@@ -79,7 +79,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.22 2002/09/19 17:03:21 cbothamy Exp $"
+.ascii       "$Id: vbe.c,v 1.23 2003/01/04 08:50:29 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -298,7 +298,7 @@ ASM_START
 ASM_END    
   }
 //#ifdef DEBUG
-  printf("VBE Bios $Id: vbe.c,v 1.22 2002/09/19 17:03:21 cbothamy Exp $\n");
+  printf("VBE Bios $Id: vbe.c,v 1.23 2003/01/04 08:50:29 vruppert Exp $\n");
 //#endif  
 }
 
@@ -346,6 +346,7 @@ Bit16u *AX;Bit16u ES;Bit16u DI;
         VbeInfoBlock      vbe_info_block;
         Bit16u            status;
         Bit16u            result;
+        Bit16u            vbe2_info;
 #ifdef DYN_LIST
         Bit16u            *video_mode_list;
 #endif
@@ -357,11 +358,13 @@ Bit16u *AX;Bit16u ES;Bit16u DI;
 #ifdef DEBUG
         printf("VBE vbe_biosfn_return_vbe_info ES%x DI%x AX%x\n",ES,DI,status);
 #endif
+
+        vbe2_info = 0;
+#ifdef VBE2_NO_VESA_CHECK
+#else
         // get vbe_info_block into local variable
         memcpyb(ss, &vbe_info_block, ES, DI, sizeof(vbe_info_block));
 
-#ifdef VBE2_NO_VESA_CHECK
-#else
         // check for VBE2 signature
         if (((vbe_info_block.VbeSignature[0] == 'V') &&
              (vbe_info_block.VbeSignature[1] == 'B') &&
@@ -373,63 +376,67 @@ Bit16u *AX;Bit16u ES;Bit16u DI;
              (vbe_info_block.VbeSignature[2] == 'S') &&
              (vbe_info_block.VbeSignature[3] == 'A')) )
         {
-#endif
-                
+                vbe2_info = 1;
 #ifdef DEBUG
                 printf("VBE correct VESA/VBE2 signature found\n");
 #endif
-                // VBE Signature
-                vbe_info_block.VbeSignature[0] = 'V';
-                vbe_info_block.VbeSignature[1] = 'E';
-                vbe_info_block.VbeSignature[2] = 'S';
-                vbe_info_block.VbeSignature[3] = 'A';
+        }
+#endif
                 
-                // VBE Version supported
-                vbe_info_block.VbeVersion = 0x0200;
-                
-                // OEM String
-                vbe_info_block.OemStringPtr_Seg = 0xc000;
-                vbe_info_block.OemStringPtr_Off = &vbebios_copyright;
-                
-                // Capabilities
-                vbe_info_block.Capabilities[0] = 0;
-                vbe_info_block.Capabilities[1] = 0;
-                vbe_info_block.Capabilities[2] = 0;
-                vbe_info_block.Capabilities[3] = 0;
+        // VBE Signature
+        vbe_info_block.VbeSignature[0] = 'V';
+        vbe_info_block.VbeSignature[1] = 'E';
+        vbe_info_block.VbeSignature[2] = 'S';
+        vbe_info_block.VbeSignature[3] = 'A';
+        
+        // VBE Version supported
+        vbe_info_block.VbeVersion = 0x0200;
+        
+        // OEM String
+        vbe_info_block.OemStringPtr_Seg = 0xc000;
+        vbe_info_block.OemStringPtr_Off = &vbebios_copyright;
+        
+        // Capabilities
+        vbe_info_block.Capabilities[0] = 0;
+        vbe_info_block.Capabilities[1] = 0;
+        vbe_info_block.Capabilities[2] = 0;
+        vbe_info_block.Capabilities[3] = 0;
 
 #ifdef DYN_LIST
-                // FIXME: This doesn't work correctly somehow?
-                // VBE Video Mode Pointer (dynamicly generated from the mode_info_list)
-                vbe_info_block.VideoModePtr_Seg= ES ;//0xc000;
-                vbe_info_block.VideoModePtr_Off= DI + 34;//&(VBEInfoData->Reserved);//&vbebios_mode_list;
+        // FIXME: This doesn't work correctly somehow?
+        // VBE Video Mode Pointer (dynamicly generated from the mode_info_list)
+        vbe_info_block.VideoModePtr_Seg= ES ;//0xc000;
+        vbe_info_block.VideoModePtr_Off= DI + 34;//&(VBEInfoData->Reserved);//&vbebios_mode_list;
 #else
-                // VBE Video Mode Pointer (staticly in rom)
-                vbe_info_block.VideoModePtr_Seg = 0xc000;
-                vbe_info_block.VideoModePtr_Off = &vbebios_mode_list;
+        // VBE Video Mode Pointer (staticly in rom)
+        vbe_info_block.VideoModePtr_Seg = 0xc000;
+        vbe_info_block.VideoModePtr_Off = &vbebios_mode_list;
 
 #endif
 
 #ifdef DYN_LIST
 
-//                video_mode_list=(Bit16u*)&(vbe_info_block.Reserved);
+//      video_mode_list=(Bit16u*)&(vbe_info_block.Reserved);
 
-                do
-                {
-        #ifdef DEBUG
-                        printf("VBE found mode %x => %x\n", cur_info->mode,cur_mode);
-        #endif
-//                        *video_mode_list=cur_info->mode;
-                        vbe_info_block.Reserved[cur_mode] = cur_info->mode;
-                        
-                        cur_info++;
-                        //video_mode_list++;
-                        cur_mode++;
-                } while (cur_info->mode != VBE_VESA_MODE_END_OF_LIST);
+        do
+        {
+#ifdef DEBUG
+                printf("VBE found mode %x => %x\n", cur_info->mode,cur_mode);
+#endif
+//              *video_mode_list=cur_info->mode;
+                vbe_info_block.Reserved[cur_mode] = cur_info->mode;
                 
-                // Add vesa mode list terminator
-                vbe_info_block.Reserved[cur_mode] = VBE_VESA_MODE_END_OF_LIST;
+                cur_info++;
+                //video_mode_list++;
+                cur_mode++;
+        } while (cur_info->mode != VBE_VESA_MODE_END_OF_LIST);
+        
+        // Add vesa mode list terminator
+        vbe_info_block.Reserved[cur_mode] = VBE_VESA_MODE_END_OF_LIST;
 #endif
 
+        if (vbe2_info)
+	{
                 // VBE Total Memory (in 64b blocks)
                 vbe_info_block.TotalMemory = VBE_TOTAL_VIDEO_MEMORY_DIV_64K;
 
@@ -444,20 +451,15 @@ Bit16u *AX;Bit16u ES;Bit16u DI;
 
                 // copy updates in vbe_info_block back
                 memcpyb(ES, DI, ss, &vbe_info_block, sizeof(vbe_info_block));
+        }
+	else
+	{
+                // copy updates in vbe_info_block back (VBE 1.x compatibility)
+                memcpyb(ES, DI, ss, &vbe_info_block, 256);
+	}
                 
-                result = 0x4f;
+        result = 0x4f;
 
-#ifdef VBE2_NO_VESA_CHECK
-#else
-        }
-        else
-        {
-#ifdef DEBUG
-                printf("VBE failed VBE2 signature check\n");
-#endif
-                result = 0x0100;
-        }
-#endif        
         write_word(ss, AX, result);
 }
 
