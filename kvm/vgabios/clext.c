@@ -649,8 +649,18 @@ cirrus_extbios_85h:
   mov cl, al
   shr cl, #0x03
   and cl, #0x03
+  cmp cl, #0x03
+  je c85h2
   mov al, #0x04
   shl al, cl
+  jmp c85h3
+c85h2:
+;; 4MB or 2MB
+  and al, #0x80
+  mov al, #0x20 ;; 2 MB
+  je c85h3
+  mov al, #0x40 ;; 4 MB
+c85h3:
   pop dx
   pop cx
   ret
