@@ -1,61 +1,626 @@
-cvs-current:
+2003-08-17 15:44  cbothamy
 
-vgabios-0.3b
-  - "Christophe Bothamy" <cbothamy@free.fr>: Nov 23 2002
-    . added lfb-mode numbers (patch from mathis)
-    . updated the Makefile
-    . removed display of copyrights. 
-    . changed the Copyright string to "LGPL VGABios developers"
-  - Volker 
-    . set the cursor shape depending on the current font height
-    . clear BL before calling int 0x10 function 0x1103 in vgabios_init_func
-    . added some text font functions
-  - "Jeroen Janssen" <japj@darius.demon.nl>
-    . Forced to new DISPI (0xb0c1) interface (requires latest bochs vbe code)
-    . Added multibuffering support
-    . Added new DISPI interface for: virt width, height, x offset, y offset
-    . Added LFB modes (to be used with the vbe-lfb patch in bochs)
-      see VBE_HAVE_LFB in vbe.c (currently default enabled)
-    . updated TODO & docs for changes after bochs 1.4
+	* README (1.3):
+	
+	- added the old ChangeLog in the HOSTORY section of the README file
+	- update History for 0.4a release, with a summary of Changes
 
-vgabios-0.3a 
-  - "Christophe Bothamy" <cbothamy@free.fr>: Mar 10 2002
-    . Fixed bug in function ah=13
-  - "Jeroen Janssen" <japj@darius.demon.nl>
-    . updated vbebios implementation to new api
-    . added vbe_display_api documentation
-    . added 640x400x8, 640x480x8, 800x600x8, 1024x768 (>640x480 needs a special bochs patch atm)
-    . added 320x200x8 vbe support (uses the standard 320x200x8 vga mode to
-      display, this allows for testing & having something on screen as well,
-      at least until bochs host side display is up & running)
-    . adding lfbprof (vbe) testprogram (+some small fixes to it)
-    . merging with vbebios 0.2
+2003-08-17 15:24  cbothamy
 
-vgabios-0.2b
-  - "Christophe Bothamy" <cbothamy@free.fr>: Nov 19 2001
-    . Fixed bug in function ah=13
+	* Makefile (1.11):
+	
+	- fix Makefile for "release" target
 
-vgabios-0.2a
-  - "Christophe Bothamy" <cbothamy@free.fr>: Nov 09 2001
-    . Included bugfix from techt@pikeonline.net about grayscale summing
-    . Added the "IBM" string at org 0x1e as Bart Oldeman suggested
-    . Fixed DS and ES that where inverted in the int10 parameters list!
-    . The following have been implemented :
-	- function ax=1a00, ax=1a01, ah=1b
-	- function ax=1130                
-    . Added debug messages for unimplemented/unknown functions
-      Must be compiled with DEBUG defined. The output is trapped
-      by the unknown-ioport driver of plex/bochs (port 0xfff0 is used)
+2003-08-16 01:49  cbothamy
 
-vgabios-0.1a
-  - "Christophe Bothamy" <cbothamy@free.fr>: May 8 2001
-    . First release. The work has been focused only on text mode.
-    . The following have been implemented :
-	- inits
-	- int 10 handler
-	- functions ah=00, ah=01, ah=02, ah=03, ah=05, ah=06, ah=07, ah=08
-	  ah=09, ah=0a, ah=0e, ah=0f, ax=1000, ax=1001, ax=1002, ax=1003
-	  ax=1007, ax=1008, ax=1009, ax=1010, ax=1012, ax=1013, ax=1015
-	  ax=1017, ax=1018, ax=1019, ax=101a, ax=101b, ah=12 bl=10,
-	  ah=12 bl=30, ah=12 bl=31, ah=12 bl=32, ah=12 bl=33, ah=12 bl=34
-	  ah=13
+	* Makefile (1.10), README (1.2), VGABIOS-lgpl-latest.bin (1.24),
+	VGABIOS-lgpl-latest.debug.bin (1.24), vgabios.c (1.34):
+	
+	- update the Makefile for releases - remove references to old
+	plex86 website - update the Makefile so it build
+	VGABIOS-lgpl-latest.bin and   VGABIOS-lgpl-latest.debug.bin
+
+2003-08-07 18:17  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.23), VGABIOS-lgpl-latest.debug.bin
+	(1.23):
+	
+	- current VBE mode now stored in BDA (unused address 0xBA)
+
+2003-08-07 17:54  vruppert
+
+	* vbe.c (1.34), vgatables.h (1.5):
+	
+	- current VBE mode now stored in BDA (unused address 0xBA)
+
+2003-07-20 18:05  vruppert
+
+	* vgabios.c (1.33), VGABIOS-lgpl-latest.bin (1.22),
+	VGABIOS-lgpl-latest.debug.bin (1.22):
+	
+	- fixed a few functions accessing the attribute controller
+
+2003-07-19 09:33  vruppert
+
+	* vgabios.c (1.32), VGABIOS-lgpl-latest.bin (1.21),
+	VGABIOS-lgpl-latest.debug.bin (1.21):
+	
+	- re-enable video after programming the attribute controller -
+	biosfn_set_all_palette_reg(): number of palette registers fixed
+
+2003-07-16 22:32  vruppert
+
+	* ChangeLog (1.18), vbe.c (1.33), vbe.h (1.17), vbe_display_api.txt
+	(1.7), vgabios.c (1.31), VGABIOS-lgpl-latest.bin (1.20),
+	VGABIOS-lgpl-latest.debug.bin (1.20):
+	
+	- LFB flag now stored in the register VBE_DISPI_INDEX_ENABLE -
+	release date in Changelog fixed - release date of VBE BIOS 0.6 was
+	the same as VGA BIOS 0.3b - year changed in copyright messages
+
+2003-07-15 12:40  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.19), VGABIOS-lgpl-latest.debug.bin
+	(1.19):
+	
+	- new function dispi_get_bpp() - function
+	vbe_biosfn_set_get_logical_scan_line_length() fixed for >8bpp -
+	number of image pages of all VBE modes fixed
+
+2003-07-15 12:35  vruppert
+
+	* vbe.c (1.32), vbetables.h (1.21):
+	
+	- new function dispi_get_bpp() - function
+	vbe_biosfn_set_get_logical_scan_line_length() fixed for >8bpp -
+	number of image pages of all VBE modes fixed
+
+2003-07-14 19:45  vruppert
+
+	* vbe_display_api.txt (1.6):
+	
+	- description of VBE_DISPI_ interface 0xb0c2 added
+
+2003-07-10 19:07  vruppert
+
+	* vbe.c (1.31), vbetables.h (1.20), VGABIOS-lgpl-latest.bin (1.18),
+	VGABIOS-lgpl-latest.debug.bin (1.18):
+	
+	- 15 bpp VBE modes added - "Bochs own" mode 0x142 (640x480x32bpp)
+	added
+
+2003-07-01 19:00  vruppert
+
+	* vbe.c (1.30), vbe.h (1.16), vbetables.h (1.19),
+	VGABIOS-lgpl-latest.bin (1.17), VGABIOS-lgpl-latest.debug.bin
+	(1.17):
+	
+	- VBE preserve display memory feature implemented - VBE mode
+	entries 0x117 and 0x118 added
+
+2003-06-30 21:27  vruppert
+
+	* vbe.c (1.29), vbe.h (1.15), vbetables.h (1.18),
+	VGABIOS-lgpl-latest.bin (1.16), VGABIOS-lgpl-latest.debug.bin
+	(1.16):
+	
+	- VBE mode info blocks of modes with >8bpp enabled - VBE modes with
+	24 bpp: bytes per scanline fixed - vbe_biosfn_set_mode() now
+	supports >8bpp - VBE will be enabled with new VBE_DISPI_ID2
+	(0xB0C2)
+
+2003-06-29 12:53  vruppert
+
+	* vbetables.h (1.17), VGABIOS-lgpl-latest.bin (1.15),
+	VGABIOS-lgpl-latest.debug.bin (1.15):
+	
+	- duplicate lines with VBE_MODE_ATTRIBUTE_GRAPHICS_MODE removed -
+	VBE mode info items of currently unsupported modes fixed
+
+2003-06-15 21:19  vruppert
+
+	* vgabios.c (1.30), VGABIOS-lgpl-latest.bin (1.14),
+	VGABIOS-lgpl-latest.debug.bin (1.14):
+	
+	- function write_gfx_char() rewritten
+
+2003-04-26 09:27  vruppert
+
+	* VGABIOS-lgpl-latest.debug.bin (1.13):
+	
+	- added missing VBE function dispi_get_bank() - added missing
+	return codes for VBE function 4F05h - memory size is always
+	reported in VBE function 4F00h - fixed scan line length for VBE
+	mode 0102h - fixed function set_active_page() for graphics modes -
+	fixed the page sizes of some VGA modes
+
+2003-04-26 09:22  vruppert
+
+	* vbe.c (1.28), vbetables.h (1.16), vgabios.c (1.29), vgatables.h
+	(1.4), VGABIOS-lgpl-latest.bin (1.13):
+	
+	- added missing VBE function dispi_get_bank() - added missing
+	return codes for VBE function 4F05h - memory size is always
+	reported in VBE function 4F00h - fixed scan line length for VBE
+	mode 0102h - fixed function set_active_page() for graphics modes -
+	fixed the page sizes of some VGA modes
+
+2003-04-20 09:51  vruppert
+
+	* vgabios.c (1.28), vgatables.h (1.3), VGABIOS-lgpl-latest.bin
+	(1.12), VGABIOS-lgpl-latest.debug.bin (1.12):
+	
+	- function write_gfx_char() now supports different font sizes -
+	some entries of the static functionality table fixed
+
+2003-04-18 09:23  vruppert
+
+	* vbe.c (1.27), vbe.h (1.14), vbetables.h (1.15):
+	
+	- applied patch #1331	* new function dispi_set_bank_farcall()   *
+	VBE mode info item WinFuncPtr points to the new function if the
+	flag	 VBE_WINDOW_ATTRIBUTE_RELOCATABLE is set   * flag
+	VBE_MODE_ATTRIBUTE_EXTENDED_INFORMATION_AVAILABLE added
+
+2003-02-11 20:17  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.11), VGABIOS-lgpl-latest.debug.bin
+	(1.11), vbe.c (1.26), vbetables.h (1.14):
+	
+	- VBE mode search rewritten   * improved function
+	mode_info_find_mode() is now used by the VBE functions	   0x4F01
+	and 0x4F02   * removed all mode list entries with the LFB bit set.
+	LFB detection is now	 present in the function
+	mode_info_find_mode()
+
+2003-02-09 20:59  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.10), VGABIOS-lgpl-latest.debug.bin
+	(1.10), vgabios.c (1.27):
+	
+	- function write_gfx_char(): memory address now calculated in this
+	function;   background color is always black - function
+	biosfn_write_char_attr(): the count parameter is now used in
+	graphics   modes too - function biosfn_write_char_only() works the
+	same way as function   biosfn_write_char_attr() in graphics mode -
+	copying charmap data optimized using memcpyb()
+
+2003-02-09 11:36  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.9), VGABIOS-lgpl-latest.debug.bin
+	(1.9):
+	
+	- VESA mode 0x102 added (uses existing SVGA mode 0x6a) - all VESA
+	modes with the LFB flag set removed from the list (Linux doesn't  
+	like mode numbers > 0x07ff)
+
+2003-02-09 11:02  vruppert
+
+	* vbe.c (1.25), vbe.h (1.13), vbetables.h (1.13):
+	
+	- VESA mode 0x102 added (uses existing SVGA mode 0x6a) - all VESA
+	modes with the LFB flag set removed from the list (Linux doesn't  
+	like mode numbers > 0x07ff)
+
+2003-02-08 13:04  vruppert
+
+	* vbe.c (1.24), vgabios.c (1.26):
+	
+	- vbe_biosfn_return_current_mode() now returns the active standard
+	VGA mode   TODO: return VESA mode if enabled -
+	biosfn_set_video_mode() now clears the screen in CGA mode correctly
+	- write character functions are now working in all PLANAR4 graphics
+	modes - added stubs for unimplemented features in graphics modes
+
+2003-02-04 22:19  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.8), VGABIOS-lgpl-latest.debug.bin
+	(1.8):
+	
+	- set video mode: clear vga memory in graphics mode - set video
+	mode: load default font in text mode - write character implemented
+	for graphics mode 0x12
+
+2003-02-04 22:06  vruppert
+
+	* vgabios.c (1.25):
+	
+	- set video mode: clear vga memory in graphics mode - set video
+	mode: load default font in text mode - write character implemented
+	for graphics mode 0x12
+
+2003-01-21 19:30  vruppert
+
+	* vgabios.c (1.24):
+	
+	- remap the cursor size if the char height is > 8 and the new
+	values are < 8
+
+2003-01-20 18:24  cbothamy
+
+	* Makefile (1.9):
+	
+	- fix so make -j2 does not overwrite temp files
+
+2003-01-19 12:35  vruppert
+
+	* vgabios.c (1.23):
+	
+	- function set_scan_lines() recalculates the number of rows and the
+	page size - new values for char height, text rows and page size are
+	stored in the BIOS   data segment - asm helper function idiv_u
+	added
+
+2003-01-15 18:49  cbothamy
+
+	* VGABIOS-lgpl-latest.bin (1.7), VGABIOS-lgpl-latest.debug.bin
+	(1.7):
+	
+	- compile vgabios rev 1.22
+
+2003-01-15 18:49  cbothamy
+
+	* vgabios.c (1.22):
+	
+	- fix bug found by ams : a 8bits index value was compared to 0x100
+	in some cases	in biosfn_set_all_dac_reg, biosfn_read_all_dac_reg,
+	biosfn_perform_gray_scale_summing
+
+2003-01-15 17:34  cbothamy
+
+	* Makefile (1.8):
+	
+	- fix symbol table file names, discovered by ams
+
+2003-01-04 21:20  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.6), VGABIOS-lgpl-latest.debug.bin
+	(1.6), vgabios.c (1.21):
+	
+	- biosfn_set_video_mode(): reset attribute controller flip-flop
+	before setting	 up the controller's registers (bug found with
+	amidiag)
+
+2003-01-04 09:50  vruppert
+
+	* vbe.c (1.23):
+	
+	- VBE function 0x00 returns VBE 1.x compatible information if no
+	VBE signature	is present
+
+2003-01-01 12:44  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.5), VGABIOS-lgpl-latest.debug.bin
+	(1.5):
+	
+	- SVGA mode 0x6A (800x600x4) added to the list of graphics modes
+
+2002-12-31 18:07  vruppert
+
+	* vgatables.h (1.2):
+	
+	- SVGA mode 0x6A (800x600x4) added to the list of graphics modes
+
+2002-11-23 10:38  cbothamy
+
+	* ChangeLog (1.17, v0_3b):
+	
+	- fix changelog for 0.3b release
+
+2002-10-20 17:12  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.4), VGABIOS-lgpl-latest.debug.bin
+	(1.4), vgabios.c (1.20) (utags: v0_3b):
+	
+	- new function set_scan_lines() for the font size change (patch
+	from Hartmut Birr) - cursor shape start and end must be updated in
+	set_scan_lines() - set_scan_lines() is called by the functions
+	0x1110, 0x1111, 0x1112 and 0x1114   after copying the font data
+
+2002-10-04 08:20  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.3), VGABIOS-lgpl-latest.debug.bin
+	(1.3), vgabios.c (1.19):
+	
+	- biosfn_set_single_dac_reg(): the red value is stored in DH
+
+2002-09-19 19:05  cbothamy
+
+	* VGABIOS-lgpl-latest.bin (1.2), VGABIOS-lgpl-latest.debug.bin
+	(1.2):
+	
+	- updated with latest changes
+
+2002-09-19 19:03  cbothamy
+
+	* ChangeLog (1.16), Makefile (1.7, v0_3b), vbe.c (1.22, v0_3b),
+	vgabios.c (1.18), vgabios.h (1.3, v0_3b):
+	
+	- updated the Makefile - removed display of copyrights.  - changed
+	the Copyright string to "LGPL VGABios developers"
+
+2002-09-08 21:14  vruppert
+
+	* vgabios.c (1.17):
+	
+	- set the cursor shape depending on the current font height - clear
+	BL before calling int 0x10 function 0x1103 in vgabios_init_func
+
+2002-08-23 22:58  cbothamy
+
+	* vbe.c (1.21), vbetables.h (1.12, v0_3b):
+	
+	- added lfb-mode numbers (patch from mathis)
+
+2002-07-21 21:57  japj
+
+	* vbe.c (1.20), vgabios.c (1.16):
+	
+	gcc2/3 preprocessing fix
+
+2002-05-18 16:55  cbothamy
+
+	* vgabios.c (1.15):
+	
+	- include patch from Volker that adds some text font functions
+
+2002-05-01 23:13  japj
+
+	* VGABIOS-lgpl-latest.bin (1.1), VGABIOS-lgpl-latest.debug.bin
+	(1.1):
+	
+	adding latest bin & debug bin of the vgabios
+
+2002-04-29 14:50  japj
+
+	* ChangeLog (1.15), vbe.c (1.19), vbe.h (1.12, v0_3b), vbetables.h
+	(1.11), vgabios.c (1.14):
+	
+	- applying hw scrolling/multibuffering patch
+
+2002-04-25 21:59  japj
+
+	* Makefile (1.6), vbe.c (1.18), vgabios.c (1.13):
+	
+	- reverting #asm/##asm & endasm patch (does not work with with
+	cygwin)
+
+2002-04-19 19:38  japj
+
+	* Makefile (1.5), vbe.c (1.17), vgabios.c (1.12):
+	
+	- fixing preprocessing of vgabios with latest gcc (from Mandrake
+	8.2)
+
+2002-04-08 23:44  japj
+
+	* ChangeLog (1.14), vbe_display_api.txt (1.5, v0_3b):
+	
+	- preparing docs for new DISPI interface (for hardware scrolling)
+
+2002-04-03 19:06  japj
+
+	* ChangeLog (1.13), TODO (1.9, v0_3b), vbe.c (1.16):
+	
+	- defaulting LFB on + updated changelog & todo
+
+2002-04-03 00:38  cbothamy
+
+	* vbe.c (1.15), vgabios.c (1.11):
+	
+	- changed the logging ports to 0x500 -> 0x502
+
+2002-03-14 17:54  japj
+
+	* vbe.c (1.14):
+	
+	- vbetables.h is dependant upon some defines (VBE_HAVE_LFB), so put
+	the include *after* the define
+
+2002-03-13 21:47  japj
+
+	* ChangeLog (1.12), TODO (1.8), vbe.c (1.13), vbetables.h (1.10),
+	vgabios.c (1.10):
+	
+	- made LFB dependant upon define - not implement vbe functions
+	return failure - updated todo & docs for things after bochs 1.4
+
+2002-03-13 19:46  japj
+
+	* vbe.h (1.11), vbe_display_api.txt (1.4):
+	
+	- added max video memory + documented what is in the 0xb0c0
+	interface
+
+2002-03-12 02:33  cbothamy
+
+	* ChangeLog (1.11), Makefile (1.4):
+	
+	- updated for 0.3a. Merged vgabios.bin and vbebios.bin
+
+2002-03-10 21:36  japj
+
+	* ChangeLog (1.10), vbetables.h (1.9):
+	
+	- added LFB modes for testing with vbe-lfb patch in Bochs
+
+2002-03-10 17:42  japj
+
+	* vbe.c (1.12, v0_3a):
+	
+	- show people when they do NOT have VBE support available
+
+2002-03-10 17:36  japj
+
+	* TODO (1.7, v0_3a), vbe.c (1.11), vbe.h (1.10, v0_3a), vgabios.c
+	(1.9, v0_3a):
+	
+	- cleanup of vbe internal functions (set 8bpp mode is now dependant
+	on ModeInfo content instead of hardcoded functions)
+
+2002-03-10 17:20  cbothamy
+
+	* ChangeLog (1.9, v0_3a), TODO (1.6):
+	
+	- updated for 0.3a
+
+2002-03-10 17:19  cbothamy
+
+	* vbe.c (1.10), vbe.h (1.9):
+	
+	- added vbe_has_vbe_display function that detects an attached vbe
+	display
+
+2002-03-10 17:12  cbothamy
+
+	* vgabios.c (1.8):
+	
+	- vbe calls are done only if a vbe display is detected
+
+2002-03-10 11:25  japj
+
+	* vbe.h (1.8), vbe_display_api.txt (1.3, v0_3a):
+	
+	- preparing for LFB support
+
+2002-03-09 14:25  japj
+
+	* vgabios.c (1.7):
+	
+	- fixing initial cursor shape to _ instead of -
+
+2002-03-08 23:08  japj
+
+	* ChangeLog (1.8), TODO (1.5), vbe.c (1.9), vbe.h (1.7), vgabios.c
+	(1.6):
+	
+	- updating vbe code to new API
+
+2002-03-08 21:48  japj
+
+	* vbe.c (1.8), vbe.h (1.6), vbetables.h (1.8, v0_3a):
+	
+	- updating vbe code with #defines from API
+
+2002-03-08 21:31  japj
+
+	* vbe_display_api.txt (1.2):
+	
+	- adding some text about how banks work
+
+2002-03-08 21:09  japj
+
+	* ChangeLog (1.7), vbe_display_api.txt (1.1):
+	
+	- adding vbe_display_api documentation
+
+2002-03-07 21:36  japj
+
+	* ChangeLog (1.6), vbe.c (1.7), vbetables.h (1.7):
+	
+	- added 1024x768xbpp support - some more cleanups/comments
+
+2002-03-06 21:55  japj
+
+	* ChangeLog (1.5), TODO (1.4), vbe.c (1.6), vbetables.h (1.6),
+	vgabios.c (1.5):
+	
+	- updated changelog with new modi - added 640x480x8 (Mandrake
+	Installer can use this!) - added pre VBE2 compatible 'detection' -
+	fixed problem when normal vga set mode wouldn't disable vbe mode
+
+2002-03-06 20:59  japj
+
+	* TODO (1.3), vbe.c (1.5), vbe.h (1.5), vbetables.h (1.5),
+	vgabios.c (1.4):
+	
+	- adding 640x400x8 and 800x600x8 vbe support   (this depends
+	HEAVILY on my bochs vga code patch - japj)
+
+2002-03-06 18:00  japj
+
+	* vbe.c (1.4), vbe.h (1.4), vbetables.h (1.4):
+	
+	- implemented banked & lfb support for 320x200x8bpp   (some fixes
+	for vbetest program not displaying anything)
+
+2002-03-05 20:25  japj
+
+	* Makefile (1.3, v0_3a):
+	
+	for vbe debug bios: - print debugging information in assembly
+	output - print source code in assembly output
+
+2002-03-01 19:39  japj
+
+	* ChangeLog (1.4), TODO (1.2), vbe.c (1.3), vbe.h (1.3),
+	vbetables.h (1.3):
+	
+	- added vbe support for 320x200x8 using the standard vgamode (0x13)
+
+2002-02-19 00:29  japj
+
+	* ChangeLog (1.3):
+	
+	- updating ChangeLog with lfbprof
+
+2002-02-18 23:26  japj
+
+	* tests/lfbprof/: lfbprof.c (1.2), lfbprof.h (1.2) (utags: v0_3a,
+	v0_3b):
+	
+	- fixed unsigned short for mode list (-1 != 0xffff otherwise) -
+	fixed LfbMapRealPointer macro mask problem (some modes were
+	skipped) - added some extra 'debugging' printf's
+
+2002-02-18 23:07  japj
+
+	* tests/lfbprof/: Makefile (1.1, v0_3b, v0_3a), lfbprof.c (1.1),
+	lfbprof.h (1.1):
+	
+	- Adding lfbprof testprogram (for vbe testing purposes)   It needs
+	to be compiled with the Watcom C Compiler
+
+2002-02-18 18:48  japj
+
+	* vbe.c (1.2), vbe.h (1.2):
+	
+	- cosmetic updates to vbe.c/h + added bunch of FIXMEs for work that
+	needs to be done
+
+2002-02-18 18:34  japj
+
+	* vbetables.h (1.2):
+	
+	- cosmetic updates in vbetables.h
+
+2002-02-18 18:32  japj
+
+	* ChangeLog (1.2):
+	
+	updated changelog with merge of vbebios 0.2
+
+2002-02-18 18:07  japj
+
+	* vgabios.c (1.3):
+	
+	- small cosmetic cleanup in vgabios vbe code + added FIXMEs
+
+2002-02-18 17:55  japj
+
+	* Makefile (1.2), dataseghack (1.2, v0_3b, v0_3a), vbe.c (1.1),
+	vbe.h (1.1), vbetables.h (1.1), vgabios.c (1.2), vgabios.h (1.2,
+	v0_3a):
+	
+	- merging with vbebios 0.2 release
+
+2002-02-18 11:31  cbothamy
+
+	* BUGS (1.1, v0_3b, v0_3a), COPYING (1.1, v0_3b, v0_3a), ChangeLog
+	(1.1), Makefile (1.1), Notes (1.1, v0_3b, v0_3a), README (1.1,
+	v0_3b, v0_3a), TODO (1.1), dataseghack (1.1), vgabios.c (1.1),
+	vgabios.h (1.1), vgafonts.h (1.1, v0_3b, v0_3a), vgatables.h (1.1,
+	v0_3b, v0_3a), tests/testbios.c (1.1, v0_3b, v0_3a):
+	
+	- initial import
+
