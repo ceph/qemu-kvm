@@ -52,7 +52,7 @@ vgabios.debug.bin: vgabios.debug.o
 
 vgabios.debug.o: vgabios.c vgabios.h vgafonts.h vgatables.h
 	gcc -E vgabios.c -DDEBUG -DVGABIOS_DATE="\"$(RELDATE)\"" | tools86 -E > _vgabios_.debug.c
-	/usr/lib/bcc/bcc-cc1 -o vgabios.debug.s -c -D__i86__ -0 _vgabios_.debug.c
+	/usr/lib/bcc/bcc-cc1 -t -d -o vgabios.debug.s -c -D__i86__ -0 _vgabios_.debug.c
 	./dataseghack vgabios.debug.s
 	as86 vgabios.debug.s -o vgabios.debug.o -u -w -g -0 
 
