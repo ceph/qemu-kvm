@@ -76,7 +76,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.29 2003/06/30 19:27:05 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.30 2003/07/01 17:00:33 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -106,6 +106,8 @@ _vbebios_mode_list:
 .word VBE_VESA_MODE_640X480X888
 .word VBE_VESA_MODE_800X600X565
 .word VBE_VESA_MODE_800X600X888
+.word VBE_VESA_MODE_1024X768X565
+.word VBE_VESA_MODE_1024X768X888
 .word VBE_OWN_MODE_800X600X8888
 .word VBE_OWN_MODE_1024X768X8888
 .word VBE_OWN_MODE_320X200X8
@@ -337,7 +339,7 @@ ASM_START
 ASM_END    
   }
 //#ifdef DEBUG
-  printf("VBE Bios $Id: vbe.c,v 1.29 2003/06/30 19:27:05 vruppert Exp $\n");
+  printf("VBE Bios $Id: vbe.c,v 1.30 2003/07/01 17:00:33 vruppert Exp $\n");
 //#endif  
 }
 
@@ -580,11 +582,13 @@ Bit16u *AX;Bit16u BX; Bit16u ES;Bit16u DI;
         Bit16u            result;
         ModeInfoListItem  *cur_info;
         Boolean           using_lfb;
-        
+        Bit8u             no_clear;
+
         using_lfb=((BX & VBE_MODE_LINEAR_FRAME_BUFFER) == VBE_MODE_LINEAR_FRAME_BUFFER);
-        
+        no_clear=((BX & VBE_MODE_PRESERVE_DISPLAY_MEMORY) == VBE_MODE_PRESERVE_DISPLAY_MEMORY)?VBE_DISPI_NOCLEARMEM:0;
+
         BX = (BX & 0x1ff);
-        
+
         //result=read_word(ss,AX);
         
         // check for non vesa mode
@@ -625,7 +629,7 @@ Bit16u *AX;Bit16u BX; Bit16u ES;Bit16u DI;
                 dispi_set_yres(cur_info->info.YResolution);
                 dispi_set_bpp(cur_info->info.BitsPerPixel);
                 dispi_set_bank(0);
-                dispi_set_enable(VBE_DISPI_ENABLED);
+                dispi_set_enable(VBE_DISPI_ENABLED | no_clear);
 
                   // FIXME: store current mode in BIOS data area
   
