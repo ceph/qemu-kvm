@@ -14,7 +14,7 @@ bios: vgabios.bin vgabios.debug.bin
 
 clean:
 	/bin/rm -f  *.o *.s *.ld86 \
-          temp.awk.* vgabios*.orig _vgabios_* core vgabios*.bin $(RELEASE).bin
+          temp.awk.* vgabios*.orig _vgabios_* _vgabios-debug_* core vgabios*.bin $(RELEASE).bin
 
 dist-clean: clean
 
@@ -36,9 +36,9 @@ vgabios.bin: vgabios.c vgabios.h vgafonts.h vgatables.h vbe.h vbe.c vbetables.h
 	ls -l vgabios.bin
 
 vgabios.debug.bin: vgabios.c vgabios.h vgafonts.h vgatables.h vbe.h vbe.c vbetables.h
-	gcc -E vgabios.c -DVBE -DDEBUG -DVGABIOS_DATE="\"$(RELDATE)\"" > _vgabios_.c
-	bcc -o vgabios.s -C-c -D__i86__ -S -0 _vgabios_.c
-	sed -e 's/^\.text//' -e 's/^\.data//' vgabios.s > _vgabios_.s
-	as86 _vgabios_.s -b vgabios.debug.bin -u -w- -g -0 -j -O -l vgabios.debug.txt
-	rm -f _vgabios_.s _vgabios_.c vgabios.s
+	gcc -E vgabios.c -DVBE -DDEBUG -DVGABIOS_DATE="\"$(RELDATE)\"" > _vgabios-debug_.c
+	bcc -o vgabios-debug.s -C-c -D__i86__ -S -0 _vgabios-debug_.c
+	sed -e 's/^\.text//' -e 's/^\.data//' vgabios-debug.s > _vgabios-debug_.s
+	as86 _vgabios-debug_.s -b vgabios.debug.bin -u -w- -g -0 -j -O -l vgabios.debug.txt
+	rm -f _vgabios-debug_.s _vgabios-debug_.c vgabios-debug.s
 	ls -l vgabios.debug.bin
