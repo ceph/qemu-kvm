@@ -320,7 +320,7 @@ ASM_START
 
 ASM_END
 
-  printf("VGABios $Id: vgabios.c,v 1.18 2002/09/19 17:03:21 cbothamy Exp $\n");
+  printf("VGABios $Id: vgabios.c,v 1.19 2002/10/04 06:20:26 vruppert Exp $\n");
 }
 
 // --------------------------------------------------------------------------------------------
@@ -533,7 +533,7 @@ static void int10_func(DI, SI, BP, SP, BX, DX, CX, AX, DS, ES, FLAGS)
         biosfn_get_all_palette_reg(ES,DX);
         break;
        case 0x10:
-        biosfn_set_single_dac_reg(BX,GET_CH(),GET_CL(),GET_DL());
+        biosfn_set_single_dac_reg(BX,GET_CH(),GET_CL(),GET_DH());
         break;
        case 0x12:
         biosfn_set_all_dac_reg(BX,CX,ES,DX);
