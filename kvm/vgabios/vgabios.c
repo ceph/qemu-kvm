@@ -104,7 +104,6 @@ static void biosfn_get_font_info();
 static void biosfn_get_ega_info();
 static void biosfn_alternate_prtsc();
 static void biosfn_select_vert_res();
-static void biosfn_enable_cursor_emulation();
 static void biosfn_switch_video_interface();
 static void biosfn_enable_video_refresh_control();
 static void biosfn_write_string();
@@ -310,8 +309,13 @@ int10_test_BL32:
   jmp   int10_end
 int10_test_BL33:
   cmp   bl, #0x33
-  jne   int10_normal
+  jne   int10_test_BL34
   call  biosfn_enable_grayscale_summing
+  jmp   int10_end
+int10_test_BL34:
+  cmp   bl, #0x34
+  jne   int10_normal
+  call  biosfn_enable_cursor_emulation
   jmp   int10_end
 int10_test_101B:
   cmp   ax, #0x101b
@@ -368,7 +372,7 @@ init_vga_card:
   ret
 
 msg_vga_init:
-.ascii "VGABios $Id: vgabios.c,v 1.49 2004/04/25 20:12:56 vruppert Exp $"
+.ascii "VGABios $Id: vgabios.c,v 1.50 2004/05/01 16:03:13 vruppert Exp $"
 .byte 0x0d,0x0a,0x00
 ASM_END
 
@@ -631,10 +635,6 @@ static void int10_func(DI, SI, BP, SP, BX, DX, CX, AX, DS, ES, FLAGS)
         break;
        case 0x30:
         biosfn_select_vert_res(GET_AL());
-        SET_AL(0x12);
-        break;
-       case 0x34:
-        biosfn_enable_cursor_emulation(GET_AL());
         SET_AL(0x12);
         break;
        case 0x35:
@@ -986,6 +986,7 @@ ASM_END
 static void biosfn_set_cursor_shape (CH,CL) 
 Bit8u CH;Bit8u CL; 
 {Bit16u cheight,curs,crtc_addr;
+ Bit8u modeset_ctl;
 
  CH&=0x3f;
  CL&=0x1f;
@@ -993,8 +994,9 @@ Bit8u CH;Bit8u CL;
  curs=(CH<<8)+CL;
  write_word(BIOSMEM_SEG,BIOSMEM_CURSOR_TYPE,curs);
 
+ modeset_ctl=read_byte(BIOSMEM_SEG,BIOSMEM_MODESET_CTL);
  cheight = read_word(BIOSMEM_SEG,BIOSMEM_CHAR_HEIGHT);
- if((cheight>8) && (CL<8) && (CH<0x20))
+ if((modeset_ctl&0x01) && (cheight>8) && (CL<8) && (CH<0x20))
   {
    if(CL!=(CH+1))
     {
@@ -1235,7 +1237,7 @@ Bit8u page;Bit16u *car;
 static void write_gfx_char_pl4(car,attr,xcurs,ycurs,nbcols,cheight)
 Bit8u car;Bit8u attr;Bit8u xcurs;Bit8u ycurs;Bit8u nbcols;Bit8u cheight;
 {
- Bit8u i,mmask;
+ Bit8u i,j,mask;
  Bit8u *fdata;
  Bit16u addr,dest,src;
 
@@ -1251,17 +1253,38 @@ Bit8u car;Bit8u attr;Bit8u xcurs;Bit8u ycurs;Bit8u nbcols;Bit8u cheight;
   }
  addr=xcurs+ycurs*cheight*nbcols;
  src = car * cheight;
- outb( VGAREG_SEQU_ADDRESS, 0x02 );
- mmask = inb( VGAREG_SEQU_DATA );
+ outw(VGAREG_GRDC_ADDRESS, 0x0205);
+ if(attr&0x80)
+  {
+   outw(VGAREG_GRDC_ADDRESS, 0x1803);
+  }
  for(i=0;i<cheight;i++)
   {
    dest=addr+i*nbcols;
-   outb( VGAREG_SEQU_DATA, 0x0f );
-   write_byte(0xa000,dest,0x00);
-   outb( VGAREG_SEQU_DATA, attr & 0x0f );
-   write_byte(0xa000,dest,fdata[src+i]);
+   for(j=0;j<8;j++)
+    {
+     mask=0x80>>j;
+     outw(VGAREG_GRDC_ADDRESS, (mask << 8) | 0x08);
+     read_byte(0xa000,dest);
+     if(fdata[src+i]&mask)
+      {
+       write_byte(0xa000,dest,attr&0x0f);
+      }
+     else
+      {
+       write_byte(0xa000,dest,0x00);
+      }
+    }
   }
- outb( VGAREG_SEQU_DATA, mmask );
+ASM_START
+  mov dx, #vgareg_grdc_address
+  mov ax, 0xff08
+  out dx, ax
+  mov ax, 0x0005
+  out dx, ax
+  mov ax, 0x0003
+  out dx, ax
+ASM_END
 }
 
 // --------------------------------------------------------------------------------------------
@@ -2734,19 +2757,27 @@ biosfn_enable_grayscale_summing:
 ASM_END
 
 // --------------------------------------------------------------------------------------------
-static void biosfn_enable_cursor_emulation (disable)
-Bit8u disable;
-{
- Bit8u videoctl;
-
- videoctl=read_byte(BIOSMEM_SEG,BIOSMEM_VIDEO_CTL);
-
- // Bit 0 set if disable!=0
- if(disable!=0x00)videoctl|=0x01;
- else videoctl&=0xfe;
-
- write_byte(BIOSMEM_SEG,BIOSMEM_VIDEO_CTL,videoctl);
-}
+ASM_START
+biosfn_enable_cursor_emulation:
+  push  ds
+  push  bx
+  push  dx
+  mov   dl, al
+  and   dl, #0x01
+  xor   dl, #0x01
+  mov   ax, #biosmem_seg
+  mov   ds, ax
+  mov   bx, #biosmem_modeset_ctl
+  mov   al, [bx]
+  and   al, #0xfe
+  or    al, dl
+  mov   [bx], al
+  mov   ax, #0x1212
+  pop   dx
+  pop   bx
+  pop   ds
+  ret
+ASM_END
 
 // --------------------------------------------------------------------------------------------
 static void biosfn_switch_video_interface (AL,ES,DX) Bit8u AL;Bit16u ES;Bit16u DX;
