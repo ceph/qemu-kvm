@@ -320,7 +320,7 @@ ASM_START
 
 ASM_END
 
-  printf("VGABios $Id: vgabios.c,v 1.31 2003/07/16 20:32:38 vruppert Exp $\n");
+  printf("VGABios $Id: vgabios.c,v 1.32 2003/07/19 07:33:47 vruppert Exp $\n");
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1537,6 +1537,7 @@ Bit8u reg;Bit8u value;
    inb(VGAREG_ACTL_RESET);
    outb(VGAREG_ACTL_ADDRESS,reg);
    outb(VGAREG_ACTL_WRITE_DATA,value);
+   outb(VGAREG_ACTL_ADDRESS,0x20);
   }
 }
 
@@ -1547,6 +1548,7 @@ Bit8u value;
  inb(VGAREG_ACTL_RESET);
  outb(VGAREG_ACTL_ADDRESS,0x11);
  outb(VGAREG_ACTL_WRITE_DATA,value);
+ outb(VGAREG_ACTL_ADDRESS,0x20);
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1557,7 +1559,7 @@ Bit16u seg;Bit16u offset;
 
  inb(VGAREG_ACTL_RESET);
  // First the colors
- for(i=0;i<=0x10;i++)
+ for(i=0;i<0x10;i++)
   {
    outb(VGAREG_ACTL_ADDRESS,i);
    outb(VGAREG_ACTL_WRITE_DATA,read_byte(seg,offset));
@@ -1567,6 +1569,7 @@ Bit16u seg;Bit16u offset;
  // Then the border
  outb(VGAREG_ACTL_ADDRESS,0x11);
  outb(VGAREG_ACTL_WRITE_DATA,read_byte(seg,offset));
+ outb(VGAREG_ACTL_ADDRESS,0x20);
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1584,6 +1587,7 @@ Bit8u state;
  inb(VGAREG_ACTL_RESET);
  outb(VGAREG_ACTL_ADDRESS,0x10);
  outb(VGAREG_ACTL_WRITE_DATA,value);
+ outb(VGAREG_ACTL_ADDRESS,0x20);
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1596,6 +1600,7 @@ Bit8u reg;Bit16u *value;
    inb(VGAREG_ACTL_RESET);
    outb(VGAREG_ACTL_ADDRESS,reg);
    write_word(ss,value,((Bit16u)inb(VGAREG_ACTL_READ_DATA))<<8);
+   outb(VGAREG_ACTL_ADDRESS,0x20);
   }
 }
 
@@ -1607,6 +1612,7 @@ Bit16u *value;
  inb(VGAREG_ACTL_RESET);
  outb(VGAREG_ACTL_ADDRESS,0x11);
  write_word(ss,value,((Bit16u)inb(VGAREG_ACTL_READ_DATA))<<8);
+ outb(VGAREG_ACTL_ADDRESS,0x20);
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1626,6 +1632,7 @@ static void biosfn_get_all_palette_reg (seg,offset) Bit16u seg;Bit16u offset;
  // Then the border
  outb(VGAREG_ACTL_ADDRESS,0x11);
  write_byte(seg,offset,inb(VGAREG_ACTL_READ_DATA));
+ outb(VGAREG_ACTL_ADDRESS,0x20);
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1678,6 +1685,7 @@ Bit8u function;
    else
      outb(VGAREG_ACTL_WRITE_DATA,(page&0x03)<<2);
   }
+ outb(VGAREG_ACTL_ADDRESS,0x20);
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1735,6 +1743,7 @@ static void biosfn_read_video_dac_state (state) Bit16u *state;
  if(mcr==0)(csr>>2)&0x03;
 
  write_word(ss,state,(mcr<<8)+csr);
+ outb(VGAREG_ACTL_ADDRESS,0x20);
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1774,6 +1783,7 @@ Bit16u start;Bit16u count;
    outb( VGAREG_DAC_DATA, i&0xff );
    outb( VGAREG_DAC_DATA, i&0xff );
   }  
+ outb(VGAREG_ACTL_ADDRESS,0x20);
 }
 
 // --------------------------------------------------------------------------------------------
