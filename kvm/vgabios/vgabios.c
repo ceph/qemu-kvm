@@ -94,7 +94,6 @@ static void biosfn_perform_gray_scale_summing();
 static void biosfn_load_text_user_pat();
 static void biosfn_load_text_8_14_pat();
 static void biosfn_load_text_8_8_pat();
-static void biosfn_set_text_block_specifier();
 static void biosfn_load_text_8_16_pat();
 static void biosfn_load_gfx_8_8_chars();
 static void biosfn_load_gfx_user_chars();
@@ -105,9 +104,7 @@ static void biosfn_get_font_info();
 static void biosfn_get_ega_info();
 static void biosfn_alternate_prtsc();
 static void biosfn_select_vert_res();
-static void biosfn_enable_default_palette_loading();
 static void biosfn_enable_video_addressing();
-static void biosfn_enable_grayscale_summing();
 static void biosfn_enable_cursor_emulation();
 static void biosfn_switch_video_interface();
 static void biosfn_enable_video_refresh_control();
@@ -290,8 +287,25 @@ int10_test_1A:
   jmp   int10_end
 int10_test_0B:
   cmp   ah, #0x0b
-  jne   int10_test_101B
+  jne   int10_test_1103
   call  biosfn_group_0B
+  jmp   int10_end
+int10_test_1103:
+  cmp   ax, #0x1103
+  jne   int10_test_12
+  call  biosfn_set_text_block_specifier
+  jmp   int10_end
+int10_test_12:
+  cmp   ah, #0x12
+  jne   int10_test_101B
+  cmp   bl, #0x31
+  jne   int10_test_BL33
+  call  biosfn_enable_default_palette_loading
+  jmp   int10_end
+int10_test_BL33:
+  cmp   bl, #0x33
+  jne   int10_normal
+  call  biosfn_enable_grayscale_summing
   jmp   int10_end
 int10_test_101B:
   cmp   ax, #0x101b
@@ -348,7 +362,7 @@ init_vga_card:
   ret
 
 msg_vga_init:
-.ascii "VGABios $Id: vgabios.c,v 1.47 2004/04/24 09:58:31 vruppert Exp $"
+.ascii "VGABios $Id: vgabios.c,v 1.48 2004/04/25 08:45:25 vruppert Exp $"
 .byte 0x0d,0x0a,0x00
 ASM_END
 
@@ -571,9 +585,6 @@ static void int10_func(DI, SI, BP, SP, BX, DX, CX, AX, DS, ES, FLAGS)
        case 0x12:
         biosfn_load_text_8_8_pat(GET_AL(),GET_BL());
         break;
-       case 0x03:
-        biosfn_set_text_block_specifier(GET_BL());
-        break;
        case 0x04:
        case 0x14:
         biosfn_load_text_8_16_pat(GET_AL(),GET_BL());
@@ -616,16 +627,8 @@ static void int10_func(DI, SI, BP, SP, BX, DX, CX, AX, DS, ES, FLAGS)
         biosfn_select_vert_res(GET_AL());
         SET_AL(0x12);
         break;
-       case 0x31:
-        biosfn_enable_default_palette_loading(GET_AL());
-        SET_AL(0x12);
-        break;
        case 0x32:
         biosfn_enable_video_addressing(GET_AL());
-        SET_AL(0x12);
-        break;
-       case 0x33:
-        biosfn_enable_grayscale_summing(GET_AL());
         SET_AL(0x12);
         break;
        case 0x34:
@@ -2425,7 +2428,7 @@ static void biosfn_load_text_user_pat (AL,ES,BP,CX,DX,BL,BH) Bit8u AL;Bit16u ES;
  Bit16u blockaddr,dest,i,src;
 
  get_font_access();
- blockaddr = BL << 13;
+ blockaddr = ((BL & 0x03) << 14) + ((BL & 0x04) << 11);
  for(i=0;i<CX;i++)
   {
    src = BP + i * BH;
@@ -2444,7 +2447,7 @@ static void biosfn_load_text_8_14_pat (AL,BL) Bit8u AL;Bit8u BL;
  Bit16u blockaddr,dest,i,src;
 
  get_font_access();
- blockaddr = BL << 13;
+ blockaddr = ((BL & 0x03) << 14) + ((BL & 0x04) << 11);
  for(i=0;i<0x100;i++)
   {
    src = i * 14;
@@ -2463,7 +2466,7 @@ static void biosfn_load_text_8_8_pat (AL,BL) Bit8u AL;Bit8u BL;
  Bit16u blockaddr,dest,i,src;
 
  get_font_access();
- blockaddr = BL << 13;
+ blockaddr = ((BL & 0x03) << 14) + ((BL & 0x04) << 11);
  for(i=0;i<0x100;i++)
   {
    src = i * 8;
@@ -2477,18 +2480,27 @@ static void biosfn_load_text_8_8_pat (AL,BL) Bit8u AL;Bit8u BL;
   }
 }
 
-static void biosfn_set_text_block_specifier (BL) Bit8u BL;
-{
- outb( VGAREG_SEQU_ADDRESS, 0x03 );
- outb( VGAREG_SEQU_DATA, BL );
-}
+// --------------------------------------------------------------------------------------------
+ASM_START
+biosfn_set_text_block_specifier:
+  push  ax
+  push  dx
+  mov   dx, #vgareg_sequ_address
+  mov   ah, bl
+  mov   al, #0x03
+  out   dx, ax
+  pop   dx
+  pop   ax
+  ret
+ASM_END
 
+// --------------------------------------------------------------------------------------------
 static void biosfn_load_text_8_16_pat (AL,BL) Bit8u AL;Bit8u BL;
 {
  Bit16u blockaddr,dest,i,src;
 
  get_font_access();
- blockaddr = BL << 13;
+ blockaddr = ((BL & 0x03) << 14) + ((BL & 0x04) << 11);
  for(i=0;i<0x100;i++)
   {
    src = i * 16;
@@ -2646,19 +2658,27 @@ Bit8u res;
 }
 
 // --------------------------------------------------------------------------------------------
-static void biosfn_enable_default_palette_loading (disable) 
-Bit8u disable;
-{
- Bit8u modeset;
-
- modeset=read_byte(BIOSMEM_SEG,BIOSMEM_MODESET_CTL);
-
- // Bit 3
- if(disable!=0x00)modeset|=0x08;
- else modeset&=0xf7;
-
- write_byte(BIOSMEM_SEG,BIOSMEM_MODESET_CTL,modeset);
-}
+ASM_START
+biosfn_enable_default_palette_loading:
+  push  ds
+  push  bx
+  push  dx
+  mov   dl, al
+  and   dl, #0x01
+  shl   dl, 3
+  mov   ax, #biosmem_seg
+  mov   ds, ax
+  mov   bx, #biosmem_modeset_ctl
+  mov   al, [bx]
+  and   al, #0xf7
+  or    al, dl
+  mov   [bx], al
+  mov   ax, #0x1212
+  pop   dx
+  pop   bx
+  pop   ds
+  ret
+ASM_END
 
 // --------------------------------------------------------------------------------------------
 static void biosfn_enable_video_addressing (disable) 
@@ -2674,19 +2694,28 @@ Bit8u disable;
 }
 
 // --------------------------------------------------------------------------------------------
-static void biosfn_enable_grayscale_summing (disable)
-Bit8u disable;
-{
- Bit8u modeset;
-
- modeset=read_byte(BIOSMEM_SEG,BIOSMEM_MODESET_CTL);
-
- // Bit 1 set if disable=0
- if(disable==0x00)modeset|=0x02;
- else modeset&=0xfd;
-
- write_byte(BIOSMEM_SEG,BIOSMEM_MODESET_CTL,modeset);
-}
+ASM_START
+biosfn_enable_grayscale_summing:
+  push  ds
+  push  bx
+  push  dx
+  mov   dl, al
+  and   dl, #0x01
+  xor   dl, #0x01
+  shl   dl, 1
+  mov   ax, #biosmem_seg
+  mov   ds, ax
+  mov   bx, #biosmem_modeset_ctl
+  mov   al, [bx]
+  and   al, #0xfd
+  or    al, dl
+  mov   [bx], al
+  mov   ax, #0x1212
+  pop   dx
+  pop   bx
+  pop   ds
+  ret
+ASM_END
 
 // --------------------------------------------------------------------------------------------
 static void biosfn_enable_cursor_emulation (disable)
