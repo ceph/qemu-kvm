@@ -2006,12 +2006,11 @@ void ata_detect( )
       mode      = read_byte(get_SS(),buffer+96) ? ATA_MODE_PIO32 : ATA_MODE_PIO16;
       blksize   = read_word(get_SS(),buffer+10);
       
-      // FIXME : should use default geometry words 1 3 6
-      cylinders = read_word(get_SS(),buffer+108); // last sector not used... should this be  - 1 ?
-      heads     = read_word(get_SS(),buffer+110);
-      spt       = read_word(get_SS(),buffer+112);
+      cylinders = read_word(get_SS(),buffer+(1*2)); // word 1
+      heads     = read_word(get_SS(),buffer+(3*2)); // word 3
+      spt       = read_word(get_SS(),buffer+(6*2)); // word 6
 
-      sectors   = read_dword(get_SS(),buffer+114);
+      sectors   = read_dword(get_SS(),buffer+(60*2)); // word 60 and word 61
 
       write_byte(ebda_seg,&EbdaData->ata.devices[device].device,ATA_DEVICE_HD);
       write_byte(ebda_seg,&EbdaData->ata.devices[device].removable, removable);
