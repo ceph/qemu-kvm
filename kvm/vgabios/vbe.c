@@ -79,7 +79,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.14 2002/03/14 16:54:22 japj Exp $"
+.ascii       "$Id: vbe.c,v 1.15 2002/04/02 22:38:53 cbothamy Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -123,7 +123,7 @@ _vbebios_mode_list:
 #endasm
 
 // from rombios.c
-#define PANIC_PORT 0x400
+#define PANIC_PORT 0x501
 
 #asm
 MACRO HALT
@@ -237,9 +237,9 @@ void vbe_init()
     HALT(__LINE__)
 #endasm    
   }
-#ifdef DEBUG
-  printf("VBE Bios $Id: vbe.c,v 1.14 2002/03/14 16:54:22 japj Exp $\n");
-#endif  
+//#ifdef DEBUG
+  printf("VBE Bios $Id: vbe.c,v 1.15 2002/04/02 22:38:53 cbothamy Exp $\n");
+//#endif  
 }
 
 /** VBE Display Info - Display information on screen about the VBE
