@@ -1997,6 +1997,11 @@ protected_mode:
       rep
         movsw  ;; move CX words from DS:SI to ES:DI
 
+      ;; make sure DS and ES limits are 64KB
+      mov ax, #0x28
+      mov ds, ax
+      mov es, ax
+
       ;; clear CR3 and reset PG bit in CR0 ???
       xor  eax, eax
       mov cr0, eax
