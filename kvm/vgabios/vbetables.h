@@ -29,7 +29,9 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE | 
+#ifdef VBE_HAVE_LFB                                        
                                         VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |
+#endif
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE,
    /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_READABLE |
                                         VBE_WINDOW_ATTRIBUTE_WRITEABLE,
@@ -63,7 +65,11 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  RsvdFieldPosition*/         0,
    /*Bit8u  DirectColorModeInfo*/       0,
 // Mandatory information for VBE 2.0 and above
+#ifdef VBE_HAVE_LFB                                        
    /*Bit32u PhysBasePtr*/               VBE_DISPI_LFB_PHYSICAL_ADDRESS,
+#else
+   /*Bit32u PhysBasePtr*/               0,
+#endif   
    /*Bit32u OffScreenMemOffset*/        0,
    /*Bit16u OffScreenMemSize*/          0,
 // Mandatory information for VBE 3.0 and above
@@ -92,7 +98,9 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE |
-                                        VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |                                        
+#ifdef VBE_HAVE_LFB                                        
+                                        VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |
+#endif
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE,
    /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_READABLE |
                                         VBE_WINDOW_ATTRIBUTE_WRITEABLE,
@@ -126,7 +134,11 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  RsvdFieldPosition*/         0,
    /*Bit8u  DirectColorModeInfo*/       0,
 // Mandatory information for VBE 2.0 and above
+#ifdef VBE_HAVE_LFB                                        
    /*Bit32u PhysBasePtr*/               VBE_DISPI_LFB_PHYSICAL_ADDRESS,
+#else
+   /*Bit32u PhysBasePtr*/               0,
+#endif
    /*Bit32u OffScreenMemOffset*/        0,
    /*Bit16u OffScreenMemSize*/          0,
 // Mandatory information for VBE 3.0 and above
@@ -155,7 +167,9 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE |
-                                        VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |                                        
+#ifdef VBE_HAVE_LFB                                        
+                                        VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |
+#endif
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE,
    /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_READABLE |
                                         VBE_WINDOW_ATTRIBUTE_WRITEABLE,
@@ -189,7 +203,11 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  RsvdFieldPosition*/         0,
    /*Bit8u  DirectColorModeInfo*/       0,
 // Mandatory information for VBE 2.0 and above
+#ifdef VBE_HAVE_LFB                                        
    /*Bit32u PhysBasePtr*/               VBE_DISPI_LFB_PHYSICAL_ADDRESS,
+#else
+   /*Bit32u PhysBasePtr*/               0,
+#endif
    /*Bit32u OffScreenMemOffset*/        0,
    /*Bit16u OffScreenMemSize*/          0,
 // Mandatory information for VBE 3.0 and above
@@ -218,7 +236,9 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE |
-                                        VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |                                        
+#ifdef VBE_HAVE_LFB                                        
+                                        VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |
+#endif
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE,
    /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_READABLE |
                                         VBE_WINDOW_ATTRIBUTE_WRITEABLE,
@@ -252,7 +272,11 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  RsvdFieldPosition*/         0,
    /*Bit8u  DirectColorModeInfo*/       0,
 // Mandatory information for VBE 2.0 and above
+   #ifdef VBE_HAVE_LFB                                        
    /*Bit32u PhysBasePtr*/               VBE_DISPI_LFB_PHYSICAL_ADDRESS,
+#else
+   /*Bit32u PhysBasePtr*/               0,
+#endif
    /*Bit32u OffScreenMemOffset*/        0,
    /*Bit16u OffScreenMemSize*/          0,
 // Mandatory information for VBE 3.0 and above
@@ -281,7 +305,9 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE |
-                                        VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |                                        
+#ifdef VBE_HAVE_LFB                                        
+                                        VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |
+#endif
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE,
    /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_READABLE |
                                         VBE_WINDOW_ATTRIBUTE_WRITEABLE,
@@ -315,7 +341,11 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  RsvdFieldPosition*/         0,
    /*Bit8u  DirectColorModeInfo*/       0,
 // Mandatory information for VBE 2.0 and above
+#ifdef VBE_HAVE_LFB                                        
    /*Bit32u PhysBasePtr*/               VBE_DISPI_LFB_PHYSICAL_ADDRESS,
+#else
+   /*Bit32u PhysBasePtr*/               0,
+#endif
    /*Bit32u OffScreenMemOffset*/        0,
    /*Bit16u OffScreenMemSize*/          0,
 // Mandatory information for VBE 3.0 and above

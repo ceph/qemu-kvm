@@ -35,13 +35,21 @@ v2.0
   - upload the fonts to the "card" memory 
   - display fonts from the "card" memory (plex86/bochs vga card needs update)
 
+=================================================================================================
 VBE:
 ----
 Short term:
-- LFB mode support
-
+- bugfixes for bochs 1.4 support
+- LFB mode support (bochs patch available + VBE_HAVE_LFB in vbe.c)
+- implement remaining functions that can be done with DISPI 0xb0c0 interface 
+  (get functions for mode?, window)
 
 Long term:
+- extend DISPI interface (see also bochs bug [ 529554 ] unsupported VBE features DISPI update)
+  . clear / preserve display memory upon set vbe
+  . set/get logical scanline length (4f06)
+  . set/get display start (4f07)
 - have plex86 host side display interface
-- support more modi
+- support more modi (16bit/32bit modi support)
 - have text io functions in vbe mode
+

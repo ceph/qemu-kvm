@@ -1,6 +1,8 @@
 vgabios-????
   - "Jeroen Janssen" <japj@darius.demon.nl>
     . Added LFB modes (to be used with the vbe-lfb patch in bochs)
+      see VBE_HAVE_LFB in vbe.c
+    . updated TODO & docs for changes after bochs 1.4
 
 vgabios-0.3a 
   - "Christophe Bothamy" <cbothamy@free.fr>: Mar 10 2002
