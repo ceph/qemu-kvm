@@ -1484,7 +1484,8 @@ bios_printf(action, s)
   format_width = 0;
 
   if ((action & BIOS_PRINTF_DEBHALT) == BIOS_PRINTF_DEBHALT) {
-    bios_printf (BIOS_PRINTF_ALL, "FATAL: ");
+    outb(PANIC_PORT2, 0x00);
+    bios_printf (BIOS_PRINTF_SCREEN, "FATAL: ");
   }
 
   while (c = read_byte(0xf000, s)) {
@@ -1730,11 +1731,6 @@ shutdown_status_panic(status)
 void
 print_bios_banner()
 {
-  /* test formats
-  bios_printf(BIOS_PRINTF_SCREEN, "Test: x234=%3x, d-123=%d, c=%c, s=%s\n",
-      0x1234, -123, '!', "ok");
-  */
-
   printf(BX_APPNAME" BIOS, %d cpu%s, ", BX_SMP_PROCESSORS, BX_SMP_PROCESSORS>1?"s":"");
   printf("%s %s\n", bios_cvs_version_string, bios_date_string);
   printf("\n");
@@ -1807,7 +1803,13 @@ print_cdromboot_failure( code )
 void
 nmi_handler_msg()
 {
-  BX_INFO("NMI Handler called\n");
+  BX_PANIC("NMI Handler called\n");
+}
+
+void
+int18_panic_msg()
+{
+  BX_PANIC("INT18: BOOT FAILURE\n");
 }
 
 void
@@ -7881,8 +7883,8 @@ int13_eltorito:
 ;- INT18h -
 ;----------
 int18_handler: ;; Boot Failure routing
+  call _int18_panic_msg
   hlt
-  HALT(__LINE__)
   iret
 
 ;----------
@@ -9321,7 +9323,6 @@ nmi:
   ;; FIXME the NMI handler should not panic
   ;; but iret when called from int75 (fpu exception)
   call _nmi_handler_msg
-  HALT(__LINE__)
   iret
 
 int75_handler:
