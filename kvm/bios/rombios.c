@@ -9105,7 +9105,7 @@ pci_pro_devloop:
 pci_pro_nextdev:
   inc bx
   cmp bx, #0x0100
-  jnb pci_pro_devloop
+  jne pci_pro_devloop
   mov ah, #0x86
   jmp pci_pro_fail
 pci_pro_f08: ;; read configuration byte
@@ -9185,7 +9185,7 @@ pci_pro_select_reg:
   and di,  #0xff
   or  ax,  di
   and al,  #0xfc
-  mov edx, #0x0cf8
+  mov dx, #0x0cf8
   out dx,  eax
   ret
 
@@ -9238,7 +9238,7 @@ pci_real_devloop:
 pci_real_nextdev:
   inc bx
   cmp bx, #0x0100
-  jnb pci_real_devloop
+  jne pci_real_devloop
   mov dx, cx
   shr ecx, #16
   mov ah, #0x86
@@ -9316,7 +9316,7 @@ pci_real_select_reg:
   and di,  #0xff
   or  ax,  di
   and al,  #0xfc
-  mov edx, #0x0cf8
+  mov dx, #0x0cf8
   out dx,  eax
   ret
 #endif
@@ -10099,7 +10099,18 @@ int1a_handler:
   cmp  ah, #0xb1
   jne  int1a_normal
   call pcibios_real
-  jb   pcibios_error
+  jc   pcibios_error
+  push ax
+  mov  ax, ss
+  push ds
+  mov  ds, ax
+  push bp
+  mov  bp, sp
+  lahf
+  mov  [bp+10], ah
+  pop bp
+  pop ds
+  pop ax
   iret
 pcibios_error:
   mov  al, ah
