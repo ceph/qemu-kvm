@@ -27,6 +27,7 @@ static ModeInfoListItem mode_info_list[]=
 {*/
 // Mandatory information for all VBE revisions
    /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
+                                        VBE_MODE_ATTRIBUTE_EXTENDED_INFORMATION_AVAILABLE |
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE |
 #ifdef VBE_HAVE_LFB
@@ -96,13 +97,15 @@ static ModeInfoListItem mode_info_list[]=
 {*/
 // Mandatory information for all VBE revisions
    /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
+                                        VBE_MODE_ATTRIBUTE_EXTENDED_INFORMATION_AVAILABLE |
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE |
 #ifdef VBE_HAVE_LFB
                                         VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |
 #endif
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE,
-   /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_READABLE |
+   /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_RELOCATABLE |
+                                        VBE_WINDOW_ATTRIBUTE_READABLE |
                                         VBE_WINDOW_ATTRIBUTE_WRITEABLE,
    /*Bit8u  WinBAttributes*/            0,
    /*Bit16u WinGranularity*/            VBE_DISPI_BANK_SIZE_KB,
@@ -165,6 +168,7 @@ static ModeInfoListItem mode_info_list[]=
 {*/
 // Mandatory information for all VBE revisions
    /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
+                                        VBE_MODE_ATTRIBUTE_EXTENDED_INFORMATION_AVAILABLE |
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE |
 #ifdef VBE_HAVE_LFB
@@ -234,12 +238,13 @@ static ModeInfoListItem mode_info_list[]=
 {*/
 // Mandatory information for all VBE revisions
    /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
+                                        VBE_MODE_ATTRIBUTE_EXTENDED_INFORMATION_AVAILABLE |
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE |
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE,
-   /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_READABLE |
-                                        VBE_WINDOW_ATTRIBUTE_WRITEABLE |
-                                        VBE_WINDOW_ATTRIBUTE_RELOCATABLE,
+   /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_RELOCATABLE |
+                                        VBE_WINDOW_ATTRIBUTE_READABLE |
+                                        VBE_WINDOW_ATTRIBUTE_WRITEABLE,
    /*Bit8u  WinBAttributes*/            0,
    /*Bit16u WinGranularity*/            VBE_DISPI_BANK_SIZE_KB,
    /*Bit16u WinSize*/                   VBE_DISPI_BANK_SIZE_KB,
@@ -297,13 +302,15 @@ static ModeInfoListItem mode_info_list[]=
 {*/
 // Mandatory information for all VBE revisions
    /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
+                                        VBE_MODE_ATTRIBUTE_EXTENDED_INFORMATION_AVAILABLE |
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE |
 #ifdef VBE_HAVE_LFB
                                         VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |
 #endif
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE,
-   /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_READABLE |
+   /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_RELOCATABLE |
+                                        VBE_WINDOW_ATTRIBUTE_READABLE |
                                         VBE_WINDOW_ATTRIBUTE_WRITEABLE,
    /*Bit8u  WinBAttributes*/            0,
    /*Bit16u WinGranularity*/            VBE_DISPI_BANK_SIZE_KB,
@@ -366,13 +373,15 @@ static ModeInfoListItem mode_info_list[]=
 {*/
 // Mandatory information for all VBE revisions
    /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
+                                        VBE_MODE_ATTRIBUTE_EXTENDED_INFORMATION_AVAILABLE |
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE |
 #ifdef VBE_HAVE_LFB
                                         VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |
 #endif
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE,
-   /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_READABLE |
+   /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_RELOCATABLE |
+                                        VBE_WINDOW_ATTRIBUTE_READABLE |
                                         VBE_WINDOW_ATTRIBUTE_WRITEABLE,
    /*Bit8u  WinBAttributes*/            0,
    /*Bit16u WinGranularity*/            VBE_DISPI_BANK_SIZE_KB,
@@ -436,6 +445,7 @@ static ModeInfoListItem mode_info_list[]=
 {*/
 // Mandatory information for all VBE revisions
    /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
+                                        VBE_MODE_ATTRIBUTE_EXTENDED_INFORMATION_AVAILABLE |
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE |
                                         VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |
@@ -560,6 +570,7 @@ static ModeInfoListItem mode_info_list[]=
 {*/
 // Mandatory information for all VBE revisions
    /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
+                                        VBE_MODE_ATTRIBUTE_EXTENDED_INFORMATION_AVAILABLE |
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE |
                                         VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |
@@ -622,6 +633,7 @@ static ModeInfoListItem mode_info_list[]=
 {*/
 // Mandatory information for all VBE revisions
    /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
+                                        VBE_MODE_ATTRIBUTE_EXTENDED_INFORMATION_AVAILABLE |
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE |
                                         VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |
@@ -684,6 +696,7 @@ static ModeInfoListItem mode_info_list[]=
 {*/
 // Mandatory information for all VBE revisions
    /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
+                                        VBE_MODE_ATTRIBUTE_EXTENDED_INFORMATION_AVAILABLE |
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE |
                                         VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |
@@ -746,6 +759,7 @@ static ModeInfoListItem mode_info_list[]=
 {*/
 // Mandatory information for all VBE revisions
    /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
+                                        VBE_MODE_ATTRIBUTE_EXTENDED_INFORMATION_AVAILABLE |
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE |
                                         VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |

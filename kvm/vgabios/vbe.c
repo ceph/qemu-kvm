@@ -79,7 +79,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.26 2003/02/11 19:17:59 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.27 2003/04/18 07:23:36 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -190,6 +190,35 @@ static void dispi_set_bank(bank)
 {
   outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_BANK);
   outw(VBE_DISPI_IOPORT_DATA,bank);
+}
+
+static void dispi_set_bank_farcall()
+{
+ASM_START
+  cmp bx,#0x0100
+  je dispi_set_bank_farcall_get
+  or bx,bx
+  jnz dispi_set_bank_farcall_error
+  push dx
+  mov ax,# VBE_DISPI_INDEX_BANK
+  mov dx,# VBE_DISPI_IOPORT_INDEX
+  out dx,ax
+  pop ax
+  mov dx,# VBE_DISPI_IOPORT_DATA
+  out dx,ax
+  retf
+dispi_set_bank_farcall_get:
+  mov ax,# VBE_DISPI_INDEX_BANK
+  mov dx,# VBE_DISPI_IOPORT_INDEX
+  out dx,ax
+  mov dx,# VBE_DISPI_IOPORT_DATA
+  in ax,dx
+  mov dx,ax
+  retf
+dispi_set_bank_farcall_error:
+  mov ax,#0x014F
+  retf
+ASM_END
 }
 
 static void dispi_set_x_offset(offset)
@@ -308,7 +337,7 @@ ASM_START
 ASM_END    
   }
 //#ifdef DEBUG
-  printf("VBE Bios $Id: vbe.c,v 1.26 2003/02/11 19:17:59 vruppert Exp $\n");
+  printf("VBE Bios $Id: vbe.c,v 1.27 2003/04/18 07:23:36 vruppert Exp $\n");
 //#endif  
 }
 
@@ -510,6 +539,10 @@ Bit16u *AX;Bit16u CX; Bit16u ES;Bit16u DI;
 #endif        
                 memsetb(ss, &info, 0, sizeof(ModeInfoBlock));
                 memcpyb(ss, &info, 0xc000, &(cur_info->info), sizeof(ModeInfoBlockCompact));
+                if (info.WinAAttributes & VBE_WINDOW_ATTRIBUTE_RELOCATABLE) {
+                  info.WinFuncPtr = 0xC0000000UL;
+                  *(Bit16u *)&(info.WinFuncPtr) = (Bit16u)(dispi_set_bank_farcall);
+                }
                 
                 result = 0x4f;
         }

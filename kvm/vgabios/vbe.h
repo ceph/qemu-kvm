@@ -225,6 +225,7 @@ typedef struct ModeInfoBlock
 // Mode Attributes
 
 #define VBE_MODE_ATTRIBUTE_SUPPORTED                     0x0001
+#define VBE_MODE_ATTRIBUTE_EXTENDED_INFORMATION_AVAILABLE  0x0002
 #define VBE_MODE_ATTRIBUTE_TTY_BIOS_SUPPORT              0x0004
 #define VBE_MODE_ATTRIBUTE_COLOR_MODE                    0x0008
 #define VBE_MODE_ATTRIBUTE_GRAPHICS_MODE                 0x0010
