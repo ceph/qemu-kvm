@@ -4575,7 +4575,7 @@ int13_harddisk(DI, SI, BP, SP, BX, DX, CX, AX, DS, ES, FLAGS)
       // should look at 40:8E also???
       
       // Read the status from controller
-      status = inb(read_word(ebda_seg, &EbdaData->ata.channels[device/2].iobase1 + ATA_CB_STAT));
+      status = inb(read_word(ebda_seg, &EbdaData->ata.channels[device/2].iobase1) + ATA_CB_STAT);
       if ( (status & ( ATA_CB_STAT_BSY | ATA_CB_STAT_RDY )) == ATA_CB_STAT_RDY ) {
         goto int13_success;
         }
