@@ -74,7 +74,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.11 2002/03/10 16:36:06 japj Exp $"
+.ascii       "$Id: vbe.c,v 1.12 2002/03/10 16:42:59 japj Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -86,6 +86,12 @@ _vbebios_info_string:
 .byte	0x0a,0x0d
 .byte	0x0a,0x0d
 .byte	0x00
+
+_no_vbebios_info_string:
+.ascii      "NO Bochs VBE Support available!"
+.byte	0x0a,0x0d
+.byte 0x00
+
 
 #ifndef DYN_LIST
 // FIXME: for each new mode add a statement here
@@ -201,10 +207,9 @@ static ModeInfoListItem* mode_info_find_mode(mode)
  */
 Boolean vbe_has_vbe_display()
 {
-  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_ID);
-  outw(VBE_DISPI_IOPORT_DATA,VBE_DISPI_ID0);
+  dispi_set_id(VBE_DISPI_ID0);
 
-  return (inw(VBE_DISPI_IOPORT_DATA)==VBE_DISPI_ID0);
+  return (dispi_get_id()==VBE_DISPI_ID0);
 }
 
 /** VBE Init - Initialise the Vesa Bios Extension Code
@@ -228,7 +233,7 @@ void vbe_init()
 #endasm    
   }
 #ifdef DEBUG
-  printf("VBE Bios $Id: vbe.c,v 1.11 2002/03/10 16:36:06 japj Exp $\n");
+  printf("VBE Bios $Id: vbe.c,v 1.12 2002/03/10 16:42:59 japj Exp $\n");
 #endif  
 }
 
@@ -236,12 +241,26 @@ void vbe_init()
  */
 void vbe_display_info()
 {
-#asm
- mov ax,#0xc000
- mov ds,ax
- mov si,#_vbebios_info_string
- call _display_string
-#endasm  
+  // Check for VBE display extension in Bochs
+  if (vbe_has_vbe_display())
+  {
+    #asm
+     mov ax,#0xc000
+     mov ds,ax
+     mov si,#_vbebios_info_string
+     call _display_string
+    #endasm  
+  }
+  else
+  {
+    #asm
+     mov ax,#0xc000
+     mov ds,ax
+     mov si,#_no_vbebios_info_string
+     call _display_string
+    #endasm  
+    
+  }
 }  
 
 /** Function 00h - Return VBE Controller Information
