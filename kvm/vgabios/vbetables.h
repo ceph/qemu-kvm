@@ -185,10 +185,10 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  YCharSize*/                 16,
    /*Bit8u  NumberOfPlanes*/            4,
    /*Bit8u  BitsPerPixel*/              4,
-   /*Bit8u  NumberOfBanks*/             1,
+   /*Bit8u  NumberOfBanks*/             16,
    /*Bit8u  MemoryModel*/               VBE_MEMORYMODEL_PLANAR,
    /*Bit8u  BankSize*/                  0,
-   /*Bit8u  NumberOfImagePages*/        0,
+   /*Bit8u  NumberOfImagePages*/        15,
    /*Bit8u  Reserved_page*/             0,
 // Direct Color fields (required for direct/6 and YUV/7 memory models)
    /*Bit8u  RedMaskSize*/               0,

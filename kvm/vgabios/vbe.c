@@ -71,7 +71,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.44 2004/05/09 20:31:30 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.45 2004/07/22 18:37:29 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -87,7 +87,7 @@ _no_vbebios_info_string:
 .byte 0x00
 
 msg_vbe_init:
-.ascii      "VBE Bios $Id: vbe.c,v 1.44 2004/05/09 20:31:30 vruppert Exp $"
+.ascii      "VBE Bios $Id: vbe.c,v 1.45 2004/07/22 18:37:29 vruppert Exp $"
 .byte	0x0a,0x0d, 0x00
 
 
@@ -162,8 +162,37 @@ ASM_END
 static void dispi_set_xres(xres)
   Bit16u xres;
 {
-  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_XRES);
-  outw(VBE_DISPI_IOPORT_DATA,xres);
+ASM_START
+  push bp
+  mov  bp, sp
+  push ax
+  push dx
+
+  mov  dx, # VBE_DISPI_IOPORT_INDEX
+  mov  ax, # VBE_DISPI_INDEX_XRES
+  out  dx, ax
+  mov  dx, # VBE_DISPI_IOPORT_DATA
+  mov  ax, 4[bp] ; xres
+  out  dx, ax
+  push ax
+  mov  dx, #0x03d4
+  mov  ax, #0x0011
+  out  dx, ax
+  mov  dx, #0x03d4
+  pop  ax
+  push ax
+  shr  ax, #3
+  dec  ax
+  mov  ah, al
+  mov  al, #0x01
+  out  dx, ax
+  pop  ax
+  call vga_set_virt_width
+
+  pop  dx
+  pop  ax
+  pop  bp
+ASM_END
 }
 
 static void dispi_set_yres(yres)
@@ -239,9 +268,7 @@ dispi_get_enable:
   in   ax, dx
   pop  dx
   ret
-ASM_END
 
-ASM_START
 _dispi_set_bank:
   push dx
   push ax
@@ -339,7 +366,28 @@ dispi_get_y_offset:
   pop  dx
   ret
 
+vga_set_virt_width:
+  push ax
+  push bx
+  push dx
+  mov  bx, ax
+  call dispi_get_bpp
+  cmp  al, #0x04
+  ja   set_width_svga
+  shr  bx, #2
+set_width_svga:
+  shr  bx, #2
+  mov  dx, #0x03d4
+  mov  ah, bl
+  mov  al, #0x13
+  out  dx, ax
+  pop  dx
+  pop  bx
+  pop  ax
+  ret
+
 dispi_set_virt_width:
+  call vga_set_virt_width
   push dx
   push ax
   mov  dx, # VBE_DISPI_IOPORT_INDEX
@@ -718,9 +766,9 @@ Bit16u *AX;Bit16u BX; Bit16u ES;Bit16u DI;
                   biosfn_set_video_mode(0x6a);
                 }
 
+                dispi_set_bpp(cur_info->info.BitsPerPixel);
                 dispi_set_xres(cur_info->info.XResolution);
                 dispi_set_yres(cur_info->info.YResolution);
-                dispi_set_bpp(cur_info->info.BitsPerPixel);
                 dispi_set_bank(0);
                 dispi_set_enable(VBE_DISPI_ENABLED | no_clear | lfb_flag);
 
