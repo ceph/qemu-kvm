@@ -101,7 +101,6 @@ static void biosfn_load_gfx_8_14_chars();
 static void biosfn_load_gfx_8_8_dd_chars();
 static void biosfn_load_gfx_8_16_chars();
 static void biosfn_get_font_info();
-static void biosfn_get_ega_info();
 static void biosfn_alternate_prtsc();
 static void biosfn_select_vert_res();
 static void biosfn_switch_video_interface();
@@ -123,6 +122,7 @@ biosmem_initial_mode = 0x10
 biosmem_current_mode = 0x49
 biosmem_nb_cols      = 0x4a
 biosmem_current_page = 0x62
+biosmem_crtc_address = 0x63
 biosmem_current_msr  = 0x65
 biosmem_char_height  = 0x85
 biosmem_video_ctl    = 0x87
@@ -130,6 +130,7 @@ biosmem_switches     = 0x88
 biosmem_modeset_ctl  = 0x89
 biosmem_dcc_index    = 0x8a
 
+vgareg_mda_crtc_address  = 0x03b4
 vgareg_actl_address      = 0x03c0
 vgareg_actl_read_data    = 0x03c1
 vgareg_write_misc_output = 0x03c2
@@ -298,6 +299,11 @@ int10_test_1103:
 int10_test_12:
   cmp   ah, #0x12
   jne   int10_test_101B
+  cmp   bl, #0x10
+  jne   int10_test_BL31
+  call  biosfn_get_ega_info
+  jmp   int10_end
+int10_test_BL31:
   cmp   bl, #0x31
   jne   int10_test_BL32
   call  biosfn_enable_default_palette_loading
@@ -372,7 +378,7 @@ init_vga_card:
   ret
 
 msg_vga_init:
-.ascii "VGABios $Id: vgabios.c,v 1.50 2004/05/01 16:03:13 vruppert Exp $"
+.ascii "VGABios $Id: vgabios.c,v 1.51 2004/05/02 17:27:18 vruppert Exp $"
 .byte 0x0d,0x0a,0x00
 ASM_END
 
@@ -627,9 +633,6 @@ static void int10_func(DI, SI, BP, SP, BX, DX, CX, AX, DS, ES, FLAGS)
    case 0x12:
      switch(GET_BL())
       {
-       case 0x10:
-        biosfn_get_ega_info(&BX,&CX);
-        break;
        case 0x20:
         biosfn_alternate_prtsc();
         break;
@@ -1123,12 +1126,43 @@ Bit8u page;
 }
 
 // --------------------------------------------------------------------------------------------
+static void vgamem_copy_pl4(xstart,ysrc,ydest,cols,nbcols,cheight)
+Bit8u xstart;Bit8u ysrc;Bit8u ydest;Bit8u cols;Bit8u nbcols;Bit8u cheight;
+{
+ Bit16u src,dest;
+ Bit8u i;
+
+ src=ysrc*cheight*nbcols+xstart;
+ dest=ydest*cheight*nbcols+xstart;
+ outw(VGAREG_GRDC_ADDRESS, 0x0105);
+ for(i=0;i<cheight;i++)
+  {
+   memcpyb(0xa000,dest+i*nbcols,0xa000,src+i*nbcols,cols);
+  }
+ outw(VGAREG_GRDC_ADDRESS, 0x0005);
+}
+
+// --------------------------------------------------------------------------------------------
+static void vgamem_fill_pl4(xstart,ystart,cols,nbcols,cheight)
+Bit8u xstart;Bit8u ystart;Bit8u cols;Bit8u nbcols;Bit8u cheight;
+{
+ Bit16u dest;
+ Bit8u i;
+
+ dest=ystart*cheight*nbcols+xstart;
+ for(i=0;i<cheight;i++)
+  {
+   memsetb(0xa000,dest+i*nbcols,0x00,cols);
+  }
+}
+
+// --------------------------------------------------------------------------------------------
 static void biosfn_scroll (nblines,attr,rul,cul,rlr,clr,page,dir)
 Bit8u nblines;Bit8u attr;Bit8u rul;Bit8u cul;Bit8u rlr;Bit8u clr;Bit8u page;Bit8u dir;
 {
  // page == 0xFF if current
 
- Bit8u mode,line;
+ Bit8u mode,line,cheight;
  Bit16u nbcols,nbrows,i;
  Bit16u address;
 
@@ -1148,6 +1182,10 @@ Bit8u nblines;Bit8u attr;Bit8u rul;Bit8u cul;Bit8u rlr;Bit8u clr;Bit8u page;Bit8
  if(page==0xFF)
   page=read_byte(BIOSMEM_SEG,BIOSMEM_CURRENT_PAGE);
 
+ if(rlr>=nbrows)rlr=nbrows-1;
+ if(clr>=nbcols)clr=nbcols-1;
+ if(nblines>nbrows)nblines=0;
+
  if(vga_modes[line].class==TEXT)
   {
    // Compute the address
@@ -1155,10 +1193,6 @@ Bit8u nblines;Bit8u attr;Bit8u rul;Bit8u cul;Bit8u rlr;Bit8u clr;Bit8u page;Bit8
 #ifdef DEBUG
    printf("Scroll, address %04x (%04x %04x %02x)\n",address,nbrows,nbcols,page);
 #endif
-
-   if(rlr>=nbrows)rlr=nbrows-1;
-   if(clr>=nbcols)clr=nbcols-1;
-   if(nblines>nbrows)nblines=0;
 
    if(nblines==0&&rul==0&&cul==0&&rlr==nbrows-1&&clr==nbcols-1)
     {
@@ -1188,11 +1222,43 @@ Bit8u nblines;Bit8u attr;Bit8u rul;Bit8u cul;Bit8u rlr;Bit8u clr;Bit8u page;Bit8
   }
  else
   {
-   // FIXME gfx mode
+   // FIXME gfx mode not complete
+   cheight=vga_modes[line].cheight;
+   if((vga_modes[line].memmodel==PLANAR4)||(vga_modes[line].memmodel==PLANAR1))
+    {
+     if(nblines==0&&rul==0&&cul==0&&rlr==nbrows-1&&clr==nbcols-1)
+      {
+       memsetb(vga_modes[line].sstart,0,0x00,nbrows*nbcols*cheight);
+      }
+     else
+      {// if Scroll up
+       if(dir==SCROLL_UP)
+        {for(i=rul;i<=rlr;i++)
+          {
+           if((i+nblines>rlr)||(nblines==0))
+            vgamem_fill_pl4(cul,i,clr-cul+1,nbcols,cheight);
+           else
+            vgamem_copy_pl4(cul,i+nblines,i,clr-cul+1,nbcols,cheight);
+          }
+        }
+       else
+        {for(i=rlr;i>=rul;i--)
+          {
+           if((i<rul+nblines)||(nblines==0))
+            vgamem_fill_pl4(cul,i,clr-cul+1,nbcols,cheight);
+           else
+            vgamem_copy_pl4(cul,i,i-nblines,clr-cul+1,nbcols,cheight);
+          }
+        }
+      }
+    }
+   else
+    {
 #ifdef DEBUG
-   printf("Scroll in graphics mode ");
-   unimplemented();
+     printf("Scroll in graphics mode ");
+     unimplemented();
 #endif
+    }
   }
 }
 
@@ -1605,64 +1671,63 @@ static void biosfn_write_pixel (BH,AL,CX,DX) Bit8u BH;Bit8u AL;Bit16u CX;Bit16u 
  if(line==0xFF)return;
  if(vga_modes[line].class==TEXT)return;
 
- if((vga_modes[line].memmodel==PLANAR4)||(vga_modes[line].memmodel==PLANAR1))
+ switch(vga_modes[line].memmodel)
   {
-   addr = CX/8+DX*read_word(BIOSMEM_SEG,BIOSMEM_NB_COLS);
-   mask = 0x01 << (7 - (CX & 0x07));
-   outw(VGAREG_GRDC_ADDRESS, (mask << 8) | 0x08);
-   outw(VGAREG_GRDC_ADDRESS, 0x0205);
-   data = read_byte(0xa000,addr);
-   if (AL & 0x80)
-    {
-     outw(VGAREG_GRDC_ADDRESS, 0x1803);
-    }
-   write_byte(0xa000,addr,AL);
-   outw(VGAREG_GRDC_ADDRESS, 0xff08);
-   outw(VGAREG_GRDC_ADDRESS, 0x0005);
-   outw(VGAREG_GRDC_ADDRESS, 0x0003);
-  }
- else if(vga_modes[line].memmodel==CGA)
-  {
-   if(vga_modes[line].pixbits==2)
-    {
-     addr=(CX>>2)+(DX>>1)*80;
-    }
-   else
-    {
-     addr=(CX>>3)+(DX>>1)*80;
-    }
-   if (DX & 1) addr += 0x2000;
-   data = read_byte(0xb800,addr);
-   if(vga_modes[line].pixbits==2)
-    {
-     attr = (AL & 0x03) << ((3 - (CX & 0x03)) * 2);
-     mask = 0x03 << ((3 - (CX & 0x03)) * 2);
-    }
-   else
-    {
-     attr = (AL & 0x01) << (7 - (CX & 0x07));
+   case PLANAR4:
+   case PLANAR1:
+     addr = CX/8+DX*read_word(BIOSMEM_SEG,BIOSMEM_NB_COLS);
      mask = 0x01 << (7 - (CX & 0x07));
-    }
-   if (AL & 0x80)
-    {
-     data ^= attr;
-    }
-   else
-    {
-     data &= ~mask;
-     data |= attr;
-    }
-   write_byte(0xb800,addr,data);
-  }
- else if(vga_modes[line].memmodel==LINEAR8)
-  {
-   addr=CX+DX*(read_word(BIOSMEM_SEG,BIOSMEM_NB_COLS)*8);
-   write_byte(0xa000,addr,AL);
-  }
- else
-  {
+     outw(VGAREG_GRDC_ADDRESS, (mask << 8) | 0x08);
+     outw(VGAREG_GRDC_ADDRESS, 0x0205);
+     data = read_byte(0xa000,addr);
+     if (AL & 0x80)
+      {
+       outw(VGAREG_GRDC_ADDRESS, 0x1803);
+      }
+     write_byte(0xa000,addr,AL);
+     outw(VGAREG_GRDC_ADDRESS, 0xff08);
+     outw(VGAREG_GRDC_ADDRESS, 0x0005);
+     outw(VGAREG_GRDC_ADDRESS, 0x0003);
+     break;
+   case CGA:
+     if(vga_modes[line].pixbits==2)
+      {
+       addr=(CX>>2)+(DX>>1)*80;
+      }
+     else
+      {
+       addr=(CX>>3)+(DX>>1)*80;
+      }
+     if (DX & 1) addr += 0x2000;
+     data = read_byte(0xb800,addr);
+     if(vga_modes[line].pixbits==2)
+      {
+       attr = (AL & 0x03) << ((3 - (CX & 0x03)) * 2);
+       mask = 0x03 << ((3 - (CX & 0x03)) * 2);
+      }
+     else
+      {
+       attr = (AL & 0x01) << (7 - (CX & 0x07));
+       mask = 0x01 << (7 - (CX & 0x07));
+      }
+     if (AL & 0x80)
+      {
+       data ^= attr;
+      }
+     else
+      {
+       data &= ~mask;
+       data |= attr;
+      }
+     write_byte(0xb800,addr,data);
+     break;
+   case LINEAR8:
+     addr=CX+DX*(read_word(BIOSMEM_SEG,BIOSMEM_NB_COLS)*8);
+     write_byte(0xa000,addr,AL);
+     break;
 #ifdef DEBUG
-   unimplemented();
+   default:
+     unimplemented();
 #endif
   }
 }
@@ -1680,43 +1745,42 @@ static void biosfn_read_pixel (BH,CX,DX,AX) Bit8u BH;Bit16u CX;Bit16u DX;Bit16u 
  if(line==0xFF)return;
  if(vga_modes[line].class==TEXT)return;
 
- if((vga_modes[line].memmodel==PLANAR4)||(vga_modes[line].memmodel==PLANAR1))
+ switch(vga_modes[line].memmodel)
   {
-   addr = CX/8+DX*read_word(BIOSMEM_SEG,BIOSMEM_NB_COLS);
-   mask = 0x01 << (7 - (CX & 0x07));
-   attr = 0x00;
-   for(i=0;i<4;i++)
-    {
-     outw(VGAREG_GRDC_ADDRESS, (i << 8) | 0x04);
-     data = read_byte(0xa000,addr) & mask;
-     if (data > 0) attr |= (0x01 << i);
-    }
-  }
- else if(vga_modes[line].memmodel==CGA)
-  {
-   addr=(CX>>2)+(DX>>1)*80;
-   if (DX & 1) addr += 0x2000;
-   data = read_byte(0xb800,addr);
-   if(vga_modes[line].pixbits==2)
-    {
-     attr = (data >> ((3 - (CX & 0x03)) * 2)) & 0x03;
-    }
-   else
-    {
-     attr = (data >> (7 - (CX & 0x07))) & 0x01;
-    }
-  }
- else if(vga_modes[line].memmodel==LINEAR8)
-  {
-   addr=CX+DX*(read_word(BIOSMEM_SEG,BIOSMEM_NB_COLS)*8);
-   attr=read_byte(0xa000,addr);
-  }
- else
-  {
+   case PLANAR4:
+   case PLANAR1:
+     addr = CX/8+DX*read_word(BIOSMEM_SEG,BIOSMEM_NB_COLS);
+     mask = 0x01 << (7 - (CX & 0x07));
+     attr = 0x00;
+     for(i=0;i<4;i++)
+      {
+       outw(VGAREG_GRDC_ADDRESS, (i << 8) | 0x04);
+       data = read_byte(0xa000,addr) & mask;
+       if (data > 0) attr |= (0x01 << i);
+      }
+     break;
+   case CGA:
+     addr=(CX>>2)+(DX>>1)*80;
+     if (DX & 1) addr += 0x2000;
+     data = read_byte(0xb800,addr);
+     if(vga_modes[line].pixbits==2)
+      {
+       attr = (data >> ((3 - (CX & 0x03)) * 2)) & 0x03;
+      }
+     else
+      {
+       attr = (data >> (7 - (CX & 0x07))) & 0x01;
+      }
+     break;
+   case LINEAR8:
+     addr=CX+DX*(read_word(BIOSMEM_SEG,BIOSMEM_NB_COLS)*8);
+     attr=read_byte(0xa000,addr);
+     break;
+   default:
 #ifdef DEBUG
-   unimplemented();
+     unimplemented();
 #endif
-   attr = 0;
+     attr = 0;
   }
  write_word(ss,AX,(read_word(ss,AX) & 0xff00) | attr);
 }
@@ -1733,8 +1797,6 @@ Bit8u car;Bit8u page;Bit8u attr;Bit8u flag;
  // special case if page is 0xff, use current page
  if(page==0xff)
   page=read_byte(BIOSMEM_SEG,BIOSMEM_CURRENT_PAGE);
-
- // FIXME gfx mode
 
  // Get the mode
  mode=read_byte(BIOSMEM_SEG,BIOSMEM_CURRENT_MODE);
@@ -2627,21 +2689,27 @@ Bit8u BH;Bit16u *ES;Bit16u *BP;Bit16u *CX;Bit16u *DX;
 }
 
 // --------------------------------------------------------------------------------------------
-static void biosfn_get_ega_info (BX,CX) 
-Bit16u *BX;Bit16u *CX;
-{Bit16u ss=get_SS();
- Bit16u crtc;
- Bit8u switches;
-
- crtc=read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS);
- if(crtc==VGAREG_MDA_CRTC_ADDRESS)
-  write_word(ss,BX,(1<<8)+0x0003);
- else
-  write_word(ss,BX,0x0003);
-
- switches=read_byte(BIOSMEM_SEG,BIOSMEM_SWITCHES);
- write_word(ss,CX,(switches&0x0f));
-}
+ASM_START
+biosfn_get_ega_info:
+  push  ds
+  push  ax
+  mov   ax, #biosmem_seg
+  mov   ds, ax
+  xor   ch, ch
+  mov   bx, #biosmem_switches
+  mov   cl, [bx]
+  and   cl, #0x0f
+  mov   bx, #biosmem_crtc_address
+  mov   ax, [bx]
+  mov   bx, #0x0003
+  cmp   ax, #vgareg_mda_crtc_address
+  jne   mode_ega_color
+  mov   bh, #0x01
+mode_ega_color:
+  pop   ax
+  pop   ds
+  ret
+ASM_END
 
 // --------------------------------------------------------------------------------------------
 static void biosfn_alternate_prtsc()
