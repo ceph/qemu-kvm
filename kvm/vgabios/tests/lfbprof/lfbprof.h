@@ -138,7 +138,7 @@ void LfbMemcpy(void *dst,void *src,int n);
 
 /* Map a real mode pointer into address space */
 
-#define LfbMapRealPointer(p)    (void*)(((unsigned)(p) >> 12) + ((p) & 0xFFFF))
+#define LfbMapRealPointer(p)    (void*)(((unsigned)((p)  & 0xFFFF0000) >> 12) + ((p) & 0xFFFF))
 
 /* Get the current timer tick count */
 

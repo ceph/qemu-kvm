@@ -14,6 +14,11 @@
 *               For simplicity, this program only supports 256 color
 *               SuperVGA video modes that support a linear framebuffer.
 *
+*
+* 2002/02/18: Jeroen Janssen <japj@darius.demon.nl
+*               - fixed unsigned short for mode list (-1 != 0xffff otherwise)
+*               - fixed LfbMapRealPointer macro mask problem (some modes were skipped)
+*
 ****************************************************************************/
 
 #include <stdio.h>
@@ -28,7 +33,7 @@
 int     VESABuf_len = 1024;         /* Length of VESABuf                */
 int     VESABuf_sel = 0;            /* Selector for VESABuf             */
 int     VESABuf_rseg;               /* Real mode segment of VESABuf     */
-short   modeList[50];               /* List of available VBE modes      */
+unsigned short   modeList[50];      /* List of available VBE modes      */
 float   clearsPerSec;               /* Number of clears per second      */
 float   clearsMbPerSec;             /* Memory transfer for clears       */
 float   bitBltsPerSec;              /* Number of BitBlt's per second    */
@@ -343,7 +348,7 @@ int VBE_detect(void)
 ****************************************************************************/
 {
     RMREGS      regs;
-    short       *p1,*p2;
+    unsigned    short    *p1,*p2;
     VBE_vgaInfo vgaInfo;
 
     /* Put 'VBE2' into the signature area so that the VBE 2.0 BIOS knows
@@ -366,10 +371,14 @@ int VBE_detect(void)
      * that we have passed, so the next call to the VBE will trash the
      * list of modes.
      */
+    printf("videomodeptr %x\n",vgaInfo.VideoModePtr);
     p1 = LfbMapRealPointer(vgaInfo.VideoModePtr);
     p2 = modeList;
     while (*p1 != -1)
+    {
+        printf("found mode %x\n",*p1);
         *p2++ = *p1++;
+    }
     *p2 = -1;
     return vgaInfo.VESAVersion;
 }
@@ -446,7 +455,7 @@ void AvailableModes(void)
 *
 ****************************************************************************/
 {
-    short           *p;
+    unsigned short           *p;
     VBE_modeInfo    modeInfo;
 
     printf("Usage: LFBPROF <xres> <yres>\n\n");
@@ -480,8 +489,9 @@ void InitGraphics(int x,int y)
 *
 ****************************************************************************/
 {
-    short           *p;
+    unsigned short           *p;
     VBE_modeInfo    modeInfo;
+    printf("InitGraphics\n");
 
     for (p = modeList; *p != -1; p++) {
         if (VBE_getModeInfo(*p, &modeInfo)) {
@@ -517,6 +527,7 @@ void EndGraphics(void)
 ****************************************************************************/
 {
     RMREGS  regs;
+    printf("EndGraphics\n");
     regs.x.ax = 0x3;
     DPMI_int86(0x10, &regs, &regs);
 }
@@ -538,6 +549,7 @@ void ProfileMode(void)
     int     i,numClears,numBlts,maxImages;
     long    startTicks,endTicks;
     void    *image[10],*dst;
+    printf("ProfileMode\n");
 
     /* Profile screen clearing operation */
     startTicks = LfbGetTicks();
