@@ -20,6 +20,64 @@ typedef struct ModeInfoListItem
 static ModeInfoListItem mode_info_list[]=
 {
         {
+                VBE_OWN_MODE_320X200X8,
+                {
+/*typedef struct ModeInfoBlock
+{*/
+// Mandatory information for all VBE revisions
+   /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED | VBE_MODE_ATTRIBUTE_GRAPHICS_MODE | VBE_MODE_ATTRIBUTE_COLOR_MODE | VBE_MODE_ATTTRIBUTE_LFB_ONLY,
+   /*Bit8u  WinAAttributes*/            0,
+   /*Bit8u  WinBAttributes*/            0,
+   /*Bit16u WinGranularity*/            0,
+   /*Bit16u WinSize*/                   0,
+   /*Bit16u WinASegment*/               0,
+   /*Bit16u WinBSegment*/               0,
+   /*Bit32u WinFuncPtr*/                0,
+   /*Bit16u BytesPerScanLine*/          320,
+// Mandatory information for VBE 1.2 and above   
+   /*Bit16u XResolution*/               320,
+   /*Bit16u YResolution*/               200,
+   /*Bit8u  XCharSize*/                 8,
+   /*Bit8u  YCharSize*/                 16,
+   /*Bit8u  NumberOfPlanes*/            1,
+   /*Bit8u  BitsPerPixel*/              8,
+   /*Bit8u  NumberOfBanks*/             1,
+   /*Bit8u  MemoryModel*/               VBE_MEMORYMODEL_PACKED_PIXEL,
+   /*Bit8u  BankSize*/                  0,
+   /*Bit8u  NumberOfImagePages*/        0,
+   /*Bit8u  Reserved_page*/             0,
+// Direct Color fields (required for direct/6 and YUV/7 memory models)
+   /*Bit8u  RedMaskSize*/               0,
+   /*Bit8u  RedFieldPosition*/          0,
+   /*Bit8u  GreenMaskSize*/             0,
+   /*Bit8u  GreenFieldPosition*/        0,
+   /*Bit8u  BlueMaskSize*/              0,
+   /*Bit8u  BlueFieldPosition*/         0,
+   /*Bit8u  RsvdMaskSize*/              0,
+   /*Bit8u  RsvdFieldPosition*/         0,
+   /*Bit8u  DirectColorModeInfo*/       0,
+// Mandatory information for VBE 2.0 and above
+   /*Bit32u PhysBasePtr*/               0xa0000,  //FIXME: this allows this mode to be displayed using the standard 320x200x8 vga mode
+   /*Bit32u OffScreenMemOffset*/        0,
+   /*Bit16u OffScreenMemSize*/          0,
+// Mandatory information for VBE 3.0 and above   
+   /*Bit16u LinBytesPerScanLine*/       320,
+   /*Bit8u  BnkNumberOfPages*/          0,
+   /*Bit8u  LinNumberOfPages*/          0,
+   /*Bit8u  LinRedMaskSize*/            0,
+   /*Bit8u  LinRedFieldPosition*/       0,
+   /*Bit8u  LinGreenMaskSize*/          0,
+   /*Bit8u  LinGreenFieldPosition*/     0,
+   /*Bit8u  LinBlueMaskSize*/           0,
+   /*Bit8u  LinBlueFieldPosition*/      0,
+   /*Bit8u  LinRsvdMaskSize*/           0,
+   /*Bit8u  LinRsvdFieldPosition*/      0,
+   /*Bit32u MaxPixelClock*/             0,
+/*} ModeInfoBlock;*/
+                }
+        },
+	
+        {
                 VBE_VESA_MODE_640X400X8,
                 {
 /*typedef struct ModeInfoBlock

@@ -63,7 +63,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.2 2002/02/18 17:48:58 japj Exp $"
+.ascii       "$Id: vbe.c,v 1.3 2002/03/01 18:39:38 japj Exp $"
 .byte        0x00
 
 #ifndef DYN_LIST
@@ -78,6 +78,7 @@ _vbebios_mode_list:
 .word VBE_VESA_MODE_800X600X888
 .word VBE_OWN_MODE_800X600X8888
 .word VBE_OWN_MODE_1024X768X8888
+.word VBE_OWN_MODE_320X200X8
 .word VBE_VESA_MODE_END_OF_LIST
 #endif
 
@@ -292,6 +293,18 @@ Bit16u *AX;Bit16u BX; Bit16u ES;Bit16u DI;
         
         //result=read_word(ss,AX);
         
+        // check for non vesa mode
+        if (BX<VBE_MODE_VESA_DEFINED)
+        {
+                Bit8u   mode;
+                // call the vgabios in order to set the video mode
+                // this allows for going back to textmode with a VBE call (some applications expect that to work)
+                
+                mode=(BX & 0xff);
+                biosfn_set_video_mode(mode);
+                result = 0x4f;
+        }
+        
         while ((cur_info->mode != VBE_VESA_MODE_END_OF_LIST) && (!found))
         {
                 if (cur_info->mode == BX)
@@ -312,10 +325,21 @@ Bit16u *AX;Bit16u BX; Bit16u ES;Bit16u DI;
                         cur_info->info.YResolution,
                         cur_info->info.BitsPerPixel);
 #endif
-
-                // FIXME: setup gfx mode with host
-                // FIXME: store current mode in CMOS
-
+                // FIXME: this is here so we can do some testing
+                // at least until bochs host side display is up & running
+                // (we're using the 'standard' 320x200x256 vga mode as if it
+                //  were a vesa mode)
+                
+                if (cur_info->mode == VBE_OWN_MODE_320X200X8)
+                {
+                        biosfn_set_video_mode(0x13);
+                }
+                else
+                {
+                        // FIXME: setup gfx mode with host
+                        // FIXME: store current mode in CMOS
+                }
+                
                 result = 0x4f;
         }
         else

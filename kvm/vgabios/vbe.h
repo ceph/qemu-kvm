@@ -199,12 +199,13 @@ typedef struct ModeInfoBlock
 
 // BOCHS/PLEX86 'own' mode numbers
 // FIXME: Add more modi
-#define VBE_OWN_MODE_320X200X8888			 0x140
-#define VBE_OWN_MODE_640X400X8888			 0x141
-#define VBE_OWN_MODE_640X480X8888			 0x142
-#define VBE_OWN_MODE_800X600X8888			 0x143
-#define VBE_OWN_MODE_1024X768X8888			 0x144
-#define VBE_OWN_MODE_1280X1024X8888			 0x145
+#define VBE_OWN_MODE_320X200X8888                        0x140
+#define VBE_OWN_MODE_640X400X8888                        0x141
+#define VBE_OWN_MODE_640X480X8888                        0x142
+#define VBE_OWN_MODE_800X600X8888                        0x143
+#define VBE_OWN_MODE_1024X768X8888                       0x144
+#define VBE_OWN_MODE_1280X1024X8888                      0x145
+#define VBE_OWN_MODE_320X200X8                           0x146
 
 #define VBE_VESA_MODE_END_OF_LIST                        0xFFFF
 
@@ -263,7 +264,7 @@ typedef struct ModeInfoBlock
 
 // FIXME: Add actual host <-> guest IOPORT
 #define VBE_BIOS_CALLBACK_IOPORT                         0xFF00
-#define VBE_TOTAL_VIDEO_MEMORY_DIV_64K			(4*1024/64)
+#define VBE_TOTAL_VIDEO_MEMORY_DIV_64K                  (4*1024/64)
 
 // FIXME: Add host <-> guest index port commands
 #endif

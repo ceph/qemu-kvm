@@ -39,3 +39,13 @@ v3.0
   - vesa bios (plex86/bochs vga card needs update)
   - frame buffer/SDL display
 
+
+
+VBE:
+----
+Short term:
+- get Scitech's vbetest program working with 320x200x8.
+
+Long term:
+- have bochs/plex86 host side display interface
+- support more modi

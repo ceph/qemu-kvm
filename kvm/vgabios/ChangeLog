@@ -1,5 +1,8 @@
 
 vgabios-0.3a (Not released yet!!)
+    . added 320x200x8 vbe support (uses the standard 320x200x8 vga mode to
+      display, this allows for testing & having something on screen as well,
+      at least until bochs host side display is up & running)
     . adding lfbprof (vbe) testprogram (+some small fixes to it)
     . merging with vbebios 0.2
 
