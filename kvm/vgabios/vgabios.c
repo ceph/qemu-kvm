@@ -687,10 +687,7 @@ static void int10_func(DI, SI, BP, SP, BX, DX, CX, AX, DS, ES, FLAGS)
 #endif
         break;
        case 0x05:
-        //FIXME
-#ifdef DEBUG
-        unimplemented();
-#endif
+        vbe_biosfn_display_window_control(&AX,BX,&DX);
         break;
        case 0x06:
         //FIXME

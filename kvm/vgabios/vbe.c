@@ -63,7 +63,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.4 2002/03/06 17:00:57 japj Exp $"
+.ascii       "$Id: vbe.c,v 1.5 2002/03/06 19:59:28 japj Exp $"
 .byte        0x00
 
 #ifndef DYN_LIST
@@ -81,6 +81,8 @@ _vbebios_mode_list:
 .word VBE_OWN_MODE_1024X768X8888
 #endif
 .word VBE_OWN_MODE_320X200X8
+.word VBE_VESA_MODE_640X400X8
+.word VBE_VESA_MODE_800X600X8
 .word VBE_VESA_MODE_END_OF_LIST
 #endif
 
@@ -270,6 +272,79 @@ Bit16u *AX;Bit16u CX; Bit16u ES;Bit16u DI;
         write_word(ss, AX, result);
 }
 
+//FIXME: make a generic vbe_set function that does io port with params
+static void vbe_set_800x600x8()
+{
+                        #asm
+                        // set xresolution
+                        mov dx, #0xff80
+                        mov ax, #0x01
+                        outw dx, ax
+                        inc dx
+                        mov ax, #0x320
+                        outw dx, ax
+                        dec dx
+                        // set yresolution
+                        mov ax, #0x02
+                        outw dx, ax
+                        inc dx
+                        mov ax, #0x258
+                        outw dx, ax
+                        dec dx
+                        // set bank
+                        mov ax, #0x04
+                        outw dx, ax
+                        inc dx
+                        mov ax, #0x00
+                        outw dx, ax
+                        dec dx
+                        
+                        // enable video mode
+                        mov ax, #0x03
+                        outw dx, ax
+                        inc dx
+                        mov ax, #0x01
+                        outw dx, ax
+                   
+                        #endasm
+}
+
+static void vbe_set_640x400x8()
+{
+                        #asm
+                        // set xresolution
+                        mov dx, #0xff80
+                        mov ax, #0x01
+                        outw dx, ax
+                        inc dx
+                        mov ax, #0x280
+                        outw dx, ax
+                        dec dx
+                        // set yresolution
+                        mov ax, #0x02
+                        outw dx, ax
+                        inc dx
+                        mov ax, #0x190
+                        outw dx, ax
+                        dec dx
+                        // set bank
+                        mov ax, #0x04
+                        outw dx, ax
+                        inc dx
+                        mov ax, #0x00
+                        outw dx, ax
+                        dec dx
+                        
+                        // enable video mode
+                        mov ax, #0x03
+                        outw dx, ax
+                        inc dx
+                        mov ax, #0x01
+                        outw dx, ax
+                   
+                        #endasm
+}
+
 /** Function 02h - Set VBE Mode
  * 
  * Input:
@@ -299,6 +374,20 @@ Bit16u *AX;Bit16u BX; Bit16u ES;Bit16u DI;
         if (BX<VBE_MODE_VESA_DEFINED)
         {
                 Bit8u   mode;
+
+                        #asm
+                        // set xresolution
+                        mov dx, #0xff80
+                        
+                        // disable video mode
+                        mov ax, #0x03
+                        out dx, ax
+                        inc dx
+                        mov ax, #0x00
+                        out dx, ax
+                   
+                        #endasm
+                
                 // call the vgabios in order to set the video mode
                 // this allows for going back to textmode with a VBE call (some applications expect that to work)
                 
@@ -336,6 +425,21 @@ Bit16u *AX;Bit16u BX; Bit16u ES;Bit16u DI;
                 {
                         biosfn_set_video_mode(0x13);
                 }
+                if (cur_info->mode == VBE_VESA_MODE_640X400X8)
+                {
+#ifdef DEBUG                        
+                        printf("VBE VBE_VESA_MODE_640X400X8");
+#endif                  
+                        vbe_set_640x400x8();
+                }               
+                else
+                if (cur_info->mode == VBE_VESA_MODE_800X600X8)
+                {
+#ifdef DEBUG                        
+                        printf("VBE VBE_VESA_MODE_800X600X8");
+#endif                  
+                        vbe_set_800x600x8();
+                }               
                 else
                 {
                         // FIXME: setup gfx mode with host
@@ -408,17 +512,56 @@ void vbe_biosfn_save_restore_state(AX, DL, CX, ES, BX)
  * 
  * Input:
  *              AX      = 4F05h
+ *     (16-bit) BH      = 00h Set memory window
+ *                      = 01h Get memory window
+ *              BL      = Window number
+ *                      = 00h Window A
+ *                      = 01h Window B
+ *              DX      = Window number in video memory in window
+ *                        granularity units (Set Memory Window only)
  * Note:
  *              If this function is called while in a linear frame buffer mode,
  *              this function must fail with completion code AH=03h
  * 
  * Output:
  *              AX      = VBE Return Status
- *
- * FIXME: incomplete API description, Input & Output
+ *              DX      = Window number in window granularity units
+ *                        (Get Memory Window only)
  */
-void vbe_biosfn_display_window_control(AX)
+ 
+static void
+vbe_set_bank(bank)
+  Bit8u bank;
 {
+#asm
+  push bp
+  mov  bp, sp
+  push ax
+  push dx
+  
+  mov dx,#0xff80
+    mov ax,#0x04
+    outw dx, ax
+    inc dx
+
+    mov  ax, 4[bp] ;; bank
+    outw dx, ax
+  pop dx  
+  pop  ax
+  pop  bp
+#endasm
+}
+
+void vbe_biosfn_display_window_control(AX,BX,DX)
+Bit16u *AX;Bit16u BX;Bit16u *DX;
+{
+        Bit16u            ss = get_SS();
+        Bit16u            window = read_word(ss, DX);
+        
+        if (BX==0x0000)
+        {
+                vbe_set_bank(window);
+        }
 }
 
 
