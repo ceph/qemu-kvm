@@ -3978,8 +3978,6 @@ normal_post:
   mov  ax, #dummy_iret_handler
   mov  dx, #0xF000
 
-  call _print_bios_banner
-
 post_default_ints:
   mov  [bx], ax
   inc  bx
@@ -4184,6 +4182,8 @@ notrom:
   ;; Floppy setup
   ;;
   call floppy_drive_post
+
+  call _print_bios_banner
 
   int  #0x19
   //JMP_EP(0x0064) ; INT 19h location
