@@ -320,7 +320,7 @@ ASM_START
 
 ASM_END
 
-  printf("VGABios $Id: vgabios.c,v 1.25 2003/02/04 21:06:04 vruppert Exp $\n");
+  printf("VGABios $Id: vgabios.c,v 1.26 2003/02/08 12:04:03 vruppert Exp $\n");
 }
 
 // --------------------------------------------------------------------------------------------
@@ -906,17 +906,25 @@ static void biosfn_set_video_mode(mode) Bit8u mode;
  inb(VGAREG_ACTL_RESET);
 
  if(noclearmem==0x00)
-  {if(mode<0x0d)
+  {
+   if(vga_modes[line].class==TEXT)
     {
      memsetw(vga_modes[line].sstart,0,0x0720,0x4000); // 32k
     }
    else
     {
-     outb( VGAREG_SEQU_ADDRESS, 0x02 );
-     mmask = inb( VGAREG_SEQU_DATA );
-     outb( VGAREG_SEQU_DATA, 0x0f ); // all planes
-     memsetw(vga_modes[line].sstart,0,0x0000,0x8000); // 64k
-     outb( VGAREG_SEQU_DATA, mmask );
+     if(mode<0x0d)
+      {
+       memsetw(vga_modes[line].sstart,0,0x0000,0x4000); // 32k
+      }
+     else
+      {
+       outb( VGAREG_SEQU_ADDRESS, 0x02 );
+       mmask = inb( VGAREG_SEQU_DATA );
+       outb( VGAREG_SEQU_DATA, 0x0f ); // all planes
+       memsetw(vga_modes[line].sstart,0,0x0000,0x8000); // 64k
+       outb( VGAREG_SEQU_DATA, mmask );
+      }
     }
   }
 
@@ -1131,40 +1139,51 @@ Bit8u nblines;Bit8u attr;Bit8u rul;Bit8u cul;Bit8u rlr;Bit8u clr;Bit8u page;Bit8
  if(page==0xFF)
   page=read_byte(BIOSMEM_SEG,BIOSMEM_CURRENT_PAGE);
 
- // Compute the address
- address=SCREEN_MEM_START(nbcols,nbrows,page);
+ if(vga_modes[line].class==TEXT)
+  {
+   // Compute the address
+   address=SCREEN_MEM_START(nbcols,nbrows,page);
 #ifdef DEBUG
- printf("Scroll, address %04x (%04x %04x %02x)\n",address,nbrows,nbcols,page);
+   printf("Scroll, address %04x (%04x %04x %02x)\n",address,nbrows,nbcols,page);
 #endif
 
- if(rlr>=nbrows)rlr=nbrows-1;
- if(clr>=nbcols)clr=nbcols-1;
- if(nblines>nbrows)nblines=0;
+   if(rlr>=nbrows)rlr=nbrows-1;
+   if(clr>=nbcols)clr=nbcols-1;
+   if(nblines>nbrows)nblines=0;
 
- if(nblines==0&&rul==0&&cul==0&&rlr==nbrows-1&&clr==nbcols-1)
-  {
-   memsetw(vga_modes[line].sstart,address,(Bit16u)attr*0x100+' ',nbrows*nbcols);
-  }
- else
-  {// if Scroll up
-   if(dir==SCROLL_UP)
-    {for(i=rul;i<=rlr;i++)
-      {
-       if((i+nblines>rlr)||(nblines==0))
-        memsetw(vga_modes[line].sstart,address+(i*nbcols+cul)*2,(Bit16u)attr*0x100+' ',clr-cul+1);
-       else
-        memcpyw(vga_modes[line].sstart,address+(i*nbcols+cul)*2,vga_modes[line].sstart,((i+nblines)*nbcols+cul)*2,clr-cul+1);
-      }
+   if(nblines==0&&rul==0&&cul==0&&rlr==nbrows-1&&clr==nbcols-1)
+    {
+     memsetw(vga_modes[line].sstart,address,(Bit16u)attr*0x100+' ',nbrows*nbcols);
     }
    else
-    {for(i=rlr;i>=rul;i--)
-      {
-       if((i<rul+nblines)||(nblines==0))
-        memsetw(vga_modes[line].sstart,address+(i*nbcols+cul)*2,(Bit16u)attr*0x100+' ',clr-cul+1);
-       else
-        memcpyw(vga_modes[line].sstart,address+(i*nbcols+cul)*2,vga_modes[line].sstart,((i-nblines)*nbcols+cul)*2,clr-cul+1);
+    {// if Scroll up
+     if(dir==SCROLL_UP)
+      {for(i=rul;i<=rlr;i++)
+        {
+         if((i+nblines>rlr)||(nblines==0))
+          memsetw(vga_modes[line].sstart,address+(i*nbcols+cul)*2,(Bit16u)attr*0x100+' ',clr-cul+1);
+         else
+          memcpyw(vga_modes[line].sstart,address+(i*nbcols+cul)*2,vga_modes[line].sstart,((i+nblines)*nbcols+cul)*2,clr-cul+1);
+        }
+      }
+     else
+      {for(i=rlr;i>=rul;i--)
+        {
+         if((i<rul+nblines)||(nblines==0))
+          memsetw(vga_modes[line].sstart,address+(i*nbcols+cul)*2,(Bit16u)attr*0x100+' ',clr-cul+1);
+         else
+          memcpyw(vga_modes[line].sstart,address+(i*nbcols+cul)*2,vga_modes[line].sstart,((i-nblines)*nbcols+cul)*2,clr-cul+1);
+        }
       }
     }
+  }
+ else
+  {
+   // FIXME gfx mode
+#ifdef DEBUG
+   printf("Scroll in graphics mode !\n");
+   unimplemented();
+#endif
   }
 }
 
@@ -1175,8 +1194,6 @@ Bit8u page;Bit16u *car;
  Bit8u xcurs,ycurs,mode,line;
  Bit16u nbcols,nbrows,address;
  Bit16u cursor,dummy;
-
- // FIXME gfx mode
 
  // Get the mode
  mode=read_byte(BIOSMEM_SEG,BIOSMEM_CURRENT_MODE);
@@ -1191,10 +1208,20 @@ Bit8u page;Bit16u *car;
  nbrows=read_byte(BIOSMEM_SEG,BIOSMEM_NB_ROWS)+1;
  nbcols=read_word(BIOSMEM_SEG,BIOSMEM_NB_COLS);
 
- // Compute the address
- address=SCREEN_MEM_START(nbcols,nbrows,page)+(xcurs+ycurs*nbcols)*2;
+ if(vga_modes[line].class==TEXT)
+  {
+   // Compute the address
+   address=SCREEN_MEM_START(nbcols,nbrows,page)+(xcurs+ycurs*nbcols)*2;
 
- write_word(ss,car,read_word(vga_modes[line].sstart,address));
+   write_word(ss,car,read_word(vga_modes[line].sstart,address));
+  }
+ else
+  {
+   // FIXME gfx mode
+#ifdef DEBUG
+   unimplemented();
+#endif
+  }
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1257,7 +1284,7 @@ Bit8u car;Bit8u page;Bit8u attr;Bit16u count;
  else
   {
    // FIXME gfx mode not complete
-   if(mode==0x12)
+   if(vga_modes[line].memmodel==PLANAR4)
     {
      cheight=vga_modes[line].cheight;
      address=xcurs+ycurs*cheight*nbcols;
@@ -1306,6 +1333,9 @@ Bit8u car;Bit8u page;Bit8u attr;Bit16u count;
  else
   {
    // FIXME gfx mode
+#ifdef DEBUG
+   unimplemented();
+#endif
   }
 }
 
@@ -1417,7 +1447,7 @@ Bit8u car;Bit8u page;Bit8u attr;Bit8u flag;
     else
      {
       // FIXME gfx mode not complete
-      if(mode==0x12)
+      if(vga_modes[line].memmodel==PLANAR4)
        {
         cheight=vga_modes[line].cheight;
         address=xcurs+ycurs*cheight*nbcols;

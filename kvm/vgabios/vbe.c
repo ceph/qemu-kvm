@@ -79,7 +79,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.23 2003/01/04 08:50:29 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.24 2003/02/08 12:04:03 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -179,6 +179,12 @@ static void dispi_set_bpp(bpp)
 {
   outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_BPP);
   outw(VBE_DISPI_IOPORT_DATA,bpp);
+}
+
+static Bit16u dispi_get_enable()
+{
+  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_ENABLE);
+  return inw(VBE_DISPI_IOPORT_DATA);  
 }
 
 void dispi_set_enable(enable)
@@ -298,7 +304,7 @@ ASM_START
 ASM_END    
   }
 //#ifdef DEBUG
-  printf("VBE Bios $Id: vbe.c,v 1.23 2003/01/04 08:50:29 vruppert Exp $\n");
+  printf("VBE Bios $Id: vbe.c,v 1.24 2003/02/08 12:04:03 vruppert Exp $\n");
 //#endif  
 }
 
@@ -603,7 +609,7 @@ Bit16u *AX;Bit16u BX; Bit16u ES;Bit16u DI;
                   dispi_set_bank(0);
                   dispi_set_enable(VBE_DISPI_ENABLED);
 
-                  // FIXME: store current mode in CMOS
+                  // FIXME: store current mode in BIOS data area
                   
                   result = 0x4f;                  
                 }
@@ -639,15 +645,22 @@ void vbe_biosfn_return_current_mode(AX, BX)
 Bit16u *AX;Bit16u *BX;
 {
         Bit16u ss=get_SS();
-
-// FIXME: get current mode from CMOS reg?
+	Bit16u mode=0xffff;
 
 #ifdef DEBUG
         printf("VBE vbe_biosfn_return_current_mode\n");
 #endif
         
+        if(dispi_get_enable())
+        {
+		// FIXME: get current mode from BIOS data area
+	}
+	else
+	{
+		mode=read_byte(BIOSMEM_SEG,BIOSMEM_CURRENT_MODE);
+	}
         write_word(ss, AX, 0x4f);
-        write_word(ss, BX, 0x3);
+        write_word(ss, BX, mode);
 }
 
 
