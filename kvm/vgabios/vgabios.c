@@ -320,7 +320,7 @@ ASM_START
 
 ASM_END
 
-  printf("VGABios $Id: vgabios.c,v 1.20 2002/10/20 15:12:33 vruppert Exp $\n");
+  printf("VGABios $Id: vgabios.c,v 1.21 2003/01/04 20:20:01 vruppert Exp $\n");
 }
 
 // --------------------------------------------------------------------------------------------
@@ -867,6 +867,9 @@ static void biosfn_set_video_mode(mode) Bit8u mode;
      outb(VGAREG_DAC_DATA,0);
     }
   }
+
+ // Reset Attribute Ctl flip-flop
+ inb(VGAREG_ACTL_RESET);
 
  // Set Attribute Ctl
  for(i=0;i<=ACTL_MAX_REG;i++)
