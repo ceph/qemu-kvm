@@ -95,6 +95,13 @@
 //   - the translation policy is defined in cmos regs 0x39 & 0x3a
 //
 // TODO :
+//   int09
+//     - I think the extended key check should really be done in
+//       int09, and int15/4f should be empty. I did not see any
+//       bug, but maybe some code hooking int15/4f could be 
+//       disoriented when receiving extented E0 scancode.
+//       I've got a patch for this to be applied after Bochs2.0
+//
 //   int74 
 //     - needs to be reworked.  Uses direct [bp] offsets. (?)
 //
@@ -8978,6 +8985,7 @@ int14_handler:
 .org 0xe82e
 int16_handler:
 
+  sti
   push  ds
   pushf
   pusha
