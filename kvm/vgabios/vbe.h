@@ -20,27 +20,27 @@ void vbe_biosfn_set_get_dac_palette_format(AX);
 void vbe_biosfn_set_get_palette_data(AX);
 void vbe_biosfn_return_protected_mode_interface(AX);
 
-
+// The official VBE Information Block
 typedef struct VbeInfoBlock
 { 
-   Bit8u  VbeSignature[4]        ;
-   Bit16u VbeVersion             ;
-   Bit16u OemStringPtr_Off       ;
-   Bit16u OemStringPtr_Seg       ;
-   Bit8u  Capabilities[4]        ;
-   Bit16u VideoModePtr_Off       ; 
-   Bit16u VideoModePtr_Seg       ; 
-   Bit16u TotalMemory            ; 
-   Bit16u OemSoftwareRev         ; 
-   Bit16u OemVendorNamePtr_Off   ;
-   Bit16u OemVendorNamePtr_Seg   ; 
-   Bit16u OemProductNamePtr_Off  ; 
-   Bit16u OemProductNamePtr_Seg  ; 
-   Bit16u OemProductRevPtr_Off   ; 
-   Bit16u OemProductRevPtr_Seg   ;
-   //Bit8u  Reserved[222]          ;
-   Bit16u  Reserved[111]          ; // DYN_LIST
-   Bit8u  OemData[256]           ; 
+   Bit8u  VbeSignature[4];
+   Bit16u VbeVersion;
+   Bit16u OemStringPtr_Off;
+   Bit16u OemStringPtr_Seg;
+   Bit8u  Capabilities[4];
+   Bit16u VideoModePtr_Off;
+   Bit16u VideoModePtr_Seg;
+   Bit16u TotalMemory;
+   Bit16u OemSoftwareRev;
+   Bit16u OemVendorNamePtr_Off;
+   Bit16u OemVendorNamePtr_Seg;
+   Bit16u OemProductNamePtr_Off;
+   Bit16u OemProductNamePtr_Seg;
+   Bit16u OemProductRevPtr_Off;
+   Bit16u OemProductRevPtr_Seg;
+   //Bit8u  Reserved[222];
+   Bit16u  Reserved[111];// FIXME use this to put a dynamicly generated mode list in
+   Bit8u  OemData[256];
 } VbeInfoBlock;
 
 
@@ -48,112 +48,111 @@ typedef struct VbeInfoBlock
 // this saves us 189 bytes per block
 typedef struct ModeInfoBlockCompact
 {
-// Mandatory information for all VBE revisions	
-   Bit16u ModeAttributes         ; 
-   Bit8u  WinAAttributes         ; 
-   Bit8u  WinBAttributes         ; 
-   Bit16u WinGranularity         ; 
-   Bit16u WinSize                ; 
-   Bit16u WinASegment            ; 
-   Bit16u WinBSegment            ; 
-   Bit32u WinFuncPtr             ; 
-   Bit16u BytesPerScanLine       ; 
-// Mandatory information for VBE 1.2 and above   
-   Bit16u XResolution            ; 
-   Bit16u YResolution            ; 
-   Bit8u  XCharSize              ; 
-   Bit8u  YCharSize              ; 
-   Bit8u  NumberOfPlanes         ; 
-   Bit8u  BitsPerPixel           ; 
-   Bit8u  NumberOfBanks          ; 
-   Bit8u  MemoryModel            ; 
-   Bit8u  BankSize               ; 
-   Bit8u  NumberOfImagePages     ;
-   Bit8u  Reserved_page          ; 
-// Direct Color fields (required for direct/6 and YUV/7 memory models)      
-   Bit8u  RedMaskSize            ; 
-   Bit8u  RedFieldPosition       ; 
-   Bit8u  GreenMaskSize          ; 
-   Bit8u  GreenFieldPosition     ;
-   Bit8u  BlueMaskSize           ; 
-   Bit8u  BlueFieldPosition      ; 
-   Bit8u  RsvdMaskSize           ; 
-   Bit8u  RsvdFieldPosition      ; 
-   Bit8u  DirectColorModeInfo    ;
+// Mandatory information for all VBE revisions
+   Bit16u ModeAttributes;
+   Bit8u  WinAAttributes;
+   Bit8u  WinBAttributes;
+   Bit16u WinGranularity;
+   Bit16u WinSize;
+   Bit16u WinASegment;
+   Bit16u WinBSegment;
+   Bit32u WinFuncPtr;
+   Bit16u BytesPerScanLine;
+// Mandatory information for VBE 1.2 and above
+   Bit16u XResolution;
+   Bit16u YResolution;
+   Bit8u  XCharSize;
+   Bit8u  YCharSize;
+   Bit8u  NumberOfPlanes;
+   Bit8u  BitsPerPixel;
+   Bit8u  NumberOfBanks;
+   Bit8u  MemoryModel;
+   Bit8u  BankSize;
+   Bit8u  NumberOfImagePages;
+   Bit8u  Reserved_page;
+// Direct Color fields (required for direct/6 and YUV/7 memory models)
+   Bit8u  RedMaskSize;
+   Bit8u  RedFieldPosition;
+   Bit8u  GreenMaskSize;
+   Bit8u  GreenFieldPosition;
+   Bit8u  BlueMaskSize;
+   Bit8u  BlueFieldPosition;
+   Bit8u  RsvdMaskSize;
+   Bit8u  RsvdFieldPosition;
+   Bit8u  DirectColorModeInfo;
 // Mandatory information for VBE 2.0 and above
-   Bit32u PhysBasePtr            ; 
-   Bit32u OffScreenMemOffset     ; 
-   Bit16u OffScreenMemSize       ; 
-// Mandatory information for VBE 3.0 and above   
-   Bit16u LinBytesPerScanLine    ;
-   Bit8u  BnkNumberOfPages       ;
-   Bit8u  LinNumberOfPages       ;
-   Bit8u  LinRedMaskSize         ;
-   Bit8u  LinRedFieldPosition    ;
-   Bit8u  LinGreenMaskSize       ;
-   Bit8u  LinGreenFieldPosition  ;
-   Bit8u  LinBlueMaskSize        ;
-   Bit8u  LinBlueFieldPosition   ;
-   Bit8u  LinRsvdMaskSize        ;
-   Bit8u  LinRsvdFieldPosition   ;
-   Bit32u MaxPixelClock          ;
-//   Bit8u  Reserved[189]          ; // Compact Mode Info storage in bios
+   Bit32u PhysBasePtr;
+   Bit32u OffScreenMemOffset;
+   Bit16u OffScreenMemSize;
+// Mandatory information for VBE 3.0 and above
+   Bit16u LinBytesPerScanLine;
+   Bit8u  BnkNumberOfPages;
+   Bit8u  LinNumberOfPages;
+   Bit8u  LinRedMaskSize;
+   Bit8u  LinRedFieldPosition;
+   Bit8u  LinGreenMaskSize;
+   Bit8u  LinGreenFieldPosition;
+   Bit8u  LinBlueMaskSize;
+   Bit8u  LinBlueFieldPosition;
+   Bit8u  LinRsvdMaskSize;
+   Bit8u  LinRsvdFieldPosition;
+   Bit32u MaxPixelClock;
+//   Bit8u  Reserved[189]; // DO NOT PUT THIS IN HERE because of Compact Mode Info storage in bios 
 } ModeInfoBlockCompact;
 
 typedef struct ModeInfoBlock
 {
-// Mandatory information for all VBE revisions	
-   Bit16u ModeAttributes         ; 
-   Bit8u  WinAAttributes         ; 
-   Bit8u  WinBAttributes         ; 
-   Bit16u WinGranularity         ; 
-   Bit16u WinSize                ; 
-   Bit16u WinASegment            ; 
-   Bit16u WinBSegment            ; 
-   Bit32u WinFuncPtr             ; 
-   Bit16u BytesPerScanLine       ; 
-// Mandatory information for VBE 1.2 and above   
-   Bit16u XResolution            ; 
-   Bit16u YResolution            ; 
-   Bit8u  XCharSize              ; 
-   Bit8u  YCharSize              ; 
-   Bit8u  NumberOfPlanes         ; 
-   Bit8u  BitsPerPixel           ; 
-   Bit8u  NumberOfBanks          ; 
-   Bit8u  MemoryModel            ; 
-   Bit8u  BankSize               ; 
-   Bit8u  NumberOfImagePages     ;
-   Bit8u  Reserved_page          ; 
-// Direct Color fields (required for direct/6 and YUV/7 memory models)      
-   Bit8u  RedMaskSize            ; 
-   Bit8u  RedFieldPosition       ; 
-   Bit8u  GreenMaskSize          ; 
-   Bit8u  GreenFieldPosition     ;
-   Bit8u  BlueMaskSize           ; 
-   Bit8u  BlueFieldPosition      ; 
-   Bit8u  RsvdMaskSize           ; 
-   Bit8u  RsvdFieldPosition      ; 
-   Bit8u  DirectColorModeInfo    ;
+// Mandatory information for all VBE revisions
+   Bit16u ModeAttributes;
+   Bit8u  WinAAttributes;
+   Bit8u  WinBAttributes;
+   Bit16u WinGranularity;
+   Bit16u WinSize;
+   Bit16u WinASegment;
+   Bit16u WinBSegment;
+   Bit32u WinFuncPtr;
+   Bit16u BytesPerScanLine;
+// Mandatory information for VBE 1.2 and above
+   Bit16u XResolution;
+   Bit16u YResolution;
+   Bit8u  XCharSize;
+   Bit8u  YCharSize;
+   Bit8u  NumberOfPlanes;
+   Bit8u  BitsPerPixel;
+   Bit8u  NumberOfBanks;
+   Bit8u  MemoryModel;
+   Bit8u  BankSize;
+   Bit8u  NumberOfImagePages;
+   Bit8u  Reserved_page;
+// Direct Color fields (required for direct/6 and YUV/7 memory models)
+   Bit8u  RedMaskSize;
+   Bit8u  RedFieldPosition;
+   Bit8u  GreenMaskSize;
+   Bit8u  GreenFieldPosition;
+   Bit8u  BlueMaskSize;
+   Bit8u  BlueFieldPosition;
+   Bit8u  RsvdMaskSize;
+   Bit8u  RsvdFieldPosition;
+   Bit8u  DirectColorModeInfo;
 // Mandatory information for VBE 2.0 and above
-   Bit32u PhysBasePtr            ; 
-   Bit32u OffScreenMemOffset     ; 
-   Bit16u OffScreenMemSize       ; 
-// Mandatory information for VBE 3.0 and above   
-   Bit16u LinBytesPerScanLine    ;
-   Bit8u  BnkNumberOfPages       ;
-   Bit8u  LinNumberOfPages       ;
-   Bit8u  LinRedMaskSize         ;
-   Bit8u  LinRedFieldPosition    ;
-   Bit8u  LinGreenMaskSize       ;
-   Bit8u  LinGreenFieldPosition  ;
-   Bit8u  LinBlueMaskSize        ;
-   Bit8u  LinBlueFieldPosition   ;
-   Bit8u  LinRsvdMaskSize        ;
-   Bit8u  LinRsvdFieldPosition   ;
-   Bit32u MaxPixelClock          ;
-   Bit8u  Reserved[189]          ;
+   Bit32u PhysBasePtr;
+   Bit32u OffScreenMemOffset;
+   Bit16u OffScreenMemSize;
+// Mandatory information for VBE 3.0 and above
+   Bit16u LinBytesPerScanLine;
+   Bit8u  BnkNumberOfPages;
+   Bit8u  LinNumberOfPages;
+   Bit8u  LinRedMaskSize;
+   Bit8u  LinRedFieldPosition;
+   Bit8u  LinGreenMaskSize;
+   Bit8u  LinGreenFieldPosition;
+   Bit8u  LinBlueMaskSize;
+   Bit8u  LinBlueFieldPosition;
+   Bit8u  LinRsvdMaskSize;
+   Bit8u  LinRsvdFieldPosition;
+   Bit32u MaxPixelClock;
+   Bit8u  Reserved[189];
 } ModeInfoBlock;
-
 
 // VBE Return Status Info
 // AL
@@ -198,6 +197,8 @@ typedef struct ModeInfoBlock
 #define VBE_VESA_MODE_1280X1024X565                      0x11A
 #define VBE_VESA_MODE_1280X1024X888                      0x11B
 
+// BOCHS/PLEX86 'own' mode numbers
+// FIXME: Add more modi
 #define VBE_OWN_MODE_320X200X8888			 0x140
 #define VBE_OWN_MODE_640X400X8888			 0x141
 #define VBE_OWN_MODE_640X480X8888			 0x142
@@ -256,9 +257,13 @@ typedef struct ModeInfoBlock
 
 // GUEST <-> HOST Communication API
 
+// FIXME: either dynamicly ask host for this or put somewhere high in physical memory
+//        like 0xE0000000
 #define VBE_PHYSICAL_BASE_ADDRESS                        0x3b00000
-//0xE0000000
+
+// FIXME: Add actual host <-> guest IOPORT
 #define VBE_BIOS_CALLBACK_IOPORT                         0xFF00
 #define VBE_TOTAL_VIDEO_MEMORY_DIV_64K			(4*1024/64)
 
+// FIXME: Add host <-> guest index port commands
 #endif
