@@ -324,7 +324,7 @@ ASM_START
 
 ASM_END
 
-  printf("VGABios $Id: vgabios.c,v 1.35 2003/08/18 16:38:26 vruppert Exp $\n");
+  printf("VGABios $Id: vgabios.c,v 1.36 2003/11/03 20:57:02 vruppert Exp $\n");
 }
 
 // --------------------------------------------------------------------------------------------
@@ -933,7 +933,7 @@ static void biosfn_set_video_mode(mode) Bit8u mode;
   }
 
  // Set the BIOS mem
- write_byte(BIOSMEM_SEG,BIOSMEM_CURRENT_MODE,mode|noclearmem);
+ write_byte(BIOSMEM_SEG,BIOSMEM_CURRENT_MODE,mode);
  write_word(BIOSMEM_SEG,BIOSMEM_NB_COLS,twidth);
  write_word(BIOSMEM_SEG,BIOSMEM_PAGE_SIZE,vga_modes[line].slength);
  write_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS,crtc_addr);
@@ -1524,14 +1524,15 @@ Bit8u car;Bit8u page;Bit8u attr;Bit8u flag;
 static void biosfn_get_video_mode (AX,BX) 
 Bit16u *AX;Bit16u *BX;
 {Bit16u ss=get_SS();
- Bit8u  mode,page;
+ Bit8u  mode,noclear,page;
  Bit16u nbcars;
 
  page=read_byte(BIOSMEM_SEG,BIOSMEM_CURRENT_PAGE);
  mode=read_byte(BIOSMEM_SEG,BIOSMEM_CURRENT_MODE);
+ noclear=read_byte(BIOSMEM_SEG,BIOSMEM_VIDEO_CTL) & 0x80;
  nbcars=read_word(BIOSMEM_SEG,BIOSMEM_NB_COLS);
 
- write_word(ss,AX,(nbcars<<8)+mode);
+ write_word(ss,AX,(nbcars<<8)+mode|noclear);
  write_word(ss,BX,((Bit16u)page)<<8);
 }
 

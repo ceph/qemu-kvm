@@ -76,7 +76,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.34 2003/08/07 15:54:11 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.35 2003/11/03 20:57:01 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -349,7 +349,7 @@ ASM_START
 ASM_END    
   }
 //#ifdef DEBUG
-  printf("VBE Bios $Id: vbe.c,v 1.34 2003/08/07 15:54:11 vruppert Exp $\n");
+  printf("VBE Bios $Id: vbe.c,v 1.35 2003/11/03 20:57:01 vruppert Exp $\n");
 //#endif  
 }
 
@@ -644,7 +644,8 @@ Bit16u *AX;Bit16u BX; Bit16u ES;Bit16u DI;
                 dispi_set_enable(VBE_DISPI_ENABLED | no_clear | lfb_flag);
 
                 write_word(BIOSMEM_SEG,BIOSMEM_VBE_MODE,BX);
-  
+                write_byte(BIOSMEM_SEG,BIOSMEM_VIDEO_CTL,(0x60 | no_clear));
+
                 result = 0x4f;                  
         }
         else
