@@ -2883,8 +2883,11 @@ ata_packet_in_before_16:
         jmp  ata_packet_no_before
 
 ata_packet_in_before_32:
+        push eax
+ata_packet_in_before_32_loop:
         in   eax, dx
-        loop ata_packet_in_before_32
+        loop ata_packet_in_before_32_loop
+        pop  eax
 
 ata_packet_no_before:
         mov  cx, _ata_cmd_packet.lcount + 2[bp] 
@@ -2921,8 +2924,11 @@ ata_packet_in_after_16:
         jmp  ata_packet_done
 
 ata_packet_in_after_32:
+        push eax
+ata_packet_in_after_32_loop:
         in   eax, dx
-        loop ata_packet_in_after_32
+        loop ata_packet_in_after_32_loop
+        pop  eax
 
 ata_packet_done:
         pop  bp
