@@ -260,14 +260,35 @@ typedef struct ModeInfoBlock
 
 // FIXME: either dynamicly ask host for this or put somewhere high in physical memory
 //        like 0xE0000000
-#define VBE_PHYSICAL_BASE_ADDRESS                        0x3b00000
+//#define VBE_PHYSICAL_BASE_ADDRESS                        0x3b00000
 
-#define VGAMEM_GRAPH_PHYSICAL_ADDRESS                    0xA0000
-#define VBE_BANK_SIZE_KB                                 64
-
-// FIXME: Add actual host <-> guest IOPORT
-#define VBE_BIOS_CALLBACK_IOPORT                         0xFF00
 #define VBE_TOTAL_VIDEO_MEMORY_DIV_64K                  (4*1024/64)
 
-// FIXME: Add host <-> guest index port commands
+  #define VBE_DISPI_BANK_ADDRESS          0xA0000
+  #define VBE_DISPI_BANK_SIZE_KB          64
+  
+  #define VBE_DISPI_MAX_XRES              1024
+  #define VBE_DISPI_MAX_YRES              768
+  
+  #define VBE_DISPI_IOPORT_INDEX          0xFF80
+  #define VBE_DISPI_IOPORT_DATA           0xFF81
+  
+  #define VBE_DISPI_INDEX_ID              0x0
+  #define VBE_DISPI_INDEX_XRES            0x1
+  #define VBE_DISPI_INDEX_YRES            0x2
+  #define VBE_DISPI_INDEX_BPP             0x3
+  #define VBE_DISPI_INDEX_ENABLE          0x4
+  #define VBE_DISPI_INDEX_BANK            0x5
+  
+  #define VBE_DISPI_ID0                   0xB0C0
+  
+  #define VBE_DISPI_BPP_8                 0x0
+// The following is not support yet, but just for reference available.  
+//  #define VBE_DISPI_BPP_RGB565            0x1
+//  #define VBE_DISPI_BPP_RGB555            0x2
+
+  #define VBE_DISPI_DISABLED              0x00
+  #define VBE_DISPI_ENABLED               0x01
+
+
 #endif

@@ -74,7 +74,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.7 2002/03/07 20:36:08 japj Exp $"
+.ascii       "$Id: vbe.c,v 1.8 2002/03/08 20:48:49 japj Exp $"
 .byte        0x00
 
 #ifndef DYN_LIST
@@ -303,22 +303,22 @@ static void vbe_set_1024x768x8()
 {
                         #asm
                         // set xresolution
-                        mov dx, #0xff80
-                        mov ax, #0x01
+                        mov dx, #VBE_DISPI_IOPORT_INDEX
+                        mov ax, #VBE_DISPI_INDEX_XRES
                         outw dx, ax
                         inc dx
                         mov ax, #0x400
                         outw dx, ax
                         dec dx
                         // set yresolution
-                        mov ax, #0x02
+                        mov ax, #VBE_DISPI_INDEX_YRES
                         outw dx, ax
                         inc dx
                         mov ax, #0x300
                         outw dx, ax
                         dec dx
                         // set bank
-                        mov ax, #0x04
+                        mov ax, #VBE_DISPI_INDEX_BANK
                         outw dx, ax
                         inc dx
                         mov ax, #0x00
@@ -326,10 +326,10 @@ static void vbe_set_1024x768x8()
                         dec dx
                         
                         // enable video mode
-                        mov ax, #0x03
+                        mov ax, #VBE_DISPI_INDEX_ENABLE
                         outw dx, ax
                         inc dx
-                        mov ax, #0x01
+                        mov ax, #VBE_DISPI_ENABLED
                         outw dx, ax
                    
                         #endasm
@@ -339,22 +339,22 @@ static void vbe_set_800x600x8()
 {
                         #asm
                         // set xresolution
-                        mov dx, #0xff80
-                        mov ax, #0x01
+                        mov dx, #VBE_DISPI_IOPORT_INDEX
+                        mov ax, #VBE_DISPI_INDEX_XRES
                         outw dx, ax
                         inc dx
                         mov ax, #0x320
                         outw dx, ax
                         dec dx
                         // set yresolution
-                        mov ax, #0x02
+                        mov ax, #VBE_DISPI_INDEX_YRES
                         outw dx, ax
                         inc dx
                         mov ax, #0x258
                         outw dx, ax
                         dec dx
                         // set bank
-                        mov ax, #0x04
+                        mov ax, #VBE_DISPI_INDEX_BANK
                         outw dx, ax
                         inc dx
                         mov ax, #0x00
@@ -362,10 +362,10 @@ static void vbe_set_800x600x8()
                         dec dx
                         
                         // enable video mode
-                        mov ax, #0x03
+                        mov ax, #VBE_DISPI_INDEX_ENABLE
                         outw dx, ax
                         inc dx
-                        mov ax, #0x01
+                        mov ax, #VBE_DISPI_ENABLED
                         outw dx, ax
                    
                         #endasm
@@ -375,22 +375,22 @@ static void vbe_set_640x480x8()
 {
                         #asm
                         // set xresolution
-                        mov dx, #0xff80
-                        mov ax, #0x01
+                        mov dx, #VBE_DISPI_IOPORT_INDEX
+                        mov ax, #VBE_DISPI_INDEX_XRES
                         outw dx, ax
                         inc dx
                         mov ax, #0x280
                         outw dx, ax
                         dec dx
                         // set yresolution
-                        mov ax, #0x02
+                        mov ax, #VBE_DISPI_INDEX_YRES
                         outw dx, ax
                         inc dx
                         mov ax, #0x1E0
                         outw dx, ax
                         dec dx
                         // set bank
-                        mov ax, #0x04
+                        mov ax, #VBE_DISPI_INDEX_BANK
                         outw dx, ax
                         inc dx
                         mov ax, #0x00
@@ -398,10 +398,10 @@ static void vbe_set_640x480x8()
                         dec dx
                         
                         // enable video mode
-                        mov ax, #0x03
+                        mov ax, #VBE_DISPI_INDEX_ENABLE
                         outw dx, ax
                         inc dx
-                        mov ax, #0x01
+                        mov ax, #VBE_DISPI_ENABLED
                         outw dx, ax
                    
                         #endasm
@@ -412,22 +412,22 @@ static void vbe_set_640x400x8()
 {
                         #asm
                         // set xresolution
-                        mov dx, #0xff80
-                        mov ax, #0x01
+                        mov dx, #VBE_DISPI_IOPORT_INDEX
+                        mov ax, #VBE_DISPI_INDEX_XRES
                         outw dx, ax
                         inc dx
                         mov ax, #0x280
                         outw dx, ax
                         dec dx
                         // set yresolution
-                        mov ax, #0x02
+                        mov ax, #VBE_DISPI_INDEX_YRES
                         outw dx, ax
                         inc dx
                         mov ax, #0x190
                         outw dx, ax
                         dec dx
                         // set bank
-                        mov ax, #0x04
+                        mov ax, #VBE_DISPI_INDEX_BANK
                         outw dx, ax
                         inc dx
                         mov ax, #0x00
@@ -435,10 +435,10 @@ static void vbe_set_640x400x8()
                         dec dx
                         
                         // enable video mode
-                        mov ax, #0x03
+                        mov ax, #VBE_DISPI_INDEX_ENABLE
                         outw dx, ax
                         inc dx
-                        mov ax, #0x01
+                        mov ax, #VBE_DISPI_ENABLED
                         outw dx, ax
                    
                         #endasm
@@ -479,13 +479,13 @@ Bit16u *AX;Bit16u BX; Bit16u ES;Bit16u DI;
                  // bochs vbe code disable video mode
                  push dx
                  push ax
-                 mov dx, #0xff80
+                 mov dx, #VBE_DISPI_IOPORT_INDEX
                 
                  // disable video mode
-                 mov ax, #0x03
+                 mov ax, #VBE_DISPI_INDEX_ENABLE
                  out dx, ax
                  inc dx
-                 mov ax, #0x00
+                 mov ax, #VBE_DISPI_DISABLED
                  out dx, ax
                  pop ax
                  pop dx

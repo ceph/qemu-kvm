@@ -34,8 +34,8 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_READABLE |
                                         VBE_WINDOW_ATTRIBUTE_WRITEABLE,
    /*Bit8u  WinBAttributes*/            0,
-   /*Bit16u WinGranularity*/            VBE_BANK_SIZE_KB,
-   /*Bit16u WinSize*/                   VBE_BANK_SIZE_KB,
+   /*Bit16u WinGranularity*/            VBE_DISPI_BANK_SIZE_KB,
+   /*Bit16u WinSize*/                   VBE_DISPI_BANK_SIZE_KB,
    /*Bit16u WinASegment*/               VGAMEM_GRAPH,
    /*Bit16u WinBSegment*/               0,
    /*Bit32u WinFuncPtr*/                0,
@@ -63,7 +63,7 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  RsvdFieldPosition*/         0,
    /*Bit8u  DirectColorModeInfo*/       0,
 // Mandatory information for VBE 2.0 and above
-   /*Bit32u PhysBasePtr*/               VGAMEM_GRAPH_PHYSICAL_ADDRESS,  //FIXME: this allows this mode to be displayed using the standard 320x200x8 vga mode
+   /*Bit32u PhysBasePtr*/               VBE_DISPI_BANK_ADDRESS,  //FIXME: this allows this mode to be displayed using the standard 320x200x8 vga mode
    /*Bit32u OffScreenMemOffset*/        0,
    /*Bit16u OffScreenMemSize*/          0,
 // Mandatory information for VBE 3.0 and above
@@ -96,8 +96,8 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_READABLE |
                                         VBE_WINDOW_ATTRIBUTE_WRITEABLE,
    /*Bit8u  WinBAttributes*/            0,
-   /*Bit16u WinGranularity*/            VBE_BANK_SIZE_KB,
-   /*Bit16u WinSize*/                   VBE_BANK_SIZE_KB,
+   /*Bit16u WinGranularity*/            VBE_DISPI_BANK_SIZE_KB,
+   /*Bit16u WinSize*/                   VBE_DISPI_BANK_SIZE_KB,
    /*Bit16u WinASegment*/               VGAMEM_GRAPH,
    /*Bit16u WinBSegment*/               0,
    /*Bit32u WinFuncPtr*/                0,
@@ -125,7 +125,7 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  RsvdFieldPosition*/         0,
    /*Bit8u  DirectColorModeInfo*/       0,
 // Mandatory information for VBE 2.0 and above
-   /*Bit32u PhysBasePtr*/               VGAMEM_GRAPH_PHYSICAL_ADDRESS,  //FIXME: this allows this mode to be displayed using the standard 320x200x8 vga mode
+   /*Bit32u PhysBasePtr*/               0,
    /*Bit32u OffScreenMemOffset*/        0,
    /*Bit16u OffScreenMemSize*/          0,
 // Mandatory information for VBE 3.0 and above
@@ -158,8 +158,8 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_READABLE |
                                         VBE_WINDOW_ATTRIBUTE_WRITEABLE,
    /*Bit8u  WinBAttributes*/            0,
-   /*Bit16u WinGranularity*/            VBE_BANK_SIZE_KB,
-   /*Bit16u WinSize*/                   VBE_BANK_SIZE_KB,
+   /*Bit16u WinGranularity*/            VBE_DISPI_BANK_SIZE_KB,
+   /*Bit16u WinSize*/                   VBE_DISPI_BANK_SIZE_KB,
    /*Bit16u WinASegment*/               VGAMEM_GRAPH,
    /*Bit16u WinBSegment*/               0,
    /*Bit32u WinFuncPtr*/                0,
@@ -187,7 +187,7 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  RsvdFieldPosition*/         0,
    /*Bit8u  DirectColorModeInfo*/       0,
 // Mandatory information for VBE 2.0 and above
-   /*Bit32u PhysBasePtr*/               VGAMEM_GRAPH_PHYSICAL_ADDRESS,  //FIXME: this allows this mode to be displayed using the standard 320x200x8 vga mode
+   /*Bit32u PhysBasePtr*/               0,
    /*Bit32u OffScreenMemOffset*/        0,
    /*Bit16u OffScreenMemSize*/          0,
 // Mandatory information for VBE 3.0 and above
@@ -220,8 +220,8 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_READABLE |
                                         VBE_WINDOW_ATTRIBUTE_WRITEABLE,
    /*Bit8u  WinBAttributes*/            0,
-   /*Bit16u WinGranularity*/            VBE_BANK_SIZE_KB,
-   /*Bit16u WinSize*/                   VBE_BANK_SIZE_KB,
+   /*Bit16u WinGranularity*/            VBE_DISPI_BANK_SIZE_KB,
+   /*Bit16u WinSize*/                   VBE_DISPI_BANK_SIZE_KB,
    /*Bit16u WinASegment*/               VGAMEM_GRAPH,
    /*Bit16u WinBSegment*/               0,
    /*Bit32u WinFuncPtr*/                0,
@@ -249,7 +249,7 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  RsvdFieldPosition*/         0,
    /*Bit8u  DirectColorModeInfo*/       0,
 // Mandatory information for VBE 2.0 and above
-   /*Bit32u PhysBasePtr*/               VGAMEM_GRAPH_PHYSICAL_ADDRESS,  //FIXME: this allows this mode to be displayed using the standard 320x200x8 vga mode
+   /*Bit32u PhysBasePtr*/               0,
    /*Bit32u OffScreenMemOffset*/        0,
    /*Bit16u OffScreenMemSize*/          0,
 // Mandatory information for VBE 3.0 and above
@@ -282,8 +282,8 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_READABLE |
                                         VBE_WINDOW_ATTRIBUTE_WRITEABLE,
    /*Bit8u  WinBAttributes*/            0,
-   /*Bit16u WinGranularity*/            VBE_BANK_SIZE_KB,
-   /*Bit16u WinSize*/                   VBE_BANK_SIZE_KB,
+   /*Bit16u WinGranularity*/            VBE_DISPI_BANK_SIZE_KB,
+   /*Bit16u WinSize*/                   VBE_DISPI_BANK_SIZE_KB,
    /*Bit16u WinASegment*/               VGAMEM_GRAPH,
    /*Bit16u WinBSegment*/               0,
    /*Bit32u WinFuncPtr*/                0,
@@ -311,7 +311,7 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  RsvdFieldPosition*/         0,
    /*Bit8u  DirectColorModeInfo*/       0,
 // Mandatory information for VBE 2.0 and above
-   /*Bit32u PhysBasePtr*/               VGAMEM_GRAPH_PHYSICAL_ADDRESS,  //FIXME: this allows this mode to be displayed using the standard 320x200x8 vga mode
+   /*Bit32u PhysBasePtr*/               0,
    /*Bit32u OffScreenMemOffset*/        0,
    /*Bit16u OffScreenMemSize*/          0,
 // Mandatory information for VBE 3.0 and above
