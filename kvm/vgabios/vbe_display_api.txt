@@ -9,7 +9,22 @@ VBE Display API
   
   This document does not describe hwo the VBEBios implements the VBE2/3 spec.
   This document does not describe how the Bochs display code will display gfx based upon this spec.
-  
+
+
+API History
+-----------
+0xb0c0            supports the following VBE_DISPI_ interfaces (present in Bochs 1.4.pre2):
+                  VBE_DISPI_INDEX_ID
+                  VBE_DISPI_INDEX_XRES
+                  VBE_DISPI_INDEX_YRES
+                  VBE_DISPI_INDEX_BPP
+                  VBE_DISPI_INDEX_ENABLE
+                  VBE_DISPI_INDEX_BANK
+                  
+                  Bpp format supported is:
+                  VBE_DISPI_BPP_8
+                  
+                  
 
 History
 -------
@@ -53,6 +68,7 @@ Abbreviations
 
 #defines
 --------
+  #define VBE_DISPI_TOTAL_VIDEO_MEMORY_MB 4
   #define VBE_DISPI_BANK_ADDRESS          0xA0000
   #define VBE_DISPI_BANK_SIZE_KB          64
   
