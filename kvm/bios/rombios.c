@@ -2075,13 +2075,13 @@ void ata_detect( )
 #if BX_MAX_ATA_INTERFACES > 2
   write_byte(ebda_seg,&EbdaData->ata.channels[2].iface,ATA_IFACE_ISA);
   write_word(ebda_seg,&EbdaData->ata.channels[2].iobase1,0x1e8);
-  write_word(ebda_seg,&EbdaData->ata.channels[2].iobase2,0x3e8);
+  write_word(ebda_seg,&EbdaData->ata.channels[2].iobase2,0x3e0);
   write_byte(ebda_seg,&EbdaData->ata.channels[2].irq,12);
 #endif
 #if BX_MAX_ATA_INTERFACES > 3
   write_byte(ebda_seg,&EbdaData->ata.channels[3].iface,ATA_IFACE_ISA);
   write_word(ebda_seg,&EbdaData->ata.channels[3].iobase1,0x168);
-  write_word(ebda_seg,&EbdaData->ata.channels[3].iobase2,0x368);
+  write_word(ebda_seg,&EbdaData->ata.channels[3].iobase2,0x360);
   write_byte(ebda_seg,&EbdaData->ata.channels[3].irq,11);
 #endif
 #if BX_MAX_ATA_INTERFACES > 4
