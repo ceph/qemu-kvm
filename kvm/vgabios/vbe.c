@@ -28,11 +28,8 @@
 //
 // ============================================================================================
 
-#include "vbe.h"
-#include "vbetables.h"
 
 // defines available
-
 // enable LFB support (depends upon bochs-vbe-lfb patch)
 //#define VBE_HAVE_LFB
 
@@ -44,6 +41,11 @@
 
 // enable unsupported modi in the mode_info list (ie >8bpp)
 //#define LIST_UNSUPPORTED_MODI
+
+
+#include "vbe.h"
+#include "vbetables.h"
+
 
 // The current OEM Software Revision of this VBE Bios
 #define VBE_OEM_SOFTWARE_REV 0x0002;
@@ -77,7 +79,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.13 2002/03/13 20:47:07 japj Exp $"
+.ascii       "$Id: vbe.c,v 1.14 2002/03/14 16:54:22 japj Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -236,7 +238,7 @@ void vbe_init()
 #endasm    
   }
 #ifdef DEBUG
-  printf("VBE Bios $Id: vbe.c,v 1.13 2002/03/13 20:47:07 japj Exp $\n");
+  printf("VBE Bios $Id: vbe.c,v 1.14 2002/03/14 16:54:22 japj Exp $\n");
 #endif  
 }
 
