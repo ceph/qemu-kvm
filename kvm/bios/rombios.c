@@ -8594,48 +8594,51 @@ pci_real_select_reg:
 #endif
 
 detect_parport:
+  push dx
   add  dx, #2
   in   al, dx
   and  al, #0xdf ; clear input mode
   out  dx, al
-  sub  dx, #2
+  pop  dx
   mov  al, #0xaa
   out  dx, al
   in   al, dx
   cmp  al, #0xaa
   jne  no_parport
+  push bx
   shl  bx, #1
   mov  [bx+0x408], dx ; Parallel I/O address
-  shr  bx, #1
+  pop  bx
   mov  [bx+0x478], cl ; Parallel printer timeout
   inc  bx
 no_parport:
   ret
 
 detect_serial:
-  add  dx, #4
-  in   al, dx
-  or   al, #0x10 ; enable loopback mode
+  push dx
+  inc  dx
+  mov  al, #0x02
   out  dx, al
-  and  al, #0xf0
-  or   al, #0x0a
-  out  dx, al
-  add  dx, #2
   in   al, dx
-  and  al, #0xf0
-  cmp  al, #0x90
+  cmp  al, #0x02
   jne  no_serial
-  sub  dx, #2
+  inc  dx
   in   al, dx
-  and  al, #0xe0
+  cmp  al, #0x02
+  jne  no_serial
+  dec  dx
+  xor  al, al
   out  dx, al
-  sub  dx, #4
+  pop  dx
+  push bx
   shl  bx, #1
   mov  [bx+0x400], dx ; Serial I/O address
-  shr  bx, #1
+  pop  bx
   mov  [bx+0x47c], cl ; Serial timeout
   inc  bx
+  ret
 no_serial:
+  pop  dx
   ret
 
 ;; for 'C' strings and other data, insert them here with
