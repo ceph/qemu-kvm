@@ -23,6 +23,7 @@
 #define BIOSMEM_MODESET_CTL   0x89
 #define BIOSMEM_DCC_INDEX     0x8A
 #define BIOSMEM_VS_POINTER    0xA8
+#define BIOSMEM_VBE_MODE      0xBA
 
 
 /*

@@ -76,7 +76,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.33 2003/07/16 20:32:38 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.34 2003/08/07 15:54:11 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -349,7 +349,7 @@ ASM_START
 ASM_END    
   }
 //#ifdef DEBUG
-  printf("VBE Bios $Id: vbe.c,v 1.33 2003/07/16 20:32:38 vruppert Exp $\n");
+  printf("VBE Bios $Id: vbe.c,v 1.34 2003/08/07 15:54:11 vruppert Exp $\n");
 //#endif  
 }
 
@@ -643,7 +643,7 @@ Bit16u *AX;Bit16u BX; Bit16u ES;Bit16u DI;
                 dispi_set_bank(0);
                 dispi_set_enable(VBE_DISPI_ENABLED | no_clear | lfb_flag);
 
-                  // FIXME: store current mode in BIOS data area
+                write_word(BIOSMEM_SEG,BIOSMEM_VBE_MODE,BX);
   
                 result = 0x4f;                  
         }
@@ -676,20 +676,20 @@ void vbe_biosfn_return_current_mode(AX, BX)
 Bit16u *AX;Bit16u *BX;
 {
         Bit16u ss=get_SS();
-	Bit16u mode=0xffff;
+        Bit16u mode;
 
 #ifdef DEBUG
         printf("VBE vbe_biosfn_return_current_mode\n");
 #endif
-        
+
         if(dispi_get_enable())
         {
-		// FIXME: get current mode from BIOS data area
-	}
-	else
-	{
-		mode=read_byte(BIOSMEM_SEG,BIOSMEM_CURRENT_MODE);
-	}
+                mode=read_word(BIOSMEM_SEG,BIOSMEM_VBE_MODE);
+        }
+        else
+        {
+                mode=read_byte(BIOSMEM_SEG,BIOSMEM_CURRENT_MODE);
+        }
         write_word(ss, AX, 0x4f);
         write_word(ss, BX, mode);
 }
