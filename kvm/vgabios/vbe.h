@@ -262,6 +262,9 @@ typedef struct ModeInfoBlock
 //        like 0xE0000000
 #define VBE_PHYSICAL_BASE_ADDRESS                        0x3b00000
 
+#define VGAMEM_GRAPH_PHYSICAL_ADDRESS                    0xA0000
+#define VBE_BANK_SIZE_KB                                 64
+
 // FIXME: Add actual host <-> guest IOPORT
 #define VBE_BIOS_CALLBACK_IOPORT                         0xFF00
 #define VBE_TOTAL_VIDEO_MEMORY_DIV_64K                  (4*1024/64)

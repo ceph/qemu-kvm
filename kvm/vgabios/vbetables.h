@@ -14,6 +14,7 @@ typedef struct ModeInfoListItem
         ModeInfoBlockCompact    info;
 } ModeInfoListItem;
 
+//#define LIST_UNSUPPORTED_MODI
 
 // FIXME: check all member variables to be correct for the different modi
 // FIXME: add more modi
@@ -25,16 +26,21 @@ static ModeInfoListItem mode_info_list[]=
 /*typedef struct ModeInfoBlock
 {*/
 // Mandatory information for all VBE revisions
-   /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED | VBE_MODE_ATTRIBUTE_GRAPHICS_MODE | VBE_MODE_ATTRIBUTE_COLOR_MODE | VBE_MODE_ATTTRIBUTE_LFB_ONLY,
-   /*Bit8u  WinAAttributes*/            0,
+   /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
+                                        VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
+                                        VBE_MODE_ATTRIBUTE_COLOR_MODE | 
+                                        VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |
+                                        VBE_MODE_ATTRIBUTE_GRAPHICS_MODE,
+   /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_READABLE |
+                                        VBE_WINDOW_ATTRIBUTE_WRITEABLE,
    /*Bit8u  WinBAttributes*/            0,
-   /*Bit16u WinGranularity*/            0,
-   /*Bit16u WinSize*/                   0,
-   /*Bit16u WinASegment*/               0,
+   /*Bit16u WinGranularity*/            VBE_BANK_SIZE_KB,
+   /*Bit16u WinSize*/                   VBE_BANK_SIZE_KB,
+   /*Bit16u WinASegment*/               VGAMEM_GRAPH,
    /*Bit16u WinBSegment*/               0,
    /*Bit32u WinFuncPtr*/                0,
    /*Bit16u BytesPerScanLine*/          320,
-// Mandatory information for VBE 1.2 and above   
+// Mandatory information for VBE 1.2 and above
    /*Bit16u XResolution*/               320,
    /*Bit16u YResolution*/               200,
    /*Bit8u  XCharSize*/                 8,
@@ -57,10 +63,10 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  RsvdFieldPosition*/         0,
    /*Bit8u  DirectColorModeInfo*/       0,
 // Mandatory information for VBE 2.0 and above
-   /*Bit32u PhysBasePtr*/               0xa0000,  //FIXME: this allows this mode to be displayed using the standard 320x200x8 vga mode
+   /*Bit32u PhysBasePtr*/               VGAMEM_GRAPH_PHYSICAL_ADDRESS,  //FIXME: this allows this mode to be displayed using the standard 320x200x8 vga mode
    /*Bit32u OffScreenMemOffset*/        0,
    /*Bit16u OffScreenMemSize*/          0,
-// Mandatory information for VBE 3.0 and above   
+// Mandatory information for VBE 3.0 and above
    /*Bit16u LinBytesPerScanLine*/       320,
    /*Bit8u  BnkNumberOfPages*/          0,
    /*Bit8u  LinNumberOfPages*/          0,
@@ -76,14 +82,16 @@ static ModeInfoListItem mode_info_list[]=
 /*} ModeInfoBlock;*/
                 }
         },
-	
+#ifdef LIST_UNSUPPORTED_MODI
         {
                 VBE_VESA_MODE_640X400X8,
                 {
 /*typedef struct ModeInfoBlock
 {*/
 // Mandatory information for all VBE revisions
-   /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED | VBE_MODE_ATTRIBUTE_GRAPHICS_MODE | VBE_MODE_ATTTRIBUTE_LFB_ONLY,
+   /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
+                                        VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
+                                        VBE_MODE_ATTTRIBUTE_LFB_ONLY,
    /*Bit8u  WinAAttributes*/            0,
    /*Bit8u  WinBAttributes*/            0,
    /*Bit16u WinGranularity*/            0,
@@ -92,7 +100,7 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit16u WinBSegment*/               0,
    /*Bit32u WinFuncPtr*/                0,
    /*Bit16u BytesPerScanLine*/          640,
-// Mandatory information for VBE 1.2 and above   
+// Mandatory information for VBE 1.2 and above
    /*Bit16u XResolution*/               640,
    /*Bit16u YResolution*/               400,
    /*Bit8u  XCharSize*/                 8,
@@ -118,7 +126,7 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit32u PhysBasePtr*/               VBE_PHYSICAL_BASE_ADDRESS,
    /*Bit32u OffScreenMemOffset*/        0,
    /*Bit16u OffScreenMemSize*/          0,
-// Mandatory information for VBE 3.0 and above   
+// Mandatory information for VBE 3.0 and above
    /*Bit16u LinBytesPerScanLine*/       640,
    /*Bit8u  BnkNumberOfPages*/          0,
    /*Bit8u  LinNumberOfPages*/          0,
@@ -141,7 +149,9 @@ static ModeInfoListItem mode_info_list[]=
 /*typedef struct ModeInfoBlock
 {*/
 // Mandatory information for all VBE revisions
-   /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED | VBE_MODE_ATTRIBUTE_GRAPHICS_MODE | VBE_MODE_ATTTRIBUTE_LFB_ONLY,
+   /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
+                                        VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
+                                        VBE_MODE_ATTTRIBUTE_LFB_ONLY,
    /*Bit8u  WinAAttributes*/            0,
    /*Bit8u  WinBAttributes*/            0,
    /*Bit16u WinGranularity*/            0,
@@ -199,7 +209,9 @@ static ModeInfoListItem mode_info_list[]=
 /*typedef struct ModeInfoBlock
 {*/
 // Mandatory information for all VBE revisions
-   /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED | VBE_MODE_ATTRIBUTE_GRAPHICS_MODE | VBE_MODE_ATTTRIBUTE_LFB_ONLY,
+   /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
+                                        VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
+                                        VBE_MODE_ATTTRIBUTE_LFB_ONLY,
    /*Bit8u  WinAAttributes*/            0,
    /*Bit8u  WinBAttributes*/            0,
    /*Bit16u WinGranularity*/            0,
@@ -315,7 +327,9 @@ static ModeInfoListItem mode_info_list[]=
 /*typedef struct ModeInfoBlock
 {*/
 // Mandatory information for all VBE revisions
-   /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED | VBE_MODE_ATTRIBUTE_GRAPHICS_MODE | VBE_MODE_ATTTRIBUTE_LFB_ONLY,
+   /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
+                                        VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
+                                        VBE_MODE_ATTTRIBUTE_LFB_ONLY,
    /*Bit8u  WinAAttributes*/            0,
    /*Bit8u  WinBAttributes*/            0,
    /*Bit16u WinGranularity*/            0,
@@ -373,7 +387,9 @@ static ModeInfoListItem mode_info_list[]=
 /*typedef struct ModeInfoBlock
 {*/
 // Mandatory information for all VBE revisions
-   /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED | VBE_MODE_ATTRIBUTE_GRAPHICS_MODE | VBE_MODE_ATTTRIBUTE_LFB_ONLY,
+   /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
+                                        VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
+                                        VBE_MODE_ATTTRIBUTE_LFB_ONLY,
    /*Bit8u  WinAAttributes*/            0,
    /*Bit8u  WinBAttributes*/            0,
    /*Bit16u WinGranularity*/            0,
@@ -431,7 +447,9 @@ static ModeInfoListItem mode_info_list[]=
 /*typedef struct ModeInfoBlock
 {*/
 // Mandatory information for all VBE revisions
-   /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED | VBE_MODE_ATTRIBUTE_GRAPHICS_MODE | VBE_MODE_ATTTRIBUTE_LFB_ONLY,
+   /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
+                                        VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
+                                        VBE_MODE_ATTTRIBUTE_LFB_ONLY,
    /*Bit8u  WinAAttributes*/            0,
    /*Bit8u  WinBAttributes*/            0,
    /*Bit16u WinGranularity*/            0,
@@ -489,7 +507,9 @@ static ModeInfoListItem mode_info_list[]=
 /*typedef struct ModeInfoBlock
 {*/
 // Mandatory information for all VBE revisions
-   /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED | VBE_MODE_ATTRIBUTE_GRAPHICS_MODE | VBE_MODE_ATTTRIBUTE_LFB_ONLY,
+   /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
+                                        VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
+                                        VBE_MODE_ATTTRIBUTE_LFB_ONLY,
    /*Bit8u  WinAAttributes*/            0,
    /*Bit8u  WinBAttributes*/            0,
    /*Bit16u WinGranularity*/            0,
@@ -540,6 +560,7 @@ static ModeInfoListItem mode_info_list[]=
 /*} ModeInfoBlock;*/
                 }
         },
+#endif        
 
 /** END OF THE LIST **/
         {

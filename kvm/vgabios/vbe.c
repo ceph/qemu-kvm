@@ -63,13 +63,14 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.3 2002/03/01 18:39:38 japj Exp $"
+.ascii       "$Id: vbe.c,v 1.4 2002/03/06 17:00:57 japj Exp $"
 .byte        0x00
 
 #ifndef DYN_LIST
 // FIXME: for each new mode add a statement here
 //        at least until dynamic list creation is working
 _vbebios_mode_list:
+#ifdef LIST_UNSUPPORTED_MODI
 .word VBE_VESA_MODE_640X400X8
 .word VBE_VESA_MODE_640X480X8
 .word VBE_VESA_MODE_640X480X565
@@ -78,6 +79,7 @@ _vbebios_mode_list:
 .word VBE_VESA_MODE_800X600X888
 .word VBE_OWN_MODE_800X600X8888
 .word VBE_OWN_MODE_1024X768X8888
+#endif
 .word VBE_OWN_MODE_320X200X8
 .word VBE_VESA_MODE_END_OF_LIST
 #endif
