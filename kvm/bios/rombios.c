@@ -814,7 +814,6 @@ print_bios_banner()
 {
   bios_printf(0, bios_version_string);
   bios_printf(0, "\n");
-  panic ("oh crap");
 }
 
 
