@@ -76,7 +76,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.31 2003/07/10 17:07:29 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.32 2003/07/15 10:35:37 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -170,6 +170,12 @@ static void dispi_set_bpp(bpp)
 {
   outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_BPP);
   outw(VBE_DISPI_IOPORT_DATA,bpp);
+}
+
+static Bit16u dispi_get_bpp()
+{
+  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_BPP);
+  return inw(VBE_DISPI_IOPORT_DATA);
 }
 
 static Bit16u dispi_get_enable()
@@ -343,7 +349,7 @@ ASM_START
 ASM_END    
   }
 //#ifdef DEBUG
-  printf("VBE Bios $Id: vbe.c,v 1.31 2003/07/10 17:07:29 vruppert Exp $\n");
+  printf("VBE Bios $Id: vbe.c,v 1.32 2003/07/15 10:35:37 vruppert Exp $\n");
 //#endif  
 }
 
@@ -774,14 +780,19 @@ Bit16u *AX;Bit16u *BX;Bit16u *DX;Bit16u *DX;
 	Bit16u result=0x100;
 	Bit16u width = read_word(ss, CX);
 	Bit16u cmd = read_word(ss, BX);
-	
+	Bit8u  bytespp = dispi_get_bpp()/8;
+
 	// check bl
 	if ( ((cmd & 0xff) == 0x00) || ((cmd & 0xff) == 0x02) )
 	{
-		// set scan line lenght in pixels(0x00) or bytes (0x00)
+		// set scan line lenght in pixels(0x00) or bytes (0x02)
 		Bit16u new_width;
 		Bit16u new_height;
-		
+
+		if ( ((cmd & 0xff) == 0x02) && (bytespp > 1) )
+		{
+			width/=bytespp;
+		}
 		dispi_set_virt_width(width);
 		new_width=dispi_get_virt_width();
 		new_height=dispi_get_virt_height();
@@ -800,8 +811,7 @@ Bit16u *AX;Bit16u *BX;Bit16u *DX;Bit16u *DX;
 			result=0x4f;
 		}
 		
-		// FIXME: adjust for higher bpp (in bytes)
-		write_word(ss,BX,new_width);
+		write_word(ss,BX,new_width*bytespp);
 		write_word(ss,CX,new_width);
 		write_word(ss,DX,new_height);
 	}

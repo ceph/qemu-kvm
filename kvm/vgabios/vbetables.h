@@ -120,7 +120,7 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  NumberOfBanks*/             4, // 640x400/64kb == 4
    /*Bit8u  MemoryModel*/               VBE_MEMORYMODEL_PACKED_PIXEL,
    /*Bit8u  BankSize*/                  0,
-   /*Bit8u  NumberOfImagePages*/        3,
+   /*Bit8u  NumberOfImagePages*/        15,
    /*Bit8u  Reserved_page*/             0,
 // Direct Color fields (required for direct/6 and YUV/7 memory models)
    /*Bit8u  RedMaskSize*/               0,
@@ -189,7 +189,7 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  NumberOfBanks*/             5, // 640x480/64kb == 5
    /*Bit8u  MemoryModel*/               VBE_MEMORYMODEL_PACKED_PIXEL,
    /*Bit8u  BankSize*/                  0,
-   /*Bit8u  NumberOfImagePages*/        3,
+   /*Bit8u  NumberOfImagePages*/        11,
    /*Bit8u  Reserved_page*/             0,
 // Direct Color fields (required for direct/6 and YUV/7 memory models)
    /*Bit8u  RedMaskSize*/               0,
@@ -256,7 +256,7 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  NumberOfBanks*/             1,
    /*Bit8u  MemoryModel*/               VBE_MEMORYMODEL_PLANAR,
    /*Bit8u  BankSize*/                  0,
-   /*Bit8u  NumberOfImagePages*/        1,
+   /*Bit8u  NumberOfImagePages*/        0,
    /*Bit8u  Reserved_page*/             0,
 // Direct Color fields (required for direct/6 and YUV/7 memory models)
    /*Bit8u  RedMaskSize*/               0,
@@ -322,7 +322,7 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  NumberOfBanks*/             8, // 800x600/64kb == 8
    /*Bit8u  MemoryModel*/               VBE_MEMORYMODEL_PACKED_PIXEL,
    /*Bit8u  BankSize*/                  0,
-   /*Bit8u  NumberOfImagePages*/        3,
+   /*Bit8u  NumberOfImagePages*/        7,
    /*Bit8u  Reserved_page*/             0,
 // Direct Color fields (required for direct/6 and YUV/7 memory models)
    /*Bit8u  RedMaskSize*/               0,
@@ -462,7 +462,7 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  NumberOfBanks*/             1,
    /*Bit8u  MemoryModel*/               VBE_MEMORYMODEL_DIRECT_COLOR,
    /*Bit8u  BankSize*/                  0,
-   /*Bit8u  NumberOfImagePages*/        0,
+   /*Bit8u  NumberOfImagePages*/        5,
    /*Bit8u  Reserved_page*/             0,
 // Direct Color fields (required for direct/6 and YUV/7 memory models)
    /*Bit8u  RedMaskSize*/               5,
@@ -532,7 +532,7 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  NumberOfBanks*/             1,
    /*Bit8u  MemoryModel*/               VBE_MEMORYMODEL_DIRECT_COLOR,
    /*Bit8u  BankSize*/                  0,
-   /*Bit8u  NumberOfImagePages*/        0,
+   /*Bit8u  NumberOfImagePages*/        3,
    /*Bit8u  Reserved_page*/             0,
 // Direct Color fields (required for direct/6 and YUV/7 memory models)
    /*Bit8u  RedMaskSize*/               5,
@@ -602,7 +602,7 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  NumberOfBanks*/             1,
    /*Bit8u  MemoryModel*/               VBE_MEMORYMODEL_DIRECT_COLOR,
    /*Bit8u  BankSize*/                  0,
-   /*Bit8u  NumberOfImagePages*/        0,
+   /*Bit8u  NumberOfImagePages*/        1,
    /*Bit8u  Reserved_page*/             0,
 // Direct Color fields (required for direct/6 and YUV/7 memory models)
    /*Bit8u  RedMaskSize*/               5,
@@ -672,7 +672,7 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  NumberOfBanks*/             1,
    /*Bit8u  MemoryModel*/               VBE_MEMORYMODEL_DIRECT_COLOR,
    /*Bit8u  BankSize*/                  0,
-   /*Bit8u  NumberOfImagePages*/        0,
+   /*Bit8u  NumberOfImagePages*/        5,
    /*Bit8u  Reserved_page*/             0,
 // Direct Color fields (required for direct/6 and YUV/7 memory models)
    /*Bit8u  RedMaskSize*/               5,
@@ -742,7 +742,7 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  NumberOfBanks*/             1,
    /*Bit8u  MemoryModel*/               VBE_MEMORYMODEL_DIRECT_COLOR,
    /*Bit8u  BankSize*/                  0,
-   /*Bit8u  NumberOfImagePages*/        0,
+   /*Bit8u  NumberOfImagePages*/        3,
    /*Bit8u  Reserved_page*/             0,
 // Direct Color fields (required for direct/6 and YUV/7 memory models)
    /*Bit8u  RedMaskSize*/               5,
@@ -812,7 +812,7 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  NumberOfBanks*/             1,
    /*Bit8u  MemoryModel*/               VBE_MEMORYMODEL_DIRECT_COLOR,
    /*Bit8u  BankSize*/                  0,
-   /*Bit8u  NumberOfImagePages*/        0,
+   /*Bit8u  NumberOfImagePages*/        1,
    /*Bit8u  Reserved_page*/             0,
 // Direct Color fields (required for direct/6 and YUV/7 memory models)
    /*Bit8u  RedMaskSize*/               5,
@@ -882,7 +882,7 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  NumberOfBanks*/             1,
    /*Bit8u  MemoryModel*/               VBE_MEMORYMODEL_DIRECT_COLOR,
    /*Bit8u  BankSize*/                  0,
-   /*Bit8u  NumberOfImagePages*/        0,
+   /*Bit8u  NumberOfImagePages*/        3,
    /*Bit8u  Reserved_page*/             0,
 // Direct Color fields (required for direct/6 and YUV/7 memory models)
    /*Bit8u  RedMaskSize*/               8,
@@ -952,7 +952,7 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  NumberOfBanks*/             1,
    /*Bit8u  MemoryModel*/               VBE_MEMORYMODEL_DIRECT_COLOR,
    /*Bit8u  BankSize*/                  0,
-   /*Bit8u  NumberOfImagePages*/        0,
+   /*Bit8u  NumberOfImagePages*/        1,
    /*Bit8u  Reserved_page*/             0,
 // Direct Color fields (required for direct/6 and YUV/7 memory models)
    /*Bit8u  RedMaskSize*/               8,
@@ -1092,7 +1092,7 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  NumberOfBanks*/             1,
    /*Bit8u  MemoryModel*/               VBE_MEMORYMODEL_DIRECT_COLOR,
    /*Bit8u  BankSize*/                  0,
-   /*Bit8u  NumberOfImagePages*/        0,
+   /*Bit8u  NumberOfImagePages*/        1,
    /*Bit8u  Reserved_page*/             0,
 // Direct Color fields (required for direct/6 and YUV/7 memory models)
    /*Bit8u  RedMaskSize*/               8,
@@ -1162,7 +1162,7 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  NumberOfBanks*/             1,
    /*Bit8u  MemoryModel*/               VBE_MEMORYMODEL_DIRECT_COLOR,
    /*Bit8u  BankSize*/                  0,
-   /*Bit8u  NumberOfImagePages*/        0,
+   /*Bit8u  NumberOfImagePages*/        1,
    /*Bit8u  Reserved_page*/             0,
 // Direct Color fields (required for direct/6 and YUV/7 memory models)
    /*Bit8u  RedMaskSize*/               8,
