@@ -15,7 +15,7 @@
 *               SuperVGA video modes that support a linear framebuffer.
 *
 *
-* 2002/02/18: Jeroen Janssen <japj@darius.demon.nl
+* 2002/02/18: Jeroen Janssen <japj at xs4all dot nl>
 *               - fixed unsigned short for mode list (-1 != 0xffff otherwise)
 *               - fixed LfbMapRealPointer macro mask problem (some modes were skipped)
 *

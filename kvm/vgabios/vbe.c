@@ -59,7 +59,7 @@ extern Bit16u vbebios_mode_list;
 ASM_START
 // FIXME: 'merge' these (c) etc strings with the vgabios.c strings?
 _vbebios_copyright:
-.ascii       "Bochs/Plex86 VBE(C) 2003 Jeroen Janssen <japj@darius.demon.nl>"
+.ascii       "Bochs/Plex86 VBE(C) 2003 http://savannah.nongnu.org/projects/vgabios/"
 .byte        0x00
 
 _vbebios_vendor_name:
@@ -71,7 +71,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.39 2004/02/23 21:07:59 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.40 2004/04/18 09:15:22 japj Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -353,7 +353,7 @@ void vbe_init()
     write_byte(BIOSMEM_SEG,BIOSMEM_VBE_FLAG,0x01);
     dispi_set_id(VBE_DISPI_ID3);
   }
-  printf("VBE Bios $Id: vbe.c,v 1.39 2004/02/23 21:07:59 vruppert Exp $\n");
+  printf("VBE Bios $Id: vbe.c,v 1.40 2004/04/18 09:15:22 japj Exp $\n");
 }
 
 /** VBE Display Info - Display information on screen about the VBE
