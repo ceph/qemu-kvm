@@ -918,7 +918,9 @@ static void biosfn_set_video_mode(mode) Bit8u mode;
  
  // Set cursor shape
  if(vga_modes[line].class==TEXT)
-  {biosfn_set_cursor_shape(0x06,0x07);
+  {
+    //biosfn_set_cursor_shape(0x06,0x07); // CGA
+    biosfn_set_cursor_shape(0x0A,0x0B); // Monochrome
   }
 
  // Set cursor pos for page 0..7
