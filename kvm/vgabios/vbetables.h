@@ -234,6 +234,7 @@ static ModeInfoListItem mode_info_list[]=
 // Mandatory information for all VBE revisions
    /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
                                         VBE_MODE_ATTRIBUTE_EXTENDED_INFORMATION_AVAILABLE |
+                                        VBE_MODE_ATTRIBUTE_TTY_BIOS_SUPPORT |
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE |
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE,
    /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_RELOCATABLE |

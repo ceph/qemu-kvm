@@ -76,7 +76,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.35 2003/11/03 20:57:01 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.36 2003/11/17 21:03:42 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -323,9 +323,7 @@ static ModeInfoListItem* mode_info_find_mode(mode, using_lfb)
  */
 Boolean vbe_has_vbe_display()
 {
-  dispi_set_id(VBE_DISPI_ID2);
-
-  return (dispi_get_id()==VBE_DISPI_ID2);
+  return read_byte(BIOSMEM_SEG,BIOSMEM_VBE_FLAG);
 }
 
 /** VBE Init - Initialise the Vesa Bios Extension Code
@@ -341,16 +339,12 @@ void vbe_init()
   
   dispi_id=inw(VBE_DISPI_IOPORT_DATA);
   
-  if (dispi_id!=VBE_DISPI_ID0)
+  if (dispi_id==VBE_DISPI_ID0)
   {
-//FIXME this results in a 'rombios.c' line panic, but it's actually a 'vbe.c' panic
-ASM_START    
-    HALT(__LINE__)
-ASM_END    
+    write_byte(BIOSMEM_SEG,BIOSMEM_VBE_FLAG,0x01);
+    dispi_set_id(VBE_DISPI_ID2);
   }
-//#ifdef DEBUG
-  printf("VBE Bios $Id: vbe.c,v 1.35 2003/11/03 20:57:01 vruppert Exp $\n");
-//#endif  
+  printf("VBE Bios $Id: vbe.c,v 1.36 2003/11/17 21:03:42 vruppert Exp $\n");
 }
 
 /** VBE Display Info - Display information on screen about the VBE

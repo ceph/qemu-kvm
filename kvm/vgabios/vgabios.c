@@ -236,14 +236,8 @@ vgabios_init_func:
   call _init_bios_area
 
 #ifdef VBE  
-  call _vbe_has_vbe_display
-  cmp  al, #0x00
-  je   init_no_vbe_display
-
 ;; init vbe functions
   call _vbe_init  
-
-init_no_vbe_display:
 #endif
 
 ;; set int10 vect
@@ -254,14 +248,6 @@ init_no_vbe_display:
 
 ;; init video mode and clear the screen
   mov ax,#0x0003
-  int #0x10
-
-;; copy and activate 8x16 font
-  mov ax, #0x1104
-  mov bl, #0x00
-  int #0x10
-  mov ax, #0x1103
-  mov bl, #0x00
   int #0x10
 
 ;; show info
@@ -324,7 +310,7 @@ ASM_START
 
 ASM_END
 
-  printf("VGABios $Id: vgabios.c,v 1.38 2003/11/05 23:21:19 cbothamy Exp $\n");
+  printf("VGABios $Id: vgabios.c,v 1.39 2003/11/17 21:03:42 vruppert Exp $\n");
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1641,7 +1627,7 @@ static void biosfn_get_all_palette_reg (seg,offset) Bit16u seg;Bit16u offset;
  Bit8u i;
 
  // First the colors
- for(i=0;i<=0x10;i++)
+ for(i=0;i<0x10;i++)
   {
    inb(VGAREG_ACTL_RESET);
    outb(VGAREG_ACTL_ADDRESS,i);
