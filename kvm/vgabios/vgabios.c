@@ -104,7 +104,6 @@ static void biosfn_get_font_info();
 static void biosfn_get_ega_info();
 static void biosfn_alternate_prtsc();
 static void biosfn_select_vert_res();
-static void biosfn_enable_video_addressing();
 static void biosfn_enable_cursor_emulation();
 static void biosfn_switch_video_interface();
 static void biosfn_enable_video_refresh_control();
@@ -134,11 +133,13 @@ biosmem_dcc_index    = 0x8a
 
 vgareg_actl_address      = 0x03c0
 vgareg_actl_read_data    = 0x03c1
+vgareg_write_misc_output = 0x03c2
 vgareg_sequ_address      = 0x03c4
 vgareg_pel_mask          = 0x03c6
 vgareg_dac_read_address  = 0x03c7
 vgareg_dac_write_address = 0x03c8
 vgareg_dac_data          = 0x03c9
+vgareg_read_misc_output  = 0x03cc
 vgareg_grdc_address      = 0x03ce
 vgareg_actl_reset        = 0x03da
 
@@ -299,8 +300,13 @@ int10_test_12:
   cmp   ah, #0x12
   jne   int10_test_101B
   cmp   bl, #0x31
-  jne   int10_test_BL33
+  jne   int10_test_BL32
   call  biosfn_enable_default_palette_loading
+  jmp   int10_end
+int10_test_BL32:
+  cmp   bl, #0x32
+  jne   int10_test_BL33
+  call  biosfn_enable_video_addressing
   jmp   int10_end
 int10_test_BL33:
   cmp   bl, #0x33
@@ -362,7 +368,7 @@ init_vga_card:
   ret
 
 msg_vga_init:
-.ascii "VGABios $Id: vgabios.c,v 1.48 2004/04/25 08:45:25 vruppert Exp $"
+.ascii "VGABios $Id: vgabios.c,v 1.49 2004/04/25 20:12:56 vruppert Exp $"
 .byte 0x0d,0x0a,0x00
 ASM_END
 
@@ -625,10 +631,6 @@ static void int10_func(DI, SI, BP, SP, BX, DX, CX, AX, DS, ES, FLAGS)
         break;
        case 0x30:
         biosfn_select_vert_res(GET_AL());
-        SET_AL(0x12);
-        break;
-       case 0x32:
-        biosfn_enable_video_addressing(GET_AL());
         SET_AL(0x12);
         break;
        case 0x34:
@@ -1403,7 +1405,7 @@ Bit8u car;Bit8u page;Bit8u attr;Bit16u count;
    bpp=vga_modes[line].pixbits;
    while((count-->0) && (xcurs<nbcols))
     {
-     if(vga_modes[line].memmodel==PLANAR4)
+     if((vga_modes[line].memmodel==PLANAR4)||(vga_modes[line].memmodel==PLANAR1))
       {
        write_gfx_char_pl4(car,attr,xcurs,ycurs,nbcols,cheight);
       }
@@ -1464,7 +1466,7 @@ Bit8u car;Bit8u page;Bit8u attr;Bit16u count;
    bpp=vga_modes[line].pixbits;
    while((count-->0) && (xcurs<nbcols))
     {
-     if(vga_modes[line].memmodel==PLANAR4)
+     if((vga_modes[line].memmodel==PLANAR4)||(vga_modes[line].memmodel==PLANAR1))
       {
        write_gfx_char_pl4(car,attr,xcurs,ycurs,nbcols,cheight);
       }
@@ -1580,7 +1582,7 @@ static void biosfn_write_pixel (BH,AL,CX,DX) Bit8u BH;Bit8u AL;Bit16u CX;Bit16u 
  if(line==0xFF)return;
  if(vga_modes[line].class==TEXT)return;
 
- if(vga_modes[line].memmodel==PLANAR4)
+ if((vga_modes[line].memmodel==PLANAR4)||(vga_modes[line].memmodel==PLANAR1))
   {
    addr = CX/8+DX*read_word(BIOSMEM_SEG,BIOSMEM_NB_COLS);
    mask = 0x01 << (7 - (CX & 0x07));
@@ -1655,7 +1657,7 @@ static void biosfn_read_pixel (BH,CX,DX,AX) Bit8u BH;Bit16u CX;Bit16u DX;Bit16u 
  if(line==0xFF)return;
  if(vga_modes[line].class==TEXT)return;
 
- if(vga_modes[line].memmodel==PLANAR4)
+ if((vga_modes[line].memmodel==PLANAR4)||(vga_modes[line].memmodel==PLANAR1))
   {
    addr = CX/8+DX*read_word(BIOSMEM_SEG,BIOSMEM_NB_COLS);
    mask = 0x01 << (7 - (CX & 0x07));
@@ -1770,7 +1772,7 @@ Bit8u car;Bit8u page;Bit8u attr;Bit8u flag;
       // FIXME gfx mode not complete
       cheight=vga_modes[line].cheight;
       bpp=vga_modes[line].pixbits;
-      if(vga_modes[line].memmodel==PLANAR4)
+      if((vga_modes[line].memmodel==PLANAR4)||(vga_modes[line].memmodel==PLANAR1))
        {
         write_gfx_char_pl4(car,attr,xcurs,ycurs,nbcols,cheight);
        }
@@ -2376,12 +2378,18 @@ ASM_START
  out dx, ax
  mov ax, #0x0300
  out dx, ax
+ mov dx, #vgareg_read_misc_output
+ in  al, dx
+ and al, #0x01
+ shl al, 2
+ or  al, #0x0a
+ mov ah, al
+ mov al, #0x06
  mov dx, #vgareg_grdc_address
+ out dx, ax
  mov ax, #0x0004
  out dx, ax
  mov ax, #0x1005
- out dx, ax
- mov ax, #0x0e06
  out dx, ax
 ASM_END
 }
@@ -2681,17 +2689,25 @@ biosfn_enable_default_palette_loading:
 ASM_END
 
 // --------------------------------------------------------------------------------------------
-static void biosfn_enable_video_addressing (disable) 
-Bit8u disable;
-{
- Bit8u misc;
-
- misc=inb(VGAREG_READ_MISC_OUTPUT);
- // bit 1, 0 disable
- if(disable!=0x00) misc&=0xfd;
- else misc|=0x02;
- outb(VGAREG_WRITE_MISC_OUTPUT,misc);
-}
+ASM_START
+biosfn_enable_video_addressing:
+  push  bx
+  push  dx
+  mov   bl, al
+  and   bl, #0x01
+  xor   bl, #0x01
+  shl   bl, 1
+  mov   dx, #vgareg_read_misc_output
+  in    al, dx
+  and   al, #0xfd
+  or    al, bl
+  mov   dx, #vgareg_write_misc_output
+  out   dx, al
+  mov   ax, #0x1212
+  pop   dx
+  pop   bx
+  ret
+ASM_END
 
 // --------------------------------------------------------------------------------------------
 ASM_START
