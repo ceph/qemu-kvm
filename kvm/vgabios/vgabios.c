@@ -320,7 +320,7 @@ ASM_START
 
 ASM_END
 
-  printf("VGABios $Id: vgabios.c,v 1.21 2003/01/04 20:20:01 vruppert Exp $\n");
+  printf("VGABios $Id: vgabios.c,v 1.22 2003/01/15 17:49:06 cbothamy Exp $\n");
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1495,7 +1495,7 @@ Bit16u reg;Bit8u g;Bit8u b;Bit8u r;
 // --------------------------------------------------------------------------------------------
 static void biosfn_set_all_dac_reg (start,count,seg,offset) 
 Bit16u start;Bit16u count;Bit16u seg;Bit16u offset;
-{Bit8u i;
+{Bit16u i;
  outb(VGAREG_DAC_WRITE_ADDRESS,start);
  for(i=0;i<count;i++)
   {outb(VGAREG_DAC_DATA,read_byte(seg,offset++));
@@ -1551,7 +1551,7 @@ Bit8u reg;Bit16u *tor;Bit16u *togb;
 // --------------------------------------------------------------------------------------------
 static void biosfn_read_all_dac_reg (start,count,seg,offset) 
 Bit16u start;Bit16u count;Bit16u seg;Bit16u offset;
-{Bit8u i;
+{Bit16u i;
  outb(VGAREG_DAC_READ_ADDRESS,start);
  for(i=0;i<count;i++)
   {write_byte(seg,offset++,inb(VGAREG_DAC_DATA));
@@ -1594,8 +1594,9 @@ static void biosfn_read_video_dac_state (state) Bit16u *state;
 // --------------------------------------------------------------------------------------------
 static void biosfn_perform_gray_scale_summing (start,count) 
 Bit16u start;Bit16u count;
-{Bit8u index,r,g,b,d;
+{Bit8u r,g,b,d;
  Bit16u i,m;
+ Bit16u index;
 
  inb(VGAREG_ACTL_RESET);
  outb(VGAREG_ACTL_ADDRESS,0x10);
