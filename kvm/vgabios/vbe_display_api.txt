@@ -24,12 +24,16 @@ API History
                   Bpp format supported is:
                   VBE_DISPI_BPP_8
 
-0xb0c1            supports 0xb0c0 VBE_DISPI_ interfaces, additional interfaces:
+0xb0c1            supports 0xb0c0 VBE_DISPI_ interfaces, additional interfaces (present in Bochs 2.0):
                   VBE_DISPI_INDEX_VIRT_WIDTH
                   VBE_DISPI_INDEX_VIRT_HEIGHT
                   VBE_DISPI_INDEX_X_OFFSET
                   VBE_DISPI_INDEX_Y_OFFSET
-                 
+
+0xb0c2            supports 0xb0c1 VBE_DISPI_ interfaces, interfaces updated for additional features:
+                  VBE_DISPI_INDEX_BPP supports >8bpp color depth (value = bits)
+                  VBE_DISPI_INDEX_ENABLE supports new flag VBE_DISPI_NOCLEARMEM
+
                   
 
 History
@@ -99,14 +103,11 @@ Abbreviations
   
   #define VBE_DISPI_ID0                   0xB0C0
   #define VBE_DISPI_ID1                   0xB0C1
+  #define VBE_DISPI_ID2                   0xB0C2
   
-  #define VBE_DISPI_BPP_8                 0x0
-// The following is not support yet, but just for reference available.  
-//  #define VBE_DISPI_BPP_RGB565            0x1
-//  #define VBE_DISPI_BPP_RGB555            0x2
-
   #define VBE_DISPI_DISABLED              0x00
   #define VBE_DISPI_ENABLED               0x01
+  #define VBE_DISPI_NOCLEARMEM            0x80
   
   #define VBE_DISPI_LFB_PHYSICAL_ADDRESS  0xE0000000
 
@@ -182,6 +183,14 @@ API
     The current Y offset (in pixels!) of the visible screen part.
     Writing a new offset will also result in a complete screen refresh.
 
+
+[0xb0c2]
+  * VBE_DISPI_INDEX_BPP : WORD {R,W}
+    The value written is now the number of bits per pixel. A value of 0 is treated
+    the same as 8 for backward compatibilty. These values are supported: 8, 15,
+    16, 24 and 32. The value of 4 is not handled in the VBE code.
+  * VBE_DISPI_INDEX_ENABLE : WORD {R,W}
+    The new flag VBE_DISPI_NOCLEARMEM allows to preserve the VBE video memory.
 
 Displaying GFX
 --------------
