@@ -134,7 +134,7 @@
 
 #define DEBUG_ROMBIOS      0
 
-#define DEBUG_ATA          1
+#define DEBUG_ATA          0
 #define DEBUG_INT13_HD     1
 #define DEBUG_INT13_CD     1
 #define DEBUG_INT13_ET     1
@@ -4220,9 +4220,9 @@ ASM_END
 
         write_word(DS, SI+(Bit16u)&Int13DPT->size, 0x1a);
         write_word(DS, SI+(Bit16u)&Int13DPT->infos, 0x02); // geometry is valid
-        write_dword(DS, SI+(Bit16u)&Int13DPT->cylinders, cylinders);
-        write_dword(DS, SI+(Bit16u)&Int13DPT->heads, heads);
-        write_dword(DS, SI+(Bit16u)&Int13DPT->spt, spt);
+        write_dword(DS, SI+(Bit16u)&Int13DPT->cylinders, (Bit32u)cylinders);
+        write_dword(DS, SI+(Bit16u)&Int13DPT->heads, (Bit32u)heads);
+        write_dword(DS, SI+(Bit16u)&Int13DPT->spt, (Bit32u)spt);
         write_dword(DS, SI+(Bit16u)&Int13DPT->sector_count1, sectcount);  // FIXME should be Bit64
         write_dword(DS, SI+(Bit16u)&Int13DPT->sector_count2, 0L);  
         write_word(DS, SI+(Bit16u)&Int13DPT->blksize, blksize);  
@@ -4300,7 +4300,7 @@ ASM_END
 	if (iface=ATA_IFACE_ISA) {
           write_word(DS, SI+(Bit16u)&Int13DPT->iface_path[0], iobase1);
           write_word(DS, SI+(Bit16u)&Int13DPT->iface_path[2], 0);
-          write_dword(DS, SI+(Bit16u)&Int13DPT->iface_path[4], 0);
+          write_dword(DS, SI+(Bit16u)&Int13DPT->iface_path[4], 0L);
           }
         else { 
           // FIXME PCI
@@ -4649,7 +4649,7 @@ int13_cdrom_rme_end:
 	if (iface=ATA_IFACE_ISA) {
           write_word(DS, SI+(Bit16u)&Int13DPT->iface_path[0], iobase1);
           write_word(DS, SI+(Bit16u)&Int13DPT->iface_path[2], 0);
-          write_dword(DS, SI+(Bit16u)&Int13DPT->iface_path[4], 0);
+          write_dword(DS, SI+(Bit16u)&Int13DPT->iface_path[4], 0L);
           }
         else { 
           // FIXME PCI
