@@ -4,7 +4,7 @@
  */
 // ============================================================================================
 //  
-//  Copyright (C) 2001 Christophe Bothamy
+//  Copyright (C) 2001,2002 Christophe Bothamy
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -173,7 +173,7 @@ vgabios_date:
 .byte	0x00
 
 vgabios_copyright:
-.ascii	"(C) 2001 Christophe Bothamy <cbothamy@free.fr>"
+.ascii	"(C) 2002 Christophe Bothamy <cbothamy@free.fr>"
 .byte	0x00
 
 vgabios_license:
@@ -187,7 +187,7 @@ vgabios_website:
 .byte	0x0a,0x0d
 .ascii	" . http://bochs.sourceforge.net"
 .byte	0x0a,0x0d
-.ascii	" . http://cbothamy.free.fr/projects/vgabios"
+.ascii	" . http://savannah.gnu.org/projects/vgabios"
 .byte	0x00
  
 
@@ -205,8 +205,14 @@ vgabios_init_func:
   call _init_bios_area
 
 #ifdef VBE  
+  call _vbe_has_vbe_display
+  cmp  al, #0x00
+  je   init_no_vbe_display
+
 ;; init vbe functions
   call _vbe_init  
+
+init_no_vbe_display:
 #endif
 
 ;; set int10 vect
@@ -278,6 +284,10 @@ static void init_vga_card()
   outb dx,al
 
 #endasm
+
+#ifdef DEBUG
+  printf("VGABios $Id: vgabios.c,v 1.8 2002/03/10 16:12:46 cbothamy Exp $\n");
+#endif
 }
 
 // --------------------------------------------------------------------------------------------
@@ -680,64 +690,70 @@ static void int10_func(DI, SI, BP, SP, BX, DX, CX, AX, DS, ES, FLAGS)
 
 #ifdef VBE 
    case 0x4f:
-     switch(GET_AL())
-     {
-       case 0x00:
-        vbe_biosfn_return_controller_information(&AX,ES,DI);
-        break;
-       case 0x01:
-        vbe_biosfn_return_mode_information(&AX,CX,ES,DI);
-        break;
-       case 0x02:
-        vbe_biosfn_set_mode(&AX,BX,ES,DI);
-        break;
-       case 0x03:
-        vbe_biosfn_return_current_mode(&AX,&BX);
-        break;
+     if (vbe_has_vbe_display()) {
+       switch(GET_AL())
+       {
+         case 0x00:
+          vbe_biosfn_return_controller_information(&AX,ES,DI);
+          break;
+         case 0x01:
+          vbe_biosfn_return_mode_information(&AX,CX,ES,DI);
+          break;
+         case 0x02:
+          vbe_biosfn_set_mode(&AX,BX,ES,DI);
+          break;
+         case 0x03:
+          vbe_biosfn_return_current_mode(&AX,&BX);
+          break;
        case 0x04:
-        //FIXME
+          //FIXME
 #ifdef DEBUG
-        unimplemented();
+          unimplemented();
 #endif
-        break;
-       case 0x05:
-        vbe_biosfn_display_window_control(&AX,BX,&DX);
-        break;
-       case 0x06:
-        //FIXME
+          break;
+         case 0x05:
+          vbe_biosfn_display_window_control(&AX,BX,&DX);
+          break;
+         case 0x06:
+          //FIXME
 #ifdef DEBUG
-        unimplemented();
+          unimplemented();
 #endif
-        break;
-       case 0x07:
-        //FIXME
+          break;
+         case 0x07:
+          //FIXME
 #ifdef DEBUG   
-        unimplemented();
+          unimplemented();
 #endif
-        break;
-       case 0x08:
-        //FIXME
+          break;
+         case 0x08:
+          //FIXME
 #ifdef DEBUG
-        unimplemented();
+          unimplemented();
 #endif
-        break;
-       case 0x09:
-        //FIXME
+          break;
+         case 0x09:
+          //FIXME
 #ifdef DEBUG
-        unimplemented();
+          unimplemented();
 #endif
-        break;
-       case 0x0A:
-        //FIXME
+          break;
+         case 0x0A:
+          //FIXME
 #ifdef DEBUG
-        unimplemented();
+          unimplemented();
 #endif
-        break;
+          break;
 #ifdef DEBUG
-       default:
-        unknown();
+         default:
+          unknown();
 #endif   		 
+          }
         }
+        else {
+          // No VBE display
+          SET_AH(0x01);
+          }
         break;
 #endif
 
@@ -764,24 +780,27 @@ static void biosfn_set_video_mode(mode) Bit8u mode;
  Bit8u modeset_ctl,video_ctl,vga_switches;
  Bit16u crtc_addr;
  
- 
- #asm
- // FIXME: how to to do this nicely?
- // bochs vbe code disable video mode
- push dx
- push ax
- mov dx, #VBE_DISPI_IOPORT_INDEX
+#ifdef VBE
+ if (vbe_has_vbe_display()) { 
+   #asm
+   // FIXME: how to to do this nicely?
+   // bochs vbe code disable video mode
+   push dx
+   push ax
+   mov dx, #VBE_DISPI_IOPORT_INDEX
 
- // disable video mode
- mov ax, #VBE_DISPI_INDEX_ENABLE
- out dx, ax
- inc dx
- mov ax, #VBE_DISPI_DISABLED
- out dx, ax
- pop ax
- pop dx
+   // disable video mode
+   mov ax, #VBE_DISPI_INDEX_ENABLE
+   out dx, ax
+   inc dx
+   mov ax, #VBE_DISPI_DISABLED
+   out dx, ax
+   pop ax
+   pop dx
 
- #endasm
+   #endasm
+  }
+#endif // def VBE
  
  
  // The real mode
