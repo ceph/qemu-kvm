@@ -681,37 +681,44 @@ static void int10_func(DI, SI, BP, SP, BX, DX, CX, AX, DS, ES, FLAGS)
         vbe_biosfn_return_current_mode(&AX,&BX);
         break;
        case 0x04:
-#ifdef DEBUG       
+        //FIXME
+#ifdef DEBUG
         unimplemented();
 #endif
         break;
        case 0x05:
-#ifdef DEBUG       
+        //FIXME
+#ifdef DEBUG
         unimplemented();
 #endif
         break;
        case 0x06:
-#ifdef DEBUG       
+        //FIXME
+#ifdef DEBUG
         unimplemented();
 #endif
         break;
        case 0x07:
-#ifdef DEBUG       
+        //FIXME
+#ifdef DEBUG   
         unimplemented();
 #endif
         break;
        case 0x08:
-#ifdef DEBUG       
+        //FIXME
+#ifdef DEBUG
         unimplemented();
 #endif
         break;
        case 0x09:
-#ifdef DEBUG       
+        //FIXME
+#ifdef DEBUG
         unimplemented();
 #endif
         break;
        case 0x0A:
-#ifdef DEBUG       
+        //FIXME
+#ifdef DEBUG
         unimplemented();
 #endif
         break;
@@ -719,8 +726,8 @@ static void int10_func(DI, SI, BP, SP, BX, DX, CX, AX, DS, ES, FLAGS)
        default:
         unknown();
 #endif   		 
-   	}
-     	break;
+        }
+        break;
 #endif
 
 #ifdef DEBUG
