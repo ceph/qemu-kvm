@@ -397,7 +397,7 @@ init_vga_card:
   ret
 
 msg_vga_init:
-.ascii "VGABios $Id: vgabios.c,v 1.58 2004/06/16 21:08:34 vruppert Exp $"
+.ascii "VGABios $Id: vgabios.c,v 1.59 2004/07/18 20:22:43 vruppert Exp $"
 .byte 0x0d,0x0a,0x00
 ASM_END
 
@@ -873,6 +873,8 @@ static void biosfn_set_video_mode(mode) Bit8u mode;
  // Set CRTC address VGA or MDA 
  crtc_addr=vga_modes[line].memmodel==MTEXT?VGAREG_MDA_CRTC_ADDRESS:VGAREG_VGA_CRTC_ADDRESS;
 
+ // Disable CRTC write protection
+ outw(crtc_addr,0x0011);
  // Set CRTC regs
  for(i=0;i<=CRTC_MAX_REG;i++)
   {outb(crtc_addr,i);
