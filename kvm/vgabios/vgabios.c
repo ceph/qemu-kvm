@@ -60,7 +60,10 @@ static Bit16u         read_word();
 static void           write_byte();
 static void           write_word();
 static Bit8u          inb();
+static Bit16u         inw();
 static void           outb();
+static void           outw();
+
 static Bit16u         get_SS();
 
 // Output
@@ -201,6 +204,11 @@ vgabios_init_func:
 ;; init basic bios vars
   call _init_bios_area
 
+#ifdef VBE  
+;; init vbe functions
+  call _vbe_init  
+#endif
+
 ;; set int10 vect
   SET_INT_VECTOR(0x10, #0xC000, #vgabios_int10_handler)
 
@@ -213,6 +221,12 @@ vgabios_init_func:
 
 ;; show info
   call _display_info
+
+#ifdef VBE  
+;; show vbe info
+  call _vbe_display_info  
+#endif
+
 
   retf
 #endasm
@@ -756,13 +770,13 @@ static void biosfn_set_video_mode(mode) Bit8u mode;
  // bochs vbe code disable video mode
  push dx
  push ax
- mov dx, #0xff80
+ mov dx, #VBE_DISPI_IOPORT_INDEX
 
  // disable video mode
- mov ax, #0x03
+ mov ax, #VBE_DISPI_INDEX_ENABLE
  out dx, ax
  inc dx
- mov ax, #0x00
+ mov ax, #VBE_DISPI_DISABLED
  out dx, ax
  pop ax
  pop dx
@@ -2251,7 +2265,6 @@ inb(port)
 #endasm
 }
 
-#if 0
   Bit16u
 inw(port)
   Bit16u port;
@@ -2268,7 +2281,6 @@ inw(port)
   pop  bp
 #endasm
 }
-#endif
 
 // --------------------------------------------------------------------------------------------
   void
@@ -2293,7 +2305,6 @@ outb(port, val)
 }
 
 // --------------------------------------------------------------------------------------------
-#if 0
   void
 outw(port, val)
   Bit16u port;
@@ -2314,7 +2325,6 @@ outw(port, val)
   pop  bp
 #endasm
 }
-#endif
 
 Bit16u get_SS()
 {

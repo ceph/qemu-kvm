@@ -44,10 +44,9 @@ v3.0
 VBE:
 ----
 Short term:
-- make bochs guest <-> host display API documentation
 - fix io port calls for VBE_VESA_MODE_640X400X8 and VBE_VESA_MODE_800X600X8
 
 Long term:
-- have bochs/plex86 host side display interface
+- have plex86 host side display interface
 - support more modi
 - have text io functions in vbe mode

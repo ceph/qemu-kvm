@@ -74,8 +74,18 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.8 2002/03/08 20:48:49 japj Exp $"
+.ascii       "$Id: vbe.c,v 1.9 2002/03/08 22:08:08 japj Exp $"
 .byte        0x00
+
+_vbebios_info_string:
+.ascii      "Bochs VBE Display Adapter"
+.byte	0x0a,0x0d
+.ascii      "(C) 2002 Jeroen Janssen <japj-vbebios@darius.demon.nl>"
+.byte	0x0a,0x0d
+.ascii	"This VBE Bios is released under the GNU LGPL"
+.byte	0x0a,0x0d
+.byte	0x0a,0x0d
+.byte	0x00
 
 #ifndef DYN_LIST
 // FIXME: for each new mode add a statement here
@@ -100,6 +110,60 @@ _vbebios_mode_list:
 #endif
 
 #endasm
+
+// from rombios.c
+#define PANIC_PORT 0x400
+
+#asm
+MACRO HALT
+  ;; the HALT macro is called with the line number of the HALT call.
+  ;; The line number is then sent to the PANIC_PORT, causing Bochs to
+  ;; print a BX_PANIC message.  This will normally halt the simulation
+  ;; with a message such as "BIOS panic at rombios.c, line 4091".
+  ;; However, users can choose to make panics non-fatal and continue.
+  mov dx,#PANIC_PORT
+  mov ax,#?1
+  out dx,ax 
+MEND
+#endasm
+
+
+/** VBE Init - Initialise the Vesa Bios Extension Code
+ *
+ *  This function does a sanity check on the host side display code interface.
+ */
+void vbe_init()
+{
+  Bit16u dispi_id;
+  
+  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_ID);
+  outw(VBE_DISPI_IOPORT_DATA,VBE_DISPI_ID0);
+  
+  dispi_id=inw(VBE_DISPI_IOPORT_DATA);
+  
+  if (dispi_id!=VBE_DISPI_ID0)
+  {
+//FIXME this results in a 'rombios.c' line panic, but it's actually a 'vbe.c' panic
+#asm    
+    HALT(__LINE__)
+#endasm    
+  }
+#ifdef DEBUG
+  printf("VBE Bios $Id: vbe.c,v 1.9 2002/03/08 22:08:08 japj Exp $\n");
+#endif  
+}
+
+/** VBE Display Info - Display information on screen about the VBE
+ */
+void vbe_display_info()
+{
+#asm
+ mov ax,#0xc000
+ mov ds,ax
+ mov si,#_vbebios_info_string
+ call _display_string
+#endasm  
+}  
 
 /** Function 00h - Return VBE Controller Information
  * 
@@ -657,8 +721,8 @@ vbe_set_bank(bank)
   push ax
   push dx
   
-  mov dx,#0xff80
-    mov ax,#0x04
+  mov dx,#VBE_DISPI_IOPORT_INDEX
+    mov ax,#VBE_DISPI_INDEX_BANK
     outw dx, ax
     inc dx
 
