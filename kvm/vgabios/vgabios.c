@@ -95,7 +95,6 @@ static void biosfn_set_palette();
 static void biosfn_write_pixel();
 static void biosfn_read_pixel();
 static void biosfn_write_teletype();
-static void biosfn_get_video_mode();
 static void biosfn_set_single_palette_reg();
 static void biosfn_set_overscan_border_color();
 static void biosfn_set_all_palette_reg();
@@ -133,7 +132,6 @@ static void biosfn_enable_cursor_emulation();
 static void biosfn_switch_video_interface();
 static void biosfn_enable_video_refresh_control();
 static void biosfn_write_string();
-static void biosfn_read_display_code();
 static void biosfn_set_display_code();
 static void biosfn_read_state_info();
 static void biosfn_read_video_state_size();
@@ -145,6 +143,14 @@ static void biosfn_restore_video_state();
 #define ASM_END   #endasm
 
 ASM_START
+
+biosmem_seg = 0x40
+biosmem_current_mode = 0x49
+biosmem_nb_cols      = 0x4a
+biosmem_current_page = 0x62
+biosmem_video_ctl    = 0x87
+biosmem_dcc_index    = 0x8a
+
 MACRO SET_INT_VECTOR
   push ds
   xor ax, ax
@@ -268,6 +274,17 @@ ASM_END
 ASM_START
 vgabios_int10_handler:
   pushf
+  cmp   ah, #0x0f
+  jne   int10_l1
+  call  biosfn_get_video_mode
+  jmp   int10_end
+int10_l1:
+  cmp   ax, #0x1a00
+  jne   int10_normal
+  call  biosfn_read_display_code
+  jmp   int10_end
+
+int10_normal:
   push es
   push ds
   pusha
@@ -280,6 +297,7 @@ vgabios_int10_handler:
   popa
   pop ds
   pop es
+int10_end:
   popf
   iret
 ASM_END
@@ -310,7 +328,7 @@ ASM_START
 
 ASM_END
 
-  printf("VGABios $Id: vgabios.c,v 1.40 2004/04/04 18:19:48 vruppert Exp $\n");
+  printf("VGABios $Id: vgabios.c,v 1.41 2004/04/05 19:39:43 vruppert Exp $\n");
 }
 
 // --------------------------------------------------------------------------------------------
@@ -495,9 +513,6 @@ static void int10_func(DI, SI, BP, SP, BX, DX, CX, AX, DS, ES, FLAGS)
      // We do output only on the current page !
      biosfn_write_teletype(GET_AL(),0xff,GET_BL(),NO_ATTR);
      break;
-   case 0x0F:
-     biosfn_get_video_mode(&AX,&BX);
-     break;
    case 0x10:
      switch(GET_AL())
       {
@@ -651,9 +666,6 @@ static void int10_func(DI, SI, BP, SP, BX, DX, CX, AX, DS, ES, FLAGS)
    case 0x1A:
      switch(GET_AL())
       {
-       case 0x00:
-        biosfn_read_display_code(&BX);
-        break;
        case 0x01:
         biosfn_set_display_code(GET_BL(),GET_BH());
         break;
@@ -954,12 +966,6 @@ static void biosfn_set_video_mode(mode) Bit8u mode;
  // Write the fonts in memory
  if(vga_modes[line].class==TEXT)
   { 
-   // TEXT class is always 16 lines high
-   /*
-   biosfn_load_text_8_16_pat(0x04,0x00);
-   biosfn_set_text_block_specifier(0);
-   */
-   // Same in asm here
 ASM_START
   ;; copy and activate 8x16 font
   mov ax, #0x1104
@@ -1695,20 +1701,29 @@ Bit8u car;Bit8u page;Bit8u attr;Bit8u flag;
 }
 
 // --------------------------------------------------------------------------------------------
-static void biosfn_get_video_mode (AX,BX) 
-Bit16u *AX;Bit16u *BX;
-{Bit16u ss=get_SS();
- Bit8u  mode,noclear,page;
- Bit16u nbcars;
-
- page=read_byte(BIOSMEM_SEG,BIOSMEM_CURRENT_PAGE);
- mode=read_byte(BIOSMEM_SEG,BIOSMEM_CURRENT_MODE);
- noclear=read_byte(BIOSMEM_SEG,BIOSMEM_VIDEO_CTL) & 0x80;
- nbcars=read_word(BIOSMEM_SEG,BIOSMEM_NB_COLS);
-
- write_word(ss,AX,(nbcars<<8)+mode|noclear);
- write_word(ss,BX,((Bit16u)page)<<8);
-}
+ASM_START
+biosfn_get_video_mode:
+  push  ds
+  mov   ax, #biosmem_seg
+  mov   ds, ax
+  push  bx
+  mov   bx, #biosmem_current_page
+  mov   al, [bx]
+  pop   bx
+  mov   bh, al
+  push  bx
+  mov   bx, #biosmem_video_ctl
+  mov   ah, [bx]
+  and   ah, #0x80
+  mov   bx, #biosmem_current_mode
+  mov   al, [bx]
+  or    al, ah
+  mov   bx, #biosmem_nb_cols
+  mov   ah, [bx]
+  pop   bx
+  pop   ds
+  ret
+ASM_END
 
 // --------------------------------------------------------------------------------------------
 static void biosfn_set_single_palette_reg (reg,value) 
@@ -2354,12 +2369,20 @@ Bit8u flag;Bit8u page;Bit8u attr;Bit16u count;Bit8u row;Bit8u col;Bit16u seg;Bit
 }
 
 // --------------------------------------------------------------------------------------------
-static void biosfn_read_display_code (BX) 
-Bit16u *BX;
-{
- Bit16u ss=get_SS();
- write_word(ss,BX,(Bit16u)read_byte(BIOSMEM_SEG,BIOSMEM_DCC_INDEX));
-}
+ASM_START
+biosfn_read_display_code:
+  push  ds
+  push  ax
+  mov   ax, #biosmem_seg
+  mov   ds, ax
+  mov   bx, #biosmem_dcc_index
+  mov   al, [bx]
+  mov   bl, al
+  xor   bh, bh
+  pop   ax
+  pop   ds
+  ret
+ASM_END
 
 // --------------------------------------------------------------------------------------------
 static void biosfn_set_display_code (BL,BH) 
