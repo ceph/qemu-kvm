@@ -79,7 +79,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.25 2003/02/09 10:02:45 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.26 2003/02/11 19:17:59 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -246,8 +246,8 @@ static Bit16u dispi_get_virt_height()
 
 
 // ModeInfo helper function
-static ModeInfoListItem* mode_info_find_mode(mode)
-  Bit16u mode;
+static ModeInfoListItem* mode_info_find_mode(mode, using_lfb)
+  Bit16u mode; Boolean using_lfb;
 {
   ModeInfoListItem  *cur_info=&mode_info_list;
 
@@ -255,12 +255,25 @@ static ModeInfoListItem* mode_info_find_mode(mode)
   {
     if (cur_info->mode == mode)
     {
-      return cur_info;
+      if (!using_lfb)
+      {
+        return cur_info;
+      }
+      else if (cur_info->info.ModeAttributes & VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE)
+      {
+        return cur_info;
+      }
+      else
+      {
+        cur_info++;
+      }
     }
-    
-    cur_info++;
+    else
+    {
+      cur_info++;
+    }
   }
-  
+
   return 0;
 }
 
@@ -295,7 +308,7 @@ ASM_START
 ASM_END    
   }
 //#ifdef DEBUG
-  printf("VBE Bios $Id: vbe.c,v 1.25 2003/02/09 10:02:45 vruppert Exp $\n");
+  printf("VBE Bios $Id: vbe.c,v 1.26 2003/02/11 19:17:59 vruppert Exp $\n");
 //#endif  
 }
 
@@ -477,26 +490,20 @@ Bit16u *AX;Bit16u CX; Bit16u ES;Bit16u DI;
         Bit16u            result=0x0100;
         Bit16u            ss=get_SS();
         ModeInfoBlock     info;
-        ModeInfoListItem  *cur_info=&mode_info_list;
-        Boolean           found=0;
+        ModeInfoListItem  *cur_info;
+        Boolean           using_lfb;
 
 #ifdef DEBUG
         printf("VBE vbe_biosfn_return_mode_information ES%x DI%x CX%x\n",ES,DI,CX);
 #endif
 
-        while ((cur_info->mode != VBE_VESA_MODE_END_OF_LIST) && (!found))
-        {
-                if (cur_info->mode == CX)
-                {
-                        found=1;
-                }
-                else
-                {
-                        cur_info++;
-                }
-        }
+        using_lfb=((CX & VBE_MODE_LINEAR_FRAME_BUFFER) == VBE_MODE_LINEAR_FRAME_BUFFER);
         
-        if (found)
+        CX = (CX & 0x1ff);
+        
+        cur_info = mode_info_find_mode(CX, using_lfb, &cur_info);
+
+        if (cur_info != 0)
         {
 #ifdef DEBUG
                 printf("VBE found mode %x\n",CX);
@@ -538,8 +545,7 @@ Bit16u *AX;Bit16u BX; Bit16u ES;Bit16u DI;
 {
         Bit16u            ss = get_SS();
         Bit16u            result;
-        ModeInfoListItem  *cur_info = &mode_info_list;
-        Boolean           found = 0;
+        ModeInfoListItem  *cur_info;
         Boolean           using_lfb;
         
         using_lfb=((BX & VBE_MODE_LINEAR_FRAME_BUFFER) == VBE_MODE_LINEAR_FRAME_BUFFER);
@@ -562,18 +568,9 @@ Bit16u *AX;Bit16u BX; Bit16u ES;Bit16u DI;
                 result = 0x4f;
         }
         
-        while ((cur_info->mode != VBE_VESA_MODE_END_OF_LIST) && (!found))
-        {
-                if (cur_info->mode == BX)
-                {
-                        found = 1;
-                }
-                else
-                {
-                        cur_info++;
-                }
-        }
-        if (found)
+        cur_info = mode_info_find_mode(BX, using_lfb, &cur_info);
+
+        if (cur_info != 0)
         {
 #ifdef DEBUG
                 printf("VBE found mode %x, setting:\n", BX);
