@@ -7665,16 +7665,16 @@ int1a_function(regs, ds, iret_addr)
     case 0xb1:
       // real mode PCI BIOS functions now handled in assembler code
       // this C code handles the error code for information only
-      if (regs.u.r8.al == 0xff) {
+      if (regs.u.r8.bl == 0xff) {
         BX_INFO("PCI BIOS: PCI not present\n");
-      } else if (regs.u.r8.al == 0x81) {
+      } else if (regs.u.r8.bl == 0x81) {
         BX_INFO("unsupported PCI BIOS function 0x%02x\n", regs.u.r8.al);
-      } else if (regs.u.r8.al == 0x83) {
+      } else if (regs.u.r8.bl == 0x83) {
         BX_INFO("bad PCI vendor ID %04x\n", regs.u.r16.dx);
-      } else if (regs.u.r8.al == 0x86) {
+      } else if (regs.u.r8.bl == 0x86) {
         BX_INFO("PCI device %04x:%04x not found\n", regs.u.r16.dx, regs.u.r16.cx);
       }
-      regs.u.r8.ah = regs.u.r8.al;
+      regs.u.r8.ah = regs.u.r8.bl;
       SetCF(iret_addr.flags);
       break;
 #endif
@@ -10085,7 +10085,7 @@ int1a_handler:
   pop ax
   iret
 pcibios_error:
-  mov  al, ah
+  mov  bl, ah
   mov  ah, #0xb1
 int1a_normal:
 #endif
