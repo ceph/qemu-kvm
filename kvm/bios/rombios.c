@@ -2635,7 +2635,7 @@ int09_function(DI, SI, BP, SP, BX, DX, CX, AX)
     default:
       if (scancode & 0x80) return; /* toss key releases ... */
       if (scancode > MAX_SCAN_CODE) {
-        panic("KBD: int09h_handler(): unknown scancode read!");
+        printf("KBD: int09h_handler(): unknown scancode read!");
         return;
         }
       if (shift_flags & 0x08) { /* ALT */
@@ -2662,7 +2662,7 @@ int09_function(DI, SI, BP, SP, BX, DX, CX, AX)
         scancode = scan_to_scanascii[scancode].normal >> 8;
         }
       if (scancode==0 && asciicode==0) {
-        panic("KBD: int09h_handler(): scancode & asciicode are zero?");
+        printf("KBD: int09h_handler(): scancode & asciicode are zero?");
         }
       enqueue_key(scancode, asciicode);
       break;
