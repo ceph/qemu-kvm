@@ -320,7 +320,7 @@ ASM_START
 
 ASM_END
 
-  printf("VGABios $Id: vgabios.c,v 1.24 2003/01/21 18:30:27 vruppert Exp $\n");
+  printf("VGABios $Id: vgabios.c,v 1.25 2003/02/04 21:06:04 vruppert Exp $\n");
 }
 
 // --------------------------------------------------------------------------------------------
@@ -789,7 +789,7 @@ static void biosfn_set_video_mode(mode) Bit8u mode;
 
  // Should we clear the screen ?
  Bit8u noclearmem=mode&0x80;
- Bit8u line,*palette;
+ Bit8u line,mmask,*palette;
  Bit16u i,twidth,theight,cheight;
  Bit8u modeset_ctl,video_ctl,vga_switches;
  Bit16u crtc_addr;
@@ -906,12 +906,17 @@ static void biosfn_set_video_mode(mode) Bit8u mode;
  inb(VGAREG_ACTL_RESET);
 
  if(noclearmem==0x00)
-  {if(vga_modes[line].class==TEXT)
+  {if(mode<0x0d)
     {
      memsetw(vga_modes[line].sstart,0,0x0720,0x4000); // 32k
     }
    else
-    {// FIXME should handle gfx mode
+    {
+     outb( VGAREG_SEQU_ADDRESS, 0x02 );
+     mmask = inb( VGAREG_SEQU_DATA );
+     outb( VGAREG_SEQU_DATA, 0x0f ); // all planes
+     memsetw(vga_modes[line].sstart,0,0x0000,0x8000); // 64k
+     outb( VGAREG_SEQU_DATA, mmask );
     }
   }
 
@@ -949,7 +954,10 @@ static void biosfn_set_video_mode(mode) Bit8u mode;
  biosfn_set_active_page(0x00);
 
  // Write the fonts in memory
-// FIXME
+ if(vga_modes[line].class==TEXT)
+  {
+   biosfn_load_text_8_16_pat(0x04,0x00);
+  }
 
  // Set the ints 0x1F and 0x43
 ASM_START
@@ -1190,14 +1198,40 @@ Bit8u page;Bit16u *car;
 }
 
 // --------------------------------------------------------------------------------------------
+static void write_gfx_char(car,attr,addr,cols,cheight,fdata)
+Bit8u car;Bit8u attr;Bit16u addr;Bit8u cols;Bit8u cheight;Bit8u *fdata;
+{
+ Bit8u back,fore,data,i,j,mmask;
+ Bit16u dest,src;
+
+ src = car * cheight;
+ fore = attr & 0x0f;
+ outb( VGAREG_SEQU_ADDRESS, 0x02 );
+ mmask = inb( VGAREG_SEQU_DATA );
+ for(i=0;i<4;i++)
+  {
+   outb( VGAREG_SEQU_DATA, 1 << i );
+   for(j=0;j<cheight;j++)
+    {
+     dest=addr+j*cols;
+     data = read_byte(0xa000,dest) & ~fdata[src+j];
+     if(fore & (1 << i))
+      {
+       data |= fdata[src+j];
+      }
+     write_byte(0xa000,dest,data);
+    }
+  }
+ outb( VGAREG_SEQU_DATA, mmask );
+}
+
+// --------------------------------------------------------------------------------------------
 static void biosfn_write_char_attr (car,page,attr,count) 
 Bit8u car;Bit8u page;Bit8u attr;Bit16u count;
 {
- Bit8u xcurs,ycurs,mode,line;
+ Bit8u cheight,xcurs,ycurs,mode,line;
  Bit16u nbcols,nbrows,address;
  Bit16u cursor,dummy;
-
- // FIXME gfx mode
 
  // Get the mode
  mode=read_byte(BIOSMEM_SEG,BIOSMEM_CURRENT_MODE);
@@ -1212,11 +1246,30 @@ Bit8u car;Bit8u page;Bit8u attr;Bit16u count;
  nbrows=read_byte(BIOSMEM_SEG,BIOSMEM_NB_ROWS)+1;
  nbcols=read_word(BIOSMEM_SEG,BIOSMEM_NB_COLS);
 
- // Compute the address
- address=SCREEN_MEM_START(nbcols,nbrows,page)+(xcurs+ycurs*nbcols)*2;
+ if(vga_modes[line].class==TEXT)
+  {
+   // Compute the address
+   address=SCREEN_MEM_START(nbcols,nbrows,page)+(xcurs+ycurs*nbcols)*2;
 
- dummy=((Bit16u)attr<<8)+car;
- memsetw(vga_modes[line].sstart,address,dummy,count);
+   dummy=((Bit16u)attr<<8)+car;
+   memsetw(vga_modes[line].sstart,address,dummy,count);
+  }
+ else
+  {
+   // FIXME gfx mode not complete
+   if(mode==0x12)
+    {
+     cheight=vga_modes[line].cheight;
+     address=xcurs+ycurs*cheight*nbcols;
+     write_gfx_char(car,attr,address,nbcols,cheight,&vgafont16);
+    }
+   else
+    {
+#ifdef DEBUG
+     unimplemented();
+#endif
+    }
+  }
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1227,8 +1280,6 @@ Bit8u car;Bit8u page;Bit8u attr;Bit16u count;
  Bit16u nbcols,nbrows,address;
  Bit16u cursor,dummy;
 
- // FIXME gfx mode
-
  // Get the mode
  mode=read_byte(BIOSMEM_SEG,BIOSMEM_CURRENT_MODE);
  line=find_vga_entry(mode);
@@ -1242,12 +1293,19 @@ Bit8u car;Bit8u page;Bit8u attr;Bit16u count;
  nbrows=read_byte(BIOSMEM_SEG,BIOSMEM_NB_ROWS)+1;
  nbcols=read_word(BIOSMEM_SEG,BIOSMEM_NB_COLS);
 
- // Compute the address
- address=SCREEN_MEM_START(nbcols,nbrows,page)+(xcurs+ycurs*nbcols)*2;
+ if(vga_modes[line].class==TEXT)
+  {
+   // Compute the address
+   address=SCREEN_MEM_START(nbcols,nbrows,page)+(xcurs+ycurs*nbcols)*2;
 
- while(count-->0)
-  {write_byte(vga_modes[line].sstart,address,car);
-   address+=2;
+   while(count-->0)
+    {write_byte(vga_modes[line].sstart,address,car);
+     address+=2;
+    }
+  }
+ else
+  {
+   // FIXME gfx mode
   }
 }
 
@@ -1292,7 +1350,7 @@ static void biosfn_write_teletype (car, page, attr, flag)
 Bit8u car;Bit8u page;Bit8u attr;Bit8u flag;
 {// flag = WITH_ATTR / NO_ATTR
 
- Bit8u xcurs,ycurs,mode,line;
+ Bit8u cheight,xcurs,ycurs,mode,line;
  Bit16u nbcols,nbrows,address;
  Bit16u cursor,dummy;
 
@@ -1344,14 +1402,34 @@ Bit8u car;Bit8u page;Bit8u attr;Bit8u flag;
     break;
 
    default:
-    // Compute the address  
-    address=SCREEN_MEM_START(nbcols,nbrows,page)+(xcurs+ycurs*nbcols)*2;
 
-    // Write the char 
-    write_byte(vga_modes[line].sstart,address,car);
+    if(vga_modes[line].class==TEXT)
+     {
+      // Compute the address  
+      address=SCREEN_MEM_START(nbcols,nbrows,page)+(xcurs+ycurs*nbcols)*2;
 
-    if(flag==WITH_ATTR)
-     write_byte(vga_modes[line].sstart,address+1,attr);
+      // Write the char 
+      write_byte(vga_modes[line].sstart,address,car);
+
+      if(flag==WITH_ATTR)
+       write_byte(vga_modes[line].sstart,address+1,attr);
+     }
+    else
+     {
+      // FIXME gfx mode not complete
+      if(mode==0x12)
+       {
+        cheight=vga_modes[line].cheight;
+        address=xcurs+ycurs*cheight*nbcols;
+        write_gfx_char(car,attr,address,nbcols,cheight,&vgafont16);
+       }
+      else
+       {
+#ifdef DEBUG
+        unimplemented();
+#endif
+       }
+     }
 
     xcurs++;
   }
