@@ -1,5 +1,6 @@
 
 vgabios-0.3a (Not released yet!!)
+    . added vbe_display_api documentation
     . added 640x400x8, 640x480x8, 800x600x8, 1024x768 (>640x480 needs a special bochs patch atm)
     . added 320x200x8 vbe support (uses the standard 320x200x8 vga mode to
       display, this allows for testing & having something on screen as well,
