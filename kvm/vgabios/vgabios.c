@@ -320,7 +320,7 @@ ASM_START
 
 ASM_END
 
-  printf("VGABios $Id: vgabios.c,v 1.32 2003/07/19 07:33:47 vruppert Exp $\n");
+  printf("VGABios $Id: vgabios.c,v 1.33 2003/07/20 16:05:17 vruppert Exp $\n");
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1583,9 +1583,6 @@ Bit8u state;
  value=inb(VGAREG_ACTL_READ_DATA);
  value&=0xf7;
  value|=state<<3;
-
- inb(VGAREG_ACTL_RESET);
- outb(VGAREG_ACTL_ADDRESS,0x10);
  outb(VGAREG_ACTL_WRITE_DATA,value);
  outb(VGAREG_ACTL_ADDRESS,0x20);
 }
@@ -1600,6 +1597,7 @@ Bit8u reg;Bit16u *value;
    inb(VGAREG_ACTL_RESET);
    outb(VGAREG_ACTL_ADDRESS,reg);
    write_word(ss,value,((Bit16u)inb(VGAREG_ACTL_READ_DATA))<<8);
+   inb(VGAREG_ACTL_RESET);
    outb(VGAREG_ACTL_ADDRESS,0x20);
   }
 }
@@ -1620,10 +1618,10 @@ static void biosfn_get_all_palette_reg (seg,offset) Bit16u seg;Bit16u offset;
 {
  Bit8u i;
 
- inb(VGAREG_ACTL_RESET);
  // First the colors
  for(i=0;i<=0x10;i++)
   {
+   inb(VGAREG_ACTL_RESET);
    outb(VGAREG_ACTL_ADDRESS,i);
    write_byte(seg,offset,inb(VGAREG_ACTL_READ_DATA));
    offset++;
@@ -1668,16 +1666,13 @@ Bit8u function;
  value=inb(VGAREG_ACTL_READ_DATA);
  function&=0x01;
  if(function==0)
-  {// 4 of 64
+  {// set paging code
    value&=0x7f;
-   value|=function<<7;
-
-   inb(VGAREG_ACTL_RESET);
-   outb(VGAREG_ACTL_ADDRESS,0x10);
+   value|=page<<7;
    outb(VGAREG_ACTL_WRITE_DATA,value);
   }
  else
-  {// 16 of 16
+  {// select page
    inb(VGAREG_ACTL_RESET);
    outb(VGAREG_ACTL_ADDRESS,0x14);
    if(value&0x80)
