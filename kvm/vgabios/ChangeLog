@@ -1,3 +1,7 @@
+
+vgabios-xxx
+    . merging with vbebios 0.2
+
 vgabios-0.2b
   - "Christophe Bothamy" <cbothamy@free.fr>: Nov 19 2001
     . Fixed bug in function ah=13
