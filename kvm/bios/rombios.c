@@ -4774,6 +4774,8 @@ int16_handler:
 
   cmp   ah, #0x00
   je    int16_F00
+  cmp   ah, #0x10
+  je    int16_F00
 
   mov  bx, #0xf000
   mov  ds, bx
