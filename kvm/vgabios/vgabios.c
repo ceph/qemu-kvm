@@ -152,6 +152,9 @@ biosmem_switches     = 0x88
 biosmem_modeset_ctl  = 0x89
 biosmem_dcc_index    = 0x8a
 
+vgareg_sequ_address  = 0x03c4
+vgareg_grdc_address  = 0x03ce
+
 MACRO SET_INT_VECTOR
   push ds
   xor ax, ax
@@ -332,7 +335,7 @@ init_vga_card:
   ret
 
 msg_vga_init:
-.ascii "VGABios $Id: vgabios.c,v 1.42 2004/04/06 19:30:25 vruppert Exp $"
+.ascii "VGABios $Id: vgabios.c,v 1.43 2004/04/08 17:50:19 vruppert Exp $"
 .byte 0x0d,0x0a,0x00
 ASM_END
 
@@ -370,7 +373,7 @@ init_bios_area:
   mov   [bx], al
 
 ;; Set the basic modeset options
-  mov   bx, #biosmem_modeset_cl
+  mov   bx, #biosmem_modeset_ctl
   mov   al, #0x51
   mov   [bx], al
 
@@ -1373,6 +1376,34 @@ Bit8u car;Bit8u attr;Bit8u xcurs;Bit8u ycurs;Bit8u nbcols;Bit8u bpp;
 }
 
 // --------------------------------------------------------------------------------------------
+static void write_gfx_char_lin(car,attr,xcurs,ycurs,nbcols)
+Bit8u car;Bit8u attr;Bit8u xcurs;Bit8u ycurs;Bit8u nbcols;
+{
+ Bit8u i,j,mask,data;
+ Bit8u *fdata;
+ Bit16u addr,dest,src;
+
+ fdata = &vgafont8;
+ addr=xcurs*8+ycurs*nbcols*64;
+ src = car * 8;
+ for(i=0;i<8;i++)
+  {
+   dest=addr+i*nbcols*8;
+   mask = 0x80;
+   for(j=0;j<8;j++)
+    {
+     data = 0x00;
+     if (fdata[src+i] & mask)
+      {
+       data = attr;
+      }
+     write_byte(0xa000,dest+j,data);
+     mask >>= 1;
+    }
+  }
+}
+
+// --------------------------------------------------------------------------------------------
 static void biosfn_write_char_attr (car,page,attr,count) 
 Bit8u car;Bit8u page;Bit8u attr;Bit16u count;
 {
@@ -1415,6 +1446,10 @@ Bit8u car;Bit8u page;Bit8u attr;Bit16u count;
      else if(vga_modes[line].memmodel==CGA)
       {
        write_gfx_char_cga(car,attr,xcurs,ycurs,nbcols,bpp);
+      }
+     else if(vga_modes[line].memmodel==LINEAR8)
+      {
+       write_gfx_char_lin(car,attr,xcurs,ycurs,nbcols);
       }
      else
       {
@@ -1472,6 +1507,10 @@ Bit8u car;Bit8u page;Bit8u attr;Bit16u count;
      else if(vga_modes[line].memmodel==CGA)
       {
        write_gfx_char_cga(car,attr,xcurs,ycurs,nbcols,bpp);
+      }
+     else if(vga_modes[line].memmodel==LINEAR8)
+      {
+       write_gfx_char_lin(car,attr,xcurs,ycurs,nbcols);
       }
      else
       {
@@ -1683,6 +1722,10 @@ Bit8u car;Bit8u page;Bit8u attr;Bit8u flag;
       else if(vga_modes[line].memmodel==CGA)
        {
         write_gfx_char_cga(car,attr,xcurs,ycurs,nbcols,bpp);
+       }
+      else if(vga_modes[line].memmodel==LINEAR8)
+       {
+        write_gfx_char_lin(car,attr,xcurs,ycurs,nbcols);
        }
       else
        {
@@ -1993,24 +2036,46 @@ Bit16u start;Bit16u count;
 // --------------------------------------------------------------------------------------------
 static void get_font_access()
 {
- outw( VGAREG_SEQU_ADDRESS, 0x0100 );
- outw( VGAREG_SEQU_ADDRESS, 0x0402 );
- outw( VGAREG_SEQU_ADDRESS, 0x0704 );
- outw( VGAREG_SEQU_ADDRESS, 0x0300 );
- outw( VGAREG_GRDC_ADDRESS, 0x0204 );
- outw( VGAREG_GRDC_ADDRESS, 0x0005 );
- outw( VGAREG_GRDC_ADDRESS, 0x0406 );
+ASM_START
+ mov dx, #vgareg_sequ_address
+ mov ax, #0x0100
+ out dx, ax
+ mov ax, #0x0402
+ out dx, ax
+ mov ax, #0x0704
+ out dx, ax
+ mov ax, #0x0300
+ out dx, ax
+ mov dx, #vgareg_grdc_address
+ mov ax, #0x0204
+ out dx, ax
+ mov ax, #0x0005
+ out dx, ax
+ mov ax, #0x0406
+ out dx, ax
+ASM_END
 }
 
 static void release_font_access()
 {
- outw( VGAREG_SEQU_ADDRESS, 0x0100 );
- outw( VGAREG_SEQU_ADDRESS, 0x0302 );
- outw( VGAREG_SEQU_ADDRESS, 0x0304 );
- outw( VGAREG_SEQU_ADDRESS, 0x0300 );
- outw( VGAREG_GRDC_ADDRESS, 0x0004 );
- outw( VGAREG_GRDC_ADDRESS, 0x1005 );
- outw( VGAREG_GRDC_ADDRESS, 0x0e06 );
+ASM_START
+ mov dx, #vgareg_sequ_address
+ mov ax, #0x0100
+ out dx, ax
+ mov ax, #0x0302
+ out dx, ax
+ mov ax, #0x0304
+ out dx, ax
+ mov ax, #0x0300
+ out dx, ax
+ mov dx, #vgareg_grdc_address
+ mov ax, #0x0004
+ out dx, ax
+ mov ax, #0x1005
+ out dx, ax
+ mov ax, #0x0e06
+ out dx, ax
+ASM_END
 }
 
 ASM_START
