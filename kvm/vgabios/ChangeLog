@@ -1,3 +1,328 @@
+2005-03-06 13:06  vruppert
+
+	* Makefile (1.17):
+
+	- vgabios files with cirrus support added to release target
+
+2005-03-06 12:24  vruppert
+
+	* Makefile (1.16):
+
+	- cross compilation support added (patch from Alex Beregszaszi)
+
+2005-03-05 13:03  vruppert
+
+	* BUGS (1.3), README (1.8), TODO (1.11):
+
+	- documentation updates
+
+2004-12-04 15:26  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.61), VGABIOS-lgpl-latest.cirrus.bin
+	  (1.13), VGABIOS-lgpl-latest.cirrus.debug.bin (1.13),
+	  VGABIOS-lgpl-latest.debug.bin (1.61), clext.c (1.9):
+
+	- Cirrus extension: support for 1280x1024x15 and 1280x1024x16 modes added (patch
+	  from Fabrice Bellard)
+
+2004-08-08 16:53  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.60), VGABIOS-lgpl-latest.cirrus.bin (1.12),
+	  VGABIOS-lgpl-latest.cirrus.debug.bin (1.12),
+	  VGABIOS-lgpl-latest.debug.bin (1.60), clext.c (1.8):
+
+	- use single bank mode for VBE
+	- enable 16k granularity for VBE only
+
+2004-07-30 19:33  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.59), VGABIOS-lgpl-latest.cirrus.bin (1.11),
+	  VGABIOS-lgpl-latest.cirrus.debug.bin (1.11),
+	  VGABIOS-lgpl-latest.debug.bin (1.59), clext.c (1.7):
+
+	- cirrus init: set standard vga mode and reset bitblt
+
+2004-07-22 18:38  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.58), VGABIOS-lgpl-latest.cirrus.bin (1.10),
+	  VGABIOS-lgpl-latest.cirrus.debug.bin (1.10),
+	  VGABIOS-lgpl-latest.debug.bin (1.58), clext.c (1.6), vbe.c (1.45),
+	  vbetables.h (1.24):
+
+	- cirrus extension: tables for mode 1280x1024x8 added
+	- vbe: dispi_set_xres() and dispi_set_virt_width() now modify vga compatible
+	  registers
+	- vbe: mode list entry for mode 800x600x4 fixed
+
+2004-07-18 20:23  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.57), VGABIOS-lgpl-latest.cirrus.bin (1.9),
+	  VGABIOS-lgpl-latest.cirrus.debug.bin (1.9),
+	  VGABIOS-lgpl-latest.debug.bin (1.57), vgabios.c (1.59), vgatables.h (1.8):
+
+	- disable CRTC write protection before setting new values
+	- CRTC line for mode 0x6a fixed
+
+2004-07-07 16:08  vruppert
+
+	* Makefile (1.15), VGABIOS-lgpl-latest.bin (1.56),
+	  VGABIOS-lgpl-latest.cirrus.bin (1.8), VGABIOS-lgpl-latest.cirrus.debug.bin (1.8),
+	  VGABIOS-lgpl-latest.debug.bin (1.56), biossums.c (1.1), clext.c (1.5):
+
+	- biossums utility for the Bochs BIOS adapted for the LGPL'd VGABIOS
+	- VESA3 PMINFO checksum calculated in the source
+	- 24 bpp mode entries fixed (patch from Fabrice Bellard)
+
+2004-06-25 18:28  vruppert
+
+	* VGABIOS-lgpl-latest.cirrus.bin (1.7), VGABIOS-lgpl-latest.cirrus.debug.bin (1.7),
+	  clext.c (1.4):
+
+	- 4MB memory probe added (patch from Fabrice Bellard)
+
+2004-06-25 17:31  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.55), VGABIOS-lgpl-latest.cirrus.bin (1.6),
+	  VGABIOS-lgpl-latest.cirrus.debug.bin (1.6),
+	  VGABIOS-lgpl-latest.debug.bin (1.55), clext.c (1.3):
+
+	- fixed value of sequencer reset register in cirrus mode table
+	- fixed possible overflow error if cirrus start address is >256k
+
+2004-06-23 21:11  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.54), VGABIOS-lgpl-latest.cirrus.bin (1.5),
+	  VGABIOS-lgpl-latest.cirrus.debug.bin (1.5),
+	  VGABIOS-lgpl-latest.debug.bin (1.54), clext.c (1.2):
+
+	- applied new patch for the cirrus extension from suzu
+	  * enable VESA LFB support if a Cirrus PCI adapter is detected
+	  * prepared VBE3 protected mode info block (test case required)
+	- added VBE functions 4F06h and 4F07h
+	- some bugfixes
+
+2004-06-17 18:57  vruppert
+
+	* Makefile (1.14), VGABIOS-lgpl-latest.bin (1.53),
+	  VGABIOS-lgpl-latest.cirrus.bin (1.2), VGABIOS-lgpl-latest.cirrus.debug.bin (1.2),
+	  VGABIOS-lgpl-latest.debug.bin (1.53):
+
+	- fixed makefile targets for the binaries with cirrus extension
+
+2004-06-16 21:11  vruppert
+
+	* Makefile (1.13), VGABIOS-lgpl-latest.bin (1.52),
+	  VGABIOS-lgpl-latest.cirrus.bin (1.1), VGABIOS-lgpl-latest.cirrus.debug.bin (1.1),
+	  VGABIOS-lgpl-latest.debug.bin (1.52), clext.c (1.1), vgabios.c (1.58):
+
+	- applied suzu's cirrus extension patch. Cirrus SVGA detection, most of the
+	  cirrus-specific modes and some basic VBE features are present now.
+
+2004-05-31 21:15  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.51), VGABIOS-lgpl-latest.debug.bin (1.51),
+	  vgabios.c (1.57):
+
+	- write character in planar graphics modes: sequencer map mask must be 0x0f and
+	  bit operation must be 'replace' if bit 7 of attribute is clear
+	- read/write pixel in planar graphics modes: bit mask setup simplified
+
+2004-05-11 18:08  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.50), VGABIOS-lgpl-latest.debug.bin (1.50),
+	  vgabios.c (1.56):
+
+	- biosfn_select_vert_res rewritten in assembler
+	- scroll text in planar graphics modes: attribute for blank line fixed
+	- write character in planar graphics modes: graphics controller values fixed
+
+2004-05-09 20:32  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.49), VGABIOS-lgpl-latest.debug.bin (1.49),
+	  vbe.c (1.44), vbe.h (1.24), vgabios.c (1.55):
+
+	- VBE init code and some dispi ioport functions rewritten in assembler
+	- text scroll functions for CGA graphics modes added
+	- scroll text in graphics modes: attribute for blank line fixed
+
+2004-05-08 16:06  vruppert
+
+	* BUGS (1.2), README (1.7), TODO (1.10), VGABIOS-lgpl-latest.bin (1.48),
+	  VGABIOS-lgpl-latest.debug.bin (1.48), vbe.c (1.43), vbe.h (1.23),
+	  vbe_display_api.txt (1.11), vgabios.c (1.54):
+
+	- VBE internal functions dispi_set_enable and dispi_set_bank now called both from C
+	  and asm code
+	- VBE function 0x03 rewritten in assembler
+	- VBE function 0x08 cleaned up
+	- text output and scroll functions for graphics modes rewritten using case
+	  structures
+	- documentation and comments updated
+
+2004-05-06 21:18  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.47), VGABIOS-lgpl-latest.debug.bin (1.47),
+	  vbe.c (1.42), vbe.h (1.22), vgabios.c (1.53):
+
+	- VBE functions 0x05, 0x06, 0x07 and some dispi ioport functions rewritten in
+	  assembler
+	- VBE functions 0x06 and 0x07: get functions now supported, 15 bpp bug fixed
+
+2004-05-05 19:24  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.46), VGABIOS-lgpl-latest.debug.bin (1.46),
+	  vbe.c (1.41), vbe.h (1.21), vbe_display_api.txt (1.10), vgabios.c (1.52):
+
+	- 8 bit DAC capability flag set
+	- vbe_biosfn_set_get_dac_palette_format implemented
+	- VBE api description updated
+	- C definitions from header files now used assembler code
+
+2004-05-02 17:27  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.45), VGABIOS-lgpl-latest.debug.bin (1.45),
+	  vgabios.c (1.51):
+
+	- text scroll functions for PLANAR1/PLANAR4 graphics modes added
+	- function biosfn_get_ega_info rewritten in assembler
+	- read/write graphics pixel functions rewritten using a case structure
+
+2004-05-01 16:03  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.44), VGABIOS-lgpl-latest.debug.bin (1.44),
+	  vgabios.c (1.50):
+
+	- biosfn_enable_cursor_emulation rewritten in assembler
+	- remap of the cursor shape depends on modeset control bit 0
+	- text output in PLANAR4 modes now supports attribute bit 7 (XOR with background)
+
+2004-04-25 20:13  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.43), VGABIOS-lgpl-latest.debug.bin (1.43),
+	  vgabios.c (1.49), vgatables.h (1.7):
+
+	- table entries for vga mode 0x0f fixed (PLANAR2 exists on EGA only)
+	- function release_font_access now supports the monochrome text mode
+	- PLANAR1 modes now supported in text output functions and read/write pixel
+	- function AH=0x12/BL=0x32 rewritten in assembler
+
+2004-04-25 08:45  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.42), VGABIOS-lgpl-latest.debug.bin (1.42),
+	  vgabios.c (1.48):
+
+	- block address calculation in font functions fixed
+	- functions AX=0x1103, AH=0x12/BL=0x31 and AH=0x12/BL=0x33 rewritten in assembler
+
+2004-04-24 09:59  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.41), VGABIOS-lgpl-latest.debug.bin (1.41),
+	  vgabios.c (1.47):
+
+	- read/write graphics pixel for PLANAR4 modes added
+	- CGA specific functions (group AH = 0x0B) implemented
+
+2004-04-23 14:34  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.40), VGABIOS-lgpl-latest.debug.bin (1.40),
+	  vgabios.c (1.46):
+
+	- remaining palette and dac read/write functions (except gray scale summing)
+	  rewritten in assembler
+
+2004-04-18 13:43  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.39), VGABIOS-lgpl-latest.debug.bin (1.39),
+	  vgabios.c (1.45):
+
+	- some palette and dac read/write functions rewritten in assembler
+	- main int10 debug message now works with assembler functions, too
+
+2004-04-18 09:15  japj
+
+	* vbe.c (1.40):
+
+	updated my email address + put vgabios url in the bios copyright string
+	(instead of my old email address)
+
+2004-04-17 07:18  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.38), VGABIOS-lgpl-latest.debug.bin (1.38),
+	  vgabios.c (1.44):
+
+	- biosfn_set_video_mode: don't load DAC registers if default palette loading is
+	  disabled. Perform gray scale summing if enabled.
+	- biosfn_perform_gray_scale_summing: switch between DAC read and write mode is
+	  required to make this function work. Maximum DAC value always set to 0x3f.
+
+2004-04-08 17:50  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.37), VGABIOS-lgpl-latest.debug.bin (1.37),
+	  vgabios.c (1.43):
+
+	- write character function for the LINEAR8 mode
+	- get_font_access() and release_font_access() rewritten in assembler
+	- fixed wrong variable name in the init code
+
+2004-04-06 19:31  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.36), VGABIOS-lgpl-latest.debug.bin (1.36),
+	  vgabios.c (1.42):
+
+	- init functions rewitten in assembler
+	- function biosfn_set_display_code rewritten in assembler
+
+2004-04-05 19:40  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.35), VGABIOS-lgpl-latest.debug.bin (1.35),
+	  vgabios.c (1.41):
+
+	- functions biosfn_get_video_mode() and biosfn_read_display_code() rewritten
+	  in assembler
+
+2004-04-04 18:20  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.34), VGABIOS-lgpl-latest.debug.bin (1.34),
+	  vgabios.c (1.40):
+
+	- write character function for CGA modes added
+	- read/write graphics pixel for CGA and LINEAR8 modes added
+
+2004-02-23 21:08  vruppert
+
+	* VGABIOS-lgpl-latest.bin (1.33), VGABIOS-lgpl-latest.debug.bin (1.33),
+	  vbe.c (1.39):
+
+	- dispi_get_max_bpp(): restore the original value of the vbe enable register
+
+2004-02-22 14:17  vruppert
+
+	* README (1.6), vbe.c (1.38), vbe.h (1.20), vbe_display_api.txt (1.9),
+	  VGABIOS-lgpl-latest.bin (1.32), VGABIOS-lgpl-latest.debug.bin (1.32):
+
+	- new function dispi_get_max_bpp() returns the bpp capabilities of the Bochs gui
+	- create the mode list depending on the supported bpp capability
+	- unused stuff removed
+	- documentation updated
+
+2004-02-21 18:20  vruppert
+
+	* vbe.c (1.37), vbe.h (1.19), vbetables.h (1.23),
+	  VGABIOS-lgpl-latest.bin (1.31), VGABIOS-lgpl-latest.debug.bin (1.31):
+
+	- dynamicly genarated vbe mode_info list works now
+
+2003-11-17 21:04  vruppert
+
+	* vbe.c (1.36), vbetables.h (1.22), vgabios.c (1.39), vgatables.h (1.6),
+	  VGABIOS-lgpl-latest.bin (1.30), VGABIOS-lgpl-latest.debug.bin (1.30):
+
+	- new VBE presence flag stored at unused BDA address 0xB9
+	- VBE init code rewritten
+	- added BIOS TTY flag for VBE mode 0x0102 (TODO: scrolling)
+	- vgabios_init_func: load and activate text font already done by set_video_mode
+	- function biosfn_get_all_palette_reg() fixed
+
 2003-11-06 00:26  cbothamy
 
 	* README (1.5):
