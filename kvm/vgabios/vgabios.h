@@ -1,6 +1,10 @@
+#ifndef vgabios_h_included
+#define vgabios_h_included
+
 /* Types */
 typedef unsigned char  Bit8u;
 typedef unsigned short Bit16u;
+typedef unsigned long  Bit32u;
 typedef unsigned short Boolean;
 
 /* Defines */
@@ -50,3 +54,5 @@ typedef unsigned short Boolean;
 #define SCREEN_SIZE(x,y) (((x*y*2)|0x00ff)+1)
 #define SCREEN_MEM_START(x,y,p) ((((x*y*2)|0x00ff)+1)*p)
 #define SCREEN_IO_START(x,y,p) ((((x*y)|0x00ff)+1)*p)
+
+#endif

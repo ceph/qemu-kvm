@@ -50,6 +50,10 @@
 
 #include "vgabios.h"
 
+#ifdef VBE
+#include "vbe.h"
+#endif
+
 /* Declares */
 static Bit8u          read_byte();
 static Bit16u         read_word();
@@ -659,6 +663,66 @@ static void int10_func(DI, SI, BP, SP, BX, DX, CX, AX, DS, ES, FLAGS)
       }
      SET_AL(0x1C);
      break;
+
+#ifdef VBE 
+   case 0x4f:
+     switch(GET_AL())
+     {
+       case 0x00:
+        vbe_biosfn_return_controller_information(&AX,ES,DI);
+        break;
+       case 0x01:
+        vbe_biosfn_return_mode_information(&AX,CX,ES,DI);
+        break;
+       case 0x02:
+        vbe_biosfn_set_mode(&AX,BX,ES,DI);
+        break;
+       case 0x03:
+        vbe_biosfn_return_current_mode(&AX,&BX);
+        break;
+       case 0x04:
+#ifdef DEBUG       
+        unimplemented();
+#endif
+        break;
+       case 0x05:
+#ifdef DEBUG       
+        unimplemented();
+#endif
+        break;
+       case 0x06:
+#ifdef DEBUG       
+        unimplemented();
+#endif
+        break;
+       case 0x07:
+#ifdef DEBUG       
+        unimplemented();
+#endif
+        break;
+       case 0x08:
+#ifdef DEBUG       
+        unimplemented();
+#endif
+        break;
+       case 0x09:
+#ifdef DEBUG       
+        unimplemented();
+#endif
+        break;
+       case 0x0A:
+#ifdef DEBUG       
+        unimplemented();
+#endif
+        break;
+#ifdef DEBUG
+       default:
+        unknown();
+#endif   		 
+   	}
+     	break;
+#endif
+
 #ifdef DEBUG
    default:
      unknown();
@@ -2300,6 +2364,10 @@ void printf(s)
     s ++;
     }
 }
+#endif
+
+#ifdef VBE
+#include "vbe.c"
 #endif
 
 // --------------------------------------------------------------------------------------------
