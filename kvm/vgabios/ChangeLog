@@ -1,5 +1,8 @@
 
-vgabios-0.3a (Not released yet!!)
+vgabios-0.3a 
+  - "Christophe Bothamy" <cbothamy@free.fr>: Feb 10 2002
+    . Fixed bug in function ah=13
+  - "Jeroen Janssen" <japj@darius.demon.nl>
     . updated vbebios implementation to new api
     . added vbe_display_api documentation
     . added 640x400x8, 640x480x8, 800x600x8, 1024x768 (>640x480 needs a special bochs patch atm)
