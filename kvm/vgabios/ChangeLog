@@ -1,5 +1,6 @@
 vgabios-????
   - "Jeroen Janssen" <japj@darius.demon.nl>
+    . Added new DISPI interface for: virt width, height, x offset, y offset
     . Added LFB modes (to be used with the vbe-lfb patch in bochs)
       see VBE_HAVE_LFB in vbe.c (currently default enabled)
     . updated TODO & docs for changes after bochs 1.4
