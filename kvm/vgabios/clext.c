@@ -343,7 +343,7 @@ cirrus_init:
   call cirrus_check
   jnz no_cirrus
   SET_INT_VECTOR(0x10, #0xC000, #cirrus_int10_handler)
-  mov al, #0x0f
+  mov al, #0x0f ; memory setup
   mov dx, #0x3C4
   out dx, al
   inc dx
@@ -352,6 +352,13 @@ cirrus_init:
   mov ah, al
   mov al, #0x0a
   dec dx
+  out dx, ax
+  mov ax, #0x0007 ; set vga mode
+  out dx, ax
+  mov ax, #0x0431 ; reset bitblt
+  mov dx, #0x3CE
+  out dx, ax
+  mov ax, #0x0031
   out dx, ax
 no_cirrus:
   ret
