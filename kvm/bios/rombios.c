@@ -9257,9 +9257,9 @@ int19_handler:
   je  int19_fail
 
   mov dl, bl       ;; set drive so guest os find it
-  mov 4[bp], ax    ;; set cs
+  mov 2[bp], ax    ;; set cs
   xor ax, ax
-  mov 2[bp], ax    ;; set ip
+  mov 4[bp], ax    ;; set ip
   mov [bp], ax     ;; set bp
   mov ax, #0xaa55  ;; set ok flag
 
