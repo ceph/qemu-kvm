@@ -296,6 +296,7 @@ typedef struct ModeInfoBlock
   
   #define VBE_DISPI_DISABLED              0x00
   #define VBE_DISPI_ENABLED               0x01
+  #define VBE_DISPI_LFB_ENABLED           0x40
   #define VBE_DISPI_NOCLEARMEM            0x80
   
   #define VBE_DISPI_LFB_PHYSICAL_ADDRESS  0xE0000000

@@ -64,7 +64,7 @@ extern Bit16u vbebios_mode_list;
 ASM_START
 // FIXME: 'merge' these (c) etc strings with the vgabios.c strings?
 _vbebios_copyright:
-.ascii       "Bochs/Plex86 VBE(C) 2002 Jeroen Janssen <japj@darius.demon.nl>"
+.ascii       "Bochs/Plex86 VBE(C) 2003 Jeroen Janssen <japj@darius.demon.nl>"
 .byte        0x00
 
 _vbebios_vendor_name:
@@ -76,7 +76,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.32 2003/07/15 10:35:37 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.33 2003/07/16 20:32:38 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -349,7 +349,7 @@ ASM_START
 ASM_END    
   }
 //#ifdef DEBUG
-  printf("VBE Bios $Id: vbe.c,v 1.32 2003/07/15 10:35:37 vruppert Exp $\n");
+  printf("VBE Bios $Id: vbe.c,v 1.33 2003/07/16 20:32:38 vruppert Exp $\n");
 //#endif  
 }
 
@@ -593,8 +593,10 @@ Bit16u *AX;Bit16u BX; Bit16u ES;Bit16u DI;
         ModeInfoListItem  *cur_info;
         Boolean           using_lfb;
         Bit8u             no_clear;
+        Bit8u             lfb_flag;
 
         using_lfb=((BX & VBE_MODE_LINEAR_FRAME_BUFFER) == VBE_MODE_LINEAR_FRAME_BUFFER);
+        lfb_flag=using_lfb?VBE_DISPI_LFB_ENABLED:0;
         no_clear=((BX & VBE_MODE_PRESERVE_DISPLAY_MEMORY) == VBE_MODE_PRESERVE_DISPLAY_MEMORY)?VBE_DISPI_NOCLEARMEM:0;
 
         BX = (BX & 0x1ff);
@@ -639,7 +641,7 @@ Bit16u *AX;Bit16u BX; Bit16u ES;Bit16u DI;
                 dispi_set_yres(cur_info->info.YResolution);
                 dispi_set_bpp(cur_info->info.BitsPerPixel);
                 dispi_set_bank(0);
-                dispi_set_enable(VBE_DISPI_ENABLED | no_clear);
+                dispi_set_enable(VBE_DISPI_ENABLED | no_clear | lfb_flag);
 
                   // FIXME: store current mode in BIOS data area
   

@@ -32,13 +32,13 @@ API History
 
 0xb0c2            supports 0xb0c1 VBE_DISPI_ interfaces, interfaces updated for additional features:
                   VBE_DISPI_INDEX_BPP supports >8bpp color depth (value = bits)
-                  VBE_DISPI_INDEX_ENABLE supports new flag VBE_DISPI_NOCLEARMEM
+                  VBE_DISPI_INDEX_ENABLE supports new flags VBE_DISPI_NOCLEARMEM and VBE_DISPI_LFB_ENABLED
 
                   
 
 History
 -------
-  Version 0.6     (UNRELEASED)  Jeroen Janssen
+  Version 0.6     2002 Nov 23  Jeroen Janssen
                   - Added LFB support
                   - Added Virt width, height and x,y offset
                   
@@ -51,7 +51,7 @@ History
 Todo
 ----
   Version 0.6     - add virtual width, height, x offset, y offset in bios & bochs
-                    (for set/get logical scan line length andset/get display start)
+                    (for set/get logical scan line length and set/get display start)
   
   Version 0.6+    [random order]
                   - Add lots of different (A)RGB formats
@@ -107,6 +107,7 @@ Abbreviations
   
   #define VBE_DISPI_DISABLED              0x00
   #define VBE_DISPI_ENABLED               0x01
+  #define VBE_DISPI_VBE_ENABLED           0x40
   #define VBE_DISPI_NOCLEARMEM            0x80
   
   #define VBE_DISPI_LFB_PHYSICAL_ADDRESS  0xE0000000
@@ -191,6 +192,7 @@ API
     16, 24 and 32. The value of 4 is not handled in the VBE code.
   * VBE_DISPI_INDEX_ENABLE : WORD {R,W}
     The new flag VBE_DISPI_NOCLEARMEM allows to preserve the VBE video memory.
+    The new flag VBE_DISPI_LFB_ENABLED indicates the usage of the LFB.
 
 Displaying GFX
 --------------

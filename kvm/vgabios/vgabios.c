@@ -195,7 +195,7 @@ vgabios_date:
 .byte	0x00
 
 vgabios_copyright:
-.ascii	"(C) 2002 the LGPL VGABios developers Team"
+.ascii	"(C) 2003 the LGPL VGABios developers Team"
 .byte	0x0a,0x0d
 .byte	0x00
 
@@ -320,7 +320,7 @@ ASM_START
 
 ASM_END
 
-  printf("VGABios $Id: vgabios.c,v 1.30 2003/06/15 19:19:50 vruppert Exp $\n");
+  printf("VGABios $Id: vgabios.c,v 1.31 2003/07/16 20:32:38 vruppert Exp $\n");
 }
 
 // --------------------------------------------------------------------------------------------
