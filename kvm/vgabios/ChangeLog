@@ -1,4 +1,13 @@
-vgabios-????
+cvs-current:
+  - "Christophe Bothamy" <cbothamy@free.fr>: Mar 10 2002
+    . added lfb-mode numbers (patch from mathis)
+    . updated the Makefile
+    . removed display of copyrights. 
+    . changed the Copyright string to "LGPL VGABios developers"
+  - Volker 
+    . set the cursor shape depending on the current font height
+    . clear BL before calling int 0x10 function 0x1103 in vgabios_init_func
+    . added some text font functions
   - "Jeroen Janssen" <japj@darius.demon.nl>
     . Forced to new DISPI (0xb0c1) interface (requires latest bochs vbe code)
     . Added multibuffering support

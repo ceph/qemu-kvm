@@ -14,7 +14,7 @@ bios: vgabios.bin vgabios.debug.bin
 
 clean:
 	/bin/rm -f  *.o *.s *.ld86 \
-          temp.awk.* vgabios*.orig _vgabios_*.c core vgabios*.bin $(RELEASE).bin
+          temp.awk.* vgabios*.orig _vgabios_* core vgabios*.bin $(RELEASE).bin
 
 dist-clean: clean
 
@@ -27,34 +27,18 @@ release: bios
 	rm vgabios.debug.bin
 	tar czvf ../$(RELEASE).tgz -C .. $(RELEASE)/
 
-vgabios.bin: vgabios.o
-	ld86 -0 -r -o vgabios vgabios.o
-	tools86 vgabios
-	dd if=vgabios of=vgabios.bin ibs=32 skip=1 count=1024
-	rm -f vgabios _vgabios_.c
+vgabios.bin: vgabios.c vgabios.h vgafonts.h vgatables.h vbe.h vbe.c vbetables.h
+	gcc -E vgabios.c -DVBE -DVGABIOS_DATE="\"$(RELDATE)\"" > _vgabios_.c
+	bcc -o vgabios.s -C-c -D__i86__ -S -0 _vgabios_.c
+	sed -e 's/^\.text//' -e 's/^\.data//' vgabios.s > _vgabios_.s
+	as86 _vgabios_.s -b vgabios.bin -u -w- -g -0 -j -O -l vgabios.debug.txt
+	rm -f _vgabios_.s _vgabios_.c vgabios.s
 	ls -l vgabios.bin
 
-vgabios.o: vgabios.c vgabios.h vgafonts.h vgatables.h vbe.h vbe.c vbetables.h
-	gcc -E vgabios.c -DVBE -DVGABIOS_DATE="\"$(RELDATE)\"" | tools86 -E > _vgabios_.c
-#	cat _vgabios.c | sed -e "s/##asm/#asm/g" -e "s/##endasm/#endasm/g" > _vgabios_.c
-	
-	/usr/lib/bcc/bcc-cc1 -o vgabios.s -c -D__i86__ -0 _vgabios_.c
-	./dataseghack vgabios.s
-	# bug : with -j i get 1 byte displacement at the end of bin file !
-	#as86 vgabios.s -o vgabios.o -u -w -g -0 -j
-	as86 vgabios.s -o vgabios.o -u -w -g -0 
-
-
-vgabios.debug.bin: vgabios.debug.o
-	ld86 -0 -r -o vgabios.debug vgabios.debug.o
-	tools86 vgabios.debug
-	dd if=vgabios.debug of=vgabios.debug.bin ibs=32 skip=1 count=1024
-	rm -f vgabios.debug _vgabios_.debug.c
+vgabios.debug.bin: vgabios.c vgabios.h vgafonts.h vgatables.h vbe.h vbe.c vbetables.h
+	gcc -E vgabios.c -DVBE -DDEBUG -DVGABIOS_DATE="\"$(RELDATE)\"" > _vgabios_.c
+	bcc -o vgabios.s -C-c -D__i86__ -S -0 _vgabios_.c
+	sed -e 's/^\.text//' -e 's/^\.data//' vgabios.s > _vgabios_.s
+	as86 _vgabios_.s -b vgabios.debug.bin -u -w- -g -0 -j -O -l vgabios.txt
+	rm -f _vgabios_.s _vgabios_.c vgabios.s
 	ls -l vgabios.debug.bin
-
-vgabios.debug.o: vgabios.c vgabios.h vgafonts.h vgatables.h vbe.h vbe.c vbetables.h
-	gcc -E vgabios.c -DVBE -DDEBUG -DVGABIOS_DATE="\"$(RELDATE)\"" | tools86 -E > _vgabios.debug.c
-	cat _vgabios.debug.c | sed -e "s/##asm/#asm/g" -e "s/##endasm/#endasm/g" > _vgabios_.debug.c
-	/usr/lib/bcc/bcc-cc1 -o vgabios.debug.s -c -D__i86__ -0 _vgabios_.debug.c
-	./dataseghack vgabios.debug.s
-	as86 vgabios.debug.s -o vgabios.debug.o -u -w -g -0 

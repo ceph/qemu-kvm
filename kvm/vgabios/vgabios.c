@@ -4,7 +4,7 @@
  */
 // ============================================================================================
 //  
-//  Copyright (C) 2001,2002 Christophe Bothamy
+//  Copyright (C) 2001,2002 the LGPL VGABios developers Team
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -144,11 +144,26 @@ static void biosfn_restore_video_state();
 #define ASM_START #asm
 #define ASM_END   #endasm
 
+ASM_START
+MACRO SET_INT_VECTOR
+  push ds
+  xor ax, ax
+  mov ds, ax
+  mov ax, ?3
+  mov ?1*4, ax
+  mov ax, ?2
+  mov ?1*4+2, ax
+  pop ds
+MEND
+
+ASM_END
 
 ASM_START
 .text
 .rom
 .org 0
+
+use16 386
 
 vgabios_start:
 .byte	0x55, 0xaa	/* BIOS signature, required for BIOS extensions */
@@ -158,10 +173,11 @@ vgabios_start:
 
 vgabios_entry_point:
            
-  JMPL(vgabios_init_func)
+  jmp vgabios_init_func
 
 vgabios_name:
 .ascii	"Plex86/Bochs VGABios"
+.ascii	" "
 .byte	0x00
 
 // Info from Bart Oldeman
@@ -170,19 +186,23 @@ vgabios_name:
 .byte   0x00
 
 vgabios_version:
-.ascii	"v0.3a"
-.byte	0x00
+.ascii	"current-cvs"
+.ascii	" "
 
 vgabios_date:
 .ascii  VGABIOS_DATE
+.byte   0x0a,0x0d
 .byte	0x00
 
 vgabios_copyright:
-.ascii	"(C) 2002 Christophe Bothamy <cbothamy@free.fr>"
+.ascii	"(C) 2002 the LGPL VGABios developers Team"
+.byte	0x0a,0x0d
 .byte	0x00
 
 vgabios_license:
-.ascii	"This VGA Bios is released under the GNU LGPL"
+.ascii	"This VGA/VBE Bios is released under the GNU LGPL"
+.byte	0x0a,0x0d
+.byte	0x0a,0x0d
 .byte	0x00
 
 vgabios_website:
@@ -192,7 +212,9 @@ vgabios_website:
 .byte	0x0a,0x0d
 .ascii	" . http://bochs.sourceforge.net"
 .byte	0x0a,0x0d
-.ascii	" . http://savannah.gnu.org/projects/vgabios"
+.ascii	" . http://www.nongnu.org/vgabios"
+.byte	0x0a,0x0d
+.byte	0x0a,0x0d
 .byte	0x00
  
 
@@ -298,7 +320,7 @@ ASM_START
 
 ASM_END
 
-  printf("VGABios $Id: vgabios.c,v 1.17 2002/09/08 19:14:31 vruppert Exp $\n");
+  printf("VGABios $Id: vgabios.c,v 1.18 2002/09/19 17:03:21 cbothamy Exp $\n");
 }
 
 // --------------------------------------------------------------------------------------------
@@ -341,14 +363,6 @@ static void display_splash_screen()
  *  Tell who we are
  */
 
-ASM_START
-crlf:
- .byte 0x0a,0x0d,0x00
-space:
- .ascii " "
- .byte 0x00
-ASM_END
-
 static void display_info()
 {
 ASM_START
@@ -356,32 +370,17 @@ ASM_START
  mov ds,ax
  mov si,#vgabios_name
  call _display_string
- mov si,#space
- call _display_string
  mov si,#vgabios_version
  call _display_string
- mov si,#space
- call _display_string
- mov si,#vgabios_date
- call _display_string
- mov si,#crlf
- call _display_string
- mov si,#vgabios_copyright
- call _display_string
- mov si,#crlf
- call _display_string
+ 
+ ;;mov si,#vgabios_copyright
+ ;;call _display_string
+ ;;mov si,#crlf
+ ;;call _display_string
 
  mov si,#vgabios_license
  call _display_string
- mov si,#crlf
- call _display_string
- mov si,#crlf
- call _display_string
  mov si,#vgabios_website
- call _display_string
- mov si,#crlf
- call _display_string
- mov si,#crlf
  call _display_string
 ASM_END
 }
@@ -2526,4 +2525,3 @@ vgabios_end:
 .byte 0xCB
 ;; BLOCK_STRINGS_BEGIN
 ASM_END
-

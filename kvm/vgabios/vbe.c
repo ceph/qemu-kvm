@@ -79,21 +79,18 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.21 2002/08/23 20:58:39 cbothamy Exp $"
+.ascii       "$Id: vbe.c,v 1.22 2002/09/19 17:03:21 cbothamy Exp $"
 .byte        0x00
 
 _vbebios_info_string:
-.ascii      "Bochs VBE Display Adapter"
-.byte	0x0a,0x0d
-.ascii      "(C) 2002 Jeroen Janssen <japj-vbebios@darius.demon.nl>"
-.byte	0x0a,0x0d
-.ascii	"This VBE Bios is released under the GNU LGPL"
+.ascii      "Bochs VBE Display Adapter enabled"
 .byte	0x0a,0x0d
 .byte	0x0a,0x0d
 .byte	0x00
 
 _no_vbebios_info_string:
 .ascii      "NO Bochs VBE Support available!"
+.byte	0x0a,0x0d
 .byte	0x0a,0x0d
 .byte 0x00
 
@@ -301,7 +298,7 @@ ASM_START
 ASM_END    
   }
 //#ifdef DEBUG
-  printf("VBE Bios $Id: vbe.c,v 1.21 2002/08/23 20:58:39 cbothamy Exp $\n");
+  printf("VBE Bios $Id: vbe.c,v 1.22 2002/09/19 17:03:21 cbothamy Exp $\n");
 //#endif  
 }
 

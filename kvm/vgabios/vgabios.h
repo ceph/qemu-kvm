@@ -8,17 +8,6 @@ typedef unsigned long  Bit32u;
 typedef unsigned short Boolean;
 
 /* Defines */
-#define JMPL(label) db 0xe9!!!dw (label-(*+2)) ; jmp near label
-
-#define SET_INT_VECTOR(vec, seg, off) \
-  push ds !!!\
-  xor ax,ax !!!\
-  mov ds,ax !!!\
-  mov ax, off !!!\
-  mov vec*4, ax  !!!\
-  mov ax, seg  !!!\
-  mov vec*4+2, ax !!!\
-  pop ds
 
 #define SET_AL(val8) AX = ((AX & 0xff00) | (val8))
 #define SET_BL(val8) BX = ((BX & 0xff00) | (val8))
