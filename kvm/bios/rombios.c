@@ -5569,8 +5569,14 @@ int13_cdemu(DS, ES, DI, SI, BP, SP, BX, DX, CX, AX, IP, CS, FLAGS)
         case 0x03: SET_BL( 0x06 ); break;
         }
 
-      DI = read_word(0x00, 0x1e*4); // INT vector 0x1E
-      ES = read_word(0x00, 0x1e*4+2);
+ASM_START
+      push bp
+      mov  bp, sp
+      mov ax, #diskette_param_table2
+      mov _int13_cdemu.DI+2[bp], ax
+      mov _int13_cdemu.ES+2[bp], cs
+      pop  bp
+ASM_END
       goto int13_success;
       break;
 
@@ -7141,8 +7147,14 @@ BX_DEBUG_INT13_FL("floppy f08\n");
         }
 
       /* set es & di to point to 11 byte diskette param table in ROM */
-      DI = read_word(0x00, 0x1e*4); // INT vector 0x1E
-      ES = read_word(0x00, 0x1e*4+2);
+ASM_START
+      push bp
+      mov  bp, sp
+      mov ax, #diskette_param_table2
+      mov _int13_diskette_function.DI+2[bp], ax
+      mov _int13_diskette_function.ES+2[bp], cs
+      pop  bp
+ASM_END
       CLEAR_CF(); // success
       /* disk status not changed upon success */
       return;
