@@ -3242,7 +3242,7 @@ int14_function(regs, ds, iret_addr)
   sti
   ASM_END
 
-  addr = read_word(0x0040, 2 * regs.u.r16.dx);
+  addr = read_word(0x0040, (regs.u.r16.dx << 1));
   timeout = read_byte(0x0040, 0x007C + regs.u.r16.dx);
   if ((regs.u.r16.dx < 4) && (addr > 0)) {
     switch (regs.u.r8.ah) {
@@ -7142,9 +7142,9 @@ int17_function(regs, ds, iret_addr)
   sti
   ASM_END
 
-  if ((regs.u.r8.ah < 3) && (regs.u.r16.dx == 0)) {
-    addr = read_word(0x0040, 0x0008);
-    timeout = read_byte(0x0040, 0x0078) << 8;
+  addr = read_word(0x0040, (regs.u.r16.dx << 1) + 8);
+  if ((regs.u.r8.ah < 3) && (regs.u.r16.dx < 3) && (addr > 0)) {
+    timeout = read_byte(0x0040, 0x0078 + regs.u.r16.dx) << 8;
     if (regs.u.r8.ah == 0) {
       outb(addr, regs.u.r8.al);
       val8 = inb(addr+2);
@@ -8934,6 +8934,10 @@ post_default_ints:
   mov dx, #0x03f8 ; Serial I/O address, port 1
   call detect_serial
   mov dx, #0x02f8 ; Serial I/O address, port 2
+  call detect_serial
+  mov dx, #0x03e8 ; Serial I/O address, port 3
+  call detect_serial
+  mov dx, #0x02e8 ; Serial I/O address, port 4
   call detect_serial
   shl bx, #0x09
   mov ax, 0x410   ; Equipment word bits 9..11 determing # serial ports
