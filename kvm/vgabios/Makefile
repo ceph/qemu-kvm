@@ -17,17 +17,17 @@ bios: vgabios.bin vgabios.debug.bin
 
 clean:
 	/bin/rm -f  *.o *.s *.ld86 \
-          temp.awk.* vgabios*.orig _vgabios_* _vgabios-debug_* core vgabios*.bin vgabios*.txt $(RELEASE).bin
+          temp.awk.* vgabios*.orig _vgabios_* _vgabios-debug_* core vgabios*.bin vgabios*.txt $(RELEASE).bin *.bak
 
 dist-clean: clean
 
 release: 
 	VGABIOS_VERS=\"-DVGABIOS_VERS=\\\"$(RELVERS)\\\"\" make bios
 	/bin/rm -f  *.o *.s *.ld86 \
-          temp.awk.* vgabios.*.orig _vgabios_.*.c core
+          temp.awk.* vgabios.*.orig _vgabios_.*.c core *.bak .#*
 	cp VGABIOS-lgpl-latest.bin ../$(RELEASE).bin
 	cp VGABIOS-lgpl-latest.debug.bin ../$(RELEASE).debug.bin
-	tar czvf ../$(RELEASE).tgz -C .. $(RELEASE)/
+	tar czvf ../$(RELEASE).tgz --exclude CVS -C .. $(RELEASE)/
 
 vgabios.bin: vgabios.c vgabios.h vgafonts.h vgatables.h vbe.h vbe.c vbetables.h
 	gcc -E vgabios.c $(VGABIOS_VERS) -DVBE $(VGABIOS_DATE) > _vgabios_.c
