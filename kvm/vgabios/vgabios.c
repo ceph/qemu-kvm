@@ -186,7 +186,11 @@ vgabios_name:
 .byte   0x00
 
 vgabios_version:
+#ifndef VGABIOS_VERS
 .ascii	"current-cvs"
+#else
+.ascii VGABIOS_VERS
+#endif
 .ascii	" "
 
 vgabios_date:
@@ -208,8 +212,8 @@ vgabios_license:
 vgabios_website:
 .ascii	"Please visit :"
 .byte	0x0a,0x0d
-.ascii  " . http://www.plex86.org"
-.byte	0x0a,0x0d
+;;.ascii  " . http://www.plex86.org"
+;;.byte	0x0a,0x0d
 .ascii	" . http://bochs.sourceforge.net"
 .byte	0x0a,0x0d
 .ascii	" . http://www.nongnu.org/vgabios"
@@ -320,7 +324,7 @@ ASM_START
 
 ASM_END
 
-  printf("VGABios $Id: vgabios.c,v 1.33 2003/07/20 16:05:17 vruppert Exp $\n");
+  printf("VGABios $Id: vgabios.c,v 1.34 2003/08/15 23:49:28 cbothamy Exp $\n");
 }
 
 // --------------------------------------------------------------------------------------------
