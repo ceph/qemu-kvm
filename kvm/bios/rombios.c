@@ -3696,6 +3696,11 @@ BX_DEBUG_INT15("case 1 or 5:\n");
           ret = send_to_mouse_ctrl(0xFF); // reset mouse command
           if (ret == 0) {
             ret = get_mouse_data(&mouse_data3);
+            // if no mouse attached, it will return RESEND
+            if (mouse_data3 == 0xfe) {
+              SET_CF();
+              return;
+            }
             if (mouse_data3 != 0xfa)
               BX_PANIC("Mouse reset returned %02x (should be ack)\n", (unsigned)mouse_data3);
             if ( ret == 0 ) {
