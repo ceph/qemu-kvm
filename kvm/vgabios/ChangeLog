@@ -3,7 +3,7 @@ vgabios-????
     . Added LFB modes (to be used with the vbe-lfb patch in bochs)
 
 vgabios-0.3a 
-  - "Christophe Bothamy" <cbothamy@free.fr>: Feb 10 2002
+  - "Christophe Bothamy" <cbothamy@free.fr>: Mar 10 2002
     . Fixed bug in function ah=13
   - "Jeroen Janssen" <japj@darius.demon.nl>
     . updated vbebios implementation to new api
