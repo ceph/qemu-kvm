@@ -76,7 +76,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.30 2003/07/01 17:00:33 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.31 2003/07/10 17:07:29 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -102,12 +102,16 @@ _vbebios_mode_list:
 .word VBE_VESA_MODE_800X600X4
 .word VBE_VESA_MODE_800X600X8
 .word VBE_VESA_MODE_1024X768X8
+.word VBE_VESA_MODE_640X480X1555
 .word VBE_VESA_MODE_640X480X565
 .word VBE_VESA_MODE_640X480X888
+.word VBE_VESA_MODE_800X600X1555
 .word VBE_VESA_MODE_800X600X565
 .word VBE_VESA_MODE_800X600X888
+.word VBE_VESA_MODE_1024X768X1555
 .word VBE_VESA_MODE_1024X768X565
 .word VBE_VESA_MODE_1024X768X888
+.word VBE_OWN_MODE_640X480X8888
 .word VBE_OWN_MODE_800X600X8888
 .word VBE_OWN_MODE_1024X768X8888
 .word VBE_OWN_MODE_320X200X8
@@ -339,7 +343,7 @@ ASM_START
 ASM_END    
   }
 //#ifdef DEBUG
-  printf("VBE Bios $Id: vbe.c,v 1.30 2003/07/01 17:00:33 vruppert Exp $\n");
+  printf("VBE Bios $Id: vbe.c,v 1.31 2003/07/10 17:07:29 vruppert Exp $\n");
 //#endif  
 }
 
