@@ -3321,7 +3321,7 @@ int15_function(regs, ES, DS, FLAGS)
   Bit8u   ret, mouse_data1, mouse_data2, mouse_data3;
   Bit8u   comm_byte, mf2_state;
   Bit32u  extended_memory_size=0; // 64bits long
-  Bit16u  CX;
+  Bit16u  CX,DX;
 
 BX_DEBUG_INT15("int15 AX=%04x\n",regs.u.r16.ax);
 
@@ -3350,6 +3350,47 @@ BX_DEBUG_INT15("int15 AX=%04x\n",regs.u.r16.ax);
     case 0x52:    // removable media eject
       CLEAR_CF();
       regs.u.r8.ah = 0;  // "ok ejection may proceed"
+      break;
+
+    case 0x86:
+      // Wait for CX:DX microseconds. currently using the 
+      // refresh request port 0x61 bit4, toggling every 15usec 
+
+      CX = regs.u.r16.cx;
+      DX = regs.u.r16.dx;
+
+ASM_START
+      sti
+
+      ;; Get the count in eax
+      mov  bx, sp
+      SEG SS
+        mov  ax, _int15_function.CX [bx]
+      shl  eax, #16
+      SEG SS
+        mov  ax, _int15_function.DX [bx]
+
+      ;; convert to numbers of 15usec ticks
+      mov ebx, #15
+      xor edx, edx
+      div eax, ebx
+      mov ecx, eax
+
+      ;; wait for ecx number of refresh requests
+      in al, #0x61
+      and al,#0x10
+      mov ah, al
+
+int1586_tick:
+      in al, #0x61
+      and al,#0x10
+      cmp al, ah
+      je  int1586_tick
+      mov ah, al
+      dec ecx
+      jnz int1586_tick
+ASM_END
+
       break;
 
     case 0x87:
