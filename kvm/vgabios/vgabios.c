@@ -320,7 +320,7 @@ ASM_START
 
 ASM_END
 
-  printf("VGABios $Id: vgabios.c,v 1.27 2003/02/09 19:59:21 vruppert Exp $\n");
+  printf("VGABios $Id: vgabios.c,v 1.28 2003/04/20 07:51:12 vruppert Exp $\n");
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1225,12 +1225,23 @@ Bit8u page;Bit16u *car;
 }
 
 // --------------------------------------------------------------------------------------------
-static void write_gfx_char(car,attr,xcurs,ycurs,nbcols,cheight,fdata)
-Bit8u car;Bit8u attr;Bit8u xcurs;Bit8u ycurs;Bit8u nbcols;Bit8u cheight;Bit8u *fdata;
+static void write_gfx_char(car,attr,xcurs,ycurs,nbcols,cheight)
+Bit8u car;Bit8u attr;Bit8u xcurs;Bit8u ycurs;Bit8u nbcols;Bit8u cheight;
 {
  Bit8u back,fore,data,i,j,mmask;
+ Bit8u *fdata;
  Bit16u addr,dest,src;
 
+ switch(cheight)
+  {case 14:
+    fdata = &vgafont14;
+    break;
+   case 16:
+    fdata = &vgafont16;
+    break;
+   default:
+    fdata = &vgafont8;
+  }
  addr=xcurs+ycurs*cheight*nbcols;
  src = car * cheight;
  fore = attr & 0x0f;
@@ -1290,7 +1301,7 @@ Bit8u car;Bit8u page;Bit8u attr;Bit16u count;
      cheight=vga_modes[line].cheight;
      while((count-->0) && (xcurs<nbcols))
       {
-       write_gfx_char(car,attr,xcurs,ycurs,nbcols,cheight,&vgafont16);
+       write_gfx_char(car,attr,xcurs,ycurs,nbcols,cheight);
        xcurs++;
       }
     }
@@ -1342,7 +1353,7 @@ Bit8u car;Bit8u page;Bit8u attr;Bit16u count;
      cheight=vga_modes[line].cheight;
      while((count-->0) && (xcurs<nbcols))
       {
-       write_gfx_char(car,attr,xcurs,ycurs,nbcols,cheight,&vgafont16);
+       write_gfx_char(car,attr,xcurs,ycurs,nbcols,cheight);
        xcurs++;
       }
     }
@@ -1466,7 +1477,7 @@ Bit8u car;Bit8u page;Bit8u attr;Bit8u flag;
       if(vga_modes[line].memmodel==PLANAR4)
        {
         cheight=vga_modes[line].cheight;
-        write_gfx_char(car,attr,xcurs,ycurs,nbcols,cheight,&vgafont16);
+        write_gfx_char(car,attr,xcurs,ycurs,nbcols,cheight);
        }
       else
        {
