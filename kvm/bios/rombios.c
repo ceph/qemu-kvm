@@ -2192,8 +2192,8 @@ Bit16u device;
 {
   Bit16u ebda_seg=read_word(0x0040,0x000E);
   Bit16u iobase1, iobase2;
-  Bit8u  channel, slave, max;
-  Bit8u  sn, sc; 
+  Bit8u  channel, slave, sn, sc; 
+  Bit16u max;
 
   channel = device / 2;
   slave = device % 2;
