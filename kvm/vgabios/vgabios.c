@@ -320,7 +320,7 @@ ASM_START
 
 ASM_END
 
-  printf("VGABios $Id: vgabios.c,v 1.22 2003/01/15 17:49:06 cbothamy Exp $\n");
+  printf("VGABios $Id: vgabios.c,v 1.23 2003/01/19 11:35:23 vruppert Exp $\n");
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1653,9 +1653,17 @@ static void release_font_access()
  outw( VGAREG_GRDC_ADDRESS, 0x0e06 );
 }
 
+ASM_START
+idiv_u:
+  xor dx,dx
+  div bx
+  ret
+ASM_END
+
 static void set_scan_lines(lines) Bit8u lines;
 {
- Bit8u crtc9;
+ Bit16u cols,page,vde;
+ Bit8u crtc9,ovl,rows;
 
  outb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS), 0x09);
  crtc9 = inb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS)+1);
@@ -1669,6 +1677,16 @@ static void set_scan_lines(lines) Bit8u lines;
   {
    biosfn_set_cursor_shape(lines-4,lines-3);
   }
+ write_word(BIOSMEM_SEG,BIOSMEM_CHAR_HEIGHT, lines);
+ outb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS), 0x12);
+ vde = inb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS)+1);
+ outb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS), 0x07);
+ ovl = inb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS)+1);
+ vde += (((ovl & 0x02) << 7) + ((ovl & 0x40) << 3) + 1);
+ rows = vde / lines;
+ write_byte(BIOSMEM_SEG,BIOSMEM_NB_ROWS, rows-1);
+ cols = read_word(BIOSMEM_SEG,BIOSMEM_NB_COLS);
+ write_word(BIOSMEM_SEG,BIOSMEM_PAGE_SIZE, rows * cols * 2);
 }
 
 static void biosfn_load_text_user_pat (AL,ES,BP,CX,DX,BL,BH) Bit8u AL;Bit16u ES;Bit16u BP;Bit16u CX;Bit16u DX;Bit8u BL;Bit8u BH;
