@@ -8999,20 +8999,15 @@ post_default_ints:
   /* (mch) Keyboard self-test */
   mov  al, #0xaa
   out  0x64, al
-kbd_wait1:
+kbd_wait:
   in   al, 0x64
   test al, #0x01
-  jz   kbd_wait1
+  jz   kbd_wait
   in   al, 0x60
   cmp  al, #0x55
   je   keyboard_ok
   call _keyboard_panic
 keyboard_ok:
-  mov  cx, 0x0100
-kbd_wait2:
-  nop
-  loop kbd_wait2
-  in   al, 0x64 ; read status to clear IRQ
 
   ;; mov CMOS Equipment Byte to BDA Equipment Word
   mov  ax, 0x0410
