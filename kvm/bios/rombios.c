@@ -3191,9 +3191,9 @@ printf("floppy f08\n");
         BX = 0;
         CX = 0;
         DX = 0;
-        //ES = 0; // ???
+        ES = 0;
+        DI = 0;
         SET_DL(num_floppies);
-        //set_diskette_ret_status(AH=1);
         SET_CF();
         return;
         }
@@ -3252,9 +3252,9 @@ printf("floppy f08\n");
           panic("floppy: int13: bad floppy type");
         }
 
-      /* set es & di to point to 11 byte diskette param table */
-      DI = read_word(0x0000, 0x0078);
-      ES = read_word(0x0000, 0x007a);
+      /* set es & di to point to 11 byte diskette param table in ROM */
+      DI = 0xefc7;
+      ES = 0xf000;
       CLEAR_CF(); // success
       /* disk status not changed upon success */
       return;
@@ -4979,7 +4979,7 @@ db  0xFF
 db  0x6C
 db  0xF6
 db  0x0F
-db  0x01 ;; most systems default to 8
+db  0x08
 
 
 ;----------------------------------------
