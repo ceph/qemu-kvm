@@ -87,8 +87,6 @@ static void biosfn_scroll();
 static void biosfn_read_char_attr();
 static void biosfn_write_char_attr();
 static void biosfn_write_char_only();
-static void biosfn_set_border_color();
-static void biosfn_set_palette();
 static void biosfn_write_pixel();
 static void biosfn_read_pixel();
 static void biosfn_write_teletype();
@@ -287,8 +285,13 @@ vgabios_int10_handler:
   jmp   int10_end
 int10_test_1A:
   cmp   ah, #0x1a
-  jne   int10_test_101B
+  jne   int10_test_0B
   call  biosfn_group_1A
+  jmp   int10_end
+int10_test_0B:
+  cmp   ah, #0x0b
+  jne   int10_test_101B
+  call  biosfn_group_0B
   jmp   int10_end
 int10_test_101B:
   cmp   ax, #0x101b
@@ -345,7 +348,7 @@ init_vga_card:
   ret
 
 msg_vga_init:
-.ascii "VGABios $Id: vgabios.c,v 1.46 2004/04/23 14:33:31 vruppert Exp $"
+.ascii "VGABios $Id: vgabios.c,v 1.47 2004/04/24 09:58:31 vruppert Exp $"
 .byte 0x0d,0x0a,0x00
 ASM_END
 
@@ -537,12 +540,6 @@ static void int10_func(DI, SI, BP, SP, BX, DX, CX, AX, DS, ES, FLAGS)
      break;
    case 0x0A:
      biosfn_write_char_only(GET_AL(),GET_BH(),GET_BL(),CX);
-     break;
-   case 0x0B:
-     if(GET_BH()==0x00)
-      biosfn_set_border_color(GET_BL());
-     else
-      biosfn_set_palette(GET_BL());
      break;
    case 0x0C:
      biosfn_write_pixel(GET_BH(),GET_AL(),CX,DX);
@@ -1488,28 +1485,91 @@ Bit8u car;Bit8u page;Bit8u attr;Bit16u count;
 }
 
 // --------------------------------------------------------------------------------------------
-static void biosfn_set_border_color (BL) Bit8u BL;
-// FIXME anybody using this function ?
-{
+ASM_START
+biosfn_group_0B:
+  cmp   bh, #0x00
+  je    biosfn_set_border_color
+  cmp   bh, #0x01
+  je    biosfn_set_palette
 #ifdef DEBUG
- unimplemented();
+  call  _unknown
 #endif
-}
-
-// --------------------------------------------------------------------------------------------
-static void biosfn_set_palette (BL) Bit8u BL;
-// FIXME anybody using this function ?
-{
-#ifdef DEBUG
- unimplemented();
-#endif
-}
+  ret
+biosfn_set_border_color:
+  push  ax
+  push  bx
+  push  cx
+  push  dx
+  mov   dx, #vgareg_actl_reset
+  in    al, dx
+  mov   dx, #vgareg_actl_address
+  mov   al, #0x00
+  out   dx, al
+  mov   al, bl
+  and   al, #0x0f
+  test  al, #0x08
+  jz    set_low_border
+  add   al, #0x08
+set_low_border:
+  out   dx, al
+  mov   cl, #0x01
+  and   bl, #0x10
+set_intensity_loop:
+  mov   dx, #vgareg_actl_address
+  mov   al, cl
+  out   dx, al
+  mov   dx, #vgareg_actl_read_data
+  in    al, dx
+  and   al, #0xef
+  or    al, bl
+  mov   dx, #vgareg_actl_address
+  out   dx, al
+  inc   cl
+  cmp   cl, #0x04
+  jne   set_intensity_loop
+  mov   al, #0x20
+  out   dx, al
+  pop   dx
+  pop   cx
+  pop   bx
+  pop   ax
+  ret
+biosfn_set_palette:
+  push  ax
+  push  bx
+  push  cx
+  push  dx
+  mov   dx, #vgareg_actl_reset
+  in    al, dx
+  mov   cl, #0x01
+  and   bl, #0x01
+set_cga_palette_loop:
+  mov   dx, #vgareg_actl_address
+  mov   al, cl
+  out   dx, al
+  mov   dx, #vgareg_actl_read_data
+  in    al, dx
+  and   al, #0xfe
+  or    al, bl
+  mov   dx, #vgareg_actl_address
+  out   dx, al
+  inc   cl
+  cmp   cl, #0x04
+  jne   set_cga_palette_loop
+  mov   al, #0x20
+  out   dx, al
+  pop   dx
+  pop   cx
+  pop   bx
+  pop   ax
+  ret
+ASM_END
 
 // --------------------------------------------------------------------------------------------
 static void biosfn_write_pixel (BH,AL,CX,DX) Bit8u BH;Bit8u AL;Bit16u CX;Bit16u DX;
 {
- Bit8u mode,line,mask,attr;
- Bit16u addr,data;
+ Bit8u mode,line,mask,attr,data;
+ Bit16u addr;
 
  // Get the mode
  mode=read_byte(BIOSMEM_SEG,BIOSMEM_CURRENT_MODE);
@@ -1517,7 +1577,23 @@ static void biosfn_write_pixel (BH,AL,CX,DX) Bit8u BH;Bit8u AL;Bit16u CX;Bit16u 
  if(line==0xFF)return;
  if(vga_modes[line].class==TEXT)return;
 
- if(vga_modes[line].memmodel==CGA)
+ if(vga_modes[line].memmodel==PLANAR4)
+  {
+   addr = CX/8+DX*read_word(BIOSMEM_SEG,BIOSMEM_NB_COLS);
+   mask = 0x01 << (7 - (CX & 0x07));
+   outw(VGAREG_GRDC_ADDRESS, (mask << 8) | 0x08);
+   outw(VGAREG_GRDC_ADDRESS, 0x0205);
+   data = read_byte(0xa000,addr);
+   if (AL & 0x80)
+    {
+     outw(VGAREG_GRDC_ADDRESS, 0x1803);
+    }
+   write_byte(0xa000,addr,AL);
+   outw(VGAREG_GRDC_ADDRESS, 0xff08);
+   outw(VGAREG_GRDC_ADDRESS, 0x0005);
+   outw(VGAREG_GRDC_ADDRESS, 0x0003);
+  }
+ else if(vga_modes[line].memmodel==CGA)
   {
    if(vga_modes[line].pixbits==2)
     {
@@ -1566,8 +1642,8 @@ static void biosfn_write_pixel (BH,AL,CX,DX) Bit8u BH;Bit8u AL;Bit16u CX;Bit16u 
 // --------------------------------------------------------------------------------------------
 static void biosfn_read_pixel (BH,CX,DX,AX) Bit8u BH;Bit16u CX;Bit16u DX;Bit16u *AX;
 {
- Bit8u mode,line,attr;
- Bit16u addr,data;
+ Bit8u mode,line,mask,attr,data,i;
+ Bit16u addr;
  Bit16u ss=get_SS();
 
  // Get the mode
@@ -1576,7 +1652,19 @@ static void biosfn_read_pixel (BH,CX,DX,AX) Bit8u BH;Bit16u CX;Bit16u DX;Bit16u 
  if(line==0xFF)return;
  if(vga_modes[line].class==TEXT)return;
 
- if(vga_modes[line].memmodel==CGA)
+ if(vga_modes[line].memmodel==PLANAR4)
+  {
+   addr = CX/8+DX*read_word(BIOSMEM_SEG,BIOSMEM_NB_COLS);
+   mask = 0x01 << (7 - (CX & 0x07));
+   attr = 0x00;
+   for(i=0;i<4;i++)
+    {
+     outw(VGAREG_GRDC_ADDRESS, (i << 8) | 0x04);
+     data = read_byte(0xa000,addr) & mask;
+     if (data > 0) attr |= (0x01 << i);
+    }
+  }
+ else if(vga_modes[line].memmodel==CGA)
   {
    addr=(CX>>2)+(DX>>1)*80;
    if (DX & 1) addr += 0x2000;
