@@ -71,7 +71,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.38 2004/02/22 14:17:10 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.39 2004/02/23 21:07:59 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -175,14 +175,15 @@ static Bit16u dispi_get_bpp()
 
 static Bit16u dispi_get_max_bpp()
 {
-  Bit16u max_bpp;
+  Bit16u max_bpp, vbe_enable;
 
   outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_ENABLE);
-  outw(VBE_DISPI_IOPORT_DATA,VBE_DISPI_GETCAPS);
+  vbe_enable = inw(VBE_DISPI_IOPORT_DATA);
+  outw(VBE_DISPI_IOPORT_DATA,vbe_enable|VBE_DISPI_GETCAPS);
   outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_BPP);
   max_bpp = inw(VBE_DISPI_IOPORT_DATA);
   outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_ENABLE);
-  outw(VBE_DISPI_IOPORT_DATA,VBE_DISPI_DISABLED);
+  outw(VBE_DISPI_IOPORT_DATA,vbe_enable);
   return max_bpp;
 }
 
@@ -352,7 +353,7 @@ void vbe_init()
     write_byte(BIOSMEM_SEG,BIOSMEM_VBE_FLAG,0x01);
     dispi_set_id(VBE_DISPI_ID3);
   }
-  printf("VBE Bios $Id: vbe.c,v 1.38 2004/02/22 14:17:10 vruppert Exp $\n");
+  printf("VBE Bios $Id: vbe.c,v 1.39 2004/02/23 21:07:59 vruppert Exp $\n");
 }
 
 /** VBE Display Info - Display information on screen about the VBE
