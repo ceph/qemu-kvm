@@ -310,7 +310,7 @@ ASM_START
 
 ASM_END
 
-  printf("VGABios $Id: vgabios.c,v 1.39 2003/11/17 21:03:42 vruppert Exp $\n");
+  printf("VGABios $Id: vgabios.c,v 1.40 2004/04/04 18:19:48 vruppert Exp $\n");
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1201,7 +1201,7 @@ Bit8u nblines;Bit8u attr;Bit8u rul;Bit8u cul;Bit8u rlr;Bit8u clr;Bit8u page;Bit8
   {
    // FIXME gfx mode
 #ifdef DEBUG
-   printf("Scroll in graphics mode !\n");
+   printf("Scroll in graphics mode ");
    unimplemented();
 #endif
   }
@@ -1245,7 +1245,7 @@ Bit8u page;Bit16u *car;
 }
 
 // --------------------------------------------------------------------------------------------
-static void write_gfx_char(car,attr,xcurs,ycurs,nbcols,cheight)
+static void write_gfx_char_pl4(car,attr,xcurs,ycurs,nbcols,cheight)
 Bit8u car;Bit8u attr;Bit8u xcurs;Bit8u ycurs;Bit8u nbcols;Bit8u cheight;
 {
  Bit8u i,mmask;
@@ -1278,10 +1278,87 @@ Bit8u car;Bit8u attr;Bit8u xcurs;Bit8u ycurs;Bit8u nbcols;Bit8u cheight;
 }
 
 // --------------------------------------------------------------------------------------------
+static void write_gfx_char_cga(car,attr,xcurs,ycurs,nbcols,bpp)
+Bit8u car;Bit8u attr;Bit8u xcurs;Bit8u ycurs;Bit8u nbcols;Bit8u bpp;
+{
+ Bit8u i,j,mask,data;
+ Bit8u *fdata;
+ Bit16u addr,dest,src;
+
+ fdata = &vgafont8;
+ addr=(xcurs*bpp)+ycurs*320;
+ src = car * 8;
+ for(i=0;i<8;i++)
+  {
+   dest=addr+(i>>1)*80;
+   if (i & 1) dest += 0x2000;
+   mask = 0x80;
+   if (bpp == 1)
+    {
+     if (attr & 0x80)
+      {
+       data = read_byte(0xb800,dest);
+      }
+     else
+      {
+       data = 0x00;
+      }
+     for(j=0;j<8;j++)
+      {
+       if (fdata[src+i] & mask)
+        {
+         if (attr & 0x80)
+          {
+           data ^= (attr & 0x01) << (7-j);
+          }
+         else
+          {
+           data |= (attr & 0x01) << (7-j);
+          }
+        }
+       mask >>= 1;
+      }
+     write_byte(0xb800,dest,data);
+    }
+   else
+    {
+     while (mask > 0)
+      {
+       if (attr & 0x80)
+        {
+         data = read_byte(0xb800,dest);
+        }
+       else
+        {
+         data = 0x00;
+        }
+       for(j=0;j<4;j++)
+        {
+         if (fdata[src+i] & mask)
+          {
+           if (attr & 0x80)
+            {
+             data ^= (attr & 0x03) << ((3-j)*2);
+            }
+           else
+            {
+             data |= (attr & 0x03) << ((3-j)*2);
+            }
+          }
+         mask >>= 1;
+        }
+       write_byte(0xb800,dest,data);
+       dest += 1;
+      }
+    }
+  }
+}
+
+// --------------------------------------------------------------------------------------------
 static void biosfn_write_char_attr (car,page,attr,count) 
 Bit8u car;Bit8u page;Bit8u attr;Bit16u count;
 {
- Bit8u cheight,xcurs,ycurs,mode,line;
+ Bit8u cheight,xcurs,ycurs,mode,line,bpp;
  Bit16u nbcols,nbrows,address;
  Bit16u cursor,dummy;
 
@@ -1309,20 +1386,25 @@ Bit8u car;Bit8u page;Bit8u attr;Bit16u count;
  else
   {
    // FIXME gfx mode not complete
-   if(vga_modes[line].memmodel==PLANAR4)
+   cheight=vga_modes[line].cheight;
+   bpp=vga_modes[line].pixbits;
+   while((count-->0) && (xcurs<nbcols))
     {
-     cheight=vga_modes[line].cheight;
-     while((count-->0) && (xcurs<nbcols))
+     if(vga_modes[line].memmodel==PLANAR4)
       {
-       write_gfx_char(car,attr,xcurs,ycurs,nbcols,cheight);
-       xcurs++;
+       write_gfx_char_pl4(car,attr,xcurs,ycurs,nbcols,cheight);
       }
-    }
-   else
-    {
+     else if(vga_modes[line].memmodel==CGA)
+      {
+       write_gfx_char_cga(car,attr,xcurs,ycurs,nbcols,bpp);
+      }
+     else
+      {
 #ifdef DEBUG
-     unimplemented();
+       unimplemented();
 #endif
+      }
+     xcurs++;
     }
   }
 }
@@ -1331,7 +1413,7 @@ Bit8u car;Bit8u page;Bit8u attr;Bit16u count;
 static void biosfn_write_char_only (car,page,attr,count)
 Bit8u car;Bit8u page;Bit8u attr;Bit16u count;
 {
- Bit8u cheight,xcurs,ycurs,mode,line;
+ Bit8u cheight,xcurs,ycurs,mode,line,bpp;
  Bit16u nbcols,nbrows,address;
  Bit16u cursor,dummy;
 
@@ -1361,20 +1443,25 @@ Bit8u car;Bit8u page;Bit8u attr;Bit16u count;
  else
   {
    // FIXME gfx mode not complete
-   if(vga_modes[line].memmodel==PLANAR4)
+   cheight=vga_modes[line].cheight;
+   bpp=vga_modes[line].pixbits;
+   while((count-->0) && (xcurs<nbcols))
     {
-     cheight=vga_modes[line].cheight;
-     while((count-->0) && (xcurs<nbcols))
+     if(vga_modes[line].memmodel==PLANAR4)
       {
-       write_gfx_char(car,attr,xcurs,ycurs,nbcols,cheight);
-       xcurs++;
+       write_gfx_char_pl4(car,attr,xcurs,ycurs,nbcols,cheight);
       }
-    }
-   else
-    {
+     else if(vga_modes[line].memmodel==CGA)
+      {
+       write_gfx_char_cga(car,attr,xcurs,ycurs,nbcols,bpp);
+      }
+     else
+      {
 #ifdef DEBUG
-     unimplemented();
+       unimplemented();
 #endif
+      }
+     xcurs++;
     }
   }
 }
@@ -1399,20 +1486,102 @@ static void biosfn_set_palette (BL) Bit8u BL;
 
 // --------------------------------------------------------------------------------------------
 static void biosfn_write_pixel (BH,AL,CX,DX) Bit8u BH;Bit8u AL;Bit16u CX;Bit16u DX;
-// FIXME anybody using this function ?
 {
+ Bit8u mode,line,mask,attr;
+ Bit16u addr,data;
+
+ // Get the mode
+ mode=read_byte(BIOSMEM_SEG,BIOSMEM_CURRENT_MODE);
+ line=find_vga_entry(mode);
+ if(line==0xFF)return;
+ if(vga_modes[line].class==TEXT)return;
+
+ if(vga_modes[line].memmodel==CGA)
+  {
+   if(vga_modes[line].pixbits==2)
+    {
+     addr=(CX>>2)+(DX>>1)*80;
+    }
+   else
+    {
+     addr=(CX>>3)+(DX>>1)*80;
+    }
+   if (DX & 1) addr += 0x2000;
+   data = read_byte(0xb800,addr);
+   if(vga_modes[line].pixbits==2)
+    {
+     attr = (AL & 0x03) << ((3 - (CX & 0x03)) * 2);
+     mask = 0x03 << ((3 - (CX & 0x03)) * 2);
+    }
+   else
+    {
+     attr = (AL & 0x01) << (7 - (CX & 0x07));
+     mask = 0x01 << (7 - (CX & 0x07));
+    }
+   if (AL & 0x80)
+    {
+     data ^= attr;
+    }
+   else
+    {
+     data &= ~mask;
+     data |= attr;
+    }
+   write_byte(0xb800,addr,data);
+  }
+ else if(vga_modes[line].memmodel==LINEAR8)
+  {
+   addr=CX+DX*(read_word(BIOSMEM_SEG,BIOSMEM_NB_COLS)*8);
+   write_byte(0xa000,addr,AL);
+  }
+ else
+  {
 #ifdef DEBUG
- unimplemented();
+   unimplemented();
 #endif
+  }
 }
 
 // --------------------------------------------------------------------------------------------
 static void biosfn_read_pixel (BH,CX,DX,AX) Bit8u BH;Bit16u CX;Bit16u DX;Bit16u *AX;
-// FIXME anybody using this function ?
 {
+ Bit8u mode,line,attr;
+ Bit16u addr,data;
+ Bit16u ss=get_SS();
+
+ // Get the mode
+ mode=read_byte(BIOSMEM_SEG,BIOSMEM_CURRENT_MODE);
+ line=find_vga_entry(mode);
+ if(line==0xFF)return;
+ if(vga_modes[line].class==TEXT)return;
+
+ if(vga_modes[line].memmodel==CGA)
+  {
+   addr=(CX>>2)+(DX>>1)*80;
+   if (DX & 1) addr += 0x2000;
+   data = read_byte(0xb800,addr);
+   if(vga_modes[line].pixbits==2)
+    {
+     attr = (data >> ((3 - (CX & 0x03)) * 2)) & 0x03;
+    }
+   else
+    {
+     attr = (data >> (7 - (CX & 0x07))) & 0x01;
+    }
+  }
+ else if(vga_modes[line].memmodel==LINEAR8)
+  {
+   addr=CX+DX*(read_word(BIOSMEM_SEG,BIOSMEM_NB_COLS)*8);
+   attr=read_byte(0xa000,addr);
+  }
+ else
+  {
 #ifdef DEBUG
- unimplemented();
+   unimplemented();
 #endif
+   attr = 0;
+  }
+ write_word(ss,AX,(read_word(ss,AX) & 0xff00) | attr);
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1420,7 +1589,7 @@ static void biosfn_write_teletype (car, page, attr, flag)
 Bit8u car;Bit8u page;Bit8u attr;Bit8u flag;
 {// flag = WITH_ATTR / NO_ATTR
 
- Bit8u cheight,xcurs,ycurs,mode,line;
+ Bit8u cheight,xcurs,ycurs,mode,line,bpp;
  Bit16u nbcols,nbrows,address;
  Bit16u cursor,dummy;
 
@@ -1487,10 +1656,15 @@ Bit8u car;Bit8u page;Bit8u attr;Bit8u flag;
     else
      {
       // FIXME gfx mode not complete
+      cheight=vga_modes[line].cheight;
+      bpp=vga_modes[line].pixbits;
       if(vga_modes[line].memmodel==PLANAR4)
        {
-        cheight=vga_modes[line].cheight;
-        write_gfx_char(car,attr,xcurs,ycurs,nbcols,cheight);
+        write_gfx_char_pl4(car,attr,xcurs,ycurs,nbcols,cheight);
+       }
+      else if(vga_modes[line].memmodel==CGA)
+       {
+        write_gfx_char_cga(car,attr,xcurs,ycurs,nbcols,bpp);
        }
       else
        {
