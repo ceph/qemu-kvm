@@ -335,7 +335,7 @@ init_vga_card:
   ret
 
 msg_vga_init:
-.ascii "VGABios $Id: vgabios.c,v 1.43 2004/04/08 17:50:19 vruppert Exp $"
+.ascii "VGABios $Id: vgabios.c,v 1.44 2004/04/17 07:18:21 vruppert Exp $"
 .byte 0x0d,0x0a,0x00
 ASM_END
 
@@ -869,19 +869,22 @@ static void biosfn_set_video_mode(mode) Bit8u mode;
       palette=&palette3;
       break;
     }
-  }
-
- // Always 256*3 values
- for(i=0;i<0x0100;i++)
-  {if(i<=dac_regs[vga_modes[line].dacmodel])
-    {outb(VGAREG_DAC_DATA,palette[(i*3)+0]);
-     outb(VGAREG_DAC_DATA,palette[(i*3)+1]);
-     outb(VGAREG_DAC_DATA,palette[(i*3)+2]);
+   // Always 256*3 values
+   for(i=0;i<0x0100;i++)
+    {if(i<=dac_regs[vga_modes[line].dacmodel])
+      {outb(VGAREG_DAC_DATA,palette[(i*3)+0]);
+       outb(VGAREG_DAC_DATA,palette[(i*3)+1]);
+       outb(VGAREG_DAC_DATA,palette[(i*3)+2]);
+      }
+     else
+      {outb(VGAREG_DAC_DATA,0);
+       outb(VGAREG_DAC_DATA,0);
+       outb(VGAREG_DAC_DATA,0);
+      }
     }
-   else
-    {outb(VGAREG_DAC_DATA,0);
-     outb(VGAREG_DAC_DATA,0);
-     outb(VGAREG_DAC_DATA,0);
+   if((modeset_ctl&0x02)==0x02)
+    {
+     biosfn_perform_gray_scale_summing(0x00, 0x100);
     }
   }
 
@@ -1996,25 +1999,17 @@ static void biosfn_read_video_dac_state (state) Bit16u *state;
 // --------------------------------------------------------------------------------------------
 static void biosfn_perform_gray_scale_summing (start,count) 
 Bit16u start;Bit16u count;
-{Bit8u r,g,b,d;
- Bit16u i,m;
+{Bit8u r,g,b;
+ Bit16u i;
  Bit16u index;
 
  inb(VGAREG_ACTL_RESET);
- outb(VGAREG_ACTL_ADDRESS,0x10);
- d=(inb(VGAREG_ACTL_READ_DATA)>>6)&0x01;
-
- // depth is 8 or 6 bits
- if(d==0)m=0x3f;
- else m=0xff;
- 
-
- // We start overwriting at
- outb(VGAREG_DAC_READ_ADDRESS,start);
- outb(VGAREG_DAC_WRITE_ADDRESS,start);
+ outb(VGAREG_ACTL_ADDRESS,0x00);
 
  for( index = 0; index < count; index++ ) 
   {
+   // set read address and switch to read mode
+   outb(VGAREG_DAC_READ_ADDRESS,start);
    // get 6-bit wide RGB data values
    r=inb( VGAREG_DAC_DATA );
    g=inb( VGAREG_DAC_DATA );
@@ -2023,13 +2018,17 @@ Bit16u start;Bit16u count;
    // intensity = ( 0.3 * Red ) + ( 0.59 * Green ) + ( 0.11 * Blue )
    i = ( ( 77*r + 151*g + 28*b ) + 0x80 ) >> 8;
 
-   if(i>m)i=m;
+   if(i>0x3f)i=0x3f;
  
+   // set write address and switch to write mode
+   outb(VGAREG_DAC_WRITE_ADDRESS,start);
    // write new intensity value
    outb( VGAREG_DAC_DATA, i&0xff );
    outb( VGAREG_DAC_DATA, i&0xff );
    outb( VGAREG_DAC_DATA, i&0xff );
+   start++;
   }  
+ inb(VGAREG_ACTL_RESET);
  outb(VGAREG_ACTL_ADDRESS,0x20);
 }
 
