@@ -2359,6 +2359,14 @@ int16_function(DI, SI, BP, SP, BX, DX, CX, AX, FLAGS)
       SET_AH(shift_flags);
       break;
 
+    case 0x92: /* keyboard capability check called by DOS 5.0+ keyb */
+      SET_AH(0x80); // function int16 ah=0x10-0x12 supported
+      break;
+
+    case 0xA2: /* 122 keys capability check called by DOS 5.0+ keyb */
+      SET_AH(0xFF); // function int16 ah=0x20-0x22 NOT supported
+      break;
+
     default:
       printf("KBD: unsupported int 16h function %02x\n", GET_AH());
     }
