@@ -33,6 +33,7 @@ API History
 0xb0c2            supports 0xb0c1 VBE_DISPI_ interfaces, interfaces updated for additional features:
                   VBE_DISPI_INDEX_BPP supports >8bpp color depth (value = bits)
                   VBE_DISPI_INDEX_ENABLE supports new flags VBE_DISPI_NOCLEARMEM and VBE_DISPI_LFB_ENABLED
+                  VBE i/o registers changed from 0xFF80/81 to 0x01CE/CF
 
                   
 
@@ -87,8 +88,8 @@ Abbreviations
   #define VBE_DISPI_MAX_XRES              1024
   #define VBE_DISPI_MAX_YRES              768
   
-  #define VBE_DISPI_IOPORT_INDEX          0xFF80
-  #define VBE_DISPI_IOPORT_DATA           0xFF81
+  #define VBE_DISPI_IOPORT_INDEX          0x01CE
+  #define VBE_DISPI_IOPORT_DATA           0x01CF
   
   #define VBE_DISPI_INDEX_ID              0x0
   #define VBE_DISPI_INDEX_XRES            0x1

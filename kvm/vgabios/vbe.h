@@ -276,8 +276,8 @@ typedef struct ModeInfoBlock
   #define VBE_DISPI_MAX_XRES              1024
   #define VBE_DISPI_MAX_YRES              768
   
-  #define VBE_DISPI_IOPORT_INDEX          0xFF80
-  #define VBE_DISPI_IOPORT_DATA           0xFF81
+  #define VBE_DISPI_IOPORT_INDEX          0x01CE
+  #define VBE_DISPI_IOPORT_DATA           0x01CF
   
   #define VBE_DISPI_INDEX_ID              0x0
   #define VBE_DISPI_INDEX_XRES            0x1
