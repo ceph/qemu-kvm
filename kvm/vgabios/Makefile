@@ -35,7 +35,9 @@ vgabios.bin: vgabios.o
 	ls -l vgabios.bin
 
 vgabios.o: vgabios.c vgabios.h vgafonts.h vgatables.h vbe.h vbe.c vbetables.h
-	gcc -E vgabios.c -DVBE -DVGABIOS_DATE="\"$(RELDATE)\"" | tools86 -E > _vgabios_.c
+	gcc -E vgabios.c -DVBE -DVGABIOS_DATE="\"$(RELDATE)\"" | tools86 -E > _vgabios.c
+	cat _vgabios.c | sed -e "s/##asm/#asm/g" -e "s/##endasm/#endasm/g" > _vgabios_.c
+	
 	/usr/lib/bcc/bcc-cc1 -o vgabios.s -c -D__i86__ -0 _vgabios_.c
 	./dataseghack vgabios.s
 	# bug : with -j i get 1 byte displacement at the end of bin file !
@@ -51,7 +53,8 @@ vgabios.debug.bin: vgabios.debug.o
 	ls -l vgabios.debug.bin
 
 vgabios.debug.o: vgabios.c vgabios.h vgafonts.h vgatables.h vbe.h vbe.c vbetables.h
-	gcc -E vgabios.c -DVBE -DDEBUG -DVGABIOS_DATE="\"$(RELDATE)\"" | tools86 -E > _vgabios_.debug.c
+	gcc -E vgabios.c -DVBE -DDEBUG -DVGABIOS_DATE="\"$(RELDATE)\"" | tools86 -E > _vgabios.debug.c
+	cat _vgabios.debug.c | sed -e "s/##asm/#asm/g" -e "s/##endasm/#endasm/g" > _vgabios_.debug.c
 	/usr/lib/bcc/bcc-cc1 -o vgabios.debug.s -c -D__i86__ -0 _vgabios_.debug.c
 	./dataseghack vgabios.debug.s
 	as86 vgabios.debug.s -o vgabios.debug.o -u -w -g -0 
