@@ -1556,6 +1556,7 @@ bios_printf(action, s)
     // do {} while (1);
 ASM_START
     HALT2(__LINE__)
+    hlt
 ASM_END
     }
 }
