@@ -19,8 +19,8 @@ void vbe_biosfn_set_mode(AX, BX, ES, DI);
 void vbe_biosfn_return_current_mode(AX, BX); 
 void vbe_biosfn_save_restore_state(AX, DL, CX, ES, BX); 
 void vbe_biosfn_display_window_control(AX,BX,DX);
-void vbe_biosfn_set_get_logical_scan_line_length(AX); 
-void vbe_biosfn_set_get_display_start(AX);
+void vbe_biosfn_set_get_logical_scan_line_length(AX,BX,CX,DX);
+void vbe_biosfn_set_get_display_start(AX,BX,CX,DX);
 void vbe_biosfn_set_get_dac_palette_format(AX); 
 void vbe_biosfn_set_get_palette_data(AX);
 void vbe_biosfn_return_protected_mode_interface(AX);
@@ -284,8 +284,13 @@ typedef struct ModeInfoBlock
   #define VBE_DISPI_INDEX_BPP             0x3
   #define VBE_DISPI_INDEX_ENABLE          0x4
   #define VBE_DISPI_INDEX_BANK            0x5
-  
+  #define VBE_DISPI_INDEX_VIRT_WIDTH      0x6
+  #define VBE_DISPI_INDEX_VIRT_HEIGHT     0x7
+  #define VBE_DISPI_INDEX_X_OFFSET        0x8
+  #define VBE_DISPI_INDEX_Y_OFFSET        0x9
+      
   #define VBE_DISPI_ID0                   0xB0C0
+  #define VBE_DISPI_ID1                   0xB0C1
   
   #define VBE_DISPI_BPP_8                 0x0
 // The following is not support yet, but just for reference available.  

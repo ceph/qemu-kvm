@@ -1,5 +1,7 @@
 vgabios-????
   - "Jeroen Janssen" <japj@darius.demon.nl>
+    . Forced to new DISPI (0xb0c1) interface (requires latest bochs vbe code)
+    . Added multibuffering support
     . Added new DISPI interface for: virt width, height, x offset, y offset
     . Added LFB modes (to be used with the vbe-lfb patch in bochs)
       see VBE_HAVE_LFB in vbe.c (currently default enabled)

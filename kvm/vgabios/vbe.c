@@ -79,7 +79,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.18 2002/04/25 19:59:20 japj Exp $"
+.ascii       "$Id: vbe.c,v 1.19 2002/04/29 12:50:36 japj Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -188,6 +188,59 @@ static void dispi_set_bank(bank)
   outw(VBE_DISPI_IOPORT_DATA,bank);
 }
 
+static void dispi_set_x_offset(offset)
+  Bit16u offset;
+{
+  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_X_OFFSET);
+  outw(VBE_DISPI_IOPORT_DATA,offset);
+}
+
+static Bit16u dispi_get_x_offset()
+{
+  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_X_OFFSET);
+  return inw(VBE_DISPI_IOPORT_DATA);
+}
+
+static void dispi_set_y_offset(offset)
+  Bit16u offset;
+{
+  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_Y_OFFSET);
+  outw(VBE_DISPI_IOPORT_DATA,offset);
+}
+
+static Bit16u dispi_get_y_offset()
+{
+  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_Y_OFFSET);
+  return inw(VBE_DISPI_IOPORT_DATA);
+}
+
+static void dispi_set_virt_width(width)
+  Bit16u width;
+{
+  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_VIRT_WIDTH);
+  outw(VBE_DISPI_IOPORT_DATA,width);
+}
+
+static Bit16u dispi_get_virt_width()
+{
+  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_VIRT_WIDTH);
+  return inw(VBE_DISPI_IOPORT_DATA);
+}
+/*
+static void dispi_set_virt_height(height)
+  Bit16u height;
+{
+  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_VIRT_HEIGHT);
+  outw(VBE_DISPI_IOPORT_DATA,height);
+}
+*/
+static Bit16u dispi_get_virt_height()
+{
+  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_VIRT_HEIGHT);
+  return inw(VBE_DISPI_IOPORT_DATA);
+}
+
+
 // ModeInfo helper function
 static ModeInfoListItem* mode_info_find_mode(mode)
   Bit16u mode;
@@ -212,9 +265,9 @@ static ModeInfoListItem* mode_info_find_mode(mode)
  */
 Boolean vbe_has_vbe_display()
 {
-  dispi_set_id(VBE_DISPI_ID0);
+  dispi_set_id(VBE_DISPI_ID1);
 
-  return (dispi_get_id()==VBE_DISPI_ID0);
+  return (dispi_get_id()==VBE_DISPI_ID1);
 }
 
 /** VBE Init - Initialise the Vesa Bios Extension Code
@@ -238,7 +291,7 @@ void vbe_init()
 #endasm    
   }
 //#ifdef DEBUG
-  printf("VBE Bios $Id: vbe.c,v 1.18 2002/04/25 19:59:20 japj Exp $\n");
+  printf("VBE Bios $Id: vbe.c,v 1.19 2002/04/29 12:50:36 japj Exp $\n");
 //#endif  
 }
 
@@ -532,6 +585,9 @@ Bit16u *AX;Bit16u BX; Bit16u ES;Bit16u DI;
                 {
                   // we have a 8bpp mode, preparing to set it
                   
+                  // first disable current mode (when switching between vesa modi)
+                  dispi_set_enable(VBE_DISPI_DISABLED);
+                  
                   dispi_set_xres(cur_info->info.XResolution);
                   dispi_set_yres(cur_info->info.YResolution);
                   dispi_set_bpp(VBE_DISPI_BPP_8);
@@ -639,30 +695,126 @@ Bit16u *AX;Bit16u BX;Bit16u *DX;
 
 
 /** Function 06h - Set/Get Logical Scan Line Length
- * 
+ *
  * Input:
  *              AX      = 4F06h
- * Output:
+ *              BL      = 00h Set Scan Line Length in Pixels
+ *                      = 01h Get Scan Line Length
+ *                      = 02h Set Scan Line Length in Bytes
+ *                      = 03h Get Maximum Scan Line Length
+ *              CX      = If BL=00h Desired Width in Pixels
+ *                        If BL=02h Desired Width in Bytes
+ *                        (Ignored for Get Functions)
+ * 
+ * Output: 
  *              AX      = VBE Return Status
- *
- * FIXME: incomplete API description, Input & Output
+ *              BX      = Bytes Per Scan Line
+ *              CX      = Actual Pixels Per Scan Line
+ *                        (truncated to nearest complete pixel)
+ *              DX      = Maximum Number of Scan Lines 
  */
-void vbe_biosfn_set_get_logical_scan_line_length(AX)
+void vbe_biosfn_set_get_logical_scan_line_length(AX,BX,CX,DX)
+Bit16u *AX;Bit16u *BX;Bit16u *DX;Bit16u *DX;
 {
+	Bit16u ss=get_SS();
+	Bit16u result=0x100;
+	Bit16u width = read_word(ss, CX);
+	Bit16u cmd = read_word(ss, BX);
+	
+	// check bl
+	if ( ((cmd & 0xff) == 0x00) || ((cmd & 0xff) == 0x02) )
+	{
+		// set scan line lenght in pixels(0x00) or bytes (0x00)
+		Bit16u new_width;
+		Bit16u new_height;
+		
+		dispi_set_virt_width(width);
+		new_width=dispi_get_virt_width();
+		new_height=dispi_get_virt_height();
+		
+		if (new_width!=width)
+		{
+#ifdef DEBUG
+                printf("* VBE width adjusted\n");
+#endif
+			
+			// notify width adjusted
+			result=0x024f;
+		}
+		else
+		{
+			result=0x4f;
+		}
+		
+		// FIXME: adjust for higher bpp (in bytes)
+		write_word(ss,BX,new_width);
+		write_word(ss,CX,new_width);
+		write_word(ss,DX,new_height);
+	}
+
+	write_word(ss, AX, result);	
 }
 
 
 /** Function 07h - Set/Get Display Start
  * 
- * Input:
+ * Input(16-bit):
  *              AX      = 4F07h
+ *              BH      = 00h Reserved and must be 00h
+ *              BL      = 00h Set Display Start
+ *                      = 01h Get Display Start
+ *                      = 02h Schedule Display Start (Alternate)
+ *                      = 03h Schedule Stereoscopic Display Start
+ *                      = 04h Get Scheduled Display Start Status
+ *                      = 05h Enable Stereoscopic Mode
+ *                      = 06h Disable Stereoscopic Mode
+ *                      = 80h Set Display Start during Vertical Retrace
+ *                      = 82h Set Display Start during Vertical Retrace (Alternate)
+ *                      = 83h Set Stereoscopic Display Start during Vertical Retrace
+ *              ECX     = If BL=02h/82h Display Start Address in bytes
+ *                        If BL=03h/83h Left Image Start Address in bytes
+ *              EDX     = If BL=03h/83h Right Image Start Address in bytes
+ *              CX      = If BL=00h/80h First Displayed Pixel In Scan Line
+ *              DX      = If BL=00h/80h First Displayed Scan Line
+ *
  * Output:
  *              AX      = VBE Return Status
+ *              BH      = If BL=01h Reserved and will be 0
+ *              CX      = If BL=01h First Displayed Pixel In Scan Line
+ *                        If BL=04h 0 if flip has not occurred, not 0 if it has
+ *              DX      = If BL=01h First Displayed Scan Line
  *
- * FIXME: incomplete API description, Input & Output
+ * Input(32-bit): 
+ *              BH      = 00h Reserved and must be 00h
+ *              BL      = 00h Set Display Start
+ *                      = 80h Set Display Start during Vertical Retrace
+ *              CX      = Bits 0-15 of display start address
+ *              DX      = Bits 16-31 of display start address
+ *              ES      = Selector for memory mapped registers 
  */
-void vbe_biosfn_set_get_display_start(AX)
+void vbe_biosfn_set_get_display_start(AX,BX,CX,DX)
+Bit16u *AX;Bit16u BX;Bit16u CX;Bit16u DX;
 {
+	Bit16u ss=get_SS();
+	Bit16u result=0x100;
+#ifdef DEBUG
+ //       printf("VBE vbe_biosfn_set_get_display_start\n");
+#endif
+	
+	// check for set display start
+	if ((GET_BL()==0x00) || (GET_BL()==0x80))
+	{
+	  // 0x80 is during vertical retrace - is also used by sdd vbetest during multibuffering
+#ifdef DEBUG
+//        printf("VBE vbe_biosfn_set_get_display_start CX%x DX%x\n",CX,DX);
+#endif
+		
+		dispi_set_x_offset(CX);
+		dispi_set_y_offset(DX);
+		result = 0x4f;
+	}
+	
+	write_word(ss, AX, result);	
 }
 
 

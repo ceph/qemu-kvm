@@ -285,7 +285,7 @@ static void init_vga_card()
 
 #endasm
 
-  printf("VGABios $Id: vgabios.c,v 1.13 2002/04/25 19:59:20 japj Exp $\n");
+  printf("VGABios $Id: vgabios.c,v 1.14 2002/04/29 12:50:36 japj Exp $\n");
 }
 
 // --------------------------------------------------------------------------------------------
@@ -715,20 +715,10 @@ static void int10_func(DI, SI, BP, SP, BX, DX, CX, AX, DS, ES, FLAGS)
           vbe_biosfn_display_window_control(&AX,BX,&DX);
           break;
          case 0x06:
-          //FIXME
-#ifdef DEBUG
-          unimplemented();
-#endif
-          // function failed
-          AX=0x100;
+          vbe_biosfn_set_get_logical_scan_line_length(&AX,&BX,&CX,&DX);
           break;
          case 0x07:
-          //FIXME
-#ifdef DEBUG   
-          unimplemented();
-#endif
-          // function failed
-          AX=0x100;
+          vbe_biosfn_set_get_display_start(&AX,BX,CX,DX);
           break;
          case 0x08:
           //FIXME
