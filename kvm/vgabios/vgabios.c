@@ -71,9 +71,6 @@ static void           printf();
 static void           unimplemented();
 static void           unknown();
 
-static void init_vga_card();
-static void init_bios_area();
-
 static Bit8u find_vga_entry();
 
 static void memsetb();
@@ -132,7 +129,6 @@ static void biosfn_enable_cursor_emulation();
 static void biosfn_switch_video_interface();
 static void biosfn_enable_video_refresh_control();
 static void biosfn_write_string();
-static void biosfn_set_display_code();
 static void biosfn_read_state_info();
 static void biosfn_read_video_state_size();
 static void biosfn_save_video_state();
@@ -145,10 +141,15 @@ static void biosfn_restore_video_state();
 ASM_START
 
 biosmem_seg = 0x40
+biosmem_initial_mode = 0x10
 biosmem_current_mode = 0x49
 biosmem_nb_cols      = 0x4a
 biosmem_current_page = 0x62
+biosmem_current_msr  = 0x65
+biosmem_char_height  = 0x85
 biosmem_video_ctl    = 0x87
+biosmem_switches     = 0x88
+biosmem_modeset_ctl  = 0x89
 biosmem_dcc_index    = 0x8a
 
 MACRO SET_INT_VECTOR
@@ -236,10 +237,10 @@ vgabios_website:
 vgabios_init_func:
 
 ;; init vga card
-  call _init_vga_card
+  call init_vga_card
 
 ;; init basic bios vars
-  call _init_bios_area
+  call init_bios_area
 
 #ifdef VBE  
 ;; init vbe functions
@@ -275,13 +276,13 @@ ASM_START
 vgabios_int10_handler:
   pushf
   cmp   ah, #0x0f
-  jne   int10_l1
+  jne   int10_test_1A
   call  biosfn_get_video_mode
   jmp   int10_end
-int10_l1:
-  cmp   ax, #0x1a00
+int10_test_1A:
+  cmp   ah, #0x1a
   jne   int10_normal
-  call  biosfn_read_display_code
+  call  biosfn_group_1A
   jmp   int10_end
 
 int10_normal:
@@ -308,9 +309,8 @@ ASM_END
 /*
  * Boot time harware inits 
  */
-static void init_vga_card()
-{
 ASM_START
+init_vga_card:
 ;; switch to color mode and enable CPU access 480 lines
   mov dx, #0x3C2
   mov al, #0xC3
@@ -320,43 +320,68 @@ ASM_START
   mov dx, #0x3C4
   mov al, #0x04
   outb dx,al
-
-;;
   mov dx, #0x3C5
   mov al, #0x02
   outb dx,al
 
-ASM_END
+  mov  bx, #msg_vga_init
+  push bx
+  call _printf
+  inc  sp
+  inc  sp
+  ret
 
-  printf("VGABios $Id: vgabios.c,v 1.41 2004/04/05 19:39:43 vruppert Exp $\n");
-}
+msg_vga_init:
+.ascii "VGABios $Id: vgabios.c,v 1.42 2004/04/06 19:30:25 vruppert Exp $"
+.byte 0x0d,0x0a,0x00
+ASM_END
 
 // --------------------------------------------------------------------------------------------
 /*
  *  Boot time bios area inits 
  */
-static void init_bios_area()
-{
-  // init detected hardware BIOS Area 
-  write_word(BIOSMEM_SEG,BIOSMEM_INITIAL_MODE,read_word(BIOSMEM_SEG,BIOSMEM_INITIAL_MODE)&0xFFCF);
+ASM_START
+init_bios_area:
+  push  ds
+  mov   ax, #biosmem_seg
+  mov   ds, ax
 
-  // Just for the first int10 find its children
+;; init detected hardware BIOS Area
+  mov   bx, #biosmem_initial_mode
+  mov   ax, [bx]
+  and   ax, #0xffcf
+  mov   [bx], ax
 
-  // the default chat height
-  write_byte(BIOSMEM_SEG,BIOSMEM_CHAR_HEIGHT,16);
+;; Just for the first int10 find its children
 
-  // Clear the screen 
-  write_byte(BIOSMEM_SEG,BIOSMEM_VIDEO_CTL,0x60);
+;; the default char height
+  mov   bx, #biosmem_char_height
+  mov   al, #0x10
+  mov   [bx], al
 
-  // Set the basic screen we have
-  write_byte(BIOSMEM_SEG,BIOSMEM_SWITCHES,0xF9);
+;; Clear the screen 
+  mov   bx, #biosmem_video_ctl
+  mov   al, #0x60
+  mov   [bx], al
 
-  // Set the basic modeset options
-  write_byte(BIOSMEM_SEG,BIOSMEM_MODESET_CTL,0x51);
+;; Set the basic screen we have
+  mov   bx, #biosmem_switches
+  mov   al, #0xf9
+  mov   [bx], al
 
-  // Set the  default MSR
-  write_byte(BIOSMEM_SEG,BIOSMEM_CURRENT_MSR,0x09);
-}
+;; Set the basic modeset options
+  mov   bx, #biosmem_modeset_cl
+  mov   al, #0x51
+  mov   [bx], al
+
+;; Set the  default MSR
+  mov   bx, #biosmem_current_msr
+  mov   al, #0x09
+  mov   [bx], al
+
+  pop ds
+  ret
+ASM_END
 
 // --------------------------------------------------------------------------------------------
 /*
@@ -662,19 +687,6 @@ static void int10_func(DI, SI, BP, SP, BX, DX, CX, AX, DS, ES, FLAGS)
      break;
    case 0x13:
      biosfn_write_string(GET_AL(),GET_BH(),GET_BL(),CX,GET_DH(),GET_DL(),ES,BP);
-     break;
-   case 0x1A:
-     switch(GET_AL())
-      {
-       case 0x01:
-        biosfn_set_display_code(GET_BL(),GET_BH());
-        break;
-#ifdef DEBUG
-       default:
-        unknown();
-#endif
-      }
-     SET_AL(0x1A);
      break;
    case 0x1B:
      biosfn_read_state_info(BX,ES,DI);
@@ -2370,6 +2382,15 @@ Bit8u flag;Bit8u page;Bit8u attr;Bit16u count;Bit8u row;Bit8u col;Bit16u seg;Bit
 
 // --------------------------------------------------------------------------------------------
 ASM_START
+biosfn_group_1A:
+  cmp   al, #0x00
+  je    biosfn_read_display_code
+  cmp   al, #0x01
+  je    biosfn_set_display_code
+#ifdef DEBUG
+  call  _unknown
+#endif
+  ret
 biosfn_read_display_code:
   push  ds
   push  ax
@@ -2380,20 +2401,39 @@ biosfn_read_display_code:
   mov   bl, al
   xor   bh, bh
   pop   ax
+  mov   al, ah
   pop   ds
   ret
-ASM_END
-
-// --------------------------------------------------------------------------------------------
-static void biosfn_set_display_code (BL,BH) 
-Bit8u BL;Bit8u BH;
-{
- write_byte(BIOSMEM_SEG,BIOSMEM_DCC_INDEX,BL);
+biosfn_set_display_code:
+  push  ds
+  push  ax
+  push  bx
+  mov   ax, #biosmem_seg
+  mov   ds, ax
+  mov   ax, bx
+  mov   bx, #biosmem_dcc_index
+  mov   [bx], al
+#ifdef DEBUG
+  mov   al, ah
+  xor   ah, ah
+  push  ax
+  mov   bx, #msg_alt_dcc
+  push  bx
+  call  _printf
+  add   sp, #4
+#endif
+  pop   bx
+  pop   ax
+  mov   al, ah
+  pop   ds
+  ret
 
 #ifdef DEBUG
- printf("Alternate Display code (%02x) was discarded\n",BH);
+msg_alt_dcc:
+.ascii "Alternate Display code (%02x) was discarded"
+.byte 0x0d,0x0a,0x00
 #endif
-}
+ASM_END
 
 // --------------------------------------------------------------------------------------------
 static void biosfn_read_state_info (BX,ES,DI) 
