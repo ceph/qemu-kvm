@@ -9203,7 +9203,7 @@ int19_handler:
   ;; bl contains the boot drive
   ;; ax contains the boot segment or 0 if failure
 
-  cmp ax, 0x0000
+  cmp ax, #0x0000
   je  int19_fail
 
   mov dl, bl       ;; set drive so guest os find it
