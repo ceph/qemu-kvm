@@ -320,7 +320,7 @@ ASM_START
 
 ASM_END
 
-  printf("VGABios $Id: vgabios.c,v 1.26 2003/02/08 12:04:03 vruppert Exp $\n");
+  printf("VGABios $Id: vgabios.c,v 1.27 2003/02/09 19:59:21 vruppert Exp $\n");
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1225,12 +1225,13 @@ Bit8u page;Bit16u *car;
 }
 
 // --------------------------------------------------------------------------------------------
-static void write_gfx_char(car,attr,addr,cols,cheight,fdata)
-Bit8u car;Bit8u attr;Bit16u addr;Bit8u cols;Bit8u cheight;Bit8u *fdata;
+static void write_gfx_char(car,attr,xcurs,ycurs,nbcols,cheight,fdata)
+Bit8u car;Bit8u attr;Bit8u xcurs;Bit8u ycurs;Bit8u nbcols;Bit8u cheight;Bit8u *fdata;
 {
  Bit8u back,fore,data,i,j,mmask;
- Bit16u dest,src;
+ Bit16u addr,dest,src;
 
+ addr=xcurs+ycurs*cheight*nbcols;
  src = car * cheight;
  fore = attr & 0x0f;
  outb( VGAREG_SEQU_ADDRESS, 0x02 );
@@ -1240,11 +1241,11 @@ Bit8u car;Bit8u attr;Bit16u addr;Bit8u cols;Bit8u cheight;Bit8u *fdata;
    outb( VGAREG_SEQU_DATA, 1 << i );
    for(j=0;j<cheight;j++)
     {
-     dest=addr+j*cols;
-     data = read_byte(0xa000,dest) & ~fdata[src+j];
+     dest=addr+j*nbcols;
+     data = 0;
      if(fore & (1 << i))
       {
-       data |= fdata[src+j];
+       data = fdata[src+j];
       }
      write_byte(0xa000,dest,data);
     }
@@ -1287,8 +1288,11 @@ Bit8u car;Bit8u page;Bit8u attr;Bit16u count;
    if(vga_modes[line].memmodel==PLANAR4)
     {
      cheight=vga_modes[line].cheight;
-     address=xcurs+ycurs*cheight*nbcols;
-     write_gfx_char(car,attr,address,nbcols,cheight,&vgafont16);
+     while((count-->0) && (xcurs<nbcols))
+      {
+       write_gfx_char(car,attr,xcurs,ycurs,nbcols,cheight,&vgafont16);
+       xcurs++;
+      }
     }
    else
     {
@@ -1303,7 +1307,7 @@ Bit8u car;Bit8u page;Bit8u attr;Bit16u count;
 static void biosfn_write_char_only (car,page,attr,count)
 Bit8u car;Bit8u page;Bit8u attr;Bit16u count;
 {
- Bit8u xcurs,ycurs,mode,line;
+ Bit8u cheight,xcurs,ycurs,mode,line;
  Bit16u nbcols,nbrows,address;
  Bit16u cursor,dummy;
 
@@ -1332,10 +1336,22 @@ Bit8u car;Bit8u page;Bit8u attr;Bit16u count;
   }
  else
   {
-   // FIXME gfx mode
+   // FIXME gfx mode not complete
+   if(vga_modes[line].memmodel==PLANAR4)
+    {
+     cheight=vga_modes[line].cheight;
+     while((count-->0) && (xcurs<nbcols))
+      {
+       write_gfx_char(car,attr,xcurs,ycurs,nbcols,cheight,&vgafont16);
+       xcurs++;
+      }
+    }
+   else
+    {
 #ifdef DEBUG
-   unimplemented();
+     unimplemented();
 #endif
+    }
   }
 }
 
@@ -1450,8 +1466,7 @@ Bit8u car;Bit8u page;Bit8u attr;Bit8u flag;
       if(vga_modes[line].memmodel==PLANAR4)
        {
         cheight=vga_modes[line].cheight;
-        address=xcurs+ycurs*cheight*nbcols;
-        write_gfx_char(car,attr,address,nbcols,cheight,&vgafont16);
+        write_gfx_char(car,attr,xcurs,ycurs,nbcols,cheight,&vgafont16);
        }
       else
        {
@@ -1805,7 +1820,7 @@ static void set_scan_lines(lines) Bit8u lines;
 
 static void biosfn_load_text_user_pat (AL,ES,BP,CX,DX,BL,BH) Bit8u AL;Bit16u ES;Bit16u BP;Bit16u CX;Bit16u DX;Bit8u BL;Bit8u BH;
 {
- Bit16u blockaddr,dest,i,j,src;
+ Bit16u blockaddr,dest,i,src;
 
  get_font_access();
  blockaddr = BL << 13;
@@ -1813,10 +1828,7 @@ static void biosfn_load_text_user_pat (AL,ES,BP,CX,DX,BL,BH) Bit8u AL;Bit16u ES;
   {
    src = BP + i * BH;
    dest = blockaddr + (DX + i) * 32;
-   for(j=0;j<BH;j++)
-    {
-     write_byte(0xA000, dest+j, read_byte(ES, src+j));
-    }
+   memcpyb(0xA000, dest, ES, src, BH);
   }
  release_font_access();
  if(AL>=0x10)
@@ -1827,7 +1839,7 @@ static void biosfn_load_text_user_pat (AL,ES,BP,CX,DX,BL,BH) Bit8u AL;Bit16u ES;
 
 static void biosfn_load_text_8_14_pat (AL,BL) Bit8u AL;Bit8u BL;
 {
- Bit16u blockaddr,dest,i,j,src;
+ Bit16u blockaddr,dest,i,src;
 
  get_font_access();
  blockaddr = BL << 13;
@@ -1835,10 +1847,7 @@ static void biosfn_load_text_8_14_pat (AL,BL) Bit8u AL;Bit8u BL;
   {
    src = i * 14;
    dest = blockaddr + i * 32;
-   for(j=0;j<14;j++)
-    {
-     write_byte(0xA000, dest+j, vgafont14[src+j]);
-    }
+   memcpyb(0xA000, dest, 0xC000, vgafont14+src, 14);
   }
  release_font_access();
  if(AL>=0x10)
@@ -1849,7 +1858,7 @@ static void biosfn_load_text_8_14_pat (AL,BL) Bit8u AL;Bit8u BL;
 
 static void biosfn_load_text_8_8_pat (AL,BL) Bit8u AL;Bit8u BL;
 {
- Bit16u blockaddr,dest,i,j,src;
+ Bit16u blockaddr,dest,i,src;
 
  get_font_access();
  blockaddr = BL << 13;
@@ -1857,10 +1866,7 @@ static void biosfn_load_text_8_8_pat (AL,BL) Bit8u AL;Bit8u BL;
   {
    src = i * 8;
    dest = blockaddr + i * 32;
-   for(j=0;j<8;j++)
-    {
-     write_byte(0xA000, dest+j, vgafont8[src+j]);
-    }
+   memcpyb(0xA000, dest, 0xC000, vgafont8+src, 8);
   }
  release_font_access();
  if(AL>=0x10)
@@ -1877,7 +1883,7 @@ static void biosfn_set_text_block_specifier (BL) Bit8u BL;
 
 static void biosfn_load_text_8_16_pat (AL,BL) Bit8u AL;Bit8u BL;
 {
- Bit16u blockaddr,dest,i,j,src;
+ Bit16u blockaddr,dest,i,src;
 
  get_font_access();
  blockaddr = BL << 13;
@@ -1885,10 +1891,7 @@ static void biosfn_load_text_8_16_pat (AL,BL) Bit8u AL;Bit8u BL;
   {
    src = i * 16;
    dest = blockaddr + i * 32;
-   for(j=0;j<16;j++)
-    {
-     write_byte(0xA000, dest+j, vgafont16[src+j]);
-    }
+   memcpyb(0xA000, dest, 0xC000, vgafont16+src, 16);
   }
  release_font_access();
  if(AL>=0x10)
