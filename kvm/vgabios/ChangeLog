@@ -1,5 +1,6 @@
 
-vgabios-xxx
+vgabios-0.3a (Not released yet!!)
+    . adding lfbprof (vbe) testprogram (+some small fixes to it)
     . merging with vbebios 0.2
 
 vgabios-0.2b
