@@ -312,6 +312,11 @@ int10_test_101B:
 int10_test_4F:
   cmp   ah, #0x4f
   jne   int10_normal
+  cmp   al, #0x03
+  jne   int10_test_vbe_05
+  call  vbe_biosfn_return_current_mode
+  jmp   int10_end
+int10_test_vbe_05:
   cmp   al, #0x05
   jne   int10_test_vbe_06
   call  vbe_biosfn_display_window_control
@@ -380,7 +385,7 @@ init_vga_card:
   ret
 
 msg_vga_init:
-.ascii "VGABios $Id: vgabios.c,v 1.53 2004/05/06 21:17:29 vruppert Exp $"
+.ascii "VGABios $Id: vgabios.c,v 1.54 2004/05/08 16:05:58 vruppert Exp $"
 .byte 0x0d,0x0a,0x00
 ASM_END
 
@@ -697,10 +702,7 @@ static void int10_func(DI, SI, BP, SP, BX, DX, CX, AX, DS, ES, FLAGS)
          case 0x02:
           vbe_biosfn_set_mode(&AX,BX,ES,DI);
           break;
-         case 0x03:
-          vbe_biosfn_return_current_mode(&AX,&BX);
-          break;
-       case 0x04:
+         case 0x04:
           //FIXME
 #ifdef DEBUG
           unimplemented();
@@ -1147,7 +1149,7 @@ Bit8u nblines;Bit8u attr;Bit8u rul;Bit8u cul;Bit8u rlr;Bit8u clr;Bit8u page;Bit8
 {
  // page == 0xFF if current
 
- Bit8u mode,line,cheight;
+ Bit8u mode,line,cheight,cols;
  Bit16u nbcols,nbrows,i;
  Bit16u address;
 
@@ -1170,6 +1172,7 @@ Bit8u nblines;Bit8u attr;Bit8u rul;Bit8u cul;Bit8u rlr;Bit8u clr;Bit8u page;Bit8
  if(rlr>=nbrows)rlr=nbrows-1;
  if(clr>=nbcols)clr=nbcols-1;
  if(nblines>nbrows)nblines=0;
+ cols=clr-cul+1;
 
  if(vga_modes[line].class==TEXT)
   {
@@ -1189,18 +1192,18 @@ Bit8u nblines;Bit8u attr;Bit8u rul;Bit8u cul;Bit8u rlr;Bit8u clr;Bit8u page;Bit8
       {for(i=rul;i<=rlr;i++)
         {
          if((i+nblines>rlr)||(nblines==0))
-          memsetw(vga_modes[line].sstart,address+(i*nbcols+cul)*2,(Bit16u)attr*0x100+' ',clr-cul+1);
+          memsetw(vga_modes[line].sstart,address+(i*nbcols+cul)*2,(Bit16u)attr*0x100+' ',cols);
          else
-          memcpyw(vga_modes[line].sstart,address+(i*nbcols+cul)*2,vga_modes[line].sstart,((i+nblines)*nbcols+cul)*2,clr-cul+1);
+          memcpyw(vga_modes[line].sstart,address+(i*nbcols+cul)*2,vga_modes[line].sstart,((i+nblines)*nbcols+cul)*2,cols);
         }
       }
      else
       {for(i=rlr;i>=rul;i--)
         {
          if((i<rul+nblines)||(nblines==0))
-          memsetw(vga_modes[line].sstart,address+(i*nbcols+cul)*2,(Bit16u)attr*0x100+' ',clr-cul+1);
+          memsetw(vga_modes[line].sstart,address+(i*nbcols+cul)*2,(Bit16u)attr*0x100+' ',cols);
          else
-          memcpyw(vga_modes[line].sstart,address+(i*nbcols+cul)*2,vga_modes[line].sstart,((i-nblines)*nbcols+cul)*2,clr-cul+1);
+          memcpyw(vga_modes[line].sstart,address+(i*nbcols+cul)*2,vga_modes[line].sstart,((i-nblines)*nbcols+cul)*2,cols);
         }
       }
     }
@@ -1209,39 +1212,40 @@ Bit8u nblines;Bit8u attr;Bit8u rul;Bit8u cul;Bit8u rlr;Bit8u clr;Bit8u page;Bit8
   {
    // FIXME gfx mode not complete
    cheight=vga_modes[line].cheight;
-   if((vga_modes[line].memmodel==PLANAR4)||(vga_modes[line].memmodel==PLANAR1))
+   switch(vga_modes[line].memmodel)
     {
-     if(nblines==0&&rul==0&&cul==0&&rlr==nbrows-1&&clr==nbcols-1)
-      {
-       memsetb(vga_modes[line].sstart,0,0x00,nbrows*nbcols*cheight);
-      }
-     else
-      {// if Scroll up
-       if(dir==SCROLL_UP)
-        {for(i=rul;i<=rlr;i++)
-          {
-           if((i+nblines>rlr)||(nblines==0))
-            vgamem_fill_pl4(cul,i,clr-cul+1,nbcols,cheight);
-           else
-            vgamem_copy_pl4(cul,i+nblines,i,clr-cul+1,nbcols,cheight);
-          }
+     case PLANAR4:
+     case PLANAR1:
+       if(nblines==0&&rul==0&&cul==0&&rlr==nbrows-1&&clr==nbcols-1)
+        {
+         memsetb(vga_modes[line].sstart,0,0x00,nbrows*nbcols*cheight);
         }
        else
-        {for(i=rlr;i>=rul;i--)
-          {
-           if((i<rul+nblines)||(nblines==0))
-            vgamem_fill_pl4(cul,i,clr-cul+1,nbcols,cheight);
-           else
-            vgamem_copy_pl4(cul,i,i-nblines,clr-cul+1,nbcols,cheight);
+        {// if Scroll up
+         if(dir==SCROLL_UP)
+          {for(i=rul;i<=rlr;i++)
+            {
+             if((i+nblines>rlr)||(nblines==0))
+              vgamem_fill_pl4(cul,i,cols,nbcols,cheight);
+             else
+              vgamem_copy_pl4(cul,i+nblines,i,cols,nbcols,cheight);
+            }
+          }
+         else
+          {for(i=rlr;i>=rul;i--)
+            {
+             if((i<rul+nblines)||(nblines==0))
+              vgamem_fill_pl4(cul,i,cols,nbcols,cheight);
+             else
+              vgamem_copy_pl4(cul,i,i-nblines,cols,nbcols,cheight);
+            }
           }
         }
-      }
-    }
-   else
-    {
+       break;
 #ifdef DEBUG
-     printf("Scroll in graphics mode ");
-     unimplemented();
+     default:
+       printf("Scroll in graphics mode ");
+       unimplemented();
 #endif
     }
   }
@@ -1479,22 +1483,21 @@ Bit8u car;Bit8u page;Bit8u attr;Bit16u count;
    bpp=vga_modes[line].pixbits;
    while((count-->0) && (xcurs<nbcols))
     {
-     if((vga_modes[line].memmodel==PLANAR4)||(vga_modes[line].memmodel==PLANAR1))
+     switch(vga_modes[line].memmodel)
       {
-       write_gfx_char_pl4(car,attr,xcurs,ycurs,nbcols,cheight);
-      }
-     else if(vga_modes[line].memmodel==CGA)
-      {
-       write_gfx_char_cga(car,attr,xcurs,ycurs,nbcols,bpp);
-      }
-     else if(vga_modes[line].memmodel==LINEAR8)
-      {
-       write_gfx_char_lin(car,attr,xcurs,ycurs,nbcols);
-      }
-     else
-      {
+       case PLANAR4:
+       case PLANAR1:
+         write_gfx_char_pl4(car,attr,xcurs,ycurs,nbcols,cheight);
+         break;
+       case CGA:
+         write_gfx_char_cga(car,attr,xcurs,ycurs,nbcols,bpp);
+         break;
+       case LINEAR8:
+         write_gfx_char_lin(car,attr,xcurs,ycurs,nbcols);
+         break;
 #ifdef DEBUG
-       unimplemented();
+       default:
+         unimplemented();
 #endif
       }
      xcurs++;
@@ -1540,22 +1543,21 @@ Bit8u car;Bit8u page;Bit8u attr;Bit16u count;
    bpp=vga_modes[line].pixbits;
    while((count-->0) && (xcurs<nbcols))
     {
-     if((vga_modes[line].memmodel==PLANAR4)||(vga_modes[line].memmodel==PLANAR1))
+     switch(vga_modes[line].memmodel)
       {
-       write_gfx_char_pl4(car,attr,xcurs,ycurs,nbcols,cheight);
-      }
-     else if(vga_modes[line].memmodel==CGA)
-      {
-       write_gfx_char_cga(car,attr,xcurs,ycurs,nbcols,bpp);
-      }
-     else if(vga_modes[line].memmodel==LINEAR8)
-      {
-       write_gfx_char_lin(car,attr,xcurs,ycurs,nbcols);
-      }
-     else
-      {
+       case PLANAR4:
+       case PLANAR1:
+         write_gfx_char_pl4(car,attr,xcurs,ycurs,nbcols,cheight);
+         break;
+       case CGA:
+         write_gfx_char_cga(car,attr,xcurs,ycurs,nbcols,bpp);
+         break;
+       case LINEAR8:
+         write_gfx_char_lin(car,attr,xcurs,ycurs,nbcols);
+         break;
 #ifdef DEBUG
-       unimplemented();
+       default:
+         unimplemented();
 #endif
       }
      xcurs++;
@@ -1842,26 +1844,24 @@ Bit8u car;Bit8u page;Bit8u attr;Bit8u flag;
       // FIXME gfx mode not complete
       cheight=vga_modes[line].cheight;
       bpp=vga_modes[line].pixbits;
-      if((vga_modes[line].memmodel==PLANAR4)||(vga_modes[line].memmodel==PLANAR1))
+      switch(vga_modes[line].memmodel)
        {
-        write_gfx_char_pl4(car,attr,xcurs,ycurs,nbcols,cheight);
-       }
-      else if(vga_modes[line].memmodel==CGA)
-       {
-        write_gfx_char_cga(car,attr,xcurs,ycurs,nbcols,bpp);
-       }
-      else if(vga_modes[line].memmodel==LINEAR8)
-       {
-        write_gfx_char_lin(car,attr,xcurs,ycurs,nbcols);
-       }
-      else
-       {
+        case PLANAR4:
+        case PLANAR1:
+          write_gfx_char_pl4(car,attr,xcurs,ycurs,nbcols,cheight);
+          break;
+        case CGA:
+          write_gfx_char_cga(car,attr,xcurs,ycurs,nbcols,bpp);
+          break;
+        case LINEAR8:
+          write_gfx_char_lin(car,attr,xcurs,ycurs,nbcols);
+          break;
 #ifdef DEBUG
-        unimplemented();
+        default:
+          unimplemented();
 #endif
        }
      }
-
     xcurs++;
   }
 

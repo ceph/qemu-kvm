@@ -7,7 +7,7 @@ VBE Display API
   very heavily on each other. As such, this documents needs be synchronised 
   between bochs CVS and the vgabios CVS.
   
-  This document does not describe hwo the VBEBios implements the VBE2/3 spec.
+  This document does not describe how the VBEBios implements the VBE2/3 spec.
   This document does not describe how the Bochs display code will display gfx based upon this spec.
 
 
@@ -55,9 +55,6 @@ History
 
 Todo
 ----
-  Version 0.6     - add virtual width, height, x offset, y offset in bios & bochs
-                    (for set/get logical scan line length and set/get display start)
-  
   Version 0.6+    [random order]
                   - Add lots of different (A)RGB formats
   
@@ -194,7 +191,7 @@ API
   * VBE_DISPI_INDEX_BPP : WORD {R,W}
     The value written is now the number of bits per pixel. A value of 0 is treated
     the same as 8 for backward compatibilty. These values are supported: 8, 15,
-    16, 24 and 32. The value of 4 is not handled in the VBE code.
+    16, 24 and 32. The value of 4 is not yet handled in the VBE code.
   * VBE_DISPI_INDEX_ENABLE : WORD {R,W}
     The new flag VBE_DISPI_NOCLEARMEM allows to preserve the VBE video memory.
     The new flag VBE_DISPI_LFB_ENABLED indicates the usage of the LFB.

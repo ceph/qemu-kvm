@@ -30,7 +30,7 @@
 
 
 // defines available
-// enable LFB support (depends upon bochs-vbe-lfb patch)
+// enable LFB support
 #define VBE_HAVE_LFB
 
 // disable VESA/VBE2 check in vbe info
@@ -71,7 +71,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.42 2004/05/06 21:17:29 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.43 2004/05/08 16:05:52 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -200,28 +200,32 @@ static Bit16u dispi_get_max_bpp()
   return max_bpp;
 }
 
-static Bit16u dispi_get_enable()
-{
-  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_ENABLE);
-  return inw(VBE_DISPI_IOPORT_DATA);  
-}
+ASM_START
+_dispi_set_enable:
+  push dx
+  push ax
+  mov  dx, # VBE_DISPI_IOPORT_INDEX
+  mov  ax, # VBE_DISPI_INDEX_ENABLE
+  out  dx, ax
+  pop  ax
+  mov  dx, # VBE_DISPI_IOPORT_DATA
+  out  dx, ax
+  pop  dx
+  ret
 
-void dispi_set_enable(enable)
-  Bit16u enable;
-{
-  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_ENABLE);
-  outw(VBE_DISPI_IOPORT_DATA,enable);
-}
-
-static void dispi_set_bank(bank)
-  Bit16u bank;
-{
-  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_BANK);
-  outw(VBE_DISPI_IOPORT_DATA,bank);
-}
+dispi_get_enable:
+  push dx
+  mov  dx, # VBE_DISPI_IOPORT_INDEX
+  mov  ax, # VBE_DISPI_INDEX_ENABLE
+  out  dx, ax
+  mov  dx, # VBE_DISPI_IOPORT_DATA
+  in   ax, dx
+  pop  dx
+  ret
+ASM_END
 
 ASM_START
-dispi_set_bank:
+_dispi_set_bank:
   push dx
   push ax
   mov  dx, # VBE_DISPI_IOPORT_INDEX
@@ -410,7 +414,7 @@ void vbe_init()
     write_byte(BIOSMEM_SEG,BIOSMEM_VBE_FLAG,0x01);
     dispi_set_id(VBE_DISPI_ID3);
   }
-  printf("VBE Bios $Id: vbe.c,v 1.42 2004/05/06 21:17:29 vruppert Exp $\n");
+  printf("VBE Bios $Id: vbe.c,v 1.43 2004/05/08 16:05:52 vruppert Exp $\n");
 }
 
 /** VBE Display Info - Display information on screen about the VBE
@@ -726,27 +730,28 @@ Bit16u *AX;Bit16u BX; Bit16u ES;Bit16u DI;
  *              BX      = Current VBE Mode
  * 
  */
-void vbe_biosfn_return_current_mode(AX, BX)
-Bit16u *AX;Bit16u *BX;
-{
-        Bit16u ss=get_SS();
-        Bit16u mode;
-
-#ifdef DEBUG
-        printf("VBE vbe_biosfn_return_current_mode\n");
-#endif
-
-        if(dispi_get_enable())
-        {
-                mode=read_word(BIOSMEM_SEG,BIOSMEM_VBE_MODE);
-        }
-        else
-        {
-                mode=read_byte(BIOSMEM_SEG,BIOSMEM_CURRENT_MODE);
-        }
-        write_word(ss, AX, 0x4f);
-        write_word(ss, BX, mode);
-}
+ASM_START
+vbe_biosfn_return_current_mode:
+  push ds
+  mov  ax, # BIOSMEM_SEG
+  mov  ds, ax
+  call dispi_get_enable
+  and  ax, # VBE_DISPI_ENABLED
+  jz   no_vbe_mode
+  mov  bx, # BIOSMEM_VBE_MODE
+  mov  ax, [bx]
+  mov  bx, ax
+  jnz  vbe_03_ok
+no_vbe_mode:
+  mov  bx, # BIOSMEM_CURRENT_MODE
+  mov  al, [bx]
+  mov  bl, al
+  xor  bh, bh
+vbe_03_ok:
+  mov  ax, #0x004f
+  pop  ds
+  ret
+ASM_END
 
 
 /** Function 04h - Save/Restore State
@@ -799,7 +804,7 @@ vbe_biosfn_display_window_control:
   ret
 set_display_window:
   mov  ax, dx
-  call dispi_set_bank
+  call _dispi_set_bank
   call dispi_get_bank
   cmp  ax, dx
   jne  vbe_05_failed
@@ -946,43 +951,34 @@ ASM_END
  */
 ASM_START
 vbe_biosfn_set_get_dac_palette_format:
-  push dx
-  mov  dx, # VBE_DISPI_IOPORT_INDEX
-  mov  ax, # VBE_DISPI_INDEX_ENABLE
-  out  dx, ax
   cmp  bl, #0x01
   je   get_dac_palette_format
-  ja   vbe_08_unknown
-  mov  dx, # VBE_DISPI_IOPORT_DATA
-  in   ax, dx
-  cmp  bh, #0x08
-  je   set_8bit_dac
+  jb   set_dac_palette_format
+  mov  ax, #0x0100
+  ret
+set_dac_palette_format:
+  call dispi_get_enable
   cmp  bh, #0x06
+  je   set_normal_dac
+  cmp  bh, #0x08
   jne  vbe_08_unsupported
-  and  ax, #~ VBE_DISPI_8BIT_DAC
-  out  dx, ax
-  jmp  get_dac_palette_format
-set_8bit_dac:
   or   ax, # VBE_DISPI_8BIT_DAC
-  out  dx, ax
+  jnz  set_dac_mode
+set_normal_dac:
+  and  ax, #~ VBE_DISPI_8BIT_DAC
+set_dac_mode:
+  call _dispi_set_enable
 get_dac_palette_format:
   mov  bh, #0x06
-  mov  dx, # VBE_DISPI_IOPORT_DATA
-  in   ax, dx
+  call dispi_get_enable
   and  ax, # VBE_DISPI_8BIT_DAC
   jz   vbe_08_ok
   mov  bh, #0x08
 vbe_08_ok:
   mov  ax, #0x004f
-  pop  dx
-  ret
-vbe_08_unknown:
-  mov  ax, #0x0100
-  pop  dx
   ret
 vbe_08_unsupported:
   mov  ax, #0x014f
-  pop  dx
   ret
 ASM_END
 

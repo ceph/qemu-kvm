@@ -16,7 +16,6 @@ void vbe_display_info();
 void vbe_biosfn_return_controller_information(AX, ES, DI);
 void vbe_biosfn_return_mode_information(AX, CX, ES, DI);
 void vbe_biosfn_set_mode(AX, BX, ES, DI);
-void vbe_biosfn_return_current_mode(AX, BX); 
 void vbe_biosfn_save_restore_state(AX, DL, CX, ES, BX); 
 void vbe_biosfn_set_get_palette_data(AX);
 void vbe_biosfn_return_protected_mode_interface(AX);
@@ -198,7 +197,6 @@ typedef struct ModeInfoBlock
 #define VBE_VESA_MODE_1280X1024X888                      0x11B
 
 // BOCHS/PLEX86 'own' mode numbers
-// FIXME: Add more modi
 #define VBE_OWN_MODE_320X200X8888                        0x140
 #define VBE_OWN_MODE_640X400X8888                        0x141
 #define VBE_OWN_MODE_640X480X8888                        0x142

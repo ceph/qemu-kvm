@@ -1,9 +1,3 @@
-The code is quite new, and testing has been very minimal.
 Not all the functions have been implemented yet. 
-
-From an implemented point of view, these should be working but do not :
-- 43/50 lines switching
-- cursor shape seems broken (volker)
-
 
 Please report any bugs to <cbothamy@free.fr>

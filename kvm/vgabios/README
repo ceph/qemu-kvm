@@ -15,12 +15,12 @@ To compile the VGA Bios you will need :
 - as86
 - ld86
 
-Untar the archive, and type make. You should get a "vgabios.bin" file.
-Alternatively, you can use the binary file "vgabios-XXX.bin", i have
-compiled for you.
+Untar the archive, and type make. You should get a "VGABIOS-lgpl-latest.bin"
+file. Alternatively, you can use the binary file "VGABIOS-lgpl-latest.bin",
+i have compiled for you.
 
 Edit your plex86/bochs conf file, and modify the load-rom command in the
-VGA BIOS section, to point to the new vgabios.bin file.
+VGA BIOS section, to point to the new vgabios image file.
 
 
 Debugging
@@ -38,7 +38,6 @@ Testing
 Look at the "testvga.c" file in the archive. This is a minimal Turbo C 2.0 
 source file that calls a few int10 functions. Feel free to modify it to suit 
 your needs.
-The VGA Bios in its current version has been very little tested.
 
 
 Copyright and License
