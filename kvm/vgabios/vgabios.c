@@ -92,20 +92,10 @@ static void biosfn_set_palette();
 static void biosfn_write_pixel();
 static void biosfn_read_pixel();
 static void biosfn_write_teletype();
-static void biosfn_set_single_palette_reg();
-static void biosfn_set_overscan_border_color();
 static void biosfn_set_all_palette_reg();
 static void biosfn_toggle_intensity();
-static void biosfn_get_single_palette_reg();
-static void biosfn_read_overscan_border_color();
 static void biosfn_get_all_palette_reg();
-static void biosfn_set_single_dac_reg();
-static void biosfn_set_all_dac_reg();
 static void biosfn_select_video_dac_color_page();
-static void biosfn_read_single_dac_reg();
-static void biosfn_read_all_dac_reg();
-static void biosfn_set_pel_mask();
-static void biosfn_read_pel_mask();
 static void biosfn_read_video_dac_state();
 static void biosfn_perform_gray_scale_summing();
 static void biosfn_load_text_user_pat();
@@ -152,8 +142,15 @@ biosmem_switches     = 0x88
 biosmem_modeset_ctl  = 0x89
 biosmem_dcc_index    = 0x8a
 
-vgareg_sequ_address  = 0x03c4
-vgareg_grdc_address  = 0x03ce
+vgareg_actl_address      = 0x03c0
+vgareg_actl_read_data    = 0x03c1
+vgareg_sequ_address      = 0x03c4
+vgareg_pel_mask          = 0x03c6
+vgareg_dac_read_address  = 0x03c7
+vgareg_dac_write_address = 0x03c8
+vgareg_dac_data          = 0x03c9
+vgareg_grdc_address      = 0x03ce
+vgareg_actl_reset        = 0x03da
 
 MACRO SET_INT_VECTOR
   push ds
@@ -278,14 +275,75 @@ ASM_END
 ASM_START
 vgabios_int10_handler:
   pushf
+#ifdef DEBUG
+  push es
+  push ds
+  pusha
+  mov   bx, #0xc000
+  mov   ds, bx
+  call _int10_debugmsg
+  popa
+  pop ds
+  pop es
+#endif
   cmp   ah, #0x0f
   jne   int10_test_1A
   call  biosfn_get_video_mode
   jmp   int10_end
 int10_test_1A:
   cmp   ah, #0x1a
-  jne   int10_normal
+  jne   int10_test_1000
   call  biosfn_group_1A
+  jmp   int10_end
+int10_test_1000:
+  cmp   ax, #0x1000
+  jne   int10_test_1001
+  call  biosfn_set_single_palette_reg
+  jmp   int10_end
+int10_test_1001:
+  cmp   ax, #0x1001
+  jne   int10_test_1007
+  call  biosfn_set_overscan_border_color
+  jmp   int10_end
+int10_test_1007:
+  cmp   ax, #0x1007
+  jne   int10_test_1008
+  call  biosfn_get_single_palette_reg
+  jmp   int10_end
+int10_test_1008:
+  cmp   ax, #0x1008
+  jne   int10_test_1010
+  call  biosfn_read_overscan_border_color
+  jmp   int10_end
+int10_test_1010:
+  cmp   ax, #0x1010
+  jne   int10_test_1012
+  call  biosfn_set_single_dac_reg
+  jmp   int10_end
+int10_test_1012:
+  cmp   ax, #0x1012
+  jne   int10_test_1015
+  call  biosfn_set_all_dac_reg
+  jmp   int10_end
+int10_test_1015:
+  cmp   ax, #0x1015
+  jne   int10_test_1017
+  call  biosfn_read_single_dac_reg
+  jmp   int10_end
+int10_test_1017:
+  cmp   ax, #0x1017
+  jne   int10_test_1018
+  call  biosfn_read_all_dac_reg
+  jmp   int10_end
+int10_test_1018:
+  cmp   ax, #0x1018
+  jne   int10_test_1019
+  call  biosfn_set_pel_mask
+  jmp   int10_end
+int10_test_1019:
+  cmp   ax, #0x1019
+  jne   int10_normal
+  call  biosfn_read_pel_mask
   jmp   int10_end
 
 int10_normal:
@@ -335,7 +393,7 @@ init_vga_card:
   ret
 
 msg_vga_init:
-.ascii "VGABios $Id: vgabios.c,v 1.44 2004/04/17 07:18:21 vruppert Exp $"
+.ascii "VGABios $Id: vgabios.c,v 1.45 2004/04/18 13:43:10 vruppert Exp $"
 .byte 0x0d,0x0a,0x00
 ASM_END
 
@@ -451,6 +509,15 @@ ASM_END
 }
 
 // --------------------------------------------------------------------------------------------
+#ifdef DEBUG
+static void int10_debugmsg(DI, SI, BP, SP, BX, DX, CX, AX, DS, ES, FLAGS)
+  Bit16u DI, SI, BP, SP, BX, DX, CX, AX, ES, DS, FLAGS;
+{
+ // 0E is write char...
+ if(GET_AH()!=0x0E)
+  printf("vgabios call ah%02x al%02x bx%04x cx%04x dx%04x\n",GET_AH(),GET_AL(),BX,CX,DX);
+}
+#endif
 
 // --------------------------------------------------------------------------------------------
 /*
@@ -459,11 +526,6 @@ ASM_END
 static void int10_func(DI, SI, BP, SP, BX, DX, CX, AX, DS, ES, FLAGS)
   Bit16u DI, SI, BP, SP, BX, DX, CX, AX, ES, DS, FLAGS;
 {
-#ifdef DEBUG
- // 0E is write char...
- if(GET_AH()!=0x0E)
-  printf("vgabios call ah%02x al%02x bx%04x cx%04x dx%04x\n",GET_AH(),GET_AL(),BX,CX,DX);
-#endif
 
  // BIOS functions
  switch(GET_AH())
@@ -544,47 +606,17 @@ static void int10_func(DI, SI, BP, SP, BX, DX, CX, AX, DS, ES, FLAGS)
    case 0x10:
      switch(GET_AL())
       {
-       case 0x00:
-        biosfn_set_single_palette_reg(GET_BL(),GET_BH());
-        break;
-       case 0x01:
-        biosfn_set_overscan_border_color(GET_BH());
-        break;
        case 0x02:
         biosfn_set_all_palette_reg(ES,DX);
         break;
        case 0x03:
         biosfn_toggle_intensity(GET_BL());
         break;
-       case 0x07:
-        biosfn_get_single_palette_reg(GET_BL(),&BX);
-        break;
-       case 0x08:
-        biosfn_read_overscan_border_color(&BX);
-        break;
        case 0x09:
         biosfn_get_all_palette_reg(ES,DX);
         break;
-       case 0x10:
-        biosfn_set_single_dac_reg(BX,GET_CH(),GET_CL(),GET_DH());
-        break;
-       case 0x12:
-        biosfn_set_all_dac_reg(BX,CX,ES,DX);
-        break;
        case 0x13:
         biosfn_select_video_dac_color_page(GET_BL(),GET_BH());
-        break;
-       case 0x15:
-        biosfn_read_single_dac_reg(GET_BL(),&DX,&CX);
-        break;
-       case 0x17:
-        biosfn_read_all_dac_reg(BX,CX,ES,DX);
-        break;
-       case 0x18:
-        biosfn_set_pel_mask(GET_BL());
-        break;
-       case 0x19:
-        biosfn_read_pel_mask(&BX);
         break;
        case 0x1A:
         biosfn_read_video_dac_state(&BX);
@@ -1784,27 +1816,36 @@ biosfn_get_video_mode:
 ASM_END
 
 // --------------------------------------------------------------------------------------------
-static void biosfn_set_single_palette_reg (reg,value) 
-Bit8u reg;Bit8u value;
-{
- if(reg<=ACTL_MAX_REG)
-  {
-   inb(VGAREG_ACTL_RESET);
-   outb(VGAREG_ACTL_ADDRESS,reg);
-   outb(VGAREG_ACTL_WRITE_DATA,value);
-   outb(VGAREG_ACTL_ADDRESS,0x20);
-  }
-}
+ASM_START
+biosfn_set_single_palette_reg:
+  cmp   bl, #0x14
+  ja    no_actl_reg1
+  push  ax
+  push  dx
+  mov   dx, #vgareg_actl_reset
+  in    al, dx
+  mov   dx, #vgareg_actl_address
+  mov   al, bl
+  out   dx, al
+  mov   al, bh
+  out   dx, al
+  mov   al, #0x20
+  out   dx, al
+  pop   dx
+  pop   ax
+no_actl_reg1:
+  ret
+ASM_END
 
 // --------------------------------------------------------------------------------------------
-static void biosfn_set_overscan_border_color (value) 
-Bit8u value;
-{
- inb(VGAREG_ACTL_RESET);
- outb(VGAREG_ACTL_ADDRESS,0x11);
- outb(VGAREG_ACTL_WRITE_DATA,value);
- outb(VGAREG_ACTL_ADDRESS,0x20);
-}
+ASM_START
+biosfn_set_overscan_border_color:
+  push  bx
+  mov   bl, #0x11
+  call  biosfn_set_single_palette_reg
+  pop   bx
+  ret
+ASM_END
 
 // --------------------------------------------------------------------------------------------
 static void biosfn_set_all_palette_reg (seg,offset) 
@@ -1843,30 +1884,44 @@ Bit8u state;
 }
 
 // --------------------------------------------------------------------------------------------
-static void biosfn_get_single_palette_reg (reg,value) 
-Bit8u reg;Bit16u *value;
-{Bit16u ss=get_SS();
- 
- if(reg<=ACTL_MAX_REG)
-  {
-   inb(VGAREG_ACTL_RESET);
-   outb(VGAREG_ACTL_ADDRESS,reg);
-   write_word(ss,value,((Bit16u)inb(VGAREG_ACTL_READ_DATA))<<8);
-   inb(VGAREG_ACTL_RESET);
-   outb(VGAREG_ACTL_ADDRESS,0x20);
-  }
-}
+ASM_START
+biosfn_get_single_palette_reg:
+  cmp   bl, #0x14
+  ja    no_actl_reg2
+  push  ax
+  push  dx
+  mov   dx, #vgareg_actl_reset
+  in    al, dx
+  mov   dx, #vgareg_actl_address
+  mov   al, bl
+  out   dx, al
+  mov   dx, #vgareg_actl_read_data
+  in    al, dx
+  mov   bh, al
+  mov   dx, #vgareg_actl_reset
+  in    al, dx
+  mov   dx, #vgareg_actl_address
+  mov   al, #0x20
+  out   dx, al
+  pop   dx
+  pop   ax
+no_actl_reg2:
+  ret
+ASM_END
 
 // --------------------------------------------------------------------------------------------
-static void biosfn_read_overscan_border_color (value) 
-Bit16u *value;
-{Bit16u ss=get_SS();
- 
- inb(VGAREG_ACTL_RESET);
- outb(VGAREG_ACTL_ADDRESS,0x11);
- write_word(ss,value,((Bit16u)inb(VGAREG_ACTL_READ_DATA))<<8);
- outb(VGAREG_ACTL_ADDRESS,0x20);
-}
+ASM_START
+biosfn_read_overscan_border_color:
+  push  ax
+  push  bx
+  mov   bl, #0x11
+  call  biosfn_get_single_palette_reg
+  mov   al, bh
+  pop   bx
+  mov   bh, al
+  pop   ax
+  ret
+ASM_END
 
 // --------------------------------------------------------------------------------------------
 static void biosfn_get_all_palette_reg (seg,offset) Bit16u seg;Bit16u offset;
@@ -1889,26 +1944,62 @@ static void biosfn_get_all_palette_reg (seg,offset) Bit16u seg;Bit16u offset;
 }
 
 // --------------------------------------------------------------------------------------------
-static void biosfn_set_single_dac_reg (reg,g,b,r) 
-Bit16u reg;Bit8u g;Bit8u b;Bit8u r;
-{
- outb(VGAREG_DAC_WRITE_ADDRESS,reg);
- outb(VGAREG_DAC_DATA,r);
- outb(VGAREG_DAC_DATA,g);
- outb(VGAREG_DAC_DATA,b);
-}
+ASM_START
+biosfn_set_single_dac_reg:
+  push  ax
+  push  dx
+  mov   dx, #vgareg_dac_write_address
+  mov   al, bl
+  out   dx, al
+  mov   dx, #vgareg_dac_data
+  pop   ax
+  push  ax
+  mov   al, ah
+  out   dx, al
+  mov   al, ch
+  out   dx, al
+  mov   al, cl
+  out   dx, al
+  pop   dx
+  pop   ax
+  ret
+ASM_END
 
 // --------------------------------------------------------------------------------------------
-static void biosfn_set_all_dac_reg (start,count,seg,offset) 
-Bit16u start;Bit16u count;Bit16u seg;Bit16u offset;
-{Bit16u i;
- outb(VGAREG_DAC_WRITE_ADDRESS,start);
- for(i=0;i<count;i++)
-  {outb(VGAREG_DAC_DATA,read_byte(seg,offset++));
-   outb(VGAREG_DAC_DATA,read_byte(seg,offset++));
-   outb(VGAREG_DAC_DATA,read_byte(seg,offset++));
-  }
-}
+ASM_START
+biosfn_set_all_dac_reg:
+  push  ax
+  push  bx
+  push  cx
+  push  dx
+  mov   dx, #vgareg_dac_write_address
+  mov   al, bl
+  out   dx, al
+  pop   dx
+  push  dx
+  mov   bx, dx
+  mov   dx, #vgareg_dac_data
+set_dac_loop:
+  seg   es
+  mov   al, [bx]
+  out   dx, al
+  inc   bx
+  seg   es
+  mov   al, [bx]
+  out   dx, al
+  inc   bx
+  seg   es
+  mov   al, [bx]
+  out   dx, al
+  inc   bx
+  dec   cx
+  jnz   set_dac_loop
+  pop   dx
+  pop   cx
+  pop   bx
+  pop   ax
+  ret
+ASM_END
 
 // --------------------------------------------------------------------------------------------
 static void biosfn_select_video_dac_color_page (function,page) 
@@ -1939,45 +2030,89 @@ Bit8u function;
 }
 
 // --------------------------------------------------------------------------------------------
-static void biosfn_read_single_dac_reg (reg,tor,togb) 
-Bit8u reg;Bit16u *tor;Bit16u *togb;
-{Bit16u ss=get_SS();
- Bit8u r,g,b;
-
- outb(VGAREG_DAC_READ_ADDRESS,reg);
- r=inb(VGAREG_DAC_DATA);
- g=inb(VGAREG_DAC_DATA);
- b=inb(VGAREG_DAC_DATA);
- write_word(ss,tor,((Bit16u)r)<<8);
- write_word(ss,togb,(((Bit16u)g)<<8)+b);
-}
-
-// --------------------------------------------------------------------------------------------
-static void biosfn_read_all_dac_reg (start,count,seg,offset) 
-Bit16u start;Bit16u count;Bit16u seg;Bit16u offset;
-{Bit16u i;
- outb(VGAREG_DAC_READ_ADDRESS,start);
- for(i=0;i<count;i++)
-  {write_byte(seg,offset++,inb(VGAREG_DAC_DATA));
-   write_byte(seg,offset++,inb(VGAREG_DAC_DATA));
-   write_byte(seg,offset++,inb(VGAREG_DAC_DATA));
-  }
-}
+ASM_START
+biosfn_read_single_dac_reg:
+  push  ax
+  push  dx
+  mov   dx, #vgareg_dac_read_address
+  mov   al, bl
+  out   dx, al
+  pop   ax
+  mov   ah, al
+  mov   dx, #vgareg_dac_data
+  in    al, dx
+  xchg  al, ah
+  push  ax
+  in    al, dx
+  mov   ch, al
+  in    al, dx
+  mov   cl, al
+  pop   dx
+  pop   ax
+  ret
+ASM_END
 
 // --------------------------------------------------------------------------------------------
-static void biosfn_set_pel_mask (mask) 
-Bit8u mask;
-{
- outb(VGAREG_PEL_MASK,mask);
-}
+ASM_START
+biosfn_read_all_dac_reg:
+  push  ax
+  push  bx
+  push  cx
+  push  dx
+  mov   dx, #vgareg_dac_read_address
+  mov   al, bl
+  out   dx, al
+  pop   dx
+  push  dx
+  mov   bx, dx
+  mov   dx, #vgareg_dac_data
+read_dac_loop:
+  in    al, dx
+  seg   es
+  mov   [bx], al
+  inc   bx
+  in    al, dx
+  seg   es
+  mov   [bx], al
+  inc   bx
+  in    al, dx
+  seg   es
+  mov   [bx], al
+  inc   bx
+  dec   cx
+  jnz   read_dac_loop
+  pop   dx
+  pop   cx
+  pop   bx
+  pop   ax
+  ret
+ASM_END
 
 // --------------------------------------------------------------------------------------------
-static void biosfn_read_pel_mask (mask) 
-Bit16u *mask;
-{Bit16u ss=get_SS();
- 
- write_word(ss,mask,inb(VGAREG_PEL_MASK));
-}
+ASM_START
+biosfn_set_pel_mask:
+  push  ax
+  push  dx
+  mov   dx, #vgareg_pel_mask
+  mov   al, bl
+  out   dx, al
+  pop   dx
+  pop   ax
+  ret
+ASM_END
+
+// --------------------------------------------------------------------------------------------
+ASM_START
+biosfn_read_pel_mask:
+  push  ax
+  push  dx
+  mov   dx, #vgareg_pel_mask
+  in    al, dx
+  mov   bl, al
+  pop   dx
+  pop   ax
+  ret
+ASM_END
 
 // --------------------------------------------------------------------------------------------
 static void biosfn_read_video_dac_state (state) Bit16u *state;
