@@ -244,10 +244,10 @@ cirrus_mode_t cirrus_modes[] =
    cseq_1024x768x16,cgraph_svgacolor,ccrtc_1024x768x16,16,
    6,5,10,5,5,5,0,1,15},
 
- {0xe0,800,600,24,0xe5,
+ {0x78,800,600,24,0xe5,
    cseq_800x600x24,cgraph_svgacolor,ccrtc_800x600x24,24,
    6,8,16,8,8,8,0,0,0},
- {0xe1,1024,768,24,0xe5,
+ {0x79,1024,768,24,0xe5,
    cseq_1024x768x24,cgraph_svgacolor,ccrtc_1024x768x24,24,
    6,8,16,8,8,8,0,0,0},
 
@@ -283,7 +283,7 @@ unsigned short cirrus_vesa_modelist[] = {
 // 800x600x16
   0x114, 0x65,
 // 800x600x24
-  0x115, 0xe0,
+  0x115, 0x78,
 // 1024x768x8
   0x105, 0x60,
 // 1024x768x15
@@ -291,7 +291,7 @@ unsigned short cirrus_vesa_modelist[] = {
 // 1024x768x16
   0x117, 0x74,
 // 1024x768x24
-//0x118, 0xe1,
+//0x118, 0x79,
 // invalid
   0xffff,0xffff
 };
@@ -1517,8 +1517,9 @@ cirrus_vesa_selB800_data:
 cirrus_vesa_selC000_data:
   dw 0xC000 ;; sel_C0000
 cirrus_vesa_is_protected_mode:
-  db 0x00 ;; is_protected_mode
-  db 0x00 ;; check_sum
+  ;; protected mode flag and checksum
+  dw (~((0xf2 + (cirrus_vesa_pmbios_entry >> 8) + (cirrus_vesa_pmbios_entry) \
+     + (cirrus_vesa_pmbios_init >> 8) + (cirrus_vesa_pmbios_init)) & 0xff) << 8) + 0x01
 ASM_END
 #endif // CIRRUS_VESA3_PMINFO
 

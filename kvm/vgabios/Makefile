@@ -13,12 +13,12 @@ VGABIOS_DATE = "-DVGABIOS_DATE=\"$(RELDATE)\""
 all: bios cirrus-bios
 
 
-bios: vgabios.bin vgabios.debug.bin 
+bios: biossums vgabios.bin vgabios.debug.bin 
 
 cirrus-bios: vgabios-cirrus.bin vgabios-cirrus.debug.bin 
 
 clean:
-	/bin/rm -f  *.o *.s *.ld86 \
+	/bin/rm -f  biossums *.o *.s *.ld86 \
           temp.awk.* vgabios*.orig _vgabios_* _vgabios-debug_* core vgabios*.bin vgabios*.txt $(RELEASE).bin *.bak
 
 dist-clean: clean
@@ -38,6 +38,7 @@ vgabios.bin: vgabios.c vgabios.h vgafonts.h vgatables.h vbe.h vbe.c vbetables.h
 	as86 _vgabios_.s -b vgabios.bin -u -w- -g -0 -j -O -l vgabios.txt
 	rm -f _vgabios_.s _vgabios_.c vgabios.s
 	mv vgabios.bin VGABIOS-lgpl-latest.bin
+	./biossums VGABIOS-lgpl-latest.bin
 	ls -l VGABIOS-lgpl-latest.bin
 
 vgabios.debug.bin: vgabios.c vgabios.h vgafonts.h vgatables.h vbe.h vbe.c vbetables.h
@@ -47,6 +48,7 @@ vgabios.debug.bin: vgabios.c vgabios.h vgafonts.h vgatables.h vbe.h vbe.c vbetab
 	as86 _vgabios-debug_.s -b vgabios.debug.bin -u -w- -g -0 -j -O -l vgabios.debug.txt
 	rm -f _vgabios-debug_.s _vgabios-debug_.c vgabios-debug.s
 	mv vgabios.debug.bin VGABIOS-lgpl-latest.debug.bin
+	./biossums VGABIOS-lgpl-latest.debug.bin
 	ls -l VGABIOS-lgpl-latest.debug.bin
 
 vgabios-cirrus.bin: vgabios.c vgabios.h vgafonts.h vgatables.h clext.c
@@ -56,6 +58,7 @@ vgabios-cirrus.bin: vgabios.c vgabios.h vgafonts.h vgatables.h clext.c
 	as86 _vgabios-cirrus_.s -b vgabios-cirrus.bin -u -w- -g -0 -j -O -l vgabios.cirrus.txt
 	rm -f _vgabios-cirrus_.s _vgabios-cirrus_.c vgabios-cirrus.s
 	mv vgabios-cirrus.bin VGABIOS-lgpl-latest.cirrus.bin
+	./biossums VGABIOS-lgpl-latest.cirrus.bin
 	ls -l VGABIOS-lgpl-latest.cirrus.bin
 
 vgabios-cirrus.debug.bin: vgabios.c vgabios.h vgafonts.h vgatables.h clext.c
@@ -65,4 +68,8 @@ vgabios-cirrus.debug.bin: vgabios.c vgabios.h vgafonts.h vgatables.h clext.c
 	as86 _vgabios-cirrus-debug_.s -b vgabios.cirrus.debug.bin -u -w- -g -0 -j -O -l vgabios.cirrus.debug.txt
 	rm -f _vgabios-cirrus-debug_.s _vgabios-cirrus-debug_.c vgabios-cirrus-debug.s
 	mv vgabios.cirrus.debug.bin VGABIOS-lgpl-latest.cirrus.debug.bin
+	./biossums VGABIOS-lgpl-latest.cirrus.debug.bin
 	ls -l VGABIOS-lgpl-latest.cirrus.debug.bin
+
+biossums: biossums.c
+	gcc -o biossums biossums.c
