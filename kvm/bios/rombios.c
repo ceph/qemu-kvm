@@ -3147,10 +3147,6 @@ cdrom_boot()
   else
     write_byte(ebda_seg,&EbdaData->cdemu.emulated_drive,0x80);
 
-  // FIXME ElTorito Harddisk. current code can only emulate a floppy
-  //if(read_byte(ebda_seg,&EbdaData->cdemu.emulated_drive)!=0x00)
-  //  BX_PANIC("El-Torito: Cannot boot as a harddisk yet\n");
-
   write_byte(ebda_seg,&EbdaData->cdemu.controller_index,device/2);
   write_byte(ebda_seg,&EbdaData->cdemu.device_spec,device%2);
 
