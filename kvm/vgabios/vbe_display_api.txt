@@ -78,7 +78,8 @@ Abbreviations
 
   #define VBE_DISPI_DISABLED              0x00
   #define VBE_DISPI_ENABLED               0x01
-
+  
+  #define VBE_DISPI_LFB_PHYSICAL_ADDRESS  0xE0000000
 
 API
 ---
@@ -92,7 +93,7 @@ API
     This way, the display code knows the vbebios 'ID' and the vbebios can check if the correct
     display code is present.
     As a result, a PANIC can be generated if an incompatible vbebios/display code combination is detected.
-    This panic can be generated from both the display code and the bios.
+    This panic can be generated from the bochs display code (NOT the bios, see Notes).
     
     Example values: VBE_DISPI_ID0
         
@@ -155,3 +156,6 @@ Notes
    
   * Since the XRES/YRES/BPP may not be written when VBE is enabled, if you want to switch from one VBE mode
     to another, you will need to disable VBE first.
+  
+  * Note when the bios doesn't find a valid DISPI_ID, it can disable the VBE functions. This allows people to 
+    use the same bios for both vbe enabled and disabled bochs executables.

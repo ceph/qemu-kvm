@@ -261,7 +261,7 @@ typedef struct ModeInfoBlock
 
 // FIXME: either dynamicly ask host for this or put somewhere high in physical memory
 //        like 0xE0000000
-//#define VBE_PHYSICAL_BASE_ADDRESS                        0x3b00000
+
 
 #define VBE_TOTAL_VIDEO_MEMORY_DIV_64K                  (4*1024/64)
 
@@ -290,6 +290,7 @@ typedef struct ModeInfoBlock
 
   #define VBE_DISPI_DISABLED              0x00
   #define VBE_DISPI_ENABLED               0x01
-
+  
+  #define VBE_DISPI_LFB_PHYSICAL_ADDRESS  0xE0000000
 
 #endif
