@@ -31,6 +31,17 @@
 #include "vbe.h"
 #include "vbetables.h"
 
+// defines available
+
+// disable VESA/VBE2 check in vbe info
+//#define VBE2_NO_VESA_CHECK
+
+// dynamicly generate a mode_info list
+//#define DYN_LIST
+
+// enable unsupported modi in the mode_info list (ie >8bpp)
+//#define LIST_UNSUPPORTED_MODI
+
 // The current OEM Software Revision of this VBE Bios
 #define VBE_OEM_SOFTWARE_REV 0x0002;
 
@@ -63,16 +74,15 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.6 2002/03/06 20:55:45 japj Exp $"
+.ascii       "$Id: vbe.c,v 1.7 2002/03/07 20:36:08 japj Exp $"
 .byte        0x00
 
 #ifndef DYN_LIST
 // FIXME: for each new mode add a statement here
 //        at least until dynamic list creation is working
 _vbebios_mode_list:
+
 #ifdef LIST_UNSUPPORTED_MODI
-.word VBE_VESA_MODE_640X400X8
-.word VBE_VESA_MODE_640X480X8
 .word VBE_VESA_MODE_640X480X565
 .word VBE_VESA_MODE_800X600X565
 .word VBE_VESA_MODE_640X480X888
@@ -80,10 +90,12 @@ _vbebios_mode_list:
 .word VBE_OWN_MODE_800X600X8888
 .word VBE_OWN_MODE_1024X768X8888
 #endif
+
 .word VBE_OWN_MODE_320X200X8
 .word VBE_VESA_MODE_640X400X8
 .word VBE_VESA_MODE_640X480X8
 .word VBE_VESA_MODE_800X600X8
+.word VBE_VESA_MODE_1024X768X8
 .word VBE_VESA_MODE_END_OF_LIST
 #endif
 
@@ -121,6 +133,8 @@ Bit16u *AX;Bit16u ES;Bit16u DI;
         // get vbe_info_block into local variable
         memcpyb(ss, &vbe_info_block, ES, DI, sizeof(vbe_info_block));
 
+#ifdef VBE2_NO_VESA_CHECK
+#else
         // check for VBE2 signature
         if (((vbe_info_block.VbeSignature[0] == 'V') &&
              (vbe_info_block.VbeSignature[1] == 'B') &&
@@ -132,6 +146,8 @@ Bit16u *AX;Bit16u ES;Bit16u DI;
              (vbe_info_block.VbeSignature[2] == 'S') &&
              (vbe_info_block.VbeSignature[3] == 'A')) )
         {
+#endif
+                
 #ifdef DEBUG
                 printf("VBE correct VESA/VBE2 signature found\n");
 #endif
@@ -203,6 +219,9 @@ Bit16u *AX;Bit16u ES;Bit16u DI;
                 memcpyb(ES, DI, ss, &vbe_info_block, sizeof(vbe_info_block));
                 
                 result = 0x4f;
+
+#ifdef VBE2_NO_VESA_CHECK
+#else
         }
         else
         {
@@ -211,7 +230,7 @@ Bit16u *AX;Bit16u ES;Bit16u DI;
 #endif
                 result = 0x0100;
         }
-        
+#endif        
         write_word(ss, AX, result);
 }
 
@@ -279,6 +298,43 @@ Bit16u *AX;Bit16u CX; Bit16u ES;Bit16u DI;
 }
 
 //FIXME: make a generic vbe_set function that does io port with params
+
+static void vbe_set_1024x768x8()
+{
+                        #asm
+                        // set xresolution
+                        mov dx, #0xff80
+                        mov ax, #0x01
+                        outw dx, ax
+                        inc dx
+                        mov ax, #0x400
+                        outw dx, ax
+                        dec dx
+                        // set yresolution
+                        mov ax, #0x02
+                        outw dx, ax
+                        inc dx
+                        mov ax, #0x300
+                        outw dx, ax
+                        dec dx
+                        // set bank
+                        mov ax, #0x04
+                        outw dx, ax
+                        inc dx
+                        mov ax, #0x00
+                        outw dx, ax
+                        dec dx
+                        
+                        // enable video mode
+                        mov ax, #0x03
+                        outw dx, ax
+                        inc dx
+                        mov ax, #0x01
+                        outw dx, ax
+                   
+                        #endasm
+}
+
 static void vbe_set_800x600x8()
 {
                         #asm
@@ -494,6 +550,13 @@ Bit16u *AX;Bit16u BX; Bit16u ES;Bit16u DI;
                         printf("VBE VBE_VESA_MODE_800X600X8");
 #endif                  
                         vbe_set_800x600x8();
+                }               
+                if (cur_info->mode == VBE_VESA_MODE_1024X768X8)
+                {
+#ifdef DEBUG                        
+                        printf("VBE VBE_VESA_MODE_1024X768X8");
+#endif                  
+                        vbe_set_1024x768x8();
                 }               
                 else
                 {

@@ -268,6 +268,68 @@ static ModeInfoListItem mode_info_list[]=
 /*} ModeInfoBlock;*/
                 }
         },
+
+        {
+                VBE_VESA_MODE_1024X768X8,
+                {
+/*typedef struct ModeInfoBlock
+{*/
+// Mandatory information for all VBE revisions
+   /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
+                                        VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
+                                        VBE_MODE_ATTRIBUTE_COLOR_MODE |
+                                        VBE_MODE_ATTRIBUTE_GRAPHICS_MODE,
+   /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_READABLE |
+                                        VBE_WINDOW_ATTRIBUTE_WRITEABLE,
+   /*Bit8u  WinBAttributes*/            0,
+   /*Bit16u WinGranularity*/            VBE_BANK_SIZE_KB,
+   /*Bit16u WinSize*/                   VBE_BANK_SIZE_KB,
+   /*Bit16u WinASegment*/               VGAMEM_GRAPH,
+   /*Bit16u WinBSegment*/               0,
+   /*Bit32u WinFuncPtr*/                0,
+   /*Bit16u BytesPerScanLine*/          1024,
+// Mandatory information for VBE 1.2 and above
+   /*Bit16u XResolution*/               1024,
+   /*Bit16u YResolution*/               768,
+   /*Bit8u  XCharSize*/                 8,
+   /*Bit8u  YCharSize*/                 16,
+   /*Bit8u  NumberOfPlanes*/            1,
+   /*Bit8u  BitsPerPixel*/              8,
+   /*Bit8u  NumberOfBanks*/             12, // 1024x768/64kb == 12
+   /*Bit8u  MemoryModel*/               VBE_MEMORYMODEL_PACKED_PIXEL,
+   /*Bit8u  BankSize*/                  0,
+   /*Bit8u  NumberOfImagePages*/        0,
+   /*Bit8u  Reserved_page*/             0,
+// Direct Color fields (required for direct/6 and YUV/7 memory models)
+   /*Bit8u  RedMaskSize*/               0,
+   /*Bit8u  RedFieldPosition*/          0,
+   /*Bit8u  GreenMaskSize*/             0,
+   /*Bit8u  GreenFieldPosition*/        0,
+   /*Bit8u  BlueMaskSize*/              0,
+   /*Bit8u  BlueFieldPosition*/         0,
+   /*Bit8u  RsvdMaskSize*/              0,
+   /*Bit8u  RsvdFieldPosition*/         0,
+   /*Bit8u  DirectColorModeInfo*/       0,
+// Mandatory information for VBE 2.0 and above
+   /*Bit32u PhysBasePtr*/               VGAMEM_GRAPH_PHYSICAL_ADDRESS,  //FIXME: this allows this mode to be displayed using the standard 320x200x8 vga mode
+   /*Bit32u OffScreenMemOffset*/        0,
+   /*Bit16u OffScreenMemSize*/          0,
+// Mandatory information for VBE 3.0 and above
+   /*Bit16u LinBytesPerScanLine*/       1024,
+   /*Bit8u  BnkNumberOfPages*/          0,
+   /*Bit8u  LinNumberOfPages*/          0,
+   /*Bit8u  LinRedMaskSize*/            0,
+   /*Bit8u  LinRedFieldPosition*/       0,
+   /*Bit8u  LinGreenMaskSize*/          0,
+   /*Bit8u  LinGreenFieldPosition*/     0,
+   /*Bit8u  LinBlueMaskSize*/           0,
+   /*Bit8u  LinBlueFieldPosition*/      0,
+   /*Bit8u  LinRsvdMaskSize*/           0,
+   /*Bit8u  LinRsvdFieldPosition*/      0,
+   /*Bit32u MaxPixelClock*/             0,
+/*} ModeInfoBlock;*/
+                }
+        },
         
 #ifdef LIST_UNSUPPORTED_MODI
         {
