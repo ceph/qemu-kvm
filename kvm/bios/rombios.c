@@ -1562,14 +1562,24 @@ keyboard_init()
 {
     Bit16u max;
 
-    /* clear buffers before testing */
+    outb(0x80, 0x00);
+
+    /* clear out buffers before testing */
     max=0xffff;
     while(--max > 0) {
-      if (inb(0x64) & 0x01) inb(0x60);
       if ((inb(0x64) & 0x02) == 0) break;
       }
     if (max==0x0)
         keyboard_panic(990);
+
+    /* clear in buffers before testing */
+    max=0x100;
+    while(--max > 0) {
+      if (inb(0x64) & 0x01) {
+        inb(0x60);
+        max=0x100;
+        }
+      }
 
     /* ------------------- controller side ----------------------*/
     /* send cmd = 0xAA, self test 8042 */
@@ -1589,12 +1599,12 @@ keyboard_init()
     if (max==0x0)
         keyboard_panic(01);
 
-    /* read self-test result, 0x55 should be returned form 0x60 */
+    /* read self-test result, 0x55 should be returned from 0x60 */
     if ((inb(0x60) != 0x55)){
         keyboard_panic(991);
     }
 
-    /* send cmd = 0xAA, keyboard interface test */
+    /* send cmd = 0xAB, keyboard interface test */
     outb(0x64,0xab);
 
     /* empty input buffer or any other command/data will be lost */
@@ -8682,7 +8692,7 @@ post_default_ints:
   mov  bx, #0x003E
   mov  0x0482, bx
 
-  /* clear the output buffer and enable keyboard */
+  /* init the keyboard */
   call _keyboard_init
 
   ;; mov CMOS Equipment Byte to BDA Equipment Word
