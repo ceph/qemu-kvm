@@ -43,8 +43,7 @@ typedef struct VbeInfoBlock
    Bit16u OemProductNamePtr_Seg;
    Bit16u OemProductRevPtr_Off;
    Bit16u OemProductRevPtr_Seg;
-   //Bit8u  Reserved[222];
-   Bit16u  Reserved[111];// FIXME use this to put a dynamicly generated mode list in
+   Bit16u  Reserved[111]; // used for dynamicly generated mode list
    Bit8u  OemData[256];
 } VbeInfoBlock;
 
