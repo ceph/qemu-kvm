@@ -50,3 +50,4 @@ Short term:
 Long term:
 - have bochs/plex86 host side display interface
 - support more modi
+- have text io functions in vbe mode

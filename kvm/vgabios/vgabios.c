@@ -750,6 +750,26 @@ static void biosfn_set_video_mode(mode) Bit8u mode;
  Bit8u modeset_ctl,video_ctl,vga_switches;
  Bit16u crtc_addr;
  
+ 
+ #asm
+ // FIXME: how to to do this nicely?
+ // bochs vbe code disable video mode
+ push dx
+ push ax
+ mov dx, #0xff80
+
+ // disable video mode
+ mov ax, #0x03
+ out dx, ax
+ inc dx
+ mov ax, #0x00
+ out dx, ax
+ pop ax
+ pop dx
+
+ #endasm
+ 
+ 
  // The real mode
  mode=mode&0x7f;
 

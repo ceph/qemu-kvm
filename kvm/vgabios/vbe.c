@@ -63,7 +63,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.5 2002/03/06 19:59:28 japj Exp $"
+.ascii       "$Id: vbe.c,v 1.6 2002/03/06 20:55:45 japj Exp $"
 .byte        0x00
 
 #ifndef DYN_LIST
@@ -82,6 +82,7 @@ _vbebios_mode_list:
 #endif
 .word VBE_OWN_MODE_320X200X8
 .word VBE_VESA_MODE_640X400X8
+.word VBE_VESA_MODE_640X480X8
 .word VBE_VESA_MODE_800X600X8
 .word VBE_VESA_MODE_END_OF_LIST
 #endif
@@ -121,13 +122,18 @@ Bit16u *AX;Bit16u ES;Bit16u DI;
         memcpyb(ss, &vbe_info_block, ES, DI, sizeof(vbe_info_block));
 
         // check for VBE2 signature
-        if ( (vbe_info_block.VbeSignature[0] == 'V') &&
+        if (((vbe_info_block.VbeSignature[0] == 'V') &&
              (vbe_info_block.VbeSignature[1] == 'B') &&
              (vbe_info_block.VbeSignature[2] == 'E') &&
-             (vbe_info_block.VbeSignature[3] == '2') )
+             (vbe_info_block.VbeSignature[3] == '2')) ||
+             
+            ((vbe_info_block.VbeSignature[0] == 'V') &&
+             (vbe_info_block.VbeSignature[1] == 'E') &&
+             (vbe_info_block.VbeSignature[2] == 'S') &&
+             (vbe_info_block.VbeSignature[3] == 'A')) )
         {
 #ifdef DEBUG
-                printf("VBE correct VBE2 signature found\n");
+                printf("VBE correct VESA/VBE2 signature found\n");
 #endif
                 // VBE Signature
                 vbe_info_block.VbeSignature[0] = 'V';
@@ -309,6 +315,43 @@ static void vbe_set_800x600x8()
                         #endasm
 }
 
+static void vbe_set_640x480x8()
+{
+                        #asm
+                        // set xresolution
+                        mov dx, #0xff80
+                        mov ax, #0x01
+                        outw dx, ax
+                        inc dx
+                        mov ax, #0x280
+                        outw dx, ax
+                        dec dx
+                        // set yresolution
+                        mov ax, #0x02
+                        outw dx, ax
+                        inc dx
+                        mov ax, #0x1E0
+                        outw dx, ax
+                        dec dx
+                        // set bank
+                        mov ax, #0x04
+                        outw dx, ax
+                        inc dx
+                        mov ax, #0x00
+                        outw dx, ax
+                        dec dx
+                        
+                        // enable video mode
+                        mov ax, #0x03
+                        outw dx, ax
+                        inc dx
+                        mov ax, #0x01
+                        outw dx, ax
+                   
+                        #endasm
+}
+
+
 static void vbe_set_640x400x8()
 {
                         #asm
@@ -375,19 +418,23 @@ Bit16u *AX;Bit16u BX; Bit16u ES;Bit16u DI;
         {
                 Bit8u   mode;
 
-                        #asm
-                        // set xresolution
-                        mov dx, #0xff80
-                        
-                        // disable video mode
-                        mov ax, #0x03
-                        out dx, ax
-                        inc dx
-                        mov ax, #0x00
-                        out dx, ax
-                   
-                        #endasm
+                #asm
+                 // FIXME: how to to do this nicely?
+                 // bochs vbe code disable video mode
+                 push dx
+                 push ax
+                 mov dx, #0xff80
                 
+                 // disable video mode
+                 mov ax, #0x03
+                 out dx, ax
+                 inc dx
+                 mov ax, #0x00
+                 out dx, ax
+                 pop ax
+                 pop dx
+                
+                 #endasm                
                 // call the vgabios in order to set the video mode
                 // this allows for going back to textmode with a VBE call (some applications expect that to work)
                 
@@ -433,6 +480,14 @@ Bit16u *AX;Bit16u BX; Bit16u ES;Bit16u DI;
                         vbe_set_640x400x8();
                 }               
                 else
+                if (cur_info->mode == VBE_VESA_MODE_640X480X8)
+                {
+#ifdef DEBUG                        
+                        printf("VBE VBE_VESA_MODE_640X480X8");
+#endif                  
+                        vbe_set_640x480x8();
+                }               
+                else               
                 if (cur_info->mode == VBE_VESA_MODE_800X600X8)
                 {
 #ifdef DEBUG                        
