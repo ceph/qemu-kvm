@@ -8895,6 +8895,25 @@ pcibios_init_sel_reg:
   pop eax
   ret
   
+pcibios_init_set_elcr:
+  push ax
+  push cx
+  mov  dx, #0x04d0
+  test al, #0x08
+  jz   is_master_pic
+  inc  dx
+  and  al, #0x07
+is_master_pic:
+  mov  cl, al
+  mov  bl, #0x01
+  shl  bl, cl
+  in   al, dx
+  or   al, bl
+  out  dx, al
+  pop  cx
+  pop  ax
+  ret
+
 pcibios_init:
   push ds
   push bp
@@ -8974,6 +8993,7 @@ pci_test_int_pin:
   out  dx, al
   inc  bx
   mov  [bp-2], bx
+  call pcibios_init_set_elcr
 pirq_found:
   mov  bh, [si]
   mov  bl, [si+1]
