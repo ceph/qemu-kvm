@@ -320,7 +320,7 @@ ASM_START
 
 ASM_END
 
-  printf("VGABios $Id: vgabios.c,v 1.28 2003/04/20 07:51:12 vruppert Exp $\n");
+  printf("VGABios $Id: vgabios.c,v 1.29 2003/04/26 07:22:27 vruppert Exp $\n");
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1079,22 +1079,35 @@ Bit8u page;
 {
  Bit16u cursor,dummy;
  Bit16u nbcols,nbrows,address;
+ Bit8u mode,line;
 
  if(page>7)return;
+
+ // Get the mode
+ mode=read_byte(BIOSMEM_SEG,BIOSMEM_CURRENT_MODE);
+ line=find_vga_entry(mode);
+ if(line==0xFF)return;
 
  // Get pos curs pos for the right page 
  biosfn_get_cursor_pos(page,&dummy,&cursor);
 
- // Get the dimensions
- nbcols=read_word(BIOSMEM_SEG,BIOSMEM_NB_COLS);
- nbrows=read_byte(BIOSMEM_SEG,BIOSMEM_NB_ROWS)+1;
+ if(vga_modes[line].class==TEXT)
+  {
+   // Get the dimensions
+   nbcols=read_word(BIOSMEM_SEG,BIOSMEM_NB_COLS);
+   nbrows=read_byte(BIOSMEM_SEG,BIOSMEM_NB_ROWS)+1;
  
- // Calculate the address knowing nbcols nbrows and page num
- address=SCREEN_MEM_START(nbcols,nbrows,page);
- write_word(BIOSMEM_SEG,BIOSMEM_CURRENT_START,address);
+   // Calculate the address knowing nbcols nbrows and page num
+   address=SCREEN_MEM_START(nbcols,nbrows,page);
+   write_word(BIOSMEM_SEG,BIOSMEM_CURRENT_START,address);
 
- // Start address
- address=SCREEN_IO_START(nbcols,nbrows,page);
+   // Start address
+   address=SCREEN_IO_START(nbcols,nbrows,page);
+  }
+ else
+  {
+   address = page*vga_modes[line].slength;
+  }
 
  // CRTC regs 0x0c and 0x0d
  outb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS),0x0c);

@@ -251,7 +251,7 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit16u WinASegment*/               VGAMEM_GRAPH,
    /*Bit16u WinBSegment*/               0,
    /*Bit32u WinFuncPtr*/                0,
-   /*Bit16u BytesPerScanLine*/          800,
+   /*Bit16u BytesPerScanLine*/          100,
 // Mandatory information for VBE 1.2 and above
    /*Bit16u XResolution*/               800,
    /*Bit16u YResolution*/               600,
@@ -279,7 +279,7 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit32u OffScreenMemOffset*/        0,
    /*Bit16u OffScreenMemSize*/          0,
 // Mandatory information for VBE 3.0 and above
-   /*Bit16u LinBytesPerScanLine*/       800,
+   /*Bit16u LinBytesPerScanLine*/       100,
    /*Bit8u  BnkNumberOfPages*/          0,
    /*Bit8u  LinNumberOfPages*/          0,
    /*Bit8u  LinRedMaskSize*/            0,

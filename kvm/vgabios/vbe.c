@@ -79,7 +79,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.27 2003/04/18 07:23:36 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.28 2003/04/26 07:22:26 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -190,6 +190,12 @@ static void dispi_set_bank(bank)
 {
   outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_BANK);
   outw(VBE_DISPI_IOPORT_DATA,bank);
+}
+
+static Bit16u dispi_get_bank()
+{
+  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_BANK);
+  return inw(VBE_DISPI_IOPORT_DATA);
 }
 
 static void dispi_set_bank_farcall()
@@ -337,7 +343,7 @@ ASM_START
 ASM_END    
   }
 //#ifdef DEBUG
-  printf("VBE Bios $Id: vbe.c,v 1.27 2003/04/18 07:23:36 vruppert Exp $\n");
+  printf("VBE Bios $Id: vbe.c,v 1.28 2003/04/26 07:22:26 vruppert Exp $\n");
 //#endif  
 }
 
@@ -474,11 +480,11 @@ Bit16u *AX;Bit16u ES;Bit16u DI;
         vbe_info_block.Reserved[cur_mode] = VBE_VESA_MODE_END_OF_LIST;
 #endif
 
+        // VBE Total Memory (in 64b blocks)
+        vbe_info_block.TotalMemory = VBE_TOTAL_VIDEO_MEMORY_DIV_64K;
+
         if (vbe2_info)
 	{
-                // VBE Total Memory (in 64b blocks)
-                vbe_info_block.TotalMemory = VBE_TOTAL_VIDEO_MEMORY_DIV_64K;
-
                 // OEM Stuff
                 vbe_info_block.OemSoftwareRev = VBE_OEM_SOFTWARE_REV;
                 vbe_info_block.OemVendorNamePtr_Seg = 0xc000;
@@ -734,11 +740,20 @@ Bit16u *AX;Bit16u BX;Bit16u *DX;
 {
         Bit16u            ss = get_SS();
         Bit16u            window = read_word(ss, DX);
+        Bit16u            result = 0x014f;
         
         if (BX==0x0000)
         {
                 dispi_set_bank(window);
+                result = 0x4f;
         }
+        else if (BX==0x0100)
+        {
+                window = dispi_get_bank();
+                write_word(ss, DX, result);
+                result = 0x4f;
+        }
+        write_word(ss, AX, result);
 }
 
 
