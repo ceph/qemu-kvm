@@ -9565,9 +9565,6 @@ ASM_END
  * found at ftp://ftp.simtel.net/pub/simtelnet/msdos/screen/fntcol16.zip
  * This font is public domain
  */ 
-// FIXME we should maybe remove the 128 lower 8x8 chars from the VGABIOS.
-// Then we have to rework the lgpl's VGABIOS to use this font.
-// We could check what the Elpin bios does.
 static Bit8u vgafont8[128*8]=
 {
  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
