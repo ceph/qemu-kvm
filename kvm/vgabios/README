@@ -97,12 +97,12 @@ vgabios-0.4b : Nov 04 2003
 
 vgabios-0.4a : Aug 17 2003
   - Volker
-    . LFB flagged VBE modes removed
+    . VBE mode search rewritten (VBE modes with LFB bit removed)
     . many bugfixes and optimizations
-    . write character function implemeted for graphic modes
+    . write character function implemented for graphics modes
     . support for 15bpp, 16bpp, 24bpp and 32bpp VBE modes added
-    . SVGA modes 0x6A added
-    . VBE mode 0x102, 0x117, 0x118, 0x142 (Bochs specific)
+    . SVGA mode 0x6A added
+    . VBE modes 0x102, 0x117, 0x118 and 0x142 (Bochs specific)
 
 vgabios-0.3b : Nov 23 2002
   - Christophe

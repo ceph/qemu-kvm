@@ -30,12 +30,16 @@ API History
                   VBE_DISPI_INDEX_X_OFFSET
                   VBE_DISPI_INDEX_Y_OFFSET
 
-0xb0c2            supports 0xb0c1 VBE_DISPI_ interfaces, interfaces updated for additional features:
+0xb0c2            supports 0xb0c1 VBE_DISPI_ interfaces, interfaces updated for
+                  additional features (present in Bochs 2.1):
                   VBE_DISPI_INDEX_BPP supports >8bpp color depth (value = bits)
                   VBE_DISPI_INDEX_ENABLE supports new flags VBE_DISPI_NOCLEARMEM and VBE_DISPI_LFB_ENABLED
                   VBE i/o registers changed from 0xFF80/81 to 0x01CE/CF
 
-                  
+0xb0c3            supports 0xb0c2 VBE_DISPI_ interfaces, interfaces updated for
+                  additional features:
+                  VBE_DISPI_INDEX_ENABLE supports new flag VBE_DISPI_GETCAPS
+
 
 History
 -------
@@ -195,26 +199,31 @@ API
     The new flag VBE_DISPI_NOCLEARMEM allows to preserve the VBE video memory.
     The new flag VBE_DISPI_LFB_ENABLED indicates the usage of the LFB.
 
-Displaying GFX
+[0xb0c3]
+  * VBE_DISPI_INDEX_ENABLE : WORD {R,W}
+    If the new flag VBE_DISPI_GETCAPS is enabled, the xres, yres and bpp registers
+    return the gui capabilities.
+
+Displaying GFX (banked mode)
 --------------
-  Currently Linear Frame Buffer support is not available yet.
-  The only other way of displaying (VBE) graphics is using banked modi.
-  
   What happens is that the total screen is devided in banks of 'VBE_DISPI_BANK_SIZE_KB' KiloByte in size.
   If you want to set a pixel you can calculate its bank by doing:
-  
+
     offset = pixel_x + pixel_y * resolution_x;
     bank = offset / 64 Kb (rounded 1.9999 -> 1)
-    
-    bank_pixel_pos = offset - bank * 64Kb
-    
-  Now you can set the current bank and put the pixel at VBE_DISPI_BANK_ADDRESS + bank_pixel_pos  
 
+    bank_pixel_pos = offset - bank * 64Kb
+
+  Now you can set the current bank and put the pixel at VBE_DISPI_BANK_ADDRESS + bank_pixel_pos
+
+Displaying GFX (linear frame buffer mode)
+--------------
+  NOT WRITTEN YET
 
 Notes
 ----- 
   * Since the XRES/YRES/BPP may not be written when VBE is enabled, if you want to switch from one VBE mode
     to another, you will need to disable VBE first.
-  
-  * Note when the bios doesn't find a valid DISPI_ID, it can disable the VBE functions. This allows people to 
+
+  * Note when the bios doesn't find a valid DISPI_ID, it can disable the VBE functions. This allows people to
     use the same bios for both vbe enabled and disabled bochs executables.

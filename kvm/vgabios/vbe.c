@@ -47,15 +47,10 @@
 // The current OEM Software Revision of this VBE Bios
 #define VBE_OEM_SOFTWARE_REV 0x0002;
 
-#define VBEInfoData ((VbeInfoBlock *) 0)
-
 extern char vbebios_copyright;
 extern char vbebios_vendor_name;
 extern char vbebios_product_name;
 extern char vbebios_product_revision;
-
-// FIXME: find out why we cannot use the dynamic list generation (due to a bug somewhere)
-//#define DYN_LIST
 
 #ifndef DYN_LIST
 extern Bit16u vbebios_mode_list;
@@ -76,7 +71,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.37 2004/02/21 18:20:32 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.38 2004/02/22 14:17:10 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -176,6 +171,19 @@ static Bit16u dispi_get_bpp()
 {
   outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_BPP);
   return inw(VBE_DISPI_IOPORT_DATA);
+}
+
+static Bit16u dispi_get_max_bpp()
+{
+  Bit16u max_bpp;
+
+  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_ENABLE);
+  outw(VBE_DISPI_IOPORT_DATA,VBE_DISPI_GETCAPS);
+  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_BPP);
+  max_bpp = inw(VBE_DISPI_IOPORT_DATA);
+  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_ENABLE);
+  outw(VBE_DISPI_IOPORT_DATA,VBE_DISPI_DISABLED);
+  return max_bpp;
 }
 
 static Bit16u dispi_get_enable()
@@ -342,9 +350,9 @@ void vbe_init()
   if (dispi_id==VBE_DISPI_ID0)
   {
     write_byte(BIOSMEM_SEG,BIOSMEM_VBE_FLAG,0x01);
-    dispi_set_id(VBE_DISPI_ID2);
+    dispi_set_id(VBE_DISPI_ID3);
   }
-  printf("VBE Bios $Id: vbe.c,v 1.37 2004/02/21 18:20:32 vruppert Exp $\n");
+  printf("VBE Bios $Id: vbe.c,v 1.38 2004/02/22 14:17:10 vruppert Exp $\n");
 }
 
 /** VBE Display Info - Display information on screen about the VBE
@@ -481,14 +489,15 @@ Bit16u *AX;Bit16u ES;Bit16u DI;
 #ifdef DYN_LIST
         do
         {
+                if (cur_info->info.BitsPerPixel <= dispi_get_max_bpp()) {
 #ifdef DEBUG
-                printf("VBE found mode %x => %x\n", cur_info->mode,cur_mode);
+                  printf("VBE found mode %x => %x\n", cur_info->mode,cur_mode);
 #endif
-                write_word(ES, DI + cur_ptr, cur_info->mode);
-
+                  write_word(ES, DI + cur_ptr, cur_info->mode);
+                  cur_mode++;
+                  cur_ptr+=2;
+                }
                 cur_info++;
-                cur_mode++;
-                cur_ptr+=2;
         } while (cur_info->mode != VBE_VESA_MODE_END_OF_LIST);
         
         // Add vesa mode list terminator
