@@ -79,7 +79,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.24 2003/02/08 12:04:03 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.25 2003/02/09 10:02:45 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -102,28 +102,19 @@ _vbebios_mode_list:
 
 #ifdef LIST_UNSUPPORTED_MODI
 .word VBE_VESA_MODE_640X480X565
-.word VBE_VESA_MODE_640X480X565 + 0x4000
 .word VBE_VESA_MODE_800X600X565
-.word VBE_VESA_MODE_800X600X565 + 0x4000
 .word VBE_VESA_MODE_640X480X888
-.word VBE_VESA_MODE_640X480X888 + 0x4000
 .word VBE_VESA_MODE_800X600X888
-.word VBE_VESA_MODE_800X600X888 + 0x4000
 .word VBE_OWN_MODE_800X600X8888
-.word VBE_OWN_MODE_800X600X8888 + 0x4000
 .word VBE_OWN_MODE_1024X768X8888
-.word VBE_OWN_MODE_1024X768X8888 + 0x4000
 #endif
 
-.word VBE_OWN_MODE_320X200X8
 .word VBE_VESA_MODE_640X400X8
-.word VBE_VESA_MODE_640X400X8 + 0x4000
 .word VBE_VESA_MODE_640X480X8
-.word VBE_VESA_MODE_640X480X8 + 0x4000
+.word VBE_VESA_MODE_800X600X4
 .word VBE_VESA_MODE_800X600X8
-.word VBE_VESA_MODE_800X600X8 + 0x4000
 .word VBE_VESA_MODE_1024X768X8
-.word VBE_VESA_MODE_1024X768X8 + 0x4000
+.word VBE_OWN_MODE_320X200X8
 .word VBE_VESA_MODE_END_OF_LIST
 #endif
 
@@ -304,7 +295,7 @@ ASM_START
 ASM_END    
   }
 //#ifdef DEBUG
-  printf("VBE Bios $Id: vbe.c,v 1.24 2003/02/08 12:04:03 vruppert Exp $\n");
+  printf("VBE Bios $Id: vbe.c,v 1.25 2003/02/09 10:02:45 vruppert Exp $\n");
 //#endif  
 }
 
@@ -596,16 +587,21 @@ Bit16u *AX;Bit16u BX; Bit16u ES;Bit16u DI;
                 // (we're using the 'standard' 320x200x256 vga mode as if it
                 //  were a vesa mode)
                 
-                if (cur_info->info.BitsPerPixel == 8)
+                if (cur_info->info.BitsPerPixel <= 8)
                 {
-                  // we have a 8bpp mode, preparing to set it
+                  // we have a 4bpp or 8bpp mode, preparing to set it
                   
                   // first disable current mode (when switching between vesa modi)
                   dispi_set_enable(VBE_DISPI_DISABLED);
                   
+                  if (cur_info->mode == VBE_VESA_MODE_800X600X4)
+		  {
+                    biosfn_set_video_mode(0x6a);
+		  }
+
                   dispi_set_xres(cur_info->info.XResolution);
                   dispi_set_yres(cur_info->info.YResolution);
-                  dispi_set_bpp(VBE_DISPI_BPP_8);
+                  dispi_set_bpp((cur_info->info.BitsPerPixel == 8)?VBE_DISPI_BPP_8:VBE_DISPI_BPP_4);
                   dispi_set_bank(0);
                   dispi_set_enable(VBE_DISPI_ENABLED);
 
