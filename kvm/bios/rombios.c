@@ -1581,14 +1581,19 @@ keyboard_init()
     while ( (inb(0x64) & 0x02) && (--max>0)) outb(0x80, 0x00);
 
     /* flush incoming keys */
-    max=0x1000;
+    max=0x2000;
     while (--max > 0) {
         outb(0x80, 0x00);
         if (inb(0x64) & 0x01) {
             inb(0x60);
-            max = 0x1000;
+            max = 0x2000;
             }
         }
+  
+    // Due to timer issues, and if the IPS setting is > 15000000, 
+    // the incoming keys might not be flushed here. That will
+    // cause a panic a few lines below.  See sourceforge bug report :
+    // [ 642031 ] FATAL: Keyboard RESET error:993
 
     /* ------------------- controller side ----------------------*/
     /* send cmd = 0xAA, self test 8042 */
@@ -1722,7 +1727,10 @@ keyboard_init()
 keyboard_panic(status)
   Bit16u status;
 {
-  BX_PANIC("Keyboard RESET error:%u\n",status);
+  // If you're getting a 993 keyboard panic here, 
+  // please see the comment in keyboard_init
+  
+  BX_PANIC("Keyboard error:%u\n",status);
 }
 
 //--------------------------------------------------------------------------
