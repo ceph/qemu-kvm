@@ -50,19 +50,19 @@ vgabios.debug.bin: vgabios.c vgabios.h vgafonts.h vgatables.h vbe.h vbe.c vbetab
 	ls -l VGABIOS-lgpl-latest.debug.bin
 
 vgabios-cirrus.bin: vgabios.c vgabios.h vgafonts.h vgatables.h clext.c
-	gcc -E vgabios.c $(VGABIOS_VERS) -DCIRRUS $(VGABIOS_DATE) > _vgabios_.c
-	bcc -o vgabios.s -C-c -D__i86__ -S -0 _vgabios_.c
-	sed -e 's/^\.text//' -e 's/^\.data//' vgabios.s > _vgabios_.s
-	as86 _vgabios_.s -b vgabios.bin -u -w- -g -0 -j -O -l vgabios.txt
-	rm -f _vgabios_.s _vgabios_.c vgabios.s
-	mv vgabios.bin VGABIOS-lgpl-latest.cirrus.bin
+	gcc -E vgabios.c $(VGABIOS_VERS) -DCIRRUS $(VGABIOS_DATE) > _vgabios-cirrus_.c
+	bcc -o vgabios-cirrus.s -C-c -D__i86__ -S -0 _vgabios-cirrus_.c
+	sed -e 's/^\.text//' -e 's/^\.data//' vgabios-cirrus.s > _vgabios-cirrus_.s
+	as86 _vgabios-cirrus_.s -b vgabios-cirrus.bin -u -w- -g -0 -j -O -l vgabios.cirrus.txt
+	rm -f _vgabios-cirrus_.s _vgabios-cirrus_.c vgabios-cirrus.s
+	mv vgabios-cirrus.bin VGABIOS-lgpl-latest.cirrus.bin
 	ls -l VGABIOS-lgpl-latest.cirrus.bin
 
 vgabios-cirrus.debug.bin: vgabios.c vgabios.h vgafonts.h vgatables.h clext.c
-	gcc -E vgabios.c $(VGABIOS_VERS) -DCIRRUS -DCIRRUS_DEBUG $(VGABIOS_DATE) > _vgabios-debug_.c
-	bcc -o vgabios-debug.s -C-c -D__i86__ -S -0 _vgabios-debug_.c
-	sed -e 's/^\.text//' -e 's/^\.data//' vgabios-debug.s > _vgabios-debug_.s
-	as86 _vgabios-debug_.s -b vgabios.debug.bin -u -w- -g -0 -j -O -l vgabios.debug.txt
-	rm -f _vgabios-debug_.s _vgabios-debug_.c vgabios-debug.s
-	mv vgabios.debug.bin VGABIOS-lgpl-latest.cirrus.debug.bin
+	gcc -E vgabios.c $(VGABIOS_VERS) -DCIRRUS -DCIRRUS_DEBUG $(VGABIOS_DATE) > _vgabios-cirrus-debug_.c
+	bcc -o vgabios-cirrus-debug.s -C-c -D__i86__ -S -0 _vgabios-cirrus-debug_.c
+	sed -e 's/^\.text//' -e 's/^\.data//' vgabios-cirrus-debug.s > _vgabios-cirrus-debug_.s
+	as86 _vgabios-cirrus-debug_.s -b vgabios.cirrus.debug.bin -u -w- -g -0 -j -O -l vgabios.cirrus.debug.txt
+	rm -f _vgabios-cirrus-debug_.s _vgabios-cirrus-debug_.c vgabios-cirrus-debug.s
+	mv vgabios.cirrus.debug.bin VGABIOS-lgpl-latest.cirrus.debug.bin
 	ls -l VGABIOS-lgpl-latest.cirrus.debug.bin
