@@ -3853,10 +3853,16 @@ floppy_media_sense(drive)
     drive_type >>= 4;
   else
     drive_type &= 0x0f;
-  if ( drive_type == 2 ) {
+  if ( drive_type == 1 ) {
+    // 360K 5.25" drive
+    config_data = 0x00; // 0000 0000
+    media_state = 0x25; // 0010 0101
+    retval = 1;
+    }
+  else if ( drive_type == 2 ) {
     // 1.2 MB 5.25" drive
     config_data = 0x00; // 0000 0000
-    media_state = 0x25; // 0001 0101
+    media_state = 0x25; // 0010 0101
     retval = 1;
     }
   else if ( drive_type == 3 ) {
