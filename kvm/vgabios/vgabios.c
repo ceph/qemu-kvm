@@ -102,7 +102,6 @@ static void biosfn_load_gfx_8_8_dd_chars();
 static void biosfn_load_gfx_8_16_chars();
 static void biosfn_get_font_info();
 static void biosfn_alternate_prtsc();
-static void biosfn_select_vert_res();
 static void biosfn_switch_video_interface();
 static void biosfn_enable_video_refresh_control();
 static void biosfn_write_string();
@@ -274,8 +273,13 @@ int10_test_12:
   cmp   ah, #0x12
   jne   int10_test_101B
   cmp   bl, #0x10
-  jne   int10_test_BL31
+  jne   int10_test_BL30
   call  biosfn_get_ega_info
+  jmp   int10_end
+int10_test_BL30:
+  cmp   bl, #0x30
+  jne   int10_test_BL31
+  call  biosfn_select_vert_res
   jmp   int10_end
 int10_test_BL31:
   cmp   bl, #0x31
@@ -385,7 +389,7 @@ init_vga_card:
   ret
 
 msg_vga_init:
-.ascii "VGABios $Id: vgabios.c,v 1.55 2004/05/09 20:31:31 vruppert Exp $"
+.ascii "VGABios $Id: vgabios.c,v 1.56 2004/05/11 18:07:36 vruppert Exp $"
 .byte 0x0d,0x0a,0x00
 ASM_END
 
@@ -642,10 +646,6 @@ static void int10_func(DI, SI, BP, SP, BX, DX, CX, AX, DS, ES, FLAGS)
       {
        case 0x20:
         biosfn_alternate_prtsc();
-        break;
-       case 0x30:
-        biosfn_select_vert_res(GET_AL());
-        SET_AL(0x12);
         break;
        case 0x35:
         biosfn_switch_video_interface(GET_AL(),ES,DX);
@@ -1130,17 +1130,19 @@ Bit8u xstart;Bit8u ysrc;Bit8u ydest;Bit8u cols;Bit8u nbcols;Bit8u cheight;
 }
 
 // --------------------------------------------------------------------------------------------
-static void vgamem_fill_pl4(xstart,ystart,cols,nbcols,cheight)
-Bit8u xstart;Bit8u ystart;Bit8u cols;Bit8u nbcols;Bit8u cheight;
+static void vgamem_fill_pl4(xstart,ystart,cols,nbcols,cheight,attr)
+Bit8u xstart;Bit8u ystart;Bit8u cols;Bit8u nbcols;Bit8u cheight;Bit8u attr;
 {
  Bit16u dest;
  Bit8u i;
 
  dest=ystart*cheight*nbcols+xstart;
+ outw(VGAREG_GRDC_ADDRESS, 0x0205);
  for(i=0;i<cheight;i++)
   {
-   memsetb(0xa000,dest+i*nbcols,0x00,cols);
+   memsetb(0xa000,dest+i*nbcols,attr,cols);
   }
+ outw(VGAREG_GRDC_ADDRESS, 0x0005);
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1253,7 +1255,9 @@ Bit8u nblines;Bit8u attr;Bit8u rul;Bit8u cul;Bit8u rlr;Bit8u clr;Bit8u page;Bit8
      case PLANAR1:
        if(nblines==0&&rul==0&&cul==0&&rlr==nbrows-1&&clr==nbcols-1)
         {
-         memsetb(vga_modes[line].sstart,0,0x00,nbrows*nbcols*cheight);
+         outw(VGAREG_GRDC_ADDRESS, 0x0205);
+         memsetb(vga_modes[line].sstart,0,attr,nbrows*nbcols*cheight);
+         outw(VGAREG_GRDC_ADDRESS, 0x0005);
         }
        else
         {// if Scroll up
@@ -1261,7 +1265,7 @@ Bit8u nblines;Bit8u attr;Bit8u rul;Bit8u cul;Bit8u rlr;Bit8u clr;Bit8u page;Bit8
           {for(i=rul;i<=rlr;i++)
             {
              if((i+nblines>rlr)||(nblines==0))
-              vgamem_fill_pl4(cul,i,cols,nbcols,cheight);
+              vgamem_fill_pl4(cul,i,cols,nbcols,cheight,attr);
              else
               vgamem_copy_pl4(cul,i+nblines,i,cols,nbcols,cheight);
             }
@@ -1270,7 +1274,7 @@ Bit8u nblines;Bit8u attr;Bit8u rul;Bit8u cul;Bit8u rlr;Bit8u clr;Bit8u page;Bit8
           {for(i=rlr;i>=rul;i--)
             {
              if((i<rul+nblines)||(nblines==0))
-              vgamem_fill_pl4(cul,i,cols,nbcols,cheight);
+              vgamem_fill_pl4(cul,i,cols,nbcols,cheight,attr);
              else
               vgamem_copy_pl4(cul,i,i-nblines,cols,nbcols,cheight);
             }
@@ -1403,11 +1407,11 @@ Bit8u car;Bit8u attr;Bit8u xcurs;Bit8u ycurs;Bit8u nbcols;Bit8u cheight;
   }
 ASM_START
   mov dx, # VGAREG_GRDC_ADDRESS
-  mov ax, 0xff08
+  mov ax, #0xff08
   out dx, ax
-  mov ax, 0x0005
+  mov ax, #0x0005
   out dx, ax
-  mov ax, 0x0003
+  mov ax, #0x0003
   out dx, ax
 ASM_END
 }
@@ -1742,9 +1746,15 @@ static void biosfn_write_pixel (BH,AL,CX,DX) Bit8u BH;Bit8u AL;Bit16u CX;Bit16u 
        outw(VGAREG_GRDC_ADDRESS, 0x1803);
       }
      write_byte(0xa000,addr,AL);
-     outw(VGAREG_GRDC_ADDRESS, 0xff08);
-     outw(VGAREG_GRDC_ADDRESS, 0x0005);
-     outw(VGAREG_GRDC_ADDRESS, 0x0003);
+ASM_START
+     mov dx, # VGAREG_GRDC_ADDRESS
+     mov ax, #0xff08
+     out dx, ax
+     mov ax, #0x0005
+     out dx, ax
+     mov ax, #0x0003
+     out dx, ax
+ASM_END
      break;
    case CGA:
      if(vga_modes[line].pixbits==2)
@@ -2783,44 +2793,83 @@ static void biosfn_alternate_prtsc()
 }
 
 // --------------------------------------------------------------------------------------------
-static void biosfn_select_vert_res (res) 
-Bit8u res;
-{// res : 00 200 lines, 01 350 lines, 02 400 lines
- Bit8u modeset,switches;
-
- modeset=read_byte(BIOSMEM_SEG,BIOSMEM_MODESET_CTL);
- switches=read_byte(BIOSMEM_SEG,BIOSMEM_SWITCHES);
- switch(res)
-  {case 0x00:
-    // set modeset ctl bit 7 and reset bit 4
-    // set switches bit 3-0 to 0x08
-    modeset|=0x80;modeset&=0xef;
-    switches&=0xf0;switches|=0x08;
-    break;
-   case 0x01:
-    // reset modeset ctl bit 7 and bit 4
-    // set switches bit 3-0 to 0x09
-    modeset&=0x6f;
-    switches&=0xf0;switches|=0x09;
-    break;
-   case 0x02:
-    // reset modeset ctl bit 7 and set bit 4
-    // set switches bit 3-0 to 0x09
-    modeset|=0x10;modeset&=0x7f;
-    switches&=0xf0;switches|=0x09;
-    break;
-   default:
-    #ifdef DEBUG
-     printf("Select vert res (%02x) was discarded\n",res);
-    #endif
-    return;
-  }
- write_byte(BIOSMEM_SEG,BIOSMEM_MODESET_CTL,modeset);
- write_byte(BIOSMEM_SEG,BIOSMEM_SWITCHES,switches);
-}
-
-// --------------------------------------------------------------------------------------------
 ASM_START
+biosfn_select_vert_res:
+
+; res : 00 200 lines, 01 350 lines, 02 400 lines
+
+  push  ds
+  push  bx
+  push  dx
+  mov   dl, al
+  mov   ax, # BIOSMEM_SEG
+  mov   ds, ax
+  mov   bx, # BIOSMEM_MODESET_CTL
+  mov   al, [bx]
+  mov   bx, # BIOSMEM_SWITCHES
+  mov   ah, [bx]
+  cmp   dl, #0x01
+  je    vert_res_350
+  jb    vert_res_200
+  cmp   dl, #0x02
+  je    vert_res_400
+#ifdef DEBUG
+  mov   al, dl
+  xor   ah, ah
+  push  ax
+  mov   bx, #msg_vert_res
+  push  bx
+  call  _printf
+  add   sp, #4
+#endif
+  jmp   set_retcode
+vert_res_400:
+
+  ; reset modeset ctl bit 7 and set bit 4
+  ; set switches bit 3-0 to 0x09
+
+  and   al, #0x7f
+  or    al, #0x10
+  and   ah, #0xf0
+  or    ah, #0x09
+  jnz   set_vert_res
+vert_res_350:
+
+  ; reset modeset ctl bit 7 and bit 4
+  ; set switches bit 3-0 to 0x09
+
+  and   al, #0x6f
+  and   ah, #0xf0
+  or    ah, #0x09
+  jnz   set_vert_res
+vert_res_200:
+
+  ; set modeset ctl bit 7 and reset bit 4
+  ; set switches bit 3-0 to 0x08
+
+  and   al, #0xef
+  or    al, #0x80
+  and   ah, #0xf0
+  or    ah, #0x08
+set_vert_res:
+  mov   bx, # BIOSMEM_MODESET_CTL
+  mov   [bx], al
+  mov   bx, # BIOSMEM_SWITCHES
+  mov   [bx], ah
+set_retcode:
+  mov   ax, #0x1212
+  pop   dx
+  pop   bx
+  pop   ds
+  ret
+
+#ifdef DEBUG
+msg_vert_res:
+.ascii "Select vert res (%02x) was discarded"
+.byte 0x0d,0x0a,0x00
+#endif
+
+
 biosfn_enable_default_palette_loading:
   push  ds
   push  bx
@@ -2840,10 +2889,8 @@ biosfn_enable_default_palette_loading:
   pop   bx
   pop   ds
   ret
-ASM_END
 
-// --------------------------------------------------------------------------------------------
-ASM_START
+
 biosfn_enable_video_addressing:
   push  bx
   push  dx
@@ -2861,10 +2908,8 @@ biosfn_enable_video_addressing:
   pop   dx
   pop   bx
   ret
-ASM_END
 
-// --------------------------------------------------------------------------------------------
-ASM_START
+
 biosfn_enable_grayscale_summing:
   push  ds
   push  bx
@@ -2885,10 +2930,8 @@ biosfn_enable_grayscale_summing:
   pop   bx
   pop   ds
   ret
-ASM_END
 
-// --------------------------------------------------------------------------------------------
-ASM_START
+
 biosfn_enable_cursor_emulation:
   push  ds
   push  bx
