@@ -324,7 +324,7 @@ ASM_START
 
 ASM_END
 
-  printf("VGABios $Id: vgabios.c,v 1.34 2003/08/15 23:49:28 cbothamy Exp $\n");
+  printf("VGABios $Id: vgabios.c,v 1.35 2003/08/18 16:38:26 vruppert Exp $\n");
 }
 
 // --------------------------------------------------------------------------------------------
@@ -973,23 +973,23 @@ static void biosfn_set_video_mode(mode) Bit8u mode;
 
  // Set the ints 0x1F and 0x43
 ASM_START
- SET_INT_VECTOR(0x1f, #0xC000, #vgafont8+128*8)
+ SET_INT_VECTOR(0x1f, #0xC000, #_vgafont8+128*8)
 ASM_END
 
   switch(cheight)
    {case 8:
 ASM_START
-     SET_INT_VECTOR(0x43, #0xC000, #vgafont8)
+     SET_INT_VECTOR(0x43, #0xC000, #_vgafont8)
 ASM_END
      break;
     case 14:
 ASM_START
-     SET_INT_VECTOR(0x43, #0xC000, #vgafont14)
+     SET_INT_VECTOR(0x43, #0xC000, #_vgafont14)
 ASM_END
      break;
     case 16:
 ASM_START
-     SET_INT_VECTOR(0x43, #0xC000, #vgafont16)
+     SET_INT_VECTOR(0x43, #0xC000, #_vgafont16)
 ASM_END
      break;
    }
@@ -998,7 +998,7 @@ ASM_END
 // --------------------------------------------------------------------------------------------
 static void biosfn_set_cursor_shape (CH,CL) 
 Bit8u CH;Bit8u CL; 
-{Bit16u cheight,curs;
+{Bit16u cheight,curs,crtc_addr;
 
  CH&=0x3f;
  CL&=0x1f;
@@ -1021,10 +1021,11 @@ Bit8u CH;Bit8u CL;
   }
 
  // CTRC regs 0x0a and 0x0b
- outb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS),0x0a);
- outb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS)+1,CH);
- outb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS),0x0b);
- outb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS)+1,CL);
+ crtc_addr=read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS);
+ outb(crtc_addr,0x0a);
+ outb(crtc_addr+1,CH);
+ outb(crtc_addr,0x0b);
+ outb(crtc_addr+1,CL);
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1032,7 +1033,7 @@ static void biosfn_set_cursor_pos (page, cursor)
 Bit8u page;Bit16u cursor;
 {
  Bit8u xcurs,ycurs,current;
- Bit16u nbcols,nbrows,address;
+ Bit16u nbcols,nbrows,address,crtc_addr;
 
  // Should not happen...
  if(page>7)return;
@@ -1054,10 +1055,11 @@ Bit8u page;Bit16u cursor;
    address=SCREEN_IO_START(nbcols,nbrows,page)+xcurs+ycurs*nbcols;
    
    // CRTC regs 0x0e and 0x0f
-   outb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS),0x0e);
-   outb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS)+1,(address&0xff00)>>8);
-   outb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS),0x0f);
-   outb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS)+1,address&0x00ff);
+   crtc_addr=read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS);
+   outb(crtc_addr,0x0e);
+   outb(crtc_addr+1,(address&0xff00)>>8);
+   outb(crtc_addr,0x0f);
+   outb(crtc_addr+1,address&0x00ff);
   }
 }
 
@@ -1081,7 +1083,7 @@ Bit8u page;Bit16u *shape;Bit16u *pos;
 static void biosfn_set_active_page (page) 
 Bit8u page;
 {
- Bit16u cursor,dummy;
+ Bit16u cursor,dummy,crtc_addr;
  Bit16u nbcols,nbrows,address;
  Bit8u mode,line;
 
@@ -1114,10 +1116,11 @@ Bit8u page;
   }
 
  // CRTC regs 0x0c and 0x0d
- outb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS),0x0c);
- outb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS)+1,(address&0xff00)>>8);
- outb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS),0x0d);
- outb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS)+1,address&0x00ff);
+ crtc_addr=read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS);
+ outb(crtc_addr,0x0c);
+ outb(crtc_addr+1,(address&0xff00)>>8);
+ outb(crtc_addr,0x0d);
+ outb(crtc_addr+1,address&0x00ff);
 
  // And change the BIOS page
  write_byte(BIOSMEM_SEG,BIOSMEM_CURRENT_PAGE,page);
@@ -1817,13 +1820,14 @@ ASM_END
 
 static void set_scan_lines(lines) Bit8u lines;
 {
- Bit16u cols,page,vde;
- Bit8u crtc9,ovl,rows;
+ Bit16u crtc_addr,cols,page,vde;
+ Bit8u crtc_r9,ovl,rows;
 
- outb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS), 0x09);
- crtc9 = inb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS)+1);
- crtc9 = (crtc9 & 0xe0) | (lines - 1);
- outb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS)+1, crtc9);
+ crtc_addr = read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS);
+ outb(crtc_addr, 0x09);
+ crtc_r9 = inb(crtc_addr+1);
+ crtc_r9 = (crtc_r9 & 0xe0) | (lines - 1);
+ outb(crtc_addr+1, crtc_r9);
  if(lines==8)
   {
    biosfn_set_cursor_shape(0x06,0x07);
@@ -1833,10 +1837,10 @@ static void set_scan_lines(lines) Bit8u lines;
    biosfn_set_cursor_shape(lines-4,lines-3);
   }
  write_word(BIOSMEM_SEG,BIOSMEM_CHAR_HEIGHT, lines);
- outb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS), 0x12);
- vde = inb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS)+1);
- outb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS), 0x07);
- ovl = inb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS)+1);
+ outb(crtc_addr, 0x12);
+ vde = inb(crtc_addr+1);
+ outb(crtc_addr, 0x07);
+ ovl = inb(crtc_addr+1);
  vde += (((ovl & 0x02) << 7) + ((ovl & 0x40) << 3) + 1);
  rows = vde / lines;
  write_byte(BIOSMEM_SEG,BIOSMEM_NB_ROWS, rows-1);
