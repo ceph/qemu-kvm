@@ -4703,6 +4703,8 @@ post_default_ints:
   ;; DMA
   mov al, #0xC0
   out 0xD6, al ; cascade mode of channel 4 enabled
+  mov al, #0x00
+  out 0xD4, al ; unmask channel 4
 
   ;; Parallel setup
   SET_INT_VECTOR(0x0F, #0xF000, #dummy_iret_handler)
