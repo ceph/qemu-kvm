@@ -320,7 +320,7 @@ ASM_START
 
 ASM_END
 
-  printf("VGABios $Id: vgabios.c,v 1.23 2003/01/19 11:35:23 vruppert Exp $\n");
+  printf("VGABios $Id: vgabios.c,v 1.24 2003/01/21 18:30:27 vruppert Exp $\n");
 }
 
 // --------------------------------------------------------------------------------------------
@@ -938,14 +938,7 @@ static void biosfn_set_video_mode(mode) Bit8u mode;
  // Set cursor shape
  if(vga_modes[line].class==TEXT)
   {
-   if(cheight<14)
-    {
-     biosfn_set_cursor_shape(0x06,0x07);
-    }
-   else
-    {
-     biosfn_set_cursor_shape(0x0C,0x0D);
-    }
+   biosfn_set_cursor_shape(0x06,0x07);
   }
 
  // Set cursor pos for page 0..7
@@ -985,14 +978,27 @@ ASM_END
 // --------------------------------------------------------------------------------------------
 static void biosfn_set_cursor_shape (CH,CL) 
 Bit8u CH;Bit8u CL; 
-{Bit16u curs;
+{Bit16u cheight,curs;
 
  CH&=0x3f;
  CL&=0x1f;
 
- // FIXME should remap to vga settings in case of 14/16 lines
  curs=(CH<<8)+CL;
  write_word(BIOSMEM_SEG,BIOSMEM_CURSOR_TYPE,curs);
+
+ cheight = read_word(BIOSMEM_SEG,BIOSMEM_CHAR_HEIGHT);
+ if((cheight>8) && (CL<8) && (CH<0x20))
+  {
+   if(CL!=(CH+1))
+    {
+     CH = ((CH+1) * cheight / 8) -1;
+    }
+   else
+    {
+     CH = ((CL+1) * cheight / 8) - 2;
+    }
+   CL = ((CL+1) * cheight / 8) - 1;
+  }
 
  // CTRC regs 0x0a and 0x0b
  outb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS),0x0a);
