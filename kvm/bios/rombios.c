@@ -9268,8 +9268,8 @@ int19_handler:
   shl eax,   #0x04   ;; convert seg to ip
   mov 2[bp], ax      ;; set ip
 
-  shr eax,   #0x10   ;; get the new cs
-  and ax,    #0x000F ;; remove unknown junk
+  shr eax,   #0x04   ;; get cs back
+  and ax,    #0xF000 ;; remove what went in ip
   mov 4[bp], ax      ;; set cs
   xor ax,    ax
   mov [bp],  ax      ;; set bp 
