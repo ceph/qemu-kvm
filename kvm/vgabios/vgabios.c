@@ -320,7 +320,7 @@ ASM_START
 
 ASM_END
 
-  printf("VGABios $Id: vgabios.c,v 1.19 2002/10/04 06:20:26 vruppert Exp $\n");
+  printf("VGABios $Id: vgabios.c,v 1.20 2002/10/20 15:12:33 vruppert Exp $\n");
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1649,6 +1649,24 @@ static void release_font_access()
  outw( VGAREG_GRDC_ADDRESS, 0x0e06 );
 }
 
+static void set_scan_lines(lines) Bit8u lines;
+{
+ Bit8u crtc9;
+
+ outb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS), 0x09);
+ crtc9 = inb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS)+1);
+ crtc9 = (crtc9 & 0xe0) | (lines - 1);
+ outb(read_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS)+1, crtc9);
+ if(lines==8)
+  {
+   biosfn_set_cursor_shape(0x06,0x07);
+  }
+ else
+  {
+   biosfn_set_cursor_shape(lines-4,lines-3);
+  }
+}
+
 static void biosfn_load_text_user_pat (AL,ES,BP,CX,DX,BL,BH) Bit8u AL;Bit16u ES;Bit16u BP;Bit16u CX;Bit16u DX;Bit8u BL;Bit8u BH;
 {
  Bit16u blockaddr,dest,i,j,src;
@@ -1667,7 +1685,7 @@ static void biosfn_load_text_user_pat (AL,ES,BP,CX,DX,BL,BH) Bit8u AL;Bit16u ES;
  release_font_access();
  if(AL>=0x10)
   {
-   printf("Function 0x1110 not finished\n");
+   set_scan_lines(BH);
   }
 }
 
@@ -1689,7 +1707,7 @@ static void biosfn_load_text_8_14_pat (AL,BL) Bit8u AL;Bit8u BL;
  release_font_access();
  if(AL>=0x10)
   {
-   printf("Function 0x1111 not finished\n");
+   set_scan_lines(14);
   }
 }
 
@@ -1711,7 +1729,7 @@ static void biosfn_load_text_8_8_pat (AL,BL) Bit8u AL;Bit8u BL;
  release_font_access();
  if(AL>=0x10)
   {
-   printf("Function 0x1112 not finished\n");
+   set_scan_lines(8);
   }
 }
 
@@ -1739,7 +1757,7 @@ static void biosfn_load_text_8_16_pat (AL,BL) Bit8u AL;Bit8u BL;
  release_font_access();
  if(AL>=0x10)
   {
-   printf("Function 0x1114 not finished\n");
+   set_scan_lines(16);
   }
 }
 
