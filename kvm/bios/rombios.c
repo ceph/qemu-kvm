@@ -8464,7 +8464,7 @@ pci_pro_select_reg:
 use16 386
 
 pcibios_real:
-  push ax
+  push eax
   push dx
   mov eax, #0x80000000
   mov dx, #0x0cf8
@@ -8474,13 +8474,13 @@ pcibios_real:
   cmp eax, #0x12378086
   je  pci_present
   pop dx
-  pop ax
+  pop eax
   mov ah, #0xff
   stc
   ret
 pci_present:
   pop dx
-  pop ax
+  pop eax
   cmp al, #0x01 ;; installation check
   jne pci_real_f02
   mov ax, #0x0001
