@@ -3,6 +3,9 @@
 
 #include "vgabios.h"
 
+// DISPI helper function
+void dispi_set_enable(enable);
+
 /** VBE int10 API
  *
  *  See the function descriptions in vbe.c for more information

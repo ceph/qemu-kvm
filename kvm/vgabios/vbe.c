@@ -74,7 +74,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.10 2002/03/10 16:19:08 cbothamy Exp $"
+.ascii       "$Id: vbe.c,v 1.11 2002/03/10 16:36:06 japj Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -127,6 +127,75 @@ MACRO HALT
 MEND
 #endasm
 
+// DISPI ioport functions
+// FIXME: what if no VBE host side code?
+static Bit16u dispi_get_id()
+{
+  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_ID);
+  return inw(VBE_DISPI_IOPORT_DATA);  
+}
+
+static void dispi_set_id(id)
+  Bit16u id;
+{
+  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_ID);
+  outw(VBE_DISPI_IOPORT_DATA,id);
+}
+
+static void dispi_set_xres(xres)
+  Bit16u xres;
+{
+  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_XRES);
+  outw(VBE_DISPI_IOPORT_DATA,xres);
+}
+
+static void dispi_set_yres(yres)
+  Bit16u yres;
+{
+  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_YRES);
+  outw(VBE_DISPI_IOPORT_DATA,yres);
+}
+
+static void dispi_set_bpp(bpp)
+  Bit16u bpp;
+{
+  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_BPP);
+  outw(VBE_DISPI_IOPORT_DATA,bpp);
+}
+
+void dispi_set_enable(enable)
+  Bit16u enable;
+{
+  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_ENABLE);
+  outw(VBE_DISPI_IOPORT_DATA,enable);
+}
+
+static void dispi_set_bank(bank)
+  Bit16u bank;
+{
+  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_BANK);
+  outw(VBE_DISPI_IOPORT_DATA,bank);
+}
+
+// ModeInfo helper function
+static ModeInfoListItem* mode_info_find_mode(mode)
+  Bit16u mode;
+{
+  ModeInfoListItem  *cur_info=&mode_info_list;
+
+  while (cur_info->mode != VBE_VESA_MODE_END_OF_LIST)
+  {
+    if (cur_info->mode == mode)
+    {
+      return cur_info;
+    }
+    
+    cur_info++;
+  }
+  
+  return 0;
+}
+
 /** Has VBE display - Returns true if VBE display detected
  *
  */
@@ -159,7 +228,7 @@ void vbe_init()
 #endasm    
   }
 #ifdef DEBUG
-  printf("VBE Bios $Id: vbe.c,v 1.10 2002/03/10 16:19:08 cbothamy Exp $\n");
+  printf("VBE Bios $Id: vbe.c,v 1.11 2002/03/10 16:36:06 japj Exp $\n");
 #endif  
 }
 
@@ -371,153 +440,6 @@ Bit16u *AX;Bit16u CX; Bit16u ES;Bit16u DI;
         write_word(ss, AX, result);
 }
 
-//FIXME: make a generic vbe_set function that does io port with params
-
-static void vbe_set_1024x768x8()
-{
-                        #asm
-                        // set xresolution
-                        mov dx, #VBE_DISPI_IOPORT_INDEX
-                        mov ax, #VBE_DISPI_INDEX_XRES
-                        outw dx, ax
-                        inc dx
-                        mov ax, #0x400
-                        outw dx, ax
-                        dec dx
-                        // set yresolution
-                        mov ax, #VBE_DISPI_INDEX_YRES
-                        outw dx, ax
-                        inc dx
-                        mov ax, #0x300
-                        outw dx, ax
-                        dec dx
-                        // set bank
-                        mov ax, #VBE_DISPI_INDEX_BANK
-                        outw dx, ax
-                        inc dx
-                        mov ax, #0x00
-                        outw dx, ax
-                        dec dx
-                        
-                        // enable video mode
-                        mov ax, #VBE_DISPI_INDEX_ENABLE
-                        outw dx, ax
-                        inc dx
-                        mov ax, #VBE_DISPI_ENABLED
-                        outw dx, ax
-                   
-                        #endasm
-}
-
-static void vbe_set_800x600x8()
-{
-                        #asm
-                        // set xresolution
-                        mov dx, #VBE_DISPI_IOPORT_INDEX
-                        mov ax, #VBE_DISPI_INDEX_XRES
-                        outw dx, ax
-                        inc dx
-                        mov ax, #0x320
-                        outw dx, ax
-                        dec dx
-                        // set yresolution
-                        mov ax, #VBE_DISPI_INDEX_YRES
-                        outw dx, ax
-                        inc dx
-                        mov ax, #0x258
-                        outw dx, ax
-                        dec dx
-                        // set bank
-                        mov ax, #VBE_DISPI_INDEX_BANK
-                        outw dx, ax
-                        inc dx
-                        mov ax, #0x00
-                        outw dx, ax
-                        dec dx
-                        
-                        // enable video mode
-                        mov ax, #VBE_DISPI_INDEX_ENABLE
-                        outw dx, ax
-                        inc dx
-                        mov ax, #VBE_DISPI_ENABLED
-                        outw dx, ax
-                   
-                        #endasm
-}
-
-static void vbe_set_640x480x8()
-{
-                        #asm
-                        // set xresolution
-                        mov dx, #VBE_DISPI_IOPORT_INDEX
-                        mov ax, #VBE_DISPI_INDEX_XRES
-                        outw dx, ax
-                        inc dx
-                        mov ax, #0x280
-                        outw dx, ax
-                        dec dx
-                        // set yresolution
-                        mov ax, #VBE_DISPI_INDEX_YRES
-                        outw dx, ax
-                        inc dx
-                        mov ax, #0x1E0
-                        outw dx, ax
-                        dec dx
-                        // set bank
-                        mov ax, #VBE_DISPI_INDEX_BANK
-                        outw dx, ax
-                        inc dx
-                        mov ax, #0x00
-                        outw dx, ax
-                        dec dx
-                        
-                        // enable video mode
-                        mov ax, #VBE_DISPI_INDEX_ENABLE
-                        outw dx, ax
-                        inc dx
-                        mov ax, #VBE_DISPI_ENABLED
-                        outw dx, ax
-                   
-                        #endasm
-}
-
-
-static void vbe_set_640x400x8()
-{
-                        #asm
-                        // set xresolution
-                        mov dx, #VBE_DISPI_IOPORT_INDEX
-                        mov ax, #VBE_DISPI_INDEX_XRES
-                        outw dx, ax
-                        inc dx
-                        mov ax, #0x280
-                        outw dx, ax
-                        dec dx
-                        // set yresolution
-                        mov ax, #VBE_DISPI_INDEX_YRES
-                        outw dx, ax
-                        inc dx
-                        mov ax, #0x190
-                        outw dx, ax
-                        dec dx
-                        // set bank
-                        mov ax, #VBE_DISPI_INDEX_BANK
-                        outw dx, ax
-                        inc dx
-                        mov ax, #0x00
-                        outw dx, ax
-                        dec dx
-                        
-                        // enable video mode
-                        mov ax, #VBE_DISPI_INDEX_ENABLE
-                        outw dx, ax
-                        inc dx
-                        mov ax, #VBE_DISPI_ENABLED
-                        outw dx, ax
-                   
-                        #endasm
-}
-
 /** Function 02h - Set VBE Mode
  * 
  * Input:
@@ -547,24 +469,8 @@ Bit16u *AX;Bit16u BX; Bit16u ES;Bit16u DI;
         if (BX<VBE_MODE_VESA_DEFINED)
         {
                 Bit8u   mode;
-
-                #asm
-                 // FIXME: how to to do this nicely?
-                 // bochs vbe code disable video mode
-                 push dx
-                 push ax
-                 mov dx, #VBE_DISPI_IOPORT_INDEX
                 
-                 // disable video mode
-                 mov ax, #VBE_DISPI_INDEX_ENABLE
-                 out dx, ax
-                 inc dx
-                 mov ax, #VBE_DISPI_DISABLED
-                 out dx, ax
-                 pop ax
-                 pop dx
-                
-                 #endasm                
+                dispi_set_enable(VBE_DISPI_DISABLED);
                 // call the vgabios in order to set the video mode
                 // this allows for going back to textmode with a VBE call (some applications expect that to work)
                 
@@ -598,47 +504,22 @@ Bit16u *AX;Bit16u BX; Bit16u ES;Bit16u DI;
                 // (we're using the 'standard' 320x200x256 vga mode as if it
                 //  were a vesa mode)
                 
-                if (cur_info->mode == VBE_OWN_MODE_320X200X8)
+                if (cur_info->info.BitsPerPixel == 8)
                 {
-                        biosfn_set_video_mode(0x13);
-                }
-                if (cur_info->mode == VBE_VESA_MODE_640X400X8)
-                {
-#ifdef DEBUG                        
-                        printf("VBE VBE_VESA_MODE_640X400X8");
-#endif                  
-                        vbe_set_640x400x8();
-                }               
-                else
-                if (cur_info->mode == VBE_VESA_MODE_640X480X8)
-                {
-#ifdef DEBUG                        
-                        printf("VBE VBE_VESA_MODE_640X480X8");
-#endif                  
-                        vbe_set_640x480x8();
-                }               
-                else               
-                if (cur_info->mode == VBE_VESA_MODE_800X600X8)
-                {
-#ifdef DEBUG                        
-                        printf("VBE VBE_VESA_MODE_800X600X8");
-#endif                  
-                        vbe_set_800x600x8();
-                }               
-                if (cur_info->mode == VBE_VESA_MODE_1024X768X8)
-                {
-#ifdef DEBUG                        
-                        printf("VBE VBE_VESA_MODE_1024X768X8");
-#endif                  
-                        vbe_set_1024x768x8();
-                }               
-                else
-                {
-                        // FIXME: setup gfx mode with host
-                        // FIXME: store current mode in CMOS
+                  // we have a 8bpp mode, preparing to set it
+                  
+                  dispi_set_xres(cur_info->info.XResolution);
+                  dispi_set_yres(cur_info->info.YResolution);
+                  dispi_set_bpp(VBE_DISPI_BPP_8);
+                  dispi_set_bank(0);
+                  dispi_set_enable(VBE_DISPI_ENABLED);
+
+                  // FIXME: store current mode in CMOS
+                  
+                  result = 0x4f;                  
                 }
                 
-                result = 0x4f;
+                //FIXME: new resolutions will need special code (per bpp)
         }
         else
         {
@@ -720,30 +601,6 @@ void vbe_biosfn_save_restore_state(AX, DL, CX, ES, BX)
  *              DX      = Window number in window granularity units
  *                        (Get Memory Window only)
  */
- 
-static void
-vbe_set_bank(bank)
-  Bit8u bank;
-{
-#asm
-  push bp
-  mov  bp, sp
-  push ax
-  push dx
-  
-  mov dx,#VBE_DISPI_IOPORT_INDEX
-    mov ax,#VBE_DISPI_INDEX_BANK
-    outw dx, ax
-    inc dx
-
-    mov  ax, 4[bp] ;; bank
-    outw dx, ax
-  pop dx  
-  pop  ax
-  pop  bp
-#endasm
-}
-
 void vbe_biosfn_display_window_control(AX,BX,DX)
 Bit16u *AX;Bit16u BX;Bit16u *DX;
 {
@@ -752,7 +609,7 @@ Bit16u *AX;Bit16u BX;Bit16u *DX;
         
         if (BX==0x0000)
         {
-                vbe_set_bank(window);
+                dispi_set_bank(window);
         }
 }
 

@@ -38,7 +38,8 @@ v2.0
 VBE:
 ----
 Short term:
-- fix io port calls for VBE_VESA_MODE_640X400X8 and VBE_VESA_MODE_800X600X8
+- LFB mode support
+
 
 Long term:
 - have plex86 host side display interface
