@@ -324,7 +324,7 @@ ASM_START
 
 ASM_END
 
-  printf("VGABios $Id: vgabios.c,v 1.37 2003/11/04 19:26:43 vruppert Exp $\n");
+  printf("VGABios $Id: vgabios.c,v 1.38 2003/11/05 23:21:19 cbothamy Exp $\n");
 }
 
 // --------------------------------------------------------------------------------------------
@@ -967,8 +967,22 @@ static void biosfn_set_video_mode(mode) Bit8u mode;
 
  // Write the fonts in memory
  if(vga_modes[line].class==TEXT)
-  {
+  { 
+   // TEXT class is always 16 lines high
+   /*
    biosfn_load_text_8_16_pat(0x04,0x00);
+   biosfn_set_text_block_specifier(0);
+   */
+   // Same in asm here
+ASM_START
+  ;; copy and activate 8x16 font
+  mov ax, #0x1104
+  mov bl, #0x00
+  int #0x10
+  mov ax, #0x1103
+  mov bl, #0x00
+  int #0x10
+ASM_END
   }
 
  // Set the ints 0x1F and 0x43
