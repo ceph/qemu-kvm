@@ -79,7 +79,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.20 2002/07/21 19:57:14 japj Exp $"
+.ascii       "$Id: vbe.c,v 1.21 2002/08/23 20:58:39 cbothamy Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -105,18 +105,28 @@ _vbebios_mode_list:
 
 #ifdef LIST_UNSUPPORTED_MODI
 .word VBE_VESA_MODE_640X480X565
+.word VBE_VESA_MODE_640X480X565 + 0x4000
 .word VBE_VESA_MODE_800X600X565
+.word VBE_VESA_MODE_800X600X565 + 0x4000
 .word VBE_VESA_MODE_640X480X888
+.word VBE_VESA_MODE_640X480X888 + 0x4000
 .word VBE_VESA_MODE_800X600X888
+.word VBE_VESA_MODE_800X600X888 + 0x4000
 .word VBE_OWN_MODE_800X600X8888
+.word VBE_OWN_MODE_800X600X8888 + 0x4000
 .word VBE_OWN_MODE_1024X768X8888
+.word VBE_OWN_MODE_1024X768X8888 + 0x4000
 #endif
 
 .word VBE_OWN_MODE_320X200X8
 .word VBE_VESA_MODE_640X400X8
+.word VBE_VESA_MODE_640X400X8 + 0x4000
 .word VBE_VESA_MODE_640X480X8
+.word VBE_VESA_MODE_640X480X8 + 0x4000
 .word VBE_VESA_MODE_800X600X8
+.word VBE_VESA_MODE_800X600X8 + 0x4000
 .word VBE_VESA_MODE_1024X768X8
+.word VBE_VESA_MODE_1024X768X8 + 0x4000
 .word VBE_VESA_MODE_END_OF_LIST
 #endif
 
@@ -291,7 +301,7 @@ ASM_START
 ASM_END    
   }
 //#ifdef DEBUG
-  printf("VBE Bios $Id: vbe.c,v 1.20 2002/07/21 19:57:14 japj Exp $\n");
+  printf("VBE Bios $Id: vbe.c,v 1.21 2002/08/23 20:58:39 cbothamy Exp $\n");
 //#endif  
 }
 
