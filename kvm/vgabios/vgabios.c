@@ -225,6 +225,13 @@ init_no_vbe_display:
   mov ax,#0x0003
   int #0x10
 
+;; copy and activate 8x16 font
+  mov ax, #0x1104
+  mov bl, #0x00
+  int #0x10
+  mov ax, #0x1103
+  int #0x10
+
 ;; show info
   call _display_info
 
@@ -285,7 +292,7 @@ static void init_vga_card()
 
 #endasm
 
-  printf("VGABios $Id: vgabios.c,v 1.14 2002/04/29 12:50:36 japj Exp $\n");
+  printf("VGABios $Id: vgabios.c,v 1.15 2002/05/18 14:55:28 cbothamy Exp $\n");
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1609,36 +1616,122 @@ Bit16u start;Bit16u count;
 }
 
 // --------------------------------------------------------------------------------------------
+static void get_font_access()
+{
+ outw( VGAREG_SEQU_ADDRESS, 0x0100 );
+ outw( VGAREG_SEQU_ADDRESS, 0x0402 );
+ outw( VGAREG_SEQU_ADDRESS, 0x0704 );
+ outw( VGAREG_SEQU_ADDRESS, 0x0300 );
+ outw( VGAREG_GRDC_ADDRESS, 0x0204 );
+ outw( VGAREG_GRDC_ADDRESS, 0x0005 );
+ outw( VGAREG_GRDC_ADDRESS, 0x0406 );
+}
+
+static void release_font_access()
+{
+ outw( VGAREG_SEQU_ADDRESS, 0x0100 );
+ outw( VGAREG_SEQU_ADDRESS, 0x0302 );
+ outw( VGAREG_SEQU_ADDRESS, 0x0304 );
+ outw( VGAREG_SEQU_ADDRESS, 0x0300 );
+ outw( VGAREG_GRDC_ADDRESS, 0x0004 );
+ outw( VGAREG_GRDC_ADDRESS, 0x1005 );
+ outw( VGAREG_GRDC_ADDRESS, 0x0e06 );
+}
+
 static void biosfn_load_text_user_pat (AL,ES,BP,CX,DX,BL,BH) Bit8u AL;Bit16u ES;Bit16u BP;Bit16u CX;Bit16u DX;Bit8u BL;Bit8u BH;
 {
-#ifdef DEBUG
- unimplemented();
-#endif
+ Bit16u blockaddr,dest,i,j,src;
+
+ get_font_access();
+ blockaddr = BL << 13;
+ for(i=0;i<CX;i++)
+  {
+   src = BP + i * BH;
+   dest = blockaddr + (DX + i) * 32;
+   for(j=0;j<BH;j++)
+    {
+     write_byte(0xA000, dest+j, read_byte(ES, src+j));
+    }
+  }
+ release_font_access();
+ if(AL>=0x10)
+  {
+   printf("Function 0x1110 not finished\n");
+  }
 }
+
 static void biosfn_load_text_8_14_pat (AL,BL) Bit8u AL;Bit8u BL;
 {
-#ifdef DEBUG
- unimplemented();
-#endif
+ Bit16u blockaddr,dest,i,j,src;
+
+ get_font_access();
+ blockaddr = BL << 13;
+ for(i=0;i<0x100;i++)
+  {
+   src = i * 14;
+   dest = blockaddr + i * 32;
+   for(j=0;j<14;j++)
+    {
+     write_byte(0xA000, dest+j, vgafont14[src+j]);
+    }
+  }
+ release_font_access();
+ if(AL>=0x10)
+  {
+   printf("Function 0x1111 not finished\n");
+  }
 }
+
 static void biosfn_load_text_8_8_pat (AL,BL) Bit8u AL;Bit8u BL;
 {
-#ifdef DEBUG
- unimplemented();
-#endif
+ Bit16u blockaddr,dest,i,j,src;
+
+ get_font_access();
+ blockaddr = BL << 13;
+ for(i=0;i<0x100;i++)
+  {
+   src = i * 8;
+   dest = blockaddr + i * 32;
+   for(j=0;j<8;j++)
+    {
+     write_byte(0xA000, dest+j, vgafont8[src+j]);
+    }
+  }
+ release_font_access();
+ if(AL>=0x10)
+  {
+   printf("Function 0x1112 not finished\n");
+  }
 }
+
 static void biosfn_set_text_block_specifier (BL) Bit8u BL;
 {
-#ifdef DEBUG
- unimplemented();
-#endif
+ outb( VGAREG_SEQU_ADDRESS, 0x03 );
+ outb( VGAREG_SEQU_DATA, BL );
 }
+
 static void biosfn_load_text_8_16_pat (AL,BL) Bit8u AL;Bit8u BL;
 {
-#ifdef DEBUG
- unimplemented();
-#endif
+ Bit16u blockaddr,dest,i,j,src;
+
+ get_font_access();
+ blockaddr = BL << 13;
+ for(i=0;i<0x100;i++)
+  {
+   src = i * 16;
+   dest = blockaddr + i * 32;
+   for(j=0;j<16;j++)
+    {
+     write_byte(0xA000, dest+j, vgafont16[src+j]);
+    }
+  }
+ release_font_access();
+ if(AL>=0x10)
+  {
+   printf("Function 0x1114 not finished\n");
+  }
 }
+
 static void biosfn_load_gfx_8_8_chars (ES,BP) Bit16u ES;Bit16u BP;
 {
 #ifdef DEBUG
