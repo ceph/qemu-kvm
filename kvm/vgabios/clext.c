@@ -60,13 +60,13 @@ typedef struct
 
 /* VGA */
 unsigned short cseq_vga[] = {0x0007,0xffff};
-unsigned short cgraph_vga[] = {0x0009,0x000a,0x200b,0xffff};
+unsigned short cgraph_vga[] = {0x0009,0x000a,0x000b,0xffff};
 unsigned short ccrtc_vga[] = {0x001a,0x001b,0x001d,0xffff};
 
 /* extensions */
 unsigned short cgraph_svgacolor[] = {
 0x0000,0x0001,0x0002,0x0003,0x0004,0x4005,0x0506,0x0f07,0xff08,
-0x0009,0x000a,0x200b,
+0x0009,0x000a,0x000b,
 0xffff
 };
 /* 640x480x8 */
@@ -598,7 +598,7 @@ is_text_mode:
   pop ds
   ret
 
-cirrus_enable_dualbank:
+cirrus_enable_16k_granularity:
   push ax
   push dx
   mov dx, #0x3ce
@@ -606,7 +606,7 @@ cirrus_enable_dualbank:
   out dx, al
   inc dx
   in al, dx
-  or al, #0x21 ;; enable dual bank
+  or al, #0x20 ;; enable 16k
   out dx, al
   pop dx
   pop ax
@@ -827,15 +827,15 @@ cirrus_vesa_01h_1:
 
   mov ax, #0x003b ;; mode
   stosw
-  mov ax, #0x0707 ;; attr
+  mov ax, #0x0007 ;; attr
   stosw
   mov ax, #0x0010 ;; granularity =16K
   stosw
-  mov ax, #0x0020 ;; size =32K
+  mov ax, #0x0040 ;; size =64K
   stosw
   mov ax, #0xA000 ;; segment A
   stosw
-  mov ax, #0xA800 ;; segment B
+  xor ax, ax ;; no segment B
   stosw
   mov ax, #cirrus_vesa_05h_farentry
   stosw
@@ -964,8 +964,8 @@ cirrus_vesa_02h_1:
   call cirrus_get_modeentry_nomask
   call cirrus_switch_mode
   test bx, #0x4000 ;; LFB
-  jz cirrus_vesa_02h_3
-  call cirrus_enable_dualbank
+  jnz cirrus_vesa_02h_3
+  call cirrus_enable_16k_granularity
 cirrus_vesa_02h_3:
   pop ax
   push ds
