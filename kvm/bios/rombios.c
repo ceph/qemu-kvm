@@ -5308,7 +5308,7 @@ int13_cdemu(DI, SI, BP, SP, BX, DX, CX, AX, ES, FLAGS)
         goto int13_fail_noah;
         }
 
-      goto int13_success_noah;
+      goto int13_success;
       break;
 
     case 0x08: /* read disk drive parameters */
