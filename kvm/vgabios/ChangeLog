@@ -1,4 +1,6 @@
 cvs-current:
+
+vgabios-0.3b
   - "Christophe Bothamy" <cbothamy@free.fr>: Mar 10 2002
     . added lfb-mode numbers (patch from mathis)
     . updated the Makefile
