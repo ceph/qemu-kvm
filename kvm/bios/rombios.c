@@ -2135,6 +2135,8 @@ Bit16u device;
         }
       }
     }
+  // Enable interrupts
+  outb(iobase2+ATA_CB_DC, ATA_CB_DC_HD15);
 }
 
 // ---------------------------------------------------------------------------
@@ -2282,6 +2284,8 @@ ASM_END
       continue;
     }
   }
+  // Enable interrupts
+  outb(iobase2+ATA_CB_DC, ATA_CB_DC_HD15);
   return 0;
 }
 
@@ -2425,6 +2429,8 @@ ASM_END
       continue;
     }
   }
+  // Enable interrupts
+  outb(iobase2+ATA_CB_DC, ATA_CB_DC_HD15);
   return 0;
 }
 
@@ -2690,6 +2696,8 @@ ASM_END
     return 4;
     }
 
+  // Enable interrupts
+  outb(iobase2+ATA_CB_DC, ATA_CB_DC_HD15);
   return 0;
 }
 
@@ -4014,7 +4022,7 @@ int13_harddisk(DI, SI, BP, SP, BX, DX, CX, AX, DS, ES, FLAGS)
   switch (GET_AH()) {
 
     case 0x00: /* disk controller reset */
-      // FIXME should send ata_reset ?
+      ata_reset (device);
       goto int13_success;
       break;
 
