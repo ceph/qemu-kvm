@@ -3687,14 +3687,17 @@ BX_DEBUG_INT15("case 1: enable mouse\n");
         case 5: // Initialize Mouse
 BX_DEBUG_INT15("case 1 or 5:\n");
           if (regs.u.r8.al == 5) {
-            if (regs.u.r8.bh != 3)
-              BX_PANIC("INT 15h C2 AL=5, BH=%02x\n", (unsigned) regs.u.r8.bh);
+            if (regs.u.r8.bh != 3) {
+              SET_CF();
+              regs.u.r8.ah = 0x02; // invalid input
+              return;
+            }
             mouse_flags_2 = read_byte(ebda_seg, 0x0027);
             mouse_flags_2 = (mouse_flags_2 & 0x00) | regs.u.r8.bh;
             mouse_flags_1 = 0x00;
             write_byte(ebda_seg, 0x0026, mouse_flags_1);
             write_byte(ebda_seg, 0x0027, mouse_flags_2);
-            }
+          }
 
           inhibit_mouse_int_and_events(); // disable IRQ12 and packets
           ret = send_to_mouse_ctrl(0xFF); // reset mouse command
