@@ -292,13 +292,8 @@ typedef struct ModeInfoBlock
       
   #define VBE_DISPI_ID0                   0xB0C0
   #define VBE_DISPI_ID1                   0xB0C1
+  #define VBE_DISPI_ID2                   0xB0C2
   
-  #define VBE_DISPI_BPP_8                 0x0
-  #define VBE_DISPI_BPP_4                 0x4
-// The following is not support yet, but just for reference available.  
-//  #define VBE_DISPI_BPP_RGB565            0x1
-//  #define VBE_DISPI_BPP_RGB555            0x2
-
   #define VBE_DISPI_DISABLED              0x00
   #define VBE_DISPI_ENABLED               0x01
   

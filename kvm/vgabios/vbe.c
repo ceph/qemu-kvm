@@ -39,9 +39,6 @@
 // dynamicly generate a mode_info list
 //#define DYN_LIST
 
-// enable unsupported modi in the mode_info list (ie >8bpp)
-//#define LIST_UNSUPPORTED_MODI
-
 
 #include "vbe.h"
 #include "vbetables.h"
@@ -79,7 +76,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.28 2003/04/26 07:22:26 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.29 2003/06/30 19:27:05 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -100,20 +97,17 @@ _no_vbebios_info_string:
 //        at least until dynamic list creation is working
 _vbebios_mode_list:
 
-#ifdef LIST_UNSUPPORTED_MODI
-.word VBE_VESA_MODE_640X480X565
-.word VBE_VESA_MODE_800X600X565
-.word VBE_VESA_MODE_640X480X888
-.word VBE_VESA_MODE_800X600X888
-.word VBE_OWN_MODE_800X600X8888
-.word VBE_OWN_MODE_1024X768X8888
-#endif
-
 .word VBE_VESA_MODE_640X400X8
 .word VBE_VESA_MODE_640X480X8
 .word VBE_VESA_MODE_800X600X4
 .word VBE_VESA_MODE_800X600X8
 .word VBE_VESA_MODE_1024X768X8
+.word VBE_VESA_MODE_640X480X565
+.word VBE_VESA_MODE_640X480X888
+.word VBE_VESA_MODE_800X600X565
+.word VBE_VESA_MODE_800X600X888
+.word VBE_OWN_MODE_800X600X8888
+.word VBE_OWN_MODE_1024X768X8888
 .word VBE_OWN_MODE_320X200X8
 .word VBE_VESA_MODE_END_OF_LIST
 #endif
@@ -317,9 +311,9 @@ static ModeInfoListItem* mode_info_find_mode(mode, using_lfb)
  */
 Boolean vbe_has_vbe_display()
 {
-  dispi_set_id(VBE_DISPI_ID1);
+  dispi_set_id(VBE_DISPI_ID2);
 
-  return (dispi_get_id()==VBE_DISPI_ID1);
+  return (dispi_get_id()==VBE_DISPI_ID2);
 }
 
 /** VBE Init - Initialise the Vesa Bios Extension Code
@@ -343,7 +337,7 @@ ASM_START
 ASM_END    
   }
 //#ifdef DEBUG
-  printf("VBE Bios $Id: vbe.c,v 1.28 2003/04/26 07:22:26 vruppert Exp $\n");
+  printf("VBE Bios $Id: vbe.c,v 1.29 2003/06/30 19:27:05 vruppert Exp $\n");
 //#endif  
 }
 
@@ -618,35 +612,24 @@ Bit16u *AX;Bit16u BX; Bit16u ES;Bit16u DI;
                         cur_info->info.YResolution,
                         cur_info->info.BitsPerPixel);
 #endif
-                // FIXME: this is here so we can do some testing
-                // at least until bochs host side display is up & running
-                // (we're using the 'standard' 320x200x256 vga mode as if it
-                //  were a vesa mode)
                 
-                if (cur_info->info.BitsPerPixel <= 8)
-                {
-                  // we have a 4bpp or 8bpp mode, preparing to set it
-                  
-                  // first disable current mode (when switching between vesa modi)
-                  dispi_set_enable(VBE_DISPI_DISABLED);
-                  
-                  if (cur_info->mode == VBE_VESA_MODE_800X600X4)
-		  {
-                    biosfn_set_video_mode(0x6a);
-		  }
+                // first disable current mode (when switching between vesa modi)
+                dispi_set_enable(VBE_DISPI_DISABLED);
 
-                  dispi_set_xres(cur_info->info.XResolution);
-                  dispi_set_yres(cur_info->info.YResolution);
-                  dispi_set_bpp((cur_info->info.BitsPerPixel == 8)?VBE_DISPI_BPP_8:VBE_DISPI_BPP_4);
-                  dispi_set_bank(0);
-                  dispi_set_enable(VBE_DISPI_ENABLED);
+                if (cur_info->mode == VBE_VESA_MODE_800X600X4)
+                {
+                  biosfn_set_video_mode(0x6a);
+                }
+
+                dispi_set_xres(cur_info->info.XResolution);
+                dispi_set_yres(cur_info->info.YResolution);
+                dispi_set_bpp(cur_info->info.BitsPerPixel);
+                dispi_set_bank(0);
+                dispi_set_enable(VBE_DISPI_ENABLED);
 
                   // FIXME: store current mode in BIOS data area
-                  
-                  result = 0x4f;                  
-                }
-                
-                //FIXME: new resolutions will need special code (per bpp)
+  
+                result = 0x4f;                  
         }
         else
         {

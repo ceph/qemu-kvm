@@ -14,8 +14,6 @@ typedef struct ModeInfoListItem
         ModeInfoBlockCompact    info;
 } ModeInfoListItem;
 
-//#define LIST_UNSUPPORTED_MODI
-
 // FIXME: check all member variables to be correct for the different modi
 // FIXME: add more modi
 static ModeInfoListItem mode_info_list[]=
@@ -431,7 +429,6 @@ static ModeInfoListItem mode_info_list[]=
                 }
         },
 
-#ifdef LIST_UNSUPPORTED_MODI
         {
                 VBE_VESA_MODE_640X480X565,
                 {
@@ -594,14 +591,14 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit16u WinASegment*/               VGAMEM_GRAPH,
    /*Bit16u WinBSegment*/               0,
    /*Bit32u WinFuncPtr*/                0,
-   /*Bit16u BytesPerScanLine*/          640*4,
+   /*Bit16u BytesPerScanLine*/          640*3,
 // Mandatory information for VBE 1.2 and above
    /*Bit16u XResolution*/               640,
    /*Bit16u YResolution*/               480,
    /*Bit8u  XCharSize*/                 8,
    /*Bit8u  YCharSize*/                 16,
    /*Bit8u  NumberOfPlanes*/            1,
-   /*Bit8u  BitsPerPixel*/              32,
+   /*Bit8u  BitsPerPixel*/              24,
    /*Bit8u  NumberOfBanks*/             1,
    /*Bit8u  MemoryModel*/               VBE_MEMORYMODEL_DIRECT_COLOR,
    /*Bit8u  BankSize*/                  0,
@@ -614,8 +611,8 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  GreenFieldPosition*/        8,
    /*Bit8u  BlueMaskSize*/              8,
    /*Bit8u  BlueFieldPosition*/         0,
-   /*Bit8u  RsvdMaskSize*/              8,
-   /*Bit8u  RsvdFieldPosition*/         24,
+   /*Bit8u  RsvdMaskSize*/              0,
+   /*Bit8u  RsvdFieldPosition*/         0,
    /*Bit8u  DirectColorModeInfo*/       0,
 // Mandatory information for VBE 2.0 and above
 #ifdef VBE_HAVE_LFB
@@ -626,7 +623,7 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit32u OffScreenMemOffset*/        0,
    /*Bit16u OffScreenMemSize*/          0,
 // Mandatory information for VBE 3.0 and above
-   /*Bit16u LinBytesPerScanLine*/       640*4,
+   /*Bit16u LinBytesPerScanLine*/       640*3,
    /*Bit8u  BnkNumberOfPages*/          0,
    /*Bit8u  LinNumberOfPages*/          0,
    /*Bit8u  LinRedMaskSize*/            8,
@@ -635,8 +632,8 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  LinGreenFieldPosition*/     8,
    /*Bit8u  LinBlueMaskSize*/           8,
    /*Bit8u  LinBlueFieldPosition*/      0,
-   /*Bit8u  LinRsvdMaskSize*/           8,
-   /*Bit8u  LinRsvdFieldPosition*/      24,
+   /*Bit8u  LinRsvdMaskSize*/           0,
+   /*Bit8u  LinRsvdFieldPosition*/      0,
    /*Bit32u MaxPixelClock*/             0,
 /*} ModeInfoBlock;*/
                 }
@@ -664,14 +661,14 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit16u WinASegment*/               VGAMEM_GRAPH,
    /*Bit16u WinBSegment*/               0,
    /*Bit32u WinFuncPtr*/                0,
-   /*Bit16u BytesPerScanLine*/          800*4,
+   /*Bit16u BytesPerScanLine*/          800*3,
 // Mandatory information for VBE 1.2 and above
    /*Bit16u XResolution*/               800,
    /*Bit16u YResolution*/               600,
    /*Bit8u  XCharSize*/                 8,
    /*Bit8u  YCharSize*/                 16,
    /*Bit8u  NumberOfPlanes*/            1,
-   /*Bit8u  BitsPerPixel*/              32,
+   /*Bit8u  BitsPerPixel*/              24,
    /*Bit8u  NumberOfBanks*/             1,
    /*Bit8u  MemoryModel*/               VBE_MEMORYMODEL_DIRECT_COLOR,
    /*Bit8u  BankSize*/                  0,
@@ -684,8 +681,8 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  GreenFieldPosition*/        8,
    /*Bit8u  BlueMaskSize*/              8,
    /*Bit8u  BlueFieldPosition*/         0,
-   /*Bit8u  RsvdMaskSize*/              8,
-   /*Bit8u  RsvdFieldPosition*/         24,
+   /*Bit8u  RsvdMaskSize*/              0,
+   /*Bit8u  RsvdFieldPosition*/         0,
    /*Bit8u  DirectColorModeInfo*/       0,
 // Mandatory information for VBE 2.0 and above
 #ifdef VBE_HAVE_LFB
@@ -696,7 +693,7 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit32u OffScreenMemOffset*/        0,
    /*Bit16u OffScreenMemSize*/          0,
 // Mandatory information for VBE 3.0 and above
-   /*Bit16u LinBytesPerScanLine*/       800*4,
+   /*Bit16u LinBytesPerScanLine*/       800*3,
    /*Bit8u  BnkNumberOfPages*/          0,
    /*Bit8u  LinNumberOfPages*/          0,
    /*Bit8u  LinRedMaskSize*/            8,
@@ -705,8 +702,8 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  LinGreenFieldPosition*/     8,
    /*Bit8u  LinBlueMaskSize*/           8,
    /*Bit8u  LinBlueFieldPosition*/      0,
-   /*Bit8u  LinRsvdMaskSize*/           8,
-   /*Bit8u  LinRsvdFieldPosition*/      24,
+   /*Bit8u  LinRsvdMaskSize*/           0,
+   /*Bit8u  LinRsvdFieldPosition*/      0,
    /*Bit32u MaxPixelClock*/             0,
 /*} ModeInfoBlock;*/
                 }
@@ -851,7 +848,6 @@ static ModeInfoListItem mode_info_list[]=
 /*} ModeInfoBlock;*/
                 }
         },
-#endif
 
 /** END OF THE LIST **/
         {
