@@ -173,6 +173,8 @@
   
 #define PANIC_PORT 0x400
 
+#define DEBUG_ROMBIOS 0
+
 // #20  is dec 20
 // #$20 is hex 20 = 32
 // LDA	#$20
@@ -1068,8 +1070,6 @@ static char CVSID[] = "$Id$";
 #define BIOS_PRINTF_DEBUG    4
 #define BIOS_PRINTF_ALL      (BIOS_PRINTF_SCREEN | BIOS_PRINTF_DEBUG)
 #define BIOS_PRINTF_DEBHALT  (BIOS_PRINTF_SCREEN | BIOS_PRINTF_DEBUG | BIOS_PRINTF_HALT)
-
-#define DEBUG_ROMBIOS 0
 
 #if DEBUG_ROMBIOS
 #  define printf(format, p...) bios_printf(BIOS_PRINTF_DEBUG, format, ##p)
