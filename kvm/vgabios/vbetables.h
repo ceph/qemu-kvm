@@ -28,7 +28,6 @@ static ModeInfoListItem mode_info_list[]=
 // Mandatory information for all VBE revisions
    /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
                                         VBE_MODE_ATTRIBUTE_EXTENDED_INFORMATION_AVAILABLE |
-                                        VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE |
 #ifdef VBE_HAVE_LFB
                                         VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |
@@ -98,7 +97,6 @@ static ModeInfoListItem mode_info_list[]=
 // Mandatory information for all VBE revisions
    /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
                                         VBE_MODE_ATTRIBUTE_EXTENDED_INFORMATION_AVAILABLE |
-                                        VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE |
 #ifdef VBE_HAVE_LFB
                                         VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |
@@ -169,7 +167,6 @@ static ModeInfoListItem mode_info_list[]=
 // Mandatory information for all VBE revisions
    /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
                                         VBE_MODE_ATTRIBUTE_EXTENDED_INFORMATION_AVAILABLE |
-                                        VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE |
 #ifdef VBE_HAVE_LFB
                                         VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |
@@ -239,7 +236,6 @@ static ModeInfoListItem mode_info_list[]=
 // Mandatory information for all VBE revisions
    /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
                                         VBE_MODE_ATTRIBUTE_EXTENDED_INFORMATION_AVAILABLE |
-                                        VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE |
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE,
    /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_RELOCATABLE |
@@ -303,7 +299,6 @@ static ModeInfoListItem mode_info_list[]=
 // Mandatory information for all VBE revisions
    /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
                                         VBE_MODE_ATTRIBUTE_EXTENDED_INFORMATION_AVAILABLE |
-                                        VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE |
 #ifdef VBE_HAVE_LFB
                                         VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |
@@ -342,7 +337,7 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  RsvdFieldPosition*/         0,
    /*Bit8u  DirectColorModeInfo*/       0,
 // Mandatory information for VBE 2.0 and above
-   #ifdef VBE_HAVE_LFB
+#ifdef VBE_HAVE_LFB
    /*Bit32u PhysBasePtr*/               VBE_DISPI_LFB_PHYSICAL_ADDRESS,
 #else
    /*Bit32u PhysBasePtr*/               0,
@@ -374,7 +369,6 @@ static ModeInfoListItem mode_info_list[]=
 // Mandatory information for all VBE revisions
    /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
                                         VBE_MODE_ATTRIBUTE_EXTENDED_INFORMATION_AVAILABLE |
-                                        VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE |
 #ifdef VBE_HAVE_LFB
                                         VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |
@@ -446,15 +440,18 @@ static ModeInfoListItem mode_info_list[]=
 // Mandatory information for all VBE revisions
    /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
                                         VBE_MODE_ATTRIBUTE_EXTENDED_INFORMATION_AVAILABLE |
-                                        VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE |
+#ifdef VBE_HAVE_LFB
                                         VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |
+#endif
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE,
-   /*Bit8u  WinAAttributes*/            0,
+   /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_RELOCATABLE |
+                                        VBE_WINDOW_ATTRIBUTE_READABLE |
+                                        VBE_WINDOW_ATTRIBUTE_WRITEABLE,
    /*Bit8u  WinBAttributes*/            0,
-   /*Bit16u WinGranularity*/            0,
-   /*Bit16u WinSize*/                   0,
-   /*Bit16u WinASegment*/               0,
+   /*Bit16u WinGranularity*/            VBE_DISPI_BANK_SIZE_KB,
+   /*Bit16u WinSize*/                   VBE_DISPI_BANK_SIZE_KB,
+   /*Bit16u WinASegment*/               VGAMEM_GRAPH,
    /*Bit16u WinBSegment*/               0,
    /*Bit32u WinFuncPtr*/                0,
    /*Bit16u BytesPerScanLine*/          640*2,
@@ -468,20 +465,24 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  NumberOfBanks*/             1,
    /*Bit8u  MemoryModel*/               VBE_MEMORYMODEL_DIRECT_COLOR,
    /*Bit8u  BankSize*/                  0,
-   /*Bit8u  NumberOfImagePages*/        3,
+   /*Bit8u  NumberOfImagePages*/        0,
    /*Bit8u  Reserved_page*/             0,
 // Direct Color fields (required for direct/6 and YUV/7 memory models)
    /*Bit8u  RedMaskSize*/               5,
-   /*Bit8u  RedFieldPosition*/          0,
+   /*Bit8u  RedFieldPosition*/          11,
    /*Bit8u  GreenMaskSize*/             6,
    /*Bit8u  GreenFieldPosition*/        5,
    /*Bit8u  BlueMaskSize*/              5,
-   /*Bit8u  BlueFieldPosition*/         11,
+   /*Bit8u  BlueFieldPosition*/         0,
    /*Bit8u  RsvdMaskSize*/              0,
    /*Bit8u  RsvdFieldPosition*/         0,
    /*Bit8u  DirectColorModeInfo*/       0,
 // Mandatory information for VBE 2.0 and above
-   /*Bit32u PhysBasePtr*/               VBE_PHYSICAL_BASE_ADDRESS,
+#ifdef VBE_HAVE_LFB
+   /*Bit32u PhysBasePtr*/               VBE_DISPI_LFB_PHYSICAL_ADDRESS,
+#else
+   /*Bit32u PhysBasePtr*/               0,
+#endif
    /*Bit32u OffScreenMemOffset*/        0,
    /*Bit16u OffScreenMemSize*/          0,
 // Mandatory information for VBE 3.0 and above
@@ -489,11 +490,11 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  BnkNumberOfPages*/          0,
    /*Bit8u  LinNumberOfPages*/          0,
    /*Bit8u  LinRedMaskSize*/            5,
-   /*Bit8u  LinRedFieldPosition*/       0,
+   /*Bit8u  LinRedFieldPosition*/       11,
    /*Bit8u  LinGreenMaskSize*/          6,
    /*Bit8u  LinGreenFieldPosition*/     5,
    /*Bit8u  LinBlueMaskSize*/           5,
-   /*Bit8u  LinBlueFieldPosition*/      11,
+   /*Bit8u  LinBlueFieldPosition*/      0,
    /*Bit8u  LinRsvdMaskSize*/           0,
    /*Bit8u  LinRsvdFieldPosition*/      0,
    /*Bit32u MaxPixelClock*/             0,
@@ -508,15 +509,19 @@ static ModeInfoListItem mode_info_list[]=
 {*/
 // Mandatory information for all VBE revisions
    /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
-                                        VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
+                                        VBE_MODE_ATTRIBUTE_EXTENDED_INFORMATION_AVAILABLE |
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE |
+#ifdef VBE_HAVE_LFB
                                         VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |
+#endif
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE,
-   /*Bit8u  WinAAttributes*/            0,
+   /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_RELOCATABLE |
+                                        VBE_WINDOW_ATTRIBUTE_READABLE |
+                                        VBE_WINDOW_ATTRIBUTE_WRITEABLE,
    /*Bit8u  WinBAttributes*/            0,
-   /*Bit16u WinGranularity*/            0,
-   /*Bit16u WinSize*/                   0,
-   /*Bit16u WinASegment*/               0,
+   /*Bit16u WinGranularity*/            VBE_DISPI_BANK_SIZE_KB,
+   /*Bit16u WinSize*/                   VBE_DISPI_BANK_SIZE_KB,
+   /*Bit16u WinASegment*/               VGAMEM_GRAPH,
    /*Bit16u WinBSegment*/               0,
    /*Bit32u WinFuncPtr*/                0,
    /*Bit16u BytesPerScanLine*/          800*2,
@@ -530,20 +535,24 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  NumberOfBanks*/             1,
    /*Bit8u  MemoryModel*/               VBE_MEMORYMODEL_DIRECT_COLOR,
    /*Bit8u  BankSize*/                  0,
-   /*Bit8u  NumberOfImagePages*/        3,
+   /*Bit8u  NumberOfImagePages*/        0,
    /*Bit8u  Reserved_page*/             0,
 // Direct Color fields (required for direct/6 and YUV/7 memory models)
    /*Bit8u  RedMaskSize*/               5,
-   /*Bit8u  RedFieldPosition*/          0,
+   /*Bit8u  RedFieldPosition*/          11,
    /*Bit8u  GreenMaskSize*/             6,
    /*Bit8u  GreenFieldPosition*/        5,
    /*Bit8u  BlueMaskSize*/              5,
-   /*Bit8u  BlueFieldPosition*/         11,
+   /*Bit8u  BlueFieldPosition*/         0,
    /*Bit8u  RsvdMaskSize*/              0,
    /*Bit8u  RsvdFieldPosition*/         0,
    /*Bit8u  DirectColorModeInfo*/       0,
 // Mandatory information for VBE 2.0 and above
-   /*Bit32u PhysBasePtr*/               VBE_PHYSICAL_BASE_ADDRESS,
+#ifdef VBE_HAVE_LFB
+   /*Bit32u PhysBasePtr*/               VBE_DISPI_LFB_PHYSICAL_ADDRESS,
+#else
+   /*Bit32u PhysBasePtr*/               0,
+#endif
    /*Bit32u OffScreenMemOffset*/        0,
    /*Bit16u OffScreenMemSize*/          0,
 // Mandatory information for VBE 3.0 and above
@@ -551,11 +560,11 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  BnkNumberOfPages*/          0,
    /*Bit8u  LinNumberOfPages*/          0,
    /*Bit8u  LinRedMaskSize*/            5,
-   /*Bit8u  LinRedFieldPosition*/       0,
+   /*Bit8u  LinRedFieldPosition*/       11,
    /*Bit8u  LinGreenMaskSize*/          6,
    /*Bit8u  LinGreenFieldPosition*/     5,
    /*Bit8u  LinBlueMaskSize*/           5,
-   /*Bit8u  LinBlueFieldPosition*/      11,
+   /*Bit8u  LinBlueFieldPosition*/      0,
    /*Bit8u  LinRsvdMaskSize*/           0,
    /*Bit8u  LinRsvdFieldPosition*/      0,
    /*Bit32u MaxPixelClock*/             0,
@@ -571,56 +580,63 @@ static ModeInfoListItem mode_info_list[]=
 // Mandatory information for all VBE revisions
    /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
                                         VBE_MODE_ATTRIBUTE_EXTENDED_INFORMATION_AVAILABLE |
-                                        VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE |
+#ifdef VBE_HAVE_LFB
                                         VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |
+#endif
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE,
-   /*Bit8u  WinAAttributes*/            0,
+   /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_RELOCATABLE |
+                                        VBE_WINDOW_ATTRIBUTE_READABLE |
+                                        VBE_WINDOW_ATTRIBUTE_WRITEABLE,
    /*Bit8u  WinBAttributes*/            0,
-   /*Bit16u WinGranularity*/            0,
-   /*Bit16u WinSize*/                   0,
-   /*Bit16u WinASegment*/               0,
+   /*Bit16u WinGranularity*/            VBE_DISPI_BANK_SIZE_KB,
+   /*Bit16u WinSize*/                   VBE_DISPI_BANK_SIZE_KB,
+   /*Bit16u WinASegment*/               VGAMEM_GRAPH,
    /*Bit16u WinBSegment*/               0,
    /*Bit32u WinFuncPtr*/                0,
-   /*Bit16u BytesPerScanLine*/          640*3,
+   /*Bit16u BytesPerScanLine*/          640*4,
 // Mandatory information for VBE 1.2 and above
    /*Bit16u XResolution*/               640,
    /*Bit16u YResolution*/               480,
    /*Bit8u  XCharSize*/                 8,
    /*Bit8u  YCharSize*/                 16,
    /*Bit8u  NumberOfPlanes*/            1,
-   /*Bit8u  BitsPerPixel*/              24,
+   /*Bit8u  BitsPerPixel*/              32,
    /*Bit8u  NumberOfBanks*/             1,
    /*Bit8u  MemoryModel*/               VBE_MEMORYMODEL_DIRECT_COLOR,
    /*Bit8u  BankSize*/                  0,
-   /*Bit8u  NumberOfImagePages*/        3,
+   /*Bit8u  NumberOfImagePages*/        0,
    /*Bit8u  Reserved_page*/             0,
 // Direct Color fields (required for direct/6 and YUV/7 memory models)
    /*Bit8u  RedMaskSize*/               8,
-   /*Bit8u  RedFieldPosition*/          0,
+   /*Bit8u  RedFieldPosition*/          16,
    /*Bit8u  GreenMaskSize*/             8,
    /*Bit8u  GreenFieldPosition*/        8,
    /*Bit8u  BlueMaskSize*/              8,
-   /*Bit8u  BlueFieldPosition*/         16,
-   /*Bit8u  RsvdMaskSize*/              0,
-   /*Bit8u  RsvdFieldPosition*/         0,
+   /*Bit8u  BlueFieldPosition*/         0,
+   /*Bit8u  RsvdMaskSize*/              8,
+   /*Bit8u  RsvdFieldPosition*/         24,
    /*Bit8u  DirectColorModeInfo*/       0,
 // Mandatory information for VBE 2.0 and above
-   /*Bit32u PhysBasePtr*/               VBE_PHYSICAL_BASE_ADDRESS,
+#ifdef VBE_HAVE_LFB
+   /*Bit32u PhysBasePtr*/               VBE_DISPI_LFB_PHYSICAL_ADDRESS,
+#else
+   /*Bit32u PhysBasePtr*/               0,
+#endif
    /*Bit32u OffScreenMemOffset*/        0,
    /*Bit16u OffScreenMemSize*/          0,
 // Mandatory information for VBE 3.0 and above
-   /*Bit16u LinBytesPerScanLine*/       640*3,
+   /*Bit16u LinBytesPerScanLine*/       640*4,
    /*Bit8u  BnkNumberOfPages*/          0,
    /*Bit8u  LinNumberOfPages*/          0,
    /*Bit8u  LinRedMaskSize*/            8,
-   /*Bit8u  LinRedFieldPosition*/       0,
+   /*Bit8u  LinRedFieldPosition*/       16,
    /*Bit8u  LinGreenMaskSize*/          8,
    /*Bit8u  LinGreenFieldPosition*/     8,
    /*Bit8u  LinBlueMaskSize*/           8,
-   /*Bit8u  LinBlueFieldPosition*/      16,
-   /*Bit8u  LinRsvdMaskSize*/           0,
-   /*Bit8u  LinRsvdFieldPosition*/      0,
+   /*Bit8u  LinBlueFieldPosition*/      0,
+   /*Bit8u  LinRsvdMaskSize*/           8,
+   /*Bit8u  LinRsvdFieldPosition*/      24,
    /*Bit32u MaxPixelClock*/             0,
 /*} ModeInfoBlock;*/
                 }
@@ -634,78 +650,18 @@ static ModeInfoListItem mode_info_list[]=
 // Mandatory information for all VBE revisions
    /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
                                         VBE_MODE_ATTRIBUTE_EXTENDED_INFORMATION_AVAILABLE |
-                                        VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE |
+#ifdef VBE_HAVE_LFB
                                         VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |
+#endif
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE,
-   /*Bit8u  WinAAttributes*/            0,
+   /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_RELOCATABLE |
+                                        VBE_WINDOW_ATTRIBUTE_READABLE |
+                                        VBE_WINDOW_ATTRIBUTE_WRITEABLE,
    /*Bit8u  WinBAttributes*/            0,
-   /*Bit16u WinGranularity*/            0,
-   /*Bit16u WinSize*/                   0,
-   /*Bit16u WinASegment*/               0,
-   /*Bit16u WinBSegment*/               0,
-   /*Bit32u WinFuncPtr*/                0,
-   /*Bit16u BytesPerScanLine*/          800*3,
-// Mandatory information for VBE 1.2 and above
-   /*Bit16u XResolution*/               800,
-   /*Bit16u YResolution*/               600,
-   /*Bit8u  XCharSize*/                 8,
-   /*Bit8u  YCharSize*/                 16,
-   /*Bit8u  NumberOfPlanes*/            1,
-   /*Bit8u  BitsPerPixel*/              24,
-   /*Bit8u  NumberOfBanks*/             1,
-   /*Bit8u  MemoryModel*/               VBE_MEMORYMODEL_DIRECT_COLOR,
-   /*Bit8u  BankSize*/                  0,
-   /*Bit8u  NumberOfImagePages*/        3,
-   /*Bit8u  Reserved_page*/             0,
-// Direct Color fields (required for direct/6 and YUV/7 memory models)
-   /*Bit8u  RedMaskSize*/               8,
-   /*Bit8u  RedFieldPosition*/          0,
-   /*Bit8u  GreenMaskSize*/             8,
-   /*Bit8u  GreenFieldPosition*/        8,
-   /*Bit8u  BlueMaskSize*/              8,
-   /*Bit8u  BlueFieldPosition*/         16,
-   /*Bit8u  RsvdMaskSize*/              0,
-   /*Bit8u  RsvdFieldPosition*/         0,
-   /*Bit8u  DirectColorModeInfo*/       0,
-// Mandatory information for VBE 2.0 and above
-   /*Bit32u PhysBasePtr*/               VBE_PHYSICAL_BASE_ADDRESS,
-   /*Bit32u OffScreenMemOffset*/        0,
-   /*Bit16u OffScreenMemSize*/          0,
-// Mandatory information for VBE 3.0 and above
-   /*Bit16u LinBytesPerScanLine*/       800*3,
-   /*Bit8u  BnkNumberOfPages*/          0,
-   /*Bit8u  LinNumberOfPages*/          0,
-   /*Bit8u  LinRedMaskSize*/            8,
-   /*Bit8u  LinRedFieldPosition*/       0,
-   /*Bit8u  LinGreenMaskSize*/          8,
-   /*Bit8u  LinGreenFieldPosition*/     8,
-   /*Bit8u  LinBlueMaskSize*/           8,
-   /*Bit8u  LinBlueFieldPosition*/      16,
-   /*Bit8u  LinRsvdMaskSize*/           0,
-   /*Bit8u  LinRsvdFieldPosition*/      0,
-   /*Bit32u MaxPixelClock*/             0,
-/*} ModeInfoBlock;*/
-                }
-        },
-
-        {
-                VBE_OWN_MODE_800X600X8888,
-                {
-/*typedef struct ModeInfoBlock
-{*/
-// Mandatory information for all VBE revisions
-   /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
-                                        VBE_MODE_ATTRIBUTE_EXTENDED_INFORMATION_AVAILABLE |
-                                        VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
-                                        VBE_MODE_ATTRIBUTE_COLOR_MODE |
-                                        VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |
-                                        VBE_MODE_ATTRIBUTE_GRAPHICS_MODE,
-   /*Bit8u  WinAAttributes*/            0,
-   /*Bit8u  WinBAttributes*/            0,
-   /*Bit16u WinGranularity*/            0,
-   /*Bit16u WinSize*/                   0,
-   /*Bit16u WinASegment*/               0,
+   /*Bit16u WinGranularity*/            VBE_DISPI_BANK_SIZE_KB,
+   /*Bit16u WinSize*/                   VBE_DISPI_BANK_SIZE_KB,
+   /*Bit16u WinASegment*/               VGAMEM_GRAPH,
    /*Bit16u WinBSegment*/               0,
    /*Bit32u WinFuncPtr*/                0,
    /*Bit16u BytesPerScanLine*/          800*4,
@@ -719,20 +675,24 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  NumberOfBanks*/             1,
    /*Bit8u  MemoryModel*/               VBE_MEMORYMODEL_DIRECT_COLOR,
    /*Bit8u  BankSize*/                  0,
-   /*Bit8u  NumberOfImagePages*/        3,
+   /*Bit8u  NumberOfImagePages*/        0,
    /*Bit8u  Reserved_page*/             0,
 // Direct Color fields (required for direct/6 and YUV/7 memory models)
    /*Bit8u  RedMaskSize*/               8,
-   /*Bit8u  RedFieldPosition*/          0,
+   /*Bit8u  RedFieldPosition*/          16,
    /*Bit8u  GreenMaskSize*/             8,
    /*Bit8u  GreenFieldPosition*/        8,
    /*Bit8u  BlueMaskSize*/              8,
-   /*Bit8u  BlueFieldPosition*/         16,
+   /*Bit8u  BlueFieldPosition*/         0,
    /*Bit8u  RsvdMaskSize*/              8,
    /*Bit8u  RsvdFieldPosition*/         24,
-   /*Bit8u  DirectColorModeInfo*/       VBE_DIRECTCOLOR_RESERVED_BITS_AVAILABLE,
+   /*Bit8u  DirectColorModeInfo*/       0,
 // Mandatory information for VBE 2.0 and above
-   /*Bit32u PhysBasePtr*/               VBE_PHYSICAL_BASE_ADDRESS,
+#ifdef VBE_HAVE_LFB
+   /*Bit32u PhysBasePtr*/               VBE_DISPI_LFB_PHYSICAL_ADDRESS,
+#else
+   /*Bit32u PhysBasePtr*/               0,
+#endif
    /*Bit32u OffScreenMemOffset*/        0,
    /*Bit16u OffScreenMemSize*/          0,
 // Mandatory information for VBE 3.0 and above
@@ -740,11 +700,81 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  BnkNumberOfPages*/          0,
    /*Bit8u  LinNumberOfPages*/          0,
    /*Bit8u  LinRedMaskSize*/            8,
-   /*Bit8u  LinRedFieldPosition*/       0,
+   /*Bit8u  LinRedFieldPosition*/       16,
    /*Bit8u  LinGreenMaskSize*/          8,
    /*Bit8u  LinGreenFieldPosition*/     8,
    /*Bit8u  LinBlueMaskSize*/           8,
-   /*Bit8u  LinBlueFieldPosition*/      16,
+   /*Bit8u  LinBlueFieldPosition*/      0,
+   /*Bit8u  LinRsvdMaskSize*/           8,
+   /*Bit8u  LinRsvdFieldPosition*/      24,
+   /*Bit32u MaxPixelClock*/             0,
+/*} ModeInfoBlock;*/
+                }
+        },
+
+        {
+                VBE_OWN_MODE_800X600X8888,
+                {
+/*typedef struct ModeInfoBlock
+{*/
+// Mandatory information for all VBE revisions
+   /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
+                                        VBE_MODE_ATTRIBUTE_EXTENDED_INFORMATION_AVAILABLE |
+                                        VBE_MODE_ATTRIBUTE_COLOR_MODE |
+#ifdef VBE_HAVE_LFB
+                                        VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |
+#endif
+                                        VBE_MODE_ATTRIBUTE_GRAPHICS_MODE,
+   /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_RELOCATABLE |
+                                        VBE_WINDOW_ATTRIBUTE_READABLE |
+                                        VBE_WINDOW_ATTRIBUTE_WRITEABLE,
+   /*Bit8u  WinBAttributes*/            0,
+   /*Bit16u WinGranularity*/            VBE_DISPI_BANK_SIZE_KB,
+   /*Bit16u WinSize*/                   VBE_DISPI_BANK_SIZE_KB,
+   /*Bit16u WinASegment*/               VGAMEM_GRAPH,
+   /*Bit16u WinBSegment*/               0,
+   /*Bit32u WinFuncPtr*/                0,
+   /*Bit16u BytesPerScanLine*/          800*4,
+// Mandatory information for VBE 1.2 and above
+   /*Bit16u XResolution*/               800,
+   /*Bit16u YResolution*/               600,
+   /*Bit8u  XCharSize*/                 8,
+   /*Bit8u  YCharSize*/                 16,
+   /*Bit8u  NumberOfPlanes*/            1,
+   /*Bit8u  BitsPerPixel*/              32,
+   /*Bit8u  NumberOfBanks*/             1,
+   /*Bit8u  MemoryModel*/               VBE_MEMORYMODEL_DIRECT_COLOR,
+   /*Bit8u  BankSize*/                  0,
+   /*Bit8u  NumberOfImagePages*/        0,
+   /*Bit8u  Reserved_page*/             0,
+// Direct Color fields (required for direct/6 and YUV/7 memory models)
+   /*Bit8u  RedMaskSize*/               8,
+   /*Bit8u  RedFieldPosition*/          16,
+   /*Bit8u  GreenMaskSize*/             8,
+   /*Bit8u  GreenFieldPosition*/        8,
+   /*Bit8u  BlueMaskSize*/              8,
+   /*Bit8u  BlueFieldPosition*/         0,
+   /*Bit8u  RsvdMaskSize*/              8,
+   /*Bit8u  RsvdFieldPosition*/         24,
+   /*Bit8u  DirectColorModeInfo*/       VBE_DIRECTCOLOR_RESERVED_BITS_AVAILABLE,
+// Mandatory information for VBE 2.0 and above
+#ifdef VBE_HAVE_LFB
+   /*Bit32u PhysBasePtr*/               VBE_DISPI_LFB_PHYSICAL_ADDRESS,
+#else
+   /*Bit32u PhysBasePtr*/               0,
+#endif
+   /*Bit32u OffScreenMemOffset*/        0,
+   /*Bit16u OffScreenMemSize*/          0,
+// Mandatory information for VBE 3.0 and above
+   /*Bit16u LinBytesPerScanLine*/       800*4,
+   /*Bit8u  BnkNumberOfPages*/          0,
+   /*Bit8u  LinNumberOfPages*/          0,
+   /*Bit8u  LinRedMaskSize*/            8,
+   /*Bit8u  LinRedFieldPosition*/       16,
+   /*Bit8u  LinGreenMaskSize*/          8,
+   /*Bit8u  LinGreenFieldPosition*/     8,
+   /*Bit8u  LinBlueMaskSize*/           8,
+   /*Bit8u  LinBlueFieldPosition*/      0,
    /*Bit8u  LinRsvdMaskSize*/           8,
    /*Bit8u  LinRsvdFieldPosition*/      24,
    /*Bit32u MaxPixelClock*/             0,
@@ -760,21 +790,24 @@ static ModeInfoListItem mode_info_list[]=
 // Mandatory information for all VBE revisions
    /*Bit16u ModeAttributes*/            VBE_MODE_ATTRIBUTE_SUPPORTED |
                                         VBE_MODE_ATTRIBUTE_EXTENDED_INFORMATION_AVAILABLE |
-                                        VBE_MODE_ATTRIBUTE_GRAPHICS_MODE |
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE |
+#ifdef VBE_HAVE_LFB
                                         VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |
+#endif
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE,
-   /*Bit8u  WinAAttributes*/            0,
+   /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_RELOCATABLE |
+                                        VBE_WINDOW_ATTRIBUTE_READABLE |
+                                        VBE_WINDOW_ATTRIBUTE_WRITEABLE,
    /*Bit8u  WinBAttributes*/            0,
-   /*Bit16u WinGranularity*/            0,
-   /*Bit16u WinSize*/                   0,
-   /*Bit16u WinASegment*/               0,
+   /*Bit16u WinGranularity*/            VBE_DISPI_BANK_SIZE_KB,
+   /*Bit16u WinSize*/                   VBE_DISPI_BANK_SIZE_KB,
+   /*Bit16u WinASegment*/               VGAMEM_GRAPH,
    /*Bit16u WinBSegment*/               0,
    /*Bit32u WinFuncPtr*/                0,
    /*Bit16u BytesPerScanLine*/          1024*4,
 // Mandatory information for VBE 1.2 and above
    /*Bit16u XResolution*/               1024,
-   /*Bit16u YResolution*/               800,
+   /*Bit16u YResolution*/               768,
    /*Bit8u  XCharSize*/                 8,
    /*Bit8u  YCharSize*/                 16,
    /*Bit8u  NumberOfPlanes*/            1,
@@ -782,20 +815,24 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  NumberOfBanks*/             1,
    /*Bit8u  MemoryModel*/               VBE_MEMORYMODEL_DIRECT_COLOR,
    /*Bit8u  BankSize*/                  0,
-   /*Bit8u  NumberOfImagePages*/        3,
+   /*Bit8u  NumberOfImagePages*/        1,
    /*Bit8u  Reserved_page*/             0,
 // Direct Color fields (required for direct/6 and YUV/7 memory models)
    /*Bit8u  RedMaskSize*/               8,
-   /*Bit8u  RedFieldPosition*/          0,
+   /*Bit8u  RedFieldPosition*/          16,
    /*Bit8u  GreenMaskSize*/             8,
    /*Bit8u  GreenFieldPosition*/        8,
    /*Bit8u  BlueMaskSize*/              8,
-   /*Bit8u  BlueFieldPosition*/         16,
+   /*Bit8u  BlueFieldPosition*/         0,
    /*Bit8u  RsvdMaskSize*/              8,
    /*Bit8u  RsvdFieldPosition*/         24,
    /*Bit8u  DirectColorModeInfo*/       VBE_DIRECTCOLOR_RESERVED_BITS_AVAILABLE,
 // Mandatory information for VBE 2.0 and above
-   /*Bit32u PhysBasePtr*/               VBE_PHYSICAL_BASE_ADDRESS,
+#ifdef VBE_HAVE_LFB
+   /*Bit32u PhysBasePtr*/               VBE_DISPI_LFB_PHYSICAL_ADDRESS,
+#else
+   /*Bit32u PhysBasePtr*/               0,
+#endif
    /*Bit32u OffScreenMemOffset*/        0,
    /*Bit16u OffScreenMemSize*/          0,
 // Mandatory information for VBE 3.0 and above
@@ -803,11 +840,11 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  BnkNumberOfPages*/          0,
    /*Bit8u  LinNumberOfPages*/          0,
    /*Bit8u  LinRedMaskSize*/            8,
-   /*Bit8u  LinRedFieldPosition*/       0,
+   /*Bit8u  LinRedFieldPosition*/       16,
    /*Bit8u  LinGreenMaskSize*/          8,
    /*Bit8u  LinGreenFieldPosition*/     8,
    /*Bit8u  LinBlueMaskSize*/           8,
-   /*Bit8u  LinBlueFieldPosition*/      16,
+   /*Bit8u  LinBlueFieldPosition*/      0,
    /*Bit8u  LinRsvdMaskSize*/           8,
    /*Bit8u  LinRsvdFieldPosition*/      24,
    /*Bit32u MaxPixelClock*/             0,
