@@ -1,0 +1,41 @@
+Short term :
+------------
+
+General
+  - Fix init mode (ah=00). Should use more BIOS variables
+  - Add new functionalities and modify static functionality table 
+  - Performance : 16 bits IO
+
+v0.3
+  - Implement the remaining functions :
+	- chargen ax=1100, ax=1101, ax=1102, ax=1103, ax=1104, ax=1110,
+	  ax=1111, ax=1112, ax=1120, ax=1121, ax=1122, ax=1123, ax=1124
+
+v0.4
+  - Reimplement the tables so it is compatible with the video save pointer table
+  - Implement the remaining functions (don't know if all are needed):
+	- set border ah=0b bh=00, set cga palette ah=0b bh=01, 
+	- display switch interface ah=12 bl=35
+	- video refresh control ah=12 bl=36
+        - save/restore state ah=1c
+
+v0.5
+  - Graphic modes
+  - Implement the remaining functions :
+	- read/write graphic pixel ah=0c, ah=0d, 
+  
+v1.0
+  - Bugfixes
+
+
+Long term :
+-----------
+
+v2.0
+  - upload the fonts to the "card" memory 
+  - display fonts from the "card" memory (plex86/bochs vga card needs update)
+
+v3.0
+  - vesa bios (plex86/bochs vga card needs update)
+  - frame buffer/SDL display
+

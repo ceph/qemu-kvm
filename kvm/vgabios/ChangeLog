@@ -1,0 +1,28 @@
+vgabios-0.2b
+  - "Christophe Bothamy" <cbothamy@free.fr>: Nov 19 2001
+    . Fixed bug in function ah=13
+
+vgabios-0.2a
+  - "Christophe Bothamy" <cbothamy@free.fr>: Nov 09 2001
+    . Included bugfix from techt@pikeonline.net about grayscale summing
+    . Added the "IBM" string at org 0x1e as Bart Oldeman suggested
+    . Fixed DS and ES that where inverted in the int10 parameters list!
+    . The following have been implemented :
+	- function ax=1a00, ax=1a01, ah=1b
+	- function ax=1130                
+    . Added debug messages for unimplemented/unknown functions
+      Must be compiled with DEBUG defined. The output is trapped
+      by the unknown-ioport driver of plex/bochs (port 0xfff0 is used)
+
+vgabios-0.1a
+  - "Christophe Bothamy" <cbothamy@free.fr>: May 8 2001
+    . First release. The work has been focused only on text mode.
+    . The following have been implemented :
+	- inits
+	- int 10 handler
+	- functions ah=00, ah=01, ah=02, ah=03, ah=05, ah=06, ah=07, ah=08
+	  ah=09, ah=0a, ah=0e, ah=0f, ax=1000, ax=1001, ax=1002, ax=1003
+	  ax=1007, ax=1008, ax=1009, ax=1010, ax=1012, ax=1013, ax=1015
+	  ax=1017, ax=1018, ax=1019, ax=101a, ax=101b, ah=12 bl=10,
+	  ah=12 bl=30, ah=12 bl=31, ah=12 bl=32, ah=12 bl=33, ah=12 bl=34
+	  ah=13
