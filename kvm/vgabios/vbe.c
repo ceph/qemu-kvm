@@ -64,7 +64,7 @@ extern char vbebios_product_revision;
 extern Bit16u vbebios_mode_list;
 #endif
 
-#asm
+ASM_START
 // FIXME: 'merge' these (c) etc strings with the vgabios.c strings?
 _vbebios_copyright:
 .ascii       "Bochs/Plex86 VBE(C) 2002 Jeroen Janssen <japj@darius.demon.nl>"
@@ -79,7 +79,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.19 2002/04/29 12:50:36 japj Exp $"
+.ascii       "$Id: vbe.c,v 1.20 2002/07/21 19:57:14 japj Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -120,12 +120,12 @@ _vbebios_mode_list:
 .word VBE_VESA_MODE_END_OF_LIST
 #endif
 
-#endasm
+ASM_END
 
 // from rombios.c
 #define PANIC_PORT 0x501
 
-#asm
+ASM_START
 MACRO HALT
   ;; the HALT macro is called with the line number of the HALT call.
   ;; The line number is then sent to the PANIC_PORT, causing Bochs to
@@ -136,7 +136,7 @@ MACRO HALT
   mov ax,#?1
   out dx,ax 
 MEND
-#endasm
+ASM_END
 
 // DISPI ioport functions
 // FIXME: what if no VBE host side code?
@@ -286,12 +286,12 @@ void vbe_init()
   if (dispi_id!=VBE_DISPI_ID0)
   {
 //FIXME this results in a 'rombios.c' line panic, but it's actually a 'vbe.c' panic
-#asm    
+ASM_START    
     HALT(__LINE__)
-#endasm    
+ASM_END    
   }
 //#ifdef DEBUG
-  printf("VBE Bios $Id: vbe.c,v 1.19 2002/04/29 12:50:36 japj Exp $\n");
+  printf("VBE Bios $Id: vbe.c,v 1.20 2002/07/21 19:57:14 japj Exp $\n");
 //#endif  
 }
 
@@ -302,21 +302,21 @@ void vbe_display_info()
   // Check for VBE display extension in Bochs
   if (vbe_has_vbe_display())
   {
-    #asm
+    ASM_START
      mov ax,#0xc000
      mov ds,ax
      mov si,#_vbebios_info_string
      call _display_string
-    #endasm  
+    ASM_END  
   }
   else
   {
-    #asm
+    ASM_START
      mov ax,#0xc000
      mov ds,ax
      mov si,#_no_vbebios_info_string
      call _display_string
-    #endasm  
+    ASM_END  
     
   }
 }  

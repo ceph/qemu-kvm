@@ -140,7 +140,12 @@ static void biosfn_read_video_state_size();
 static void biosfn_save_video_state();
 static void biosfn_restore_video_state();
 
-#asm
+// This is for compiling with gcc2 and gcc3
+#define ASM_START #asm
+#define ASM_END   #endasm
+
+
+ASM_START
 .text
 .rom
 .org 0
@@ -242,12 +247,12 @@ init_no_vbe_display:
 
 
   retf
-#endasm
+ASM_END
 
 /*
  *  int10 handled here
  */
-#asm
+ASM_START
 vgabios_int10_handler:
   pushf
   push es
@@ -264,7 +269,7 @@ vgabios_int10_handler:
   pop es
   popf
   iret
-#endasm
+ASM_END
 
 #include "vgatables.h"
 #include "vgafonts.h"
@@ -274,7 +279,7 @@ vgabios_int10_handler:
  */
 static void init_vga_card()
 {
-#asm
+ASM_START
 ;; switch to color mode and enable CPU access 480 lines
   mov dx, #0x3C2
   mov al, #0xC3
@@ -290,9 +295,9 @@ static void init_vga_card()
   mov al, #0x02
   outb dx,al
 
-#endasm
+ASM_END
 
-  printf("VGABios $Id: vgabios.c,v 1.15 2002/05/18 14:55:28 cbothamy Exp $\n");
+  printf("VGABios $Id: vgabios.c,v 1.16 2002/07/21 19:57:14 japj Exp $\n");
 }
 
 // --------------------------------------------------------------------------------------------
@@ -335,17 +340,17 @@ static void display_splash_screen()
  *  Tell who we are
  */
 
-#asm
+ASM_START
 crlf:
  .byte 0x0a,0x0d,0x00
 space:
  .ascii " "
  .byte 0x00
-#endasm
+ASM_END
 
 static void display_info()
 {
-#asm
+ASM_START
  mov ax,#0xc000
  mov ds,ax
  mov si,#vgabios_name
@@ -377,13 +382,13 @@ static void display_info()
  call _display_string
  mov si,#crlf
  call _display_string
-#endasm
+ASM_END
 }
 
 static void display_string()
 {
  // Get length of string
-#asm
+ASM_START
  mov ax,ds
  mov es,ax
  mov di,si
@@ -406,7 +411,7 @@ static void display_string()
  mov bx,#0x000b
  mov bp,si
  int #0x10
-#endasm
+ASM_END
 }
 
 // --------------------------------------------------------------------------------------------
@@ -945,25 +950,25 @@ static void biosfn_set_video_mode(mode) Bit8u mode;
 // FIXME
 
  // Set the ints 0x1F and 0x43
-#asm
+ASM_START
  SET_INT_VECTOR(0x1f, #0xC000, #vgafont8+128*8)
-#endasm
+ASM_END
 
   switch(cheight)
    {case 8:
-#asm
+ASM_START
      SET_INT_VECTOR(0x43, #0xC000, #vgafont8)
-#endasm
+ASM_END
      break;
     case 14:
-#asm
+ASM_START
      SET_INT_VECTOR(0x43, #0xC000, #vgafont14)
-#endasm
+ASM_END
      break;
     case 16:
-#asm
+ASM_START
      SET_INT_VECTOR(0x43, #0xC000, #vgafont16)
-#endasm
+ASM_END
      break;
    }
 }
@@ -2077,7 +2082,7 @@ static void memsetb(seg,offset,value,count)
   Bit16u value;
   Bit16u count;
 {
-#asm
+ASM_START
   push bp
   mov  bp, sp
 
@@ -2105,7 +2110,7 @@ memsetb_end:
     pop ax
 
   pop bp
-#endasm
+ASM_END
 }
 
 // --------------------------------------------------------------------------------------------
@@ -2115,7 +2120,7 @@ static void memsetw(seg,offset,value,count)
   Bit16u value;
   Bit16u count;
 {
-#asm
+ASM_START
   push bp
   mov  bp, sp
 
@@ -2143,7 +2148,7 @@ memsetw_end:
     pop ax
 
   pop bp
-#endasm
+ASM_END
 }
 
 // --------------------------------------------------------------------------------------------
@@ -2154,7 +2159,7 @@ static void memcpyb(dseg,doffset,sseg,soffset,count)
   Bit16u soffset;
   Bit16u count;
 {
-#asm
+ASM_START
   push bp
   mov  bp, sp
 
@@ -2189,7 +2194,7 @@ memcpyb_end:
     pop ax
 
   pop bp
-#endasm
+ASM_END
 }
 
 // --------------------------------------------------------------------------------------------
@@ -2200,7 +2205,7 @@ static void memcpyw(dseg,doffset,sseg,soffset,count)
   Bit16u soffset;
   Bit16u count;
 {
-#asm
+ASM_START
   push bp
   mov  bp, sp
 
@@ -2235,7 +2240,7 @@ memcpyw_end:
     pop ax
 
   pop bp
-#endasm
+ASM_END
 }
 
 /* =========================================================== */
@@ -2250,7 +2255,7 @@ read_byte(seg, offset)
   Bit16u seg;
   Bit16u offset;
 {
-#asm
+ASM_START
   push bp
   mov  bp, sp
 
@@ -2265,7 +2270,7 @@ read_byte(seg, offset)
     pop  bx
 
   pop  bp
-#endasm
+ASM_END
 }
 
 // --------------------------------------------------------------------------------------------
@@ -2274,7 +2279,7 @@ read_word(seg, offset)
   Bit16u seg;
   Bit16u offset;
 {
-#asm
+ASM_START
   push bp
   mov  bp, sp
 
@@ -2289,7 +2294,7 @@ read_word(seg, offset)
     pop  bx
 
   pop  bp
-#endasm
+ASM_END
 }
 
 // --------------------------------------------------------------------------------------------
@@ -2299,7 +2304,7 @@ write_byte(seg, offset, data)
   Bit16u offset;
   Bit8u  data;
 {
-#asm
+ASM_START
   push bp
   mov  bp, sp
 
@@ -2316,7 +2321,7 @@ write_byte(seg, offset, data)
     pop  ax
 
   pop  bp
-#endasm
+ASM_END
 }
 
 // --------------------------------------------------------------------------------------------
@@ -2326,7 +2331,7 @@ write_word(seg, offset, data)
   Bit16u offset;
   Bit16u data;
 {
-#asm
+ASM_START
   push bp
   mov  bp, sp
 
@@ -2343,7 +2348,7 @@ write_word(seg, offset, data)
     pop  ax
 
   pop  bp
-#endasm
+ASM_END
 }
 
 // --------------------------------------------------------------------------------------------
@@ -2351,7 +2356,7 @@ write_word(seg, offset, data)
 inb(port)
   Bit16u port;
 {
-#asm
+ASM_START
   push bp
   mov  bp, sp
 
@@ -2361,14 +2366,14 @@ inb(port)
     pop  dx
 
   pop  bp
-#endasm
+ASM_END
 }
 
   Bit16u
 inw(port)
   Bit16u port;
 {
-#asm
+ASM_START
   push bp
   mov  bp, sp
 
@@ -2378,7 +2383,7 @@ inw(port)
     pop  dx
 
   pop  bp
-#endasm
+ASM_END
 }
 
 // --------------------------------------------------------------------------------------------
@@ -2387,7 +2392,7 @@ outb(port, val)
   Bit16u port;
   Bit8u  val;
 {
-#asm
+ASM_START
   push bp
   mov  bp, sp
 
@@ -2400,7 +2405,7 @@ outb(port, val)
     pop  ax
 
   pop  bp
-#endasm
+ASM_END
 }
 
 // --------------------------------------------------------------------------------------------
@@ -2409,7 +2414,7 @@ outw(port, val)
   Bit16u port;
   Bit16u  val;
 {
-#asm
+ASM_START
   push bp
   mov  bp, sp
 
@@ -2422,14 +2427,14 @@ outw(port, val)
     pop  ax
 
   pop  bp
-#endasm
+ASM_END
 }
 
 Bit16u get_SS()
 {
-#asm
+ASM_START
   mov  ax, ss
-#endasm
+ASM_END
 }
 
 #ifdef DEBUG
@@ -2503,15 +2508,15 @@ void printf(s)
 
 // --------------------------------------------------------------------------------------------
 
-#asm 
+ASM_START 
 ;; DATA_SEG_DEFS_HERE
-#endasm
+ASM_END
 
-#asm
+ASM_START
 .ascii "vgabios ends here"
 .byte  0x00
 vgabios_end:
 .byte 0xCB
 ;; BLOCK_STRINGS_BEGIN
-#endasm
+ASM_END
 
