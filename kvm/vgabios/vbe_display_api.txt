@@ -131,7 +131,24 @@ API
   * VBE_DISPI_INDEX_BANK : WORD
     This parameter can be used to read/write the current selected BANK (at 0xA0000).
     This can be used for switching banks in banked mode.
+
+
+Displaying GFX
+--------------
+  Currently Linear Frame Buffer support is not available yet.
+  The only other way of displaying (VBE) graphics is using banked modi.
+  
+  What happens is that the total screen is devided in banks of 'VBE_DISPI_BANK_SIZE_KB' KiloByte in size.
+  If you want to set a pixel you can calculate its bank by doing:
+  
+    offset = pixel_x + pixel_y * resolution_x;
+    bank = offset / 64 Kb (rounded 1.9999 -> 1)
     
+    bank_pixel_pos = offset - bank * 64Kb
+    
+  Now you can set the current bank and put the pixel at VBE_DISPI_BANK_ADDRESS + bank_pixel_pos  
+
+
 Notes
 -----
   * Currently only Banked modi are 'officially' supported (although 320x200x8 LFB is available in the bios atm).
