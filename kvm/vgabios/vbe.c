@@ -31,7 +31,7 @@
 
 // defines available
 // enable LFB support (depends upon bochs-vbe-lfb patch)
-//#define VBE_HAVE_LFB
+#define VBE_HAVE_LFB
 
 // disable VESA/VBE2 check in vbe info
 //#define VBE2_NO_VESA_CHECK
@@ -79,7 +79,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.15 2002/04/02 22:38:53 cbothamy Exp $"
+.ascii       "$Id: vbe.c,v 1.16 2002/04/03 17:06:39 japj Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -238,7 +238,7 @@ void vbe_init()
 #endasm    
   }
 //#ifdef DEBUG
-  printf("VBE Bios $Id: vbe.c,v 1.15 2002/04/02 22:38:53 cbothamy Exp $\n");
+  printf("VBE Bios $Id: vbe.c,v 1.16 2002/04/03 17:06:39 japj Exp $\n");
 //#endif  
 }
 

@@ -39,8 +39,7 @@ v2.0
 VBE:
 ----
 Short term:
-- bugfixes for bochs 1.4 support
-- LFB mode support (bochs patch available + VBE_HAVE_LFB in vbe.c)
+- bugfixes for bochs 1.4(+) support
 - implement remaining functions that can be done with DISPI 0xb0c0 interface 
   (get functions for mode?, window)
 
