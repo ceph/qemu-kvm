@@ -71,7 +71,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.41 2004/05/05 19:23:53 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.42 2004/05/06 21:17:29 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -167,11 +167,24 @@ static void dispi_set_bpp(bpp)
   outw(VBE_DISPI_IOPORT_DATA,bpp);
 }
 
-static Bit16u dispi_get_bpp()
-{
-  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_BPP);
-  return inw(VBE_DISPI_IOPORT_DATA);
-}
+ASM_START
+; AL = bits per pixel / AH = bytes per pixel
+dispi_get_bpp:
+  push dx
+  mov  dx, # VBE_DISPI_IOPORT_INDEX
+  mov  ax, # VBE_DISPI_INDEX_BPP
+  out  dx, ax
+  mov  dx, # VBE_DISPI_IOPORT_DATA
+  in   ax, dx
+  mov  ah, al
+  shr  ah, 3
+  test al, #0x07
+  jz   get_bpp_noinc
+  inc  ah
+get_bpp_noinc:
+  pop  dx
+  ret
+ASM_END
 
 static Bit16u dispi_get_max_bpp()
 {
@@ -207,11 +220,29 @@ static void dispi_set_bank(bank)
   outw(VBE_DISPI_IOPORT_DATA,bank);
 }
 
-static Bit16u dispi_get_bank()
-{
-  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_BANK);
-  return inw(VBE_DISPI_IOPORT_DATA);
-}
+ASM_START
+dispi_set_bank:
+  push dx
+  push ax
+  mov  dx, # VBE_DISPI_IOPORT_INDEX
+  mov  ax, # VBE_DISPI_INDEX_BANK
+  out  dx, ax
+  pop  ax
+  mov  dx, # VBE_DISPI_IOPORT_DATA
+  out  dx, ax
+  pop  dx
+  ret
+
+dispi_get_bank:
+  push dx
+  mov  dx, # VBE_DISPI_IOPORT_INDEX
+  mov  ax, # VBE_DISPI_INDEX_BANK
+  out  dx, ax
+  mov  dx, # VBE_DISPI_IOPORT_DATA
+  in   ax, dx
+  pop  dx
+  ret
+ASM_END
 
 static void dispi_set_bank_farcall()
 {
@@ -242,57 +273,83 @@ dispi_set_bank_farcall_error:
 ASM_END
 }
 
-static void dispi_set_x_offset(offset)
-  Bit16u offset;
-{
-  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_X_OFFSET);
-  outw(VBE_DISPI_IOPORT_DATA,offset);
-}
+ASM_START
+dispi_set_x_offset:
+  push dx
+  push ax
+  mov  dx, # VBE_DISPI_IOPORT_INDEX
+  mov  ax, # VBE_DISPI_INDEX_X_OFFSET
+  out  dx, ax
+  pop  ax
+  mov  dx, # VBE_DISPI_IOPORT_DATA
+  out  dx, ax
+  pop  dx
+  ret
 
-static Bit16u dispi_get_x_offset()
-{
-  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_X_OFFSET);
-  return inw(VBE_DISPI_IOPORT_DATA);
-}
+dispi_get_x_offset:
+  push dx
+  mov  dx, # VBE_DISPI_IOPORT_INDEX
+  mov  ax, # VBE_DISPI_INDEX_X_OFFSET
+  out  dx, ax
+  mov  dx, # VBE_DISPI_IOPORT_DATA
+  in   ax, dx
+  pop  dx
+  ret
 
-static void dispi_set_y_offset(offset)
-  Bit16u offset;
-{
-  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_Y_OFFSET);
-  outw(VBE_DISPI_IOPORT_DATA,offset);
-}
+dispi_set_y_offset:
+  push dx
+  push ax
+  mov  dx, # VBE_DISPI_IOPORT_INDEX
+  mov  ax, # VBE_DISPI_INDEX_Y_OFFSET
+  out  dx, ax
+  pop  ax
+  mov  dx, # VBE_DISPI_IOPORT_DATA
+  out  dx, ax
+  pop  dx
+  ret
 
-static Bit16u dispi_get_y_offset()
-{
-  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_Y_OFFSET);
-  return inw(VBE_DISPI_IOPORT_DATA);
-}
+dispi_get_y_offset:
+  push dx
+  mov  dx, # VBE_DISPI_IOPORT_INDEX
+  mov  ax, # VBE_DISPI_INDEX_Y_OFFSET
+  out  dx, ax
+  mov  dx, # VBE_DISPI_IOPORT_DATA
+  in   ax, dx
+  pop  dx
+  ret
 
-static void dispi_set_virt_width(width)
-  Bit16u width;
-{
-  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_VIRT_WIDTH);
-  outw(VBE_DISPI_IOPORT_DATA,width);
-}
+dispi_set_virt_width:
+  push dx
+  push ax
+  mov  dx, # VBE_DISPI_IOPORT_INDEX
+  mov  ax, # VBE_DISPI_INDEX_VIRT_WIDTH
+  out  dx, ax
+  pop  ax
+  mov  dx, # VBE_DISPI_IOPORT_DATA
+  out  dx, ax
+  pop  dx
+  ret
 
-static Bit16u dispi_get_virt_width()
-{
-  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_VIRT_WIDTH);
-  return inw(VBE_DISPI_IOPORT_DATA);
-}
-/*
-static void dispi_set_virt_height(height)
-  Bit16u height;
-{
-  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_VIRT_HEIGHT);
-  outw(VBE_DISPI_IOPORT_DATA,height);
-}
-*/
-static Bit16u dispi_get_virt_height()
-{
-  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_VIRT_HEIGHT);
-  return inw(VBE_DISPI_IOPORT_DATA);
-}
+dispi_get_virt_width:
+  push dx
+  mov  dx, # VBE_DISPI_IOPORT_INDEX
+  mov  ax, # VBE_DISPI_INDEX_VIRT_WIDTH
+  out  dx, ax
+  mov  dx, # VBE_DISPI_IOPORT_DATA
+  in   ax, dx
+  pop  dx
+  ret
+
+dispi_get_virt_height:
+  push dx
+  mov  dx, # VBE_DISPI_IOPORT_INDEX
+  mov  ax, # VBE_DISPI_INDEX_VIRT_HEIGHT
+  out  dx, ax
+  mov  dx, # VBE_DISPI_IOPORT_DATA
+  in   ax, dx
+  pop  dx
+  ret
+ASM_END
 
 
 // ModeInfo helper function
@@ -353,7 +410,7 @@ void vbe_init()
     write_byte(BIOSMEM_SEG,BIOSMEM_VBE_FLAG,0x01);
     dispi_set_id(VBE_DISPI_ID3);
   }
-  printf("VBE Bios $Id: vbe.c,v 1.41 2004/05/05 19:23:53 vruppert Exp $\n");
+  printf("VBE Bios $Id: vbe.c,v 1.42 2004/05/06 21:17:29 vruppert Exp $\n");
 }
 
 /** VBE Display Info - Display information on screen about the VBE
@@ -731,26 +788,32 @@ void vbe_biosfn_save_restore_state(AX, DL, CX, ES, BX)
  *              DX      = Window number in window granularity units
  *                        (Get Memory Window only)
  */
-void vbe_biosfn_display_window_control(AX,BX,DX)
-Bit16u *AX;Bit16u BX;Bit16u *DX;
-{
-        Bit16u            ss = get_SS();
-        Bit16u            window = read_word(ss, DX);
-        Bit16u            result = 0x014f;
-        
-        if (BX==0x0000)
-        {
-                dispi_set_bank(window);
-                result = 0x4f;
-        }
-        else if (BX==0x0100)
-        {
-                window = dispi_get_bank();
-                write_word(ss, DX, result);
-                result = 0x4f;
-        }
-        write_word(ss, AX, result);
-}
+ASM_START
+vbe_biosfn_display_window_control:
+  cmp  bl, #0x00
+  jne  vbe_05_failed
+  cmp  bh, #0x01
+  je   get_display_window
+  jb   set_display_window
+  mov  ax, #0x0100
+  ret
+set_display_window:
+  mov  ax, dx
+  call dispi_set_bank
+  call dispi_get_bank
+  cmp  ax, dx
+  jne  vbe_05_failed
+  mov  ax, #0x004f
+  ret
+get_display_window:
+  call dispi_get_bank
+  mov  dx, ax
+  mov  ax, #0x004f
+  ret
+vbe_05_failed:
+  mov  ax, #0x014f
+  ret
+ASM_END
 
 
 /** Function 06h - Set/Get Logical Scan Line Length
@@ -772,51 +835,39 @@ Bit16u *AX;Bit16u BX;Bit16u *DX;
  *                        (truncated to nearest complete pixel)
  *              DX      = Maximum Number of Scan Lines 
  */
-void vbe_biosfn_set_get_logical_scan_line_length(AX,BX,CX,DX)
-Bit16u *AX;Bit16u *BX;Bit16u *DX;Bit16u *DX;
-{
-	Bit16u ss=get_SS();
-	Bit16u result=0x100;
-	Bit16u width = read_word(ss, CX);
-	Bit16u cmd = read_word(ss, BX);
-	Bit8u  bytespp = dispi_get_bpp()/8;
-
-	// check bl
-	if ( ((cmd & 0xff) == 0x00) || ((cmd & 0xff) == 0x02) )
-	{
-		// set scan line lenght in pixels(0x00) or bytes (0x02)
-		Bit16u new_width;
-		Bit16u new_height;
-
-		if ( ((cmd & 0xff) == 0x02) && (bytespp > 1) )
-		{
-			width/=bytespp;
-		}
-		dispi_set_virt_width(width);
-		new_width=dispi_get_virt_width();
-		new_height=dispi_get_virt_height();
-		
-		if (new_width!=width)
-		{
-#ifdef DEBUG
-                printf("* VBE width adjusted\n");
-#endif
-			
-			// notify width adjusted
-			result=0x024f;
-		}
-		else
-		{
-			result=0x4f;
-		}
-		
-		write_word(ss,BX,new_width*bytespp);
-		write_word(ss,CX,new_width);
-		write_word(ss,DX,new_height);
-	}
-
-	write_word(ss, AX, result);	
-}
+ASM_START
+vbe_biosfn_set_get_logical_scan_line_length:
+  mov  ax, cx
+  cmp  bl, #0x01
+  je   get_logical_scan_line_length
+  cmp  bl, #0x02
+  je   set_logical_scan_line_bytes
+  jb   set_logical_scan_line_pixels
+  mov  ax, #0x0100
+  ret
+set_logical_scan_line_bytes:
+  push ax
+  call dispi_get_bpp
+  xor  bh, bh
+  mov  bl, ah
+  xor  dx, dx
+  pop  ax
+  div  bx
+set_logical_scan_line_pixels:
+  call dispi_set_virt_width
+get_logical_scan_line_length:
+  call dispi_get_bpp
+  xor  bh, bh
+  mov  bl, ah
+  call dispi_get_virt_width
+  mov  cx, ax
+  mul  bx
+  mov  bx, ax
+  call dispi_get_virt_height
+  mov  dx, ax
+  mov  ax, #0x004f
+  ret
+ASM_END
 
 
 /** Function 07h - Set/Get Display Start
@@ -855,31 +906,32 @@ Bit16u *AX;Bit16u *BX;Bit16u *DX;Bit16u *DX;
  *              DX      = Bits 16-31 of display start address
  *              ES      = Selector for memory mapped registers 
  */
-void vbe_biosfn_set_get_display_start(AX,BX,CX,DX)
-Bit16u *AX;Bit16u BX;Bit16u CX;Bit16u DX;
-{
-	Bit16u ss=get_SS();
-	Bit16u result=0x100;
-#ifdef DEBUG
- //       printf("VBE vbe_biosfn_set_get_display_start\n");
-#endif
-	
-	// check for set display start
-	if ((GET_BL()==0x00) || (GET_BL()==0x80))
-	{
-	  // 0x80 is during vertical retrace - is also used by sdd vbetest during multibuffering
-#ifdef DEBUG
-//        printf("VBE vbe_biosfn_set_get_display_start CX%x DX%x\n",CX,DX);
-#endif
-		
-		dispi_set_x_offset(CX);
-		dispi_set_y_offset(DX);
-		result = 0x4f;
-	}
-	
-	write_word(ss, AX, result);	
-}
-
+ASM_START
+vbe_biosfn_set_get_display_start:
+  cmp  bl, #0x80
+  je   set_display_start
+  cmp  bl, #0x01
+  je   get_display_start
+  jb   set_display_start
+  mov  ax, #0x0100
+  ret
+set_display_start:
+  mov  ax, cx
+  call dispi_set_x_offset
+  mov  ax, dx
+  call dispi_set_y_offset
+  mov  ax, #0x004f
+  ret
+get_display_start:
+  call dispi_get_x_offset
+  mov  cx, ax
+  call dispi_get_y_offset
+  mov  dx, ax
+  xor  bh, bh
+  mov  ax, #0x004f
+  ret
+ASM_END
+  
 
 /** Function 08h - Set/Get Dac Palette Format
  * 

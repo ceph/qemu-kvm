@@ -304,13 +304,30 @@ int10_test_101B:
 #ifndef VBE
   jne   int10_normal
 #else
-  jne   int10_test_4F08
+  jne   int10_test_4F
 #endif
   call  biosfn_group_10
   jmp   int10_end
 #ifdef VBE
-int10_test_4F08:
-  cmp   ax, #0x4f08
+int10_test_4F:
+  cmp   ah, #0x4f
+  jne   int10_normal
+  cmp   al, #0x05
+  jne   int10_test_vbe_06
+  call  vbe_biosfn_display_window_control
+  jmp   int10_end
+int10_test_vbe_06:
+  cmp   al, #0x06
+  jne   int10_test_vbe_07
+  call  vbe_biosfn_set_get_logical_scan_line_length
+  jmp   int10_end
+int10_test_vbe_07:
+  cmp   al, #0x07
+  jne   int10_test_vbe_08
+  call  vbe_biosfn_set_get_display_start
+  jmp   int10_end
+int10_test_vbe_08:
+  cmp   al, #0x08
   jne   int10_normal
   call  vbe_biosfn_set_get_dac_palette_format
   jmp   int10_end
@@ -363,7 +380,7 @@ init_vga_card:
   ret
 
 msg_vga_init:
-.ascii "VGABios $Id: vgabios.c,v 1.52 2004/05/05 19:23:53 vruppert Exp $"
+.ascii "VGABios $Id: vgabios.c,v 1.53 2004/05/06 21:17:29 vruppert Exp $"
 .byte 0x0d,0x0a,0x00
 ASM_END
 
@@ -690,15 +707,6 @@ static void int10_func(DI, SI, BP, SP, BX, DX, CX, AX, DS, ES, FLAGS)
 #endif
           // function failed
           AX=0x100;
-          break;
-         case 0x05:
-          vbe_biosfn_display_window_control(&AX,BX,&DX);
-          break;
-         case 0x06:
-          vbe_biosfn_set_get_logical_scan_line_length(&AX,&BX,&CX,&DX);
-          break;
-         case 0x07:
-          vbe_biosfn_set_get_display_start(&AX,BX,CX,DX);
           break;
          case 0x09:
           //FIXME

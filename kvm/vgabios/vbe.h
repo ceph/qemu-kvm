@@ -18,9 +18,6 @@ void vbe_biosfn_return_mode_information(AX, CX, ES, DI);
 void vbe_biosfn_set_mode(AX, BX, ES, DI);
 void vbe_biosfn_return_current_mode(AX, BX); 
 void vbe_biosfn_save_restore_state(AX, DL, CX, ES, BX); 
-void vbe_biosfn_display_window_control(AX,BX,DX);
-void vbe_biosfn_set_get_logical_scan_line_length(AX,BX,CX,DX);
-void vbe_biosfn_set_get_display_start(AX,BX,CX,DX);
 void vbe_biosfn_set_get_palette_data(AX);
 void vbe_biosfn_return_protected_mode_interface(AX);
 
