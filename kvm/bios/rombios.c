@@ -2728,12 +2728,14 @@ outLBA(cylinder,hd_heads,head,hd_sectors,sector,dl)
 	xor	ebx,ebx
 	mov	bl,6[bp]
 	imul	ebx
-	add	al,8[bp]
-	adc	ah,#0
+
+	mov 	bl,8[bp]
+	add 	eax,ebx
 	mov	bl,10[bp]
 	imul	ebx
-	add	al,12[bp]
-	adc	ah,#0
+	mov 	bl,12[bp]
+	add 	eax,ebx
+
 	dec	eax
 	mov	dx,#0x1f3
 	out	dx,al
