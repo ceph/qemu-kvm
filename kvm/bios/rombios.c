@@ -1897,10 +1897,12 @@ printf("CHS: %x %x %x\n", cylinder, head, sector);
         if ( !(status & 0x80) ) break;
         }
 
-      if ( !(status & 0x08) ) {
+      if (status & 0x01) {
+        panic("hard drive BIOS:(read/verify) read error");
+      } else if ( !(status & 0x08) ) {
         printf("status was %02x\n", (unsigned) status);
-        panic("hard drive BIOS:(read/verify) data-request bit not set");
-        }
+        panic("hard drive BIOS:(read/verify) expected DRQ=1");
+      }
 
       sector_count = 0;
       tempbx = BX;
