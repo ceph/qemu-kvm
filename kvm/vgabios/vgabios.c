@@ -209,7 +209,7 @@ vgabios_init_func:
 
 #ifdef VBE  
 ;; init vbe functions
-  call _vbe_init  
+  call vbe_init  
 #endif
 
 ;; set int10 vect
@@ -227,7 +227,7 @@ vgabios_init_func:
 
 #ifdef VBE  
 ;; show vbe info
-  call _vbe_display_info  
+  call vbe_display_info  
 #endif
 
 
@@ -385,7 +385,7 @@ init_vga_card:
   ret
 
 msg_vga_init:
-.ascii "VGABios $Id: vgabios.c,v 1.54 2004/05/08 16:05:58 vruppert Exp $"
+.ascii "VGABios $Id: vgabios.c,v 1.55 2004/05/09 20:31:31 vruppert Exp $"
 .byte 0x0d,0x0a,0x00
 ASM_END
 
@@ -1144,12 +1144,47 @@ Bit8u xstart;Bit8u ystart;Bit8u cols;Bit8u nbcols;Bit8u cheight;
 }
 
 // --------------------------------------------------------------------------------------------
+static void vgamem_copy_cga(xstart,ysrc,ydest,cols,nbcols,cheight)
+Bit8u xstart;Bit8u ysrc;Bit8u ydest;Bit8u cols;Bit8u nbcols;Bit8u cheight;
+{
+ Bit16u src,dest;
+ Bit8u i;
+
+ src=((ysrc*cheight*nbcols)>>1)+xstart;
+ dest=((ydest*cheight*nbcols)>>1)+xstart;
+ for(i=0;i<cheight;i++)
+  {
+   if (i & 1)
+     memcpyb(0xb800,0x2000+dest+(i>>1)*nbcols,0xb800,0x2000+src+(i>>1)*nbcols,cols);
+   else
+     memcpyb(0xb800,dest+(i>>1)*nbcols,0xb800,src+(i>>1)*nbcols,cols);
+  }
+}
+
+// --------------------------------------------------------------------------------------------
+static void vgamem_fill_cga(xstart,ystart,cols,nbcols,cheight,attr)
+Bit8u xstart;Bit8u ystart;Bit8u cols;Bit8u nbcols;Bit8u cheight;Bit8u attr;
+{
+ Bit16u dest;
+ Bit8u i;
+
+ dest=((ystart*cheight*nbcols)>>1)+xstart;
+ for(i=0;i<cheight;i++)
+  {
+   if (i & 1)
+     memsetb(0xb800,0x2000+dest+(i>>1)*nbcols,attr,cols);
+   else
+     memsetb(0xb800,dest+(i>>1)*nbcols,attr,cols);
+  }
+}
+
+// --------------------------------------------------------------------------------------------
 static void biosfn_scroll (nblines,attr,rul,cul,rlr,clr,page,dir)
 Bit8u nblines;Bit8u attr;Bit8u rul;Bit8u cul;Bit8u rlr;Bit8u clr;Bit8u page;Bit8u dir;
 {
  // page == 0xFF if current
 
- Bit8u mode,line,cheight,cols;
+ Bit8u mode,line,cheight,bpp,cols;
  Bit16u nbcols,nbrows,i;
  Bit16u address;
 
@@ -1238,6 +1273,41 @@ Bit8u nblines;Bit8u attr;Bit8u rul;Bit8u cul;Bit8u rlr;Bit8u clr;Bit8u page;Bit8
               vgamem_fill_pl4(cul,i,cols,nbcols,cheight);
              else
               vgamem_copy_pl4(cul,i,i-nblines,cols,nbcols,cheight);
+            }
+          }
+        }
+       break;
+     case CGA:
+       bpp=vga_modes[line].pixbits;
+       if(nblines==0&&rul==0&&cul==0&&rlr==nbrows-1&&clr==nbcols-1)
+        {
+         memsetb(vga_modes[line].sstart,0,attr,nbrows*nbcols*cheight*bpp);
+        }
+       else
+        {
+         if(bpp==2)
+          {
+           cul<<=1;
+           cols<<=1;
+           nbcols<<=1;
+          }
+         // if Scroll up
+         if(dir==SCROLL_UP)
+          {for(i=rul;i<=rlr;i++)
+            {
+             if((i+nblines>rlr)||(nblines==0))
+              vgamem_fill_cga(cul,i,cols,nbcols,cheight,attr);
+             else
+              vgamem_copy_cga(cul,i+nblines,i,cols,nbcols,cheight);
+            }
+          }
+         else
+          {for(i=rlr;i>=rul;i--)
+            {
+             if((i<rul+nblines)||(nblines==0))
+              vgamem_fill_cga(cul,i,cols,nbcols,cheight,attr);
+             else
+              vgamem_copy_cga(cul,i,i-nblines,cols,nbcols,cheight);
             }
           }
         }
@@ -1873,7 +1943,15 @@ Bit8u car;Bit8u page;Bit8u attr;Bit8u flag;
 
  // Do we need to scroll ?
  if(ycurs==nbrows)
-  {biosfn_scroll(0x01,0x07,0,0,nbrows-1,nbcols-1,page,SCROLL_UP);
+  {
+   if(vga_modes[line].class==TEXT)
+    {
+     biosfn_scroll(0x01,0x07,0,0,nbrows-1,nbcols-1,page,SCROLL_UP);
+    }
+   else
+    {
+     biosfn_scroll(0x01,0x00,0,0,nbrows-1,nbcols-1,page,SCROLL_UP);
+    }
    ycurs-=1;
   }
  

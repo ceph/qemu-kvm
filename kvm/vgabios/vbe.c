@@ -71,7 +71,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.43 2004/05/08 16:05:52 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.44 2004/05/09 20:31:30 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -85,6 +85,10 @@ _no_vbebios_info_string:
 .byte	0x0a,0x0d
 .byte	0x0a,0x0d
 .byte 0x00
+
+msg_vbe_init:
+.ascii      "VBE Bios $Id: vbe.c,v 1.44 2004/05/09 20:31:30 vruppert Exp $"
+.byte	0x0a,0x0d, 0x00
 
 
 #ifndef DYN_LIST
@@ -129,22 +133,31 @@ MACRO HALT
   mov ax,#?1
   out dx,ax 
 MEND
+
+; DISPI ioport functions
+
+dispi_get_id:
+  push dx
+  mov  dx, # VBE_DISPI_IOPORT_INDEX
+  mov  ax, # VBE_DISPI_INDEX_ID
+  out  dx, ax
+  mov  dx, # VBE_DISPI_IOPORT_DATA
+  in   ax, dx
+  pop  dx
+  ret
+
+dispi_set_id:
+  push dx
+  push ax
+  mov  dx, # VBE_DISPI_IOPORT_INDEX
+  mov  ax, # VBE_DISPI_INDEX_ID
+  out  dx, ax
+  pop  ax
+  mov  dx, # VBE_DISPI_IOPORT_DATA
+  out  dx, ax
+  pop  dx
+  ret
 ASM_END
-
-// DISPI ioport functions
-// FIXME: what if no VBE host side code?
-static Bit16u dispi_get_id()
-{
-  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_ID);
-  return inw(VBE_DISPI_IOPORT_DATA);  
-}
-
-static void dispi_set_id(id)
-  Bit16u id;
-{
-  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_ID);
-  outw(VBE_DISPI_IOPORT_DATA,id);
-}
 
 static void dispi_set_xres(xres)
   Bit16u xres;
@@ -184,23 +197,27 @@ dispi_get_bpp:
 get_bpp_noinc:
   pop  dx
   ret
-ASM_END
 
-static Bit16u dispi_get_max_bpp()
-{
-  Bit16u max_bpp, vbe_enable;
+_dispi_get_max_bpp:
+  push dx
+  push bx
+  call dispi_get_enable
+  mov  bx, ax
+  or   ax, # VBE_DISPI_GETCAPS
+  call _dispi_set_enable
+  mov  dx, # VBE_DISPI_IOPORT_INDEX
+  mov  ax, # VBE_DISPI_INDEX_BPP
+  out  dx, ax
+  mov  dx, # VBE_DISPI_IOPORT_DATA
+  in   ax, dx
+  push ax
+  mov  ax, bx
+  call _dispi_set_enable
+  pop  ax
+  pop  bx
+  pop  dx
+  ret
 
-  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_ENABLE);
-  vbe_enable = inw(VBE_DISPI_IOPORT_DATA);
-  outw(VBE_DISPI_IOPORT_DATA,vbe_enable|VBE_DISPI_GETCAPS);
-  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_BPP);
-  max_bpp = inw(VBE_DISPI_IOPORT_DATA);
-  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_ENABLE);
-  outw(VBE_DISPI_IOPORT_DATA,vbe_enable);
-  return max_bpp;
-}
-
-ASM_START
 _dispi_set_enable:
   push dx
   push ax
@@ -388,60 +405,67 @@ static ModeInfoListItem* mode_info_find_mode(mode, using_lfb)
   return 0;
 }
 
-/** Has VBE display - Returns true if VBE display detected
- *
- */
-Boolean vbe_has_vbe_display()
-{
-  return read_byte(BIOSMEM_SEG,BIOSMEM_VBE_FLAG);
-}
+ASM_START
 
-/** VBE Init - Initialise the Vesa Bios Extension Code
- *
- *  This function does a sanity check on the host side display code interface.
- */
-void vbe_init()
-{
-  Bit16u dispi_id;
-  
-  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_ID);
-  outw(VBE_DISPI_IOPORT_DATA,VBE_DISPI_ID0);
-  
-  dispi_id=inw(VBE_DISPI_IOPORT_DATA);
-  
-  if (dispi_id==VBE_DISPI_ID0)
-  {
-    write_byte(BIOSMEM_SEG,BIOSMEM_VBE_FLAG,0x01);
-    dispi_set_id(VBE_DISPI_ID3);
-  }
-  printf("VBE Bios $Id: vbe.c,v 1.43 2004/05/08 16:05:52 vruppert Exp $\n");
-}
+; Has VBE display - Returns true if VBE display detected
 
-/** VBE Display Info - Display information on screen about the VBE
- */
-void vbe_display_info()
-{
-  // Check for VBE display extension in Bochs
-  if (vbe_has_vbe_display())
-  {
-    ASM_START
-     mov ax,#0xc000
-     mov ds,ax
-     mov si,#_vbebios_info_string
-     call _display_string
-    ASM_END  
-  }
-  else
-  {
-    ASM_START
-     mov ax,#0xc000
-     mov ds,ax
-     mov si,#_no_vbebios_info_string
-     call _display_string
-    ASM_END  
-    
-  }
-}  
+_vbe_has_vbe_display:
+  push ds
+  push bx
+  mov  ax, # BIOSMEM_SEG
+  mov  ds, ax
+  mov  bx, # BIOSMEM_VBE_FLAG
+  mov  al, [bx]
+  and  al, #0x01
+  xor  ah, ah
+  pop  bx
+  pop  ds
+  ret
+
+; VBE Init - Initialise the Vesa Bios Extension Code
+; This function does a sanity check on the host side display code interface.
+
+vbe_init:
+  mov  ax, # VBE_DISPI_ID0
+  call dispi_set_id
+  call dispi_get_id
+  cmp  ax, # VBE_DISPI_ID0
+  jne  no_vbe_interface
+  push ds
+  push bx
+  mov  ax, # BIOSMEM_SEG
+  mov  ds, ax
+  mov  bx, # BIOSMEM_VBE_FLAG
+  mov  al, #0x01
+  mov  [bx], al
+  pop  bx
+  pop  ds
+  mov  ax, # VBE_DISPI_ID3
+  call dispi_set_id
+no_vbe_interface:
+  mov  bx, #msg_vbe_init
+  push bx
+  call _printf
+  inc  sp
+  inc  sp
+  ret
+
+; VBE Display Info - Display information on screen about the VBE
+
+vbe_display_info:
+  call _vbe_has_vbe_display
+  test ax, ax
+  jz   no_vbe_flag
+  mov  ax, #0xc000
+  mov  ds, ax
+  mov  si, #_vbebios_info_string
+  jmp  _display_string
+no_vbe_flag:
+  mov  ax, #0xc000
+  mov  ds, ax
+  mov  si, #_no_vbebios_info_string
+  jmp  _display_string
+ASM_END  
 
 /** Function 00h - Return VBE Controller Information
  * 
