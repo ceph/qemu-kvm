@@ -6,7 +6,7 @@ LDFLAGS =
 
 RELEASE = `pwd | sed "s-.*/--"`
 RELDATE = `date '+%d %b %Y'`
-RELVERS = `pwd | sed "s-.*/--" | sed "s/vgabios// | sed s/-//"`
+RELVERS = `pwd | sed "s-.*/--" | sed "s/vgabios//" | sed "s/-//"`
 
 VGABIOS_DATE = "-DVGABIOS_DATE=\"$(RELDATE)\""
 
