@@ -1556,7 +1556,6 @@ bios_printf(action, s)
     // do {} while (1);
 ASM_START
     HALT2(__LINE__)
-    hlt
 ASM_END
     }
 }
@@ -7732,6 +7731,7 @@ int13_eltorito:
 ;- INT18h -
 ;----------
 int18_handler: ;; Boot Failure routing
+  hlt
   HALT(__LINE__)
   iret
 
@@ -7756,7 +7756,7 @@ int19_relocated: ;; Boot function, relocated
   ;; bl contains the boot drive
   ;; ax contains the boot segment or 0 if failure
 
-  test       ax, ax  ;; id ax is 0 call int18
+  test       ax, ax  ;; if ax is 0 call int18
   jz         int18_handler
 
   mov dl,    bl      ;; set drive so guest os find it
