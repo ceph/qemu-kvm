@@ -74,7 +74,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.9 2002/03/08 22:08:08 japj Exp $"
+.ascii       "$Id: vbe.c,v 1.10 2002/03/10 16:19:08 cbothamy Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -127,6 +127,16 @@ MACRO HALT
 MEND
 #endasm
 
+/** Has VBE display - Returns true if VBE display detected
+ *
+ */
+Boolean vbe_has_vbe_display()
+{
+  outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_ID);
+  outw(VBE_DISPI_IOPORT_DATA,VBE_DISPI_ID0);
+
+  return (inw(VBE_DISPI_IOPORT_DATA)==VBE_DISPI_ID0);
+}
 
 /** VBE Init - Initialise the Vesa Bios Extension Code
  *
@@ -149,7 +159,7 @@ void vbe_init()
 #endasm    
   }
 #ifdef DEBUG
-  printf("VBE Bios $Id: vbe.c,v 1.9 2002/03/08 22:08:08 japj Exp $\n");
+  printf("VBE Bios $Id: vbe.c,v 1.10 2002/03/10 16:19:08 cbothamy Exp $\n");
 #endif  
 }
 

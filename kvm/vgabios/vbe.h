@@ -7,6 +7,7 @@
  *
  *  See the function descriptions in vbe.c for more information
  */
+Boolean vbe_has_vbe_display();
 void vbe_init();
 void vbe_display_info();
 void vbe_biosfn_return_controller_information(AX, ES, DI);
