@@ -1,20 +1,53 @@
+2003-11-06 00:26  cbothamy
+
+	* README (1.5):
+
+	  - add changes for 0.4c release
+
+2003-11-06 00:22  cbothamy
+
+	* VGABIOS-lgpl-latest.bin (1.29), VGABIOS-lgpl-latest.debug.bin
+	  (1.29):
+
+	  - compile vgabios.c rev1.38
+
+2003-11-06 00:21  cbothamy
+
+	* vgabios.c (1.38):
+
+	  - activate char table after loading it when setting a text video
+	  mode
+
+2003-11-06 00:19  cbothamy
+
+	* Makefile (1.12):
+
+	  - when making a release, remove unwanted files first, and exclude
+	  CVS from the tarball
+
+2003-11-04 22:50  cbothamy
+
+	* ChangeLog (1.20, v0_4b):
+
+	  - update ChangeLog for 0.4b release
+
 2003-11-04 22:49  cbothamy
 
-	* README (1.4):
+	* README (1.4, v0_4b):
 
 	  - update Changes for 0.4b release
 
 2003-11-04 20:26  vruppert
 
 	* vgabios.c (1.37), VGABIOS-lgpl-latest.bin (1.28),
-	  VGABIOS-lgpl-latest.debug.bin (1.28):
+	  VGABIOS-lgpl-latest.debug.bin (1.28) (utags: v0_4b):
 
 	  - biosfn_get_font_info(): character height must be returned in CX
 
 2003-11-03 21:57  vruppert
 
-	* vbe.c (1.35), vgabios.c (1.36), VGABIOS-lgpl-latest.bin (1.27),
-	  VGABIOS-lgpl-latest.debug.bin (1.27):
+	* vbe.c (1.35, v0_4b), vgabios.c (1.36), VGABIOS-lgpl-latest.bin
+	  (1.27), VGABIOS-lgpl-latest.debug.bin (1.27):
 
 	  - the 'noclearmem' flag is not stored in the 'current video mode'
 	  register (0040h:0049h) - VBE also stores the 'noclear' flag in
@@ -22,8 +55,9 @@
 
 2003-10-05 10:06  vruppert
 
-	* vbe.h (1.18), vbe_display_api.txt (1.8), VGABIOS-lgpl-latest.bin
-	  (1.26), VGABIOS-lgpl-latest.debug.bin (1.26):
+	* vbe.h (1.18, v0_4b), vbe_display_api.txt (1.8, v0_4b),
+	  VGABIOS-lgpl-latest.bin (1.26), VGABIOS-lgpl-latest.debug.bin
+	  (1.26):
 
 	  - changed VBE i/o registers to 0x01CE/CF (suggestion from Daniel
 	  Gimpelevich)
@@ -53,7 +87,7 @@
 
 2003-08-17 15:24  cbothamy
 
-	* Makefile (1.11, v0_4a):
+	* Makefile (1.11, v0_4b, v0_4a):
 
 	  - fix Makefile for "release" target
 
@@ -76,7 +110,7 @@
 
 2003-08-07 17:54  vruppert
 
-	* vbe.c (1.34), vgatables.h (1.5) (utags: v0_4a):
+	* vbe.c (1.34), vgatables.h (1.5, v0_4b) (utags: v0_4a):
 
 	  - current VBE mode now stored in BDA (unused address 0xBA)
 
@@ -118,7 +152,7 @@
 
 2003-07-15 12:35  vruppert
 
-	* vbe.c (1.32), vbetables.h (1.21, v0_4a):
+	* vbe.c (1.32), vbetables.h (1.21, v0_4b, v0_4a):
 
 	  - new function dispi_get_bpp() - function
 	  vbe_biosfn_set_get_logical_scan_line_length() fixed for >8bpp -
@@ -384,7 +418,7 @@
 2002-09-19 19:03  cbothamy
 
 	* ChangeLog (1.16), Makefile (1.7, v0_3b), vbe.c (1.22, v0_3b),
-	  vgabios.c (1.18), vgabios.h (1.3, v0_4a, v0_3b):
+	  vgabios.c (1.18), vgabios.h (1.3, v0_4b, v0_4a, v0_3b):
 
 	  - updated the Makefile - removed display of copyrights.  -
 	  changed the Copyright string to "LGPL VGABios developers"
@@ -451,7 +485,7 @@
 
 2002-04-03 19:06  japj
 
-	* ChangeLog (1.13), TODO (1.9, v0_4a, v0_3b), vbe.c (1.16):
+	* ChangeLog (1.13), TODO (1.9, v0_4b, v0_4a, v0_3b), vbe.c (1.16):
 
 	  - defaulting LFB on + updated changelog & todo
 
@@ -620,7 +654,7 @@
 2002-02-18 23:26  japj
 
 	* tests/lfbprof/: lfbprof.c (1.2), lfbprof.h (1.2) (utags: v0_3a,
-	  v0_3b, v0_4a):
+	  v0_3b, v0_4a, v0_4b):
 
 	  - fixed unsigned short for mode list (-1 != 0xffff otherwise) -
 	  fixed LfbMapRealPointer macro mask problem (some modes were
@@ -628,8 +662,8 @@
 
 2002-02-18 23:07  japj
 
-	* tests/lfbprof/: Makefile (1.1, v0_4a, v0_3b, v0_3a), lfbprof.c
-	  (1.1), lfbprof.h (1.1):
+	* tests/lfbprof/: Makefile (1.1, v0_4b, v0_4a, v0_3b, v0_3a),
+	  lfbprof.c (1.1), lfbprof.h (1.1):
 
 	  - Adding lfbprof testprogram (for vbe testing purposes)   It
 	  needs to be compiled with the Watcom C Compiler
@@ -661,20 +695,21 @@
 
 2002-02-18 17:55  japj
 
-	* Makefile (1.2), dataseghack (1.2, v0_4a, v0_3b, v0_3a), vbe.c
-	  (1.1), vbe.h (1.1), vbetables.h (1.1), vgabios.c (1.2), vgabios.h
-	  (1.2, v0_3a):
+	* Makefile (1.2), dataseghack (1.2, v0_4b, v0_4a, v0_3b, v0_3a),
+	  vbe.c (1.1), vbe.h (1.1), vbetables.h (1.1), vgabios.c (1.2),
+	  vgabios.h (1.2, v0_3a):
 
 	  - merging with vbebios 0.2 release
 
 2002-02-18 11:31  cbothamy
 
-	* BUGS (1.1, v0_4a, v0_3b, v0_3a), COPYING (1.1, v0_4a, v0_3b,
-	  v0_3a), ChangeLog (1.1), Makefile (1.1), Notes (1.1, v0_4a,
-	  v0_3b, v0_3a), README (1.1, v0_3b, v0_3a), TODO (1.1),
-	  dataseghack (1.1), vgabios.c (1.1), vgabios.h (1.1), vgafonts.h
-	  (1.1, v0_4a, v0_3b, v0_3a), vgatables.h (1.1, v0_3b, v0_3a),
-	  tests/testbios.c (1.1, v0_4a, v0_3b, v0_3a):
+	* BUGS (1.1, v0_4b, v0_4a, v0_3b, v0_3a), COPYING (1.1, v0_4b,
+	  v0_4a, v0_3b, v0_3a), ChangeLog (1.1), Makefile (1.1), Notes
+	  (1.1, v0_4b, v0_4a, v0_3b, v0_3a), README (1.1, v0_3b, v0_3a),
+	  TODO (1.1), dataseghack (1.1), vgabios.c (1.1), vgabios.h (1.1),
+	  vgafonts.h (1.1, v0_4b, v0_4a, v0_3b, v0_3a), vgatables.h (1.1,
+	  v0_3b, v0_3a), tests/testbios.c (1.1, v0_4b, v0_4a, v0_3b,
+	  v0_3a):
 
 	  - initial import
 
