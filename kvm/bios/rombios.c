@@ -3860,7 +3860,7 @@ BX_DEBUG_INT15("case default:\n");
                         extended_memory_size >>= 16;
                         write_word(ES, regs.u.r16.di+14, extended_memory_size);
 
-                        write_dword(ES, regs.u.r16.di+16, 0x1);
+                        write_word(ES, regs.u.r16.di+16, 0x1);
                         write_word(ES, regs.u.r16.di+18, 0x0);
 
                         regs.u.r32.ebx = 0;
