@@ -3477,7 +3477,8 @@ ASM_START
       ;;  perhaps do something with IDT here
 
       ;; set PE bit in CR0
-      mov  ax, #0x0001
+      mov  eax, cr0
+      or   al, #0x01
       mov  cr0, eax
       ;; far jump to flush CPU queue after transition to protected mode
       JMP_AP(0x0020, protected_mode)
@@ -3501,9 +3502,10 @@ protected_mode:
       mov ds, ax
       mov es, ax
 
-      ;; clear CR3 and reset PG bit in CR0 ???
-      xor  eax, eax
-      mov cr0, eax
+      ;; reset PG bit in CR0 ???
+      mov  eax, cr0
+      and  al, #0xFE
+      mov  cr0, eax
 
       ;; far jump to flush CPU queue after transition to real mode
       JMP_AP(0xf000, real_mode)
