@@ -320,7 +320,7 @@ ASM_START
 
 ASM_END
 
-  printf("VGABios $Id: vgabios.c,v 1.29 2003/04/26 07:22:27 vruppert Exp $\n");
+  printf("VGABios $Id: vgabios.c,v 1.30 2003/06/15 19:19:50 vruppert Exp $\n");
 }
 
 // --------------------------------------------------------------------------------------------
@@ -1241,7 +1241,7 @@ Bit8u page;Bit16u *car;
 static void write_gfx_char(car,attr,xcurs,ycurs,nbcols,cheight)
 Bit8u car;Bit8u attr;Bit8u xcurs;Bit8u ycurs;Bit8u nbcols;Bit8u cheight;
 {
- Bit8u back,fore,data,i,j,mmask;
+ Bit8u i,mmask;
  Bit8u *fdata;
  Bit16u addr,dest,src;
 
@@ -1257,22 +1257,15 @@ Bit8u car;Bit8u attr;Bit8u xcurs;Bit8u ycurs;Bit8u nbcols;Bit8u cheight;
   }
  addr=xcurs+ycurs*cheight*nbcols;
  src = car * cheight;
- fore = attr & 0x0f;
  outb( VGAREG_SEQU_ADDRESS, 0x02 );
  mmask = inb( VGAREG_SEQU_DATA );
- for(i=0;i<4;i++)
+ for(i=0;i<cheight;i++)
   {
-   outb( VGAREG_SEQU_DATA, 1 << i );
-   for(j=0;j<cheight;j++)
-    {
-     dest=addr+j*nbcols;
-     data = 0;
-     if(fore & (1 << i))
-      {
-       data = fdata[src+j];
-      }
-     write_byte(0xa000,dest,data);
-    }
+   dest=addr+i*nbcols;
+   outb( VGAREG_SEQU_DATA, 0x0f );
+   write_byte(0xa000,dest,0x00);
+   outb( VGAREG_SEQU_DATA, attr & 0x0f );
+   write_byte(0xa000,dest,fdata[src+i]);
   }
  outb( VGAREG_SEQU_DATA, mmask );
 }
