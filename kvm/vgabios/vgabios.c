@@ -324,7 +324,7 @@ ASM_START
 
 ASM_END
 
-  printf("VGABios $Id: vgabios.c,v 1.36 2003/11/03 20:57:02 vruppert Exp $\n");
+  printf("VGABios $Id: vgabios.c,v 1.37 2003/11/04 19:26:43 vruppert Exp $\n");
 }
 
 // --------------------------------------------------------------------------------------------
@@ -2006,7 +2006,7 @@ Bit8u BH;Bit16u *ES;Bit16u *BP;Bit16u *CX;Bit16u *DX;
     return;
   }
  // Set byte/char of on screen font
- write_word(ss,DX,(Bit16u)read_byte(BIOSMEM_SEG,BIOSMEM_CHAR_HEIGHT));
+ write_word(ss,CX,(Bit16u)read_byte(BIOSMEM_SEG,BIOSMEM_CHAR_HEIGHT));
 
  // Set Highest char row
  write_word(ss,DX,(Bit16u)read_byte(BIOSMEM_SEG,BIOSMEM_NB_ROWS));
