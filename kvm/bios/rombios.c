@@ -8567,10 +8567,14 @@ int76_handler:
 
 ;--------------------
 #if BX_APM
+
 use32 386
 #define APM_PROT32
 #include "apmbios.S"
+
 use16 386
+#define APM_PROT16
+#include "apmbios.S"
 
 #define APM_REAL
 #include "apmbios.S"
