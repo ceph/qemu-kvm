@@ -71,7 +71,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.40 2004/04/18 09:15:22 japj Exp $"
+.ascii       "$Id: vbe.c,v 1.41 2004/05/05 19:23:53 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -353,7 +353,7 @@ void vbe_init()
     write_byte(BIOSMEM_SEG,BIOSMEM_VBE_FLAG,0x01);
     dispi_set_id(VBE_DISPI_ID3);
   }
-  printf("VBE Bios $Id: vbe.c,v 1.40 2004/04/18 09:15:22 japj Exp $\n");
+  printf("VBE Bios $Id: vbe.c,v 1.41 2004/05/05 19:23:53 vruppert Exp $\n");
 }
 
 /** VBE Display Info - Display information on screen about the VBE
@@ -449,7 +449,7 @@ Bit16u *AX;Bit16u ES;Bit16u DI;
         vbe_info_block.OemStringPtr_Off = &vbebios_copyright;
         
         // Capabilities
-        vbe_info_block.Capabilities[0] = 0;
+        vbe_info_block.Capabilities[0] = VBE_CAPABILITY_8BIT_DAC;
         vbe_info_block.Capabilities[1] = 0;
         vbe_info_block.Capabilities[2] = 0;
         vbe_info_block.Capabilities[3] = 0;
@@ -885,14 +885,54 @@ Bit16u *AX;Bit16u BX;Bit16u CX;Bit16u DX;
  * 
  * Input:
  *              AX      = 4F08h
+ *              BL      = 00h set DAC palette width
+ *                      = 01h get DAC palette width
+ *              BH      = If BL=00h: desired number of bits per primary color
  * Output:
  *              AX      = VBE Return Status
- *
- * FIXME: incomplete API description, Input & Output
+ *              BH      = current number of bits per primary color (06h = standard VGA)
  */
-void vbe_biosfn_set_get_dac_palette_format(AX)
-{
-}
+ASM_START
+vbe_biosfn_set_get_dac_palette_format:
+  push dx
+  mov  dx, # VBE_DISPI_IOPORT_INDEX
+  mov  ax, # VBE_DISPI_INDEX_ENABLE
+  out  dx, ax
+  cmp  bl, #0x01
+  je   get_dac_palette_format
+  ja   vbe_08_unknown
+  mov  dx, # VBE_DISPI_IOPORT_DATA
+  in   ax, dx
+  cmp  bh, #0x08
+  je   set_8bit_dac
+  cmp  bh, #0x06
+  jne  vbe_08_unsupported
+  and  ax, #~ VBE_DISPI_8BIT_DAC
+  out  dx, ax
+  jmp  get_dac_palette_format
+set_8bit_dac:
+  or   ax, # VBE_DISPI_8BIT_DAC
+  out  dx, ax
+get_dac_palette_format:
+  mov  bh, #0x06
+  mov  dx, # VBE_DISPI_IOPORT_DATA
+  in   ax, dx
+  and  ax, # VBE_DISPI_8BIT_DAC
+  jz   vbe_08_ok
+  mov  bh, #0x08
+vbe_08_ok:
+  mov  ax, #0x004f
+  pop  dx
+  ret
+vbe_08_unknown:
+  mov  ax, #0x0100
+  pop  dx
+  ret
+vbe_08_unsupported:
+  mov  ax, #0x014f
+  pop  dx
+  ret
+ASM_END
 
 
 /** Function 09h - Set/Get Palette Data

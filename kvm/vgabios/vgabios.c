@@ -117,32 +117,6 @@ static void biosfn_restore_video_state();
 
 ASM_START
 
-biosmem_seg = 0x40
-biosmem_initial_mode = 0x10
-biosmem_current_mode = 0x49
-biosmem_nb_cols      = 0x4a
-biosmem_current_page = 0x62
-biosmem_crtc_address = 0x63
-biosmem_current_msr  = 0x65
-biosmem_char_height  = 0x85
-biosmem_video_ctl    = 0x87
-biosmem_switches     = 0x88
-biosmem_modeset_ctl  = 0x89
-biosmem_dcc_index    = 0x8a
-
-vgareg_mda_crtc_address  = 0x03b4
-vgareg_actl_address      = 0x03c0
-vgareg_actl_read_data    = 0x03c1
-vgareg_write_misc_output = 0x03c2
-vgareg_sequ_address      = 0x03c4
-vgareg_pel_mask          = 0x03c6
-vgareg_dac_read_address  = 0x03c7
-vgareg_dac_write_address = 0x03c8
-vgareg_dac_data          = 0x03c9
-vgareg_read_misc_output  = 0x03cc
-vgareg_grdc_address      = 0x03ce
-vgareg_actl_reset        = 0x03da
-
 MACRO SET_INT_VECTOR
   push ds
   xor ax, ax
@@ -327,9 +301,20 @@ int10_test_101B:
   cmp   ax, #0x101b
   je    int10_normal
   cmp   ah, #0x10
+#ifndef VBE
   jne   int10_normal
+#else
+  jne   int10_test_4F08
+#endif
   call  biosfn_group_10
   jmp   int10_end
+#ifdef VBE
+int10_test_4F08:
+  cmp   ax, #0x4f08
+  jne   int10_normal
+  call  vbe_biosfn_set_get_dac_palette_format
+  jmp   int10_end
+#endif
 
 int10_normal:
   push es
@@ -378,7 +363,7 @@ init_vga_card:
   ret
 
 msg_vga_init:
-.ascii "VGABios $Id: vgabios.c,v 1.51 2004/05/02 17:27:18 vruppert Exp $"
+.ascii "VGABios $Id: vgabios.c,v 1.52 2004/05/05 19:23:53 vruppert Exp $"
 .byte 0x0d,0x0a,0x00
 ASM_END
 
@@ -389,11 +374,11 @@ ASM_END
 ASM_START
 init_bios_area:
   push  ds
-  mov   ax, #biosmem_seg
+  mov   ax, # BIOSMEM_SEG
   mov   ds, ax
 
 ;; init detected hardware BIOS Area
-  mov   bx, #biosmem_initial_mode
+  mov   bx, # BIOSMEM_INITIAL_MODE
   mov   ax, [bx]
   and   ax, #0xffcf
   mov   [bx], ax
@@ -401,27 +386,27 @@ init_bios_area:
 ;; Just for the first int10 find its children
 
 ;; the default char height
-  mov   bx, #biosmem_char_height
+  mov   bx, # BIOSMEM_CHAR_HEIGHT
   mov   al, #0x10
   mov   [bx], al
 
 ;; Clear the screen 
-  mov   bx, #biosmem_video_ctl
+  mov   bx, # BIOSMEM_VIDEO_CTL
   mov   al, #0x60
   mov   [bx], al
 
 ;; Set the basic screen we have
-  mov   bx, #biosmem_switches
+  mov   bx, # BIOSMEM_SWITCHES
   mov   al, #0xf9
   mov   [bx], al
 
 ;; Set the basic modeset options
-  mov   bx, #biosmem_modeset_ctl
+  mov   bx, # BIOSMEM_MODESET_CTL
   mov   al, #0x51
   mov   [bx], al
 
 ;; Set the  default MSR
-  mov   bx, #biosmem_current_msr
+  mov   bx, # BIOSMEM_CURRENT_MSR
   mov   al, #0x09
   mov   [bx], al
 
@@ -714,14 +699,6 @@ static void int10_func(DI, SI, BP, SP, BX, DX, CX, AX, DS, ES, FLAGS)
           break;
          case 0x07:
           vbe_biosfn_set_get_display_start(&AX,BX,CX,DX);
-          break;
-         case 0x08:
-          //FIXME
-#ifdef DEBUG
-          unimplemented();
-#endif
-          // function failed
-          AX=0x100;
           break;
          case 0x09:
           //FIXME
@@ -1343,7 +1320,7 @@ Bit8u car;Bit8u attr;Bit8u xcurs;Bit8u ycurs;Bit8u nbcols;Bit8u cheight;
     }
   }
 ASM_START
-  mov dx, #vgareg_grdc_address
+  mov dx, # VGAREG_GRDC_ADDRESS
   mov ax, 0xff08
   out dx, ax
   mov ax, 0x0005
@@ -1594,9 +1571,9 @@ biosfn_set_border_color:
   push  bx
   push  cx
   push  dx
-  mov   dx, #vgareg_actl_reset
+  mov   dx, # VGAREG_ACTL_RESET
   in    al, dx
-  mov   dx, #vgareg_actl_address
+  mov   dx, # VGAREG_ACTL_ADDRESS
   mov   al, #0x00
   out   dx, al
   mov   al, bl
@@ -1609,14 +1586,14 @@ set_low_border:
   mov   cl, #0x01
   and   bl, #0x10
 set_intensity_loop:
-  mov   dx, #vgareg_actl_address
+  mov   dx, # VGAREG_ACTL_ADDRESS
   mov   al, cl
   out   dx, al
-  mov   dx, #vgareg_actl_read_data
+  mov   dx, # VGAREG_ACTL_READ_DATA
   in    al, dx
   and   al, #0xef
   or    al, bl
-  mov   dx, #vgareg_actl_address
+  mov   dx, # VGAREG_ACTL_ADDRESS
   out   dx, al
   inc   cl
   cmp   cl, #0x04
@@ -1633,19 +1610,19 @@ biosfn_set_palette:
   push  bx
   push  cx
   push  dx
-  mov   dx, #vgareg_actl_reset
+  mov   dx, # VGAREG_ACTL_RESET
   in    al, dx
   mov   cl, #0x01
   and   bl, #0x01
 set_cga_palette_loop:
-  mov   dx, #vgareg_actl_address
+  mov   dx, # VGAREG_ACTL_ADDRESS
   mov   al, cl
   out   dx, al
-  mov   dx, #vgareg_actl_read_data
+  mov   dx, # VGAREG_ACTL_READ_DATA
   in    al, dx
   and   al, #0xfe
   or    al, bl
-  mov   dx, #vgareg_actl_address
+  mov   dx, # VGAREG_ACTL_ADDRESS
   out   dx, al
   inc   cl
   cmp   cl, #0x04
@@ -1901,21 +1878,21 @@ Bit8u car;Bit8u page;Bit8u attr;Bit8u flag;
 ASM_START
 biosfn_get_video_mode:
   push  ds
-  mov   ax, #biosmem_seg
+  mov   ax, # BIOSMEM_SEG
   mov   ds, ax
   push  bx
-  mov   bx, #biosmem_current_page
+  mov   bx, # BIOSMEM_CURRENT_PAGE
   mov   al, [bx]
   pop   bx
   mov   bh, al
   push  bx
-  mov   bx, #biosmem_video_ctl
+  mov   bx, # BIOSMEM_VIDEO_CTL
   mov   ah, [bx]
   and   ah, #0x80
-  mov   bx, #biosmem_current_mode
+  mov   bx, # BIOSMEM_CURRENT_MODE
   mov   al, [bx]
   or    al, ah
-  mov   bx, #biosmem_nb_cols
+  mov   bx, # BIOSMEM_NB_COLS
   mov   ah, [bx]
   pop   bx
   pop   ds
@@ -1995,9 +1972,9 @@ biosfn_set_single_palette_reg:
   ja    no_actl_reg1
   push  ax
   push  dx
-  mov   dx, #vgareg_actl_reset
+  mov   dx, # VGAREG_ACTL_RESET
   in    al, dx
-  mov   dx, #vgareg_actl_address
+  mov   dx, # VGAREG_ACTL_ADDRESS
   mov   al, bl
   out   dx, al
   mov   al, bh
@@ -2028,10 +2005,10 @@ biosfn_set_all_palette_reg:
   push  cx
   push  dx
   mov   bx, dx
-  mov   dx, #vgareg_actl_reset
+  mov   dx, # VGAREG_ACTL_RESET
   in    al, dx
   mov   cl, #0x00
-  mov   dx, #vgareg_actl_address
+  mov   dx, # VGAREG_ACTL_ADDRESS
 set_palette_loop:
   mov   al, cl
   out   dx, al
@@ -2062,18 +2039,18 @@ biosfn_toggle_intensity:
   push  ax
   push  bx
   push  dx
-  mov   dx, #vgareg_actl_reset
+  mov   dx, # VGAREG_ACTL_RESET
   in    al, dx
-  mov   dx, #vgareg_actl_address
+  mov   dx, # VGAREG_ACTL_ADDRESS
   mov   al, #0x10
   out   dx, al
-  mov   dx, #vgareg_actl_read_data
+  mov   dx, # VGAREG_ACTL_READ_DATA
   in    al, dx
   and   al, #0xf7
   and   bl, #0x01
   shl   bl, 3
   or    al, bl
-  mov   dx, #vgareg_actl_address
+  mov   dx, # VGAREG_ACTL_ADDRESS
   out   dx, al
   mov   al, #0x20
   out   dx, al
@@ -2090,17 +2067,17 @@ biosfn_get_single_palette_reg:
   ja    no_actl_reg2
   push  ax
   push  dx
-  mov   dx, #vgareg_actl_reset
+  mov   dx, # VGAREG_ACTL_RESET
   in    al, dx
-  mov   dx, #vgareg_actl_address
+  mov   dx, # VGAREG_ACTL_ADDRESS
   mov   al, bl
   out   dx, al
-  mov   dx, #vgareg_actl_read_data
+  mov   dx, # VGAREG_ACTL_READ_DATA
   in    al, dx
   mov   bh, al
-  mov   dx, #vgareg_actl_reset
+  mov   dx, # VGAREG_ACTL_RESET
   in    al, dx
-  mov   dx, #vgareg_actl_address
+  mov   dx, # VGAREG_ACTL_ADDRESS
   mov   al, #0x20
   out   dx, al
   pop   dx
@@ -2133,12 +2110,12 @@ biosfn_get_all_palette_reg:
   mov   bx, dx
   mov   cl, #0x00
 get_palette_loop:
-  mov   dx, #vgareg_actl_reset
+  mov   dx, # VGAREG_ACTL_RESET
   in    al, dx
-  mov   dx, #vgareg_actl_address
+  mov   dx, # VGAREG_ACTL_ADDRESS
   mov   al, cl
   out   dx, al
-  mov   dx, #vgareg_actl_read_data
+  mov   dx, # VGAREG_ACTL_READ_DATA
   in    al, dx
   seg   es
   mov   [bx], al
@@ -2146,18 +2123,18 @@ get_palette_loop:
   inc   cl
   cmp   cl, #0x10
   jne   get_palette_loop
-  mov   dx, #vgareg_actl_reset
+  mov   dx, # VGAREG_ACTL_RESET
   in    al, dx
-  mov   dx, #vgareg_actl_address
+  mov   dx, # VGAREG_ACTL_ADDRESS
   mov   al, #0x11
   out   dx, al
-  mov   dx, #vgareg_actl_read_data
+  mov   dx, # VGAREG_ACTL_READ_DATA
   in    al, dx
   seg   es
   mov   [bx], al
-  mov   dx, #vgareg_actl_reset
+  mov   dx, # VGAREG_ACTL_RESET
   in    al, dx
-  mov   dx, #vgareg_actl_address
+  mov   dx, # VGAREG_ACTL_ADDRESS
   mov   al, #0x20
   out   dx, al
   pop   dx
@@ -2172,10 +2149,10 @@ ASM_START
 biosfn_set_single_dac_reg:
   push  ax
   push  dx
-  mov   dx, #vgareg_dac_write_address
+  mov   dx, # VGAREG_DAC_WRITE_ADDRESS
   mov   al, bl
   out   dx, al
-  mov   dx, #vgareg_dac_data
+  mov   dx, # VGAREG_DAC_DATA
   pop   ax
   push  ax
   mov   al, ah
@@ -2196,13 +2173,13 @@ biosfn_set_all_dac_reg:
   push  bx
   push  cx
   push  dx
-  mov   dx, #vgareg_dac_write_address
+  mov   dx, # VGAREG_DAC_WRITE_ADDRESS
   mov   al, bl
   out   dx, al
   pop   dx
   push  dx
   mov   bx, dx
-  mov   dx, #vgareg_dac_data
+  mov   dx, # VGAREG_DAC_DATA
 set_dac_loop:
   seg   es
   mov   al, [bx]
@@ -2231,26 +2208,26 @@ biosfn_select_video_dac_color_page:
   push  ax
   push  bx
   push  dx
-  mov   dx, #vgareg_actl_reset
+  mov   dx, # VGAREG_ACTL_RESET
   in    al, dx
-  mov   dx, #vgareg_actl_address
+  mov   dx, # VGAREG_ACTL_ADDRESS
   mov   al, #0x10
   out   dx, al
-  mov   dx, #vgareg_actl_read_data
+  mov   dx, # VGAREG_ACTL_READ_DATA
   in    al, dx
   and   bl, #0x01
   jnz   set_dac_page
   and   al, #0x7f
   shl   bh, 7
   or    al, bh
-  mov   dx, #vgareg_actl_address
+  mov   dx, # VGAREG_ACTL_ADDRESS
   out   dx, al
   jmp   set_actl_normal
 set_dac_page:
   push  ax
-  mov   dx, #vgareg_actl_reset
+  mov   dx, # VGAREG_ACTL_RESET
   in    al, dx
-  mov   dx, #vgareg_actl_address
+  mov   dx, # VGAREG_ACTL_ADDRESS
   mov   al, #0x14
   out   dx, al
   pop   ax
@@ -2275,12 +2252,12 @@ ASM_START
 biosfn_read_single_dac_reg:
   push  ax
   push  dx
-  mov   dx, #vgareg_dac_read_address
+  mov   dx, # VGAREG_DAC_READ_ADDRESS
   mov   al, bl
   out   dx, al
   pop   ax
   mov   ah, al
-  mov   dx, #vgareg_dac_data
+  mov   dx, # VGAREG_DAC_DATA
   in    al, dx
   xchg  al, ah
   push  ax
@@ -2300,13 +2277,13 @@ biosfn_read_all_dac_reg:
   push  bx
   push  cx
   push  dx
-  mov   dx, #vgareg_dac_read_address
+  mov   dx, # VGAREG_DAC_READ_ADDRESS
   mov   al, bl
   out   dx, al
   pop   dx
   push  dx
   mov   bx, dx
-  mov   dx, #vgareg_dac_data
+  mov   dx, # VGAREG_DAC_DATA
 read_dac_loop:
   in    al, dx
   seg   es
@@ -2334,7 +2311,7 @@ ASM_START
 biosfn_set_pel_mask:
   push  ax
   push  dx
-  mov   dx, #vgareg_pel_mask
+  mov   dx, # VGAREG_PEL_MASK
   mov   al, bl
   out   dx, al
   pop   dx
@@ -2347,7 +2324,7 @@ ASM_START
 biosfn_read_pel_mask:
   push  ax
   push  dx
-  mov   dx, #vgareg_pel_mask
+  mov   dx, # VGAREG_PEL_MASK
   in    al, dx
   mov   bl, al
   pop   dx
@@ -2360,21 +2337,21 @@ ASM_START
 biosfn_read_video_dac_state:
   push  ax
   push  dx
-  mov   dx, #vgareg_actl_reset
+  mov   dx, # VGAREG_ACTL_RESET
   in    al, dx
-  mov   dx, #vgareg_actl_address
+  mov   dx, # VGAREG_ACTL_ADDRESS
   mov   al, #0x10
   out   dx, al
-  mov   dx, #vgareg_actl_read_data
+  mov   dx, # VGAREG_ACTL_READ_DATA
   in    al, dx
   mov   bl, al
   shr   bl, 7
-  mov   dx, #vgareg_actl_reset
+  mov   dx, # VGAREG_ACTL_RESET
   in    al, dx
-  mov   dx, #vgareg_actl_address
+  mov   dx, # VGAREG_ACTL_ADDRESS
   mov   al, #0x14
   out   dx, al
-  mov   dx, #vgareg_actl_read_data
+  mov   dx, # VGAREG_ACTL_READ_DATA
   in    al, dx
   mov   bh, al
   and   bh, #0x0f
@@ -2382,9 +2359,9 @@ biosfn_read_video_dac_state:
   jnz   get_dac_16_page
   shr   bh, 2
 get_dac_16_page:
-  mov   dx, #vgareg_actl_reset
+  mov   dx, # VGAREG_ACTL_RESET
   in    al, dx
-  mov   dx, #vgareg_actl_address
+  mov   dx, # VGAREG_ACTL_ADDRESS
   mov   al, #0x20
   out   dx, al
   pop   dx
@@ -2432,7 +2409,7 @@ Bit16u start;Bit16u count;
 static void get_font_access()
 {
 ASM_START
- mov dx, #vgareg_sequ_address
+ mov dx, # VGAREG_SEQU_ADDRESS
  mov ax, #0x0100
  out dx, ax
  mov ax, #0x0402
@@ -2441,7 +2418,7 @@ ASM_START
  out dx, ax
  mov ax, #0x0300
  out dx, ax
- mov dx, #vgareg_grdc_address
+ mov dx, # VGAREG_GRDC_ADDRESS
  mov ax, #0x0204
  out dx, ax
  mov ax, #0x0005
@@ -2454,7 +2431,7 @@ ASM_END
 static void release_font_access()
 {
 ASM_START
- mov dx, #vgareg_sequ_address
+ mov dx, # VGAREG_SEQU_ADDRESS
  mov ax, #0x0100
  out dx, ax
  mov ax, #0x0302
@@ -2463,14 +2440,14 @@ ASM_START
  out dx, ax
  mov ax, #0x0300
  out dx, ax
- mov dx, #vgareg_read_misc_output
+ mov dx, # VGAREG_READ_MISC_OUTPUT
  in  al, dx
  and al, #0x01
  shl al, 2
  or  al, #0x0a
  mov ah, al
  mov al, #0x06
- mov dx, #vgareg_grdc_address
+ mov dx, # VGAREG_GRDC_ADDRESS
  out dx, ax
  mov ax, #0x0004
  out dx, ax
@@ -2578,7 +2555,7 @@ ASM_START
 biosfn_set_text_block_specifier:
   push  ax
   push  dx
-  mov   dx, #vgareg_sequ_address
+  mov   dx, # VGAREG_SEQU_ADDRESS
   mov   ah, bl
   mov   al, #0x03
   out   dx, ax
@@ -2693,16 +2670,16 @@ ASM_START
 biosfn_get_ega_info:
   push  ds
   push  ax
-  mov   ax, #biosmem_seg
+  mov   ax, # BIOSMEM_SEG
   mov   ds, ax
   xor   ch, ch
-  mov   bx, #biosmem_switches
+  mov   bx, # BIOSMEM_SWITCHES
   mov   cl, [bx]
   and   cl, #0x0f
-  mov   bx, #biosmem_crtc_address
+  mov   bx, # BIOSMEM_CRTC_ADDRESS
   mov   ax, [bx]
   mov   bx, #0x0003
-  cmp   ax, #vgareg_mda_crtc_address
+  cmp   ax, # VGAREG_MDA_CRTC_ADDRESS
   jne   mode_ega_color
   mov   bh, #0x01
 mode_ega_color:
@@ -2765,9 +2742,9 @@ biosfn_enable_default_palette_loading:
   mov   dl, al
   and   dl, #0x01
   shl   dl, 3
-  mov   ax, #biosmem_seg
+  mov   ax, # BIOSMEM_SEG
   mov   ds, ax
-  mov   bx, #biosmem_modeset_ctl
+  mov   bx, # BIOSMEM_MODESET_CTL
   mov   al, [bx]
   and   al, #0xf7
   or    al, dl
@@ -2788,11 +2765,11 @@ biosfn_enable_video_addressing:
   and   bl, #0x01
   xor   bl, #0x01
   shl   bl, 1
-  mov   dx, #vgareg_read_misc_output
+  mov   dx, # VGAREG_READ_MISC_OUTPUT
   in    al, dx
   and   al, #0xfd
   or    al, bl
-  mov   dx, #vgareg_write_misc_output
+  mov   dx, # VGAREG_WRITE_MISC_OUTPUT
   out   dx, al
   mov   ax, #0x1212
   pop   dx
@@ -2810,9 +2787,9 @@ biosfn_enable_grayscale_summing:
   and   dl, #0x01
   xor   dl, #0x01
   shl   dl, 1
-  mov   ax, #biosmem_seg
+  mov   ax, # BIOSMEM_SEG
   mov   ds, ax
-  mov   bx, #biosmem_modeset_ctl
+  mov   bx, # BIOSMEM_MODESET_CTL
   mov   al, [bx]
   and   al, #0xfd
   or    al, dl
@@ -2833,9 +2810,9 @@ biosfn_enable_cursor_emulation:
   mov   dl, al
   and   dl, #0x01
   xor   dl, #0x01
-  mov   ax, #biosmem_seg
+  mov   ax, # BIOSMEM_SEG
   mov   ds, ax
-  mov   bx, #biosmem_modeset_ctl
+  mov   bx, # BIOSMEM_MODESET_CTL
   mov   al, [bx]
   and   al, #0xfe
   or    al, dl
@@ -2908,9 +2885,9 @@ biosfn_group_1A:
 biosfn_read_display_code:
   push  ds
   push  ax
-  mov   ax, #biosmem_seg
+  mov   ax, # BIOSMEM_SEG
   mov   ds, ax
-  mov   bx, #biosmem_dcc_index
+  mov   bx, # BIOSMEM_DCC_INDEX
   mov   al, [bx]
   mov   bl, al
   xor   bh, bh
@@ -2922,10 +2899,10 @@ biosfn_set_display_code:
   push  ds
   push  ax
   push  bx
-  mov   ax, #biosmem_seg
+  mov   ax, # BIOSMEM_SEG
   mov   ds, ax
   mov   ax, bx
-  mov   bx, #biosmem_dcc_index
+  mov   bx, # BIOSMEM_DCC_INDEX
   mov   [bx], al
 #ifdef DEBUG
   mov   al, ah

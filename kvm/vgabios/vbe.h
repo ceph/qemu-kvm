@@ -21,7 +21,6 @@ void vbe_biosfn_save_restore_state(AX, DL, CX, ES, BX);
 void vbe_biosfn_display_window_control(AX,BX,DX);
 void vbe_biosfn_set_get_logical_scan_line_length(AX,BX,CX,DX);
 void vbe_biosfn_set_get_display_start(AX,BX,CX,DX);
-void vbe_biosfn_set_get_dac_palette_format(AX); 
 void vbe_biosfn_set_get_palette_data(AX);
 void vbe_biosfn_return_protected_mode_interface(AX);
 
@@ -297,6 +296,7 @@ typedef struct ModeInfoBlock
   #define VBE_DISPI_DISABLED              0x00
   #define VBE_DISPI_ENABLED               0x01
   #define VBE_DISPI_GETCAPS               0x02
+  #define VBE_DISPI_8BIT_DAC              0x20
   #define VBE_DISPI_LFB_ENABLED           0x40
   #define VBE_DISPI_NOCLEARMEM            0x80
   
