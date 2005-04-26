@@ -10418,7 +10418,7 @@ mp_config_proc0:
   db 0 ;; entry type=processor
   db 0 ;; local APIC id
   db 0x11 ;; local APIC version number
-  db 1 ;; cpu flags: enabled
+  db 3 ;; cpu flags: enabled, bootstrap processor
   db 0,6,0,0 ;; cpu signature
   dw 0x201,0 ;; feature flags
   dw 0,0 ;; reserved
@@ -10436,7 +10436,7 @@ mp_config_proc2:
   db 0 ;; entry type=processor
   db 2 ;; local APIC id
   db 0x11 ;; local APIC version number
-  db 3 ;; cpu flags: enabled, bootstrap processor
+  db 1 ;; cpu flags: enabled
   db 0,6,0,0 ;; cpu signature
   dw 0x201,0 ;; feature flags
   dw 0,0 ;; reserved
