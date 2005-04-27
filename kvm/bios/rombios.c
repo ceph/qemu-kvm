@@ -182,7 +182,14 @@
 #if BX_PCIBIOS && BX_CPU<3
 #    error PCI BIOS can only be used with 386+ cpu
 #endif
+#if BX_APM && BX_CPU<3
+#    error APM BIOS can only be used with 386+ cpu
+#endif
 
+#ifndef BX_SMP_PROCESSORS
+#define BX_SMP_PROCESSORS 1
+#    warning BX_SMP_PROCESSORS not defined, defaulting to 1
+#endif
   
 #define PANIC_PORT  0x400
 #define PANIC_PORT2 0x401
