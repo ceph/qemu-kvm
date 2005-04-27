@@ -10456,7 +10456,7 @@ mp_config_isa_bus:
   db 0x49, 0x53, 0x41, 0x20, 0x20, 0x20  ;; bus type="ISA   "
 mp_config_ioapic:
   db 2 ;; entry type=I/O APIC
-  db 4 ;; apic id=2. linux will set.
+  db 4 ;; apic id=4. linux will set.
   db 0x11 ;; I/O APIC version number
   db 1 ;; flags=1=enabled
   dw 0x0000, 0xfec0 ;; memory mapped address of I/O APIC
