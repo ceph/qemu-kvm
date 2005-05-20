@@ -71,7 +71,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.45 2004/07/22 18:37:29 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.46 2005/05/20 16:06:52 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -87,7 +87,7 @@ _no_vbebios_info_string:
 .byte 0x00
 
 msg_vbe_init:
-.ascii      "VBE Bios $Id: vbe.c,v 1.45 2004/07/22 18:37:29 vruppert Exp $"
+.ascii      "VBE Bios $Id: vbe.c,v 1.46 2005/05/20 16:06:52 vruppert Exp $"
 .byte	0x0a,0x0d, 0x00
 
 
@@ -116,23 +116,6 @@ _vbebios_mode_list:
 .word VBE_OWN_MODE_320X200X8
 .word VBE_VESA_MODE_END_OF_LIST
 #endif
-
-ASM_END
-
-// from rombios.c
-#define PANIC_PORT 0x501
-
-ASM_START
-MACRO HALT
-  ;; the HALT macro is called with the line number of the HALT call.
-  ;; The line number is then sent to the PANIC_PORT, causing Bochs to
-  ;; print a BX_PANIC message.  This will normally halt the simulation
-  ;; with a message such as "BIOS panic at rombios.c, line 4091".
-  ;; However, users can choose to make panics non-fatal and continue.
-  mov dx,#PANIC_PORT
-  mov ax,#?1
-  out dx,ax 
-MEND
 
 ; DISPI ioport functions
 

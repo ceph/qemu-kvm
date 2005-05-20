@@ -397,7 +397,7 @@ init_vga_card:
   ret
 
 msg_vga_init:
-.ascii "VGABios $Id: vgabios.c,v 1.59 2004/07/18 20:22:43 vruppert Exp $"
+.ascii "VGABios $Id: vgabios.c,v 1.60 2005/05/20 16:06:52 vruppert Exp $"
 .byte 0x0d,0x0a,0x00
 ASM_END
 
@@ -734,8 +734,8 @@ static void int10_func(DI, SI, BP, SP, BX, DX, CX, AX, DS, ES, FLAGS)
           // function failed
           AX=0x100;
           break;
-#ifdef DEBUG
          default:
+#ifdef DEBUG
           unknown();
 #endif   		 
           // function failed
