@@ -71,7 +71,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.46 2005/05/20 16:06:52 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.47 2005/05/24 16:50:50 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -86,10 +86,11 @@ _no_vbebios_info_string:
 .byte	0x0a,0x0d
 .byte 0x00
 
+#if defined(USE_BX_INFO) || defined(DEBUG)
 msg_vbe_init:
-.ascii      "VBE Bios $Id: vbe.c,v 1.46 2005/05/20 16:06:52 vruppert Exp $"
+.ascii      "VBE Bios $Id: vbe.c,v 1.47 2005/05/24 16:50:50 vruppert Exp $"
 .byte	0x0a,0x0d, 0x00
-
+#endif
 
 #ifndef DYN_LIST
 // FIXME: for each new mode add a statement here
@@ -474,11 +475,13 @@ vbe_init:
   mov  ax, # VBE_DISPI_ID3
   call dispi_set_id
 no_vbe_interface:
+#if defined(USE_BX_INFO) || defined(DEBUG)
   mov  bx, #msg_vbe_init
   push bx
   call _printf
   inc  sp
   inc  sp
+#endif
   ret
 
 ; VBE Display Info - Display information on screen about the VBE
