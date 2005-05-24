@@ -1,3 +1,23 @@
+2005-05-24 16:50  vruppert
+
+	* vbe.c (1.47), vgabios.c (1.61):
+
+	- output to the vgabios info port can be disabled now. It is still enabled by
+	  default and always possible in debug mode. (based on a patch from Alex Beregszaszi)
+
+2005-05-20 16:06  vruppert
+
+	* vbe.c (1.46), vgabios.c (1.60):
+
+	- fixed return value for the default case in the VBE section (non-debug mode)
+	- removed unused macros HALT and PANIC_PORT
+
+2005-03-07 20:39  vruppert
+
+	* README (1.9):
+
+	- updates for 0.5a release
+
 2005-03-06 13:06  vruppert
 
 	* Makefile (1.17):
