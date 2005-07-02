@@ -402,7 +402,7 @@ init_vga_card:
 
 #if defined(USE_BX_INFO) || defined(DEBUG)
 msg_vga_init:
-.ascii "VGABios $Id: vgabios.c,v 1.61 2005/05/24 16:50:50 vruppert Exp $"
+.ascii "VGABios $Id: vgabios.c,v 1.62 2005/07/02 18:39:43 vruppert Exp $"
 .byte 0x0d,0x0a,0x00
 #endif
 ASM_END
@@ -421,6 +421,8 @@ init_bios_area:
   mov   bx, # BIOSMEM_INITIAL_MODE
   mov   ax, [bx]
   and   ax, #0xffcf
+;; set 80x25 color (not clear from RBIL but usual)
+  or    ax, #0x0020
   mov   [bx], ax
 
 ;; Just for the first int10 find its children
@@ -1914,7 +1916,6 @@ Bit8u car;Bit8u page;Bit8u attr;Bit8u flag;
     break;
 
    case '\n':
-    xcurs=0;
     ycurs++;
     break;
 
