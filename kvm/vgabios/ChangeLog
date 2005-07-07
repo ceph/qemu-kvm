@@ -1,3 +1,11 @@
+2005-07-02 18:39  vruppert
+
+	* vgabios.c (1.62):
+
+	- BIOS configuration word usually reports initial mode 80x25 color text
+	- vgabios function 0x0e (write teletype): linefeed (0x0a) only increments the
+	  cursor row value
+
 2005-05-24 16:50  vruppert
 
 	* vbe.c (1.47), vgabios.c (1.61):
