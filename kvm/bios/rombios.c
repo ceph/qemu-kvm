@@ -7826,11 +7826,11 @@ ASM_END
           // Done waiting.
           Bit16u segment, offset;
 
-          offset = read_word( 0x40, 0x98 );
-          segment = read_word( 0x40, 0x9A );
+          segment = read_word( 0x40, 0x98 );
+          offset = read_word( 0x40, 0x9A );
           write_byte( 0x40, 0xA0, 0 );  // Turn of status byte.
           outb_cmos( 0xB, registerB & 0x37 ); // Clear the Periodic Interrupt.
-          write_byte( segment, offset, 0x80 );  // Write to specified flag byte.
+          write_byte(segment, offset, read_byte(segment, offset) | 0x80 );  // Write to specified flag byte.
         } else {
           // Continue waiting.
           time -= 0x3D1;
