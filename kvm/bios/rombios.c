@@ -10179,11 +10179,11 @@ int1a_callfunction:
 ;;
 int70_handler:
   push ds
-  pusha
+  pushad
   xor  ax, ax
   mov  ds, ax
   call _int70_function
-  popa
+  popad
   pop  ds
   iret
 
