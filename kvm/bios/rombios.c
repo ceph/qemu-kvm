@@ -722,7 +722,7 @@ typedef struct {
   
   // for access to EBDA area
   //     The EBDA structure should conform to 
-  //     http://www.cybertrails.com/~fys/rombios.htm document
+  //     http://www.frontiernet.net/~fys/rombios.htm document
   //     I made the ata and cdemu structs begin at 0x121 in the EBDA seg
   typedef struct {
     unsigned char filler1[0x3D];
