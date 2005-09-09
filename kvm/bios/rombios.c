@@ -9925,7 +9925,7 @@ int09_handler:
   xor  ax, ax
   mov  ds, ax
   mov  al, BYTE [0x496]     ;; mf2_state |= 0x02
-  or   al, #0x01
+  or   al, #0x02
   mov  BYTE [0x496], al
   pop  ds
   
