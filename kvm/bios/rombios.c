@@ -9135,7 +9135,75 @@ pcibios_init_sel_reg:
   ret
   
 pcibios_init_iomem_bases:
-  /* TODO */
+  push bp
+  mov  bp, sp
+  mov  eax, #0xe0000000 ;; base for memory init
+  push eax
+  mov  ax, #0xc000 ;; base for i/o init
+  push ax
+  mov  ax, #0x0010 ;; start at base address #0
+  push ax
+  mov  bx, #0x0008
+pci_init_io_loop1:
+  mov  dl, #0x00
+  call pcibios_init_sel_reg
+  mov  dx, #0x0cfc
+  in   ax, dx
+  cmp  ax, #0xffff
+  jz   next_pci_dev
+  mov  dl, #0x04
+  call pcibios_init_sel_reg
+  mov  dx, #0x0cfc
+  in   al, dx
+  and  al, #0x03
+  jz   next_pci_dev
+pci_init_io_loop2:
+  mov  dl, [bp-8]
+  call pcibios_init_sel_reg
+  mov  dx, #0x0cfc
+  in   eax, dx
+  mov  ecx, eax
+  mov  eax, #0xffffffff
+  out  dx, eax
+  in   eax, dx
+  test al, #0x01
+  jnz  init_io_base
+  cmp  eax, ecx
+  je   next_pci_base
+  xor  eax, #0xffffffff
+  mov  ecx, eax
+  mov  eax, [bp-4]
+  out  dx, eax
+  add  eax, ecx ;; calculate next free mem base
+  add  eax, #0x01000000
+  and  eax, #0xff000000
+  mov  [bp-4], eax
+  jmp  next_pci_base
+init_io_base:
+  cmp  ax, cx
+  je   next_pci_base
+  xor  ax, #0xfffe
+  mov  cx, ax
+  mov  ax, [bp-6]
+  out  dx, ax
+  add  ax, cx ;; calculate next free i/o base
+  add  ax, #0x0100
+  and  ax, #0xff00
+  mov  [bp-6], ax
+next_pci_base:
+  mov  al, [bp-8]
+  add  al, #0x04
+  cmp  al, #0x28
+  je   next_pci_dev
+  mov  byte ptr[bp-8], al
+  jmp  pci_init_io_loop2
+next_pci_dev:
+  mov  byte ptr[bp-8], #0x10
+  inc  bx
+  cmp  bx, #0x0100
+  jne  pci_init_io_loop1
+  mov  sp, bp
+  pop  bp
   ret
 
 pcibios_init_set_elcr:
