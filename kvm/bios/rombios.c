@@ -9162,12 +9162,12 @@ pci_init_io_loop2:
   call pcibios_init_sel_reg
   mov  dx, #0x0cfc
   in   eax, dx
+  test al, #0x01
+  jnz  init_io_base
   mov  ecx, eax
   mov  eax, #0xffffffff
   out  dx, eax
   in   eax, dx
-  test al, #0x01
-  jnz  init_io_base
   cmp  eax, ecx
   je   next_pci_base
   xor  eax, #0xffffffff
@@ -9180,6 +9180,10 @@ pci_init_io_loop2:
   mov  [bp-4], eax
   jmp  next_pci_base
 init_io_base:
+  mov  cx, ax
+  mov  ax, #0xffff
+  out  dx, ax
+  in   ax, dx
   cmp  ax, cx
   je   next_pci_base
   xor  ax, #0xfffe
