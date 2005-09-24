@@ -9151,12 +9151,12 @@ pci_init_io_loop1:
   in   ax, dx
   cmp  ax, #0xffff
   jz   next_pci_dev
-  mov  dl, #0x04
+  mov  dl, #0x04 ;; disable i/o and memory space access
   call pcibios_init_sel_reg
   mov  dx, #0x0cfc
   in   al, dx
-  and  al, #0x03
-  jz   next_pci_dev
+  and  al, #0xfc
+  out  dx, al
 pci_init_io_loop2:
   mov  dl, [bp-8]
   call pcibios_init_sel_reg
@@ -9198,9 +9198,16 @@ next_pci_base:
   mov  al, [bp-8]
   add  al, #0x04
   cmp  al, #0x28
-  je   next_pci_dev
+  je   enable_iomem_space
   mov  byte ptr[bp-8], al
   jmp  pci_init_io_loop2
+enable_iomem_space:
+  mov  dl, #0x04 ;; enable i/o and memory space access if available
+  call pcibios_init_sel_reg
+  mov  dx, #0x0cfc
+  in   al, dx
+  or   al, #0x07
+  out  dx, al
 next_pci_dev:
   mov  byte ptr[bp-8], #0x10
   inc  bx
