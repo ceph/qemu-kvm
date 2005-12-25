@@ -1547,6 +1547,23 @@ put_uint(action, val, width, neg)
   send(action, val - (nval * 10) + '0');
 }
 
+  void
+put_luint(action, val, width, neg)
+  Bit16u action;
+  unsigned long val;
+  short width;
+  bx_bool neg;
+{
+  unsigned long nval = val / 10;
+  if (nval)
+    put_luint(action, nval, width - 1, neg);
+  else {
+    while (--width > 0) send(action, ' ');
+    if (neg) send(action, '-');
+  }
+  send(action, val - (nval * 10) + '0');
+}
+
 //--------------------------------------------------------------------------
 // bios_printf()
 //   A compact variable argument printf function which prints its output via
@@ -1565,7 +1582,7 @@ bios_printf(action, s)
   bx_bool  in_format;
   short i;
   Bit16u  *arg_ptr;
-  Bit16u   arg_seg, arg, nibble, shift_count, format_width;
+  Bit16u   arg_seg, arg, nibble, hibyte, shift_count, format_width;
 
   arg_ptr = &s;
   arg_seg = get_SS();
@@ -1602,6 +1619,12 @@ bios_printf(action, s)
           }
         else if (c == 'u') {
           put_uint(action, arg, format_width, 0);
+          }
+        else if (c == 'l') {
+          s++;
+          arg_ptr++; /* increment to next arg */
+          hibyte = read_word(arg_seg, arg_ptr);
+          put_luint(action, ((Bit32u) hibyte << 16) | arg, format_width, 0);
           }
         else if (c == 'd') {
           if (arg & 0x8000)
@@ -2406,7 +2429,7 @@ void ata_detect( )
         case ATA_TYPE_ATA:
           printf("ata%d %s: ",channel,slave?" slave":"master");
           i=0; while(c=read_byte(get_SS(),model+i++)) printf("%c",c);
-          printf(" ATA-%d Hard-Disk (%u MBytes)\n",version,(Bit16u)sizeinmb);
+          printf(" ATA-%d Hard-Disk (%lu MBytes)\n", version, sizeinmb);
           break;
         case ATA_TYPE_ATAPI:
           printf("ata%d %s: ",channel,slave?" slave":"master");
