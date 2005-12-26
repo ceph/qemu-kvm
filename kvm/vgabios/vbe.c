@@ -71,7 +71,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.47 2005/05/24 16:50:50 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.48 2005/12/26 19:50:26 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -88,7 +88,7 @@ _no_vbebios_info_string:
 
 #if defined(USE_BX_INFO) || defined(DEBUG)
 msg_vbe_init:
-.ascii      "VBE Bios $Id: vbe.c,v 1.47 2005/05/24 16:50:50 vruppert Exp $"
+.ascii      "VBE Bios $Id: vbe.c,v 1.48 2005/12/26 19:50:26 vruppert Exp $"
 .byte	0x0a,0x0d, 0x00
 #endif
 
@@ -117,6 +117,29 @@ _vbebios_mode_list:
 .word VBE_OWN_MODE_320X200X8
 .word VBE_VESA_MODE_END_OF_LIST
 #endif
+
+vesa_pm_start:
+  dw vesa_pm_set_window - vesa_pm_start
+  dw vesa_pm_set_display_strt - vesa_pm_start
+  dw vesa_pm_unimplemented - vesa_pm_start
+  dw 0
+
+  USE32
+vesa_pm_set_window:
+  mov ax, #0x4f05
+  int #0x10
+  ret
+
+vesa_pm_set_display_start:
+  mov ax, #0x4f07
+  int #0x10
+  ret
+
+vesa_pm_unimplemented:
+  mov ax, #0x014f
+  ret
+  USE16
+vesa_pm_end:
 
 ; DISPI ioport functions
 
@@ -1055,14 +1078,28 @@ void vbe_biosfn_set_get_palette_data(AX)
 }
 
 /** Function 0Ah - Return VBE Protected Mode Interface
- * 
- * Input:
- *              AX      = 4F0Ah
- * Output:
- *              AX      = VBE Return Status
+ * Input:    AX   = 4F0Ah   VBE 2.0 Protected Mode Interface
+ *           BL   = 00h          Return protected mode table
  *
- * FIXME: incomplete API description, Input & Output
+ *
+ * Output:   AX   =         Status
+ *           ES   =         Real Mode Segment of Table
+ *           DI   =         Offset of Table
+ *           CX   =         Length of Table including protected mode code
+ *                          (for copying purposes)
  */
-void vbe_biosfn_return_protected_mode_interface(AX)
-{
-}
+ASM_START
+vbe_biosfn_return_protected_mode_interface:
+  test bx, bx
+  jnz _fail
+  mov di, #0xc000
+  mov es, di
+  mov di, # vesa_pm_start
+  mov cx, # vesa_pm_end
+  sub cx, di
+  mov ax, #0x004f
+  ret
+_fail:
+  mov ax, #0x014f
+  ret
+ASM_END

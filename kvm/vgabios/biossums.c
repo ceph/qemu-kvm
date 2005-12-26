@@ -22,11 +22,7 @@ typedef unsigned char byte;
 
 void check( int value, char* message );
 
-#define LEN_BIOS_DATA 0x8000
-#define MAX_OFFSET    (LEN_BIOS_DATA - 1)
-
-
-#define BIOS_OFFSET 0x7FFF
+#define MAX_BIOS_DATA 0x10000
 
 long chksum_bios_get_offset( byte* data, long offset );
 byte chksum_bios_calc_value( byte* data, long offset );
@@ -43,7 +39,8 @@ byte chksum_pmid_get_value(  byte* data, long offset );
 void chksum_pmid_set_value(  byte* data, long offset, byte value );
 
 
-byte bios_data[LEN_BIOS_DATA];
+byte bios_data[MAX_BIOS_DATA];
+long bios_len;
 
 
 int main( int argc, char* argv[] ) {
@@ -54,21 +51,29 @@ int main( int argc, char* argv[] ) {
   int   hits;
 
 
-  if( argc != 2 ) {
+  if (argc != 2) {
     printf( "Error. Need a file-name as an argument.\n" );
     exit( EXIT_FAILURE );
   }
 
-  if(( stream = fopen( argv[1], "rb" )) == NULL ) {
-    printf( "Error opening %s for reading.\n", argv[1] );
-    exit( EXIT_FAILURE );
+  if ((stream = fopen(argv[1], "rb")) == NULL) {
+    printf("Error opening %s for reading.\n", argv[1]);
+    exit(EXIT_FAILURE);
   }
-  if( fread( bios_data, 1, LEN_BIOS_DATA, stream ) >= LEN_BIOS_DATA ) {
-    printf( "Error reading max. 32767 Bytes from %s.\n", argv[1] );
-    fclose( stream );
-    exit( EXIT_FAILURE );
+  memset(bios_data, 0, MAX_BIOS_DATA);
+  bios_len = fread(bios_data, 1, MAX_BIOS_DATA, stream);
+  if (bios_len >= MAX_BIOS_DATA) {
+    printf("Error reading max. 65535 Bytes from %s.\n", argv[1]);
+    fclose(stream);
+    exit(EXIT_FAILURE);
   }
-  fclose( stream );
+  fclose(stream);
+  if (bios_len < 0x7FFF) {
+    bios_len = 0x8000;
+  } else {
+    bios_len = (bios_len + 0x201) & ~0x1FF;
+  }
+  bios_data[2] = (byte)(bios_len / 512);
 
   hits   = 0;
   offset = 0L;
@@ -111,8 +116,8 @@ int main( int argc, char* argv[] ) {
     printf( "Error opening %s for writing.\n", argv[1] );
     exit( EXIT_FAILURE );
   }
-  if( fwrite( bios_data, 1, LEN_BIOS_DATA, stream ) < LEN_BIOS_DATA ) {
-    printf( "Error writing 32KBytes to %s.\n", argv[1] );
+  if( fwrite( bios_data, 1, bios_len, stream ) < bios_len ) {
+    printf( "Error writing %d KBytes to %s.\n", bios_len / 1024, argv[1] );
     fclose( stream );
     exit( EXIT_FAILURE );
   }
@@ -133,7 +138,7 @@ void check( int okay, char* message ) {
 
 long chksum_bios_get_offset( byte* data, long offset ) {
 
-  return( BIOS_OFFSET );
+  return (bios_len - 1);
 }
 
 
@@ -143,7 +148,7 @@ byte chksum_bios_calc_value( byte* data, long offset ) {
   byte  sum;
 
   sum = 0;
-  for( i = 0; i < MAX_OFFSET; i++ ) {
+  for( i = 0; i < offset; i++ ) {
     sum = sum + *( data + i );
   }
   sum = -sum;          /* iso ensures -s + s == 0 on unsigned types */
@@ -153,13 +158,13 @@ byte chksum_bios_calc_value( byte* data, long offset ) {
 
 byte chksum_bios_get_value( byte* data, long offset ) {
 
-  return( *( data + BIOS_OFFSET ) );
+  return( *( data + offset ) );
 }
 
 
 void chksum_bios_set_value( byte* data, long offset, byte value ) {
 
-  *( data + BIOS_OFFSET ) = value;
+  *( data + offset ) = value;
 }
 
 
@@ -170,7 +175,7 @@ byte chksum_pmid_calc_value( byte* data, long offset ) {
   byte sum;
 
   len = PMID_LEN;
-  check( offset + len <= MAX_OFFSET, "PMID entry length out of bounds" );
+  check((offset + len) <= (bios_len - 1), "PMID entry length out of bounds" );
   sum = 0;
   for( i = 0; i < len; i++ ) {
     if( i != PMID_CHKSUM ) {
@@ -186,7 +191,7 @@ long chksum_pmid_get_offset( byte* data, long offset ) {
 
   long result = -1L;
 
-  while( offset + PMID_LEN < MAX_OFFSET ) {
+  while ((offset + PMID_LEN) < (bios_len - 1)) {
     offset = offset + 1;
     if( *( data + offset + 0 ) == 'P' && \
         *( data + offset + 1 ) == 'M' && \
@@ -202,13 +207,13 @@ long chksum_pmid_get_offset( byte* data, long offset ) {
 
 byte chksum_pmid_get_value( byte* data, long offset ) {
 
-  check( offset + PMID_CHKSUM <= MAX_OFFSET, "PMID checksum out of bounds" );
+  check((offset + PMID_CHKSUM) <= (bios_len - 1), "PMID checksum out of bounds" );
   return(  *( data + offset + PMID_CHKSUM ) );
 }
 
 
 void chksum_pmid_set_value( byte* data, long offset, byte value ) {
 
-  check( offset + PMID_CHKSUM <= MAX_OFFSET, "PMID checksum out of bounds" );
+  check((offset + PMID_CHKSUM) <= (bios_len - 1), "PMID checksum out of bounds" );
   *( data + offset + PMID_CHKSUM ) = value;
 }

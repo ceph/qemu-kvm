@@ -347,8 +347,13 @@ int10_test_vbe_07:
   jmp   int10_end
 int10_test_vbe_08:
   cmp   al, #0x08
-  jne   int10_normal
+  jne   int10_test_vbe_0A
   call  vbe_biosfn_set_get_dac_palette_format
+  jmp   int10_end
+int10_test_vbe_0A:
+  cmp   al, #0x0A
+  jne   int10_normal
+  call  vbe_biosfn_return_protected_mode_interface
   jmp   int10_end
 #endif
 
@@ -402,7 +407,7 @@ init_vga_card:
 
 #if defined(USE_BX_INFO) || defined(DEBUG)
 msg_vga_init:
-.ascii "VGABios $Id: vgabios.c,v 1.62 2005/07/02 18:39:43 vruppert Exp $"
+.ascii "VGABios $Id: vgabios.c,v 1.63 2005/12/26 19:50:26 vruppert Exp $"
 .byte 0x0d,0x0a,0x00
 #endif
 ASM_END
