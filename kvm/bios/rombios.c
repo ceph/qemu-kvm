@@ -7780,7 +7780,7 @@ int1a_function(regs, ds, iret_addr)
       } else if (regs.u.r8.bl == 0x83) {
         BX_INFO("bad PCI vendor ID %04x\n", regs.u.r16.dx);
       } else if (regs.u.r8.bl == 0x86) {
-        BX_INFO("PCI device %04x:%04x not found\n", regs.u.r16.dx, regs.u.r16.cx);
+        BX_INFO("PCI device %04x:%04x not found at index %d\n", regs.u.r16.dx, regs.u.r16.cx, regs.u.r16.si);
       }
       regs.u.r8.ah = regs.u.r8.bl;
       SetCF(iret_addr.flags);
