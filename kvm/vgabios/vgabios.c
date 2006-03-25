@@ -111,6 +111,7 @@ static void biosfn_read_state_info();
 static void biosfn_read_video_state_size();
 static void biosfn_save_video_state();
 static void biosfn_restore_video_state();
+extern Bit8u video_save_pointer_table[];
 
 // This is for compiling with gcc2 and gcc3
 #define ASM_START #asm
@@ -407,7 +408,7 @@ init_vga_card:
 
 #if defined(USE_BX_INFO) || defined(DEBUG)
 msg_vga_init:
-.ascii "VGABios $Id: vgabios.c,v 1.63 2005/12/26 19:50:26 vruppert Exp $"
+.ascii "VGABios $Id: vgabios.c,v 1.64 2006/03/25 10:19:16 vruppert Exp $"
 .byte 0x0d,0x0a,0x00
 #endif
 ASM_END
@@ -459,6 +460,29 @@ init_bios_area:
 
   pop ds
   ret
+
+_video_save_pointer_table:
+  .word _video_param_table
+  .word 0xc000
+
+  .word 0 /* XXX: fill it */
+  .word 0
+
+  .word 0 /* XXX: fill it */
+  .word 0
+
+  .word 0 /* XXX: fill it */
+  .word 0
+
+  .word 0 /* XXX: fill it */
+  .word 0
+
+  .word 0 /* XXX: fill it */
+  .word 0
+
+  .word 0 /* XXX: fill it */
+  .word 0
+
 ASM_END
 
 // --------------------------------------------------------------------------------------------
@@ -780,8 +804,8 @@ static void biosfn_set_video_mode(mode) Bit8u mode;
 
  // Should we clear the screen ?
  Bit8u noclearmem=mode&0x80;
- Bit8u line,mmask,*palette;
- Bit16u i,twidth,theight,cheight;
+ Bit8u line,mmask,*palette,vpti;
+ Bit16u i,twidth,theightm1,cheight;
  Bit8u modeset_ctl,video_ctl,vga_switches;
  Bit16u crtc_addr;
  
@@ -804,9 +828,10 @@ static void biosfn_set_video_mode(mode) Bit8u mode;
  if(line==0xFF)
   return;
 
- twidth=vga_modes[line].twidth;
- theight=vga_modes[line].theight;
- cheight=vga_modes[line].cheight;
+ vpti=line_to_vpti[line];
+ twidth=video_param_table[vpti].twidth;
+ theightm1=video_param_table[vpti].theightm1;
+ cheight=video_param_table[vpti].cheight;
  
  // Read the bios vga control
  video_ctl=read_byte(BIOSMEM_SEG,BIOSMEM_VIDEO_CTL);
@@ -866,21 +891,25 @@ static void biosfn_set_video_mode(mode) Bit8u mode;
  inb(VGAREG_ACTL_RESET);
 
  // Set Attribute Ctl
- for(i=0;i<=ACTL_MAX_REG;i++)
+ for(i=0;i<=0x13;i++)
   {outb(VGAREG_ACTL_ADDRESS,i);
-   outb(VGAREG_ACTL_WRITE_DATA,actl_regs[vga_modes[line].actlmodel][i]);
+   outb(VGAREG_ACTL_WRITE_DATA,video_param_table[vpti].actl_regs[i]);
   }
+ outb(VGAREG_ACTL_ADDRESS,0x14);
+ outb(VGAREG_ACTL_WRITE_DATA,0x00);
 
  // Set Sequencer Ctl
- for(i=0;i<=SEQU_MAX_REG;i++)
+ outb(VGAREG_SEQU_ADDRESS,0);
+ outb(VGAREG_SEQU_DATA,0x03);
+ for(i=1;i<=4;i++)
   {outb(VGAREG_SEQU_ADDRESS,i);
-   outb(VGAREG_SEQU_DATA,sequ_regs[vga_modes[line].sequmodel][i]);
+   outb(VGAREG_SEQU_DATA,video_param_table[vpti].sequ_regs[i - 1]);
   }
 
  // Set Grafx Ctl
- for(i=0;i<=GRDC_MAX_REG;i++)
+ for(i=0;i<=8;i++)
   {outb(VGAREG_GRDC_ADDRESS,i);
-   outb(VGAREG_GRDC_DATA,grdc_regs[vga_modes[line].grdcmodel][i]);
+   outb(VGAREG_GRDC_DATA,video_param_table[vpti].grdc_regs[i]);
   }
 
  // Set CRTC address VGA or MDA 
@@ -889,13 +918,13 @@ static void biosfn_set_video_mode(mode) Bit8u mode;
  // Disable CRTC write protection
  outw(crtc_addr,0x0011);
  // Set CRTC regs
- for(i=0;i<=CRTC_MAX_REG;i++)
+ for(i=0;i<=0x18;i++)
   {outb(crtc_addr,i);
-   outb(crtc_addr+1,crtc_regs[vga_modes[line].crtcmodel][i]);
+   outb(crtc_addr+1,video_param_table[vpti].crtc_regs[i]);
   }
 
  // Set the misc register
- outb(VGAREG_WRITE_MISC_OUTPUT,vga_modes[line].miscreg);
+ outb(VGAREG_WRITE_MISC_OUTPUT,video_param_table[vpti].miscreg);
 
  // Enable video
  outb(VGAREG_ACTL_ADDRESS,0x20);
@@ -927,9 +956,9 @@ static void biosfn_set_video_mode(mode) Bit8u mode;
  // Set the BIOS mem
  write_byte(BIOSMEM_SEG,BIOSMEM_CURRENT_MODE,mode);
  write_word(BIOSMEM_SEG,BIOSMEM_NB_COLS,twidth);
- write_word(BIOSMEM_SEG,BIOSMEM_PAGE_SIZE,vga_modes[line].slength);
+ write_word(BIOSMEM_SEG,BIOSMEM_PAGE_SIZE,*(Bit16u *)&video_param_table[vpti].slength_l);
  write_word(BIOSMEM_SEG,BIOSMEM_CRTC_ADDRESS,crtc_addr);
- write_byte(BIOSMEM_SEG,BIOSMEM_NB_ROWS,theight-1);
+ write_byte(BIOSMEM_SEG,BIOSMEM_NB_ROWS,theightm1);
  write_word(BIOSMEM_SEG,BIOSMEM_CHAR_HEIGHT,cheight);
  write_byte(BIOSMEM_SEG,BIOSMEM_VIDEO_CTL,(0x60|noclearmem));
  write_byte(BIOSMEM_SEG,BIOSMEM_SWITCHES,0xF9);
@@ -937,8 +966,8 @@ static void biosfn_set_video_mode(mode) Bit8u mode;
 
  // FIXME We nearly have the good tables. to be reworked
  write_byte(BIOSMEM_SEG,BIOSMEM_DCC_INDEX,0x08);    // 8 is VGA should be ok for now
- write_word(BIOSMEM_SEG,BIOSMEM_VS_POINTER,0x00);
- write_word(BIOSMEM_SEG,BIOSMEM_VS_POINTER+2,0x00);
+ write_word(BIOSMEM_SEG,BIOSMEM_VS_POINTER, video_save_pointer_table);
+ write_word(BIOSMEM_SEG,BIOSMEM_VS_POINTER+2, 0xc000);
 
  // FIXME
  write_byte(BIOSMEM_SEG,BIOSMEM_CURRENT_MSR,0x00); // Unavailable on vanilla vga, but...
@@ -1114,7 +1143,7 @@ Bit8u page;
   }
  else
   {
-   address = page*vga_modes[line].slength;
+   address = page * (*(Bit16u *)&video_param_table[line_to_vpti[line]].slength_l);
   }
 
  // CRTC regs 0x0c and 0x0d
@@ -1271,7 +1300,7 @@ Bit8u nblines;Bit8u attr;Bit8u rul;Bit8u cul;Bit8u rlr;Bit8u clr;Bit8u page;Bit8
  else
   {
    // FIXME gfx mode not complete
-   cheight=vga_modes[line].cheight;
+   cheight=video_param_table[line_to_vpti[line]].cheight;
    switch(vga_modes[line].memmodel)
     {
      case PLANAR4:
@@ -1581,7 +1610,7 @@ Bit8u car;Bit8u page;Bit8u attr;Bit16u count;
  else
   {
    // FIXME gfx mode not complete
-   cheight=vga_modes[line].cheight;
+   cheight=video_param_table[line_to_vpti[line]].cheight;
    bpp=vga_modes[line].pixbits;
    while((count-->0) && (xcurs<nbcols))
     {
@@ -1641,7 +1670,7 @@ Bit8u car;Bit8u page;Bit8u attr;Bit16u count;
  else
   {
    // FIXME gfx mode not complete
-   cheight=vga_modes[line].cheight;
+   cheight=video_param_table[line_to_vpti[line]].cheight;
    bpp=vga_modes[line].pixbits;
    while((count-->0) && (xcurs<nbcols))
     {
@@ -1949,7 +1978,7 @@ Bit8u car;Bit8u page;Bit8u attr;Bit8u flag;
     else
      {
       // FIXME gfx mode not complete
-      cheight=vga_modes[line].cheight;
+      cheight=video_param_table[line_to_vpti[line]].cheight;
       bpp=vga_modes[line].pixbits;
       switch(vga_modes[line].memmodel)
        {
