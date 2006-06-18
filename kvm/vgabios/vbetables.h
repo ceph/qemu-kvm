@@ -8,12 +8,6 @@
 
 */
 
-typedef struct ModeInfoListItem
-{
-        Bit16u                  mode;
-        ModeInfoBlockCompact    info;
-} ModeInfoListItem;
-
 // FIXME: check all member variables to be correct for the different modi
 // FIXME: add more modi
 static ModeInfoListItem mode_info_list[]=

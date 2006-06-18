@@ -71,7 +71,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.48 2005/12/26 19:50:26 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.49 2006/06/18 15:22:43 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -88,7 +88,7 @@ _no_vbebios_info_string:
 
 #if defined(USE_BX_INFO) || defined(DEBUG)
 msg_vbe_init:
-.ascii      "VBE Bios $Id: vbe.c,v 1.48 2005/12/26 19:50:26 vruppert Exp $"
+.ascii      "VBE Bios $Id: vbe.c,v 1.49 2006/06/18 15:22:43 vruppert Exp $"
 .byte	0x0a,0x0d, 0x00
 #endif
 
@@ -118,21 +118,114 @@ _vbebios_mode_list:
 .word VBE_VESA_MODE_END_OF_LIST
 #endif
 
+  .align 2
 vesa_pm_start:
   dw vesa_pm_set_window - vesa_pm_start
-  dw vesa_pm_set_display_strt - vesa_pm_start
+  dw vesa_pm_set_display_start - vesa_pm_start
   dw vesa_pm_unimplemented - vesa_pm_start
-  dw 0
+  dw vesa_pm_io_ports_table - vesa_pm_start
+vesa_pm_io_ports_table:
+  dw VBE_DISPI_IOPORT_INDEX
+  dw VBE_DISPI_IOPORT_INDEX + 1
+  dw VBE_DISPI_IOPORT_DATA
+  dw VBE_DISPI_IOPORT_DATA + 1
+  dw 0xffff
+  dw 0xffff
 
   USE32
 vesa_pm_set_window:
-  mov ax, #0x4f05
-  int #0x10
+  cmp  bx, #0x00
+  je  vesa_pm_set_display_window1
+  mov  ax, #0x0100
+  ret
+vesa_pm_set_display_window1:
+  mov  ax, dx
+  push dx
+  push ax
+  mov  dx, # VBE_DISPI_IOPORT_INDEX
+  mov  ax, # VBE_DISPI_INDEX_BANK
+  out  dx, ax
+  pop  ax
+  mov  dx, # VBE_DISPI_IOPORT_DATA
+  out  dx, ax
+  pop  dx
+  mov  ax, #0x004f
   ret
 
 vesa_pm_set_display_start:
-  mov ax, #0x4f07
-  int #0x10
+  cmp  bl, #0x80
+  je   vesa_pm_set_display_start1
+  cmp  bl, #0x00
+  je   vesa_pm_set_display_start1
+  mov  ax, #0x0100
+  ret
+vesa_pm_set_display_start1:
+; convert offset to (X, Y) coordinate 
+; (would be simpler to change Bochs VBE API...)
+  push eax
+  push ecx
+  push edx
+  push esi
+  push edi
+  shl edx, #16
+  and ecx, #0xffff
+  or ecx, edx
+  shl ecx, #2
+  mov eax, ecx
+
+  push eax
+  mov  dx, # VBE_DISPI_IOPORT_INDEX
+  mov  ax, # VBE_DISPI_INDEX_VIRT_WIDTH
+  out  dx, ax
+  mov  dx, # VBE_DISPI_IOPORT_DATA
+  in   ax, dx
+  movzx ecx, ax
+
+  mov  dx, # VBE_DISPI_IOPORT_INDEX
+  mov  ax, # VBE_DISPI_INDEX_BPP
+  out  dx, ax
+  mov  dx, # VBE_DISPI_IOPORT_DATA
+  in   ax, dx
+  movzx esi, ax
+  pop  eax
+
+  add esi, #7
+  shr esi, #3
+  imul ecx, esi
+  xor edx, edx
+  div ecx
+  mov edi, eax
+  mov eax, edx
+  xor edx, edx
+  div esi
+
+  push dx
+  push ax
+  mov  dx, # VBE_DISPI_IOPORT_INDEX
+  mov  ax, # VBE_DISPI_INDEX_X_OFFSET
+  out  dx, ax
+  pop  ax
+  mov  dx, # VBE_DISPI_IOPORT_DATA
+  out  dx, ax
+  pop  dx
+
+  mov  ax, di
+  push dx
+  push ax
+  mov  dx, # VBE_DISPI_IOPORT_INDEX
+  mov  ax, # VBE_DISPI_INDEX_Y_OFFSET
+  out  dx, ax
+  pop  ax
+  mov  dx, # VBE_DISPI_IOPORT_DATA
+  out  dx, ax
+  pop  dx
+
+  pop edi
+  pop esi
+  pop edx
+  pop ecx
+  pop eax
+  mov  ax, #0x004f
   ret
 
 vesa_pm_unimplemented:
@@ -835,6 +928,64 @@ vbe_03_ok:
 ASM_END
 
 
+Bit16u vbe_biosfn_read_video_state_size()
+{
+    return 9 * 2;
+}
+
+void vbe_biosfn_save_video_state(ES, BX)
+     Bit16u ES; Bit16u BX;
+{
+    Bit16u enable, i;
+
+    outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_ENABLE);
+    enable = inw(VBE_DISPI_IOPORT_DATA);
+    write_word(ES, BX, enable);
+    BX += 2;
+    if (!(enable & VBE_DISPI_ENABLED)) 
+        return;
+    for(i = VBE_DISPI_INDEX_XRES; i <= VBE_DISPI_INDEX_Y_OFFSET; i++) {
+        if (i != VBE_DISPI_INDEX_ENABLE) {
+            outw(VBE_DISPI_IOPORT_INDEX, i);
+            write_word(ES, BX, inw(VBE_DISPI_IOPORT_DATA));
+            BX += 2;
+        }
+    }
+}
+
+
+void vbe_biosfn_restore_video_state(ES, BX)
+     Bit16u ES; Bit16u BX;
+{
+    Bit16u enable, i;
+
+    enable = read_word(ES, BX);
+    BX += 2;
+    
+    if (!(enable & VBE_DISPI_ENABLED)) {
+        outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_ENABLE);
+        outw(VBE_DISPI_IOPORT_DATA, enable);
+    } else {
+        outw(VBE_DISPI_IOPORT_INDEX, VBE_DISPI_INDEX_XRES);
+        outw(VBE_DISPI_IOPORT_DATA, read_word(ES, BX));
+        BX += 2;
+        outw(VBE_DISPI_IOPORT_INDEX, VBE_DISPI_INDEX_YRES);
+        outw(VBE_DISPI_IOPORT_DATA, read_word(ES, BX));
+        BX += 2;
+        outw(VBE_DISPI_IOPORT_INDEX, VBE_DISPI_INDEX_BPP);
+        outw(VBE_DISPI_IOPORT_DATA, read_word(ES, BX));
+        BX += 2;
+        outw(VBE_DISPI_IOPORT_INDEX,VBE_DISPI_INDEX_ENABLE);
+        outw(VBE_DISPI_IOPORT_DATA, enable);
+
+        for(i = VBE_DISPI_INDEX_BANK; i <= VBE_DISPI_INDEX_Y_OFFSET; i++) {
+            outw(VBE_DISPI_IOPORT_INDEX, i);
+            outw(VBE_DISPI_IOPORT_DATA, read_word(ES, BX));
+            BX += 2;
+        }
+    }
+}
+
 /** Function 04h - Save/Restore State
  * 
  * Input:
@@ -849,10 +1000,48 @@ ASM_END
  *              BX      = Number of 64-byte blocks to hold the state buffer (if DL=00h)
  * 
  */
-void vbe_biosfn_save_restore_state(AX, DL, CX, ES, BX)
+void vbe_biosfn_save_restore_state(AX, CX, DX, ES, BX)
+Bit16u *AX; Bit16u CX; Bit16u DX; Bit16u ES; Bit16u *BX;
 {
-}
+    Bit16u ss=get_SS();
+    Bit16u result, val;
 
+    result = 0x4f;
+    switch(GET_DL()) {
+    case 0x00:
+        val = biosfn_read_video_state_size2(CX);
+#ifdef DEBUG
+        printf("VGA state size=%x\n", val);
+#endif
+        if (CX & 8)
+            val += vbe_biosfn_read_video_state_size();
+        write_word(ss, BX, val);
+        break;
+    case 0x01:
+        val = read_word(ss, BX);
+        val = biosfn_save_video_state(CX, ES, val);
+#ifdef DEBUG
+        printf("VGA save_state offset=%x\n", val);
+#endif
+        if (CX & 8)
+            vbe_biosfn_save_video_state(ES, val);
+        break;
+    case 0x02:
+        val = read_word(ss, BX);
+        val = biosfn_restore_video_state(CX, ES, val);
+#ifdef DEBUG
+        printf("VGA restore_state offset=%x\n", val);
+#endif
+        if (CX & 8)
+            vbe_biosfn_restore_video_state(ES, val);
+        break;
+    default:
+        // function failed
+        result = 0x100;
+        break;
+    }
+    write_word(ss, AX, result);
+}
 
 /** Function 05h - Display Window Control
  * 
@@ -1090,7 +1279,7 @@ void vbe_biosfn_set_get_palette_data(AX)
  */
 ASM_START
 vbe_biosfn_return_protected_mode_interface:
-  test bx, bx
+  test bl, bl
   jnz _fail
   mov di, #0xc000
   mov es, di
