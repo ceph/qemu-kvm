@@ -30,14 +30,9 @@
 
 
 // defines available
-// enable LFB support
-#define VBE_HAVE_LFB
 
 // disable VESA/VBE2 check in vbe info
 //#define VBE2_NO_VESA_CHECK
-
-// dynamicly generate a mode_info list
-#define DYN_LIST
 
 
 #include "vbe.h"
@@ -51,10 +46,6 @@ extern char vbebios_copyright;
 extern char vbebios_vendor_name;
 extern char vbebios_product_name;
 extern char vbebios_product_revision;
-
-#ifndef DYN_LIST
-extern Bit16u vbebios_mode_list;
-#endif
 
 ASM_START
 // FIXME: 'merge' these (c) etc strings with the vgabios.c strings?
@@ -71,7 +62,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.49 2006/06/18 15:22:43 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.50 2006/06/21 16:58:06 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -88,34 +79,8 @@ _no_vbebios_info_string:
 
 #if defined(USE_BX_INFO) || defined(DEBUG)
 msg_vbe_init:
-.ascii      "VBE Bios $Id: vbe.c,v 1.49 2006/06/18 15:22:43 vruppert Exp $"
+.ascii      "VBE Bios $Id: vbe.c,v 1.50 2006/06/21 16:58:06 vruppert Exp $"
 .byte	0x0a,0x0d, 0x00
-#endif
-
-#ifndef DYN_LIST
-// FIXME: for each new mode add a statement here
-//        at least until dynamic list creation is working
-_vbebios_mode_list:
-
-.word VBE_VESA_MODE_640X400X8
-.word VBE_VESA_MODE_640X480X8
-.word VBE_VESA_MODE_800X600X4
-.word VBE_VESA_MODE_800X600X8
-.word VBE_VESA_MODE_1024X768X8
-.word VBE_VESA_MODE_640X480X1555
-.word VBE_VESA_MODE_640X480X565
-.word VBE_VESA_MODE_640X480X888
-.word VBE_VESA_MODE_800X600X1555
-.word VBE_VESA_MODE_800X600X565
-.word VBE_VESA_MODE_800X600X888
-.word VBE_VESA_MODE_1024X768X1555
-.word VBE_VESA_MODE_1024X768X565
-.word VBE_VESA_MODE_1024X768X888
-.word VBE_OWN_MODE_640X480X8888
-.word VBE_OWN_MODE_800X600X8888
-.word VBE_OWN_MODE_1024X768X8888
-.word VBE_OWN_MODE_320X200X8
-.word VBE_VESA_MODE_END_OF_LIST
 #endif
 
   .align 2
@@ -324,6 +289,28 @@ dispi_get_bpp:
   jz   get_bpp_noinc
   inc  ah
 get_bpp_noinc:
+  pop  dx
+  ret
+
+; get display capabilities
+
+_dispi_get_max_xres:
+  push dx
+  push bx
+  call dispi_get_enable
+  mov  bx, ax
+  or   ax, # VBE_DISPI_GETCAPS
+  call _dispi_set_enable
+  mov  dx, # VBE_DISPI_IOPORT_INDEX
+  mov  ax, # VBE_DISPI_INDEX_XRES
+  out  dx, ax
+  mov  dx, # VBE_DISPI_IOPORT_DATA
+  in   ax, dx
+  push ax
+  mov  ax, bx
+  call _dispi_set_enable
+  pop  ax
+  pop  bx
   pop  dx
   ret
 
@@ -689,15 +676,9 @@ Bit16u *AX;Bit16u ES;Bit16u DI;
         vbe_info_block.Capabilities[2] = 0;
         vbe_info_block.Capabilities[3] = 0;
 
-#ifdef DYN_LIST
         // VBE Video Mode Pointer (dynamicly generated from the mode_info_list)
         vbe_info_block.VideoModePtr_Seg= ES ;
         vbe_info_block.VideoModePtr_Off= DI + 34;
-#else
-        // VBE Video Mode Pointer (staticly in rom)
-        vbe_info_block.VideoModePtr_Seg = 0xc000;
-        vbe_info_block.VideoModePtr_Off = &vbebios_mode_list;
-#endif
 
         // VBE Total Memory (in 64b blocks)
         vbe_info_block.TotalMemory = VBE_TOTAL_VIDEO_MEMORY_DIV_64K;
@@ -722,10 +703,10 @@ Bit16u *AX;Bit16u ES;Bit16u DI;
                 memcpyb(ES, DI, ss, &vbe_info_block, 256);
 	}
                 
-#ifdef DYN_LIST
         do
         {
-                if (cur_info->info.BitsPerPixel <= dispi_get_max_bpp()) {
+                if ((cur_info->info.XResolution <= dispi_get_max_xres()) &&
+                    (cur_info->info.BitsPerPixel <= dispi_get_max_bpp())) {
 #ifdef DEBUG
                   printf("VBE found mode %x => %x\n", cur_info->mode,cur_mode);
 #endif
@@ -738,7 +719,6 @@ Bit16u *AX;Bit16u ES;Bit16u DI;
         
         // Add vesa mode list terminator
         write_word(ES, DI + cur_ptr, cur_info->mode);
-#endif
 
         result = 0x4f;
 
