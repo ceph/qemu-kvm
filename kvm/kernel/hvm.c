@@ -2,10 +2,12 @@
 
 #include <linux/module.h>
 #include <linux/errno.h>
+#include <asm/processor.h>
 
-static int cpu_has_hvm_support(void)
+static __init int cpu_has_hvm_support(void)
 {
-	return 0;
+	unsigned long ecx = cpuid_ecx(1);
+	return test_bit(5, &ecx); /* CPUID.1:ECX.VMX[bit 5] -> VT */
 }
 
 static __init int hvm_init(void)
