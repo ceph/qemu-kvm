@@ -9,6 +9,10 @@
 #include <linux/mm.h>
 #include <linux/miscdevice.h>
 
+struct hvm {
+	unsigned created : 1;
+};
+
 DEFINE_PER_CPU(void *, vmxarea);
 static int vmcs_order;
 
@@ -88,12 +92,35 @@ static __exit void hvm_disable(void *garbage)
 
 static int hvm_dev_open(struct inode *inode, struct file *filp)
 {
+	filp->private_data = kzalloc(sizeof(struct hvm), GFP_KERNEL);
+	if (!filp->private_data)
+		return -ENOMEM;
 	return 0;
+}
+
+static int hvm_dev_release(struct inode *inode, struct file *filp)
+{
+	kfree(filp->private_data);
+	return 0;
+}
+
+static int hvm_dev_ioctl(struct inode *inode, struct file *filp,
+                         unsigned int ioctl, unsigned long arg)
+{
+	struct hvm *hvm = filp->private_data;
+	int r = -EINVAL;
+
+	(void)hvm;
+	switch (ioctl) {
+	}
+	return r;
 }
 
 static struct file_operations hvm_chardev_ops = {
 	.owner		= THIS_MODULE,
 	.open		= hvm_dev_open,
+	.release        = hvm_dev_release,
+	.ioctl          = hvm_dev_ioctl,
 };
 
 static struct miscdevice hvm_dev = {
