@@ -7,6 +7,7 @@
 #include <linux/gfp.h>
 #include <asm/msr.h>
 #include <linux/mm.h>
+#include <linux/miscdevice.h>
 
 DEFINE_PER_CPU(void *, vmxarea);
 static int vmcs_order;
@@ -85,6 +86,22 @@ static __exit void hvm_disable(void *garbage)
 	asm volatile ( "vmxoff" );
 }
 
+static int hvm_dev_open(struct inode *inode, struct file *filp)
+{
+	return 0;
+}
+
+static struct file_operations hvm_chardev_ops = {
+	.owner		= THIS_MODULE,
+	.open		= hvm_dev_open,
+};
+
+static struct miscdevice hvm_dev = {
+	MISC_DYNAMIC_MINOR,
+	"hvm",
+	&hvm_chardev_ops,
+};
+
 static __init int hvm_init(void)
 {
 	int r = 0;
@@ -102,12 +119,23 @@ static __init int hvm_init(void)
 	if (r)
 		goto out;
 	on_each_cpu(hvm_enable, 0, 0, 1);
+
+	r = misc_register(&hvm_dev);
+	if (r) {
+		printk (KERN_ERR "hvm: misc device register failed\n");
+		goto out_free;
+	}
+
+	return r;
+out_free:
+	free_hvm_area();
 out:
 	return r;
 }
 
 static __exit void hvm_exit(void)
 {
+	misc_deregister(&hvm_dev);
 	on_each_cpu(hvm_disable, 0, 0, 1);
 	free_hvm_area();
 }
