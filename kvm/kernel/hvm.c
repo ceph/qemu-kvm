@@ -11,6 +11,7 @@
 #include <linux/miscdevice.h>
 #include <linux/vmalloc.h>
 #include <asm/uaccess.h>
+#include <linux/reboot.h>
 
 struct hvm {
 	unsigned created : 1;
@@ -190,6 +191,21 @@ static struct miscdevice hvm_dev = {
 	&hvm_chardev_ops,
 };
 
+static int hvm_reboot(struct notifier_block *notifier, unsigned long val,
+                       void *v)
+{
+	if (val == SYS_RESTART) {
+		printk(KERN_INFO "hvm: exiting vmx mode\n");
+		on_each_cpu(hvm_disable, 0, 0, 1);
+	}
+	return NOTIFY_OK;
+}
+
+static struct notifier_block hvm_reboot_notifier = {
+	.notifier_call = hvm_reboot,
+	.priority = 0,
+};
+
 static __init int hvm_init(void)
 {
 	int r = 0;
@@ -207,6 +223,7 @@ static __init int hvm_init(void)
 	if (r)
 		goto out;
 	on_each_cpu(hvm_enable, 0, 0, 1);
+	register_reboot_notifier(&hvm_reboot_notifier);
 
 	r = misc_register(&hvm_dev);
 	if (r) {
@@ -224,6 +241,7 @@ out:
 static __exit void hvm_exit(void)
 {
 	misc_deregister(&hvm_dev);
+	unregister_reboot_notifier(&hvm_reboot_notifier);
 	on_each_cpu(hvm_disable, 0, 0, 1);
 	free_hvm_area();
 }
