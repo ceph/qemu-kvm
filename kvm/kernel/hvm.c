@@ -1,5 +1,6 @@
 /* hardware virtual machine support module */
 
+#include <linux/hvm.h>
 #include <linux/module.h>
 #include <linux/errno.h>
 #include <asm/processor.h>
@@ -8,9 +9,13 @@
 #include <asm/msr.h>
 #include <linux/mm.h>
 #include <linux/miscdevice.h>
+#include <linux/vmalloc.h>
+#include <asm/uaccess.h>
 
 struct hvm {
 	unsigned created : 1;
+	unsigned long phys_mem_pages;
+	struct page **phys_mem;
 };
 
 DEFINE_PER_CPU(void *, vmxarea);
@@ -98,10 +103,55 @@ static int hvm_dev_open(struct inode *inode, struct file *filp)
 	return 0;
 }
 
+static void hvm_free_physmem(struct hvm *hvm)
+{
+	unsigned long i;
+
+	for (i = 0; i < hvm->phys_mem_pages; ++i)
+		__free_page(hvm->phys_mem[i]);
+	vfree(hvm->phys_mem);
+}
+
 static int hvm_dev_release(struct inode *inode, struct file *filp)
 {
-	kfree(filp->private_data);
+	struct hvm *hvm = filp->private_data;
+	
+	if (hvm->created)
+		hvm_free_physmem(hvm);
+	kfree(hvm);
 	return 0;
+}
+
+static int hvm_dev_ioctl_create(struct hvm *hvm, struct hvm_create *hvm_create)
+{
+	int r;
+	unsigned long pages = ((hvm_create->memory_size-1) >> PAGE_SHIFT) + 1;
+	unsigned long i;
+
+	r = -EEXIST;
+	if (hvm->created)
+		goto out;
+	r = -EINVAL;
+	if (!hvm_create->memory_size)
+		goto out;
+	hvm->phys_mem_pages = pages;
+	hvm->phys_mem = vmalloc(pages * sizeof(struct page *));
+	r = -ENOMEM;
+	if (!hvm->phys_mem)
+		goto out;
+	memset(hvm->phys_mem, 0, pages * sizeof(struct page *));
+	for (i = 0; i < pages; ++i) {
+		hvm->phys_mem[i] = alloc_page(GFP_HIGHUSER);
+		if (!hvm->phys_mem[i])
+			goto out_free_physmem;
+	}
+	hvm->created = 1;
+	return 0;
+
+out_free_physmem:
+	hvm_free_physmem(hvm);
+out:
+	return r;
 }
 
 static int hvm_dev_ioctl(struct inode *inode, struct file *filp,
@@ -110,9 +160,20 @@ static int hvm_dev_ioctl(struct inode *inode, struct file *filp,
 	struct hvm *hvm = filp->private_data;
 	int r = -EINVAL;
 
-	(void)hvm;
 	switch (ioctl) {
+	case HVM_CREATE: {
+		struct hvm_create hvm_create;
+	
+		r = -EFAULT;
+		if (copy_from_user(&hvm_create, (void *)arg, sizeof hvm_create))
+			goto out;
+		r = hvm_dev_ioctl_create(hvm, &hvm_create);
+		break;
 	}
+	default:
+		;
+	}
+ out:
 	return r;
 }
 

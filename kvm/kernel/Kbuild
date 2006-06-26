@@ -1,1 +1,2 @@
+EXTRA_CFLAGS := -I$(PWD)/include
 obj-m := hvm.o
