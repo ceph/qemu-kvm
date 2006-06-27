@@ -129,12 +129,12 @@ static __init void hvm_enable(void *garbage)
 		/* enable and lock */
 		wrmsrl(MSR_IA32_FEATURE_CONTROL, old | 5);
 	write_cr4(read_cr4() | CR4_VMXE); /* FIXME: not cpu hotplug safe */
-	asm volatile ( "vmxon %0" : : "m"(phys_addr) );
+	asm volatile ( "vmxon %0" : : "m"(phys_addr) : "memory", "cc" );
 }
 
 static __exit void hvm_disable(void *garbage)
 {
-	asm volatile ( "vmxoff" );
+	asm volatile ( "vmxoff" : : : "cc" );
 }
 
 static int hvm_dev_open(struct inode *inode, struct file *filp)
