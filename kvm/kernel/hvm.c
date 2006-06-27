@@ -33,7 +33,7 @@ static __exit void free_hvm_area(void)
 	int cpu;
 
 	for_each_online_cpu(cpu)
-		free_pages((unsigned long)per_cpu(vmxarea, cpu), 0);
+		free_pages((unsigned long)per_cpu(vmxarea, cpu), vmcs_order);
 }
 
 #define MSR_IA32_FEATURE_CONTROL 0x03a
