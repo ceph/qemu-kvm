@@ -178,11 +178,40 @@ static int hvm_dev_ioctl(struct inode *inode, struct file *filp,
 	return r;
 }
 
+static struct page *hvm_dev_nopage(struct vm_area_struct *vma, 
+				   unsigned long address, 
+				   int *type)
+{
+	struct hvm *hvm = vma->vm_file->private_data;
+	unsigned long pgoff;
+	struct page *page = NOPAGE_SIGBUS;
+
+	*type = VM_FAULT_MINOR;
+	pgoff = (address - vma->vm_start) >> PAGE_SHIFT;
+	if (pgoff >= hvm->phys_mem_pages)
+		goto out;
+	page = hvm->phys_mem[pgoff];
+	get_page(page);
+out:
+	return page;
+}
+
+static struct vm_operations_struct hvm_dev_vm_ops = {
+	.nopage = hvm_dev_nopage,
+};
+
+static int hvm_dev_mmap(struct file *file, struct vm_area_struct *vma)
+{
+	vma->vm_ops = &hvm_dev_vm_ops;
+	return 0;
+}
+
 static struct file_operations hvm_chardev_ops = {
 	.owner		= THIS_MODULE,
 	.open		= hvm_dev_open,
 	.release        = hvm_dev_release,
 	.ioctl          = hvm_dev_ioctl,
+	.mmap           = hvm_dev_mmap,
 };
 
 static struct miscdevice hvm_dev = {
