@@ -289,7 +289,8 @@ static int hvm_dev_ioctl_run(struct hvm *hvm, struct hvm_run *hvm_run)
 
 	if (!vcpu->launched) {
 		asm volatile ( "vmlaunch; setz %0" : "=g"(fail) );
-		vcpu->launched = 1;
+		if (!fail)
+			vcpu->launched = 1;
 	} else
 		asm volatile ( "vmresume; setz %0" : "=g"(fail) );
 
