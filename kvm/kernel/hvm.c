@@ -254,12 +254,57 @@ out:
 	return r;
 }
 
-static u32 vmcs_read32(unsigned field)
+static unsigned long vmcs_readl(unsigned field)
 {
-	u32 value;
+	unsigned long value;
 	
 	asm ( "vmread %1, %0" : "=g"(value) : "r"(field) : "cc" );
 	return value;
+}
+
+static inline u16 vmcs_read16(unsigned field)
+{
+	return vmcs_readl(field);
+}
+
+static inline u32 vmcs_read32(unsigned field)
+{
+	return vmcs_readl(field);
+}
+
+static inline u64 vmcs_read64(unsigned field)
+{
+#ifdef __x86_64__
+	return vmcs_readl(field);
+#else
+	return vmcs_readl(field) | ((u64)vmcs_readl(field+1) << 32);
+#endif
+}
+
+static void vmcs_writel(unsigned field, unsigned long value)
+{
+	asm ( "vmwrite %0, %1" : : "g"(value), "r"(field) : "cc" );
+}
+
+static inline void vmcs_write16(unsigned field, u16 value)
+{
+	vmcs_writel(field, value);
+}
+
+static inline void vmcs_write32(unsigned field, u32 value)
+{
+	vmcs_writel(field, value);
+}
+
+static inline void vmcs_write64(unsigned field, u64 value)
+{
+#ifdef __x86_64__
+	vmcs_writel(field, value);
+#else
+	vmcs_writel(field, value);
+	asm volatile ( "" );
+	vmcs_writel(field+1, value >> 32);
+#endif
 }
 
 static int hvm_dev_ioctl_run(struct hvm *hvm, struct hvm_run *hvm_run)
