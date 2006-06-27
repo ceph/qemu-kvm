@@ -237,7 +237,7 @@ static inline u64 vmcs_read64(unsigned field)
 
 static void vmcs_writel(unsigned field, unsigned long value)
 {
-	asm ( "vmwrite %0, %1" : : "g"(value), "r"(field) : "cc" );
+	asm ( "vmwrite %0, %1" : : "r"(value), "r"(field) : "cc" );
 }
 
 static inline void vmcs_write16(unsigned field, u16 value)
