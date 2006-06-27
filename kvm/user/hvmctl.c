@@ -26,6 +26,21 @@ void hvm_create(int fd, unsigned long memory, void **vm_mem)
 	memset(*vm_mem, 0, memory);
 }
 
+void hvm_run(int fd, int vcpu)
+{
+	int r;
+	struct hvm_run hvm_run = {
+		.vcpu = vcpu,
+	};
+
+	r = ioctl(fd, HVM_RUN, &hvm_run);
+	if (r == -1) {
+		printf("hvm_run: %m\n");
+		exit(1);
+	}
+	printf("hvm_run: %d %d\n", hvm_run.exit_type, hvm_run.exit_reason);
+}
+
 int main(int ac, char **av)
 {
 	int fd;
@@ -37,4 +52,5 @@ int main(int ac, char **av)
 		exit(1);
 	}
 	hvm_create(fd, 128 * 1024 * 1024, &vm_mem);
+	hvm_run(fd, 0);
 }
