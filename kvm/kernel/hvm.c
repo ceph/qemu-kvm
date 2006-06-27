@@ -17,15 +17,22 @@
 
 #define HVM_MAX_VCPUS 4
 
+struct hvm_vcpu {
+	void *vmcs;
+	int   cpu;
+	int   launched;
+};
+
 struct hvm {
 	unsigned created : 1;
 	unsigned long phys_mem_pages;
 	struct page **phys_mem;
 	int nvcpus;
-	void *vmcs[HVM_MAX_VCPUS];
+	struct hvm_vcpu vcpus[HVM_MAX_VCPUS];
 };
 
 DEFINE_PER_CPU(void *, vmxarea);
+DEFINE_PER_CPU(void *, current_vmcs);
 
 static struct vmcs_descriptor {
 	int size;
@@ -161,7 +168,7 @@ static void hvm_free_vmcs(struct hvm *hvm)
 	unsigned int i;
 
 	for (i = 0; i < hvm->nvcpus; ++i) {
-		void *vmcs = hvm->vmcs[i];
+		void *vmcs = hvm->vcpus[i].vmcs;
 
 		if (vmcs) {
 			vmcs_clear(vmcs);
@@ -213,7 +220,8 @@ static int hvm_dev_ioctl_create(struct hvm *hvm, struct hvm_create *hvm_create)
 		if (!vmcs)
 			goto out_free_vmcs;
 		vmcs_clear(vmcs);
-		hvm->vmcs[i] = vmcs;
+		hvm->vcpus[i].vmcs = vmcs;
+		hvm->vcpus[i].launched = 0;
 	}
 		
 	hvm->created = 1;
