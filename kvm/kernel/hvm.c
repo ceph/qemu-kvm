@@ -60,6 +60,39 @@ static void vmcs_clear(void *vmcs)
 	asm volatile ( "vmclear %0" : : "m"(phys_addr) : "cc", "memory" );
 }
 
+static void __vcpu_clear(void *arg)
+{
+	struct hvm_vcpu *vcpu = arg;
+
+	if (vcpu->cpu == smp_processor_id())
+		vmcs_clear(vcpu->vmcs);
+}
+
+/*
+ * Switches to specified vcpu, until a matching vcpu_put()
+ */
+static void vcpu_load(struct hvm_vcpu *vcpu)
+{
+	u64 phys_addr = __pa(vcpu->vmcs);
+	int cpu = get_cpu();
+	
+	if (vcpu->cpu != cpu && vcpu->launched) {
+		smp_call_function(__vcpu_clear, vcpu, 0, 1);
+		vcpu->launched = 0;
+		vcpu->cpu = cpu;
+	}
+
+	if (per_cpu(current_vmcs, cpu) != vcpu->vmcs) {
+		per_cpu(current_vmcs, cpu) = vcpu->vmcs;
+		asm volatile ( "vmptrld %0" : : "m"(phys_addr) : "cc" );
+	}
+}
+
+static void vcpu_put(void)
+{
+	put_cpu();
+}
+
 static void *alloc_vmcs_cpu(int cpu)
 {
 	int node = cpu_to_node(cpu);
