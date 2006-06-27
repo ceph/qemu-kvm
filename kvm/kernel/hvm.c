@@ -208,52 +208,6 @@ static int hvm_dev_release(struct inode *inode, struct file *filp)
 	return 0;
 }
 
-static int hvm_dev_ioctl_create(struct hvm *hvm, struct hvm_create *hvm_create)
-{
-	int r;
-	unsigned long pages = ((hvm_create->memory_size-1) >> PAGE_SHIFT) + 1;
-	unsigned long i;
-
-	r = -EEXIST;
-	if (hvm->created)
-		goto out;
-	r = -EINVAL;
-	if (!hvm_create->memory_size)
-		goto out;
-	hvm->phys_mem_pages = pages;
-	hvm->phys_mem = vmalloc(pages * sizeof(struct page *));
-	r = -ENOMEM;
-	if (!hvm->phys_mem)
-		goto out;
-	memset(hvm->phys_mem, 0, pages * sizeof(struct page *));
-	for (i = 0; i < pages; ++i) {
-		hvm->phys_mem[i] = alloc_page(GFP_HIGHUSER);
-		if (!hvm->phys_mem[i])
-			goto out_free_physmem;
-	}
-	hvm->nvcpus = 1;
-	for (i = 0; i < hvm->nvcpus; ++i) {
-		void *vmcs;
-
-		vmcs = alloc_vmcs();
-		if (!vmcs)
-			goto out_free_vmcs;
-		vmcs_clear(vmcs);
-		hvm->vcpus[i].vmcs = vmcs;
-		hvm->vcpus[i].launched = 0;
-	}
-		
-	hvm->created = 1;
-	return 0;
-
-out_free_vmcs:
-	hvm_free_vmcs(hvm);
-out_free_physmem:
-	hvm_free_physmem(hvm);
-out:
-	return r;
-}
-
 static unsigned long vmcs_readl(unsigned field)
 {
 	unsigned long value;
@@ -305,6 +259,52 @@ static inline void vmcs_write64(unsigned field, u64 value)
 	asm volatile ( "" );
 	vmcs_writel(field+1, value >> 32);
 #endif
+}
+
+static int hvm_dev_ioctl_create(struct hvm *hvm, struct hvm_create *hvm_create)
+{
+	int r;
+	unsigned long pages = ((hvm_create->memory_size-1) >> PAGE_SHIFT) + 1;
+	unsigned long i;
+
+	r = -EEXIST;
+	if (hvm->created)
+		goto out;
+	r = -EINVAL;
+	if (!hvm_create->memory_size)
+		goto out;
+	hvm->phys_mem_pages = pages;
+	hvm->phys_mem = vmalloc(pages * sizeof(struct page *));
+	r = -ENOMEM;
+	if (!hvm->phys_mem)
+		goto out;
+	memset(hvm->phys_mem, 0, pages * sizeof(struct page *));
+	for (i = 0; i < pages; ++i) {
+		hvm->phys_mem[i] = alloc_page(GFP_HIGHUSER);
+		if (!hvm->phys_mem[i])
+			goto out_free_physmem;
+	}
+	hvm->nvcpus = 1;
+	for (i = 0; i < hvm->nvcpus; ++i) {
+		void *vmcs;
+
+		vmcs = alloc_vmcs();
+		if (!vmcs)
+			goto out_free_vmcs;
+		vmcs_clear(vmcs);
+		hvm->vcpus[i].vmcs = vmcs;
+		hvm->vcpus[i].launched = 0;
+	}
+		
+	hvm->created = 1;
+	return 0;
+
+out_free_vmcs:
+	hvm_free_vmcs(hvm);
+out_free_physmem:
+	hvm_free_physmem(hvm);
+out:
+	return r;
 }
 
 static int hvm_dev_ioctl_run(struct hvm *hvm, struct hvm_run *hvm_run)
