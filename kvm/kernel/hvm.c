@@ -13,10 +13,14 @@
 #include <asm/uaccess.h>
 #include <linux/reboot.h>
 
+#define HVM_MAX_VCPUS 4
+
 struct hvm {
 	unsigned created : 1;
 	unsigned long phys_mem_pages;
 	struct page **phys_mem;
+	int nvcpus;
+	void *vmcs[HVM_MAX_VCPUS];
 };
 
 DEFINE_PER_CPU(void *, vmxarea);
@@ -39,6 +43,13 @@ static __init void setup_vmcs_descriptor(void)
 	vmcs_descriptor.order = get_order(vmcs_descriptor.size);
 	vmcs_descriptor.revision_id = vmx_msr_low;
 };
+
+static void vmcs_clear(void *vmcs)
+{
+	u64 phys_addr = __pa(vmcs);
+
+	asm volatile ( "vmclear %0" : : "m"(phys_addr) : "cc", "memory" );
+}
 
 static void *alloc_vmcs_cpu(int cpu)
 {
@@ -143,12 +154,28 @@ static void hvm_free_physmem(struct hvm *hvm)
 	vfree(hvm->phys_mem);
 }
 
+static void hvm_free_vmcs(struct hvm *hvm)
+{
+	unsigned int i;
+
+	for (i = 0; i < hvm->nvcpus; ++i) {
+		void *vmcs = hvm->vmcs[i];
+
+		if (vmcs) {
+			vmcs_clear(vmcs);
+			free_vmcs(vmcs);
+		}
+	}
+}
+
 static int hvm_dev_release(struct inode *inode, struct file *filp)
 {
 	struct hvm *hvm = filp->private_data;
 	
-	if (hvm->created)
+	if (hvm->created) {
+		hvm_free_vmcs(hvm);
 		hvm_free_physmem(hvm);
+	}
 	kfree(hvm);
 	return 0;
 }
@@ -176,9 +203,22 @@ static int hvm_dev_ioctl_create(struct hvm *hvm, struct hvm_create *hvm_create)
 		if (!hvm->phys_mem[i])
 			goto out_free_physmem;
 	}
+	hvm->nvcpus = 1;
+	for (i = 0; i < hvm->nvcpus; ++i) {
+		void *vmcs;
+
+		vmcs = alloc_vmcs();
+		if (!vmcs)
+			goto out_free_vmcs;
+		vmcs_clear(vmcs);
+		hvm->vmcs[i] = vmcs;
+	}
+		
 	hvm->created = 1;
 	return 0;
 
+out_free_vmcs:
+	hvm_free_vmcs(hvm);
 out_free_physmem:
 	hvm_free_physmem(hvm);
 out:
