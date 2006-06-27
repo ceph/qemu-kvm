@@ -20,7 +20,50 @@ struct hvm {
 };
 
 DEFINE_PER_CPU(void *, vmxarea);
-static int vmcs_order;
+
+static struct vmcs_descriptor {
+	int size;
+	int order;
+	u32 revision_id;
+} vmcs_descriptor;
+
+#define MSR_IA32_FEATURE_CONTROL 0x03a
+#define MSR_IA32_VMX_BASIC_MSR   0x480
+
+static __init void setup_vmcs_descriptor(void)
+{
+	u32 vmx_msr_low, vmx_msr_high;
+
+	rdmsr(MSR_IA32_VMX_BASIC_MSR, vmx_msr_low, vmx_msr_high);
+	vmcs_descriptor.size = vmx_msr_high & 0x1fff;
+	vmcs_descriptor.order = get_order(vmcs_descriptor.size);
+	vmcs_descriptor.revision_id = vmx_msr_low;
+};
+
+static void *alloc_vmcs_cpu(int cpu)
+{
+	int node = cpu_to_node(cpu);
+	struct page *pages;
+	void *vmcs;
+
+	pages = alloc_pages_node(node, GFP_KERNEL, vmcs_descriptor.order);
+	if (!pages)
+		return 0;
+	vmcs = page_address(pages);
+	memset(vmcs, 0, vmcs_descriptor.size);
+	*(u32 *)vmcs = vmcs_descriptor.revision_id; /* vmcs revision id */
+	return vmcs;
+}
+
+static void *alloc_vmcs(void)
+{
+	return alloc_vmcs_cpu(smp_processor_id());
+}
+
+static void free_vmcs(void *vmcs)
+{
+	free_pages((unsigned long)vmcs, vmcs_descriptor.order);
+}
 
 static __init int cpu_has_hvm_support(void)
 {
@@ -33,36 +76,23 @@ static __exit void free_hvm_area(void)
 	int cpu;
 
 	for_each_online_cpu(cpu)
-		free_pages((unsigned long)per_cpu(vmxarea, cpu), vmcs_order);
+		free_vmcs(per_cpu(vmxarea, cpu));
 }
-
-#define MSR_IA32_FEATURE_CONTROL 0x03a
-#define MSR_IA32_VMX_BASIC_MSR   0x480
 
 static __init int alloc_hvm_area(void)
 {
 	int cpu;
-	u32 vmx_msr_low, vmx_msr_high;
-	int vmcs_size;
-
-	rdmsr(MSR_IA32_VMX_BASIC_MSR, vmx_msr_low, vmx_msr_high);
-	vmcs_size = vmx_msr_high & 0x1fff;
-	vmcs_order = get_order(vmcs_size);
 
 	for_each_online_cpu(cpu) {
 		void *vmcs;
-		int node = cpu_to_node(cpu);
 
-		vmcs = page_address(alloc_pages_node(node, GFP_KERNEL, 0));
+		vmcs = alloc_vmcs_cpu(cpu);
 		if (!vmcs) {
 			free_hvm_area();
 			return -ENOMEM;
 		}
 		
 		per_cpu(vmxarea, cpu) = vmcs;
-		memset(vmcs, 0, vmcs_size);
-
-		*(u32 *)vmcs = vmx_msr_low; /* vmcs revision id */
 	}
 	return 0;
 }
@@ -248,6 +278,7 @@ static __init int hvm_init(void)
 		return -EOPNOTSUPP;
 	}
 
+	setup_vmcs_descriptor();
 	r = alloc_hvm_area();
 	if (r)
 		goto out;
