@@ -13,6 +13,8 @@
 #include <asm/uaccess.h>
 #include <linux/reboot.h>
 
+#include "vmx.h"
+
 #define HVM_MAX_VCPUS 4
 
 struct hvm {
