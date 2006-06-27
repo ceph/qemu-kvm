@@ -268,6 +268,41 @@ out:
 	return r;
 }
 
+static u32 vmcs_read32(unsigned field)
+{
+	u32 value;
+	
+	asm ( "vmread %1, %0" : "=g"(value) : "r"(field) : "cc" );
+	return value;
+}
+
+static int hvm_dev_ioctl_run(struct hvm *hvm, struct hvm_run *hvm_run)
+{
+	struct hvm_vcpu *vcpu;
+	u8 fail;
+
+	if (hvm_run->vcpu < 0 || hvm_run->vcpu >= hvm->nvcpus)
+		return -EINVAL;
+	vcpu = &hvm->vcpus[hvm_run->vcpu];
+	
+	vcpu_load(vcpu);
+
+	if (!vcpu->launched) {
+		asm volatile ( "vmlaunch; setz %0" : "=g"(fail) );
+		vcpu->launched = 1;
+	} else
+		asm volatile ( "vmresume; setz %0" : "=g"(fail) );
+
+	hvm_run->exit_type = 0;
+	if (fail) {
+		hvm_run->exit_type = HVM_EXIT_TYPE_FAIL_ENTRY;
+		hvm_run->exit_reason = vmcs_read32(VM_INSTRUCTION_ERROR);
+	}
+
+	vcpu_put();
+	return 0;
+}
+
 static int hvm_dev_ioctl(struct inode *inode, struct file *filp,
                          unsigned int ioctl, unsigned long arg)
 {
@@ -282,6 +317,21 @@ static int hvm_dev_ioctl(struct inode *inode, struct file *filp,
 		if (copy_from_user(&hvm_create, (void *)arg, sizeof hvm_create))
 			goto out;
 		r = hvm_dev_ioctl_create(hvm, &hvm_create);
+		if (r)
+			goto out;
+		break;
+	}
+	case HVM_RUN: {
+		struct hvm_run hvm_run;
+	
+		r = -EFAULT;
+		if (copy_from_user(&hvm_run, (void *)arg, sizeof hvm_run))
+			goto out;
+		r = hvm_dev_ioctl_run(hvm, &hvm_run);
+		r = -EFAULT;
+		if (copy_to_user((void *)arg, &hvm_run, sizeof hvm_run))
+			goto out;
+		r = 0;
 		break;
 	}
 	default:
