@@ -1,5 +1,7 @@
 /* hardware virtual machine support module */
 
+#include "hvm.h"
+
 #include <linux/hvm.h>
 #include <linux/module.h>
 #include <linux/errno.h>
@@ -14,22 +16,6 @@
 #include <linux/reboot.h>
 
 #include "vmx.h"
-
-#define HVM_MAX_VCPUS 4
-
-struct hvm_vcpu {
-	void *vmcs;
-	int   cpu;
-	int   launched;
-};
-
-struct hvm {
-	unsigned created : 1;
-	unsigned long phys_mem_pages;
-	struct page **phys_mem;
-	int nvcpus;
-	struct hvm_vcpu vcpus[HVM_MAX_VCPUS];
-};
 
 DEFINE_PER_CPU(void *, vmxarea);
 DEFINE_PER_CPU(void *, current_vmcs);
