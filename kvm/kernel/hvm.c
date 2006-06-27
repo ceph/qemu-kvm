@@ -261,6 +261,116 @@ static inline void vmcs_write64(unsigned field, u64 value)
 #endif
 }
 
+static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
+{
+	u32 host_sysenter_cs;
+	u32 junk;
+	
+	vcpu_load(vcpu->vmcs);
+
+	/* Segments */
+	vmcs_write16(GUEST_CS_SELECTOR, __KERNEL_CS);
+	vmcs_write16(GUEST_DS_SELECTOR, __KERNEL_DS);
+	vmcs_write16(GUEST_ES_SELECTOR, __KERNEL_DS);
+	vmcs_write16(GUEST_FS_SELECTOR, __KERNEL_DS);
+	vmcs_write16(GUEST_GS_SELECTOR, __KERNEL_DS);
+	vmcs_write16(GUEST_SS_SELECTOR, __KERNEL_DS);
+
+	vmcs_write16(GUEST_TR_SELECTOR, 0);
+	vmcs_write16(GUEST_LDTR_SELECTOR, 0);
+
+	vmcs_write32(GUEST_CS_LIMIT, -1u);
+	vmcs_write32(GUEST_DS_LIMIT, -1u);
+	vmcs_write32(GUEST_ES_LIMIT, -1u);
+	vmcs_write32(GUEST_FS_LIMIT, -1u);
+	vmcs_write32(GUEST_GS_LIMIT, -1u);
+	vmcs_write32(GUEST_SS_LIMIT, -1u);
+
+	vmcs_write32(GUEST_LDTR_LIMIT, 0);
+	vmcs_write32(GUEST_TR_LIMIT, 0);
+	vmcs_write32(GUEST_IDTR_LIMIT, 0);
+
+	vmcs_write32(GUEST_CS_AR_BYTES, 0x8d);
+	vmcs_write32(GUEST_DS_AR_BYTES, 0x83);
+	vmcs_write32(GUEST_ES_AR_BYTES, 0x83);
+	vmcs_write32(GUEST_FS_AR_BYTES, 0x83);
+	vmcs_write32(GUEST_GS_AR_BYTES, 0x83);
+	vmcs_write32(GUEST_SS_AR_BYTES, 0x83);
+
+	vmcs_write32(GUEST_LDTR_AR_BYTES, 0x83);
+	vmcs_write32(GUEST_TR_AR_BYTES, 0x83);
+
+	vmcs_write32(GUEST_SYSENTER_CS, 0);
+
+
+	/* I/O */
+	vmcs_write64(IO_BITMAP_A, 0);
+	vmcs_write64(IO_BITMAP_B, 0);
+
+	vmcs_write64(TSC_OFFSET, 0);
+
+	/* vmcs link (?) */
+	vmcs_write64(VMCS_LINK_POINTER, -1ull);
+
+	/* Special registers */
+	vmcs_write64(GUEST_IA32_DEBUGCTL, 0);
+
+	/* Control */
+	vmcs_write32(PIN_BASED_VM_EXEC_CONTROL,
+		     PIN_BASED_EXT_INTR_MASK | PIN_BASED_NMI_EXITING);
+	vmcs_write32(CPU_BASED_VM_EXEC_CONTROL,
+		     CPU_BASED_VIRTUAL_INTR_PENDING
+		     | CPU_BASED_HLT_EXITING
+		     | CPU_BASED_CR8_LOAD_EXITING
+		     | CPU_BASED_CR8_STORE_EXITING
+		     | CPU_BASED_TPR_SHADOW
+		     | CPU_BASED_UNCOND_IO_EXITING
+		);
+	vmcs_write32(EXCEPTION_BITMAP, 1 << 14); /* want page faults */
+	vmcs_write32(PAGE_FAULT_ERROR_CODE_MASK, 0);
+	vmcs_write32(PAGE_FAULT_ERROR_CODE_MATCH, 0);
+	vmcs_write32(CR3_TARGET_COUNT, 0);
+
+	vmcs_write16(HOST_CS_SELECTOR, __KERNEL_CS);
+	vmcs_write16(HOST_DS_SELECTOR, __KERNEL_DS);
+	vmcs_write16(HOST_ES_SELECTOR, __KERNEL_DS);
+	vmcs_write16(HOST_FS_SELECTOR, __KERNEL_DS);
+	vmcs_write16(HOST_GS_SELECTOR, __KERNEL_DS);
+	vmcs_write16(HOST_SS_SELECTOR, __KERNEL_DS);
+
+	vmcs_write16(HOST_TR_SELECTOR, GDT_ENTRY_TSS*8);
+
+	rdmsr(MSR_IA32_SYSENTER_CS, host_sysenter_cs, junk);
+	vmcs_write32(HOST_IA32_SYSENTER_CS, host_sysenter_cs);
+
+#ifdef __x86_64__
+#define HOST_IS_64 1
+#else
+#define HOST_IS_64 0
+#endif
+	
+	vmcs_write32(VM_EXIT_CONTROLS, 
+		     (HOST_IS_64 << 9)   /* address space size */
+		     | (1 << 15)         /* ack interrupts */
+		     | 0x3edff           /* reserved */
+		);
+	vmcs_write32(VM_EXIT_MSR_STORE_COUNT, 0);
+	vmcs_write32(VM_EXIT_MSR_LOAD_COUNT, 0);
+
+#define GUEST_IS_64 HOST_IS_64
+	
+	vmcs_write32(VM_ENTRY_CONTROLS, 
+		     (GUEST_IS_64 << 9) /* address space size */
+		     | 0x11ff           /* reserved */
+		);
+	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD, 0);
+
+	vmcs_writel(CR0_GUEST_HOST_MASK, -1ul);
+	vmcs_writel(CR4_GUEST_HOST_MASK, -1ul);
+
+	vcpu_put();
+}
+
 static int hvm_dev_ioctl_create(struct hvm *hvm, struct hvm_create *hvm_create)
 {
 	int r;
@@ -294,6 +404,8 @@ static int hvm_dev_ioctl_create(struct hvm *hvm, struct hvm_create *hvm_create)
 		vmcs_clear(vmcs);
 		hvm->vcpus[i].vmcs = vmcs;
 		hvm->vcpus[i].launched = 0;
+
+		hvm_vcpu_setup(&hvm->vcpus[i]);
 	}
 		
 	hvm->created = 1;
