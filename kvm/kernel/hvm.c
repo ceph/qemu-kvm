@@ -208,7 +208,7 @@ static int hvm_dev_release(struct inode *inode, struct file *filp)
 	return 0;
 }
 
-static unsigned long vmcs_readl(unsigned field)
+static unsigned long vmcs_readl(unsigned long field)
 {
 	unsigned long value;
 	
@@ -216,17 +216,17 @@ static unsigned long vmcs_readl(unsigned field)
 	return value;
 }
 
-static inline u16 vmcs_read16(unsigned field)
+static inline u16 vmcs_read16(unsigned long field)
 {
 	return vmcs_readl(field);
 }
 
-static inline u32 vmcs_read32(unsigned field)
+static inline u32 vmcs_read32(unsigned long field)
 {
 	return vmcs_readl(field);
 }
 
-static inline u64 vmcs_read64(unsigned field)
+static inline u64 vmcs_read64(unsigned long field)
 {
 #ifdef __x86_64__
 	return vmcs_readl(field);
@@ -235,22 +235,22 @@ static inline u64 vmcs_read64(unsigned field)
 #endif
 }
 
-static void vmcs_writel(unsigned field, unsigned long value)
+static void vmcs_writel(unsigned long field, unsigned long value)
 {
-	asm ( "vmwrite %0, %1" : : "r"(value), "r"(field) : "cc" );
+	asm ( "vmwrite %0, %1" : : "r"(value), "r"((unsigned long)field) : "cc" );
 }
 
-static inline void vmcs_write16(unsigned field, u16 value)
-{
-	vmcs_writel(field, value);
-}
-
-static inline void vmcs_write32(unsigned field, u32 value)
+static inline void vmcs_write16(unsigned long field, u16 value)
 {
 	vmcs_writel(field, value);
 }
 
-static inline void vmcs_write64(unsigned field, u64 value)
+static inline void vmcs_write32(unsigned long field, u32 value)
+{
+	vmcs_writel(field, value);
+}
+
+static inline void vmcs_write64(unsigned long field, u64 value)
 {
 #ifdef __x86_64__
 	vmcs_writel(field, value);
@@ -533,7 +533,9 @@ static int hvm_dev_ioctl_run(struct hvm *hvm, struct hvm_run *hvm_run)
 	      "hvm_vmx_return: popa \n\t"
               "mov $0, %0 \n\t"
 	      "done:"
-	      : "=g" (fail) : "r"(vcpu->launched), "r"(HOST_RSP) : "cc" );
+	      : "=g" (fail) 
+	      : "r"(vcpu->launched), "r"((unsigned long)HOST_RSP) 
+	      : "cc" );
 
 	hvm_run->exit_type = 0;
 	if (fail) {
