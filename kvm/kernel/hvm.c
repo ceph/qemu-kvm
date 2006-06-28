@@ -261,11 +261,36 @@ static inline void vmcs_write64(unsigned field, u64 value)
 #endif
 }
 
+struct descriptor_table {
+	u16 limit;
+	unsigned long base;
+} __attribute__((packed));
+
+static void get_gdt(struct descriptor_table *table)
+{
+	asm ( "sgdt %0" : "=m"(*table) );
+}
+
+static u16 read_fs(void)
+{
+	u16 seg;
+	asm ( "mov %%fs, %0" : "=g"(seg) );
+	return seg;
+}
+
+static u16 read_gs(void)
+{
+	u16 seg;
+	asm ( "mov %%gs, %0" : "=g"(seg) );
+	return seg;
+}
+
 static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 {
 	u32 host_sysenter_cs;
 	u32 junk;
 	unsigned long a;
+	struct descriptor_table dt;
 	
 	vcpu_load(vcpu->vmcs);
 
@@ -340,14 +365,20 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	vmcs_writel(HOST_CR4, read_cr4());  /* 4.2.3 */
 	vmcs_writel(HOST_CR3, read_cr3());  /* 4.2.3  FIXME: shadow tables */
 
-	vmcs_write16(HOST_CS_SELECTOR, __KERNEL_CS);
-	vmcs_write16(HOST_DS_SELECTOR, __KERNEL_DS);
-	vmcs_write16(HOST_ES_SELECTOR, __KERNEL_DS);
-	vmcs_write16(HOST_FS_SELECTOR, __KERNEL_DS);
-	vmcs_write16(HOST_GS_SELECTOR, __KERNEL_DS);
-	vmcs_write16(HOST_SS_SELECTOR, __KERNEL_DS);
+	vmcs_write16(HOST_CS_SELECTOR, __KERNEL_CS);  /* 4.2.4 */
+	vmcs_write16(HOST_DS_SELECTOR, __KERNEL_DS);  /* 4.2.4 */
+	vmcs_write16(HOST_ES_SELECTOR, __KERNEL_DS);  /* 4.2.4 */
+	vmcs_write16(HOST_FS_SELECTOR, read_fs());    /* 4.2.4 */
+	vmcs_write16(HOST_GS_SELECTOR, read_gs());    /* 4.2.4 */
+	vmcs_write16(HOST_SS_SELECTOR, __KERNEL_DS);  /* 4.2.4 */
+	vmcs_writel(HOST_FS_BASE, 0); /* 4.2.4; FIXME: x86-64? */
+	vmcs_writel(HOST_GS_BASE, 0); /* 4.2.4; FIXME: x86-64? */
 
-	vmcs_write16(HOST_TR_SELECTOR, GDT_ENTRY_TSS*8);
+	vmcs_write16(HOST_TR_SELECTOR, GDT_ENTRY_TSS*8);  /* 4.2.4 */
+	vmcs_writel(HOST_TR_BASE, 0); /* 4.2.4; FIXME: x86-64? */
+
+	get_gdt(&dt);
+	vmcs_writel(HOST_GDTR_BASE, dt.base);   /* 4.2.4 */
 
 	rdmsr(MSR_IA32_SYSENTER_CS, host_sysenter_cs, junk);
 	vmcs_write32(HOST_IA32_SYSENTER_CS, host_sysenter_cs);
