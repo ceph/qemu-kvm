@@ -42,8 +42,13 @@ static __init void setup_vmcs_descriptor(void)
 static void vmcs_clear(void *vmcs)
 {
 	u64 phys_addr = __pa(vmcs);
+	u8 error;
 
-	asm volatile ( "vmclear %0" : : "m"(phys_addr) : "cc", "memory" );
+	asm volatile ( "vmclear %1; setna %0" 
+		       : "=m"(error) : "m"(phys_addr) : "cc", "memory" );
+	if (error)
+		printk(KERN_ERR "hvm: vmclear fail: %p/%llx\n", 
+		       vmcs, phys_addr);
 }
 
 static void __vcpu_clear(void *arg)
@@ -69,8 +74,14 @@ static void vcpu_load(struct hvm_vcpu *vcpu)
 	}
 
 	if (per_cpu(current_vmcs, cpu) != vcpu->vmcs) {
+		u8 error;
+
 		per_cpu(current_vmcs, cpu) = vcpu->vmcs;
-		asm volatile ( "vmptrld %0" : : "m"(phys_addr) : "cc" );
+		asm volatile ( "vmptrld %1; setna %0" 
+			       : "=m"(error) : "m"(phys_addr) : "cc" );
+		if (error)
+			printk(KERN_ERR "hvm: vmptrld %p/%llx fail\n",
+			       vcpu->vmcs, phys_addr);
 	}
 }
 
@@ -237,7 +248,13 @@ static inline u64 vmcs_read64(unsigned long field)
 
 static void vmcs_writel(unsigned long field, unsigned long value)
 {
-	asm ( "vmwrite %0, %1" : : "r"(value), "r"((unsigned long)field) : "cc" );
+	u8 error;
+
+	asm ( "vmwrite %1, %2; setna %0" 
+	      : "=g"(error) : "r"(value), "r"((unsigned long)field) : "cc" );
+	if (error)
+		printk(KERN_ERR "vmwrite error: reg %lx value %lx\n",
+		       field, value);
 }
 
 static inline void vmcs_write16(unsigned long field, u16 value)
