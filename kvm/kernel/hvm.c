@@ -265,6 +265,7 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 {
 	u32 host_sysenter_cs;
 	u32 junk;
+	unsigned long a;
 	
 	vcpu_load(vcpu->vmcs);
 
@@ -335,6 +336,10 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	vmcs_write32(PAGE_FAULT_ERROR_CODE_MATCH, 0);
 	vmcs_write32(CR3_TARGET_COUNT, 0);           /* 4.2.1 */
 
+	vmcs_writel(HOST_CR0, read_cr0());  /* 4.2.3 */
+	vmcs_writel(HOST_CR4, read_cr4());  /* 4.2.3 */
+	vmcs_writel(HOST_CR3, read_cr3());  /* 4.2.3  FIXME: shadow tables */
+
 	vmcs_write16(HOST_CS_SELECTOR, __KERNEL_CS);
 	vmcs_write16(HOST_DS_SELECTOR, __KERNEL_DS);
 	vmcs_write16(HOST_ES_SELECTOR, __KERNEL_DS);
@@ -346,6 +351,10 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 
 	rdmsr(MSR_IA32_SYSENTER_CS, host_sysenter_cs, junk);
 	vmcs_write32(HOST_IA32_SYSENTER_CS, host_sysenter_cs);
+	rdmsrl(MSR_IA32_SYSENTER_ESP, a);
+	vmcs_writel(HOST_IA32_SYSENTER_ESP, a);   /* 4.2.3 */
+	rdmsrl(MSR_IA32_SYSENTER_EIP, a);
+	vmcs_writel(HOST_IA32_SYSENTER_EIP, a);   /* 4.2.3 */
 
 #ifdef __x86_64__
 #define HOST_IS_64 1
