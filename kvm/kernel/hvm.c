@@ -438,8 +438,9 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 		     | (1 << 15)         /* ack interrupts */
 		     | 0x3edff           /* reserved, 22.2,1, 20.7.1 */
 		);
-	vmcs_write32(VM_EXIT_MSR_STORE_COUNT, 0);
-	vmcs_write32(VM_EXIT_MSR_LOAD_COUNT, 0);
+	vmcs_write32(VM_EXIT_MSR_STORE_COUNT, 0); /* 22.2.2 */
+	vmcs_write32(VM_EXIT_MSR_LOAD_COUNT, 0);  /* 22.2.2 */
+	vmcs_write32(VM_ENTRY_MSR_LOAD_COUNT, 0); /* 22.2.2 */
 
 	vmcs_write32(VM_ENTRY_CONTROLS, /* 20.8.1 */
 		     (GUEST_IS_64 << 9) /* address space size, 22.2.5 */
