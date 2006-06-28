@@ -356,7 +356,8 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	vmcs_writel(GUEST_SYSENTER_ESP, 0);  /* 4.3.1.1 */
 	vmcs_writel(GUEST_SYSENTER_EIP, 0);  /* 4.3.1.1 */
 
-	vmcs_writel(GUEST_RFLAGS, get_eflags());  /* 4.3.1.2 */
+	vmcs_writel(GUEST_RFLAGS, get_eflags());  /* 4.3.1.2 , 4.3.1.4*/
+	vmcs_writel(GUEST_RIP, 0); /* 4.3.1.4 */
 
 	vmcs_writel(GUEST_CR0, read_cr0());  /* 4.3.1.1 */
 	vmcs_writel(GUEST_CR4, read_cr4());  /* 4.3.1.1 */
