@@ -317,19 +317,23 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 
 	/* Control */
 	vmcs_write32(PIN_BASED_VM_EXEC_CONTROL,
-		     PIN_BASED_EXT_INTR_MASK | PIN_BASED_NMI_EXITING);
-	vmcs_write32(CPU_BASED_VM_EXEC_CONTROL,
-		     CPU_BASED_VIRTUAL_INTR_PENDING
-		     | CPU_BASED_HLT_EXITING
-		     | CPU_BASED_CR8_LOAD_EXITING
-		     | CPU_BASED_CR8_STORE_EXITING
-		     | CPU_BASED_TPR_SHADOW
-		     | CPU_BASED_UNCOND_IO_EXITING
+		     PIN_BASED_EXT_INTR_MASK   /* 2.6.1 */
+		     | PIN_BASED_NMI_EXITING   /* 2.6.1 */
+		     | 0x16   /* reserved, 4.2.1, 2.6.1 */
+		);
+	vmcs_write32(CPU_BASED_VM_EXEC_CONTROL,      
+		     CPU_BASED_VIRTUAL_INTR_PENDING  /* 2.6.2 */
+		     | CPU_BASED_HLT_EXITING         /* 2.6.2 */
+		     | CPU_BASED_CR8_LOAD_EXITING    /* 2.6.2 */
+		     | CPU_BASED_CR8_STORE_EXITING   /* 2.6.2 */
+		     /* | CPU_BASED_TPR_SHADOW */    /* 2.6.2 */
+		     | CPU_BASED_UNCOND_IO_EXITING   /* 2.6.2 */
+		     | 0x401e172    /* reserved, 4.2.1, 2.6.2 */
 		);
 	vmcs_write32(EXCEPTION_BITMAP, 1 << 14); /* want page faults */
 	vmcs_write32(PAGE_FAULT_ERROR_CODE_MASK, 0);
 	vmcs_write32(PAGE_FAULT_ERROR_CODE_MATCH, 0);
-	vmcs_write32(CR3_TARGET_COUNT, 0);
+	vmcs_write32(CR3_TARGET_COUNT, 0);           /* 4.2.1 */
 
 	vmcs_write16(HOST_CS_SELECTOR, __KERNEL_CS);
 	vmcs_write16(HOST_DS_SELECTOR, __KERNEL_DS);
@@ -349,21 +353,21 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 #define HOST_IS_64 0
 #endif
 	
-	vmcs_write32(VM_EXIT_CONTROLS, 
+	vmcs_write32(VM_EXIT_CONTROLS,   /* 2.7.1 */
 		     (HOST_IS_64 << 9)   /* address space size */
 		     | (1 << 15)         /* ack interrupts */
-		     | 0x3edff           /* reserved */
+		     | 0x3edff           /* reserved, 4.2,1, 2.7.1 */
 		);
 	vmcs_write32(VM_EXIT_MSR_STORE_COUNT, 0);
 	vmcs_write32(VM_EXIT_MSR_LOAD_COUNT, 0);
 
 #define GUEST_IS_64 HOST_IS_64
 	
-	vmcs_write32(VM_ENTRY_CONTROLS, 
+	vmcs_write32(VM_ENTRY_CONTROLS, /* 2.8.1 */
 		     (GUEST_IS_64 << 9) /* address space size */
-		     | 0x11ff           /* reserved */
+		     | 0x11ff           /* reserved, 4.2.1, 2.8.1 */
 		);
-	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD, 0);
+	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD, 0);  /* 4.2.1 */
 
 	vmcs_writel(CR0_GUEST_HOST_MASK, -1ul);
 	vmcs_writel(CR4_GUEST_HOST_MASK, -1ul);
