@@ -319,10 +319,10 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	vmcs_write16(GUEST_GS_SELECTOR, 24);
 	vmcs_write16(GUEST_SS_SELECTOR, 24);
 
-	vmcs_write16(GUEST_TR_SELECTOR, 8);  /* 4.3.1.2 */
-	vmcs_writel(GUEST_TR_BASE, 0);  /* 4.3.1.2 */
-	vmcs_write16(GUEST_LDTR_SELECTOR, 0);  /* 4.3.1.2 */
-	vmcs_writel(GUEST_LDTR_BASE, 0);  /* 4.3.1.2 */
+	vmcs_write16(GUEST_TR_SELECTOR, 8);  /* 22.3.1.2 */
+	vmcs_writel(GUEST_TR_BASE, 0);  /* 22.3.1.2 */
+	vmcs_write16(GUEST_LDTR_SELECTOR, 0);  /* 22.3.1.2 */
+	vmcs_writel(GUEST_LDTR_BASE, 0);  /* 22.3.1.2 */
 
 	vmcs_write32(GUEST_CS_LIMIT, -1u);
 	vmcs_write32(GUEST_DS_LIMIT, -1u);
@@ -331,47 +331,47 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	vmcs_write32(GUEST_GS_LIMIT, -1u);
 	vmcs_write32(GUEST_SS_LIMIT, -1u);
 
-	vmcs_writel(GUEST_CS_BASE, 0);  /* 4.3.1.2 */
-	vmcs_writel(GUEST_DS_BASE, 0);  /* 4.3.1.2 */
-	vmcs_writel(GUEST_ES_BASE, 0);  /* 4.3.1.2 */
-	vmcs_writel(GUEST_FS_BASE, 0);  /* 4.3.1.2 */
-	vmcs_writel(GUEST_GS_BASE, 0);  /* 4.3.1.2 */
-	vmcs_writel(GUEST_SS_BASE, 0);  /* 4.3.1.2 */
+	vmcs_writel(GUEST_CS_BASE, 0);  /* 22.3.1.2 */
+	vmcs_writel(GUEST_DS_BASE, 0);  /* 22.3.1.2 */
+	vmcs_writel(GUEST_ES_BASE, 0);  /* 22.3.1.2 */
+	vmcs_writel(GUEST_FS_BASE, 0);  /* 22.3.1.2 */
+	vmcs_writel(GUEST_GS_BASE, 0);  /* 22.3.1.2 */
+	vmcs_writel(GUEST_SS_BASE, 0);  /* 22.3.1.2 */
 
 	vmcs_write32(GUEST_LDTR_LIMIT, 0);
 	vmcs_write32(GUEST_TR_LIMIT, 2000);
 	vmcs_write32(GUEST_IDTR_LIMIT, 0);
 
-	vmcs_write32(GUEST_CS_AR_BYTES, 0xc09d | (GUEST_IS_64 << 13)); /* 4.3.1.2 */
-	vmcs_write32(GUEST_DS_AR_BYTES, 0xc093);  /* 4.3.1.2 */
-	vmcs_write32(GUEST_ES_AR_BYTES, 0xc093);  /* 4.3.1.2 */
-	vmcs_write32(GUEST_FS_AR_BYTES, 0xc093);  /* 4.3.1.2 */
-	vmcs_write32(GUEST_GS_AR_BYTES, 0xc093);  /* 4.3.1.2 */
-	vmcs_write32(GUEST_SS_AR_BYTES, 0xc093);  /* 4.3.1.2 */
+	vmcs_write32(GUEST_CS_AR_BYTES, 0xc09d | (GUEST_IS_64 << 13)); /* 22.3.1.2 */
+	vmcs_write32(GUEST_DS_AR_BYTES, 0xc093);  /* 22.3.1.2 */
+	vmcs_write32(GUEST_ES_AR_BYTES, 0xc093);  /* 22.3.1.2 */
+	vmcs_write32(GUEST_FS_AR_BYTES, 0xc093);  /* 22.3.1.2 */
+	vmcs_write32(GUEST_GS_AR_BYTES, 0xc093);  /* 22.3.1.2 */
+	vmcs_write32(GUEST_SS_AR_BYTES, 0xc093);  /* 22.3.1.2 */
 
-	vmcs_write32(GUEST_LDTR_AR_BYTES, 0x1c082); /* 4.3.1.2 */
-	vmcs_write32(GUEST_TR_AR_BYTES, 0xc08d);   /* 4.3.1.2 */
+	vmcs_write32(GUEST_LDTR_AR_BYTES, 0x1c082); /* 22.3.1.2 */
+	vmcs_write32(GUEST_TR_AR_BYTES, 0xc08d);   /* 22.3.1.2 */
 
-	vmcs_write32(GUEST_SYSENTER_CS, 0);  /* 4.3.1.1 */
-	vmcs_writel(GUEST_SYSENTER_ESP, 0);  /* 4.3.1.1 */
-	vmcs_writel(GUEST_SYSENTER_EIP, 0);  /* 4.3.1.1 */
+	vmcs_write32(GUEST_SYSENTER_CS, 0);  /* 22.3.1.1 */
+	vmcs_writel(GUEST_SYSENTER_ESP, 0);  /* 22.3.1.1 */
+	vmcs_writel(GUEST_SYSENTER_EIP, 0);  /* 22.3.1.1 */
 
-	vmcs_writel(GUEST_RFLAGS, get_eflags() & ~0x200ul);  /* 4.3.1.2 , 4.3.1.4*/
-	vmcs_writel(GUEST_RIP, 0); /* 4.3.1.4 */
+	vmcs_writel(GUEST_RFLAGS, get_eflags() & ~0x200ul);  /* 22.3.1.2 , 22.3.1.4*/
+	vmcs_writel(GUEST_RIP, 0); /* 22.3.1.4 */
 
-	vmcs_writel(GUEST_CR0, read_cr0());  /* 4.3.1.1 */
-	vmcs_writel(GUEST_CR4, read_cr4() & ~(unsigned long)X86_CR4_PAE);  /* 4.3.1.1. 4.3.1.6 */
-	vmcs_writel(GUEST_CR3, read_cr3());  /* 4.3.1.1; FIXME: shadow */
+	vmcs_writel(GUEST_CR0, read_cr0());  /* 22.3.1.1 */
+	vmcs_writel(GUEST_CR4, read_cr4() & ~(unsigned long)X86_CR4_PAE);  /* 22.3.1.1. 22.3.1.6 */
+	vmcs_writel(GUEST_CR3, read_cr3());  /* 22.3.1.1; FIXME: shadow */
 	vmcs_write64(GUEST_DR7, 0);
 
-	vmcs_writel(GUEST_GDTR_BASE, 0);   /* 4.3.1.3 */
-	vmcs_write32(GUEST_GDTR_LIMIT, 0);  /* 4.3.1.3 */
-	vmcs_writel(GUEST_IDTR_BASE, 0);   /* 4.3.1.3 */
-	vmcs_write32(GUEST_IDTR_LIMIT, 0);  /* 4.3.1.3 */
+	vmcs_writel(GUEST_GDTR_BASE, 0);   /* 22.3.1.3 */
+	vmcs_write32(GUEST_GDTR_LIMIT, 0);  /* 22.3.1.3 */
+	vmcs_writel(GUEST_IDTR_BASE, 0);   /* 22.3.1.3 */
+	vmcs_write32(GUEST_IDTR_LIMIT, 0);  /* 22.3.1.3 */
 
-	vmcs_write32(GUEST_ACTIVITY_STATE, 0); /* 4.3.1.5 */
-	vmcs_write32(GUEST_INTERRUPTIBILITY_INFO, 1); /* 4.3.1.5 */
-	vmcs_write32(GUEST_PENDING_DBG_EXCEPTIONS, 0); /* 4.3.1.5 */
+	vmcs_write32(GUEST_ACTIVITY_STATE, 0); /* 22.3.1.5 */
+	vmcs_write32(GUEST_INTERRUPTIBILITY_INFO, 1); /* 22.3.1.5 */
+	vmcs_write32(GUEST_PENDING_DBG_EXCEPTIONS, 0); /* 22.3.1.5 */
 
 	/* I/O */
 	vmcs_write64(IO_BITMAP_A, 0);
@@ -380,73 +380,73 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	vmcs_write64(TSC_OFFSET, 0);
 
 	/* vmcs link (?) */
-	vmcs_write64(VMCS_LINK_POINTER, -1ull); /* 4.3.1.5 */
+	vmcs_write64(VMCS_LINK_POINTER, -1ull); /* 22.3.1.5 */
 
 	/* Special registers */
 	vmcs_write64(GUEST_IA32_DEBUGCTL, 0);
 
 	/* Control */
 	vmcs_write32(PIN_BASED_VM_EXEC_CONTROL,
-		     PIN_BASED_EXT_INTR_MASK   /* 2.6.1 */
-		     | PIN_BASED_NMI_EXITING   /* 2.6.1 */
-		     | 0x16   /* reserved, 4.2.1, 2.6.1 */
+		     PIN_BASED_EXT_INTR_MASK   /* 20.6.1 */
+		     | PIN_BASED_NMI_EXITING   /* 20.6.1 */
+		     | 0x16   /* reserved, 22.2.1, 20.6.1 */
 		);
 	vmcs_write32(CPU_BASED_VM_EXEC_CONTROL,      
-		     CPU_BASED_VIRTUAL_INTR_PENDING  /* 2.6.2 */
-		     | CPU_BASED_HLT_EXITING         /* 2.6.2 */
-		     | CPU_BASED_CR8_LOAD_EXITING    /* 2.6.2 */
-		     | CPU_BASED_CR8_STORE_EXITING   /* 2.6.2 */
-		     /* | CPU_BASED_TPR_SHADOW */    /* 2.6.2 */
-		     | CPU_BASED_UNCOND_IO_EXITING   /* 2.6.2 */
-		     | 0x401e172    /* reserved, 4.2.1, 2.6.2 */
+		     CPU_BASED_VIRTUAL_INTR_PENDING  /* 20.6.2 */
+		     | CPU_BASED_HLT_EXITING         /* 20.6.2 */
+		     | CPU_BASED_CR8_LOAD_EXITING    /* 20.6.2 */
+		     | CPU_BASED_CR8_STORE_EXITING   /* 20.6.2 */
+		     /* | CPU_BASED_TPR_SHADOW */    /* 20.6.2 */
+		     | CPU_BASED_UNCOND_IO_EXITING   /* 20.6.2 */
+		     | 0x401e172    /* reserved, 22.2.1, 20.6.2 */
 		);
 	vmcs_write32(EXCEPTION_BITMAP, 1 << 14); /* want page faults */
 	vmcs_write32(PAGE_FAULT_ERROR_CODE_MASK, 0);
 	vmcs_write32(PAGE_FAULT_ERROR_CODE_MATCH, 0);
-	vmcs_write32(CR3_TARGET_COUNT, 0);           /* 4.2.1 */
+	vmcs_write32(CR3_TARGET_COUNT, 0);           /* 22.2.1 */
 
-	vmcs_writel(HOST_CR0, read_cr0());  /* 4.2.3 */
-	vmcs_writel(HOST_CR4, read_cr4());  /* 4.2.3, 4.2.5 */
-	vmcs_writel(HOST_CR3, read_cr3());  /* 4.2.3  FIXME: shadow tables */
+	vmcs_writel(HOST_CR0, read_cr0());  /* 22.2.3 */
+	vmcs_writel(HOST_CR4, read_cr4());  /* 22.2.3, 22.2.5 */
+	vmcs_writel(HOST_CR3, read_cr3());  /* 22.2.3  FIXME: shadow tables */
 
-	vmcs_write16(HOST_CS_SELECTOR, __KERNEL_CS);  /* 4.2.4 */
-	vmcs_write16(HOST_DS_SELECTOR, __KERNEL_DS);  /* 4.2.4 */
-	vmcs_write16(HOST_ES_SELECTOR, __KERNEL_DS);  /* 4.2.4 */
-	vmcs_write16(HOST_FS_SELECTOR, read_fs());    /* 4.2.4 */
-	vmcs_write16(HOST_GS_SELECTOR, read_gs());    /* 4.2.4 */
-	vmcs_write16(HOST_SS_SELECTOR, __KERNEL_DS);  /* 4.2.4 */
-	vmcs_writel(HOST_FS_BASE, 0); /* 4.2.4; FIXME: x86-64? */
-	vmcs_writel(HOST_GS_BASE, 0); /* 4.2.4; FIXME: x86-64? */
+	vmcs_write16(HOST_CS_SELECTOR, __KERNEL_CS);  /* 22.2.4 */
+	vmcs_write16(HOST_DS_SELECTOR, __KERNEL_DS);  /* 22.2.4 */
+	vmcs_write16(HOST_ES_SELECTOR, __KERNEL_DS);  /* 22.2.4 */
+	vmcs_write16(HOST_FS_SELECTOR, read_fs());    /* 22.2.4 */
+	vmcs_write16(HOST_GS_SELECTOR, read_gs());    /* 22.2.4 */
+	vmcs_write16(HOST_SS_SELECTOR, __KERNEL_DS);  /* 22.2.4 */
+	vmcs_writel(HOST_FS_BASE, 0); /* 22.2.4; FIXME: x86-64? */
+	vmcs_writel(HOST_GS_BASE, 0); /* 22.2.4; FIXME: x86-64? */
 
-	vmcs_write16(HOST_TR_SELECTOR, GDT_ENTRY_TSS*8);  /* 4.2.4 */
-	vmcs_writel(HOST_TR_BASE, 0); /* 4.2.4; FIXME: x86-64? */
+	vmcs_write16(HOST_TR_SELECTOR, GDT_ENTRY_TSS*8);  /* 22.2.4 */
+	vmcs_writel(HOST_TR_BASE, 0); /* 22.2.4; FIXME: x86-64? */
 
 	get_gdt(&dt);
-	vmcs_writel(HOST_GDTR_BASE, dt.base);   /* 4.2.4 */
+	vmcs_writel(HOST_GDTR_BASE, dt.base);   /* 22.2.4 */
 
 
-	vmcs_writel(HOST_RIP, (unsigned long)hvm_vmx_return); /* 4.2.5 */
+	vmcs_writel(HOST_RIP, (unsigned long)hvm_vmx_return); /* 22.2.5 */
 
 	rdmsr(MSR_IA32_SYSENTER_CS, host_sysenter_cs, junk);
 	vmcs_write32(HOST_IA32_SYSENTER_CS, host_sysenter_cs);
 	rdmsrl(MSR_IA32_SYSENTER_ESP, a);
-	vmcs_writel(HOST_IA32_SYSENTER_ESP, a);   /* 4.2.3 */
+	vmcs_writel(HOST_IA32_SYSENTER_ESP, a);   /* 22.2.3 */
 	rdmsrl(MSR_IA32_SYSENTER_EIP, a);
-	vmcs_writel(HOST_IA32_SYSENTER_EIP, a);   /* 4.2.3 */
+	vmcs_writel(HOST_IA32_SYSENTER_EIP, a);   /* 22.2.3 */
 
-	vmcs_write32(VM_EXIT_CONTROLS,   /* 2.7.1 */
+	vmcs_write32(VM_EXIT_CONTROLS,   /* 20.7.1 */
 		     (HOST_IS_64 << 9)   /* address space size */
 		     | (1 << 15)         /* ack interrupts */
-		     | 0x3edff           /* reserved, 4.2,1, 2.7.1 */
+		     | 0x3edff           /* reserved, 22.2,1, 20.7.1 */
 		);
 	vmcs_write32(VM_EXIT_MSR_STORE_COUNT, 0);
 	vmcs_write32(VM_EXIT_MSR_LOAD_COUNT, 0);
 
-	vmcs_write32(VM_ENTRY_CONTROLS, /* 2.8.1 */
-		     (GUEST_IS_64 << 9) /* address space size, 4.2.5 */
-		     | 0x11ff           /* reserved, 4.2.1, 2.8.1 */
+	vmcs_write32(VM_ENTRY_CONTROLS, /* 20.8.1 */
+		     (GUEST_IS_64 << 9) /* address space size, 22.2.5 */
+		     | 0x11ff           /* reserved, 22.2.1, 20.8.1 */
 		);
-	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD, 0);  /* 4.2.1 */
+	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD, 0);  /* 22.2.1 */
 
 	vmcs_writel(CR0_GUEST_HOST_MASK, -1ul);
 	vmcs_writel(CR4_GUEST_HOST_MASK, -1ul);
