@@ -287,6 +287,7 @@ static u16 read_gs(void)
 
 static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 {
+	extern asmlinkage void hvm_vmx_return(void);
 	u32 host_sysenter_cs;
 	u32 junk;
 	unsigned long a;
@@ -362,7 +363,7 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	vmcs_write32(CR3_TARGET_COUNT, 0);           /* 4.2.1 */
 
 	vmcs_writel(HOST_CR0, read_cr0());  /* 4.2.3 */
-	vmcs_writel(HOST_CR4, read_cr4());  /* 4.2.3 */
+	vmcs_writel(HOST_CR4, read_cr4());  /* 4.2.3, 4.2.5 */
 	vmcs_writel(HOST_CR3, read_cr3());  /* 4.2.3  FIXME: shadow tables */
 
 	vmcs_write16(HOST_CS_SELECTOR, __KERNEL_CS);  /* 4.2.4 */
@@ -379,6 +380,9 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 
 	get_gdt(&dt);
 	vmcs_writel(HOST_GDTR_BASE, dt.base);   /* 4.2.4 */
+
+
+	vmcs_writel(HOST_RIP, (unsigned long)hvm_vmx_return); /* 4.2.5 */
 
 	rdmsr(MSR_IA32_SYSENTER_CS, host_sysenter_cs, junk);
 	vmcs_write32(HOST_IA32_SYSENTER_CS, host_sysenter_cs);
@@ -404,7 +408,7 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 #define GUEST_IS_64 HOST_IS_64
 	
 	vmcs_write32(VM_ENTRY_CONTROLS, /* 2.8.1 */
-		     (GUEST_IS_64 << 9) /* address space size */
+		     (GUEST_IS_64 << 9) /* address space size, 4.2.5 */
 		     | 0x11ff           /* reserved, 4.2.1, 2.8.1 */
 		);
 	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD, 0);  /* 4.2.1 */
@@ -474,18 +478,34 @@ static int hvm_dev_ioctl_run(struct hvm *hvm, struct hvm_run *hvm_run)
 	
 	vcpu_load(vcpu);
 
-	if (!vcpu->launched) {
-		asm volatile ( "vmlaunch; setz %0" : "=g"(fail) );
-		if (!fail)
-			vcpu->launched = 1;
-	} else
-		asm volatile ( "vmresume; setz %0" : "=g"(fail) );
+#ifdef __x86_64__
+#define SP "rsp"
+#else
+#define SP "esp"
+#endif
+
+	asm ( "pusha \n\t"
+	      "vmwrite %%" SP ", %2 \n\t"
+	      "cmp $0, %1 \n\t"
+	      "jne launched \n\t"
+	      "vmlaunch \n\t"
+	      "jmp error \n\t"
+	      "launched: vmresume \n\t"
+	      "error: popa \n\t"
+	      "mov $1, %1 \n\t"
+	      "jmp done \n\t"
+	      ".globl hvm_vmx_return \n\t"
+	      "hvm_vmx_return: popa \n\t"
+              "mov $0, %0 \n\t"
+	      "done:"
+	      : "=g" (fail) : "r"(vcpu->launched), "r"(HOST_RSP) : "cc" );
 
 	hvm_run->exit_type = 0;
 	if (fail) {
 		hvm_run->exit_type = HVM_EXIT_TYPE_FAIL_ENTRY;
 		hvm_run->exit_reason = vmcs_read32(VM_INSTRUCTION_ERROR);
-	}
+	} else
+		vcpu->launched = 1;
 
 	vcpu_put();
 	return 0;
