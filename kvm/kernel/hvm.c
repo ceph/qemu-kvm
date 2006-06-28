@@ -251,7 +251,7 @@ static void vmcs_writel(unsigned long field, unsigned long value)
 	u8 error;
 
 	asm ( "vmwrite %1, %2; setna %0" 
-	      : "=g"(error) : "r"(value), "r"((unsigned long)field) : "cc" );
+	      : "=g"(error) : "r"(value), "r"(field) : "cc" );
 	if (error)
 		printk(KERN_ERR "vmwrite error: reg %lx value %lx\n",
 		       field, value);
