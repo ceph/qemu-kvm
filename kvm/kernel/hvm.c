@@ -643,14 +643,15 @@ static int hvm_dev_ioctl_run(struct hvm *hvm, struct hvm_run *hvm_run)
 	      : "r"(vcpu->launched), "r"((unsigned long)HOST_RSP) 
 	      : "cc" );
 
-	printk(KERN_INFO "post launch: fail %d\n", fail);
-
 	hvm_run->exit_type = 0;
 	if (fail) {
 		hvm_run->exit_type = HVM_EXIT_TYPE_FAIL_ENTRY;
 		hvm_run->exit_reason = vmcs_read32(VM_INSTRUCTION_ERROR);
-	} else
+	} else {
 		vcpu->launched = 1;
+		hvm_run->exit_type = HVM_EXIT_TYPE_VM_EXIT;
+		hvm_run->exit_reason = vmcs_read32(VM_EXIT_REASON);
+	}
 
 	vcpu_put();
 	return 0;
