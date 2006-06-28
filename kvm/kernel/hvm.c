@@ -29,6 +29,14 @@ static struct vmcs_descriptor {
 #define MSR_IA32_FEATURE_CONTROL 0x03a
 #define MSR_IA32_VMX_BASIC_MSR   0x480
 
+static unsigned long read_msr(unsigned long msr)
+{
+	u64 value;
+	
+	rdmsrl(msr, value);
+	return value;
+}
+
 static __init void setup_vmcs_descriptor(void)
 {
 	u32 vmx_msr_low, vmx_msr_high;
@@ -288,6 +296,11 @@ static void get_gdt(struct descriptor_table *table)
 	asm ( "sgdt %0" : "=m"(*table) );
 }
 
+static void get_idt(struct descriptor_table *table)
+{
+	asm ( "sidt %0" : "=m"(*table) );
+}
+
 static u16 read_fs(void)
 {
 	u16 seg;
@@ -336,6 +349,7 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	vmcs_write16(GUEST_SS_SELECTOR, 24);
 
 	vmcs_write16(GUEST_TR_SELECTOR, 8);  /* 22.3.1.2 */
+	vmcs_writel(HOST_TR_BASE, 0); /* 22.2.4 */
 	vmcs_writel(GUEST_TR_BASE, 0);  /* 22.3.1.2 */
 	vmcs_write16(GUEST_LDTR_SELECTOR, 0);  /* 22.3.1.2 */
 	vmcs_writel(GUEST_LDTR_BASE, 0);  /* 22.3.1.2 */
@@ -435,10 +449,11 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	vmcs_writel(HOST_GS_BASE, 0); /* 22.2.4; FIXME: x86-64? */
 
 	vmcs_write16(HOST_TR_SELECTOR, GDT_ENTRY_TSS*8);  /* 22.2.4 */
-	vmcs_writel(HOST_TR_BASE, 0); /* 22.2.4; FIXME: x86-64? */
 
 	get_gdt(&dt);
 	vmcs_writel(HOST_GDTR_BASE, dt.base);   /* 22.2.4 */
+	get_idt(&dt);
+	vmcs_writel(HOST_IDTR_BASE, dt.base);   /* 22.2.4 */
 
 
 	vmcs_writel(HOST_RIP, (unsigned long)hvm_vmx_return); /* 22.2.5 */
@@ -519,6 +534,64 @@ out:
 	return r;
 }
 
+struct segment_descriptor {
+	u16 limit_low;
+	u16 base_low;
+	u8  base_mid;
+	u8  type : 4;
+	u8  system : 1;
+	u8  dpl : 2;
+	u8  present : 1;
+	u8  limit_high : 4;
+	u8  avl : 1;
+	u8  long_mode : 1;
+	u8  default_op : 1;
+	u8  granularity : 1;
+	u8  base_high;
+} __attribute__((packed));
+
+#ifdef __x86_64__
+// LDT or TSS descriptor in the GDT. 16 bytes.
+struct segment_descriptor_64 {
+	struct segment_descriptor s;
+	u32 base_higher;
+	u32 pad_zero;
+} __attribute__((packed));
+
+#endif
+
+static unsigned long segment_base(u16 selector)
+{
+	struct descriptor_table gdt;
+	struct segment_descriptor *d;
+	unsigned long table_base;
+	typedef unsigned long ul;
+	unsigned long v;
+
+	asm ( "sgdt %0" : "=m"(gdt) );
+	table_base = gdt.base;
+
+	if (selector & 4) {           /* from ldt */
+		u16 ldt_selector;
+
+		asm ( "sldt %0" : "=g"(ldt_selector) );
+		table_base = segment_base(ldt_selector);
+	}
+	d = (struct segment_descriptor *)(table_base + (selector & ~7));
+	v = d->base_low | ((ul)d->base_mid << 16) | ((ul)d->base_high << 24);
+	if (d->system == 0 
+	    && (d->type == 2 || d->type == 9 || d->type == 11))
+		v |= ((ul)((struct segment_descriptor_64 *)d)->base_higher) << 32;
+	return v;
+}
+
+static unsigned long read_tr_base(void)
+{
+	u16 tr;
+	asm ( "str %0" : "=g"(tr) );
+	return segment_base(tr);
+}
+
 static int hvm_dev_ioctl_run(struct hvm *hvm, struct hvm_run *hvm_run)
 {
 	struct hvm_vcpu *vcpu;
@@ -529,6 +602,12 @@ static int hvm_dev_ioctl_run(struct hvm *hvm, struct hvm_run *hvm_run)
 	vcpu = &hvm->vcpus[hvm_run->vcpu];
 	
 	vcpu_load(vcpu);
+
+#ifdef __x86_64__
+	vmcs_writel(HOST_FS_BASE, read_msr(MSR_FS_BASE));
+	vmcs_writel(HOST_GS_BASE, read_msr(MSR_GS_BASE));
+	vmcs_writel(HOST_TR_BASE, read_tr_base()); /* 22.2.4; FIXME: x86-64? */
+#endif
 
 #ifdef __x86_64__
 #define SP "rsp"
@@ -563,6 +642,8 @@ static int hvm_dev_ioctl_run(struct hvm *hvm, struct hvm_run *hvm_run)
 	      : "=g" (fail) 
 	      : "r"(vcpu->launched), "r"((unsigned long)HOST_RSP) 
 	      : "cc" );
+
+	printk(KERN_INFO "post launch: fail %d\n", fail);
 
 	hvm_run->exit_type = 0;
 	if (fail) {
