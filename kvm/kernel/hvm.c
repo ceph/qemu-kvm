@@ -363,6 +363,11 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	vmcs_writel(GUEST_CR3, read_cr3());  /* 4.3.1.1; FIXME: shadow */
 	vmcs_write64(GUEST_DR7, 0);
 
+	vmcs_writel(GUEST_GDTR_BASE, 0);   /* 4.3.1.3 */
+	vmcs_write32(GUEST_GDTR_LIMIT, 0);  /* 4.3.1.3 */
+	vmcs_writel(GUEST_IDTR_BASE, 0);   /* 4.3.1.3 */
+	vmcs_write32(GUEST_IDTR_LIMIT, 0);  /* 4.3.1.3 */
+
 	/* I/O */
 	vmcs_write64(IO_BITMAP_A, 0);
 	vmcs_write64(IO_BITMAP_B, 0);
