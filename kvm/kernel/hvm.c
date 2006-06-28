@@ -356,7 +356,7 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	vmcs_writel(GUEST_SYSENTER_ESP, 0);  /* 4.3.1.1 */
 	vmcs_writel(GUEST_SYSENTER_EIP, 0);  /* 4.3.1.1 */
 
-	vmcs_writel(GUEST_RFLAGS, get_eflags());  /* 4.3.1.2 , 4.3.1.4*/
+	vmcs_writel(GUEST_RFLAGS, get_eflags() & ~0x200ul);  /* 4.3.1.2 , 4.3.1.4*/
 	vmcs_writel(GUEST_RIP, 0); /* 4.3.1.4 */
 
 	vmcs_writel(GUEST_CR0, read_cr0());  /* 4.3.1.1 */
@@ -369,6 +369,10 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	vmcs_writel(GUEST_IDTR_BASE, 0);   /* 4.3.1.3 */
 	vmcs_write32(GUEST_IDTR_LIMIT, 0);  /* 4.3.1.3 */
 
+	vmcs_write32(GUEST_ACTIVITY_STATE, 0); /* 4.3.1.5 */
+	vmcs_write32(GUEST_INTERRUPTIBILITY_INFO, 1); /* 4.3.1.5 */
+	vmcs_write32(GUEST_PENDING_DBG_EXCEPTIONS, 0); /* 4.3.1.5 */
+
 	/* I/O */
 	vmcs_write64(IO_BITMAP_A, 0);
 	vmcs_write64(IO_BITMAP_B, 0);
@@ -376,7 +380,7 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	vmcs_write64(TSC_OFFSET, 0);
 
 	/* vmcs link (?) */
-	vmcs_write64(VMCS_LINK_POINTER, -1ull);
+	vmcs_write64(VMCS_LINK_POINTER, -1ull); /* 4.3.1.5 */
 
 	/* Special registers */
 	vmcs_write64(GUEST_IA32_DEBUGCTL, 0);
