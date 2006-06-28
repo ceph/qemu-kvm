@@ -325,7 +325,7 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	unsigned long a;
 	struct descriptor_table dt;
 	
-	vcpu_load(vcpu->vmcs);
+	vcpu_load(vcpu);
 
 	/* Segments */
 	vmcs_write16(GUEST_CS_SELECTOR, 16);
