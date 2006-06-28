@@ -288,8 +288,7 @@ static u16 read_gs(void)
 static unsigned long get_eflags(void)
 {
 	unsigned long x;
-	
-	asm ( "pushf; popl %0" : "=m"(x) );
+	asm ( "pushf; pop %0" : "=m"(x) );
 	return x;
 }
 
@@ -515,22 +514,32 @@ static int hvm_dev_ioctl_run(struct hvm *hvm, struct hvm_run *hvm_run)
 
 #ifdef __x86_64__
 #define SP "rsp"
+#define PUSHA "push %%rax; push %%rbx; push %%rcx; push %%rdx;" \
+              "push %%rsi; push %%rdi; push %%rbp;" \
+	      "push %%r8;  push %%r9;  push %%r10; push %%r11;" \
+              "push %%r12; push %%r13; push %%r14; push %%r15"
+#define POPA  "pop  %%r15; pop  %%r14; pop  %%r13; pop  %%r12;" \
+	      "pop  %%r11; pop  %%r10; pop  %%r9;  pop  %%r8;"	\
+	      "pop  %%rbp; pop  %%rdi; pop  %%rsi;"	       \
+	      "pop  %%rdx; pop  %%rcx; pop  %%rbx; pop  %%rax"
 #else
 #define SP "esp"
+#define PUSHA "pusha"
+#define POPA  "popa"
 #endif
 
-	asm ( "pusha \n\t"
+	asm ( PUSHA "\n\t"
 	      "vmwrite %%" SP ", %2 \n\t"
 	      "cmp $0, %1 \n\t"
 	      "jne launched \n\t"
 	      "vmlaunch \n\t"
 	      "jmp error \n\t"
 	      "launched: vmresume \n\t"
-	      "error: popa \n\t"
+	      "error: " POPA " \n\t"
 	      "mov $1, %1 \n\t"
 	      "jmp done \n\t"
 	      ".globl hvm_vmx_return \n\t"
-	      "hvm_vmx_return: popa \n\t"
+	      "hvm_vmx_return: " POPA " \n\t"
               "mov $0, %0 \n\t"
 	      "done:"
 	      : "=g" (fail) 
