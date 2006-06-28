@@ -17,7 +17,7 @@ struct hvm_run {
 	int vcpu;
 	/* out */
 	int exit_type;
-	int exit_reason;
+	__u32 exit_reason;
 };
 
 #define HVM_CREATE 1

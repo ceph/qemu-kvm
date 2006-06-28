@@ -38,7 +38,8 @@ void hvm_run(int fd, int vcpu)
 		printf("hvm_run: %m\n");
 		exit(1);
 	}
-	printf("hvm_run: %d %d\n", hvm_run.exit_type, hvm_run.exit_reason);
+	printf("hvm_run: %d %u\n", 
+	       hvm_run.exit_type, hvm_run.exit_reason & 0xffff);
 }
 
 int main(int ac, char **av)
