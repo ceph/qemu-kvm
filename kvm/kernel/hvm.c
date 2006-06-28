@@ -360,7 +360,7 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	vmcs_writel(GUEST_RIP, 0); /* 4.3.1.4 */
 
 	vmcs_writel(GUEST_CR0, read_cr0());  /* 4.3.1.1 */
-	vmcs_writel(GUEST_CR4, read_cr4());  /* 4.3.1.1 */
+	vmcs_writel(GUEST_CR4, read_cr4() & ~(unsigned long)X86_CR4_PAE);  /* 4.3.1.1. 4.3.1.6 */
 	vmcs_writel(GUEST_CR3, read_cr3());  /* 4.3.1.1; FIXME: shadow */
 	vmcs_write64(GUEST_DR7, 0);
 
