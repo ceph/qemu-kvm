@@ -3,8 +3,16 @@
 
 #define HVM_MAX_VCPUS 4
 
+#include <linux/types.h>
+
+struct vmcs {
+	u32 revision_id;
+	u32 abort;
+	char data[0];
+};
+
 struct hvm_vcpu {
-	void *vmcs;
+	struct vmcs *vmcs;
 	int   cpu;
 	int   launched;
 };

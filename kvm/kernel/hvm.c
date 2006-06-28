@@ -17,8 +17,8 @@
 
 #include "vmx.h"
 
-DEFINE_PER_CPU(void *, vmxarea);
-DEFINE_PER_CPU(void *, current_vmcs);
+DEFINE_PER_CPU(struct vmcs *, vmxarea);
+DEFINE_PER_CPU(struct vmcs *, current_vmcs);
 
 static struct vmcs_descriptor {
 	int size;
@@ -39,7 +39,7 @@ static __init void setup_vmcs_descriptor(void)
 	vmcs_descriptor.revision_id = vmx_msr_low;
 };
 
-static void vmcs_clear(void *vmcs)
+static void vmcs_clear(struct vmcs *vmcs)
 {
 	u64 phys_addr = __pa(vmcs);
 	u8 error;
@@ -90,27 +90,27 @@ static void vcpu_put(void)
 	put_cpu();
 }
 
-static void *alloc_vmcs_cpu(int cpu)
+static struct vmcs *alloc_vmcs_cpu(int cpu)
 {
 	int node = cpu_to_node(cpu);
 	struct page *pages;
-	void *vmcs;
+	struct vmcs *vmcs;
 
 	pages = alloc_pages_node(node, GFP_KERNEL, vmcs_descriptor.order);
 	if (!pages)
 		return 0;
 	vmcs = page_address(pages);
 	memset(vmcs, 0, vmcs_descriptor.size);
-	*(u32 *)vmcs = vmcs_descriptor.revision_id; /* vmcs revision id */
+	vmcs->revision_id = vmcs_descriptor.revision_id; /* vmcs revision id */
 	return vmcs;
 }
 
-static void *alloc_vmcs(void)
+static struct vmcs *alloc_vmcs(void)
 {
 	return alloc_vmcs_cpu(smp_processor_id());
 }
 
-static void free_vmcs(void *vmcs)
+static void free_vmcs(struct vmcs *vmcs)
 {
 	free_pages((unsigned long)vmcs, vmcs_descriptor.order);
 }
@@ -134,7 +134,7 @@ static __init int alloc_hvm_area(void)
 	int cpu;
 
 	for_each_online_cpu(cpu) {
-		void *vmcs;
+		struct vmcs *vmcs;
 
 		vmcs = alloc_vmcs_cpu(cpu);
 		if (!vmcs) {
@@ -198,7 +198,7 @@ static void hvm_free_vmcs(struct hvm *hvm)
 	unsigned int i;
 
 	for (i = 0; i < hvm->nvcpus; ++i) {
-		void *vmcs = hvm->vcpus[i].vmcs;
+		struct vmcs *vmcs = hvm->vcpus[i].vmcs;
 
 		if (vmcs) {
 			vmcs_clear(vmcs);
@@ -496,7 +496,7 @@ static int hvm_dev_ioctl_create(struct hvm *hvm, struct hvm_create *hvm_create)
 	}
 	hvm->nvcpus = 1;
 	for (i = 0; i < hvm->nvcpus; ++i) {
-		void *vmcs;
+		struct vmcs *vmcs;
 
 		vmcs = alloc_vmcs();
 		if (!vmcs)
