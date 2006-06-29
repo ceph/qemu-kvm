@@ -19,6 +19,7 @@
 
 static unsigned long read_tr_base(void);
 static void vmcs_writel(unsigned long field, unsigned long value);
+static __exit void hvm_free_1to1_mapping(struct hvm *hvm);
 
 DEFINE_PER_CPU(struct vmcs *, vmxarea);
 DEFINE_PER_CPU(struct vmcs *, current_vmcs);
@@ -236,6 +237,7 @@ static int hvm_dev_release(struct inode *inode, struct file *filp)
 	if (hvm->created) {
 		hvm_free_vmcs(hvm);
 		hvm_free_physmem(hvm);
+		hvm_free_1to1_mapping(hvm);
 	}
 	kfree(hvm);
 	return 0;
@@ -347,6 +349,7 @@ static unsigned long get_eflags(void)
 static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 {
 	extern asmlinkage void hvm_vmx_return(void);
+	struct hvm *hvm = vcpu->hvm;
 	u32 host_sysenter_cs;
 	u32 junk;
 	unsigned long a;
@@ -404,7 +407,7 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 
 	vmcs_writel(GUEST_CR0, read_cr0());  /* 22.3.1.1 */
 	vmcs_writel(GUEST_CR4, read_cr4());  /* 22.3.1.1, 22.3.1.6 */
-	vmcs_writel(GUEST_CR3, read_cr3());  /* 22.3.1.1; FIXME: shadow */
+	vmcs_writel(GUEST_CR3, __pa(hvm->map_1to1[0]));  /* 22.3.1.1; FIXME: shadow */
 	vmcs_write64(GUEST_DR7, 0);
 
 	vmcs_writel(GUEST_GDTR_BASE, 0);   /* 22.3.1.3 */
@@ -499,6 +502,38 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	vcpu_put();
 }
 
+static __exit void hvm_free_1to1_mapping(struct hvm *hvm)
+{
+	int i;
+
+	for (i = 0; i < 4; ++i)
+		free_page((unsigned long)hvm->map_1to1[i]);
+}
+
+static __init int hvm_setup_1to1_mapping(struct hvm *hvm)
+{
+	int i;
+
+	for (i = 0; i < 4; ++i) {
+		struct page *page;
+
+		page = alloc_page(GFP_KERNEL);
+		if (!page)
+			goto out_free;
+		hvm->map_1to1[i] = page_address(page);
+		memset(hvm->map_1to1[i], 0, PAGE_SIZE);
+	}
+	hvm->map_1to1[0][0] = __pa(hvm->map_1to1[1]) | 0x23;
+	hvm->map_1to1[1][0] = __pa(hvm->map_1to1[2]) | 0x23;
+	hvm->map_1to1[2][0] = __pa(hvm->map_1to1[3]) | 0x23;
+	for (i = 0; i < 512; ++i)
+		hvm->map_1to1[3][i] = __pa(page_address(hvm->phys_mem[i])) | 0x163;
+	return 0;
+out_free:
+	hvm_free_1to1_mapping(hvm);
+	return -ENOMEM;
+}
+
 static int hvm_dev_ioctl_create(struct hvm *hvm, struct hvm_create *hvm_create)
 {
 	int r;
@@ -522,10 +557,14 @@ static int hvm_dev_ioctl_create(struct hvm *hvm, struct hvm_create *hvm_create)
 		if (!hvm->phys_mem[i])
 			goto out_free_physmem;
 	}
+	r = hvm_setup_1to1_mapping(hvm);
+	if (r)
+		goto out_free_physmem;
 	hvm->nvcpus = 1;
 	for (i = 0; i < hvm->nvcpus; ++i) {
 		struct vmcs *vmcs;
 
+		hvm->vcpus[i].hvm = hvm;
 		vmcs = alloc_vmcs();
 		if (!vmcs)
 			goto out_free_vmcs;

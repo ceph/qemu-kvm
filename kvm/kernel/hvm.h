@@ -12,6 +12,7 @@ struct vmcs {
 };
 
 struct hvm_vcpu {
+	struct hvm *hvm;
 	struct vmcs *vmcs;
 	int   cpu;
 	int   launched;
@@ -23,6 +24,9 @@ struct hvm {
 	struct page **phys_mem;
 	int nvcpus;
 	struct hvm_vcpu vcpus[HVM_MAX_VCPUS];
+
+	/* Temporary: 1:1 virtual memory mapping of first 2MB */
+	unsigned long *map_1to1[4];
 };
 
 #endif
