@@ -65,9 +65,12 @@ static void vmcs_clear(struct vmcs *vmcs)
 static void __vcpu_clear(void *arg)
 {
 	struct hvm_vcpu *vcpu = arg;
+	int cpu = smp_processor_id();
 
 	if (vcpu->cpu == smp_processor_id())
 		vmcs_clear(vcpu->vmcs);
+	if (per_cpu(current_vmcs, cpu) == vcpu->vmcs)
+		per_cpu(current_vmcs, cpu) = 0;
 }
 
 /*
@@ -78,10 +81,9 @@ static void vcpu_load(struct hvm_vcpu *vcpu)
 	u64 phys_addr = __pa(vcpu->vmcs);
 	int cpu = get_cpu();
 	
-	if (vcpu->cpu != cpu && vcpu->launched) {
+	if (vcpu->cpu != cpu) {
 		smp_call_function(__vcpu_clear, vcpu, 0, 1);
 		vcpu->launched = 0;
-		vcpu->cpu = cpu;
 	}
 
 	if (per_cpu(current_vmcs, cpu) != vcpu->vmcs) {
@@ -93,6 +95,10 @@ static void vcpu_load(struct hvm_vcpu *vcpu)
 		if (error)
 			printk(KERN_ERR "hvm: vmptrld %p/%llx fail\n",
 			       vcpu->vmcs, phys_addr);
+	}
+
+	if (vcpu->cpu != cpu) {
+		vcpu->cpu = cpu;
 		/* 
 		 * Linux uses per-cpu TSS, so set this when switching
 		 * processors.
