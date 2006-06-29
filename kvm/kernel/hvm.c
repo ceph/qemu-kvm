@@ -19,7 +19,7 @@
 
 static unsigned long read_tr_base(void);
 static void vmcs_writel(unsigned long field, unsigned long value);
-static __exit void hvm_free_1to1_mapping(struct hvm *hvm);
+static void hvm_free_1to1_mapping(struct hvm *hvm);
 
 DEFINE_PER_CPU(struct vmcs *, vmxarea);
 DEFINE_PER_CPU(struct vmcs *, current_vmcs);
@@ -194,7 +194,7 @@ static __init void hvm_enable(void *garbage)
 	asm volatile ( "vmxon %0" : : "m"(phys_addr) : "memory", "cc" );
 }
 
-static __exit void hvm_disable(void *garbage)
+static void hvm_disable(void *garbage)
 {
 	asm volatile ( "vmxoff" : : : "cc" );
 }
@@ -504,7 +504,7 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	vcpu_put();
 }
 
-static __exit void hvm_free_1to1_mapping(struct hvm *hvm)
+static void hvm_free_1to1_mapping(struct hvm *hvm)
 {
 	int i;
 
