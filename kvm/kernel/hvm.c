@@ -503,6 +503,10 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	vmcs_writel(CR0_GUEST_HOST_MASK, -1ul);
 	vmcs_writel(CR4_GUEST_HOST_MASK, -1ul);
 
+	vmcs_writel(VIRTUAL_APIC_PAGE_ADDR, 0);
+	vmcs_writel(TPR_THRESHOLD, 0);
+	vmcs_writel(SECONDARY_VM_EXEC_CONTROL, 0);
+
 	vcpu_put();
 }
 
