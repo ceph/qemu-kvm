@@ -17,6 +17,9 @@
 
 #include "vmx.h"
 
+static unsigned long read_tr_base(void);
+static void vmcs_writel(unsigned long field, unsigned long value);
+
 DEFINE_PER_CPU(struct vmcs *, vmxarea);
 DEFINE_PER_CPU(struct vmcs *, current_vmcs);
 
@@ -90,6 +93,11 @@ static void vcpu_load(struct hvm_vcpu *vcpu)
 		if (error)
 			printk(KERN_ERR "hvm: vmptrld %p/%llx fail\n",
 			       vcpu->vmcs, phys_addr);
+		/* 
+		 * Linux uses per-cpu TSS, so set this when switching
+		 * processors.
+		 */
+		vmcs_writel(HOST_TR_BASE, read_tr_base()); /* 22.2.4 */
 	}
 }
 
@@ -349,7 +357,6 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	vmcs_write16(GUEST_SS_SELECTOR, 24);
 
 	vmcs_write16(GUEST_TR_SELECTOR, 8);  /* 22.3.1.2 */
-	vmcs_writel(HOST_TR_BASE, 0); /* 22.2.4 */
 	vmcs_writel(GUEST_TR_BASE, 0);  /* 22.3.1.2 */
 	vmcs_write16(GUEST_LDTR_SELECTOR, 0);  /* 22.3.1.2 */
 	vmcs_writel(GUEST_LDTR_BASE, 0);  /* 22.3.1.2 */
@@ -606,7 +613,6 @@ static int hvm_dev_ioctl_run(struct hvm *hvm, struct hvm_run *hvm_run)
 #ifdef __x86_64__
 	vmcs_writel(HOST_FS_BASE, read_msr(MSR_FS_BASE));
 	vmcs_writel(HOST_GS_BASE, read_msr(MSR_GS_BASE));
-	vmcs_writel(HOST_TR_BASE, read_tr_base()); /* 22.2.4; FIXME: x86-64? */
 #endif
 
 #ifdef __x86_64__
