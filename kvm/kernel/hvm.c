@@ -397,7 +397,7 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	vmcs_write32(GUEST_SS_AR_BYTES, 0xc093);  /* 22.3.1.2 */
 
 	vmcs_write32(GUEST_LDTR_AR_BYTES, 0x1c082); /* 22.3.1.2 */
-	vmcs_write32(GUEST_TR_AR_BYTES, 0xc08b);   /* 22.3.1.2 */
+	vmcs_write32(GUEST_TR_AR_BYTES, 0x808b);   /* 22.3.1.2 */
 
 	vmcs_write32(GUEST_SYSENTER_CS, 0);  /* 22.3.1.1 */
 	vmcs_writel(GUEST_SYSENTER_ESP, 0);  /* 22.3.1.1 */
