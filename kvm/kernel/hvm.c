@@ -420,7 +420,7 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	vmcs_write32(GUEST_IDTR_LIMIT, 0xffff);  /* 22.3.1.3 */
 
 	vmcs_write32(GUEST_ACTIVITY_STATE, 0); /* 22.3.1.5 */
-	vmcs_write32(GUEST_INTERRUPTIBILITY_INFO, 1); /* 22.3.1.5 */
+	vmcs_write32(GUEST_INTERRUPTIBILITY_INFO, 0); /* 22.3.1.5 */
 	vmcs_write32(GUEST_PENDING_DBG_EXCEPTIONS, 0); /* 22.3.1.5 */
 
 	/* I/O */
