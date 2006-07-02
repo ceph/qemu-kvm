@@ -465,8 +465,15 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	vmcs_write16(HOST_FS_SELECTOR, read_fs());    /* 22.2.4 */
 	vmcs_write16(HOST_GS_SELECTOR, read_gs());    /* 22.2.4 */
 	vmcs_write16(HOST_SS_SELECTOR, __KERNEL_DS);  /* 22.2.4 */
+#ifdef __x86_64__
+	rdmsrl(MSR_FS_BASE, a);
+	vmcs_writel(HOST_FS_BASE, a); /* 22.2.4 */
+	rdmsrl(MSR_GS_BASE, a);
+	vmcs_writel(HOST_GS_BASE, a); /* 22.2.4 */
+#else
 	vmcs_writel(HOST_FS_BASE, 0); /* 22.2.4; FIXME: x86-64? */
 	vmcs_writel(HOST_GS_BASE, 0); /* 22.2.4; FIXME: x86-64? */
+#endif
 
 	vmcs_write16(HOST_TR_SELECTOR, GDT_ENTRY_TSS*8);  /* 22.2.4 */
 
