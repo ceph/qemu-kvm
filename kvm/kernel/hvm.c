@@ -224,7 +224,7 @@ static void hvm_free_vmcs(struct hvm *hvm)
 		struct hvm_vcpu *vcpu = &hvm->vcpus[i];
 
 		if (vcpu->vmcs) {
-			smp_call_function(__vcpu_clear, vcpu, 0, 1);
+			on_each_cpu(__vcpu_clear, vcpu, 0, 1);
 			free_vmcs(vcpu->vmcs);
 		}
 	}
