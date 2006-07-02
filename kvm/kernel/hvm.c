@@ -578,6 +578,7 @@ static int hvm_dev_ioctl_create(struct hvm *hvm, struct hvm_create *hvm_create)
 	for (i = 0; i < hvm->nvcpus; ++i) {
 		struct vmcs *vmcs;
 
+		hvm->vcpus[i].cpu = -1;  /* First load will set up TR */
 		hvm->vcpus[i].hvm = hvm;
 		vmcs = alloc_vmcs();
 		if (!vmcs)
