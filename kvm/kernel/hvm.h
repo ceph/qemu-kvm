@@ -16,6 +16,7 @@ struct hvm_vcpu {
 	struct vmcs *vmcs;
 	int   cpu;
 	int   launched;
+	unsigned long regs[16]; /* except rsp */
 };
 
 struct hvm {

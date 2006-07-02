@@ -690,36 +690,94 @@ static int hvm_dev_ioctl_run(struct hvm *hvm, struct hvm_run *hvm_run)
 
 #ifdef __x86_64__
 #define SP "rsp"
-#define PUSHA "push %%rax; push %%rbx; push %%rcx; push %%rdx;" \
+#define PUSHA "push %%rax; push %%rbx; push %%rdx;" \
               "push %%rsi; push %%rdi; push %%rbp;" \
 	      "push %%r8;  push %%r9;  push %%r10; push %%r11;" \
-              "push %%r12; push %%r13; push %%r14; push %%r15"
-#define POPA  "pop  %%r15; pop  %%r14; pop  %%r13; pop  %%r12;" \
+              "push %%r12; push %%r13; push %%r14; push %%r15; push %%rcx"
+#define POPA  "pop  %%rcx; pop  %%r15; pop  %%r14; pop  %%r13; pop  %%r12;" \
 	      "pop  %%r11; pop  %%r10; pop  %%r9;  pop  %%r8;"	\
 	      "pop  %%rbp; pop  %%rdi; pop  %%rsi;"	       \
-	      "pop  %%rdx; pop  %%rcx; pop  %%rbx; pop  %%rax"
+	      "pop  %%rdx; pop  %%rbx; pop  %%rax"
+#define LOAD_GUEST_REGS \
+	"mov 0(%3),   %%rax \n\t" \
+	"mov 8(%3),   %%rbx \n\t" \
+	"mov 24(%3),  %%rdx \n\t" \
+	"mov 32(%3),  %%rsi \n\t" \
+	"mov 40(%3),  %%rdi \n\t" \
+	"mov 56(%3),  %%rbp \n\t" \
+	"mov 64(%3),  %%r8 \n\t" \
+	"mov 72(%3),  %%r9 \n\t" \
+	"mov 80(%3),  %%r10 \n\t" \
+	"mov 88(%3),  %%r11 \n\t" \
+	"mov 96(%3),  %%r12 \n\t" \
+	"mov 104(%3), %%r13 \n\t" \
+	"mov 112(%3), %%r14 \n\t" \
+	"mov 120(%3), %%r15 \n\t" \
+	"mov 16(%3),  %%rcx \n\t" /* kills %3 (rcx) */
+
+#define STORE_GUEST_REGS \
+	"xchg %3, 0(%%rsp) \n\t" \
+	"mov %%rax, 0(%3) \n\t" \
+	"mov %%rbx, 8(%3) \n\t" \
+	"pushq 0(%%rsp); popq 16(%3) \n\t" \
+	"mov %%rdx, 24(%3) \n\t" \
+	"mov %%rsi, 32(%3) \n\t" \
+	"mov %%rdi, 40(%3) \n\t" \
+	"mov %%rbp, 56(%3) \n\t" \
+	"mov %%r8,  64(%3) \n\t" \
+	"mov %%r9,  72(%3) \n\t" \
+	"mov %%r10, 80(%3) \n\t" \
+	"mov %%r11, 88(%3) \n\t" \
+	"mov %%r12, 96(%3) \n\t" \
+	"mov %%r13, 104(%3) \n\t" \
+	"mov %%r14, 112(%3) \n\t" \
+	"mov %%r15, 120(%3) \n\t" \
+	"mov 0(%%rsp), %3 \n\t"
 #else
 #define SP "esp"
-#define PUSHA "pusha"
-#define POPA  "popa"
+#define PUSHA "pusha; push %%ecx"
+#define POPA  "pop %%ecx; popa"
+
+#define LOAD_GUEST_REGS \
+	"mov 0(%3),   %%eax \n\t" \
+	"mov 4(%3),   %%ebx \n\t" \
+	"mov 12(%3),  %%edx \n\t" \
+	"mov 16(%3),  %%esi \n\t" \
+	"mov 20(%3),  %%edi \n\t" \
+	"mov 28(%3),  %%ebp \n\t" \
+	"mov 8(%3),   %%ecx \n\t" /* kills %3 (ecx) */
+
+#define STORE_GUEST_REGS \
+	"xchg %3, 0(%%esp) \n\t" \
+	"mov %%eax, 0(%3) \n\t" \
+	"mov %%ebx, 4(%3) \n\t" \
+	"pushl 0(%%esp); popl 8(%3) \n\t" \
+	"mov %%edx, 12(%3) \n\t" \
+	"mov %%esi, 16(%3) \n\t" \
+	"mov %%edi, 20(%3) \n\t" \
+	"mov %%ebp, 28(%3) \n\t" \
+	"mov 0(%%esp), %3"
+
 #endif
 
 	asm ( PUSHA "\n\t"
 	      "vmwrite %%" SP ", %2 \n\t"
 	      "cmp $0, %1 \n\t"
+	      LOAD_GUEST_REGS "\n\t"
 	      "jne launched \n\t"
 	      "vmlaunch \n\t"
 	      "jmp error \n\t"
 	      "launched: vmresume \n\t"
-	      "error: " POPA " \n\t"
+	      "error: " STORE_GUEST_REGS "; " POPA " \n\t"
 	      "mov $1, %1 \n\t"
 	      "jmp done \n\t"
 	      ".globl hvm_vmx_return \n\t"
-	      "hvm_vmx_return: " POPA " \n\t"
+	      "hvm_vmx_return: " STORE_GUEST_REGS "; " POPA " \n\t"
               "mov $0, %0 \n\t"
 	      "done:"
 	      : "=g" (fail) 
-	      : "r"(vcpu->launched), "r"((unsigned long)HOST_RSP) 
+	      : "r"(vcpu->launched), "r"((unsigned long)HOST_RSP),
+		"c"(vcpu->regs)
 	      : "cc" );
 
 	hvm_run->exit_type = 0;
@@ -734,6 +792,80 @@ static int hvm_dev_ioctl_run(struct hvm *hvm, struct hvm_run *hvm_run)
 	}
 
 	vcpu_put();
+	return 0;
+}
+
+static int hvm_dev_ioctl_set_regs(struct hvm *hvm, struct hvm_regs *regs)
+{
+	struct hvm_vcpu *vcpu;
+
+	if (!hvm->created)
+		return -EINVAL;
+	if (regs->vcpu < 0 || regs->vcpu >= hvm->nvcpus)
+		return -EINVAL;
+	vcpu = &hvm->vcpus[regs->vcpu];
+
+	vcpu_load(vcpu);
+
+	regs->rax = vcpu->regs[0];
+	regs->rbx = vcpu->regs[1];
+	regs->rcx = vcpu->regs[2];
+	regs->rdx = vcpu->regs[3];
+	regs->rsi = vcpu->regs[4];
+	regs->rdi = vcpu->regs[5];
+	regs->rsp = vmcs_readl(GUEST_RSP);
+	regs->rbp = vcpu->regs[7];
+	regs->r8 = vcpu->regs[8];
+	regs->r9 = vcpu->regs[9];
+	regs->r10 = vcpu->regs[10];
+	regs->r11 = vcpu->regs[11];
+	regs->r12 = vcpu->regs[12];
+	regs->r13 = vcpu->regs[13];
+	regs->r14 = vcpu->regs[14];
+	regs->r15 = vcpu->regs[15];
+	
+	regs->rip = vmcs_readl(GUEST_RIP);
+	regs->rflags = vmcs_readl(GUEST_RFLAGS);
+
+	vcpu_put();
+
+	return 0;
+}
+
+static int hvm_dev_ioctl_get_regs(struct hvm *hvm, struct hvm_regs *regs)
+{
+	struct hvm_vcpu *vcpu;
+
+	if (!hvm->created)
+		return -EINVAL;
+	if (regs->vcpu < 0 || regs->vcpu >= hvm->nvcpus)
+		return -EINVAL;
+	vcpu = &hvm->vcpus[regs->vcpu];
+
+	vcpu_load(vcpu);
+
+	vcpu->regs[0] = regs->rax;
+	vcpu->regs[1] = regs->rbx;
+	vcpu->regs[2] = regs->rcx;
+	vcpu->regs[3] = regs->rdx;
+	vcpu->regs[4] = regs->rsi;
+	vcpu->regs[5] = regs->rdi;
+	vmcs_writel(GUEST_RSP, regs->rsp);
+	vcpu->regs[7] = regs->rbp;
+	vcpu->regs[8] = regs->r8;
+	vcpu->regs[9] = regs->r9;
+	vcpu->regs[10] = regs->r10;
+	vcpu->regs[11] = regs->r11;
+	vcpu->regs[12] = regs->r12;
+	vcpu->regs[13] = regs->r13;
+	vcpu->regs[14] = regs->r14;
+	vcpu->regs[15] = regs->r15;
+	
+	vmcs_writel(GUEST_RIP, regs->rip);
+	vmcs_writel(GUEST_RFLAGS, regs->rflags);
+
+	vcpu_put();
+
 	return 0;
 }
 
@@ -764,6 +896,33 @@ static int hvm_dev_ioctl(struct inode *inode, struct file *filp,
 		r = hvm_dev_ioctl_run(hvm, &hvm_run);
 		r = -EFAULT;
 		if (copy_to_user((void *)arg, &hvm_run, sizeof hvm_run))
+			goto out;
+		r = 0;
+		break;
+	}
+	case HVM_GET_REGS: {
+		struct hvm_regs hvm_regs;
+	
+		r = -EFAULT;
+		if (copy_from_user(&hvm_regs, (void *)arg, sizeof hvm_regs))
+			goto out;
+		r = hvm_dev_ioctl_get_regs(hvm, &hvm_regs);
+		if (r)
+			goto out;
+		r = -EFAULT;
+		if (copy_to_user((void *)arg, &hvm_regs, sizeof hvm_regs))
+			goto out;
+		r = 0;
+		break;
+	}
+	case HVM_SET_REGS: {
+		struct hvm_regs hvm_regs;
+	
+		r = -EFAULT;
+		if (copy_from_user(&hvm_regs, (void *)arg, sizeof hvm_regs))
+			goto out;
+		r = hvm_dev_ioctl_set_regs(hvm, &hvm_regs);
+		if (r)
 			goto out;
 		r = 0;
 		break;
