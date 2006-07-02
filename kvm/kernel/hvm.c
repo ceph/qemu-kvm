@@ -412,7 +412,7 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	vmcs_writel(GUEST_CR4, read_cr4());  /* 22.3.1.1, 22.3.1.6 */
 	vmcs_writel(CR4_READ_SHADOW, read_cr4());
 	vmcs_writel(GUEST_CR3, __pa(hvm->map_1to1[0]));  /* 22.3.1.1; FIXME: shadow */
-	vmcs_write64(GUEST_DR7, 0);
+	vmcs_write64(GUEST_DR7, 0x400);
 
 	vmcs_writel(GUEST_GDTR_BASE, 0);   /* 22.3.1.3 */
 	vmcs_write32(GUEST_GDTR_LIMIT, 0xffff);  /* 22.3.1.3 */
