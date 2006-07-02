@@ -666,7 +666,7 @@ static int hvm_handle_exit(struct hvm_run *hvm_run)
 		printk(KERN_INFO "exit 0: exception %08x %04x\n",
 		       intr_info, error_code);
 		if ((vmcs_read32(VM_EXIT_INTR_INFO) & 0x7ff) == 0x30e) {
-			asm ( "mov %%cr2, %0" : "=r"(cr2) );
+			cr2 = vmcs_readl(EXIT_QUALIFICATION);
 			printk("page fault: rip %lx addr %lx\n", rip, cr2);
 		}
 		return 0;
