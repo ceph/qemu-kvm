@@ -471,8 +471,8 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	rdmsrl(MSR_GS_BASE, a);
 	vmcs_writel(HOST_GS_BASE, a); /* 22.2.4 */
 #else
-	vmcs_writel(HOST_FS_BASE, 0); /* 22.2.4; FIXME: x86-64? */
-	vmcs_writel(HOST_GS_BASE, 0); /* 22.2.4; FIXME: x86-64? */
+	vmcs_writel(HOST_FS_BASE, 0); /* 22.2.4 */
+	vmcs_writel(HOST_GS_BASE, 0); /* 22.2.4 */
 #endif
 
 	vmcs_write16(HOST_TR_SELECTOR, GDT_ENTRY_TSS*8);  /* 22.2.4 */
