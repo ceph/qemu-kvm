@@ -511,7 +511,6 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 
 	vmcs_writel(VIRTUAL_APIC_PAGE_ADDR, 0);
 	vmcs_writel(TPR_THRESHOLD, 0);
-	vmcs_writel(SECONDARY_VM_EXEC_CONTROL, 0);
 
 	vcpu_put();
 }
