@@ -760,7 +760,7 @@ static int hvm_dev_ioctl_run(struct hvm *hvm, struct hvm_run *hvm_run)
 
 #endif
 
-	asm ( PUSHA "\n\t"
+	asm ( "pushf; " PUSHA "\n\t"
 	      "vmwrite %%" SP ", %2 \n\t"
 	      "cmp $0, %1 \n\t"
 	      LOAD_GUEST_REGS "\n\t"
@@ -768,11 +768,11 @@ static int hvm_dev_ioctl_run(struct hvm *hvm, struct hvm_run *hvm_run)
 	      "vmlaunch \n\t"
 	      "jmp error \n\t"
 	      "launched: vmresume \n\t"
-	      "error: " STORE_GUEST_REGS "; " POPA " \n\t"
+	      "error: " STORE_GUEST_REGS "; " POPA "; popf \n\t"
 	      "mov $1, %1 \n\t"
 	      "jmp done \n\t"
 	      ".globl hvm_vmx_return \n\t"
-	      "hvm_vmx_return: " STORE_GUEST_REGS "; " POPA " \n\t"
+	      "hvm_vmx_return: " STORE_GUEST_REGS "; " POPA "; popf \n\t"
               "mov $0, %0 \n\t"
 	      "done:"
 	      : "=g" (fail) 
