@@ -576,18 +576,19 @@ static int hvm_dev_ioctl_create(struct hvm *hvm, struct hvm_create *hvm_create)
 		goto out_free_physmem;
 	hvm->nvcpus = 1;
 	for (i = 0; i < hvm->nvcpus; ++i) {
+		struct hvm_vcpu *vcpu = &hvm->vcpus[i];
 		struct vmcs *vmcs;
 
-		hvm->vcpus[i].cpu = -1;  /* First load will set up TR */
-		hvm->vcpus[i].hvm = hvm;
+		vcpu->cpu = -1;  /* First load will set up TR */
+		vcpu->hvm = hvm;
 		vmcs = alloc_vmcs();
 		if (!vmcs)
 			goto out_free_vmcs;
 		vmcs_clear(vmcs);
-		hvm->vcpus[i].vmcs = vmcs;
-		hvm->vcpus[i].launched = 0;
+		vcpu->vmcs = vmcs;
+		vcpu->launched = 0;
 
-		hvm_vcpu_setup(&hvm->vcpus[i]);
+		hvm_vcpu_setup(vcpu);
 	}
 		
 	hvm->created = 1;
