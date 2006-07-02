@@ -651,6 +651,27 @@ static unsigned long read_tr_base(void)
 	return segment_base(tr);
 }
 
+static void hvm_handle_exit(struct hvm_run *hvm_run)
+{
+	u32 intr_info, error_code;
+	unsigned long cr2, rip;
+		
+	switch (hvm_run->exit_reason) {
+	case 0: /* exception or nmi */
+		intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
+		error_code = 0;
+		rip = vmcs_readl(GUEST_RIP);
+		if (intr_info & 0x800)
+			error_code = vmcs_read32(VM_EXIT_INTR_ERROR_CODE);
+		printk(KERN_INFO "exit 0 exception/nmi: %08x %04x\n",
+		       intr_info, error_code);
+		if ((vmcs_read32(VM_EXIT_INTR_INFO) & 0x7ff) == 0x30e) {
+			asm ( "mov %%cr2, %0" : "=r"(cr2) );
+			printk("page fault: rip %lx addr %lx\n", rip, cr2);
+		}
+	}
+}
+
 static int hvm_dev_ioctl_run(struct hvm *hvm, struct hvm_run *hvm_run)
 {
 	struct hvm_vcpu *vcpu;
@@ -709,6 +730,7 @@ static int hvm_dev_ioctl_run(struct hvm *hvm, struct hvm_run *hvm_run)
 		vcpu->launched = 1;
 		hvm_run->exit_type = HVM_EXIT_TYPE_VM_EXIT;
 		hvm_run->exit_reason = vmcs_read32(VM_EXIT_REASON);
+		hvm_handle_exit(hvm_run);
 	}
 
 	vcpu_put();
