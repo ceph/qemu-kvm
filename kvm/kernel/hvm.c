@@ -221,11 +221,11 @@ static void hvm_free_vmcs(struct hvm *hvm)
 	unsigned int i;
 
 	for (i = 0; i < hvm->nvcpus; ++i) {
-		struct vmcs *vmcs = hvm->vcpus[i].vmcs;
+		struct hvm_vcpu *vcpu = &hvm->vcpus[i];
 
-		if (vmcs) {
-			vmcs_clear(vmcs);
-			free_vmcs(vmcs);
+		if (vcpu->vmcs) {
+			smp_call_function(__vcpu_clear, vcpu, 0, 1);
+			free_vmcs(vcpu->vmcs);
 		}
 	}
 }
