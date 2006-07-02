@@ -658,12 +658,16 @@ static void hvm_handle_exit(struct hvm_run *hvm_run)
 		
 	switch (hvm_run->exit_reason) {
 	case 0: /* exception or nmi */
+	case 1: /* interrupt */
 		intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
 		error_code = 0;
 		rip = vmcs_readl(GUEST_RIP);
 		if (intr_info & 0x800)
 			error_code = vmcs_read32(VM_EXIT_INTR_ERROR_CODE);
-		printk(KERN_INFO "exit 0 exception/nmi: %08x %04x\n",
+		printk(KERN_INFO "%s: %08x %04x\n",
+		       (hvm_run->exit_reason 
+			? "exit 1: interrupt"
+			: "exit 0: exception"),
 		       intr_info, error_code);
 		if ((vmcs_read32(VM_EXIT_INTR_INFO) & 0x7ff) == 0x30e) {
 			asm ( "mov %%cr2, %0" : "=r"(cr2) );
