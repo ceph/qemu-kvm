@@ -839,7 +839,7 @@ again:
 	return 0;
 }
 
-static int hvm_dev_ioctl_set_regs(struct hvm *hvm, struct hvm_regs *regs)
+static int hvm_dev_ioctl_get_regs(struct hvm *hvm, struct hvm_regs *regs)
 {
 	struct hvm_vcpu *vcpu;
 
@@ -876,7 +876,7 @@ static int hvm_dev_ioctl_set_regs(struct hvm *hvm, struct hvm_regs *regs)
 	return 0;
 }
 
-static int hvm_dev_ioctl_get_regs(struct hvm *hvm, struct hvm_regs *regs)
+static int hvm_dev_ioctl_set_regs(struct hvm *hvm, struct hvm_regs *regs)
 {
 	struct hvm_vcpu *vcpu;
 
