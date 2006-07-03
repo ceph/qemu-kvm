@@ -666,23 +666,23 @@ static int hvm_handle_exit(struct hvm_run *hvm_run)
 		
 	exit_reason = vmcs_read32(VM_EXIT_REASON);
 	switch (exit_reason) {
-	case 0: /* exception or nmi */
+	case EXIT_REASON_EXCEPTION_NMI:
 		intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
 		error_code = 0;
 		rip = vmcs_readl(GUEST_RIP);
-		if (intr_info & 0x800)
+		if (intr_info & INTR_INFO_DELIEVER_CODE_MASK)
 			error_code = vmcs_read32(VM_EXIT_INTR_ERROR_CODE);
 		printk(KERN_INFO "exit 0: exception %08x %04x\n",
 		       intr_info, error_code);
-		if ((vmcs_read32(VM_EXIT_INTR_INFO) & 0x7ff) == 0x30e) {
+		if ((intr_info & (INTR_INFO_INTR_TYPE_MASK | INTR_INFO_VECTOR_MASK)) == (INTR_TYPE_EXCEPTION | 14)) {
 			cr2 = vmcs_readl(EXIT_QUALIFICATION);
 			printk("page fault: rip %lx addr %lx\n", rip, cr2);
 		}
 		hvm_run->exit_reason = HVM_EXIT_EXCEPTION;
-		hvm_run->ex.exception = intr_info & 0xff;
+		hvm_run->ex.exception = intr_info & INTR_INFO_VECTOR_MASK;
 		hvm_run->ex.error_code = error_code;
 		return 0;
-	case 1: /* interrupt */
+	case EXIT_REASON_EXTERNAL_INTERRUPT:
 		return 1;
 	default:
 		hvm_run->exit_reason = HVM_EXIT_UNKNOWN;
