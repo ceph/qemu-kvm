@@ -387,8 +387,8 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	vmcs_write32(GUEST_LDTR_LIMIT, 0);
 	vmcs_write32(GUEST_TR_LIMIT, 4095); /* 22.3.1.1 */
 
-	vmcs_write32(GUEST_CS_AR_BYTES, 0xc09b 
-		     /* | (GUEST_IS_64 << 13) */ /* L bit - error in doc? */
+	vmcs_write32(GUEST_CS_AR_BYTES, 0x809b 
+		     | (GUEST_IS_64 << 13)    /* L bit; 22.3.1.2 */
 		     | (!GUEST_IS_64 << 14)); /* 22.3.1.2 */
 	vmcs_write32(GUEST_DS_AR_BYTES, 0xc093);  /* 22.3.1.2 */
 	vmcs_write32(GUEST_ES_AR_BYTES, 0xc093);  /* 22.3.1.2 */
