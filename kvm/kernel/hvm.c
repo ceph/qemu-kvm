@@ -68,7 +68,7 @@ static void __vcpu_clear(void *arg)
 	struct hvm_vcpu *vcpu = arg;
 	int cpu = smp_processor_id();
 
-	if (vcpu->cpu == smp_processor_id())
+	if (vcpu->cpu == cpu)
 		vmcs_clear(vcpu->vmcs);
 	if (per_cpu(current_vmcs, cpu) == vcpu->vmcs)
 		per_cpu(current_vmcs, cpu) = 0;
