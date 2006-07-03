@@ -151,4 +151,78 @@ enum vmcs_field {
 	HOST_RIP                        = 0x00006c16,
 };
 
+#define VMX_EXIT_REASONS_FAILED_VMENTRY         0x80000000
+
+#define EXIT_REASON_EXCEPTION_NMI       0
+#define EXIT_REASON_EXTERNAL_INTERRUPT  1
+
+#define EXIT_REASON_PENDING_INTERRUPT   7
+
+#define EXIT_REASON_TASK_SWITCH         9
+#define EXIT_REASON_CPUID               10
+#define EXIT_REASON_HLT                 12
+#define EXIT_REASON_INVLPG              14
+#define EXIT_REASON_RDPMC               15
+#define EXIT_REASON_RDTSC               16
+#define EXIT_REASON_VMCALL              18
+#define EXIT_REASON_VMCLEAR             19
+#define EXIT_REASON_VMLAUNCH            20
+#define EXIT_REASON_VMPTRLD             21
+#define EXIT_REASON_VMPTRST             22
+#define EXIT_REASON_VMREAD              23
+#define EXIT_REASON_VMRESUME            24
+#define EXIT_REASON_VMWRITE             25
+#define EXIT_REASON_VMOFF               26
+#define EXIT_REASON_VMON                27
+#define EXIT_REASON_CR_ACCESS           28
+#define EXIT_REASON_DR_ACCESS           29
+#define EXIT_REASON_IO_INSTRUCTION      30
+#define EXIT_REASON_MSR_READ            31
+#define EXIT_REASON_MSR_WRITE           32
+#define EXIT_REASON_MWAIT_INSTRUCTION   36
+
+/*
+ * Interruption-information format
+ */
+#define INTR_INFO_VECTOR_MASK           0xff            /* 7:0 */
+#define INTR_INFO_INTR_TYPE_MASK        0x700           /* 10:8 */
+#define INTR_INFO_DELIEVER_CODE_MASK    0x800           /* 11 */
+#define INTR_INFO_VALID_MASK            0x80000000      /* 31 */
+
+#define INTR_TYPE_EXT_INTR              (0 << 8) /* external interrupt */
+#define INTR_TYPE_EXCEPTION             (3 << 8) /* processor exception */
+
+/*
+ * Exit Qualifications for MOV for Control Register Access
+ */
+#define CONTROL_REG_ACCESS_NUM          0x7     /* 2:0, number of control register */
+#define CONTROL_REG_ACCESS_TYPE         0x30    /* 5:4, access type */
+#define CONTROL_REG_ACCESS_REG          0xf00   /* 10:8, general purpose register */
+#define LMSW_SOURCE_DATA  (0xFFFF << 16) /* 16:31 lmsw source */
+#define REG_EAX                         (0 << 8) 
+#define REG_ECX                         (1 << 8) 
+#define REG_EDX                         (2 << 8) 
+#define REG_EBX                         (3 << 8) 
+#define REG_ESP                         (4 << 8) 
+#define REG_EBP                         (5 << 8) 
+#define REG_ESI                         (6 << 8) 
+#define REG_EDI                         (7 << 8) 
+#define REG_R8                         (8 << 8)
+#define REG_R9                         (9 << 8)
+#define REG_R10                        (10 << 8)
+#define REG_R11                        (11 << 8)
+#define REG_R12                        (12 << 8)
+#define REG_R13                        (13 << 8)
+#define REG_R14                        (14 << 8)
+#define REG_R15                        (15 << 8)
+
+/*
+ * Exit Qualifications for MOV for Debug Register Access
+ */
+#define DEBUG_REG_ACCESS_NUM            0x7     /* 2:0, number of debug register */
+#define DEBUG_REG_ACCESS_TYPE           0x10    /* 4, direction of access */
+#define TYPE_MOV_TO_DR                  (0 << 4) 
+#define TYPE_MOV_FROM_DR                (1 << 4)
+#define DEBUG_REG_ACCESS_REG            0xf00   /* 11:8, general purpose register */
+ 
 #endif
