@@ -107,6 +107,7 @@ void hvm_run(int fd, int vcpu)
 			printf("unhandled vm exit: %d\n", hvm_run.exit_reason);
 			break;
 		}
+		printf("instruction length: %d\n", hvm_run.instruction_length);
 	}
 	show_regs(fd, vcpu);
 }

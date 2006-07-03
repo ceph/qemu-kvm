@@ -725,6 +725,7 @@ static int hvm_handle_exit(struct hvm_run *hvm_run, struct hvm_vcpu *vcpu)
 {
 	u32 exit_reason;
 		
+	hvm_run->instruction_length = vmcs_read32(VM_EXIT_INSTRUCTION_LEN);
 	exit_reason = vmcs_read32(VM_EXIT_REASON);
 	if (exit_reason < hvm_vmx_max_exit_handlers 
 	    && hvm_vmx_exit_handlers[exit_reason])

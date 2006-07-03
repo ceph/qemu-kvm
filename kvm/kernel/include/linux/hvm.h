@@ -24,6 +24,7 @@ struct hvm_run {
 	/* out */
 	int exit_type;
 	__u32 exit_reason;
+	__u32 instruction_length;
 	union {
 		/* HVM_EXIT_EXCEPTION */
 		struct {
