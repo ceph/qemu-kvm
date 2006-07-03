@@ -131,5 +131,6 @@ int main(int ac, char **av)
 	}
 	hvm_create(fd, 128 * 1024 * 1024, &vm_mem);
 	show_regs(fd, 0);
-	hvm_run(fd, 0);
+	while (1)
+		hvm_run(fd, 0);
 }
