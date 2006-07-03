@@ -40,6 +40,19 @@ void hvm_create(int fd, unsigned long memory, void **vm_mem)
 	memcpy(*vm_mem, testprog, sizeof testprog);
 }
 
+void handle_io(struct hvm_run *run)
+{
+	if (!run->io.string)
+		printf("%s port %x value %llx\n",
+		       (run->io.direction == HVM_EXIT_IO_IN ? "in" : "out"),
+		       run->io.port, run->io.value);
+	else
+		printf("%ss port %x data %llx count %llx dir %s\n",
+		       (run->io.direction == HVM_EXIT_IO_IN ? "in" : "out"),
+		       run->io.port, run->io.address, run->io.count,
+		       (run->io.string_down ? "down" : ""));
+}
+
 void hvm_run(int fd, int vcpu)
 {
 	int r;
@@ -52,8 +65,26 @@ void hvm_run(int fd, int vcpu)
 		printf("hvm_run: %m\n");
 		exit(1);
 	}
-	printf("hvm_run: %d %u\n", 
-	       hvm_run.exit_type, hvm_run.exit_reason & 0xffff);
+	switch (hvm_run.exit_type) {
+	case HVM_EXIT_TYPE_FAIL_ENTRY:
+		printf("hvm_run: failed entry, reason %u\n", 
+		       hvm_run.exit_reason & 0xffff);
+		break;
+	case HVM_EXIT_TYPE_VM_EXIT:
+		switch (hvm_run.exit_reason) {
+		case HVM_EXIT_EXCEPTION:
+			printf("exception %d (%x)\n", 
+			       hvm_run.ex.exception,
+			       hvm_run.ex.error_code);
+			break;
+		case HVM_EXIT_IO:
+			handle_io(&hvm_run);
+			break;
+		default:
+			printf("unhandled vm exit: %d\n", hvm_run.exit_reason);
+			break;
+		}
+	}
 }
 
 int main(int ac, char **av)
