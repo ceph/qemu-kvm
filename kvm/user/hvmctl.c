@@ -53,6 +53,29 @@ void handle_io(struct hvm_run *run)
 		       (run->io.string_down ? "down" : ""));
 }
 
+void show_regs(int fd, int vcpu)
+{
+	struct hvm_regs regs;
+	int r;
+
+	regs.vcpu = vcpu;
+	r = ioctl(fd, HVM_GET_REGS, &regs);
+	if (r == -1) {
+		perror("HVM_GET_REGS");
+		exit(1);
+	}
+	printf("rax %016llx rbx %016llx rcx %016llx rdx %016llx\n"
+	       "rsi %016llx rdi %016llx rsp %016llx rbp %016llx\n"
+	       "r8  %016llx r9  %016llx r10 %016llx r11 %016llx\n"
+	       "r12 %016llx r13 %016llx r14 %016llx r15 %016llx\n"
+	       "rip %016llx rflags %08llx\n",
+	       regs.rax, regs.rbx, regs.rcx, regs.rdx,
+	       regs.rsi, regs.rdi, regs.rsp, regs.rbp,
+	       regs.r8,  regs.r9,  regs.r10, regs.r11,
+	       regs.r12, regs.r13, regs.r14, regs.r15,
+	       regs.rip, regs.rflags);
+}
+
 void hvm_run(int fd, int vcpu)
 {
 	int r;
@@ -85,6 +108,7 @@ void hvm_run(int fd, int vcpu)
 			break;
 		}
 	}
+	show_regs(fd, vcpu);
 }
 
 int main(int ac, char **av)
@@ -98,5 +122,6 @@ int main(int ac, char **av)
 		exit(1);
 	}
 	hvm_create(fd, 128 * 1024 * 1024, &vm_mem);
+	show_regs(fd, 0);
 	hvm_run(fd, 0);
 }
