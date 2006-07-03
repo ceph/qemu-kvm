@@ -192,12 +192,16 @@ static void vcpu_load(struct hvm_vcpu *vcpu)
 	}
 
 	if (vcpu->cpu != cpu) {
+		struct descriptor_table dt;
+
 		vcpu->cpu = cpu;
 		/* 
-		 * Linux uses per-cpu TSS, so set this when switching
+		 * Linux uses per-cpu TSS and GDT, so set these when switching
 		 * processors.
 		 */
 		vmcs_writel(HOST_TR_BASE, read_tr_base()); /* 22.2.4 */
+		get_gdt(&dt);
+		vmcs_writel(HOST_GDTR_BASE, dt.base);   /* 22.2.4 */
 	}
 }
 
@@ -534,8 +538,6 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 
 	vmcs_write16(HOST_TR_SELECTOR, GDT_ENTRY_TSS*8);  /* 22.2.4 */
 
-	get_gdt(&dt);
-	vmcs_writel(HOST_GDTR_BASE, dt.base);   /* 22.2.4 */
 	get_idt(&dt);
 	vmcs_writel(HOST_IDTR_BASE, dt.base);   /* 22.2.4 */
 
