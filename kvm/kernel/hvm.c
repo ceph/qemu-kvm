@@ -17,9 +17,102 @@
 
 #include "vmx.h"
 
-static unsigned long read_tr_base(void);
 static void vmcs_writel(unsigned long field, unsigned long value);
 static void hvm_free_1to1_mapping(struct hvm *hvm);
+
+struct descriptor_table {
+	u16 limit;
+	unsigned long base;
+} __attribute__((packed));
+
+static void get_gdt(struct descriptor_table *table)
+{
+	asm ( "sgdt %0" : "=m"(*table) );
+}
+
+static void get_idt(struct descriptor_table *table)
+{
+	asm ( "sidt %0" : "=m"(*table) );
+}
+
+static u16 read_fs(void)
+{
+	u16 seg;
+	asm ( "mov %%fs, %0" : "=g"(seg) );
+	return seg;
+}
+
+static u16 read_gs(void)
+{
+	u16 seg;
+	asm ( "mov %%gs, %0" : "=g"(seg) );
+	return seg;
+}
+
+static unsigned long get_eflags(void)
+{
+	unsigned long x;
+	asm ( "pushf; pop %0" : "=m"(x) );
+	return x;
+}
+
+struct segment_descriptor {
+	u16 limit_low;
+	u16 base_low;
+	u8  base_mid;
+	u8  type : 4;
+	u8  system : 1;
+	u8  dpl : 2;
+	u8  present : 1;
+	u8  limit_high : 4;
+	u8  avl : 1;
+	u8  long_mode : 1;
+	u8  default_op : 1;
+	u8  granularity : 1;
+	u8  base_high;
+} __attribute__((packed));
+
+#ifdef __x86_64__
+// LDT or TSS descriptor in the GDT. 16 bytes.
+struct segment_descriptor_64 {
+	struct segment_descriptor s;
+	u32 base_higher;
+	u32 pad_zero;
+} __attribute__((packed));
+
+#endif
+
+static unsigned long segment_base(u16 selector)
+{
+	struct descriptor_table gdt;
+	struct segment_descriptor *d;
+	unsigned long table_base;
+	typedef unsigned long ul;
+	unsigned long v;
+
+	asm ( "sgdt %0" : "=m"(gdt) );
+	table_base = gdt.base;
+
+	if (selector & 4) {           /* from ldt */
+		u16 ldt_selector;
+
+		asm ( "sldt %0" : "=g"(ldt_selector) );
+		table_base = segment_base(ldt_selector);
+	}
+	d = (struct segment_descriptor *)(table_base + (selector & ~7));
+	v = d->base_low | ((ul)d->base_mid << 16) | ((ul)d->base_high << 24);
+	if (d->system == 0 
+	    && (d->type == 2 || d->type == 9 || d->type == 11))
+		v |= ((ul)((struct segment_descriptor_64 *)d)->base_higher) << 32;
+	return v;
+}
+
+static unsigned long read_tr_base(void)
+{
+	u16 tr;
+	asm ( "str %0" : "=g"(tr) );
+	return segment_base(tr);
+}
 
 DEFINE_PER_CPU(struct vmcs *, vmxarea);
 DEFINE_PER_CPU(struct vmcs *, current_vmcs);
@@ -302,42 +395,6 @@ static inline void vmcs_write64(unsigned long field, u64 value)
 #endif
 }
 
-struct descriptor_table {
-	u16 limit;
-	unsigned long base;
-} __attribute__((packed));
-
-static void get_gdt(struct descriptor_table *table)
-{
-	asm ( "sgdt %0" : "=m"(*table) );
-}
-
-static void get_idt(struct descriptor_table *table)
-{
-	asm ( "sidt %0" : "=m"(*table) );
-}
-
-static u16 read_fs(void)
-{
-	u16 seg;
-	asm ( "mov %%fs, %0" : "=g"(seg) );
-	return seg;
-}
-
-static u16 read_gs(void)
-{
-	u16 seg;
-	asm ( "mov %%gs, %0" : "=g"(seg) );
-	return seg;
-}
-
-static unsigned long get_eflags(void)
-{
-	unsigned long x;
-	asm ( "pushf; pop %0" : "=m"(x) );
-	return x;
-}
-
 #ifdef __x86_64__
 #define HOST_IS_64 1
 #else
@@ -599,64 +656,6 @@ out_free_physmem:
 	hvm_free_physmem(hvm);
 out:
 	return r;
-}
-
-struct segment_descriptor {
-	u16 limit_low;
-	u16 base_low;
-	u8  base_mid;
-	u8  type : 4;
-	u8  system : 1;
-	u8  dpl : 2;
-	u8  present : 1;
-	u8  limit_high : 4;
-	u8  avl : 1;
-	u8  long_mode : 1;
-	u8  default_op : 1;
-	u8  granularity : 1;
-	u8  base_high;
-} __attribute__((packed));
-
-#ifdef __x86_64__
-// LDT or TSS descriptor in the GDT. 16 bytes.
-struct segment_descriptor_64 {
-	struct segment_descriptor s;
-	u32 base_higher;
-	u32 pad_zero;
-} __attribute__((packed));
-
-#endif
-
-static unsigned long segment_base(u16 selector)
-{
-	struct descriptor_table gdt;
-	struct segment_descriptor *d;
-	unsigned long table_base;
-	typedef unsigned long ul;
-	unsigned long v;
-
-	asm ( "sgdt %0" : "=m"(gdt) );
-	table_base = gdt.base;
-
-	if (selector & 4) {           /* from ldt */
-		u16 ldt_selector;
-
-		asm ( "sldt %0" : "=g"(ldt_selector) );
-		table_base = segment_base(ldt_selector);
-	}
-	d = (struct segment_descriptor *)(table_base + (selector & ~7));
-	v = d->base_low | ((ul)d->base_mid << 16) | ((ul)d->base_high << 24);
-	if (d->system == 0 
-	    && (d->type == 2 || d->type == 9 || d->type == 11))
-		v |= ((ul)((struct segment_descriptor_64 *)d)->base_higher) << 32;
-	return v;
-}
-
-static unsigned long read_tr_base(void)
-{
-	u16 tr;
-	asm ( "str %0" : "=g"(tr) );
-	return segment_base(tr);
 }
 
 static int handle_exit_exception(struct hvm_vcpu *vcpu, 
