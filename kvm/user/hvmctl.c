@@ -40,8 +40,10 @@ void hvm_create(int fd, unsigned long memory, void **vm_mem)
 	memcpy(*vm_mem, testprog, sizeof testprog);
 }
 
-void handle_io(struct hvm_run *run)
+void handle_io(int fd, struct hvm_run *run)
 {
+	struct hvm_regs regs;
+
 	if (!run->io.string)
 		printf("%s port %x value %llx\n",
 		       (run->io.direction == HVM_EXIT_IO_IN ? "in" : "out"),
@@ -51,6 +53,11 @@ void handle_io(struct hvm_run *run)
 		       (run->io.direction == HVM_EXIT_IO_IN ? "in" : "out"),
 		       run->io.port, run->io.address, run->io.count,
 		       (run->io.string_down ? "down" : ""));
+
+	regs.vcpu = run->vcpu;
+	ioctl(fd, HVM_GET_REGS, &regs);
+	regs.rip += run->instruction_length;
+	ioctl(fd, HVM_SET_REGS, &regs);
 }
 
 void show_regs(int fd, int vcpu)
@@ -101,7 +108,7 @@ void hvm_run(int fd, int vcpu)
 			       hvm_run.ex.error_code);
 			break;
 		case HVM_EXIT_IO:
-			handle_io(&hvm_run);
+			handle_io(fd, &hvm_run);
 			break;
 		default:
 			printf("unhandled vm exit: %d\n", hvm_run.exit_reason);
