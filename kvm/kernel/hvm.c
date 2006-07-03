@@ -659,52 +659,77 @@ static unsigned long read_tr_base(void)
 	return segment_base(tr);
 }
 
+static int handle_exit_exception(struct hvm_vcpu *vcpu, 
+				 struct hvm_run *hvm_run)
+{
+	u32 intr_info, error_code;
+	unsigned long cr2, rip;
+
+	intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
+	error_code = 0;
+	rip = vmcs_readl(GUEST_RIP);
+	if (intr_info & INTR_INFO_DELIEVER_CODE_MASK)
+		error_code = vmcs_read32(VM_EXIT_INTR_ERROR_CODE);
+	printk(KERN_INFO "exit 0: exception %08x %04x\n",
+	       intr_info, error_code);
+	if ((intr_info & (INTR_INFO_INTR_TYPE_MASK | INTR_INFO_VECTOR_MASK)) == (INTR_TYPE_EXCEPTION | 14)) {
+		cr2 = vmcs_readl(EXIT_QUALIFICATION);
+		printk("page fault: rip %lx addr %lx\n", rip, cr2);
+	}
+	hvm_run->exit_reason = HVM_EXIT_EXCEPTION;
+	hvm_run->ex.exception = intr_info & INTR_INFO_VECTOR_MASK;
+	hvm_run->ex.error_code = error_code;
+	return 0;
+}
+
+static int handle_internal(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
+{
+	return 1;
+}
+
+static int handle_io(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
+{
+	u64 exit_qualification;
+
+	exit_qualification = vmcs_read64(EXIT_QUALIFICATION);
+	hvm_run->exit_reason = HVM_EXIT_IO;
+	if (exit_qualification & 8)
+		hvm_run->io.direction = HVM_EXIT_IO_IN;
+	else
+		hvm_run->io.direction = HVM_EXIT_IO_OUT;
+	hvm_run->io.size = (exit_qualification & 7) + 1;
+	hvm_run->io.string = (exit_qualification & 16) != 0;
+	hvm_run->io.string_down 
+		= (vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_DF) != 0;
+	hvm_run->io.rep = (exit_qualification & 32) != 0;
+	hvm_run->io.port = exit_qualification >> 16;
+	hvm_run->io.count = vcpu->regs[2]; /* rcx. FIXMEL: mask? */
+	if (hvm_run->io.string)
+		hvm_run->io.address = vmcs_readl(GUEST_LINEAR_ADDRESS);
+	else
+		hvm_run->io.value = vcpu->regs[0]; /* rax */
+	return 0;
+}
+
+static int (*hvm_vmx_exit_handlers[])(struct hvm_vcpu *vcpu,
+				      struct hvm_run *hvm_eun) = {
+	[EXIT_REASON_EXCEPTION_NMI]           = handle_exit_exception,
+	[EXIT_REASON_EXTERNAL_INTERRUPT]      = handle_internal,
+	[EXIT_REASON_IO_INSTRUCTION]          = handle_io,
+};
+
+static const int hvm_vmx_max_exit_handlers =
+	sizeof(hvm_vmx_exit_handlers) / sizeof(*hvm_vmx_exit_handlers);
+
 static int hvm_handle_exit(struct hvm_run *hvm_run, struct hvm_vcpu *vcpu)
 {
-	u32 exit_reason, intr_info, error_code;
-	unsigned long cr2, rip;
-	u64 exit_qualification;
+	u32 exit_reason;
 		
 	exit_reason = vmcs_read32(VM_EXIT_REASON);
-	switch (exit_reason) {
-	case EXIT_REASON_EXCEPTION_NMI:
-		intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
-		error_code = 0;
-		rip = vmcs_readl(GUEST_RIP);
-		if (intr_info & INTR_INFO_DELIEVER_CODE_MASK)
-			error_code = vmcs_read32(VM_EXIT_INTR_ERROR_CODE);
-		printk(KERN_INFO "exit 0: exception %08x %04x\n",
-		       intr_info, error_code);
-		if ((intr_info & (INTR_INFO_INTR_TYPE_MASK | INTR_INFO_VECTOR_MASK)) == (INTR_TYPE_EXCEPTION | 14)) {
-			cr2 = vmcs_readl(EXIT_QUALIFICATION);
-			printk("page fault: rip %lx addr %lx\n", rip, cr2);
-		}
-		hvm_run->exit_reason = HVM_EXIT_EXCEPTION;
-		hvm_run->ex.exception = intr_info & INTR_INFO_VECTOR_MASK;
-		hvm_run->ex.error_code = error_code;
-		return 0;
-	case EXIT_REASON_EXTERNAL_INTERRUPT:
-		return 1;
-	case EXIT_REASON_IO_INSTRUCTION:
-		exit_qualification = vmcs_read64(EXIT_QUALIFICATION);
-		hvm_run->exit_reason = HVM_EXIT_IO;
-		if (exit_qualification & 8)
-			hvm_run->io.direction = HVM_EXIT_IO_IN;
-		else
-			hvm_run->io.direction = HVM_EXIT_IO_OUT;
-		hvm_run->io.size = (exit_qualification & 7) + 1;
-		hvm_run->io.string = (exit_qualification & 16) != 0;
-		hvm_run->io.string_down 
-			= (vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_DF) != 0;
-		hvm_run->io.rep = (exit_qualification & 32) != 0;
-		hvm_run->io.port = exit_qualification >> 16;
-		hvm_run->io.count = vcpu->regs[2]; /* rcx. FIXMEL: mask? */
-		if (hvm_run->io.string)
-			hvm_run->io.address = vmcs_readl(GUEST_LINEAR_ADDRESS);
-		else
-			hvm_run->io.value = vcpu->regs[0]; /* rax */
-		return 0;
-	default:
+	if (exit_reason < hvm_vmx_max_exit_handlers 
+	    && hvm_vmx_exit_handlers[exit_reason])
+		return hvm_vmx_exit_handlers[exit_reason](vcpu, hvm_run);
+	else {
 		hvm_run->exit_reason = HVM_EXIT_UNKNOWN;
 		printk(KERN_ERR "hvm: unhandled exit reason %d\n", 
 		       exit_reason);
