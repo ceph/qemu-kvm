@@ -11,6 +11,11 @@ struct hvm_create {
 #define HVM_EXIT_TYPE_FAIL_ENTRY 1
 #define HVM_EXIT_TYPE_VM_EXIT    2
 
+enum hvm_exit_reason {
+	HVM_EXIT_UNKNOWN,
+	HVM_EXIT_EXCEPTION,
+};
+
 /* for HVM_RUN */
 struct hvm_run {
 	/* in */
@@ -18,6 +23,13 @@ struct hvm_run {
 	/* out */
 	int exit_type;
 	__u32 exit_reason;
+	union {
+		/* HVM_EXIT_EXCEPTION */
+		struct {
+			__u32 exception;
+			__u32 error_code;
+		} ex;
+	};
 };
 
 /* for HVM_GET_REGS and HVM_SET_REGS */

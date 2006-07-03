@@ -661,10 +661,11 @@ static unsigned long read_tr_base(void)
 
 static int hvm_handle_exit(struct hvm_run *hvm_run)
 {
-	u32 intr_info, error_code;
+	u32 exit_reason, intr_info, error_code;
 	unsigned long cr2, rip;
 		
-	switch (hvm_run->exit_reason) {
+	exit_reason = vmcs_read32(VM_EXIT_REASON);
+	switch (exit_reason) {
 	case 0: /* exception or nmi */
 		intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
 		error_code = 0;
@@ -677,9 +678,16 @@ static int hvm_handle_exit(struct hvm_run *hvm_run)
 			cr2 = vmcs_readl(EXIT_QUALIFICATION);
 			printk("page fault: rip %lx addr %lx\n", rip, cr2);
 		}
+		hvm_run->exit_reason = HVM_EXIT_EXCEPTION;
+		hvm_run->ex.exception = intr_info & 0xff;
+		hvm_run->ex.error_code = error_code;
 		return 0;
 	case 1: /* interrupt */
 		return 1;
+	default:
+		hvm_run->exit_reason = HVM_EXIT_UNKNOWN;
+		printk(KERN_ERR "hvm: unhandled exit reason %d\n", 
+		       exit_reason);
 	}
 	return 0;
 }
@@ -800,7 +808,6 @@ again:
 	} else {
 		vcpu->launched = 1;
 		hvm_run->exit_type = HVM_EXIT_TYPE_VM_EXIT;
-		hvm_run->exit_reason = vmcs_read32(VM_EXIT_REASON);
 		if (hvm_handle_exit(hvm_run)) {
 			/* Give scheduler a change to reschedule. */
 			vcpu_put();
