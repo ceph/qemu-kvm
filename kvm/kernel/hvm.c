@@ -666,6 +666,10 @@ static int handle_exit_exception(struct hvm_vcpu *vcpu,
 	unsigned long cr2, rip;
 
 	intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
+	if ((intr_info & INTR_INFO_INTR_TYPE_MASK) == 0x200) { /* nmi */
+		asm ( "int $2" );
+		return 1;
+	}
 	error_code = 0;
 	rip = vmcs_readl(GUEST_RIP);
 	if (intr_info & INTR_INFO_DELIEVER_CODE_MASK)
