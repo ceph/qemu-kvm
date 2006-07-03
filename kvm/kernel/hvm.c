@@ -861,6 +861,7 @@ again:
 		if (hvm_handle_exit(hvm_run, vcpu)) {
 			/* Give scheduler a change to reschedule. */
 			vcpu_put();
+			cond_resched();
 			goto again;
 		}
 	}
