@@ -14,6 +14,7 @@ struct hvm_create {
 enum hvm_exit_reason {
 	HVM_EXIT_UNKNOWN,
 	HVM_EXIT_EXCEPTION,
+	HVM_EXIT_IO,
 };
 
 /* for HVM_RUN */
@@ -29,6 +30,23 @@ struct hvm_run {
 			__u32 exception;
 			__u32 error_code;
 		} ex;
+		/* HVM_EXIT_IO */
+		struct {
+#define HVM_EXIT_IO_IN  0
+#define HVM_EXIT_IO_OUT 1
+			__u8 direction;
+			__u8 size; /* bytes */
+			__u8 string;
+			__u8 string_down;
+			__u8 rep;
+			__u8 pad;
+			__u16 port;
+			__u64 count;
+			union {
+				__u64 address;
+				__u32 value;
+			};
+		} io;
 	};
 };
 

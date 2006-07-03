@@ -659,10 +659,11 @@ static unsigned long read_tr_base(void)
 	return segment_base(tr);
 }
 
-static int hvm_handle_exit(struct hvm_run *hvm_run)
+static int hvm_handle_exit(struct hvm_run *hvm_run, struct hvm_vcpu *vcpu)
 {
 	u32 exit_reason, intr_info, error_code;
 	unsigned long cr2, rip;
+	u64 exit_qualification;
 		
 	exit_reason = vmcs_read32(VM_EXIT_REASON);
 	switch (exit_reason) {
@@ -684,6 +685,25 @@ static int hvm_handle_exit(struct hvm_run *hvm_run)
 		return 0;
 	case EXIT_REASON_EXTERNAL_INTERRUPT:
 		return 1;
+	case EXIT_REASON_IO_INSTRUCTION:
+		exit_qualification = vmcs_read64(EXIT_QUALIFICATION);
+		hvm_run->exit_reason = HVM_EXIT_IO;
+		if (exit_qualification & 8)
+			hvm_run->io.direction = HVM_EXIT_IO_IN;
+		else
+			hvm_run->io.direction = HVM_EXIT_IO_OUT;
+		hvm_run->io.size = (exit_qualification & 7) + 1;
+		hvm_run->io.string = (exit_qualification & 16) != 0;
+		hvm_run->io.string_down 
+			= (vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_DF) != 0;
+		hvm_run->io.rep = (exit_qualification & 32) != 0;
+		hvm_run->io.port = exit_qualification >> 16;
+		hvm_run->io.count = vcpu->regs[2]; /* rcx. FIXMEL: mask? */
+		if (hvm_run->io.string)
+			hvm_run->io.address = vmcs_readl(GUEST_LINEAR_ADDRESS);
+		else
+			hvm_run->io.value = vcpu->regs[0]; /* rax */
+		return 0;
 	default:
 		hvm_run->exit_reason = HVM_EXIT_UNKNOWN;
 		printk(KERN_ERR "hvm: unhandled exit reason %d\n", 
@@ -808,7 +828,7 @@ again:
 	} else {
 		vcpu->launched = 1;
 		hvm_run->exit_type = HVM_EXIT_TYPE_VM_EXIT;
-		if (hvm_handle_exit(hvm_run)) {
+		if (hvm_handle_exit(hvm_run, vcpu)) {
 			/* Give scheduler a change to reschedule. */
 			vcpu_put();
 			goto again;
