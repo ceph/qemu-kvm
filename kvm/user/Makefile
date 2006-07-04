@@ -1,7 +1,7 @@
 
 CFLAGS = -I ../kernel/include $(autodepend-flags) 
 
-autodepend-flags = -MMD -MF .$*.d
+autodepend-flags = -MMD -MF $(dir $*).$(notdir $*).d
 
 all: hvmctl
 
