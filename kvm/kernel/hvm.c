@@ -17,7 +17,6 @@
 
 #include "vmx.h"
 
-static void vmcs_writel(unsigned long field, unsigned long value);
 static void hvm_free_1to1_mapping(struct hvm *hvm);
 
 struct descriptor_table {
@@ -298,9 +297,18 @@ static void hvm_disable(void *garbage)
 
 static int hvm_dev_open(struct inode *inode, struct file *filp)
 {
-	filp->private_data = kzalloc(sizeof(struct hvm), GFP_KERNEL);
-	if (!filp->private_data)
+	struct hvm *hvm = kzalloc(sizeof(struct hvm), GFP_KERNEL);
+	int i;
+
+	if (!hvm)
 		return -ENOMEM;
+	
+	for (i = 0; i < HVM_MAX_VCPUS; i++) {
+		INIT_LIST_HEAD(&hvm->vcpus[i].free_page_links);
+		INIT_LIST_HEAD(&hvm->vcpus[i].free_pages);
+	}
+
+	filp->private_data = hvm;
 	return 0;
 }
 
@@ -313,17 +321,23 @@ static void hvm_free_physmem(struct hvm *hvm)
 	vfree(hvm->phys_mem);
 }
 
-static void hvm_free_vmcs(struct hvm *hvm)
+static void hvm_free_vmcs(struct hvm_vcpu *vcpu)
+{
+	if (vcpu->vmcs) {
+		on_each_cpu(__vcpu_clear, vcpu, 0, 1);
+		free_vmcs(vcpu->vmcs);
+	}
+}
+
+static void hvm_free_vcpus(struct hvm *hvm)
 {
 	unsigned int i;
 
 	for (i = 0; i < hvm->nvcpus; ++i) {
 		struct hvm_vcpu *vcpu = &hvm->vcpus[i];
 
-		if (vcpu->vmcs) {
-			on_each_cpu(__vcpu_clear, vcpu, 0, 1);
-			free_vmcs(vcpu->vmcs);
-		}
+		hvm_free_vmcs(vcpu);
+		hvm_mmu_destroy(vcpu);
 	}
 }
 
@@ -332,7 +346,7 @@ static int hvm_dev_release(struct inode *inode, struct file *filp)
 	struct hvm *hvm = filp->private_data;
 	
 	if (hvm->created) {
-		hvm_free_vmcs(hvm);
+		hvm_free_vcpus(hvm);
 		hvm_free_physmem(hvm);
 		hvm_free_1to1_mapping(hvm);
 	}
@@ -367,7 +381,7 @@ static inline u64 vmcs_read64(unsigned long field)
 #endif
 }
 
-static void vmcs_writel(unsigned long field, unsigned long value)
+void vmcs_writel(unsigned long field, unsigned long value)
 {
 	u8 error;
 
@@ -407,14 +421,14 @@ static inline void vmcs_write64(unsigned long field, u64 value)
 	
 #define GUEST_IS_64 HOST_IS_64
 	
-static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
+static int hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 {
 	extern asmlinkage void hvm_vmx_return(void);
-	struct hvm *hvm = vcpu->hvm;
 	u32 host_sysenter_cs;
 	u32 junk;
 	unsigned long a;
 	struct descriptor_table dt;
+	int ret;
 	
 	vcpu_load(vcpu);
 
@@ -472,7 +486,7 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	vmcs_writel(CR0_READ_SHADOW, read_cr0());
 	vmcs_writel(GUEST_CR4, read_cr4());  /* 22.3.1.1, 22.3.1.6 */
 	vmcs_writel(CR4_READ_SHADOW, read_cr4());
-	vmcs_writel(GUEST_CR3, __pa(hvm->map_1to1[0]));  /* 22.3.1.1; FIXME: shadow */
+	vmcs_writel(GUEST_CR3, 0);  /* 22.3.1.1; */
 	vmcs_write64(GUEST_DR7, 0x400);
 
 	vmcs_writel(GUEST_GDTR_BASE, 0);   /* 22.3.1.3 */
@@ -571,7 +585,10 @@ static void hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	vmcs_writel(VIRTUAL_APIC_PAGE_ADDR, 0);
 	vmcs_writel(TPR_THRESHOLD, 0);
 
+	ret = hvm_mmu_init(vcpu);
+
 	vcpu_put();
+	return ret;
 }
 
 static void hvm_free_1to1_mapping(struct hvm *hvm)
@@ -641,19 +658,21 @@ static int hvm_dev_ioctl_create(struct hvm *hvm, struct hvm_create *hvm_create)
 		vcpu->hvm = hvm;
 		vmcs = alloc_vmcs();
 		if (!vmcs)
-			goto out_free_vmcs;
+			goto out_free_vcpus;
 		vmcs_clear(vmcs);
 		vcpu->vmcs = vmcs;
 		vcpu->launched = 0;
 
-		hvm_vcpu_setup(vcpu);
+		if (hvm_vcpu_setup(vcpu)) {
+			goto out_free_vcpus;
+		}
 	}
 		
 	hvm->created = 1;
 	return 0;
 
-out_free_vmcs:
-	hvm_free_vmcs(hvm);
+out_free_vcpus:
+	hvm_free_vcpus(hvm);
 out_free_physmem:
 	hvm_free_physmem(hvm);
 out:
@@ -680,6 +699,10 @@ static int handle_exit_exception(struct hvm_vcpu *vcpu,
 	if ((intr_info & (INTR_INFO_INTR_TYPE_MASK | INTR_INFO_VECTOR_MASK)) == (INTR_TYPE_EXCEPTION | 14)) {
 		cr2 = vmcs_readl(EXIT_QUALIFICATION);
 		printk("page fault: rip %lx addr %lx\n", rip, cr2);
+
+		if (!vcpu->paging_context->pf(vcpu, cr2, error_code)) {
+			return 1;
+		}
 	}
 	hvm_run->exit_reason = HVM_EXIT_EXCEPTION;
 	hvm_run->ex.exception = intr_info & INTR_INFO_VECTOR_MASK;
