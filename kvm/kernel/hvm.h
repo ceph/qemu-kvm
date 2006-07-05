@@ -56,9 +56,6 @@ struct hvm {
 	struct page **phys_mem;
 	int nvcpus;
 	struct hvm_vcpu vcpus[HVM_MAX_VCPUS];
-
-	/* Temporary: 1:1 virtual memory mapping of first 2MB */
-	unsigned long *map_1to1[4];
 };
 
 void hvm_mmu_destroy(struct hvm_vcpu *vcpu);

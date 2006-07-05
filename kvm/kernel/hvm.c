@@ -17,7 +17,6 @@
 
 #include "vmx.h"
 
-static void hvm_free_1to1_mapping(struct hvm *hvm);
 
 struct descriptor_table {
 	u16 limit;
@@ -348,7 +347,6 @@ static int hvm_dev_release(struct inode *inode, struct file *filp)
 	if (hvm->created) {
 		hvm_free_vcpus(hvm);
 		hvm_free_physmem(hvm);
-		hvm_free_1to1_mapping(hvm);
 	}
 	kfree(hvm);
 	return 0;
@@ -591,37 +589,6 @@ static int hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	return ret;
 }
 
-static void hvm_free_1to1_mapping(struct hvm *hvm)
-{
-	int i;
-
-	for (i = 0; i < 4; ++i)
-		free_page((unsigned long)hvm->map_1to1[i]);
-}
-
-static __init int hvm_setup_1to1_mapping(struct hvm *hvm)
-{
-	int i;
-
-	for (i = 0; i < 4; ++i) {
-		struct page *page;
-
-		page = alloc_page(GFP_KERNEL);
-		if (!page)
-			goto out_free;
-		hvm->map_1to1[i] = page_address(page);
-		memset(hvm->map_1to1[i], 0, PAGE_SIZE);
-	}
-	hvm->map_1to1[0][0] = __pa(hvm->map_1to1[1]) | 0x23;
-	hvm->map_1to1[1][0] = __pa(hvm->map_1to1[2]) | 0x23;
-	hvm->map_1to1[2][0] = __pa(hvm->map_1to1[3]) | 0x23;
-	for (i = 0; i < 512; ++i)
-		hvm->map_1to1[3][i] = __pa(page_address(hvm->phys_mem[i])) | 0x163;
-	return 0;
-out_free:
-	hvm_free_1to1_mapping(hvm);
-	return -ENOMEM;
-}
 
 static int hvm_dev_ioctl_create(struct hvm *hvm, struct hvm_create *hvm_create)
 {
@@ -646,9 +613,6 @@ static int hvm_dev_ioctl_create(struct hvm *hvm, struct hvm_create *hvm_create)
 		if (!hvm->phys_mem[i])
 			goto out_free_physmem;
 	}
-	r = hvm_setup_1to1_mapping(hvm);
-	if (r)
-		goto out_free_physmem;
 	hvm->nvcpus = 1;
 	for (i = 0; i < hvm->nvcpus; ++i) {
 		struct hvm_vcpu *vcpu = &hvm->vcpus[i];
