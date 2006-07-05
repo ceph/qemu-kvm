@@ -8116,6 +8116,7 @@ boot_setup:
   mov ax,    #0xaa55 ;; set ok flag
 
   pop bp
+  sti                ;; enable interrupts before executing boot code
   iret               ;; Beam me up Scotty
 
 ;----------
