@@ -1,10 +1,14 @@
-#include <linux/hvm.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/mman.h>
 #include <string.h>
+#include "hvmctl.h"
+
+struct hvm_context {
+	int fd;
+};
 
 unsigned char testprog[] = {
 	0xb0, 0,                    // mov $0, %al
@@ -68,8 +72,24 @@ unsigned char testprog[] = {
 
 #endif
 
-void hvm_create(int fd, unsigned long memory, void **vm_mem)
+hvm_context_t hvm_init()
 {
+	int fd;
+	hvm_context_t hvm;
+
+	fd = open("/dev/hvm", O_RDWR);
+	if (fd == -1) {
+		printf("open: %m\n");
+		exit(1);
+	}
+	hvm = malloc(sizeof(*hvm));
+	hvm->fd = fd;
+	return hvm;
+}
+
+int hvm_create(hvm_context_t hvm, unsigned long memory, void **vm_mem)
+{
+	int fd = hvm->fd;
 	int r;
 	struct hvm_create create = {
 		.memory_size = memory,
@@ -87,6 +107,7 @@ void hvm_create(int fd, unsigned long memory, void **vm_mem)
 	}
 	memset(*vm_mem, 0, memory);
 	memcpy(*vm_mem, testprog, sizeof testprog);
+	return 0;
 }
 
 void handle_io(int fd, struct hvm_run *run)
@@ -132,9 +153,10 @@ void show_regs(int fd, int vcpu)
 	       regs.rip, regs.rflags);
 }
 
-void hvm_run(int fd, int vcpu)
+int hvm_run(hvm_context_t hvm, int vcpu)
 {
 	int r;
+	int fd = hvm->fd;
 	struct hvm_run hvm_run = {
 		.vcpu = vcpu,
 	};
@@ -166,20 +188,17 @@ void hvm_run(int fd, int vcpu)
 		printf("instruction length: %d\n", hvm_run.instruction_length);
 	}
 	show_regs(fd, vcpu);
+	return 0;
 }
 
 int main(int ac, char **av)
 {
-	int fd;
+	hvm_context_t hvm;
 	void *vm_mem;
 
-	fd = open("/dev/hvm", O_RDWR);
-	if (fd == -1) {
-		printf("open: %m\n");
-		exit(1);
-	}
-	hvm_create(fd, 128 * 1024 * 1024, &vm_mem);
-	show_regs(fd, 0);
+	hvm = hvm_init();
+	hvm_create(hvm, 128 * 1024 * 1024, &vm_mem);
+	show_regs(hvm->fd, 0);
 	while (1)
-		hvm_run(fd, 0);
+		hvm_run(hvm, 0);
 }
