@@ -1,3 +1,4 @@
 #!/bin/sh
 
-./configure --target-list=x86_64-softmmu --cc=gcc32 --disable-kqemu
+./configure --target-list=x86_64-softmmu --cc=gcc32 --disable-kqemu \
+	--enable-kvm
