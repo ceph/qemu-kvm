@@ -130,8 +130,9 @@ void handle_io(int fd, struct hvm_run *run)
 	ioctl(fd, HVM_SET_REGS, &regs);
 }
 
-void show_regs(int fd, int vcpu)
+void hvm_show_regs(hvm_context_t hvm, int vcpu)
 {
+	int fd = hvm->fd;
 	struct hvm_regs regs;
 	int r;
 
@@ -187,7 +188,7 @@ int hvm_run(hvm_context_t hvm, int vcpu)
 		}
 		printf("instruction length: %d\n", hvm_run.instruction_length);
 	}
-	show_regs(fd, vcpu);
+	hvm_show_regs(hvm, vcpu);
 	return 0;
 }
 
@@ -198,7 +199,7 @@ int main(int ac, char **av)
 
 	hvm = hvm_init();
 	hvm_create(hvm, 128 * 1024 * 1024, &vm_mem);
-	show_regs(hvm->fd, 0);
+	hvm_show_regs(hvm, 0);
 	while (1)
 		hvm_run(hvm, 0);
 }

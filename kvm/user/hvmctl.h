@@ -12,6 +12,6 @@ int hvm_create(hvm_context_t hvm,
 	       unsigned long phys_mem_bytes,
 	       void **phys_mem);
 int hvm_run(hvm_context_t hvm, int vcpu);
-
+void hvm_show_regs(hvm_context_t, int vcpu);
 
 #endif
