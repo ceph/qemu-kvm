@@ -993,8 +993,8 @@ static int hvm_dev_ioctl_get_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 	get_dtable(gdt, GDTR);
 #undef get_dtable
 
-	sregs->cr0 = vmcs_readl(GUEST_CR0);
-	/* FIXME: cr2? */
+	sregs->cr0 = vcpu->cr0;
+	sregs->cr2 = vcpu->cr2;
 	sregs->cr3 = vcpu->cr3;
 	sregs->cr4 = vcpu->cr4;
 	sregs->cr8 = vcpu->cr8;
@@ -1024,7 +1024,7 @@ static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 		vmcs_writel(GUEST_##seg##_BASE, sregs->var.base);  \
 		vmcs_write32(GUEST_##seg##_LIMIT, sregs->var.limit); \
 		vmcs_write16(GUEST_##seg##_SELECTOR, sregs->var.selector); \
-		ar |= sregs->var.type & 15; \
+		ar |= (sregs->var.type & 15) | 1; \
 		ar |= (sregs->var.s & 1) << 4; \
 		ar |= (sregs->var.dpl & 3) << 5; \
 		ar |= (sregs->var.present & 1) << 7; \
@@ -1032,7 +1032,7 @@ static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 		ar |= (sregs->var.l & 1) << 13; \
 		ar |= (sregs->var.db & 1) << 14; \
 		ar |= (sregs->var.g & 1) << 15; \
-		ar |= (sregs->var.unusable & 1) << 16; \
+		ar |= (sregs->var.unusable & 1) << 16;	\
 		vmcs_write32(GUEST_##seg##_AR_BYTES, ar); \
 	} while (0);
 
@@ -1044,6 +1044,7 @@ static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 	set_segment(ss, SS);
 
 	set_segment(tr, TR);
+	vmcs_write32(GUEST_TR_AR_BYTES, 0x808b);
 	set_segment(ldt, LDTR);
 #undef set_segment
 
@@ -1055,10 +1056,9 @@ static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 	set_dtable(gdt, GDTR);
 #undef set_dtable
 
-	vmcs_writel(GUEST_CR0, sregs->cr0);
-	/* FIXME: cr2? */
-	vcpu->cr3 = sregs->cr3;
-	vmcs_writel(GUEST_CR3, 0); /* reset_shadow_paging() */
+	vcpu->cr0 = sregs->cr0;
+	vcpu->cr2 = sregs->cr2;
+	vcpu->cr3 = sregs->cr3; /* FIXME: flush paging */
 	vcpu->cr4 = sregs->cr4;
 	vcpu->cr8 = sregs->cr8;
 

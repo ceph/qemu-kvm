@@ -44,7 +44,7 @@ struct hvm_vcpu {
 	unsigned long rip;      /* needs vcpu_load_rsp_rip() */
 
 	gaddr_t cr3;
-	unsigned long cr4, cr8;
+	unsigned long cr0, cr2, cr4, cr8;
 
 	struct list_head free_page_links;
 	struct list_head free_pages;
