@@ -87,6 +87,12 @@
 
 #include "exec-all.h"
 
+#if USE_KVM
+#include <hvmctl.h>
+
+static hvm_context_t hvm_context;
+#endif
+
 #define DEFAULT_NETWORK_SCRIPT "/etc/qemu-ifup"
 
 //#define DEBUG_UNUSED_IOPORT
@@ -5500,11 +5506,16 @@ int main(int argc, char **argv)
     phys_ram_size = ram_size + vga_ram_size + bios_size;
 
 #ifdef CONFIG_SOFTMMU
+#if USE_KVM
+    hvm_context = hvm_init();
+    hvm_create(hvm_context, phys_ram_size, &phys_ram_base);
+#else
     phys_ram_base = qemu_vmalloc(phys_ram_size);
     if (!phys_ram_base) {
         fprintf(stderr, "Could not allocate physical memory\n");
         exit(1);
     }
+#endif
 #else
     /* as we must map the same page at several addresses, we must use
        a fd */

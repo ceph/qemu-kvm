@@ -305,6 +305,10 @@ endif
 ifdef CONFIG_ADLIB
 SOUND_HW += fmopl.o adlib.o
 endif
+ifdef CONFIG_HVM_INC
+DEFINES += -I $(CONFIG_HVM_INC) -I $(CONFIG_HVM_KERNEL_INC)
+LIBS += -L $(CONFIG_HVM_LIB) -lhvm
+endif
 
 # USB layer
 VL_OBJS+= usb.o usb-hub.o usb-uhci.o usb-linux.o usb-hid.o
