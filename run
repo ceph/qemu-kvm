@@ -1,5 +1,5 @@
-sudo /sbin/rmmod hvm
-sudo /sbin/insmod ../kernel/hvm.ko
+sudo /sbin/rmmod kvm
+sudo /sbin/insmod ../kernel/kvm.ko
 sudo chmod a+rw /dev/hvm
 dd < /dev/zero bs=1k count=1 of=disk
 dd < /dev/zero bs=1k count=1 of=disk seek=$((10*1024*1024-1))
