@@ -8116,7 +8116,6 @@ boot_setup:
   mov ax,    #0xaa55 ;; set ok flag
 
   pop bp
-  sti                ;; enable interrupts before executing boot code
   iret               ;; Beam me up Scotty
 
 ;----------
@@ -9760,6 +9759,7 @@ post_default_ints:
   ;;
 #endif // BX_ELTORITO_BOOT
  
+  sti        ;; enable interrupts
   int  #0x19
 
 
