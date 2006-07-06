@@ -8,6 +8,8 @@
 
 struct hvm_context {
 	int fd;
+	struct hvm_callbacks *callbacks;
+	void *opaque;
 };
 
 unsigned char testprog[] = {
@@ -72,7 +74,8 @@ unsigned char testprog[] = {
 
 #endif
 
-hvm_context_t hvm_init()
+hvm_context_t hvm_init(struct hvm_callbacks *callbacks,
+		       void *opaque)
 {
 	int fd;
 	hvm_context_t hvm;
@@ -84,6 +87,8 @@ hvm_context_t hvm_init()
 	}
 	hvm = malloc(sizeof(*hvm));
 	hvm->fd = fd;
+	hvm->callbacks = callbacks;
+	hvm->opaque = opaque;
 	return hvm;
 }
 
