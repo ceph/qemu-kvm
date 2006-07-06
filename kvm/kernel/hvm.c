@@ -975,11 +975,11 @@ static int hvm_dev_ioctl_get_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 	} while (0);
 
 	get_segment(cs, CS);
-	get_segment(ds, CS);
-	get_segment(es, CS);
-	get_segment(fs, CS);
-	get_segment(gs, CS);
-	get_segment(ss, CS);
+	get_segment(ds, DS);
+	get_segment(es, ES);
+	get_segment(fs, FS);
+	get_segment(gs, GS);
+	get_segment(ss, SS);
 
 	get_segment(tr, TR);
 	get_segment(ldt, LDTR);
@@ -1008,6 +1008,7 @@ static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 {
 	struct hvm_vcpu *vcpu;
 
+	printk("set_sregs\n");
 	if (!hvm->created)
 		return -EINVAL;
 	if (sregs->vcpu < 0 || sregs->vcpu >= hvm->nvcpus)
@@ -1036,11 +1037,11 @@ static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 	} while (0);
 
 	set_segment(cs, CS);
-	set_segment(ds, CS);
-	set_segment(es, CS);
-	set_segment(fs, CS);
-	set_segment(gs, CS);
-	set_segment(ss, CS);
+	set_segment(ds, DS);
+	set_segment(es, ES);
+	set_segment(fs, FS);
+	set_segment(gs, GS);
+	set_segment(ss, SS);
 
 	set_segment(tr, TR);
 	set_segment(ldt, LDTR);
