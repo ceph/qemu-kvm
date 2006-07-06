@@ -714,11 +714,40 @@ static int handle_io(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 	return 0;
 }
 
+static int handle_cr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
+{
+	u64 exit_qualification;
+	int cr;
+	int reg;
+
+	exit_qualification = vmcs_read64(EXIT_QUALIFICATION);
+	printk("cr exit: %llx\n", exit_qualification);
+	cr = exit_qualification & 15;
+	reg = (exit_qualification >> 8) & 15;
+	switch ((exit_qualification >> 4) & 3) {
+	case 0: /* mov to cr */
+		switch (cr) {
+		case 4:
+			vcpu_load_rsp_rip(vcpu);
+			vcpu->cr4 = vcpu->regs[reg];
+			vcpu->rip += hvm_run->instruction_length;
+			vcpu_put_rsp_rip(vcpu);
+			return 1;
+		};
+		break;
+	default:
+		break;
+	}
+	hvm_run->exit_reason = 0;
+	return 0;
+}
+
 static int (*hvm_vmx_exit_handlers[])(struct hvm_vcpu *vcpu,
 				      struct hvm_run *hvm_eun) = {
 	[EXIT_REASON_EXCEPTION_NMI]           = handle_exit_exception,
 	[EXIT_REASON_EXTERNAL_INTERRUPT]      = handle_internal,
 	[EXIT_REASON_IO_INSTRUCTION]          = handle_io,
+	[EXIT_REASON_CR_ACCESS]               = handle_cr,
 };
 
 static const int hvm_vmx_max_exit_handlers =
