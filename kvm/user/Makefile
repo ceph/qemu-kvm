@@ -1,5 +1,5 @@
 
-CFLAGS = -I ../kernel/include $(autodepend-flags) 
+CFLAGS = -I ../kernel/include $(autodepend-flags) -g
 CXXFLAGS = $(autodepend-flags) 
 
 autodepend-flags = -MMD -MF $(dir $*).$(notdir $*).d

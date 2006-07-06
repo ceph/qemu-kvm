@@ -130,6 +130,30 @@ void handle_io(int fd, struct hvm_run *run)
 	ioctl(fd, HVM_SET_REGS, &regs);
 }
 
+int hvm_get_regs(hvm_context_t hvm, int vcpu, struct hvm_regs *regs)
+{
+    regs->vcpu = vcpu;
+    return ioctl(hvm->fd, HVM_GET_REGS, regs);
+}
+
+int hvm_set_regs(hvm_context_t hvm, int vcpu, struct hvm_regs *regs)
+{
+    regs->vcpu = vcpu;
+    return ioctl(hvm->fd, HVM_SET_REGS, regs);
+}
+
+int hvm_get_sregs(hvm_context_t hvm, int vcpu, struct hvm_sregs *sregs)
+{
+    sregs->vcpu = vcpu;
+    return ioctl(hvm->fd, HVM_GET_SREGS, sregs);
+}
+
+int hvm_set_sregs(hvm_context_t hvm, int vcpu, struct hvm_sregs *sregs)
+{
+    sregs->vcpu = vcpu;
+    return ioctl(hvm->fd, HVM_SET_SREGS, sregs);
+}
+
 void hvm_show_regs(hvm_context_t hvm, int vcpu)
 {
 	int fd = hvm->fd;
