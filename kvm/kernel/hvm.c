@@ -589,6 +589,17 @@ static int hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	return ret;
 }
 
+static void vcpu_load_rsp_rip(struct hvm_vcpu *vcpu)
+{
+	vcpu->regs[4] = vmcs_readl(GUEST_RSP);
+	vcpu->rip = vmcs_readl(GUEST_RIP);
+}
+
+static void vcpu_put_rsp_rip(struct hvm_vcpu *vcpu)
+{
+	vmcs_writel(GUEST_RSP, vcpu->regs[4]);
+	vmcs_writel(GUEST_RIP, vcpu->rip);
+}
 
 static int hvm_dev_ioctl_create(struct hvm *hvm, struct hvm_create *hvm_create)
 {
