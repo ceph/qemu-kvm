@@ -1660,6 +1660,12 @@ void helper_ljmp_protected_T0_T1(int next_eip_addend)
         cpu_x86_load_seg_cache(env, R_CS, (new_cs & 0xfffc) | cpl,
                        get_seg_base(e1, e2), limit, e2);
         EIP = new_eip;
+#ifdef USE_KVM
+        if (e2 & DESC_L_MASK) {
+            env->exception_index = -1;
+            cpu_loop_exit();   
+        }       
+#endif
     } else {
         /* jump to call or task gate */
         dpl = (e2 >> DESC_DPL_SHIFT) & 3;
