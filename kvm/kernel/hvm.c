@@ -790,7 +790,7 @@ again:
 	"mov %%rax, 0(%3) \n\t" \
 	"mov %%rbx, 24(%3) \n\t" \
 	"pushq 0(%%rsp); popq 8(%3) \n\t" \
-	"mov %%rdx, 24(%3) \n\t" \
+	"mov %%rdx, 16(%3) \n\t" \
 	"mov %%rsi, 48(%3) \n\t" \
 	"mov %%rdi, 56(%3) \n\t" \
 	"mov %%rbp, 40(%3) \n\t" \
