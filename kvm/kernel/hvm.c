@@ -932,6 +932,129 @@ static int hvm_dev_ioctl_set_regs(struct hvm *hvm, struct hvm_regs *regs)
 	return 0;
 }
 
+static int hvm_dev_ioctl_get_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
+{
+	struct hvm_vcpu *vcpu;
+
+	if (!hvm->created)
+		return -EINVAL;
+	if (sregs->vcpu < 0 || sregs->vcpu >= hvm->nvcpus)
+		return -EINVAL;
+	vcpu = &hvm->vcpus[sregs->vcpu];
+
+	vcpu_load(vcpu);
+
+#define get_segment(var, seg) \
+	do { \
+		u32 ar; \
+		\
+		sregs->var.base = vmcs_readl(GUEST_##seg##_BASE); \
+		sregs->var.limit = vmcs_read32(GUEST_##seg##_LIMIT); \
+		sregs->var.selector = vmcs_read16(GUEST_##seg##_SELECTOR); \
+		ar = vmcs_read32(GUEST_##seg##_AR_BYTES); \
+		sregs->var.type = ar & 15; \
+		sregs->var.s = (ar >> 4) & 1; \
+		sregs->var.dpl = (ar >> 5) & 3; \
+		sregs->var.present = (ar >> 7) & 1; \
+		sregs->var.avl = (ar >> 12) & 1; \
+		sregs->var.l = (ar >> 13) & 1; \
+		sregs->var.db = (ar >> 14) & 1; \
+		sregs->var.g = (ar >> 15) & 1; \
+		sregs->var.unusable = (ar >> 16) & 1; \
+	} while (0);
+
+	get_segment(cs, CS);
+	get_segment(ds, CS);
+	get_segment(es, CS);
+	get_segment(fs, CS);
+	get_segment(gs, CS);
+	get_segment(ss, CS);
+
+	get_segment(tr, TR);
+	get_segment(ldt, LDTR);
+#undef get_segment
+
+#define get_dtable(var, table) \
+	sregs->var.limit = vmcs_read32(GUEST_##table##_LIMIT), \
+		sregs->var.base = vmcs_readl(GUEST_##table##_BASE)
+
+	get_dtable(idt, IDTR);
+	get_dtable(gdt, GDTR);
+#undef get_dtable
+
+	sregs->cr0 = vmcs_readl(GUEST_CR0);
+	/* FIXME: cr2? */
+	sregs->cr3 = vcpu->cr3;
+	sregs->cr4 = vcpu->cr4;
+	sregs->cr8 = vcpu->cr8;
+
+	vcpu_put();
+
+	return 0;
+}
+
+static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
+{
+	struct hvm_vcpu *vcpu;
+
+	if (!hvm->created)
+		return -EINVAL;
+	if (sregs->vcpu < 0 || sregs->vcpu >= hvm->nvcpus)
+		return -EINVAL;
+	vcpu = &hvm->vcpus[sregs->vcpu];
+
+	vcpu_load(vcpu);
+
+#define set_segment(var, seg) \
+	do { \
+		u32 ar = 0; \
+		\
+		vmcs_writel(GUEST_##seg##_BASE, sregs->var.base);  \
+		vmcs_write32(GUEST_##seg##_LIMIT, sregs->var.limit); \
+		vmcs_write16(GUEST_##seg##_SELECTOR, sregs->var.selector); \
+		ar |= sregs->var.type & 15; \
+		ar |= (sregs->var.s & 1) << 4; \
+		ar |= (sregs->var.dpl & 3) << 5; \
+		ar |= (sregs->var.present & 1) << 7; \
+		ar |= (sregs->var.avl & 1) << 12; \
+		ar |= (sregs->var.l & 1) << 13; \
+		ar |= (sregs->var.db & 1) << 14; \
+		ar |= (sregs->var.g & 1) << 15; \
+		ar |= (sregs->var.unusable & 1) << 16; \
+		vmcs_write32(GUEST_##seg##_AR_BYTES, ar); \
+	} while (0);
+
+	set_segment(cs, CS);
+	set_segment(ds, CS);
+	set_segment(es, CS);
+	set_segment(fs, CS);
+	set_segment(gs, CS);
+	set_segment(ss, CS);
+
+	set_segment(tr, TR);
+	set_segment(ldt, LDTR);
+#undef set_segment
+
+#define set_dtable(var, table) \
+	vmcs_write32(GUEST_##table##_LIMIT, sregs->var.limit), \
+	vmcs_writel(GUEST_##table##_BASE, sregs->var.base)
+
+	set_dtable(idt, IDTR);
+	set_dtable(gdt, GDTR);
+#undef set_dtable
+
+	vmcs_writel(GUEST_CR0, sregs->cr0);
+	/* FIXME: cr2? */
+	vcpu->cr3 = sregs->cr3;
+	vmcs_writel(GUEST_CR3, 0); /* reset_shadow_paging() */
+	vcpu->cr4 = sregs->cr4;
+	vcpu->cr8 = sregs->cr8;
+
+	vcpu_put();
+
+	return 0;
+}
+
 static int hvm_dev_ioctl(struct inode *inode, struct file *filp,
                          unsigned int ioctl, unsigned long arg)
 {
@@ -985,6 +1108,33 @@ static int hvm_dev_ioctl(struct inode *inode, struct file *filp,
 		if (copy_from_user(&hvm_regs, (void *)arg, sizeof hvm_regs))
 			goto out;
 		r = hvm_dev_ioctl_set_regs(hvm, &hvm_regs);
+		if (r)
+			goto out;
+		r = 0;
+		break;
+	}
+	case HVM_GET_SREGS: {
+		struct hvm_sregs hvm_sregs;
+	
+		r = -EFAULT;
+		if (copy_from_user(&hvm_sregs, (void *)arg, sizeof hvm_sregs))
+			goto out;
+		r = hvm_dev_ioctl_get_sregs(hvm, &hvm_sregs);
+		if (r)
+			goto out;
+		r = -EFAULT;
+		if (copy_to_user((void *)arg, &hvm_sregs, sizeof hvm_sregs))
+			goto out;
+		r = 0;
+		break;
+	}
+	case HVM_SET_SREGS: {
+		struct hvm_sregs hvm_sregs;
+	
+		r = -EFAULT;
+		if (copy_from_user(&hvm_sregs, (void *)arg, sizeof hvm_sregs))
+			goto out;
+		r = hvm_dev_ioctl_set_sregs(hvm, &hvm_sregs);
 		if (r)
 			goto out;
 		r = 0;

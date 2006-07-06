@@ -43,6 +43,7 @@ struct hvm_vcpu {
 	unsigned long regs[16]; /* except rsp */
 
 	gaddr_t cr3;
+	unsigned long cr4, cr8;
 
 	struct list_head free_page_links;
 	struct list_head free_pages;

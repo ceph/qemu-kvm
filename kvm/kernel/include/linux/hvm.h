@@ -64,9 +64,37 @@ struct hvm_regs {
 	__u64 rip, rflags;
 };
 
+struct hvm_segment {
+	__u64 base;
+	__u32 limit;
+	__u16 selector;
+	__u8  type;
+	__u8  present, dpl, db, s, l, g, avl;
+	__u8  unusable;
+};
+
+struct hvm_dtable {
+	__u64 base;
+	__u16 limit;
+};
+
+/* for HVM_GET_SREGS and HVM_SET_SREGS */
+struct hvm_sregs {
+	/* in */
+	int vcpu;
+
+	/* out (HVM_GET_SREGS) / in (HVM_SET_SREGS) */
+	struct hvm_segment cs, ds, es, fs, gs, ss;
+	struct hvm_segment tr, ldt;
+	struct hvm_dtable gdt, idt;
+	__u64 cr0, cr2, cr3, cr4, cr8;
+};
+
 #define HVM_CREATE 1
 #define HVM_RUN    2
 #define HVM_GET_REGS 3
 #define HVM_SET_REGS 4
+#define HVM_GET_SREGS 5
+#define HVM_SET_SREGS 6
 
 #endif
