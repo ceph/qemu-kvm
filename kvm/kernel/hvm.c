@@ -749,12 +749,19 @@ static int handle_cr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 	return 0;
 }
 
+static int handle_cpuid(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
+{
+	hvm_run->exit_reason = HVM_EXIT_CPUID;
+	return 0;
+}
+
 static int (*hvm_vmx_exit_handlers[])(struct hvm_vcpu *vcpu,
 				      struct hvm_run *hvm_eun) = {
 	[EXIT_REASON_EXCEPTION_NMI]           = handle_exit_exception,
 	[EXIT_REASON_EXTERNAL_INTERRUPT]      = handle_internal,
 	[EXIT_REASON_IO_INSTRUCTION]          = handle_io,
 	[EXIT_REASON_CR_ACCESS]               = handle_cr,
+	[EXIT_REASON_CPUID]                   = handle_cpuid,
 };
 
 static const int hvm_vmx_max_exit_handlers =

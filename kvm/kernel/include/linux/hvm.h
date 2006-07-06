@@ -15,6 +15,7 @@ enum hvm_exit_reason {
 	HVM_EXIT_UNKNOWN,
 	HVM_EXIT_EXCEPTION,
 	HVM_EXIT_IO,
+	HVM_EXIT_CPUID,
 };
 
 /* for HVM_RUN */
