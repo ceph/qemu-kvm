@@ -79,6 +79,8 @@ int kvm_cpu_exec(CPUState *env)
     hvm_get_regs(hvm_context, 0, &regs);
     printf("exec returned rip %lx\n", regs.rip);
 
+    exit(0);
+
     return 0;
 }
 
