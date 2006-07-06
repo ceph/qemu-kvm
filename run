@@ -3,4 +3,4 @@ sudo /sbin/insmod ../kernel/hvm.ko
 sudo chmod a+rw /dev/hvm
 dd < /dev/zero bs=1k count=1 of=disk
 dd < /dev/zero bs=1k count=1 of=disk seek=$((10*1024*1024-1))
-./x86_64-softmmu/qemu-system-x86_64 -cdrom /data/mirror/fedora/core/5/x86_64/iso/FC-5-x86_64-disc1.iso -boot d -L /usr/share/qemu -hda disk
+./x86_64-softmmu/qemu-system-x86_64 -cdrom /data/mirror/fedora/core/5/x86_64/iso/FC-5-x86_64-disc1.iso -boot d -L /usr/share/qemu -hda disk -m 384
