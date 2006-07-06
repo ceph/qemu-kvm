@@ -90,7 +90,7 @@
 #if USE_KVM
 #include <hvmctl.h>
 
-static hvm_context_t hvm_context;
+extern hvm_context_t hvm_context;
 #endif
 
 #define DEFAULT_NETWORK_SCRIPT "/etc/qemu-ifup"
