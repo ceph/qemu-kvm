@@ -1521,6 +1521,10 @@ cirrus_clear_vram_1:
   cmp ah, bl
   jne cirrus_clear_vram_1
 
+  xor ah,ah
+  mov dx, #0x3ce
+  out dx, ax
+
   pop es
   popa
   ret
