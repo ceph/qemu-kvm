@@ -62,7 +62,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.50 2006/06/21 16:58:06 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.51 2006/07/08 13:27:08 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -79,7 +79,7 @@ _no_vbebios_info_string:
 
 #if defined(USE_BX_INFO) || defined(DEBUG)
 msg_vbe_init:
-.ascii      "VBE Bios $Id: vbe.c,v 1.50 2006/06/21 16:58:06 vruppert Exp $"
+.ascii      "VBE Bios $Id: vbe.c,v 1.51 2006/07/08 13:27:08 vruppert Exp $"
 .byte	0x0a,0x0d, 0x00
 #endif
 
@@ -154,6 +154,8 @@ vesa_pm_set_display_start1:
   movzx esi, ax
   pop  eax
 
+  cmp esi, #4
+  jz bpp4_mode
   add esi, #7
   shr esi, #3
   imul ecx, esi
@@ -163,7 +165,17 @@ vesa_pm_set_display_start1:
   mov eax, edx
   xor edx, edx
   div esi
+  jmp set_xy_regs
 
+bpp4_mode:
+  shr ecx, #1
+  xor edx, edx
+  div ecx
+  mov edi, eax
+  mov eax, edx
+  shl eax, #1
+
+set_xy_regs:
   push dx
   push ax
   mov  dx, # VBE_DISPI_IOPORT_INDEX

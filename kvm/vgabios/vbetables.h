@@ -87,7 +87,8 @@ static ModeInfoListItem mode_info_list[]=
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE |
                                         VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE,
-   /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_READABLE |
+   /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_RELOCATABLE |
+                                        VBE_WINDOW_ATTRIBUTE_READABLE |
                                         VBE_WINDOW_ATTRIBUTE_WRITEABLE,
    /*Bit8u  WinBAttributes*/            0,
    /*Bit16u WinGranularity*/            VBE_DISPI_BANK_SIZE_KB,
@@ -167,7 +168,7 @@ static ModeInfoListItem mode_info_list[]=
    /*Bit8u  YCharSize*/                 16,
    /*Bit8u  NumberOfPlanes*/            4,
    /*Bit8u  BitsPerPixel*/              4,
-   /*Bit8u  NumberOfBanks*/             16,
+   /*Bit8u  NumberOfBanks*/             1,
    /*Bit8u  MemoryModel*/               VBE_MEMORYMODEL_PLANAR,
    /*Bit8u  BankSize*/                  0,
    /*Bit8u  NumberOfImagePages*/        15,
@@ -1110,7 +1111,8 @@ static ModeInfoListItem mode_info_list[]=
                                         VBE_MODE_ATTRIBUTE_COLOR_MODE |
                                         VBE_MODE_ATTRIBUTE_LINEAR_FRAME_BUFFER_MODE |
                                         VBE_MODE_ATTRIBUTE_GRAPHICS_MODE,
-   /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_READABLE |
+   /*Bit8u  WinAAttributes*/            VBE_WINDOW_ATTRIBUTE_RELOCATABLE |
+                                        VBE_WINDOW_ATTRIBUTE_READABLE |
                                         VBE_WINDOW_ATTRIBUTE_WRITEABLE,
    /*Bit8u  WinBAttributes*/            0,
    /*Bit16u WinGranularity*/            VBE_DISPI_BANK_SIZE_KB,
