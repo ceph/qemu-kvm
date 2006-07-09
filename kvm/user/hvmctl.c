@@ -115,24 +115,79 @@ int hvm_create(hvm_context_t hvm, unsigned long memory, void **vm_mem)
 	return 0;
 }
 
-void handle_io(int fd, struct hvm_run *run)
+void handle_io(hvm_context_t hvm, struct hvm_run *run)
 {
+	uint16_t addr = run->io.port;
 	struct hvm_regs regs;
 
+	regs.vcpu = run->vcpu;
+	ioctl(hvm->fd, HVM_GET_REGS, &regs);
+
 	if (!run->io.string)
-		printf("%s port %x value %llx\n",
-		       (run->io.direction == HVM_EXIT_IO_IN ? "in" : "out"),
-		       run->io.port, run->io.value);
-	else
+		switch (run->io.direction) {
+		case HVM_EXIT_IO_IN: {
+
+			ioctl(hvm->fd, HVM_GET_REGS, &regs);
+
+			switch (run->io.size) {
+			case 1: {
+				uint8_t value;
+				hvm->callbacks->inb(hvm->opaque, addr, &value);
+				*(uint8_t *)&regs.rax = value;
+				break;
+			}
+			case 2: {
+				uint16_t value;
+				hvm->callbacks->inw(hvm->opaque, addr, &value);
+				*(uint16_t *)&regs.rax = value;
+				break;
+			}
+			case 4: {
+				uint32_t value;
+				hvm->callbacks->inl(hvm->opaque, addr, &value);
+				*(uint32_t *)&regs.rax = value;
+				break;
+			}
+			default:
+				printf("bad I/O size\n");
+				exit(1);
+			}
+			break;
+		}
+		case HVM_EXIT_IO_OUT:
+			switch (run->io.size) {
+			case 1:
+				hvm->callbacks->outb(hvm->opaque, addr,
+						     run->io.value);
+				break;
+			case 2:
+				hvm->callbacks->outw(hvm->opaque, addr,
+						     run->io.value);
+				break;
+			case 4:
+				hvm->callbacks->outl(hvm->opaque, addr,
+						     run->io.value);
+				break;
+			default:
+				printf("bad I/O size\n");
+				exit(1);
+			}
+			break;
+		default:
+			printf("bad I/O size\n");
+			exit(1);
+		}
+	else {
 		printf("%ss port %x data %llx count %llx dir %s\n",
 		       (run->io.direction == HVM_EXIT_IO_IN ? "in" : "out"),
 		       run->io.port, run->io.address, run->io.count,
 		       (run->io.string_down ? "down" : ""));
+		printf("exit: string I/O not implemented\n");
+		exit(1);
+	}
 
-	regs.vcpu = run->vcpu;
-	ioctl(fd, HVM_GET_REGS, &regs);
 	regs.rip += run->instruction_length;
-	ioctl(fd, HVM_SET_REGS, &regs);
+	ioctl(hvm->fd, HVM_SET_REGS, &regs);
 }
 
 int hvm_get_regs(hvm_context_t hvm, int vcpu, struct hvm_regs *regs)
@@ -221,7 +276,7 @@ again:
 			       hvm_run.ex.error_code);
 			break;
 		case HVM_EXIT_IO:
-			handle_io(fd, &hvm_run);
+			handle_io(hvm, &hvm_run);
 			break;
 		case HVM_EXIT_CPUID:
 			handle_cpuid(hvm, &hvm_run);

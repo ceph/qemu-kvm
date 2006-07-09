@@ -11,6 +11,12 @@ typedef struct hvm_context *hvm_context_t;
 struct hvm_callbacks {
     void (*cpuid)(void *opaque, 
 		  uint64_t *rax, uint64_t *rbx, uint64_t *rcx, uint64_t *rdx);
+    void (*inb)(void *opaque, uint16_t addr, uint8_t *data);
+    void (*inw)(void *opaque, uint16_t addr, uint16_t *data);
+    void (*inl)(void *opaque, uint16_t addr, uint32_t *data);
+    void (*outb)(void *opaque, uint16_t addr, uint8_t data);
+    void (*outw)(void *opaque, uint16_t addr, uint16_t data);
+    void (*outl)(void *opaque, uint16_t addr, uint32_t data);
 };
 
 hvm_context_t hvm_init(struct hvm_callbacks *callbacks,
