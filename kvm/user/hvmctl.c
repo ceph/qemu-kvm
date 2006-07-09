@@ -183,6 +183,17 @@ void hvm_show_regs(hvm_context_t hvm, int vcpu)
 	       regs.rip, regs.rflags);
 }
 
+static void handle_cpuid(hvm_context_t hvm, struct hvm_run *run)
+{
+	struct hvm_regs regs;
+
+	hvm_get_regs(hvm, run->vcpu, &regs);
+	hvm->callbacks->cpuid(hvm->opaque, 
+			      &regs.rax, &regs.rbx, &regs.rcx, &regs.rdx);
+	regs.rip += run->instruction_length;
+	hvm_set_regs(hvm, run->vcpu, &regs);
+}
+
 int hvm_run(hvm_context_t hvm, int vcpu)
 {
 	int r;
@@ -191,6 +202,7 @@ int hvm_run(hvm_context_t hvm, int vcpu)
 		.vcpu = vcpu,
 	};
 
+again:
 	r = ioctl(fd, HVM_RUN, &hvm_run);
 	if (r == -1) {
 		printf("hvm_run: %m\n");
@@ -211,6 +223,9 @@ int hvm_run(hvm_context_t hvm, int vcpu)
 		case HVM_EXIT_IO:
 			handle_io(fd, &hvm_run);
 			break;
+		case HVM_EXIT_CPUID:
+			handle_cpuid(hvm, &hvm_run);
+			goto again;
 		default:
 			printf("unhandled vm exit: %d\n", hvm_run.exit_reason);
 			break;
