@@ -88,9 +88,7 @@
 #include "exec-all.h"
 
 #if USE_KVM
-#include <hvmctl.h>
-
-extern hvm_context_t hvm_context;
+#include "qemu-kvm.h"
 #endif
 
 #define DEFAULT_NETWORK_SCRIPT "/etc/qemu-ifup"
@@ -5507,8 +5505,7 @@ int main(int argc, char **argv)
 
 #ifdef CONFIG_SOFTMMU
 #if USE_KVM
-    hvm_context = hvm_init();
-    hvm_create(hvm_context, phys_ram_size, &phys_ram_base);
+    kvm_init();
 #else
     phys_ram_base = qemu_vmalloc(phys_ram_size);
     if (!phys_ram_base) {

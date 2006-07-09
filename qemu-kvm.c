@@ -85,4 +85,10 @@ int kvm_cpu_exec(CPUState *env)
 }
 
 
+void kvm_init()
+{
+    hvm_context = hvm_init(0, 0);
+    hvm_create(hvm_context, phys_ram_size, &phys_ram_base);
+}
+
 #endif
