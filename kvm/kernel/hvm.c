@@ -688,6 +688,15 @@ out:
 	return r;
 }
 
+static void skip_emulated_instruction(struct hvm_vcpu *vcpu)
+{
+	unsigned long rip;
+	
+	rip = vmcs_readl(GUEST_RIP);
+	rip += vmcs_read32(VM_EXIT_INSTRUCTION_LEN);
+	vmcs_writel(GUEST_RIP, rip);
+}
+
 static int handle_exit_exception(struct hvm_vcpu *vcpu, 
 				 struct hvm_run *hvm_run)
 {
@@ -764,15 +773,15 @@ static int handle_cr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 		case 3:
 			vcpu_load_rsp_rip(vcpu);
 			vcpu->cr3 = vcpu->regs[reg];
-			vcpu->rip += hvm_run->instruction_length;
 			vcpu_put_rsp_rip(vcpu);
+			skip_emulated_instruction(vcpu);
 			/* FIXME: reset paging */
 			return 1;
 		case 4:
 			vcpu_load_rsp_rip(vcpu);
 			vcpu->cr4 = vcpu->regs[reg];
-			vcpu->rip += hvm_run->instruction_length;
 			vcpu_put_rsp_rip(vcpu);
+			skip_emulated_instruction(vcpu);
 			return 1;
 		};
 		break;
@@ -808,7 +817,7 @@ static int handle_rdmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 		/* FIXME: handling of bits 32:63 of rax, rdx */
 		vcpu->regs[0] = msr->data & -1u;
 		vcpu->regs[2] = (msr->data >> 32) & -1u;
-		vmcs_writel(GUEST_RIP, vmcs_readl(GUEST_RIP) + hvm_run->instruction_length);
+		skip_emulated_instruction(vcpu);
 		return 1;
 	}
 	return 0;
@@ -823,7 +832,7 @@ static int handle_wrmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 		/* FIXME: handling of bits 32:63 of rax, rdx */
 		msr->data = (vcpu->regs[0] & -1u)
 			| ((u64)(vcpu->regs[2] & -1u) << 32);
-		vmcs_writel(GUEST_RIP, vmcs_readl(GUEST_RIP) + hvm_run->instruction_length);
+		skip_emulated_instruction(vcpu);
 		return 1;
 	}
 	return 0;
