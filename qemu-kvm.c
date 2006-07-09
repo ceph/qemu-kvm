@@ -11,6 +11,9 @@
 
 hvm_context_t hvm_context;
 
+#define NR_CPU 16
+static CPUState *saved_env[NR_CPU];
+
 int kvm_is_ok(CPUState *env)
 {
     return (env->segs[R_CS].flags & DESC_L_MASK) != 0;
@@ -22,6 +25,10 @@ int kvm_cpu_exec(CPUState *env)
     struct hvm_sregs sregs;
 
     printf("exec into rip %lx\n", env->eip);
+
+    /* hack: save env */
+    if (!saved_env[0])
+	saved_env[0] = env;
 
     regs.rax = env->regs[R_EAX];
     regs.rbx = env->regs[R_EBX];
@@ -132,10 +139,34 @@ int kvm_cpu_exec(CPUState *env)
     return 0;
 }
 
+static void kvm_cpuid(void *opaque, uint64_t *rax, uint64_t *rbx, 
+		      uint64_t *rcx, uint64_t *rdx)
+{
+    CPUState **envs = opaque;
+    CPUState *saved_env;
+
+    saved_env = env;
+    env = envs[0];
+
+    env->regs[R_EAX] = *rax;
+    env->regs[R_EBX] = *rbx;
+    env->regs[R_ECX] = *rcx;
+    env->regs[R_EDX] = *rdx;
+    helper_cpuid();
+    *rdx = env->regs[R_EDX];
+    *rcx = env->regs[R_ECX];
+    *rbx = env->regs[R_EBX];
+    *rax = env->regs[R_EAX];
+    env = saved_env;
+}
+
+static struct hvm_callbacks qemu_kvm_ops = {
+    .cpuid = kvm_cpuid,
+};
 
 void kvm_init()
 {
-    hvm_context = hvm_init(0, 0);
+    hvm_context = hvm_init(&qemu_kvm_ops, saved_env);
     hvm_create(hvm_context, phys_ram_size, &phys_ram_base);
 }
 
