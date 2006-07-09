@@ -638,9 +638,9 @@ static int hvm_dev_ioctl_create(struct hvm *hvm, struct hvm_create *hvm_create)
 		vcpu->vmcs = vmcs;
 		vcpu->launched = 0;
 
-		if (hvm_vcpu_setup(vcpu)) {
+		r = hvm_vcpu_setup(vcpu);
+		if (r < 0)
 			goto out_free_vcpus;
-		}
 	}
 		
 	hvm->created = 1;
