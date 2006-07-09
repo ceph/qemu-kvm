@@ -77,6 +77,54 @@ int kvm_cpu_exec(CPUState *env)
     hvm_run(hvm_context, 0);
 
     hvm_get_regs(hvm_context, 0, &regs);
+
+    env->regs[R_EAX] = regs.rax;
+    env->regs[R_EBX] = regs.rbx;
+    env->regs[R_ECX] = regs.rcx;
+    env->regs[R_EDX] = regs.rdx;
+    env->regs[R_ESI] = regs.rsi;
+    env->regs[R_EDI] = regs.rdi;
+    env->regs[R_ESP] = regs.rsp;
+    env->regs[R_EBP] = regs.rbp;
+    env->eflags = regs.rflags;
+    env->eip = regs.rip;
+
+    hvm_get_sregs(hvm_context, 0, &sregs);
+
+#define get_seg(var, seg) \
+    env->seg.selector = sregs.var.selector; \
+    env->seg.base = sregs.var.base; \
+    env->seg.limit = sregs.var.limit ; \
+    env->seg.flags = \
+	(sregs.var.type << DESC_TYPE_SHIFT) \
+	| (sregs.var.present * DESC_P_MASK) \
+	| (sregs.var.dpl << DESC_DPL_SHIFT) \
+	| (sregs.var.db << DESC_B_SHIFT) \
+	| (sregs.var.s * DESC_S_MASK) \
+	| (sregs.var.l << DESC_L_SHIFT) \
+	| (sregs.var.g * DESC_G_MASK) \
+	| (sregs.var.avl * DESC_AVL_MASK)
+    
+    get_seg(cs, segs[R_CS]);
+    get_seg(ds, segs[R_DS]);
+    get_seg(es, segs[R_ES]);
+    get_seg(fs, segs[R_FS]);
+    get_seg(gs, segs[R_GS]);
+    get_seg(ss, segs[R_SS]);
+
+    get_seg(tr, tr);
+    get_seg(ldt, ldt);
+    
+    env->idt.limit = sregs.idt.limit;
+    env->idt.base = sregs.idt.base;
+    env->gdt.limit = sregs.gdt.limit;
+    env->gdt.base = sregs.gdt.base;
+
+    env->cr[0] = sregs.cr0;
+    env->cr[2] = sregs.cr2;
+    env->cr[3] = sregs.cr3;
+    env->cr[4] = sregs.cr4;
+
     printf("exec returned rip %lx\n", regs.rip);
 
     exit(0);
