@@ -25,6 +25,12 @@ struct vmcs {
 	char data[0];
 };
 
+struct vmx_msr_entry {
+	u32 index;
+	u32 reserved;
+	u64 data;
+};
+
 struct hvm_vcpu;
 
 typedef struct paging_context_s {
@@ -45,6 +51,8 @@ struct hvm_vcpu {
 
 	gaddr_t cr3;
 	unsigned long cr0, cr2, cr4, cr8;
+	struct vmx_msr_entry *guest_msrs;
+	struct vmx_msr_entry *host_msrs;
 
 	struct list_head free_page_links;
 	struct list_head free_pages;

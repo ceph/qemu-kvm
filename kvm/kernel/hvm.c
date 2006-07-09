@@ -14,9 +14,12 @@
 #include <linux/vmalloc.h>
 #include <asm/uaccess.h>
 #include <linux/reboot.h>
+#include <asm/io.h>
 
 #include "vmx.h"
 
+static const u32 vmx_msr_index[] = { MSR_EFER };
+#define NR_VMX_MSR (sizeof(vmx_msr_index) / sizeof(*vmx_msr_index))
 
 struct descriptor_table {
 	u16 limit;
@@ -426,6 +429,7 @@ static int hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	u32 junk;
 	unsigned long a;
 	struct descriptor_table dt;
+	int i;
 	int ret;
 	
 	vcpu_load(vcpu);
@@ -567,9 +571,33 @@ static int hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 		     (HOST_IS_64 << 9)   /* address space size */
 		     | 0x36dff           /* reserved, 22.2,1, 20.7.1 */
 		);
-	vmcs_write32(VM_EXIT_MSR_STORE_COUNT, 0); /* 22.2.2 */
-	vmcs_write32(VM_EXIT_MSR_LOAD_COUNT, 0);  /* 22.2.2 */
-	vmcs_write32(VM_ENTRY_MSR_LOAD_COUNT, 0); /* 22.2.2 */
+	vmcs_write32(VM_EXIT_MSR_STORE_COUNT, NR_VMX_MSR); /* 22.2.2 */
+	vmcs_write32(VM_EXIT_MSR_LOAD_COUNT, NR_VMX_MSR);  /* 22.2.2 */
+	vmcs_write32(VM_ENTRY_MSR_LOAD_COUNT, NR_VMX_MSR); /* 22.2.2 */
+
+	ret = -ENOMEM;
+	vcpu->guest_msrs = kmalloc(PAGE_SIZE, GFP_KERNEL);
+	vcpu->host_msrs = kmalloc(PAGE_SIZE, GFP_KERNEL);
+	if (!vcpu->guest_msrs)
+		goto out;
+	vcpu->host_msrs = kmalloc(PAGE_SIZE, GFP_KERNEL);
+	if (!vcpu->host_msrs)
+		goto out_free_guest_msrs;
+
+	for (i = 0; i < NR_VMX_MSR; ++i) {
+		u32 index = vmx_msr_index[i];
+		u64 data;
+
+		rdmsrl(index, data);
+		vcpu->host_msrs[i].index = index;
+		vcpu->host_msrs[i].reserved = 0;
+		vcpu->host_msrs[i].data = data;
+		vcpu->guest_msrs[i] = vcpu->host_msrs[i];
+	}
+
+	vmcs_writel(VM_ENTRY_MSR_LOAD_ADDR, virt_to_phys(vcpu->guest_msrs));
+	vmcs_writel(VM_EXIT_MSR_STORE_ADDR, virt_to_phys(vcpu->guest_msrs));
+	vmcs_writel(VM_EXIT_MSR_LOAD_ADDR, virt_to_phys(vcpu->host_msrs));
 
 	vmcs_write32(VM_ENTRY_CONTROLS, /* 20.8.1 */
 		     (GUEST_IS_64 << 9) /* address space size, 22.2.5 */
@@ -585,6 +613,12 @@ static int hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 
 	ret = hvm_mmu_init(vcpu);
 
+	vcpu_put();
+	return ret;
+
+out_free_guest_msrs:
+	kfree(vcpu->guest_msrs);
+out:
 	vcpu_put();
 	return ret;
 }
