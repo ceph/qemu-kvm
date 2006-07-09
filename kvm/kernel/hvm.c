@@ -770,6 +770,13 @@ static int handle_cr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 	switch ((exit_qualification >> 4) & 3) {
 	case 0: /* mov to cr */
 		switch (cr) {
+		case 0:
+			vcpu_load_rsp_rip(vcpu);
+			vcpu->cr0 = vcpu->regs[reg];
+			vcpu_put_rsp_rip(vcpu);
+			skip_emulated_instruction(vcpu);
+			/* FIXME: reset paging */
+			return 1;
 		case 3:
 			vcpu_load_rsp_rip(vcpu);
 			vcpu->cr3 = vcpu->regs[reg];
