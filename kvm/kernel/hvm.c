@@ -1202,6 +1202,17 @@ static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 	return 0;
 }
 
+static int hvm_dev_ioctl_translate(struct hvm *hvm, struct hvm_translation *tr)
+{
+	/* FIXME: only 1:1 mappings for now */
+	tr->physical_address = tr->linear_address;
+	tr->valid = 1;
+	tr->writeable = 1;
+	tr->usermode = 0;
+
+	return 0;
+}
+
 static int hvm_dev_ioctl(struct inode *inode, struct file *filp,
                          unsigned int ioctl, unsigned long arg)
 {
@@ -1283,6 +1294,21 @@ static int hvm_dev_ioctl(struct inode *inode, struct file *filp,
 			goto out;
 		r = hvm_dev_ioctl_set_sregs(hvm, &hvm_sregs);
 		if (r)
+			goto out;
+		r = 0;
+		break;
+	}
+	case HVM_TRANSLATE: {
+		struct hvm_translation tr;
+	
+		r = -EFAULT;
+		if (copy_from_user(&tr, (void *)arg, sizeof tr))
+			goto out;
+		r = hvm_dev_ioctl_translate(hvm, &tr);
+		if (r)
+			goto out;
+		r = -EFAULT;
+		if (copy_to_user((void *)arg, &tr, sizeof tr))
 			goto out;
 		r = 0;
 		break;

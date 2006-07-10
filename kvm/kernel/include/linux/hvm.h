@@ -91,11 +91,25 @@ struct hvm_sregs {
 	__u64 cr0, cr2, cr3, cr4, cr8;
 };
 
+/* for HVM_TRANSLATE */
+struct hvm_translation {
+	/* in */
+	__u64 linear_address;
+	int   vcpu;
+
+	/* out */
+	__u64 physical_address;
+	__u8  valid;
+	__u8  writeable;
+	__u8  usermode;
+};
+
 #define HVM_CREATE 1
 #define HVM_RUN    2
 #define HVM_GET_REGS 3
 #define HVM_SET_REGS 4
 #define HVM_GET_SREGS 5
 #define HVM_SET_SREGS 6
+#define HVM_TRANSLATE 7
 
 #endif
