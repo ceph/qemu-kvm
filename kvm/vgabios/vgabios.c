@@ -408,7 +408,7 @@ init_vga_card:
 
 #if defined(USE_BX_INFO) || defined(DEBUG)
 msg_vga_init:
-.ascii "VGABios $Id: vgabios.c,v 1.65 2006/06/18 15:22:43 vruppert Exp $"
+.ascii "VGABios $Id: vgabios.c,v 1.66 2006/07/10 07:47:51 vruppert Exp $"
 .byte 0x0d,0x0a,0x00
 #endif
 ASM_END
@@ -1288,6 +1288,7 @@ Bit8u nblines;Bit8u attr;Bit8u rul;Bit8u cul;Bit8u rlr;Bit8u clr;Bit8u page;Bit8
           memsetw(vga_modes[line].sstart,address+(i*nbcols+cul)*2,(Bit16u)attr*0x100+' ',cols);
          else
           memcpyw(vga_modes[line].sstart,address+(i*nbcols+cul)*2,vga_modes[line].sstart,((i-nblines)*nbcols+cul)*2,cols);
+         if (i>rlr) break;
         }
       }
     }
@@ -1324,6 +1325,7 @@ Bit8u nblines;Bit8u attr;Bit8u rul;Bit8u cul;Bit8u rlr;Bit8u clr;Bit8u page;Bit8
               vgamem_fill_pl4(cul,i,cols,nbcols,cheight,attr);
              else
               vgamem_copy_pl4(cul,i,i-nblines,cols,nbcols,cheight);
+             if (i>rlr) break;
             }
           }
         }
@@ -1359,6 +1361,7 @@ Bit8u nblines;Bit8u attr;Bit8u rul;Bit8u cul;Bit8u rlr;Bit8u clr;Bit8u page;Bit8
               vgamem_fill_cga(cul,i,cols,nbcols,cheight,attr);
              else
               vgamem_copy_cga(cul,i,i-nblines,cols,nbcols,cheight);
+             if (i>rlr) break;
             }
           }
         }
