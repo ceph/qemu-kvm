@@ -11,7 +11,8 @@ hvmctl: hvmctl.o main.o
 libhvm.a: hvmctl.o
 	$(AR) rcs $@ $^
 
-flatfiles: test/simple.flat test/stringio.flat test/memtest1.flat
+flatfiles: test/simple.flat test/stringio.flat test/memtest1.flat \
+	test/irq.flat
 
 %.flat: %.S
 	gcc -nostdlib -o $@ -Wl,-T,flat.lds $^
