@@ -4,7 +4,7 @@ SECTIONS
 {
     . = 0;
     .text : { *(.text) }
-    . = (. + 4095) & ~ 4095;
+    . = ALIGN(4K);
     .data : { *(.data) }
     .bss : { *(.bss) }
 }
