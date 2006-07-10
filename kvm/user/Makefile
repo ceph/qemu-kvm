@@ -11,7 +11,7 @@ hvmctl: hvmctl.o main.o
 libhvm.a: hvmctl.o
 	$(AR) rcs $@ $^
 
-flatfiles: simple.flat
+flatfiles: simple.flat stringio.flat
 
 %.flat: %.S
 	gcc -nostdlib -o $@ -Wl,-T,flat.lds $^
