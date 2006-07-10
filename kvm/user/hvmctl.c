@@ -16,19 +16,6 @@ struct hvm_context {
 	void *physical_memory;
 };
 
-unsigned char testprog[] = {
-	0xb0, 0,                    // mov $0, %al
-	0xbb, 0x10, 0x27, 0, 0,     // mov $10000, %ebx
-/* 1: */
-	0x48, 0x89, 0xd9,           // mov %rbx, %rcx
-/* 2: */
-	0xe2, 0xfe,                 // loop 2b
-	0xe6, 0x80,                 // out %al, $0x80
-	0xfe, 0xc0,                 // inc %al
-	0x48, 0x81, 0xc3, 0x10, 0x27, 0, 0, // add $10000, %rbx
-	0xeb, 0xee,                 // jmp 1b
-};
-
 #if 0
 
 unsigned char testprog[] = {
@@ -153,7 +140,6 @@ int hvm_create(hvm_context_t hvm, unsigned long memory, void **vm_mem)
 	}
 	hvm->physical_memory = *vm_mem;
 	memset(*vm_mem, 0, memory);
-	memcpy(*vm_mem, testprog, sizeof testprog);
 	return 0;
 }
 
