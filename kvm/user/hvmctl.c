@@ -4,12 +4,16 @@
 #include <stdlib.h>
 #include <sys/mman.h>
 #include <string.h>
+#include <errno.h>
 #include "hvmctl.h"
+
+#define PAGE_SIZE 4096ul
 
 struct hvm_context {
 	int fd;
 	struct hvm_callbacks *callbacks;
 	void *opaque;
+	void *physical_memory;
 };
 
 unsigned char testprog[] = {
@@ -74,6 +78,43 @@ unsigned char testprog[] = {
 
 #endif
 
+struct translation_cache {
+	unsigned long linear;
+	void *physical;
+};
+
+static void translation_cache_init(struct translation_cache *tr)
+{
+	tr->physical = 0;
+}
+
+static int translate(hvm_context_t hvm, int vcpu, struct translation_cache *tr,
+		     unsigned long linear, void **physical)
+{
+	unsigned long page = linear & ~(PAGE_SIZE-1);
+	unsigned long offset = linear & (PAGE_SIZE-1);
+
+	if (!(tr->physical && tr->linear == page)) {
+		struct hvm_translation hvm_tr;
+		int r;
+
+		hvm_tr.linear_address = page;
+		hvm_tr.vcpu = vcpu;
+		
+		r = ioctl(hvm->fd, HVM_TRANSLATE, &hvm_tr);
+		if (r == -1)
+			return -errno;
+
+		if (!hvm_tr.valid)
+			return -EFAULT;
+
+		tr->linear = page;
+		tr->physical = hvm->physical_memory + hvm_tr.physical_address;
+	}
+	*physical = tr->physical + offset;
+	return 0;
+}
+
 hvm_context_t hvm_init(struct hvm_callbacks *callbacks,
 		       void *opaque)
 {
@@ -110,42 +151,70 @@ int hvm_create(hvm_context_t hvm, unsigned long memory, void **vm_mem)
 		printf("mmap: %m\n");
 		exit(1);
 	}
+	hvm->physical_memory = *vm_mem;
 	memset(*vm_mem, 0, memory);
 	memcpy(*vm_mem, testprog, sizeof testprog);
 	return 0;
+}
+
+static int more_io(struct hvm_run *run, int first_time)
+{
+	if (!run->io.rep)
+		return first_time;
+	else
+		return run->io.count != 0;
 }
 
 void handle_io(hvm_context_t hvm, struct hvm_run *run)
 {
 	uint16_t addr = run->io.port;
 	struct hvm_regs regs;
+	int first_time = 1;
+	int delta;
+	struct translation_cache tr;
+
+	translation_cache_init(&tr);
 
 	regs.vcpu = run->vcpu;
 	ioctl(hvm->fd, HVM_GET_REGS, &regs);
 
-	if (!run->io.string)
+	delta = run->io.string_down ? -run->io.size : run->io.size;
+
+	while (more_io(run, first_time)) {
+		void *value_addr;
+		int r;
+
+		if (!run->io.string)
+			value_addr = &regs.rax;
+		else {
+			r = translate(hvm, run->vcpu, &tr, run->io.address, 
+				      &value_addr);
+			if (r) {
+				printf("failed translating I/O address %x\n",
+				       run->io.address);
+				exit(1);
+			}
+		}
+
 		switch (run->io.direction) {
 		case HVM_EXIT_IO_IN: {
-
-			ioctl(hvm->fd, HVM_GET_REGS, &regs);
-
 			switch (run->io.size) {
 			case 1: {
 				uint8_t value;
 				hvm->callbacks->inb(hvm->opaque, addr, &value);
-				*(uint8_t *)&regs.rax = value;
+				*(uint8_t *)value_addr = value;
 				break;
 			}
 			case 2: {
 				uint16_t value;
 				hvm->callbacks->inw(hvm->opaque, addr, &value);
-				*(uint16_t *)&regs.rax = value;
+				*(uint16_t *)value_addr = value;
 				break;
 			}
 			case 4: {
 				uint32_t value;
 				hvm->callbacks->inl(hvm->opaque, addr, &value);
-				*(uint32_t *)&regs.rax = value;
+				*(uint32_t *)value_addr = value;
 				break;
 			}
 			default:
@@ -158,15 +227,15 @@ void handle_io(hvm_context_t hvm, struct hvm_run *run)
 			switch (run->io.size) {
 			case 1:
 				hvm->callbacks->outb(hvm->opaque, addr,
-						     run->io.value);
+						     *(uint8_t *)value_addr);
 				break;
 			case 2:
 				hvm->callbacks->outw(hvm->opaque, addr,
-						     run->io.value);
+						     *(uint16_t *)value_addr);
 				break;
 			case 4:
 				hvm->callbacks->outl(hvm->opaque, addr,
-						     run->io.value);
+						     *(uint32_t *)value_addr);
 				break;
 			default:
 				printf("bad I/O size\n");
@@ -177,13 +246,18 @@ void handle_io(hvm_context_t hvm, struct hvm_run *run)
 			printf("bad I/O size\n");
 			exit(1);
 		}
-	else {
-		printf("%ss port %x data %llx count %llx dir %s\n",
-		       (run->io.direction == HVM_EXIT_IO_IN ? "in" : "out"),
-		       run->io.port, run->io.address, run->io.count,
-		       (run->io.string_down ? "down" : ""));
-		printf("exit: string I/O not implemented\n");
-		exit(1);
+		if (run->io.string) {
+			run->io.address += delta;
+			switch (run->io.direction) {
+			case HVM_EXIT_IO_IN:  regs.rdi += delta; break;
+			case HVM_EXIT_IO_OUT: regs.rsi += delta; break;
+			}
+			if (run->io.rep) {
+				--regs.rcx;
+				--run->io.count;
+			}
+		}
+		first_time = 0;
 	}
 
 	regs.rip += run->instruction_length;
