@@ -749,7 +749,7 @@ static int handle_io(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 		= (vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_DF) != 0;
 	hvm_run->io.rep = (exit_qualification & 32) != 0;
 	hvm_run->io.port = exit_qualification >> 16;
-	hvm_run->io.count = vcpu->regs[2]; /* rcx. FIXME: mask? */
+	hvm_run->io.count = vcpu->regs[1]; /* rcx. FIXME: mask? */
 	if (hvm_run->io.string)
 		hvm_run->io.address = vmcs_readl(GUEST_LINEAR_ADDRESS);
 	else
@@ -1017,13 +1017,13 @@ static int hvm_dev_ioctl_get_regs(struct hvm *hvm, struct hvm_regs *regs)
 	vcpu_load(vcpu);
 
 	regs->rax = vcpu->regs[0];
-	regs->rbx = vcpu->regs[1];
-	regs->rcx = vcpu->regs[2];
-	regs->rdx = vcpu->regs[3];
-	regs->rsi = vcpu->regs[4];
-	regs->rdi = vcpu->regs[5];
+	regs->rbx = vcpu->regs[3];
+	regs->rcx = vcpu->regs[1];
+	regs->rdx = vcpu->regs[2];
+	regs->rsi = vcpu->regs[6];
+	regs->rdi = vcpu->regs[7];
 	regs->rsp = vmcs_readl(GUEST_RSP);
-	regs->rbp = vcpu->regs[7];
+	regs->rbp = vcpu->regs[5];
 	regs->r8 = vcpu->regs[8];
 	regs->r9 = vcpu->regs[9];
 	regs->r10 = vcpu->regs[10];
@@ -1054,13 +1054,13 @@ static int hvm_dev_ioctl_set_regs(struct hvm *hvm, struct hvm_regs *regs)
 	vcpu_load(vcpu);
 
 	vcpu->regs[0] = regs->rax;
-	vcpu->regs[1] = regs->rbx;
-	vcpu->regs[2] = regs->rcx;
-	vcpu->regs[3] = regs->rdx;
-	vcpu->regs[4] = regs->rsi;
-	vcpu->regs[5] = regs->rdi;
+	vcpu->regs[3] = regs->rbx;
+	vcpu->regs[1] = regs->rcx;
+	vcpu->regs[2] = regs->rdx;
+	vcpu->regs[6] = regs->rsi;
+	vcpu->regs[7] = regs->rdi;
 	vmcs_writel(GUEST_RSP, regs->rsp);
-	vcpu->regs[7] = regs->rbp;
+	vcpu->regs[5] = regs->rbp;
 	vcpu->regs[8] = regs->r8;
 	vcpu->regs[9] = regs->r9;
 	vcpu->regs[10] = regs->r10;
