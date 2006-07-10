@@ -749,7 +749,7 @@ static int handle_io(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 		= (vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_DF) != 0;
 	hvm_run->io.rep = (exit_qualification & 32) != 0;
 	hvm_run->io.port = exit_qualification >> 16;
-	hvm_run->io.count = vcpu->regs[2]; /* rcx. FIXMEL: mask? */
+	hvm_run->io.count = vcpu->regs[2]; /* rcx. FIXME: mask? */
 	if (hvm_run->io.string)
 		hvm_run->io.address = vmcs_readl(GUEST_LINEAR_ADDRESS);
 	else
@@ -904,36 +904,36 @@ again:
 	      "pop  %%rbp; pop  %%rdi; pop  %%rsi;"	       \
 	      "pop  %%rdx; pop  %%rbx; pop  %%rax"
 #define LOAD_GUEST_REGS \
-	"mov 0(%3),   %%rax \n\t" \
-	"mov 24(%3),   %%rbx \n\t" \
-	"mov 16(%3),  %%rdx \n\t" \
-	"mov 48(%3),  %%rsi \n\t" \
-	"mov 56(%3),  %%rdi \n\t" \
-	"mov 40(%3),  %%rbp \n\t" \
-	"mov 64(%3),  %%r8 \n\t" \
-	"mov 72(%3),  %%r9 \n\t" \
-	"mov 80(%3),  %%r10 \n\t" \
-	"mov 88(%3),  %%r11 \n\t" \
-	"mov 96(%3),  %%r12 \n\t" \
+	"mov  0(%3),  %%rax \n\t" \
+	"mov  24(%3), %%rbx \n\t" \
+	"mov  16(%3), %%rdx \n\t" \
+	"mov  48(%3), %%rsi \n\t" \
+	"mov  56(%3), %%rdi \n\t" \
+	"mov  40(%3), %%rbp \n\t" \
+	"mov  64(%3), %%r8  \n\t" \
+	"mov  72(%3), %%r9  \n\t" \
+	"mov  80(%3), %%r10 \n\t" \
+	"mov  88(%3), %%r11 \n\t" \
+	"mov  96(%3), %%r12 \n\t" \
 	"mov 104(%3), %%r13 \n\t" \
 	"mov 112(%3), %%r14 \n\t" \
 	"mov 120(%3), %%r15 \n\t" \
 	"mov 8(%3),  %%rcx \n\t" /* kills %3 (rcx) */
 
 #define STORE_GUEST_REGS \
-	"xchg %3, 0(%%rsp) \n\t" \
-	"mov %%rax, 0(%3) \n\t" \
-	"mov %%rbx, 24(%3) \n\t" \
+	"xchg %3,     0(%%rsp) \n\t" \
+	"mov %%rax,   0(%3) \n\t" \
+	"mov %%rbx,  24(%3) \n\t" \
 	"pushq 0(%%rsp); popq 8(%3) \n\t" \
-	"mov %%rdx, 16(%3) \n\t" \
-	"mov %%rsi, 48(%3) \n\t" \
-	"mov %%rdi, 56(%3) \n\t" \
-	"mov %%rbp, 40(%3) \n\t" \
-	"mov %%r8,  64(%3) \n\t" \
-	"mov %%r9,  72(%3) \n\t" \
-	"mov %%r10, 80(%3) \n\t" \
-	"mov %%r11, 88(%3) \n\t" \
-	"mov %%r12, 96(%3) \n\t" \
+	"mov %%rdx,  16(%3) \n\t" \
+	"mov %%rsi,  48(%3) \n\t" \
+	"mov %%rdi,  56(%3) \n\t" \
+	"mov %%rbp,  40(%3) \n\t" \
+	"mov %%r8,   64(%3) \n\t" \
+	"mov %%r9,   72(%3) \n\t" \
+	"mov %%r10,  80(%3) \n\t" \
+	"mov %%r11,  88(%3) \n\t" \
+	"mov %%r12,  96(%3) \n\t" \
 	"mov %%r13, 104(%3) \n\t" \
 	"mov %%r14, 112(%3) \n\t" \
 	"mov %%r15, 120(%3) \n\t" \
@@ -954,7 +954,7 @@ again:
 
 #define STORE_GUEST_REGS \
 	"xchg %3, 0(%%esp) \n\t" \
-	"mov %%eax, 0(%3) \n\t" \
+	"mov %%eax,  0(%3) \n\t" \
 	"mov %%ebx, 12(%3) \n\t" \
 	"pushl 0(%%esp); popl 4(%3) \n\t" \
 	"mov %%edx,  8(%3) \n\t" \
