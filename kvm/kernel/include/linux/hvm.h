@@ -22,6 +22,8 @@ enum hvm_exit_reason {
 struct hvm_run {
 	/* in */
 	int vcpu;
+	int emulated;  /* skip current instruction */
+
 	/* out */
 	int exit_type;
 	__u32 exit_reason;
