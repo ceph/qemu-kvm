@@ -894,6 +894,20 @@ static int hvm_handle_exit(struct hvm_run *hvm_run, struct hvm_vcpu *vcpu)
 	return 0;
 }
 
+static void hvm_do_inject_irq(struct hvm_vcpu *vcpu)
+{
+	int word_index = __ffs(vcpu->irq_summary);
+	int bit_index = __ffs(vcpu->irq_pending[word_index]);
+	int irq = word_index * BITS_PER_LONG + bit_index;
+
+	clear_bit(bit_index, &vcpu->irq_pending[word_index]);
+	if (!vcpu->irq_pending[word_index])
+		clear_bit(word_index, &vcpu->irq_summary);
+
+	/* FIXME: guest not interruptible: queue */
+	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD, irq | (1 << 31));
+}
+
 static int hvm_dev_ioctl_run(struct hvm *hvm, struct hvm_run *hvm_run)
 {
 	struct hvm_vcpu *vcpu;
@@ -911,18 +925,8 @@ again:
 	vmcs_writel(HOST_GS_BASE, read_msr(MSR_GS_BASE));
 #endif
 
-	if (vcpu->irq_summary) {
-		int word_index = __ffs(vcpu->irq_summary);
-		int bit_index = __ffs(vcpu->irq_pending[word_index]);
-		int irq = word_index * BITS_PER_LONG + bit_index;
-
-		clear_bit(bit_index, &vcpu->irq_pending[word_index]);
-		if (!vcpu->irq_pending[word_index])
-			clear_bit(word_index, &vcpu->irq_summary);
-
-		/* FIXME: guest not interruptible: queue */
-		vmcs_write32(VM_ENTRY_INTR_INFO_FIELD, irq | (1 << 31));
-	}
+	if (vcpu->irq_summary)
+		hvm_do_inject_irq(vcpu);
 
 #ifdef __x86_64__
 #define SP "rsp"
