@@ -301,3 +301,12 @@ again:
 	hvm_show_regs(hvm, vcpu);
 	return 0;
 }
+
+int hvm_inject_irq(hvm_context_t hvm, int vcpu, unsigned irq)
+{
+	struct hvm_interrupt intr;
+
+	intr.vcpu = vcpu;
+	intr.irq = irq;
+	return ioctl(hvm->fd, HVM_INTERRUPT, &intr);
+}

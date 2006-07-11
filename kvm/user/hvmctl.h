@@ -29,6 +29,7 @@ int hvm_get_regs(hvm_context_t, int vcpu, struct hvm_regs *regs);
 int hvm_set_regs(hvm_context_t, int vcpu, struct hvm_regs *regs);
 int hvm_get_sregs(hvm_context_t, int vcpu, struct hvm_sregs *regs);
 int hvm_set_sregs(hvm_context_t, int vcpu, struct hvm_sregs *regs);
+int hvm_inject_irq(hvm_context_t, int vcpu, unsigned irq);
 void hvm_show_regs(hvm_context_t, int vcpu);
 
 #endif
