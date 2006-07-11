@@ -288,7 +288,7 @@ again:
 			break;
 		case HVM_EXIT_IO:
 			handle_io(hvm, &hvm_run);
-			break;
+			goto again;
 		case HVM_EXIT_CPUID:
 			handle_cpuid(hvm, &hvm_run);
 			goto again;
