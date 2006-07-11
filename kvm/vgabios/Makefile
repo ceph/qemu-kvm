@@ -22,7 +22,7 @@ bios: biossums vgabios.bin vgabios.debug.bin
 cirrus-bios: vgabios-cirrus.bin vgabios-cirrus.debug.bin
 
 clean:
-	/bin/rm -f  biossums *.o *.s *.ld86 \
+	/bin/rm -f  biossums vbetables-gen vbetables.h *.o *.s *.ld86 \
           temp.awk.* vgabios*.orig _vgabios_* _vgabios-debug_* core vgabios*.bin vgabios*.txt $(RELEASE).bin *.bak
 
 dist-clean: clean
@@ -79,3 +79,9 @@ vgabios-cirrus.debug.bin: vgabios.c vgabios.h vgafonts.h vgatables.h clext.c
 
 biossums: biossums.c
 	$(CC) -o biossums biossums.c
+
+vbetables-gen: vbetables-gen.c
+	$(CC) -o vbetables-gen vbetables-gen.c
+
+vbetables.h: vbetables-gen
+	./vbetables-gen > $@
