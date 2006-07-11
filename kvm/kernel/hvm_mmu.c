@@ -179,31 +179,30 @@ static int nonpaging_map(struct hvm_vcpu *vcpu, vaddr_t v, paddr_t p)
 	paddr_t table_addr = vcpu->paging_context->root;
 
 	for (; ; level--) {
-		uint32_t offset = (v & PT64_LEVEL_MASK(level)) >> 
-							PT64_LEVEL_SHIFT(level);
+		uint32_t index = PT64_INDEX(v, level);
 		uint64_t *table;
 
 		ASSERT(VALID_PAGE(table_addr));
 		table = __va(table_addr);
 
 		if (level == 1) {
-			table[offset] = p | 
+			table[index] = p | 
 					PT64_PRESENT_MASK | 
 					PT64_WRITABLE_MASK;
 			return 0;
 		}
 
-		if (table[offset] == 0) {
+		if (table[index] == 0) {
 			paddr_t new_table = hvm_mmu_alloc_page(vcpu);
 			if (!VALID_PAGE(new_table)) {
 				printk("nonpaging_map: ENOMEM\n");
 				return -ENOMEM;
 			}
-			table[offset] = new_table | 
+			table[index] = new_table | 
 					PT64_PRESENT_MASK | 
 					PT64_WRITABLE_MASK;
 		}
-		table_addr = table[offset] & PT64_BASE_ADDR_MASK;
+		table_addr = table[index] & PT64_BASE_ADDR_MASK;
 	}
 }
 
@@ -481,8 +480,7 @@ static int paging64_page_fault(struct hvm_vcpu *vcpu, uint64_t addr,
 	level = vcpu->paging_context->root_level;
 
 	for (; ; level--) {
-                uint32_t index = (addr & PT64_LEVEL_MASK(level)) >> 
-							PT64_LEVEL_SHIFT(level);
+		uint32_t index = PT64_INDEX(addr,level);
 		uint64_t *guest_table;
 		uint64_t *shadow_table;
 
@@ -503,8 +501,6 @@ static int paging64_page_fault(struct hvm_vcpu *vcpu, uint64_t addr,
 				  write_fault);
 			return 0;
 		}
-
-		
 
 		if (!(shadow_table[index] & PT64_PRESENT_MASK)) {
 			shadow_addr = hvm_mmu_alloc_page(vcpu);
