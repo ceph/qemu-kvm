@@ -42,6 +42,26 @@ typedef struct paging_context_s {
 	int root_level;
 }paging_context_t;
 
+enum {
+	VCPU_REGS_RAX = 0,
+	VCPU_REGS_RCX = 1,
+	VCPU_REGS_RDX = 2,
+	VCPU_REGS_RBX = 3,
+	VCPU_REGS_RSP = 4,
+	VCPU_REGS_RBP = 5,
+	VCPU_REGS_RSI = 6,
+	VCPU_REGS_RDI = 7,
+	VCPU_REGS_R8 = 8,
+	VCPU_REGS_R9 = 9,
+	VCPU_REGS_R10 = 10,
+	VCPU_REGS_R11 = 11,
+	VCPU_REGS_R12 = 12,
+	VCPU_REGS_R13 = 13,
+	VCPU_REGS_R14 = 14,
+	VCPU_REGS_R15 = 15,
+	VCPU_REGS_CR2 = 16,
+};
+
 struct hvm_vcpu {
 	struct hvm *hvm;
 	struct vmcs *vmcs;
@@ -50,11 +70,11 @@ struct hvm_vcpu {
 	unsigned long irq_summary; /* bit vector: 1 per word in irq_pending */ 
 #define NR_IRQ_WORDS (256 / BITS_PER_LONG)
 	unsigned long irq_pending[NR_IRQ_WORDS];
-	unsigned long regs[16]; /* for rsp needs vcpu_load_rsp_rip() */
+	unsigned long regs[17]; /* for rsp needs vcpu_load_rsp_rip() */
 	unsigned long rip;      /* needs vcpu_load_rsp_rip() */
 
 	gaddr_t cr3;
-	unsigned long cr0, cr2, cr4, cr8;
+	unsigned long cr0, cr4, cr8;
 	struct vmx_msr_entry *guest_msrs;
 	struct vmx_msr_entry *host_msrs;
 

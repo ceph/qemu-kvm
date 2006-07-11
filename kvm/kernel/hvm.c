@@ -619,13 +619,13 @@ out:
 
 static void vcpu_load_rsp_rip(struct hvm_vcpu *vcpu)
 {
-	vcpu->regs[4] = vmcs_readl(GUEST_RSP);
+	vcpu->regs[VCPU_REGS_RSP] = vmcs_readl(GUEST_RSP);
 	vcpu->rip = vmcs_readl(GUEST_RIP);
 }
 
 static void vcpu_put_rsp_rip(struct hvm_vcpu *vcpu)
 {
-	vmcs_writel(GUEST_RSP, vcpu->regs[4]);
+	vmcs_writel(GUEST_RSP, vcpu->regs[VCPU_REGS_RSP]);
 	vmcs_writel(GUEST_RIP, vcpu->rip);
 }
 
@@ -743,11 +743,11 @@ static int handle_io(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 		= (vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_DF) != 0;
 	hvm_run->io.rep = (exit_qualification & 32) != 0;
 	hvm_run->io.port = exit_qualification >> 16;
-	hvm_run->io.count = vcpu->regs[1]; /* rcx. FIXME: mask? */
+	hvm_run->io.count = vcpu->regs[VCPU_REGS_RCX]; /* rcx. FIXME: mask? */
 	if (hvm_run->io.string)
 		hvm_run->io.address = vmcs_readl(GUEST_LINEAR_ADDRESS);
 	else
-		hvm_run->io.value = vcpu->regs[0]; /* rax */
+		hvm_run->io.value = vcpu->regs[VCPU_REGS_RAX]; /* rax */
 	return 0;
 }
 
@@ -834,13 +834,13 @@ static struct vmx_msr_entry *find_msr_entry(struct hvm_vcpu *vcpu, u32 msr)
 
 static int handle_rdmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 {
-	u32 ecx = vcpu->regs[1];
+	u32 ecx = vcpu->regs[VCPU_REGS_RCX];
 	struct vmx_msr_entry *msr = find_msr_entry(vcpu, ecx);
 
 	if (msr) {
 		/* FIXME: handling of bits 32:63 of rax, rdx */
-		vcpu->regs[0] = msr->data & -1u;
-		vcpu->regs[2] = (msr->data >> 32) & -1u;
+		vcpu->regs[VCPU_REGS_RAX] = msr->data & -1u;
+		vcpu->regs[VCPU_REGS_RDX] = (msr->data >> 32) & -1u;
 		skip_emulated_instruction(vcpu);
 		return 1;
 	}
@@ -849,13 +849,13 @@ static int handle_rdmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 
 static int handle_wrmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 {
-	u32 ecx = vcpu->regs[1];
+	u32 ecx = vcpu->regs[VCPU_REGS_RCX];
 	struct vmx_msr_entry *msr = find_msr_entry(vcpu, ecx);
 
 	if (msr) {
 		/* FIXME: handling of bits 32:63 of rax, rdx */
-		msr->data = (vcpu->regs[0] & -1u)
-			| ((u64)(vcpu->regs[2] & -1u) << 32);
+		msr->data = (vcpu->regs[VCPU_REGS_RAX] & -1u)
+			| ((u64)(vcpu->regs[VCPU_REGS_RDX] & -1u) << 32);
 		skip_emulated_instruction(vcpu);
 		return 1;
 	}
@@ -935,6 +935,8 @@ again:
 	      "pop  %%rbp; pop  %%rdi; pop  %%rsi;"	       \
 	      "pop  %%rdx; pop  %%rbx; pop  %%rax"
 #define LOAD_GUEST_REGS \
+	"mov 128(%3), %%rax \n\t" \
+	"mov %%rax, %%cr2 \n\t"   \
 	"mov  0(%3),  %%rax \n\t" \
 	"mov  24(%3), %%rbx \n\t" \
 	"mov  16(%3), %%rdx \n\t" \
@@ -968,6 +970,8 @@ again:
 	"mov %%r13, 104(%3) \n\t" \
 	"mov %%r14, 112(%3) \n\t" \
 	"mov %%r15, 120(%3) \n\t" \
+	"mov %%cr2, %%rax   \n\t" \
+	"mov %%rax, 128(%3) \n\t" \
 	"mov 0(%%rsp), %3 \n\t"
 #else
 #define SP "esp"
@@ -1047,22 +1051,22 @@ static int hvm_dev_ioctl_get_regs(struct hvm *hvm, struct hvm_regs *regs)
 
 	vcpu_load(vcpu);
 
-	regs->rax = vcpu->regs[0];
-	regs->rbx = vcpu->regs[3];
-	regs->rcx = vcpu->regs[1];
-	regs->rdx = vcpu->regs[2];
-	regs->rsi = vcpu->regs[6];
-	regs->rdi = vcpu->regs[7];
+	regs->rax = vcpu->regs[VCPU_REGS_RAX];
+	regs->rbx = vcpu->regs[VCPU_REGS_RBX];
+	regs->rcx = vcpu->regs[VCPU_REGS_RCX];
+	regs->rdx = vcpu->regs[VCPU_REGS_RDX];
+	regs->rsi = vcpu->regs[VCPU_REGS_RSI];
+	regs->rdi = vcpu->regs[VCPU_REGS_RDI];
 	regs->rsp = vmcs_readl(GUEST_RSP);
-	regs->rbp = vcpu->regs[5];
-	regs->r8 = vcpu->regs[8];
-	regs->r9 = vcpu->regs[9];
-	regs->r10 = vcpu->regs[10];
-	regs->r11 = vcpu->regs[11];
-	regs->r12 = vcpu->regs[12];
-	regs->r13 = vcpu->regs[13];
-	regs->r14 = vcpu->regs[14];
-	regs->r15 = vcpu->regs[15];
+	regs->rbp = vcpu->regs[VCPU_REGS_RBP];
+	regs->r8 = vcpu->regs[VCPU_REGS_R8];
+	regs->r9 = vcpu->regs[VCPU_REGS_R9];
+	regs->r10 = vcpu->regs[VCPU_REGS_R10];
+	regs->r11 = vcpu->regs[VCPU_REGS_R11];
+	regs->r12 = vcpu->regs[VCPU_REGS_R12];
+	regs->r13 = vcpu->regs[VCPU_REGS_R13];
+	regs->r14 = vcpu->regs[VCPU_REGS_R14];
+	regs->r15 = vcpu->regs[VCPU_REGS_R15];
 	
 	regs->rip = vmcs_readl(GUEST_RIP);
 	regs->rflags = vmcs_readl(GUEST_RFLAGS);
@@ -1084,22 +1088,22 @@ static int hvm_dev_ioctl_set_regs(struct hvm *hvm, struct hvm_regs *regs)
 
 	vcpu_load(vcpu);
 
-	vcpu->regs[0] = regs->rax;
-	vcpu->regs[3] = regs->rbx;
-	vcpu->regs[1] = regs->rcx;
-	vcpu->regs[2] = regs->rdx;
-	vcpu->regs[6] = regs->rsi;
-	vcpu->regs[7] = regs->rdi;
+	vcpu->regs[VCPU_REGS_RAX] = regs->rax;
+	vcpu->regs[VCPU_REGS_RBX] = regs->rbx;
+	vcpu->regs[VCPU_REGS_RCX] = regs->rcx;
+	vcpu->regs[VCPU_REGS_RDX] = regs->rdx;
+	vcpu->regs[VCPU_REGS_RSI] = regs->rsi;
+	vcpu->regs[VCPU_REGS_RDI] = regs->rdi;
 	vmcs_writel(GUEST_RSP, regs->rsp);
-	vcpu->regs[5] = regs->rbp;
-	vcpu->regs[8] = regs->r8;
-	vcpu->regs[9] = regs->r9;
-	vcpu->regs[10] = regs->r10;
-	vcpu->regs[11] = regs->r11;
-	vcpu->regs[12] = regs->r12;
-	vcpu->regs[13] = regs->r13;
-	vcpu->regs[14] = regs->r14;
-	vcpu->regs[15] = regs->r15;
+	vcpu->regs[VCPU_REGS_RBP] = regs->rbp;
+	vcpu->regs[VCPU_REGS_R8] = regs->r8;
+	vcpu->regs[VCPU_REGS_R9] = regs->r9;
+	vcpu->regs[VCPU_REGS_R10] = regs->r10;
+	vcpu->regs[VCPU_REGS_R11] = regs->r11;
+	vcpu->regs[VCPU_REGS_R12] = regs->r12;
+	vcpu->regs[VCPU_REGS_R13] = regs->r13;
+	vcpu->regs[VCPU_REGS_R14] = regs->r14;
+	vcpu->regs[VCPU_REGS_R15] = regs->r15;
 	
 	vmcs_writel(GUEST_RIP, regs->rip);
 	vmcs_writel(GUEST_RFLAGS, regs->rflags);
@@ -1160,7 +1164,7 @@ static int hvm_dev_ioctl_get_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 #undef get_dtable
 
 	sregs->cr0 = vcpu->cr0;
-	sregs->cr2 = vcpu->cr2;
+	sregs->cr2 = vcpu->regs[VCPU_REGS_CR2];
 	sregs->cr3 = vcpu->cr3;
 	sregs->cr4 = vcpu->cr4;
 	sregs->cr8 = vcpu->cr8;
@@ -1223,7 +1227,7 @@ static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 #undef set_dtable
 
 	vcpu->cr0 = sregs->cr0;
-	vcpu->cr2 = sregs->cr2;
+	vcpu->regs[VCPU_REGS_CR2] = sregs->cr2;
 	vcpu->cr3 = sregs->cr3;
 	vcpu->cr4 = sregs->cr4;
 	vcpu->cr8 = sregs->cr8;

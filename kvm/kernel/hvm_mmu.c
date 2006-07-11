@@ -445,7 +445,7 @@ static void inject_page_fault(struct hvm_vcpu *vcpu,
 {
 	#define PF_VECTOR 14 
 
-	vcpu->cr2 = addr; 
+	vcpu->regs[VCPU_REGS_CR2] = addr; 
 	vmcs_write32(VM_ENTRY_EXCEPTION_ERROR_CODE, err_code);
 	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD,
 		     PF_VECTOR |
