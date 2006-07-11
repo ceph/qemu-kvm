@@ -27,12 +27,37 @@
 	nop
 	mov $3, %al
 	out %al, $0x80
+
+	cli
+	
+	mov $0x20, %al
+	outb %al, $0xff // inject interrupt
+
+	// no interrupt here (disabled)
+	nop
+	nop
+	mov $4, %al
+	out %al, $0x80
+	nop
+	nop
+	sti
+	out %al, $0x80 // blocked by sti
+	// interrupt here
+	out %al, $0x80 
+
+	nop
+	nop
+	mov $5, %al
+	out %al, $0x80 
+	
 	
 	hlt
 
 irq_handler:
+	pushq %rax
 	mov $1, %al
 	out %al, $0x80
+	popq %rax
 	iretq
 	
 setup_idt_entry:	// %rax: irq %rdx: handler
