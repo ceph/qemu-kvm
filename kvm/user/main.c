@@ -5,6 +5,8 @@
 #include <fcntl.h>
 #include <stdlib.h>
 
+hvm_context_t hvm;
+
 static void test_cpuid(void *opaque, uint64_t *rax, uint64_t *rbx, 
 		       uint64_t *rcx, uint64_t *rdx)
 {
@@ -29,6 +31,10 @@ static void test_inl(void *opaque, uint16_t addr, uint32_t *value)
 static void test_outb(void *opaque, uint16_t addr, uint8_t value)
 {
     printf("outb $0x%x, 0x%x\n", value, addr);
+    if (addr == 0xff) { // irq injector
+	printf("injecting interrupt 0x%x\n", value);
+	hvm_inject_irq(hvm, 0, value);
+    }
 }
 
 static void test_outw(void *opaque, uint16_t addr, uint16_t value)
@@ -71,7 +77,6 @@ static void load_file(void *mem, const char *fname)
 
 int main(int ac, char **av)
 {
-	hvm_context_t hvm;
 	void *vm_mem;
 
 	hvm = hvm_init(&test_callbacks, 0);

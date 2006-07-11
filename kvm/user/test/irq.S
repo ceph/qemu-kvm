@@ -15,7 +15,18 @@
 	lidt idt_descriptor
 
 	int $0x20
-	
+
+	sti
+	nop
+
+	mov $0x20, %al
+	outb %al, $0xff // inject interrupt
+
+	nop
+	nop
+	nop
+	mov $3, %al
+	out %al, $0x80
 	
 	hlt
 
