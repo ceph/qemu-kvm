@@ -355,7 +355,7 @@ static int hvm_dev_release(struct inode *inode, struct file *filp)
 	return 0;
 }
 
-static unsigned long vmcs_readl(unsigned long field)
+unsigned long vmcs_readl(unsigned long field)
 {
 	unsigned long value;
 	
@@ -368,10 +368,6 @@ static inline u16 vmcs_read16(unsigned long field)
 	return vmcs_readl(field);
 }
 
-static inline u32 vmcs_read32(unsigned long field)
-{
-	return vmcs_readl(field);
-}
 
 static inline u64 vmcs_read64(unsigned long field)
 {
@@ -398,10 +394,7 @@ static inline void vmcs_write16(unsigned long field, u16 value)
 	vmcs_writel(field, value);
 }
 
-static inline void vmcs_write32(unsigned long field, u32 value)
-{
-	vmcs_writel(field, value);
-}
+
 
 static inline void vmcs_write64(unsigned long field, u64 value)
 {
@@ -525,6 +518,7 @@ static int hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 		     | CPU_BASED_CR8_STORE_EXITING   /* 20.6.2 */
 		     /* | CPU_BASED_TPR_SHADOW */    /* 20.6.2 */
 		     | CPU_BASED_UNCOND_IO_EXITING   /* 20.6.2 */
+		     | CPU_BASED_INVDPG_EXITING
 		     | 0x401e172    /* reserved, 22.2.1, 20.6.2 */
 		);
 	vmcs_write32(EXCEPTION_BITMAP, 1 << 14); /* want page faults */
@@ -718,7 +712,7 @@ static int handle_exit_exception(struct hvm_vcpu *vcpu,
 		cr2 = vmcs_readl(EXIT_QUALIFICATION);
 		printk("page fault: rip %lx addr %lx\n", rip, cr2);
 
-		if (!vcpu->paging_context->pf(vcpu, cr2, error_code)) {
+		if (!vcpu->paging_context->page_fault(vcpu, cr2, error_code)) {
 			return 1;
 		}
 	}
@@ -757,6 +751,19 @@ static int handle_io(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 	return 0;
 }
 
+
+static int handle_invlpg(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
+{
+	uint64_t address = vmcs_read64(EXIT_QUALIFICATION);
+	int instruction_length = vmcs_read32(VM_EXIT_INSTRUCTION_LEN);
+	printk("handle_invlpg: 0x%llx instruction length %d\n",
+	       address, instruction_length);
+	vcpu->paging_context->inval_page(vcpu, address);
+	vmcs_writel(GUEST_RIP, vmcs_readl(GUEST_RIP) + instruction_length);
+	return 1;
+}
+
+
 static int handle_cr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 {
 	u64 exit_qualification;
@@ -780,9 +787,9 @@ static int handle_cr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 		case 3:
 			vcpu_load_rsp_rip(vcpu);
 			vcpu->cr3 = vcpu->regs[reg];
+			vcpu->paging_context->new_cr3(vcpu);
 			vcpu_put_rsp_rip(vcpu);
 			skip_emulated_instruction(vcpu);
-			/* FIXME: reset paging */
 			return 1;
 		case 4:
 			vcpu_load_rsp_rip(vcpu);
@@ -791,6 +798,16 @@ static int handle_cr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 			skip_emulated_instruction(vcpu);
 			return 1;
 		};
+		break;
+	case 1: /*mov from cr*/
+		switch (cr) {
+		case 3:
+			vcpu_load_rsp_rip(vcpu);
+			vcpu->regs[reg] = vcpu->cr3;
+			vcpu_put_rsp_rip(vcpu);
+			skip_emulated_instruction(vcpu);
+			return 1;
+		}
 		break;
 	default:
 		break;
@@ -850,6 +867,7 @@ static int (*hvm_vmx_exit_handlers[])(struct hvm_vcpu *vcpu,
 	[EXIT_REASON_EXCEPTION_NMI]           = handle_exit_exception,
 	[EXIT_REASON_EXTERNAL_INTERRUPT]      = handle_internal,
 	[EXIT_REASON_IO_INSTRUCTION]          = handle_io,
+	[EXIT_REASON_INVLPG]                  = handle_invlpg,
 	[EXIT_REASON_CR_ACCESS]               = handle_cr,
 	[EXIT_REASON_CPUID]                   = handle_cpuid,
 	[EXIT_REASON_MSR_READ]                = handle_rdmsr,
@@ -1193,10 +1211,12 @@ static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 
 	vcpu->cr0 = sregs->cr0;
 	vcpu->cr2 = sregs->cr2;
-	vcpu->cr3 = sregs->cr3; /* FIXME: flush paging */
+	vcpu->cr3 = sregs->cr3;
 	vcpu->cr4 = sregs->cr4;
 	vcpu->cr8 = sregs->cr8;
 
+	free_paging_context(vcpu);
+	create_paging_context(vcpu);
 	vcpu_put();
 
 	return 0;
@@ -1410,6 +1430,8 @@ static struct notifier_block hvm_reboot_notifier = {
 	.priority = 0,
 };
 
+struct page *hvm_bad_page;
+
 static __init int hvm_init(void)
 {
 	int r = 0;
@@ -1430,13 +1452,19 @@ static __init int hvm_init(void)
 	on_each_cpu(hvm_enable, 0, 0, 1);
 	register_reboot_notifier(&hvm_reboot_notifier);
 
+	if ((hvm_bad_page = alloc_page(GFP_KERNEL)) == NULL)
+		    goto out_free;
+
 	r = misc_register(&hvm_dev);
 	if (r) {
 		printk (KERN_ERR "hvm: misc device register failed\n");
-		goto out_free;
+		goto out_free_bad_page;
 	}
 
 	return r;
+
+out_free_bad_page:
+	__free_page(hvm_bad_page);
 out_free:
 	free_hvm_area();
 out:
@@ -1449,6 +1477,7 @@ static __exit void hvm_exit(void)
 	unregister_reboot_notifier(&hvm_reboot_notifier);
 	on_each_cpu(hvm_disable, 0, 0, 1);
 	free_hvm_area();
+	__free_page(hvm_bad_page);
 }
 
 module_init(hvm_init)

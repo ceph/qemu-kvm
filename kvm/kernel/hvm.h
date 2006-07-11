@@ -34,11 +34,12 @@ struct vmx_msr_entry {
 struct hvm_vcpu;
 
 typedef struct paging_context_s {
-	void (*set_cr3)(struct hvm_vcpu *vcpu);
-	int (*pf)(struct hvm_vcpu *vcpu, uint64_t vaddr, uint32_t err);
-	void (*inval_pg)(struct hvm_vcpu *vcpu);
+	void (*new_cr3)(struct hvm_vcpu *vcpu);
+	int (*page_fault)(struct hvm_vcpu *vcpu, uint64_t vaddr, uint32_t err);
+	void (*inval_page)(struct hvm_vcpu *vcpu, uint64_t addr);
 	void (*free)(struct hvm_vcpu *vcpu);
 	paddr_t root;
+	int root_level;
 }paging_context_t;
 
 struct hvm_vcpu {
@@ -70,6 +71,22 @@ struct hvm {
 
 void hvm_mmu_destroy(struct hvm_vcpu *vcpu);
 int hvm_mmu_init(struct hvm_vcpu *vcpu);
+
+void free_paging_context(struct hvm_vcpu *vcpu);
+int create_paging_context(struct hvm_vcpu *vcpu);
+
 void vmcs_writel(unsigned long field, unsigned long value);
+unsigned long vmcs_readl(unsigned long field);
+
+static inline u32 vmcs_read32(unsigned long field)
+{
+	return vmcs_readl(field);
+}
+
+static inline void vmcs_write32(unsigned long field, u32 value)
+{
+	vmcs_writel(field, value);
+}
+
 
 #endif
