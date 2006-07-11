@@ -197,7 +197,6 @@ void handle_io(hvm_context_t hvm, struct hvm_run *run)
 		first_time = 0;
 	}
 
-	regs.rip += run->instruction_length;
 	ioctl(hvm->fd, HVM_SET_REGS, &regs);
 }
 
@@ -256,7 +255,6 @@ static void handle_cpuid(hvm_context_t hvm, struct hvm_run *run)
 	hvm_get_regs(hvm, run->vcpu, &regs);
 	hvm->callbacks->cpuid(hvm->opaque, 
 			      &regs.rax, &regs.rbx, &regs.rcx, &regs.rdx);
-	regs.rip += run->instruction_length;
 	hvm_set_regs(hvm, run->vcpu, &regs);
 }
 
@@ -266,6 +264,7 @@ int hvm_run(hvm_context_t hvm, int vcpu)
 	int fd = hvm->fd;
 	struct hvm_run hvm_run = {
 		.vcpu = vcpu,
+		.emulated = 0,
 	};
 
 again:
@@ -274,6 +273,7 @@ again:
 		printf("hvm_run: %m\n");
 		exit(1);
 	}
+	hvm_run.emulated = 1;
 	switch (hvm_run.exit_type) {
 	case HVM_EXIT_TYPE_FAIL_ENTRY:
 		printf("hvm_run: failed entry, reason %u\n", 
