@@ -79,6 +79,6 @@ int main(int ac, char **av)
 	if (ac > 1)
 	    load_file(vm_mem, av[1]);
 	hvm_show_regs(hvm, 0);
-	while (1)
-		hvm_run(hvm, 0);
+
+	hvm_run(hvm, 0);
 }
