@@ -104,6 +104,13 @@ struct hvm_translation {
 	__u8  usermode;
 };
 
+/* for HVM_INTERRUPT */
+struct hvm_interrupt {
+	/* in */
+	int vcpu;
+	__u8 irq;
+};
+
 #define HVM_CREATE 1
 #define HVM_RUN    2
 #define HVM_GET_REGS 3
@@ -111,5 +118,6 @@ struct hvm_translation {
 #define HVM_GET_SREGS 5
 #define HVM_SET_SREGS 6
 #define HVM_TRANSLATE 7
+#define HVM_INTERRUPT 8
 
 #endif

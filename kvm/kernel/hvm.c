@@ -519,7 +519,7 @@ static int hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 		     | 0x16   /* reserved, 22.2.1, 20.6.1 */
 		);
 	vmcs_write32(CPU_BASED_VM_EXEC_CONTROL,      
-		     CPU_BASED_VIRTUAL_INTR_PENDING  /* 20.6.2 */
+		     0*CPU_BASED_VIRTUAL_INTR_PENDING  /* 20.6.2 */
 		     | CPU_BASED_HLT_EXITING         /* 20.6.2 */
 		     | CPU_BASED_CR8_LOAD_EXITING    /* 20.6.2 */
 		     | CPU_BASED_CR8_STORE_EXITING   /* 20.6.2 */
@@ -1213,6 +1213,27 @@ static int hvm_dev_ioctl_translate(struct hvm *hvm, struct hvm_translation *tr)
 	return 0;
 }
 
+static int hvm_dev_ioctl_interrupt(struct hvm *hvm, struct hvm_interrupt *irq)
+{
+	struct hvm_vcpu *vcpu;
+
+	printk("set_sregs\n");
+	if (!hvm->created)
+		return -EINVAL;
+	if (irq->vcpu < 0 || irq->vcpu >= hvm->nvcpus)
+		return -EINVAL;
+	vcpu = &hvm->vcpus[irq->vcpu];
+
+	vcpu_load(vcpu);
+
+	/* FIXME: guest not interruptible: queue */
+	/* FIXME: multiple interrupts: queue */
+	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD, irq->irq | (1 << 31));
+
+	vcpu_put();
+	return 0;
+}
+
 static int hvm_dev_ioctl(struct inode *inode, struct file *filp,
                          unsigned int ioctl, unsigned long arg)
 {
@@ -1309,6 +1330,18 @@ static int hvm_dev_ioctl(struct inode *inode, struct file *filp,
 			goto out;
 		r = -EFAULT;
 		if (copy_to_user((void *)arg, &tr, sizeof tr))
+			goto out;
+		r = 0;
+		break;
+	}
+	case HVM_INTERRUPT: {
+		struct hvm_interrupt irq;
+	
+		r = -EFAULT;
+		if (copy_from_user(&irq, (void *)arg, sizeof irq))
+			goto out;
+		r = hvm_dev_ioctl_interrupt(hvm, &irq);
+		if (r)
 			goto out;
 		r = 0;
 		break;
