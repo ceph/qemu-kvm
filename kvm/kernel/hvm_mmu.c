@@ -352,7 +352,7 @@ static uint64_t *fetch_guest64(struct hvm_vcpu *vcpu, uint64_t addr)
 			return &table[index];
 		}
 
-		guest_addr = table[index] & PT64_BASE_ADDR_MASK;
+		guest_addr = gaddr_to_paddr(vcpu, table[index] & PT64_BASE_ADDR_MASK);
 	}
 }
 
