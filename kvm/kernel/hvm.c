@@ -911,6 +911,19 @@ again:
 	vmcs_writel(HOST_GS_BASE, read_msr(MSR_GS_BASE));
 #endif
 
+	if (vcpu->irq_summary) {
+		int word_index = __ffs(vcpu->irq_summary);
+		int bit_index = __ffs(vcpu->irq_pending[word_index]);
+		int irq = word_index * BITS_PER_LONG + bit_index;
+
+		clear_bit(bit_index, &vcpu->irq_pending[word_index]);
+		if (!vcpu->irq_pending[word_index])
+			clear_bit(word_index, &vcpu->irq_summary);
+
+		/* FIXME: guest not interruptible: queue */
+		vmcs_write32(VM_ENTRY_INTR_INFO_FIELD, irq | (1 << 31));
+	}
+
 #ifdef __x86_64__
 #define SP "rsp"
 #define PUSHA "push %%rax; push %%rbx; push %%rdx;" \
@@ -1242,15 +1255,13 @@ static int hvm_dev_ioctl_interrupt(struct hvm *hvm, struct hvm_interrupt *irq)
 		return -EINVAL;
 	if (irq->vcpu < 0 || irq->vcpu >= hvm->nvcpus)
 		return -EINVAL;
+	if (irq->irq < 0 || irq->irq >= 256)
+		return -EINVAL;
 	vcpu = &hvm->vcpus[irq->vcpu];
 
-	vcpu_load(vcpu);
+	set_bit(irq->irq, vcpu->irq_pending);
+	set_bit(irq->irq / BITS_PER_LONG, &vcpu->irq_summary);
 
-	/* FIXME: guest not interruptible: queue */
-	/* FIXME: multiple interrupts: queue */
-	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD, irq->irq | (1 << 31));
-
-	vcpu_put();
 	return 0;
 }
 

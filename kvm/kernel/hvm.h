@@ -47,6 +47,9 @@ struct hvm_vcpu {
 	struct vmcs *vmcs;
 	int   cpu;
 	int   launched;
+	unsigned long irq_summary; /* bit vector: 1 per word in irq_pending */ 
+#define NR_IRQ_WORDS (256 / BITS_PER_LONG)
+	unsigned long irq_pending[NR_IRQ_WORDS];
 	unsigned long regs[16]; /* for rsp needs vcpu_load_rsp_rip() */
 	unsigned long rip;      /* needs vcpu_load_rsp_rip() */
 
