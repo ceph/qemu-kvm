@@ -512,8 +512,7 @@ static int hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 		     | 0x16   /* reserved, 22.2.1, 20.6.1 */
 		);
 	vmcs_write32(CPU_BASED_VM_EXEC_CONTROL,      
-		     0*CPU_BASED_VIRTUAL_INTR_PENDING  /* 20.6.2 */
-		     | CPU_BASED_HLT_EXITING         /* 20.6.2 */
+		     CPU_BASED_HLT_EXITING         /* 20.6.2 */
 		     | CPU_BASED_CR8_LOAD_EXITING    /* 20.6.2 */
 		     | CPU_BASED_CR8_STORE_EXITING   /* 20.6.2 */
 		     /* | CPU_BASED_TPR_SHADOW */    /* 20.6.2 */
@@ -862,6 +861,16 @@ static int handle_wrmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 	return 0;
 }
 
+static int handle_interrupt_window(struct hvm_vcpu *vcpu, 
+				   struct hvm_run *hvm_run)
+{
+	/* Turn off interrupt window reporting. */
+	vmcs_write32(CPU_BASED_VM_EXEC_CONTROL,
+		     vmcs_read32(CPU_BASED_VM_EXEC_CONTROL)
+		     & ~CPU_BASED_VIRTUAL_INTR_PENDING);
+	return 1;
+}
+
 static int (*hvm_vmx_exit_handlers[])(struct hvm_vcpu *vcpu,
 				      struct hvm_run *hvm_eun) = {
 	[EXIT_REASON_EXCEPTION_NMI]           = handle_exit_exception,
@@ -872,6 +881,7 @@ static int (*hvm_vmx_exit_handlers[])(struct hvm_vcpu *vcpu,
 	[EXIT_REASON_CPUID]                   = handle_cpuid,
 	[EXIT_REASON_MSR_READ]                = handle_rdmsr,
 	[EXIT_REASON_MSR_WRITE]               = handle_wrmsr,
+	[EXIT_REASON_PENDING_INTERRUPT]       = handle_interrupt_window,
 };
 
 static const int hvm_vmx_max_exit_handlers =
@@ -904,8 +914,24 @@ static void hvm_do_inject_irq(struct hvm_vcpu *vcpu)
 	if (!vcpu->irq_pending[word_index])
 		clear_bit(word_index, &vcpu->irq_summary);
 
-	/* FIXME: guest not interruptible: queue */
 	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD, irq | (1 << 31));
+}
+
+static void hvm_try_inject_irq(struct hvm_vcpu *vcpu)
+{
+	if ((vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_IF)
+	    && (vmcs_read32(GUEST_INTERRUPTIBILITY_INFO) & 3) == 0)
+		/*
+		 * Interrupts enabled, and not blocked by sti or mov ss. Good.
+		 */
+		hvm_do_inject_irq(vcpu);
+	else
+		/*
+		 * Interrupts blocked.  Wait for unblock.
+		 */
+		vmcs_write32(CPU_BASED_VM_EXEC_CONTROL,
+			     vmcs_read32(CPU_BASED_VM_EXEC_CONTROL)
+			     | CPU_BASED_VIRTUAL_INTR_PENDING);
 }
 
 static int hvm_dev_ioctl_run(struct hvm *hvm, struct hvm_run *hvm_run)
@@ -926,7 +952,7 @@ again:
 #endif
 
 	if (vcpu->irq_summary)
-		hvm_do_inject_irq(vcpu);
+		hvm_try_inject_irq(vcpu);
 
 #ifdef __x86_64__
 #define SP "rsp"
