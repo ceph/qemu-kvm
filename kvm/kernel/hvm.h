@@ -111,5 +111,6 @@ static inline void vmcs_write32(unsigned long field, u32 value)
 	vmcs_writel(field, value);
 }
 
+extern paddr_t hvm_bad_page_addr;
 
 #endif

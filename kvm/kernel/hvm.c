@@ -724,6 +724,9 @@ static int handle_exit_exception(struct hvm_vcpu *vcpu,
 		if (!vcpu->paging_context->page_fault(vcpu, cr2, error_code)) {
 			return 1;
 		}
+		hvm_run->exit_reason = HVM_EXIT_IO_MEM;
+		//TODO: add exit info
+		return 0;
 	}
 	hvm_run->exit_reason = HVM_EXIT_EXCEPTION;
 	hvm_run->ex.exception = intr_info & INTR_INFO_VECTOR_MASK;
@@ -1491,6 +1494,7 @@ static struct notifier_block hvm_reboot_notifier = {
 };
 
 struct page *hvm_bad_page;
+paddr_t hvm_bad_page_addr;
 
 static __init int hvm_init(void)
 {
@@ -1515,6 +1519,7 @@ static __init int hvm_init(void)
 	if ((hvm_bad_page = alloc_page(GFP_KERNEL)) == NULL)
 		    goto out_free;
 
+	hvm_bad_page_addr = page_to_pfn(hvm_bad_page) << PAGE_SHIFT;
 	r = misc_register(&hvm_dev);
 	if (r) {
 		printk (KERN_ERR "hvm: misc device register failed\n");

@@ -2,6 +2,7 @@
 #include <linux/string.h>
 #include <asm/page.h>
 #include <linux/mm.h>
+#include <linux/highmem.h>
 #include <linux/module.h>
 
 #include "vmx.h"
@@ -39,6 +40,7 @@
 
 #define PT64_FIRST_AVILE_BIT 9
 #define PT64_SHADOW_PS_MARK (1 << PT64_FIRST_AVILE_BIT)
+#define PT64_SHADOW_IO_MARK (2 << PT64_FIRST_AVILE_BIT)
 
 #define INVALID_PAGE (~(paddr_t)0)
 #define VALID_PAGE(x) ((x) != INVALID_PAGE)
@@ -57,13 +59,14 @@
 
 #define PFERR_PRESENT_MASK (1 << 0)
 #define PFERR_WRITE_MASK (1 << 1)
-
+#define PFERR_USER_MASK (1 << 2)
 
 #define P_TO_V(address)\
 	page_address(pfn_to_page((address) >> PAGE_SHIFT))
 
 
 #define CR0_PG_MASK (1 << 31)
+#define CR0_WP_MASK (1 << 16)
 #define CR4_PAE_MASK (1 << 5)
 
 #define VM_ENTRY_CONTROLS_IA32E_MASK (1 << 9)
@@ -83,6 +86,11 @@ static int is_64bit(struct hvm_vcpu *vcpu)
 static int is_pae(struct hvm_vcpu *vcpu)
 {
 	return vcpu->cr4 & CR4_PAE_MASK;
+}
+
+static int is_write_protection(struct hvm_vcpu *vcpu)
+{
+	return vcpu->cr0 & CR0_WP_MASK;
 }
 
 
@@ -308,134 +316,55 @@ static inline int is_dirty_pte64(uint64_t pte)
 	return pte & PT64_DIRTY_MASK;
 }
 
-
-static uint64_t *fetch64(struct hvm_vcpu *vcpu, uint64_t addr)
+static inline int is_io_pte64(uint64_t pte)
 {
-	paddr_t  shadow_addr = vcpu->paging_context->root;
-	int level = vcpu->paging_context->root_level;
-
-	for (; ; level--) {
-		uint64_t *table = __va(shadow_addr);
-		int index = PT64_INDEX(addr, level);
-
-		if (level == PT64_PAGE_TABLE_LEVEL) {
-			return &table[index];
-		}
-
-		if (!(table[index] & PT64_PRESENT_MASK)) {
-		     return NULL;   
-		}
-		shadow_addr = table[index] & PT64_BASE_ADDR_MASK;
-	}
-}
-
-
-static uint64_t *fetch_guest64(struct hvm_vcpu *vcpu, uint64_t addr)
-{
-	paddr_t  guest_addr = gaddr_to_paddr(vcpu, vcpu->cr3);
-	int level = vcpu->paging_context->root_level;
-
-	for (; ; level--) {
-		uint64_t *table = P_TO_V(guest_addr);
-		int index = PT64_INDEX(addr, level);
-
-		if (level == PT64_PAGE_TABLE_LEVEL) {
-			return &table[index];
-		}
-
-		if (!is_present_pte64(table[index])) {
-		     return NULL;   
-		}
-
-		if (level == PT64_DIRECTORY_LEVEL && 
-				 (table[index] & PT64_PAGE_SIZE_MASK)) {
-			return &table[index];
-		}
-
-		guest_addr = gaddr_to_paddr(vcpu, table[index] & PT64_BASE_ADDR_MASK);
-	}
-}
-
-
-static inline int paging64_handle_present_pf(struct hvm_vcpu *vcpu, 
-					     uint64_t addr,
-					     int write_fault)
-{
-	uint64_t *shadow_ent;
-	uint64_t *guest_ent;
-
-	
-	ASSERT(fetch64(vcpu, addr) && is_present_pte64(*fetch64(vcpu, addr)));
-
-	if (!write_fault) {
-		return 1;
-	}
-
-	shadow_ent = fetch64(vcpu, addr);
-       
-        if (is_writeble_pte64(*shadow_ent)) {
-		return 1;
-	}
-
-	guest_ent = fetch_guest64(vcpu, addr);
-	if (!guest_ent || !is_present_pte64(*guest_ent)) {
-		*shadow_ent = 0;
-		return 1;
-	}
-
-	if (!is_writeble_pte64(*guest_ent)) {
-		return 1;
-	}
-
-	*shadow_ent |= PT64_WRITABLE_MASK;
-	*guest_ent |= PT64_DIRTY_MASK; 
-
-	return 0;
+	return pte & PT64_SHADOW_IO_MARK;
 }
 
 
 static inline void set_pte64(struct hvm_vcpu *vcpu,
 			     uint64_t *guest_pte,
-			     uint64_t *shadow_pte,
-			     int write_fault)
+			     uint64_t *shadow_pte)
 {
+	paddr_t paddr;
 	ASSERT(*shadow_pte == 0);
 
-	*shadow_pte = gaddr_to_paddr(vcpu, *guest_pte & PT64_BASE_ADDR_MASK);
-	*shadow_pte |= *guest_pte & PT64_PTE_COPY_MASK;
+	paddr = gaddr_to_paddr(vcpu, *guest_pte & PT64_BASE_ADDR_MASK);
+	
+	*shadow_pte = *guest_pte & PT64_PTE_COPY_MASK;
+	*shadow_pte &= ~PT64_WRITABLE_MASK;
 
-	if (!is_dirty_pte64(*guest_pte)) {
-		if (write_fault) {
-			*guest_pte |= PT64_DIRTY_MASK;
-		} else {
-			*shadow_pte &= ~PT64_WRITABLE_MASK;
-		}
+	if (paddr == hvm_bad_page_addr) {
+		*shadow_pte |= *guest_pte & PT64_BASE_ADDR_MASK;
+		*shadow_pte |= PT64_SHADOW_IO_MARK;
+	} else {
+		*shadow_pte |= paddr;
 	}
 }
 
+
 static inline void set_pde64(struct hvm_vcpu *vcpu,
 			     uint64_t *guest_pde,
-			     paddr_t pt_address,
-			     uint32_t index,
-			     int write_fault)
+			     uint64_t *shadow_pte,
+			     int index)
 {
-	uint64_t *page_table = __va(pt_address);
+	paddr_t paddr;
+	paddr_t gaddr;
+	ASSERT(*shadow_pte == 0);
 
-	ASSERT(page_table[index] == 0);
+	gaddr = (*guest_pde & PT64_DIR_BASE_ADDR_MASK) + PAGE_SIZE * index;
+	paddr = gaddr_to_paddr(vcpu, gaddr);
 
-	page_table[index] = gaddr_to_paddr(vcpu, 
-		(*guest_pde & PT64_DIR_BASE_ADDR_MASK) + PAGE_SIZE * index);
-
-	page_table[index] |= (*guest_pde & PT64_NON_PTE_COPY_MASK) | 
+	*shadow_pte = (*guest_pde & PT64_NON_PTE_COPY_MASK) | 
 				((*guest_pde & PT64_DIR_PAT_MASK) >> 
 				 (PT64_DIR_PAT_SHIFT - PT64_PAT_SHIFT));
+	*shadow_pte &= ~PT64_WRITABLE_MASK;
 
-	if (!is_dirty_pte64(*guest_pde)) {
-		if (write_fault) {
-			*guest_pde |= PT64_DIRTY_MASK;
-		} else {
-			page_table[index] &= ~PT64_WRITABLE_MASK;
-		}
+	if (paddr == hvm_bad_page_addr) {
+		*shadow_pte |= gaddr;
+		*shadow_pte |= PT64_SHADOW_IO_MARK;
+	} else {
+		*shadow_pte |= paddr;
 	}
 }
 
@@ -456,81 +385,197 @@ static void inject_page_fault(struct hvm_vcpu *vcpu,
 }
 
 
+typedef struct guets_walker_s {	
+	int level;
+	uint64_t *table;
+} guets_walker_t;
+
+
+static uint64_t *fetch_guest64(struct hvm_vcpu *vcpu,
+			       guets_walker_t *walker, 
+			       int level,
+			       uint64_t addr)
+{
+
+	ASSERT(level > 0  && level <= walker->level);
+
+	for (;;) {
+		int index = PT64_INDEX(addr, walker->level);
+		paddr_t paddr;
+
+		if (level == walker->level || 
+		    !is_present_pte64(walker->table[index]) || 
+		    (walker->level == PT64_DIRECTORY_LEVEL && 
+		    (walker->table[index] & PT64_PAGE_SIZE_MASK))) {
+			return &walker->table[index];
+		}
+
+		paddr = gaddr_to_paddr(vcpu, walker->table[index] & 
+				       PT64_BASE_ADDR_MASK);
+		kunmap_atomic(walker->table, KM_USER0);
+		walker->table = kmap_atomic(pfn_to_page(paddr >> PAGE_SHIFT),
+					    KM_USER0);
+		--walker->level;
+	} 
+}
+
+
+static uint64_t *fetch64(struct hvm_vcpu *vcpu,
+			 uint64_t addr,
+			 guets_walker_t *walker,
+			 int *enomem)
+{
+	paddr_t shadow_addr;
+	int level;
+
+	shadow_addr = vcpu->paging_context->root;
+	level = vcpu->paging_context->root_level;
+
+	for (; ; level--) {
+		uint32_t index = PT64_INDEX(addr, level);
+		uint64_t *shadow_ent = ((uint64_t *)__va(shadow_addr)) + index;
+		uint64_t *gues_ent;
+
+		if (is_present_pte64(*shadow_ent)) {
+			if (level == PT64_PAGE_TABLE_LEVEL) {
+				return shadow_ent;
+			}
+			shadow_addr = *shadow_ent & PT64_BASE_ADDR_MASK;
+			continue;
+		}
+
+		gues_ent = fetch_guest64(vcpu, walker, level, addr);
+
+		if (!is_present_pte64(*gues_ent)) {
+			*enomem = 0;
+			return NULL;
+		}
+
+		*gues_ent |= PT64_ACCESSED_MASK;
+
+		if (level == PT64_PAGE_TABLE_LEVEL) {
+
+			if (walker->level == PT64_DIRECTORY_LEVEL) {
+				set_pde64(vcpu, gues_ent, shadow_ent,
+					  PT64_INDEX(addr, PT64_PAGE_TABLE_LEVEL));
+			} else {
+				ASSERT(walker->level == PT64_PAGE_TABLE_LEVEL)
+				set_pte64(vcpu, gues_ent, shadow_ent);
+			}
+			return shadow_ent;
+		}
+
+		shadow_addr = hvm_mmu_alloc_page(vcpu);
+		if (!VALID_PAGE(shadow_addr)) {
+			*enomem = 1;
+			return NULL;
+		}
+
+		*shadow_ent = shadow_addr | 
+				(*gues_ent & PT64_NON_PTE_COPY_MASK);
+	}
+
+}
+
+
+static inline int fix_write_pf64(struct hvm_vcpu *vcpu,
+				 uint64_t *shadow_ent,
+				 guets_walker_t *walker,
+				 uint64_t addr)
+{
+	uint64_t *guest_ent;
+
+	if (is_writeble_pte64(*shadow_ent)) {
+		return 0;
+	}
+
+	guest_ent = fetch_guest64(vcpu, walker, PT64_PAGE_TABLE_LEVEL, addr);
+
+	if (!is_present_pte64(*guest_ent)) {
+		*shadow_ent = 0;
+		return 0;
+	}
+	
+	if (!is_writeble_pte64(*guest_ent)) {
+		return 0;
+	}
+
+	*shadow_ent |= PT64_WRITABLE_MASK;
+	*guest_ent |= PT64_DIRTY_MASK; 
+
+	return 1;
+}
+
+
+static inline void realase_walker(guets_walker_t *walker)
+{
+	kunmap_atomic(walker->table, KM_USER0);
+}
+
+static int access_test(uint64_t pte, int write, int user)
+{
+	return 1;
+}
 
 static int paging64_page_fault(struct hvm_vcpu *vcpu, uint64_t addr,
 			       uint32_t error_code)
 {
 	int write_fault = error_code & PFERR_WRITE_MASK;
-	paddr_t guest_addr;
-	paddr_t shadow_addr;
-	int level;
+	int pte_present = error_code & PFERR_PRESENT_MASK;
+	guets_walker_t walker;
+	uint64_t *shadow_pte;
+	int write_fix;
 
-	if (error_code & PFERR_PRESENT_MASK) {
-		int inject;
+	for (;;) {
+		int enomem;
 
-		inject = paging64_handle_present_pf(vcpu, addr, write_fault);
-		if (inject) {
-			inject_page_fault(vcpu, addr, error_code);
+		walker.level = vcpu->paging_context->root_level;
+		walker.table = kmap_atomic(
+			pfn_to_page(gaddr_to_paddr(vcpu, vcpu->cr3) >> PAGE_SHIFT),
+					   KM_USER0);
+		shadow_pte = fetch64(vcpu, addr, &walker, &enomem);
+		if (!shadow_pte && enomem) {
+			nonpaging_flush(vcpu);
+			realase_walker(&walker);
+			continue;
 		}
+		break;
+	}
+
+	if (!shadow_pte) {
+		inject_page_fault(vcpu, addr, error_code);
+		realase_walker(&walker);
 		return 0;
 	}
 
-	guest_addr = gaddr_to_paddr(vcpu, vcpu->cr3);
-	shadow_addr = vcpu->paging_context->root;
-	level = vcpu->paging_context->root_level;
-
-	for (; ; level--) {
-		uint32_t index = PT64_INDEX(addr,level);
-		uint64_t *guest_table;
-		uint64_t *shadow_table;
-
-		guest_table = P_TO_V(guest_addr);
-
-		if (!(guest_table[index] & PT64_PRESENT_MASK)) {
-			inject_page_fault(vcpu, addr, error_code);
-			return 0;
-		}
-		guest_table[index] |= PT64_ACCESSED_MASK;
-
-		shadow_table = __va(shadow_addr);
-
-		if (level == PT64_PAGE_TABLE_LEVEL) {
-			set_pte64(vcpu,
-				  &guest_table[index], 
-				  &shadow_table[index], 
-				  write_fault);
-			return 0;
-		}
-
-		if (!(shadow_table[index] & PT64_PRESENT_MASK)) {
-			shadow_addr = hvm_mmu_alloc_page(vcpu);
-			if (!VALID_PAGE(shadow_addr)) {
-				nonpaging_flush(vcpu);
-				return paging64_page_fault(vcpu, addr, 
-							    error_code);
-			}
-			shadow_table[index] = shadow_addr | 
-				(guest_table[index] & PT64_NON_PTE_COPY_MASK);
-
-		} else {
-		     shadow_addr = shadow_table[index] & PT64_BASE_ADDR_MASK;   
-		}
-
-		if (level == PT64_DIRECTORY_LEVEL && 
-				 (guest_table[index] & PT64_PAGE_SIZE_MASK)) {
-			shadow_table[index] |= PT64_SHADOW_PS_MARK;
-			set_pde64(vcpu,
-				  &guest_table[index], 
-				  shadow_addr,
-				  PT64_INDEX(addr, PT64_PAGE_TABLE_LEVEL),
-				  write_fault);
-			return 0;
-		}
-
-		guest_addr = 
-			gaddr_to_paddr(vcpu,
-				       guest_table[index] & PT64_BASE_ADDR_MASK);
+	if (write_fault) {
+		write_fix = fix_write_pf64(vcpu, shadow_pte, &walker, addr);
+	} else {
+		write_fix = 0;
 	}
+
+	realase_walker(&walker);
+
+	if (is_io_pte64(*shadow_pte)) {
+		if (access_test(*shadow_pte, write_fault,
+				error_code | PFERR_USER_MASK ) ) {
+			
+			paddr_t io_addr = *shadow_pte & PT64_BASE_ADDR_MASK;
+			printk("paging64_page_fault: io work"
+			       " v 0x%llx p 0x%llx\n", addr, io_addr); 
+			return 1;
+		      
+		}
+		printk("paging64_page_fault: io work, no access\n");
+		inject_page_fault(vcpu, addr,
+					error_code | PFERR_PRESENT_MASK);
+		return 0;
+	}
+
+	if (pte_present && !write_fix) {
+		inject_page_fault(vcpu, addr, error_code);     
+	}
+	return 0;	
 }
 
 
@@ -582,6 +627,8 @@ static int create_paging64_context(struct hvm_vcpu *vcpu)
 	if (!context) {
 		return -ENOMEM;
 	}
+
+        ASSERT(is_write_protection(vcpu));
 
 	context->new_cr3 = paging64_new_cr3;
 	context->page_fault = paging64_page_fault;
