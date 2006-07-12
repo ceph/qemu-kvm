@@ -961,8 +961,10 @@ again:
 	vmcs_writel(HOST_GS_BASE, read_msr(MSR_GS_BASE));
 #endif
 
-	if (hvm_run->emulated)
+	if (hvm_run->emulated) {
 		skip_emulated_instruction(vcpu);
+		hvm_run->emulated = 0;
+	}
 
 	if (vcpu->irq_summary)
 		hvm_try_inject_irq(vcpu);
