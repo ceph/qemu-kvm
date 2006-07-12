@@ -359,7 +359,7 @@ unsigned long vmcs_readl(unsigned long field)
 {
 	unsigned long value;
 	
-	asm ( "vmread %1, %0" : "=g"(value) : "r"(field) : "cc" );
+	asm volatile ( "vmread %1, %0" : "=g"(value) : "r"(field) : "cc" );
 	return value;
 }
 
@@ -382,8 +382,8 @@ void vmcs_writel(unsigned long field, unsigned long value)
 {
 	u8 error;
 
-	asm ( "vmwrite %1, %2; setna %0" 
-	      : "=g"(error) : "r"(value), "r"(field) : "cc" );
+	asm volatile ( "vmwrite %1, %2; setna %0" 
+		       : "=g"(error) : "r"(value), "r"(field) : "cc" );
 	if (error)
 		printk(KERN_ERR "vmwrite error: reg %lx value %lx\n",
 		       field, value);
@@ -1063,7 +1063,7 @@ again:
 	      : "=g" (fail) 
 	      : "r"(vcpu->launched), "r"((unsigned long)HOST_RSP),
 		"c"(vcpu->regs)
-	      : "cc" );
+	      : "cc", "memory" );
 
 	hvm_run->exit_type = 0;
 	if (fail) {
