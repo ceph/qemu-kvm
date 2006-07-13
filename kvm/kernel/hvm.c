@@ -728,6 +728,10 @@ static int handle_exit_exception(struct hvm_vcpu *vcpu,
 		//TODO: add exit info
 		return 0;
 	}
+	if ((intr_info & (INTR_INFO_INTR_TYPE_MASK | INTR_INFO_VECTOR_MASK)) == (INTR_TYPE_EXCEPTION | 1)) {
+		hvm_run->exit_reason = HVM_EXIT_DEBUG;
+		return 0;
+	}
 	hvm_run->exit_reason = HVM_EXIT_EXCEPTION;
 	hvm_run->ex.exception = intr_info & INTR_INFO_VECTOR_MASK;
 	hvm_run->ex.error_code = error_code;
@@ -947,6 +951,16 @@ static void hvm_try_inject_irq(struct hvm_vcpu *vcpu)
 			     | CPU_BASED_VIRTUAL_INTR_PENDING);
 }
 
+static void hvm_guest_debug_pre(struct hvm_vcpu *vcpu)
+{
+	struct hvm_guest_debug *dbg = &vcpu->guest_debug;
+
+	set_debugreg(dbg->bp[0], 0);
+	set_debugreg(dbg->bp[1], 1);
+	set_debugreg(dbg->bp[2], 2);
+	set_debugreg(dbg->bp[3], 3);
+}
+
 static int hvm_dev_ioctl_run(struct hvm *hvm, struct hvm_run *hvm_run)
 {
 	struct hvm_vcpu *vcpu;
@@ -971,6 +985,9 @@ again:
 
 	if (vcpu->irq_summary)
 		hvm_try_inject_irq(vcpu);
+
+	if (vcpu->guest_debug.enabled)
+		hvm_guest_debug_pre(vcpu);
 
 #ifdef __x86_64__
 #define SP "rsp"
@@ -1317,6 +1334,48 @@ static int hvm_dev_ioctl_interrupt(struct hvm *hvm, struct hvm_interrupt *irq)
 	return 0;
 }
 
+static int hvm_dev_ioctl_debug_guest(struct hvm *hvm, 
+				     struct hvm_debug_guest *dbg)
+{
+	struct hvm_vcpu *vcpu;
+	unsigned long dr7 = 0x400;
+	u32 exception_bitmap;
+
+	if (!hvm->created)
+		return -EINVAL;
+	if (dbg->vcpu < 0 || dbg->vcpu >= hvm->nvcpus)
+		return -EINVAL;
+	vcpu = &hvm->vcpus[dbg->vcpu];
+
+	vcpu_load(vcpu);
+
+	exception_bitmap = vmcs_read32(EXCEPTION_BITMAP);
+
+	vcpu->guest_debug.enabled = dbg->enabled;
+	if (vcpu->guest_debug.enabled) {
+		int i;
+
+		dr7 |= 0x200;  /* exact */
+		for (i = 0; i < 4; ++i) {
+			if (!dbg->breakpoints[i].enabled)
+				continue;
+			vcpu->guest_debug.bp[i] = dbg->breakpoints[i].address;
+			dr7 |= 2 << (i*2);    /* global enable */
+			dr7 |= 0 << (i*4+16); /* execution breakpoint */
+		}
+
+		exception_bitmap |= (1u << 1);  /* Trap debug exceptions */
+	} else
+		exception_bitmap &= ~(1u << 1); /* Ignore debug exceptions */
+
+	vmcs_write32(EXCEPTION_BITMAP, exception_bitmap);
+	vmcs_writel(GUEST_DR7, dr7);
+
+	vcpu_put();
+
+	return 0;
+}
+
 static int hvm_dev_ioctl(struct inode *inode, struct file *filp,
                          unsigned int ioctl, unsigned long arg)
 {
@@ -1424,6 +1483,18 @@ static int hvm_dev_ioctl(struct inode *inode, struct file *filp,
 		if (copy_from_user(&irq, (void *)arg, sizeof irq))
 			goto out;
 		r = hvm_dev_ioctl_interrupt(hvm, &irq);
+		if (r)
+			goto out;
+		r = 0;
+		break;
+	}
+	case HVM_DEBUG_GUEST: {
+		struct hvm_debug_guest dbg;
+	
+		r = -EFAULT;
+		if (copy_from_user(&dbg, (void *)arg, sizeof dbg))
+			goto out;
+		r = hvm_dev_ioctl_debug_guest(hvm, &dbg);
 		if (r)
 			goto out;
 		r = 0;

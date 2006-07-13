@@ -17,6 +17,7 @@ enum hvm_exit_reason {
 	HVM_EXIT_IO,
 	HVM_EXIT_CPUID,
 	HVM_EXIT_IO_MEM,
+	HVM_EXIT_DEBUG,
 };
 
 /* for HVM_RUN */
@@ -52,6 +53,8 @@ struct hvm_run {
 				__u32 value;
 			};
 		} io;
+		struct {
+		} debug;
 	};
 };
 
@@ -114,6 +117,19 @@ struct hvm_interrupt {
 	__u8 irq;
 };
 
+struct hvm_breakpoint {
+	__u32 enabled;
+	__u64 address;
+};
+
+/* for HVM_DEBUG_GUEST */
+struct hvm_debug_guest {
+	/* int */
+	int vcpu;
+	int enabled;
+	struct hvm_breakpoint breakpoints[4];
+};
+
 #define HVM_CREATE 1
 #define HVM_RUN    2
 #define HVM_GET_REGS 3
@@ -122,5 +138,6 @@ struct hvm_interrupt {
 #define HVM_SET_SREGS 6
 #define HVM_TRANSLATE 7
 #define HVM_INTERRUPT 8
+#define HVM_DEBUG_GUEST 9
 
 #endif

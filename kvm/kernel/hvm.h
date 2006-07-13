@@ -42,6 +42,11 @@ typedef struct paging_context_s {
 	int root_level;
 }paging_context_t;
 
+struct hvm_guest_debug {
+	int enabled;
+	unsigned long bp[4];
+};
+
 enum {
 	VCPU_REGS_RAX = 0,
 	VCPU_REGS_RCX = 1,
@@ -82,6 +87,8 @@ struct hvm_vcpu {
 	struct list_head free_pages;
 	page_link_t page_link_buf[HVM_NUM_MMU_PAGES];
 	paging_context_t *paging_context;
+
+	struct hvm_guest_debug guest_debug;
 };
 
 struct hvm {
