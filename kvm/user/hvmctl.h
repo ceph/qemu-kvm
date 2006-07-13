@@ -17,6 +17,7 @@ struct hvm_callbacks {
     void (*outb)(void *opaque, uint16_t addr, uint8_t data);
     void (*outw)(void *opaque, uint16_t addr, uint16_t data);
     void (*outl)(void *opaque, uint16_t addr, uint32_t data);
+    void (*debug)(void *opaque, int vcpu);
 };
 
 hvm_context_t hvm_init(struct hvm_callbacks *callbacks,
@@ -30,6 +31,7 @@ int hvm_set_regs(hvm_context_t, int vcpu, struct hvm_regs *regs);
 int hvm_get_sregs(hvm_context_t, int vcpu, struct hvm_sregs *regs);
 int hvm_set_sregs(hvm_context_t, int vcpu, struct hvm_sregs *regs);
 int hvm_inject_irq(hvm_context_t, int vcpu, unsigned irq);
+int hvm_guest_debug(hvm_context_t, int vcpu, struct hvm_debug_guest *dbg);
 void hvm_show_regs(hvm_context_t, int vcpu);
 
 #endif

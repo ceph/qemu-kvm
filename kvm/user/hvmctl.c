@@ -200,6 +200,11 @@ void handle_io(hvm_context_t hvm, struct hvm_run *run)
 	ioctl(hvm->fd, HVM_SET_REGS, &regs);
 }
 
+void handle_debug(hvm_context_t hvm, struct hvm_run *run)
+{
+	hvm->callbacks->debug(hvm->opaque, run->vcpu);
+}
+
 int hvm_get_regs(hvm_context_t hvm, int vcpu, struct hvm_regs *regs)
 {
     regs->vcpu = vcpu;
@@ -292,6 +297,9 @@ again:
 		case HVM_EXIT_CPUID:
 			handle_cpuid(hvm, &hvm_run);
 			goto again;
+		case HVM_EXIT_DEBUG:
+			handle_debug(hvm, &hvm_run);
+			goto again;
 		default:
 			printf("unhandled vm exit: %d\n", hvm_run.exit_reason);
 			break;
@@ -309,4 +317,11 @@ int hvm_inject_irq(hvm_context_t hvm, int vcpu, unsigned irq)
 	intr.vcpu = vcpu;
 	intr.irq = irq;
 	return ioctl(hvm->fd, HVM_INTERRUPT, &intr);
+}
+
+int hvm_guest_debug(hvm_context_t hvm, int vcpu, struct hvm_debug_guest *dbg)
+{
+	dbg->vcpu = vcpu;
+
+	return ioctl(hvm->fd, HVM_DEBUG_GUEST, dbg);
 }
