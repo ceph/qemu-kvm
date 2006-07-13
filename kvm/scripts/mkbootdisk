@@ -1,0 +1,23 @@
+#!/bin/sh
+
+set -e
+
+kernel="$1"
+
+[[ -f "$kernel" ]] || { echo need kernel; exit 1; }
+
+dd < /dev/zero > /tmp/boot.img bs=1M count=10
+mkfs -t vfat /tmp/boot.img
+
+mount -o loop /tmp/boot.img /mnt
+
+cp "$kernel" /mnt/kernel
+
+cat <<EOF > /mnt/SYSLINUX.CFG
+DEFAULT kernel
+EOF
+
+umount /mnt
+
+syslinux /tmp/boot.img
+
