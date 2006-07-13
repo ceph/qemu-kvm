@@ -1042,6 +1042,10 @@ int cpu_breakpoint_insert(CPUState *env, target_ulong pc)
     if (env->nb_breakpoints >= MAX_BREAKPOINTS)
         return -1;
     env->breakpoints[env->nb_breakpoints++] = pc;
+
+#ifdef USE_KVM
+    kvm_update_debugger(env);
+#endif
     
     breakpoint_invalidate(env, pc);
     return 0;
@@ -1065,6 +1069,10 @@ int cpu_breakpoint_remove(CPUState *env, target_ulong pc)
     if (i < env->nb_breakpoints)
       env->breakpoints[i] = env->breakpoints[env->nb_breakpoints];
 
+#ifdef USE_KVM
+    kvm_update_debugger(env);
+#endif
+    
     breakpoint_invalidate(env, pc);
     return 0;
 #else

@@ -8,6 +8,7 @@
 
 #include "qemu-kvm.h"
 #include <hvmctl.h>
+#include <string.h>
 
 hvm_context_t hvm_context;
 
@@ -174,8 +175,19 @@ static void kvm_cpuid(void *opaque, uint64_t *rax, uint64_t *rbx,
     env = saved_env;
 }
 
+static void kvm_debug(void *opaque, int vcpu)
+{
+    CPUState **envs = opaque;
+
+    env = envs[0];
+    save_regs(env);
+    env->exception_index = EXCP_DEBUG;
+    cpu_loop_exit();
+}
+
 static struct hvm_callbacks qemu_kvm_ops = {
     .cpuid = kvm_cpuid,
+    .debug = kvm_debug,
 };
 
 void kvm_init()
@@ -183,5 +195,22 @@ void kvm_init()
     hvm_context = hvm_init(&qemu_kvm_ops, saved_env);
     hvm_create(hvm_context, phys_ram_size, &phys_ram_base);
 }
+
+int kvm_update_debugger(CPUState *env)
+{
+    struct hvm_debug_guest dbg;
+    int i;
+
+    memset(&dbg, 0, sizeof dbg);
+    if (env->nb_breakpoints) {
+	dbg.enabled = 1;
+	for (i = 0; i < 4 && i < env->nb_breakpoints; ++i) {
+	    dbg.breakpoints[i].enabled = 1;
+	    dbg.breakpoints[i].address = env->breakpoints[i];
+	}
+    }
+    return hvm_guest_debug(hvm_context, 0, &dbg);
+}
+
 
 #endif
