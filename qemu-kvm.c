@@ -19,12 +19,10 @@ int kvm_is_ok(CPUState *env)
     return (env->segs[R_CS].flags & DESC_L_MASK) != 0;
 }
 
-int kvm_cpu_exec(CPUState *env)
+static void load_regs(CPUState *env)
 {
     struct hvm_regs regs;
     struct hvm_sregs sregs;
-
-    printf("exec into rip %lx\n", env->eip);
 
     /* hack: save env */
     if (!saved_env[0])
@@ -80,8 +78,12 @@ int kvm_cpu_exec(CPUState *env)
     sregs.cr8 = 0;
 
     hvm_set_sregs(hvm_context, 0, &sregs);
+}
 
-    hvm_run(hvm_context, 0);
+static void save_regs(CPUState *env)
+{
+    struct hvm_regs regs;
+    struct hvm_sregs sregs;
 
     hvm_get_regs(hvm_context, 0, &regs);
 
@@ -131,8 +133,20 @@ int kvm_cpu_exec(CPUState *env)
     env->cr[2] = sregs.cr2;
     env->cr[3] = sregs.cr3;
     env->cr[4] = sregs.cr4;
+}
 
-    printf("exec returned rip %lx\n", regs.rip);
+int kvm_cpu_exec(CPUState *env)
+{
+
+    printf("exec into rip %lx\n", env->eip);
+
+    load_regs(env);
+
+    hvm_run(hvm_context, 0);
+
+    save_regs(env);
+
+    printf("exec returned rip %lx\n", env->eip);
 
     exit(0);
 
