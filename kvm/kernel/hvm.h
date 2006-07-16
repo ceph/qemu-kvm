@@ -45,6 +45,7 @@ typedef struct paging_context_s {
 struct hvm_guest_debug {
 	int enabled;
 	unsigned long bp[4];
+	int singlestep;
 };
 
 enum {

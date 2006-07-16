@@ -129,6 +129,7 @@ struct hvm_debug_guest {
 	int vcpu;
 	int enabled;
 	struct hvm_breakpoint breakpoints[4];
+	int singlestep;
 };
 
 #define HVM_CREATE                _IOW( 'q', 1, struct hvm_create)

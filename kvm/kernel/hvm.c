@@ -959,6 +959,14 @@ static void hvm_guest_debug_pre(struct hvm_vcpu *vcpu)
 	set_debugreg(dbg->bp[1], 1);
 	set_debugreg(dbg->bp[2], 2);
 	set_debugreg(dbg->bp[3], 3);
+
+	if (dbg->singlestep) {
+		unsigned long flags;
+
+		flags = vmcs_readl(GUEST_RFLAGS);
+		flags |= X86_EFLAGS_TF | X86_EFLAGS_RF;
+		vmcs_writel(GUEST_RFLAGS, flags);
+	}
 }
 
 static int hvm_dev_ioctl_run(struct hvm *hvm, struct hvm_run *hvm_run)
@@ -1365,8 +1373,12 @@ static int hvm_dev_ioctl_debug_guest(struct hvm *hvm,
 		}
 
 		exception_bitmap |= (1u << 1);  /* Trap debug exceptions */
-	} else
+
+		vcpu->guest_debug.singlestep = dbg->singlestep;
+	} else {
 		exception_bitmap &= ~(1u << 1); /* Ignore debug exceptions */
+		vcpu->guest_debug.singlestep = 0;
+	}
 
 	vmcs_write32(EXCEPTION_BITMAP, exception_bitmap);
 	vmcs_writel(GUEST_DR7, dr7);
