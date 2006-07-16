@@ -185,9 +185,46 @@ static void kvm_debug(void *opaque, int vcpu)
     cpu_loop_exit();
 }
 
+static void kvm_inb(void *opaque, uint16_t addr, uint8_t *data)
+{
+    *data = cpu_inb(0, addr);
+}
+
+static void kvm_inw(void *opaque, uint16_t addr, uint16_t *data)
+{
+    *data = cpu_inw(0, addr);
+}
+
+static void kvm_inl(void *opaque, uint16_t addr, uint32_t *data)
+{
+    *data = cpu_inl(0, addr);
+}
+
+static void kvm_outb(void *opaque, uint16_t addr, uint8_t data)
+{
+    cpu_outb(0, addr, data);
+}
+
+static void kvm_outw(void *opaque, uint16_t addr, uint16_t data)
+{
+    cpu_outw(0, addr, data);
+}
+
+static void kvm_outl(void *opaque, uint16_t addr, uint32_t data)
+{
+    printf("outl %x\n", addr);
+    cpu_outl(0, addr, data);
+}
+
 static struct hvm_callbacks qemu_kvm_ops = {
     .cpuid = kvm_cpuid,
     .debug = kvm_debug,
+    .inb   = kvm_inb,
+    .inw   = kvm_inw,
+    .inl   = kvm_inl,
+    .outb  = kvm_outb,
+    .outw  = kvm_outw,
+    .outl  = kvm_outl,
 };
 
 void kvm_init()
