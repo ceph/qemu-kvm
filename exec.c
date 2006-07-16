@@ -1091,6 +1091,9 @@ void cpu_single_step(CPUState *env, int enabled)
         /* XXX: only flush what is necessary */
         tb_flush(env);
     }
+#ifdef USE_KVM
+    kvm_update_debugger(env);
+#endif
 #endif
 }
 

@@ -202,12 +202,13 @@ int kvm_update_debugger(CPUState *env)
     int i;
 
     memset(&dbg, 0, sizeof dbg);
-    if (env->nb_breakpoints) {
+    if (env->nb_breakpoints || env->singlestep_enabled) {
 	dbg.enabled = 1;
 	for (i = 0; i < 4 && i < env->nb_breakpoints; ++i) {
 	    dbg.breakpoints[i].enabled = 1;
 	    dbg.breakpoints[i].address = env->breakpoints[i];
 	}
+	dbg.singlestep = env->singlestep_enabled;
     }
     return hvm_guest_debug(hvm_context, 0, &dbg);
 }
