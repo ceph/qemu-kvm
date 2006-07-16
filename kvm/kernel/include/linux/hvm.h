@@ -2,6 +2,7 @@
 #define __LINUX_HVM_H
 
 #include <asm/types.h>
+#include <linux/ioctl.h>
 
 /* for HVM_CREATE */
 struct hvm_create {
@@ -130,14 +131,14 @@ struct hvm_debug_guest {
 	struct hvm_breakpoint breakpoints[4];
 };
 
-#define HVM_CREATE 1
-#define HVM_RUN    2
-#define HVM_GET_REGS 3
-#define HVM_SET_REGS 4
-#define HVM_GET_SREGS 5
-#define HVM_SET_SREGS 6
-#define HVM_TRANSLATE 7
-#define HVM_INTERRUPT 8
-#define HVM_DEBUG_GUEST 9
+#define HVM_CREATE                _IOW( 'q', 1, struct hvm_create)
+#define HVM_RUN                   _IOWR('q', 2, struct hvm_run)
+#define HVM_GET_REGS              _IOWR('q', 3, struct hvm_regs)
+#define HVM_SET_REGS              _IOW( 'q', 4, struct hvm_regs)
+#define HVM_GET_SREGS             _IOWR('q', 5, struct hvm_sregs)
+#define HVM_SET_SREGS             _IOW( 'q', 6, struct hvm_sregs)
+#define HVM_TRANSLATE             _IOWR('q', 7, struct hvm_translation)
+#define HVM_INTERRUPT             _IOW( 'q', 8, struct hvm_interrupt)
+#define HVM_DEBUG_GUEST           _IOW( 'q', 9, struct hvm_debug_guest)
 
 #endif
