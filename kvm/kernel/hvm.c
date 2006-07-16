@@ -1144,6 +1144,12 @@ static int hvm_dev_ioctl_get_regs(struct hvm *hvm, struct hvm_regs *regs)
 	regs->rip = vmcs_readl(GUEST_RIP);
 	regs->rflags = vmcs_readl(GUEST_RFLAGS);
 
+	/*
+	 * Don't leak debug flags in case they were set for guest debugging
+	 */
+	if (vcpu->guest_debug.enabled && vcpu->guest_debug.singlestep)
+		regs->rflags &= ~(X86_EFLAGS_TF | X86_EFLAGS_RF);
+
 	vcpu_put();
 
 	return 0;
@@ -1348,6 +1354,7 @@ static int hvm_dev_ioctl_debug_guest(struct hvm *hvm,
 	struct hvm_vcpu *vcpu;
 	unsigned long dr7 = 0x400;
 	u32 exception_bitmap;
+	int old_singlestep;
 
 	if (!hvm->created)
 		return -EINVAL;
@@ -1358,6 +1365,7 @@ static int hvm_dev_ioctl_debug_guest(struct hvm *hvm,
 	vcpu_load(vcpu);
 
 	exception_bitmap = vmcs_read32(EXCEPTION_BITMAP);
+	old_singlestep = vcpu->guest_debug.singlestep;
 
 	vcpu->guest_debug.enabled = dbg->enabled;
 	if (vcpu->guest_debug.enabled) {
@@ -1378,6 +1386,14 @@ static int hvm_dev_ioctl_debug_guest(struct hvm *hvm,
 	} else {
 		exception_bitmap &= ~(1u << 1); /* Ignore debug exceptions */
 		vcpu->guest_debug.singlestep = 0;
+	}
+
+	if (old_singlestep && !vcpu->guest_debug.singlestep) {
+		unsigned long flags;
+
+		flags = vmcs_readl(GUEST_RFLAGS);
+		flags &= ~(X86_EFLAGS_TF | X86_EFLAGS_RF);
+		vmcs_writel(GUEST_RFLAGS, flags);
 	}
 
 	vmcs_write32(EXCEPTION_BITMAP, exception_bitmap);
