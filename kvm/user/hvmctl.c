@@ -263,6 +263,11 @@ static void handle_cpuid(hvm_context_t hvm, struct hvm_run *run)
 	hvm_set_regs(hvm, run->vcpu, &regs);
 }
 
+static void handle_io_mem(hvm_context_t hvm, struct hvm_run *hvm_run)
+{
+	hvm->callbacks->mmio(hvm->opaque);
+}
+
 int hvm_run(hvm_context_t hvm, int vcpu)
 {
 	int r;
@@ -299,6 +304,9 @@ again:
 			goto again;
 		case HVM_EXIT_DEBUG:
 			handle_debug(hvm, &hvm_run);
+			goto again;
+		case HVM_EXIT_IO_MEM:
+			handle_io_mem(hvm, &hvm_run);
 			goto again;
 		default:
 			printf("unhandled vm exit: %d\n", hvm_run.exit_reason);

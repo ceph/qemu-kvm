@@ -18,6 +18,7 @@ struct hvm_callbacks {
     void (*outw)(void *opaque, uint16_t addr, uint16_t data);
     void (*outl)(void *opaque, uint16_t addr, uint32_t data);
     void (*debug)(void *opaque, int vcpu);
+    void (*mmio)(void *opaque);
 };
 
 hvm_context_t hvm_init(struct hvm_callbacks *callbacks,
