@@ -719,7 +719,6 @@ static int handle_exit_exception(struct hvm_vcpu *vcpu,
 	       intr_info, error_code);
 	if ((intr_info & (INTR_INFO_INTR_TYPE_MASK | INTR_INFO_VECTOR_MASK)) == (INTR_TYPE_EXCEPTION | 14)) {
 		cr2 = vmcs_readl(EXIT_QUALIFICATION);
-		printk("page fault: rip %lx addr %lx\n", rip, cr2);
 
 		if (!vcpu->paging_context->page_fault(vcpu, cr2, error_code)) {
 			return 1;

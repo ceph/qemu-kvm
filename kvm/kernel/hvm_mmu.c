@@ -14,14 +14,20 @@
 		printk("assertion failed %s:%d: %s\n", __FILE__, __LINE__, #x);\
 	}
 
+#define FALSE 0
+#define TRUE 1
+
 #define PT64_ENT_PER_PAGE 512
 
 #define PT64_PRESENT_MASK (1ULL << 0)
 #define PT64_WRITABLE_MASK (1ULL << 1)
 #define PT64_USER_MASK (1ULL << 2)
+#define PT64_PWT_MASK (1ULL << 3)
+#define PT64_PCD_MASK (1ULL << 4)
 #define PT64_ACCESSED_MASK (1ULL << 5)
 #define PT64_DIRTY_MASK (1ULL << 6)
 #define PT64_PAGE_SIZE_MASK (1ULL << 7)
+#define PT64_PAT_MASK (1ULL << 7)
 #define PT64_GLOBAL_MASK (1ULL << 8)
 
 #define PT64_PAT_SHIFT 7
@@ -35,12 +41,27 @@
 #define PT64_BASE_ADDR_MASK (((1ULL << 52) - 1) & PAGE_MASK)
 #define PT64_DIR_BASE_ADDR_MASK (PT64_BASE_ADDR_MASK & ~PT64_DIR_PAT_MASK)
 
-#define PT64_PTE_COPY_MASK ((1ULL << 8) - 1)
-#define PT64_NON_PTE_COPY_MASK ((1ULL << 7) - 1)
+#define PT64_PTE_COPY_MASK \
+	(PT64_PRESENT_MASK | PT64_PWT_MASK | PT64_PCD_MASK | \
+	PT64_ACCESSED_MASK | PT64_DIRTY_MASK | PT64_PAT_MASK | PT64_GLOBAL_MASK)
 
-#define PT64_FIRST_AVILE_BIT 9
-#define PT64_SHADOW_PS_MARK (1 << PT64_FIRST_AVILE_BIT)
-#define PT64_SHADOW_IO_MARK (2 << PT64_FIRST_AVILE_BIT)
+#define PT64_NON_PTE_COPY_MASK \
+	(PT64_PRESENT_MASK | PT64_PWT_MASK | PT64_PCD_MASK | \
+	PT64_ACCESSED_MASK | PT64_DIRTY_MASK)
+
+#define PT64_FIRST_AVILE_BITS_SHIFT 9
+#define PT64_SECOND_AVILE_BITS_SHIFT 52
+
+#define PT64_SHADOW_PS_MARK (1ULL << PT64_FIRST_AVILE_BITS_SHIFT)
+#define PT64_SHADOW_IO_MARK (1ULL << PT64_FIRST_AVILE_BITS_SHIFT)
+
+#define PT64_SHADOW_WRITABLE_SHIFT (PT64_FIRST_AVILE_BITS_SHIFT + 1)
+#define PT64_SHADOW_WRITABLE_MASK (1ULL << PT64_SHADOW_WRITABLE_SHIFT)
+
+#define PT64_SHADOW_USER_SHIFT (PT64_FIRST_AVILE_BITS_SHIFT + 2)
+#define PT64_SHADOW_USER_MASK (1ULL << (PT64_SHADOW_USER_SHIFT))
+
+#define PT64_SHADOW_BITS_SHIFT PT64_SHADOW_WRITABLE_SHIFT
 
 #define INVALID_PAGE (~(paddr_t)0)
 #define VALID_PAGE(x) ((x) != INVALID_PAGE)
@@ -68,6 +89,7 @@
 #define CR0_PG_MASK (1 << 31)
 #define CR0_WP_MASK (1 << 16)
 #define CR4_PAE_MASK (1 << 5)
+#define CR4_PGE_MASK (1 << 7)
 
 #define VM_ENTRY_CONTROLS_IA32E_MASK (1 << 9)
 
@@ -87,6 +109,7 @@ static int is_pae(struct hvm_vcpu *vcpu)
 {
 	return vcpu->cr4 & CR4_PAE_MASK;
 }
+
 
 static int is_write_protection(struct hvm_vcpu *vcpu)
 {
@@ -108,6 +131,20 @@ static void hvm_mmu_free_page(struct hvm_vcpu *vcpu, paddr_t page_addr)
 }
 
 
+static int is_empty_shadow_page(paddr_t page_addr)
+{
+	uint32_t *pos;
+	uint32_t *end; 
+	for (pos = __va(page_addr), end = pos + PAGE_SIZE / sizeof(uint32_t);
+		      pos != end; pos++) {
+		if (*pos != 0) {
+			return FALSE;
+		}
+	}
+	return TRUE;
+}
+
+
 static paddr_t hvm_mmu_alloc_page(struct hvm_vcpu *vcpu)
 {
 	paddr_t page_addr;
@@ -124,8 +161,10 @@ static paddr_t hvm_mmu_alloc_page(struct hvm_vcpu *vcpu)
 	page_addr = page_link->page_addr;
 	page_link->page_addr = INVALID_PAGE;
 	list_add(&page_link->link, &vcpu->free_page_links);
+	ASSERT(is_empty_shadow_page(page_addr));
 	return page_addr;
 }
+
 
 static paddr_t gaddr_to_paddr(struct hvm_vcpu *vcpu, gaddr_t addr)
 {
@@ -138,7 +177,7 @@ static paddr_t gaddr_to_paddr(struct hvm_vcpu *vcpu, gaddr_t addr)
 		extern struct page *hvm_bad_page;
 
 		printk("gaddr_to_paddr: bad page index,"
-		       " phys_mem_pages %lu address %llu\n",
+		       " phys_mem_pages %lu gaddr 0x%llx\n",
 			vcpu->hvm->phys_mem_pages, addr);
 		page = hvm_bad_page;
 	} else {
@@ -323,19 +362,23 @@ static inline int is_io_pte64(uint64_t pte)
 
 
 static inline void set_pte64(struct hvm_vcpu *vcpu,
-			     uint64_t *guest_pte,
-			     uint64_t *shadow_pte)
+			     uint64_t guest_pte,
+			     uint64_t *shadow_pte,
+			     uint64_t access_bits)
 {
 	paddr_t paddr;
 	ASSERT(*shadow_pte == 0);
 
-	paddr = gaddr_to_paddr(vcpu, *guest_pte & PT64_BASE_ADDR_MASK);
-	
-	*shadow_pte = *guest_pte & PT64_PTE_COPY_MASK;
+	paddr = gaddr_to_paddr(vcpu, guest_pte & PT64_BASE_ADDR_MASK);
+	access_bits &= guest_pte;
+
+	*shadow_pte = (guest_pte & PT64_PTE_COPY_MASK) | access_bits;
+	*shadow_pte |= access_bits << PT64_SHADOW_BITS_SHIFT;
+
 	*shadow_pte &= ~PT64_WRITABLE_MASK;
 
 	if (paddr == hvm_bad_page_addr) {
-		*shadow_pte |= *guest_pte & PT64_BASE_ADDR_MASK;
+		*shadow_pte |= guest_pte & PT64_BASE_ADDR_MASK;
 		*shadow_pte |= PT64_SHADOW_IO_MARK;
 	} else {
 		*shadow_pte |= paddr;
@@ -344,20 +387,25 @@ static inline void set_pte64(struct hvm_vcpu *vcpu,
 
 
 static inline void set_pde64(struct hvm_vcpu *vcpu,
-			     uint64_t *guest_pde,
+			     uint64_t guest_pde,
 			     uint64_t *shadow_pte,
+			     uint64_t access_bits,
 			     int index)
 {
 	paddr_t paddr;
 	paddr_t gaddr;
+       
 	ASSERT(*shadow_pte == 0);
 
-	gaddr = (*guest_pde & PT64_DIR_BASE_ADDR_MASK) + PAGE_SIZE * index;
+	access_bits &= guest_pde;
+	gaddr = (guest_pde & PT64_DIR_BASE_ADDR_MASK) + PAGE_SIZE * index;
 	paddr = gaddr_to_paddr(vcpu, gaddr);
 
-	*shadow_pte = (*guest_pde & PT64_NON_PTE_COPY_MASK) | 
-				((*guest_pde & PT64_DIR_PAT_MASK) >> 
+	*shadow_pte = (guest_pde & PT64_NON_PTE_COPY_MASK) | access_bits |
+				((guest_pde & PT64_DIR_PAT_MASK) >> 
 				 (PT64_DIR_PAT_SHIFT - PT64_PAT_SHIFT));
+	*shadow_pte |= access_bits << PT64_SHADOW_BITS_SHIFT;
+
 	*shadow_pte &= ~PT64_WRITABLE_MASK;
 
 	if (paddr == hvm_bad_page_addr) {
@@ -374,6 +422,7 @@ static void inject_page_fault(struct hvm_vcpu *vcpu,
 {
 	#define PF_VECTOR 14 
 
+	printk("inject_page_fault: 0x%llx err 0x%x\n", addr, err_code);
 	vcpu->regs[VCPU_REGS_CR2] = addr; 
 	vmcs_write32(VM_ENTRY_EXCEPTION_ERROR_CODE, err_code);
 	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD,
@@ -428,6 +477,8 @@ static uint64_t *fetch64(struct hvm_vcpu *vcpu,
 	paddr_t shadow_addr;
 	int level;
 
+	uint64_t access_bits = PT64_USER_MASK | PT64_WRITABLE_MASK;
+
 	shadow_addr = vcpu->paging_context->root;
 	level = vcpu->paging_context->root_level;
 
@@ -440,6 +491,7 @@ static uint64_t *fetch64(struct hvm_vcpu *vcpu,
 			if (level == PT64_PAGE_TABLE_LEVEL) {
 				return shadow_ent;
 			}
+			access_bits &= *shadow_ent >> PT64_SHADOW_BITS_SHIFT;
 			shadow_addr = *shadow_ent & PT64_BASE_ADDR_MASK;
 			continue;
 		}
@@ -456,11 +508,11 @@ static uint64_t *fetch64(struct hvm_vcpu *vcpu,
 		if (level == PT64_PAGE_TABLE_LEVEL) {
 
 			if (walker->level == PT64_DIRECTORY_LEVEL) {
-				set_pde64(vcpu, gues_ent, shadow_ent,
+				set_pde64(vcpu, *gues_ent, shadow_ent, access_bits,
 					  PT64_INDEX(addr, PT64_PAGE_TABLE_LEVEL));
 			} else {
-				ASSERT(walker->level == PT64_PAGE_TABLE_LEVEL)
-				set_pte64(vcpu, gues_ent, shadow_ent);
+				ASSERT(walker->level == PT64_PAGE_TABLE_LEVEL);
+				set_pte64(vcpu, *gues_ent, shadow_ent, access_bits);
 			}
 			return shadow_ent;
 		}
@@ -470,23 +522,55 @@ static uint64_t *fetch64(struct hvm_vcpu *vcpu,
 			*enomem = 1;
 			return NULL;
 		}
-
 		*shadow_ent = shadow_addr | 
 				(*gues_ent & PT64_NON_PTE_COPY_MASK);
+		*shadow_ent |= ( PT64_WRITABLE_MASK | PT64_USER_MASK);
+
+		access_bits &= *gues_ent;
+		*shadow_ent |= access_bits << PT64_SHADOW_BITS_SHIFT;
 	}
 
 }
 
 
+static inline int fix_read_pf64(uint64_t *shadow_ent)
+{
+	if ((*shadow_ent & PT64_SHADOW_USER_MASK) && 
+	    !(*shadow_ent & PT64_USER_MASK)) {
+		*shadow_ent |= PT64_USER_MASK;
+		*shadow_ent &= ~PT64_WRITABLE_MASK;
+
+		return 1;
+		
+	}
+	return 0;
+}
+
 static inline int fix_write_pf64(struct hvm_vcpu *vcpu,
 				 uint64_t *shadow_ent,
 				 guets_walker_t *walker,
-				 uint64_t addr)
+				 uint64_t addr,
+				 int user)
 {
 	uint64_t *guest_ent;
+	int writable_shadow;
 
 	if (is_writeble_pte64(*shadow_ent)) {
 		return 0;
+	}
+	writable_shadow = *shadow_ent & PT64_SHADOW_WRITABLE_MASK; 
+	if (user) {
+		if (!(*shadow_ent & PT64_SHADOW_USER_MASK) || !writable_shadow) {
+			return 0;
+		}
+		ASSERT(*shadow_ent & PT64_USER_MASK);
+	} else {
+		if (!writable_shadow) {
+			if (is_write_protection(vcpu)) {
+				return 0;
+			}
+			*shadow_ent &= ~PT64_USER_MASK;
+		}
 	}
 
 	guest_ent = fetch_guest64(vcpu, walker, PT64_PAGE_TABLE_LEVEL, addr);
@@ -495,13 +579,9 @@ static inline int fix_write_pf64(struct hvm_vcpu *vcpu,
 		*shadow_ent = 0;
 		return 0;
 	}
-	
-	if (!is_writeble_pte64(*guest_ent)) {
-		return 0;
-	}
 
 	*shadow_ent |= PT64_WRITABLE_MASK;
-	*guest_ent |= PT64_DIRTY_MASK; 
+	*guest_ent |= PT64_DIRTY_MASK;
 
 	return 1;
 }
@@ -514,17 +594,28 @@ static inline void realase_walker(guets_walker_t *walker)
 
 static int access_test(uint64_t pte, int write, int user)
 {
+	
+	if (user && !(pte & PT64_USER_MASK)) {
+		return 0;
+	}
+
+	if (write && !(pte & PT64_WRITABLE_MASK)) {
+		return 0;
+	}
+
 	return 1;
 }
+
 
 static int paging64_page_fault(struct hvm_vcpu *vcpu, uint64_t addr,
 			       uint32_t error_code)
 {
 	int write_fault = error_code & PFERR_WRITE_MASK;
 	int pte_present = error_code & PFERR_PRESENT_MASK;
+	int user_fault = error_code & PFERR_USER_MASK;
 	guets_walker_t walker;
 	uint64_t *shadow_pte;
-	int write_fix;
+	int fixed;
 
 	for (;;) {
 		int enomem;
@@ -542,6 +633,8 @@ static int paging64_page_fault(struct hvm_vcpu *vcpu, uint64_t addr,
 		break;
 	}
 
+	printk("paging64_page_fault: 0x%llx pc 0x%lx\n",
+	       addr, vmcs_readl(GUEST_RIP));
 	if (!shadow_pte) {
 		inject_page_fault(vcpu, addr, error_code);
 		realase_walker(&walker);
@@ -549,17 +642,16 @@ static int paging64_page_fault(struct hvm_vcpu *vcpu, uint64_t addr,
 	}
 
 	if (write_fault) {
-		write_fix = fix_write_pf64(vcpu, shadow_pte, &walker, addr);
+		fixed = fix_write_pf64(vcpu, shadow_pte, &walker, addr,
+				       user_fault);
 	} else {
-		write_fix = 0;
+		fixed = fix_read_pf64(shadow_pte);
 	}
 
 	realase_walker(&walker);
 
 	if (is_io_pte64(*shadow_pte)) {
-		if (access_test(*shadow_pte, write_fault,
-				error_code | PFERR_USER_MASK ) ) {
-			
+		if (access_test(*shadow_pte, write_fault, user_fault)) {
 			paddr_t io_addr = *shadow_pte & PT64_BASE_ADDR_MASK;
 			printk("paging64_page_fault: io work"
 			       " v 0x%llx p 0x%llx\n", addr, io_addr); 
@@ -572,7 +664,7 @@ static int paging64_page_fault(struct hvm_vcpu *vcpu, uint64_t addr,
 		return 0;
 	}
 
-	if (pte_present && !write_fix) {
+	if (pte_present && !fixed) {
 		inject_page_fault(vcpu, addr, error_code);     
 	}
 	return 0;	
@@ -583,6 +675,9 @@ static void paging64_inval_page(struct hvm_vcpu *vcpu, uint64_t addr)
 {
 	paddr_t page_addr = vcpu->paging_context->root;
 	int level = vcpu->paging_context->root_level;
+
+	printk("paging64_inval_page: 0x%llx pc 0x%lx\n",
+	       addr, vmcs_readl(GUEST_RIP));
 
 	for (; ; level--) {
 		uint32_t index = PT64_INDEX(addr, level);
@@ -627,8 +722,6 @@ static int create_paging64_context(struct hvm_vcpu *vcpu)
 	if (!context) {
 		return -ENOMEM;
 	}
-
-        ASSERT(is_write_protection(vcpu));
 
 	context->new_cr3 = paging64_new_cr3;
 	context->page_fault = paging64_page_fault;
