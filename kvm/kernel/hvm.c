@@ -308,6 +308,7 @@ static int hvm_dev_open(struct inode *inode, struct file *filp)
 	for (i = 0; i < HVM_MAX_VCPUS; i++) {
 		INIT_LIST_HEAD(&hvm->vcpus[i].free_page_links);
 		INIT_LIST_HEAD(&hvm->vcpus[i].free_pages);
+		hvm->vcpus[i].paging_context.root = INVALID_PAGE;
 	}
 
 	filp->private_data = hvm;
@@ -720,7 +721,7 @@ static int handle_exit_exception(struct hvm_vcpu *vcpu,
 	if ((intr_info & (INTR_INFO_INTR_TYPE_MASK | INTR_INFO_VECTOR_MASK)) == (INTR_TYPE_EXCEPTION | 14)) {
 		cr2 = vmcs_readl(EXIT_QUALIFICATION);
 
-		if (!vcpu->paging_context->page_fault(vcpu, cr2, error_code)) {
+		if (!vcpu->paging_context.page_fault(vcpu, cr2, error_code)) {
 			return 1;
 		}
 		hvm_run->exit_reason = HVM_EXIT_IO_MEM;
@@ -773,7 +774,7 @@ static int handle_invlpg(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 	int instruction_length = vmcs_read32(VM_EXIT_INSTRUCTION_LEN);
 	printk("handle_invlpg: 0x%llx instruction length %d\n",
 	       address, instruction_length);
-	vcpu->paging_context->inval_page(vcpu, address);
+	vcpu->paging_context.inval_page(vcpu, address);
 	vmcs_writel(GUEST_RIP, vmcs_readl(GUEST_RIP) + instruction_length);
 	return 1;
 }
@@ -802,7 +803,7 @@ static int handle_cr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 		case 3:
 			vcpu_load_rsp_rip(vcpu);
 			vcpu->cr3 = vcpu->regs[reg];
-			vcpu->paging_context->new_cr3(vcpu);
+			vcpu->paging_context.new_cr3(vcpu);
 			vcpu_put_rsp_rip(vcpu);
 			skip_emulated_instruction(vcpu);
 			return 1;
@@ -1322,8 +1323,7 @@ static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 	vcpu->cr4 = sregs->cr4;
 	vcpu->cr8 = sregs->cr8;
 
-	free_paging_context(vcpu);
-	create_paging_context(vcpu);
+	hvm_mmu_reset_context(vcpu);
 	vcpu_put();
 
 	return 0;

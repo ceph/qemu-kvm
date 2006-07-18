@@ -1,11 +1,13 @@
 #ifndef __HVM_H
 #define __HVM_H
 
-#define HVM_MAX_VCPUS 4
-#define HVM_NUM_MMU_PAGES 256
-
 #include <linux/types.h>
 #include <linux/list.h>
+
+#define INVALID_PAGE (~(paddr_t)0)
+
+#define HVM_MAX_VCPUS 4
+#define HVM_NUM_MMU_PAGES 256
 
 typedef uint64_t paddr_t;
 typedef paddr_t gaddr_t;
@@ -87,7 +89,7 @@ struct hvm_vcpu {
 	struct list_head free_page_links;
 	struct list_head free_pages;
 	page_link_t page_link_buf[HVM_NUM_MMU_PAGES];
-	paging_context_t *paging_context;
+	paging_context_t paging_context;
 
 	struct hvm_guest_debug guest_debug;
 };
@@ -103,8 +105,7 @@ struct hvm {
 void hvm_mmu_destroy(struct hvm_vcpu *vcpu);
 int hvm_mmu_init(struct hvm_vcpu *vcpu);
 
-void free_paging_context(struct hvm_vcpu *vcpu);
-int create_paging_context(struct hvm_vcpu *vcpu);
+int hvm_mmu_reset_context(struct hvm_vcpu *vcpu);
 
 void vmcs_writel(unsigned long field, unsigned long value);
 unsigned long vmcs_readl(unsigned long field);
