@@ -3,21 +3,27 @@
 set -e
 
 kernel="$1"
+mnt_dir="/tmp/mkbootdisk/mnt"
+img_file="/tmp/mkbootdisk/boot.img"
 
 [[ -f "$kernel" ]] || { echo need kernel; exit 1; }
 
-dd < /dev/zero > /tmp/boot.img bs=1M count=10
-mkfs -t vfat /tmp/boot.img
+mkdir -p $mnt_dir
 
-mount -o loop /tmp/boot.img /mnt
+[[ -d "$mnt_dir" ]] || { echo mount dir err; exit 1; }
 
-cp "$kernel" /mnt/kernel
+dd < /dev/zero > $img_file bs=1M count=10
+mkfs -t vfat $img_file
 
-cat <<EOF > /mnt/SYSLINUX.CFG
+mount -o loop $img_file $mnt_dir
+
+cp "$kernel" $mnt_dir/kernel
+
+cat <<EOF > $mnt_dir/SYSLINUX.CFG
 DEFAULT kernel
 EOF
 
-umount /mnt
+umount $mnt_dir
 
-syslinux /tmp/boot.img
+syslinux $img_file
 
