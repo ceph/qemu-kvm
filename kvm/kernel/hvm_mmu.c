@@ -363,53 +363,17 @@ static inline int is_io_pte64(uint64_t pte)
 }
 
 
-static inline void set_pte64(struct hvm_vcpu *vcpu,
-			     uint64_t guest_pte,
+static inline void set_pte_common64(struct hvm_vcpu *vcpu,
 			     uint64_t *shadow_pte,
+			     gaddr_t gaddr,
 			     uint64_t access_bits)
 {
 	paddr_t paddr;
-	ASSERT(*shadow_pte == 0);
 
-	paddr = gaddr_to_paddr(vcpu, guest_pte & PT64_BASE_ADDR_MASK);
-	access_bits &= guest_pte;
-
-	*shadow_pte = (guest_pte & PT64_PTE_COPY_MASK) | access_bits;
 	*shadow_pte |= access_bits << PT64_SHADOW_BITS_OFFSET;
+	*shadow_pte |= access_bits & ~PT64_WRITABLE_MASK;
 
-	*shadow_pte &= ~PT64_WRITABLE_MASK;
-
-	if (paddr == hvm_bad_page_addr) {
-		*shadow_pte |= guest_pte & PT64_BASE_ADDR_MASK;
-		*shadow_pte |= PT64_SHADOW_IO_MARK;
-		*shadow_pte &= ~PT64_PRESENT_MASK;
-	} else {
-		*shadow_pte |= paddr;
-	}
-}
-
-
-static inline void set_pde64(struct hvm_vcpu *vcpu,
-			     uint64_t guest_pde,
-			     uint64_t *shadow_pte,
-			     uint64_t access_bits,
-			     int index)
-{
-	paddr_t paddr;
-	paddr_t gaddr;
-       
-	ASSERT(*shadow_pte == 0);
-
-	access_bits &= guest_pde;
-	gaddr = (guest_pde & PT64_DIR_BASE_ADDR_MASK) + PAGE_SIZE * index;
 	paddr = gaddr_to_paddr(vcpu, gaddr);
-
-	*shadow_pte = (guest_pde & PT64_NON_PTE_COPY_MASK) | access_bits |
-				((guest_pde & PT64_DIR_PAT_MASK) >> 
-				 (PT64_DIR_PAT_SHIFT - PT64_PAT_SHIFT));
-	*shadow_pte |= access_bits << PT64_SHADOW_BITS_OFFSET;
-
-	*shadow_pte &= ~PT64_WRITABLE_MASK;
 
 	if (paddr == hvm_bad_page_addr) {
 		*shadow_pte |= gaddr;
@@ -419,6 +383,38 @@ static inline void set_pde64(struct hvm_vcpu *vcpu,
 		*shadow_pte |= paddr;
 	}
 }
+
+
+static inline void set_pte64(struct hvm_vcpu *vcpu,
+			     uint64_t guest_pte,
+			     uint64_t *shadow_pte,
+			     uint64_t access_bits)
+{
+	ASSERT(*shadow_pte == 0);
+	access_bits &= guest_pte;
+	*shadow_pte = (guest_pte & PT64_PTE_COPY_MASK);
+	set_pte_common64(vcpu, shadow_pte, guest_pte & PT64_BASE_ADDR_MASK,
+			 access_bits);
+}
+
+
+static inline void set_pde64(struct hvm_vcpu *vcpu,
+			     uint64_t guest_pde,
+			     uint64_t *shadow_pte,
+			     uint64_t access_bits,
+			     int index)
+{
+	gaddr_t gaddr;
+       
+	ASSERT(*shadow_pte == 0);
+	access_bits &= guest_pde;
+	gaddr = (guest_pde & PT64_DIR_BASE_ADDR_MASK) + PAGE_SIZE * index;
+	*shadow_pte = (guest_pde & PT64_NON_PTE_COPY_MASK) |
+				((guest_pde & PT64_DIR_PAT_MASK) >> 
+				 (PT64_DIR_PAT_SHIFT - PT64_PAT_SHIFT));
+	set_pte_common64(vcpu, shadow_pte, gaddr, access_bits);
+}
+
 
 static void inject_page_fault(struct hvm_vcpu *vcpu, 
 			      uint64_t addr, 
@@ -512,6 +508,7 @@ static uint64_t *fetch64(struct hvm_vcpu *vcpu,
 		if (level == PT64_PAGE_TABLE_LEVEL) {
 
 			if (walker->level == PT64_DIRECTORY_LEVEL) {
+				*gues_ent |= PT64_SHADOW_PS_MARK;
 				set_pde64(vcpu, *gues_ent, shadow_ent, access_bits,
 					  PT64_INDEX(addr, PT64_PAGE_TABLE_LEVEL));
 			} else {
@@ -532,11 +529,6 @@ static uint64_t *fetch64(struct hvm_vcpu *vcpu,
 
 		access_bits &= *gues_ent;
 		*shadow_ent |= access_bits << PT64_SHADOW_BITS_OFFSET;
-
-		if (level == PT64_DIRECTORY_LEVEL && 
-			(*gues_ent & PT64_PAGE_SIZE_MASK)) {
-			*shadow_ent |= PT64_SHADOW_PS_MARK;
-		}
 	}
 }
 
