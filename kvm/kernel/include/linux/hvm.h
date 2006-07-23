@@ -96,6 +96,7 @@ struct hvm_sregs {
 	struct hvm_segment tr, ldt;
 	struct hvm_dtable gdt, idt;
 	__u64 cr0, cr2, cr3, cr4, cr8;
+	__u64 efer;
 };
 
 /* for HVM_TRANSLATE */

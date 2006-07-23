@@ -14,10 +14,16 @@ hvm_context_t hvm_context;
 
 #define NR_CPU 16
 static CPUState *saved_env[NR_CPU];
+static int kvm_mmio_pending = 0;
 
 int kvm_is_ok(CPUState *env)
 {
-    return (env->segs[R_CS].flags & DESC_L_MASK) != 0;
+    return (env->segs[R_CS].flags & DESC_L_MASK) != 0 && !kvm_mmio_pending;
+}
+
+void kvm_handled_mmio(CPUState *env)
+{
+    kvm_mmio_pending = 0;
 }
 
 static void load_regs(CPUState *env)
@@ -78,6 +84,8 @@ static void load_regs(CPUState *env)
     sregs.cr4 = env->cr[4];
     sregs.cr8 = 0;
 
+    sregs.efer = env->efer;
+
     hvm_set_sregs(hvm_context, 0, &sregs);
 }
 
@@ -134,6 +142,8 @@ static void save_regs(CPUState *env)
     env->cr[2] = sregs.cr2;
     env->cr[3] = sregs.cr3;
     env->cr[4] = sregs.cr4;
+
+    env->efer = sregs.efer;
 }
 
 int kvm_cpu_exec(CPUState *env)
@@ -216,6 +226,17 @@ static void kvm_outl(void *opaque, uint16_t addr, uint32_t data)
     cpu_outl(0, addr, data);
 }
 
+static void kvm_mmio(void *opaque)
+{
+    CPUState **envs = opaque;
+
+    env = envs[0];
+    save_regs(env);
+    printf("mmio at %lx\n", env->eip);
+    kvm_mmio_pending = 1;
+    cpu_loop_exit();
+}
+ 
 static struct hvm_callbacks qemu_kvm_ops = {
     .cpuid = kvm_cpuid,
     .debug = kvm_debug,
@@ -225,12 +246,13 @@ static struct hvm_callbacks qemu_kvm_ops = {
     .outb  = kvm_outb,
     .outw  = kvm_outw,
     .outl  = kvm_outl,
+    .mmio  = kvm_mmio,
 };
 
 void kvm_init()
 {
     hvm_context = hvm_init(&qemu_kvm_ops, saved_env);
-    hvm_create(hvm_context, phys_ram_size, &phys_ram_base);
+    hvm_create(hvm_context, phys_ram_size, (void**)&phys_ram_base);
 }
 
 int kvm_update_debugger(CPUState *env)

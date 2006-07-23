@@ -809,6 +809,13 @@ int cpu_exec(CPUState *env1)
                     cpu_loop_exit();
                 }
 #endif
+#if defined(USE_KVM)
+		/* return quickly after handling mmio */
+		kvm_handled_mmio(env);
+		if (kvm_is_ok(env)) {
+			cpu_loop_exit();
+		}
+#endif
             }
         } else {
             env_to_regs();

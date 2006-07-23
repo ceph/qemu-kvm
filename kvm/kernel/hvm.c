@@ -1207,6 +1207,7 @@ static int hvm_dev_ioctl_set_regs(struct hvm *hvm, struct hvm_regs *regs)
 static int hvm_dev_ioctl_get_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 {
 	struct hvm_vcpu *vcpu;
+	struct vmx_msr_entry *msr_entry;
 
 	if (!hvm->created)
 		return -EINVAL;
@@ -1260,6 +1261,8 @@ static int hvm_dev_ioctl_get_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 	sregs->cr4 = vcpu->cr4;
 	sregs->cr8 = vcpu->cr8;
 
+	msr_entry = find_msr_entry(vcpu, MSR_EFER);
+	sregs->efer = msr_entry->data;
 	vcpu_put();
 
 	return 0;
@@ -1268,6 +1271,7 @@ static int hvm_dev_ioctl_get_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 {
 	struct hvm_vcpu *vcpu;
+	struct vmx_msr_entry *msr_entry;
 
 	printk("set_sregs\n");
 	if (!hvm->created)
@@ -1322,6 +1326,9 @@ static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 	vcpu->cr3 = sregs->cr3;
 	vcpu->cr4 = sregs->cr4;
 	vcpu->cr8 = sregs->cr8;
+
+	msr_entry = find_msr_entry(vcpu, MSR_EFER);
+	msr_entry->data = sregs->efer;
 
 	hvm_mmu_reset_context(vcpu);
 	vcpu_put();
