@@ -4,10 +4,16 @@
 #include <linux/types.h>
 #include <linux/list.h>
 
+#define CR0_TS_MASK (1ULL << 3)
+
 #define INVALID_PAGE (~(paddr_t)0)
 
 #define HVM_MAX_VCPUS 4
 #define HVM_NUM_MMU_PAGES 256
+
+#define FX_IMAGE_SIZE 512
+#define FX_IMAGE_ALIGN 16
+#define FX_BUF_SIZE (2 * FX_IMAGE_SIZE + FX_IMAGE_ALIGN)
 
 typedef uint64_t paddr_t;
 typedef paddr_t gaddr_t;
@@ -92,6 +98,10 @@ struct hvm_vcpu {
 	paging_context_t paging_context;
 
 	struct hvm_guest_debug guest_debug;
+
+	char fx_buf[FX_BUF_SIZE];
+	char *host_fx_image;
+	char *guest_fx_image;
 };
 
 struct hvm {

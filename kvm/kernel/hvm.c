@@ -57,6 +57,16 @@ static unsigned long get_eflags(void)
 	return x;
 }
 
+static inline  void fx_save(void *image)
+{
+	asm ( "fxsave (%0)":: "r" (image));
+}
+
+static inline  void fx_restore(void *image)
+{
+	asm ( "fxrstor (%0)":: "r" (image));
+}
+
 struct segment_descriptor {
 	u16 limit_low;
 	u16 base_low;
@@ -306,9 +316,16 @@ static int hvm_dev_open(struct inode *inode, struct file *filp)
 		return -ENOMEM;
 	
 	for (i = 0; i < HVM_MAX_VCPUS; i++) {
-		INIT_LIST_HEAD(&hvm->vcpus[i].free_page_links);
-		INIT_LIST_HEAD(&hvm->vcpus[i].free_pages);
-		hvm->vcpus[i].paging_context.root = INVALID_PAGE;
+		struct hvm_vcpu *vcpu;
+
+		vcpu = &hvm->vcpus[i];
+		INIT_LIST_HEAD(&vcpu->free_page_links);
+		INIT_LIST_HEAD(&vcpu->free_pages);
+		vcpu->paging_context.root = INVALID_PAGE;
+
+		vcpu->host_fx_image = (char*)ALIGN((vaddr_t)vcpu->fx_buf,
+						   FX_IMAGE_ALIGN);
+		vcpu->guest_fx_image = vcpu->host_fx_image + FX_IMAGE_SIZE;
 	}
 
 	filp->private_data = hvm;
@@ -427,6 +444,8 @@ static int hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	int ret;
 	
 	vcpu_load(vcpu);
+
+	fx_save(vcpu->guest_fx_image);
 
 	/* Segments */
 	vmcs_write16(GUEST_CS_SELECTOR, 16);
@@ -599,7 +618,7 @@ static int hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 		);
 	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD, 0);  /* 22.2.1 */
 
-	vmcs_writel(CR0_GUEST_HOST_MASK, -1ul);
+	vmcs_writel(CR0_GUEST_HOST_MASK, ~CR0_TS_MASK);
 	vmcs_writel(CR4_GUEST_HOST_MASK, -1ul);
 
 	vmcs_writel(VIRTUAL_APIC_PAGE_ADDR, 0);
@@ -927,7 +946,7 @@ static int hvm_handle_exit(struct hvm_run *hvm_run, struct hvm_vcpu *vcpu)
 		return hvm_vmx_exit_handlers[exit_reason](vcpu, hvm_run);
 	else {
 		hvm_run->exit_reason = HVM_EXIT_UNKNOWN;
-		printk(KERN_ERR "hvm: unhandled exit reason %d\n", 
+		printk(KERN_ERR "hvm: unhandled exit reason 0x%x\n", 
 		       exit_reason);
 	}
 	return 0;
@@ -1084,6 +1103,8 @@ again:
 	"mov 0(%%esp), %3"
 
 #endif
+	fx_save(vcpu->host_fx_image);
+	fx_restore(vcpu->guest_fx_image);
 
 	asm ( "pushf; " PUSHA "\n\t"
 	      "vmwrite %%" SP ", %2 \n\t"
@@ -1094,7 +1115,7 @@ again:
 	      "jmp error \n\t"
 	      "launched: vmresume \n\t"
 	      "error: " STORE_GUEST_REGS "; " POPA "; popf \n\t"
-	      "mov $1, %1 \n\t"
+	      "mov $1, %0 \n\t"
 	      "jmp done \n\t"
 	      ".globl hvm_vmx_return \n\t"
 	      "hvm_vmx_return: " STORE_GUEST_REGS "; " POPA "; popf \n\t"
@@ -1104,6 +1125,9 @@ again:
 	      : "r"(vcpu->launched), "r"((unsigned long)HOST_RSP),
 		"c"(vcpu->regs)
 	      : "cc", "memory" );
+
+	fx_save(vcpu->guest_fx_image);
+	fx_restore(vcpu->host_fx_image);
 
 	hvm_run->exit_type = 0;
 	if (fail) {
