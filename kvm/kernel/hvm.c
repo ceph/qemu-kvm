@@ -1548,6 +1548,8 @@ static int hvm_dev_ioctl(struct inode *inode, struct file *filp,
 		if (copy_from_user(&hvm_run, (void *)arg, sizeof hvm_run))
 			goto out;
 		r = hvm_dev_ioctl_run(hvm, &hvm_run);
+		if (r < 0)
+			goto out;
 		r = -EFAULT;
 		if (copy_to_user((void *)arg, &hvm_run, sizeof hvm_run))
 			goto out;
