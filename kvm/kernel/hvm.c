@@ -1080,6 +1080,9 @@ static int hvm_dev_ioctl_run(struct hvm *hvm, struct hvm_run *hvm_run)
 	vcpu = &hvm->vcpus[hvm_run->vcpu];
 	
 again:	
+	if (signal_pending(current))
+		return -EINTR;
+
 	vcpu_load(vcpu);
 
 #ifdef __x86_64__
