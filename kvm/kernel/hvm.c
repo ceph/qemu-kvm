@@ -951,6 +951,12 @@ static int handle_rdmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 	}
 	switch (ecx) {
 	case MSR_IA32_MCG_STATUS:
+	case MSR_IA32_MCG_CAP:
+	case MSR_IA32_MC0_MISC:
+	case MSR_IA32_MC0_MISC+4:
+	case MSR_IA32_MC0_MISC+8:
+	case MSR_IA32_MC0_MISC+12:
+	case MSR_IA32_MC0_MISC+16:
 		vcpu->regs[VCPU_REGS_RAX] = 0;
 		vcpu->regs[VCPU_REGS_RDX] = 0;
 		skip_emulated_instruction(vcpu);
