@@ -918,6 +918,8 @@ static int handle_cr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 		break;
 	}
 	hvm_run->exit_reason = 0;
+	printk(KERN_ERR "hvm: unhandled control register: op %d cr %d\n", 
+	       (int)(exit_qualification >> 4) & 3, cr);
 	return 0;
 }
 
@@ -949,6 +951,7 @@ static int handle_rdmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 		skip_emulated_instruction(vcpu);
 		return 1;
 	}
+	printk(KERN_ERR "hvm: unhandled rdmsr: %x\n", ecx);
 	return 0;
 }
 
@@ -976,6 +979,7 @@ static int handle_wrmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 		skip_emulated_instruction(vcpu);
 		return 1;
 	}
+	printk(KERN_ERR "hvm: unhandled wrmsr: %x\n", ecx);
 	return 0;
 }
 
