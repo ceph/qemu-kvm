@@ -146,6 +146,8 @@ static void save_regs(CPUState *env)
     env->efer = sregs.efer;
 }
 
+#include <signal.h>
+
 int kvm_cpu_exec(CPUState *env)
 {
 
@@ -153,6 +155,10 @@ int kvm_cpu_exec(CPUState *env)
 
     load_regs(env);
 
+    /* FIXME: block SIGALRM until we can handle it (by injecting a
+     *        timer interrupt 
+     */
+    sigblock(sigmask(SIGALRM));
     hvm_run(hvm_context, 0);
 
     save_regs(env);
