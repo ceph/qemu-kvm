@@ -951,6 +951,13 @@ static int handle_rdmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 		skip_emulated_instruction(vcpu);
 		return 1;
 	}
+	switch (ecx) {
+	case MSR_IA32_MCG_STATUS:
+		vcpu->regs[VCPU_REGS_RAX] = 0;
+		vcpu->regs[VCPU_REGS_RDX] = 0;
+		skip_emulated_instruction(vcpu);
+		return 1;
+	}
 	printk(KERN_ERR "hvm: unhandled rdmsr: %x\n", ecx);
 	return 0;
 }
