@@ -425,6 +425,76 @@ static inline void vmcs_write64(unsigned long field, u64 value)
 #endif
 }
 
+#if 0
+static void vmcs_dump(void)
+{
+	printk("************************ vmcs_dump ************************\n");
+	printk("VM_ENTRY_CONTROLS 0x%x\n", vmcs_read32(VM_ENTRY_CONTROLS));
+
+	printk("GUEST_CR0 0x%lx\n", vmcs_readl(GUEST_CR0));
+	printk("GUEST_CR3 0x%lx\n", vmcs_readl(GUEST_CR3));
+	printk("GUEST_CR4 0x%lx\n", vmcs_readl(GUEST_CR4));
+
+	printk("GUEST_SYSENTER_ESP 0x%lx\n", vmcs_readl(GUEST_SYSENTER_ESP));
+	printk("GUEST_SYSENTER_EIP 0x%lx\n", vmcs_readl(GUEST_SYSENTER_EIP));
+
+
+	printk("GUEST_IA32_DEBUGCTL 0x%llx\n", vmcs_read64(GUEST_IA32_DEBUGCTL));
+	printk("GUEST_DR7 0x%lx\n", vmcs_readl(GUEST_DR7));
+
+	printk("GUEST_RFLAGS 0x%lx\n", vmcs_readl(GUEST_RFLAGS));
+
+
+	printk("GUEST_CS_SELECTOR 0x%x\n", vmcs_read16(GUEST_CS_SELECTOR));
+	printk("GUEST_DS_SELECTOR 0x%x\n", vmcs_read16(GUEST_DS_SELECTOR));
+	printk("GUEST_ES_SELECTOR 0x%x\n", vmcs_read16(GUEST_ES_SELECTOR));
+	printk("GUEST_FS_SELECTOR 0x%x\n", vmcs_read16(GUEST_FS_SELECTOR));
+	printk("GUEST_GS_SELECTOR 0x%x\n", vmcs_read16(GUEST_GS_SELECTOR));
+	printk("GUEST_SS_SELECTOR 0x%x\n", vmcs_read16(GUEST_SS_SELECTOR));
+
+	printk("GUEST_TR_SELECTOR 0x%x\n", vmcs_read16(GUEST_TR_SELECTOR));
+	printk("GUEST_LDTR_SELECTOR 0x%x\n", vmcs_read16(GUEST_LDTR_SELECTOR));
+
+	printk("GUEST_CS_AR_BYTES 0x%x\n", vmcs_read32(GUEST_CS_AR_BYTES));
+	printk("GUEST_DS_AR_BYTES 0x%x\n", vmcs_read32(GUEST_DS_AR_BYTES));
+	printk("GUEST_ES_AR_BYTES 0x%x\n", vmcs_read32(GUEST_ES_AR_BYTES));
+	printk("GUEST_FS_AR_BYTES 0x%x\n", vmcs_read32(GUEST_FS_AR_BYTES));
+	printk("GUEST_GS_AR_BYTES 0x%x\n", vmcs_read32(GUEST_GS_AR_BYTES));
+	printk("GUEST_SS_AR_BYTES 0x%x\n", vmcs_read32(GUEST_SS_AR_BYTES));
+
+	printk("GUEST_LDTR_AR_BYTES 0x%x\n", vmcs_read32(GUEST_LDTR_AR_BYTES));
+	printk("GUEST_TR_AR_BYTES 0x%x\n", vmcs_read32(GUEST_TR_AR_BYTES));
+
+	printk("GUEST_CS_BASE 0x%lx\n", vmcs_readl(GUEST_CS_BASE));
+	printk("GUEST_DS_BASE 0x%lx\n", vmcs_readl(GUEST_DS_BASE));
+	printk("GUEST_ES_BASE 0x%lx\n", vmcs_readl(GUEST_ES_BASE));
+	printk("GUEST_FS_BASE 0x%lx\n", vmcs_readl(GUEST_FS_BASE));
+	printk("GUEST_GS_BASE 0x%lx\n", vmcs_readl(GUEST_GS_BASE));
+	printk("GUEST_SS_BASE 0x%lx\n", vmcs_readl(GUEST_SS_BASE));
+
+
+	printk("GUEST_LDTR_BASE 0x%lx\n", vmcs_readl(GUEST_LDTR_BASE));
+	printk("GUEST_TR_BASE 0x%lx\n", vmcs_readl(GUEST_TR_BASE));
+
+	printk("GUEST_CS_LIMIT 0x%x\n", vmcs_read32(GUEST_CS_LIMIT));
+	printk("GUEST_DS_LIMIT 0x%x\n", vmcs_read32(GUEST_DS_LIMIT));
+	printk("GUEST_ES_LIMIT 0x%x\n", vmcs_read32(GUEST_ES_LIMIT));
+	printk("GUEST_FS_LIMIT 0x%x\n", vmcs_read32(GUEST_FS_LIMIT));
+	printk("GUEST_GS_LIMIT 0x%x\n", vmcs_read32(GUEST_GS_LIMIT));
+	printk("GUEST_SS_LIMIT 0x%x\n", vmcs_read32(GUEST_SS_LIMIT));
+
+	printk("GUEST_LDTR_LIMIT 0x%x\n", vmcs_read32(GUEST_LDTR_LIMIT));
+	printk("GUEST_TR_LIMIT 0x%x\n", vmcs_read32(GUEST_TR_LIMIT));
+
+	printk("GUEST_GDTR_BASE 0x%lx\n", vmcs_readl(GUEST_GDTR_BASE));
+	printk("GUEST_IDTR_BASE 0x%lx\n", vmcs_readl(GUEST_IDTR_BASE));
+
+	printk("GUEST_GDTR_LIMIT 0x%x\n", vmcs_read32(GUEST_GDTR_LIMIT));
+	printk("GUEST_IDTR_LIMIT 0x%x\n", vmcs_read32(GUEST_IDTR_LIMIT));
+	printk("***********************************************************\n");     
+}
+#endif
+
 #ifdef __x86_64__
 #define HOST_IS_64 1
 #else
@@ -502,7 +572,7 @@ static int hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	vmcs_writel(GUEST_CR4, read_cr4());  /* 22.3.1.1, 22.3.1.6 */
 	vmcs_writel(CR4_READ_SHADOW, read_cr4());
 	vmcs_writel(GUEST_CR3, 0);  /* 22.3.1.1; */
-	vmcs_write64(GUEST_DR7, 0x400);
+	vmcs_writel(GUEST_DR7, 0x400);
 
 	vmcs_writel(GUEST_GDTR_BASE, 0);   /* 22.3.1.3 */
 	vmcs_write32(GUEST_GDTR_LIMIT, 0xffff);  /* 22.3.1.3 */
@@ -1308,12 +1378,13 @@ static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 
 #define set_segment(var, seg) \
 	do { \
-		u32 ar = 0; \
+		u32 ar; \
 		\
 		vmcs_writel(GUEST_##seg##_BASE, sregs->var.base);  \
 		vmcs_write32(GUEST_##seg##_LIMIT, sregs->var.limit); \
 		vmcs_write16(GUEST_##seg##_SELECTOR, sregs->var.selector); \
-		ar |= (sregs->var.type & 15) | 1; \
+		ar = (sregs->var.unusable) ? (1 << 16) : 1;\
+		ar |= (sregs->var.type & 15); \
 		ar |= (sregs->var.s & 1) << 4; \
 		ar |= (sregs->var.dpl & 3) << 5; \
 		ar |= (sregs->var.present & 1) << 7; \
@@ -1321,7 +1392,6 @@ static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 		ar |= (sregs->var.l & 1) << 13; \
 		ar |= (sregs->var.db & 1) << 14; \
 		ar |= (sregs->var.g & 1) << 15; \
-		ar |= (sregs->var.unusable & 1) << 16;	\
 		vmcs_write32(GUEST_##seg##_AR_BYTES, ar); \
 	} while (0);
 
@@ -1333,7 +1403,11 @@ static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 	set_segment(ss, SS);
 
 	set_segment(tr, TR);
-	vmcs_write32(GUEST_TR_AR_BYTES, 0x808b);
+
+	if (sregs->tr.type != 11 /*64bit busy TSS*/) {
+		vmcs_write32(GUEST_TR_AR_BYTES, 
+			     (vmcs_read32(GUEST_TR_AR_BYTES) & (1 << 15)) | 0x008b);
+	}
 	set_segment(ldt, LDTR);
 #undef set_segment
 
