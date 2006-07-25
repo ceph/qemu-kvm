@@ -12,7 +12,7 @@
 
 #define ASSERT(x)  							     \
 	if (!(x)) { 							     \
-		pgprintk("assertion failed %s:%d: %s\n", __FILE__, __LINE__, #x);\
+		printk("assertion failed %s:%d: %s\n", __FILE__, __LINE__, #x);\
 	}
 
 #define FALSE 0
