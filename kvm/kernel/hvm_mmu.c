@@ -8,10 +8,11 @@
 #include "vmx.h"
 #include "hvm.h"
 
+#define pgprintk(x...) do { } while (0)
 
 #define ASSERT(x)  							     \
 	if (!(x)) { 							     \
-		printk("assertion failed %s:%d: %s\n", __FILE__, __LINE__, #x);\
+		pgprintk("assertion failed %s:%d: %s\n", __FILE__, __LINE__, #x);\
 	}
 
 #define FALSE 0
@@ -177,7 +178,7 @@ static paddr_t gaddr_to_paddr(struct hvm_vcpu *vcpu, gaddr_t addr)
 	if (page_index >= vcpu->hvm->phys_mem_pages) {
 		extern struct page *hvm_bad_page;
 
-		printk("gaddr_to_paddr: bad page index,"
+		pgprintk("gaddr_to_paddr: bad page index,"
 		       " phys_mem_pages %lu gaddr 0x%llx\n",
 			vcpu->hvm->phys_mem_pages, addr);
 		page = hvm_bad_page;
@@ -243,7 +244,7 @@ static int nonpaging_map(struct hvm_vcpu *vcpu, vaddr_t v, paddr_t p)
 		if (table[index] == 0) {
 			paddr_t new_table = hvm_mmu_alloc_page(vcpu);
 			if (!VALID_PAGE(new_table)) {
-				printk("nonpaging_map: ENOMEM\n");
+				pgprintk("nonpaging_map: ENOMEM\n");
 				return -ENOMEM;
 			}
 			table[index] = new_table | 
@@ -259,7 +260,7 @@ static void nonpaging_flush(struct hvm_vcpu *vcpu)
 {
 	paddr_t root = vcpu->paging_context.root;
 
-	printk("nonpaging_flush\n");
+	pgprintk("nonpaging_flush\n");
 	ASSERT(VALID_PAGE(root));
 	releas_pt_page_64(vcpu, root, PT64_ROOT_LEVEL);
 	root = hvm_mmu_alloc_page(vcpu);
@@ -411,7 +412,7 @@ static void inject_page_fault(struct hvm_vcpu *vcpu,
 {
 	#define PF_VECTOR 14 
 
-	printk("inject_page_fault: 0x%llx err 0x%x\n", addr, err_code);
+	pgprintk("inject_page_fault: 0x%llx err 0x%x\n", addr, err_code);
 	vcpu->regs[VCPU_REGS_CR2] = addr; 
 	vmcs_write32(VM_ENTRY_EXCEPTION_ERROR_CODE, err_code);
 	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD,
@@ -623,7 +624,7 @@ static int paging64_page_fault(struct hvm_vcpu *vcpu, uint64_t addr,
 		break;
 	}
 
-	printk("paging64_page_fault: 0x%llx pc 0x%lx error_code 0x%x\n",
+	pgprintk("paging64_page_fault: 0x%llx pc 0x%lx error_code 0x%x\n",
 	       addr, vmcs_readl(GUEST_RIP), error_code);
 	if (!shadow_pte) {
 		inject_page_fault(vcpu, addr, error_code);
@@ -643,12 +644,12 @@ static int paging64_page_fault(struct hvm_vcpu *vcpu, uint64_t addr,
 	if (is_io_pte64(*shadow_pte)) {
 		if (access_test(*shadow_pte, write_fault, user_fault)) {
 			paddr_t io_addr = *shadow_pte & PT64_BASE_ADDR_MASK;
-			printk("paging64_page_fault: io work"
+			pgprintk("paging64_page_fault: io work"
 			       " v 0x%llx p 0x%llx\n", addr, io_addr); 
 			return 1;
 		      
 		}
-		printk("paging64_page_fault: io work, no access\n");
+		pgprintk("paging64_page_fault: io work, no access\n");
 		inject_page_fault(vcpu, addr,
 					error_code | PFERR_PRESENT_MASK);
 		return 0;
@@ -666,7 +667,7 @@ static void paging64_inval_page(struct hvm_vcpu *vcpu, uint64_t addr)
 	paddr_t page_addr = vcpu->paging_context.root;
 	int level = vcpu->paging_context.root_level;
 
-	printk("paging64_inval_page: 0x%llx pc 0x%lx\n",
+	pgprintk("paging64_inval_page: 0x%llx pc 0x%lx\n",
 	       addr, vmcs_readl(GUEST_RIP));
 
 	for (; ; level--) {
@@ -735,7 +736,7 @@ static int init_paging_context(struct hvm_vcpu *vcpu)
 	ASSERT(vcpu);
 	ASSERT(!VALID_PAGE(vcpu->paging_context.root));
 
-	printk("init_paging_context: %s %s %s\n",
+	pgprintk("init_paging_context: %s %s %s\n",
 	       is_paging(vcpu) ? "paging" : "",
 	       is_64bit(vcpu) ? "64bit" : "",
 	       is_pae(vcpu) ? "PAE" : "");

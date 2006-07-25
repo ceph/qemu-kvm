@@ -805,8 +805,6 @@ static int handle_exit_exception(struct hvm_vcpu *vcpu,
 	rip = vmcs_readl(GUEST_RIP);
 	if (intr_info & INTR_INFO_DELIEVER_CODE_MASK)
 		error_code = vmcs_read32(VM_EXIT_INTR_ERROR_CODE);
-	printk(KERN_INFO "exit 0: exception %08x %04x\n",
-	       intr_info, error_code);
 	if ((intr_info & (INTR_INFO_INTR_TYPE_MASK | INTR_INFO_VECTOR_MASK)) == (INTR_TYPE_EXCEPTION | 14)) {
 		cr2 = vmcs_readl(EXIT_QUALIFICATION);
 
