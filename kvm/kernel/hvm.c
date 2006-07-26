@@ -18,7 +18,9 @@
 
 #include "vmx.h"
 
-static const u32 vmx_msr_index[] = { MSR_EFER };
+static const u32 vmx_msr_index[] = { 
+	MSR_EFER, MSR_STAR, MSR_CSTAR, MSR_LSTAR, MSR_SYSCALL_MASK,
+};
 #define NR_VMX_MSR (sizeof(vmx_msr_index) / sizeof(*vmx_msr_index))
 
 struct descriptor_table {
@@ -950,6 +952,22 @@ static int handle_rdmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 		return 1;
 	}
 	switch (ecx) {
+	case MSR_IA32_SYSENTER_CS:
+		vcpu->regs[VCPU_REGS_RAX] = vmcs_read32(GUEST_SYSENTER_CS);
+		vcpu->regs[VCPU_REGS_RAX] = 0;
+		skip_emulated_instruction(vcpu);
+		return 1;
+	case MSR_IA32_SYSENTER_EIP:
+		vcpu->regs[VCPU_REGS_RAX] = vmcs_read32(GUEST_SYSENTER_EIP);
+		vcpu->regs[VCPU_REGS_RAX] = 0;
+		skip_emulated_instruction(vcpu);
+		return 1;
+	case MSR_IA32_SYSENTER_ESP:
+		vcpu->regs[VCPU_REGS_RAX] = vmcs_read32(GUEST_SYSENTER_ESP);
+		vcpu->regs[VCPU_REGS_RAX] = 0;
+		skip_emulated_instruction(vcpu);
+		return 1;
+
 	case MSR_IA32_MCG_STATUS:
 	case MSR_IA32_MCG_CAP:
 	case MSR_IA32_MC0_MISC:
@@ -990,6 +1008,21 @@ static int handle_wrmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 	case 0xc0000101:
 		vmcs_writel(GUEST_GS_BASE, (vcpu->regs[VCPU_REGS_RAX] & -1u)
 			    | ((u64)(vcpu->regs[VCPU_REGS_RDX] & -1u) << 32));
+		skip_emulated_instruction(vcpu);
+		return 1;
+	case MSR_IA32_SYSENTER_CS:
+		vmcs_write32(GUEST_SYSENTER_CS, 
+			     (vcpu->regs[VCPU_REGS_RAX] & -1u));
+		skip_emulated_instruction(vcpu);
+		return 1;
+	case MSR_IA32_SYSENTER_EIP:
+		vmcs_write32(GUEST_SYSENTER_EIP, 
+			     (vcpu->regs[VCPU_REGS_RAX] & -1u));
+		skip_emulated_instruction(vcpu);
+		return 1;
+	case MSR_IA32_SYSENTER_ESP:
+		vmcs_write32(GUEST_SYSENTER_ESP, 
+			     (vcpu->regs[VCPU_REGS_RAX] & -1u));
 		skip_emulated_instruction(vcpu);
 		return 1;
 	}
