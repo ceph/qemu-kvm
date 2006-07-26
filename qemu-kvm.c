@@ -159,6 +159,7 @@ int kvm_cpu_exec(CPUState *env)
      *        timer interrupt 
      */
     sigblock(sigmask(SIGALRM));
+    sigblock(sigmask(SIGIO)); // block RTC signals
     hvm_run(hvm_context, 0);
 
     save_regs(env);
