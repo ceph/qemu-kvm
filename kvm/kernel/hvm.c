@@ -611,6 +611,7 @@ static int hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 		     /* | CPU_BASED_TPR_SHADOW */    /* 20.6.2 */
 		     | CPU_BASED_UNCOND_IO_EXITING   /* 20.6.2 */
 		     | CPU_BASED_INVDPG_EXITING
+		     | CPU_BASED_MOV_DR_EXITING
 		     | 0x401e172    /* reserved, 22.2.1, 20.6.2 */
 		);
 	vmcs_write32(EXCEPTION_BITMAP, 1 << 14); /* want page faults */
@@ -921,6 +922,41 @@ static int handle_cr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 	return 0;
 }
 
+static int handle_dr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
+{
+	u64 exit_qualification;
+	unsigned long val;
+	int dr, reg;
+	
+	/*
+	 * FIXME: this code assumes the host is debugging the guest.
+	 *        need to deal with guest debugging itself too.
+	 */
+	exit_qualification = vmcs_read64(EXIT_QUALIFICATION);
+	dr = exit_qualification & 7;
+	reg = (exit_qualification >> 8) & 15;
+	vcpu_load_rsp_rip(vcpu);
+	if (exit_qualification & 16) {
+		/* mov from dr */
+		switch (dr) {
+		case 6:
+			val = 0xffff0ff0;
+			break;
+		case 7:
+			val = 0x400;
+			break;
+		default:
+			val = 0;
+		}
+		vcpu->regs[reg] = val;
+	} else {
+		/* mov to dr */
+	}
+	vcpu_put_rsp_rip(vcpu);
+	skip_emulated_instruction(vcpu);
+	return 1;
+}
+
 static int handle_cpuid(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 {
 	hvm_run->exit_reason = HVM_EXIT_CPUID;
@@ -1045,6 +1081,7 @@ static int (*hvm_vmx_exit_handlers[])(struct hvm_vcpu *vcpu,
 	[EXIT_REASON_IO_INSTRUCTION]          = handle_io,
 	[EXIT_REASON_INVLPG]                  = handle_invlpg,
 	[EXIT_REASON_CR_ACCESS]               = handle_cr,
+	[EXIT_REASON_DR_ACCESS]               = handle_dr,
 	[EXIT_REASON_CPUID]                   = handle_cpuid,
 	[EXIT_REASON_MSR_READ]                = handle_rdmsr,
 	[EXIT_REASON_MSR_WRITE]               = handle_wrmsr,
