@@ -968,7 +968,7 @@ static inline void set_cr0(struct hvm_vcpu *vcpu, unsigned long cr0)
 static inline void __set_cr0(unsigned long cr0)
 {
 	vmcs_writel(CR0_READ_SHADOW, cr0 & HVM_GUEST_CR0_MASK);
-	vmcs_writel(GUEST_CR0, cr0 | HVM_GUEST_CR0_MASK);
+	vmcs_writel(GUEST_CR0, cr0 | HVM_VM_CR0_ALWAYS_ON);
 }
 
 static int handle_cr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
