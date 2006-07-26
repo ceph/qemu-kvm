@@ -1062,6 +1062,12 @@ static int handle_interrupt_window(struct hvm_vcpu *vcpu,
 	return 1;
 }
 
+static int handle_halt(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
+{
+	hvm_run->exit_reason = HVM_EXIT_HLT;
+	return 0;
+}
+
 static int (*hvm_vmx_exit_handlers[])(struct hvm_vcpu *vcpu,
 				      struct hvm_run *hvm_eun) = {
 	[EXIT_REASON_EXCEPTION_NMI]           = handle_exit_exception,
@@ -1074,6 +1080,7 @@ static int (*hvm_vmx_exit_handlers[])(struct hvm_vcpu *vcpu,
 	[EXIT_REASON_MSR_READ]                = handle_rdmsr,
 	[EXIT_REASON_MSR_WRITE]               = handle_wrmsr,
 	[EXIT_REASON_PENDING_INTERRUPT]       = handle_interrupt_window,
+	[EXIT_REASON_HLT]                     = handle_halt,
 };
 
 static const int hvm_vmx_max_exit_handlers =
