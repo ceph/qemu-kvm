@@ -657,9 +657,9 @@ static int hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 		     (HOST_IS_64 << 9)   /* address space size */
 		     | 0x36dff           /* reserved, 22.2,1, 20.7.1 */
 		);
-	vmcs_write32(VM_EXIT_MSR_STORE_COUNT, NR_VMX_MSR); /* 22.2.2 */
-	vmcs_write32(VM_EXIT_MSR_LOAD_COUNT, NR_VMX_MSR);  /* 22.2.2 */
-	vmcs_write32(VM_ENTRY_MSR_LOAD_COUNT, NR_VMX_MSR); /* 22.2.2 */
+	vmcs_write32(VM_EXIT_MSR_STORE_COUNT, 0); /* 22.2.2 */
+	vmcs_write32(VM_EXIT_MSR_LOAD_COUNT, 0);  /* 22.2.2 */
+	vmcs_write32(VM_ENTRY_MSR_LOAD_COUNT, 0); /* 22.2.2 */
 
 	ret = -ENOMEM;
 	vcpu->guest_msrs = kmalloc(PAGE_SIZE, GFP_KERNEL);
@@ -681,6 +681,7 @@ static int hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 		vcpu->guest_msrs[i] = vcpu->host_msrs[i];
 	}
 
+	/* unused for now due to a VT bug */
 	vmcs_writel(VM_ENTRY_MSR_LOAD_ADDR, virt_to_phys(vcpu->guest_msrs));
 	vmcs_writel(VM_EXIT_MSR_STORE_ADDR, virt_to_phys(vcpu->guest_msrs));
 	vmcs_writel(VM_EXIT_MSR_LOAD_ADDR, virt_to_phys(vcpu->host_msrs));
@@ -1122,6 +1123,22 @@ static void hvm_guest_debug_pre(struct hvm_vcpu *vcpu)
 	}
 }
 
+static void load_msrs(struct vmx_msr_entry *e)
+{
+	int i;
+
+	for (i = 0; i < NR_VMX_MSR; ++i)
+		rdmsrl(e[i].index, e[i].data);
+}
+
+static void save_msrs(struct vmx_msr_entry *e)
+{
+	int i;
+
+	for (i = 0; i < NR_VMX_MSR; ++i)
+		wrmsrl(e[i].index, e[i].data);
+}
+
 static int hvm_dev_ioctl_run(struct hvm *hvm, struct hvm_run *hvm_run)
 {
 	struct hvm_vcpu *vcpu;
@@ -1231,6 +1248,8 @@ again:
 	fx_save(vcpu->host_fx_image);
 	fx_restore(vcpu->guest_fx_image);
 
+	load_msrs(vcpu->guest_msrs);
+
 	asm ( "pushf; " PUSHA "\n\t"
 	      "vmwrite %%" SP ", %2 \n\t"
 	      "cmp $0, %1 \n\t"
@@ -1250,6 +1269,9 @@ again:
 	      : "r"(vcpu->launched), "r"((unsigned long)HOST_RSP),
 		"c"(vcpu->regs)
 	      : "cc", "memory" );
+
+	save_msrs(vcpu->guest_msrs);
+	load_msrs(vcpu->host_msrs);
 
 	fx_save(vcpu->guest_fx_image);
 	fx_restore(vcpu->host_fx_image);
