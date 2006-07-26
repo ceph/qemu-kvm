@@ -663,7 +663,6 @@ static int hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 
 	ret = -ENOMEM;
 	vcpu->guest_msrs = kmalloc(PAGE_SIZE, GFP_KERNEL);
-	vcpu->host_msrs = kmalloc(PAGE_SIZE, GFP_KERNEL);
 	if (!vcpu->guest_msrs)
 		goto out;
 	vcpu->host_msrs = kmalloc(PAGE_SIZE, GFP_KERNEL);
