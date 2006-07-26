@@ -1541,8 +1541,8 @@ static int hvm_dev_ioctl_debug_guest(struct hvm *hvm,
 	return 0;
 }
 
-static int hvm_dev_ioctl(struct inode *inode, struct file *filp,
-                         unsigned int ioctl, unsigned long arg)
+static long hvm_dev_ioctl(struct file *filp,
+			  unsigned int ioctl, unsigned long arg)
 {
 	struct hvm *hvm = filp->private_data;
 	int r = -EINVAL;
@@ -1706,7 +1706,7 @@ static struct file_operations hvm_chardev_ops = {
 	.owner		= THIS_MODULE,
 	.open		= hvm_dev_open,
 	.release        = hvm_dev_release,
-	.ioctl          = hvm_dev_ioctl,
+	.unlocked_ioctl = hvm_dev_ioctl,
 	.mmap           = hvm_dev_mmap,
 };
 
