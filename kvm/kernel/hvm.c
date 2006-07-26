@@ -957,6 +957,9 @@ static int handle_rdmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 	case MSR_IA32_MC0_MISC+8:
 	case MSR_IA32_MC0_MISC+12:
 	case MSR_IA32_MC0_MISC+16:
+		/* MTRR registers */
+	case 0xfe: 
+	case 0x200 ... 0x2ff: 
 		vcpu->regs[VCPU_REGS_RAX] = 0;
 		vcpu->regs[VCPU_REGS_RDX] = 0;
 		skip_emulated_instruction(vcpu);
