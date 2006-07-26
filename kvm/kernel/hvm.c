@@ -1034,12 +1034,12 @@ static int handle_wrmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 		return 1;
 	}
 	switch (ecx) {
-	case 0xc0000100:
+	case MSR_FS_BASE:
 		vmcs_writel(GUEST_FS_BASE, (vcpu->regs[VCPU_REGS_RAX] & -1u)
 			    | ((u64)(vcpu->regs[VCPU_REGS_RDX] & -1u) << 32));
 		skip_emulated_instruction(vcpu);
 		return 1;
-	case 0xc0000101:
+	case MSR_GS_BASE:
 		vmcs_writel(GUEST_GS_BASE, (vcpu->regs[VCPU_REGS_RAX] & -1u)
 			    | ((u64)(vcpu->regs[VCPU_REGS_RDX] & -1u) << 32));
 		skip_emulated_instruction(vcpu);
