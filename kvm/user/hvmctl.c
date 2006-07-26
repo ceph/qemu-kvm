@@ -260,12 +260,18 @@ static void handle_cpuid(hvm_context_t hvm, struct hvm_run *run)
 	hvm_get_regs(hvm, run->vcpu, &regs);
 	hvm->callbacks->cpuid(hvm->opaque, 
 			      &regs.rax, &regs.rbx, &regs.rcx, &regs.rdx);
+	regs.rdx &= ~(1ull << 12); /* disable mtrr support */
 	hvm_set_regs(hvm, run->vcpu, &regs);
 }
 
 static void handle_io_mem(hvm_context_t hvm, struct hvm_run *hvm_run)
 {
 	hvm->callbacks->mmio(hvm->opaque);
+}
+
+static void handle_halt(hvm_context_t hvm, struct hvm_run *hvm_run)
+{
+	hvm->callbacks->halt(hvm->opaque, hvm_run->vcpu);
 }
 
 int hvm_run(hvm_context_t hvm, int vcpu)
@@ -279,10 +285,12 @@ int hvm_run(hvm_context_t hvm, int vcpu)
 
 again:
 	r = ioctl(fd, HVM_RUN, &hvm_run);
-	if (r == -1) {
+	if (r == -1 && errno != EINTR) {
 		printf("hvm_run: %m\n");
 		exit(1);
 	}
+	if (r == -1)
+		goto again;
 	hvm_run.emulated = 1;
 	switch (hvm_run.exit_type) {
 	case HVM_EXIT_TYPE_FAIL_ENTRY:
@@ -307,6 +315,9 @@ again:
 			goto again;
 		case HVM_EXIT_IO_MEM:
 			handle_io_mem(hvm, &hvm_run);
+			goto again;
+		case HVM_EXIT_HLT:
+			handle_halt(hvm, &hvm_run);
 			goto again;
 		default:
 			printf("unhandled vm exit: %d\n", hvm_run.exit_reason);
