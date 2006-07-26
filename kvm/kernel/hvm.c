@@ -977,31 +977,18 @@ static int handle_rdmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 {
 	u32 ecx = vcpu->regs[VCPU_REGS_RCX];
 	struct vmx_msr_entry *msr = find_msr_entry(vcpu, ecx);
+	u64 data;
 
-	if (msr) {
-		/* FIXME: handling of bits 32:63 of rax, rdx */
-		vcpu->regs[VCPU_REGS_RAX] = msr->data & -1u;
-		vcpu->regs[VCPU_REGS_RDX] = (msr->data >> 32) & -1u;
-		skip_emulated_instruction(vcpu);
-		return 1;
-	}
 	switch (ecx) {
 	case MSR_IA32_SYSENTER_CS:
-		vcpu->regs[VCPU_REGS_RAX] = vmcs_read32(GUEST_SYSENTER_CS);
-		vcpu->regs[VCPU_REGS_RAX] = 0;
-		skip_emulated_instruction(vcpu);
-		return 1;
+		data = vmcs_read32(GUEST_SYSENTER_CS);
+		break;
 	case MSR_IA32_SYSENTER_EIP:
-		vcpu->regs[VCPU_REGS_RAX] = vmcs_read32(GUEST_SYSENTER_EIP);
-		vcpu->regs[VCPU_REGS_RAX] = 0;
-		skip_emulated_instruction(vcpu);
-		return 1;
+		data = vmcs_read32(GUEST_SYSENTER_EIP);
+		break;
 	case MSR_IA32_SYSENTER_ESP:
-		vcpu->regs[VCPU_REGS_RAX] = vmcs_read32(GUEST_SYSENTER_ESP);
-		vcpu->regs[VCPU_REGS_RAX] = 0;
-		skip_emulated_instruction(vcpu);
-		return 1;
-
+		data = vmcs_read32(GUEST_SYSENTER_ESP);
+		break;
 	case MSR_IA32_MCG_STATUS:
 	case MSR_IA32_MCG_CAP:
 	case MSR_IA32_MC0_MISC:
@@ -1012,13 +999,22 @@ static int handle_rdmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 		/* MTRR registers */
 	case 0xfe: 
 	case 0x200 ... 0x2ff: 
-		vcpu->regs[VCPU_REGS_RAX] = 0;
-		vcpu->regs[VCPU_REGS_RDX] = 0;
-		skip_emulated_instruction(vcpu);
-		return 1;
+		data = 0;
+		break;
+	default:
+		if (msr) {
+			data = msr->data;
+			break;
+		}
+		printk(KERN_ERR "hvm: unhandled rdmsr: %x\n", ecx);
+		return 0;
 	}
-	printk(KERN_ERR "hvm: unhandled rdmsr: %x\n", ecx);
-	return 0;
+	
+	/* FIXME: handling of bits 32:63 of rax, rdx */
+	vcpu->regs[VCPU_REGS_RAX] = data & -1u;
+	vcpu->regs[VCPU_REGS_RDX] = (data >> 32) & -1u;
+	skip_emulated_instruction(vcpu);
+	return 1;
 }
 
 static int handle_wrmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
