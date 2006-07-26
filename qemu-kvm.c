@@ -244,6 +244,16 @@ static void kvm_mmio(void *opaque)
     cpu_loop_exit();
 }
  
+static void kvm_halt(void *opaque, int vcpu)
+{
+    CPUState **envs = opaque;
+
+    env = envs[0];
+    save_regs(env);
+    printf("halt at %lx\n", env->eip);
+    cpu_loop_exit();
+}
+ 
 static struct hvm_callbacks qemu_kvm_ops = {
     .cpuid = kvm_cpuid,
     .debug = kvm_debug,
@@ -254,6 +264,7 @@ static struct hvm_callbacks qemu_kvm_ops = {
     .outw  = kvm_outw,
     .outl  = kvm_outl,
     .mmio  = kvm_mmio,
+    .halt  = kvm_halt,
 };
 
 void kvm_init()
