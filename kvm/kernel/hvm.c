@@ -1025,38 +1025,34 @@ static int handle_wrmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 {
 	u32 ecx = vcpu->regs[VCPU_REGS_RCX];
 	struct vmx_msr_entry *msr = find_msr_entry(vcpu, ecx);
+	u64 data = (vcpu->regs[VCPU_REGS_RAX] & -1u)
+		| ((u64)(vcpu->regs[VCPU_REGS_RDX] & -1u) << 32);
 
 	if (msr) {
 		/* FIXME: handling of bits 32:63 of rax, rdx */
-		msr->data = (vcpu->regs[VCPU_REGS_RAX] & -1u)
-			| ((u64)(vcpu->regs[VCPU_REGS_RDX] & -1u) << 32);
+		msr->data = data;
 		skip_emulated_instruction(vcpu);
 		return 1;
 	}
 	switch (ecx) {
 	case MSR_FS_BASE:
-		vmcs_writel(GUEST_FS_BASE, (vcpu->regs[VCPU_REGS_RAX] & -1u)
-			    | ((u64)(vcpu->regs[VCPU_REGS_RDX] & -1u) << 32));
+		vmcs_writel(GUEST_FS_BASE, data);
 		skip_emulated_instruction(vcpu);
 		return 1;
 	case MSR_GS_BASE:
-		vmcs_writel(GUEST_GS_BASE, (vcpu->regs[VCPU_REGS_RAX] & -1u)
-			    | ((u64)(vcpu->regs[VCPU_REGS_RDX] & -1u) << 32));
+		vmcs_writel(GUEST_GS_BASE, data);
 		skip_emulated_instruction(vcpu);
 		return 1;
 	case MSR_IA32_SYSENTER_CS:
-		vmcs_write32(GUEST_SYSENTER_CS, 
-			     (vcpu->regs[VCPU_REGS_RAX] & -1u));
+		vmcs_write32(GUEST_SYSENTER_CS, data); 
 		skip_emulated_instruction(vcpu);
 		return 1;
 	case MSR_IA32_SYSENTER_EIP:
-		vmcs_write32(GUEST_SYSENTER_EIP, 
-			     (vcpu->regs[VCPU_REGS_RAX] & -1u));
+		vmcs_write32(GUEST_SYSENTER_EIP, data);
 		skip_emulated_instruction(vcpu);
 		return 1;
 	case MSR_IA32_SYSENTER_ESP:
-		vmcs_write32(GUEST_SYSENTER_ESP, 
-			     (vcpu->regs[VCPU_REGS_RAX] & -1u));
+		vmcs_write32(GUEST_SYSENTER_ESP, data);
 		skip_emulated_instruction(vcpu);
 		return 1;
 	}
