@@ -692,7 +692,7 @@ static int hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 		);
 	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD, 0);  /* 22.2.1 */
 
-	vmcs_writel(CR0_GUEST_HOST_MASK, ~CR0_TS_MASK);
+	vmcs_writel(CR0_GUEST_HOST_MASK, HVM_GUEST_CR0_MASK);
 	vmcs_writel(CR4_GUEST_HOST_MASK, -1ul);
 
 	vmcs_writel(VIRTUAL_APIC_PAGE_ADDR, 0);
@@ -869,6 +869,108 @@ static int handle_invlpg(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 }
 
 
+static inline void inject_gp(void)
+{
+	#define GP_VECTOR 13 
+
+	printk("inject_general_protection: rip 0x%lx\n",
+		 vmcs_readl(GUEST_RIP));
+	vmcs_write32(VM_ENTRY_EXCEPTION_ERROR_CODE, 0);
+	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD,
+		     GP_VECTOR |
+		     INTR_TYPE_EXCEPTION |
+		     INTR_INFO_DELIEVER_CODE_MASK |
+		     INTR_INFO_VALID_MASK);
+	
+}
+
+
+static inline void set_cr0(struct hvm_vcpu *vcpu, unsigned long cr0)
+{
+	// (CD == 0 && NW == 1) => #GP
+
+	if ((cr0 & CR0_PG_MASK) && !(cr0 & CR0_PE_MASK)) {
+		printk("set_cr0: #GP, set PG flag and a clear PE flag\n");
+		inject_gp();
+		return;
+	}
+
+	if ((cr0 & CR0_PG_MASK) && !(guest_cr0() & CR0_PE_MASK)) {
+		printk("set_cr0: #GP, set PG flag and not in protected mode\n");
+		inject_gp();
+		return;
+	}
+
+	if ((cr0 & CR0_PG_MASK) && !(guest_cr0() & CR0_PG_MASK)) {
+
+		if (is_long_mode()) {
+			uint32_t guest_cs_ar;
+			if (is_pae(vcpu)) {
+				printk("set_cr0: #GP, start paging in "
+				       "long mode while PAE is disabled\n");
+				inject_gp();
+				return;
+			}
+			guest_cs_ar = vmcs_read32(GUEST_CS_AR_BYTES);
+			if (guest_cs_ar & SEGMENT_AR_L_MASK) {
+				printk("set_cr0: #GP, start paging in "
+				       "long mode while CS.L == 1\n");
+				inject_gp();
+				return;
+
+			}
+		} else if (is_pae(vcpu)) {
+			//test PDPT
+
+			/*
+				 -- INTEL -- 
+				If any of the reserved bits are set in the
+				page-directory pointers table (PDPT) and the
+				 loading of a control register causes the 
+				 PDPT to be loaded into the processor.
+
+
+                                * If the PG flag is set to 1 and control
+				register CR4 is written to set the PAE flag
+				to 1 (to enable the physical address extension
+				mode), the pointers in the page-directory 
+				pointers table (PDPT) are loaded into the 
+				processor (into internal, non-architectural
+				registers).
+
+				* If the PAE flag is set to 1 and the PG flag 
+				set to 1, writing to control register CR3 will
+				cause the PDPTRs to be reloaded into the
+				processor. If the PAE flag is set to 1 and
+				control register CR0 is written to set the PG 
+				flag, the PDPTRs are reloaded into the processor.
+
+
+				-- AMD --
+				 Reserved bits were set in the page-directory 
+				 pointers table (used in the legacy extended
+				  physical addressing mode) and the instruction
+				modified CR0, CR3, or CR4.
+
+
+				 => #GP
+
+			*/
+		}
+               
+	}
+	vmcs_writel(CR0_READ_SHADOW, cr0 & HVM_GUEST_CR0_MASK);
+	hvm_mmu_reset_context(vcpu);
+	skip_emulated_instruction(vcpu);
+}
+
+
+static inline void __set_cr0(unsigned long cr0)
+{
+	vmcs_writel(CR0_READ_SHADOW, cr0 & HVM_GUEST_CR0_MASK);
+	vmcs_writel(GUEST_CR0, cr0 | HVM_GUEST_CR0_MASK);
+}
+
 static int handle_cr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 {
 	u64 exit_qualification;
@@ -883,10 +985,7 @@ static int handle_cr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 		switch (cr) {
 		case 0:
 			vcpu_load_rsp_rip(vcpu);
-			vcpu->cr0 = vcpu->regs[reg];
-			vcpu_put_rsp_rip(vcpu);
-			skip_emulated_instruction(vcpu);
-			/* FIXME: reset paging */
+			set_cr0(vcpu, vcpu->regs[reg]);
 			return 1;
 		case 3:
 			vcpu_load_rsp_rip(vcpu);
@@ -1454,7 +1553,7 @@ static int hvm_dev_ioctl_get_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 	get_dtable(gdt, GDTR);
 #undef get_dtable
 
-	sregs->cr0 = vcpu->cr0;
+	sregs->cr0 = guest_cr0();
 	sregs->cr2 = vcpu->regs[VCPU_REGS_CR2];
 	sregs->cr3 = vcpu->cr3;
 	sregs->cr4 = vcpu->cr4;
@@ -1523,7 +1622,7 @@ static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 	set_dtable(gdt, GDTR);
 #undef set_dtable
 
-	vcpu->cr0 = sregs->cr0;
+	__set_cr0(sregs->cr0);
 	vcpu->regs[VCPU_REGS_CR2] = sregs->cr2;
 	vcpu->cr3 = sregs->cr3;
 	vcpu->cr4 = sregs->cr4;

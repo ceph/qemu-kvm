@@ -4,7 +4,23 @@
 #include <linux/types.h>
 #include <linux/list.h>
 
+#include "vmx.h"
+
+#define CR0_PE_MASK (1ULL << 0)
 #define CR0_TS_MASK (1ULL << 3)
+#define CR0_NE_MASK (1ULL << 5)
+#define CR0_WP_MASK (1ULL << 16)
+#define CR0_NW_MASK (1ULL << 29)
+#define CR0_CD_MASK (1ULL << 30)
+#define CR0_PG_MASK (1ULL << 31)
+
+#define CR4_PSE_MASK (1ULL << 4)
+#define CR4_PAE_MASK (1ULL << 5)
+#define CR4_PGE_MASK (1ULL << 7)
+
+#define HVM_GUEST_CR0_MASK \
+	(CR0_PG_MASK | CR0_PE_MASK | CR0_WP_MASK | CR0_NE_MASK)
+#define HVM_VM_CR0_ALWAYS_ON HVM_GUEST_CR0_MASK
 
 #define INVALID_PAGE (~(paddr_t)0)
 
@@ -88,7 +104,7 @@ struct hvm_vcpu {
 	unsigned long rip;      /* needs vcpu_load_rsp_rip() */
 
 	gaddr_t cr3;
-	unsigned long cr0, cr4, cr8;
+	unsigned long cr4, cr8;
 	struct vmx_msr_entry *guest_msrs;
 	struct vmx_msr_entry *host_msrs;
 
@@ -128,6 +144,28 @@ static inline u32 vmcs_read32(unsigned long field)
 static inline void vmcs_write32(unsigned long field, u32 value)
 {
 	vmcs_writel(field, value);
+}
+
+static inline int is_long_mode(void)
+{
+	return vmcs_read32(VM_ENTRY_CONTROLS) & VM_ENTRY_CONTROLS_IA32E_MASK;
+}
+
+
+static inline int is_pae(struct hvm_vcpu *vcpu)
+{
+	return vcpu->cr4 & CR4_PAE_MASK;
+}
+
+static inline int is_pse(struct hvm_vcpu *vcpu)
+{
+	return vcpu->cr4 & CR4_PSE_MASK;
+}
+
+static inline unsigned long guest_cr0(void)
+{
+	return (vmcs_readl(CR0_READ_SHADOW) & HVM_GUEST_CR0_MASK) | 
+		(vmcs_readl(GUEST_CR0) & ~HVM_GUEST_CR0_MASK);     
 }
 
 extern paddr_t hvm_bad_page_addr;

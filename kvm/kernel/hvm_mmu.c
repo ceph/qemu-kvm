@@ -90,34 +90,15 @@
 	page_address(pfn_to_page((address) >> PAGE_SHIFT))
 
 
-#define CR0_PG_MASK (1 << 31)
-#define CR0_WP_MASK (1 << 16)
-#define CR4_PAE_MASK (1 << 5)
-#define CR4_PGE_MASK (1 << 7)
-
-#define VM_ENTRY_CONTROLS_IA32E_MASK (1 << 9)
-
-static int is_paging(struct hvm_vcpu *vcpu)
+static int is_paging(void)
 {
-	return vcpu->cr0 & CR0_PG_MASK;
+	return guest_cr0() & CR0_PG_MASK;
 }
 
 
-static int is_64bit(struct hvm_vcpu *vcpu)
+static int is_write_protection(void)
 {
-	return vmcs_read32(VM_ENTRY_CONTROLS) & VM_ENTRY_CONTROLS_IA32E_MASK;
-}
-
-
-static int is_pae(struct hvm_vcpu *vcpu)
-{
-	return vcpu->cr4 & CR4_PAE_MASK;
-}
-
-
-static int is_write_protection(struct hvm_vcpu *vcpu)
-{
-	return vcpu->cr0 & CR0_WP_MASK;
+	return guest_cr0() & CR0_WP_MASK;
 }
 
 
@@ -559,7 +540,7 @@ static inline int fix_write_pf64(struct hvm_vcpu *vcpu,
 		ASSERT(*shadow_ent & PT64_USER_MASK);
 	} else {
 		if (!writable_shadow) {
-			if (is_write_protection(vcpu)) {
+			if (is_write_protection()) {
 				return 0;
 			}
 			*shadow_ent &= ~PT64_USER_MASK;
@@ -739,12 +720,12 @@ static int init_paging_context(struct hvm_vcpu *vcpu)
 	ASSERT(!VALID_PAGE(vcpu->paging_context.root));
 
 	pgprintk("init_paging_context: %s %s %s\n",
-	       is_paging(vcpu) ? "paging" : "",
-	       is_64bit(vcpu) ? "64bit" : "",
+	       is_paging() ? "paging" : "",
+	       is_long_mode() ? "64bit" : "",
 	       is_pae(vcpu) ? "PAE" : "");
-	if (!is_paging(vcpu) ) {
+	if (!is_paging() ) {
 		return nonpaging_init_context(vcpu);
-	} else if (is_64bit(vcpu)) {
+	} else if (is_long_mode()) {
 		return paging64_init_context(vcpu);
 	} else if (is_pae(vcpu) ) {
 		return paging32E_init_context(vcpu); 

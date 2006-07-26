@@ -227,5 +227,12 @@ enum vmcs_field {
 #define TYPE_MOV_TO_DR                  (0 << 4) 
 #define TYPE_MOV_FROM_DR                (1 << 4)
 #define DEBUG_REG_ACCESS_REG            0xf00   /* 11:8, general purpose register */
- 
+
+
+/* segment AR */
+#define SEGMENT_AR_L_MASK (1 << 13)
+
+/* entry controls */
+#define VM_ENTRY_CONTROLS_IA32E_MASK (1 << 9)
+
 #endif
