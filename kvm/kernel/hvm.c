@@ -19,7 +19,8 @@
 #include "vmx.h"
 
 static const u32 vmx_msr_index[] = { 
-	MSR_EFER, MSR_STAR, MSR_CSTAR, MSR_LSTAR, MSR_SYSCALL_MASK,
+	MSR_EFER, MSR_STAR, MSR_CSTAR, MSR_LSTAR, MSR_SYSCALL_MASK, 
+	MSR_KERNEL_GS_BASE,
 };
 #define NR_VMX_MSR (sizeof(vmx_msr_index) / sizeof(*vmx_msr_index))
 
