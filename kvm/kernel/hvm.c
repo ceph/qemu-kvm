@@ -863,8 +863,6 @@ static int handle_invlpg(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 {
 	uint64_t address = vmcs_read64(EXIT_QUALIFICATION);
 	int instruction_length = vmcs_read32(VM_EXIT_INSTRUCTION_LEN);
-	printk("handle_invlpg: 0x%llx instruction length %d\n",
-	       address, instruction_length);
 	vcpu->paging_context.inval_page(vcpu, address);
 	vmcs_writel(GUEST_RIP, vmcs_readl(GUEST_RIP) + instruction_length);
 	return 1;
@@ -878,7 +876,6 @@ static int handle_cr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 	int reg;
 
 	exit_qualification = vmcs_read64(EXIT_QUALIFICATION);
-	printk("cr exit: %llx\n", exit_qualification);
 	cr = exit_qualification & 15;
 	reg = (exit_qualification >> 8) & 15;
 	switch ((exit_qualification >> 4) & 3) {
@@ -1444,7 +1441,6 @@ static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 	struct hvm_vcpu *vcpu;
 	struct vmx_msr_entry *msr_entry;
 
-	printk("set_sregs\n");
 	if (!hvm->created)
 		return -EINVAL;
 	if (sregs->vcpu < 0 || sregs->vcpu >= hvm->nvcpus)
@@ -1526,7 +1522,6 @@ static int hvm_dev_ioctl_interrupt(struct hvm *hvm, struct hvm_interrupt *irq)
 {
 	struct hvm_vcpu *vcpu;
 
-	printk("set_sregs\n");
 	if (!hvm->created)
 		return -EINVAL;
 	if (irq->vcpu < 0 || irq->vcpu >= hvm->nvcpus)
