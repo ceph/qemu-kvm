@@ -17,10 +17,14 @@
 #define CR4_PSE_MASK (1ULL << 4)
 #define CR4_PAE_MASK (1ULL << 5)
 #define CR4_PGE_MASK (1ULL << 7)
+#define CR4_VMXE_MASK (1ULL << 13)
 
 #define HVM_GUEST_CR0_MASK \
 	(CR0_PG_MASK | CR0_PE_MASK | CR0_WP_MASK | CR0_NE_MASK)
 #define HVM_VM_CR0_ALWAYS_ON HVM_GUEST_CR0_MASK
+
+#define HVM_GUEST_CR4_MASK \
+	(CR4_PSE_MASK | CR4_PAE_MASK | CR4_PGE_MASK | CR4_VMXE_MASK)
 
 #define INVALID_PAGE (~(paddr_t)0)
 
@@ -104,7 +108,7 @@ struct hvm_vcpu {
 	unsigned long rip;      /* needs vcpu_load_rsp_rip() */
 
 	gaddr_t cr3;
-	unsigned long cr4, cr8;
+	unsigned long cr8;
 	struct vmx_msr_entry *guest_msrs;
 	struct vmx_msr_entry *host_msrs;
 
@@ -151,21 +155,30 @@ static inline int is_long_mode(void)
 	return vmcs_read32(VM_ENTRY_CONTROLS) & VM_ENTRY_CONTROLS_IA32E_MASK;
 }
 
-
-static inline int is_pae(struct hvm_vcpu *vcpu)
+static inline unsigned long guest_cr4(void)
 {
-	return vcpu->cr4 & CR4_PAE_MASK;
+	return vmcs_readl(GUEST_CR4) & ~CR4_VMXE_MASK;
 }
 
-static inline int is_pse(struct hvm_vcpu *vcpu)
+static inline int is_pae(void)
 {
-	return vcpu->cr4 & CR4_PSE_MASK;
+	return guest_cr4() & CR4_PAE_MASK;
+}
+
+static inline int is_pse(void)
+{
+	return guest_cr4() & CR4_PSE_MASK;
 }
 
 static inline unsigned long guest_cr0(void)
 {
 	return (vmcs_readl(CR0_READ_SHADOW) & HVM_GUEST_CR0_MASK) | 
 		(vmcs_readl(GUEST_CR0) & ~HVM_GUEST_CR0_MASK);     
+}
+
+static int is_paging(void)
+{
+	return guest_cr0() & CR0_PG_MASK;
 }
 
 extern paddr_t hvm_bad_page_addr;

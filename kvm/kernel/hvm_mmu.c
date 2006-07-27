@@ -90,11 +90,6 @@
 	page_address(pfn_to_page((address) >> PAGE_SHIFT))
 
 
-static int is_paging(void)
-{
-	return guest_cr0() & CR0_PG_MASK;
-}
-
 
 static int is_write_protection(void)
 {
@@ -689,7 +684,7 @@ static int paging64_init_context(struct hvm_vcpu *vcpu)
 {
 	paging_context_t *context = &vcpu->paging_context;
 
-	ASSERT(is_pae(vcpu));
+	ASSERT(is_pae());
 	context->new_cr3 = paging64_new_cr3;
 	context->page_fault = paging64_page_fault;
 	context->inval_page = paging64_inval_page;
@@ -722,12 +717,12 @@ static int init_paging_context(struct hvm_vcpu *vcpu)
 	pgprintk("init_paging_context: %s %s %s\n",
 	       is_paging() ? "paging" : "",
 	       is_long_mode() ? "64bit" : "",
-	       is_pae(vcpu) ? "PAE" : "");
+	       is_pae() ? "PAE" : "");
 	if (!is_paging() ) {
 		return nonpaging_init_context(vcpu);
 	} else if (is_long_mode()) {
 		return paging64_init_context(vcpu);
-	} else if (is_pae(vcpu) ) {
+	} else if (is_pae() ) {
 		return paging32E_init_context(vcpu); 
 	} else {
 		return paging32_init_context(vcpu);

@@ -693,7 +693,7 @@ static int hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD, 0);  /* 22.2.1 */
 
 	vmcs_writel(CR0_GUEST_HOST_MASK, HVM_GUEST_CR0_MASK);
-	vmcs_writel(CR4_GUEST_HOST_MASK, -1ul);
+	vmcs_writel(CR4_GUEST_HOST_MASK, HVM_GUEST_CR4_MASK);
 
 	vmcs_writel(VIRTUAL_APIC_PAGE_ADDR, 0);
 	vmcs_writel(TPR_THRESHOLD, 0);
@@ -905,7 +905,7 @@ static inline void set_cr0(struct hvm_vcpu *vcpu, unsigned long cr0)
 
 		if (is_long_mode()) {
 			uint32_t guest_cs_ar;
-			if (is_pae(vcpu)) {
+			if (is_pae()) {
 				printk("set_cr0: #GP, start paging in "
 				       "long mode while PAE is disabled\n");
 				inject_gp();
@@ -919,7 +919,7 @@ static inline void set_cr0(struct hvm_vcpu *vcpu, unsigned long cr0)
 				return;
 
 			}
-		} else if (is_pae(vcpu)) {
+		} else if (is_pae()) {
 			//test PDPT
 
 			/*
@@ -965,10 +965,40 @@ static inline void set_cr0(struct hvm_vcpu *vcpu, unsigned long cr0)
 }
 
 
+static inline void set_cr4(struct hvm_vcpu *vcpu, unsigned long cr4)
+{
+	if (is_long_mode()) {
+		if (!(cr4 & CR4_PAE_MASK)) {
+			printk("set_cr4: #GP, clearing PAE while in long mode\n");
+			inject_gp();
+			return;
+		}
+	} else if (is_paging() && !is_pae() && (cr4 & CR4_PAE_MASK)) {
+		//test PDPT
+	}
+
+	if (cr4 & CR4_VMXE_MASK) {
+		printk("set_cr4: #GP, setting VMXE\n");
+		inject_gp();
+		return;
+	}
+	vmcs_writel(GUEST_CR4, cr4 | CR4_VMXE_MASK);
+	vmcs_writel(CR4_READ_SHADOW, cr4 & ~CR4_VMXE_MASK);
+	hvm_mmu_reset_context(vcpu);
+	skip_emulated_instruction(vcpu);
+}
+
+
 static inline void __set_cr0(unsigned long cr0)
 {
 	vmcs_writel(CR0_READ_SHADOW, cr0 & HVM_GUEST_CR0_MASK);
 	vmcs_writel(GUEST_CR0, cr0 | HVM_VM_CR0_ALWAYS_ON);
+}
+
+static inline void __set_cr4(unsigned long cr4)
+{
+	vmcs_writel(CR4_READ_SHADOW, cr4);
+	vmcs_writel(GUEST_CR4, cr4 | CR4_VMXE_MASK);
 }
 
 static int handle_cr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
@@ -996,9 +1026,7 @@ static int handle_cr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 			return 1;
 		case 4:
 			vcpu_load_rsp_rip(vcpu);
-			vcpu->cr4 = vcpu->regs[reg];
-			vcpu_put_rsp_rip(vcpu);
-			skip_emulated_instruction(vcpu);
+			set_cr4(vcpu, vcpu->regs[reg]);
 			return 1;
 		};
 		break;
@@ -1556,7 +1584,7 @@ static int hvm_dev_ioctl_get_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 	sregs->cr0 = guest_cr0();
 	sregs->cr2 = vcpu->regs[VCPU_REGS_CR2];
 	sregs->cr3 = vcpu->cr3;
-	sregs->cr4 = vcpu->cr4;
+	sregs->cr4 = guest_cr4();
 	sregs->cr8 = vcpu->cr8;
 
 	msr_entry = find_msr_entry(vcpu, MSR_EFER);
@@ -1625,7 +1653,7 @@ static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 	__set_cr0(sregs->cr0);
 	vcpu->regs[VCPU_REGS_CR2] = sregs->cr2;
 	vcpu->cr3 = sregs->cr3;
-	vcpu->cr4 = sregs->cr4;
+	__set_cr4(sregs->cr4);
 	vcpu->cr8 = sregs->cr8;
 
 	msr_entry = find_msr_entry(vcpu, MSR_EFER);
