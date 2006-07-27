@@ -964,6 +964,27 @@ static inline void set_cr0(struct hvm_vcpu *vcpu, unsigned long cr0)
 }
 
 
+static inline void lmsw(struct hvm_vcpu *vcpu, unsigned long msw)
+{
+	unsigned long cr0 = guest_cr0();
+
+	if ((msw & CR0_PE_MASK) && !(cr0 & CR0_PE_MASK)) {
+	      vmcs_writel(CR0_READ_SHADOW, cr0 | CR0_PE_MASK);
+	      printk("lmsw: enter protected mode\n");
+	      // enter protected mode
+	} else {
+		printk("lmsw: unexpected\n");
+	}
+
+	#define LMSW_GUEST_MASK 0x0eULL
+
+	vmcs_writel(GUEST_CR0, (vmcs_readl(GUEST_CR0) & ~LMSW_GUEST_MASK) 
+				| (msw & LMSW_GUEST_MASK));
+
+	skip_emulated_instruction(vcpu);
+}
+
+
 static inline void set_cr4(struct hvm_vcpu *vcpu, unsigned long cr4)
 {
 	if (is_long_mode()) {
@@ -1088,6 +1109,9 @@ static int handle_cr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 			return 1;
 		}
 		break;
+	case 3: /* lmsw */
+		lmsw(vcpu, (exit_qualification >> LMSW_SOURCE_DATA_SHIFT) & 0x0f);
+		return 1;
 	default:
 		break;
 	}

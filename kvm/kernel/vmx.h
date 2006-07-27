@@ -201,7 +201,8 @@ enum vmcs_field {
 #define CONTROL_REG_ACCESS_NUM          0x7     /* 2:0, number of control register */
 #define CONTROL_REG_ACCESS_TYPE         0x30    /* 5:4, access type */
 #define CONTROL_REG_ACCESS_REG          0xf00   /* 10:8, general purpose register */
-#define LMSW_SOURCE_DATA  (0xFFFF << 16) /* 16:31 lmsw source */
+#define LMSW_SOURCE_DATA_SHIFT 16
+#define LMSW_SOURCE_DATA  (0xFFFF << LMSW_SOURCE_DATA_SHIFT) /* 16:31 lmsw source */
 #define REG_EAX                         (0 << 8) 
 #define REG_ECX                         (1 << 8) 
 #define REG_EDX                         (2 << 8) 
