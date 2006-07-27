@@ -1107,6 +1107,12 @@ static int handle_rdmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 	u64 data;
 
 	switch (ecx) {
+	case MSR_FS_BASE:
+		data = vmcs_readl(GUEST_FS_BASE);
+		break;
+	case MSR_GS_BASE:
+		data = vmcs_readl(GUEST_GS_BASE);
+		break;
 	case MSR_IA32_SYSENTER_CS:
 		data = vmcs_read32(GUEST_SYSENTER_CS);
 		break;
