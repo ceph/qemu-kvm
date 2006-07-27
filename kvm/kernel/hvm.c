@@ -608,7 +608,6 @@ static int hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 		     CPU_BASED_HLT_EXITING         /* 20.6.2 */
 		     | CPU_BASED_CR8_LOAD_EXITING    /* 20.6.2 */
 		     | CPU_BASED_CR8_STORE_EXITING   /* 20.6.2 */
-		     /* | CPU_BASED_TPR_SHADOW */    /* 20.6.2 */
 		     | CPU_BASED_UNCOND_IO_EXITING   /* 20.6.2 */
 		     | CPU_BASED_INVDPG_EXITING
 		     | CPU_BASED_MOV_DR_EXITING
@@ -994,9 +993,6 @@ static inline void set_cr4(struct hvm_vcpu *vcpu, unsigned long cr4)
 
 static inline void set_cr3(struct hvm_vcpu *vcpu, unsigned long cr3)
 {
-	
-	printk("set_cr3: CR3_L_MODE_RESEVED_BITS 0x%llx\n",
-	       CR3_L_MODE_RESEVED_BITS);
 	if (is_long_mode()) {
 		if ( cr3 & CR3_L_MODE_RESEVED_BITS) {
 			printk("set_cr3: #GP, reserved bits\n");
@@ -1018,7 +1014,20 @@ static inline void set_cr3(struct hvm_vcpu *vcpu, unsigned long cr3)
 	vcpu->paging_context.new_cr3(vcpu);
 	skip_emulated_instruction(vcpu);
 }
-	
+
+
+#define CR8_RESEVED_BITS (~0x0fULL)
+
+static inline void set_cr8(struct hvm_vcpu *vcpu, unsigned long cr8)
+{
+	if ( cr8 & CR8_RESEVED_BITS) {
+		printk("set_cr8: #GP, reserved bits\n");
+		inject_gp();
+		return;
+	}
+	vcpu->cr8 = cr8;
+	skip_emulated_instruction(vcpu);  
+}
 
 
 static inline void __set_cr0(unsigned long cr0)
@@ -1057,6 +1066,10 @@ static int handle_cr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 			vcpu_load_rsp_rip(vcpu);
 			set_cr4(vcpu, vcpu->regs[reg]);
 			return 1;
+		case 8:
+			vcpu_load_rsp_rip(vcpu);
+			set_cr8(vcpu, vcpu->regs[reg]);
+			return 1;
 		};
 		break;
 	case 1: /*mov from cr*/
@@ -1064,6 +1077,12 @@ static int handle_cr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 		case 3:
 			vcpu_load_rsp_rip(vcpu);
 			vcpu->regs[reg] = vcpu->cr3;
+			vcpu_put_rsp_rip(vcpu);
+			skip_emulated_instruction(vcpu);
+			return 1;
+		case 8:
+			vcpu_load_rsp_rip(vcpu);
+			vcpu->regs[reg] = vcpu->cr8;
 			vcpu_put_rsp_rip(vcpu);
 			skip_emulated_instruction(vcpu);
 			return 1;

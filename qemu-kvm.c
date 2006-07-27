@@ -82,7 +82,7 @@ static void load_regs(CPUState *env)
     sregs.cr2 = env->cr[2];
     sregs.cr3 = env->cr[3];
     sregs.cr4 = env->cr[4];
-    sregs.cr8 = 0;
+    sregs.cr8 = cpu_get_apic_tpr(env);
 
     sregs.efer = env->efer;
 
@@ -142,6 +142,8 @@ static void save_regs(CPUState *env)
     env->cr[2] = sregs.cr2;
     env->cr[3] = sregs.cr3;
     env->cr[4] = sregs.cr4;
+
+    cpu_set_apic_tpr(env, sregs.cr8);
 
     env->efer = sregs.efer;
 }
