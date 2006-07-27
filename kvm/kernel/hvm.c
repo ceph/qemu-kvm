@@ -989,6 +989,38 @@ static inline void set_cr4(struct hvm_vcpu *vcpu, unsigned long cr4)
 }
 
 
+#define CR3_RESEVED_BITS 0x07ULL
+#define CR3_L_MODE_RESEVED_BITS (~((1ULL << 40) - 1) | 0x0fe7ULL)
+
+static inline void set_cr3(struct hvm_vcpu *vcpu, unsigned long cr3)
+{
+	
+	printk("set_cr3: CR3_L_MODE_RESEVED_BITS 0x%llx\n",
+	       CR3_L_MODE_RESEVED_BITS);
+	if (is_long_mode()) {
+		if ( cr3 & CR3_L_MODE_RESEVED_BITS) {
+			printk("set_cr3: #GP, reserved bits\n");
+			inject_gp();
+			return;
+		}
+	} else {
+		if (cr3 & CR3_RESEVED_BITS) {
+			printk("set_cr3: #GP, reserved bits\n");
+			inject_gp();
+			return;
+		}
+		if (is_paging() && is_pae()) {
+			//test PDPT
+		}
+	}
+
+	vcpu->cr3 = cr3;
+	vcpu->paging_context.new_cr3(vcpu);
+	skip_emulated_instruction(vcpu);
+}
+	
+
+
 static inline void __set_cr0(unsigned long cr0)
 {
 	vmcs_writel(CR0_READ_SHADOW, cr0 & HVM_GUEST_CR0_MASK);
@@ -1019,10 +1051,7 @@ static int handle_cr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 			return 1;
 		case 3:
 			vcpu_load_rsp_rip(vcpu);
-			vcpu->cr3 = vcpu->regs[reg];
-			vcpu->paging_context.new_cr3(vcpu);
-			vcpu_put_rsp_rip(vcpu);
-			skip_emulated_instruction(vcpu);
+			set_cr3(vcpu, vcpu->regs[reg]);
 			return 1;
 		case 4:
 			vcpu_load_rsp_rip(vcpu);
