@@ -884,9 +884,21 @@ static inline void inject_gp(void)
 }
 
 
+#define CR0_RESEVED_BITS 0xffffffff1ffaffc0ULL
+
 static inline void set_cr0(struct hvm_vcpu *vcpu, unsigned long cr0)
 {
-	// (CD == 0 && NW == 1) => #GP
+	if (cr0 & CR0_RESEVED_BITS) {
+		printk("set_cr0: 0x%lx #GP, reserved bits (0x%lx)\n", cr0, guest_cr0());
+		inject_gp();
+		return;
+	}
+
+	if ((cr0 & CR0_NW_MASK) && !(cr0 & CR0_CD_MASK)) {
+		printk("set_cr0: #GP, CD == 0 && NW == 1\n");
+		inject_gp();
+		return;
+	}
 
 	if ((cr0 & CR0_PG_MASK) && !(cr0 & CR0_PE_MASK)) {
 		printk("set_cr0: #GP, set PG flag and a clear PE flag\n");
@@ -958,6 +970,7 @@ static inline void set_cr0(struct hvm_vcpu *vcpu, unsigned long cr0)
 		}
                
 	}
+	vmcs_writel(GUEST_CR0, cr0 | HVM_VM_CR0_ALWAYS_ON);
 	vmcs_writel(CR0_READ_SHADOW, cr0 & HVM_GUEST_CR0_MASK);
 	hvm_mmu_reset_context(vcpu);
 	skip_emulated_instruction(vcpu);
@@ -984,9 +997,16 @@ static inline void lmsw(struct hvm_vcpu *vcpu, unsigned long msw)
 	skip_emulated_instruction(vcpu);
 }
 
+#define CR4_RESEVED_BITS (~((1ULL << 11) - 1))
 
 static inline void set_cr4(struct hvm_vcpu *vcpu, unsigned long cr4)
 {
+	if (cr4 & CR4_RESEVED_BITS) {
+		printk("set_cr4: #GP, reserved bits\n");
+		inject_gp();
+		return;
+	}
+
 	if (is_long_mode()) {
 		if (!(cr4 & CR4_PAE_MASK)) {
 			printk("set_cr4: #GP, clearing PAE while in long mode\n");
@@ -1003,7 +1023,7 @@ static inline void set_cr4(struct hvm_vcpu *vcpu, unsigned long cr4)
 		return;
 	}
 	vmcs_writel(GUEST_CR4, cr4 | CR4_VMXE_MASK);
-	vmcs_writel(CR4_READ_SHADOW, cr4 & ~CR4_VMXE_MASK);
+	vmcs_writel(CR4_READ_SHADOW, cr4);
 	hvm_mmu_reset_context(vcpu);
 	skip_emulated_instruction(vcpu);
 }
