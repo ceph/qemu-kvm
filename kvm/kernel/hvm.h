@@ -109,6 +109,7 @@ struct hvm_vcpu {
 
 	gaddr_t cr3;
 	unsigned long cr8;
+	u64 shadow_efer;
 	struct vmx_msr_entry *guest_msrs;
 	struct vmx_msr_entry *host_msrs;
 

@@ -518,6 +518,8 @@ static int hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	
 	vcpu_load(vcpu);
 
+	vcpu->cr8 = 0;
+	vcpu->shadow_efer = read_msr(MSR_EFER);
 	fx_save(vcpu->guest_fx_image);
 
 	/* Segments */
@@ -912,9 +914,15 @@ static inline void set_cr0(struct hvm_vcpu *vcpu, unsigned long cr0)
 		return;
 	}
 
-	if ((cr0 & CR0_PG_MASK) && !(guest_cr0() & CR0_PG_MASK)) {
-
-		if (is_long_mode()) {
+	if (is_paging()) {
+		if (!(cr0 & CR0_PG_MASK)) {
+			vcpu->shadow_efer &= ~EFER_LMA;
+			vmcs_write32(VM_ENTRY_CONTROLS, 
+				     vmcs_read32(VM_ENTRY_CONTROLS) &
+				     ~VM_ENTRY_CONTROLS_IA32E_MASK);
+		}
+	} else if ((cr0 & CR0_PG_MASK)) {
+		if ((vcpu->shadow_efer & EFER_LME)) {
 			uint32_t guest_cs_ar;
 			if (is_pae()) {
 				printk("set_cr0: #GP, start paging in "
@@ -930,6 +938,11 @@ static inline void set_cr0(struct hvm_vcpu *vcpu, unsigned long cr0)
 				return;
 
 			}
+			vcpu->shadow_efer |= EFER_LMA;
+			vmcs_write32(VM_ENTRY_CONTROLS, 
+				     vmcs_read32(VM_ENTRY_CONTROLS) |
+				     VM_ENTRY_CONTROLS_IA32E_MASK);
+
 		} else if (is_pae()) {
 			//test PDPT
 
@@ -1242,10 +1255,66 @@ static int handle_rdmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 	return 1;
 }
 
+
+#define EFER_RESERVED_BITS 0xfffffffffffff2fe
+
+
+static inline void set_efer(struct hvm_vcpu *vcpu, u64 efer)
+{
+	struct vmx_msr_entry *msr;
+
+	if (efer & EFER_RESERVED_BITS) {
+		printk("set_efer: 0x%llx #GP, reserved bits\n", efer);
+		inject_gp();
+		return;
+	}
+
+	if (is_paging() && (vcpu->shadow_efer & EFER_LME) != (efer & EFER_LME)) {
+		printk("set_efer: #GP, change LME while paging\n");
+		inject_gp();
+		return;
+	}
+
+	efer &= ~EFER_LMA; 
+	efer |= vcpu->shadow_efer & EFER_LMA;
+
+	vcpu->shadow_efer = efer;
+
+	msr = find_msr_entry(vcpu, MSR_EFER);
+
+	if (!(efer & EFER_LMA)) {
+	    efer &= ~EFER_LME;    
+	}
+	msr->data = efer;
+	skip_emulated_instruction(vcpu);
+}
+
+
+static inline void __set_efer(struct hvm_vcpu *vcpu, u64 efer)
+{
+	struct vmx_msr_entry *msr = find_msr_entry(vcpu, MSR_EFER);
+
+	vcpu->shadow_efer = efer;
+	if (efer & EFER_LMA) {
+		vmcs_write32(VM_ENTRY_CONTROLS, 
+				     vmcs_read32(VM_ENTRY_CONTROLS) |
+				     VM_ENTRY_CONTROLS_IA32E_MASK);
+		msr->data = efer;
+
+	} else {
+		vmcs_write32(VM_ENTRY_CONTROLS, 
+				     vmcs_read32(VM_ENTRY_CONTROLS) &
+				     ~VM_ENTRY_CONTROLS_IA32E_MASK);
+
+		msr->data = efer & ~EFER_LME;
+	}
+}
+
+
 static int handle_wrmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 {
 	u32 ecx = vcpu->regs[VCPU_REGS_RCX];
-	struct vmx_msr_entry *msr = find_msr_entry(vcpu, ecx);
+	struct vmx_msr_entry *msr;
 	u64 data = (vcpu->regs[VCPU_REGS_RAX] & -1u)
 		| ((u64)(vcpu->regs[VCPU_REGS_RDX] & -1u) << 32);
 
@@ -1265,7 +1334,11 @@ static int handle_wrmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 	case MSR_IA32_SYSENTER_ESP:
 		vmcs_write32(GUEST_SYSENTER_ESP, data);
 		break;
+	case MSR_EFER:
+		set_efer(vcpu, data);
+		return 1;
 	default:
+		msr = find_msr_entry(vcpu, ecx);
 		if (msr) {
 			msr->data = data;
 			break;
@@ -1631,7 +1704,6 @@ static int hvm_dev_ioctl_set_regs(struct hvm *hvm, struct hvm_regs *regs)
 static int hvm_dev_ioctl_get_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 {
 	struct hvm_vcpu *vcpu;
-	struct vmx_msr_entry *msr_entry;
 
 	if (!hvm->created)
 		return -EINVAL;
@@ -1684,9 +1756,7 @@ static int hvm_dev_ioctl_get_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 	sregs->cr3 = vcpu->cr3;
 	sregs->cr4 = guest_cr4();
 	sregs->cr8 = vcpu->cr8;
-
-	msr_entry = find_msr_entry(vcpu, MSR_EFER);
-	sregs->efer = msr_entry->data;
+	sregs->efer = vcpu->shadow_efer;
 	vcpu_put();
 
 	return 0;
@@ -1695,7 +1765,6 @@ static int hvm_dev_ioctl_get_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 {
 	struct hvm_vcpu *vcpu;
-	struct vmx_msr_entry *msr_entry;
 
 	if (!hvm->created)
 		return -EINVAL;
@@ -1754,8 +1823,7 @@ static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 	__set_cr4(sregs->cr4);
 	vcpu->cr8 = sregs->cr8;
 
-	msr_entry = find_msr_entry(vcpu, MSR_EFER);
-	msr_entry->data = sregs->efer;
+	__set_efer(vcpu, sregs->efer);
 
 	hvm_mmu_reset_context(vcpu);
 	vcpu_put();
