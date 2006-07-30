@@ -14,6 +14,9 @@
 #define CR0_CD_MASK (1ULL << 30)
 #define CR0_PG_MASK (1ULL << 31)
 
+#define CR3_WPT_MASK (1ULL << 3)
+#define CR3_PCD_MASK (1ULL << 4)
+
 #define CR4_PSE_MASK (1ULL << 4)
 #define CR4_PAE_MASK (1ULL << 5)
 #define CR4_PGE_MASK (1ULL << 7)

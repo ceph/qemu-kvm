@@ -244,6 +244,9 @@ static void nonpaging_flush(struct hvm_vcpu *vcpu)
 	root = hvm_mmu_alloc_page(vcpu);
 	ASSERT(VALID_PAGE(root));
 	vcpu->paging_context.root = root;
+	if (is_paging()) {
+		root |= (vcpu->cr3 & (CR3_PCD_MASK | CR3_WPT_MASK));
+	} 
 	vmcs_writel(GUEST_CR3, root);
 }
 
@@ -692,7 +695,8 @@ static int paging64_init_context(struct hvm_vcpu *vcpu)
 	context->root_level = PT64_ROOT_LEVEL;
 	context->root = hvm_mmu_alloc_page(vcpu);
 	ASSERT(VALID_PAGE(context->root));
-	vmcs_writel(GUEST_CR3, context->root);
+	vmcs_writel(GUEST_CR3, context->root | 
+		    (vcpu->cr3 & (CR3_PCD_MASK | CR3_WPT_MASK)));
 	return 0;
 }
 
