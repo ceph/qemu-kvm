@@ -714,10 +714,10 @@ static int init_paging_context(struct hvm_vcpu *vcpu)
 	ASSERT(vcpu);
 	ASSERT(!VALID_PAGE(vcpu->paging_context.root));
 
-	pgprintk("init_paging_context: %s %s %s\n",
-	       is_paging() ? "paging" : "",
-	       is_long_mode() ? "64bit" : "",
-	       is_pae() ? "PAE" : "");
+	pgprintk("init_paging_context:%s%s%s\n",
+	       is_paging() ? " paging" : "",
+	       is_long_mode() ? " 64bit" : "",
+	       is_pae() ? " PAE" : "");
 	if (!is_paging() ) {
 		return nonpaging_init_context(vcpu);
 	} else if (is_long_mode()) {
