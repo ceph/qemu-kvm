@@ -154,13 +154,17 @@
 #define HF_MP_MASK           (1 << HF_MP_SHIFT)
 #define HF_EM_MASK           (1 << HF_EM_SHIFT)
 #define HF_TS_MASK           (1 << HF_TS_SHIFT)
+#define HF_IOPL_MASK         (3 << HF_IOPL_SHIFT)
 #define HF_LMA_MASK          (1 << HF_LMA_SHIFT)
 #define HF_CS64_MASK         (1 << HF_CS64_SHIFT)
 #define HF_OSFXSR_MASK       (1 << HF_OSFXSR_SHIFT)
+#define HF_VM_MASK           (1 << HF_VM_SHIFT)
 #define HF_HALTED_MASK       (1 << HF_HALTED_SHIFT)
 
-#define CR0_PE_MASK  (1 << 0)
-#define CR0_MP_MASK  (1 << 1)
+#define CR0_PE_SHIFT 0
+#define CR0_PE_MASK  (1 << CR0_PE_SHIFT)
+#define CR0_MP_SHIFT 1
+#define CR0_MP_MASK  (1 << CR0_MP_SHIFT)
 #define CR0_EM_MASK  (1 << 2)
 #define CR0_TS_MASK  (1 << 3)
 #define CR0_ET_MASK  (1 << 4)
@@ -177,7 +181,8 @@
 #define CR4_PAE_MASK  (1 << 5)
 #define CR4_PGE_MASK  (1 << 7)
 #define CR4_PCE_MASK  (1 << 8)
-#define CR4_OSFXSR_MASK (1 << 9)
+#define CR4_OSFXSR_SHIFT 9
+#define CR4_OSFXSR_MASK (1 << CR4_OSFXSR_SHIFT)
 #define CR4_OSXMMEXCPT_MASK  (1 << 10)
 
 #define PG_PRESENT_BIT	0

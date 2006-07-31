@@ -17,7 +17,7 @@ static CPUState *saved_env[NR_CPU];
 
 int kvm_is_ok(CPUState *env)
 {
-    return (env->segs[R_CS].flags & DESC_L_MASK) != 0 && !env->kvm_mmio;
+    return (env->efer & MSR_EFER_LMA) && !env->kvm_mmio;
 }
 
 void kvm_handled_mmio(CPUState *env)
@@ -101,6 +101,7 @@ static void save_regs(CPUState *env)
 {
     struct hvm_regs regs;
     struct hvm_sregs sregs;
+    uint32_t hflags;
 
     hvm_get_regs(hvm_context, 0, &regs);
 
@@ -163,7 +164,48 @@ static void save_regs(CPUState *env)
     cpu_set_apic_tpr(env, sregs.cr8);
 
     env->efer = sregs.efer;
+
+#define HFLAG_COPY_MASK ~( \
+			HF_CPL_MASK | HF_PE_MASK | HF_MP_MASK | HF_EM_MASK | \
+			HF_TS_MASK | HF_TF_MASK | HF_VM_MASK | HF_IOPL_MASK | \
+			HF_OSFXSR_MASK | HF_LMA_MASK | HF_CS32_MASK | \
+			HF_SS32_MASK | HF_CS64_MASK | HF_ADDSEG_MASK)
+
+
+
+    hflags = (env->segs[R_CS].flags >> DESC_DPL_SHIFT) & HF_CPL_MASK;
+    hflags |= (env->cr[0] & CR0_PE_MASK) << (HF_PE_SHIFT - CR0_PE_SHIFT);
+    hflags |= (env->cr[0] << (HF_MP_SHIFT - CR0_MP_SHIFT)) & 
+	    (HF_MP_MASK | HF_EM_MASK | HF_TS_MASK);
+    hflags |= (env->eflags & (HF_TF_MASK | HF_VM_MASK | HF_IOPL_MASK)); 
+    hflags |= (env->cr[4] & CR4_OSFXSR_MASK) << 
+	    (HF_OSFXSR_SHIFT - CR4_OSFXSR_SHIFT);
+
+    if (env->efer & MSR_EFER_LMA) {
+        hflags |= HF_LMA_MASK;
+    }
+
+    if ((hflags & HF_LMA_MASK) && (env->segs[R_CS].flags & DESC_L_MASK)) {
+        hflags |= HF_CS32_MASK | HF_SS32_MASK | HF_CS64_MASK;
+    } else {
+        hflags |= (env->segs[R_CS].flags & DESC_B_MASK) >> 
+		(DESC_B_SHIFT - HF_CS32_SHIFT);
+        hflags |= (env->segs[R_SS].flags & DESC_B_MASK) >> 
+		(DESC_B_SHIFT - HF_SS32_SHIFT);
+        if (!(env->cr[0] & CR0_PE_MASK) || 
+                   (env->eflags & VM_MASK) ||
+                   !(hflags & HF_CS32_MASK)) {
+                hflags |= HF_ADDSEG_MASK;
+            } else {
+                hflags |= ((env->segs[R_DS].base | 
+                                env->segs[R_ES].base |
+                                env->segs[R_SS].base) != 0) << 
+                    HF_ADDSEG_SHIFT;
+            }
+    }
+    env->hflags = (env->hflags & HFLAG_COPY_MASK) | hflags;
 }
+
 
 #include <signal.h>
 
