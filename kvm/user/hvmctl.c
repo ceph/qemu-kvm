@@ -299,6 +299,11 @@ again:
 		break;
 	case HVM_EXIT_TYPE_VM_EXIT:
 		switch (hvm_run.exit_reason) {
+		case HVM_EXIT_UNKNOWN:
+			printf("unhandled vm exit: %d\n", 
+			       hvm_run.hw.hardware_exit_reason);
+			abort();
+			break;
 		case HVM_EXIT_EXCEPTION:
 			printf("exception %d (%x)\n", 
 			       hvm_run.ex.exception,
