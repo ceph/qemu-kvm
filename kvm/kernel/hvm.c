@@ -1665,6 +1665,54 @@ static int hvm_dev_ioctl_get_regs(struct hvm *hvm, struct hvm_regs *regs)
 	return 0;
 }
 
+
+#if 0
+static void regs_dump(struct hvm_vcpu *vcpu)
+{
+	#define REG_DUMP(reg) \
+		printk(#reg" = 0x%lx\n", vcpu->regs[VCPU_REGS_##reg])
+	#define VMCS_REG_DUMP(reg) \
+		printk(#reg" = 0x%lx\n", vmcs_readl(GUEST_##reg))
+
+	printk("************************ regs_dump ************************\n");
+	REG_DUMP(RAX);
+	REG_DUMP(RBX);
+	REG_DUMP(RCX);
+	REG_DUMP(RDX);
+	REG_DUMP(RSP);
+	REG_DUMP(RBP);
+	REG_DUMP(RSI);
+	REG_DUMP(RDI);
+	REG_DUMP(R8);
+	REG_DUMP(R9);
+	REG_DUMP(R10);
+	REG_DUMP(R11);
+	REG_DUMP(R12);
+	REG_DUMP(R13);
+	REG_DUMP(R14);
+	REG_DUMP(R15);
+
+	VMCS_REG_DUMP(RSP);
+	VMCS_REG_DUMP(RIP);
+	VMCS_REG_DUMP(RFLAGS);
+       
+	printk("***********************************************************\n");
+}
+
+
+static void sregs_dump(struct hvm_vcpu *vcpu)
+{
+	printk("************************ sregs_dump ************************\n");
+	printk("cr2 = 0x%lx\n", vcpu->regs[VCPU_REGS_CR2]);
+	printk("cr3 = 0x%llx\n", vcpu->cr3);
+	printk("cr8 = 0x%lx\n", vcpu->cr8);
+	printk("shadow_efer = 0x%llx\n", vcpu->shadow_efer);
+	vmcs_dump();
+	printk("***********************************************************\n");
+}
+#endif
+
+
 static int hvm_dev_ioctl_set_regs(struct hvm *hvm, struct hvm_regs *regs)
 {
 	struct hvm_vcpu *vcpu;

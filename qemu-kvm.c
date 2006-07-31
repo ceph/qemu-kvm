@@ -43,6 +43,15 @@ static void load_regs(CPUState *env)
     regs.rdi = env->regs[R_EDI];
     regs.rsp = env->regs[R_ESP];
     regs.rbp = env->regs[R_EBP];
+    regs.r8 = env->regs[8];
+    regs.r9 = env->regs[9];
+    regs.r10 = env->regs[10];
+    regs.r11 = env->regs[11];
+    regs.r12 = env->regs[12];
+    regs.r13 = env->regs[13];
+    regs.r14 = env->regs[14];
+    regs.r15 = env->regs[15];
+    
     regs.rflags = env->eflags;
     regs.rip = env->eip;
 
@@ -104,6 +113,15 @@ static void save_regs(CPUState *env)
     env->regs[R_EDI] = regs.rdi;
     env->regs[R_ESP] = regs.rsp;
     env->regs[R_EBP] = regs.rbp;
+    env->regs[8] = regs.r8;
+    env->regs[9] = regs.r9;
+    env->regs[10] = regs.r10;
+    env->regs[11] = regs.r11;
+    env->regs[12] = regs.r12;
+    env->regs[13] = regs.r13;
+    env->regs[14] = regs.r14;
+    env->regs[15] = regs.r15;
+
     env->eflags = regs.rflags;
     env->eip = regs.rip;
 
@@ -157,11 +175,6 @@ int kvm_cpu_exec(CPUState *env)
 
     load_regs(env);
 
-    /* FIXME: block SIGALRM until we can handle it (by injecting a
-     *        timer interrupt 
-     */
-    sigblock(sigmask(SIGALRM));
-    sigblock(sigmask(SIGIO)); // block RTC signals
     hvm_run(hvm_context, 0);
 
     save_regs(env);
@@ -235,6 +248,16 @@ static void kvm_outl(void *opaque, uint16_t addr, uint32_t data)
     cpu_outl(0, addr, data);
 }
 
+static void kvm_io_window(void *opaque)
+{
+    CPUState **envs = opaque;
+
+    env = envs[0];
+    save_regs(env);
+    printf("kvm_io_window at %lx\n", env->eip);
+    cpu_loop_exit();
+}
+
 static void kvm_mmio(void *opaque)
 {
     CPUState **envs = opaque;
@@ -267,6 +290,7 @@ static struct hvm_callbacks qemu_kvm_ops = {
     .outl  = kvm_outl,
     .mmio  = kvm_mmio,
     .halt  = kvm_halt,
+    .io_window = kvm_io_window,
 };
 
 void kvm_init()

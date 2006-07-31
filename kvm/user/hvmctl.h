@@ -20,6 +20,7 @@ struct hvm_callbacks {
     void (*debug)(void *opaque, int vcpu);
     void (*mmio)(void *opaque);
     void (*halt)(void *opaque, int vcpu);
+    void (*io_window)(void *opaque);
 };
 
 hvm_context_t hvm_init(struct hvm_callbacks *callbacks,

@@ -47,6 +47,31 @@ static void test_outl(void *opaque, uint16_t addr, uint32_t value)
     printf("outl $0x%x, 0x%x\n", value, addr);
 }
 
+
+static void test_debug(void *opaque, int vcpu)
+{
+    printf("test_debug\n");
+}
+
+
+static void test_mmio(void *opaque)
+{
+    printf("test_mmio\n");
+}
+
+
+static void test_halt(void *opaque, int vcpu)
+{
+    printf("test_halt\n");
+}
+
+
+static void test_io_window(void *opaque)
+{
+    printf("test_io_window\n");
+}
+
+
 static struct hvm_callbacks test_callbacks = {
     .cpuid       = test_cpuid,
     .inb         = test_inb,
@@ -55,7 +80,12 @@ static struct hvm_callbacks test_callbacks = {
     .outb        = test_outb,
     .outw        = test_outw,
     .outl        = test_outl,
+    .debug       = test_debug,
+    .mmio        = test_mmio,
+    .halt        = test_halt,
+    .io_window = test_io_window,
 };
+ 
 
 static void load_file(void *mem, const char *fname)
 {

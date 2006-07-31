@@ -269,6 +269,11 @@ static void handle_io_mem(hvm_context_t hvm, struct hvm_run *hvm_run)
 	hvm->callbacks->mmio(hvm->opaque);
 }
 
+static void handle_io_window(hvm_context_t hvm, struct hvm_run *hvm_run)
+{
+	hvm->callbacks->io_window(hvm->opaque);
+}
+
 static void handle_halt(hvm_context_t hvm, struct hvm_run *hvm_run)
 {
 	hvm->callbacks->halt(hvm->opaque, hvm_run->vcpu);
@@ -289,8 +294,10 @@ again:
 		printf("hvm_run: %m\n");
 		exit(1);
 	}
-	if (r == -1)
+	if (r == -1) {
+		handle_io_window(hvm, &hvm_run);
 		goto again;
+	}
 	hvm_run.emulated = 1;
 	switch (hvm_run.exit_type) {
 	case HVM_EXIT_TYPE_FAIL_ENTRY:
