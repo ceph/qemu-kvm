@@ -33,6 +33,10 @@ struct hvm_run {
 	__u32 exit_reason;
 	__u32 instruction_length;
 	union {
+		/* HVM_EXIT_UNKNOWN */
+		struct {
+			__u32 hardware_exit_reason;
+		} hw;
 		/* HVM_EXIT_EXCEPTION */
 		struct {
 			__u32 exception;

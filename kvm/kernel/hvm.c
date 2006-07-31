@@ -1395,6 +1395,7 @@ static int hvm_handle_exit(struct hvm_run *hvm_run, struct hvm_vcpu *vcpu)
 		return hvm_vmx_exit_handlers[exit_reason](vcpu, hvm_run);
 	else {
 		hvm_run->exit_reason = HVM_EXIT_UNKNOWN;
+		hvm_run->hw.hardware_exit_reason = exit_reason;
 		printk(KERN_ERR "hvm: unhandled exit reason 0x%x\n", 
 		       exit_reason);
 	}
