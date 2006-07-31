@@ -14,16 +14,15 @@ hvm_context_t hvm_context;
 
 #define NR_CPU 16
 static CPUState *saved_env[NR_CPU];
-static int kvm_mmio_pending = 0;
 
 int kvm_is_ok(CPUState *env)
 {
-    return (env->segs[R_CS].flags & DESC_L_MASK) != 0 && !kvm_mmio_pending;
+    return (env->segs[R_CS].flags & DESC_L_MASK) != 0 && !env->kvm_mmio;
 }
 
 void kvm_handled_mmio(CPUState *env)
 {
-    kvm_mmio_pending = 0;
+    env->kvm_mmio = 0;
 }
 
 static void load_regs(CPUState *env)
@@ -265,7 +264,7 @@ static void kvm_mmio(void *opaque)
     env = envs[0];
     save_regs(env);
     printf("mmio at %lx\n", env->eip);
-    kvm_mmio_pending = 1;
+    env->kvm_mmio = 1;
     cpu_loop_exit();
 }
  

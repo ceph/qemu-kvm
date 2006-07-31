@@ -6401,7 +6401,7 @@ static inline int gen_intermediate_code_internal(CPUState *env,
             break;
         }
         /* if too long translation, stop generation too */
-        if (gen_opc_ptr >= gen_opc_end ||
+        if (gen_opc_ptr >= gen_opc_end || env->kvm_mmio ||
             (pc_ptr - pc_start) >= (TARGET_PAGE_SIZE - 32)) {
             gen_jmp_im(pc_ptr - dc->cs_base);
             gen_eob(dc);

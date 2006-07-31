@@ -524,6 +524,11 @@ typedef struct CPUX86State {
     int kqemu_enabled;
     int last_io_time;
 #endif
+
+#ifdef USE_KVM
+    int kvm_mmio;
+#endif
+
     /* in order to simplify APIC support, we leave this pointer to the
        user */
     struct APICState *apic_state;

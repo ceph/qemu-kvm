@@ -1238,7 +1238,7 @@ static inline int gen_intermediate_code_internal(CPUState *env,
         if (dc->is_jmp)
             break;
         /* if too long translation, stop generation */
-        if (dc->gen_code_ptr >= gen_code_end ||
+        if (dc->gen_code_ptr >= gen_code_end || env->kvm_mmio ||
             (dc->pc - pc_start) >= (TARGET_PAGE_SIZE - 32)) {
             gen_jmp(dc, dc->pc - dc->cs_base);
             break;
