@@ -1,6 +1,9 @@
 // irq test program.  assumes outb $irq, $0xff generates an interrupt $irq.
 
+#include "print.h"
+	
 .text
+	PRINT "irq test"
 	mov $stack_top, %rsp
 
 	call setup_gdt
@@ -14,21 +17,25 @@
 
 	lidt idt_descriptor
 
+	PRINT "software interrupt"
 	int $0x20
 
 	sti
 	nop
 
+	PRINT "injecting interrupt with interrupts enabled"
+	
 	mov $0x20, %al
 	outb %al, $0xff // inject interrupt
 
 	nop
 	nop
 	nop
-	mov $3, %al
-	out %al, $0x80
+	PRINT "after injection"
 
 	cli
+
+	PRINT "injecting interrupt with interrupts disabled"
 	
 	mov $0x20, %al
 	outb %al, $0xff // inject interrupt
@@ -36,8 +43,7 @@
 	// no interrupt here (disabled)
 	nop
 	nop
-	mov $4, %al
-	out %al, $0x80
+	PRINT "enabling interrupts"
 	nop
 	nop
 	sti
@@ -45,19 +51,14 @@
 	// interrupt here
 	out %al, $0x80 
 
+	PRINT "after injection"
 	nop
 	nop
-	mov $5, %al
-	out %al, $0x80 
-	
 	
 	hlt
-
+	
 irq_handler:
-	pushq %rax
-	mov $1, %al
-	out %al, $0x80
-	popq %rax
+	PRINT "interrupt handler"
 	iretq
 	
 setup_idt_entry:	// %rax: irq %rdx: handler

@@ -14,7 +14,12 @@ libhvm.a: hvmctl.o
 flatfiles: test/simple.flat test/stringio.flat test/memtest1.flat \
 	test/irq.flat
 
-%.flat: %.S
+%.flat: %.o
 	gcc -nostdlib -o $@ -Wl,-T,flat.lds $^
+
+%.o: %.S
+	gcc -c -nostdlib -o $@ $^
+
+test/irq.flat: test/print.o
 
 -include .*.d
