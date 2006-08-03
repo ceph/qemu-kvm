@@ -450,7 +450,7 @@ int cpu_exec(CPUState *env1)
 #endif
 
 #ifdef USE_KVM
-	    if (kvm_is_ok(env) && env->interrupt_request == 0) {
+	    if (kvm_is_ok(env)) {
 		int ret;
                 env->eflags = env->eflags | cc_table[CC_OP].compute_all() | (DF & DF_MASK);
                 ret = kvm_cpu_exec(env);

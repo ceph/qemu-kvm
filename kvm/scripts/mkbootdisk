@@ -21,6 +21,7 @@ cp "$kernel" $mnt_dir/kernel
 
 cat <<EOF > $mnt_dir/SYSLINUX.CFG
 DEFAULT kernel
+APPEND console=ttyS0
 EOF
 
 umount $mnt_dir

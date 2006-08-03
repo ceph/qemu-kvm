@@ -209,10 +209,32 @@ static void save_regs(CPUState *env)
 
 #include <signal.h>
 
+static inline void push_interrupts(CPUState *env)
+{
+    if (!(env->interrupt_request & CPU_INTERRUPT_HARD)) {
+    	if ((env->interrupt_request & CPU_INTERRUPT_EXIT)) {
+	    env->interrupt_request &= ~CPU_INTERRUPT_EXIT;
+	    env->exception_index = EXCP_INTERRUPT;
+	    cpu_loop_exit();
+        }
+        return;
+    }
+
+    do {
+        int intno;
+
+        env->interrupt_request &= ~CPU_INTERRUPT_HARD;
+        intno = cpu_get_pic_interrupt(env);
+        hvm_inject_irq(hvm_context, 0, intno); // for now using cpu 0
+    } while ((env->interrupt_request & CPU_INTERRUPT_HARD));
+}
+
 int kvm_cpu_exec(CPUState *env)
 {
 
     printf("exec into rip %lx\n", env->eip);
+
+    push_interrupts(env);
 
     load_regs(env);
 
@@ -226,6 +248,7 @@ int kvm_cpu_exec(CPUState *env)
 
     return 0;
 }
+
 
 static void kvm_cpuid(void *opaque, uint64_t *rax, uint64_t *rbx, 
 		      uint64_t *rcx, uint64_t *rdx)

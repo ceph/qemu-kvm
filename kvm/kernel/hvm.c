@@ -1075,7 +1075,7 @@ static inline void set_cr3(struct hvm_vcpu *vcpu, unsigned long cr3)
 static inline void set_cr8(struct hvm_vcpu *vcpu, unsigned long cr8)
 {
 	if ( cr8 & CR8_RESEVED_BITS) {
-		printk("set_cr8: #GP, reserved bits\n");
+		printk("set_cr8: #GP, reserved bits 0x%lx\n", cr8);
 		inject_gp();
 		return;
 	}
@@ -1386,7 +1386,19 @@ static const int hvm_vmx_max_exit_handlers =
 
 static int hvm_handle_exit(struct hvm_run *hvm_run, struct hvm_vcpu *vcpu)
 {
+	u32 vectoring_info = vmcs_read32(IDT_VECTORING_INFO_FIELD);
 	u32 exit_reason;
+
+	if (vectoring_info & VECTORING_INFO_VALID_MASK) {
+		if ((vectoring_info & VECTORING_INFO_TYPE_MASK) == 
+							INTR_TYPE_EXT_INTR) {
+			int irq;
+			
+			irq = vectoring_info & VECTORING_INFO_VECTOR_MASK;
+			set_bit(irq, vcpu->irq_pending);
+			set_bit(irq / BITS_PER_LONG, &vcpu->irq_summary);
+		}
+	}
 		
 	hvm_run->instruction_length = vmcs_read32(VM_EXIT_INSTRUCTION_LEN);
 	exit_reason = vmcs_read32(VM_EXIT_REASON);
@@ -1412,7 +1424,8 @@ static void hvm_do_inject_irq(struct hvm_vcpu *vcpu)
 	if (!vcpu->irq_pending[word_index])
 		clear_bit(word_index, &vcpu->irq_summary);
 
-	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD, irq | (1 << 31));
+	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD, 
+			irq | INTR_TYPE_EXT_INTR | INTR_INFO_VALID_MASK);
 }
 
 static void hvm_try_inject_irq(struct hvm_vcpu *vcpu)
@@ -1491,7 +1504,8 @@ again:
 		hvm_run->emulated = 0;
 	}
 
-	if (vcpu->irq_summary)
+	if (vcpu->irq_summary && 
+	    !(vmcs_read32(VM_ENTRY_INTR_INFO_FIELD) & INTR_INFO_VALID_MASK))
 		hvm_try_inject_irq(vcpu);
 
 	if (vcpu->guest_debug.enabled)
