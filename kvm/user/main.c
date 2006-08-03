@@ -30,10 +30,21 @@ static void test_inl(void *opaque, uint16_t addr, uint32_t *value)
 
 static void test_outb(void *opaque, uint16_t addr, uint8_t value)
 {
-    printf("outb $0x%x, 0x%x\n", value, addr);
-    if (addr == 0xff) { // irq injector
+    static int newline = 1;
+
+    switch (addr) {
+    case 0xff: // irq injector
 	printf("injecting interrupt 0x%x\n", value);
 	hvm_inject_irq(hvm, 0, value);
+	break;
+    case 0xf1: // serial
+	if (newline)
+	    fputs("GUEST: ", stdout);
+	putchar(value);
+	newline = value == '\n';
+	break;
+    default:
+	printf("outb $0x%x, 0x%x\n", value, addr);
     }
 }
 
