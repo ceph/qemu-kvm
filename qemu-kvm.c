@@ -340,6 +340,7 @@ static void kvm_halt(void *opaque, int vcpu)
     env = envs[0];
     save_regs(env);
     printf("halt at %lx\n", env->eip);
+    ++env->eip;
     cpu_loop_exit();
 }
  
