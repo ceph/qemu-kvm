@@ -1901,9 +1901,11 @@ static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 
 static int hvm_dev_ioctl_translate(struct hvm *hvm, struct hvm_translation *tr)
 {
-	/* FIXME: only 1:1 mappings for now */
-	tr->physical_address = tr->linear_address;
-	tr->valid = 1;
+	unsigned long vaddr = tr->linear_address;
+	struct hvm_vcpu *vcpu = &hvm->vcpus[tr->vcpu];
+	u64 pte = vcpu->paging_context.fetch_pte64(vcpu, vaddr);
+	tr->physical_address = (pte & 0xfffffffff000) | (vaddr & ~PAGE_MASK);
+	tr->valid = pte & 1;
 	tr->writeable = 1;
 	tr->usermode = 0;
 
