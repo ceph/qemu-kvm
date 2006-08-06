@@ -250,6 +250,15 @@ static void nonpaging_flush(struct hvm_vcpu *vcpu)
 	vmcs_writel(GUEST_CR3, root);
 }
 
+static u64 nonpaging_fetch_pte64(struct hvm_vcpu *vcpu, unsigned long vaddr)
+{
+	return (vaddr & PAGE_MASK) 
+		| PT64_PRESENT_MASK
+		| PT64_WRITABLE_MASK
+		| PT64_ACCESSED_MASK
+		| PT64_DIRTY_MASK;
+}
+
 static int nonpaging_page_fault(struct hvm_vcpu *vcpu, uint64_t addr,
 			       uint32_t error_code)
 {
@@ -297,6 +306,7 @@ static int nonpaging_init_context(struct hvm_vcpu *vcpu)
 	context->new_cr3 = nonpaging_new_cr3;
 	context->page_fault = nonpaging_page_fault;
 	context->inval_page = nonpaging_inval_page;
+	context->fetch_pte64 = nonpaging_fetch_pte64;
 	context->free = nonpaging_free;
 	context->root_level = PT64_ROOT_LEVEL;
 	context->root = hvm_mmu_alloc_page(vcpu);
@@ -450,7 +460,6 @@ static uint64_t *fetch_guest64(struct hvm_vcpu *vcpu,
 		--walker->level;
 	} 
 }
-
 
 static uint64_t *fetch64(struct hvm_vcpu *vcpu,
 			 uint64_t addr,
@@ -658,6 +667,16 @@ static int paging64_page_fault(struct hvm_vcpu *vcpu, uint64_t addr,
 	return 0;	
 }
 
+static u64 paging64_fetch_pte64(struct hvm_vcpu *vcpu, unsigned long vaddr)
+{
+	guest_walker_t walker;
+	u64 guest_pte;
+
+	init_walker(&walker, vcpu);
+	guest_pte = *fetch_guest64(vcpu, &walker, PT64_PAGE_TABLE_LEVEL, vaddr);
+	release_walker(&walker);
+	return guest_pte;
+}
 
 static void paging64_inval_page(struct hvm_vcpu *vcpu, uint64_t addr)
 {
@@ -707,6 +726,7 @@ static int paging64_init_context(struct hvm_vcpu *vcpu)
 	context->new_cr3 = paging64_new_cr3;
 	context->page_fault = paging64_page_fault;
 	context->inval_page = paging64_inval_page;
+	context->fetch_pte64 = paging64_fetch_pte64;
 	context->free = paging64_free;
 	context->root_level = PT64_ROOT_LEVEL;
 	context->root = hvm_mmu_alloc_page(vcpu);

@@ -77,6 +77,7 @@ typedef struct paging_context_s {
 	int (*page_fault)(struct hvm_vcpu *vcpu, uint64_t vaddr, uint32_t err);
 	void (*inval_page)(struct hvm_vcpu *vcpu, uint64_t addr);
 	void (*free)(struct hvm_vcpu *vcpu);
+	u64 (*fetch_pte64)(struct hvm_vcpu *vcpu, unsigned long vaddr);
 	paddr_t root;
 	int root_level;
 }paging_context_t;
