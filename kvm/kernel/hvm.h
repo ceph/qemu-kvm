@@ -38,6 +38,14 @@
 #define FX_IMAGE_ALIGN 16
 #define FX_BUF_SIZE (2 * FX_IMAGE_SIZE + FX_IMAGE_ALIGN)
 
+#define DE_VECTOR 0
+#define DF_VECTOR 8
+#define TS_VECTOR 10
+#define NP_VECTOR 11
+#define SS_VECTOR 12
+#define GP_VECTOR 13
+#define PF_VECTOR 14
+
 typedef uint64_t paddr_t;
 typedef paddr_t gaddr_t;
 
@@ -184,6 +192,20 @@ static int is_paging(void)
 {
 	return guest_cr0() & CR0_PG_MASK;
 }
+
+static inline int is_page_fault(uint32_t intr_info)
+{
+	return (intr_info & (INTR_INFO_INTR_TYPE_MASK | INTR_INFO_VECTOR_MASK |
+			     INTR_INFO_VALID_MASK)) == 
+		(INTR_TYPE_EXCEPTION | PF_VECTOR | INTR_INFO_VALID_MASK);
+}
+
+static inline int is_external_interrupt(uint32_t intr_info)
+{
+	return (intr_info & (INTR_INFO_INTR_TYPE_MASK | INTR_INFO_VALID_MASK)) 
+		== (INTR_TYPE_EXT_INTR | INTR_INFO_VALID_MASK);
+}
+
 
 extern paddr_t hvm_bad_page_addr;
 

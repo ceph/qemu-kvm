@@ -391,9 +391,21 @@ static void inject_page_fault(struct hvm_vcpu *vcpu,
 			      uint64_t addr, 
 			      uint32_t err_code)
 {
-	#define PF_VECTOR 14 
+	uint32_t vect_info = vmcs_read32(IDT_VECTORING_INFO_FIELD);
 
 	pgprintk("inject_page_fault: 0x%llx err 0x%x\n", addr, err_code);
+	
+	if (is_page_fault(vect_info)) {
+		printk("inject_page_fault: double fault 0x%llx @ 0x%lx\n",
+		       addr, vmcs_readl(GUEST_RIP));
+		vmcs_write32(VM_ENTRY_EXCEPTION_ERROR_CODE, 0);
+		vmcs_write32(VM_ENTRY_INTR_INFO_FIELD,
+			     DF_VECTOR |
+			     INTR_TYPE_EXCEPTION |
+			     INTR_INFO_DELIEVER_CODE_MASK |
+			     INTR_INFO_VALID_MASK);
+		return;
+	}
 	vcpu->regs[VCPU_REGS_CR2] = addr; 
 	vmcs_write32(VM_ENTRY_EXCEPTION_ERROR_CODE, err_code);
 	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD,

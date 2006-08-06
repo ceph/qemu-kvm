@@ -795,13 +795,29 @@ static void skip_emulated_instruction(struct hvm_vcpu *vcpu)
 			     interruptibility & ~3);
 }
 
+
 static int handle_exit_exception(struct hvm_vcpu *vcpu, 
 				 struct hvm_run *hvm_run)
 {
 	u32 intr_info, error_code;
 	unsigned long cr2, rip;
+	u32 vect_info;
 
+	vect_info = vmcs_read32(IDT_VECTORING_INFO_FIELD);
 	intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
+
+	if ((vect_info & VECTORING_INFO_VALID_MASK) && 
+						!is_page_fault(intr_info)) {
+		printk("%s: unexpected, vectoring info 0x%x intr info 0x%x\n",
+			       __FUNCTION__, vect_info, intr_info);
+	}
+
+	if (is_external_interrupt(vect_info)) {
+		int irq = vect_info & VECTORING_INFO_VECTOR_MASK;
+		set_bit(irq, vcpu->irq_pending);
+		set_bit(irq / BITS_PER_LONG, &vcpu->irq_summary);
+	}
+
 	if ((intr_info & INTR_INFO_INTR_TYPE_MASK) == 0x200) { /* nmi */
 		asm ( "int $2" );
 		return 1;
@@ -810,14 +826,13 @@ static int handle_exit_exception(struct hvm_vcpu *vcpu,
 	rip = vmcs_readl(GUEST_RIP);
 	if (intr_info & INTR_INFO_DELIEVER_CODE_MASK)
 		error_code = vmcs_read32(VM_EXIT_INTR_ERROR_CODE);
-	if ((intr_info & (INTR_INFO_INTR_TYPE_MASK | INTR_INFO_VECTOR_MASK)) == (INTR_TYPE_EXCEPTION | 14)) {
+	if (is_page_fault(intr_info)) {
 		cr2 = vmcs_readl(EXIT_QUALIFICATION);
 
 		if (!vcpu->paging_context.page_fault(vcpu, cr2, error_code)) {
 			return 1;
 		}
 		hvm_run->exit_reason = HVM_EXIT_IO_MEM;
-		//TODO: add exit info
 		return 0;
 	}
 	if ((intr_info & (INTR_INFO_INTR_TYPE_MASK | INTR_INFO_VECTOR_MASK)) == (INTR_TYPE_EXCEPTION | 1)) {
@@ -872,8 +887,6 @@ static int handle_invlpg(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 
 static inline void inject_gp(void)
 {
-	#define GP_VECTOR 13 
-
 	printk("inject_general_protection: rip 0x%lx\n",
 		 vmcs_readl(GUEST_RIP));
 	vmcs_write32(VM_ENTRY_EXCEPTION_ERROR_CODE, 0);
@@ -882,7 +895,6 @@ static inline void inject_gp(void)
 		     INTR_TYPE_EXCEPTION |
 		     INTR_INFO_DELIEVER_CODE_MASK |
 		     INTR_INFO_VALID_MASK);
-	
 }
 
 
@@ -1387,21 +1399,14 @@ static const int hvm_vmx_max_exit_handlers =
 static int hvm_handle_exit(struct hvm_run *hvm_run, struct hvm_vcpu *vcpu)
 {
 	u32 vectoring_info = vmcs_read32(IDT_VECTORING_INFO_FIELD);
-	u32 exit_reason;
+	u32 exit_reason = vmcs_read32(VM_EXIT_REASON);
 
-	if (vectoring_info & VECTORING_INFO_VALID_MASK) {
-		if ((vectoring_info & VECTORING_INFO_TYPE_MASK) == 
-							INTR_TYPE_EXT_INTR) {
-			int irq;
-			
-			irq = vectoring_info & VECTORING_INFO_VECTOR_MASK;
-			set_bit(irq, vcpu->irq_pending);
-			set_bit(irq / BITS_PER_LONG, &vcpu->irq_summary);
-		}
+	if ( (vectoring_info & VECTORING_INFO_VALID_MASK) && 
+				exit_reason != EXIT_REASON_EXCEPTION_NMI ) {
+		printk("%s: unexpected, valid vectoring info and exit"
+		       " reason is 0x%x\n", __FUNCTION__, exit_reason);
 	}
-		
 	hvm_run->instruction_length = vmcs_read32(VM_EXIT_INSTRUCTION_LEN);
-	exit_reason = vmcs_read32(VM_EXIT_REASON);
 	if (exit_reason < hvm_vmx_max_exit_handlers 
 	    && hvm_vmx_exit_handlers[exit_reason])
 		return hvm_vmx_exit_handlers[exit_reason](vcpu, hvm_run);
