@@ -1,0 +1,79 @@
+#!/usr/bin/python
+
+import sys, re, os.path
+import subprocess
+from optparse import OptionParser
+
+class Addr2line:
+    def __init__(self, vmlinux, prefix = ''):
+        self.a2l = subprocess.Popen(['addr2line', '-fe', vmlinux],
+                                    stdin = subprocess.PIPE,
+                                    stdout = subprocess.PIPE,
+                                    stderr = subprocess.PIPE,
+                                    close_fds = True)
+        self.prefix = prefix
+        self.cache = dict()
+    def resolve(self, addr):
+        self.a2l.stdin.write('%08x\n' % addr)
+        symbol = self.a2l.stdout.readline().strip()
+        file = self.a2l.stdout.readline().strip()
+        if symbol == '??':
+            return None
+        if file.startswith(self.prefix):
+            file = file[len(self.prefix):]
+        return (symbol, file)
+
+class MultiResolver:
+    def __init__(self, resolvers):
+        self.resolvers = resolvers
+    def resolve(self, addr):
+        for resolver in self.resolvers:
+            ret = resolver.resolve(addr)
+            if ret:
+                return ret
+
+class Cache:
+    def __init__(self, resolver):
+        self.resolver = resolver
+        self.cache = dict()
+    def resolve(self, addr):
+        if not self.cache.has_key(addr):
+            self.cache[addr] = self.resolver.resolve(addr)
+        return self.cache[addr]
+        
+optparser = OptionParser()
+optparser.add_option('-g', '--guest', dest='guest', action='store_true',
+                     default=True,
+                     help='interpret kernel addresses as guest (default)')
+optparser.add_option('-H', '--host', dest='guest', action='store_false',
+                     help='interpret kernel addresses as host')
+(options, args) = optparser.parse_args()
+
+basedir = os.getcwd()
+basedir = re.sub(r'(.*/kvm)(/.*)', r'\1', basedir)
+
+addr_re = re.compile(r'\b[0-9a-fA-F]{8,16}\b')
+if options.guest:
+    linux = Addr2line(basedir + '/qemu/vmlinux',
+                      basedir + '/qemu/linux/')
+else:
+    linux = Addr2line(basedir + '/kernel/vmlinux',
+                      basedir + '/kernel/linux/')
+addr2line = Cache(linux)
+
+def expand_addr(addr):
+    addr = addr.group(0)
+    result = addr2line.resolve(int(addr, 16))
+    if result:
+        (symbol, file) = result
+        return '%s %s(%s)' % (addr, symbol, file)
+    else:
+        return addr
+
+try:
+    for line in sys.stdin:
+        line = addr_re.sub(expand_addr, line)
+        print line,
+except KeyboardInterrupt:
+    sys.exit()
+
