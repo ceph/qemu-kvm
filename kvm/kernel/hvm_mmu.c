@@ -571,6 +571,14 @@ static inline int fix_write_pf64(struct hvm_vcpu *vcpu,
 }
 
 
+static void init_walker(guets_walker_t *walker, struct hvm_vcpu *vcpu)
+{
+	walker->level = vcpu->paging_context.root_level;
+	walker->table = kmap_atomic(
+		pfn_to_page(gaddr_to_paddr(vcpu, vcpu->cr3) >> PAGE_SHIFT),
+		KM_USER0);
+}
+
 static inline void release_walker(guets_walker_t *walker)
 {
 	kunmap_atomic(walker->table, KM_USER0);
@@ -590,7 +598,6 @@ static int access_test(uint64_t pte, int write, int user)
 	return 1;
 }
 
-
 static int paging64_page_fault(struct hvm_vcpu *vcpu, uint64_t addr,
 			       uint32_t error_code)
 {
@@ -604,10 +611,7 @@ static int paging64_page_fault(struct hvm_vcpu *vcpu, uint64_t addr,
 	for (;;) {
 		int enomem;
 
-		walker.level = vcpu->paging_context.root_level;
-		walker.table = kmap_atomic(
-			pfn_to_page(gaddr_to_paddr(vcpu, vcpu->cr3) >> PAGE_SHIFT),
-					   KM_USER0);
+		init_walker(&walker, vcpu);
 		shadow_pte = fetch64(vcpu, addr, &walker, &enomem);
 		if (!shadow_pte && enomem) {
 			nonpaging_flush(vcpu);
