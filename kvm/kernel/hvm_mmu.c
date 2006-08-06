@@ -54,13 +54,13 @@
 	(PT64_PRESENT_MASK | PT64_PWT_MASK | PT64_PCD_MASK | \
 	PT64_ACCESSED_MASK | PT64_DIRTY_MASK | PT64_NX_MASK)
 
-#define PT64_FIRST_AVILE_BITS_SHIFT 9
-#define PT64_SECOND_AVILE_BITS_SHIFT 52
+#define PT64_FIRST_AVAIL_BITS_SHIFT 9
+#define PT64_SECOND_AVAIL_BITS_SHIFT 52
 
-#define PT64_SHADOW_PS_MARK (1ULL << PT64_FIRST_AVILE_BITS_SHIFT)
-#define PT64_SHADOW_IO_MARK (1ULL << PT64_FIRST_AVILE_BITS_SHIFT)
+#define PT64_SHADOW_PS_MARK (1ULL << PT64_FIRST_AVAIL_BITS_SHIFT)
+#define PT64_SHADOW_IO_MARK (1ULL << PT64_FIRST_AVAIL_BITS_SHIFT)
 
-#define PT64_SHADOW_WRITABLE_SHIFT (PT64_FIRST_AVILE_BITS_SHIFT + 1)
+#define PT64_SHADOW_WRITABLE_SHIFT (PT64_FIRST_AVAIL_BITS_SHIFT + 1)
 #define PT64_SHADOW_WRITABLE_MASK (1ULL << PT64_SHADOW_WRITABLE_SHIFT)
 
 #define PT64_SHADOW_USER_SHIFT (PT64_SHADOW_WRITABLE_SHIFT + 1)
@@ -571,7 +571,7 @@ static inline int fix_write_pf64(struct hvm_vcpu *vcpu,
 }
 
 
-static inline void realase_walker(guets_walker_t *walker)
+static inline void release_walker(guets_walker_t *walker)
 {
 	kunmap_atomic(walker->table, KM_USER0);
 }
@@ -611,7 +611,7 @@ static int paging64_page_fault(struct hvm_vcpu *vcpu, uint64_t addr,
 		shadow_pte = fetch64(vcpu, addr, &walker, &enomem);
 		if (!shadow_pte && enomem) {
 			nonpaging_flush(vcpu);
-			realase_walker(&walker);
+			release_walker(&walker);
 			continue;
 		}
 		break;
@@ -621,7 +621,7 @@ static int paging64_page_fault(struct hvm_vcpu *vcpu, uint64_t addr,
 	       addr, vmcs_readl(GUEST_RIP), error_code);
 	if (!shadow_pte) {
 		inject_page_fault(vcpu, addr, error_code);
-		realase_walker(&walker);
+		release_walker(&walker);
 		return 0;
 	}
 
@@ -632,7 +632,7 @@ static int paging64_page_fault(struct hvm_vcpu *vcpu, uint64_t addr,
 		fixed = fix_read_pf64(shadow_pte);
 	}
 
-	realase_walker(&walker);
+	release_walker(&walker);
 
 	if (is_io_pte64(*shadow_pte)) {
 		if (access_test(*shadow_pte, write_fault, user_fault)) {
