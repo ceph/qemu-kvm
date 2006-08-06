@@ -674,6 +674,10 @@ static u64 paging64_fetch_pte64(struct hvm_vcpu *vcpu, unsigned long vaddr)
 
 	init_walker(&walker, vcpu);
 	guest_pte = *fetch_guest64(vcpu, &walker, PT64_PAGE_TABLE_LEVEL, vaddr);
+	if (guest_pte & PT64_PAGE_SIZE_MASK) {
+		guest_pte |= vaddr & 0x1ff000;
+		guest_pte &= ~PT64_PAGE_SIZE_MASK;
+	}
 	release_walker(&walker);
 	return guest_pte;
 }
