@@ -417,14 +417,14 @@ static void inject_page_fault(struct hvm_vcpu *vcpu,
 }
 
 
-typedef struct guets_walker_s {	
+typedef struct guest_walker_s {	
 	int level;
 	uint64_t *table;
-} guets_walker_t;
+} guest_walker_t;
 
 
 static uint64_t *fetch_guest64(struct hvm_vcpu *vcpu,
-			       guets_walker_t *walker, 
+			       guest_walker_t *walker, 
 			       int level,
 			       uint64_t addr)
 {
@@ -454,7 +454,7 @@ static uint64_t *fetch_guest64(struct hvm_vcpu *vcpu,
 
 static uint64_t *fetch64(struct hvm_vcpu *vcpu,
 			 uint64_t addr,
-			 guets_walker_t *walker,
+			 guest_walker_t *walker,
 			 int *enomem)
 {
 	paddr_t shadow_addr;
@@ -468,7 +468,7 @@ static uint64_t *fetch64(struct hvm_vcpu *vcpu,
 	for (; ; level--) {
 		uint32_t index = PT64_INDEX(addr, level);
 		uint64_t *shadow_ent = ((uint64_t *)__va(shadow_addr)) + index;
-		uint64_t *gues_ent;
+		uint64_t *guest_ent;
 
 		if (is_present_pte64(*shadow_ent) || is_io_pte64(*shadow_ent)) {
 			if (level == PT64_PAGE_TABLE_LEVEL) {
@@ -479,24 +479,24 @@ static uint64_t *fetch64(struct hvm_vcpu *vcpu,
 			continue;
 		}
 
-		gues_ent = fetch_guest64(vcpu, walker, level, addr);
+		guest_ent = fetch_guest64(vcpu, walker, level, addr);
 
-		if (!is_present_pte64(*gues_ent)) {
+		if (!is_present_pte64(*guest_ent)) {
 			*enomem = 0;
 			return NULL;
 		}
 
-		*gues_ent |= PT64_ACCESSED_MASK;
+		*guest_ent |= PT64_ACCESSED_MASK;
 
 		if (level == PT64_PAGE_TABLE_LEVEL) {
 
 			if (walker->level == PT64_DIRECTORY_LEVEL) {
-				*gues_ent |= PT64_SHADOW_PS_MARK;
-				set_pde64(vcpu, *gues_ent, shadow_ent, access_bits,
+				*guest_ent |= PT64_SHADOW_PS_MARK;
+				set_pde64(vcpu, *guest_ent, shadow_ent, access_bits,
 					  PT64_INDEX(addr, PT64_PAGE_TABLE_LEVEL));
 			} else {
 				ASSERT(walker->level == PT64_PAGE_TABLE_LEVEL);
-				set_pte64(vcpu, *gues_ent, shadow_ent, access_bits);
+				set_pte64(vcpu, *guest_ent, shadow_ent, access_bits);
 			}
 			return shadow_ent;
 		}
@@ -507,10 +507,10 @@ static uint64_t *fetch64(struct hvm_vcpu *vcpu,
 			return NULL;
 		}
 		*shadow_ent = shadow_addr | 
-				(*gues_ent & PT64_NON_PTE_COPY_MASK);
+				(*guest_ent & PT64_NON_PTE_COPY_MASK);
 		*shadow_ent |= ( PT64_WRITABLE_MASK | PT64_USER_MASK);
 
-		access_bits &= *gues_ent;
+		access_bits &= *guest_ent;
 		*shadow_ent |= access_bits << PT64_SHADOW_BITS_OFFSET;
 	}
 }
@@ -532,7 +532,7 @@ static inline int fix_read_pf64(uint64_t *shadow_ent)
 
 static inline int fix_write_pf64(struct hvm_vcpu *vcpu,
 				 uint64_t *shadow_ent,
-				 guets_walker_t *walker,
+				 guest_walker_t *walker,
 				 uint64_t addr,
 				 int user)
 {
@@ -571,7 +571,7 @@ static inline int fix_write_pf64(struct hvm_vcpu *vcpu,
 }
 
 
-static void init_walker(guets_walker_t *walker, struct hvm_vcpu *vcpu)
+static void init_walker(guest_walker_t *walker, struct hvm_vcpu *vcpu)
 {
 	walker->level = vcpu->paging_context.root_level;
 	walker->table = kmap_atomic(
@@ -579,7 +579,7 @@ static void init_walker(guets_walker_t *walker, struct hvm_vcpu *vcpu)
 		KM_USER0);
 }
 
-static inline void release_walker(guets_walker_t *walker)
+static inline void release_walker(guest_walker_t *walker)
 {
 	kunmap_atomic(walker->table, KM_USER0);
 }
@@ -604,7 +604,7 @@ static int paging64_page_fault(struct hvm_vcpu *vcpu, uint64_t addr,
 	int write_fault = error_code & PFERR_WRITE_MASK;
 	int pte_present = error_code & PFERR_PRESENT_MASK;
 	int user_fault = error_code & PFERR_USER_MASK;
-	guets_walker_t walker;
+	guest_walker_t walker;
 	uint64_t *shadow_pte;
 	int fixed;
 
