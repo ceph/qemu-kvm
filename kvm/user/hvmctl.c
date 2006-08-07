@@ -198,6 +198,7 @@ void handle_io(hvm_context_t hvm, struct hvm_run *run)
 	}
 
 	ioctl(hvm->fd, HVM_SET_REGS, &regs);
+	run->emulated = 1;
 }
 
 void handle_debug(hvm_context_t hvm, struct hvm_run *run)
@@ -262,6 +263,7 @@ static void handle_cpuid(hvm_context_t hvm, struct hvm_run *run)
 			      &regs.rax, &regs.rbx, &regs.rcx, &regs.rdx);
 	regs.rdx &= ~(1ull << 12); /* disable mtrr support */
 	hvm_set_regs(hvm, run->vcpu, &regs);
+	run->emulated = 1;
 }
 
 static void handle_io_mem(hvm_context_t hvm, struct hvm_run *hvm_run)
@@ -298,7 +300,6 @@ again:
 		handle_io_window(hvm, &hvm_run);
 		goto again;
 	}
-	hvm_run.emulated = 1;
 	switch (hvm_run.exit_type) {
 	case HVM_EXIT_TYPE_FAIL_ENTRY:
 		printf("hvm_run: failed entry, reason %u\n", 
