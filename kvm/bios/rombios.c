@@ -1129,7 +1129,7 @@ static struct {
       { 0x5300, 0x532e,   none,   none, 0x20 }, /* Del */
       {   none,   none,   none,   none, none },
       {   none,   none,   none,   none, none },
-      {   none,   none,   none,   none, none },
+      { 0x565c, 0x567c,   none,   none, none }, /* \| */    
       { 0x5700, 0x5700,   none,   none, none }, /* F11 */
       { 0x5800, 0x5800,   none,   none, none }  /* F12 */
       };
@@ -4626,6 +4626,10 @@ int09_function(DI, SI, BP, SP, BX, DX, CX, AX)
       } else if (shift_flags & 0x04) { /* CONTROL */
         asciicode = scan_to_scanascii[scancode].control;
         scancode = scan_to_scanascii[scancode].control >> 8;
+      } else if (((mf2_state & 0x02) > 0) && ((scancode >= 0x47) && (scancode <= 0x53))) {
+        /* extended keys handling */
+        asciicode = 0xe0;
+        scancode = scan_to_scanascii[scancode].normal >> 8;
       } else if (shift_flags & 0x03) { /* LSHIFT + RSHIFT */
         /* check if lock state should be ignored 
          * because a SHIFT key are pressed */
