@@ -62,7 +62,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.52 2006/07/10 07:47:35 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.53 2006/08/09 21:26:02 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -79,7 +79,7 @@ _no_vbebios_info_string:
 
 #if defined(USE_BX_INFO) || defined(DEBUG)
 msg_vbe_init:
-.ascii      "VBE Bios $Id: vbe.c,v 1.52 2006/07/10 07:47:35 vruppert Exp $"
+.ascii      "VBE Bios $Id: vbe.c,v 1.53 2006/08/09 21:26:02 vruppert Exp $"
 .byte	0x0a,0x0d, 0x00
 #endif
 
@@ -600,7 +600,7 @@ vbe_init:
   mov  [bx], al
   pop  bx
   pop  ds
-  mov  ax, # VBE_DISPI_ID3
+  mov  ax, # VBE_DISPI_ID4
   call dispi_set_id
 no_vbe_interface:
 #if defined(USE_BX_INFO) || defined(DEBUG)
