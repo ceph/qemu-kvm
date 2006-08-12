@@ -275,8 +275,6 @@ typedef struct ModeInfoListItem
 //        like 0xE0000000
 
 
-  #define VBE_DISPI_TOTAL_VIDEO_MEMORY_MB 8
-
   #define VBE_DISPI_BANK_ADDRESS          0xA0000
   #define VBE_DISPI_BANK_SIZE_KB          64
   
@@ -311,9 +309,5 @@ typedef struct ModeInfoListItem
   #define VBE_DISPI_NOCLEARMEM            0x80
   
   #define VBE_DISPI_LFB_PHYSICAL_ADDRESS  0xE0000000
-
-
-#define VBE_TOTAL_VIDEO_MEMORY_DIV_64K                  (VBE_DISPI_TOTAL_VIDEO_MEMORY_MB*1024/64)
-
 
 #endif

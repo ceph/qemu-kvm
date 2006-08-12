@@ -84,7 +84,10 @@ Abbreviations
 
 #defines
 --------
+vbetables-gen.c
   #define VBE_DISPI_TOTAL_VIDEO_MEMORY_MB 8
+
+vbe.h
   #define VBE_DISPI_BANK_ADDRESS          0xA0000
   #define VBE_DISPI_BANK_SIZE_KB          64
   
@@ -207,7 +210,7 @@ API
     The new flag VBE_DISPI_8BIT_DAC switches the DAC to 8 bit mode.
 
 [0xb0c4]
-  * VBE_DISPI_TOTAL_VIDEO_MEMORY_MB set to 8
+  * VBE_DISPI_TOTAL_VIDEO_MEMORY_MB set to 8 (moved to auto-generated vbetables.h)
 
 Displaying GFX (banked mode)
 --------------

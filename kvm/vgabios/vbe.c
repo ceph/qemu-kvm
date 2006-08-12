@@ -38,6 +38,7 @@
 #include "vbe.h"
 #include "vbetables.h"
 
+#define VBE_TOTAL_VIDEO_MEMORY_DIV_64K (VBE_DISPI_TOTAL_VIDEO_MEMORY_MB*1024/64)
 
 // The current OEM Software Revision of this VBE Bios
 #define VBE_OEM_SOFTWARE_REV 0x0002;
@@ -62,7 +63,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.53 2006/08/09 21:26:02 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.54 2006/08/12 07:47:33 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -79,7 +80,7 @@ _no_vbebios_info_string:
 
 #if defined(USE_BX_INFO) || defined(DEBUG)
 msg_vbe_init:
-.ascii      "VBE Bios $Id: vbe.c,v 1.53 2006/08/09 21:26:02 vruppert Exp $"
+.ascii      "VBE Bios $Id: vbe.c,v 1.54 2006/08/12 07:47:33 vruppert Exp $"
 .byte	0x0a,0x0d, 0x00
 #endif
 
