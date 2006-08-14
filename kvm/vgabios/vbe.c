@@ -63,7 +63,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.54 2006/08/12 07:47:33 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.55 2006/08/14 20:24:34 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -80,7 +80,7 @@ _no_vbebios_info_string:
 
 #if defined(USE_BX_INFO) || defined(DEBUG)
 msg_vbe_init:
-.ascii      "VBE Bios $Id: vbe.c,v 1.54 2006/08/12 07:47:33 vruppert Exp $"
+.ascii      "VBE Bios $Id: vbe.c,v 1.55 2006/08/14 20:24:34 vruppert Exp $"
 .byte	0x0a,0x0d, 0x00
 #endif
 
@@ -258,20 +258,6 @@ ASM_START
   mov  dx, # VBE_DISPI_IOPORT_DATA
   mov  ax, 4[bp] ; xres
   out  dx, ax
-  push ax
-  mov  dx, #0x03d4
-  mov  ax, #0x0011
-  out  dx, ax
-  mov  dx, #0x03d4
-  pop  ax
-  push ax
-  shr  ax, #3
-  dec  ax
-  mov  ah, al
-  mov  al, #0x01
-  out  dx, ax
-  pop  ax
-  call vga_set_virt_width
 
   pop  dx
   pop  ax
@@ -531,6 +517,114 @@ dispi_get_virt_height:
   in   ax, dx
   pop  dx
   ret
+
+_vga_compat_setup:
+  push ax
+  push dx
+
+  ; set CRT X resolution
+  mov  dx, # VBE_DISPI_IOPORT_INDEX
+  mov  ax, # VBE_DISPI_INDEX_XRES
+  out  dx, ax
+  mov  dx, # VBE_DISPI_IOPORT_DATA
+  in   ax, dx
+  push ax
+  mov  dx, #0x03d4
+  mov  ax, #0x0011
+  out  dx, ax
+  mov  dx, #0x03d4
+  pop  ax
+  push ax
+  shr  ax, #3
+  dec  ax
+  mov  ah, al
+  mov  al, #0x01
+  out  dx, ax
+  pop  ax
+  call vga_set_virt_width
+
+  ; set CRT Y resolution
+  mov  dx, # VBE_DISPI_IOPORT_INDEX
+  mov  ax, # VBE_DISPI_INDEX_YRES
+  out  dx, ax
+  mov  dx, # VBE_DISPI_IOPORT_DATA
+  in   ax, dx
+  dec  ax
+  push ax
+  mov  dx, #0x03d4
+  mov  ah, al
+  mov  al, #0x12
+  out  dx, ax
+  pop  ax
+  mov  al, #0x07
+  out  dx, al
+  inc  dx
+  in   al, dx
+  and  al, #0xbd
+  test ah, #0x01
+  jz   bit8_clear
+  or   al, #0x02
+bit8_clear:
+  test ah, #0x02
+  jz   bit9_clear
+  or   al, #0x40
+bit9_clear:
+  out  dx, al
+
+  ; other settings
+  mov  dx, #0x03d4
+  mov  ax, #0x0009
+  out  dx, ax
+  mov  dx, # VGAREG_ACTL_RESET
+  in   al, dx
+  mov  dx, # VGAREG_ACTL_ADDRESS
+  mov  al, #0x10
+  out  dx, al
+  mov  dx, # VGAREG_ACTL_READ_DATA
+  in   al, dx
+  or   al, #0x01
+  mov  dx, # VGAREG_ACTL_ADDRESS
+  out  dx, al
+  mov  al, #0x20
+  out  dx, al
+  mov  dx, # VGAREG_GRDC_ADDRESS
+  mov  ax, #0x0506
+  out  dx, ax
+  mov  dx, # VGAREG_SEQU_ADDRESS
+  mov  ax, #0x0f02
+  out  dx, ax
+
+  ; settings for >= 8bpp
+  mov  dx, # VBE_DISPI_IOPORT_INDEX
+  mov  ax, # VBE_DISPI_INDEX_BPP
+  out  dx, ax
+  mov  dx, # VBE_DISPI_IOPORT_DATA
+  in   ax, dx
+  cmp  al, #0x08
+  jb   vga_compat_end
+  mov  dx, # VGAREG_ACTL_RESET
+  in   al, dx
+  mov  dx, # VGAREG_ACTL_ADDRESS
+  mov  al, #0x10
+  out  dx, al
+  mov  dx, # VGAREG_ACTL_READ_DATA
+  in   al, dx
+  or   al, #0x40
+  mov  dx, # VGAREG_ACTL_ADDRESS
+  out  dx, al
+  mov  al, #0x20
+  out  dx, al
+  mov  dx, # VGAREG_SEQU_ADDRESS
+  mov  al, #0x04
+  out  dx, al
+  mov  dx, # VGAREG_SEQU_DATA
+  in   al, dx
+  or   al, #0x08
+  out  dx, al
+
+vga_compat_end:
+  pop  dx
+  pop  ax
 ASM_END
 
 
@@ -879,6 +973,7 @@ Bit16u *AX;Bit16u BX; Bit16u ES;Bit16u DI;
                 dispi_set_yres(cur_info->info.YResolution);
                 dispi_set_bank(0);
                 dispi_set_enable(VBE_DISPI_ENABLED | no_clear | lfb_flag);
+                vga_compat_setup();
 
                 write_word(BIOSMEM_SEG,BIOSMEM_VBE_MODE,BX);
                 write_byte(BIOSMEM_SEG,BIOSMEM_VIDEO_CTL,(0x60 | no_clear));
