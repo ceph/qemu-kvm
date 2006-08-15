@@ -292,6 +292,7 @@ int hvm_run(hvm_context_t hvm, int vcpu)
 
 again:
 	r = ioctl(fd, HVM_RUN, &hvm_run);
+	hvm_run.emulated = 0;
 	if (r == -1 && errno != EINTR) {
 		printf("hvm_run: %m\n");
 		exit(1);

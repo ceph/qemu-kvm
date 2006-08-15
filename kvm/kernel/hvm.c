@@ -1493,22 +1493,20 @@ static int hvm_dev_ioctl_run(struct hvm *hvm, struct hvm_run *hvm_run)
 	if (hvm_run->vcpu < 0 || hvm_run->vcpu >= hvm->nvcpus)
 		return -EINVAL;
 	vcpu = &hvm->vcpus[hvm_run->vcpu];
-	
-again:	
-	if (signal_pending(current))
-		return -EINTR;
 
 	vcpu_load(vcpu);
-
-#ifdef __x86_64__
-	vmcs_writel(HOST_FS_BASE, read_msr(MSR_FS_BASE));
-	vmcs_writel(HOST_GS_BASE, read_msr(MSR_GS_BASE));
-#endif
 
 	if (hvm_run->emulated) {
 		skip_emulated_instruction(vcpu);
 		hvm_run->emulated = 0;
 	}
+	
+again:
+
+#ifdef __x86_64__
+	vmcs_writel(HOST_FS_BASE, read_msr(MSR_FS_BASE));
+	vmcs_writel(HOST_GS_BASE, read_msr(MSR_GS_BASE));
+#endif
 
 	if (vcpu->irq_summary && 
 	    !(vmcs_read32(VM_ENTRY_INTR_INFO_FIELD) & INTR_INFO_VALID_MASK))
@@ -1634,7 +1632,11 @@ again:
 		if (hvm_handle_exit(hvm_run, vcpu)) {
 			/* Give scheduler a change to reschedule. */
 			vcpu_put();
+			if (signal_pending(current)) {
+				return -EINTR;
+			}
 			cond_resched();
+			vcpu_load(vcpu);
 			goto again;
 		}
 	}
