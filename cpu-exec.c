@@ -481,7 +481,11 @@ int cpu_exec(CPUState *env1)
                 tmp_T0 = T0;
 #endif	    
                 interrupt_request = env->interrupt_request;
-                if (__builtin_expect(interrupt_request, 0)) {
+                if (__builtin_expect(interrupt_request, 0)
+#ifdef USE_KVM
+                    && !((env->efer & MSR_EFER_LMA))
+#endif
+                    ) {
 #if defined(TARGET_I386)
                     /* if hardware interrupt pending, we execute it */
                     if ((interrupt_request & CPU_INTERRUPT_HARD) &&

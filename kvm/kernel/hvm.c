@@ -447,7 +447,7 @@ static void vmcs_dump(void)
 	printk("GUEST_DR7 0x%lx\n", vmcs_readl(GUEST_DR7));
 
 	printk("GUEST_RFLAGS 0x%lx\n", vmcs_readl(GUEST_RFLAGS));
-
+	printk("GUEST_RIP 0x%lx\n", vmcs_readl(GUEST_RIP));
 
 	printk("GUEST_CS_SELECTOR 0x%x\n", vmcs_read16(GUEST_CS_SELECTOR));
 	printk("GUEST_DS_SELECTOR 0x%x\n", vmcs_read16(GUEST_DS_SELECTOR));
@@ -1148,6 +1148,7 @@ static int handle_cr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 			skip_emulated_instruction(vcpu);
 			return 1;
 		case 8:
+			printk("handle_cr: read CR8 cpu bug (AA15) !!!!!!!!!!!!!!!!!\n");
 			vcpu_load_rsp_rip(vcpu);
 			vcpu->regs[reg] = vcpu->cr8;
 			vcpu_put_rsp_rip(vcpu);

@@ -824,6 +824,11 @@ static void do_interrupt64(int intno, int is_int, int error_code,
     uint32_t e1, e2, e3, ss;
     target_ulong old_eip, esp, offset;
 
+#ifdef USE_KVM
+    printf("%s: unexpect\n", __FUNCTION__);
+    exit(-1);
+#endif
+
     has_error_code = 0;
     if (!is_int && !is_hw) {
         switch(intno) {
@@ -1107,6 +1112,12 @@ void do_interrupt_user(int intno, int is_int, int error_code,
     int dpl, cpl;
     uint32_t e2;
 
+#ifdef USE_KVM
+    if ((env->efer & MSR_EFER_LMA)) {
+        printf("%s: unexpect\n", __FUNCTION__);
+        exit(-1);
+    }
+#endif
     dt = &env->idt;
     ptr = dt->base + (intno * 8);
     e2 = ldl_kernel(ptr + 4);
@@ -1132,6 +1143,12 @@ void do_interrupt_user(int intno, int is_int, int error_code,
 void do_interrupt(int intno, int is_int, int error_code, 
                   target_ulong next_eip, int is_hw)
 {
+#ifdef USE_KVM
+    if ((env->efer & MSR_EFER_LMA)) {
+        printf("%s: unexpect\n", __FUNCTION__);
+        exit(-1);
+    }
+#endif
     if (loglevel & CPU_LOG_INT) {
         if ((env->cr[0] & CR0_PE_MASK)) {
             static int count;
