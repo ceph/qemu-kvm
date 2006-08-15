@@ -15,7 +15,7 @@ print:
 	push %rsi
 	push %rdx
 
-	mov %rax, %rsi
+	mov %rdi, %rsi
 	mov $PSEUDO_SERIAL_PORT, %edx
 
 putchar:

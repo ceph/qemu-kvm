@@ -9,10 +9,10 @@
 
 .previous
 
-	push %rax
-	lea 333b, %rax
+	push %rdi
+	lea 333b, %rdi
 	call print
-	pop %rax
+	pop %rdi
 
 .endm
 
