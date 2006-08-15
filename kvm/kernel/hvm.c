@@ -23,6 +23,7 @@ static const u32 vmx_msr_index[] = {
 	MSR_KERNEL_GS_BASE,
 };
 #define NR_VMX_MSR (sizeof(vmx_msr_index) / sizeof(*vmx_msr_index))
+#define NUM_AUTO_MSRS 1
 
 struct descriptor_table {
 	u16 limit;
@@ -659,9 +660,9 @@ static int hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 		     (HOST_IS_64 << 9)   /* address space size */
 		     | 0x36dff           /* reserved, 22.2,1, 20.7.1 */
 		);
-	vmcs_write32(VM_EXIT_MSR_STORE_COUNT, 0); /* 22.2.2 */
-	vmcs_write32(VM_EXIT_MSR_LOAD_COUNT, 0);  /* 22.2.2 */
-	vmcs_write32(VM_ENTRY_MSR_LOAD_COUNT, 0); /* 22.2.2 */
+	vmcs_write32(VM_EXIT_MSR_STORE_COUNT, NUM_AUTO_MSRS); /* 22.2.2 */
+	vmcs_write32(VM_EXIT_MSR_LOAD_COUNT, NUM_AUTO_MSRS);  /* 22.2.2 */
+	vmcs_write32(VM_ENTRY_MSR_LOAD_COUNT, NUM_AUTO_MSRS); /* 22.2.2 */
 
 	ret = -ENOMEM;
 	vcpu->guest_msrs = kmalloc(PAGE_SIZE, GFP_KERNEL);
@@ -1472,16 +1473,16 @@ static void load_msrs(struct vmx_msr_entry *e)
 {
 	int i;
 
-	for (i = 0; i < NR_VMX_MSR; ++i)
-		rdmsrl(e[i].index, e[i].data);
+	for (i = NUM_AUTO_MSRS; i < NR_VMX_MSR; ++i)
+		wrmsrl(e[i].index, e[i].data);
 }
 
 static void save_msrs(struct vmx_msr_entry *e)
 {
 	int i;
 
-	for (i = 0; i < NR_VMX_MSR; ++i)
-		wrmsrl(e[i].index, e[i].data);
+	for (i = NUM_AUTO_MSRS; i < NR_VMX_MSR; ++i)
+		rdmsrl(e[i].index, e[i].data);
 }
 
 static int hvm_dev_ioctl_run(struct hvm *hvm, struct hvm_run *hvm_run)
@@ -1594,6 +1595,7 @@ again:
 	fx_save(vcpu->host_fx_image);
 	fx_restore(vcpu->guest_fx_image);
 
+	save_msrs(vcpu->host_msrs);
 	load_msrs(vcpu->guest_msrs);
 
 	asm ( "pushf; " PUSHA "\n\t"
