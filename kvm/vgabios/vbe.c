@@ -63,7 +63,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.55 2006/08/14 20:24:34 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.56 2006/08/15 20:42:14 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -80,7 +80,7 @@ _no_vbebios_info_string:
 
 #if defined(USE_BX_INFO) || defined(DEBUG)
 msg_vbe_init:
-.ascii      "VBE Bios $Id: vbe.c,v 1.55 2006/08/14 20:24:34 vruppert Exp $"
+.ascii      "VBE Bios $Id: vbe.c,v 1.56 2006/08/15 20:42:14 vruppert Exp $"
 .byte	0x0a,0x0d, 0x00
 #endif
 
@@ -963,7 +963,7 @@ Bit16u *AX;Bit16u BX; Bit16u ES;Bit16u DI;
                 // first disable current mode (when switching between vesa modi)
                 dispi_set_enable(VBE_DISPI_DISABLED);
 
-                if (cur_info->mode == VBE_VESA_MODE_800X600X4)
+                if (cur_info->info.BitsPerPixel == 4)
                 {
                   biosfn_set_video_mode(0x6a);
                 }
