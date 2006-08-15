@@ -12,7 +12,7 @@ libhvm.a: hvmctl.o
 	$(AR) rcs $@ $^
 
 flatfiles: test/simple.flat test/stringio.flat test/memtest1.flat \
-	test/irq.flat
+	test/irq.flat test/sieve.flat
 
 %.flat: %.o
 	gcc -nostdlib -o $@ -Wl,-T,flat.lds $^
@@ -21,5 +21,7 @@ flatfiles: test/simple.flat test/stringio.flat test/memtest1.flat \
 	gcc -c -nostdlib -o $@ $^
 
 test/irq.flat: test/print.o
+
+test/sieve.flat: test/cstart.o test/sieve.o test/print.o
 
 -include .*.d
