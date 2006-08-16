@@ -937,7 +937,7 @@ static inline void set_cr0(struct hvm_vcpu *vcpu, unsigned long cr0)
 	} else if ((cr0 & CR0_PG_MASK)) {
 		if ((vcpu->shadow_efer & EFER_LME)) {
 			uint32_t guest_cs_ar;
-			if (is_pae()) {
+			if (!is_pae()) {
 				printk("set_cr0: #GP, start paging in "
 				       "long mode while PAE is disabled\n");
 				inject_gp();
