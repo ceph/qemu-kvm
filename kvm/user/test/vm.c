@@ -1,0 +1,190 @@
+
+#define PAGE_SIZE 4096
+#define LARGE_PAGE_SIZE (512 * PAGE_SIZE)
+
+static void *free = 0;
+
+static unsigned long virt_to_phys(const void *virt) 
+{ 
+    return (unsigned long)virt;
+}
+
+static void *phys_to_virt(unsigned long phys)
+{
+    return (void *)phys;
+}
+
+void *memset(void *data, int c, unsigned long len)
+{
+    char *s = data;
+
+    while (len--)
+	*s++ = c;
+
+    return data;
+}
+
+static void free_memory(void *mem, unsigned long size)
+{
+    while (size >= PAGE_SIZE) {
+	*(void **)mem = free;
+	free = mem;
+	mem += PAGE_SIZE;
+	size -= PAGE_SIZE;
+    }
+}
+
+void *alloc_page()
+{
+    void *p;
+
+    if (!free)
+	return 0;
+    
+    p = free;
+    free = *(void **)free;
+
+    return p;
+}
+
+extern char edata, end_of_memory;
+
+#define PTE_PRESENT (1ull << 0)
+#define PTE_PSE     (1ull << 7)
+#define PTE_WRITE   (1ull << 1)
+
+static void install_pte(unsigned long *cr3, 
+			int pte_level, 
+			void *virt,
+			unsigned long pte)
+{
+    int level;
+    unsigned long *pt = cr3;
+    unsigned offset;
+
+    for (level = 4; level > pte_level; --level) {
+	offset = ((unsigned long)virt >> ((level-1) * 9 + 12)) & 511;
+	if (!(pt[offset] & PTE_PRESENT)) {
+	    unsigned long *new_pt = alloc_page();
+	    memset(new_pt, 0, PAGE_SIZE);
+	    pt[offset] = virt_to_phys(new_pt) | PTE_PRESENT | PTE_WRITE;
+	}
+	pt = phys_to_virt(pt[offset] & 0xffffffffff000ull);
+    }
+    offset = (((unsigned long)virt >> ((level-1) * 9) + 12)) & 511;
+    pt[offset] = pte;
+}
+
+static void install_large_page(unsigned long *cr3, 
+			       unsigned long phys,
+			       void *virt)
+{
+    install_pte(cr3, 2, virt, phys | PTE_PRESENT | PTE_WRITE | PTE_PSE);
+}
+
+static void install_page(unsigned long *cr3, 
+			 unsigned long phys,
+			 void *virt)
+{
+    install_pte(cr3, 1, virt, phys | PTE_PRESENT | PTE_WRITE);
+}
+
+static void load_cr3(unsigned long cr3)
+{
+    asm ( "mov %0, %%cr3" : : "r"(cr3) );
+}
+
+static void load_cr0(unsigned long cr0)
+{
+    asm volatile ( "mov %0, %%cr0" : : "r"(cr0) );
+}
+
+static unsigned long read_cr0()
+{
+    unsigned long cr0;
+
+    asm volatile ( "mov %%cr0, %0" : "=r"(cr0) );
+    return cr0;
+}
+
+static void load_cr4(unsigned long cr4)
+{
+    asm volatile ( "mov %0, %%cr4" : : "r"(cr4) );
+}
+
+static unsigned long read_cr4()
+{
+    unsigned long cr4;
+
+    asm volatile ( "mov %%cr4, %0" : "=r"(cr4) );
+    return cr4;
+}
+
+struct gdt_table_descr
+{
+    unsigned short len;
+    unsigned long *table;
+} __attribute__((packed));
+
+static void load_gdt(unsigned long *table, int nent)
+{
+    struct gdt_table_descr descr;
+
+    descr.len = nent * 8 - 1;
+    descr.table = table;
+    asm volatile ( "lgdt %0" : : "m"(descr) );
+}
+
+#define SEG_CS_32 8
+#define SEG_CS_64 16
+
+struct ljmp {
+    void *ofs;
+    unsigned short seg;
+};
+
+static void setup_mmu(unsigned long len)
+{
+    unsigned long *cr3 = alloc_page();
+    unsigned long phys = 0;
+    unsigned long gdt[] = { 
+	[SEG_CS_32/8] = 0x00cf9b000000ffffull,
+	[SEG_CS_64/8] = 0x00af9b000000ffffull,
+    };
+    int gdt_size = sizeof(gdt) / sizeof(unsigned long);
+    extern char entry_32;
+    struct ljmp entry_32_ptr = { &entry_32, SEG_CS_32 };
+
+    memset(cr3, 0, PAGE_SIZE);
+    while (phys + LARGE_PAGE_SIZE <= len) {
+	install_large_page(cr3, phys, (void *)phys);
+	phys += LARGE_PAGE_SIZE;
+    }
+    while (phys + PAGE_SIZE <= len) {
+	install_page(cr3, phys, (void *)phys);
+	phys += PAGE_SIZE;
+    }
+    
+    load_cr3(virt_to_phys(cr3));
+    load_cr4(read_cr4() | (1ull << 5) | (1ull < 4));
+    load_gdt(gdt, gdt_size);
+
+    asm volatile (
+		  "   .byte 0x48; ljmp *%1\n\t"
+		  ".code32 \n\t"
+		  "entry_32: \n\t"
+		  "   mov %%eax, %%cr0 \n\t"
+		  "   ljmp %2, $(2f) \n\t"
+		  ".code64 \n\t"
+		  "2:"
+		  : : "a"(read_cr0() | (1ull << 31))
+		    , "m"(entry_32_ptr), "i"(SEG_CS_64)
+		  );
+    print("paging enabled\n");
+}
+
+void setup_vm()
+{
+    free_memory(&edata, &end_of_memory - &edata);
+    setup_mmu((long)&end_of_memory);
+}
