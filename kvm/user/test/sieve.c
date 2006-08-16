@@ -1,3 +1,5 @@
+#include "vm.h"
+
 void print(const char *text);
 
 void printi(int n)
@@ -52,7 +54,7 @@ int sieve(char* data, int size)
     return r;
 }
 
-#define STATIC_SIZE 100000
+#define STATIC_SIZE 100000000
 char static_data[STATIC_SIZE];
 
 int main()
@@ -62,6 +64,11 @@ int main()
     print("starting sieve\n");
     r = sieve(static_data, STATIC_SIZE);
     print("static: ");
+    printi(r);
+    print("\n");
+    setup_vm();
+    print("mapped: ");
+    r = sieve(static_data, STATIC_SIZE);
     printi(r);
     print("\n");
     return 0;

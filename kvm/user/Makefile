@@ -22,6 +22,6 @@ flatfiles: test/simple.flat test/stringio.flat test/memtest1.flat \
 
 test/irq.flat: test/print.o
 
-test/sieve.flat: test/cstart.o test/sieve.o test/print.o
+test/sieve.flat: test/cstart.o test/sieve.o test/print.o test/vm.o
 
 -include .*.d
