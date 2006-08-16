@@ -54,12 +54,14 @@ int sieve(char* data, int size)
     return r;
 }
 
-#define STATIC_SIZE 100000000
+#define STATIC_SIZE 1000000
+#define VSIZE 100000000
 char static_data[STATIC_SIZE];
 
 int main()
 {
     int r;
+    void *v;
 
     print("starting sieve\n");
     r = sieve(static_data, STATIC_SIZE);
@@ -71,5 +73,12 @@ int main()
     r = sieve(static_data, STATIC_SIZE);
     printi(r);
     print("\n");
+    print("vmalloc: ");
+    v = vmalloc(VSIZE);
+    r = sieve(v, VSIZE);
+    printi(r);
+    print("\n");
+    vfree(v);
+    
     return 0;
 }

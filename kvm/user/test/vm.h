@@ -3,4 +3,7 @@
 
 void setup_vm();
 
+void *vmalloc(unsigned long size);
+void vfree(void *mem);
+
 #endif

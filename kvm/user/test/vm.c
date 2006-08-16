@@ -1,8 +1,9 @@
 
-#define PAGE_SIZE 4096
+#define PAGE_SIZE 4096ul
 #define LARGE_PAGE_SIZE (512 * PAGE_SIZE)
 
 static void *free = 0;
+static void *vfree_top = 0;
 
 static unsigned long virt_to_phys(const void *virt) 
 { 
@@ -47,11 +48,18 @@ void *alloc_page()
     return p;
 }
 
+void free_page(void *page)
+{
+    *(void **)page = free;
+    free = page;
+}
+
 extern char edata, end_of_memory;
 
 #define PTE_PRESENT (1ull << 0)
 #define PTE_PSE     (1ull << 7)
 #define PTE_WRITE   (1ull << 1)
+#define PTE_ADDR    (0xffffffffff000ull)
 
 static void install_pte(unsigned long *cr3, 
 			int pte_level, 
@@ -75,6 +83,26 @@ static void install_pte(unsigned long *cr3,
     pt[offset] = pte;
 }
 
+static unsigned long get_pte(unsigned long *cr3, void *virt)
+{
+    int level;
+    unsigned long *pt = cr3, pte;
+    unsigned offset;
+
+    for (level = 4; level > 1; --level) {
+	offset = ((unsigned long)virt >> ((level-1) * 9 + 12)) & 511;
+	pte = pt[offset];
+	if (!(pte & PTE_PRESENT))
+	    return 0;
+	if (level == 2 && (pte & PTE_PSE))
+	    return pte;
+	pt = phys_to_virt(pte & 0xffffffffff000ull);
+    }
+    offset = (((unsigned long)virt >> ((level-1) * 9) + 12)) & 511;
+    pte = pt[offset];
+    return pte;
+}
+
 static void install_large_page(unsigned long *cr3, 
 			       unsigned long phys,
 			       void *virt)
@@ -92,6 +120,14 @@ static void install_page(unsigned long *cr3,
 static void load_cr3(unsigned long cr3)
 {
     asm ( "mov %0, %%cr3" : : "r"(cr3) );
+}
+
+static unsigned long read_cr3()
+{
+    unsigned long cr3;
+
+    asm volatile ( "mov %%cr3, %0" : "=r"(cr3) );
+    return cr3;
 }
 
 static void load_cr0(unsigned long cr0)
@@ -187,4 +223,36 @@ void setup_vm()
 {
     free_memory(&edata, &end_of_memory - &edata);
     setup_mmu((long)&end_of_memory);
+}
+
+void *vmalloc(unsigned long size)
+{
+    void *mem, *p;
+    unsigned pages;
+
+    size += sizeof(unsigned long);
+    
+    size = (size + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+    vfree_top -= size;
+    mem = p = vfree_top;
+    pages = size / PAGE_SIZE;
+    while (pages--) {
+	install_page(phys_to_virt(read_cr3()), virt_to_phys(alloc_page()), p);
+	p += PAGE_SIZE;
+	size -= PAGE_SIZE;
+    }
+    *(unsigned long *)mem = size;
+    mem += sizeof(unsigned long);
+    return mem;
+}
+
+void *vfree(void *mem)
+{
+    unsigned long size = *(unsigned long *)mem;
+    
+    while (size) {
+	free_page(phys_to_virt(get_pte(phys_to_virt(read_cr3()), mem) & PTE_ADDR));
+	mem += PAGE_SIZE;
+	size -= PAGE_SIZE;
+    }
 }
