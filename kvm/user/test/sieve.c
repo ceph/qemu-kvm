@@ -54,30 +54,32 @@ int sieve(char* data, int size)
     return r;
 }
 
+void test_sieve(const char *msg, char *data, int size)
+{
+    int r;
+
+    print(msg);
+    print(": ");
+    r = sieve(data, size);
+    printi(r);
+    print("\n");
+}
+
 #define STATIC_SIZE 1000000
 #define VSIZE 100000000
 char static_data[STATIC_SIZE];
 
 int main()
 {
-    int r;
     void *v;
 
     print("starting sieve\n");
-    r = sieve(static_data, STATIC_SIZE);
-    print("static: ");
-    printi(r);
-    print("\n");
+    test_sieve("static", static_data, STATIC_SIZE);
     setup_vm();
     print("mapped: ");
-    r = sieve(static_data, STATIC_SIZE);
-    printi(r);
-    print("\n");
-    print("vmalloc: ");
+    test_sieve("mapped", static_data, STATIC_SIZE);
     v = vmalloc(VSIZE);
-    r = sieve(v, VSIZE);
-    printi(r);
-    print("\n");
+    test_sieve("virtual", v, VSIZE);
     vfree(v);
     
     return 0;
