@@ -72,15 +72,18 @@ char static_data[STATIC_SIZE];
 int main()
 {
     void *v;
+    int i;
 
     print("starting sieve\n");
     test_sieve("static", static_data, STATIC_SIZE);
     setup_vm();
     print("mapped: ");
     test_sieve("mapped", static_data, STATIC_SIZE);
-    v = vmalloc(VSIZE);
-    test_sieve("virtual", v, VSIZE);
-    vfree(v);
+    for (i = 0; i < 30; ++i) {
+	v = vmalloc(VSIZE);
+	test_sieve("virtual", v, VSIZE);
+	vfree(v);
+    }
     
     return 0;
 }
