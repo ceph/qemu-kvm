@@ -245,6 +245,7 @@ static void nonpaging_flush(struct hvm_vcpu *vcpu)
 {
 	paddr_t root = vcpu->paging_context.root;
 
+	++hvm_stat.tlb_flush;
 	pgprintk("nonpaging_flush\n");
 	ASSERT(VALID_PAGE(root));
 	releas_pt_page_64(vcpu, root, PT64_ROOT_LEVEL);
@@ -412,6 +413,8 @@ static void inject_page_fault(struct hvm_vcpu *vcpu,
 
 	pgprintk("inject_page_fault: 0x%llx err 0x%x\n", addr, err_code);
 	
+	++hvm_stat.pf_guest;
+
 	if (is_page_fault(vect_info)) {
 		printk("inject_page_fault: double fault 0x%llx @ 0x%lx\n",
 		       addr, vmcs_readl(GUEST_RIP));
@@ -671,6 +674,9 @@ static int paging64_page_fault(struct hvm_vcpu *vcpu, uint64_t addr,
 	if (pte_present && !fixed) {
 		inject_page_fault(vcpu, addr, error_code);     
 	}
+
+	hvm_stat.pf_fixed += fixed;
+
 	return 0;	
 }
 
@@ -703,6 +709,8 @@ static void paging64_inval_page(struct hvm_vcpu *vcpu, uint64_t addr)
 
 	pgprintk("paging64_inval_page: 0x%llx pc 0x%lx\n",
 	       addr, vmcs_readl(GUEST_RIP));
+
+	++hvm_stat.invlpg;
 
 	for (; ; level--) {
 		uint32_t index = PT64_INDEX(addr, level);

@@ -15,8 +15,20 @@
 #include <asm/uaccess.h>
 #include <linux/reboot.h>
 #include <asm/io.h>
+#include <linux/debugfs.h>
 
 #include "vmx.h"
+
+MODULE_AUTHOR("Qumranet");
+MODULE_LICENSE("GPL");
+
+static struct dentry *debugfs_dir;
+static struct dentry *debugfs_pf_fixed;
+static struct dentry *debugfs_pf_guest;
+static struct dentry *debugfs_tlb_flush;
+static struct dentry *debugfs_invlpg;
+
+struct hvm_stat hvm_stat;
 
 #define KVM_LOG_BUF_SIZE PAGE_SIZE
 
@@ -2246,6 +2258,28 @@ static struct notifier_block hvm_reboot_notifier = {
 struct page *hvm_bad_page;
 paddr_t hvm_bad_page_addr;
 
+static __init void hvm_init_debug(void)
+{
+	debugfs_dir = debugfs_create_dir("kvm", 0);
+	debugfs_pf_fixed = debugfs_create_u32("pf_fixed", 0444, debugfs_dir,
+					      &hvm_stat.pf_fixed);
+	debugfs_pf_guest = debugfs_create_u32("pf_guest", 0444, debugfs_dir, 
+					      &hvm_stat.pf_guest);
+	debugfs_tlb_flush = debugfs_create_u32("tlb_flush", 0444, debugfs_dir, 
+					       &hvm_stat.tlb_flush);
+	debugfs_invlpg = debugfs_create_u32("invlpg", 0444, debugfs_dir, 
+					      &hvm_stat.pf_guest);
+}
+
+static void hvm_exit_debug(void)
+{
+	debugfs_remove(debugfs_pf_fixed);
+	debugfs_remove(debugfs_pf_guest);
+	debugfs_remove(debugfs_tlb_flush);
+	debugfs_remove(debugfs_invlpg);
+	debugfs_remove(debugfs_dir);
+}
+
 static __init int hvm_init(void)
 {
 	int r = 0;
@@ -2258,6 +2292,8 @@ static __init int hvm_init(void)
 		printk(KERN_ERR "hvm: disabled by bios\n");
 		return -EOPNOTSUPP;
 	}
+
+	hvm_init_debug();
 
 	setup_vmcs_descriptor();
 	r = alloc_hvm_area();
@@ -2283,11 +2319,13 @@ out_free_bad_page:
 out_free:
 	free_hvm_area();
 out:
+	hvm_exit_debug();
 	return r;
 }
 
 static __exit void hvm_exit(void)
 {
+	hvm_exit_debug();
 	misc_deregister(&hvm_dev);
 	unregister_reboot_notifier(&hvm_reboot_notifier);
 	on_each_cpu(hvm_disable, 0, 0, 1);

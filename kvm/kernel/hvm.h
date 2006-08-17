@@ -147,6 +147,15 @@ struct hvm {
 	char *log_buf;
 };
 
+struct hvm_stat {
+	u32 pf_fixed;
+	u32 pf_guest;
+	u32 tlb_flush;
+	u32 invlpg;
+};
+
+extern struct hvm_stat hvm_stat;
+
 int hvm_printf(struct hvm *hvm, const char *fmt, ...);
 
 void hvm_mmu_destroy(struct hvm_vcpu *vcpu);
