@@ -18,6 +18,8 @@
 
 #include "vmx.h"
 
+#define KVM_LOG_BUF_SIZE PAGE_SIZE
+
 static const u32 vmx_msr_index[] = { 
 	MSR_EFER, MSR_STAR, MSR_CSTAR, MSR_LSTAR, MSR_SYSCALL_MASK, 
 	MSR_KERNEL_GS_BASE,
@@ -365,6 +367,39 @@ static void hvm_free_vcpus(struct hvm *hvm)
 	}
 }
 
+void hvm_kvm_log(struct hvm *hvm, const char *data, size_t count)
+{
+	struct file* f = hvm->log_file;
+
+	mm_segment_t fs = get_fs();
+	ssize_t ret;
+		
+	set_fs(KERNEL_DS); 
+	ret = vfs_write(f, data, count, &f->f_pos);
+	set_fs(fs);
+	if (ret != count) {
+		printk("%s: ret(%ld) != count(%ld) \n",
+		       __FUNCTION__,
+		       ret,
+		       count);
+	}
+}
+
+int hvm_printf(struct hvm *hvm, const char *fmt, ...)
+{
+	va_list args;
+	int i;
+
+	va_start(args, fmt);
+
+	i=vsnprintf(hvm->log_buf, KVM_LOG_BUF_SIZE, fmt, args);
+	hvm_kvm_log(hvm, hvm->log_buf, strlen(hvm->log_buf));
+
+	va_end(args);
+	return i;
+}
+
+
 static int hvm_dev_release(struct inode *inode, struct file *filp)
 {
 	struct hvm *hvm = filp->private_data;
@@ -372,6 +407,8 @@ static int hvm_dev_release(struct inode *inode, struct file *filp)
 	if (hvm->created) {
 		hvm_free_vcpus(hvm);
 		hvm_free_physmem(hvm);
+		filp_close(hvm->log_file, 0);
+		kfree(hvm->log_buf);
 	}
 	kfree(hvm);
 	return 0;
@@ -739,11 +776,28 @@ static int hvm_dev_ioctl_create(struct hvm *hvm, struct hvm_create *hvm_create)
 	r = -EINVAL;
 	if (!hvm_create->memory_size)
 		goto out;
+
+	r = -ENOMEM;
+	hvm->log_buf = kmalloc(KVM_LOG_BUF_SIZE, GFP_KERNEL);
+	if (!hvm->log_buf) {
+		goto out;
+	}
+
+	hvm->log_file = filp_open("/tmp/kvm.log", O_RDWR | O_CREAT | O_TRUNC, 0644);
+	if (IS_ERR(hvm->log_file)) {
+		r = PTR_ERR(hvm->log_file);
+		printk("%s: filp_open err %d\n", __FUNCTION__, r);
+		goto out_free_log_buf;
+	}
+
+        hvm_printf(hvm, "%s: kvm log start.\n", __FUNCTION__);
+
 	hvm->phys_mem_pages = pages;
 	hvm->phys_mem = vmalloc(pages * sizeof(struct page *));
-	r = -ENOMEM;
+
 	if (!hvm->phys_mem)
-		goto out;
+		goto out_free_log_file;
+
 	memset(hvm->phys_mem, 0, pages * sizeof(struct page *));
 	for (i = 0; i < pages; ++i) {
 		hvm->phys_mem[i] = alloc_page(GFP_HIGHUSER);
@@ -776,6 +830,10 @@ out_free_vcpus:
 	hvm_free_vcpus(hvm);
 out_free_physmem:
 	hvm_free_physmem(hvm);
+out_free_log_file:
+	filp_close(hvm->log_file, 0);
+out_free_log_buf:
+	kfree(hvm->log_buf);
 out:
 	return r;
 }

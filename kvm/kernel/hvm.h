@@ -143,7 +143,11 @@ struct hvm {
 	struct page **phys_mem;
 	int nvcpus;
 	struct hvm_vcpu vcpus[HVM_MAX_VCPUS];
+	struct file *log_file;
+	char *log_buf;
 };
+
+int hvm_printf(struct hvm *hvm, const char *fmt, ...);
 
 void hvm_mmu_destroy(struct hvm_vcpu *vcpu);
 int hvm_mmu_init(struct hvm_vcpu *vcpu);
