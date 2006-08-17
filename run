@@ -58,4 +58,6 @@ if [[ -n "$install" ]]; then
     bootdisk=d
 fi
 
-${kvm:+./x86_64-softmmu/}qemu-system-x86_64 -cdrom /data/mirror/fedora/core/5/x86_64/iso/FC-5-x86_64-disc1.iso -boot "$bootdisk" -L /usr/share/qemu -hda "$disk" -m 384 -serial file:serial.log
+cdrom=/data/mirror/fedora/core/5/x86_64/os/images/boot.iso
+
+${kvm:+./x86_64-softmmu/}qemu-system-x86_64 -cdrom "$cdrom" -boot "$bootdisk" -L /usr/share/qemu -hda "$disk" -m 384 -serial file:serial.log
