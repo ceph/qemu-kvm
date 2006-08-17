@@ -1,7 +1,61 @@
-sudo /sbin/rmmod kvm
-sudo /sbin/insmod ../kernel/kvm.ko
-sudo chmod a+rw /dev/hvm
+#!/bin/sh
+
+set -e
+
+reload=1
+install=
+kvm=1
+
+usage() {
+    cat <<EOF 
+usage: $0 [options]
+
+options:
+	--no-reload-module     do not reload kvm module
+	--install              start up guest in installer boot cd
+        --no-kvm               use standard qemu, without kvm
+	--help                 this help
+EOF
+    exit 1
+}
+
+while [[ "$1" = -* ]]; do
+    opt="$1"
+    shift
+    case "$opt" in
+	--no-reload-module)
+	    reload=
+	    ;;
+	--install)
+	    install=1
+	    ;;
+	--no-kvm)
+	    kvm=
+	    ;;
+	--help)
+	    usage
+	    ;;
+	*)
+	    usage
+	    ;;
+    esac
+done
+
+if [[ -n "$kvm" && -n "$reload" ]]; then
+    sudo /sbin/rmmod kvm
+    sudo /sbin/insmod ../kernel/kvm.ko
+    sudo chmod a+rw /dev/hvm
+fi
+
 disk="/tmp/disk"
-dd < /dev/zero bs=1k count=1 of="$disk"
-dd < /dev/zero bs=1k count=1 of="$disk" seek=$((10*1024*1024-1))
-./x86_64-softmmu/qemu-system-x86_64 -cdrom /data/mirror/fedora/core/5/x86_64/iso/FC-5-x86_64-disc1.iso -boot d -L /usr/share/qemu -hda "$disk" -m 384 -serial file:serial.log
+if [[ -n "$install" ]]; then
+    dd < /dev/zero bs=1k count=1 of="$disk"
+    dd < /dev/zero bs=1k count=1 of="$disk" seek=$((10*1024*1024-1))
+fi
+
+boodisk=c
+if [[ -n "$install" ]]; then
+    bootdisk=d
+fi
+
+${kvm:+./x86_64-softmmu/}qemu-system-x86_64 -cdrom /data/mirror/fedora/core/5/x86_64/iso/FC-5-x86_64-disc1.iso -boot "$bootdisk" -L /usr/share/qemu -hda "$disk" -m 384 -serial file:serial.log
