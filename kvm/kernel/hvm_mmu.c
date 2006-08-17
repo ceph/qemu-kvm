@@ -146,6 +146,12 @@ static paddr_t hvm_mmu_alloc_page(struct hvm_vcpu *vcpu)
 }
 
 
+static int is_vga_mem(unsigned long page_index)
+{
+	return page_index >= 0xa0000 / PAGE_SIZE
+		&& page_index < 0xc0000 / PAGE_SIZE;
+}
+
 static paddr_t gaddr_to_paddr(struct hvm_vcpu *vcpu, gaddr_t addr)
 {
 	uint64_t page_index = (addr & ((1ULL << 48) - 1)) >> PAGE_SHIFT;
@@ -153,7 +159,8 @@ static paddr_t gaddr_to_paddr(struct hvm_vcpu *vcpu, gaddr_t addr)
 	
 	ASSERT(vcpu);
 
-	if (page_index >= vcpu->hvm->phys_mem_pages) {
+	if (page_index >= vcpu->hvm->phys_mem_pages 
+	    || is_vga_mem(page_index)) {
 		extern struct page *hvm_bad_page;
 
 		pgprintk("gaddr_to_paddr: bad page index,"
