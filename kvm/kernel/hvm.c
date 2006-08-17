@@ -516,6 +516,7 @@ static int hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	struct descriptor_table dt;
 	int i;
 	int ret;
+	u64 tsc;
 	
 	vcpu_load(vcpu);
 
@@ -593,7 +594,8 @@ static int hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 	vmcs_write64(IO_BITMAP_A, 0);
 	vmcs_write64(IO_BITMAP_B, 0);
 
-	vmcs_write64(TSC_OFFSET, 0);
+	rdtscll(tsc);
+	vmcs_write64(TSC_OFFSET, -tsc);
 
 	/* vmcs link (?) */
 	vmcs_write64(VMCS_LINK_POINTER, -1ull); /* 22.3.1.5 */
@@ -614,6 +616,7 @@ static int hvm_vcpu_setup(struct hvm_vcpu *vcpu)
 		     | CPU_BASED_UNCOND_IO_EXITING   /* 20.6.2 */
 		     | CPU_BASED_INVDPG_EXITING
 		     | CPU_BASED_MOV_DR_EXITING
+		     | CPU_BASED_USE_TSC_OFFSETING   /* 21.3 */
 		     | 0x401e172    /* reserved, 22.2.1, 20.6.2 */
 		);
 	vmcs_write32(EXCEPTION_BITMAP, 1 << 14); /* want page faults */
