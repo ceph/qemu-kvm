@@ -337,7 +337,6 @@ again:
 			printf("unhandled vm exit: %d\n", hvm_run.exit_reason);
 			break;
 		}
-		printf("instruction length: %d\n", hvm_run.instruction_length);
 	}
 	hvm_show_regs(hvm, vcpu);
 	return 0;

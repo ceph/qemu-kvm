@@ -238,8 +238,6 @@ static inline void push_interrupts(CPUState *env)
 int kvm_cpu_exec(CPUState *env)
 {
 
-    printf("exec into rip %lx\n", env->eip);
-
     push_interrupts(env);
 
     load_regs(env);
@@ -314,7 +312,6 @@ static void kvm_outw(void *opaque, uint16_t addr, uint16_t data)
 
 static void kvm_outl(void *opaque, uint16_t addr, uint32_t data)
 {
-    printf("outl %x\n", addr);
     cpu_outl(0, addr, data);
 }
 
@@ -324,7 +321,6 @@ static void kvm_io_window(void *opaque)
 
     env = envs[0];
     save_regs(env);
-    printf("kvm_io_window at %lx\n", env->eip);
     cpu_loop_exit();
 }
 
@@ -334,7 +330,6 @@ static void kvm_mmio(void *opaque)
 
     env = envs[0];
     save_regs(env);
-    printf("mmio at %lx\n", env->eip);
     env->kvm_mmio = 1;
     cpu_loop_exit();
 }
@@ -345,7 +340,6 @@ static void kvm_halt(void *opaque, int vcpu)
 
     env = envs[0];
     save_regs(env);
-    printf("halt at %lx\n", env->eip);
     ++env->eip;
     cpu_loop_exit();
 }
