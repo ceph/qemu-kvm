@@ -21,11 +21,14 @@
 #define KVM_LOG_BUF_SIZE PAGE_SIZE
 
 static const u32 vmx_msr_index[] = { 
-	MSR_EFER, MSR_STAR, MSR_CSTAR, MSR_LSTAR, MSR_SYSCALL_MASK, 
-	MSR_KERNEL_GS_BASE,
+	MSR_EFER, MSR_STAR, MSR_CSTAR,
+	MSR_KERNEL_GS_BASE, MSR_SYSCALL_MASK, MSR_LSTAR
 };
 #define NR_VMX_MSR (sizeof(vmx_msr_index) / sizeof(*vmx_msr_index))
-#define NUM_AUTO_MSRS 1
+
+
+#define NUM_AUTO_MSRS 4 // avoid save/load MSR_SYSCALL_MASK and MSR_LSTAR 
+			// by std vt mechanism (cpu bug AA24)
 
 struct descriptor_table {
 	u16 limit;
@@ -1539,12 +1542,10 @@ static void load_msrs(struct vmx_msr_entry *e)
 		wrmsrl(e[i].index, e[i].data);
 }
 
-static void save_msrs(struct vmx_msr_entry *e)
+static void save_msrs(struct vmx_msr_entry *e, int msr_index)
 {
-	int i;
-
-	for (i = NUM_AUTO_MSRS; i < NR_VMX_MSR; ++i)
-		rdmsrl(e[i].index, e[i].data);
+	for (; msr_index < NR_VMX_MSR; ++msr_index)
+		rdmsrl(e[msr_index].index, e[msr_index].data);
 }
 
 static int hvm_dev_ioctl_run(struct hvm *hvm, struct hvm_run *hvm_run)
@@ -1655,7 +1656,7 @@ again:
 	fx_save(vcpu->host_fx_image);
 	fx_restore(vcpu->guest_fx_image);
 
-	save_msrs(vcpu->host_msrs);
+	save_msrs(vcpu->host_msrs, 0);
 	load_msrs(vcpu->guest_msrs);
 
 	asm ( "pushf; " PUSHA "\n\t"
@@ -1678,7 +1679,7 @@ again:
 		"c"(vcpu->regs)
 	      : "cc", "memory" );
 
-	save_msrs(vcpu->guest_msrs);
+	save_msrs(vcpu->guest_msrs, NUM_AUTO_MSRS);
 	load_msrs(vcpu->host_msrs);
 
 	fx_save(vcpu->guest_fx_image);
