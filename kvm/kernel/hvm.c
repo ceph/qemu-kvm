@@ -1912,6 +1912,7 @@ static int hvm_dev_ioctl_get_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 {
 	struct hvm_vcpu *vcpu;
+	int mmu_reset_needed = 0;
 
 	if (!hvm->created)
 		return -EINVAL;
@@ -1966,13 +1967,16 @@ static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 
 	__set_cr0(sregs->cr0);
 	vcpu->regs[VCPU_REGS_CR2] = sregs->cr2;
+	mmu_reset_needed |= vcpu->cr3 != sregs->cr3;
 	vcpu->cr3 = sregs->cr3;
 	__set_cr4(sregs->cr4);
 	vcpu->cr8 = sregs->cr8;
 
+	mmu_reset_needed |= vcpu->shadow_efer != sregs->efer;
 	__set_efer(vcpu, sregs->efer);
 
-	hvm_mmu_reset_context(vcpu);
+	if (mmu_reset_needed)
+		hvm_mmu_reset_context(vcpu);
 	vcpu_put();
 
 	return 0;
