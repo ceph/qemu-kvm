@@ -204,6 +204,12 @@ static void save_regs(CPUState *env)
             }
     }
     env->hflags = (env->hflags & HFLAG_COPY_MASK) | hflags;
+    CC_SRC = env->eflags & (CC_O | CC_S | CC_Z | CC_A | CC_P | CC_C);
+    DF = 1 - (2 * ((env->eflags >> 10) & 1));
+    CC_OP = CC_OP_EFLAGS;
+    env->eflags &= ~(DF_MASK | CC_O | CC_S | CC_Z | CC_A | CC_P | CC_C);
+
+    tlb_flush(env, 1);
 }
 
 
