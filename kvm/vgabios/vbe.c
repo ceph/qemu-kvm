@@ -63,7 +63,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.56 2006/08/15 20:42:14 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.57 2006/08/18 20:39:32 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -80,7 +80,7 @@ _no_vbebios_info_string:
 
 #if defined(USE_BX_INFO) || defined(DEBUG)
 msg_vbe_init:
-.ascii      "VBE Bios $Id: vbe.c,v 1.56 2006/08/15 20:42:14 vruppert Exp $"
+.ascii      "VBE Bios $Id: vbe.c,v 1.57 2006/08/18 20:39:32 vruppert Exp $"
 .byte	0x0a,0x0d, 0x00
 #endif
 
@@ -473,10 +473,10 @@ vga_set_virt_width:
   call dispi_get_bpp
   cmp  al, #0x04
   ja   set_width_svga
-  shr  bx, #2
+  shr  bx, #1
 set_width_svga:
-  shr  bx, #2
-  mov  dx, #0x03d4
+  shr  bx, #3
+  mov  dx, # VGAREG_VGA_CRTC_ADDRESS
   mov  ah, bl
   mov  al, #0x13
   out  dx, ax
@@ -529,10 +529,9 @@ _vga_compat_setup:
   mov  dx, # VBE_DISPI_IOPORT_DATA
   in   ax, dx
   push ax
-  mov  dx, #0x03d4
+  mov  dx, # VGAREG_VGA_CRTC_ADDRESS
   mov  ax, #0x0011
   out  dx, ax
-  mov  dx, #0x03d4
   pop  ax
   push ax
   shr  ax, #3
@@ -551,7 +550,7 @@ _vga_compat_setup:
   in   ax, dx
   dec  ax
   push ax
-  mov  dx, #0x03d4
+  mov  dx, # VGAREG_VGA_CRTC_ADDRESS
   mov  ah, al
   mov  al, #0x12
   out  dx, ax
@@ -572,7 +571,7 @@ bit9_clear:
   out  dx, al
 
   ; other settings
-  mov  dx, #0x03d4
+  mov  dx, # VGAREG_VGA_CRTC_ADDRESS
   mov  ax, #0x0009
   out  dx, ax
   mov  dx, # VGAREG_ACTL_RESET
@@ -602,6 +601,13 @@ bit9_clear:
   in   ax, dx
   cmp  al, #0x08
   jb   vga_compat_end
+  mov  dx, # VGAREG_VGA_CRTC_ADDRESS
+  mov  al, #0x14
+  out  dx, al
+  mov  dx, # VGAREG_VGA_CRTC_DATA
+  in   al, dx
+  or   al, #0x40
+  out  dx, al
   mov  dx, # VGAREG_ACTL_RESET
   in   al, dx
   mov  dx, # VGAREG_ACTL_ADDRESS
@@ -620,6 +626,14 @@ bit9_clear:
   mov  dx, # VGAREG_SEQU_DATA
   in   al, dx
   or   al, #0x08
+  out  dx, al
+  mov  dx, # VGAREG_GRDC_ADDRESS
+  mov  al, #0x05
+  out  dx, al
+  mov  dx, # VGAREG_GRDC_DATA
+  in   al, dx
+  and  al, #0x9f
+  or   al, #0x40
   out  dx, al
 
 vga_compat_end:
