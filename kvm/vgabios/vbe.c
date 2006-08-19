@@ -63,7 +63,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.57 2006/08/18 20:39:32 vruppert Exp $"
+.ascii       "$Id: vbe.c,v 1.58 2006/08/19 09:39:43 vruppert Exp $"
 .byte        0x00
 
 _vbebios_info_string:
@@ -80,7 +80,7 @@ _no_vbebios_info_string:
 
 #if defined(USE_BX_INFO) || defined(DEBUG)
 msg_vbe_init:
-.ascii      "VBE Bios $Id: vbe.c,v 1.57 2006/08/18 20:39:32 vruppert Exp $"
+.ascii      "VBE Bios $Id: vbe.c,v 1.58 2006/08/19 09:39:43 vruppert Exp $"
 .byte	0x0a,0x0d, 0x00
 #endif
 
@@ -574,6 +574,12 @@ bit9_clear:
   mov  dx, # VGAREG_VGA_CRTC_ADDRESS
   mov  ax, #0x0009
   out  dx, ax
+  mov  al, #0x17
+  out  dx, al
+  mov  dx, # VGAREG_VGA_CRTC_DATA
+  in   al, dx
+  or   al, #0x03
+  out  dx, al
   mov  dx, # VGAREG_ACTL_RESET
   in   al, dx
   mov  dx, # VGAREG_ACTL_ADDRESS
