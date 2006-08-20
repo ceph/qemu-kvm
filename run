@@ -42,7 +42,9 @@ while [[ "$1" = -* ]]; do
 done
 
 if [[ -n "$kvm" && -n "$reload" ]]; then
-    sudo /sbin/rmmod kvm
+    if /sbin/lsmod | grep -q '^kvm '; then
+	sudo /sbin/rmmod kvm
+    fi
     sudo /sbin/insmod ../kernel/kvm.ko
     sudo chmod a+rw /dev/hvm
 fi
