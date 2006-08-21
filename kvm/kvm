@@ -37,7 +37,7 @@ if options.kvm and options.reload:
         if x.startswith('kvm '):
             if os.spawnl(os.P_WAIT, '/sbin/rmmod', 'rmmod', 'kvm') != 0:
                 raise Exception('failed to remove kvm module')
-    if os.spawnl(os.P_WAIT, '/sbin/insmod', 'insmod', '../kernel/kvm.ko') != 0:
+    if os.spawnl(os.P_WAIT, '/sbin/insmod', 'insmod', 'kernel/kvm.ko') != 0:
         raise Exception('failed to load kvm module')
 
 disk = options.image
@@ -56,7 +56,7 @@ cdrom = '/data/mirror/fedora/core/5/x86_64/os/images/boot.iso'
 
 cmd = 'qemu-system-x86_64'
 if options.kvm:
-    cmd = './x86_64-softmmu/' + cmd
+    cmd = 'qemu/x86_64-softmmu/' + cmd
 
 os.execlp(cmd, cmd,
           '-cdrom', cdrom, '-boot', bootdisk, '-L', '/usr/share/qemu',
