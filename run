@@ -3,19 +3,6 @@
 import sys, os
 import optparse
 
-def usage():
-    from textwrap import dedent
-    print dedent(
-        '''\
-           usage: %s [options]
-
-           options:
-               --no-reload-module     
-               --install              
-               --no-kvm               
-               --help                 this help
-         ''') % (sys.argv[0],)
-
 optparser = optparse.OptionParser()
 
 optparser.add_option('--no-reload-module',
