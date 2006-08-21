@@ -27,6 +27,11 @@ static struct dentry *debugfs_pf_fixed;
 static struct dentry *debugfs_pf_guest;
 static struct dentry *debugfs_tlb_flush;
 static struct dentry *debugfs_invlpg;
+static struct dentry *debugfs_exits;
+static struct dentry *debugfs_io_exits;
+static struct dentry *debugfs_mmio_exits;
+static struct dentry *debugfs_signal_exits;
+static struct dentry *debugfs_irq_exits;
 
 struct hvm_stat hvm_stat;
 
@@ -909,6 +914,7 @@ static int handle_exit_exception(struct hvm_vcpu *vcpu,
 		if (!vcpu->paging_context.page_fault(vcpu, cr2, error_code)) {
 			return 1;
 		}
+		++hvm_stat.mmio_exits;
 		hvm_run->exit_reason = HVM_EXIT_IO_MEM;
 		return 0;
 	}
@@ -922,8 +928,10 @@ static int handle_exit_exception(struct hvm_vcpu *vcpu,
 	return 0;
 }
 
-static int handle_internal(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
+static int handle_external_interrupt(struct hvm_vcpu *vcpu, 
+				     struct hvm_run *hvm_run)
 {
+	++hvm_stat.irq_exits;
 	return 1;
 }
 
@@ -931,6 +939,7 @@ static int handle_io(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 {
 	u64 exit_qualification;
 
+	++hvm_stat.io_exits;
 	exit_qualification = vmcs_read64(EXIT_QUALIFICATION);
 	hvm_run->exit_reason = HVM_EXIT_IO;
 	if (exit_qualification & 8)
@@ -1459,7 +1468,7 @@ static int handle_halt(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 static int (*hvm_vmx_exit_handlers[])(struct hvm_vcpu *vcpu,
 				      struct hvm_run *hvm_eun) = {
 	[EXIT_REASON_EXCEPTION_NMI]           = handle_exit_exception,
-	[EXIT_REASON_EXTERNAL_INTERRUPT]      = handle_internal,
+	[EXIT_REASON_EXTERNAL_INTERRUPT]      = handle_external_interrupt,
 	[EXIT_REASON_IO_INSTRUCTION]          = handle_io,
 	[EXIT_REASON_INVLPG]                  = handle_invlpg,
 	[EXIT_REASON_CR_ACCESS]               = handle_cr,
@@ -1691,6 +1700,8 @@ again:
 		"c"(vcpu->regs)
 	      : "cc", "memory" );
 
+	++hvm_stat.exits;
+
 	save_msrs(vcpu->guest_msrs, NUM_AUTO_MSRS);
 	load_msrs(vcpu->host_msrs);
 
@@ -1708,6 +1719,7 @@ again:
 			/* Give scheduler a change to reschedule. */
 			vcpu_put();
 			if (signal_pending(current)) {
+				++hvm_stat.signal_exits;
 				return -EINTR;
 			}
 			cond_resched();
@@ -2273,10 +2285,27 @@ static __init void hvm_init_debug(void)
 					       &hvm_stat.tlb_flush);
 	debugfs_invlpg = debugfs_create_u32("invlpg", 0444, debugfs_dir, 
 					      &hvm_stat.invlpg);
+	debugfs_exits = debugfs_create_u32("exits", 0444, debugfs_dir, 
+					   &hvm_stat.exits);
+	debugfs_io_exits = debugfs_create_u32("io_exits", 0444, debugfs_dir, 
+					      &hvm_stat.io_exits);
+	debugfs_mmio_exits = debugfs_create_u32("mmio_exits", 0444,
+						debugfs_dir, 
+						&hvm_stat.mmio_exits);
+	debugfs_signal_exits = debugfs_create_u32("signal_exits", 0444, 
+						  debugfs_dir, 
+						  &hvm_stat.signal_exits);
+	debugfs_irq_exits = debugfs_create_u32("irq_exits", 0444, debugfs_dir, 
+					       &hvm_stat.irq_exits);
 }
 
 static void hvm_exit_debug(void)
 {
+	debugfs_remove(debugfs_signal_exits);
+	debugfs_remove(debugfs_irq_exits);
+	debugfs_remove(debugfs_mmio_exits);
+	debugfs_remove(debugfs_io_exits);
+	debugfs_remove(debugfs_exits);
 	debugfs_remove(debugfs_pf_fixed);
 	debugfs_remove(debugfs_pf_guest);
 	debugfs_remove(debugfs_tlb_flush);

@@ -152,6 +152,12 @@ struct hvm_stat {
 	u32 pf_guest;
 	u32 tlb_flush;
 	u32 invlpg;
+
+	u32 exits;
+	u32 io_exits;
+	u32 mmio_exits;
+	u32 signal_exits;
+	u32 irq_exits;
 };
 
 extern struct hvm_stat hvm_stat;
