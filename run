@@ -1,65 +1,71 @@
-#!/bin/sh
+#!/usr/bin/python
 
-set -e
+import sys, os
+import optparse
 
-reload=1
-install=
-kvm=1
+def usage():
+    from textwrap import dedent
+    print dedent(
+        '''\
+           usage: %s [options]
 
-usage() {
-    cat <<EOF 
-usage: $0 [options]
+           options:
+               --no-reload-module     
+               --install              
+               --no-kvm               
+               --help                 this help
+         ''') % (sys.argv[0],)
 
-options:
-	--no-reload-module     do not reload kvm module
-	--install              start up guest in installer boot cd
-        --no-kvm               use standard qemu, without kvm
-	--help                 this help
-EOF
-    exit 1
-}
+optparser = optparse.OptionParser()
 
-while [[ "$1" = -* ]]; do
-    opt="$1"
-    shift
-    case "$opt" in
-	--no-reload-module)
-	    reload=
-	    ;;
-	--install)
-	    install=1
-	    ;;
-	--no-kvm)
-	    kvm=
-	    ;;
-	--help)
-	    usage
-	    ;;
-	*)
-	    usage
-	    ;;
-    esac
-done
+optparser.add_option('--no-reload-module',
+                     help = 'do not reload kvm module',
+                     action = 'store_false',
+                     dest = 'reload',
+                     default = True,
+                     )
 
-if [[ -n "$kvm" && -n "$reload" ]]; then
-    if /sbin/lsmod | grep -q '^kvm '; then
-	sudo /sbin/rmmod kvm
-    fi
-    sudo /sbin/insmod ../kernel/kvm.ko
-    sudo chmod a+rw /dev/hvm
-fi
+optparser.add_option('--install',
+                     help = 'start up guest in installer boot cd',
+                     action = 'store_true',
+                     default = False,
+                     )
 
-disk="/tmp/disk"
-if [[ -n "$install" ]]; then
-    dd < /dev/zero bs=1k count=1 of="$disk"
-    dd < /dev/zero bs=1k count=1 of="$disk" seek=$((10*1024*1024-1))
-fi
+optparser.add_option('--no-kvm',
+                     help = 'use standard qemu, without kvm',
+                     action = 'store_false',
+                     dest = 'kvm',
+                     default = True,
+                     )
+(options, args) = optparser.parse_args(sys.argv)
 
-boodisk=c
-if [[ -n "$install" ]]; then
-    bootdisk=d
-fi
+if options.kvm and options.reload:
+    for x in os.popen4('/sbin/lsmod')[1].readlines():
+        if x.startswith('kvm '):
+            if os.spawnl(os.P_WAIT, '/sbin/rmmod', 'rmmod', 'kvm') != 0:
+                raise Exception('failed to remove kvm module')
+    if os.spawnl(os.P_WAIT, '/sbin/insmod', 'insmod', '../kernel/kvm.ko') != 0:
+        raise Exception('failed to load kvm module')
 
-cdrom=/data/mirror/fedora/core/5/x86_64/os/images/boot.iso
+disk = "/tmp/disk"
+if options.install:
+    fd = file(disk, 'w')
+    fd.truncate()
+    fd.seek(10*1024*1024*1024-1)
+    fd.write('\0')
+    fd.close()
 
-${kvm:+./x86_64-softmmu/}qemu-system-x86_64 -cdrom "$cdrom" -boot "$bootdisk" -L /usr/share/qemu -hda "$disk" -m 384 -serial file:serial.log
+bootdisk = 'c'
+if options.install:
+    bootdisk = 'd'
+
+cdrom = '/data/mirror/fedora/core/5/x86_64/os/images/boot.iso'
+
+cmd = 'qemu-system-x86_64'
+if options.kvm:
+    cmd = './x86_64-softmmu/' + cmd
+
+os.execlp(cmd, cmd,
+          '-cdrom', cdrom, '-boot', bootdisk, '-L', '/usr/share/qemu',
+          '-hda', disk, '-m', '384', '-serial', 'file:/tmp/serial.log',
+          )
