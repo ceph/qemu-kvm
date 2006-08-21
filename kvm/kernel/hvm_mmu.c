@@ -146,31 +146,33 @@ static paddr_t hvm_mmu_alloc_page(struct hvm_vcpu *vcpu)
 }
 
 
-static int is_vga_mem(unsigned long page_index)
+
+static inline int is_io_mem(struct hvm_vcpu *vcpu, unsigned long addr)
 {
-	return page_index >= 0xa0000 / PAGE_SIZE
-		&& page_index < 0xc0000 / PAGE_SIZE;
+
+	if ((addr >> PAGE_SHIFT) >= vcpu->hvm->phys_mem_pages ) {
+		return TRUE;
+	}
+
+	return (addr >= 0xa0000ULL && addr < 0xe0000ULL) || 
+		(addr >= 0xf0000ULL && addr < 0x100000ULL) ||
+		(addr >= 0xffff0000ULL && addr < 0x100000000ULL);
 }
+
 
 static paddr_t gaddr_to_paddr(struct hvm_vcpu *vcpu, gaddr_t addr)
 {
-	uint64_t page_index = (addr & ((1ULL << 48) - 1)) >> PAGE_SHIFT;
 	struct page *page;
-	
+
 	ASSERT(vcpu);
+	ASSERT((addr & ~PT64_BASE_ADDR_MASK) == 0)
 
-	if (page_index >= vcpu->hvm->phys_mem_pages 
-	    || is_vga_mem(page_index)) {
-		extern struct page *hvm_bad_page;
-
-		pgprintk("gaddr_to_paddr: bad page index,"
-		       " phys_mem_pages %lu gaddr 0x%llx\n",
-			vcpu->hvm->phys_mem_pages, addr);
-		page = hvm_bad_page;
-	} else {
-		page = vcpu->hvm->phys_mem[page_index];
+	if (is_io_mem(vcpu, addr)) {
+		return hvm_bad_page_addr;
 	}
-	return page_to_pfn(page) << PAGE_SHIFT;
+
+	page = vcpu->hvm->phys_mem[addr >> PAGE_SHIFT];
+	return page_to_pfn(page) << PAGE_SHIFT;  
 }
 
 
