@@ -24,6 +24,12 @@ optparser.add_option('--no-kvm',
                      dest = 'kvm',
                      default = True,
                      )
+optparser.add_option('--image',
+                     help = 'select disk image',
+                     dest = 'image',
+                     default = '/tmp/disk',
+                     )
+
 (options, args) = optparser.parse_args(sys.argv)
 
 if options.kvm and options.reload:
@@ -34,7 +40,7 @@ if options.kvm and options.reload:
     if os.spawnl(os.P_WAIT, '/sbin/insmod', 'insmod', '../kernel/kvm.ko') != 0:
         raise Exception('failed to load kvm module')
 
-disk = "/tmp/disk"
+disk = options.image
 if options.install:
     fd = file(disk, 'w')
     fd.truncate()
