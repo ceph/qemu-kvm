@@ -2272,7 +2272,7 @@ static __init void hvm_init_debug(void)
 	debugfs_tlb_flush = debugfs_create_u32("tlb_flush", 0444, debugfs_dir, 
 					       &hvm_stat.tlb_flush);
 	debugfs_invlpg = debugfs_create_u32("invlpg", 0444, debugfs_dir, 
-					      &hvm_stat.pf_guest);
+					      &hvm_stat.invlpg);
 }
 
 static void hvm_exit_debug(void)
