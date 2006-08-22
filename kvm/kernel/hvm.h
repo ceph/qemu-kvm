@@ -229,4 +229,37 @@ static inline int is_external_interrupt(uint32_t intr_info)
 
 extern paddr_t hvm_bad_page_addr;
 
+
+/* The Xen-based x86 emulator wants register state in a struct cpu_user_regs */
+
+#ifdef __x86_64__
+#define DECLARE_REG(basename) \
+	union { \
+		u64 r##basename; \
+		u64 e##basename; \
+	}
+#else
+#define DECLARE_REG(basename) u32 e#basename
+#endif
+
+struct cpu_user_regs {
+	DECLARE_REG(ax);
+	DECLARE_REG(bx);
+	DECLARE_REG(cx);
+	DECLARE_REG(dx);
+	DECLARE_REG(si);
+	DECLARE_REG(di);
+	DECLARE_REG(sp);
+	DECLARE_REG(bp);
+	DECLARE_REG(ip);
+	DECLARE_REG(flags);
+#ifdef __x86_64__
+	u64 r8, r9, r10, r11, r12, r13, r14, r15;
+#endif
+	u16 cs, ds, es, fs, gs, ss;
+	u16 error_code;
+};
+
+#undef DECLARE_REG
+
 #endif
