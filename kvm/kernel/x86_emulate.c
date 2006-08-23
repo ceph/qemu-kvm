@@ -600,7 +600,7 @@ x86_emulate_memop(
         goto special_insn;
     case DstReg:
         dst.type = OP_REG;
-        if ( d & ByteOp )
+        if ( (d & ByteOp) && !(twobyte_table && (b == 0xb6 || b == 0xb7)) )
         {
             dst.ptr = decode_register(modrm_reg, &_regs, (rex_prefix == 0));
             dst.val = *(uint8_t *)dst.ptr;
