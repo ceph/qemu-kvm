@@ -29,6 +29,11 @@ optparser.add_option('--image',
                      dest = 'image',
                      default = '/tmp/disk',
                      )
+optparser.add_option('--cdrom',
+                     help = 'select cdrom image',
+                     dest = 'cdrom',
+                     default = '/data/mirror/fedora/core/5/x86_64/os/images/boot.iso',
+                     )
 
 (options, args) = optparser.parse_args(sys.argv)
 
@@ -52,13 +57,13 @@ bootdisk = 'c'
 if options.install:
     bootdisk = 'd'
 
-cdrom = '/data/mirror/fedora/core/5/x86_64/os/images/boot.iso'
-
 cmd = 'qemu-system-x86_64'
 if options.kvm:
     cmd = 'qemu/x86_64-softmmu/' + cmd
 
+print cmd
+
 os.execlp(cmd, cmd,
-          '-cdrom', cdrom, '-boot', bootdisk, '-L', '/usr/share/qemu',
+          '-cdrom', options.cdrom, '-boot', bootdisk, '-L', '/usr/share/qemu',
           '-hda', disk, '-m', '384', '-serial', 'file:/tmp/serial.log',
           )
