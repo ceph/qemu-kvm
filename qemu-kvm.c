@@ -17,12 +17,12 @@ static CPUState *saved_env[NR_CPU];
 
 int kvm_is_ok(CPUState *env)
 {
-    return (env->efer & MSR_EFER_LMA) && !env->kvm_mmio;
+    return (env->efer & MSR_EFER_LMA) && !env->kvm_emulate_one_instruction;
 }
 
 void kvm_handled_mmio(CPUState *env)
 {
-    env->kvm_mmio = 0;
+    env->kvm_emulate_one_instruction = 0;
 }
 
 static void load_regs(CPUState *env)
@@ -371,7 +371,7 @@ static void kvm_emulate_one_instruction(void *opaque)
 
     env = envs[0];
     save_regs(env);
-    env->kvm_mmio = 1;
+    env->kvm_emulate_one_instruction = 1;
     cpu_loop_exit();
 }
  
