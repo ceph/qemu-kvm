@@ -315,6 +315,47 @@ static void kvm_outl(void *opaque, uint16_t addr, uint32_t data)
     cpu_outl(0, addr, data);
 }
 
+static void kvm_readb(void *opaque, uint64_t addr, uint8_t *data)
+{
+    CPUState **envs = opaque;
+    *data = ldub_phys(addr);
+}
+ 
+static void kvm_readw(void *opaque, uint64_t addr, uint16_t *data)
+{
+    *data = lduw_phys(addr);
+}
+
+static void kvm_readl(void *opaque, uint64_t addr, uint32_t *data)
+{
+    *data = ldl_phys(addr);
+}
+
+static void kvm_readq(void *opaque, uint64_t addr, uint64_t *data)
+{
+    *data = ldq_phys(addr);
+}
+
+static void kvm_writeb(void *opaque, uint64_t addr, uint8_t data)
+{
+    stb_phys(addr, data);
+}
+
+static void kvm_writew(void *opaque, uint64_t addr, uint16_t data)
+{
+    stw_phys(addr, data);
+}
+
+static void kvm_writel(void *opaque, uint64_t addr, uint32_t data)
+{
+    stl_phys(addr, data);
+}
+
+static void kvm_writeq(void *opaque, uint64_t addr, uint64_t data)
+{
+    stq_phys(addr, data);
+}
+
 static void kvm_io_window(void *opaque)
 {
     CPUState **envs = opaque;
@@ -354,6 +395,14 @@ static struct hvm_callbacks qemu_kvm_ops = {
     .outw  = kvm_outw,
     .outl  = kvm_outl,
     .mmio  = kvm_mmio,
+    .readb = kvm_readb,
+    .readw = kvm_readw,
+    .readl = kvm_readl,
+    .readq = kvm_readq,
+    .writeb = kvm_writeb,
+    .writew = kvm_writew,
+    .writel = kvm_writel,
+    .writeq = kvm_writeq,
     .halt  = kvm_halt,
     .io_window = kvm_io_window,
 };
