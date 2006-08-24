@@ -17,6 +17,14 @@ struct hvm_callbacks {
     void (*outb)(void *opaque, uint16_t addr, uint8_t data);
     void (*outw)(void *opaque, uint16_t addr, uint16_t data);
     void (*outl)(void *opaque, uint16_t addr, uint32_t data);
+    void (*readb)(void *opaque, uint64_t addr, uint8_t *data);
+    void (*readw)(void *opaque, uint64_t addr, uint16_t *data);
+    void (*readl)(void *opaque, uint64_t addr, uint32_t *data);
+    void (*readq)(void *opaque, uint64_t addr, uint64_t *data);
+    void (*writeb)(void *opaque, uint64_t addr, uint8_t data);
+    void (*writew)(void *opaque, uint64_t addr, uint16_t data);
+    void (*writel)(void *opaque, uint64_t addr, uint32_t data);
+    void (*writeq)(void *opaque, uint64_t addr, uint64_t data);
     void (*debug)(void *opaque, int vcpu);
     void (*mmio)(void *opaque);
     void (*halt)(void *opaque, int vcpu);

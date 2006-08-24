@@ -271,6 +271,45 @@ static void handle_io_mem(hvm_context_t hvm, struct hvm_run *hvm_run)
 	hvm->callbacks->mmio(hvm->opaque);
 }
 
+static void handle_mmio(hvm_context_t hvm, struct hvm_run *hvm_run)
+{
+	unsigned long addr = hvm_run->mmio.phys_addr;
+	void *data = hvm_run->mmio.data;
+
+	if (hvm_run->mmio.is_write) {
+		switch (hvm_run->mmio.len) {
+		case 1:
+			hvm->callbacks->writeb(hvm->opaque, addr, *(uint8_t *)data);
+			break;
+		case 2:
+			hvm->callbacks->writew(hvm->opaque, addr, *(uint16_t *)data);
+			break;
+		case 4:
+			hvm->callbacks->writel(hvm->opaque, addr, *(uint32_t *)data);
+			break;
+		case 8:
+			hvm->callbacks->writeq(hvm->opaque, addr, *(uint64_t *)data);
+			break;
+		}
+	} else {
+		switch (hvm_run->mmio.len) {
+		case 1:
+			hvm->callbacks->readb(hvm->opaque, addr, (uint8_t *)data);
+			break;
+		case 2:
+			hvm->callbacks->readw(hvm->opaque, addr, (uint16_t *)data);
+			break;
+		case 4:
+			hvm->callbacks->readl(hvm->opaque, addr, (uint32_t *)data);
+			break;
+		case 8:
+			hvm->callbacks->readq(hvm->opaque, addr, (uint64_t *)data);
+			break;
+		}
+		hvm_run->mmio_completed = 1;
+	}
+}
+
 static void handle_io_window(hvm_context_t hvm, struct hvm_run *hvm_run)
 {
 	hvm->callbacks->io_window(hvm->opaque);
@@ -288,11 +327,13 @@ int hvm_run(hvm_context_t hvm, int vcpu)
 	struct hvm_run hvm_run = {
 		.vcpu = vcpu,
 		.emulated = 0,
+		.mmio_completed = 0,
 	};
 
 again:
 	r = ioctl(fd, HVM_RUN, &hvm_run);
 	hvm_run.emulated = 0;
+	hvm_run.mmio_completed = 0;
 	if (r == -1 && errno != EINTR) {
 		printf("hvm_run: %m\n");
 		exit(1);
@@ -329,6 +370,9 @@ again:
 			goto again;
 		case HVM_EXIT_IO_MEM:
 			handle_io_mem(hvm, &hvm_run);
+			goto again;
+		case HVM_EXIT_MMIO:
+			handle_mmio(hvm, &hvm_run);
 			goto again;
 		case HVM_EXIT_HLT:
 			handle_halt(hvm, &hvm_run);
