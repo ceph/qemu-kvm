@@ -135,6 +135,13 @@ struct hvm_vcpu {
 	char fx_buf[FX_BUF_SIZE];
 	char *host_fx_image;
 	char *guest_fx_image;
+
+	int mmio_needed;
+	int mmio_read_completed;
+	int mmio_is_write;
+	int mmio_size;
+	unsigned char mmio_data[8];
+	unsigned long mmio_phys_addr;
 };
 
 struct hvm {

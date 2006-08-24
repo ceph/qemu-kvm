@@ -20,6 +20,7 @@ enum hvm_exit_reason {
 	HVM_EXIT_IO_MEM,
 	HVM_EXIT_DEBUG,
 	HVM_EXIT_HLT,
+	HVM_EXIT_MMIO,
 };
 
 /* for HVM_RUN */
@@ -27,6 +28,7 @@ struct hvm_run {
 	/* in */
 	int vcpu;
 	int emulated;  /* skip current instruction */
+	int mmio_completed; /* mmio request completed */
 
 	/* out */
 	int exit_type;
@@ -61,6 +63,13 @@ struct hvm_run {
 		} io;
 		struct {
 		} debug;
+		/* HVM_EXIT_IO_MEM */
+		struct {
+			__u64 phys_addr;
+			__u8  data[8];
+			__u32 len;
+			__u8  is_write;
+		} mmio;
 	};
 };
 

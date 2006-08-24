@@ -16,8 +16,11 @@
 #include <linux/reboot.h>
 #include <asm/io.h>
 #include <linux/debugfs.h>
+#include <linux/highmem.h>
 
 #include "vmx.h"
+#include "x86_emulate.h"
+#include "hvm_mmu.h"
 
 MODULE_AUTHOR("Qumranet");
 MODULE_LICENSE("GPL");
@@ -464,8 +467,8 @@ void vmcs_writel(unsigned long field, unsigned long value)
 	asm volatile ( "vmwrite %1, %2; setna %0" 
 		       : "=g"(error) : "r"(value), "r"(field) : "cc" );
 	if (error)
-		printk(KERN_ERR "vmwrite error: reg %lx value %lx\n",
-		       field, value);
+		printk(KERN_ERR "vmwrite error: reg %lx value %lx (err %d)\n",
+		       field, value, vmcs_read32(VM_INSTRUCTION_ERROR));
 }
 
 static inline void vmcs_write16(unsigned long field, u16 value)
@@ -877,6 +880,230 @@ static void skip_emulated_instruction(struct hvm_vcpu *vcpu)
 			     interruptibility & ~3);
 }
 
+struct hvm_x86_emulate_ctxt {
+	struct x86_emulate_ctxt x;
+	struct hvm_vcpu *vcpu;
+};
+
+static struct hvm_vcpu *vcpu_from_ctxt(struct x86_emulate_ctxt *ctxt)
+{
+	struct hvm_x86_emulate_ctxt *hvm_ctxt 
+		= container_of(ctxt, struct hvm_x86_emulate_ctxt, x);
+	return hvm_ctxt->vcpu;
+}
+
+static int emulator_read_std(unsigned long addr,
+			     unsigned long *val,
+			     unsigned int bytes,
+			     struct x86_emulate_ctxt *ctxt)
+{
+	struct hvm_vcpu *vcpu = vcpu_from_ctxt(ctxt);
+	void *data = val;
+
+	while (bytes) {
+		u64 pte = vcpu->paging_context.fetch_pte64(vcpu, addr);
+		unsigned offset = addr & (PAGE_SIZE-1);
+		unsigned tocopy = min(bytes, (unsigned)PAGE_SIZE - offset);
+		unsigned long pfn;
+		void *page;
+
+		if (!(pte & PT64_PRESENT_MASK))
+			return hvm_printf(vcpu->hvm, "not present\n"), X86EMUL_PROPAGATE_FAULT;
+		pfn = (pte & PT64_BASE_ADDR_MASK) >> PAGE_SHIFT;
+		page = kmap_atomic(vcpu->hvm->phys_mem[pfn], KM_USER0);
+
+		memcpy(data, page + offset, tocopy);
+
+		kunmap_atomic(page, KM_USER0);
+
+		bytes -= tocopy;
+		data += tocopy;
+		addr += tocopy;
+	}
+	
+	return X86EMUL_CONTINUE;
+}
+
+static int emulator_write_std(unsigned long addr,
+			      unsigned long val,
+			      unsigned int bytes,
+			      struct x86_emulate_ctxt *ctxt)
+{
+	printk(KERN_ERR "emulator_write_std: addr %lx n %d\n",
+	       addr, bytes);
+	return X86EMUL_UNHANDLEABLE;
+}
+
+static int emulator_read_emulated(unsigned long addr,
+				  unsigned long *val,
+				  unsigned int bytes,
+				  struct x86_emulate_ctxt *ctxt)
+{
+	struct hvm_vcpu *vcpu = vcpu_from_ctxt(ctxt);
+
+	if (vcpu->mmio_read_completed) {
+		memcpy(val, vcpu->mmio_data, bytes);
+		vcpu->mmio_read_completed = 0;
+		return X86EMUL_CONTINUE;
+	} else {
+		u64 pte = vcpu->paging_context.fetch_pte64(vcpu, addr);
+		unsigned offset = addr & (PAGE_SIZE-1);
+
+		if (!(pte & PT64_PRESENT_MASK))
+			return hvm_printf(vcpu->hvm, "not present\n"), X86EMUL_PROPAGATE_FAULT;
+		vcpu->mmio_needed = 1;
+		vcpu->mmio_phys_addr = (pte & PT64_BASE_ADDR_MASK) | offset;
+		vcpu->mmio_size = bytes;
+		vcpu->mmio_is_write = 0;
+
+		return X86EMUL_UNHANDLEABLE;
+	}
+}
+
+static int emulator_write_emulated(unsigned long addr,
+				   unsigned long val,
+				   unsigned int bytes,
+				   struct x86_emulate_ctxt *ctxt)
+{
+	struct hvm_vcpu *vcpu = vcpu_from_ctxt(ctxt);
+
+	u64 pte = vcpu->paging_context.fetch_pte64(vcpu, addr);
+	unsigned offset = addr & (PAGE_SIZE-1);
+	
+	if (!(pte & PT64_PRESENT_MASK))
+		return hvm_printf(vcpu->hvm, "not present\n"), X86EMUL_PROPAGATE_FAULT;
+	
+	vcpu->mmio_needed = 1;
+	vcpu->mmio_phys_addr = (pte & PT64_BASE_ADDR_MASK) | offset;
+	vcpu->mmio_size = bytes;
+	vcpu->mmio_is_write = 1;
+	memcpy(vcpu->mmio_data, &val, bytes);
+
+	return X86EMUL_CONTINUE;
+}
+
+static int emulator_cmpxchg_emulated(unsigned long addr,
+				     unsigned long old,
+				     unsigned long new,
+				     unsigned int bytes,
+				     struct x86_emulate_ctxt *ctxt)
+{
+	printk(KERN_ERR "emulator_write_emulated: addr %lx n %d\n",
+	       addr, bytes);
+	return X86EMUL_UNHANDLEABLE;
+}
+
+struct x86_emulate_ops emulate_ops = {
+	.read_std            = emulator_read_std,
+	.write_std           = emulator_write_std,
+	.read_emulated       = emulator_read_emulated,
+	.write_emulated      = emulator_write_emulated,
+	.cmpxchg_emulated    = emulator_cmpxchg_emulated,
+};
+
+enum emulation_result {
+	EMULATE_DONE,       /* no further processing */
+	EMULATE_DO_MMIO,      /* hvm_run filled with mmio request */
+	EMULATE_FAIL,         /* can't emulate this instruction */
+};
+
+static int emulate_instruction(struct hvm_vcpu *vcpu,
+			       struct hvm_run *run,
+			       unsigned long cr2,
+			       u16 error_code)
+{
+	struct cpu_user_regs regs;
+	struct hvm_x86_emulate_ctxt emulate_ctxt;
+	int r;
+
+	regs.eax = vcpu->regs[VCPU_REGS_RAX];
+	regs.ebx = vcpu->regs[VCPU_REGS_RBX];
+	regs.ecx = vcpu->regs[VCPU_REGS_RCX];
+	regs.edx = vcpu->regs[VCPU_REGS_RDX];
+	regs.esi = vcpu->regs[VCPU_REGS_RSI];
+	regs.edi = vcpu->regs[VCPU_REGS_RDI];
+	regs.esp = vmcs_readl(GUEST_RSP);
+	regs.ebp = vcpu->regs[VCPU_REGS_RBP];
+	regs.eip = vmcs_readl(GUEST_RIP);
+	regs.eflags = vmcs_readl(GUEST_RFLAGS);
+#ifdef __x86_64__
+	regs.r8 = vcpu->regs[VCPU_REGS_R8];
+	regs.r9 = vcpu->regs[VCPU_REGS_R9];
+	regs.r10 = vcpu->regs[VCPU_REGS_R10];
+	regs.r11 = vcpu->regs[VCPU_REGS_R11];
+	regs.r12 = vcpu->regs[VCPU_REGS_R12];
+	regs.r13 = vcpu->regs[VCPU_REGS_R13];
+	regs.r14 = vcpu->regs[VCPU_REGS_R14];
+	regs.r15 = vcpu->regs[VCPU_REGS_R15];
+#endif
+	regs.cs = vmcs_read16(GUEST_CS_SELECTOR);
+	regs.ds = vmcs_read16(GUEST_DS_SELECTOR);
+	regs.es = vmcs_read16(GUEST_ES_SELECTOR);
+	regs.fs = vmcs_read16(GUEST_FS_SELECTOR);
+	regs.gs = vmcs_read16(GUEST_GS_SELECTOR);
+	regs.ss = vmcs_read16(GUEST_SS_SELECTOR);
+
+	emulate_ctxt.x.regs = &regs;
+	emulate_ctxt.x.cr2 = cr2;
+	emulate_ctxt.x.mode = X86EMUL_MODE_PROT64; /* FIXME: get from regs */
+	emulate_ctxt.vcpu = vcpu;
+
+	vcpu->mmio_is_write = 0;
+	r = x86_emulate_memop(&emulate_ctxt.x, &emulate_ops);
+
+	if (r || vcpu->mmio_is_write) {
+		run->mmio.phys_addr = vcpu->mmio_phys_addr;
+		memcpy(run->mmio.data, vcpu->mmio_data, 8);
+		run->mmio.len = vcpu->mmio_size;
+		run->mmio.is_write = vcpu->mmio_is_write;
+	}
+
+	if (r) {
+		if (!vcpu->mmio_needed) {
+			static int reported;
+
+			if (!reported) {
+				u8 opcodes[4];
+
+				emulator_read_std(vmcs_readl(GUEST_RIP),
+						  (unsigned long *)opcodes,
+						  4, 
+						  &emulate_ctxt.x);
+
+				printk(KERN_ERR "emulation failed but !mmio_needed? rip %lx %02x %02x %02x %02x\n", vmcs_readl(GUEST_RIP), opcodes[0], opcodes[1], opcodes[2], opcodes[3]);
+				reported = 1;
+			}
+			return EMULATE_FAIL;
+		}
+		return EMULATE_DO_MMIO;
+	}
+
+	vcpu->regs[VCPU_REGS_RAX] = regs.eax;
+	vcpu->regs[VCPU_REGS_RBX] = regs.ebx;
+	vcpu->regs[VCPU_REGS_RCX] = regs.ecx;
+	vcpu->regs[VCPU_REGS_RDX] = regs.edx;
+	vcpu->regs[VCPU_REGS_RSI] = regs.esi;
+	vcpu->regs[VCPU_REGS_RDI] = regs.edi;
+	vmcs_writel(GUEST_RSP, regs.esp);
+	vcpu->regs[VCPU_REGS_RBP] = regs.ebp;
+	vmcs_writel(GUEST_RIP, regs.eip);
+	vmcs_writel(GUEST_RFLAGS, regs.eflags);
+#ifdef __x86_64__
+	vcpu->regs[VCPU_REGS_R8] = regs.r8;
+	vcpu->regs[VCPU_REGS_R9] = regs.r9;
+	vcpu->regs[VCPU_REGS_R10] = regs.r10;
+	vcpu->regs[VCPU_REGS_R11] = regs.r11;
+	vcpu->regs[VCPU_REGS_R12] = regs.r12;
+	vcpu->regs[VCPU_REGS_R13] = regs.r13;
+	vcpu->regs[VCPU_REGS_R14] = regs.r14;
+	vcpu->regs[VCPU_REGS_R15] = regs.r15;
+#endif
+
+	if (vcpu->mmio_is_write)
+		return EMULATE_DO_MMIO;
+
+	return EMULATE_DONE;
+}
 
 static int handle_exit_exception(struct hvm_vcpu *vcpu, 
 				 struct hvm_run *hvm_run)
@@ -884,6 +1111,7 @@ static int handle_exit_exception(struct hvm_vcpu *vcpu,
 	u32 intr_info, error_code;
 	unsigned long cr2, rip;
 	u32 vect_info;
+	enum emulation_result er;
 
 	vect_info = vmcs_read32(IDT_VECTORING_INFO_FIELD);
 	intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
@@ -914,9 +1142,22 @@ static int handle_exit_exception(struct hvm_vcpu *vcpu,
 		if (!vcpu->paging_context.page_fault(vcpu, cr2, error_code)) {
 			return 1;
 		}
-		++hvm_stat.mmio_exits;
-		hvm_run->exit_reason = HVM_EXIT_IO_MEM;
-		return 0;
+		er = emulate_instruction(vcpu, hvm_run, cr2, error_code);
+
+		switch (er) {
+		case EMULATE_DONE:
+			return 1;
+		case EMULATE_FAIL:
+			++hvm_stat.mmio_exits;
+			hvm_run->exit_reason = HVM_EXIT_IO_MEM;
+			return 0;
+		case EMULATE_DO_MMIO:
+			++hvm_stat.mmio_exits;
+			hvm_run->exit_reason = HVM_EXIT_MMIO;
+			return 0;
+		default:
+			BUG();
+		}
 	}
 	if ((intr_info & (INTR_INFO_INTR_TYPE_MASK | INTR_INFO_VECTOR_MASK)) == (INTR_TYPE_EXCEPTION | 1)) {
 		hvm_run->exit_reason = HVM_EXIT_DEBUG;
@@ -1584,6 +1825,13 @@ static int hvm_dev_ioctl_run(struct hvm *hvm, struct hvm_run *hvm_run)
 		skip_emulated_instruction(vcpu);
 		hvm_run->emulated = 0;
 	}
+
+	if (hvm_run->mmio_completed) {
+		memcpy(vcpu->mmio_data, hvm_run->mmio.data, 8);
+		vcpu->mmio_read_completed = 1;
+	}
+
+	vcpu->mmio_needed = 0;
 	
 again:
 
