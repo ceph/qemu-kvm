@@ -266,9 +266,10 @@ static void handle_cpuid(hvm_context_t hvm, struct hvm_run *run)
 	run->emulated = 1;
 }
 
-static void handle_io_mem(hvm_context_t hvm, struct hvm_run *hvm_run)
+static void handle_emulate_one_instruction(hvm_context_t hvm, 
+					   struct hvm_run *hvm_run)
 {
-	hvm->callbacks->mmio(hvm->opaque);
+	hvm->callbacks->emulate_one_instruction(hvm->opaque);
 }
 
 static void handle_mmio(hvm_context_t hvm, struct hvm_run *hvm_run)
@@ -368,8 +369,8 @@ again:
 		case HVM_EXIT_DEBUG:
 			handle_debug(hvm, &hvm_run);
 			goto again;
-		case HVM_EXIT_IO_MEM:
-			handle_io_mem(hvm, &hvm_run);
+		case HVM_EXIT_EMULATE_ONE_INSTRUCTION:
+			handle_emulate_one_instruction(hvm, &hvm_run);
 			goto again;
 		case HVM_EXIT_MMIO:
 			handle_mmio(hvm, &hvm_run);

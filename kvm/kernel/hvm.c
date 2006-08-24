@@ -1149,7 +1149,7 @@ static int handle_exit_exception(struct hvm_vcpu *vcpu,
 			return 1;
 		case EMULATE_FAIL:
 			++hvm_stat.mmio_exits;
-			hvm_run->exit_reason = HVM_EXIT_IO_MEM;
+			hvm_run->exit_reason = HVM_EXIT_EMULATE_ONE_INSTRUCTION;
 			return 0;
 		case EMULATE_DO_MMIO:
 			++hvm_stat.mmio_exits;

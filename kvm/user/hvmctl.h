@@ -26,7 +26,7 @@ struct hvm_callbacks {
     void (*writel)(void *opaque, uint64_t addr, uint32_t data);
     void (*writeq)(void *opaque, uint64_t addr, uint64_t data);
     void (*debug)(void *opaque, int vcpu);
-    void (*mmio)(void *opaque);
+    void (*emulate_one_instruction)(void *opaque);
     void (*halt)(void *opaque, int vcpu);
     void (*io_window)(void *opaque);
 };

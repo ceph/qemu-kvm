@@ -365,7 +365,7 @@ static void kvm_io_window(void *opaque)
     cpu_loop_exit();
 }
 
-static void kvm_mmio(void *opaque)
+static void kvm_emulate_one_instruction(void *opaque)
 {
     CPUState **envs = opaque;
 
@@ -394,7 +394,7 @@ static struct hvm_callbacks qemu_kvm_ops = {
     .outb  = kvm_outb,
     .outw  = kvm_outw,
     .outl  = kvm_outl,
-    .mmio  = kvm_mmio,
+    .emulate_one_instruction = kvm_emulate_one_instruction,
     .readb = kvm_readb,
     .readw = kvm_readw,
     .readl = kvm_readl,

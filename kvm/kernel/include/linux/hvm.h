@@ -17,7 +17,7 @@ enum hvm_exit_reason {
 	HVM_EXIT_EXCEPTION,
 	HVM_EXIT_IO,
 	HVM_EXIT_CPUID,
-	HVM_EXIT_IO_MEM,
+	HVM_EXIT_EMULATE_ONE_INSTRUCTION,
 	HVM_EXIT_DEBUG,
 	HVM_EXIT_HLT,
 	HVM_EXIT_MMIO,
@@ -63,7 +63,7 @@ struct hvm_run {
 		} io;
 		struct {
 		} debug;
-		/* HVM_EXIT_IO_MEM */
+		/* HVM_EXIT_MMIO */
 		struct {
 			__u64 phys_addr;
 			__u8  data[8];

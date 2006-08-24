@@ -65,7 +65,7 @@ static void test_debug(void *opaque, int vcpu)
 }
 
 
-static void test_mmio(void *opaque)
+static void test_emulate_one_instruction(void *opaque)
 {
     printf("test_mmio\n");
 }
@@ -92,7 +92,7 @@ static struct hvm_callbacks test_callbacks = {
     .outw        = test_outw,
     .outl        = test_outl,
     .debug       = test_debug,
-    .mmio        = test_mmio,
+    .emulate_one_instruction = test_emulate_one_instruction,
     .halt        = test_halt,
     .io_window = test_io_window,
 };
