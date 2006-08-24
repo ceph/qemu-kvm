@@ -317,7 +317,6 @@ static void kvm_outl(void *opaque, uint16_t addr, uint32_t data)
 
 static void kvm_readb(void *opaque, uint64_t addr, uint8_t *data)
 {
-    CPUState **envs = opaque;
     *data = ldub_phys(addr);
 }
  
