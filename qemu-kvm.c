@@ -380,7 +380,7 @@ static void kvm_halt(void *opaque, int vcpu)
 
     env = envs[0];
     save_regs(env);
-    ++env->eip;
+    env->kvm_emulate_one_instruction = 1;
     cpu_loop_exit();
 }
  
