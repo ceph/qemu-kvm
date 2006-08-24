@@ -1702,6 +1702,11 @@ static int handle_interrupt_window(struct hvm_vcpu *vcpu,
 
 static int handle_halt(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 {
+	if (vcpu->irq_summary && (vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_IF)) {
+		skip_emulated_instruction(vcpu);
+		return 1;
+	}
+
 	hvm_run->exit_reason = HVM_EXIT_HLT;
 	return 0;
 }
