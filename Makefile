@@ -1,8 +1,16 @@
+# Makefile for QEMU.
+
 include config-host.mak
+
+.PHONY: all clean distclean dvi info install install-doc tar tarbin \
+	speed test test2 html dvi info
 
 CFLAGS=-Wall -O2 -g -fno-strict-aliasing -I.
 ifdef CONFIG_DARWIN
 CFLAGS+= -mdynamic-no-pic
+endif
+ifeq ($(ARCH),sparc)
+CFLAGS+=-mcpu=ultrasparc
 endif
 LDFLAGS=-g
 LIBS=
@@ -17,11 +25,13 @@ else
 DOCS=
 endif
 
-all: dyngen$(EXESUF) $(TOOLS) $(DOCS)
-	for d in $(TARGET_DIRS); do \
-	$(MAKE) -C $$d $@ || exit 1 ; \
-        done
+all: $(TOOLS) $(DOCS) recurse-all
 
+subdir-%: dyngen$(EXESUF)
+	$(MAKE) -C $(subst subdir-,,$@) all
+
+recurse-all: $(patsubst %,subdir-%, $(TARGET_DIRS))
+        
 qemu-img$(EXESUF): qemu-img.c block.c block-cow.c block-qcow.c aes.c block-vmdk.c block-cloop.c block-dmg.c block-bochs.c block-vpc.c block-vvfat.c
 	$(CC) -DQEMU_TOOL $(CFLAGS) $(LDFLAGS) $(DEFINES) -o $@ $^ -lz $(LIBS)
 
@@ -39,6 +49,7 @@ clean:
 
 distclean: clean
 	rm -f config-host.mak config-host.h $(DOCS)
+	rm -f qemu-{doc,tech}.{info,aux,cp,dvi,fn,info,ky,log,pg,toc,tp,vr}
 	for d in $(TARGET_DIRS); do \
 	rm -rf $$d || exit 1 ; \
         done
@@ -60,7 +71,7 @@ install: all $(if $(BUILD_DOCS),install-doc)
 	$(INSTALL) -m 755 -s $(TOOLS) "$(DESTDIR)$(bindir)"
 	mkdir -p "$(DESTDIR)$(datadir)"
 	for x in bios.bin vgabios.bin vgabios-cirrus.bin ppc_rom.bin \
-			video.x proll.elf linux_boot.bin; do \
+			video.x openbios-sparc32 linux_boot.bin; do \
 		$(INSTALL) -m 644 $(SRC_PATH)/pc-bios/$$x "$(DESTDIR)$(datadir)"; \
 	done
 ifndef CONFIG_WIN32
@@ -103,6 +114,12 @@ qemu-img.1: qemu-img.texi
 	$(SRC_PATH)/texi2pod.pl $< qemu-img.pod
 	pod2man --section=1 --center=" " --release=" " qemu-img.pod > $@
 
+info: qemu-doc.info qemu-tech.info
+
+dvi: qemu-doc.dvi qemu-tech.dvi
+
+html: qemu-doc.html qemu-tech.html
+
 FILE=qemu-$(shell cat VERSION)
 
 # tar release (use 'make -k tar' on a checkouted tree)
@@ -135,7 +152,7 @@ tarbin:
 	$(datadir)/vgabios-cirrus.bin \
 	$(datadir)/ppc_rom.bin \
 	$(datadir)/video.x \
-	$(datadir)/proll.elf \
+	$(datadir)/openbios-sparc32 \
 	$(datadir)/linux_boot.bin \
 	$(docdir)/qemu-doc.html \
 	$(docdir)/qemu-tech.html \

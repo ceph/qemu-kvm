@@ -219,10 +219,6 @@ void do_mfc0 (int reg, int sel)
         T0 = env->CP0_Status;
         if (env->hflags & MIPS_HFLAG_UM)
             T0 |= (1 << CP0St_UM);
-        if (env->hflags & MIPS_HFLAG_ERL)
-            T0 |= (1 << CP0St_ERL);
-        if (env->hflags & MIPS_HFLAG_EXL)
-            T0 |= (1 << CP0St_EXL);
         rn = "Status";
         break;
     case 13:
@@ -330,19 +326,19 @@ void do_mtc0 (int reg, int sel)
         rn = "Index";
         break;
     case 2:
-        val = T0 & 0x03FFFFFFF;
+        val = T0 & 0x3FFFFFFF;
         old = env->CP0_EntryLo0;
         env->CP0_EntryLo0 = val;
         rn = "EntryLo0";
         break;
     case 3:
-        val = T0 & 0x03FFFFFFF;
+        val = T0 & 0x3FFFFFFF;
         old = env->CP0_EntryLo1;
         env->CP0_EntryLo1 = val;
         rn = "EntryLo1";
         break;
     case 4:
-        val = (env->CP0_Context & 0xFF000000) | (T0 & 0x00FFFFF0);
+        val = (env->CP0_Context & 0xFF800000) | (T0 & 0x007FFFF0);
         old = env->CP0_Context;
         env->CP0_Context = val;
         rn = "Context";
@@ -366,7 +362,7 @@ void do_mtc0 (int reg, int sel)
         rn = "Count";
         break;
     case 10:
-        val = T0 & 0xFFFFF0FF;
+        val = T0 & 0xFFFFE0FF;
         old = env->CP0_EntryHi;
         env->CP0_EntryHi = val;
 	/* If the ASID changes, flush qemu's TLB.  */
@@ -403,20 +399,17 @@ void do_mtc0 (int reg, int sel)
                     old, val, env->CP0_Cause, old & mask, val & mask,
                     env->CP0_Cause & mask);
         }
-#if 1
         if ((val & (1 << CP0St_IE)) && !(old & (1 << CP0St_IE)) &&
             !(env->hflags & MIPS_HFLAG_EXL) &&
             !(env->hflags & MIPS_HFLAG_ERL) &&
-            !(env->hflags & MIPS_HFLAG_DM) && 
+            !(env->hflags & MIPS_HFLAG_DM) &&
             (env->CP0_Status & env->CP0_Cause & mask)) {
             if (logfile)
                 fprintf(logfile, "Raise pending IRQs\n");
             env->interrupt_request |= CPU_INTERRUPT_HARD;
-            do_raise_exception(EXCP_EXT_INTERRUPT);
-        } else if (!(val & 0x00000001) && (old & 0x00000001)) {
+        } else if (!(val & (1 << CP0St_IE)) && (old & (1 << CP0St_IE))) {
             env->interrupt_request &= ~CPU_INTERRUPT_HARD;
         }
-#endif
         rn = "Status";
         break;
     case 13:
@@ -532,6 +525,47 @@ void do_mtc0 (int reg, int sel)
     return;
 }
 
+#ifdef MIPS_USES_FPU
+#include "softfloat.h"
+
+void fpu_handle_exception(void)
+{
+#ifdef CONFIG_SOFTFLOAT
+    int flags = get_float_exception_flags(&env->fp_status);
+    unsigned int cpuflags = 0, enable, cause = 0;
+
+    enable = GET_FP_ENABLE(env->fcr31);
+
+    /* determine current flags */   
+    if (flags & float_flag_invalid) {
+        cpuflags |= FP_INVALID;
+        cause |= FP_INVALID & enable;
+    }
+    if (flags & float_flag_divbyzero) {
+        cpuflags |= FP_DIV0;    
+        cause |= FP_DIV0 & enable;
+    }
+    if (flags & float_flag_overflow) {
+        cpuflags |= FP_OVERFLOW;    
+        cause |= FP_OVERFLOW & enable;
+    }
+    if (flags & float_flag_underflow) {
+        cpuflags |= FP_UNDERFLOW;   
+        cause |= FP_UNDERFLOW & enable;
+    }
+    if (flags & float_flag_inexact) {
+        cpuflags |= FP_INEXACT; 
+        cause |= FP_INEXACT & enable;
+    }
+    SET_FP_FLAGS(env->fcr31, cpuflags);
+    SET_FP_CAUSE(env->fcr31, cause);
+#else
+    SET_FP_FLAGS(env->fcr31, 0);
+    SET_FP_CAUSE(env->fcr31, 0);
+#endif
+}
+#endif /* MIPS_USES_FPU */
+
 /* TLB management */
 #if defined(MIPS_USES_R4K_TLB)
 static void invalidate_tlb (int idx)
@@ -605,9 +639,9 @@ void do_tlbp (void)
     uint8_t ASID;
     int i;
 
-    tag = (env->CP0_EntryHi & 0xFFFFE000);
-    ASID = env->CP0_EntryHi & 0x000000FF;
-        for (i = 0; i < MIPS_TLB_NB; i++) {
+    tag = env->CP0_EntryHi & 0xFFFFE000;
+    ASID = env->CP0_EntryHi & 0xFF;
+    for (i = 0; i < MIPS_TLB_NB; i++) {
         tlb = &env->tlb[i];
         /* Check ASID, virtual page number & size */
         if ((tlb->G == 1 || tlb->ASID == ASID) && tlb->VPN == tag) {

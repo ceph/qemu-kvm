@@ -52,6 +52,7 @@ typedef struct DisasContext {
     target_ulong jump_pc[2]; /* used when JUMP_PC pc value is used */
     int is_br;
     int mem_idx;
+    int fpu_enabled;
     struct TranslationBlock *tb;
 } DisasContext;
 
@@ -361,6 +362,9 @@ GEN32(gen_op_store_DT1_fpr, gen_op_store_DT1_fpr_fprf);
 	asi = GET_FIELD(insn, 19, 26);					\
 	switch (asi) {							\
 	case 0x80: /* Primary address space */				\
+	    gen_op_##width##_raw();					\
+	    break;							\
+	case 0x82: /* Primary address space, non-faulting load */       \
 	    gen_op_##width##_raw();					\
 	    break;							\
 	default:							\
@@ -935,6 +939,19 @@ static GenOpFunc * const gen_fcmpd[4] = {
 };
 #endif
 
+static int gen_trap_ifnofpu(DisasContext * dc)
+{
+#if !defined(CONFIG_USER_ONLY)
+    if (!dc->fpu_enabled) {
+        save_state(dc);
+        gen_op_exception(TT_NFPU_INSN);
+        dc->is_br = 1;
+        return 1;
+    }
+#endif
+    return 0;
+}
+
 /* before an instruction, dc->pc must be static */
 static void disas_sparc_insn(DisasContext * dc)
 {
@@ -956,8 +973,8 @@ static void disas_sparc_insn(DisasContext * dc)
 		    int cc;
 
 		    target = GET_FIELD_SP(insn, 0, 18);
-		    target <<= 2;
 		    target = sign_extend(target, 18);
+		    target <<= 2;
 		    cc = GET_FIELD_SP(insn, 20, 21);
 		    if (cc == 0)
 			do_branch(dc, target, insn, 0);
@@ -970,9 +987,9 @@ static void disas_sparc_insn(DisasContext * dc)
 	    case 0x3:		/* V9 BPr */
 		{
 		    target = GET_FIELD_SP(insn, 0, 13) | 
-			(GET_FIELD_SP(insn, 20, 21) >> 7);
-		    target <<= 2;
+                        (GET_FIELD_SP(insn, 20, 21) << 14);
 		    target = sign_extend(target, 16);
+		    target <<= 2;
 		    rs1 = GET_FIELD(insn, 13, 17);
 		    gen_movl_reg_T0(rs1);
 		    do_branch_reg(dc, target, insn);
@@ -981,12 +998,11 @@ static void disas_sparc_insn(DisasContext * dc)
 	    case 0x5:		/* V9 FBPcc */
 		{
 		    int cc = GET_FIELD_SP(insn, 20, 21);
-#if !defined(CONFIG_USER_ONLY)
-		    gen_op_trap_ifnofpu();
-#endif
+                    if (gen_trap_ifnofpu(dc))
+                        goto jmp_insn;
 		    target = GET_FIELD_SP(insn, 0, 18);
-		    target <<= 2;
 		    target = sign_extend(target, 19);
+		    target <<= 2;
 		    do_fbranch(dc, target, insn, cc);
 		    goto jmp_insn;
 		}
@@ -994,19 +1010,18 @@ static void disas_sparc_insn(DisasContext * dc)
 	    case 0x2:		/* BN+x */
 		{
 		    target = GET_FIELD(insn, 10, 31);
-		    target <<= 2;
 		    target = sign_extend(target, 22);
+		    target <<= 2;
 		    do_branch(dc, target, insn, 0);
 		    goto jmp_insn;
 		}
 	    case 0x6:		/* FBN+x */
 		{
-#if !defined(CONFIG_USER_ONLY)
-		    gen_op_trap_ifnofpu();
-#endif
+                    if (gen_trap_ifnofpu(dc))
+                        goto jmp_insn;
 		    target = GET_FIELD(insn, 10, 31);
-		    target <<= 2;
 		    target = sign_extend(target, 22);
+		    target <<= 2;
 		    do_fbranch(dc, target, insn, 0);
 		    goto jmp_insn;
 		}
@@ -1077,16 +1092,16 @@ static void disas_sparc_insn(DisasContext * dc)
 		    }
 #endif
                 }
-                save_state(dc);
                 cond = GET_FIELD(insn, 3, 6);
                 if (cond == 0x8) {
+                    save_state(dc);
                     gen_op_trap_T0();
-                    dc->is_br = 1;
-                    goto jmp_insn;
                 } else if (cond != 0) {
 #ifdef TARGET_SPARC64
 		    /* V9 icc/xcc */
 		    int cc = GET_FIELD_SP(insn, 11, 12);
+		    flush_T2(dc);
+                    save_state(dc);
 		    if (cc == 0)
 			gen_cond[0][cond]();
 		    else if (cc == 2)
@@ -1094,10 +1109,17 @@ static void disas_sparc_insn(DisasContext * dc)
 		    else
 			goto illegal_insn;
 #else
+		    flush_T2(dc);
+                    save_state(dc);
 		    gen_cond[0][cond]();
 #endif
                     gen_op_trapcc_T0();
                 }
+                gen_op_next_insn();
+                gen_op_movl_T0_0();
+                gen_op_exit_tb();
+                dc->is_br = 1;
+                goto jmp_insn;
             } else if (xop == 0x28) {
                 rs1 = GET_FIELD(insn, 13, 17);
                 switch(rs1) {
@@ -1121,11 +1143,21 @@ static void disas_sparc_insn(DisasContext * dc)
                     gen_movl_T0_reg(rd);
                     break;
 		case 0x5: /* V9 rdpc */
-		    gen_op_movl_T0_im(dc->pc);
+		    if (dc->pc == (uint32_t)dc->pc) {
+			gen_op_movl_T0_im(dc->pc);
+		    } else {
+			gen_op_movq_T0_im64(dc->pc >> 32, dc->pc);
+		    }
 		    gen_movl_T0_reg(rd);
 		    break;
 		case 0x6: /* V9 rdfprs */
 		    gen_op_movl_T0_env(offsetof(CPUSPARCState, fprs));
+                    gen_movl_T0_reg(rd);
+                    break;
+		case 0x13: /* Graphics Status */
+                    if (gen_trap_ifnofpu(dc))
+                        goto jmp_insn;
+		    gen_op_movtl_T0_env(offsetof(CPUSPARCState, gsr));
                     gen_movl_T0_reg(rd);
                     break;
 		case 0x17: /* Tick compare */
@@ -1143,7 +1175,6 @@ static void disas_sparc_insn(DisasContext * dc)
 		case 0x10: /* Performance Control */
 		case 0x11: /* Performance Instrumentation Counter */
 		case 0x12: /* Dispatch Control */
-		case 0x13: /* Graphics Status */
 		case 0x14: /* Softint set, WO */
 		case 0x15: /* Softint clear, WO */
 		case 0x16: /* Softint write */
@@ -1235,9 +1266,8 @@ static void disas_sparc_insn(DisasContext * dc)
                 break;
 #endif
 	    } else if (xop == 0x34) {	/* FPU Operations */
-#if !defined(CONFIG_USER_ONLY)
-		gen_op_trap_ifnofpu();
-#endif
+                if (gen_trap_ifnofpu(dc))
+                    goto jmp_insn;
                 rs1 = GET_FIELD(insn, 13, 17);
 	        rs2 = GET_FIELD(insn, 27, 31);
 	        xop = GET_FIELD(insn, 18, 26);
@@ -1423,9 +1453,8 @@ static void disas_sparc_insn(DisasContext * dc)
 #ifdef TARGET_SPARC64
 		int cond;
 #endif
-#if !defined(CONFIG_USER_ONLY)
-		gen_op_trap_ifnofpu();
-#endif
+                if (gen_trap_ifnofpu(dc))
+                    goto jmp_insn;
                 rs1 = GET_FIELD(insn, 13, 17);
 	        rs2 = GET_FIELD(insn, 27, 31);
 	        xop = GET_FIELD(insn, 18, 26);
@@ -1761,6 +1790,11 @@ static void disas_sparc_insn(DisasContext * dc)
                         else
                             gen_op_addx_T1_T0();
                         break;
+#ifdef TARGET_SPARC64
+		    case 0x9: /* V9 mulx */
+                        gen_op_mulx_T1_T0();
+                        break;
+#endif
                     case 0xa:
                         gen_op_umul_T1_T0();
                         if (xop & 0x10)
@@ -1777,6 +1811,11 @@ static void disas_sparc_insn(DisasContext * dc)
                         else
                             gen_op_subx_T1_T0();
                         break;
+#ifdef TARGET_SPARC64
+		    case 0xd: /* V9 udivx */
+                        gen_op_udivx_T1_T0();
+                        break;
+#endif
                     case 0xe:
                         gen_op_udiv_T1_T0();
                         if (xop & 0x10)
@@ -1793,16 +1832,6 @@ static void disas_sparc_insn(DisasContext * dc)
 		    gen_movl_T0_reg(rd);
                 } else {
                     switch (xop) {
-#ifdef TARGET_SPARC64
-		    case 0x9: /* V9 mulx */
-                        gen_op_mulx_T1_T0();
-			gen_movl_T0_reg(rd);
-                        break;
-		    case 0xd: /* V9 udivx */
-                        gen_op_udivx_T1_T0();
-			gen_movl_T0_reg(rd);
-                        break;
-#endif
 		    case 0x20: /* taddcc */
 		    case 0x21: /* tsubcc */
 		    case 0x22: /* taddcctv */
@@ -1849,6 +1878,11 @@ static void disas_sparc_insn(DisasContext * dc)
 				    gen_op_sir();
 #endif
 				break;
+			    case 0x13: /* Graphics Status */
+                                if (gen_trap_ifnofpu(dc))
+                                    goto jmp_insn;
+				gen_op_movtl_env_T0(offsetof(CPUSPARCState, gsr));
+				break;
 			    case 0x17: /* Tick compare */
 #if !defined(CONFIG_USER_ONLY)
 				if (!supervisor(dc))
@@ -1874,7 +1908,6 @@ static void disas_sparc_insn(DisasContext * dc)
 			    case 0x10: /* Performance Control */
 			    case 0x11: /* Performance Instrumentation Counter */
 			    case 0x12: /* Dispatch Control */
-			    case 0x13: /* Graphics Status */
 			    case 0x14: /* Softint set */
 			    case 0x15: /* Softint clear */
 			    case 0x16: /* Softint write */
@@ -1938,6 +1971,11 @@ static void disas_sparc_insn(DisasContext * dc)
 				break;
 			    case 6: // pstate
 				gen_op_wrpstate();
+                                save_state(dc);
+                                gen_op_next_insn();
+                                gen_op_movl_T0_0();
+                                gen_op_exit_tb();
+                                dc->is_br = 1;
 				break;
 			    case 7: // tl
 				gen_op_movl_env_T0(offsetof(CPUSPARCState, tl));
@@ -2051,7 +2089,36 @@ static void disas_sparc_insn(DisasContext * dc)
 			}
 		    case 0x36: /* UltraSparc shutdown, VIS */
 			{
-			    // XXX
+			    int opf = GET_FIELD_SP(insn, 5, 13);
+                            rs1 = GET_FIELD(insn, 13, 17);
+                            rs2 = GET_FIELD(insn, 27, 31);
+
+                            switch (opf) {
+                            case 0x018: /* VIS I alignaddr */
+                                if (gen_trap_ifnofpu(dc))
+                                    goto jmp_insn;
+                                gen_movl_reg_T0(rs1);
+                                gen_movl_reg_T1(rs2);
+                                gen_op_alignaddr();
+                                gen_movl_T0_reg(rd);
+                                break;
+                            case 0x01a: /* VIS I alignaddrl */
+                                if (gen_trap_ifnofpu(dc))
+                                    goto jmp_insn;
+                                // XXX
+                                break;
+                            case 0x048: /* VIS I faligndata */
+                                if (gen_trap_ifnofpu(dc))
+                                    goto jmp_insn;
+                                gen_op_load_fpr_DT0(rs1);
+                                gen_op_load_fpr_DT1(rs2);
+                                gen_op_faligndata();
+                                gen_op_store_DT0_fpr(rd);
+                                break;
+                            default:
+                                goto illegal_insn;
+                            }
+                            break;
 			}
 #endif
 		    default:
@@ -2117,7 +2184,15 @@ static void disas_sparc_insn(DisasContext * dc)
 		case 0x38:	/* jmpl */
 		    {
 			if (rd != 0) {
+#ifdef TARGET_SPARC64
+                            if (dc->pc == (uint32_t)dc->pc) {
+                                gen_op_movl_T1_im(dc->pc);
+                            } else {
+                                gen_op_movq_T1_im64(dc->pc >> 32, dc->pc);
+                            }
+#else
 			    gen_op_movl_T1_im(dc->pc);
+#endif
 			    gen_movl_T1_reg(rd);
 			}
                         gen_mov_pc_npc(dc);
@@ -2345,9 +2420,8 @@ static void disas_sparc_insn(DisasContext * dc)
 	    skip_move: ;
 #endif
 	    } else if (xop >= 0x20 && xop < 0x24) {
-#if !defined(CONFIG_USER_ONLY) || defined(TARGET_SPARC64)
-		gen_op_trap_ifnofpu();
-#endif
+                if (gen_trap_ifnofpu(dc))
+                    goto jmp_insn;
 		switch (xop) {
 		case 0x20:	/* load fpreg */
 		    gen_op_ldst(ldf);
@@ -2428,9 +2502,8 @@ static void disas_sparc_insn(DisasContext * dc)
 		    goto illegal_insn;
 		}
 	    } else if (xop > 0x23 && xop < 0x28) {
-#if !defined(CONFIG_USER_ONLY)
-		gen_op_trap_ifnofpu();
-#endif
+                if (gen_trap_ifnofpu(dc))
+                    goto jmp_insn;
 		switch (xop) {
 		case 0x24:
                     gen_op_load_fpr_FT0(rd);
@@ -2526,8 +2599,14 @@ static inline int gen_intermediate_code_internal(TranslationBlock * tb,
     dc->npc = (target_ulong) tb->cs_base;
 #if defined(CONFIG_USER_ONLY)
     dc->mem_idx = 0;
+    dc->fpu_enabled = 1;
 #else
     dc->mem_idx = ((env->psrs) != 0);
+#ifdef TARGET_SPARC64
+    dc->fpu_enabled = (((env->pstate & PS_PEF) != 0) && ((env->fprs & FPRS_FEF) != 0));
+#else
+    dc->fpu_enabled = ((env->psref) != 0);
+#endif
 #endif
     gen_opc_ptr = gen_opc_buf;
     gen_opc_end = gen_opc_buf + OPC_MAX_SIZE;
@@ -2652,6 +2731,10 @@ void cpu_reset(CPUSPARCState *env)
     env->regwptr = env->regbase + (env->cwp * 16);
 #if defined(CONFIG_USER_ONLY)
     env->user_mode_only = 1;
+#ifdef TARGET_SPARC64
+    env->cleanwin = NWINDOWS - 1;
+    env->cansave = NWINDOWS - 1;
+#endif
 #else
     env->psrs = 1;
     env->psrps = 1;
@@ -2716,11 +2799,19 @@ void cpu_dump_state(CPUState *env, FILE *f,
         if ((i & 3) == 3)
             cpu_fprintf(f, "\n");
     }
+#ifdef TARGET_SPARC64
+    cpu_fprintf(f, "pstate: 0x%08x ccr: 0x%02x asi: 0x%02x tl: %d\n",
+		env->pstate, GET_CCR(env), env->asi, env->tl);
+    cpu_fprintf(f, "cansave: %d canrestore: %d otherwin: %d wstate %d cleanwin %d cwp %d\n",
+		env->cansave, env->canrestore, env->otherwin, env->wstate,
+		env->cleanwin, NWINDOWS - 1 - env->cwp);
+#else
     cpu_fprintf(f, "psr: 0x%08x -> %c%c%c%c %c%c%c wim: 0x%08x\n", GET_PSR(env),
 	    GET_FLAG(PSR_ZERO, 'Z'), GET_FLAG(PSR_OVF, 'V'),
 	    GET_FLAG(PSR_NEG, 'N'), GET_FLAG(PSR_CARRY, 'C'),
 	    env->psrs?'S':'-', env->psrps?'P':'-', 
 	    env->psret?'E':'-', env->wim);
+#endif
     cpu_fprintf(f, "fsr: 0x%08x\n", GET_FSR32(env));
 }
 
@@ -2741,7 +2832,8 @@ target_ulong cpu_get_phys_page_debug(CPUState *env, target_ulong addr)
     int prot, access_index;
 
     if (get_physical_address(env, &phys_addr, &prot, &access_index, addr, 2, 0) != 0)
-        return -1;
+        if (get_physical_address(env, &phys_addr, &prot, &access_index, addr, 0, 0) != 0)
+            return -1;
     return phys_addr;
 }
 #endif

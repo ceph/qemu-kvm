@@ -34,6 +34,7 @@
 #endif
 
 static const char *interp_prefix = CONFIG_QEMU_PREFIX;
+const char *qemu_uname_release = CONFIG_UNAME_RELEASE;
 
 #if defined(__i386__) && !defined(CONFIG_STATIC)
 /* Force usage of an ELF interpreter even if it is an ELF shared
@@ -106,29 +107,7 @@ int cpu_get_pic_interrupt(CPUState *env)
 
 /* timers for rdtsc */
 
-#if defined(__i386__)
-
-int64_t cpu_get_real_ticks(void)
-{
-    int64_t val;
-    asm volatile ("rdtsc" : "=A" (val));
-    return val;
-}
-
-#elif defined(__x86_64__)
-
-int64_t cpu_get_real_ticks(void)
-{
-    uint32_t low,high;
-    int64_t val;
-    asm volatile("rdtsc" : "=a" (low), "=d" (high));
-    val = high;
-    val <<= 32;
-    val |= low;
-    return val;
-}
-
-#else
+#if 0
 
 static uint64_t emu_time;
 
@@ -494,11 +473,17 @@ static inline void save_window_offset(CPUSPARCState *env, int cwp1)
 
 static void save_window(CPUSPARCState *env)
 {
+#ifndef TARGET_SPARC64
     unsigned int new_wim;
     new_wim = ((env->wim >> 1) | (env->wim << (NWINDOWS - 1))) &
         ((1LL << NWINDOWS) - 1);
     save_window_offset(env, (env->cwp - 2) & (NWINDOWS - 1));
     env->wim = new_wim;
+#else
+    save_window_offset(env, (env->cwp - 2) & (NWINDOWS - 1));
+    env->cansave++;
+    env->canrestore--;
+#endif
 }
 
 static void restore_window(CPUSPARCState *env)
@@ -521,6 +506,12 @@ static void restore_window(CPUSPARCState *env)
         sp_ptr += sizeof(target_ulong);
     }
     env->wim = new_wim;
+#ifdef TARGET_SPARC64
+    env->canrestore++;
+    if (env->cleanwin < NWINDOWS - 1)
+	env->cleanwin++;
+    env->cansave--;
+#endif
 }
 
 static void flush_windows(CPUSPARCState *env)
@@ -553,8 +544,12 @@ void cpu_loop (CPUSPARCState *env)
         trapnr = cpu_sparc_exec (env);
         
         switch (trapnr) {
+#ifndef TARGET_SPARC64
         case 0x88: 
         case 0x90:
+#else
+        case 0x16d:
+#endif
             ret = do_syscall (env, env->gregs[1],
                               env->regwptr[0], env->regwptr[1], 
                               env->regwptr[2], env->regwptr[3], 
@@ -595,10 +590,17 @@ void cpu_loop (CPUSPARCState *env)
             }
             break;
 #else
+        case TT_SPILL: /* window overflow */
+            save_window(env);
+            break;
+        case TT_FILL: /* window underflow */
+            restore_window(env);
+            break;
 	    // XXX
 #endif
-	case 0x100: // XXX, why do we get these?
-	    break;
+        case EXCP_INTERRUPT:
+            /* just indicate that signals should be handled asap */
+            break;
         case EXCP_DEBUG:
             {
                 int sig;
@@ -1300,6 +1302,7 @@ void cpu_loop(CPUMIPSState *env)
         case EXCP_SYSCALL:
             {
                 syscall_num = env->gpr[2] - 4000;
+                env->PC += 4;
                 if (syscall_num >= sizeof(mips_syscall_args)) {
                     ret = -ENOSYS;
                 } else {
@@ -1326,8 +1329,6 @@ void cpu_loop(CPUMIPSState *env)
                                      arg5, 
                                      arg6);
                 }
-                fail:
-                env->PC += 4;
                 if ((unsigned int)ret >= (unsigned int)(-1133)) {
                     env->gpr[7] = 1; /* error flag */
                     ret = -ret;
@@ -1341,39 +1342,13 @@ void cpu_loop(CPUMIPSState *env)
             break;
         case EXCP_CpU:
         case EXCP_RI:
-            {
-                uint32_t insn, op;
-
-                insn = tget32(env->PC);
-                op = insn >> 26;
-                //                printf("insn=%08x op=%02x\n", insn, op);
-                /* XXX: totally dummy FP ops just to be able to launch
-                   a few executables */
-                switch(op) {
-                case 0x31: /* LWC1 */
-                    env->PC += 4;
-                    break;
-                case 0x39: /* SWC1 */
-                    env->PC += 4;
-                    break;
-                case 0x11:
-                    switch((insn >> 21) & 0x1f) {
-                    case 0x02: /* CFC1 */
-                        env->PC += 4;
-                        break;
-                    default:
-                        goto sigill;
-                    }
-                    break;
-                default:
-                sigill:
-                    info.si_signo = TARGET_SIGILL;
-                    info.si_errno = 0;
-                    info.si_code = 0;
-                    queue_signal(info.si_signo, &info);
-                    break;
-                }
-            }
+            info.si_signo = TARGET_SIGILL;
+            info.si_errno = 0;
+            info.si_code = 0;
+            queue_signal(info.si_signo, &info);
+            break;
+        case EXCP_INTERRUPT:
+            /* just indicate that signals should be handled asap */
             break;
         default:
             //        error:
@@ -1391,7 +1366,7 @@ void cpu_loop(CPUMIPSState *env)
 void cpu_loop (CPUState *env)
 {
     int trapnr, ret;
-    //    target_siginfo_t info;
+    target_siginfo_t info;
     
     while (1) {
         trapnr = cpu_sh4_exec (env);
@@ -1399,15 +1374,29 @@ void cpu_loop (CPUState *env)
         switch (trapnr) {
         case 0x160:
             ret = do_syscall(env, 
-                             env->gregs[0x13], 
-                             env->gregs[0x14], 
-                             env->gregs[0x15], 
-                             env->gregs[0x16], 
-                             env->gregs[0x17], 
-                             env->gregs[0x10], 
+                             env->gregs[3], 
+                             env->gregs[4], 
+                             env->gregs[5], 
+                             env->gregs[6], 
+                             env->gregs[7], 
+                             env->gregs[0], 
                              0);
-            env->gregs[0x10] = ret;
+            env->gregs[0] = ret;
             env->pc += 2;
+            break;
+        case EXCP_DEBUG:
+            {
+                int sig;
+
+                sig = gdb_handlesig (env, TARGET_SIGTRAP);
+                if (sig)
+                  {
+                    info.si_signo = sig;
+                    info.si_errno = 0;
+                    info.si_code = TARGET_TRAP_BRKPT;
+                    queue_signal(info.si_signo, &info);
+                  }
+            }
             break;
         default:
             printf ("Unhandled trap: 0x%x\n", trapnr);
@@ -1514,6 +1503,8 @@ int main(int argc, char **argv)
             }
         } else if (!strcmp(r, "g")) {
             gdbstub_port = atoi(argv[optind++]);
+	} else if (!strcmp(r, "r")) {
+	    qemu_uname_release = argv[optind++];
         } else 
 #ifdef USE_CODE_COPY
         if (!strcmp(r, "no-code-copy")) {
@@ -1542,7 +1533,7 @@ int main(int argc, char **argv)
     env = cpu_init();
     global_env = env;
     
-    if (elf_exec(filename, argv+optind, environ, regs, info) != 0) {
+    if (loader_exec(filename, argv+optind, environ, regs, info) != 0) {
 	printf("Error loading %s\n", filename);
 	_exit(1);
     }
@@ -1553,6 +1544,7 @@ int main(int argc, char **argv)
         fprintf(logfile, "start_brk   0x%08lx\n" , info->start_brk);
         fprintf(logfile, "end_code    0x%08lx\n" , info->end_code);
         fprintf(logfile, "start_code  0x%08lx\n" , info->start_code);
+        fprintf(logfile, "start_data  0x%08lx\n" , info->start_data);
         fprintf(logfile, "end_data    0x%08lx\n" , info->end_data);
         fprintf(logfile, "start_stack 0x%08lx\n" , info->start_stack);
         fprintf(logfile, "brk         0x%08lx\n" , info->brk);
@@ -1567,6 +1559,7 @@ int main(int argc, char **argv)
     memset(ts, 0, sizeof(TaskState));
     env->opaque = ts;
     ts->used = 1;
+    ts->info = info;
     env->user_mode_only = 1;
     
 #if defined(TARGET_I386)
@@ -1696,6 +1689,9 @@ int main(int argc, char **argv)
             env->gpr[i] = regs->regs[i];
         }
         env->PC = regs->cp0_epc;
+#ifdef MIPS_USES_FPU
+        env->CP0_Status |= (1 << CP0St_CU1);
+#endif
     }
 #elif defined(TARGET_SH4)
     {
