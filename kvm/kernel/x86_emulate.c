@@ -918,23 +918,11 @@ x86_emulate_memop(
     case 0xa4 ... 0xa5: /* movs */
         dst.type  = OP_MEM;
         dst.bytes = (d & ByteOp) ? 1 : op_bytes;
-        if ( _regs.error_code & 2 )
-        {
-            /* Write fault: destination is special memory. */
-            dst.ptr = (unsigned long *)cr2;
-            if ( (rc = ops->read_std(register_address(seg ? *seg : _regs.ds,
-                                                      _regs.esi),
-                                     &dst.val, dst.bytes, ctxt)) != 0 )
+        dst.ptr = (unsigned long *)register_address(_regs.es, _regs.edi);
+        if ( (rc = ops->read_emulated(register_address(seg ? *seg : _regs.ds,
+                                                       _regs.esi),
+                                      &dst.val, dst.bytes, ctxt)) != 0 )
                 goto done;
-        }
-        else
-        {
-            /* Read fault: source is special memory. */
-            dst.ptr = (unsigned long *)register_address(_regs.es, _regs.edi);
-            if ( (rc = ops->read_emulated(cr2, &dst.val,
-                                          dst.bytes, ctxt)) != 0 )
-                goto done;
-        }
         register_address_increment(
             _regs.esi, (_regs.eflags & EFLG_DF) ? -dst.bytes : dst.bytes);
         register_address_increment(
