@@ -81,6 +81,7 @@ typedef struct paging_context_s {
 	u64 (*fetch_pte64)(struct hvm_vcpu *vcpu, unsigned long vaddr);
 	paddr_t root;
 	int root_level;
+	int shadow_root_level;
 }paging_context_t;
 
 struct hvm_guest_debug {
@@ -176,6 +177,8 @@ void hvm_mmu_destroy(struct hvm_vcpu *vcpu);
 int hvm_mmu_init(struct hvm_vcpu *vcpu);
 
 int hvm_mmu_reset_context(struct hvm_vcpu *vcpu);
+
+paddr_t guest_v_to_host_p(struct hvm_vcpu *vcpu, vaddr_t v);
 
 void vmcs_writel(unsigned long field, unsigned long value);
 unsigned long vmcs_readl(unsigned long field);
