@@ -28,6 +28,7 @@
 
 #define HVM_GUEST_CR4_MASK \
 	(CR4_PSE_MASK | CR4_PAE_MASK | CR4_PGE_MASK | CR4_VMXE_MASK)
+#define HVM_VM_CR4_ALWAYS_ON (CR4_VMXE_MASK | CR4_PAE_MASK)
 
 #define INVALID_PAGE (~(paddr_t)0)
 
@@ -196,7 +197,8 @@ static inline int is_long_mode(void)
 
 static inline unsigned long guest_cr4(void)
 {
-	return vmcs_readl(GUEST_CR4) & ~CR4_VMXE_MASK;
+	return (vmcs_readl(CR4_READ_SHADOW) & HVM_GUEST_CR4_MASK) | 
+		(vmcs_readl(GUEST_CR4) & ~HVM_GUEST_CR4_MASK);  
 }
 
 static inline int is_pae(void)

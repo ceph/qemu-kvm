@@ -1380,7 +1380,7 @@ static inline void set_cr4(struct hvm_vcpu *vcpu, unsigned long cr4)
 		inject_gp();
 		return;
 	}
-	vmcs_writel(GUEST_CR4, cr4 | CR4_VMXE_MASK);
+	vmcs_writel(GUEST_CR4, cr4 | HVM_VM_CR4_ALWAYS_ON);
 	vmcs_writel(CR4_READ_SHADOW, cr4);
 	hvm_mmu_reset_context(vcpu);
 	skip_emulated_instruction(vcpu);
@@ -1438,7 +1438,7 @@ static inline void __set_cr0(unsigned long cr0)
 static inline void __set_cr4(unsigned long cr4)
 {
 	vmcs_writel(CR4_READ_SHADOW, cr4);
-	vmcs_writel(GUEST_CR4, cr4 | CR4_VMXE_MASK);
+	vmcs_writel(GUEST_CR4, cr4 | HVM_VM_CR4_ALWAYS_ON);
 }
 
 static int handle_cr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
