@@ -1524,7 +1524,7 @@ static int handle_rdmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 		data = 0;
 		break;
 	case MSR_IA32_APICBASE:
-		data = 0xfee00000; // for now
+		data = vcpu->apic_base;
 		break;
 	default:
 		if (msr) {
@@ -2069,6 +2069,7 @@ static int hvm_dev_ioctl_get_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 	sregs->cr4 = guest_cr4();
 	sregs->cr8 = vcpu->cr8;
 	sregs->efer = vcpu->shadow_efer;
+	sregs->apic_base = vcpu->apic_base;
 	vcpu_put();
 
 	return 0;
@@ -2207,6 +2208,7 @@ static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 
 	mmu_reset_needed |= vcpu->shadow_efer != sregs->efer;
 	__set_efer(vcpu, sregs->efer);
+	vcpu->apic_base = sregs->apic_base;
 
 	if (mmu_reset_needed)
 		hvm_mmu_reset_context(vcpu);

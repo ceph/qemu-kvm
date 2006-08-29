@@ -112,6 +112,7 @@ struct hvm_sregs {
 	struct hvm_dtable gdt, idt;
 	__u64 cr0, cr2, cr3, cr4, cr8;
 	__u64 efer;
+	__u64 apic_base;
 };
 
 /* for HVM_TRANSLATE */
