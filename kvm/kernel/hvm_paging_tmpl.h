@@ -199,6 +199,10 @@ static uint64_t *FNAME(fetch)(struct hvm_vcpu *vcpu,
 				(*guest_ent & PT_NON_PTE_COPY_MASK);
 			*shadow_ent |= ( PT_WRITABLE_MASK | PT_USER_MASK);
 
+			/* 32-bit pae reserves some bits in PDPTR */
+			if (level == 3 && vcpu->paging_context.root_level == 3)
+				*shadow_ent &= ~0x1e6ull;
+
 #if PTTYPE == 32			
 		}
 #endif
