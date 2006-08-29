@@ -458,20 +458,6 @@ unsigned long vmcs_readl(unsigned long field)
 	return value;
 }
 
-static inline u16 vmcs_read16(unsigned long field)
-{
-	return vmcs_readl(field);
-}
-
-
-static inline u64 vmcs_read64(unsigned long field)
-{
-#ifdef __x86_64__
-	return vmcs_readl(field);
-#else
-	return vmcs_readl(field) | ((u64)vmcs_readl(field+1) << 32);
-#endif
-}
 
 void vmcs_writel(unsigned long field, unsigned long value)
 {
@@ -1416,9 +1402,6 @@ static inline void set_cr4(struct hvm_vcpu *vcpu, unsigned long cr4)
 	skip_emulated_instruction(vcpu);
 }
 
-
-#define CR3_RESEVED_BITS 0x07ULL
-#define CR3_L_MODE_RESEVED_BITS (~((1ULL << 40) - 1) | 0x0fe7ULL)
 
 static inline void set_cr3(struct hvm_vcpu *vcpu, unsigned long cr3)
 {
