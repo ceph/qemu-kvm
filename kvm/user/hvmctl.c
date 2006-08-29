@@ -378,6 +378,9 @@ again:
 		case HVM_EXIT_HLT:
 			handle_halt(hvm, &hvm_run);
 			goto again;
+		case HVM_EXIT_REAL_MODE:
+			handle_emulate_one_instruction(hvm, &hvm_run);
+			goto again;
 		default:
 			printf("unhandled vm exit: %d\n", hvm_run.exit_reason);
 			break;

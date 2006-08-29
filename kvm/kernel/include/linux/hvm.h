@@ -21,6 +21,7 @@ enum hvm_exit_reason {
 	HVM_EXIT_DEBUG,
 	HVM_EXIT_HLT,
 	HVM_EXIT_MMIO,
+	HVM_EXIT_REAL_MODE,
 };
 
 /* for HVM_RUN */

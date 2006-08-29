@@ -50,6 +50,18 @@ static const u32 vmx_msr_index[] = {
 #define NUM_AUTO_MSRS 4 // avoid save/load MSR_SYSCALL_MASK and MSR_LSTAR 
 			// by std vt mechanism (cpu bug AA24)
 
+
+static struct vmx_msr_entry *find_msr_entry(struct hvm_vcpu *vcpu, u32 msr)
+{
+	int i;
+
+	for (i = 0; i < NR_VMX_MSR; ++i)
+		if (vmx_msr_index[i] == msr)
+			return &vcpu->guest_msrs[i];
+	return 0;
+}
+
+
 struct descriptor_table {
 	u16 limit;
 	unsigned long base;
@@ -1233,30 +1245,30 @@ static inline void inject_gp(void)
 
 #define CR0_RESEVED_BITS 0xffffffff1ffaffc0ULL
 
-static inline void set_cr0(struct hvm_vcpu *vcpu, unsigned long cr0)
+static inline int set_cr0(struct hvm_vcpu *vcpu, unsigned long cr0)
 {
 	if (cr0 & CR0_RESEVED_BITS) {
 		printk("set_cr0: 0x%lx #GP, reserved bits (0x%lx)\n", cr0, guest_cr0());
 		inject_gp();
-		return;
+		return 1;
 	}
 
 	if ((cr0 & CR0_NW_MASK) && !(cr0 & CR0_CD_MASK)) {
 		printk("set_cr0: #GP, CD == 0 && NW == 1\n");
 		inject_gp();
-		return;
+		return 1;
 	}
 
 	if ((cr0 & CR0_PG_MASK) && !(cr0 & CR0_PE_MASK)) {
 		printk("set_cr0: #GP, set PG flag and a clear PE flag\n");
 		inject_gp();
-		return;
+		return 1;
 	}
 
 	if ((cr0 & CR0_PG_MASK) && !(guest_cr0() & CR0_PE_MASK)) {
 		printk("set_cr0: #GP, set PG flag and not in protected mode\n");
 		inject_gp();
-		return;
+		return 1;
 	}
 
 	if (is_paging()) {
@@ -1269,21 +1281,32 @@ static inline void set_cr0(struct hvm_vcpu *vcpu, unsigned long cr0)
 	} else if ((cr0 & CR0_PG_MASK)) {
 		if ((vcpu->shadow_efer & EFER_LME)) {
 			uint32_t guest_cs_ar;
+			uint32_t guest_tr_ar;
 			if (!is_pae()) {
 				printk("set_cr0: #GP, start paging in "
 				       "long mode while PAE is disabled\n");
 				inject_gp();
-				return;
+				return 1;
 			}
 			guest_cs_ar = vmcs_read32(GUEST_CS_AR_BYTES);
 			if (guest_cs_ar & SEGMENT_AR_L_MASK) {
 				printk("set_cr0: #GP, start paging in "
 				       "long mode while CS.L == 1\n");
 				inject_gp();
-				return;
+				return 1;
 
 			}
+			guest_tr_ar = vmcs_read32(GUEST_TR_AR_BYTES);
+			if ((guest_tr_ar & AR_TYPE_MASK) != AR_TYPE_BUSY_64_TSS) {
+				printk("%s: tss fixup for long mode. \n",
+				       __FUNCTION__);
+				vmcs_write32(GUEST_TR_AR_BYTES, 
+					     (guest_tr_ar & ~AR_TYPE_MASK) | 
+					     AR_TYPE_BUSY_64_TSS);
+			}
 			vcpu->shadow_efer |= EFER_LMA;
+                        find_msr_entry(vcpu, MSR_EFER)->data |= 
+							EFER_LMA | EFER_LME;
 			vmcs_write32(VM_ENTRY_CONTROLS, 
 				     vmcs_read32(VM_ENTRY_CONTROLS) |
 				     VM_ENTRY_CONTROLS_IA32E_MASK);
@@ -1328,10 +1351,16 @@ static inline void set_cr0(struct hvm_vcpu *vcpu, unsigned long cr0)
 		}
                
 	}
+
+	if (!(cr0 & CR0_PE_MASK)) {
+		printk("%s: enter real mode\n", __FUNCTION__);
+		return 0;
+	}
 	vmcs_writel(GUEST_CR0, cr0 | HVM_VM_CR0_ALWAYS_ON);
 	vmcs_writel(CR0_READ_SHADOW, cr0 & HVM_GUEST_CR0_MASK);
 	hvm_mmu_reset_context(vcpu);
 	skip_emulated_instruction(vcpu);
+	return 1;
 }
 
 
@@ -1455,7 +1484,10 @@ static int handle_cr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 		switch (cr) {
 		case 0:
 			vcpu_load_rsp_rip(vcpu);
-			set_cr0(vcpu, vcpu->regs[reg]);
+			if (!set_cr0(vcpu, vcpu->regs[reg])) {
+				hvm_run->exit_reason = HVM_EXIT_REAL_MODE;
+				return 0;
+			}
 			return 1;
 		case 3:
 			vcpu_load_rsp_rip(vcpu);
@@ -1538,16 +1570,6 @@ static int handle_dr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 static int handle_cpuid(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 {
 	hvm_run->exit_reason = HVM_EXIT_CPUID;
-	return 0;
-}
-
-static struct vmx_msr_entry *find_msr_entry(struct hvm_vcpu *vcpu, u32 msr)
-{
-	int i;
-
-	for (i = 0; i < NR_VMX_MSR; ++i)
-		if (vmx_msr_index[i] == msr)
-			return &vcpu->guest_msrs[i];
 	return 0;
 }
 
