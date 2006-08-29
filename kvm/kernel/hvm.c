@@ -1607,6 +1607,9 @@ static int handle_rdmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 	case 0x200 ... 0x2ff: 
 		data = 0;
 		break;
+	case MSR_IA32_APICBASE:
+		data = 0xfee00000; // for now
+		break;
 	default:
 		if (msr) {
 			data = msr->data;
