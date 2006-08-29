@@ -1240,7 +1240,7 @@ static inline int gen_intermediate_code_internal(CPUState *env,
         /* if too long translation, stop generation */
         if (dc->gen_code_ptr >= gen_code_end ||
 #ifdef USE_KVM
-            env->kvm_mmio ||
+            (env->cr[0] & CR0_PE_MASK) ||
 #endif
             (dc->pc - pc_start) >= (TARGET_PAGE_SIZE - 32)) {
             gen_jmp(dc, dc->pc - dc->cs_base);

@@ -487,7 +487,7 @@ int cpu_exec(CPUState *env1)
                 interrupt_request = env->interrupt_request;
                 if (__builtin_expect(interrupt_request, 0)
 #ifdef USE_KVM
-                    && !((env->efer & MSR_EFER_LMA))
+                    && !((env->cr[0] & CR0_PE_MASK))
 #endif
                     ) {
 #if defined(TARGET_I386)

@@ -17,7 +17,7 @@ static CPUState *saved_env[NR_CPU];
 
 int kvm_is_ok(CPUState *env)
 {
-    return (env->efer & MSR_EFER_LMA) && !env->kvm_emulate_one_instruction;
+    return (env->cr[0] & CR0_PE_MASK) && !env->kvm_emulate_one_instruction;
 }
 
 void kvm_handled_mmio(CPUState *env)
@@ -68,7 +68,7 @@ static void load_regs(CPUState *env)
     sregs.var.l = (env->seg.flags >> DESC_L_SHIFT) & 1; \
     sregs.var.g = (env->seg.flags & DESC_G_MASK) != 0; \
     sregs.var.avl = (env->seg.flags & DESC_AVL_MASK) != 0; \
-    sregs.var.unusable = env->seg.selector == 0
+    sregs.var.unusable = env->seg.flags == 0;
     
     set_seg(cs, segs[R_CS]);
     set_seg(ds, segs[R_DS]);
@@ -78,7 +78,6 @@ static void load_regs(CPUState *env)
     set_seg(ss, segs[R_SS]);
 
     set_seg(tr, tr);
-    sregs.tr.unusable = 0;
     set_seg(ldt, ldt);
     
     sregs.idt.limit = env->idt.limit;

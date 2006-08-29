@@ -367,6 +367,7 @@ static int hvm_dev_open(struct inode *inode, struct file *filp)
 		vcpu->host_fx_image = (char*)ALIGN((vaddr_t)vcpu->fx_buf,
 						   FX_IMAGE_ALIGN);
 		vcpu->guest_fx_image = vcpu->host_fx_image + FX_IMAGE_SIZE;
+		vcpu->first_sreg_fix = 1;
 	}
 
 	filp->private_data = hvm;
@@ -1485,6 +1486,7 @@ static int handle_cr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 		case 0:
 			vcpu_load_rsp_rip(vcpu);
 			if (!set_cr0(vcpu, vcpu->regs[reg])) {
+				vcpu->fix_segs = 1;
 				hvm_run->exit_reason = HVM_EXIT_REAL_MODE;
 				return 0;
 			}
@@ -2164,6 +2166,7 @@ static int hvm_dev_ioctl_get_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 		sregs->var.limit = vmcs_read32(GUEST_##seg##_LIMIT); \
 		sregs->var.selector = vmcs_read16(GUEST_##seg##_SELECTOR); \
 		ar = vmcs_read32(GUEST_##seg##_AR_BYTES); \
+		if (ar & AR_UNUSABLE_MASK) ar = 0; \
 		sregs->var.type = ar & 15; \
 		sregs->var.s = (ar >> 4) & 1; \
 		sregs->var.dpl = (ar >> 5) & 3; \
@@ -2205,6 +2208,73 @@ static int hvm_dev_ioctl_get_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 	return 0;
 }
 
+static void sregs_init(struct hvm_vcpu *vcpu, struct hvm_sregs *sregs)
+{
+	#define INIT_SEG(seg)\
+		(seg).g = 0;\
+		(seg).db = 0;\
+		(seg).l = 0;\
+		(seg).present = 1;\
+		(seg).dpl = 0;\
+		(seg).unusable = 0;
+
+	#define INIT_DATA_SEG(seg)\
+		INIT_SEG(seg)\
+		(seg).s = 1;\
+		(seg).type = 3; /* read/write accessed data seg */
+
+
+	INIT_SEG(sregs->cs);
+	sregs->cs.s = 1;
+	sregs->cs.type = 11; // execute/read, accessed code seg
+
+	INIT_DATA_SEG(sregs->ds);
+	INIT_DATA_SEG(sregs->es);
+	INIT_DATA_SEG(sregs->fs);
+	INIT_DATA_SEG(sregs->gs);
+	INIT_DATA_SEG(sregs->ss);
+
+	INIT_SEG(sregs->tr);
+	sregs->tr.selector = 0;
+	sregs->tr.s = 0;
+	sregs->tr.type = AR_TYPE_BUSY_16_TSS;
+
+	INIT_SEG(sregs->ldt);
+	sregs->ldt.selector = 0;
+	sregs->ldt.s = 0;
+	sregs->ldt.type = AR_TYPE_LDT;
+}
+
+static void sregs_fixup(struct hvm_vcpu *vcpu, struct hvm_sregs *sregs)
+{
+	int first_fix = vcpu->first_sreg_fix;
+
+	vcpu->first_sreg_fix = 0;
+
+	if (first_fix && sregs->cs.unusable) {
+		sregs_init(vcpu, sregs);
+		return;
+	}
+
+	if (!vcpu->fix_segs) {
+		return;
+	}
+	vcpu->fix_segs = 0;
+
+
+	if (sregs->cs.unusable) {
+		INIT_SEG(sregs->cs);
+		sregs->cs.s = 1;
+		sregs->cs.type = 11; // execute/read, accessed code seg
+	}
+	sregs->ds.unusable = 1;
+	sregs->es.unusable = 1;
+	sregs->fs.unusable = 1;
+	sregs->gs.unusable = 1;
+	sregs->ss.unusable = 1;
+
+}
+
 static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 {
 	struct hvm_vcpu *vcpu;
@@ -2216,6 +2286,8 @@ static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 		return -EINVAL;
 	vcpu = &hvm->vcpus[sregs->vcpu];
 
+	sregs_fixup(vcpu, sregs);
+
 	vcpu_load(vcpu);
 
 #define set_segment(var, seg) \
@@ -2225,15 +2297,18 @@ static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 		vmcs_writel(GUEST_##seg##_BASE, sregs->var.base);  \
 		vmcs_write32(GUEST_##seg##_LIMIT, sregs->var.limit); \
 		vmcs_write16(GUEST_##seg##_SELECTOR, sregs->var.selector); \
-		ar = (sregs->var.unusable) ? (1 << 16) : 1;\
-		ar |= (sregs->var.type & 15); \
-		ar |= (sregs->var.s & 1) << 4; \
-		ar |= (sregs->var.dpl & 3) << 5; \
-		ar |= (sregs->var.present & 1) << 7; \
-		ar |= (sregs->var.avl & 1) << 12; \
-		ar |= (sregs->var.l & 1) << 13; \
-		ar |= (sregs->var.db & 1) << 14; \
-		ar |= (sregs->var.g & 1) << 15; \
+		if (sregs->var.unusable) { \
+			ar = (1 << 16); \
+		} else { \
+			ar = (sregs->var.type & 15); \
+			ar |= (sregs->var.s & 1) << 4; \
+			ar |= (sregs->var.dpl & 3) << 5; \
+			ar |= (sregs->var.present & 1) << 7; \
+			ar |= (sregs->var.avl & 1) << 12; \
+			ar |= (sregs->var.l & 1) << 13; \
+			ar |= (sregs->var.db & 1) << 14; \
+			ar |= (sregs->var.g & 1) << 15; \
+		} \
 		vmcs_write32(GUEST_##seg##_AR_BYTES, ar); \
 	} while (0);
 
@@ -2246,10 +2321,6 @@ static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 
 	set_segment(tr, TR);
 
-	if (sregs->tr.type != 11 /*64bit busy TSS*/) {
-		vmcs_write32(GUEST_TR_AR_BYTES, 
-			     (vmcs_read32(GUEST_TR_AR_BYTES) & (1 << 15)) | 0x008b);
-	}
 	set_segment(ldt, LDTR);
 #undef set_segment
 
