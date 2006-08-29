@@ -1142,7 +1142,13 @@ static int handle_exit_exception(struct hvm_vcpu *vcpu,
 		if (!vcpu->paging_context.page_fault(vcpu, cr2, error_code)) {
 			return 1;
 		}
-		er = emulate_instruction(vcpu, hvm_run, cr2, error_code);
+		/*
+		 * Temporarily disable emulation to avoid a problem when
+		 * writing to the APIC EOI register: qemu tries to inject
+		 * an interrupt but becomes confused.
+		 */
+		//er = emulate_instruction(vcpu, hvm_run, cr2, error_code);
+		er = EMULATE_FAIL;
 
 		switch (er) {
 		case EMULATE_DONE:
