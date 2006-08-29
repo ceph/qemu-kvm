@@ -241,4 +241,25 @@ enum vmcs_field {
 /* entry controls */
 #define VM_ENTRY_CONTROLS_IA32E_MASK (1 << 9)
 
+#define AR_TYPE_ACCESSES_MASK 1
+#define AR_TYPE_READABLE_MASK (1 << 1)
+#define AR_TYPE_WRITEABLE_MASK (1 << 2)
+#define AR_TYPE_CODE_MASK (1 << 3)
+#define AR_TYPE_MASK 0x0f
+#define AR_TYPE_BUSY_64_TSS 11
+#define AR_TYPE_BUSY_32_TSS 11
+#define AR_TYPE_BUSY_16_TSS 3
+#define AR_TYPE_LDT 2
+
+#define AR_UNUSABLE_MASK (1 << 16)
+#define AR_S_MASK (1 << 4)
+#define AR_P_MASK (1 << 7)
+#define AR_L_MASK (1 << 13)
+#define AR_DB_MASK (1 << 14)
+#define AR_G_MASK (1 << 15)
+#define AR_DPL_SHIFT 5
+#define AR_DPL(ar) (((ar) >> AR_DPL_SHIFT) & 3)
+
+#define AR_RESERVD_MASK 0xfffe0f00
+
 #endif
