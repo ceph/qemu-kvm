@@ -362,9 +362,9 @@ static int hvm_dev_open(struct inode *inode, struct file *filp)
 		vcpu = &hvm->vcpus[i];
 		INIT_LIST_HEAD(&vcpu->free_page_links);
 		INIT_LIST_HEAD(&vcpu->free_pages);
-		vcpu->paging_context.root = INVALID_PAGE;
+		vcpu->paging_context.root_hpa = INVALID_PAGE;
 
-		vcpu->host_fx_image = (char*)ALIGN((vaddr_t)vcpu->fx_buf,
+		vcpu->host_fx_image = (char*)ALIGN((hva_t)vcpu->fx_buf,
 						   FX_IMAGE_ALIGN);
 		vcpu->guest_fx_image = vcpu->host_fx_image + FX_IMAGE_SIZE;
 		vcpu->first_sreg_fix = 1;
@@ -2627,7 +2627,7 @@ static struct notifier_block hvm_reboot_notifier = {
 };
 
 struct page *hvm_bad_page;
-paddr_t hvm_bad_page_addr;
+hpa_t hvm_bad_page_addr;
 
 static __init void hvm_init_debug(void)
 {

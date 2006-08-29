@@ -30,7 +30,7 @@
 	(CR4_PSE_MASK | CR4_PAE_MASK | CR4_PGE_MASK | CR4_VMXE_MASK)
 #define HVM_VM_CR4_ALWAYS_ON (CR4_VMXE_MASK | CR4_PAE_MASK)
 
-#define INVALID_PAGE (~(paddr_t)0)
+#define INVALID_PAGE (~(hpa_t)0)
 
 #define HVM_MAX_VCPUS 4
 #define HVM_NUM_MMU_PAGES 256
@@ -47,15 +47,28 @@
 #define GP_VECTOR 13
 #define PF_VECTOR 14
 
-typedef uint64_t paddr_t;
-typedef paddr_t gaddr_t;
+/*
+ * Address types:
+ *
+ *  gva - guest virtual address
+ *  gpa - guest physical address
+ *  gfn - guest frame number
+ *  hva - host virtual address
+ *  hpa - host physical address
+ *  hfn - host frame number
+ */
 
-typedef uint64_t vaddr_t;
+typedef unsigned long  gva_t;
+typedef u64            gpa_t;
+typedef unsigned long  gfn_t;
 
+typedef unsigned long  hva_t;
+typedef u64            hpa_t;
+typedef unsigned long  hfn_t;
 
 typedef struct page_link_s {
 	struct list_head link;
-	paddr_t page_addr;
+	hpa_t page_hpa;
 } page_link_t;
 
 
@@ -75,11 +88,11 @@ struct hvm_vcpu;
 
 typedef struct paging_context_s {
 	void (*new_cr3)(struct hvm_vcpu *vcpu);
-	int (*page_fault)(struct hvm_vcpu *vcpu, uint64_t vaddr, uint32_t err);
-	void (*inval_page)(struct hvm_vcpu *vcpu, uint64_t addr);
+	int (*page_fault)(struct hvm_vcpu *vcpu, gva_t gva, uint32_t err);
+	void (*inval_page)(struct hvm_vcpu *vcpu, gva_t gva);
 	void (*free)(struct hvm_vcpu *vcpu);
-	u64 (*fetch_pte64)(struct hvm_vcpu *vcpu, unsigned long vaddr);
-	paddr_t root;
+	u64 (*fetch_pte64)(struct hvm_vcpu *vcpu, gva_t gva);
+	hpa_t root_hpa;
 	int root_level;
 	int shadow_root_level;
 }paging_context_t;
@@ -121,7 +134,7 @@ struct hvm_vcpu {
 	unsigned long regs[17]; /* for rsp needs vcpu_load_rsp_rip() */
 	unsigned long rip;      /* needs vcpu_load_rsp_rip() */
 
-	gaddr_t cr3;
+	gpa_t cr3;
 	unsigned long cr8;
 	u64 shadow_efer;
 	struct vmx_msr_entry *guest_msrs;
@@ -181,7 +194,7 @@ int hvm_mmu_init(struct hvm_vcpu *vcpu);
 
 int hvm_mmu_reset_context(struct hvm_vcpu *vcpu);
 
-paddr_t guest_v_to_host_p(struct hvm_vcpu *vcpu, vaddr_t v);
+hpa_t gva_to_hpa(struct hvm_vcpu *vcpu, gva_t gva);
 
 void vmcs_writel(unsigned long field, unsigned long value);
 unsigned long vmcs_readl(unsigned long field);
@@ -242,7 +255,7 @@ static inline int is_external_interrupt(uint32_t intr_info)
 }
 
 
-extern paddr_t hvm_bad_page_addr;
+extern hpa_t hvm_bad_page_addr;
 
 
 /* The Xen-based x86 emulator wants register state in a struct cpu_user_regs */
