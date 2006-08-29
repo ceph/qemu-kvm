@@ -257,11 +257,14 @@ void hvm_show_regs(hvm_context_t hvm, int vcpu)
 static void handle_cpuid(hvm_context_t hvm, struct hvm_run *run)
 {
 	struct hvm_regs regs;
+	uint32_t orig_eax;
 
 	hvm_get_regs(hvm, run->vcpu, &regs);
+	orig_eax = regs.rax;
 	hvm->callbacks->cpuid(hvm->opaque, 
 			      &regs.rax, &regs.rbx, &regs.rcx, &regs.rdx);
-	regs.rdx &= ~(1ull << 12); /* disable mtrr support */
+	if (orig_eax == 1)
+		regs.rdx &= ~(1ull << 12); /* disable mtrr support */
 	hvm_set_regs(hvm, run->vcpu, &regs);
 	run->emulated = 1;
 }
