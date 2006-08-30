@@ -2232,10 +2232,13 @@ static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 	set_dtable(gdt, GDTR);
 #undef set_dtable
 
+	mmu_reset_needed |= guest_cr0() != sregs->cr0;
 	__set_cr0(sregs->cr0);
 	vcpu->regs[VCPU_REGS_CR2] = sregs->cr2;
 	mmu_reset_needed |= vcpu->cr3 != sregs->cr3;
 	vcpu->cr3 = sregs->cr3;
+
+	mmu_reset_needed |=  guest_cr4() != sregs->cr4;
 	__set_cr4(sregs->cr4);
 	vcpu->cr8 = sregs->cr8;
 
