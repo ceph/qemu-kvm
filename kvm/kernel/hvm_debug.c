@@ -177,8 +177,6 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 
 	#define RFLAGS_VM (1 << 17)
 	#define RFLAGS_RF (1 << 9)
-	#define SELECTOR_TI_MASK (1 << 2)
-	#define SELECTOR_RPL_MASK 0x03
 	
 
 	#define VIR8086_SEG_BASE_TEST(seg)\

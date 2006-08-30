@@ -50,6 +50,9 @@
 #define GP_VECTOR 13
 #define PF_VECTOR 14
 
+#define SELECTOR_TI_MASK (1 << 2)
+#define SELECTOR_RPL_MASK 0x03
+
 /*
  * Address types:
  *
@@ -253,6 +256,11 @@ static inline unsigned long guest_cr0(void)
 {
 	return (vmcs_readl(CR0_READ_SHADOW) & HVM_GUEST_CR0_MASK) | 
 		(vmcs_readl(GUEST_CR0) & ~HVM_GUEST_CR0_MASK);     
+}
+
+static inline unsigned guest_cpl(void)
+{
+	return vmcs_read16(GUEST_CS_SELECTOR) & SELECTOR_RPL_MASK;     
 }
 
 static int is_paging(void)

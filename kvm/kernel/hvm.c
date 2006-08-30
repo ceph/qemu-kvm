@@ -1391,6 +1391,14 @@ static int handle_cr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 	int cr;
 	int reg;
 
+#ifdef KVM_DEBUG
+	if (guest_cpl() != 0) {
+		hvm_printf(vcpu->hvm, "%s: not supervisor\n", __FUNCTION__);
+		inject_gp();
+		return 1;
+	}
+#endif
+
 	exit_qualification = vmcs_read64(EXIT_QUALIFICATION);
 	cr = exit_qualification & 15;
 	reg = (exit_qualification >> 8) & 15;
@@ -1495,6 +1503,14 @@ static int handle_rdmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 	struct vmx_msr_entry *msr = find_msr_entry(vcpu, ecx);
 	u64 data;
 
+#ifdef KVM_DEBUG
+	if (guest_cpl() != 0) {
+		hvm_printf(vcpu->hvm, "%s: not supervisor\n", __FUNCTION__);
+		inject_gp();
+		return 1;
+	}
+#endif
+
 	switch (ecx) {
 	case MSR_FS_BASE:
 		data = vmcs_readl(GUEST_FS_BASE);
@@ -1532,7 +1548,8 @@ static int handle_rdmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 			break;
 		}
 		printk(KERN_ERR "hvm: unhandled rdmsr: %x\n", ecx);
-		return 0;
+		inject_gp();
+		return 1;
 	}
 	
 	/* FIXME: handling of bits 32:63 of rax, rdx */
@@ -1605,6 +1622,14 @@ static int handle_wrmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 	u64 data = (vcpu->regs[VCPU_REGS_RAX] & -1u)
 		| ((u64)(vcpu->regs[VCPU_REGS_RDX] & -1u) << 32);
 
+#ifdef KVM_DEBUG
+	if (guest_cpl() != 0) {
+		hvm_printf(vcpu->hvm, "%s: not supervisor\n", __FUNCTION__);
+		inject_gp();
+		return 1;
+	}
+#endif
+
 	switch (ecx) {
 	case MSR_FS_BASE:
 		vmcs_writel(GUEST_FS_BASE, data);
@@ -1631,7 +1656,8 @@ static int handle_wrmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 			break;
 		}
 		printk(KERN_ERR "hvm: unhandled wrmsr: %x\n", ecx);
-		return 0;
+		inject_gp();
+		return 1;
 	}
 	skip_emulated_instruction(vcpu);
 	return 1;
