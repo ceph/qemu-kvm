@@ -279,6 +279,29 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 		return 0;
 	}
 
+	if ( !long_mode && (cr4 & CR4_PAE_MASK)) {
+		/* check the 4 PDPTEs for reserved bits */
+		unsigned long pdpt_pfn = cr3 >> PAGE_SHIFT;
+		int i;
+		u64 pdpte;
+		unsigned offset = (cr3 & (PAGE_SIZE-1)) >> 5;
+		u64 *pdpt = kmap_atomic(pfn_to_page(pdpt_pfn), KM_USER0);
+
+		for (i = 0; i < 4; ++i) {
+			pdpte = pdpt[offset + i];
+			if (pdpte & 0xfff00000000001e6ull)
+				break;
+		}
+
+		kunmap_atomic(pdpt, KM_USER0);
+
+		if (i != 4) {
+			hvm_printf(vcpu->hvm, "%s: pae cr3[%d] 0x%llx, reserved bits\n",
+				   __FUNCTION__, i, pdpte);
+			return 0;
+		}
+	}
+
 	dr7 = vmcs_readl(GUEST_DR7);
 
 	if (dr7 & ~((1UL << 32) - 1)) {
