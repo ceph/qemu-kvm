@@ -283,7 +283,7 @@ static int FNAME(page_fault)(struct hvm_vcpu *vcpu, gva_t addr,
 		return 0;
 	}
 
-	//hvm_printf(vcpu->hvm, "%s: addr 0x%llx @ 0x%lx\n",
+	//vcpu_printf(vcpu, "%s: addr 0x%llx @ 0x%lx\n",
 	//	   __FUNCTION__, addr, vmcs_readl(GUEST_RIP));
 
 	if (write_fault) {

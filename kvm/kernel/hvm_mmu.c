@@ -607,7 +607,7 @@ static int init_paging_context(struct hvm_vcpu *vcpu)
 	ASSERT(vcpu);
 	ASSERT(!VALID_PAGE(vcpu->paging_context.root_hpa));
 
-	hvm_printf(vcpu->hvm, "init_paging_context:%s%s%s\n",
+	vcpu_printf(vcpu, "init_paging_context:%s%s%s\n",
 	       is_paging() ? " paging" : "",
 	       is_long_mode() ? " 64bit" : "",
 	       is_pae() ? " PAE" : "");

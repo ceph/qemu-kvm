@@ -838,7 +838,7 @@ static int emulator_read_std(unsigned long addr,
 		void *page;
 
 		if (!(pte & PT_PRESENT_MASK))
-			return hvm_printf(vcpu->hvm, "not present\n"), X86EMUL_PROPAGATE_FAULT;
+			return vcpu_printf(vcpu, "not present\n"), X86EMUL_PROPAGATE_FAULT;
 		pfn = (pte & PT64_BASE_ADDR_MASK) >> PAGE_SHIFT;
 		page = kmap_atomic(vcpu->hvm->phys_mem[pfn], KM_USER0);
 
@@ -880,7 +880,7 @@ static int emulator_read_emulated(unsigned long addr,
 		unsigned offset = addr & (PAGE_SIZE-1);
 
 		if (!(pte & PT_PRESENT_MASK))
-			return hvm_printf(vcpu->hvm, "not present\n"), X86EMUL_PROPAGATE_FAULT;
+			return vcpu_printf(vcpu, "not present\n"), X86EMUL_PROPAGATE_FAULT;
 		vcpu->mmio_needed = 1;
 		vcpu->mmio_phys_addr = (pte & PT64_BASE_ADDR_MASK) | offset;
 		vcpu->mmio_size = bytes;
@@ -901,7 +901,7 @@ static int emulator_write_emulated(unsigned long addr,
 	unsigned offset = addr & (PAGE_SIZE-1);
 	
 	if (!(pte & PT_PRESENT_MASK))
-		return hvm_printf(vcpu->hvm, "not present\n"), X86EMUL_PROPAGATE_FAULT;
+		return vcpu_printf(vcpu, "not present\n"), X86EMUL_PROPAGATE_FAULT;
 	
 	vcpu->mmio_needed = 1;
 	vcpu->mmio_phys_addr = (pte & PT64_BASE_ADDR_MASK) | offset;

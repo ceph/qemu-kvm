@@ -192,6 +192,7 @@ struct hvm_stat {
 extern struct hvm_stat hvm_stat;
 
 int hvm_printf(struct hvm *hvm, const char *fmt, ...);
+#define vcpu_printf(vcpu, fmt...) hvm_printf(vcpu->hvm, fmt)
 
 void hvm_mmu_destroy(struct hvm_vcpu *vcpu);
 int hvm_mmu_init(struct hvm_vcpu *vcpu);

@@ -18,7 +18,7 @@ void show_msrs(struct hvm_vcpu *vcpu)
 	int i;
 
 	for (i = 0; i < NR_VMX_MSR; ++i) {
-		hvm_printf(vcpu->hvm, "%s: %s=0x%llx\n",
+		vcpu_printf(vcpu, "%s: %s=0x%llx\n",
 		       __FUNCTION__,
 		       vmx_msr_name[i],
 		       vcpu->guest_msrs[i].data);
@@ -105,23 +105,23 @@ void show_irq(struct hvm_vcpu *vcpu,  int irq)
 	struct gate_struct gate;
 
 	if (!is_long_mode()) {
-		hvm_printf(vcpu->hvm, "%s: not in long mode\n", __FUNCTION__);
+		vcpu_printf(vcpu, "%s: not in long mode\n", __FUNCTION__);
 	}
 
 	if (!is_long_mode() || idt_limit < irq * sizeof(gate)) {
-		hvm_printf(vcpu->hvm, "%s: 0x%x read_guest err\n",
+		vcpu_printf(vcpu, "%s: 0x%x read_guest err\n",
 			   __FUNCTION__,
 			   irq);
 		return;
 	}
 
 	if (!read_guest(vcpu, idt_base + irq * sizeof(gate), sizeof(gate), &gate)) {
-		hvm_printf(vcpu->hvm, "%s: 0x%x read_guest err\n",
+		vcpu_printf(vcpu, "%s: 0x%x read_guest err\n",
 			   __FUNCTION__,
 			   irq);
 		return;
 	}
-	hvm_printf(vcpu->hvm, "%s: 0x%x handler 0x%llx\n",
+	vcpu_printf(vcpu, "%s: 0x%x handler 0x%llx\n",
 		   __FUNCTION__,
 		   irq,
 		   ((uint64_t)gate.offset_high << 32) | 
@@ -143,12 +143,12 @@ void show_page(struct hvm_vcpu *vcpu,
 		for (i = 0; i <  PAGE_SIZE / sizeof(uint64_t) ; i++) {
 			uint8_t *ptr = (uint8_t*)&buf[i];
 			int j;
-			hvm_printf(vcpu->hvm, " 0x%16.16x:",
+			vcpu_printf(vcpu, " 0x%16.16x:",
 				   addr + i * sizeof(uint64_t));
 			for (j = 0; j < sizeof(uint64_t) ; j++) {
-				hvm_printf(vcpu->hvm, " 0x%2.2x", ptr[j]);
+				vcpu_printf(vcpu, " 0x%2.2x", ptr[j]);
 			}
-			hvm_printf(vcpu->hvm, "\n");
+			vcpu_printf(vcpu, "\n");
 		}
 	}
 	kfree(buf);
@@ -184,7 +184,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 	#define VIR8086_SEG_BASE_TEST(seg)\
 		if (vmcs_readl(GUEST_##seg##_BASE) != \
 		    (unsigned long)vmcs_read16(GUEST_##seg##_SELECTOR) << 4) {\
-			hvm_printf(vcpu->hvm, "%s: "#seg" base 0x%lx in "\
+			vcpu_printf(vcpu, "%s: "#seg" base 0x%lx in "\
 				   "virtual8086 is not "#seg" selector 0x%lx"\
 				   " shifted right 4 bits\n",\
 			   __FUNCTION__,\
@@ -195,7 +195,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 
 	#define VIR8086_SEG_LIMIT_TEST(seg)\
 		if (vmcs_readl(GUEST_##seg##_LIMIT) != 0x0ffff) { \
-			hvm_printf(vcpu->hvm, "%s: "#seg" limit 0x%lx in "\
+			vcpu_printf(vcpu, "%s: "#seg" limit 0x%lx in "\
 				   "virtual8086 is not 0xffff\n",\
 			   __FUNCTION__,\
 			   vmcs_readl(GUEST_##seg##_LIMIT));\
@@ -204,7 +204,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 
 	#define VIR8086_SEG_AR_TEST(seg)\
 		if (vmcs_read32(GUEST_##seg##_AR_BYTES) != 0x0f3) { \
-			hvm_printf(vcpu->hvm, "%s: "#seg" AR 0x%x in "\
+			vcpu_printf(vcpu, "%s: "#seg" AR 0x%x in "\
 				   "virtual8086 is not 0xf3\n",\
 			   __FUNCTION__,\
 			   vmcs_read32(GUEST_##seg##_AR_BYTES));\
@@ -212,50 +212,50 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 		}
 
 
-	//hvm_printf(vcpu->hvm, "%s: start %d\n", __FUNCTION__, vm_entry_test_id);
+	//vcpu_printf(vcpu, "%s: start %d\n", __FUNCTION__, vm_entry_test_id);
 
 	cr0 = vmcs_readl(GUEST_CR0);
 
 	if (!(cr0 & CR0_PG_MASK)) {
-		hvm_printf(vcpu->hvm, "%s: cr0 0x%lx, PG is not set\n",
+		vcpu_printf(vcpu, "%s: cr0 0x%lx, PG is not set\n",
 			   __FUNCTION__, cr0);
 		return 0;
 	}
 
 	if (!(cr0 & CR0_PE_MASK)) {
-		hvm_printf(vcpu->hvm, "%s: cr0 0x%lx, PE is not set\n",
+		vcpu_printf(vcpu, "%s: cr0 0x%lx, PE is not set\n",
 			   __FUNCTION__, cr0);
 		return 0;
 	}
 
 	if (!(cr0 & CR0_NE_MASK)) {
-		hvm_printf(vcpu->hvm, "%s: cr0 0x%lx, NE is not set\n",
+		vcpu_printf(vcpu, "%s: cr0 0x%lx, NE is not set\n",
 			   __FUNCTION__, cr0);
 		return 0;
 	}
 
 	if (!(cr0 & CR0_WP_MASK)) {
-		hvm_printf(vcpu->hvm, "%s: cr0 0x%lx, WP is not set\n",
+		vcpu_printf(vcpu, "%s: cr0 0x%lx, WP is not set\n",
 			   __FUNCTION__, cr0);
 	}
 
 	cr4 = vmcs_readl(GUEST_CR4);
 
 	if (!(cr4 & CR4_VMXE_MASK)) {
-		hvm_printf(vcpu->hvm, "%s: cr4 0x%lx, VMXE is not set\n",
+		vcpu_printf(vcpu, "%s: cr4 0x%lx, VMXE is not set\n",
 			   __FUNCTION__, cr4);
 		return 0;
 	}
 
 	if (!(cr4 & CR4_PAE_MASK)) {
-		hvm_printf(vcpu->hvm, "%s: cr4 0x%lx, PAE is not set\n",
+		vcpu_printf(vcpu, "%s: cr4 0x%lx, PAE is not set\n",
 			   __FUNCTION__, cr4);
 	}
 
 	ia32_debugctl = vmcs_read64(GUEST_IA32_DEBUGCTL);
 
 	if (ia32_debugctl & IA32_DEBUGCTL_RESERVED_BITS ) {
-		hvm_printf(vcpu->hvm, "%s: ia32_debugctl 0x%llx, reserve bits\n",
+		vcpu_printf(vcpu, "%s: ia32_debugctl 0x%llx, reserve bits\n",
 			   __FUNCTION__, ia32_debugctl);
 		return 0;
 	}
@@ -266,7 +266,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 	}
 
 	if ( long_mode && !(cr4 & CR4_PAE_MASK)) {
-		hvm_printf(vcpu->hvm, "%s: long mode and not PAE\n",
+		vcpu_printf(vcpu, "%s: long mode and not PAE\n",
 			   __FUNCTION__);
 		return 0;
 	}
@@ -274,7 +274,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 	cr3 = vmcs_readl(GUEST_CR3);
 
 	if (cr3 & CR3_L_MODE_RESEVED_BITS) {
-		hvm_printf(vcpu->hvm, "%s: cr3 0x%lx, reserved bits\n",
+		vcpu_printf(vcpu, "%s: cr3 0x%lx, reserved bits\n",
 			   __FUNCTION__, cr3);
 		return 0;
 	}
@@ -296,7 +296,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 		kunmap_atomic(pdpt, KM_USER0);
 
 		if (i != 4) {
-			hvm_printf(vcpu->hvm, "%s: pae cr3[%d] 0x%llx, reserved bits\n",
+			vcpu_printf(vcpu, "%s: pae cr3[%d] 0x%llx, reserved bits\n",
 				   __FUNCTION__, i, pdpte);
 			return 0;
 		}
@@ -305,7 +305,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 	dr7 = vmcs_readl(GUEST_DR7);
 
 	if (dr7 & ~((1UL << 32) - 1)) {
-		hvm_printf(vcpu->hvm, "%s: dr7 0x%lx, reserved bits\n",
+		vcpu_printf(vcpu, "%s: dr7 0x%lx, reserved bits\n",
 			   __FUNCTION__, dr7);
 		return 0;
 	}
@@ -313,7 +313,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 	sysenter_esp = vmcs_readl(GUEST_SYSENTER_ESP);
 
 	if (!is_canonical(sysenter_esp)) {
-		hvm_printf(vcpu->hvm, "%s: sysenter_esp 0x%lx, not canonical\n",
+		vcpu_printf(vcpu, "%s: sysenter_esp 0x%lx, not canonical\n",
 			   __FUNCTION__, sysenter_esp);
 		return 0;
 	}
@@ -321,7 +321,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 	sysenter_eip = vmcs_readl(GUEST_SYSENTER_EIP);
 
 	if (!is_canonical(sysenter_eip)) {
-		hvm_printf(vcpu->hvm, "%s: sysenter_eip 0x%lx, not canonical\n",
+		vcpu_printf(vcpu, "%s: sysenter_eip 0x%lx, not canonical\n",
 			   __FUNCTION__, sysenter_eip);
 		return 0;
 	}
@@ -331,14 +331,14 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 
 
 	if (vmcs_read16(GUEST_TR_SELECTOR) & SELECTOR_TI_MASK) {
-	       hvm_printf(vcpu->hvm, "%s: tr selctor 0x%x, TI is set\n",
+	       vcpu_printf(vcpu, "%s: tr selctor 0x%x, TI is set\n",
 			   __FUNCTION__, vmcs_read16(GUEST_TR_SELECTOR));
 	       return 0;
 	}
 
 	if (!(vmcs_read32(GUEST_LDTR_AR_BYTES) & AR_UNUSABLE_MASK) &&
 	      vmcs_read16(GUEST_LDTR_SELECTOR) & SELECTOR_TI_MASK) {
-	       hvm_printf(vcpu->hvm, "%s: ldtr selctor 0x%x,"
+	       vcpu_printf(vcpu, "%s: ldtr selctor 0x%x,"
 				     " is usable and TI is set\n",
 			   __FUNCTION__, vmcs_read16(GUEST_LDTR_SELECTOR));
 	       return 0;
@@ -347,7 +347,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 	if (!virtual8086 && 
 	    (vmcs_read16(GUEST_SS_SELECTOR) & SELECTOR_RPL_MASK) != 
 	    (vmcs_read16(GUEST_CS_SELECTOR) & SELECTOR_RPL_MASK)) {
-		hvm_printf(vcpu->hvm, "%s: ss selctor 0x%x cs selctor 0x%x,"
+		vcpu_printf(vcpu, "%s: ss selctor 0x%x cs selctor 0x%x,"
 				     " not same RPL\n",
 			   __FUNCTION__,
 			   vmcs_read16(GUEST_SS_SELECTOR),
@@ -367,7 +367,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 	if (!is_canonical(vmcs_readl(GUEST_TR_BASE)) || 
 	    !is_canonical(vmcs_readl(GUEST_FS_BASE)) ||
 	    !is_canonical(vmcs_readl(GUEST_GS_BASE)) ) {
-		hvm_printf(vcpu->hvm, "%s: TR 0x%lx FS 0x%lx or GS 0x%lx base"
+		vcpu_printf(vcpu, "%s: TR 0x%lx FS 0x%lx or GS 0x%lx base"
 				      " is not canonical\n",
 			   __FUNCTION__,
 			   vmcs_readl(GUEST_TR_BASE),
@@ -379,7 +379,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 
 	if (!(vmcs_read32(GUEST_LDTR_AR_BYTES) & AR_UNUSABLE_MASK) && 
 	    !is_canonical(vmcs_readl(GUEST_LDTR_BASE))) {
-		hvm_printf(vcpu->hvm, "%s: LDTR base 0x%lx, usable and is not"
+		vcpu_printf(vcpu, "%s: LDTR base 0x%lx, usable and is not"
 				      " canonical\n",
 			   __FUNCTION__,
 			   vmcs_readl(GUEST_LDTR_BASE));
@@ -387,7 +387,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 	}
 
 	if ((vmcs_readl(GUEST_CS_BASE) & ~((1ULL << 32) - 1))) {
-		hvm_printf(vcpu->hvm, "%s: CS base 0x%lx, not all bits 63-32"
+		vcpu_printf(vcpu, "%s: CS base 0x%lx, not all bits 63-32"
 				      " are zero\n",
 			   __FUNCTION__,
 			   vmcs_readl(GUEST_CS_BASE));
@@ -397,7 +397,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 	#define SEG_BASE_TEST(seg)\
 	if ( !(vmcs_read32(GUEST_##seg##_AR_BYTES) & AR_UNUSABLE_MASK) &&\
 	     (vmcs_readl(GUEST_##seg##_BASE) & ~((1ULL << 32) - 1))) {\
-		hvm_printf(vcpu->hvm, "%s: "#seg" base 0x%lx, is usable and not"\
+		vcpu_printf(vcpu, "%s: "#seg" base 0x%lx, is usable and not"\
 						" all bits 63-32 are zero\n",\
 			   __FUNCTION__,\
 			   vmcs_readl(GUEST_##seg##_BASE));\
@@ -441,7 +441,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 			err = 1;						\
 		}								\
 		if (err) {							\
-			hvm_printf(vcpu->hvm, "%s: "#seg" AR 0x%x, G err. lim"	\
+			vcpu_printf(vcpu, "%s: "#seg" AR 0x%x, G err. lim"	\
 							" is 0x%x\n",		\
 						   __FUNCTION__,		\
 						   ar, lim);			\
@@ -451,21 +451,21 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 
 
 		if (!(cs_ar & AR_TYPE_ACCESSES_MASK)) {
-			hvm_printf(vcpu->hvm, "%s: cs AR 0x%x, accesses is clear\n",
+			vcpu_printf(vcpu, "%s: cs AR 0x%x, accesses is clear\n",
 			   __FUNCTION__,
 			   cs_ar);
 			return 0;
 		}
 
 		if (!(cs_ar & AR_TYPE_CODE_MASK)) {
-			hvm_printf(vcpu->hvm, "%s: cs AR 0x%x, code is clear\n",
+			vcpu_printf(vcpu, "%s: cs AR 0x%x, code is clear\n",
 			   __FUNCTION__,
 			   cs_ar);
 			return 0;
 		}
 
 		if (!(cs_ar & AR_S_MASK)) {
-			hvm_printf(vcpu->hvm, "%s: cs AR 0x%x, type is sys\n",
+			vcpu_printf(vcpu, "%s: cs AR 0x%x, type is sys\n",
 			   __FUNCTION__,
 			   cs_ar);
 			return 0;
@@ -474,7 +474,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 		if ((cs_ar & AR_TYPE_MASK) >= 8 && (cs_ar & AR_TYPE_MASK) < 12 && 
 		    AR_DPL(cs_ar) != 
 		    (vmcs_read16(GUEST_CS_SELECTOR) & SELECTOR_RPL_MASK) ) {
-			hvm_printf(vcpu->hvm, "%s: cs AR 0x%x, "
+			vcpu_printf(vcpu, "%s: cs AR 0x%x, "
 					      "DPL not as RPL\n",
 				   __FUNCTION__,
 				   cs_ar);
@@ -484,7 +484,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 		if ((cs_ar & AR_TYPE_MASK) >= 13 && (cs_ar & AR_TYPE_MASK) < 16 && 
 		    AR_DPL(cs_ar) > 
 		    (vmcs_read16(GUEST_CS_SELECTOR) & SELECTOR_RPL_MASK) ) {
-			hvm_printf(vcpu->hvm, "%s: cs AR 0x%x, "
+			vcpu_printf(vcpu, "%s: cs AR 0x%x, "
 					      "DPL greater than RPL\n",
 				   __FUNCTION__,
 				   cs_ar);
@@ -492,7 +492,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 		}
 
 		if (!(cs_ar & AR_P_MASK)) {
-				hvm_printf(vcpu->hvm, "%s: CS AR 0x%x, not "
+				vcpu_printf(vcpu, "%s: CS AR 0x%x, not "
 						      "present\n",
 					   __FUNCTION__,
 					   cs_ar);
@@ -500,7 +500,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 		}
 
 		if ((cs_ar & AR_RESERVD_MASK)) {
-				hvm_printf(vcpu->hvm, "%s: CS AR 0x%x, reseved"
+				vcpu_printf(vcpu, "%s: CS AR 0x%x, reseved"
 						      " bits are set\n",
 					   __FUNCTION__,
 					   cs_ar);
@@ -508,7 +508,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 		}
 
 		if (long_mode & (cs_ar & AR_L_MASK) && (cs_ar & AR_DB_MASK)) {
-			hvm_printf(vcpu->hvm, "%s: CS AR 0x%x, DB and L are set"
+			vcpu_printf(vcpu, "%s: CS AR 0x%x, DB and L are set"
 					      " in long mode\n",
 					   __FUNCTION__,
 					   cs_ar);
@@ -521,7 +521,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 		if (!(ss_ar & AR_UNUSABLE_MASK)) { 
 		    if ((ss_ar & AR_TYPE_MASK) != 3 && 
 			(ss_ar & AR_TYPE_MASK) != 7 ) {
-			hvm_printf(vcpu->hvm, "%s: ss AR 0x%x, usable and type"
+			vcpu_printf(vcpu, "%s: ss AR 0x%x, usable and type"
 					      " is not 3 or 7\n",
 			   __FUNCTION__,
 			   ss_ar);
@@ -529,14 +529,14 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 		    }
 
 		    if (!(ss_ar & AR_S_MASK)) {
-			hvm_printf(vcpu->hvm, "%s: ss AR 0x%x, usable and"
+			vcpu_printf(vcpu, "%s: ss AR 0x%x, usable and"
 					      " is sys\n",
 			   __FUNCTION__,
 			   ss_ar);
 			return 0;
 		    }
 		    if (!(ss_ar & AR_P_MASK)) {
-				hvm_printf(vcpu->hvm, "%s: SS AR 0x%x, usable"
+				vcpu_printf(vcpu, "%s: SS AR 0x%x, usable"
 						      " and  not present\n",
 					   __FUNCTION__,
 					   ss_ar);
@@ -544,7 +544,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 		    }
 
 		    if ((ss_ar & AR_RESERVD_MASK)) {
-					hvm_printf(vcpu->hvm, "%s: SS AR 0x%x, reseved"
+					vcpu_printf(vcpu, "%s: SS AR 0x%x, reseved"
 							      " bits are set\n",
 						   __FUNCTION__,
 						   ss_ar);
@@ -557,7 +557,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 
 		if (AR_DPL(ss_ar) != 
 		    (vmcs_read16(GUEST_SS_SELECTOR) & SELECTOR_RPL_MASK) ) {
-			hvm_printf(vcpu->hvm, "%s: SS AR 0x%x, "
+			vcpu_printf(vcpu, "%s: SS AR 0x%x, "
 					      "DPL not as RPL\n",
 				   __FUNCTION__,
 				   ss_ar);
@@ -568,7 +568,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 		uint32_t ar = vmcs_read32(GUEST_##seg##_AR_BYTES);\
 		if (!(ar & AR_UNUSABLE_MASK)) {\
 			if (!(ar & AR_TYPE_ACCESSES_MASK)) {\
-				hvm_printf(vcpu->hvm, "%s: "#seg" AR 0x%x, "\
+				vcpu_printf(vcpu, "%s: "#seg" AR 0x%x, "\
 						"usable and not accesses\n",\
 					   __FUNCTION__,\
 					   ar);\
@@ -576,14 +576,14 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 			}\
 			if ((ar & AR_TYPE_CODE_MASK) &&\
 			    !(ar & AR_TYPE_READABLE_MASK)) {\
-				hvm_printf(vcpu->hvm, "%s: "#seg" AR 0x%x, "\
+				vcpu_printf(vcpu, "%s: "#seg" AR 0x%x, "\
 						"code and not readable\n",\
 					   __FUNCTION__,\
 					   ar);\
 				return 0;\
 			}\
 			if (!(ar & AR_S_MASK)) {\
-				hvm_printf(vcpu->hvm, "%s: "#seg" AR 0x%x, usable and"\
+				vcpu_printf(vcpu, "%s: "#seg" AR 0x%x, usable and"\
 					      " is sys\n",\
 					   __FUNCTION__,\
 					   ar);\
@@ -593,21 +593,21 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 			    (ar & AR_TYPE_MASK) < 12 && \
 			    AR_DPL(ar) < (vmcs_read16(GUEST_##seg##_SELECTOR) & \
 					  SELECTOR_RPL_MASK) ) {\
-				    hvm_printf(vcpu->hvm, "%s: "#seg" AR 0x%x, "\
+				    vcpu_printf(vcpu, "%s: "#seg" AR 0x%x, "\
 					      "DPL less than RPL\n",\
 					       __FUNCTION__,\
 					       ar);\
 				    return 0;\
 			}\
 			if (!(ar & AR_P_MASK)) {\
-				hvm_printf(vcpu->hvm, "%s: "#seg" AR 0x%x, usable and"\
+				vcpu_printf(vcpu, "%s: "#seg" AR 0x%x, usable and"\
 					      " not present\n",\
 					   __FUNCTION__,\
 					   ar);\
 				return 0;\
 			}\
 			if ((ar & AR_RESERVD_MASK)) {\
-					hvm_printf(vcpu->hvm, "%s: "#seg" AR"\
+					vcpu_printf(vcpu, "%s: "#seg" AR"\
 							" 0x%x, reseved"\
 							" bits are set\n",\
 						   __FUNCTION__,\
@@ -626,7 +626,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 		// TR test
 		if (long_mode) {
 			if ((tr_ar & AR_TYPE_MASK) != AR_TYPE_BUSY_64_TSS) {
-				hvm_printf(vcpu->hvm, "%s: TR AR 0x%x, long"
+				vcpu_printf(vcpu, "%s: TR AR 0x%x, long"
 						      " mode and not 64bit busy"
 						      " tss\n",
 				   __FUNCTION__,
@@ -636,7 +636,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 		} else {
 			if ((tr_ar & AR_TYPE_MASK) != AR_TYPE_BUSY_32_TSS && 
 			    (tr_ar & AR_TYPE_MASK) != AR_TYPE_BUSY_16_TSS) {
-				hvm_printf(vcpu->hvm, "%s: TR AR 0x%x, long"
+				vcpu_printf(vcpu, "%s: TR AR 0x%x, long"
 						      " mode and not 16/32bit "
 						      "busy tss\n",
 				   __FUNCTION__,
@@ -646,20 +646,20 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 
 		}
 		if ((tr_ar & AR_S_MASK)) {
-			hvm_printf(vcpu->hvm, "%s: TR AR 0x%x, S is set\n",
+			vcpu_printf(vcpu, "%s: TR AR 0x%x, S is set\n",
 				   __FUNCTION__,
 				   tr_ar);
 			return 0;
 		}
 		if (!(tr_ar & AR_P_MASK)) {
-			hvm_printf(vcpu->hvm, "%s: TR AR 0x%x, P is not set\n",
+			vcpu_printf(vcpu, "%s: TR AR 0x%x, P is not set\n",
 				   __FUNCTION__,
 				   tr_ar);
 			return 0;
 		}
 
 		if ((tr_ar & (AR_RESERVD_MASK| AR_UNUSABLE_MASK))) {
-			hvm_printf(vcpu->hvm, "%s: TR AR 0x%x, reserved bit are"
+			vcpu_printf(vcpu, "%s: TR AR 0x%x, reserved bit are"
 					      " set\n",
 				   __FUNCTION__,
 				   tr_ar);
@@ -671,7 +671,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 		if (!(ldtr_ar & AR_UNUSABLE_MASK)) {
 
 			if ((ldtr_ar & AR_TYPE_MASK) != AR_TYPE_LDT) {
-				hvm_printf(vcpu->hvm, "%s: LDTR AR 0x%x,"
+				vcpu_printf(vcpu, "%s: LDTR AR 0x%x,"
 						      " bad type\n",
 					   __FUNCTION__,
 					   ldtr_ar);
@@ -679,7 +679,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 			}
 
 			if ((ldtr_ar & AR_S_MASK)) {
-				hvm_printf(vcpu->hvm, "%s: LDTR AR 0x%x,"
+				vcpu_printf(vcpu, "%s: LDTR AR 0x%x,"
 						      " S is set\n",
 					   __FUNCTION__,
 					   ldtr_ar);
@@ -687,14 +687,14 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 			}
 
 			if (!(ldtr_ar & AR_P_MASK)) {
-				hvm_printf(vcpu->hvm, "%s: LDTR AR 0x%x,"
+				vcpu_printf(vcpu, "%s: LDTR AR 0x%x,"
 						      " P is not set\n",
 					   __FUNCTION__,
 					   ldtr_ar);
 				return 0;
 			}
 			if ((ldtr_ar & AR_RESERVD_MASK)) {
-				hvm_printf(vcpu->hvm, "%s: LDTR AR 0x%x,"
+				vcpu_printf(vcpu, "%s: LDTR AR 0x%x,"
 						      " reserved bit are  set\n",
 					   __FUNCTION__,
 					   ldtr_ar);
@@ -709,13 +709,13 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 
 	#define IDT_GDT_TEST(reg)\
 	if (!is_canonical(vmcs_readl(GUEST_##reg##_BASE))) {\
-		hvm_printf(vcpu->hvm, "%s: "#reg" BASE 0x%lx, not canonical\n",\
+		vcpu_printf(vcpu, "%s: "#reg" BASE 0x%lx, not canonical\n",\
 					   __FUNCTION__,\
 					   vmcs_readl(GUEST_##reg##_BASE));\
 		return 0;\
 	}\
 	if (vmcs_read32(GUEST_##reg##_LIMIT) >> 16) {\
-		hvm_printf(vcpu->hvm, "%s: "#reg" LIMIT 0x%x, size err\n",\
+		vcpu_printf(vcpu, "%s: "#reg" LIMIT 0x%x, size err\n",\
 				   __FUNCTION__,\
 				   vmcs_read32(GUEST_##reg##_LIMIT));\
 		return 0;\
@@ -729,14 +729,14 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 
 	if ((!long_mode || !(vmcs_read32(GUEST_CS_AR_BYTES) & AR_L_MASK)) && 
 	    vmcs_readl(GUEST_RIP) & ~((1ULL << 32) - 1) ){
-		hvm_printf(vcpu->hvm, "%s: RIP 0x%lx, size err\n",
+		vcpu_printf(vcpu, "%s: RIP 0x%lx, size err\n",
 				   __FUNCTION__,
 				   vmcs_readl(GUEST_RIP));
 		return 0;    
 	}
 
 	if (!is_canonical(vmcs_readl(GUEST_RIP))) {
-		hvm_printf(vcpu->hvm, "%s: RIP 0x%lx, not canonical\n",
+		vcpu_printf(vcpu, "%s: RIP 0x%lx, not canonical\n",
 				   __FUNCTION__,
 				   vmcs_readl(GUEST_RIP));
 		return 0; 
@@ -749,7 +749,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 
 	if ((rflags & RFLAGS_RESEVED_CLEAR_BITS) || 
 	    !(rflags & RFLAGS_RESEVED_SET_BITS)) {
-		hvm_printf(vcpu->hvm, "%s: RFLAGS 0x%lx, reserved bits 0x%lx 0x%lx\n",
+		vcpu_printf(vcpu, "%s: RFLAGS 0x%lx, reserved bits 0x%lx 0x%lx\n",
 			   __FUNCTION__,
 			   rflags,
 			   RFLAGS_RESEVED_CLEAR_BITS,
@@ -758,7 +758,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 	}
 
 	if (long_mode && virtual8086) {
-		hvm_printf(vcpu->hvm, "%s: RFLAGS 0x%lx, vm and long mode\n",
+		vcpu_printf(vcpu, "%s: RFLAGS 0x%lx, vm and long mode\n",
 				   __FUNCTION__,
 				   rflags);
 		return 0; 
@@ -770,7 +770,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 		if ((vm_entry_info & INTR_INFO_VALID_MASK) && 
 		    (vm_entry_info & INTR_INFO_INTR_TYPE_MASK) == 
 		    INTR_TYPE_EXT_INTR) {
-			hvm_printf(vcpu->hvm, "%s: RFLAGS 0x%lx, external"
+			vcpu_printf(vcpu, "%s: RFLAGS 0x%lx, external"
 					      " interrupt and RF is clear\n",
 				   __FUNCTION__,
 				   rflags);
