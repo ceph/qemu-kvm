@@ -502,13 +502,8 @@ static int access_test(uint64_t pte, int write, int user)
 static void paging_inval_page(struct hvm_vcpu *vcpu, gva_t addr)
 {
 	hpa_t page_addr = vcpu->paging_context.root_hpa;
-	int level = vcpu->paging_context.root_level;
+	int level = vcpu->paging_context.shadow_root_level;
 
-	pgprintk("paging_inval_page: 0x%llx pc 0x%lx\n",
-	       addr, vmcs_readl(GUEST_RIP));
-
-	nonpaging_flush(vcpu); //for now
-	return;
 	++hvm_stat.invlpg;
 
 	for (; ; level--) {
