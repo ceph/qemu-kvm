@@ -7,6 +7,7 @@
 /* for HVM_CREATE */
 struct hvm_create {
 	__u64 memory_size; /* bytes */
+	__u32 log_fd; /* for debug, -1U if none */
 };
 
 #define HVM_EXIT_TYPE_FAIL_ENTRY 1

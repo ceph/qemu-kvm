@@ -71,12 +71,14 @@ hvm_context_t hvm_init(struct hvm_callbacks *callbacks,
 	return hvm;
 }
 
-int hvm_create(hvm_context_t hvm, unsigned long memory, void **vm_mem)
+int hvm_create(hvm_context_t hvm, unsigned long memory, void **vm_mem,
+	       int log_fd)
 {
 	int fd = hvm->fd;
 	int r;
 	struct hvm_create create = {
 		.memory_size = memory,
+		.log_fd = log_fd,
 	};
 
 	r = ioctl(fd, HVM_CREATE, &create);

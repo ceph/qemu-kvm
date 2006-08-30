@@ -35,7 +35,8 @@ hvm_context_t hvm_init(struct hvm_callbacks *callbacks,
 		       void *opaque);
 int hvm_create(hvm_context_t hvm,
 	       unsigned long phys_mem_bytes,
-	       void **phys_mem);
+	       void **phys_mem,
+	       int log_fd);
 int hvm_run(hvm_context_t hvm, int vcpu);
 int hvm_get_regs(hvm_context_t, int vcpu, struct hvm_regs *regs);
 int hvm_set_regs(hvm_context_t, int vcpu, struct hvm_regs *regs);

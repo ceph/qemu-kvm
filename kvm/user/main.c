@@ -121,7 +121,7 @@ int main(int ac, char **av)
 	void *vm_mem;
 
 	hvm = hvm_init(&test_callbacks, 0);
-	hvm_create(hvm, 128 * 1024 * 1024, &vm_mem);
+	hvm_create(hvm, 128 * 1024 * 1024, &vm_mem, 1);
 	if (ac > 1)
 	    load_file(vm_mem, av[1]);
 	hvm_show_regs(hvm, 0);

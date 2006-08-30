@@ -17,6 +17,7 @@
 #include <asm/io.h>
 #include <linux/debugfs.h>
 #include <linux/highmem.h>
+#include <linux/file.h>
 
 #include "vmx.h"
 #include "x86_emulate.h"
@@ -410,6 +411,9 @@ void hvm_kvm_log(struct hvm *hvm, const char *data, size_t count)
 	mm_segment_t fs = get_fs();
 	ssize_t ret;
 		
+	if (!f)
+		return;
+
 	set_fs(KERNEL_DS); 
 	ret = vfs_write(f, data, count, &f->f_pos);
 	set_fs(fs);
@@ -425,6 +429,9 @@ int hvm_printf(struct hvm *hvm, const char *fmt, ...)
 {
 	va_list args;
 	int i;
+
+	if (!hvm->log_file)
+		return 0;
 
 	va_start(args, fmt);
 
@@ -443,7 +450,8 @@ static int hvm_dev_release(struct inode *inode, struct file *filp)
 	if (hvm->created) {
 		hvm_free_vcpus(hvm);
 		hvm_free_physmem(hvm);
-		filp_close(hvm->log_file, 0);
+		if (hvm->log_file)
+			fput(hvm->log_file);
 		kfree(hvm->log_buf);
 	}
 	kfree(hvm);
@@ -736,12 +744,8 @@ static int hvm_dev_ioctl_create(struct hvm *hvm, struct hvm_create *hvm_create)
 		goto out;
 	}
 
-	hvm->log_file = filp_open("/tmp/kvm.log", O_RDWR | O_CREAT | O_TRUNC, 0644);
-	if (IS_ERR(hvm->log_file)) {
-		r = PTR_ERR(hvm->log_file);
-		printk("%s: filp_open err %d\n", __FUNCTION__, r);
-		goto out_free_log_buf;
-	}
+	if (hvm_create->log_fd != -1u)
+		hvm->log_file = fget(hvm_create->log_fd);
 
         hvm_printf(hvm, "%s: kvm log start.\n", __FUNCTION__);
 
@@ -784,8 +788,7 @@ out_free_vcpus:
 out_free_physmem:
 	hvm_free_physmem(hvm);
 out_free_log_file:
-	filp_close(hvm->log_file, 0);
-out_free_log_buf:
+	fput(hvm->log_file);
 	kfree(hvm->log_buf);
 out:
 	return r;
