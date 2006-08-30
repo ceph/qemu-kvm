@@ -206,7 +206,13 @@ static uint64_t *FNAME(fetch)(struct hvm_vcpu *vcpu,
 #if PTTYPE == 32			
 		}
 #endif
-		access_bits &= *guest_ent;
+		/*
+		 * 32-bit pae PDPTEs do not have access bits
+		 */
+		if (PTTYPE != 64 
+		    || vcpu->paging_context.root_level != 3
+		    || level != 3)
+		    access_bits &= *guest_ent;
 		*shadow_ent |= access_bits << PT_SHADOW_BITS_OFFSET;
 		priv_shadow_ent = shadow_ent;
 	}
