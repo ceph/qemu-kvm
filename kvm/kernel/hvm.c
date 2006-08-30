@@ -1649,6 +1649,10 @@ static int handle_wrmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 	case MSR_EFER:
 		set_efer(vcpu, data);
 		return 1;
+	case MSR_IA32_MC0_STATUS:
+		vcpu_printf(vcpu, "%s: MSR_IA32_MC0_STATUS 0x%llx, nop\n"
+			    , __FUNCTION__, data);
+		break;
 	default:
 		msr = find_msr_entry(vcpu, ecx);
 		if (msr) {

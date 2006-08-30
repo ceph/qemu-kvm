@@ -210,8 +210,6 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 		}
 
 
-	//vcpu_printf(vcpu, "%s: start %d\n", __FUNCTION__, vm_entry_test_id);
-
 	cr0 = vmcs_readl(GUEST_CR0);
 
 	if (!(cr0 & CR0_PG_MASK)) {
