@@ -189,30 +189,15 @@ static uint64_t *FNAME(fetch)(struct hvm_vcpu *vcpu,
 			*enomem = 1;
 			return NULL;
 		}
-#if PTTYPE == 32
-		if (level > PT32_ROOT_LEVEL) {
+		if (!is_long_mode() && level == 3) {
 			*shadow_ent = shadow_addr | 
 				(*guest_ent & (PT_PRESENT_MASK | PT_PWT_MASK | PT_PCD_MASK));
 		} else {
-#endif
 			*shadow_ent = shadow_addr | 
 				(*guest_ent & PT_NON_PTE_COPY_MASK);
 			*shadow_ent |= ( PT_WRITABLE_MASK | PT_USER_MASK);
-
-			/* 32-bit pae reserves some bits in PDPTR */
-			if (level == 3 && vcpu->paging_context.root_level == 3)
-				*shadow_ent &= ~0x1e6ull;
-
-#if PTTYPE == 32			
+			access_bits &= *guest_ent;
 		}
-#endif
-		/*
-		 * 32-bit pae PDPTEs do not have access bits
-		 */
-		if (PTTYPE != 64 
-		    || vcpu->paging_context.root_level != 3
-		    || level != 3)
-		    access_bits &= *guest_ent;
 		*shadow_ent |= access_bits << PT_SHADOW_BITS_OFFSET;
 		priv_shadow_ent = shadow_ent;
 	}
@@ -288,9 +273,6 @@ static int FNAME(page_fault)(struct hvm_vcpu *vcpu, gva_t addr,
 		FNAME(release_walker)(&walker);
 		return 0;
 	}
-
-	//vcpu_printf(vcpu, "%s: addr 0x%llx @ 0x%lx\n",
-	//	   __FUNCTION__, addr, vmcs_readl(GUEST_RIP));
 
 	if (write_fault) {
 		fixed = FNAME(fix_write_pf)(vcpu, shadow_pte, &walker, addr,

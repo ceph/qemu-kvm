@@ -507,6 +507,8 @@ static void paging_inval_page(struct hvm_vcpu *vcpu, gva_t addr)
 	pgprintk("paging_inval_page: 0x%llx pc 0x%lx\n",
 	       addr, vmcs_readl(GUEST_RIP));
 
+	nonpaging_flush(vcpu); //for now
+	return;
 	++hvm_stat.invlpg;
 
 	for (; ; level--) {
