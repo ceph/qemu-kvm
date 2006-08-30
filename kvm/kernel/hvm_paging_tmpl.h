@@ -38,16 +38,23 @@ typedef struct guest_walker_s {
 static void FNAME(init_walker)(guest_walker_t *walker,
 				  struct hvm_vcpu *vcpu)
 {
+	hpa_t hpa;
+
 	walker->level = vcpu->paging_context.root_level;
-	walker->table = kmap_atomic(
-		pfn_to_page(gpa_to_hpa(vcpu, vcpu->cr3) >> PAGE_SHIFT),
-		KM_USER0);
+	hpa = gpa_to_hpa(vcpu, vcpu->cr3 & PT64_BASE_ADDR_MASK);
+	walker->table = kmap_atomic(pfn_to_page(hpa >> PAGE_SHIFT), KM_USER0);
+
+	ASSERT((!is_long_mode() && is_pae()) || 
+	       (vcpu->cr3 & ~(PAGE_MASK | CR3_FLAGS_MASK)) == 0);
+		
+	walker->table = (pt_element_t *)( (unsigned long)walker->table | 
+				(vcpu->cr3 & ~(PAGE_MASK | CR3_FLAGS_MASK)) );
 }
 
 
 static inline void FNAME(release_walker)(guest_walker_t *walker)
 {
-	kunmap_atomic(walker->table, KM_USER0);
+	kunmap_atomic(walker->table & PAGE_MASK, KM_USER0);
 }
 
 
@@ -100,6 +107,8 @@ static pt_element_t *FNAME(fetch_guest)(struct hvm_vcpu *vcpu,
 		int index = PT_INDEX(addr, walker->level);
 		hpa_t paddr;
 
+		ASSERT(((unsigned long)walker->table & PAGE_MASK) == 
+		       ((unsigned long)&walker->table[index] & PAGE_MASK));
 		if (level == walker->level ||
 		    !is_present_pte(walker->table[index]) ||
 		    (walker->level == PT_DIRECTORY_LEVEL &&

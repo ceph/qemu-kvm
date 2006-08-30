@@ -19,6 +19,7 @@
 
 #define CR3_RESEVED_BITS 0x07ULL
 #define CR3_L_MODE_RESEVED_BITS (~((1ULL << 40) - 1) | 0x0fe7ULL)
+#define CR3_FLAGS_MASK ((1ULL << 5) - 1)
 
 #define CR4_PSE_MASK (1ULL << 4)
 #define CR4_PAE_MASK (1ULL << 5)
