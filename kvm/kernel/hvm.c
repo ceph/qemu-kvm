@@ -2186,7 +2186,7 @@ static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 		return -EINVAL;
 	vcpu = &hvm->vcpus[sregs->vcpu];
 
-	sregs_fixup(vcpu, sregs);
+	//sregs_fixup(vcpu, sregs);
 
 	vcpu_load(vcpu);
 

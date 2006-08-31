@@ -56,29 +56,33 @@ static void load_regs(CPUState *env)
 
     hvm_set_regs(hvm_context, 0, &regs);
 
-#define set_seg(var, seg) \
+#define set_seg(var, seg, default_s, default_type)	\
+  do {				    \
+      unsigned flags = env->seg.flags; \
+      unsigned valid = flags & ~DESC_P_MASK; \
     sregs.var.selector = env->seg.selector; \
     sregs.var.base = env->seg.base; \
     sregs.var.limit = env->seg.limit; \
-    sregs.var.type = (env->seg.flags >> DESC_TYPE_SHIFT) & 15; \
-    sregs.var.present = (env->seg.flags & DESC_P_MASK) != 0; \
-    sregs.var.dpl = (env->seg.flags >> DESC_DPL_SHIFT) & 3; \
-    sregs.var.db = (env->seg.flags >> DESC_B_SHIFT) & 1; \
-    sregs.var.s = (env->seg.flags & DESC_S_MASK) != 0; \
-    sregs.var.l = (env->seg.flags >> DESC_L_SHIFT) & 1; \
-    sregs.var.g = (env->seg.flags & DESC_G_MASK) != 0; \
-    sregs.var.avl = (env->seg.flags & DESC_AVL_MASK) != 0; \
-    sregs.var.unusable = env->seg.flags == 0;
+    sregs.var.type = valid ? (flags >> DESC_TYPE_SHIFT) & 15 : default_type; \
+    sregs.var.present = valid ? (flags & DESC_P_MASK) != 0 : 1; \
+    sregs.var.dpl = env->seg.selector & 3; \
+    sregs.var.db = valid ? (flags >> DESC_B_SHIFT) & 1 : 0; \
+    sregs.var.s = valid ? (flags & DESC_S_MASK) != 0 : default_s;   \
+    sregs.var.l = valid ? (flags >> DESC_L_SHIFT) & 1 : 0;    \
+    sregs.var.g = valid ? (flags & DESC_G_MASK) != 0 : 0;      \
+    sregs.var.avl = (flags & DESC_AVL_MASK) != 0; \
+    sregs.var.unusable = 0; \
+  } while (0)
     
-    set_seg(cs, segs[R_CS]);
-    set_seg(ds, segs[R_DS]);
-    set_seg(es, segs[R_ES]);
-    set_seg(fs, segs[R_FS]);
-    set_seg(gs, segs[R_GS]);
-    set_seg(ss, segs[R_SS]);
+    set_seg(cs, segs[R_CS], 1, 11);
+    set_seg(ds, segs[R_DS], 1, 3);
+    set_seg(es, segs[R_ES], 1, 3);
+    set_seg(fs, segs[R_FS], 1, 3);
+    set_seg(gs, segs[R_GS], 1, 3);
+    set_seg(ss, segs[R_SS], 1, 3);
 
-    set_seg(tr, tr);
-    set_seg(ldt, ldt);
+    set_seg(tr, tr, 0, 3);
+    set_seg(ldt, ldt, 0, 2);
     
     sregs.idt.limit = env->idt.limit;
     sregs.idt.base = env->idt.base;
