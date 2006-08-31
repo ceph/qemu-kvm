@@ -89,6 +89,22 @@ int write_guest(struct hvm_vcpu *vcpu,
 	return 1;
 }
 
+void show_code(struct hvm_vcpu *vcpu)
+{
+	gva_t rip = vmcs_readl(GUEST_RIP);
+	u8 code[50];
+	int i;
+	
+	if (!is_long_mode())
+		rip += vmcs_readl(GUEST_CS_BASE);
+
+	read_guest(vcpu, rip, sizeof code, code);
+	vcpu_printf(vcpu, "code:");
+	for (i = 0; i < sizeof code; ++i)
+		vcpu_printf(vcpu, " %02x", code[i]);
+	vcpu_printf(vcpu, "\n");
+}
+
 struct gate_struct {          
 	u16 offset_low;
 	u16 segment; 

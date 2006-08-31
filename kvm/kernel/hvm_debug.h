@@ -16,6 +16,7 @@ int write_guest(struct hvm_vcpu *vcpu,
 
 void show_irq(struct hvm_vcpu *vcpu,  int irq);
 void show_page(struct hvm_vcpu *vcpu, gva_t addr);
+void show_code(struct hvm_vcpu *vcpu);
 int vm_entry_test(struct hvm_vcpu *vcpu);
 
 void vmcs_dump(void);
