@@ -1662,6 +1662,8 @@ static int handle_wrmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 		vmcs_write64(TSC_OFFSET, data - tsc);
 		break;
 	}
+	case 0x200 ... 0x2ff: /* MTRRs */
+		break;
 	default:
 		msr = find_msr_entry(vcpu, ecx);
 		if (msr) {
