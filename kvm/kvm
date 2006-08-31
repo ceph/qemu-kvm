@@ -18,6 +18,12 @@ optparser.add_option('--install',
                      default = False,
                      )
 
+optparser.add_option('--debugger',
+                     help = 'wait for gdb',
+                     action = 'store_true',
+                     default = False,
+                     )
+
 optparser.add_option('--no-kvm',
                      help = 'use standard qemu, without kvm',
                      action = 'store_false',
@@ -63,7 +69,12 @@ if options.kvm:
 
 print cmd
 
-os.execlp(cmd, cmd,
-          '-cdrom', options.cdrom, '-boot', bootdisk, '-L', '/usr/share/qemu',
-          '-hda', disk, '-m', '384', '-serial', 'file:/tmp/serial.log',
+qemu_args = (cmd, '-cdrom', options.cdrom, '-boot', bootdisk,
+             '-L', '/usr/share/qemu', '-hda', disk, '-m', '384',
+             '-serial', 'file:/tmp/serial.log',
           )
+
+if options.debugger:
+    qemu_args += ('-s',)
+
+os.execvp(cmd, qemu_args)
