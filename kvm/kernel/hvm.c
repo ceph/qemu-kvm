@@ -1150,7 +1150,7 @@ static int handle_invlpg(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 }
 
 
-static inline void inject_gp(void)
+static inline void inject_gp(struct hvm_vcpu *vcpu)
 {
 	printk("inject_general_protection: rip 0x%lx\n",
 		 vmcs_readl(GUEST_RIP));
@@ -1169,25 +1169,25 @@ static inline int set_cr0(struct hvm_vcpu *vcpu, unsigned long cr0)
 {
 	if (cr0 & CR0_RESEVED_BITS) {
 		printk("set_cr0: 0x%lx #GP, reserved bits (0x%lx)\n", cr0, guest_cr0());
-		inject_gp();
+		inject_gp(vcpu);
 		return 1;
 	}
 
 	if ((cr0 & CR0_NW_MASK) && !(cr0 & CR0_CD_MASK)) {
 		printk("set_cr0: #GP, CD == 0 && NW == 1\n");
-		inject_gp();
+		inject_gp(vcpu);
 		return 1;
 	}
 
 	if ((cr0 & CR0_PG_MASK) && !(cr0 & CR0_PE_MASK)) {
 		printk("set_cr0: #GP, set PG flag and a clear PE flag\n");
-		inject_gp();
+		inject_gp(vcpu);
 		return 1;
 	}
 
 	if ((cr0 & CR0_PG_MASK) && !(guest_cr0() & CR0_PE_MASK)) {
 		printk("set_cr0: #GP, set PG flag and not in protected mode\n");
-		inject_gp();
+		inject_gp(vcpu);
 		return 1;
 	}
 
@@ -1205,14 +1205,14 @@ static inline int set_cr0(struct hvm_vcpu *vcpu, unsigned long cr0)
 			if (!is_pae()) {
 				printk("set_cr0: #GP, start paging in "
 				       "long mode while PAE is disabled\n");
-				inject_gp();
+				inject_gp(vcpu);
 				return 1;
 			}
 			guest_cs_ar = vmcs_read32(GUEST_CS_AR_BYTES);
 			if (guest_cs_ar & SEGMENT_AR_L_MASK) {
 				printk("set_cr0: #GP, start paging in "
 				       "long mode while CS.L == 1\n");
-				inject_gp();
+				inject_gp(vcpu);
 				return 1;
 
 			}
@@ -1310,14 +1310,14 @@ static inline void set_cr4(struct hvm_vcpu *vcpu, unsigned long cr4)
 {
 	if (cr4 & CR4_RESEVED_BITS) {
 		printk("set_cr4: #GP, reserved bits\n");
-		inject_gp();
+		inject_gp(vcpu);
 		return;
 	}
 
 	if (is_long_mode()) {
 		if (!(cr4 & CR4_PAE_MASK)) {
 			printk("set_cr4: #GP, clearing PAE while in long mode\n");
-			inject_gp();
+			inject_gp(vcpu);
 			return;
 		}
 	} else if (is_paging() && !is_pae() && (cr4 & CR4_PAE_MASK)) {
@@ -1326,7 +1326,7 @@ static inline void set_cr4(struct hvm_vcpu *vcpu, unsigned long cr4)
 
 	if (cr4 & CR4_VMXE_MASK) {
 		printk("set_cr4: #GP, setting VMXE\n");
-		inject_gp();
+		inject_gp(vcpu);
 		return;
 	}
 	vmcs_writel(GUEST_CR4, cr4 | HVM_VM_CR4_ALWAYS_ON);
@@ -1341,13 +1341,13 @@ static inline void set_cr3(struct hvm_vcpu *vcpu, unsigned long cr3)
 	if (is_long_mode()) {
 		if ( cr3 & CR3_L_MODE_RESEVED_BITS) {
 			printk("set_cr3: #GP, reserved bits\n");
-			inject_gp();
+			inject_gp(vcpu);
 			return;
 		}
 	} else {
 		if (cr3 & CR3_RESEVED_BITS) {
 			printk("set_cr3: #GP, reserved bits\n");
-			inject_gp();
+			inject_gp(vcpu);
 			return;
 		}
 		if (is_paging() && is_pae()) {
@@ -1367,7 +1367,7 @@ static inline void set_cr8(struct hvm_vcpu *vcpu, unsigned long cr8)
 {
 	if ( cr8 & CR8_RESEVED_BITS) {
 		printk("set_cr8: #GP, reserved bits 0x%lx\n", cr8);
-		inject_gp();
+		inject_gp(vcpu);
 		return;
 	}
 	vcpu->cr8 = cr8;
@@ -1396,7 +1396,7 @@ static int handle_cr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 #ifdef KVM_DEBUG
 	if (guest_cpl() != 0) {
 		hvm_printf(vcpu->hvm, "%s: not supervisor\n", __FUNCTION__);
-		inject_gp();
+		inject_gp(vcpu);
 		return 1;
 	}
 #endif
@@ -1507,7 +1507,7 @@ static int handle_rdmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 #ifdef KVM_DEBUG
 	if (guest_cpl() != 0) {
 		hvm_printf(vcpu->hvm, "%s: not supervisor\n", __FUNCTION__);
-		inject_gp();
+		inject_gp(vcpu);
 		return 1;
 	}
 #endif
@@ -1549,7 +1549,7 @@ static int handle_rdmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 			break;
 		}
 		printk(KERN_ERR "hvm: unhandled rdmsr: %x\n", ecx);
-		inject_gp();
+		inject_gp(vcpu);
 		return 1;
 	}
 	
@@ -1570,13 +1570,13 @@ static inline void set_efer(struct hvm_vcpu *vcpu, u64 efer)
 
 	if (efer & EFER_RESERVED_BITS) {
 		printk("set_efer: 0x%llx #GP, reserved bits\n", efer);
-		inject_gp();
+		inject_gp(vcpu);
 		return;
 	}
 
 	if (is_paging() && (vcpu->shadow_efer & EFER_LME) != (efer & EFER_LME)) {
 		printk("set_efer: #GP, change LME while paging\n");
-		inject_gp();
+		inject_gp(vcpu);
 		return;
 	}
 
@@ -1626,7 +1626,7 @@ static int handle_wrmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 #ifdef KVM_DEBUG
 	if (guest_cpl() != 0) {
 		hvm_printf(vcpu->hvm, "%s: not supervisor\n", __FUNCTION__);
-		inject_gp();
+		inject_gp(vcpu);
 		return 1;
 	}
 #endif
@@ -1661,7 +1661,7 @@ static int handle_wrmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 			break;
 		}
 		printk(KERN_ERR "hvm: unhandled wrmsr: %x\n", ecx);
-		inject_gp();
+		inject_gp(vcpu);
 		return 1;
 	}
 	skip_emulated_instruction(vcpu);
