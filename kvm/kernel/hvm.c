@@ -1615,6 +1615,7 @@ static inline void __set_efer(struct hvm_vcpu *vcpu, u64 efer)
 	}
 }
 
+#define MSR_IA32_TIME_STAMP_COUNTER 0x10
 
 static int handle_wrmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 {
@@ -1654,6 +1655,13 @@ static int handle_wrmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 		vcpu_printf(vcpu, "%s: MSR_IA32_MC0_STATUS 0x%llx, nop\n"
 			    , __FUNCTION__, data);
 		break;
+	case MSR_IA32_TIME_STAMP_COUNTER: {
+		u64 tsc;
+
+		rdtscll(tsc);
+		vmcs_write64(TSC_OFFSET, data - tsc);
+		break;
+	}
 	default:
 		msr = find_msr_entry(vcpu, ecx);
 		if (msr) {
