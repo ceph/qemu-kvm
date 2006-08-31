@@ -99,7 +99,7 @@ void show_code(struct hvm_vcpu *vcpu)
 		rip += vmcs_readl(GUEST_CS_BASE);
 
 	read_guest(vcpu, rip, sizeof code, code);
-	vcpu_printf(vcpu, "code:");
+	vcpu_printf(vcpu, "code: %lx", rip);
 	for (i = 0; i < sizeof code; ++i)
 		vcpu_printf(vcpu, " %02x", code[i]);
 	vcpu_printf(vcpu, "\n");
