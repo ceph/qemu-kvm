@@ -1273,7 +1273,7 @@ static inline int set_cr0(struct hvm_vcpu *vcpu, unsigned long cr0)
 	}
 
 	if (!(cr0 & CR0_PE_MASK)) {
-		printk("%s: enter real mode\n", __FUNCTION__);
+		vcpu_printf(vcpu, "%s: enter real mode\n", __FUNCTION__);
 		return 0;
 	}
 	vmcs_writel(GUEST_CR0, cr0 | HVM_VM_CR0_ALWAYS_ON);
