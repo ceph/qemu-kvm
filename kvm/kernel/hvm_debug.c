@@ -632,7 +632,7 @@ int vm_entry_test(struct hvm_vcpu *vcpu)
 		} else {
 			if ((tr_ar & AR_TYPE_MASK) != AR_TYPE_BUSY_32_TSS && 
 			    (tr_ar & AR_TYPE_MASK) != AR_TYPE_BUSY_16_TSS) {
-				vcpu_printf(vcpu, "%s: TR AR 0x%x, long"
+				vcpu_printf(vcpu, "%s: TR AR 0x%x, legacy"
 						      " mode and not 16/32bit "
 						      "busy tss\n",
 				   __FUNCTION__,
