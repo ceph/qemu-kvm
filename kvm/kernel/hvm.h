@@ -159,9 +159,6 @@ struct hvm_vcpu {
 	char *host_fx_image;
 	char *guest_fx_image;
 
-	int fix_segs;
-	int first_sreg_fix;
-
 	int mmio_needed;
 	int mmio_read_completed;
 	int mmio_is_write;

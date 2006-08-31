@@ -368,7 +368,6 @@ static int hvm_dev_open(struct inode *inode, struct file *filp)
 		vcpu->host_fx_image = (char*)ALIGN((hva_t)vcpu->fx_buf,
 						   FX_IMAGE_ALIGN);
 		vcpu->guest_fx_image = vcpu->host_fx_image + FX_IMAGE_SIZE;
-		vcpu->first_sreg_fix = 1;
 	}
 
 	filp->private_data = hvm;
@@ -1411,7 +1410,6 @@ static int handle_cr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 		case 0:
 			vcpu_load_rsp_rip(vcpu);
 			if (!set_cr0(vcpu, vcpu->regs[reg])) {
-				vcpu->fix_segs = 1;
 				hvm_run->exit_reason = HVM_EXIT_REAL_MODE;
 				return 0;
 			}
@@ -2108,73 +2106,6 @@ static int hvm_dev_ioctl_get_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 	return 0;
 }
 
-static void sregs_init(struct hvm_vcpu *vcpu, struct hvm_sregs *sregs)
-{
-	#define INIT_SEG(seg)\
-		(seg).g = 0;\
-		(seg).db = 0;\
-		(seg).l = 0;\
-		(seg).present = 1;\
-		(seg).dpl = 0;\
-		(seg).unusable = 0;
-
-	#define INIT_DATA_SEG(seg)\
-		INIT_SEG(seg)\
-		(seg).s = 1;\
-		(seg).type = 3; /* read/write accessed data seg */
-
-
-	INIT_SEG(sregs->cs);
-	sregs->cs.s = 1;
-	sregs->cs.type = 11; // execute/read, accessed code seg
-
-	INIT_DATA_SEG(sregs->ds);
-	INIT_DATA_SEG(sregs->es);
-	INIT_DATA_SEG(sregs->fs);
-	INIT_DATA_SEG(sregs->gs);
-	INIT_DATA_SEG(sregs->ss);
-
-	INIT_SEG(sregs->tr);
-	sregs->tr.selector = 0;
-	sregs->tr.s = 0;
-	sregs->tr.type = AR_TYPE_BUSY_16_TSS;
-
-	INIT_SEG(sregs->ldt);
-	sregs->ldt.selector = 0;
-	sregs->ldt.s = 0;
-	sregs->ldt.type = AR_TYPE_LDT;
-}
-
-static void sregs_fixup(struct hvm_vcpu *vcpu, struct hvm_sregs *sregs)
-{
-	int first_fix = vcpu->first_sreg_fix;
-
-	vcpu->first_sreg_fix = 0;
-
-	if (first_fix && sregs->cs.unusable) {
-		sregs_init(vcpu, sregs);
-		return;
-	}
-
-	if (!vcpu->fix_segs) {
-		return;
-	}
-	vcpu->fix_segs = 0;
-
-
-	if (sregs->cs.unusable) {
-		INIT_SEG(sregs->cs);
-		sregs->cs.s = 1;
-		sregs->cs.type = 11; // execute/read, accessed code seg
-	}
-	sregs->ds.unusable = 1;
-	sregs->es.unusable = 1;
-	sregs->fs.unusable = 1;
-	sregs->gs.unusable = 1;
-	sregs->ss.unusable = 1;
-
-}
-
 static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 {
 	struct hvm_vcpu *vcpu;
@@ -2185,8 +2116,6 @@ static int hvm_dev_ioctl_set_sregs(struct hvm *hvm, struct hvm_sregs *sregs)
 	if (sregs->vcpu < 0 || sregs->vcpu >= hvm->nvcpus)
 		return -EINVAL;
 	vcpu = &hvm->vcpus[sregs->vcpu];
-
-	//sregs_fixup(vcpu, sregs);
 
 	vcpu_load(vcpu);
 
