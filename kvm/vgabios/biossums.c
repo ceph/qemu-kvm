@@ -43,13 +43,12 @@ byte bios_data[MAX_BIOS_DATA];
 long bios_len;
 
 
-int main( int argc, char* argv[] ) {
-
+int main(int argc, char* argv[])
+{
   FILE* stream;
   long  offset, tmp_offset;
-  byte  cur_val = 0, new_val = 0;
-  int   hits;
-
+  byte  bios_len_byte, cur_val = 0, new_val = 0;
+  int   hits, modified;
 
   if (argc != 2) {
     printf( "Error. Need a file-name as an argument.\n" );
@@ -62,18 +61,28 @@ int main( int argc, char* argv[] ) {
   }
   memset(bios_data, 0, MAX_BIOS_DATA);
   bios_len = fread(bios_data, 1, MAX_BIOS_DATA, stream);
-  if (bios_len >= MAX_BIOS_DATA) {
-    printf("Error reading max. 65535 Bytes from %s.\n", argv[1]);
+  if (bios_len > MAX_BIOS_DATA) {
+    printf("Error reading max. 65536 Bytes from %s.\n", argv[1]);
     fclose(stream);
     exit(EXIT_FAILURE);
   }
   fclose(stream);
-  if (bios_len < 0x7FFF) {
+  modified = 0;
+  if (bios_len < 0x8000) {
     bios_len = 0x8000;
-  } else {
-    bios_len = (bios_len + 0x201) & ~0x1FF;
+    modified = 1;
+  } else if ((bios_len & 0x1FF) != 0) {
+    bios_len = (bios_len + 0x200) & ~0x1FF;
+    modified = 1;
   }
-  bios_data[2] = (byte)(bios_len / 512);
+  bios_len_byte = (byte)(bios_len / 512);
+  if (bios_len_byte != bios_data[2]) {
+    if (modified == 0) {
+      bios_len += 0x200;
+    }
+    bios_data[2] = (byte)(bios_len / 512);
+    modified = 1;
+  }
 
   hits   = 0;
   offset = 0L;
@@ -86,44 +95,59 @@ int main( int argc, char* argv[] ) {
     printf( "Calculated checksum:  0x%02X  ",   new_val );
     hits++;
   }
-  if( hits == 1 && cur_val != new_val ) {
-    printf( "Setting checksum." );
+  if ((hits == 1) && (cur_val != new_val)) {
+    printf("Setting checksum.");
     chksum_pmid_set_value( bios_data, offset, new_val );
+    if (modified == 0) {
+      bios_len += 0x200;
+      bios_data[2]++;
+    }
+    modified = 1;
   }
-  if( hits >= 2 ) {
+  if (hits >= 2) {
     printf( "Multiple PMID entries! No checksum set." );
   }
-  if( hits ) {
-    printf( "\n" );
+  if (hits) {
+    printf("\n");
   }
-
 
   offset  = 0L;
-  offset  = chksum_bios_get_offset( bios_data, offset );
-  cur_val = chksum_bios_get_value(  bios_data, offset );
-  new_val = chksum_bios_calc_value( bios_data, offset );
-  printf( "\nBios checksum at:   0x%4lX\n", offset  );
-  printf( "Current checksum:     0x%02X\n",   cur_val );
-  printf( "Calculated checksum:  0x%02X  ",   new_val );
-  if( cur_val != new_val ) {
-    printf( "Setting checksum." );
-    chksum_bios_set_value( bios_data, offset, new_val );
-  }
-  printf( "\n" );
+  do {
+    offset  = chksum_bios_get_offset(bios_data, offset);
+    cur_val = chksum_bios_get_value(bios_data, offset);
+    new_val = chksum_bios_calc_value(bios_data, offset);
+    if ((cur_val != new_val) && (modified == 0)) {
+      bios_len += 0x200;
+      bios_data[2]++;
+      modified = 1;
+    } else {
+      printf("\nBios checksum at:   0x%4lX\n", offset);
+      printf("Current checksum:     0x%02X\n", cur_val);
+      printf("Calculated checksum:  0x%02X  ", new_val);
+      if (cur_val != new_val) {
+        printf("Setting checksum.");
+        chksum_bios_set_value(bios_data, offset, new_val);
+        cur_val = new_val;
+        modified = 1;
+      }
+      printf( "\n" );
+    }
+  } while (cur_val != new_val);
 
-
-  if(( stream = fopen( argv[1], "wb" )) == NULL ) {
-    printf( "Error opening %s for writing.\n", argv[1] );
-    exit( EXIT_FAILURE );
+  if (modified == 1) {
+    if ((stream = fopen( argv[1], "wb")) == NULL) {
+      printf("Error opening %s for writing.\n", argv[1]);
+      exit(EXIT_FAILURE);
+    }
+    if (fwrite(bios_data, 1, bios_len, stream) < bios_len) {
+      printf("Error writing %d KBytes to %s.\n", bios_len / 1024, argv[1]);
+      fclose(stream);
+      exit(EXIT_FAILURE);
+    }
+    fclose(stream);
   }
-  if( fwrite( bios_data, 1, bios_len, stream ) < bios_len ) {
-    printf( "Error writing %d KBytes to %s.\n", bios_len / 1024, argv[1] );
-    fclose( stream );
-    exit( EXIT_FAILURE );
-  }
-  fclose( stream );
 
-  return( EXIT_SUCCESS );
+  return (EXIT_SUCCESS);
 }
 
 
