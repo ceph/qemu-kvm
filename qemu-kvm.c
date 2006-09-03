@@ -17,7 +17,9 @@ static CPUState *saved_env[NR_CPU];
 
 int kvm_is_ok(CPUState *env)
 {
-    return (env->cr[0] & CR0_PE_MASK) && !env->kvm_emulate_one_instruction;
+    return (env->cr[0] & CR0_PE_MASK) 
+	&& !(env->eflags & VM_MASK)
+	&& !env->kvm_emulate_one_instruction;
 }
 
 void kvm_handled_mmio(CPUState *env)
