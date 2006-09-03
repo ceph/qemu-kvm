@@ -225,29 +225,30 @@ static inline int is_io_mem(struct hvm_vcpu *vcpu, unsigned long addr)
 		(addr >= 0xffff0000ULL && addr < 0x100000000ULL);
 }
 
-
 static hpa_t gpa_to_hpa(struct hvm_vcpu *vcpu, gpa_t gpa)
 {
 	struct page *page;
 
 	ASSERT(vcpu);
-	ASSERT((gpa & ~PT64_BASE_ADDR_MASK) == 0)
 
 	if (is_io_mem(vcpu, gpa)) {
 		return hvm_bad_page_addr;
 	}
 
 	page = vcpu->hvm->phys_mem[gpa >> PAGE_SHIFT];
-	return page_to_pfn(page) << PAGE_SHIFT;  
+	return (page_to_pfn(page) << PAGE_SHIFT) | (gpa & (PAGE_SIZE-1));
+}
+
+gpa_t gva_to_gpa(struct hvm_vcpu *vcpu, gva_t gva)
+{
+	uint64_t pte = vcpu->paging_context.fetch_pte64(vcpu, gva);
+	return (pte & PT64_BASE_ADDR_MASK) | (gva & ~PAGE_MASK);
 }
 
 hpa_t gva_to_hpa(struct hvm_vcpu *vcpu, gva_t gva)
 {
-	uint64_t pte = vcpu->paging_context.fetch_pte64(vcpu, gva);
-	return gpa_to_hpa(vcpu, pte & PT64_BASE_ADDR_MASK);
+	return gpa_to_hpa(vcpu, gva_to_gpa(vcpu, gva));
 }
-
-
 
 static void releas_pt_page_64(struct hvm_vcpu *vcpu, hpa_t page_hpa, int level)
 {

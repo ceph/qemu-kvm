@@ -200,6 +200,7 @@ int hvm_mmu_init(struct hvm_vcpu *vcpu);
 
 int hvm_mmu_reset_context(struct hvm_vcpu *vcpu);
 
+gpa_t gva_to_gpa(struct hvm_vcpu *vcpu, gva_t gva);
 hpa_t gva_to_hpa(struct hvm_vcpu *vcpu, gva_t gva);
 
 void vmcs_writel(unsigned long field, unsigned long value);
