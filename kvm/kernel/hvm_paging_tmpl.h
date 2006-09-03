@@ -320,10 +320,6 @@ static u64 FNAME(fetch_pte)(struct hvm_vcpu *vcpu, gva_t vaddr)
 	FNAME(init_walker)(&walker, vcpu);
 	guest_pte = *FNAME(fetch_guest)(vcpu, &walker, PT_PAGE_TABLE_LEVEL, vaddr);
 
-	if (!is_present_pte(guest_pte)) {
-		printk("%s: 0x%lx not present", __FUNCTION__, vaddr);
-	}
-
 	if (is_present_pte(guest_pte) &&
 	    walker.level == PT_DIRECTORY_LEVEL) {
 		gpa_t gaddr; 
