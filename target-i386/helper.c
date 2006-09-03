@@ -184,7 +184,15 @@ static inline void get_ss_esp_from_tss(uint32_t *ss_ptr,
     if (!(env->tr.flags & DESC_P_MASK))
         cpu_abort(env, "invalid tss");
     type = (env->tr.flags >> DESC_TYPE_SHIFT) & 0xf;
+#ifdef USE_KVM
+    /*
+     * Bit 1 is the Busy bit.  We believe it is legal to interrupt into a busy
+     * segment
+     */
+    if ((type & 5) != 1)
+#else
     if ((type & 7) != 1)
+#endif
         cpu_abort(env, "invalid tss type");
     shift = type >> 3;
     index = (dpl * 4 + 2) << shift;
