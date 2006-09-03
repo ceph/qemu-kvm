@@ -221,7 +221,6 @@ static inline int is_io_mem(struct hvm_vcpu *vcpu, unsigned long addr)
 	}
 
 	return (addr >= 0xa0000ULL && addr < 0xe0000ULL) || 
-		(addr >= 0xf0000ULL && addr < 0x100000ULL) ||
 		(addr >= 0xffff0000ULL && addr < 0x100000000ULL);
 }
 
