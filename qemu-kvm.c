@@ -85,6 +85,12 @@ static void load_regs(CPUState *env)
 
     set_seg(tr, tr, 0, 3);
     set_seg(ldt, ldt, 0, 2);
+
+    if (env->cr[0] & CR0_PE_MASK) {
+	/* force ss cpl to cs cpl */
+	sregs.ss.selector = (sregs.ss.selector & ~3) | (sregs.cs.selector & 3);
+	sregs.ss.dpl = sregs.ss.selector & 3;
+    }
     
     sregs.idt.limit = env->idt.limit;
     sregs.idt.base = env->idt.base;
