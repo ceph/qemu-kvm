@@ -505,7 +505,12 @@ static inline void check_io(int addr, int size)
     
     /* TSS must be a valid 32 bit one */
     if (!(env->tr.flags & DESC_P_MASK) ||
+#ifdef USE_KVM
+	/* Probable qemu bug: 11 is a valid segment type */
+        ((env->tr.flags >> DESC_TYPE_SHIFT) & 0xd) != 9 ||
+#else
         ((env->tr.flags >> DESC_TYPE_SHIFT) & 0xf) != 9 ||
+#endif
         env->tr.limit < 103)
         goto fail;
     io_offset = lduw_kernel(env->tr.base + 0x66);
