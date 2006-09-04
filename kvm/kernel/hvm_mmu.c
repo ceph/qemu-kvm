@@ -510,24 +510,27 @@ static void paging_inval_page(struct hvm_vcpu *vcpu, gva_t addr)
 		uint32_t index = PT64_INDEX(addr, level);
 		uint64_t *table = __va(page_addr);
 
-		if (!is_present_pte(table[index])) {
-			return;
-		}
-
 		if (level == PT_PAGE_TABLE_LEVEL ) {
 			table[index] = 0;
 			return;
 		}
 
+                if (!is_present_pte(table[index])) {
+                        return;
+                }
+
+                page_addr = table[index] & PT64_BASE_ADDR_MASK;
+
 		if (level == PT_DIRECTORY_LEVEL && 
 			  (table[index] & PT_SHADOW_PS_MARK)) {
-			hpa_t page_addr = table[index] & PT64_BASE_ADDR_MASK;
 			table[index] = 0;
 			releas_pt_page_64(vcpu, page_addr, PT_PAGE_TABLE_LEVEL);
+
+			//flush tlb
+			vmcs_writel(GUEST_CR3, vcpu->paging_context.root_hpa |
+				    (vcpu->cr3 & (CR3_PCD_MASK | CR3_WPT_MASK))); 
 			return;
 		}
-
-		page_addr = table[index] & PT64_BASE_ADDR_MASK;
 	}
 }
 

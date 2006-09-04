@@ -32,6 +32,7 @@
 typedef struct guest_walker_s {	
 	int level;
 	pt_element_t *table;
+	pt_element_t inherited_ar;
 } guest_walker_t;
 
 
@@ -49,6 +50,7 @@ static void FNAME(init_walker)(guest_walker_t *walker,
 		
 	walker->table = (pt_element_t *)( (unsigned long)walker->table | 
 				(vcpu->cr3 & ~(PAGE_MASK | CR3_FLAGS_MASK)) );
+	walker->inherited_ar = PT_USER_MASK | PT_WRITABLE_MASK;
 }
 
 
@@ -120,7 +122,9 @@ static pt_element_t *FNAME(fetch_guest)(struct hvm_vcpu *vcpu,
 		     )) {
 			return &walker->table[index];
 		}
-
+		if (walker->level != 3 || is_long_mode()) {
+			walker->inherited_ar &= walker->table[index];
+		}
 		paddr = gpa_to_hpa(vcpu, walker->table[index] & 
 				       PT_BASE_ADDR_MASK);
 		kunmap_atomic(walker->table, KM_USER0);
@@ -140,8 +144,6 @@ static uint64_t *FNAME(fetch)(struct hvm_vcpu *vcpu,
 	int level;
 	uint64_t *priv_shadow_ent = NULL;
 
-	uint64_t access_bits = PT_USER_MASK | PT_WRITABLE_MASK;
-
 	shadow_addr = vcpu->paging_context.root_hpa;
 	level = vcpu->paging_context.shadow_root_level;
 
@@ -154,8 +156,8 @@ static uint64_t *FNAME(fetch)(struct hvm_vcpu *vcpu,
 			if (level == PT_PAGE_TABLE_LEVEL) {
 				return shadow_ent;
 			}
-			access_bits &= *shadow_ent >> PT_SHADOW_BITS_OFFSET;
 			shadow_addr = *shadow_ent & PT64_BASE_ADDR_MASK;
+			priv_shadow_ent = shadow_ent;
 			continue;
 		}
 
@@ -184,11 +186,11 @@ static uint64_t *FNAME(fetch)(struct hvm_vcpu *vcpu,
 				if (priv_shadow_ent) {
 					*priv_shadow_ent |= PT_SHADOW_PS_MARK;
 				}
-				FNAME(set_pde)(vcpu, *guest_ent, shadow_ent, access_bits,
+				FNAME(set_pde)(vcpu, *guest_ent, shadow_ent, walker->inherited_ar,
 					  PT_INDEX(addr, PT_PAGE_TABLE_LEVEL));
 			} else {
 				ASSERT(walker->level == PT_PAGE_TABLE_LEVEL);
-				FNAME(set_pte)(vcpu, *guest_ent, shadow_ent, access_bits);
+				FNAME(set_pte)(vcpu, *guest_ent, shadow_ent, walker->inherited_ar);
 			}
 			return shadow_ent;
 		}
@@ -204,10 +206,8 @@ static uint64_t *FNAME(fetch)(struct hvm_vcpu *vcpu,
 		} else {
 			*shadow_ent = shadow_addr | 
 				(*guest_ent & PT_NON_PTE_COPY_MASK);
-			*shadow_ent |= ( PT_WRITABLE_MASK | PT_USER_MASK);
-			access_bits &= *guest_ent;
+			*shadow_ent |= (PT_WRITABLE_MASK | PT_USER_MASK);
 		}
-		*shadow_ent |= access_bits << PT_SHADOW_BITS_OFFSET;
 		priv_shadow_ent = shadow_ent;
 	}
 }
