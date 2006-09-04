@@ -1528,6 +1528,7 @@ static int handle_rdmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 	case MSR_IA32_SYSENTER_ESP:
 		data = vmcs_read32(GUEST_SYSENTER_ESP);
 		break;
+	case MSR_IA32_MC0_CTL:
 	case MSR_IA32_MCG_STATUS:
 	case MSR_IA32_MCG_CAP:
 	case MSR_IA32_MC0_MISC:
