@@ -437,6 +437,10 @@ int hvm_vprintf(struct hvm *hvm, const char *fmt, va_list args)
 	return i;
 }
 
+/**
+ * Writes text to the hvm log file.  Must not be called under vcpu_load() 
+ * context.
+ */
 int hvm_printf(struct hvm *hvm, const char *fmt, ...)
 {
 	va_list args;
@@ -450,6 +454,28 @@ int hvm_printf(struct hvm *hvm, const char *fmt, ...)
 	i = hvm_vprintf(hvm, fmt, args);
 
 	va_end(args);
+	return i;
+}
+
+/**
+ * Writes text to the hvm log file.  Must be called under vcpu_load() context.
+ */
+int vcpu_printf(struct hvm_vcpu *vcpu, const char *fmt, ...)
+{
+	va_list args;
+	int i;
+
+	if (!vcpu->hvm->log_file)
+		return 0;
+
+	vcpu_put();
+
+	va_start(args, fmt);
+	i = hvm_vprintf(vcpu->hvm, fmt, args);
+	va_end(args);
+
+	vcpu_load(vcpu);
+
 	return i;
 }
 
