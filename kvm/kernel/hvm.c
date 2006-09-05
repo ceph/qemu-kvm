@@ -1395,7 +1395,7 @@ static int handle_cr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 
 #ifdef KVM_DEBUG
 	if (guest_cpl() != 0) {
-		hvm_printf(vcpu->hvm, "%s: not supervisor\n", __FUNCTION__);
+		vcpu_printf(vcpu, "%s: not supervisor\n", __FUNCTION__);
 		inject_gp(vcpu);
 		return 1;
 	}
@@ -1506,7 +1506,7 @@ static int handle_rdmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 
 #ifdef KVM_DEBUG
 	if (guest_cpl() != 0) {
-		hvm_printf(vcpu->hvm, "%s: not supervisor\n", __FUNCTION__);
+		vcpu_printf(vcpu, "%s: not supervisor\n", __FUNCTION__);
 		inject_gp(vcpu);
 		return 1;
 	}
@@ -1627,7 +1627,7 @@ static int handle_wrmsr(struct hvm_vcpu *vcpu, struct hvm_run *hvm_run)
 
 #ifdef KVM_DEBUG
 	if (guest_cpl() != 0) {
-		hvm_printf(vcpu->hvm, "%s: not supervisor\n", __FUNCTION__);
+		vcpu_printf(vcpu, "%s: not supervisor\n", __FUNCTION__);
 		inject_gp(vcpu);
 		return 1;
 	}
