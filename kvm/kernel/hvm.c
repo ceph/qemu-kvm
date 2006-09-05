@@ -424,6 +424,19 @@ void hvm_kvm_log(struct hvm *hvm, const char *data, size_t count)
 	}
 }
 
+int hvm_vprintf(struct hvm *hvm, const char *fmt, va_list args)
+{
+	int i;
+
+	if (!hvm->log_file)
+		return 0;
+
+	i = vsnprintf(hvm->log_buf, KVM_LOG_BUF_SIZE, fmt, args);
+	hvm_kvm_log(hvm, hvm->log_buf, strlen(hvm->log_buf));
+
+	return i;
+}
+
 int hvm_printf(struct hvm *hvm, const char *fmt, ...)
 {
 	va_list args;
@@ -434,13 +447,11 @@ int hvm_printf(struct hvm *hvm, const char *fmt, ...)
 
 	va_start(args, fmt);
 
-	i=vsnprintf(hvm->log_buf, KVM_LOG_BUF_SIZE, fmt, args);
-	hvm_kvm_log(hvm, hvm->log_buf, strlen(hvm->log_buf));
+	i = hvm_vprintf(hvm, fmt, args);
 
 	va_end(args);
 	return i;
 }
-
 
 static int hvm_dev_release(struct inode *inode, struct file *filp)
 {
