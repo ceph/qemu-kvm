@@ -62,7 +62,6 @@ static struct vmx_msr_entry *find_msr_entry(struct kvm_vcpu *vcpu, u32 msr)
 	return 0;
 }
 
-
 struct descriptor_table {
 	u16 limit;
 	unsigned long base;
@@ -502,7 +501,6 @@ unsigned long vmcs_readl(unsigned long field)
 	return value;
 }
 
-
 void vmcs_writel(unsigned long field, unsigned long value)
 {
 	u8 error;
@@ -519,8 +517,6 @@ static void vmcs_write16(unsigned long field, u16 value)
 	vmcs_writel(field, value);
 }
 
-
-
 static void vmcs_write64(unsigned long field, u64 value)
 {
 #ifdef __x86_64__
@@ -531,7 +527,6 @@ static void vmcs_write64(unsigned long field, u64 value)
 	vmcs_writel(field+1, value >> 32);
 #endif
 }
-
 
 #ifdef __x86_64__
 #define HOST_IS_64 1
@@ -1199,7 +1194,6 @@ static void inject_gp(struct kvm_vcpu *vcpu)
 		     INTR_INFO_VALID_MASK);
 }
 
-
 #define CR0_RESEVED_BITS 0xffffffff1ffaffc0ULL
 
 static int set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
@@ -1320,7 +1314,6 @@ static int set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 	return 1;
 }
 
-
 static void lmsw(struct kvm_vcpu *vcpu, unsigned long msw)
 {
 	unsigned long cr0 = guest_cr0();
@@ -1372,7 +1365,6 @@ static void set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
 	skip_emulated_instruction(vcpu);
 }
 
-
 static void set_cr3(struct kvm_vcpu *vcpu, unsigned long cr3)
 {
 	if (is_long_mode()) {
@@ -1396,7 +1388,6 @@ static void set_cr3(struct kvm_vcpu *vcpu, unsigned long cr3)
 	vcpu->paging_context.new_cr3(vcpu);
 	skip_emulated_instruction(vcpu);
 }
-
 
 #define CR8_RESEVED_BITS (~0x0fULL)
 
@@ -1598,9 +1589,7 @@ static int handle_rdmsr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	return 1;
 }
 
-
 #define EFER_RESERVED_BITS 0xfffffffffffff2fe
-
 
 static void set_efer(struct kvm_vcpu *vcpu, u64 efer)
 {
@@ -1631,7 +1620,6 @@ static void set_efer(struct kvm_vcpu *vcpu, u64 efer)
 	msr->data = efer;
 	skip_emulated_instruction(vcpu);
 }
-
 
 static void __set_efer(struct kvm_vcpu *vcpu, u64 efer)
 {

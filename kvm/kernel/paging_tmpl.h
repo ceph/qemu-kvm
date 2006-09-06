@@ -1,5 +1,4 @@
 
-
 #if PTTYPE == 64
 	#define pt_element_t uint64_t
 	#define guest_walker_s guest_walker64_s
@@ -28,13 +27,11 @@
 	error
 #endif
 
-
 typedef struct guest_walker_s {	
 	int level;
 	pt_element_t *table;
 	pt_element_t inherited_ar;
 } guest_walker_t;
-
 
 static void FNAME(init_walker)(guest_walker_t *walker,
 				  struct kvm_vcpu *vcpu)
@@ -53,12 +50,10 @@ static void FNAME(init_walker)(guest_walker_t *walker,
 	walker->inherited_ar = PT_USER_MASK | PT_WRITABLE_MASK;
 }
 
-
 static void FNAME(release_walker)(guest_walker_t *walker)
 {
 	kunmap_atomic(walker->table & PAGE_MASK, KM_USER0);
 }
-
 
 static void FNAME(set_pte)(struct kvm_vcpu *vcpu,
 			     uint64_t guest_pte,
@@ -71,7 +66,6 @@ static void FNAME(set_pte)(struct kvm_vcpu *vcpu,
 	set_pte_common(vcpu, shadow_pte, guest_pte & PT_BASE_ADDR_MASK,
 			 access_bits);
 }
-
 
 static void FNAME(set_pde)(struct kvm_vcpu *vcpu,
 			     uint64_t guest_pde,
@@ -95,7 +89,6 @@ static void FNAME(set_pde)(struct kvm_vcpu *vcpu,
 				 (PT_DIR_PAT_SHIFT - PT_PAT_SHIFT));
 	set_pte_common(vcpu, shadow_pte, gaddr, access_bits);
 }
-
 
 static pt_element_t *FNAME(fetch_guest)(struct kvm_vcpu *vcpu,
 			       guest_walker_t *walker, 
@@ -133,7 +126,6 @@ static pt_element_t *FNAME(fetch_guest)(struct kvm_vcpu *vcpu,
 		--walker->level;
 	} 
 }
-
 
 static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu,
 			 gva_t addr,
@@ -212,7 +204,6 @@ static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu,
 	}
 }
 
-
 static int FNAME(fix_write_pf)(struct kvm_vcpu *vcpu,
 				 uint64_t *shadow_ent,
 				 guest_walker_t *walker,
@@ -252,7 +243,6 @@ static int FNAME(fix_write_pf)(struct kvm_vcpu *vcpu,
 
 	return 1;
 }
-
 
 static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 			       uint32_t error_code)
@@ -311,7 +301,6 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 	return 0;	
 }
 
-
 static u64 FNAME(fetch_pte)(struct kvm_vcpu *vcpu, gva_t vaddr)
 {
 	guest_walker_t walker;
@@ -343,8 +332,6 @@ static u64 FNAME(fetch_pte)(struct kvm_vcpu *vcpu, gva_t vaddr)
 	return guest_pte;
 }
 
-
-
 #undef pt_element_t
 #undef guest_walker_s
 #undef guest_walker_t
@@ -356,4 +343,3 @@ static u64 FNAME(fetch_pte)(struct kvm_vcpu *vcpu, gva_t vaddr)
 #undef PT_PTE_COPY_MASK
 #undef PT_NON_PTE_COPY_MASK
 #undef PT_DIR_BASE_ADDR_MASK
-

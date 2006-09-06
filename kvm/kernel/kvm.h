@@ -78,7 +78,6 @@ typedef struct page_link_s {
 	hpa_t page_hpa;
 } page_link_t;
 
-
 struct vmcs {
 	u32 revision_id;
 	u32 abort;
