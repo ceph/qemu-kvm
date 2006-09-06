@@ -73,10 +73,10 @@ typedef unsigned long  hva_t;
 typedef u64            hpa_t;
 typedef unsigned long  hfn_t;
 
-typedef struct page_link_s {
+struct kvm_mmu_page_link {
 	struct list_head link;
 	hpa_t page_hpa;
-} page_link_t;
+};
 
 struct vmcs {
 	u32 revision_id;
@@ -154,7 +154,7 @@ struct kvm_vcpu {
 
 	struct list_head free_page_links;
 	struct list_head free_pages;
-	page_link_t page_link_buf[KVM_NUM_MMU_PAGES];
+	struct kvm_mmu_page_link page_link_buf[KVM_NUM_MMU_PAGES];
 	struct kvm_mmu mmu;
 
 	struct kvm_guest_debug guest_debug;
