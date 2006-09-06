@@ -5,7 +5,7 @@
 #include <sys/mman.h>
 #include <string.h>
 #include <errno.h>
-#include "hvmctl.h"
+#include "kvmctl.h"
 
 #define PAGE_SIZE 4096ul
 

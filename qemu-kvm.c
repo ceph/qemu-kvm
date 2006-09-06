@@ -7,7 +7,7 @@
 #include "exec.h"
 
 #include "qemu-kvm.h"
-#include <hvmctl.h>
+#include <kvmctl.h>
 #include <string.h>
 
 hvm_context_t hvm_context;

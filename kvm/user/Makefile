@@ -4,11 +4,11 @@ CXXFLAGS = $(autodepend-flags)
 
 autodepend-flags = -MMD -MF $(dir $*).$(notdir $*).d
 
-all: hvmctl libhvm.a flatfiles
+all: kvmctl libkvm.a flatfiles
 
-hvmctl: hvmctl.o main.o
+kvmctl: kvmctl.o main.o
 
-libhvm.a: hvmctl.o
+libkvm.a: kvmctl.o
 	$(AR) rcs $@ $^
 
 flatfiles: test/simple.flat test/stringio.flat test/memtest1.flat \
