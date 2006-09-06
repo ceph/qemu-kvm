@@ -1,8 +1,8 @@
 
 #include <linux/highmem.h>
 
-#include "hvm.h"
-#include "hvm_debug.h"
+#include "kvm.h"
+#include "debug.h"
 
 #ifdef KVM_DEBUG
 

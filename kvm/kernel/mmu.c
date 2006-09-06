@@ -6,7 +6,7 @@
 #include <linux/module.h>
 
 #include "vmx.h"
-#include "hvm.h"
+#include "kvm.h"
 
 #define pgprintk(x...) do { } while (0)
 
@@ -541,11 +541,11 @@ static void paging_free(struct hvm_vcpu *vcpu)
 }
 
 #define PTTYPE 64
-#include "hvm_paging_tmpl.h"
+#include "paging_tmpl.h"
 #undef PTTYPE
 
 #define PTTYPE 32
-#include "hvm_paging_tmpl.h"
+#include "paging_tmpl.h"
 #undef PTTYPE
 
 

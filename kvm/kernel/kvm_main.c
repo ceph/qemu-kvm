@@ -1,6 +1,6 @@
 /* hardware virtual machine support module */
 
-#include "hvm.h"
+#include "kvm.h"
 
 #include <linux/hvm.h>
 #include <linux/module.h>
@@ -21,7 +21,7 @@
 
 #include "vmx.h"
 #include "x86_emulate.h"
-#include "hvm_mmu.h"
+#include "mmu.h"
 
 MODULE_AUTHOR("Qumranet");
 MODULE_LICENSE("GPL");

@@ -14,7 +14,7 @@
 #include <public/xen.h>
 #define DPRINTF(_f, _a...) printf( _f , ## _a )
 #else
-#include "hvm.h"
+#include "kvm.h"
 #define DPRINTF(x...) do {} while (0)
 #endif
 #include "x86_emulate.h"
