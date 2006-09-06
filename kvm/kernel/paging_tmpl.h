@@ -83,10 +83,9 @@ static void FNAME(set_pde)(struct kvm_vcpu *vcpu,
 	access_bits &= guest_pde;
 	gaddr = (guest_pde & PT_DIR_BASE_ADDR_MASK) + PAGE_SIZE * index;
 #if PTTYPE == 32
-	if (is_cpuid_PSE36()) {
+	if (is_cpuid_PSE36())
 		gaddr |= (guest_pde & PT32_DIR_PSE36_MASK) << 
 			(32 - PT32_DIR_PSE36_SHIFT);
-	}
 #endif
 	*shadow_pte = (guest_pde & PT_NON_PTE_COPY_MASK) |
 				((guest_pde & PT_DIR_PAT_MASK) >> 
@@ -116,12 +115,10 @@ static pt_element_t *FNAME(fetch_guest)(struct kvm_vcpu *vcpu,
 		     && is_pse()
 #endif
 		     
-		     )) {
+		     ))
 			return &walker->table[index];
-		}
-		if (walker->level != 3 || is_long_mode()) {
+		if (walker->level != 3 || is_long_mode())
 			walker->inherited_ar &= walker->table[index];
-		}
 		paddr = gpa_to_hpa(vcpu, walker->table[index] & 
 				       PT_BASE_ADDR_MASK);
 		kunmap_atomic(walker->table, KM_USER0);
@@ -149,9 +146,8 @@ static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu,
 		pt_element_t *guest_ent;
 
 		if (is_present_pte(*shadow_ent) || is_io_pte(*shadow_ent)) {
-			if (level == PT_PAGE_TABLE_LEVEL) {
+			if (level == PT_PAGE_TABLE_LEVEL)
 				return shadow_ent;
-			}
 			shadow_addr = *shadow_ent & PT64_BASE_ADDR_MASK;
 			priv_shadow_ent = shadow_ent;
 			continue;
@@ -162,12 +158,9 @@ static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu,
 			ASSERT(level == PT32E_ROOT_LEVEL);
 			guest_ent = FNAME(fetch_guest)(vcpu, walker,
 						       PT32_ROOT_LEVEL, addr);
-		} else {
+		} else
 #endif
 			guest_ent = FNAME(fetch_guest)(vcpu, walker, level, addr);
-#if PTTYPE == 32
-		}
-#endif
 
 		if (!is_present_pte(*guest_ent)) {
 			*enomem = 0;
@@ -179,9 +172,8 @@ static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu,
 		if (level == PT_PAGE_TABLE_LEVEL) {
 
 			if (walker->level == PT_DIRECTORY_LEVEL) {
-				if (priv_shadow_ent) {
+				if (priv_shadow_ent)
 					*priv_shadow_ent |= PT_SHADOW_PS_MARK;
-				}
 				FNAME(set_pde)(vcpu, *guest_ent, shadow_ent, walker->inherited_ar,
 					  PT_INDEX(addr, PT_PAGE_TABLE_LEVEL));
 			} else {
@@ -196,10 +188,10 @@ static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu,
 			*enomem = 1;
 			return NULL;
 		}
-		if (!is_long_mode() && level == 3) {
+		if (!is_long_mode() && level == 3)
 			*shadow_ent = shadow_addr | 
 				(*guest_ent & (PT_PRESENT_MASK | PT_PWT_MASK | PT_PCD_MASK));
-		} else {
+		else {
 			*shadow_ent = shadow_addr | 
 				(*guest_ent & PT_NON_PTE_COPY_MASK);
 			*shadow_ent |= (PT_WRITABLE_MASK | PT_USER_MASK);
@@ -217,23 +209,20 @@ static int FNAME(fix_write_pf)(struct kvm_vcpu *vcpu,
 	pt_element_t *guest_ent;
 	int writable_shadow;
 
-	if (is_writeble_pte(*shadow_ent)) {
+	if (is_writeble_pte(*shadow_ent))
 		return 0;
-	}
+
 	writable_shadow = *shadow_ent & PT_SHADOW_WRITABLE_MASK; 
 	if (user) {
-		if (!(*shadow_ent & PT_SHADOW_USER_MASK) || !writable_shadow) {
+		if (!(*shadow_ent & PT_SHADOW_USER_MASK) || !writable_shadow)
 			return 0;
-		}
 		ASSERT(*shadow_ent & PT_USER_MASK);
-	} else {
+	} else
 		if (!writable_shadow) {
-			if (is_write_protection()) {
+			if (is_write_protection())
 				return 0;
-			}
 			*shadow_ent &= ~PT_USER_MASK;
 		}
-	}
 
 	guest_ent = FNAME(fetch_guest)(vcpu, walker, PT_PAGE_TABLE_LEVEL, addr);
 
@@ -277,28 +266,25 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 		return 0;
 	}
 
-	if (write_fault) {
+	if (write_fault)
 		fixed = FNAME(fix_write_pf)(vcpu, shadow_pte, &walker, addr,
 				       user_fault);
-	} else {
+	else
 		fixed = fix_read_pf(shadow_pte);
-	}
 
 	FNAME(release_walker)(&walker);
 
 	if (is_io_pte(*shadow_pte)) {
-		if (access_test(*shadow_pte, write_fault, user_fault)) {
+		if (access_test(*shadow_pte, write_fault, user_fault))
 			return 1;
-		}
 		pgprintk("%s: io work, no access\n", __FUNCTION__);
 		inject_page_fault(vcpu, addr,
 					error_code | PFERR_PRESENT_MASK);
 		return 0;
 	}
 
-	if (pte_present && !fixed) {
+	if (pte_present && !fixed)
 		inject_page_fault(vcpu, addr, error_code);     
-	}
 
 	kvm_stat.pf_fixed += fixed;
 
@@ -324,10 +310,9 @@ static u64 FNAME(fetch_pte)(struct kvm_vcpu *vcpu, gva_t vaddr)
 #if PTTYPE == 32
 		ASSERT(is_pse());
 
-                if (is_cpuid_PSE36()) {
+                if (is_cpuid_PSE36())
 			gaddr |= (guest_pte & PT32_DIR_PSE36_MASK) << 
 				(32 - PT32_DIR_PSE36_SHIFT);
-		}
 #endif
 		guest_pte &= ~(PT_PAGE_SIZE_MASK | PT_BASE_ADDR_MASK);
 		guest_pte |= gaddr;

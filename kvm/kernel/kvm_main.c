@@ -1115,9 +1115,8 @@ static int handle_exit_exception(struct kvm_vcpu *vcpu,
 	if (is_page_fault(intr_info)) {
 		cr2 = vmcs_readl(EXIT_QUALIFICATION);
 
-		if (!vcpu->mmu.page_fault(vcpu, cr2, error_code)) {
+		if (!vcpu->mmu.page_fault(vcpu, cr2, error_code))
 			return 1;
-		}
 		/*
 		 * Temporarily disable emulation to avoid a problem when
 		 * writing to the APIC EOI register: qemu tries to inject
@@ -1334,9 +1333,8 @@ static void lmsw(struct kvm_vcpu *vcpu, unsigned long msw)
 	      vmcs_writel(CR0_READ_SHADOW, cr0 | CR0_PE_MASK);
 	      printk("lmsw: enter protected mode\n");
 	      // enter protected mode
-	} else {
+	} else
 		printk("lmsw: unexpected\n");
-	}
 
 	#define LMSW_GUEST_MASK 0x0eULL
 
@@ -1626,9 +1624,8 @@ static void set_efer(struct kvm_vcpu *vcpu, u64 efer)
 
 	msr = find_msr_entry(vcpu, MSR_EFER);
 
-	if (!(efer & EFER_LMA)) {
+	if (!(efer & EFER_LMA))
 	    efer &= ~EFER_LME;    
-	}
 	msr->data = efer;
 	skip_emulated_instruction(vcpu);
 }
@@ -1761,10 +1758,9 @@ static int kvm_handle_exit(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 	u32 exit_reason = vmcs_read32(VM_EXIT_REASON);
 
 	if ( (vectoring_info & VECTORING_INFO_VALID_MASK) && 
-				exit_reason != EXIT_REASON_EXCEPTION_NMI ) {
+				exit_reason != EXIT_REASON_EXCEPTION_NMI )
 		printk("%s: unexpected, valid vectoring info and exit"
 		       " reason is 0x%x\n", __FUNCTION__, exit_reason);
-	}
 	kvm_run->instruction_length = vmcs_read32(VM_EXIT_INSTRUCTION_LEN);
 	if (exit_reason < kvm_vmx_max_exit_handlers 
 	    && kvm_vmx_exit_handlers[exit_reason])
