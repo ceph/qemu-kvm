@@ -82,11 +82,9 @@ static void FNAME(set_pde)(struct kvm_vcpu *vcpu,
 	ASSERT(*shadow_pte == 0);
 	access_bits &= guest_pde;
 	gaddr = (guest_pde & PT_DIR_BASE_ADDR_MASK) + PAGE_SIZE * index;
-#if PTTYPE == 32
-	if (is_cpuid_PSE36())
+	if (PTTYPE == 32 && is_cpuid_PSE36())
 		gaddr |= (guest_pde & PT32_DIR_PSE36_MASK) << 
 			(32 - PT32_DIR_PSE36_SHIFT);
-#endif
 	*shadow_pte = (guest_pde & PT_NON_PTE_COPY_MASK) |
 				((guest_pde & PT_DIR_PAT_MASK) >> 
 				 (PT_DIR_PAT_SHIFT - PT_PAT_SHIFT));
@@ -111,11 +109,7 @@ static pt_element_t *FNAME(fetch_guest)(struct kvm_vcpu *vcpu,
 		    !is_present_pte(walker->table[index]) ||
 		    (walker->level == PT_DIRECTORY_LEVEL &&
 		    (walker->table[index] & PT_PAGE_SIZE_MASK) 
-#if PTTYPE == 32
-		     && is_pse()
-#endif
-		     
-		     ))
+		     && (PTTYPE == 64 || is_pse())))
 			return &walker->table[index];
 		if (walker->level != 3 || is_long_mode())
 			walker->inherited_ar &= walker->table[index];
@@ -153,13 +147,11 @@ static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu,
 			continue;
 		}
 
-#if PTTYPE == 32
-		if (level > PT32_ROOT_LEVEL) {
+		if (PTTYPE == 32 && level > PT32_ROOT_LEVEL) {
 			ASSERT(level == PT32E_ROOT_LEVEL);
 			guest_ent = FNAME(fetch_guest)(vcpu, walker,
 						       PT32_ROOT_LEVEL, addr);
 		} else
-#endif
 			guest_ent = FNAME(fetch_guest)(vcpu, walker, level, addr);
 
 		if (!is_present_pte(*guest_ent)) {
@@ -307,13 +299,12 @@ static u64 FNAME(fetch_pte)(struct kvm_vcpu *vcpu, gva_t vaddr)
 
 		gaddr = (guest_pte & PT_DIR_BASE_ADDR_MASK) | 
 			(vaddr & PT_LEVEL_MASK(PT_PAGE_TABLE_LEVEL));
-#if PTTYPE == 32
-		ASSERT(is_pse());
+		ASSERT(PTTYPE == 64 || is_pse());
 
-                if (is_cpuid_PSE36())
+                if (PTTYPE == 32 && is_cpuid_PSE36())
 			gaddr |= (guest_pte & PT32_DIR_PSE36_MASK) << 
 				(32 - PT32_DIR_PSE36_SHIFT);
-#endif
+
 		guest_pte &= ~(PT_PAGE_SIZE_MASK | PT_BASE_ADDR_MASK);
 		guest_pte |= gaddr;
 	}
