@@ -275,7 +275,7 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 	FNAME(release_walker)(&walker);
 
 	if (is_io_pte(*shadow_pte)) {
-		if (access_test(*shadow_pte, write_fault, user_fault))
+		if (may_access(*shadow_pte, write_fault, user_fault))
 			return 1;
 		pgprintk("%s: io work, no access\n", __FUNCTION__);
 		inject_page_fault(vcpu, addr,

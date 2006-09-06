@@ -457,7 +457,7 @@ static inline int fix_read_pf(uint64_t *shadow_ent)
 	return 0;
 }
 
-static int access_test(uint64_t pte, int write, int user)
+static int may_access(uint64_t pte, int write, int user)
 {
 	
 	if (user && !(pte & PT_USER_MASK))
