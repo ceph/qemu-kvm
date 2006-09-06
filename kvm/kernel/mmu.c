@@ -167,9 +167,7 @@ static void kvm_mmu_free_page(struct kvm_vcpu *vcpu, hpa_t page_hpa)
 	page_link_t *page_link;
 
 	ASSERT(!list_empty(&vcpu->free_page_links));
-	page_link = list_entry(vcpu->free_page_links.next,
-				     page_link_t, 
-				     link);
+	page_link = list_entry(vcpu->free_page_links.next, page_link_t, link);
 	list_del(&page_link->link);
 	page_link->page_hpa = page_hpa;
 	list_add(&page_link->link, &vcpu->free_pages);
@@ -194,9 +192,7 @@ static hpa_t kvm_mmu_alloc_page(struct kvm_vcpu *vcpu)
 	if (list_empty(&vcpu->free_pages))
 		return INVALID_PAGE; 
 	
-	page_link = list_entry(vcpu->free_pages.next,
-				     page_link_t, 
-				     link);
+	page_link = list_entry(vcpu->free_pages.next, page_link_t, link);
 	list_del(&page_link->link);
 	page_addr = page_link->page_hpa;
 	page_link->page_hpa = INVALID_PAGE;
@@ -208,7 +204,7 @@ static hpa_t kvm_mmu_alloc_page(struct kvm_vcpu *vcpu)
 static inline int is_io_mem(struct kvm_vcpu *vcpu, unsigned long addr)
 {
 
-	if ((addr >> PAGE_SHIFT) >= vcpu->kvm->phys_mem_pages )
+	if ((addr >> PAGE_SHIFT) >= vcpu->kvm->phys_mem_pages)
 		return 1;
 
 	return (addr >= 0xa0000ULL && addr < 0xe0000ULL) || 
@@ -239,7 +235,8 @@ hpa_t gva_to_hpa(struct kvm_vcpu *vcpu, gva_t gva)
 	return gpa_to_hpa(vcpu, gva_to_gpa(vcpu, gva));
 }
 
-static void release_pt_page_64(struct kvm_vcpu *vcpu, hpa_t page_hpa, int level)
+static void release_pt_page_64(struct kvm_vcpu *vcpu, hpa_t page_hpa, 
+			       int level)
 {
 	ASSERT(vcpu);
 	ASSERT(VALID_PAGE(page_hpa));
@@ -252,8 +249,9 @@ static void release_pt_page_64(struct kvm_vcpu *vcpu, hpa_t page_hpa, int level)
 		uint64_t *end;
 
 		for (pos = __va(page_hpa), end = pos + PT64_ENT_PER_PAGE;
-		      pos != end; pos++) {
+		     pos != end; pos++) {
 			uint64_t current_ent = *pos;
+
 			*pos = 0;
 			if (is_present_pte(current_ent))
 				release_pt_page_64(vcpu,
@@ -282,14 +280,13 @@ static int nonpaging_map(struct kvm_vcpu *vcpu, gva_t v, hpa_t p)
 		table = __va(table_addr);
 
 		if (level == 1) {
-			table[index] = p | 
-					PT_PRESENT_MASK | 
-					PT_WRITABLE_MASK;
+			table[index] = p | PT_PRESENT_MASK | PT_WRITABLE_MASK;
 			return 0;
 		}
 
 		if (table[index] == 0) {
 			hpa_t new_table = kvm_mmu_alloc_page(vcpu);
+
 			if (!VALID_PAGE(new_table)) {
 				pgprintk("nonpaging_map: ENOMEM\n");
 				return -ENOMEM;
@@ -343,8 +340,7 @@ static int nonpaging_page_fault(struct kvm_vcpu *vcpu, gva_t gva,
 	     hpa_t paddr = gpa_to_hpa(vcpu, addr & PT64_BASE_ADDR_MASK);
 	     if (paddr == kvm_bad_page_addr)
 		     return 1;
-	     ret = nonpaging_map(vcpu, 
-		   addr & PAGE_MASK, paddr);
+	     ret = nonpaging_map(vcpu, addr & PAGE_MASK, paddr);
 	     if (ret) {
 		     nonpaging_flush(vcpu);
 		     continue;
@@ -356,7 +352,6 @@ static int nonpaging_page_fault(struct kvm_vcpu *vcpu, gva_t gva,
 
 static void nonpaging_inval_page(struct kvm_vcpu *vcpu, gva_t addr)
 {
-	
 }
 
 static void nonpaging_free(struct kvm_vcpu *vcpu)
@@ -366,8 +361,7 @@ static void nonpaging_free(struct kvm_vcpu *vcpu)
 	ASSERT(vcpu);
 	root = vcpu->mmu.root_hpa;
 	if (VALID_PAGE(root))
-		release_pt_page_64(vcpu, root,
-				  vcpu->mmu.shadow_root_level);
+		release_pt_page_64(vcpu, root, vcpu->mmu.shadow_root_level);
 	vcpu->mmu.root_hpa = INVALID_PAGE;
 }
 
@@ -600,7 +594,6 @@ int kvm_mmu_reset_context(struct kvm_vcpu *vcpu)
 static void free_mmu_pages(struct kvm_vcpu *vcpu)
 {
 	while (!list_empty(&vcpu->free_pages)) {
-
 		   page_link_t *page_link;
 
 		   page_link = list_entry(vcpu->free_pages.next,

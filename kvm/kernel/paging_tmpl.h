@@ -37,8 +37,7 @@ typedef struct guest_walker_s {
 	pt_element_t inherited_ar;
 } guest_walker_t;
 
-static void FNAME(init_walker)(guest_walker_t *walker,
-				  struct kvm_vcpu *vcpu)
+static void FNAME(init_walker)(guest_walker_t *walker, struct kvm_vcpu *vcpu)
 {
 	hpa_t hpa;
 
@@ -59,23 +58,19 @@ static void FNAME(release_walker)(guest_walker_t *walker)
 	kunmap_atomic(walker->table & PAGE_MASK, KM_USER0);
 }
 
-static void FNAME(set_pte)(struct kvm_vcpu *vcpu,
-			     uint64_t guest_pte,
-			     uint64_t *shadow_pte,
-			     uint64_t access_bits)
+static void FNAME(set_pte)(struct kvm_vcpu *vcpu, uint64_t guest_pte,
+			   uint64_t *shadow_pte, uint64_t access_bits)
 {
 	ASSERT(*shadow_pte == 0);
 	access_bits &= guest_pte;
 	*shadow_pte = (guest_pte & PT_PTE_COPY_MASK);
 	set_pte_common(vcpu, shadow_pte, guest_pte & PT_BASE_ADDR_MASK,
-			 access_bits);
+		       access_bits);
 }
 
-static void FNAME(set_pde)(struct kvm_vcpu *vcpu,
-			     uint64_t guest_pde,
-			     uint64_t *shadow_pte,
-			     uint64_t access_bits,
-			     int index)
+static void FNAME(set_pde)(struct kvm_vcpu *vcpu, uint64_t guest_pde,
+			   uint64_t *shadow_pte, uint64_t access_bits,
+			   int index)
 {
 	gpa_t gaddr;
        
@@ -86,8 +81,8 @@ static void FNAME(set_pde)(struct kvm_vcpu *vcpu,
 		gaddr |= (guest_pde & PT32_DIR_PSE36_MASK) << 
 			(32 - PT32_DIR_PSE36_SHIFT);
 	*shadow_pte = (guest_pde & PT_NON_PTE_COPY_MASK) |
-				((guest_pde & PT_DIR_PAT_MASK) >> 
-				 (PT_DIR_PAT_SHIFT - PT_PAT_SHIFT));
+		          ((guest_pde & PT_DIR_PAT_MASK) >> 
+			            (PT_DIR_PAT_SHIFT - PT_PAT_SHIFT));
 	set_pte_common(vcpu, shadow_pte, gaddr, access_bits);
 }
 
@@ -108,13 +103,13 @@ static pt_element_t *FNAME(fetch_guest)(struct kvm_vcpu *vcpu,
 		if (level == walker->level ||
 		    !is_present_pte(walker->table[index]) ||
 		    (walker->level == PT_DIRECTORY_LEVEL &&
-		    (walker->table[index] & PT_PAGE_SIZE_MASK) 
-		     && (PTTYPE == 64 || is_pse())))
+		     (walker->table[index] & PT_PAGE_SIZE_MASK) &&
+		     (PTTYPE == 64 || is_pse())))
 			return &walker->table[index];
 		if (walker->level != 3 || is_long_mode())
 			walker->inherited_ar &= walker->table[index];
-		paddr = gpa_to_hpa(vcpu, walker->table[index] & 
-				       PT_BASE_ADDR_MASK);
+		paddr = gpa_to_hpa(vcpu, 
+				   walker->table[index] & PT_BASE_ADDR_MASK);
 		kunmap_atomic(walker->table, KM_USER0);
 		walker->table = kmap_atomic(pfn_to_page(paddr >> PAGE_SHIFT),
 					    KM_USER0);
@@ -151,7 +146,8 @@ static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu,
 			guest_ent = FNAME(fetch_guest)(vcpu, walker,
 						       PT32_ROOT_LEVEL, addr);
 		} else
-			guest_ent = FNAME(fetch_guest)(vcpu, walker, level, addr);
+			guest_ent = FNAME(fetch_guest)(vcpu, walker, 
+						       level, addr);
 
 		if (!is_present_pte(*guest_ent))
 			return NULL;
@@ -163,8 +159,9 @@ static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu,
 			if (walker->level == PT_DIRECTORY_LEVEL) {
 				if (priv_shadow_ent)
 					*priv_shadow_ent |= PT_SHADOW_PS_MARK;
-				FNAME(set_pde)(vcpu, *guest_ent, shadow_ent, walker->inherited_ar,
-					  PT_INDEX(addr, PT_PAGE_TABLE_LEVEL));
+				FNAME(set_pde)(vcpu, *guest_ent, shadow_ent, 
+					       walker->inherited_ar,
+				          PT_INDEX(addr, PT_PAGE_TABLE_LEVEL));
 			} else {
 				ASSERT(walker->level == PT_PAGE_TABLE_LEVEL);
 				FNAME(set_pte)(vcpu, *guest_ent, shadow_ent, walker->inherited_ar);
@@ -188,10 +185,10 @@ static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu,
 }
 
 static int FNAME(fix_write_pf)(struct kvm_vcpu *vcpu,
-				 uint64_t *shadow_ent,
-				 guest_walker_t *walker,
-				 gva_t addr,
-				 int user)
+			       uint64_t *shadow_ent,
+			       guest_walker_t *walker,
+			       gva_t addr,
+			       int user)
 {
 	pt_element_t *guest_ent;
 	int writable_shadow;
@@ -253,7 +250,7 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 
 	if (write_fault)
 		fixed = FNAME(fix_write_pf)(vcpu, shadow_pte, &walker, addr,
-				       user_fault);
+					    user_fault);
 	else
 		fixed = fix_read_pf(shadow_pte);
 
@@ -264,7 +261,7 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 			return 1;
 		pgprintk("%s: io work, no access\n", __FUNCTION__);
 		inject_page_fault(vcpu, addr,
-					error_code | PFERR_PRESENT_MASK);
+				  error_code | PFERR_PRESENT_MASK);
 		return 0;
 	}
 
@@ -284,8 +281,7 @@ static u64 FNAME(fetch_pte)(struct kvm_vcpu *vcpu, gva_t vaddr)
 	FNAME(init_walker)(&walker, vcpu);
 	guest_pte = *FNAME(fetch_guest)(vcpu, &walker, PT_PAGE_TABLE_LEVEL, vaddr);
 
-	if (is_present_pte(guest_pte) &&
-	    walker.level == PT_DIRECTORY_LEVEL) {
+	if (is_present_pte(guest_pte) && walker.level == PT_DIRECTORY_LEVEL) {
 		gpa_t gaddr; 
 
 		ASSERT((guest_pte & PT_PAGE_SIZE_MASK));
