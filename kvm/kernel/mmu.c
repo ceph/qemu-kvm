@@ -30,10 +30,6 @@
 		printk("assertion failed %s:%d: %s\n", __FILE__, __LINE__, #x);\
 	}
 
-#define FALSE 0
-#define TRUE 1
-
-
 #define PT64_ENT_PER_PAGE 512
 #define PT32_ENT_PER_PAGE 1024
 
@@ -148,7 +144,7 @@ static int is_write_protection(void)
 
 static int is_cpuid_PSE36(void)
 {
-	return TRUE;
+	return 1;
 }
 
 static int is_present_pte(unsigned long pte)
@@ -186,10 +182,10 @@ static int is_empty_shadow_page(hpa_t page_hpa)
 	for (pos = __va(page_hpa), end = pos + PAGE_SIZE / sizeof(uint32_t);
 		      pos != end; pos++) {
 		if (*pos != 0) {
-			return FALSE;
+			return 0;
 		}
 	}
-	return TRUE;
+	return 1;
 }
 
 static hpa_t kvm_mmu_alloc_page(struct kvm_vcpu *vcpu)
@@ -216,7 +212,7 @@ static inline int is_io_mem(struct kvm_vcpu *vcpu, unsigned long addr)
 {
 
 	if ((addr >> PAGE_SHIFT) >= vcpu->kvm->phys_mem_pages ) {
-		return TRUE;
+		return 1;
 	}
 
 	return (addr >= 0xa0000ULL && addr < 0xe0000ULL) || 
