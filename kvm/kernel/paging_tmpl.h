@@ -1,8 +1,7 @@
 
 #if PTTYPE == 64
 	#define pt_element_t uint64_t
-	#define guest_walker_s guest_walker64_s
-	#define guest_walker_t guest_walker64_t
+	#define guest_walker guest_walker64
 	#define FNAME(name) paging##64_##name
 	#define PT_BASE_ADDR_MASK PT64_BASE_ADDR_MASK
 	#define PT_DIR_BASE_ADDR_MASK PT64_DIR_BASE_ADDR_MASK
@@ -13,8 +12,7 @@
 	#define PT_NON_PTE_COPY_MASK PT64_NON_PTE_COPY_MASK
 #elif PTTYPE == 32
 	#define pt_element_t uint32_t
-	#define guest_walker_s guest_walker32_s
-	#define guest_walker_t guest_walker32_t
+	#define guest_walker guest_walker32
 	#define FNAME(name) paging##32_##name
 	#define PT_BASE_ADDR_MASK PT32_BASE_ADDR_MASK
 	#define PT_DIR_BASE_ADDR_MASK PT32_DIR_BASE_ADDR_MASK
@@ -31,13 +29,14 @@
  * The guest_walker structure emulates the behavior of the hardware page
  * table walker.
  */
-typedef struct guest_walker_s {	
+struct guest_walker {	
 	int level;
 	pt_element_t *table;
 	pt_element_t inherited_ar;
-} guest_walker_t;
+};
 
-static void FNAME(init_walker)(guest_walker_t *walker, struct kvm_vcpu *vcpu)
+static void FNAME(init_walker)(struct guest_walker *walker, 
+			       struct kvm_vcpu *vcpu)
 {
 	hpa_t hpa;
 
@@ -53,7 +52,7 @@ static void FNAME(init_walker)(guest_walker_t *walker, struct kvm_vcpu *vcpu)
 	walker->inherited_ar = PT_USER_MASK | PT_WRITABLE_MASK;
 }
 
-static void FNAME(release_walker)(guest_walker_t *walker)
+static void FNAME(release_walker)(struct guest_walker *walker)
 {
 	kunmap_atomic(walker->table & PAGE_MASK, KM_USER0);
 }
@@ -87,7 +86,7 @@ static void FNAME(set_pde)(struct kvm_vcpu *vcpu, uint64_t guest_pde,
 }
 
 static pt_element_t *FNAME(fetch_guest)(struct kvm_vcpu *vcpu,
-			       guest_walker_t *walker, 
+			       struct guest_walker *walker, 
 			       int level,
 			       gva_t addr)
 {
@@ -119,7 +118,7 @@ static pt_element_t *FNAME(fetch_guest)(struct kvm_vcpu *vcpu,
 
 static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu,
 			 gva_t addr,
-			 guest_walker_t *walker)
+			 struct guest_walker *walker)
 {
 	hpa_t shadow_addr;
 	int level;
@@ -186,7 +185,7 @@ static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu,
 
 static int FNAME(fix_write_pf)(struct kvm_vcpu *vcpu,
 			       uint64_t *shadow_ent,
-			       guest_walker_t *walker,
+			       struct guest_walker *walker,
 			       gva_t addr,
 			       int user)
 {
@@ -227,7 +226,7 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 	int write_fault = error_code & PFERR_WRITE_MASK;
 	int pte_present = error_code & PFERR_PRESENT_MASK;
 	int user_fault = error_code & PFERR_USER_MASK;
-	guest_walker_t walker;
+	struct guest_walker walker;
 	uint64_t *shadow_pte;
 	int fixed;
 
@@ -275,7 +274,7 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 
 static u64 FNAME(fetch_pte)(struct kvm_vcpu *vcpu, gva_t vaddr)
 {
-	guest_walker_t walker;
+	struct guest_walker walker;
 	pt_element_t guest_pte;
 
 	FNAME(init_walker)(&walker, vcpu);
@@ -302,8 +301,7 @@ static u64 FNAME(fetch_pte)(struct kvm_vcpu *vcpu, gva_t vaddr)
 }
 
 #undef pt_element_t
-#undef guest_walker_s
-#undef guest_walker_t
+#undef guest_walker
 #undef FNAME
 #undef PT_BASE_ADDR_MASK
 #undef PT_INDEX
