@@ -37,7 +37,7 @@ typedef struct guest_walker_s {
 
 
 static void FNAME(init_walker)(guest_walker_t *walker,
-				  struct hvm_vcpu *vcpu)
+				  struct kvm_vcpu *vcpu)
 {
 	hpa_t hpa;
 
@@ -60,7 +60,7 @@ static inline void FNAME(release_walker)(guest_walker_t *walker)
 }
 
 
-static inline void FNAME(set_pte)(struct hvm_vcpu *vcpu,
+static inline void FNAME(set_pte)(struct kvm_vcpu *vcpu,
 			     uint64_t guest_pte,
 			     uint64_t *shadow_pte,
 			     uint64_t access_bits)
@@ -73,7 +73,7 @@ static inline void FNAME(set_pte)(struct hvm_vcpu *vcpu,
 }
 
 
-static inline void FNAME(set_pde)(struct hvm_vcpu *vcpu,
+static inline void FNAME(set_pde)(struct kvm_vcpu *vcpu,
 			     uint64_t guest_pde,
 			     uint64_t *shadow_pte,
 			     uint64_t access_bits,
@@ -97,7 +97,7 @@ static inline void FNAME(set_pde)(struct hvm_vcpu *vcpu,
 }
 
 
-static pt_element_t *FNAME(fetch_guest)(struct hvm_vcpu *vcpu,
+static pt_element_t *FNAME(fetch_guest)(struct kvm_vcpu *vcpu,
 			       guest_walker_t *walker, 
 			       int level,
 			       gva_t addr)
@@ -135,7 +135,7 @@ static pt_element_t *FNAME(fetch_guest)(struct hvm_vcpu *vcpu,
 }
 
 
-static uint64_t *FNAME(fetch)(struct hvm_vcpu *vcpu,
+static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu,
 			 gva_t addr,
 			 guest_walker_t *walker,
 			 int *enomem)
@@ -195,7 +195,7 @@ static uint64_t *FNAME(fetch)(struct hvm_vcpu *vcpu,
 			return shadow_ent;
 		}
 
-		shadow_addr = hvm_mmu_alloc_page(vcpu);
+		shadow_addr = kvm_mmu_alloc_page(vcpu);
 		if (!VALID_PAGE(shadow_addr)) {
 			*enomem = 1;
 			return NULL;
@@ -213,7 +213,7 @@ static uint64_t *FNAME(fetch)(struct hvm_vcpu *vcpu,
 }
 
 
-static inline int FNAME(fix_write_pf)(struct hvm_vcpu *vcpu,
+static inline int FNAME(fix_write_pf)(struct kvm_vcpu *vcpu,
 				 uint64_t *shadow_ent,
 				 guest_walker_t *walker,
 				 gva_t addr,
@@ -254,7 +254,7 @@ static inline int FNAME(fix_write_pf)(struct hvm_vcpu *vcpu,
 }
 
 
-static int FNAME(page_fault)(struct hvm_vcpu *vcpu, gva_t addr,
+static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 			       uint32_t error_code)
 {
 	int write_fault = error_code & PFERR_WRITE_MASK;
@@ -306,13 +306,13 @@ static int FNAME(page_fault)(struct hvm_vcpu *vcpu, gva_t addr,
 		inject_page_fault(vcpu, addr, error_code);     
 	}
 
-	hvm_stat.pf_fixed += fixed;
+	kvm_stat.pf_fixed += fixed;
 
 	return 0;	
 }
 
 
-static u64 FNAME(fetch_pte)(struct hvm_vcpu *vcpu, gva_t vaddr)
+static u64 FNAME(fetch_pte)(struct kvm_vcpu *vcpu, gva_t vaddr)
 {
 	guest_walker_t walker;
 	pt_element_t guest_pte;

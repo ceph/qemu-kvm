@@ -5,7 +5,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 
-hvm_context_t hvm;
+kvm_context_t kvm;
 
 static void test_cpuid(void *opaque, uint64_t *rax, uint64_t *rbx, 
 		       uint64_t *rcx, uint64_t *rdx)
@@ -35,7 +35,7 @@ static void test_outb(void *opaque, uint16_t addr, uint8_t value)
     switch (addr) {
     case 0xff: // irq injector
 	printf("injecting interrupt 0x%x\n", value);
-	hvm_inject_irq(hvm, 0, value);
+	kvm_inject_irq(kvm, 0, value);
 	break;
     case 0xf1: // serial
 	if (newline)
@@ -83,7 +83,7 @@ static void test_io_window(void *opaque)
 }
 
 
-static struct hvm_callbacks test_callbacks = {
+static struct kvm_callbacks test_callbacks = {
     .cpuid       = test_cpuid,
     .inb         = test_inb,
     .inw         = test_inw,
@@ -120,11 +120,11 @@ int main(int ac, char **av)
 {
 	void *vm_mem;
 
-	hvm = hvm_init(&test_callbacks, 0);
-	hvm_create(hvm, 128 * 1024 * 1024, &vm_mem, 1);
+	kvm = kvm_init(&test_callbacks, 0);
+	kvm_create(kvm, 128 * 1024 * 1024, &vm_mem, 1);
 	if (ac > 1)
 	    load_file(vm_mem, av[1]);
-	hvm_show_regs(hvm, 0);
+	kvm_show_regs(kvm, 0);
 
-	hvm_run(hvm, 0);
+	kvm_run(kvm, 0);
 }

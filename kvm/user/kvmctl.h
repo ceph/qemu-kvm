@@ -1,14 +1,14 @@
-#ifndef HVMCTL_H
-#define HVMCTL_H
+#ifndef KVMCTL_H
+#define KVMCTL_H
 
 #include <linux/kvm.h>
 #include <stdint.h>
 
-struct hvm_context;
+struct kvm_context;
 
-typedef struct hvm_context *hvm_context_t;
+typedef struct kvm_context *kvm_context_t;
 
-struct hvm_callbacks {
+struct kvm_callbacks {
     void (*cpuid)(void *opaque, 
 		  uint64_t *rax, uint64_t *rbx, uint64_t *rcx, uint64_t *rdx);
     void (*inb)(void *opaque, uint16_t addr, uint8_t *data);
@@ -31,19 +31,19 @@ struct hvm_callbacks {
     void (*io_window)(void *opaque);
 };
 
-hvm_context_t hvm_init(struct hvm_callbacks *callbacks,
+kvm_context_t kvm_init(struct kvm_callbacks *callbacks,
 		       void *opaque);
-int hvm_create(hvm_context_t hvm,
+int kvm_create(kvm_context_t kvm,
 	       unsigned long phys_mem_bytes,
 	       void **phys_mem,
 	       int log_fd);
-int hvm_run(hvm_context_t hvm, int vcpu);
-int hvm_get_regs(hvm_context_t, int vcpu, struct hvm_regs *regs);
-int hvm_set_regs(hvm_context_t, int vcpu, struct hvm_regs *regs);
-int hvm_get_sregs(hvm_context_t, int vcpu, struct hvm_sregs *regs);
-int hvm_set_sregs(hvm_context_t, int vcpu, struct hvm_sregs *regs);
-int hvm_inject_irq(hvm_context_t, int vcpu, unsigned irq);
-int hvm_guest_debug(hvm_context_t, int vcpu, struct hvm_debug_guest *dbg);
-void hvm_show_regs(hvm_context_t, int vcpu);
+int kvm_run(kvm_context_t kvm, int vcpu);
+int kvm_get_regs(kvm_context_t, int vcpu, struct kvm_regs *regs);
+int kvm_set_regs(kvm_context_t, int vcpu, struct kvm_regs *regs);
+int kvm_get_sregs(kvm_context_t, int vcpu, struct kvm_sregs *regs);
+int kvm_set_sregs(kvm_context_t, int vcpu, struct kvm_sregs *regs);
+int kvm_inject_irq(kvm_context_t, int vcpu, unsigned irq);
+int kvm_guest_debug(kvm_context_t, int vcpu, struct kvm_debug_guest *dbg);
+void kvm_show_regs(kvm_context_t, int vcpu);
 
 #endif

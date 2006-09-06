@@ -13,7 +13,7 @@ static const char *vmx_msr_name[] = {
 
 #define NR_VMX_MSR (sizeof(vmx_msr_name) / sizeof(char*))
 
-void show_msrs(struct hvm_vcpu *vcpu)
+void show_msrs(struct kvm_vcpu *vcpu)
 {
 	int i;
 
@@ -25,7 +25,7 @@ void show_msrs(struct hvm_vcpu *vcpu)
 	}
 }
 
-int read_guest(struct hvm_vcpu *vcpu,
+int read_guest(struct kvm_vcpu *vcpu,
 			     gva_t addr,
 			     unsigned long size,
 			     void *dest)
@@ -39,7 +39,7 @@ int read_guest(struct hvm_vcpu *vcpu,
 		hva_t guest_buf;
 
 		paddr = gva_to_hpa(vcpu, addr);
-		if ( paddr == hvm_bad_page_addr ) {
+		if ( paddr == kvm_bad_page_addr ) {
 			return 0;
 		}
 		guest_buf = (hva_t)kmap_atomic(
@@ -57,7 +57,7 @@ int read_guest(struct hvm_vcpu *vcpu,
 	return 1;
 }
 
-int write_guest(struct hvm_vcpu *vcpu,
+int write_guest(struct kvm_vcpu *vcpu,
 			     gva_t addr,
 			     unsigned long size,
 			     void *data)
@@ -71,7 +71,7 @@ int write_guest(struct hvm_vcpu *vcpu,
 		hva_t guest_buf;
 
 		paddr = gva_to_hpa(vcpu, addr);
-		if ( paddr == hvm_bad_page_addr ) {
+		if ( paddr == kvm_bad_page_addr ) {
 			return 0;
 		}
 		guest_buf = (hva_t)kmap_atomic(
@@ -89,7 +89,7 @@ int write_guest(struct hvm_vcpu *vcpu,
 	return 1;
 }
 
-void show_code(struct hvm_vcpu *vcpu)
+void show_code(struct kvm_vcpu *vcpu)
 {
 	gva_t rip = vmcs_readl(GUEST_RIP);
 	u8 code[50];
@@ -114,7 +114,7 @@ struct gate_struct {
 	u32 zero1; 
 } __attribute__((packed));
 
-void show_irq(struct hvm_vcpu *vcpu,  int irq)
+void show_irq(struct kvm_vcpu *vcpu,  int irq)
 {
 	unsigned long idt_base = vmcs_readl(GUEST_IDTR_BASE);
 	unsigned long idt_limit = vmcs_readl(GUEST_IDTR_LIMIT);
@@ -145,7 +145,7 @@ void show_irq(struct hvm_vcpu *vcpu,  int irq)
 		   gate.offset_low); 
 }
 
-void show_page(struct hvm_vcpu *vcpu,
+void show_page(struct kvm_vcpu *vcpu,
 			     gva_t addr)
 {
 	uint64_t *buf = kmalloc(PAGE_SIZE, GFP_KERNEL);
@@ -177,7 +177,7 @@ static int is_canonical(unsigned long addr)
        return  addr == ((long)addr << 16) >> 16;
 }
 
-int vm_entry_test(struct hvm_vcpu *vcpu)
+int vm_entry_test(struct kvm_vcpu *vcpu)
 {
 	unsigned long cr0;
 	unsigned long cr4;
@@ -863,7 +863,7 @@ void vmcs_dump(void)
 	printk("***********************************************************\n");     
 }
 
-void regs_dump(struct hvm_vcpu *vcpu)
+void regs_dump(struct kvm_vcpu *vcpu)
 {
 	#define REG_DUMP(reg) \
 		printk(#reg" = 0x%lx\n", vcpu->regs[VCPU_REGS_##reg])
@@ -895,7 +895,7 @@ void regs_dump(struct hvm_vcpu *vcpu)
 	printk("***********************************************************\n");
 }
 
-void sregs_dump(struct hvm_vcpu *vcpu)
+void sregs_dump(struct kvm_vcpu *vcpu)
 {
 	printk("************************ sregs_dump ************************\n");
 	printk("cr2 = 0x%lx\n", vcpu->regs[VCPU_REGS_CR2]);

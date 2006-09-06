@@ -323,9 +323,9 @@ ifdef CONFIG_ADLIB
 SOUND_HW += fmopl.o adlib.o
 endif
 AUDIODRV+= wavcapture.o
-ifdef CONFIG_HVM_INC
-DEFINES += -I $(CONFIG_HVM_INC) -I $(CONFIG_HVM_KERNEL_INC)
-LIBS += -L $(CONFIG_HVM_LIB) -lhvm
+ifdef CONFIG_KVM_INC
+DEFINES += -I $(CONFIG_KVM_INC) -I $(CONFIG_KVM_KERNEL_INC)
+LIBS += -L $(CONFIG_KVM_LIB) -lkvm
 endif
 
 # SCSI layer

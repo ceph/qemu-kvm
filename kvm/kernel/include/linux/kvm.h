@@ -1,32 +1,32 @@
-#ifndef __LINUX_HVM_H
-#define __LINUX_HVM_H
+#ifndef __LINUX_KVM_H
+#define __LINUX_KVM_H
 
 #include <asm/types.h>
 #include <linux/ioctl.h>
 
-/* for HVM_CREATE */
-struct hvm_create {
+/* for KVM_CREATE */
+struct kvm_create {
 	__u64 memory_size; /* bytes */
 	__u32 log_fd; /* for debug, -1U if none */
 };
 
-#define HVM_EXIT_TYPE_FAIL_ENTRY 1
-#define HVM_EXIT_TYPE_VM_EXIT    2
+#define KVM_EXIT_TYPE_FAIL_ENTRY 1
+#define KVM_EXIT_TYPE_VM_EXIT    2
 
-enum hvm_exit_reason {
-	HVM_EXIT_UNKNOWN,
-	HVM_EXIT_EXCEPTION,
-	HVM_EXIT_IO,
-	HVM_EXIT_CPUID,
-	HVM_EXIT_EMULATE_ONE_INSTRUCTION,
-	HVM_EXIT_DEBUG,
-	HVM_EXIT_HLT,
-	HVM_EXIT_MMIO,
-	HVM_EXIT_REAL_MODE,
+enum kvm_exit_reason {
+	KVM_EXIT_UNKNOWN,
+	KVM_EXIT_EXCEPTION,
+	KVM_EXIT_IO,
+	KVM_EXIT_CPUID,
+	KVM_EXIT_EMULATE_ONE_INSTRUCTION,
+	KVM_EXIT_DEBUG,
+	KVM_EXIT_HLT,
+	KVM_EXIT_MMIO,
+	KVM_EXIT_REAL_MODE,
 };
 
-/* for HVM_RUN */
-struct hvm_run {
+/* for KVM_RUN */
+struct kvm_run {
 	/* in */
 	int vcpu;
 	int emulated;  /* skip current instruction */
@@ -37,19 +37,19 @@ struct hvm_run {
 	__u32 exit_reason;
 	__u32 instruction_length;
 	union {
-		/* HVM_EXIT_UNKNOWN */
+		/* KVM_EXIT_UNKNOWN */
 		struct {
 			__u32 hardware_exit_reason;
 		} hw;
-		/* HVM_EXIT_EXCEPTION */
+		/* KVM_EXIT_EXCEPTION */
 		struct {
 			__u32 exception;
 			__u32 error_code;
 		} ex;
-		/* HVM_EXIT_IO */
+		/* KVM_EXIT_IO */
 		struct {
-#define HVM_EXIT_IO_IN  0
-#define HVM_EXIT_IO_OUT 1
+#define KVM_EXIT_IO_IN  0
+#define KVM_EXIT_IO_OUT 1
 			__u8 direction;
 			__u8 size; /* bytes */
 			__u8 string;
@@ -65,7 +65,7 @@ struct hvm_run {
 		} io;
 		struct {
 		} debug;
-		/* HVM_EXIT_MMIO */
+		/* KVM_EXIT_MMIO */
 		struct {
 			__u64 phys_addr;
 			__u8  data[8];
@@ -75,12 +75,12 @@ struct hvm_run {
 	};
 };
 
-/* for HVM_GET_REGS and HVM_SET_REGS */
-struct hvm_regs {
+/* for KVM_GET_REGS and KVM_SET_REGS */
+struct kvm_regs {
 	/* in */
 	int vcpu;
 	
-	/* out (HVM_GET_REGS) / in (HVM_SET_REGS) */
+	/* out (KVM_GET_REGS) / in (KVM_SET_REGS) */
 	__u64 rax, rbx, rcx, rdx;
 	__u64 rsi, rdi, rsp, rbp;
 	__u64 r8,  r9,  r10, r11;
@@ -88,7 +88,7 @@ struct hvm_regs {
 	__u64 rip, rflags;
 };
 
-struct hvm_segment {
+struct kvm_segment {
 	__u64 base;
 	__u32 limit;
 	__u16 selector;
@@ -97,27 +97,27 @@ struct hvm_segment {
 	__u8  unusable;
 };
 
-struct hvm_dtable {
+struct kvm_dtable {
 	__u64 base;
 	__u16 limit;
 };
 
-/* for HVM_GET_SREGS and HVM_SET_SREGS */
-struct hvm_sregs {
+/* for KVM_GET_SREGS and KVM_SET_SREGS */
+struct kvm_sregs {
 	/* in */
 	int vcpu;
 
-	/* out (HVM_GET_SREGS) / in (HVM_SET_SREGS) */
-	struct hvm_segment cs, ds, es, fs, gs, ss;
-	struct hvm_segment tr, ldt;
-	struct hvm_dtable gdt, idt;
+	/* out (KVM_GET_SREGS) / in (KVM_SET_SREGS) */
+	struct kvm_segment cs, ds, es, fs, gs, ss;
+	struct kvm_segment tr, ldt;
+	struct kvm_dtable gdt, idt;
 	__u64 cr0, cr2, cr3, cr4, cr8;
 	__u64 efer;
 	__u64 apic_base;
 };
 
-/* for HVM_TRANSLATE */
-struct hvm_translation {
+/* for KVM_TRANSLATE */
+struct kvm_translation {
 	/* in */
 	__u64 linear_address;
 	int   vcpu;
@@ -129,35 +129,35 @@ struct hvm_translation {
 	__u8  usermode;
 };
 
-/* for HVM_INTERRUPT */
-struct hvm_interrupt {
+/* for KVM_INTERRUPT */
+struct kvm_interrupt {
 	/* in */
 	int vcpu;
 	__u8 irq;
 };
 
-struct hvm_breakpoint {
+struct kvm_breakpoint {
 	__u32 enabled;
 	__u64 address;
 };
 
-/* for HVM_DEBUG_GUEST */
-struct hvm_debug_guest {
+/* for KVM_DEBUG_GUEST */
+struct kvm_debug_guest {
 	/* int */
 	int vcpu;
 	int enabled;
-	struct hvm_breakpoint breakpoints[4];
+	struct kvm_breakpoint breakpoints[4];
 	int singlestep;
 };
 
-#define HVM_CREATE                _IOW( 'q', 1, struct hvm_create)
-#define HVM_RUN                   _IOWR('q', 2, struct hvm_run)
-#define HVM_GET_REGS              _IOWR('q', 3, struct hvm_regs)
-#define HVM_SET_REGS              _IOW( 'q', 4, struct hvm_regs)
-#define HVM_GET_SREGS             _IOWR('q', 5, struct hvm_sregs)
-#define HVM_SET_SREGS             _IOW( 'q', 6, struct hvm_sregs)
-#define HVM_TRANSLATE             _IOWR('q', 7, struct hvm_translation)
-#define HVM_INTERRUPT             _IOW( 'q', 8, struct hvm_interrupt)
-#define HVM_DEBUG_GUEST           _IOW( 'q', 9, struct hvm_debug_guest)
+#define KVM_CREATE                _IOW( 'q', 1, struct kvm_create)
+#define KVM_RUN                   _IOWR('q', 2, struct kvm_run)
+#define KVM_GET_REGS              _IOWR('q', 3, struct kvm_regs)
+#define KVM_SET_REGS              _IOW( 'q', 4, struct kvm_regs)
+#define KVM_GET_SREGS             _IOWR('q', 5, struct kvm_sregs)
+#define KVM_SET_SREGS             _IOW( 'q', 6, struct kvm_sregs)
+#define KVM_TRANSLATE             _IOWR('q', 7, struct kvm_translation)
+#define KVM_INTERRUPT             _IOW( 'q', 8, struct kvm_interrupt)
+#define KVM_DEBUG_GUEST           _IOW( 'q', 9, struct kvm_debug_guest)
 
 #endif

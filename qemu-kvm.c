@@ -10,7 +10,7 @@
 #include <kvmctl.h>
 #include <string.h>
 
-hvm_context_t hvm_context;
+kvm_context_t kvm_context;
 
 #define NR_CPU 16
 static CPUState *saved_env[NR_CPU];
@@ -29,8 +29,8 @@ void kvm_handled_mmio(CPUState *env)
 
 static void load_regs(CPUState *env)
 {
-    struct hvm_regs regs;
-    struct hvm_sregs sregs;
+    struct kvm_regs regs;
+    struct kvm_sregs sregs;
 
     /* hack: save env */
     if (!saved_env[0])
@@ -56,7 +56,7 @@ static void load_regs(CPUState *env)
     regs.rflags = env->eflags;
     regs.rip = env->eip;
 
-    hvm_set_regs(hvm_context, 0, &regs);
+    kvm_set_regs(kvm_context, 0, &regs);
 
 #define set_seg(var, seg, default_s, default_type)	\
   do {				    \
@@ -105,16 +105,16 @@ static void load_regs(CPUState *env)
     sregs.apic_base = cpu_get_apic_base(env);
     sregs.efer = env->efer;
 
-    hvm_set_sregs(hvm_context, 0, &sregs);
+    kvm_set_sregs(kvm_context, 0, &sregs);
 }
 
 static void save_regs(CPUState *env)
 {
-    struct hvm_regs regs;
-    struct hvm_sregs sregs;
+    struct kvm_regs regs;
+    struct kvm_sregs sregs;
     uint32_t hflags;
 
-    hvm_get_regs(hvm_context, 0, &regs);
+    kvm_get_regs(kvm_context, 0, &regs);
 
     env->regs[R_EAX] = regs.rax;
     env->regs[R_EBX] = regs.rbx;
@@ -136,7 +136,7 @@ static void save_regs(CPUState *env)
     env->eflags = regs.rflags;
     env->eip = regs.rip;
 
-    hvm_get_sregs(hvm_context, 0, &sregs);
+    kvm_get_sregs(kvm_context, 0, &sregs);
 
 #define get_seg(var, seg) \
     env->seg.selector = sregs.var.selector; \
@@ -242,7 +242,7 @@ static inline void push_interrupts(CPUState *env)
     env->interrupt_request &= ~CPU_INTERRUPT_HARD;
 
     // for now using cpu 0
-    hvm_inject_irq(hvm_context, 0, cpu_get_pic_interrupt(env)); 
+    kvm_inject_irq(kvm_context, 0, cpu_get_pic_interrupt(env)); 
 }
 
 int kvm_cpu_exec(CPUState *env)
@@ -252,7 +252,7 @@ int kvm_cpu_exec(CPUState *env)
 
     load_regs(env);
 
-    hvm_run(hvm_context, 0);
+    kvm_run(kvm_context, 0);
 
     save_regs(env);
 
@@ -397,7 +397,7 @@ static void kvm_halt(void *opaque, int vcpu)
     cpu_loop_exit();
 }
  
-static struct hvm_callbacks qemu_kvm_ops = {
+static struct kvm_callbacks qemu_kvm_ops = {
     .cpuid = kvm_cpuid,
     .debug = kvm_debug,
     .inb   = kvm_inb,
@@ -421,13 +421,13 @@ static struct hvm_callbacks qemu_kvm_ops = {
 
 void kvm_qemu_init()
 {
-    hvm_context = hvm_init(&qemu_kvm_ops, saved_env);
-    hvm_create(hvm_context, phys_ram_size, (void**)&phys_ram_base, 1);
+    kvm_context = kvm_init(&qemu_kvm_ops, saved_env);
+    kvm_create(kvm_context, phys_ram_size, (void**)&phys_ram_base, 1);
 }
 
 int kvm_update_debugger(CPUState *env)
 {
-    struct hvm_debug_guest dbg;
+    struct kvm_debug_guest dbg;
     int i;
 
     memset(&dbg, 0, sizeof dbg);
@@ -439,7 +439,7 @@ int kvm_update_debugger(CPUState *env)
 	}
 	dbg.singlestep = env->singlestep_enabled;
     }
-    return hvm_guest_debug(hvm_context, 0, &dbg);
+    return kvm_guest_debug(kvm_context, 0, &dbg);
 }
 
 

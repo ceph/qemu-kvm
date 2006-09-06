@@ -1,5 +1,5 @@
-#ifndef __HVM_H
-#define __HVM_H
+#ifndef __KVM_H
+#define __KVM_H
 
 #include <linux/types.h>
 #include <linux/list.h>
@@ -26,18 +26,18 @@
 #define CR4_PGE_MASK (1ULL << 7)
 #define CR4_VMXE_MASK (1ULL << 13)
 
-#define HVM_GUEST_CR0_MASK \
+#define KVM_GUEST_CR0_MASK \
 	(CR0_PG_MASK | CR0_PE_MASK | CR0_WP_MASK | CR0_NE_MASK)
-#define HVM_VM_CR0_ALWAYS_ON HVM_GUEST_CR0_MASK
+#define KVM_VM_CR0_ALWAYS_ON KVM_GUEST_CR0_MASK
 
-#define HVM_GUEST_CR4_MASK \
+#define KVM_GUEST_CR4_MASK \
 	(CR4_PSE_MASK | CR4_PAE_MASK | CR4_PGE_MASK | CR4_VMXE_MASK)
-#define HVM_VM_CR4_ALWAYS_ON (CR4_VMXE_MASK | CR4_PAE_MASK)
+#define KVM_VM_CR4_ALWAYS_ON (CR4_VMXE_MASK | CR4_PAE_MASK)
 
 #define INVALID_PAGE (~(hpa_t)0)
 
-#define HVM_MAX_VCPUS 4
-#define HVM_NUM_MMU_PAGES 256
+#define KVM_MAX_VCPUS 4
+#define KVM_NUM_MMU_PAGES 256
 
 #define FX_IMAGE_SIZE 512
 #define FX_IMAGE_ALIGN 16
@@ -91,20 +91,20 @@ struct vmx_msr_entry {
 	u64 data;
 };
 
-struct hvm_vcpu;
+struct kvm_vcpu;
 
 typedef struct paging_context_s {
-	void (*new_cr3)(struct hvm_vcpu *vcpu);
-	int (*page_fault)(struct hvm_vcpu *vcpu, gva_t gva, uint32_t err);
-	void (*inval_page)(struct hvm_vcpu *vcpu, gva_t gva);
-	void (*free)(struct hvm_vcpu *vcpu);
-	u64 (*fetch_pte64)(struct hvm_vcpu *vcpu, gva_t gva);
+	void (*new_cr3)(struct kvm_vcpu *vcpu);
+	int (*page_fault)(struct kvm_vcpu *vcpu, gva_t gva, uint32_t err);
+	void (*inval_page)(struct kvm_vcpu *vcpu, gva_t gva);
+	void (*free)(struct kvm_vcpu *vcpu);
+	u64 (*fetch_pte64)(struct kvm_vcpu *vcpu, gva_t gva);
 	hpa_t root_hpa;
 	int root_level;
 	int shadow_root_level;
 }paging_context_t;
 
-struct hvm_guest_debug {
+struct kvm_guest_debug {
 	int enabled;
 	unsigned long bp[4];
 	int singlestep;
@@ -130,8 +130,8 @@ enum {
 	VCPU_REGS_CR2 = 16,
 };
 
-struct hvm_vcpu {
-	struct hvm *hvm;
+struct kvm_vcpu {
+	struct kvm *kvm;
 	struct vmcs *vmcs;
 	int   cpu;
 	int   launched;
@@ -150,10 +150,10 @@ struct hvm_vcpu {
 
 	struct list_head free_page_links;
 	struct list_head free_pages;
-	page_link_t page_link_buf[HVM_NUM_MMU_PAGES];
+	page_link_t page_link_buf[KVM_NUM_MMU_PAGES];
 	paging_context_t paging_context;
 
-	struct hvm_guest_debug guest_debug;
+	struct kvm_guest_debug guest_debug;
 
 	char fx_buf[FX_BUF_SIZE];
 	char *host_fx_image;
@@ -167,17 +167,17 @@ struct hvm_vcpu {
 	unsigned long mmio_phys_addr;
 };
 
-struct hvm {
+struct kvm {
 	unsigned created : 1;
 	unsigned long phys_mem_pages;
 	struct page **phys_mem;
 	int nvcpus;
-	struct hvm_vcpu vcpus[HVM_MAX_VCPUS];
+	struct kvm_vcpu vcpus[KVM_MAX_VCPUS];
 	struct file *log_file;
 	char *log_buf;
 };
 
-struct hvm_stat {
+struct kvm_stat {
 	u32 pf_fixed;
 	u32 pf_guest;
 	u32 tlb_flush;
@@ -190,19 +190,19 @@ struct hvm_stat {
 	u32 irq_exits;
 };
 
-extern struct hvm_stat hvm_stat;
+extern struct kvm_stat kvm_stat;
 
-int hvm_printf(struct hvm *hvm, const char *fmt, ...);
-int hvm_vprintf(struct hvm *hvm, const char *fmt, va_list args);
-int vcpu_printf(struct hvm_vcpu *vcpu, const char *fmt, ...);
+int kvm_printf(struct kvm *kvm, const char *fmt, ...);
+int kvm_vprintf(struct kvm *kvm, const char *fmt, va_list args);
+int vcpu_printf(struct kvm_vcpu *vcpu, const char *fmt, ...);
 
-void hvm_mmu_destroy(struct hvm_vcpu *vcpu);
-int hvm_mmu_init(struct hvm_vcpu *vcpu);
+void kvm_mmu_destroy(struct kvm_vcpu *vcpu);
+int kvm_mmu_init(struct kvm_vcpu *vcpu);
 
-int hvm_mmu_reset_context(struct hvm_vcpu *vcpu);
+int kvm_mmu_reset_context(struct kvm_vcpu *vcpu);
 
-gpa_t gva_to_gpa(struct hvm_vcpu *vcpu, gva_t gva);
-hpa_t gva_to_hpa(struct hvm_vcpu *vcpu, gva_t gva);
+gpa_t gva_to_gpa(struct kvm_vcpu *vcpu, gva_t gva);
+hpa_t gva_to_hpa(struct kvm_vcpu *vcpu, gva_t gva);
 
 void vmcs_writel(unsigned long field, unsigned long value);
 unsigned long vmcs_readl(unsigned long field);
@@ -238,8 +238,8 @@ static inline int is_long_mode(void)
 
 static inline unsigned long guest_cr4(void)
 {
-	return (vmcs_readl(CR4_READ_SHADOW) & HVM_GUEST_CR4_MASK) | 
-		(vmcs_readl(GUEST_CR4) & ~HVM_GUEST_CR4_MASK);  
+	return (vmcs_readl(CR4_READ_SHADOW) & KVM_GUEST_CR4_MASK) | 
+		(vmcs_readl(GUEST_CR4) & ~KVM_GUEST_CR4_MASK);  
 }
 
 static inline int is_pae(void)
@@ -254,8 +254,8 @@ static inline int is_pse(void)
 
 static inline unsigned long guest_cr0(void)
 {
-	return (vmcs_readl(CR0_READ_SHADOW) & HVM_GUEST_CR0_MASK) | 
-		(vmcs_readl(GUEST_CR0) & ~HVM_GUEST_CR0_MASK);     
+	return (vmcs_readl(CR0_READ_SHADOW) & KVM_GUEST_CR0_MASK) | 
+		(vmcs_readl(GUEST_CR0) & ~KVM_GUEST_CR0_MASK);     
 }
 
 static inline unsigned guest_cpl(void)
@@ -282,7 +282,7 @@ static inline int is_external_interrupt(uint32_t intr_info)
 }
 
 
-extern hpa_t hvm_bad_page_addr;
+extern hpa_t kvm_bad_page_addr;
 
 
 /* The Xen-based x86 emulator wants register state in a struct cpu_user_regs */
