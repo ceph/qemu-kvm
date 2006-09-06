@@ -2,7 +2,7 @@
 
 #include "kvm.h"
 
-#include <linux/hvm.h>
+#include <linux/kvm.h>
 #include <linux/module.h>
 #include <linux/errno.h>
 #include <asm/processor.h>

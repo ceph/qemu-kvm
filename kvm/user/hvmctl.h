@@ -1,7 +1,7 @@
 #ifndef HVMCTL_H
 #define HVMCTL_H
 
-#include <linux/hvm.h>
+#include <linux/kvm.h>
 #include <stdint.h>
 
 struct hvm_context;
