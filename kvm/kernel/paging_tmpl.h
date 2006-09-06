@@ -86,9 +86,9 @@ static void FNAME(set_pde)(struct kvm_vcpu *vcpu, uint64_t guest_pde,
 }
 
 static pt_element_t *FNAME(fetch_guest)(struct kvm_vcpu *vcpu,
-			       struct guest_walker *walker, 
-			       int level,
-			       gva_t addr)
+					struct guest_walker *walker, 
+					int level,
+					gva_t addr)
 {
 
 	ASSERT(level > 0  && level <= walker->level);
@@ -116,9 +116,8 @@ static pt_element_t *FNAME(fetch_guest)(struct kvm_vcpu *vcpu,
 	} 
 }
 
-static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu,
-			 gva_t addr,
-			 struct guest_walker *walker)
+static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu, gva_t addr,
+			      struct guest_walker *walker)
 {
 	hpa_t shadow_addr;
 	int level;
