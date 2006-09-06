@@ -99,12 +99,12 @@ static unsigned long get_eflags(void)
 	return x;
 }
 
-static inline  void fx_save(void *image)
+static void fx_save(void *image)
 {
 	asm ( "fxsave (%0)":: "r" (image));
 }
 
-static inline  void fx_restore(void *image)
+static void fx_restore(void *image)
 {
 	asm ( "fxrstor (%0)":: "r" (image));
 }
@@ -514,14 +514,14 @@ void vmcs_writel(unsigned long field, unsigned long value)
 		       field, value, vmcs_read32(VM_INSTRUCTION_ERROR));
 }
 
-static inline void vmcs_write16(unsigned long field, u16 value)
+static void vmcs_write16(unsigned long field, u16 value)
 {
 	vmcs_writel(field, value);
 }
 
 
 
-static inline void vmcs_write64(unsigned long field, u64 value)
+static void vmcs_write64(unsigned long field, u64 value)
 {
 #ifdef __x86_64__
 	vmcs_writel(field, value);
@@ -1187,7 +1187,7 @@ static int handle_invlpg(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 }
 
 
-static inline void inject_gp(struct kvm_vcpu *vcpu)
+static void inject_gp(struct kvm_vcpu *vcpu)
 {
 	printk("inject_general_protection: rip 0x%lx\n",
 		 vmcs_readl(GUEST_RIP));
@@ -1202,7 +1202,7 @@ static inline void inject_gp(struct kvm_vcpu *vcpu)
 
 #define CR0_RESEVED_BITS 0xffffffff1ffaffc0ULL
 
-static inline int set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
+static int set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 {
 	if (cr0 & CR0_RESEVED_BITS) {
 		printk("set_cr0: 0x%lx #GP, reserved bits (0x%lx)\n", cr0, guest_cr0());
@@ -1321,7 +1321,7 @@ static inline int set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 }
 
 
-static inline void lmsw(struct kvm_vcpu *vcpu, unsigned long msw)
+static void lmsw(struct kvm_vcpu *vcpu, unsigned long msw)
 {
 	unsigned long cr0 = guest_cr0();
 
@@ -1343,7 +1343,7 @@ static inline void lmsw(struct kvm_vcpu *vcpu, unsigned long msw)
 
 #define CR4_RESEVED_BITS (~((1ULL << 11) - 1))
 
-static inline void set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
+static void set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
 {
 	if (cr4 & CR4_RESEVED_BITS) {
 		printk("set_cr4: #GP, reserved bits\n");
@@ -1373,7 +1373,7 @@ static inline void set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
 }
 
 
-static inline void set_cr3(struct kvm_vcpu *vcpu, unsigned long cr3)
+static void set_cr3(struct kvm_vcpu *vcpu, unsigned long cr3)
 {
 	if (is_long_mode()) {
 		if ( cr3 & CR3_L_MODE_RESEVED_BITS) {
@@ -1400,7 +1400,7 @@ static inline void set_cr3(struct kvm_vcpu *vcpu, unsigned long cr3)
 
 #define CR8_RESEVED_BITS (~0x0fULL)
 
-static inline void set_cr8(struct kvm_vcpu *vcpu, unsigned long cr8)
+static void set_cr8(struct kvm_vcpu *vcpu, unsigned long cr8)
 {
 	if ( cr8 & CR8_RESEVED_BITS) {
 		printk("set_cr8: #GP, reserved bits 0x%lx\n", cr8);
@@ -1412,13 +1412,13 @@ static inline void set_cr8(struct kvm_vcpu *vcpu, unsigned long cr8)
 }
 
 
-static inline void __set_cr0(unsigned long cr0)
+static void __set_cr0(unsigned long cr0)
 {
 	vmcs_writel(CR0_READ_SHADOW, cr0 & KVM_GUEST_CR0_MASK);
 	vmcs_writel(GUEST_CR0, cr0 | KVM_VM_CR0_ALWAYS_ON);
 }
 
-static inline void __set_cr4(unsigned long cr4)
+static void __set_cr4(unsigned long cr4)
 {
 	vmcs_writel(CR4_READ_SHADOW, cr4);
 	vmcs_writel(GUEST_CR4, cr4 | KVM_VM_CR4_ALWAYS_ON);
@@ -1602,7 +1602,7 @@ static int handle_rdmsr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 #define EFER_RESERVED_BITS 0xfffffffffffff2fe
 
 
-static inline void set_efer(struct kvm_vcpu *vcpu, u64 efer)
+static void set_efer(struct kvm_vcpu *vcpu, u64 efer)
 {
 	struct vmx_msr_entry *msr;
 
@@ -1633,7 +1633,7 @@ static inline void set_efer(struct kvm_vcpu *vcpu, u64 efer)
 }
 
 
-static inline void __set_efer(struct kvm_vcpu *vcpu, u64 efer)
+static void __set_efer(struct kvm_vcpu *vcpu, u64 efer)
 {
 	struct vmx_msr_entry *msr = find_msr_entry(vcpu, MSR_EFER);
 

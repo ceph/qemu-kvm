@@ -127,37 +127,30 @@
 	page_address(pfn_to_page((address) >> PAGE_SHIFT))
 
 
-static inline int is_write_protection(void)
+static int is_write_protection(void)
 {
 	return guest_cr0() & CR0_WP_MASK;
 }
 
 
-static inline int is_cpuid_PSE36(void)
+static int is_cpuid_PSE36(void)
 {
 	return TRUE;
 }
 
 
-static inline int is_present_pte(unsigned long pte)
+static int is_present_pte(unsigned long pte)
 {
 	return pte & PT_PRESENT_MASK;
 }
 
 
-static inline int is_writeble_pte(unsigned long pte)
+static int is_writeble_pte(unsigned long pte)
 {
 	return pte & PT_WRITABLE_MASK;
 }
 
-
-static inline int is_dirty_pte(unsigned long pte)
-{
-	return pte & PT_DIRTY_MASK;
-}
-
-
-static inline int is_io_pte(unsigned long pte)
+static int is_io_pte(unsigned long pte)
 {
 	return pte & PT_SHADOW_IO_MARK;
 }

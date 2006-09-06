@@ -54,13 +54,13 @@ static void FNAME(init_walker)(guest_walker_t *walker,
 }
 
 
-static inline void FNAME(release_walker)(guest_walker_t *walker)
+static void FNAME(release_walker)(guest_walker_t *walker)
 {
 	kunmap_atomic(walker->table & PAGE_MASK, KM_USER0);
 }
 
 
-static inline void FNAME(set_pte)(struct kvm_vcpu *vcpu,
+static void FNAME(set_pte)(struct kvm_vcpu *vcpu,
 			     uint64_t guest_pte,
 			     uint64_t *shadow_pte,
 			     uint64_t access_bits)
@@ -73,7 +73,7 @@ static inline void FNAME(set_pte)(struct kvm_vcpu *vcpu,
 }
 
 
-static inline void FNAME(set_pde)(struct kvm_vcpu *vcpu,
+static void FNAME(set_pde)(struct kvm_vcpu *vcpu,
 			     uint64_t guest_pde,
 			     uint64_t *shadow_pte,
 			     uint64_t access_bits,
@@ -213,7 +213,7 @@ static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu,
 }
 
 
-static inline int FNAME(fix_write_pf)(struct kvm_vcpu *vcpu,
+static int FNAME(fix_write_pf)(struct kvm_vcpu *vcpu,
 				 uint64_t *shadow_ent,
 				 guest_walker_t *walker,
 				 gva_t addr,

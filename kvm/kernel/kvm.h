@@ -263,7 +263,7 @@ static inline unsigned guest_cpl(void)
 	return vmcs_read16(GUEST_CS_SELECTOR) & SELECTOR_RPL_MASK;     
 }
 
-static int is_paging(void)
+static inline int is_paging(void)
 {
 	return guest_cr0() & CR0_PG_MASK;
 }
