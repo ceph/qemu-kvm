@@ -598,12 +598,12 @@ static void free_mmu_pages(struct kvm_vcpu *vcpu)
 	while (!list_empty(&vcpu->free_pages)) {
 		struct kvm_mmu_page_link *page_link;
 
-		   page_link = list_entry(vcpu->free_pages.next,
-					  struct kvm_mmu_page_link, link);
-		   list_del(&page_link->link);
-		   __free_page(pfn_to_page(page_link->page_hpa >> PAGE_SHIFT));
-		   page_link->page_hpa = INVALID_PAGE;
-		   list_add(&page_link->link, &vcpu->free_page_links);
+		page_link = list_entry(vcpu->free_pages.next,
+				       struct kvm_mmu_page_link, link);
+		list_del(&page_link->link);
+		__free_page(pfn_to_page(page_link->page_hpa >> PAGE_SHIFT));
+		page_link->page_hpa = INVALID_PAGE;
+		list_add(&page_link->link, &vcpu->free_page_links);
 	}
 }
 
