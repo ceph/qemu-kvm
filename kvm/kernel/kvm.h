@@ -92,7 +92,7 @@ struct vmx_msr_entry {
 
 struct kvm_vcpu;
 
-typedef struct paging_context_s {
+struct kvm_mmu {
 	void (*new_cr3)(struct kvm_vcpu *vcpu);
 	int (*page_fault)(struct kvm_vcpu *vcpu, gva_t gva, uint32_t err);
 	void (*inval_page)(struct kvm_vcpu *vcpu, gva_t gva);
@@ -101,7 +101,7 @@ typedef struct paging_context_s {
 	hpa_t root_hpa;
 	int root_level;
 	int shadow_root_level;
-}paging_context_t;
+};
 
 struct kvm_guest_debug {
 	int enabled;
@@ -150,7 +150,7 @@ struct kvm_vcpu {
 	struct list_head free_page_links;
 	struct list_head free_pages;
 	page_link_t page_link_buf[KVM_NUM_MMU_PAGES];
-	paging_context_t paging_context;
+	struct kvm_mmu mmu;
 
 	struct kvm_guest_debug guest_debug;
 

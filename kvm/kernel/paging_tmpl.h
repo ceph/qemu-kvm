@@ -38,7 +38,7 @@ static void FNAME(init_walker)(guest_walker_t *walker,
 {
 	hpa_t hpa;
 
-	walker->level = vcpu->paging_context.root_level;
+	walker->level = vcpu->mmu.root_level;
 	hpa = gpa_to_hpa(vcpu, vcpu->cr3 & PT64_BASE_ADDR_MASK);
 	walker->table = kmap_atomic(pfn_to_page(hpa >> PAGE_SHIFT), KM_USER0);
 
@@ -136,8 +136,8 @@ static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu,
 	int level;
 	uint64_t *priv_shadow_ent = NULL;
 
-	shadow_addr = vcpu->paging_context.root_hpa;
-	level = vcpu->paging_context.shadow_root_level;
+	shadow_addr = vcpu->mmu.root_hpa;
+	level = vcpu->mmu.shadow_root_level;
 
 	for (; ; level--) {
 		uint32_t index = SHADOW_PT_INDEX(addr, level);

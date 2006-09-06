@@ -362,7 +362,7 @@ static int kvm_dev_open(struct inode *inode, struct file *filp)
 		vcpu = &kvm->vcpus[i];
 		INIT_LIST_HEAD(&vcpu->free_page_links);
 		INIT_LIST_HEAD(&vcpu->free_pages);
-		vcpu->paging_context.root_hpa = INVALID_PAGE;
+		vcpu->mmu.root_hpa = INVALID_PAGE;
 
 		vcpu->host_fx_image = (char*)ALIGN((hva_t)vcpu->fx_buf,
 						   FX_IMAGE_ALIGN);
@@ -865,7 +865,7 @@ static int emulator_read_std(unsigned long addr,
 	void *data = val;
 
 	while (bytes) {
-		u64 pte = vcpu->paging_context.fetch_pte64(vcpu, addr);
+		u64 pte = vcpu->mmu.fetch_pte64(vcpu, addr);
 		unsigned offset = addr & (PAGE_SIZE-1);
 		unsigned tocopy = min(bytes, (unsigned)PAGE_SIZE - offset);
 		unsigned long pfn;
@@ -910,7 +910,7 @@ static int emulator_read_emulated(unsigned long addr,
 		vcpu->mmio_read_completed = 0;
 		return X86EMUL_CONTINUE;
 	} else {
-		u64 pte = vcpu->paging_context.fetch_pte64(vcpu, addr);
+		u64 pte = vcpu->mmu.fetch_pte64(vcpu, addr);
 		unsigned offset = addr & (PAGE_SIZE-1);
 
 		if (!(pte & PT_PRESENT_MASK))
@@ -931,7 +931,7 @@ static int emulator_write_emulated(unsigned long addr,
 {
 	struct kvm_vcpu *vcpu = vcpu_from_ctxt(ctxt);
 
-	u64 pte = vcpu->paging_context.fetch_pte64(vcpu, addr);
+	u64 pte = vcpu->mmu.fetch_pte64(vcpu, addr);
 	unsigned offset = addr & (PAGE_SIZE-1);
 	
 	if (!(pte & PT_PRESENT_MASK))
@@ -1103,7 +1103,7 @@ static int handle_exit_exception(struct kvm_vcpu *vcpu,
 	if (is_page_fault(intr_info)) {
 		cr2 = vmcs_readl(EXIT_QUALIFICATION);
 
-		if (!vcpu->paging_context.page_fault(vcpu, cr2, error_code)) {
+		if (!vcpu->mmu.page_fault(vcpu, cr2, error_code)) {
 			return 1;
 		}
 		/*
@@ -1176,7 +1176,7 @@ static int handle_invlpg(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 {
 	uint64_t address = vmcs_read64(EXIT_QUALIFICATION);
 	int instruction_length = vmcs_read32(VM_EXIT_INSTRUCTION_LEN);
-	vcpu->paging_context.inval_page(vcpu, address);
+	vcpu->mmu.inval_page(vcpu, address);
 	vmcs_writel(GUEST_RIP, vmcs_readl(GUEST_RIP) + instruction_length);
 	return 1;
 }
@@ -1385,7 +1385,7 @@ static void set_cr3(struct kvm_vcpu *vcpu, unsigned long cr3)
 	}
 
 	vcpu->cr3 = cr3;
-	vcpu->paging_context.new_cr3(vcpu);
+	vcpu->mmu.new_cr3(vcpu);
 	skip_emulated_instruction(vcpu);
 }
 
@@ -2222,7 +2222,7 @@ static int kvm_dev_ioctl_translate(struct kvm *kvm, struct kvm_translation *tr)
 {
 	unsigned long vaddr = tr->linear_address;
 	struct kvm_vcpu *vcpu = &kvm->vcpus[tr->vcpu];
-	u64 pte = vcpu->paging_context.fetch_pte64(vcpu, vaddr);
+	u64 pte = vcpu->mmu.fetch_pte64(vcpu, vaddr);
 	tr->physical_address = (pte & 0xfffffffff000) | (vaddr & ~PAGE_MASK);
 	tr->valid = pte & 1;
 	tr->writeable = 1;
