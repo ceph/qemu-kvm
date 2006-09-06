@@ -248,7 +248,7 @@ hpa_t gva_to_hpa(struct kvm_vcpu *vcpu, gva_t gva)
 	return gpa_to_hpa(vcpu, gva_to_gpa(vcpu, gva));
 }
 
-static void releas_pt_page_64(struct kvm_vcpu *vcpu, hpa_t page_hpa, int level)
+static void release_pt_page_64(struct kvm_vcpu *vcpu, hpa_t page_hpa, int level)
 {
 	ASSERT(vcpu);
 	ASSERT(VALID_PAGE(page_hpa));
@@ -265,7 +265,7 @@ static void releas_pt_page_64(struct kvm_vcpu *vcpu, hpa_t page_hpa, int level)
 			uint64_t current_ent = *pos;
 			*pos = 0;
 			if (is_present_pte(current_ent)) {
-				releas_pt_page_64(vcpu,
+				release_pt_page_64(vcpu,
 						  current_ent & 
 						  PT64_BASE_ADDR_MASK,
 						  level - 1);
@@ -323,7 +323,7 @@ static void nonpaging_flush(struct kvm_vcpu *vcpu)
 	++kvm_stat.tlb_flush;
 	pgprintk("nonpaging_flush\n");
 	ASSERT(VALID_PAGE(root));
-	releas_pt_page_64(vcpu, root, vcpu->mmu.shadow_root_level);
+	release_pt_page_64(vcpu, root, vcpu->mmu.shadow_root_level);
 	root = kvm_mmu_alloc_page(vcpu);
 	ASSERT(VALID_PAGE(root));
 	vcpu->mmu.root_hpa = root;
@@ -379,7 +379,7 @@ static void nonpaging_free(struct kvm_vcpu *vcpu)
 	ASSERT(vcpu);
 	root = vcpu->mmu.root_hpa;
 	if (VALID_PAGE(root)) {
-		releas_pt_page_64(vcpu, root,
+		release_pt_page_64(vcpu, root,
 				  vcpu->mmu.shadow_root_level);
 	}
 	vcpu->mmu.root_hpa = INVALID_PAGE;
@@ -511,7 +511,7 @@ static void paging_inval_page(struct kvm_vcpu *vcpu, gva_t addr)
 		if (level == PT_DIRECTORY_LEVEL && 
 			  (table[index] & PT_SHADOW_PS_MARK)) {
 			table[index] = 0;
-			releas_pt_page_64(vcpu, page_addr, PT_PAGE_TABLE_LEVEL);
+			release_pt_page_64(vcpu, page_addr, PT_PAGE_TABLE_LEVEL);
 
 			//flush tlb
 			vmcs_writel(GUEST_CR3, vcpu->mmu.root_hpa |
