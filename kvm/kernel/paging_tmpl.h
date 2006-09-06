@@ -27,6 +27,10 @@
 	error
 #endif
 
+/*
+ * The guest_walker structure emulates the behavior of the hardware page
+ * table walker.
+ */
 typedef struct guest_walker_s {	
 	int level;
 	pt_element_t *table;
