@@ -124,8 +124,7 @@ static pt_element_t *FNAME(fetch_guest)(struct kvm_vcpu *vcpu,
 
 static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu,
 			 gva_t addr,
-			 guest_walker_t *walker,
-			 int *enomem)
+			 guest_walker_t *walker)
 {
 	hpa_t shadow_addr;
 	int level;
@@ -154,10 +153,8 @@ static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu,
 		} else
 			guest_ent = FNAME(fetch_guest)(vcpu, walker, level, addr);
 
-		if (!is_present_pte(*guest_ent)) {
-			*enomem = 0;
+		if (!is_present_pte(*guest_ent))
 			return NULL;
-		}
 
 		*guest_ent |= PT_ACCESSED_MASK;
 
@@ -176,10 +173,8 @@ static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu,
 		}
 
 		shadow_addr = kvm_mmu_alloc_page(vcpu);
-		if (!VALID_PAGE(shadow_addr)) {
-			*enomem = 1;
-			return NULL;
-		}
+		if (!VALID_PAGE(shadow_addr))
+			return ERR_PTR(-ENOMEM);
 		if (!is_long_mode() && level == 3)
 			*shadow_ent = shadow_addr | 
 				(*guest_ent & (PT_PRESENT_MASK | PT_PWT_MASK | PT_PCD_MASK));
@@ -240,11 +235,9 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 	int fixed;
 
 	for (;;) {
-		int enomem;
-
 		FNAME(init_walker)(&walker, vcpu);
-		shadow_pte = FNAME(fetch)(vcpu, addr, &walker, &enomem);
-		if (!shadow_pte && enomem) {
+		shadow_pte = FNAME(fetch)(vcpu, addr, &walker);
+		if (IS_ERR(shadow_pte)) {  /* must be -ENOMEM */
 			nonpaging_flush(vcpu);
 			FNAME(release_walker)(&walker);
 			continue;
