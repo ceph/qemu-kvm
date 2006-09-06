@@ -386,7 +386,7 @@ static int nonpaging_init_context(struct kvm_vcpu *vcpu)
 
 static void paging_new_cr3(struct kvm_vcpu *vcpu)
 {
-    nonpaging_flush(vcpu);
+	nonpaging_flush(vcpu);
 }
 
 static inline void set_pte_common(struct kvm_vcpu *vcpu,
@@ -568,11 +568,11 @@ static int init_kvm_mmu(struct kvm_vcpu *vcpu)
 	       is_paging() ? " paging" : "",
 	       is_long_mode() ? " 64bit" : "",
 	       is_pae() ? " PAE" : "");
-	if (!is_paging() )
+	if (!is_paging())
 		return nonpaging_init_context(vcpu);
 	else if (is_long_mode())
 		return paging64_init_context(vcpu);
-	else if (is_pae() )
+	else if (is_pae())
 		return paging32E_init_context(vcpu); 
 	else
 		return paging32_init_context(vcpu);
