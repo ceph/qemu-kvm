@@ -6077,7 +6077,7 @@ int main(int argc, char **argv)
     phys_ram_size = ram_size + vga_ram_size + bios_size;
 
 #if USE_KVM
-    kvm_init();
+    kvm_qemu_init();
 #else
     phys_ram_base = qemu_vmalloc(phys_ram_size);
     if (!phys_ram_base) {

@@ -419,7 +419,7 @@ static struct hvm_callbacks qemu_kvm_ops = {
     .io_window = kvm_io_window,
 };
 
-void kvm_init()
+void kvm_qemu_init()
 {
     hvm_context = hvm_init(&qemu_kvm_ops, saved_env);
     hvm_create(hvm_context, phys_ram_size, (void**)&phys_ram_base, 1);
