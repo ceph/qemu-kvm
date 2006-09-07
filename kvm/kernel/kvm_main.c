@@ -771,15 +771,12 @@ static void vcpu_put_rsp_rip(struct kvm_vcpu *vcpu)
 static int kvm_dev_ioctl_create(struct kvm *kvm, struct kvm_create *kvm_create)
 {
 	int r;
-	unsigned long pages = ((kvm_create->memory_size-1) >> PAGE_SHIFT) + 1;
 	unsigned long i;
 
 	r = -EEXIST;
 	if (kvm->created)
 		goto out;
 	r = -EINVAL;
-	if (!kvm_create->memory_size)
-		goto out;
 
 	r = -ENOMEM;
 	kvm->log_buf = kmalloc(KVM_LOG_BUF_SIZE, GFP_KERNEL);
@@ -792,18 +789,6 @@ static int kvm_dev_ioctl_create(struct kvm *kvm, struct kvm_create *kvm_create)
 
         kvm_printf(kvm, "%s: kvm log start.\n", __FUNCTION__);
 
-	kvm->phys_mem_pages = pages;
-	kvm->phys_mem = vmalloc(pages * sizeof(struct page *));
-
-	if (!kvm->phys_mem)
-		goto out_free_log_file;
-
-	memset(kvm->phys_mem, 0, pages * sizeof(struct page *));
-	for (i = 0; i < pages; ++i) {
-		kvm->phys_mem[i] = alloc_page(GFP_HIGHUSER);
-		if (!kvm->phys_mem[i])
-			goto out_free_physmem;
-	}
 	kvm->nvcpus = 1;
 	for (i = 0; i < kvm->nvcpus; ++i) {
 		struct kvm_vcpu *vcpu = &kvm->vcpus[i];
@@ -828,11 +813,48 @@ static int kvm_dev_ioctl_create(struct kvm *kvm, struct kvm_create *kvm_create)
 
 out_free_vcpus:
 	kvm_free_vcpus(kvm);
-out_free_physmem:
-	kvm_free_physmem(kvm);
-out_free_log_file:
 	fput(kvm->log_file);
 	kfree(kvm->log_buf);
+out:
+	return r;
+}
+
+static int kvm_dev_ioctl_create_memory_region(struct kvm *kvm, 
+					      struct kvm_memory_region *mem)
+{
+	int r;
+	unsigned long pages;
+	unsigned long i;
+
+	r = -ENOENT;
+	if (!kvm->created)
+		goto out;
+	r = -EINVAL;
+	if (!mem->memory_size)
+		goto out;
+	if (mem->memory_size & (PAGE_SIZE - 1))
+		goto out;
+	if (mem->guest_phys_addr & (PAGE_SIZE - 1))
+		goto out;
+
+	pages = ((mem->memory_size - 1) >> PAGE_SHIFT) + 1;
+	kvm->phys_mem_pages = pages;
+	kvm->phys_mem = vmalloc(pages * sizeof(struct page *));
+
+	if (!kvm->phys_mem)
+		goto out;
+
+	r = -ENOMEM;
+	memset(kvm->phys_mem, 0, pages * sizeof(struct page *));
+	for (i = 0; i < pages; ++i) {
+		kvm->phys_mem[i] = alloc_page(GFP_HIGHUSER);
+		if (!kvm->phys_mem[i])
+			goto out_free_physmem;
+	}
+	return 0;
+
+out_free_physmem:
+	kvm_free_physmem(kvm);
 out:
 	return r;
 }
@@ -2437,6 +2459,17 @@ static long kvm_dev_ioctl(struct file *filp,
 		if (r)
 			goto out;
 		r = 0;
+		break;
+	}
+	case KVM_CREATE_MEMORY_REGION: {
+		struct kvm_memory_region kvm_mem;
+	
+		r = -EFAULT;
+		if (copy_from_user(&kvm_mem, (void *)arg, sizeof kvm_mem))
+			goto out;
+		r = kvm_dev_ioctl_create_memory_region(kvm, &kvm_mem);
+		if (r)
+			goto out;
 		break;
 	}
 	default:

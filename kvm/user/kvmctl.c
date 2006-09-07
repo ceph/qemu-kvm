@@ -77,8 +77,11 @@ int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem,
 	int fd = kvm->fd;
 	int r;
 	struct kvm_create create = {
-		.memory_size = memory,
 		.log_fd = log_fd,
+	};
+	struct kvm_memory_region main_memory = {
+		.memory_size = memory,
+		.guest_phys_addr = 0,
 	};
 
 	r = ioctl(fd, KVM_CREATE, &create);
@@ -86,6 +89,12 @@ int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem,
 		printf("kvm_create: %m\n");
 		exit(1);
 	}
+	r = ioctl(fd, KVM_CREATE_MEMORY_REGION, &main_memory);
+	if (r == -1) {
+		printf("kvm_create_memory_region: %m\n");
+		exit(1);
+	}
+
 	*vm_mem = mmap(0, memory, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 	if (*vm_mem == MAP_FAILED) {
 		printf("mmap: %m\n");
