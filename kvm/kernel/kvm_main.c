@@ -385,13 +385,21 @@ static int kvm_dev_open(struct inode *inode, struct file *filp)
 	return 0;
 }
 
-static void kvm_free_physmem(struct kvm *kvm)
+static void kvm_free_physmem_slot(struct kvm *kvm, int slot)
 {
+	struct kvm_memory_slot *memslot = &kvm->memslots[slot];
 	unsigned long i;
 
-	for (i = 0; i < kvm->phys_mem_pages; ++i)
-		__free_page(kvm->phys_mem[i]);
-	vfree(kvm->phys_mem);
+	for (i = 0; i < memslot->npages; ++i)
+		__free_page(memslot->phys_mem[i]);
+	vfree(memslot->phys_mem);
+	*memslot = kvm->memslots[--kvm->nmemslots];
+}
+
+static void kvm_free_physmem(struct kvm *kvm)
+{
+	while (kvm->nmemslots)
+		kvm_free_physmem_slot(kvm, 0);
 }
 
 static void kvm_free_vmcs(struct kvm_vcpu *vcpu)
@@ -825,6 +833,8 @@ static int kvm_dev_ioctl_create_memory_region(struct kvm *kvm,
 	int r;
 	unsigned long pages;
 	unsigned long i;
+	int slot;
+	struct kvm_memory_slot *memslot;
 
 	r = -ENOENT;
 	if (!kvm->created)
@@ -836,27 +846,47 @@ static int kvm_dev_ioctl_create_memory_region(struct kvm *kvm,
 		goto out;
 	if (mem->guest_phys_addr & (PAGE_SIZE - 1))
 		goto out;
-
+	r = -ENOBUFS;
+	if (kvm->nmemslots == KVM_MAX_MEMORY_SLOTS)
+		goto out;
+	
+	slot = kvm->nmemslots++;
+	memslot = &kvm->memslots[slot];
 	pages = ((mem->memory_size - 1) >> PAGE_SHIFT) + 1;
-	kvm->phys_mem_pages = pages;
-	kvm->phys_mem = vmalloc(pages * sizeof(struct page *));
+	memslot->base_gfn = mem->guest_phys_addr >> PAGE_SHIFT;
+	memslot->npages = pages;
+	memslot->phys_mem = vmalloc(pages * sizeof(struct page *));
 
-	if (!kvm->phys_mem)
+	if (!memslot->phys_mem)
 		goto out;
 
 	r = -ENOMEM;
-	memset(kvm->phys_mem, 0, pages * sizeof(struct page *));
+	memset(memslot->phys_mem, 0, pages * sizeof(struct page *));
 	for (i = 0; i < pages; ++i) {
-		kvm->phys_mem[i] = alloc_page(GFP_HIGHUSER);
-		if (!kvm->phys_mem[i])
+		memslot->phys_mem[i] = alloc_page(GFP_HIGHUSER);
+		if (!memslot->phys_mem[i])
 			goto out_free_physmem;
 	}
 	return 0;
 
 out_free_physmem:
-	kvm_free_physmem(kvm);
+	kvm_free_physmem_slot(kvm, slot);
 out:
 	return r;
+}
+
+struct page *gfn_to_page(struct kvm *kvm, gfn_t gfn)
+{
+	int i;
+
+	for (i = 0; i < kvm->nmemslots; ++i) {
+		struct kvm_memory_slot *memslot = &kvm->memslots[i];
+
+		if (gfn >= memslot->base_gfn
+		    && gfn < memslot->base_gfn + memslot->npages)
+			return memslot->phys_mem[gfn - memslot->base_gfn];
+	}
+	return 0;
 }
 
 static void skip_emulated_instruction(struct kvm_vcpu *vcpu)
@@ -908,7 +938,7 @@ static int emulator_read_std(unsigned long addr,
 		if (!(pte & PT_PRESENT_MASK))
 			return vcpu_printf(vcpu, "not present\n"), X86EMUL_PROPAGATE_FAULT;
 		pfn = (pte & PT64_BASE_ADDR_MASK) >> PAGE_SHIFT;
-		page = kmap_atomic(vcpu->kvm->phys_mem[pfn], KM_USER0);
+		page = kmap_atomic(gfn_to_page(vcpu->kvm, pfn), KM_USER0);
 
 		memcpy(data, page + offset, tocopy);
 
@@ -2485,15 +2515,15 @@ static struct page *kvm_dev_nopage(struct vm_area_struct *vma,
 {
 	struct kvm *kvm = vma->vm_file->private_data;
 	unsigned long pgoff;
-	struct page *page = NOPAGE_SIGBUS;
+	struct page *page;
 
 	*type = VM_FAULT_MINOR;
-	pgoff = (address - vma->vm_start) >> PAGE_SHIFT;
-	if (pgoff >= kvm->phys_mem_pages)
-		goto out;
-	page = kvm->phys_mem[pgoff];
-	get_page(page);
-out:
+	pgoff = ((address - vma->vm_start) >> PAGE_SHIFT) + vma->vm_pgoff;
+	page = gfn_to_page(kvm, pgoff);
+	if (page)
+		get_page(page);
+	else
+		page = NOPAGE_SIGBUS;
 	return page;
 }
 

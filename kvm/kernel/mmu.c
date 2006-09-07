@@ -205,10 +205,6 @@ static hpa_t kvm_mmu_alloc_page(struct kvm_vcpu *vcpu)
 
 static inline int is_io_mem(struct kvm_vcpu *vcpu, unsigned long addr)
 {
-
-	if ((addr >> PAGE_SHIFT) >= vcpu->kvm->phys_mem_pages)
-		return 1;
-
 	return (addr >= 0xa0000ULL && addr < 0xe0000ULL) || 
 		(addr >= 0xffff0000ULL && addr < 0x100000000ULL);
 }
@@ -222,7 +218,10 @@ static hpa_t gpa_to_hpa(struct kvm_vcpu *vcpu, gpa_t gpa)
 	if (is_io_mem(vcpu, gpa))
 		return kvm_bad_page_addr;
 
-	page = vcpu->kvm->phys_mem[gpa >> PAGE_SHIFT];
+	page = gfn_to_page(vcpu->kvm, gpa >> PAGE_SHIFT);
+	if (!page)
+		return kvm_bad_page_addr;
+
 	return (page_to_pfn(page) << PAGE_SHIFT) | (gpa & (PAGE_SIZE-1));
 }
 

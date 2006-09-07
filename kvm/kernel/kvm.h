@@ -37,6 +37,7 @@
 #define INVALID_PAGE (~(hpa_t)0)
 
 #define KVM_MAX_VCPUS 4
+#define KVM_MEMORY_SLOTS 4
 #define KVM_NUM_MMU_PAGES 256
 
 #define FX_IMAGE_SIZE 512
@@ -171,10 +172,18 @@ struct kvm_vcpu {
 	unsigned long mmio_phys_addr;
 };
 
+struct kvm_memory_slot {
+	gfn_t base_gfn;
+	unsigned long npages;
+	struct page **phys_mem;
+};
+
+#define KVM_MAX_MEMORY_SLOTS 8
+
 struct kvm {
 	unsigned created : 1;
-	unsigned long phys_mem_pages;
-	struct page **phys_mem;
+	int nmemslots;
+	struct kvm_memory_slot memslots[KVM_MEMORY_SLOTS];
 	int nvcpus;
 	struct kvm_vcpu vcpus[KVM_MAX_VCPUS];
 	struct file *log_file;
@@ -207,6 +216,8 @@ int kvm_mmu_reset_context(struct kvm_vcpu *vcpu);
 
 gpa_t gva_to_gpa(struct kvm_vcpu *vcpu, gva_t gva);
 hpa_t gva_to_hpa(struct kvm_vcpu *vcpu, gva_t gva);
+
+struct page *gfn_to_page(struct kvm *kvm, gfn_t gfn);
 
 void vmcs_writel(unsigned long field, unsigned long value);
 unsigned long vmcs_readl(unsigned long field);
