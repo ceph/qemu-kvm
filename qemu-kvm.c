@@ -393,7 +393,9 @@ static void kvm_halt(void *opaque, int vcpu)
     env = envs[0];
     save_regs(env);
 
-    if (!(env->kvm_pending_int && env->eflags & IF_MASK)) {
+    if (!((env->kvm_pending_int || 
+	   (env->interrupt_request & CPU_INTERRUPT_HARD)) && 
+	  (env->eflags & IF_MASK))) {
 	  env->kvm_emulate_one_instruction = 1;
     }
     cpu_loop_exit();
