@@ -28,6 +28,9 @@
  */
 #include "vl.h"
 #include "vga_int.h"
+#ifndef _WIN32
+#include <sys/mman.h>
+#endif
 
 /*
  * TODO:
@@ -231,6 +234,10 @@ typedef struct CirrusVGAState {
     int cirrus_linear_io_addr;
     int cirrus_linear_bitblt_io_addr;
     int cirrus_mmio_io_addr;
+#ifdef USE_KVM
+    unsigned long cirrus_lfb_addr;
+    unsigned long cirrus_lfb_end;
+#endif
     uint32_t cirrus_addr_mask;
     uint32_t linear_mmio_mask;
     uint8_t cirrus_shadow_gr0;
@@ -267,6 +274,10 @@ typedef struct CirrusVGAState {
     int last_hw_cursor_y_end;
     int real_vram_size; /* XXX: suppress that */
     CPUWriteMemoryFunc **cirrus_linear_write;
+#ifdef USE_KVM
+    unsigned long map_addr;
+    unsigned long map_end;
+#endif
 } CirrusVGAState;
 
 typedef struct PCICirrusVGAState {
@@ -2520,6 +2531,51 @@ static CPUWriteMemoryFunc *cirrus_linear_bitblt_write[3] = {
     cirrus_linear_bitblt_writel,
 };
 
+#ifdef USE_KVM
+
+#include "qemu-kvm.h"
+
+extern kvm_context_t kvm_context;
+
+static void *set_vram_mapping(unsigned long begin, unsigned long end)
+{
+    void *vram_pointer = NULL;
+
+    printf("set_vram_mapping: memory: %lx - %lx\n",
+	   begin, end);
+
+    /* align begin and end address */
+    begin = begin & TARGET_PAGE_MASK;
+    end = begin + VGA_RAM_SIZE;
+    end = (end + TARGET_PAGE_SIZE -1 ) & TARGET_PAGE_MASK;
+
+    vram_pointer = kvm_create_phys_mem(kvm_context, begin, end - begin, 1);
+
+    if (vram_pointer == NULL) {
+        printf("set_vram_mapping: cannot allocate memory: %m\n");
+        return NULL;
+    }
+
+    memset(vram_pointer, 0, end - begin);
+
+    printf("set_vram_mapping: return %p\n", vram_pointer);
+    return vram_pointer;
+}
+
+static int unset_vram_mapping(unsigned long begin, unsigned long end)
+{
+    /* align begin and end address */
+    end = begin + VGA_RAM_SIZE;
+    begin = begin & TARGET_PAGE_MASK;
+    end = (end + TARGET_PAGE_SIZE -1 ) & TARGET_PAGE_MASK;
+
+    kvm_destroy_phys_mem(kvm_context, begin, end - begin);
+
+    return 0;
+}
+
+#endif
+
 /* Compute the memory access functions */
 static void cirrus_update_memory_access(CirrusVGAState *s)
 {
@@ -2538,11 +2594,43 @@ static void cirrus_update_memory_access(CirrusVGAState *s)
         
 	mode = s->gr[0x05] & 0x7;
 	if (mode < 4 || mode > 5 || ((s->gr[0x0B] & 0x4) == 0)) {
+#ifdef USE_KVM
+            if (s->cirrus_lfb_addr && s->cirrus_lfb_end && !s->map_addr) {
+                void *vram_pointer, *old_vram;
+
+                vram_pointer = set_vram_mapping(s->cirrus_lfb_addr,
+                                                s->cirrus_lfb_end);
+                if (!vram_pointer)
+                    fprintf(stderr, "NULL vram_pointer\n");
+                else {
+                    old_vram = vga_update_vram((VGAState *)s, vram_pointer,
+                                               VGA_RAM_SIZE);
+                    qemu_free(old_vram);
+                }
+                s->map_addr = s->cirrus_lfb_addr;
+                s->map_end = s->cirrus_lfb_end;
+            }
+#endif
             s->cirrus_linear_write[0] = cirrus_linear_mem_writeb;
             s->cirrus_linear_write[1] = cirrus_linear_mem_writew;
             s->cirrus_linear_write[2] = cirrus_linear_mem_writel;
         } else {
         generic_io:
+#ifdef USE_KVM
+            if (s->cirrus_lfb_addr && s->cirrus_lfb_end && s->map_addr) {
+		int error;
+                void *old_vram = NULL;
+
+		error = unset_vram_mapping(s->cirrus_lfb_addr,
+					   s->cirrus_lfb_end);
+		if (!error)
+		    old_vram = vga_update_vram((VGAState *)s, NULL,
+                                               VGA_RAM_SIZE);
+                if (old_vram)
+                    munmap(old_vram, s->map_addr - s->map_end);
+                s->map_addr = s->map_end = 0;
+            }
+#endif
             s->cirrus_linear_write[0] = cirrus_linear_writeb;
             s->cirrus_linear_write[1] = cirrus_linear_writew;
             s->cirrus_linear_write[2] = cirrus_linear_writel;
@@ -3136,6 +3224,15 @@ static void cirrus_pci_lfb_map(PCIDevice *d, int region_num,
     /* XXX: add byte swapping apertures */
     cpu_register_physical_memory(addr, s->vram_size,
 				 s->cirrus_linear_io_addr);
+#ifdef USE_KVM
+    s->cirrus_lfb_addr = addr;
+    s->cirrus_lfb_end = addr + VGA_RAM_SIZE;
+
+    if (s->map_addr && (s->cirrus_lfb_addr != s->map_addr) &&
+        (s->cirrus_lfb_end != s->map_end))
+        printf("cirrus vga map change while on lfb mode\n");
+#endif
+
     cpu_register_physical_memory(addr + 0x1000000, 0x400000,
 				 s->cirrus_linear_bitblt_io_addr);
 }

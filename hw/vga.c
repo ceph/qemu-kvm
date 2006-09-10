@@ -1556,6 +1556,32 @@ static void vga_draw_blank(VGAState *s, int full_update)
 #define GMODE_GRAPH    1
 #define GMODE_BLANK 2 
 
+#ifdef USE_KVM
+
+#define CHECKSUM_SIZE (2*1024*1024/8)
+
+static int vram_has_changed(VGAState *s)
+{
+    const uint64_t *vram = (const uint64_t *)s->vram_ptr;
+    uint64_t csum = 3;
+    int i, mod;
+
+    if (!vram)
+	return 0;
+
+    for (i = 0; i < CHECKSUM_SIZE; ++i) {
+	csum = (csum << 3) | (csum >> 61);
+	csum ^= vram[i];
+    }
+
+    mod = s->last_vram_checksum != csum;
+    s->last_vram_checksum = csum;
+
+    return mod;
+}
+
+#endif
+
 static void vga_update_display(void *opaque)
 {
     VGAState *s = (VGAState *)opaque;
@@ -1568,6 +1594,9 @@ static void vga_update_display(void *opaque)
             rgb_to_pixel_dup_table[get_depth_index(s->ds)];
         
         full_update = 0;
+#ifdef USE_KVM
+        full_update = vram_has_changed(s);
+#endif
         if (!(s->ar_index & 0x20)) {
             graphic_mode = GMODE_BLANK;
         } else {
@@ -1722,6 +1751,7 @@ static void vga_map(PCIDevice *pci_dev, int region_num,
     }
 }
 
+/* when used on xen/kvm environment, the vga_ram_base is not used */
 void vga_common_init(VGAState *s, DisplayState *ds, uint8_t *vga_ram_base, 
                      unsigned long vga_ram_offset, int vga_ram_size)
 {
@@ -1752,7 +1782,11 @@ void vga_common_init(VGAState *s, DisplayState *ds, uint8_t *vga_ram_base,
 
     vga_reset(s);
 
+#ifndef USE_KVM
     s->vram_ptr = vga_ram_base;
+#else
+    s->vram_ptr = qemu_malloc(vga_ram_size);
+#endif
     s->vram_offset = vga_ram_offset;
     s->vram_size = vga_ram_size;
     s->ds = ds;
@@ -1843,6 +1877,7 @@ int vga_initialize(PCIBus *bus, DisplayState *ds, uint8_t *vga_ram_base,
         /* XXX: vga_ram_size must be a power of two */
         pci_register_io_region(d, 0, vga_ram_size, 
                                PCI_ADDRESS_SPACE_MEM_PREFETCH, vga_map);
+	printf("vga_bios_size %d\n", vga_bios_size);
         if (vga_bios_size != 0) {
             unsigned int bios_total_size;
             s->bios_offset = vga_bios_offset;
@@ -1862,6 +1897,33 @@ int vga_initialize(PCIBus *bus, DisplayState *ds, uint8_t *vga_ram_base,
 #endif
     }
     return 0;
+}
+
+void *vga_update_vram(VGAState *s, void *vga_ram_base, int vga_ram_size)
+{
+    uint8_t *old_pointer;
+
+    printf("vga_update_vram: base %p ptr %p\n", vga_ram_base, s->vram_ptr);
+    if (s->vram_size != vga_ram_size) {
+        fprintf(stderr, "No support to change vga_ram_size\n");
+        return NULL;
+    }
+
+    if (!vga_ram_base) {
+        vga_ram_base = qemu_malloc(vga_ram_size);
+        if (!vga_ram_base) {
+            fprintf(stderr, "reallocate error\n");
+            return NULL;
+        }
+    }
+
+    /* XXX lock needed? */
+    memcpy(vga_ram_base, s->vram_ptr, vga_ram_size);
+    old_pointer = s->vram_ptr;
+    s->vram_ptr = vga_ram_base;
+
+    printf("vga_update_vram: done\n");
+    return old_pointer;
 }
 
 /********************************************************/
