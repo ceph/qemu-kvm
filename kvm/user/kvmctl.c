@@ -105,6 +105,39 @@ int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem,
 	return 0;
 }
 
+void *kvm_create_phys_mem(kvm_context_t kvm, unsigned long phys_start, 
+			  unsigned long len, int writable)
+{
+	void *ptr;
+	int r;
+	int fd = kvm->fd;
+	int prot = PROT_READ;
+	struct kvm_memory_region memory = {
+		.memory_size = len,
+		.guest_phys_addr = phys_start,
+	};
+
+	r = ioctl(fd, KVM_CREATE_MEMORY_REGION, &memory);
+	if (r == -1)
+	    return 0;
+
+	if (writable)
+		prot |= PROT_WRITE;
+
+	ptr = mmap(0, len, prot, MAP_SHARED, fd, phys_start);
+	if (ptr == MAP_FAILED)
+		return 0;
+	return ptr;
+}
+
+void kvm_destroy_phys_mem(kvm_context_t kvm, unsigned long phys_start, 
+			  unsigned long len)
+{
+	printf("kvm_destroy_phys_mem: implement me\n");
+	exit(1);
+}
+
+
 static int more_io(struct kvm_run *run, int first_time)
 {
 	if (!run->io.rep)

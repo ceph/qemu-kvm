@@ -45,5 +45,9 @@ int kvm_set_sregs(kvm_context_t, int vcpu, struct kvm_sregs *regs);
 int kvm_inject_irq(kvm_context_t, int vcpu, unsigned irq);
 int kvm_guest_debug(kvm_context_t, int vcpu, struct kvm_debug_guest *dbg);
 void kvm_show_regs(kvm_context_t, int vcpu);
+void *kvm_create_phys_mem(kvm_context_t, unsigned long phys_start, 
+			  unsigned long len, int writable);
+void kvm_destroy_phys_mem(kvm_context_t, unsigned long phys_start, 
+			  unsigned long len);
 
 #endif
