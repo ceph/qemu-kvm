@@ -532,6 +532,7 @@ typedef struct CPUX86State {
 
 #ifdef USE_KVM
     int kvm_emulate_one_instruction;
+    int kvm_pending_int;
 #endif
 
     /* in order to simplify APIC support, we leave this pointer to the

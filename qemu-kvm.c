@@ -222,6 +222,8 @@ static void save_regs(CPUState *env)
     env->eflags &= ~(DF_MASK | CC_O | CC_S | CC_Z | CC_A | CC_P | CC_C);
 
     tlb_flush(env, 1);
+
+    env->kvm_pending_int = sregs.pending_int;
 }
 
 
@@ -230,7 +232,7 @@ static void save_regs(CPUState *env)
 static inline void push_interrupts(CPUState *env)
 {
     if (!(env->interrupt_request & CPU_INTERRUPT_HARD) ||
-	!(env->eflags & IF_MASK)) {
+	!(env->eflags & IF_MASK) || env->kvm_pending_int) {
     	if ((env->interrupt_request & CPU_INTERRUPT_EXIT)) {
 	    env->interrupt_request &= ~CPU_INTERRUPT_EXIT;
 	    env->exception_index = EXCP_INTERRUPT;
@@ -391,7 +393,7 @@ static void kvm_halt(void *opaque, int vcpu)
     env = envs[0];
     save_regs(env);
 
-    if (!((env->interrupt_request & CPU_INTERRUPT_HARD) && (env->eflags & IF_MASK))) {
+    if (!(env->kvm_pending_int && env->eflags & IF_MASK)) {
 	  env->kvm_emulate_one_instruction = 1;
     }
     cpu_loop_exit();

@@ -2197,6 +2197,9 @@ static int kvm_dev_ioctl_get_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 	sregs->cr8 = vcpu->cr8;
 	sregs->efer = vcpu->shadow_efer;
 	sregs->apic_base = vcpu->apic_base;
+
+	sregs->pending_int = vcpu->irq_summary != 0;
+
 	vcpu_put();
 
 	return 0;

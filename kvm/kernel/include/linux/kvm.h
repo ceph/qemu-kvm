@@ -120,6 +120,9 @@ struct kvm_sregs {
 	__u64 cr0, cr2, cr3, cr4, cr8;
 	__u64 efer;
 	__u64 apic_base;
+
+	/* out (KVM_GET_SREGS) */
+	int pending_int;
 };
 
 /* for KVM_TRANSLATE */
