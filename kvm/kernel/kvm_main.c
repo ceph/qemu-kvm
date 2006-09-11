@@ -416,7 +416,7 @@ static void kvm_free_vcpus(struct kvm *kvm)
 		kvm_free_vcpu(&kvm->vcpus[i]);
 }
 
-void kvm_kvm_log(struct kvm *kvm, const char *data, size_t count)
+void kvm_log(struct kvm *kvm, const char *data, size_t count)
 {
 	struct file* f = kvm->log_file;
 
@@ -445,7 +445,7 @@ int kvm_vprintf(struct kvm *kvm, const char *fmt, va_list args)
 		return 0;
 
 	i = vsnprintf(kvm->log_buf, KVM_LOG_BUF_SIZE, fmt, args);
-	kvm_kvm_log(kvm, kvm->log_buf, strlen(kvm->log_buf));
+	kvm_log(kvm, kvm->log_buf, strlen(kvm->log_buf));
 
 	return i;
 }
@@ -861,7 +861,7 @@ out:
  * Allocate some memory and give it an address in the guest physical address
  * space.
  *
- * Discontiguous memory is allows, mostly for framebuffers.
+ * Discontiguous memory is allowed, mostly for framebuffers.
  */
 static int kvm_dev_ioctl_create_memory_region(struct kvm *kvm, 
 					      struct kvm_memory_region *mem)
