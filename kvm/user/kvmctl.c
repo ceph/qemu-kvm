@@ -76,15 +76,12 @@ int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem,
 {
 	int fd = kvm->fd;
 	int r;
-	struct kvm_create create = {
-		.log_fd = log_fd,
-	};
 	struct kvm_memory_region main_memory = {
 		.memory_size = memory,
 		.guest_phys_addr = 0,
 	};
 
-	r = ioctl(fd, KVM_CREATE, &create);
+	r = ioctl(fd, KVM_SET_LOG_FD, 1);
 	if (r == -1) {
 		printf("kvm_create: %m\n");
 		exit(1);

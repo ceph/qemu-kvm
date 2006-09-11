@@ -4,11 +4,6 @@
 #include <asm/types.h>
 #include <linux/ioctl.h>
 
-/* for KVM_CREATE */
-struct kvm_create {
-	__u32 log_fd; /* for debug, -1U if none */
-};
-
 /* for KVM_CREATE_MEMORY_REGION */
 struct kvm_memory_region {
 	__u64 guest_phys_addr;
@@ -159,7 +154,7 @@ struct kvm_debug_guest {
 	int singlestep;
 };
 
-#define KVM_CREATE                _IOW( 'q', 1, struct kvm_create)
+#define KVM_SET_LOG_FD            _IOW( 'q', 1, int) /* arg = fd */
 #define KVM_RUN                   _IOWR('q', 2, struct kvm_run)
 #define KVM_GET_REGS              _IOWR('q', 3, struct kvm_regs)
 #define KVM_SET_REGS              _IOW( 'q', 4, struct kvm_regs)

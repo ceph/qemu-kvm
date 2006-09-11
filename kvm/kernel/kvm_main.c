@@ -368,6 +368,7 @@ static int kvm_dev_open(struct inode *inode, struct file *filp)
 		return -ENOMEM;
 	
 	filp->private_data = kvm;
+	kvm->created = 1;
 	return 0;
 }
 
@@ -765,30 +766,29 @@ static void vcpu_put_rsp_rip(struct kvm_vcpu *vcpu)
 	vmcs_writel(GUEST_RIP, vcpu->rip);
 }
 
-static int kvm_dev_ioctl_create(struct kvm *kvm, struct kvm_create *kvm_create)
+static int kvm_dev_ioctl_set_logfd(struct kvm *kvm, int fd)
 {
 	int r;
 
-	r = -EEXIST;
-	if (kvm->created)
+	r = -ENOENT;
+	if (!kvm->created)
 		goto out;
 
 	r = -ENOMEM;
-	kvm->log_buf = kmalloc(KVM_LOG_BUF_SIZE, GFP_KERNEL);
-	if (!kvm->log_buf) {
+	if (!kvm->log_buf)
+		kvm->log_buf = kmalloc(KVM_LOG_BUF_SIZE, GFP_KERNEL);
+	if (!kvm->log_buf)
 		goto out;
-	}
 
-	if (kvm_create->log_fd != -1u)
-		kvm->log_file = fget(kvm_create->log_fd);
+	if (kvm->log_file)
+		fput(kvm->log_file);
+
+	kvm->log_file = fget(fd);
 
         kvm_printf(kvm, "%s: kvm log start.\n", __FUNCTION__);
 
-	kvm->created = 1;
 	return 0;
 
-	fput(kvm->log_file);
-	kfree(kvm->log_buf);
 out:
 	return r;
 }
@@ -2392,13 +2392,8 @@ static long kvm_dev_ioctl(struct file *filp,
 	int r = -EINVAL;
 
 	switch (ioctl) {
-	case KVM_CREATE: {
-		struct kvm_create kvm_create;
-	
-		r = -EFAULT;
-		if (copy_from_user(&kvm_create, (void *)arg, sizeof kvm_create))
-			goto out;
-		r = kvm_dev_ioctl_create(kvm, &kvm_create);
+	case KVM_SET_LOG_FD: {
+		r = kvm_dev_ioctl_set_logfd(kvm, arg);
 		if (r)
 			goto out;
 		break;
