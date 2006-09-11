@@ -547,7 +547,12 @@ static void vmcs_write64(unsigned long field, u64 value)
 #endif
 	
 #define GUEST_IS_64 HOST_IS_64
-	
+
+/*
+ * Sets up the vmcs for a 64-bit (or 32-bit on i386) guest.  All of the
+ * required registers are set.  Some will be overwritten since the vcpu
+ * will typically start from a different state.
+ */
 static int kvm_vcpu_setup(struct kvm_vcpu *vcpu)
 {
 	extern asmlinkage void kvm_vmx_return(void);
@@ -756,18 +761,29 @@ out:
 	return ret;
 }
 
+/*
+ * Sync the rsp and rip registers into the vcpu structure.  This allows
+ * registers to be accessed by indexing vcpu->regs.
+ */
 static void vcpu_load_rsp_rip(struct kvm_vcpu *vcpu)
 {
 	vcpu->regs[VCPU_REGS_RSP] = vmcs_readl(GUEST_RSP);
 	vcpu->rip = vmcs_readl(GUEST_RIP);
 }
 
+/*
+ * Syncs rsp and rip back into the vmcs.  Should be called after possible
+ * modification.
+ */
 static void vcpu_put_rsp_rip(struct kvm_vcpu *vcpu)
 {
 	vmcs_writel(GUEST_RSP, vcpu->regs[VCPU_REGS_RSP]);
 	vmcs_writel(GUEST_RIP, vcpu->rip);
 }
 
+/*
+ * Sets up an fd to act as a log file.  Optional.
+ */
 static int kvm_dev_ioctl_set_logfd(struct kvm *kvm, int fd)
 {
 	int r;
@@ -791,6 +807,9 @@ out:
 	return r;
 }
 
+/*
+ * Creates some virtual cpus.  Good luck creating more than one.
+ */
 static int kvm_dev_ioctl_create_vcpus(struct kvm *kvm, int n)
 {
 	int i, r;
@@ -838,7 +857,12 @@ out:
 	return r;
 }		
 
-
+/*
+ * Allocate some memory and give it an address in the guest physical address
+ * space.
+ *
+ * Discontiguous memory is allows, mostly for framebuffers.
+ */
 static int kvm_dev_ioctl_create_memory_region(struct kvm *kvm, 
 					      struct kvm_memory_region *mem)
 {
@@ -1794,8 +1818,13 @@ static int handle_halt(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	return 0;
 }
 
+/*
+ * The exit handlers return 1 if the exit was handled fully and guest execution
+ * may resume.  Otherwise they set the kvm_run parameter to indicate what needs
+ * to be done to userspace and return 0.
+ */
 static int (*kvm_vmx_exit_handlers[])(struct kvm_vcpu *vcpu,
-				      struct kvm_run *kvm_eun) = {
+				      struct kvm_run *kvm_run) = {
 	[EXIT_REASON_EXCEPTION_NMI]           = handle_exception,
 	[EXIT_REASON_EXTERNAL_INTERRUPT]      = handle_external_interrupt,
 	[EXIT_REASON_IO_INSTRUCTION]          = handle_io,
@@ -1812,6 +1841,10 @@ static int (*kvm_vmx_exit_handlers[])(struct kvm_vcpu *vcpu,
 static const int kvm_vmx_max_exit_handlers =
 	sizeof(kvm_vmx_exit_handlers) / sizeof(*kvm_vmx_exit_handlers);
 
+/*
+ * The guest has exited.  See if we can fix it or if we need userspace
+ * assistance.
+ */
 static int kvm_handle_exit(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 {
 	u32 vectoring_info = vmcs_read32(IDT_VECTORING_INFO_FIELD);
@@ -2281,6 +2314,9 @@ static int kvm_dev_ioctl_set_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 	return 0;
 }
 
+/*
+ * Translate a guest virtual address to a guest physical address.
+ */
 static int kvm_dev_ioctl_translate(struct kvm *kvm, struct kvm_translation *tr)
 {
 	unsigned long vaddr = tr->linear_address;
@@ -2563,6 +2599,10 @@ static int kvm_reboot(struct notifier_block *notifier, unsigned long val,
                        void *v)
 {
 	if (val == SYS_RESTART) {
+		/*
+		 * Some (well, at least mine) BIOSes hang on reboot if
+		 * in vmx root mode.
+		 */
 		printk(KERN_INFO "kvm: exiting vmx mode\n");
 		on_each_cpu(kvm_disable, 0, 0, 1);
 	}
