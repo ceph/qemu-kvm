@@ -94,6 +94,11 @@ int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem,
 		printf("kvm_create_memory_region: %m\n");
 		exit(1);
 	}
+	r = ioctl(fd, KVM_CREATE_VCPUS, 1);
+	if (r == -1) {
+		printf("kvm_create_vcpus: %m\n");
+		exit(1);
+	}
 
 	*vm_mem = mmap(0, memory, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 	if (*vm_mem == MAP_FAILED) {

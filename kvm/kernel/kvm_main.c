@@ -363,24 +363,10 @@ static void kvm_disable(void *garbage)
 static int kvm_dev_open(struct inode *inode, struct file *filp)
 {
 	struct kvm *kvm = kzalloc(sizeof(struct kvm), GFP_KERNEL);
-	int i;
 
 	if (!kvm)
 		return -ENOMEM;
 	
-	for (i = 0; i < KVM_MAX_VCPUS; i++) {
-		struct kvm_vcpu *vcpu;
-
-		vcpu = &kvm->vcpus[i];
-		INIT_LIST_HEAD(&vcpu->free_page_links);
-		INIT_LIST_HEAD(&vcpu->free_pages);
-		vcpu->mmu.root_hpa = INVALID_PAGE;
-
-		vcpu->host_fx_image = (char*)ALIGN((hva_t)vcpu->fx_buf,
-						   FX_IMAGE_ALIGN);
-		vcpu->guest_fx_image = vcpu->host_fx_image + FX_IMAGE_SIZE;
-	}
-
 	filp->private_data = kvm;
 	return 0;
 }
@@ -407,19 +393,22 @@ static void kvm_free_vmcs(struct kvm_vcpu *vcpu)
 	if (vcpu->vmcs) {
 		on_each_cpu(__vcpu_clear, vcpu, 0, 1);
 		free_vmcs(vcpu->vmcs);
+		vcpu->vmcs = 0;
 	}
+}
+
+static void kvm_free_vcpu(struct kvm_vcpu *vcpu)
+{
+	kvm_free_vmcs(vcpu);
+	kvm_mmu_destroy(vcpu);
 }
 
 static void kvm_free_vcpus(struct kvm *kvm)
 {
 	unsigned int i;
 
-	for (i = 0; i < kvm->nvcpus; ++i) {
-		struct kvm_vcpu *vcpu = &kvm->vcpus[i];
-
-		kvm_free_vmcs(vcpu);
-		kvm_mmu_destroy(vcpu);
-	}
+	for (i = 0; i < kvm->nvcpus; ++i)
+		kvm_free_vcpu(&kvm->vcpus[i]);
 }
 
 void kvm_kvm_log(struct kvm *kvm, const char *data, size_t count)
@@ -779,12 +768,10 @@ static void vcpu_put_rsp_rip(struct kvm_vcpu *vcpu)
 static int kvm_dev_ioctl_create(struct kvm *kvm, struct kvm_create *kvm_create)
 {
 	int r;
-	unsigned long i;
 
 	r = -EEXIST;
 	if (kvm->created)
 		goto out;
-	r = -EINVAL;
 
 	r = -ENOMEM;
 	kvm->log_buf = kmalloc(KVM_LOG_BUF_SIZE, GFP_KERNEL);
@@ -797,10 +784,39 @@ static int kvm_dev_ioctl_create(struct kvm *kvm, struct kvm_create *kvm_create)
 
         kvm_printf(kvm, "%s: kvm log start.\n", __FUNCTION__);
 
-	kvm->nvcpus = 1;
-	for (i = 0; i < kvm->nvcpus; ++i) {
+	kvm->created = 1;
+	return 0;
+
+	fput(kvm->log_file);
+	kfree(kvm->log_buf);
+out:
+	return r;
+}
+
+static int kvm_dev_ioctl_create_vcpus(struct kvm *kvm, int n)
+{
+	int i, r;
+
+	r = -ENOENT;
+	if (!kvm->created)
+		goto out;
+	
+	r = -EINVAL;
+	if (n < 0 || kvm->nvcpus + n >= KVM_MAX_VCPUS)
+		goto out;
+
+	for (i = kvm->nvcpus; i < kvm->nvcpus + n; ++i) {
 		struct kvm_vcpu *vcpu = &kvm->vcpus[i];
 		struct vmcs *vmcs;
+
+		INIT_LIST_HEAD(&vcpu->free_page_links);
+		INIT_LIST_HEAD(&vcpu->free_pages);
+		vcpu->mmu.root_hpa = INVALID_PAGE;
+
+		vcpu->host_fx_image = (char*)ALIGN((hva_t)vcpu->fx_buf,
+						   FX_IMAGE_ALIGN);
+		vcpu->guest_fx_image = vcpu->host_fx_image + FX_IMAGE_SIZE;
+
 
 		vcpu->cpu = -1;  /* First load will set up TR */
 		vcpu->kvm = kvm;
@@ -815,17 +831,18 @@ static int kvm_dev_ioctl_create(struct kvm *kvm, struct kvm_create *kvm_create)
 		if (r < 0)
 			goto out_free_vcpus;
 	}
-		
-	kvm->created = 1;
+
+	kvm->nvcpus = i;
+
 	return 0;
 
 out_free_vcpus:
-	kvm_free_vcpus(kvm);
-	fput(kvm->log_file);
-	kfree(kvm->log_buf);
+	for ( ; i >= kvm->nvcpus; --i)
+		kvm_free_vcpu(&kvm->vcpus[i]);
 out:
 	return r;
-}
+}		
+
 
 static int kvm_dev_ioctl_create_memory_region(struct kvm *kvm, 
 					      struct kvm_memory_region *mem)
@@ -2382,6 +2399,12 @@ static long kvm_dev_ioctl(struct file *filp,
 		if (copy_from_user(&kvm_create, (void *)arg, sizeof kvm_create))
 			goto out;
 		r = kvm_dev_ioctl_create(kvm, &kvm_create);
+		if (r)
+			goto out;
+		break;
+	}
+	case KVM_CREATE_VCPUS: {
+		r = kvm_dev_ioctl_create_vcpus(kvm, arg);
 		if (r)
 			goto out;
 		break;
