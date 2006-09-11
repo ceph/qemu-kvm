@@ -1142,8 +1142,7 @@ static int emulate_instruction(struct kvm_vcpu *vcpu,
 	return EMULATE_DONE;
 }
 
-static int handle_exit_exception(struct kvm_vcpu *vcpu, 
-				 struct kvm_run *kvm_run)
+static int handle_exception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 {
 	u32 intr_info, error_code;
 	unsigned long cr2, rip;
@@ -1797,7 +1796,7 @@ static int handle_halt(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 
 static int (*kvm_vmx_exit_handlers[])(struct kvm_vcpu *vcpu,
 				      struct kvm_run *kvm_eun) = {
-	[EXIT_REASON_EXCEPTION_NMI]           = handle_exit_exception,
+	[EXIT_REASON_EXCEPTION_NMI]           = handle_exception,
 	[EXIT_REASON_EXTERNAL_INTERRUPT]      = handle_external_interrupt,
 	[EXIT_REASON_IO_INSTRUCTION]          = handle_io,
 	[EXIT_REASON_INVLPG]                  = handle_invlpg,
