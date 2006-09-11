@@ -181,7 +181,6 @@ struct kvm_memory_slot {
 #define KVM_MAX_MEMORY_SLOTS 8
 
 struct kvm {
-	unsigned created : 1;
 	int nmemslots;
 	struct kvm_memory_slot memslots[KVM_MEMORY_SLOTS];
 	int nvcpus;

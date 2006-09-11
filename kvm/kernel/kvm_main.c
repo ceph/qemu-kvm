@@ -368,7 +368,6 @@ static int kvm_dev_open(struct inode *inode, struct file *filp)
 		return -ENOMEM;
 	
 	filp->private_data = kvm;
-	kvm->created = 1;
 	return 0;
 }
 
@@ -492,13 +491,11 @@ static int kvm_dev_release(struct inode *inode, struct file *filp)
 {
 	struct kvm *kvm = filp->private_data;
 	
-	if (kvm->created) {
-		kvm_free_vcpus(kvm);
-		kvm_free_physmem(kvm);
-		if (kvm->log_file)
-			fput(kvm->log_file);
-		kfree(kvm->log_buf);
-	}
+	kvm_free_vcpus(kvm);
+	kvm_free_physmem(kvm);
+	if (kvm->log_file)
+		fput(kvm->log_file);
+	kfree(kvm->log_buf);
 	kfree(kvm);
 	return 0;
 }
@@ -770,10 +767,6 @@ static int kvm_dev_ioctl_set_logfd(struct kvm *kvm, int fd)
 {
 	int r;
 
-	r = -ENOENT;
-	if (!kvm->created)
-		goto out;
-
 	r = -ENOMEM;
 	if (!kvm->log_buf)
 		kvm->log_buf = kmalloc(KVM_LOG_BUF_SIZE, GFP_KERNEL);
@@ -797,10 +790,6 @@ static int kvm_dev_ioctl_create_vcpus(struct kvm *kvm, int n)
 {
 	int i, r;
 
-	r = -ENOENT;
-	if (!kvm->created)
-		goto out;
-	
 	r = -EINVAL;
 	if (n < 0 || kvm->nvcpus + n >= KVM_MAX_VCPUS)
 		goto out;
@@ -853,9 +842,6 @@ static int kvm_dev_ioctl_create_memory_region(struct kvm *kvm,
 	int slot;
 	struct kvm_memory_slot *memslot;
 
-	r = -ENOENT;
-	if (!kvm->created)
-		goto out;
 	r = -EINVAL;
 	if (!mem->memory_size)
 		goto out;
@@ -2080,8 +2066,6 @@ static int kvm_dev_ioctl_get_regs(struct kvm *kvm, struct kvm_regs *regs)
 {
 	struct kvm_vcpu *vcpu;
 
-	if (!kvm->created)
-		return -EINVAL;
 	if (regs->vcpu < 0 || regs->vcpu >= kvm->nvcpus)
 		return -EINVAL;
 	vcpu = &kvm->vcpus[regs->vcpu];
@@ -2123,8 +2107,6 @@ static int kvm_dev_ioctl_set_regs(struct kvm *kvm, struct kvm_regs *regs)
 {
 	struct kvm_vcpu *vcpu;
 
-	if (!kvm->created)
-		return -EINVAL;
 	if (regs->vcpu < 0 || regs->vcpu >= kvm->nvcpus)
 		return -EINVAL;
 	vcpu = &kvm->vcpus[regs->vcpu];
@@ -2160,8 +2142,6 @@ static int kvm_dev_ioctl_get_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 {
 	struct kvm_vcpu *vcpu;
 
-	if (!kvm->created)
-		return -EINVAL;
 	if (sregs->vcpu < 0 || sregs->vcpu >= kvm->nvcpus)
 		return -EINVAL;
 	vcpu = &kvm->vcpus[sregs->vcpu];
@@ -2227,8 +2207,6 @@ static int kvm_dev_ioctl_set_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 	struct kvm_vcpu *vcpu;
 	int mmu_reset_needed = 0;
 
-	if (!kvm->created)
-		return -EINVAL;
 	if (sregs->vcpu < 0 || sregs->vcpu >= kvm->nvcpus)
 		return -EINVAL;
 	vcpu = &kvm->vcpus[sregs->vcpu];
@@ -2315,8 +2293,6 @@ static int kvm_dev_ioctl_interrupt(struct kvm *kvm, struct kvm_interrupt *irq)
 {
 	struct kvm_vcpu *vcpu;
 
-	if (!kvm->created)
-		return -EINVAL;
 	if (irq->vcpu < 0 || irq->vcpu >= kvm->nvcpus)
 		return -EINVAL;
 	if (irq->irq < 0 || irq->irq >= 256)
@@ -2337,8 +2313,6 @@ static int kvm_dev_ioctl_debug_guest(struct kvm *kvm,
 	u32 exception_bitmap;
 	int old_singlestep;
 
-	if (!kvm->created)
-		return -EINVAL;
 	if (dbg->vcpu < 0 || dbg->vcpu >= kvm->nvcpus)
 		return -EINVAL;
 	vcpu = &kvm->vcpus[dbg->vcpu];
