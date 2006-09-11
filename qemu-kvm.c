@@ -382,7 +382,11 @@ static void kvm_emulate_one_instruction(void *opaque)
 
     env = envs[0];
     save_regs(env);
-    env->kvm_emulate_one_instruction = 1;
+    if (kvm_is_ok(env))
+	env->kvm_emulate_one_instruction = 1;
+    /*
+     * if !kvm_is_ok(), we'd like to remain in the emulator.
+     */
     cpu_loop_exit();
 }
  
