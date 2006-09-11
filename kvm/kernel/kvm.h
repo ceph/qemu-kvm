@@ -3,6 +3,7 @@
 
 #include <linux/types.h>
 #include <linux/list.h>
+#include <linux/mutex.h>
 
 #include "vmx.h"
 
@@ -138,6 +139,7 @@ enum {
 struct kvm_vcpu {
 	struct kvm *kvm;
 	struct vmcs *vmcs;
+	struct mutex mutex;
 	int   cpu;
 	int   launched;
 	unsigned long irq_summary; /* bit vector: 1 per word in irq_pending */ 

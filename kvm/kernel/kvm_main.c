@@ -237,7 +237,11 @@ static void __vcpu_clear(void *arg)
 static void vcpu_load(struct kvm_vcpu *vcpu)
 {
 	u64 phys_addr = __pa(vcpu->vmcs);
-	int cpu = get_cpu();
+	int cpu;
+	
+	mutex_lock(&vcpu->mutex);
+	
+	cpu = get_cpu();
 	
 	if (vcpu->cpu != cpu) {
 		smp_call_function(__vcpu_clear, vcpu, 0, 1);
@@ -269,9 +273,10 @@ static void vcpu_load(struct kvm_vcpu *vcpu)
 	}
 }
 
-static void vcpu_put(void)
+static void vcpu_put(struct kvm_vcpu *vcpu)
 {
 	put_cpu();
+	mutex_unlock(&vcpu->mutex);
 }
 
 static struct vmcs *alloc_vmcs_cpu(int cpu)
@@ -476,7 +481,7 @@ int vcpu_printf(struct kvm_vcpu *vcpu, const char *fmt, ...)
 	if (!vcpu->kvm->log_file)
 		return 0;
 
-	vcpu_put();
+	vcpu_put(vcpu);
 
 	va_start(args, fmt);
 	i = kvm_vprintf(vcpu->kvm, fmt, args);
@@ -741,13 +746,13 @@ static int kvm_vcpu_setup(struct kvm_vcpu *vcpu)
 
 	ret = kvm_mmu_init(vcpu);
 
-	vcpu_put();
+	vcpu_put(vcpu);
 	return ret;
 
 out_free_guest_msrs:
 	kfree(vcpu->guest_msrs);
 out:
-	vcpu_put();
+	vcpu_put(vcpu);
 	return ret;
 }
 
@@ -798,6 +803,7 @@ static int kvm_dev_ioctl_create_vcpus(struct kvm *kvm, int n)
 		struct kvm_vcpu *vcpu = &kvm->vcpus[i];
 		struct vmcs *vmcs;
 
+		mutex_init(&vcpu->mutex);
 		INIT_LIST_HEAD(&vcpu->free_page_links);
 		INIT_LIST_HEAD(&vcpu->free_pages);
 		vcpu->mmu.root_hpa = INVALID_PAGE;
@@ -2047,7 +2053,7 @@ again:
 		kvm_run->exit_type = KVM_EXIT_TYPE_VM_EXIT;
 		if (kvm_handle_exit(kvm_run, vcpu)) {
 			/* Give scheduler a change to reschedule. */
-			vcpu_put();
+			vcpu_put(vcpu);
 			if (signal_pending(current)) {
 				++kvm_stat.signal_exits;
 				return -EINTR;
@@ -2058,7 +2064,7 @@ again:
 		}
 	}
 
-	vcpu_put();
+	vcpu_put(vcpu);
 	return 0;
 }
 
@@ -2098,7 +2104,7 @@ static int kvm_dev_ioctl_get_regs(struct kvm *kvm, struct kvm_regs *regs)
 	if (vcpu->guest_debug.enabled && vcpu->guest_debug.singlestep)
 		regs->rflags &= ~(X86_EFLAGS_TF | X86_EFLAGS_RF);
 
-	vcpu_put();
+	vcpu_put(vcpu);
 
 	return 0;
 }
@@ -2133,7 +2139,7 @@ static int kvm_dev_ioctl_set_regs(struct kvm *kvm, struct kvm_regs *regs)
 	vmcs_writel(GUEST_RIP, regs->rip);
 	vmcs_writel(GUEST_RFLAGS, regs->rflags);
 
-	vcpu_put();
+	vcpu_put(vcpu);
 
 	return 0;
 }
@@ -2197,7 +2203,7 @@ static int kvm_dev_ioctl_get_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 
 	sregs->pending_int = vcpu->irq_summary != 0;
 
-	vcpu_put();
+	vcpu_put(vcpu);
 
 	return 0;
 }
@@ -2271,7 +2277,7 @@ static int kvm_dev_ioctl_set_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 
 	if (mmu_reset_needed)
 		kvm_mmu_reset_context(vcpu);
-	vcpu_put();
+	vcpu_put(vcpu);
 
 	return 0;
 }
@@ -2280,11 +2286,15 @@ static int kvm_dev_ioctl_translate(struct kvm *kvm, struct kvm_translation *tr)
 {
 	unsigned long vaddr = tr->linear_address;
 	struct kvm_vcpu *vcpu = &kvm->vcpus[tr->vcpu];
-	u64 pte = vcpu->mmu.fetch_pte64(vcpu, vaddr);
+	u64 pte;
+
+	vcpu_load(vcpu);
+	pte = vcpu->mmu.fetch_pte64(vcpu, vaddr);
 	tr->physical_address = (pte & 0xfffffffff000) | (vaddr & ~PAGE_MASK);
 	tr->valid = pte & 1;
 	tr->writeable = 1;
 	tr->usermode = 0;
+	vcpu_put(vcpu);
 
 	return 0;
 }
@@ -2299,8 +2309,12 @@ static int kvm_dev_ioctl_interrupt(struct kvm *kvm, struct kvm_interrupt *irq)
 		return -EINVAL;
 	vcpu = &kvm->vcpus[irq->vcpu];
 
+	vcpu_load(vcpu);
+
 	set_bit(irq->irq, vcpu->irq_pending);
 	set_bit(irq->irq / BITS_PER_LONG, &vcpu->irq_summary);
+
+	vcpu_put(vcpu);
 
 	return 0;
 }
@@ -2354,7 +2368,7 @@ static int kvm_dev_ioctl_debug_guest(struct kvm *kvm,
 	vmcs_write32(EXCEPTION_BITMAP, exception_bitmap);
 	vmcs_writel(GUEST_DR7, dr7);
 
-	vcpu_put();
+	vcpu_put(vcpu);
 
 	return 0;
 }
