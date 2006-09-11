@@ -134,9 +134,6 @@
 #define PT_DIRECTORY_LEVEL 2
 #define PT_PAGE_TABLE_LEVEL 1
 
-#define P_TO_V(address)\
-	page_address(pfn_to_page((address) >> PAGE_SHIFT))
-
 static int is_write_protection(void)
 {
 	return guest_cr0() & CR0_WP_MASK;
