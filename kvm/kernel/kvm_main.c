@@ -815,7 +815,7 @@ static int kvm_dev_ioctl_create_vcpus(struct kvm *kvm, int n)
 	int i, r;
 
 	r = -EINVAL;
-	if (n < 0 || kvm->nvcpus + n >= KVM_MAX_VCPUS)
+	if (n < 0 || kvm->nvcpus + n > KVM_MAX_VCPUS)
 		goto out;
 
 	for (i = kvm->nvcpus; i < kvm->nvcpus + n; ++i) {
