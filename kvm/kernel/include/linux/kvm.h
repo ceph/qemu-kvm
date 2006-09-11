@@ -29,12 +29,12 @@ enum kvm_exit_reason {
 /* for KVM_RUN */
 struct kvm_run {
 	/* in */
-	int vcpu;
-	int emulated;  /* skip current instruction */
-	int mmio_completed; /* mmio request completed */
+	__u32 vcpu;
+	__u32 emulated;  /* skip current instruction */
+	__u32 mmio_completed; /* mmio request completed */
 
 	/* out */
-	int exit_type;
+	__u32 exit_type;
 	__u32 exit_reason;
 	__u32 instruction_length;
 	union {
@@ -79,7 +79,8 @@ struct kvm_run {
 /* for KVM_GET_REGS and KVM_SET_REGS */
 struct kvm_regs {
 	/* in */
-	int vcpu;
+	__u32 vcpu;
+	__u32 padding;
 	
 	/* out (KVM_GET_REGS) / in (KVM_SET_REGS) */
 	__u64 rax, rbx, rcx, rdx;
@@ -96,17 +97,20 @@ struct kvm_segment {
 	__u8  type;
 	__u8  present, dpl, db, s, l, g, avl;
 	__u8  unusable;
+	__u8  padding;
 };
 
 struct kvm_dtable {
 	__u64 base;
 	__u16 limit;
+	__u16 padding[3];
 };
 
 /* for KVM_GET_SREGS and KVM_SET_SREGS */
 struct kvm_sregs {
 	/* in */
-	int vcpu;
+	__u32 vcpu;
+	__u32 padding;
 
 	/* out (KVM_GET_SREGS) / in (KVM_SET_SREGS) */
 	struct kvm_segment cs, ds, es, fs, gs, ss;
@@ -117,14 +121,15 @@ struct kvm_sregs {
 	__u64 apic_base;
 
 	/* out (KVM_GET_SREGS) */
-	int pending_int;
+	__u32 pending_int;
 };
 
 /* for KVM_TRANSLATE */
 struct kvm_translation {
 	/* in */
 	__u64 linear_address;
-	int   vcpu;
+	__u32 vcpu;
+	__u32 padding;
 
 	/* out */
 	__u64 physical_address;
@@ -136,22 +141,23 @@ struct kvm_translation {
 /* for KVM_INTERRUPT */
 struct kvm_interrupt {
 	/* in */
-	int vcpu;
-	__u8 irq;
+	__u32 vcpu;
+	__u32 irq;
 };
 
 struct kvm_breakpoint {
 	__u32 enabled;
+	__u32 padding;
 	__u64 address;
 };
 
 /* for KVM_DEBUG_GUEST */
 struct kvm_debug_guest {
 	/* int */
-	int vcpu;
-	int enabled;
+	__u32 vcpu;
+	__u32 enabled;
 	struct kvm_breakpoint breakpoints[4];
-	int singlestep;
+	__u32 singlestep;
 };
 
 #define KVM_SET_LOG_FD            _IOW( 'q', 1, int) /* arg = fd */
