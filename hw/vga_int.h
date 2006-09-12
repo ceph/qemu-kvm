@@ -135,7 +135,6 @@
     void (*cursor_draw_line)(struct VGAState *s, uint8_t *d, int y);    \
     /* tell for each page if it has been updated since the last time */ \
     uint32_t last_palette[256];                                         \
-    uint64_t last_vram_checksum; /* for USE_KVM, temporary */ 	        \
     uint32_t last_ch_attr[CH_ATTR_SIZE]; /* XXX: make it dynamic */
 
 
