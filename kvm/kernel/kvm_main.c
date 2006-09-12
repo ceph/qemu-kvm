@@ -972,6 +972,37 @@ out:
 	return r;
 }
 
+/*
+ * Get (and clear) the dirty memory log for a memory slot.
+ */
+static int kvm_dev_ioctl_get_dirty_log(struct kvm *kvm, 
+				       struct kvm_dirty_log *log)
+{
+	struct kvm_memory_slot *memslot;
+	int r;
+	int n;
+
+	r = -EINVAL;
+	if (log->slot >= KVM_MEMORY_SLOTS)
+		goto out;
+
+	memslot = &kvm->memslots[log->slot];
+	r = -ENOENT;
+	if (!memslot->dirty_bitmap)
+		goto out;
+
+	n = ALIGN(memslot->npages, 8) / 8;
+	r = -EFAULT;
+	if (copy_to_user(log->dirty_bitmap, memslot->dirty_bitmap, n))
+		goto out;
+
+	memset(memslot->dirty_bitmap, 0, n);
+	return 0;
+
+out:
+	return r;
+}
+
 struct page *gfn_to_page(struct kvm *kvm, gfn_t gfn)
 {
 	int i;
@@ -2629,6 +2660,17 @@ static long kvm_dev_ioctl(struct file *filp,
 		if (copy_from_user(&kvm_mem, (void *)arg, sizeof kvm_mem))
 			goto out;
 		r = kvm_dev_ioctl_set_memory_region(kvm, &kvm_mem);
+		if (r)
+			goto out;
+		break;
+	}
+	case KVM_GET_DIRTY_LOG: {
+		struct kvm_dirty_log log;
+	
+		r = -EFAULT;
+		if (copy_from_user(&log, (void *)arg, sizeof log))
+			goto out;
+		r = kvm_dev_ioctl_get_dirty_log(kvm, &log);
 		if (r)
 			goto out;
 		break;

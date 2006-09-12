@@ -4,6 +4,10 @@
 #include <asm/types.h>
 #include <linux/ioctl.h>
 
+#ifndef __user
+#define __user
+#endif
+
 /* for KVM_CREATE_MEMORY_REGION */
 struct kvm_memory_region {
 	__u32 slot;
@@ -165,6 +169,16 @@ struct kvm_debug_guest {
 	__u32 singlestep;
 };
 
+/* for KVM_GET_DIRTY_LOG */
+struct kvm_dirty_log {
+	__u32 slot;
+	__u32 padding;
+	union {
+		void __user *dirty_bitmap; /* one bit per page */
+		__u64 padding;
+	};
+};
+
 #define KVM_SET_LOG_FD            _IOW( 'q', 1, int) /* arg = fd */
 #define KVM_RUN                   _IOWR('q', 2, struct kvm_run)
 #define KVM_GET_REGS              _IOWR('q', 3, struct kvm_regs)
@@ -176,5 +190,6 @@ struct kvm_debug_guest {
 #define KVM_DEBUG_GUEST           _IOW( 'q', 9, struct kvm_debug_guest)
 #define KVM_SET_MEMORY_REGION     _IOW( 'q', 10, struct kvm_memory_region)
 #define KVM_CREATE_VCPUS           _IOW( 'q', 11, int) /* arg = nvcpus */
+#define KVM_GET_DIRTY_LOG         _IOW( 'q', 12, struct kvm_dirty_log)
 
 #endif
