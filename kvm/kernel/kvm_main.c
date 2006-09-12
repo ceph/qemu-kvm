@@ -979,8 +979,9 @@ static int kvm_dev_ioctl_get_dirty_log(struct kvm *kvm,
 				       struct kvm_dirty_log *log)
 {
 	struct kvm_memory_slot *memslot;
-	int r;
+	int r, i;
 	int n;
+	unsigned long any = 0;
 
 	r = -EINVAL;
 	if (log->slot >= KVM_MEMORY_SLOTS)
@@ -992,9 +993,23 @@ static int kvm_dev_ioctl_get_dirty_log(struct kvm *kvm,
 		goto out;
 
 	n = ALIGN(memslot->npages, 8) / 8;
+
+	for (i = 0; !any && i < n; ++i)
+		any = memslot->dirty_bitmap[i];
+
 	r = -EFAULT;
 	if (copy_to_user(log->dirty_bitmap, memslot->dirty_bitmap, n))
 		goto out;
+
+
+	if (any)
+		for (i = 0; i < kvm->nvcpus; ++i) {
+			struct kvm_vcpu *vcpu = &kvm->vcpus[i];
+
+			vcpu_load(vcpu);
+			kvm_mmu_reset_context(vcpu);
+			vcpu_put(vcpu);
+		}
 
 	memset(memslot->dirty_bitmap, 0, n);
 	return 0;
