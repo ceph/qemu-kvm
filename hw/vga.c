@@ -1359,6 +1359,22 @@ void vga_invalidate_scanlines(VGAState *s, int y1, int y2)
     }
 }
 
+#ifdef USE_KVM
+
+#include "kvmctl.h"
+extern kvm_context_t kvm_context;
+
+static int bitmap_get_dirty(unsigned long *bitmap, unsigned nr)
+{
+    unsigned word = nr / ((sizeof bitmap[0]) * 8);
+    unsigned bit = nr % ((sizeof bitmap[0]) * 8);
+
+    //printf("%x -> %ld\n", nr, (bitmap[word] >> bit) & 1);
+    return (bitmap[word] >> bit) & 1;
+}
+
+#endif
+
 /* 
  * graphic modes
  */
@@ -1371,6 +1387,19 @@ static void vga_draw_graphic(VGAState *s, int full_update)
     uint32_t v, addr1, addr;
     vga_draw_line_func *vga_draw_line;
     
+#ifdef USE_KVM
+
+    /* HACK ALERT */
+#define BITMAP_SIZE ((8*1024*1024) / 4096 / 8 / sizeof(long))
+    unsigned long bitmap[BITMAP_SIZE];
+
+    kvm_get_dirty_pages(kvm_context, 1, &bitmap);
+
+#define cpu_physical_memory_get_dirty(addr, type) \
+    (bitmap_get_dirty(bitmap, (addr - s->vram_offset) >> TARGET_PAGE_BITS) \
+     | cpu_physical_memory_get_dirty(addr, type))
+#endif
+
     full_update |= update_basic_params(s);
 
     s->get_resolution(s, &width, &height);
@@ -1556,32 +1585,6 @@ static void vga_draw_blank(VGAState *s, int full_update)
 #define GMODE_GRAPH    1
 #define GMODE_BLANK 2 
 
-#ifdef USE_KVM
-
-#define CHECKSUM_SIZE (2*1024*1024/8)
-
-static int vram_has_changed(VGAState *s)
-{
-    const uint64_t *vram = (const uint64_t *)s->vram_ptr;
-    uint64_t csum = 3;
-    int i, mod;
-
-    if (!vram)
-	return 0;
-
-    for (i = 0; i < CHECKSUM_SIZE; ++i) {
-	csum = (csum << 3) | (csum >> 61);
-	csum ^= vram[i];
-    }
-
-    mod = s->last_vram_checksum != csum;
-    s->last_vram_checksum = csum;
-
-    return mod;
-}
-
-#endif
-
 static void vga_update_display(void *opaque)
 {
     VGAState *s = (VGAState *)opaque;
@@ -1594,9 +1597,6 @@ static void vga_update_display(void *opaque)
             rgb_to_pixel_dup_table[get_depth_index(s->ds)];
         
         full_update = 0;
-#ifdef USE_KVM
-        full_update = vram_has_changed(s);
-#endif
         if (!(s->ar_index & 0x20)) {
             graphic_mode = GMODE_BLANK;
         } else {
