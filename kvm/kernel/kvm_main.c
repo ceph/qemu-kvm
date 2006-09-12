@@ -1027,17 +1027,19 @@ void mark_page_dirty(struct kvm *kvm, gfn_t gfn)
 		memslot = &kvm->memslots[i];
 
 		if (gfn >= memslot->base_gfn
-		    && gfn < memslot->base_gfn + memslot->npages)
-			break;
+		    && gfn < memslot->base_gfn + memslot->npages) {
+
+			if (!memslot || !memslot->dirty_bitmap)
+				return;
+
+			rel_gfn = gfn - memslot->base_gfn;
+
+			/* avoid RMW */
+			if (!test_bit(rel_gfn, memslot->dirty_bitmap))
+				set_bit(rel_gfn, memslot->dirty_bitmap);
+			return;
+		}
 	}
-			
-	if (!memslot || !memslot->dirty_bitmap)
-		return;
-
-	rel_gfn = gfn - memslot->base_gfn;
-
-	if (!test_bit(rel_gfn, memslot->dirty_bitmap))   /* avoid RMW */
-		set_bit(rel_gfn, memslot->dirty_bitmap);
 }
 
 static void skip_emulated_instruction(struct kvm_vcpu *vcpu)
