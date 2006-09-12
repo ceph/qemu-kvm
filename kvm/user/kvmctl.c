@@ -109,7 +109,7 @@ int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem,
 }
 
 void *kvm_create_phys_mem(kvm_context_t kvm, unsigned long phys_start, 
-			  unsigned long len, int slot, int writable)
+			  unsigned long len, int slot, int log, int writable)
 {
 	void *ptr;
 	int r;
@@ -119,6 +119,7 @@ void *kvm_create_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 		.slot = slot,
 		.memory_size = len,
 		.guest_phys_addr = phys_start,
+		.flags = log ? KVM_MEM_LOG_DIRTY_PAGES : 0,
 	};
 
 	r = ioctl(fd, KVM_SET_MEMORY_REGION, &memory);
@@ -141,6 +142,20 @@ void kvm_destroy_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 	exit(1);
 }
 
+
+void kvm_get_dirty_pages(kvm_context_t kvm, int slot, void *buf)
+{
+	int r;
+	struct kvm_dirty_log log = {
+		.slot = slot,
+	};
+
+	log.dirty_bitmap = buf;
+
+	r = ioctl(kvm->fd, KVM_GET_DIRTY_LOG, &log);
+	if (r == -1)
+		exit(1);
+}
 
 static int more_io(struct kvm_run *run, int first_time)
 {
