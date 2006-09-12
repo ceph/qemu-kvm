@@ -278,6 +278,7 @@ static int nonpaging_map(struct kvm_vcpu *vcpu, gva_t v, hpa_t p)
 		table = __va(table_addr);
 
 		if (level == 1) {
+			mark_page_dirty(vcpu->kvm, v >> PAGE_SHIFT);
 			table[index] = p | PT_PRESENT_MASK | PT_WRITABLE_MASK;
 			return 0;
 		}

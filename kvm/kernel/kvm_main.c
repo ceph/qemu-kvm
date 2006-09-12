@@ -389,6 +389,8 @@ static void kvm_free_physmem_slot(struct kvm *kvm, int slot)
 	vfree(memslot->phys_mem);
 	memslot->phys_mem = 0;
 	memslot->npages = 0;
+	vfree(memslot->dirty_bitmap);
+	memslot->dirty_bitmap = 0;
 }
 
 static void kvm_free_physmem(struct kvm *kvm)
@@ -913,13 +915,20 @@ static int kvm_dev_ioctl_set_memory_region(struct kvm *kvm,
 	if (memslot->phys_mem && npages)
 		kvm_free_physmem_slot(kvm, mem->slot);
 		
+	/* Free page dirty bitmap if unneeded */
+	if (!(mem->flags & KVM_MEM_LOG_DIRTY_PAGES) && memslot->dirty_bitmap) {
+		vfree(memslot->dirty_bitmap);
+		memslot->dirty_bitmap = 0;	
+	}
+
 	memslot->base_gfn = base_gfn;
 	memslot->npages = npages;
 	memslot->flags = mem->flags;
 
+	r = -ENOMEM;
+
 	/* Allocate if a slot is being created */
 	if (npages && !memslot->phys_mem) {
-		r = -ENOMEM;
 		memslot->phys_mem = vmalloc(npages * sizeof(struct page *));
 
 		if (!memslot->phys_mem)
@@ -931,6 +940,17 @@ static int kvm_dev_ioctl_set_memory_region(struct kvm *kvm,
 			if (!memslot->phys_mem[i])
 				goto out_free_physmem;
 		}
+	}
+
+	/* Allocate page dirty bitmap if needed */
+	if ((memslot->flags & KVM_MEM_LOG_DIRTY_PAGES) && 
+	    !memslot->dirty_bitmap) {
+		unsigned dirty_bytes = ALIGN(npages, BITS_PER_LONG) / 8;
+
+		memslot->dirty_bitmap = vmalloc(dirty_bytes);
+		if (!memslot->dirty_bitmap)
+			goto out;
+		memset(memslot->dirty_bitmap, 0, dirty_bytes);
 	}
 
 	if (mem->slot >= kvm->nmemslots)
@@ -964,6 +984,29 @@ struct page *gfn_to_page(struct kvm *kvm, gfn_t gfn)
 			return memslot->phys_mem[gfn - memslot->base_gfn];
 	}
 	return 0;
+}
+
+void mark_page_dirty(struct kvm *kvm, gfn_t gfn)
+{
+	int i;
+	struct kvm_memory_slot *memslot = 0;
+	unsigned long rel_gfn;
+
+	for (i = 0; i < kvm->nmemslots; ++i) {
+		memslot = &kvm->memslots[i];
+
+		if (gfn >= memslot->base_gfn
+		    && gfn < memslot->base_gfn + memslot->npages)
+			break;
+	}
+			
+	if (!memslot || !memslot->dirty_bitmap)
+		return;
+
+	rel_gfn = gfn - memslot->base_gfn;
+
+	if (!test_bit(rel_gfn, memslot->dirty_bitmap))   /* avoid RMW */
+		set_bit(rel_gfn, memslot->dirty_bitmap);
 }
 
 static void skip_emulated_instruction(struct kvm_vcpu *vcpu)

@@ -179,6 +179,7 @@ struct kvm_memory_slot {
 	unsigned long npages;
 	unsigned long flags;
 	struct page **phys_mem;
+	unsigned long *dirty_bitmap;
 };
 
 struct kvm {
@@ -218,6 +219,7 @@ gpa_t gva_to_gpa(struct kvm_vcpu *vcpu, gva_t gva);
 hpa_t gva_to_hpa(struct kvm_vcpu *vcpu, gva_t gva);
 
 struct page *gfn_to_page(struct kvm *kvm, gfn_t gfn);
+void mark_page_dirty(struct kvm *kvm, gfn_t gfn);
 
 void vmcs_writel(unsigned long field, unsigned long value);
 unsigned long vmcs_readl(unsigned long field);

@@ -190,6 +190,7 @@ static int FNAME(fix_write_pf)(struct kvm_vcpu *vcpu,
 {
 	pt_element_t *guest_ent;
 	int writable_shadow;
+	gfn_t gfn;
 
 	if (is_writeble_pte(*shadow_ent))
 		return 0;
@@ -213,6 +214,8 @@ static int FNAME(fix_write_pf)(struct kvm_vcpu *vcpu,
 		return 0;
 	}
 
+	gfn = (*guest_ent & PT64_BASE_ADDR_MASK) >> PAGE_SHIFT;
+	mark_page_dirty(vcpu->kvm, gfn);
 	*shadow_ent |= PT_WRITABLE_MASK;
 	*guest_ent |= PT_DIRTY_MASK;
 
