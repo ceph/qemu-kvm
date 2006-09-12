@@ -177,10 +177,9 @@ struct kvm_vcpu {
 struct kvm_memory_slot {
 	gfn_t base_gfn;
 	unsigned long npages;
+	unsigned long flags;
 	struct page **phys_mem;
 };
-
-#define KVM_MAX_MEMORY_SLOTS 8
 
 struct kvm {
 	int nmemslots;

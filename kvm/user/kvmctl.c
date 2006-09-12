@@ -77,6 +77,7 @@ int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem,
 	int fd = kvm->fd;
 	int r;
 	struct kvm_memory_region main_memory = {
+		.slot = 0,
 		.memory_size = memory,
 		.guest_phys_addr = 0,
 	};
@@ -86,7 +87,7 @@ int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem,
 		printf("kvm_create: %m\n");
 		exit(1);
 	}
-	r = ioctl(fd, KVM_CREATE_MEMORY_REGION, &main_memory);
+	r = ioctl(fd, KVM_SET_MEMORY_REGION, &main_memory);
 	if (r == -1) {
 		printf("kvm_create_memory_region: %m\n");
 		exit(1);
@@ -108,18 +109,19 @@ int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem,
 }
 
 void *kvm_create_phys_mem(kvm_context_t kvm, unsigned long phys_start, 
-			  unsigned long len, int writable)
+			  unsigned long len, int slot, int writable)
 {
 	void *ptr;
 	int r;
 	int fd = kvm->fd;
 	int prot = PROT_READ;
 	struct kvm_memory_region memory = {
+		.slot = slot,
 		.memory_size = len,
 		.guest_phys_addr = phys_start,
 	};
 
-	r = ioctl(fd, KVM_CREATE_MEMORY_REGION, &memory);
+	r = ioctl(fd, KVM_SET_MEMORY_REGION, &memory);
 	if (r == -1)
 	    return 0;
 

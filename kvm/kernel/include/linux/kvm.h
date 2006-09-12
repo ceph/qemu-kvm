@@ -6,6 +6,8 @@
 
 /* for KVM_CREATE_MEMORY_REGION */
 struct kvm_memory_region {
+	__u32 slot;
+	__u32 flags;
 	__u64 guest_phys_addr;
 	__u64 memory_size; /* bytes */
 };
@@ -169,7 +171,7 @@ struct kvm_debug_guest {
 #define KVM_TRANSLATE             _IOWR('q', 7, struct kvm_translation)
 #define KVM_INTERRUPT             _IOW( 'q', 8, struct kvm_interrupt)
 #define KVM_DEBUG_GUEST           _IOW( 'q', 9, struct kvm_debug_guest)
-#define KVM_CREATE_MEMORY_REGION  _IOW( 'q', 10, struct kvm_memory_region)
+#define KVM_SET_MEMORY_REGION     _IOW( 'q', 10, struct kvm_memory_region)
 #define KVM_CREATE_VCPUS           _IOW( 'q', 11, int) /* arg = nvcpus */
 
 #endif

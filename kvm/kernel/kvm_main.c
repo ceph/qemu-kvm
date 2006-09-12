@@ -381,16 +381,22 @@ static void kvm_free_physmem_slot(struct kvm *kvm, int slot)
 	struct kvm_memory_slot *memslot = &kvm->memslots[slot];
 	unsigned long i;
 
+	if (!memslot->npages)
+		return;
+
 	for (i = 0; i < memslot->npages; ++i)
 		__free_page(memslot->phys_mem[i]);
 	vfree(memslot->phys_mem);
-	*memslot = kvm->memslots[--kvm->nmemslots];
+	memslot->phys_mem = 0;
+	memslot->npages = 0;
 }
 
 static void kvm_free_physmem(struct kvm *kvm)
 {
-	while (kvm->nmemslots)
-		kvm_free_physmem_slot(kvm, 0);
+	int i;
+	
+	for (i = 0; i < kvm->nmemslots; ++i)
+		kvm_free_physmem_slot(kvm, i);
 }
 
 static void kvm_free_vmcs(struct kvm_vcpu *vcpu)
@@ -863,47 +869,85 @@ out:
  *
  * Discontiguous memory is allowed, mostly for framebuffers.
  */
-static int kvm_dev_ioctl_create_memory_region(struct kvm *kvm, 
-					      struct kvm_memory_region *mem)
+static int kvm_dev_ioctl_set_memory_region(struct kvm *kvm, 
+					   struct kvm_memory_region *mem)
 {
 	int r;
-	unsigned long pages;
+	gfn_t base_gfn;
+	unsigned long npages;
 	unsigned long i;
-	int slot;
 	struct kvm_memory_slot *memslot;
 
 	r = -EINVAL;
-	if (!mem->memory_size)
-		goto out;
+	/* General sanity checks */
 	if (mem->memory_size & (PAGE_SIZE - 1))
 		goto out;
 	if (mem->guest_phys_addr & (PAGE_SIZE - 1))
 		goto out;
-	r = -ENOBUFS;
-	if (kvm->nmemslots == KVM_MAX_MEMORY_SLOTS)
+	if (mem->slot >= KVM_MEMORY_SLOTS)
 		goto out;
-	
-	slot = kvm->nmemslots++;
-	memslot = &kvm->memslots[slot];
-	pages = ((mem->memory_size - 1) >> PAGE_SHIFT) + 1;
-	memslot->base_gfn = mem->guest_phys_addr >> PAGE_SHIFT;
-	memslot->npages = pages;
-	memslot->phys_mem = vmalloc(pages * sizeof(struct page *));
-
-	if (!memslot->phys_mem)
+	if (mem->guest_phys_addr + mem->memory_size < mem->guest_phys_addr)
 		goto out;
 
-	r = -ENOMEM;
-	memset(memslot->phys_mem, 0, pages * sizeof(struct page *));
-	for (i = 0; i < pages; ++i) {
-		memslot->phys_mem[i] = alloc_page(GFP_HIGHUSER);
-		if (!memslot->phys_mem[i])
-			goto out_free_physmem;
+	memslot = &kvm->memslots[mem->slot];
+	base_gfn = mem->guest_phys_addr >> PAGE_SHIFT;
+	npages = mem->memory_size >> PAGE_SHIFT;
+
+	/* Disallow changing a memory slot's size. */
+	if (npages && memslot->npages && npages != memslot->npages)
+		goto out;
+
+	/* Check for overlaps */
+	r = -EEXIST;
+	for (i = 0; i < KVM_MEMORY_SLOTS; ++i) {
+		struct kvm_memory_slot *s = &kvm->memslots[i];
+
+		if (s == memslot)
+			continue;
+		if (!((base_gfn + npages <= s->base_gfn) ||
+		      (base_gfn >= s->base_gfn + s->npages)))
+			goto out;
 	}
+
+	/* Deallocate if slot is being removed */
+	if (memslot->phys_mem && npages)
+		kvm_free_physmem_slot(kvm, mem->slot);
+		
+	memslot->base_gfn = base_gfn;
+	memslot->npages = npages;
+	memslot->flags = mem->flags;
+
+	/* Allocate if a slot is being created */
+	if (npages && !memslot->phys_mem) {
+		r = -ENOMEM;
+		memslot->phys_mem = vmalloc(npages * sizeof(struct page *));
+
+		if (!memslot->phys_mem)
+			goto out;
+
+		memset(memslot->phys_mem, 0, npages * sizeof(struct page *));
+		for (i = 0; i < npages; ++i) {
+			memslot->phys_mem[i] = alloc_page(GFP_HIGHUSER);
+			if (!memslot->phys_mem[i])
+				goto out_free_physmem;
+		}
+	}
+
+	if (mem->slot >= kvm->nmemslots)
+		kvm->nmemslots = mem->slot + 1;
+
+	for (i = 0; i < kvm->nvcpus; ++i) {
+		struct kvm_vcpu *vcpu = &kvm->vcpus[i];
+		
+		vcpu_load(vcpu);
+		kvm_mmu_reset_context(vcpu);
+		vcpu_put(vcpu);
+	}
+
 	return 0;
 
 out_free_physmem:
-	kvm_free_physmem_slot(kvm, slot);
+	kvm_free_physmem_slot(kvm, mem->slot);
 out:
 	return r;
 }
@@ -2535,13 +2579,13 @@ static long kvm_dev_ioctl(struct file *filp,
 		r = 0;
 		break;
 	}
-	case KVM_CREATE_MEMORY_REGION: {
+	case KVM_SET_MEMORY_REGION: {
 		struct kvm_memory_region kvm_mem;
 	
 		r = -EFAULT;
 		if (copy_from_user(&kvm_mem, (void *)arg, sizeof kvm_mem))
 			goto out;
-		r = kvm_dev_ioctl_create_memory_region(kvm, &kvm_mem);
+		r = kvm_dev_ioctl_set_memory_region(kvm, &kvm_mem);
 		if (r)
 			goto out;
 		break;
