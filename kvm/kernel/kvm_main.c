@@ -1424,6 +1424,27 @@ static void inject_gp(struct kvm_vcpu *vcpu)
 		     INTR_INFO_VALID_MASK);
 }
 
+static int pdptrs_have_reserved_bits_set(struct kvm_vcpu *vcpu, gpa_t cr3)
+{
+	gfn_t pdpt_gfn = cr3 >> PAGE_SHIFT;
+	unsigned offset = (cr3 & (PAGE_SIZE-1)) >> 5;
+	int i;
+	u64 pdpte;
+	u64 *pdpt;
+
+	pdpt = kmap_atomic(gfn_to_page(vcpu->kvm, pdpt_gfn), KM_USER0);
+
+	for (i = 0; i < 4; ++i) {
+		pdpte = pdpt[offset + i];
+		if ((pdpte & 1) && (pdpte & 0xfffffff0000001e6ull))
+			break;
+	}
+
+	kunmap_atomic(pdpt, KM_USER0);
+
+	return i != 4;
+}
+
 #define CR0_RESEVED_BITS 0xffffffff1ffaffc0ULL
 
 static int set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
@@ -1492,43 +1513,11 @@ static int set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 				     vmcs_read32(VM_ENTRY_CONTROLS) |
 				     VM_ENTRY_CONTROLS_IA32E_MASK);
 
-		} else if (is_pae()) {
-			//test PDPT
-
-			/*
-				 -- INTEL -- 
-				If any of the reserved bits are set in the
-				page-directory pointers table (PDPT) and the
-				 loading of a control register causes the 
-				 PDPT to be loaded into the processor.
-
-
-                                * If the PG flag is set to 1 and control
-				register CR4 is written to set the PAE flag
-				to 1 (to enable the physical address extension
-				mode), the pointers in the page-directory 
-				pointers table (PDPT) are loaded into the 
-				processor (into internal, non-architectural
-				registers).
-
-				* If the PAE flag is set to 1 and the PG flag 
-				set to 1, writing to control register CR3 will
-				cause the PDPTRs to be reloaded into the
-				processor. If the PAE flag is set to 1 and
-				control register CR0 is written to set the PG 
-				flag, the PDPTRs are reloaded into the processor.
-
-
-				-- AMD --
-				 Reserved bits were set in the page-directory 
-				 pointers table (used in the legacy extended
-				  physical addressing mode) and the instruction
-				modified CR0, CR3, or CR4.
-
-
-				 => #GP
-
-			*/
+		} else if (is_pae() &&
+			   pdptrs_have_reserved_bits_set(vcpu, vcpu->cr3)) {
+			printk("set_cr0: #GP, pdptrs reserved bits\n");
+			inject_gp(vcpu);
+			return 1;
 		}
                
 	}
@@ -1579,8 +1568,10 @@ static void set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
 			inject_gp(vcpu);
 			return;
 		}
-	} else if (is_paging() && !is_pae() && (cr4 & CR4_PAE_MASK)) {
-		//test PDPT
+	} else if (is_paging() && !is_pae() && (cr4 & CR4_PAE_MASK)
+		   && pdptrs_have_reserved_bits_set(vcpu, vcpu->cr3)) {
+		printk("set_cr4: #GP, pdptrs reserved bits\n");
+		inject_gp(vcpu);
 	}
 
 	if (cr4 & CR4_VMXE_MASK) {
@@ -1608,8 +1599,11 @@ static void set_cr3(struct kvm_vcpu *vcpu, unsigned long cr3)
 			inject_gp(vcpu);
 			return;
 		}
-		if (is_paging() && is_pae()) {
-			//test PDPT
+		if (is_paging() && is_pae() && 
+		    pdptrs_have_reserved_bits_set(vcpu, cr3)) {
+			printk("set_cr3: #GP, pdptrs reserved bits\n");
+			inject_gp(vcpu);
+			return;
 		}
 	}
 
