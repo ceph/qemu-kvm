@@ -151,7 +151,9 @@ static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu, gva_t addr,
 		if (!is_present_pte(*guest_ent))
 			return NULL;
 
-		*guest_ent |= PT_ACCESSED_MASK;
+		/* Don't set accessed bit on PAE PDPTRs */
+		if (vcpu->mmu.root_level != 3 || walker->level != 3)
+			*guest_ent |= PT_ACCESSED_MASK;
 
 		if (level == PT_PAGE_TABLE_LEVEL) {
 
