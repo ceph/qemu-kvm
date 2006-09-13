@@ -3,8 +3,6 @@
 import curses
 import os, time
 
-#for i in  /sys/kernel/debug/kvm/*; do echo $(basename $i) $(cat $i); done
-
 class Stats:
     def __init__(self):
         self.base = '/sys/kernel/debug/kvm'
