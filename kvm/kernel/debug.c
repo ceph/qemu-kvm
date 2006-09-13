@@ -312,11 +312,11 @@ int vm_entry_test(struct kvm_vcpu *vcpu)
 		int i;
 		u64 pdpte;
 		unsigned offset = (cr3 & (PAGE_SIZE-1)) >> 5;
-		u64 *pdpt = kmap_atomic(pfn_to_page(pdpt_pfn), KM_USER0);
+		u64 *pdpt = kmap_atomic(gfn_to_page(pdpt_pfn), KM_USER0);
 
 		for (i = 0; i < 4; ++i) {
 			pdpte = pdpt[offset + i];
-			if (pdpte & 0xfff00000000001e6ull)
+			if ((pdpte & 1) && (pdpte & 0xfffffff0000001e6ull))
 				break;
 		}
 
