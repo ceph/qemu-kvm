@@ -266,10 +266,12 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 		return 0;
 	}
 
-	if (pte_present && !fixed)
+	if (pte_present && !fixed) {
 		inject_page_fault(vcpu, addr, error_code);     
+		return 0;
+	}
 
-	kvm_stat.pf_fixed += fixed;
+	++kvm_stat.pf_fixed;
 
 	return 0;	
 }
