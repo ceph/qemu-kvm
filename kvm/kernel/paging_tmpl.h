@@ -64,7 +64,7 @@ static void FNAME(set_pte)(struct kvm_vcpu *vcpu, uint64_t guest_pte,
 	access_bits &= guest_pte;
 	*shadow_pte = (guest_pte & PT_PTE_COPY_MASK);
 	set_pte_common(vcpu, shadow_pte, guest_pte & PT_BASE_ADDR_MASK,
-		       access_bits);
+		       guest_pte & PT_DIRTY_MASK, access_bits);
 }
 
 static void FNAME(set_pde)(struct kvm_vcpu *vcpu, uint64_t guest_pde,
@@ -82,7 +82,8 @@ static void FNAME(set_pde)(struct kvm_vcpu *vcpu, uint64_t guest_pde,
 	*shadow_pte = (guest_pde & PT_NON_PTE_COPY_MASK) |
 		          ((guest_pde & PT_DIR_PAT_MASK) >> 
 			            (PT_DIR_PAT_SHIFT - PT_PAT_SHIFT));
-	set_pte_common(vcpu, shadow_pte, gaddr, access_bits);
+	set_pte_common(vcpu, shadow_pte, gaddr, 
+		       guest_pde & PT_DIRTY_MASK, access_bits);
 }
 
 static pt_element_t *FNAME(fetch_guest)(struct kvm_vcpu *vcpu,
@@ -215,7 +216,6 @@ static int FNAME(fix_write_pf)(struct kvm_vcpu *vcpu,
 	}
 
 	gfn = (*guest_ent & PT64_BASE_ADDR_MASK) >> PAGE_SHIFT;
-	mark_page_dirty(vcpu->kvm, gfn);
 	*shadow_ent |= PT_WRITABLE_MASK;
 	*guest_ent |= PT_DIRTY_MASK;
 

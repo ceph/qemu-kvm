@@ -389,12 +389,19 @@ static void paging_new_cr3(struct kvm_vcpu *vcpu)
 static inline void set_pte_common(struct kvm_vcpu *vcpu,
 			     uint64_t *shadow_pte,
 			     gpa_t gaddr,
+			     int dirty,
 			     uint64_t access_bits)
 {
 	hpa_t paddr;
 
 	*shadow_pte |= access_bits << PT_SHADOW_BITS_OFFSET;
-	*shadow_pte |= access_bits & ~PT_WRITABLE_MASK;
+	if (!dirty)
+		access_bits &= ~PT_WRITABLE_MASK;
+
+	if (access_bits & PT_WRITABLE_MASK)
+		mark_page_dirty(vcpu->kvm, gaddr >> PAGE_SHIFT);
+
+	*shadow_pte |= access_bits;
 
 	paddr = gpa_to_hpa(vcpu, gaddr);
 
