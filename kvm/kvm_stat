@@ -21,6 +21,7 @@ class Stats:
 stats = Stats()
         
 def main(screen, stats):
+    curses.use_default_colors()
     curses.noecho()
     def refresh():
         screen.erase()
