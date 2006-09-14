@@ -674,6 +674,9 @@ static void pc_init1(int ram_size, int vga_ram_size, int boot_device,
     /* setup basic memory access */
     cpu_register_physical_memory(0xc0000, 0x10000, 
                                  vga_bios_offset | IO_MEM_ROM);
+#ifdef USE_KVM
+    memcpy(phys_ram_base + 0xc0000, phys_ram_base + vga_bios_offset, 0x10000);
+#endif
 
     /* map the last 128KB of the BIOS in ISA space */
     isa_bios_size = bios_size;

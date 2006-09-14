@@ -165,6 +165,13 @@ struct x86_emulate_ctxt
 
     /* Emulated execution mode, represented by an X86EMUL_MODE value. */
     int                     mode;
+
+    unsigned long cs_base;
+    unsigned long ds_base;
+    unsigned long es_base;
+    unsigned long ss_base;
+    unsigned long gs_base;
+    unsigned long fs_base;
 };
 
 /* Execution mode, passed to the emulator. */

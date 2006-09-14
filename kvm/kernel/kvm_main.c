@@ -1211,6 +1211,7 @@ static int emulate_instruction(struct kvm_vcpu *vcpu,
 	struct cpu_user_regs regs;
 	struct kvm_x86_emulate_ctxt emulate_ctxt;
 	int r;
+	uint32_t cs_ar;
 
 	regs.eax = vcpu->regs[VCPU_REGS_RAX];
 	regs.ebx = vcpu->regs[VCPU_REGS_RBX];
@@ -1239,9 +1240,31 @@ static int emulate_instruction(struct kvm_vcpu *vcpu,
 	regs.gs = vmcs_read16(GUEST_GS_SELECTOR);
 	regs.ss = vmcs_read16(GUEST_SS_SELECTOR);
 
+	cs_ar = vmcs_read32(GUEST_CS_AR_BYTES);
+
 	emulate_ctxt.x.regs = &regs;
 	emulate_ctxt.x.cr2 = cr2;
-	emulate_ctxt.x.mode = X86EMUL_MODE_PROT64; /* FIXME: get from regs */
+	emulate_ctxt.x.mode = (regs.eflags & X86_EFLAGS_VM) ? X86EMUL_MODE_REAL:
+			      (cs_ar & AR_L_MASK) ? X86EMUL_MODE_PROT64:
+			      (cs_ar & AR_DB_MASK) ? X86EMUL_MODE_PROT32: 
+			      X86EMUL_MODE_PROT16;
+
+	if (emulate_ctxt.x.mode == X86EMUL_MODE_PROT64) {
+		emulate_ctxt.x.cs_base = 0;
+		emulate_ctxt.x.ds_base = 0;
+		emulate_ctxt.x.es_base = 0;
+		emulate_ctxt.x.ss_base = 0;
+		emulate_ctxt.x.gs_base = 0;
+		emulate_ctxt.x.fs_base = 0;
+	} else {
+		emulate_ctxt.x.cs_base = vmcs_readl(GUEST_CS_BASE);
+		emulate_ctxt.x.ds_base = vmcs_readl(GUEST_DS_BASE);
+		emulate_ctxt.x.es_base = vmcs_readl(GUEST_ES_BASE);
+		emulate_ctxt.x.ss_base = vmcs_readl(GUEST_SS_BASE);
+		emulate_ctxt.x.gs_base = vmcs_readl(GUEST_GS_BASE);
+		emulate_ctxt.x.fs_base = vmcs_readl(GUEST_FS_BASE);
+	}
+
 	emulate_ctxt.vcpu = vcpu;
 
 	vcpu->mmio_is_write = 0;
@@ -1266,7 +1289,14 @@ static int emulate_instruction(struct kvm_vcpu *vcpu,
 						  4, 
 						  &emulate_ctxt.x);
 
-				printk(KERN_ERR "emulation failed but !mmio_needed? rip %lx %02x %02x %02x %02x\n", vmcs_readl(GUEST_RIP), opcodes[0], opcodes[1], opcodes[2], opcodes[3]);
+				printk(KERN_ERR "emulation failed but "
+						"!mmio_needed? rip %lx %02x"
+						" %02x %02x %02x\n",
+				       vmcs_readl(GUEST_RIP),
+				       opcodes[0],
+				       opcodes[1],
+				       opcodes[2],
+				       opcodes[3]);
 				reported = 1;
 			}
 			return EMULATE_FAIL;
@@ -1336,25 +1366,19 @@ static int handle_exception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 
 		if (!vcpu->mmu.page_fault(vcpu, cr2, error_code))
 			return 1;
-		/*
-		 * Temporarily disable emulation to avoid a problem when
-		 * writing to the APIC EOI register: qemu tries to inject
-		 * an interrupt but becomes confused.
-		 */
-		//er = emulate_instruction(vcpu, kvm_run, cr2, error_code);
-		er = EMULATE_FAIL;
+
+		er = emulate_instruction(vcpu, kvm_run, cr2, error_code);
 
 		switch (er) {
 		case EMULATE_DONE:
 			return 1;
-		case EMULATE_FAIL:
-			++kvm_stat.mmio_exits;
-			kvm_run->exit_reason = KVM_EXIT_EMULATE_ONE_INSTRUCTION;
-			return 0;
 		case EMULATE_DO_MMIO:
 			++kvm_stat.mmio_exits;
 			kvm_run->exit_reason = KVM_EXIT_MMIO;
 			return 0;
+		 case EMULATE_FAIL:
+			vcpu_printf(vcpu, "%s: emulate fail\n");
+			break;
 		default:
 			BUG();
 		}

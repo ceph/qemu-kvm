@@ -363,7 +363,8 @@ do{ __asm__ __volatile__ (                                              \
 /* Fetch next part of the instruction being emulated. */
 #define insn_fetch(_type, _size, _eip)                                  \
 ({ unsigned long _x;                                                    \
-   rc = ops->read_std((unsigned long)(_eip), &_x, (_size), ctxt);       \
+   rc = ops->read_std((unsigned long)(_eip) + ctxt->cs_base, &_x,       \
+                                                  (_size), ctxt);       \
    if ( rc != 0 )                                                       \
        goto done;                                                       \
    (_eip) += (_size);                                                   \
@@ -371,10 +372,10 @@ do{ __asm__ __volatile__ (                                              \
 })
 
 /* Access/update address held in a register, based on addressing mode. */
-#define register_address(sel, reg)                                      \
-    (((mode == X86EMUL_MODE_REAL) ? ((unsigned long)(sel) << 4) : 0) +  \
-     ((ad_bytes == sizeof(unsigned long)) ? (reg) :                     \
-      ((reg) & ((1UL << (ad_bytes << 3)) - 1))))
+#define register_address(base, reg)                                      \
+    ((base) + ((ad_bytes == sizeof(unsigned long)) ? (reg) :             \
+			((reg) & ((1UL << (ad_bytes << 3)) - 1))))
+
 #define register_address_increment(reg, inc)                            \
 do {                                                                    \
     int _inc = (inc); /* signed type ensures sign extension to long */  \
@@ -432,7 +433,7 @@ x86_emulate_memop(
 {
     uint8_t b, d, sib, twobyte = 0, rex_prefix = 0;
     uint8_t modrm, modrm_mod = 0, modrm_reg = 0, modrm_rm = 0;
-    uint16_t *seg = NULL; /* override segment */
+    unsigned long *override_base = NULL;
     unsigned int op_bytes, ad_bytes, lock_prefix = 0, rep_prefix = 0, i;
     int rc = 0;
     struct operand src, dst;
@@ -476,22 +477,22 @@ x86_emulate_memop(
                 ad_bytes ^= 6;  /* switch between 2/4 bytes */
             break;
         case 0x2e: /* CS override */
-            seg = &_regs.cs;
+            override_base = &ctxt->cs_base;
             break;
         case 0x3e: /* DS override */
-            seg = &_regs.ds;
+            override_base = &ctxt->ds_base;
             break;
         case 0x26: /* ES override */
-            seg = &_regs.es;
+            override_base = &ctxt->es_base;
             break;
         case 0x64: /* FS override */
-            seg = &_regs.fs;
+            override_base = &ctxt->fs_base;
             break;
         case 0x65: /* GS override */
-            seg = &_regs.gs;
+            override_base = &ctxt->gs_base;
             break;
         case 0x36: /* SS override */
-            seg = &_regs.ss;
+            override_base = &ctxt->ss_base;
             break;
         case 0xf0: /* LOCK */
             lock_prefix = 1;
@@ -770,7 +771,7 @@ x86_emulate_memop(
         /* 64-bit mode: POP always pops a 64-bit operand. */
         if ( mode == X86EMUL_MODE_PROT64 )
             dst.bytes = 8;
-        if ( (rc = ops->read_std(register_address(_regs.ss, _regs.esp),
+        if ( (rc = ops->read_std(register_address(ctxt->ss_base , _regs.esp),
                                  &dst.val, dst.bytes, ctxt)) != 0 )
             goto done;
         register_address_increment(_regs.esp, dst.bytes);
@@ -853,7 +854,7 @@ x86_emulate_memop(
                     goto done;
             }
             register_address_increment(_regs.esp, -dst.bytes);
-            if ( (rc = ops->write_std(register_address(_regs.ss, _regs.esp),
+            if ( (rc = ops->write_std(register_address(ctxt->ss_base, _regs.esp),
                                       dst.val, dst.bytes, ctxt)) != 0 )
                 goto done;
             dst.val = dst.orig_val; /* skanky: disable writeback */
@@ -918,8 +919,10 @@ x86_emulate_memop(
     case 0xa4 ... 0xa5: /* movs */
         dst.type  = OP_MEM;
         dst.bytes = (d & ByteOp) ? 1 : op_bytes;
-        dst.ptr = (unsigned long *)register_address(_regs.es, _regs.edi);
-        if ( (rc = ops->read_emulated(register_address(seg ? *seg : _regs.ds,
+        dst.ptr = (unsigned long *)register_address(ctxt->es_base , _regs.edi);
+        if ( (rc = ops->read_emulated(register_address(override_base ?
+						       *override_base :
+						       ctxt->ds_base,
                                                        _regs.esi),
                                       &dst.val, dst.bytes, ctxt)) != 0 )
                 goto done;
