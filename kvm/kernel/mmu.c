@@ -161,13 +161,13 @@ static int is_io_pte(unsigned long pte)
 
 static void kvm_mmu_free_page(struct kvm_vcpu *vcpu, hpa_t page_hpa)
 {
-	struct kvm_mmu_page_link *page_link;
+	struct kvm_mmu_page *page_header;
 	struct page *page = pfn_to_page(page_hpa >> PAGE_SHIFT);
 
-	page_link = (struct kvm_mmu_page_link *)page->private;
-	list_del(&page_link->link);
-	page_link->page_hpa = page_hpa;
-	list_add(&page_link->link, &vcpu->free_pages);
+	page_header = (struct kvm_mmu_page *)page->private;
+	list_del(&page_header->link);
+	page_header->page_hpa = page_hpa;
+	list_add(&page_header->link, &vcpu->free_pages);
 }
 
 static int is_empty_shadow_page(hpa_t page_hpa)
@@ -183,17 +183,16 @@ static int is_empty_shadow_page(hpa_t page_hpa)
 
 static hpa_t kvm_mmu_alloc_page(struct kvm_vcpu *vcpu)
 {
-	struct kvm_mmu_page_link *page_link;
+	struct kvm_mmu_page *page;
 
 	if (list_empty(&vcpu->free_pages))
 		return INVALID_PAGE; 
 	
-	page_link = list_entry(vcpu->free_pages.next, struct kvm_mmu_page_link,
-			       link);
-	list_del(&page_link->link);
-	list_add(&page_link->link, &vcpu->kvm->active_mmu_pages);
-	ASSERT(is_empty_shadow_page(page_link->page_hpa));
-	return page_link->page_hpa;
+	page = list_entry(vcpu->free_pages.next, struct kvm_mmu_page, link);
+	list_del(&page->link);
+	list_add(&page->link, &vcpu->kvm->active_mmu_pages);
+	ASSERT(is_empty_shadow_page(page->page_hpa));
+	return page->page_hpa;
 }
 
 static inline int is_io_mem(struct kvm_vcpu *vcpu, unsigned long addr)
@@ -596,13 +595,13 @@ int kvm_mmu_reset_context(struct kvm_vcpu *vcpu)
 static void free_mmu_pages(struct kvm_vcpu *vcpu)
 {
 	while (!list_empty(&vcpu->free_pages)) {
-		struct kvm_mmu_page_link *page_link;
+		struct kvm_mmu_page *page;
 
-		page_link = list_entry(vcpu->free_pages.next,
-				       struct kvm_mmu_page_link, link);
-		list_del(&page_link->link);
-		__free_page(pfn_to_page(page_link->page_hpa >> PAGE_SHIFT));
-		page_link->page_hpa = INVALID_PAGE;
+		page = list_entry(vcpu->free_pages.next, 
+				  struct kvm_mmu_page, link);
+		list_del(&page->link);
+		__free_page(pfn_to_page(page->page_hpa >> PAGE_SHIFT));
+		page->page_hpa = INVALID_PAGE;
 	}
 }
 
@@ -614,15 +613,15 @@ static int alloc_mmu_pages(struct kvm_vcpu *vcpu)
 
 	for (i = 0; i < KVM_NUM_MMU_PAGES; i++) {
 		struct page *page;
-		struct kvm_mmu_page_link *page_link = &vcpu->page_link_buf[i];
+		struct kvm_mmu_page *page_header = &vcpu->page_header_buf[i];
 
-		INIT_LIST_HEAD(&page_link->link);
+		INIT_LIST_HEAD(&page_header->link);
 		if ((page = alloc_page(GFP_KERNEL)) == NULL)
 		    goto error_1;
-		page->private = (unsigned long)page_link;
-		page_link->page_hpa = page_to_pfn(page) << PAGE_SHIFT;
-		memset(__va(page_link->page_hpa), 0, PAGE_SIZE);
-		list_add(&page_link->link, &vcpu->free_pages);
+		page->private = (unsigned long)page_header;
+		page_header->page_hpa = page_to_pfn(page) << PAGE_SHIFT;
+		memset(__va(page_header->page_hpa), 0, PAGE_SIZE);
+		list_add(&page_header->link, &vcpu->free_pages);
 	}
 	return 0;
 
