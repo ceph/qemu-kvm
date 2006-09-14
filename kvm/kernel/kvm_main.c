@@ -372,6 +372,7 @@ static int kvm_dev_open(struct inode *inode, struct file *filp)
 	if (!kvm)
 		return -ENOMEM;
 	
+	INIT_LIST_HEAD(&kvm->active_mmu_pages);
 	filp->private_data = kvm;
 	return 0;
 }
@@ -831,7 +832,6 @@ static int kvm_dev_ioctl_create_vcpus(struct kvm *kvm, int n)
 		struct vmcs *vmcs;
 
 		mutex_init(&vcpu->mutex);
-		INIT_LIST_HEAD(&vcpu->free_page_links);
 		INIT_LIST_HEAD(&vcpu->free_pages);
 		vcpu->mmu.root_hpa = INVALID_PAGE;
 

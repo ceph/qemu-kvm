@@ -155,7 +155,6 @@ struct kvm_vcpu {
 	struct vmx_msr_entry *guest_msrs;
 	struct vmx_msr_entry *host_msrs;
 
-	struct list_head free_page_links;
 	struct list_head free_pages;
 	struct kvm_mmu_page_link page_link_buf[KVM_NUM_MMU_PAGES];
 	struct kvm_mmu mmu;
@@ -185,6 +184,7 @@ struct kvm_memory_slot {
 struct kvm {
 	int nmemslots;
 	struct kvm_memory_slot memslots[KVM_MEMORY_SLOTS];
+	struct list_head active_mmu_pages;
 	int nvcpus;
 	struct kvm_vcpu vcpus[KVM_MAX_VCPUS];
 	struct file *log_file;

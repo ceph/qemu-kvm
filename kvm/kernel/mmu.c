@@ -162,10 +162,9 @@ static int is_io_pte(unsigned long pte)
 static void kvm_mmu_free_page(struct kvm_vcpu *vcpu, hpa_t page_hpa)
 {
 	struct kvm_mmu_page_link *page_link;
+	struct page *page = pfn_to_page(page_hpa >> PAGE_SHIFT);
 
-	ASSERT(!list_empty(&vcpu->free_page_links));
-	page_link = list_entry(vcpu->free_page_links.next, 
-			       struct kvm_mmu_page_link, link);
+	page_link = (struct kvm_mmu_page_link *)page->private;
 	list_del(&page_link->link);
 	page_link->page_hpa = page_hpa;
 	list_add(&page_link->link, &vcpu->free_pages);
@@ -184,7 +183,6 @@ static int is_empty_shadow_page(hpa_t page_hpa)
 
 static hpa_t kvm_mmu_alloc_page(struct kvm_vcpu *vcpu)
 {
-	hpa_t page_addr;
 	struct kvm_mmu_page_link *page_link;
 
 	if (list_empty(&vcpu->free_pages))
@@ -193,11 +191,9 @@ static hpa_t kvm_mmu_alloc_page(struct kvm_vcpu *vcpu)
 	page_link = list_entry(vcpu->free_pages.next, struct kvm_mmu_page_link,
 			       link);
 	list_del(&page_link->link);
-	page_addr = page_link->page_hpa;
-	page_link->page_hpa = INVALID_PAGE;
-	list_add(&page_link->link, &vcpu->free_page_links);
-	ASSERT(is_empty_shadow_page(page_addr));
-	return page_addr;
+	list_add(&page_link->link, &vcpu->kvm->active_mmu_pages);
+	ASSERT(is_empty_shadow_page(page_link->page_hpa));
+	return page_link->page_hpa;
 }
 
 static inline int is_io_mem(struct kvm_vcpu *vcpu, unsigned long addr)
@@ -607,7 +603,6 @@ static void free_mmu_pages(struct kvm_vcpu *vcpu)
 		list_del(&page_link->link);
 		__free_page(pfn_to_page(page_link->page_hpa >> PAGE_SHIFT));
 		page_link->page_hpa = INVALID_PAGE;
-		list_add(&page_link->link, &vcpu->free_page_links);
 	}
 }
 
@@ -624,6 +619,7 @@ static int alloc_mmu_pages(struct kvm_vcpu *vcpu)
 		INIT_LIST_HEAD(&page_link->link);
 		if ((page = alloc_page(GFP_KERNEL)) == NULL)
 		    goto error_1;
+		page->private = (unsigned long)page_link;
 		page_link->page_hpa = page_to_pfn(page) << PAGE_SHIFT;
 		memset(__va(page_link->page_hpa), 0, PAGE_SIZE);
 		list_add(&page_link->link, &vcpu->free_pages);
@@ -642,7 +638,6 @@ int kvm_mmu_init(struct kvm_vcpu *vcpu)
 	ASSERT(vcpu);
 	ASSERT(!VALID_PAGE(vcpu->mmu.root_hpa));
 	ASSERT(list_empty(&vcpu->free_pages));
-	ASSERT(list_empty(&vcpu->free_page_links));
 
 	if ((r = alloc_mmu_pages(vcpu)))
 		return r;
