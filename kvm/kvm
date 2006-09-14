@@ -50,6 +50,12 @@ if options.kvm and options.reload:
                 raise Exception('failed to remove kvm module')
     if os.spawnl(os.P_WAIT, '/sbin/insmod', 'insmod', 'kernel/kvm.ko') != 0:
         raise Exception('failed to load kvm module')
+    for i in range(5):
+        if os.access('/dev/kvm', os.F_OK):
+            break
+        os.sleep(0.1 + 0.2 * i)
+    if not os.access('/dev/kvm', os.F_OK):
+        print '/dev/kvm not present'
 
 disk = options.image
 if options.install:
