@@ -122,7 +122,7 @@ static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu, gva_t addr,
 {
 	hpa_t shadow_addr;
 	int level;
-	uint64_t *priv_shadow_ent = NULL;
+	uint64_t *prev_shadow_ent = NULL;
 
 	shadow_addr = vcpu->mmu.root_hpa;
 	level = vcpu->mmu.shadow_root_level;
@@ -136,7 +136,7 @@ static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu, gva_t addr,
 			if (level == PT_PAGE_TABLE_LEVEL)
 				return shadow_ent;
 			shadow_addr = *shadow_ent & PT64_BASE_ADDR_MASK;
-			priv_shadow_ent = shadow_ent;
+			prev_shadow_ent = shadow_ent;
 			continue;
 		}
 
@@ -158,8 +158,8 @@ static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu, gva_t addr,
 		if (level == PT_PAGE_TABLE_LEVEL) {
 
 			if (walker->level == PT_DIRECTORY_LEVEL) {
-				if (priv_shadow_ent)
-					*priv_shadow_ent |= PT_SHADOW_PS_MARK;
+				if (prev_shadow_ent)
+					*prev_shadow_ent |= PT_SHADOW_PS_MARK;
 				FNAME(set_pde)(vcpu, *guest_ent, shadow_ent, 
 					       walker->inherited_ar,
 				          PT_INDEX(addr, PT_PAGE_TABLE_LEVEL));
@@ -181,7 +181,7 @@ static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu, gva_t addr,
 				(*guest_ent & PT_NON_PTE_COPY_MASK);
 			*shadow_ent |= (PT_WRITABLE_MASK | PT_USER_MASK);
 		}
-		priv_shadow_ent = shadow_ent;
+		prev_shadow_ent = shadow_ent;
 	}
 }
 
