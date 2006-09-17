@@ -17,8 +17,7 @@ static CPUState *saved_env[NR_CPU];
 
 int kvm_is_ok(CPUState *env)
 {
-    return (env->cr[0] & CR0_PE_MASK) 
-	&& !(env->eflags & VM_MASK)
+    return (env->cr[0] & CR0_PE_MASK)
 	&& !env->kvm_emulate_one_instruction;
 }
 
@@ -75,23 +74,51 @@ static void load_regs(CPUState *env)
     sregs.var.avl = (flags & DESC_AVL_MASK) != 0; \
     sregs.var.unusable = 0; \
   } while (0)
-    
-    set_seg(cs, segs[R_CS], 1, 11);
-    set_seg(ds, segs[R_DS], 1, 3);
-    set_seg(es, segs[R_ES], 1, 3);
-    set_seg(fs, segs[R_FS], 1, 3);
-    set_seg(gs, segs[R_GS], 1, 3);
-    set_seg(ss, segs[R_SS], 1, 3);
+
+
+#define set_v8086_seg(var, seg) \
+  do { \
+    sregs.var.selector = env->seg.selector; \
+    sregs.var.base = env->seg.base; \
+    sregs.var.limit = env->seg.limit; \
+    sregs.var.type = 3; \
+    sregs.var.present = 1; \
+    sregs.var.dpl = 3; \
+    sregs.var.db = 0; \
+    sregs.var.s = 1; \
+    sregs.var.l = 0; \
+    sregs.var.g = 0; \
+    sregs.var.avl = 0; \
+    sregs.var.unusable = 0; \
+  } while (0)
+
+
+    if ((env->eflags & VM_MASK)) {
+	    set_v8086_seg(cs, segs[R_CS]);
+	    set_v8086_seg(ds, segs[R_DS]);
+	    set_v8086_seg(es, segs[R_ES]);
+	    set_v8086_seg(fs, segs[R_FS]);
+	    set_v8086_seg(gs, segs[R_GS]);
+	    set_v8086_seg(ss, segs[R_SS]);
+    } else {
+	    set_seg(cs, segs[R_CS], 1, 11);
+	    set_seg(ds, segs[R_DS], 1, 3);
+	    set_seg(es, segs[R_ES], 1, 3);
+	    set_seg(fs, segs[R_FS], 1, 3);
+	    set_seg(gs, segs[R_GS], 1, 3);
+	    set_seg(ss, segs[R_SS], 1, 3);
+
+	    if (env->cr[0] & CR0_PE_MASK) {
+		/* force ss cpl to cs cpl */
+		sregs.ss.selector = (sregs.ss.selector & ~3) | 
+			(sregs.cs.selector & 3);
+		sregs.ss.dpl = sregs.ss.selector & 3;
+	    }
+    }
 
     set_seg(tr, tr, 0, 3);
     set_seg(ldt, ldt, 0, 2);
 
-    if (env->cr[0] & CR0_PE_MASK) {
-	/* force ss cpl to cs cpl */
-	sregs.ss.selector = (sregs.ss.selector & ~3) | (sregs.cs.selector & 3);
-	sregs.ss.dpl = sregs.ss.selector & 3;
-    }
-    
     sregs.idt.limit = env->idt.limit;
     sregs.idt.base = env->idt.base;
     sregs.gdt.limit = env->gdt.limit;

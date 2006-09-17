@@ -417,7 +417,7 @@ again:
 	case KVM_EXIT_TYPE_VM_EXIT:
 		switch (kvm_run.exit_reason) {
 		case KVM_EXIT_UNKNOWN:
-			printf("unhandled vm exit: %d\n", 
+			printf("unhandled vm exit:  0x%x\n", 
 			       kvm_run.hw.hardware_exit_reason);
 			abort();
 			break;
@@ -448,7 +448,7 @@ again:
 			handle_emulate_one_instruction(kvm, &kvm_run);
 			goto again;
 		default:
-			printf("unhandled vm exit: %d\n", kvm_run.exit_reason);
+			printf("unhandled vm exit: 0x%x\n", kvm_run.exit_reason);
 			break;
 		}
 	}

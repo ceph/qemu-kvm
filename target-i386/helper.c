@@ -1157,7 +1157,7 @@ void do_interrupt(int intno, int is_int, int error_code,
                   target_ulong next_eip, int is_hw)
 {
 #ifdef USE_KVM
-    if ((env->cr[0] & CR0_PE_MASK) && !(env->eflags & VM_MASK)) {
+    if ((env->cr[0] & CR0_PE_MASK)) {
         printf("%s: unexpect\n", __FUNCTION__);
         exit(-1);
     }
