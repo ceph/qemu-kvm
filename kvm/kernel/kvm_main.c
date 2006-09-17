@@ -1193,6 +1193,23 @@ static int emulator_cmpxchg_emulated(unsigned long addr,
 	return X86EMUL_UNHANDLEABLE;
 }
 
+static void report_emulation_failure(struct x86_emulate_ctxt *ctxt)
+{			
+	static int reported;
+	u8 opcodes[4];
+	unsigned long rip = vmcs_readl(GUEST_RIP);
+
+	if (reported)
+		return;
+
+	emulator_read_std(vmcs_readl(GUEST_RIP), (void *)opcodes, 4, ctxt);
+
+	printk(KERN_ERR "emulation failed but !mmio_needed?"
+	       " rip %lx %02x %02x %02x %02x\n",
+	       rip, opcodes[0], opcodes[1], opcodes[2], opcodes[3]);
+	reported = 1;
+}
+
 struct x86_emulate_ops emulate_ops = {
 	.read_std            = emulator_read_std,
 	.write_std           = emulator_write_std,
@@ -1283,26 +1300,7 @@ static int emulate_instruction(struct kvm_vcpu *vcpu,
 
 	if (r) {
 		if (!vcpu->mmio_needed) {
-			static int reported;
-
-			if (!reported) {
-				u8 opcodes[4];
-
-				emulator_read_std(vmcs_readl(GUEST_RIP),
-						  (unsigned long *)opcodes,
-						  4,
-						  &emulate_ctxt);
-
-				printk(KERN_ERR "emulation failed but "
-						"!mmio_needed? rip %lx %02x"
-						" %02x %02x %02x\n",
-				       vmcs_readl(GUEST_RIP),
-				       opcodes[0],
-				       opcodes[1],
-				       opcodes[2],
-				       opcodes[3]);
-				reported = 1;
-			}
+			report_emulation_failure(&emulate_ctxt);
 			return EMULATE_FAIL;
 		}
 		return EMULATE_DO_MMIO;
