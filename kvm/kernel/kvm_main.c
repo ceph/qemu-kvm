@@ -1092,24 +1092,12 @@ static void skip_emulated_instruction(struct kvm_vcpu *vcpu)
 			     interruptibility & ~3);
 }
 
-struct kvm_x86_emulate_ctxt {
-	struct x86_emulate_ctxt x;
-	struct kvm_vcpu *vcpu;
-};
-
-static struct kvm_vcpu *vcpu_from_ctxt(struct x86_emulate_ctxt *ctxt)
-{
-	struct kvm_x86_emulate_ctxt *kvm_ctxt
-		= container_of(ctxt, struct kvm_x86_emulate_ctxt, x);
-	return kvm_ctxt->vcpu;
-}
-
 static int emulator_read_std(unsigned long addr,
 			     unsigned long *val,
 			     unsigned int bytes,
 			     struct x86_emulate_ctxt *ctxt)
 {
-	struct kvm_vcpu *vcpu = vcpu_from_ctxt(ctxt);
+	struct kvm_vcpu *vcpu = ctxt->private;
 	void *data = val;
 
 	while (bytes) {
@@ -1151,7 +1139,7 @@ static int emulator_read_emulated(unsigned long addr,
 				  unsigned int bytes,
 				  struct x86_emulate_ctxt *ctxt)
 {
-	struct kvm_vcpu *vcpu = vcpu_from_ctxt(ctxt);
+	struct kvm_vcpu *vcpu = ctxt->private;
 
 	if (vcpu->mmio_read_completed) {
 		memcpy(val, vcpu->mmio_data, bytes);
@@ -1177,7 +1165,7 @@ static int emulator_write_emulated(unsigned long addr,
 				   unsigned int bytes,
 				   struct x86_emulate_ctxt *ctxt)
 {
-	struct kvm_vcpu *vcpu = vcpu_from_ctxt(ctxt);
+	struct kvm_vcpu *vcpu = ctxt->private;
 
 	u64 pte = vcpu->mmu.fetch_pte64(vcpu, addr);
 	unsigned offset = addr & (PAGE_SIZE-1);
@@ -1225,7 +1213,7 @@ static int emulate_instruction(struct kvm_vcpu *vcpu,
 			       u16 error_code)
 {
 	struct cpu_user_regs regs;
-	struct kvm_x86_emulate_ctxt emulate_ctxt;
+	struct x86_emulate_ctxt emulate_ctxt;
 	int r;
 	uint32_t cs_ar;
 
@@ -1258,33 +1246,33 @@ static int emulate_instruction(struct kvm_vcpu *vcpu,
 
 	cs_ar = vmcs_read32(GUEST_CS_AR_BYTES);
 
-	emulate_ctxt.x.regs = &regs;
-	emulate_ctxt.x.cr2 = cr2;
-	emulate_ctxt.x.mode = (regs.eflags & X86_EFLAGS_VM) ? X86EMUL_MODE_REAL:
+	emulate_ctxt.regs = &regs;
+	emulate_ctxt.cr2 = cr2;
+	emulate_ctxt.mode = (regs.eflags & X86_EFLAGS_VM) ? X86EMUL_MODE_REAL:
 			      (cs_ar & AR_L_MASK) ? X86EMUL_MODE_PROT64:
 			      (cs_ar & AR_DB_MASK) ? X86EMUL_MODE_PROT32:
 			      X86EMUL_MODE_PROT16;
 
-	if (emulate_ctxt.x.mode == X86EMUL_MODE_PROT64) {
-		emulate_ctxt.x.cs_base = 0;
-		emulate_ctxt.x.ds_base = 0;
-		emulate_ctxt.x.es_base = 0;
-		emulate_ctxt.x.ss_base = 0;
-		emulate_ctxt.x.gs_base = 0;
-		emulate_ctxt.x.fs_base = 0;
+	if (emulate_ctxt.mode == X86EMUL_MODE_PROT64) {
+		emulate_ctxt.cs_base = 0;
+		emulate_ctxt.ds_base = 0;
+		emulate_ctxt.es_base = 0;
+		emulate_ctxt.ss_base = 0;
+		emulate_ctxt.gs_base = 0;
+		emulate_ctxt.fs_base = 0;
 	} else {
-		emulate_ctxt.x.cs_base = vmcs_readl(GUEST_CS_BASE);
-		emulate_ctxt.x.ds_base = vmcs_readl(GUEST_DS_BASE);
-		emulate_ctxt.x.es_base = vmcs_readl(GUEST_ES_BASE);
-		emulate_ctxt.x.ss_base = vmcs_readl(GUEST_SS_BASE);
-		emulate_ctxt.x.gs_base = vmcs_readl(GUEST_GS_BASE);
-		emulate_ctxt.x.fs_base = vmcs_readl(GUEST_FS_BASE);
+		emulate_ctxt.cs_base = vmcs_readl(GUEST_CS_BASE);
+		emulate_ctxt.ds_base = vmcs_readl(GUEST_DS_BASE);
+		emulate_ctxt.es_base = vmcs_readl(GUEST_ES_BASE);
+		emulate_ctxt.ss_base = vmcs_readl(GUEST_SS_BASE);
+		emulate_ctxt.gs_base = vmcs_readl(GUEST_GS_BASE);
+		emulate_ctxt.fs_base = vmcs_readl(GUEST_FS_BASE);
 	}
 
-	emulate_ctxt.vcpu = vcpu;
+	emulate_ctxt.private = vcpu;
 
 	vcpu->mmio_is_write = 0;
-	r = x86_emulate_memop(&emulate_ctxt.x, &emulate_ops);
+	r = x86_emulate_memop(&emulate_ctxt, &emulate_ops);
 
 	if (r || vcpu->mmio_is_write) {
 		run->mmio.phys_addr = vcpu->mmio_phys_addr;
@@ -1303,7 +1291,7 @@ static int emulate_instruction(struct kvm_vcpu *vcpu,
 				emulator_read_std(vmcs_readl(GUEST_RIP),
 						  (unsigned long *)opcodes,
 						  4,
-						  &emulate_ctxt.x);
+						  &emulate_ctxt);
 
 				printk(KERN_ERR "emulation failed but "
 						"!mmio_needed? rip %lx %02x"

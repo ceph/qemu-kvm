@@ -150,6 +150,8 @@ struct x86_emulate_ctxt {
 	unsigned long ss_base;
 	unsigned long gs_base;
 	unsigned long fs_base;
+
+	void *private; /* Not used by emulator */
 };
 
 /* Execution mode, passed to the emulator. */
