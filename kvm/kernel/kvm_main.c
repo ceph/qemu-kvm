@@ -1011,9 +1011,9 @@ static int kvm_dev_ioctl_get_dirty_log(struct kvm *kvm,
 			vcpu_put(vcpu);
 		}
 		kvm_mmu_slot_remove_write_access(kvm, log->slot);
+		memset(memslot->dirty_bitmap, 0, n);
 	}
 
-	memset(memslot->dirty_bitmap, 0, n);
 	return 0;
 
 out:
