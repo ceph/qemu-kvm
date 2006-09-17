@@ -3027,6 +3027,11 @@ static void cirrus_vga_save(QEMUFile *f, void *opaque)
     qemu_put_be32s(f, &s->hw_cursor_y);
     /* XXX: we do not save the bitblt state - we assume we do not save
        the state when the blitter is active */
+
+#ifdef USE_KVM
+    qemu_put_be32s(f, &s->real_vram_size);
+    qemu_put_buffer(f, s->vram_ptr, s->real_vram_size);
+#endif
 }
 
 static int cirrus_vga_load(QEMUFile *f, void *opaque, int version_id)
@@ -3069,6 +3074,21 @@ static int cirrus_vga_load(QEMUFile *f, void *opaque, int version_id)
 
     qemu_get_be32s(f, &s->hw_cursor_x);
     qemu_get_be32s(f, &s->hw_cursor_y);
+
+#ifdef USE_KVM
+    {
+        int real_vram_size;
+        qemu_get_be32s(f, &real_vram_size);
+        if (real_vram_size != s->real_vram_size) {
+            if (real_vram_size > s->real_vram_size)
+                real_vram_size = s->real_vram_size;
+            printf("%s: REAL_VRAM_SIZE MISMATCH !!!!!! SAVED=%d CURRENT=%d", 
+                   __FUNCTION__, real_vram_size, s->real_vram_size);
+        }
+        qemu_get_buffer(f, s->vram_ptr, real_vram_size);
+    }
+#endif
+
 
     /* force refresh */
     s->graphic_mode = -1;
