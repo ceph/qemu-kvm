@@ -173,7 +173,7 @@ struct kvm_vcpu {
 	int mmio_is_write;
 	int mmio_size;
 	unsigned char mmio_data[8];
-	unsigned long mmio_phys_addr;
+	gpa_t mmio_phys_addr;
 };
 
 struct kvm_memory_slot {
