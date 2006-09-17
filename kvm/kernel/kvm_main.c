@@ -1002,14 +1002,16 @@ static int kvm_dev_ioctl_get_dirty_log(struct kvm *kvm,
 		goto out;
 
 
-	if (any)
+	if (any) {
 		for (i = 0; i < kvm->nvcpus; ++i) {
 			struct kvm_vcpu *vcpu = &kvm->vcpus[i];
 
 			vcpu_load(vcpu);
-			kvm_mmu_reset_context(vcpu);
+			vmcs_writel(HOST_CR3, vmcs_readl(HOST_CR3));
 			vcpu_put(vcpu);
 		}
+		kvm_mmu_slot_remove_write_access(kvm, log->slot);
+	}
 
 	memset(memslot->dirty_bitmap, 0, n);
 	return 0;
@@ -1030,6 +1032,20 @@ struct page *gfn_to_page(struct kvm *kvm, gfn_t gfn)
 			return memslot->phys_mem[gfn - memslot->base_gfn];
 	}
 	return 0;
+}
+
+int gfn_to_memslot(struct kvm *kvm, gfn_t gfn)
+{
+	int i;
+
+	for (i = 0; i < kvm->nmemslots; ++i) {
+		struct kvm_memory_slot *memslot = &kvm->memslots[i];
+
+		if (gfn >= memslot->base_gfn
+		    && gfn < memslot->base_gfn + memslot->npages)
+			return i;
+	}
+	return -1;
 }
 
 void mark_page_dirty(struct kvm *kvm, gfn_t gfn)

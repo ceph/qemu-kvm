@@ -78,6 +78,9 @@ typedef unsigned long  hfn_t;
 struct kvm_mmu_page {
 	struct list_head link;
 	hpa_t page_hpa;
+	unsigned long slot_bitmap; /* One bit set per slot which has memory
+				    * in this shadow page.
+				    */
 };
 
 struct vmcs {
@@ -214,11 +217,13 @@ void kvm_mmu_destroy(struct kvm_vcpu *vcpu);
 int kvm_mmu_init(struct kvm_vcpu *vcpu);
 
 int kvm_mmu_reset_context(struct kvm_vcpu *vcpu);
+void kvm_mmu_slot_remove_write_access(struct kvm *kvm, int slot);
 
 gpa_t gva_to_gpa(struct kvm_vcpu *vcpu, gva_t gva);
 hpa_t gva_to_hpa(struct kvm_vcpu *vcpu, gva_t gva);
 
 struct page *gfn_to_page(struct kvm *kvm, gfn_t gfn);
+int gfn_to_memslot(struct kvm *kvm, gfn_t gfn);
 void mark_page_dirty(struct kvm *kvm, gfn_t gfn);
 
 void vmcs_writel(unsigned long field, unsigned long value);

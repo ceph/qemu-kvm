@@ -192,7 +192,17 @@ static hpa_t kvm_mmu_alloc_page(struct kvm_vcpu *vcpu)
 	list_del(&page->link);
 	list_add(&page->link, &vcpu->kvm->active_mmu_pages);
 	ASSERT(is_empty_shadow_page(page->page_hpa));
+	page->slot_bitmap = 0;
 	return page->page_hpa;
+}
+
+static void page_header_update_slot(struct kvm *kvm, void *pte, gpa_t gpa)
+{
+	int slot = gfn_to_memslot(kvm, gpa >> PAGE_SHIFT);
+	struct page *page = pfn_to_page(__pa(pte) >> PAGE_SHIFT);
+	struct kvm_mmu_page *page_head = (struct kvm_mmu_page *)page->private;
+
+	__set_bit(slot, &page_head->slot_bitmap);
 }
 
 static inline int is_io_mem(struct kvm_vcpu *vcpu, unsigned long addr)
@@ -274,6 +284,7 @@ static int nonpaging_map(struct kvm_vcpu *vcpu, gva_t v, hpa_t p)
 
 		if (level == 1) {
 			mark_page_dirty(vcpu->kvm, v >> PAGE_SHIFT);
+			page_header_update_slot(vcpu->kvm, table, v);
 			table[index] = p | PT_PRESENT_MASK | PT_WRITABLE_MASK;
 			return 0;
 		}
@@ -395,6 +406,8 @@ static inline void set_pte_common(struct kvm_vcpu *vcpu,
 
 	if (access_bits & PT_WRITABLE_MASK)
 		mark_page_dirty(vcpu->kvm, gaddr >> PAGE_SHIFT);
+
+	page_header_update_slot(vcpu->kvm, shadow_pte, gaddr);
 
 	*shadow_pte |= access_bits;
 
@@ -655,3 +668,23 @@ void kvm_mmu_destroy(struct kvm_vcpu *vcpu)
 	destroy_kvm_mmu(vcpu);
 	free_mmu_pages(vcpu);
 }
+
+void kvm_mmu_slot_remove_write_access(struct kvm *kvm, int slot)
+{
+	struct kvm_mmu_page *page;
+
+	list_for_each_entry(page, &kvm->active_mmu_pages, link) {
+		int i;
+		u64 *pt;
+
+		if (!test_bit(slot, &page->slot_bitmap))
+			continue;
+
+		pt = __va(page->page_hpa);
+		for (i = 0; i < PT64_ENT_PER_PAGE; ++i)
+			/* avoid RMW */
+			if (pt[i] & PT_WRITABLE_MASK)
+				pt[i] &= ~PT_WRITABLE_MASK;
+
+	}
+} 

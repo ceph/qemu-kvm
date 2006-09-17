@@ -218,6 +218,7 @@ static int FNAME(fix_write_pf)(struct kvm_vcpu *vcpu,
 	}
 
 	gfn = (*guest_ent & PT64_BASE_ADDR_MASK) >> PAGE_SHIFT;
+	mark_page_dirty(vcpu->kvm, gfn);
 	*shadow_ent |= PT_WRITABLE_MASK;
 	*guest_ent |= PT_DIRTY_MASK;
 
