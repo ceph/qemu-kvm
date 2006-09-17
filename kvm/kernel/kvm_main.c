@@ -2845,7 +2845,7 @@ static __init int kvm_init(void)
 	register_reboot_notifier(&kvm_reboot_notifier);
 
 	if ((kvm_bad_page = alloc_page(GFP_KERNEL)) == NULL)
-		    goto out_free;
+		goto out_free;
 
 	kvm_bad_page_addr = page_to_pfn(kvm_bad_page) << PAGE_SHIFT;
 	r = misc_register(&kvm_dev);
