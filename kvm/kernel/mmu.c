@@ -173,7 +173,7 @@ static void kvm_mmu_free_page(struct kvm_vcpu *vcpu, hpa_t page_hpa)
 static int is_empty_shadow_page(hpa_t page_hpa)
 {
 	uint32_t *pos;
-	uint32_t *end; 
+	uint32_t *end;
 	for (pos = __va(page_hpa), end = pos + PAGE_SIZE / sizeof(uint32_t);
 		      pos != end; pos++)
 		if (*pos != 0)
@@ -186,7 +186,7 @@ static hpa_t kvm_mmu_alloc_page(struct kvm_vcpu *vcpu)
 	struct kvm_mmu_page *page;
 
 	if (list_empty(&vcpu->free_pages))
-		return INVALID_PAGE; 
+		return INVALID_PAGE;
 	
 	page = list_entry(vcpu->free_pages.next, struct kvm_mmu_page, link);
 	list_del(&page->link);
@@ -207,7 +207,7 @@ static void page_header_update_slot(struct kvm *kvm, void *pte, gpa_t gpa)
 
 static inline int is_io_mem(struct kvm_vcpu *vcpu, unsigned long addr)
 {
-	return (addr >= 0xa0000ULL && addr < 0xc0000ULL) || 
+	return (addr >= 0xa0000ULL && addr < 0xc0000ULL) ||
 		(addr >= 0xffff0000ULL && addr < 0x100000000ULL);
 }
 
@@ -238,7 +238,7 @@ hpa_t gva_to_hpa(struct kvm_vcpu *vcpu, gva_t gva)
 	return gpa_to_hpa(vcpu, gva_to_gpa(vcpu, gva));
 }
 
-static void release_pt_page_64(struct kvm_vcpu *vcpu, hpa_t page_hpa, 
+static void release_pt_page_64(struct kvm_vcpu *vcpu, hpa_t page_hpa,
 			       int level)
 {
 	ASSERT(vcpu);
@@ -258,16 +258,16 @@ static void release_pt_page_64(struct kvm_vcpu *vcpu, hpa_t page_hpa,
 			*pos = 0;
 			if (is_present_pte(current_ent))
 				release_pt_page_64(vcpu,
-						  current_ent & 
+						  current_ent &
 						  PT64_BASE_ADDR_MASK,
 						  level - 1);
 		}
 	}
-	kvm_mmu_free_page(vcpu, page_hpa);  
+	kvm_mmu_free_page(vcpu, page_hpa);
 }
 
 static void nonpaging_new_cr3(struct kvm_vcpu *vcpu)
-{    
+{
 }
 
 static int nonpaging_map(struct kvm_vcpu *vcpu, gva_t v, hpa_t p)
@@ -325,7 +325,7 @@ static void nonpaging_flush(struct kvm_vcpu *vcpu)
 
 static u64 nonpaging_fetch_pte64(struct kvm_vcpu *vcpu, unsigned long vaddr)
 {
-	return (vaddr & PAGE_MASK) 
+	return (vaddr & PAGE_MASK)
 		| PT_PRESENT_MASK
 		| PT_WRITABLE_MASK
 		| PT_ACCESSED_MASK
@@ -421,8 +421,8 @@ static inline void set_pte_common(struct kvm_vcpu *vcpu,
 		*shadow_pte |= paddr;
 }
 
-static void inject_page_fault(struct kvm_vcpu *vcpu, 
-			      uint64_t addr, 
+static void inject_page_fault(struct kvm_vcpu *vcpu,
+			      uint64_t addr,
 			      uint32_t err_code)
 {
 	uint32_t vect_info = vmcs_read32(IDT_VECTORING_INFO_FIELD);
@@ -442,7 +442,7 @@ static void inject_page_fault(struct kvm_vcpu *vcpu,
 			     INTR_INFO_VALID_MASK);
 		return;
 	}
-	vcpu->regs[VCPU_REGS_CR2] = addr; 
+	vcpu->regs[VCPU_REGS_CR2] = addr;
 	vmcs_write32(VM_ENTRY_EXCEPTION_ERROR_CODE, err_code);
 	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD,
 		     PF_VECTOR |
@@ -454,7 +454,7 @@ static void inject_page_fault(struct kvm_vcpu *vcpu,
 
 static inline int fix_read_pf(uint64_t *shadow_ent)
 {
-	if ((*shadow_ent & PT_SHADOW_USER_MASK) && 
+	if ((*shadow_ent & PT_SHADOW_USER_MASK) &&
 	    !(*shadow_ent & PT_USER_MASK)) {
 		*shadow_ent |= PT_USER_MASK;
 		*shadow_ent &= ~PT_WRITABLE_MASK;
@@ -496,14 +496,14 @@ static void paging_inval_page(struct kvm_vcpu *vcpu, gva_t addr)
 
                 page_addr = table[index] & PT64_BASE_ADDR_MASK;
 
-		if (level == PT_DIRECTORY_LEVEL && 
+		if (level == PT_DIRECTORY_LEVEL &&
 			  (table[index] & PT_SHADOW_PS_MARK)) {
 			table[index] = 0;
 			release_pt_page_64(vcpu, page_addr, PT_PAGE_TABLE_LEVEL);
 
 			//flush tlb
 			vmcs_writel(GUEST_CR3, vcpu->mmu.root_hpa |
-				    (vcpu->cr3 & (CR3_PCD_MASK | CR3_WPT_MASK))); 
+				    (vcpu->cr3 & (CR3_PCD_MASK | CR3_WPT_MASK)));
 			return;
 		}
 	}
@@ -536,7 +536,7 @@ static int paging64_init_context(struct kvm_vcpu *vcpu)
 	context->shadow_root_level = PT64_ROOT_LEVEL;
 	context->root_hpa = kvm_mmu_alloc_page(vcpu);
 	ASSERT(VALID_PAGE(context->root_hpa));
-	vmcs_writel(GUEST_CR3, context->root_hpa | 
+	vmcs_writel(GUEST_CR3, context->root_hpa |
 		    (vcpu->cr3 & (CR3_PCD_MASK | CR3_WPT_MASK)));
 	return 0;
 }
@@ -554,7 +554,7 @@ static int paging32_init_context(struct kvm_vcpu *vcpu)
 	context->shadow_root_level = PT32E_ROOT_LEVEL;
 	context->root_hpa = kvm_mmu_alloc_page(vcpu);
 	ASSERT(VALID_PAGE(context->root_hpa));
-	vmcs_writel(GUEST_CR3, context->root_hpa | 
+	vmcs_writel(GUEST_CR3, context->root_hpa |
 		    (vcpu->cr3 & (CR3_PCD_MASK | CR3_WPT_MASK)));
 	return 0;
 }
@@ -585,7 +585,7 @@ static int init_kvm_mmu(struct kvm_vcpu *vcpu)
 	else if (is_long_mode())
 		return paging64_init_context(vcpu);
 	else if (is_pae())
-		return paging32E_init_context(vcpu); 
+		return paging32E_init_context(vcpu);
 	else
 		return paging32_init_context(vcpu);
 }
@@ -610,7 +610,7 @@ static void free_mmu_pages(struct kvm_vcpu *vcpu)
 	while (!list_empty(&vcpu->free_pages)) {
 		struct kvm_mmu_page *page;
 
-		page = list_entry(vcpu->free_pages.next, 
+		page = list_entry(vcpu->free_pages.next,
 				  struct kvm_mmu_page, link);
 		list_del(&page->link);
 		__free_page(pfn_to_page(page->page_hpa >> PAGE_SHIFT));
@@ -687,4 +687,4 @@ void kvm_mmu_slot_remove_write_access(struct kvm *kvm, int slot)
 				pt[i] &= ~PT_WRITABLE_MASK;
 
 	}
-} 
+}

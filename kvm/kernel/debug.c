@@ -21,7 +21,7 @@
 
 #ifdef KVM_DEBUG
 
-static const char *vmx_msr_name[] = { 
+static const char *vmx_msr_name[] = {
 	"MSR_EFER", "MSR_STAR", "MSR_CSTAR",
 	"MSR_KERNEL_GS_BASE", "MSR_SYSCALL_MASK", "MSR_LSTAR"
 };
@@ -120,13 +120,13 @@ void show_code(struct kvm_vcpu *vcpu)
 	vcpu_printf(vcpu, "\n");
 }
 
-struct gate_struct {          
+struct gate_struct {
 	u16 offset_low;
-	u16 segment; 
+	u16 segment;
 	unsigned ist : 3, zero0 : 5, type : 5, dpl : 2, p : 1;
 	u16 offset_middle;
 	u32 offset_high;
-	u32 zero1; 
+	u32 zero1;
 } __attribute__((packed));
 
 void show_irq(struct kvm_vcpu *vcpu,  int irq)
@@ -155,9 +155,9 @@ void show_irq(struct kvm_vcpu *vcpu,  int irq)
 	vcpu_printf(vcpu, "%s: 0x%x handler 0x%llx\n",
 		   __FUNCTION__,
 		   irq,
-		   ((uint64_t)gate.offset_high << 32) | 
-		   ((uint64_t)gate.offset_middle << 16) | 
-		   gate.offset_low); 
+		   ((uint64_t)gate.offset_high << 32) |
+		   ((uint64_t)gate.offset_middle << 16) |
+		   gate.offset_low);
 }
 
 void show_page(struct kvm_vcpu *vcpu,
@@ -372,8 +372,8 @@ int vm_entry_test(struct kvm_vcpu *vcpu)
 	       return 0;
 	}
 
-	if (!virtual8086 && 
-	    (vmcs_read16(GUEST_SS_SELECTOR) & SELECTOR_RPL_MASK) != 
+	if (!virtual8086 &&
+	    (vmcs_read16(GUEST_SS_SELECTOR) & SELECTOR_RPL_MASK) !=
 	    (vmcs_read16(GUEST_CS_SELECTOR) & SELECTOR_RPL_MASK)) {
 		vcpu_printf(vcpu, "%s: ss selctor 0x%x cs selctor 0x%x,"
 				     " not same RPL\n",
@@ -392,7 +392,7 @@ int vm_entry_test(struct kvm_vcpu *vcpu)
 		VIR8086_SEG_BASE_TEST(GS);
 	}
 
-	if (!is_canonical(vmcs_readl(GUEST_TR_BASE)) || 
+	if (!is_canonical(vmcs_readl(GUEST_TR_BASE)) ||
 	    !is_canonical(vmcs_readl(GUEST_FS_BASE)) ||
 	    !is_canonical(vmcs_readl(GUEST_GS_BASE)) ) {
 		vcpu_printf(vcpu, "%s: TR 0x%lx FS 0x%lx or GS 0x%lx base"
@@ -405,7 +405,7 @@ int vm_entry_test(struct kvm_vcpu *vcpu)
 
 	}
 
-	if (!(vmcs_read32(GUEST_LDTR_AR_BYTES) & AR_UNUSABLE_MASK) && 
+	if (!(vmcs_read32(GUEST_LDTR_AR_BYTES) & AR_UNUSABLE_MASK) &&
 	    !is_canonical(vmcs_readl(GUEST_LDTR_BASE))) {
 		vcpu_printf(vcpu, "%s: LDTR base 0x%lx, usable and is not"
 				      " canonical\n",
@@ -499,8 +499,8 @@ int vm_entry_test(struct kvm_vcpu *vcpu)
 			return 0;
 		}
 
-		if ((cs_ar & AR_TYPE_MASK) >= 8 && (cs_ar & AR_TYPE_MASK) < 12 && 
-		    AR_DPL(cs_ar) != 
+		if ((cs_ar & AR_TYPE_MASK) >= 8 && (cs_ar & AR_TYPE_MASK) < 12 &&
+		    AR_DPL(cs_ar) !=
 		    (vmcs_read16(GUEST_CS_SELECTOR) & SELECTOR_RPL_MASK) ) {
 			vcpu_printf(vcpu, "%s: cs AR 0x%x, "
 					      "DPL not as RPL\n",
@@ -509,8 +509,8 @@ int vm_entry_test(struct kvm_vcpu *vcpu)
 			return 0;
 		}
 
-		if ((cs_ar & AR_TYPE_MASK) >= 13 && (cs_ar & AR_TYPE_MASK) < 16 && 
-		    AR_DPL(cs_ar) > 
+		if ((cs_ar & AR_TYPE_MASK) >= 13 && (cs_ar & AR_TYPE_MASK) < 16 &&
+		    AR_DPL(cs_ar) >
 		    (vmcs_read16(GUEST_CS_SELECTOR) & SELECTOR_RPL_MASK) ) {
 			vcpu_printf(vcpu, "%s: cs AR 0x%x, "
 					      "DPL greater than RPL\n",
@@ -546,8 +546,8 @@ int vm_entry_test(struct kvm_vcpu *vcpu)
 
 		SEG_G_TEST(CS);
 
-		if (!(ss_ar & AR_UNUSABLE_MASK)) { 
-		    if ((ss_ar & AR_TYPE_MASK) != 3 && 
+		if (!(ss_ar & AR_UNUSABLE_MASK)) {
+		    if ((ss_ar & AR_TYPE_MASK) != 3 &&
 			(ss_ar & AR_TYPE_MASK) != 7 ) {
 			vcpu_printf(vcpu, "%s: ss AR 0x%x, usable and type"
 					      " is not 3 or 7\n",
@@ -583,7 +583,7 @@ int vm_entry_test(struct kvm_vcpu *vcpu)
 
 		}
 
-		if (AR_DPL(ss_ar) != 
+		if (AR_DPL(ss_ar) !=
 		    (vmcs_read16(GUEST_SS_SELECTOR) & SELECTOR_RPL_MASK) ) {
 			vcpu_printf(vcpu, "%s: SS AR 0x%x, "
 					      "DPL not as RPL\n",
@@ -662,7 +662,7 @@ int vm_entry_test(struct kvm_vcpu *vcpu)
 				return 0;
 			}
 		} else {
-			if ((tr_ar & AR_TYPE_MASK) != AR_TYPE_BUSY_32_TSS && 
+			if ((tr_ar & AR_TYPE_MASK) != AR_TYPE_BUSY_32_TSS &&
 			    (tr_ar & AR_TYPE_MASK) != AR_TYPE_BUSY_16_TSS) {
 				vcpu_printf(vcpu, "%s: TR AR 0x%x, legacy"
 						      " mode and not 16/32bit "
@@ -755,19 +755,19 @@ int vm_entry_test(struct kvm_vcpu *vcpu)
 
 	// RIP
 
-	if ((!long_mode || !(vmcs_read32(GUEST_CS_AR_BYTES) & AR_L_MASK)) && 
+	if ((!long_mode || !(vmcs_read32(GUEST_CS_AR_BYTES) & AR_L_MASK)) &&
 	    vmcs_readl(GUEST_RIP) & ~((1ULL << 32) - 1) ){
 		vcpu_printf(vcpu, "%s: RIP 0x%lx, size err\n",
 				   __FUNCTION__,
 				   vmcs_readl(GUEST_RIP));
-		return 0;    
+		return 0;
 	}
 
 	if (!is_canonical(vmcs_readl(GUEST_RIP))) {
 		vcpu_printf(vcpu, "%s: RIP 0x%lx, not canonical\n",
 				   __FUNCTION__,
 				   vmcs_readl(GUEST_RIP));
-		return 0; 
+		return 0;
 	}
 
 	// RFLAGS
@@ -775,34 +775,34 @@ int vm_entry_test(struct kvm_vcpu *vcpu)
 		(~((1ULL << 22) - 1) | (1ULL << 15) | (1ULL << 5) | (1ULL << 3))
 	#define RFLAGS_RESEVED_SET_BITS (1 << 1)
 
-	if ((rflags & RFLAGS_RESEVED_CLEAR_BITS) || 
+	if ((rflags & RFLAGS_RESEVED_CLEAR_BITS) ||
 	    !(rflags & RFLAGS_RESEVED_SET_BITS)) {
 		vcpu_printf(vcpu, "%s: RFLAGS 0x%lx, reserved bits 0x%lx 0x%lx\n",
 			   __FUNCTION__,
 			   rflags,
 			   RFLAGS_RESEVED_CLEAR_BITS,
 			   RFLAGS_RESEVED_SET_BITS);
-		return 0; 
+		return 0;
 	}
 
 	if (long_mode && virtual8086) {
 		vcpu_printf(vcpu, "%s: RFLAGS 0x%lx, vm and long mode\n",
 				   __FUNCTION__,
 				   rflags);
-		return 0; 
+		return 0;
 	}
 
 	
 	if (!(rflags & RFLAGS_RF)) {
 		uint32_t vm_entry_info = vmcs_read32(VM_ENTRY_INTR_INFO_FIELD);
-		if ((vm_entry_info & INTR_INFO_VALID_MASK) && 
-		    (vm_entry_info & INTR_INFO_INTR_TYPE_MASK) == 
+		if ((vm_entry_info & INTR_INFO_VALID_MASK) &&
+		    (vm_entry_info & INTR_INFO_INTR_TYPE_MASK) ==
 		    INTR_TYPE_EXT_INTR) {
 			vcpu_printf(vcpu, "%s: RFLAGS 0x%lx, external"
 					      " interrupt and RF is clear\n",
 				   __FUNCTION__,
 				   rflags);
-			return 0; 
+			return 0;
 		}
 
 	}
@@ -876,7 +876,7 @@ void vmcs_dump(void)
 
 	printk("GUEST_GDTR_LIMIT 0x%x\n", vmcs_read32(GUEST_GDTR_LIMIT));
 	printk("GUEST_IDTR_LIMIT 0x%x\n", vmcs_read32(GUEST_IDTR_LIMIT));
-	printk("***********************************************************\n");     
+	printk("***********************************************************\n");
 }
 
 void regs_dump(struct kvm_vcpu *vcpu)
@@ -907,7 +907,7 @@ void regs_dump(struct kvm_vcpu *vcpu)
 	VMCS_REG_DUMP(RSP);
 	VMCS_REG_DUMP(RIP);
 	VMCS_REG_DUMP(RFLAGS);
-       
+
 	printk("***********************************************************\n");
 }
 

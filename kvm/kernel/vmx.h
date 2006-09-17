@@ -44,10 +44,10 @@ enum vmcs_field {
 	HOST_FS_SELECTOR                = 0x00000c08,
 	HOST_GS_SELECTOR                = 0x00000c0a,
 	HOST_TR_SELECTOR                = 0x00000c0c,
-	IO_BITMAP_A                     = 0x00002000, 
-	IO_BITMAP_A_HIGH                = 0x00002001, 
-	IO_BITMAP_B                     = 0x00002002, 
-	IO_BITMAP_B_HIGH                = 0x00002003, 
+	IO_BITMAP_A                     = 0x00002000,
+	IO_BITMAP_A_HIGH                = 0x00002001,
+	IO_BITMAP_B                     = 0x00002002,
+	IO_BITMAP_B_HIGH                = 0x00002003,
 	MSR_BITMAP                      = 0x00002004,
 	MSR_BITMAP_HIGH                 = 0x00002005,
 	VM_EXIT_MSR_STORE_ADDR          = 0x00002006,
@@ -65,7 +65,7 @@ enum vmcs_field {
 	GUEST_IA32_DEBUGCTL             = 0x00002802,
 	GUEST_IA32_DEBUGCTL_HIGH        = 0x00002803,
 	PIN_BASED_VM_EXEC_CONTROL       = 0x00004000,
-	CPU_BASED_VM_EXEC_CONTROL       = 0x00004002,   
+	CPU_BASED_VM_EXEC_CONTROL       = 0x00004002,
 	EXCEPTION_BITMAP                = 0x00004004,
 	PAGE_FAULT_ERROR_CODE_MASK      = 0x00004006,
 	PAGE_FAULT_ERROR_CODE_MATCH     = 0x00004008,
@@ -82,7 +82,7 @@ enum vmcs_field {
 	SECONDARY_VM_EXEC_CONTROL       = 0x0000401e,
 	VM_INSTRUCTION_ERROR            = 0x00004400,
 	VM_EXIT_REASON                  = 0x00004402,
-	VM_EXIT_INTR_INFO               = 0x00004404,   
+	VM_EXIT_INTR_INFO               = 0x00004404,
 	VM_EXIT_INTR_ERROR_CODE         = 0x00004406,
 	IDT_VECTORING_INFO_FIELD        = 0x00004408,
 	IDT_VECTORING_ERROR_CODE        = 0x0000440a,
@@ -114,10 +114,10 @@ enum vmcs_field {
 	CR4_GUEST_HOST_MASK             = 0x00006002,
 	CR0_READ_SHADOW                 = 0x00006004,
 	CR4_READ_SHADOW                 = 0x00006006,
-	CR3_TARGET_VALUE0               = 0x00006008, 
-	CR3_TARGET_VALUE1               = 0x0000600a, 
-	CR3_TARGET_VALUE2               = 0x0000600c, 
-	CR3_TARGET_VALUE3               = 0x0000600e, 
+	CR3_TARGET_VALUE0               = 0x00006008,
+	CR3_TARGET_VALUE1               = 0x0000600a,
+	CR3_TARGET_VALUE2               = 0x0000600c,
+	CR3_TARGET_VALUE3               = 0x0000600e,
 	EXIT_QUALIFICATION              = 0x00006400,
 	GUEST_LINEAR_ADDRESS            = 0x0000640a,
 	GUEST_CR0                       = 0x00006800,
@@ -131,7 +131,7 @@ enum vmcs_field {
 	GUEST_GS_BASE                   = 0x00006810,
 	GUEST_LDTR_BASE                 = 0x00006812,
 	GUEST_TR_BASE                   = 0x00006814,
-	GUEST_GDTR_BASE                 = 0x00006816,    
+	GUEST_GDTR_BASE                 = 0x00006816,
 	GUEST_IDTR_BASE                 = 0x00006818,
 	GUEST_DR7                       = 0x0000681a,
 	GUEST_RSP                       = 0x0000681c,
@@ -208,14 +208,14 @@ enum vmcs_field {
 #define CONTROL_REG_ACCESS_REG          0xf00   /* 10:8, general purpose register */
 #define LMSW_SOURCE_DATA_SHIFT 16
 #define LMSW_SOURCE_DATA  (0xFFFF << LMSW_SOURCE_DATA_SHIFT) /* 16:31 lmsw source */
-#define REG_EAX                         (0 << 8) 
-#define REG_ECX                         (1 << 8) 
-#define REG_EDX                         (2 << 8) 
-#define REG_EBX                         (3 << 8) 
-#define REG_ESP                         (4 << 8) 
-#define REG_EBP                         (5 << 8) 
-#define REG_ESI                         (6 << 8) 
-#define REG_EDI                         (7 << 8) 
+#define REG_EAX                         (0 << 8)
+#define REG_ECX                         (1 << 8)
+#define REG_EDX                         (2 << 8)
+#define REG_EBX                         (3 << 8)
+#define REG_ESP                         (4 << 8)
+#define REG_EBP                         (5 << 8)
+#define REG_ESI                         (6 << 8)
+#define REG_EDI                         (7 << 8)
 #define REG_R8                         (8 << 8)
 #define REG_R9                         (9 << 8)
 #define REG_R10                        (10 << 8)
@@ -230,7 +230,7 @@ enum vmcs_field {
  */
 #define DEBUG_REG_ACCESS_NUM            0x7     /* 2:0, number of debug register */
 #define DEBUG_REG_ACCESS_TYPE           0x10    /* 4, direction of access */
-#define TYPE_MOV_TO_DR                  (0 << 4) 
+#define TYPE_MOV_TO_DR                  (0 << 4)
 #define TYPE_MOV_FROM_DR                (1 << 4)
 #define DEBUG_REG_ACCESS_REG            0xf00   /* 11:8, general purpose register */
 

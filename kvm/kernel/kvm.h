@@ -145,7 +145,7 @@ struct kvm_vcpu {
 	struct mutex mutex;
 	int   cpu;
 	int   launched;
-	unsigned long irq_summary; /* bit vector: 1 per word in irq_pending */ 
+	unsigned long irq_summary; /* bit vector: 1 per word in irq_pending */
 #define NR_IRQ_WORDS (256 / BITS_PER_LONG)
 	unsigned long irq_pending[NR_IRQ_WORDS];
 	unsigned long regs[17]; /* for rsp needs vcpu_load_rsp_rip() */
@@ -260,8 +260,8 @@ static inline int is_long_mode(void)
 
 static inline unsigned long guest_cr4(void)
 {
-	return (vmcs_readl(CR4_READ_SHADOW) & KVM_GUEST_CR4_MASK) | 
-		(vmcs_readl(GUEST_CR4) & ~KVM_GUEST_CR4_MASK);  
+	return (vmcs_readl(CR4_READ_SHADOW) & KVM_GUEST_CR4_MASK) |
+		(vmcs_readl(GUEST_CR4) & ~KVM_GUEST_CR4_MASK);
 }
 
 static inline int is_pae(void)
@@ -276,13 +276,13 @@ static inline int is_pse(void)
 
 static inline unsigned long guest_cr0(void)
 {
-	return (vmcs_readl(CR0_READ_SHADOW) & KVM_GUEST_CR0_MASK) | 
-		(vmcs_readl(GUEST_CR0) & ~KVM_GUEST_CR0_MASK);     
+	return (vmcs_readl(CR0_READ_SHADOW) & KVM_GUEST_CR0_MASK) |
+		(vmcs_readl(GUEST_CR0) & ~KVM_GUEST_CR0_MASK);
 }
 
 static inline unsigned guest_cpl(void)
 {
-	return vmcs_read16(GUEST_CS_SELECTOR) & SELECTOR_RPL_MASK;     
+	return vmcs_read16(GUEST_CS_SELECTOR) & SELECTOR_RPL_MASK;
 }
 
 static inline int is_paging(void)
@@ -293,13 +293,13 @@ static inline int is_paging(void)
 static inline int is_page_fault(uint32_t intr_info)
 {
 	return (intr_info & (INTR_INFO_INTR_TYPE_MASK | INTR_INFO_VECTOR_MASK |
-			     INTR_INFO_VALID_MASK)) == 
+			     INTR_INFO_VALID_MASK)) ==
 		(INTR_TYPE_EXCEPTION | PF_VECTOR | INTR_INFO_VALID_MASK);
 }
 
 static inline int is_external_interrupt(uint32_t intr_info)
 {
-	return (intr_info & (INTR_INFO_INTR_TYPE_MASK | INTR_INFO_VALID_MASK)) 
+	return (intr_info & (INTR_INFO_INTR_TYPE_MASK | INTR_INFO_VALID_MASK))
 		== (INTR_TYPE_EXT_INTR | INTR_INFO_VALID_MASK);
 }
 

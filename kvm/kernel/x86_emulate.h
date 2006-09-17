@@ -2,7 +2,7 @@
  * x86_emulate.h
  *
  * Generic x86 (32-bit and 64-bit) instruction decoder and emulator.
- * 
+ *
  * Copyright (c) 2005 Keir Fraser
  *
  * From: xen-unstable 10676:af9809f51f81a3c43f276f00c81a52ef558afda4
