@@ -223,7 +223,7 @@ gpa_t gva_to_gpa(struct kvm_vcpu *vcpu, gva_t gva);
 hpa_t gpa_to_hpa(struct kvm_vcpu *vcpu, gpa_t gpa);
 
 struct page *gfn_to_page(struct kvm *kvm, gfn_t gfn);
-int gfn_to_memslot(struct kvm *kvm, gfn_t gfn);
+struct kvm_memory_slot *gfn_to_memslot(struct kvm *kvm, gfn_t gfn);
 void mark_page_dirty(struct kvm *kvm, gfn_t gfn);
 
 void vmcs_writel(unsigned long field, unsigned long value);
@@ -306,6 +306,11 @@ static inline int is_external_interrupt(uint32_t intr_info)
 static inline void flush_guest_tlb(struct kvm_vcpu *vcpu)
 {
 	vmcs_writel(GUEST_CR3, vmcs_readl(GUEST_CR3));
+}
+
+static inline int memslot_id(struct kvm *kvm, struct kvm_memory_slot *slot)
+{
+	return slot - kvm->memslots;
 }
 
 extern hpa_t kvm_bad_page_addr;

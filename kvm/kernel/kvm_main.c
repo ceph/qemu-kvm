@@ -1034,7 +1034,7 @@ struct page *gfn_to_page(struct kvm *kvm, gfn_t gfn)
 	return 0;
 }
 
-int gfn_to_memslot(struct kvm *kvm, gfn_t gfn)
+struct kvm_memory_slot *gfn_to_memslot(struct kvm *kvm, gfn_t gfn)
 {
 	int i;
 
@@ -1043,9 +1043,9 @@ int gfn_to_memslot(struct kvm *kvm, gfn_t gfn)
 
 		if (gfn >= memslot->base_gfn
 		    && gfn < memslot->base_gfn + memslot->npages)
-			return i;
+			return memslot;
 	}
-	return -1;
+	return 0;
 }
 
 void mark_page_dirty(struct kvm *kvm, gfn_t gfn)
