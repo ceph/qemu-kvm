@@ -2775,9 +2775,6 @@ static struct notifier_block kvm_reboot_notifier = {
 	.priority = 0,
 };
 
-struct page *kvm_bad_page;
-hpa_t kvm_bad_page_addr;
-
 static __init void kvm_init_debug(void)
 {
 	debugfs_dir = debugfs_create_dir("kvm", 0);
@@ -2839,20 +2836,14 @@ static __init int kvm_init(void)
 	on_each_cpu(kvm_enable, 0, 0, 1);
 	register_reboot_notifier(&kvm_reboot_notifier);
 
-	if ((kvm_bad_page = alloc_page(GFP_KERNEL)) == NULL)
-		goto out_free;
-
-	kvm_bad_page_addr = page_to_pfn(kvm_bad_page) << PAGE_SHIFT;
 	r = misc_register(&kvm_dev);
 	if (r) {
 		printk (KERN_ERR "kvm: misc device register failed\n");
-		goto out_free_bad_page;
+		goto out_free;
 	}
 
 	return r;
 
-out_free_bad_page:
-	__free_page(kvm_bad_page);
 out_free:
 	free_kvm_area();
 out:
@@ -2867,7 +2858,6 @@ static __exit void kvm_exit(void)
 	unregister_reboot_notifier(&kvm_reboot_notifier);
 	on_each_cpu(kvm_disable, 0, 0, 1);
 	free_kvm_area();
-	__free_page(kvm_bad_page);
 }
 
 module_init(kvm_init)

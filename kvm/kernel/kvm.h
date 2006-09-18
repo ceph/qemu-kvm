@@ -317,9 +317,6 @@ static inline int memslot_id(struct kvm *kvm, struct kvm_memory_slot *slot)
 	return slot - kvm->memslots;
 }
 
-extern hpa_t kvm_bad_page_addr;
-
-
 /* The Xen-based x86 emulator wants register state in a struct cpu_user_regs */
 
 #ifdef __x86_64__
