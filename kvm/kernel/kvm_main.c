@@ -2772,6 +2772,7 @@ static struct file_operations kvm_chardev_ops = {
 	.open		= kvm_dev_open,
 	.release        = kvm_dev_release,
 	.unlocked_ioctl = kvm_dev_ioctl,
+	.compat_ioctl   = kvm_dev_ioctl,
 	.mmap           = kvm_dev_mmap,
 };
 
