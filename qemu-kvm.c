@@ -465,7 +465,7 @@ int kvm_update_debugger(CPUState *env)
     struct kvm_debug_guest dbg;
     int i;
 
-    memset(&dbg, 0, sizeof dbg);
+    dbg.enabled = 0;
     if (env->nb_breakpoints || env->singlestep_enabled) {
 	dbg.enabled = 1;
 	for (i = 0; i < 4 && i < env->nb_breakpoints; ++i) {
