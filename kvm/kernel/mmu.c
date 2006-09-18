@@ -211,7 +211,7 @@ static inline int is_io_mem(struct kvm_vcpu *vcpu, unsigned long addr)
 		(addr >= 0xffff0000ULL && addr < 0x100000000ULL);
 }
 
-static hpa_t gpa_to_hpa(struct kvm_vcpu *vcpu, gpa_t gpa)
+hpa_t gpa_to_hpa(struct kvm_vcpu *vcpu, gpa_t gpa)
 {
 	struct page *page;
 
@@ -231,11 +231,6 @@ gpa_t gva_to_gpa(struct kvm_vcpu *vcpu, gva_t gva)
 {
 	uint64_t pte = vcpu->mmu.fetch_pte64(vcpu, gva);
 	return (pte & PT64_BASE_ADDR_MASK) | (gva & ~PAGE_MASK);
-}
-
-hpa_t gva_to_hpa(struct kvm_vcpu *vcpu, gva_t gva)
-{
-	return gpa_to_hpa(vcpu, gva_to_gpa(vcpu, gva));
 }
 
 static void release_pt_page_64(struct kvm_vcpu *vcpu, hpa_t page_hpa,

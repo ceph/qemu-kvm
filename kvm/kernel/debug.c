@@ -48,12 +48,14 @@ int read_guest(struct kvm_vcpu *vcpu,
 	unsigned char *host_buf = dest;
 
 	while (size) {
+		gpa_t gpa;
 		hpa_t paddr;
 		unsigned now;
 		unsigned offset;
 		hva_t guest_buf;
 
-		paddr = gva_to_hpa(vcpu, addr);
+		gpa = gva_to_gpa(vcpu, addr);
+		paddr = gpa_to_hpa(vcpu, gpa);
 		if ( paddr == kvm_bad_page_addr ) {
 			return 0;
 		}
@@ -80,12 +82,14 @@ int write_guest(struct kvm_vcpu *vcpu,
 	unsigned char *host_buf = data;
 
 	while (size) {
+		gpa_t gpa;
 		hpa_t paddr;
 		unsigned now;
 		unsigned offset;
 		hva_t guest_buf;
 
-		paddr = gva_to_hpa(vcpu, addr);
+		gpa = gva_to_gpa(vcpu, addr);
+		paddr = gpa_to_hpa(vcpu, addr);
 		if ( paddr == kvm_bad_page_addr ) {
 			return 0;
 		}
