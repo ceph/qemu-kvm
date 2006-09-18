@@ -1020,20 +1020,6 @@ out:
 	return r;
 }
 
-struct page *gfn_to_page(struct kvm *kvm, gfn_t gfn)
-{
-	int i;
-
-	for (i = 0; i < kvm->nmemslots; ++i) {
-		struct kvm_memory_slot *memslot = &kvm->memslots[i];
-
-		if (gfn >= memslot->base_gfn
-		    && gfn < memslot->base_gfn + memslot->npages)
-			return memslot->phys_mem[gfn - memslot->base_gfn];
-	}
-	return 0;
-}
-
 struct kvm_memory_slot *gfn_to_memslot(struct kvm *kvm, gfn_t gfn)
 {
 	int i;
@@ -1105,12 +1091,15 @@ static int emulator_read_std(unsigned long addr,
 		unsigned offset = addr & (PAGE_SIZE-1);
 		unsigned tocopy = min(bytes, (unsigned)PAGE_SIZE - offset);
 		unsigned long pfn;
+		struct kvm_memory_slot *memslot;
 		void *page;
 
 		if (!(pte & PT_PRESENT_MASK))
 			return vcpu_printf(vcpu, "not present\n"), X86EMUL_PROPAGATE_FAULT;
 		pfn = (pte & PT64_BASE_ADDR_MASK) >> PAGE_SHIFT;
-		page = kmap_atomic(gfn_to_page(vcpu->kvm, pfn), KM_USER0);
+		memslot = gfn_to_memslot(vcpu->kvm, pfn);
+		/* FIXME: no memslot: emulate? return 0xff? */
+		page = kmap_atomic(gfn_to_page(memslot, pfn), KM_USER0);
 
 		memcpy(data, page + offset, tocopy);
 
@@ -1457,8 +1446,11 @@ static int pdptrs_have_reserved_bits_set(struct kvm_vcpu *vcpu, gpa_t cr3)
 	int i;
 	u64 pdpte;
 	u64 *pdpt;
+	struct kvm_memory_slot *memslot;
 
-	pdpt = kmap_atomic(gfn_to_page(vcpu->kvm, pdpt_gfn), KM_USER0);
+	memslot = gfn_to_memslot(vcpu->kvm, pdpt_gfn);
+	/* FIXME: !memslot - emulate? 0xff? */
+	pdpt = kmap_atomic(gfn_to_page(memslot, pdpt_gfn), KM_USER0);
 
 	for (i = 0; i < 4; ++i) {
 		pdpte = pdpt[offset + i];
@@ -2725,15 +2717,18 @@ static struct page *kvm_dev_nopage(struct vm_area_struct *vma,
 {
 	struct kvm *kvm = vma->vm_file->private_data;
 	unsigned long pgoff;
+	struct kvm_memory_slot *slot;
 	struct page *page;
 
 	*type = VM_FAULT_MINOR;
 	pgoff = ((address - vma->vm_start) >> PAGE_SHIFT) + vma->vm_pgoff;
-	page = gfn_to_page(kvm, pgoff);
-	if (page)
-		get_page(page);
-	else
-		page = NOPAGE_SIGBUS;
+	slot = gfn_to_memslot(kvm, pgoff);
+	if (!slot)
+		return NOPAGE_SIGBUS;
+	page = gfn_to_page(slot, pgoff);
+	if (!page)
+		return NOPAGE_SIGBUS;
+	get_page(page);
 	return page;
 }
 

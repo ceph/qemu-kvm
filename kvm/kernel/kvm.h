@@ -220,9 +220,13 @@ int kvm_mmu_reset_context(struct kvm_vcpu *vcpu);
 void kvm_mmu_slot_remove_write_access(struct kvm *kvm, int slot);
 
 gpa_t gva_to_gpa(struct kvm_vcpu *vcpu, gva_t gva);
-hpa_t gpa_to_hpa(struct kvm_vcpu *vcpu, gpa_t gpa);
+hpa_t gpa_to_hpa(struct kvm_memory_slot *memslot, gpa_t gpa);
 
-struct page *gfn_to_page(struct kvm *kvm, gfn_t gfn);
+static inline struct page *gfn_to_page(struct kvm_memory_slot *slot, gfn_t gfn)
+{
+	return slot->phys_mem[gfn - slot->base_gfn];
+}
+
 struct kvm_memory_slot *gfn_to_memslot(struct kvm *kvm, gfn_t gfn);
 void mark_page_dirty(struct kvm *kvm, gfn_t gfn);
 

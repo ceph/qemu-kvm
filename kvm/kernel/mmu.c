@@ -211,19 +211,11 @@ static inline int is_io_mem(struct kvm_vcpu *vcpu, unsigned long addr)
 		(addr >= 0xffff0000ULL && addr < 0x100000000ULL);
 }
 
-hpa_t gpa_to_hpa(struct kvm_vcpu *vcpu, gpa_t gpa)
+hpa_t gpa_to_hpa(struct kvm_memory_slot *memslot, gpa_t gpa)
 {
 	struct page *page;
 
-	ASSERT(vcpu);
-
-	if (is_io_mem(vcpu, gpa))
-		return kvm_bad_page_addr;
-
-	page = gfn_to_page(vcpu->kvm, gpa >> PAGE_SHIFT);
-	if (!page)
-		return kvm_bad_page_addr;
-
+	page = gfn_to_page(memslot, gpa >> PAGE_SHIFT);
 	return (page_to_pfn(page) << PAGE_SHIFT) | (gpa & (PAGE_SIZE-1));
 }
 
@@ -337,9 +329,13 @@ static int nonpaging_page_fault(struct kvm_vcpu *vcpu, gva_t gva,
      ASSERT(VALID_PAGE(vcpu->mmu.root_hpa));
 
      for (;;) {
-	     hpa_t paddr = gpa_to_hpa(vcpu, addr & PT64_BASE_ADDR_MASK);
-	     if (paddr == kvm_bad_page_addr)
+	     struct kvm_memory_slot *slot;
+	     hpa_t paddr;
+
+	     slot = gfn_to_memslot(vcpu->kvm, addr >> PAGE_SHIFT);
+	     if (!slot || is_io_mem(vcpu, addr))
 		     return 1;
+	     paddr = gpa_to_hpa(slot, addr & PT64_BASE_ADDR_MASK);
 	     ret = nonpaging_map(vcpu, addr & PAGE_MASK, paddr);
 	     if (ret) {
 		     nonpaging_flush(vcpu);
@@ -394,6 +390,7 @@ static inline void set_pte_common(struct kvm_vcpu *vcpu,
 			     uint64_t access_bits)
 {
 	hpa_t paddr;
+	struct kvm_memory_slot *slot;
 
 	*shadow_pte |= access_bits << PT_SHADOW_BITS_OFFSET;
 	if (!dirty)
@@ -406,14 +403,16 @@ static inline void set_pte_common(struct kvm_vcpu *vcpu,
 
 	*shadow_pte |= access_bits;
 
-	paddr = gpa_to_hpa(vcpu, gaddr);
+	slot = gfn_to_memslot(vcpu->kvm, gaddr >> PAGE_SHIFT);
 
-	if (paddr == kvm_bad_page_addr) {
+	if (!slot || is_io_mem(vcpu, gaddr)) {
 		*shadow_pte |= gaddr;
 		*shadow_pte |= PT_SHADOW_IO_MARK;
 		*shadow_pte &= ~PT_PRESENT_MASK;
-	} else
+	} else {
+		paddr = gpa_to_hpa(slot, gaddr);
 		*shadow_pte |= paddr;
+	}
 }
 
 static void inject_page_fault(struct kvm_vcpu *vcpu,

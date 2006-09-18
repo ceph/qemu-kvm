@@ -39,9 +39,13 @@ static void FNAME(init_walker)(struct guest_walker *walker,
 			       struct kvm_vcpu *vcpu)
 {
 	hpa_t hpa;
+	struct kvm_memory_slot *slot;
 
 	walker->level = vcpu->mmu.root_level;
-	hpa = gpa_to_hpa(vcpu, vcpu->cr3 & PT64_BASE_ADDR_MASK);
+	slot = gfn_to_memslot(vcpu->kvm, 
+			      (vcpu->cr3 & PT64_BASE_ADDR_MASK) >> PAGE_SHIFT);
+	/* FIXME: cr3 -> mmio or nowhere? */
+	hpa = gpa_to_hpa(slot, vcpu->cr3 & PT64_BASE_ADDR_MASK);
 	walker->table = kmap_atomic(pfn_to_page(hpa >> PAGE_SHIFT), KM_USER0);
 
 	ASSERT((!is_long_mode() && is_pae()) ||
@@ -96,6 +100,7 @@ static pt_element_t *FNAME(fetch_guest)(struct kvm_vcpu *vcpu,
 
 	for (;;) {
 		int index = PT_INDEX(addr, walker->level);
+		struct kvm_memory_slot *slot;
 		hpa_t paddr;
 
 		ASSERT(((unsigned long)walker->table & PAGE_MASK) ==
@@ -108,8 +113,9 @@ static pt_element_t *FNAME(fetch_guest)(struct kvm_vcpu *vcpu,
 			return &walker->table[index];
 		if (walker->level != 3 || is_long_mode())
 			walker->inherited_ar &= walker->table[index];
-		paddr = gpa_to_hpa(vcpu,
-				   walker->table[index] & PT_BASE_ADDR_MASK);
+		slot = gfn_to_memslot(vcpu->kvm, (walker->table[index] & PT_BASE_ADDR_MASK) >> PAGE_SHIFT);
+		/* FIXME: paging on mmio? */
+		paddr = gpa_to_hpa(slot, walker->table[index] & PT_BASE_ADDR_MASK);
 		kunmap_atomic(walker->table, KM_USER0);
 		walker->table = kmap_atomic(pfn_to_page(paddr >> PAGE_SHIFT),
 					    KM_USER0);
