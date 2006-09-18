@@ -53,12 +53,13 @@ int read_guest(struct kvm_vcpu *vcpu,
 		unsigned now;
 		unsigned offset;
 		hva_t guest_buf;
+		struct kvm_memory_slot *slot;
 
 		gpa = gva_to_gpa(vcpu, addr);
-		paddr = gpa_to_hpa(vcpu, gpa);
-		if ( paddr == kvm_bad_page_addr ) {
+		slot = gfn_to_memslot(vcpu->kvm, gpa >> PAGE_SHIFT);
+		if (!slot)
 			return 0;
-		}
+		paddr = gpa_to_hpa(slot, gpa);
 		guest_buf = (hva_t)kmap_atomic(
 					pfn_to_page(paddr >> PAGE_SHIFT),
 					KM_USER0);
@@ -87,12 +88,13 @@ int write_guest(struct kvm_vcpu *vcpu,
 		unsigned now;
 		unsigned offset;
 		hva_t guest_buf;
+		struct kvm_memory_slot *slot;
 
 		gpa = gva_to_gpa(vcpu, addr);
-		paddr = gpa_to_hpa(vcpu, addr);
-		if ( paddr == kvm_bad_page_addr ) {
+		slot = gfn_to_memslot(vcpu->kvm, gpa >> PAGE_SHIFT);
+		if (!slot)
 			return 0;
-		}
+		paddr = gpa_to_hpa(slot, addr);
 		guest_buf = (hva_t)kmap_atomic(
 					pfn_to_page(paddr >> PAGE_SHIFT),
 					KM_USER0);
