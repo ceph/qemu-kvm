@@ -303,6 +303,10 @@ static inline int is_external_interrupt(uint32_t intr_info)
 		== (INTR_TYPE_EXT_INTR | INTR_INFO_VALID_MASK);
 }
 
+static inline void flush_guest_tlb(struct kvm_vcpu *vcpu)
+{
+	vmcs_writel(GUEST_CR3, vmcs_readl(GUEST_CR3));
+}
 
 extern hpa_t kvm_bad_page_addr;
 

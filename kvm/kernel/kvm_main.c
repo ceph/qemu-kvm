@@ -1007,7 +1007,7 @@ static int kvm_dev_ioctl_get_dirty_log(struct kvm *kvm,
 			struct kvm_vcpu *vcpu = &kvm->vcpus[i];
 
 			vcpu_load(vcpu);
-			vmcs_writel(HOST_CR3, vmcs_readl(HOST_CR3));
+			flush_guest_tlb(vcpu);
 			vcpu_put(vcpu);
 		}
 		kvm_mmu_slot_remove_write_access(kvm, log->slot);
