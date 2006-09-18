@@ -326,7 +326,7 @@ static inline int memslot_id(struct kvm *kvm, struct kvm_memory_slot *slot)
 		u64 e##basename; \
 	}
 #else
-#define DECLARE_REG(basename) u32 e#basename
+#define DECLARE_REG(basename) u32 e##basename
 #endif
 
 struct cpu_user_regs {

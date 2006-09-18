@@ -54,15 +54,23 @@ struct kvm_stat kvm_stat;
 #define KVM_LOG_BUF_SIZE PAGE_SIZE
 
 static const u32 vmx_msr_index[] = {
-	MSR_EFER, MSR_STAR, MSR_CSTAR,
-	MSR_KERNEL_GS_BASE, MSR_SYSCALL_MASK, MSR_LSTAR
+	MSR_EFER, MSR_K6_STAR,
+#ifdef __x86_64__
+	MSR_CSTAR, MSR_KERNEL_GS_BASE, MSR_SYSCALL_MASK, MSR_LSTAR
+#endif
 };
 #define NR_VMX_MSR (sizeof(vmx_msr_index) / sizeof(*vmx_msr_index))
 
 
-#define NUM_AUTO_MSRS 4 // avoid save/load MSR_SYSCALL_MASK and MSR_LSTAR
-			// by std vt mechanism (cpu bug AA24)
-
+#ifdef __x86_64__
+/*
+ * avoid save/load MSR_SYSCALL_MASK and MSR_LSTAR by std vt 
+ * mechanism (cpu bug AA24)
+ */
+#define NUM_AUTO_MSRS (NR_VMX_MSR-2) 
+#else
+#define NUM_AUTO_MSRS NR_VMX_MSR
+#endif
 
 static struct vmx_msr_entry *find_msr_entry(struct kvm_vcpu *vcpu, u32 msr)
 {
@@ -165,9 +173,11 @@ static unsigned long segment_base(u16 selector)
 	}
 	d = (struct segment_descriptor *)(table_base + (selector & ~7));
 	v = d->base_low | ((ul)d->base_mid << 16) | ((ul)d->base_high << 24);
+#ifdef __x86_64__
 	if (d->system == 0
 	    && (d->type == 2 || d->type == 9 || d->type == 11))
 		v |= ((ul)((struct segment_descriptor_64 *)d)->base_higher) << 32;
+#endif
 	return v;
 }
 
@@ -441,8 +451,8 @@ void kvm_log(struct kvm *kvm, const char *data, size_t count)
 	if (ret != count) {
 		printk("%s: ret(%ld) != count(%ld) \n",
 		       __FUNCTION__,
-		       ret,
-		       count);
+		       (long)ret,
+		       (long)count);
 	}
 }
 
@@ -1492,13 +1502,16 @@ static int set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 	}
 
 	if (is_paging()) {
+#ifdef __x86_64__
 		if (!(cr0 & CR0_PG_MASK)) {
 			vcpu->shadow_efer &= ~EFER_LMA;
 			vmcs_write32(VM_ENTRY_CONTROLS,
 				     vmcs_read32(VM_ENTRY_CONTROLS) &
 				     ~VM_ENTRY_CONTROLS_IA32E_MASK);
 		}
+#endif
 	} else if ((cr0 & CR0_PG_MASK)) {
+#ifdef __x86_64__
 		if ((vcpu->shadow_efer & EFER_LME)) {
 			uint32_t guest_cs_ar;
 			uint32_t guest_tr_ar;
@@ -1531,8 +1544,10 @@ static int set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 				     vmcs_read32(VM_ENTRY_CONTROLS) |
 				     VM_ENTRY_CONTROLS_IA32E_MASK);
 
-		} else if (is_pae() &&
-			   pdptrs_have_reserved_bits_set(vcpu, vcpu->cr3)) {
+		} else
+#endif
+		if (is_pae() &&
+			    pdptrs_have_reserved_bits_set(vcpu, vcpu->cr3)) {
 			printk("set_cr0: #GP, pdptrs reserved bits\n");
 			inject_gp(vcpu);
 			return 1;
@@ -1782,12 +1797,14 @@ static int handle_rdmsr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 #endif
 
 	switch (ecx) {
+#ifdef __x86_64__
 	case MSR_FS_BASE:
 		data = vmcs_readl(GUEST_FS_BASE);
 		break;
 	case MSR_GS_BASE:
 		data = vmcs_readl(GUEST_GS_BASE);
 		break;
+#endif
 	case MSR_IA32_SYSENTER_CS:
 		data = vmcs_read32(GUEST_SYSENTER_CS);
 		break;
@@ -1830,6 +1847,7 @@ static int handle_rdmsr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	return 1;
 }
 
+#ifdef __x86_64__
 #define EFER_RESERVED_BITS 0xfffffffffffff2fe
 
 static void set_efer(struct kvm_vcpu *vcpu, u64 efer)
@@ -1880,6 +1898,7 @@ static void __set_efer(struct kvm_vcpu *vcpu, u64 efer)
 		msr->data = efer & ~EFER_LME;
 	}
 }
+#endif
 
 #define MSR_IA32_TIME_STAMP_COUNTER 0x10
 
@@ -1899,12 +1918,14 @@ static int handle_wrmsr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 #endif
 
 	switch (ecx) {
+#ifdef __x86_64__
 	case MSR_FS_BASE:
 		vmcs_writel(GUEST_FS_BASE, data);
 		break;
 	case MSR_GS_BASE:
 		vmcs_writel(GUEST_GS_BASE, data);
 		break;
+#endif
 	case MSR_IA32_SYSENTER_CS:
 		vmcs_write32(GUEST_SYSENTER_CS, data);
 		break;
@@ -1914,6 +1935,7 @@ static int handle_wrmsr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	case MSR_IA32_SYSENTER_ESP:
 		vmcs_write32(GUEST_SYSENTER_ESP, data);
 		break;
+#ifdef __x86_64
 	case MSR_EFER:
 		set_efer(vcpu, data);
 		return 1;
@@ -1921,6 +1943,7 @@ static int handle_wrmsr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 		vcpu_printf(vcpu, "%s: MSR_IA32_MC0_STATUS 0x%llx, nop\n"
 			    , __FUNCTION__, data);
 		break;
+#endif
 	case MSR_IA32_TIME_STAMP_COUNTER: {
 		u64 tsc;
 
@@ -2451,7 +2474,9 @@ static int kvm_dev_ioctl_set_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 	vcpu->cr8 = sregs->cr8;
 
 	mmu_reset_needed |= vcpu->shadow_efer != sregs->efer;
+#ifdef __x86_64__
 	__set_efer(vcpu, sregs->efer);
+#endif
 	vcpu->apic_base = sregs->apic_base;
 
 	if (mmu_reset_needed)
@@ -2472,7 +2497,7 @@ static int kvm_dev_ioctl_translate(struct kvm *kvm, struct kvm_translation *tr)
 
 	vcpu_load(vcpu);
 	pte = vcpu->mmu.fetch_pte64(vcpu, vaddr);
-	tr->physical_address = (pte & 0xfffffffff000) | (vaddr & ~PAGE_MASK);
+	tr->physical_address = (pte & 0xfffffffff000ull)|(vaddr & ~PAGE_MASK);
 	tr->valid = pte & 1;
 	tr->writeable = 1;
 	tr->usermode = 0;

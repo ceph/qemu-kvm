@@ -52,13 +52,13 @@ static void FNAME(init_walker)(struct guest_walker *walker,
 	       (vcpu->cr3 & ~(PAGE_MASK | CR3_FLAGS_MASK)) == 0);
 		
 	walker->table = (pt_element_t *)( (unsigned long)walker->table |
-				(vcpu->cr3 & ~(PAGE_MASK | CR3_FLAGS_MASK)) );
+		(unsigned long)(vcpu->cr3 & ~(PAGE_MASK | CR3_FLAGS_MASK)) );
 	walker->inherited_ar = PT_USER_MASK | PT_WRITABLE_MASK;
 }
 
 static void FNAME(release_walker)(struct guest_walker *walker)
 {
-	kunmap_atomic(walker->table & PAGE_MASK, KM_USER0);
+	kunmap_atomic(walker->table, KM_USER0);
 }
 
 static void FNAME(set_pte)(struct kvm_vcpu *vcpu, uint64_t guest_pte,

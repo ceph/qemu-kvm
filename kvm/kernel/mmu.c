@@ -205,7 +205,7 @@ static void page_header_update_slot(struct kvm *kvm, void *pte, gpa_t gpa)
 	__set_bit(slot, &page_head->slot_bitmap);
 }
 
-static inline int is_io_mem(struct kvm_vcpu *vcpu, unsigned long addr)
+static inline int is_io_mem(struct kvm_vcpu *vcpu, gpa_t addr)
 {
 	return (addr >= 0xa0000ULL && addr < 0xc0000ULL) ||
 		(addr >= 0xffff0000ULL && addr < 0x100000000ULL);
