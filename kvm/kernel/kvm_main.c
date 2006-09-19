@@ -459,10 +459,11 @@ void kvm_log(struct kvm *kvm, const char *data, size_t count)
 	ret = vfs_write(f, data, count, &f->f_pos);
 	set_fs(fs);
 	if (ret != count) {
-		printk("%s: ret(%ld) != count(%ld) \n",
+		printk("%s: ret(%ld) != count(%ld), dumping stack \n",
 		       __FUNCTION__,
 		       (long)ret,
 		       (long)count);
+		dump_stack();
 	}
 }
 
