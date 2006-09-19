@@ -131,6 +131,7 @@ struct kvm_sregs {
 
 	/* out (KVM_GET_SREGS) */
 	__u32 pending_int;
+	__u32 padding2;
 };
 
 /* for KVM_TRANSLATE */
