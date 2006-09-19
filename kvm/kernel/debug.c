@@ -198,7 +198,7 @@ static int is_canonical(unsigned long addr)
        return  addr == ((long)addr << 16) >> 16;
 }
 
-int vm_entry_test(struct kvm_vcpu *vcpu)
+int vm_entry_test_guest(struct kvm_vcpu *vcpu)
 {
 	unsigned long cr0;
 	unsigned long cr4;
@@ -814,6 +814,155 @@ int vm_entry_test(struct kvm_vcpu *vcpu)
 
 	// to be continued from Checks on Guest Non-Register State (22.3.1.5)
 	return 1;
+}
+
+static int check_fixed_bits(struct kvm_vcpu *vcpu, const char *reg, 
+			    unsigned long cr,
+			    u32 msr_fixed_0, u32 msr_fixed_1)
+{
+	u64 fixed_bits_0, fixed_bits_1;
+	
+	rdmsrl(msr_fixed_0, fixed_bits_0);
+	rdmsrl(msr_fixed_1, fixed_bits_1);
+	if ((cr & fixed_bits_0) != fixed_bits_0) {
+		vcpu_printf(vcpu, "%s: %s (%lx) has one of %llx unset\n",
+			   __FUNCTION__, reg, cr, fixed_bits_0);
+		return 0;
+	}
+	if ((~cr & ~fixed_bits_1) != ~fixed_bits_1) {
+		vcpu_printf(vcpu, "%s: %s (%lx) has one of %llx set\n",
+			   __FUNCTION__, reg, cr, ~fixed_bits_1);
+		return 0;
+	}
+	return 1;
+}
+
+static int phys_addr_width(void)
+{
+	unsigned eax, ebx, ecx, edx;
+
+	cpuid(0x80000008, &eax, &ebx, &ecx, &edx);
+	return eax & 0xff;
+}
+
+static int check_canonical(struct kvm_vcpu *vcpu, const char *name,
+			   unsigned long reg)
+{
+	unsigned long x;
+
+	if (sizeof(reg) == 4)
+		return 1;
+	x = (long)reg >> 48;
+	if (x == 0 || x == ~0UL) {
+		vcpu_printf(vcpu, "%s: %s (%lx) not canonical\n",
+			    __FUNCTION__, name, reg);
+		return 0;
+	}
+	return 1;
+}
+
+static int check_selector(struct kvm_vcpu *vcpu, const char *name,
+			  int rpl_ti, int null,
+			  u16 sel)
+{
+	if (rpl_ti && (sel & 7)) {
+		vcpu_printf(vcpu, "%s: %s (%x) nonzero rpl or ti\n",
+			    __FUNCTION__, name, sel);
+		return 0;
+	}
+	if (null && !sel) {
+		vcpu_printf(vcpu, "%s: %s (%x) zero\n",
+			    __FUNCTION__, name, sel);
+		return 0;
+	}
+	return 1;
+}
+
+#define MSR_IA32_VMX_CR0_FIXED0 0x486
+#define MSR_IA32_VMX_CR0_FIXED1 0x487
+
+#define MSR_IA32_VMX_CR4_FIXED0 0x488
+#define MSR_IA32_VMX_CR4_FIXED1 0x489
+
+int vm_entry_test_host(struct kvm_vcpu *vcpu)
+{
+	int r = 0;
+	unsigned long cr0 = vmcs_readl(HOST_CR0);
+	unsigned long cr4 = vmcs_readl(HOST_CR4);
+	unsigned long cr3 = vmcs_readl(HOST_CR3);
+	int host_64;
+	
+	host_64 = vmcs_read32(VM_EXIT_CONTROLS) & VM_EXIT_HOST_ADD_SPACE_SIZE;
+
+	/* 22.2.2 */
+	r &= check_fixed_bits(vcpu, "host cr0", cr0, MSR_IA32_VMX_CR0_FIXED0, 
+			      MSR_IA32_VMX_CR0_FIXED1);
+		
+	r &= check_fixed_bits(vcpu, "host cr0", cr4, MSR_IA32_VMX_CR4_FIXED0, 
+			      MSR_IA32_VMX_CR4_FIXED1);
+	if ((u64)cr3 >> phys_addr_width()) {
+		vcpu_printf(vcpu, "%s: cr3 (%lx) vs phys addr width\n",
+			    __FUNCTION__, cr3);
+		r = 0;
+	}
+
+	r &= check_canonical(vcpu, "host ia32_sysenter_eip", 
+			     vmcs_readl(HOST_IA32_SYSENTER_EIP));
+	r &= check_canonical(vcpu, "host ia32_sysenter_esp", 
+			     vmcs_readl(HOST_IA32_SYSENTER_ESP));
+
+	/* 22.2.3 */
+	r &= check_selector(vcpu, "host cs", 1, 1,
+			    vmcs_read16(HOST_CS_SELECTOR));
+	r &= check_selector(vcpu, "host ss", 1, !host_64,
+			    vmcs_read16(HOST_SS_SELECTOR));
+	r &= check_selector(vcpu, "host ds", 1, 0,
+			    vmcs_read16(HOST_DS_SELECTOR));
+	r &= check_selector(vcpu, "host es", 1, 0,
+			    vmcs_read16(HOST_ES_SELECTOR));
+	r &= check_selector(vcpu, "host fs", 1, 0,
+			    vmcs_read16(HOST_FS_SELECTOR));
+	r &= check_selector(vcpu, "host gs", 1, 0,
+			    vmcs_read16(HOST_GS_SELECTOR));
+	r &= check_selector(vcpu, "host tr", 1, 1,
+			    vmcs_read16(HOST_TR_SELECTOR));
+
+#ifdef __x86_64__
+	r &= check_canonical(vcpu, "host fs base", 
+			     vmcs_readl(HOST_FS_BASE));
+	r &= check_canonical(vcpu, "host gs base", 
+			     vmcs_readl(HOST_GS_BASE));
+	r &= check_canonical(vcpu, "host gdtr base", 
+			     vmcs_readl(HOST_GDTR_BASE));
+	r &= check_canonical(vcpu, "host idtr base", 
+			     vmcs_readl(HOST_IDTR_BASE));
+#endif
+
+	/* 22.2.4 */
+#ifdef __x86_64__
+	if (!host_64) {
+		vcpu_printf(vcpu, "%s: vm exit controls: !64 bit host\n",
+			    __FUNCTION__);
+		r = 0;
+	}
+	if (!(cr4 & CR4_PAE_MASK)) {
+		vcpu_printf(vcpu, "%s: cr4 (%lx): !pae\n",
+			    __FUNCTION__, cr4);
+		r = 0;
+	}
+	r &= check_canonical(vcpu, "host rip", vmcs_readl(HOST_RIP));
+#endif
+
+	return r;
+}
+
+int vm_entry_test(struct kvm_vcpu *vcpu)
+{
+	int rg, rh;
+
+	rg = vm_entry_test_guest(vcpu);
+	rh = vm_entry_test_host(vcpu);
+	return rg && rh;
 }
 
 void vmcs_dump(void)
