@@ -853,7 +853,7 @@ static int check_canonical(struct kvm_vcpu *vcpu, const char *name,
 	if (sizeof(reg) == 4)
 		return 1;
 	x = (long)reg >> 48;
-	if (x == 0 || x == ~0UL) {
+	if (!(x == 0 || x == ~0UL)) {
 		vcpu_printf(vcpu, "%s: %s (%lx) not canonical\n",
 			    __FUNCTION__, name, reg);
 		return 0;
