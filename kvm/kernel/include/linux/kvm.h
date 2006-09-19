@@ -179,17 +179,19 @@ struct kvm_dirty_log {
 	};
 };
 
-#define KVM_SET_LOG_FD            _IOW( 'q', 1, int) /* arg = fd */
-#define KVM_RUN                   _IOWR('q', 2, struct kvm_run)
-#define KVM_GET_REGS              _IOWR('q', 3, struct kvm_regs)
-#define KVM_SET_REGS              _IOW( 'q', 4, struct kvm_regs)
-#define KVM_GET_SREGS             _IOWR('q', 5, struct kvm_sregs)
-#define KVM_SET_SREGS             _IOW( 'q', 6, struct kvm_sregs)
-#define KVM_TRANSLATE             _IOWR('q', 7, struct kvm_translation)
-#define KVM_INTERRUPT             _IOW( 'q', 8, struct kvm_interrupt)
-#define KVM_DEBUG_GUEST           _IOW( 'q', 9, struct kvm_debug_guest)
-#define KVM_SET_MEMORY_REGION     _IOW( 'q', 10, struct kvm_memory_region)
-#define KVM_CREATE_VCPUS           _IOW( 'q', 11, int) /* arg = nvcpus */
-#define KVM_GET_DIRTY_LOG         _IOW( 'q', 12, struct kvm_dirty_log)
+#define KVMIO 0xAE
+
+#define KVM_SET_LOG_FD            _IOW(KVMIO, 1, int) /* arg = fd */
+#define KVM_RUN                   _IOWR(KVMIO, 2, struct kvm_run)
+#define KVM_GET_REGS              _IOWR(KVMIO, 3, struct kvm_regs)
+#define KVM_SET_REGS              _IOW(KVMIO, 4, struct kvm_regs)
+#define KVM_GET_SREGS             _IOWR(KVMIO, 5, struct kvm_sregs)
+#define KVM_SET_SREGS             _IOW(KVMIO, 6, struct kvm_sregs)
+#define KVM_TRANSLATE             _IOWR(KVMIO, 7, struct kvm_translation)
+#define KVM_INTERRUPT             _IOW(KVMIO, 8, struct kvm_interrupt)
+#define KVM_DEBUG_GUEST           _IOW(KVMIO, 9, struct kvm_debug_guest)
+#define KVM_SET_MEMORY_REGION     _IOW(KVMIO, 10, struct kvm_memory_region)
+#define KVM_CREATE_VCPUS          _IOW(KVMIO, 11, int) /* arg = nvcpus */
+#define KVM_GET_DIRTY_LOG         _IOW(KVMIO, 12, struct kvm_dirty_log)
 
 #endif
