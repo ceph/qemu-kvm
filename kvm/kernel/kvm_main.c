@@ -111,6 +111,16 @@ static u16 read_gs(void)
 	return seg;
 }
 
+static void load_fs(u16 sel)
+{
+	asm ( "mov %0, %%fs\n" : : "g"(sel) );
+}
+
+static void load_gs(u16 sel)
+{
+	asm ( "mov %0, %%gs\n" : : "g"(sel) );
+}
+
 static unsigned long get_eflags(void)
 {
 	unsigned long x;
@@ -2104,6 +2114,8 @@ static int kvm_dev_ioctl_run(struct kvm *kvm, struct kvm_run *kvm_run)
 {
 	struct kvm_vcpu *vcpu;
 	u8 fail;
+	u16 fs_sel, gs_sel;
+	int fs_gs_reload_needed;
 
 	if (kvm_run->vcpu < 0 || kvm_run->vcpu >= kvm->nvcpus)
 		return -EINVAL;
@@ -2124,6 +2136,20 @@ static int kvm_dev_ioctl_run(struct kvm *kvm, struct kvm_run *kvm_run)
 	vcpu->mmio_needed = 0;
 	
 again:
+	/*
+	 * Set host fs and gs selectors.  Unfortunately, 22.2.3 does not
+	 * allow segment selectors with cpl > 0 or ti == 1.
+	 */
+	fs_sel = read_fs();
+	gs_sel = read_gs();
+	fs_gs_reload_needed = (fs_sel & 7) | (gs_sel & 7);
+	if (!fs_gs_reload_needed) {
+		vmcs_write16(HOST_FS_SELECTOR, fs_sel);
+		vmcs_write16(HOST_GS_SELECTOR, gs_sel);
+	} else {
+		vmcs_write16(HOST_FS_SELECTOR, 0);
+		vmcs_write16(HOST_GS_SELECTOR, 0);
+	}
 
 #ifdef __x86_64__
 	vmcs_writel(HOST_FS_BASE, read_msr(MSR_FS_BASE));
@@ -2251,6 +2277,19 @@ again:
 		kvm_run->exit_type = KVM_EXIT_TYPE_FAIL_ENTRY;
 		kvm_run->exit_reason = vmcs_read32(VM_INSTRUCTION_ERROR);
 	} else {
+		if (fs_gs_reload_needed) {
+			load_fs(fs_sel);
+			/*
+			 * If we have to reload gs, we must take care to 
+			 * preserve our gs base.
+			 */
+			local_irq_disable();
+			load_gs(gs_sel);
+#ifdef __x86_64__
+			wrmsrl(MSR_GS_BASE, vmcs_readl(HOST_GS_BASE));
+#endif
+			local_irq_enable();
+		}
 		vcpu->launched = 1;
 		kvm_run->exit_type = KVM_EXIT_TYPE_VM_EXIT;
 		if (kvm_handle_exit(kvm_run, vcpu)) {
