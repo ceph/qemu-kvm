@@ -7,28 +7,32 @@
 
 kvm_context_t kvm;
 
-static void test_cpuid(void *opaque, uint64_t *rax, uint64_t *rbx, 
+static int test_cpuid(void *opaque, uint64_t *rax, uint64_t *rbx, 
 		       uint64_t *rcx, uint64_t *rdx)
 {
     printf("cpuid 0x%lx\n", (uint32_t)*rax);
+    return 0;
 }
 
-static void test_inb(void *opaque, uint16_t addr, uint8_t *value)
+static int test_inb(void *opaque, uint16_t addr, uint8_t *value)
 {
     printf("inb 0x%x\n", addr);
+    return 0;
 }
 
-static void test_inw(void *opaque, uint16_t addr, uint16_t *value)
+static int test_inw(void *opaque, uint16_t addr, uint16_t *value)
 {
     printf("inw 0x%x\n", addr);
+    return 0;
 }
 
-static void test_inl(void *opaque, uint16_t addr, uint32_t *value)
+static int test_inl(void *opaque, uint16_t addr, uint32_t *value)
 {
     printf("inl 0x%x\n", addr);
+    return 0;
 }
 
-static void test_outb(void *opaque, uint16_t addr, uint8_t value)
+static int test_outb(void *opaque, uint16_t addr, uint8_t value)
 {
     static int newline = 1;
 
@@ -46,42 +50,44 @@ static void test_outb(void *opaque, uint16_t addr, uint8_t value)
     default:
 	printf("outb $0x%x, 0x%x\n", value, addr);
     }
+    return 0;
 }
 
-static void test_outw(void *opaque, uint16_t addr, uint16_t value)
+static int test_outw(void *opaque, uint16_t addr, uint16_t value)
 {
     printf("outw $0x%x, 0x%x\n", value, addr);
+    return 0;
 }
 
-static void test_outl(void *opaque, uint16_t addr, uint32_t value)
+static int test_outl(void *opaque, uint16_t addr, uint32_t value)
 {
     printf("outl $0x%x, 0x%x\n", value, addr);
+    return 0;
 }
 
-
-static void test_debug(void *opaque, int vcpu)
+static int test_debug(void *opaque, int vcpu)
 {
     printf("test_debug\n");
+    return 0;
 }
 
-
-static void test_emulate_one_instruction(void *opaque)
+static int test_emulate_one_instruction(void *opaque)
 {
     printf("test_mmio\n");
+    return 0;
 }
 
-
-static void test_halt(void *opaque, int vcpu)
+static int test_halt(void *opaque, int vcpu)
 {
     printf("test_halt\n");
+    return 0;
 }
 
-
-static void test_io_window(void *opaque)
+static int test_io_window(void *opaque)
 {
     printf("test_io_window\n");
+    return 0;
 }
-
 
 static struct kvm_callbacks test_callbacks = {
     .cpuid       = test_cpuid,

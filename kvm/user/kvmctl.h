@@ -9,26 +9,26 @@ struct kvm_context;
 typedef struct kvm_context *kvm_context_t;
 
 struct kvm_callbacks {
-    void (*cpuid)(void *opaque, 
+    int (*cpuid)(void *opaque, 
 		  uint64_t *rax, uint64_t *rbx, uint64_t *rcx, uint64_t *rdx);
-    void (*inb)(void *opaque, uint16_t addr, uint8_t *data);
-    void (*inw)(void *opaque, uint16_t addr, uint16_t *data);
-    void (*inl)(void *opaque, uint16_t addr, uint32_t *data);
-    void (*outb)(void *opaque, uint16_t addr, uint8_t data);
-    void (*outw)(void *opaque, uint16_t addr, uint16_t data);
-    void (*outl)(void *opaque, uint16_t addr, uint32_t data);
-    void (*readb)(void *opaque, uint64_t addr, uint8_t *data);
-    void (*readw)(void *opaque, uint64_t addr, uint16_t *data);
-    void (*readl)(void *opaque, uint64_t addr, uint32_t *data);
-    void (*readq)(void *opaque, uint64_t addr, uint64_t *data);
-    void (*writeb)(void *opaque, uint64_t addr, uint8_t data);
-    void (*writew)(void *opaque, uint64_t addr, uint16_t data);
-    void (*writel)(void *opaque, uint64_t addr, uint32_t data);
-    void (*writeq)(void *opaque, uint64_t addr, uint64_t data);
-    void (*debug)(void *opaque, int vcpu);
-    void (*emulate_one_instruction)(void *opaque);
-    void (*halt)(void *opaque, int vcpu);
-    void (*io_window)(void *opaque);
+    int (*inb)(void *opaque, uint16_t addr, uint8_t *data);
+    int (*inw)(void *opaque, uint16_t addr, uint16_t *data);
+    int (*inl)(void *opaque, uint16_t addr, uint32_t *data);
+    int (*outb)(void *opaque, uint16_t addr, uint8_t data);
+    int (*outw)(void *opaque, uint16_t addr, uint16_t data);
+    int (*outl)(void *opaque, uint16_t addr, uint32_t data);
+    int (*readb)(void *opaque, uint64_t addr, uint8_t *data);
+    int (*readw)(void *opaque, uint64_t addr, uint16_t *data);
+    int (*readl)(void *opaque, uint64_t addr, uint32_t *data);
+    int (*readq)(void *opaque, uint64_t addr, uint64_t *data);
+    int (*writeb)(void *opaque, uint64_t addr, uint8_t data);
+    int (*writew)(void *opaque, uint64_t addr, uint16_t data);
+    int (*writel)(void *opaque, uint64_t addr, uint32_t data);
+    int (*writeq)(void *opaque, uint64_t addr, uint64_t data);
+    int (*debug)(void *opaque, int vcpu);
+    int (*emulate_one_instruction)(void *opaque);
+    int (*halt)(void *opaque, int vcpu);
+    int (*io_window)(void *opaque);
 };
 
 kvm_context_t kvm_init(struct kvm_callbacks *callbacks,

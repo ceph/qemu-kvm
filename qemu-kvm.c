@@ -285,15 +285,11 @@ int kvm_cpu_exec(CPUState *env)
 
     save_regs(env);
 
-    printf("exec returned rip %lx\n", env->eip);
-
-    exit(0);
-
     return 0;
 }
 
 
-static void kvm_cpuid(void *opaque, uint64_t *rax, uint64_t *rbx, 
+static int kvm_cpuid(void *opaque, uint64_t *rax, uint64_t *rbx, 
 		      uint64_t *rcx, uint64_t *rdx)
 {
     CPUState **envs = opaque;
@@ -312,100 +308,111 @@ static void kvm_cpuid(void *opaque, uint64_t *rax, uint64_t *rbx,
     *rbx = env->regs[R_EBX];
     *rax = env->regs[R_EAX];
     env = saved_env;
+    return 0;
 }
 
-static void kvm_debug(void *opaque, int vcpu)
+static int kvm_debug(void *opaque, int vcpu)
 {
     CPUState **envs = opaque;
 
     env = envs[0];
     save_regs(env);
     env->exception_index = EXCP_DEBUG;
-    cpu_loop_exit();
+    return 1;
 }
 
-static void kvm_inb(void *opaque, uint16_t addr, uint8_t *data)
+static int kvm_inb(void *opaque, uint16_t addr, uint8_t *data)
 {
     *data = cpu_inb(0, addr);
+    return 0;
 }
 
-static void kvm_inw(void *opaque, uint16_t addr, uint16_t *data)
+static int kvm_inw(void *opaque, uint16_t addr, uint16_t *data)
 {
     *data = cpu_inw(0, addr);
+    return 0;
 }
 
-static void kvm_inl(void *opaque, uint16_t addr, uint32_t *data)
+static int kvm_inl(void *opaque, uint16_t addr, uint32_t *data)
 {
     *data = cpu_inl(0, addr);
+    return 0;
 }
 
-static void kvm_outb(void *opaque, uint16_t addr, uint8_t data)
+static int kvm_outb(void *opaque, uint16_t addr, uint8_t data)
 {
     cpu_outb(0, addr, data);
+    return 0;
 }
 
-static void kvm_outw(void *opaque, uint16_t addr, uint16_t data)
+static int kvm_outw(void *opaque, uint16_t addr, uint16_t data)
 {
     cpu_outw(0, addr, data);
+    return 0;
 }
 
-static void kvm_outl(void *opaque, uint16_t addr, uint32_t data)
+static int kvm_outl(void *opaque, uint16_t addr, uint32_t data)
 {
     cpu_outl(0, addr, data);
+    return 0;
 }
 
-static void kvm_readb(void *opaque, uint64_t addr, uint8_t *data)
+static int kvm_readb(void *opaque, uint64_t addr, uint8_t *data)
 {
     *data = ldub_phys(addr);
+    return 0;
 }
  
-static void kvm_readw(void *opaque, uint64_t addr, uint16_t *data)
+static int kvm_readw(void *opaque, uint64_t addr, uint16_t *data)
 {
     *data = lduw_phys(addr);
+    return 0;
 }
 
-static void kvm_readl(void *opaque, uint64_t addr, uint32_t *data)
+static int kvm_readl(void *opaque, uint64_t addr, uint32_t *data)
 {
     *data = ldl_phys(addr);
+    return 0;
 }
 
-static void kvm_readq(void *opaque, uint64_t addr, uint64_t *data)
+static int kvm_readq(void *opaque, uint64_t addr, uint64_t *data)
 {
     *data = ldq_phys(addr);
+    return 9;
 }
 
-static void kvm_writeb(void *opaque, uint64_t addr, uint8_t data)
+static int kvm_writeb(void *opaque, uint64_t addr, uint8_t data)
 {
     stb_phys(addr, data);
+    return 0;
 }
 
-static void kvm_writew(void *opaque, uint64_t addr, uint16_t data)
+static int kvm_writew(void *opaque, uint64_t addr, uint16_t data)
 {
     stw_phys(addr, data);
+    return 0;
 }
 
-static void kvm_writel(void *opaque, uint64_t addr, uint32_t data)
+static int kvm_writel(void *opaque, uint64_t addr, uint32_t data)
 {
     stl_phys(addr, data);
+    return 0;
 }
 
-static void kvm_writeq(void *opaque, uint64_t addr, uint64_t data)
+static int kvm_writeq(void *opaque, uint64_t addr, uint64_t data)
 {
     stq_phys(addr, data);
+    return 0;
 }
 
-static void kvm_io_window(void *opaque)
+static int kvm_io_window(void *opaque)
 {
-    CPUState **envs = opaque;
-
-    env = envs[0];
-    save_regs(env);
-    cpu_loop_exit();
+    return 1;
 }
 
-static void kvm_emulate_one_instruction(void *opaque)
+static int kvm_emulate_one_instruction(void *opaque)
 {
-    CPUState **envs = opaque;
+    CPUState **envs = opaque, *env;
 
     env = envs[0];
     save_regs(env);
@@ -414,12 +421,12 @@ static void kvm_emulate_one_instruction(void *opaque)
     /*
      * if !kvm_is_ok(), we'd like to remain in the emulator.
      */
-    cpu_loop_exit();
+    return 1;
 }
  
-static void kvm_halt(void *opaque, int vcpu)
+static int kvm_halt(void *opaque, int vcpu)
 {
-    CPUState **envs = opaque;
+    CPUState **envs = opaque, *env;
 
     env = envs[0];
     save_regs(env);
@@ -429,7 +436,7 @@ static void kvm_halt(void *opaque, int vcpu)
 	  (env->eflags & IF_MASK))) {
 	  env->kvm_emulate_one_instruction = 1;
     }
-    cpu_loop_exit();
+    return 1;
 }
  
 static struct kvm_callbacks qemu_kvm_ops = {
