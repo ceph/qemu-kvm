@@ -378,7 +378,7 @@ static int kvm_readl(void *opaque, uint64_t addr, uint32_t *data)
 static int kvm_readq(void *opaque, uint64_t addr, uint64_t *data)
 {
     *data = ldq_phys(addr);
-    return 9;
+    return 0;
 }
 
 static int kvm_writeb(void *opaque, uint64_t addr, uint8_t data)
