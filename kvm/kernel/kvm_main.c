@@ -295,6 +295,7 @@ static void vcpu_load(struct kvm_vcpu *vcpu)
 
 	if (vcpu->cpu != cpu) {
 		struct descriptor_table dt;
+		unsigned long sysenter_esp;
 
 		vcpu->cpu = cpu;
 		/*
@@ -304,6 +305,9 @@ static void vcpu_load(struct kvm_vcpu *vcpu)
 		vmcs_writel(HOST_TR_BASE, read_tr_base()); /* 22.2.4 */
 		get_gdt(&dt);
 		vmcs_writel(HOST_GDTR_BASE, dt.base);   /* 22.2.4 */
+
+		rdmsrl(MSR_IA32_SYSENTER_ESP, sysenter_esp);
+		vmcs_writel(HOST_IA32_SYSENTER_ESP, sysenter_esp); /* 22.2.3 */
 	}
 }
 
@@ -2132,7 +2136,6 @@ static int kvm_dev_ioctl_run(struct kvm *kvm, struct kvm_run *kvm_run)
 	u16 fs_sel, gs_sel, ldt_sel;
 	int fs_gs_ldt_reload_needed;
 
-	printk("%s: entry\n", __FUNCTION__);
 	if (kvm_run->vcpu < 0 || kvm_run->vcpu >= kvm->nvcpus)
 		return -EINVAL;
 	vcpu = &kvm->vcpus[kvm_run->vcpu];
