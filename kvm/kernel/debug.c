@@ -70,7 +70,7 @@ int read_guest(struct kvm_vcpu *vcpu,
 		host_buf += now;
 		addr += now;
 		size -= now;
-		kunmap_atomic(guest_buf & PAGE_MASK, KM_USER0);
+		kunmap_atomic((void *)guest_buf, KM_USER0);
 	}
 	return 1;
 }
@@ -105,7 +105,7 @@ int write_guest(struct kvm_vcpu *vcpu,
 		host_buf += now;
 		addr += now;
 		size -= now;
-		kunmap_atomic(guest_buf & PAGE_MASK, KM_USER0);
+		kunmap_atomic((void *)guest_buf, KM_USER0);
 	}
 	return 1;
 }
@@ -191,7 +191,7 @@ void show_page(struct kvm_vcpu *vcpu,
 	kfree(buf);
 }
 
-#define IA32_DEBUGCTL_RESERVED_BITS 0xfffffffffffffe3c
+#define IA32_DEBUGCTL_RESERVED_BITS 0xfffffffffffffe3cULL
 
 static int is_canonical(unsigned long addr)
 {
@@ -337,7 +337,7 @@ int vm_entry_test_guest(struct kvm_vcpu *vcpu)
 
 	dr7 = vmcs_readl(GUEST_DR7);
 
-	if (dr7 & ~((1UL << 32) - 1)) {
+	if (dr7 & ~((1ULL << 32) - 1)) {
 		vcpu_printf(vcpu, "%s: dr7 0x%lx, reserved bits\n",
 			   __FUNCTION__, dr7);
 		return 0;
@@ -651,6 +651,11 @@ int vm_entry_test_guest(struct kvm_vcpu *vcpu)
 		}\
 		}
 
+#undef DS
+#undef ES
+#undef FS
+#undef GS
+
 		SEG_AR_TEST(DS);
 		SEG_AR_TEST(ES);
 		SEG_AR_TEST(FS);
@@ -848,6 +853,7 @@ static int phys_addr_width(void)
 static int check_canonical(struct kvm_vcpu *vcpu, const char *name,
 			   unsigned long reg)
 {
+#ifdef __x86_64__
 	unsigned long x;
 
 	if (sizeof(reg) == 4)
@@ -858,6 +864,7 @@ static int check_canonical(struct kvm_vcpu *vcpu, const char *name,
 			    __FUNCTION__, name, reg);
 		return 0;
 	}
+#endif
 	return 1;
 }
 
