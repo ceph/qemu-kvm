@@ -212,6 +212,23 @@ static unsigned long read_tr_base(void)
 	return segment_base(tr);
 }
 
+static void reload_tss(void)
+{
+#ifndef __x86_64__
+
+	/*
+	 * VT restores TR but not its size.  Useless.
+	 */
+	struct descriptor_table gdt;
+	struct segment_descriptor *descs;
+	
+	get_gdt(&gdt);
+	descs = (void *)gdt.base;
+	descs[GDT_ENTRY_TSS].type = 9; /* available TSS */
+	load_TR_desc();
+}
+#endif
+
 DEFINE_PER_CPU(struct vmcs *, vmxarea);
 DEFINE_PER_CPU(struct vmcs *, current_vmcs);
 
@@ -2314,6 +2331,8 @@ again:
 			wrmsrl(MSR_GS_BASE, vmcs_readl(HOST_GS_BASE));
 #endif
 			local_irq_enable();
+
+			reload_tss();
 		}
 		vcpu->launched = 1;
 		kvm_run->exit_type = KVM_EXIT_TYPE_VM_EXIT;
