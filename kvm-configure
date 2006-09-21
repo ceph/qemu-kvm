@@ -1,4 +1,5 @@
 #!/bin/sh
 
-./configure --target-list=$(uname -i)-softmmu --cc=gcc32 --disable-kqemu \
+CC=gcc`rpm -qa | grep compat-gcc | cut -d '-' -f 3`
+./configure --target-list=$(uname -i)-softmmu --cc=$CC --disable-kqemu \
 	--enable-kvm
