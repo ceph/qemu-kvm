@@ -2273,6 +2273,10 @@ again:
 	fx_save(vcpu->guest_fx_image);
 	fx_restore(vcpu->host_fx_image);
 
+#ifndef __x86_64__
+	asm ( "mov %0, %%ds; mov %0, %%es" : : "r"(__USER_DS) );
+#endif
+
 	kvm_run->exit_type = 0;
 	if (fail) {
 		kvm_run->exit_type = KVM_EXIT_TYPE_FAIL_ENTRY;
