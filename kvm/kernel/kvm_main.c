@@ -111,6 +111,13 @@ static u16 read_gs(void)
 	return seg;
 }
 
+static u16 read_ldt(void)
+{
+	u16 ldt;
+	asm ( "sldt %0" : "=g"(ldt) );
+	return ldt;
+}
+
 static void load_fs(u16 sel)
 {
 	asm ( "mov %0, %%fs\n" : : "g"(sel) );
@@ -120,6 +127,13 @@ static void load_gs(u16 sel)
 {
 	asm ( "mov %0, %%gs\n" : : "g"(sel) );
 }
+
+#ifndef load_ldt
+static void load_ldt(u16 sel)
+{
+	asm ( "lldt %0" : : "g"(sel) );
+}
+#endif
 
 static unsigned long get_eflags(void)
 {
@@ -2115,9 +2129,10 @@ static int kvm_dev_ioctl_run(struct kvm *kvm, struct kvm_run *kvm_run)
 {
 	struct kvm_vcpu *vcpu;
 	u8 fail;
-	u16 fs_sel, gs_sel;
-	int fs_gs_reload_needed;
+	u16 fs_sel, gs_sel, ldt_sel;
+	int fs_gs_ldt_reload_needed;
 
+	printk("%s: entry\n", __FUNCTION__);
 	if (kvm_run->vcpu < 0 || kvm_run->vcpu >= kvm->nvcpus)
 		return -EINVAL;
 	vcpu = &kvm->vcpus[kvm_run->vcpu];
@@ -2143,8 +2158,9 @@ again:
 	 */
 	fs_sel = read_fs();
 	gs_sel = read_gs();
-	fs_gs_reload_needed = (fs_sel & 7) | (gs_sel & 7);
-	if (!fs_gs_reload_needed) {
+	ldt_sel = read_ldt();
+	fs_gs_ldt_reload_needed = (fs_sel & 7) | (gs_sel & 7) | ldt_sel;
+	if (!fs_gs_ldt_reload_needed) {
 		vmcs_write16(HOST_FS_SELECTOR, fs_sel);
 		vmcs_write16(HOST_GS_SELECTOR, gs_sel);
 	} else {
@@ -2282,7 +2298,8 @@ again:
 		kvm_run->exit_type = KVM_EXIT_TYPE_FAIL_ENTRY;
 		kvm_run->exit_reason = vmcs_read32(VM_INSTRUCTION_ERROR);
 	} else {
-		if (fs_gs_reload_needed) {
+		if (fs_gs_ldt_reload_needed) {
+			load_ldt(ldt_sel);
 			load_fs(fs_sel);
 			/*
 			 * If we have to reload gs, we must take care to 
