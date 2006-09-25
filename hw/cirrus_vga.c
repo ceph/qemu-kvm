@@ -3086,6 +3086,7 @@ static int cirrus_vga_load(QEMUFile *f, void *opaque, int version_id)
                    __FUNCTION__, real_vram_size, s->real_vram_size);
         }
         qemu_get_buffer(f, s->vram_ptr, real_vram_size);
+        cirrus_update_memory_access(s);
     }
 #endif
 
