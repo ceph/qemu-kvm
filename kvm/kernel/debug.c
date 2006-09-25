@@ -972,72 +972,72 @@ int vm_entry_test(struct kvm_vcpu *vcpu)
 	return rg && rh;
 }
 
-void vmcs_dump(void)
+void vmcs_dump(struct kvm_vcpu *vcpu)
 {
-	printk("************************ vmcs_dump ************************\n");
-	printk("VM_ENTRY_CONTROLS 0x%x\n", vmcs_read32(VM_ENTRY_CONTROLS));
+	vcpu_printf(vcpu, "************************ vmcs_dump ************************\n");
+	vcpu_printf(vcpu, "VM_ENTRY_CONTROLS 0x%x\n", vmcs_read32(VM_ENTRY_CONTROLS));
 
-	printk("GUEST_CR0 0x%lx\n", vmcs_readl(GUEST_CR0));
-	printk("GUEST_CR3 0x%lx\n", vmcs_readl(GUEST_CR3));
-	printk("GUEST_CR4 0x%lx\n", vmcs_readl(GUEST_CR4));
+	vcpu_printf(vcpu, "GUEST_CR0 0x%lx\n", vmcs_readl(GUEST_CR0));
+	vcpu_printf(vcpu, "GUEST_CR3 0x%lx\n", vmcs_readl(GUEST_CR3));
+	vcpu_printf(vcpu, "GUEST_CR4 0x%lx\n", vmcs_readl(GUEST_CR4));
 
-	printk("GUEST_SYSENTER_ESP 0x%lx\n", vmcs_readl(GUEST_SYSENTER_ESP));
-	printk("GUEST_SYSENTER_EIP 0x%lx\n", vmcs_readl(GUEST_SYSENTER_EIP));
-
-
-	printk("GUEST_IA32_DEBUGCTL 0x%llx\n", vmcs_read64(GUEST_IA32_DEBUGCTL));
-	printk("GUEST_DR7 0x%lx\n", vmcs_readl(GUEST_DR7));
-
-	printk("GUEST_RFLAGS 0x%lx\n", vmcs_readl(GUEST_RFLAGS));
-	printk("GUEST_RIP 0x%lx\n", vmcs_readl(GUEST_RIP));
-
-	printk("GUEST_CS_SELECTOR 0x%x\n", vmcs_read16(GUEST_CS_SELECTOR));
-	printk("GUEST_DS_SELECTOR 0x%x\n", vmcs_read16(GUEST_DS_SELECTOR));
-	printk("GUEST_ES_SELECTOR 0x%x\n", vmcs_read16(GUEST_ES_SELECTOR));
-	printk("GUEST_FS_SELECTOR 0x%x\n", vmcs_read16(GUEST_FS_SELECTOR));
-	printk("GUEST_GS_SELECTOR 0x%x\n", vmcs_read16(GUEST_GS_SELECTOR));
-	printk("GUEST_SS_SELECTOR 0x%x\n", vmcs_read16(GUEST_SS_SELECTOR));
-
-	printk("GUEST_TR_SELECTOR 0x%x\n", vmcs_read16(GUEST_TR_SELECTOR));
-	printk("GUEST_LDTR_SELECTOR 0x%x\n", vmcs_read16(GUEST_LDTR_SELECTOR));
-
-	printk("GUEST_CS_AR_BYTES 0x%x\n", vmcs_read32(GUEST_CS_AR_BYTES));
-	printk("GUEST_DS_AR_BYTES 0x%x\n", vmcs_read32(GUEST_DS_AR_BYTES));
-	printk("GUEST_ES_AR_BYTES 0x%x\n", vmcs_read32(GUEST_ES_AR_BYTES));
-	printk("GUEST_FS_AR_BYTES 0x%x\n", vmcs_read32(GUEST_FS_AR_BYTES));
-	printk("GUEST_GS_AR_BYTES 0x%x\n", vmcs_read32(GUEST_GS_AR_BYTES));
-	printk("GUEST_SS_AR_BYTES 0x%x\n", vmcs_read32(GUEST_SS_AR_BYTES));
-
-	printk("GUEST_LDTR_AR_BYTES 0x%x\n", vmcs_read32(GUEST_LDTR_AR_BYTES));
-	printk("GUEST_TR_AR_BYTES 0x%x\n", vmcs_read32(GUEST_TR_AR_BYTES));
-
-	printk("GUEST_CS_BASE 0x%lx\n", vmcs_readl(GUEST_CS_BASE));
-	printk("GUEST_DS_BASE 0x%lx\n", vmcs_readl(GUEST_DS_BASE));
-	printk("GUEST_ES_BASE 0x%lx\n", vmcs_readl(GUEST_ES_BASE));
-	printk("GUEST_FS_BASE 0x%lx\n", vmcs_readl(GUEST_FS_BASE));
-	printk("GUEST_GS_BASE 0x%lx\n", vmcs_readl(GUEST_GS_BASE));
-	printk("GUEST_SS_BASE 0x%lx\n", vmcs_readl(GUEST_SS_BASE));
+	vcpu_printf(vcpu, "GUEST_SYSENTER_ESP 0x%lx\n", vmcs_readl(GUEST_SYSENTER_ESP));
+	vcpu_printf(vcpu, "GUEST_SYSENTER_EIP 0x%lx\n", vmcs_readl(GUEST_SYSENTER_EIP));
 
 
-	printk("GUEST_LDTR_BASE 0x%lx\n", vmcs_readl(GUEST_LDTR_BASE));
-	printk("GUEST_TR_BASE 0x%lx\n", vmcs_readl(GUEST_TR_BASE));
+	vcpu_printf(vcpu, "GUEST_IA32_DEBUGCTL 0x%llx\n", vmcs_read64(GUEST_IA32_DEBUGCTL));
+	vcpu_printf(vcpu, "GUEST_DR7 0x%lx\n", vmcs_readl(GUEST_DR7));
 
-	printk("GUEST_CS_LIMIT 0x%x\n", vmcs_read32(GUEST_CS_LIMIT));
-	printk("GUEST_DS_LIMIT 0x%x\n", vmcs_read32(GUEST_DS_LIMIT));
-	printk("GUEST_ES_LIMIT 0x%x\n", vmcs_read32(GUEST_ES_LIMIT));
-	printk("GUEST_FS_LIMIT 0x%x\n", vmcs_read32(GUEST_FS_LIMIT));
-	printk("GUEST_GS_LIMIT 0x%x\n", vmcs_read32(GUEST_GS_LIMIT));
-	printk("GUEST_SS_LIMIT 0x%x\n", vmcs_read32(GUEST_SS_LIMIT));
+	vcpu_printf(vcpu, "GUEST_RFLAGS 0x%lx\n", vmcs_readl(GUEST_RFLAGS));
+	vcpu_printf(vcpu, "GUEST_RIP 0x%lx\n", vmcs_readl(GUEST_RIP));
 
-	printk("GUEST_LDTR_LIMIT 0x%x\n", vmcs_read32(GUEST_LDTR_LIMIT));
-	printk("GUEST_TR_LIMIT 0x%x\n", vmcs_read32(GUEST_TR_LIMIT));
+	vcpu_printf(vcpu, "GUEST_CS_SELECTOR 0x%x\n", vmcs_read16(GUEST_CS_SELECTOR));
+	vcpu_printf(vcpu, "GUEST_DS_SELECTOR 0x%x\n", vmcs_read16(GUEST_DS_SELECTOR));
+	vcpu_printf(vcpu, "GUEST_ES_SELECTOR 0x%x\n", vmcs_read16(GUEST_ES_SELECTOR));
+	vcpu_printf(vcpu, "GUEST_FS_SELECTOR 0x%x\n", vmcs_read16(GUEST_FS_SELECTOR));
+	vcpu_printf(vcpu, "GUEST_GS_SELECTOR 0x%x\n", vmcs_read16(GUEST_GS_SELECTOR));
+	vcpu_printf(vcpu, "GUEST_SS_SELECTOR 0x%x\n", vmcs_read16(GUEST_SS_SELECTOR));
 
-	printk("GUEST_GDTR_BASE 0x%lx\n", vmcs_readl(GUEST_GDTR_BASE));
-	printk("GUEST_IDTR_BASE 0x%lx\n", vmcs_readl(GUEST_IDTR_BASE));
+	vcpu_printf(vcpu, "GUEST_TR_SELECTOR 0x%x\n", vmcs_read16(GUEST_TR_SELECTOR));
+	vcpu_printf(vcpu, "GUEST_LDTR_SELECTOR 0x%x\n", vmcs_read16(GUEST_LDTR_SELECTOR));
 
-	printk("GUEST_GDTR_LIMIT 0x%x\n", vmcs_read32(GUEST_GDTR_LIMIT));
-	printk("GUEST_IDTR_LIMIT 0x%x\n", vmcs_read32(GUEST_IDTR_LIMIT));
-	printk("***********************************************************\n");
+	vcpu_printf(vcpu, "GUEST_CS_AR_BYTES 0x%x\n", vmcs_read32(GUEST_CS_AR_BYTES));
+	vcpu_printf(vcpu, "GUEST_DS_AR_BYTES 0x%x\n", vmcs_read32(GUEST_DS_AR_BYTES));
+	vcpu_printf(vcpu, "GUEST_ES_AR_BYTES 0x%x\n", vmcs_read32(GUEST_ES_AR_BYTES));
+	vcpu_printf(vcpu, "GUEST_FS_AR_BYTES 0x%x\n", vmcs_read32(GUEST_FS_AR_BYTES));
+	vcpu_printf(vcpu, "GUEST_GS_AR_BYTES 0x%x\n", vmcs_read32(GUEST_GS_AR_BYTES));
+	vcpu_printf(vcpu, "GUEST_SS_AR_BYTES 0x%x\n", vmcs_read32(GUEST_SS_AR_BYTES));
+
+	vcpu_printf(vcpu, "GUEST_LDTR_AR_BYTES 0x%x\n", vmcs_read32(GUEST_LDTR_AR_BYTES));
+	vcpu_printf(vcpu, "GUEST_TR_AR_BYTES 0x%x\n", vmcs_read32(GUEST_TR_AR_BYTES));
+
+	vcpu_printf(vcpu, "GUEST_CS_BASE 0x%lx\n", vmcs_readl(GUEST_CS_BASE));
+	vcpu_printf(vcpu, "GUEST_DS_BASE 0x%lx\n", vmcs_readl(GUEST_DS_BASE));
+	vcpu_printf(vcpu, "GUEST_ES_BASE 0x%lx\n", vmcs_readl(GUEST_ES_BASE));
+	vcpu_printf(vcpu, "GUEST_FS_BASE 0x%lx\n", vmcs_readl(GUEST_FS_BASE));
+	vcpu_printf(vcpu, "GUEST_GS_BASE 0x%lx\n", vmcs_readl(GUEST_GS_BASE));
+	vcpu_printf(vcpu, "GUEST_SS_BASE 0x%lx\n", vmcs_readl(GUEST_SS_BASE));
+
+
+	vcpu_printf(vcpu, "GUEST_LDTR_BASE 0x%lx\n", vmcs_readl(GUEST_LDTR_BASE));
+	vcpu_printf(vcpu, "GUEST_TR_BASE 0x%lx\n", vmcs_readl(GUEST_TR_BASE));
+
+	vcpu_printf(vcpu, "GUEST_CS_LIMIT 0x%x\n", vmcs_read32(GUEST_CS_LIMIT));
+	vcpu_printf(vcpu, "GUEST_DS_LIMIT 0x%x\n", vmcs_read32(GUEST_DS_LIMIT));
+	vcpu_printf(vcpu, "GUEST_ES_LIMIT 0x%x\n", vmcs_read32(GUEST_ES_LIMIT));
+	vcpu_printf(vcpu, "GUEST_FS_LIMIT 0x%x\n", vmcs_read32(GUEST_FS_LIMIT));
+	vcpu_printf(vcpu, "GUEST_GS_LIMIT 0x%x\n", vmcs_read32(GUEST_GS_LIMIT));
+	vcpu_printf(vcpu, "GUEST_SS_LIMIT 0x%x\n", vmcs_read32(GUEST_SS_LIMIT));
+
+	vcpu_printf(vcpu, "GUEST_LDTR_LIMIT 0x%x\n", vmcs_read32(GUEST_LDTR_LIMIT));
+	vcpu_printf(vcpu, "GUEST_TR_LIMIT 0x%x\n", vmcs_read32(GUEST_TR_LIMIT));
+
+	vcpu_printf(vcpu, "GUEST_GDTR_BASE 0x%lx\n", vmcs_readl(GUEST_GDTR_BASE));
+	vcpu_printf(vcpu, "GUEST_IDTR_BASE 0x%lx\n", vmcs_readl(GUEST_IDTR_BASE));
+
+	vcpu_printf(vcpu, "GUEST_GDTR_LIMIT 0x%x\n", vmcs_read32(GUEST_GDTR_LIMIT));
+	vcpu_printf(vcpu, "GUEST_IDTR_LIMIT 0x%x\n", vmcs_read32(GUEST_IDTR_LIMIT));
+	vcpu_printf(vcpu, "***********************************************************\n");
 }
 
 void regs_dump(struct kvm_vcpu *vcpu)
@@ -1079,7 +1079,7 @@ void sregs_dump(struct kvm_vcpu *vcpu)
 	vcpu_printf(vcpu, "cr3 = 0x%llx\n", vcpu->cr3);
 	vcpu_printf(vcpu, "cr8 = 0x%lx\n", vcpu->cr8);
 	vcpu_printf(vcpu, "shadow_efer = 0x%llx\n", vcpu->shadow_efer);
-	vmcs_dump();
+	vmcs_dump(vcpu);
 	vcpu_printf(vcpu, "***********************************************************\n");
 }
 

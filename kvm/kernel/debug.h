@@ -19,7 +19,7 @@ void show_page(struct kvm_vcpu *vcpu, gva_t addr);
 void show_code(struct kvm_vcpu *vcpu);
 int vm_entry_test(struct kvm_vcpu *vcpu);
 
-void vmcs_dump(void);
+void vmcs_dump(struct kvm_vcpu *vcpu);
 void regs_dump(struct kvm_vcpu *vcpu);
 void sregs_dump(struct kvm_vcpu *vcpu);
 
