@@ -2258,9 +2258,9 @@ again:
 	"mov 0(%3),   %%eax \n\t" \
 	"mov 12(%3),  %%ebx \n\t" \
 	"mov 8(%3),   %%edx \n\t" \
-	"mov 16(%3),  %%esi \n\t" \
-	"mov 20(%3),  %%edi \n\t" \
-	"mov 28(%3),  %%ebp \n\t" \
+	"mov 24(%3),  %%esi \n\t" \
+	"mov 28(%3),  %%edi \n\t" \
+	"mov 20(%3),  %%ebp \n\t" \
 	"mov 4(%3),   %%ecx \n\t" /* kills %3 (ecx) */
 
 #define STORE_GUEST_REGS \
@@ -2269,9 +2269,9 @@ again:
 	"mov %%ebx, 12(%3) \n\t" \
 	"pushl 0(%%esp); popl 4(%3) \n\t" \
 	"mov %%edx,  8(%3) \n\t" \
-	"mov %%esi, 16(%3) \n\t" \
-	"mov %%edi, 20(%3) \n\t" \
-	"mov %%ebp, 28(%3) \n\t" \
+	"mov %%esi, 24(%3) \n\t" \
+	"mov %%edi, 28(%3) \n\t" \
+	"mov %%ebp, 20(%3) \n\t" \
 	"mov 0(%%esp), %3"
 
 #endif
