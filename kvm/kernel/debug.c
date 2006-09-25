@@ -1043,11 +1043,11 @@ void vmcs_dump(void)
 void regs_dump(struct kvm_vcpu *vcpu)
 {
 	#define REG_DUMP(reg) \
-		printk(#reg" = 0x%lx\n", vcpu->regs[VCPU_REGS_##reg])
+		vcpu_printf(vcpu, #reg" = 0x%lx\n", vcpu->regs[VCPU_REGS_##reg])
 	#define VMCS_REG_DUMP(reg) \
-		printk(#reg" = 0x%lx\n", vmcs_readl(GUEST_##reg))
+		vcpu_printf(vcpu, #reg" = 0x%lx\n", vmcs_readl(GUEST_##reg))
 
-	printk("************************ regs_dump ************************\n");
+	vcpu_printf(vcpu, "************************ regs_dump ************************\n");
 	REG_DUMP(RAX);
 	REG_DUMP(RBX);
 	REG_DUMP(RCX);
@@ -1069,18 +1069,18 @@ void regs_dump(struct kvm_vcpu *vcpu)
 	VMCS_REG_DUMP(RIP);
 	VMCS_REG_DUMP(RFLAGS);
 
-	printk("***********************************************************\n");
+	vcpu_printf(vcpu, "***********************************************************\n");
 }
 
 void sregs_dump(struct kvm_vcpu *vcpu)
 {
-	printk("************************ sregs_dump ************************\n");
-	printk("cr2 = 0x%lx\n", vcpu->regs[VCPU_REGS_CR2]);
-	printk("cr3 = 0x%llx\n", vcpu->cr3);
-	printk("cr8 = 0x%lx\n", vcpu->cr8);
-	printk("shadow_efer = 0x%llx\n", vcpu->shadow_efer);
+	vcpu_printf(vcpu, "************************ sregs_dump ************************\n");
+	vcpu_printf(vcpu, "cr2 = 0x%lx\n", vcpu->regs[VCPU_REGS_CR2]);
+	vcpu_printf(vcpu, "cr3 = 0x%llx\n", vcpu->cr3);
+	vcpu_printf(vcpu, "cr8 = 0x%lx\n", vcpu->cr8);
+	vcpu_printf(vcpu, "shadow_efer = 0x%llx\n", vcpu->shadow_efer);
 	vmcs_dump();
-	printk("***********************************************************\n");
+	vcpu_printf(vcpu, "***********************************************************\n");
 }
 
 #endif
