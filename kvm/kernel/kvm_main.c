@@ -1877,6 +1877,7 @@ static int handle_rdmsr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	case MSR_IA32_MC0_MISC+8:
 	case MSR_IA32_MC0_MISC+12:
 	case MSR_IA32_MC0_MISC+16:
+	case MSR_IA32_UCODE_REV:
 		/* MTRR registers */
 	case 0xfe:
 	case 0x200 ... 0x2ff:
@@ -2006,6 +2007,7 @@ static int handle_wrmsr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 		vmcs_write64(TSC_OFFSET, data - tsc);
 		break;
 	}
+	case MSR_IA32_UCODE_REV:
 	case 0x200 ... 0x2ff: /* MTRRs */
 		break;
 	default:
