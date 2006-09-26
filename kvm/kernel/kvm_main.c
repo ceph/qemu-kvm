@@ -494,11 +494,20 @@ void kvm_log(struct kvm *kvm, const char *data, size_t count)
 	ret = vfs_write(f, data, count, &f->f_pos);
 	set_fs(fs);
 	if (ret != count) {
+		if (ret == -512) {
+			static int reported;
+
+			if (reported)
+				return;
+			reported = 1;
+			printk("%s: vfs_write() returned -512, investigate\n",
+				__FUNCTION__);
+			return;
+		}
 		printk("%s: ret(%ld) != count(%ld), dumping stack \n",
 		       __FUNCTION__,
 		       (long)ret,
 		       (long)count);
-		dump_stack();
 	}
 }
 
