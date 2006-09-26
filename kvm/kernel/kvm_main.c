@@ -1242,9 +1242,13 @@ static int emulator_cmpxchg_emulated(unsigned long addr,
 				     unsigned int bytes,
 				     struct x86_emulate_ctxt *ctxt)
 {
-	printk(KERN_ERR "emulator_write_emulated: addr %lx n %d\n",
-	       addr, bytes);
-	return X86EMUL_UNHANDLEABLE;
+	static int reported;
+
+	if (!reported) {
+		reported = 1;
+		printk(KERN_WARNING "kvm: emulating exchange as write\n");
+	}
+	return emulator_write_emulated(addr, new, bytes, ctxt);
 }
 
 static void report_emulation_failure(struct x86_emulate_ctxt *ctxt)
