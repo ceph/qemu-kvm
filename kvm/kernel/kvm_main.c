@@ -288,15 +288,13 @@ static int vcpu_slot(struct kvm_vcpu *vcpu)
 }
 
 /*
- * Switches to specified vcpu, until a matching vcpu_put()
+ * Switches to specified vcpu, until a matching vcpu_put(), but assumes
+ * vcpu mutex is already taken.
  */
-static struct kvm_vcpu *vcpu_load(struct kvm *kvm, int vcpu_slot)
+static struct kvm_vcpu *__vcpu_load(struct kvm_vcpu *vcpu)
 {
-	struct kvm_vcpu *vcpu = &kvm->vcpus[vcpu_slot];
 	u64 phys_addr = __pa(vcpu->vmcs);
 	int cpu;
-	
-	mutex_lock(&vcpu->mutex);
 	
 	cpu = get_cpu();
 	
@@ -333,6 +331,17 @@ static struct kvm_vcpu *vcpu_load(struct kvm *kvm, int vcpu_slot)
 		vmcs_writel(HOST_IA32_SYSENTER_ESP, sysenter_esp); /* 22.2.3 */
 	}
 	return vcpu;
+}
+
+/*
+ * Switches to specified vcpu, until a matching vcpu_put()
+ */
+static struct kvm_vcpu *vcpu_load(struct kvm *kvm, int vcpu_slot)
+{
+	struct kvm_vcpu *vcpu = &kvm->vcpus[vcpu_slot];
+	
+	mutex_lock(&vcpu->mutex);
+	return __vcpu_load(vcpu);
 }
 
 static void vcpu_put(struct kvm_vcpu *vcpu)
