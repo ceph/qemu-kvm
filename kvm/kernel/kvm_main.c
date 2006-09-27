@@ -643,7 +643,7 @@ static void vmcs_write64(unsigned long field, u64 value)
  * required registers are set.  Some will be overwritten since the vcpu
  * will typically start from a different state.
  */
-static int kvm_vcpu_setup(struct kvm *kvm, int vcpu_slot)
+static int kvm_vcpu_setup(struct kvm_vcpu *vcpu)
 {
 	extern asmlinkage void kvm_vmx_return(void);
 	u32 host_sysenter_cs;
@@ -653,9 +653,8 @@ static int kvm_vcpu_setup(struct kvm *kvm, int vcpu_slot)
 	int i;
 	int ret;
 	u64 tsc;
-	struct kvm_vcpu *vcpu;
 	
-	vcpu = vcpu_load(kvm, vcpu_slot);
+	__vcpu_load(vcpu);
 
 	vcpu->cr8 = 0;
 	vcpu->shadow_efer = read_msr(MSR_EFER);
@@ -914,6 +913,7 @@ static int kvm_dev_ioctl_create_vcpus(struct kvm *kvm, int n)
 		struct vmcs *vmcs;
 
 		mutex_init(&vcpu->mutex);
+		mutex_lock(&vcpu->mutex);
 		INIT_LIST_HEAD(&vcpu->free_pages);
 		vcpu->mmu.root_hpa = INVALID_PAGE;
 
@@ -925,13 +925,18 @@ static int kvm_dev_ioctl_create_vcpus(struct kvm *kvm, int n)
 		vcpu->cpu = -1;  /* First load will set up TR */
 		vcpu->kvm = kvm;
 		vmcs = alloc_vmcs();
-		if (!vmcs)
+		if (!vmcs) {
+			mutex_unlock(&vcpu->mutex);
 			goto out_free_vcpus;
+		}
 		vmcs_clear(vmcs);
 		vcpu->vmcs = vmcs;
 		vcpu->launched = 0;
 
-		r = kvm_vcpu_setup(kvm, i);
+		r = kvm_vcpu_setup(vcpu);
+
+		vcpu_put(vcpu);
+
 		if (r < 0)
 			goto out_free_vcpus;
 	}
