@@ -2014,6 +2014,9 @@ static int handle_wrmsr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	case MSR_IA32_UCODE_REV:
 	case 0x200 ... 0x2ff: /* MTRRs */
 		break;
+	case MSR_IA32_APICBASE:
+		vcpu->apic_base = data;
+		break;
 	default:
 		msr = find_msr_entry(vcpu, ecx);
 		if (msr) {
