@@ -2012,6 +2012,7 @@ static int handle_wrmsr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 		break;
 	}
 	case MSR_IA32_UCODE_REV:
+	case MSR_IA32_UCODE_WRITE:
 	case 0x200 ... 0x2ff: /* MTRRs */
 		break;
 	case MSR_IA32_APICBASE:
