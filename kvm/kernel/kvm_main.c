@@ -508,7 +508,7 @@ void kvm_log(struct kvm *kvm, const char *data, size_t count)
 	struct file* f = kvm->log_file;
 
 	mm_segment_t fs = get_fs();
-	ssize_t ret;
+	ssize_t ret = 0;
 	sigset_t sigmask, oldsigmask;
 		
 	if (!f)
@@ -517,14 +517,17 @@ void kvm_log(struct kvm *kvm, const char *data, size_t count)
 	set_fs(KERNEL_DS);
 	sigfillset(&sigmask);
 	sigprocmask(SIG_SETMASK, &sigmask, &oldsigmask);
-	ret = vfs_write(f, data, count, &f->f_pos);
+	while (count) {
+		ret = vfs_write(f, data, count, &f->f_pos);
+		if (ret < 0)
+			break;
+		data += ret;
+		count -= ret;
+	}
 	sigprocmask(SIG_SETMASK, &oldsigmask, 0);
 	set_fs(fs);
-	if (ret != count)
-		printk("%s: ret(%ld) != count(%ld), dumping stack \n",
-		       __FUNCTION__,
-		       (long)ret,
-		       (long)count);
+	if (ret < 0)
+		printk("%s: %d\n", __FUNCTION__, (int)ret);
 }
 
 int kvm_vprintf(struct kvm *kvm, const char *fmt, va_list args)
