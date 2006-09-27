@@ -282,11 +282,17 @@ static void __vcpu_clear(void *arg)
 		per_cpu(current_vmcs, cpu) = 0;
 }
 
+static int vcpu_slot(struct kvm_vcpu *vcpu)
+{
+	return vcpu - vcpu->kvm->vcpus;
+}
+
 /*
  * Switches to specified vcpu, until a matching vcpu_put()
  */
-static void vcpu_load(struct kvm_vcpu *vcpu)
+static struct kvm_vcpu *vcpu_load(struct kvm *kvm, int vcpu_slot)
 {
+	struct kvm_vcpu *vcpu = &kvm->vcpus[vcpu_slot];
 	u64 phys_addr = __pa(vcpu->vmcs);
 	int cpu;
 	
@@ -326,6 +332,7 @@ static void vcpu_load(struct kvm_vcpu *vcpu)
 		rdmsrl(MSR_IA32_SYSENTER_ESP, sysenter_esp);
 		vmcs_writel(HOST_IA32_SYSENTER_ESP, sysenter_esp); /* 22.2.3 */
 	}
+	return vcpu;
 }
 
 static void vcpu_put(struct kvm_vcpu *vcpu)
@@ -561,7 +568,7 @@ int vcpu_printf(struct kvm_vcpu *vcpu, const char *fmt, ...)
 	i = kvm_vprintf(vcpu->kvm, fmt, args);
 	va_end(args);
 
-	vcpu_load(vcpu);
+	vcpu_load(vcpu->kvm, vcpu_slot(vcpu));
 
 	return i;
 }
@@ -627,7 +634,7 @@ static void vmcs_write64(unsigned long field, u64 value)
  * required registers are set.  Some will be overwritten since the vcpu
  * will typically start from a different state.
  */
-static int kvm_vcpu_setup(struct kvm_vcpu *vcpu)
+static int kvm_vcpu_setup(struct kvm *kvm, int vcpu_slot)
 {
 	extern asmlinkage void kvm_vmx_return(void);
 	u32 host_sysenter_cs;
@@ -637,8 +644,9 @@ static int kvm_vcpu_setup(struct kvm_vcpu *vcpu)
 	int i;
 	int ret;
 	u64 tsc;
+	struct kvm_vcpu *vcpu;
 	
-	vcpu_load(vcpu);
+	vcpu = vcpu_load(kvm, vcpu_slot);
 
 	vcpu->cr8 = 0;
 	vcpu->shadow_efer = read_msr(MSR_EFER);
@@ -914,7 +922,7 @@ static int kvm_dev_ioctl_create_vcpus(struct kvm *kvm, int n)
 		vcpu->vmcs = vmcs;
 		vcpu->launched = 0;
 
-		r = kvm_vcpu_setup(vcpu);
+		r = kvm_vcpu_setup(kvm, i);
 		if (r < 0)
 			goto out_free_vcpus;
 	}
@@ -1022,9 +1030,9 @@ static int kvm_dev_ioctl_set_memory_region(struct kvm *kvm,
 		kvm->nmemslots = mem->slot + 1;
 
 	for (i = 0; i < kvm->nvcpus; ++i) {
-		struct kvm_vcpu *vcpu = &kvm->vcpus[i];
-		
-		vcpu_load(vcpu);
+		struct kvm_vcpu *vcpu;
+
+		vcpu = vcpu_load(kvm, i);
 		kvm_mmu_reset_context(vcpu);
 		vcpu_put(vcpu);
 	}
@@ -1069,9 +1077,8 @@ static int kvm_dev_ioctl_get_dirty_log(struct kvm *kvm,
 
 	if (any) {
 		for (i = 0; i < kvm->nvcpus; ++i) {
-			struct kvm_vcpu *vcpu = &kvm->vcpus[i];
+			struct kvm_vcpu *vcpu = vcpu_load(kvm, i);
 
-			vcpu_load(vcpu);
 			flush_guest_tlb(vcpu);
 			vcpu_put(vcpu);
 		}
@@ -2174,9 +2181,8 @@ static int kvm_dev_ioctl_run(struct kvm *kvm, struct kvm_run *kvm_run)
 
 	if (kvm_run->vcpu < 0 || kvm_run->vcpu >= kvm->nvcpus)
 		return -EINVAL;
-	vcpu = &kvm->vcpus[kvm_run->vcpu];
 
-	vcpu_load(vcpu);
+	vcpu = vcpu_load(kvm, kvm_run->vcpu);
 
 	if (kvm_run->emulated) {
 		skip_emulated_instruction(vcpu);
@@ -2367,7 +2373,7 @@ again:
 				return -EINTR;
 			}
 			cond_resched();
-			vcpu_load(vcpu);
+			vcpu_load(kvm, vcpu_slot(vcpu));
 			goto again;
 		}
 	}
@@ -2382,9 +2388,8 @@ static int kvm_dev_ioctl_get_regs(struct kvm *kvm, struct kvm_regs *regs)
 
 	if (regs->vcpu < 0 || regs->vcpu >= kvm->nvcpus)
 		return -EINVAL;
-	vcpu = &kvm->vcpus[regs->vcpu];
 
-	vcpu_load(vcpu);
+	vcpu = vcpu_load(kvm, regs->vcpu);
 
 	regs->rax = vcpu->regs[VCPU_REGS_RAX];
 	regs->rbx = vcpu->regs[VCPU_REGS_RBX];
@@ -2423,9 +2428,8 @@ static int kvm_dev_ioctl_set_regs(struct kvm *kvm, struct kvm_regs *regs)
 
 	if (regs->vcpu < 0 || regs->vcpu >= kvm->nvcpus)
 		return -EINVAL;
-	vcpu = &kvm->vcpus[regs->vcpu];
 
-	vcpu_load(vcpu);
+	vcpu = vcpu_load(kvm, regs->vcpu);
 
 	vcpu->regs[VCPU_REGS_RAX] = regs->rax;
 	vcpu->regs[VCPU_REGS_RBX] = regs->rbx;
@@ -2458,9 +2462,7 @@ static int kvm_dev_ioctl_get_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 
 	if (sregs->vcpu < 0 || sregs->vcpu >= kvm->nvcpus)
 		return -EINVAL;
-	vcpu = &kvm->vcpus[sregs->vcpu];
-
-	vcpu_load(vcpu);
+	vcpu = vcpu_load(kvm, sregs->vcpu);
 
 #define get_segment(var, seg) \
 	do { \
@@ -2523,9 +2525,7 @@ static int kvm_dev_ioctl_set_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 
 	if (sregs->vcpu < 0 || sregs->vcpu >= kvm->nvcpus)
 		return -EINVAL;
-	vcpu = &kvm->vcpus[sregs->vcpu];
-
-	vcpu_load(vcpu);
+	vcpu = vcpu_load(kvm, sregs->vcpu);
 
 #define set_segment(var, seg) \
 	do { \
@@ -2598,10 +2598,10 @@ static int kvm_dev_ioctl_set_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 static int kvm_dev_ioctl_translate(struct kvm *kvm, struct kvm_translation *tr)
 {
 	unsigned long vaddr = tr->linear_address;
-	struct kvm_vcpu *vcpu = &kvm->vcpus[tr->vcpu];
+	struct kvm_vcpu *vcpu;
 	u64 pte;
 
-	vcpu_load(vcpu);
+	vcpu = vcpu_load(kvm, tr->vcpu);
 	pte = vcpu->mmu.fetch_pte64(vcpu, vaddr);
 	tr->physical_address = (pte & 0xfffffffff000ull)|(vaddr & ~PAGE_MASK);
 	tr->valid = pte & 1;
@@ -2620,9 +2620,7 @@ static int kvm_dev_ioctl_interrupt(struct kvm *kvm, struct kvm_interrupt *irq)
 		return -EINVAL;
 	if (irq->irq < 0 || irq->irq >= 256)
 		return -EINVAL;
-	vcpu = &kvm->vcpus[irq->vcpu];
-
-	vcpu_load(vcpu);
+	vcpu = vcpu_load(kvm, irq->vcpu);
 
 	set_bit(irq->irq, vcpu->irq_pending);
 	set_bit(irq->irq / BITS_PER_LONG, &vcpu->irq_summary);
@@ -2642,9 +2640,7 @@ static int kvm_dev_ioctl_debug_guest(struct kvm *kvm,
 
 	if (dbg->vcpu < 0 || dbg->vcpu >= kvm->nvcpus)
 		return -EINVAL;
-	vcpu = &kvm->vcpus[dbg->vcpu];
-
-	vcpu_load(vcpu);
+	vcpu = vcpu_load(kvm, dbg->vcpu);
 
 	exception_bitmap = vmcs_read32(EXCEPTION_BITMAP);
 	old_singlestep = vcpu->guest_debug.singlestep;
