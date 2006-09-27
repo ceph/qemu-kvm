@@ -499,7 +499,7 @@ static void kvm_free_vcpus(struct kvm *kvm)
 {
 	unsigned int i;
 
-	for (i = 0; i < kvm->nvcpus; ++i)
+	for (i = 0; i < KVM_MAX_VCPUS; ++i)
 		kvm_free_vcpu(&kvm->vcpus[i]);
 }
 
@@ -952,9 +952,6 @@ static int kvm_dev_ioctl_create_vcpu(struct kvm *kvm, int n)
 	if (r < 0)
 		goto out_free_vcpus;
 
-	if (kvm->nvcpus < n + 1)
-		kvm->nvcpus = n + 1;
-
 	return 0;
 
 out_free_vcpus:
@@ -1054,7 +1051,7 @@ static int kvm_dev_ioctl_set_memory_region(struct kvm *kvm,
 	if (mem->slot >= kvm->nmemslots)
 		kvm->nmemslots = mem->slot + 1;
 
-	for (i = 0; i < kvm->nvcpus; ++i) {
+	for (i = 0; i < KVM_MAX_VCPUS; ++i) {
 		struct kvm_vcpu *vcpu;
 
 		vcpu = vcpu_load(kvm, i);
@@ -1103,7 +1100,7 @@ static int kvm_dev_ioctl_get_dirty_log(struct kvm *kvm,
 
 
 	if (any) {
-		for (i = 0; i < kvm->nvcpus; ++i) {
+		for (i = 0; i < KVM_MAX_VCPUS; ++i) {
 			struct kvm_vcpu *vcpu = vcpu_load(kvm, i);
 
 			if (!vcpu)
@@ -2208,7 +2205,7 @@ static int kvm_dev_ioctl_run(struct kvm *kvm, struct kvm_run *kvm_run)
 	u16 fs_sel, gs_sel, ldt_sel;
 	int fs_gs_ldt_reload_needed;
 
-	if (kvm_run->vcpu < 0 || kvm_run->vcpu >= kvm->nvcpus)
+	if (kvm_run->vcpu < 0 || kvm_run->vcpu >= KVM_MAX_VCPUS)
 		return -EINVAL;
 
 	vcpu = vcpu_load(kvm, kvm_run->vcpu);
@@ -2418,7 +2415,7 @@ static int kvm_dev_ioctl_get_regs(struct kvm *kvm, struct kvm_regs *regs)
 {
 	struct kvm_vcpu *vcpu;
 
-	if (regs->vcpu < 0 || regs->vcpu >= kvm->nvcpus)
+	if (regs->vcpu < 0 || regs->vcpu >= KVM_MAX_VCPUS)
 		return -EINVAL;
 
 	vcpu = vcpu_load(kvm, regs->vcpu);
@@ -2460,7 +2457,7 @@ static int kvm_dev_ioctl_set_regs(struct kvm *kvm, struct kvm_regs *regs)
 {
 	struct kvm_vcpu *vcpu;
 
-	if (regs->vcpu < 0 || regs->vcpu >= kvm->nvcpus)
+	if (regs->vcpu < 0 || regs->vcpu >= KVM_MAX_VCPUS)
 		return -EINVAL;
 
 	vcpu = vcpu_load(kvm, regs->vcpu);
@@ -2496,7 +2493,7 @@ static int kvm_dev_ioctl_get_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 {
 	struct kvm_vcpu *vcpu;
 
-	if (sregs->vcpu < 0 || sregs->vcpu >= kvm->nvcpus)
+	if (sregs->vcpu < 0 || sregs->vcpu >= KVM_MAX_VCPUS)
 		return -EINVAL;
 	vcpu = vcpu_load(kvm, sregs->vcpu);
 	if (!vcpu)
@@ -2561,7 +2558,7 @@ static int kvm_dev_ioctl_set_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 	struct kvm_vcpu *vcpu;
 	int mmu_reset_needed = 0;
 
-	if (sregs->vcpu < 0 || sregs->vcpu >= kvm->nvcpus)
+	if (sregs->vcpu < 0 || sregs->vcpu >= KVM_MAX_VCPUS)
 		return -EINVAL;
 	vcpu = vcpu_load(kvm, sregs->vcpu);
 	if (!vcpu)
@@ -2658,7 +2655,7 @@ static int kvm_dev_ioctl_interrupt(struct kvm *kvm, struct kvm_interrupt *irq)
 {
 	struct kvm_vcpu *vcpu;
 
-	if (irq->vcpu < 0 || irq->vcpu >= kvm->nvcpus)
+	if (irq->vcpu < 0 || irq->vcpu >= KVM_MAX_VCPUS)
 		return -EINVAL;
 	if (irq->irq < 0 || irq->irq >= 256)
 		return -EINVAL;
@@ -2682,7 +2679,7 @@ static int kvm_dev_ioctl_debug_guest(struct kvm *kvm,
 	u32 exception_bitmap;
 	int old_singlestep;
 
-	if (dbg->vcpu < 0 || dbg->vcpu >= kvm->nvcpus)
+	if (dbg->vcpu < 0 || dbg->vcpu >= KVM_MAX_VCPUS)
 		return -EINVAL;
 	vcpu = vcpu_load(kvm, dbg->vcpu);
 	if (!vcpu)
