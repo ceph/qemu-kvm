@@ -439,11 +439,14 @@ static void kvm_disable(void *garbage)
 static int kvm_dev_open(struct inode *inode, struct file *filp)
 {
 	struct kvm *kvm = kzalloc(sizeof(struct kvm), GFP_KERNEL);
+	int i;
 
 	if (!kvm)
 		return -ENOMEM;
 	
 	INIT_LIST_HEAD(&kvm->active_mmu_pages);
+	for (i = 0; i < KVM_MAX_VCPUS; ++i)
+		mutex_init(&kvm->vcpus[i].mutex);
 	filp->private_data = kvm;
 	return 0;
 }
@@ -912,7 +915,6 @@ static int kvm_dev_ioctl_create_vcpu(struct kvm *kvm, int n)
 
 	vcpu = &kvm->vcpus[n];
 
-	mutex_init(&vcpu->mutex);
 	mutex_lock(&vcpu->mutex);
 	INIT_LIST_HEAD(&vcpu->free_pages);
 	vcpu->mmu.root_hpa = INVALID_PAGE;
