@@ -82,8 +82,8 @@ else:
     
 if options.kvm:
     cmd = 'qemu/' + arch + '-softmmu/' + cmd
-
-print cmd
+else:
+    cmd = 'qemu'
 
 qemu_args = (cmd, '-cdrom', options.cdrom, '-boot', bootdisk,
              '-L', '/usr/share/qemu', '-hda', disk, '-m', '384',
@@ -92,5 +92,8 @@ qemu_args = (cmd, '-cdrom', options.cdrom, '-boot', bootdisk,
 
 if options.debugger:
     qemu_args += ('-s',)
+
+def concat_func(x,y): return x + ' ' + y
+print 'Running %s' % reduce(concat_func, qemu_args)
 
 os.execvp(cmd, qemu_args)
