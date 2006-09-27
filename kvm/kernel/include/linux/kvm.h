@@ -192,7 +192,7 @@ struct kvm_dirty_log {
 #define KVM_INTERRUPT             _IOW(KVMIO, 8, struct kvm_interrupt)
 #define KVM_DEBUG_GUEST           _IOW(KVMIO, 9, struct kvm_debug_guest)
 #define KVM_SET_MEMORY_REGION     _IOW(KVMIO, 10, struct kvm_memory_region)
-#define KVM_CREATE_VCPUS          _IOW(KVMIO, 11, int) /* arg = nvcpus */
+#define KVM_CREATE_VCPU           _IOW(KVMIO, 11, int /* vcpu_slot */)
 #define KVM_GET_DIRTY_LOG         _IOW(KVMIO, 12, struct kvm_dirty_log)
 
 #endif

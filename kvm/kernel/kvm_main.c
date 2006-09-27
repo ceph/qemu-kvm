@@ -900,54 +900,52 @@ out:
 /*
  * Creates some virtual cpus.  Good luck creating more than one.
  */
-static int kvm_dev_ioctl_create_vcpus(struct kvm *kvm, int n)
+static int kvm_dev_ioctl_create_vcpu(struct kvm *kvm, int n)
 {
-	int i, r;
+	int r;
+	struct kvm_vcpu *vcpu;
+	struct vmcs *vmcs;
 
 	r = -EINVAL;
-	if (n < 0 || kvm->nvcpus + n > KVM_MAX_VCPUS)
+	if (n < 0 || n >= KVM_MAX_VCPUS)
 		goto out;
 
-	for (i = kvm->nvcpus; i < kvm->nvcpus + n; ++i) {
-		struct kvm_vcpu *vcpu = &kvm->vcpus[i];
-		struct vmcs *vmcs;
+	vcpu = &kvm->vcpus[n];
 
-		mutex_init(&vcpu->mutex);
-		mutex_lock(&vcpu->mutex);
-		INIT_LIST_HEAD(&vcpu->free_pages);
-		vcpu->mmu.root_hpa = INVALID_PAGE;
+	mutex_init(&vcpu->mutex);
+	mutex_lock(&vcpu->mutex);
+	INIT_LIST_HEAD(&vcpu->free_pages);
+	vcpu->mmu.root_hpa = INVALID_PAGE;
 
-		vcpu->host_fx_image = (char*)ALIGN((hva_t)vcpu->fx_buf,
-						   FX_IMAGE_ALIGN);
-		vcpu->guest_fx_image = vcpu->host_fx_image + FX_IMAGE_SIZE;
+	vcpu->host_fx_image = (char*)ALIGN((hva_t)vcpu->fx_buf,
+					   FX_IMAGE_ALIGN);
+	vcpu->guest_fx_image = vcpu->host_fx_image + FX_IMAGE_SIZE;
 
-
-		vcpu->cpu = -1;  /* First load will set up TR */
-		vcpu->kvm = kvm;
-		vmcs = alloc_vmcs();
-		if (!vmcs) {
-			mutex_unlock(&vcpu->mutex);
-			goto out_free_vcpus;
-		}
-		vmcs_clear(vmcs);
-		vcpu->vmcs = vmcs;
-		vcpu->launched = 0;
-
-		r = kvm_vcpu_setup(vcpu);
-
-		vcpu_put(vcpu);
-
-		if (r < 0)
-			goto out_free_vcpus;
+	vcpu->cpu = -1;  /* First load will set up TR */
+	vcpu->kvm = kvm;
+	vmcs = alloc_vmcs();
+	if (!vmcs) {
+		mutex_unlock(&vcpu->mutex);
+		goto out_free_vcpus;
 	}
+	vmcs_clear(vmcs);
+	vcpu->vmcs = vmcs;
+	vcpu->launched = 0;
 
-	kvm->nvcpus = i;
+	r = kvm_vcpu_setup(vcpu);
+
+	vcpu_put(vcpu);
+
+	if (r < 0)
+		goto out_free_vcpus;
+
+	if (kvm->nvcpus < n + 1)
+		kvm->nvcpus = n + 1;
 
 	return 0;
 
 out_free_vcpus:
-	for ( ; i >= kvm->nvcpus; --i)
-		kvm_free_vcpu(&kvm->vcpus[i]);
+	kvm_free_vcpu(vcpu);
 out:
 	return r;
 }		
@@ -2709,8 +2707,8 @@ static long kvm_dev_ioctl(struct file *filp,
 			goto out;
 		break;
 	}
-	case KVM_CREATE_VCPUS: {
-		r = kvm_dev_ioctl_create_vcpus(kvm, arg);
+	case KVM_CREATE_VCPU: {
+		r = kvm_dev_ioctl_create_vcpu(kvm, arg);
 		if (r)
 			goto out;
 		break;

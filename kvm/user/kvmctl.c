@@ -92,9 +92,9 @@ int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem,
 		printf("kvm_create_memory_region: %m\n");
 		exit(1);
 	}
-	r = ioctl(fd, KVM_CREATE_VCPUS, 1);
+	r = ioctl(fd, KVM_CREATE_VCPU, 0);
 	if (r == -1) {
-		printf("kvm_create_vcpus: %m\n");
+		printf("kvm_create_vcpu: %m\n");
 		exit(1);
 	}
 
