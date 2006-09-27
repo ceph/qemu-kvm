@@ -509,29 +509,22 @@ void kvm_log(struct kvm *kvm, const char *data, size_t count)
 
 	mm_segment_t fs = get_fs();
 	ssize_t ret;
+	sigset_t sigmask, oldsigmask;
 		
 	if (!f)
 		return;
 
 	set_fs(KERNEL_DS);
+	sigfillset(&sigmask);
+	sigprocmask(SIG_SETMASK, &sigmask, &oldsigmask);
 	ret = vfs_write(f, data, count, &f->f_pos);
+	sigprocmask(SIG_SETMASK, &oldsigmask, 0);
 	set_fs(fs);
-	if (ret != count) {
-		if (ret == -512) {
-			static int reported;
-
-			if (reported)
-				return;
-			reported = 1;
-			printk("%s: vfs_write() returned -512, investigate\n",
-				__FUNCTION__);
-			return;
-		}
+	if (ret != count)
 		printk("%s: ret(%ld) != count(%ld), dumping stack \n",
 		       __FUNCTION__,
 		       (long)ret,
 		       (long)count);
-	}
 }
 
 int kvm_vprintf(struct kvm *kvm, const char *fmt, va_list args)
