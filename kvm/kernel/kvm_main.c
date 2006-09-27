@@ -2270,6 +2270,8 @@ again:
 #define POPA  "pop %%ecx; popa"
 
 #define LOAD_GUEST_REGS \
+	"mov 64(%3),  %%eax \n\t" \
+	"mov %%eax,   %%cr2 \n\t" \
 	"mov 0(%3),   %%eax \n\t" \
 	"mov 12(%3),  %%ebx \n\t" \
 	"mov 8(%3),   %%edx \n\t" \
@@ -2287,6 +2289,8 @@ again:
 	"mov %%esi, 24(%3) \n\t" \
 	"mov %%edi, 28(%3) \n\t" \
 	"mov %%ebp, 20(%3) \n\t" \
+	"mov %%cr2, %%eax  \n\t" \
+	"mov %%eax, 64(%3) \n\t" \
 	"mov 0(%%esp), %3"
 
 #endif

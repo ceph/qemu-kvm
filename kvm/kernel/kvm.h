@@ -81,6 +81,8 @@ struct kvm_mmu_page {
 	unsigned long slot_bitmap; /* One bit set per slot which has memory
 				    * in this shadow page.
 				    */
+	unsigned long magic;
+#define PAGE_HEAD_MAGIC 0x12344321ul
 };
 
 struct vmcs {
