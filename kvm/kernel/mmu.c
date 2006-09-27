@@ -193,7 +193,6 @@ static hpa_t kvm_mmu_alloc_page(struct kvm_vcpu *vcpu)
 	list_add(&page->link, &vcpu->kvm->active_mmu_pages);
 	ASSERT(is_empty_shadow_page(page->page_hpa));
 	page->slot_bitmap = 0;
-	page->magic = PAGE_HEAD_MAGIC;
 	return page->page_hpa;
 }
 
@@ -203,10 +202,6 @@ static void page_header_update_slot(struct kvm *kvm, void *pte, gpa_t gpa)
 	struct page *page = pfn_to_page(__pa(pte) >> PAGE_SHIFT);
 	struct kvm_mmu_page *page_head = (struct kvm_mmu_page *)page->private;
 
-	if (page_head->magic != PAGE_HEAD_MAGIC) {
-		printk("BAD MAGIC!\n");
-		BUG();
-	}
 	__set_bit(slot, &page_head->slot_bitmap);
 }
 
@@ -431,8 +426,8 @@ static void inject_page_fault(struct kvm_vcpu *vcpu,
 	++kvm_stat.pf_guest;
 
 	if (is_page_fault(vect_info)) {
-		pgprintk("inject_page_fault: double fault 0x%llx @ 0x%lx\n",
-			 addr, vmcs_readl(GUEST_RIP));
+		printk("inject_page_fault: double fault 0x%llx @ 0x%lx\n",
+		       addr, vmcs_readl(GUEST_RIP));
 		vmcs_write32(VM_ENTRY_EXCEPTION_ERROR_CODE, 0);
 		vmcs_write32(VM_ENTRY_INTR_INFO_FIELD,
 			     DF_VECTOR |

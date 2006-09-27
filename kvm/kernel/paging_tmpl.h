@@ -241,9 +241,6 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 	uint64_t *shadow_pte;
 	int fixed;
 
-	if (addr == 0x8192040)
-		printk("fauling bss, rip %lx\n", vmcs_readl(GUEST_RIP));
-
 	for (;;) {
 		FNAME(init_walker)(&walker, vcpu);
 		shadow_pte = FNAME(fetch)(vcpu, addr, &walker);
@@ -256,16 +253,10 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 	}
 
 	if (!shadow_pte) {
-		if (addr == 0x8192040)
-			printk("no entry\n");
-		
 		inject_page_fault(vcpu, addr, error_code);
 		FNAME(release_walker)(&walker);
 		return 0;
 	}
-
-	if (addr == 0x8192040)
-		printk("pte: %llx\n", (u64)*shadow_pte);
 
 	if (write_fault)
 		fixed = FNAME(fix_write_pf)(vcpu, shadow_pte, &walker, addr,
@@ -285,8 +276,6 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 	}
 
 	if (pte_present && !fixed) {
-		if (addr == 0x8192040)
-			printk("injecting pf\n");
 		inject_page_fault(vcpu, addr, error_code);
 		return 0;
 	}
