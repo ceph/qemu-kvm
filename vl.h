@@ -161,6 +161,10 @@ extern int smp_cpus;
 #define BIOS_SIZE ((256 + 64) * 1024)
 #endif
 
+#if USE_KVM
+#define KVM_EXTRA_PAGES 3
+#endif
+
 /* keyboard/mouse support */
 
 #define MOUSE_EVENT_LBUTTON 0x01

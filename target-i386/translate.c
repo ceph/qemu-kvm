@@ -6457,9 +6457,6 @@ static inline int gen_intermediate_code_internal(CPUState *env,
         }
         /* if too long translation, stop generation too */
         if (gen_opc_ptr >= gen_opc_end ||
-#ifdef USE_KVM
-            (env->cr[0] & CR0_PE_MASK) ||
-#endif
             (pc_ptr - pc_start) >= (TARGET_PAGE_SIZE - 32)) {
             gen_jmp_im(pc_ptr - dc->cs_base);
             gen_eob(dc);

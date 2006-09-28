@@ -23,6 +23,7 @@
 #define CR3_L_MODE_RESEVED_BITS (~((1ULL << 40) - 1) | 0x0fe7ULL)
 #define CR3_FLAGS_MASK ((1ULL << 5) - 1)
 
+#define CR4_VME_MASK (1ULL << 0)
 #define CR4_PSE_MASK (1ULL << 4)
 #define CR4_PAE_MASK (1ULL << 5)
 #define CR4_PGE_MASK (1ULL << 7)
@@ -33,8 +34,9 @@
 #define KVM_VM_CR0_ALWAYS_ON KVM_GUEST_CR0_MASK
 
 #define KVM_GUEST_CR4_MASK \
-	(CR4_PSE_MASK | CR4_PAE_MASK | CR4_PGE_MASK | CR4_VMXE_MASK)
-#define KVM_VM_CR4_ALWAYS_ON (CR4_VMXE_MASK | CR4_PAE_MASK)
+	(CR4_PSE_MASK | CR4_PAE_MASK | CR4_PGE_MASK | CR4_VMXE_MASK | CR4_VME_MASK)
+#define KVM_PMODE_VM_CR4_ALWAYS_ON (CR4_VMXE_MASK | CR4_PAE_MASK)
+#define KVM_RMODE_VM_CR4_ALWAYS_ON (CR4_VMXE_MASK | CR4_PAE_MASK | CR4_VME_MASK)
 
 #define INVALID_PAGE (~(hpa_t)0)
 
@@ -56,6 +58,8 @@
 
 #define SELECTOR_TI_MASK (1 << 2)
 #define SELECTOR_RPL_MASK 0x03
+
+#define IOPL_SHIFT 12
 
 /*
  * Address types:
@@ -178,6 +182,16 @@ struct kvm_vcpu {
 	int mmio_size;
 	unsigned char mmio_data[8];
 	gpa_t mmio_phys_addr;
+
+	struct{
+		int active;
+		uint8_t save_iopl;
+		struct {
+			unsigned long base;
+			uint32_t limit;
+			uint32_t ar;
+		} tr;
+	} rmode;
 };
 
 struct kvm_memory_slot {
@@ -225,6 +239,7 @@ void kvm_mmu_slot_remove_write_access(struct kvm *kvm, int slot);
 
 gpa_t gva_to_gpa(struct kvm_vcpu *vcpu, gva_t gva);
 hpa_t gpa_to_hpa(struct kvm_memory_slot *memslot, gpa_t gpa);
+hpa_t gva_to_hpa(struct kvm_vcpu *vcpu, gva_t gva);
 
 static inline struct page *gfn_to_page(struct kvm_memory_slot *slot, gfn_t gfn)
 {
@@ -233,6 +248,16 @@ static inline struct page *gfn_to_page(struct kvm_memory_slot *slot, gfn_t gfn)
 
 struct kvm_memory_slot *gfn_to_memslot(struct kvm *kvm, gfn_t gfn);
 void mark_page_dirty(struct kvm *kvm, gfn_t gfn);
+
+int kvm_read_guest(struct kvm_vcpu *vcpu,
+	       gva_t addr,
+	       unsigned long size,
+	       void *dest);
+
+int kvm_write_guest(struct kvm_vcpu *vcpu,
+		gva_t addr,
+		unsigned long size,
+		void *data);
 
 void vmcs_writel(unsigned long field, unsigned long value);
 unsigned long vmcs_readl(unsigned long field);

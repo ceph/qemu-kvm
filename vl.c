@@ -6074,11 +6074,11 @@ int main(int argc, char **argv)
     }
 
     /* init the memory */
-    phys_ram_size = ram_size + vga_ram_size + bios_size;
-
 #if USE_KVM
+    phys_ram_size = ram_size + vga_ram_size + bios_size + KVM_EXTRA_PAGES * 4096;
     kvm_qemu_init();
 #else
+    phys_ram_size = ram_size + vga_ram_size + bios_size;
     phys_ram_base = qemu_vmalloc(phys_ram_size);
     if (!phys_ram_base) {
         fprintf(stderr, "Could not allocate physical memory\n");

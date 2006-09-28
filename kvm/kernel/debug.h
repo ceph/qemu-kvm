@@ -4,18 +4,11 @@
 #ifdef KVM_DEBUG
 
 void show_msrs(struct kvm_vcpu *vcpu);
-int read_guest(struct kvm_vcpu *vcpu,
-	       gva_t addr,
-	       unsigned long size,
-	       void *dest);
 
-int write_guest(struct kvm_vcpu *vcpu,
-		gva_t addr,
-		unsigned long size,
-		void *data);
 
 void show_irq(struct kvm_vcpu *vcpu,  int irq);
 void show_page(struct kvm_vcpu *vcpu, gva_t addr);
+void show_u64(struct kvm_vcpu *vcpu, gva_t addr);
 void show_code(struct kvm_vcpu *vcpu);
 int vm_entry_test(struct kvm_vcpu *vcpu);
 

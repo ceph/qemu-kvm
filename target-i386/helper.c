@@ -1126,10 +1126,8 @@ void do_interrupt_user(int intno, int is_int, int error_code,
     uint32_t e2;
 
 #ifdef USE_KVM
-    if ((env->cr[0] & CR0_PE_MASK)) {
-        printf("%s: unexpect\n", __FUNCTION__);
-        exit(-1);
-    }
+    printf("%s: unexpect\n", __FUNCTION__);
+    exit(-1);
 #endif
     dt = &env->idt;
     ptr = dt->base + (intno * 8);
@@ -1157,10 +1155,8 @@ void do_interrupt(int intno, int is_int, int error_code,
                   target_ulong next_eip, int is_hw)
 {
 #ifdef USE_KVM
-    if ((env->cr[0] & CR0_PE_MASK)) {
-        printf("%s: unexpect\n", __FUNCTION__);
-        exit(-1);
-    }
+    printf("%s: unexpect\n", __FUNCTION__);
+    exit(-1);
 #endif
     if (loglevel & CPU_LOG_INT) {
         if ((env->cr[0] & CR0_PE_MASK)) {

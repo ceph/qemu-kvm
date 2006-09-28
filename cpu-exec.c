@@ -456,10 +456,11 @@ int cpu_exec(CPUState *env1)
 #ifdef USE_KVM
 	    if (kvm_is_ok(env)) {
 		int ret;
-                env->eflags = env->eflags | cc_table[CC_OP].compute_all() | (DF & DF_MASK);
                 ret = kvm_cpu_exec(env);
 		longjmp(env->jmp_env, 1);
 	    }
+	    printf("%s: unexpect\n", __FUNCTION__);
+	    exit(-1);
 #endif
             T0 = 0; /* force lookup of first TB */
             for(;;) {
@@ -469,9 +470,6 @@ int cpu_exec(CPUState *env1)
 #endif	    
                 interrupt_request = env->interrupt_request;
                 if (__builtin_expect(interrupt_request, 0)
-#ifdef USE_KVM
-                    && !((env->cr[0] & CR0_PE_MASK))
-#endif
                     ) {
 #if defined(TARGET_I386)
                     /* if hardware interrupt pending, we execute it */

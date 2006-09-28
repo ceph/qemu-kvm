@@ -72,6 +72,21 @@ static const u32 vmx_msr_index[] = {
 #define NUM_AUTO_MSRS NR_VMX_MSR
 #endif
 
+#define TSS_IOPB_BASE_OFFSET 0x66
+#define TSS_BASE_SIZE 0x68
+#define TSS_IOPB_SIZE (65536 / 8)
+#define TSS_REDIRECTION_SIZE (256 / 8)
+#define RMODE_TSS_SIZE (TSS_BASE_SIZE + TSS_REDIRECTION_SIZE + TSS_IOPB_SIZE + 1)
+
+static int rmode_tss_base(struct kvm* kvm);
+static int set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0);
+static void __set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0);
+static void lmsw(struct kvm_vcpu *vcpu, unsigned long msw);
+static void set_cr3(struct kvm_vcpu *vcpu, unsigned long cr0);
+static void set_cr4(struct kvm_vcpu *vcpu, unsigned long cr0);
+static void __set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4);
+static void __set_efer(struct kvm_vcpu *vcpu, u64 efer);
+
 static struct vmx_msr_entry *find_msr_entry(struct kvm_vcpu *vcpu, u32 msr)
 {
 	int i;
@@ -134,13 +149,6 @@ static void load_ldt(u16 sel)
 	asm ( "lldt %0" : : "g"(sel) );
 }
 #endif
-
-static unsigned long get_eflags(void)
-{
-	unsigned long x;
-	asm ( "pushf; pop %0" : "=m"(x) );
-	return x;
-}
 
 static void fx_save(void *image)
 {
@@ -247,6 +255,83 @@ static unsigned long read_msr(unsigned long msr)
 	
 	rdmsrl(msr, value);
 	return value;
+}
+
+static inline struct page *_gfn_to_page(struct kvm *kvm, gfn_t gfn)
+{
+	struct kvm_memory_slot *slot = gfn_to_memslot(kvm, gfn);
+	return (slot) ? slot->phys_mem[gfn - slot->base_gfn] : 0;
+}
+
+
+
+int kvm_read_guest(struct kvm_vcpu *vcpu,
+			     gva_t addr,
+			     unsigned long size,
+			     void *dest)
+{
+	unsigned char *host_buf = dest;
+	unsigned long req_size = size;
+
+	while (size) {
+		hpa_t paddr;
+		unsigned now;
+		unsigned offset;
+		hva_t guest_buf;
+
+		paddr = gva_to_hpa(vcpu, addr);
+		//fixme
+		/*if ( paddr == kvm_bad_page_addr ) {
+			break;
+		}*/
+		guest_buf = (hva_t)kmap_atomic(
+					pfn_to_page(paddr >> PAGE_SHIFT),
+					KM_USER0);
+		offset = addr & ~PAGE_MASK;
+		guest_buf |= offset;
+		now = min(size, PAGE_SIZE - offset);
+		memcpy(host_buf, (void*)guest_buf, now);
+		host_buf += now;
+		addr += now;
+		size -= now;
+		kunmap_atomic(guest_buf & PAGE_MASK, KM_USER0);
+	}
+	return req_size - size;
+}
+
+int kvm_write_guest(struct kvm_vcpu *vcpu,
+			     gva_t addr,
+			     unsigned long size,
+			     void *data)
+{
+	unsigned char *host_buf = data;
+	unsigned long req_size = size;
+
+	while (size) {
+		hpa_t paddr;
+		unsigned now;
+		unsigned offset;
+		hva_t guest_buf;
+
+		paddr = gva_to_hpa(vcpu, addr);
+
+		//fixme
+		/*if ( paddr == kvm_bad_page_addr ) {
+			break;
+		}*/
+		guest_buf = (hva_t)kmap_atomic(
+					pfn_to_page(paddr >> PAGE_SHIFT),
+					KM_USER0);
+		offset = addr & ~PAGE_MASK;
+		guest_buf |= offset;
+		now = min(size, PAGE_SIZE - offset);
+		memcpy((void*)guest_buf, host_buf, now);
+		host_buf += now;
+		addr += now;
+		size -= now;
+		kunmap_atomic(guest_buf & PAGE_MASK, KM_USER0);
+	}
+	return req_size - size;
 }
 
 static __init void setup_vmcs_descriptor(void)
@@ -649,6 +734,133 @@ static void vmcs_write64(unsigned long field, u64 value)
 	
 #define GUEST_IS_64 HOST_IS_64
 
+static void enter_pmode(struct kvm_vcpu *vcpu)
+{
+	unsigned long flags;
+
+	vcpu->rmode.active = 0;
+
+	vmcs_writel(GUEST_TR_BASE, vcpu->rmode.tr.base);
+	vmcs_write32(GUEST_TR_LIMIT, vcpu->rmode.tr.limit);
+	vmcs_write32(GUEST_TR_AR_BYTES, vcpu->rmode.tr.ar);
+
+	flags = vmcs_readl(GUEST_RFLAGS);
+	flags &= ~(IOPL_MASK | X86_EFLAGS_VM);
+	flags |= (vcpu->rmode.save_iopl << IOPL_SHIFT);
+	vmcs_writel(GUEST_RFLAGS, flags);
+
+	vmcs_writel(GUEST_CR4, (vmcs_readl(GUEST_CR4) & ~CR4_VME_MASK) | 
+			(vmcs_readl(CR0_READ_SHADOW) & CR4_VME_MASK) );
+
+	vmcs_write32(EXCEPTION_BITMAP, 1 << PF_VECTOR);
+
+	#define FIX_PMODE_DATASEG(seg, save) {				\
+			vmcs_write16(GUEST_##seg##_SELECTOR, 0); 	\
+			vmcs_writel(GUEST_##seg##_BASE, 0); 		\
+			vmcs_write32(GUEST_##seg##_LIMIT, 0xffff);	\
+			vmcs_write32(GUEST_##seg##_AR_BYTES, 0x93);	\
+	}
+
+	FIX_PMODE_DATASEG(SS, vcpu->rmode.ss);
+	FIX_PMODE_DATASEG(ES, vcpu->rmode.es);
+	FIX_PMODE_DATASEG(DS, vcpu->rmode.ds);
+	FIX_PMODE_DATASEG(GS, vcpu->rmode.gs);
+	FIX_PMODE_DATASEG(FS, vcpu->rmode.fs);
+
+	vmcs_write16(GUEST_CS_SELECTOR, 
+		     vmcs_read16(GUEST_CS_SELECTOR) & ~SELECTOR_RPL_MASK);
+	vmcs_write32(GUEST_CS_AR_BYTES, 0x9b);
+}
+
+static void enter_rmode(struct kvm_vcpu *vcpu)
+{
+	unsigned long flags;
+
+	vcpu->rmode.active = 1;
+
+	vcpu->rmode.tr.base = vmcs_readl(GUEST_TR_BASE);
+	vmcs_writel(GUEST_TR_BASE, rmode_tss_base(vcpu->kvm));
+
+	vcpu->rmode.tr.limit = vmcs_read32(GUEST_TR_LIMIT);
+	vmcs_write32(GUEST_TR_LIMIT, RMODE_TSS_SIZE - 1);
+
+	vcpu->rmode.tr.ar = vmcs_read32(GUEST_TR_AR_BYTES);
+	vmcs_write32(GUEST_TR_AR_BYTES, 0x008b);
+
+	flags = vmcs_readl(GUEST_RFLAGS);
+	vcpu->rmode.save_iopl = (flags & IOPL_MASK) >> IOPL_SHIFT;
+
+	flags |= IOPL_MASK | X86_EFLAGS_VM;
+
+	vmcs_writel(GUEST_RFLAGS, flags);
+	vmcs_writel(GUEST_CR4, vmcs_readl(GUEST_CR4) | CR4_VME_MASK);
+	vmcs_write32(EXCEPTION_BITMAP, ~0);
+
+	#define FIX_RMODE_SEG(seg, save) {				   \
+		vmcs_write16(GUEST_##seg##_SELECTOR, 			   \
+					vmcs_readl(GUEST_##seg##_BASE) >> 4); \
+		vmcs_write32(GUEST_##seg##_LIMIT, 0xffff);		   \
+		vmcs_write32(GUEST_##seg##_AR_BYTES, 0xf3);		   \
+	}
+
+	vmcs_write32(GUEST_CS_AR_BYTES, 0xf3);
+	vmcs_write16(GUEST_CS_SELECTOR, vmcs_readl(GUEST_CS_BASE) >> 4);
+
+	FIX_RMODE_SEG(ES, vcpu->rmode.es);
+	FIX_RMODE_SEG(DS, vcpu->rmode.ds);
+	FIX_RMODE_SEG(SS, vcpu->rmode.ss);
+	FIX_RMODE_SEG(GS, vcpu->rmode.gs);
+	FIX_RMODE_SEG(FS, vcpu->rmode.fs);
+}
+
+static int rmode_tss_base(struct kvm* kvm)
+{
+	gfn_t base_gfn = kvm->memslots[0].base_gfn + kvm->memslots[0].npages - 3;
+	return base_gfn << PAGE_SHIFT;
+}
+
+static int init_rmode_tss(struct kvm* kvm)
+{
+	struct page *p1, *p2, *p3;
+	gfn_t fn = rmode_tss_base(kvm) >> PAGE_SHIFT;
+	char *page;
+
+	p1 = _gfn_to_page(kvm, fn++);
+	p2 = _gfn_to_page(kvm, fn++);
+	p3 = _gfn_to_page(kvm, fn);
+
+	if (!p1 || !p2 || !p3) {
+		kvm_printf(kvm,"%s: gfn_to_page failed\n", __FUNCTION__);
+		return 0;
+	}
+
+	page = kmap_atomic(p1, KM_USER0);
+	memset(page, 0, PAGE_SIZE);
+	*(uint16_t*)(page + 0x66) = TSS_BASE_SIZE + TSS_REDIRECTION_SIZE;
+	kunmap_atomic(page, KM_USER0);
+
+	page = kmap_atomic(p2, KM_USER0);
+	memset(page, 0, PAGE_SIZE);
+	kunmap_atomic(page, KM_USER0);
+	
+	page = kmap_atomic(p3, KM_USER0);
+	memset(page, 0, PAGE_SIZE);
+	*(page + RMODE_TSS_SIZE - 2 * PAGE_SIZE - 1) = ~0;
+	kunmap_atomic(page, KM_USER0);
+
+	return 1;
+}
+
+static uint32_t get_rdx_init_val(void)
+{
+	uint32_t val;
+
+	asm ("movl $1, %%eax \n\t"
+	     "movl %%eax, %0 \n\t" : "=g"(val) );
+	return val;
+
+}
+
 /*
  * Sets up the vmcs for a 64-bit (or 32-bit on i386) guest.  All of the
  * required registers are set.  Some will be overwritten since the vcpu
@@ -664,76 +876,70 @@ static int kvm_vcpu_setup(struct kvm_vcpu *vcpu)
 	int i;
 	int ret;
 	u64 tsc;
-	
+
+	if (!init_rmode_tss(vcpu->kvm)) {
+		return 0;
+	}
+
+	memset(vcpu->regs, 0, sizeof(vcpu->regs));
+	vcpu->regs[VCPU_REGS_RDX] = get_rdx_init_val();
 	vcpu->cr8 = 0;
-	vcpu->shadow_efer = read_msr(MSR_EFER);
-	fx_save(vcpu->guest_fx_image);
+        vcpu->apic_base = 0xfee00000 |
+			/*for vcpu 0*/ MSR_IA32_APICBASE_BSP |
+			MSR_IA32_APICBASE_ENABLE;
 
-	/* Segments */
-	vmcs_write16(GUEST_CS_SELECTOR, 16);
-	vmcs_write16(GUEST_DS_SELECTOR, 24);
-	vmcs_write16(GUEST_ES_SELECTOR, 24);
-	vmcs_write16(GUEST_FS_SELECTOR, 24);
-	vmcs_write16(GUEST_GS_SELECTOR, 24);
-	vmcs_write16(GUEST_SS_SELECTOR, 24);
+	fx_save(vcpu->guest_fx_image); // <---------------------- todo: init fix
 
-	vmcs_write16(GUEST_TR_SELECTOR, 8);  /* 22.3.1.2 */
-	vmcs_writel(GUEST_TR_BASE, 0);  /* 22.3.1.2 */
-	vmcs_write16(GUEST_LDTR_SELECTOR, 0);  /* 22.3.1.2 */
-	vmcs_writel(GUEST_LDTR_BASE, 0);  /* 22.3.1.2 */
+	#define SEG_SETUP(seg) {				\
+		vmcs_write16(GUEST_##seg##_SELECTOR, 0);	\
+		vmcs_writel(GUEST_##seg##_BASE, 0);		\
+		vmcs_write32(GUEST_##seg##_LIMIT, 0xffff);	\
+		vmcs_write32(GUEST_##seg##_AR_BYTES, 0x93); 	\
+	}
 
-	vmcs_write32(GUEST_CS_LIMIT, -1u);
-	vmcs_write32(GUEST_DS_LIMIT, -1u);
-	vmcs_write32(GUEST_ES_LIMIT, -1u);
-	vmcs_write32(GUEST_FS_LIMIT, -1u);
-	vmcs_write32(GUEST_GS_LIMIT, -1u);
-	vmcs_write32(GUEST_SS_LIMIT, -1u);
+	vmcs_write16(GUEST_CS_SELECTOR, 0xf000);
+	vmcs_writel(GUEST_CS_BASE, 0x000f0000);
+	vmcs_write32(GUEST_CS_LIMIT, 0xffff);
+	vmcs_write32(GUEST_CS_AR_BYTES, 0x9b); 
 
-	vmcs_writel(GUEST_CS_BASE, 0);  /* 22.3.1.2 */
-	vmcs_writel(GUEST_DS_BASE, 0);  /* 22.3.1.2 */
-	vmcs_writel(GUEST_ES_BASE, 0);  /* 22.3.1.2 */
-	vmcs_writel(GUEST_FS_BASE, 0);  /* 22.3.1.2 */
-	vmcs_writel(GUEST_GS_BASE, 0);  /* 22.3.1.2 */
-	vmcs_writel(GUEST_SS_BASE, 0);  /* 22.3.1.2 */
+	SEG_SETUP(DS);
+	SEG_SETUP(ES);
+	SEG_SETUP(FS);
+	SEG_SETUP(GS);
+	SEG_SETUP(SS);
 
-	vmcs_write32(GUEST_LDTR_LIMIT, 0);
-	vmcs_write32(GUEST_TR_LIMIT, 4095); /* 22.3.1.1 */
+	vmcs_write16(GUEST_TR_SELECTOR, 0);
+	vmcs_writel(GUEST_TR_BASE, 0);
+	vmcs_write32(GUEST_TR_LIMIT, 0xffff);
+	vmcs_write32(GUEST_TR_AR_BYTES, 0x008b);
 
-	vmcs_write32(GUEST_CS_AR_BYTES, 0x809b
-		     | (GUEST_IS_64 << 13)    /* L bit; 22.3.1.2 */
-		     | (!GUEST_IS_64 << 14)); /* 22.3.1.2 */
-	vmcs_write32(GUEST_DS_AR_BYTES, 0xc093);  /* 22.3.1.2 */
-	vmcs_write32(GUEST_ES_AR_BYTES, 0xc093);  /* 22.3.1.2 */
-	vmcs_write32(GUEST_FS_AR_BYTES, 0xc093);  /* 22.3.1.2 */
-	vmcs_write32(GUEST_GS_AR_BYTES, 0xc093);  /* 22.3.1.2 */
-	vmcs_write32(GUEST_SS_AR_BYTES, 0xc093);  /* 22.3.1.2 */
+	vmcs_write16(GUEST_LDTR_SELECTOR, 0);
+	vmcs_writel(GUEST_LDTR_BASE, 0);
+	vmcs_write32(GUEST_LDTR_LIMIT, 0xffff);
+	vmcs_write32(GUEST_LDTR_AR_BYTES, 0x00082);
+	
+	vmcs_write32(GUEST_SYSENTER_CS, 0);
+	vmcs_writel(GUEST_SYSENTER_ESP, 0);
+	vmcs_writel(GUEST_SYSENTER_EIP, 0);
 
-	vmcs_write32(GUEST_LDTR_AR_BYTES, 0x1c082); /* 22.3.1.2 */
-	vmcs_write32(GUEST_TR_AR_BYTES, 0x808b);   /* 22.3.1.2 */
-
-	vmcs_write32(GUEST_SYSENTER_CS, 0);  /* 22.3.1.1 */
-	vmcs_writel(GUEST_SYSENTER_ESP, 0);  /* 22.3.1.1 */
-	vmcs_writel(GUEST_SYSENTER_EIP, 0);  /* 22.3.1.1 */
-
-	vmcs_writel(GUEST_RFLAGS, get_eflags() & ~0x200ul);  /* 22.3.1.2 , 22.3.1.4*/
-	vmcs_writel(GUEST_RIP, 0); /* 22.3.1.4 */
+	vmcs_writel(GUEST_RFLAGS, 0x02);
+	vmcs_writel(GUEST_RIP, 0xfff0);
 	vmcs_writel(GUEST_RSP, 0);
 
-	vmcs_writel(GUEST_CR0, read_cr0());  /* 22.3.1.1 */
-	vmcs_writel(CR0_READ_SHADOW, read_cr0() & ~CR0_PG_MASK);
-	vmcs_writel(GUEST_CR4, read_cr4());  /* 22.3.1.1, 22.3.1.6 */
-	vmcs_writel(CR4_READ_SHADOW, read_cr4());
-	vmcs_writel(GUEST_CR3, 0);  /* 22.3.1.1; */
+	vmcs_writel(GUEST_CR3, 0);
+
+	//todo: dr0 = dr1 = dr2 = dr3 = 0; dr6 = 0xffff0ff0
 	vmcs_writel(GUEST_DR7, 0x400);
 
-	vmcs_writel(GUEST_GDTR_BASE, 0);   /* 22.3.1.3 */
-	vmcs_write32(GUEST_GDTR_LIMIT, 0xffff);  /* 22.3.1.3 */
-	vmcs_writel(GUEST_IDTR_BASE, 0);   /* 22.3.1.3 */
-	vmcs_write32(GUEST_IDTR_LIMIT, 0xffff);  /* 22.3.1.3 */
+	vmcs_writel(GUEST_GDTR_BASE, 0);
+	vmcs_write32(GUEST_GDTR_LIMIT, 0xffff);
 
-	vmcs_write32(GUEST_ACTIVITY_STATE, 0); /* 22.3.1.5 */
-	vmcs_write32(GUEST_INTERRUPTIBILITY_INFO, 0); /* 22.3.1.5 */
-	vmcs_write32(GUEST_PENDING_DBG_EXCEPTIONS, 0); /* 22.3.1.5 */
+	vmcs_writel(GUEST_IDTR_BASE, 0);
+	vmcs_write32(GUEST_IDTR_LIMIT, 0xffff);
+
+	vmcs_write32(GUEST_ACTIVITY_STATE, 0);
+	vmcs_write32(GUEST_INTERRUPTIBILITY_INFO, 0);
+	vmcs_write32(GUEST_PENDING_DBG_EXCEPTIONS, 0);
 
 	/* I/O */
 	vmcs_write64(IO_BITMAP_A, 0);
@@ -742,7 +948,6 @@ static int kvm_vcpu_setup(struct kvm_vcpu *vcpu)
 	rdtscll(tsc);
 	vmcs_write64(TSC_OFFSET, -tsc);
 
-	/* vmcs link (?) */
 	vmcs_write64(VMCS_LINK_POINTER, -1ull); /* 22.3.1.5 */
 
 	/* Special registers */
@@ -764,7 +969,7 @@ static int kvm_vcpu_setup(struct kvm_vcpu *vcpu)
 		     | CPU_BASED_USE_TSC_OFFSETING   /* 21.3 */
 		     | 0x401e172    /* reserved, 22.2.1, 20.6.2 */
 		);
-	vmcs_write32(EXCEPTION_BITMAP, 1 << 14); /* want page faults */
+	vmcs_write32(EXCEPTION_BITMAP, 1 << PF_VECTOR);
 	vmcs_write32(PAGE_FAULT_ERROR_CODE_MASK, 0);
 	vmcs_write32(PAGE_FAULT_ERROR_CODE_MATCH, 0);
 	vmcs_write32(CR3_TARGET_COUNT, 0);           /* 22.2.1 */
@@ -831,22 +1036,22 @@ static int kvm_vcpu_setup(struct kvm_vcpu *vcpu)
 		vcpu->guest_msrs[i] = vcpu->host_msrs[i];
 	}
 
-	/* unused for now due to a VT bug */
 	vmcs_writel(VM_ENTRY_MSR_LOAD_ADDR, virt_to_phys(vcpu->guest_msrs));
 	vmcs_writel(VM_EXIT_MSR_STORE_ADDR, virt_to_phys(vcpu->guest_msrs));
 	vmcs_writel(VM_EXIT_MSR_LOAD_ADDR, virt_to_phys(vcpu->host_msrs));
 
-	vmcs_write32(VM_ENTRY_CONTROLS, /* 20.8.1 */
-		     (GUEST_IS_64 << 9) /* address space size, 22.2.5 */
-		     | 0x11ff           /* reserved, 22.2.1, 20.8.1 */
-		);
+	vmcs_write32(VM_ENTRY_CONTROLS, 0x11ff); /* reserved, 22.2.1, 20.8.1 */
 	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD, 0);  /* 22.2.1 */
+
+	vmcs_writel(VIRTUAL_APIC_PAGE_ADDR, 0);
+	vmcs_writel(TPR_THRESHOLD, 0);
 
 	vmcs_writel(CR0_GUEST_HOST_MASK, KVM_GUEST_CR0_MASK);
 	vmcs_writel(CR4_GUEST_HOST_MASK, KVM_GUEST_CR4_MASK);
 
-	vmcs_writel(VIRTUAL_APIC_PAGE_ADDR, 0);
-	vmcs_writel(TPR_THRESHOLD, 0);
+	__set_cr0(vcpu, 0x60000010); // enter rmode
+	__set_cr4(vcpu, 0);
+	__set_efer(vcpu, 0);
 
 	ret = kvm_mmu_init(vcpu);
 
@@ -1441,6 +1646,352 @@ static int emulate_instruction(struct kvm_vcpu *vcpu,
 	return EMULATE_DONE;
 }
 
+#define MAX_INSTRUCTION_SIZE 15
+
+struct rmode_sysemu {
+	struct kvm_vcpu *vcpu;
+	gva_t rip;
+	int op_bytes;
+	int addr_bytes;
+	gva_t base_addr;
+
+	int inst_len;
+	int pos;
+	uint8_t inst[MAX_INSTRUCTION_SIZE];
+
+	struct {
+		unsigned mod;
+		unsigned regop;
+		unsigned rm;
+	} modrm;
+};
+
+
+static int rmode_sysemu_start(struct kvm_vcpu *vcpu, struct rmode_sysemu *emu)
+{
+	emu->vcpu = vcpu;
+	emu->rip = vmcs_readl(GUEST_RIP) + vmcs_readl(GUEST_CS_BASE);
+	emu->inst_len = vmcs_read32(VM_EXIT_INSTRUCTION_LEN);
+	emu->op_bytes = 2;
+	emu->addr_bytes = 2;
+	emu->pos = 0;
+	emu->base_addr = vmcs_readl(GUEST_DS_BASE);
+
+	if (kvm_read_guest(vcpu, emu->rip, emu->inst_len, emu->inst) != 
+								emu->inst_len) {
+		vcpu_printf(emu->vcpu, "%s: inst read err\n", __FUNCTION__);
+		return 0;
+	}
+
+	for ( ; emu->pos < emu->inst_len; emu->pos++) {
+		switch (emu->inst[emu->pos]) {
+		case 0xf0:
+		case 0xf2:
+		case 0xf3:
+			break;
+		case 0x2e:
+			emu->base_addr = vmcs_readl(GUEST_CS_BASE);
+			break;
+		case 0x36:
+			emu->base_addr = vmcs_readl(GUEST_SS_BASE);
+			break;
+		case 0x3e:
+			emu->base_addr = vmcs_readl(GUEST_DS_BASE);
+			break;
+		case 0x26:
+			emu->base_addr = vmcs_readl(GUEST_ES_BASE);
+			break;
+		case 0x64:
+			emu->base_addr = vmcs_readl(GUEST_FS_BASE);
+			break;
+		case 0x65:
+			emu->base_addr = vmcs_readl(GUEST_GS_BASE);
+			break;
+		case 0x66:
+			emu->op_bytes = 4;
+			break;
+		case 0x67:
+			emu->addr_bytes = 4;
+			break;
+		default:
+			goto done;
+		}
+	}
+	vcpu_printf(emu->vcpu, "%s: unexpected\n", __FUNCTION__);
+	return 0;
+done:
+	return 1;
+}
+
+static int rmode_sysemu_opcode(struct rmode_sysemu *emu, uint16_t *opcode)
+{
+	if (emu->inst[emu->pos] == 0x0f) {
+		if (++emu->pos == emu->inst_len) {
+			vcpu_printf(emu->vcpu, "%s: unexpected\n",
+				    __FUNCTION__);
+			return 0;
+		}
+		*opcode = (0x0f << 8) + emu->inst[emu->pos++];
+	} else {
+		*opcode = emu->inst[emu->pos++];
+	}
+	return 1;
+}
+
+
+static int rmode_sysemu_byte(struct rmode_sysemu *emu, uint8_t *byte)
+{
+	if (emu->pos == emu->inst_len) {
+		vcpu_printf(emu->vcpu, "%s: unexpected\n",
+				    __FUNCTION__);
+		return 0;
+	}
+	*byte = emu->inst[emu->pos++];
+	return 1;
+}
+
+
+static int rmode_sysemu_address(struct rmode_sysemu *emu, gva_t *a)
+{
+	int i;
+
+	if ( emu->pos + emu->addr_bytes > emu->inst_len) {
+		vcpu_printf(emu->vcpu, "%s: unexpected\n",
+				    __FUNCTION__);
+		return 0;
+	}
+
+	for (i = 0; i < emu->addr_bytes; ((char*)a)[i++] = emu->inst[emu->pos++]);
+	for (; i < sizeof (gva_t); ((char*)a)[i++] = 0);
+
+	*a += emu->base_addr;
+	return 1;
+
+}
+
+static int rmode_sysemu_modrm(struct rmode_sysemu *emu)
+{
+	uint8_t byte;
+
+	if (!rmode_sysemu_byte(emu, &byte)) {
+		return 0;
+	}
+
+	emu->modrm.mod = byte >> 6;
+	emu->modrm.regop = (byte >> 3) & 7;
+	emu->modrm.rm = byte & 7;
+
+	return 1;
+}
+
+static unsigned long *rmode_sysemu_reg(struct rmode_sysemu *emu)
+{
+	if (emu->modrm.mod != 3) {
+		vcpu_printf(emu->vcpu,"%s: unsuported mod %x\n",
+			    __FUNCTION__,
+			    emu->modrm.mod);
+		return 0;
+	}
+
+	switch (emu->modrm.rm) {
+	case 0:
+		return &emu->vcpu->regs[VCPU_REGS_RAX];
+	case 1:
+		return &emu->vcpu->regs[VCPU_REGS_RCX];
+	case 2:
+		return &emu->vcpu->regs[VCPU_REGS_RDX];
+	case 3:
+		return &emu->vcpu->regs[VCPU_REGS_RBX];
+	case 4:
+		return &emu->vcpu->regs[VCPU_REGS_RSP];
+	case 5:
+		return &emu->vcpu->regs[VCPU_REGS_RBP];
+	case 6:
+		return &emu->vcpu->regs[VCPU_REGS_RSI];
+	case 7:
+		return &emu->vcpu->regs[VCPU_REGS_RDI];
+	default:
+		vcpu_printf(emu->vcpu, "%s: unexpected\n",
+				    __FUNCTION__);
+		return 0; //err
+	}
+}
+
+static uint64_t mk_cr_64(uint64_t curr_cr, uint32_t new_val)
+{
+	return (curr_cr & ~((1ULL << 32) - 1)) | new_val;
+}
+
+static int rmode_emulate_sysinst(struct kvm_vcpu *vcpu)
+{
+	struct rmode_sysemu emu;
+	uint16_t opcode;
+
+	vcpu_load_rsp_rip(vcpu);
+
+	if (!rmode_sysemu_start(vcpu, &emu)) {
+		return 0;
+	}
+
+	if (!rmode_sysemu_opcode(&emu, &opcode)) {
+		return 0;
+	}
+
+	if (opcode == 0x0f01) {
+
+		if (!rmode_sysemu_modrm(&emu)) {
+			return 0;
+		}
+		switch (emu.modrm.regop) {
+		case 2: //LGDT
+		case 3: { //LIDT
+			gva_t address;
+			uint64_t dtr;
+			uint32_t limit;
+			gva_t base;
+			uint8_t *dtr_p = (uint8_t*)&dtr;
+
+			if (emu.modrm.mod != 0 || 
+			    (emu.addr_bytes == 4 && emu.modrm.rm != 5) ||
+			    (emu.addr_bytes == 2 && emu.modrm.rm != 6)) {
+				vcpu_printf(vcpu, "%s: unsuported mod %u rm %u"
+						  " addr_bytes %u\n",
+					    __FUNCTION__,
+					    emu.modrm.mod,
+					    emu.modrm.rm,
+					    emu.addr_bytes);
+				return 0;
+			}
+
+			if (!rmode_sysemu_address(&emu, &address)) {
+				return 0;
+			}
+
+			if (kvm_read_guest(vcpu, address, 6, dtr_p) != 6) {
+				vcpu_printf(vcpu, "%s: read gust err\n",
+					    __FUNCTION__);
+				return 0; //#PF
+			}
+
+			if (emu.op_bytes == 2) {
+				dtr_p[5] = 0;
+			}
+
+			limit = *(uint16_t*)dtr_p;
+			base = *(uint32_t*)(dtr_p + 2);
+
+			if (emu.modrm.regop == 2) {
+				vmcs_writel(GUEST_GDTR_BASE, base);
+				vmcs_write32(GUEST_GDTR_LIMIT, limit);
+			} else {
+				vmcs_writel(GUEST_IDTR_BASE, base);
+				vmcs_write32(GUEST_IDTR_LIMIT, limit);
+				
+			}
+			skip_emulated_instruction(vcpu);
+			return 1;
+		}
+		case 6: { //lmsw
+			unsigned long *reg;
+
+			if (!(reg = rmode_sysemu_reg(&emu))) {
+				return 0;
+			}
+			lmsw(vcpu, *reg);
+			return 1;
+		}
+		default:
+			vcpu_printf(vcpu, "%s: unsuported op 0x%x sub %u\n",
+				    __FUNCTION__,
+				    opcode,
+				    emu.modrm.regop);
+			return 0;
+		}
+	} else if (opcode == 0x0f20) { // mov from cr
+		unsigned long *reg;
+
+		if (!rmode_sysemu_modrm(&emu) ||
+		    !(reg = rmode_sysemu_reg(&emu))) {
+			return 0;
+		}
+
+		switch(emu.modrm.regop){
+		case 0:
+			*reg = guest_cr0();
+			vcpu_put_rsp_rip(vcpu);
+			skip_emulated_instruction(vcpu);
+			return 1;
+		case 2:
+			*reg = vcpu->cr2;
+			vcpu_put_rsp_rip(vcpu);
+			skip_emulated_instruction(vcpu);
+			return 1;
+		case 3:
+			*reg = vcpu->cr3;
+			vcpu_put_rsp_rip(vcpu);
+			skip_emulated_instruction(vcpu);
+			return 1;
+		case 4:
+			*reg = guest_cr4();
+			vcpu_put_rsp_rip(vcpu);
+			skip_emulated_instruction(vcpu);
+			return 1;
+		default:
+			vcpu_printf(vcpu, "%s: unexpected cr %u\n",
+				    __FUNCTION__,
+				    emu.modrm.regop);
+			return 0; 
+		}
+	} else if (opcode == 0x0f22) { // mov to cr
+		unsigned long *reg;
+		uint32_t val;
+
+		if (!rmode_sysemu_modrm(&emu) ||
+		    !(reg = rmode_sysemu_reg(&emu))) {
+			return 0;
+		}
+		val = *reg;
+
+		switch(emu.modrm.regop){
+		case 0:
+			set_cr0(vcpu, mk_cr_64(guest_cr0(), val));
+			return 1;
+		case 2:
+			vcpu->cr2 = val;
+			skip_emulated_instruction(vcpu);
+			return 1;
+		case 3:
+			set_cr3(vcpu, val);
+			return 1;
+		case 4:
+			set_cr4(vcpu, mk_cr_64(guest_cr4(), val));
+			return 1;
+		default:
+			vcpu_printf(vcpu, "%s: unexpected cr %u\n",
+				    __FUNCTION__,
+				    emu.modrm.regop);
+			return 0;
+		}
+	}
+	vcpu_printf(vcpu, "%s: unsuported op 0x%x\n",
+				    __FUNCTION__,
+				    opcode);
+	return 0;
+}
+
+
+static int handle_rmode_exception(struct kvm_vcpu *vcpu, int vec, uint32_t err_code)
+{
+	if (!vcpu->rmode.active) {
+		return 0;
+	}
+
+	if (vec == GP_VECTOR && err_code == 0 && rmode_emulate_sysinst(vcpu)) {
+		return 1;
+	}
+	return 0;
+}
+
 static int handle_exception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 {
 	u32 intr_info, error_code;
@@ -1491,12 +2042,19 @@ static int handle_exception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 			kvm_run->exit_reason = KVM_EXIT_MMIO;
 			return 0;
 		 case EMULATE_FAIL:
-			vcpu_printf(vcpu, "%s: emulate fail\n");
+			vcpu_printf(vcpu, "%s: emulate fail\n", __FUNCTION__);
 			break;
 		default:
 			BUG();
 		}
 	}
+
+	if (vcpu->rmode.active &&
+	    handle_rmode_exception(vcpu, intr_info & INTR_INFO_VECTOR_MASK,
+								error_code)) {
+		return 1;
+	}
+
 	if ((intr_info & (INTR_INFO_INTR_TYPE_MASK | INTR_INFO_VECTOR_MASK)) == (INTR_TYPE_EXCEPTION | 1)) {
 		kvm_run->exit_reason = KVM_EXIT_DEBUG;
 		return 0;
@@ -1511,6 +2069,56 @@ static int handle_external_interrupt(struct kvm_vcpu *vcpu,
 				     struct kvm_run *kvm_run)
 {
 	++kvm_stat.irq_exits;
+	return 1;
+}
+
+
+static int get_io_count(struct kvm_vcpu *vcpu, uint64_t *count)
+{
+	uint64_t inst;
+	gva_t rip;
+	int countr_size;
+	int i, n;
+
+	if ((vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_VM)) {
+		countr_size = 2;
+	} else {
+		uint32_t cs_ar = vmcs_read32(GUEST_CS_AR_BYTES);
+
+		countr_size = (cs_ar & AR_L_MASK) ? 8: 
+			      (cs_ar & AR_DB_MASK) ? 4: 2;
+	}
+
+	rip =  vmcs_readl(GUEST_RIP);
+	if (countr_size != 8) {
+		rip += vmcs_readl(GUEST_CS_BASE);
+	}
+
+	n = kvm_read_guest(vcpu, rip, sizeof(inst), &inst);
+
+	for (i = 0; i < n; i++) {
+		switch (((uint8_t*)&inst)[i]) {
+		case 0xf0:
+		case 0xf2:
+		case 0xf3:
+		case 0x2e:
+		case 0x36:
+		case 0x3e:
+		case 0x26:
+		case 0x64:
+		case 0x65:
+		case 0x66:
+			break;
+		case 0x67:
+			countr_size = (countr_size == 2) ? 4: (countr_size >> 1);
+		default:
+			goto done;
+		}
+	}
+	return 0;
+done:
+	countr_size *= 8;
+	*count = vcpu->regs[VCPU_REGS_RCX] & (~0ULL >> (64 - countr_size));
 	return 1;
 }
 
@@ -1531,10 +2139,12 @@ static int handle_io(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 		= (vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_DF) != 0;
 	kvm_run->io.rep = (exit_qualification & 32) != 0;
 	kvm_run->io.port = exit_qualification >> 16;
-	kvm_run->io.count = vcpu->regs[VCPU_REGS_RCX]; /* rcx. FIXME: mask? */
-	if (kvm_run->io.string)
+	if (kvm_run->io.string) {
+		if (!get_io_count(vcpu, &kvm_run->io.count)) {
+			return 1;
+		}
 		kvm_run->io.address = vmcs_readl(GUEST_LINEAR_ADDRESS);
-	else
+	} else
 		kvm_run->io.value = vcpu->regs[VCPU_REGS_RAX]; /* rax */
 	return 0;
 }
@@ -1613,12 +2223,6 @@ static int set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 		return 1;
 	}
 
-	if ((cr0 & CR0_PG_MASK) && !(guest_cr0() & CR0_PE_MASK)) {
-		printk("set_cr0: #GP, set PG flag and not in protected mode\n");
-		inject_gp(vcpu);
-		return 1;
-	}
-
 	if (is_paging()) {
 #ifdef __x86_64__
 		if (!(cr0 & CR0_PG_MASK)) {
@@ -1673,12 +2277,7 @@ static int set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 
 	}
 
-	if (!(cr0 & CR0_PE_MASK)) {
-		vcpu_printf(vcpu, "%s: enter real mode\n", __FUNCTION__);
-		return 0;
-	}
-	vmcs_writel(GUEST_CR0, cr0 | KVM_VM_CR0_ALWAYS_ON);
-	vmcs_writel(CR0_READ_SHADOW, cr0 & KVM_GUEST_CR0_MASK);
+	__set_cr0(vcpu, cr0);
 	kvm_mmu_reset_context(vcpu);
 	skip_emulated_instruction(vcpu);
 	return 1;
@@ -1689,9 +2288,9 @@ static void lmsw(struct kvm_vcpu *vcpu, unsigned long msw)
 	unsigned long cr0 = guest_cr0();
 
 	if ((msw & CR0_PE_MASK) && !(cr0 & CR0_PE_MASK)) {
-	      vmcs_writel(CR0_READ_SHADOW, cr0 | CR0_PE_MASK);
-	      printk("lmsw: enter protected mode\n");
-	      // enter protected mode
+		enter_pmode(vcpu);
+		vmcs_writel(CR0_READ_SHADOW, cr0 | CR0_PE_MASK);
+		
 	} else
 		printk("lmsw: unexpected\n");
 
@@ -1730,8 +2329,7 @@ static void set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
 		inject_gp(vcpu);
 		return;
 	}
-	vmcs_writel(GUEST_CR4, cr4 | KVM_VM_CR4_ALWAYS_ON);
-	vmcs_writel(CR4_READ_SHADOW, cr4);
+	__set_cr4(vcpu, cr4);
 	spin_lock(&vcpu->kvm->lock);
 	kvm_mmu_reset_context(vcpu);
 	spin_unlock(&vcpu->kvm->lock);
@@ -1781,16 +2379,25 @@ static void set_cr8(struct kvm_vcpu *vcpu, unsigned long cr8)
 }
 
 
-static void __set_cr0(unsigned long cr0)
+static void __set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 {
-	vmcs_writel(CR0_READ_SHADOW, cr0 & KVM_GUEST_CR0_MASK);
+	if (vcpu->rmode.active && (cr0 & CR0_PE_MASK)) {
+		enter_pmode(vcpu);
+	}
+
+	if (!vcpu->rmode.active && !(cr0 & CR0_PE_MASK)) {
+		enter_rmode(vcpu);
+	}
+
+	vmcs_writel(CR0_READ_SHADOW, cr0);
 	vmcs_writel(GUEST_CR0, cr0 | KVM_VM_CR0_ALWAYS_ON);
 }
 
-static void __set_cr4(unsigned long cr4)
+static void __set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
 {
 	vmcs_writel(CR4_READ_SHADOW, cr4);
-	vmcs_writel(GUEST_CR4, cr4 | KVM_VM_CR4_ALWAYS_ON);
+	vmcs_writel(GUEST_CR4, cr4 | (vcpu->rmode.active ?
+		    KVM_RMODE_VM_CR4_ALWAYS_ON : KVM_PMODE_VM_CR4_ALWAYS_ON));
 }
 
 static int handle_cr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
@@ -2063,7 +2670,7 @@ static int handle_wrmsr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 		set_efer(vcpu, data);
 		return 1;
 	case MSR_IA32_MC0_STATUS:
-		vcpu_printf(vcpu, "%s: MSR_IA32_MC0_STATUS 0x%llx, nop\n"
+		printk(KERN_WARNING "%s: MSR_IA32_MC0_STATUS 0x%llx, nop\n"
 			    , __FUNCTION__, data);
 		break;
 #endif
@@ -2107,8 +2714,8 @@ static int handle_interrupt_window(struct kvm_vcpu *vcpu,
 
 static int handle_halt(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 {
+	skip_emulated_instruction(vcpu);
 	if (vcpu->irq_summary && (vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_IF)) {
-		skip_emulated_instruction(vcpu);
 		return 1;
 	}
 
@@ -2165,6 +2772,51 @@ static int kvm_handle_exit(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 	return 0;
 }
 
+static void inject_rmode_irq(struct kvm_vcpu *vcpu, int irq)
+{
+	uint16_t ent[2];
+	uint16_t cs;
+	uint16_t ip;
+	unsigned long flags;
+	unsigned long ss_base = vmcs_readl(GUEST_SS_BASE);
+	uint16_t sp =  vmcs_readl(GUEST_RSP);
+	uint32_t ss_limit = vmcs_read32(GUEST_SS_LIMIT);
+
+	if (sp > ss_limit || sp - 6 > sp) {
+		vcpu_printf(vcpu, "%s: #SS, rsp 0x%lx ss 0x%lx limit 0x%x\n",
+			    __FUNCTION__,
+			    vmcs_readl(GUEST_RSP),
+			    vmcs_readl(GUEST_SS_BASE),
+			    vmcs_read32(GUEST_SS_LIMIT));
+		return;
+	}
+
+	if (kvm_read_guest(vcpu, irq * sizeof(ent), sizeof(ent), &ent) != 
+								sizeof(ent)) {
+		vcpu_printf(vcpu, "%s: read guest err\n", __FUNCTION__);
+		return;
+	}
+
+	flags =  vmcs_readl(GUEST_RFLAGS);
+	cs =  vmcs_readl(GUEST_CS_BASE) >> 4;
+	ip =  vmcs_readl(GUEST_RIP);
+
+
+	if (kvm_write_guest(vcpu, ss_base + sp - 2, 2, &flags) != 2 ||
+	    kvm_write_guest(vcpu, ss_base + sp - 4, 2, &cs) != 2 ||
+	    kvm_write_guest(vcpu, ss_base + sp - 6, 2, &ip) != 2) {
+		vcpu_printf(vcpu, "%s: write guest err\n", __FUNCTION__);
+		return;
+	}
+
+	vmcs_writel(GUEST_RFLAGS, flags & 
+		    ~( X86_EFLAGS_IF | X86_EFLAGS_AC | X86_EFLAGS_TF));
+	vmcs_write16(GUEST_CS_SELECTOR, ent[1]) ;
+	vmcs_writel(GUEST_CS_BASE, ent[1] << 4);
+	vmcs_writel(GUEST_RIP, ent[0]);
+	vmcs_writel(GUEST_RSP, (vmcs_readl(GUEST_RSP) & ~0xffff) | (sp - 6));
+}
+
 static void kvm_do_inject_irq(struct kvm_vcpu *vcpu)
 {
 	int word_index = __ffs(vcpu->irq_summary);
@@ -2175,6 +2827,10 @@ static void kvm_do_inject_irq(struct kvm_vcpu *vcpu)
 	if (!vcpu->irq_pending[word_index])
 		clear_bit(word_index, &vcpu->irq_summary);
 
+	if (vcpu->rmode.active) {
+		inject_rmode_irq(vcpu, irq);
+		return;
+	}
 	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD,
 			irq | INTR_TYPE_EXT_INTR | INTR_INFO_VALID_MASK);
 }
@@ -2658,14 +3314,10 @@ static int kvm_dev_ioctl_set_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 	set_dtable(gdt, GDTR);
 #undef set_dtable
 
-	mmu_reset_needed |= guest_cr0() != sregs->cr0;
-	__set_cr0(sregs->cr0);
 	vcpu->cr2 = sregs->cr2;
 	mmu_reset_needed |= vcpu->cr3 != sregs->cr3;
 	vcpu->cr3 = sregs->cr3;
 
-	mmu_reset_needed |=  guest_cr4() != sregs->cr4;
-	__set_cr4(sregs->cr4);
 	vcpu->cr8 = sregs->cr8;
 
 	mmu_reset_needed |= vcpu->shadow_efer != sregs->efer;
@@ -2673,6 +3325,12 @@ static int kvm_dev_ioctl_set_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 	__set_efer(vcpu, sregs->efer);
 #endif
 	vcpu->apic_base = sregs->apic_base;
+
+	mmu_reset_needed |= guest_cr0() != sregs->cr0;
+	__set_cr0(vcpu, sregs->cr0);
+
+	mmu_reset_needed |=  guest_cr4() != sregs->cr4;
+	__set_cr4(vcpu, sregs->cr4);
 
 	if (mmu_reset_needed)
 		kvm_mmu_reset_context(vcpu);

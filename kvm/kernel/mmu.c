@@ -207,10 +207,10 @@ static void page_header_update_slot(struct kvm *kvm, void *pte, gpa_t gpa)
 
 static inline int is_io_mem(struct kvm_vcpu *vcpu, gpa_t addr)
 {
-	return (addr >= 0xa0000ULL && addr < 0xc0000ULL) ||
-		(addr >= 0xffff0000ULL && addr < 0x100000000ULL);
+	return addr >= 0xa0000ULL && addr < 0xc0000ULL;
 }
 
+//fixme not safe
 hpa_t gpa_to_hpa(struct kvm_memory_slot *memslot, gpa_t gpa)
 {
 	struct page *page;
@@ -218,12 +218,22 @@ hpa_t gpa_to_hpa(struct kvm_memory_slot *memslot, gpa_t gpa)
 	page = gfn_to_page(memslot, gpa >> PAGE_SHIFT);
 	return (page_to_pfn(page) << PAGE_SHIFT) | (gpa & (PAGE_SIZE-1));
 }
-
+//fixme not safe
 gpa_t gva_to_gpa(struct kvm_vcpu *vcpu, gva_t gva)
 {
 	uint64_t pte = vcpu->mmu.fetch_pte64(vcpu, gva);
 	return (pte & PT64_BASE_ADDR_MASK) | (gva & ~PAGE_MASK);
 }
+//fixme not safe
+hpa_t gva_to_hpa(struct kvm_vcpu *vcpu, gva_t gva)
+{
+	gpa_t gpa = gva_to_gpa(vcpu, gva);
+	struct kvm_memory_slot *slot;
+
+	slot = gfn_to_memslot(vcpu->kvm, gpa >> PAGE_SHIFT);
+	return slot ? gpa_to_hpa(slot, gpa) : 0;
+}
+
 
 static void release_pt_page_64(struct kvm_vcpu *vcpu, hpa_t page_hpa,
 			       int level)
@@ -272,7 +282,8 @@ static int nonpaging_map(struct kvm_vcpu *vcpu, gva_t v, hpa_t p)
 		if (level == 1) {
 			mark_page_dirty(vcpu->kvm, v >> PAGE_SHIFT);
 			page_header_update_slot(vcpu->kvm, table, v);
-			table[index] = p | PT_PRESENT_MASK | PT_WRITABLE_MASK;
+			table[index] = p | PT_PRESENT_MASK | PT_WRITABLE_MASK | 
+								PT_USER_MASK;
 			return 0;
 		}
 
@@ -287,8 +298,8 @@ static int nonpaging_map(struct kvm_vcpu *vcpu, gva_t v, hpa_t p)
 			if (level == PT32E_ROOT_LEVEL)
 				table[index] = new_table | PT_PRESENT_MASK;
 			else
-				table[index] = new_table |
-					PT_PRESENT_MASK | PT_WRITABLE_MASK;
+				table[index] = new_table | PT_PRESENT_MASK | 
+						PT_WRITABLE_MASK | PT_USER_MASK;
 		}
 		table_addr = table[index] & PT64_BASE_ADDR_MASK;
 	}

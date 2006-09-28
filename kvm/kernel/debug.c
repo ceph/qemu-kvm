@@ -40,76 +40,6 @@ void show_msrs(struct kvm_vcpu *vcpu)
 	}
 }
 
-int read_guest(struct kvm_vcpu *vcpu,
-			     gva_t addr,
-			     unsigned long size,
-			     void *dest)
-{
-	unsigned char *host_buf = dest;
-
-	while (size) {
-		gpa_t gpa;
-		hpa_t paddr;
-		unsigned now;
-		unsigned offset;
-		hva_t guest_buf;
-		struct kvm_memory_slot *slot;
-
-		gpa = gva_to_gpa(vcpu, addr);
-		slot = gfn_to_memslot(vcpu->kvm, gpa >> PAGE_SHIFT);
-		if (!slot)
-			return 0;
-		paddr = gpa_to_hpa(slot, gpa);
-		guest_buf = (hva_t)kmap_atomic(
-					pfn_to_page(paddr >> PAGE_SHIFT),
-					KM_USER0);
-		offset = addr & ~PAGE_MASK;
-		guest_buf |= offset;
-		now = min(size, PAGE_SIZE - offset);
-		memcpy(host_buf, (void*)guest_buf, now);
-		host_buf += now;
-		addr += now;
-		size -= now;
-		kunmap_atomic((void *)guest_buf, KM_USER0);
-	}
-	return 1;
-}
-
-int write_guest(struct kvm_vcpu *vcpu,
-			     gva_t addr,
-			     unsigned long size,
-			     void *data)
-{
-	unsigned char *host_buf = data;
-
-	while (size) {
-		gpa_t gpa;
-		hpa_t paddr;
-		unsigned now;
-		unsigned offset;
-		hva_t guest_buf;
-		struct kvm_memory_slot *slot;
-
-		gpa = gva_to_gpa(vcpu, addr);
-		slot = gfn_to_memslot(vcpu->kvm, gpa >> PAGE_SHIFT);
-		if (!slot)
-			return 0;
-		paddr = gpa_to_hpa(slot, addr);
-		guest_buf = (hva_t)kmap_atomic(
-					pfn_to_page(paddr >> PAGE_SHIFT),
-					KM_USER0);
-		offset = addr & ~PAGE_MASK;
-		guest_buf |= offset;
-		now = min(size, PAGE_SIZE - offset);
-		memcpy((void*)guest_buf, host_buf, now);
-		host_buf += now;
-		addr += now;
-		size -= now;
-		kunmap_atomic((void *)guest_buf, KM_USER0);
-	}
-	return 1;
-}
-
 void show_code(struct kvm_vcpu *vcpu)
 {
 	gva_t rip = vmcs_readl(GUEST_RIP);
@@ -119,7 +49,7 @@ void show_code(struct kvm_vcpu *vcpu)
 	if (!is_long_mode())
 		rip += vmcs_readl(GUEST_CS_BASE);
 
-	read_guest(vcpu, rip, sizeof code, code);
+	kvm_read_guest(vcpu, rip, sizeof code, code);
 	vcpu_printf(vcpu, "code: %lx", rip);
 	for (i = 0; i < sizeof code; ++i)
 		vcpu_printf(vcpu, " %02x", code[i]);
@@ -152,7 +82,7 @@ void show_irq(struct kvm_vcpu *vcpu,  int irq)
 		return;
 	}
 
-	if (!read_guest(vcpu, idt_base + irq * sizeof(gate), sizeof(gate), &gate)) {
+	if (kvm_read_guest(vcpu, idt_base + irq * sizeof(gate), sizeof(gate), &gate) != sizeof(gate)) {
 		vcpu_printf(vcpu, "%s: 0x%x read_guest err\n",
 			   __FUNCTION__,
 			   irq);
@@ -175,7 +105,7 @@ void show_page(struct kvm_vcpu *vcpu,
 		return;
 	}
 	addr &= PAGE_MASK;
-	if (read_guest(vcpu, addr, PAGE_SIZE, buf)) {
+	if (kvm_read_guest(vcpu, addr, PAGE_SIZE, buf)) {
 		int i;
 		for (i = 0; i <  PAGE_SIZE / sizeof(uint64_t) ; i++) {
 			uint8_t *ptr = (uint8_t*)&buf[i];
@@ -189,6 +119,21 @@ void show_page(struct kvm_vcpu *vcpu,
 		}
 	}
 	kfree(buf);
+}
+
+void show_u64(struct kvm_vcpu *vcpu, gva_t addr)
+{
+	uint64_t buf;
+
+	if (kvm_read_guest(vcpu, addr, sizeof(uint64_t), &buf) == sizeof(uint64_t)) {
+		uint8_t *ptr = (uint8_t*)&buf;
+		int j;
+		vcpu_printf(vcpu, " 0x%16.16x:", addr);
+		for (j = 0; j < sizeof(uint64_t) ; j++) {
+			vcpu_printf(vcpu, " 0x%2.2x", ptr[j]);
+		}
+		vcpu_printf(vcpu, "\n");
+	}
 }
 
 #define IA32_DEBUGCTL_RESERVED_BITS 0xfffffffffffffe3cULL
@@ -1075,8 +1020,10 @@ void regs_dump(struct kvm_vcpu *vcpu)
 void sregs_dump(struct kvm_vcpu *vcpu)
 {
 	vcpu_printf(vcpu, "************************ sregs_dump ************************\n");
+	vcpu_printf(vcpu, "cr0 = 0x%lx\n", guest_cr0());
 	vcpu_printf(vcpu, "cr2 = 0x%lx\n", vcpu->cr2);
 	vcpu_printf(vcpu, "cr3 = 0x%lx\n", vcpu->cr3);
+	vcpu_printf(vcpu, "cr4 = 0x%lx\n", guest_cr4());
 	vcpu_printf(vcpu, "cr8 = 0x%lx\n", vcpu->cr8);
 	vcpu_printf(vcpu, "shadow_efer = 0x%llx\n", vcpu->shadow_efer);
 	vmcs_dump(vcpu);

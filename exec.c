@@ -81,6 +81,7 @@ int phys_ram_size;
 int phys_ram_fd;
 uint8_t *phys_ram_base;
 uint8_t *phys_ram_dirty;
+uint8_t *bios_mem;
 
 CPUState *first_cpu;
 /* current CPU in the current thread. It is only valid inside

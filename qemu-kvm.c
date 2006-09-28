@@ -17,8 +17,7 @@ static CPUState *saved_env[NR_CPU];
 
 int kvm_is_ok(CPUState *env)
 {
-    return (env->cr[0] & CR0_PE_MASK)
-	&& !env->kvm_emulate_one_instruction;
+    return !env->kvm_emulate_one_instruction;
 }
 
 void kvm_handled_mmio(CPUState *env)
@@ -272,10 +271,12 @@ static inline void push_interrupts(CPUState *env)
         return;
     }
 
-    env->interrupt_request &= ~CPU_INTERRUPT_HARD;
+    do {
+        env->interrupt_request &= ~CPU_INTERRUPT_HARD;
 
-    // for now using cpu 0
-    kvm_inject_irq(kvm_context, 0, cpu_get_pic_interrupt(env)); 
+        // for now using cpu 0
+	kvm_inject_irq(kvm_context, 0, cpu_get_pic_interrupt(env)); 
+    } while ( (env->interrupt_request & CPU_INTERRUPT_HARD) && (env->cr[2] & CR0_PG_MASK) );
 }
 
 int kvm_cpu_exec(CPUState *env)
@@ -283,7 +284,8 @@ int kvm_cpu_exec(CPUState *env)
 
     push_interrupts(env);
 
-    load_regs(env);
+    if (!saved_env[0])
+	saved_env[0] = env;
 
     kvm_run(kvm_context, 0);
 
@@ -438,7 +440,8 @@ static int kvm_halt(void *opaque, int vcpu)
     if (!((env->kvm_pending_int || 
 	   (env->interrupt_request & CPU_INTERRUPT_HARD)) && 
 	  (env->eflags & IF_MASK))) {
-	  env->kvm_emulate_one_instruction = 1;
+	    env->hflags |= HF_HALTED_MASK;
+	    env->exception_index = EXCP_HLT;
     }
     return 1;
 }
