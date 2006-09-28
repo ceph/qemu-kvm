@@ -1537,7 +1537,8 @@ static void inject_gp(struct kvm_vcpu *vcpu)
 		     INTR_INFO_VALID_MASK);
 }
 
-static int pdptrs_have_reserved_bits_set(struct kvm_vcpu *vcpu, gpa_t cr3)
+static int pdptrs_have_reserved_bits_set(struct kvm_vcpu *vcpu, 
+					 unsigned long cr3)
 {
 	gfn_t pdpt_gfn = cr3 >> PAGE_SHIFT;
 	unsigned offset = (cr3 & (PAGE_SIZE-1)) >> 5;

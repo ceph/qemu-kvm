@@ -154,7 +154,7 @@ struct kvm_vcpu {
 	unsigned long rip;      /* needs vcpu_load_rsp_rip() */
 
 	unsigned long cr2;
-	gpa_t cr3;
+	unsigned long cr3;
 	unsigned long cr8;
 	u64 shadow_efer;
 	u64 apic_base;
