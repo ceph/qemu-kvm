@@ -1075,7 +1075,7 @@ void regs_dump(struct kvm_vcpu *vcpu)
 void sregs_dump(struct kvm_vcpu *vcpu)
 {
 	vcpu_printf(vcpu, "************************ sregs_dump ************************\n");
-	vcpu_printf(vcpu, "cr2 = 0x%lx\n", vcpu->regs[VCPU_REGS_CR2]);
+	vcpu_printf(vcpu, "cr2 = 0x%lx\n", vcpu->cr2);
 	vcpu_printf(vcpu, "cr3 = 0x%lx\n", vcpu->cr3);
 	vcpu_printf(vcpu, "cr8 = 0x%lx\n", vcpu->cr8);
 	vcpu_printf(vcpu, "shadow_efer = 0x%llx\n", vcpu->shadow_efer);
