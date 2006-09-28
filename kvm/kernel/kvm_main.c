@@ -2369,7 +2369,7 @@ again:
 		[r14]"i"(offsetof(struct kvm_vcpu, regs[VCPU_REGS_R14])),
 		[r15]"i"(offsetof(struct kvm_vcpu, regs[VCPU_REGS_R15])),
 #endif
-		[cr2]"i"(offsetof(struct kvm_vcpu, regs[VCPU_REGS_CR2]))
+		[cr2]"i"(offsetof(struct kvm_vcpu, cr2))
 	      : "cc", "memory" );
 
 	++kvm_stat.exits;
@@ -2553,7 +2553,7 @@ static int kvm_dev_ioctl_get_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 #undef get_dtable
 
 	sregs->cr0 = guest_cr0();
-	sregs->cr2 = vcpu->regs[VCPU_REGS_CR2];
+	sregs->cr2 = vcpu->cr2;
 	sregs->cr3 = vcpu->cr3;
 	sregs->cr4 = guest_cr4();
 	sregs->cr8 = vcpu->cr8;
@@ -2622,7 +2622,7 @@ static int kvm_dev_ioctl_set_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 
 	mmu_reset_needed |= guest_cr0() != sregs->cr0;
 	__set_cr0(sregs->cr0);
-	vcpu->regs[VCPU_REGS_CR2] = sregs->cr2;
+	vcpu->cr2 = sregs->cr2;
 	mmu_reset_needed |= vcpu->cr3 != sregs->cr3;
 	vcpu->cr3 = sregs->cr3;
 

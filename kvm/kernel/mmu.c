@@ -436,7 +436,7 @@ static void inject_page_fault(struct kvm_vcpu *vcpu,
 			     INTR_INFO_VALID_MASK);
 		return;
 	}
-	vcpu->regs[VCPU_REGS_CR2] = addr;
+	vcpu->cr2 = addr;
 	vmcs_write32(VM_ENTRY_EXCEPTION_ERROR_CODE, err_code);
 	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD,
 		     PF_VECTOR |
