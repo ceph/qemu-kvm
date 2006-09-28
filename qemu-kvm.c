@@ -43,6 +43,7 @@ static void load_regs(CPUState *env)
     regs.rdi = env->regs[R_EDI];
     regs.rsp = env->regs[R_ESP];
     regs.rbp = env->regs[R_EBP];
+#ifdef TARGET_X86_64
     regs.r8 = env->regs[8];
     regs.r9 = env->regs[9];
     regs.r10 = env->regs[10];
@@ -51,6 +52,7 @@ static void load_regs(CPUState *env)
     regs.r13 = env->regs[13];
     regs.r14 = env->regs[14];
     regs.r15 = env->regs[15];
+#endif
     
     regs.rflags = env->eflags;
     regs.rip = env->eip;
@@ -151,6 +153,7 @@ static void save_regs(CPUState *env)
     env->regs[R_EDI] = regs.rdi;
     env->regs[R_ESP] = regs.rsp;
     env->regs[R_EBP] = regs.rbp;
+#ifdef TARGET_X86_64
     env->regs[8] = regs.r8;
     env->regs[9] = regs.r9;
     env->regs[10] = regs.r10;
@@ -159,6 +162,7 @@ static void save_regs(CPUState *env)
     env->regs[13] = regs.r13;
     env->regs[14] = regs.r14;
     env->regs[15] = regs.r15;
+#endif
 
     env->eflags = regs.rflags;
     env->eip = regs.rip;
