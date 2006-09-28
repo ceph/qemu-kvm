@@ -665,8 +665,6 @@ static int kvm_vcpu_setup(struct kvm_vcpu *vcpu)
 	int ret;
 	u64 tsc;
 	
-	__vcpu_load(vcpu);
-
 	vcpu->cr8 = 0;
 	vcpu->shadow_efer = read_msr(MSR_EFER);
 	fx_save(vcpu->guest_fx_image);
@@ -852,13 +850,11 @@ static int kvm_vcpu_setup(struct kvm_vcpu *vcpu)
 
 	ret = kvm_mmu_init(vcpu);
 
-	vcpu_put(vcpu);
 	return ret;
 
 out_free_guest_msrs:
 	kfree(vcpu->guest_msrs);
 out:
-	vcpu_put(vcpu);
 	return ret;
 }
 
@@ -955,6 +951,8 @@ static int kvm_dev_ioctl_create_vcpu(struct kvm *kvm, int n)
 	vmcs_clear(vmcs);
 	vcpu->vmcs = vmcs;
 	vcpu->launched = 0;
+
+	__vcpu_load(vcpu);
 
 	r = kvm_vcpu_setup(vcpu);
 
