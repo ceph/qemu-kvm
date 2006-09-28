@@ -4,6 +4,7 @@
 #include <linux/types.h>
 #include <linux/list.h>
 #include <linux/mutex.h>
+#include <linux/spinlock.h>
 
 #include "vmx.h"
 
@@ -188,6 +189,7 @@ struct kvm_memory_slot {
 };
 
 struct kvm {
+	spinlock_t lock; /* protects everything except vcpus */
 	int nmemslots;
 	struct kvm_memory_slot memslots[KVM_MEMORY_SLOTS];
 	struct list_head active_mmu_pages;

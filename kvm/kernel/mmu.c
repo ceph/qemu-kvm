@@ -570,10 +570,6 @@ static int init_kvm_mmu(struct kvm_vcpu *vcpu)
 	ASSERT(vcpu);
 	ASSERT(!VALID_PAGE(vcpu->mmu.root_hpa));
 
-	vcpu_printf(vcpu, "init_kvm_mmu:%s%s%s\n",
-	       is_paging() ? " paging" : "",
-	       is_long_mode() ? " 64bit" : "",
-	       is_pae() ? " PAE" : "");
 	if (!is_paging())
 		return nonpaging_init_context(vcpu);
 	else if (is_long_mode())

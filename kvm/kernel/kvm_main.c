@@ -448,6 +448,7 @@ static int kvm_dev_open(struct inode *inode, struct file *filp)
 	if (!kvm)
 		return -ENOMEM;
 	
+	spin_lock_init(&kvm->lock);
 	INIT_LIST_HEAD(&kvm->active_mmu_pages);
 	for (i = 0; i < KVM_MAX_VCPUS; ++i)
 		mutex_init(&kvm->vcpus[i].mutex);
@@ -505,14 +506,19 @@ static void kvm_free_vcpus(struct kvm *kvm)
 
 void kvm_log(struct kvm *kvm, const char *data, size_t count)
 {
-	struct file* f = kvm->log_file;
-
+	struct file* f;
 	mm_segment_t fs = get_fs();
 	ssize_t ret = 0;
 	sigset_t sigmask, oldsigmask;
-		
-	if (!f)
+
+	spin_lock(&kvm->lock);
+	f = kvm->log_file;
+	if (!f) {
+		spin_unlock(&kvm->lock);
 		return;
+	}
+	get_file(f);
+	spin_unlock(&kvm->lock);
 
 	set_fs(KERNEL_DS);
 	sigfillset(&sigmask);
@@ -526,6 +532,7 @@ void kvm_log(struct kvm *kvm, const char *data, size_t count)
 	}
 	sigprocmask(SIG_SETMASK, &oldsigmask, 0);
 	set_fs(fs);
+	fput(f);
 	if (ret < 0)
 		printk("%s: %d\n", __FUNCTION__, (int)ret);
 }
@@ -881,18 +888,26 @@ static void vcpu_put_rsp_rip(struct kvm_vcpu *vcpu)
 static int kvm_dev_ioctl_set_logfd(struct kvm *kvm, int fd)
 {
 	int r;
+	char *newbuf;
 
 	r = -ENOMEM;
-	if (!kvm->log_buf)
-		kvm->log_buf = kmalloc(KVM_LOG_BUF_SIZE, GFP_KERNEL);
-	if (!kvm->log_buf)
+	newbuf = kmalloc(KVM_LOG_BUF_SIZE, GFP_KERNEL);
+	if (!newbuf)
 		goto out;
+
+	spin_lock(&kvm->lock);
+	if (!kvm->log_buf) {
+		kvm->log_buf = newbuf;
+		newbuf = 0;
+	}
 
 	if (kvm->log_file)
 		fput(kvm->log_file);
 
 	kvm->log_file = fget(fd);
+	spin_unlock(&kvm->lock);
 
+	kfree(newbuf);
         kvm_printf(kvm, "%s: kvm log start.\n", __FUNCTION__);
 
 	return 0;
@@ -971,6 +986,7 @@ static int kvm_dev_ioctl_set_memory_region(struct kvm *kvm,
 	unsigned long i;
 	struct kvm_memory_slot *memslot;
 
+	spin_lock(&kvm->lock);
 	r = -EINVAL;
 	/* General sanity checks */
 	if (mem->memory_size & (PAGE_SIZE - 1))
@@ -1047,6 +1063,8 @@ static int kvm_dev_ioctl_set_memory_region(struct kvm *kvm,
 	if (mem->slot >= kvm->nmemslots)
 		kvm->nmemslots = mem->slot + 1;
 
+	spin_unlock(&kvm->lock);
+
 	for (i = 0; i < KVM_MAX_VCPUS; ++i) {
 		struct kvm_vcpu *vcpu;
 
@@ -1062,6 +1080,7 @@ static int kvm_dev_ioctl_set_memory_region(struct kvm *kvm,
 out_free_physmem:
 	kvm_free_physmem_slot(kvm, mem->slot);
 out:
+	spin_unlock(&kvm->lock);
 	return r;
 }
 
@@ -1076,6 +1095,7 @@ static int kvm_dev_ioctl_get_dirty_log(struct kvm *kvm,
 	int n;
 	unsigned long any = 0;
 
+	spin_lock(&kvm->lock);
 	r = -EINVAL;
 	if (log->slot >= KVM_MEMORY_SLOTS)
 		goto out;
@@ -1096,6 +1116,9 @@ static int kvm_dev_ioctl_get_dirty_log(struct kvm *kvm,
 
 
 	if (any) {
+		kvm_mmu_slot_remove_write_access(kvm, log->slot);
+		memset(memslot->dirty_bitmap, 0, n);
+		spin_unlock(&kvm->lock);
 		for (i = 0; i < KVM_MAX_VCPUS; ++i) {
 			struct kvm_vcpu *vcpu = vcpu_load(kvm, i);
 
@@ -1104,13 +1127,13 @@ static int kvm_dev_ioctl_get_dirty_log(struct kvm *kvm,
 			flush_guest_tlb(vcpu);
 			vcpu_put(vcpu);
 		}
-		kvm_mmu_slot_remove_write_access(kvm, log->slot);
-		memset(memslot->dirty_bitmap, 0, n);
+		spin_lock(&kvm->lock);
 	}
 
-	return 0;
+	r = 0;
 
 out:
+	spin_unlock(&kvm->lock);
 	return r;
 }
 
@@ -1453,10 +1476,14 @@ static int handle_exception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	if (is_page_fault(intr_info)) {
 		cr2 = vmcs_readl(EXIT_QUALIFICATION);
 
-		if (!vcpu->mmu.page_fault(vcpu, cr2, error_code))
+		spin_lock(&vcpu->kvm->lock);
+		if (!vcpu->mmu.page_fault(vcpu, cr2, error_code)) {
+			spin_unlock(&vcpu->kvm->lock);
 			return 1;
+		}
 
 		er = emulate_instruction(vcpu, kvm_run, cr2, error_code);
+		spin_unlock(&vcpu->kvm->lock);
 
 		switch (er) {
 		case EMULATE_DONE:
@@ -1519,7 +1546,9 @@ static int handle_invlpg(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 {
 	uint64_t address = vmcs_read64(EXIT_QUALIFICATION);
 	int instruction_length = vmcs_read32(VM_EXIT_INSTRUCTION_LEN);
+	spin_lock(&vcpu->kvm->lock);
 	vcpu->mmu.inval_page(vcpu, address);
+	spin_unlock(&vcpu->kvm->lock);
 	vmcs_writel(GUEST_RIP, vmcs_readl(GUEST_RIP) + instruction_length);
 	return 1;
 }
@@ -1547,6 +1576,7 @@ static int pdptrs_have_reserved_bits_set(struct kvm_vcpu *vcpu,
 	u64 *pdpt;
 	struct kvm_memory_slot *memslot;
 
+	spin_lock(&vcpu->kvm->lock);
 	memslot = gfn_to_memslot(vcpu->kvm, pdpt_gfn);
 	/* FIXME: !memslot - emulate? 0xff? */
 	pdpt = kmap_atomic(gfn_to_page(memslot, pdpt_gfn), KM_USER0);
@@ -1558,6 +1588,7 @@ static int pdptrs_have_reserved_bits_set(struct kvm_vcpu *vcpu,
 	}
 
 	kunmap_atomic(pdpt, KM_USER0);
+	spin_unlock(&vcpu->kvm->lock);
 
 	return i != 4;
 }
@@ -1703,7 +1734,9 @@ static void set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
 	}
 	vmcs_writel(GUEST_CR4, cr4 | KVM_VM_CR4_ALWAYS_ON);
 	vmcs_writel(CR4_READ_SHADOW, cr4);
+	spin_lock(&vcpu->kvm->lock);
 	kvm_mmu_reset_context(vcpu);
+	spin_unlock(&vcpu->kvm->lock);
 	skip_emulated_instruction(vcpu);
 }
 
@@ -1730,7 +1763,9 @@ static void set_cr3(struct kvm_vcpu *vcpu, unsigned long cr3)
 	}
 
 	vcpu->cr3 = cr3;
+	spin_lock(&vcpu->kvm->lock);
 	vcpu->mmu.new_cr3(vcpu);
+	spin_unlock(&vcpu->kvm->lock);
 	skip_emulated_instruction(vcpu);
 }
 
@@ -2660,11 +2695,13 @@ static int kvm_dev_ioctl_translate(struct kvm *kvm, struct kvm_translation *tr)
 	vcpu = vcpu_load(kvm, tr->vcpu);
 	if (!vcpu)
 		return -ENOENT;
+	spin_lock(&kvm->lock);
 	pte = vcpu->mmu.fetch_pte64(vcpu, vaddr);
 	tr->physical_address = (pte & 0xfffffffff000ull)|(vaddr & ~PAGE_MASK);
 	tr->valid = pte & 1;
 	tr->writeable = 1;
 	tr->usermode = 0;
+	spin_unlock(&kvm->lock);
 	vcpu_put(vcpu);
 
 	return 0;
