@@ -2444,6 +2444,7 @@ static int kvm_dev_ioctl_get_regs(struct kvm *kvm, struct kvm_regs *regs)
 	regs->rdi = vcpu->regs[VCPU_REGS_RDI];
 	regs->rsp = vmcs_readl(GUEST_RSP);
 	regs->rbp = vcpu->regs[VCPU_REGS_RBP];
+#ifdef __x86_64__
 	regs->r8 = vcpu->regs[VCPU_REGS_R8];
 	regs->r9 = vcpu->regs[VCPU_REGS_R9];
 	regs->r10 = vcpu->regs[VCPU_REGS_R10];
@@ -2452,6 +2453,7 @@ static int kvm_dev_ioctl_get_regs(struct kvm *kvm, struct kvm_regs *regs)
 	regs->r13 = vcpu->regs[VCPU_REGS_R13];
 	regs->r14 = vcpu->regs[VCPU_REGS_R14];
 	regs->r15 = vcpu->regs[VCPU_REGS_R15];
+#endif
 	
 	regs->rip = vmcs_readl(GUEST_RIP);
 	regs->rflags = vmcs_readl(GUEST_RFLAGS);
@@ -2486,6 +2488,7 @@ static int kvm_dev_ioctl_set_regs(struct kvm *kvm, struct kvm_regs *regs)
 	vcpu->regs[VCPU_REGS_RDI] = regs->rdi;
 	vmcs_writel(GUEST_RSP, regs->rsp);
 	vcpu->regs[VCPU_REGS_RBP] = regs->rbp;
+#ifdef __x86_64__
 	vcpu->regs[VCPU_REGS_R8] = regs->r8;
 	vcpu->regs[VCPU_REGS_R9] = regs->r9;
 	vcpu->regs[VCPU_REGS_R10] = regs->r10;
@@ -2494,6 +2497,7 @@ static int kvm_dev_ioctl_set_regs(struct kvm *kvm, struct kvm_regs *regs)
 	vcpu->regs[VCPU_REGS_R13] = regs->r13;
 	vcpu->regs[VCPU_REGS_R14] = regs->r14;
 	vcpu->regs[VCPU_REGS_R15] = regs->r15;
+#endif
 	
 	vmcs_writel(GUEST_RIP, regs->rip);
 	vmcs_writel(GUEST_RFLAGS, regs->rflags);

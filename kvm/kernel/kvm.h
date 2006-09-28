@@ -128,6 +128,7 @@ enum {
 	VCPU_REGS_RBP = 5,
 	VCPU_REGS_RSI = 6,
 	VCPU_REGS_RDI = 7,
+#ifdef __x86_64__
 	VCPU_REGS_R8 = 8,
 	VCPU_REGS_R9 = 9,
 	VCPU_REGS_R10 = 10,
@@ -136,6 +137,8 @@ enum {
 	VCPU_REGS_R13 = 13,
 	VCPU_REGS_R14 = 14,
 	VCPU_REGS_R15 = 15,
+#endif
+	NR_VCPU_REGS
 };
 
 struct kvm_vcpu {
@@ -147,7 +150,7 @@ struct kvm_vcpu {
 	unsigned long irq_summary; /* bit vector: 1 per word in irq_pending */
 #define NR_IRQ_WORDS (256 / BITS_PER_LONG)
 	unsigned long irq_pending[NR_IRQ_WORDS];
-	unsigned long regs[16]; /* for rsp needs vcpu_load_rsp_rip() */
+	unsigned long regs[NR_VCPU_REGS]; /* for rsp: vcpu_load_rsp_rip() */
 	unsigned long rip;      /* needs vcpu_load_rsp_rip() */
 
 	unsigned long cr2;
