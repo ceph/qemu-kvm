@@ -360,9 +360,21 @@ void bios_printf(int flags, const char *fmt, ...)
 /* approximative ! */
 void delay_ms(int n)
 {
-    int i, j;
+    int i, j, r1, r2;
     for(i = 0; i < n; i++) {
+#if BX_QEMU
         for(j = 0; j < 1000000; j++);
+#else
+        j = 66;
+        r1 = inb(0x61) & 0x10;
+        do {
+            r2 = inb(0x61) & 0x10;
+            if (r1 != r2) {
+                j--;
+                r1 = r2;
+            }
+        } while (j > 0);
+#endif
     }
 }
 
@@ -436,7 +448,7 @@ void smp_probe(void)
 
         smp_cpus = readw((void *)CPU_COUNT_ADDR);
     }
-    BX_INFO("Found %d cpus\n", smp_cpus);
+    BX_INFO("Found %d cpu(s)\n", smp_cpus);
 }
 
 /****************************************************/
