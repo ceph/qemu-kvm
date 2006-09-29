@@ -143,7 +143,7 @@
 #define BX_FLOPPY_ON_CNT 37   /* 2 seconds */
 #define BX_PCIBIOS       1
 #define BX_APM           1
-#define BX_ROMBIOS32     0
+#define BX_ROMBIOS32     1
 
 #define BX_USE_ATADRV    1
 #define BX_ELTORITO_BOOT 1
