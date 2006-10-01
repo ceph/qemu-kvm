@@ -4115,7 +4115,7 @@ ASM_END
                     case 3:
                         set_e820_range(ES, regs.u.r16.di, 
                                        0x00100000L, 
-                                       extended_memory_size - 0x10000L, 1);
+                                       extended_memory_size - ACPI_DATA_SIZE, 1);
                         regs.u.r32.ebx = 4;
                         regs.u.r32.eax = 0x534D4150;
                         regs.u.r32.ecx = 0x14;
@@ -4124,7 +4124,7 @@ ASM_END
                         break;
                     case 4:
                         set_e820_range(ES, regs.u.r16.di, 
-                                       extended_memory_size - 0x10000L, 
+                                       extended_memory_size - ACPI_DATA_SIZE, 
                                        extended_memory_size, 3); // ACPI RAM
                         regs.u.r32.ebx = 5;
                         regs.u.r32.eax = 0x534D4150;
@@ -8723,7 +8723,7 @@ bios32_structure:
 
 .align 16
 bios32_entry_point:
-  pushf
+  pushfd
   cmp eax, #0x49435024 ;; "$PCI"
   jne unknown_service
   mov eax, #0x80000000
@@ -8750,12 +8750,12 @@ bios32_end:
 #ifdef BX_QEMU
   and dword ptr[esp+8],0xfffffffc ;; reset CS.RPL for kqemu
 #endif
-  popf
+  popfd
   retf
 
 .align 16
 pcibios_protected:
-  pushf
+  pushfd
   cli
   push esi
   push edi
@@ -8864,7 +8864,7 @@ pci_pro_fail:
 #ifdef BX_QEMU
   and dword ptr[esp+8],0xfffffffc ;; reset CS.RPL for kqemu
 #endif
-  popf
+  popfd
   stc
   retf
 pci_pro_ok:
@@ -8874,7 +8874,7 @@ pci_pro_ok:
 #ifdef BX_QEMU
   and dword ptr[esp+8],0xfffffffc ;; reset CS.RPL for kqemu
 #endif
-  popf
+  popfd
   clc
   retf
 
