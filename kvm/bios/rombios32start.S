@@ -61,6 +61,10 @@ smm_relocation_start:
 2:
   movl $0xa0000, %eax
   addr32 movl %eax, (%ebx)
+  /* indicate to the BIOS that the SMM code was executed */
+  mov $0x00, %al
+  movw $0xb3, %dx
+  outb %al, %dx
   rsm                
 smm_relocation_end:
         
