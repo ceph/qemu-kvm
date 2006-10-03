@@ -340,12 +340,6 @@ static int handle_cpuid(kvm_context_t kvm, struct kvm_run *run)
 	return r;
 }
 
-static int handle_emulate_one_instruction(kvm_context_t kvm, 
-					   struct kvm_run *kvm_run)
-{
-	return kvm->callbacks->emulate_one_instruction(kvm->opaque);
-}
-
 static int handle_mmio(kvm_context_t kvm, struct kvm_run *kvm_run)
 {
 	unsigned long addr = kvm_run->mmio.phys_addr;
@@ -448,17 +442,11 @@ again:
 		case KVM_EXIT_DEBUG:
 			r = handle_debug(kvm, &kvm_run);
 			break;
-		case KVM_EXIT_EMULATE_ONE_INSTRUCTION:
-			r = handle_emulate_one_instruction(kvm, &kvm_run);
-			break;
 		case KVM_EXIT_MMIO:
 			r = handle_mmio(kvm, &kvm_run);
 			break;
 		case KVM_EXIT_HLT:
 			r = handle_halt(kvm, &kvm_run);
-			break;
-		case KVM_EXIT_REAL_MODE:
-			r = handle_emulate_one_instruction(kvm, &kvm_run);
 			break;
 		default:
 			printf("unhandled vm exit: 0x%x\n", kvm_run.exit_reason);

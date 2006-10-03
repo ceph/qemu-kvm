@@ -71,12 +71,6 @@ static int test_debug(void *opaque, int vcpu)
     return 0;
 }
 
-static int test_emulate_one_instruction(void *opaque)
-{
-    printf("test_mmio\n");
-    return 0;
-}
-
 static int test_halt(void *opaque, int vcpu)
 {
     printf("test_halt\n");
@@ -98,7 +92,6 @@ static struct kvm_callbacks test_callbacks = {
     .outw        = test_outw,
     .outl        = test_outl,
     .debug       = test_debug,
-    .emulate_one_instruction = test_emulate_one_instruction,
     .halt        = test_halt,
     .io_window = test_io_window,
 };

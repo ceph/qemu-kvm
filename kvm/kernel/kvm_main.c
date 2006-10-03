@@ -79,7 +79,7 @@ static const u32 vmx_msr_index[] = {
 #define RMODE_TSS_SIZE (TSS_BASE_SIZE + TSS_REDIRECTION_SIZE + TSS_IOPB_SIZE + 1)
 
 static int rmode_tss_base(struct kvm* kvm);
-static int set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0);
+static void set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0);
 static void __set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0);
 static void lmsw(struct kvm_vcpu *vcpu, unsigned long msw);
 static void set_cr3(struct kvm_vcpu *vcpu, unsigned long cr0);
@@ -2203,24 +2203,24 @@ static int pdptrs_have_reserved_bits_set(struct kvm_vcpu *vcpu,
 
 #define CR0_RESEVED_BITS 0xffffffff1ffaffc0ULL
 
-static int set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
+static void set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 {
 	if (cr0 & CR0_RESEVED_BITS) {
 		printk("set_cr0: 0x%lx #GP, reserved bits (0x%lx)\n", cr0, guest_cr0());
 		inject_gp(vcpu);
-		return 1;
+		return;
 	}
 
 	if ((cr0 & CR0_NW_MASK) && !(cr0 & CR0_CD_MASK)) {
 		printk("set_cr0: #GP, CD == 0 && NW == 1\n");
 		inject_gp(vcpu);
-		return 1;
+		return;
 	}
 
 	if ((cr0 & CR0_PG_MASK) && !(cr0 & CR0_PE_MASK)) {
 		printk("set_cr0: #GP, set PG flag and a clear PE flag\n");
 		inject_gp(vcpu);
-		return 1;
+		return;
 	}
 
 	if (is_paging()) {
@@ -2241,14 +2241,14 @@ static int set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 				printk("set_cr0: #GP, start paging in "
 				       "long mode while PAE is disabled\n");
 				inject_gp(vcpu);
-				return 1;
+				return;
 			}
 			guest_cs_ar = vmcs_read32(GUEST_CS_AR_BYTES);
 			if (guest_cs_ar & SEGMENT_AR_L_MASK) {
 				printk("set_cr0: #GP, start paging in "
 				       "long mode while CS.L == 1\n");
 				inject_gp(vcpu);
-				return 1;
+				return;
 
 			}
 			guest_tr_ar = vmcs_read32(GUEST_TR_AR_BYTES);
@@ -2272,7 +2272,7 @@ static int set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 			    pdptrs_have_reserved_bits_set(vcpu, vcpu->cr3)) {
 			printk("set_cr0: #GP, pdptrs reserved bits\n");
 			inject_gp(vcpu);
-			return 1;
+			return;
 		}
 
 	}
@@ -2280,7 +2280,7 @@ static int set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 	__set_cr0(vcpu, cr0);
 	kvm_mmu_reset_context(vcpu);
 	skip_emulated_instruction(vcpu);
-	return 1;
+	return;
 }
 
 static void lmsw(struct kvm_vcpu *vcpu, unsigned long msw)
@@ -2422,10 +2422,7 @@ static int handle_cr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 		switch (cr) {
 		case 0:
 			vcpu_load_rsp_rip(vcpu);
-			if (!set_cr0(vcpu, vcpu->regs[reg])) {
-				kvm_run->exit_reason = KVM_EXIT_REAL_MODE;
-				return 0;
-			}
+			set_cr0(vcpu, vcpu->regs[reg]);
 			return 1;
 		case 3:
 			vcpu_load_rsp_rip(vcpu);

@@ -531,7 +531,6 @@ typedef struct CPUX86State {
 #endif
 
 #ifdef USE_KVM
-    int kvm_emulate_one_instruction;
     int kvm_pending_int;
 #endif
 

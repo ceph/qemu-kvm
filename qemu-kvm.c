@@ -15,16 +15,6 @@ kvm_context_t kvm_context;
 #define NR_CPU 16
 static CPUState *saved_env[NR_CPU];
 
-int kvm_is_ok(CPUState *env)
-{
-    return !env->kvm_emulate_one_instruction;
-}
-
-void kvm_handled_mmio(CPUState *env)
-{
-    env->kvm_emulate_one_instruction = 0;
-}
-
 static void load_regs(CPUState *env)
 {
     struct kvm_regs regs;
@@ -416,19 +406,6 @@ static int kvm_io_window(void *opaque)
     return 1;
 }
 
-static int kvm_emulate_one_instruction(void *opaque)
-{
-    CPUState **envs = opaque, *env;
-
-    env = envs[0];
-    save_regs(env);
-    if (kvm_is_ok(env))
-	env->kvm_emulate_one_instruction = 1;
-    /*
-     * if !kvm_is_ok(), we'd like to remain in the emulator.
-     */
-    return 1;
-}
  
 static int kvm_halt(void *opaque, int vcpu)
 {
@@ -455,7 +432,6 @@ static struct kvm_callbacks qemu_kvm_ops = {
     .outb  = kvm_outb,
     .outw  = kvm_outw,
     .outl  = kvm_outl,
-    .emulate_one_instruction = kvm_emulate_one_instruction,
     .readb = kvm_readb,
     .readw = kvm_readw,
     .readl = kvm_readl,

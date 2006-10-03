@@ -454,13 +454,8 @@ int cpu_exec(CPUState *env1)
 #endif
 
 #ifdef USE_KVM
-	    if (kvm_is_ok(env)) {
-		int ret;
-                ret = kvm_cpu_exec(env);
-		longjmp(env->jmp_env, 1);
-	    }
-	    printf("%s: unexpect\n", __FUNCTION__);
-	    exit(-1);
+            kvm_cpu_exec(env);
+            longjmp(env->jmp_env, 1);
 #endif
             T0 = 0; /* force lookup of first TB */
             for(;;) {
@@ -801,13 +796,6 @@ int cpu_exec(CPUState *env1)
                     (cpu_get_time_fast() - env->last_io_time) >= MIN_CYCLE_BEFORE_SWITCH) {
                     cpu_loop_exit();
                 }
-#endif
-#if defined(USE_KVM)
-		/* return quickly after handling mmio */
-		kvm_handled_mmio(env);
-		if (kvm_is_ok(env)) {
-			cpu_loop_exit();
-		}
 #endif
             }
         } else {

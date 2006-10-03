@@ -26,7 +26,6 @@ struct kvm_callbacks {
     int (*writel)(void *opaque, uint64_t addr, uint32_t data);
     int (*writeq)(void *opaque, uint64_t addr, uint64_t data);
     int (*debug)(void *opaque, int vcpu);
-    int (*emulate_one_instruction)(void *opaque);
     int (*halt)(void *opaque, int vcpu);
     int (*io_window)(void *opaque);
 };
