@@ -1320,6 +1320,10 @@ raced:
 		goto raced;
 	}
 
+	r = -EAGAIN;
+	if (kvm->busy)
+		goto out_unlock;
+
 	if (mem->slot >= kvm->nmemslots)
 		kvm->nmemslots = mem->slot + 1;
 
@@ -1361,6 +1365,13 @@ static int kvm_dev_ioctl_get_dirty_log(struct kvm *kvm,
 	unsigned long any = 0;
 
 	spin_lock(&kvm->lock);
+
+	/*
+	 * Prevent changes to guest memory configuration even while the lock
+	 * is not taken.
+	 */
+	++kvm->busy;
+	spin_unlock(&kvm->lock);
 	r = -EINVAL;
 	if (log->slot >= KVM_MEMORY_SLOTS)
 		goto out;
@@ -1381,9 +1392,10 @@ static int kvm_dev_ioctl_get_dirty_log(struct kvm *kvm,
 
 
 	if (any) {
+		spin_lock(&kvm->lock);
 		kvm_mmu_slot_remove_write_access(kvm, log->slot);
-		memset(memslot->dirty_bitmap, 0, n);
 		spin_unlock(&kvm->lock);
+		memset(memslot->dirty_bitmap, 0, n);
 		for (i = 0; i < KVM_MAX_VCPUS; ++i) {
 			struct kvm_vcpu *vcpu = vcpu_load(kvm, i);
 
@@ -1392,12 +1404,13 @@ static int kvm_dev_ioctl_get_dirty_log(struct kvm *kvm,
 			flush_guest_tlb(vcpu);
 			vcpu_put(vcpu);
 		}
-		spin_lock(&kvm->lock);
 	}
 
 	r = 0;
 
 out:
+	spin_lock(&kvm->lock);
+	--kvm->busy;
 	spin_unlock(&kvm->lock);
 	return r;
 }

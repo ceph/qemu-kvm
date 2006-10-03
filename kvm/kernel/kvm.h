@@ -209,6 +209,7 @@ struct kvm {
 	struct list_head active_mmu_pages;
 	struct kvm_vcpu vcpus[KVM_MAX_VCPUS];
 	int memory_config_version;
+	int busy;
 	struct file *log_file;
 	char *log_buf;
 };
