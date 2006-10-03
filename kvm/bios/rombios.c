@@ -9496,6 +9496,7 @@ rombios32_real_mode:
 
   ;; restore SS:SP from the BDA
   mov ss, 0x0469
+  mov esp, #0x00000000
   mov sp, 0x0467
   ;; restore a20
   pop ax
