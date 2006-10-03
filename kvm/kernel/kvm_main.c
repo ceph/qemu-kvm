@@ -546,21 +546,27 @@ static int kvm_dev_open(struct inode *inode, struct file *filp)
 	return 0;
 }
 
-static void kvm_free_physmem_slot(struct kvm *kvm, int slot)
+/*
+ * Free any memory in @free but not in @dont.
+ */
+static void kvm_free_physmem_slot(struct kvm_memory_slot *free,
+				  struct kvm_memory_slot *dont)
 {
-	struct kvm_memory_slot *memslot = &kvm->memslots[slot];
-	unsigned long i;
+	int i;
 
-	if (!memslot->npages)
-		return;
+	if (!dont || free->phys_mem != dont->phys_mem)
+		if (free->phys_mem) {
+			for (i = 0; i < free->npages; ++i)
+				__free_page(free->phys_mem[i]);
+			vfree(free->phys_mem);
+		}
 
-	for (i = 0; i < memslot->npages; ++i)
-		__free_page(memslot->phys_mem[i]);
-	vfree(memslot->phys_mem);
-	memslot->phys_mem = 0;
-	memslot->npages = 0;
-	vfree(memslot->dirty_bitmap);
-	memslot->dirty_bitmap = 0;
+	if (!dont || free->dirty_bitmap != dont->dirty_bitmap)
+		vfree(free->dirty_bitmap);
+
+	free->phys_mem = 0;
+	free->npages = 0;
+	free->dirty_bitmap = 0;
 }
 
 static void kvm_free_physmem(struct kvm *kvm)
@@ -568,7 +574,7 @@ static void kvm_free_physmem(struct kvm *kvm)
 	int i;
 	
 	for (i = 0; i < kvm->nmemslots; ++i)
-		kvm_free_physmem_slot(kvm, i);
+		kvm_free_physmem_slot(&kvm->memslots[i], 0);
 }
 
 static void kvm_free_vmcs(struct kvm_vcpu *vcpu)
@@ -1218,8 +1224,9 @@ static int kvm_dev_ioctl_set_memory_region(struct kvm *kvm,
 	unsigned long npages;
 	unsigned long i;
 	struct kvm_memory_slot *memslot;
+	struct kvm_memory_slot old, new;
+	int memory_config_version;
 
-	spin_lock(&kvm->lock);
 	r = -EINVAL;
 	/* General sanity checks */
 	if (mem->memory_size & (PAGE_SIZE - 1))
@@ -1235,9 +1242,23 @@ static int kvm_dev_ioctl_set_memory_region(struct kvm *kvm,
 	base_gfn = mem->guest_phys_addr >> PAGE_SHIFT;
 	npages = mem->memory_size >> PAGE_SHIFT;
 
+	if (!npages)
+		mem->flags &= ~KVM_MEM_LOG_DIRTY_PAGES;
+
+raced:
+	spin_lock(&kvm->lock);
+
+	memory_config_version = kvm->memory_config_version;
+	new = old = *memslot;
+
+	new.base_gfn = base_gfn;
+	new.npages = npages;
+	new.flags = mem->flags;
+
 	/* Disallow changing a memory slot's size. */
-	if (npages && memslot->npages && npages != memslot->npages)
-		goto out;
+	r = -EINVAL;
+	if (npages && old.npages && npages != old.npages)
+		goto out_unlock;
 
 	/* Check for overlaps */
 	r = -EEXIST;
@@ -1248,53 +1269,62 @@ static int kvm_dev_ioctl_set_memory_region(struct kvm *kvm,
 			continue;
 		if (!((base_gfn + npages <= s->base_gfn) ||
 		      (base_gfn >= s->base_gfn + s->npages)))
-			goto out;
+			goto out_unlock;
 	}
+	/*
+	 * Do memory allocations outside lock.  memory_config_version will
+	 * detect any races.
+	 */
+	spin_unlock(&kvm->lock);
 
 	/* Deallocate if slot is being removed */
-	if (memslot->phys_mem && npages)
-		kvm_free_physmem_slot(kvm, mem->slot);
+	if (!npages)
+		new.phys_mem = 0;
 		
 	/* Free page dirty bitmap if unneeded */
-	if (!(mem->flags & KVM_MEM_LOG_DIRTY_PAGES) && memslot->dirty_bitmap) {
-		vfree(memslot->dirty_bitmap);
-		memslot->dirty_bitmap = 0;	
-	}
-
-	memslot->base_gfn = base_gfn;
-	memslot->npages = npages;
-	memslot->flags = mem->flags;
+	if (!(new.flags & KVM_MEM_LOG_DIRTY_PAGES))
+		new.dirty_bitmap = 0;
 
 	r = -ENOMEM;
 
 	/* Allocate if a slot is being created */
-	if (npages && !memslot->phys_mem) {
-		memslot->phys_mem = vmalloc(npages * sizeof(struct page *));
+	if (npages && !new.phys_mem) {
+		new.phys_mem = vmalloc(npages * sizeof(struct page *));
 
-		if (!memslot->phys_mem)
-			goto out;
+		if (!new.phys_mem)
+			goto out_free;
 
-		memset(memslot->phys_mem, 0, npages * sizeof(struct page *));
+		memset(new.phys_mem, 0, npages * sizeof(struct page *));
 		for (i = 0; i < npages; ++i) {
-			memslot->phys_mem[i] = alloc_page(GFP_HIGHUSER);
-			if (!memslot->phys_mem[i])
-				goto out_free_physmem;
+			new.phys_mem[i] = alloc_page(GFP_HIGHUSER);
+			if (!new.phys_mem[i])
+				goto out_free;
 		}
 	}
 
 	/* Allocate page dirty bitmap if needed */
-	if ((memslot->flags & KVM_MEM_LOG_DIRTY_PAGES) &&
-	    !memslot->dirty_bitmap) {
+	if ((new.flags & KVM_MEM_LOG_DIRTY_PAGES) && !new.dirty_bitmap) {
 		unsigned dirty_bytes = ALIGN(npages, BITS_PER_LONG) / 8;
 
-		memslot->dirty_bitmap = vmalloc(dirty_bytes);
-		if (!memslot->dirty_bitmap)
-			goto out;
-		memset(memslot->dirty_bitmap, 0, dirty_bytes);
+		new.dirty_bitmap = vmalloc(dirty_bytes);
+		if (!new.dirty_bitmap)
+			goto out_free;
+		memset(new.dirty_bitmap, 0, dirty_bytes);
+	}
+
+	spin_lock(&kvm->lock);
+	
+	if (memory_config_version != kvm->memory_config_version) {
+		spin_unlock(&kvm->lock);
+		kvm_free_physmem_slot(&new, &old);
+		goto raced;
 	}
 
 	if (mem->slot >= kvm->nmemslots)
 		kvm->nmemslots = mem->slot + 1;
+
+	*memslot = new;
+	++kvm->memory_config_version;
 
 	spin_unlock(&kvm->lock);
 
@@ -1308,12 +1338,14 @@ static int kvm_dev_ioctl_set_memory_region(struct kvm *kvm,
 		vcpu_put(vcpu);
 	}
 
+	kvm_free_physmem_slot(&old, &new);
 	return 0;
 
-out_free_physmem:
-	kvm_free_physmem_slot(kvm, mem->slot);
-out:
+out_unlock:
 	spin_unlock(&kvm->lock);
+out_free:
+	kvm_free_physmem_slot(&new, &old);
+out:
 	return r;
 }
 

@@ -208,6 +208,7 @@ struct kvm {
 	struct kvm_memory_slot memslots[KVM_MEMORY_SLOTS];
 	struct list_head active_mmu_pages;
 	struct kvm_vcpu vcpus[KVM_MAX_VCPUS];
+	int memory_config_version;
 	struct file *log_file;
 	char *log_buf;
 };
