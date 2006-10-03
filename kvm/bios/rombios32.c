@@ -45,6 +45,8 @@ typedef unsigned long long uint64_t;
                 : "=a" (eax), "=b" (ebx), "=c" (ecx), "=d" (edx) \
                 : "0" (index))
 
+#define wbinvd() asm volatile("wbinvd")
+
 #define CPUID_APIC (1 << 9)
 
 #define APIC_BASE    ((uint8_t *)0xfee00000)
@@ -591,6 +593,7 @@ static void bios_lock_shadow_ram(void)
     PCIDevice *d = &i440_pcidev;
     int v;
 
+    wbinvd();
     v = pci_config_readb(d, 0x59);
     v = (v & 0x0f) | (0x10);
     pci_config_writeb(d, 0x59, v);
@@ -645,7 +648,7 @@ static void smm_init(PCIDevice *d)
     outb(0xb3, 0x01);
 
     /* raise an SMI interrupt */
-    outb(0xb2, 0x01);
+    outb(0xb2, 0x00);
 
     /* wait until SMM code executed */
     while (inb(0xb3) != 0x00);
@@ -656,6 +659,7 @@ static void smm_init(PCIDevice *d)
     /* copy the SMM code */
     memcpy((void *)0xa8000, &smm_code_start,
            &smm_code_end - &smm_code_start);
+    wbinvd();
     
     /* close the SMM memory window and enable normal SMM */
     pci_config_writeb(&i440_pcidev, 0x72, 0x02 | 0x08);
