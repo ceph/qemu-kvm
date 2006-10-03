@@ -160,6 +160,11 @@ static void fx_restore(void *image)
 	asm ( "fxrstor (%0)":: "r" (image));
 }
 
+static void fpu_init(void)
+{
+	asm ( "finit" );
+}
+
 struct segment_descriptor {
 	u16 limit_low;
 	u16 base_low;
@@ -861,6 +866,31 @@ static uint32_t get_rdx_init_val(void)
 
 }
 
+static void fx_init(struct kvm_vcpu *vcpu)
+{
+	struct __attribute__ ((__packed__)) fx_image_s {
+		uint16_t control; //fcw
+		uint16_t status; //fsw
+		uint16_t tag; // ftw
+		uint16_t opcode; //fop
+		uint64_t ip; // fpu ip
+		uint64_t operand;// fpu dp
+		uint32_t mxcsr;
+		uint32_t mxcsr_mask;
+		
+	} *fx_image;
+
+	fx_save(vcpu->host_fx_image);
+	fpu_init();
+	fx_save(vcpu->guest_fx_image);
+	fx_restore(vcpu->host_fx_image);
+
+	fx_image = (struct fx_image_s *)vcpu->guest_fx_image;
+	fx_image->mxcsr = 0x1f80;
+	memset(vcpu->guest_fx_image + sizeof(struct fx_image_s),
+	       0, FX_IMAGE_SIZE - sizeof(struct fx_image_s));
+}
+
 /*
  * Sets up the vmcs for a 64-bit (or 32-bit on i386) guest.  All of the
  * required registers are set.  Some will be overwritten since the vcpu
@@ -888,7 +918,7 @@ static int kvm_vcpu_setup(struct kvm_vcpu *vcpu)
 			/*for vcpu 0*/ MSR_IA32_APICBASE_BSP |
 			MSR_IA32_APICBASE_ENABLE;
 
-	fx_save(vcpu->guest_fx_image); // <---------------------- todo: init fix
+	fx_init(vcpu);
 
 	#define SEG_SETUP(seg) {				\
 		vmcs_write16(GUEST_##seg##_SELECTOR, 0);	\
