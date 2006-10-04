@@ -39,6 +39,7 @@
 #define KVM_RMODE_VM_CR4_ALWAYS_ON (CR4_VMXE_MASK | CR4_PAE_MASK | CR4_VME_MASK)
 
 #define INVALID_PAGE (~(hpa_t)0)
+#define UNMUPPED_GVA (~(gpa_t)0)
 
 #define KVM_MAX_VCPUS 1
 #define KVM_MEMORY_SLOTS 4
@@ -112,7 +113,7 @@ struct kvm_mmu {
 	int (*page_fault)(struct kvm_vcpu *vcpu, gva_t gva, uint32_t err);
 	void (*inval_page)(struct kvm_vcpu *vcpu, gva_t gva);
 	void (*free)(struct kvm_vcpu *vcpu);
-	u64 (*fetch_pte64)(struct kvm_vcpu *vcpu, gva_t gva);
+	gpa_t (*gva_to_gpa)(struct kvm_vcpu *vcpu, gva_t gva);
 	hpa_t root_hpa;
 	int root_level;
 	int shadow_root_level;
@@ -239,9 +240,13 @@ int kvm_mmu_init(struct kvm_vcpu *vcpu);
 int kvm_mmu_reset_context(struct kvm_vcpu *vcpu);
 void kvm_mmu_slot_remove_write_access(struct kvm *kvm, int slot);
 
-gpa_t gva_to_gpa(struct kvm_vcpu *vcpu, gva_t gva);
-hpa_t gpa_to_hpa(struct kvm_memory_slot *memslot, gpa_t gpa);
+hpa_t gpa_to_hpa(struct kvm_vcpu *vcpu, gpa_t gpa);
+#define HPA_MSB ((sizeof(hpa_t) * 8) - 1)
+#define HPA_ERR_MASK ((hpa_t)1 << HPA_MSB)
+static inline int is_error_hpa(hpa_t hpa) { return hpa >> HPA_MSB; }
 hpa_t gva_to_hpa(struct kvm_vcpu *vcpu, gva_t gva);
+
+extern hpa_t bad_page_address;
 
 static inline struct page *gfn_to_page(struct kvm_memory_slot *slot, gfn_t gfn)
 {

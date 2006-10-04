@@ -44,8 +44,7 @@ static void FNAME(init_walker)(struct guest_walker *walker,
 	walker->level = vcpu->mmu.root_level;
 	slot = gfn_to_memslot(vcpu->kvm, 
 			      (vcpu->cr3 & PT64_BASE_ADDR_MASK) >> PAGE_SHIFT);
-	/* FIXME: cr3 -> mmio or nowhere? */
-	hpa = gpa_to_hpa(slot, vcpu->cr3 & PT64_BASE_ADDR_MASK);
+	hpa = safe_gpa_to_hpa(vcpu, vcpu->cr3 & PT64_BASE_ADDR_MASK);
 	walker->table = kmap_atomic(pfn_to_page(hpa >> PAGE_SHIFT), KM_USER0);
 
 	ASSERT((!is_long_mode() && is_pae()) ||
@@ -100,7 +99,6 @@ static pt_element_t *FNAME(fetch_guest)(struct kvm_vcpu *vcpu,
 
 	for (;;) {
 		int index = PT_INDEX(addr, walker->level);
-		struct kvm_memory_slot *slot;
 		hpa_t paddr;
 
 		ASSERT(((unsigned long)walker->table & PAGE_MASK) ==
@@ -113,9 +111,7 @@ static pt_element_t *FNAME(fetch_guest)(struct kvm_vcpu *vcpu,
 			return &walker->table[index];
 		if (walker->level != 3 || is_long_mode())
 			walker->inherited_ar &= walker->table[index];
-		slot = gfn_to_memslot(vcpu->kvm, (walker->table[index] & PT_BASE_ADDR_MASK) >> PAGE_SHIFT);
-		/* FIXME: paging on mmio? */
-		paddr = gpa_to_hpa(slot, walker->table[index] & PT_BASE_ADDR_MASK);
+		paddr = safe_gpa_to_hpa(vcpu, walker->table[index] & PT_BASE_ADDR_MASK);
 		kunmap_atomic(walker->table, KM_USER0);
 		walker->table = kmap_atomic(pfn_to_page(paddr >> PAGE_SHIFT),
 					    KM_USER0);
@@ -285,32 +281,36 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 	return 0;	
 }
 
-static u64 FNAME(fetch_pte)(struct kvm_vcpu *vcpu, gva_t vaddr)
+static gpa_t FNAME(gva_to_gpa)(struct kvm_vcpu *vcpu, gva_t vaddr)
 {
 	struct guest_walker walker;
 	pt_element_t guest_pte;
+	gpa_t gpa;
 
 	FNAME(init_walker)(&walker, vcpu);
-	guest_pte = *FNAME(fetch_guest)(vcpu, &walker, PT_PAGE_TABLE_LEVEL, vaddr);
+	guest_pte = *FNAME(fetch_guest)(vcpu, &walker, PT_PAGE_TABLE_LEVEL,
+					vaddr);
+	FNAME(release_walker)(&walker);
 
-	if (is_present_pte(guest_pte) && walker.level == PT_DIRECTORY_LEVEL) {
-		gpa_t gaddr;
-
+	if (!is_present_pte(guest_pte))
+		return UNMUPPED_GVA;
+	
+	if (walker.level == PT_DIRECTORY_LEVEL) {
 		ASSERT((guest_pte & PT_PAGE_SIZE_MASK));
-
-		gaddr = (guest_pte & PT_DIR_BASE_ADDR_MASK) |
-			(vaddr & PT_LEVEL_MASK(PT_PAGE_TABLE_LEVEL));
 		ASSERT(PTTYPE == 64 || is_pse());
 
-                if (PTTYPE == 32 && is_cpuid_PSE36())
-			gaddr |= (guest_pte & PT32_DIR_PSE36_MASK) <<
-				(32 - PT32_DIR_PSE36_SHIFT);
+		gpa = (guest_pte & PT_DIR_BASE_ADDR_MASK) | (vaddr & 
+			(PT_LEVEL_MASK(PT_PAGE_TABLE_LEVEL) | ~PAGE_MASK));
 
-		guest_pte &= ~(PT_PAGE_SIZE_MASK | PT_BASE_ADDR_MASK);
-		guest_pte |= gaddr;
+		if (PTTYPE == 32 && is_cpuid_PSE36())
+			gpa |= (guest_pte & PT32_DIR_PSE36_MASK) <<
+					(32 - PT32_DIR_PSE36_SHIFT);
+	} else {
+		gpa = (guest_pte & PT_BASE_ADDR_MASK);
+		gpa |= (vaddr & ~PAGE_MASK);
 	}
-	FNAME(release_walker)(&walker);
-	return guest_pte;
+        
+	return gpa;
 }
 
 #undef pt_element_t

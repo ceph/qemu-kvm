@@ -33,7 +33,6 @@
 
 #include "vmx.h"
 #include "x86_emulate.h"
-#include "mmu.h"
 
 MODULE_AUTHOR("Qumranet");
 MODULE_LICENSE("GPL");
@@ -285,10 +284,10 @@ int kvm_read_guest(struct kvm_vcpu *vcpu,
 		hva_t guest_buf;
 
 		paddr = gva_to_hpa(vcpu, addr);
-		//fixme
-		/*if ( paddr == kvm_bad_page_addr ) {
+
+		if ( is_error_hpa(paddr) ) {
 			break;
-		}*/
+		}
 		guest_buf = (hva_t)kmap_atomic(
 					pfn_to_page(paddr >> PAGE_SHIFT),
 					KM_USER0);
@@ -320,10 +319,9 @@ int kvm_write_guest(struct kvm_vcpu *vcpu,
 
 		paddr = gva_to_hpa(vcpu, addr);
 
-		//fixme
-		/*if ( paddr == kvm_bad_page_addr ) {
+		if ( is_error_hpa(paddr) ) {
 			break;
-		}*/
+		}
 		guest_buf = (hva_t)kmap_atomic(
 					pfn_to_page(paddr >> PAGE_SHIFT),
 					KM_USER0);
@@ -1484,16 +1482,16 @@ static int emulator_read_std(unsigned long addr,
 	void *data = val;
 
 	while (bytes) {
-		u64 pte = vcpu->mmu.fetch_pte64(vcpu, addr);
+		gpa_t gpa = vcpu->mmu.gva_to_gpa(vcpu, addr);
 		unsigned offset = addr & (PAGE_SIZE-1);
 		unsigned tocopy = min(bytes, (unsigned)PAGE_SIZE - offset);
 		unsigned long pfn;
 		struct kvm_memory_slot *memslot;
 		void *page;
 
-		if (!(pte & PT_PRESENT_MASK))
+		if (gpa == UNMUPPED_GVA)
 			return vcpu_printf(vcpu, "not present\n"), X86EMUL_PROPAGATE_FAULT;
-		pfn = (pte & PT64_BASE_ADDR_MASK) >> PAGE_SHIFT;
+		pfn = gpa >> PAGE_SHIFT;
 		memslot = gfn_to_memslot(vcpu->kvm, pfn);
 		/* FIXME: no memslot: emulate? return 0xff? */
 		page = kmap_atomic(gfn_to_page(memslot, pfn), KM_USER0);
@@ -1532,13 +1530,11 @@ static int emulator_read_emulated(unsigned long addr,
 		vcpu->mmio_read_completed = 0;
 		return X86EMUL_CONTINUE;
 	} else {
-		u64 pte = vcpu->mmu.fetch_pte64(vcpu, addr);
-		unsigned offset = addr & (PAGE_SIZE-1);
-
-		if (!(pte & PT_PRESENT_MASK))
+		gpa_t gpa = vcpu->mmu.gva_to_gpa(vcpu, addr);
+		if (gpa == UNMUPPED_GVA)
 			return vcpu_printf(vcpu, "not present\n"), X86EMUL_PROPAGATE_FAULT;
 		vcpu->mmio_needed = 1;
-		vcpu->mmio_phys_addr = (pte & PT64_BASE_ADDR_MASK) | offset;
+		vcpu->mmio_phys_addr = gpa;
 		vcpu->mmio_size = bytes;
 		vcpu->mmio_is_write = 0;
 
@@ -1552,15 +1548,13 @@ static int emulator_write_emulated(unsigned long addr,
 				   struct x86_emulate_ctxt *ctxt)
 {
 	struct kvm_vcpu *vcpu = ctxt->private;
-
-	u64 pte = vcpu->mmu.fetch_pte64(vcpu, addr);
-	unsigned offset = addr & (PAGE_SIZE-1);
+	gpa_t gpa = vcpu->mmu.gva_to_gpa(vcpu, addr);
 	
-	if (!(pte & PT_PRESENT_MASK))
+	if (gpa == UNMUPPED_GVA)
 		return vcpu_printf(vcpu, "not present\n"), X86EMUL_PROPAGATE_FAULT;
 	
 	vcpu->mmio_needed = 1;
-	vcpu->mmio_phys_addr = (pte & PT64_BASE_ADDR_MASK) | offset;
+	vcpu->mmio_phys_addr = gpa;
 	vcpu->mmio_size = bytes;
 	vcpu->mmio_is_write = 1;
 	memcpy(vcpu->mmio_data, &val, bytes);
@@ -3420,15 +3414,15 @@ static int kvm_dev_ioctl_translate(struct kvm *kvm, struct kvm_translation *tr)
 {
 	unsigned long vaddr = tr->linear_address;
 	struct kvm_vcpu *vcpu;
-	u64 pte;
+	gpa_t gpa;
 
 	vcpu = vcpu_load(kvm, tr->vcpu);
 	if (!vcpu)
 		return -ENOENT;
 	spin_lock(&kvm->lock);
-	pte = vcpu->mmu.fetch_pte64(vcpu, vaddr);
-	tr->physical_address = (pte & 0xfffffffff000ull)|(vaddr & ~PAGE_MASK);
-	tr->valid = pte & 1;
+	gpa = vcpu->mmu.gva_to_gpa(vcpu, vaddr);
+	tr->physical_address = gpa;
+	tr->valid = gpa != UNMUPPED_GVA;
 	tr->writeable = 1;
 	tr->usermode = 0;
 	spin_unlock(&kvm->lock);
@@ -3771,8 +3765,11 @@ static void kvm_exit_debug(void)
 	debugfs_remove(debugfs_dir);
 }
 
+hpa_t bad_page_address;
+
 static __init int kvm_init(void)
 {
+	static struct page *bad_page;
 	int r = 0;
 
 	if (!cpu_has_kvm_support()) {
@@ -3799,6 +3796,15 @@ static __init int kvm_init(void)
 		goto out_free;
 	}
 
+
+	if ((bad_page = alloc_page(GFP_KERNEL)) == NULL) {
+		r = -ENOMEM;
+		goto out_free;
+	}
+
+	bad_page_address = page_to_pfn(bad_page) << PAGE_SHIFT;
+	memset(__va(bad_page_address), 0, PAGE_SIZE);
+
 	return r;
 
 out_free:
@@ -3815,6 +3821,7 @@ static __exit void kvm_exit(void)
 	unregister_reboot_notifier(&kvm_reboot_notifier);
 	on_each_cpu(kvm_disable, 0, 0, 1);
 	free_kvm_area();
+	__free_page(pfn_to_page(bad_page_address >> PAGE_SHIFT));
 }
 
 module_init(kvm_init)

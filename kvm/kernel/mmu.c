@@ -210,28 +210,37 @@ static inline int is_io_mem(struct kvm_vcpu *vcpu, gpa_t addr)
 	return addr >= 0xa0000ULL && addr < 0xc0000ULL;
 }
 
-//fixme not safe
-hpa_t gpa_to_hpa(struct kvm_memory_slot *memslot, gpa_t gpa)
+
+
+hpa_t safe_gpa_to_hpa(struct kvm_vcpu *vcpu, gpa_t gpa)
 {
+	hpa_t hpa = gpa_to_hpa(vcpu, gpa);
+
+	return is_error_hpa(hpa) ? bad_page_address | (gpa & ~PAGE_MASK): hpa;
+}
+
+hpa_t gpa_to_hpa(struct kvm_vcpu *vcpu, gpa_t gpa)
+{
+	struct kvm_memory_slot *slot;
 	struct page *page;
 
-	page = gfn_to_page(memslot, gpa >> PAGE_SHIFT);
+	ASSERT((gpa & HPA_ERR_MASK) == 0);
+	slot = gfn_to_memslot(vcpu->kvm, gpa >> PAGE_SHIFT);
+	if (!slot) {
+		return gpa | HPA_ERR_MASK;
+	}
+	page = gfn_to_page(slot, gpa >> PAGE_SHIFT);
 	return (page_to_pfn(page) << PAGE_SHIFT) | (gpa & (PAGE_SIZE-1));
 }
-//fixme not safe
-gpa_t gva_to_gpa(struct kvm_vcpu *vcpu, gva_t gva)
-{
-	uint64_t pte = vcpu->mmu.fetch_pte64(vcpu, gva);
-	return (pte & PT64_BASE_ADDR_MASK) | (gva & ~PAGE_MASK);
-}
-//fixme not safe
+
 hpa_t gva_to_hpa(struct kvm_vcpu *vcpu, gva_t gva)
 {
-	gpa_t gpa = gva_to_gpa(vcpu, gva);
-	struct kvm_memory_slot *slot;
+	gpa_t gpa = vcpu->mmu.gva_to_gpa(vcpu, gva);
 
-	slot = gfn_to_memslot(vcpu->kvm, gpa >> PAGE_SHIFT);
-	return slot ? gpa_to_hpa(slot, gpa) : 0;
+	if (gpa == UNMUPPED_GVA) {
+		return UNMUPPED_GVA;
+	}
+	return gpa_to_hpa(vcpu, gpa);
 }
 
 
@@ -321,13 +330,9 @@ static void nonpaging_flush(struct kvm_vcpu *vcpu)
 	vmcs_writel(GUEST_CR3, root);
 }
 
-static u64 nonpaging_fetch_pte64(struct kvm_vcpu *vcpu, unsigned long vaddr)
+static gpa_t nonpaging_gva_to_gpa(struct kvm_vcpu *vcpu, gva_t vaddr)
 {
-	return (vaddr & PAGE_MASK)
-		| PT_PRESENT_MASK
-		| PT_WRITABLE_MASK
-		| PT_ACCESSED_MASK
-		| PT_DIRTY_MASK;
+	return vaddr;
 }
 
 static int nonpaging_page_fault(struct kvm_vcpu *vcpu, gva_t gva,
@@ -340,13 +345,16 @@ static int nonpaging_page_fault(struct kvm_vcpu *vcpu, gva_t gva,
      ASSERT(VALID_PAGE(vcpu->mmu.root_hpa));
 
      for (;;) {
-	     struct kvm_memory_slot *slot;
 	     hpa_t paddr;
 
-	     slot = gfn_to_memslot(vcpu->kvm, addr >> PAGE_SHIFT);
-	     if (!slot || is_io_mem(vcpu, addr))
+	     if (is_io_mem(vcpu, addr))
 		     return 1;
-	     paddr = gpa_to_hpa(slot, addr & PT64_BASE_ADDR_MASK);
+
+	     paddr = gpa_to_hpa(vcpu , addr & PT64_BASE_ADDR_MASK);
+
+	     if (is_error_hpa(paddr))
+		     return 1;
+
 	     ret = nonpaging_map(vcpu, addr & PAGE_MASK, paddr);
 	     if (ret) {
 		     nonpaging_flush(vcpu);
@@ -379,7 +387,7 @@ static int nonpaging_init_context(struct kvm_vcpu *vcpu)
 	context->new_cr3 = nonpaging_new_cr3;
 	context->page_fault = nonpaging_page_fault;
 	context->inval_page = nonpaging_inval_page;
-	context->fetch_pte64 = nonpaging_fetch_pte64;
+	context->gva_to_gpa = nonpaging_gva_to_gpa;
 	context->free = nonpaging_free;
 	context->root_level = PT32E_ROOT_LEVEL;
 	context->shadow_root_level = PT32E_ROOT_LEVEL;
@@ -401,7 +409,6 @@ static inline void set_pte_common(struct kvm_vcpu *vcpu,
 			     uint64_t access_bits)
 {
 	hpa_t paddr;
-	struct kvm_memory_slot *slot;
 
 	*shadow_pte |= access_bits << PT_SHADOW_BITS_OFFSET;
 	if (!dirty)
@@ -414,14 +421,13 @@ static inline void set_pte_common(struct kvm_vcpu *vcpu,
 
 	*shadow_pte |= access_bits;
 
-	slot = gfn_to_memslot(vcpu->kvm, gaddr >> PAGE_SHIFT);
+	paddr = gpa_to_hpa(vcpu, gaddr & PT64_BASE_ADDR_MASK);
 
-	if (!slot || is_io_mem(vcpu, gaddr)) {
+	if (is_error_hpa(paddr) || is_io_mem(vcpu, gaddr)) {
 		*shadow_pte |= gaddr;
 		*shadow_pte |= PT_SHADOW_IO_MARK;
 		*shadow_pte &= ~PT_PRESENT_MASK;
 	} else {
-		paddr = gpa_to_hpa(slot, gaddr);
 		*shadow_pte |= paddr;
 	}
 }
@@ -535,7 +541,7 @@ static int paging64_init_context(struct kvm_vcpu *vcpu)
 	context->new_cr3 = paging_new_cr3;
 	context->page_fault = paging64_page_fault;
 	context->inval_page = paging_inval_page;
-	context->fetch_pte64 = paging64_fetch_pte;
+	context->gva_to_gpa = paging64_gva_to_gpa;
 	context->free = paging_free;
 	context->root_level = PT64_ROOT_LEVEL;
 	context->shadow_root_level = PT64_ROOT_LEVEL;
@@ -553,7 +559,7 @@ static int paging32_init_context(struct kvm_vcpu *vcpu)
 	context->new_cr3 = paging_new_cr3;
 	context->page_fault = paging32_page_fault;
 	context->inval_page = paging_inval_page;
-	context->fetch_pte64 = paging32_fetch_pte;
+	context->gva_to_gpa = paging32_gva_to_gpa;
 	context->free = paging_free;
 	context->root_level = PT32_ROOT_LEVEL;
 	context->shadow_root_level = PT32E_ROOT_LEVEL;
