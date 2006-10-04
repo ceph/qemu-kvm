@@ -293,7 +293,7 @@ static gpa_t FNAME(gva_to_gpa)(struct kvm_vcpu *vcpu, gva_t vaddr)
 	FNAME(release_walker)(&walker);
 
 	if (!is_present_pte(guest_pte))
-		return UNMUPPED_GVA;
+		return UNMAPPED_GVA;
 	
 	if (walker.level == PT_DIRECTORY_LEVEL) {
 		ASSERT((guest_pte & PT_PAGE_SIZE_MASK));

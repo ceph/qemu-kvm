@@ -1489,7 +1489,7 @@ static int emulator_read_std(unsigned long addr,
 		struct kvm_memory_slot *memslot;
 		void *page;
 
-		if (gpa == UNMUPPED_GVA)
+		if (gpa == UNMAPPED_GVA)
 			return vcpu_printf(vcpu, "not present\n"), X86EMUL_PROPAGATE_FAULT;
 		pfn = gpa >> PAGE_SHIFT;
 		memslot = gfn_to_memslot(vcpu->kvm, pfn);
@@ -1531,7 +1531,7 @@ static int emulator_read_emulated(unsigned long addr,
 		return X86EMUL_CONTINUE;
 	} else {
 		gpa_t gpa = vcpu->mmu.gva_to_gpa(vcpu, addr);
-		if (gpa == UNMUPPED_GVA)
+		if (gpa == UNMAPPED_GVA)
 			return vcpu_printf(vcpu, "not present\n"), X86EMUL_PROPAGATE_FAULT;
 		vcpu->mmio_needed = 1;
 		vcpu->mmio_phys_addr = gpa;
@@ -1550,7 +1550,7 @@ static int emulator_write_emulated(unsigned long addr,
 	struct kvm_vcpu *vcpu = ctxt->private;
 	gpa_t gpa = vcpu->mmu.gva_to_gpa(vcpu, addr);
 	
-	if (gpa == UNMUPPED_GVA)
+	if (gpa == UNMAPPED_GVA)
 		return vcpu_printf(vcpu, "not present\n"), X86EMUL_PROPAGATE_FAULT;
 	
 	vcpu->mmio_needed = 1;
@@ -3422,7 +3422,7 @@ static int kvm_dev_ioctl_translate(struct kvm *kvm, struct kvm_translation *tr)
 	spin_lock(&kvm->lock);
 	gpa = vcpu->mmu.gva_to_gpa(vcpu, vaddr);
 	tr->physical_address = gpa;
-	tr->valid = gpa != UNMUPPED_GVA;
+	tr->valid = gpa != UNMAPPED_GVA;
 	tr->writeable = 1;
 	tr->usermode = 0;
 	spin_unlock(&kvm->lock);

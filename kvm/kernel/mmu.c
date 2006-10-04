@@ -237,8 +237,8 @@ hpa_t gva_to_hpa(struct kvm_vcpu *vcpu, gva_t gva)
 {
 	gpa_t gpa = vcpu->mmu.gva_to_gpa(vcpu, gva);
 
-	if (gpa == UNMUPPED_GVA) {
-		return UNMUPPED_GVA;
+	if (gpa == UNMAPPED_GVA) {
+		return UNMAPPED_GVA;
 	}
 	return gpa_to_hpa(vcpu, gpa);
 }
