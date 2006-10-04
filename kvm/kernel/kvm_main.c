@@ -898,9 +898,7 @@ static void fx_init(struct kvm_vcpu *vcpu)
 }
 
 /*
- * Sets up the vmcs for a 64-bit (or 32-bit on i386) guest.  All of the
- * required registers are set.  Some will be overwritten since the vcpu
- * will typically start from a different state.
+ * Sets up the vmcs for emulated real mode.
  */
 static int kvm_vcpu_setup(struct kvm_vcpu *vcpu)
 {
@@ -926,13 +924,17 @@ static int kvm_vcpu_setup(struct kvm_vcpu *vcpu)
 
 	fx_init(vcpu);
 
-	#define SEG_SETUP(seg) {				\
+#define SEG_SETUP(seg) do {					\
 		vmcs_write16(GUEST_##seg##_SELECTOR, 0);	\
 		vmcs_writel(GUEST_##seg##_BASE, 0);		\
 		vmcs_write32(GUEST_##seg##_LIMIT, 0xffff);	\
 		vmcs_write32(GUEST_##seg##_AR_BYTES, 0x93); 	\
-	}
+	} while (0)
 
+	/*
+	 * GUEST_CS_BASE should really be 0xffff0000, but VT vm86 mode
+	 * insists on having GUEST_CS_BASE == GUEST_CS_SELECTOR << 4.  Sigh.
+	 */
 	vmcs_write16(GUEST_CS_SELECTOR, 0xf000);
 	vmcs_writel(GUEST_CS_BASE, 0x000f0000);
 	vmcs_write32(GUEST_CS_LIMIT, 0xffff);
