@@ -434,7 +434,7 @@ x86_emulate_memop(struct x86_emulate_ctxt *ctxt, struct x86_emulate_ops *ops)
 	unsigned long cr2 = ctxt->cr2;
 	int mode = ctxt->mode;
 	unsigned long modrm_ea;
-	int use_modrm_ea, index_reg = 0, base_reg = 0, scale, rip_relative;
+	int use_modrm_ea, index_reg = 0, base_reg = 0, scale, rip_relative = 0;
 
 	/* Shadow copy of register state. Committed on successful emulation. */
 	struct cpu_user_regs _regs = *ctxt->regs;
@@ -536,7 +536,6 @@ done_prefixes:
 		modrm_rm |= (modrm & 0x07);
 		modrm_ea = 0;
 		use_modrm_ea = 1;
-		rip_relative = 0;
 
 		if (modrm_mod == 3) {
 			DPRINTF("Cannot parse ModRM.mod == 3.\n");
@@ -647,13 +646,33 @@ done_prefixes:
 		}
 		if (!override_base)
 			override_base = &ctxt->ds_base;
-		if (mode != X86EMUL_MODE_PROT64 || 
-		    override_base == &ctxt->fs_base || 
-		    override_base == &ctxt->gs_base)
+		if (mode == X86EMUL_MODE_PROT64 &&
+		    override_base != &ctxt->fs_base &&
+		    override_base != &ctxt->gs_base)
+			override_base = 0;
+
+		if (override_base)
 			modrm_ea += *override_base;
-		if (modrm_ea != cr2)
-			printk("ea: %lx cr2: %lx\n", modrm_ea, cr2);
-		/* FIXME: handle rip_relative */
+
+		if (rip_relative) {
+			modrm_ea += _regs.eip;
+			switch (d & SrcMask) {
+			case SrcImmByte:
+				modrm_ea += 1;
+				break;
+			case SrcImm:
+				if (d & ByteOp)
+					modrm_ea += 1;
+				else
+					if (op_bytes == 8)
+						modrm_ea += 4;
+					else
+						modrm_ea += op_bytes;
+			}
+		}
+		if (ad_bytes != 8)
+			modrm_ea = (uint32_t)modrm_ea;
+		cr2 = modrm_ea;
 	}
 
 	/* Decode and fetch the destination operand: register or memory. */
