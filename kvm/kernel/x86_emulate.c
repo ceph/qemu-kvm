@@ -546,6 +546,11 @@ done_prefixes:
 		}
 
 		if (ad_bytes == 2) {
+			unsigned bx = _regs[VCPU_REGS_RBX];
+			unsigned bp = _regs[VCPU_REGS_RBP];
+			unsigned si = _regs[VCPU_REGS_RSI];
+			unsigned di = _regs[VCPU_REGS_RDI];
+
 			/* 16-bit ModR/M decode. */
 			switch (modrm_mod) {
 			case 0:
@@ -561,32 +566,29 @@ done_prefixes:
 			}
 			switch (modrm_rm) {
 			case 0:
-				modrm_ea += _regs[VCPU_REGS_RBX]					+ _regs[VCPU_REGS_RSI];
+				modrm_ea += bx + si;
 				break;
 			case 1:
-				modrm_ea += _regs[VCPU_REGS_RBX]
-					+ _regs[VCPU_REGS_RDI];
+				modrm_ea += bx + di;
 				break;
 			case 2:
-				modrm_ea += _regs[VCPU_REGS_RBP]
-					+ _regs[VCPU_REGS_RSI];
+				modrm_ea += bp + si;
 				break;
 			case 3:
-				modrm_ea += _regs[VCPU_REGS_RBP]
-					+ _regs[VCPU_REGS_RDI];
+				modrm_ea += bp + di;
 				break;
 			case 4:
-				modrm_ea += _regs[VCPU_REGS_RSI];
+				modrm_ea += si;
 				break;
 			case 5:
-				modrm_ea += _regs[VCPU_REGS_RDI];
+				modrm_ea += di;
 				break;
 			case 6:
 				if (modrm_mod != 0)
-					modrm_ea += _regs[VCPU_REGS_RBP];
+					modrm_ea += bp;
 				break;
 			case 7:
-				modrm_ea += _regs[VCPU_REGS_RBX];
+				modrm_ea += bx;
 				break;
 			}
 			if (modrm_rm == 2 || modrm_rm == 3 || 
