@@ -44,16 +44,16 @@ void show_code(struct kvm_vcpu *vcpu)
 {
 	gva_t rip = vmcs_readl(GUEST_RIP);
 	u8 code[50];
+	char buf[30 + 3 * sizeof code];
 	int i;
 	
 	if (!is_long_mode())
 		rip += vmcs_readl(GUEST_CS_BASE);
 
 	kvm_read_guest(vcpu, rip, sizeof code, code);
-	vcpu_printf(vcpu, "code: %lx", rip);
 	for (i = 0; i < sizeof code; ++i)
-		vcpu_printf(vcpu, " %02x", code[i]);
-	vcpu_printf(vcpu, "\n");
+		sprintf(buf + i * 3, " %02x", code[i]);
+	vcpu_printf(vcpu, "code: %lx%s\n", rip, buf);
 }
 
 struct gate_struct {
@@ -110,7 +110,7 @@ void show_page(struct kvm_vcpu *vcpu,
 		for (i = 0; i <  PAGE_SIZE / sizeof(uint64_t) ; i++) {
 			uint8_t *ptr = (uint8_t*)&buf[i];
 			int j;
-			vcpu_printf(vcpu, " 0x%16.16x:",
+			vcpu_printf(vcpu, " 0x%16.16lx:",
 				   addr + i * sizeof(uint64_t));
 			for (j = 0; j < sizeof(uint64_t) ; j++) {
 				vcpu_printf(vcpu, " 0x%2.2x", ptr[j]);
@@ -128,7 +128,7 @@ void show_u64(struct kvm_vcpu *vcpu, gva_t addr)
 	if (kvm_read_guest(vcpu, addr, sizeof(uint64_t), &buf) == sizeof(uint64_t)) {
 		uint8_t *ptr = (uint8_t*)&buf;
 		int j;
-		vcpu_printf(vcpu, " 0x%16.16x:", addr);
+		vcpu_printf(vcpu, " 0x%16.16lx:", addr);
 		for (j = 0; j < sizeof(uint64_t) ; j++) {
 			vcpu_printf(vcpu, " 0x%2.2x", ptr[j]);
 		}
@@ -165,7 +165,7 @@ int vm_entry_test_guest(struct kvm_vcpu *vcpu)
 		if (vmcs_readl(GUEST_##seg##_BASE) != \
 		    (unsigned long)vmcs_read16(GUEST_##seg##_SELECTOR) << 4) {\
 			vcpu_printf(vcpu, "%s: "#seg" base 0x%lx in "\
-				   "virtual8086 is not "#seg" selector 0x%lx"\
+				   "virtual8086 is not "#seg" selector 0x%x"\
 				   " shifted right 4 bits\n",\
 			   __FUNCTION__,\
 			   vmcs_readl(GUEST_##seg##_BASE),\
@@ -732,7 +732,7 @@ int vm_entry_test_guest(struct kvm_vcpu *vcpu)
 
 	if ((rflags & RFLAGS_RESEVED_CLEAR_BITS) ||
 	    !(rflags & RFLAGS_RESEVED_SET_BITS)) {
-		vcpu_printf(vcpu, "%s: RFLAGS 0x%lx, reserved bits 0x%lx 0x%lx\n",
+		vcpu_printf(vcpu, "%s: RFLAGS 0x%lx, reserved bits 0x%llx 0x%x\n",
 			   __FUNCTION__,
 			   rflags,
 			   RFLAGS_RESEVED_CLEAR_BITS,
