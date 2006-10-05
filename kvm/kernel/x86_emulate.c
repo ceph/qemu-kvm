@@ -629,7 +629,7 @@ done_prefixes:
 					rip_relative = 1;
 				break;
 			default:
-				modrm_ea += _regs.gprs[modrm_mod];
+				modrm_ea += _regs.gprs[modrm_rm];
 				break;
 			}
 			switch (modrm_mod) {
