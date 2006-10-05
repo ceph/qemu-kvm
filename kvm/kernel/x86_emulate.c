@@ -550,7 +550,7 @@ done_prefixes:
 			switch (modrm_mod) {
 			case 0:
 				if (modrm_rm == 6)
-					modrm_ea += insn_fetch(u16, 2,							       _eip);
+					modrm_ea += insn_fetch(u16, 2, _eip);
 				break;
 			case 1:
 				modrm_ea += insn_fetch(s8, 1, _eip);
@@ -561,8 +561,7 @@ done_prefixes:
 			}
 			switch (modrm_rm) {
 			case 0:
-				modrm_ea += _regs[VCPU_REGS_RBX]
-					+ _regs[VCPU_REGS_RSI];
+				modrm_ea += _regs[VCPU_REGS_RBX]					+ _regs[VCPU_REGS_RSI];
 				break;
 			case 1:
 				modrm_ea += _regs[VCPU_REGS_RBX]
@@ -686,22 +685,21 @@ done_prefixes:
 		dst.type = OP_REG;
 		if ((d & ByteOp)
 		    && !(twobyte_table && (b == 0xb6 || b == 0xb7))) {
-			dst.ptr =
-			    decode_register(modrm_reg, _regs, 
-					    (rex_prefix == 0));
+			dst.ptr = decode_register(modrm_reg, _regs, 
+						  (rex_prefix == 0));
 			dst.val = *(u8 *) dst.ptr;
 			dst.bytes = 1;
 		} else {
 			dst.ptr = decode_register(modrm_reg, _regs, 0);
 			switch ((dst.bytes = op_bytes)) {
 			case 2:
-				dst.val = *(u16 *) dst.ptr;
+				dst.val = *(u16 *)dst.ptr;
 				break;
 			case 4:
-				dst.val = *(u32 *) dst.ptr;
+				dst.val = *(u32 *)dst.ptr;
 				break;
 			case 8:
-				dst.val = *(u64 *) dst.ptr;
+				dst.val = *(u64 *)dst.ptr;
 				break;
 			}
 		}
@@ -728,9 +726,8 @@ done_prefixes:
 	case SrcReg:
 		src.type = OP_REG;
 		if (d & ByteOp) {
-			src.ptr =
-			    decode_register(modrm_reg, _regs,
-					    (rex_prefix == 0));
+			src.ptr = decode_register(modrm_reg, _regs,
+						  (rex_prefix == 0));
 			src.val = src.orig_val = *(u8 *) src.ptr;
 			src.bytes = 1;
 		} else {
@@ -896,9 +893,9 @@ done_prefixes:
 		/* 64-bit mode: POP always pops a 64-bit operand. */
 		if (mode == X86EMUL_MODE_PROT64)
 			dst.bytes = 8;
-		if ((rc =
-		     ops->read_std(register_address(ctxt->ss_base, _regs[VCPU_REGS_RSP]),
-				   &dst.val, dst.bytes, ctxt)) != 0)
+		if ((rc = ops->read_std(register_address(ctxt->ss_base, 
+							 _regs[VCPU_REGS_RSP]),
+					&dst.val, dst.bytes, ctxt)) != 0)
 			goto done;
 		register_address_increment(_regs[VCPU_REGS_RSP], dst.bytes);
 		break;
@@ -986,7 +983,8 @@ done_prefixes:
 							ctxt)) != 0)
 					goto done;
 			}
-			register_address_increment(_regs[VCPU_REGS_RSP], -dst.bytes);
+			register_address_increment(_regs[VCPU_REGS_RSP], 
+						   -dst.bytes);
 			if ((rc = ops->write_std(
 				     register_address(ctxt->ss_base,
 						      _regs[VCPU_REGS_RSP]),
@@ -1007,13 +1005,13 @@ writeback:
 			/* The 4-byte case *is* correct: in 64-bit mode we zero-extend. */
 			switch (dst.bytes) {
 			case 1:
-				*(u8 *) dst.ptr = (u8) dst.val;
+				*(u8 *)dst.ptr = (u8)dst.val;
 				break;
 			case 2:
-				*(u16 *) dst.ptr = (u16) dst.val;
+				*(u16 *)dst.ptr = (u16)dst.val;
 				break;
 			case 4:
-				*dst.ptr = (u32) dst.val;
+				*dst.ptr = (u32)dst.val;
 				break;	/* 64b: zero-ext */
 			case 8:
 				*dst.ptr = dst.val;
@@ -1060,21 +1058,16 @@ special_insn:
 	case 0xa4 ... 0xa5:	/* movs */
 		dst.type = OP_MEM;
 		dst.bytes = (d & ByteOp) ? 1 : op_bytes;
-		dst.ptr =
-		    (unsigned long *)register_address(ctxt->es_base, _regs[VCPU_REGS_RDI]);
-		if ((rc =
-		     ops->
-		     read_emulated(register_address
-				   (override_base ? *override_base : ctxt->
-				    ds_base, _regs[VCPU_REGS_RSI]), &dst.val, dst.bytes,
-				   ctxt)) != 0)
+		dst.ptr = (unsigned long *)register_address(ctxt->es_base, 
+							_regs[VCPU_REGS_RDI]);
+		if ((rc = ops->read_emulated(register_address(
+		      override_base ? *override_base : ctxt->ds_base, 
+		      _regs[VCPU_REGS_RSI]), &dst.val, dst.bytes, ctxt)) != 0)
 			goto done;
 		register_address_increment(_regs[VCPU_REGS_RSI],
-					   (_eflags & EFLG_DF) ? -dst.
-					   bytes : dst.bytes);
+			     (_eflags & EFLG_DF) ? -dst.bytes : dst.bytes);
 		register_address_increment(_regs[VCPU_REGS_RDI],
-					   (_eflags & EFLG_DF) ? -dst.
-					   bytes : dst.bytes);
+			     (_eflags & EFLG_DF) ? -dst.bytes : dst.bytes);
 		break;
 	case 0xa6 ... 0xa7:	/* cmps */
 		DPRINTF("Urk! I don't handle CMPS.\n");
@@ -1085,19 +1078,16 @@ special_insn:
 		dst.ptr = (unsigned long *)cr2;
 		dst.val = _regs[VCPU_REGS_RAX];
 		register_address_increment(_regs[VCPU_REGS_RDI],
-					   (_eflags & EFLG_DF) ? -dst.
-					   bytes : dst.bytes);
+			     (_eflags & EFLG_DF) ? -dst.bytes : dst.bytes);
 		break;
 	case 0xac ... 0xad:	/* lods */
 		dst.type = OP_REG;
 		dst.bytes = (d & ByteOp) ? 1 : op_bytes;
 		dst.ptr = (unsigned long *)&_regs[VCPU_REGS_RAX];
-		if ((rc =
-		     ops->read_emulated(cr2, &dst.val, dst.bytes, ctxt)) != 0)
+		if ((rc = ops->read_emulated(cr2, &dst.val, dst.bytes, ctxt)) != 0)
 			goto done;
 		register_address_increment(_regs[VCPU_REGS_RSI],
-					   (_eflags & EFLG_DF) ? -dst.
-					   bytes : dst.bytes);
+			   (_eflags & EFLG_DF) ? -dst.bytes : dst.bytes);
 		break;
 	case 0xae ... 0xaf:	/* scas */
 		DPRINTF("Urk! I don't handle SCAS.\n");
@@ -1252,9 +1242,8 @@ twobyte_special_insn:
 				_eflags &= ~EFLG_ZF;
 			} else {
 				new = (_regs[VCPU_REGS_RCX] << 32) | (u32) _regs[VCPU_REGS_RBX];
-				if ((rc =
-				     ops->cmpxchg_emulated(cr2, old, new, 8,
-							   ctxt)) != 0)
+				if ((rc = ops->cmpxchg_emulated(cr2, old, 
+							  new, 8, ctxt)) != 0)
 					goto done;
 				_eflags |= EFLG_ZF;
 			}
