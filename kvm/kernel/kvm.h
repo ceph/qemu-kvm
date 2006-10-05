@@ -354,31 +354,9 @@ static inline int memslot_id(struct kvm *kvm, struct kvm_memory_slot *slot)
 }
 
 /* The Xen-based x86 emulator wants register state in a struct cpu_user_regs */
-
-#ifdef __x86_64__
-#define DECLARE_REG(basename) \
-	union { \
-		u64 r##basename; \
-		u64 e##basename; \
-	}
-#else
-#define DECLARE_REG(basename) u32 e##basename
-#endif
-
 struct cpu_user_regs {
-	DECLARE_REG(ax);
-	DECLARE_REG(bx);
-	DECLARE_REG(cx);
-	DECLARE_REG(dx);
-	DECLARE_REG(si);
-	DECLARE_REG(di);
-	DECLARE_REG(sp);
-	DECLARE_REG(bp);
-	DECLARE_REG(ip);
-	DECLARE_REG(flags);
-#ifdef __x86_64__
-	u64 r8, r9, r10, r11, r12, r13, r14, r15;
-#endif
+	unsigned long gprs[NR_VCPU_REGS];
+	unsigned long eip, eflags;
 	u16 cs, ds, es, fs, gs, ss;
 	u16 error_code;
 };

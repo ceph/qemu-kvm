@@ -1618,26 +1618,11 @@ static int emulate_instruction(struct kvm_vcpu *vcpu,
 	int r;
 	uint32_t cs_ar;
 
-	regs.eax = vcpu->regs[VCPU_REGS_RAX];
-	regs.ebx = vcpu->regs[VCPU_REGS_RBX];
-	regs.ecx = vcpu->regs[VCPU_REGS_RCX];
-	regs.edx = vcpu->regs[VCPU_REGS_RDX];
-	regs.esi = vcpu->regs[VCPU_REGS_RSI];
-	regs.edi = vcpu->regs[VCPU_REGS_RDI];
-	regs.esp = vmcs_readl(GUEST_RSP);
-	regs.ebp = vcpu->regs[VCPU_REGS_RBP];
-	regs.eip = vmcs_readl(GUEST_RIP);
+	vcpu_load_rsp_rip(vcpu);
+	memcpy(regs.gprs, vcpu->regs, sizeof regs.gprs);
+	regs.eip = vcpu->rip;
 	regs.eflags = vmcs_readl(GUEST_RFLAGS);
-#ifdef __x86_64__
-	regs.r8 = vcpu->regs[VCPU_REGS_R8];
-	regs.r9 = vcpu->regs[VCPU_REGS_R9];
-	regs.r10 = vcpu->regs[VCPU_REGS_R10];
-	regs.r11 = vcpu->regs[VCPU_REGS_R11];
-	regs.r12 = vcpu->regs[VCPU_REGS_R12];
-	regs.r13 = vcpu->regs[VCPU_REGS_R13];
-	regs.r14 = vcpu->regs[VCPU_REGS_R14];
-	regs.r15 = vcpu->regs[VCPU_REGS_R15];
-#endif
+
 	regs.cs = vmcs_read16(GUEST_CS_SELECTOR);
 	regs.ds = vmcs_read16(GUEST_DS_SELECTOR);
 	regs.es = vmcs_read16(GUEST_ES_SELECTOR);
@@ -1690,26 +1675,10 @@ static int emulate_instruction(struct kvm_vcpu *vcpu,
 		return EMULATE_DO_MMIO;
 	}
 
-	vcpu->regs[VCPU_REGS_RAX] = regs.eax;
-	vcpu->regs[VCPU_REGS_RBX] = regs.ebx;
-	vcpu->regs[VCPU_REGS_RCX] = regs.ecx;
-	vcpu->regs[VCPU_REGS_RDX] = regs.edx;
-	vcpu->regs[VCPU_REGS_RSI] = regs.esi;
-	vcpu->regs[VCPU_REGS_RDI] = regs.edi;
-	vmcs_writel(GUEST_RSP, regs.esp);
-	vcpu->regs[VCPU_REGS_RBP] = regs.ebp;
-	vmcs_writel(GUEST_RIP, regs.eip);
+	memcpy(vcpu->regs, regs.gprs, sizeof vcpu->regs);
+	vcpu->rip = regs.eip;
+	vcpu_put_rsp_rip(vcpu);
 	vmcs_writel(GUEST_RFLAGS, regs.eflags);
-#ifdef __x86_64__
-	vcpu->regs[VCPU_REGS_R8] = regs.r8;
-	vcpu->regs[VCPU_REGS_R9] = regs.r9;
-	vcpu->regs[VCPU_REGS_R10] = regs.r10;
-	vcpu->regs[VCPU_REGS_R11] = regs.r11;
-	vcpu->regs[VCPU_REGS_R12] = regs.r12;
-	vcpu->regs[VCPU_REGS_R13] = regs.r13;
-	vcpu->regs[VCPU_REGS_R14] = regs.r14;
-	vcpu->regs[VCPU_REGS_R15] = regs.r15;
-#endif
 
 	if (vcpu->mmio_is_write)
 		return EMULATE_DO_MMIO;

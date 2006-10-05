@@ -416,70 +416,9 @@ void *decode_register(uint8_t modrm_reg, struct cpu_user_regs *regs,
 {
 	void *p;
 
-	switch (modrm_reg) {
-	case 0:
-		p = &regs->eax;
-		break;
-	case 1:
-		p = &regs->ecx;
-		break;
-	case 2:
-		p = &regs->edx;
-		break;
-	case 3:
-		p = &regs->ebx;
-		break;
-	case 4:
-		p = (highbyte_regs ?
-		     ((unsigned char *)&regs->eax + 1) :
-		     (unsigned char *)&regs->esp);
-		break;
-	case 5:
-		p = (highbyte_regs ?
-		     ((unsigned char *)&regs->ecx + 1) :
-		     (unsigned char *)&regs->ebp);
-		break;
-	case 6:
-		p = (highbyte_regs ?
-		     ((unsigned char *)&regs->edx + 1) :
-		     (unsigned char *)&regs->esi);
-		break;
-	case 7:
-		p = (highbyte_regs ?
-		     ((unsigned char *)&regs->ebx + 1) :
-		     (unsigned char *)&regs->edi);
-		break;
-#if defined(__x86_64__)
-	case 8:
-		p = &regs->r8;
-		break;
-	case 9:
-		p = &regs->r9;
-		break;
-	case 10:
-		p = &regs->r10;
-		break;
-	case 11:
-		p = &regs->r11;
-		break;
-	case 12:
-		p = &regs->r12;
-		break;
-	case 13:
-		p = &regs->r13;
-		break;
-	case 14:
-		p = &regs->r14;
-		break;
-	case 15:
-		p = &regs->r15;
-		break;
-#endif
-	default:
-		p = NULL;
-		break;
-	}
-
+	p = &regs->gprs[modrm_reg];
+	if (highbyte_regs && modrm_reg >= 4 && modrm_reg < 8)
+		p = (unsigned char *)&regs->gprs[modrm_reg & 3] + 1;
 	return p;
 }
 
@@ -621,31 +560,35 @@ done_prefixes:
 			}
 			switch (modrm_rm) {
 			case 0:
-				modrm_ea += _regs.ebx + _regs.esi;
+				modrm_ea += _regs.gprs[VCPU_REGS_RBX]
+					+ _regs.gprs[VCPU_REGS_RSI];
 				break;
 			case 1:
-				modrm_ea += _regs.ebx + _regs.edi;
+				modrm_ea += _regs.gprs[VCPU_REGS_RBX]
+					+ _regs.gprs[VCPU_REGS_RDI];
 				break;
 			case 2:
-				modrm_ea += _regs.ebp + _regs.esi;
+				modrm_ea += _regs.gprs[VCPU_REGS_RBP]
+					+ _regs.gprs[VCPU_REGS_RSI];
 				break;
 			case 3:
-				modrm_ea += _regs.ebp + _regs.edi;
+				modrm_ea += _regs.gprs[VCPU_REGS_RBP]
+					+ _regs.gprs[VCPU_REGS_RDI];
 				break;
 			case 4:
-				modrm_ea += _regs.esi;
+				modrm_ea += _regs.gprs[VCPU_REGS_RSI];
 				break;
 			case 5:
-				modrm_ea += _regs.edi;
+				modrm_ea += _regs.gprs[VCPU_REGS_RDI];
 				break;
 			case 6:
 				if (modrm_mod != 0)
-					modrm_ea += _regs.ebp;
+					modrm_ea += _regs.gprs[VCPU_REGS_RBP];
 				else if (mode == X86EMUL_MODE_PROT64)
 					rip_relative = 1;
 				break;
 			case 7:
-				modrm_ea += _regs.ebx;
+				modrm_ea += _regs.gprs[VCPU_REGS_RBX];
 				break;
 			}
 			if (modrm_rm == 2 || modrm_rm == 3 || 
@@ -656,18 +599,6 @@ done_prefixes:
 		} else {
 			/* 32/64-bit ModR/M decode. */
 			switch (modrm_rm) {
-			case 0:
-				modrm_ea += _regs.eax;
-				break;
-			case 1:
-				modrm_ea += _regs.ecx;
-				break;
-			case 2:
-				modrm_ea += _regs.edx;
-				break;
-			case 3:
-				modrm_ea += _regs.ebx;
-				break;
 			case 4:
 			case 12:
 				sib = insn_fetch(uint8_t, 1, _regs.eip);
@@ -676,145 +607,30 @@ done_prefixes:
 				scale = sib >> 6;
 
 				switch (base_reg) {
-				case 0:
-					modrm_ea += _regs.eax;
-					break;
-				case 1:
-					modrm_ea += _regs.ecx;
-					break;
-				case 2:
-					modrm_ea += _regs.edx;
-					break;
-				case 3:
-					modrm_ea += _regs.ebx;
-					break;
-				case 4:
-					modrm_ea += _regs.esp;
-					break;
 				case 5:
 					if (modrm_mod != 0)
-						modrm_ea += _regs.ebp;
+						modrm_ea += _regs.gprs[base_reg];
 					else
 						modrm_ea += insn_fetch(int32_t, 4, _regs.eip);
 					break;
-				case 6:
-					modrm_ea += _regs.esi;
-					break;
-				case 7:
-					modrm_ea += _regs.edi;
-					break;
-#ifdef __x86_64__
-				case 8:
-					modrm_ea += _regs.r8;
-					break;
-				case 9:
-					modrm_ea += _regs.r9;
-					break;
-				case 10:
-					modrm_ea += _regs.r10;
-					break;
-				case 11:
-					modrm_ea += _regs.r11;
-					break;
-				case 12:
-					modrm_ea += _regs.r12;
-					break;
-				case 13:
-					modrm_ea += _regs.r13;
-					break;
-				case 14:
-					modrm_ea += _regs.r14;
-					break;
-				case 15:
-					modrm_ea += _regs.r15;
-					break;
-#endif
+				default:
+					modrm_ea += _regs.gprs[base_reg];
 				}
 				switch (index_reg) {
-				case 0:
-					modrm_ea += _regs.eax << scale;
-					break;
-				case 1:
-					modrm_ea += _regs.ecx << scale;
-					break;
-				case 2:
-					modrm_ea += _regs.edx << scale;
-					break;
-				case 3:
-					modrm_ea += _regs.ebx << scale;
-					break;
 				case 4:
 					break;
-				case 5:
-					modrm_ea += _regs.ebp << scale;
-					break;
-				case 6:
-					modrm_ea += _regs.esi << scale;
-					break;
-				case 7:
-					modrm_ea += _regs.edi << scale;
-					break;
-#ifdef __x86_64__
-				case 8:
-					modrm_ea += _regs.r8 << scale;
-					break;
-				case 9:
-					modrm_ea += _regs.r9 << scale;
-					break;
-				case 10:
-					modrm_ea += _regs.r10 << scale;
-					break;
-				case 11:
-					modrm_ea += _regs.r11 << scale;
-					break;
-				case 12:
-					modrm_ea += _regs.r12 << scale;
-					break;
-				case 13:
-					modrm_ea += _regs.r13 << scale;
-					break;
-				case 14:
-					modrm_ea += _regs.r14 << scale;
-					break;
-				case 15:
-					modrm_ea += _regs.r15 << scale;
-					break;
-#endif
+				default:
+					modrm_ea += _regs.gprs[index_reg] << scale;
+
 				}
 				break;
 			case 5:
 				if (modrm_mod != 0)
-					modrm_ea += _regs.ebp;
+					modrm_ea += _regs.gprs[modrm_rm];
 				break;
-			case 6:
-				modrm_ea += _regs.esi;
+			default:
+				modrm_ea += _regs.gprs[modrm_mod];
 				break;
-			case 7:
-				modrm_ea += _regs.edi;
-				break;
-#ifdef __x86_64__
-			case 8:
-				modrm_ea += _regs.r8;
-				break;
-			case 9:
-				modrm_ea += _regs.r9;
-				break;
-			case 10:
-				modrm_ea += _regs.r10;
-				break;
-			case 11:
-				modrm_ea += _regs.r11;
-				break;
-			case 13:
-				modrm_ea += _regs.r13;
-				break;
-			case 14:
-				modrm_ea += _regs.r14;
-				break;
-			case 15:
-				modrm_ea += _regs.r15;
-				break;
-#endif
 			}
 			switch (modrm_mod) {
 			case 0:
@@ -1043,12 +859,12 @@ done_prefixes:
 		lock_prefix = 1;
 		break;
 	case 0xa0 ... 0xa1:	/* mov */
-		dst.ptr = (unsigned long *)&_regs.eax;
+		dst.ptr = (unsigned long *)&_regs.gprs[VCPU_REGS_RAX];
 		dst.val = src.val;
 		_regs.eip += ad_bytes;	/* skip src displacement */
 		break;
 	case 0xa2 ... 0xa3:	/* mov */
-		dst.val = (unsigned long)_regs.eax;
+		dst.val = (unsigned long)_regs.gprs[VCPU_REGS_RAX];
 		_regs.eip += ad_bytes;	/* skip dst displacement */
 		break;
 	case 0x88 ... 0x8b:	/* mov */
@@ -1060,10 +876,10 @@ done_prefixes:
 		if (mode == X86EMUL_MODE_PROT64)
 			dst.bytes = 8;
 		if ((rc =
-		     ops->read_std(register_address(ctxt->ss_base, _regs.esp),
+		     ops->read_std(register_address(ctxt->ss_base, _regs.gprs[VCPU_REGS_RSP]),
 				   &dst.val, dst.bytes, ctxt)) != 0)
 			goto done;
-		register_address_increment(_regs.esp, dst.bytes);
+		register_address_increment(_regs.gprs[VCPU_REGS_RSP], dst.bytes);
 		break;
 	case 0xc0 ... 0xc1:
 	      grp2:		/* Grp2 */
@@ -1096,7 +912,7 @@ done_prefixes:
 		src.val = 1;
 		goto grp2;
 	case 0xd2 ... 0xd3:	/* Grp2 */
-		src.val = _regs.ecx;
+		src.val = _regs.gprs[VCPU_REGS_RCX];
 		goto grp2;
 	case 0xf6 ... 0xf7:	/* Grp3 */
 		switch (modrm_reg) {
@@ -1149,10 +965,10 @@ done_prefixes:
 							ctxt)) != 0)
 					goto done;
 			}
-			register_address_increment(_regs.esp, -dst.bytes);
+			register_address_increment(_regs.gprs[VCPU_REGS_RSP], -dst.bytes);
 			if ((rc = ops->write_std(
 				     register_address(ctxt->ss_base,
-						      _regs.esp),
+						      _regs.gprs[VCPU_REGS_RSP]),
 				     dst.val, dst.bytes, ctxt)) != 0)
 				goto done;
 			dst.val = dst.orig_val;	/* skanky: disable writeback */
@@ -1210,11 +1026,11 @@ special_insn:
 	if (twobyte)
 		goto twobyte_special_insn;
 	if (rep_prefix) {
-		if (_regs.ecx == 0) {
+		if (_regs.gprs[VCPU_REGS_RCX] == 0) {
 			ctxt->regs->eip = _regs.eip;
 			goto done;
 		}
-		_regs.ecx--;
+		_regs.gprs[VCPU_REGS_RCX]--;
 		_regs.eip = ctxt->regs->eip;
 	}
 	switch (b) {
@@ -1222,18 +1038,18 @@ special_insn:
 		dst.type = OP_MEM;
 		dst.bytes = (d & ByteOp) ? 1 : op_bytes;
 		dst.ptr =
-		    (unsigned long *)register_address(ctxt->es_base, _regs.edi);
+		    (unsigned long *)register_address(ctxt->es_base, _regs.gprs[VCPU_REGS_RDI]);
 		if ((rc =
 		     ops->
 		     read_emulated(register_address
 				   (override_base ? *override_base : ctxt->
-				    ds_base, _regs.esi), &dst.val, dst.bytes,
+				    ds_base, _regs.gprs[VCPU_REGS_RSI]), &dst.val, dst.bytes,
 				   ctxt)) != 0)
 			goto done;
-		register_address_increment(_regs.esi,
+		register_address_increment(_regs.gprs[VCPU_REGS_RSI],
 					   (_regs.eflags & EFLG_DF) ? -dst.
 					   bytes : dst.bytes);
-		register_address_increment(_regs.edi,
+		register_address_increment(_regs.gprs[VCPU_REGS_RDI],
 					   (_regs.eflags & EFLG_DF) ? -dst.
 					   bytes : dst.bytes);
 		break;
@@ -1244,19 +1060,19 @@ special_insn:
 		dst.type = OP_MEM;
 		dst.bytes = (d & ByteOp) ? 1 : op_bytes;
 		dst.ptr = (unsigned long *)cr2;
-		dst.val = _regs.eax;
-		register_address_increment(_regs.edi,
+		dst.val = _regs.gprs[VCPU_REGS_RAX];
+		register_address_increment(_regs.gprs[VCPU_REGS_RDI],
 					   (_regs.eflags & EFLG_DF) ? -dst.
 					   bytes : dst.bytes);
 		break;
 	case 0xac ... 0xad:	/* lods */
 		dst.type = OP_REG;
 		dst.bytes = (d & ByteOp) ? 1 : op_bytes;
-		dst.ptr = (unsigned long *)&_regs.eax;
+		dst.ptr = (unsigned long *)&_regs.gprs[VCPU_REGS_RAX];
 		if ((rc =
 		     ops->read_emulated(cr2, &dst.val, dst.bytes, ctxt)) != 0)
 			goto done;
-		register_address_increment(_regs.esi,
+		register_address_increment(_regs.gprs[VCPU_REGS_RSI],
 					   (_regs.eflags & EFLG_DF) ? -dst.
 					   bytes : dst.bytes);
 		break;
@@ -1311,7 +1127,7 @@ twobyte_insn:
 		 * destination.
 		 */
 		src.orig_val = src.val;
-		src.val = _regs.eax;
+		src.val = _regs.gprs[VCPU_REGS_RAX];
 		emulate_2op_SrcV("cmp", src, dst, _regs.eflags);
 		/* Always write back. The question is: where to? */
 		d |= Mov;
@@ -1321,7 +1137,7 @@ twobyte_insn:
 		} else {
 			/* Failure: write the value we saw to EAX. */
 			dst.type = OP_REG;
-			dst.ptr = (unsigned long *)&_regs.eax;
+			dst.ptr = (unsigned long *)&_regs.gprs[VCPU_REGS_RAX];
 		}
 		break;
 	case 0xa3:
@@ -1406,13 +1222,13 @@ twobyte_special_insn:
 			unsigned long old, new;
 			if ((rc = ops->read_emulated(cr2, &old, 8, ctxt)) != 0)
 				goto done;
-			if (((uint32_t) (old >> 0) != (uint32_t) _regs.eax) ||
-			    ((uint32_t) (old >> 32) != (uint32_t) _regs.edx)) {
-				_regs.eax = (uint32_t) (old >> 0);
-				_regs.edx = (uint32_t) (old >> 32);
+			if (((uint32_t) (old >> 0) != (uint32_t) _regs.gprs[VCPU_REGS_RAX]) ||
+			    ((uint32_t) (old >> 32) != (uint32_t) _regs.gprs[VCPU_REGS_RDX])) {
+				_regs.gprs[VCPU_REGS_RAX] = (uint32_t) (old >> 0);
+				_regs.gprs[VCPU_REGS_RDX] = (uint32_t) (old >> 32);
 				_regs.eflags &= ~EFLG_ZF;
 			} else {
-				new = (_regs.ecx << 32) | (uint32_t) _regs.ebx;
+				new = (_regs.gprs[VCPU_REGS_RCX] << 32) | (uint32_t) _regs.gprs[VCPU_REGS_RBX];
 				if ((rc =
 				     ops->cmpxchg_emulated(cr2, old, new, 8,
 							   ctxt)) != 0)
