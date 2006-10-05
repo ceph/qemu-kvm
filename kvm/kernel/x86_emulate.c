@@ -584,8 +584,6 @@ done_prefixes:
 			case 6:
 				if (modrm_mod != 0)
 					modrm_ea += _regs.gprs[VCPU_REGS_RBP];
-				else if (mode == X86EMUL_MODE_PROT64)
-					rip_relative = 1;
 				break;
 			case 7:
 				modrm_ea += _regs.gprs[VCPU_REGS_RBX];
@@ -627,6 +625,8 @@ done_prefixes:
 			case 5:
 				if (modrm_mod != 0)
 					modrm_ea += _regs.gprs[modrm_rm];
+				else if (mode == X86EMUL_MODE_PROT64)
+					rip_relative = 1;
 				break;
 			default:
 				modrm_ea += _regs.gprs[modrm_mod];
