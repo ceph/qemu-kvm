@@ -179,7 +179,7 @@ int x86_emulate_memop(struct x86_emulate_ctxt *ctxt,
  * pointer into the block that addresses the relevant register.
  * @highbyte_regs specifies whether to decode AH,CH,DH,BH.
  */
-void *decode_register(uint8_t modrm_reg, unsigned long *regs,
+void *decode_register(u8 modrm_reg, unsigned long *regs,
 		      int highbyte_regs);
 
 #endif				/* __X86_EMULATE_H__ */
