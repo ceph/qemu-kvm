@@ -494,6 +494,8 @@ x86_emulate_memop(struct x86_emulate_ctxt *ctxt, struct x86_emulate_ops *ops)
 	struct operand src, dst;
 	unsigned long cr2 = ctxt->cr2;
 	int mode = ctxt->mode;
+	unsigned long modrm_ea;
+	int use_modrm_ea, index_reg = 0, base_reg = 0, scale, rip_relative;
 
 	/* Shadow copy of register state. Committed on successful emulation. */
 	struct cpu_user_regs _regs = *ctxt->regs;
@@ -567,7 +569,8 @@ done_prefixes:
 		if (b & 8)
 			op_bytes = 8;	/* REX.W */
 		modrm_reg = (b & 4) << 1;	/* REX.R */
-		/* REX.B and REX.X do not need to be decoded. */
+		index_reg = (b & 2) << 2; /* REX.X */
+		modrm_rm = base_reg = (b & 1) << 3; /* REG.B */
 		b = insn_fetch(uint8_t, 1, _regs.eip);
 	}
 
@@ -592,6 +595,9 @@ done_prefixes:
 		modrm_mod |= (modrm & 0xc0) >> 6;
 		modrm_reg |= (modrm & 0x38) >> 3;
 		modrm_rm |= (modrm & 0x07);
+		modrm_ea = 0;
+		use_modrm_ea = 1;
+		rip_relative = 0;
 
 		if (modrm_mod == 3) {
 			DPRINTF("Cannot parse ModRM.mod == 3.\n");
@@ -603,42 +609,235 @@ done_prefixes:
 			switch (modrm_mod) {
 			case 0:
 				if (modrm_rm == 6)
-					_regs.eip += 2;	/* skip disp16 */
+					modrm_ea += insn_fetch(uint16_t, 2,
+							       _regs.eip);
 				break;
 			case 1:
-				_regs.eip += 1;	/* skip disp8 */
+				modrm_ea += insn_fetch(int8_t, 1, _regs.eip);
 				break;
 			case 2:
-				_regs.eip += 2;	/* skip disp16 */
+				modrm_ea += insn_fetch(uint16_t, 2, _regs.eip);
 				break;
 			}
-		} else {
-			/* 32/64-bit ModR/M decode. */
-			switch (modrm_mod) {
+			switch (modrm_rm) {
 			case 0:
-				if ((modrm_rm == 4) &&
-				    (((sib =
-				       insn_fetch(uint8_t, 1,
-						  _regs.eip)) & 7) == 5))
-					_regs.eip += 4; /* skip disp32
-							 * specified by
-							 * SIB.base */
-
-				else if (modrm_rm == 5)
-					_regs.eip += 4;	/* skip disp32 */
+				modrm_ea += _regs.ebx + _regs.esi;
 				break;
 			case 1:
-				if (modrm_rm == 4)
-					sib = insn_fetch(uint8_t, 1, _regs.eip);
-				_regs.eip += 1;	/* skip disp8 */
+				modrm_ea += _regs.ebx + _regs.edi;
 				break;
 			case 2:
-				if (modrm_rm == 4)
-					sib = insn_fetch(uint8_t, 1, _regs.eip);
-				_regs.eip += 4;	/* skip disp32 */
+				modrm_ea += _regs.ebp + _regs.esi;
+				break;
+			case 3:
+				modrm_ea += _regs.ebp + _regs.edi;
+				break;
+			case 4:
+				modrm_ea += _regs.esi;
+				break;
+			case 5:
+				modrm_ea += _regs.edi;
+				break;
+			case 6:
+				if (modrm_mod != 0)
+					modrm_ea += _regs.ebp;
+				else if (mode == X86EMUL_MODE_PROT64)
+					rip_relative = 1;
+				break;
+			case 7:
+				modrm_ea += _regs.ebx;
+				break;
+			}
+			if (modrm_rm == 2 || modrm_rm == 3 || 
+			    (modrm_rm == 6 && modrm_mod != 0))
+				if (!override_base)
+					override_base = &ctxt->ss_base;
+			modrm_ea = (uint16_t)modrm_ea;
+		} else {
+			/* 32/64-bit ModR/M decode. */
+			switch (modrm_rm) {
+			case 0:
+				modrm_ea += _regs.eax;
+				break;
+			case 1:
+				modrm_ea += _regs.ecx;
+				break;
+			case 2:
+				modrm_ea += _regs.edx;
+				break;
+			case 3:
+				modrm_ea += _regs.ebx;
+				break;
+			case 4:
+			case 12:
+				sib = insn_fetch(uint8_t, 1, _regs.eip);
+				index_reg |= (sib >> 3) & 7;
+				base_reg |= sib & 7;
+				scale = sib >> 6;
+
+				switch (base_reg) {
+				case 0:
+					modrm_ea += _regs.eax;
+					break;
+				case 1:
+					modrm_ea += _regs.ecx;
+					break;
+				case 2:
+					modrm_ea += _regs.edx;
+					break;
+				case 3:
+					modrm_ea += _regs.ebx;
+					break;
+				case 4:
+					modrm_ea += _regs.esp;
+					break;
+				case 5:
+					if (modrm_mod != 0)
+						modrm_ea += _regs.ebp;
+					else
+						modrm_ea += insn_fetch(int32_t, 4, _regs.eip);
+					break;
+				case 6:
+					modrm_ea += _regs.esi;
+					break;
+				case 7:
+					modrm_ea += _regs.edi;
+					break;
+#ifdef __x86_64__
+				case 8:
+					modrm_ea += _regs.r8;
+					break;
+				case 9:
+					modrm_ea += _regs.r9;
+					break;
+				case 10:
+					modrm_ea += _regs.r10;
+					break;
+				case 11:
+					modrm_ea += _regs.r11;
+					break;
+				case 12:
+					modrm_ea += _regs.r12;
+					break;
+				case 13:
+					modrm_ea += _regs.r13;
+					break;
+				case 14:
+					modrm_ea += _regs.r14;
+					break;
+				case 15:
+					modrm_ea += _regs.r15;
+					break;
+#endif
+				}
+				switch (index_reg) {
+				case 0:
+					modrm_ea += _regs.eax << scale;
+					break;
+				case 1:
+					modrm_ea += _regs.ecx << scale;
+					break;
+				case 2:
+					modrm_ea += _regs.edx << scale;
+					break;
+				case 3:
+					modrm_ea += _regs.ebx << scale;
+					break;
+				case 4:
+					break;
+				case 5:
+					modrm_ea += _regs.ebp << scale;
+					break;
+				case 6:
+					modrm_ea += _regs.esi << scale;
+					break;
+				case 7:
+					modrm_ea += _regs.edi << scale;
+					break;
+#ifdef __x86_64__
+				case 8:
+					modrm_ea += _regs.r8 << scale;
+					break;
+				case 9:
+					modrm_ea += _regs.r9 << scale;
+					break;
+				case 10:
+					modrm_ea += _regs.r10 << scale;
+					break;
+				case 11:
+					modrm_ea += _regs.r11 << scale;
+					break;
+				case 12:
+					modrm_ea += _regs.r12 << scale;
+					break;
+				case 13:
+					modrm_ea += _regs.r13 << scale;
+					break;
+				case 14:
+					modrm_ea += _regs.r14 << scale;
+					break;
+				case 15:
+					modrm_ea += _regs.r15 << scale;
+					break;
+#endif
+				}
+				break;
+			case 5:
+				if (modrm_mod != 0)
+					modrm_ea += _regs.ebp;
+				break;
+			case 6:
+				modrm_ea += _regs.esi;
+				break;
+			case 7:
+				modrm_ea += _regs.edi;
+				break;
+#ifdef __x86_64__
+			case 8:
+				modrm_ea += _regs.r8;
+				break;
+			case 9:
+				modrm_ea += _regs.r9;
+				break;
+			case 10:
+				modrm_ea += _regs.r10;
+				break;
+			case 11:
+				modrm_ea += _regs.r11;
+				break;
+			case 13:
+				modrm_ea += _regs.r13;
+				break;
+			case 14:
+				modrm_ea += _regs.r14;
+				break;
+			case 15:
+				modrm_ea += _regs.r15;
+				break;
+#endif
+			}
+			switch (modrm_mod) {
+			case 0:
+				if (modrm_rm == 5)
+					modrm_ea += insn_fetch(int32_t, 4, _regs.eip);
+				break;
+			case 1:
+				modrm_ea += insn_fetch(int8_t, 1, _regs.eip);
+				break;
+			case 2:
+				modrm_ea += insn_fetch(int32_t, 4, _regs.eip);
 				break;
 			}
 		}
+		if (!override_base)
+			override_base = &ctxt->ds_base;
+		if (mode != X86EMUL_MODE_PROT64 || 
+		    override_base == &ctxt->fs_base || 
+		    override_base == &ctxt->gs_base)
+			modrm_ea += *override_base;
+		if (modrm_ea != cr2)
+			printk("ea: %lx cr2: %lx\n", modrm_ea, cr2);
+		/* FIXME: handle rip_relative */
 	}
 
 	/* Decode and fetch the destination operand: register or memory. */
