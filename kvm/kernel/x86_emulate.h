@@ -136,9 +136,10 @@ struct cpu_user_regs;
 
 struct x86_emulate_ctxt {
 	/* Register state before/after emulation. */
-	struct cpu_user_regs *regs;
+	struct kvm_vcpu *vcpu;
 
 	/* Linear faulting address (if emulating a page-faulting instruction). */
+	unsigned long eflags;
 	unsigned long cr2;
 
 	/* Emulated execution mode, represented by an X86EMUL_MODE value. */
@@ -150,8 +151,6 @@ struct x86_emulate_ctxt {
 	unsigned long ss_base;
 	unsigned long gs_base;
 	unsigned long fs_base;
-
-	void *private; /* Not used by emulator */
 };
 
 /* Execution mode, passed to the emulator. */
@@ -180,7 +179,7 @@ int x86_emulate_memop(struct x86_emulate_ctxt *ctxt,
  * pointer into the block that addresses the relevant register.
  * @highbyte_regs specifies whether to decode AH,CH,DH,BH.
  */
-void *decode_register(uint8_t modrm_reg, struct cpu_user_regs *regs,
+void *decode_register(uint8_t modrm_reg, unsigned long *regs,
 		      int highbyte_regs);
 
 #endif				/* __X86_EMULATE_H__ */

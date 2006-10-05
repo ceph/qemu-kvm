@@ -1352,7 +1352,7 @@ static int emulator_read_std(unsigned long addr,
 			     unsigned int bytes,
 			     struct x86_emulate_ctxt *ctxt)
 {
-	struct kvm_vcpu *vcpu = ctxt->private;
+	struct kvm_vcpu *vcpu = ctxt->vcpu;
 	void *data = val;
 
 	while (bytes) {
@@ -1397,7 +1397,7 @@ static int emulator_read_emulated(unsigned long addr,
 				  unsigned int bytes,
 				  struct x86_emulate_ctxt *ctxt)
 {
-	struct kvm_vcpu *vcpu = ctxt->private;
+	struct kvm_vcpu *vcpu = ctxt->vcpu;
 
 	if (vcpu->mmio_read_completed) {
 		memcpy(val, vcpu->mmio_data, bytes);
@@ -1421,7 +1421,7 @@ static int emulator_write_emulated(unsigned long addr,
 				   unsigned int bytes,
 				   struct x86_emulate_ctxt *ctxt)
 {
-	struct kvm_vcpu *vcpu = ctxt->private;
+	struct kvm_vcpu *vcpu = ctxt->vcpu;
 	gpa_t gpa = vcpu->mmu.gva_to_gpa(vcpu, addr);
 	
 	if (gpa == UNMAPPED_GVA)
@@ -1487,31 +1487,21 @@ static int emulate_instruction(struct kvm_vcpu *vcpu,
 			       unsigned long cr2,
 			       u16 error_code)
 {
-	struct cpu_user_regs regs;
 	struct x86_emulate_ctxt emulate_ctxt;
 	int r;
 	uint32_t cs_ar;
 
 	vcpu_load_rsp_rip(vcpu);
-	memcpy(regs.gprs, vcpu->regs, sizeof regs.gprs);
-	regs.eip = vcpu->rip;
-	regs.eflags = vmcs_readl(GUEST_RFLAGS);
-
-	regs.cs = vmcs_read16(GUEST_CS_SELECTOR);
-	regs.ds = vmcs_read16(GUEST_DS_SELECTOR);
-	regs.es = vmcs_read16(GUEST_ES_SELECTOR);
-	regs.fs = vmcs_read16(GUEST_FS_SELECTOR);
-	regs.gs = vmcs_read16(GUEST_GS_SELECTOR);
-	regs.ss = vmcs_read16(GUEST_SS_SELECTOR);
 
 	cs_ar = vmcs_read32(GUEST_CS_AR_BYTES);
 
-	emulate_ctxt.regs = &regs;
+	emulate_ctxt.vcpu = vcpu;
+	emulate_ctxt.eflags = vmcs_readl(GUEST_RFLAGS);
 	emulate_ctxt.cr2 = cr2;
-	emulate_ctxt.mode = (regs.eflags & X86_EFLAGS_VM) ? X86EMUL_MODE_REAL:
-			      (cs_ar & AR_L_MASK) ? X86EMUL_MODE_PROT64:
-			      (cs_ar & AR_DB_MASK) ? X86EMUL_MODE_PROT32:
-			      X86EMUL_MODE_PROT16;
+	emulate_ctxt.mode = (emulate_ctxt.eflags & X86_EFLAGS_VM) 
+		? X86EMUL_MODE_REAL : (cs_ar & AR_L_MASK) 
+		? X86EMUL_MODE_PROT64 :	(cs_ar & AR_DB_MASK) 
+		? X86EMUL_MODE_PROT32 : X86EMUL_MODE_PROT16;
 
 	if (emulate_ctxt.mode == X86EMUL_MODE_PROT64) {
 		emulate_ctxt.cs_base = 0;
@@ -1528,8 +1518,6 @@ static int emulate_instruction(struct kvm_vcpu *vcpu,
 		emulate_ctxt.gs_base = vmcs_readl(GUEST_GS_BASE);
 		emulate_ctxt.fs_base = vmcs_readl(GUEST_FS_BASE);
 	}
-
-	emulate_ctxt.private = vcpu;
 
 	vcpu->mmio_is_write = 0;
 	r = x86_emulate_memop(&emulate_ctxt, &emulate_ops);
@@ -1549,10 +1537,8 @@ static int emulate_instruction(struct kvm_vcpu *vcpu,
 		return EMULATE_DO_MMIO;
 	}
 
-	memcpy(vcpu->regs, regs.gprs, sizeof vcpu->regs);
-	vcpu->rip = regs.eip;
 	vcpu_put_rsp_rip(vcpu);
-	vmcs_writel(GUEST_RFLAGS, regs.eflags);
+	vmcs_writel(GUEST_RFLAGS, emulate_ctxt.eflags);
 
 	if (vcpu->mmio_is_write)
 		return EMULATE_DO_MMIO;

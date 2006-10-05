@@ -350,14 +350,4 @@ static inline int memslot_id(struct kvm *kvm, struct kvm_memory_slot *slot)
 	return slot - kvm->memslots;
 }
 
-/* The Xen-based x86 emulator wants register state in a struct cpu_user_regs */
-struct cpu_user_regs {
-	unsigned long gprs[NR_VCPU_REGS];
-	unsigned long eip, eflags;
-	u16 cs, ds, es, fs, gs, ss;
-	u16 error_code;
-};
-
-#undef DECLARE_REG
-
 #endif
