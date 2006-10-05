@@ -211,8 +211,6 @@ struct kvm {
 	struct kvm_vcpu vcpus[KVM_MAX_VCPUS];
 	int memory_config_version;
 	int busy;
-	struct file *log_file;
-	char *log_buf;
 };
 
 struct kvm_stat {
@@ -230,9 +228,8 @@ struct kvm_stat {
 
 extern struct kvm_stat kvm_stat;
 
-int kvm_printf(struct kvm *kvm, const char *fmt, ...);
-int kvm_vprintf(struct kvm *kvm, const char *fmt, va_list args);
-int vcpu_printf(struct kvm_vcpu *vcpu, const char *fmt, ...);
+#define kvm_printf(kvm, fmt ...) printk(KERN_DEBUG fmt)
+#define vcpu_printf(vcpu, fmt...) kvm_printf(vcpu->kvm, fmt)
 
 void kvm_mmu_destroy(struct kvm_vcpu *vcpu);
 int kvm_mmu_init(struct kvm_vcpu *vcpu);

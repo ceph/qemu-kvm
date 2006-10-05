@@ -447,7 +447,7 @@ static struct kvm_callbacks qemu_kvm_ops = {
 void kvm_qemu_init()
 {
     kvm_context = kvm_init(&qemu_kvm_ops, saved_env);
-    kvm_create(kvm_context, phys_ram_size, (void**)&phys_ram_base, 1);
+    kvm_create(kvm_context, phys_ram_size, (void**)&phys_ram_base);
 }
 
 int kvm_update_debugger(CPUState *env)

@@ -34,8 +34,7 @@ kvm_context_t kvm_init(struct kvm_callbacks *callbacks,
 		       void *opaque);
 int kvm_create(kvm_context_t kvm,
 	       unsigned long phys_mem_bytes,
-	       void **phys_mem,
-	       int log_fd);
+	       void **phys_mem);
 int kvm_run(kvm_context_t kvm, int vcpu);
 int kvm_get_regs(kvm_context_t, int vcpu, struct kvm_regs *regs);
 int kvm_set_regs(kvm_context_t, int vcpu, struct kvm_regs *regs);

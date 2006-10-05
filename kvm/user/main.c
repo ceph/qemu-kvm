@@ -120,7 +120,7 @@ int main(int ac, char **av)
 	void *vm_mem;
 
 	kvm = kvm_init(&test_callbacks, 0);
-	kvm_create(kvm, 128 * 1024 * 1024, &vm_mem, 1);
+	kvm_create(kvm, 128 * 1024 * 1024, &vm_mem);
 	if (ac > 1)
 	    load_file(vm_mem, av[1]);
 	kvm_show_regs(kvm, 0);

@@ -180,7 +180,6 @@ struct kvm_dirty_log {
 
 #define KVMIO 0xAE
 
-#define KVM_SET_LOG_FD            _IOW(KVMIO, 1, int) /* arg = fd */
 #define KVM_RUN                   _IOWR(KVMIO, 2, struct kvm_run)
 #define KVM_GET_REGS              _IOWR(KVMIO, 3, struct kvm_regs)
 #define KVM_SET_REGS              _IOW(KVMIO, 4, struct kvm_regs)

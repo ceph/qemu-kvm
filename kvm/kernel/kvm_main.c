@@ -598,104 +598,12 @@ static void kvm_free_vcpus(struct kvm *kvm)
 		kvm_free_vcpu(&kvm->vcpus[i]);
 }
 
-void kvm_log(struct kvm *kvm, const char *data, size_t count)
-{
-	struct file* f;
-	mm_segment_t fs = get_fs();
-	ssize_t ret = 0;
-	sigset_t sigmask, oldsigmask;
-
-	spin_lock(&kvm->lock);
-	f = kvm->log_file;
-	if (!f) {
-		spin_unlock(&kvm->lock);
-		return;
-	}
-	get_file(f);
-	spin_unlock(&kvm->lock);
-
-	set_fs(KERNEL_DS);
-	sigfillset(&sigmask);
-	sigprocmask(SIG_SETMASK, &sigmask, &oldsigmask);
-	while (count) {
-		ret = vfs_write(f, data, count, &f->f_pos);
-		if (ret < 0)
-			break;
-		data += ret;
-		count -= ret;
-	}
-	sigprocmask(SIG_SETMASK, &oldsigmask, 0);
-	set_fs(fs);
-	fput(f);
-	if (ret < 0)
-		printk("%s: %d\n", __FUNCTION__, (int)ret);
-}
-
-int kvm_vprintf(struct kvm *kvm, const char *fmt, va_list args)
-{
-	int i;
-
-	if (!kvm->log_file)
-		return 0;
-
-	i = vsnprintf(kvm->log_buf, KVM_LOG_BUF_SIZE, fmt, args);
-	kvm_log(kvm, kvm->log_buf, strlen(kvm->log_buf));
-
-	return i;
-}
-
-/**
- * Writes text to the kvm log file.  Must not be called under vcpu_load()
- * context.
- */
-int kvm_printf(struct kvm *kvm, const char *fmt, ...)
-{
-	va_list args;
-	int i;
-
-	if (!kvm->log_file)
-		return 0;
-
-	va_start(args, fmt);
-
-	i = kvm_vprintf(kvm, fmt, args);
-
-	va_end(args);
-	return i;
-}
-
-/**
- * Writes text to the kvm log file.  Must be called under vcpu_load() context.
- */
-int vcpu_printf(struct kvm_vcpu *vcpu, const char *fmt, ...)
-{
-	va_list args;
-	int i;
-
-	if (!vcpu->kvm->log_file)
-		return 0;
-
-	vcpu_put(vcpu);
-
-	va_start(args, fmt);
-	i = kvm_vprintf(vcpu->kvm, fmt, args);
-	va_end(args);
-
-	/* Cannot fail - no vcpu unplug support yet. */
-	vcpu_load(vcpu->kvm, vcpu_slot(vcpu));
-
-	return i;
-}
-
 static int kvm_dev_release(struct inode *inode, struct file *filp)
 {
 	struct kvm *kvm = filp->private_data;
 	
 	kvm_free_vcpus(kvm);
 	kvm_free_physmem(kvm);
-	if (kvm->log_file)
-		fput(kvm->log_file);
-	kfree(kvm->log_buf);
 	kfree(kvm);
 	return 0;
 }
@@ -1117,40 +1025,6 @@ static void vcpu_put_rsp_rip(struct kvm_vcpu *vcpu)
 {
 	vmcs_writel(GUEST_RSP, vcpu->regs[VCPU_REGS_RSP]);
 	vmcs_writel(GUEST_RIP, vcpu->rip);
-}
-
-/*
- * Sets up an fd to act as a log file.  Optional.
- */
-static int kvm_dev_ioctl_set_logfd(struct kvm *kvm, int fd)
-{
-	int r;
-	char *newbuf;
-
-	r = -ENOMEM;
-	newbuf = kmalloc(KVM_LOG_BUF_SIZE, GFP_KERNEL);
-	if (!newbuf)
-		goto out;
-
-	spin_lock(&kvm->lock);
-	if (!kvm->log_buf) {
-		kvm->log_buf = newbuf;
-		newbuf = 0;
-	}
-
-	if (kvm->log_file)
-		fput(kvm->log_file);
-
-	kvm->log_file = fget(fd);
-	spin_unlock(&kvm->lock);
-
-	kfree(newbuf);
-        kvm_printf(kvm, "%s: kvm log start.\n", __FUNCTION__);
-
-	return 0;
-
-out:
-	return r;
 }
 
 /*
@@ -3481,12 +3355,6 @@ static long kvm_dev_ioctl(struct file *filp,
 	int r = -EINVAL;
 
 	switch (ioctl) {
-	case KVM_SET_LOG_FD: {
-		r = kvm_dev_ioctl_set_logfd(kvm, arg);
-		if (r)
-			goto out;
-		break;
-	}
 	case KVM_CREATE_VCPU: {
 		r = kvm_dev_ioctl_create_vcpu(kvm, arg);
 		if (r)

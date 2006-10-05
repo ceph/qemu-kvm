@@ -71,8 +71,7 @@ kvm_context_t kvm_init(struct kvm_callbacks *callbacks,
 	return kvm;
 }
 
-int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem,
-	       int log_fd)
+int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem)
 {
 	int fd = kvm->fd;
 	int r;
@@ -82,11 +81,6 @@ int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem,
 		.guest_phys_addr = 0,
 	};
 
-	r = ioctl(fd, KVM_SET_LOG_FD, 1);
-	if (r == -1) {
-		printf("kvm_create: %m\n");
-		exit(1);
-	}
 	r = ioctl(fd, KVM_SET_MEMORY_REGION, &main_memory);
 	if (r == -1) {
 		printf("kvm_create_memory_region: %m\n");
