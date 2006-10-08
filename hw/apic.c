@@ -745,6 +745,8 @@ static void apic_save(QEMUFile *f, void *opaque)
     qemu_put_be32s(f, &s->initial_count);
     qemu_put_be64s(f, &s->initial_count_load_time);
     qemu_put_be64s(f, &s->next_time);
+
+    qemu_put_timer(f, s->timer);
 }
 
 static int apic_load(QEMUFile *f, void *opaque, int version_id)
@@ -779,6 +781,8 @@ static int apic_load(QEMUFile *f, void *opaque, int version_id)
     qemu_get_be32s(f, &s->initial_count);
     qemu_get_be64s(f, &s->initial_count_load_time);
     qemu_get_be64s(f, &s->next_time);
+
+    qemu_get_timer(f, s->timer);
     return 0;
 }
 
