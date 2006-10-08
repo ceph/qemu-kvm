@@ -1456,11 +1456,12 @@ static void report_emulation_failure(struct x86_emulate_ctxt *ctxt)
 	static int reported;
 	u8 opcodes[4];
 	unsigned long rip = vmcs_readl(GUEST_RIP);
+	unsigned long rip_linear = rip + vmcs_readl(GUEST_CS_BASE);
 
 	if (reported)
 		return;
 
-	emulator_read_std(vmcs_readl(GUEST_RIP), (void *)opcodes, 4, ctxt);
+	emulator_read_std(rip_linear, (void *)opcodes, 4, ctxt);
 
 	printk(KERN_ERR "emulation failed but !mmio_needed?"
 	       " rip %lx %02x %02x %02x %02x\n",
