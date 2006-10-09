@@ -84,7 +84,9 @@ static void lmsw(struct kvm_vcpu *vcpu, unsigned long msw);
 static void set_cr3(struct kvm_vcpu *vcpu, unsigned long cr0);
 static void set_cr4(struct kvm_vcpu *vcpu, unsigned long cr0);
 static void __set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4);
+#ifdef __x86_64__
 static void __set_efer(struct kvm_vcpu *vcpu, u64 efer);
+#endif
 
 static struct vmx_msr_entry *find_msr_entry(struct kvm_vcpu *vcpu, u32 msr)
 {
@@ -253,6 +255,7 @@ static struct vmcs_descriptor {
 #define MSR_IA32_FEATURE_CONTROL 0x03a
 #define MSR_IA32_VMX_BASIC_MSR   0x480
 
+#ifdef __x86_64__
 static unsigned long read_msr(unsigned long msr)
 {
 	u64 value;
@@ -260,6 +263,7 @@ static unsigned long read_msr(unsigned long msr)
 	rdmsrl(msr, value);
 	return value;
 }
+#endif
 
 static inline struct page *_gfn_to_page(struct kvm *kvm, gfn_t gfn)
 {
@@ -298,7 +302,7 @@ int kvm_read_guest(struct kvm_vcpu *vcpu,
 		host_buf += now;
 		addr += now;
 		size -= now;
-		kunmap_atomic(guest_buf & PAGE_MASK, KM_USER0);
+		kunmap_atomic((void *)(guest_buf & PAGE_MASK), KM_USER0);
 	}
 	return req_size - size;
 }
@@ -331,7 +335,7 @@ int kvm_write_guest(struct kvm_vcpu *vcpu,
 		host_buf += now;
 		addr += now;
 		size -= now;
-		kunmap_atomic(guest_buf & PAGE_MASK, KM_USER0);
+		kunmap_atomic((void *)(guest_buf & PAGE_MASK), KM_USER0);
 	}
 	return req_size - size;
 }
@@ -993,7 +997,9 @@ static int kvm_vcpu_setup(struct kvm_vcpu *vcpu)
 
 	__set_cr0(vcpu, 0x60000010); // enter rmode
 	__set_cr4(vcpu, 0);
+#ifdef __x86_64__
 	__set_efer(vcpu, 0);
+#endif
 
 	ret = kvm_mmu_init(vcpu);
 

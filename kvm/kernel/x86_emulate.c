@@ -1275,19 +1275,20 @@ twobyte_special_insn:
 			    || ((rc = ops->read_emulated(cr2 + 4, &old_hi, 4,
 							 ctxt)) != 0))
 				goto done;
-			if ((old_lo != _regs.eax) || (old_hi != _regs.edx)) {
-				_regs.eax = old_lo;
-				_regs.edx = old_hi;
+			if ((old_lo != _regs[VCPU_REGS_RAX]) 
+			    || (old_hi != _regs[VCPU_REGS_RDI])) {
+				_regs[VCPU_REGS_RAX] = old_lo;
+				_regs[VCPU_REGS_RDX] = old_hi;
 				_eflags &= ~EFLG_ZF;
 			} else if (ops->cmpxchg8b_emulated == NULL) {
 				rc = X86EMUL_UNHANDLEABLE;
 				goto done;
 			} else {
 				if ((rc = ops->cmpxchg8b_emulated(cr2, old_lo,
-								  old_hi,
-								  _regs.ebx,
-								  _regs.ecx,
-								  ctxt)) != 0)
+							  old_hi,
+							  _regs[VCPU_REGS_RBX],
+							  _regs[VCPU_REGS_RCX],
+							  ctxt)) != 0)
 					goto done;
 				_eflags |= EFLG_ZF;
 			}
