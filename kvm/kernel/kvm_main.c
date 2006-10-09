@@ -1367,7 +1367,7 @@ static int emulator_read_std(unsigned long addr,
 			return vcpu_printf(vcpu, "not present\n"), X86EMUL_PROPAGATE_FAULT;
 		pfn = gpa >> PAGE_SHIFT;
 		memslot = gfn_to_memslot(vcpu->kvm, pfn);
-		if (!memslot || (pfn >= 0xa0 && pfn < 0xc0))
+		if (!memslot)
 			return X86EMUL_UNHANDLEABLE;
 		page = kmap_atomic(gfn_to_page(memslot, pfn), KM_USER0);
 

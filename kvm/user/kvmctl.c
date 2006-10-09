@@ -73,18 +73,33 @@ kvm_context_t kvm_init(struct kvm_callbacks *callbacks,
 
 int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem)
 {
+	unsigned long dosmem = 0xa0000;
+	unsigned long exmem = 0xc0000;
 	int fd = kvm->fd;
 	int r;
-	struct kvm_memory_region main_memory = {
-		.slot = 0,
-		.memory_size = memory,
+	struct kvm_memory_region low_memory = {
+		.slot = 3,
+		.memory_size = memory  < dosmem ? memory : dosmem,
 		.guest_phys_addr = 0,
 	};
+	struct kvm_memory_region extended_memory = {
+		.slot = 0,
+		.memory_size = memory < exmem ? 0 : memory - exmem,
+		.guest_phys_addr = exmem,
+	};
 
-	r = ioctl(fd, KVM_SET_MEMORY_REGION, &main_memory);
+	/* 640K should be enough. */
+	r = ioctl(fd, KVM_SET_MEMORY_REGION, &low_memory);
 	if (r == -1) {
 		printf("kvm_create_memory_region: %m\n");
 		exit(1);
+	}
+	if (extended_memory.memory_size) {
+		r = ioctl(fd, KVM_SET_MEMORY_REGION, &extended_memory);
+		if (r == -1) {
+			printf("kvm_create_memory_region: %m\n");
+			exit(1);
+		}
 	}
 
 	*vm_mem = mmap(0, memory, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
@@ -93,7 +108,6 @@ int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem)
 		exit(1);
 	}
 	kvm->physical_memory = *vm_mem;
-	memset(*vm_mem, 0, memory);
 
 	r = ioctl(fd, KVM_CREATE_VCPU, 0);
 	if (r == -1) {

@@ -205,13 +205,6 @@ static void page_header_update_slot(struct kvm *kvm, void *pte, gpa_t gpa)
 	__set_bit(slot, &page_head->slot_bitmap);
 }
 
-static inline int is_io_mem(struct kvm_vcpu *vcpu, gpa_t addr)
-{
-	return addr >= 0xa0000ULL && addr < 0xc0000ULL;
-}
-
-
-
 hpa_t safe_gpa_to_hpa(struct kvm_vcpu *vcpu, gpa_t gpa)
 {
 	hpa_t hpa = gpa_to_hpa(vcpu, gpa);
@@ -347,9 +340,6 @@ static int nonpaging_page_fault(struct kvm_vcpu *vcpu, gva_t gva,
      for (;;) {
 	     hpa_t paddr;
 
-	     if (is_io_mem(vcpu, addr))
-		     return 1;
-
 	     paddr = gpa_to_hpa(vcpu , addr & PT64_BASE_ADDR_MASK);
 
 	     if (is_error_hpa(paddr))
@@ -423,7 +413,7 @@ static inline void set_pte_common(struct kvm_vcpu *vcpu,
 
 	paddr = gpa_to_hpa(vcpu, gaddr & PT64_BASE_ADDR_MASK);
 
-	if (is_error_hpa(paddr) || is_io_mem(vcpu, gaddr)) {
+	if (is_error_hpa(paddr)) {
 		*shadow_pte |= gaddr;
 		*shadow_pte |= PT_SHADOW_IO_MARK;
 		*shadow_pte &= ~PT_PRESENT_MASK;
