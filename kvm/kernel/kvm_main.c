@@ -1429,7 +1429,7 @@ static int emulator_write_emulated(unsigned long addr,
 	gpa_t gpa = vcpu->mmu.gva_to_gpa(vcpu, addr);
 	
 	if (gpa == UNMAPPED_GVA)
-		return vcpu_printf(vcpu, "not present\n"), X86EMUL_PROPAGATE_FAULT;
+		return X86EMUL_PROPAGATE_FAULT;
 	
 	vcpu->mmio_needed = 1;
 	vcpu->mmio_phys_addr = gpa;
