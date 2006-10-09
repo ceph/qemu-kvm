@@ -138,11 +138,12 @@ static u8 opcode_table[256] = {
 
 static u8 twobyte_table[256] = {
 	/* 0x00 - 0x0F */
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ImplicitOps | ModRM, 0, 0,
+	0, SrcMem | ModRM | DstReg | Mov, 0, 0, 0, 0, 0, 0, 
+	0, 0, 0, 0, 0, ImplicitOps | ModRM, 0, 0,
 	/* 0x10 - 0x1F */
 	0, 0, 0, 0, 0, 0, 0, 0, ImplicitOps | ModRM, 0, 0, 0, 0, 0, 0, 0,
 	/* 0x20 - 0x2F */
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	ImplicitOps, 0, ImplicitOps, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	/* 0x30 - 0x3F */
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	/* 0x40 - 0x47 */
@@ -422,6 +423,23 @@ void *decode_register(u8 modrm_reg, unsigned long *regs,
 	return p;
 }
 
+static int read_descriptor(struct x86_emulate_ctxt *ctxt, 
+			   struct x86_emulate_ops *ops,
+			   void *ptr,
+			   u16 *size, unsigned long *address, int op_bytes)
+{
+	int rc;
+
+	if (op_bytes == 2)
+		op_bytes = 3;
+	*address = 0;
+	rc = ops->read_std((unsigned long)ptr, (unsigned long *)size, 2, ctxt);
+	if (rc)
+		return rc;
+	rc = ops->read_std((unsigned long)ptr + 2, address, op_bytes, ctxt);
+	return rc;
+}
+
 int
 x86_emulate_memop(struct x86_emulate_ctxt *ctxt, struct x86_emulate_ops *ops)
 {
@@ -439,6 +457,7 @@ x86_emulate_memop(struct x86_emulate_ctxt *ctxt, struct x86_emulate_ops *ops)
 	/* Shadow copy of register state. Committed on successful emulation. */
 	unsigned long _regs[NR_VCPU_REGS];
 	unsigned long _eip = ctxt->vcpu->rip, _eflags = ctxt->eflags;
+	unsigned long modrm_val = 0;
 
 	memcpy(_regs, ctxt->vcpu->regs, sizeof _regs);
 
@@ -541,9 +560,10 @@ done_prefixes:
 		use_modrm_ea = 1;
 
 		if (modrm_mod == 3) {
-			DPRINTF("Cannot parse ModRM.mod == 3.\n");
-			goto cannot_emulate;
-		}
+			modrm_val = *(unsigned long *)
+				decode_register(modrm_rm, _regs, d & ByteOp);
+			goto modrm_done;
+		}	
 
 		if (ad_bytes == 2) {
 			unsigned bx = _regs[VCPU_REGS_RBX];
@@ -676,6 +696,8 @@ done_prefixes:
 		if (ad_bytes != 8)
 			modrm_ea = (u32)modrm_ea;
 		cr2 = modrm_ea;
+	modrm_done:
+		;
 	}
 
 	/* Decode and fetch the destination operand: register or memory. */
@@ -1099,6 +1121,32 @@ special_insn:
 
 twobyte_insn:
 	switch (b) {
+	case 0x01: /* lgdt, lidt, lmsw */
+		switch (modrm_reg) {
+			u16 size;
+			unsigned long address;
+
+		case 2: /* lgdt */
+			rc = read_descriptor(ctxt, ops, src.ptr,
+					     &size, &address, op_bytes);
+			if (rc)
+				goto done;
+			realmode_lgdt(ctxt->vcpu, size, address);
+			break;
+		case 3: /* lidt */
+			rc = read_descriptor(ctxt, ops, src.ptr,
+					     &size, &address, op_bytes);
+			if (rc)
+				goto done;
+			realmode_lidt(ctxt->vcpu, size, address);
+			break;
+		case 6: /* lmsw */
+			realmode_lmsw(ctxt->vcpu, (u16)modrm_val, &_eflags);
+			break;
+		default:
+			goto cannot_emulate;
+		}
+		break;
 	case 0x40 ... 0x4f:	/* cmov */
 		dst.val = dst.orig_val = src.val;
 		d &= ~Mov;	/* default to no move */
@@ -1204,6 +1252,19 @@ twobyte_special_insn:
 	switch (b) {
 	case 0x0d:		/* GrpP (prefetch) */
 	case 0x18:		/* Grp16 (prefetch/nop) */
+		break;
+	case 0x20: /* mov cr, reg */
+		b = insn_fetch(u8, 1, _eip);
+		if ((b & 0xc0) != 0xc0)
+			goto cannot_emulate;
+		_regs[(b >> 3) & 7] = realmode_get_cr(ctxt->vcpu, b & 7);
+		break;
+	case 0x22: /* mov reg, cr */
+		b = insn_fetch(u8, 1, _eip);
+		if ((b & 0xc0) != 0xc0)
+			goto cannot_emulate;
+		realmode_set_cr(ctxt->vcpu, b & 7, _regs[(b >> 3) & 7] & -1u,
+				&_eflags);
 		break;
 	case 0xc7:		/* Grp9 (cmpxchg8b) */
 #if defined(__i386__)

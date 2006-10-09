@@ -1367,7 +1367,8 @@ static int emulator_read_std(unsigned long addr,
 			return vcpu_printf(vcpu, "not present\n"), X86EMUL_PROPAGATE_FAULT;
 		pfn = gpa >> PAGE_SHIFT;
 		memslot = gfn_to_memslot(vcpu->kvm, pfn);
-		/* FIXME: no memslot: emulate? return 0xff? */
+		if (!memslot || (pfn >= 0xa0 && pfn < 0xc0))
+			return X86EMUL_UNHANDLEABLE;
 		page = kmap_atomic(gfn_to_page(memslot, pfn), KM_USER0);
 
 		memcpy(data, page + offset, tocopy);
@@ -1398,12 +1399,15 @@ static int emulator_read_emulated(unsigned long addr,
 				  struct x86_emulate_ctxt *ctxt)
 {
 	struct kvm_vcpu *vcpu = ctxt->vcpu;
-
+	
 	if (vcpu->mmio_read_completed) {
 		memcpy(val, vcpu->mmio_data, bytes);
 		vcpu->mmio_read_completed = 0;
 		return X86EMUL_CONTINUE;
-	} else {
+	} else if (emulator_read_std(addr, val, bytes, ctxt)
+		   == X86EMUL_CONTINUE)
+		return X86EMUL_CONTINUE;
+	else {
 		gpa_t gpa = vcpu->mmu.gva_to_gpa(vcpu, addr);
 		if (gpa == UNMAPPED_GVA)
 			return vcpu_printf(vcpu, "not present\n"), X86EMUL_PROPAGATE_FAULT;
@@ -1523,7 +1527,7 @@ static int emulate_instruction(struct kvm_vcpu *vcpu,
 	vcpu->mmio_is_write = 0;
 	r = x86_emulate_memop(&emulate_ctxt, &emulate_ops);
 
-	if (r || vcpu->mmio_is_write) {
+	if ((r || vcpu->mmio_is_write) && run) {
 		run->mmio.phys_addr = vcpu->mmio_phys_addr;
 		memcpy(run->mmio.data, vcpu->mmio_data, 8);
 		run->mmio.len = vcpu->mmio_size;
@@ -1547,349 +1551,81 @@ static int emulate_instruction(struct kvm_vcpu *vcpu,
 	return EMULATE_DONE;
 }
 
-#define MAX_INSTRUCTION_SIZE 15
-
-struct rmode_sysemu {
-	struct kvm_vcpu *vcpu;
-	gva_t rip;
-	int op_bytes;
-	int addr_bytes;
-	gva_t base_addr;
-
-	int inst_len;
-	int pos;
-	uint8_t inst[MAX_INSTRUCTION_SIZE];
-
-	struct {
-		unsigned mod;
-		unsigned regop;
-		unsigned rm;
-	} modrm;
-};
-
-
-static int rmode_sysemu_start(struct kvm_vcpu *vcpu, struct rmode_sysemu *emu)
-{
-	emu->vcpu = vcpu;
-	emu->rip = vmcs_readl(GUEST_RIP) + vmcs_readl(GUEST_CS_BASE);
-	emu->inst_len = vmcs_read32(VM_EXIT_INSTRUCTION_LEN);
-	emu->op_bytes = 2;
-	emu->addr_bytes = 2;
-	emu->pos = 0;
-	emu->base_addr = vmcs_readl(GUEST_DS_BASE);
-
-	if (kvm_read_guest(vcpu, emu->rip, emu->inst_len, emu->inst) != 
-								emu->inst_len) {
-		vcpu_printf(emu->vcpu, "%s: inst read err\n", __FUNCTION__);
-		return 0;
-	}
-
-	for ( ; emu->pos < emu->inst_len; emu->pos++) {
-		switch (emu->inst[emu->pos]) {
-		case 0xf0:
-		case 0xf2:
-		case 0xf3:
-			break;
-		case 0x2e:
-			emu->base_addr = vmcs_readl(GUEST_CS_BASE);
-			break;
-		case 0x36:
-			emu->base_addr = vmcs_readl(GUEST_SS_BASE);
-			break;
-		case 0x3e:
-			emu->base_addr = vmcs_readl(GUEST_DS_BASE);
-			break;
-		case 0x26:
-			emu->base_addr = vmcs_readl(GUEST_ES_BASE);
-			break;
-		case 0x64:
-			emu->base_addr = vmcs_readl(GUEST_FS_BASE);
-			break;
-		case 0x65:
-			emu->base_addr = vmcs_readl(GUEST_GS_BASE);
-			break;
-		case 0x66:
-			emu->op_bytes = 4;
-			break;
-		case 0x67:
-			emu->addr_bytes = 4;
-			break;
-		default:
-			goto done;
-		}
-	}
-	vcpu_printf(emu->vcpu, "%s: unexpected\n", __FUNCTION__);
-	return 0;
-done:
-	return 1;
-}
-
-static int rmode_sysemu_opcode(struct rmode_sysemu *emu, uint16_t *opcode)
-{
-	if (emu->inst[emu->pos] == 0x0f) {
-		if (++emu->pos == emu->inst_len) {
-			vcpu_printf(emu->vcpu, "%s: unexpected\n",
-				    __FUNCTION__);
-			return 0;
-		}
-		*opcode = (0x0f << 8) + emu->inst[emu->pos++];
-	} else {
-		*opcode = emu->inst[emu->pos++];
-	}
-	return 1;
-}
-
-
-static int rmode_sysemu_byte(struct rmode_sysemu *emu, uint8_t *byte)
-{
-	if (emu->pos == emu->inst_len) {
-		vcpu_printf(emu->vcpu, "%s: unexpected\n",
-				    __FUNCTION__);
-		return 0;
-	}
-	*byte = emu->inst[emu->pos++];
-	return 1;
-}
-
-
-static int rmode_sysemu_address(struct rmode_sysemu *emu, gva_t *a)
-{
-	int i;
-
-	if ( emu->pos + emu->addr_bytes > emu->inst_len) {
-		vcpu_printf(emu->vcpu, "%s: unexpected\n",
-				    __FUNCTION__);
-		return 0;
-	}
-
-	for (i = 0; i < emu->addr_bytes; ((char*)a)[i++] = emu->inst[emu->pos++]);
-	for (; i < sizeof (gva_t); ((char*)a)[i++] = 0);
-
-	*a += emu->base_addr;
-	return 1;
-
-}
-
-static int rmode_sysemu_modrm(struct rmode_sysemu *emu)
-{
-	uint8_t byte;
-
-	if (!rmode_sysemu_byte(emu, &byte)) {
-		return 0;
-	}
-
-	emu->modrm.mod = byte >> 6;
-	emu->modrm.regop = (byte >> 3) & 7;
-	emu->modrm.rm = byte & 7;
-
-	return 1;
-}
-
-static unsigned long *rmode_sysemu_reg(struct rmode_sysemu *emu)
-{
-	if (emu->modrm.mod != 3) {
-		vcpu_printf(emu->vcpu,"%s: unsuported mod %x\n",
-			    __FUNCTION__,
-			    emu->modrm.mod);
-		return 0;
-	}
-
-	switch (emu->modrm.rm) {
-	case 0:
-		return &emu->vcpu->regs[VCPU_REGS_RAX];
-	case 1:
-		return &emu->vcpu->regs[VCPU_REGS_RCX];
-	case 2:
-		return &emu->vcpu->regs[VCPU_REGS_RDX];
-	case 3:
-		return &emu->vcpu->regs[VCPU_REGS_RBX];
-	case 4:
-		return &emu->vcpu->regs[VCPU_REGS_RSP];
-	case 5:
-		return &emu->vcpu->regs[VCPU_REGS_RBP];
-	case 6:
-		return &emu->vcpu->regs[VCPU_REGS_RSI];
-	case 7:
-		return &emu->vcpu->regs[VCPU_REGS_RDI];
-	default:
-		vcpu_printf(emu->vcpu, "%s: unexpected\n",
-				    __FUNCTION__);
-		return 0; //err
-	}
-}
-
 static uint64_t mk_cr_64(uint64_t curr_cr, uint32_t new_val)
 {
 	return (curr_cr & ~((1ULL << 32) - 1)) | new_val;
 }
 
-static int rmode_emulate_sysinst(struct kvm_vcpu *vcpu)
+void realmode_lgdt(struct kvm_vcpu *vcpu, u16 limit, unsigned long base)
 {
-	struct rmode_sysemu emu;
-	uint16_t opcode;
-
-	vcpu_load_rsp_rip(vcpu);
-
-	if (!rmode_sysemu_start(vcpu, &emu)) {
-		return 0;
-	}
-
-	if (!rmode_sysemu_opcode(&emu, &opcode)) {
-		return 0;
-	}
-
-	if (opcode == 0x0f01) {
-
-		if (!rmode_sysemu_modrm(&emu)) {
-			return 0;
-		}
-		switch (emu.modrm.regop) {
-		case 2: //LGDT
-		case 3: { //LIDT
-			gva_t address;
-			uint64_t dtr;
-			uint32_t limit;
-			gva_t base;
-			uint8_t *dtr_p = (uint8_t*)&dtr;
-
-			if (emu.modrm.mod != 0 || 
-			    (emu.addr_bytes == 4 && emu.modrm.rm != 5) ||
-			    (emu.addr_bytes == 2 && emu.modrm.rm != 6)) {
-				vcpu_printf(vcpu, "%s: unsuported mod %u rm %u"
-						  " addr_bytes %u\n",
-					    __FUNCTION__,
-					    emu.modrm.mod,
-					    emu.modrm.rm,
-					    emu.addr_bytes);
-				return 0;
-			}
-
-			if (!rmode_sysemu_address(&emu, &address)) {
-				return 0;
-			}
-
-			if (kvm_read_guest(vcpu, address, 6, dtr_p) != 6) {
-				vcpu_printf(vcpu, "%s: read gust err\n",
-					    __FUNCTION__);
-				return 0; //#PF
-			}
-
-			if (emu.op_bytes == 2) {
-				dtr_p[5] = 0;
-			}
-
-			limit = *(uint16_t*)dtr_p;
-			base = *(uint32_t*)(dtr_p + 2);
-
-			if (emu.modrm.regop == 2) {
-				vmcs_writel(GUEST_GDTR_BASE, base);
-				vmcs_write32(GUEST_GDTR_LIMIT, limit);
-			} else {
-				vmcs_writel(GUEST_IDTR_BASE, base);
-				vmcs_write32(GUEST_IDTR_LIMIT, limit);
-				
-			}
-			skip_emulated_instruction(vcpu);
-			return 1;
-		}
-		case 6: { //lmsw
-			unsigned long *reg;
-
-			if (!(reg = rmode_sysemu_reg(&emu))) {
-				return 0;
-			}
-			lmsw(vcpu, *reg);
-			return 1;
-		}
-		default:
-			vcpu_printf(vcpu, "%s: unsuported op 0x%x sub %u\n",
-				    __FUNCTION__,
-				    opcode,
-				    emu.modrm.regop);
-			return 0;
-		}
-	} else if (opcode == 0x0f20) { // mov from cr
-		unsigned long *reg;
-
-		if (!rmode_sysemu_modrm(&emu) ||
-		    !(reg = rmode_sysemu_reg(&emu))) {
-			return 0;
-		}
-
-		switch(emu.modrm.regop){
-		case 0:
-			*reg = guest_cr0();
-			vcpu_put_rsp_rip(vcpu);
-			skip_emulated_instruction(vcpu);
-			return 1;
-		case 2:
-			*reg = vcpu->cr2;
-			vcpu_put_rsp_rip(vcpu);
-			skip_emulated_instruction(vcpu);
-			return 1;
-		case 3:
-			*reg = vcpu->cr3;
-			vcpu_put_rsp_rip(vcpu);
-			skip_emulated_instruction(vcpu);
-			return 1;
-		case 4:
-			*reg = guest_cr4();
-			vcpu_put_rsp_rip(vcpu);
-			skip_emulated_instruction(vcpu);
-			return 1;
-		default:
-			vcpu_printf(vcpu, "%s: unexpected cr %u\n",
-				    __FUNCTION__,
-				    emu.modrm.regop);
-			return 0; 
-		}
-	} else if (opcode == 0x0f22) { // mov to cr
-		unsigned long *reg;
-		uint32_t val;
-
-		if (!rmode_sysemu_modrm(&emu) ||
-		    !(reg = rmode_sysemu_reg(&emu))) {
-			return 0;
-		}
-		val = *reg;
-
-		switch(emu.modrm.regop){
-		case 0:
-			set_cr0(vcpu, mk_cr_64(guest_cr0(), val));
-			return 1;
-		case 2:
-			vcpu->cr2 = val;
-			skip_emulated_instruction(vcpu);
-			return 1;
-		case 3:
-			set_cr3(vcpu, val);
-			return 1;
-		case 4:
-			set_cr4(vcpu, mk_cr_64(guest_cr4(), val));
-			return 1;
-		default:
-			vcpu_printf(vcpu, "%s: unexpected cr %u\n",
-				    __FUNCTION__,
-				    emu.modrm.regop);
-			return 0;
-		}
-	}
-	vcpu_printf(vcpu, "%s: unsuported op 0x%x\n",
-				    __FUNCTION__,
-				    opcode);
-	return 0;
+	vmcs_writel(GUEST_GDTR_BASE, base);
+	vmcs_write32(GUEST_GDTR_LIMIT, limit);
 }
 
+void realmode_lidt(struct kvm_vcpu *vcpu, u16 limit, unsigned long base)
+{
+	vmcs_writel(GUEST_IDTR_BASE, base);
+	vmcs_write32(GUEST_IDTR_LIMIT, limit);
+}
 
-static int handle_rmode_exception(struct kvm_vcpu *vcpu, int vec, uint32_t err_code)
+void realmode_lmsw(struct kvm_vcpu *vcpu, unsigned long msw,
+		   unsigned long *rflags)
+{
+	lmsw(vcpu, msw);
+	*rflags = vmcs_readl(GUEST_RFLAGS);
+}
+
+unsigned long realmode_get_cr(struct kvm_vcpu *vcpu, int cr)
+{
+	switch (cr) {
+	case 0:
+		return guest_cr0();
+	case 2:
+		return vcpu->cr2;
+	case 3:
+		return vcpu->cr3;
+	case 4:
+		return guest_cr4();
+	default:
+		vcpu_printf(vcpu, "%s: unexpected cr %u\n", __FUNCTION__, cr);
+		return 0; 
+	}
+}
+
+#include "debug.h"
+
+void realmode_set_cr(struct kvm_vcpu *vcpu, int cr, unsigned long val,
+		     unsigned long *rflags)
+{
+	switch (cr) {
+	case 0:
+		set_cr0(vcpu, mk_cr_64(guest_cr0(), val));
+		*rflags = vmcs_readl(GUEST_RFLAGS);
+		break;
+	case 2:
+		vcpu->cr2 = val;
+		break;
+	case 3:
+		set_cr3(vcpu, val);
+		break;
+	case 4:
+		set_cr4(vcpu, mk_cr_64(guest_cr4(), val));
+		break;
+	default:
+		vcpu_printf(vcpu, "%s: unexpected cr %u\n", __FUNCTION__, cr);
+	}
+}
+
+static int handle_rmode_exception(struct kvm_vcpu *vcpu,
+				  int vec, uint32_t err_code)
 {
 	if (!vcpu->rmode.active) {
 		return 0;
 	}
 
-	if (vec == GP_VECTOR && err_code == 0 && rmode_emulate_sysinst(vcpu)) {
-		return 1;
-	}
+	if (vec == GP_VECTOR && err_code == 0)
+		if (emulate_instruction(vcpu, 0, 0, 0) == EMULATE_DONE)
+			return 1;
 	return 0;
 }
 
@@ -2180,7 +1916,6 @@ static void set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 
 	__set_cr0(vcpu, cr0);
 	kvm_mmu_reset_context(vcpu);
-	skip_emulated_instruction(vcpu);
 	return;
 }
 
@@ -2199,8 +1934,6 @@ static void lmsw(struct kvm_vcpu *vcpu, unsigned long msw)
 
 	vmcs_writel(GUEST_CR0, (vmcs_readl(GUEST_CR0) & ~LMSW_GUEST_MASK)
 				| (msw & LMSW_GUEST_MASK));
-
-	skip_emulated_instruction(vcpu);
 }
 
 #define CR4_RESEVED_BITS (~((1ULL << 11) - 1))
@@ -2234,7 +1967,6 @@ static void set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
 	spin_lock(&vcpu->kvm->lock);
 	kvm_mmu_reset_context(vcpu);
 	spin_unlock(&vcpu->kvm->lock);
-	skip_emulated_instruction(vcpu);
 }
 
 static void set_cr3(struct kvm_vcpu *vcpu, unsigned long cr3)
@@ -2263,7 +1995,6 @@ static void set_cr3(struct kvm_vcpu *vcpu, unsigned long cr3)
 	spin_lock(&vcpu->kvm->lock);
 	vcpu->mmu.new_cr3(vcpu);
 	spin_unlock(&vcpu->kvm->lock);
-	skip_emulated_instruction(vcpu);
 }
 
 #define CR8_RESEVED_BITS (~0x0fULL)
@@ -2276,7 +2007,6 @@ static void set_cr8(struct kvm_vcpu *vcpu, unsigned long cr8)
 		return;
 	}
 	vcpu->cr8 = cr8;
-	skip_emulated_instruction(vcpu);
 }
 
 
@@ -2324,18 +2054,22 @@ static int handle_cr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 		case 0:
 			vcpu_load_rsp_rip(vcpu);
 			set_cr0(vcpu, vcpu->regs[reg]);
+			skip_emulated_instruction(vcpu);
 			return 1;
 		case 3:
 			vcpu_load_rsp_rip(vcpu);
 			set_cr3(vcpu, vcpu->regs[reg]);
+			skip_emulated_instruction(vcpu);
 			return 1;
 		case 4:
 			vcpu_load_rsp_rip(vcpu);
 			set_cr4(vcpu, vcpu->regs[reg]);
+			skip_emulated_instruction(vcpu);
 			return 1;
 		case 8:
 			vcpu_load_rsp_rip(vcpu);
 			set_cr8(vcpu, vcpu->regs[reg]);
+			skip_emulated_instruction(vcpu);
 			return 1;
 		};
 		break;
@@ -2358,6 +2092,8 @@ static int handle_cr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 		break;
 	case 3: /* lmsw */
 		lmsw(vcpu, (exit_qualification >> LMSW_SOURCE_DATA_SHIFT) & 0x0f);
+
+		skip_emulated_instruction(vcpu);
 		return 1;
 	default:
 		break;
@@ -2664,8 +2400,6 @@ static int kvm_handle_exit(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 	else {
 		kvm_run->exit_reason = KVM_EXIT_UNKNOWN;
 		kvm_run->hw.hardware_exit_reason = exit_reason;
-		printk(KERN_ERR "kvm: unhandled exit reason 0x%x\n",
-		       exit_reason);
 	}
 	return 0;
 }

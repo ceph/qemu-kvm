@@ -253,6 +253,15 @@ static inline struct page *gfn_to_page(struct kvm_memory_slot *slot, gfn_t gfn)
 struct kvm_memory_slot *gfn_to_memslot(struct kvm *kvm, gfn_t gfn);
 void mark_page_dirty(struct kvm *kvm, gfn_t gfn);
 
+void realmode_lgdt(struct kvm_vcpu *vcpu, u16 size, unsigned long address);
+void realmode_lidt(struct kvm_vcpu *vcpu, u16 size, unsigned long address);
+void realmode_lmsw(struct kvm_vcpu *vcpu, unsigned long msw,
+		   unsigned long *rflags);
+
+unsigned long realmode_get_cr(struct kvm_vcpu *vcpu, int cr);
+void realmode_set_cr(struct kvm_vcpu *vcpu, int cr, unsigned long value,
+		     unsigned long *rflags);
+
 int kvm_read_guest(struct kvm_vcpu *vcpu,
 	       gva_t addr,
 	       unsigned long size,
