@@ -1364,7 +1364,7 @@ static int emulator_read_std(unsigned long addr,
 		void *page;
 
 		if (gpa == UNMAPPED_GVA)
-			return vcpu_printf(vcpu, "not present\n"), X86EMUL_PROPAGATE_FAULT;
+			return X86EMUL_PROPAGATE_FAULT;
 		pfn = gpa >> PAGE_SHIFT;
 		memslot = gfn_to_memslot(vcpu->kvm, pfn);
 		if (!memslot)
