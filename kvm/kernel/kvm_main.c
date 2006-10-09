@@ -285,9 +285,9 @@ int kvm_read_guest(struct kvm_vcpu *vcpu,
 
 		paddr = gva_to_hpa(vcpu, addr);
 
-		if ( is_error_hpa(paddr) ) {
+		if (is_error_hpa(paddr))
 			break;
-		}
+
 		guest_buf = (hva_t)kmap_atomic(
 					pfn_to_page(paddr >> PAGE_SHIFT),
 					KM_USER0);
@@ -319,12 +319,11 @@ int kvm_write_guest(struct kvm_vcpu *vcpu,
 
 		paddr = gva_to_hpa(vcpu, addr);
 
-		if ( is_error_hpa(paddr) ) {
+		if (is_error_hpa(paddr))
 			break;
-		}
+
 		guest_buf = (hva_t)kmap_atomic(
-					pfn_to_page(paddr >> PAGE_SHIFT),
-					KM_USER0);
+				pfn_to_page(paddr >> PAGE_SHIFT), KM_USER0);
 		offset = addr & ~PAGE_MASK;
 		guest_buf |= offset;
 		now = min(size, PAGE_SIZE - offset);
@@ -817,9 +816,8 @@ static int kvm_vcpu_setup(struct kvm_vcpu *vcpu)
 	int ret;
 	u64 tsc;
 
-	if (!init_rmode_tss(vcpu->kvm)) {
+	if (!init_rmode_tss(vcpu->kvm))
 		return 0;
-	}
 
 	memset(vcpu->regs, 0, sizeof(vcpu->regs));
 	vcpu->regs[VCPU_REGS_RDX] = get_rdx_init_val();
@@ -1619,9 +1617,8 @@ void realmode_set_cr(struct kvm_vcpu *vcpu, int cr, unsigned long val,
 static int handle_rmode_exception(struct kvm_vcpu *vcpu,
 				  int vec, uint32_t err_code)
 {
-	if (!vcpu->rmode.active) {
+	if (!vcpu->rmode.active)
 		return 0;
-	}
 
 	if (vec == GP_VECTOR && err_code == 0)
 		if (emulate_instruction(vcpu, 0, 0, 0) == EMULATE_DONE)
@@ -1688,9 +1685,8 @@ static int handle_exception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 
 	if (vcpu->rmode.active &&
 	    handle_rmode_exception(vcpu, intr_info & INTR_INFO_VECTOR_MASK,
-								error_code)) {
+								error_code))
 		return 1;
-	}
 
 	if ((intr_info & (INTR_INFO_INTR_TYPE_MASK | INTR_INFO_VECTOR_MASK)) == (INTR_TYPE_EXCEPTION | 1)) {
 		kvm_run->exit_reason = KVM_EXIT_DEBUG;
@@ -1727,9 +1723,8 @@ static int get_io_count(struct kvm_vcpu *vcpu, uint64_t *count)
 	}
 
 	rip =  vmcs_readl(GUEST_RIP);
-	if (countr_size != 8) {
+	if (countr_size != 8)
 		rip += vmcs_readl(GUEST_CS_BASE);
-	}
 
 	n = kvm_read_guest(vcpu, rip, sizeof(inst), &inst);
 
@@ -1777,9 +1772,8 @@ static int handle_io(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	kvm_run->io.rep = (exit_qualification & 32) != 0;
 	kvm_run->io.port = exit_qualification >> 16;
 	if (kvm_run->io.string) {
-		if (!get_io_count(vcpu, &kvm_run->io.count)) {
+		if (!get_io_count(vcpu, &kvm_run->io.count))
 			return 1;
-		}
 		kvm_run->io.address = vmcs_readl(GUEST_LINEAR_ADDRESS);
 	} else
 		kvm_run->io.value = vcpu->regs[VCPU_REGS_RAX]; /* rax */
@@ -2012,13 +2006,11 @@ static void set_cr8(struct kvm_vcpu *vcpu, unsigned long cr8)
 
 static void __set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 {
-	if (vcpu->rmode.active && (cr0 & CR0_PE_MASK)) {
+	if (vcpu->rmode.active && (cr0 & CR0_PE_MASK))
 		enter_pmode(vcpu);
-	}
 
-	if (!vcpu->rmode.active && !(cr0 & CR0_PE_MASK)) {
+	if (!vcpu->rmode.active && !(cr0 & CR0_PE_MASK))
 		enter_rmode(vcpu);
-	}
 
 	vmcs_writel(CR0_READ_SHADOW, cr0);
 	vmcs_writel(GUEST_CR0, cr0 | KVM_VM_CR0_ALWAYS_ON);
@@ -2349,9 +2341,8 @@ static int handle_interrupt_window(struct kvm_vcpu *vcpu,
 static int handle_halt(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 {
 	skip_emulated_instruction(vcpu);
-	if (vcpu->irq_summary && (vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_IF)) {
+	if (vcpu->irq_summary && (vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_IF))
 		return 1;
-	}
 
 	kvm_run->exit_reason = KVM_EXIT_HLT;
 	return 0;

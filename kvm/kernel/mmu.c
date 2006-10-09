@@ -219,9 +219,8 @@ hpa_t gpa_to_hpa(struct kvm_vcpu *vcpu, gpa_t gpa)
 
 	ASSERT((gpa & HPA_ERR_MASK) == 0);
 	slot = gfn_to_memslot(vcpu->kvm, gpa >> PAGE_SHIFT);
-	if (!slot) {
+	if (!slot)
 		return gpa | HPA_ERR_MASK;
-	}
 	page = gfn_to_page(slot, gpa >> PAGE_SHIFT);
 	return (page_to_pfn(page) << PAGE_SHIFT) | (gpa & (PAGE_SIZE-1));
 }
@@ -230,9 +229,8 @@ hpa_t gva_to_hpa(struct kvm_vcpu *vcpu, gva_t gva)
 {
 	gpa_t gpa = vcpu->mmu.gva_to_gpa(vcpu, gva);
 
-	if (gpa == UNMAPPED_GVA) {
+	if (gpa == UNMAPPED_GVA)
 		return UNMAPPED_GVA;
-	}
 	return gpa_to_hpa(vcpu, gpa);
 }
 

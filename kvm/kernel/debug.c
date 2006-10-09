@@ -71,9 +71,8 @@ void show_irq(struct kvm_vcpu *vcpu,  int irq)
 	unsigned long idt_limit = vmcs_readl(GUEST_IDTR_LIMIT);
 	struct gate_struct gate;
 
-	if (!is_long_mode()) {
+	if (!is_long_mode())
 		vcpu_printf(vcpu, "%s: not in long mode\n", __FUNCTION__);
-	}
 
 	if (!is_long_mode() || idt_limit < irq * sizeof(gate)) {
 		vcpu_printf(vcpu, "%s: 0x%x read_guest err\n",
@@ -101,9 +100,9 @@ void show_page(struct kvm_vcpu *vcpu,
 {
 	uint64_t *buf = kmalloc(PAGE_SIZE, GFP_KERNEL);
 
-	if (!buf) {
+	if (!buf)
 		return;
-	}
+
 	addr &= PAGE_MASK;
 	if (kvm_read_guest(vcpu, addr, PAGE_SIZE, buf)) {
 		int i;
@@ -112,9 +111,8 @@ void show_page(struct kvm_vcpu *vcpu,
 			int j;
 			vcpu_printf(vcpu, " 0x%16.16lx:",
 				   addr + i * sizeof(uint64_t));
-			for (j = 0; j < sizeof(uint64_t) ; j++) {
+			for (j = 0; j < sizeof(uint64_t) ; j++)
 				vcpu_printf(vcpu, " 0x%2.2x", ptr[j]);
-			}
 			vcpu_printf(vcpu, "\n");
 		}
 	}
@@ -129,9 +127,8 @@ void show_u64(struct kvm_vcpu *vcpu, gva_t addr)
 		uint8_t *ptr = (uint8_t*)&buf;
 		int j;
 		vcpu_printf(vcpu, " 0x%16.16lx:", addr);
-		for (j = 0; j < sizeof(uint64_t) ; j++) {
+		for (j = 0; j < sizeof(uint64_t) ; j++)
 			vcpu_printf(vcpu, " 0x%2.2x", ptr[j]);
-		}
 		vcpu_printf(vcpu, "\n");
 	}
 }
@@ -412,12 +409,10 @@ int vm_entry_test_guest(struct kvm_vcpu *vcpu)
 		uint32_t lim = vmcs_read32(GUEST_##seg##_LIMIT);		\
 		uint32_t ar = vmcs_read32(GUEST_##seg##_AR_BYTES);		\
 		int err = 0;							\
-		if (((lim & ~PAGE_MASK) != ~PAGE_MASK) && (ar & AR_G_MASK)) {	\
+		if (((lim & ~PAGE_MASK) != ~PAGE_MASK) && (ar & AR_G_MASK))	\
 			err = 1;						\
-		}								\
-		if ((lim & ~((1u << 20) - 1)) && !(ar & AR_G_MASK)) {		\
+		if ((lim & ~((1u << 20) - 1)) && !(ar & AR_G_MASK))		\
 			err = 1;						\
-		}								\
 		if (err) {							\
 			vcpu_printf(vcpu, "%s: "#seg" AR 0x%x, G err. lim"	\
 							" is 0x%x\n",		\
