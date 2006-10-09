@@ -2568,103 +2568,108 @@ again:
 	if (vcpu->guest_debug.enabled)
 		kvm_guest_debug_pre(vcpu);
 
-#ifdef __x86_64__
-#define SP "rsp"
-#define PUSHA "push %%rax; push %%rbx; push %%rdx;" \
-              "push %%rsi; push %%rdi; push %%rbp;" \
-	      "push %%r8;  push %%r9;  push %%r10; push %%r11;" \
-              "push %%r12; push %%r13; push %%r14; push %%r15; push %%rcx"
-#define POPA  "pop  %%rcx; pop  %%r15; pop  %%r14; pop  %%r13; pop  %%r12;" \
-	      "pop  %%r11; pop  %%r10; pop  %%r9;  pop  %%r8;"	\
-	      "pop  %%rbp; pop  %%rdi; pop  %%rsi;"	       \
-	      "pop  %%rdx; pop  %%rbx; pop  %%rax"
-#define LOAD_GUEST_REGS \
-	"mov %c[cr2](%3), %%rax \n\t" \
-	"mov %%rax, %%cr2 \n\t"   \
-	"mov %c[rax](%3), %%rax \n\t" \
-	"mov %c[rbx](%3), %%rbx \n\t" \
-	"mov %c[rdx](%3), %%rdx \n\t" \
-	"mov %c[rsi](%3), %%rsi \n\t" \
-	"mov %c[rdi](%3), %%rdi \n\t" \
-	"mov %c[rbp](%3), %%rbp \n\t" \
-	"mov %c[r8](%3),  %%r8  \n\t" \
-	"mov %c[r9](%3),  %%r9  \n\t" \
-	"mov %c[r10](%3), %%r10 \n\t" \
-	"mov %c[r11](%3), %%r11 \n\t" \
-	"mov %c[r12](%3), %%r12 \n\t" \
-	"mov %c[r13](%3), %%r13 \n\t" \
-	"mov %c[r14](%3), %%r14 \n\t" \
-	"mov %c[r15](%3), %%r15 \n\t" \
-	"mov %c[rcx](%3), %%rcx \n\t" /* kills %3 (rcx) */
-
-#define STORE_GUEST_REGS \
-	"xchg %3,     0(%%rsp) \n\t" \
-	"mov %%rax, %c[rax](%3) \n\t" \
-	"mov %%rbx, %c[rbx](%3) \n\t" \
-	"pushq 0(%%rsp); popq %c[rcx](%3) \n\t" \
-	"mov %%rdx, %c[rdx](%3) \n\t" \
-	"mov %%rsi, %c[rsi](%3) \n\t" \
-	"mov %%rdi, %c[rdi](%3) \n\t" \
-	"mov %%rbp, %c[rbp](%3) \n\t" \
-	"mov %%r8,  %c[r8](%3) \n\t" \
-	"mov %%r9,  %c[r9](%3) \n\t" \
-	"mov %%r10, %c[r10](%3) \n\t" \
-	"mov %%r11, %c[r11](%3) \n\t" \
-	"mov %%r12, %c[r12](%3) \n\t" \
-	"mov %%r13, %c[r13](%3) \n\t" \
-	"mov %%r14, %c[r14](%3) \n\t" \
-	"mov %%r15, %c[r15](%3) \n\t" \
-	"mov %%cr2, %%rax   \n\t" \
-	"mov %%rax, %c[cr2](%3) \n\t" \
-	"mov 0(%%rsp), %3 \n\t"
-#else
-#define SP "esp"
-#define PUSHA "pusha; push %%ecx"
-#define POPA  "pop %%ecx; popa"
-
-#define LOAD_GUEST_REGS \
-	"mov %c[cr2](%3), %%eax \n\t" \
-	"mov %%eax,   %%cr2 \n\t" \
-	"mov %c[rax](%3), %%eax \n\t" \
-	"mov %c[rbx](%3), %%ebx \n\t" \
-	"mov %c[rdx](%3), %%edx \n\t" \
-	"mov %c[rsi](%3), %%esi \n\t" \
-	"mov %c[rdi](%3), %%edi \n\t" \
-	"mov %c[rbp](%3), %%ebp \n\t" \
-	"mov %c[rcx](%3), %%ecx \n\t" /* kills %3 (ecx) */
-
-#define STORE_GUEST_REGS \
-	"xchg %3, 0(%%esp) \n\t" \
-	"mov %%eax, %c[rax](%3) \n\t" \
-	"mov %%ebx, %c[rbx](%3) \n\t" \
-	"pushl 0(%%esp); popl %c[rcx](%3) \n\t" \
-	"mov %%edx, %c[rdx](%3) \n\t" \
-	"mov %%esi, %c[rsi](%3) \n\t" \
-	"mov %%edi, %c[rdi](%3) \n\t" \
-	"mov %%ebp, %c[rbp](%3) \n\t" \
-	"mov %%cr2, %%eax  \n\t" \
-	"mov %%eax, %c[cr2](%3) \n\t" \
-	"mov 0(%%esp), %3"
-
-#endif
 	fx_save(vcpu->host_fx_image);
 	fx_restore(vcpu->guest_fx_image);
 
 	save_msrs(vcpu->host_msrs, 0);
 	load_msrs(vcpu->guest_msrs);
 
-	asm ( "pushf; " PUSHA "\n\t"
-	      "vmwrite %%" SP ", %2 \n\t"
-	      "cmp $0, %1 \n\t"
-	      LOAD_GUEST_REGS "\n\t"
-	      "jne launched \n\t"
-	      "vmlaunch \n\t"
-	      "jmp kvm_vmx_return \n\t"
-	      "launched: vmresume \n\t"
-	      ".globl kvm_vmx_return \n\t"
-	      "kvm_vmx_return: " STORE_GUEST_REGS "; " POPA "\n\t"
-	      "setbe %0 \n\t"
-	      "popf \n\t"
+	asm ( 
+		/* Store host registers */
+		"pushf \n\t"
+#ifdef __x86_64__
+		"push %%rax; push %%rbx; push %%rdx;"
+		"push %%rsi; push %%rdi; push %%rbp;"
+		"push %%r8;  push %%r9;  push %%r10; push %%r11;"
+		"push %%r12; push %%r13; push %%r14; push %%r15;"
+		"push %%rcx \n\t"
+		"vmwrite %%rsp, %2 \n\t"
+#else
+		"pusha; push %%ecx \n\t"
+		"vmwrite %%esp, %2 \n\t"
+#endif
+		/* Check if vmlaunch of vmresume is needed */
+		"cmp $0, %1 \n\t"
+		/* Load guest registers.  Don't clobber flags. */
+#ifdef __x86_64__
+		"mov %c[cr2](%3), %%rax \n\t"	
+		"mov %%rax, %%cr2 \n\t"		
+		"mov %c[rax](%3), %%rax \n\t"	
+		"mov %c[rbx](%3), %%rbx \n\t"	
+		"mov %c[rdx](%3), %%rdx \n\t"	
+		"mov %c[rsi](%3), %%rsi \n\t"	
+		"mov %c[rdi](%3), %%rdi \n\t"	
+		"mov %c[rbp](%3), %%rbp \n\t"	
+		"mov %c[r8](%3),  %%r8  \n\t"	
+		"mov %c[r9](%3),  %%r9  \n\t"	
+		"mov %c[r10](%3), %%r10 \n\t"
+		"mov %c[r11](%3), %%r11 \n\t"
+		"mov %c[r12](%3), %%r12 \n\t"
+		"mov %c[r13](%3), %%r13 \n\t"
+		"mov %c[r14](%3), %%r14 \n\t"
+		"mov %c[r15](%3), %%r15 \n\t"
+		"mov %c[rcx](%3), %%rcx \n\t" /* kills %3 (rcx) */
+#else
+		"mov %c[cr2](%3), %%eax \n\t"
+		"mov %%eax,   %%cr2 \n\t"
+		"mov %c[rax](%3), %%eax \n\t"
+		"mov %c[rbx](%3), %%ebx \n\t"
+		"mov %c[rdx](%3), %%edx \n\t"
+		"mov %c[rsi](%3), %%esi \n\t"
+		"mov %c[rdi](%3), %%edi \n\t"
+		"mov %c[rbp](%3), %%ebp \n\t"
+		"mov %c[rcx](%3), %%ecx \n\t" /* kills %3 (ecx) */
+#endif
+		/* Enter guest mode */
+		"jne launched \n\t"
+		"vmlaunch \n\t"
+		"jmp kvm_vmx_return \n\t"
+		"launched: vmresume \n\t"
+		".globl kvm_vmx_return \n\t"
+		"kvm_vmx_return: "
+		/* Save guest registers, load host registers, keep flags */
+#ifdef __x86_64__
+		"xchg %3,     0(%%rsp) \n\t"
+		"mov %%rax, %c[rax](%3) \n\t"
+		"mov %%rbx, %c[rbx](%3) \n\t"
+		"pushq 0(%%rsp); popq %c[rcx](%3) \n\t"
+		"mov %%rdx, %c[rdx](%3) \n\t"
+		"mov %%rsi, %c[rsi](%3) \n\t"
+		"mov %%rdi, %c[rdi](%3) \n\t"
+		"mov %%rbp, %c[rbp](%3) \n\t"
+		"mov %%r8,  %c[r8](%3) \n\t"
+		"mov %%r9,  %c[r9](%3) \n\t"
+		"mov %%r10, %c[r10](%3) \n\t"
+		"mov %%r11, %c[r11](%3) \n\t"
+		"mov %%r12, %c[r12](%3) \n\t"
+		"mov %%r13, %c[r13](%3) \n\t"
+		"mov %%r14, %c[r14](%3) \n\t"
+		"mov %%r15, %c[r15](%3) \n\t"
+		"mov %%cr2, %%rax   \n\t"
+		"mov %%rax, %c[cr2](%3) \n\t"
+		"mov 0(%%rsp), %3 \n\t"
+
+		"pop  %%rcx; pop  %%r15; pop  %%r14; pop  %%r13; pop  %%r12;"
+		"pop  %%r11; pop  %%r10; pop  %%r9;  pop  %%r8;"	
+		"pop  %%rbp; pop  %%rdi; pop  %%rsi;"	
+		"pop  %%rdx; pop  %%rbx; pop  %%rax \n\t"
+#else
+		"xchg %3, 0(%%esp) \n\t"
+		"mov %%eax, %c[rax](%3) \n\t"
+		"mov %%ebx, %c[rbx](%3) \n\t"
+		"pushl 0(%%esp); popl %c[rcx](%3) \n\t"
+		"mov %%edx, %c[rdx](%3) \n\t"
+		"mov %%esi, %c[rsi](%3) \n\t"
+		"mov %%edi, %c[rdi](%3) \n\t"
+		"mov %%ebp, %c[rbp](%3) \n\t"
+		"mov %%cr2, %%eax  \n\t"
+		"mov %%eax, %c[cr2](%3) \n\t"
+		"mov 0(%%esp), %3 \n\t"
+
+		"pop %%ecx; popa \n\t"
+#endif
+		"setbe %0 \n\t"
+		"popf \n\t"
 	      : "=g" (fail)
 	      : "r"(vcpu->launched), "r"((unsigned long)HOST_RSP),
 		"c"(vcpu),
