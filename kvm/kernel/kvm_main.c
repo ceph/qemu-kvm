@@ -2653,15 +2653,12 @@ again:
 	      LOAD_GUEST_REGS "\n\t"
 	      "jne launched \n\t"
 	      "vmlaunch \n\t"
-	      "jmp error \n\t"
+	      "jmp kvm_vmx_return \n\t"
 	      "launched: vmresume \n\t"
-	      "error: " STORE_GUEST_REGS "; " POPA "; popf \n\t"
-	      "mov $1, %0 \n\t"
-	      "jmp done \n\t"
 	      ".globl kvm_vmx_return \n\t"
-	      "kvm_vmx_return: " STORE_GUEST_REGS "; " POPA "; popf \n\t"
-              "mov $0, %0 \n\t"
-	      "done:"
+	      "kvm_vmx_return: " STORE_GUEST_REGS "; " POPA "\n\t"
+	      "setbe %0 \n\t"
+	      "popf \n\t"
 	      : "=g" (fail)
 	      : "r"(vcpu->launched), "r"((unsigned long)HOST_RSP),
 		"c"(vcpu),
