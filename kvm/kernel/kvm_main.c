@@ -252,8 +252,12 @@ static struct vmcs_descriptor {
 	u32 revision_id;
 } vmcs_descriptor;
 
-#define MSR_IA32_FEATURE_CONTROL 0x03a
-#define MSR_IA32_VMX_BASIC_MSR   0x480
+#define MSR_IA32_FEATURE_CONTROL 		0x03a
+#define MSR_IA32_VMX_BASIC_MSR   		0x480
+#define MSR_IA32_VMX_PINBASED_CTLS_MSR		0x481
+#define MSR_IA32_VMX_PROCBASED_CTLS_MSR		0x482
+#define MSR_IA32_VMX_EXIT_CTLS_MSR		0x483
+#define MSR_IA32_VMX_ENTRY_CTLS_MSR		0x484
 
 #ifdef __x86_64__
 static unsigned long read_msr(unsigned long msr)
@@ -811,6 +815,17 @@ static void fx_init(struct kvm_vcpu *vcpu)
 	       0, FX_IMAGE_SIZE - sizeof(struct fx_image_s));
 }
 
+static void kvm_adjust_allowed_settings(u32 msr, u32 vmcs_field, u32 val)
+{
+	u32 msr_high, msr_low;
+
+	rdmsr(msr, msr_low, msr_high);
+	
+	val &= msr_high;
+	val |= msr_low;
+	vmcs_write32(vmcs_field, val);
+}
+
 /*
  * Sets up the vmcs for emulated real mode.
  */
@@ -905,21 +920,22 @@ static int kvm_vcpu_setup(struct kvm_vcpu *vcpu)
 	vmcs_write64(GUEST_IA32_DEBUGCTL, 0);
 
 	/* Control */
-	vmcs_write32(PIN_BASED_VM_EXEC_CONTROL,
-		     PIN_BASED_EXT_INTR_MASK   /* 20.6.1 */
-		     | PIN_BASED_NMI_EXITING   /* 20.6.1 */
-		     | 0x16   /* reserved, 22.2.1, 20.6.1 */
-		);
-	vmcs_write32(CPU_BASED_VM_EXEC_CONTROL,
-		     CPU_BASED_HLT_EXITING         /* 20.6.2 */
-		     | CPU_BASED_CR8_LOAD_EXITING    /* 20.6.2 */
-		     | CPU_BASED_CR8_STORE_EXITING   /* 20.6.2 */
-		     | CPU_BASED_UNCOND_IO_EXITING   /* 20.6.2 */
-		     | CPU_BASED_INVDPG_EXITING
-		     | CPU_BASED_MOV_DR_EXITING
-		     | CPU_BASED_USE_TSC_OFFSETING   /* 21.3 */
-		     | 0x401e172    /* reserved, 22.2.1, 20.6.2 */
-		);
+	kvm_adjust_allowed_settings(MSR_IA32_VMX_PINBASED_CTLS_MSR,
+				    PIN_BASED_VM_EXEC_CONTROL,
+				    PIN_BASED_EXT_INTR_MASK   /* 20.6.1 */
+				    | PIN_BASED_NMI_EXITING   /* 20.6.1 */
+			);
+	kvm_adjust_allowed_settings(MSR_IA32_VMX_PROCBASED_CTLS_MSR,
+				    CPU_BASED_VM_EXEC_CONTROL,
+				    CPU_BASED_HLT_EXITING         /* 20.6.2 */
+				    | CPU_BASED_CR8_LOAD_EXITING    /* 20.6.2 */
+				    | CPU_BASED_CR8_STORE_EXITING   /* 20.6.2 */
+				    | CPU_BASED_UNCOND_IO_EXITING   /* 20.6.2 */
+				    | CPU_BASED_INVDPG_EXITING
+				    | CPU_BASED_MOV_DR_EXITING
+				    | CPU_BASED_USE_TSC_OFFSETING   /* 21.3 */
+			);
+
 	vmcs_write32(EXCEPTION_BITMAP, 1 << PF_VECTOR);
 	vmcs_write32(PAGE_FAULT_ERROR_CODE_MASK, 0);
 	vmcs_write32(PAGE_FAULT_ERROR_CODE_MATCH, 0);
@@ -959,11 +975,9 @@ static int kvm_vcpu_setup(struct kvm_vcpu *vcpu)
 	vmcs_writel(HOST_IA32_SYSENTER_ESP, a);   /* 22.2.3 */
 	rdmsrl(MSR_IA32_SYSENTER_EIP, a);
 	vmcs_writel(HOST_IA32_SYSENTER_EIP, a);   /* 22.2.3 */
-
-	vmcs_write32(VM_EXIT_CONTROLS,   /* 20.7.1 */
-		     (HOST_IS_64 << 9)   /* address space size */
-		     | 0x36dff           /* reserved, 22.2,1, 20.7.1 */
-		);
+	
+	kvm_adjust_allowed_settings(MSR_IA32_VMX_EXIT_CTLS_MSR, VM_EXIT_CONTROLS,
+		     		    (HOST_IS_64 << 9));  /* reserved, 22.2,1, 20.7.1 */
 	vmcs_write32(VM_EXIT_MSR_STORE_COUNT, NUM_AUTO_MSRS); /* 22.2.2 */
 	vmcs_write32(VM_EXIT_MSR_LOAD_COUNT, NUM_AUTO_MSRS);  /* 22.2.2 */
 	vmcs_write32(VM_ENTRY_MSR_LOAD_COUNT, NUM_AUTO_MSRS); /* 22.2.2 */
@@ -990,8 +1004,10 @@ static int kvm_vcpu_setup(struct kvm_vcpu *vcpu)
 	vmcs_writel(VM_ENTRY_MSR_LOAD_ADDR, virt_to_phys(vcpu->guest_msrs));
 	vmcs_writel(VM_EXIT_MSR_STORE_ADDR, virt_to_phys(vcpu->guest_msrs));
 	vmcs_writel(VM_EXIT_MSR_LOAD_ADDR, virt_to_phys(vcpu->host_msrs));
-
-	vmcs_write32(VM_ENTRY_CONTROLS, 0x11ff); /* reserved, 22.2.1, 20.8.1 */
+	
+	/* reserved, 22.2.1, 20.8.1 */
+	kvm_adjust_allowed_settings(MSR_IA32_VMX_ENTRY_CTLS_MSR, 
+                                    VM_ENTRY_CONTROLS, 0);
 	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD, 0);  /* 22.2.1 */
 
 	vmcs_writel(VIRTUAL_APIC_PAGE_ADDR, 0);
@@ -3385,3 +3401,5 @@ static __exit void kvm_exit(void)
 
 module_init(kvm_init)
 module_exit(kvm_exit)
+
+
