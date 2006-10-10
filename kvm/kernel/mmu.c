@@ -405,8 +405,6 @@ static inline void set_pte_common(struct kvm_vcpu *vcpu,
 	if (access_bits & PT_WRITABLE_MASK)
 		mark_page_dirty(vcpu->kvm, gaddr >> PAGE_SHIFT);
 
-	page_header_update_slot(vcpu->kvm, shadow_pte, gaddr);
-
 	*shadow_pte |= access_bits;
 
 	paddr = gpa_to_hpa(vcpu, gaddr & PT64_BASE_ADDR_MASK);
@@ -417,6 +415,7 @@ static inline void set_pte_common(struct kvm_vcpu *vcpu,
 		*shadow_pte &= ~PT_PRESENT_MASK;
 	} else {
 		*shadow_pte |= paddr;
+		page_header_update_slot(vcpu->kvm, shadow_pte, gaddr);
 	}
 }
 
