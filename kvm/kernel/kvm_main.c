@@ -541,8 +541,13 @@ static int kvm_dev_open(struct inode *inode, struct file *filp)
 	
 	spin_lock_init(&kvm->lock);
 	INIT_LIST_HEAD(&kvm->active_mmu_pages);
-	for (i = 0; i < KVM_MAX_VCPUS; ++i)
-		mutex_init(&kvm->vcpus[i].mutex);
+	for (i = 0; i < KVM_MAX_VCPUS; ++i) {
+		struct kvm_vcpu *vcpu = &kvm->vcpus[i];
+
+		mutex_init(&vcpu->mutex);
+		vcpu->mmu.root_hpa = INVALID_PAGE;
+		INIT_LIST_HEAD(&vcpu->free_pages);
+	}
 	filp->private_data = kvm;
 	return 0;
 }
@@ -1052,9 +1057,6 @@ static int kvm_dev_ioctl_create_vcpu(struct kvm *kvm, int n)
 		mutex_unlock(&vcpu->mutex);
 		return -EEXIST;
 	}
-
-	INIT_LIST_HEAD(&vcpu->free_pages);
-	vcpu->mmu.root_hpa = INVALID_PAGE;
 
 	vcpu->host_fx_image = (char*)ALIGN((hva_t)vcpu->fx_buf,
 					   FX_IMAGE_ALIGN);
