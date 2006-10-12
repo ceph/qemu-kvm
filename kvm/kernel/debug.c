@@ -90,15 +90,15 @@ void show_irq(struct kvm_vcpu *vcpu,  int irq)
 	vcpu_printf(vcpu, "%s: 0x%x handler 0x%llx\n",
 		   __FUNCTION__,
 		   irq,
-		   ((uint64_t)gate.offset_high << 32) |
-		   ((uint64_t)gate.offset_middle << 16) |
+		   ((u64)gate.offset_high << 32) |
+		   ((u64)gate.offset_middle << 16) |
 		   gate.offset_low);
 }
 
 void show_page(struct kvm_vcpu *vcpu,
 			     gva_t addr)
 {
-	uint64_t *buf = kmalloc(PAGE_SIZE, GFP_KERNEL);
+	u64 *buf = kmalloc(PAGE_SIZE, GFP_KERNEL);
 
 	if (!buf)
 		return;
@@ -106,12 +106,12 @@ void show_page(struct kvm_vcpu *vcpu,
 	addr &= PAGE_MASK;
 	if (kvm_read_guest(vcpu, addr, PAGE_SIZE, buf)) {
 		int i;
-		for (i = 0; i <  PAGE_SIZE / sizeof(uint64_t) ; i++) {
-			uint8_t *ptr = (uint8_t*)&buf[i];
+		for (i = 0; i <  PAGE_SIZE / sizeof(u64) ; i++) {
+			u8 *ptr = (u8*)&buf[i];
 			int j;
 			vcpu_printf(vcpu, " 0x%16.16lx:",
-				   addr + i * sizeof(uint64_t));
-			for (j = 0; j < sizeof(uint64_t) ; j++)
+				   addr + i * sizeof(u64));
+			for (j = 0; j < sizeof(u64) ; j++)
 				vcpu_printf(vcpu, " 0x%2.2x", ptr[j]);
 			vcpu_printf(vcpu, "\n");
 		}
@@ -121,13 +121,13 @@ void show_page(struct kvm_vcpu *vcpu,
 
 void show_u64(struct kvm_vcpu *vcpu, gva_t addr)
 {
-	uint64_t buf;
+	u64 buf;
 
-	if (kvm_read_guest(vcpu, addr, sizeof(uint64_t), &buf) == sizeof(uint64_t)) {
-		uint8_t *ptr = (uint8_t*)&buf;
+	if (kvm_read_guest(vcpu, addr, sizeof(u64), &buf) == sizeof(u64)) {
+		u8 *ptr = (u8*)&buf;
 		int j;
 		vcpu_printf(vcpu, " 0x%16.16lx:", addr);
-		for (j = 0; j < sizeof(uint64_t) ; j++)
+		for (j = 0; j < sizeof(u64) ; j++)
 			vcpu_printf(vcpu, " 0x%2.2x", ptr[j]);
 		vcpu_printf(vcpu, "\n");
 	}
@@ -146,7 +146,7 @@ int vm_entry_test_guest(struct kvm_vcpu *vcpu)
 	unsigned long cr4;
 	unsigned long cr3;
 	unsigned long dr7;
-	uint64_t ia32_debugctl;
+	u64 ia32_debugctl;
 	unsigned long sysenter_esp;
 	unsigned long sysenter_eip;
 	unsigned long rflags;
@@ -400,14 +400,14 @@ int vm_entry_test_guest(struct kvm_vcpu *vcpu)
 		VIR8086_SEG_AR_TEST(GS);
 	} else {
 
-		uint32_t cs_ar = vmcs_read32(GUEST_CS_AR_BYTES);
-		uint32_t ss_ar = vmcs_read32(GUEST_SS_AR_BYTES);
-		uint32_t tr_ar = vmcs_read32(GUEST_TR_AR_BYTES);
-		uint32_t ldtr_ar = vmcs_read32(GUEST_LDTR_AR_BYTES);
+		u32 cs_ar = vmcs_read32(GUEST_CS_AR_BYTES);
+		u32 ss_ar = vmcs_read32(GUEST_SS_AR_BYTES);
+		u32 tr_ar = vmcs_read32(GUEST_TR_AR_BYTES);
+		u32 ldtr_ar = vmcs_read32(GUEST_LDTR_AR_BYTES);
 
 		#define SEG_G_TEST(seg) {					\
-		uint32_t lim = vmcs_read32(GUEST_##seg##_LIMIT);		\
-		uint32_t ar = vmcs_read32(GUEST_##seg##_AR_BYTES);		\
+		u32 lim = vmcs_read32(GUEST_##seg##_LIMIT);		\
+		u32 ar = vmcs_read32(GUEST_##seg##_AR_BYTES);		\
 		int err = 0;							\
 		if (((lim & ~PAGE_MASK) != ~PAGE_MASK) && (ar & AR_G_MASK))	\
 			err = 1;						\
@@ -538,7 +538,7 @@ int vm_entry_test_guest(struct kvm_vcpu *vcpu)
 		}
 
 		#define SEG_AR_TEST(seg) {\
-		uint32_t ar = vmcs_read32(GUEST_##seg##_AR_BYTES);\
+		u32 ar = vmcs_read32(GUEST_##seg##_AR_BYTES);\
 		if (!(ar & AR_UNUSABLE_MASK)) {\
 			if (!(ar & AR_TYPE_ACCESSES_MASK)) {\
 				vcpu_printf(vcpu, "%s: "#seg" AR 0x%x, "\
@@ -744,7 +744,7 @@ int vm_entry_test_guest(struct kvm_vcpu *vcpu)
 
 	
 	if (!(rflags & RFLAGS_RF)) {
-		uint32_t vm_entry_info = vmcs_read32(VM_ENTRY_INTR_INFO_FIELD);
+		u32 vm_entry_info = vmcs_read32(VM_ENTRY_INTR_INFO_FIELD);
 		if ((vm_entry_info & INTR_INFO_VALID_MASK) &&
 		    (vm_entry_info & INTR_INFO_INTR_TYPE_MASK) ==
 		    INTR_TYPE_EXT_INTR) {

@@ -1,6 +1,6 @@
 
 #if PTTYPE == 64
-	#define pt_element_t uint64_t
+	#define pt_element_t u64
 	#define guest_walker guest_walker64
 	#define FNAME(name) paging##64_##name
 	#define PT_BASE_ADDR_MASK PT64_BASE_ADDR_MASK
@@ -11,7 +11,7 @@
 	#define PT_PTE_COPY_MASK PT64_PTE_COPY_MASK
 	#define PT_NON_PTE_COPY_MASK PT64_NON_PTE_COPY_MASK
 #elif PTTYPE == 32
-	#define pt_element_t uint32_t
+	#define pt_element_t u32
 	#define guest_walker guest_walker32
 	#define FNAME(name) paging##32_##name
 	#define PT_BASE_ADDR_MASK PT32_BASE_ADDR_MASK
@@ -60,8 +60,8 @@ static void FNAME(release_walker)(struct guest_walker *walker)
 	kunmap_atomic(walker->table, KM_USER0);
 }
 
-static void FNAME(set_pte)(struct kvm_vcpu *vcpu, uint64_t guest_pte,
-			   uint64_t *shadow_pte, uint64_t access_bits)
+static void FNAME(set_pte)(struct kvm_vcpu *vcpu, u64 guest_pte,
+			   u64 *shadow_pte, u64 access_bits)
 {
 	ASSERT(*shadow_pte == 0);
 	access_bits &= guest_pte;
@@ -70,8 +70,8 @@ static void FNAME(set_pte)(struct kvm_vcpu *vcpu, uint64_t guest_pte,
 		       guest_pte & PT_DIRTY_MASK, access_bits);
 }
 
-static void FNAME(set_pde)(struct kvm_vcpu *vcpu, uint64_t guest_pde,
-			   uint64_t *shadow_pte, uint64_t access_bits,
+static void FNAME(set_pde)(struct kvm_vcpu *vcpu, u64 guest_pde,
+			   u64 *shadow_pte, u64 access_bits,
 			   int index)
 {
 	gpa_t gaddr;
@@ -119,19 +119,19 @@ static pt_element_t *FNAME(fetch_guest)(struct kvm_vcpu *vcpu,
 	}
 }
 
-static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu, gva_t addr,
+static u64 *FNAME(fetch)(struct kvm_vcpu *vcpu, gva_t addr,
 			      struct guest_walker *walker)
 {
 	hpa_t shadow_addr;
 	int level;
-	uint64_t *prev_shadow_ent = NULL;
+	u64 *prev_shadow_ent = NULL;
 
 	shadow_addr = vcpu->mmu.root_hpa;
 	level = vcpu->mmu.shadow_root_level;
 
 	for (; ; level--) {
-		uint32_t index = SHADOW_PT_INDEX(addr, level);
-		uint64_t *shadow_ent = ((uint64_t *)__va(shadow_addr)) + index;
+		u32 index = SHADOW_PT_INDEX(addr, level);
+		u64 *shadow_ent = ((u64 *)__va(shadow_addr)) + index;
 		pt_element_t *guest_ent;
 
 		if (is_present_pte(*shadow_ent) || is_io_pte(*shadow_ent)) {
@@ -188,7 +188,7 @@ static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu, gva_t addr,
 }
 
 static int FNAME(fix_write_pf)(struct kvm_vcpu *vcpu,
-			       uint64_t *shadow_ent,
+			       u64 *shadow_ent,
 			       struct guest_walker *walker,
 			       gva_t addr,
 			       int user)
@@ -228,13 +228,13 @@ static int FNAME(fix_write_pf)(struct kvm_vcpu *vcpu,
 }
 
 static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
-			       uint32_t error_code)
+			       u32 error_code)
 {
 	int write_fault = error_code & PFERR_WRITE_MASK;
 	int pte_present = error_code & PFERR_PRESENT_MASK;
 	int user_fault = error_code & PFERR_USER_MASK;
 	struct guest_walker walker;
-	uint64_t *shadow_pte;
+	u64 *shadow_pte;
 	int fixed;
 
 	for (;;) {

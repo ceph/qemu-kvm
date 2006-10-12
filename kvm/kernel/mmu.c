@@ -170,9 +170,9 @@ static void kvm_mmu_free_page(struct kvm_vcpu *vcpu, hpa_t page_hpa)
 
 static int is_empty_shadow_page(hpa_t page_hpa)
 {
-	uint32_t *pos;
-	uint32_t *end;
-	for (pos = __va(page_hpa), end = pos + PAGE_SIZE / sizeof(uint32_t);
+	u32 *pos;
+	u32 *end;
+	for (pos = __va(page_hpa), end = pos + PAGE_SIZE / sizeof(u32);
 		      pos != end; pos++)
 		if (*pos != 0)
 			return 0;
@@ -244,12 +244,12 @@ static void release_pt_page_64(struct kvm_vcpu *vcpu, hpa_t page_hpa,
 	if (level == 1)
 		memset(__va(page_hpa), 0, PAGE_SIZE);
 	else {
-		uint64_t *pos;
-		uint64_t *end;
+		u64 *pos;
+		u64 *end;
 
 		for (pos = __va(page_hpa), end = pos + PT64_ENT_PER_PAGE;
 		     pos != end; pos++) {
-			uint64_t current_ent = *pos;
+			u64 current_ent = *pos;
 
 			*pos = 0;
 			if (is_present_pte(current_ent))
@@ -272,8 +272,8 @@ static int nonpaging_map(struct kvm_vcpu *vcpu, gva_t v, hpa_t p)
 	hpa_t table_addr = vcpu->mmu.root_hpa;
 
 	for (; ; level--) {
-		uint32_t index = PT64_INDEX(v, level);
-		uint64_t *table;
+		u32 index = PT64_INDEX(v, level);
+		u64 *table;
 
 		ASSERT(VALID_PAGE(table_addr));
 		table = __va(table_addr);
@@ -327,7 +327,7 @@ static gpa_t nonpaging_gva_to_gpa(struct kvm_vcpu *vcpu, gva_t vaddr)
 }
 
 static int nonpaging_page_fault(struct kvm_vcpu *vcpu, gva_t gva,
-			       uint32_t error_code)
+			       u32 error_code)
 {
      int ret;
      gpa_t addr = gva;
@@ -415,10 +415,10 @@ static void mark_pagetable_nonglobal(void *shadow_pte)
 }
 
 static inline void set_pte_common(struct kvm_vcpu *vcpu,
-			     uint64_t *shadow_pte,
+			     u64 *shadow_pte,
 			     gpa_t gaddr,
 			     int dirty,
-			     uint64_t access_bits)
+			     u64 access_bits)
 {
 	hpa_t paddr;
 
@@ -447,10 +447,10 @@ static inline void set_pte_common(struct kvm_vcpu *vcpu,
 }
 
 static void inject_page_fault(struct kvm_vcpu *vcpu,
-			      uint64_t addr,
-			      uint32_t err_code)
+			      u64 addr,
+			      u32 err_code)
 {
-	uint32_t vect_info = vmcs_read32(IDT_VECTORING_INFO_FIELD);
+	u32 vect_info = vmcs_read32(IDT_VECTORING_INFO_FIELD);
 
 	pgprintk("inject_page_fault: 0x%llx err 0x%x\n", addr, err_code);
 	
@@ -477,7 +477,7 @@ static void inject_page_fault(struct kvm_vcpu *vcpu,
 	
 }
 
-static inline int fix_read_pf(uint64_t *shadow_ent)
+static inline int fix_read_pf(u64 *shadow_ent)
 {
 	if ((*shadow_ent & PT_SHADOW_USER_MASK) &&
 	    !(*shadow_ent & PT_USER_MASK)) {
@@ -490,7 +490,7 @@ static inline int fix_read_pf(uint64_t *shadow_ent)
 	return 0;
 }
 
-static int may_access(uint64_t pte, int write, int user)
+static int may_access(u64 pte, int write, int user)
 {
 	
 	if (user && !(pte & PT_USER_MASK))
@@ -508,8 +508,8 @@ static void paging_inval_page(struct kvm_vcpu *vcpu, gva_t addr)
 	++kvm_stat.invlpg;
 
 	for (; ; level--) {
-		uint32_t index = PT64_INDEX(addr, level);
-		uint64_t *table = __va(page_addr);
+		u32 index = PT64_INDEX(addr, level);
+		u64 *table = __va(page_addr);
 
 		if (level == PT_PAGE_TABLE_LEVEL ) {
 			table[index] = 0;

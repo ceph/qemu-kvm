@@ -113,7 +113,7 @@ struct kvm_vcpu;
  */
 struct kvm_mmu {
 	void (*new_cr3)(struct kvm_vcpu *vcpu);
-	int (*page_fault)(struct kvm_vcpu *vcpu, gva_t gva, uint32_t err);
+	int (*page_fault)(struct kvm_vcpu *vcpu, gva_t gva, u32 err);
 	void (*inval_page)(struct kvm_vcpu *vcpu, gva_t gva);
 	void (*free)(struct kvm_vcpu *vcpu);
 	gpa_t (*gva_to_gpa)(struct kvm_vcpu *vcpu, gva_t gva);
@@ -189,11 +189,11 @@ struct kvm_vcpu {
 
 	struct{
 		int active;
-		uint8_t save_iopl;
+		u8 save_iopl;
 		struct {
 			unsigned long base;
-			uint32_t limit;
-			uint32_t ar;
+			u32 limit;
+			u32 ar;
 		} tr;
 	} rmode;
 };
@@ -339,14 +339,14 @@ static inline int is_paging(void)
 	return guest_cr0() & CR0_PG_MASK;
 }
 
-static inline int is_page_fault(uint32_t intr_info)
+static inline int is_page_fault(u32 intr_info)
 {
 	return (intr_info & (INTR_INFO_INTR_TYPE_MASK | INTR_INFO_VECTOR_MASK |
 			     INTR_INFO_VALID_MASK)) ==
 		(INTR_TYPE_EXCEPTION | PF_VECTOR | INTR_INFO_VALID_MASK);
 }
 
-static inline int is_external_interrupt(uint32_t intr_info)
+static inline int is_external_interrupt(u32 intr_info)
 {
 	return (intr_info & (INTR_INFO_INTR_TYPE_MASK | INTR_INFO_VALID_MASK))
 		== (INTR_TYPE_EXT_INTR | INTR_INFO_VALID_MASK);

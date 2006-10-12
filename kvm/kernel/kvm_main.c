@@ -765,7 +765,7 @@ static int init_rmode_tss(struct kvm* kvm)
 
 	page = kmap_atomic(p1, KM_USER0);
 	memset(page, 0, PAGE_SIZE);
-	*(uint16_t*)(page + 0x66) = TSS_BASE_SIZE + TSS_REDIRECTION_SIZE;
+	*(u16*)(page + 0x66) = TSS_BASE_SIZE + TSS_REDIRECTION_SIZE;
 	kunmap_atomic(page, KM_USER0);
 
 	page = kmap_atomic(p2, KM_USER0);
@@ -780,9 +780,9 @@ static int init_rmode_tss(struct kvm* kvm)
 	return 1;
 }
 
-static uint32_t get_rdx_init_val(void)
+static u32 get_rdx_init_val(void)
 {
-	uint32_t val;
+	u32 val;
 
 	asm ("movl $1, %%eax \n\t"
 	     "movl %%eax, %0 \n\t" : "=g"(val) );
@@ -793,14 +793,14 @@ static uint32_t get_rdx_init_val(void)
 static void fx_init(struct kvm_vcpu *vcpu)
 {
 	struct __attribute__ ((__packed__)) fx_image_s {
-		uint16_t control; //fcw
-		uint16_t status; //fsw
-		uint16_t tag; // ftw
-		uint16_t opcode; //fop
-		uint64_t ip; // fpu ip
-		uint64_t operand;// fpu dp
-		uint32_t mxcsr;
-		uint32_t mxcsr_mask;
+		u16 control; //fcw
+		u16 status; //fsw
+		u16 tag; // ftw
+		u16 opcode; //fop
+		u64 ip; // fpu ip
+		u64 operand;// fpu dp
+		u32 mxcsr;
+		u32 mxcsr_mask;
 		
 	} *fx_image;
 
@@ -1516,7 +1516,7 @@ static int emulate_instruction(struct kvm_vcpu *vcpu,
 {
 	struct x86_emulate_ctxt emulate_ctxt;
 	int r;
-	uint32_t cs_ar;
+	u32 cs_ar;
 
 	vcpu_load_rsp_rip(vcpu);
 
@@ -1573,7 +1573,7 @@ static int emulate_instruction(struct kvm_vcpu *vcpu,
 	return EMULATE_DONE;
 }
 
-static uint64_t mk_cr_64(uint64_t curr_cr, uint32_t new_val)
+static u64 mk_cr_64(u64 curr_cr, u32 new_val)
 {
 	return (curr_cr & ~((1ULL << 32) - 1)) | new_val;
 }
@@ -1639,7 +1639,7 @@ void realmode_set_cr(struct kvm_vcpu *vcpu, int cr, unsigned long val,
 }
 
 static int handle_rmode_exception(struct kvm_vcpu *vcpu,
-				  int vec, uint32_t err_code)
+				  int vec, u32 err_code)
 {
 	if (!vcpu->rmode.active)
 		return 0;
@@ -1730,9 +1730,9 @@ static int handle_external_interrupt(struct kvm_vcpu *vcpu,
 }
 
 
-static int get_io_count(struct kvm_vcpu *vcpu, uint64_t *count)
+static int get_io_count(struct kvm_vcpu *vcpu, u64 *count)
 {
-	uint64_t inst;
+	u64 inst;
 	gva_t rip;
 	int countr_size;
 	int i, n;
@@ -1740,7 +1740,7 @@ static int get_io_count(struct kvm_vcpu *vcpu, uint64_t *count)
 	if ((vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_VM)) {
 		countr_size = 2;
 	} else {
-		uint32_t cs_ar = vmcs_read32(GUEST_CS_AR_BYTES);
+		u32 cs_ar = vmcs_read32(GUEST_CS_AR_BYTES);
 
 		countr_size = (cs_ar & AR_L_MASK) ? 8: 
 			      (cs_ar & AR_DB_MASK) ? 4: 2;
@@ -1753,7 +1753,7 @@ static int get_io_count(struct kvm_vcpu *vcpu, uint64_t *count)
 	n = kvm_read_guest(vcpu, rip, sizeof(inst), &inst);
 
 	for (i = 0; i < n; i++) {
-		switch (((uint8_t*)&inst)[i]) {
+		switch (((u8*)&inst)[i]) {
 		case 0xf0:
 		case 0xf2:
 		case 0xf3:
@@ -1807,7 +1807,7 @@ static int handle_io(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 
 static int handle_invlpg(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 {
-	uint64_t address = vmcs_read64(EXIT_QUALIFICATION);
+	u64 address = vmcs_read64(EXIT_QUALIFICATION);
 	int instruction_length = vmcs_read32(VM_EXIT_INSTRUCTION_LEN);
 	spin_lock(&vcpu->kvm->lock);
 	vcpu->mmu.inval_page(vcpu, address);
@@ -1890,8 +1890,8 @@ static void set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 	} else if ((cr0 & CR0_PG_MASK)) {
 #ifdef __x86_64__
 		if ((vcpu->shadow_efer & EFER_LME)) {
-			uint32_t guest_cs_ar;
-			uint32_t guest_tr_ar;
+			u32 guest_cs_ar;
+			u32 guest_tr_ar;
 			if (!is_pae()) {
 				printk("set_cr0: #GP, start paging in "
 				       "long mode while PAE is disabled\n");
@@ -2421,13 +2421,13 @@ static int kvm_handle_exit(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 
 static void inject_rmode_irq(struct kvm_vcpu *vcpu, int irq)
 {
-	uint16_t ent[2];
-	uint16_t cs;
-	uint16_t ip;
+	u16 ent[2];
+	u16 cs;
+	u16 ip;
 	unsigned long flags;
 	unsigned long ss_base = vmcs_readl(GUEST_SS_BASE);
-	uint16_t sp =  vmcs_readl(GUEST_RSP);
-	uint32_t ss_limit = vmcs_read32(GUEST_SS_LIMIT);
+	u16 sp =  vmcs_readl(GUEST_RSP);
+	u32 ss_limit = vmcs_read32(GUEST_SS_LIMIT);
 
 	if (sp > ss_limit || sp - 6 > sp) {
 		vcpu_printf(vcpu, "%s: #SS, rsp 0x%lx ss 0x%lx limit 0x%x\n",
