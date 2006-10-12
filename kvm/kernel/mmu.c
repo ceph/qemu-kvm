@@ -161,13 +161,11 @@ static int is_io_pte(unsigned long pte)
 
 static void kvm_mmu_free_page(struct kvm_vcpu *vcpu, hpa_t page_hpa)
 {
-	struct kvm_mmu_page *page_header;
-	struct page *page = pfn_to_page(page_hpa >> PAGE_SHIFT);
+	struct kvm_mmu_page *page_head = page_header(page_hpa);
 
-	page_header = (struct kvm_mmu_page *)page->private;
-	list_del(&page_header->link);
-	page_header->page_hpa = page_hpa;
-	list_add(&page_header->link, &vcpu->free_pages);
+	list_del(&page_head->link);
+	page_head->page_hpa = page_hpa;
+	list_add(&page_head->link, &vcpu->free_pages);
 }
 
 static int is_empty_shadow_page(hpa_t page_hpa)
@@ -201,8 +199,7 @@ static hpa_t kvm_mmu_alloc_page(struct kvm_vcpu *vcpu, u64 *parent_pte)
 static void page_header_update_slot(struct kvm *kvm, void *pte, gpa_t gpa)
 {
 	int slot = memslot_id(kvm, gfn_to_memslot(kvm, gpa >> PAGE_SHIFT));
-	struct page *page = pfn_to_page(__pa(pte) >> PAGE_SHIFT);
-	struct kvm_mmu_page *page_head = (struct kvm_mmu_page *)page->private;
+	struct kvm_mmu_page *page_head = page_header(__pa(pte));
 
 	__set_bit(slot, &page_head->slot_bitmap);
 }
