@@ -172,7 +172,7 @@ static uint64_t *FNAME(fetch)(struct kvm_vcpu *vcpu, gva_t addr,
 			return shadow_ent;
 		}
 
-		shadow_addr = kvm_mmu_alloc_page(vcpu);
+		shadow_addr = kvm_mmu_alloc_page(vcpu, shadow_ent);
 		if (!VALID_PAGE(shadow_addr))
 			return ERR_PTR(-ENOMEM);
 		if (!is_long_mode() && level == 3)

@@ -5,6 +5,7 @@
 #include <linux/list.h>
 #include <linux/mutex.h>
 #include <linux/spinlock.h>
+#include <linux/mm.h>
 
 #include "vmx.h"
 
@@ -87,6 +88,8 @@ struct kvm_mmu_page {
 	unsigned long slot_bitmap; /* One bit set per slot which has memory
 				    * in this shadow page.
 				    */
+	int global;              /* Set if all ptes in this page are global */
+	u64 *parent_pte;
 };
 
 struct vmcs {
@@ -357,6 +360,13 @@ static inline void flush_guest_tlb(struct kvm_vcpu *vcpu)
 static inline int memslot_id(struct kvm *kvm, struct kvm_memory_slot *slot)
 {
 	return slot - kvm->memslots;
+}
+
+static inline struct kvm_mmu_page *page_header(hpa_t shadow_page)
+{
+	struct page *page = pfn_to_page(shadow_page >> PAGE_SHIFT);
+
+	return (struct kvm_mmu_page *)page->private;
 }
 
 #endif
