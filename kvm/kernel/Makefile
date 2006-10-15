@@ -13,5 +13,4 @@ rpm:	all
 	rpmbuild --define="kverrel $$(uname -r)" \
 		 --define="objdir $$(pwd)" \
 		 --define="_topdir $$(pwd)/.." \
-		 --define="svnrev $(svnrev)" \
 		-bb $(tmpspec)
