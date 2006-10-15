@@ -89,6 +89,59 @@ static int vmdk_probe(const uint8_t *buf, int buf_size, const char *filename)
         return 0;
 }
 
+#define SECTOR_SIZE 512				
+#define DESC_SIZE 20*SECTOR_SIZE	// 20 sectors of 512 bytes each
+#define HEADER_SIZE 512   			// first sector of 512 bytes 
+
+static void vmdk_parent_close(BlockDriverState *bs)
+{
+    if (bs->bs_par_table)
+        bdrv_close(bs->bs_par_table);
+}
+
+static int vmdk_parent_open(BlockDriverState *bs, int fd)
+{
+    char *p_name; 
+    char desc[DESC_SIZE];
+    static int idx=0;
+
+    /* the descriptor offset = 0x200 */
+    if (lseek(fd, 0x200, SEEK_SET) == -1)
+        return -1;
+    if (read(fd, desc, DESC_SIZE) != DESC_SIZE)
+        return -1;
+
+    if ((p_name = strstr(desc,"parentFileNameHint")) != 0) {
+        char *end_name, *tmp_name;
+        char name[256], buf[128];
+        int name_size;
+
+        p_name += sizeof("parentFileNameHint") + 1;
+        if ((end_name = strchr(p_name,'\"')) == 0)
+            return -1;
+
+        bs->parent_img_name = qemu_mallocz(end_name - p_name + 2);
+        strncpy(bs->parent_img_name, p_name, end_name - p_name);
+
+        tmp_name = strstr(bs->device_name,"_QEMU");
+        name_size = tmp_name ? (tmp_name - bs->device_name) : sizeof(bs->device_name);
+        strncpy(name,bs->device_name,name_size);
+        sprintf(buf, "_QEMU_%d", ++idx);
+
+        bs->bs_par_table = bdrv_new(strcat(name, buf));
+        if (!bs->bs_par_table) {
+            failure:
+            bdrv_close(bs);
+            return -1;
+        }
+
+        if (bdrv_open(bs->bs_par_table, bs->parent_img_name, 0) < 0)
+            goto failure;
+    }
+
+    return 0;
+}
+
 static int vmdk_open(BlockDriverState *bs, const char *filename)
 {
     BDRVVmdkState *s = bs->opaque;
@@ -133,6 +186,10 @@ static int vmdk_open(BlockDriverState *bs, const char *filename)
             / s->l1_entry_sectors;
         s->l1_table_offset = le64_to_cpu(header.rgd_offset) << 9;
         s->l1_backup_table_offset = le64_to_cpu(header.gd_offset) << 9;
+
+        // try to open parent images, if exist
+        if (vmdk_parent_open(bs, fd) != 0)
+            goto fail;
     } else {
         goto fail;
     }
@@ -275,11 +332,17 @@ static int vmdk_read(BlockDriverState *bs, int64_t sector_num,
         if (n > nb_sectors)
             n = nb_sectors;
         if (!cluster_offset) {
-            memset(buf, 0, 512 * n);
+            // try to read from parent image, if exist
+            if (bs->bs_par_table) {
+                if (vmdk_read(bs->bs_par_table, sector_num, buf, nb_sectors) == -1)
+                    return -1;
+            } else {
+                memset(buf, 0, 512 * n);
+            }
         } else {
             lseek(s->fd, cluster_offset + index_in_cluster * 512, SEEK_SET);
             ret = read(s->fd, buf, n * 512);
-            if (ret != n * 512) 
+            if (ret != n * 512)
                 return -1;
         }
         nb_sectors -= n;
@@ -421,9 +484,12 @@ static int vmdk_create(const char *filename, int64_t total_size,
 static void vmdk_close(BlockDriverState *bs)
 {
     BDRVVmdkState *s = bs->opaque;
+
     qemu_free(s->l1_table);
     qemu_free(s->l2_cache);
     close(s->fd);
+    // try to close parent image, if exist
+    vmdk_parent_close(bs);
 }
 
 static void vmdk_flush(BlockDriverState *bs)

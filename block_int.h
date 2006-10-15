@@ -67,12 +67,15 @@ struct BlockDriverState {
     int is_temporary;
     
     BlockDriverState *backing_hd;
+
+    BlockDriverState *bs_par_table;
+    char *parent_img_name;
     
     /* NOTE: the following infos are only hints for real hardware
        drivers. They are not used by the block driver */
     int cyls, heads, secs, translation;
     int type;
-    char device_name[32];
+    char device_name[256];
     BlockDriverState *next;
 };
 
