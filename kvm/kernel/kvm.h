@@ -231,6 +231,18 @@ struct kvm_stat {
 
 extern struct kvm_stat kvm_stat;
 
+
+struct kvm_run;
+struct kvm_arch_operations {
+	struct kvm_vcpu* (*vcpu_get)(struct kvm_vcpu *vcpu);
+	void (*vcpu_put)(struct kvm_vcpu *vcpu);
+	struct vmcs* (*vcpu_arch_init)(void);
+	void (*vcpu_arch_destroy)(struct vmcs *vmcs);
+	int (*vcpu_setup)(struct kvm_vcpu *vcpu);
+	int (*vcpu_exec)(struct kvm *kvm, struct kvm_run *kvm_run);
+};
+
+
 #define kvm_printf(kvm, fmt ...) printk(KERN_DEBUG fmt)
 #define vcpu_printf(vcpu, fmt...) kvm_printf(vcpu->kvm, fmt)
 
