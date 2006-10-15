@@ -4755,6 +4755,10 @@ static void ram_save(QEMUFile *f, void *opaque)
     int i;
     qemu_put_be32(f, phys_ram_size);
     for(i = 0; i < phys_ram_size; i+= TARGET_PAGE_SIZE) {
+#ifdef USE_KVM
+        if ((i>=0xa0000) && (i<0xc0000)) /* do not access video-addresses */
+            continue;
+#endif
         ram_put_page(f, phys_ram_base + i, TARGET_PAGE_SIZE);
     }
 }
@@ -4768,6 +4772,10 @@ static int ram_load(QEMUFile *f, void *opaque, int version_id)
     if (qemu_get_be32(f) != phys_ram_size)
         return -EINVAL;
     for(i = 0; i < phys_ram_size; i+= TARGET_PAGE_SIZE) {
+#ifdef USE_KVM
+        if ((i>=0xa0000) && (i<0xc0000)) /* do not access video-addresses */
+            continue;
+#endif
         ret = ram_get_page(f, phys_ram_base + i, TARGET_PAGE_SIZE);
         if (ret)
             return ret;
