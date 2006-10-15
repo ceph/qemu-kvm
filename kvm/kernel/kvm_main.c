@@ -49,7 +49,7 @@ static struct dentry *debugfs_signal_exits;
 static struct dentry *debugfs_irq_exits;
 
 struct kvm_stat kvm_stat;
-static struct kvm_arch_operations *kvm_arch_ops;
+struct kvm_arch_operations *kvm_arch_ops;
 
 #define KVM_LOG_BUF_SIZE PAGE_SIZE
 
@@ -852,12 +852,12 @@ static int vmx_vcpu_setup(struct kvm_vcpu *vcpu)
 	if (!init_rmode_tss(vcpu->kvm)) {
 		ret = 0;
 		goto out;
-        }
+	}
 
 	memset(vcpu->regs, 0, sizeof(vcpu->regs));
 	vcpu->regs[VCPU_REGS_RDX] = get_rdx_init_val();
 	vcpu->cr8 = 0;
-        vcpu->apic_base = 0xfee00000 |
+	vcpu->apic_base = 0xfee00000 |
 			/*for vcpu 0*/ MSR_IA32_APICBASE_BSP |
 			MSR_IA32_APICBASE_ENABLE;
 
@@ -1102,8 +1102,8 @@ static int kvm_dev_ioctl_create_vcpu(struct kvm *kvm, int n)
 	vcpu->vmcs = vmcs;
 	vcpu->launched = 0;
 
-        r = kvm_arch_ops->vcpu_setup(vcpu);
-        if (r < 0)
+	r = kvm_arch_ops->vcpu_setup(vcpu);
+	if (r < 0)
 		goto out_free_vcpus;
 
 	return 0;
@@ -1923,7 +1923,7 @@ static void set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 					     AR_TYPE_BUSY_64_TSS);
 			}
 			vcpu->shadow_efer |= EFER_LMA;
-                        find_msr_entry(vcpu, MSR_EFER)->data |=
+			find_msr_entry(vcpu, MSR_EFER)->data |=
 							EFER_LMA | EFER_LME;
 			vmcs_write32(VM_ENTRY_CONTROLS,
 				     vmcs_read32(VM_ENTRY_CONTROLS) |
@@ -3240,7 +3240,7 @@ static long kvm_dev_ioctl(struct file *filp,
 	default:
 		;
 	}
- out:
+out:
 	return r;
 }
 
@@ -3357,6 +3357,12 @@ static struct kvm_arch_operations kvm_vmx_ops = {
 	.vcpu_arch_destroy	= vmx_vmcs_clear,
 	.vcpu_setup      	= vmx_vcpu_setup,
 	.vcpu_exec 	        = vmx_vcpu_exec,
+	.guest_cr0              = vmx_guest_cr0,
+	.guest_cr4		= vmx_guest_cr4,
+	.write_cr3		= vmx_write_cr3,
+	.is_long_mode		= vmx_is_long_mode,
+	.guest_cpl		= vmx_guest_cpl,
+	.flush_guest_tlb	= vmx_flush_guest_tlb,
 };
 
 

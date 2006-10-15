@@ -240,8 +240,14 @@ struct kvm_arch_operations {
 	void (*vcpu_arch_destroy)(struct vmcs *vmcs);
 	int (*vcpu_setup)(struct kvm_vcpu *vcpu);
 	int (*vcpu_exec)(struct kvm *kvm, struct kvm_run *kvm_run);
+	unsigned long (*guest_cr4)(void);
+	unsigned long (*guest_cr0)(void);
+	void (*write_cr3)(unsigned long cr3);
+	void (*flush_guest_tlb)(struct kvm_vcpu *vcpu);
+	int (*is_long_mode)(void);
+	unsigned (*guest_cpl)(void);
 };
-
+extern struct kvm_arch_operations *kvm_arch_ops;
 
 #define kvm_printf(kvm, fmt ...) printk(KERN_DEBUG fmt)
 #define vcpu_printf(vcpu, fmt...) kvm_printf(vcpu->kvm, fmt)
@@ -314,15 +320,25 @@ static inline void vmcs_write32(unsigned long field, u32 value)
 	vmcs_writel(field, value);
 }
 
-static inline int is_long_mode(void)
+static inline int vmx_is_long_mode(void)
 {
 	return vmcs_read32(VM_ENTRY_CONTROLS) & VM_ENTRY_CONTROLS_IA32E_MASK;
 }
 
-static inline unsigned long guest_cr4(void)
+static inline int is_long_mode(void)
+{
+	return kvm_arch_ops->is_long_mode();
+}
+
+static inline unsigned long vmx_guest_cr4(void)
 {
 	return (vmcs_readl(CR4_READ_SHADOW) & KVM_GUEST_CR4_MASK) |
 		(vmcs_readl(GUEST_CR4) & ~KVM_GUEST_CR4_MASK);
+}
+
+static inline unsigned long guest_cr4(void)
+{
+	return kvm_arch_ops->guest_cr4();
 }
 
 static inline int is_pae(void)
@@ -335,15 +351,25 @@ static inline int is_pse(void)
 	return guest_cr4() & CR4_PSE_MASK;
 }
 
-static inline unsigned long guest_cr0(void)
+static inline unsigned long vmx_guest_cr0(void)
 {
 	return (vmcs_readl(CR0_READ_SHADOW) & KVM_GUEST_CR0_MASK) |
 		(vmcs_readl(GUEST_CR0) & ~KVM_GUEST_CR0_MASK);
 }
 
-static inline unsigned guest_cpl(void)
+static inline unsigned long guest_cr0(void)
+{
+	return kvm_arch_ops->guest_cr0();
+}
+
+static inline unsigned vmx_guest_cpl(void)
 {
 	return vmcs_read16(GUEST_CS_SELECTOR) & SELECTOR_RPL_MASK;
+}
+
+static inline unsigned guest_cpl(void)
+{
+	return kvm_arch_ops->guest_cpl();
 }
 
 static inline int is_paging(void)
@@ -364,9 +390,24 @@ static inline int is_external_interrupt(u32 intr_info)
 		== (INTR_TYPE_EXT_INTR | INTR_INFO_VALID_MASK);
 }
 
-static inline void flush_guest_tlb(struct kvm_vcpu *vcpu)
+static inline void vmx_write_cr3(unsigned long cr3)
+{
+	vmcs_writel(GUEST_CR3, cr3);
+}
+
+static inline void write_cr3(unsigned long cr3)
+{
+	kvm_arch_ops->write_cr3(cr3);
+}
+
+static inline void vmx_flush_guest_tlb(struct kvm_vcpu *vcpu)
 {
 	vmcs_writel(GUEST_CR3, vmcs_readl(GUEST_CR3));
+}
+
+static inline void flush_guest_tlb(struct kvm_vcpu *vcpu)
+{
+	kvm_arch_ops->flush_guest_tlb(vcpu);
 }
 
 static inline int memslot_id(struct kvm *kvm, struct kvm_memory_slot *slot)

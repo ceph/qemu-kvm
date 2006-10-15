@@ -318,7 +318,7 @@ static void nonpaging_flush(struct kvm_vcpu *vcpu)
 	vcpu->mmu.root_hpa = root;
 	if (is_paging())
 		root |= (vcpu->cr3 & (CR3_PCD_MASK | CR3_WPT_MASK));
-	vmcs_writel(GUEST_CR3, root);
+	write_cr3(root);
 }
 
 static gpa_t nonpaging_gva_to_gpa(struct kvm_vcpu *vcpu, gva_t vaddr)
@@ -329,13 +329,13 @@ static gpa_t nonpaging_gva_to_gpa(struct kvm_vcpu *vcpu, gva_t vaddr)
 static int nonpaging_page_fault(struct kvm_vcpu *vcpu, gva_t gva,
 			       u32 error_code)
 {
-     int ret;
-     gpa_t addr = gva;
-
-     ASSERT(vcpu);
-     ASSERT(VALID_PAGE(vcpu->mmu.root_hpa));
-
-     for (;;) {
+	int ret;
+	gpa_t addr = gva;
+	
+	ASSERT(vcpu);
+	ASSERT(VALID_PAGE(vcpu->mmu.root_hpa));
+	
+	for (;;) {
 	     hpa_t paddr;
 
 	     paddr = gpa_to_hpa(vcpu , addr & PT64_BASE_ADDR_MASK);
@@ -349,8 +349,8 @@ static int nonpaging_page_fault(struct kvm_vcpu *vcpu, gva_t gva,
 		     continue;
 	     }
 	     break;
-     }
-     return ret;
+	}
+	return ret;
 }
 
 static void nonpaging_inval_page(struct kvm_vcpu *vcpu, gva_t addr)
@@ -381,7 +381,7 @@ static int nonpaging_init_context(struct kvm_vcpu *vcpu)
 	context->shadow_root_level = PT32E_ROOT_LEVEL;
 	context->root_hpa = kvm_mmu_alloc_page(vcpu, 0);
 	ASSERT(VALID_PAGE(context->root_hpa));
-	vmcs_writel(GUEST_CR3, context->root_hpa);
+	write_cr3(context->root_hpa);
 	return 0;
 }
 
@@ -516,10 +516,10 @@ static void paging_inval_page(struct kvm_vcpu *vcpu, gva_t addr)
 			return;
 		}
 
-                if (!is_present_pte(table[index]))
-                        return;
+		if (!is_present_pte(table[index]))
+			return;
 
-                page_addr = table[index] & PT64_BASE_ADDR_MASK;
+		page_addr = table[index] & PT64_BASE_ADDR_MASK;
 
 		if (level == PT_DIRECTORY_LEVEL &&
 			  (table[index] & PT_SHADOW_PS_MARK)) {
@@ -527,8 +527,8 @@ static void paging_inval_page(struct kvm_vcpu *vcpu, gva_t addr)
 			release_pt_page_64(vcpu, page_addr, PT_PAGE_TABLE_LEVEL);
 
 			//flush tlb
-			vmcs_writel(GUEST_CR3, vcpu->mmu.root_hpa |
-				    (vcpu->cr3 & (CR3_PCD_MASK | CR3_WPT_MASK)));
+			write_cr3(vcpu->mmu.root_hpa |
+				  (vcpu->cr3 & (CR3_PCD_MASK | CR3_WPT_MASK)));
 			return;
 		}
 	}
@@ -561,8 +561,8 @@ static int paging64_init_context(struct kvm_vcpu *vcpu)
 	context->shadow_root_level = PT64_ROOT_LEVEL;
 	context->root_hpa = kvm_mmu_alloc_page(vcpu, 0);
 	ASSERT(VALID_PAGE(context->root_hpa));
-	vmcs_writel(GUEST_CR3, context->root_hpa |
-		    (vcpu->cr3 & (CR3_PCD_MASK | CR3_WPT_MASK)));
+	write_cr3(context->root_hpa |
+		  (vcpu->cr3 & (CR3_PCD_MASK | CR3_WPT_MASK)));
 	return 0;
 }
 
@@ -579,8 +579,8 @@ static int paging32_init_context(struct kvm_vcpu *vcpu)
 	context->shadow_root_level = PT32E_ROOT_LEVEL;
 	context->root_hpa = kvm_mmu_alloc_page(vcpu, 0);
 	ASSERT(VALID_PAGE(context->root_hpa));
-	vmcs_writel(GUEST_CR3, context->root_hpa |
-		    (vcpu->cr3 & (CR3_PCD_MASK | CR3_WPT_MASK)));
+	write_cr3(context->root_hpa |
+		  (vcpu->cr3 & (CR3_PCD_MASK | CR3_WPT_MASK)));
 	return 0;
 }
 
