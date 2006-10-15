@@ -22,7 +22,9 @@
  * THE SOFTWARE.
  */
 #include "vl.h"
+#ifdef USE_KVM
 #include "qemu-kvm.h"
+#endif
 
 /* output Bochs bios info messages */
 //#define DEBUG_BIOS
@@ -606,7 +608,9 @@ static void pc_init_ne2k_isa(NICInfo *nd)
     nb_ne2k++;
 }
 
+#ifdef USE_KVM
 extern kvm_context_t kvm_context;
+#endif
 
 /* PC hardware initialisation */
 static void pc_init1(int ram_size, int vga_ram_size, int boot_device,
