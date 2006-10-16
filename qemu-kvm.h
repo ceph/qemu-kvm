@@ -4,6 +4,7 @@
 #include "kvmctl.h"
 
 void kvm_qemu_init(void);
+void kvm_load_registers(CPUState *env);
 int kvm_cpu_exec(CPUState *env);
 int kvm_update_debugger(CPUState *env);
 

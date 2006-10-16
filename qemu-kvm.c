@@ -269,6 +269,11 @@ static inline void push_interrupts(CPUState *env)
     } while ( (env->interrupt_request & CPU_INTERRUPT_HARD) && (env->cr[2] & CR0_PG_MASK) );
 }
 
+void kvm_load_registers(CPUState *env)
+{
+    load_regs(env);
+}
+
 int kvm_cpu_exec(CPUState *env)
 {
 

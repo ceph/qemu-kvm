@@ -4591,6 +4591,9 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
     /* XXX: compute hflags from scratch, except for CPL and IIF */
     env->hflags = hflags;
     tlb_flush(env, 1);
+#ifdef USE_KVM
+    kvm_load_registers(env);
+#endif
     return 0;
 }
 
