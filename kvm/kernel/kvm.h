@@ -150,14 +150,6 @@ enum {
 	NR_VCPU_REGS
 };
 
-
-enum {
-	KVM_GUEST_RSP,
-	KVM_GUEST_RIP,
-	KVM_GUEST_RFLAGS,
-	KVM_CONST_FIELDS_LAST,
-};
-
 struct kvm_vcpu {
 	struct kvm *kvm;
 	struct vmcs *vmcs;
@@ -254,9 +246,6 @@ struct kvm_arch_operations {
 	void (*flush_guest_tlb)(struct kvm_vcpu *vcpu);
 	int (*is_long_mode)(void);
 	unsigned (*guest_cpl)(void);
-	unsigned long (*read_cb)(unsigned long field);
-	void (*write_cb)(unsigned long field, unsigned long value);
-	unsigned long *enum_tbl;
 };
 extern struct kvm_arch_operations *kvm_arch_ops;
 
@@ -432,16 +421,5 @@ static inline struct kvm_mmu_page *page_header(hpa_t shadow_page)
 
 	return (struct kvm_mmu_page *)page->private;
 }
-
-static inline unsigned long kvm_read_cb(unsigned long field)
-{
-	return kvm_arch_ops->read_cb(kvm_arch_ops->enum_tbl[field]);
-}
-
-static inline void kvm_write_cb(unsigned long field, unsigned long value)
-{
-	kvm_arch_ops->write_cb(kvm_arch_ops->enum_tbl[field], value);
-}
-
 
 #endif

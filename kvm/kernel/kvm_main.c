@@ -2789,7 +2789,7 @@ static int kvm_dev_ioctl_get_regs(struct kvm *kvm, struct kvm_regs *regs)
 	regs->rdx = vcpu->regs[VCPU_REGS_RDX];
 	regs->rsi = vcpu->regs[VCPU_REGS_RSI];
 	regs->rdi = vcpu->regs[VCPU_REGS_RDI];
-	regs->rsp = kvm_read_cb(KVM_GUEST_RSP);
+	regs->rsp = vmcs_readl(GUEST_RSP);
 	regs->rbp = vcpu->regs[VCPU_REGS_RBP];
 #ifdef __x86_64__
 	regs->r8 = vcpu->regs[VCPU_REGS_R8];
@@ -2802,8 +2802,8 @@ static int kvm_dev_ioctl_get_regs(struct kvm *kvm, struct kvm_regs *regs)
 	regs->r15 = vcpu->regs[VCPU_REGS_R15];
 #endif
 	
-	regs->rip = kvm_read_cb(KVM_GUEST_RIP);
-	regs->rflags = kvm_read_cb(KVM_GUEST_RFLAGS);
+	regs->rip = vmcs_readl(GUEST_RIP);
+	regs->rflags = vmcs_readl(GUEST_RFLAGS);
 
 	/*
 	 * Don't leak debug flags in case they were set for guest debugging
@@ -2833,7 +2833,7 @@ static int kvm_dev_ioctl_set_regs(struct kvm *kvm, struct kvm_regs *regs)
 	vcpu->regs[VCPU_REGS_RDX] = regs->rdx;
 	vcpu->regs[VCPU_REGS_RSI] = regs->rsi;
 	vcpu->regs[VCPU_REGS_RDI] = regs->rdi;
-	kvm_write_cb(KVM_GUEST_RSP, regs->rsp);
+	vmcs_writel(GUEST_RSP, regs->rsp);
 	vcpu->regs[VCPU_REGS_RBP] = regs->rbp;
 #ifdef __x86_64__
 	vcpu->regs[VCPU_REGS_R8] = regs->r8;
@@ -2846,8 +2846,8 @@ static int kvm_dev_ioctl_set_regs(struct kvm *kvm, struct kvm_regs *regs)
 	vcpu->regs[VCPU_REGS_R15] = regs->r15;
 #endif
 	
-	kvm_write_cb(KVM_GUEST_RIP, regs->rip);
-	kvm_write_cb(KVM_GUEST_RFLAGS, regs->rflags);
+	vmcs_writel(GUEST_RIP, regs->rip);
+	vmcs_writel(GUEST_RFLAGS, regs->rflags);
 
 	vcpu_put(vcpu);
 
@@ -3350,16 +3350,6 @@ static void kvm_exit_debug(void)
 
 hpa_t bad_page_address;
 
-unsigned long vmx_enum_tbl[KVM_CONST_FIELDS_LAST];
-
-
-static void vmx_init_enum_tbl(void)
-{
-	vmx_enum_tbl[KVM_GUEST_RSP]	= GUEST_RSP;
-	vmx_enum_tbl[KVM_GUEST_RIP]	= GUEST_RIP;
-	vmx_enum_tbl[KVM_GUEST_RFLAGS]	= GUEST_RFLAGS;
-};
-
 static struct kvm_arch_operations kvm_vmx_ops = {
 	.vcpu_get 		= __vmx_vcpu_get,
 	.vcpu_put 		= __vmx_vcpu_put,
@@ -3373,9 +3363,6 @@ static struct kvm_arch_operations kvm_vmx_ops = {
 	.is_long_mode		= vmx_is_long_mode,
 	.guest_cpl		= vmx_guest_cpl,
 	.flush_guest_tlb	= vmx_flush_guest_tlb,
-	.read_cb		= vmcs_readl,
-	.write_cb		= vmcs_writel,
-	.enum_tbl 		= &vmx_enum_tbl[0],
 };
 
 
@@ -3387,7 +3374,6 @@ static __init int kvm_init(void)
 	switch (boot_cpu_data.x86_vendor) {
 	case X86_VENDOR_INTEL:
 		kvm_arch_ops = &kvm_vmx_ops;
-		vmx_init_enum_tbl();
 		break;
 	case X86_VENDOR_AMD:
 	default:
