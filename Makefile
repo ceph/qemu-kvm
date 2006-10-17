@@ -13,7 +13,7 @@ ifeq ($(ARCH),sparc)
 CFLAGS+=-mcpu=ultrasparc
 endif
 LDFLAGS=-g
-LIBS=
+LIBS=-lz -luuid
 DEFINES+=-D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE
 TOOLS=qemu-img$(EXESUF)
 ifdef CONFIG_STATIC
@@ -33,7 +33,7 @@ subdir-%: dyngen$(EXESUF)
 recurse-all: $(patsubst %,subdir-%, $(TARGET_DIRS))
         
 qemu-img$(EXESUF): qemu-img.c block.c block-cow.c block-qcow.c aes.c block-vmdk.c block-cloop.c block-dmg.c block-bochs.c block-vpc.c block-vvfat.c
-	$(CC) -DQEMU_TOOL $(CFLAGS) $(LDFLAGS) $(DEFINES) -o $@ $^ -lz $(LIBS)
+	$(CC) -DQEMU_TOOL $(CFLAGS) $(LDFLAGS) $(DEFINES) -o $@ $^ $(LIBS)
 
 dyngen$(EXESUF): dyngen.c
 	$(HOST_CC) $(CFLAGS) $(DEFINES) -o $@ $^

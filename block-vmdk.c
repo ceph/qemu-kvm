@@ -22,6 +22,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+#include <uuid/uuid.h>
 #include "vl.h"
 #include "block_int.h"
 
@@ -92,6 +93,137 @@ static int vmdk_probe(const uint8_t *buf, int buf_size, const char *filename)
 #define SECTOR_SIZE 512				
 #define DESC_SIZE 20*SECTOR_SIZE	// 20 sectors of 512 bytes each
 #define HEADER_SIZE 512   			// first sector of 512 bytes 
+int vmdk_snapshot_create(BlockDriverState *bs)
+{
+    int snp_fd, p_fd;
+    uint32_t p_cid;
+    char *p_name, *gd_buf, *rgd_buf; 
+    VMDK4Header header;
+    uint32_t gde_entries, gd_size;
+    int64_t gd_offset, rgd_offset, capacity, gt_size;
+    char p_desc[DESC_SIZE], s_desc[DESC_SIZE], hdr[HEADER_SIZE];
+    char parent_filename[1024];
+    char snapshot_filename[1024];
+    uuid_t name;
+    char *desc_template =
+    "# Disk DescriptorFile\n"
+    "version=1\n"
+    "CID=%x\n"
+    "parentCID=%x\n"
+    "createType=\"monolithicSparse\"\n"
+    "parentFileNameHint=\"%s\"\n"
+    "\n"
+    "# Extent description\n"
+    "RW %lu SPARSE \"%s\"\n"
+    "\n"
+    "# The Disk Data Base \n"
+    "#DDB\n"
+    "\n";
+
+    strcpy(parent_filename, bs->filename);
+    uuid_generate(name);     // it should be unique filename
+    uuid_unparse(name, snapshot_filename);
+    strcat(snapshot_filename,".vmdk");
+
+    snp_fd = open(snapshot_filename, O_RDWR | O_CREAT | O_TRUNC | O_BINARY | O_LARGEFILE, 0644);
+    if (snp_fd < 0)
+        return -1;
+    p_fd = open(parent_filename, O_RDONLY | O_BINARY | O_LARGEFILE);
+    if (p_fd < 0) {
+        close(snp_fd);
+        return -1;
+    }
+
+    if (lseek(p_fd, 0x0, SEEK_SET) == -1)
+        goto fail;
+    if (read(p_fd, hdr, HEADER_SIZE) != HEADER_SIZE)
+        goto fail;
+
+    /* write the header */
+    if (lseek(snp_fd, 0x0, SEEK_SET) == -1)
+        goto fail;
+    if (write(snp_fd, hdr, HEADER_SIZE) == -1)
+        goto fail;
+
+    memset(&header, 0, sizeof(header));
+    memcpy(&header,&hdr[4], sizeof(header)); // skip the VMDK4_MAGIC
+
+    ftruncate(snp_fd, header.grain_offset << 9);
+    /* the descriptor offset = 0x200 */
+    if (lseek(p_fd, 0x200, SEEK_SET) == -1)
+        goto fail;
+    if (read(p_fd, p_desc, DESC_SIZE) != DESC_SIZE)
+        goto fail;
+
+    if ((p_name = strstr(p_desc,"CID")) != 0) {
+        p_name += sizeof("CID");
+        sscanf(p_name,"%x",&p_cid);
+    }
+    sprintf(s_desc, desc_template, p_cid, p_cid, parent_filename
+            , (uint32_t)header.capacity, snapshot_filename);
+
+    bs->parent_cid = p_cid;
+
+    /* write the descriptor */
+    if (lseek(snp_fd, 0x200, SEEK_SET) == -1)
+        goto fail;
+    if (write(snp_fd, s_desc, strlen(s_desc)) == -1)
+        goto fail;
+
+    gd_offset = header.gd_offset * SECTOR_SIZE;     // offset of GD table
+    rgd_offset = header.rgd_offset * SECTOR_SIZE;   // offset of RGD table
+    capacity = header.capacity * SECTOR_SIZE;       // Extent size
+    /*
+     * Each GDE span 32M disk, means:
+     * 512 GTE per GT, each GTE points to grain
+     */
+    gt_size = (int64_t)header.num_gtes_per_gte * header.granularity * SECTOR_SIZE;
+    if (!gt_size)
+        goto fail;
+    gde_entries = (uint32_t)(capacity / gt_size);  // number of gde/rgde 
+    gd_size = gde_entries * sizeof(uint32_t);
+
+    /* write RGD */
+    rgd_buf = qemu_malloc(gd_size);
+    if (!rgd_buf)
+        goto fail;
+    if (lseek(p_fd, rgd_offset, SEEK_SET) == -1)
+        goto fail_rgd;
+    if (read(p_fd, rgd_buf, gd_size) != gd_size)
+        goto fail_rgd;
+    if (lseek(snp_fd, rgd_offset, SEEK_SET) == -1)
+        goto fail_rgd;
+    if (write(snp_fd, rgd_buf, gd_size) == -1)
+        goto fail_rgd;
+    qemu_free(rgd_buf);
+
+    /* write GD */
+    gd_buf = qemu_malloc(gd_size);
+    if (!gd_buf)
+        goto fail_rgd;
+    if (lseek(p_fd, gd_offset, SEEK_SET) == -1)
+        goto fail_gd;
+    if (read(p_fd, gd_buf, gd_size) != gd_size)
+        goto fail_gd;
+    if (lseek(snp_fd, gd_offset, SEEK_SET) == -1)
+        goto fail_gd;
+    if (write(snp_fd, gd_buf, gd_size) == -1)
+        goto fail_gd;
+    qemu_free(gd_buf);
+
+    close(p_fd);
+    close(snp_fd);
+    return 0;
+
+    fail_gd:
+    qemu_free(gd_buf);
+    fail_rgd:   
+    qemu_free(rgd_buf);
+    fail:
+    close(p_fd);
+    close(snp_fd);
+    return -1;
+}
 
 static void vmdk_parent_close(BlockDriverState *bs)
 {

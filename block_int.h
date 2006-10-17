@@ -70,6 +70,8 @@ struct BlockDriverState {
 
     BlockDriverState *bs_par_table;
     char *parent_img_name;
+    uint32_t parent_cid;
+    uint32_t cid;
     
     /* NOTE: the following infos are only hints for real hardware
        drivers. They are not used by the block driver */
