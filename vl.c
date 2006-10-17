@@ -822,6 +822,7 @@ static void timer_save(QEMUFile *f, void *opaque)
     }
     qemu_put_be64s(f, &cpu_ticks_offset);
     qemu_put_be64s(f, &ticks_per_sec);
+    qemu_put_be64s(f, &cpu_clock_offset);
 }
 
 static int timer_load(QEMUFile *f, void *opaque, int version_id)
@@ -833,6 +834,7 @@ static int timer_load(QEMUFile *f, void *opaque, int version_id)
     }
     qemu_get_be64s(f, &cpu_ticks_offset);
     qemu_get_be64s(f, &ticks_per_sec);
+    qemu_get_be64s(f, &cpu_clock_offset);
     return 0;
 }
 
