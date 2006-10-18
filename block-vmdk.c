@@ -555,6 +555,8 @@ static int vmdk_read(BlockDriverState *bs, int64_t sector_num,
         if (!cluster_offset) {
             // try to read from parent image, if exist
             if (bs->bs_par_table) {
+                if (!vmdk_is_cid_valid(bs))
+                    return -1;
                 if (vmdk_read(bs->bs_par_table, sector_num, buf, nb_sectors) == -1)
                     return -1;
             } else {
@@ -579,6 +581,7 @@ static int vmdk_write(BlockDriverState *bs, int64_t sector_num,
     BDRVVmdkState *s = bs->opaque;
     int ret, index_in_cluster, n;
     uint64_t cluster_offset;
+    static int cid_update = 0;
 
     while (nb_sectors > 0) {
         index_in_cluster = sector_num & (s->cluster_sectors - 1);
@@ -595,6 +598,12 @@ static int vmdk_write(BlockDriverState *bs, int64_t sector_num,
         nb_sectors -= n;
         sector_num += n;
         buf += n * 512;
+
+        // update CID on the first write every time the virtual disk is opened
+        if (!cid_update) {
+            vmdk_write_cid(bs, time(NULL));
+            cid_update++;
+        }
     }
     return 0;
 }
