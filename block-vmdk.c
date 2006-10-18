@@ -453,6 +453,39 @@ static int vmdk_open(BlockDriverState *bs, const char *filename)
     return -1;
 }
 
+static uint64_t get_cluster_offset(BlockDriverState *bs, uint64_t offset, int allocate);
+
+static int get_whole_cluster(BlockDriverState *bs, uint64_t cluster_offset,
+                             uint64_t offset, int allocate)
+{
+    int ret;
+    uint64_t parent_cluster_offset;
+    BDRVVmdkState *s = bs->opaque;
+    uint8_t  whole_grain[s->cluster_sectors*512];        // 128 sectors * 512 bytes each = grain size 64KB
+
+    // we will be here if it's first write on non-exist grain(cluster).
+    // try to read from parent image, if exist
+    if (bs->bs_par_table) {
+        BDRVVmdkState *ps = bs->bs_par_table->opaque;
+
+        if (!vmdk_is_cid_valid(bs))
+            return -1;
+
+        parent_cluster_offset = get_cluster_offset(bs->bs_par_table, offset, allocate);
+
+        lseek(ps->fd, parent_cluster_offset, SEEK_SET);
+        ret = read(ps->fd, whole_grain, ps->cluster_sectors*512);
+        if (ret != ps->cluster_sectors*512)
+            return -1;
+
+        lseek(s->fd, cluster_offset << 9, SEEK_SET);
+        ret = write(s->fd, whole_grain, sizeof(whole_grain));
+        if (ret != sizeof(whole_grain))
+            return -1;
+    }
+    return 0;
+}
+
 static uint64_t get_cluster_offset(BlockDriverState *bs,
                                    uint64_t offset, int allocate)
 {
@@ -518,6 +551,9 @@ static uint64_t get_cluster_offset(BlockDriverState *bs,
             if (write(s->fd, &tmp, sizeof(tmp)) != sizeof(tmp))
                 return 0;
         }
+
+        if (get_whole_cluster(bs, cluster_offset, offset, allocate) == -1)
+            return 0;
     }
     cluster_offset <<= 9;
     return cluster_offset;
