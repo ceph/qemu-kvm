@@ -49,7 +49,6 @@ static struct dentry *debugfs_signal_exits;
 static struct dentry *debugfs_irq_exits;
 
 struct kvm_stat kvm_stat;
-struct kvm_arch_operations *kvm_arch_ops;
 
 #define KVM_LOG_BUF_SIZE PAGE_SIZE
 
@@ -355,7 +354,7 @@ static __init void setup_vmcs_descriptor(void)
 	vmcs_descriptor.revision_id = vmx_msr_low;
 };
 
-static void vmx_vmcs_clear(struct vmcs *vmcs)
+static void vmcs_clear(struct vmcs *vmcs)
 {
 	u64 phys_addr = __pa(vmcs);
 	u8 error;
@@ -373,7 +372,7 @@ static void __vcpu_clear(void *arg)
 	int cpu = smp_processor_id();
 
 	if (vcpu->cpu == cpu)
-		vmx_vmcs_clear(vcpu->vmcs);
+		vmcs_clear(vcpu->vmcs);
 	if (per_cpu(current_vmcs, cpu) == vcpu->vmcs)
 		per_cpu(current_vmcs, cpu) = 0;
 }
@@ -387,7 +386,7 @@ static int vcpu_slot(struct kvm_vcpu *vcpu)
  * Switches to specified vcpu, until a matching vcpu_put(), but assumes
  * vcpu mutex is already taken.
  */
-static struct kvm_vcpu *__vmx_vcpu_get(struct kvm_vcpu *vcpu)
+static struct kvm_vcpu *__vcpu_load(struct kvm_vcpu *vcpu)
 {
 	u64 phys_addr = __pa(vcpu->vmcs);
 	int cpu;
@@ -432,7 +431,7 @@ static struct kvm_vcpu *__vmx_vcpu_get(struct kvm_vcpu *vcpu)
 /*
  * Switches to specified vcpu, until a matching vcpu_put()
  */
-static struct kvm_vcpu *vcpu_get(struct kvm *kvm, int vcpu_slot)
+static struct kvm_vcpu *vcpu_load(struct kvm *kvm, int vcpu_slot)
 {
 	struct kvm_vcpu *vcpu = &kvm->vcpus[vcpu_slot];
 	
@@ -441,17 +440,12 @@ static struct kvm_vcpu *vcpu_get(struct kvm *kvm, int vcpu_slot)
 		mutex_unlock(&vcpu->mutex);
 		return 0;
 	}
-	return kvm_arch_ops->vcpu_get(vcpu);
-}
-
-static void __vmx_vcpu_put(struct kvm_vcpu *vcpu)
-{
-	put_cpu();
+	return __vcpu_load(vcpu);
 }
 
 static void vcpu_put(struct kvm_vcpu *vcpu)
 {
-	kvm_arch_ops->vcpu_put(vcpu);
+	put_cpu();
 	mutex_unlock(&vcpu->mutex);
 }
 
@@ -471,7 +465,7 @@ static struct vmcs *alloc_vmcs_cpu(int cpu)
 	return vmcs;
 }
 
-static struct vmcs *vmx_alloc_vmcs(void)
+static struct vmcs *alloc_vmcs(void)
 {
 	return alloc_vmcs_cpu(smp_processor_id());
 }
@@ -836,7 +830,7 @@ static void vmcs_write32_fixedbits(u32 msr, u32 vmcs_field, u32 val)
 /*
  * Sets up the vmcs for emulated real mode.
  */
-static int vmx_vcpu_setup(struct kvm_vcpu *vcpu)
+static int kvm_vcpu_setup(struct kvm_vcpu *vcpu)
 {
 	extern asmlinkage void kvm_vmx_return(void);
 	u32 host_sysenter_cs;
@@ -847,7 +841,6 @@ static int vmx_vcpu_setup(struct kvm_vcpu *vcpu)
 	int ret;
 	u64 tsc;
 
-	__vmx_vcpu_get(vcpu);
 
 	if (!init_rmode_tss(vcpu->kvm)) {
 		ret = 0;
@@ -1034,14 +1027,12 @@ static int vmx_vcpu_setup(struct kvm_vcpu *vcpu)
 #endif
 
 	ret = kvm_mmu_init(vcpu);
-	vcpu_put(vcpu);
 
 	return ret;
 
 out_free_guest_msrs:
 	kfree(vcpu->guest_msrs);
 out:
-	vcpu_put(vcpu);
 	return ret;
 }
 
@@ -1093,16 +1084,21 @@ static int kvm_dev_ioctl_create_vcpu(struct kvm *kvm, int n)
 
 	vcpu->cpu = -1;  /* First load will set up TR */
 	vcpu->kvm = kvm;
-	vmcs = kvm_arch_ops->vcpu_arch_init();
+	vmcs = alloc_vmcs();
 	if (!vmcs) {
 		mutex_unlock(&vcpu->mutex);
 		goto out_free_vcpus;
 	}
-	kvm_arch_ops->vcpu_arch_destroy(vmcs);
+	vmcs_clear(vmcs);
 	vcpu->vmcs = vmcs;
 	vcpu->launched = 0;
 
-	r = kvm_arch_ops->vcpu_setup(vcpu);
+	__vcpu_load(vcpu);
+
+	r = kvm_vcpu_setup(vcpu);
+
+	vcpu_put(vcpu);
+
 	if (r < 0)
 		goto out_free_vcpus;
 
@@ -1239,7 +1235,7 @@ raced:
 	for (i = 0; i < KVM_MAX_VCPUS; ++i) {
 		struct kvm_vcpu *vcpu;
 
-		vcpu = vcpu_get(kvm, i);
+		vcpu = vcpu_load(kvm, i);
 		if (!vcpu)
 			continue;
 		kvm_mmu_reset_context(vcpu);
@@ -1301,7 +1297,7 @@ static int kvm_dev_ioctl_get_dirty_log(struct kvm *kvm,
 		spin_unlock(&kvm->lock);
 		memset(memslot->dirty_bitmap, 0, n);
 		for (i = 0; i < KVM_MAX_VCPUS; ++i) {
-			struct kvm_vcpu *vcpu = vcpu_get(kvm, i);
+			struct kvm_vcpu *vcpu = vcpu_load(kvm, i);
 
 			if (!vcpu)
 				continue;
@@ -2539,7 +2535,7 @@ static void save_msrs(struct vmx_msr_entry *e, int msr_index)
 		rdmsrl(e[msr_index].index, e[msr_index].data);
 }
 
-static int vmx_vcpu_exec(struct kvm *kvm, struct kvm_run *kvm_run)
+static int kvm_dev_ioctl_run(struct kvm *kvm, struct kvm_run *kvm_run)
 {
 	struct kvm_vcpu *vcpu;
 	u8 fail;
@@ -2549,7 +2545,7 @@ static int vmx_vcpu_exec(struct kvm *kvm, struct kvm_run *kvm_run)
 	if (kvm_run->vcpu < 0 || kvm_run->vcpu >= KVM_MAX_VCPUS)
 		return -EINVAL;
 
-	vcpu = vcpu_get(kvm, kvm_run->vcpu);
+	vcpu = vcpu_load(kvm, kvm_run->vcpu);
 	if (!vcpu)
 		return -ENOENT;
 
@@ -2763,7 +2759,7 @@ again:
 			}
 			cond_resched();
 			/* Cannot fail -  no vcpu unplug yet. */
-			vcpu_get(kvm, vcpu_slot(vcpu));
+			vcpu_load(kvm, vcpu_slot(vcpu));
 			goto again;
 		}
 	}
@@ -2779,7 +2775,7 @@ static int kvm_dev_ioctl_get_regs(struct kvm *kvm, struct kvm_regs *regs)
 	if (regs->vcpu < 0 || regs->vcpu >= KVM_MAX_VCPUS)
 		return -EINVAL;
 
-	vcpu = vcpu_get(kvm, regs->vcpu);
+	vcpu = vcpu_load(kvm, regs->vcpu);
 	if (!vcpu)
 		return -ENOENT;
 
@@ -2823,7 +2819,7 @@ static int kvm_dev_ioctl_set_regs(struct kvm *kvm, struct kvm_regs *regs)
 	if (regs->vcpu < 0 || regs->vcpu >= KVM_MAX_VCPUS)
 		return -EINVAL;
 
-	vcpu = vcpu_get(kvm, regs->vcpu);
+	vcpu = vcpu_load(kvm, regs->vcpu);
 	if (!vcpu)
 		return -ENOENT;
 
@@ -2860,7 +2856,7 @@ static int kvm_dev_ioctl_get_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 
 	if (sregs->vcpu < 0 || sregs->vcpu >= KVM_MAX_VCPUS)
 		return -EINVAL;
-	vcpu = vcpu_get(kvm, sregs->vcpu);
+	vcpu = vcpu_load(kvm, sregs->vcpu);
 	if (!vcpu)
 		return -ENOENT;
 
@@ -2925,7 +2921,7 @@ static int kvm_dev_ioctl_set_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 
 	if (sregs->vcpu < 0 || sregs->vcpu >= KVM_MAX_VCPUS)
 		return -EINVAL;
-	vcpu = vcpu_get(kvm, sregs->vcpu);
+	vcpu = vcpu_load(kvm, sregs->vcpu);
 	if (!vcpu)
 		return -ENOENT;
 
@@ -3005,7 +3001,7 @@ static int kvm_dev_ioctl_translate(struct kvm *kvm, struct kvm_translation *tr)
 	struct kvm_vcpu *vcpu;
 	gpa_t gpa;
 
-	vcpu = vcpu_get(kvm, tr->vcpu);
+	vcpu = vcpu_load(kvm, tr->vcpu);
 	if (!vcpu)
 		return -ENOENT;
 	spin_lock(&kvm->lock);
@@ -3028,7 +3024,7 @@ static int kvm_dev_ioctl_interrupt(struct kvm *kvm, struct kvm_interrupt *irq)
 		return -EINVAL;
 	if (irq->irq < 0 || irq->irq >= 256)
 		return -EINVAL;
-	vcpu = vcpu_get(kvm, irq->vcpu);
+	vcpu = vcpu_load(kvm, irq->vcpu);
 	if (!vcpu)
 		return -ENOENT;
 
@@ -3050,7 +3046,7 @@ static int kvm_dev_ioctl_debug_guest(struct kvm *kvm,
 
 	if (dbg->vcpu < 0 || dbg->vcpu >= KVM_MAX_VCPUS)
 		return -EINVAL;
-	vcpu = vcpu_get(kvm, dbg->vcpu);
+	vcpu = vcpu_load(kvm, dbg->vcpu);
 	if (!vcpu)
 		return -ENOENT;
 
@@ -3113,7 +3109,7 @@ static long kvm_dev_ioctl(struct file *filp,
 		r = -EFAULT;
 		if (copy_from_user(&kvm_run, (void *)arg, sizeof kvm_run))
 			goto out;
-		r = kvm_arch_ops->vcpu_exec(kvm, &kvm_run);
+		r = kvm_dev_ioctl_run(kvm, &kvm_run);
 		if (r < 0)
 			goto out;
 		r = -EFAULT;
@@ -3350,36 +3346,10 @@ static void kvm_exit_debug(void)
 
 hpa_t bad_page_address;
 
-static struct kvm_arch_operations kvm_vmx_ops = {
-	.vcpu_get 		= __vmx_vcpu_get,
-	.vcpu_put 		= __vmx_vcpu_put,
-	.vcpu_arch_init		= vmx_alloc_vmcs,
-	.vcpu_arch_destroy	= vmx_vmcs_clear,
-	.vcpu_setup      	= vmx_vcpu_setup,
-	.vcpu_exec 	        = vmx_vcpu_exec,
-	.guest_cr0              = vmx_guest_cr0,
-	.guest_cr4		= vmx_guest_cr4,
-	.write_cr3		= vmx_write_cr3,
-	.is_long_mode		= vmx_is_long_mode,
-	.guest_cpl		= vmx_guest_cpl,
-	.flush_guest_tlb	= vmx_flush_guest_tlb,
-};
-
-
 static __init int kvm_init(void)
 {
 	static struct page *bad_page;
 	int r = 0;
-
-	switch (boot_cpu_data.x86_vendor) {
-	case X86_VENDOR_INTEL:
-		kvm_arch_ops = &kvm_vmx_ops;
-		break;
-	case X86_VENDOR_AMD:
-	default:
-		printk(KERN_ERR "kvm: no cpu support for %s\n", boot_cpu_data.x86_vendor_id);
-		return -EOPNOTSUPP;
-	}
 
 	if (!cpu_has_kvm_support()) {
 		printk(KERN_ERR "kvm: no hardware support\n");
