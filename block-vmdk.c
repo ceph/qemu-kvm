@@ -90,9 +90,95 @@ static int vmdk_probe(const uint8_t *buf, int buf_size, const char *filename)
         return 0;
 }
 
+#define CHECK_CID 1
+
 #define SECTOR_SIZE 512				
 #define DESC_SIZE 20*SECTOR_SIZE	// 20 sectors of 512 bytes each
 #define HEADER_SIZE 512   			// first sector of 512 bytes 
+
+static uint32_t vmdk_read_cid(int fd, int parent)
+{
+    char desc[DESC_SIZE];
+    uint32_t cid;
+    char *p_name, *cid_str; 
+    size_t cid_str_size;
+
+    if (fd) {
+        /* the descriptor offset = 0x200 */
+        if (lseek(fd, 0x200, SEEK_SET) == -1)
+            return 0;
+        if (read(fd, desc, DESC_SIZE) != DESC_SIZE)
+            return 0;
+
+        if (parent) {
+            cid_str = "parentCID";
+            cid_str_size = sizeof("parentCID");
+        } else {
+            cid_str = "CID";
+            cid_str_size = sizeof("CID");
+        }
+
+        if ((p_name = strstr(desc,cid_str)) != 0) {
+            p_name += cid_str_size;
+            sscanf(p_name,"%x",&cid);
+        }
+
+        return cid;
+    }
+    return 0;
+}
+
+static int vmdk_write_cid(BlockDriverState *bs, uint32_t cid)
+{
+    BDRVVmdkState *s = bs->opaque;
+    char desc[DESC_SIZE], tmp_desc[DESC_SIZE];
+    char *p_name, *tmp_str;
+
+    if (s->fd) {
+        /* the descriptor offset = 0x200 */
+        if (lseek(s->fd, 0x200, SEEK_SET) == -1)
+            return -1;
+        if (read(s->fd, desc, DESC_SIZE) != DESC_SIZE)
+            return 0;
+
+        tmp_str = strstr(desc,"parentCID");
+        strcpy(tmp_desc, tmp_str);
+        if ((p_name = strstr(desc,"CID")) != 0) {
+            p_name += sizeof("CID");
+            sprintf(p_name,"%x\n",cid);
+            strcat(desc,tmp_desc);
+        }
+
+        if (lseek(s->fd, 0x200, SEEK_SET) == -1)
+            return -1;
+        if (write(s->fd, &desc, DESC_SIZE) != DESC_SIZE)
+            return -1;
+
+        bs->cid = cid;
+        return 0;
+    }
+    return -1;
+}
+
+static int vmdk_is_cid_valid(BlockDriverState *bs)
+{
+#ifdef CHECK_CID
+    BlockDriverState *p_bs = bs->bs_par_table;
+    uint32_t cur_pcid;
+
+    if (p_bs) {
+        BDRVVmdkState *s = p_bs->opaque;
+
+        cur_pcid = vmdk_read_cid(s->fd,0);
+        if (bs->parent_cid != cur_pcid)
+            // CID not valid
+            return 0;
+    }
+#endif
+    // CID valid
+    return 1;
+}
+
 int vmdk_snapshot_create(BlockDriverState *bs)
 {
     int snp_fd, p_fd;
@@ -322,6 +408,9 @@ static int vmdk_open(BlockDriverState *bs, const char *filename)
         // try to open parent images, if exist
         if (vmdk_parent_open(bs, fd) != 0)
             goto fail;
+        // write the CID once after the image creation
+        bs->cid = vmdk_read_cid(fd,0);
+        bs->parent_cid = vmdk_read_cid(fd,1);
     } else {
         goto fail;
     }
@@ -529,7 +618,7 @@ static int vmdk_create(const char *filename, int64_t total_size,
         "# The Disk Data Base \n"
         "#DDB\n"
         "\n"
-        "ddb.virtualHWVersion = \"3\"\n"
+        "ddb.virtualHWVersion = \"4\"\n"
         "ddb.geometry.cylinders = \"%lu\"\n"
         "ddb.geometry.heads = \"16\"\n"
         "ddb.geometry.sectors = \"63\"\n"
