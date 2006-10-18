@@ -88,7 +88,7 @@ struct kvm_regs {
 	/* in */
 	__u32 vcpu;
 	__u32 padding;
-	
+
 	/* out (KVM_GET_REGS) / in (KVM_SET_REGS) */
 	__u64 rax, rbx, rcx, rdx;
 	__u64 rsi, rdi, rsp, rbp;

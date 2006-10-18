@@ -46,7 +46,7 @@ void show_code(struct kvm_vcpu *vcpu)
 	u8 code[50];
 	char buf[30 + 3 * sizeof code];
 	int i;
-	
+
 	if (!is_long_mode())
 		rip += vmcs_readl(GUEST_CS_BASE);
 
@@ -156,7 +156,7 @@ int vm_entry_test_guest(struct kvm_vcpu *vcpu)
 
 	#define RFLAGS_VM (1 << 17)
 	#define RFLAGS_RF (1 << 9)
-	
+
 
 	#define VIR8086_SEG_BASE_TEST(seg)\
 		if (vmcs_readl(GUEST_##seg##_BASE) != \
@@ -742,7 +742,7 @@ int vm_entry_test_guest(struct kvm_vcpu *vcpu)
 		return 0;
 	}
 
-	
+
 	if (!(rflags & RFLAGS_RF)) {
 		u32 vm_entry_info = vmcs_read32(VM_ENTRY_INTR_INFO_FIELD);
 		if ((vm_entry_info & INTR_INFO_VALID_MASK) &&
@@ -761,12 +761,12 @@ int vm_entry_test_guest(struct kvm_vcpu *vcpu)
 	return 1;
 }
 
-static int check_fixed_bits(struct kvm_vcpu *vcpu, const char *reg, 
+static int check_fixed_bits(struct kvm_vcpu *vcpu, const char *reg,
 			    unsigned long cr,
 			    u32 msr_fixed_0, u32 msr_fixed_1)
 {
 	u64 fixed_bits_0, fixed_bits_1;
-	
+
 	rdmsrl(msr_fixed_0, fixed_bits_0);
 	rdmsrl(msr_fixed_1, fixed_bits_1);
 	if ((cr & fixed_bits_0) != fixed_bits_0) {
@@ -838,14 +838,14 @@ int vm_entry_test_host(struct kvm_vcpu *vcpu)
 	unsigned long cr4 = vmcs_readl(HOST_CR4);
 	unsigned long cr3 = vmcs_readl(HOST_CR3);
 	int host_64;
-	
+
 	host_64 = vmcs_read32(VM_EXIT_CONTROLS) & VM_EXIT_HOST_ADD_SPACE_SIZE;
 
 	/* 22.2.2 */
-	r &= check_fixed_bits(vcpu, "host cr0", cr0, MSR_IA32_VMX_CR0_FIXED0, 
+	r &= check_fixed_bits(vcpu, "host cr0", cr0, MSR_IA32_VMX_CR0_FIXED0,
 			      MSR_IA32_VMX_CR0_FIXED1);
-		
-	r &= check_fixed_bits(vcpu, "host cr0", cr4, MSR_IA32_VMX_CR4_FIXED0, 
+
+	r &= check_fixed_bits(vcpu, "host cr0", cr4, MSR_IA32_VMX_CR4_FIXED0,
 			      MSR_IA32_VMX_CR4_FIXED1);
 	if ((u64)cr3 >> phys_addr_width()) {
 		vcpu_printf(vcpu, "%s: cr3 (%lx) vs phys addr width\n",
@@ -853,9 +853,9 @@ int vm_entry_test_host(struct kvm_vcpu *vcpu)
 		r = 0;
 	}
 
-	r &= check_canonical(vcpu, "host ia32_sysenter_eip", 
+	r &= check_canonical(vcpu, "host ia32_sysenter_eip",
 			     vmcs_readl(HOST_IA32_SYSENTER_EIP));
-	r &= check_canonical(vcpu, "host ia32_sysenter_esp", 
+	r &= check_canonical(vcpu, "host ia32_sysenter_esp",
 			     vmcs_readl(HOST_IA32_SYSENTER_ESP));
 
 	/* 22.2.3 */
@@ -875,13 +875,13 @@ int vm_entry_test_host(struct kvm_vcpu *vcpu)
 			    vmcs_read16(HOST_TR_SELECTOR));
 
 #ifdef __x86_64__
-	r &= check_canonical(vcpu, "host fs base", 
+	r &= check_canonical(vcpu, "host fs base",
 			     vmcs_readl(HOST_FS_BASE));
-	r &= check_canonical(vcpu, "host gs base", 
+	r &= check_canonical(vcpu, "host gs base",
 			     vmcs_readl(HOST_GS_BASE));
-	r &= check_canonical(vcpu, "host gdtr base", 
+	r &= check_canonical(vcpu, "host gdtr base",
 			     vmcs_readl(HOST_GDTR_BASE));
-	r &= check_canonical(vcpu, "host idtr base", 
+	r &= check_canonical(vcpu, "host idtr base",
 			     vmcs_readl(HOST_IDTR_BASE));
 #endif
 

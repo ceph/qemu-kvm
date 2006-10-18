@@ -29,7 +29,7 @@
  * The guest_walker structure emulates the behavior of the hardware page
  * table walker.
  */
-struct guest_walker {	
+struct guest_walker {
 	int level;
 	pt_element_t *table;
 	pt_element_t inherited_ar;
@@ -42,14 +42,14 @@ static void FNAME(init_walker)(struct guest_walker *walker,
 	struct kvm_memory_slot *slot;
 
 	walker->level = vcpu->mmu.root_level;
-	slot = gfn_to_memslot(vcpu->kvm, 
+	slot = gfn_to_memslot(vcpu->kvm,
 			      (vcpu->cr3 & PT64_BASE_ADDR_MASK) >> PAGE_SHIFT);
 	hpa = safe_gpa_to_hpa(vcpu, vcpu->cr3 & PT64_BASE_ADDR_MASK);
 	walker->table = kmap_atomic(pfn_to_page(hpa >> PAGE_SHIFT), KM_USER0);
 
 	ASSERT((!is_long_mode() && is_pae()) ||
 	       (vcpu->cr3 & ~(PAGE_MASK | CR3_FLAGS_MASK)) == 0);
-		
+
 	walker->table = (pt_element_t *)( (unsigned long)walker->table |
 		(unsigned long)(vcpu->cr3 & ~(PAGE_MASK | CR3_FLAGS_MASK)) );
 	walker->inherited_ar = PT_USER_MASK | PT_WRITABLE_MASK;
@@ -278,7 +278,7 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 
 	++kvm_stat.pf_fixed;
 
-	return 0;	
+	return 0;
 }
 
 static gpa_t FNAME(gva_to_gpa)(struct kvm_vcpu *vcpu, gva_t vaddr)
@@ -294,12 +294,12 @@ static gpa_t FNAME(gva_to_gpa)(struct kvm_vcpu *vcpu, gva_t vaddr)
 
 	if (!is_present_pte(guest_pte))
 		return UNMAPPED_GVA;
-	
+
 	if (walker.level == PT_DIRECTORY_LEVEL) {
 		ASSERT((guest_pte & PT_PAGE_SIZE_MASK));
 		ASSERT(PTTYPE == 64 || is_pse());
 
-		gpa = (guest_pte & PT_DIR_BASE_ADDR_MASK) | (vaddr & 
+		gpa = (guest_pte & PT_DIR_BASE_ADDR_MASK) | (vaddr &
 			(PT_LEVEL_MASK(PT_PAGE_TABLE_LEVEL) | ~PAGE_MASK));
 
 		if (PTTYPE == 32 && is_cpuid_PSE36())
@@ -309,7 +309,7 @@ static gpa_t FNAME(gva_to_gpa)(struct kvm_vcpu *vcpu, gva_t vaddr)
 		gpa = (guest_pte & PT_BASE_ADDR_MASK);
 		gpa |= (vaddr & ~PAGE_MASK);
 	}
-        
+
 	return gpa;
 }
 
