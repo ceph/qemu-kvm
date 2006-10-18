@@ -1,0 +1,194 @@
+#!/bin/sh
+# kvm init script              Takes care for all VMM tasks
+#
+# chkconfig: - 99 01
+# description: The KVM is a kernel level Virtual Machine Monitor.  \
+#              Currently it starts a bridge and attached eth0 for it
+
+dir=$(dirname "$0")
+
+ifnum=${ifnum:-$(ip route list | awk '/^default / { print $NF }' | sed 's/^[^0-9]*//')}
+ifnum=${ifnum:-0}
+switch=${sw0:-sw${ifnum}}
+pif=${pif:-eth${ifnum}}
+antispoof=${antispoof:-no}
+command=$1
+
+if [ -f /etc/sysconfig/network-scripts/ifcfg-${pif} ]; then
+    . /etc/sysconfig/network-scripts/ifcfg-${pif}
+fi
+
+get_ip_info() {
+    addr=`ip addr show dev $1 | egrep '^ *inet' | sed -e 's/ *inet //' -e 's/ .*//'`
+    gateway=`ip route show dev $1 | fgrep default | sed 's/default via //'`
+}
+    
+do_ifup() {
+    if ! ifup $1 ; then
+        if [ ${addr} ] ; then
+            ip addr flush $1 >/dev/null 2>&1
+            ip addr add ${addr} dev $1 >/dev/null 2>&1
+            ip link set dev $1 up >/dev/null 2>&1
+        fi
+    fi
+}
+
+link_exists()
+{
+    if ip link show "$1" >/dev/null 2>/dev/null
+    then
+        return 0
+    else
+        return 1
+    fi
+}
+
+create_switch () {
+    local switch=$1
+
+    if [ ! -e "/sys/class/net/${switch}/bridge" ]; then
+	brctl addbr ${switch} >/dev/null 2>&1
+	brctl stp ${switch} off >/dev/null 2>&1
+	brctl setfd ${switch} 0 >/dev/null 2>&1
+    fi
+    ip link set ${switch} up >/dev/null 2>&1
+}
+
+add_to_switch () {
+    local switch=$1
+    local dev=$2
+
+    if [ -e "/sys/class/net/${switch}/brif/${dev}" ]; then
+	ip link set ${dev} up >/dev/null 2>&1 || true
+	return
+    fi
+    brctl addif ${switch} ${dev} >/dev/null 2>&1
+    ip link set ${dev} up >/dev/null 2>&1
+}
+
+#taken from Xen
+transfer_routes () {
+    local src=$1
+    local dst=$2
+    # List all routes and grep the ones with $src in.
+    # Stick 'ip route del' on the front to delete.
+    # Change $src to $dst and use 'ip route add' to add.
+    ip route list | sed -ne "
+/dev ${src}\( \|$\)/ {
+  h
+  s/^/ip route del /
+  P
+  g
+  s/${src}/${dst}/
+  s/^/ip route add /
+  P
+  d
+}" | sh -e
+}
+
+
+change_ips() {
+    local src=$1
+    local dst=$2
+
+    #take care also for case we do not have /etc/sysconfig data (the switch as a src case)
+    if [ -x $BOOTPROTO ]; then
+        if [ -x $(pgrep dhclient) ];then
+           BOOTPROTO="null"
+        else
+            BOOTPROTO="dhcp"
+        fi
+    fi
+
+    if [ $BOOTPROTO = "dhcp" ]; then
+        ifdown ${src} >/dev/null 2>&1 || true
+        ip link set ${src} up >/dev/null 2>&1
+        pkill dhclient >/dev/null 2>&1
+	for ((i=0;i<3;i++)); do
+	    pgrep dhclient >/dev/null 2>&1 || i=4	
+   	    sleep 1
+	done
+        dhclient ${dst} >/dev/null 2>&1
+    else
+        get_ip_info ${src}
+        do_ifup ${dst}
+        transfer_routes ${src} ${dst}
+    fi
+}
+               
+antispoofing () {
+    iptables -P FORWARD DROP >/dev/null 2>&1
+    iptables -F FORWARD >/dev/null 2>&1
+    iptables -A FORWARD -m physdev --physdev-in ${dev} -j ACCEPT >/dev/null 2>&1
+}
+
+status () {
+    local dev=$1
+    local sw=$2
+    
+    echo '============================================================'
+    ip addr show ${dev}
+    ip addr show ${sw}
+    echo ' '
+    brctl show ${sw}
+    echo ' '
+    ip route list
+    echo ' '
+    route -n
+    echo '============================================================'
+    gdev=$(ip route list | awk '/^default / { print $NF }')
+    gateway=`ip route show dev ${gdev}| fgrep default | sed 's/default via //'`
+    ping -c 1 ${gateway} || true
+    echo '============================================================'
+}
+
+start () {
+    if [ "${switch}" = "null" ] ; then
+	return
+    fi
+
+    create_switch ${switch}
+    add_to_switch ${switch} ${pif}
+    change_ips ${pif} ${switch}
+
+    if [ ${antispoof} = 'yes' ] ; then
+	antispoofing
+    fi
+}
+
+stop () {
+    if [ "${switch}" = "null" ]; then
+	return
+    fi
+    if ! link_exists "$switch"; then
+	return
+    fi
+
+    change_ips ${switch} ${pif}
+    ip link set ${switch} down
+    brctl delbr ${switch}
+}
+
+
+case "$command" in
+    start)
+	echo -n $"Starting KVM: "
+	start
+	echo
+	;;
+    
+    stop)
+	echo -n $"Shutting down KVM: "
+	stop
+	echo
+	;;
+
+    status)
+	status ${pif} ${switch}
+	;;
+
+    *)
+	echo "Unknown command: $command" >&2
+	echo 'Valid commands are: start, stop, status' >&2
+	exit 1
+esac
