@@ -185,7 +185,7 @@ static hpa_t kvm_mmu_alloc_page(struct kvm_vcpu *vcpu, u64 *parent_pte)
 
 	if (list_empty(&vcpu->free_pages))
 		return INVALID_PAGE;
-	
+
 	page = list_entry(vcpu->free_pages.next, struct kvm_mmu_page, link);
 	list_del(&page->link);
 	list_add(&page->link, &vcpu->kvm->active_mmu_pages);
@@ -281,13 +281,13 @@ static int nonpaging_map(struct kvm_vcpu *vcpu, gva_t v, hpa_t p)
 		if (level == 1) {
 			mark_page_dirty(vcpu->kvm, v >> PAGE_SHIFT);
 			page_header_update_slot(vcpu->kvm, table, v);
-			table[index] = p | PT_PRESENT_MASK | PT_WRITABLE_MASK | 
+			table[index] = p | PT_PRESENT_MASK | PT_WRITABLE_MASK |
 								PT_USER_MASK;
 			return 0;
 		}
 
 		if (table[index] == 0) {
-			hpa_t new_table = kvm_mmu_alloc_page(vcpu, 
+			hpa_t new_table = kvm_mmu_alloc_page(vcpu,
 							     &table[index]);
 
 			if (!VALID_PAGE(new_table)) {
@@ -298,7 +298,7 @@ static int nonpaging_map(struct kvm_vcpu *vcpu, gva_t v, hpa_t p)
 			if (level == PT32E_ROOT_LEVEL)
 				table[index] = new_table | PT_PRESENT_MASK;
 			else
-				table[index] = new_table | PT_PRESENT_MASK | 
+				table[index] = new_table | PT_PRESENT_MASK |
 						PT_WRITABLE_MASK | PT_USER_MASK;
 		}
 		table_addr = table[index] & PT64_BASE_ADDR_MASK;
@@ -331,10 +331,10 @@ static int nonpaging_page_fault(struct kvm_vcpu *vcpu, gva_t gva,
 {
 	int ret;
 	gpa_t addr = gva;
-	
+
 	ASSERT(vcpu);
 	ASSERT(VALID_PAGE(vcpu->mmu.root_hpa));
-	
+
 	for (;;) {
 	     hpa_t paddr;
 
@@ -390,7 +390,7 @@ static void kvm_mmu_flush_tlb(struct kvm_vcpu *vcpu)
 {
 	struct kvm_mmu_page *page, *npage;
 
-	list_for_each_entry_safe(page, npage, &vcpu->kvm->active_mmu_pages, 
+	list_for_each_entry_safe(page, npage, &vcpu->kvm->active_mmu_pages,
 				 link) {
 		if (page->global)
 			continue;
@@ -453,7 +453,7 @@ static void inject_page_fault(struct kvm_vcpu *vcpu,
 	u32 vect_info = vmcs_read32(IDT_VECTORING_INFO_FIELD);
 
 	pgprintk("inject_page_fault: 0x%llx err 0x%x\n", addr, err_code);
-	
+
 	++kvm_stat.pf_guest;
 
 	if (is_page_fault(vect_info)) {
@@ -474,7 +474,7 @@ static void inject_page_fault(struct kvm_vcpu *vcpu,
 		     INTR_TYPE_EXCEPTION |
 		     INTR_INFO_DELIEVER_CODE_MASK |
 		     INTR_INFO_VALID_MASK);
-	
+
 }
 
 static inline int fix_read_pf(u64 *shadow_ent)
@@ -485,14 +485,14 @@ static inline int fix_read_pf(u64 *shadow_ent)
 		*shadow_ent &= ~PT_WRITABLE_MASK;
 
 		return 1;
-		
+
 	}
 	return 0;
 }
 
 static int may_access(u64 pte, int write, int user)
 {
-	
+
 	if (user && !(pte & PT_USER_MASK))
 		return 0;
 	if (write && !(pte & PT_WRITABLE_MASK))

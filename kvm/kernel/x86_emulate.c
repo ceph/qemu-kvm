@@ -146,7 +146,7 @@ static u8 opcode_table[256] = {
 
 static u8 twobyte_table[256] = {
 	/* 0x00 - 0x0F */
-	0, SrcMem | ModRM | DstReg | Mov, 0, 0, 0, 0, 0, 0, 
+	0, SrcMem | ModRM | DstReg | Mov, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, ImplicitOps | ModRM, 0, 0,
 	/* 0x10 - 0x1F */
 	0, 0, 0, 0, 0, 0, 0, 0, ImplicitOps | ModRM, 0, 0, 0, 0, 0, 0, 0,
@@ -420,7 +420,7 @@ struct operand {
 			   (((reg) + _inc) & ((1UL << (ad_bytes << 3)) - 1)); \
 	} while (0)
 
-void *decode_register(u8 modrm_reg, unsigned long *regs, 
+void *decode_register(u8 modrm_reg, unsigned long *regs,
 		      int highbyte_regs)
 {
 	void *p;
@@ -431,7 +431,7 @@ void *decode_register(u8 modrm_reg, unsigned long *regs,
 	return p;
 }
 
-static int read_descriptor(struct x86_emulate_ctxt *ctxt, 
+static int read_descriptor(struct x86_emulate_ctxt *ctxt,
 			   struct x86_emulate_ops *ops,
 			   void *ptr,
 			   u16 *size, unsigned long *address, int op_bytes)
@@ -571,7 +571,7 @@ done_prefixes:
 			modrm_val = *(unsigned long *)
 				decode_register(modrm_rm, _regs, d & ByteOp);
 			goto modrm_done;
-		}	
+		}
 
 		if (ad_bytes == 2) {
 			unsigned bx = _regs[VCPU_REGS_RBX];
@@ -619,7 +619,7 @@ done_prefixes:
 				modrm_ea += bx;
 				break;
 			}
-			if (modrm_rm == 2 || modrm_rm == 3 || 
+			if (modrm_rm == 2 || modrm_rm == 3 ||
 			    (modrm_rm == 6 && modrm_mod != 0))
 				if (!override_base)
 					override_base = &ctxt->ss_base;
@@ -717,7 +717,7 @@ done_prefixes:
 		dst.type = OP_REG;
 		if ((d & ByteOp)
 		    && !(twobyte_table && (b == 0xb6 || b == 0xb7))) {
-			dst.ptr = decode_register(modrm_reg, _regs, 
+			dst.ptr = decode_register(modrm_reg, _regs,
 						  (rex_prefix == 0));
 			dst.val = *(u8 *) dst.ptr;
 			dst.bytes = 1;
@@ -925,7 +925,7 @@ done_prefixes:
 		/* 64-bit mode: POP always pops a 64-bit operand. */
 		if (mode == X86EMUL_MODE_PROT64)
 			dst.bytes = 8;
-		if ((rc = ops->read_std(register_address(ctxt->ss_base, 
+		if ((rc = ops->read_std(register_address(ctxt->ss_base,
 							 _regs[VCPU_REGS_RSP]),
 					&dst.val, dst.bytes, ctxt)) != 0)
 			goto done;
@@ -1015,7 +1015,7 @@ done_prefixes:
 							ctxt)) != 0)
 					goto done;
 			}
-			register_address_increment(_regs[VCPU_REGS_RSP], 
+			register_address_increment(_regs[VCPU_REGS_RSP],
 						   -dst.bytes);
 			if ((rc = ops->write_std(
 				     register_address(ctxt->ss_base,
@@ -1090,10 +1090,10 @@ special_insn:
 	case 0xa4 ... 0xa5:	/* movs */
 		dst.type = OP_MEM;
 		dst.bytes = (d & ByteOp) ? 1 : op_bytes;
-		dst.ptr = (unsigned long *)register_address(ctxt->es_base, 
+		dst.ptr = (unsigned long *)register_address(ctxt->es_base,
 							_regs[VCPU_REGS_RDI]);
 		if ((rc = ops->read_emulated(register_address(
-		      override_base ? *override_base : ctxt->ds_base, 
+		      override_base ? *override_base : ctxt->ds_base,
 		      _regs[VCPU_REGS_RSI]), &dst.val, dst.bytes, ctxt)) != 0)
 			goto done;
 		register_address_increment(_regs[VCPU_REGS_RSI],
@@ -1283,7 +1283,7 @@ twobyte_special_insn:
 			    || ((rc = ops->read_emulated(cr2 + 4, &old_hi, 4,
 							 ctxt)) != 0))
 				goto done;
-			if ((old_lo != _regs[VCPU_REGS_RAX]) 
+			if ((old_lo != _regs[VCPU_REGS_RAX])
 			    || (old_hi != _regs[VCPU_REGS_RDI])) {
 				_regs[VCPU_REGS_RAX] = old_lo;
 				_regs[VCPU_REGS_RDX] = old_hi;
@@ -1314,7 +1314,7 @@ twobyte_special_insn:
 				_eflags &= ~EFLG_ZF;
 			} else {
 				new = (_regs[VCPU_REGS_RCX] << 32) | (u32) _regs[VCPU_REGS_RBX];
-				if ((rc = ops->cmpxchg_emulated(cr2, old, 
+				if ((rc = ops->cmpxchg_emulated(cr2, old,
 							  new, 8, ctxt)) != 0)
 					goto done;
 				_eflags |= EFLG_ZF;
