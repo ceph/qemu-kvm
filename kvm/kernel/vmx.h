@@ -1,7 +1,29 @@
 #ifndef VMX_H
 #define VMX_H
 
-/* Intel VT cpu definitions */
+/*
+ * vmx.h: VMX Architecture related definitions
+ * Copyright (c) 2004, Intel Corporation.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms and conditions of the GNU General Public License,
+ * version 2, as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, write to the Free Software Foundation, Inc., 59 Temple
+ * Place - Suite 330, Boston, MA 02111-1307 USA.
+ *
+ * A few random additions are:
+ * Copyright (C) 2006 Qumranet
+ *    Avi Kivity <avi@qumranet.com>
+ *    Yaniv Kamay <yaniv@qumranet.com>
+ *
+ */
 
 #define CPU_BASED_VIRTUAL_INTR_PENDING  0x00000004
 #define CPU_BASED_USE_TSC_OFFSETING     0x00000008
