@@ -3,7 +3,7 @@ KERNELDIR := /lib/modules/`uname -r`/build
 rpmrelease = devel
 
 all::
-	$(MAKE) -C $(KERNELDIR) M=`pwd` "$$@"
+	$(MAKE) CC=gcc34 -C $(KERNELDIR) M=`pwd` "$$@"
 
 tmpspec = .tmp.kvm-kmod.spec
 
@@ -19,5 +19,5 @@ clean:
 	rm -rf *.o *.ko
 
 svnclean:
-	svn st | grep '^\?' | xargs rm -rf
+	svn st | grep '^\?' | awk '{print $2}' | xargs rm -rf
 
