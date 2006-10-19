@@ -369,4 +369,19 @@ static inline struct kvm_mmu_page *page_header(hpa_t shadow_page)
 	return (struct kvm_mmu_page *)page->private;
 }
 
+#ifdef __x86_64__
+
+/*
+ * When emulating 32-bit mode, cr3 is only 32 bits even on x86_64.  Therefore
+ * we need to allocate shadow page tables in the first 4GB of memory, which
+ * happens to fit the DMA32 zone.
+ */
+#define GFP_KVM_MMU (GFP_KERNEL | __GFP_DMA32)
+
+#else
+
+#define GFP_KVM_MMU GFP_KERNEL
+
+#endif
+
 #endif

@@ -657,7 +657,7 @@ static int alloc_mmu_pages(struct kvm_vcpu *vcpu)
 		struct kvm_mmu_page *page_header = &vcpu->page_header_buf[i];
 
 		INIT_LIST_HEAD(&page_header->link);
-		if ((page = alloc_page(GFP_KERNEL)) == NULL)
+		if ((page = alloc_page(GFP_KVM_MMU)) == NULL)
 			goto error_1;
 		page->private = (unsigned long)page_header;
 		page_header->page_hpa = page_to_pfn(page) << PAGE_SHIFT;
