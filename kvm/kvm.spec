@@ -29,12 +29,15 @@ rm -rf %{buildroot}
 %define bin %{bindir}/kvm
 %define initdir /etc/init.d
 %define confdir /etc/kvm
+%define utilsdir /etc/kvm/utils
 mkdir -p %{buildroot}/%{bindir}
 mkdir -p %{buildroot}/%{confdir}
 mkdir -p %{buildroot}/%{initdir}
+mkdir -p %{buildroot}/%{utilsdir}
 cp %{objdir}/qemu/x86_64-softmmu/qemu-system-x86_64 %{buildroot}/%{bin}
 cp %{objdir}/scripts/kvm %{buildroot}/%{initdir}/kvm
 cp %{objdir}/scripts/qemu-ifup %{buildroot}/%{confdir}/qemu-ifup
+cp %{objdir}/kvm %{buildroot}/%{utilsdir}/kvm
 
 %post 
 depmod %{kverrel}
@@ -51,4 +54,5 @@ depmod %{kverrel}
 /usr/bin/kvm
 %{confdir}/qemu-ifup
 %{initdir}/kvm  
+%{utilsdir}/kvm
 %changelog
