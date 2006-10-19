@@ -481,6 +481,10 @@ static inline int fix_read_pf(u64 *shadow_ent)
 {
 	if ((*shadow_ent & PT_SHADOW_USER_MASK) &&
 	    !(*shadow_ent & PT_USER_MASK)) {
+		/*
+		 * If supervisor write protect is disabled, we shadow kernel
+		 * pages as user pages so we can trap the write access.
+		 */
 		*shadow_ent |= PT_USER_MASK;
 		*shadow_ent &= ~PT_WRITABLE_MASK;
 
@@ -500,6 +504,9 @@ static int may_access(u64 pte, int write, int user)
 	return 1;
 }
 
+/*
+ * Remove a shadow pte.
+ */
 static void paging_inval_page(struct kvm_vcpu *vcpu, gva_t addr)
 {
 	hpa_t page_addr = vcpu->mmu.root_hpa;

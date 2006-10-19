@@ -1,3 +1,7 @@
+/*
+ * We need the mmu code to access both 32-bit and 64-bit guest ptes,
+ * so the code in this file is compiled twice, once per pte size.
+ */
 
 #if PTTYPE == 64
 	#define pt_element_t u64
@@ -89,6 +93,9 @@ static void FNAME(set_pde)(struct kvm_vcpu *vcpu, u64 guest_pde,
 		       guest_pde & PT_DIRTY_MASK, access_bits);
 }
 
+/*
+ * Fetch a guest pte from a specific level in the paging hierarchy.
+ */
 static pt_element_t *FNAME(fetch_guest)(struct kvm_vcpu *vcpu,
 					struct guest_walker *walker,
 					int level,
@@ -119,6 +126,9 @@ static pt_element_t *FNAME(fetch_guest)(struct kvm_vcpu *vcpu,
 	}
 }
 
+/*
+ * Fetch a shadow pte for a specific level in the paging hierarchy.
+ */
 static u64 *FNAME(fetch)(struct kvm_vcpu *vcpu, gva_t addr,
 			      struct guest_walker *walker)
 {
@@ -187,6 +197,13 @@ static u64 *FNAME(fetch)(struct kvm_vcpu *vcpu, gva_t addr,
 	}
 }
 
+/*
+ * The guest faulted for write.  We need to
+ * 
+ * - check write permissions
+ * - update the guest pte dirty bit
+ * - update our own dirty page tracking structures
+ */
 static int FNAME(fix_write_pf)(struct kvm_vcpu *vcpu,
 			       u64 *shadow_ent,
 			       struct guest_walker *walker,
@@ -202,10 +219,18 @@ static int FNAME(fix_write_pf)(struct kvm_vcpu *vcpu,
 
 	writable_shadow = *shadow_ent & PT_SHADOW_WRITABLE_MASK;
 	if (user) {
+		/*
+		 * User mode access.  Fail if it's a kernel page or a read-only
+		 * page.
+		 */
 		if (!(*shadow_ent & PT_SHADOW_USER_MASK) || !writable_shadow)
 			return 0;
 		ASSERT(*shadow_ent & PT_USER_MASK);
 	} else
+		/*
+		 * Kernel mode access.  Fail if it's a read-only page and 
+		 * supervisor write protection is enabled.
+		 */
 		if (!writable_shadow) {
 			if (is_write_protection())
 				return 0;
@@ -227,6 +252,19 @@ static int FNAME(fix_write_pf)(struct kvm_vcpu *vcpu,
 	return 1;
 }
 
+/*
+ * Page fault handler.  There are several causes for a page fault:
+ *   - there is no shadow pte for the guest pte
+ *   - write access through a shadow pte marked read only so that we can set 
+ *     the dirty bit
+ *   - write access to a shadow pte marked read only so we can update the page
+ *     dirty bitmap, when userspace requests it
+ *   - mmio access; in this case we will never install a present shadow pte
+ *   - normal guest page fault due to the guest pte marked not present, not
+ *     writable, or not executable
+ *
+ *  Returns: 1 if we need to emulate the instruction, 0 otherwise
+ */
 static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 			       u32 error_code)
 {
@@ -237,6 +275,9 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 	u64 *shadow_pte;
 	int fixed;
 
+	/*
+	 * Look up the shadow pte for the faulting address.
+	 */
 	for (;;) {
 		FNAME(init_walker)(&walker, vcpu);
 		shadow_pte = FNAME(fetch)(vcpu, addr, &walker);
@@ -248,12 +289,18 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 		break;
 	}
 
+	/*
+	 * The page is not mapped by the guest.  Let the guest handle it.
+	 */
 	if (!shadow_pte) {
 		inject_page_fault(vcpu, addr, error_code);
 		FNAME(release_walker)(&walker);
 		return 0;
 	}
 
+	/*
+	 * Update the shadow pte.
+	 */
 	if (write_fault)
 		fixed = FNAME(fix_write_pf)(vcpu, shadow_pte, &walker, addr,
 					    user_fault);
@@ -262,6 +309,9 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 
 	FNAME(release_walker)(&walker);
 
+	/*
+	 * mmio: emulate if accessible, otherwise its a guest fault.
+	 */
 	if (is_io_pte(*shadow_pte)) {
 		if (may_access(*shadow_pte, write_fault, user_fault))
 			return 1;
@@ -271,6 +321,9 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 		return 0;
 	}
 
+	/*
+	 * pte not present, guest page fault.
+	 */
 	if (pte_present && !fixed) {
 		inject_page_fault(vcpu, addr, error_code);
 		return 0;
