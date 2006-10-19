@@ -57,7 +57,8 @@ if options.kvm and options.reload:
             if os.spawnl(os.P_WAIT, '/sbin/rmmod', 'rmmod', 'kvm') != 0:
                 raise Exception('failed to remove kvm module')
     if os.spawnl(os.P_WAIT, '/sbin/insmod', 'insmod', 'kernel/kvm.ko') != 0:
-        raise Exception('failed to load kvm module')
+        if os.spawnl(os.P_WAIT, '/sbin/modprobe', 'modprobe', 'kvm') != 0:
+            raise Exception('failed to load kvm module')
     for i in range(5):
         if os.access('/dev/kvm', os.F_OK):
             break
@@ -89,7 +90,11 @@ else:
     cmd = 'qemu'
     
 if options.kvm:
-    cmd = 'qemu/' + arch + '-softmmu/' + cmd
+    local_cmd = 'qemu/' + arch + '-softmmu/' + cmd
+    if os.access(local_cmd, os.F_OK):
+       cmd = local_cmd
+    else:
+       cmd = '/usr/bin/kvm'
 else:
     cmd = 'qemu'
 
