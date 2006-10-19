@@ -14,3 +14,10 @@ rpm:	all
 		 --define="objdir $$(pwd)" \
 		 --define="_topdir $$(pwd)/.." \
 		-bb $(tmpspec)
+
+clean:
+	rm -rf *.o *.ko
+
+svnclean:
+	svn st | grep '^\?' | xargs rm -rf
+
