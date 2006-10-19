@@ -20,7 +20,6 @@ fi
 
 get_ip_info() {
     addr=`ip addr show dev $1 | egrep '^ *inet' | sed -e 's/ *inet //' -e 's/ .*//'`
-    gateway=`ip route show dev $1 | fgrep default | sed 's/default via //'`
 }
     
 do_ifup() {
@@ -136,8 +135,7 @@ status () {
     echo ' '
     route -n
     echo '============================================================'
-    gdev=$(ip route list | awk '/^default / { print $NF }')
-    gateway=`ip route show dev ${gdev}| fgrep default | sed 's/default via //'`
+    gateway=$(ip route list | awk '/^default / { print $3 }')
     ping -c 1 ${gateway} || true
     echo '============================================================'
 }
