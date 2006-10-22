@@ -20,16 +20,15 @@ fi
 
 get_ip_info() {
     addr=`ip addr show dev $1 | egrep '^ *inet' | sed -e 's/ *inet //' -e 's/ .*//'`
+    gateway=$(ip route list | awk '/^default / { print $3 }')
 }
     
 do_ifup() {
-    if ! ifup $1 ; then
-        if [ ${addr} ] ; then
-            ip addr flush $1 >/dev/null 2>&1
-            ip addr add ${addr} dev $1 >/dev/null 2>&1
-            ip link set dev $1 up >/dev/null 2>&1
-        fi
-    fi
+     if [ ${addr} ] ; then
+        ip addr flush $1 
+        ip addr add ${addr} dev $1 
+        ip link set dev $1 up 
+     fi
 }
 
 link_exists()
@@ -110,8 +109,11 @@ change_ips() {
         dhclient ${dst} >/dev/null 2>&1
     else
         get_ip_info ${src}
+        ifdown ${src} >/dev/null 2>&1 || true
+        ip link set ${src} up >/dev/null 2>&1
         do_ifup ${dst}
         transfer_routes ${src} ${dst}
+        ip route add default via ${gateway} dev ${dst}
     fi
 }
                
