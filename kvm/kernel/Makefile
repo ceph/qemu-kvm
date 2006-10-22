@@ -3,7 +3,7 @@ KERNELDIR := /lib/modules/`uname -r`/build
 rpmrelease = devel
 
 all::
-	$(MAKE) CC=gcc34 -C $(KERNELDIR) M=`pwd` "$$@"
+	$(MAKE) -C $(KERNELDIR) M=`pwd` "$$@"
 
 tmpspec = .tmp.kvm-kmod.spec
 
