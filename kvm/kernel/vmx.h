@@ -49,7 +49,7 @@
 #define VM_EXIT_HOST_ADD_SPACE_SIZE     0x00000200
 
 
-/* VMCS Encordings */
+/* VMCS Encodings */
 enum vmcs_field {
 	GUEST_ES_SELECTOR               = 0x00000800,
 	GUEST_CS_SELECTOR               = 0x00000802,
