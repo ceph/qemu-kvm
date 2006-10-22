@@ -199,7 +199,7 @@ static u64 *FNAME(fetch)(struct kvm_vcpu *vcpu, gva_t addr,
 
 /*
  * The guest faulted for write.  We need to
- * 
+ *
  * - check write permissions
  * - update the guest pte dirty bit
  * - update our own dirty page tracking structures
@@ -228,7 +228,7 @@ static int FNAME(fix_write_pf)(struct kvm_vcpu *vcpu,
 		ASSERT(*shadow_ent & PT_USER_MASK);
 	} else
 		/*
-		 * Kernel mode access.  Fail if it's a read-only page and 
+		 * Kernel mode access.  Fail if it's a read-only page and
 		 * supervisor write protection is enabled.
 		 */
 		if (!writable_shadow) {
@@ -255,7 +255,7 @@ static int FNAME(fix_write_pf)(struct kvm_vcpu *vcpu,
 /*
  * Page fault handler.  There are several causes for a page fault:
  *   - there is no shadow pte for the guest pte
- *   - write access through a shadow pte marked read only so that we can set 
+ *   - write access through a shadow pte marked read only so that we can set
  *     the dirty bit
  *   - write access to a shadow pte marked read only so we can update the page
  *     dirty bitmap, when userspace requests it
