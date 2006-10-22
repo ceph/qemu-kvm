@@ -26,7 +26,7 @@
 	#define PT_PTE_COPY_MASK PT32_PTE_COPY_MASK
 	#define PT_NON_PTE_COPY_MASK PT32_NON_PTE_COPY_MASK
 #else
-	error
+	#error Invalid PTTYPE value
 #endif
 
 /*
