@@ -1,4 +1,6 @@
 
+DESTDIR =
+
 rpmrelease = devel
 
 .PHONY: kernel user qemu
@@ -9,6 +11,22 @@ qemu kernel user:
 	$(MAKE) -C $@
 
 qemu: user
+
+bindir = /usr/bin
+bin = $(bindir)/kvm
+initdir = /etc/init.d
+confdir = /etc/kvm
+utilsdir = /etc/kvm/utils
+
+install:
+	mkdir -p $(DESTDIR)/$(bindir)
+	mkdir -p $(DESTDIR)/$(confdir)
+	mkdir -p $(DESTDIR)/$(initdir)
+	mkdir -p $(DESTDIR)/$(utilsdir)
+	cp qemu/x86_64-softmmu/qemu-system-x86_64 $(DESTDIR)/$(bin)
+	cp scripts/kvm $(DESTDIR)/$(initdir)/kvm
+	cp scripts/qemu-ifup $(DESTDIR)/$(confdir)/qemu-ifup
+	cp kvm $(DESTDIR)/$(utilsdir)/kvm
 
 tmpspec = .tmp.kvm.spec
 
