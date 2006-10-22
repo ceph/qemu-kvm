@@ -221,7 +221,8 @@ hpa_t gpa_to_hpa(struct kvm_vcpu *vcpu, gpa_t gpa)
 	if (!slot)
 		return gpa | HPA_ERR_MASK;
 	page = gfn_to_page(slot, gpa >> PAGE_SHIFT);
-	return (page_to_pfn(page) << PAGE_SHIFT) | (gpa & (PAGE_SIZE-1));
+	return ((hpa_t)page_to_pfn(page) << PAGE_SHIFT)
+		| (gpa & (PAGE_SIZE-1));
 }
 
 hpa_t gva_to_hpa(struct kvm_vcpu *vcpu, gva_t gva)
@@ -660,7 +661,7 @@ static int alloc_mmu_pages(struct kvm_vcpu *vcpu)
 		if ((page = alloc_page(GFP_KVM_MMU)) == NULL)
 			goto error_1;
 		page->private = (unsigned long)page_header;
-		page_header->page_hpa = page_to_pfn(page) << PAGE_SHIFT;
+		page_header->page_hpa = (hpa_t)page_to_pfn(page) << PAGE_SHIFT;
 		memset(__va(page_header->page_hpa), 0, PAGE_SIZE);
 		list_add(&page_header->link, &vcpu->free_pages);
 	}
