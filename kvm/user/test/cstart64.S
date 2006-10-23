@@ -27,7 +27,7 @@ ptl4:
 .align 4096
 
 gdt64_desc:
-	.word gdt64_end - gdt64
+	.word gdt64_end - gdt64 - 1
 	.quad gdt64
 
 gdt64:
@@ -38,7 +38,8 @@ gdt64_end:
 .section .init
 
 .code32
-
+	lgdt gdt64_desc
+	
 	mov %cr4, %eax
 	bts $5, %eax  # pae
 	mov %eax, %cr4
