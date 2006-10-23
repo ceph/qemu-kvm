@@ -183,13 +183,6 @@ static void setup_mmu(unsigned long len)
 {
     unsigned long *cr3 = alloc_page();
     unsigned long phys = 0;
-    unsigned long gdt[] = { 
-	[SEG_CS_32/8] = 0x00cf9b000000ffffull,
-	[SEG_CS_64/8] = 0x00af9b000000ffffull,
-    };
-    int gdt_size = sizeof(gdt) / sizeof(unsigned long);
-    extern char entry_32;
-    struct ljmp entry_32_ptr = { &entry_32, SEG_CS_32 };
 
     memset(cr3, 0, PAGE_SIZE);
     while (phys + LARGE_PAGE_SIZE <= len) {
@@ -202,20 +195,6 @@ static void setup_mmu(unsigned long len)
     }
     
     load_cr3(virt_to_phys(cr3));
-    load_cr4(read_cr4() | (1ull << 5) | (1ull < 4));
-    load_gdt(gdt, gdt_size);
-
-    asm volatile (
-		  "   .byte 0x48; ljmp *%1\n\t"
-		  ".code32 \n\t"
-		  "entry_32: \n\t"
-		  "   mov %%eax, %%cr0 \n\t"
-		  "   ljmp %2, $(2f) \n\t"
-		  ".code64 \n\t"
-		  "2:"
-		  : : "a"(read_cr0() | (1ull << 31))
-		    , "m"(entry_32_ptr), "i"(SEG_CS_64)
-		  );
     print("paging enabled\n");
 }
 
