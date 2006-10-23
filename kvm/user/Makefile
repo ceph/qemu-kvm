@@ -25,6 +25,6 @@ test/bootstrap: test/bootstrap.o
 
 test/irq.flat: test/print.o
 
-test/sieve.flat: test/cstart.o test/sieve.o test/print.o test/vm.o
+test/sieve.flat: test/cstart64.o test/sieve.o test/print.o test/vm.o
 
 -include .*.d
