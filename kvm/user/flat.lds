@@ -2,7 +2,7 @@ OUTPUT_FORMAT(binary)
 
 SECTIONS
 {
-    . = 0;
+    . = 1M;
     stext = .;
     .text : { *(.init) *(.text) }
     . = ALIGN(4K);
