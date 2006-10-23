@@ -22,7 +22,6 @@ pmode:
 	mov %ax, %gs
 	mov %ax, %ss
 	mov $0xa0000, %esp
-x:	 jmp x
 	ljmp $8, $0
 
 .align 16
