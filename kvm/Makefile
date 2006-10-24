@@ -3,7 +3,7 @@ DESTDIR =
 
 rpmrelease = devel
 
-.PHONY: kernel user qemu
+.PHONY: kernel user qemu clean
 
 all: kernel user qemu
 
@@ -11,6 +11,11 @@ qemu kernel user:
 	$(MAKE) -C $@
 
 qemu: user
+
+clean: 
+	@for d in kernel user qemu; do 	\
+		$(MAKE) -C $$d $@; 	\
+	done
 
 bindir = /usr/bin
 bin = $(bindir)/kvm

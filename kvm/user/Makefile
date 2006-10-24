@@ -28,3 +28,7 @@ test/irq.flat: test/print.o
 test/sieve.flat: test/cstart64.o test/sieve.o test/print.o test/vm.o
 
 -include .*.d
+
+clean:
+	$(RM) kvmctl *.o *.a .*.d
+	$(RM) test/bootstrap test/*.o test/*.flat test/.*.d

@@ -16,7 +16,7 @@ rpm:	all
 		-bb $(tmpspec)
 
 clean:
-	rm -rf *.o *.ko
+	$(MAKE) -C $(KERNELDIR) M=`pwd` $@
 
 svnclean:
 	svn st | grep '^\?' | awk '{print $2}' | xargs rm -rf
