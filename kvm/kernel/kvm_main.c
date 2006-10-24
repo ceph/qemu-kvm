@@ -58,8 +58,6 @@ static struct kvm_stats_debugfs_item {
 
 static struct dentry *debugfs_dir;
 
-#define KVM_LOG_BUF_SIZE PAGE_SIZE
-
 static const u32 vmx_msr_index[] = {
 	MSR_EFER, MSR_K6_STAR,
 #ifdef __x86_64__
@@ -84,6 +82,26 @@ static const u32 vmx_msr_index[] = {
 #define TSS_IOPB_SIZE (65536 / 8)
 #define TSS_REDIRECTION_SIZE (256 / 8)
 #define RMODE_TSS_SIZE (TSS_BASE_SIZE + TSS_REDIRECTION_SIZE + TSS_IOPB_SIZE + 1)
+
+#define MSR_IA32_FEATURE_CONTROL 		0x03a
+#define MSR_IA32_VMX_BASIC_MSR   		0x480
+#define MSR_IA32_VMX_PINBASED_CTLS_MSR		0x481
+#define MSR_IA32_VMX_PROCBASED_CTLS_MSR		0x482
+#define MSR_IA32_VMX_EXIT_CTLS_MSR		0x483
+#define MSR_IA32_VMX_ENTRY_CTLS_MSR		0x484
+
+#define CR0_RESEVED_BITS 0xffffffff1ffaffc0ULL
+#define LMSW_GUEST_MASK 0x0eULL
+#define CR4_RESEVED_BITS (~((1ULL << 11) - 1))
+#define CR4_VMXE 0x2000
+#define CR8_RESEVED_BITS (~0x0fULL)
+#define EFER_RESERVED_BITS 0xfffffffffffff2fe
+
+#ifdef __x86_64__
+#define HOST_IS_64 1
+#else
+#define HOST_IS_64 0
+#endif
 
 static int rmode_tss_base(struct kvm* kvm);
 static void set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0);
@@ -259,13 +277,6 @@ static struct vmcs_descriptor {
 	int order;
 	u32 revision_id;
 } vmcs_descriptor;
-
-#define MSR_IA32_FEATURE_CONTROL 		0x03a
-#define MSR_IA32_VMX_BASIC_MSR   		0x480
-#define MSR_IA32_VMX_PINBASED_CTLS_MSR		0x481
-#define MSR_IA32_VMX_PROCBASED_CTLS_MSR		0x482
-#define MSR_IA32_VMX_EXIT_CTLS_MSR		0x483
-#define MSR_IA32_VMX_ENTRY_CTLS_MSR		0x484
 
 #ifdef __x86_64__
 static unsigned long read_msr(unsigned long msr)
@@ -523,8 +534,6 @@ static __init int vmx_disabled_by_bios(void)
 	return (msr & 5) == 1; /* locked but not enabled */
 }
 
-#define CR4_VMXE 0x2000
-
 static __init void kvm_enable(void *garbage)
 {
 	int cpu = raw_smp_processor_id();
@@ -663,14 +672,6 @@ static void vmcs_write64(unsigned long field, u64 value)
 	vmcs_writel(field+1, value >> 32);
 #endif
 }
-
-#ifdef __x86_64__
-#define HOST_IS_64 1
-#else
-#define HOST_IS_64 0
-#endif
-
-#define GUEST_IS_64 HOST_IS_64
 
 static void enter_pmode(struct kvm_vcpu *vcpu)
 {
@@ -1866,8 +1867,6 @@ static int pdptrs_have_reserved_bits_set(struct kvm_vcpu *vcpu,
 	return i != 4;
 }
 
-#define CR0_RESEVED_BITS 0xffffffff1ffaffc0ULL
-
 static void set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 {
 	if (cr0 & CR0_RESEVED_BITS) {
@@ -1961,13 +1960,9 @@ static void lmsw(struct kvm_vcpu *vcpu, unsigned long msw)
 	} else
 		printk(KERN_DEBUG "lmsw: unexpected\n");
 
-	#define LMSW_GUEST_MASK 0x0eULL
-
 	vmcs_writel(GUEST_CR0, (vmcs_readl(GUEST_CR0) & ~LMSW_GUEST_MASK)
 				| (msw & LMSW_GUEST_MASK));
 }
-
-#define CR4_RESEVED_BITS (~((1ULL << 11) - 1))
 
 static void set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
 {
@@ -2029,8 +2024,6 @@ static void set_cr3(struct kvm_vcpu *vcpu, unsigned long cr3)
 	vcpu->mmu.new_cr3(vcpu);
 	spin_unlock(&vcpu->kvm->lock);
 }
-
-#define CR8_RESEVED_BITS (~0x0fULL)
 
 static void set_cr8(struct kvm_vcpu *vcpu, unsigned long cr8)
 {
@@ -2244,7 +2237,6 @@ static int handle_rdmsr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 }
 
 #ifdef __x86_64__
-#define EFER_RESERVED_BITS 0xfffffffffffff2fe
 
 static void set_efer(struct kvm_vcpu *vcpu, u64 efer)
 {
