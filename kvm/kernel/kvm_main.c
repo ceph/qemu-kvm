@@ -37,18 +37,26 @@
 MODULE_AUTHOR("Qumranet");
 MODULE_LICENSE("GPL");
 
-static struct dentry *debugfs_dir;
-static struct dentry *debugfs_pf_fixed;
-static struct dentry *debugfs_pf_guest;
-static struct dentry *debugfs_tlb_flush;
-static struct dentry *debugfs_invlpg;
-static struct dentry *debugfs_exits;
-static struct dentry *debugfs_io_exits;
-static struct dentry *debugfs_mmio_exits;
-static struct dentry *debugfs_signal_exits;
-static struct dentry *debugfs_irq_exits;
-
 struct kvm_stat kvm_stat;
+
+static struct kvm_stats_debugfs_item {
+	const char *name;
+	u32 *data;
+	struct dentry *dentry;
+} debugfs_entries[] = {
+	{ "pf_fixed", &kvm_stat.pf_fixed },
+	{ "pf_guest", &kvm_stat.pf_guest },
+	{ "tlb_flush", &kvm_stat.tlb_flush },
+	{ "invlpg", &kvm_stat.invlpg },
+	{ "exits", &kvm_stat.exits },
+	{ "io_exits", &kvm_stat.io_exits },
+	{ "mmio_exits", &kvm_stat.mmio_exits },
+	{ "signal_exits", &kvm_stat.signal_exits },
+	{ "irq_exits", &kvm_stat.irq_exits },
+	{ 0, 0 }
+};
+
+static struct dentry *debugfs_dir;
 
 #define KVM_LOG_BUF_SIZE PAGE_SIZE
 
@@ -3305,40 +3313,20 @@ static struct notifier_block kvm_reboot_notifier = {
 
 static __init void kvm_init_debug(void)
 {
+	struct kvm_stats_debugfs_item *p;
+
 	debugfs_dir = debugfs_create_dir("kvm", 0);
-	debugfs_pf_fixed = debugfs_create_u32("pf_fixed", 0444, debugfs_dir,
-					      &kvm_stat.pf_fixed);
-	debugfs_pf_guest = debugfs_create_u32("pf_guest", 0444, debugfs_dir,
-					      &kvm_stat.pf_guest);
-	debugfs_tlb_flush = debugfs_create_u32("tlb_flush", 0444, debugfs_dir,
-					       &kvm_stat.tlb_flush);
-	debugfs_invlpg = debugfs_create_u32("invlpg", 0444, debugfs_dir,
-					      &kvm_stat.invlpg);
-	debugfs_exits = debugfs_create_u32("exits", 0444, debugfs_dir,
-					   &kvm_stat.exits);
-	debugfs_io_exits = debugfs_create_u32("io_exits", 0444, debugfs_dir,
-					      &kvm_stat.io_exits);
-	debugfs_mmio_exits = debugfs_create_u32("mmio_exits", 0444,
-						debugfs_dir,
-						&kvm_stat.mmio_exits);
-	debugfs_signal_exits = debugfs_create_u32("signal_exits", 0444,
-						  debugfs_dir,
-						  &kvm_stat.signal_exits);
-	debugfs_irq_exits = debugfs_create_u32("irq_exits", 0444, debugfs_dir,
-					       &kvm_stat.irq_exits);
+	for (p = debugfs_entries; p->name; ++p)
+		p->dentry = debugfs_create_u32(p->name, 0444, debugfs_dir,
+					       p->data);
 }
 
 static void kvm_exit_debug(void)
 {
-	debugfs_remove(debugfs_signal_exits);
-	debugfs_remove(debugfs_irq_exits);
-	debugfs_remove(debugfs_mmio_exits);
-	debugfs_remove(debugfs_io_exits);
-	debugfs_remove(debugfs_exits);
-	debugfs_remove(debugfs_pf_fixed);
-	debugfs_remove(debugfs_pf_guest);
-	debugfs_remove(debugfs_tlb_flush);
-	debugfs_remove(debugfs_invlpg);
+	struct kvm_stats_debugfs_item *p;
+
+	for (p = debugfs_entries; p->name; ++p)
+		debugfs_remove(p->dentry);
 	debugfs_remove(debugfs_dir);
 }
 
