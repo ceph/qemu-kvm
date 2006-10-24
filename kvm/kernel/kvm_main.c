@@ -1622,8 +1622,6 @@ unsigned long realmode_get_cr(struct kvm_vcpu *vcpu, int cr)
 	}
 }
 
-#include "debug.h"
-
 void realmode_set_cr(struct kvm_vcpu *vcpu, int cr, unsigned long val,
 		     unsigned long *rflags)
 {

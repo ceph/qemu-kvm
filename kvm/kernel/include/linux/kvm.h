@@ -4,10 +4,6 @@
 #include <asm/types.h>
 #include <linux/ioctl.h>
 
-#ifndef __user
-#define __user
-#endif
-
 /* for KVM_CREATE_MEMORY_REGION */
 struct kvm_memory_region {
 	__u32 slot;
