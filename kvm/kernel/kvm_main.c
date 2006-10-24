@@ -131,65 +131,65 @@ struct descriptor_table {
 
 static void get_gdt(struct descriptor_table *table)
 {
-	asm ( "sgdt %0" : "=m"(*table) );
+	asm ("sgdt %0" : "=m"(*table));
 }
 
 static void get_idt(struct descriptor_table *table)
 {
-	asm ( "sidt %0" : "=m"(*table) );
+	asm ("sidt %0" : "=m"(*table));
 }
 
 static u16 read_fs(void)
 {
 	u16 seg;
-	asm ( "mov %%fs, %0" : "=g"(seg) );
+	asm ("mov %%fs, %0" : "=g"(seg));
 	return seg;
 }
 
 static u16 read_gs(void)
 {
 	u16 seg;
-	asm ( "mov %%gs, %0" : "=g"(seg) );
+	asm ("mov %%gs, %0" : "=g"(seg));
 	return seg;
 }
 
 static u16 read_ldt(void)
 {
 	u16 ldt;
-	asm ( "sldt %0" : "=g"(ldt) );
+	asm ("sldt %0" : "=g"(ldt));
 	return ldt;
 }
 
 static void load_fs(u16 sel)
 {
-	asm ( "mov %0, %%fs\n" : : "g"(sel) );
+	asm ("mov %0, %%fs" : : "g"(sel));
 }
 
 static void load_gs(u16 sel)
 {
-	asm ( "mov %0, %%gs\n" : : "g"(sel) );
+	asm ("mov %0, %%gs" : : "g"(sel));
 }
 
 #ifndef load_ldt
 static void load_ldt(u16 sel)
 {
-	asm ( "lldt %0" : : "g"(sel) );
+	asm ("lldt %0" : : "g"(sel));
 }
 #endif
 
 static void fx_save(void *image)
 {
-	asm ( "fxsave (%0)":: "r" (image));
+	asm ("fxsave (%0)":: "r" (image));
 }
 
 static void fx_restore(void *image)
 {
-	asm ( "fxrstor (%0)":: "r" (image));
+	asm ("fxrstor (%0)":: "r" (image));
 }
 
 static void fpu_init(void)
 {
-	asm ( "finit" );
+	asm ("finit");
 }
 
 struct segment_descriptor {
@@ -226,13 +226,13 @@ static unsigned long segment_base(u16 selector)
 	typedef unsigned long ul;
 	unsigned long v;
 
-	asm ( "sgdt %0" : "=m"(gdt) );
+	asm ("sgdt %0" : "=m"(gdt));
 	table_base = gdt.base;
 
 	if (selector & 4) {           /* from ldt */
 		u16 ldt_selector;
 
-		asm ( "sldt %0" : "=g"(ldt_selector) );
+		asm ("sldt %0" : "=g"(ldt_selector));
 		table_base = segment_base(ldt_selector);
 	}
 	d = (struct segment_descriptor *)(table_base + (selector & ~7));
@@ -248,7 +248,7 @@ static unsigned long segment_base(u16 selector)
 static unsigned long read_tr_base(void)
 {
 	u16 tr;
-	asm ( "str %0" : "=g"(tr) );
+	asm ("str %0" : "=g"(tr));
 	return segment_base(tr);
 }
 
@@ -378,7 +378,7 @@ static void vmcs_clear(struct vmcs *vmcs)
 	u64 phys_addr = __pa(vmcs);
 	u8 error;
 
-	asm volatile ( "vmclear %1; setna %0"
+	asm volatile ("vmclear %1; setna %0"
 		       : "=m"(error) : "m"(phys_addr) : "cc", "memory" );
 	if (error)
 		printk(KERN_ERR "kvm: vmclear fail: %p/%llx\n",
@@ -421,7 +421,7 @@ static struct kvm_vcpu *__vcpu_load(struct kvm_vcpu *vcpu)
 		u8 error;
 
 		per_cpu(current_vmcs, cpu) = vcpu->vmcs;
-		asm volatile ( "vmptrld %1; setna %0"
+		asm volatile ("vmptrld %1; setna %0"
 			       : "=m"(error) : "m"(phys_addr) : "cc" );
 		if (error)
 			printk(KERN_ERR "kvm: vmptrld %p/%llx fail\n",
@@ -545,12 +545,12 @@ static __init void kvm_enable(void *garbage)
 		/* enable and lock */
 		wrmsrl(MSR_IA32_FEATURE_CONTROL, old | 5);
 	write_cr4(read_cr4() | CR4_VMXE); /* FIXME: not cpu hotplug safe */
-	asm volatile ( "vmxon %0" : : "m"(phys_addr) : "memory", "cc" );
+	asm volatile ("vmxon %0" : : "m"(phys_addr) : "memory", "cc");
 }
 
 static void kvm_disable(void *garbage)
 {
-	asm volatile ( "vmxoff" : : : "cc" );
+	asm volatile ("vmxoff" : : : "cc");
 }
 
 static int kvm_dev_open(struct inode *inode, struct file *filp)
@@ -642,7 +642,7 @@ unsigned long vmcs_readl(unsigned long field)
 {
 	unsigned long value;
 
-	asm volatile ( "vmread %1, %0" : "=g"(value) : "r"(field) : "cc" );
+	asm volatile ("vmread %1, %0" : "=g"(value) : "r"(field) : "cc");
 	return value;
 }
 
@@ -650,7 +650,7 @@ void vmcs_writel(unsigned long field, unsigned long value)
 {
 	u8 error;
 
-	asm volatile ( "vmwrite %1, %2; setna %0"
+	asm volatile ("vmwrite %1, %2; setna %0"
 		       : "=g"(error) : "r"(value), "r"(field) : "cc" );
 	if (error)
 		printk(KERN_ERR "vmwrite error: reg %lx value %lx (err %d)\n",
@@ -668,7 +668,7 @@ static void vmcs_write64(unsigned long field, u64 value)
 	vmcs_writel(field, value);
 #else
 	vmcs_writel(field, value);
-	asm volatile ( "" );
+	asm volatile ("");
 	vmcs_writel(field+1, value >> 32);
 #endif
 }
@@ -1684,7 +1684,7 @@ static int handle_exception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	}
 
 	if ((intr_info & INTR_INFO_INTR_TYPE_MASK) == 0x200) { /* nmi */
-		asm ( "int $2" );
+		asm ("int $2");
 		return 1;
 	}
 	error_code = 0;
@@ -2729,7 +2729,7 @@ again:
 	fx_restore(vcpu->host_fx_image);
 
 #ifndef __x86_64__
-	asm ( "mov %0, %%ds; mov %0, %%es" : : "r"(__USER_DS) );
+	asm ("mov %0, %%ds; mov %0, %%es" : : "r"(__USER_DS));
 #endif
 
 	kvm_run->exit_type = 0;
