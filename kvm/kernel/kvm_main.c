@@ -2251,7 +2251,7 @@ static void set_efer(struct kvm_vcpu *vcpu, u64 efer)
 	struct vmx_msr_entry *msr;
 
 	if (efer & EFER_RESERVED_BITS) {
-		printk(KERN_DEBUG "set_efer: 0x%llx #GP, reserved bits\n", 
+		printk(KERN_DEBUG "set_efer: 0x%llx #GP, reserved bits\n",
 		       efer);
 		inject_gp(vcpu);
 		return;
