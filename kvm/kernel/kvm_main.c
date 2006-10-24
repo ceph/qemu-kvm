@@ -214,7 +214,7 @@ struct segment_descriptor_64 {
 	struct segment_descriptor s;
 	u32 base_higher;
 	u32 pad_zero;
-} __attribute__((packed));
+};
 
 #endif
 
