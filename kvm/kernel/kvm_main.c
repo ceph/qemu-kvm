@@ -251,8 +251,8 @@ static void reload_tss(void)
 #endif
 }
 
-DEFINE_PER_CPU(struct vmcs *, vmxarea);
-DEFINE_PER_CPU(struct vmcs *, current_vmcs);
+static DEFINE_PER_CPU(struct vmcs *, vmxarea);
+static DEFINE_PER_CPU(struct vmcs *, current_vmcs);
 
 static struct vmcs_descriptor {
 	int size;
