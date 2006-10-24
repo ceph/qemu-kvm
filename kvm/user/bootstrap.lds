@@ -2,7 +2,7 @@ OUTPUT_FORMAT(binary)
 
 SECTIONS
 {
-    . = 1M;
+    . = 0;
     stext = .;
     .text : { *(.init) *(.text) }
     . = ALIGN(4K);
@@ -11,6 +11,5 @@ SECTIONS
     .bss : { *(.bss) }
     . = ALIGN(4K);
     edata = .;
-    end_of_memory = 128M;
 }
 
