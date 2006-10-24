@@ -25,9 +25,10 @@
 
 #define pgprintk(x...) do { } while (0)
 
-#define ASSERT(x)  							     \
-	if (!(x)) { 							     \
-		printk("assertion failed %s:%d: %s\n", __FILE__, __LINE__, #x);\
+#define ASSERT(x)							\
+	if (!(x)) {							\
+		printk(KERN_WARNING "assertion failed %s:%d: %s\n",	\
+		       __FILE__, __LINE__, #x);				\
 	}
 
 #define PT64_ENT_PER_PAGE 512
@@ -458,7 +459,8 @@ static void inject_page_fault(struct kvm_vcpu *vcpu,
 	++kvm_stat.pf_guest;
 
 	if (is_page_fault(vect_info)) {
-		printk("inject_page_fault: double fault 0x%llx @ 0x%lx\n",
+		printk(KERN_DEBUG "inject_page_fault: "
+		       "double fault 0x%llx @ 0x%lx\n",
 		       addr, vmcs_readl(GUEST_RIP));
 		vmcs_write32(VM_ENTRY_EXCEPTION_ERROR_CODE, 0);
 		vmcs_write32(VM_ENTRY_INTR_INFO_FIELD,

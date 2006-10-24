@@ -1672,8 +1672,8 @@ static int handle_exception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 
 	if ((vect_info & VECTORING_INFO_VALID_MASK) &&
 						!is_page_fault(intr_info)) {
-		printk("%s: unexpected, vectoring info 0x%x intr info 0x%x\n",
-			       __FUNCTION__, vect_info, intr_info);
+		printk(KERN_ERR "%s: unexpected, vectoring info 0x%x "
+		       "intr info 0x%x\n", __FUNCTION__, vect_info, intr_info);
 	}
 
 	if (is_external_interrupt(vect_info)) {
@@ -1829,8 +1829,8 @@ static int handle_invlpg(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 
 static void inject_gp(struct kvm_vcpu *vcpu)
 {
-	printk("inject_general_protection: rip 0x%lx\n",
-		 vmcs_readl(GUEST_RIP));
+	printk(KERN_DEBUG "inject_general_protection: rip 0x%lx\n",
+	       vmcs_readl(GUEST_RIP));
 	vmcs_write32(VM_ENTRY_EXCEPTION_ERROR_CODE, 0);
 	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD,
 		     GP_VECTOR |
@@ -1871,19 +1871,21 @@ static int pdptrs_have_reserved_bits_set(struct kvm_vcpu *vcpu,
 static void set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 {
 	if (cr0 & CR0_RESEVED_BITS) {
-		printk("set_cr0: 0x%lx #GP, reserved bits (0x%lx)\n", cr0, guest_cr0());
+		printk(KERN_DEBUG "set_cr0: 0x%lx #GP, reserved bits 0x%lx\n",
+		       cr0, guest_cr0());
 		inject_gp(vcpu);
 		return;
 	}
 
 	if ((cr0 & CR0_NW_MASK) && !(cr0 & CR0_CD_MASK)) {
-		printk("set_cr0: #GP, CD == 0 && NW == 1\n");
+		printk(KERN_DEBUG "set_cr0: #GP, CD == 0 && NW == 1\n");
 		inject_gp(vcpu);
 		return;
 	}
 
 	if ((cr0 & CR0_PG_MASK) && !(cr0 & CR0_PE_MASK)) {
-		printk("set_cr0: #GP, set PG flag and a clear PE flag\n");
+		printk(KERN_DEBUG "set_cr0: #GP, set PG flag "
+		       "and a clear PE flag\n");
 		inject_gp(vcpu);
 		return;
 	}
@@ -1903,23 +1905,23 @@ static void set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 			u32 guest_cs_ar;
 			u32 guest_tr_ar;
 			if (!is_pae()) {
-				printk("set_cr0: #GP, start paging in "
-				       "long mode while PAE is disabled\n");
+				printk(KERN_DEBUG "set_cr0: #GP, start paging "
+				       "in long mode while PAE is disabled\n");
 				inject_gp(vcpu);
 				return;
 			}
 			guest_cs_ar = vmcs_read32(GUEST_CS_AR_BYTES);
 			if (guest_cs_ar & SEGMENT_AR_L_MASK) {
-				printk("set_cr0: #GP, start paging in "
-				       "long mode while CS.L == 1\n");
+				printk(KERN_DEBUG "set_cr0: #GP, start paging "
+				       "in long mode while CS.L == 1\n");
 				inject_gp(vcpu);
 				return;
 
 			}
 			guest_tr_ar = vmcs_read32(GUEST_TR_AR_BYTES);
 			if ((guest_tr_ar & AR_TYPE_MASK) != AR_TYPE_BUSY_64_TSS) {
-				printk("%s: tss fixup for long mode. \n",
-				       __FUNCTION__);
+				printk(KERN_DEBUG "%s: tss fixup for "
+				       "long mode. \n", __FUNCTION__);
 				vmcs_write32(GUEST_TR_AR_BYTES,
 					     (guest_tr_ar & ~AR_TYPE_MASK) |
 					     AR_TYPE_BUSY_64_TSS);
@@ -1935,7 +1937,8 @@ static void set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 #endif
 		if (is_pae() &&
 			    pdptrs_have_reserved_bits_set(vcpu, vcpu->cr3)) {
-			printk("set_cr0: #GP, pdptrs reserved bits\n");
+			printk(KERN_DEBUG "set_cr0: #GP, pdptrs "
+			       "reserved bits\n");
 			inject_gp(vcpu);
 			return;
 		}
@@ -1956,7 +1959,7 @@ static void lmsw(struct kvm_vcpu *vcpu, unsigned long msw)
 		vmcs_writel(CR0_READ_SHADOW, cr0 | CR0_PE_MASK);
 
 	} else
-		printk("lmsw: unexpected\n");
+		printk(KERN_DEBUG "lmsw: unexpected\n");
 
 	#define LMSW_GUEST_MASK 0x0eULL
 
@@ -1969,25 +1972,26 @@ static void lmsw(struct kvm_vcpu *vcpu, unsigned long msw)
 static void set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
 {
 	if (cr4 & CR4_RESEVED_BITS) {
-		printk("set_cr4: #GP, reserved bits\n");
+		printk(KERN_DEBUG "set_cr4: #GP, reserved bits\n");
 		inject_gp(vcpu);
 		return;
 	}
 
 	if (is_long_mode()) {
 		if (!(cr4 & CR4_PAE_MASK)) {
-			printk("set_cr4: #GP, clearing PAE while in long mode\n");
+			printk(KERN_DEBUG "set_cr4: #GP, clearing PAE while "
+			       "in long mode\n");
 			inject_gp(vcpu);
 			return;
 		}
 	} else if (is_paging() && !is_pae() && (cr4 & CR4_PAE_MASK)
 		   && pdptrs_have_reserved_bits_set(vcpu, vcpu->cr3)) {
-		printk("set_cr4: #GP, pdptrs reserved bits\n");
+		printk(KERN_DEBUG "set_cr4: #GP, pdptrs reserved bits\n");
 		inject_gp(vcpu);
 	}
 
 	if (cr4 & CR4_VMXE_MASK) {
-		printk("set_cr4: #GP, setting VMXE\n");
+		printk(KERN_DEBUG "set_cr4: #GP, setting VMXE\n");
 		inject_gp(vcpu);
 		return;
 	}
@@ -2001,19 +2005,20 @@ static void set_cr3(struct kvm_vcpu *vcpu, unsigned long cr3)
 {
 	if (is_long_mode()) {
 		if ( cr3 & CR3_L_MODE_RESEVED_BITS) {
-			printk("set_cr3: #GP, reserved bits\n");
+			printk(KERN_DEBUG "set_cr3: #GP, reserved bits\n");
 			inject_gp(vcpu);
 			return;
 		}
 	} else {
 		if (cr3 & CR3_RESEVED_BITS) {
-			printk("set_cr3: #GP, reserved bits\n");
+			printk(KERN_DEBUG "set_cr3: #GP, reserved bits\n");
 			inject_gp(vcpu);
 			return;
 		}
 		if (is_paging() && is_pae() &&
 		    pdptrs_have_reserved_bits_set(vcpu, cr3)) {
-			printk("set_cr3: #GP, pdptrs reserved bits\n");
+			printk(KERN_DEBUG "set_cr3: #GP, pdptrs "
+			       "reserved bits\n");
 			inject_gp(vcpu);
 			return;
 		}
@@ -2030,7 +2035,7 @@ static void set_cr3(struct kvm_vcpu *vcpu, unsigned long cr3)
 static void set_cr8(struct kvm_vcpu *vcpu, unsigned long cr8)
 {
 	if ( cr8 & CR8_RESEVED_BITS) {
-		printk("set_cr8: #GP, reserved bits 0x%lx\n", cr8);
+		printk(KERN_DEBUG "set_cr8: #GP, reserved bits 0x%lx\n", cr8);
 		inject_gp(vcpu);
 		return;
 	}
@@ -2108,7 +2113,8 @@ static int handle_cr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 			skip_emulated_instruction(vcpu);
 			return 1;
 		case 8:
-			printk("handle_cr: read CR8 cpu bug (AA15) !!!!!!!!!!!!!!!!!\n");
+			printk(KERN_DEBUG "handle_cr: read CR8 "
+			       "cpu erratum AA15\n");
 			vcpu_load_rsp_rip(vcpu);
 			vcpu->regs[reg] = vcpu->cr8;
 			vcpu_put_rsp_rip(vcpu);
@@ -2245,13 +2251,14 @@ static void set_efer(struct kvm_vcpu *vcpu, u64 efer)
 	struct vmx_msr_entry *msr;
 
 	if (efer & EFER_RESERVED_BITS) {
-		printk("set_efer: 0x%llx #GP, reserved bits\n", efer);
+		printk(KERN_DEBUG "set_efer: 0x%llx #GP, reserved bits\n", 
+		       efer);
 		inject_gp(vcpu);
 		return;
 	}
 
 	if (is_paging() && (vcpu->shadow_efer & EFER_LME) != (efer & EFER_LME)) {
-		printk("set_efer: #GP, change LME while paging\n");
+		printk(KERN_DEBUG "set_efer: #GP, change LME while paging\n");
 		inject_gp(vcpu);
 		return;
 	}
@@ -2416,8 +2423,8 @@ static int kvm_handle_exit(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 
 	if ( (vectoring_info & VECTORING_INFO_VALID_MASK) &&
 				exit_reason != EXIT_REASON_EXCEPTION_NMI )
-		printk("%s: unexpected, valid vectoring info and exit"
-		       " reason is 0x%x\n", __FUNCTION__, exit_reason);
+		printk(KERN_WARNING "%s: unexpected, valid vectoring info and "
+		       "exit reason is 0x%x\n", __FUNCTION__, exit_reason);
 	kvm_run->instruction_length = vmcs_read32(VM_EXIT_INSTRUCTION_LEN);
 	if (exit_reason < kvm_vmx_max_exit_handlers
 	    && kvm_vmx_exit_handlers[exit_reason])
