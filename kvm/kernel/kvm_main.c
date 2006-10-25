@@ -2989,7 +2989,15 @@ static int kvm_dev_ioctl_set_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 	vcpu->apic_base = sregs->apic_base;
 
 	mmu_reset_needed |= guest_cr0() != sregs->cr0;
-	__set_cr0(vcpu, sregs->cr0);
+	vcpu->rmode.active = ((sregs->cr0 & CR0_PE_MASK) == 0);
+	if (vcpu->rmode.active) {
+		vmcs_write32(EXCEPTION_BITMAP, ~0);
+	}
+	else {
+		vmcs_write32(EXCEPTION_BITMAP, 1 << PF_VECTOR);
+	}
+	vmcs_writel(CR0_READ_SHADOW, sregs->cr0);
+	vmcs_writel(GUEST_CR0, sregs->cr0 | KVM_VM_CR0_ALWAYS_ON);
 
 	mmu_reset_needed |=  guest_cr4() != sregs->cr4;
 	__set_cr4(vcpu, sregs->cr4);
