@@ -19,6 +19,7 @@ static void load_regs(CPUState *env)
 {
     struct kvm_regs regs;
     struct kvm_sregs sregs;
+    struct kvm_msrs msrs;
 
     /* hack: save env */
     if (!saved_env[0])
@@ -124,12 +125,28 @@ static void load_regs(CPUState *env)
     sregs.efer = env->efer;
 
     kvm_set_sregs(kvm_context, 0, &sregs);
+
+    /* msrs */
+    msrs.sysenter_cs  = env->sysenter_cs;
+    msrs.sysenter_esp = env->sysenter_esp;
+    msrs.sysenter_eip = env->sysenter_eip;
+ 
+    msrs.star           = env->star;
+#ifdef TARGET_X86_64
+    msrs.lstar          = env->lstar;
+    msrs.cstar          = env->cstar;
+    msrs.syscall_mask   = env->fmask;
+    msrs.kernel_gs_base = env->kernelgsbase;
+#endif
+
+    kvm_set_msrs(kvm_context, 0, &msrs);
 }
 
 static void save_regs(CPUState *env)
 {
     struct kvm_regs regs;
     struct kvm_sregs sregs;
+    struct kvm_msrs msrs;
     uint32_t hflags;
 
     kvm_get_regs(kvm_context, 0, &regs);
@@ -244,6 +261,20 @@ static void save_regs(CPUState *env)
     tlb_flush(env, 1);
 
     env->kvm_pending_int = sregs.pending_int;
+
+    /* msrs */    
+    kvm_get_msrs(kvm_context, 0, &msrs);
+    env->sysenter_cs  = msrs.sysenter_cs;
+    env->sysenter_esp = msrs.sysenter_esp;
+    env->sysenter_eip = msrs.sysenter_eip;
+    
+    env->star         = msrs.star;
+#ifdef TARGET_X86_64
+    env->lstar        = msrs.lstar;
+    env->cstar        = msrs.cstar;
+    env->fmask        = msrs.syscall_mask;
+    env->kernelgsbase = msrs.kernel_gs_base;
+#endif
 }
 
 
