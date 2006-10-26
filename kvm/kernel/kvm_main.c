@@ -673,6 +673,14 @@ static void vmcs_write64(unsigned long field, u64 value)
 #endif
 }
 
+static void update_exception_bitmap(struct kvm_vcpu *vcpu)
+{
+	if (vcpu->rmode.active)
+		vmcs_write32(EXCEPTION_BITMAP, ~0);
+	else
+		vmcs_write32(EXCEPTION_BITMAP, 1 << PF_VECTOR);
+}
+
 static void enter_pmode(struct kvm_vcpu *vcpu)
 {
 	unsigned long flags;
@@ -691,7 +699,7 @@ static void enter_pmode(struct kvm_vcpu *vcpu)
 	vmcs_writel(GUEST_CR4, (vmcs_readl(GUEST_CR4) & ~CR4_VME_MASK) |
 			(vmcs_readl(CR0_READ_SHADOW) & CR4_VME_MASK) );
 
-	vmcs_write32(EXCEPTION_BITMAP, 1 << PF_VECTOR);
+	update_exception_bitmap(vcpu);
 
 	#define FIX_PMODE_DATASEG(seg, save) {				\
 			vmcs_write16(GUEST_##seg##_SELECTOR, 0); 	\
@@ -733,7 +741,7 @@ static void enter_rmode(struct kvm_vcpu *vcpu)
 
 	vmcs_writel(GUEST_RFLAGS, flags);
 	vmcs_writel(GUEST_CR4, vmcs_readl(GUEST_CR4) | CR4_VME_MASK);
-	vmcs_write32(EXCEPTION_BITMAP, ~0);
+	update_exception_bitmap(vcpu);
 
 	#define FIX_RMODE_SEG(seg, save) {				   \
 		vmcs_write16(GUEST_##seg##_SELECTOR, 			   \
@@ -3002,7 +3010,10 @@ static int kvm_dev_ioctl_set_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 	vcpu->apic_base = sregs->apic_base;
 
 	mmu_reset_needed |= guest_cr0() != sregs->cr0;
-	__set_cr0(vcpu, sregs->cr0);
+	vcpu->rmode.active = ((sregs->cr0 & CR0_PE_MASK) == 0);
+	update_exception_bitmap(vcpu);
+	vmcs_writel(CR0_READ_SHADOW, sregs->cr0);
+	vmcs_writel(GUEST_CR0, sregs->cr0 | KVM_VM_CR0_ALWAYS_ON);
 
 	mmu_reset_needed |=  guest_cr4() != sregs->cr4;
 	__set_cr4(vcpu, sregs->cr4);
