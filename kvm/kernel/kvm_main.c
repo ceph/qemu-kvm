@@ -2206,21 +2206,22 @@ static int handle_cpuid(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	return 0;
 }
 
-static int handle_rdmsr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
+/* 
+ * Reads an msr value (of 'msr_index') into 'pdata'.
+ * Returns 0 on success, non-0 otherwise.
+ * Assumes vcpu_get() was already called.
+ */
+static int get_msr(struct kvm_vcpu *vcpu, u32 msr_index, u64 *pdata)
 {
-	u32 ecx = vcpu->regs[VCPU_REGS_RCX];
-	struct vmx_msr_entry *msr = find_msr_entry(vcpu, ecx);
 	u64 data;
+	struct vmx_msr_entry *msr;
 
-#ifdef KVM_DEBUG
-	if (guest_cpl() != 0) {
-		vcpu_printf(vcpu, "%s: not supervisor\n", __FUNCTION__);
-		inject_gp(vcpu);
-		return 1;
+	if (!pdata) {
+		printk(KERN_ERR "BUG: get_msr called with NULL pdata\n");
+		return -EINVAL;
 	}
-#endif
 
-	switch (ecx) {
+	switch (msr_index) {
 #ifdef __x86_64__
 	case MSR_FS_BASE:
 		data = vmcs_readl(GUEST_FS_BASE);
@@ -2256,14 +2257,37 @@ static int handle_rdmsr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 		data = vcpu->apic_base;
 		break;
 	default:
-		if (msr) {
-			data = msr->data;
-			break;
+		msr = find_msr_entry(vcpu, msr_index);
+		if (!msr) {
+			printk(KERN_ERR "kvm: unhandled rdmsr: %x\n", msr_index);
+			return 1;
 		}
-		printk(KERN_ERR "kvm: unhandled rdmsr: %x\n", ecx);
+		data = msr->data;
+		break;
+	}
+
+	*pdata = data;
+	return 0;
+}
+
+static int handle_rdmsr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
+{
+	u32 ecx = vcpu->regs[VCPU_REGS_RCX];
+	u64 data;
+
+#ifdef KVM_DEBUG
+	if (guest_cpl() != 0) {
+		vcpu_printf(vcpu, "%s: not supervisor\n", __FUNCTION__);
 		inject_gp(vcpu);
 		return 1;
 	}
+#endif
+
+	if (get_msr(vcpu, ecx, &data)) {
+		inject_gp(vcpu);
+		return 1;
+	}
+
 
 	/* FIXME: handling of bits 32:63 of rax, rdx */
 	vcpu->regs[VCPU_REGS_RAX] = data & -1u;
@@ -2308,22 +2332,16 @@ static void set_efer(struct kvm_vcpu *vcpu, u64 efer)
 
 #define MSR_IA32_TIME_STAMP_COUNTER 0x10
 
-static int handle_wrmsr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
+
+/* 
+ * Writes msr value into into the appropriate "register".
+ * Returns 0 on success, non-0 otherwise.
+ * Assumes vcpu_get() was already called.
+ */
+static int set_msr(struct kvm_vcpu *vcpu, u32 msr_index, u64 data)
 {
-	u32 ecx = vcpu->regs[VCPU_REGS_RCX];
 	struct vmx_msr_entry *msr;
-	u64 data = (vcpu->regs[VCPU_REGS_RAX] & -1u)
-		| ((u64)(vcpu->regs[VCPU_REGS_RDX] & -1u) << 32);
-
-#ifdef KVM_DEBUG
-	if (guest_cpl() != 0) {
-		vcpu_printf(vcpu, "%s: not supervisor\n", __FUNCTION__);
-		inject_gp(vcpu);
-		return 1;
-	}
-#endif
-
-	switch (ecx) {
+	switch (msr_index) {
 #ifdef __x86_64__
 	case MSR_FS_BASE:
 		vmcs_writel(GUEST_FS_BASE, data);
@@ -2344,7 +2362,7 @@ static int handle_wrmsr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 #ifdef __x86_64
 	case MSR_EFER:
 		set_efer(vcpu, data);
-		return 1;
+		break;
 	case MSR_IA32_MC0_STATUS:
 		printk(KERN_WARNING "%s: MSR_IA32_MC0_STATUS 0x%llx, nop\n"
 			    , __FUNCTION__, data);
@@ -2365,16 +2383,39 @@ static int handle_wrmsr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 		vcpu->apic_base = data;
 		break;
 	default:
-		msr = find_msr_entry(vcpu, ecx);
-		if (msr) {
-			msr->data = data;
-			break;
+		msr = find_msr_entry(vcpu, msr_index);
+		if (!msr) {
+			printk(KERN_ERR "kvm: unhandled wrmsr: 0x%x\n", msr_index);
+			return 1;
 		}
-		printk(KERN_ERR "kvm: unhandled wrmsr: %x\n", ecx);
+		msr->data = data;
+		break;
+	}
+
+	return 0;
+}
+
+static int handle_wrmsr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
+{
+	u32 ecx = vcpu->regs[VCPU_REGS_RCX];
+	u64 data = (vcpu->regs[VCPU_REGS_RAX] & -1u)
+		| ((u64)(vcpu->regs[VCPU_REGS_RDX] & -1u) << 32);
+
+#ifdef KVM_DEBUG
+	if (guest_cpl() != 0) {
+		vcpu_printf(vcpu, "%s: not supervisor\n", __FUNCTION__);
 		inject_gp(vcpu);
 		return 1;
 	}
-	skip_emulated_instruction(vcpu);
+#endif
+
+	if (set_msr(vcpu, ecx, data) != 0) {
+		inject_gp(vcpu);
+		return 1;
+	}
+
+	if (ecx != MSR_EFER)
+		skip_emulated_instruction(vcpu);
 	return 1;
 }
 
@@ -3017,6 +3058,67 @@ static int kvm_dev_ioctl_set_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 	return 0;
 }
 
+static int kvm_dev_ioctl_get_msrs(struct kvm *kvm, struct kvm_msrs *msrs)
+{
+	struct kvm_vcpu *vcpu;
+	int rc = 0;
+
+	if (msrs->vcpu < 0 || msrs->vcpu >= KVM_MAX_VCPUS)
+		return -EINVAL;
+	vcpu = vcpu_get(kvm, msrs->vcpu);
+	if (!vcpu)
+		return -ENOENT;
+
+	rc |= get_msr(vcpu, MSR_IA32_SYSENTER_CS,  &msrs->sysenter_cs);
+	rc |= get_msr(vcpu, MSR_IA32_SYSENTER_ESP, &msrs->sysenter_esp);
+	rc |= get_msr(vcpu, MSR_IA32_SYSENTER_EIP, &msrs->sysenter_eip);
+	
+	rc |= get_msr(vcpu, MSR_K6_STAR,        &msrs->star);
+#ifdef __x86_64__
+	rc |= get_msr(vcpu, MSR_CSTAR,          &msrs->cstar);
+	rc |= get_msr(vcpu, MSR_KERNEL_GS_BASE, &msrs->kernel_gs_base);
+	rc |= get_msr(vcpu, MSR_SYSCALL_MASK,   &msrs->syscall_mask);
+	rc |= get_msr(vcpu, MSR_LSTAR,          &msrs->lstar);
+#endif
+
+	vcpu_put(vcpu);
+
+	if (rc)
+		return -EINVAL;
+
+	return 0;
+}
+
+static int kvm_dev_ioctl_set_msrs(struct kvm *kvm, struct kvm_msrs *msrs)
+{
+	struct kvm_vcpu *vcpu;
+	int rc = 0;
+
+	if (msrs->vcpu < 0 || msrs->vcpu >= KVM_MAX_VCPUS)
+		return -EINVAL;
+	vcpu = vcpu_get(kvm, msrs->vcpu);
+	if (!vcpu)
+		return -ENOENT;
+
+	rc |= set_msr(vcpu, MSR_IA32_SYSENTER_CS,  msrs->sysenter_cs);
+	rc |= set_msr(vcpu, MSR_IA32_SYSENTER_ESP, msrs->sysenter_esp);
+	rc |= set_msr(vcpu, MSR_IA32_SYSENTER_EIP, msrs->sysenter_eip);
+	rc |= set_msr(vcpu, MSR_K6_STAR,           msrs->star);
+#ifdef __x86_64__
+	rc |= set_msr(vcpu, MSR_CSTAR,             msrs->cstar);
+	rc |= set_msr(vcpu, MSR_KERNEL_GS_BASE,    msrs->kernel_gs_base);
+	rc |= set_msr(vcpu, MSR_SYSCALL_MASK,      msrs->syscall_mask);
+	rc |= set_msr(vcpu, MSR_LSTAR,             msrs->lstar);
+#endif
+
+	vcpu_put(vcpu);
+
+	if (rc)
+		return -EINVAL;
+
+	return 0;
+}
+
 /*
  * Translate a guest virtual address to a guest physical address.
  */
@@ -3256,6 +3358,33 @@ static long kvm_dev_ioctl(struct file *filp,
 		r = kvm_dev_ioctl_get_dirty_log(kvm, &log);
 		if (r)
 			goto out;
+		break;
+	}
+	case KVM_GET_MSRS: {
+		struct kvm_msrs kvm_msrs;
+
+		r = -EFAULT;
+		if (copy_from_user(&kvm_msrs, (void *)arg, sizeof kvm_msrs))
+			goto out;
+		r = kvm_dev_ioctl_get_msrs(kvm, &kvm_msrs);
+		if (r)
+			goto out;
+		r = -EFAULT;
+		if (copy_to_user((void *)arg, &kvm_msrs, sizeof kvm_msrs))
+			goto out;
+		r = 0;
+		break;
+	}
+	case KVM_SET_MSRS: {
+		struct kvm_msrs kvm_msrs;
+
+		r = -EFAULT;
+		if (copy_from_user(&kvm_msrs, (void *)arg, sizeof kvm_msrs))
+			goto out;
+		r = kvm_dev_ioctl_set_msrs(kvm, &kvm_msrs);
+		if (r)
+			goto out;
+		r = 0;
 		break;
 	}
 	default:

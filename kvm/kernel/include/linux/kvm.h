@@ -128,6 +128,26 @@ struct kvm_sregs {
 	__u32 padding2;
 };
 
+/* for KVM_GET_MSRS and KVM_SET_MSRS */
+struct kvm_msrs {
+	__u32 vcpu;
+	__u32 size; /* in bytes */
+	/* FIXME: use struct xxx entries[0]; instead of hard coded names */
+
+	/* __u64 efer; */ //already saved in sregs
+	__u64 star;
+#ifdef __x86_64__
+	__u64 cstar;
+	__u64 kernel_gs_base;
+	__u64 syscall_mask;
+	__u64 lstar;
+#endif
+	/* sysenter registers */
+	__u64 sysenter_cs; /* FIXME: its real type is __u32 */
+	__u64 sysenter_esp;
+	__u64 sysenter_eip;
+};
+
 /* for KVM_TRANSLATE */
 struct kvm_translation {
 	/* in */
@@ -187,5 +207,7 @@ struct kvm_dirty_log {
 #define KVM_SET_MEMORY_REGION     _IOW(KVMIO, 10, struct kvm_memory_region)
 #define KVM_CREATE_VCPU           _IOW(KVMIO, 11, int /* vcpu_slot */)
 #define KVM_GET_DIRTY_LOG         _IOW(KVMIO, 12, struct kvm_dirty_log)
+#define KVM_GET_MSRS              _IOWR(KVMIO,13, struct kvm_msrs)
+#define KVM_SET_MSRS              _IOW(KVMIO, 14, struct kvm_msrs)
 
 #endif
