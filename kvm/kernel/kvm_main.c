@@ -1901,20 +1901,10 @@ static void set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 		return;
 	}
 
-	if (is_paging()) {
-#ifdef __x86_64__
-		if (!(cr0 & CR0_PG_MASK)) {
-			vcpu->shadow_efer &= ~EFER_LMA;
-			vmcs_write32(VM_ENTRY_CONTROLS,
-				     vmcs_read32(VM_ENTRY_CONTROLS) &
-				     ~VM_ENTRY_CONTROLS_IA32E_MASK);
-		}
-#endif
-	} else if ((cr0 & CR0_PG_MASK)) {
+	if (!is_paging() && (cr0 & CR0_PG_MASK)) {
 #ifdef __x86_64__
 		if ((vcpu->shadow_efer & EFER_LME)) {
 			u32 guest_cs_ar;
-			u32 guest_tr_ar;
 			if (!is_pae()) {
 				printk(KERN_DEBUG "set_cr0: #GP, start paging "
 				       "in long mode while PAE is disabled\n");
@@ -1929,21 +1919,6 @@ static void set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 				return;
 
 			}
-			guest_tr_ar = vmcs_read32(GUEST_TR_AR_BYTES);
-			if ((guest_tr_ar & AR_TYPE_MASK) != AR_TYPE_BUSY_64_TSS) {
-				printk(KERN_DEBUG "%s: tss fixup for "
-				       "long mode. \n", __FUNCTION__);
-				vmcs_write32(GUEST_TR_AR_BYTES,
-					     (guest_tr_ar & ~AR_TYPE_MASK) |
-					     AR_TYPE_BUSY_64_TSS);
-			}
-			vcpu->shadow_efer |= EFER_LMA;
-			find_msr_entry(vcpu, MSR_EFER)->data |=
-							EFER_LMA | EFER_LME;
-			vmcs_write32(VM_ENTRY_CONTROLS,
-				     vmcs_read32(VM_ENTRY_CONTROLS) |
-				     VM_ENTRY_CONTROLS_IA32E_MASK);
-
 		} else
 #endif
 		if (is_pae() &&
@@ -2047,6 +2022,39 @@ static void set_cr8(struct kvm_vcpu *vcpu, unsigned long cr8)
 	vcpu->cr8 = cr8;
 }
 
+#ifdef __x86_64__
+
+static void exit_lmode(struct kvm_vcpu *vcpu)
+{
+	vcpu->shadow_efer &= ~EFER_LMA;
+
+	vmcs_write32(VM_ENTRY_CONTROLS,
+		     vmcs_read32(VM_ENTRY_CONTROLS)
+		     & ~VM_ENTRY_CONTROLS_IA32E_MASK);
+}
+
+static void enter_lmode(struct kvm_vcpu *vcpu)
+{
+	u32 guest_tr_ar;
+
+	guest_tr_ar = vmcs_read32(GUEST_TR_AR_BYTES);
+	if ((guest_tr_ar & AR_TYPE_MASK) != AR_TYPE_BUSY_64_TSS) {
+		printk(KERN_DEBUG "%s: tss fixup for long mode. \n",
+		       __FUNCTION__);
+		vmcs_write32(GUEST_TR_AR_BYTES,
+			     (guest_tr_ar & ~AR_TYPE_MASK)
+			     | AR_TYPE_BUSY_64_TSS);
+	}
+
+	vcpu->shadow_efer |= EFER_LMA;
+
+	find_msr_entry(vcpu, MSR_EFER)->data |= EFER_LMA | EFER_LME;
+	vmcs_write32(VM_ENTRY_CONTROLS,
+		     vmcs_read32(VM_ENTRY_CONTROLS)
+		     | VM_ENTRY_CONTROLS_IA32E_MASK);
+}
+
+#endif
 
 static void __set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 {
@@ -2055,6 +2063,15 @@ static void __set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 
 	if (!vcpu->rmode.active && !(cr0 & CR0_PE_MASK))
 		enter_rmode(vcpu);
+
+#ifdef __x86_64__
+	if (vcpu->shadow_efer & EFER_LME) {
+		if (!is_paging() && (cr0 & CR0_PG_MASK))
+			enter_lmode(vcpu);
+		if (is_paging() && !(cr0 & CR0_PG_MASK))
+			exit_lmode(vcpu);
+	}
+#endif
 
 	vmcs_writel(CR0_READ_SHADOW, cr0);
 	vmcs_writel(GUEST_CR0, cr0 | KVM_VM_CR0_ALWAYS_ON);
