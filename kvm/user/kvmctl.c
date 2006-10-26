@@ -307,6 +307,18 @@ int kvm_set_sregs(kvm_context_t kvm, int vcpu, struct kvm_sregs *sregs)
     return ioctl(kvm->fd, KVM_SET_SREGS, sregs);
 }
 
+int kvm_get_msrs(kvm_context_t kvm, int vcpu, struct kvm_msrs *msrs)
+{
+    msrs->vcpu = vcpu;
+    return ioctl(kvm->fd, KVM_GET_MSRS, msrs);
+}
+
+int kvm_set_msrs(kvm_context_t kvm, int vcpu, struct kvm_msrs *msrs)
+{
+    msrs->vcpu = vcpu;
+    return ioctl(kvm->fd, KVM_SET_MSRS, msrs);
+}
+
 void kvm_show_regs(kvm_context_t kvm, int vcpu)
 {
 	int fd = kvm->fd;

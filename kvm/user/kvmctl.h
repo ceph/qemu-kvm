@@ -41,6 +41,8 @@ int kvm_get_regs(kvm_context_t, int vcpu, struct kvm_regs *regs);
 int kvm_set_regs(kvm_context_t, int vcpu, struct kvm_regs *regs);
 int kvm_get_sregs(kvm_context_t, int vcpu, struct kvm_sregs *regs);
 int kvm_set_sregs(kvm_context_t, int vcpu, struct kvm_sregs *regs);
+int kvm_get_msrs(kvm_context_t, int vcpu, struct kvm_msrs *msrs);
+int kvm_set_msrs(kvm_context_t, int vcpu, struct kvm_msrs *msrs);
 int kvm_inject_irq(kvm_context_t, int vcpu, unsigned irq);
 int kvm_guest_debug(kvm_context_t, int vcpu, struct kvm_debug_guest *dbg);
 void kvm_show_regs(kvm_context_t, int vcpu);
