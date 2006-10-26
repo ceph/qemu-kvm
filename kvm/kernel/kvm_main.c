@@ -104,17 +104,6 @@ static const u32 vmx_msr_index[] = {
 #define HOST_IS_64 0
 #endif
 
-static int rmode_tss_base(struct kvm* kvm);
-static void set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0);
-static void __set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0);
-static void lmsw(struct kvm_vcpu *vcpu, unsigned long msw);
-static void set_cr3(struct kvm_vcpu *vcpu, unsigned long cr0);
-static void set_cr4(struct kvm_vcpu *vcpu, unsigned long cr0);
-static void __set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4);
-#ifdef __x86_64__
-static void __set_efer(struct kvm_vcpu *vcpu, u64 efer);
-#endif
-
 static struct vmx_msr_entry *find_msr_entry(struct kvm_vcpu *vcpu, u32 msr)
 {
 	int i;
@@ -679,6 +668,18 @@ static void vmcs_write64(unsigned long field, u64 value)
 #endif
 }
 
+static void inject_gp(struct kvm_vcpu *vcpu)
+{
+	printk(KERN_DEBUG "inject_general_protection: rip 0x%lx\n",
+	       vmcs_readl(GUEST_RIP));
+	vmcs_write32(VM_ENTRY_EXCEPTION_ERROR_CODE, 0);
+	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD,
+		     GP_VECTOR |
+		     INTR_TYPE_EXCEPTION |
+		     INTR_INFO_DELIEVER_CODE_MASK |
+		     INTR_INFO_VALID_MASK);
+}
+
 static void update_exception_bitmap(struct kvm_vcpu *vcpu)
 {
 	if (vcpu->rmode.active)
@@ -725,6 +726,12 @@ static void enter_pmode(struct kvm_vcpu *vcpu)
 	vmcs_write32(GUEST_CS_AR_BYTES, 0x9b);
 }
 
+static int rmode_tss_base(struct kvm* kvm)
+{
+	gfn_t base_gfn = kvm->memslots[0].base_gfn + kvm->memslots[0].npages - 3;
+	return base_gfn << PAGE_SHIFT;
+}
+
 static void enter_rmode(struct kvm_vcpu *vcpu)
 {
 	unsigned long flags;
@@ -766,12 +773,6 @@ static void enter_rmode(struct kvm_vcpu *vcpu)
 	FIX_RMODE_SEG(FS, vcpu->rmode.fs);
 }
 
-static int rmode_tss_base(struct kvm* kvm)
-{
-	gfn_t base_gfn = kvm->memslots[0].base_gfn + kvm->memslots[0].npages - 3;
-	return base_gfn << PAGE_SHIFT;
-}
-
 static int init_rmode_tss(struct kvm* kvm)
 {
 	struct page *p1, *p2, *p3;
@@ -802,6 +803,258 @@ static int init_rmode_tss(struct kvm* kvm)
 	kunmap_atomic(page, KM_USER0);
 
 	return 1;
+}
+
+#ifdef __x86_64__
+
+static void __set_efer(struct kvm_vcpu *vcpu, u64 efer)
+{
+	struct vmx_msr_entry *msr = find_msr_entry(vcpu, MSR_EFER);
+
+	vcpu->shadow_efer = efer;
+	if (efer & EFER_LMA) {
+		vmcs_write32(VM_ENTRY_CONTROLS,
+				     vmcs_read32(VM_ENTRY_CONTROLS) |
+				     VM_ENTRY_CONTROLS_IA32E_MASK);
+		msr->data = efer;
+
+	} else {
+		vmcs_write32(VM_ENTRY_CONTROLS,
+				     vmcs_read32(VM_ENTRY_CONTROLS) &
+				     ~VM_ENTRY_CONTROLS_IA32E_MASK);
+
+		msr->data = efer & ~EFER_LME;
+	}
+}
+
+static void enter_lmode(struct kvm_vcpu *vcpu)
+{
+	u32 guest_tr_ar;
+
+	guest_tr_ar = vmcs_read32(GUEST_TR_AR_BYTES);
+	if ((guest_tr_ar & AR_TYPE_MASK) != AR_TYPE_BUSY_64_TSS) {
+		printk(KERN_DEBUG "%s: tss fixup for long mode. \n",
+		       __FUNCTION__);
+		vmcs_write32(GUEST_TR_AR_BYTES,
+			     (guest_tr_ar & ~AR_TYPE_MASK)
+			     | AR_TYPE_BUSY_64_TSS);
+	}
+
+	vcpu->shadow_efer |= EFER_LMA;
+
+	find_msr_entry(vcpu, MSR_EFER)->data |= EFER_LMA | EFER_LME;
+	vmcs_write32(VM_ENTRY_CONTROLS,
+		     vmcs_read32(VM_ENTRY_CONTROLS)
+		     | VM_ENTRY_CONTROLS_IA32E_MASK);
+}
+
+static void exit_lmode(struct kvm_vcpu *vcpu)
+{
+	vcpu->shadow_efer &= ~EFER_LMA;
+
+	vmcs_write32(VM_ENTRY_CONTROLS,
+		     vmcs_read32(VM_ENTRY_CONTROLS)
+		     & ~VM_ENTRY_CONTROLS_IA32E_MASK);
+}
+
+#endif
+
+static void __set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
+{
+	if (vcpu->rmode.active && (cr0 & CR0_PE_MASK))
+		enter_pmode(vcpu);
+
+	if (!vcpu->rmode.active && !(cr0 & CR0_PE_MASK))
+		enter_rmode(vcpu);
+
+#ifdef __x86_64__
+	if (vcpu->shadow_efer & EFER_LME) {
+		if (!is_paging() && (cr0 & CR0_PG_MASK))
+			enter_lmode(vcpu);
+		if (is_paging() && !(cr0 & CR0_PG_MASK))
+			exit_lmode(vcpu);
+	}
+#endif
+
+	vmcs_writel(CR0_READ_SHADOW, cr0);
+	vmcs_writel(GUEST_CR0, cr0 | KVM_VM_CR0_ALWAYS_ON);
+}
+
+static int pdptrs_have_reserved_bits_set(struct kvm_vcpu *vcpu,
+					 unsigned long cr3)
+{
+	gfn_t pdpt_gfn = cr3 >> PAGE_SHIFT;
+	unsigned offset = (cr3 & (PAGE_SIZE-1)) >> 5;
+	int i;
+	u64 pdpte;
+	u64 *pdpt;
+	struct kvm_memory_slot *memslot;
+
+	spin_lock(&vcpu->kvm->lock);
+	memslot = gfn_to_memslot(vcpu->kvm, pdpt_gfn);
+	/* FIXME: !memslot - emulate? 0xff? */
+	pdpt = kmap_atomic(gfn_to_page(memslot, pdpt_gfn), KM_USER0);
+
+	for (i = 0; i < 4; ++i) {
+		pdpte = pdpt[offset + i];
+		if ((pdpte & 1) && (pdpte & 0xfffffff0000001e6ull))
+			break;
+	}
+
+	kunmap_atomic(pdpt, KM_USER0);
+	spin_unlock(&vcpu->kvm->lock);
+
+	return i != 4;
+}
+
+static void set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
+{
+	if (cr0 & CR0_RESEVED_BITS) {
+		printk(KERN_DEBUG "set_cr0: 0x%lx #GP, reserved bits 0x%lx\n",
+		       cr0, guest_cr0());
+		inject_gp(vcpu);
+		return;
+	}
+
+	if ((cr0 & CR0_NW_MASK) && !(cr0 & CR0_CD_MASK)) {
+		printk(KERN_DEBUG "set_cr0: #GP, CD == 0 && NW == 1\n");
+		inject_gp(vcpu);
+		return;
+	}
+
+	if ((cr0 & CR0_PG_MASK) && !(cr0 & CR0_PE_MASK)) {
+		printk(KERN_DEBUG "set_cr0: #GP, set PG flag "
+		       "and a clear PE flag\n");
+		inject_gp(vcpu);
+		return;
+	}
+
+	if (!is_paging() && (cr0 & CR0_PG_MASK)) {
+#ifdef __x86_64__
+		if ((vcpu->shadow_efer & EFER_LME)) {
+			u32 guest_cs_ar;
+			if (!is_pae()) {
+				printk(KERN_DEBUG "set_cr0: #GP, start paging "
+				       "in long mode while PAE is disabled\n");
+				inject_gp(vcpu);
+				return;
+			}
+			guest_cs_ar = vmcs_read32(GUEST_CS_AR_BYTES);
+			if (guest_cs_ar & SEGMENT_AR_L_MASK) {
+				printk(KERN_DEBUG "set_cr0: #GP, start paging "
+				       "in long mode while CS.L == 1\n");
+				inject_gp(vcpu);
+				return;
+
+			}
+		} else
+#endif
+		if (is_pae() &&
+			    pdptrs_have_reserved_bits_set(vcpu, vcpu->cr3)) {
+			printk(KERN_DEBUG "set_cr0: #GP, pdptrs "
+			       "reserved bits\n");
+			inject_gp(vcpu);
+			return;
+		}
+
+	}
+
+	__set_cr0(vcpu, cr0);
+	kvm_mmu_reset_context(vcpu);
+	return;
+}
+
+static void lmsw(struct kvm_vcpu *vcpu, unsigned long msw)
+{
+	unsigned long cr0 = guest_cr0();
+
+	if ((msw & CR0_PE_MASK) && !(cr0 & CR0_PE_MASK)) {
+		enter_pmode(vcpu);
+		vmcs_writel(CR0_READ_SHADOW, cr0 | CR0_PE_MASK);
+
+	} else
+		printk(KERN_DEBUG "lmsw: unexpected\n");
+
+	vmcs_writel(GUEST_CR0, (vmcs_readl(GUEST_CR0) & ~LMSW_GUEST_MASK)
+				| (msw & LMSW_GUEST_MASK));
+}
+
+static void __set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
+{
+	vmcs_writel(CR4_READ_SHADOW, cr4);
+	vmcs_writel(GUEST_CR4, cr4 | (vcpu->rmode.active ?
+		    KVM_RMODE_VM_CR4_ALWAYS_ON : KVM_PMODE_VM_CR4_ALWAYS_ON));
+}
+
+static void set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
+{
+	if (cr4 & CR4_RESEVED_BITS) {
+		printk(KERN_DEBUG "set_cr4: #GP, reserved bits\n");
+		inject_gp(vcpu);
+		return;
+	}
+
+	if (is_long_mode()) {
+		if (!(cr4 & CR4_PAE_MASK)) {
+			printk(KERN_DEBUG "set_cr4: #GP, clearing PAE while "
+			       "in long mode\n");
+			inject_gp(vcpu);
+			return;
+		}
+	} else if (is_paging() && !is_pae() && (cr4 & CR4_PAE_MASK)
+		   && pdptrs_have_reserved_bits_set(vcpu, vcpu->cr3)) {
+		printk(KERN_DEBUG "set_cr4: #GP, pdptrs reserved bits\n");
+		inject_gp(vcpu);
+	}
+
+	if (cr4 & CR4_VMXE_MASK) {
+		printk(KERN_DEBUG "set_cr4: #GP, setting VMXE\n");
+		inject_gp(vcpu);
+		return;
+	}
+	__set_cr4(vcpu, cr4);
+	spin_lock(&vcpu->kvm->lock);
+	kvm_mmu_reset_context(vcpu);
+	spin_unlock(&vcpu->kvm->lock);
+}
+
+static void set_cr3(struct kvm_vcpu *vcpu, unsigned long cr3)
+{
+	if (is_long_mode()) {
+		if ( cr3 & CR3_L_MODE_RESEVED_BITS) {
+			printk(KERN_DEBUG "set_cr3: #GP, reserved bits\n");
+			inject_gp(vcpu);
+			return;
+		}
+	} else {
+		if (cr3 & CR3_RESEVED_BITS) {
+			printk(KERN_DEBUG "set_cr3: #GP, reserved bits\n");
+			inject_gp(vcpu);
+			return;
+		}
+		if (is_paging() && is_pae() &&
+		    pdptrs_have_reserved_bits_set(vcpu, cr3)) {
+			printk(KERN_DEBUG "set_cr3: #GP, pdptrs "
+			       "reserved bits\n");
+			inject_gp(vcpu);
+			return;
+		}
+	}
+
+	vcpu->cr3 = cr3;
+	spin_lock(&vcpu->kvm->lock);
+	vcpu->mmu.new_cr3(vcpu);
+	spin_unlock(&vcpu->kvm->lock);
+}
+
+static void set_cr8(struct kvm_vcpu *vcpu, unsigned long cr8)
+{
+	if ( cr8 & CR8_RESEVED_BITS) {
+		printk(KERN_DEBUG "set_cr8: #GP, reserved bits 0x%lx\n", cr8);
+		inject_gp(vcpu);
+		return;
+	}
+	vcpu->cr8 = cr8;
 }
 
 static u32 get_rdx_init_val(void)
@@ -1827,7 +2080,6 @@ static int handle_io(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	return 0;
 }
 
-
 static int handle_invlpg(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 {
 	u64 address = vmcs_read64(EXIT_QUALIFICATION);
@@ -1837,251 +2089,6 @@ static int handle_invlpg(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	spin_unlock(&vcpu->kvm->lock);
 	vmcs_writel(GUEST_RIP, vmcs_readl(GUEST_RIP) + instruction_length);
 	return 1;
-}
-
-
-static void inject_gp(struct kvm_vcpu *vcpu)
-{
-	printk(KERN_DEBUG "inject_general_protection: rip 0x%lx\n",
-	       vmcs_readl(GUEST_RIP));
-	vmcs_write32(VM_ENTRY_EXCEPTION_ERROR_CODE, 0);
-	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD,
-		     GP_VECTOR |
-		     INTR_TYPE_EXCEPTION |
-		     INTR_INFO_DELIEVER_CODE_MASK |
-		     INTR_INFO_VALID_MASK);
-}
-
-static int pdptrs_have_reserved_bits_set(struct kvm_vcpu *vcpu,
-					 unsigned long cr3)
-{
-	gfn_t pdpt_gfn = cr3 >> PAGE_SHIFT;
-	unsigned offset = (cr3 & (PAGE_SIZE-1)) >> 5;
-	int i;
-	u64 pdpte;
-	u64 *pdpt;
-	struct kvm_memory_slot *memslot;
-
-	spin_lock(&vcpu->kvm->lock);
-	memslot = gfn_to_memslot(vcpu->kvm, pdpt_gfn);
-	/* FIXME: !memslot - emulate? 0xff? */
-	pdpt = kmap_atomic(gfn_to_page(memslot, pdpt_gfn), KM_USER0);
-
-	for (i = 0; i < 4; ++i) {
-		pdpte = pdpt[offset + i];
-		if ((pdpte & 1) && (pdpte & 0xfffffff0000001e6ull))
-			break;
-	}
-
-	kunmap_atomic(pdpt, KM_USER0);
-	spin_unlock(&vcpu->kvm->lock);
-
-	return i != 4;
-}
-
-static void set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
-{
-	if (cr0 & CR0_RESEVED_BITS) {
-		printk(KERN_DEBUG "set_cr0: 0x%lx #GP, reserved bits 0x%lx\n",
-		       cr0, guest_cr0());
-		inject_gp(vcpu);
-		return;
-	}
-
-	if ((cr0 & CR0_NW_MASK) && !(cr0 & CR0_CD_MASK)) {
-		printk(KERN_DEBUG "set_cr0: #GP, CD == 0 && NW == 1\n");
-		inject_gp(vcpu);
-		return;
-	}
-
-	if ((cr0 & CR0_PG_MASK) && !(cr0 & CR0_PE_MASK)) {
-		printk(KERN_DEBUG "set_cr0: #GP, set PG flag "
-		       "and a clear PE flag\n");
-		inject_gp(vcpu);
-		return;
-	}
-
-	if (!is_paging() && (cr0 & CR0_PG_MASK)) {
-#ifdef __x86_64__
-		if ((vcpu->shadow_efer & EFER_LME)) {
-			u32 guest_cs_ar;
-			if (!is_pae()) {
-				printk(KERN_DEBUG "set_cr0: #GP, start paging "
-				       "in long mode while PAE is disabled\n");
-				inject_gp(vcpu);
-				return;
-			}
-			guest_cs_ar = vmcs_read32(GUEST_CS_AR_BYTES);
-			if (guest_cs_ar & SEGMENT_AR_L_MASK) {
-				printk(KERN_DEBUG "set_cr0: #GP, start paging "
-				       "in long mode while CS.L == 1\n");
-				inject_gp(vcpu);
-				return;
-
-			}
-		} else
-#endif
-		if (is_pae() &&
-			    pdptrs_have_reserved_bits_set(vcpu, vcpu->cr3)) {
-			printk(KERN_DEBUG "set_cr0: #GP, pdptrs "
-			       "reserved bits\n");
-			inject_gp(vcpu);
-			return;
-		}
-
-	}
-
-	__set_cr0(vcpu, cr0);
-	kvm_mmu_reset_context(vcpu);
-	return;
-}
-
-static void lmsw(struct kvm_vcpu *vcpu, unsigned long msw)
-{
-	unsigned long cr0 = guest_cr0();
-
-	if ((msw & CR0_PE_MASK) && !(cr0 & CR0_PE_MASK)) {
-		enter_pmode(vcpu);
-		vmcs_writel(CR0_READ_SHADOW, cr0 | CR0_PE_MASK);
-
-	} else
-		printk(KERN_DEBUG "lmsw: unexpected\n");
-
-	vmcs_writel(GUEST_CR0, (vmcs_readl(GUEST_CR0) & ~LMSW_GUEST_MASK)
-				| (msw & LMSW_GUEST_MASK));
-}
-
-static void set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
-{
-	if (cr4 & CR4_RESEVED_BITS) {
-		printk(KERN_DEBUG "set_cr4: #GP, reserved bits\n");
-		inject_gp(vcpu);
-		return;
-	}
-
-	if (is_long_mode()) {
-		if (!(cr4 & CR4_PAE_MASK)) {
-			printk(KERN_DEBUG "set_cr4: #GP, clearing PAE while "
-			       "in long mode\n");
-			inject_gp(vcpu);
-			return;
-		}
-	} else if (is_paging() && !is_pae() && (cr4 & CR4_PAE_MASK)
-		   && pdptrs_have_reserved_bits_set(vcpu, vcpu->cr3)) {
-		printk(KERN_DEBUG "set_cr4: #GP, pdptrs reserved bits\n");
-		inject_gp(vcpu);
-	}
-
-	if (cr4 & CR4_VMXE_MASK) {
-		printk(KERN_DEBUG "set_cr4: #GP, setting VMXE\n");
-		inject_gp(vcpu);
-		return;
-	}
-	__set_cr4(vcpu, cr4);
-	spin_lock(&vcpu->kvm->lock);
-	kvm_mmu_reset_context(vcpu);
-	spin_unlock(&vcpu->kvm->lock);
-}
-
-static void set_cr3(struct kvm_vcpu *vcpu, unsigned long cr3)
-{
-	if (is_long_mode()) {
-		if ( cr3 & CR3_L_MODE_RESEVED_BITS) {
-			printk(KERN_DEBUG "set_cr3: #GP, reserved bits\n");
-			inject_gp(vcpu);
-			return;
-		}
-	} else {
-		if (cr3 & CR3_RESEVED_BITS) {
-			printk(KERN_DEBUG "set_cr3: #GP, reserved bits\n");
-			inject_gp(vcpu);
-			return;
-		}
-		if (is_paging() && is_pae() &&
-		    pdptrs_have_reserved_bits_set(vcpu, cr3)) {
-			printk(KERN_DEBUG "set_cr3: #GP, pdptrs "
-			       "reserved bits\n");
-			inject_gp(vcpu);
-			return;
-		}
-	}
-
-	vcpu->cr3 = cr3;
-	spin_lock(&vcpu->kvm->lock);
-	vcpu->mmu.new_cr3(vcpu);
-	spin_unlock(&vcpu->kvm->lock);
-}
-
-static void set_cr8(struct kvm_vcpu *vcpu, unsigned long cr8)
-{
-	if ( cr8 & CR8_RESEVED_BITS) {
-		printk(KERN_DEBUG "set_cr8: #GP, reserved bits 0x%lx\n", cr8);
-		inject_gp(vcpu);
-		return;
-	}
-	vcpu->cr8 = cr8;
-}
-
-#ifdef __x86_64__
-
-static void exit_lmode(struct kvm_vcpu *vcpu)
-{
-	vcpu->shadow_efer &= ~EFER_LMA;
-
-	vmcs_write32(VM_ENTRY_CONTROLS,
-		     vmcs_read32(VM_ENTRY_CONTROLS)
-		     & ~VM_ENTRY_CONTROLS_IA32E_MASK);
-}
-
-static void enter_lmode(struct kvm_vcpu *vcpu)
-{
-	u32 guest_tr_ar;
-
-	guest_tr_ar = vmcs_read32(GUEST_TR_AR_BYTES);
-	if ((guest_tr_ar & AR_TYPE_MASK) != AR_TYPE_BUSY_64_TSS) {
-		printk(KERN_DEBUG "%s: tss fixup for long mode. \n",
-		       __FUNCTION__);
-		vmcs_write32(GUEST_TR_AR_BYTES,
-			     (guest_tr_ar & ~AR_TYPE_MASK)
-			     | AR_TYPE_BUSY_64_TSS);
-	}
-
-	vcpu->shadow_efer |= EFER_LMA;
-
-	find_msr_entry(vcpu, MSR_EFER)->data |= EFER_LMA | EFER_LME;
-	vmcs_write32(VM_ENTRY_CONTROLS,
-		     vmcs_read32(VM_ENTRY_CONTROLS)
-		     | VM_ENTRY_CONTROLS_IA32E_MASK);
-}
-
-#endif
-
-static void __set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
-{
-	if (vcpu->rmode.active && (cr0 & CR0_PE_MASK))
-		enter_pmode(vcpu);
-
-	if (!vcpu->rmode.active && !(cr0 & CR0_PE_MASK))
-		enter_rmode(vcpu);
-
-#ifdef __x86_64__
-	if (vcpu->shadow_efer & EFER_LME) {
-		if (!is_paging() && (cr0 & CR0_PG_MASK))
-			enter_lmode(vcpu);
-		if (is_paging() && !(cr0 & CR0_PG_MASK))
-			exit_lmode(vcpu);
-	}
-#endif
-
-	vmcs_writel(CR0_READ_SHADOW, cr0);
-	vmcs_writel(GUEST_CR0, cr0 | KVM_VM_CR0_ALWAYS_ON);
-}
-
-static void __set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
-{
-	vmcs_writel(CR4_READ_SHADOW, cr4);
-	vmcs_writel(GUEST_CR4, cr4 | (vcpu->rmode.active ?
-		    KVM_RMODE_VM_CR4_ALWAYS_ON : KVM_PMODE_VM_CR4_ALWAYS_ON));
 }
 
 static int handle_cr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
@@ -2297,25 +2304,6 @@ static void set_efer(struct kvm_vcpu *vcpu, u64 efer)
 	skip_emulated_instruction(vcpu);
 }
 
-static void __set_efer(struct kvm_vcpu *vcpu, u64 efer)
-{
-	struct vmx_msr_entry *msr = find_msr_entry(vcpu, MSR_EFER);
-
-	vcpu->shadow_efer = efer;
-	if (efer & EFER_LMA) {
-		vmcs_write32(VM_ENTRY_CONTROLS,
-				     vmcs_read32(VM_ENTRY_CONTROLS) |
-				     VM_ENTRY_CONTROLS_IA32E_MASK);
-		msr->data = efer;
-
-	} else {
-		vmcs_write32(VM_ENTRY_CONTROLS,
-				     vmcs_read32(VM_ENTRY_CONTROLS) &
-				     ~VM_ENTRY_CONTROLS_IA32E_MASK);
-
-		msr->data = efer & ~EFER_LME;
-	}
-}
 #endif
 
 #define MSR_IA32_TIME_STAMP_COUNTER 0x10
