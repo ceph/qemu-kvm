@@ -143,7 +143,7 @@ struct kvm_msrs {
 	__u64 lstar;
 #endif
 	/* sysenter registers */
-	__u64 sysenter_cs; /* FIXME: its real type is __u32 */
+	__u64 sysenter_cs;
 	__u64 sysenter_esp;
 	__u64 sysenter_eip;
 };
