@@ -167,6 +167,7 @@ struct kvm_vcpu {
 	unsigned long cr8;
 	u64 shadow_efer;
 	u64 apic_base;
+	int nmsrs;
 	struct vmx_msr_entry *guest_msrs;
 	struct vmx_msr_entry *host_msrs;
 
