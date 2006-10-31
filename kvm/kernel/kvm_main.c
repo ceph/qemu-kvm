@@ -959,7 +959,9 @@ static void set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 	}
 
 	__set_cr0(vcpu, cr0);
+	spin_lock(&vcpu->kvm->lock);
 	kvm_mmu_reset_context(vcpu);
+	spin_unlock(&vcpu->kvm->lock);
 	return;
 }
 
