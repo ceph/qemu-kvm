@@ -124,8 +124,9 @@ struct kvm_sregs {
 	__u64 apic_base;
 
 	/* out (KVM_GET_SREGS) */
-	__u32 pending_int;
+	__u32 interrupt_summary;
 	__u32 padding2;
+	__u64 interrupt_bitmap[256 / (8 * sizeof (__u64))]; /* 256 bits */
 };
 
 /* for KVM_GET_MSRS and KVM_SET_MSRS */

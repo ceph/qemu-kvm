@@ -4453,6 +4453,13 @@ void cpu_save(QEMUFile *f, void *opaque)
     qemu_put_be64s(f, &env->fmask);
     qemu_put_be64s(f, &env->kernelgsbase);
 #endif
+
+#ifdef USE_KVM
+    qemu_put_be32s(f, &env->kvm_interrupt_summary);
+    for (i = 0; i < NR_IRQ_WORDS ; i++) {
+        qemu_put_betls(f, &env->kvm_interrupt_bitmap[i]);
+    }
+#endif
 }
 
 #ifdef USE_X86LDOUBLE
@@ -4594,6 +4601,10 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
     env->hflags = hflags;
     tlb_flush(env, 1);
 #ifdef USE_KVM
+    qemu_get_be32s(f, &env->kvm_interrupt_summary);
+    for (i = 0; i < NR_IRQ_WORDS ; i++) {
+        qemu_get_betls(f, &env->kvm_interrupt_bitmap[i]);
+    }
     kvm_load_registers(env);
 #endif
     return 0;

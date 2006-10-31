@@ -2986,7 +2986,13 @@ static int kvm_dev_ioctl_get_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 	sregs->efer = vcpu->shadow_efer;
 	sregs->apic_base = vcpu->apic_base;
 
-	sregs->pending_int = vcpu->irq_summary != 0;
+	sregs->interrupt_summary = vcpu->irq_summary;
+	memcpy(sregs->interrupt_bitmap, vcpu->irq_pending, sizeof sregs->interrupt_bitmap);
+	{ /* verify size mismatch at compile time. FIXME: use the same constant */
+		int a[(sizeof sregs->interrupt_bitmap) - (sizeof vcpu->irq_pending)];
+		int b[(sizeof vcpu->irq_pending)  - (sizeof sregs->interrupt_bitmap)];
+		if (0) { a[0]=b[0]; a[1]=b[1]; }
+	}
 
 	vcpu_put(vcpu);
 
@@ -3069,6 +3075,10 @@ static int kvm_dev_ioctl_set_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 
 	if (mmu_reset_needed)
 		kvm_mmu_reset_context(vcpu);
+
+	vcpu->irq_summary = sregs->interrupt_summary;
+	memcpy(vcpu->irq_pending, sregs->interrupt_bitmap, sizeof vcpu->irq_pending);
+
 	vcpu_put(vcpu);
 
 	return 0;
