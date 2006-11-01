@@ -205,11 +205,8 @@ cd ..
      </cms:content>
   </cms:page>
 
-  <cms:page name="download">
+  <cms:page href="http://sourceforge.net/project/showfiles.php?group_id=180599">
      <cms:menuitem>Download</cms:menuitem>
-     <cms:title>KVM Downloads</cms:title>
-     <cms:content>
-     </cms:content>
   </cms:page>
 
   <cms:page name="faq">

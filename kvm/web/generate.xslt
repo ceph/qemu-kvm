@@ -10,7 +10,7 @@
   <xsl:apply-templates select="cms:pageset/cms:page"/>
 </xsl:template>
 
-<xsl:template match="cms:page">
+<xsl:template match="cms:page[@name]">
   <xsl:document href="{@name}.html">
     <html>
       <head>
@@ -34,13 +34,21 @@
   </xsl:document>
 </xsl:template>
 
+<xsl:template match="cms:page[@href]"/>
+
 <xsl:template match="cms:menuitem">
   <xsl:apply-templates/>
 </xsl:template>
 
-<xsl:template mode="menu" match="cms:page">
+<xsl:template mode="menu" match="cms:page[@name]">
   <div class="menu">
     <a href="{@name}.html"><xsl:apply-templates select="cms:menuitem"/></a>
+  </div>
+</xsl:template>
+
+<xsl:template mode="menu" match="cms:page[@href]">
+  <div class="menu">
+    <a href="{@href}"><xsl:apply-templates select="cms:menuitem"/></a>
   </div>
 </xsl:template>
 
