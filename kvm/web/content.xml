@@ -178,6 +178,33 @@ cd ..
      </cms:content>
   </cms:page>
 
+  <cms:page name="lists">
+     <cms:menuitem>Lists</cms:menuitem>
+     <cms:title>Mailing Lists</cms:title>
+     <cms:content>
+
+       <p>
+          kvm has a sourceforge.net mailing list, 
+          <code>kvm-devel@lists.sourceforge.net</code>.
+       </p>
+
+       <p>
+          To subscribe, click <a href=
+          "http://lists.sourceforge.net/mailman/listinfo/kvm-devel">heree</a>.
+       </p>
+
+       <p>
+         Archives:
+         <ul>
+           <li><a href="http://sourceforge.net/mailarchive/forum.php?forum_id=50582">Sourceforge</a></li>
+           <li><a href="http://news.gmane.org/gmane.comp.emulators.kvm.devel">
+              Gmane</a></li>
+         </ul>
+       </p>
+
+     </cms:content>
+  </cms:page>
+
   <cms:page name="download">
      <cms:menuitem>Download</cms:menuitem>
      <cms:title>KVM Downloads</cms:title>
