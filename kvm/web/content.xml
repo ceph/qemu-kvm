@@ -189,6 +189,156 @@ cd ..
      <cms:menuitem>FAQ</cms:menuitem>
      <cms:title>Frequently Asked Questions</cms:title>
      <cms:content>
+        
+       <p class="q">
+          What do I need to use kvm?
+       </p>
+
+       <p>
+          You will need an x86 machine running a recent Linux kernel on an
+          Intel processor with VT (virtualization technology) extensions.
+       </p>
+       <p>
+          In the near future, you will also be able to use AMD processors with
+          AMD-V extensions.
+       </p>
+
+       <hr/>
+
+       <p class="q">
+          What is Intel VT / AMD-V?
+       </p>
+       <p>
+          Intel VT and AMD's AMD-V are instruction set extensions that provide
+          hardware assistance to virtual machine monitors.  They enable
+          running fully isolated virtual machines at native hardware speeds,
+          for some workloads.
+       </p>
+
+       <hr/>
+
+       <p class="q">
+          How can I tell if I have Intel VT or AMD-V?
+       </p>
+       <p>
+          With a recent enough Linux kernel, run the command:
+          <pre>grep '^flags.*vmx' /proc/cpuinfo</pre>
+          If something shows up, you have VT.  You can also check the processor
+          model name (in <code>/proc/cpuinfo</code>) in the vendor's web site.
+       </p>
+
+       <hr/>
+
+       <p class="q">
+          What user space tools does kvm use?
+       </p>
+       <p>
+          kvm uses a slightly modified <a href="http://www.qemu.com">qemu</a>
+          program to instantiate the virtual machine.  Once running, a virtual
+          machine is just a regular process.  You can use <code>top(1)</code>,
+          <code>kill(1)</code>, <code>taskset(1)</code> and similar tools to
+          manage virtual machines.
+       </p>
+      
+       <hr/>
+
+       <p class="q">
+          What virtual disk formats can kvm use?
+       </p>
+       <p>
+          kvm inherits a wealth of disk formats support from qemu; it supports
+          raw images, the native qemu format (qcow), VMware format, and many
+          more.
+       </p>
+
+       <hr/>
+
+       <p class="q">
+          What is the difference between kvm and Xen?
+       </p>
+       <p>
+          Xen is an external hypervisor; it assumes control of the machine
+          and divides resources among guests.  On the other hand, kvm is
+          part of Linux and uses the regular Linux scheduler and memory
+          management. This means that kvm is much smaller and simpler to use.
+       </p>
+       <p>
+          On the other hand, Xen supports both full virtualization and a
+          technique called paravirtualization, which allows better performance
+          for modified guests.  kvm does not at present support
+          paravirtualization.
+       </p>
+
+       <hr/>
+
+       <p class="q">
+          What is the difference between kvm and VMWare?
+       </p>
+       <p>
+          VMware is a proprietary product.  kvm is Free Software released
+          under the GPL.
+       </p>
+
+       <hr/>
+
+       <p class="q">
+          What is the difference between kvm and QEMU?
+       </p>
+       <p>
+          Qemu uses emulation; kvm uses processor extensions for
+          virtualization.
+       </p>
+
+       <hr/>
+
+       <p class="q">
+          Do you have a port of kvm for Windows?
+       </p>
+       <p>
+          No.
+       </p>
+
+       <hr/>   
+
+       <p class="q">
+          What kernel version does it work with?
+       </p>
+       <p>
+          kvm should work with any recent kernel (2.6.16 and above, likely
+          even earlier)
+       </p>
+
+       <hr/>   
+
+       <p class="q">
+          How much memory do I need?
+       </p>
+       <p>
+          You will need enough memory to let the guest run comfortably
+          while keeping enough for the host. 1GB is probably a minimum.
+       </p>
+
+       <hr/>   
+
+       <p class="q">
+          What OSs can I run inside kvm VM?
+       </p>
+       <p>
+          We have tested Linux (32/64 bit) and Windows (32 bit).  Others may
+          or may not work.
+       </p>
+
+       <hr/>   
+
+       <p class="q">
+          What happens if I kill -9 a VM process?
+       </p>
+       <p>
+          From the guest's perspective, it is as if you yanked the power cord
+          out.  From the host's perspective, the process is killed and all
+          resources it uses are reclaimed.
+       </p>
+
      </cms:content>
   </cms:page>
 
