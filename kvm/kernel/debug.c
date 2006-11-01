@@ -448,9 +448,9 @@ int vm_entry_test_guest(struct kvm_vcpu *vcpu)
 		    AR_DPL(cs_ar) !=
 		    (vmcs_read16(GUEST_CS_SELECTOR) & SELECTOR_RPL_MASK) ) {
 			vcpu_printf(vcpu, "%s: cs AR 0x%x, "
-					      "DPL not as RPL\n",
+					      "DPL(0x%x) not as RPL(0x%x)\n",
 				   __FUNCTION__,
-				   cs_ar);
+				   cs_ar, AR_DPL(cs_ar), vmcs_read16(GUEST_CS_SELECTOR) & SELECTOR_RPL_MASK);
 			return 0;
 		}
 
@@ -977,15 +977,17 @@ void vmcs_dump(struct kvm_vcpu *vcpu)
 
 	vcpu_printf(vcpu, "GUEST_GDTR_LIMIT 0x%x\n", vmcs_read32(GUEST_GDTR_LIMIT));
 	vcpu_printf(vcpu, "GUEST_IDTR_LIMIT 0x%x\n", vmcs_read32(GUEST_IDTR_LIMIT));
+
+	vcpu_printf(vcpu, "EXCEPTION_BITMAP 0x%x\n", vmcs_read32(EXCEPTION_BITMAP));
 	vcpu_printf(vcpu, "***********************************************************\n");
 }
 
 void regs_dump(struct kvm_vcpu *vcpu)
 {
 	#define REG_DUMP(reg) \
-		vcpu_printf(vcpu, #reg" = 0x%lx\n", vcpu->regs[VCPU_REGS_##reg])
+		vcpu_printf(vcpu, #reg" = 0x%lx(VCPU)\n", vcpu->regs[VCPU_REGS_##reg])
 	#define VMCS_REG_DUMP(reg) \
-		vcpu_printf(vcpu, #reg" = 0x%lx\n", vmcs_readl(GUEST_##reg))
+		vcpu_printf(vcpu, #reg" = 0x%lx(VMCS)\n", vmcs_readl(GUEST_##reg))
 
 	vcpu_printf(vcpu, "************************ regs_dump ************************\n");
 	REG_DUMP(RAX);
@@ -1021,9 +1023,28 @@ void sregs_dump(struct kvm_vcpu *vcpu)
 	vcpu_printf(vcpu, "cr4 = 0x%lx\n", guest_cr4());
 	vcpu_printf(vcpu, "cr8 = 0x%lx\n", vcpu->cr8);
 	vcpu_printf(vcpu, "shadow_efer = 0x%llx\n", vcpu->shadow_efer);
-	vmcs_dump(vcpu);
 	vcpu_printf(vcpu, "***********************************************************\n");
 }
 
+void show_pending_interrupts(struct kvm_vcpu *vcpu)
+{
+	int i;
+	vcpu_printf(vcpu, "************************ pending interrupts ****************\n");
+	vcpu_printf(vcpu, "sumamry = 0x%lx\n", vcpu->irq_summary);
+	for (i=0 ; i < NR_IRQ_WORDS ; i++)
+		vcpu_printf(vcpu, "%lx ", vcpu->irq_pending[i]);
+	vcpu_printf(vcpu, "\n");
+	vcpu_printf(vcpu, "************************************************************\n");
+}
+
+void vcpu_dump(struct kvm_vcpu *vcpu)
+{
+	regs_dump(vcpu);
+	sregs_dump(vcpu);
+	vmcs_dump(vcpu);
+	show_msrs(vcpu);
+	show_pending_interrupts(vcpu);
+	/* more ... */
+}
 #endif
 
