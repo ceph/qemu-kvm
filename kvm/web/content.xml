@@ -28,6 +28,10 @@
            mainline Linux.
         </p>
 
+        <p>
+           KVM is open source software.
+        </p>
+
      </cms:content>
   </cms:page>
 
@@ -35,6 +39,20 @@
      <cms:menuitem>Status</cms:menuitem>
      <cms:title>Status</cms:title>
      <cms:content>
+
+       <p>
+          Currently, KVM is very stable (at least with the guests we test :),
+          and is fast enough for desktop use on recent processors.  For
+          server workloads, an optimized version of the MMU virtualization is
+          needed.  This is currently in progress.
+       </p>
+
+       <p>
+          KVM is available as a patch to recent Linux kernel versions and
+          as an external module that can be used with your favorite distro-
+          provided kernel.  We are working to merge KVM into Linux so that
+          the functionality is available with no hassle.
+       </p>
 
        <p>
           Working:
@@ -50,6 +68,7 @@
           In progress:
           <ul>
              <li>AMD-based hosts (require AMD-V capable processors)</li>
+             <li>Optimized MMU virtualization</li>
           </ul>
        </p>
 
@@ -66,7 +85,84 @@
   <cms:page name="howto">
      <cms:menuitem>HOWTO</cms:menuitem>
      <cms:title>Getting KVM to run on your machine</cms:title>
+
      <cms:content>
+
+       <p>
+          You will need:
+          <ul>
+             <li><code>libkvm.tar.gz</code> (FIXME: link)</li>
+             <li><code>qemu-0.8.2</code> (FIXME: link)</li>
+             <li><code>qemu-kvm.patch</code> (FIXME: link)</li>
+             <li>The <code>kvm</code> patchset (FIXME: link)</li>
+             <li>A VT capable Intel processor</li>
+             <li>qemu prerequisites:
+                <ul>
+                   <li><code>gcc</code> 3.x</li>
+                   <li><code>SDL</code> libraries and headers</li>
+                   <li><code>zlib</code> libraries and headers</li>
+                </ul>
+             </li>
+          </ul>
+       </p>
+
+       <p>
+          Steps:
+          <ol>
+             <li>Compile and install libkvm:
+                <pre>
+tar xzf libkvm.tar.gz
+cd libkvm
+make
+sudo make install
+</pre>
+             </li>
+
+             <li>
+                Patch, configure, compile, and install qemu:
+                <pre>
+tar xzf qemu-0.8.2.tar.gz
+cd qemu-0.8.2
+patch -p0 &lt; ../qemu-kvm.patch
+./configure --cc=gcc32 --enable-kvm --disable-kqemu --prefix=/usr/local/kvm
+make
+sudo make install
+cd ..
+</pre>
+             </li>
+
+             <li>
+                Create a disk image:
+                <pre>
+/usr/local/kvm/bin/qemu-img create -f qcow vdisk.img 10G
+</pre>
+             </li>
+
+             <li>
+                Install an operating system:
+                <pre>
+/usr/local/kvm/bin/qemu-system-x86_64 \
+ -hdc vdisk.img \
+ -cdrom /path/to/boot-media.iso \
+ -boot d \
+ -m 384 -net
+</pre>
+             </li>
+
+             <li>
+                After installation is complete, run it with:
+                <pre>
+/usr/local/kvm/bin/qemu-system-x86_64 \
+ -hdc vdisk.img \
+ -boot c \
+ -m 384 -net
+</pre>
+             </li>
+
+       
+          </ol>
+       </p>
+
      </cms:content>
   </cms:page>
 
