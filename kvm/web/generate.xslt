@@ -17,8 +17,17 @@
         <title><xsl:apply-templates select="cms:title"/></title>
       </head>
       <body>
-        <h1><xsl:apply-templates select="cms:title"/></h1>
-        <xsl:apply-templates select="cms:content/*"/>
+        <table>
+           <tr> 
+              <td>
+                 <xsl:apply-templates mode="menu" select="/cms:pageset"/>
+              </td>
+              <td>
+                 <h1><xsl:apply-templates select="cms:title"/></h1>
+                 <xsl:apply-templates select="cms:content/*"/>
+              </td>
+           </tr>
+         </table>
       </body>
     </html>
   </xsl:document>
@@ -26,6 +35,12 @@
 
 <xsl:template match="cms:menuitem">
   <xsl:apply-templates/>
+</xsl:template>
+
+<xsl:template mode="menu" match="cms:page">
+  <div>
+    <a href="{@name}.html"><xsl:apply-templates select="cms:menuitem"/></a>
+  </div>
 </xsl:template>
 
 <xsl:template match="@*|xhtml:*">
