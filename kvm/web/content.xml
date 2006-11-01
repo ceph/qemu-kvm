@@ -215,7 +215,7 @@ cd ..
      <cms:content>
         
        <p class="q">
-          What do I need to use kvm?
+          <b>What do I need to use kvm?</b>
        </p>
 
        <p>
@@ -230,10 +230,12 @@ cd ..
        <hr/>
 
        <p class="q">
-          What is Intel VT / AMD-V?
+          <b>What is Intel VT / AMD-V?</b>
        </p>
        <p>
-          Intel VT and AMD's AMD-V are instruction set extensions that provide
+          <a href="http://www.intel.com/technology/itj/2006/v10i3/1-hardware/6-vt-x-vt-i-solutions.htm">Intel VT</a> 
+          and <a href="http://www.amd.com/us-en/Processors/ProductInformation/0,,30_118_8826_14287,00.html">AMD's AMD-V</a> 
+          are instruction set extensions that provide
           hardware assistance to virtual machine monitors.  They enable
           running fully isolated virtual machines at native hardware speeds,
           for some workloads.
@@ -242,7 +244,7 @@ cd ..
        <hr/>
 
        <p class="q">
-          How can I tell if I have Intel VT or AMD-V?
+          <b>How can I tell if I have Intel VT or AMD-V?</b>
        </p>
        <p>
           With a recent enough Linux kernel, run the command:
@@ -254,7 +256,7 @@ cd ..
        <hr/>
 
        <p class="q">
-          What user space tools does kvm use?
+          <b>What user space tools does kvm use?</b>
        </p>
        <p>
           kvm uses a slightly modified <a href="http://www.qemu.com">qemu</a>
@@ -267,7 +269,7 @@ cd ..
        <hr/>
 
        <p class="q">
-          What virtual disk formats can kvm use?
+          <b>What virtual disk formats can kvm use?</b>
        </p>
        <p>
           kvm inherits a wealth of disk formats support from qemu; it supports
@@ -278,7 +280,7 @@ cd ..
        <hr/>
 
        <p class="q">
-          What is the difference between kvm and Xen?
+          <b>What is the difference between kvm and Xen?</b>
        </p>
        <p>
           Xen is an external hypervisor; it assumes control of the machine
@@ -296,7 +298,7 @@ cd ..
        <hr/>
 
        <p class="q">
-          What is the difference between kvm and VMWare?
+          <b>What is the difference between kvm and VMWare?</b>
        </p>
        <p>
           VMware is a proprietary product.  kvm is Free Software released
@@ -306,7 +308,7 @@ cd ..
        <hr/>
 
        <p class="q">
-          What is the difference between kvm and QEMU?
+          <b>What is the difference between kvm and QEMU?</b>
        </p>
        <p>
           Qemu uses emulation; kvm uses processor extensions for
@@ -316,7 +318,7 @@ cd ..
        <hr/>
 
        <p class="q">
-          Do you have a port of kvm for Windows?
+          <b>Do you have a port of kvm for Windows?</b>
        </p>
        <p>
           No.
@@ -325,7 +327,7 @@ cd ..
        <hr/>   
 
        <p class="q">
-          What kernel version does it work with?
+          <b>What kernel version does it work with?</b>
        </p>
        <p>
           kvm should work with any recent kernel (2.6.16 and above, likely
@@ -335,17 +337,18 @@ cd ..
        <hr/>   
 
        <p class="q">
-          How much memory do I need?
+          <b>How much memory do I need?</b>
        </p>
        <p>
           You will need enough memory to let the guest run comfortably
-          while keeping enough for the host. 1GB is probably a minimum.
+          while keeping enough for the host. 1GB is probably a minimum 
+          configuration for the host OS.
        </p>
 
        <hr/>   
 
        <p class="q">
-          What OSs can I run inside kvm VM?
+          <b>What OSs can I run inside kvm VM?</b>
        </p>
        <p>
           We have tested Linux (32/64 bit) and Windows (32 bit).  Others may
@@ -355,7 +358,7 @@ cd ..
        <hr/>   
 
        <p class="q">
-          What happens if I kill -9 a VM process?
+          <b>What happens if I kill -9 a VM process?</b>
        </p>
        <p>
           From the guest's perspective, it is as if you yanked the power cord
