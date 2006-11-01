@@ -211,5 +211,6 @@ struct kvm_dirty_log {
 #define KVM_GET_DIRTY_LOG         _IOW(KVMIO, 12, struct kvm_dirty_log)
 #define KVM_GET_MSRS              _IOWR(KVMIO,13, struct kvm_msrs)
 #define KVM_SET_MSRS              _IOW(KVMIO, 14, struct kvm_msrs)
+#define KVM_DUMP_VCPU             _IOW(KVMIO, 15, int /* vcpu_slot */)
 
 #endif

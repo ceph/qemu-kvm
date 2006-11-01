@@ -34,6 +34,10 @@
 #include "vmx.h"
 #include "x86_emulate.h"
 
+#ifdef KVM_DEBUG
+#include "debug.h"
+#endif
+
 MODULE_AUTHOR("Qumranet");
 MODULE_LICENSE("GPL");
 
@@ -3408,6 +3412,20 @@ static long kvm_dev_ioctl(struct file *filp,
 		r = 0;
 		break;
 	}
+#ifdef KVM_DEBUG
+	case KVM_DUMP_VCPU: {
+		u32 vcpu_slot = (u32)arg;
+		struct kvm_vcpu *vcpu;
+		if (vcpu_slot > KVM_MAX_VCPUS) {
+			goto out;
+		}
+		vcpu = vcpu_get(kvm, vcpu_slot);
+		vcpu_dump(vcpu);
+		vcpu_put(vcpu);
+		r = 0;
+		break;
+	}
+#endif
 	default:
 		;
 	}
