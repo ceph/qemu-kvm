@@ -15,11 +15,12 @@
     <html>
       <head>
         <title><xsl:apply-templates select="cms:title"/></title>
+	<link rel="stylesheet" href="style.css"/>
       </head>
       <body>
         <table>
            <tr> 
-              <td>
+              <td class="menu">
                  <xsl:apply-templates mode="menu" select="/cms:pageset"/>
               </td>
               <td>
@@ -38,7 +39,7 @@
 </xsl:template>
 
 <xsl:template mode="menu" match="cms:page">
-  <div>
+  <div class="menu">
     <a href="{@name}.html"><xsl:apply-templates select="cms:menuitem"/></a>
   </div>
 </xsl:template>
