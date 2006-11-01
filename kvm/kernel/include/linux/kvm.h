@@ -3,7 +3,15 @@
 
 #include <asm/types.h>
 #include <linux/ioctl.h>
-#include <linux/kvm_config.h>
+
+/* defining KVM_NR_INTERRUPTS, the number of interrupts kvm supports (irq lines)
+ *     and the number of array entries needed (according to type) to hold a 
+ *     bitmap for that number of interrupts.
+ */
+#define KVM_NR_INTERRUPTS 256
+#define KVM_IRQ_BITMAP_SIZE_BYTES    (KVM_NR_INTERRUPTS + 7 / 8)
+#define KVM_IRQ_BITMAP_SIZE(type)    (KVM_IRQ_BITMAP_SIZE_BYTES / sizeof(type))
+
 
 /* for KVM_CREATE_MEMORY_REGION */
 struct kvm_memory_region {

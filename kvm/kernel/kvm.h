@@ -8,7 +8,7 @@
 #include <linux/mm.h>
 
 #include "vmx.h"
-#include <linux/kvm_config.h>
+#include <linux/kvm.h>
 
 #define CR0_PE_MASK (1ULL << 0)
 #define CR0_TS_MASK (1ULL << 3)
