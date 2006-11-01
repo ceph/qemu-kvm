@@ -1,0 +1,15 @@
+td.menu { vertical-align: top;
+          font-size: large;
+          font-family: arial;
+	  background: #E6C588;
+	  height: 600px;
+	  padding: 0;
+        }
+
+div.menu { margin: 5px 40px 5px 15px }
+
+td.content { vertical-align: top; }
+
+pre { background: #E9E9E9 }
+
+.q { background: #E3FFD7 }

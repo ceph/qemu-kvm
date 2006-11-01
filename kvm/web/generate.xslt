@@ -18,12 +18,12 @@
 	<link rel="stylesheet" href="style.css"/>
       </head>
       <body>
-        <table>
+        <table class="main">
            <tr> 
               <td class="menu">
                  <xsl:apply-templates mode="menu" select="/cms:pageset"/>
               </td>
-              <td>
+              <td class="content">
                  <h1><xsl:apply-templates select="cms:title"/></h1>
                  <xsl:apply-templates select="cms:content/*"/>
               </td>
