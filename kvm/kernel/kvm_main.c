@@ -2988,11 +2988,6 @@ static int kvm_dev_ioctl_get_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 
 	sregs->interrupt_summary = vcpu->irq_summary;
 	memcpy(sregs->interrupt_bitmap, vcpu->irq_pending, sizeof sregs->interrupt_bitmap);
-	{ /* verify size mismatch at compile time. FIXME: use the same constant */
-		int a[(sizeof sregs->interrupt_bitmap) - (sizeof vcpu->irq_pending)];
-		int b[(sizeof vcpu->irq_pending)  - (sizeof sregs->interrupt_bitmap)];
-		if (0) { a[0]=b[0]; a[1]=b[1]; }
-	}
 
 	vcpu_put(vcpu);
 

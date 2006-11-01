@@ -8,6 +8,7 @@
 #include <linux/mm.h>
 
 #include "vmx.h"
+#include <linux/kvm_config.h>
 
 #define CR0_PE_MASK (1ULL << 0)
 #define CR0_TS_MASK (1ULL << 3)
@@ -157,7 +158,7 @@ struct kvm_vcpu {
 	int   cpu;
 	int   launched;
 	unsigned long irq_summary; /* bit vector: 1 per word in irq_pending */
-#define NR_IRQ_WORDS (256 / BITS_PER_LONG)
+#define NR_IRQ_WORDS KVM_IRQ_BITMAP_SIZE(unsigned long)
 	unsigned long irq_pending[NR_IRQ_WORDS];
 	unsigned long regs[NR_VCPU_REGS]; /* for rsp: vcpu_load_rsp_rip() */
 	unsigned long rip;      /* needs vcpu_load_rsp_rip() */

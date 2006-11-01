@@ -3,6 +3,7 @@
 
 #include <asm/types.h>
 #include <linux/ioctl.h>
+#include <linux/kvm_config.h>
 
 /* for KVM_CREATE_MEMORY_REGION */
 struct kvm_memory_region {
@@ -126,7 +127,7 @@ struct kvm_sregs {
 	/* out (KVM_GET_SREGS) */
 	__u32 interrupt_summary;
 	__u32 padding2;
-	__u64 interrupt_bitmap[256 / (8 * sizeof (__u64))]; /* 256 bits */
+	__u64 interrupt_bitmap[KVM_IRQ_BITMAP_SIZE(__u64)];
 };
 
 /* for KVM_GET_MSRS and KVM_SET_MSRS */
