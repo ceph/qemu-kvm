@@ -91,6 +91,7 @@
        <p>
           You will need:
           <ul>
+             <li><code>kvm-module.tar.gz</code> (FIXME: link)</li>
              <li><code>libkvm.tar.gz</code> (FIXME: link)</li>
              <li><code>qemu-0.8.2</code> (FIXME: link)</li>
              <li><code>qemu-kvm.patch</code> (FIXME: link)</li>
@@ -109,6 +110,17 @@
        <p>
           Steps:
           <ol>
+             <li>
+                Compile and load <code>kvm.ko</code>.  This assumes you are
+                using the external module:
+                <pre>
+tar xzf kvm-module.tar.gz
+cd kvm-module
+make
+insmod kvm.ko
+</pre>
+             </li>                
+
              <li>Compile and install libkvm:
                 <pre>
 tar xzf libkvm.tar.gz
