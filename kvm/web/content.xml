@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<cms:pageset 
+  xmlns:cms="http://www.qumranet.com/silly-cms"
+  xmlns="http://www.w3.org/1999/xhtml" 
+  xmlns:xhtml="http://www.w3.org/1999/xhtml" 
+>
+  <cms:page name="index">
+     <cms:menuitem>About</cms:menuitem>
+     <cms:title>KVM: Kernel-based Virtual Machine for Linux</cms:title>
+     <cms:content>
+
+        <p>
+           <b>KVM</b> (for Kernel-based Virtual Machine) is a full
+           virtualization solution for Linux on x86 hardware.  It consists
+           of a loadable kernel module (<code>kvm.ko</code>) and a userspace
+           component.
+        </p>
+
+        <p>
+           Using KVM, one can run multiple virtual machines running
+           unmodified Linux or Windows images.  Each virtual machine has
+           private virtualized hardware: a network card, disk, graphics
+           adapter, etc.
+        </p>
+
+        <p>
+           The kernel component of KVM is proposed for inclusion into
+           mainline Linux.
+        </p>
+
+     </cms:content>
+  </cms:page>
+
+  <cms:page name="status">
+     <cms:menuitem>Status</cms:menuitem>
+     <cms:title>Status</cms:title>
+     <cms:content>
+
+       <p>
+          Working:
+          <ul>
+             <li>Intel-based hosts (requires VT capable processors)</li>
+             <li>Linux guests (32-bit and 64-bit)</li>
+             <li>Windows guests (32-bit)</li>
+             <li>SMP hosts</li>
+         </ul>
+       </p>
+
+       <p>
+          In progress:
+          <ul>
+             <li>AMD-based hosts (require AMD-V capable processors)</li>
+          </ul>
+       </p>
+
+       <p>
+          Planned:
+          <ul>
+             <li>SMP guests</li>
+          </ul>
+       </p>
+
+     </cms:content>
+  </cms:page>
+
+  <cms:page name="howto">
+     <cms:menuitem>HOWTO</cms:menuitem>
+     <cms:title>Getting KVM to run on your machine</cms:title>
+     <cms:content>
+     </cms:content>
+  </cms:page>
+
+  <cms:page name="download">
+     <cms:menuitem>Download</cms:menuitem>
+     <cms:title>KVM Downloads</cms:title>
+     <cms:content>
+     </cms:content>
+  </cms:page>
+
+  <cms:page name="faq">
+     <cms:menuitem>FAQ</cms:menuitem>
+     <cms:title>Frequently Asked Questions</cms:title>
+     <cms:content>
+     </cms:content>
+  </cms:page>
+
+</cms:pageset>
