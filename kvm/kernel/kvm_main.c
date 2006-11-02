@@ -3144,6 +3144,22 @@ static int kvm_dev_ioctl_set_msrs(struct kvm *kvm, struct kvm_msrs *msrs)
 	return 0;
 }
 
+#ifdef KVM_DEBUG
+static int kvm_dev_ioctl_dump_vcpu(struct kvm *kvm, int vcpu_slot)
+{
+	struct kvm_vcpu *vcpu;
+
+	if (vcpu_slot < 0 || vcpu_slot >= KVM_MAX_VCPUS)
+		return -EINVAL;
+	vcpu = vcpu_get(kvm, vcpu_slot);
+	if (!vcpu)
+		return -ENOENT;
+	vcpu_dump(vcpu);
+	vcpu_put(vcpu);
+	return 0;
+}
+#endif
+
 /*
  * Translate a guest virtual address to a guest physical address.
  */
@@ -3414,15 +3430,9 @@ static long kvm_dev_ioctl(struct file *filp,
 	}
 #ifdef KVM_DEBUG
 	case KVM_DUMP_VCPU: {
-		u32 vcpu_slot = (u32)arg;
-		struct kvm_vcpu *vcpu;
-		if (vcpu_slot > KVM_MAX_VCPUS) {
+		r = kvm_dev_ioctl_dump_vcpu(kvm, arg);
+		if (r)
 			goto out;
-		}
-		vcpu = vcpu_get(kvm, vcpu_slot);
-		vcpu_dump(vcpu);
-		vcpu_put(vcpu);
-		r = 0;
 		break;
 	}
 #endif
