@@ -41,7 +41,7 @@
      <cms:content>
 
        <p>
-          Currently, KVM is very stable (at least with the guests we test :),
+          Currently, KVM is stable (at least with the guests we test :),
           and is fast enough for desktop use on recent processors.  For
           server workloads, an optimized version of the MMU virtualization is
           needed.  This is currently in progress.
@@ -346,7 +346,7 @@ sudo /usr/local/kvm/bin/qemu-system-x86_64 \
           Do you have a port of kvm for Windows?
        </p>
        <p>
-          No.
+          Not in this release.
        </p>
 
        <hr/>   
@@ -362,7 +362,7 @@ sudo /usr/local/kvm/bin/qemu-system-x86_64 \
        <hr/>   
 
        <p class="q">
-          How much memory do I need?
+          How much RAM do I need?
        </p>
        <p>
           You will need enough memory to let the guest run comfortably
@@ -390,6 +390,23 @@ sudo /usr/local/kvm/bin/qemu-system-x86_64 \
           out.  From the host's perspective, the process is killed and all
           resources it uses are reclaimed.
        </p>
+
+       <p class="q">
+          Does kvm support SMP hosts?
+       </p>
+       <p>
+          Yes.
+       </p>
+
+       <p class="q">
+          What is Qumranet's product?
+       </p>
+       <p>
+          Qumranet is a startup company financed by <a href="http://www.sequoiacap.com/">Sequoia Capital</a> and 
+          <a href="http://www.nvp.com/">Norwest Venture Partners (NVP)</a>. 
+          The company is still in Stealth mode.
+       </p>
+
 
      </cms:content>
   </cms:page>
