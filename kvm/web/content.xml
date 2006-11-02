@@ -379,4 +379,12 @@ sudo /usr/local/kvm/bin/qemu-system-x86_64 \
      </cms:content>
   </cms:page>
 
+  <cms:footer>
+    <p><center>
+       kvm development is sponsored by 
+       <a href="http://www.qumranet.com">Qumranet</a>.
+       </center>
+    </p>
+  </cms:footer>
+
 </cms:pageset>

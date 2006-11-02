@@ -35,6 +35,9 @@
               </td>
            </tr>
          </table>
+         <div class="footer">
+           <xsl:apply-templates select="/cms:pageset/cms:footer/*"/>
+         </div>
       </body>
     </html>
   </xsl:document>

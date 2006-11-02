@@ -13,3 +13,6 @@ td.content { vertical-align: top; }
 pre { background: #E9E9E9 }
 
 .q { background: #E3FFD7; font-weight: bold; }
+
+.footer { font-size: smaller; alignment: center; }
+
