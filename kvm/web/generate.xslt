@@ -21,6 +21,8 @@
 	<link rel="stylesheet" href="style.css"/>
       </head>
       <body>
+                 <h1><xsl:apply-templates select="cms:title"/></h1>
+
         <table class="main">
            <tr> 
               <td class="menu">
@@ -30,7 +32,6 @@
                  </xsl:apply-templates>
               </td>
               <td class="content">
-                 <h1><xsl:apply-templates select="cms:title"/></h1>
                  <xsl:apply-templates select="cms:content/*"/>
               </td>
            </tr>
