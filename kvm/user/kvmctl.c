@@ -499,5 +499,5 @@ int kvm_guest_debug(kvm_context_t kvm, int vcpu, struct kvm_debug_guest *dbg)
 
 int kvm_dump_vcpu(kvm_context_t kvm, int vcpu)
 {
-    return ioctl(kvm->fd, KVM_DUMP_VCPU, vcpu);
+	return ioctl(kvm->fd, KVM_DUMP_VCPU, vcpu);
 }
