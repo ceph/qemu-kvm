@@ -794,7 +794,7 @@ configure_kvm() {
     echo "#define USE_KVM 1" >> $config_h
     echo "CONFIG_KVM_INC=$PWD/../user" >> $config_mak
     echo "CONFIG_KVM_LIB=$PWD/../user" >> $config_mak
-    echo "CONFIG_KVM_KERNEL_INC=$PWD/../kernel/include" >> $config_mak
+    echo "CONFIG_KVM_KERNEL_INC=$kernel_path/include" >> $config_mak
   fi
 }
 
