@@ -220,7 +220,7 @@ sudo /usr/local/kvm/bin/qemu-system-x86_64 \
      <cms:title>Documents</cms:title>
      <cms:content>
        <p>
-         Documents:
+         White papers:
          <ul>
            <li><a href="http://www.qumranet.com/wp/kvm_wp.pdf">kvm whitepaper</a></li>
           </ul>
