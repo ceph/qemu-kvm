@@ -89,13 +89,13 @@
      <cms:content>
 
        <p>
-          You will need:
+          You will need (see download section):
           <ul>
-             <li><code>kvm-module.tar.gz</code> (FIXME: link)</li>
-             <li><code>libkvm.tar.gz</code> (FIXME: link)</li>
-             <li><code>qemu-0.8.2</code> (FIXME: link)</li>
-             <li><code>qemu-kvm.patch</code> (FIXME: link)</li>
-             <li>The <code>kvm</code> patchset (FIXME: link)</li>
+             <li><code>kvm-module.tar.gz</code></li>
+             <li><code>libkvm.tar.gz</code></li>
+             <li><code>qemu-0.8.2</code> from the
+                 <a href="http://www.qemu.com">qemu</a> web site</li>
+             <li><code>qemu-kvm.patch</code></li>
              <li>A VT capable Intel processor</li>
              <li>qemu prerequisites:
                 <ul>
