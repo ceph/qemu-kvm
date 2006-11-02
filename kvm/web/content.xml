@@ -117,17 +117,23 @@
 tar xzf kvm-module.tar.gz
 cd kvm-module
 make
-insmod kvm.ko
+sudo /sbin/insmod kvm.ko
+cd ..
 </pre>
+                (if you're running a kernel with kvm patched in, just
+                 <code>modprobe kvm</code> instead)
              </li>                
 
              <li>Compile and install libkvm:
                 <pre>
 tar xzf libkvm.tar.gz
 cd libkvm
-make
-sudo make install
+make KERNELDIR=../kvm-module
+sudo make KERNELDIR=../kvm-module install DESTDIR=/usr/local/kvm
+cd ..
 </pre>
+                (if you're running a kernel with kvm patched in, substitute
+                 the kernel source directory for <code>KERNELDIR</code>)
              </li>
 
              <li>
@@ -136,7 +142,9 @@ sudo make install
 tar xzf qemu-0.8.2.tar.gz
 cd qemu-0.8.2
 patch -p0 &lt; ../qemu-kvm.patch
-./configure --cc=gcc32 --enable-kvm --disable-kqemu --prefix=/usr/local/kvm
+./configure --cc=gcc32 --enable-kvm --disable-kqemu --prefix=/usr/local/kvm \
+      --extra-cflags='-I /usr/local/kvm/include' \
+      --extra-ldflags='-L /usr/local/kvm/lib64'
 make
 sudo make install
 cd ..
@@ -153,21 +161,21 @@ cd ..
              <li>
                 Install an operating system:
                 <pre>
-/usr/local/kvm/bin/qemu-system-x86_64 \
- -hdc vdisk.img \
+sudo /usr/local/kvm/bin/qemu-system-x86_64 \
+ -hda vdisk.img \
  -cdrom /path/to/boot-media.iso \
  -boot d \
- -m 384 -net
+ -m 384
 </pre>
              </li>
 
              <li>
                 After installation is complete, run it with:
                 <pre>
-/usr/local/kvm/bin/qemu-system-x86_64 \
- -hdc vdisk.img \
+sudo /usr/local/kvm/bin/qemu-system-x86_64 \
+ -hda vdisk.img \
  -boot c \
- -m 384 -net
+ -m 384
 </pre>
              </li>
 
