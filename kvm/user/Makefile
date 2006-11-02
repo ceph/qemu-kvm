@@ -14,7 +14,7 @@ else
 LIBDIR = /lib
 endif
 
-all: kvmctl libkvm.a flatfiles
+all: kvmctl libkvm.a
 
 kvmctl: kvmctl.o main.o
 
