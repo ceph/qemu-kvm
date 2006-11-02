@@ -21,7 +21,10 @@
         <table class="main">
            <tr> 
               <td class="menu">
-                 <xsl:apply-templates mode="menu" select="/cms:pageset"/>
+                 <xsl:apply-templates mode="menu" 
+                                      select="/cms:pageset/cms:page">
+                   <xsl:with-param name="current" select="."/>
+                 </xsl:apply-templates>
               </td>
               <td class="content">
                  <h1><xsl:apply-templates select="cms:title"/></h1>
@@ -41,8 +44,16 @@
 </xsl:template>
 
 <xsl:template mode="menu" match="cms:page[@name]">
+  <xsl:param name="current"/>
   <div class="menu">
-    <a href="{@name}.html"><xsl:apply-templates select="cms:menuitem"/></a>
+    <xsl:choose>
+      <xsl:when test=". != $current">
+        <a href="{@name}.html"><xsl:apply-templates select="cms:menuitem"/></a>
+      </xsl:when>
+      <xsl:otherwise>
+        <xsl:apply-templates select="cms:menuitem"/>
+      </xsl:otherwise>
+    </xsl:choose>
   </div>
 </xsl:template>
 
