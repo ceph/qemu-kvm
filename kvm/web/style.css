@@ -1,18 +1,20 @@
 td.menu { vertical-align: top;
-          font-size: medium;
+          font-size: small;
           font-family: arial;
-	  background: #E3FFD7;
+          color:white;
+          font-weight:bold;
+	  background: #99cccc;
 	  height: 500px;
-	  padding: 0;
+	  padding-top: 10px;
         }
-
+H1 {text-decoration:underline;}
 div.menu { margin: 5px 40px 5px 15px }
 
-td.content { vertical-align: top; }
+td.content { vertical-align: top; padding-left: 20px;}
 
 pre { background: #E9E9E9 }
 
-.q { background: #E3FFD7; font-weight: bold; }
+.q { background: #99cccc; font-weight: bold; }
 
 .footer { font-size: smaller; alignment: center; }
 
