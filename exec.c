@@ -1045,7 +1045,8 @@ int cpu_breakpoint_insert(CPUState *env, target_ulong pc)
     env->breakpoints[env->nb_breakpoints++] = pc;
 
 #ifdef USE_KVM
-    kvm_update_debugger(env);
+    if (env->use_kvm)
+	kvm_update_debugger(env);
 #endif
     
     breakpoint_invalidate(env, pc);
@@ -1071,7 +1072,8 @@ int cpu_breakpoint_remove(CPUState *env, target_ulong pc)
       env->breakpoints[i] = env->breakpoints[env->nb_breakpoints];
 
 #ifdef USE_KVM
-    kvm_update_debugger(env);
+    if (env->use_kvm)
+	kvm_update_debugger(env);
 #endif
     
     breakpoint_invalidate(env, pc);
@@ -1093,7 +1095,8 @@ void cpu_single_step(CPUState *env, int enabled)
         tb_flush(env);
     }
 #ifdef USE_KVM
-    kvm_update_debugger(env);
+    if (env->use_kvm)
+	kvm_update_debugger(env);
 #endif
 #endif
 }

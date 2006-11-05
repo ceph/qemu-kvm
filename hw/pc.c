@@ -610,6 +610,7 @@ static void pc_init_ne2k_isa(NICInfo *nd)
 
 #ifdef USE_KVM
 extern kvm_context_t kvm_context;
+extern int kvm_allowed;
 #endif
 
 /* PC hardware initialisation */
@@ -682,7 +683,9 @@ static void pc_init1(int ram_size, int vga_ram_size, int boot_device,
     cpu_register_physical_memory(0xc0000, 0x10000, 
                                  vga_bios_offset | IO_MEM_ROM);
 #ifdef USE_KVM
-    memcpy(phys_ram_base + 0xc0000, phys_ram_base + vga_bios_offset, 0x10000);
+    if (kvm_allowed)
+	    memcpy(phys_ram_base + 0xc0000, phys_ram_base + vga_bios_offset,
+		   0x10000);
 #endif
 
     /* map the last 128KB of the BIOS in ISA space */
@@ -695,21 +698,25 @@ static void pc_init1(int ram_size, int vga_ram_size, int boot_device,
                                  isa_bios_size, 
                                  (bios_offset + bios_size - isa_bios_size) | IO_MEM_ROM);
 #ifdef USE_KVM
-    memcpy(phys_ram_base + 0x100000 - isa_bios_size, phys_ram_base + (bios_offset + bios_size - isa_bios_size), isa_bios_size);
+    if (kvm_allowed)
+	    memcpy(phys_ram_base + 0x100000 - isa_bios_size,
+		   phys_ram_base + (bios_offset + bios_size - isa_bios_size),
+		   isa_bios_size);
 #endif
     /* map all the bios at the top of memory */
     cpu_register_physical_memory((uint32_t)(-bios_size), 
                                  bios_size, bios_offset | IO_MEM_ROM);
 #ifdef USE_KVM
-    bios_mem = kvm_create_phys_mem(kvm_context, (uint32_t)(-bios_size),
-				       bios_size, 2, 0, 1);
-    if (!bios_mem) {
-	    exit(1);
-    }
-    memcpy(bios_mem, phys_ram_base + bios_offset, bios_size);
+    if (kvm_allowed) {
+	    bios_mem = kvm_create_phys_mem(kvm_context, (uint32_t)(-bios_size),
+					   bios_size, 2, 0, 1);
+	    if (!bios_mem)
+		    exit(1);
+	    memcpy(bios_mem, phys_ram_base + bios_offset, bios_size);
 
-    cpu_register_physical_memory(phys_ram_size - KVM_EXTRA_PAGES * 4096, KVM_EXTRA_PAGES * 4096,
-				 (phys_ram_size - KVM_EXTRA_PAGES * 4096) | IO_MEM_ROM);
+	    cpu_register_physical_memory(phys_ram_size - KVM_EXTRA_PAGES * 4096, KVM_EXTRA_PAGES * 4096,
+					 (phys_ram_size - KVM_EXTRA_PAGES * 4096) | IO_MEM_ROM);
+    }
     
 #endif
     

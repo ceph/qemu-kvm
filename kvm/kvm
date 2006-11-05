@@ -88,20 +88,20 @@ if arch == 'x86_64':
     cmd = 'qemu-system-' + arch
 else:
     cmd = 'qemu'
-    
-if options.kvm:
-    local_cmd = 'qemu/' + arch + '-softmmu/' + cmd
-    if os.access(local_cmd, os.F_OK):
-       cmd = local_cmd
-    else:
-       cmd = '/usr/bin/kvm'
+
+local_cmd = 'qemu/' + arch + '-softmmu/' + cmd
+if os.access(local_cmd, os.F_OK):
+    cmd = local_cmd
 else:
-    cmd = 'qemu'
+    cmd = '/usr/bin/kvm'
 
 qemu_args = (cmd, '-cdrom', options.cdrom, '-boot', bootdisk,
              '-L', '/usr/share/qemu', '-hda', disk, '-m', '384',
              '-serial', 'file:/tmp/serial.log',
           )
+
+if not options.kvm:
+    qemu_args += ('-no-kvm',)
 
 if options.debugger:
     qemu_args += ('-s',)
