@@ -41,4 +41,15 @@ rpm:	user qemu
 	rpmbuild --define="kverrel $$(uname -r)" \
 		 --define="objdir $$(pwd)" \
 		 --define="_topdir $$(pwd)" \
+		 --define="prebuilt 1" \
 		-bb $(tmpspec)
+
+srpm:
+	mkdir -p SOURCES SRPMS
+	sed 's/^Release:.*/Release: $(rpmrelease)/' kvm.spec > $(tmpspec)
+	tar czf SOURCES/kvm.tar.gz qemu
+	tar czf SOURCES/user.tar.gz user
+	tar czf SOURCES/kernel.tar.gz kernel
+	tar czf SOURCES/scripts.tar.gz scripts
+	cp Makefile SOURCES
+	rpmbuild  --define="_topdir $$(pwd)" -bs $(tmpspec)

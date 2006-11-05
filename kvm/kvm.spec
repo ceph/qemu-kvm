@@ -22,19 +22,51 @@ BuildRequires: compat-gcc-34
 
 BuildRequires:  SDL-devel zlib-devel
 
+%define _prebuilt %{?prebuilt:1}%{!?prebuilt:0}
+
+%if !%{_prebuilt}
+Source0: kvm.tar.gz
+Source1: user.tar.gz
+Source2: kernel.tar.gz
+Source3: scripts.tar.gz
+Source4: Makefile
+%endif
+
 %description
 The Kernel Virtual Machine provides a virtualization enviroment for processors
 with hardware support for virtualization: Intel's VT and AMD's AMD-V.
 
 %prep
 
+%if !%{_prebuilt}
+%setup -T -b 0 -n qemu
+%setup -T -b 1 -n user -D
+%setup -T -b 2 -n kernel -D
+%setup -T -b 3 -n scripts -D
+cd ..
+cp %{_sourcedir}/Makefile .
+%endif
+
 %build
 
 rm -rf %{buildroot}
 
+%if !%{_prebuilt}
+cd ..
+make -C user
+(cd qemu; ./kvm-configure)
+make -C qemu
+%endif
+
 %install
 
-make -C %{objdir} DESTDIR=%{buildroot} install
+%if !%{_prebuilt}
+cd ..
+%else
+cd %{objdir}
+%endif
+
+make DESTDIR=%{buildroot} install
 
 %define bindir /usr/bin
 %define bin %{bindir}/kvm
