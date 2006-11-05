@@ -12,8 +12,15 @@ ExclusiveArch:  i386 x86_64
 
 Requires:	qemu kvm-kmod bridge-utils
 
-%define compat_gcc %(rpm -qa | grep compat-gcc |  sed 's/^[^0-9]*//' | sed 's/-.*//')
-BuildRequires:  SDL-devel zlib-devel compat-gcc-%{compat_gcc}
+%define fedora_release %(rpm -q --qf '%%{version}' fedora-release)
+
+%if %{fedora_release} == 5
+BuildRequires: compat-gcc-32
+%else
+BuildRequires: compat-gcc-34
+%endif
+
+BuildRequires:  SDL-devel zlib-devel
 
 %description
 The Kernel Virtual Machine provides a virtualization enviroment for processors
