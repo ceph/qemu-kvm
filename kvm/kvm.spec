@@ -10,8 +10,8 @@ BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}
 
 ExclusiveArch:  i386 x86_64
 
-Requires:	qemu kvm-kmod
-BuildRequires:  SDL-devel zlib-devel > compat-gcc-32
+Requires:	qemu kvm-kmod bridge-utils
+BuildRequires:  SDL-devel zlib-devel compat-gcc-34
 
 %description
 The Kernel Virtual Machine provides a virtualization enviroment for processors
