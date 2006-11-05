@@ -155,7 +155,7 @@ start () {
 	antispoofing
     fi
 
-    /sbin/insmod kvm
+    /sbin/modprobe kvm
 }
 
 stop () {
@@ -170,7 +170,7 @@ stop () {
     ip link set ${switch} down
     brctl delbr ${switch}
 
-    /sbin/rmmod kvm
+    /sbin/modprobe -r kvm
 }
 
 
