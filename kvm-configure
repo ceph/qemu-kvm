@@ -2,4 +2,4 @@
 
 CC=$(ls /usr/bin/gcc3* | tail -n1)
 ./configure --target-list=$(uname -i)-softmmu --cc=$CC --disable-kqemu \
-	--enable-kvm
+	--enable-kvm "$@"
