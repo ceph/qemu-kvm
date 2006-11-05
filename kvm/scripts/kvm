@@ -154,6 +154,8 @@ start () {
     if [ ${antispoof} = 'yes' ] ; then
 	antispoofing
     fi
+
+    /sbin/insmod kvm
 }
 
 stop () {
@@ -167,6 +169,8 @@ stop () {
     change_ips ${switch} ${pif}
     ip link set ${switch} down
     brctl delbr ${switch}
+
+    /sbin/rmmod kvm
 }
 
 
