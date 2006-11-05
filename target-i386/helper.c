@@ -189,7 +189,7 @@ static inline void get_ss_esp_from_tss(uint32_t *ss_ptr,
      * Bit 1 is the Busy bit.  We believe it is legal to interrupt into a busy
      * segment
      */
-    if ((type & 5) != 1)
+    if ((env->use_kvm && (type & 5) != 1) || (type & 7) != 1)
 #else
     if ((type & 7) != 1)
 #endif
@@ -838,8 +838,10 @@ static void do_interrupt64(int intno, int is_int, int error_code,
     target_ulong old_eip, esp, offset;
 
 #ifdef USE_KVM
-    printf("%s: unexpect\n", __FUNCTION__);
-    exit(-1);
+    if (env->use_kvm) {
+	    printf("%s: unexpect\n", __FUNCTION__);
+	    exit(-1);
+    }
 #endif
 
     has_error_code = 0;
@@ -1126,8 +1128,10 @@ void do_interrupt_user(int intno, int is_int, int error_code,
     uint32_t e2;
 
 #ifdef USE_KVM
-    printf("%s: unexpect\n", __FUNCTION__);
-    exit(-1);
+    if (env->use_kvm) {
+	    printf("%s: unexpect\n", __FUNCTION__);
+	    exit(-1);
+    }
 #endif
     dt = &env->idt;
     ptr = dt->base + (intno * 8);
@@ -1155,8 +1159,10 @@ void do_interrupt(int intno, int is_int, int error_code,
                   target_ulong next_eip, int is_hw)
 {
 #ifdef USE_KVM
-    printf("%s: unexpect\n", __FUNCTION__);
-    exit(-1);
+    if (env->use_kvm) {
+	printf("%s: unexpect\n", __FUNCTION__);
+	exit(-1);
+    }
 #endif
     if (loglevel & CPU_LOG_INT) {
         if ((env->cr[0] & CR0_PE_MASK)) {
@@ -1687,7 +1693,7 @@ void helper_ljmp_protected_T0_T1(int next_eip_addend)
                        get_seg_base(e1, e2), limit, e2);
         EIP = new_eip;
 #ifdef USE_KVM
-        if (e2 & DESC_L_MASK) {
+        if (env->use_kvm && (e2 & DESC_L_MASK)) {
             env->exception_index = -1;
             cpu_loop_exit();   
         }       

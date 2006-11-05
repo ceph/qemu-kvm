@@ -10,6 +10,7 @@
 #include <kvmctl.h>
 #include <string.h>
 
+int kvm_allowed = 1;
 kvm_context_t kvm_context;
 
 #define NR_CPU 16

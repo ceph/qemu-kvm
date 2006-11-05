@@ -1375,6 +1375,10 @@ static int bitmap_get_dirty(unsigned long *bitmap, unsigned nr)
 
 #endif
 
+#ifdef USE_KVM
+extern int kvm_allowed;
+#endif
+
 /* 
  * graphic modes
  */
@@ -1393,11 +1397,8 @@ static void vga_draw_graphic(VGAState *s, int full_update)
 #define BITMAP_SIZE ((8*1024*1024) / 4096 / 8 / sizeof(long))
     unsigned long bitmap[BITMAP_SIZE];
 
-    kvm_get_dirty_pages(kvm_context, 1, &bitmap);
-
-#define cpu_physical_memory_get_dirty(addr, type) \
-    (bitmap_get_dirty(bitmap, (addr - s->vram_offset) >> TARGET_PAGE_BITS) \
-     | cpu_physical_memory_get_dirty(addr, type))
+    if (kvm_allowed)
+	    kvm_get_dirty_pages(kvm_context, 1, &bitmap);
 #endif
 
     full_update |= update_basic_params(s);
@@ -1506,10 +1507,16 @@ static void vga_draw_graphic(VGAState *s, int full_update)
         update = full_update | 
             cpu_physical_memory_get_dirty(page0, VGA_DIRTY_FLAG) |
             cpu_physical_memory_get_dirty(page1, VGA_DIRTY_FLAG);
+	if (kvm_allowed) {
+		update |= bitmap_get_dirty(bitmap, (page0 - s->vram_offset) >> TARGET_PAGE_BITS);
+		update |= bitmap_get_dirty(bitmap, (page1 - s->vram_offset) >> TARGET_PAGE_BITS);
+	}
         if ((page1 - page0) > TARGET_PAGE_SIZE) {
             /* if wide line, can use another page */
             update |= cpu_physical_memory_get_dirty(page0 + TARGET_PAGE_SIZE, 
                                                     VGA_DIRTY_FLAG);
+	    if (kvm_allowed)
+		    update |= bitmap_get_dirty(bitmap, (page0 - s->vram_offset) >> TARGET_PAGE_BITS);
         }
         /* explicit invalidation for the hardware cursor */
         update |= (s->invalidated_y_table[y >> 5] >> (y & 0x1f)) & 1;
@@ -1751,6 +1758,10 @@ static void vga_map(PCIDevice *pci_dev, int region_num,
     }
 }
 
+#ifdef USE_KVM
+extern int kvm_allowed;
+#endif
+
 /* when used on xen/kvm environment, the vga_ram_base is not used */
 void vga_common_init(VGAState *s, DisplayState *ds, uint8_t *vga_ram_base, 
                      unsigned long vga_ram_offset, int vga_ram_size)
@@ -1785,7 +1796,10 @@ void vga_common_init(VGAState *s, DisplayState *ds, uint8_t *vga_ram_base,
 #ifndef USE_KVM
     s->vram_ptr = vga_ram_base;
 #else
-    s->vram_ptr = qemu_malloc(vga_ram_size);
+    if (kvm_allowed)
+	    s->vram_ptr = qemu_malloc(vga_ram_size);
+    else
+	    s->vram_ptr = vga_ram_base;
 #endif
     s->vram_offset = vga_ram_offset;
     s->vram_size = vga_ram_size;

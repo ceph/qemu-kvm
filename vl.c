@@ -4594,7 +4594,8 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
     env->hflags = hflags;
     tlb_flush(env, 1);
 #ifdef USE_KVM
-    kvm_load_registers(env);
+    if (env->use_kvm)
+	    kvm_load_registers(env);
 #endif
     return 0;
 }
@@ -4761,7 +4762,7 @@ static void ram_save(QEMUFile *f, void *opaque)
     qemu_put_be32(f, phys_ram_size);
     for(i = 0; i < phys_ram_size; i+= TARGET_PAGE_SIZE) {
 #ifdef USE_KVM
-        if ((i>=0xa0000) && (i<0xc0000)) /* do not access video-addresses */
+        if (kvm_allowed && (i>=0xa0000) && (i<0xc0000)) /* do not access video-addresses */
             continue;
 #endif
         ram_put_page(f, phys_ram_base + i, TARGET_PAGE_SIZE);
@@ -4771,14 +4772,13 @@ static void ram_save(QEMUFile *f, void *opaque)
 static int ram_load(QEMUFile *f, void *opaque, int version_id)
 {
     int i, ret;
-
     if (version_id != 1)
         return -EINVAL;
     if (qemu_get_be32(f) != phys_ram_size)
         return -EINVAL;
     for(i = 0; i < phys_ram_size; i+= TARGET_PAGE_SIZE) {
 #ifdef USE_KVM
-        if ((i>=0xa0000) && (i<0xc0000)) /* do not access video-addresses */
+        if (kvm_allowed && (i>=0xa0000) && (i<0xc0000)) /* do not access video-addresses */
             continue;
 #endif
         ret = ram_get_page(f, phys_ram_base + i, TARGET_PAGE_SIZE);
@@ -5231,6 +5231,9 @@ void help(void)
            "-kernel-kqemu   enable KQEMU full virtualization (default is user mode only)\n"
            "-no-kqemu       disable KQEMU kernel module usage\n"
 #endif
+#ifdef USE_KVM
+	   "-no-kvm         disable KVM hardware virtualization\n"
+#endif
 #ifdef USE_CODE_COPY
            "-no-code-copy   disable code copy acceleration\n"
 #endif
@@ -5319,6 +5322,7 @@ enum {
     QEMU_OPTION_smp,
     QEMU_OPTION_vnc,
     QEMU_OPTION_no_acpi,
+    QEMU_OPTION_no_kvm,
 };
 
 typedef struct QEMUOption {
@@ -5374,6 +5378,9 @@ const QEMUOption qemu_options[] = {
 #ifdef USE_KQEMU
     { "no-kqemu", 0, QEMU_OPTION_no_kqemu },
     { "kernel-kqemu", 0, QEMU_OPTION_kernel_kqemu },
+#endif
+#ifdef USE_KVM
+    { "no-kvm", 0, QEMU_OPTION_no_kvm },
 #endif
 #if defined(TARGET_PPC) || defined(TARGET_SPARC)
     { "g", 1, QEMU_OPTION_g },
@@ -6007,6 +6014,11 @@ int main(int argc, char **argv)
                 kqemu_allowed = 2;
                 break;
 #endif
+#ifdef USE_KVM
+	    case QEMU_OPTION_no_kvm:
+		kvm_allowed = 0;
+		break;
+#endif
             case QEMU_OPTION_usb:
                 usb_enabled = 1;
                 break;
@@ -6088,8 +6100,17 @@ int main(int argc, char **argv)
 
     /* init the memory */
 #if USE_KVM
-    phys_ram_size = ram_size + vga_ram_size + bios_size + KVM_EXTRA_PAGES * 4096;
-    kvm_qemu_init();
+    phys_ram_size = ram_size + vga_ram_size + bios_size;
+    if (kvm_allowed) {
+	    phys_ram_size += KVM_EXTRA_PAGES * 4096;
+	    kvm_qemu_init();
+    } else {
+	    phys_ram_base = qemu_vmalloc(phys_ram_size);
+	    if (!phys_ram_base) {
+		    fprintf(stderr, "Could not allocate physical memory\n");
+		    exit(1);
+	    }
+    }
 #else
     phys_ram_size = ram_size + vga_ram_size + bios_size;
     phys_ram_base = qemu_vmalloc(phys_ram_size);
