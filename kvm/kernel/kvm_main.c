@@ -1052,12 +1052,7 @@ static void set_cr8(struct kvm_vcpu *vcpu, unsigned long cr8)
 
 static u32 get_rdx_init_val(void)
 {
-	u32 val;
-
-	asm ("movl $1, %%eax \n\t"
-	     "movl %%eax, %0 \n\t" : "=g"(val) );
-	return val;
-
+	return 0x600; /* P6 family */
 }
 
 static void fx_init(struct kvm_vcpu *vcpu)
