@@ -697,7 +697,7 @@ static void enter_pmode(struct kvm_vcpu *vcpu)
 	vmcs_writel(GUEST_RFLAGS, flags);
 
 	vmcs_writel(GUEST_CR4, (vmcs_readl(GUEST_CR4) & ~CR4_VME_MASK) |
-			(vmcs_readl(CR0_READ_SHADOW) & CR4_VME_MASK) );
+			(vmcs_readl(CR4_READ_SHADOW) & CR4_VME_MASK));
 
 	update_exception_bitmap(vcpu);
 
