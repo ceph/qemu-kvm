@@ -278,9 +278,13 @@ sudo /usr/local/kvm/bin/qemu-system-x86_64 \
        </p>
        <p>
           With a recent enough Linux kernel, run the command:
-          <pre>grep '^flags.*vmx' /proc/cpuinfo</pre>
+          <pre>egrep '^flags.*(vmx|svm)' /proc/cpuinfo</pre>
           If something shows up, you have VT.  You can also check the processor
           model name (in <code>/proc/cpuinfo</code>) in the vendor's web site.
+       </p>
+       <p>
+          Note that some manufacturers disable VT in the machine's BIOS, in
+          such a way that it cannot be re-enabled.
        </p>
 
        <hr/>
