@@ -143,6 +143,8 @@ static void load_regs(CPUState *env)
     msrs.kernel_gs_base = env->kernelgsbase;
 #endif
 
+    msrs.tsc            = env->tsc;
+
     kvm_set_msrs(kvm_context, 0, &msrs);
 }
 
@@ -282,6 +284,8 @@ static void save_regs(CPUState *env)
     env->fmask        = msrs.syscall_mask;
     env->kernelgsbase = msrs.kernel_gs_base;
 #endif
+
+    env->tsc          = msrs.tsc;
 }
 
 

@@ -683,6 +683,33 @@ static void inject_gp(struct kvm_vcpu *vcpu)
 		     INTR_INFO_VALID_MASK);
 }
 
+
+/* 
+ * reads and returns guest's timestamp counter "register"
+ * guest_tsc = host_tsc + tsc_offset    -- 21.3
+ */
+static u64 guest_read_tsc(void)
+{
+	u64 host_tsc, tsc_offset;
+
+	rdtscll(host_tsc);
+	tsc_offset = vmcs_read64(TSC_OFFSET);
+	return host_tsc + tsc_offset;
+}
+
+/* 
+ * writes 'guest_tsc' into guest's timestamp counter "register"
+ * guest_tsc = host_tsc + tsc_offset ==> tsc_offset = guest_tsc - host_tsc
+ */
+static void guest_write_tsc(u64 guest_tsc)
+{
+	u64 host_tsc;
+	
+	rdtscll(host_tsc);
+	vmcs_write64(TSC_OFFSET, guest_tsc - host_tsc);
+}
+
+
 static void update_exception_bitmap(struct kvm_vcpu *vcpu)
 {
 	if (vcpu->rmode.active)
@@ -1115,7 +1142,6 @@ static int vmx_vcpu_setup(struct kvm_vcpu *vcpu)
 	struct descriptor_table dt;
 	int i;
 	int ret;
-	u64 tsc;
 	int nr_good_msrs;
 
 	__vmx_vcpu_get(vcpu);
@@ -1193,8 +1219,7 @@ static int vmx_vcpu_setup(struct kvm_vcpu *vcpu)
 	vmcs_write64(IO_BITMAP_A, 0);
 	vmcs_write64(IO_BITMAP_B, 0);
 
-	rdtscll(tsc);
-	vmcs_write64(TSC_OFFSET, -tsc);
+	guest_write_tsc(0);
 
 	vmcs_write64(VMCS_LINK_POINTER, -1ull); /* 22.3.1.5 */
 
@@ -2382,10 +2407,7 @@ static int set_msr(struct kvm_vcpu *vcpu, u32 msr_index, u64 data)
 		break;
 #endif
 	case MSR_IA32_TIME_STAMP_COUNTER: {
-		u64 tsc;
-
-		rdtscll(tsc);
-		vmcs_write64(TSC_OFFSET, data - tsc);
+		guest_write_tsc(data);
 		break;
 	}
 	case MSR_IA32_UCODE_REV:
@@ -3101,6 +3123,8 @@ static int kvm_dev_ioctl_get_msrs(struct kvm *kvm, struct kvm_msrs *msrs)
 	rc |= get_msr(vcpu, MSR_LSTAR,          &msrs->lstar);
 #endif
 
+	msrs->tsc = guest_read_tsc();
+
 	vcpu_put(vcpu);
 
 	if (rc)
@@ -3130,6 +3154,8 @@ static int kvm_dev_ioctl_set_msrs(struct kvm *kvm, struct kvm_msrs *msrs)
 	rc |= set_msr(vcpu, MSR_SYSCALL_MASK,      msrs->syscall_mask);
 	rc |= set_msr(vcpu, MSR_LSTAR,             msrs->lstar);
 #endif
+
+	guest_write_tsc(msrs->tsc);
 
 	vcpu_put(vcpu);
 

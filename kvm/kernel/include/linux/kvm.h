@@ -156,6 +156,8 @@ struct kvm_msrs {
 	__u64 sysenter_cs;
 	__u64 sysenter_esp;
 	__u64 sysenter_eip;
+
+	__u64 tsc; /* time stamp counter */
 };
 
 /* for KVM_TRANSLATE */

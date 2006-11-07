@@ -492,6 +492,9 @@ typedef struct CPUX86State {
     target_ulong kernelgsbase;
 #endif
 
+#ifdef USE_KVM
+    uint64_t tsc; /* time stamp counter */
+#endif
     uint64_t pat;
 
     /* temporary data for USE_CODE_COPY mode */

@@ -4459,6 +4459,7 @@ void cpu_save(QEMUFile *f, void *opaque)
     for (i = 0; i < NR_IRQ_WORDS ; i++) {
         qemu_put_betls(f, &env->kvm_interrupt_bitmap[i]);
     }
+    qemu_put_be64s(f, &env->tsc);
 #endif
 }
 
@@ -4606,6 +4607,7 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
         for (i = 0; i < NR_IRQ_WORDS ; i++) {
             qemu_get_betls(f, &env->kvm_interrupt_bitmap[i]);
         }
+        qemu_get_be64s(f, &env->tsc);
         kvm_load_registers(env);
     }
 #endif
