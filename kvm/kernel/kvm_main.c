@@ -870,7 +870,8 @@ static void __set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 #endif
 
 	vmcs_writel(CR0_READ_SHADOW, cr0);
-	vmcs_writel(GUEST_CR0, cr0 | KVM_VM_CR0_ALWAYS_ON);
+	vmcs_writel(GUEST_CR0,
+		    (cr0 & ~KVM_GUEST_CR0_MASK) | KVM_VM_CR0_ALWAYS_ON);
 }
 
 static int pdptrs_have_reserved_bits_set(struct kvm_vcpu *vcpu,
@@ -3008,7 +3009,8 @@ static int kvm_dev_ioctl_set_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 	vcpu->rmode.active = ((sregs->cr0 & CR0_PE_MASK) == 0);
 	update_exception_bitmap(vcpu);
 	vmcs_writel(CR0_READ_SHADOW, sregs->cr0);
-	vmcs_writel(GUEST_CR0, sregs->cr0 | KVM_VM_CR0_ALWAYS_ON);
+	vmcs_writel(GUEST_CR0, 
+		    (sregs->cr0 & ~KVM_GUEST_CR0_MASK) | KVM_VM_CR0_ALWAYS_ON);
 
 	mmu_reset_needed |=  guest_cr4() != sregs->cr4;
 	__set_cr4(vcpu, sregs->cr4);
