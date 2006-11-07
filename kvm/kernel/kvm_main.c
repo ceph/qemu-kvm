@@ -3009,7 +3009,7 @@ static int kvm_dev_ioctl_set_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 	vcpu->rmode.active = ((sregs->cr0 & CR0_PE_MASK) == 0);
 	update_exception_bitmap(vcpu);
 	vmcs_writel(CR0_READ_SHADOW, sregs->cr0);
-	vmcs_writel(GUEST_CR0, 
+	vmcs_writel(GUEST_CR0,
 		    (sregs->cr0 & ~KVM_GUEST_CR0_MASK) | KVM_VM_CR0_ALWAYS_ON);
 
 	mmu_reset_needed |=  guest_cr4() != sregs->cr4;
