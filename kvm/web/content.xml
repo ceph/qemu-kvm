@@ -102,6 +102,8 @@
                    <li><code>gcc</code> 3.x</li>
                    <li><code>SDL</code> libraries and headers</li>
                    <li><code>zlib</code> libraries and headers</li>
+                   <li><code>libuuid</code> libraries and headers (from
+                       e2fsprogs-devel)</li>
                 </ul>
              </li>
              <li>A recent enough binutils (&gt;= 2.16.91.0.2) for vmx 
