@@ -6,7 +6,8 @@ CXXFLAGS = $(autodepend-flags)
 
 autodepend-flags = -MMD -MF $(dir $*).$(notdir $*).d
 
-DESTDIR = /usr/local
+PREFIX = /usr/local
+DESTDIR = 
 
 ifeq ($(shell uname -m), x86_64)
 LIBDIR = /lib64
@@ -25,10 +26,10 @@ flatfiles: test/simple.flat test/stringio.flat test/memtest1.flat \
 	test/irq.flat test/sieve.flat test/bootstrap
 
 install:
-	install -D kvmctl.h $(DESTDIR)/include/kvmctl.h
+	install -D kvmctl.h $(DESTDIR)/$(PREFIX)/include/kvmctl.h
 	install -D $(KERNELDIR)/include/linux/kvm.h \
-		$(DESTDIR)/include/linux/kvm.h
-	install -D libkvm.a $(DESTDIR)/$(LIBDIR)/libkvm.a
+		$(DESTDIR)/$(PREFIX)/include/linux/kvm.h
+	install -D libkvm.a $(DESTDIR)/$(PREFIX)/$(LIBDIR)/libkvm.a
 
 %.flat: %.o
 	gcc -nostdlib -o $@ -Wl,-T,flat.lds $^
