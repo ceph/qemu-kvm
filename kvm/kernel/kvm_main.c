@@ -376,7 +376,8 @@ static void vmx_vmcs_clear(struct vmcs *vmcs)
 	u8 error;
 
 	asm volatile (ASM_VMX_VMCLEAR_RAX "; setna %0"
-		       : "=g"(error) : "a"(&phys_addr) : "cc", "memory" );
+		      : "=g"(error) : "a"(&phys_addr), "m"(phys_addr)
+		      : "cc", "memory");
 	if (error)
 		printk(KERN_ERR "kvm: vmclear fail: %p/%llx\n",
 		       vmcs, phys_addr);
@@ -419,7 +420,8 @@ static struct kvm_vcpu *__vmx_vcpu_get(struct kvm_vcpu *vcpu)
 
 		per_cpu(current_vmcs, cpu) = vcpu->vmcs;
 		asm volatile (ASM_VMX_VMPTRLD_RAX "; setna %0"
-			       : "=g"(error) : "a"(&phys_addr) : "cc" );
+			      : "=g"(error) : "a"(&phys_addr), "m"(phys_addr)
+			      : "cc");
 		if (error)
 			printk(KERN_ERR "kvm: vmptrld %p/%llx fail\n",
 			       vcpu->vmcs, phys_addr);
@@ -547,7 +549,8 @@ static __init void kvm_enable(void *garbage)
 		/* enable and lock */
 		wrmsrl(MSR_IA32_FEATURE_CONTROL, old | 5);
 	write_cr4(read_cr4() | CR4_VMXE); /* FIXME: not cpu hotplug safe */
-	asm volatile (ASM_VMX_VMXON_RAX : : "a"(&phys_addr) : "memory", "cc");
+	asm volatile (ASM_VMX_VMXON_RAX : : "a"(&phys_addr), "m"(phys_addr)
+		      : "memory", "cc");
 }
 
 static void kvm_disable(void *garbage)
