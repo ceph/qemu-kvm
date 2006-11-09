@@ -91,11 +91,7 @@
        <p>
           You will need (see download section):
           <ul>
-             <li><code>kvm-module.tar.gz</code></li>
-             <li><code>libkvm.tar.gz</code></li>
-             <li><code>qemu-0.8.2</code> from the
-                 <a href="http://www.qemu.com">qemu</a> web site</li>
-             <li><code>qemu-kvm.patch</code></li>
+             <li><code>kvm-<i>release</i>.tar.gz</code></li>
              <li>A VT capable Intel processor</li>
              <li>qemu prerequisites:
                 <ul>
@@ -120,45 +116,34 @@
           Steps:
           <ol>
              <li>
-                Compile and load <code>kvm.ko</code>.  This assumes you are
-                using the external module:
-                <pre>
-tar xzf kvm-module.tar.gz
-cd kvm-module
-make
-sudo /sbin/insmod kvm.ko
-cd ..
-</pre>
-                (if you're running a kernel with kvm patched in, just
-                 <code>modprobe kvm</code> instead)
-             </li>                
+                <p>
+                Unpack and onfigure the kvm components:
+                </p>
+                <p>If you are using a patched kernel (e.g. a recent -mm 
+                   kernel), configure the kernel normally, boot into it, and:
 
-             <li>Compile and install libkvm:
                 <pre>
-tar xzf libkvm.tar.gz
-cd libkvm
-make KERNELDIR=../kvm-module
-sudo make KERNELDIR=../kvm-module install DESTDIR=/usr/local/kvm
-cd ..
-</pre>
-                (if you're running a kernel with kvm patched in, substitute
-                 the kernel source directory for <code>KERNELDIR</code>)
-             </li>
-
-             <li>
-                Patch, configure, compile, and install qemu:
-                <pre>
-tar xzf qemu-0.8.2.tar.gz
-cd qemu-0.8.2
-patch -p0 &lt; ../qemu-kvm.patch
-./configure --cc=gcc32 --enable-kvm --disable-kqemu --prefix=/usr/local/kvm \
-      --extra-cflags='-I /usr/local/kvm/include' \
-      --extra-ldflags='-L /usr/local/kvm/lib64'
+tar xzf kvm-<i>release</i>.tar.gz
+cd kvm-<i>release</i>
+./configure --prefix=/usr/local/kvm --with-patched-kernel
 make
 sudo make install
-cd ..
+sudo /sbin/modprobe kvm
 </pre>
-             </li>
+             </p>
+
+             <p>
+                If you're <i>not</i> running a patched kernel:
+                <pre>
+tar xzf kvm-<i>release</i>.tar.gz
+cd kvm-<i>release</i>
+./configure --prefix=/usr/local/kvm
+make
+sudo make install
+sudo /sbin/insmod kernel/kvm.ko
+</pre>
+             </p>
+             </li>                
 
              <li>
                 Create a disk image:
@@ -176,6 +161,8 @@ sudo /usr/local/kvm/bin/qemu-system-x86_64 \
  -boot d \
  -m 384
 </pre>
+             (use <code>qemu</code> instead of <code>qemu-system-x86_64</code>
+              for i386)
              </li>
 
              <li>
@@ -186,6 +173,8 @@ sudo /usr/local/kvm/bin/qemu-system-x86_64 \
  -boot c \
  -m 384
 </pre>
+             (use <code>qemu</code> instead of <code>qemu-system-x86_64</code>
+              for i386)
              </li>
 
        
