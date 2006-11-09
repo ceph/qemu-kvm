@@ -3,6 +3,7 @@
 prefix=/usr/local
 kerneldir=/lib/modules/$(uname -r)/build
 want_module=1
+qemu_cc=$(ls /usr/bin/gcc3* | tail -n1)
 
 usage() {
     cat <<-EOF
@@ -13,6 +14,7 @@ usage() {
 	    --prefix=PREFIX        where to install things ($prefix)
 	    --with-patched-kernel  don't use external module
 	    --kerneldir=DIR        kernel build directory ($kerneldir)
+	    --qemu-cc="$qemu_cc"   compiler for qemu (needs gcc3.x) ($qemu_cc)
 EOF
     exit 1
 }
@@ -32,7 +34,10 @@ while [[ "$1" = -* ]]; do
 	    kerneldir="$arg"
 	    ;;
 	--with-patched-kernel)
-	    want_module=0
+	    want_module=
+	    ;;
+	--qemu-cc)
+	    qemu_cc="$arg"
 	    ;;
 	--help)
 	    usage
@@ -49,6 +54,14 @@ if (( want_module )); then
 fi
 
 (cd user; ./configure --prefix="$prefix" --kerneldir="$libkvm_kerneldir")
+(cd qemu; ./configure --target-list=$(uname -i)-softmmu --cc="$qemu_cc" \
+    --disable-kqemu --extra-cflags="-I $PWD/../user" \
+    --extra-ldflags="-L $PWD/../user" \
+    --enable-kvm --kernel-path="$libkvm_kerneldir" \
+    --prefix="$prefix"
+)
+
+
 
 cat <<EOF > config.mak
 PREFIX=$prefix

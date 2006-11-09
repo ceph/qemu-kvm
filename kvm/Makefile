@@ -1,16 +1,22 @@
 
 include config.mak
 
+DESTDIR=
+
 rpmrelease = devel
 
 .PHONY: kernel user qemu
 
-all: $(if $(want_module), kernel) user qemu
+all: $(if $(WANT_MODULE), kernel) user qemu
 
 qemu kernel user:
 	$(MAKE) -C $@
 
 qemu: user
+
+install:
+	make -C user DESTDIR="$(DESTDIR)" install
+	make -C qemu DESTDIR="$(DESTDIR)" install
 
 tmpspec = .tmp.kvm.spec
 
