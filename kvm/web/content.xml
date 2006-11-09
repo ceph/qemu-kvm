@@ -115,7 +115,7 @@
           <ol>
              <li>
                 <p>
-                Unpack and onfigure the kvm components:
+                Unpack and configure the kvm components:
                 </p>
                 <p>If you are using a patched kernel (e.g. a recent -mm 
                    kernel), configure the kernel normally, boot into it, and:
