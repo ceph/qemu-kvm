@@ -20,13 +20,13 @@ struct kvm_memory_region {
 #define KVM_EXIT_TYPE_VM_EXIT    2
 
 enum kvm_exit_reason {
-	KVM_EXIT_UNKNOWN,
-	KVM_EXIT_EXCEPTION,
-	KVM_EXIT_IO,
-	KVM_EXIT_CPUID,
-	KVM_EXIT_DEBUG,
-	KVM_EXIT_HLT,
-	KVM_EXIT_MMIO,
+	KVM_EXIT_UNKNOWN          = 0,
+	KVM_EXIT_EXCEPTION        = 1,
+	KVM_EXIT_IO               = 2,
+	KVM_EXIT_CPUID            = 3,
+	KVM_EXIT_DEBUG            = 4,
+	KVM_EXIT_HLT              = 5,
+	KVM_EXIT_MMIO             = 6,
 };
 
 /* for KVM_RUN */
