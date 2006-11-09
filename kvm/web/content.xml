@@ -102,8 +102,6 @@
                        e2fsprogs-devel)</li>
                 </ul>
              </li>
-             <li>A recent enough binutils (&gt;= 2.16.91.0.2) for vmx 
-                 instruction support</li>
           </ul>
        </p>
 
