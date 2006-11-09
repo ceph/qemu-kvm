@@ -66,7 +66,7 @@ cd ..
 cd %{objdir}
 %endif
 
-make DESTDIR=%{buildroot} install
+make DESTDIR=%{buildroot} install-rpm
 
 %define bindir /usr/bin
 %define bin %{bindir}/kvm

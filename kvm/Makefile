@@ -1,11 +1,12 @@
+include config.mak
 
-DESTDIR =
+DESTDIR=
 
 rpmrelease = devel
 
 .PHONY: kernel user qemu clean
 
-all: kernel user qemu
+all: $(if $(WANT_MODULE), kernel) user qemu
 
 qemu kernel user:
 	$(MAKE) -C $@
@@ -23,7 +24,7 @@ initdir = /etc/init.d
 confdir = /etc/kvm
 utilsdir = /etc/kvm/utils
 
-install:
+install-rpm:
 	mkdir -p $(DESTDIR)/$(bindir)
 	mkdir -p $(DESTDIR)/$(confdir)
 	mkdir -p $(DESTDIR)/$(initdir)
@@ -32,6 +33,10 @@ install:
 	cp scripts/kvm $(DESTDIR)/$(initdir)/kvm
 	cp scripts/qemu-ifup $(DESTDIR)/$(confdir)/qemu-ifup
 	cp kvm $(DESTDIR)/$(utilsdir)/kvm
+
+install:
+	make -C user DESTDIR="$(DESTDIR)" install
+	make -C qemu DESTDIR="$(DESTDIR)" install
 
 tmpspec = .tmp.kvm.spec
 

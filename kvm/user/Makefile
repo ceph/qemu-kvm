@@ -1,10 +1,14 @@
 
-CFLAGS = -I ../kernel/include $(autodepend-flags) -g
+include config.mak
+
+CFLAGS = -I $(KERNELDIR)/include $(autodepend-flags) -g
 CXXFLAGS = $(autodepend-flags) 
 
 autodepend-flags = -MMD -MF $(dir $*).$(notdir $*).d
 
 all: kvmctl libkvm.a flatfiles
+
+DESTDIR = 
 
 kvmctl: kvmctl.o main.o
 
@@ -13,6 +17,12 @@ libkvm.a: kvmctl.o
 
 flatfiles: test/simple.flat test/stringio.flat test/memtest1.flat \
 	test/irq.flat test/sieve.flat test/bootstrap
+
+install:
+	install -D kvmctl.h $(DESTDIR)/$(PREFIX)/include/kvmctl.h
+	install -D $(KERNELDIR)/include/linux/kvm.h \
+		$(DESTDIR)/$(PREFIX)/include/linux/kvm.h
+	install -D libkvm.a $(DESTDIR)/$(PREFIX)/$(LIBDIR)/libkvm.a
 
 %.flat: %.o
 	gcc -nostdlib -o $@ -Wl,-T,flat.lds $^
