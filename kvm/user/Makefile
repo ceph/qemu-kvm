@@ -1,12 +1,11 @@
 
-KERNELDIR = ../kernel
+include config.mak
 
 CFLAGS = -I $(KERNELDIR)/include $(autodepend-flags) -g
 CXXFLAGS = $(autodepend-flags) 
 
 autodepend-flags = -MMD -MF $(dir $*).$(notdir $*).d
 
-PREFIX = /usr/local
 DESTDIR = 
 
 ifeq ($(shell uname -m), x86_64)
