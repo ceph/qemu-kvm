@@ -1,9 +1,11 @@
 
+include config.mak
+
 rpmrelease = devel
 
 .PHONY: kernel user qemu
 
-all: kernel user qemu
+all: $(if $(want_module), kernel) user qemu
 
 qemu kernel user:
 	$(MAKE) -C $@

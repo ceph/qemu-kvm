@@ -1,0 +1,58 @@
+#!/bin/sh
+
+prefix=/usr/local
+kerneldir=/lib/modules/$(uname -r)/build
+want_module=1
+
+usage() {
+    cat <<-EOF
+	Usage: $0 [options]
+
+	Options include:
+
+	    --prefix=PREFIX        where to install things ($prefix)
+	    --with-patched-kernel  don't use external module
+	    --kerneldir=DIR        kernel build directory ($kerneldir)
+EOF
+    exit 1
+}
+
+while [[ "$1" = -* ]]; do
+    opt="$1"; shift
+    arg=
+    if [[ "$opt" = *=* ]]; then
+	arg="${opt#*=}"
+	opt="${opt%%=*}"
+    fi
+    case "$opt" in
+	--prefix)
+	    prefix="$arg"
+	    ;;
+	--kerneldir)
+	    kerneldir="$arg"
+	    ;;
+	--with-patched-kernel)
+	    want_module=0
+	    ;;
+	--help)
+	    usage
+	    ;;
+	*)
+	    usage
+	    ;;
+    esac
+done
+
+libkvm_kerneldir="$kerneldir"
+if (( want_module )); then
+    libkvm_kerneldir=$(readlink -f kernel)
+fi
+
+(cd user; ./configure --prefix="$prefix" --kerneldir="$libkvm_kerneldir")
+
+cat <<EOF > config.mak
+PREFIX=$prefix
+KERNELDIR=$(readlink -f $kerneldir)
+WANT_MODULE=$want_module
+EOF
+
