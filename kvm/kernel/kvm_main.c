@@ -33,6 +33,7 @@
 #include <linux/debugfs.h>
 #include <linux/highmem.h>
 #include <linux/file.h>
+#include <asm/desc.h>
 
 #include "vmx.h"
 #include "x86_emulate.h"
