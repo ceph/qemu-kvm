@@ -200,10 +200,11 @@ struct kvm_vcpu {
 		int active;
 		u8 save_iopl;
 		struct {
+			u16 selector;
 			unsigned long base;
 			u32 limit;
 			u32 ar;
-		} tr;
+		} tr, es, ds, fs, gs;
 	} rmode;
 };
 

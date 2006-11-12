@@ -747,17 +747,26 @@ static void enter_pmode(struct kvm_vcpu *vcpu)
 	update_exception_bitmap(vcpu);
 
 	#define FIX_PMODE_DATASEG(seg, save) {				\
-			vmcs_write16(GUEST_##seg##_SELECTOR, 0); 	\
-			vmcs_writel(GUEST_##seg##_BASE, 0); 		\
-			vmcs_write32(GUEST_##seg##_LIMIT, 0xffff);	\
-			vmcs_write32(GUEST_##seg##_AR_BYTES, 0x93);	\
+		if (vmcs_readl(GUEST_##seg##_BASE) == save.base) { \
+			vmcs_write16(GUEST_##seg##_SELECTOR, save.selector); \
+			vmcs_writel(GUEST_##seg##_BASE, save.base); \
+			vmcs_write32(GUEST_##seg##_LIMIT, save.limit); \
+			vmcs_write32(GUEST_##seg##_AR_BYTES, save.ar); \
+		} else { \
+			u32 dpl = (vmcs_read16(GUEST_##seg##_SELECTOR) & \
+				   SELECTOR_RPL_MASK) << AR_DPL_SHIFT; \
+			vmcs_write32(GUEST_##seg##_AR_BYTES, 0x93 | dpl); \
+		} \
 	}
 
-	FIX_PMODE_DATASEG(SS, vcpu->rmode.ss);
 	FIX_PMODE_DATASEG(ES, vcpu->rmode.es);
 	FIX_PMODE_DATASEG(DS, vcpu->rmode.ds);
 	FIX_PMODE_DATASEG(GS, vcpu->rmode.gs);
 	FIX_PMODE_DATASEG(FS, vcpu->rmode.fs);
+
+
+	vmcs_write16(GUEST_SS_SELECTOR, 0);
+	vmcs_write32(GUEST_SS_AR_BYTES, 0x93);
 
 	vmcs_write16(GUEST_CS_SELECTOR,
 		     vmcs_read16(GUEST_CS_SELECTOR) & ~SELECTOR_RPL_MASK);
@@ -794,19 +803,26 @@ static void enter_rmode(struct kvm_vcpu *vcpu)
 	vmcs_writel(GUEST_CR4, vmcs_readl(GUEST_CR4) | CR4_VME_MASK);
 	update_exception_bitmap(vcpu);
 
-	#define FIX_RMODE_SEG(seg, save) {				   \
+	#define FIX_RMODE_SEG(seg, save) { \
+		save.selector = vmcs_read16(GUEST_##seg##_SELECTOR); \
+		save.base = vmcs_readl(GUEST_##seg##_BASE); \
+		save.limit = vmcs_read32(GUEST_##seg##_LIMIT); \
+		save.ar = vmcs_read32(GUEST_##seg##_AR_BYTES); \
 		vmcs_write16(GUEST_##seg##_SELECTOR, 			   \
 					vmcs_readl(GUEST_##seg##_BASE) >> 4); \
 		vmcs_write32(GUEST_##seg##_LIMIT, 0xffff);		   \
 		vmcs_write32(GUEST_##seg##_AR_BYTES, 0xf3);		   \
 	}
 
+	vmcs_write16(GUEST_SS_SELECTOR, vmcs_readl(GUEST_SS_BASE) >> 4);
+	vmcs_write32(GUEST_SS_LIMIT, 0xffff);
+	vmcs_write32(GUEST_SS_AR_BYTES, 0xf3);
+
 	vmcs_write32(GUEST_CS_AR_BYTES, 0xf3);
 	vmcs_write16(GUEST_CS_SELECTOR, vmcs_readl(GUEST_CS_BASE) >> 4);
 
 	FIX_RMODE_SEG(ES, vcpu->rmode.es);
 	FIX_RMODE_SEG(DS, vcpu->rmode.ds);
-	FIX_RMODE_SEG(SS, vcpu->rmode.ss);
 	FIX_RMODE_SEG(GS, vcpu->rmode.gs);
 	FIX_RMODE_SEG(FS, vcpu->rmode.fs);
 }
