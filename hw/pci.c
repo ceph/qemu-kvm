@@ -71,6 +71,7 @@ int generic_pci_load(QEMUFile* f, void *opaque, int version_id)
         return -EINVAL;
 
     qemu_get_buffer(f, s->config, 256);
+    pci_update_mappings(s);
     return 0;
 }
 
