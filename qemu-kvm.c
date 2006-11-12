@@ -514,5 +514,6 @@ int kvm_update_debugger(CPUState *env)
     return kvm_guest_debug(kvm_context, 0, &dbg);
 }
 
-
+#else /* NOT USE_KVM */
+int kvm_allowed = 0;
 #endif
