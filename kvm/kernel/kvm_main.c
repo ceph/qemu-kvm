@@ -154,12 +154,12 @@ static u16 read_ldt(void)
 
 static void load_fs(u16 sel)
 {
-	asm ("mov %0, %%fs" : : "g"(sel));
+	asm ("mov %0, %%fs" : : "rm"(sel));
 }
 
 static void load_gs(u16 sel)
 {
-	asm ("mov %0, %%gs" : : "g"(sel));
+	asm ("mov %0, %%gs" : : "rm"(sel));
 }
 
 #ifndef load_ldt
