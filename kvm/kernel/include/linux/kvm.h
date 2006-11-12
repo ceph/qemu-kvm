@@ -1,6 +1,13 @@
 #ifndef __LINUX_KVM_H
 #define __LINUX_KVM_H
 
+/*
+ * Userspace interface for /dev/kvm - kernel based virtual machine
+ *
+ * Note: this interface is considered experimental and may change without
+ *       notice.
+ */
+
 #include <asm/types.h>
 #include <linux/ioctl.h>
 
