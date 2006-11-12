@@ -1765,10 +1765,6 @@ static void vga_map(PCIDevice *pci_dev, int region_num,
     }
 }
 
-#ifdef USE_KVM
-extern int kvm_allowed;
-#endif
-
 /* when used on xen/kvm environment, the vga_ram_base is not used */
 void vga_common_init(VGAState *s, DisplayState *ds, uint8_t *vga_ram_base, 
                      unsigned long vga_ram_offset, int vga_ram_size)

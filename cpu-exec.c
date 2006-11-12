@@ -37,6 +37,7 @@
 
 #ifdef USE_KVM
 #include "qemu-kvm.h"
+extern int kvm_allowed;
 #endif
 
 int tb_invalidated_flag;
@@ -454,7 +455,7 @@ int cpu_exec(CPUState *env1)
 #endif
 
 #ifdef USE_KVM
-            if (env->use_kvm) {
+            if (kvm_allowed) {
                 kvm_cpu_exec(env);
                 longjmp(env->jmp_env, 1);
             }
