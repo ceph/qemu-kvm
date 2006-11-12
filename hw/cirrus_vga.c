@@ -2596,8 +2596,7 @@ static void cirrus_update_memory_access(CirrusVGAState *s)
 	mode = s->gr[0x05] & 0x7;
 	if (mode < 4 || mode > 5 || ((s->gr[0x0B] & 0x4) == 0)) {
 #ifdef USE_KVM
-	    CPUState *env = cpu_single_env; /* XXX: SMP support */
-            if (env->use_kvm && s->cirrus_lfb_addr && s->cirrus_lfb_end &&
+            if (kvm_allowed && s->cirrus_lfb_addr && s->cirrus_lfb_end &&
 		!s->map_addr) {
                 void *vram_pointer, *old_vram;
 
@@ -2618,13 +2617,9 @@ static void cirrus_update_memory_access(CirrusVGAState *s)
             s->cirrus_linear_write[1] = cirrus_linear_mem_writew;
             s->cirrus_linear_write[2] = cirrus_linear_mem_writel;
         } else {
-#ifdef USE_KVM
-	    CPUState *env;
-#endif
         generic_io:
 #ifdef USE_KVM
-	    env = cpu_single_env;
-            if (env->use_kvm && s->cirrus_lfb_addr && s->cirrus_lfb_end &&
+            if (kvm_allowed && s->cirrus_lfb_addr && s->cirrus_lfb_end &&
 		s->map_addr) {
 		int error;
                 void *old_vram = NULL;
@@ -3000,9 +2995,6 @@ static CPUWriteMemoryFunc *cirrus_mmio_write[3] = {
 static void cirrus_vga_save(QEMUFile *f, void *opaque)
 {
     CirrusVGAState *s = opaque;
-#ifdef USE_KVM
-    CPUState *env = cpu_single_env;
-#endif
 
     qemu_put_be32s(f, &s->latch);
     qemu_put_8s(f, &s->sr_index);
@@ -3039,7 +3031,7 @@ static void cirrus_vga_save(QEMUFile *f, void *opaque)
        the state when the blitter is active */
 
 #ifdef USE_KVM
-    if (env->use_kvm) { /* XXX: KVM images ought to be loadable in QEMU */
+    if (kvm_allowed) { /* XXX: KVM images ought to be loadable in QEMU */
 	qemu_put_be32s(f, &s->real_vram_size);
 	qemu_put_buffer(f, s->vram_ptr, s->real_vram_size);
     }
@@ -3049,9 +3041,6 @@ static void cirrus_vga_save(QEMUFile *f, void *opaque)
 static int cirrus_vga_load(QEMUFile *f, void *opaque, int version_id)
 {
     CirrusVGAState *s = opaque;
-#ifdef USE_KVM
-    CPUState *env = cpu_single_env;
-#endif    
 
     if (version_id != 1)
         return -EINVAL;
@@ -3091,7 +3080,7 @@ static int cirrus_vga_load(QEMUFile *f, void *opaque, int version_id)
     qemu_get_be32s(f, &s->hw_cursor_y);
 
 #ifdef USE_KVM
-    if (env->use_kvm) {
+    if (kvm_allowed) {
         int real_vram_size;
         qemu_get_be32s(f, &real_vram_size);
         if (real_vram_size != s->real_vram_size) {
