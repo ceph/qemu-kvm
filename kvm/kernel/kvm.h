@@ -195,10 +195,10 @@ struct kvm_vcpu {
 	unsigned char mmio_data[8];
 	gpa_t mmio_phys_addr;
 
-	struct{
+	struct {
 		int active;
 		u8 save_iopl;
-		struct {
+		struct kvm_save_segment {
 			u16 selector;
 			unsigned long base;
 			u32 limit;
