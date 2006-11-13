@@ -9,7 +9,7 @@
  *     bitmap for that number of interrupts.
  */
 #define KVM_NR_INTERRUPTS 256
-#define KVM_IRQ_BITMAP_SIZE_BYTES    (KVM_NR_INTERRUPTS + 7 / 8)
+#define KVM_IRQ_BITMAP_SIZE_BYTES    ((KVM_NR_INTERRUPTS + 7) / 8)
 #define KVM_IRQ_BITMAP_SIZE(type)    (KVM_IRQ_BITMAP_SIZE_BYTES / sizeof(type))
 
 
