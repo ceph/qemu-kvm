@@ -182,6 +182,62 @@ sudo /usr/local/kvm/bin/qemu-system-x86_64 \
      </cms:content>
   </cms:page>
 
+  <cms:page name="opensuse">
+
+     <cms:title>Prebuilt openSUSE packages</cms:title>
+     <cms:menuitem>openSUSE</cms:menuitem>
+
+     <cms:content>
+
+      <p>
+         Gerd Hoffman has provided prebuilt RPMs for openSUSE.
+      </p>
+
+      <p>
+         To install and run kvm on openSUSE, follow these steps:
+         <ol>
+             <li>
+               Add 
+http://software.opensuse.org/download/home:/kraxel/SUSE_Linux_10.1/
+(correct for your version) to your yast software repositories
+             </li>
+             <li>
+               Use yast to install the kvm and kvm-kmp RPMs
+             </li>
+             <li>
+                Create a disk image:
+                <pre>
+qemu-img create -f qcow vdisk.img 10G
+</pre>
+             </li>
+
+             <li>
+                Install an operating system:
+                <pre>
+sudo qemu-kvm-x86_64 \
+ -hda vdisk.img \
+ -cdrom /path/to/boot-media.iso \
+ -boot d \
+ -m 384
+</pre>
+             </li>
+
+             <li>
+                After installation is complete, run it with:
+                <pre>
+sudo qemu-kvm-x86_64 \
+ -hda vdisk.img \
+ -boot c \
+ -m 384
+</pre>
+             </li>
+         </ol>
+      </p>
+       
+     </cms:content>
+
+  </cms:page>
+
   <cms:page name="lists">
      <cms:menuitem>Lists</cms:menuitem>
      <cms:title>Mailing Lists</cms:title>
