@@ -40,6 +40,9 @@ target_phys_addr_t pci_mem_base;
 static int pci_irq_index;
 static PCIBus *first_bus;
 
+/* forward declarations */
+static void pci_update_mappings(PCIDevice *d);
+
 PCIBus *pci_register_bus(pci_set_irq_fn set_irq, void *pic, int devfn_min)
 {
     PCIBus *bus;
