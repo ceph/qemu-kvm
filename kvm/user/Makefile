@@ -37,6 +37,8 @@ test/irq.flat: test/print.o
 
 test/sieve.flat: test/cstart64.o test/sieve.o test/print.o test/vm.o
 
+test/test32.flat: test/test32.o
+
 -include .*.d
 
 clean:

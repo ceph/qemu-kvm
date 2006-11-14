@@ -53,8 +53,16 @@ if (( want_module )); then
     libkvm_kerneldir=$(readlink -f kernel)
 fi
 
+target_cpu() {
+    if [[ $(uname -m) = i?86 ]]; then
+	echo i386
+    else
+	uname -m
+    fi
+}
+
 (cd user; ./configure --prefix="$prefix" --kerneldir="$libkvm_kerneldir")
-(cd qemu; ./configure --target-list=$(uname -i)-softmmu --cc="$qemu_cc" \
+(cd qemu; ./configure --target-list=$(target_cpu)-softmmu --cc="$qemu_cc" \
     --disable-kqemu --extra-cflags="-I $PWD/../user" \
     --extra-ldflags="-L $PWD/../user" \
     --enable-kvm --kernel-path="$libkvm_kerneldir" \
