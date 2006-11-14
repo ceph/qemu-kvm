@@ -450,10 +450,30 @@ static struct kvm_callbacks qemu_kvm_ops = {
     .io_window = kvm_io_window,
 };
 
-void kvm_qemu_init()
+int kvm_qemu_init()
 {
+    /* Try to initialize kvm */
     kvm_context = kvm_init(&qemu_kvm_ops, saved_env);
-    kvm_create(kvm_context, phys_ram_size, (void**)&phys_ram_base);
+    if (!kvm_context) {
+      	return -1;
+    }
+
+    return 0;
+}
+
+int kvm_qemu_create_context(void)
+{
+    if (kvm_create(kvm_context, phys_ram_size, (void**)&phys_ram_base) < 0) {
+	kvm_qemu_destroy();
+	return -1;
+    }
+
+    return 0;
+}
+
+void kvm_qemu_destroy(void)
+{
+    kvm_finalize(kvm_context);
 }
 
 int kvm_update_debugger(CPUState *env)
