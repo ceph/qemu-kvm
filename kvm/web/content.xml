@@ -239,7 +239,7 @@ sudo qemu-kvm-x86_64 \
   </cms:page>
 
   <cms:page name="lists">
-     <cms:menuitem>Lists</cms:menuitem>
+     <cms:menuitem>Lists, IRC</cms:menuitem>
      <cms:title>Mailing Lists</cms:title>
      <cms:content>
 
@@ -260,6 +260,12 @@ sudo qemu-kvm-x86_64 \
            <li><a href="http://news.gmane.org/gmane.comp.emulators.kvm.devel">
               Gmane</a></li>
          </ul>
+       </p>
+
+       <h2>IRC</h2>
+
+       <p>
+         Join us on <b>#kvm</b> at freenode.
        </p>
 
      </cms:content>
