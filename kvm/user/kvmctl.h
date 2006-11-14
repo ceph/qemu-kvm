@@ -31,8 +31,11 @@ struct kvm_callbacks {
     int (*io_window)(void *opaque);
 };
 
+/* Create a new kvm context */
 kvm_context_t kvm_init(struct kvm_callbacks *callbacks,
 		       void *opaque);
+/* Cleanup the kvm context */
+void kvm_finalize(kvm_context_t kvm);
 int kvm_create(kvm_context_t kvm,
 	       unsigned long phys_mem_bytes,
 	       void **phys_mem);

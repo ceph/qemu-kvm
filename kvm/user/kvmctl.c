@@ -61,14 +61,20 @@ kvm_context_t kvm_init(struct kvm_callbacks *callbacks,
 
 	fd = open("/dev/kvm", O_RDWR);
 	if (fd == -1) {
-		printf("open: %m\n");
-		exit(1);
+		perror("open");
+		return NULL;
 	}
 	kvm = malloc(sizeof(*kvm));
 	kvm->fd = fd;
 	kvm->callbacks = callbacks;
 	kvm->opaque = opaque;
 	return kvm;
+}
+
+void kvm_finalize(kvm_context_t kvm)
+{
+	close(kvm->fd);
+	free(kvm);
 }
 
 int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem)
@@ -91,28 +97,28 @@ int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem)
 	/* 640K should be enough. */
 	r = ioctl(fd, KVM_SET_MEMORY_REGION, &low_memory);
 	if (r == -1) {
-		printf("kvm_create_memory_region: %m\n");
-		exit(1);
+		fprintf(stderr, "kvm_create_memory_region: %m\n");
+		return -1;
 	}
 	if (extended_memory.memory_size) {
 		r = ioctl(fd, KVM_SET_MEMORY_REGION, &extended_memory);
 		if (r == -1) {
-			printf("kvm_create_memory_region: %m\n");
-			exit(1);
+			fprintf(stderr, "kvm_create_memory_region: %m\n");
+			return -1;
 		}
 	}
 
 	*vm_mem = mmap(0, memory, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 	if (*vm_mem == MAP_FAILED) {
-		printf("mmap: %m\n");
-		exit(1);
+		fprintf(stderr, "mmap: %m\n");
+		return -1;
 	}
 	kvm->physical_memory = *vm_mem;
 
 	r = ioctl(fd, KVM_CREATE_VCPU, 0);
 	if (r == -1) {
-		printf("kvm_create_vcpu: %m\n");
-		exit(1);
+		fprintf(stderr, "kvm_create_vcpu: %m\n");
+		return -1;
 	}
 	return 0;
 }
@@ -174,7 +180,7 @@ static int more_io(struct kvm_run *run, int first_time)
 		return run->io.count != 0;
 }
 
-int handle_io(kvm_context_t kvm, struct kvm_run *run)
+static int handle_io(kvm_context_t kvm, struct kvm_run *run)
 {
 	uint16_t addr = run->io.port;
 	struct kvm_regs regs;
@@ -199,8 +205,8 @@ int handle_io(kvm_context_t kvm, struct kvm_run *run)
 			r = translate(kvm, run->vcpu, &tr, run->io.address, 
 				      &value_addr);
 			if (r) {
-				printf("failed translating I/O address %x\n",
-				       run->io.address);
+				fprintf(stderr, "failed translating I/O address %x\n",
+					run->io.address);
 				exit(1);
 			}
 		}
@@ -227,7 +233,7 @@ int handle_io(kvm_context_t kvm, struct kvm_run *run)
 				break;
 			}
 			default:
-				printf("bad I/O size\n");
+				fprintf(stderr, "bad I/O size\n");
 				exit(1);
 			}
 			break;
@@ -247,12 +253,12 @@ int handle_io(kvm_context_t kvm, struct kvm_run *run)
 						     *(uint32_t *)value_addr);
 				break;
 			default:
-				printf("bad I/O size\n");
+				fprintf(stderr, "bad I/O size\n");
 				exit(1);
 			}
 			break;
 		default:
-			printf("bad I/O size\n");
+			fprintf(stderr, "bad I/O size\n");
 			exit(1);
 		}
 		if (run->io.string) {
@@ -319,16 +325,17 @@ void kvm_show_regs(kvm_context_t kvm, int vcpu)
 		perror("KVM_GET_REGS");
 		exit(1);
 	}
-	printf("rax %016llx rbx %016llx rcx %016llx rdx %016llx\n"
-	       "rsi %016llx rdi %016llx rsp %016llx rbp %016llx\n"
-	       "r8  %016llx r9  %016llx r10 %016llx r11 %016llx\n"
-	       "r12 %016llx r13 %016llx r14 %016llx r15 %016llx\n"
-	       "rip %016llx rflags %08llx\n",
-	       regs.rax, regs.rbx, regs.rcx, regs.rdx,
-	       regs.rsi, regs.rdi, regs.rsp, regs.rbp,
-	       regs.r8,  regs.r9,  regs.r10, regs.r11,
-	       regs.r12, regs.r13, regs.r14, regs.r15,
-	       regs.rip, regs.rflags);
+	fprintf(stderr,
+		"rax %016llx rbx %016llx rcx %016llx rdx %016llx\n"
+		"rsi %016llx rdi %016llx rsp %016llx rbp %016llx\n"
+		"r8  %016llx r9  %016llx r10 %016llx r11 %016llx\n"
+		"r12 %016llx r13 %016llx r14 %016llx r15 %016llx\n"
+		"rip %016llx rflags %08llx\n",
+		regs.rax, regs.rbx, regs.rcx, regs.rdx,
+		regs.rsi, regs.rdi, regs.rsp, regs.rbp,
+		regs.r8,  regs.r9,  regs.r10, regs.r11,
+		regs.r12, regs.r13, regs.r14, regs.r15,
+		regs.rip, regs.rflags);
 }
 
 static int handle_cpuid(kvm_context_t kvm, struct kvm_run *run)
@@ -423,20 +430,20 @@ again:
 	}
 	switch (kvm_run.exit_type) {
 	case KVM_EXIT_TYPE_FAIL_ENTRY:
-		printf("kvm_run: failed entry, reason %u\n", 
-		       kvm_run.exit_reason & 0xffff);
+		fprintf(stderr, "kvm_run: failed entry, reason %u\n", 
+			kvm_run.exit_reason & 0xffff);
 		exit(1);
 		break;
 	case KVM_EXIT_TYPE_VM_EXIT:
 		switch (kvm_run.exit_reason) {
 		case KVM_EXIT_UNKNOWN:
-			printf("unhandled vm exit:  0x%x\n", 
+			fprintf(stderr, "unhandled vm exit:  0x%x\n", 
 			       kvm_run.hw.hardware_exit_reason);
 			kvm_show_regs(kvm, vcpu);
 			abort();
 			break;
 		case KVM_EXIT_EXCEPTION:
-			printf("exception %d (%x)\n", 
+			fprintf(stderr, "exception %d (%x)\n", 
 			       kvm_run.ex.exception,
 			       kvm_run.ex.error_code);
 			abort();
@@ -457,7 +464,7 @@ again:
 			r = handle_halt(kvm, &kvm_run);
 			break;
 		default:
-			printf("unhandled vm exit: 0x%x\n", kvm_run.exit_reason);
+			fprintf(stderr, "unhandled vm exit: 0x%x\n", kvm_run.exit_reason);
 			kvm_show_regs(kvm, vcpu);
 			abort();
 			break;
