@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 prefix=/usr/local
 kerneldir=/lib/modules/$(uname -r)/build
