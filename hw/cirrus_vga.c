@@ -3298,13 +3298,13 @@ void pci_cirrus_vga_init(PCIBus *bus, DisplayState *ds, uint8_t *vga_ram_base,
     pci_conf[0x0b] = PCI_CLASS_BASE_DISPLAY;
     pci_conf[0x0e] = PCI_CLASS_HEADERTYPE_00h;
 
+    register_savevm("cirrus_vga_pci", 0, 1, generic_pci_save, generic_pci_load,
+                    (PCIDevice *)d);
     /* setup VGA */
     s = &d->cirrus_vga;
     vga_common_init((VGAState *)s, 
                     ds, vga_ram_base, vga_ram_offset, vga_ram_size);
     cirrus_init_common(s, device_id, 1);
-    register_savevm("cirrus_vga_pci", 0, 1, generic_pci_save, generic_pci_load,
-                    (PCIDevice *)d);
     /* setup memory space */
     /* memory #0 LFB */
     /* memory #1 memory-mapped I/O */
