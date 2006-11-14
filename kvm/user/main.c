@@ -115,6 +115,37 @@ static void load_file(void *mem, const char *fname)
     }
 }
 
+static void enter_32(kvm_context_t kvm)
+{
+    struct kvm_regs regs = {
+	.rsp = 0x80000,  /* 512KB */
+	.rip = 0x100000, /* 1MB */
+	.rflags = 2,
+    };
+    struct kvm_sregs sregs = {
+	.cs = { 0, -1u,  8, 11, 1, 0, 1, 1, 0, 1, 0, 0 },
+	.ds = { 0, -1u, 16,  3, 1, 0, 1, 1, 0, 1, 0, 0 },
+	.es = { 0, -1u, 16,  3, 1, 0, 1, 1, 0, 1, 0, 0 },
+	.fs = { 0, -1u, 16,  3, 1, 0, 1, 1, 0, 1, 0, 0 },
+	.gs = { 0, -1u, 16,  3, 1, 0, 1, 1, 0, 1, 0, 0 },
+	.ss = { 0, -1u, 16,  3, 1, 0, 1, 1, 0, 1, 0, 0 },
+
+	.tr = { 0, 10000, 24, 11, 1, 0, 0, 0, 0, 0, 0, 0 },
+	.ldt = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
+	.gdt = { 0, 0 },
+	.idt = { 0, 0 },
+	.cr0 = 0x37,
+	.cr3 = 0,
+	.cr4 = 0,
+	.efer = 0,
+	.apic_base = 0,
+	.pending_int = 0,
+    };
+
+    kvm_set_regs(kvm, 0, &regs);
+    kvm_set_sregs(kvm, 0, &sregs);
+}
+
 int main(int ac, char **av)
 {
 	void *vm_mem;
@@ -122,7 +153,10 @@ int main(int ac, char **av)
 	kvm = kvm_init(&test_callbacks, 0);
 	kvm_create(kvm, 128 * 1024 * 1024, &vm_mem);
 	if (ac > 1)
-	    load_file(vm_mem + 0xf0000, av[1]);
+	    if (strcmp(av[1], "-32") != 0)
+		load_file(vm_mem + 0xf0000, av[1]);
+	    else
+		enter_32(kvm);
 	if (ac > 2)
 	    load_file(vm_mem + 0x100000, av[2]);
 	kvm_show_regs(kvm, 0);
