@@ -157,7 +157,10 @@ struct kvm_msrs {
 	__u32 vcpu;
 	__u32 nmsrs; /* number of msrs in entries */
 
-	struct kvm_msr_entry *entries;
+	union {
+		struct kvm_msr_entry __user *entries;
+		__u64 padding;
+	};
 };
 
 /* for KVM_TRANSLATE */
