@@ -14,3 +14,7 @@ rpm:	all
 		 --define="objdir $$(pwd)" \
 		 --define="_topdir $$(pwd)/.." \
 		-bb $(tmpspec)
+
+clean:
+	$(MAKE) -C $(KERNELDIR) M=`pwd` clean
+	rm -f Module.symvers
