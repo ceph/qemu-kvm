@@ -1,3 +1,19 @@
+/*
+ * Kernel-based Virtual Machine test driver
+ *
+ * This test driver provides a simple way of testing kvm, without a full
+ * device model.
+ *
+ * Copyright (C) 2006 Qumranet
+ *
+ * Authors:
+ *
+ *  Avi Kivity <avi@qumranet.com>
+ *  Yaniv Kamay <yaniv@qumranet.com>
+ *
+ * This work is licensed under the GNU LGPL license, version 2.
+ */
+
 #include "kvmctl.h"
 
 #include <stdio.h>

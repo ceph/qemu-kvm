@@ -1,3 +1,19 @@
+/*
+ * Kernel-based Virtual Machine control library
+ *
+ * This library provides an API to control the kvm hardware virtualization
+ * module.
+ *
+ * Copyright (C) 2006 Qumranet
+ *
+ * Authors:
+ *
+ *  Avi Kivity <avi@qumranet.com>
+ *  Yaniv Kamay <yaniv@qumranet.com>
+ *
+ * This work is licensed under the GNU LGPL license, version 2.
+ */
+
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdio.h>
