@@ -1,4 +1,5 @@
 KERNELDIR := /lib/modules/`uname -r`/build
+KVERREL = $(patsubst /lib/modules/%/build,%,$(KERNELDIR))
 
 rpmrelease = devel
 
@@ -10,7 +11,7 @@ tmpspec = .tmp.kvm-kmod.spec
 rpm:	all
 	mkdir -p ../BUILD ../RPMS/$$(uname -m)
 	sed 's/^Release:.*/Release: $(rpmrelease)/' kvm-kmod.spec > $(tmpspec)
-	rpmbuild --define="kverrel $$(uname -r)" \
+	rpmbuild --define="kverrel $(KVERREL)" \
 		 --define="objdir $$(pwd)" \
 		 --define="_topdir $$(pwd)/.." \
 		-bb $(tmpspec)
