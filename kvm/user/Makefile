@@ -46,6 +46,6 @@ test/sieve.flat: test/cstart64.o test/sieve.o test/print.o test/vm.o
 test/test32.flat: test/test32.o
 
 clean:
-	rm -f kvmctl *.o *.a test/*.o test/*.flat test/bootstrap
+	rm -f kvmctl *.o *.a test/*.o test/*.flat test/bootstrap .*.d
 
 -include .*.d
