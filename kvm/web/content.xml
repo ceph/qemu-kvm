@@ -308,6 +308,11 @@ sudo qemu-kvm-x86_64 \
                   instructions, and changing the execution loop to call the
                   emulator for real mode.
               </li>
+              <li>
+                  Fedora kernel package: packaging kernel modules is a rather
+                  arcane stuff.  We already have volunteers for openSUSE and
+                  Debian; we need packages for Fedora.
+              </li>
           </ul>
         </p>
         
