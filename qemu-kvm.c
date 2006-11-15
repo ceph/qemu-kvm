@@ -10,17 +10,24 @@
 #include <kvmctl.h>
 #include <string.h>
 
+#include <asm/msr.h>
+#ifndef MSR_IA32_TSC
+#define MSR_IA32_TSC		0x10
+#endif
+
 int kvm_allowed = 1;
 kvm_context_t kvm_context;
 
 #define NR_CPU 16
 static CPUState *saved_env[NR_CPU];
 
+char msr_buffer[1024]; /* FIXME: dynamically allocate (be SMP aware) */
 static void load_regs(CPUState *env)
 {
     struct kvm_regs regs;
     struct kvm_sregs sregs;
-    struct kvm_msrs msrs;
+    struct kvm_msrs *msrs = (struct kvm_msrs*)msr_buffer;
+    int i;
 
     /* hack: save env */
     if (!saved_env[0])
@@ -131,29 +138,38 @@ static void load_regs(CPUState *env)
     kvm_set_sregs(kvm_context, 0, &sregs);
 
     /* msrs */
-    msrs.sysenter_cs  = env->sysenter_cs;
-    msrs.sysenter_esp = env->sysenter_esp;
-    msrs.sysenter_eip = env->sysenter_eip;
- 
-    msrs.star           = env->star;
+#define set_msr(msrs, j, k, v)       \
+    do {                             \
+        msrs->entries[j].index = k;  \
+        msrs->entries[j].data  = v;  \
+        j++;                         \
+    } while (0)
+    
+    i = 0;
+    set_msr(msrs, i, MSR_IA32_SYSENTER_CS,  env->sysenter_cs);
+    set_msr(msrs, i, MSR_IA32_SYSENTER_ESP, env->sysenter_esp);
+    set_msr(msrs, i, MSR_IA32_SYSENTER_EIP, env->sysenter_eip);
+    set_msr(msrs, i, MSR_K6_STAR,           env->star);
 #ifdef TARGET_X86_64
-    msrs.lstar          = env->lstar;
-    msrs.cstar          = env->cstar;
-    msrs.syscall_mask   = env->fmask;
-    msrs.kernel_gs_base = env->kernelgsbase;
+    set_msr(msrs, i, MSR_CSTAR,             env->cstar);
+    set_msr(msrs, i, MSR_KERNEL_GS_BASE,    env->kernelgsbase);
+    set_msr(msrs, i, MSR_SYSCALL_MASK,      env->fmask);
+    set_msr(msrs, i, MSR_LSTAR  ,           env->lstar);
 #endif
+    set_msr(msrs, i, MSR_IA32_TSC, env->tsc);
 
-    msrs.tsc            = env->tsc;
-
-    kvm_set_msrs(kvm_context, 0, &msrs);
+    msrs->size = kvm_msr_size(i);
+    kvm_set_msrs(kvm_context, 0, msrs);
 }
 
 static void save_regs(CPUState *env)
 {
     struct kvm_regs regs;
     struct kvm_sregs sregs;
-    struct kvm_msrs msrs;
+    struct kvm_msrs *msrs = (struct kvm_msrs*)msr_buffer;
     uint32_t hflags;
+    uint64_t data;
+    uint32_t i, n;
 
     kvm_get_regs(kvm_context, 0, &regs);
 
@@ -272,22 +288,47 @@ static void save_regs(CPUState *env)
     env->kvm_interrupt_summary = sregs.interrupt_summary;
 
     /* msrs */    
-    kvm_get_msrs(kvm_context, 0, &msrs);
-    env->sysenter_cs  = msrs.sysenter_cs;
-    env->sysenter_esp = msrs.sysenter_esp;
-    env->sysenter_eip = msrs.sysenter_eip;
-    
-    env->star         = msrs.star;
+    msrs->size=sizeof(msr_buffer);
+    kvm_get_msrs(kvm_context, 0, msrs);
+    n = kvm_msr_num_entries(msrs);
+    for (i=0 ; i<n; i++) {
+        data = msrs->entries[i].data;
+        switch (msrs->entries[i].index) {
+        case MSR_IA32_SYSENTER_CS:  
+            env->sysenter_cs  = data;
+            break;
+        case MSR_IA32_SYSENTER_ESP:
+            env->sysenter_esp = data;
+            break;
+        case MSR_IA32_SYSENTER_EIP:
+            env->sysenter_eip = data;
+            break;
+        case MSR_STAR:
+            env->star         = data;
+            break;
 #ifdef TARGET_X86_64
-    env->lstar        = msrs.lstar;
-    env->cstar        = msrs.cstar;
-    env->fmask        = msrs.syscall_mask;
-    env->kernelgsbase = msrs.kernel_gs_base;
+        case MSR_CSTAR:
+            env->cstar        = data;
+            break;
+        case MSR_KERNEL_GS_BASE:
+            env->kernelgsbase = data;
+            break;
+        case MSR_SYSCALL_MASK:
+            env->fmask        = data;
+            break;
+        case MSR_LSTAR:
+            env->lstar        = data;
+            break;
 #endif
-
-    env->tsc          = msrs.tsc;
+        case MSR_IA32_TSC:
+            env->tsc          = data;
+            break;
+        default:
+            printf("Warning unknown msr index 0x%x\n", msrs->entries[i].index);
+            break;
+        }
+    }
 }
-
 
 #include <signal.h>
 

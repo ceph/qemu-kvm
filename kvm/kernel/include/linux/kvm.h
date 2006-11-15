@@ -146,26 +146,39 @@ struct kvm_sregs {
 };
 
 /* for KVM_GET_MSRS and KVM_SET_MSRS */
+
+/* 
+ * struct kvm_msrs contains a variable number of struct kvm_msr_entry entries
+ * When calling KVM_GET_MSRS ioctl, the user can not know in advance 
+ *     the required size.
+ * If the user specifies too small a kvm_msrs.size then the return value 
+ *     would be -EINVAL and kvm_msrs.size would hold the required size.
+ * The user should always fill vcpu and size fields.
+ */
+struct kvm_msr_entry {
+	__u32 index;
+	__u32 reserved;
+	__u64 data;
+};
+
 struct kvm_msrs {
 	__u32 vcpu;
-	__u32 size; /* in bytes */
-	/* FIXME: use struct xxx entries[0]; instead of hard coded names */
+	__u32 size; /* in bytes of the whole structure */
 
-	/* __u64 efer; */ //already saved in sregs
-	__u64 star;
-#ifdef __x86_64__
-	__u64 cstar;
-	__u64 kernel_gs_base;
-	__u64 syscall_mask;
-	__u64 lstar;
-#endif
-	/* sysenter registers */
-	__u64 sysenter_cs;
-	__u64 sysenter_esp;
-	__u64 sysenter_eip;
-
-	__u64 tsc; /* time stamp counter */
+	struct kvm_msr_entry entries[0]; /* variable length according to size */
 };
+
+/* calculates the number of entries in 'm' according to its size */
+static inline __u32 kvm_msr_num_entries(struct kvm_msrs *m)
+{
+	return (m->size - sizeof(struct kvm_msrs)) / sizeof(struct kvm_msr_entry);
+}
+
+/* calculates the required size needed to host n entries */
+static inline __u32 kvm_msr_size(__u32 n)
+{
+	return sizeof(struct kvm_msrs) +  n * sizeof(struct kvm_msr_entry);
+}
 
 /* for KVM_TRANSLATE */
 struct kvm_translation {

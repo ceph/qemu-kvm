@@ -106,11 +106,7 @@ struct vmcs {
 	char data[0];
 };
 
-struct vmx_msr_entry {
-	u32 index;
-	u32 reserved;
-	u64 data;
-};
+#define vmx_msr_entry kvm_msr_entry
 
 struct kvm_vcpu;
 
