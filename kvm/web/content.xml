@@ -290,6 +290,31 @@ sudo qemu-kvm-x86_64 \
      <cms:menuitem>Download</cms:menuitem>
   </cms:page>
 
+  <cms:page name="todo">
+     <cms:menuitem>TODO</cms:menuitem>
+     <cms:title>TODO</cms:title>
+
+     <cms:content>
+
+       <p>
+          The following items need some love.  Please post to the list
+          if you are interested in helping out:
+
+          <ul>
+              <li>
+                  Real mode support: VT support for real mode is terrible, so
+                  we need to do it in software.  This means extending the
+                  x86 emulator (<code>x86_emulate.c</code>) to handle more
+                  instructions, and changing the execution loop to call the
+                  emulator for real mode.
+              </li>
+          </ul>
+        </p>
+        
+     </cms:content>
+
+  </cms:page>
+
   <cms:page name="faq">
      <cms:menuitem>FAQ</cms:menuitem>
      <cms:title>Frequently Asked Questions</cms:title>
