@@ -3184,34 +3184,19 @@ static u32 msrs_to_save[] = {
 	MSR_IA32_TIME_STAMP_COUNTER
 };
 
-static u32 kvm_msr_calc_size(void)
-{
-	u32 n = sizeof(msrs_to_save) / sizeof(u32);
-	return kvm_msr_size(n);
-}
-
-static int exists(u32 *array, u32 num_entries, u32 value)
-{
-	u32 i;
-	for (i=0; i<num_entries; i++)
-		if (array[i] == value)
-			return 1;
-	return 0;
-}
-
 static int kvm_dev_ioctl_get_msrs(struct kvm *kvm, struct kvm_msrs *msrs)
 {
 	struct kvm_vcpu *vcpu;
-	struct kvm_msr_entry *entry;
-	int rc = 0;
+	struct kvm_msr_entry *entry, *entries;
+	int rc;
 	u32 size, num_entries, i;
 
 	if (msrs->vcpu < 0 || msrs->vcpu >= KVM_MAX_VCPUS)
 		return -EINVAL;
 
-	size = kvm_msr_calc_size();
-	if (msrs->size < size) {
-		msrs->size = size; /* inform actual size */
+	num_entries = ARRAY_SIZE(msrs_to_save);
+	if (msrs->nmsrs < num_entries) {
+		msrs->nmsrs = num_entries; /* inform actual number of entries */
 		return -EINVAL;
 	}
 
@@ -3219,36 +3204,53 @@ static int kvm_dev_ioctl_get_msrs(struct kvm *kvm, struct kvm_msrs *msrs)
 	if (!vcpu)
 		return -ENOENT;
 
-	msrs->size = size; /* update to actual size */
-	num_entries = sizeof(msrs_to_save) / sizeof(u32);
-	memset(msrs->entries, 0, sizeof(msrs->entries));
+	msrs->nmsrs = num_entries; /* update to actual number of entries */
+	size = msrs->nmsrs * sizeof(struct kvm_msr_entry);
+	rc = -E2BIG;
+	if (size > 4096)
+		goto out_vcpu;
+	
+	rc = -ENOMEM;
+	entries = vmalloc(size);
+	if (entries == NULL)
+		goto out_vcpu;
+
+	memset(entries, 0, size);
+	rc = -EINVAL;
 	for (i=0; i<num_entries; i++) {
-		entry = &msrs->entries[i];
+		entry = &entries[i];
 		entry->index = msrs_to_save[i];
-		rc |= get_msr(vcpu, entry->index, &entry->data);
+		if (get_msr(vcpu, entry->index, &entry->data))
+			goto out_free;
 	}
 
+	rc = -EFAULT;
+	if (copy_to_user(msrs->entries, entries, size))
+		goto out_free;
+
+	rc = 0;
+out_free:
+	vfree(entries);
+
+out_vcpu:
 	vcpu_put(vcpu);
 
-	if (rc)
-		return -EINVAL;
-
-	return 0;
+	return rc;
 }
 
 static int kvm_dev_ioctl_set_msrs(struct kvm *kvm, struct kvm_msrs *msrs)
 {
 	struct kvm_vcpu *vcpu;
-	struct kvm_msr_entry *entry;
-	int rc = 0;
+	struct kvm_msr_entry *entry, *entries;
+	int rc;
 	u32 size, num_entries, i;
 
 	if (msrs->vcpu < 0 || msrs->vcpu >= KVM_MAX_VCPUS)
 		return -EINVAL;
 
-	size = kvm_msr_calc_size();
-	if (msrs->size < size) {
-		msrs->size = size; /* inform actual size */
+	num_entries = ARRAY_SIZE(msrs_to_save);
+	if (msrs->nmsrs < num_entries) {
+		msrs->nmsrs = num_entries; /* inform actual size */
 		return -EINVAL;
 	}
 
@@ -3256,20 +3258,35 @@ static int kvm_dev_ioctl_set_msrs(struct kvm *kvm, struct kvm_msrs *msrs)
 	if (!vcpu)
 		return -ENOENT;
 
-	num_entries = kvm_msr_num_entries(msrs);
-	printk("num_entries = %u (size=%u)\n", num_entries, msrs->size);
+	size = msrs->nmsrs * sizeof(struct kvm_msr_entry);
+	rc = -E2BIG;
+	if (size > 4096)
+		goto out_vcpu;
+
+	rc = -ENOMEM;
+	entries = vmalloc(size);
+	if (entries == NULL)
+		goto out_vcpu;
+
+	rc = -EFAULT;
+	if (copy_from_user(entries, msrs->entries, size))
+		goto out_free;
+
+	rc = -EINVAL;
 	for (i=0; i<num_entries; i++) {
-		entry = &msrs->entries[i];
-		if (exists(msrs_to_save, num_entries, entry->index))
-			rc |= set_msr(vcpu, entry->index,  entry->data);			
+		entry = &entries[i];
+		if (set_msr(vcpu, entry->index,  entry->data))
+			goto out_free;
 	}
-	
+
+	rc = 0;
+out_free:
+	vfree(entries);
+
+out_vcpu:
 	vcpu_put(vcpu);
 
-	if (rc)
-		return -EINVAL;
-
-	return 0;
+	return rc;
 }
 
 #ifdef KVM_DEBUG
@@ -3530,45 +3547,27 @@ static long kvm_dev_ioctl(struct file *filp,
 		break;
 	}
 	case KVM_GET_MSRS: {
-		/* FIXME: allocate buffer dynamically or at init (be SMP aware) */
-		char kvm_msr_buffer[1024]; 
-		struct kvm_msrs *kvm_msrs = (struct kvm_msrs *)kvm_msr_buffer;
+		struct kvm_msrs kvm_msrs;
 
 		r = -EFAULT;
-		if (copy_from_user(kvm_msrs, (void *)arg, sizeof kvm_msrs))
+		if (copy_from_user(&kvm_msrs, (void *)arg, sizeof kvm_msrs))
 			goto out;
-		r = kvm_dev_ioctl_get_msrs(kvm, kvm_msrs);
+		r = kvm_dev_ioctl_get_msrs(kvm, &kvm_msrs);
 		if (r)
 			goto out;
 		r = -EFAULT;
-		if (copy_to_user((void *)arg, kvm_msrs, kvm_msrs->size))
+		if (copy_to_user((void *)arg, &kvm_msrs, sizeof kvm_msrs))
 			goto out;
-		r = -EINVAL;
-		if (kvm_msrs->size > sizeof(kvm_msr_buffer)) {
-			printk(KERN_ERR "%s: %s: kvm_buffer is too small\n",
-			       __FUNCTION__, "KVM_GET_MSRS");
-			goto out;
-		}
 		r = 0;
 		break;
 	}
 	case KVM_SET_MSRS: {
-		/* FIXME: allocate buffer dynamically or at init (be SMP aware) */
-		char kvm_msr_buffer[1024];
-		struct kvm_msrs *kvm_msrs = (struct kvm_msrs *)kvm_msr_buffer;
+		struct kvm_msrs kvm_msrs;
 
 		r = -EFAULT;
-		if (copy_from_user(kvm_msrs, (void *)arg, sizeof kvm_msrs))
+		if (copy_from_user(&kvm_msrs, (void *)arg, sizeof kvm_msrs))
 			goto out;
-		r = -EINVAL;
-		if (kvm_msrs->size > sizeof(kvm_msr_buffer)) {
-			printk(KERN_ERR "%s: %s: kvm_buffer is too small\n",
-			       __FUNCTION__, "KVM_SET_MSRS");
-			goto out;
-		}
-		if (copy_from_user(kvm_msrs, (void *)arg, kvm_msrs->size))
-			goto out;
-		r = kvm_dev_ioctl_set_msrs(kvm, kvm_msrs);
+		r = kvm_dev_ioctl_set_msrs(kvm, &kvm_msrs);
 		if (r)
 			goto out;
 		r = 0;
