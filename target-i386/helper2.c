@@ -141,12 +141,6 @@ CPUX86State *cpu_x86_init(void)
 #ifdef USE_KQEMU
     kqemu_init(env);
 #endif
-#ifdef USE_KVM
-    {
-	extern int kvm_allowed;
-	env->use_kvm = kvm_allowed;
-    }
-#endif
     return env;
 }
 

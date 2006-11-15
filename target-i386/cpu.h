@@ -492,6 +492,9 @@ typedef struct CPUX86State {
     target_ulong kernelgsbase;
 #endif
 
+#ifdef USE_KVM
+    uint64_t tsc; /* time stamp counter */
+#endif
     uint64_t pat;
 
     /* temporary data for USE_CODE_COPY mode */
@@ -531,8 +534,10 @@ typedef struct CPUX86State {
 #endif
 
 #ifdef USE_KVM
-    int kvm_pending_int;
-    int use_kvm;
+    unsigned int kvm_interrupt_summary;
+#define BITS_PER_LONG (8 * sizeof (long))
+#define NR_IRQ_WORDS (256/ BITS_PER_LONG)
+    unsigned long kvm_interrupt_bitmap[NR_IRQ_WORDS];
 #endif
 
     /* in order to simplify APIC support, we leave this pointer to the

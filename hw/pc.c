@@ -24,6 +24,7 @@
 #include "vl.h"
 #ifdef USE_KVM
 #include "qemu-kvm.h"
+extern int kvm_allowed;
 #endif
 
 /* output Bochs bios info messages */

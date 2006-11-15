@@ -10,16 +10,75 @@
 #include <kvmctl.h>
 #include <string.h>
 
+#include <asm/msr.h>
+#ifndef MSR_IA32_TSC
+#define MSR_IA32_TSC		0x10
+#endif
+
+extern void perror(const char *s);
+
 int kvm_allowed = 1;
 kvm_context_t kvm_context;
 
 #define NR_CPU 16
 static CPUState *saved_env[NR_CPU];
 
+/* FIXME: dynamically allocate msr_entries (be SMP aware) */
+#define NUM_MSR_ENTRIES 32
+struct kvm_msr_entry msr_entries[NUM_MSR_ENTRIES];
+static void set_msr_entry(struct kvm_msr_entry *entry, uint32_t index, 
+                          uint64_t data)
+{
+    entry->index = index;
+    entry->data  = data;
+}
+
+/* returns 0 on success, non-0 on failure */
+static int get_msr_entry(struct kvm_msr_entry *entry, CPUState *env)
+{
+        switch (entry->index) {
+        case MSR_IA32_SYSENTER_CS:  
+            env->sysenter_cs  = entry->data;
+            break;
+        case MSR_IA32_SYSENTER_ESP:
+            env->sysenter_esp = entry->data;
+            break;
+        case MSR_IA32_SYSENTER_EIP:
+            env->sysenter_eip = entry->data;
+            break;
+        case MSR_STAR:
+            env->star         = entry->data;
+            break;
+#ifdef TARGET_X86_64
+        case MSR_CSTAR:
+            env->cstar        = entry->data;
+            break;
+        case MSR_KERNEL_GS_BASE:
+            env->kernelgsbase = entry->data;
+            break;
+        case MSR_SYSCALL_MASK:
+            env->fmask        = entry->data;
+            break;
+        case MSR_LSTAR:
+            env->lstar        = entry->data;
+            break;
+#endif
+        case MSR_IA32_TSC:
+            env->tsc          = entry->data;
+            break;
+        default:
+            printf("Warning unknown msr index 0x%x\n", entry->index);
+            return 1;
+        }
+        return 0;
+}
+
 static void load_regs(CPUState *env)
 {
     struct kvm_regs regs;
     struct kvm_sregs sregs;
+    struct kvm_msrs msrs;
+    int i, rc;
 
     /* hack: save env */
     if (!saved_env[0])
@@ -48,6 +107,9 @@ static void load_regs(CPUState *env)
     regs.rip = env->eip;
 
     kvm_set_regs(kvm_context, 0, &regs);
+
+    sregs.interrupt_summary = env->kvm_interrupt_summary;
+    memcpy(sregs.interrupt_bitmap, env->kvm_interrupt_bitmap, sizeof(sregs.interrupt_bitmap));
 
 #define set_seg(var, seg, default_s, default_type)	\
   do {				    \
@@ -125,13 +187,35 @@ static void load_regs(CPUState *env)
     sregs.efer = env->efer;
 
     kvm_set_sregs(kvm_context, 0, &sregs);
+
+    /* msrs */
+    i = 0;
+    set_msr_entry(&msr_entries[i++], MSR_IA32_SYSENTER_CS,  env->sysenter_cs);
+    set_msr_entry(&msr_entries[i++], MSR_IA32_SYSENTER_ESP, env->sysenter_esp);
+    set_msr_entry(&msr_entries[i++], MSR_IA32_SYSENTER_EIP, env->sysenter_eip);
+    set_msr_entry(&msr_entries[i++], MSR_K6_STAR,           env->star);
+#ifdef TARGET_X86_64
+    set_msr_entry(&msr_entries[i++], MSR_CSTAR,             env->cstar);
+    set_msr_entry(&msr_entries[i++], MSR_KERNEL_GS_BASE,    env->kernelgsbase);
+    set_msr_entry(&msr_entries[i++], MSR_SYSCALL_MASK,      env->fmask);
+    set_msr_entry(&msr_entries[i++], MSR_LSTAR  ,           env->lstar);
+#endif
+    set_msr_entry(&msr_entries[i++], MSR_IA32_TSC, env->tsc);
+
+    msrs.nmsrs = i;
+    msrs.entries = msr_entries;
+    rc = kvm_set_msrs(kvm_context, 0, &msrs);
+    if (rc)
+        perror("kvm_set_msrs FAILED");
 }
 
 static void save_regs(CPUState *env)
 {
     struct kvm_regs regs;
     struct kvm_sregs sregs;
+    struct kvm_msrs msrs;
     uint32_t hflags;
+    uint32_t i, n, rc;
 
     kvm_get_regs(kvm_context, 0, &regs);
 
@@ -158,6 +242,9 @@ static void save_regs(CPUState *env)
     env->eip = regs.rip;
 
     kvm_get_sregs(kvm_context, 0, &sregs);
+
+    env->kvm_interrupt_summary = sregs.interrupt_summary;
+    memcpy(env->kvm_interrupt_bitmap, sregs.interrupt_bitmap, sizeof(env->kvm_interrupt_bitmap));
 
 #define get_seg(var, seg) \
     env->seg.selector = sregs.var.selector; \
@@ -244,16 +331,30 @@ static void save_regs(CPUState *env)
 
     tlb_flush(env, 1);
 
-    env->kvm_pending_int = sregs.pending_int;
-}
+    env->kvm_interrupt_summary = sregs.interrupt_summary;
 
+    /* msrs */    
+    msrs.nmsrs   = NUM_MSR_ENTRIES;
+    msrs.entries = msr_entries;
+    rc = kvm_get_msrs(kvm_context, 0, &msrs);
+    if (rc) {
+        perror("kvm_get_msrs FAILED");
+    }
+    else {
+        n = msrs.nmsrs; /* actual number of MSRs */
+        for (i=0 ; i<n; i++) {
+            if (get_msr_entry(&msr_entries[i], env))
+                return;
+        }
+    }
+}
 
 #include <signal.h>
 
 static inline void push_interrupts(CPUState *env)
 {
     if (!(env->interrupt_request & CPU_INTERRUPT_HARD) ||
-	!(env->eflags & IF_MASK) || env->kvm_pending_int) {
+	!(env->eflags & IF_MASK) || env->kvm_interrupt_summary) {
     	if ((env->interrupt_request & CPU_INTERRUPT_EXIT)) {
 	    env->interrupt_request &= ~CPU_INTERRUPT_EXIT;
 	    env->exception_index = EXCP_INTERRUPT;
@@ -420,7 +521,7 @@ static int kvm_halt(void *opaque, int vcpu)
     env = envs[0];
     save_regs(env);
 
-    if (!((env->kvm_pending_int || 
+    if (!((env->kvm_interrupt_summary || 
 	   (env->interrupt_request & CPU_INTERRUPT_HARD)) && 
 	  (env->eflags & IF_MASK))) {
 	    env->hflags |= HF_HALTED_MASK;

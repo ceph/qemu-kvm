@@ -11,6 +11,15 @@
 #include <asm/types.h>
 #include <linux/ioctl.h>
 
+/* defining KVM_NR_INTERRUPTS, the number of interrupts kvm supports (irq lines)
+ *     and the number of array entries needed (according to type) to hold a 
+ *     bitmap for that number of interrupts.
+ */
+#define KVM_NR_INTERRUPTS 256
+#define KVM_IRQ_BITMAP_SIZE_BYTES    ((KVM_NR_INTERRUPTS + 7) / 8)
+#define KVM_IRQ_BITMAP_SIZE(type)    (KVM_IRQ_BITMAP_SIZE_BYTES / sizeof(type))
+
+
 /* for KVM_CREATE_MEMORY_REGION */
 struct kvm_memory_region {
 	__u32 slot;
@@ -131,8 +140,27 @@ struct kvm_sregs {
 	__u64 apic_base;
 
 	/* out (KVM_GET_SREGS) */
-	__u32 pending_int;
+	__u32 interrupt_summary;
 	__u32 padding2;
+	__u64 interrupt_bitmap[KVM_IRQ_BITMAP_SIZE(__u64)];
+};
+
+/* for KVM_GET_MSRS and KVM_SET_MSRS */
+
+struct kvm_msr_entry {
+	__u32 index;
+	__u32 reserved;
+	__u64 data;
+};
+
+struct kvm_msrs {
+	__u32 vcpu;
+	__u32 nmsrs; /* number of msrs in entries */
+
+	union {
+		struct kvm_msr_entry __user *entries;
+		__u64 padding;
+	};
 };
 
 /* for KVM_TRANSLATE */
@@ -194,5 +222,7 @@ struct kvm_dirty_log {
 #define KVM_SET_MEMORY_REGION     _IOW(KVMIO, 10, struct kvm_memory_region)
 #define KVM_CREATE_VCPU           _IOW(KVMIO, 11, int /* vcpu_slot */)
 #define KVM_GET_DIRTY_LOG         _IOW(KVMIO, 12, struct kvm_dirty_log)
+#define KVM_GET_MSRS              _IOWR(KVMIO,13, struct kvm_msrs)
+#define KVM_SET_MSRS              _IOW(KVMIO, 14, struct kvm_msrs)
 
 #endif

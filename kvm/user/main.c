@@ -155,7 +155,7 @@ static void enter_32(kvm_context_t kvm)
 	.cr4 = 0,
 	.efer = 0,
 	.apic_base = 0,
-	.pending_int = 0,
+	.interrupt_bitmap = { 0 },
     };
 
     kvm_set_regs(kvm, 0, &regs);

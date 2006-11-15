@@ -68,6 +68,10 @@
 #define TARGET_PHYS_ADDR_SPACE_BITS 32
 #endif
 
+#ifdef USE_KVM
+extern int kvm_allowed;
+#endif
+
 TranslationBlock tbs[CODE_GEN_MAX_BLOCKS];
 TranslationBlock *tb_phys_hash[CODE_GEN_PHYS_HASH_SIZE];
 int nb_tbs;
@@ -1045,7 +1049,7 @@ int cpu_breakpoint_insert(CPUState *env, target_ulong pc)
     env->breakpoints[env->nb_breakpoints++] = pc;
 
 #ifdef USE_KVM
-    if (env->use_kvm)
+    if (kvm_allowed)
 	kvm_update_debugger(env);
 #endif
     
@@ -1072,7 +1076,7 @@ int cpu_breakpoint_remove(CPUState *env, target_ulong pc)
       env->breakpoints[i] = env->breakpoints[env->nb_breakpoints];
 
 #ifdef USE_KVM
-    if (env->use_kvm)
+    if (kvm_allowed)
 	kvm_update_debugger(env);
 #endif
     
@@ -1095,7 +1099,7 @@ void cpu_single_step(CPUState *env, int enabled)
         tb_flush(env);
     }
 #ifdef USE_KVM
-    if (env->use_kvm)
+    if (kvm_allowed)
 	kvm_update_debugger(env);
 #endif
 #endif
