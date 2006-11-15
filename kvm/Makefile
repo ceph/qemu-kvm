@@ -27,3 +27,9 @@ rpm:	user qemu
 		 --define="objdir $$(pwd)" \
 		 --define="_topdir $$(pwd)" \
 		-bb $(tmpspec)
+
+clean:
+	for i in $(if $(WANT_MODULE), kernel) user qemu; do \
+		make -C $$i clean; \
+	done
+	rm -f config.make user/config.mak
