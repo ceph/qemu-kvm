@@ -31,6 +31,11 @@ optparser.add_option('--no-tap',
                      default = False,
                      )
 
+optparser.add_option('--vnc',
+                     help = 'use VNC rather than SDL',
+                     dest = 'vnc',
+                     default = None,
+                     )
 
 optparser.add_option('--no-kvm',
                      help = 'use standard qemu, without kvm',
@@ -98,6 +103,7 @@ else:
 qemu_args = (cmd, '-cdrom', options.cdrom, '-boot', bootdisk,
              '-L', '/usr/share/qemu', '-hda', disk, '-m', '384',
              '-serial', 'file:/tmp/serial.log',
+             '-usbdevice', 'tablet'
           )
 
 if not options.kvm:
@@ -108,6 +114,9 @@ if options.debugger:
 
 if not options.notap:
     qemu_args += ('-net', 'nic' ,'-net', 'tap,script=/etc/kvm/qemu-ifup',)
+
+if options.vnc is not None:
+    qemu_args += ('-vnc', str(options.vnc))
 
 def concat_func(x,y): return x + ' ' + y
 print 'Running %s' % reduce(concat_func, qemu_args)
