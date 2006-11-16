@@ -743,7 +743,6 @@ static void guest_write_tsc(u64 guest_tsc)
 	vmcs_write64(TSC_OFFSET, guest_tsc - host_tsc);
 }
 
-
 static void update_exception_bitmap(struct kvm_vcpu *vcpu)
 {
 	if (vcpu->rmode.active)
@@ -2385,7 +2384,6 @@ static int handle_rdmsr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 		return 1;
 	}
 
-
 	/* FIXME: handling of bits 32:63 of rax, rdx */
 	vcpu->regs[VCPU_REGS_RAX] = data & -1u;
 	vcpu->regs[VCPU_REGS_RDX] = (data >> 32) & -1u;
@@ -3159,9 +3157,8 @@ static int kvm_dev_ioctl_set_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 }
 
 /* 
- * msrs_to_save is a list of msr indices which we need for migration.
- * The user saves the values of those MSRs using kvm_dev_ioctl_get_msrs
- * and restore/load them using kvm_dev_ioctl_set_msrs.
+ * List of msr numbers which we expose to userspace through KVM_GET_MSRS
+ * and KVM_SET_MSRS.
  */
 static u32 msrs_to_save[] = {
 	MSR_IA32_SYSENTER_CS, MSR_IA32_SYSENTER_ESP, MSR_IA32_SYSENTER_EIP,
@@ -3169,7 +3166,7 @@ static u32 msrs_to_save[] = {
 #ifdef __x86_64__
 	MSR_CSTAR, MSR_KERNEL_GS_BASE, MSR_SYSCALL_MASK, MSR_LSTAR,
 #endif
-	MSR_IA32_TIME_STAMP_COUNTER
+	MSR_IA32_TIME_STAMP_COUNTER,
 };
 
 static int kvm_dev_ioctl_get_msrs(struct kvm *kvm, struct kvm_msrs *msrs)
