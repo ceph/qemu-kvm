@@ -10,10 +10,7 @@
 #include <kvmctl.h>
 #include <string.h>
 
-#include <asm/msr.h>
-#ifndef MSR_IA32_TSC
 #define MSR_IA32_TSC		0x10
-#endif
 
 extern void perror(const char *s);
 
@@ -192,7 +189,7 @@ static void load_regs(CPUState *env)
     set_msr_entry(&msr_entries[i++], MSR_IA32_SYSENTER_CS,  env->sysenter_cs);
     set_msr_entry(&msr_entries[i++], MSR_IA32_SYSENTER_ESP, env->sysenter_esp);
     set_msr_entry(&msr_entries[i++], MSR_IA32_SYSENTER_EIP, env->sysenter_eip);
-    set_msr_entry(&msr_entries[i++], MSR_K6_STAR,           env->star);
+    set_msr_entry(&msr_entries[i++], MSR_STAR,              env->star);
 #ifdef TARGET_X86_64
     set_msr_entry(&msr_entries[i++], MSR_CSTAR,             env->cstar);
     set_msr_entry(&msr_entries[i++], MSR_KERNEL_GS_BASE,    env->kernelgsbase);
