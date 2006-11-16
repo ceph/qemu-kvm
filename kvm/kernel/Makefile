@@ -1,5 +1,5 @@
-KERNELDIR := /lib/modules/`uname -r`/build
-KVERREL = `uname -r`
+KERNELDIR := /lib/modules/$(shell uname -r)/build
+KVERREL = $(patsubst /lib/modules/%/build,%,$(KERNELDIR))
 
 rpmrelease = devel
 
