@@ -108,7 +108,6 @@ static void load_regs(CPUState *env)
 
     kvm_set_regs(kvm_context, 0, &regs);
 
-    sregs.interrupt_summary = env->kvm_interrupt_summary;
     memcpy(sregs.interrupt_bitmap, env->kvm_interrupt_bitmap, sizeof(sregs.interrupt_bitmap));
 
 #define set_seg(var, seg, default_s, default_type)	\
@@ -243,7 +242,6 @@ static void save_regs(CPUState *env)
 
     kvm_get_sregs(kvm_context, 0, &sregs);
 
-    env->kvm_interrupt_summary = sregs.interrupt_summary;
     memcpy(env->kvm_interrupt_bitmap, sregs.interrupt_bitmap, sizeof(env->kvm_interrupt_bitmap));
 
 #define get_seg(var, seg) \
@@ -331,8 +329,6 @@ static void save_regs(CPUState *env)
 
     tlb_flush(env, 1);
 
-    env->kvm_interrupt_summary = sregs.interrupt_summary;
-
     /* msrs */    
     msrs.nmsrs   = NUM_MSR_ENTRIES;
     msrs.entries = msr_entries;
@@ -351,10 +347,20 @@ static void save_regs(CPUState *env)
 
 #include <signal.h>
 
+static int kvm_interrupt_pending(CPUState *env)
+{
+    int i;
+
+    for (i = 0; i < NR_IRQ_WORDS; ++i)
+	if (env->kvm_interrupt_bitmap[i])
+	    return 1;
+    return 0;
+}
+
 static inline void push_interrupts(CPUState *env)
 {
     if (!(env->interrupt_request & CPU_INTERRUPT_HARD) ||
-	!(env->eflags & IF_MASK) || env->kvm_interrupt_summary) {
+	!(env->eflags & IF_MASK) || kvm_interrupt_pending(env)) {
     	if ((env->interrupt_request & CPU_INTERRUPT_EXIT)) {
 	    env->interrupt_request &= ~CPU_INTERRUPT_EXIT;
 	    env->exception_index = EXCP_INTERRUPT;
@@ -521,7 +527,7 @@ static int kvm_halt(void *opaque, int vcpu)
     env = envs[0];
     save_regs(env);
 
-    if (!((env->kvm_interrupt_summary || 
+    if (!((kvm_interrupt_pending(env) || 
 	   (env->interrupt_request & CPU_INTERRUPT_HARD)) && 
 	  (env->eflags & IF_MASK))) {
 	    env->hflags |= HF_HALTED_MASK;

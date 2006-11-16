@@ -4456,7 +4456,6 @@ void cpu_save(QEMUFile *f, void *opaque)
 
 #ifdef USE_KVM
     if (kvm_allowed) {
-        qemu_put_be32s(f, &env->kvm_interrupt_summary);
         for (i = 0; i < NR_IRQ_WORDS ; i++) {
             qemu_put_betls(f, &env->kvm_interrupt_bitmap[i]);
         }
@@ -4605,7 +4604,6 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
     tlb_flush(env, 1);
 #ifdef USE_KVM
     if (kvm_allowed) {
-        qemu_get_be32s(f, &env->kvm_interrupt_summary);
         for (i = 0; i < NR_IRQ_WORDS ; i++) {
             qemu_get_betls(f, &env->kvm_interrupt_bitmap[i]);
         }
