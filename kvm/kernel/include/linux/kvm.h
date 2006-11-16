@@ -138,10 +138,6 @@ struct kvm_sregs {
 	__u64 cr0, cr2, cr3, cr4, cr8;
 	__u64 efer;
 	__u64 apic_base;
-
-	/* out (KVM_GET_SREGS) */
-	__u32 interrupt_summary;
-	__u32 padding2;
 	__u64 interrupt_bitmap[KVM_IRQ_BITMAP_SIZE(__u64)];
 };
 
