@@ -3063,7 +3063,8 @@ static int kvm_dev_ioctl_get_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 	sregs->efer = vcpu->shadow_efer;
 	sregs->apic_base = vcpu->apic_base;
 
-	memcpy(sregs->interrupt_bitmap, vcpu->irq_pending, sizeof sregs->interrupt_bitmap);
+	memcpy(sregs->interrupt_bitmap, vcpu->irq_pending,
+	       sizeof sregs->interrupt_bitmap);
 
 	vcpu_put(vcpu);
 
@@ -3148,7 +3149,8 @@ static int kvm_dev_ioctl_set_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 	if (mmu_reset_needed)
 		kvm_mmu_reset_context(vcpu);
 
-	memcpy(vcpu->irq_pending, sregs->interrupt_bitmap, sizeof vcpu->irq_pending);
+	memcpy(vcpu->irq_pending, sregs->interrupt_bitmap,
+	       sizeof vcpu->irq_pending);
 	vcpu->irq_summary = 0;
 	for (i = 0; i < NR_IRQ_WORDS; ++i)
 		if (vcpu->irq_pending[i])
