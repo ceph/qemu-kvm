@@ -125,7 +125,7 @@ static void load_regs(CPUState *env)
     sregs.var.l = valid ? (flags >> DESC_L_SHIFT) & 1 : 0;    \
     sregs.var.g = valid ? (flags & DESC_G_MASK) != 0 : 0;      \
     sregs.var.avl = (flags & DESC_AVL_MASK) != 0; \
-    sregs.var.unusable = 0; \
+    sregs.var.unusable = (flags == 0); \
   } while (0)
 
 
