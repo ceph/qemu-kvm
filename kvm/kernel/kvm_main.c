@@ -717,8 +717,7 @@ static void inject_gp(struct kvm_vcpu *vcpu)
 		     INTR_INFO_VALID_MASK);
 }
 
-
-/* 
+/*
  * reads and returns guest's timestamp counter "register"
  * guest_tsc = host_tsc + tsc_offset    -- 21.3
  */
@@ -731,14 +730,14 @@ static u64 guest_read_tsc(void)
 	return host_tsc + tsc_offset;
 }
 
-/* 
+/*
  * writes 'guest_tsc' into guest's timestamp counter "register"
  * guest_tsc = host_tsc + tsc_offset ==> tsc_offset = guest_tsc - host_tsc
  */
 static void guest_write_tsc(u64 guest_tsc)
 {
 	u64 host_tsc;
-	
+
 	rdtscll(host_tsc);
 	vmcs_write64(TSC_OFFSET, guest_tsc - host_tsc);
 }
@@ -2299,7 +2298,7 @@ static int handle_cpuid(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	return 0;
 }
 
-/* 
+/*
  * Reads an msr value (of 'msr_index') into 'pdata'.
  * Returns 0 on success, non-0 otherwise.
  * Assumes vcpu_load() was already called.
@@ -2371,14 +2370,6 @@ static int handle_rdmsr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	u32 ecx = vcpu->regs[VCPU_REGS_RCX];
 	u64 data;
 
-#ifdef KVM_DEBUG
-	if (guest_cpl() != 0) {
-		vcpu_printf(vcpu, "%s: not supervisor\n", __FUNCTION__);
-		inject_gp(vcpu);
-		return 1;
-	}
-#endif
-
 	if (get_msr(vcpu, ecx, &data)) {
 		inject_gp(vcpu);
 		return 1;
@@ -2426,7 +2417,7 @@ static void set_efer(struct kvm_vcpu *vcpu, u64 efer)
 #endif
 
 
-/* 
+/*
  * Writes msr value into into the appropriate "register".
  * Returns 0 on success, non-0 otherwise.
  * Assumes vcpu_load() was already called.
@@ -2490,14 +2481,6 @@ static int handle_wrmsr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	u32 ecx = vcpu->regs[VCPU_REGS_RCX];
 	u64 data = (vcpu->regs[VCPU_REGS_RAX] & -1u)
 		| ((u64)(vcpu->regs[VCPU_REGS_RDX] & -1u) << 32);
-
-#ifdef KVM_DEBUG
-	if (guest_cpl() != 0) {
-		vcpu_printf(vcpu, "%s: not supervisor\n", __FUNCTION__);
-		inject_gp(vcpu);
-		return 1;
-	}
-#endif
 
 	if (set_msr(vcpu, ecx, data) != 0) {
 		inject_gp(vcpu);
@@ -3161,7 +3144,7 @@ static int kvm_dev_ioctl_set_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 	return 0;
 }
 
-/* 
+/*
  * List of msr numbers which we expose to userspace through KVM_GET_MSRS
  * and KVM_SET_MSRS.
  */
@@ -3186,7 +3169,8 @@ static int kvm_dev_ioctl_get_msrs(struct kvm *kvm, struct kvm_msrs *msrs)
 
 	num_entries = ARRAY_SIZE(msrs_to_save);
 	if (msrs->nmsrs < num_entries) {
-		msrs->nmsrs = num_entries; /* inform actual number of entries */
+		/* inform actual number of entries */
+		msrs->nmsrs = num_entries;
 		return -EINVAL;
 	}
 
@@ -3199,7 +3183,7 @@ static int kvm_dev_ioctl_get_msrs(struct kvm *kvm, struct kvm_msrs *msrs)
 	rc = -E2BIG;
 	if (size > 4096)
 		goto out_vcpu;
-	
+
 	rc = -ENOMEM;
 	entries = vmalloc(size);
 	if (entries == NULL)
