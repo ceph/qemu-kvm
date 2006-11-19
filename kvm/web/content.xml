@@ -238,6 +238,60 @@ sudo qemu-kvm-x86_64 \
 
   </cms:page>
 
+  <cms:page name="debian">
+
+     <cms:title>KVM on Debian</cms:title>
+     <cms:menuitem>Debian</cms:menuitem>
+
+     <cms:content>
+
+      <p>
+         Baruch Even has integrated kvm into the debian archive.
+      </p>
+
+      <p>
+         To install and run kvm on Debian, follow these steps:
+         <ol>
+             <li>
+               Run the commands <pre>
+sudo apt-get install kvm kvm-source
+sudo m-a build kvm &amp;&amp; sudo m-a install kvm &amp;&amp; sudo modprobe kvm
+</pre>
+             </li>
+             <li>
+                Create a disk image:
+                <pre>
+qemu-img create -f qcow vdisk.img 10G
+</pre>
+             </li>
+
+             <li>
+                Install an operating system:
+                <pre>
+sudo kvm \
+ -hda vdisk.img \
+ -cdrom /path/to/boot-media.iso \
+ -boot d \
+ -m 384
+</pre>
+             </li>
+
+             <li>
+                After installation is complete, run it with:
+                <pre>
+sudo kvm \
+ -hda vdisk.img \
+ -boot c \
+ -m 384
+</pre>
+             </li>
+         </ol>
+      </p>
+       
+     </cms:content>
+
+  </cms:page>
+
   <cms:page name="lists">
      <cms:menuitem>Lists, IRC</cms:menuitem>
      <cms:title>Mailing Lists</cms:title>
