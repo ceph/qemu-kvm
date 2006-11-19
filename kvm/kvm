@@ -53,6 +53,11 @@ optparser.add_option('--cdrom',
                      dest = 'cdrom',
                      default = '/data/mirror/fedora/core/5/x86_64/os/images/boot.iso',
                      )
+optparser.add_option('--loadvm',
+                     help = 'select saved vm-image',
+                     dest = 'saved_image',
+                     default = '',
+                     )
 
 (options, args) = optparser.parse_args(sys.argv)
 
@@ -117,6 +122,9 @@ if not options.notap:
 
 if options.vnc is not None:
     qemu_args += ('-vnc', str(options.vnc))
+
+if options.saved_image != '':
+    qemu_args += ('-loadvm' , options.saved_image, )
 
 def concat_func(x,y): return x + ' ' + y
 print 'Running %s' % reduce(concat_func, qemu_args)
