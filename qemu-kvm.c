@@ -50,10 +50,10 @@ static int get_msr_entry(struct kvm_msr_entry *entry, CPUState *env)
         case MSR_CSTAR:
             env->cstar        = entry->data;
             break;
-        case MSR_KERNEL_GS_BASE:
+        case MSR_KERNELGSBASE:
             env->kernelgsbase = entry->data;
             break;
-        case MSR_SYSCALL_MASK:
+        case MSR_FMASK:
             env->fmask        = entry->data;
             break;
         case MSR_LSTAR:
@@ -192,8 +192,8 @@ static void load_regs(CPUState *env)
     set_msr_entry(&msr_entries[i++], MSR_STAR,              env->star);
 #ifdef TARGET_X86_64
     set_msr_entry(&msr_entries[i++], MSR_CSTAR,             env->cstar);
-    set_msr_entry(&msr_entries[i++], MSR_KERNEL_GS_BASE,    env->kernelgsbase);
-    set_msr_entry(&msr_entries[i++], MSR_SYSCALL_MASK,      env->fmask);
+    set_msr_entry(&msr_entries[i++], MSR_KERNELGSBASE,      env->kernelgsbase);
+    set_msr_entry(&msr_entries[i++], MSR_FMASK,             env->fmask);
     set_msr_entry(&msr_entries[i++], MSR_LSTAR  ,           env->lstar);
 #endif
     set_msr_entry(&msr_entries[i++], MSR_IA32_TSC, env->tsc);
