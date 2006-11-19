@@ -290,6 +290,39 @@ sudo qemu-kvm-x86_64 \
      <cms:menuitem>Download</cms:menuitem>
   </cms:page>
 
+  <cms:page name="code">
+     <cms:menuitem>Code</cms:menuitem>
+     <cms:title>Source Control</cms:title>
+
+     <cms:content>
+
+       <p>
+          The source code for kvm is available through <code>subversion</code>.
+          Read-only access is provided through the URL
+          <code>svn://kvm.qumranet.com/kvm</code>.
+       </p>
+
+       <p>
+          To check out the trunk, type
+<pre>
+svn checkout svn://kvm.qumranet.com/kvm/trunk some-name
+</pre>
+
+          To check out the release branch (that is submitted to -mm), type
+<pre>
+svn checkout svn://kvm.qumranet.com/kvm/branches/release some-name
+</pre>
+
+          To view the list of branches, type
+<pre>
+svn ls svn://kvm.qumranet.com/kvm/branches
+</pre>
+       </p>
+
+     </cms:content>
+
+  </cms:page>
+
   <cms:page name="todo">
      <cms:menuitem>TODO</cms:menuitem>
      <cms:title>TODO</cms:title>
