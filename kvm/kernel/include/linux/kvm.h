@@ -152,10 +152,13 @@ struct kvm_msrs {
 	__u32 vcpu;
 	__u32 nmsrs; /* number of msrs in entries */
 
-	union {
-		struct kvm_msr_entry __user *entries;
-		__u64 padding;
-	};
+	struct kvm_msr_entry entries[0];
+};
+
+/* for KVM_GET_MSR_INDEX_LIST */
+struct kvm_msr_list {
+	__u32 nmsrs; /* number of msrs in entries */
+	__u32 indices[0];
 };
 
 /* for KVM_TRANSLATE */
@@ -218,6 +221,7 @@ struct kvm_dirty_log {
 #define KVM_CREATE_VCPU           _IOW(KVMIO, 11, int /* vcpu_slot */)
 #define KVM_GET_DIRTY_LOG         _IOW(KVMIO, 12, struct kvm_dirty_log)
 #define KVM_GET_MSRS              _IOWR(KVMIO, 13, struct kvm_msrs)
-#define KVM_SET_MSRS              _IOW(KVMIO, 14, struct kvm_msrs)
+#define KVM_SET_MSRS              _IOWR(KVMIO, 14, struct kvm_msrs)
+#define KVM_GET_MSR_INDEX_LIST    _IOWR(KVMIO, 15, struct kvm_msr_list)
 
 #endif

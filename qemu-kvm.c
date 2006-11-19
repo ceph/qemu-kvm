@@ -20,9 +20,6 @@ kvm_context_t kvm_context;
 #define NR_CPU 16
 static CPUState *saved_env[NR_CPU];
 
-/* FIXME: dynamically allocate msr_entries (be SMP aware) */
-#define NUM_MSR_ENTRIES 32
-struct kvm_msr_entry msr_entries[NUM_MSR_ENTRIES];
 static void set_msr_entry(struct kvm_msr_entry *entry, uint32_t index, 
                           uint64_t data)
 {
@@ -70,12 +67,18 @@ static int get_msr_entry(struct kvm_msr_entry *entry, CPUState *env)
         return 0;
 }
 
+#ifdef TARGET_X86_64
+#define MSR_COUNT 9
+#else
+#define MSR_COUNT 5
+#endif
+
 static void load_regs(CPUState *env)
 {
     struct kvm_regs regs;
     struct kvm_sregs sregs;
-    struct kvm_msrs msrs;
-    int i, rc;
+    struct kvm_msr_entry msrs[MSR_COUNT];
+    int rc;
 
     /* hack: save env */
     if (!saved_env[0])
@@ -185,23 +188,20 @@ static void load_regs(CPUState *env)
     kvm_set_sregs(kvm_context, 0, &sregs);
 
     /* msrs */
-    i = 0;
-    set_msr_entry(&msr_entries[i++], MSR_IA32_SYSENTER_CS,  env->sysenter_cs);
-    set_msr_entry(&msr_entries[i++], MSR_IA32_SYSENTER_ESP, env->sysenter_esp);
-    set_msr_entry(&msr_entries[i++], MSR_IA32_SYSENTER_EIP, env->sysenter_eip);
-    set_msr_entry(&msr_entries[i++], MSR_STAR,              env->star);
+    set_msr_entry(&msrs[0], MSR_IA32_SYSENTER_CS,  env->sysenter_cs);
+    set_msr_entry(&msrs[1], MSR_IA32_SYSENTER_ESP, env->sysenter_esp);
+    set_msr_entry(&msrs[2], MSR_IA32_SYSENTER_EIP, env->sysenter_eip);
+    set_msr_entry(&msrs[3], MSR_STAR,              env->star);
+    set_msr_entry(&msrs[4], MSR_IA32_TSC, env->tsc);
 #ifdef TARGET_X86_64
-    set_msr_entry(&msr_entries[i++], MSR_CSTAR,             env->cstar);
-    set_msr_entry(&msr_entries[i++], MSR_KERNELGSBASE,      env->kernelgsbase);
-    set_msr_entry(&msr_entries[i++], MSR_FMASK,             env->fmask);
-    set_msr_entry(&msr_entries[i++], MSR_LSTAR  ,           env->lstar);
+    set_msr_entry(&msrs[5], MSR_CSTAR,             env->cstar);
+    set_msr_entry(&msrs[6], MSR_KERNELGSBASE,      env->kernelgsbase);
+    set_msr_entry(&msrs[7], MSR_FMASK,             env->fmask);
+    set_msr_entry(&msrs[8], MSR_LSTAR  ,           env->lstar);
 #endif
-    set_msr_entry(&msr_entries[i++], MSR_IA32_TSC, env->tsc);
 
-    msrs.nmsrs = i;
-    msrs.entries = msr_entries;
-    rc = kvm_set_msrs(kvm_context, 0, &msrs);
-    if (rc)
+    rc = kvm_set_msrs(kvm_context, 0, msrs, MSR_COUNT);
+    if (rc == -1)
         perror("kvm_set_msrs FAILED");
 }
 
@@ -209,7 +209,7 @@ static void save_regs(CPUState *env)
 {
     struct kvm_regs regs;
     struct kvm_sregs sregs;
-    struct kvm_msrs msrs;
+    struct kvm_msr_entry msrs[MSR_COUNT];
     uint32_t hflags;
     uint32_t i, n, rc;
 
@@ -327,16 +327,25 @@ static void save_regs(CPUState *env)
     tlb_flush(env, 1);
 
     /* msrs */    
-    msrs.nmsrs   = NUM_MSR_ENTRIES;
-    msrs.entries = msr_entries;
-    rc = kvm_get_msrs(kvm_context, 0, &msrs);
-    if (rc) {
+    msrs[0].index = MSR_IA32_SYSENTER_CS;
+    msrs[1].index = MSR_IA32_SYSENTER_ESP;
+    msrs[2].index = MSR_IA32_SYSENTER_EIP;
+    msrs[3].index = MSR_STAR;
+    msrs[4].index = MSR_IA32_TSC;
+#ifdef TARGET_X86_64
+    msrs[5].index = MSR_CSTAR;
+    msrs[6].index = MSR_KERNELGSBASE;
+    msrs[7].index = MSR_FMASK;
+    msrs[8].index = MSR_LSTAR;
+#endif
+    rc = kvm_get_msrs(kvm_context, 0, msrs, MSR_COUNT);
+    if (rc == -1) {
         perror("kvm_get_msrs FAILED");
     }
     else {
-        n = msrs.nmsrs; /* actual number of MSRs */
+        n = rc; /* actual number of MSRs */
         for (i=0 ; i<n; i++) {
-            if (get_msr_entry(&msr_entries[i], env))
+            if (get_msr_entry(&msrs[i], env))
                 return;
         }
     }

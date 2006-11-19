@@ -129,6 +129,8 @@ static const u32 vmx_msr_index[] = {
 #define MSR_IA32_VMX_EXIT_CTLS_MSR		0x483
 #define MSR_IA32_VMX_ENTRY_CTLS_MSR		0x484
 
+#define MAX_IO_MSRS 256
+
 #define CR0_RESEVED_BITS 0xffffffff1ffaffc0ULL
 #define LMSW_GUEST_MASK 0x0eULL
 #define CR4_RESEVED_BITS (~((1ULL << 11) - 1))
@@ -3146,7 +3148,7 @@ static int kvm_dev_ioctl_set_sregs(struct kvm *kvm, struct kvm_sregs *sregs)
 
 /*
  * List of msr numbers which we expose to userspace through KVM_GET_MSRS
- * and KVM_SET_MSRS.
+ * and KVM_SET_MSRS, and KVM_GET_MSR_INDEX_LIST.
  */
 static u32 msrs_to_save[] = {
 	MSR_IA32_SYSENTER_CS, MSR_IA32_SYSENTER_ESP, MSR_IA32_SYSENTER_EIP,
@@ -3157,110 +3159,91 @@ static u32 msrs_to_save[] = {
 	MSR_IA32_TIME_STAMP_COUNTER,
 };
 
-static int kvm_dev_ioctl_get_msrs(struct kvm *kvm, struct kvm_msrs *msrs)
+
+/*
+ * Adapt set_msr() to msr_io()'s calling convention
+ */
+static int do_set_msr(struct kvm_vcpu *vcpu, unsigned index, u64 *data)
 {
-	struct kvm_vcpu *vcpu;
-	struct kvm_msr_entry *entry, *entries;
-	int rc;
-	u32 size, num_entries, i;
-
-	if (msrs->vcpu < 0 || msrs->vcpu >= KVM_MAX_VCPUS)
-		return -EINVAL;
-
-	num_entries = ARRAY_SIZE(msrs_to_save);
-	if (msrs->nmsrs < num_entries) {
-		/* inform actual number of entries */
-		msrs->nmsrs = num_entries;
-		return -EINVAL;
-	}
-
-	vcpu = vcpu_load(kvm, msrs->vcpu);
-	if (!vcpu)
-		return -ENOENT;
-
-	msrs->nmsrs = num_entries; /* update to actual number of entries */
-	size = msrs->nmsrs * sizeof(struct kvm_msr_entry);
-	rc = -E2BIG;
-	if (size > 4096)
-		goto out_vcpu;
-
-	rc = -ENOMEM;
-	entries = vmalloc(size);
-	if (entries == NULL)
-		goto out_vcpu;
-
-	memset(entries, 0, size);
-	rc = -EINVAL;
-	for (i=0; i<num_entries; i++) {
-		entry = &entries[i];
-		entry->index = msrs_to_save[i];
-		if (get_msr(vcpu, entry->index, &entry->data))
-			goto out_free;
-	}
-
-	rc = -EFAULT;
-	if (copy_to_user(msrs->entries, entries, size))
-		goto out_free;
-
-	rc = 0;
-out_free:
-	vfree(entries);
-
-out_vcpu:
-	vcpu_put(vcpu);
-
-	return rc;
+	return set_msr(vcpu, index, *data);
 }
 
-static int kvm_dev_ioctl_set_msrs(struct kvm *kvm, struct kvm_msrs *msrs)
+/*
+ * Read or write a bunch of msrs. All parameters are kernel addresses.
+ *
+ * @return number of msrs set successfully.
+ */
+static int __msr_io(struct kvm *kvm, struct kvm_msrs *msrs,
+		    struct kvm_msr_entry *entries,
+		    int (*do_msr)(struct kvm_vcpu *vcpu,
+				  unsigned index, u64 *data))
 {
 	struct kvm_vcpu *vcpu;
-	struct kvm_msr_entry *entry, *entries;
-	int rc;
-	u32 size, num_entries, i;
+	int i;
 
 	if (msrs->vcpu < 0 || msrs->vcpu >= KVM_MAX_VCPUS)
 		return -EINVAL;
-
-	num_entries = ARRAY_SIZE(msrs_to_save);
-	if (msrs->nmsrs < num_entries) {
-		msrs->nmsrs = num_entries; /* inform actual size */
-		return -EINVAL;
-	}
 
 	vcpu = vcpu_load(kvm, msrs->vcpu);
 	if (!vcpu)
 		return -ENOENT;
 
-	size = msrs->nmsrs * sizeof(struct kvm_msr_entry);
-	rc = -E2BIG;
-	if (size > 4096)
-		goto out_vcpu;
+	for (i = 0; i < msrs->nmsrs; ++i)
+		if (do_msr(vcpu, entries[i].index, &entries[i].data))
+			break;
 
-	rc = -ENOMEM;
-	entries = vmalloc(size);
-	if (entries == NULL)
-		goto out_vcpu;
-
-	rc = -EFAULT;
-	if (copy_from_user(entries, msrs->entries, size))
-		goto out_free;
-
-	rc = -EINVAL;
-	for (i=0; i<num_entries; i++) {
-		entry = &entries[i];
-		if (set_msr(vcpu, entry->index,  entry->data))
-			goto out_free;
-	}
-
-	rc = 0;
-out_free:
-	vfree(entries);
-
-out_vcpu:
 	vcpu_put(vcpu);
 
-	return rc;
+	return i;
+}
+
+/*
+ * Read or write a bunch of msrs. Parameters are user addresses.
+ *
+ * @return number of msrs set successfully.
+ */
+static int msr_io(struct kvm *kvm, struct kvm_msrs __user *user_msrs,
+		  int (*do_msr)(struct kvm_vcpu *vcpu,
+				unsigned index, u64 *data),
+		  int writeback)
+{
+	struct kvm_msrs msrs;
+	struct kvm_msr_entry *entries;
+	int r, n;
+	unsigned size;
+
+	r = -EFAULT;
+	if (copy_from_user(&msrs, user_msrs, sizeof msrs))
+		goto out;
+
+	r = -E2BIG;
+	if (msrs.nmsrs >= MAX_IO_MSRS)
+		goto out;
+
+	r = -ENOMEM;
+	size = sizeof(struct kvm_msr_entry) * msrs.nmsrs;
+	entries = vmalloc(size);
+	if (!entries)
+		goto out;
+
+	r = -EFAULT;
+	if (copy_from_user(entries, user_msrs->entries, size))
+		goto out_free;
+
+	r = n = __msr_io(kvm, &msrs, entries, do_msr);
+	if (r < 0)
+		goto out_free;
+
+	r = -EFAULT;
+	if (writeback && copy_to_user(user_msrs->entries, entries, size))
+		goto out_free;
+
+	r = n;
+
+out_free:
+	vfree(entries);
+out:
+	return r;
 }
 
 /*
@@ -3504,32 +3487,32 @@ static long kvm_dev_ioctl(struct file *filp,
 			goto out;
 		break;
 	}
-	case KVM_GET_MSRS: {
-		struct kvm_msrs kvm_msrs;
+	case KVM_GET_MSRS:
+		r = msr_io(kvm, (void __user *)arg, get_msr, 1);
+		break;
+	case KVM_SET_MSRS:
+		r = msr_io(kvm, (void __user *)arg, do_set_msr, 0);
+		break;
+	case KVM_GET_MSR_INDEX_LIST: {
+		struct kvm_msr_list __user *user_msr_list = (void __user *)arg;
+		struct kvm_msr_list msr_list;
+		unsigned n;
 
 		r = -EFAULT;
-		if (copy_from_user(&kvm_msrs, (void *)arg, sizeof kvm_msrs))
+		if (copy_from_user(&msr_list, user_msr_list, sizeof msr_list))
 			goto out;
-		r = kvm_dev_ioctl_get_msrs(kvm, &kvm_msrs);
-		if (r)
+		n = msr_list.nmsrs;
+		msr_list.nmsrs = ARRAY_SIZE(msrs_to_save);
+		if (copy_to_user(user_msr_list, &msr_list, sizeof msr_list))
+			goto out;
+		r = -E2BIG;
+		if (n < ARRAY_SIZE(msrs_to_save))
 			goto out;
 		r = -EFAULT;
-		if (copy_to_user((void *)arg, &kvm_msrs, sizeof kvm_msrs))
+		if (copy_to_user(user_msr_list->indices, &msrs_to_save,
+				 sizeof msrs_to_save))
 			goto out;
-		r = 0;
-		break;
-	}
-	case KVM_SET_MSRS: {
-		struct kvm_msrs kvm_msrs;
-
-		r = -EFAULT;
-		if (copy_from_user(&kvm_msrs, (void *)arg, sizeof kvm_msrs))
-			goto out;
-		r = kvm_dev_ioctl_set_msrs(kvm, &kvm_msrs);
-		if (r)
-			goto out;
-		r = 0;
-		break;
+		r = 0; 
 	}
 	default:
 		;
