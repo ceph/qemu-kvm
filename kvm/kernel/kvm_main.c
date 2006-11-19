@@ -3512,7 +3512,7 @@ static long kvm_dev_ioctl(struct file *filp,
 		if (copy_to_user(user_msr_list->indices, &msrs_to_save,
 				 sizeof msrs_to_save))
 			goto out;
-		r = 0; 
+		r = 0;
 	}
 	default:
 		;
