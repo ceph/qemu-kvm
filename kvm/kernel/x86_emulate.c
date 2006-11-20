@@ -1152,8 +1152,6 @@ twobyte_insn:
 			realmode_lidt(ctxt->vcpu, size, address);
 			break;
 		case 6: /* lmsw */
-			if (modrm_mod != 3)
-				goto done;
 			realmode_lmsw(ctxt->vcpu, (u16)modrm_val, &_eflags);
 			break;
 		default:
