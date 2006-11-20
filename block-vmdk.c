@@ -23,6 +23,7 @@
  * THE SOFTWARE.
  */
 #include <uuid/uuid.h>
+#include <libgen.h>
 #include "vl.h"
 #include "block_int.h"
 
@@ -317,11 +318,13 @@ static void vmdk_parent_close(BlockDriverState *bs)
         bdrv_close(bs->bs_par_table);
 }
 
-static int vmdk_parent_open(BlockDriverState *bs, int fd)
+
+static int vmdk_parent_open(BlockDriverState *bs, int fd, char * dir_name)
 {
     char *p_name; 
     char desc[DESC_SIZE];
     static int idx=0;
+    char parent_img_name[1024];
 
     /* the descriptor offset = 0x200 */
     if (lseek(fd, 0x200, SEEK_SET) == -1)
@@ -333,6 +336,7 @@ static int vmdk_parent_open(BlockDriverState *bs, int fd)
         char *end_name, *tmp_name;
         char name[256], buf[128];
         int name_size;
+        struct stat file_buf;
 
         p_name += sizeof("parentFileNameHint") + 1;
         if ((end_name = strchr(p_name,'\"')) == 0)
@@ -340,7 +344,11 @@ static int vmdk_parent_open(BlockDriverState *bs, int fd)
 
         bs->parent_img_name = qemu_mallocz(end_name - p_name + 2);
         strncpy(bs->parent_img_name, p_name, end_name - p_name);
-
+        if (stat(bs->parent_img_name, &file_buf) != 0) {
+            strcpy(parent_img_name, dir_name);
+            strcat(parent_img_name, basename(bs->parent_img_name));
+        }
+        
         tmp_name = strstr(bs->device_name,"_QEMU");
         name_size = tmp_name ? (tmp_name - bs->device_name) : sizeof(bs->device_name);
         strncpy(name,bs->device_name,name_size);
@@ -353,7 +361,7 @@ static int vmdk_parent_open(BlockDriverState *bs, int fd)
             return -1;
         }
 
-        if (bdrv_open(bs->bs_par_table, bs->parent_img_name, 0) < 0)
+        if (bdrv_open(bs->bs_par_table, parent_img_name, 0) < 0)
             goto failure;
     }
 
@@ -390,7 +398,8 @@ static int vmdk_open(BlockDriverState *bs, const char *filename)
         s->l1_backup_table_offset = 0;
         s->l1_entry_sectors = s->l2_size * s->cluster_sectors;
     } else if (magic == VMDK4_MAGIC) {
-        VMDK4Header header;
+        char dir_name[1024];
+	VMDK4Header header;
         
         if (read(fd, &header, sizeof(header)) != sizeof(header))
             goto fail;
@@ -406,7 +415,9 @@ static int vmdk_open(BlockDriverState *bs, const char *filename)
         s->l1_backup_table_offset = le64_to_cpu(header.gd_offset) << 9;
 
         // try to open parent images, if exist
-        if (vmdk_parent_open(bs, fd) != 0)
+        strcpy(dir_name, dirname(filename));
+        strcat(dir_name,"/");
+        if (vmdk_parent_open(bs, fd, dir_name) != 0)
             goto fail;
         // write the CID once after the image creation
         bs->cid = vmdk_read_cid(fd,0);
