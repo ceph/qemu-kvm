@@ -1045,7 +1045,9 @@ static void set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 	}
 
 	__set_cr0(vcpu, cr0);
+	spin_lock(&vcpu->kvm->lock);
 	kvm_mmu_reset_context(vcpu);
+	spin_unlock(&vcpu->kvm->lock);
 	return;
 }
 
@@ -1907,16 +1909,15 @@ static int emulate_instruction(struct kvm_vcpu *vcpu,
 		emulate_ctxt.ds_base = 0;
 		emulate_ctxt.es_base = 0;
 		emulate_ctxt.ss_base = 0;
-		emulate_ctxt.gs_base = 0;
-		emulate_ctxt.fs_base = 0;
 	} else {
 		emulate_ctxt.cs_base = vmcs_readl(GUEST_CS_BASE);
 		emulate_ctxt.ds_base = vmcs_readl(GUEST_DS_BASE);
 		emulate_ctxt.es_base = vmcs_readl(GUEST_ES_BASE);
 		emulate_ctxt.ss_base = vmcs_readl(GUEST_SS_BASE);
-		emulate_ctxt.gs_base = vmcs_readl(GUEST_GS_BASE);
-		emulate_ctxt.fs_base = vmcs_readl(GUEST_FS_BASE);
 	}
+
+	emulate_ctxt.gs_base = vmcs_readl(GUEST_GS_BASE);
+	emulate_ctxt.fs_base = vmcs_readl(GUEST_FS_BASE);
 
 	vcpu->mmio_is_write = 0;
 	r = x86_emulate_memop(&emulate_ctxt, &emulate_ops);
@@ -2322,6 +2323,9 @@ static int get_msr(struct kvm_vcpu *vcpu, u32 msr_index, u64 *pdata)
 		break;
 	case MSR_GS_BASE:
 		data = vmcs_readl(GUEST_GS_BASE);
+		break;
+	case MSR_EFER:
+		data = vcpu->shadow_efer;
 		break;
 #endif
 	case MSR_IA32_TIME_STAMP_COUNTER:

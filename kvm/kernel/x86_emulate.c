@@ -1268,13 +1268,13 @@ twobyte_special_insn:
 		b = insn_fetch(u8, 1, _eip);
 		if ((b & 0xc0) != 0xc0)
 			goto cannot_emulate;
-		_regs[(b >> 3) & 7] = realmode_get_cr(ctxt->vcpu, b & 7);
+		_regs[b & 7] = realmode_get_cr(ctxt->vcpu, (b >> 3) & 7);
 		break;
 	case 0x22: /* mov reg, cr */
 		b = insn_fetch(u8, 1, _eip);
 		if ((b & 0xc0) != 0xc0)
 			goto cannot_emulate;
-		realmode_set_cr(ctxt->vcpu, b & 7, _regs[(b >> 3) & 7] & -1u,
+		realmode_set_cr(ctxt->vcpu, (b >> 3) & 7, _regs[b & 7] & -1u,
 				&_eflags);
 		break;
 	case 0xc7:		/* Grp9 (cmpxchg8b) */
