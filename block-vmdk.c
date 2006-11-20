@@ -347,8 +347,10 @@ static int vmdk_parent_open(BlockDriverState *bs, int fd, char * dir_name)
         if (stat(bs->parent_img_name, &file_buf) != 0) {
             strcpy(parent_img_name, dir_name);
             strcat(parent_img_name, basename(bs->parent_img_name));
+        } else {
+            strcpy(parent_img_name, bs->parent_img_name);
         }
-        
+
         tmp_name = strstr(bs->device_name,"_QEMU");
         name_size = tmp_name ? (tmp_name - bs->device_name) : sizeof(bs->device_name);
         strncpy(name,bs->device_name,name_size);
