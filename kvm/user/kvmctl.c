@@ -329,6 +329,9 @@ int kvm_set_sregs(kvm_context_t kvm, int vcpu, struct kvm_sregs *sregs)
     return ioctl(kvm->fd, KVM_SET_SREGS, sregs);
 }
 
+/*
+ * Returns available msr list.  User must free.
+ */
 struct kvm_msr_list *kvm_get_msr_list(kvm_context_t kvm)
 {
     struct kvm_msr_list sizer, *msrs;
@@ -338,8 +341,12 @@ struct kvm_msr_list *kvm_get_msr_list(kvm_context_t kvm)
     r = ioctl(kvm->fd, KVM_GET_MSR_INDEX_LIST, &sizer);
     if (r == -1)
 	return 0;
-    msrs = malloc(sizeof *msrs + msrs->nmsrs * sizeof *msrs->indices);
-    r = ioctl(kvm->fd, KVM_GET_MSR_INDEX_LIST, &sizer);
+    msrs = malloc(sizeof *msrs + sizer->nmsrs * sizeof *msrs->indices);
+    if (!msrs) {
+	errno = ENOMEM;
+	return 0;
+    }
+    r = ioctl(kvm->fd, KVM_GET_MSR_INDEX_LIST, msrs);
     if (r == -1) {
 	e = errno;
 	free(msrs);
