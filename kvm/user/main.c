@@ -1,3 +1,19 @@
+/*
+ * Kernel-based Virtual Machine test driver
+ *
+ * This test driver provides a simple way of testing kvm, without a full
+ * device model.
+ *
+ * Copyright (C) 2006 Qumranet
+ *
+ * Authors:
+ *
+ *  Avi Kivity <avi@qumranet.com>
+ *  Yaniv Kamay <yaniv@qumranet.com>
+ *
+ * This work is licensed under the GNU LGPL license, version 2.
+ */
+
 #include "kvmctl.h"
 
 #include <stdio.h>
@@ -151,7 +167,15 @@ int main(int ac, char **av)
 	void *vm_mem;
 
 	kvm = kvm_init(&test_callbacks, 0);
-	kvm_create(kvm, 128 * 1024 * 1024, &vm_mem);
+	if (!kvm) {
+	    fprintf(stderr, "kvm_init failed\n");
+	    return 1;
+	}
+	if (kvm_create(kvm, 128 * 1024 * 1024, &vm_mem) < 0) {
+	    kvm_finalize(kvm);
+	    fprintf(stderr, "kvm_create failed\n");
+	    return 1;
+	}
 	if (ac > 1)
 	    if (strcmp(av[1], "-32") != 0)
 		load_file(vm_mem + 0xf0000, av[1]);
@@ -162,4 +186,6 @@ int main(int ac, char **av)
 	kvm_show_regs(kvm, 0);
 
 	kvm_run(kvm, 0);
+
+	return 0;
 }

@@ -10,10 +10,7 @@
 #include <kvmctl.h>
 #include <string.h>
 
-#include <asm/msr.h>
-#ifndef MSR_IA32_TSC
 #define MSR_IA32_TSC		0x10
-#endif
 
 extern void perror(const char *s);
 
@@ -53,10 +50,10 @@ static int get_msr_entry(struct kvm_msr_entry *entry, CPUState *env)
         case MSR_CSTAR:
             env->cstar        = entry->data;
             break;
-        case MSR_KERNEL_GS_BASE:
+        case MSR_KERNELGSBASE:
             env->kernelgsbase = entry->data;
             break;
-        case MSR_SYSCALL_MASK:
+        case MSR_FMASK:
             env->fmask        = entry->data;
             break;
         case MSR_LSTAR:
@@ -192,11 +189,11 @@ static void load_regs(CPUState *env)
     set_msr_entry(&msr_entries[i++], MSR_IA32_SYSENTER_CS,  env->sysenter_cs);
     set_msr_entry(&msr_entries[i++], MSR_IA32_SYSENTER_ESP, env->sysenter_esp);
     set_msr_entry(&msr_entries[i++], MSR_IA32_SYSENTER_EIP, env->sysenter_eip);
-    set_msr_entry(&msr_entries[i++], MSR_K6_STAR,           env->star);
+    set_msr_entry(&msr_entries[i++], MSR_STAR,              env->star);
 #ifdef TARGET_X86_64
     set_msr_entry(&msr_entries[i++], MSR_CSTAR,             env->cstar);
-    set_msr_entry(&msr_entries[i++], MSR_KERNEL_GS_BASE,    env->kernelgsbase);
-    set_msr_entry(&msr_entries[i++], MSR_SYSCALL_MASK,      env->fmask);
+    set_msr_entry(&msr_entries[i++], MSR_KERNELGSBASE,      env->kernelgsbase);
+    set_msr_entry(&msr_entries[i++], MSR_FMASK,             env->fmask);
     set_msr_entry(&msr_entries[i++], MSR_LSTAR  ,           env->lstar);
 #endif
     set_msr_entry(&msr_entries[i++], MSR_IA32_TSC, env->tsc);
@@ -557,10 +554,30 @@ static struct kvm_callbacks qemu_kvm_ops = {
     .io_window = kvm_io_window,
 };
 
-void kvm_qemu_init()
+int kvm_qemu_init()
 {
+    /* Try to initialize kvm */
     kvm_context = kvm_init(&qemu_kvm_ops, saved_env);
-    kvm_create(kvm_context, phys_ram_size, (void**)&phys_ram_base);
+    if (!kvm_context) {
+      	return -1;
+    }
+
+    return 0;
+}
+
+int kvm_qemu_create_context(void)
+{
+    if (kvm_create(kvm_context, phys_ram_size, (void**)&phys_ram_base) < 0) {
+	kvm_qemu_destroy();
+	return -1;
+    }
+
+    return 0;
+}
+
+void kvm_qemu_destroy(void)
+{
+    kvm_finalize(kvm_context);
 }
 
 int kvm_update_debugger(CPUState *env)

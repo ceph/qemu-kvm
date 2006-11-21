@@ -58,3 +58,9 @@ srpm:
 	tar czf SOURCES/scripts.tar.gz scripts
 	cp Makefile SOURCES
 	rpmbuild  --define="_topdir $$(pwd)" -bs $(tmpspec)
+
+clean:
+	for i in $(if $(WANT_MODULE), kernel) user qemu; do \
+		make -C $$i clean; \
+	done
+	rm -f config.make user/config.mak

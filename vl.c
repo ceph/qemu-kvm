@@ -6068,6 +6068,15 @@ int main(int argc, char **argv)
         }
     }
 
+#if USE_KVM
+    if (kvm_allowed) {
+	if (kvm_qemu_init() < 0) {
+	    fprintf(stderr, "Could not initialize KVM, will disable KVM support\n");
+	    kvm_allowed = 0;
+	}
+    }
+#endif
+
 #ifdef USE_KQEMU
     if (smp_cpus > 1)
         kqemu_allowed = 0;
@@ -6113,11 +6122,15 @@ int main(int argc, char **argv)
     }
 
     /* init the memory */
-#if USE_KVM
     phys_ram_size = ram_size + vga_ram_size + bios_size;
+#if USE_KVM
+    /* Initialize kvm */
     if (kvm_allowed) {
 	    phys_ram_size += KVM_EXTRA_PAGES * 4096;
-	    kvm_qemu_init();
+	    if (kvm_qemu_create_context() < 0) {
+		    fprintf(stderr, "Could not create KVM context\n");
+		    exit(1);
+	    }
     } else {
 	    phys_ram_base = qemu_vmalloc(phys_ram_size);
 	    if (!phys_ram_base) {
@@ -6126,7 +6139,6 @@ int main(int argc, char **argv)
 	    }
     }
 #else
-    phys_ram_size = ram_size + vga_ram_size + bios_size;
     phys_ram_base = qemu_vmalloc(phys_ram_size);
     if (!phys_ram_base) {
         fprintf(stderr, "Could not allocate physical memory\n");
