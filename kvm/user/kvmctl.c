@@ -341,7 +341,7 @@ struct kvm_msr_list *kvm_get_msr_list(kvm_context_t kvm)
     r = ioctl(kvm->fd, KVM_GET_MSR_INDEX_LIST, &sizer);
     if (r == -1)
 	return 0;
-    msrs = malloc(sizeof *msrs + sizer->nmsrs * sizeof *msrs->indices);
+    msrs = malloc(sizeof *msrs + sizer.nmsrs * sizeof *msrs->indices);
     if (!msrs) {
 	errno = ENOMEM;
 	return 0;
