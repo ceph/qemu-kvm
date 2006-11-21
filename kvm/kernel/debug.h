@@ -15,6 +15,8 @@ int vm_entry_test(struct kvm_vcpu *vcpu);
 void vmcs_dump(struct kvm_vcpu *vcpu);
 void regs_dump(struct kvm_vcpu *vcpu);
 void sregs_dump(struct kvm_vcpu *vcpu);
+void show_pending_interrupts(struct kvm_vcpu *vcpu);
+void vcpu_dump(struct kvm_vcpu *vcpu);
 
 #endif
 
