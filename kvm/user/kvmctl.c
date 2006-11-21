@@ -329,16 +329,72 @@ int kvm_set_sregs(kvm_context_t kvm, int vcpu, struct kvm_sregs *sregs)
     return ioctl(kvm->fd, KVM_SET_SREGS, sregs);
 }
 
-int kvm_get_msrs(kvm_context_t kvm, int vcpu, struct kvm_msrs *msrs)
+/*
+ * Returns available msr list.  User must free.
+ */
+struct kvm_msr_list *kvm_get_msr_list(kvm_context_t kvm)
 {
-    msrs->vcpu = vcpu;
-    return ioctl(kvm->fd, KVM_GET_MSRS, msrs);
+    struct kvm_msr_list sizer, *msrs;
+    int r, e;
+
+    sizer.nmsrs = 0;
+    r = ioctl(kvm->fd, KVM_GET_MSR_INDEX_LIST, &sizer);
+    if (r == -1)
+	return 0;
+    msrs = malloc(sizeof *msrs + sizer.nmsrs * sizeof *msrs->indices);
+    if (!msrs) {
+	errno = ENOMEM;
+	return 0;
+    }
+    r = ioctl(kvm->fd, KVM_GET_MSR_INDEX_LIST, msrs);
+    if (r == -1) {
+	e = errno;
+	free(msrs);
+	errno = e;
+	return 0;
+    }
+    return msrs;
 }
 
-int kvm_set_msrs(kvm_context_t kvm, int vcpu, struct kvm_msrs *msrs)
+int kvm_get_msrs(kvm_context_t kvm, int vcpu, struct kvm_msr_entry *msrs,
+		 int n)
 {
-    msrs->vcpu = vcpu;
-    return ioctl(kvm->fd, KVM_SET_MSRS, msrs);
+    struct kvm_msrs *kmsrs = malloc(sizeof *kmsrs + n * sizeof *msrs);
+    int r, e;
+
+    if (!kmsrs) {
+	errno = ENOMEM;
+	return -1;
+    }
+    kmsrs->vcpu = vcpu;
+    kmsrs->nmsrs = n;
+    memcpy(kmsrs->entries, msrs, n * sizeof *msrs);
+    r = ioctl(kvm->fd, KVM_GET_MSRS, kmsrs);
+    e = errno;
+    memcpy(msrs, kmsrs->entries, n * sizeof *msrs);
+    free(kmsrs);
+    errno = e;
+    return r;
+}
+
+int kvm_set_msrs(kvm_context_t kvm, int vcpu, struct kvm_msr_entry *msrs,
+		 int n)
+{
+    struct kvm_msrs *kmsrs = malloc(sizeof *kmsrs + n * sizeof *msrs);
+    int r, e;
+
+    if (!kmsrs) {
+	errno = ENOMEM;
+	return -1;
+    }
+    kmsrs->vcpu = vcpu;
+    kmsrs->nmsrs = n;
+    memcpy(kmsrs->entries, msrs, n * sizeof *msrs);
+    r = ioctl(kvm->fd, KVM_SET_MSRS, kmsrs);
+    e = errno;
+    free(kmsrs);
+    errno = e;
+    return r;
 }
 
 void kvm_show_regs(kvm_context_t kvm, int vcpu)
