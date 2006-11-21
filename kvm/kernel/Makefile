@@ -1,4 +1,5 @@
-KERNELDIR := /lib/modules/`uname -r`/build
+KERNELDIR := /lib/modules/$(shell uname -r)/build
+KVERREL = $(patsubst /lib/modules/%/build,%,$(KERNELDIR))
 
 rpmrelease = devel
 
@@ -10,11 +11,14 @@ tmpspec = .tmp.kvm-kmod.spec
 rpm:	all
 	mkdir -p ../BUILD ../RPMS/$$(uname -m)
 	sed 's/^Release:.*/Release: $(rpmrelease)/' kvm-kmod.spec > $(tmpspec)
-	rpmbuild --define="kverrel $$(uname -r)" \
+	rpmbuild --define="kverrel $(KVERREL)" \
 		 --define="objdir $$(pwd)" \
 		 --define="_topdir $$(pwd)/.." \
 		-bb $(tmpspec)
 
 clean:
-	$(MAKE) -C $(KERNELDIR) M=`pwd` clean
-	rm -f Module.symvers
+	$(MAKE) -C $(KERNELDIR) M=`pwd` $@
+
+svnclean:
+	svn st | grep '^\?' | awk '{print $2}' | xargs rm -rf
+
