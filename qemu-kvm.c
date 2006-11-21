@@ -125,7 +125,7 @@ static void load_regs(CPUState *env)
     sregs.var.l = valid ? (flags >> DESC_L_SHIFT) & 1 : 0;    \
     sregs.var.g = valid ? (flags & DESC_G_MASK) != 0 : 0;      \
     sregs.var.avl = (flags & DESC_AVL_MASK) != 0; \
-    sregs.var.unusable = (flags == 0); \
+    sregs.var.unusable = 0; \
   } while (0)
 
 
@@ -606,6 +606,5 @@ int kvm_update_debugger(CPUState *env)
     return kvm_guest_debug(kvm_context, 0, &dbg);
 }
 
-#else /* NOT USE_KVM */
-int kvm_allowed = 0;
+
 #endif

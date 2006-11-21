@@ -792,9 +792,7 @@ echo "#define CONFIG_QEMU_PREFIX \"$interp_prefix1\"" >> $config_h
 configure_kvm() {
   if test $kvm = "yes" -a "$target_softmmu" = "yes" -a $cpu = "$target_cpu" ; then
     echo "#define USE_KVM 1" >> $config_h
-    echo "CONFIG_KVM_INC=$PWD/../user" >> $config_mak
-    echo "CONFIG_KVM_LIB=$PWD/../user" >> $config_mak
-    echo "CONFIG_KVM_KERNEL_INC=$PWD/../kernel/include" >> $config_mak
+    echo "CONFIG_KVM_KERNEL_INC=$kernel_path/include" >> $config_mak
   fi
 }
 

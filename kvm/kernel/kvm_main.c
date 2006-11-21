@@ -504,6 +504,7 @@ static void vcpu_put(struct kvm_vcpu *vcpu)
 	mutex_unlock(&vcpu->mutex);
 }
 
+
 static struct vmcs *alloc_vmcs_cpu(int cpu)
 {
 	int node = cpu_to_node(cpu);
@@ -1212,13 +1213,16 @@ static int kvm_vcpu_setup(struct kvm_vcpu *vcpu)
 	int ret;
 	int nr_good_msrs;
 
-	if (!init_rmode_tss(vcpu->kvm))
-		return 0;
+
+	if (!init_rmode_tss(vcpu->kvm)) {
+		ret = 0;
+		goto out;
+	}
 
 	memset(vcpu->regs, 0, sizeof(vcpu->regs));
 	vcpu->regs[VCPU_REGS_RDX] = get_rdx_init_val();
 	vcpu->cr8 = 0;
-        vcpu->apic_base = 0xfee00000 |
+	vcpu->apic_base = 0xfee00000 |
 			/*for vcpu 0*/ MSR_IA32_APICBASE_BSP |
 			MSR_IA32_APICBASE_ENABLE;
 

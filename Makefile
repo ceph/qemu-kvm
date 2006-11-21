@@ -1,11 +1,14 @@
 # Makefile for QEMU.
 
+CFLAGS=
+LDFLAGS=
+
 include config-host.mak
 
 .PHONY: all clean distclean dvi info install install-doc tar tarbin \
 	speed test test2 html dvi info
 
-CFLAGS=-Wall -O2 -g -fno-strict-aliasing -I.
+CFLAGS+=-Wall -O2 -g -fno-strict-aliasing -I.
 ifdef CONFIG_DARWIN
 CFLAGS+= -mdynamic-no-pic
 endif

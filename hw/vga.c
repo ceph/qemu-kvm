@@ -1373,13 +1373,6 @@ static int bitmap_get_dirty(unsigned long *bitmap, unsigned nr)
     return (bitmap[word] >> bit) & 1;
 }
 
-#else /* NOT USE_KVM */
-/* 
- * A few declarations to fix compile problems when USE_KVM is not defined.
- * Should never be used/called
- */ 
-static int bitmap_get_dirty(unsigned long *bitmap, unsigned nr){return 0;}
-unsigned long bitmap[0];
 #endif
 
 #ifdef USE_KVM

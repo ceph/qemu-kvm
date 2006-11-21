@@ -6,9 +6,15 @@ CXXFLAGS = $(autodepend-flags)
 
 autodepend-flags = -MMD -MF $(dir $*).$(notdir $*).d
 
-all: kvmctl libkvm.a flatfiles
-
 DESTDIR = 
+
+ifeq ($(shell uname -m), x86_64)
+LIBDIR = /lib64
+else
+LIBDIR = /lib
+endif
+
+all: kvmctl libkvm.a
 
 kvmctl: kvmctl.o main.o
 
