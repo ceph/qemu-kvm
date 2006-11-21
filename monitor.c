@@ -331,6 +331,52 @@ static void do_eject(int force, const char *filename)
     eject_device(bs, force);
 }
 
+
+int vmdk_snapshot_create(BlockDriverState *bs);
+
+static void do_snapshot(const char *hda, const char *hdb,
+                        const char *hdc, const char *hdd)
+{
+
+    if (!strcmp(hda,"hda")) {
+        if (vmdk_snapshot_create(bs_table[0]) == -1)
+            term_printf("hda snapshot fail\n");
+    }
+
+    if (hdb) {
+        if (!strcmp(hdb,"hdb")) {
+            if (bs_table[1]) {
+                if (vmdk_snapshot_create(bs_table[1]) == -1)
+                    term_printf("hdb snapshot fail\n");
+            }else {
+                term_printf("hdb not exist\n");
+            }
+        }
+    }
+
+    if (hdc) {
+        if (!strcmp(hdc,"hdc")) {
+            if (bs_table[2]) {
+                if (vmdk_snapshot_create(bs_table[2]) == -1)
+                    term_printf("hdc snapshot fail\n");
+            }else {
+                term_printf("hdc not exist\n");
+            }
+        }
+    }
+
+    if (hdd) {
+        if (!strcmp(hdd,"hdd")) {
+            if (bs_table[3]) {
+                if (vmdk_snapshot_create(bs_table[3]) == -1)
+                    term_printf("hdd snapshot fail\n");
+            }else {
+                term_printf("hdd not exist\n");
+            }
+        }
+    }
+}
+
 static void do_change(const char *device, const char *filename)
 {
     BlockDriverState *bs;
@@ -1198,6 +1244,8 @@ static term_cmd_t term_cmds[] = {
 #endif
      { "stopcapture", "i", do_stop_capture,
        "capture index", "stop capture" },
+     { "create_snapshot", "ss?s?s?", do_snapshot, 
+       "hda [hdb] [hdc] [hdd]", "create snapshot of one or more images (VMDK format)" },
     { NULL, NULL, }, 
 };
 
