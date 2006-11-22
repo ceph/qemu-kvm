@@ -40,12 +40,14 @@ install:
 	make -C qemu DESTDIR="$(DESTDIR)" install
 
 tmpspec = .tmp.kvm.spec
+TARGETDIR=$$(pwd)/../RPMS
 
 rpm:	user qemu
-	mkdir -p BUILD RPMS/$$(uname -i)
+	mkdir -p $(TARGETDIR)/$$(uname -i)
 	sed 's/^Release:.*/Release: $(rpmrelease)/' kvm.spec > $(tmpspec)
 	rpmbuild --define="kverrel $$(uname -r)" \
 		 --define="objdir $$(pwd)" \
+		 --define="_rpmdir $(TARGETDIR)" \
 		 --define="_topdir $$(pwd)" \
 		 --define="prebuilt 1" \
 		-bb $(tmpspec)
