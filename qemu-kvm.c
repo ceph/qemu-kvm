@@ -110,21 +110,21 @@ static void load_regs(CPUState *env)
 
     memcpy(sregs.interrupt_bitmap, env->kvm_interrupt_bitmap, sizeof(sregs.interrupt_bitmap));
 
-#define set_seg(var, seg) \
-  do { \
-    unsigned flags = env->seg.flags; \
-    unsigned valid = flags & ~DESC_P_MASK; \
+#define set_seg(var, seg, default_s, default_type)	\
+  do {				    \
+      unsigned flags = env->seg.flags; \
+      unsigned valid = flags & ~DESC_P_MASK; \
     sregs.var.selector = env->seg.selector; \
-    sregs.var.base     = env->seg.base; \
-    sregs.var.limit    = env->seg.limit; \
-    sregs.var.type     = flags >> DESC_TYPE_SHIFT; \
-    sregs.var.present  = (flags & DESC_P_MASK) != 0; \
-    sregs.var.dpl      = env->seg.selector & 3; \
-    sregs.var.db       = (flags >> DESC_B_SHIFT) & 1; \
-    sregs.var.s        = (flags & DESC_S_MASK) != 0; \
-    sregs.var.l        = (flags >> DESC_L_SHIFT) & 1; \
-    sregs.var.g        = (flags & DESC_G_MASK) != 0; \
-    sregs.var.avl      = (flags & DESC_AVL_MASK) != 0; \
+    sregs.var.base = env->seg.base; \
+    sregs.var.limit = env->seg.limit; \
+    sregs.var.type = valid ? (flags >> DESC_TYPE_SHIFT) & 15 : default_type; \
+    sregs.var.present = valid ? (flags & DESC_P_MASK) != 0 : 1; \
+    sregs.var.dpl = env->seg.selector & 3; \
+    sregs.var.db = valid ? (flags >> DESC_B_SHIFT) & 1 : 0; \
+    sregs.var.s = valid ? (flags & DESC_S_MASK) != 0 : default_s;   \
+    sregs.var.l = valid ? (flags >> DESC_L_SHIFT) & 1 : 0;    \
+    sregs.var.g = valid ? (flags & DESC_G_MASK) != 0 : 0;      \
+    sregs.var.avl = (flags & DESC_AVL_MASK) != 0; \
     sregs.var.unusable = 0; \
   } while (0)
 
@@ -154,12 +154,12 @@ static void load_regs(CPUState *env)
 	    set_v8086_seg(gs, segs[R_GS]);
 	    set_v8086_seg(ss, segs[R_SS]);
     } else {
-	    set_seg(cs, segs[R_CS]);
-	    set_seg(ds, segs[R_DS]);
-	    set_seg(es, segs[R_ES]);
-	    set_seg(fs, segs[R_FS]);
-	    set_seg(gs, segs[R_GS]);
-	    set_seg(ss, segs[R_SS]);
+	    set_seg(cs, segs[R_CS], 1, 11);
+	    set_seg(ds, segs[R_DS], 1, 3);
+	    set_seg(es, segs[R_ES], 1, 3);
+	    set_seg(fs, segs[R_FS], 1, 3);
+	    set_seg(gs, segs[R_GS], 1, 3);
+	    set_seg(ss, segs[R_SS], 1, 3);
 
 	    if (env->cr[0] & CR0_PE_MASK) {
 		/* force ss cpl to cs cpl */
@@ -169,8 +169,8 @@ static void load_regs(CPUState *env)
 	    }
     }
 
-    set_seg(tr, tr);
-    set_seg(ldt, ldt);
+    set_seg(tr, tr, 0, 3);
+    set_seg(ldt, ldt, 0, 2);
 
     sregs.idt.limit = env->idt.limit;
     sregs.idt.base = env->idt.base;

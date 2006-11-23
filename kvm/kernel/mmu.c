@@ -138,9 +138,9 @@
 #define PT_DIRECTORY_LEVEL 2
 #define PT_PAGE_TABLE_LEVEL 1
 
-static int is_write_protection(void)
+static int is_write_protection(struct kvm_vcpu *vcpu)
 {
-	return guest_cr0() & CR0_WP_MASK;
+	return vcpu->cr0 & CR0_WP_MASK;
 }
 
 static int is_cpuid_PSE36(void)
@@ -321,9 +321,9 @@ static void nonpaging_flush(struct kvm_vcpu *vcpu)
 	root = kvm_mmu_alloc_page(vcpu, 0);
 	ASSERT(VALID_PAGE(root));
 	vcpu->mmu.root_hpa = root;
-	if (is_paging())
+	if (is_paging(vcpu))
 		root |= (vcpu->cr3 & (CR3_PCD_MASK | CR3_WPT_MASK));
-	vmcs_writel(GUEST_CR3, root);
+	kvm_arch_ops->set_cr3(vcpu, root);
 }
 
 static gpa_t nonpaging_gva_to_gpa(struct kvm_vcpu *vcpu, gva_t vaddr)
@@ -386,7 +386,7 @@ static int nonpaging_init_context(struct kvm_vcpu *vcpu)
 	context->shadow_root_level = PT32E_ROOT_LEVEL;
 	context->root_hpa = kvm_mmu_alloc_page(vcpu, 0);
 	ASSERT(VALID_PAGE(context->root_hpa));
-	vmcs_writel(GUEST_CR3, context->root_hpa);
+	kvm_arch_ops->set_cr3(vcpu, context->root_hpa);
 	return 0;
 }
 
@@ -455,32 +455,7 @@ static void inject_page_fault(struct kvm_vcpu *vcpu,
 			      u64 addr,
 			      u32 err_code)
 {
-	u32 vect_info = vmcs_read32(IDT_VECTORING_INFO_FIELD);
-
-	pgprintk("inject_page_fault: 0x%llx err 0x%x\n", addr, err_code);
-
-	++kvm_stat.pf_guest;
-
-	if (is_page_fault(vect_info)) {
-		printk(KERN_DEBUG "inject_page_fault: "
-		       "double fault 0x%llx @ 0x%lx\n",
-		       addr, vmcs_readl(GUEST_RIP));
-		vmcs_write32(VM_ENTRY_EXCEPTION_ERROR_CODE, 0);
-		vmcs_write32(VM_ENTRY_INTR_INFO_FIELD,
-			     DF_VECTOR |
-			     INTR_TYPE_EXCEPTION |
-			     INTR_INFO_DELIEVER_CODE_MASK |
-			     INTR_INFO_VALID_MASK);
-		return;
-	}
-	vcpu->cr2 = addr;
-	vmcs_write32(VM_ENTRY_EXCEPTION_ERROR_CODE, err_code);
-	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD,
-		     PF_VECTOR |
-		     INTR_TYPE_EXCEPTION |
-		     INTR_INFO_DELIEVER_CODE_MASK |
-		     INTR_INFO_VALID_MASK);
-
+	kvm_arch_ops->inject_page_fault(vcpu, addr, err_code);
 }
 
 static inline int fix_read_pf(u64 *shadow_ent)
@@ -539,9 +514,7 @@ static void paging_inval_page(struct kvm_vcpu *vcpu, gva_t addr)
 			table[index] = 0;
 			release_pt_page_64(vcpu, page_addr, PT_PAGE_TABLE_LEVEL);
 
-			//flush tlb
-			vmcs_writel(GUEST_CR3, vcpu->mmu.root_hpa |
-				    (vcpu->cr3 & (CR3_PCD_MASK | CR3_WPT_MASK)));
+			kvm_arch_ops->flush_tlb(vcpu);
 			return;
 		}
 	}
@@ -564,7 +537,7 @@ static int paging64_init_context(struct kvm_vcpu *vcpu)
 {
 	struct kvm_mmu *context = &vcpu->mmu;
 
-	ASSERT(is_pae());
+	ASSERT(is_pae(vcpu));
 	context->new_cr3 = paging_new_cr3;
 	context->page_fault = paging64_page_fault;
 	context->inval_page = paging_inval_page;
@@ -574,7 +547,7 @@ static int paging64_init_context(struct kvm_vcpu *vcpu)
 	context->shadow_root_level = PT64_ROOT_LEVEL;
 	context->root_hpa = kvm_mmu_alloc_page(vcpu, 0);
 	ASSERT(VALID_PAGE(context->root_hpa));
-	vmcs_writel(GUEST_CR3, context->root_hpa |
+	kvm_arch_ops->set_cr3(vcpu, context->root_hpa |
 		    (vcpu->cr3 & (CR3_PCD_MASK | CR3_WPT_MASK)));
 	return 0;
 }
@@ -592,7 +565,7 @@ static int paging32_init_context(struct kvm_vcpu *vcpu)
 	context->shadow_root_level = PT32E_ROOT_LEVEL;
 	context->root_hpa = kvm_mmu_alloc_page(vcpu, 0);
 	ASSERT(VALID_PAGE(context->root_hpa));
-	vmcs_writel(GUEST_CR3, context->root_hpa |
+	kvm_arch_ops->set_cr3(vcpu, context->root_hpa |
 		    (vcpu->cr3 & (CR3_PCD_MASK | CR3_WPT_MASK)));
 	return 0;
 }
@@ -614,11 +587,11 @@ static int init_kvm_mmu(struct kvm_vcpu *vcpu)
 	ASSERT(vcpu);
 	ASSERT(!VALID_PAGE(vcpu->mmu.root_hpa));
 
-	if (!is_paging())
+	if (!is_paging(vcpu))
 		return nonpaging_init_context(vcpu);
-	else if (is_long_mode())
+	else if (kvm_arch_ops->is_long_mode(vcpu))
 		return paging64_init_context(vcpu);
-	else if (is_pae())
+	else if (is_pae(vcpu))
 		return paging32E_init_context(vcpu);
 	else
 		return paging32_init_context(vcpu);

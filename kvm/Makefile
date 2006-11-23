@@ -14,6 +14,11 @@ qemu kernel user:
 
 qemu: user
 
+clean: 
+	@for d in kernel user qemu; do 	\
+		$(MAKE) -C $$d $@; 	\
+	done
+
 bindir = /usr/bin
 bin = $(bindir)/kvm
 initdir = /etc/init.d
@@ -35,14 +40,12 @@ install:
 	make -C qemu DESTDIR="$(DESTDIR)" install
 
 tmpspec = .tmp.kvm.spec
-TARGETDIR=$$(pwd)/../RPMS
 
 rpm:	user qemu
-	mkdir -p $(TARGETDIR)/$$(uname -i)
+	mkdir -p BUILD RPMS/$$(uname -i)
 	sed 's/^Release:.*/Release: $(rpmrelease)/' kvm.spec > $(tmpspec)
 	rpmbuild --define="kverrel $$(uname -r)" \
 		 --define="objdir $$(pwd)" \
-		 --define="_rpmdir $(TARGETDIR)" \
 		 --define="_topdir $$(pwd)" \
 		 --define="prebuilt 1" \
 		-bb $(tmpspec)
