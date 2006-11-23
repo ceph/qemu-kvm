@@ -75,17 +75,6 @@ static struct dentry *debugfs_dir;
 #define CR8_RESEVED_BITS (~0x0fULL)
 #define EFER_RESERVED_BITS 0xfffffffffffff2fe
 
-struct vmx_msr_entry *find_msr_entry(struct kvm_vcpu *vcpu, u32 msr)
-{
-	int i;
-
-	for (i = 0; i < vcpu->nmsrs; ++i)
-		if (vcpu->guest_msrs[i].index == msr)
-			return &vcpu->guest_msrs[i];
-	return 0;
-}
-EXPORT_SYMBOL_GPL(find_msr_entry);
-
 struct segment_descriptor {
 	u16 limit_low;
 	u16 base_low;
@@ -1093,8 +1082,6 @@ static int get_msr(struct kvm_vcpu *vcpu, u32 msr_index, u64 *pdata)
 
 void set_efer(struct kvm_vcpu *vcpu, u64 efer)
 {
-	struct vmx_msr_entry *msr;
-
 	if (efer & EFER_RESERVED_BITS) {
 		printk(KERN_DEBUG "set_efer: 0x%llx #GP, reserved bits\n",
 		       efer);
@@ -1109,16 +1096,12 @@ void set_efer(struct kvm_vcpu *vcpu, u64 efer)
 		return;
 	}
 
+	kvm_arch_ops->set_efer(vcpu, efer);
+
 	efer &= ~EFER_LMA;
 	efer |= vcpu->shadow_efer & EFER_LMA;
 
 	vcpu->shadow_efer = efer;
-
-	msr = find_msr_entry(vcpu, MSR_EFER);
-
-	if (!(efer & EFER_LMA))
-	    efer &= ~EFER_LME;
-	msr->data = efer;
 }
 EXPORT_SYMBOL_GPL(set_efer);
 
