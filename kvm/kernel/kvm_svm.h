@@ -6,7 +6,7 @@
 #include <asm/msr.h>
 
 #include "svm.h"
-#include "kvm_base.h"
+#include "kvm.h"
 
 
 static const u32 host_save_msrs[] = {
@@ -21,7 +21,7 @@ static const u32 host_save_msrs[] = {
 #define NR_HOST_SAVE_MSRS (sizeof(host_save_msrs) / sizeof(*host_save_msrs))
 #define NUM_AB_RSGS 4
 
-struct vcpu_arch_info {
+struct vcpu_svm {
 	struct vmcb *vmcb;
 	unsigned long vmcb_pa;
 	struct svm_cpu_data *svm_data;

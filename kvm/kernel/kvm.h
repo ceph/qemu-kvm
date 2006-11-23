@@ -166,7 +166,10 @@ enum {
 
 struct kvm_vcpu {
 	struct kvm *kvm;
-	struct vmcs *vmcs;
+	union {
+		struct vmcs *vmcs;
+		struct vcpu_svm *svm;
+	};
 	struct mutex mutex;
 	int   cpu;
 	int   launched;
