@@ -1906,7 +1906,7 @@ static int default_fmt_size = 4;
 
 #define MAX_ARGS 16
 
-static void monitor_handle_command(const char *cmdline)
+static void monitor_handle_command(const term_cmd_t *cmds, const char *cmdline)
 {
     const char *p, *pstart, *typestr;
     char *q;
@@ -1938,7 +1938,7 @@ static void monitor_handle_command(const char *cmdline)
     cmdname[len] = '\0';
     
     /* find the command */
-    for(cmd = term_cmds; cmd->name != NULL; cmd++) {
+    for(cmd = cmds; cmd->name != NULL; cmd++) {
         if (compare_cmd(cmdname, cmd->name)) 
             goto found;
     }
@@ -2419,7 +2419,7 @@ static void monitor_start_input(void);
 
 static void monitor_handle_command1(void *opaque, const char *cmdline)
 {
-    monitor_handle_command(cmdline);
+    monitor_handle_command(term_cmds, cmdline);
     monitor_start_input();
 }
 
