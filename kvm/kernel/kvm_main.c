@@ -3084,8 +3084,6 @@ static void set_segment(struct kvm_segment *var, int seg)
 		ar |= (var->db & 1) << 14;
 		ar |= (var->g & 1) << 15;
 	}
-	if (ar == 0) /* a 0 value means unusable */
-		ar = AR_UNUSABLE_MASK;
 	vmcs_write32(sf->ar_bytes, ar);
 }
 
