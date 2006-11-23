@@ -14,11 +14,6 @@ qemu kernel user:
 
 qemu: user
 
-clean: 
-	@for d in kernel user qemu; do 	\
-		$(MAKE) -C $$d $@; 	\
-	done
-
 bindir = /usr/bin
 bin = $(bindir)/kvm
 initdir = /etc/init.d
