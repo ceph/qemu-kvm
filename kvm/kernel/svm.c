@@ -22,6 +22,9 @@
 #include "kvm_svm.h"
 #include "x86_emulate.h"
 
+MODULE_AUTHOR("Qumranet");
+MODULE_LICENSE("GPL");
+
 #define IOPM_ALLOC_ORDER 2
 #define MSRPM_ALLOC_ORDER 1
 
