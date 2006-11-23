@@ -1953,6 +1953,8 @@ static void monitor_handle_command(const char *cmdline)
     typestr = cmd->args_type;
     nb_args = 0;
     for(;;) {
+        while (isspace(*p)) /* eat whitespaces */
+            p++;
         c = *typestr;
         if (c == '\0')
             break;
@@ -1965,8 +1967,6 @@ static void monitor_handle_command(const char *cmdline)
                 int ret;
                 char *str;
                 
-                while (isspace(*p)) 
-                    p++;
                 if (*typestr == '?') {
                     typestr++;
                     if (*p == '\0') {
@@ -2006,8 +2006,6 @@ static void monitor_handle_command(const char *cmdline)
             {
                 int count, format, size;
                 
-                while (isspace(*p))
-                    p++;
                 if (*p == '/') {
                     /* format found */
                     p++;
@@ -2086,8 +2084,6 @@ static void monitor_handle_command(const char *cmdline)
         case 'l':
             {
                 target_long val;
-                while (isspace(*p)) 
-                    p++;
                 if (*typestr == '?' || *typestr == '.') {
                     if (*typestr == '?') {
                         if (*p == '\0')
@@ -2135,8 +2131,6 @@ static void monitor_handle_command(const char *cmdline)
             }
             break;
         case 'A':
-            while (isspace(*p)) /* eat whitespaces */
-                p++;
             args[nb_args++] = p;
             while (*p) /* goto end of cmdline */
                 p++;
@@ -2149,8 +2143,6 @@ static void monitor_handle_command(const char *cmdline)
                 c = *typestr++;
                 if (c == '\0')
                     goto bad_type;
-                while (isspace(*p)) 
-                    p++;
                 has_option = 0;
                 if (*p == '-') {
                     p++;
