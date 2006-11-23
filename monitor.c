@@ -24,7 +24,7 @@
 #include "vl.h"
 #include "disas.h"
 #include <dirent.h>
-
+#include "migration.h"
 //#define DEBUG
 //#define DEBUG_COMPLETION
 
@@ -59,11 +59,15 @@ static CharDriverState *monitor_hd;
 
 static term_cmd_t term_cmds[];
 static term_cmd_t info_cmds[];
+static term_cmd_t migration_cmds[];
 
 static char term_outbuf[1024];
 static int term_outbuf_index;
 
 static void monitor_start_input(void);
+static void monitor_handle_command(const term_cmd_t *cmds, 
+                                   const char *cmdline);
+
 
 CPUState *mon_cpu = NULL;
 
@@ -1153,6 +1157,16 @@ static void do_stop_capture (int n)
     }
 }
 
+static void do_migration(const char *subcmdline)
+{
+    monitor_handle_command(migration_cmds, subcmdline);
+}
+
+static void do_migration_help(char *name)
+{
+    help_cmd1(migration_cmds, "migration ", name);
+}
+
 #ifdef HAS_AUDIO
 int wav_start_capture (CaptureState *s, const char *path, int freq,
                        int bits, int nchannels);
@@ -1247,6 +1261,8 @@ static term_cmd_t term_cmds[] = {
        "capture index", "stop capture" },
      { "create_snapshot", "ss?s?s?", do_snapshot, 
        "hda [hdb] [hdc] [hdd]", "create snapshot of one or more images (VMDK format)" },
+    { "migration", "A", do_migration, "subcommand|help", 
+      "start/stop/manage migrations"},
     { NULL, NULL, }, 
 };
 
@@ -1287,6 +1303,25 @@ static term_cmd_t info_cmds[] = {
       "", "show profiling information", },
     { "capture", "", do_info_capture,
       "show capture information" },
+    { NULL, NULL, },
+};
+
+
+static term_cmd_t migration_cmds[] = {
+    { "listen", "s?s?", do_migration_listen,
+      "[local_host:port [remote_host:port]]", "listen to a port" },
+    { "connect", "s?s?", do_migration_connect, 
+      "[local_host:port [remote_host:port]]", "connect to a port"},
+    { "getfd", "i", do_migration_getfd, "fd (socket)", 
+      "get established connection"},
+    { "start", "s", do_migration_start, "online|offline" ,
+      "start the migration proccess"},
+    { "cancel", "", do_migration_cancel, "", 
+      "cancel an ongoing migration procces"},
+    { "status", "", do_migration_status, "", "get migration status/progress"},
+    { "set", "A", do_migration_set, "params", "set migration parameters"},
+    { "show",   "",  do_migration_show, "", "show migration parameters"},
+    { "help",   "s?",  do_migration_help, "[subcommand]", "show help message"},
     { NULL, NULL, },
 };
 
