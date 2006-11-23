@@ -41,6 +41,7 @@
  * 'i'          32 bit integer
  * 'l'          target long (32 or 64 bit)
  * '/'          optional gdb-like print format (like "/10x")
+ * 'A'          pass the rest of cmdline as one argument (for subcommands).
  *
  * '?'          optional type (for 'F', 's' and 'i')
  *
@@ -2132,6 +2133,13 @@ static void monitor_handle_command(const char *cmdline)
                     args[nb_args++] = (void *)(int)(val & 0xffffffff);
                 }
             }
+            break;
+        case 'A':
+            while (isspace(*p)) /* eat whitespaces */
+                p++;
+            args[nb_args++] = p;
+            while (*p) /* goto end of cmdline */
+                p++;
             break;
         case '-':
             {
