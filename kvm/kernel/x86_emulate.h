@@ -130,6 +130,22 @@ struct x86_emulate_ops {
 				   unsigned long new_lo,
 				   unsigned long new_hi,
 				   struct x86_emulate_ctxt * ctxt);
+
+	int (*clear_ts)(struct x86_emulate_ctxt * ctxt, unsigned long next_rip);
+
+	int (*inval_page)(struct x86_emulate_ctxt * ctxt,
+			  unsigned long addr,
+			  unsigned long next_rip);
+
+	int (*get_dr)(struct x86_emulate_ctxt * ctxt,
+		      unsigned dr,
+		      unsigned reg,
+		      unsigned long next_rip);
+
+	int (*set_dr)(struct x86_emulate_ctxt * ctxt,
+		      unsigned dr,
+		      unsigned reg,
+		      unsigned long next_rip);
 };
 
 struct cpu_user_regs;

@@ -149,12 +149,12 @@ static u8 opcode_table[256] = {
 
 static u8 twobyte_table[256] = {
 	/* 0x00 - 0x0F */
-	0, SrcMem | ModRM | DstReg | Mov, 0, 0, 0, 0, 0, 0,
+	0, SrcMem | ModRM | DstReg, 0, 0, 0, 0, ImplicitOps, 0, 
 	0, 0, 0, 0, 0, ImplicitOps | ModRM, 0, 0,
 	/* 0x10 - 0x1F */
 	0, 0, 0, 0, 0, 0, 0, 0, ImplicitOps | ModRM, 0, 0, 0, 0, 0, 0, 0,
 	/* 0x20 - 0x2F */
-	ImplicitOps, 0, ImplicitOps, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	ImplicitOps, ModRM, ImplicitOps, ModRM, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	/* 0x30 - 0x3F */
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	/* 0x40 - 0x47 */
@@ -1154,10 +1154,20 @@ twobyte_insn:
 		case 6: /* lmsw */
 			realmode_lmsw(ctxt->vcpu, (u16)modrm_val, &_eflags);
 			break;
+		case 7: /* invlpg*/
+			return ops->inval_page(ctxt, cr2, _eip);
 		default:
 			goto cannot_emulate;
 		}
 		break;
+	case 0x21: /* mov from dr to reg */
+		if (modrm_mod != 3)
+			goto cannot_emulate;
+		return ops->get_dr(ctxt, modrm_reg, modrm_rm, _eip);
+	case 0x23: /* mov from reg to dr */
+		if (modrm_mod != 3)
+			goto cannot_emulate;
+		return ops->set_dr(ctxt, modrm_reg, modrm_rm, _eip);
 	case 0x40 ... 0x4f:	/* cmov */
 		dst.val = dst.orig_val = src.val;
 		d &= ~Mov;	/* default to no move */
@@ -1264,6 +1274,8 @@ twobyte_special_insn:
 	case 0x0d:		/* GrpP (prefetch) */
 	case 0x18:		/* Grp16 (prefetch/nop) */
 		break;
+	case 0x06:
+		return ops->clear_ts(ctxt, _eip);
 	case 0x20: /* mov cr, reg */
 		b = insn_fetch(u8, 1, _eip);
 		if ((b & 0xc0) != 0xc0)
