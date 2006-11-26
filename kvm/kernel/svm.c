@@ -778,106 +778,50 @@ static void new_asid(struct kvm_vcpu *vcpu, struct svm_cpu_data *svm_data)
 	vcpu->svm->vmcb->control.asid = svm_data->next_asid++;
 }
 
-static int emulator_clts(struct x86_emulate_ctxt *ctxt, unsigned long next_rip)
+static void svm_invlpg(struct kvm_vcpu *vcpu, gva_t address)
 {
-	struct kvm_vcpu *vcpu = ctxt->vcpu;
-	unsigned long cr0 = vcpu->cr0;
-
-	cr0 &= ~CR0_TS_MASK;
-	svm_set_cr0(vcpu, cr0);
-	vcpu->svm->next_rip = next_rip;
-	skip_emulated_instruction(vcpu);
-	return 0;
-}
-
-static int emulator_invlpg(struct x86_emulate_ctxt * ctxt,
-			  unsigned long address,
-			  unsigned long next_rip)
-{
-	struct kvm_vcpu *vcpu = ctxt->vcpu;
-
-	spin_lock(&vcpu->kvm->lock);
-	vcpu->mmu.inval_page(vcpu, address);
-	spin_unlock(&vcpu->kvm->lock);
 	invlpga(address, vcpu->svm->vmcb->control.asid); // is needed?
-	vcpu->svm->next_rip = next_rip;
-	skip_emulated_instruction(vcpu);
-	return 0;
 }
 
-static int emulator_get_dr(struct x86_emulate_ctxt * ctxt,
-			   unsigned dr,
-			   unsigned reg,
-			   unsigned long next_rip)
+static unsigned long svm_get_dr(struct kvm_vcpu *vcpu, int dr)
 {
-	struct kvm_vcpu *vcpu = ctxt->vcpu;
-
-	switch (dr) {
-	case 0 ... 3:
-		if (reg > 15) {
-			printk("%s: unexpected reg %u dr %u\n",
-			       __FUNCTION__, reg, dr);
-			inject_ud(vcpu);
-			return 0;
-		}
-		vcpu->regs[reg] = vcpu->svm->ab_regs[dr];
-		vcpu->svm->next_rip = next_rip;
-		skip_emulated_instruction(vcpu);
-		return 0;
-	default:
-		printk("%s: unexpected dr %u reg %u\n", __FUNCTION__, dr, reg);
-		return -1;
-	}
+	return vcpu->svm->ab_regs[dr];
 }
 
-static int emulator_set_dr(struct x86_emulate_ctxt * ctxt,
-			   unsigned dr,
-			   unsigned reg,
-			   unsigned long next_rip)
+static void svm_set_dr(struct kvm_vcpu *vcpu, int dr, unsigned long value,
+		       int *exception)
 {
-	unsigned long mask = (ctxt->mode == X86EMUL_MODE_PROT64) ? ~0ULL : ~0U;
-	struct kvm_vcpu *vcpu = ctxt->vcpu;
-
-	if (reg >= 8) {
-		printk("%s: unexpected reg %u dr %u\n",
-		       __FUNCTION__, reg, dr);
-		inject_ud(vcpu);
-		return 0;
-	}
+	*exception = 0;
 
 	if (vcpu->svm->vmcb->save.dr7 & DR7_GD_MASK) {
 		vcpu->svm->vmcb->save.dr7 &= ~DR7_GD_MASK;
 		vcpu->svm->vmcb->save.dr6 |= DR6_BD_MASK;
-		inject_db(vcpu);
-		return 0;
+		*exception = DB_VECTOR;
+		return;
 	}
 
 	switch (dr) {
 	case 0 ... 3:
-		vcpu->svm->ab_regs[dr] = vcpu->regs[reg] & mask;
-		vcpu->svm->next_rip = next_rip;
-		skip_emulated_instruction(vcpu);
-		return 0;
-	case 5:
+		vcpu->svm->ab_regs[dr] = value;
+		return;
+	case 4 ... 5:
 		if (vcpu->cr4 & CR4_DE_MASK) {
-			inject_ud(vcpu);
-			return 0;
+			*exception = UD_VECTOR;
+			return;
 		}
 	case 7: {
-		unsigned long dr7 = vcpu->regs[reg] & mask;
-
-		if (dr7 & ~((1ULL << 32) - 1)) {
-			svm_inject_gp(vcpu, 0);
-			return 0;
+		if (value & ~((1ULL << 32) - 1)) {
+			*exception = GP_VECTOR;
+			return;
 		}
-		vcpu->svm->vmcb->save.dr7 = dr7;
-		vcpu->svm->next_rip = next_rip;
-		skip_emulated_instruction(vcpu);
-		return 0;
+		vcpu->svm->vmcb->save.dr7 = value;
+		return;
 	}
 	default:
-		printk("%s: unexpected dr %u reg %u\n", __FUNCTION__, dr, reg);
-		return -1;
+		printk(KERN_DEBUG "%s: unexpected dr %u\n",
+		       __FUNCTION__, dr);
+		*exception = UD_VECTOR;
+		return;
 	}
 }
 
@@ -1650,11 +1594,14 @@ static struct kvm_arch_ops svm_arch_ops = {
 	.set_idt = svm_set_idt,
 	.get_gdt = svm_get_gdt,
 	.set_gdt = svm_set_gdt,
+	.get_dr = svm_get_dr,
+	.set_dr = svm_set_dr,
 	.cache_regs = svm_cache_regs,
 	.decache_regs = svm_decache_regs,
 	.get_rflags = svm_get_rflags,
 	.set_rflags = svm_set_rflags,
 
+	.invlpg = svm_invlpg,
 	.flush_tlb = svm_flush_tlb,
 	.inject_page_fault = svm_inject_page_fault,
 

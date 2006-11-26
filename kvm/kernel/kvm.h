@@ -290,11 +290,15 @@ struct kvm_arch_ops {
 	void (*set_idt)(struct kvm_vcpu *vcpu, struct descriptor_table *dt);
 	void (*get_gdt)(struct kvm_vcpu *vcpu, struct descriptor_table *dt);
 	void (*set_gdt)(struct kvm_vcpu *vcpu, struct descriptor_table *dt);
+	unsigned long (*get_dr)(struct kvm_vcpu *vcpu, int dr);
+	void (*set_dr)(struct kvm_vcpu *vcpu, int dr, unsigned long value,
+		       int *exception);
 	void (*cache_regs)(struct kvm_vcpu *vcpu);
 	void (*decache_regs)(struct kvm_vcpu *vcpu);
 	unsigned long (*get_rflags)(struct kvm_vcpu *vcpu);
 	void (*set_rflags)(struct kvm_vcpu *vcpu, unsigned long rflags);
 
+	void (*invlpg)(struct kvm_vcpu *vcpu, gva_t addr);
 	void (*flush_tlb)(struct kvm_vcpu *vcpu);
 	void (*inject_page_fault)(struct kvm_vcpu *vcpu,
 				  unsigned long addr, u32 err_code);
@@ -353,6 +357,15 @@ void realmode_lmsw(struct kvm_vcpu *vcpu, unsigned long msw,
 unsigned long realmode_get_cr(struct kvm_vcpu *vcpu, int cr);
 void realmode_set_cr(struct kvm_vcpu *vcpu, int cr, unsigned long value,
 		     unsigned long *rflags);
+
+struct x86_emulate_ctxt;
+
+int emulate_invlpg(struct kvm_vcpu *vcpu, gva_t address);
+int emulate_clts(struct kvm_vcpu *vcpu);
+int emulator_get_dr(struct x86_emulate_ctxt* ctxt, int dr,
+		    unsigned long *dest);
+int emulator_set_dr(struct x86_emulate_ctxt *ctxt, int dr,
+		    unsigned long value);
 
 void set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0);
 void set_cr3(struct kvm_vcpu *vcpu, unsigned long cr0);

@@ -1155,7 +1155,8 @@ twobyte_insn:
 			realmode_lmsw(ctxt->vcpu, (u16)modrm_val, &_eflags);
 			break;
 		case 7: /* invlpg*/
-			return ops->inval_page(ctxt, cr2, _eip);
+			emulate_invlpg(ctxt->vcpu, cr2);
+			break;
 		default:
 			goto cannot_emulate;
 		}
@@ -1163,11 +1164,13 @@ twobyte_insn:
 	case 0x21: /* mov from dr to reg */
 		if (modrm_mod != 3)
 			goto cannot_emulate;
-		return ops->get_dr(ctxt, modrm_reg, modrm_rm, _eip);
+		rc = emulator_get_dr(ctxt, modrm_reg, &_regs[modrm_rm]);
+		break;
 	case 0x23: /* mov from reg to dr */
 		if (modrm_mod != 3)
 			goto cannot_emulate;
-		return ops->set_dr(ctxt, modrm_reg, modrm_rm, _eip);
+		rc = emulator_set_dr(ctxt, modrm_reg, _regs[modrm_rm]);
+		break;
 	case 0x40 ... 0x4f:	/* cmov */
 		dst.val = dst.orig_val = src.val;
 		d &= ~Mov;	/* default to no move */
@@ -1275,7 +1278,8 @@ twobyte_special_insn:
 	case 0x18:		/* Grp16 (prefetch/nop) */
 		break;
 	case 0x06:
-		return ops->clear_ts(ctxt, _eip);
+		emulate_clts(ctxt->vcpu);
+		break;
 	case 0x20: /* mov cr, reg */
 		b = insn_fetch(u8, 1, _eip);
 		if ((b & 0xc0) != 0xc0)
