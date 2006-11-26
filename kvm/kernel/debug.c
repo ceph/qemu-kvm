@@ -40,6 +40,22 @@ void show_msrs(struct kvm_vcpu *vcpu)
 	}
 }
 
+void show_code(struct kvm_vcpu *vcpu)
+{
+	gva_t rip = vmcs_readl(GUEST_RIP);
+	u8 code[50];
+	char buf[30 + 3 * sizeof code];
+	int i;
+
+	if (!is_long_mode())
+		rip += vmcs_readl(GUEST_CS_BASE);
+
+	kvm_read_guest(vcpu, rip, sizeof code, code);
+	for (i = 0; i < sizeof code; ++i)
+		sprintf(buf + i * 3, " %02x", code[i]);
+	vcpu_printf(vcpu, "code: %lx%s\n", rip, buf);
+}
+
 struct gate_struct {
 	u16 offset_low;
 	u16 segment;

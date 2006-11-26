@@ -87,17 +87,17 @@ static inline void push_irq(struct kvm_vcpu *vcpu, u8 irq)
 
 static inline void clgi(void)
 {
-	asm volatile ( "clgi" );
+	asm ( "clgi" );
 }
 
 static inline void stgi(void)
 {
-	asm volatile ( "stgi" );
+	asm ( "stgi" );
 }
 
 static inline void invlpga(unsigned long addr, u32 asid)
 {
-	asm volatile ( "invlpga \n\t" :: "a"(addr), "c"(asid));
+	asm ( "invlpga \n\t" :: "a"(addr), "c"(asid));
 }
 
 static inline unsigned long read_cr2(void)
@@ -284,7 +284,7 @@ static void svm_hardware_enable(void *garbage)
 	svm_data->max_asid = cpuid_ebx(SVM_CPUID_FUNC) - 1;
 	svm_data->next_asid = svm_data->max_asid + 1;
 
-	asm volatile ( "sgdt %0" : "=m"(gdt_descr) );
+	asm ( "sgdt %0" : "=m"(gdt_descr) );
 	gdt = (struct desc_struct *)gdt_descr.address;
 	svm_data->tss_desc = (struct ldttss_desc *)(gdt + GDT_ENTRY_TSS);
 
@@ -1276,7 +1276,6 @@ static int handle_exit(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 		       vcpu->svm->vmcb->save.rflags);
 		return 0;
 	}
-	
 	return svm_exit_handlers[exit_code](vcpu, kvm_run);
 }
 
@@ -1347,7 +1346,7 @@ static void save_ab_regs(unsigned long *ab_regs)
 
 static void load_ab_regs(unsigned long *ab_regs)
 {
-	asm volatile ("mov %[dr0], %%dr0 \n\t"
+	asm ("mov %[dr0], %%dr0 \n\t"
 	     "mov %[dr1], %%dr1 \n\t"
 	     "mov %[dr2], %%dr2 \n\t"
 	     "mov %[dr3], %%dr3 \n\t"
@@ -1386,7 +1385,7 @@ again:
 		save_ab_regs(vcpu->svm->host_ab_regs);
 		load_ab_regs(vcpu->svm->ab_regs);
 	}
-	asm volatile (
+	asm (
 #ifdef __x86_64__
 		"push %%rbx; push %%rcx; push %%rdx;"
 		"push %%rsi; push %%rdi; push %%rbp;"
