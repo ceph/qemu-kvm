@@ -1617,6 +1617,7 @@ static struct kvm_arch_ops svm_arch_ops = {
 
 static int __init svm_init(void)
 {
+	kvm_emulator_want_group7_invlpg();
 	kvm_init_arch(&svm_arch_ops, THIS_MODULE);
 	return 0;
 }

@@ -29,6 +29,7 @@
 #define DPRINTF(x...) do {} while (0)
 #endif
 #include "x86_emulate.h"
+#include <linux/module.h>
 
 /*
  * Opcode effective-address decode tables.
@@ -199,6 +200,19 @@ static u8 twobyte_table[256] = {
 	/* 0xF0 - 0xFF */
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 };
+
+/*
+ * Tell the emulator that of the Group 7 instructions (sgdt, lidt, etc.) we
+ * are interested only in invlpg and not in any of the rest.
+ *
+ * invlpg is a special instruction in that the data it references may not
+ * be mapped.
+ */
+void kvm_emulator_want_group7_invlpg(void)
+{
+	twobyte_table[1] &= ~SrcMem;
+}
+EXPORT_SYMBOL_GPL(kvm_emulator_want_group7_invlpg);
 
 /* Type, address-of, and value of an instruction's operand. */
 struct operand {
