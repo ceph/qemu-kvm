@@ -155,7 +155,8 @@ start () {
 	antispoofing
     fi
 
-    /sbin/modprobe kvm
+    grep -q GenuineIntel /proc/cpuinfo && /sbin/modprobe kvm-intel
+    grep -q AuthenticAMD /proc/cpuinfo && /sbin/modprobe kvm-amd
 }
 
 stop () {
