@@ -913,6 +913,8 @@ static unsigned long get_segment_base(struct kvm_vcpu *vcpu, int seg)
 
 int emulate_invlpg(struct kvm_vcpu *vcpu, gva_t address)
 {
+	kvm_arch_ops->cache_regs(vcpu);
+	printk("invlpg: rip %lx address %lx\n", vcpu->rip, address);
 	spin_lock(&vcpu->kvm->lock);
 	vcpu->mmu.inval_page(vcpu, address);
 	spin_unlock(&vcpu->kvm->lock);
