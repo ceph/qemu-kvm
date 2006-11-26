@@ -4245,14 +4245,14 @@ int qemu_savevm(const char *filename)
         qemu_put_be32(f, se->version_id);
 
         /* record size: filled later */
-        len_pos = ftell(f);
+        len_pos = qemu_ftell(f);
         qemu_put_be32(f, 0);
         
         se->save_state(f, se->opaque);
 
         /* fill record size */
-        cur_pos = ftell(f);
-        len = ftell(f) - len_pos - 4;
+        cur_pos = qemu_ftell(f);
+        len = qemu_ftell(f) - len_pos - 4;
         fseek(f, len_pos, SEEK_SET);
         qemu_put_be32(f, len);
         fseek(f, cur_pos, SEEK_SET);
@@ -4319,7 +4319,7 @@ int qemu_loadvm(const char *filename)
         printf("idstr=%s instance=0x%x version=%d len=%d\n", 
                idstr, instance_id, version_id, record_len);
 #endif
-        cur_pos = ftell(f);
+        cur_pos = qemu_ftell(f);
         se = find_se(idstr, instance_id);
         if (!se) {
             fprintf(stderr, "qemu: warning: instance 0x%x of device '%s' not present in current VM\n", 
