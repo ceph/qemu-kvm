@@ -1486,6 +1486,8 @@ again:
 	if ((vcpu->svm->vmcb->save.dr7 & 0xff))
 		load_ab_regs(vcpu->svm->host_ab_regs);
 
+	vcpu->cr2 = vcpu->svm->vmcb->save.cr2;
+
 	write_dr6(vcpu->svm->host_dr6);
 	write_dr7(vcpu->svm->host_dr7);
 	write_cr2(vcpu->svm->host_cr2);
