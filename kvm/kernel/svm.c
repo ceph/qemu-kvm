@@ -1129,11 +1129,42 @@ static int svm_get_msr(struct kvm_vcpu *vcpu, unsigned ecx, u64 *data)
 	case 0x200 ... 0x2ff:
 		*data = 0;
 		break;
+	case MSR_IA32_TIME_STAMP_COUNTER: {
+		u64 tsc;
+
+		rdtscll(tsc);
+		*data = vcpu->svm->vmcb->control.tsc_offset + tsc;
+		break;
+	}
 	case MSR_EFER:
 		*data = vcpu->shadow_efer;
 		break;
 	case MSR_IA32_APICBASE:
 		*data = vcpu->apic_base;
+		break;
+	case MSR_STAR:
+		*data = vcpu->svm->vmcb->save.star;
+		break;
+	case MSR_LSTAR:
+		*data = vcpu->svm->vmcb->save.lstar;
+		break;
+	case MSR_CSTAR:
+		*data = vcpu->svm->vmcb->save.cstar;
+		break;
+	case MSR_IA32_SYSENTER_CS:
+		*data = vcpu->svm->vmcb->save.sysenter_cs;
+		break;
+	case MSR_IA32_SYSENTER_EIP:
+		*data = vcpu->svm->vmcb->save.sysenter_eip;
+		break;
+	case MSR_IA32_SYSENTER_ESP:
+		*data = vcpu->svm->vmcb->save.sysenter_esp;
+		break;
+	case MSR_KERNEL_GS_BASE:
+		*data = vcpu->svm->vmcb->save.kernel_gs_base;
+		break;
+	case MSR_SYSCALL_MASK:
+		*data = vcpu->svm->vmcb->save.sfmask;
 		break;
 	default:
 		printk(KERN_ERR "kvm: unhandled rdmsr: 0x%x\n", ecx);
@@ -1181,6 +1212,30 @@ static int svm_set_msr(struct kvm_vcpu *vcpu, unsigned ecx, u64 data)
 		break;
 	case MSR_IA32_APICBASE:
 		vcpu->apic_base = data;
+		break;
+	case MSR_STAR:
+		vcpu->svm->vmcb->save.star = data;
+		break;
+	case MSR_LSTAR:
+		vcpu->svm->vmcb->save.lstar = data;
+		break;
+	case MSR_CSTAR:
+		vcpu->svm->vmcb->save.cstar = data;
+		break;
+	case MSR_IA32_SYSENTER_CS:
+		vcpu->svm->vmcb->save.sysenter_cs = data;
+		break;
+	case MSR_IA32_SYSENTER_EIP:
+		vcpu->svm->vmcb->save.sysenter_eip = data;
+		break;
+	case MSR_IA32_SYSENTER_ESP:
+		vcpu->svm->vmcb->save.sysenter_esp = data;
+		break;
+	case MSR_KERNEL_GS_BASE:
+		vcpu->svm->vmcb->save.kernel_gs_base = data;
+		break;
+	case MSR_SYSCALL_MASK:
+		vcpu->svm->vmcb->save.sfmask = data;
 		break;
 	default:
 		printk(KERN_ERR "kvm: unhandled wrmsr: %x\n", ecx);
