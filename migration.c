@@ -351,6 +351,7 @@ static int migration_write_byte(int val)
 static int migration_write_buffer(const char *buff, int len)
 {
     int size, toend, len_req = len;
+
     while (len > 0) {
         if (migration_write_some(0) < 0)
             break;
@@ -410,7 +411,8 @@ void do_migration_start(char *deadoralive)
     const char msg[] = "HELLO WORLD";
     const int msgsize = sizeof (msg) - 1; /* do not send '\0' */
     char buff[128] = {0};
-    int i;
+    const int buffsize = sizeof(buff) -1; /* do not send '\0' */
+    int i, j, jlimit=10, stride=5, bytes = buffsize;
 
     term_printf("%s: deadoralive=%s role=%d msgsize=%d\n", __FUNCTION__, 
                 status[strcmp(deadoralive, "online") == 0], ms.role,
@@ -421,22 +423,36 @@ void do_migration_start(char *deadoralive)
             migration_write_byte(msg[i]);
         migration_write_some(1); /* force a send */
         term_printf("sent '%s'\n", msg);
-        migration_write_buffer(msg, msgsize);
-        migration_write_some(1); /* force a send */
-        term_printf("sent '%s' as a buffer\n", msg);
+        for (j=0; j<jlimit; j++) {
+            bytes -= stride;
+            if (bytes <=0)
+                break;
+            memset(buff, 'z'-j, bytes);
+            migration_write_buffer(buff, bytes);
+            migration_write_some(1); /* force a send */
+            buff[bytes]='\0';
+            term_printf("sent %d bytes '%s'\n", bytes, buff);
+        }
         break;
     case READER:
-        memset(buff, 'a', sizeof(buff));
+        memset(buff, 'a', buffsize);
         for (i=0; i<msgsize; i++)
             buff[i] = migration_read_byte();
         buff[msgsize] = '\0';
         term_printf("received '%s'\n", buff);
-        memset(buff, 'b', sizeof(buff));
-        i = migration_read_buffer(buff, msgsize);
-        term_printf("received a buffer of size %d bytes\n", i);
-        if (i>0) {
-            buff[i] = '\0';
-            term_printf("received '%s'\n", buff);
+        for (j=0; j<jlimit; j++) {
+            bytes -= stride;
+            if (bytes <=0)
+                break;
+            memset(buff, 'b'+j, bytes);
+            i = migration_read_buffer(buff, bytes);
+            term_printf("received %d bytes ", i);
+            if (i>0) {
+                buff[i] = '\0';
+                term_printf("'%s'\n", buff);
+            }
+            else
+                term_printf("...FAILED\n");
         }
         break;
     default:
