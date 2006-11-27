@@ -295,8 +295,37 @@ void do_migration_connect(char *arg1, char *arg2)
 
 
 void do_migration_getfd(int fd) { TO_BE_IMPLEMENTED; }
-void do_migration_start(char *deadoralive) { TO_BE_IMPLEMENTED; }
-void do_migration_cancel(void){ TO_BE_IMPLEMENTED; }
+void do_migration_start(char *deadoralive)
+{ 
+    const char *status[2] = {"DEAD", "ALIVE"};
+    const char msg[] = "HELLO WORLD";
+    const int msgsize = sizeof (msg) - 1; /* do not send '\0' */
+    char buff[128] = {0};
+    int i;
+
+    term_printf("%s: deadoralive=%s role=%d msgsize=%d\n", __FUNCTION__, 
+                status[strcmp(deadoralive, "online") == 0], ms.role,
+                msgsize);
+    switch (ms.role) {
+    case WRITER:
+        write(ms.fd, msg, msgsize);
+        term_printf("sent '%s'\n", msg);
+        break;
+    case READER:
+        for (i=0; i<msgsize; i++)
+            buff[i] = migration_read_byte();
+        buff[msgsize] = '\0';
+        term_printf("received '%s'\n", buff);
+        break;
+    default:
+        term_printf("ERROR: unexpected role=%d\n", ms.role);
+        break;
+    }
+}
+void do_migration_cancel(void)
+{
+    migration_cleanup(&ms);
+}
 void do_migration_status(void){ TO_BE_IMPLEMENTED; }
 void do_migration_set(char *fmt, ...){ TO_BE_IMPLEMENTED; }
 void do_migration_show(void){ TO_BE_IMPLEMENTED; }
