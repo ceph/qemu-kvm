@@ -231,6 +231,21 @@ sudo qemu-kvm-x86_64 \
  -m 384
 </pre>
              </li>
+
+             <li>
+                To load the kvm module at system boot edit 
+                <code>/etc/sysconfig/kernel</code> and
+                add <code>kvm</code> to the 
+                <code>MODULES_LOADED_ON_BOOT="..."</code> line.  Or use the
+                yast2 sysconfig module to do that change.
+             </li>
+
+             <li>
+                The package creates a new group "<code>kvm</code>".  You can
+                allow non-root users use hardware-accelerated qemu by adding
+                them to the group.
+             </li>
+
          </ol>
       </p>
        
