@@ -303,6 +303,7 @@ int migration_read_buffer(char *buff, int len)
         memcpy(buff, &ms.buff[ms.tail], size);
         migration_state_inc_tail(&ms, size);
         len -= size;
+        buff += size;
     }
     return len_req - len;
 }
@@ -360,6 +361,7 @@ static int migration_write_buffer(const char *buff, int len)
         memcpy(&ms.buff[ms.head], buff, size);
         migration_state_inc_head(&ms, size);
         len -= size;
+        buff += size;
     }
     return len_req - len;
 }
