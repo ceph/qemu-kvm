@@ -13,12 +13,48 @@ int parse_host_port(struct sockaddr_in *saddr, const char *str);
 
 typedef struct migration_state {
     int fd;
+#define BUFFSIZE (/* 256* */1024)
+    char buff[BUFFSIZE]; /* FIXME: allocate dynamically; use mutli/double buffer */
+    unsigned buffsize;
+    unsigned head, tail;
 } migration_state_t;
 
-static migration_state_t ms = {FD_UNUSED};
+static migration_state_t ms = {
+    .fd       = FD_UNUSED, 
+    .buff     = { 0 },  
+    .buffsize = BUFFSIZE, 
+    .head = 0, 
+    .tail = 0
+};
 
 static const char *reader_default_addr="localhost:4455";
 static const char *writer_default_addr="localhost:4456";
+
+/* circular buffer functions */
+static int migration_buffer_empty(migration_state_t *pms)
+{
+    return (pms->head == pms->tail);
+}
+
+static int migration_buffer_bytes_filled(migration_state_t *pms)
+{
+    return (pms->head - pms->tail) % pms->buffsize;
+}
+
+static int migration_buffer_bytes_empty(migration_state_t *pms)
+{
+    return (pms->tail - pms->head -1) % pms->buffsize;
+}
+
+static void migration_state_inc_head(migration_state_t *pms, int n)
+{
+    pms->head = (pms->head + n) % pms->buffsize;
+}
+
+static void migration_state_inc_tail(migration_state_t *pms, int n)
+{
+    pms->tail = (pms->tail + n) % pms->buffsize;
+}
 
 
 /* create a network address according to arg/default_addr */
@@ -45,6 +81,40 @@ static void migration_cleanup(migration_state_t *pms)
         close(pms->fd);
         pms->fd = FD_UNUSED;
     }
+}
+
+static int migration_read_from_socket(void *opaque)
+{
+    migration_state_t *pms = (migration_state_t *)opaque;
+    int size;
+
+    if (pms->fd == FD_UNUSED) /* not connected */
+        return 0;
+    while (1) { /* breaking if O.K. */
+        size = migration_buffer_bytes_empty(pms); /* available size */
+        if (size > pms->buffsize - pms->head) /* read till end of buffer */
+            size = pms->buffsize - pms->head;
+        size = read(pms->fd, pms->buff + pms->head, size);
+        if (size < 0) {
+            if (socket_error() == EINTR)
+                continue;
+            perror("recv FAILED");
+            term_printf("migration_read_from_socket: recv failed (%d: %s)\n", errno, strerror(errno) );
+            return size;
+        }
+        if (size == 0) {
+            /* connection closed */
+            term_printf("migration_read_from_socket: CONNECTION CLOSED\n");
+            migration_cleanup(pms);
+            /* FIXME: call vm_start on A or B according to migration status ? */
+            return size;
+        }
+        else /* we did read something */
+            break;
+    }
+
+    migration_state_inc_head(pms, size);
+    return size;
 }
 
 static void migration_accept(void *opaque)
@@ -128,6 +198,58 @@ void do_migration_listen(char *arg1, char *arg2)
     migration_accept(&ms);
 #endif
 }
+
+/* reads from the socket if needed 
+ * returns 0  if connection closed
+ *         >0 if buffer is not empty, number of bytes filled
+ *         <0 if error occure
+ */
+static int migration_read_some(void)
+{
+    int size;
+
+    if (migration_buffer_empty(&ms))
+        size = migration_read_from_socket(&ms);
+    else
+        size = migration_buffer_bytes_filled(&ms);
+    return size;
+}
+
+
+/* returns the byte read or 0 on error/connection closed */
+int migration_read_byte(void)
+{
+    int val = 0;
+    
+    if (migration_read_some() > 0) {
+        val = ms.buff[ms.tail];
+        migration_state_inc_tail(&ms, 1);
+    }
+    return val;
+}
+
+/* returns >=0 the number of bytes actually read, 
+ *       or <0 if error occured 
+ */
+int migration_read_buffer(char *buff, int len)
+{
+    int size, len_req = len;
+    while (len > 0) {
+        size = migration_read_some();
+        if (size < 0)
+            return size;
+        else if (size==0)
+            break;
+        if (len < size)
+            size = len;
+        memcpy(buff, &ms.buff[ms.tail], size);
+        migration_state_inc_tail(&ms, size);
+        len -= size;
+    }
+    return len_req - len;
+}
+
+
 void do_migration_connect(char *arg1, char *arg2)
 {
     struct sockaddr_in local, remote;
@@ -159,6 +281,8 @@ void do_migration_connect(char *arg1, char *arg2)
     
     term_printf("migration connect: connected through fd %d\n", ms.fd);
 }
+
+
 void do_migration_getfd(int fd) { TO_BE_IMPLEMENTED; }
 void do_migration_start(char *deadoralive) { TO_BE_IMPLEMENTED; }
 void do_migration_cancel(void){ TO_BE_IMPLEMENTED; }
