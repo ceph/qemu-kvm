@@ -116,7 +116,7 @@ static int migration_read_from_socket(void *opaque)
         if (size < 0) {
             if (socket_error() == EINTR)
                 continue;
-            term_printf("migration_read_from_socket: read failed (%s)\n", , strerror(errno) );
+            term_printf("migration_read_from_socket: read failed (%s)\n", strerror(errno) );
             return size;
         }
         if (size == 0) {
@@ -131,6 +131,42 @@ static int migration_read_from_socket(void *opaque)
     }
 
     migration_state_inc_head(pms, size);
+    return size;
+}
+
+static int migration_write_into_socket(void *opaque, int len)
+{
+    migration_state_t *pms = (migration_state_t *)opaque;
+    int size, toend;
+
+    if (pms->fd == FD_UNUSED) /* not connected */
+        return 0;
+    while (1) { /* breaking if O.K. */
+        size = migration_buffer_bytes_filled(pms); /* available size */
+        toend = migration_buffer_bytes_tail_end(pms);
+        if (size > toend) /* write till end of buffer */
+            size = toend;
+        if (size > len)
+            size = len;
+        size = write(pms->fd, pms->buff + pms->tail, size);
+        if (size < 0) {
+            if (socket_error() == EINTR)
+                continue;
+            term_printf("migration_write_into_socket: write failed (%s)\n", 
+                        strerror(socket_error()) );
+            return size;
+        }
+        if (size == 0) {
+            /* connection closed */
+            term_printf("migration_write_into_socket: CONNECTION CLOSED\n");
+            migration_cleanup(pms);
+            return size;
+        }
+        else /* we did write something */
+            break;
+    }
+
+    migration_state_inc_tail(pms, size);
     return size;
 }
 
@@ -272,6 +308,62 @@ int migration_read_buffer(char *buff, int len)
 }
 
 
+
+/*
+ * buffer the bytes, and send when threshold reached
+ * FIXME: bandwidth control can be implemented here
+ * returns 0 on success, <0 on error
+ */
+static int migration_write_some(int force)
+{
+    int size, threshold = 1024;
+    
+    size = migration_buffer_bytes_filled(&ms);
+    while (size && (force || (size > threshold))) {
+        size = migration_write_into_socket(&ms, size);
+        if (size < 0) /* error */
+            return size;
+        if (size == 0) { /* connection closed -- announce ERROR */
+            term_printf("migration: other side closed connection\n");
+            return -1;
+        }
+        size = migration_buffer_bytes_filled(&ms);
+    }
+    return 0;
+}
+
+static int migration_write_byte(int val)
+{
+    int rc;
+
+    rc = migration_write_some(0);
+    if ( rc == 0) {
+        rc = 1;
+        ms.buff[ms.head] = val;
+        migration_state_inc_head(&ms, 1);
+    }
+    return rc;
+}
+
+static int migration_write_buffer(const char *buff, int len)
+{
+    int size, toend, len_req = len;
+    while (len > 0) {
+        if (migration_write_some(0) < 0)
+            break;
+        size = migration_buffer_bytes_empty(&ms);
+        toend = migration_buffer_bytes_head_end(&ms);
+        if (size > toend)
+            size = toend;
+        if (size > len)
+            size = len;
+        memcpy(&ms.buff[ms.head], buff, size);
+        migration_state_inc_head(&ms, size);
+        len -= size;
+    }
+    return len_req - len;
+}
+
 void do_migration_connect(char *arg1, char *arg2)
 {
     struct sockaddr_in local, remote;
@@ -321,8 +413,13 @@ void do_migration_start(char *deadoralive)
                 msgsize);
     switch (ms.role) {
     case WRITER:
-        write(ms.fd, msg, msgsize);
+        for (i=0; i<msgsize; i++)
+            migration_write_byte(msg[i]);
+        migration_write_some(1); /* force a send */
         term_printf("sent '%s'\n", msg);
+        migration_write_buffer(msg, msgsize);
+        migration_write_some(1); /* force a send */
+        term_printf("sent '%s' as a buffer\n", msg);
         break;
     case READER:
         memset(buff, 'a', sizeof(buff));
@@ -330,6 +427,13 @@ void do_migration_start(char *deadoralive)
             buff[i] = migration_read_byte();
         buff[msgsize] = '\0';
         term_printf("received '%s'\n", buff);
+        memset(buff, 'b', sizeof(buff));
+        i = migration_read_buffer(buff, msgsize);
+        term_printf("received a buffer of size %d bytes\n", i);
+        if (i>0) {
+            buff[i] = '\0';
+            term_printf("received '%s'\n", buff);
+        }
         break;
     default:
         term_printf("ERROR: unexpected role=%d\n", ms.role);
