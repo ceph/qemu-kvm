@@ -4253,9 +4253,9 @@ int qemu_savevm(const char *filename)
         /* fill record size */
         cur_pos = qemu_ftell(f);
         len = qemu_ftell(f) - len_pos - 4;
-        fseek(f, len_pos, SEEK_SET);
+        qemu_fseek(f, len_pos, SEEK_SET);
         qemu_put_be32(f, len);
-        fseek(f, cur_pos, SEEK_SET);
+        qemu_fseek(f, cur_pos, SEEK_SET);
     }
 
     fclose(f);
