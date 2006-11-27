@@ -296,9 +296,9 @@ int migration_read_buffer(char *buff, int len)
         else if (size==0)
             break;
         toend = migration_buffer_bytes_tail_end(&ms);
-        if (size < toend)
+        if (size > toend)
             size = toend;
-        if (len < size)
+        if (size > len)
             size = len;
         memcpy(buff, &ms.buff[ms.tail], size);
         migration_state_inc_tail(&ms, size);
