@@ -1835,7 +1835,7 @@ int kvm_init_arch(struct kvm_arch_ops *ops, struct module *module)
 	r = kvm_arch_ops->hardware_setup();
 	if (r < 0)
 	    return r;
-	    
+
 	on_each_cpu(kvm_arch_ops->hardware_enable, 0, 0, 1);
 	register_reboot_notifier(&kvm_reboot_notifier);
 
