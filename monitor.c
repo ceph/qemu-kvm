@@ -430,13 +430,13 @@ static void do_log(const char *items)
 
 static void do_savevm(const char *filename)
 {
-    if (qemu_savevm(filename) < 0)
+    if (qemu_savevm(filename, &qemu_savevm_method_file) < 0)
         term_printf("I/O error when saving VM to '%s'\n", filename);
 }
 
 static void do_loadvm(const char *filename)
 {
-    if (qemu_loadvm(filename) < 0) 
+    if (qemu_loadvm(filename, &qemu_savevm_method_file) < 0)
         term_printf("I/O error when loading VM from '%s'\n", filename);
 }
 

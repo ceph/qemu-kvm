@@ -401,7 +401,23 @@ void cpu_disable_ticks(void);
 
 /* VM Load/Save */
 
-typedef FILE QEMUFile;
+//typedef FILE QEMUFile;
+typedef struct QEMUFile_s QEMUFile;
+struct QEMUFile_s {
+    void *opaque;
+    int     (*open)(QEMUFile *f, const char *filename, const char *flags);
+    void    (*close)(QEMUFile *f);
+    void    (*put_byte)(QEMUFile *f, int v);
+    int     (*get_byte)(QEMUFile *f);
+    void    (*put_buffer)(QEMUFile *f, const uint8_t *buf, int size);
+    int     (*get_buffer)(QEMUFile *f, uint8_t *buf, int size);
+    int64_t (*tell)(QEMUFile *f);
+    int64_t (*seek)(QEMUFile *f, int64_t pos, int whence);
+    int     (*eof)(QEMUFile *f);
+};
+
+extern QEMUFile qemu_savevm_method_file;
+extern QEMUFile qemu_savevm_method_socket;
 
 void qemu_put_buffer(QEMUFile *f, const uint8_t *buf, int size);
 void qemu_put_byte(QEMUFile *f, int v);
@@ -472,8 +488,8 @@ int64_t qemu_fseek(QEMUFile *f, int64_t pos, int whence);
 typedef void SaveStateHandler(QEMUFile *f, void *opaque);
 typedef int LoadStateHandler(QEMUFile *f, void *opaque, int version_id);
 
-int qemu_loadvm(const char *filename);
-int qemu_savevm(const char *filename);
+int qemu_loadvm(const char *filename, QEMUFile *f);
+int qemu_savevm(const char *filename, QEMUFile *f);
 int register_savevm(const char *idstr, 
                     int instance_id, 
                     int version_id,
