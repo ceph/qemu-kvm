@@ -63,7 +63,7 @@ static unsigned get_addr_size(struct kvm_vcpu *vcpu)
 
 	cs_atrib = sa->cs.atrib;
 
-	return (cs_atrib & SVM_SELECTOR_L_MASK) ? 8 :	
+	return (cs_atrib & SVM_SELECTOR_L_MASK) ? 8 :
 				(cs_atrib & SVM_SELECTOR_DB_MASK) ? 4 : 2;
 }
 
@@ -101,38 +101,38 @@ static inline void invlpga(unsigned long addr, u32 asid)
 }
 
 static inline unsigned long read_cr2(void)
-{ 
+{
 	unsigned long cr2;
 	asm volatile("mov %%cr2, %0" : "=r" (cr2));
 	return cr2;
-} 
+}
 
-static inline void write_cr2(unsigned long val) 
-{ 
+static inline void write_cr2(unsigned long val)
+{
 	asm volatile("mov %0, %%cr2" :: "r" (val));
 }
 
 static inline unsigned long read_dr6(void)
-{ 
+{
 	unsigned long dr6;
 	asm volatile("mov %%dr6, %0" : "=r" (dr6));
 	return dr6;
-} 
+}
 
-static inline void write_dr6(unsigned long val) 
-{ 
+static inline void write_dr6(unsigned long val)
+{
 	asm volatile("mov %0, %%dr6" :: "r" (val));
 }
 
 static inline unsigned long read_dr7(void)
-{ 
+{
 	unsigned long dr7;
 	asm volatile("mov %%dr7, %0" : "=r" (dr7));
 	return dr7;
-} 
+}
 
-static inline void write_dr7(unsigned long val) 
-{ 
+static inline void write_dr7(unsigned long val)
+{
 	asm volatile("mov %0, %%dr7" :: "r" (val));
 }
 
@@ -162,23 +162,23 @@ static void svm_set_efer(struct kvm_vcpu *vcpu, u64 efer)
 
 static void svm_inject_gp(struct kvm_vcpu *vcpu, unsigned error_code)
 {
-	
+
 	vcpu->svm->vmcb->control.event_inj = 	SVM_EVTINJ_VALID |
 						SVM_EVTINJ_VALID_ERR |
 						SVM_EVTINJ_TYPE_EXEPT |
 						GP_VECTOR;
-	vcpu->svm->vmcb->control.event_inj_err = error_code;	
+	vcpu->svm->vmcb->control.event_inj_err = error_code;
 }
 
 static void inject_ud(struct kvm_vcpu *vcpu)
-{	
+{
 	vcpu->svm->vmcb->control.event_inj = 	SVM_EVTINJ_VALID |
 						SVM_EVTINJ_TYPE_EXEPT |
 						UD_VECTOR;
 }
 
 static void inject_db(struct kvm_vcpu *vcpu)
-{	
+{
 	vcpu->svm->vmcb->control.event_inj = 	SVM_EVTINJ_VALID |
 						SVM_EVTINJ_TYPE_EXEPT |
 						DB_VECTOR;
@@ -209,7 +209,7 @@ static void skip_emulated_instruction(struct kvm_vcpu *vcpu)
 		       vcpu->svm->vmcb->save.rip,
 		       vcpu->svm->next_rip);
 	}
-	
+
 	vcpu->rip = vcpu->svm->vmcb->save.rip = vcpu->svm->next_rip;
 	vcpu->svm->vmcb->control.int_state &= ~SVM_INTERRUPT_SHADOW_MASK;
 }
@@ -222,7 +222,7 @@ static int has_svm(void)
 		printk("has_svm: not amd\n");
 		return 0;
 	}
-	
+
 	cpuid(0x80000000, &eax, &ebx, &ecx, &edx);
 	if (eax < SVM_CPUID_FUNC) {
 		printk("has_svm: can't execute cpuid_8000000a\n");
@@ -261,13 +261,13 @@ struct svm_init_data {
 
 static void svm_hardware_enable(void *garbage)
 {
-	
+
 	struct svm_cpu_data *svm_data;
 	uint64_t efer;
 	struct desc_ptr gdt_descr;
 	struct desc_struct *gdt;
 	int me = raw_smp_processor_id();
-	
+
 	if (!has_svm()) {
 		printk(KERN_ERR "svm_cpu_init: err EOPNOTSUPP on %d\n", me);
 		return;
@@ -318,12 +318,12 @@ static int svm_cpu_init(int cpu)
 err_1:
 	kfree(svm_data);
 	return r;
-	
+
 }
 
 static u32 msrpm_ranges[] = {0, 0xc0000000, 0xc0010000};
 #define NUM_MSR_MAPS (sizeof(msrpm_ranges) / sizeof(*msrpm_ranges))
-#define MSRS_RANGE_SIZE 2048 
+#define MSRS_RANGE_SIZE 2048
 #define MSRS_IN_RANGE (MSRS_RANGE_SIZE * 8 / 2)
 
 static int set_msr_interception(u32 *msrpm, unsigned msr,
@@ -332,15 +332,15 @@ static int set_msr_interception(u32 *msrpm, unsigned msr,
 	int i;
 
 	for (i = 0; i < NUM_MSR_MAPS; i++) {
-		if (msr >= msrpm_ranges[i] && 
+		if (msr >= msrpm_ranges[i] &&
 		    msr < msrpm_ranges[i] + MSRS_IN_RANGE) {
-			u32 msr_offset = (i * MSRS_IN_RANGE + msr - 
+			u32 msr_offset = (i * MSRS_IN_RANGE + msr -
 					  msrpm_ranges[i]) * 2;
-			
+
 			u32 *base = msrpm + (msr_offset / 32);
 			u32 msr_shift = msr_offset % 32;
-			u32 mask = ((write) ? 0 : 2) | ((read) ? 0 : 1); 
-			*base = (*base & ~(0x3 << msr_shift)) | 
+			u32 mask = ((write) ? 0 : 2) | ((read) ? 0 : 1);
+			*base = (*base & ~(0x3 << msr_shift)) |
 				(mask << msr_shift);
 			return 1;
 		}
@@ -356,14 +356,14 @@ static __init int svm_hardware_setup(void)
 	struct page *msrpm_pages;
 	void *msrpm_va;
 	int r;
-	
+
 
 	iopm_pages = alloc_pages(GFP_KERNEL, IOPM_ALLOC_ORDER);
 
 	if (!iopm_pages) {
 		return -ENOMEM;
 	}
-	memset(page_address(iopm_pages), 0xff, 
+	memset(page_address(iopm_pages), 0xff,
 					PAGE_SIZE * (1 << IOPM_ALLOC_ORDER));
 	iopm_base = page_to_pfn(iopm_pages) << PAGE_SHIFT;
 
@@ -388,11 +388,11 @@ static __init int svm_hardware_setup(void)
 	set_msr_interception(msrpm_va, MSR_IA32_SYSENTER_CS, 1, 1);
 	set_msr_interception(msrpm_va, MSR_IA32_SYSENTER_ESP, 1, 1);
 	set_msr_interception(msrpm_va, MSR_IA32_SYSENTER_EIP, 1, 1);
-	
+
 	for_each_online_cpu(cpu) {
 		r = svm_cpu_init(cpu);
 		if (r) {
-			goto err_2;			
+			goto err_2;
 		}
 	}
 	return 0;
@@ -466,10 +466,10 @@ static void init_vmcb(struct vmcb *vmcb)
 
 	control->intercept_exceptions = 1 << PF_VECTOR;
 
- 
+
 	control->intercept = 	(1ULL << INTERCEPT_INTR) |
 				(1ULL << INTERCEPT_NMI) |
-		// selective cr0 intercept bug? 
+		// selective cr0 intercept bug?
 		//    	0:   0f 22 d8                mov    %eax,%cr3
 		//	3:   0f 20 c0                mov    %cr0,%eax
 		//	6:   0d 00 00 00 80          or     $0x80000000,%eax
@@ -492,7 +492,7 @@ static void init_vmcb(struct vmcb *vmcb)
 				(1ULL << INTERCEPT_STGI) |
 				(1ULL << INTERCEPT_CLGI) |
 				(1ULL << INTERCEPT_SKINIT);
- 
+
 	control->iopm_base_pa = iopm_base;
 	control->msrpm_base_pa = msrpm_base;
 	rdtscll(tsc);
@@ -508,7 +508,7 @@ static void init_vmcb(struct vmcb *vmcb)
 	save->cs.selector = 0xf000;
 	//Executable/Readable Code Segment
 	save->cs.atrib = SVM_SELECTOR_READ_MASK | SVM_SELECTOR_P_MASK |
-		SVM_SELECTOR_S_MASK | SVM_SELECTOR_CODE_MASK; 
+		SVM_SELECTOR_S_MASK | SVM_SELECTOR_CODE_MASK;
 	save->cs.limit = 0xffff;
 	save->cs.base = 0xffff0000;
 
@@ -525,10 +525,10 @@ static void init_vmcb(struct vmcb *vmcb)
 	save->rflags = 2;
 	save->rip = 0x0000fff0;
 
-	save->cr0 = 0x00000010 | CR0_PG_MASK; 	// cr0 val on cpu init should 
-						// be 0x60000010, we enable cpu 
-						// cache by default. the orderly 
-						// way is to enable cache in 
+	save->cr0 = 0x00000010 | CR0_PG_MASK; 	// cr0 val on cpu init should
+						// be 0x60000010, we enable cpu
+						// cache by default. the orderly
+						// way is to enable cache in
 						// bios.
 	save->cr4 = CR4_PAE_MASK;
 	 // rdx = ??
@@ -554,7 +554,7 @@ static int svm_create_vcpu(struct kvm_vcpu *vcpu)
 	vcpu->svm->asid_generation = 0;
 	memset(vcpu->svm->ab_regs, 0, sizeof(vcpu->svm->ab_regs));
 	init_vmcb(vcpu->svm->vmcb);
-	
+
 	return 0;
 
 out2:
@@ -695,7 +695,7 @@ static void svm_set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 		if (is_paging(vcpu) && !(cr0 & CR0_PG_MASK) ) {
 			vcpu->shadow_efer &= ~EFER_LMA;
 			vcpu->svm->vmcb->save.efer &= ~(EFER_LMA | EFER_LME);
-		}	
+		}
 	}
 #endif
 	vcpu->svm->cr0 = cr0;
@@ -714,7 +714,7 @@ static void svm_set_segment(struct kvm_vcpu *vcpu,
 {
 	struct vmcb_seg *s = svm_seg(vcpu, seg);
 
-	s->base = var->base; 
+	s->base = var->base;
 	s->limit = var->limit;
 	s->selector = var->selector;
 	if (var->unusable)
@@ -730,8 +730,8 @@ static void svm_set_segment(struct kvm_vcpu *vcpu,
 		s->atrib |= (var->g & 1) << SVM_SELECTOR_G_SHIFT;
 	}
 	if (seg == VCPU_SREG_CS)
-		vcpu->svm->vmcb->save.cpl 
-			= (vcpu->svm->vmcb->save.cs.atrib 
+		vcpu->svm->vmcb->save.cpl
+			= (vcpu->svm->vmcb->save.cs.atrib
 			   >> SVM_SELECTOR_DPL_SHIFT) & 3;
 
 }
@@ -874,11 +874,11 @@ static int io_get_override(struct kvm_vcpu *vcpu,
 	unsigned ins_length;
 	gva_t rip;
 	int i;
-	
+
 	rip =  vcpu->svm->vmcb->save.rip;
 	ins_length = vcpu->svm->next_rip - rip;
 	rip += vcpu->svm->vmcb->save.cs.base;
-	
+
 	if (ins_length > MAX_INST_SIZE) {
 		printk("%s: inst length err, cs base 0x%llx rip 0x%llx "
 		       "next rip 0x%llx ins_length %u\n",
@@ -957,7 +957,7 @@ static unsigned long io_adress(struct kvm_vcpu *vcpu, int ins, u64 *address)
 		reg = &vcpu->regs[VCPU_REGS_RSI];
 		seg = (seg) ? seg : &vcpu->svm->vmcb->save.ds;
 	}
-	
+
 	addr_mask = ~0ULL >> (64 - (addr_size * 8));
 
 	if ((cs_atrib & SVM_SELECTOR_L_MASK) &&
@@ -965,12 +965,12 @@ static unsigned long io_adress(struct kvm_vcpu *vcpu, int ins, u64 *address)
 		*address = (*reg & addr_mask);
 		return addr_mask;
 	}
-	
+
 	if (!(seg->atrib & SVM_SELECTOR_P_SHIFT)) {
 		svm_inject_gp(vcpu, 0);
 		return 0;
 	}
-	
+
 	*address = (*reg & addr_mask) + seg->base;
 	return addr_mask;
 }
@@ -1000,7 +1000,7 @@ static int io_interception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 			return 1;
 		}
 
-		if (kvm_run->io.rep) { 
+		if (kvm_run->io.rep) {
 			kvm_run->io.count = vcpu->regs[VCPU_REGS_RCX] & addr_maks;
 			kvm_run->io.string_down = (vcpu->svm->vmcb->save.rflags
 						   & X86_EFLAGS_DF) != 0;
@@ -1023,7 +1023,7 @@ static int halt_interception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	skip_emulated_instruction(vcpu);
 	if (vcpu->irq_summary && (vcpu->svm->vmcb->save.rflags & X86_EFLAGS_IF))
 		return 1;
-	
+
 	kvm_run->exit_reason = KVM_EXIT_HLT;
 	return 0;
 }
@@ -1238,7 +1238,7 @@ static int (*svm_exit_handlers[])(struct kvm_vcpu *vcpu,
 	[SVM_EXIT_HLT]				= halt_interception,
 	[SVM_EXIT_INVLPG]			= emulate_on_interception,
 	[SVM_EXIT_INVLPGA]			= invalid_op_interception,
-	[SVM_EXIT_IOIO] 		  	= io_interception,      
+	[SVM_EXIT_IOIO] 		  	= io_interception,
 	[SVM_EXIT_MSR]				= msr_interception,
 	[SVM_EXIT_TASK_SWITCH]			= task_switch_interception,
 	[SVM_EXIT_VMRUN]			= invalid_op_interception,
@@ -1265,7 +1265,7 @@ static int handle_exit(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 		       exit_code);
 	}
 
-	if (exit_code >= sizeof(svm_exit_handlers) / sizeof(*svm_exit_handlers) 
+	if (exit_code >= sizeof(svm_exit_handlers) / sizeof(*svm_exit_handlers)
 	    || svm_exit_handlers[exit_code] == 0) {
 		kvm_run->exit_reason = KVM_EXIT_UNKNOWN;
 		printk("%s: 0x%x @ 0x%llx cr0 0x%lx rflags 0x%llx\n",
@@ -1276,7 +1276,7 @@ static int handle_exit(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 		       vcpu->svm->vmcb->save.rflags);
 		return 0;
 	}
-	
+
 	return svm_exit_handlers[exit_code](vcpu, kvm_run);
 }
 
@@ -1296,7 +1296,7 @@ static void pre_svm_run(struct kvm_vcpu *vcpu)
 	struct svm_cpu_data *svm_data = per_cpu(svm_data, cpu);
 
 	vcpu->svm->vmcb->control.tlb_ctl = TLB_CONTROL_DO_NOTHING;
-	if (vcpu->cpu != cpu || 
+	if (vcpu->cpu != cpu ||
 	    vcpu->svm->asid_generation != svm_data->asid_generation) {
 		new_asid(vcpu, svm_data);
 	}
@@ -1314,8 +1314,8 @@ static inline void kvm_try_inject_irq(struct kvm_vcpu *vcpu)
 
 	control->int_vector = pop_irq(vcpu);
 	control->int_ctl &= ~V_INTR_PRIO_MASK;
-	control->int_ctl |= V_IRQ_MASK | 
-		((/*control->int_vector >> 4*/ 0xf) << V_INTR_PRIO_SHIFT); 
+	control->int_ctl |= V_IRQ_MASK |
+		((/*control->int_vector >> 4*/ 0xf) << V_INTR_PRIO_SHIFT);
 }
 
 static void kvm_reput_irq(struct kvm_vcpu *vcpu)
@@ -1351,9 +1351,9 @@ static void load_ab_regs(unsigned long *ab_regs)
 	     "mov %[dr1], %%dr1 \n\t"
 	     "mov %[dr2], %%dr2 \n\t"
 	     "mov %[dr3], %%dr3 \n\t"
-	     : 
+	     :
 	     : [dr0] "r"(ab_regs[0]),
-	       [dr1] "r"(ab_regs[1]), 
+	       [dr1] "r"(ab_regs[1]),
 	       [dr2] "r"(ab_regs[2]),
 	       [dr3] "r"(ab_regs[3])
 	     : "rax");
@@ -1400,12 +1400,12 @@ again:
 #ifdef __x86_64__
 		"mov %c[rbx](%[vcpu]), %%rbx \n\t"
 		"mov %c[rcx](%[vcpu]), %%rcx \n\t"
-		"mov %c[rdx](%[vcpu]), %%rdx \n\t"	
-		"mov %c[rsi](%[vcpu]), %%rsi \n\t"	
-		"mov %c[rdi](%[vcpu]), %%rdi \n\t"	
-		"mov %c[rbp](%[vcpu]), %%rbp \n\t"	
-		"mov %c[r8](%[vcpu]),  %%r8  \n\t"	
-		"mov %c[r9](%[vcpu]),  %%r9  \n\t"	
+		"mov %c[rdx](%[vcpu]), %%rdx \n\t"
+		"mov %c[rsi](%[vcpu]), %%rsi \n\t"
+		"mov %c[rdi](%[vcpu]), %%rdi \n\t"
+		"mov %c[rbp](%[vcpu]), %%rbp \n\t"
+		"mov %c[r8](%[vcpu]),  %%r8  \n\t"
+		"mov %c[r9](%[vcpu]),  %%r9  \n\t"
 		"mov %c[r10](%[vcpu]), %%r10 \n\t"
 		"mov %c[r11](%[vcpu]), %%r11 \n\t"
 		"mov %c[r12](%[vcpu]), %%r12 \n\t"
@@ -1418,7 +1418,7 @@ again:
 		"mov %c[rdx](%[vcpu]), %%edx \n\t"
 		"mov %c[rsi](%[vcpu]), %%esi \n\t"
 		"mov %c[rdi](%[vcpu]), %%edi \n\t"
-		"mov %c[rbp](%[vcpu]), %%ebp \n\t"   
+		"mov %c[rbp](%[vcpu]), %%ebp \n\t"
 #endif
 
 		/* Enter guest mode */
@@ -1448,8 +1448,8 @@ again:
 		"mov %%r15, %c[r15](%[vcpu]) \n\t"
 
 		"pop  %%r15; pop  %%r14; pop  %%r13; pop  %%r12;"
-		"pop  %%r11; pop  %%r10; pop  %%r9;  pop  %%r8;"	
-		"pop  %%rbp; pop  %%rdi; pop  %%rsi;"	
+		"pop  %%r11; pop  %%r10; pop  %%r9;  pop  %%r8;"
+		"pop  %%rbp; pop  %%rdi; pop  %%rsi;"
 		"pop  %%rdx; pop  %%rcx; pop  %%rbx; \n\t"
 #else
 		"mov %%ebx, %c[rbx](%3) \n\t"
@@ -1459,10 +1459,10 @@ again:
 		"mov %%edi, %c[rdi](%3) \n\t"
 		"mov %%ebp, %c[rbp](%3) \n\t"
 
-		"pop  %%ebp; pop  %%edi; pop  %%esi;"	
+		"pop  %%ebp; pop  %%edi; pop  %%esi;"
 		"pop  %%edx; pop  %%ecx; pop  %%ebx; \n\t"
 #endif
-		: 
+		:
 		: [vcpu]"a"(vcpu),
 		  [svm]"i"(offsetof(struct kvm_vcpu, svm)),
 		  [vmcb]"i"(offsetof(struct vcpu_svm, vmcb_pa)),
@@ -1505,7 +1505,7 @@ again:
 	kvm_reput_irq(vcpu);
 
 	vcpu->svm->next_rip = 0;
-	
+
 	if (vcpu->svm->vmcb->control.exit_code == SVM_EXIT_ERR) {
 		kvm_run->exit_type = KVM_EXIT_TYPE_FAIL_ENTRY;
 		kvm_run->exit_reason = vcpu->svm->vmcb->control.exit_code;
@@ -1539,12 +1539,12 @@ static void svm_inject_page_fault(struct kvm_vcpu *vcpu,
 				  uint32_t err_code)
 {
 	uint32_t exit_int_info = vcpu->svm->vmcb->control.exit_int_info;
-	
+
 	++kvm_stat.pf_guest;
 
 	if (is_page_fault(exit_int_info)) {
 
-		vcpu->svm->vmcb->control.event_inj_err = 0; 
+		vcpu->svm->vmcb->control.event_inj_err = 0;
 		vcpu->svm->vmcb->control.event_inj = 	SVM_EVTINJ_VALID |
 							SVM_EVTINJ_VALID_ERR |
 							SVM_EVTINJ_TYPE_EXEPT |
@@ -1557,7 +1557,7 @@ static void svm_inject_page_fault(struct kvm_vcpu *vcpu,
 						SVM_EVTINJ_VALID_ERR |
 						SVM_EVTINJ_TYPE_EXEPT |
 						PF_VECTOR;
-	vcpu->svm->vmcb->control.event_inj_err = err_code;	
+	vcpu->svm->vmcb->control.event_inj_err = err_code;
 }
 
 
