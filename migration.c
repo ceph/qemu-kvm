@@ -11,12 +11,19 @@ int parse_host_port(struct sockaddr_in *saddr, const char *str);
 
 #define FD_UNUSED -1
 
+typedef enum {
+    NONE   = 0,
+    WRITER = 1,
+    READER = 2
+} migration_role_t;	
+
 typedef struct migration_state {
     int fd;
 #define BUFFSIZE (/* 256* */1024)
     char buff[BUFFSIZE]; /* FIXME: allocate dynamically; use mutli/double buffer */
     unsigned buffsize;
     unsigned head, tail;
+    migration_role_t role;
 } migration_state_t;
 
 static migration_state_t ms = {
@@ -160,6 +167,8 @@ void do_migration_listen(char *arg1, char *arg2)
         return;
     }
 
+    ms.role = READER;
+
     if (parse_host_port_and_message(&local,  arg1, reader_default_addr, "migration listen"))
         return;
 
@@ -258,6 +267,8 @@ void do_migration_connect(char *arg1, char *arg2)
         term_printf("Already connecting or connection established\n");
         return;
     }
+
+    ms.role = WRITER;
 
     if (parse_host_port_and_message(&local,  arg1, writer_default_addr, "migration connect"))
         return;
