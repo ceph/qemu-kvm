@@ -53,6 +53,16 @@ static int migration_buffer_bytes_empty(migration_state_t *pms)
     return (pms->tail - pms->head -1) % pms->buffsize;
 }
 
+static int migration_buffer_bytes_head_end(migration_state_t *pms)
+{
+    return pms->buffsize - pms->head;
+}
+
+static int migration_buffer_bytes_tail_end(migration_state_t *pms)
+{
+    return pms->buffsize - pms->tail;
+}
+
 static void migration_state_inc_head(migration_state_t *pms, int n)
 {
     pms->head = (pms->head + n) % pms->buffsize;
@@ -93,20 +103,20 @@ static void migration_cleanup(migration_state_t *pms)
 static int migration_read_from_socket(void *opaque)
 {
     migration_state_t *pms = (migration_state_t *)opaque;
-    int size;
+    int size, toend;
 
     if (pms->fd == FD_UNUSED) /* not connected */
         return 0;
     while (1) { /* breaking if O.K. */
         size = migration_buffer_bytes_empty(pms); /* available size */
-        if (size > pms->buffsize - pms->head) /* read till end of buffer */
-            size = pms->buffsize - pms->head;
+        toend = migration_buffer_bytes_head_end(pms);
+        if (size > toend) /* read till end of buffer */
+            size = toend;
         size = read(pms->fd, pms->buff + pms->head, size);
         if (size < 0) {
             if (socket_error() == EINTR)
                 continue;
-            perror("recv FAILED");
-            term_printf("migration_read_from_socket: recv failed (%d: %s)\n", errno, strerror(errno) );
+            term_printf("migration_read_from_socket: read failed (%s)\n", , strerror(errno) );
             return size;
         }
         if (size == 0) {
@@ -242,13 +252,16 @@ int migration_read_byte(void)
  */
 int migration_read_buffer(char *buff, int len)
 {
-    int size, len_req = len;
+    int size, toend, len_req = len;
     while (len > 0) {
         size = migration_read_some();
         if (size < 0)
             return size;
         else if (size==0)
             break;
+        toend = migration_buffer_bytes_tail_end(&ms);
+        if (size < toend)
+            size = toend;
         if (len < size)
             size = len;
         memcpy(buff, &ms.buff[ms.tail], size);
@@ -312,6 +325,7 @@ void do_migration_start(char *deadoralive)
         term_printf("sent '%s'\n", msg);
         break;
     case READER:
+        memset(buff, 'a', sizeof(buff));
         for (i=0; i<msgsize; i++)
             buff[i] = migration_read_byte();
         buff[msgsize] = '\0';
