@@ -49,6 +49,7 @@ rpm:	user qemu
 		 --define="_topdir $$(pwd)" \
 		 --define="prebuilt 1" \
 		-bb $(tmpspec)
+	$(RM) $(tmpspec)
 
 srpm:
 	mkdir -p SOURCES SRPMS
@@ -59,6 +60,7 @@ srpm:
 	tar czf SOURCES/scripts.tar.gz scripts
 	cp Makefile SOURCES
 	rpmbuild  --define="_topdir $$(pwd)" -bs $(tmpspec)
+	$(RM) $(tmpspec)
 
 clean:
 	for i in $(if $(WANT_MODULE), kernel) user qemu; do \
