@@ -29,6 +29,7 @@
 #define DPRINTF(x...) do {} while (0)
 #endif
 #include "x86_emulate.h"
+#include <linux/module.h>
 
 /*
  * Opcode effective-address decode tables.
@@ -149,12 +150,12 @@ static u8 opcode_table[256] = {
 
 static u8 twobyte_table[256] = {
 	/* 0x00 - 0x0F */
-	0, SrcMem | ModRM | DstReg | Mov, 0, 0, 0, 0, 0, 0,
+	0, SrcMem | ModRM | DstReg, 0, 0, 0, 0, ImplicitOps, 0, 
 	0, 0, 0, 0, 0, ImplicitOps | ModRM, 0, 0,
 	/* 0x10 - 0x1F */
 	0, 0, 0, 0, 0, 0, 0, 0, ImplicitOps | ModRM, 0, 0, 0, 0, 0, 0, 0,
 	/* 0x20 - 0x2F */
-	ImplicitOps, 0, ImplicitOps, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	ImplicitOps, ModRM, ImplicitOps, ModRM, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	/* 0x30 - 0x3F */
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	/* 0x40 - 0x47 */
@@ -199,6 +200,19 @@ static u8 twobyte_table[256] = {
 	/* 0xF0 - 0xFF */
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 };
+
+/*
+ * Tell the emulator that of the Group 7 instructions (sgdt, lidt, etc.) we
+ * are interested only in invlpg and not in any of the rest.
+ *
+ * invlpg is a special instruction in that the data it references may not
+ * be mapped.
+ */
+void kvm_emulator_want_group7_invlpg(void)
+{
+	twobyte_table[1] &= ~SrcMem;
+}
+EXPORT_SYMBOL_GPL(kvm_emulator_want_group7_invlpg);
 
 /* Type, address-of, and value of an instruction's operand. */
 struct operand {
@@ -1154,9 +1168,22 @@ twobyte_insn:
 		case 6: /* lmsw */
 			realmode_lmsw(ctxt->vcpu, (u16)modrm_val, &_eflags);
 			break;
+		case 7: /* invlpg*/
+			emulate_invlpg(ctxt->vcpu, cr2);
+			break;
 		default:
 			goto cannot_emulate;
 		}
+		break;
+	case 0x21: /* mov from dr to reg */
+		if (modrm_mod != 3)
+			goto cannot_emulate;
+		rc = emulator_get_dr(ctxt, modrm_reg, &_regs[modrm_rm]);
+		break;
+	case 0x23: /* mov from reg to dr */
+		if (modrm_mod != 3)
+			goto cannot_emulate;
+		rc = emulator_set_dr(ctxt, modrm_reg, _regs[modrm_rm]);
 		break;
 	case 0x40 ... 0x4f:	/* cmov */
 		dst.val = dst.orig_val = src.val;
@@ -1263,6 +1290,9 @@ twobyte_special_insn:
 	switch (b) {
 	case 0x0d:		/* GrpP (prefetch) */
 	case 0x18:		/* Grp16 (prefetch/nop) */
+		break;
+	case 0x06:
+		emulate_clts(ctxt->vcpu);
 		break;
 	case 0x20: /* mov cr, reg */
 		b = insn_fetch(u8, 1, _eip);

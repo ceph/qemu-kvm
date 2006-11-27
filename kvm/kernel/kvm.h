@@ -166,7 +166,10 @@ enum {
 
 struct kvm_vcpu {
 	struct kvm *kvm;
-	struct vmcs *vmcs;
+	union {
+		struct vmcs *vmcs;
+		struct vcpu_svm *svm;
+	};
 	struct mutex mutex;
 	int   cpu;
 	int   launched;
@@ -287,11 +290,15 @@ struct kvm_arch_ops {
 	void (*set_idt)(struct kvm_vcpu *vcpu, struct descriptor_table *dt);
 	void (*get_gdt)(struct kvm_vcpu *vcpu, struct descriptor_table *dt);
 	void (*set_gdt)(struct kvm_vcpu *vcpu, struct descriptor_table *dt);
+	unsigned long (*get_dr)(struct kvm_vcpu *vcpu, int dr);
+	void (*set_dr)(struct kvm_vcpu *vcpu, int dr, unsigned long value,
+		       int *exception);
 	void (*cache_regs)(struct kvm_vcpu *vcpu);
 	void (*decache_regs)(struct kvm_vcpu *vcpu);
 	unsigned long (*get_rflags)(struct kvm_vcpu *vcpu);
 	void (*set_rflags)(struct kvm_vcpu *vcpu, unsigned long rflags);
 
+	void (*invlpg)(struct kvm_vcpu *vcpu, gva_t addr);
 	void (*flush_tlb)(struct kvm_vcpu *vcpu);
 	void (*inject_page_fault)(struct kvm_vcpu *vcpu,
 				  unsigned long addr, u32 err_code);
@@ -324,6 +331,8 @@ hpa_t gpa_to_hpa(struct kvm_vcpu *vcpu, gpa_t gpa);
 static inline int is_error_hpa(hpa_t hpa) { return hpa >> HPA_MSB; }
 hpa_t gva_to_hpa(struct kvm_vcpu *vcpu, gva_t gva);
 
+void kvm_emulator_want_group7_invlpg(void);
+
 extern hpa_t bad_page_address;
 
 static inline struct page *gfn_to_page(struct kvm_memory_slot *slot, gfn_t gfn)
@@ -350,6 +359,15 @@ void realmode_lmsw(struct kvm_vcpu *vcpu, unsigned long msw,
 unsigned long realmode_get_cr(struct kvm_vcpu *vcpu, int cr);
 void realmode_set_cr(struct kvm_vcpu *vcpu, int cr, unsigned long value,
 		     unsigned long *rflags);
+
+struct x86_emulate_ctxt;
+
+int emulate_invlpg(struct kvm_vcpu *vcpu, gva_t address);
+int emulate_clts(struct kvm_vcpu *vcpu);
+int emulator_get_dr(struct x86_emulate_ctxt* ctxt, int dr,
+		    unsigned long *dest);
+int emulator_set_dr(struct x86_emulate_ctxt *ctxt, int dr,
+		    unsigned long value);
 
 void set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0);
 void set_cr3(struct kvm_vcpu *vcpu, unsigned long cr0);

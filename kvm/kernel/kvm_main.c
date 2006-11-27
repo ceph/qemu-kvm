@@ -71,17 +71,6 @@ static struct dentry *debugfs_dir;
 #define CR8_RESEVED_BITS (~0x0fULL)
 #define EFER_RESERVED_BITS 0xfffffffffffff2fe
 
-struct vmx_msr_entry *find_msr_entry(struct kvm_vcpu *vcpu, u32 msr)
-{
-	int i;
-
-	for (i = 0; i < vcpu->nmsrs; ++i)
-		if (vcpu->guest_msrs[i].index == msr)
-			return &vcpu->guest_msrs[i];
-	return 0;
-}
-EXPORT_SYMBOL_GPL(find_msr_entry);
-
 struct segment_descriptor {
 	u16 limit_low;
 	u16 base_low;
@@ -918,6 +907,52 @@ static unsigned long get_segment_base(struct kvm_vcpu *vcpu, int seg)
 	return kvm_arch_ops->get_segment_base(vcpu, seg);
 }
 
+int emulate_invlpg(struct kvm_vcpu *vcpu, gva_t address)
+{
+	spin_lock(&vcpu->kvm->lock);
+	vcpu->mmu.inval_page(vcpu, address);
+	spin_unlock(&vcpu->kvm->lock);
+	kvm_arch_ops->invlpg(vcpu, address);
+	return X86EMUL_CONTINUE;
+}
+
+int emulate_clts(struct kvm_vcpu *vcpu)
+{
+	unsigned long cr0 = vcpu->cr0;
+
+	cr0 &= ~CR0_TS_MASK;
+	kvm_arch_ops->set_cr0(vcpu, cr0);
+	return X86EMUL_CONTINUE;
+}
+
+int emulator_get_dr(struct x86_emulate_ctxt* ctxt, int dr, unsigned long *dest)
+{
+	struct kvm_vcpu *vcpu = ctxt->vcpu;
+
+	switch (dr) {
+	case 0 ... 3:
+		*dest = kvm_arch_ops->get_dr(vcpu, dr);
+		return X86EMUL_CONTINUE;
+	default:
+		printk(KERN_DEBUG "%s: unexpected dr %u\n",
+		       __FUNCTION__, dr);
+		return X86EMUL_UNHANDLEABLE;
+	}
+}
+
+int emulator_set_dr(struct x86_emulate_ctxt *ctxt, int dr, unsigned long value)
+{
+	unsigned long mask = (ctxt->mode == X86EMUL_MODE_PROT64) ? ~0ULL : ~0U;
+	int exception;
+
+	kvm_arch_ops->set_dr(ctxt->vcpu, dr, value & mask, &exception);
+	if (exception) {
+		/* FIXME: better handling */
+		return X86EMUL_UNHANDLEABLE;
+	}
+	return X86EMUL_CONTINUE;
+}
+
 static void report_emulation_failure(struct x86_emulate_ctxt *ctxt)
 {
 	static int reported;
@@ -1089,8 +1124,6 @@ static int get_msr(struct kvm_vcpu *vcpu, u32 msr_index, u64 *pdata)
 
 void set_efer(struct kvm_vcpu *vcpu, u64 efer)
 {
-	struct vmx_msr_entry *msr;
-
 	if (efer & EFER_RESERVED_BITS) {
 		printk(KERN_DEBUG "set_efer: 0x%llx #GP, reserved bits\n",
 		       efer);
@@ -1105,16 +1138,12 @@ void set_efer(struct kvm_vcpu *vcpu, u64 efer)
 		return;
 	}
 
+	kvm_arch_ops->set_efer(vcpu, efer);
+
 	efer &= ~EFER_LMA;
 	efer |= vcpu->shadow_efer & EFER_LMA;
 
 	vcpu->shadow_efer = efer;
-
-	msr = find_msr_entry(vcpu, MSR_EFER);
-
-	if (!(efer & EFER_LMA))
-	    efer &= ~EFER_LME;
-	msr->data = efer;
 }
 EXPORT_SYMBOL_GPL(set_efer);
 

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import sys, os, time
+import sys, os, time, re
 import optparse
 
 optparser = optparse.OptionParser()
@@ -74,10 +74,22 @@ def insert_module(module):
         if os.spawnl(os.P_WAIT, '/sbin/modprobe', 'modprobe', module) != 0:
             raise Exception('failed to load kvm module')
 
+def vendor():
+    for x in file('/proc/cpuinfo').readlines():
+        m = re.match(r'vendor_id[ \t]*: *([a-zA-Z]+),*', x)
+        if m:
+            return m.group(1)
+    return unknown
+
+vendor_module = {
+    'GenuineIntel': 'kvm-intel',
+    'AuthenticAMD': 'kvm-amd',
+    }[vendor()]
+
 if options.kvm and options.reload:
-    for module in ['kvm-intel', 'kvm']:
+    for module in [vendor_module, 'kvm']:
         remove_module(module)
-    for module in ['kvm', 'kvm-intel']:
+    for module in ['kvm', vendor_module]:
         insert_module(module)
     for i in range(5):
         if os.access('/dev/kvm', os.F_OK):
