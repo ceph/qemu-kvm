@@ -41,7 +41,6 @@
 	 | CR0_NW_MASK | CR0_CD_MASK)
 #define KVM_VM_CR0_ALWAYS_ON \
 	(CR0_PG_MASK | CR0_PE_MASK | CR0_WP_MASK | CR0_NE_MASK)
-
 #define KVM_GUEST_CR4_MASK \
 	(CR4_PSE_MASK | CR4_PAE_MASK | CR4_PGE_MASK | CR4_VMXE_MASK | CR4_VME_MASK)
 #define KVM_PMODE_VM_CR4_ALWAYS_ON (CR4_VMXE_MASK | CR4_PAE_MASK)
@@ -154,6 +153,17 @@ enum {
 	NR_VCPU_REGS
 };
 
+enum {
+	VCPU_SREG_CS,
+	VCPU_SREG_DS,
+	VCPU_SREG_ES,
+	VCPU_SREG_FS,
+	VCPU_SREG_GS,
+	VCPU_SREG_SS,
+	VCPU_SREG_TR,
+	VCPU_SREG_LDTR,
+};
+
 struct kvm_vcpu {
 	struct kvm *kvm;
 	struct vmcs *vmcs;
@@ -166,8 +176,10 @@ struct kvm_vcpu {
 	unsigned long regs[NR_VCPU_REGS]; /* for rsp: vcpu_load_rsp_rip() */
 	unsigned long rip;      /* needs vcpu_load_rsp_rip() */
 
+	unsigned long cr0;
 	unsigned long cr2;
 	unsigned long cr3;
+	unsigned long cr4;
 	unsigned long cr8;
 	u64 shadow_efer;
 	u64 apic_base;
@@ -235,10 +247,70 @@ struct kvm_stat {
 	u32 irq_exits;
 };
 
+struct descriptor_table {
+	u16 limit;
+	unsigned long base;
+} __attribute__((packed));
+
+struct kvm_arch_ops {
+	int (*cpu_has_kvm_support)(void);          /* __init */
+	int (*disabled_by_bios)(void);             /* __init */
+	void (*hardware_enable)(void *dummy);      /* __init */
+	void (*hardware_disable)(void *dummy);
+	int (*hardware_setup)(void);               /* __init */
+	void (*hardware_unsetup)(void);            /* __exit */
+
+	int (*vcpu_create)(struct kvm_vcpu *vcpu);
+	void (*vcpu_free)(struct kvm_vcpu *vcpu);
+
+	struct kvm_vcpu *(*vcpu_load)(struct kvm_vcpu *vcpu);
+	void (*vcpu_put)(struct kvm_vcpu *vcpu);
+
+	int (*set_guest_debug)(struct kvm_vcpu *vcpu,
+			       struct kvm_debug_guest *dbg);
+	int (*get_msr)(struct kvm_vcpu *vcpu, u32 msr_index, u64 *pdata);
+	int (*set_msr)(struct kvm_vcpu *vcpu, u32 msr_index, u64 data);
+	u64 (*get_segment_base)(struct kvm_vcpu *vcpu, int seg);
+	void (*get_segment)(struct kvm_vcpu *vcpu,
+			    struct kvm_segment *var, int seg);
+	void (*set_segment)(struct kvm_vcpu *vcpu,
+			    struct kvm_segment *var, int seg);
+	int (*is_long_mode)(struct kvm_vcpu *vcpu);
+	void (*get_cs_db_l_bits)(struct kvm_vcpu *vcpu, int *db, int *l);
+	void (*set_cr0)(struct kvm_vcpu *vcpu, unsigned long cr0);
+	void (*set_cr0_no_modeswitch)(struct kvm_vcpu *vcpu,
+				      unsigned long cr0);
+	void (*set_cr3)(struct kvm_vcpu *vcpu, unsigned long cr3);
+	void (*set_cr4)(struct kvm_vcpu *vcpu, unsigned long cr4);
+	void (*set_efer)(struct kvm_vcpu *vcpu, u64 efer);
+	void (*get_idt)(struct kvm_vcpu *vcpu, struct descriptor_table *dt);
+	void (*set_idt)(struct kvm_vcpu *vcpu, struct descriptor_table *dt);
+	void (*get_gdt)(struct kvm_vcpu *vcpu, struct descriptor_table *dt);
+	void (*set_gdt)(struct kvm_vcpu *vcpu, struct descriptor_table *dt);
+	void (*cache_regs)(struct kvm_vcpu *vcpu);
+	void (*decache_regs)(struct kvm_vcpu *vcpu);
+	unsigned long (*get_rflags)(struct kvm_vcpu *vcpu);
+	void (*set_rflags)(struct kvm_vcpu *vcpu, unsigned long rflags);
+
+	void (*flush_tlb)(struct kvm_vcpu *vcpu);
+	void (*inject_page_fault)(struct kvm_vcpu *vcpu,
+				  unsigned long addr, u32 err_code);
+
+	void (*inject_gp)(struct kvm_vcpu *vcpu, unsigned err_code);
+
+	int (*run)(struct kvm_vcpu *vcpu, struct kvm_run *run);
+	int (*vcpu_setup)(struct kvm_vcpu *vcpu);
+	void (*skip_emulated_instruction)(struct kvm_vcpu *vcpu);
+};
+
 extern struct kvm_stat kvm_stat;
+extern struct kvm_arch_ops *kvm_arch_ops;
 
 #define kvm_printf(kvm, fmt ...) printk(KERN_DEBUG fmt)
 #define vcpu_printf(vcpu, fmt...) kvm_printf(vcpu->kvm, fmt)
+
+int kvm_init_arch(struct kvm_arch_ops *ops, struct module *module);
+void kvm_exit_arch(void);
 
 void kvm_mmu_destroy(struct kvm_vcpu *vcpu);
 int kvm_mmu_init(struct kvm_vcpu *vcpu);
@@ -262,6 +334,14 @@ static inline struct page *gfn_to_page(struct kvm_memory_slot *slot, gfn_t gfn)
 struct kvm_memory_slot *gfn_to_memslot(struct kvm *kvm, gfn_t gfn);
 void mark_page_dirty(struct kvm *kvm, gfn_t gfn);
 
+enum emulation_result {
+	EMULATE_DONE,       /* no further processing */
+	EMULATE_DO_MMIO,      /* kvm_run filled with mmio request */
+	EMULATE_FAIL,         /* can't emulate this instruction */
+};
+
+int emulate_instruction(struct kvm_vcpu *vcpu, struct kvm_run *run,
+			unsigned long cr2, u16 error_code);
 void realmode_lgdt(struct kvm_vcpu *vcpu, u16 size, unsigned long address);
 void realmode_lidt(struct kvm_vcpu *vcpu, u16 size, unsigned long address);
 void realmode_lmsw(struct kvm_vcpu *vcpu, unsigned long msw,
@@ -270,6 +350,22 @@ void realmode_lmsw(struct kvm_vcpu *vcpu, unsigned long msw,
 unsigned long realmode_get_cr(struct kvm_vcpu *vcpu, int cr);
 void realmode_set_cr(struct kvm_vcpu *vcpu, int cr, unsigned long value,
 		     unsigned long *rflags);
+
+void set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0);
+void set_cr3(struct kvm_vcpu *vcpu, unsigned long cr0);
+void set_cr4(struct kvm_vcpu *vcpu, unsigned long cr0);
+void set_cr8(struct kvm_vcpu *vcpu, unsigned long cr0);
+void lmsw(struct kvm_vcpu *vcpu, unsigned long msw);
+
+#ifdef __x86_64__
+void set_efer(struct kvm_vcpu *vcpu, u64 efer);
+#endif
+
+void fx_init(struct kvm_vcpu *vcpu);
+
+void load_msrs(struct vmx_msr_entry *e, int n);
+void save_msrs(struct vmx_msr_entry *e, int n);
+void kvm_resched(struct kvm_vcpu *vcpu);
 
 int kvm_read_guest(struct kvm_vcpu *vcpu,
 	       gva_t addr,
@@ -281,86 +377,27 @@ int kvm_write_guest(struct kvm_vcpu *vcpu,
 		unsigned long size,
 		void *data);
 
-void vmcs_writel(unsigned long field, unsigned long value);
-unsigned long vmcs_readl(unsigned long field);
+unsigned long segment_base(u16 selector);
 
-static inline u16 vmcs_read16(unsigned long field)
+static inline struct page *_gfn_to_page(struct kvm *kvm, gfn_t gfn)
 {
-	return vmcs_readl(field);
+	struct kvm_memory_slot *slot = gfn_to_memslot(kvm, gfn);
+	return (slot) ? slot->phys_mem[gfn - slot->base_gfn] : 0;
 }
 
-static inline u32 vmcs_read32(unsigned long field)
+static inline int is_pae(struct kvm_vcpu *vcpu)
 {
-	return vmcs_readl(field);
+	return vcpu->cr4 & CR4_PAE_MASK;
 }
 
-static inline u64 vmcs_read64(unsigned long field)
+static inline int is_pse(struct kvm_vcpu *vcpu)
 {
-#ifdef __x86_64__
-	return vmcs_readl(field);
-#else
-	return vmcs_readl(field) | ((u64)vmcs_readl(field+1) << 32);
-#endif
+	return vcpu->cr4 & CR4_PSE_MASK;
 }
 
-static inline void vmcs_write32(unsigned long field, u32 value)
+static inline int is_paging(struct kvm_vcpu *vcpu)
 {
-	vmcs_writel(field, value);
-}
-
-static inline int is_long_mode(void)
-{
-	return vmcs_read32(VM_ENTRY_CONTROLS) & VM_ENTRY_CONTROLS_IA32E_MASK;
-}
-
-static inline unsigned long guest_cr4(void)
-{
-	return (vmcs_readl(CR4_READ_SHADOW) & KVM_GUEST_CR4_MASK) |
-		(vmcs_readl(GUEST_CR4) & ~KVM_GUEST_CR4_MASK);
-}
-
-static inline int is_pae(void)
-{
-	return guest_cr4() & CR4_PAE_MASK;
-}
-
-static inline int is_pse(void)
-{
-	return guest_cr4() & CR4_PSE_MASK;
-}
-
-static inline unsigned long guest_cr0(void)
-{
-	return (vmcs_readl(CR0_READ_SHADOW) & KVM_GUEST_CR0_MASK) |
-		(vmcs_readl(GUEST_CR0) & ~KVM_GUEST_CR0_MASK);
-}
-
-static inline unsigned guest_cpl(void)
-{
-	return vmcs_read16(GUEST_CS_SELECTOR) & SELECTOR_RPL_MASK;
-}
-
-static inline int is_paging(void)
-{
-	return guest_cr0() & CR0_PG_MASK;
-}
-
-static inline int is_page_fault(u32 intr_info)
-{
-	return (intr_info & (INTR_INFO_INTR_TYPE_MASK | INTR_INFO_VECTOR_MASK |
-			     INTR_INFO_VALID_MASK)) ==
-		(INTR_TYPE_EXCEPTION | PF_VECTOR | INTR_INFO_VALID_MASK);
-}
-
-static inline int is_external_interrupt(u32 intr_info)
-{
-	return (intr_info & (INTR_INFO_INTR_TYPE_MASK | INTR_INFO_VALID_MASK))
-		== (INTR_TYPE_EXT_INTR | INTR_INFO_VALID_MASK);
-}
-
-static inline void flush_guest_tlb(struct kvm_vcpu *vcpu)
-{
-	vmcs_writel(GUEST_CR3, vmcs_readl(GUEST_CR3));
+	return vcpu->cr0 & CR0_PG_MASK;
 }
 
 static inline int memslot_id(struct kvm *kvm, struct kvm_memory_slot *slot)
@@ -375,6 +412,91 @@ static inline struct kvm_mmu_page *page_header(hpa_t shadow_page)
 	return (struct kvm_mmu_page *)page->private;
 }
 
+static inline u16 read_fs(void)
+{
+	u16 seg;
+	asm ("mov %%fs, %0" : "=g"(seg));
+	return seg;
+}
+
+static inline u16 read_gs(void)
+{
+	u16 seg;
+	asm ("mov %%gs, %0" : "=g"(seg));
+	return seg;
+}
+
+static inline u16 read_ldt(void)
+{
+	u16 ldt;
+	asm ("sldt %0" : "=g"(ldt));
+	return ldt;
+}
+
+static inline void load_fs(u16 sel)
+{
+	asm ("mov %0, %%fs" : : "rm"(sel));
+}
+
+static inline void load_gs(u16 sel)
+{
+	asm ("mov %0, %%gs" : : "rm"(sel));
+}
+
+#ifndef load_ldt
+static inline void load_ldt(u16 sel)
+{
+	asm ("lldt %0" : : "g"(sel));
+}
+#endif
+
+static inline void get_idt(struct descriptor_table *table)
+{
+	asm ("sidt %0" : "=m"(*table));
+}
+
+static inline void get_gdt(struct descriptor_table *table)
+{
+	asm ("sgdt %0" : "=m"(*table));
+}
+
+static inline unsigned long read_tr_base(void)
+{
+	u16 tr;
+	asm ("str %0" : "=g"(tr));
+	return segment_base(tr);
+}
+
+#ifdef __x86_64__
+static inline unsigned long read_msr(unsigned long msr)
+{
+	u64 value;
+
+	rdmsrl(msr, value);
+	return value;
+}
+#endif
+
+static inline void fx_save(void *image)
+{
+	asm ("fxsave (%0)":: "r" (image));
+}
+
+static inline void fx_restore(void *image)
+{
+	asm ("fxrstor (%0)":: "r" (image));
+}
+
+static inline void fpu_init(void)
+{
+	asm ("finit");
+}
+
+static inline u32 get_rdx_init_val(void)
+{
+	return 0x600; /* P6 family */
+}
+
 #define ASM_VMX_VMCLEAR_RAX       ".byte 0x66, 0x0f, 0xc7, 0x30"
 #define ASM_VMX_VMLAUNCH          ".byte 0x0f, 0x01, 0xc2"
 #define ASM_VMX_VMRESUME          ".byte 0x0f, 0x01, 0xc3"
@@ -384,6 +506,14 @@ static inline struct kvm_mmu_page *page_header(hpa_t shadow_page)
 #define ASM_VMX_VMWRITE_RSP_RDX   ".byte 0x0f, 0x79, 0xd4"
 #define ASM_VMX_VMXOFF            ".byte 0x0f, 0x01, 0xc4"
 #define ASM_VMX_VMXON_RAX         ".byte 0xf3, 0x0f, 0xc7, 0x30"
+
+#define MSR_IA32_TIME_STAMP_COUNTER		0x010
+
+#define TSS_IOPB_BASE_OFFSET 0x66
+#define TSS_BASE_SIZE 0x68
+#define TSS_IOPB_SIZE (65536 / 8)
+#define TSS_REDIRECTION_SIZE (256 / 8)
+#define RMODE_TSS_SIZE (TSS_BASE_SIZE + TSS_REDIRECTION_SIZE + TSS_IOPB_SIZE + 1)
 
 #ifdef __x86_64__
 

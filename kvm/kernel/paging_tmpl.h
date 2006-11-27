@@ -70,7 +70,7 @@ static void FNAME(init_walker)(struct guest_walker *walker,
 	hpa = safe_gpa_to_hpa(vcpu, vcpu->cr3 & PT64_BASE_ADDR_MASK);
 	walker->table = kmap_atomic(pfn_to_page(hpa >> PAGE_SHIFT), KM_USER0);
 
-	ASSERT((!is_long_mode() && is_pae()) ||
+	ASSERT((!kvm_arch_ops->is_long_mode(vcpu) && is_pae(vcpu)) ||
 	       (vcpu->cr3 & ~(PAGE_MASK | CR3_FLAGS_MASK)) == 0);
 
 	walker->table = (pt_element_t *)( (unsigned long)walker->table |
@@ -133,9 +133,9 @@ static pt_element_t *FNAME(fetch_guest)(struct kvm_vcpu *vcpu,
 		    !is_present_pte(walker->table[index]) ||
 		    (walker->level == PT_DIRECTORY_LEVEL &&
 		     (walker->table[index] & PT_PAGE_SIZE_MASK) &&
-		     (PTTYPE == 64 || is_pse())))
+		     (PTTYPE == 64 || is_pse(vcpu))))
 			return &walker->table[index];
-		if (walker->level != 3 || is_long_mode())
+		if (walker->level != 3 || kvm_arch_ops->is_long_mode(vcpu))
 			walker->inherited_ar &= walker->table[index];
 		paddr = safe_gpa_to_hpa(vcpu, walker->table[index] & PT_BASE_ADDR_MASK);
 		kunmap_atomic(walker->table, KM_USER0);
@@ -204,7 +204,7 @@ static u64 *FNAME(fetch)(struct kvm_vcpu *vcpu, gva_t addr,
 		shadow_addr = kvm_mmu_alloc_page(vcpu, shadow_ent);
 		if (!VALID_PAGE(shadow_addr))
 			return ERR_PTR(-ENOMEM);
-		if (!is_long_mode() && level == 3)
+		if (!kvm_arch_ops->is_long_mode(vcpu) && level == 3)
 			*shadow_ent = shadow_addr |
 				(*guest_ent & (PT_PRESENT_MASK | PT_PWT_MASK | PT_PCD_MASK));
 		else {
@@ -251,7 +251,7 @@ static int FNAME(fix_write_pf)(struct kvm_vcpu *vcpu,
 		 * supervisor write protection is enabled.
 		 */
 		if (!writable_shadow) {
-			if (is_write_protection())
+			if (is_write_protection(vcpu))
 				return 0;
 			*shadow_ent &= ~PT_USER_MASK;
 		}
@@ -369,7 +369,7 @@ static gpa_t FNAME(gva_to_gpa)(struct kvm_vcpu *vcpu, gva_t vaddr)
 
 	if (walker.level == PT_DIRECTORY_LEVEL) {
 		ASSERT((guest_pte & PT_PAGE_SIZE_MASK));
-		ASSERT(PTTYPE == 64 || is_pse());
+		ASSERT(PTTYPE == 64 || is_pse(vcpu));
 
 		gpa = (guest_pte & PT_DIR_BASE_ADDR_MASK) | (vaddr &
 			(PT_LEVEL_MASK(PT_PAGE_TABLE_LEVEL) | ~PAGE_MASK));

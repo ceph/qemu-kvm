@@ -61,14 +61,24 @@ optparser.add_option('--loadvm',
 
 (options, args) = optparser.parse_args(sys.argv)
 
-if options.kvm and options.reload:
+def remove_module(module):
+    module = module.replace('-', '_')
     for x in os.popen4('/sbin/lsmod')[1].readlines():
-        if x.startswith('kvm '):
-            if os.spawnl(os.P_WAIT, '/sbin/rmmod', 'rmmod', 'kvm') != 0:
-                raise Exception('failed to remove kvm module')
-    if os.spawnl(os.P_WAIT, '/sbin/insmod', 'insmod', 'kernel/kvm.ko') != 0:
-        if os.spawnl(os.P_WAIT, '/sbin/modprobe', 'modprobe', 'kvm') != 0:
+        if x.startswith(module + ' '):
+            if os.spawnl(os.P_WAIT, '/sbin/rmmod', 'rmmod', module) != 0:
+                raise Exception('failed to remove %s module' % (module,))
+
+def insert_module(module):
+    if os.spawnl(os.P_WAIT, '/sbin/insmod', 'insmod',
+                 'kernel/%s.ko' % (module,)) != 0:
+        if os.spawnl(os.P_WAIT, '/sbin/modprobe', 'modprobe', module) != 0:
             raise Exception('failed to load kvm module')
+
+if options.kvm and options.reload:
+    for module in ['kvm-intel', 'kvm']:
+        remove_module(module)
+    for module in ['kvm', 'kvm-intel']:
+        insert_module(module)
     for i in range(5):
         if os.access('/dev/kvm', os.F_OK):
             break
