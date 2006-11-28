@@ -102,17 +102,17 @@ static inline void push_irq(struct kvm_vcpu *vcpu, u8 irq)
 
 static inline void clgi(void)
 {
-	asm volatile ("clgi");
+	asm volatile (SVM_CLGI);
 }
 
 static inline void stgi(void)
 {
-	asm volatile ("stgi");
+	asm volatile (SVM_STGI);
 }
 
 static inline void invlpga(unsigned long addr, u32 asid)
 {
-	asm volatile ("invlpga" :: "a"(addr), "c"(asid));
+	asm volatile (SVM_INVLPGA :: "a"(addr), "c"(asid));
 }
 
 static inline unsigned long read_cr2(void)
