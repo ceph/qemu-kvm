@@ -113,7 +113,7 @@ struct __attribute__ ((__packed__)) vmcb_control_area {
 
 struct __attribute__ ((__packed__)) vmcb_seg {
 	u16 selector;
-	u16 atrib;
+	u16 attrib;
 	u32 limit;
 	u64 base;
 };
@@ -182,7 +182,7 @@ struct __attribute__ ((__packed__)) vmcb {
 #define SVM_SELECTOR_DB_SHIFT 10
 #define SVM_SELECTOR_G_SHIFT 11
 
-#define SVM_SELECTOR_TYP_MASK (0xf)
+#define SVM_SELECTOR_TYPE_MASK (0xf)
 #define SVM_SELECTOR_S_MASK (1 << SVM_SELECTOR_S_SHIFT)
 #define SVM_SELECTOR_DPL_MASK (3 << SVM_SELECTOR_DPL_SHIFT)
 #define SVM_SELECTOR_P_MASK (1 << SVM_SELECTOR_P_SHIFT)
