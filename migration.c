@@ -503,7 +503,6 @@ static int64_t qemu_savevm_method_socket_seek(QEMUFile *f, int64_t pos, int when
 
     if (pms->role == READER) {
         record_len = qemu_get_be32(f);
-        printf("record_len=%u\n", record_len);
     }
     return 0;
 }
