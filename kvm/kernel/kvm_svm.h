@@ -19,7 +19,7 @@ static const u32 host_save_msrs[] = {
 
 
 #define NR_HOST_SAVE_MSRS (sizeof(host_save_msrs) / sizeof(*host_save_msrs))
-#define NUM_DB_REGS 4
+#define NUM_AB_RSGS 4
 
 struct vcpu_svm {
 	struct vmcb *vmcb;
@@ -29,13 +29,13 @@ struct vcpu_svm {
 
 	unsigned long cr0;
 	unsigned long cr4;
-	unsigned long db_regs[NUM_DB_REGS];
+	unsigned long ab_regs[NUM_AB_RSGS];
 
 	u64 next_rip;
 
 	u64 host_msrs[NR_HOST_SAVE_MSRS];
 	unsigned long host_cr2;
-	unsigned long host_db_regs[NUM_DB_REGS];
+	unsigned long host_ab_regs[NUM_AB_RSGS];
 	unsigned long host_dr6;
 	unsigned long host_dr7;
 };
