@@ -4330,7 +4330,7 @@ int qemu_savevm(const char *filename, QEMUFile *f)
         qemu_put_be32(f, len);
         qemu_fseek(f, cur_pos, SEEK_SET);
     }
-
+    qemu_put_byte(f, 0); /* len==0 represents end of state */
     f->close(f);
     ret = 0;
  the_end:
@@ -4379,7 +4379,7 @@ int qemu_loadvm(const char *filename, QEMUFile *f)
     }
     for(;;) {
         len = qemu_get_byte(f);
-        if (f->eof(f))
+        if (f->eof(f) || len==0)
             break;
         qemu_get_buffer(f, idstr, len);
         idstr[len] = '\0';
