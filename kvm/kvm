@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 import sys, os, time, re
-import optparse
+import optparse, commands
 
 optparser = optparse.OptionParser()
 
@@ -140,7 +140,19 @@ if options.debugger:
     qemu_args += ('-s',)
 
 if not options.notap:
-    qemu_args += ('-net', 'nic' ,'-net', 'tap,script=/etc/kvm/qemu-ifup',)
+    mac = None
+    for line in commands.getoutput('ip link show eth0').splitlines():
+        m = re.match(r'.*link/ether (..:..:..:..:..:..).*', line)
+        if m:
+            mac = m.group(1)
+    if not mac:
+        raise Exception, 'Unable to determine eth0 mac address'
+    mac_components = mac.split(':')
+    mac_components[0] = 'a0'
+    mac = ':'.join(mac_components)
+            
+    qemu_args += ('-net', 'nic,macaddr=%s' % (mac,),
+                  '-net', 'tap,script=/etc/kvm/qemu-ifup',)
 
 if options.vnc is not None:
     qemu_args += ('-vnc', str(options.vnc))

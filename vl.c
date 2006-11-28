@@ -4093,12 +4093,12 @@ void qemu_del_wait_object(HANDLE handle, WaitObjectFunc *func, void *opaque)
 
 void qemu_put_buffer(QEMUFile *f, const uint8_t *buf, int size)
 {
-    fwrite(buf, 1, size, f);
+    f->put_buffer(f, buf, size);
 }
 
 void qemu_put_byte(QEMUFile *f, int v)
 {
-    fputc(v, f);
+    f->put_byte(f, v);
 }
 
 void qemu_put_be16(QEMUFile *f, unsigned int v)
@@ -4123,17 +4123,12 @@ void qemu_put_be64(QEMUFile *f, uint64_t v)
 
 int qemu_get_buffer(QEMUFile *f, uint8_t *buf, int size)
 {
-    return fread(buf, 1, size, f);
+    return f->get_buffer(f, buf, size);
 }
 
 int qemu_get_byte(QEMUFile *f)
 {
-    int v;
-    v = fgetc(f);
-    if (v == EOF)
-        return 0;
-    else
-        return v;
+    return f->get_byte(f);
 }
 
 unsigned int qemu_get_be16(QEMUFile *f)
@@ -4164,14 +4159,12 @@ uint64_t qemu_get_be64(QEMUFile *f)
 
 int64_t qemu_ftell(QEMUFile *f)
 {
-    return ftell(f);
+    return f->tell(f);
 }
 
 int64_t qemu_fseek(QEMUFile *f, int64_t pos, int whence)
 {
-    if (fseek(f, pos, whence) < 0)
-        return -1;
-    return ftell(f);
+    return f->seek(f, pos, whence);
 }
 
 typedef struct SaveStateEntry {
@@ -4217,17 +4210,97 @@ int register_savevm(const char *idstr,
 #define QEMU_VM_FILE_MAGIC   0x5145564d
 #define QEMU_VM_FILE_VERSION 0x00000001
 
-int qemu_savevm(const char *filename)
+
+static int qemu_savevm_method_file_open(QEMUFile *f, const char *filename, 
+                                  const char *flags)
+{
+    FILE *fp = fopen(filename, flags);
+    f->opaque = (void*)fp;
+    if (!fp)
+        return -1;
+    return 0;
+}
+
+static void qemu_savevm_method_file_close(QEMUFile *f)
+{
+    FILE *fp = (FILE*)f->opaque;
+    if (fp)
+        fclose(fp);
+}
+
+static void qemu_savevm_method_file_put_buffer(QEMUFile *f, const uint8_t *buf, int size)
+{
+    FILE *fp = (FILE*)f->opaque;
+    fwrite(buf, 1, size, fp);
+}
+
+static void qemu_savevm_method_file_put_byte(QEMUFile *f, int v)
+{
+    FILE *fp = (FILE*)f->opaque;
+    fputc(v, fp);
+}
+
+static int qemu_savevm_method_file_get_buffer(QEMUFile *f, uint8_t *buf, int size)
+{
+    FILE *fp = (FILE*)f->opaque;
+    return fread(buf, 1, size, fp);
+}
+
+static int qemu_savevm_method_file_get_byte(QEMUFile *f)
+{
+    FILE *fp = (FILE*)f->opaque;
+    int v;
+
+    v = fgetc(fp);
+    if (v == EOF)
+        return 0;
+    else
+        return v;
+}
+
+static int64_t qemu_savevm_method_file_tell(QEMUFile *f)
+{
+    FILE *fp = (FILE*)f->opaque;
+    return ftell(fp);
+}
+
+static int64_t qemu_savevm_method_file_seek(QEMUFile *f, int64_t pos, int whence)
+{
+    FILE *fp = (FILE*)f->opaque;
+    if (fseek(fp, pos, whence) < 0)
+        return -1;
+    return ftell(fp);
+}
+
+static int qemu_savevm_method_file_eof(QEMUFile *f)
+{
+    FILE *fp = (FILE*)f->opaque;
+    return feof(fp);
+}
+
+QEMUFile qemu_savevm_method_file = { 
+    .opaque       = NULL, 
+    .open         = qemu_savevm_method_file_open,
+    .close        = qemu_savevm_method_file_close,
+    .put_byte     = qemu_savevm_method_file_put_byte,
+    .get_byte     = qemu_savevm_method_file_get_byte,
+    .put_buffer   = qemu_savevm_method_file_put_buffer,
+    .get_buffer   = qemu_savevm_method_file_get_buffer,
+    .tell         = qemu_savevm_method_file_tell,
+    .seek         = qemu_savevm_method_file_seek,
+    .eof          = qemu_savevm_method_file_eof
+};
+
+
+int qemu_savevm(const char *filename, QEMUFile *f)
 {
     SaveStateEntry *se;
-    QEMUFile *f;
     int len, len_pos, cur_pos, saved_vm_running, ret;
 
     saved_vm_running = vm_running;
     vm_stop(0);
 
-    f = fopen(filename, "wb");
-    if (!f) {
+    if (f->open(f, filename, "wb")) {
         ret = -1;
         goto the_end;
     }
@@ -4245,20 +4318,20 @@ int qemu_savevm(const char *filename)
         qemu_put_be32(f, se->version_id);
 
         /* record size: filled later */
-        len_pos = ftell(f);
+        len_pos = qemu_ftell(f);
         qemu_put_be32(f, 0);
         
         se->save_state(f, se->opaque);
 
         /* fill record size */
-        cur_pos = ftell(f);
-        len = ftell(f) - len_pos - 4;
-        fseek(f, len_pos, SEEK_SET);
+        cur_pos = qemu_ftell(f);
+        len = qemu_ftell(f) - len_pos - 4;
+        qemu_fseek(f, len_pos, SEEK_SET);
         qemu_put_be32(f, len);
-        fseek(f, cur_pos, SEEK_SET);
+        qemu_fseek(f, cur_pos, SEEK_SET);
     }
-
-    fclose(f);
+    qemu_put_byte(f, 0); /* len==0 represents end of state */
+    f->close(f);
     ret = 0;
  the_end:
     if (saved_vm_running)
@@ -4278,10 +4351,9 @@ static SaveStateEntry *find_se(const char *idstr, int instance_id)
     return NULL;
 }
 
-int qemu_loadvm(const char *filename)
+int qemu_loadvm(const char *filename, QEMUFile *f)
 {
     SaveStateEntry *se;
-    QEMUFile *f;
     int len, cur_pos, ret, instance_id, record_len, version_id;
     int saved_vm_running;
     unsigned int v;
@@ -4290,8 +4362,7 @@ int qemu_loadvm(const char *filename)
     saved_vm_running = vm_running;
     vm_stop(0);
 
-    f = fopen(filename, "rb");
-    if (!f) {
+    if (f->open(f, filename, "rb")) {
         ret = -1;
         goto the_end;
     }
@@ -4302,13 +4373,13 @@ int qemu_loadvm(const char *filename)
     v = qemu_get_be32(f);
     if (v != QEMU_VM_FILE_VERSION) {
     fail:
-        fclose(f);
+        f->close(f);
         ret = -1;
         goto the_end;
     }
     for(;;) {
         len = qemu_get_byte(f);
-        if (feof(f))
+        if (f->eof(f) || len==0)
             break;
         qemu_get_buffer(f, idstr, len);
         idstr[len] = '\0';
@@ -4319,7 +4390,7 @@ int qemu_loadvm(const char *filename)
         printf("idstr=%s instance=0x%x version=%d len=%d\n", 
                idstr, instance_id, version_id, record_len);
 #endif
-        cur_pos = ftell(f);
+        cur_pos = qemu_ftell(f);
         se = find_se(idstr, instance_id);
         if (!se) {
             fprintf(stderr, "qemu: warning: instance 0x%x of device '%s' not present in current VM\n", 
@@ -4334,7 +4405,7 @@ int qemu_loadvm(const char *filename)
         /* always seek to exact end of record */
         qemu_fseek(f, cur_pos + record_len, SEEK_SET);
     }
-    fclose(f);
+    f->close(f);
     ret = 0;
  the_end:
     if (saved_vm_running)
@@ -6277,7 +6348,7 @@ int main(int argc, char **argv)
     } else 
 #endif
     if (loadvm)
-        qemu_loadvm(loadvm);
+        qemu_loadvm(loadvm, &qemu_savevm_method_file);
 
     {
         /* XXX: simplify init */

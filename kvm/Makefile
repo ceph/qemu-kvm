@@ -9,15 +9,12 @@ rpmrelease = devel
 
 all: $(if $(WANT_MODULE), kernel) user qemu
 
+kcmd = $(if $(WANT_MODULE),,@\#)
+
 qemu kernel user:
 	$(MAKE) -C $@
 
 qemu: user
-
-clean: 
-	@for d in kernel user qemu; do 	\
-		$(MAKE) -C $$d $@; 	\
-	done
 
 bindir = /usr/bin
 bin = $(bindir)/kvm
@@ -36,19 +33,23 @@ install-rpm:
 	cp kvm $(DESTDIR)/$(utilsdir)/kvm
 
 install:
+	$(kcmd)make -C kernel DESTDIR="$(DESTDIR)" install
 	make -C user DESTDIR="$(DESTDIR)" install
 	make -C qemu DESTDIR="$(DESTDIR)" install
 
 tmpspec = .tmp.kvm.spec
+RPMDIR=$$(pwd)/RPMS
 
 rpm:	user qemu
-	mkdir -p BUILD RPMS/$$(uname -i)
+	mkdir -p $(RPMDIR)/$$(uname -i)
 	sed 's/^Release:.*/Release: $(rpmrelease)/' kvm.spec > $(tmpspec)
 	rpmbuild --define="kverrel $$(uname -r)" \
 		 --define="objdir $$(pwd)" \
+		 --define="_rpmdir $(RPMDIR)" \
 		 --define="_topdir $$(pwd)" \
 		 --define="prebuilt 1" \
 		-bb $(tmpspec)
+	$(RM) $(tmpspec)
 
 srpm:
 	mkdir -p SOURCES SRPMS
@@ -59,6 +60,7 @@ srpm:
 	tar czf SOURCES/scripts.tar.gz scripts
 	cp Makefile SOURCES
 	rpmbuild  --define="_topdir $$(pwd)" -bs $(tmpspec)
+	$(RM) $(tmpspec)
 
 clean:
 	for i in $(if $(WANT_MODULE), kernel) user qemu; do \
