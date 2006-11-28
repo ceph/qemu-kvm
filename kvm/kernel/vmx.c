@@ -23,6 +23,8 @@
 #include <linux/highmem.h>
 #include <asm/io.h>
 
+#include "segment_descriptor.h"
+
 #define MSR_IA32_FEATURE_CONTROL 		0x03a
 
 MODULE_AUTHOR("Qumranet");
