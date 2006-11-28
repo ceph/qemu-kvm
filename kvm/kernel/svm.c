@@ -86,55 +86,56 @@ static inline void push_irq(struct kvm_vcpu *vcpu, u8 irq)
 
 static inline void clgi(void)
 {
-	asm volatile ( "clgi" );
+	asm volatile ("clgi");
 }
 
 static inline void stgi(void)
 {
-	asm volatile ( "stgi" );
+	asm volatile ("stgi");
 }
 
 static inline void invlpga(unsigned long addr, u32 asid)
 {
-	asm volatile ( "invlpga \n\t" :: "a"(addr), "c"(asid));
+	asm volatile ("invlpga" :: "a"(addr), "c"(asid));
 }
 
 static inline unsigned long read_cr2(void)
 {
 	unsigned long cr2;
 
-	asm volatile("mov %%cr2, %0" : "=r" (cr2));
+	asm volatile ("mov %%cr2, %0" : "=r" (cr2));
 	return cr2;
 }
 
 static inline void write_cr2(unsigned long val)
 {
-	asm volatile("mov %0, %%cr2" :: "r" (val));
+	asm volatile ("mov %0, %%cr2" :: "r" (val));
 }
 
 static inline unsigned long read_dr6(void)
 {
 	unsigned long dr6;
-	asm volatile("mov %%dr6, %0" : "=r" (dr6));
+
+	asm volatile ("mov %%dr6, %0" : "=r" (dr6));
 	return dr6;
 }
 
 static inline void write_dr6(unsigned long val)
 {
-	asm volatile("mov %0, %%dr6" :: "r" (val));
+	asm volatile ("mov %0, %%dr6" :: "r" (val));
 }
 
 static inline unsigned long read_dr7(void)
 {
 	unsigned long dr7;
 
-	asm volatile("mov %%dr7, %0" : "=r" (dr7));
+	asm volatile ("mov %%dr7, %0" : "=r" (dr7));
 	return dr7;
 }
 
 static inline void write_dr7(unsigned long val)
 {
-	asm volatile("mov %0, %%dr7" :: "r" (val));
+	asm volatile ("mov %0, %%dr7" :: "r" (val));
 }
 
 static inline int svm_is_long_mode(struct kvm_vcpu *vcpu)
@@ -189,7 +190,6 @@ static int is_page_fault(uint32_t info)
 	info &= SVM_EVTINJ_VEC_MASK | SVM_EVTINJ_TYPE_MASK | SVM_EVTINJ_VALID;
 	return info == (PF_VECTOR | SVM_EVTINJ_VALID | SVM_EVTINJ_TYPE_EXEPT);
 }
-
 
 static int is_external_interrupt(u32 info)
 {
@@ -984,16 +984,16 @@ static int io_interception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	kvm_run->io.rep = (io_info & SVM_IOIO_REP_MASK) != 0;
 
 	if (kvm_run->io.string) {
-		unsigned addr_maks;
+		unsigned addr_mask;
 
-		addr_maks = io_adress(vcpu, _in, &kvm_run->io.address);
-		if (!addr_maks) {
+		addr_mask = io_adress(vcpu, _in, &kvm_run->io.address);
+		if (!addr_mask) {
 			printk("%s: get io address failed\n", __FUNCTION__);
 			return 1;
 		}
 
 		if (kvm_run->io.rep) {
-			kvm_run->io.count = vcpu->regs[VCPU_REGS_RCX] & addr_maks;
+			kvm_run->io.count = vcpu->regs[VCPU_REGS_RCX] & addr_mask;
 			kvm_run->io.string_down = (vcpu->svm->vmcb->save.rflags
 						   & X86_EFLAGS_DF) != 0;
 		}
