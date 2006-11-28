@@ -530,7 +530,7 @@ static void init_vmcb(struct vmcb *vmcb)
 	 * cr0 val on cpu init should be 0x60000010, we enable cpu
 	 * cache by default. the orderly way is to enable cache in bios.
 	 */
-	save->cr0 = 0x00000010 | CR0_PG_MASK; 	
+	save->cr0 = 0x00000010 | CR0_PG_MASK;
 	save->cr4 = CR4_PAE_MASK;
 	/* rdx = ?? */
 }
@@ -878,7 +878,7 @@ static int io_get_override(struct kvm_vcpu *vcpu,
 	rip += vcpu->svm->vmcb->save.cs.base;
 
 	if (ins_length > MAX_INST_SIZE)
-		printk(KERN_DEBUG 
+		printk(KERN_DEBUG
 		       "%s: inst length err, cs base 0x%llx rip 0x%llx "
 		       "next rip 0x%llx ins_length %u\n",
 		       __FUNCTION__,
