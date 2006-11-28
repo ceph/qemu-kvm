@@ -6,7 +6,7 @@ enum {
 	INTERCEPT_NMI,
 	INTERCEPT_SMI,
 	INTERCEPT_INIT,
-        INTERCEPT_VINTR,
+	INTERCEPT_VINTR,
 	INTERCEPT_SELECTIVE_CR0,
 	INTERCEPT_STORE_IDTR,
 	INTERCEPT_STORE_GDTR,
@@ -17,33 +17,33 @@ enum {
 	INTERCEPT_LOAD_LDTR,
 	INTERCEPT_LOAD_TR,
 	INTERCEPT_RDTSC,
-        INTERCEPT_RDPMC,
-        INTERCEPT_PUSHF,
+	INTERCEPT_RDPMC,
+	INTERCEPT_PUSHF,
 	INTERCEPT_POPF,
-        INTERCEPT_CPUID,
+	INTERCEPT_CPUID,
 	INTERCEPT_RSM,
-        INTERCEPT_IRET,
-        INTERCEPT_INTn,
+	INTERCEPT_IRET,
+	INTERCEPT_INTn,
 	INTERCEPT_INVD,
-        INTERCEPT_PAUSE,
-        INTERCEPT_HLT,
-        INTERCEPT_INVLPG,
-        INTERCEPT_INVLPGA,
-        INTERCEPT_IOIO_PROT,
-        INTERCEPT_MSR_PROT,
-        INTERCEPT_TASK_SWITCH,
-        INTERCEPT_FERR_FREEZE,
-        INTERCEPT_SHUTDOWN,
-        INTERCEPT_VMRUN,
-        INTERCEPT_VMMCALL,
-        INTERCEPT_VMLOAD,
-        INTERCEPT_VMSAVE,
-        INTERCEPT_STGI,
-        INTERCEPT_CLGI,
-        INTERCEPT_SKINIT,
-        INTERCEPT_RDTSCP,
-        INTERCEPT_ICEBP,
-        INTERCEPT_WBINVD,
+	INTERCEPT_PAUSE,
+	INTERCEPT_HLT,
+	INTERCEPT_INVLPG,
+	INTERCEPT_INVLPGA,
+	INTERCEPT_IOIO_PROT,
+	INTERCEPT_MSR_PROT,
+	INTERCEPT_TASK_SWITCH,
+	INTERCEPT_FERR_FREEZE,
+	INTERCEPT_SHUTDOWN,
+	INTERCEPT_VMRUN,
+	INTERCEPT_VMMCALL,
+	INTERCEPT_VMLOAD,
+	INTERCEPT_VMSAVE,
+	INTERCEPT_STGI,
+	INTERCEPT_CLGI,
+	INTERCEPT_SKINIT,
+	INTERCEPT_RDTSCP,
+	INTERCEPT_ICEBP,
+	INTERCEPT_WBINVD,
 };
 
 
@@ -57,7 +57,7 @@ struct __attribute__ ((__packed__)) vmcb_control_area {
 	u8 reserved_1[44];
 	u64 iopm_base_pa;
 	u64 msrpm_base_pa;
-        u64 tsc_offset;
+	u64 tsc_offset;
 	u32 asid;
 	u8 tlb_ctl;
 	u8 reserved_2[3];
@@ -100,8 +100,6 @@ struct __attribute__ ((__packed__)) vmcb_control_area {
 
 #define SVM_INTERRUPT_SHADOW_MASK 1
 
-
-
 #define SVM_IOIO_STR_SHIFT 2
 #define SVM_IOIO_REP_SHIFT 3
 #define SVM_IOIO_SIZE_SHIFT 4
@@ -114,11 +112,10 @@ struct __attribute__ ((__packed__)) vmcb_control_area {
 #define SVM_IOIO_ASIZE_MASK (7 << SVM_IOIO_ASIZE_SHIFT)
 
 struct __attribute__ ((__packed__)) vmcb_seg {
-		u16 selector;
-		u16 atrib;
-		u32 limit;
-		u64 base;
-
+	u16 selector;
+	u16 atrib;
+	u32 limit;
+	u64 base;
 };
 
 struct __attribute__ ((__packed__)) vmcb_save_area {
@@ -166,12 +163,10 @@ struct __attribute__ ((__packed__)) vmcb_save_area {
 	u64 last_excp_to;
 };
 
-
 struct __attribute__ ((__packed__)) vmcb {
 	struct vmcb_control_area control;
 	struct vmcb_save_area save;
 };
-
 
 #define SVM_CPUID_FEATURE_SHIFT 2
 #define SVM_CPUID_FUNC 0x8000000a
@@ -199,7 +194,6 @@ struct __attribute__ ((__packed__)) vmcb {
 #define SVM_SELECTOR_WRITE_MASK (1 << 1)
 #define SVM_SELECTOR_READ_MASK SVM_SELECTOR_WRITE_MASK
 #define SVM_SELECTOR_CODE_MASK (1 << 3)
-
 
 #define INTERCEPT_CR0_MASK 1
 #define INTERCEPT_CR3_MASK (1 << 3)
@@ -236,7 +230,6 @@ struct __attribute__ ((__packed__)) vmcb {
 
 #define SVM_EXITINTINFO_VALID SVM_EVTINJ_VALID
 #define SVM_EXITINTINFO_VALID_ERR SVM_EVTINJ_VALID_ERR
-
 
 #define	SVM_EXIT_READ_CR0 	0x000
 #define	SVM_EXIT_READ_CR3 	0x003
