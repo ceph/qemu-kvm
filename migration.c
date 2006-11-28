@@ -20,7 +20,7 @@ typedef enum {
 typedef struct migration_state {
     int fd;
 #define BUFFSIZE ( 256 * 1024)
-    char buff[BUFFSIZE]; /* FIXME: allocate dynamically; use mutli/double buffer */
+    unsigned char buff[BUFFSIZE]; /* FIXME: allocate dynamically; use mutli/double buffer */
     unsigned buffsize;
     unsigned head, tail;
     migration_role_t role;
