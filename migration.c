@@ -465,6 +465,7 @@ void do_migration_start(char *deadoralive)
         break;
     }
 }
+
 void do_migration_cancel(void)
 {
     migration_cleanup(&ms);
@@ -472,6 +473,102 @@ void do_migration_cancel(void)
 void do_migration_status(void){ TO_BE_IMPLEMENTED; }
 void do_migration_set(char *fmt, ...){ TO_BE_IMPLEMENTED; }
 void do_migration_show(void){ TO_BE_IMPLEMENTED; }
+
+
+
+/* 
+ * =============================================
+ * qemu_savevm_method implementation for sockets 
+ * =============================================
+ */
+static int qemu_savevm_method_socket_open(QEMUFile *f, const char *filename, 
+                                  const char *flags)
+{
+    if (ms.fd == FD_UNUSED)
+        return -1;
+    f->opaque = (void*)&ms;
+    return 0;
+}
+
+static void qemu_savevm_method_socket_close(QEMUFile *f)
+{
+    migration_state_t *pms = (migration_state_t*)f->opaque;
+    if (pms->role == WRITER) {
+        migration_write_some(1); /* sync */
+    }
+}
+
+static void qemu_savevm_method_socket_put_buffer(QEMUFile *f, const uint8_t *buf, int size)
+{
+    migration_write_buffer(buf, size);
+}
+
+static void qemu_savevm_method_socket_put_byte(QEMUFile *f, int v)
+{
+    migration_write_byte(v);
+}
+
+static int qemu_savevm_method_socket_get_buffer(QEMUFile *f, uint8_t *buf, int size)
+{
+    return migration_read_buffer(buf, size);
+}
+
+static int qemu_savevm_method_socket_get_byte(QEMUFile *f)
+{
+    return migration_read_byte();
+}
+
+static int64_t qemu_savevm_method_socket_tell(QEMUFile *f)
+{
+    migration_state_t *pms = (migration_state_t*)f->opaque;
+    int64_t cnt=-1;
+    if (pms->role == WRITER)
+        cnt = pms->head_counter;
+    else if (pms->role == READER)
+        cnt = pms->tail_counter;
+    return cnt;
+}
+
+/* 
+ * hack alert: written to overcome a weakness of our solution (not yet generic).
+ * READER: read 4 bytes of the actual length (and maybe do something)
+ * WRITER: ignore (or maybe do something)
+ */
+static int64_t qemu_savevm_method_socket_seek(QEMUFile *f, int64_t pos, int whence)
+{
+    migration_state_t *pms = (migration_state_t*)f->opaque;
+    unsigned int record_len;
+
+    if (pms->role == READER) {
+        record_len = qemu_get_be32(f);
+        printf("record_len=%u\n", record_len);
+    }
+    return 0;
+}
+
+static int qemu_savevm_method_socket_eof(QEMUFile *f)
+{
+    migration_state_t *pms = (migration_state_t*)f->opaque;
+
+    return (pms->fd == FD_UNUSED);
+}
+
+QEMUFile qemu_savevm_method_socket = {
+    .opaque       = NULL, 
+    .open         = qemu_savevm_method_socket_open,
+    .close        = qemu_savevm_method_socket_close,
+    .put_byte     = qemu_savevm_method_socket_put_byte,
+    .get_byte     = qemu_savevm_method_socket_get_byte,
+    .put_buffer   = qemu_savevm_method_socket_put_buffer,
+    .get_buffer   = qemu_savevm_method_socket_get_buffer,
+    .tell         = qemu_savevm_method_socket_tell,
+    .seek         = qemu_savevm_method_socket_seek,
+    .eof          = qemu_savevm_method_socket_eof
+};
+
+
+
+
 
 #else /* CONFIG_USER_ONLY is defined */
 
