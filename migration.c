@@ -24,6 +24,7 @@ typedef struct migration_state {
     unsigned buffsize;
     unsigned head, tail;
     migration_role_t role;
+    int64_t  head_counter, tail_counter;
 } migration_state_t;
 
 static migration_state_t ms = {
@@ -31,7 +32,9 @@ static migration_state_t ms = {
     .buff     = { 0 },  
     .buffsize = BUFFSIZE, 
     .head = 0, 
-    .tail = 0
+    .tail = 0,
+    .head_counter = 0,
+    .tail_counter = 0
 };
 
 static const char *reader_default_addr="localhost:4455";
@@ -66,11 +69,13 @@ static int migration_buffer_bytes_tail_end(migration_state_t *pms)
 static void migration_state_inc_head(migration_state_t *pms, int n)
 {
     pms->head = (pms->head + n) % pms->buffsize;
+    pms->head_counter += n;
 }
 
 static void migration_state_inc_tail(migration_state_t *pms, int n)
 {
     pms->tail = (pms->tail + n) % pms->buffsize;
+    pms->tail_counter += n;
 }
 
 
