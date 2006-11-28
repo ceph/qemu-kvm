@@ -36,6 +36,9 @@ MODULE_LICENSE("GPL");
 #define DR6_BD_MASK (1 << 13)
 #define CR4_DE_MASK (1UL << 3)
 
+#define SEG_TYPE_LDT 2
+#define SEG_TYPE_BUSY_TSS16 3
+
 unsigned long iopm_base;
 unsigned long msrpm_base;
 
@@ -52,19 +55,31 @@ struct svm_cpu_data {
 
 static DEFINE_PER_CPU(struct svm_cpu_data *, svm_data);
 
+struct svm_init_data {
+	int cpu;
+	int r;
+};
+
+static u32 msrpm_ranges[] = {0, 0xc0000000, 0xc0010000};
+
+#define NUM_MSR_MAPS (sizeof(msrpm_ranges) / sizeof(*msrpm_ranges))
+#define MSRS_RANGE_SIZE 2048
+#define MSRS_IN_RANGE (MSRS_RANGE_SIZE * 8 / 2)
+
+#define MAX_INST_SIZE 15
+
 static unsigned get_addr_size(struct kvm_vcpu *vcpu)
 {
 	struct vmcb_save_area *sa = &vcpu->svm->vmcb->save;
-	u16 cs_atrib;
+	u16 cs_attrib;
 
-	if (!(sa->cr0 & CR0_PE_MASK) ||(sa->rflags & X86_EFLAGS_VM)) {
+	if (!(sa->cr0 & CR0_PE_MASK) || (sa->rflags & X86_EFLAGS_VM))
 		return 2;
-	}
 
-	cs_atrib = sa->cs.atrib;
+	cs_attrib = sa->cs.attrib;
 
-	return (cs_atrib & SVM_SELECTOR_L_MASK) ? 8 :
-				(cs_atrib & SVM_SELECTOR_DB_MASK) ? 4 : 2;
+	return (cs_attrib & SVM_SELECTOR_L_MASK) ? 8 :
+				(cs_attrib & SVM_SELECTOR_DB_MASK) ? 4 : 2;
 }
 
 static inline u8 pop_irq(struct kvm_vcpu *vcpu)
@@ -87,53 +102,56 @@ static inline void push_irq(struct kvm_vcpu *vcpu, u8 irq)
 
 static inline void clgi(void)
 {
-	asm volatile ( "clgi" );
+	asm volatile ("clgi");
 }
 
 static inline void stgi(void)
 {
-	asm volatile ( "stgi" );
+	asm volatile ("stgi");
 }
 
 static inline void invlpga(unsigned long addr, u32 asid)
 {
-	asm volatile ( "invlpga \n\t" :: "a"(addr), "c"(asid));
+	asm volatile ("invlpga" :: "a"(addr), "c"(asid));
 }
 
 static inline unsigned long read_cr2(void)
 {
 	unsigned long cr2;
-	asm volatile("mov %%cr2, %0" : "=r" (cr2));
+
+	asm volatile ("mov %%cr2, %0" : "=r" (cr2));
 	return cr2;
 }
 
 static inline void write_cr2(unsigned long val)
 {
-	asm volatile("mov %0, %%cr2" :: "r" (val));
+	asm volatile ("mov %0, %%cr2" :: "r" (val));
 }
 
 static inline unsigned long read_dr6(void)
 {
 	unsigned long dr6;
-	asm volatile("mov %%dr6, %0" : "=r" (dr6));
+
+	asm volatile ("mov %%dr6, %0" : "=r" (dr6));
 	return dr6;
 }
 
 static inline void write_dr6(unsigned long val)
 {
-	asm volatile("mov %0, %%dr6" :: "r" (val));
+	asm volatile ("mov %0, %%dr6" :: "r" (val));
 }
 
 static inline unsigned long read_dr7(void)
 {
 	unsigned long dr7;
-	asm volatile("mov %%dr7, %0" : "=r" (dr7));
+
+	asm volatile ("mov %%dr7, %0" : "=r" (dr7));
 	return dr7;
 }
 
 static inline void write_dr7(unsigned long val)
 {
-	asm volatile("mov %0, %%dr7" :: "r" (val));
+	asm volatile ("mov %0, %%dr7" :: "r" (val));
 }
 
 static inline int svm_is_long_mode(struct kvm_vcpu *vcpu)
@@ -143,7 +161,7 @@ static inline int svm_is_long_mode(struct kvm_vcpu *vcpu)
 
 static inline void force_new_asid(struct kvm_vcpu *vcpu)
 {
-    vcpu->svm->asid_generation--;
+	vcpu->svm->asid_generation--;
 }
 
 static inline void flush_guest_tlb(struct kvm_vcpu *vcpu)
@@ -162,7 +180,6 @@ static void svm_set_efer(struct kvm_vcpu *vcpu, u64 efer)
 
 static void svm_inject_gp(struct kvm_vcpu *vcpu, unsigned error_code)
 {
-
 	vcpu->svm->vmcb->control.event_inj = 	SVM_EVTINJ_VALID |
 						SVM_EVTINJ_VALID_ERR |
 						SVM_EVTINJ_TYPE_EXEPT |
@@ -186,10 +203,9 @@ static void inject_db(struct kvm_vcpu *vcpu)
 
 static int is_page_fault(uint32_t info)
 {
-	info &= (SVM_EVTINJ_VEC_MASK | SVM_EVTINJ_TYPE_MASK | SVM_EVTINJ_VALID);
+	info &= SVM_EVTINJ_VEC_MASK | SVM_EVTINJ_TYPE_MASK | SVM_EVTINJ_VALID;
 	return info == (PF_VECTOR | SVM_EVTINJ_VALID | SVM_EVTINJ_TYPE_EXEPT);
 }
-
 
 static int is_external_interrupt(u32 info)
 {
@@ -200,11 +216,11 @@ static int is_external_interrupt(u32 info)
 static void skip_emulated_instruction(struct kvm_vcpu *vcpu)
 {
 	if (!vcpu->svm->next_rip) {
-		printk("%s: NOP\n", __FUNCTION__);
+		printk(KERN_DEBUG "%s: NOP\n", __FUNCTION__);
 		return;
 	}
 	if (vcpu->svm->next_rip - vcpu->svm->vmcb->save.rip > 15) {
-		printk("%s: ip 0x%llx next 0x%llx\n",
+		printk(KERN_ERR "%s: ip 0x%llx next 0x%llx\n",
 		       __FUNCTION__,
 		       vcpu->svm->vmcb->save.rip,
 		       vcpu->svm->next_rip);
@@ -219,19 +235,19 @@ static int has_svm(void)
 	uint32_t eax, ebx, ecx, edx;
 
 	if (current_cpu_data.x86_vendor != X86_VENDOR_AMD) {
-		printk("has_svm: not amd\n");
+		printk(KERN_INFO "has_svm: not amd\n");
 		return 0;
 	}
 
 	cpuid(0x80000000, &eax, &ebx, &ecx, &edx);
 	if (eax < SVM_CPUID_FUNC) {
-		printk("has_svm: can't execute cpuid_8000000a\n");
+		printk(KERN_INFO "has_svm: can't execute cpuid_8000000a\n");
 		return 0;
 	}
 
 	cpuid(0x80000001, &eax, &ebx, &ecx, &edx);
 	if (!(ecx & (1 << SVM_CPUID_FEATURE_SHIFT))) {
-		printk("has_svm: has\n");
+		printk(KERN_DEBUG "has_svm: svm not available\n");
 		return 0;
 	}
 	return 1;
@@ -253,11 +269,6 @@ static void svm_hardware_disable(void *garbage)
 		kfree(svm_data);
 	}
 }
-
-struct svm_init_data {
-	int cpu;
-	int r;
-};
 
 static void svm_hardware_enable(void *garbage)
 {
@@ -301,15 +312,13 @@ static int svm_cpu_init(int cpu)
 	int r;
 
 	svm_data = kzalloc(sizeof(struct svm_cpu_data), GFP_KERNEL);
-	if (!svm_data) {
+	if (!svm_data)
 		return -ENOMEM;
-	}
 	svm_data->cpu = cpu;
 	svm_data->save_area = alloc_page(GFP_KERNEL);
-	if (!svm_data->save_area) {
-		r = -ENOMEM;
+	r = -ENOMEM;
+	if (!svm_data->save_area)
 		goto err_1;
-	}
 
 	per_cpu(svm_data, cpu) = svm_data;
 
@@ -320,11 +329,6 @@ err_1:
 	return r;
 
 }
-
-static u32 msrpm_ranges[] = {0, 0xc0000000, 0xc0010000};
-#define NUM_MSR_MAPS (sizeof(msrpm_ranges) / sizeof(*msrpm_ranges))
-#define MSRS_RANGE_SIZE 2048
-#define MSRS_IN_RANGE (MSRS_RANGE_SIZE * 8 / 2)
 
 static int set_msr_interception(u32 *msrpm, unsigned msr,
 				int read, int write)
@@ -345,7 +349,7 @@ static int set_msr_interception(u32 *msrpm, unsigned msr,
 			return 1;
 		}
 	}
-	printk("%s: not found 0x%x\n", __FUNCTION__, msr);
+	printk(KERN_DEBUG "%s: not found 0x%x\n", __FUNCTION__, msr);
 	return 0;
 }
 
@@ -360,9 +364,8 @@ static __init int svm_hardware_setup(void)
 
 	iopm_pages = alloc_pages(GFP_KERNEL, IOPM_ALLOC_ORDER);
 
-	if (!iopm_pages) {
+	if (!iopm_pages)
 		return -ENOMEM;
-	}
 	memset(page_address(iopm_pages), 0xff,
 					PAGE_SIZE * (1 << IOPM_ALLOC_ORDER));
 	iopm_base = page_to_pfn(iopm_pages) << PAGE_SHIFT;
@@ -370,10 +373,10 @@ static __init int svm_hardware_setup(void)
 
 	msrpm_pages = alloc_pages(GFP_KERNEL, MSRPM_ALLOC_ORDER);
 
-	if (!msrpm_pages) {
-		r = -ENOMEM;
+	r = -ENOMEM;
+	if (!msrpm_pages)
 		goto err_1;
-	}
+
 	msrpm_va = page_address(msrpm_pages);
 	memset(msrpm_va, 0xff, PAGE_SIZE * (1 << MSRPM_ALLOC_ORDER));
 	msrpm_base = page_to_pfn(msrpm_pages) << PAGE_SHIFT;
@@ -391,9 +394,8 @@ static __init int svm_hardware_setup(void)
 
 	for_each_online_cpu(cpu) {
 		r = svm_cpu_init(cpu);
-		if (r) {
+		if (r)
 			goto err_2;
-		}
 	}
 	return 0;
 
@@ -416,8 +418,8 @@ static __exit void svm_hardware_unsetup(void)
 static void init_seg(struct vmcb_seg *seg)
 {
 	seg->selector = 0;
-	seg->atrib = SVM_SELECTOR_P_MASK | SVM_SELECTOR_S_MASK |
-		SVM_SELECTOR_WRITE_MASK; //Read/Write Data Segment
+	seg->attrib = SVM_SELECTOR_P_MASK | SVM_SELECTOR_S_MASK |
+		SVM_SELECTOR_WRITE_MASK; /* Read/Write Data Segment */
 	seg->limit = 0xffff;
 	seg->base = 0;
 }
@@ -425,7 +427,7 @@ static void init_seg(struct vmcb_seg *seg)
 static void init_sys_seg(struct vmcb_seg *seg, uint32_t type)
 {
 	seg->selector = 0;
-	seg->atrib = SVM_SELECTOR_P_MASK | type;
+	seg->attrib = SVM_SELECTOR_P_MASK | type;
 	seg->limit = 0xffff;
 	seg->base = 0;
 }
@@ -434,9 +436,6 @@ static int svm_vcpu_setup(struct kvm_vcpu *vcpu)
 {
 	return 0;
 }
-
-#define SEG_TYPE_LDT 2
-#define SEG_TYPE_BUSY_TSS16 3
 
 static void init_vmcb(struct vmcb *vmcb)
 {
@@ -469,15 +468,17 @@ static void init_vmcb(struct vmcb *vmcb)
 
 	control->intercept = 	(1ULL << INTERCEPT_INTR) |
 				(1ULL << INTERCEPT_NMI) |
-		// selective cr0 intercept bug?
-		//    	0:   0f 22 d8                mov    %eax,%cr3
-		//	3:   0f 20 c0                mov    %cr0,%eax
-		//	6:   0d 00 00 00 80          or     $0x80000000,%eax
-		//	b:   0f 22 c0                mov    %eax,%cr0
-		// set cr3 ->interception
-		// get cr0 ->interception
-		// set cr0 -> no interception
-				//(1ULL << INTERCEPT_SELECTIVE_CR0) |
+		/*
+		 * selective cr0 intercept bug?
+		 *    	0:   0f 22 d8                mov    %eax,%cr3
+		 *	3:   0f 20 c0                mov    %cr0,%eax
+		 *	6:   0d 00 00 00 80          or     $0x80000000,%eax
+		 *	b:   0f 22 c0                mov    %eax,%cr0
+		 * set cr3 ->interception
+		 * get cr0 ->interception
+		 * set cr0 -> no interception
+		 */
+		/*              (1ULL << INTERCEPT_SELECTIVE_CR0) | */
 				(1ULL << INTERCEPT_CPUID) |
 				(1ULL << INTERCEPT_HLT) |
 				(1ULL << INTERCEPT_INVLPG) |
@@ -506,8 +507,8 @@ static void init_vmcb(struct vmcb *vmcb)
 	init_seg(&save->gs);
 
 	save->cs.selector = 0xf000;
-	//Executable/Readable Code Segment
-	save->cs.atrib = SVM_SELECTOR_READ_MASK | SVM_SELECTOR_P_MASK |
+	/* Executable/Readable Code Segment */
+	save->cs.attrib = SVM_SELECTOR_READ_MASK | SVM_SELECTOR_P_MASK |
 		SVM_SELECTOR_S_MASK | SVM_SELECTOR_CODE_MASK;
 	save->cs.limit = 0xffff;
 	save->cs.base = 0xffff0000;
@@ -525,13 +526,13 @@ static void init_vmcb(struct vmcb *vmcb)
 	save->rflags = 2;
 	save->rip = 0x0000fff0;
 
-	save->cr0 = 0x00000010 | CR0_PG_MASK; 	// cr0 val on cpu init should
-						// be 0x60000010, we enable cpu
-						// cache by default. the orderly
-						// way is to enable cache in
-						// bios.
+	/*
+	 * cr0 val on cpu init should be 0x60000010, we enable cpu
+	 * cache by default. the orderly way is to enable cache in bios.
+	 */
+	save->cr0 = 0x00000010 | CR0_PG_MASK; 	
 	save->cr4 = CR4_PAE_MASK;
-	 // rdx = ??
+	/* rdx = ?? */
 }
 
 static int svm_create_vcpu(struct kvm_vcpu *vcpu)
@@ -552,7 +553,7 @@ static int svm_create_vcpu(struct kvm_vcpu *vcpu)
 	vcpu->svm->vmcb_pa = page_to_pfn(page) << PAGE_SHIFT;
 	vcpu->svm->cr0 = 0x00000010;
 	vcpu->svm->asid_generation = 0;
-	memset(vcpu->svm->ab_regs, 0, sizeof(vcpu->svm->ab_regs));
+	memset(vcpu->svm->db_regs, 0, sizeof(vcpu->svm->db_regs));
 	init_vmcb(vcpu->svm->vmcb);
 
 	return 0;
@@ -640,14 +641,14 @@ static void svm_get_segment(struct kvm_vcpu *vcpu,
 	var->base = s->base;
 	var->limit = s->limit;
 	var->selector = s->selector;
-	var->type = s->atrib & SVM_SELECTOR_TYP_MASK;
-	var->s = (s->atrib >> SVM_SELECTOR_S_SHIFT) & 1;
-	var->dpl = (s->atrib >> SVM_SELECTOR_DPL_SHIFT) & 3;
-	var->present = (s->atrib >> SVM_SELECTOR_P_SHIFT) & 1;
-	var->avl = (s->atrib >> SVM_SELECTOR_AVL_SHIFT) & 1;
-	var->l = (s->atrib >> SVM_SELECTOR_L_SHIFT) & 1;
-	var->db = (s->atrib >> SVM_SELECTOR_DB_SHIFT) & 1;
-	var->g = (s->atrib >> SVM_SELECTOR_G_SHIFT) & 1;
+	var->type = s->attrib & SVM_SELECTOR_TYPE_MASK;
+	var->s = (s->attrib >> SVM_SELECTOR_S_SHIFT) & 1;
+	var->dpl = (s->attrib >> SVM_SELECTOR_DPL_SHIFT) & 3;
+	var->present = (s->attrib >> SVM_SELECTOR_P_SHIFT) & 1;
+	var->avl = (s->attrib >> SVM_SELECTOR_AVL_SHIFT) & 1;
+	var->l = (s->attrib >> SVM_SELECTOR_L_SHIFT) & 1;
+	var->db = (s->attrib >> SVM_SELECTOR_DB_SHIFT) & 1;
+	var->g = (s->attrib >> SVM_SELECTOR_G_SHIFT) & 1;
 	var->unusable = !var->present;
 }
 
@@ -655,8 +656,8 @@ static void svm_get_cs_db_l_bits(struct kvm_vcpu *vcpu, int *db, int *l)
 {
 	struct vmcb_seg *s = svm_seg(vcpu, VCPU_SREG_CS);
 
-	*db = (s->atrib >> SVM_SELECTOR_DB_SHIFT) & 1;
-	*l = (s->atrib >> SVM_SELECTOR_L_SHIFT) & 1;
+	*db = (s->attrib >> SVM_SELECTOR_DB_SHIFT) & 1;
+	*l = (s->attrib >> SVM_SELECTOR_L_SHIFT) & 1;
 }
 
 static void svm_get_idt(struct kvm_vcpu *vcpu, struct descriptor_table *dt)
@@ -718,20 +719,20 @@ static void svm_set_segment(struct kvm_vcpu *vcpu,
 	s->limit = var->limit;
 	s->selector = var->selector;
 	if (var->unusable)
-		s->atrib = 0;
+		s->attrib = 0;
 	else {
-		s->atrib = (var->type & SVM_SELECTOR_TYP_MASK);
-		s->atrib |= (var->s & 1) << SVM_SELECTOR_S_SHIFT;
-		s->atrib |= (var->dpl & 3) << SVM_SELECTOR_DPL_SHIFT;
-		s->atrib |= (var->present & 1) << SVM_SELECTOR_P_SHIFT;
-		s->atrib |= (var->avl & 1) << SVM_SELECTOR_AVL_SHIFT;
-		s->atrib |= (var->l & 1) << SVM_SELECTOR_L_SHIFT;
-		s->atrib |= (var->db & 1) << SVM_SELECTOR_DB_SHIFT;
-		s->atrib |= (var->g & 1) << SVM_SELECTOR_G_SHIFT;
+		s->attrib = (var->type & SVM_SELECTOR_TYPE_MASK);
+		s->attrib |= (var->s & 1) << SVM_SELECTOR_S_SHIFT;
+		s->attrib |= (var->dpl & 3) << SVM_SELECTOR_DPL_SHIFT;
+		s->attrib |= (var->present & 1) << SVM_SELECTOR_P_SHIFT;
+		s->attrib |= (var->avl & 1) << SVM_SELECTOR_AVL_SHIFT;
+		s->attrib |= (var->l & 1) << SVM_SELECTOR_L_SHIFT;
+		s->attrib |= (var->db & 1) << SVM_SELECTOR_DB_SHIFT;
+		s->attrib |= (var->g & 1) << SVM_SELECTOR_G_SHIFT;
 	}
 	if (seg == VCPU_SREG_CS)
 		vcpu->svm->vmcb->save.cpl
-			= (vcpu->svm->vmcb->save.cs.atrib
+			= (vcpu->svm->vmcb->save.cs.attrib
 			   >> SVM_SELECTOR_DPL_SHIFT) & 3;
 
 }
@@ -748,16 +749,15 @@ static int svm_guest_debug(struct kvm_vcpu *vcpu, struct kvm_debug_guest *dbg)
 	return -EOPNOTSUPP;
 }
 
-static void load_hots_msrs(struct kvm_vcpu *vcpu)
+static void load_host_msrs(struct kvm_vcpu *vcpu)
 {
 	int i;
 
-	for ( i = 0; i < NR_HOST_SAVE_MSRS; i++) {
+	for ( i = 0; i < NR_HOST_SAVE_MSRS; i++)
 		wrmsrl(host_save_msrs[i], vcpu->svm->host_msrs[i]);
-	}
 }
 
-static void save_hots_msrs(struct kvm_vcpu *vcpu)
+static void save_host_msrs(struct kvm_vcpu *vcpu)
 {
 	int i;
 
@@ -785,7 +785,7 @@ static void svm_invlpg(struct kvm_vcpu *vcpu, gva_t address)
 
 static unsigned long svm_get_dr(struct kvm_vcpu *vcpu, int dr)
 {
-	return vcpu->svm->ab_regs[dr];
+	return vcpu->svm->db_regs[dr];
 }
 
 static void svm_set_dr(struct kvm_vcpu *vcpu, int dr, unsigned long value,
@@ -802,7 +802,7 @@ static void svm_set_dr(struct kvm_vcpu *vcpu, int dr, unsigned long value,
 
 	switch (dr) {
 	case 0 ... 3:
-		vcpu->svm->ab_regs[dr] = value;
+		vcpu->svm->db_regs[dr] = value;
 		return;
 	case 4 ... 5:
 		if (vcpu->cr4 & CR4_DE_MASK) {
@@ -832,9 +832,8 @@ static int pf_interception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	u32 error_code;
 	enum emulation_result er;
 
-	if (is_external_interrupt(exit_int_info)) {
+	if (is_external_interrupt(exit_int_info))
 		push_irq(vcpu, exit_int_info & SVM_EVTINJ_VEC_MASK);
-	}
 
 	spin_lock(&vcpu->kvm->lock);
 
@@ -865,7 +864,6 @@ static int pf_interception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	return 0;
 }
 
-#define MAX_INST_SIZE 15
 static int io_get_override(struct kvm_vcpu *vcpu,
 			  struct vmcb_seg **seg,
 			  int *addr_override)
@@ -879,24 +877,23 @@ static int io_get_override(struct kvm_vcpu *vcpu,
 	ins_length = vcpu->svm->next_rip - rip;
 	rip += vcpu->svm->vmcb->save.cs.base;
 
-	if (ins_length > MAX_INST_SIZE) {
-		printk("%s: inst length err, cs base 0x%llx rip 0x%llx "
+	if (ins_length > MAX_INST_SIZE)
+		printk(KERN_DEBUG 
+		       "%s: inst length err, cs base 0x%llx rip 0x%llx "
 		       "next rip 0x%llx ins_length %u\n",
 		       __FUNCTION__,
 		       vcpu->svm->vmcb->save.cs.base,
 		       vcpu->svm->vmcb->save.rip,
 		       vcpu->svm->vmcb->control.exit_info_2,
 		       ins_length);
-	}
 
-	if (kvm_read_guest(vcpu, rip, ins_length, inst) != ins_length) {
-		//#PF
+	if (kvm_read_guest(vcpu, rip, ins_length, inst) != ins_length)
+		/* #PF */
 		return 0;
-	}
 
 	*addr_override = 0;
 	*seg = 0;
-	for (i = 0; i < ins_length; i++) {
+	for (i = 0; i < ins_length; i++)
 		switch (inst[i]) {
 		case 0xf0:
 		case 0xf2:
@@ -927,8 +924,7 @@ static int io_get_override(struct kvm_vcpu *vcpu,
 		default:
 			return 1;
 		}
-	}
-	printk("%s: unexpected\n", __FUNCTION__);
+	printk(KERN_DEBUG "%s: unexpected\n", __FUNCTION__);
 	return 0;
 }
 
@@ -939,16 +935,14 @@ static unsigned long io_adress(struct kvm_vcpu *vcpu, int ins, u64 *address)
 	struct vmcb_seg *seg;
 	int addr_override;
 	struct vmcb_save_area *save_area = &vcpu->svm->vmcb->save;
-	u16 cs_atrib = save_area->cs.atrib;
+	u16 cs_attrib = save_area->cs.attrib;
 	unsigned addr_size = get_addr_size(vcpu);
 
-	if (!io_get_override(vcpu, &seg, &addr_override)) {
+	if (!io_get_override(vcpu, &seg, &addr_override))
 		return 0;
-	}
 
-	if (addr_override) {
+	if (addr_override)
 		addr_size = (addr_size == 2) ? 4: (addr_size >> 1);
-	}
 
 	if (ins) {
 		reg = &vcpu->regs[VCPU_REGS_RDI];
@@ -960,13 +954,13 @@ static unsigned long io_adress(struct kvm_vcpu *vcpu, int ins, u64 *address)
 
 	addr_mask = ~0ULL >> (64 - (addr_size * 8));
 
-	if ((cs_atrib & SVM_SELECTOR_L_MASK) &&
+	if ((cs_attrib & SVM_SELECTOR_L_MASK) &&
 	    !(vcpu->svm->vmcb->save.rflags & X86_EFLAGS_VM)) {
 		*address = (*reg & addr_mask);
 		return addr_mask;
 	}
 
-	if (!(seg->atrib & SVM_SELECTOR_P_SHIFT)) {
+	if (!(seg->attrib & SVM_SELECTOR_P_SHIFT)) {
 		svm_inject_gp(vcpu, 0);
 		return 0;
 	}
@@ -992,16 +986,16 @@ static int io_interception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	kvm_run->io.rep = (io_info & SVM_IOIO_REP_MASK) != 0;
 
 	if (kvm_run->io.string) {
-		unsigned addr_maks;
+		unsigned addr_mask;
 
-		addr_maks = io_adress(vcpu, _in, &kvm_run->io.address);
-		if (!addr_maks) {
+		addr_mask = io_adress(vcpu, _in, &kvm_run->io.address);
+		if (!addr_mask) {
 			printk("%s: get io address failed\n", __FUNCTION__);
 			return 1;
 		}
 
 		if (kvm_run->io.rep) {
-			kvm_run->io.count = vcpu->regs[VCPU_REGS_RCX] & addr_maks;
+			kvm_run->io.count = vcpu->regs[VCPU_REGS_RCX] & addr_mask;
 			kvm_run->io.string_down = (vcpu->svm->vmcb->save.rflags
 						   & X86_EFLAGS_DF) != 0;
 		}
@@ -1050,9 +1044,8 @@ static int cpuid_interception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 
 static int emulate_on_interception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 {
-	if (emulate_instruction(vcpu, 0, 0, 0) != EMULATE_DONE) {
-		       printk("%s: failed\n", __FUNCTION__);
-	}
+	if (emulate_instruction(vcpu, 0, 0, 0) != EMULATE_DONE)
+		printk(KERN_ERR "%s: failed\n", __FUNCTION__);
 	return 1;
 }
 
@@ -1203,11 +1196,10 @@ static int wrmsr_interception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 
 static int msr_interception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 {
-	if (vcpu->svm->vmcb->control.exit_info_1) {
+	if (vcpu->svm->vmcb->control.exit_info_1)
 		return wrmsr_interception(vcpu, kvm_run);
-	} else {
+	else
 		return rdmsr_interception(vcpu, kvm_run);
-	}
 }
 
 static int (*svm_exit_handlers[])(struct kvm_vcpu *vcpu,
@@ -1215,7 +1207,8 @@ static int (*svm_exit_handlers[])(struct kvm_vcpu *vcpu,
 	[SVM_EXIT_READ_CR0]           		= emulate_on_interception,
 	[SVM_EXIT_READ_CR3]           		= emulate_on_interception,
 	[SVM_EXIT_READ_CR4]           		= emulate_on_interception,
-	[SVM_EXIT_WRITE_CR0]          		= emulate_on_interception, //for now
+	/* for now: */
+	[SVM_EXIT_WRITE_CR0]          		= emulate_on_interception,
 	[SVM_EXIT_WRITE_CR3]          		= emulate_on_interception,
 	[SVM_EXIT_WRITE_CR4]          		= emulate_on_interception,
 	[SVM_EXIT_READ_DR0] 			= emulate_on_interception,
@@ -1233,7 +1226,7 @@ static int (*svm_exit_handlers[])(struct kvm_vcpu *vcpu,
 	[SVM_EXIT_NMI]				= nop_on_interception,
 	[SVM_EXIT_SMI]				= nop_on_interception,
 	[SVM_EXIT_INIT]				= nop_on_interception,
-	//[SVM_EXIT_CR0_SEL_WRITE]		= emulate_on_interception,
+	/* [SVM_EXIT_CR0_SEL_WRITE]		= emulate_on_interception, */
 	[SVM_EXIT_CPUID]			= cpuid_interception,
 	[SVM_EXIT_HLT]				= halt_interception,
 	[SVM_EXIT_INVLPG]			= emulate_on_interception,
@@ -1258,17 +1251,16 @@ static int handle_exit(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	kvm_run->exit_type = KVM_EXIT_TYPE_VM_EXIT;
 
 	if (is_external_interrupt(vcpu->svm->vmcb->control.exit_int_info) &&
-	    exit_code != SVM_EXIT_EXCP_BASE + PF_VECTOR) {
-		printk("%s: unexpected exit_ini_info 0x%x exit_code 0x%x\n",
-		       __FUNCTION__,
-		       vcpu->svm->vmcb->control.exit_int_info,
+	    exit_code != SVM_EXIT_EXCP_BASE + PF_VECTOR)
+		printk(KERN_ERR "%s: unexpected exit_ini_info 0x%x "
+		       "exit_code 0x%x\n",
+		       __FUNCTION__, vcpu->svm->vmcb->control.exit_int_info,
 		       exit_code);
-	}
 
 	if (exit_code >= sizeof(svm_exit_handlers) / sizeof(*svm_exit_handlers)
 	    || svm_exit_handlers[exit_code] == 0) {
 		kvm_run->exit_reason = KVM_EXIT_UNKNOWN;
-		printk("%s: 0x%x @ 0x%llx cr0 0x%lx rflags 0x%llx\n",
+		printk(KERN_ERR "%s: 0x%x @ 0x%llx cr0 0x%lx rflags 0x%llx\n",
 		       __FUNCTION__,
 		       exit_code,
 		       vcpu->svm->vmcb->save.rip,
@@ -1297,9 +1289,8 @@ static void pre_svm_run(struct kvm_vcpu *vcpu)
 
 	vcpu->svm->vmcb->control.tlb_ctl = TLB_CONTROL_DO_NOTHING;
 	if (vcpu->cpu != cpu ||
-	    vcpu->svm->asid_generation != svm_data->asid_generation) {
+	    vcpu->svm->asid_generation != svm_data->asid_generation)
 		new_asid(vcpu, svm_data);
-	}
 }
 
 
@@ -1307,9 +1298,9 @@ static inline void kvm_try_inject_irq(struct kvm_vcpu *vcpu)
 {
 	struct vmcb_control_area *control;
 
-	if (!vcpu->irq_summary) {
+	if (!vcpu->irq_summary)
 		return;
-	}
+
 	control = &vcpu->svm->vmcb->control;
 
 	control->int_vector = pop_irq(vcpu);
@@ -1328,7 +1319,7 @@ static void kvm_reput_irq(struct kvm_vcpu *vcpu)
 	}
 }
 
-static void save_ab_regs(unsigned long *ab_regs)
+static void save_db_regs(unsigned long *db_regs)
 {
 	asm ("mov %%dr0, %%rax \n\t"
 	     "mov %%rax, %[dr0] \n\t"
@@ -1338,24 +1329,24 @@ static void save_ab_regs(unsigned long *ab_regs)
 	     "mov %%rax, %[dr2] \n\t"
 	     "mov %%dr3, %%rax \n\t"
 	     "mov %%rax, %[dr3] \n\t"
-	     : [dr0] "=m"(ab_regs[0]),
-	       [dr1] "=m"(ab_regs[1]),
-	       [dr2] "=m"(ab_regs[2]),
-	       [dr3] "=m"(ab_regs[3])
+	     : [dr0] "=m"(db_regs[0]),
+	       [dr1] "=m"(db_regs[1]),
+	       [dr2] "=m"(db_regs[2]),
+	       [dr3] "=m"(db_regs[3])
 	     : : "rax");
 }
 
-static void load_ab_regs(unsigned long *ab_regs)
+static void load_db_regs(unsigned long *db_regs)
 {
 	asm volatile ("mov %[dr0], %%dr0 \n\t"
 	     "mov %[dr1], %%dr1 \n\t"
 	     "mov %[dr2], %%dr2 \n\t"
 	     "mov %[dr3], %%dr3 \n\t"
 	     :
-	     : [dr0] "r"(ab_regs[0]),
-	       [dr1] "r"(ab_regs[1]),
-	       [dr2] "r"(ab_regs[2]),
-	       [dr3] "r"(ab_regs[3])
+	     : [dr0] "r"(db_regs[0]),
+	       [dr1] "r"(db_regs[1]),
+	       [dr2] "r"(db_regs[2]),
+	       [dr3] "r"(db_regs[3])
 	     : "rax");
 }
 
@@ -1372,7 +1363,7 @@ again:
 
 	pre_svm_run(vcpu);
 
-	save_hots_msrs(vcpu);
+	save_host_msrs(vcpu);
 	fs_selector = read_fs();
 	gs_selector = read_gs();
 	ldt_selector = read_ldt();
@@ -1383,8 +1374,8 @@ again:
 
 	if (vcpu->svm->vmcb->save.dr7 & 0xff) {
 		write_dr7(0);
-		save_ab_regs(vcpu->svm->host_ab_regs);
-		load_ab_regs(vcpu->svm->ab_regs);
+		save_db_regs(vcpu->svm->host_db_regs);
+		load_db_regs(vcpu->svm->db_regs);
 	}
 	asm volatile (
 #ifdef __x86_64__
@@ -1425,9 +1416,9 @@ again:
 		"push %%rax \n\t"
 		"mov %c[svm](%[vcpu]), %%rax \n\t"
 		"mov %c[vmcb](%%rax), %%rax \n\t"
-		"vmload \n\t"
-		"vmrun \n\t"
-		"vmsave \n\t"
+		SVM_VMLOAD "\n\t"
+		SVM_VMRUN "\n\t"
+		SVM_VMSAVE "\n\t"
 		"pop %%rax \n\t"
 
 		/* Save guest registers, load host registers */
@@ -1485,7 +1476,7 @@ again:
 		: "cc", "memory" );
 
 	if ((vcpu->svm->vmcb->save.dr7 & 0xff))
-		load_ab_regs(vcpu->svm->host_ab_regs);
+		load_db_regs(vcpu->svm->host_db_regs);
 
 	vcpu->cr2 = vcpu->svm->vmcb->save.cr2;
 
@@ -1496,7 +1487,7 @@ again:
 	load_fs(fs_selector);
 	load_gs(gs_selector);
 	load_ldt(ldt_selector);
-	load_hots_msrs(vcpu);
+	load_host_msrs(vcpu);
 
 	reload_tss(vcpu);
 
