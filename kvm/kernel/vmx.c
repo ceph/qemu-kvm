@@ -1972,7 +1972,9 @@ static struct kvm_arch_ops vmx_arch_ops = {
 	.set_cr0_no_modeswitch = vmx_set_cr0_no_modeswitch,
 	.set_cr3 = vmx_set_cr3,
 	.set_cr4 = vmx_set_cr4,
+#ifdef __x86_64__
 	.set_efer = vmx_set_efer,
+#endif
 	.get_idt = vmx_get_idt,
 	.set_idt = vmx_set_idt,
 	.get_gdt = vmx_get_gdt,
