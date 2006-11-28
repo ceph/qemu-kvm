@@ -7,13 +7,13 @@ all::
 	$(MAKE) -C $(KERNELDIR) M=`pwd` "$$@"
 
 tmpspec = .tmp.kvm-kmod.spec
-TARGETDIR = $$(pwd)/../../RPMS
+RPMDIR = $$(pwd)/../RPMS
 rpm:	all
-	mkdir -p ../BUILD $(TARGETDIR)/$$(uname -m)
+	mkdir -p ../BUILD $(RPMDIR)/$$(uname -m)
 	sed 's/^Release:.*/Release: $(rpmrelease)/' kvm-kmod.spec > $(tmpspec)
 	rpmbuild --define="kverrel $(KVERREL)" \
 		 --define="objdir $$(pwd)" \
-		 --define="_rpmdir $(TARGETDIR)" \
+		 --define="_rpmdir $(RPMDIR)" \
 		 --define="_topdir $$(pwd)/.." \
 		-bb $(tmpspec)
 
