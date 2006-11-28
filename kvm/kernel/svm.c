@@ -36,6 +36,9 @@ MODULE_LICENSE("GPL");
 #define DR6_BD_MASK (1 << 13)
 #define CR4_DE_MASK (1UL << 3)
 
+#define SEG_TYPE_LDT 2
+#define SEG_TYPE_BUSY_TSS16 3
+
 unsigned long iopm_base;
 unsigned long msrpm_base;
 
@@ -51,6 +54,19 @@ struct svm_cpu_data {
 };
 
 static DEFINE_PER_CPU(struct svm_cpu_data *, svm_data);
+
+struct svm_init_data {
+	int cpu;
+	int r;
+};
+
+static u32 msrpm_ranges[] = {0, 0xc0000000, 0xc0010000};
+
+#define NUM_MSR_MAPS (sizeof(msrpm_ranges) / sizeof(*msrpm_ranges))
+#define MSRS_RANGE_SIZE 2048
+#define MSRS_IN_RANGE (MSRS_RANGE_SIZE * 8 / 2)
+
+#define MAX_INST_SIZE 15
 
 static unsigned get_addr_size(struct kvm_vcpu *vcpu)
 {
@@ -254,11 +270,6 @@ static void svm_hardware_disable(void *garbage)
 	}
 }
 
-struct svm_init_data {
-	int cpu;
-	int r;
-};
-
 static void svm_hardware_enable(void *garbage)
 {
 
@@ -318,11 +329,6 @@ err_1:
 	return r;
 
 }
-
-static u32 msrpm_ranges[] = {0, 0xc0000000, 0xc0010000};
-#define NUM_MSR_MAPS (sizeof(msrpm_ranges) / sizeof(*msrpm_ranges))
-#define MSRS_RANGE_SIZE 2048
-#define MSRS_IN_RANGE (MSRS_RANGE_SIZE * 8 / 2)
 
 static int set_msr_interception(u32 *msrpm, unsigned msr,
 				int read, int write)
@@ -430,9 +436,6 @@ static int svm_vcpu_setup(struct kvm_vcpu *vcpu)
 {
 	return 0;
 }
-
-#define SEG_TYPE_LDT 2
-#define SEG_TYPE_BUSY_TSS16 3
 
 static void init_vmcb(struct vmcb *vmcb)
 {
@@ -861,7 +864,6 @@ static int pf_interception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	return 0;
 }
 
-#define MAX_INST_SIZE 15
 static int io_get_override(struct kvm_vcpu *vcpu,
 			  struct vmcb_seg **seg,
 			  int *addr_override)
