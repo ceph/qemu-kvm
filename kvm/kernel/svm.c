@@ -1416,9 +1416,9 @@ again:
 		"push %%rax \n\t"
 		"mov %c[svm](%[vcpu]), %%rax \n\t"
 		"mov %c[vmcb](%%rax), %%rax \n\t"
-		"vmload \n\t"
-		"vmrun \n\t"
-		"vmsave \n\t"
+		SVM_VMLOAD "\n\t"
+		SVM_VMRUN "\n\t"
+		SVM_VMSAVE "\n\t"
 		"pop %%rax \n\t"
 
 		/* Save guest registers, load host registers */

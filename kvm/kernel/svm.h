@@ -304,5 +304,9 @@ struct __attribute__ ((__packed__)) vmcb {
 
 #define SVM_CR0_SELECTIVE_MASK (1 << 3 | 1) // TS and MP
 
+#define SVM_VMLOAD ".byte 0x0f, 0x01, 0xda"
+#define SVM_VMRUN  ".byte 0x0f, 0x01, 0xd8"
+#define SVM_VMSAVE ".byte 0x0f, 0x01, 0xdb"
+
 #endif
 
