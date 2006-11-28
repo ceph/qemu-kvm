@@ -1,10 +1,18 @@
 KERNELDIR := /lib/modules/$(shell uname -r)/build
 KVERREL = $(patsubst /lib/modules/%/build,%,$(KERNELDIR))
 
+DESTDIR=
+
+INSTALLDIR = $(patsubst %/build,%/extra,$(KERNELDIR))
+
 rpmrelease = devel
 
 all::
 	$(MAKE) -C $(KERNELDIR) M=`pwd` "$$@"
+
+install:
+	cp *.ko $(DESTDIR)/$(INSTALLDIR)
+	depmod -a
 
 tmpspec = .tmp.kvm-kmod.spec
 RPMDIR = $$(pwd)/../RPMS

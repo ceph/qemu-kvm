@@ -9,6 +9,8 @@ rpmrelease = devel
 
 all: $(if $(WANT_MODULE), kernel) user qemu
 
+kcmd = $(if $(WANT_MODULE),,@\#)
+
 qemu kernel user:
 	$(MAKE) -C $@
 
@@ -31,6 +33,7 @@ install-rpm:
 	cp kvm $(DESTDIR)/$(utilsdir)/kvm
 
 install:
+	$(kcmd)make -C kernel DESTDIR="$(DESTDIR)" install
 	make -C user DESTDIR="$(DESTDIR)" install
 	make -C qemu DESTDIR="$(DESTDIR)" install
 
