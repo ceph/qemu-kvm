@@ -412,53 +412,15 @@ void do_migration_connect(char *arg1, char *arg2)
 void do_migration_getfd(int fd) { TO_BE_IMPLEMENTED; }
 void do_migration_start(char *deadoralive)
 { 
-    const char *status[2] = {"DEAD", "ALIVE"};
-    const char msg[] = "HELLO WORLD";
-    const int msgsize = sizeof (msg) - 1; /* do not send '\0' */
-    char buff[128] = {0};
-    const int buffsize = sizeof(buff) -1; /* do not send '\0' */
-    int i, j, jlimit=10, stride=5, bytes = buffsize;
+    int rc = -1;
+    const char *dummy = "online_migration";
 
-    term_printf("%s: deadoralive=%s role=%d msgsize=%d\n", __FUNCTION__, 
-                status[strcmp(deadoralive, "online") == 0], ms.role,
-                msgsize);
     switch (ms.role) {
     case WRITER:
-        for (i=0; i<msgsize; i++)
-            migration_write_byte(msg[i]);
-        migration_write_some(1); /* force a send */
-        term_printf("sent '%s'\n", msg);
-        for (j=0; j<jlimit; j++) {
-            bytes -= stride;
-            if (bytes <=0)
-                break;
-            memset(buff, 'z'-j, bytes);
-            migration_write_buffer(buff, bytes);
-            migration_write_some(1); /* force a send */
-            buff[bytes]='\0';
-            term_printf("sent %d bytes '%s'\n", bytes, buff);
-        }
+        rc = qemu_savevm(dummy, &qemu_savevm_method_socket);
         break;
     case READER:
-        memset(buff, 'a', buffsize);
-        for (i=0; i<msgsize; i++)
-            buff[i] = migration_read_byte();
-        buff[msgsize] = '\0';
-        term_printf("received '%s'\n", buff);
-        for (j=0; j<jlimit; j++) {
-            bytes -= stride;
-            if (bytes <=0)
-                break;
-            memset(buff, 'b'+j, bytes);
-            i = migration_read_buffer(buff, bytes);
-            term_printf("received %d bytes ", i);
-            if (i>0) {
-                buff[i] = '\0';
-                term_printf("'%s'\n", buff);
-            }
-            else
-                term_printf("...FAILED\n");
-        }
+        rc = qemu_loadvm(dummy, &qemu_savevm_method_socket);
         break;
     default:
         term_printf("ERROR: unexpected role=%d\n", ms.role);
