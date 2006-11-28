@@ -175,6 +175,11 @@ static int migration_write_into_socket(void *opaque, int len)
     return size;
 }
 
+static void migration_start_now(void *opaque)
+{
+    do_migration_start("offline");
+}
+
 static void migration_accept(void *opaque)
 {
     migration_state_t *pms = (migration_state_t *)opaque;
@@ -204,12 +209,11 @@ static void migration_accept(void *opaque)
 
 #ifdef USE_NONBLOCKING_SOCKETS
     /* start handling I/O */
-    qemu_set_fd_handler(pms->fd, migration_read_from_socket, NULL, NULL);
+    qemu_set_fd_handler(pms->fd, migration_start_now, NULL, pms);
 #else 
     term_printf("waiting for migration to start...\n");
-    do_migration_start("offline");
+    migration_start_now(pms);
 #endif
-
 }
 
 
@@ -379,6 +383,29 @@ static int migration_write_buffer(const char *buff, int len)
     return len_req - len;
 }
 
+static void migration_connect_check(void *opaque)
+{
+    migration_state_t *pms = (migration_state_t *)opaque;
+    int err, rc;
+    socklen_t len=sizeof(err);
+
+    rc = getsockopt(pms->fd, SOL_SOCKET, SO_ERROR, (void *)&err, &len);
+    if (rc != 0) {
+        term_printf("migration connect: getsockopt FAILED (%s)\n", strerror(errno));
+        migration_cleanup(pms);
+        return;
+    }
+    if (err == 0)
+        term_printf("migration connect: connected through fd %d\n", pms->fd);
+    else
+        term_printf("migration connect: failed to conenct (%s)\n", strerror(err));
+
+#ifdef USE_NONBLOCKING_SOCKETS
+    qemu_set_fd_handler(pms->fd, migration_start_now, NULL, pms);
+#endif
+}
+
+
 void do_migration_connect(char *arg1, char *arg2)
 {
     struct sockaddr_in local, remote;
@@ -402,15 +429,24 @@ void do_migration_connect(char *arg1, char *arg2)
                     strerror(errno));
         return;
     }
+
+#ifdef USE_NONBLOCKING_SOCKETS
+    socket_set_nonblock(fd);
+    qemu_set_fd_handler(pms->fd, NULL, migration_connect_check, &pm);
+#endif
     
-    if (connect(ms.fd, (struct sockaddr*)&remote, sizeof remote) < 0) {
-        term_printf("migration connect: connect() failed (%s)\n",
-                     strerror(errno));
-        migration_cleanup(&ms);
+    while (connect(ms.fd, (struct sockaddr*)&remote, sizeof remote) < 0) {
+        if (errno == EINTR)
+            continue;
+        if (errno != EINPROGRESS) {
+            term_printf("migration connect: connect() failed (%s)\n",
+                        strerror(errno));
+            migration_cleanup(&ms);
+        }
         return;
     }
     
-    term_printf("migration connect: connected through fd %d\n", ms.fd);
+    migration_connect_check(&ms);
 }
 
 
