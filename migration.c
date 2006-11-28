@@ -199,12 +199,17 @@ static void migration_accept(void *opaque)
      */
     migration_cleanup(pms); /* clean old fd */
     pms->fd = new_fd;
+
+    term_printf("accepted new socket as fd %d\n", pms->fd);
+
 #ifdef USE_NONBLOCKING_SOCKETS
     /* start handling I/O */
     qemu_set_fd_handler(pms->fd, migration_read_from_socket, NULL, NULL);
+#else 
+    term_printf("waiting for migration to start...\n");
+    do_migration_start("offline");
 #endif
 
-    term_printf("accepted new socket as fd %d\n", pms->fd);
 }
 
 
@@ -426,6 +431,7 @@ void do_migration_start(char *deadoralive)
         term_printf("ERROR: unexpected role=%d\n", ms.role);
         break;
     }
+    term_printf("migration %s\n", (rc)?"failed":"completed");
 }
 
 void do_migration_cancel(void)
