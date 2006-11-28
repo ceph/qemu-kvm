@@ -67,7 +67,6 @@
        <p>
           In progress:
           <ul>
-             <li>AMD-based hosts (require AMD-V capable processors)</li>
              <li>Optimized MMU virtualization</li>
           </ul>
        </p>
@@ -126,7 +125,8 @@ cd kvm-<i>release</i>
 ./configure --prefix=/usr/local/kvm --with-patched-kernel
 make
 sudo make install
-sudo /sbin/modprobe kvm
+sudo /sbin/modprobe kvm-intel
+# or: sudo /sbin/modprobe kvm-amd
 </pre>
              </p>
 
@@ -138,7 +138,8 @@ cd kvm-<i>release</i>
 ./configure --prefix=/usr/local/kvm
 make
 sudo make install
-sudo /sbin/insmod kernel/kvm.ko
+sudo /sbin/modprobe kvm-intel
+# or: sudo /sbin/modprobe kvm-amd
 </pre>
              </p>
              </li>                
@@ -433,11 +434,8 @@ svn ls svn://kvm.qumranet.com/kvm/branches
 
        <p>
           You will need an x86 machine running a recent Linux kernel on an
-          Intel processor with VT (virtualization technology) extensions.
-       </p>
-       <p>
-          In the near future, you will also be able to use AMD processors with
-          AMD-V extensions.
+          Intel processor with VT (virtualization technology) extensions, or
+          an AMD processor with SVM extensions (also called AMD-V).
        </p>
 
        <hr/>
