@@ -324,7 +324,7 @@ static int migration_write_some(int force)
 {
     int size, threshold = 1024;
 
-    if (threshold > ms.buffsize) /* if buffsize is small */
+    if (threshold >= ms.buffsize) /* if buffsize is small */
         threshold = ms.buffsize / 2;
     size = migration_buffer_bytes_filled(&ms);
     while (size && (force || (size > threshold))) {
