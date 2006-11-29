@@ -1984,7 +1984,7 @@ static struct kvm_arch_ops vmx_arch_ops = {
 	.get_rflags = vmx_get_rflags,
 	.set_rflags = vmx_set_rflags,
 
-	.flush_tlb = vmx_flush_tlb,
+	.tlb_flush = vmx_flush_tlb,
 	.inject_page_fault = vmx_inject_page_fault,
 
 	.inject_gp = vmx_inject_gp,

@@ -725,7 +725,7 @@ static int kvm_dev_ioctl_get_dirty_log(struct kvm *kvm,
 
 			if (!vcpu)
 				continue;
-			kvm_arch_ops->flush_tlb(vcpu);
+			kvm_arch_ops->tlb_flush(vcpu);
 			vcpu_put(vcpu);
 		}
 	}

@@ -324,7 +324,7 @@ static void nonpaging_flush(struct kvm_vcpu *vcpu)
 	if (is_paging(vcpu))
 		root |= (vcpu->cr3 & (CR3_PCD_MASK | CR3_WPT_MASK));
 	kvm_arch_ops->set_cr3(vcpu, root);
-	kvm_arch_ops->flush_tlb(vcpu);
+	kvm_arch_ops->tlb_flush(vcpu);
 }
 
 static gpa_t nonpaging_gva_to_gpa(struct kvm_vcpu *vcpu, gva_t vaddr)
@@ -408,7 +408,7 @@ static void kvm_mmu_flush_tlb(struct kvm_vcpu *vcpu)
 		release_pt_page_64(vcpu, page->page_hpa, 1);
 	}
 	++kvm_stat.tlb_flush;
-	kvm_arch_ops->flush_tlb(vcpu);
+	kvm_arch_ops->tlb_flush(vcpu);
 }
 
 static void paging_new_cr3(struct kvm_vcpu *vcpu)
@@ -516,7 +516,7 @@ static void paging_inval_page(struct kvm_vcpu *vcpu, gva_t addr)
 			table[index] = 0;
 			release_pt_page_64(vcpu, page_addr, PT_PAGE_TABLE_LEVEL);
 
-			kvm_arch_ops->flush_tlb(vcpu);
+			kvm_arch_ops->tlb_flush(vcpu);
 			return;
 		}
 	}

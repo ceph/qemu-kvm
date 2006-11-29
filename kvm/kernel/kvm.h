@@ -299,7 +299,7 @@ struct kvm_arch_ops {
 	void (*set_rflags)(struct kvm_vcpu *vcpu, unsigned long rflags);
 
 	void (*invlpg)(struct kvm_vcpu *vcpu, gva_t addr);
-	void (*flush_tlb)(struct kvm_vcpu *vcpu);
+	void (*tlb_flush)(struct kvm_vcpu *vcpu);
 	void (*inject_page_fault)(struct kvm_vcpu *vcpu,
 				  unsigned long addr, u32 err_code);
 
