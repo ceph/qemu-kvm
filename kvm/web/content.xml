@@ -360,6 +360,10 @@ sudo kvm \
      <cms:menuitem>Download</cms:menuitem>
   </cms:page>
 
+  <cms:page href="http://sourceforge.net/tracker/?group_id=180599">
+     <cms:menuitem>Bugs</cms:menuitem>
+  </cms:page>
+
   <cms:page name="code">
      <cms:menuitem>Code</cms:menuitem>
      <cms:title>Source Control</cms:title>
