@@ -3,11 +3,20 @@
 #include "migration.h"
 
 #define TO_BE_IMPLEMENTED term_printf("%s: TO_BE_IMPLEMENTED\n", __FUNCTION__)
+#define USE_NONBLOCKING_SOCKETS
 
 #ifndef CONFIG_USER_ONLY
 
 /* defined in vl.c */
 int parse_host_port(struct sockaddr_in *saddr, const char *str);
+#ifdef USE_NONBLOCKING_SOCKETS
+void socket_set_block(int fd) /* should be in vl.c ? */
+{
+    int val;
+    val = fcntl(fd, F_GETFL);
+    fcntl(fd, F_SETFL, val & ~O_NONBLOCK);
+}
+#endif
 
 #define FD_UNUSED -1
 
@@ -177,6 +186,10 @@ static int migration_write_into_socket(void *opaque, int len)
 
 static void migration_start_now(void *opaque)
 {
+    migration_state_t *pms = (migration_state_t *)opaque;
+#ifdef USE_NONBLOCKING_SOCKETS
+    socket_set_block(pms->fd); /* read as fast as you can */
+#endif
     do_migration_start("offline");
 }
 
@@ -258,11 +271,13 @@ void do_migration_listen(char *arg1, char *arg2)
         return;
     }
 
+    term_printf("migration listen: listening on fd %d\n", ms.fd);
+
 #ifdef USE_NONBLOCKING_SOCKETS
     /* FIXME: should I allow BLOCKING socket after vm_stop() to get full bandwidth? */
-    socket_set_nonblock(fd); /* do not block and delay the guest */
+    socket_set_nonblock(ms.fd); /* do not block and delay the guest */
 
-    qemu_set_fd_handler(fd, migration_accept, NULL, NULL); /* wait for connect() */
+    qemu_set_fd_handler(ms.fd, migration_accept, NULL, &ms); /* wait for connect() */
 #else
     migration_accept(&ms);
 #endif
@@ -401,7 +416,12 @@ static void migration_connect_check(void *opaque)
         term_printf("migration connect: failed to conenct (%s)\n", strerror(err));
 
 #ifdef USE_NONBLOCKING_SOCKETS
+#if 0 /* currently force migration start command from connector */
     qemu_set_fd_handler(pms->fd, migration_start_now, NULL, pms);
+#else
+    qemu_set_fd_handler(pms->fd, NULL, NULL, NULL);
+    socket_set_block(pms->fd); /* read as fast as you can */
+#endif
 #endif
 }
 
@@ -431,8 +451,8 @@ void do_migration_connect(char *arg1, char *arg2)
     }
 
 #ifdef USE_NONBLOCKING_SOCKETS
-    socket_set_nonblock(fd);
-    qemu_set_fd_handler(pms->fd, NULL, migration_connect_check, &pm);
+    socket_set_nonblock(ms.fd);
+    qemu_set_fd_handler(ms.fd, NULL, migration_connect_check, &ms);
 #endif
     
     while (connect(ms.fd, (struct sockaddr*)&remote, sizeof remote) < 0) {
