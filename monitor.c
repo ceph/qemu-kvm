@@ -2417,6 +2417,7 @@ void readline_find_completion(const char *cmdline)
             bdrv_iterate(block_completion_it, (void *)str);
             break;
         case 's':
+        case 'A':
             /* XXX: more generic ? */
             if (!strcmp(cmd->name, "info")) {
                 completion_index = strlen(str);
@@ -2427,6 +2428,11 @@ void readline_find_completion(const char *cmdline)
                 completion_index = strlen(str);
                 for(key = key_defs; key->name != NULL; key++) {
                     cmd_completion(str, key->name);
+                }
+            } else if (!strcmp(cmd->name, "migration")) {
+                completion_index = strlen(str);
+                for(cmd = migration_cmds; cmd->name != NULL; cmd++) {
+                    cmd_completion(str, cmd->name);
                 }
             }
             break;
