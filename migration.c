@@ -469,25 +469,52 @@ void do_migration_connect(char *arg1, char *arg2)
     migration_connect_check(&ms);
 }
 
+static void migration_start_common(int online,
+                                   int (*migrate)(const char*, QEMUFile*),
+                                   int cont_on_success)
+{
+    int rc;
+    int64_t start_time, end_time;
+    const char *dummy = "online_migration";
+    
+    start_time = qemu_get_clock(rt_clock);
+    term_printf("\nstarting migration (at %" PRIx64 ")\n", start_time);
+    vm_stop(EXCP_INTERRUPT); /* FIXME: use EXCP_MIGRATION ? */
+    rc = migrate(dummy, &qemu_savevm_method_socket);
+    end_time = qemu_get_clock(rt_clock);
+    term_printf("migration %s (at %" PRIx64 " (%" PRIx64 "))\n", 
+                (rc)?"failed":"completed", end_time, end_time - start_time);
+    if ((rc==0 && cont_on_success) ||
+        (rc!=0 && !cont_on_success)) {
+        migration_cleanup(&ms);
+        vm_start();
+    }
+}
+
+static void migration_start_src(int online)
+{
+    migration_start_common(online, qemu_savevm, 0);
+}
+
+static void migration_start_dst(int online)
+{
+    migration_start_common(online, qemu_loadvm, 1);
+}
 
 void do_migration_getfd(int fd) { TO_BE_IMPLEMENTED; }
 void do_migration_start(char *deadoralive)
 { 
-    int rc = -1;
-    const char *dummy = "online_migration";
-
     switch (ms.role) {
     case WRITER:
-        rc = qemu_savevm(dummy, &qemu_savevm_method_socket);
+        migration_start_src(0);
         break;
     case READER:
-        rc = qemu_loadvm(dummy, &qemu_savevm_method_socket);
+        migration_start_dst(0);
         break;
     default:
         term_printf("ERROR: unexpected role=%d\n", ms.role);
         break;
     }
-    term_printf("migration %s\n", (rc)?"failed":"completed");
 }
 
 void do_migration_cancel(void)
