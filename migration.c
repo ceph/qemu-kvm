@@ -486,7 +486,7 @@ static void migration_start_common(int online,
                 (rc)?"failed":"completed", end_time, end_time - start_time);
     if ((rc==0 && cont_on_success) ||
         (rc!=0 && !cont_on_success)) {
-        migration_cleanup(&ms);
+        //migration_cleanup(&ms); /* FIXME: causing segfault */
         vm_start();
     }
 }
