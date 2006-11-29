@@ -171,6 +171,8 @@ stop () {
     ip link set ${switch} down
     brctl delbr ${switch}
 
+    grep -q GenuineIntel /proc/cpuinfo && /sbin/modprobe -r kvm-intel
+    grep -q AuthenticAMD /proc/cpuinfo && /sbin/modprobe -r kvm-amd
     /sbin/modprobe -r kvm
 }
 
