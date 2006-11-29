@@ -6356,6 +6356,9 @@ int main(int argc, char **argv)
         if (start_emulation) {
             vm_start();
         }
+        else {
+            console_select(1); /* focus on monitor */
+        }
     }
     main_loop();
     quit_timers();
