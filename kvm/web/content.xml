@@ -593,6 +593,25 @@ svn ls svn://kvm.qumranet.com/kvm/branches
        </p>
 
        <p class="q">
+          What is the procedure to install a Windows guest?
+       </p>
+       <p>
+          Currently the Windows guest installation is broken. The problem rises from the APIC location. At the moment
+          it is located within Qemu and this is the source of the problem. A work in progress is to shift it within the kernel.
+          Until then the following work around is suggested:
+       </p>
+       <p>
+	  1. Install the guest using Qemu only (without the KVM module -no-kvm option).
+       </p>
+       <p>
+          2. After the successful installation, run windows the first time and make sure the APIC HAL is not chosen by:
+             My Computer -> Properties -> Hardware -> Device Manager -> [Whatever under Computer -> Properties -> Update Driver.
+             -> ... Not at this time -> Next -> Install from a list -> Next -> ... Don't search | Next ->
+             Standard PC -> Next -> "Standard PC" is the noapic HAL. You might find "noapic" shorter, though.
+	     Thanks to Thomas Gleixner for the above.
+       </p>
+
+       <p class="q">
           What is Qumranet's product?
        </p>
        <p>
