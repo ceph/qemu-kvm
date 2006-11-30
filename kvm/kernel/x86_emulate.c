@@ -1296,17 +1296,13 @@ twobyte_special_insn:
 		emulate_clts(ctxt->vcpu);
 		break;
 	case 0x20: /* mov cr, reg */
-		printk("0x20: modrm_mod %d\n", modrm_mod);
 		if (modrm_mod != 3)
 			goto cannot_emulate;
-		printk("emulator: mov %%cr%d, %%r%d\n", modrm_reg, modrm_rm);
 		_regs[modrm_rm] = realmode_get_cr(ctxt->vcpu, modrm_reg);
 		break;
 	case 0x22: /* mov reg, cr */
-		printk("0x22: modrm_mod %d\n", modrm_mod);
 		if (modrm_mod != 3)
 			goto cannot_emulate;
-		printk("emulator: mov %%r%d, %%cr%d\n", modrm_rm, modrm_reg);
 		realmode_set_cr(ctxt->vcpu, modrm_reg, modrm_val, &_eflags);
 		break;
 	case 0xc7:		/* Grp9 (cmpxchg8b) */
