@@ -697,7 +697,7 @@ done_prefixes:
 		if (mode == X86EMUL_MODE_PROT64 &&
 		    override_base != &ctxt->fs_base &&
 		    override_base != &ctxt->gs_base)
-			override_base = 0;
+			override_base = NULL;
 
 		if (override_base)
 			modrm_ea += *override_base;

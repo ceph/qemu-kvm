@@ -46,11 +46,11 @@ static struct vmcs_descriptor {
 } vmcs_descriptor;
 
 #define VMX_SEGMENT_FIELD(seg)					\
-	[VCPU_SREG_##seg] {                                     \
-		GUEST_##seg##_SELECTOR,				\
-		GUEST_##seg##_BASE,			   	\
-		GUEST_##seg##_LIMIT,			   	\
-		GUEST_##seg##_AR_BYTES,			   	\
+	[VCPU_SREG_##seg] = {                                   \
+		.selector = GUEST_##seg##_SELECTOR,		\
+		.base = GUEST_##seg##_BASE,		   	\
+		.limit = GUEST_##seg##_LIMIT,		   	\
+		.ar_bytes = GUEST_##seg##_AR_BYTES,	   	\
 	}
 
 static struct kvm_vmx_segment_field {
@@ -121,7 +121,7 @@ static void __vcpu_clear(void *arg)
 	if (vcpu->cpu == cpu)
 		vmcs_clear(vcpu->vmcs);
 	if (per_cpu(current_vmcs, cpu) == vcpu->vmcs)
-		per_cpu(current_vmcs, cpu) = 0;
+		per_cpu(current_vmcs, cpu) = NULL;
 }
 
 static unsigned long vmcs_readl(unsigned long field)
@@ -564,7 +564,7 @@ static struct vmcs *alloc_vmcs_cpu(int cpu)
 
 	pages = alloc_pages_node(node, GFP_KERNEL, vmcs_descriptor.order);
 	if (!pages)
-		return 0;
+		return NULL;
 	vmcs = page_address(pages);
 	memset(vmcs, 0, vmcs_descriptor.size);
 	vmcs->revision_id = vmcs_descriptor.revision_id; /* vmcs revision id */
@@ -1300,7 +1300,7 @@ static int handle_rmode_exception(struct kvm_vcpu *vcpu,
 		return 0;
 
 	if (vec == GP_VECTOR && err_code == 0)
-		if (emulate_instruction(vcpu, 0, 0, 0) == EMULATE_DONE)
+		if (emulate_instruction(vcpu, NULL, 0, 0) == EMULATE_DONE)
 			return 1;
 	return 0;
 }
@@ -1924,7 +1924,7 @@ static void vmx_free_vmcs(struct kvm_vcpu *vcpu)
 	if (vcpu->vmcs) {
 		on_each_cpu(__vcpu_clear, vcpu, 0, 1);
 		free_vmcs(vcpu->vmcs);
-		vcpu->vmcs = 0;
+		vcpu->vmcs = NULL;
 	}
 }
 
