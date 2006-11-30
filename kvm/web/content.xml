@@ -97,6 +97,7 @@
                    <li><code>gcc</code> 3.x</li>
                    <li><code>SDL</code> libraries and headers</li>
                    <li><code>zlib</code> libraries and headers</li>
+                   <li><code>alsa</code> libraries and headers</li>
                    <li><code>libuuid</code> libraries and headers (from
                        e2fsprogs-devel)</li>
                 </ul>

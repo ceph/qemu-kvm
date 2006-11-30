@@ -20,7 +20,7 @@ BuildRequires: compat-gcc-32
 BuildRequires: compat-gcc-34
 %endif
 
-BuildRequires:  SDL-devel zlib-devel
+BuildRequires:  SDL-devel zlib-devel alsa-lib-devel
 
 %define _prebuilt %{?prebuilt:1}%{!?prebuilt:0}
 

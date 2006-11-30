@@ -66,6 +66,7 @@ target_cpu() {
     --disable-kqemu --extra-cflags="-I $PWD/../user" \
     --extra-ldflags="-L $PWD/../user" \
     --enable-kvm --kernel-path="$libkvm_kerneldir" \
+    --enable-alsa \
     --prefix="$prefix"
 )
 
