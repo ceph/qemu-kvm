@@ -299,7 +299,7 @@ struct kvm_arch_ops {
 	void (*set_rflags)(struct kvm_vcpu *vcpu, unsigned long rflags);
 
 	void (*invlpg)(struct kvm_vcpu *vcpu, gva_t addr);
-	void (*flush_tlb)(struct kvm_vcpu *vcpu);
+	void (*tlb_flush)(struct kvm_vcpu *vcpu);
 	void (*inject_page_fault)(struct kvm_vcpu *vcpu,
 				  unsigned long addr, u32 err_code);
 
@@ -400,7 +400,7 @@ unsigned long segment_base(u16 selector);
 static inline struct page *_gfn_to_page(struct kvm *kvm, gfn_t gfn)
 {
 	struct kvm_memory_slot *slot = gfn_to_memslot(kvm, gfn);
-	return (slot) ? slot->phys_mem[gfn - slot->base_gfn] : 0;
+	return (slot) ? slot->phys_mem[gfn - slot->base_gfn] : NULL;
 }
 
 static inline int is_pae(struct kvm_vcpu *vcpu)

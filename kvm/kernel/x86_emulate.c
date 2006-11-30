@@ -155,7 +155,8 @@ static u8 twobyte_table[256] = {
 	/* 0x10 - 0x1F */
 	0, 0, 0, 0, 0, 0, 0, 0, ImplicitOps | ModRM, 0, 0, 0, 0, 0, 0, 0,
 	/* 0x20 - 0x2F */
-	ImplicitOps, ModRM, ImplicitOps, ModRM, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	ModRM | ImplicitOps, ModRM, ModRM | ImplicitOps, ModRM, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
 	/* 0x30 - 0x3F */
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	/* 0x40 - 0x47 */
@@ -697,7 +698,7 @@ done_prefixes:
 		if (mode == X86EMUL_MODE_PROT64 &&
 		    override_base != &ctxt->fs_base &&
 		    override_base != &ctxt->gs_base)
-			override_base = 0;
+			override_base = NULL;
 
 		if (override_base)
 			modrm_ea += *override_base;
@@ -1295,17 +1296,14 @@ twobyte_special_insn:
 		emulate_clts(ctxt->vcpu);
 		break;
 	case 0x20: /* mov cr, reg */
-		b = insn_fetch(u8, 1, _eip);
-		if ((b & 0xc0) != 0xc0)
+		if (modrm_mod != 3)
 			goto cannot_emulate;
-		_regs[b & 7] = realmode_get_cr(ctxt->vcpu, (b >> 3) & 7);
+		_regs[modrm_rm] = realmode_get_cr(ctxt->vcpu, modrm_reg);
 		break;
 	case 0x22: /* mov reg, cr */
-		b = insn_fetch(u8, 1, _eip);
-		if ((b & 0xc0) != 0xc0)
+		if (modrm_mod != 3)
 			goto cannot_emulate;
-		realmode_set_cr(ctxt->vcpu, (b >> 3) & 7, _regs[b & 7] & -1u,
-				&_eflags);
+		realmode_set_cr(ctxt->vcpu, modrm_reg, modrm_val, &_eflags);
 		break;
 	case 0xc7:		/* Grp9 (cmpxchg8b) */
 #if defined(__i386__)

@@ -318,13 +318,13 @@ static void nonpaging_flush(struct kvm_vcpu *vcpu)
 	pgprintk("nonpaging_flush\n");
 	ASSERT(VALID_PAGE(root));
 	release_pt_page_64(vcpu, root, vcpu->mmu.shadow_root_level);
-	root = kvm_mmu_alloc_page(vcpu, 0);
+	root = kvm_mmu_alloc_page(vcpu, NULL);
 	ASSERT(VALID_PAGE(root));
 	vcpu->mmu.root_hpa = root;
 	if (is_paging(vcpu))
 		root |= (vcpu->cr3 & (CR3_PCD_MASK | CR3_WPT_MASK));
 	kvm_arch_ops->set_cr3(vcpu, root);
-	kvm_arch_ops->flush_tlb(vcpu);
+	kvm_arch_ops->tlb_flush(vcpu);
 }
 
 static gpa_t nonpaging_gva_to_gpa(struct kvm_vcpu *vcpu, gva_t vaddr)
@@ -385,7 +385,7 @@ static int nonpaging_init_context(struct kvm_vcpu *vcpu)
 	context->free = nonpaging_free;
 	context->root_level = PT32E_ROOT_LEVEL;
 	context->shadow_root_level = PT32E_ROOT_LEVEL;
-	context->root_hpa = kvm_mmu_alloc_page(vcpu, 0);
+	context->root_hpa = kvm_mmu_alloc_page(vcpu, NULL);
 	ASSERT(VALID_PAGE(context->root_hpa));
 	kvm_arch_ops->set_cr3(vcpu, context->root_hpa);
 	return 0;
@@ -408,7 +408,7 @@ static void kvm_mmu_flush_tlb(struct kvm_vcpu *vcpu)
 		release_pt_page_64(vcpu, page->page_hpa, 1);
 	}
 	++kvm_stat.tlb_flush;
-	kvm_arch_ops->flush_tlb(vcpu);
+	kvm_arch_ops->tlb_flush(vcpu);
 }
 
 static void paging_new_cr3(struct kvm_vcpu *vcpu)
@@ -516,7 +516,7 @@ static void paging_inval_page(struct kvm_vcpu *vcpu, gva_t addr)
 			table[index] = 0;
 			release_pt_page_64(vcpu, page_addr, PT_PAGE_TABLE_LEVEL);
 
-			kvm_arch_ops->flush_tlb(vcpu);
+			kvm_arch_ops->tlb_flush(vcpu);
 			return;
 		}
 	}
@@ -547,7 +547,7 @@ static int paging64_init_context(struct kvm_vcpu *vcpu)
 	context->free = paging_free;
 	context->root_level = PT64_ROOT_LEVEL;
 	context->shadow_root_level = PT64_ROOT_LEVEL;
-	context->root_hpa = kvm_mmu_alloc_page(vcpu, 0);
+	context->root_hpa = kvm_mmu_alloc_page(vcpu, NULL);
 	ASSERT(VALID_PAGE(context->root_hpa));
 	kvm_arch_ops->set_cr3(vcpu, context->root_hpa |
 		    (vcpu->cr3 & (CR3_PCD_MASK | CR3_WPT_MASK)));
@@ -565,7 +565,7 @@ static int paging32_init_context(struct kvm_vcpu *vcpu)
 	context->free = paging_free;
 	context->root_level = PT32_ROOT_LEVEL;
 	context->shadow_root_level = PT32E_ROOT_LEVEL;
-	context->root_hpa = kvm_mmu_alloc_page(vcpu, 0);
+	context->root_hpa = kvm_mmu_alloc_page(vcpu, NULL);
 	ASSERT(VALID_PAGE(context->root_hpa));
 	kvm_arch_ops->set_cr3(vcpu, context->root_hpa |
 		    (vcpu->cr3 & (CR3_PCD_MASK | CR3_WPT_MASK)));

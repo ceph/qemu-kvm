@@ -624,7 +624,8 @@ raced:
 
 		memset(new.phys_mem, 0, npages * sizeof(struct page *));
 		for (i = 0; i < npages; ++i) {
-			new.phys_mem[i] = alloc_page(GFP_HIGHUSER);
+			new.phys_mem[i] = alloc_page(GFP_HIGHUSER
+						     | __GFP_ZERO);
 			if (!new.phys_mem[i])
 				goto out_free;
 		}
@@ -729,7 +730,7 @@ static int kvm_dev_ioctl_get_dirty_log(struct kvm *kvm,
 
 			if (!vcpu)
 				continue;
-			kvm_arch_ops->flush_tlb(vcpu);
+			kvm_arch_ops->tlb_flush(vcpu);
 			vcpu_put(vcpu);
 		}
 	}

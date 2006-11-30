@@ -115,7 +115,7 @@ static inline void invlpga(unsigned long addr, u32 asid)
 	asm volatile (SVM_INVLPGA :: "a"(addr), "c"(asid));
 }
 
-static inline unsigned long read_cr2(void)
+static inline unsigned long kvm_read_cr2(void)
 {
 	unsigned long cr2;
 
@@ -123,7 +123,7 @@ static inline unsigned long read_cr2(void)
 	return cr2;
 }
 
-static inline void write_cr2(unsigned long val)
+static inline void kvm_write_cr2(unsigned long val)
 {
 	asm volatile ("mov %0, %%cr2" :: "r" (val));
 }
@@ -990,7 +990,7 @@ static int io_interception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 
 		addr_mask = io_adress(vcpu, _in, &kvm_run->io.address);
 		if (!addr_mask) {
-			printk("%s: get io address failed\n", __FUNCTION__);
+			printk(KERN_DEBUG "%s: get io address failed\n", __FUNCTION__);
 			return 1;
 		}
 
@@ -1030,7 +1030,7 @@ static int invalid_op_interception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_ru
 
 static int task_switch_interception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 {
-	printk("%s: task swiche is unsupported\n", __FUNCTION__);
+	printk(KERN_DEBUG "%s: task swiche is unsupported\n", __FUNCTION__);
 	kvm_run->exit_reason = KVM_EXIT_UNKNOWN;
 	return 0;
 }
@@ -1129,9 +1129,11 @@ static int rdmsr_interception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 static int svm_set_msr(struct kvm_vcpu *vcpu, unsigned ecx, u64 data)
 {
 	switch (ecx) {
+#ifdef __x86_64__
 	case MSR_EFER:
 		set_efer(vcpu, data);
 		break;
+#endif
 	case MSR_IA32_MC0_STATUS:
 		printk(KERN_WARNING "%s: MSR_IA32_MC0_STATUS 0x%llx, nop\n"
 			    , __FUNCTION__, data);
@@ -1367,7 +1369,7 @@ again:
 	fs_selector = read_fs();
 	gs_selector = read_gs();
 	ldt_selector = read_ldt();
-	vcpu->svm->host_cr2 = read_cr2();
+	vcpu->svm->host_cr2 = kvm_read_cr2();
 	vcpu->svm->host_dr6 = read_dr6();
 	vcpu->svm->host_dr7 = read_dr7();
 	vcpu->svm->vmcb->save.cr2 = vcpu->cr2;
@@ -1384,7 +1386,7 @@ again:
 		"push %%r8;  push %%r9;  push %%r10; push %%r11;"
 		"push %%r12; push %%r13; push %%r14; push %%r15;"
 #else
-		"push %%ebx; push %%rcx push %%edx;"
+		"push %%ebx; push %%ecx; push %%edx;"
 		"push %%esi; push %%edi; push %%ebp;"
 #endif
 
@@ -1462,9 +1464,9 @@ again:
 		  [rdx]"i"(offsetof(struct kvm_vcpu, regs[VCPU_REGS_RDX])),
 		  [rsi]"i"(offsetof(struct kvm_vcpu, regs[VCPU_REGS_RSI])),
 		  [rdi]"i"(offsetof(struct kvm_vcpu, regs[VCPU_REGS_RDI])),
-		  [rbp]"i"(offsetof(struct kvm_vcpu, regs[VCPU_REGS_RBP])),
+		  [rbp]"i"(offsetof(struct kvm_vcpu, regs[VCPU_REGS_RBP]))
 #ifdef __x86_64__
-		  [r8 ]"i"(offsetof(struct kvm_vcpu, regs[VCPU_REGS_R8 ])),
+		  ,[r8 ]"i"(offsetof(struct kvm_vcpu, regs[VCPU_REGS_R8 ])),
 		  [r9 ]"i"(offsetof(struct kvm_vcpu, regs[VCPU_REGS_R9 ])),
 		  [r10]"i"(offsetof(struct kvm_vcpu, regs[VCPU_REGS_R10])),
 		  [r11]"i"(offsetof(struct kvm_vcpu, regs[VCPU_REGS_R11])),
@@ -1482,7 +1484,7 @@ again:
 
 	write_dr6(vcpu->svm->host_dr6);
 	write_dr7(vcpu->svm->host_dr7);
-	write_cr2(vcpu->svm->host_cr2);
+	kvm_write_cr2(vcpu->svm->host_cr2);
 
 	load_fs(fs_selector);
 	load_gs(gs_selector);
@@ -1596,7 +1598,7 @@ static struct kvm_arch_ops svm_arch_ops = {
 	.set_rflags = svm_set_rflags,
 
 	.invlpg = svm_invlpg,
-	.flush_tlb = svm_flush_tlb,
+	.tlb_flush = svm_flush_tlb,
 	.inject_page_fault = svm_inject_page_fault,
 
 	.inject_gp = svm_inject_gp,
