@@ -620,7 +620,8 @@ raced:
 
 		memset(new.phys_mem, 0, npages * sizeof(struct page *));
 		for (i = 0; i < npages; ++i) {
-			new.phys_mem[i] = alloc_page(GFP_HIGHUSER);
+			new.phys_mem[i] = alloc_page(GFP_HIGHUSER
+						     | __GFP_ZERO);
 			if (!new.phys_mem[i])
 				goto out_free;
 		}
