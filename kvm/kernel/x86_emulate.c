@@ -1166,7 +1166,15 @@ twobyte_insn:
 				goto done;
 			realmode_lidt(ctxt->vcpu, size, address);
 			break;
+		case 4: /* smsw */
+			if (modrm_mod != 3)
+				goto cannot_emulate;
+			*(u16 *)&_regs[modrm_rm]
+				= realmode_get_cr(ctxt->vcpu, 0);
+			break;
 		case 6: /* lmsw */
+			if (modrm_mod != 3)
+				goto cannot_emulate;
 			realmode_lmsw(ctxt->vcpu, (u16)modrm_val, &_eflags);
 			break;
 		case 7: /* invlpg*/
