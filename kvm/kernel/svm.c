@@ -990,7 +990,7 @@ static int io_interception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 
 		addr_mask = io_adress(vcpu, _in, &kvm_run->io.address);
 		if (!addr_mask) {
-			printk("%s: get io address failed\n", __FUNCTION__);
+			printk(KERN_DEBUG "%s: get io address failed\n", __FUNCTION__);
 			return 1;
 		}
 
@@ -1030,7 +1030,7 @@ static int invalid_op_interception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_ru
 
 static int task_switch_interception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 {
-	printk("%s: task swiche is unsupported\n", __FUNCTION__);
+	printk(KERN_DEBUG "%s: task swiche is unsupported\n", __FUNCTION__);
 	kvm_run->exit_reason = KVM_EXIT_UNKNOWN;
 	return 0;
 }
