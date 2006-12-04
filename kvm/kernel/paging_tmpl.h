@@ -105,7 +105,7 @@ static void FNAME(set_pde)(struct kvm_vcpu *vcpu, u64 guest_pde,
 	if (PTTYPE == 32 && is_cpuid_PSE36())
 		gaddr |= (guest_pde & PT32_DIR_PSE36_MASK) <<
 			(32 - PT32_DIR_PSE36_SHIFT);
-	*shadow_pte = (guest_pde & PT_NON_PTE_COPY_MASK) |
+	*shadow_pte = (guest_pde & (PT_NON_PTE_COPY_MASK | PT_GLOBAL_MASK)) |
 		          ((guest_pde & PT_DIR_PAT_MASK) >>
 			            (PT_DIR_PAT_SHIFT - PT_PAT_SHIFT));
 	set_pte_common(vcpu, shadow_pte, gaddr,
