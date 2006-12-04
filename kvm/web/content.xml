@@ -58,6 +58,7 @@
           Working:
           <ul>
              <li>Intel-based hosts (requires VT capable processors)</li>
+             <li>AMD-based hosts (requires SVM capable processors)</li>
              <li>Linux guests (32-bit and 64-bit)</li>
              <li>Windows guests (32-bit)</li>
              <li>SMP hosts</li>
