@@ -90,6 +90,9 @@ unsigned long segment_base(u16 selector)
 	typedef unsigned long ul;
 	unsigned long v;
 
+	if (selector == 0)
+		return 0;
+
 	asm ("sgdt %0" : "=m"(gdt));
 	table_base = gdt.base;
 

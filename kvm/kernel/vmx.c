@@ -1702,6 +1702,9 @@ again:
 #ifdef __x86_64__
 	vmcs_writel(HOST_FS_BASE, read_msr(MSR_FS_BASE));
 	vmcs_writel(HOST_GS_BASE, read_msr(MSR_GS_BASE));
+#else
+	vmcs_writel(HOST_FS_BASE, segment_base(fs_sel));
+	vmcs_writel(HOST_GS_BASE, segment_base(gs_sel));
 #endif
 
 	if (vcpu->irq_summary &&
