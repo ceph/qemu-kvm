@@ -638,6 +638,12 @@ svn ls svn://kvm.qumranet.com/kvm/branches
 
   <cms:footer>
     <p><center>
+       Interested in working for Qumranet?  <a href="mailto:jobs@qumranet.com">
+       Send</a> your CV!
+       </center>
+    </p>
+    <hr/>
+    <p><center>
        kvm development is sponsored by 
        <a href="http://www.qumranet.com">Qumranet</a>.
        </center>
