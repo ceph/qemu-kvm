@@ -5114,6 +5114,9 @@ void main_loop_wait(int timeout)
             if (FD_ISSET(ioh->fd, &rfds)) {
                 ioh->fd_read(ioh->opaque);
             }
+        }
+        for(ioh = first_io_handler; ioh != NULL; ioh = ioh_next) {
+            ioh_next = ioh->next;
             if (FD_ISSET(ioh->fd, &wfds)) {
                 ioh->fd_write(ioh->opaque);
             }
