@@ -1158,8 +1158,10 @@ static void do_stop_capture (int n)
     }
 }
 
-static void do_migration(const char *subcmdline)
+static void do_migration(char *subcmdline)
 {
+    if (subcmdline[0] == '\0')
+        subcmdline = "help";
     monitor_handle_command(migration_cmds, subcmdline);
 }
 
@@ -1168,8 +1170,10 @@ static void do_migration_help(char *name)
     help_cmd1(migration_cmds, "migration ", name);
 }
 
-static void do_migration_set(const char *subcmdline)
+static void do_migration_set(char *subcmdline)
 {
+    if (subcmdline[0] == '\0')
+        subcmdline = "help";
     monitor_handle_command(migration_set_cmds, subcmdline);
 }
 
