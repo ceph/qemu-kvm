@@ -35,6 +35,10 @@ typedef enum {
     MIG_STAT_CANCEL = 5  /* migration canceled */
 } migration_status_t;
 
+typedef struct migration_bandwith_params {
+    int min, max, offline, seconds;
+} migration_bandwith_params_t;
+
 typedef struct migration_state {
     int fd;
     migration_status_t status;
@@ -44,6 +48,7 @@ typedef struct migration_state {
     unsigned head, tail;
     migration_role_t role;
     int64_t  head_counter, tail_counter;
+    migration_bandwith_params_t bw;
 } migration_state_t;
 
 static migration_state_t ms = {
@@ -54,7 +59,8 @@ static migration_state_t ms = {
     .head = 0, 
     .tail = 0,
     .head_counter = 0,
-    .tail_counter = 0
+    .tail_counter = 0,
+    .bw = {0, 0, 0, 0}
 };
 
 static const char *reader_default_addr="localhost:4455";
@@ -592,9 +598,31 @@ void do_migration_cancel(void)
 void do_migration_status(void){ 
     term_printf("migration status: %s\n", mig_stat_str(ms.status));
 }
-void do_migration_set_rate(int min, int max, int offline) { TO_BE_IMPLEMENTED; }
-void do_migration_set_total_time(int seconds) { TO_BE_IMPLEMENTED; }
-void do_migration_show(void){ TO_BE_IMPLEMENTED; }
+void do_migration_set_rate(int min, int max, int offline)
+{
+    if ((min<0) || (max<0) || (offline<0)) {
+        term_printf("%s: positive values only please\n", __FUNCTION__);
+        return;
+    }
+    ms.bw.min     = min;
+    ms.bw.max     = max;
+    ms.bw.offline = offline;
+}
+
+void do_migration_set_total_time(int seconds)
+{
+    if (seconds<0){
+        term_printf("%s: positive values only please\n", __FUNCTION__);
+        return;
+    }
+    ms.bw.seconds = seconds;
+}
+void do_migration_show(void)
+{
+    term_printf("%8s %8s %8s %8s\n%8d %8d %8d %8d\n",
+                "min", "max", "offline", "seconds",
+                ms.bw.min, ms.bw.max, ms.bw.offline, ms.bw.seconds); 
+}
 
 
 
