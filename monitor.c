@@ -1158,26 +1158,26 @@ static void do_stop_capture (int n)
     }
 }
 
-static void do_migration(char *subcmdline)
+static void do_migration(const char *subcmdline)
 {
     if (subcmdline[0] == '\0')
         subcmdline = "help";
     monitor_handle_command(migration_cmds, subcmdline);
 }
 
-static void do_migration_help(char *name)
+static void do_migration_help(const char *name)
 {
     help_cmd1(migration_cmds, "migration ", name);
 }
 
-static void do_migration_set(char *subcmdline)
+static void do_migration_set(const char *subcmdline)
 {
     if (subcmdline[0] == '\0')
         subcmdline = "help";
     monitor_handle_command(migration_set_cmds, subcmdline);
 }
 
-static void do_migration_set_help(char *name)
+static void do_migration_set_help(const char *name)
 {
     help_cmd1(migration_set_cmds, "migration set ", name);
 }
