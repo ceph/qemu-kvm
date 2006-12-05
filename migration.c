@@ -60,6 +60,10 @@ static migration_state_t ms = {
 static const char *reader_default_addr="localhost:4455";
 static const char *writer_default_addr="localhost:4456";
 
+/* forward declarations */
+static void migration_start_dst(int online);
+
+
 static const char *mig_stat_str(migration_status_t mig_stat)
 {
     struct {
@@ -226,12 +230,7 @@ static int migration_write_into_socket(void *opaque, int len)
 
 static void migration_start_now(void *opaque)
 {
-    migration_state_t *pms = (migration_state_t *)opaque;
-#ifdef USE_NONBLOCKING_SOCKETS
-    qemu_set_fd_handler(pms->fd, NULL, NULL, NULL);
-    socket_set_block(pms->fd); /* read as fast as you can */
-#endif
-    do_migration_start("offline");
+    migration_start_dst(0);
 }
 
 static void migration_accept(void *opaque)
@@ -280,8 +279,6 @@ void do_migration_listen(char *arg1, char *arg2)
         term_printf("Already listening or connection established\n");
         return;
     }
-
-    ms.role = READER;
 
     if (parse_host_port_and_message(&local,  arg1, reader_default_addr, "migration listen"))
         return;
@@ -461,12 +458,7 @@ static void migration_connect_check(void *opaque)
     }
 
 #ifdef USE_NONBLOCKING_SOCKETS
-#if 0 /* currently force migration start command from connector */
     qemu_set_fd_handler(pms->fd, migration_start_now, NULL, pms);
-#else
-    qemu_set_fd_handler(pms->fd, NULL, NULL, NULL);
-    socket_set_block(pms->fd); /* read as fast as you can */
-#endif
 #endif
 }
 
@@ -545,6 +537,12 @@ static void migration_start_common(int online,
         }
         return;
     }
+
+#ifdef USE_NONBLOCKING_SOCKETS
+    qemu_set_fd_handler(pms->fd, NULL, NULL, NULL);
+    socket_set_block(pms->fd); /* read as fast as you can */
+#endif
+
     pms->status = MIG_STAT_START;
     start_time = qemu_get_clock(rt_clock);
     term_printf("\nstarting migration (at %" PRIx64 ")\n", start_time);
@@ -569,28 +567,22 @@ static void migration_start_common(int online,
 
 static void migration_start_src(int online)
 {
+    ms.role = WRITER;
+
     migration_start_common(online, qemu_savevm, 0);
 }
 
 static void migration_start_dst(int online)
 {
+    ms.role = READER;
+
     migration_start_common(online, qemu_loadvm, 1);
 }
 
 void do_migration_getfd(int fd) { TO_BE_IMPLEMENTED; }
 void do_migration_start(char *deadoralive)
 { 
-    switch (ms.role) {
-    case WRITER:
-        migration_start_src(0);
-        break;
-    case READER:
-        migration_start_dst(0);
-        break;
-    default:
-        term_printf("ERROR: unexpected role=%d\n", ms.role);
-        break;
-    }
+    migration_start_src(0);
 }
 
 void do_migration_cancel(void)
