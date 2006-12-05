@@ -592,7 +592,8 @@ void do_migration_cancel(void)
 void do_migration_status(void){ 
     term_printf("migration status: %s\n", mig_stat_str(ms.status));
 }
-void do_migration_set(char *fmt, ...){ TO_BE_IMPLEMENTED; }
+void do_migration_set_rate(int min, int max, int offline) { TO_BE_IMPLEMENTED; }
+void do_migration_set_total_time(int seconds) { TO_BE_IMPLEMENTED; }
 void do_migration_show(void){ TO_BE_IMPLEMENTED; }
 
 
@@ -698,7 +699,8 @@ void do_migration_getfd(int fd) { TO_BE_IMPLEMENTED; }
 void do_migration_start(char *deadoralive) { TO_BE_IMPLEMENTED; }
 void do_migration_cancel(void){ TO_BE_IMPLEMENTED; }
 void do_migration_status(void){ TO_BE_IMPLEMENTED; }
-void do_migration_set(char *fmt, ...){ TO_BE_IMPLEMENTED; }
+void do_migration_set_rate(int min, int max, int offline) { TO_BE_IMPLEMENTED; }
+void do_migration_set_total_time(int seconds) { TO_BE_IMPLEMENTED; }
 void do_migration_show(void){ TO_BE_IMPLEMENTED; }
 
 #endif /* of CONFIG_USER_ONLY is defined */

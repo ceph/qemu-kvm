@@ -60,6 +60,7 @@ static CharDriverState *monitor_hd;
 static term_cmd_t term_cmds[];
 static term_cmd_t info_cmds[];
 static term_cmd_t migration_cmds[];
+static term_cmd_t migration_set_cmds[];
 
 static char term_outbuf[1024];
 static int term_outbuf_index;
@@ -1167,6 +1168,16 @@ static void do_migration_help(char *name)
     help_cmd1(migration_cmds, "migration ", name);
 }
 
+static void do_migration_set(const char *subcmdline)
+{
+    monitor_handle_command(migration_set_cmds, subcmdline);
+}
+
+static void do_migration_set_help(char *name)
+{
+    help_cmd1(migration_set_cmds, "migration set ", name);
+}
+
 #ifdef HAS_AUDIO
 int wav_start_capture (CaptureState *s, const char *path, int freq,
                        int bits, int nchannels);
@@ -1323,6 +1334,13 @@ static term_cmd_t migration_cmds[] = {
     { "show",   "",  do_migration_show, "", "show migration parameters"},
     { "help",   "s?",  do_migration_help, "[subcommand]", "show help message"},
     { NULL, NULL, },
+};
+
+static term_cmd_t migration_set_cmds[] = {
+    { "rate", "iii", do_migration_set_rate, "min max offline", "bandwidth params" },
+    { "total_time", "i", do_migration_set_total_time, "seconds", "max migration time"},
+    { "help",  "s?", do_migration_set_help, "[subcommand]", "show help message"},
+    { NULL, NULL, }
 };
 
 /*******************************************************************/
