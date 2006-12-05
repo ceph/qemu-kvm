@@ -228,6 +228,7 @@ static void migration_start_now(void *opaque)
 {
     migration_state_t *pms = (migration_state_t *)opaque;
 #ifdef USE_NONBLOCKING_SOCKETS
+    qemu_set_fd_handler(pms->fd, NULL, NULL, NULL);
     socket_set_block(pms->fd); /* read as fast as you can */
 #endif
     do_migration_start("offline");
@@ -513,6 +514,12 @@ void do_migration_connect(char *arg1, char *arg2)
     migration_connect_check(&ms);
 }
 
+static void migration_disconnect(void *opaque)
+{
+    migration_state_t *pms = (migration_state_t*)opaque;
+    migration_cleanup(pms, pms->status);
+}
+
 static void migration_start_common(int online,
                                    int (*migrate)(const char*, QEMUFile*),
                                    int cont_on_success)
@@ -553,9 +560,11 @@ static void migration_start_common(int online,
             pms->status = MIG_STAT_FAIL;
     if (((pms->status == MIG_STAT_SUCC) && cont_on_success) ||
         ((pms->status != MIG_STAT_SUCC) && !cont_on_success)) {
-        //migration_cleanup(&ms); /* FIXME: causing segfault */
+        migration_cleanup(pms, pms->status);
         vm_start();
     }
+    else
+        qemu_set_fd_handler(pms->fd, migration_disconnect, NULL, pms);
 }
 
 static void migration_start_src(int online)
