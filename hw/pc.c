@@ -43,7 +43,8 @@ extern int kvm_allowed;
 static fdctrl_t *floppy_controller;
 static RTCState *rtc_state;
 static PITState *pit;
-static IOAPICState *ioapic;
+
+IOAPICState *ioapic;
 
 static void ioport80_write(void *opaque, uint32_t addr, uint32_t data)
 {
