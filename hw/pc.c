@@ -853,6 +853,10 @@ static void pc_init1(int ram_size, int vga_ram_size, int boot_device,
         }
     }
 
+#define USE_HYPERCALL
+#ifdef USE_HYPERCALL
+    pci_hypercall_init(pci_bus);
+#endif
     if (pci_enabled) {
         pci_piix3_ide_init(pci_bus, bs_table, piix3_devfn + 1);
     } else {
