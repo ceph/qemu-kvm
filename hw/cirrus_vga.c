@@ -2541,9 +2541,6 @@ static void *set_vram_mapping(unsigned long begin, unsigned long end)
 {
     void *vram_pointer = NULL;
 
-    printf("set_vram_mapping: memory: %lx - %lx\n",
-	   begin, end);
-
     /* align begin and end address */
     begin = begin & TARGET_PAGE_MASK;
     end = begin + VGA_RAM_SIZE;
@@ -2559,7 +2556,6 @@ static void *set_vram_mapping(unsigned long begin, unsigned long end)
 
     memset(vram_pointer, 0, end - begin);
 
-    printf("set_vram_mapping: return %p\n", vram_pointer);
     return vram_pointer;
 }
 

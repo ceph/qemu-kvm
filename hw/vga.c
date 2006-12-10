@@ -1917,7 +1917,6 @@ void *vga_update_vram(VGAState *s, void *vga_ram_base, int vga_ram_size)
 {
     uint8_t *old_pointer;
 
-    printf("vga_update_vram: base %p ptr %p\n", vga_ram_base, s->vram_ptr);
     if (s->vram_size != vga_ram_size) {
         fprintf(stderr, "No support to change vga_ram_size\n");
         return NULL;
@@ -1936,7 +1935,6 @@ void *vga_update_vram(VGAState *s, void *vga_ram_base, int vga_ram_size)
     old_pointer = s->vram_ptr;
     s->vram_ptr = vga_ram_base;
 
-    printf("vga_update_vram: done\n");
     return old_pointer;
 }
 

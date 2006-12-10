@@ -793,7 +793,7 @@ static int phys_addr_width(void)
 static int check_canonical(struct kvm_vcpu *vcpu, const char *name,
 			   unsigned long reg)
 {
-#ifdef __x86_64__
+#ifdef CONFIG_X86_64
 	unsigned long x;
 
 	if (sizeof(reg) == 4)
@@ -874,7 +874,7 @@ int vm_entry_test_host(struct kvm_vcpu *vcpu)
 	r &= check_selector(vcpu, "host tr", 1, 1,
 			    vmcs_read16(HOST_TR_SELECTOR));
 
-#ifdef __x86_64__
+#ifdef CONFIG_X86_64
 	r &= check_canonical(vcpu, "host fs base",
 			     vmcs_readl(HOST_FS_BASE));
 	r &= check_canonical(vcpu, "host gs base",
@@ -886,7 +886,7 @@ int vm_entry_test_host(struct kvm_vcpu *vcpu)
 #endif
 
 	/* 22.2.4 */
-#ifdef __x86_64__
+#ifdef CONFIG_X86_64
 	if (!host_64) {
 		vcpu_printf(vcpu, "%s: vm exit controls: !64 bit host\n",
 			    __FUNCTION__);
