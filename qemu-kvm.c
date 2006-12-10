@@ -73,6 +73,55 @@ static int get_msr_entry(struct kvm_msr_entry *entry, CPUState *env)
 #define MSR_COUNT 5
 #endif
 
+static void set_v8086_seg(struct kvm_segment *lhs, const SegmentCache *rhs)
+{
+    lhs->selector = rhs->selector;
+    lhs->base = rhs->base;
+    lhs->limit = rhs->limit;
+    lhs->type = 3;
+    lhs->present = 1;
+    lhs->dpl = 3;
+    lhs->db = 0;
+    lhs->s = 1;
+    lhs->l = 0;
+    lhs->g = 0;
+    lhs->avl = 0;
+    lhs->unusable = 0;
+}
+
+static void set_seg(struct kvm_segment *lhs, const SegmentCache *rhs)
+{
+    unsigned flags = rhs->flags;
+    lhs->selector = rhs->selector;
+    lhs->base = rhs->base;
+    lhs->limit = rhs->limit;
+    lhs->type = (flags >> DESC_TYPE_SHIFT) & 15;
+    lhs->present = (flags & DESC_P_MASK) != 0;
+    lhs->dpl = rhs->selector & 3;
+    lhs->db = (flags >> DESC_B_SHIFT) & 1;
+    lhs->s = (flags & DESC_S_MASK) != 0;
+    lhs->l = (flags >> DESC_L_SHIFT) & 1;
+    lhs->g = (flags & DESC_G_MASK) != 0;
+    lhs->avl = (flags & DESC_AVL_MASK) != 0;
+    lhs->unusable = 0;
+}
+
+static void get_seg(SegmentCache *lhs, const struct kvm_segment *rhs)
+{
+    lhs->selector = rhs->selector;
+    lhs->base = rhs->base;
+    lhs->limit = rhs->limit;
+    lhs->flags =
+	(rhs->type << DESC_TYPE_SHIFT)
+	| (rhs->present * DESC_P_MASK)
+	| (rhs->dpl << DESC_DPL_SHIFT)
+	| (rhs->db << DESC_B_SHIFT)
+	| (rhs->s * DESC_S_MASK)
+	| (rhs->l << DESC_L_SHIFT)
+	| (rhs->g * DESC_G_MASK)
+	| (rhs->avl * DESC_AVL_MASK);
+}
+
 static void load_regs(CPUState *env)
 {
     struct kvm_regs regs;
@@ -110,55 +159,20 @@ static void load_regs(CPUState *env)
 
     memcpy(sregs.interrupt_bitmap, env->kvm_interrupt_bitmap, sizeof(sregs.interrupt_bitmap));
 
-#define set_seg(var, seg)	\
-  do {				    \
-    unsigned flags = env->seg.flags; \
-    sregs.var.selector = env->seg.selector; \
-    sregs.var.base = env->seg.base; \
-    sregs.var.limit = env->seg.limit; \
-    sregs.var.type = (flags >> DESC_TYPE_SHIFT) & 15 ; \
-    sregs.var.present = (flags & DESC_P_MASK) != 0; \
-    sregs.var.dpl = env->seg.selector & 3; \
-    sregs.var.db = (flags >> DESC_B_SHIFT) & 1; \
-    sregs.var.s = (flags & DESC_S_MASK) != 0 ;   \
-    sregs.var.l = (flags >> DESC_L_SHIFT) & 1;    \
-    sregs.var.g = (flags & DESC_G_MASK) != 0;      \
-    sregs.var.avl = (flags & DESC_AVL_MASK) != 0; \
-    sregs.var.unusable = 0; \
-  } while (0)
-
-
-#define set_v8086_seg(var, seg) \
-  do { \
-    sregs.var.selector = env->seg.selector; \
-    sregs.var.base = env->seg.base; \
-    sregs.var.limit = env->seg.limit; \
-    sregs.var.type = 3; \
-    sregs.var.present = 1; \
-    sregs.var.dpl = 3; \
-    sregs.var.db = 0; \
-    sregs.var.s = 1; \
-    sregs.var.l = 0; \
-    sregs.var.g = 0; \
-    sregs.var.avl = 0; \
-    sregs.var.unusable = 0; \
-  } while (0)
-
-
     if ((env->eflags & VM_MASK)) {
-	    set_v8086_seg(cs, segs[R_CS]);
-	    set_v8086_seg(ds, segs[R_DS]);
-	    set_v8086_seg(es, segs[R_ES]);
-	    set_v8086_seg(fs, segs[R_FS]);
-	    set_v8086_seg(gs, segs[R_GS]);
-	    set_v8086_seg(ss, segs[R_SS]);
+	    set_v8086_seg(&sregs.cs, &env->segs[R_CS]);
+	    set_v8086_seg(&sregs.ds, &env->segs[R_DS]);
+	    set_v8086_seg(&sregs.es, &env->segs[R_ES]);
+	    set_v8086_seg(&sregs.fs, &env->segs[R_FS]);
+	    set_v8086_seg(&sregs.gs, &env->segs[R_GS]);
+	    set_v8086_seg(&sregs.ss, &env->segs[R_SS]);
     } else {
-	    set_seg(cs, segs[R_CS]);
-	    set_seg(ds, segs[R_DS]);
-	    set_seg(es, segs[R_ES]);
-	    set_seg(fs, segs[R_FS]);
-	    set_seg(gs, segs[R_GS]);
-	    set_seg(ss, segs[R_SS]);
+	    set_seg(&sregs.cs, &env->segs[R_CS]);
+	    set_seg(&sregs.ds, &env->segs[R_DS]);
+	    set_seg(&sregs.es, &env->segs[R_ES]);
+	    set_seg(&sregs.fs, &env->segs[R_FS]);
+	    set_seg(&sregs.gs, &env->segs[R_GS]);
+	    set_seg(&sregs.ss, &env->segs[R_SS]);
 
 	    if (env->cr[0] & CR0_PE_MASK) {
 		/* force ss cpl to cs cpl */
@@ -168,8 +182,8 @@ static void load_regs(CPUState *env)
 	    }
     }
 
-    set_seg(tr, tr);
-    set_seg(ldt, ldt);
+    set_seg(&sregs.tr, &env->tr);
+    set_seg(&sregs.ldt, &env->ldt);
 
     sregs.idt.limit = env->idt.limit;
     sregs.idt.base = env->idt.base;
@@ -240,29 +254,15 @@ static void save_regs(CPUState *env)
 
     memcpy(env->kvm_interrupt_bitmap, sregs.interrupt_bitmap, sizeof(env->kvm_interrupt_bitmap));
 
-#define get_seg(var, seg) \
-    env->seg.selector = sregs.var.selector; \
-    env->seg.base = sregs.var.base; \
-    env->seg.limit = sregs.var.limit ; \
-    env->seg.flags = \
-	(sregs.var.type << DESC_TYPE_SHIFT) \
-	| (sregs.var.present * DESC_P_MASK) \
-	| (sregs.var.dpl << DESC_DPL_SHIFT) \
-	| (sregs.var.db << DESC_B_SHIFT) \
-	| (sregs.var.s * DESC_S_MASK) \
-	| (sregs.var.l << DESC_L_SHIFT) \
-	| (sregs.var.g * DESC_G_MASK) \
-	| (sregs.var.avl * DESC_AVL_MASK)
-    
-    get_seg(cs, segs[R_CS]);
-    get_seg(ds, segs[R_DS]);
-    get_seg(es, segs[R_ES]);
-    get_seg(fs, segs[R_FS]);
-    get_seg(gs, segs[R_GS]);
-    get_seg(ss, segs[R_SS]);
+    get_seg(&env->segs[R_CS], &sregs.cs);
+    get_seg(&env->segs[R_DS], &sregs.ds);
+    get_seg(&env->segs[R_ES], &sregs.es);
+    get_seg(&env->segs[R_FS], &sregs.fs);
+    get_seg(&env->segs[R_GS], &sregs.gs);
+    get_seg(&env->segs[R_SS], &sregs.ss);
 
-    get_seg(tr, tr);
-    get_seg(ldt, ldt);
+    get_seg(&env->tr, &sregs.tr);
+    get_seg(&env->ldt, &sregs.ldt);
     
     env->idt.limit = sregs.idt.limit;
     env->idt.base = sregs.idt.base;
