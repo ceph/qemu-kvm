@@ -24,8 +24,8 @@
         </p>
 
         <p>
-           The kernel component of KVM is proposed for inclusion into
-           mainline Linux.
+           The kernel component of KVM is included in mainline Linux, and
+           will appear in Linux 2.6.20.
         </p>
 
         <p>
