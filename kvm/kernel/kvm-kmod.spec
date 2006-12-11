@@ -26,8 +26,8 @@ rm -rf %{buildroot}
 
 %define moddir /lib/modules/%{kverrel}/extra
 mkdir -p %{buildroot}/%{moddir}
-cp %{objdir}/%{kmod_name}.ko %{buildroot}/%{moddir}
-chmod u+x %{buildroot}/%{moddir}/%{kmod_name}.ko
+cp %{objdir}/%{kmod_name}.ko %{objdir}/%{kmod_name}-intel.ko %{objdir}/%{kmod_name}-amd.ko %{buildroot}/%{moddir}
+chmod u+x %{buildroot}/%{moddir}/%{kmod_name}*.ko
 
 %post 
 
@@ -41,6 +41,8 @@ depmod %{kverrel}
 
 %files
 %{moddir}/%{kmod_name}.ko
+%{moddir}/%{kmod_name}-amd.ko
+%{moddir}/%{kmod_name}-intel.ko
 
 
 %changelog

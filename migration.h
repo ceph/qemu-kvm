@@ -8,7 +8,8 @@ void do_migration_getfd(int fd);
 void do_migration_start(char *deadoralive);
 void do_migration_cancel(void);
 void do_migration_status(void);
-void do_migration_set(char *fmt, ...);
+void do_migration_set_rate(int min, int max, int offline);
+void do_migration_set_total_time(int seconds);
 void do_migration_show(void);
 
 #endif /* QEMU_MIGRATION_H */

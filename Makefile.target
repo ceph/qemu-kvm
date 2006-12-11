@@ -342,6 +342,9 @@ VL_OBJS+= usb.o usb-hub.o usb-linux.o usb-hid.o usb-ohci.o usb-msd.o
 # PCI network cards
 VL_OBJS+= ne2000.o rtl8139.o pcnet.o
 
+# PCI Hypercall
+VL_OBJS+= hypercall.o
+
 ifeq ($(TARGET_BASE_ARCH), i386)
 # Hardware support
 VL_OBJS+= ide.o pckbd.o ps2.o vga.o $(SOUND_HW) dma.o $(AUDIODRV)

@@ -60,6 +60,7 @@ static CharDriverState *monitor_hd;
 static term_cmd_t term_cmds[];
 static term_cmd_t info_cmds[];
 static term_cmd_t migration_cmds[];
+static term_cmd_t migration_set_cmds[];
 
 static char term_outbuf[1024];
 static int term_outbuf_index;
@@ -1159,12 +1160,26 @@ static void do_stop_capture (int n)
 
 static void do_migration(const char *subcmdline)
 {
+    if (subcmdline[0] == '\0')
+        subcmdline = "help";
     monitor_handle_command(migration_cmds, subcmdline);
 }
 
-static void do_migration_help(char *name)
+static void do_migration_help(const char *name)
 {
     help_cmd1(migration_cmds, "migration ", name);
+}
+
+static void do_migration_set(const char *subcmdline)
+{
+    if (subcmdline[0] == '\0')
+        subcmdline = "help";
+    monitor_handle_command(migration_set_cmds, subcmdline);
+}
+
+static void do_migration_set_help(const char *name)
+{
+    help_cmd1(migration_set_cmds, "migration set ", name);
 }
 
 #ifdef HAS_AUDIO
@@ -1323,6 +1338,13 @@ static term_cmd_t migration_cmds[] = {
     { "show",   "",  do_migration_show, "", "show migration parameters"},
     { "help",   "s?",  do_migration_help, "[subcommand]", "show help message"},
     { NULL, NULL, },
+};
+
+static term_cmd_t migration_set_cmds[] = {
+    { "rate", "iii", do_migration_set_rate, "min max offline", "bandwidth params" },
+    { "total_time", "i", do_migration_set_total_time, "seconds", "max migration time"},
+    { "help",  "s?", do_migration_set_help, "[subcommand]", "show help message"},
+    { NULL, NULL, }
 };
 
 /*******************************************************************/
@@ -2417,6 +2439,7 @@ void readline_find_completion(const char *cmdline)
             bdrv_iterate(block_completion_it, (void *)str);
             break;
         case 's':
+        case 'A':
             /* XXX: more generic ? */
             if (!strcmp(cmd->name, "info")) {
                 completion_index = strlen(str);
@@ -2427,6 +2450,11 @@ void readline_find_completion(const char *cmdline)
                 completion_index = strlen(str);
                 for(key = key_defs; key->name != NULL; key++) {
                     cmd_completion(str, key->name);
+                }
+            } else if (!strcmp(cmd->name, "migration")) {
+                completion_index = strlen(str);
+                for(cmd = migration_cmds; cmd->name != NULL; cmd++) {
+                    cmd_completion(str, cmd->name);
                 }
             }
             break;

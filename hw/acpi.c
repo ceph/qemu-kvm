@@ -34,7 +34,8 @@ typedef struct PIIX4PMState {
     uint16_t pmen;
     uint16_t pmcntrl;
     QEMUTimer *tmr_timer;
-    int64_t tmr_overflow_time;
+    int64_t pmtmr;
+    int active_timer;
 } PIIX4PMState;
 
 #define RTC_EN (1 << 10)
@@ -46,50 +47,71 @@ typedef struct PIIX4PMState {
 
 #define SUS_EN (1 << 13)
 
+#define SCI_IRQ 9
+
 /* Note: only used for ACPI bios init. Could be deleted when ACPI init
    is integrated in Bochs BIOS */
 static PIIX4PMState *piix4_pm_state;
 
+extern IOAPICState *ioapic;
+
+
+static void update_pmtmr(PIIX4PMState *s)
+{
+    struct timespec ts;
+    int64_t val;
+
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+
+    val = ts.tv_sec;
+    val *= 1000000000;
+    val += ts.tv_nsec;
+    val *= PM_FREQ;
+    val /= 1000000000;
+
+    if (!(s->pmsts & TMROF_EN)) {
+	if ((val & 0x00800000) != (s->pmtmr & 0x00800000)) {
+	    s->pmsts |= TMROF_EN;
+	    if (s->pmen & TMROF_EN) {
+                ioapic_set_irq(ioapic, SCI_IRQ, 1);
+	    }
+	} else if (!s->active_timer) {
+	    uint64_t delta = 0x00800000 - (val & 0x007fffff);
+	    delta /= (PM_FREQ / 1000);
+	    s->active_timer = 1;
+	    qemu_mod_timer(s->tmr_timer, qemu_get_clock(rt_clock) + delta + 1);
+	}
+    }
+    s->pmtmr = val;
+}
+
 static uint32_t get_pmtmr(PIIX4PMState *s)
 {
-    uint32_t d;
-    d = muldiv64(qemu_get_clock(vm_clock), PM_FREQ, ticks_per_sec);
-    return d & 0xffffff;
+    update_pmtmr(s);
+    return s->pmtmr & 0xffffff;
 }
 
 static int get_pmsts(PIIX4PMState *s)
 {
-    int64_t d;
-    int pmsts;
-    pmsts = s->pmsts;
-    d = muldiv64(qemu_get_clock(vm_clock), PM_FREQ, ticks_per_sec);
-    if (d >= s->tmr_overflow_time)
-        s->pmsts |= TMROF_EN;
-    return pmsts;
+    return s->pmsts;
 }
+
 
 static void pm_update_sci(PIIX4PMState *s)
 {
-    int sci_level, pmsts;
-    int64_t expire_time;
-    
-    pmsts = get_pmsts(s);
-    sci_level = (((pmsts & s->pmen) & 
+    int sci_level;
+    sci_level = (((s->pmsts & s->pmen) & 
                   (RTC_EN | PWRBTN_EN | GBL_EN | TMROF_EN)) != 0);
-    pci_set_irq(&s->dev, 0, sci_level);
-    /* schedule a timer interruption if needed */
-    if ((s->pmen & TMROF_EN) && !(pmsts & TMROF_EN)) {
-        expire_time = muldiv64(s->tmr_overflow_time, ticks_per_sec, PM_FREQ);
-        qemu_mod_timer(s->tmr_timer, expire_time);
-    } else {
-        qemu_del_timer(s->tmr_timer);
+    if (!sci_level) {
+	    ioapic_set_irq(ioapic, SCI_IRQ, 0);
     }
 }
 
 static void pm_tmr_timer(void *opaque)
 {
     PIIX4PMState *s = opaque;
-    pm_update_sci(s);
+    s->active_timer = 0;
+    update_pmtmr(s);
 }
 
 static void pm_ioport_writew(void *opaque, uint32_t addr, uint32_t val)
@@ -98,18 +120,9 @@ static void pm_ioport_writew(void *opaque, uint32_t addr, uint32_t val)
     addr &= 0x3f;
     switch(addr) {
     case 0x00:
-        {
-            int64_t d;
-            int pmsts;
-            pmsts = get_pmsts(s);
-            if (pmsts & val & TMROF_EN) {
-                /* if TMRSTS is reset, then compute the new overflow time */
-                d = muldiv64(qemu_get_clock(vm_clock), PM_FREQ, ticks_per_sec);
-                s->tmr_overflow_time = (d + 0x800000LL) & ~0x7fffffLL;
-            }
-            s->pmsts &= ~val;
-            pm_update_sci(s);
-        }
+        s->pmsts &= ~val;
+	update_pmtmr(s);
+	pm_update_sci(s);
         break;
     case 0x02:
         s->pmen = val;
@@ -259,7 +272,7 @@ void piix4_pm_init(PCIBus *bus, int devfn)
     pci_conf[0x67] = (serial_hds[0] != NULL ? 0x08 : 0) |
 	(serial_hds[1] != NULL ? 0x90 : 0);
 
-    s->tmr_timer = qemu_new_timer(vm_clock, pm_tmr_timer, s);
+    s->tmr_timer = qemu_new_timer(rt_clock, pm_tmr_timer, s);
     piix4_pm_state = s;
 }
 
@@ -559,7 +572,7 @@ void acpi_bios_init(void)
     fadt->dsdt = cpu_to_le32(dsdt_addr);
     fadt->model = 1;
     fadt->reserved1 = 0;
-    fadt->sci_int = cpu_to_le16(piix4_pm_state->dev.config[0x3c]);
+    fadt->sci_int = cpu_to_le16(SCI_IRQ);
     fadt->smi_cmd = cpu_to_le32(SMI_CMD_IO_ADDR);
     fadt->acpi_enable = 0xf1;
     fadt->acpi_disable = 0xf0;
