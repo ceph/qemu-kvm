@@ -59,7 +59,13 @@ optparser.add_option('--loadvm',
                      default = '',
                      )
 
-(options, args) = optparser.parse_args(sys.argv)
+(options, args) = optparser.parse_args()
+
+if len(args) > 0:
+    options.image = args[0]
+
+if len(args) > 1:
+    options.cdrom = args[1]
 
 def remove_module(module):
     module = module.replace('-', '_')
