@@ -379,7 +379,7 @@ static inline void push_interrupts(CPUState *env)
 
         // for now using cpu 0
 	kvm_inject_irq(kvm_context, 0, cpu_get_pic_interrupt(env)); 
-    } while ( (env->interrupt_request & CPU_INTERRUPT_HARD) && (env->cr[2] & CR0_PG_MASK) );
+    } while ( (env->interrupt_request & CPU_INTERRUPT_HARD) && (env->cr[0] & CR0_PG_MASK) );
 }
 
 void kvm_load_registers(CPUState *env)
