@@ -84,6 +84,7 @@ depmod %{kverrel}
 depmod %{kverrel}
 
 %clean
+%{__rm} -rf %{buildroot}
 
 %files
 /usr/bin/kvm

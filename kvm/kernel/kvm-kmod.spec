@@ -38,6 +38,7 @@ depmod %{kverrel}
 depmod %{kverrel}
 
 %clean
+%{__rm} -rf %{buildroot}
 
 %files
 %{moddir}/%{kmod_name}.ko
