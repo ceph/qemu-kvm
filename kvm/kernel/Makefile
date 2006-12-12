@@ -11,6 +11,7 @@ all::
 	$(MAKE) -C $(KERNELDIR) M=`pwd` "$$@"
 
 install:
+	mkdir -p $(DESTDIR)/$(INSTALLDIR)
 	cp *.ko $(DESTDIR)/$(INSTALLDIR)
 	depmod -a
 
