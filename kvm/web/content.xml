@@ -424,7 +424,23 @@ svn ls svn://kvm.qumranet.com/kvm/branches
               </li>
           </ul>
         </p>
-        
+
+       <p>
+         The following smaller scale tasks can be a nice entry point
+         to someone wishing to get involved:
+
+         <ul>
+            <li>
+               Enforce the virtual time stamp counter monotonicity even when
+               a vcpu is migrated to another physical cpu.
+            </li>
+            <li>
+               Consolidate the msr code where the handling is common to
+               intel and amd.
+            </li>
+         </ul>
+        </p>
+
      </cms:content>
 
   </cms:page>
