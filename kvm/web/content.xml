@@ -605,15 +605,12 @@ svn ls svn://kvm.qumranet.com/kvm/branches
           kvm to fix the problem.
        </p>
        <p>
-          Until then, the following work around is suggested:
+          Until then, start qemu with the <code>-noapic</code> option.
+          If you have a guest that uses the APIC HAL, the following workaround
+          is suggested:
           <ol>
-	      <li>
-                 Install the guest using Qemu only (without the KVM module:
-                 use the <code>-no-kvm</code> option).
-              </li>
               <li>
-                 After installation, run Windows the first time and make sure
-                 the APIC HAL is not used:
+                 Run the guest without kvm (<code>-no-kvm</code>)
                  <br/>
                  My Computer -> Properties -> Hardware -> Device Manager 
                  -> [Whatever under Computer] -> Properties -> Update Driver
