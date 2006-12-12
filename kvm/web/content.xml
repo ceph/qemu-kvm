@@ -92,7 +92,8 @@
           You will need (see download section):
           <ul>
              <li><code>kvm-<i>release</i>.tar.gz</code></li>
-             <li>A VT capable Intel processor</li>
+             <li>A VT capable Intel processor, or an SVM capable AMD 
+                 processor</li>
              <li>qemu prerequisites:
                 <ul>
                    <li><code>gcc</code> 3.x</li>
@@ -164,6 +165,8 @@ sudo /usr/local/kvm/bin/qemu-system-x86_64 \
 </pre>
              (use <code>qemu</code> instead of <code>qemu-system-x86_64</code>
               for i386)
+             <br/>
+              If you're installing Windows, add the <code>-no-acpi</code> flag.
              </li>
 
              <li>
@@ -223,6 +226,8 @@ sudo qemu-kvm-x86_64 \
  -boot d \
  -m 384
 </pre>
+             <br/>
+              If you're installing Windows, add the <code>-no-acpi</code> flag.
              </li>
 
              <li>
@@ -292,6 +297,8 @@ sudo kvm \
  -boot d \
  -m 384
 </pre>
+             <br/>
+              If you're installing Windows, add the <code>-no-acpi</code> flag.
              </li>
 
              <li>
