@@ -48,6 +48,11 @@ while [[ "$1" = -* ]]; do
     esac
 done
 
+if [[ -z "$qemu_cc" ]]; then
+    echo "$0: cannot locate gcc 3.x. please install it or specify with --qemu-cc"
+    exit 1
+fi
+
 libkvm_kerneldir="$kerneldir"
 if (( want_module )); then
     libkvm_kerneldir=$(readlink -f kernel)
