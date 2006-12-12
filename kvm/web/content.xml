@@ -62,6 +62,7 @@
              <li>Linux guests (32-bit and 64-bit)</li>
              <li>Windows guests (32-bit)</li>
              <li>SMP hosts</li>
+             <li>Non-live migration of guests from one machine to another</li>
          </ul>
        </p>
 
@@ -69,6 +70,7 @@
           In progress:
           <ul>
              <li>Optimized MMU virtualization</li>
+             <li>Live migration</li>
           </ul>
        </p>
 
@@ -597,6 +599,18 @@ svn ls svn://kvm.qumranet.com/kvm/branches
        <p>
           We have tested Linux (32/64 bit) and Windows (32 bit).  Others may
           or may not work.
+       </p>
+
+       <hr/>   
+
+       <p class="q">
+          Does kvm support a live migration feature to move virtual machines
+          from one host to another without downtime?
+       </p>
+       <p>
+          kvm today supports non-live migration, where there is a pause
+          while memory content is transferred.  Pauseless live migration
+          is work in progress.
        </p>
 
        <hr/>   
