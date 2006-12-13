@@ -603,6 +603,12 @@ svn ls svn://kvm.qumranet.com/kvm/branches
        <p>
           We have tested Linux (32/64 bit) and Windows (32 bit).  Others may
           or may not work.
+          <br/>
+          64-bit Windows is known not to work.  This will be fixed once
+          qemu-0.8.3 is released and merged.
+          <br/>
+          Several Linux flavors are known to hang on Intel processors during
+          startup.  Workaround is to disable splashscreens in grub.
        </p>
 
        <hr/>   
