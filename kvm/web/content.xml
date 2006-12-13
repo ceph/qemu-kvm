@@ -616,6 +616,17 @@ svn ls svn://kvm.qumranet.com/kvm/branches
        <hr/>   
 
        <p class="q">
+          Can kvm run a 32-bit guest on a 64-bit host?  What about PAE?
+       </p>
+       <p>
+          kvm supports 32-bit hosts on 64-bit guests, and any combination of
+          PAE and non-PAE guests and hosts.  The only unsupported combination
+          is a 64-bit guest on a 32-bit host.
+       </p>
+
+       <hr/>   
+
+       <p class="q">
           What happens if I kill -9 a VM process?
        </p>
        <p>
