@@ -447,6 +447,10 @@ svn ls svn://kvm.qumranet.com/kvm/branches
                Consolidate the msr code where the handling is common to
                intel and amd.
             </li>
+            <li>
+               Avoid saving/loading the floating point unit state on
+               each vm entry/exit.
+            </li>
          </ul>
         </p>
 
