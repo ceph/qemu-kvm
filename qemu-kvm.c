@@ -16,6 +16,8 @@ extern void perror(const char *s);
 
 int kvm_allowed = 1;
 kvm_context_t kvm_context;
+static struct kvm_msr_list *kvm_msr_list;
+static int kvm_has_msr_star;
 
 #define NR_CPU 16
 static CPUState *saved_env[NR_CPU];
@@ -127,7 +129,7 @@ static void load_regs(CPUState *env)
     struct kvm_regs regs;
     struct kvm_sregs sregs;
     struct kvm_msr_entry msrs[MSR_COUNT];
-    int rc;
+    int rc, n;
 
     /* hack: save env */
     if (!saved_env[0])
@@ -201,19 +203,21 @@ static void load_regs(CPUState *env)
     kvm_set_sregs(kvm_context, 0, &sregs);
 
     /* msrs */
-    set_msr_entry(&msrs[0], MSR_IA32_SYSENTER_CS,  env->sysenter_cs);
-    set_msr_entry(&msrs[1], MSR_IA32_SYSENTER_ESP, env->sysenter_esp);
-    set_msr_entry(&msrs[2], MSR_IA32_SYSENTER_EIP, env->sysenter_eip);
-    set_msr_entry(&msrs[3], MSR_STAR,              env->star);
-    set_msr_entry(&msrs[4], MSR_IA32_TSC, env->tsc);
+    n = 0;
+    set_msr_entry(&msrs[n++], MSR_IA32_SYSENTER_CS,  env->sysenter_cs);
+    set_msr_entry(&msrs[n++], MSR_IA32_SYSENTER_ESP, env->sysenter_esp);
+    set_msr_entry(&msrs[n++], MSR_IA32_SYSENTER_EIP, env->sysenter_eip);
+    if (kvm_has_msr_star)
+	set_msr_entry(&msrs[n++], MSR_STAR,              env->star);
+    set_msr_entry(&msrs[n++], MSR_IA32_TSC, env->tsc);
 #ifdef TARGET_X86_64
-    set_msr_entry(&msrs[5], MSR_CSTAR,             env->cstar);
-    set_msr_entry(&msrs[6], MSR_KERNELGSBASE,      env->kernelgsbase);
-    set_msr_entry(&msrs[7], MSR_FMASK,             env->fmask);
-    set_msr_entry(&msrs[8], MSR_LSTAR  ,           env->lstar);
+    set_msr_entry(&msrs[n++], MSR_CSTAR,             env->cstar);
+    set_msr_entry(&msrs[n++], MSR_KERNELGSBASE,      env->kernelgsbase);
+    set_msr_entry(&msrs[n++], MSR_FMASK,             env->fmask);
+    set_msr_entry(&msrs[n++], MSR_LSTAR  ,           env->lstar);
 #endif
 
-    rc = kvm_set_msrs(kvm_context, 0, msrs, MSR_COUNT);
+    rc = kvm_set_msrs(kvm_context, 0, msrs, n);
     if (rc == -1)
         perror("kvm_set_msrs FAILED");
 }
@@ -326,18 +330,20 @@ static void save_regs(CPUState *env)
     tlb_flush(env, 1);
 
     /* msrs */    
-    msrs[0].index = MSR_IA32_SYSENTER_CS;
-    msrs[1].index = MSR_IA32_SYSENTER_ESP;
-    msrs[2].index = MSR_IA32_SYSENTER_EIP;
-    msrs[3].index = MSR_STAR;
-    msrs[4].index = MSR_IA32_TSC;
+    n = 0;
+    msrs[n++].index = MSR_IA32_SYSENTER_CS;
+    msrs[n++].index = MSR_IA32_SYSENTER_ESP;
+    msrs[n++].index = MSR_IA32_SYSENTER_EIP;
+    if (kvm_has_msr_star)
+	msrs[n++].index = MSR_STAR;
+    msrs[n++].index = MSR_IA32_TSC;
 #ifdef TARGET_X86_64
-    msrs[5].index = MSR_CSTAR;
-    msrs[6].index = MSR_KERNELGSBASE;
-    msrs[7].index = MSR_FMASK;
-    msrs[8].index = MSR_LSTAR;
+    msrs[n++].index = MSR_CSTAR;
+    msrs[n++].index = MSR_KERNELGSBASE;
+    msrs[n++].index = MSR_FMASK;
+    msrs[n++].index = MSR_LSTAR;
 #endif
-    rc = kvm_get_msrs(kvm_context, 0, msrs, MSR_COUNT);
+    rc = kvm_get_msrs(kvm_context, 0, msrs, n);
     if (rc == -1) {
         perror("kvm_get_msrs FAILED");
     }
@@ -597,11 +603,20 @@ int kvm_qemu_init()
 
 int kvm_qemu_create_context(void)
 {
+    int i;
+
     if (kvm_create(kvm_context, phys_ram_size, (void**)&phys_ram_base) < 0) {
 	kvm_qemu_destroy();
 	return -1;
     }
-
+    kvm_msr_list = kvm_get_msr_list(kvm_context);
+    if (!kvm_msr_list) {
+	kvm_qemu_destroy();
+	return -1;
+    }
+    for (i = 0; i < kvm_msr_list->nmsrs; ++i)
+	if (kvm_msr_list->indices[i] == MSR_STAR)
+	    kvm_has_msr_star = 1;
     return 0;
 }
 
