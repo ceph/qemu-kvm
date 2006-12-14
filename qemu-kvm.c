@@ -408,6 +408,7 @@ static int kvm_cpuid(void *opaque, uint64_t *rax, uint64_t *rbx,
 {
     CPUState **envs = opaque;
     CPUState *saved_env;
+    uint32_t eax = *rax;
 
     saved_env = env;
     env = envs[0];
@@ -421,6 +422,27 @@ static int kvm_cpuid(void *opaque, uint64_t *rax, uint64_t *rbx,
     *rcx = env->regs[R_ECX];
     *rbx = env->regs[R_EBX];
     *rax = env->regs[R_EAX];
+    // don't report long mode/syscall if no native support
+    if (eax == 0x80000001) {
+	unsigned long h_eax = eax, h_edx;
+
+
+	// push/pop hack to workaround gcc 3 register pressure trouble
+	asm (
+#ifdef __x86_64__
+	     "push %%rbx; push %%rcx; cpuid; pop %%rcx; pop %%rbx"
+#else
+	     "push %%ebx; push %%ecx; cpuid; pop %%ecx; pop %%ebx"
+#endif
+	     : "+a"(h_eax), "=d"(h_edx));
+
+	// long mode
+	if ((h_edx & 0x20000000) == 0)
+	    *rdx &= ~0x20000000ull;
+	// syscall
+	if ((h_edx & 0x00000800) == 0)
+	    *rdx &= ~0x00000800ull;
+    }
     env = saved_env;
     return 0;
 }
