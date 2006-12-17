@@ -663,7 +663,7 @@ svn ls svn://kvm.qumranet.com/kvm/branches
           kvm to fix the problem.
        </p>
        <p>
-          Until then, start qemu with the <code>-noapic</code> option.
+          Until then, start qemu with the <code>-noacpi</code> option.
           If you have a guest that uses the APIC HAL, the following workaround
           is suggested:
           <ol>
@@ -674,7 +674,7 @@ svn ls svn://kvm.qumranet.com/kvm/branches
                  -> [Whatever under Computer] -> Properties -> Update Driver
                  ->  Not at this time -> Next -> Install from a list -> Next
                 -> Don't search -> Next -> Standard PC -> Next.
-                <br/> "Standard PC" is the noapic HAL.
+                <br/> "Standard PC" is the noacpi HAL.
               </li>
           </ol>
        </p>
