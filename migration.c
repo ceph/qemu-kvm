@@ -69,6 +69,7 @@ static const char *writer_default_addr="localhost:4456";
 
 /* forward declarations */
 static void migration_start_dst(int online);
+static void migration_cleanup(migration_state_t *pms, migration_status_t stat);
 
 
 static const char *mig_stat_str(migration_status_t mig_stat)
@@ -143,7 +144,8 @@ static int parse_host_port_and_message(struct sockaddr_in *saddr,
     if (!arg)
         arg = default_addr;
     if (parse_host_port(saddr, arg) < 0) {
-        term_printf("%s: invalid argument '%s'", name, arg);
+        term_printf("%s: invalid argument '%s'\n", name, arg);
+        migration_cleanup(&ms, MIG_STAT_FAIL);
         return -1;
     }
     return 0;
@@ -157,8 +159,8 @@ static void migration_cleanup(migration_state_t *pms, migration_status_t stat)
 #endif
         close(pms->fd);
         pms->fd = FD_UNUSED;
-        pms->status = stat;
     }
+    pms->status = stat;
 }
 
 static int migration_read_from_socket(void *opaque)
@@ -181,6 +183,7 @@ static int migration_read_from_socket(void *opaque)
             if (socket_error() == EINTR)
                 continue;
             term_printf("migration_read_from_socket: read failed (%s)\n", strerror(errno) );
+            migration_cleanup(pms, MIG_STAT_FAIL);
             return size;
         }
         if (size == 0) {
@@ -220,6 +223,7 @@ static int migration_write_into_socket(void *opaque, int len)
                 continue;
             term_printf("migration_write_into_socket: write failed (%s)\n", 
                         strerror(socket_error()) );
+            migration_cleanup(pms, MIG_STAT_FAIL);
             return size;
         }
         if (size == 0) {
@@ -254,6 +258,7 @@ static void migration_accept(void *opaque)
         if (new_fd < 0 && errno != EINTR) {
             term_printf("migration listen: accept failed (%s)\n",
                         strerror(errno));
+            migration_cleanup(pms, MIG_STAT_FAIL);
             return;
         } else if (new_fd >= 0) {
             break;
@@ -298,6 +303,7 @@ void do_migration_listen(char *arg1, char *arg2)
     if (ms.fd < 0) {
         term_printf("migration listen: socket() failed (%s)\n",
                     strerror(errno));
+        migration_cleanup(&ms, MIG_STAT_FAIL);
         return;
     }
 
@@ -306,13 +312,13 @@ void do_migration_listen(char *arg1, char *arg2)
     setsockopt(ms.fd, SOL_SOCKET, SO_REUSEADDR, (const char *)&val, sizeof(val));
     
     if (bind(ms.fd, &local, sizeof local) < 0 ) {
-        migration_cleanup(&ms, MIG_STAT_NONE);
+        migration_cleanup(&ms, MIG_STAT_FAIL);
         term_printf("migration listen: bind() failed (%s)\n", strerror(errno));
         return;
     }
     
     if (listen(ms.fd, 1) < 0) { /* allow only one connection */
-        migration_cleanup(&ms, MIG_STAT_NONE);
+        migration_cleanup(&ms, MIG_STAT_FAIL);
         term_printf("migration listen: listen() failed (%s)\n", strerror(errno));
         return;
     }
@@ -454,7 +460,7 @@ static void migration_connect_check(void *opaque)
     rc = getsockopt(pms->fd, SOL_SOCKET, SO_ERROR, (void *)&err, &len);
     if (rc != 0) {
         term_printf("migration connect: getsockopt FAILED (%s)\n", strerror(errno));
-        migration_cleanup(pms, MIG_STAT_NONE);
+        migration_cleanup(pms, MIG_STAT_FAIL);
         return;
     }
     if (err == 0) {
@@ -463,6 +469,7 @@ static void migration_connect_check(void *opaque)
     }
     else {
         term_printf("migration connect: failed to conenct (%s)\n", strerror(err));
+        migration_cleanup(pms, MIG_STAT_FAIL);
         return;
     }
 
@@ -493,6 +500,7 @@ void do_migration_connect(char *arg1, char *arg2)
     if (ms.fd < 0) {
         term_printf("migration connect: socket() failed (%s)\n",
                     strerror(errno));
+        migration_cleanup(&ms, MIG_STAT_FAIL);
         return;
     }
 
@@ -507,7 +515,7 @@ void do_migration_connect(char *arg1, char *arg2)
         if (errno != EINPROGRESS) {
             term_printf("migration connect: connect() failed (%s)\n",
                         strerror(errno));
-            migration_cleanup(&ms, MIG_STAT_NONE);
+            migration_cleanup(&ms, MIG_STAT_FAIL);
         }
         return;
     }
