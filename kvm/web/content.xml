@@ -499,8 +499,20 @@ svn ls svn://kvm.qumranet.com/kvm/branches
           model name (in <code>/proc/cpuinfo</code>) in the vendor's web site.
        </p>
        <p>
-          Note that some manufacturers disable VT in the machine's BIOS, in
-          such a way that it cannot be re-enabled.
+          Note:
+          <ul>
+             <li>
+                 Some manufacturers disable VT in the machine's BIOS, in
+                 such a way that it cannot be re-enabled.
+             </li>
+             <li>
+                 <code>/proc/cpuinfo</code> only shows virtualization
+                 capabilities starting with Linux 2.6.15 (Intel) and
+                 Linux 2.6.16 (AMD).  Use the <code>uname -r</code> command
+                 to query your kernel version.
+             </li>
+          </ul>
+          In case of doubt, contact your hardware vendor.
        </p>
 
        <hr/>
