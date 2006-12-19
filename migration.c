@@ -28,11 +28,12 @@ typedef enum {
 
 typedef enum {
     MIG_STAT_NONE   = 0, /* disconnected */
-    MIG_STAT_CONN   = 1, /* connection established */
-    MIG_STAT_START  = 2, /* migration started */
-    MIG_STAT_SUCC   = 3, /* migration completed successfully */
-    MIG_STAT_FAIL   = 4, /* migration failed */
-    MIG_STAT_CANCEL = 5  /* migration canceled */
+    MIG_STAT_LISTEN = 1, /* listening, waiting for the other to connect */
+    MIG_STAT_CONN   = 2, /* connection established */
+    MIG_STAT_START  = 3, /* migration started */
+    MIG_STAT_SUCC   = 4, /* migration completed successfully */
+    MIG_STAT_FAIL   = 5, /* migration failed */
+    MIG_STAT_CANCEL = 6  /* migration canceled */
 } migration_status_t;
 
 typedef struct migration_bandwith_params {
@@ -76,9 +77,10 @@ static const char *mig_stat_str(migration_status_t mig_stat)
         migration_status_t stat;
         const char *str;
     } stat_strs[] = {    
-        {MIG_STAT_NONE,  "disconnected"},
-        {MIG_STAT_CONN,  "connected"},
-        {MIG_STAT_START, "migration stared"},
+        {MIG_STAT_NONE,   "disconnected"},
+        {MIG_STAT_LISTEN, "listening"},
+        {MIG_STAT_CONN,   "connected"},
+        {MIG_STAT_START,  "migration stared"},
         {MIG_STAT_SUCC,   "migration completed successfully"},
         {MIG_STAT_FAIL,   "migration failed"},
         {MIG_STAT_CANCEL, "migration canceled"}
@@ -315,6 +317,7 @@ void do_migration_listen(char *arg1, char *arg2)
         return;
     }
 
+    ms.status = MIG_STAT_LISTEN;
     term_printf("migration listen: listening on fd %d\n", ms.fd);
 
 #ifdef USE_NONBLOCKING_SOCKETS
