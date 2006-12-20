@@ -343,6 +343,23 @@ sudo kvm \
          </ul>
        </p>
 
+       <p>
+         Commits to the kvm subversion <a href="code.html">repository</a>
+         go to the kvm-commits mailing list.
+       </p>
+
+       <p>
+          To subscribe, click <a href=
+          "http://lists.sourceforge.net/mailman/listinfo/kvm-commits">here</a>.
+       </p>
+
+       <p>
+         Archives:
+         <ul>
+           <li><a href="http://sourceforge.net/mailarchive/forum.php?forum_id=51197">Sourceforge</a></li>
+         </ul>
+       </p>
+
        <h2>IRC</h2>
 
        <p>
