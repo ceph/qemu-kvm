@@ -23,6 +23,12 @@
 #include <errno.h>
 #include "kvmctl.h"
 
+#define EXPECTED_KVM_API_VERSION 1
+
+#if EXPECTED_KVM_API_VERSION != KVM_API_VERSION
+#error libkvm: userspace and kernel version mismatch
+#endif
+
 #define PAGE_SIZE 4096ul
 
 struct kvm_context {
@@ -74,17 +80,34 @@ kvm_context_t kvm_init(struct kvm_callbacks *callbacks,
 {
 	int fd;
 	kvm_context_t kvm;
+	int r;
 
 	fd = open("/dev/kvm", O_RDWR);
 	if (fd == -1) {
-		perror("open");
+		perror("open /dev/kvm");
 		return NULL;
+	}
+	r = ioctl(fd, KVM_GET_API_VERSION, 0);
+	if (r == -1) {
+	    fprintf(stderr, "kvm kernel version too old\n");
+	    goto out_close;
+	}
+	if (r < EXPECTED_KVM_API_VERSION) {
+	    fprintf(stderr, "kvm kernel version too old\n");
+	    goto out_close;
+	}
+	if (r > EXPECTED_KVM_API_VERSION) {
+	    fprintf(stderr, "kvm userspace version too old\n");
+	    goto out_close;
 	}
 	kvm = malloc(sizeof(*kvm));
 	kvm->fd = fd;
 	kvm->callbacks = callbacks;
 	kvm->opaque = opaque;
 	return kvm;
+ out_close:
+	close(fd);
+	return NULL;
 }
 
 void kvm_finalize(kvm_context_t kvm)
