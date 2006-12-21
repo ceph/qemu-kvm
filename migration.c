@@ -28,11 +28,12 @@ typedef enum {
 
 typedef enum {
     MIG_STAT_NONE   = 0, /* disconnected */
-    MIG_STAT_CONN   = 1, /* connection established */
-    MIG_STAT_START  = 2, /* migration started */
-    MIG_STAT_SUCC   = 3, /* migration completed successfully */
-    MIG_STAT_FAIL   = 4, /* migration failed */
-    MIG_STAT_CANCEL = 5  /* migration canceled */
+    MIG_STAT_LISTEN = 1, /* listening, waiting for the other to connect */
+    MIG_STAT_CONN   = 2, /* connection established */
+    MIG_STAT_START  = 3, /* migration started */
+    MIG_STAT_SUCC   = 4, /* migration completed successfully */
+    MIG_STAT_FAIL   = 5, /* migration failed */
+    MIG_STAT_CANCEL = 6  /* migration canceled */
 } migration_status_t;
 
 typedef struct migration_bandwith_params {
@@ -68,6 +69,7 @@ static const char *writer_default_addr="localhost:4456";
 
 /* forward declarations */
 static void migration_start_dst(int online);
+static void migration_cleanup(migration_state_t *pms, migration_status_t stat);
 
 
 static const char *mig_stat_str(migration_status_t mig_stat)
@@ -76,9 +78,10 @@ static const char *mig_stat_str(migration_status_t mig_stat)
         migration_status_t stat;
         const char *str;
     } stat_strs[] = {    
-        {MIG_STAT_NONE,  "disconnected"},
-        {MIG_STAT_CONN,  "connected"},
-        {MIG_STAT_START, "migration stared"},
+        {MIG_STAT_NONE,   "disconnected"},
+        {MIG_STAT_LISTEN, "listening"},
+        {MIG_STAT_CONN,   "connected"},
+        {MIG_STAT_START,  "migration stared"},
         {MIG_STAT_SUCC,   "migration completed successfully"},
         {MIG_STAT_FAIL,   "migration failed"},
         {MIG_STAT_CANCEL, "migration canceled"}
@@ -141,7 +144,8 @@ static int parse_host_port_and_message(struct sockaddr_in *saddr,
     if (!arg)
         arg = default_addr;
     if (parse_host_port(saddr, arg) < 0) {
-        term_printf("%s: invalid argument '%s'", name, arg);
+        term_printf("%s: invalid argument '%s'\n", name, arg);
+        migration_cleanup(&ms, MIG_STAT_FAIL);
         return -1;
     }
     return 0;
@@ -155,8 +159,8 @@ static void migration_cleanup(migration_state_t *pms, migration_status_t stat)
 #endif
         close(pms->fd);
         pms->fd = FD_UNUSED;
-        pms->status = stat;
     }
+    pms->status = stat;
 }
 
 static int migration_read_from_socket(void *opaque)
@@ -179,6 +183,7 @@ static int migration_read_from_socket(void *opaque)
             if (socket_error() == EINTR)
                 continue;
             term_printf("migration_read_from_socket: read failed (%s)\n", strerror(errno) );
+            migration_cleanup(pms, MIG_STAT_FAIL);
             return size;
         }
         if (size == 0) {
@@ -218,6 +223,7 @@ static int migration_write_into_socket(void *opaque, int len)
                 continue;
             term_printf("migration_write_into_socket: write failed (%s)\n", 
                         strerror(socket_error()) );
+            migration_cleanup(pms, MIG_STAT_FAIL);
             return size;
         }
         if (size == 0) {
@@ -252,6 +258,7 @@ static void migration_accept(void *opaque)
         if (new_fd < 0 && errno != EINTR) {
             term_printf("migration listen: accept failed (%s)\n",
                         strerror(errno));
+            migration_cleanup(pms, MIG_STAT_FAIL);
             return;
         } else if (new_fd >= 0) {
             break;
@@ -296,6 +303,7 @@ void do_migration_listen(char *arg1, char *arg2)
     if (ms.fd < 0) {
         term_printf("migration listen: socket() failed (%s)\n",
                     strerror(errno));
+        migration_cleanup(&ms, MIG_STAT_FAIL);
         return;
     }
 
@@ -304,17 +312,18 @@ void do_migration_listen(char *arg1, char *arg2)
     setsockopt(ms.fd, SOL_SOCKET, SO_REUSEADDR, (const char *)&val, sizeof(val));
     
     if (bind(ms.fd, &local, sizeof local) < 0 ) {
-        migration_cleanup(&ms, MIG_STAT_NONE);
+        migration_cleanup(&ms, MIG_STAT_FAIL);
         term_printf("migration listen: bind() failed (%s)\n", strerror(errno));
         return;
     }
     
     if (listen(ms.fd, 1) < 0) { /* allow only one connection */
-        migration_cleanup(&ms, MIG_STAT_NONE);
+        migration_cleanup(&ms, MIG_STAT_FAIL);
         term_printf("migration listen: listen() failed (%s)\n", strerror(errno));
         return;
     }
 
+    ms.status = MIG_STAT_LISTEN;
     term_printf("migration listen: listening on fd %d\n", ms.fd);
 
 #ifdef USE_NONBLOCKING_SOCKETS
@@ -451,7 +460,7 @@ static void migration_connect_check(void *opaque)
     rc = getsockopt(pms->fd, SOL_SOCKET, SO_ERROR, (void *)&err, &len);
     if (rc != 0) {
         term_printf("migration connect: getsockopt FAILED (%s)\n", strerror(errno));
-        migration_cleanup(pms, MIG_STAT_NONE);
+        migration_cleanup(pms, MIG_STAT_FAIL);
         return;
     }
     if (err == 0) {
@@ -460,6 +469,7 @@ static void migration_connect_check(void *opaque)
     }
     else {
         term_printf("migration connect: failed to conenct (%s)\n", strerror(err));
+        migration_cleanup(pms, MIG_STAT_FAIL);
         return;
     }
 
@@ -490,6 +500,7 @@ void do_migration_connect(char *arg1, char *arg2)
     if (ms.fd < 0) {
         term_printf("migration connect: socket() failed (%s)\n",
                     strerror(errno));
+        migration_cleanup(&ms, MIG_STAT_FAIL);
         return;
     }
 
@@ -504,7 +515,7 @@ void do_migration_connect(char *arg1, char *arg2)
         if (errno != EINPROGRESS) {
             term_printf("migration connect: connect() failed (%s)\n",
                         strerror(errno));
-            migration_cleanup(&ms, MIG_STAT_NONE);
+            migration_cleanup(&ms, MIG_STAT_FAIL);
         }
         return;
     }
