@@ -1434,7 +1434,7 @@ static u32 msrs_to_save[] = {
 	MSR_IA32_TIME_STAMP_COUNTER,
 };
 
-static unsigned num_msrs_to_save = 0;
+static unsigned num_msrs_to_save;
 
 static __init void kvm_init_msr_list(void)
 {
