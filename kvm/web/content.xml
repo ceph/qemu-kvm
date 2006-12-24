@@ -319,6 +319,89 @@ sudo kvm \
 
   </cms:page>
 
+  <cms:page name="migration">
+
+     <cms:title>KVM: migrating a VM</cms:title>
+     <cms:menuitem>Migration</cms:menuitem>
+
+     <cms:content>
+
+      <p>
+         KVM currently supports savevm/loadvm and offline migration<br/>
+         We're working on support for Live Migration<br/>
+         Migration commands are given when in qemu-monitor (Alt-Ctrl-2).<br/>
+         Upon successful completion, the migrated VM continues to run on 
+         the destination host.
+      </p>
+
+      <ul>
+        <li> Interface:
+          <ul>
+            <li> Connection Establishment <pre>
+migration listen  [local_host:port [remote_host:port]] -- listen on a port
+migration connect [local_host:port [remote_host:port]] -- connect to a port
+migration getfd fd (socket) -- get established connection (not implemented yet)
+</pre>
+            </li>
+            <li>Management <pre>
+migration start online/offline
+migration cancel
+</pre>
+            Once started, offline migration can not be canceled.
+            </li>
+            <li>Status <pre>
+migration status
+</pre>
+            </li>
+            <li>Migration Parameters (not implemented yet)<pre>
+migration set rate min max offline -- set bandwidth control parameters (min, max, offline)
+migration set total_time seconds -- set migration total_time (seconds)
+migration show -- show migration parameters
+</pre>
+            </li>
+            <li>Help<pre>
+migration help
+</pre>
+            </li>
+          </ul>
+        </li> 
+        <li> Example/HowTo:<br/>
+        A is the source host, B is the destination host:
+          <ol>
+            <li>Start the VM on B with the exact same parameters as the VM on A, in stopped mode (-S)
+            </li>
+            <li>Establish Connection (either A or B can listen/connect): <pre>
+B: migration listen  BIP:port  [AIP:port] (e.g. migration listen 0:4444)
+A: migration connect AIP:port   BIP:port  (e.g. migration connect 0:4445 192.168.1.15:4444)
+</pre>
+            </li>
+            <li>Start the migration (always on the source host): <pre>
+A: migration start offline
+</pre>
+            </li>
+            <li>Check the status (on either host): <pre>
+migration status
+</pre>
+            </li>
+          </ol>
+        </li>
+        <li>Problems/Todo:
+          <ul>
+            <li>Send Gratuitous ARP (or a different packet) when successful migration completes.</li>
+            <li>usbdevice tablet does not work after savevm/loadvm/migration (with vnc).</li>
+            <li>handle migration completion better (especially when network problems occur).</li>
+            <li>Online Migration.</li>
+            <li>Finish Interface implementation.</li>
+            <li>Migration does not work while CPU real-mode/protected mode are still changing.</li>
+            <li>Windows guest takes its time before answering a ping after a successful migration.</li>
+          </ul>
+        </li>
+      </ul>
+       
+     </cms:content>
+
+  </cms:page>
+
   <cms:page name="lists">
      <cms:menuitem>Lists, IRC</cms:menuitem>
      <cms:title>Mailing Lists</cms:title>
