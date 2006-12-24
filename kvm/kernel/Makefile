@@ -13,7 +13,7 @@ all::
 install:
 	mkdir -p $(DESTDIR)/$(INSTALLDIR)
 	cp *.ko $(DESTDIR)/$(INSTALLDIR)
-	depmod -a
+	/sbin/depmod -a
 
 tmpspec = .tmp.kvm-kmod.spec
 RPMDIR = $$(pwd)/../RPMS
