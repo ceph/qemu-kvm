@@ -692,7 +692,7 @@ svn ls svn://kvm.qumranet.com/kvm/branches
           kvm to fix the problem.
        </p>
        <p>
-          Until then, start qemu with the <code>-noacpi</code> option.
+          Until then, start qemu with the <code>-no-acpi</code> option.
           If you have a guest that uses the APIC HAL, the following workaround
           is suggested:
           <ol>
