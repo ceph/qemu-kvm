@@ -1259,21 +1259,34 @@ static void kvm_do_inject_irq(struct kvm_vcpu *vcpu)
 			irq | INTR_TYPE_EXT_INTR | INTR_INFO_VALID_MASK);
 }
 
-static void kvm_try_inject_irq(struct kvm_vcpu *vcpu)
+
+static void do_interrupt_requests(struct kvm_vcpu *vcpu,
+				       struct kvm_run *kvm_run)
 {
-	if ((vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_IF)
-	    && (vmcs_read32(GUEST_INTERRUPTIBILITY_INFO) & 3) == 0)
+	u32 cpu_based_vm_exec_control;
+
+	vcpu->interrupt_window_open =
+		((vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_IF) &&
+		 (vmcs_read32(GUEST_INTERRUPTIBILITY_INFO) & 3) == 0);
+
+	if (vcpu->interrupt_window_open &&
+	    vcpu->irq_summary &&
+	    !(vmcs_read32(VM_ENTRY_INTR_INFO_FIELD) & INTR_INFO_VALID_MASK))
 		/*
-		 * Interrupts enabled, and not blocked by sti or mov ss. Good.
+		 * If interrupts enabled, and not blocked by sti or mov ss. Good.
 		 */
 		kvm_do_inject_irq(vcpu);
-	else
+
+	cpu_based_vm_exec_control = vmcs_read32(CPU_BASED_VM_EXEC_CONTROL);
+	if (!vcpu->interrupt_window_open &&
+	    (vcpu->irq_summary || kvm_run->request_interrupt_window))
 		/*
 		 * Interrupts blocked.  Wait for unblock.
 		 */
-		vmcs_write32(CPU_BASED_VM_EXEC_CONTROL,
-			     vmcs_read32(CPU_BASED_VM_EXEC_CONTROL)
-			     | CPU_BASED_VIRTUAL_INTR_PENDING);
+		cpu_based_vm_exec_control |= CPU_BASED_VIRTUAL_INTR_PENDING;
+	else
+		cpu_based_vm_exec_control &= ~CPU_BASED_VIRTUAL_INTR_PENDING;
+	vmcs_write32(CPU_BASED_VM_EXEC_CONTROL, cpu_based_vm_exec_control);
 }
 
 static void kvm_guest_debug_pre(struct kvm_vcpu *vcpu)
@@ -1610,13 +1623,28 @@ static int handle_wrmsr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	return 1;
 }
 
+static void post_kvm_run_save(struct kvm_vcpu *vcpu,
+			      struct kvm_run *kvm_run)
+{
+	kvm_run->if_flag = (vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_IF) != 0;
+	kvm_run->tpr = vcpu->cr8;
+	kvm_run->apic_base = vcpu->apic_base;
+	kvm_run->ready_for_interrupt_injection = (vcpu->interrupt_window_open &&
+						  vcpu->irq_summary == 0);
+}
+
 static int handle_interrupt_window(struct kvm_vcpu *vcpu,
 				   struct kvm_run *kvm_run)
 {
-	/* Turn off interrupt window reporting. */
-	vmcs_write32(CPU_BASED_VM_EXEC_CONTROL,
-		     vmcs_read32(CPU_BASED_VM_EXEC_CONTROL)
-		     & ~CPU_BASED_VIRTUAL_INTR_PENDING);
+	/* If the user space waits to inject interrupts, exit as soon as
+	 * possible
+	 */
+	if (kvm_run->request_interrupt_window &&
+	    !vcpu->irq_summary &&
+	    (vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_IF)) {
+		kvm_run->exit_type = KVM_EXIT_INTERRUPT_WINDOW_OPEN;
+		return 0;
+	}
 	return 1;
 }
 
@@ -1677,6 +1705,20 @@ static int kvm_handle_exit(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 	return 0;
 }
 
+/*
+ * Go back to qemu for interactive response-
+ * qemu requested to inject interrupt before and now is
+ * the time to do it
+ */
+static int request_for_qemu_irq_injection(struct kvm_vcpu *vcpu,
+					  struct kvm_run *kvm_run)
+{
+	return (!vcpu->irq_summary &&
+		kvm_run->request_interrupt_window &&
+		vcpu->interrupt_window_open &&
+		(vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_IF));
+}
+
 static int vmx_vcpu_run(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 {
 	u8 fail;
@@ -1708,9 +1750,7 @@ again:
 	vmcs_writel(HOST_GS_BASE, segment_base(gs_sel));
 #endif
 
-	if (vcpu->irq_summary &&
-	    !(vmcs_read32(VM_ENTRY_INTR_INFO_FIELD) & INTR_INFO_VALID_MASK))
-		kvm_try_inject_irq(vcpu);
+	do_interrupt_requests(vcpu, kvm_run);
 
 	if (vcpu->guest_debug.enabled)
 		kvm_guest_debug_pre(vcpu);
@@ -1847,6 +1887,7 @@ again:
 
 	fx_save(vcpu->guest_fx_image);
 	fx_restore(vcpu->host_fx_image);
+	vcpu->interrupt_window_open = (vmcs_read32(GUEST_INTERRUPTIBILITY_INFO) & 3) == 0;
 
 #ifndef CONFIG_X86_64
 	asm ("mov %0, %%ds; mov %0, %%es" : : "r"(__USER_DS));
@@ -1879,12 +1920,21 @@ again:
 			/* Give scheduler a change to reschedule. */
 			if (signal_pending(current)) {
 				++kvm_stat.signal_exits;
+				post_kvm_run_save(vcpu, kvm_run);
 				return -EINTR;
 			}
+
+			if (request_for_qemu_irq_injection(vcpu, kvm_run)) {
+				post_kvm_run_save(vcpu, kvm_run);
+				return -EINTR;
+			}
+
 			kvm_resched(vcpu);
 			goto again;
 		}
 	}
+
+	post_kvm_run_save(vcpu, kvm_run);
 	return 0;
 }
 

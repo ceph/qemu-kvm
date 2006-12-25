@@ -34,8 +34,9 @@ struct kvm_memory_region {
 #define KVM_MEM_LOG_DIRTY_PAGES  1UL
 
 
-#define KVM_EXIT_TYPE_FAIL_ENTRY 1
-#define KVM_EXIT_TYPE_VM_EXIT    2
+#define KVM_EXIT_TYPE_FAIL_ENTRY	1
+#define KVM_EXIT_TYPE_VM_EXIT		2
+#define KVM_EXIT_INTERRUPT_WINDOW_OPEN	3
 
 enum kvm_exit_reason {
 	KVM_EXIT_UNKNOWN          = 0,
@@ -53,11 +54,17 @@ struct kvm_run {
 	__u32 vcpu;
 	__u32 emulated;  /* skip current instruction */
 	__u32 mmio_completed; /* mmio request completed */
+	__u8 request_interrupt_window;
 
 	/* out */
 	__u32 exit_type;
 	__u32 exit_reason;
 	__u32 instruction_length;
+	__u8 ready_for_interrupt_injection;
+	__u8 if_flag;
+	__u8 tpr;
+	__u64 apic_base;
+
 	union {
 		/* KVM_EXIT_UNKNOWN */
 		struct {

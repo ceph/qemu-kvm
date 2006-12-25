@@ -1639,12 +1639,12 @@ static long kvm_dev_ioctl(struct file *filp,
 		if (copy_from_user(&kvm_run, (void *)arg, sizeof kvm_run))
 			goto out;
 		r = kvm_dev_ioctl_run(kvm, &kvm_run);
-		if (r < 0)
+		if (r < 0 &&  r != -EINTR)
 			goto out;
-		r = -EFAULT;
-		if (copy_to_user((void *)arg, &kvm_run, sizeof kvm_run))
+		if (copy_to_user((void *)arg, &kvm_run, sizeof kvm_run)) {
+			r = -EFAULT;
 			goto out;
-		r = 0;
+		}
 		break;
 	}
 	case KVM_GET_REGS: {
