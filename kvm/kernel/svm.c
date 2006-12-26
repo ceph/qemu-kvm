@@ -235,6 +235,8 @@ static void skip_emulated_instruction(struct kvm_vcpu *vcpu)
 
 	vcpu->rip = vcpu->svm->vmcb->save.rip = vcpu->svm->next_rip;
 	vcpu->svm->vmcb->control.int_state &= ~SVM_INTERRUPT_SHADOW_MASK;
+
+	vcpu->interrupt_window_open = 1;
 }
 
 static int has_svm(void)
