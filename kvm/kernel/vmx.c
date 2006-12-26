@@ -264,6 +264,7 @@ static void skip_emulated_instruction(struct kvm_vcpu *vcpu)
 	if (interruptibility & 3)
 		vmcs_write32(GUEST_INTERRUPTIBILITY_INFO,
 			     interruptibility & ~3);
+	vcpu->interrupt_window_open = 1;
 }
 
 static void vmx_inject_gp(struct kvm_vcpu *vcpu, unsigned error_code)
@@ -1593,7 +1594,7 @@ static void post_kvm_run_save(struct kvm_vcpu *vcpu,
 			      struct kvm_run *kvm_run)
 {
 	kvm_run->if_flag = (vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_IF) != 0;
-	kvm_run->tpr = vcpu->cr8;
+	kvm_run->cr8 = vcpu->cr8;
 	kvm_run->apic_base = vcpu->apic_base;
 	kvm_run->ready_for_interrupt_injection = (vcpu->interrupt_window_open &&
 						  vcpu->irq_summary == 0);
@@ -1602,13 +1603,15 @@ static void post_kvm_run_save(struct kvm_vcpu *vcpu,
 static int handle_interrupt_window(struct kvm_vcpu *vcpu,
 				   struct kvm_run *kvm_run)
 {
-	/* If the user space waits to inject interrupts, exit as soon as
+	/*
+	 * If the user space waits to inject interrupts, exit as soon as
 	 * possible
 	 */
 	if (kvm_run->request_interrupt_window &&
 	    !vcpu->irq_summary &&
 	    (vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_IF)) {
-		kvm_run->exit_type = KVM_EXIT_INTERRUPT_WINDOW_OPEN;
+		kvm_run->exit_reason = KVM_EXIT_IRQ_WINDOW_OPEN;
+		++kvm_stat.irq_window_exits;
 		return 0;
 	}
 	return 1;
@@ -1617,10 +1620,11 @@ static int handle_interrupt_window(struct kvm_vcpu *vcpu,
 static int handle_halt(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 {
 	skip_emulated_instruction(vcpu);
-	if (vcpu->irq_summary && (vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_IF))
+	if (vcpu->irq_summary)
 		return 1;
 
 	kvm_run->exit_reason = KVM_EXIT_HLT;
+	++kvm_stat.halt_exits;
 	return 0;
 }
 
@@ -1672,11 +1676,11 @@ static int kvm_handle_exit(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 }
 
 /*
- * Go back to qemu for interactive response-
- * qemu requested to inject interrupt before and now is
+ * Go back to user space for interactive response-
+ * the device model requested to inject interrupt before and now is
  * the time to do it
  */
-static int request_for_qemu_irq_injection(struct kvm_vcpu *vcpu,
+static int dm_request_for_irq_injection(struct kvm_vcpu *vcpu,
 					  struct kvm_run *kvm_run)
 {
 	return (!vcpu->irq_summary &&
@@ -1890,7 +1894,8 @@ again:
 				return -EINTR;
 			}
 
-			if (request_for_qemu_irq_injection(vcpu, kvm_run)) {
+			if (dm_request_for_irq_injection(vcpu, kvm_run)) {
+				++kvm_stat.request_irq_exits;
 				post_kvm_run_save(vcpu, kvm_run);
 				return -EINTR;
 			}

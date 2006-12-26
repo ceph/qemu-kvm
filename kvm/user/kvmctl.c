@@ -23,7 +23,7 @@
 #include <errno.h>
 #include "kvmctl.h"
 
-#define EXPECTED_KVM_API_VERSION 1
+#define EXPECTED_KVM_API_VERSION 2
 
 #if EXPECTED_KVM_API_VERSION != KVM_API_VERSION
 #error libkvm: userspace and kernel version mismatch
@@ -522,26 +522,20 @@ static int handle_halt(kvm_context_t kvm, struct kvm_run *kvm_run)
 	return kvm->callbacks->halt(kvm->opaque, kvm_run->vcpu);
 }
 
-void push_interrupts(kvm_context_t kvm)
+int try_push_interrupts(kvm_context_t kvm)
 {
-	return kvm->callbacks->push_interrupts(kvm->opaque);
+	return kvm->callbacks->try_push_interrupts(kvm->opaque);
 }
 
-int ready_for_interrupt_injection(kvm_context_t kvm)
+static void post_kvm_run(kvm_context_t kvm, struct kvm_run *kvm_run)
 {
-	return kvm->callbacks->ready_for_interrupt_injection(kvm->opaque);
-}
-
-static void post_kvm_run_save(kvm_context_t kvm, struct kvm_run *kvm_run)
-{
-	kvm->callbacks->post_kvm_run_save(kvm->opaque, kvm_run);
+	kvm->callbacks->post_kvm_run(kvm->opaque, kvm_run);
 }
 
 int kvm_run(kvm_context_t kvm, int vcpu)
 {
 	int r;
 	int fd = kvm->fd;
-	int is_ready_for_interrupt_injection;
 	struct kvm_run kvm_run = {
 		.vcpu = vcpu,
 		.emulated = 0,
@@ -549,13 +543,9 @@ int kvm_run(kvm_context_t kvm, int vcpu)
 	};
 
 again:
-	is_ready_for_interrupt_injection = ready_for_interrupt_injection(kvm);
-	kvm_run.request_interrupt_window = !is_ready_for_interrupt_injection;
-	if (is_ready_for_interrupt_injection)
-		push_interrupts(kvm);
-
+	kvm_run.request_interrupt_window = try_push_interrupts(kvm);
 	r = ioctl(fd, KVM_RUN, &kvm_run);
-	post_kvm_run_save(kvm, &kvm_run);
+	post_kvm_run(kvm, &kvm_run);
 
 	kvm_run.emulated = 0;
 	kvm_run.mmio_completed = 0;
@@ -568,8 +558,6 @@ again:
 		goto more;
 	}
 	switch (kvm_run.exit_type) {
-	case KVM_EXIT_INTERRUPT_WINDOW_OPEN:
-		break;
 	case KVM_EXIT_TYPE_FAIL_ENTRY:
 		fprintf(stderr, "kvm_run: failed entry, reason %u\n", 
 			kvm_run.exit_reason & 0xffff);
@@ -603,6 +591,8 @@ again:
 			break;
 		case KVM_EXIT_HLT:
 			r = handle_halt(kvm, &kvm_run);
+			break;
+		case KVM_EXIT_IRQ_WINDOW_OPEN:
 			break;
 		default:
 			fprintf(stderr, "unhandled vm exit: 0x%x\n", kvm_run.exit_reason);

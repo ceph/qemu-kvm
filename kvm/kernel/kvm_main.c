@@ -62,6 +62,9 @@ static struct kvm_stats_debugfs_item {
 	{ "io_exits", &kvm_stat.io_exits },
 	{ "mmio_exits", &kvm_stat.mmio_exits },
 	{ "signal_exits", &kvm_stat.signal_exits },
+	{ "irq_window", &kvm_stat.irq_window_exits },
+	{ "halt_exits", &kvm_stat.halt_exits },
+	{ "request_irq", &kvm_stat.request_irq_exits },
 	{ "irq_exits", &kvm_stat.irq_exits },
 	{ 0, 0 }
 };

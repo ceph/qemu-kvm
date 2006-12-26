@@ -1031,10 +1031,11 @@ static int halt_interception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 {
 	vcpu->svm->next_rip = vcpu->svm->vmcb->save.rip + 1;
 	skip_emulated_instruction(vcpu);
-	if (vcpu->irq_summary && (vcpu->svm->vmcb->save.rflags & X86_EFLAGS_IF))
+	if (vcpu->irq_summary)
 		return 1;
 
 	kvm_run->exit_reason = KVM_EXIT_HLT;
+	++kvm_stat.halt_exits;
 	return 0;
 }
 
@@ -1189,13 +1190,15 @@ static int msr_interception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 static int interrupt_window_interception(struct kvm_vcpu *vcpu,
 				   struct kvm_run *kvm_run)
 {
-	/* If the user space waits to inject interrupts, exit as soon as
+	/*
+	 * If the user space waits to inject interrupts, exit as soon as
 	 * possible
 	 */
 	if (kvm_run->request_interrupt_window &&
 	    !vcpu->irq_summary &&
 	    (vcpu->svm->vmcb->save.rflags & X86_EFLAGS_IF)) {
-		kvm_run->exit_type = KVM_EXIT_INTERRUPT_WINDOW_OPEN;
+		++kvm_stat.irq_window_exits;
+		kvm_run->exit_reason = KVM_EXIT_IRQ_WINDOW_OPEN;
 		return 0;
 	}
 
@@ -1350,16 +1353,16 @@ static void post_kvm_run_save(struct kvm_vcpu *vcpu,
 	kvm_run->ready_for_interrupt_injection = (vcpu->interrupt_window_open &&
 						  vcpu->irq_summary == 0);
 	kvm_run->if_flag = (vcpu->svm->vmcb->save.rflags & X86_EFLAGS_IF) != 0;
-	kvm_run->tpr = vcpu->cr8;
+	kvm_run->cr8 = vcpu->cr8;
 	kvm_run->apic_base = vcpu->apic_base;
 }
 
 /*
- * Go back to qemu for interactive response-
- * qemu requested to inject interrupt before and now is
+ * Go back to user space for interactive response-
+ * the device model requested to inject interrupt before and now is
  * the time to do it
  */
-static int request_for_qemu_irq_injection(struct kvm_vcpu *vcpu,
+static int dm_request_for_irq_injection(struct kvm_vcpu *vcpu,
 					  struct kvm_run *kvm_run)
 {
 	return (!vcpu->irq_summary &&
@@ -1563,7 +1566,8 @@ again:
 			return -EINTR;
 		}
 
-		if (request_for_qemu_irq_injection(vcpu, kvm_run)) {
+		if (dm_request_for_irq_injection(vcpu, kvm_run)) {
+			++kvm_stat.request_irq_exits;
 			post_kvm_run_save(vcpu, kvm_run);
 			return -EINTR;
 		}

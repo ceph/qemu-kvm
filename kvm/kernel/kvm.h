@@ -248,6 +248,9 @@ struct kvm_stat {
 	u32 io_exits;
 	u32 mmio_exits;
 	u32 signal_exits;
+	u32 irq_window_exits;
+	u32 halt_exits;
+	u32 request_irq_exits;
 	u32 irq_exits;
 };
 
