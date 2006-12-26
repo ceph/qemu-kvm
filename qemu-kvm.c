@@ -440,7 +440,7 @@ static int kvm_cpuid(void *opaque, uint64_t *rax, uint64_t *rbx,
     *rcx = env->regs[R_ECX];
     *rbx = env->regs[R_EBX];
     *rax = env->regs[R_EAX];
-    // don't report long mode/syscall if no native support
+    // don't report long mode/syscall/nx if no native support
     if (eax == 0x80000001) {
 	unsigned long h_eax = eax, h_edx;
 
@@ -460,6 +460,9 @@ static int kvm_cpuid(void *opaque, uint64_t *rax, uint64_t *rbx,
 	// syscall
 	if ((h_edx & 0x00000800) == 0)
 	    *rdx &= ~0x00000800ull;
+	// nx
+	if ((h_edx & 0x00100000) == 0)
+	    *rdx &= ~0x00100000ull;
     }
     env = saved_env;
     return 0;
