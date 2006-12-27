@@ -50,6 +50,7 @@
 #ifndef __sun__
 #include <linux/if.h>
 #include <linux/if_tun.h>
+#include <linux/if_ether.h>
 #include <pty.h>
 #include <malloc.h>
 #include <linux/rtc.h>
@@ -3720,7 +3721,54 @@ void do_info_network(void)
             term_printf("  %s\n", vc->info_str);
     }
 }
- 
+
+#if defined(__linux__)
+#define SELF_ANNOUNCE_ROUNDS 5
+#define ETH_P_EXPERIMENTAL 0x01F1 /* just a number */
+//#define ETH_P_EXPERIMENTAL 0x0012 /* make it the size of the packet */
+#define EXPERIMENTAL_MAGIC 0xf1f23f4f
+int announce_self_create(unsigned char *buf, 
+                         unsigned char mac_addr[ETH_ALEN])
+{
+    struct ethhdr *eh = (struct ethhdr*)buf;
+    uint32_t *magic   = (uint32_t*)(eh+1);
+    unsigned char *p  = (unsigned char*)(magic + 1);
+
+    /* FIXME: should we send a different packet (arp/rarp/ping)? */
+    
+    /* ethernet header */
+    memset(eh->h_dest,   0xff,     ETH_ALEN);
+    memcpy(eh->h_source, mac_addr, ETH_ALEN);
+    eh->h_proto = htons(ETH_P_EXPERIMENTAL);
+
+    /* magic data */
+    *magic = EXPERIMENTAL_MAGIC;
+
+    return p - buf; /* sizeof(*eh) + sizeof(*magic) */
+}
+
+void qemu_tap_announce_self(void)
+{
+    int i, j, len;
+    VLANState *vlan;
+    VLANClientState *vc;
+    uint8_t buf[256];
+
+    for (i=0; i<nb_nics; i++) {     /* for all nics */
+        len = announce_self_create(buf, nd_table[i].macaddr);
+        vlan = nd_table[i].vlan;
+        for(vc = vlan->first_client; vc != NULL; vc = vc->next) {
+            if (vc->fd_read == tap_receive) { /* send only if tap */
+                for (j=0; j<SELF_ANNOUNCE_ROUNDS ; j++) {
+                    vc->fd_read(vc->opaque, buf, len);
+                }
+            }
+        } /* for vc -- look for tap_receive */
+    } /* for i -- all nics */
+}
+#else
+void qemu_tap_announce_self(void) {}
+#endif
 /***********************************************************/
 /* USB devices */
 
@@ -4406,6 +4454,7 @@ int qemu_loadvm(const char *filename, QEMUFile *f)
         qemu_fseek(f, cur_pos + record_len, SEEK_SET);
     }
     f->close(f);
+    qemu_tap_announce_self(); /* FIXME: should this move to vm_start? */
     ret = 0;
  the_end:
     if (saved_vm_running)
