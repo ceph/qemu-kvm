@@ -4491,7 +4491,8 @@ void cpu_save(QEMUFile *f, void *opaque)
     int i;
 
 #ifdef USE_KVM
-    kvm_save_registers(env);
+    if (kvm_allowed)
+        kvm_save_registers(env);
 #endif    
 
     for(i = 0; i < CPU_NB_REGS; i++)
