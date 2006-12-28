@@ -1034,6 +1034,7 @@ typedef struct ADBDevice ADBDevice;
 /* hypercall.c */
 
 void pci_hypercall_init(PCIBus *bus);
+void vmchannel_init(CharDriverState *hd);
 
 /* buf = NULL means polling */
 typedef int ADBDeviceRequest(ADBDevice *d, uint8_t *buf_out,

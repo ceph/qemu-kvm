@@ -5450,6 +5450,7 @@ enum {
     QEMU_OPTION_g,
     QEMU_OPTION_std_vga,
     QEMU_OPTION_monitor,
+    QEMU_OPTION_vmchannel,
     QEMU_OPTION_serial,
     QEMU_OPTION_parallel,
     QEMU_OPTION_loadvm,
@@ -5529,6 +5530,7 @@ const QEMUOption qemu_options[] = {
     { "localtime", 0, QEMU_OPTION_localtime },
     { "std-vga", 0, QEMU_OPTION_std_vga },
     { "monitor", 1, QEMU_OPTION_monitor },
+    { "vmchannel", 1, QEMU_OPTION_vmchannel },
     { "serial", 1, QEMU_OPTION_serial },
     { "parallel", 1, QEMU_OPTION_parallel },
     { "loadvm", HAS_ARG, QEMU_OPTION_loadvm },
@@ -5764,6 +5766,8 @@ int main(int argc, char **argv)
     const char *r, *optarg;
     CharDriverState *monitor_hd;
     char monitor_device[128];
+    CharDriverState *vmchannel_hd;
+    char vmchannel_device[128];
     char serial_devices[MAX_SERIAL_PORTS][128];
     int serial_device_index;
     char parallel_devices[MAX_PARALLEL_PORTS][128];
@@ -5830,6 +5834,8 @@ int main(int argc, char **argv)
     cyls = heads = secs = 0;
     translation = BIOS_ATA_TRANSLATION_AUTO;
     pstrcpy(monitor_device, sizeof(monitor_device), "vc");
+
+    vmchannel_device[0] = '\0';
 
     pstrcpy(serial_devices[0], sizeof(serial_devices[0]), "vc");
     for(i = 1; i < MAX_SERIAL_PORTS; i++)
@@ -6115,6 +6121,9 @@ int main(int argc, char **argv)
             case QEMU_OPTION_monitor:
                 pstrcpy(monitor_device, sizeof(monitor_device), optarg);
                 break;
+            case QEMU_OPTION_vmchannel:
+                pstrcpy(vmchannel_device, sizeof(vmchannel_device), optarg);
+                break;
             case QEMU_OPTION_serial:
                 if (serial_device_index >= MAX_SERIAL_PORTS) {
                     fprintf(stderr, "qemu: too many serial ports\n");
@@ -6348,6 +6357,15 @@ int main(int argc, char **argv)
         exit(1);
     }
     monitor_init(monitor_hd, !nographic);
+
+    if (*vmchannel_device) {
+        vmchannel_hd = qemu_chr_open(vmchannel_device);
+        if (!vmchannel_hd) {
+            fprintf(stderr, "qemu: could not open vmchannel device '%s'\n", vmchannel_device);
+            exit(1);
+        }
+        vmchannel_init(vmchannel_hd);
+    }
 
     for(i = 0; i < MAX_SERIAL_PORTS; i++) {
         if (serial_devices[i][0] != '\0') {
