@@ -579,7 +579,8 @@ static void migration_start_common(int online,
         vm_start();
     }
     else
-        qemu_set_fd_handler(pms->fd, migration_disconnect, NULL, pms);
+        if (pms->fd != FD_UNUSED)
+            qemu_set_fd_handler(pms->fd, migration_disconnect, NULL, pms);
 }
 
 static void migration_start_src(int online)

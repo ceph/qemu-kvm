@@ -31,10 +31,18 @@
 
 #define PAGE_SIZE 4096ul
 
+/**
+ * \brief The KVM context
+ *
+ * The verbose KVM context
+ */
 struct kvm_context {
+	/// Filedescriptor to /dev/kvm
 	int fd;
+	/// Callbacks that KVM uses to emulate various unvirtualizable functionality
 	struct kvm_callbacks *callbacks;
 	void *opaque;
+	/// A pointer to the memory used as the physical memory for the guest
 	void *physical_memory;
 };
 
