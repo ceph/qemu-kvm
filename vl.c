@@ -4489,7 +4489,11 @@ void cpu_save(QEMUFile *f, void *opaque)
     uint16_t fptag, fpus, fpuc, fpregs_format;
     uint32_t hflags;
     int i;
-    
+
+#ifdef USE_KVM
+    kvm_save_registers(env);
+#endif    
+
     for(i = 0; i < CPU_NB_REGS; i++)
         qemu_put_betls(f, &env->regs[i]);
     qemu_put_betls(f, &env->eip);

@@ -222,6 +222,141 @@ static void load_regs(CPUState *env)
         perror("kvm_set_msrs FAILED");
 }
 
+
+static void save_regs(CPUState *env)
+{
+    struct kvm_regs regs;
+    struct kvm_sregs sregs;
+    struct kvm_msr_entry msrs[MSR_COUNT];
+    uint32_t hflags;
+    uint32_t i, n, rc;
+
+    kvm_get_regs(kvm_context, 0, &regs);
+
+    env->regs[R_EAX] = regs.rax;
+    env->regs[R_EBX] = regs.rbx;
+    env->regs[R_ECX] = regs.rcx;
+    env->regs[R_EDX] = regs.rdx;
+    env->regs[R_ESI] = regs.rsi;
+    env->regs[R_EDI] = regs.rdi;
+    env->regs[R_ESP] = regs.rsp;
+    env->regs[R_EBP] = regs.rbp;
+#ifdef TARGET_X86_64
+    env->regs[8] = regs.r8;
+    env->regs[9] = regs.r9;
+    env->regs[10] = regs.r10;
+    env->regs[11] = regs.r11;
+    env->regs[12] = regs.r12;
+    env->regs[13] = regs.r13;
+    env->regs[14] = regs.r14;
+    env->regs[15] = regs.r15;
+#endif
+
+    env->eflags = regs.rflags;
+    env->eip = regs.rip;
+
+    kvm_get_sregs(kvm_context, 0, &sregs);
+
+    memcpy(env->kvm_interrupt_bitmap, sregs.interrupt_bitmap, sizeof(env->kvm_interrupt_bitmap));
+
+    get_seg(&env->segs[R_CS], &sregs.cs);
+    get_seg(&env->segs[R_DS], &sregs.ds);
+    get_seg(&env->segs[R_ES], &sregs.es);
+    get_seg(&env->segs[R_FS], &sregs.fs);
+    get_seg(&env->segs[R_GS], &sregs.gs);
+    get_seg(&env->segs[R_SS], &sregs.ss);
+
+    get_seg(&env->tr, &sregs.tr);
+    get_seg(&env->ldt, &sregs.ldt);
+    
+    env->idt.limit = sregs.idt.limit;
+    env->idt.base = sregs.idt.base;
+    env->gdt.limit = sregs.gdt.limit;
+    env->gdt.base = sregs.gdt.base;
+
+    env->cr[0] = sregs.cr0;
+    env->cr[2] = sregs.cr2;
+    env->cr[3] = sregs.cr3;
+    env->cr[4] = sregs.cr4;
+
+    cpu_set_apic_tpr(env, sregs.cr8);
+    cpu_set_apic_base(env, sregs.apic_base);
+
+    env->efer = sregs.efer;
+
+#define HFLAG_COPY_MASK ~( \
+			HF_CPL_MASK | HF_PE_MASK | HF_MP_MASK | HF_EM_MASK | \
+			HF_TS_MASK | HF_TF_MASK | HF_VM_MASK | HF_IOPL_MASK | \
+			HF_OSFXSR_MASK | HF_LMA_MASK | HF_CS32_MASK | \
+			HF_SS32_MASK | HF_CS64_MASK | HF_ADDSEG_MASK)
+
+
+
+    hflags = (env->segs[R_CS].flags >> DESC_DPL_SHIFT) & HF_CPL_MASK;
+    hflags |= (env->cr[0] & CR0_PE_MASK) << (HF_PE_SHIFT - CR0_PE_SHIFT);
+    hflags |= (env->cr[0] << (HF_MP_SHIFT - CR0_MP_SHIFT)) & 
+	    (HF_MP_MASK | HF_EM_MASK | HF_TS_MASK);
+    hflags |= (env->eflags & (HF_TF_MASK | HF_VM_MASK | HF_IOPL_MASK)); 
+    hflags |= (env->cr[4] & CR4_OSFXSR_MASK) << 
+	    (HF_OSFXSR_SHIFT - CR4_OSFXSR_SHIFT);
+
+    if (env->efer & MSR_EFER_LMA) {
+        hflags |= HF_LMA_MASK;
+    }
+
+    if ((hflags & HF_LMA_MASK) && (env->segs[R_CS].flags & DESC_L_MASK)) {
+        hflags |= HF_CS32_MASK | HF_SS32_MASK | HF_CS64_MASK;
+    } else {
+        hflags |= (env->segs[R_CS].flags & DESC_B_MASK) >> 
+		(DESC_B_SHIFT - HF_CS32_SHIFT);
+        hflags |= (env->segs[R_SS].flags & DESC_B_MASK) >> 
+		(DESC_B_SHIFT - HF_SS32_SHIFT);
+        if (!(env->cr[0] & CR0_PE_MASK) || 
+                   (env->eflags & VM_MASK) ||
+                   !(hflags & HF_CS32_MASK)) {
+                hflags |= HF_ADDSEG_MASK;
+            } else {
+                hflags |= ((env->segs[R_DS].base | 
+                                env->segs[R_ES].base |
+                                env->segs[R_SS].base) != 0) << 
+                    HF_ADDSEG_SHIFT;
+            }
+    }
+    env->hflags = (env->hflags & HFLAG_COPY_MASK) | hflags;
+    CC_SRC = env->eflags & (CC_O | CC_S | CC_Z | CC_A | CC_P | CC_C);
+    DF = 1 - (2 * ((env->eflags >> 10) & 1));
+    CC_OP = CC_OP_EFLAGS;
+    env->eflags &= ~(DF_MASK | CC_O | CC_S | CC_Z | CC_A | CC_P | CC_C);
+
+    tlb_flush(env, 1);
+
+    /* msrs */    
+    n = 0;
+    msrs[n++].index = MSR_IA32_SYSENTER_CS;
+    msrs[n++].index = MSR_IA32_SYSENTER_ESP;
+    msrs[n++].index = MSR_IA32_SYSENTER_EIP;
+    if (kvm_has_msr_star)
+	msrs[n++].index = MSR_STAR;
+    msrs[n++].index = MSR_IA32_TSC;
+#ifdef TARGET_X86_64
+    msrs[n++].index = MSR_CSTAR;
+    msrs[n++].index = MSR_KERNELGSBASE;
+    msrs[n++].index = MSR_FMASK;
+    msrs[n++].index = MSR_LSTAR;
+#endif
+    rc = kvm_get_msrs(kvm_context, 0, msrs, n);
+    if (rc == -1) {
+        perror("kvm_get_msrs FAILED");
+    }
+    else {
+        n = rc; /* actual number of MSRs */
+        for (i=0 ; i<n; i++) {
+            if (get_msr_entry(&msrs[i], env))
+                return;
+        }
+    }
+}
+
 #include <signal.h>
 
 
@@ -255,6 +390,11 @@ static void post_kvm_run(void *opaque, struct kvm_run *kvm_run)
 void kvm_load_registers(CPUState *env)
 {
     load_regs(env);
+}
+
+void kvm_save_registers(CPUState *env)
+{
+    save_regs(env);
 }
 
 int kvm_cpu_exec(CPUState *env)
