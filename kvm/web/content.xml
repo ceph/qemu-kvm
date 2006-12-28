@@ -394,13 +394,13 @@ migration status
           </ol>
         <h2 id="migration_problems">Problems/Todo</h2>:
           <ul>
-            <li>Send Gratuitous ARP (or a different packet) when successful migration completes.</li>
             <li>usbdevice tablet does not work after savevm/loadvm/migration (with vnc).</li>
             <li>handle migration completion better (especially when network problems occur).</li>
             <li>Online Migration.</li>
             <li>Finish Interface implementation.</li>
             <li>Migration does not work while CPU real-mode/protected mode are still changing.</li>
-            <li>Windows guest takes its time before answering a ping after a successful migration.</li>
+            <li>Migration does not work for AMD hosts.</li>
+            <li>Migration of a Windows guest while watching a movie (or possibly running other applications) cause it to Blue Screen on the destination.</li>
           </ul>
      </cms:content>
 
