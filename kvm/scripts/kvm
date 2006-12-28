@@ -47,7 +47,7 @@ create_switch () {
     if [ ! -e "/sys/class/net/${switch}/bridge" ]; then
 	brctl addbr ${switch} >/dev/null 2>&1
 	brctl stp ${switch} off >/dev/null 2>&1
-	brctl setfd ${switch} 0 >/dev/null 2>&1
+	brctl setfd ${switch} 0.1 >/dev/null 2>&1
     fi
     ip link set ${switch} up >/dev/null 2>&1
 }
