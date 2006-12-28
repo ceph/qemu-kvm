@@ -326,6 +326,15 @@ sudo kvm \
 
      <cms:content>
 
+      <h2>Contents:</h2>
+      <ul>
+        <li><a href="#migration_introduction">Introduction</a></li>
+        <li><a href="#migration_interface">Interface</a></li>
+        <li><a href="#migration_example">Example/HowTo</a></li>
+        <li><a href="#migration_problems">Problems/ToDo</a></li>
+      </ul>
+
+      <h2 id="migration_introduction">Introduction</h2>
       <p>
          KVM currently supports savevm/loadvm and offline migration<br/>
          We're working on support for Live Migration<br/>
@@ -334,8 +343,8 @@ sudo kvm \
          the destination host.
       </p>
 
-      <ul>
-        <li> Interface:
+
+      <h2 id="migration_interface">Interface</h2>:
           <ul>
             <li> Connection Establishment <pre>
 migration listen  [local_host:port [remote_host:port]] -- listen on a port
@@ -364,8 +373,7 @@ migration help
 </pre>
             </li>
           </ul>
-        </li> 
-        <li> Example/HowTo:<br/>
+        <h2 id="migration_example">Example/HowTo</h2>
         A is the source host, B is the destination host:
           <ol>
             <li>Start the VM on B with the exact same parameters as the VM on A, in stopped mode (-S)
@@ -384,8 +392,7 @@ migration status
 </pre>
             </li>
           </ol>
-        </li>
-        <li>Problems/Todo:
+        <h2 id="migration_problems">Problems/Todo</h2>:
           <ul>
             <li>Send Gratuitous ARP (or a different packet) when successful migration completes.</li>
             <li>usbdevice tablet does not work after savevm/loadvm/migration (with vnc).</li>
@@ -395,9 +402,6 @@ migration status
             <li>Migration does not work while CPU real-mode/protected mode are still changing.</li>
             <li>Windows guest takes its time before answering a ping after a successful migration.</li>
           </ul>
-        </li>
-      </ul>
-       
      </cms:content>
 
   </cms:page>
