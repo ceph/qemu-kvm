@@ -1665,9 +1665,10 @@ static int kvm_handle_exit(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 }
 
 /*
- * Go back to user space for interactive response-
- * the device model requested to inject interrupt before and now is
- * the time to do it
+ * Check if userspace requested an interrupt window, and that the
+ * interrupt window is open.
+ *
+ * No need to exit to userspace if we already have an interrupt queued.
  */
 static int dm_request_for_irq_injection(struct kvm_vcpu *vcpu,
 					  struct kvm_run *kvm_run)
