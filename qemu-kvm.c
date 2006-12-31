@@ -222,6 +222,7 @@ static void load_regs(CPUState *env)
         perror("kvm_set_msrs FAILED");
 }
 
+
 static void save_regs(CPUState *env)
 {
     struct kvm_regs regs;
@@ -358,34 +359,32 @@ static void save_regs(CPUState *env)
 
 #include <signal.h>
 
-static int kvm_interrupt_pending(CPUState *env)
-{
-    int i;
 
-    for (i = 0; i < NR_IRQ_WORDS; ++i)
-	if (env->kvm_interrupt_bitmap[i])
-	    return 1;
-    return 0;
-}
-
-static inline void push_interrupts(CPUState *env)
+static int try_push_interrupts(void *opaque)
 {
-    if (!(env->interrupt_request & CPU_INTERRUPT_HARD) ||
-	!(env->eflags & IF_MASK) || kvm_interrupt_pending(env)) {
-    	if ((env->interrupt_request & CPU_INTERRUPT_EXIT)) {
-	    env->interrupt_request &= ~CPU_INTERRUPT_EXIT;
-	    env->exception_index = EXCP_INTERRUPT;
-	    cpu_loop_exit();
-        }
-        return;
+    CPUState **envs = opaque, *env;
+    env = envs[0];
+
+    if (env->ready_for_interrupt_injection &&
+        (env->interrupt_request & CPU_INTERRUPT_HARD) &&
+        (env->eflags & IF_MASK)) {
+            env->interrupt_request &= ~CPU_INTERRUPT_HARD;
+            // for now using cpu 0
+            kvm_inject_irq(kvm_context, 0, cpu_get_pic_interrupt(env));
     }
 
-    do {
-        env->interrupt_request &= ~CPU_INTERRUPT_HARD;
+    return (env->interrupt_request & CPU_INTERRUPT_HARD) != 0;
+}
 
-        // for now using cpu 0
-	kvm_inject_irq(kvm_context, 0, cpu_get_pic_interrupt(env)); 
-    } while ( (env->interrupt_request & CPU_INTERRUPT_HARD) && (env->cr[0] & CR0_PG_MASK) );
+static void post_kvm_run(void *opaque, struct kvm_run *kvm_run)
+{
+    CPUState **envs = opaque, *env;
+    env = envs[0];
+
+    env->eflags = (kvm_run->if_flag) ? env->eflags | IF_MASK:env->eflags & ~IF_MASK;
+    env->ready_for_interrupt_injection = kvm_run->ready_for_interrupt_injection;
+    cpu_set_apic_tpr(env, kvm_run->cr8);
+    cpu_set_apic_base(env, kvm_run->apic_base);
 }
 
 void kvm_load_registers(CPUState *env)
@@ -393,17 +392,28 @@ void kvm_load_registers(CPUState *env)
     load_regs(env);
 }
 
+void kvm_save_registers(CPUState *env)
+{
+    save_regs(env);
+}
+
 int kvm_cpu_exec(CPUState *env)
 {
+    int pending = (!env->ready_for_interrupt_injection ||
+                   ((env->interrupt_request & CPU_INTERRUPT_HARD) &&
+		   (env->eflags & IF_MASK)));
 
-    push_interrupts(env);
+    if (!pending && (env->interrupt_request & CPU_INTERRUPT_EXIT)) {
+        env->interrupt_request &= ~CPU_INTERRUPT_EXIT;
+        env->exception_index = EXCP_INTERRUPT;
+        cpu_loop_exit();
+    }
 
+    
     if (!saved_env[0])
 	saved_env[0] = env;
 
     kvm_run(kvm_context, 0);
-
-    save_regs(env);
 
     return 0;
 }
@@ -461,7 +471,6 @@ static int kvm_debug(void *opaque, int vcpu)
     CPUState **envs = opaque;
 
     env = envs[0];
-    save_regs(env);
     env->exception_index = EXCP_DEBUG;
     return 1;
 }
@@ -561,14 +570,12 @@ static int kvm_halt(void *opaque, int vcpu)
     CPUState **envs = opaque, *env;
 
     env = envs[0];
-    save_regs(env);
-
-    if (!((kvm_interrupt_pending(env) || 
-	   (env->interrupt_request & CPU_INTERRUPT_HARD)) && 
+    if (!((env->interrupt_request & CPU_INTERRUPT_HARD) &&
 	  (env->eflags & IF_MASK))) {
 	    env->hflags |= HF_HALTED_MASK;
 	    env->exception_index = EXCP_HLT;
     }
+
     return 1;
 }
  
@@ -591,6 +598,8 @@ static struct kvm_callbacks qemu_kvm_ops = {
     .writeq = kvm_writeq,
     .halt  = kvm_halt,
     .io_window = kvm_io_window,
+    .try_push_interrupts = try_push_interrupts,
+    .post_kvm_run = post_kvm_run,
 };
 
 int kvm_qemu_init()

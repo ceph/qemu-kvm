@@ -23,7 +23,7 @@
 #include <errno.h>
 #include "kvmctl.h"
 
-#define EXPECTED_KVM_API_VERSION 1
+#define EXPECTED_KVM_API_VERSION 2
 
 #if EXPECTED_KVM_API_VERSION != KVM_API_VERSION
 #error libkvm: userspace and kernel version mismatch
@@ -522,6 +522,16 @@ static int handle_halt(kvm_context_t kvm, struct kvm_run *kvm_run)
 	return kvm->callbacks->halt(kvm->opaque, kvm_run->vcpu);
 }
 
+int try_push_interrupts(kvm_context_t kvm)
+{
+	return kvm->callbacks->try_push_interrupts(kvm->opaque);
+}
+
+static void post_kvm_run(kvm_context_t kvm, struct kvm_run *kvm_run)
+{
+	kvm->callbacks->post_kvm_run(kvm->opaque, kvm_run);
+}
+
 int kvm_run(kvm_context_t kvm, int vcpu)
 {
 	int r;
@@ -533,7 +543,10 @@ int kvm_run(kvm_context_t kvm, int vcpu)
 	};
 
 again:
+	kvm_run.request_interrupt_window = try_push_interrupts(kvm);
 	r = ioctl(fd, KVM_RUN, &kvm_run);
+	post_kvm_run(kvm, &kvm_run);
+
 	kvm_run.emulated = 0;
 	kvm_run.mmio_completed = 0;
 	if (r == -1 && errno != EINTR) {
@@ -578,6 +591,8 @@ again:
 			break;
 		case KVM_EXIT_HLT:
 			r = handle_halt(kvm, &kvm_run);
+			break;
+		case KVM_EXIT_IRQ_WINDOW_OPEN:
 			break;
 		default:
 			fprintf(stderr, "unhandled vm exit: 0x%x\n", kvm_run.exit_reason);
