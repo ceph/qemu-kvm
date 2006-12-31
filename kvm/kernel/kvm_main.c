@@ -522,12 +522,14 @@ static int kvm_dev_ioctl_create_vcpu(struct kvm *kvm, int n)
 	if (r < 0)
 		goto out_free_vcpus;
 
+	r = kvm_mmu_create(vcpu);
+	if (r < 0)
+		goto out_free_vcpus;
+
 	kvm_arch_ops->vcpu_load(vcpu);
-
-	r = kvm_arch_ops->vcpu_setup(vcpu);
+	r = kvm_mmu_setup(vcpu);
 	if (r >= 0)
-		r = kvm_mmu_init(vcpu);
-
+		r = kvm_arch_ops->vcpu_setup(vcpu);
 	vcpu_put(vcpu);
 
 	if (r < 0)
@@ -1942,16 +1944,16 @@ int kvm_init_arch(struct kvm_arch_ops *ops, struct module *module)
 		return -EEXIST;
 	}
 
-	kvm_arch_ops = ops;
-
-	if (!kvm_arch_ops->cpu_has_kvm_support()) {
+	if (!ops->cpu_has_kvm_support()) {
 		printk(KERN_ERR "kvm: no hardware support\n");
 		return -EOPNOTSUPP;
 	}
-	if (kvm_arch_ops->disabled_by_bios()) {
+	if (ops->disabled_by_bios()) {
 		printk(KERN_ERR "kvm: disabled by bios\n");
 		return -EOPNOTSUPP;
 	}
+
+	kvm_arch_ops = ops;
 
 	r = kvm_arch_ops->hardware_setup();
 	if (r < 0)

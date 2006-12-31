@@ -24,6 +24,8 @@
  */
 #include "vl.h"
 
+int use_hypercall_dev = 0;
+
 typedef struct HypercallState {
     uint8_t cmd;
     uint32_t start;
@@ -63,10 +65,13 @@ static void hp_map(PCIDevice *pci_dev, int region_num,
 void pci_hypercall_init(PCIBus *bus)
 {
 	PCIHypercallState *d;
-
 	uint8_t *pci_conf;
 
-	//printf("pci_hypercall_init\n");
+
+	// If the vmchannel wasn't initialized, we don't want the Hypercall device in the guest
+	if (use_hypercall_dev == 0) {
+		return;
+	}
 
 	d = (PCIHypercallState *)pci_register_device(bus,
 											  "HPNAME", sizeof(PCIHypercallState),
@@ -88,4 +93,34 @@ void pci_hypercall_init(PCIBus *bus)
 
 	pci_register_io_region(&d->dev, 0, 0x100,
 						   PCI_ADDRESS_SPACE_IO, hp_map);
+}
+
+
+static CharDriverState *vmchannel_hd;
+
+static int vmchannel_can_read(void *opaque)
+{
+    return 128;
+}
+
+static void vmchannel_read(void *opaque, const uint8_t *buf, int size)
+{
+    int i;
+
+	//printf("vmchannel_read buf:%p, size:%d\n", buf, size);
+
+    for(i = 0; i < size; i++) {
+		printf("buf[i]=%c\n",buf[i]);
+        readline_handle_byte(buf[i]);
+	}
+}
+
+void vmchannel_init(CharDriverState *hd)
+{
+	vmchannel_hd = hd;
+
+	use_hypercall_dev = 1;
+
+	qemu_chr_add_read_handler(hd, vmchannel_can_read, vmchannel_read, NULL);
+	//vmchannel_start_input();
 }
