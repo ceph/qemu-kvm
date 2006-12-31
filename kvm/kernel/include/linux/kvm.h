@@ -34,8 +34,8 @@ struct kvm_memory_region {
 #define KVM_MEM_LOG_DIRTY_PAGES  1UL
 
 
-#define KVM_EXIT_TYPE_FAIL_ENTRY	1
-#define KVM_EXIT_TYPE_VM_EXIT		2
+#define KVM_EXIT_TYPE_FAIL_ENTRY 1
+#define KVM_EXIT_TYPE_VM_EXIT    2
 
 enum kvm_exit_reason {
 	KVM_EXIT_UNKNOWN          = 0,
