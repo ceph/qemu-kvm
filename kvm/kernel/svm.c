@@ -497,7 +497,6 @@ static void init_vmcb(struct vmcb *vmcb)
 		/*              (1ULL << INTERCEPT_SELECTIVE_CR0) | */
 				(1ULL << INTERCEPT_CPUID) |
 				(1ULL << INTERCEPT_HLT) |
-				(1ULL << INTERCEPT_INVLPG) |
 				(1ULL << INTERCEPT_INVLPGA) |
 				(1ULL << INTERCEPT_IOIO_PROT) |
 				(1ULL << INTERCEPT_MSR_PROT) |
@@ -853,6 +852,7 @@ static int pf_interception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	u64 fault_address;
 	u32 error_code;
 	enum emulation_result er;
+	int r;
 
 	if (is_external_interrupt(exit_int_info))
 		push_irq(vcpu, exit_int_info & SVM_EVTINJ_VEC_MASK);
@@ -861,7 +861,12 @@ static int pf_interception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 
 	fault_address  = vcpu->svm->vmcb->control.exit_info_2;
 	error_code = vcpu->svm->vmcb->control.exit_info_1;
-	if (!vcpu->mmu.page_fault(vcpu, fault_address, error_code)) {
+	r = kvm_mmu_page_fault(vcpu, fault_address, error_code);
+	if (r < 0) {
+		spin_unlock(&vcpu->kvm->lock);
+		return r;
+	}
+	if (!r) {
 		spin_unlock(&vcpu->kvm->lock);
 		return 1;
 	}
@@ -1398,6 +1403,7 @@ static int svm_vcpu_run(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	u16 fs_selector;
 	u16 gs_selector;
 	u16 ldt_selector;
+	int r;
 
 again:
 	do_interrupt_requests(vcpu, kvm_run);
@@ -1565,7 +1571,8 @@ again:
 		return 0;
 	}
 
-	if (handle_exit(vcpu, kvm_run)) {
+	r = handle_exit(vcpu, kvm_run);
+	if (r > 0) {
 		if (signal_pending(current)) {
 			++kvm_stat.signal_exits;
 			post_kvm_run_save(vcpu, kvm_run);
@@ -1581,7 +1588,7 @@ again:
 		goto again;
 	}
 	post_kvm_run_save(vcpu, kvm_run);
-	return 0;
+	return r;
 }
 
 static void svm_flush_tlb(struct kvm_vcpu *vcpu)

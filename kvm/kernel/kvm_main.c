@@ -275,8 +275,8 @@ static void kvm_free_physmem(struct kvm *kvm)
 
 static void kvm_free_vcpu(struct kvm_vcpu *vcpu)
 {
-	kvm_arch_ops->vcpu_free(vcpu);
 	kvm_mmu_destroy(vcpu);
+	kvm_arch_ops->vcpu_free(vcpu);
 }
 
 static void kvm_free_vcpus(struct kvm *kvm)
@@ -302,14 +302,17 @@ static void inject_gp(struct kvm_vcpu *vcpu)
 	kvm_arch_ops->inject_gp(vcpu, 0);
 }
 
-static int pdptrs_have_reserved_bits_set(struct kvm_vcpu *vcpu,
-					 unsigned long cr3)
+/*
+ * Load the pae pdptrs.  Return true is they are all valid.
+ */
+static int load_pdptrs(struct kvm_vcpu *vcpu, unsigned long cr3)
 {
 	gfn_t pdpt_gfn = cr3 >> PAGE_SHIFT;
-	unsigned offset = (cr3 & (PAGE_SIZE-1)) >> 5;
+	unsigned offset = ((cr3 & (PAGE_SIZE-1)) >> 5) << 2;
 	int i;
 	u64 pdpte;
 	u64 *pdpt;
+	int ret;
 	struct kvm_memory_slot *memslot;
 
 	spin_lock(&vcpu->kvm->lock);
@@ -317,16 +320,23 @@ static int pdptrs_have_reserved_bits_set(struct kvm_vcpu *vcpu,
 	/* FIXME: !memslot - emulate? 0xff? */
 	pdpt = kmap_atomic(gfn_to_page(memslot, pdpt_gfn), KM_USER0);
 
+	ret = 1;
 	for (i = 0; i < 4; ++i) {
 		pdpte = pdpt[offset + i];
-		if ((pdpte & 1) && (pdpte & 0xfffffff0000001e6ull))
-			break;
+		if ((pdpte & 1) && (pdpte & 0xfffffff0000001e6ull)) {
+			ret = 0;
+			goto out;
+		}
 	}
 
+	for (i = 0; i < 4; ++i)
+		vcpu->pdptrs[i] = pdpt[offset + i];
+
+out:
 	kunmap_atomic(pdpt, KM_USER0);
 	spin_unlock(&vcpu->kvm->lock);
 
-	return i != 4;
+	return ret;
 }
 
 void set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
@@ -372,8 +382,7 @@ void set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 			}
 		} else
 #endif
-		if (is_pae(vcpu) &&
-			    pdptrs_have_reserved_bits_set(vcpu, vcpu->cr3)) {
+		if (is_pae(vcpu) && !load_pdptrs(vcpu, vcpu->cr3)) {
 			printk(KERN_DEBUG "set_cr0: #GP, pdptrs "
 			       "reserved bits\n");
 			inject_gp(vcpu);
@@ -415,7 +424,7 @@ void set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
 			return;
 		}
 	} else if (is_paging(vcpu) && !is_pae(vcpu) && (cr4 & CR4_PAE_MASK)
-		   && pdptrs_have_reserved_bits_set(vcpu, vcpu->cr3)) {
+		   && !load_pdptrs(vcpu, vcpu->cr3)) {
 		printk(KERN_DEBUG "set_cr4: #GP, pdptrs reserved bits\n");
 		inject_gp(vcpu);
 	}
@@ -447,7 +456,7 @@ void set_cr3(struct kvm_vcpu *vcpu, unsigned long cr3)
 			return;
 		}
 		if (is_paging(vcpu) && is_pae(vcpu) &&
-		    pdptrs_have_reserved_bits_set(vcpu, cr3)) {
+		    !load_pdptrs(vcpu, cr3)) {
 			printk(KERN_DEBUG "set_cr3: #GP, pdptrs "
 			       "reserved bits\n");
 			inject_gp(vcpu);
@@ -640,6 +649,7 @@ raced:
 		for (i = 0; i < npages; ++i) {
 			new.phys_mem[i] = alloc_page(GFP_HIGHUSER
 						     | __GFP_ZERO);
+			new.phys_mem[i]->private = 0;
 			if (!new.phys_mem[i])
 				goto out_free;
 		}
@@ -696,6 +706,13 @@ out:
 	return r;
 }
 
+static void do_remove_write_access(struct kvm_vcpu *vcpu, int slot)
+{
+	spin_lock(&vcpu->kvm->lock);
+	kvm_mmu_slot_remove_write_access(vcpu, slot);
+	spin_unlock(&vcpu->kvm->lock);
+}
+
 /*
  * Get (and clear) the dirty memory log for a memory slot.
  */
@@ -705,6 +722,7 @@ static int kvm_dev_ioctl_get_dirty_log(struct kvm *kvm,
 	struct kvm_memory_slot *memslot;
 	int r, i;
 	int n;
+	int cleared;
 	unsigned long any = 0;
 
 	spin_lock(&kvm->lock);
@@ -735,15 +753,17 @@ static int kvm_dev_ioctl_get_dirty_log(struct kvm *kvm,
 
 
 	if (any) {
-		spin_lock(&kvm->lock);
-		kvm_mmu_slot_remove_write_access(kvm, log->slot);
-		spin_unlock(&kvm->lock);
-		memset(memslot->dirty_bitmap, 0, n);
+		cleared = 0;
 		for (i = 0; i < KVM_MAX_VCPUS; ++i) {
 			struct kvm_vcpu *vcpu = vcpu_load(kvm, i);
 
 			if (!vcpu)
 				continue;
+			if (!cleared) {
+				do_remove_write_access(vcpu, log->slot);
+				memset(memslot->dirty_bitmap, 0, n);
+				cleared = 1;
+			}
 			kvm_arch_ops->tlb_flush(vcpu);
 			vcpu_put(vcpu);
 		}
@@ -871,6 +891,27 @@ static int emulator_read_emulated(unsigned long addr,
 	}
 }
 
+static int emulator_write_phys(struct kvm_vcpu *vcpu, gpa_t gpa,
+			       unsigned long val, int bytes)
+{
+	struct kvm_memory_slot *m;
+	struct page *page;
+	void *virt;
+
+	if (((gpa + bytes - 1) >> PAGE_SHIFT) != (gpa >> PAGE_SHIFT))
+		return 0;
+	m = gfn_to_memslot(vcpu->kvm, gpa >> PAGE_SHIFT);
+	if (!m)
+		return 0;
+	page = gfn_to_page(m, gpa >> PAGE_SHIFT);
+	kvm_mmu_pre_write(vcpu, gpa, bytes);
+	virt = kmap_atomic(page, KM_USER0);
+	memcpy(virt + offset_in_page(gpa), &val, bytes);
+	kunmap_atomic(virt, KM_USER0);
+	kvm_mmu_post_write(vcpu, gpa, bytes);
+	return 1;
+}
+
 static int emulator_write_emulated(unsigned long addr,
 				   unsigned long val,
 				   unsigned int bytes,
@@ -881,6 +922,9 @@ static int emulator_write_emulated(unsigned long addr,
 
 	if (gpa == UNMAPPED_GVA)
 		return X86EMUL_PROPAGATE_FAULT;
+
+	if (emulator_write_phys(vcpu, gpa, val, bytes))
+		return X86EMUL_CONTINUE;
 
 	vcpu->mmio_needed = 1;
 	vcpu->mmio_phys_addr = gpa;
@@ -906,6 +950,30 @@ static int emulator_cmpxchg_emulated(unsigned long addr,
 	return emulator_write_emulated(addr, new, bytes, ctxt);
 }
 
+#ifdef CONFIG_X86_32
+
+static int emulator_cmpxchg8b_emulated(unsigned long addr,
+				       unsigned long old_lo,
+				       unsigned long old_hi,
+				       unsigned long new_lo,
+				       unsigned long new_hi,
+				       struct x86_emulate_ctxt *ctxt)
+{
+	static int reported;
+	int r;
+
+	if (!reported) {
+		reported = 1;
+		printk(KERN_WARNING "kvm: emulating exchange8b as write\n");
+	}
+	r = emulator_write_emulated(addr, new_lo, 4, ctxt);
+	if (r != X86EMUL_CONTINUE)
+		return r;
+	return emulator_write_emulated(addr+4, new_hi, 4, ctxt);
+}
+
+#endif
+
 static unsigned long get_segment_base(struct kvm_vcpu *vcpu, int seg)
 {
 	return kvm_arch_ops->get_segment_base(vcpu, seg);
@@ -913,10 +981,6 @@ static unsigned long get_segment_base(struct kvm_vcpu *vcpu, int seg)
 
 int emulate_invlpg(struct kvm_vcpu *vcpu, gva_t address)
 {
-	spin_lock(&vcpu->kvm->lock);
-	vcpu->mmu.inval_page(vcpu, address);
-	spin_unlock(&vcpu->kvm->lock);
-	kvm_arch_ops->invlpg(vcpu, address);
 	return X86EMUL_CONTINUE;
 }
 
@@ -984,6 +1048,9 @@ struct x86_emulate_ops emulate_ops = {
 	.read_emulated       = emulator_read_emulated,
 	.write_emulated      = emulator_write_emulated,
 	.cmpxchg_emulated    = emulator_cmpxchg_emulated,
+#ifdef CONFIG_X86_32
+	.cmpxchg8b_emulated  = emulator_cmpxchg8b_emulated,
+#endif
 };
 
 int emulate_instruction(struct kvm_vcpu *vcpu,
@@ -1033,6 +1100,8 @@ int emulate_instruction(struct kvm_vcpu *vcpu,
 	}
 
 	if (r) {
+		if (kvm_mmu_unprotect_page_virt(vcpu, cr2))
+			return EMULATE_DONE;
 		if (!vcpu->mmio_needed) {
 			report_emulation_failure(&emulate_ctxt);
 			return EMULATE_FAIL;
