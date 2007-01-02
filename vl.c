@@ -5057,6 +5057,7 @@ void vm_start(void)
         cpu_enable_ticks();
         vm_running = 1;
         vm_state_notify(1);
+        console_select(0); /* focus on guest's display */
     }
 }
 
