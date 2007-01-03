@@ -28,9 +28,8 @@ int use_hypercall_dev = 0;
 static CharDriverState *vmchannel_hd;
 
 typedef struct HypercallState {
-    uint8_t cmd;
-    uint32_t start;
-    uint32_t stop;
+    int irq;
+    PCIDevice *pci_dev;
 } HypercallState;
 
 static void hp_ioport_write(void *opaque, uint32_t addr, uint32_t val)
@@ -67,6 +66,7 @@ static void hp_map(PCIDevice *pci_dev, int region_num,
 void pci_hypercall_init(PCIBus *bus)
 {
     PCIHypercallState *d;
+    HypercallState *s;
     uint8_t *pci_conf;
 
     // If the vmchannel wasn't initialized, we don't want the Hypercall device in the guest
@@ -90,10 +90,13 @@ void pci_hypercall_init(PCIBus *bus)
     pci_conf[0x0b] = 0x05; // BaseClass
 
     pci_conf[0x0e] = 0x00; // header_type
-    pci_conf[0x3d] = 0x00; // interrupt pin 0
+    pci_conf[0x3d] = 1; // interrupt pin 0
 
     pci_register_io_region(&d->dev, 0, 0x100,
                            PCI_ADDRESS_SPACE_IO, hp_map);
+    s = &d->hp;
+    s->irq = 16; /* PCI interrupt */
+    s->pci_dev = (PCIDevice *)d;
 }
 
 
