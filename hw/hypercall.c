@@ -25,6 +25,7 @@
 #include "vl.h"
 
 int use_hypercall_dev = 0;
+static CharDriverState *vmchannel_hd;
 
 typedef struct HypercallState {
     uint8_t cmd;
@@ -35,6 +36,7 @@ typedef struct HypercallState {
 static void hp_ioport_write(void *opaque, uint32_t addr, uint32_t val)
 {
 	//printf("hp_ioport_write, val=0x%x\n", val);
+	qemu_chr_write(vmchannel_hd, (const uint8_t*)&val, 1);
 }
 
 static uint32_t hp_ioport_read(void *opaque, uint32_t addr)
@@ -96,7 +98,6 @@ void pci_hypercall_init(PCIBus *bus)
 }
 
 
-static CharDriverState *vmchannel_hd;
 
 static int vmchannel_can_read(void *opaque)
 {
@@ -110,7 +111,6 @@ static void vmchannel_read(void *opaque, const uint8_t *buf, int size)
 	//printf("vmchannel_read buf:%p, size:%d\n", buf, size);
 
     for(i = 0; i < size; i++) {
-		printf("buf[i]=%c\n",buf[i]);
         readline_handle_byte(buf[i]);
 	}
 }
@@ -120,7 +120,6 @@ void vmchannel_init(CharDriverState *hd)
 	vmchannel_hd = hd;
 
 	use_hypercall_dev = 1;
-
-	qemu_chr_add_read_handler(hd, vmchannel_can_read, vmchannel_read, NULL);
+	qemu_chr_add_read_handler(vmchannel_hd, vmchannel_can_read, vmchannel_read, NULL);
 	//vmchannel_start_input();
 }
