@@ -59,6 +59,18 @@ optparser.add_option('--loadvm',
                      default = '',
                      )
 
+optparser.add_option('--monitor',
+                     help = 'redirect monitor (currently only stdio or tcp)',
+                     dest = 'monitor',
+                     default = '',
+                     )
+
+optparser.add_option('--stopped',
+                     help = 'start image in stopped mode',
+                     action = 'store_true',
+                     default = False,
+                     )
+
 (options, args) = optparser.parse_args()
 
 if len(args) > 0:
@@ -165,6 +177,17 @@ if options.vnc is not None:
 
 if options.saved_image != '':
     qemu_args += ('-loadvm' , options.saved_image, )
+
+if options.monitor != '':
+    if cmp(options.monitor,"stdio") == 0:
+        qemu_args += ('-monitor' , 'stdio', )
+    elif cmp(options.monitor,"tcp") == 0:
+        qemu_args += ('-monitor' , 'tcp:0:5555,server,nowait', )
+    else:
+        raise Exception('illegal monitor option %s' % option.monitor)
+
+if options.stopped:
+    qemu_args += ('-S',)
 
 def concat_func(x,y): return x + ' ' + y
 print 'Running %s' % reduce(concat_func, qemu_args)
