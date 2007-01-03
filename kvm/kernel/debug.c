@@ -28,6 +28,34 @@ static const char *vmx_msr_name[] = {
 
 #define NR_VMX_MSR (sizeof(vmx_msr_name) / sizeof(char*))
 
+static unsigned long vmcs_readl(unsigned long field)
+{
+	unsigned long value;
+
+	asm volatile (ASM_VMX_VMREAD_RDX_RAX
+		      : "=a"(value) : "d"(field) : "cc");
+	return value;
+}
+
+static u16 vmcs_read16(unsigned long field)
+{
+	return vmcs_readl(field);
+}
+
+static u32 vmcs_read32(unsigned long field)
+{
+	return vmcs_readl(field);
+}
+
+static u64 vmcs_read64(unsigned long field)
+{
+#ifdef CONFIG_X86_64
+	return vmcs_readl(field);
+#else
+	return vmcs_readl(field) | ((u64)vmcs_readl(field+1) << 32);
+#endif
+}
+
 void show_msrs(struct kvm_vcpu *vcpu)
 {
 	int i;
@@ -47,7 +75,7 @@ void show_code(struct kvm_vcpu *vcpu)
 	char buf[30 + 3 * sizeof code];
 	int i;
 
-	if (!is_long_mode())
+	if (!is_long_mode(vcpu))
 		rip += vmcs_readl(GUEST_CS_BASE);
 
 	kvm_read_guest(vcpu, rip, sizeof code, code);
@@ -71,10 +99,10 @@ void show_irq(struct kvm_vcpu *vcpu,  int irq)
 	unsigned long idt_limit = vmcs_readl(GUEST_IDTR_LIMIT);
 	struct gate_struct gate;
 
-	if (!is_long_mode())
+	if (!is_long_mode(vcpu))
 		vcpu_printf(vcpu, "%s: not in long mode\n", __FUNCTION__);
 
-	if (!is_long_mode() || idt_limit < irq * sizeof(gate)) {
+	if (!is_long_mode(vcpu) || idt_limit < irq * sizeof(gate)) {
 		vcpu_printf(vcpu, "%s: 0x%x read_guest err\n",
 			   __FUNCTION__,
 			   irq);
@@ -235,7 +263,7 @@ int vm_entry_test_guest(struct kvm_vcpu *vcpu)
 		return 0;
 	}
 
-	long_mode = is_long_mode();
+	long_mode = is_long_mode(vcpu);
 
 	if (long_mode) {
 	}
@@ -1017,10 +1045,10 @@ void regs_dump(struct kvm_vcpu *vcpu)
 void sregs_dump(struct kvm_vcpu *vcpu)
 {
 	vcpu_printf(vcpu, "************************ sregs_dump ************************\n");
-	vcpu_printf(vcpu, "cr0 = 0x%lx\n", guest_cr0());
+	vcpu_printf(vcpu, "cr0 = 0x%lx\n", vcpu->cr0);
 	vcpu_printf(vcpu, "cr2 = 0x%lx\n", vcpu->cr2);
 	vcpu_printf(vcpu, "cr3 = 0x%lx\n", vcpu->cr3);
-	vcpu_printf(vcpu, "cr4 = 0x%lx\n", guest_cr4());
+	vcpu_printf(vcpu, "cr4 = 0x%lx\n", vcpu->cr4);
 	vcpu_printf(vcpu, "cr8 = 0x%lx\n", vcpu->cr8);
 	vcpu_printf(vcpu, "shadow_efer = 0x%llx\n", vcpu->shadow_efer);
 	vcpu_printf(vcpu, "***********************************************************\n");
