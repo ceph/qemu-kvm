@@ -56,13 +56,13 @@ optparser.add_option('--cdrom',
 optparser.add_option('--loadvm',
                      help = 'select saved vm-image',
                      dest = 'saved_image',
-                     default = '',
+                     default = None,
                      )
 
 optparser.add_option('--monitor',
                      help = 'redirect monitor (currently only stdio or tcp)',
                      dest = 'monitor',
-                     default = '',
+                     default = None,
                      )
 
 optparser.add_option('--stopped',
@@ -172,16 +172,16 @@ if not options.notap:
     qemu_args += ('-net', 'nic,macaddr=%s' % (mac,),
                   '-net', 'tap,script=/etc/kvm/qemu-ifup',)
 
-if options.vnc is not None:
+if options.vnc:
     qemu_args += ('-vnc', str(options.vnc))
 
-if options.saved_image != '':
+if options.saved_image:
     qemu_args += ('-loadvm' , options.saved_image, )
 
-if options.monitor != '':
-    if cmp(options.monitor,"stdio") == 0:
+if options.monitor:
+    if options.monitor == 'stdio':
         qemu_args += ('-monitor' , 'stdio', )
-    elif cmp(options.monitor,"tcp") == 0:
+    elif options.monitor == 'tcp':
         qemu_args += ('-monitor' , 'tcp:0:5555,server,nowait', )
     else:
         raise Exception('illegal monitor option %s' % option.monitor)
