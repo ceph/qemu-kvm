@@ -10,3 +10,12 @@
 #include <linux/compiler.h>
 #include "include/linux/kvm.h"
 
+/*
+ * 2.6.16 does not have GFP_NOWAIT
+ */
+
+#include <linux/gfp.h>
+
+#ifndef GFP_NOWAIT
+#define GFP_NOWAIT (GFP_ATOMIC & ~__GFP_HIGH)
+#endif
