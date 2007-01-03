@@ -2754,7 +2754,7 @@ int parse_host_unix_path(struct sockaddr_un *uaddr, const char *str, int sep)
     p = strchrnul(str, sep);
     uaddr->sun_family = AF_UNIX;
     memcpy(uaddr->sun_path, str, p - str);
-    uaddr->sun_path[p-str+1] = '\0';
+    uaddr->sun_path[p-str] = '\0';
     unlink(uaddr->sun_path);
 
     return 0;
