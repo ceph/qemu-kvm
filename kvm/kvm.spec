@@ -78,7 +78,7 @@ make DESTDIR=%{buildroot} install-rpm
 depmod %{kverrel}
 /sbin/chkconfig --level 2345 kvm on
 /sbin/chkconfig --level 16 kvm off
-/usr/sbin/groupadd -g 444 kvm
+/usr/sbin/groupadd -fg 444 kvm
 
 %postun
 
