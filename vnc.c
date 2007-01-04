@@ -81,6 +81,8 @@ struct VncState
 
     VncReadEvent *read_handler;
     size_t read_handler_expect;
+
+    int size;
 };
 
 /* TODO
@@ -169,7 +171,7 @@ static void vnc_dpy_resize(DisplayState *ds, int w, int h)
 
     ds->data = realloc(ds->data, w * h * vs->depth);
     vs->old_data = realloc(vs->old_data, w * h * vs->depth);
-
+    vs->size = w * h * vs->depth;
     if (ds->data == NULL || vs->old_data == NULL) {
 	fprintf(stderr, "vnc: memory allocation failed\n");
 	exit(1);
@@ -732,6 +734,15 @@ static void framebuffer_update_request(VncState *vs, int incremental,
 	for (i = 0; i < h; i++) {
             vnc_set_bits(vs->dirty_row[y_position + i], 
                          (vs->ds->width / 16), VNC_DIRTY_WORDS);
+            if (old_row + vs->ds->width*vs->depth > vs->old_data + vs->size) {
+                if (0) /* FIXME: */
+                printf("vnc: BUG: %s: x=%d y=%d w=%d h=%d i=%d: "
+                       "old_row(%p) + w*d(0x%x) > old_data(%p) + size(0x%x)\n",
+                       __FUNCTION__, x_position, y_position, w, h, i,
+                       old_row,vs->ds->width * vs->depth, 
+                       vs->old_data, vs->size);
+                break;
+            }
 	    memset(old_row, 42, vs->ds->width * vs->depth);
 	    old_row += vs->ds->linesize;
 	}
@@ -1031,6 +1042,8 @@ void vnc_display_init(DisplayState *ds, int display)
     vs->lsock = -1;
     vs->csock = -1;
     vs->depth = 4;
+
+    vs->size = 0;
 
     vs->ds = ds;
 
