@@ -71,6 +71,14 @@ optparser.add_option('--stopped',
                      default = False,
                      )
 
+optparser.add_option('-n', '--dry-run',
+                     help = "just print the qemu command line; don't run it",
+                     action = 'store_true',
+                     dest = 'dry_run',
+                     default = False,
+                     )
+
+
 (options, args) = optparser.parse_args()
 
 if len(args) > 0:
@@ -189,7 +197,9 @@ if options.monitor:
 if options.stopped:
     qemu_args += ('-S',)
 
-def concat_func(x,y): return x + ' ' + y
-print 'Running %s' % reduce(concat_func, qemu_args)
+if options.dry_run:
+    def concat_func(x,y): return x + ' ' + y
+    print reduce(concat_func, qemu_args)
+    sys.exit(0)
 
 os.execvp(cmd, qemu_args)
