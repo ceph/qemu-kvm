@@ -56,8 +56,28 @@ optparser.add_option('--cdrom',
 optparser.add_option('--loadvm',
                      help = 'select saved vm-image',
                      dest = 'saved_image',
-                     default = '',
+                     default = None,
                      )
+
+optparser.add_option('--monitor',
+                     help = 'redirect monitor (currently only stdio or tcp)',
+                     dest = 'monitor',
+                     default = None,
+                     )
+
+optparser.add_option('--stopped',
+                     help = 'start image in stopped mode',
+                     action = 'store_true',
+                     default = False,
+                     )
+
+optparser.add_option('-n', '--dry-run',
+                     help = "just print the qemu command line; don't run it",
+                     action = 'store_true',
+                     dest = 'dry_run',
+                     default = False,
+                     )
+
 
 (options, args) = optparser.parse_args()
 
@@ -160,13 +180,26 @@ if not options.notap:
     qemu_args += ('-net', 'nic,macaddr=%s' % (mac,),
                   '-net', 'tap,script=/etc/kvm/qemu-ifup',)
 
-if options.vnc is not None:
+if options.vnc:
     qemu_args += ('-vnc', str(options.vnc))
 
-if options.saved_image != '':
+if options.saved_image:
     qemu_args += ('-loadvm' , options.saved_image, )
 
-def concat_func(x,y): return x + ' ' + y
-print 'Running %s' % reduce(concat_func, qemu_args)
+if options.monitor:
+    if options.monitor == 'stdio':
+        qemu_args += ('-monitor' , 'stdio', )
+    elif options.monitor == 'tcp':
+        qemu_args += ('-monitor' , 'tcp:0:5555,server,nowait', )
+    else:
+        raise Exception('illegal monitor option %s' % option.monitor)
+
+if options.stopped:
+    qemu_args += ('-S',)
+
+if options.dry_run:
+    def concat_func(x,y): return x + ' ' + y
+    print reduce(concat_func, qemu_args)
+    sys.exit(0)
 
 os.execvp(cmd, qemu_args)

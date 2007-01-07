@@ -132,6 +132,58 @@ static void uhci_reset(UHCIState *s)
     }
 }
 
+static void uhci_save(QEMUFile *f, void *opaque)
+{
+    UHCIState *s = opaque;
+    uint8_t num_ports = NB_PORTS;
+    int i;
+    
+    generic_pci_save(f, &s->dev);
+
+    qemu_put_8s(f, &num_ports);
+    for (i = 0; i < num_ports; ++i)
+        qemu_put_be16s(f, &s->ports[i].ctrl);
+    qemu_put_be16s(f, &s->cmd);
+    qemu_put_be16s(f, &s->status);
+    qemu_put_be16s(f, &s->intr);
+    qemu_put_be16s(f, &s->frnum);
+    qemu_put_be32s(f, &s->fl_base_addr);
+    qemu_put_8s(f, &s->sof_timing);
+    qemu_put_8s(f, &s->status2);
+    qemu_put_timer(f, s->frame_timer);
+}
+
+static int uhci_load(QEMUFile* f,void* opaque,int version_id)
+{
+    UHCIState *s = opaque;
+    uint8_t num_ports;
+    int i, ret;
+
+    if (version_id > 1)
+        return -EINVAL;
+
+    ret = generic_pci_load(f, &s->dev, 1);
+    if (ret < 0)
+        return ret;
+
+    qemu_get_8s(f, &num_ports);
+    if (num_ports != NB_PORTS)
+        return -EINVAL;
+    
+    for (i = 0; i < num_ports; ++i)
+        qemu_get_be16s(f, &s->ports[i].ctrl);
+    qemu_get_be16s(f, &s->cmd);
+    qemu_get_be16s(f, &s->status);
+    qemu_get_be16s(f, &s->intr);
+    qemu_get_be16s(f, &s->frnum);
+    qemu_get_be32s(f, &s->fl_base_addr);
+    qemu_get_8s(f, &s->sof_timing);
+    qemu_get_8s(f, &s->status2);
+    qemu_get_timer(f, s->frame_timer);
+    
+    return 0;
+}
+
 static void uhci_ioport_writeb(void *opaque, uint32_t addr, uint32_t val)
 {
     UHCIState *s = opaque;
@@ -671,4 +723,6 @@ void usb_uhci_init(PCIBus *bus, int devfn)
        to rely on this.  */
     pci_register_io_region(&s->dev, 4, 0x20, 
                            PCI_ADDRESS_SPACE_IO, uhci_map);
+
+    register_savevm("uhci", 0, 1, uhci_save, uhci_load, s);
 }

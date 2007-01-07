@@ -25,6 +25,9 @@
 #include "disas.h"
 #include <dirent.h>
 #include "migration.h"
+#if USE_KVM
+#include "qemu-kvm.h"
+#endif
 //#define DEBUG
 //#define DEBUG_COMPLETION
 
@@ -2230,6 +2233,15 @@ static void monitor_handle_command(const term_cmd_t *cmds, const char *cmdline)
                     cmdname);
         goto fail;
     }
+
+#ifdef USE_KVM
+    if(1)
+    {
+        CPUState *env=mon_get_cpu();
+        if (kvm_allowed)
+            kvm_save_registers(env);
+    }
+#endif    
 
     switch(nb_args) {
     case 0:

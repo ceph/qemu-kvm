@@ -99,6 +99,14 @@ static int test_io_window(void *opaque)
     return 0;
 }
 
+static int test_try_push_interrupts(void *opaque)
+{
+}
+
+static void test_post_kvm_run(void *opaque, struct kvm_run *kvm_run)
+{
+}
+
 static struct kvm_callbacks test_callbacks = {
     .cpuid       = test_cpuid,
     .inb         = test_inb,
@@ -110,6 +118,8 @@ static struct kvm_callbacks test_callbacks = {
     .debug       = test_debug,
     .halt        = test_halt,
     .io_window = test_io_window,
+    .try_push_interrupts = test_try_push_interrupts,
+    .post_kvm_run = test_post_kvm_run,
 };
  
 

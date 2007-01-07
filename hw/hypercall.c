@@ -25,22 +25,23 @@
 #include "vl.h"
 
 int use_hypercall_dev = 0;
+static CharDriverState *vmchannel_hd;
 
 typedef struct HypercallState {
-    uint8_t cmd;
-    uint32_t start;
-    uint32_t stop;
+    int irq;
+    PCIDevice *pci_dev;
 } HypercallState;
 
 static void hp_ioport_write(void *opaque, uint32_t addr, uint32_t val)
 {
-	//printf("hp_ioport_write, val=0x%x\n", val);
+    //printf("hp_ioport_write, val=0x%x\n", val);
+    qemu_chr_write(vmchannel_hd, (const uint8_t*)&val, 1);
 }
 
 static uint32_t hp_ioport_read(void *opaque, uint32_t addr)
 {
-	//printf("hp_ioport_read\n");
-	return 0;
+    //printf("hp_ioport_read\n");
+    return 0;
 }
 
 /***********************************************************/
@@ -64,39 +65,40 @@ static void hp_map(PCIDevice *pci_dev, int region_num,
 
 void pci_hypercall_init(PCIBus *bus)
 {
-	PCIHypercallState *d;
-	uint8_t *pci_conf;
+    PCIHypercallState *d;
+    HypercallState *s;
+    uint8_t *pci_conf;
 
+    // If the vmchannel wasn't initialized, we don't want the Hypercall device in the guest
+    if (use_hypercall_dev == 0) {
+        return;
+    }
 
-	// If the vmchannel wasn't initialized, we don't want the Hypercall device in the guest
-	if (use_hypercall_dev == 0) {
-		return;
-	}
+    d = (PCIHypercallState *)pci_register_device(bus,
+                                                 "Hypercall", sizeof(PCIHypercallState),
+                                                 -1,
+                                                 NULL, NULL);
 
-	d = (PCIHypercallState *)pci_register_device(bus,
-											  "HPNAME", sizeof(PCIHypercallState),
-											  -1, 
-											  NULL, NULL);
+    pci_conf = d->dev.config;
+    pci_conf[0x00] = 0x02; // Qumranet vendor ID 0x5002
+    pci_conf[0x01] = 0x50;
+    pci_conf[0x02] = 0x58; // Qumranet DeviceID 0x2258
+    pci_conf[0x03] = 0x22;
 
-	pci_conf = d->dev.config;
-	pci_conf[0x00] = 0x02; // Qumranet vendor ID 0x5002
-	pci_conf[0x01] = 0x50;
-	pci_conf[0x02] = 0x58; // Qumranet DeviceID 0x2258
-	pci_conf[0x03] = 0x22;
+    pci_conf[0x09] = 0x00; // ProgIf
+    pci_conf[0x0a] = 0x00; // SubClass
+    pci_conf[0x0b] = 0x05; // BaseClass
 
-	pci_conf[0x09] = 0x00; // ProgIf
-	pci_conf[0x0a] = 0x00; // SubClass
-	pci_conf[0x0b] = 0x05; // BaseClass
+    pci_conf[0x0e] = 0x00; // header_type
+    pci_conf[0x3d] = 1; // interrupt pin 0
 
-	pci_conf[0x0e] = 0x00; // header_type
-	pci_conf[0x3d] = 0x00; // interrupt pin 0
-
-	pci_register_io_region(&d->dev, 0, 0x100,
-						   PCI_ADDRESS_SPACE_IO, hp_map);
+    pci_register_io_region(&d->dev, 0, 0x100,
+                           PCI_ADDRESS_SPACE_IO, hp_map);
+    s = &d->hp;
+    s->irq = 16; /* PCI interrupt */
+    s->pci_dev = (PCIDevice *)d;
 }
 
-
-static CharDriverState *vmchannel_hd;
 
 static int vmchannel_can_read(void *opaque)
 {
@@ -107,20 +109,18 @@ static void vmchannel_read(void *opaque, const uint8_t *buf, int size)
 {
     int i;
 
-	//printf("vmchannel_read buf:%p, size:%d\n", buf, size);
+    //printf("vmchannel_read buf:%p, size:%d\n", buf, size);
 
     for(i = 0; i < size; i++) {
-		printf("buf[i]=%c\n",buf[i]);
         readline_handle_byte(buf[i]);
-	}
+    }
 }
 
 void vmchannel_init(CharDriverState *hd)
 {
-	vmchannel_hd = hd;
+    vmchannel_hd = hd;
 
-	use_hypercall_dev = 1;
-
-	qemu_chr_add_read_handler(hd, vmchannel_can_read, vmchannel_read, NULL);
-	//vmchannel_start_input();
+    use_hypercall_dev = 1;
+    qemu_chr_add_read_handler(vmchannel_hd, vmchannel_can_read, vmchannel_read, NULL);
+    //vmchannel_start_input();
 }
