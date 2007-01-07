@@ -36,8 +36,6 @@ static void kvm_mmu_audit(struct kvm_vcpu *vcpu, const char *msg);
 static void kvm_mmu_audit(struct kvm_vcpu *vcpu, const char *msg) {}
 #endif
 
-static int dbg = 1;
-
 #ifdef MMU_DEBUG
 
 #define pgprintk(x...) do { if (dbg) printk(x); } while (0)
@@ -48,6 +46,10 @@ static int dbg = 1;
 #define pgprintk(x...) do { } while (0)
 #define rmap_printk(x...) do { } while (0)
 
+#endif
+
+#if defined(MMU_DEBUG) || defined(AUDIT)
+static int dbg = 1;
 #endif
 
 #define ASSERT(x)							\
