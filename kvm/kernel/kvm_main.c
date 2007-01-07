@@ -661,9 +661,9 @@ raced:
 		for (i = 0; i < npages; ++i) {
 			new.phys_mem[i] = alloc_page(GFP_HIGHUSER
 						     | __GFP_ZERO);
-			new.phys_mem[i]->private = 0;
 			if (!new.phys_mem[i])
 				goto out_free;
+ 			new.phys_mem[i]->private = 0;
 		}
 	}
 
