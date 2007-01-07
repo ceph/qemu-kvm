@@ -1967,7 +1967,7 @@ static long kvm_dev_ioctl(struct file *filp,
 	default:
 		;
 	}
- out:
+out:
 	return r;
 }
 
