@@ -177,7 +177,7 @@ if not options.notap:
     mac_components[0] = 'a0'
     mac = ':'.join(mac_components)
             
-    qemu_args += ('-net', 'nic,macaddr=%s' % (mac,),
+    qemu_args += ('-net', 'nic,macaddr=%s,model=rtl8139' % (mac,),
                   '-net', 'tap,script=/etc/kvm/qemu-ifup',)
 
 if options.vnc:
