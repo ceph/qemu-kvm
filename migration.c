@@ -401,6 +401,9 @@ static int migration_write_some(int force)
 {
     int size, threshold = 1024;
 
+    if (ms.status != MIG_STAT_START)
+        return -1;
+
     if (threshold >= ms.buffsize) /* if buffsize is small */
         threshold = ms.buffsize / 2;
     size = migration_buffer_bytes_filled(&ms);
