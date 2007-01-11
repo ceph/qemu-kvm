@@ -151,6 +151,15 @@ static int parse_host_port_and_message(struct sockaddr_in *saddr,
     return 0;
 }
 
+static void migration_reset_buffer(migration_state_t *pms)
+{
+    memset(pms->buff, 0, pms->buffsize);
+    pms->head = 0;
+    pms->tail = 0;
+    pms->head_counter = 0;
+    pms->tail_counter = 0;
+}
+
 static void migration_cleanup(migration_state_t *pms, migration_status_t stat)
 {
     if (pms->fd != FD_UNUSED) {
@@ -563,6 +572,7 @@ static void migration_start_common(int online,
     socket_set_block(pms->fd); /* read as fast as you can */
 #endif
 
+    migration_reset_buffer(pms);
     pms->status = MIG_STAT_START;
     start_time = qemu_get_clock(rt_clock);
     term_printf("\nstarting migration (at %" PRIx64 ")\n", start_time);
