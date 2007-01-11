@@ -29,7 +29,7 @@ enum {
     AC_PTE_WRITABLE,
     // AC_PTE_USER,
     AC_PTE_ACCESSED,
-    // AC_PTE_DIRTY,
+    AC_PTE_DIRTY,
     // AC_PTE_NX,
 
     // AC_CPU_CR0_WP,
@@ -47,6 +47,7 @@ const char *ac_names[] = {
     [AC_PTE_PRESENT] = "pte.p",
     [AC_PTE_ACCESSED] = "pte.a",
     [AC_PTE_WRITABLE] = "pte.rw",
+    [AC_PTE_DIRTY] = "pte.d",
     [AC_ACCESS_WRITE] = "write",
 };
 
