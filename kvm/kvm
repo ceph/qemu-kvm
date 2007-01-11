@@ -51,7 +51,7 @@ optparser.add_option('--image',
 optparser.add_option('--cdrom',
                      help = 'select cdrom image',
                      dest = 'cdrom',
-                     default = '/data/mirror/fedora/core/5/x86_64/os/images/boot.iso',
+                     default = None,
                      )
 optparser.add_option('--loadvm',
                      help = 'select saved vm-image',
@@ -154,11 +154,14 @@ if os.access(local_cmd, os.F_OK):
 else:
     cmd = '/usr/bin/kvm'
 
-qemu_args = (cmd, '-cdrom', options.cdrom, '-boot', bootdisk,
+qemu_args = (cmd, '-boot', bootdisk,
              '-L', '/usr/share/qemu', '-hda', disk, '-m', '384',
              '-serial', 'file:/tmp/serial.log',
              '-usbdevice', 'tablet'
           )
+
+if options.cdrom:
+    qemu_args += ('-cdrom', options.cdrom,)
 
 if not options.kvm:
     qemu_args += ('-no-kvm',)
