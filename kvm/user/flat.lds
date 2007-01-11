@@ -4,7 +4,7 @@ SECTIONS
 {
     . = 1M;
     stext = .;
-    .text : { *(.init) *(.text) }
+    .text : { *(.init) *(.text) *(.text.*) }
     . = ALIGN(4K);
     .data : { *(.data) }
     . = ALIGN(16);

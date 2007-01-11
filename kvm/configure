@@ -4,6 +4,7 @@ prefix=/usr/local
 kerneldir=/lib/modules/$(uname -r)/build
 want_module=1
 qemu_cc=$(ls /usr/bin/gcc3* /usr/bin/gcc-3* 2>/dev/null | tail -n1)
+disable_gcc_check=
 
 usage() {
     cat <<-EOF
@@ -15,6 +16,8 @@ usage() {
 	    --with-patched-kernel  don't use external module
 	    --kerneldir=DIR        kernel build directory ($kerneldir)
 	    --qemu-cc="$qemu_cc"   compiler for qemu (needs gcc3.x) ($qemu_cc)
+	    --disable-gcc-check    don't insist on gcc-3.x
+                                   - this will break running without kvm
 EOF
     exit 1
 }
@@ -38,6 +41,9 @@ while [[ "$1" = -* ]]; do
 	    ;;
 	--qemu-cc)
 	    qemu_cc="$arg"
+	    ;;
+	--disable-gcc-check)
+	    disable_gcc_check=1
 	    ;;
 	--help)
 	    usage
@@ -72,6 +78,7 @@ target_cpu() {
     --extra-ldflags="-L $PWD/../user" \
     --enable-kvm --kernel-path="$libkvm_kerneldir" \
     --enable-alsa \
+    ${disable_gcc_check:+"--disable-gcc-check"} \
     --prefix="$prefix"
 )
 

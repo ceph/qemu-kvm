@@ -17,6 +17,7 @@
 #include <linux/module.h>
 #include <linux/vmalloc.h>
 #include <linux/highmem.h>
+#include <linux/profile.h>
 #include <asm/desc.h>
 
 #include "kvm_svm.h"
@@ -1406,7 +1407,8 @@ static int svm_vcpu_run(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	int r;
 
 again:
-	do_interrupt_requests(vcpu, kvm_run);
+	if (!vcpu->mmio_read_completed)
+		do_interrupt_requests(vcpu, kvm_run);
 
 	clgi();
 
@@ -1557,6 +1559,13 @@ again:
 	load_host_msrs(vcpu);
 
 	reload_tss(vcpu);
+
+	/*
+	 * Profile KVM exit RIPs:
+	 */
+	if (unlikely(prof_on == KVM_PROFILING))
+		profile_hit(KVM_PROFILING,
+			(void *)(unsigned long)vcpu->svm->vmcb->save.rip);
 
 	stgi();
 

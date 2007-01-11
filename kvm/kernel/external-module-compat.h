@@ -19,3 +19,15 @@
 #ifndef GFP_NOWAIT
 #define GFP_NOWAIT (GFP_ATOMIC & ~__GFP_HIGH)
 #endif
+
+
+/*
+ * kvm profiling support needs 2.6.20
+ */
+#include <linux/profile.h>
+
+#ifndef KVM_PROFILING
+#define KVM_PROFILING 1234
+#define prof_on       4321
+#endif
+

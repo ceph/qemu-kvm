@@ -22,7 +22,8 @@ libkvm.a: kvmctl.o
 	$(AR) rcs $@ $^
 
 flatfiles: test/simple.flat test/stringio.flat test/memtest1.flat \
-	test/irq.flat test/sieve.flat test/bootstrap
+	test/irq.flat test/sieve.flat test/bootstrap \
+	test/access.flat
 
 install:
 	install -D kvmctl.h $(DESTDIR)/$(PREFIX)/include/kvmctl.h
@@ -41,9 +42,13 @@ test/bootstrap: test/bootstrap.o
 
 test/irq.flat: test/print.o
 
+test/access.flat: test/cstart64.o test/access.o test/printf.o test/print.o
+
 test/sieve.flat: test/cstart64.o test/sieve.o test/print.o test/vm.o
 
 test/test32.flat: test/test32.o
+
+test/%.o: CFLAGS += -std=gnu99 -ffreestanding
 
 -include .*.d
 

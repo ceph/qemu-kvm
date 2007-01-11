@@ -89,7 +89,8 @@ if len(args) > 1:
 
 def remove_module(module):
     module = module.replace('-', '_')
-    for x in os.popen4('/sbin/lsmod')[1].readlines():
+    lines = commands.getoutput('/sbin/lsmod').split('\n')
+    for x in lines:
         if x.startswith(module + ' '):
             if os.spawnl(os.P_WAIT, '/sbin/rmmod', 'rmmod', module) != 0:
                 raise Exception('failed to remove %s module' % (module,))
@@ -177,7 +178,7 @@ if not options.notap:
     mac_components[0] = 'a0'
     mac = ':'.join(mac_components)
             
-    qemu_args += ('-net', 'nic,macaddr=%s' % (mac,),
+    qemu_args += ('-net', 'nic,macaddr=%s,model=rtl8139' % (mac,),
                   '-net', 'tap,script=/etc/kvm/qemu-ifup',)
 
 if options.vnc:

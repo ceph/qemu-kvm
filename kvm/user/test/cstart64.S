@@ -63,6 +63,8 @@ efer = 0xc0000080
 .code64
 start64:	
 	lea stacktop, %rsp
+	mov $0, %eax
+	mov %ax, %ss
 	call main
 1:	hlt
 	jmp 1b
