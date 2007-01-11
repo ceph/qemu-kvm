@@ -149,7 +149,6 @@ void set_cr0_wp(int wp)
 
 void ac_test_init(ac_test_t *at)
 {
-    printf("init\n");
     set_cr0_wp(1);
     for (int i = 0; i < NR_AC_FLAGS; ++i)
 	at->flags[i] = 0;
@@ -157,11 +156,9 @@ void ac_test_init(ac_test_t *at)
     at->phys = 32 * 1024 * 1024;
     at->pt_pool = 33 * 1024 * 1024;
     memset(at->idt, 0, sizeof at->idt);
-    printf("lidt\n");
     lidt(at->idt, 256);
     extern char page_fault;
     set_idt_entry(&at->idt[14], &page_fault);
-    printf("ok\n");
 }
 
 int ac_test_bump(ac_test_t *at)
@@ -199,7 +196,6 @@ void ac_test_setup_pte(ac_test_t *at)
 {
     unsigned long root = read_cr3();
 
-    printf("setting up pte\n");
     for (int i = 4; i >= 1; --i) {
 	pt_element_t *vroot = va(root & PT_BASE_ADDR_MASK);
 	unsigned index = ((unsigned long)at->virt >> (12 + (i-1) * 9)) & 511;
@@ -253,7 +249,6 @@ int ac_test_do_access(ac_test_t *at)
 
     ++unique;
 
-    printf("attempting access\n");
     unsigned r = unique;
     asm volatile ("cmp $0, %[write] \n\t"
 		  "jnz 1f \n\t"
@@ -291,6 +286,7 @@ int ac_test_do_access(ac_test_t *at)
 	return 0;
     }
 
+    printf("OK\n");
     return 1;
 }
 
@@ -302,7 +298,7 @@ void ac_test_exec(ac_test_t *at)
     for (int i = 0; i < NR_AC_FLAGS; ++i)
 	if (at->flags[i])
 	    printf(" %s", ac_names[i]);
-    printf(" - ");
+    printf(": ");
     ac_test_setup_pte(at);
     r = ac_test_do_access(at);
 }
