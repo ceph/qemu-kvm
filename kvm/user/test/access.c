@@ -12,6 +12,7 @@ typedef unsigned long pt_element_t;
 #define PT_WRITABLE_MASK   ((pt_element_t)1 << 1)
 #define PT_USER_MASK       ((pt_element_t)1 << 2)
 #define PT_ACCESSED_MASK   ((pt_element_t)1 << 5)
+#define PT_DIRTY_MASK      ((pt_element_t)1 << 6)
 
 #define CR0_WP_MASK (1UL << 16)
 
@@ -25,7 +26,7 @@ typedef unsigned long pt_element_t;
 
 enum {
     AC_PTE_PRESENT,
-    // AC_PTE_WRITABLE,
+    AC_PTE_WRITABLE,
     // AC_PTE_USER,
     AC_PTE_ACCESSED,
     // AC_PTE_DIRTY,
@@ -35,7 +36,7 @@ enum {
     // AC_CPU_EFER_NX,
 
     // AC_ACCESS_USER,
-    // AC_ACCESS_WRITE,
+    AC_ACCESS_WRITE,
     // AC_ACCESS_FETCH,
     // AC_ACCESS_PTE,
 
@@ -45,6 +46,8 @@ enum {
 const char *ac_names[] = {
     [AC_PTE_PRESENT] = "pte.p",
     [AC_PTE_ACCESSED] = "pte.a",
+    [AC_PTE_WRITABLE] = "pte.rw",
+    [AC_ACCESS_WRITE] = "write",
 };
 
 static inline void *va(pt_element_t phys)
@@ -210,6 +213,8 @@ void ac_test_setup_pte(ac_test_t *at)
 	    pte = at->phys & PT_BASE_ADDR_MASK;
 	    if (at->flags[AC_PTE_PRESENT])
 		pte |= PT_PRESENT_MASK;
+	    if (at->flags[AC_PTE_WRITABLE])
+		pte |= PT_WRITABLE_MASK;
 	    if (at->flags[AC_PTE_ACCESSED])
 		pte |= PT_ACCESSED_MASK;
 	    at->ptep = &vroot[index];
@@ -226,6 +231,15 @@ void ac_test_setup_pte(ac_test_t *at)
     else
 	at->expected_error |= PFERR_PRESENT_MASK;
 
+    if (at->flags[AC_ACCESS_WRITE]) {
+	if (!at->flags[AC_PTE_WRITABLE]) {
+	    at->expected_fault = 1;
+	    at->expected_error |= PFERR_WRITE_MASK;
+	} else {
+	    at->expected_pte |= PT_DIRTY_MASK;
+	}
+    }
+
     if (!at->expected_fault) {
 	at->expected_pte |= PT_ACCESSED_MASK;
     }
@@ -241,10 +255,16 @@ int ac_test_do_access(ac_test_t *at)
 
     printf("attempting access\n");
     unsigned r = unique;
-    asm volatile ("fault1: mov (%[addr]), %[reg] \n\t"
+    asm volatile ("cmp $0, %[write] \n\t"
+		  "jnz 1f \n\t"
+		  "mov (%[addr]), %[reg] \n\t"
+		  "jmp done \n\t"
+		  "1: mov %[reg], (%[addr]) \n\t"
+		  "done:"
 		  "fixed1:"
 		  : [reg]"+r"(r), "+a"(fault), "=b"(e)
-		  : [addr]"r"(at->virt));
+		  : [addr]"r"(at->virt),
+		    [write]"r"(at->flags[AC_ACCESS_WRITE]));
 
     asm volatile (".section .text.pf \n\t"
 		  "page_fault: \n\t"
@@ -267,7 +287,7 @@ int ac_test_do_access(ac_test_t *at)
 	return 0;
     }
     if (*at->ptep != at->expected_pte) {
-	printf("pte %llx expected %llx\n", *at->ptep, at->expected_pte);
+	printf("pte %x expected %x\n", *at->ptep, at->expected_pte);
 	return 0;
     }
 
