@@ -11,8 +11,13 @@ typedef unsigned long pt_element_t;
 #define PT_PRESENT_MASK    ((pt_element_t)1 << 0)
 #define PT_WRITABLE_MASK   ((pt_element_t)1 << 1)
 #define PT_USER_MASK       ((pt_element_t)1 << 2)
+#define PT_ACCESSED_MASK   ((pt_element_t)1 << 5)
 
 #define CR0_WP_MASK (1UL << 16)
+
+#define PFERR_PRESENT_MASK (1U << 0)
+#define PFERR_WRITE_MASK (1U << 1)
+#define PFERR_USER_MASK (1U << 2)
 
 /*
  * page table access check tests
@@ -22,7 +27,7 @@ enum {
     AC_PTE_PRESENT,
     // AC_PTE_WRITABLE,
     // AC_PTE_USER,
-    // AC_PTE_ACCESSED,
+    AC_PTE_ACCESSED,
     // AC_PTE_DIRTY,
     // AC_PTE_NX,
 
@@ -39,6 +44,7 @@ enum {
 
 const char *ac_names[] = {
     [AC_PTE_PRESENT] = "pte.p",
+    [AC_PTE_ACCESSED] = "pte.a",
 };
 
 static inline void *va(pt_element_t phys)
@@ -79,6 +85,10 @@ typedef struct {
     void *virt;
     pt_element_t phys;
     pt_element_t pt_pool;
+    pt_element_t *ptep;
+    pt_element_t expected_pte;
+    int expected_fault;
+    unsigned expected_error;
     idt_entry_t idt[256];
 } ac_test_t;
 
@@ -200,18 +210,31 @@ void ac_test_setup_pte(ac_test_t *at)
 	    pte = at->phys & PT_BASE_ADDR_MASK;
 	    if (at->flags[AC_PTE_PRESENT])
 		pte |= PT_PRESENT_MASK;
-	    
+	    if (at->flags[AC_PTE_ACCESSED])
+		pte |= PT_ACCESSED_MASK;
+	    at->ptep = &vroot[index];
 	}
 	vroot[index] = pte;
 	root = vroot[index];
     }
     invlpg(at->virt);
+    at->expected_pte = *at->ptep;
+    at->expected_fault = 0;
+    at->expected_error = 0;
+    if (!at->flags[AC_PTE_PRESENT])
+	at->expected_fault = 1;
+    else
+	at->expected_error |= PFERR_PRESENT_MASK;
+
+    if (!at->expected_fault) {
+	at->expected_pte |= PT_ACCESSED_MASK;
+    }
 }
 
-int ac_test_do_access(ac_test_t *at, unsigned *error_code)
+int ac_test_do_access(ac_test_t *at)
 {
     static unsigned unique = 42;
-    int ret = 1;
+    int fault = 0;
     unsigned e;
 
     ++unique;
@@ -220,25 +243,40 @@ int ac_test_do_access(ac_test_t *at, unsigned *error_code)
     unsigned r = unique;
     asm volatile ("fault1: mov (%[addr]), %[reg] \n\t"
 		  "fixed1:"
-		  : [reg]"+r"(r), "=m"(*error_code), "+a"(ret), "=b"(e)
+		  : [reg]"+r"(r), "+a"(fault), "=b"(e)
 		  : [addr]"r"(at->virt));
 
     asm volatile (".section .text.pf \n\t"
 		  "page_fault: \n\t"
 		  "pop %rbx \n\t"
 		  "movq $fixed1, (%rsp) \n\t"
-		  "movl $0, %eax \n\t"
+		  "movl $1, %eax \n\t"
 		  "iretq \n\t"
 		  ".section .text");
-    *error_code = e;
 
-    return ret;
+    if (fault && !at->expected_fault) {
+	printf("unexpected fault\n");
+	return 0;
+    }
+    if (!fault && at->expected_fault) {
+	printf("unexpected access\n");
+	return 0;
+    }
+    if (fault && e != at->expected_error) {
+	printf("error code %x expected %x\n", e, at->expected_fault);
+	return 0;
+    }
+    if (*at->ptep != at->expected_pte) {
+	printf("pte %llx expected %llx\n", *at->ptep, at->expected_pte);
+	return 0;
+    }
+
+    return 1;
 }
 
 void ac_test_exec(ac_test_t *at)
 {
     int r;
-    unsigned error_code;
 
     printf("test");
     for (int i = 0; i < NR_AC_FLAGS; ++i)
@@ -246,12 +284,7 @@ void ac_test_exec(ac_test_t *at)
 	    printf(" %s", ac_names[i]);
     printf(" - ");
     ac_test_setup_pte(at);
-    r = ac_test_do_access(at, &error_code);
-    if (r)
-	printf("accessed");
-    else
-	printf("faulted %x", error_code);
-    printf("\n");
+    r = ac_test_do_access(at);
 }
 
 void ac_test_run()
