@@ -662,11 +662,11 @@ static void migration_start_common(migration_state_t *pms)
     socket_set_block(pms->fd); /* read as fast as you can */
 #endif
 
+    start_time = qemu_get_clock(rt_clock);
     term_printf("\nstarting migration (at %" PRId64 ")\n", start_time);
     migration_phase_set(pms, 0);
     migration_reset_buffer(pms);
     pms->status = MIG_STAT_START;
-    start_time = qemu_get_clock(rt_clock);
 
     migration_phase_inc(pms);
     migration_main_loop(pms);
