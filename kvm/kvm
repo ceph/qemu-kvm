@@ -31,6 +31,12 @@ optparser.add_option('--no-tap',
                      default = False,
                      )
 
+optparser.add_option('--mac',
+                     help = 'use this specific mac addr',
+                     dest = 'mac',
+                     default = None,
+                     )
+
 optparser.add_option('--vnc',
                      help = 'use VNC rather than SDL',
                      dest = 'vnc',
@@ -170,16 +176,17 @@ if options.debugger:
     qemu_args += ('-s',)
 
 if not options.notap:
-    mac = None
-    for line in commands.getoutput('ip link show eth0').splitlines():
-        m = re.match(r'.*link/ether (..:..:..:..:..:..).*', line)
-        if m:
-            mac = m.group(1)
+    mac = options.mac
     if not mac:
-        raise Exception, 'Unable to determine eth0 mac address'
-    mac_components = mac.split(':')
-    mac_components[0] = 'a0'
-    mac = ':'.join(mac_components)
+        for line in commands.getoutput('ip link show eth0').splitlines():
+            m = re.match(r'.*link/ether (..:..:..:..:..:..).*', line)
+            if m:
+                mac = m.group(1)
+        if not mac:
+            raise Exception, 'Unable to determine eth0 mac address'
+        mac_components = mac.split(':')
+        mac_components[0] = 'a0'
+        mac = ':'.join(mac_components)
             
     qemu_args += ('-net', 'nic,macaddr=%s,model=rtl8139' % (mac,),
                   '-net', 'tap,script=/etc/kvm/qemu-ifup',)
