@@ -50,6 +50,9 @@ typedef struct migration_state {
     migration_role_t role;
     int64_t  head_counter, tail_counter;
     migration_bandwith_params_t bw;
+    int      phase;
+    int      online;
+    int      yield;
 } migration_state_t;
 
 static migration_state_t ms = {
@@ -61,16 +64,58 @@ static migration_state_t ms = {
     .tail = 0,
     .head_counter = 0,
     .tail_counter = 0,
-    .bw = {0, 0, 0, 0}
+    .bw = {0, 0, 0, 0},
+    .phase = 0,
+    .online = 0,
+    .yield = 0,
 };
 
 static const char *reader_default_addr="localhost:4455";
 static const char *writer_default_addr="localhost:4456";
 
 /* forward declarations */
-static void migration_start_dst(int online);
 static void migration_cleanup(migration_state_t *pms, migration_status_t stat);
+static void migration_start_src(migration_state_t *pms);
+static void migration_phase_1_src(migration_state_t *pms);
+static void migration_phase_2_src(migration_state_t *pms);
+static void migration_phase_3_src(migration_state_t *pms);
+static void migration_phase_4_src(migration_state_t *pms);
+static void migration_start_dst(migration_state_t *pms);
+static void migration_phase_1_dst(migration_state_t *pms);
+static void migration_phase_2_dst(migration_state_t *pms);
+static void migration_phase_3_dst(migration_state_t *pms);
+static void migration_phase_4_dst(migration_state_t *pms);
 
+typedef void (*QemuMigrationPhaseCB)(migration_state_t *pms);
+#define MIGRATION_NUM_PHASES 5
+QemuMigrationPhaseCB migration_phase_funcs[2][MIGRATION_NUM_PHASES] = {
+    {
+        migration_start_src,
+        migration_phase_1_src,
+        migration_phase_2_src,
+        migration_phase_3_src,
+        migration_phase_4_src    },
+    {
+        migration_start_dst,
+        migration_phase_1_dst,
+        migration_phase_2_dst,
+        migration_phase_3_dst,
+        migration_phase_4_dst    }
+};
+
+/* MIG_ASSERT 
+ * assuming pms is defined in the function calling MIG_ASSERT
+ * retuns non-0 if the condition is false, 0 if all is OK 
+ */
+#define MIG_ASSERT(p) mig_assert(pms, !!(p), __FUNCTION__, __LINE__)
+int mig_assert(migration_state_t *pms, int cond, const char *fname, int line)
+{
+    if (!cond) {
+        term_printf("assertion failed at %s():%d\n", fname, line);
+        migration_cleanup(&ms, MIG_STAT_FAIL);
+    }
+    return !cond;
+}
 
 static const char *mig_stat_str(migration_status_t mig_stat)
 {
@@ -251,7 +296,9 @@ static int migration_write_into_socket(void *opaque, int len)
 
 static void migration_start_now(void *opaque)
 {
-    migration_start_dst(0);
+    migration_state_t *pms = (migration_state_t *)opaque;
+
+    migration_start_dst(pms);
 }
 
 static void migration_accept(void *opaque)
@@ -541,14 +588,57 @@ static void migration_disconnect(void *opaque)
     migration_cleanup(pms, pms->status);
 }
 
-static void migration_start_common(int online,
-                                   int (*migrate)(const char*, QEMUFile*),
-                                   int cont_on_success)
+static void migration_phase_set(migration_state_t *pms, int phase)
 {
-    int rc;
-    int64_t start_time, end_time;
-    const char *dummy = "online_migration";
-    migration_state_t *pms = &ms;
+    int64_t t = qemu_get_clock(rt_clock);
+
+    term_printf("migration: starting phase %d at %" PRId64 "\n",
+                phase, t);
+    pms->phase = phase;
+}
+static void migration_phase_inc(migration_state_t *pms)
+{
+    migration_phase_set(pms, pms->phase + 1);
+}
+
+/* four phases for the migration:
+ * phase 0: initialization
+ * phase 1: online or offline
+ *    transfer all RAM pages
+ *    enable dirty pages logging
+ *
+ * phase 2: online only
+ *    repeat: transfer all dirty pages
+ *    
+ * phase 3: offline
+ *    transfer whatever left (dirty pages + non-ram states)
+ * 
+ * phase 4: offline or online
+ *    The grand finale: decide with host should continue
+ *    send a "to whom it may concern..."
+ *
+ *
+ * The function migration_main_loop just runs the appropriate function
+ *     according to phase.
+ */
+
+void migration_main_loop(void *opaque)
+{
+    migration_state_t *pms = (migration_state_t *)opaque;
+    
+    pms->yield = 0;
+    while (! pms->yield) {
+        if (pms->status != MIG_STAT_START)
+            pms->phase = MIGRATION_NUM_PHASES-1; /* last phase -- report */
+        if (MIG_ASSERT(pms->phase < MIGRATION_NUM_PHASES))
+            break;
+        migration_phase_funcs[pms->role-1][pms->phase](pms);
+    }
+}
+
+static void migration_start_common(migration_state_t *pms)
+{
+    int64_t start_time;
 
     if (pms->status != MIG_STAT_CONN) {
         switch (pms->status) {
@@ -572,48 +662,109 @@ static void migration_start_common(int online,
     socket_set_block(pms->fd); /* read as fast as you can */
 #endif
 
+    term_printf("\nstarting migration (at %" PRId64 ")\n", start_time);
+    migration_phase_set(pms, 0);
     migration_reset_buffer(pms);
     pms->status = MIG_STAT_START;
     start_time = qemu_get_clock(rt_clock);
-    term_printf("\nstarting migration (at %" PRIx64 ")\n", start_time);
+
+    migration_phase_inc(pms);
+    migration_main_loop(pms);
+}
+
+static void migration_start_src(migration_state_t *pms)
+{
+    pms->role = WRITER;
+    migration_start_common(pms);
+}
+
+static void migration_start_dst(migration_state_t *pms)
+{
+    pms->role = READER;
+    migration_start_common(pms);
+}
+
+
+static void migration_phase_1_src(migration_state_t *pms)
+{
+    migration_phase_inc(pms);
+}
+static void migration_phase_2_src(migration_state_t *pms)
+{
+    migration_phase_inc(pms);    
+}
+
+static void migration_phase_3_common(migration_state_t *pms, 
+                                     int (*migrate)(const char*, QEMUFile*))
+{
+    const char *dummy = "migrating";
+    int rc;
+
     vm_stop(EXCP_INTERRUPT); /* FIXME: use EXCP_MIGRATION ? */
     rc = migrate(dummy, &qemu_savevm_method_socket);
-    end_time = qemu_get_clock(rt_clock);
-    term_printf("migration %s (at %" PRIx64 " (%" PRIx64 "))\n", 
-                (rc)?"failed":"completed", end_time, end_time - start_time);
     if ((rc==0) && (pms->status == MIG_STAT_START))
         pms->status = MIG_STAT_SUCC;
     else
         if (pms->status == MIG_STAT_START)
             pms->status = MIG_STAT_FAIL;
-    if (((pms->status == MIG_STAT_SUCC) && cont_on_success) ||
-        ((pms->status != MIG_STAT_SUCC) && !cont_on_success)) {
+
+    migration_phase_inc(pms);
+}
+static void migration_phase_3_src(migration_state_t *pms)
+{
+    migration_phase_3_common(pms, qemu_savevm);
+}
+static void migration_phase_4_common(migration_state_t *pms, int cont)
+{
+    int64_t end_time = qemu_get_clock(rt_clock);
+    term_printf("migration %s at %" PRId64"\n",
+                (pms->status!=MIG_STAT_SUCC)?"failed":"completed successfully",
+                end_time);
+    if (cont) {
         migration_cleanup(pms, pms->status);
         vm_start();
     }
-    else
+    else 
         if (pms->fd != FD_UNUSED)
             qemu_set_fd_handler(pms->fd, migration_disconnect, NULL, pms);
+
+    pms->yield = 1;
 }
 
-static void migration_start_src(int online)
+static void migration_phase_4_src(migration_state_t *pms)
 {
-    ms.role = WRITER;
-
-    migration_start_common(online, qemu_savevm, 0);
+    migration_phase_4_common(pms, pms->status != MIG_STAT_SUCC);
 }
 
-static void migration_start_dst(int online)
+static void migration_phase_1_dst(migration_state_t *pms)
 {
-    ms.role = READER;
-
-    migration_start_common(online, qemu_loadvm, 1);
+    migration_phase_inc(pms);
+}
+static void migration_phase_2_dst(migration_state_t *pms)
+{
+    migration_phase_inc(pms);    
+}
+static void migration_phase_3_dst(migration_state_t *pms)
+{
+    migration_phase_3_common(pms, qemu_loadvm);
+}
+static void migration_phase_4_dst(migration_state_t *pms)
+{
+    migration_phase_4_common(pms, pms->status == MIG_STAT_SUCC);
 }
 
 void do_migration_getfd(int fd) { TO_BE_IMPLEMENTED; }
 void do_migration_start(char *deadoralive)
 { 
-    migration_start_src(0);
+    if (strcmp(deadoralive, "online") == 0)
+        ms.online = 1;
+    else if (strcmp(deadoralive, "offline") == 0)
+        ms.online = 0;
+    else {
+        term_printf("migration start: please specify 'online' or 'offline'\n");
+        return;
+    }
+    migration_start_src(&ms);
 }
 
 void do_migration_cancel(void)
