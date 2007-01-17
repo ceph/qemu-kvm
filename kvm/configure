@@ -22,6 +22,14 @@ EOF
     exit 1
 }
 
+
+# prefer gcc if its version is 3.* ( over a compat-gcc )
+# do it before parsing command line arguments to enable the user
+#    to specify a specific gcc he/she likes.
+if gcc -v 2>&1 | grep -q 'gcc *version *3\.[2-4]\.[0-9]'; then
+	qemu_cc=gcc
+fi
+
 while [[ "$1" = -* ]]; do
     opt="$1"; shift
     arg=
