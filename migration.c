@@ -19,6 +19,8 @@ void socket_set_block(int fd) /* should be in vl.c ? */
 #endif
 
 #define FD_UNUSED -1
+#define QEMU_MIGRATION_MAGIC     0x5145564d /* FIXME: our own magic ??? */
+#define QEMU_MIGRATION_VERSION   0x00000001
 
 typedef enum {
     NONE   = 0,
@@ -53,6 +55,7 @@ typedef struct migration_state {
     int      phase;
     int      online;
     int      yield;
+    QEMUFile *f;
 } migration_state_t;
 
 static migration_state_t ms = {
@@ -68,6 +71,7 @@ static migration_state_t ms = {
     .phase = 0,
     .online = 0,
     .yield = 0,
+    .f     = NULL,
 };
 
 static const char *reader_default_addr="localhost:4455";
@@ -667,6 +671,8 @@ static void migration_start_common(migration_state_t *pms)
     migration_phase_set(pms, 0);
     migration_reset_buffer(pms);
     pms->status = MIG_STAT_START;
+    pms->f = &qemu_savevm_method_socket;
+    pms->f->open(pms->f, NULL, NULL);
 
     migration_phase_inc(pms);
     migration_main_loop(pms);
@@ -687,6 +693,10 @@ static void migration_start_dst(migration_state_t *pms)
 
 static void migration_phase_1_src(migration_state_t *pms)
 {
+    qemu_put_be32(pms->f, QEMU_MIGRATION_MAGIC);
+    qemu_put_be32(pms->f, QEMU_MIGRATION_VERSION);
+    qemu_put_byte(pms->f, pms->online);
+
     migration_phase_inc(pms);
 }
 static void migration_phase_2_src(migration_state_t *pms)
@@ -738,6 +748,22 @@ static void migration_phase_4_src(migration_state_t *pms)
 
 static void migration_phase_1_dst(migration_state_t *pms)
 {
+    uint32_t magic, version, online;
+
+    magic   = qemu_get_be32(pms->f);
+    version = qemu_get_be32(pms->f);
+    online  = qemu_get_byte(pms->f);
+
+    if ((magic   != QEMU_MIGRATION_MAGIC)   ||
+        (version != QEMU_MIGRATION_VERSION)) {
+        term_printf("migration header: recv 0x%x 0x%x expecting 0x%x 0x%x\n",
+                    magic, version, 
+                    QEMU_MIGRATION_MAGIC, QEMU_MIGRATION_VERSION);
+        migration_cleanup(pms, MIG_STAT_FAIL);
+        return;
+    }
+    pms->online = online;
+    term_printf("===>received online=%u\n", online);
     migration_phase_inc(pms);
 }
 static void migration_phase_2_dst(migration_state_t *pms)
