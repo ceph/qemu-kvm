@@ -214,6 +214,8 @@ void ac_test_setup_pte(ac_test_t *at)
 		pte |= PT_WRITABLE_MASK;
 	    if (at->flags[AC_PTE_ACCESSED])
 		pte |= PT_ACCESSED_MASK;
+	    if (at->flags[AC_PTE_DIRTY])
+		pte |= PT_DIRTY_MASK;
 	    at->ptep = &vroot[index];
 	}
 	vroot[index] = pte;
@@ -229,10 +231,10 @@ void ac_test_setup_pte(ac_test_t *at)
 	at->expected_error |= PFERR_PRESENT_MASK;
 
     if (at->flags[AC_ACCESS_WRITE]) {
+	at->expected_error |= PFERR_WRITE_MASK;
 	if (!at->flags[AC_PTE_WRITABLE]) {
 	    at->expected_fault = 1;
-	    at->expected_error |= PFERR_WRITE_MASK;
-	} else {
+	} else if (!at->expected_fault) {
 	    at->expected_pte |= PT_DIRTY_MASK;
 	}
     }
