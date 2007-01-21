@@ -706,11 +706,18 @@ static void migration_start_dst(migration_state_t *pms)
 
 static void migration_phase_1_src(migration_state_t *pms)
 {
-    qemu_put_be32(pms->f, QEMU_MIGRATION_MAGIC);
-    qemu_put_be32(pms->f, QEMU_MIGRATION_VERSION);
-    qemu_put_byte(pms->f, pms->online);
+    if (pms->next_page == 0) {
+        qemu_put_be32(pms->f, QEMU_MIGRATION_MAGIC);
+        qemu_put_be32(pms->f, QEMU_MIGRATION_VERSION);
+        qemu_put_byte(pms->f, pms->online);
+        qemu_set_fd_handler(pms->fd, NULL, migration_main_loop, pms);
+    }
 
-    migration_phase_inc(pms);
+    migration_ram_send(pms);
+    if (pms->next_page >=  (phys_ram_size >> TARGET_PAGE_BITS)) {
+        migration_phase_inc(pms);
+        qemu_set_fd_handler(pms->fd, NULL, NULL, pms);
+    }
 }
 static void migration_phase_2_src(migration_state_t *pms)
 {
@@ -763,21 +770,29 @@ static void migration_phase_1_dst(migration_state_t *pms)
 {
     uint32_t magic, version, online;
 
-    magic   = qemu_get_be32(pms->f);
-    version = qemu_get_be32(pms->f);
-    online  = qemu_get_byte(pms->f);
+    if (pms->next_page == 0) {
+        magic   = qemu_get_be32(pms->f);
+        version = qemu_get_be32(pms->f);
+        online  = qemu_get_byte(pms->f);
 
-    if ((magic   != QEMU_MIGRATION_MAGIC)   ||
-        (version != QEMU_MIGRATION_VERSION)) {
-        term_printf("migration header: recv 0x%x 0x%x expecting 0x%x 0x%x\n",
-                    magic, version, 
-                    QEMU_MIGRATION_MAGIC, QEMU_MIGRATION_VERSION);
-        migration_cleanup(pms, MIG_STAT_FAIL);
-        return;
+        if ((magic   != QEMU_MIGRATION_MAGIC)   ||
+            (version != QEMU_MIGRATION_VERSION)) {
+            term_printf("migration header: recv 0x%x 0x%x expecting 0x%x 0x%x\n",
+                        magic, version, 
+                        QEMU_MIGRATION_MAGIC, QEMU_MIGRATION_VERSION);
+            migration_cleanup(pms, MIG_STAT_FAIL);
+            return;
+        }
+
+        pms->online = online;
+        term_printf("===>received online=%u\n", online);
     }
-    pms->online = online;
-    term_printf("===>received online=%u\n", online);
-    migration_phase_inc(pms);
+
+    migration_ram_recv(pms);
+
+    if (pms->next_page  >= (phys_ram_size >> TARGET_PAGE_BITS)) {
+        migration_phase_inc(pms);
+    }
 }
 static void migration_phase_2_dst(migration_state_t *pms)
 {
