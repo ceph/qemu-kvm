@@ -807,6 +807,14 @@ static int ram_page_homogeneous(const uint8_t *buf, const int len)
     return 1;
 }
 
+static void mig_ram_dirty_reset_page(unsigned page_number)
+{
+    ram_addr_t start, end;
+    start = page_number << TARGET_PAGE_BITS;
+    end   = start + TARGET_PAGE_SIZE;
+    cpu_physical_memory_reset_dirty(start, end, MIG_DIRTY_FLAG);
+}
+
 /*
  * Sends a single ram page
  * As in vl.c a single byte is being sent as data if page is "homogeneous"
@@ -842,6 +850,8 @@ static void mig_send_ram_page(migration_state_t *pms, unsigned page_number)
     qemu_put_byte(pms->f,   val);
     qemu_put_be32(pms->f,   page_number);
     qemu_put_buffer(pms->f, ptr, buflen);
+
+    mig_ram_dirty_reset_page(page_number);
 }
 
 /* returns 0 on success,
