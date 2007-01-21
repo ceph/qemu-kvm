@@ -38,6 +38,14 @@ typedef enum {
     MIG_STAT_CANCEL = 6  /* migration canceled */
 } migration_status_t;
 
+
+/* page types to be used when migrating ram pages */
+enum {
+    MIG_XFER_PAGE_TYPE_REGULAR     = 0,  /* regular page           */
+    MIG_XFER_PAGE_TYPE_HOMOGENEOUS = 1,  /* all bytes are the same */
+    MIG_XFER_PAGE_TYPE_END         = 15, /* go to the next phase   */
+};
+
 typedef struct migration_bandwith_params {
     int min, max, offline, seconds;
 } migration_bandwith_params_t;
@@ -56,6 +64,7 @@ typedef struct migration_state {
     int      online;
     int      yield;
     QEMUFile *f;
+    unsigned next_page;
 } migration_state_t;
 
 static migration_state_t ms = {
@@ -89,6 +98,9 @@ static void migration_phase_1_dst(migration_state_t *pms);
 static void migration_phase_2_dst(migration_state_t *pms);
 static void migration_phase_3_dst(migration_state_t *pms);
 static void migration_phase_4_dst(migration_state_t *pms);
+
+static void migration_ram_send(migration_state_t *pms);
+static void migration_ram_recv(migration_state_t *pms);
 
 typedef void (*QemuMigrationPhaseCB)(migration_state_t *pms);
 #define MIGRATION_NUM_PHASES 5
@@ -671,6 +683,7 @@ static void migration_start_common(migration_state_t *pms)
     migration_phase_set(pms, 0);
     migration_reset_buffer(pms);
     pms->status = MIG_STAT_START;
+    pms->next_page = 0;
     pms->f = &qemu_savevm_method_socket;
     pms->f->open(pms->f, NULL, NULL);
 
@@ -777,6 +790,176 @@ static void migration_phase_3_dst(migration_state_t *pms)
 static void migration_phase_4_dst(migration_state_t *pms)
 {
     migration_phase_4_common(pms, pms->status == MIG_STAT_SUCC);
+}
+
+
+/* 
+ * FIXME: make it share code in vl.c
+ */
+static int ram_page_homogeneous(const uint8_t *buf, const int len)
+{
+    int i, v;
+
+    v = buf[0];
+    for (i=1; i<len; i++)
+        if (buf[i] != v)
+            return 0;
+    return 1;
+}
+
+/*
+ * Sends a single ram page
+ * As in vl.c a single byte is being sent as data if page is "homogeneous"
+ * Layout:
+ *    header:
+ *        byte   -- migration transfer page type
+ *        uint32 -- page number
+ *    data
+ *        a single byte or the whole page (TARGET_PAGE_SIZE bytes).
+ */
+static void mig_send_ram_page(migration_state_t *pms, unsigned page_number)
+{
+    const uint8_t* ptr = (const uint8_t *)(unsigned long)phys_ram_base;
+    uint8_t val;
+    unsigned buflen;
+    
+    if (page_number >=  (phys_ram_size >> TARGET_PAGE_BITS)) {
+        term_printf("mig_send_ram_page: page_number is too large: %u (max is %u)\n",
+                    page_number, (phys_ram_size >> TARGET_PAGE_BITS));
+        migration_cleanup(pms, MIG_STAT_FAIL);
+        return;
+    }
+
+    ptr += (page_number << TARGET_PAGE_BITS);
+    if (ram_page_homogeneous(ptr, TARGET_PAGE_SIZE)) {
+        val = MIG_XFER_PAGE_TYPE_HOMOGENEOUS;
+        buflen = 1;
+    }
+    else {
+        val = MIG_XFER_PAGE_TYPE_REGULAR;
+        buflen = TARGET_PAGE_SIZE;
+    }
+    qemu_put_byte(pms->f,   val);
+    qemu_put_be32(pms->f,   page_number);
+    qemu_put_buffer(pms->f, ptr, buflen);
+}
+
+/* returns 0 on success,
+ *         1 if this phase is over
+ *        -1 on failure
+ */
+static int mig_recv_ram_page(migration_state_t *pms)
+{
+    uint8_t *ptr = (uint8_t *)(unsigned long)phys_ram_base;
+    unsigned page_number;
+    uint8_t val;
+    unsigned buflen;
+
+    val         = qemu_get_byte(pms->f);
+    page_number = qemu_get_be32(pms->f);
+
+    if ((pms->phase != 1) && (page_number != pms->next_page)) {
+        term_printf("WARNING: page number mismatch: received %u expected %u\n",
+                    page_number, pms->next_page);
+        return -1;
+    }
+
+    if (page_number >=  (phys_ram_size >> TARGET_PAGE_BITS)) {
+        term_printf("mig_recv_ram_page: page_number is too large: %u (max is %u)\n",
+                    page_number, (phys_ram_size >> TARGET_PAGE_BITS));
+        return -1;
+    }
+
+    switch(val) {
+    case MIG_XFER_PAGE_TYPE_END: /* go to the next phase */;
+        pms->next_page = phys_ram_size >> TARGET_PAGE_BITS;
+        return 1;
+    case MIG_XFER_PAGE_TYPE_REGULAR:
+        buflen = TARGET_PAGE_SIZE;
+        break;
+    case MIG_XFER_PAGE_TYPE_HOMOGENEOUS:
+        buflen = 1;
+        break;
+    default: 
+        term_printf("mig_recv_ram_page: illegal val received %d\n", val); 
+        migration_cleanup(pms, MIG_STAT_FAIL);
+        return -1;
+    }
+
+    ptr += (page_number << TARGET_PAGE_BITS);
+    qemu_get_buffer(pms->f, ptr, buflen);
+
+    if (val == MIG_XFER_PAGE_TYPE_HOMOGENEOUS)
+        memset(ptr, ptr[0], TARGET_PAGE_SIZE);
+
+    return 0;
+}
+
+
+/* In order to enable the guest to run while memory is transferred, 
+ *    the number of page continuously sent is limited by this constant.
+ * When the limit is reached we take a break and continue to send pages
+ *    upon another call to migration_ram_send (which would be when data can 
+ *    be sent over the socket ( using qemu_set_fd_handler() ).
+ */
+#define PAGES_CHUNK ((phys_ram_size >> TARGET_PAGE_BITS) /16 )
+
+/* Sends the whole ram in chunks, each call a few pages are being sent 
+ *    (needs to be called multiple times).
+ * State is kept in pms->next_page.
+ */ 
+static void migration_ram_send(migration_state_t *pms)
+{
+    unsigned num_pages = (phys_ram_size >> TARGET_PAGE_BITS);
+
+    if (pms->next_page == 0) { /* send memory size */
+        qemu_put_be32(pms->f, num_pages);
+    }
+    
+    if (pms->next_page >= num_pages) /* finished already */
+        return;
+
+    /* send a few pages (or until network buffers full) */
+    if (num_pages - pms->next_page > PAGES_CHUNK) {
+        num_pages = pms->next_page + PAGES_CHUNK;
+    }
+    for ( /*none*/ ; pms->next_page < num_pages; pms->next_page++) {
+        if ((pms->next_page >= (0xa0000 >> TARGET_PAGE_BITS)) && 
+            (pms->next_page <  (0xc0000 >> TARGET_PAGE_BITS)))
+            continue;
+        mig_send_ram_page(pms, pms->next_page);
+    }
+}
+
+/* recv the whole ram (first phase) */
+static void migration_ram_recv(migration_state_t *pms)
+{
+    unsigned num_pages;
+    int rc = 0;
+
+    num_pages = qemu_get_be32(pms->f);
+    if (num_pages != phys_ram_size >> TARGET_PAGE_BITS) {
+        term_printf("phys_memory_mismatch: %uMB %uMB\n", 
+                    num_pages >> (20-TARGET_PAGE_BITS), phys_ram_size>>20);
+        migration_cleanup(pms, MIG_STAT_FAIL);
+        return;
+    }
+
+    for (/* none */ ; rc==0 && pms->next_page < num_pages; pms->next_page++) {
+        if ((pms->next_page >= (0xa0000 >> TARGET_PAGE_BITS)) && 
+            (pms->next_page <  (0xc0000 >> TARGET_PAGE_BITS)))
+            continue;
+        rc = mig_recv_ram_page(pms); 
+        if (rc < 0) {
+            term_printf("mig_recv_ram_page FAILED after %u pages\n", pms->next_page);
+            migration_cleanup(pms, MIG_STAT_FAIL);
+            return;
+        }
+    }
+
+    if (pms->next_page < num_pages)
+        term_printf("migration_ram_recv: WARNING goto next phase after %u pages (of %u)\n",
+                    pms->next_page, num_pages);
 }
 
 void do_migration_getfd(int fd) { TO_BE_IMPLEMENTED; }
