@@ -52,6 +52,12 @@
 	#error Invalid PTTYPE value
 #endif
 
+static void FNAME(set_accessed_bit)(pt_element_t *ptep)
+{
+	if (!(*ptep & PT_ACCESSED_MASK))
+		*ptep |= PT_ACCESSED_MASK; 	/* avoid rmw */
+}
+
 /*
  * The guest_walker structure emulates the behavior of the hardware page
  * table walker.
@@ -111,9 +117,6 @@ static void FNAME(walk_addr)(struct guest_walker *walker,
 		ASSERT(((unsigned long)walker->table & PAGE_MASK) ==
 		       ((unsigned long)ptep & PAGE_MASK));
 
-		if (is_present_pte(*ptep) && !(*ptep &  PT_ACCESSED_MASK))
-			*ptep |= PT_ACCESSED_MASK;
-
 		if (!is_present_pte(*ptep))
 			break;
 
@@ -131,6 +134,8 @@ static void FNAME(walk_addr)(struct guest_walker *walker,
 			walker->gfn += PT_INDEX(addr, PT_PAGE_TABLE_LEVEL);
 			break;
 		}
+
+		FNAME(set_accessed_bit)(ptep);
 
 		if (walker->level != 3 || is_long_mode(vcpu))
 			walker->inherited_ar &= walker->table[index];
@@ -393,14 +398,16 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 	pgprintk("%s: updated shadow pte %p %llx\n", __FUNCTION__,
 		 shadow_pte, *shadow_pte);
 
-	FNAME(release_walker)(&walker);
-
 	/*
 	 * mmio: emulate if accessible, otherwise its a guest fault.
 	 */
 	if (is_io_pte(*shadow_pte)) {
-		if (may_access(*shadow_pte, write_fault, user_fault))
+		if (may_access(*shadow_pte, write_fault, user_fault)) {
+			FNAME(set_accessed_bit)(walker.ptep);
+			FNAME(release_walker)(&walker);
 			return 1;
+		}
+		FNAME(release_walker)(&walker);
 		pgprintk("%s: io work, no access\n", __FUNCTION__);
 		inject_page_fault(vcpu, addr,
 				  error_code | PFERR_PRESENT_MASK);
@@ -412,10 +419,14 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
 	 * pte not present, guest page fault.
 	 */
 	if (pte_present && !fixed && !write_pt) {
+		FNAME(release_walker)(&walker);
 		inject_page_fault(vcpu, addr, error_code);
 		kvm_mmu_audit(vcpu, "post page fault (guest)");
 		return 0;
 	}
+
+	FNAME(set_accessed_bit)(walker.ptep);
+	FNAME(release_walker)(&walker);
 
 	++kvm_stat.pf_fixed;
 	kvm_mmu_audit(vcpu, "post page fault (fixed)");
