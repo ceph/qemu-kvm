@@ -32,7 +32,7 @@ enum {
     AC_PTE_DIRTY,
     // AC_PTE_NX,
 
-    // AC_CPU_CR0_WP,
+    AC_CPU_CR0_WP,
     // AC_CPU_EFER_NX,
 
     AC_ACCESS_USER,
@@ -51,6 +51,7 @@ const char *ac_names[] = {
     [AC_PTE_DIRTY] = "pte.d",
     [AC_ACCESS_WRITE] = "write",
     [AC_ACCESS_USER] = "user",
+    [AC_CPU_CR0_WP] = "cr0.wp",
 };
 
 static inline void *va(pt_element_t phys)
@@ -243,7 +244,8 @@ void ac_test_setup_pte(ac_test_t *at)
 
     if (at->flags[AC_ACCESS_WRITE]) {
 	at->expected_error |= PFERR_WRITE_MASK;
-	if (!at->flags[AC_PTE_WRITABLE]) {
+	if (!at->flags[AC_PTE_WRITABLE]
+	    && (at->flags[AC_CPU_CR0_WP] || at->flags[AC_ACCESS_USER])) {
 	    at->expected_fault = 1;
 	} else if (!at->expected_fault) {
 	    at->expected_pte |= PT_DIRTY_MASK;
@@ -266,7 +268,15 @@ int ac_test_do_access(ac_test_t *at)
     ++unique;
 
     unsigned r = unique;
-    asm volatile ("mov %%rsp, %%rdx \n\t"
+    asm volatile ("mov %%cr0, %%rbx \n\t"
+		  "btc $4, %%rbx \n\t"
+		  "cmp $0, %[cr0wp] \n\t"
+		  "jz cr0wp_clear \n\t"
+		  "bts $4, %%rbx \n"
+		  "cr0wp_clear: \n\t"
+		  "mov %%rbx, %%cr0 \n\t"
+
+		  "mov %%rsp, %%rdx \n\t"
 		  "cmp $0, %[user] \n\t"
 		  "jz do_access \n\t"
 		  "push %%rax; mov %[user_ds], %%ax; mov %%ax, %%ds; pop %%rax  \n\t"
@@ -290,6 +300,7 @@ int ac_test_do_access(ac_test_t *at)
 		  : [addr]"r"(at->virt),
 		    [write]"r"(at->flags[AC_ACCESS_WRITE]),
 		    [user]"r"(at->flags[AC_ACCESS_USER]),
+		    [cr0wp]"g"(at->flags[AC_CPU_CR0_WP]),
 		    [user_ds]"i"(32+3),
 		    [user_cs]"i"(24+3),
 		    [user_stack_top]"r"(user_stack + sizeof user_stack),
