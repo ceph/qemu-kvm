@@ -32,13 +32,13 @@ enum {
     AC_PTE_DIRTY,
     // AC_PTE_NX,
 
-    AC_CPU_CR0_WP,
-    // AC_CPU_EFER_NX,
-
     AC_ACCESS_USER,
     AC_ACCESS_WRITE,
     // AC_ACCESS_FETCH,
     // AC_ACCESS_PTE,
+
+    // AC_CPU_EFER_NX,
+    AC_CPU_CR0_WP,
 
     NR_AC_FLAGS
 };
