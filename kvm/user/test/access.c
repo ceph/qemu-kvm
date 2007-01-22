@@ -269,15 +269,8 @@ int ac_test_do_access(ac_test_t *at)
     ++unique;
 
     unsigned r = unique;
-    asm volatile ("mov %%cr0, %%rbx \n\t"
-		  "btc $16, %%rbx \n\t"
-		  "cmp $0, %[cr0wp] \n\t"
-		  "jz cr0wp_clear \n\t"
-		  "bts $16, %%rbx \n"
-		  "cr0wp_clear: \n\t"
-		  "mov %%rbx, %%cr0 \n\t"
-
-		  "mov %%rsp, %%rdx \n\t"
+    set_cr0_wp(at->flags[AC_CPU_CR0_WP]);
+    asm volatile ("mov %%rsp, %%rdx \n\t"
 		  "cmp $0, %[user] \n\t"
 		  "jz do_access \n\t"
 		  "push %%rax; mov %[user_ds], %%ax; mov %%ax, %%ds; pop %%rax  \n\t"
@@ -301,7 +294,6 @@ int ac_test_do_access(ac_test_t *at)
 		  : [addr]"r"(at->virt),
 		    [write]"r"(at->flags[AC_ACCESS_WRITE]),
 		    [user]"r"(at->flags[AC_ACCESS_USER]),
-		    [cr0wp]"g"(at->flags[AC_CPU_CR0_WP]),
 		    [user_ds]"i"(32+3),
 		    [user_cs]"i"(24+3),
 		    [user_stack_top]"r"(user_stack + sizeof user_stack),
