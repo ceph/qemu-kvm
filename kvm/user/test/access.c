@@ -27,7 +27,7 @@ typedef unsigned long pt_element_t;
 enum {
     AC_PTE_PRESENT,
     AC_PTE_WRITABLE,
-    // AC_PTE_USER,
+    AC_PTE_USER,
     AC_PTE_ACCESSED,
     AC_PTE_DIRTY,
     // AC_PTE_NX,
@@ -35,7 +35,7 @@ enum {
     // AC_CPU_CR0_WP,
     // AC_CPU_EFER_NX,
 
-    // AC_ACCESS_USER,
+    AC_ACCESS_USER,
     AC_ACCESS_WRITE,
     // AC_ACCESS_FETCH,
     // AC_ACCESS_PTE,
@@ -47,8 +47,10 @@ const char *ac_names[] = {
     [AC_PTE_PRESENT] = "pte.p",
     [AC_PTE_ACCESSED] = "pte.a",
     [AC_PTE_WRITABLE] = "pte.rw",
+    [AC_PTE_USER] = "pte.user",
     [AC_PTE_DIRTY] = "pte.d",
     [AC_ACCESS_WRITE] = "write",
+    [AC_ACCESS_USER] = "user",
 };
 
 static inline void *va(pt_element_t phys)
@@ -125,14 +127,14 @@ unsigned short read_cs()
     asm volatile ("mov %%cs, %0" : "=r"(r));
 }
 
-void set_idt_entry(idt_entry_t *e, void *addr)
+void set_idt_entry(idt_entry_t *e, void *addr, int dpl)
 {
     memset(e, 0, sizeof *e);
     e->offset0 = (unsigned long)addr;
     e->selector = read_cs();
     e->ist = 0;
     e->type = 14;
-    e->dpl = 0;
+    e->dpl = dpl;
     e->p = 1;
     e->offset1 = (unsigned long)addr >> 16;
     e->offset2 = (unsigned long)addr >> 32;
@@ -158,8 +160,9 @@ void ac_test_init(ac_test_t *at)
     at->pt_pool = 33 * 1024 * 1024;
     memset(at->idt, 0, sizeof at->idt);
     lidt(at->idt, 256);
-    extern char page_fault;
-    set_idt_entry(&at->idt[14], &page_fault);
+    extern char page_fault, kernel_entry;
+    set_idt_entry(&at->idt[14], &page_fault, 0);
+    set_idt_entry(&at->idt[0x20], &kernel_entry, 3);
 }
 
 int ac_test_bump(ac_test_t *at)
@@ -212,6 +215,8 @@ void ac_test_setup_pte(ac_test_t *at)
 		pte |= PT_PRESENT_MASK;
 	    if (at->flags[AC_PTE_WRITABLE])
 		pte |= PT_WRITABLE_MASK;
+	    if (at->flags[AC_PTE_USER])
+		pte |= PT_USER_MASK;
 	    if (at->flags[AC_PTE_ACCESSED])
 		pte |= PT_ACCESSED_MASK;
 	    if (at->flags[AC_PTE_DIRTY])
@@ -229,6 +234,12 @@ void ac_test_setup_pte(ac_test_t *at)
 	at->expected_fault = 1;
     else
 	at->expected_error |= PFERR_PRESENT_MASK;
+
+    if (at->flags[AC_ACCESS_USER]) {
+	at->expected_error |= PFERR_USER_MASK;
+	if (!at->flags[AC_PTE_USER])
+	    at->expected_fault = 1;
+    }
 
     if (at->flags[AC_ACCESS_WRITE]) {
 	at->expected_error |= PFERR_WRITE_MASK;
@@ -249,20 +260,40 @@ int ac_test_do_access(ac_test_t *at)
     static unsigned unique = 42;
     int fault = 0;
     unsigned e;
+    static unsigned char user_stack[4096];
+    unsigned long rsp;
 
     ++unique;
 
     unsigned r = unique;
-    asm volatile ("cmp $0, %[write] \n\t"
+    asm volatile ("mov %%rsp, %%rdx \n\t"
+		  "cmp $0, %[user] \n\t"
+		  "jz do_access \n\t"
+		  "push %%rax; mov %[user_ds], %%ax; mov %%ax, %%ds; pop %%rax  \n\t"
+		  "pushq %[user_ds] \n\t"
+		  "pushq %[user_stack_top] \n\t"
+		  "pushfq \n\t"
+		  "pushq %[user_cs] \n\t"
+		  "pushq $do_access \n\t"
+		  "iretq \n"
+		  "do_access: \n\t"
+		  "cmp $0, %[write] \n\t"
 		  "jnz 1f \n\t"
 		  "mov (%[addr]), %[reg] \n\t"
 		  "jmp done \n\t"
 		  "1: mov %[reg], (%[addr]) \n\t"
-		  "done:"
-		  "fixed1:"
-		  : [reg]"+r"(r), "+a"(fault), "=b"(e)
+		  "done: \n"
+		  "fixed1: \n"
+		  "int %[kernel_entry_vector] \n\t"
+		  "back_to_kernel:"
+		  : [reg]"+r"(r), "+a"(fault), "=b"(e), "=&d"(rsp)
 		  : [addr]"r"(at->virt),
-		    [write]"r"(at->flags[AC_ACCESS_WRITE]));
+		    [write]"r"(at->flags[AC_ACCESS_WRITE]),
+		    [user]"r"(at->flags[AC_ACCESS_USER]),
+		    [user_ds]"i"(32+3),
+		    [user_cs]"i"(24+3),
+		    [user_stack_top]"r"(user_stack + sizeof user_stack),
+		    [kernel_entry_vector]"i"(0x20));
 
     asm volatile (".section .text.pf \n\t"
 		  "page_fault: \n\t"
@@ -270,6 +301,12 @@ int ac_test_do_access(ac_test_t *at)
 		  "movq $fixed1, (%rsp) \n\t"
 		  "movl $1, %eax \n\t"
 		  "iretq \n\t"
+		  ".section .text");
+
+    asm volatile (".section .text.entry \n\t"
+		  "kernel_entry: \n\t"
+		  "mov %rdx, %rsp \n\t"
+		  "jmp back_to_kernel \n\t"
 		  ".section .text");
 
     if (fault && !at->expected_fault) {
