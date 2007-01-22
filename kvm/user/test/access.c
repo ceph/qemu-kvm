@@ -164,6 +164,7 @@ void ac_test_init(ac_test_t *at)
     extern char page_fault, kernel_entry;
     set_idt_entry(&at->idt[14], &page_fault, 0);
     set_idt_entry(&at->idt[0x20], &kernel_entry, 3);
+    at->flags[AC_PTE_PRESENT] = at->flags[AC_ACCESS_WRITE] = 1;
 }
 
 int ac_test_bump(ac_test_t *at)
@@ -269,10 +270,10 @@ int ac_test_do_access(ac_test_t *at)
 
     unsigned r = unique;
     asm volatile ("mov %%cr0, %%rbx \n\t"
-		  "btc $4, %%rbx \n\t"
+		  "btc $16, %%rbx \n\t"
 		  "cmp $0, %[cr0wp] \n\t"
 		  "jz cr0wp_clear \n\t"
-		  "bts $4, %%rbx \n"
+		  "bts $16, %%rbx \n"
 		  "cr0wp_clear: \n\t"
 		  "mov %%rbx, %%cr0 \n\t"
 
