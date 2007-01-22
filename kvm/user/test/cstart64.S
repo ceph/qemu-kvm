@@ -12,17 +12,17 @@ stacktop:
 ptl2:
 i = 0
 	.rept 512
-	.quad 0x1e3 | (i << 21)
+	.quad 0x1e7 | (i << 21)
 	i = i + 1
 	.endr
 
 .align 4096
 ptl3:
-	.quad ptl2 + 3
+	.quad ptl2 + 7
 
 .align 4096
 ptl4:
-	.quad ptl3 + 3
+	.quad ptl3 + 7
 	
 .align 4096
 
