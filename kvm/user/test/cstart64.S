@@ -33,6 +33,9 @@ gdt64_desc:
 gdt64:
 	.quad 0
 	.quad 0x00af9b000000ffff # 64-bit code segment
+	.quad 0x00cf93000000ffff # 64-bit data segment
+	.quad 0x00affb000000ffff # 64-bit code segment (user)
+	.quad 0x00cff3000000ffff # 64-bit data segment (user)
 gdt64_end:
 	
 .section .init
