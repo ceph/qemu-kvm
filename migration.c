@@ -19,6 +19,8 @@ void socket_set_block(int fd) /* should be in vl.c ? */
 #endif
 
 #define FD_UNUSED -1
+#define QEMU_MIGRATION_MAGIC     0x5145564d /* FIXME: our own magic ??? */
+#define QEMU_MIGRATION_VERSION   0x00000001
 
 typedef enum {
     NONE   = 0,
@@ -36,6 +38,14 @@ typedef enum {
     MIG_STAT_CANCEL = 6  /* migration canceled */
 } migration_status_t;
 
+
+/* page types to be used when migrating ram pages */
+enum {
+    MIG_XFER_PAGE_TYPE_REGULAR     = 0,  /* regular page           */
+    MIG_XFER_PAGE_TYPE_HOMOGENEOUS = 1,  /* all bytes are the same */
+    MIG_XFER_PAGE_TYPE_END         = 15, /* go to the next phase   */
+};
+
 typedef struct migration_bandwith_params {
     int min, max, offline, seconds;
 } migration_bandwith_params_t;
@@ -50,6 +60,11 @@ typedef struct migration_state {
     migration_role_t role;
     int64_t  head_counter, tail_counter;
     migration_bandwith_params_t bw;
+    int      phase;
+    int      online;
+    int      yield;
+    QEMUFile *f;
+    unsigned next_page;
 } migration_state_t;
 
 static migration_state_t ms = {
@@ -61,16 +76,62 @@ static migration_state_t ms = {
     .tail = 0,
     .head_counter = 0,
     .tail_counter = 0,
-    .bw = {0, 0, 0, 0}
+    .bw = {0, 0, 0, 0},
+    .phase = 0,
+    .online = 0,
+    .yield = 0,
+    .f     = NULL,
 };
 
 static const char *reader_default_addr="localhost:4455";
 static const char *writer_default_addr="localhost:4456";
 
 /* forward declarations */
-static void migration_start_dst(int online);
 static void migration_cleanup(migration_state_t *pms, migration_status_t stat);
+static void migration_start_src(migration_state_t *pms);
+static void migration_phase_1_src(migration_state_t *pms);
+static void migration_phase_2_src(migration_state_t *pms);
+static void migration_phase_3_src(migration_state_t *pms);
+static void migration_phase_4_src(migration_state_t *pms);
+static void migration_start_dst(migration_state_t *pms);
+static void migration_phase_1_dst(migration_state_t *pms);
+static void migration_phase_2_dst(migration_state_t *pms);
+static void migration_phase_3_dst(migration_state_t *pms);
+static void migration_phase_4_dst(migration_state_t *pms);
 
+static void migration_ram_send(migration_state_t *pms);
+static void migration_ram_recv(migration_state_t *pms);
+
+typedef void (*QemuMigrationPhaseCB)(migration_state_t *pms);
+#define MIGRATION_NUM_PHASES 5
+QemuMigrationPhaseCB migration_phase_funcs[2][MIGRATION_NUM_PHASES] = {
+    {
+        migration_start_src,
+        migration_phase_1_src,
+        migration_phase_2_src,
+        migration_phase_3_src,
+        migration_phase_4_src    },
+    {
+        migration_start_dst,
+        migration_phase_1_dst,
+        migration_phase_2_dst,
+        migration_phase_3_dst,
+        migration_phase_4_dst    }
+};
+
+/* MIG_ASSERT 
+ * assuming pms is defined in the function calling MIG_ASSERT
+ * retuns non-0 if the condition is false, 0 if all is OK 
+ */
+#define MIG_ASSERT(p) mig_assert(pms, !!(p), __FUNCTION__, __LINE__)
+int mig_assert(migration_state_t *pms, int cond, const char *fname, int line)
+{
+    if (!cond) {
+        term_printf("assertion failed at %s():%d\n", fname, line);
+        migration_cleanup(&ms, MIG_STAT_FAIL);
+    }
+    return !cond;
+}
 
 static const char *mig_stat_str(migration_status_t mig_stat)
 {
@@ -149,6 +210,15 @@ static int parse_host_port_and_message(struct sockaddr_in *saddr,
         return -1;
     }
     return 0;
+}
+
+static void migration_reset_buffer(migration_state_t *pms)
+{
+    memset(pms->buff, 0, pms->buffsize);
+    pms->head = 0;
+    pms->tail = 0;
+    pms->head_counter = 0;
+    pms->tail_counter = 0;
 }
 
 static void migration_cleanup(migration_state_t *pms, migration_status_t stat)
@@ -242,7 +312,9 @@ static int migration_write_into_socket(void *opaque, int len)
 
 static void migration_start_now(void *opaque)
 {
-    migration_start_dst(0);
+    migration_state_t *pms = (migration_state_t *)opaque;
+
+    migration_start_dst(pms);
 }
 
 static void migration_accept(void *opaque)
@@ -401,6 +473,9 @@ static int migration_write_some(int force)
 {
     int size, threshold = 1024;
 
+    if (ms.status != MIG_STAT_START)
+        return -1;
+
     if (threshold >= ms.buffsize) /* if buffsize is small */
         threshold = ms.buffsize / 2;
     size = migration_buffer_bytes_filled(&ms);
@@ -529,14 +604,57 @@ static void migration_disconnect(void *opaque)
     migration_cleanup(pms, pms->status);
 }
 
-static void migration_start_common(int online,
-                                   int (*migrate)(const char*, QEMUFile*),
-                                   int cont_on_success)
+static void migration_phase_set(migration_state_t *pms, int phase)
 {
-    int rc;
-    int64_t start_time, end_time;
-    const char *dummy = "online_migration";
-    migration_state_t *pms = &ms;
+    int64_t t = qemu_get_clock(rt_clock);
+
+    term_printf("migration: starting phase %d at %" PRId64 "\n",
+                phase, t);
+    pms->phase = phase;
+}
+static void migration_phase_inc(migration_state_t *pms)
+{
+    migration_phase_set(pms, pms->phase + 1);
+}
+
+/* four phases for the migration:
+ * phase 0: initialization
+ * phase 1: online or offline
+ *    transfer all RAM pages
+ *    enable dirty pages logging
+ *
+ * phase 2: online only
+ *    repeat: transfer all dirty pages
+ *    
+ * phase 3: offline
+ *    transfer whatever left (dirty pages + non-ram states)
+ * 
+ * phase 4: offline or online
+ *    The grand finale: decide with host should continue
+ *    send a "to whom it may concern..."
+ *
+ *
+ * The function migration_main_loop just runs the appropriate function
+ *     according to phase.
+ */
+
+void migration_main_loop(void *opaque)
+{
+    migration_state_t *pms = (migration_state_t *)opaque;
+    
+    pms->yield = 0;
+    while (! pms->yield) {
+        if (pms->status != MIG_STAT_START)
+            pms->phase = MIGRATION_NUM_PHASES-1; /* last phase -- report */
+        if (MIG_ASSERT(pms->phase < MIGRATION_NUM_PHASES))
+            break;
+        migration_phase_funcs[pms->role-1][pms->phase](pms);
+    }
+}
+
+static void migration_start_common(migration_state_t *pms)
+{
+    int64_t start_time;
 
     if (pms->status != MIG_STAT_CONN) {
         switch (pms->status) {
@@ -560,47 +678,327 @@ static void migration_start_common(int online,
     socket_set_block(pms->fd); /* read as fast as you can */
 #endif
 
-    pms->status = MIG_STAT_START;
     start_time = qemu_get_clock(rt_clock);
-    term_printf("\nstarting migration (at %" PRIx64 ")\n", start_time);
+    term_printf("\nstarting migration (at %" PRId64 ")\n", start_time);
+    migration_phase_set(pms, 0);
+    migration_reset_buffer(pms);
+    pms->status = MIG_STAT_START;
+    pms->next_page = 0;
+    pms->f = &qemu_savevm_method_socket;
+    pms->f->open(pms->f, NULL, NULL);
+
+    migration_phase_inc(pms);
+    migration_main_loop(pms);
+}
+
+static void migration_start_src(migration_state_t *pms)
+{
+    pms->role = WRITER;
+    migration_start_common(pms);
+}
+
+static void migration_start_dst(migration_state_t *pms)
+{
+    pms->role = READER;
+    migration_start_common(pms);
+}
+
+
+static void migration_phase_1_src(migration_state_t *pms)
+{
+    if (pms->next_page == 0) {
+        qemu_put_be32(pms->f, QEMU_MIGRATION_MAGIC);
+        qemu_put_be32(pms->f, QEMU_MIGRATION_VERSION);
+        qemu_put_byte(pms->f, pms->online);
+        qemu_set_fd_handler(pms->fd, NULL, migration_main_loop, pms);
+    }
+
+    migration_ram_send(pms);
+    if (pms->next_page >=  (phys_ram_size >> TARGET_PAGE_BITS)) {
+        migration_phase_inc(pms);
+        qemu_set_fd_handler(pms->fd, NULL, NULL, pms);
+    }
+}
+static void migration_phase_2_src(migration_state_t *pms)
+{
+    migration_phase_inc(pms);    
+}
+
+static void migration_phase_3_common(migration_state_t *pms, 
+                                     int (*migrate)(const char*, QEMUFile*))
+{
+    const char *dummy = "migrating";
+    int rc;
+
     vm_stop(EXCP_INTERRUPT); /* FIXME: use EXCP_MIGRATION ? */
     rc = migrate(dummy, &qemu_savevm_method_socket);
-    end_time = qemu_get_clock(rt_clock);
-    term_printf("migration %s (at %" PRIx64 " (%" PRIx64 "))\n", 
-                (rc)?"failed":"completed", end_time, end_time - start_time);
     if ((rc==0) && (pms->status == MIG_STAT_START))
         pms->status = MIG_STAT_SUCC;
     else
         if (pms->status == MIG_STAT_START)
             pms->status = MIG_STAT_FAIL;
-    if (((pms->status == MIG_STAT_SUCC) && cont_on_success) ||
-        ((pms->status != MIG_STAT_SUCC) && !cont_on_success)) {
+
+    migration_phase_inc(pms);
+}
+static void migration_phase_3_src(migration_state_t *pms)
+{
+    migration_phase_3_common(pms, qemu_savevm);
+}
+static void migration_phase_4_common(migration_state_t *pms, int cont)
+{
+    int64_t end_time = qemu_get_clock(rt_clock);
+    term_printf("migration %s at %" PRId64"\n",
+                (pms->status!=MIG_STAT_SUCC)?"failed":"completed successfully",
+                end_time);
+    if (cont) {
         migration_cleanup(pms, pms->status);
         vm_start();
     }
-    else
+    else 
         if (pms->fd != FD_UNUSED)
             qemu_set_fd_handler(pms->fd, migration_disconnect, NULL, pms);
+
+    pms->yield = 1;
 }
 
-static void migration_start_src(int online)
+static void migration_phase_4_src(migration_state_t *pms)
 {
-    ms.role = WRITER;
-
-    migration_start_common(online, qemu_savevm, 0);
+    migration_phase_4_common(pms, pms->status != MIG_STAT_SUCC);
 }
 
-static void migration_start_dst(int online)
+static void migration_phase_1_dst(migration_state_t *pms)
 {
-    ms.role = READER;
+    uint32_t magic, version, online;
 
-    migration_start_common(online, qemu_loadvm, 1);
+    if (pms->next_page == 0) {
+        magic   = qemu_get_be32(pms->f);
+        version = qemu_get_be32(pms->f);
+        online  = qemu_get_byte(pms->f);
+
+        if ((magic   != QEMU_MIGRATION_MAGIC)   ||
+            (version != QEMU_MIGRATION_VERSION)) {
+            term_printf("migration header: recv 0x%x 0x%x expecting 0x%x 0x%x\n",
+                        magic, version, 
+                        QEMU_MIGRATION_MAGIC, QEMU_MIGRATION_VERSION);
+            migration_cleanup(pms, MIG_STAT_FAIL);
+            return;
+        }
+
+        pms->online = online;
+        term_printf("===>received online=%u\n", online);
+    }
+
+    migration_ram_recv(pms);
+
+    if (pms->next_page  >= (phys_ram_size >> TARGET_PAGE_BITS)) {
+        migration_phase_inc(pms);
+    }
+}
+static void migration_phase_2_dst(migration_state_t *pms)
+{
+    migration_phase_inc(pms);    
+}
+static void migration_phase_3_dst(migration_state_t *pms)
+{
+    migration_phase_3_common(pms, qemu_loadvm);
+}
+static void migration_phase_4_dst(migration_state_t *pms)
+{
+    migration_phase_4_common(pms, pms->status == MIG_STAT_SUCC);
+}
+
+
+/* 
+ * FIXME: make it share code in vl.c
+ */
+static int ram_page_homogeneous(const uint8_t *buf, const int len)
+{
+    int i, v;
+
+    v = buf[0];
+    for (i=1; i<len; i++)
+        if (buf[i] != v)
+            return 0;
+    return 1;
+}
+
+static void mig_ram_dirty_reset_page(unsigned page_number)
+{
+    ram_addr_t start, end;
+    start = page_number << TARGET_PAGE_BITS;
+    end   = start + TARGET_PAGE_SIZE;
+    cpu_physical_memory_reset_dirty(start, end, MIG_DIRTY_FLAG);
+}
+
+/*
+ * Sends a single ram page
+ * As in vl.c a single byte is being sent as data if page is "homogeneous"
+ * Layout:
+ *    header:
+ *        byte   -- migration transfer page type
+ *        uint32 -- page number
+ *    data
+ *        a single byte or the whole page (TARGET_PAGE_SIZE bytes).
+ */
+static void mig_send_ram_page(migration_state_t *pms, unsigned page_number)
+{
+    const uint8_t* ptr = (const uint8_t *)(unsigned long)phys_ram_base;
+    uint8_t val;
+    unsigned buflen;
+    
+    if (page_number >=  (phys_ram_size >> TARGET_PAGE_BITS)) {
+        term_printf("mig_send_ram_page: page_number is too large: %u (max is %u)\n",
+                    page_number, (phys_ram_size >> TARGET_PAGE_BITS));
+        migration_cleanup(pms, MIG_STAT_FAIL);
+        return;
+    }
+
+    ptr += (page_number << TARGET_PAGE_BITS);
+    if (ram_page_homogeneous(ptr, TARGET_PAGE_SIZE)) {
+        val = MIG_XFER_PAGE_TYPE_HOMOGENEOUS;
+        buflen = 1;
+    }
+    else {
+        val = MIG_XFER_PAGE_TYPE_REGULAR;
+        buflen = TARGET_PAGE_SIZE;
+    }
+    qemu_put_byte(pms->f,   val);
+    qemu_put_be32(pms->f,   page_number);
+    qemu_put_buffer(pms->f, ptr, buflen);
+
+    mig_ram_dirty_reset_page(page_number);
+}
+
+/* returns 0 on success,
+ *         1 if this phase is over
+ *        -1 on failure
+ */
+static int mig_recv_ram_page(migration_state_t *pms)
+{
+    uint8_t *ptr = (uint8_t *)(unsigned long)phys_ram_base;
+    unsigned page_number;
+    uint8_t val;
+    unsigned buflen;
+
+    val         = qemu_get_byte(pms->f);
+    page_number = qemu_get_be32(pms->f);
+
+    if ((pms->phase != 1) && (page_number != pms->next_page)) {
+        term_printf("WARNING: page number mismatch: received %u expected %u\n",
+                    page_number, pms->next_page);
+        return -1;
+    }
+
+    if (page_number >=  (phys_ram_size >> TARGET_PAGE_BITS)) {
+        term_printf("mig_recv_ram_page: page_number is too large: %u (max is %u)\n",
+                    page_number, (phys_ram_size >> TARGET_PAGE_BITS));
+        return -1;
+    }
+
+    switch(val) {
+    case MIG_XFER_PAGE_TYPE_END: /* go to the next phase */;
+        pms->next_page = phys_ram_size >> TARGET_PAGE_BITS;
+        return 1;
+    case MIG_XFER_PAGE_TYPE_REGULAR:
+        buflen = TARGET_PAGE_SIZE;
+        break;
+    case MIG_XFER_PAGE_TYPE_HOMOGENEOUS:
+        buflen = 1;
+        break;
+    default: 
+        term_printf("mig_recv_ram_page: illegal val received %d\n", val); 
+        migration_cleanup(pms, MIG_STAT_FAIL);
+        return -1;
+    }
+
+    ptr += (page_number << TARGET_PAGE_BITS);
+    qemu_get_buffer(pms->f, ptr, buflen);
+
+    if (val == MIG_XFER_PAGE_TYPE_HOMOGENEOUS)
+        memset(ptr, ptr[0], TARGET_PAGE_SIZE);
+
+    return 0;
+}
+
+
+/* In order to enable the guest to run while memory is transferred, 
+ *    the number of page continuously sent is limited by this constant.
+ * When the limit is reached we take a break and continue to send pages
+ *    upon another call to migration_ram_send (which would be when data can 
+ *    be sent over the socket ( using qemu_set_fd_handler() ).
+ */
+#define PAGES_CHUNK ((phys_ram_size >> TARGET_PAGE_BITS) /16 )
+
+/* Sends the whole ram in chunks, each call a few pages are being sent 
+ *    (needs to be called multiple times).
+ * State is kept in pms->next_page.
+ */ 
+static void migration_ram_send(migration_state_t *pms)
+{
+    unsigned num_pages = (phys_ram_size >> TARGET_PAGE_BITS);
+
+    if (pms->next_page == 0) { /* send memory size */
+        qemu_put_be32(pms->f, num_pages);
+    }
+    
+    if (pms->next_page >= num_pages) /* finished already */
+        return;
+
+    /* send a few pages (or until network buffers full) */
+    if (num_pages - pms->next_page > PAGES_CHUNK) {
+        num_pages = pms->next_page + PAGES_CHUNK;
+    }
+    for ( /*none*/ ; pms->next_page < num_pages; pms->next_page++) {
+        if ((pms->next_page >= (0xa0000 >> TARGET_PAGE_BITS)) && 
+            (pms->next_page <  (0xc0000 >> TARGET_PAGE_BITS)))
+            continue;
+        mig_send_ram_page(pms, pms->next_page);
+    }
+}
+
+/* recv the whole ram (first phase) */
+static void migration_ram_recv(migration_state_t *pms)
+{
+    unsigned num_pages;
+    int rc = 0;
+
+    num_pages = qemu_get_be32(pms->f);
+    if (num_pages != phys_ram_size >> TARGET_PAGE_BITS) {
+        term_printf("phys_memory_mismatch: %uMB %uMB\n", 
+                    num_pages >> (20-TARGET_PAGE_BITS), phys_ram_size>>20);
+        migration_cleanup(pms, MIG_STAT_FAIL);
+        return;
+    }
+
+    for (/* none */ ; rc==0 && pms->next_page < num_pages; pms->next_page++) {
+        if ((pms->next_page >= (0xa0000 >> TARGET_PAGE_BITS)) && 
+            (pms->next_page <  (0xc0000 >> TARGET_PAGE_BITS)))
+            continue;
+        rc = mig_recv_ram_page(pms); 
+        if (rc < 0) {
+            term_printf("mig_recv_ram_page FAILED after %u pages\n", pms->next_page);
+            migration_cleanup(pms, MIG_STAT_FAIL);
+            return;
+        }
+    }
+
+    if (pms->next_page < num_pages)
+        term_printf("migration_ram_recv: WARNING goto next phase after %u pages (of %u)\n",
+                    pms->next_page, num_pages);
 }
 
 void do_migration_getfd(int fd) { TO_BE_IMPLEMENTED; }
 void do_migration_start(char *deadoralive)
 { 
-    migration_start_src(0);
+    if (strcmp(deadoralive, "online") == 0)
+        ms.online = 1;
+    else if (strcmp(deadoralive, "offline") == 0)
+        ms.online = 0;
+    else {
+        term_printf("migration start: please specify 'online' or 'offline'\n");
+        return;
+    }
+    migration_start_src(&ms);
 }
 
 void do_migration_cancel(void)

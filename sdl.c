@@ -276,7 +276,7 @@ static void sdl_update_caption(void)
     strcpy(buf, "QEMU");
 #if USE_KVM
     if (kvm_allowed) {
-	strcat(buf, "/KVM");
+        strcat(buf, "/KVM");
     }
 #endif
     if (!vm_running) {
