@@ -532,7 +532,6 @@ static void apic_timer(void *opaque)
     if (!(s->lvt[APIC_LVT_TIMER] & APIC_LVT_MASKED)) {
         apic_set_irq(s, s->lvt[APIC_LVT_TIMER] & 0xff, APIC_TRIGGER_EDGE);
     }
-    printf("%s next time = 0x%llx\n", __FUNCTION__, s->next_time);
     apic_timer_update(s, s->next_time);
 }
 
@@ -784,7 +783,7 @@ static int apic_load(QEMUFile *f, void *opaque, int version_id)
 
     if (version_id >= 2)
         qemu_get_timer(f, s->timer);
-    printf("%s version_id=%d time is %s\n", __FUNCTION__, version_id, (version_id>=2)? "set":"no set");
+
     return 0;
 }
 
