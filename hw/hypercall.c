@@ -69,7 +69,7 @@ static void hp_reset(HypercallState *s)
     s->txbuff = 0;
     s->rxsize= 0;
     if (s->txbufferaccu) {
-        free(txbufferaccu)
+        free(s->txbufferaccu);
         s->txbufferaccu = 0;
     }
     s->txbufferaccu_offset = 0;
