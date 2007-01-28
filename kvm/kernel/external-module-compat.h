@@ -8,6 +8,7 @@
  */
 
 #include <linux/compiler.h>
+#include <linux/version.h>
 #include "include/linux/kvm.h"
 
 /*
@@ -31,3 +32,37 @@
 #define prof_on       4321
 #endif
 
+/*
+ * smp_call_function_single() is not exported below 2.6.20
+ */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
+
+#include <linux/spinlock.h>
+#include <linux/smp.h>
+
+static spinlock_t scfs_lock = SPIN_LOCK_UNLOCKED;
+static int scfs_cpu;
+static void (*scfs_func)(void *info);
+
+static void scfs_thunk(void *info)
+{
+	if (raw_smp_processor_id() == scfs_cpu)
+		scfs_func(info);
+}
+
+static inline int smp_call_function_single1(int cpu, void (*func)(void *info),
+					   void *info, int nonatomic, int wait)
+{
+	int r;
+
+	spin_lock(&scfs_lock);
+	scfs_cpu = cpu;
+	scfs_func = func;
+	r = smp_call_function(scfs_thunk, info, nonatomic, wait);
+	spin_unlock(&scfs_lock);
+	return r;
+}
+
+#define smp_call_function_single smp_call_function_single1
+
+#endif
