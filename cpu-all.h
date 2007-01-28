@@ -895,6 +895,12 @@ static inline void cpu_physical_memory_set_dirty(ram_addr_t addr)
     phys_ram_dirty[addr >> TARGET_PAGE_BITS] = 0xff;
 }
 
+static inline void cpu_physical_memory_set_dirty_flags(ram_addr_t addr,
+                                                       int dirty_flags)
+{
+    phys_ram_dirty[addr >> TARGET_PAGE_BITS] |= dirty_flags;
+}
+
 void cpu_physical_memory_reset_dirty(ram_addr_t start, ram_addr_t end,
                                      int dirty_flags);
 void cpu_tlb_update_dirty(CPUState *env);

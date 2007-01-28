@@ -711,11 +711,14 @@ static void migration_phase_1_src(migration_state_t *pms)
     int goto_next_phase = 1;
 
     if (pms->next_page == 0) {
+        ram_addr_t addr;
         qemu_put_be32(pms->f, QEMU_MIGRATION_MAGIC);
         qemu_put_be32(pms->f, QEMU_MIGRATION_VERSION);
         qemu_put_byte(pms->f, pms->online);
         qemu_put_be32(pms->f, phys_ram_size >> TARGET_PAGE_BITS);
         qemu_set_fd_handler(pms->fd, NULL, migration_main_loop, pms);
+        for (addr=0; addr<phys_ram_size; addr+=TARGET_PAGE_SIZE)
+            cpu_physical_memory_set_dirty_flags(addr, MIG_DIRTY_FLAG);
     }
 
     if (pms->online) {
@@ -958,6 +961,7 @@ static void migration_ram_send(migration_state_t *pms, int whole_ram)
 {
     unsigned num_pages = (phys_ram_size >> TARGET_PAGE_BITS);
     unsigned chunk;
+    ram_addr_t addr;
 
     if (whole_ram)
         chunk = num_pages;
@@ -969,10 +973,11 @@ static void migration_ram_send(migration_state_t *pms, int whole_ram)
         num_pages = pms->next_page + chunk;
     }
     for ( /*none*/ ; pms->next_page < num_pages; pms->next_page++) {
-        if ((pms->next_page >= (0xa0000 >> TARGET_PAGE_BITS)) && 
-            (pms->next_page <  (0xc0000 >> TARGET_PAGE_BITS)))
+        addr = pms->next_page << TARGET_PAGE_BITS;
+        if ((kvm_allowed) && (addr >= 0xa0000) && (addr < 0xc0000))
             continue;
-        mig_send_ram_page(pms, pms->next_page);
+        if (cpu_physical_memory_get_dirty(addr, MIG_DIRTY_FLAG))
+            mig_send_ram_page(pms, pms->next_page);
     }
 }
 
@@ -981,12 +986,13 @@ static void migration_ram_recv(migration_state_t *pms)
 {
     unsigned num_pages;
     int rc = 0;
+    ram_addr_t addr;
 
     num_pages = phys_ram_size >> TARGET_PAGE_BITS;
 
     for (/* none */ ; rc==0 && pms->next_page < num_pages; pms->next_page++) {
-        if ((pms->next_page >= (0xa0000 >> TARGET_PAGE_BITS)) && 
-            (pms->next_page <  (0xc0000 >> TARGET_PAGE_BITS)))
+        addr = pms->next_page << TARGET_PAGE_BITS;
+        if ((kvm_allowed) && (addr >= 0xa0000) && (addr < 0xc0000))
             continue;
         rc = mig_recv_ram_page(pms); 
         if (rc < 0) {
