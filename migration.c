@@ -99,7 +99,7 @@ static void migration_phase_2_dst(migration_state_t *pms);
 static void migration_phase_3_dst(migration_state_t *pms);
 static void migration_phase_4_dst(migration_state_t *pms);
 
-static void migration_ram_send(migration_state_t *pms);
+static void migration_ram_send(migration_state_t *pms, int whole_ram);
 static void migration_ram_recv(migration_state_t *pms);
 
 typedef void (*QemuMigrationPhaseCB)(migration_state_t *pms);
@@ -714,7 +714,7 @@ static void migration_phase_1_src(migration_state_t *pms)
         qemu_set_fd_handler(pms->fd, NULL, migration_main_loop, pms);
     }
 
-    migration_ram_send(pms);
+    migration_ram_send(pms, 0);
     if (pms->next_page >=  (phys_ram_size >> TARGET_PAGE_BITS)) {
         migration_phase_inc(pms);
         qemu_set_fd_handler(pms->fd, NULL, NULL, pms);
@@ -941,16 +941,19 @@ static int mig_recv_ram_page(migration_state_t *pms)
  *    (needs to be called multiple times).
  * State is kept in pms->next_page.
  */ 
-static void migration_ram_send(migration_state_t *pms)
+static void migration_ram_send(migration_state_t *pms, int whole_ram)
 {
     unsigned num_pages = (phys_ram_size >> TARGET_PAGE_BITS);
+    unsigned chunk;
 
-    if (pms->next_page >= num_pages) /* finished already */
-        return;
+    if (whole_ram)
+        chunk = num_pages;
+    else
+        chunk = PAGES_CHUNK;
 
     /* send a few pages (or until network buffers full) */
-    if (num_pages - pms->next_page > PAGES_CHUNK) {
-        num_pages = pms->next_page + PAGES_CHUNK;
+    if (num_pages - pms->next_page > chunk) {
+        num_pages = pms->next_page + chunk;
     }
     for ( /*none*/ ; pms->next_page < num_pages; pms->next_page++) {
         if ((pms->next_page >= (0xa0000 >> TARGET_PAGE_BITS)) && 
