@@ -620,14 +620,16 @@ static void migration_phase_inc(migration_state_t *pms)
 /* four phases for the migration:
  * phase 0: initialization
  * phase 1: online or offline
- *    transfer all RAM pages
- *    enable dirty pages logging
+ *    transfer all RAM pages (online only)
+ *    enable dirty pages logging (for offline migration the whole ram is dirty)
  *
  * phase 2: online only
  *    repeat: transfer all dirty pages
  *    
  * phase 3: offline
+ *    stop the guest.
  *    transfer whatever left (dirty pages + non-ram states)
+ *    for offline migration dirty pages are the whole memory.
  * 
  * phase 4: offline or online
  *    The grand finale: decide with host should continue
@@ -706,6 +708,8 @@ static void migration_start_dst(migration_state_t *pms)
 
 static void migration_phase_1_src(migration_state_t *pms)
 {
+    int goto_next_phase = 1;
+
     if (pms->next_page == 0) {
         qemu_put_be32(pms->f, QEMU_MIGRATION_MAGIC);
         qemu_put_be32(pms->f, QEMU_MIGRATION_VERSION);
@@ -714,12 +718,21 @@ static void migration_phase_1_src(migration_state_t *pms)
         qemu_set_fd_handler(pms->fd, NULL, migration_main_loop, pms);
     }
 
-    migration_ram_send(pms, 0);
-    if (pms->next_page >=  (phys_ram_size >> TARGET_PAGE_BITS)) {
+    if (pms->online) {
+        migration_ram_send(pms, 0);
+        if (pms->next_page <  (phys_ram_size >> TARGET_PAGE_BITS)) {
+            goto_next_phase = 0;
+        }
+    }
+
+    if (goto_next_phase) {
         migration_phase_inc(pms);
         qemu_set_fd_handler(pms->fd, NULL, NULL, pms);
     }
+    else
+        pms->yield = 1;
 }
+
 static void migration_phase_2_src(migration_state_t *pms)
 {
     migration_phase_inc(pms);    
@@ -993,6 +1006,8 @@ void do_migration_start(char *deadoralive)
 { 
     if (strcmp(deadoralive, "online") == 0)
         ms.online = 1;
+        if (kvm_allowed) /* online migration is not supported yet for kvm */
+            ms.online = 0;
     else if (strcmp(deadoralive, "offline") == 0)
         ms.online = 0;
     else {
