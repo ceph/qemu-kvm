@@ -1004,10 +1004,14 @@ static void migration_ram_recv(migration_state_t *pms)
 void do_migration_getfd(int fd) { TO_BE_IMPLEMENTED; }
 void do_migration_start(char *deadoralive)
 { 
-    if (strcmp(deadoralive, "online") == 0)
+    if (strcmp(deadoralive, "online") == 0) {
         ms.online = 1;
-        if (kvm_allowed) /* online migration is not supported yet for kvm */
+        if (kvm_allowed) { /* online migration is not supported yet for kvm */
             ms.online = 0;
+            term_printf("Currently online migration is not supported for kvm,"
+                        " using offline migration\n");
+        }
+    }
     else if (strcmp(deadoralive, "offline") == 0)
         ms.online = 0;
     else {
