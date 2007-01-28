@@ -710,6 +710,7 @@ static void migration_phase_1_src(migration_state_t *pms)
         qemu_put_be32(pms->f, QEMU_MIGRATION_MAGIC);
         qemu_put_be32(pms->f, QEMU_MIGRATION_VERSION);
         qemu_put_byte(pms->f, pms->online);
+        qemu_put_be32(pms->f, phys_ram_size >> TARGET_PAGE_BITS);
         qemu_set_fd_handler(pms->fd, NULL, migration_main_loop, pms);
     }
 
@@ -768,12 +769,13 @@ static void migration_phase_4_src(migration_state_t *pms)
 
 static void migration_phase_1_dst(migration_state_t *pms)
 {
-    uint32_t magic, version, online;
+    uint32_t magic, version, online, npages;
 
     if (pms->next_page == 0) {
         magic   = qemu_get_be32(pms->f);
         version = qemu_get_be32(pms->f);
         online  = qemu_get_byte(pms->f);
+        npages  = qemu_get_be32(pms->f);
 
         if ((magic   != QEMU_MIGRATION_MAGIC)   ||
             (version != QEMU_MIGRATION_VERSION)) {
@@ -784,6 +786,12 @@ static void migration_phase_1_dst(migration_state_t *pms)
             return;
         }
 
+        if (npages != (phys_ram_size >> TARGET_PAGE_BITS)) {
+            term_printf("phys_memory_mismatch: %uMB %uMB\n", 
+                        npages >> (20-TARGET_PAGE_BITS), phys_ram_size>>20);
+            migration_cleanup(pms, MIG_STAT_FAIL);
+            return;
+        }
         pms->online = online;
         term_printf("===>received online=%u\n", online);
     }
@@ -937,10 +945,6 @@ static void migration_ram_send(migration_state_t *pms)
 {
     unsigned num_pages = (phys_ram_size >> TARGET_PAGE_BITS);
 
-    if (pms->next_page == 0) { /* send memory size */
-        qemu_put_be32(pms->f, num_pages);
-    }
-    
     if (pms->next_page >= num_pages) /* finished already */
         return;
 
@@ -962,13 +966,7 @@ static void migration_ram_recv(migration_state_t *pms)
     unsigned num_pages;
     int rc = 0;
 
-    num_pages = qemu_get_be32(pms->f);
-    if (num_pages != phys_ram_size >> TARGET_PAGE_BITS) {
-        term_printf("phys_memory_mismatch: %uMB %uMB\n", 
-                    num_pages >> (20-TARGET_PAGE_BITS), phys_ram_size>>20);
-        migration_cleanup(pms, MIG_STAT_FAIL);
-        return;
-    }
+    num_pages = phys_ram_size >> TARGET_PAGE_BITS;
 
     for (/* none */ ; rc==0 && pms->next_page < num_pages; pms->next_page++) {
         if ((pms->next_page >= (0xa0000 >> TARGET_PAGE_BITS)) && 
