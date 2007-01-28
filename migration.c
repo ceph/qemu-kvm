@@ -729,6 +729,7 @@ static void migration_phase_1_src(migration_state_t *pms)
     }
 
     if (goto_next_phase) {
+        qemu_put_byte(pms->f, MIG_XFER_PAGE_TYPE_END);
         migration_phase_inc(pms);
         qemu_set_fd_handler(pms->fd, NULL, NULL, pms);
     }
@@ -904,21 +905,7 @@ static int mig_recv_ram_page(migration_state_t *pms)
     uint8_t val;
     unsigned buflen;
 
-    val         = qemu_get_byte(pms->f);
-    page_number = qemu_get_be32(pms->f);
-
-    if ((pms->phase != 1) && (page_number != pms->next_page)) {
-        term_printf("WARNING: page number mismatch: received %u expected %u\n",
-                    page_number, pms->next_page);
-        return -1;
-    }
-
-    if (page_number >=  (phys_ram_size >> TARGET_PAGE_BITS)) {
-        term_printf("mig_recv_ram_page: page_number is too large: %u (max is %u)\n",
-                    page_number, (phys_ram_size >> TARGET_PAGE_BITS));
-        return -1;
-    }
-
+    val = qemu_get_byte(pms->f);
     switch(val) {
     case MIG_XFER_PAGE_TYPE_END: /* go to the next phase */;
         pms->next_page = phys_ram_size >> TARGET_PAGE_BITS;
@@ -932,6 +919,13 @@ static int mig_recv_ram_page(migration_state_t *pms)
     default: 
         term_printf("mig_recv_ram_page: illegal val received %d\n", val); 
         migration_cleanup(pms, MIG_STAT_FAIL);
+        return -1;
+    }
+
+    page_number = qemu_get_be32(pms->f);
+    if (page_number >=  (phys_ram_size >> TARGET_PAGE_BITS)) {
+        term_printf("mig_recv_ram_page: page_number is too large: %u (max is %u)\n",
+                    page_number, (phys_ram_size >> TARGET_PAGE_BITS));
         return -1;
     }
 
@@ -990,7 +984,7 @@ static void migration_ram_recv(migration_state_t *pms)
 
     num_pages = phys_ram_size >> TARGET_PAGE_BITS;
 
-    for (/* none */ ; rc==0 && pms->next_page < num_pages; pms->next_page++) {
+    for (/* none */ ; rc==0 ; pms->next_page++) {
         addr = pms->next_page << TARGET_PAGE_BITS;
         if ((kvm_allowed) && (addr >= 0xa0000) && (addr < 0xc0000))
             continue;
