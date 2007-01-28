@@ -1128,6 +1128,24 @@ static int qemu_savevm_method_socket_eof(QEMUFile *f)
     return (pms->fd == FD_UNUSED);
 }
 
+
+static void qemu_savevm_method_socket_ram_save(QEMUFile *f, void *opaque)
+{
+    migration_state_t *pms = (migration_state_t*)f->opaque;
+
+    pms->next_page = 0;
+    migration_ram_send(pms, 1);
+    qemu_put_byte(pms->f, MIG_XFER_PAGE_TYPE_END);
+}
+
+static int qemu_savevm_method_socket_ram_load(QEMUFile *f, void *opaque, int ver)
+{
+    migration_state_t *pms = (migration_state_t*)f->opaque;
+
+    pms->next_page = 0;
+    migration_ram_recv(pms);
+    return 0;
+}
 QEMUFile qemu_savevm_method_socket = {
     .opaque       = NULL, 
     .open         = qemu_savevm_method_socket_open,
@@ -1138,7 +1156,9 @@ QEMUFile qemu_savevm_method_socket = {
     .get_buffer   = qemu_savevm_method_socket_get_buffer,
     .tell         = qemu_savevm_method_socket_tell,
     .seek         = qemu_savevm_method_socket_seek,
-    .eof          = qemu_savevm_method_socket_eof
+    .eof          = qemu_savevm_method_socket_eof,
+    .ram_save     = qemu_savevm_method_socket_ram_save,
+    .ram_load     = qemu_savevm_method_socket_ram_load,
 };
 
 
