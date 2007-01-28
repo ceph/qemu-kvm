@@ -53,7 +53,7 @@ typedef struct HypercallState {
     uint32_t txbuff;
     uint32_t rxsize;
     uint8_t  RxBuff[HP_MEM_SIZE];
-    uint8_t  *txbufferaccu;
+    uint8_t  txbufferaccu[HP_MEM_SIZE];
     int      txbufferaccu_offset;
     int      irq;
     PCIDevice *pci_dev;
@@ -68,10 +68,6 @@ static void hp_reset(HypercallState *s)
     s->txsize = 0;
     s->txbuff = 0;
     s->rxsize= 0;
-    if (s->txbufferaccu) {
-        free(s->txbufferaccu);
-        s->txbufferaccu = 0;
-    }
     s->txbufferaccu_offset = 0;
 }
 
@@ -101,8 +97,10 @@ static void hp_ioport_write(void *opaque, uint32_t addr, uint32_t val)
             if (s->txsize != 0) {
                 printf("txsize is being set, but txsize is not 0!!!\n");
             }
+            if (val > HP_MEM_SIZE) {
+                printf("txsize is larger than allowed by hw!!!\n");
+            }
             s->txsize = val;
-            s->txbufferaccu = malloc(val);
             s->txbufferaccu_offset = 0;
             break;
         }
@@ -120,7 +118,6 @@ static void hp_ioport_write(void *opaque, uint32_t addr, uint32_t val)
                 printf("tranmit txbuf, Len:0x%x\n", s->txbufferaccu_offset);
                 qemu_chr_write(vmchannel_hd, s->txbufferaccu, s->txsize);
                 s->txbufferaccu_offset = 0;
-                free(s->txbufferaccu);
                 s->txsize = 0;
             }
             break;
