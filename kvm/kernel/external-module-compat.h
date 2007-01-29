@@ -10,6 +10,7 @@
 #include <linux/compiler.h>
 #include <linux/version.h>
 #include "include/linux/kvm.h"
+#include <linux/cpu.h>
 
 /*
  * 2.6.16 does not have GFP_NOWAIT
@@ -64,5 +65,17 @@ static inline int smp_call_function_single1(int cpu, void (*func)(void *info),
 }
 
 #define smp_call_function_single smp_call_function_single1
+
+#endif
+
+/*
+ * The cpu hotplug stubs are broken if !CONFIG_CPU_HOTPLUG
+ */
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,21)
+
+#ifndef CONFIG_HOTPLUG_CPU
+#define register_cpu_notifier(nb) do {} while (0)
+#endif
 
 #endif
