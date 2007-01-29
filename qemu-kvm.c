@@ -199,8 +199,7 @@ static void load_regs(CPUState *env)
 
     sregs.apic_base = cpu_get_apic_base(env);
     sregs.efer = env->efer;
-    if (env->efer & MSR_EFER_LME)
-        sregs.cr8 = cpu_get_apic_tpr(env);
+    sregs.cr8 = cpu_get_apic_tpr(env);
 
     kvm_set_sregs(kvm_context, 0, &sregs);
 
@@ -284,8 +283,7 @@ static void save_regs(CPUState *env)
     cpu_set_apic_base(env, sregs.apic_base);
 
     env->efer = sregs.efer;
-    if (env->efer & MSR_EFER_LME)
-        cpu_set_apic_tpr(env, sregs.cr8);
+    cpu_set_apic_tpr(env, sregs.cr8);
 
 #define HFLAG_COPY_MASK ~( \
 			HF_CPL_MASK | HF_PE_MASK | HF_MP_MASK | HF_EM_MASK | \
@@ -386,9 +384,16 @@ static void post_kvm_run(void *opaque, struct kvm_run *kvm_run)
 
     env->eflags = (kvm_run->if_flag) ? env->eflags | IF_MASK:env->eflags & ~IF_MASK;
     env->ready_for_interrupt_injection = kvm_run->ready_for_interrupt_injection;
-    if (env->efer & MSR_EFER_LME)
-        cpu_set_apic_tpr(env, kvm_run->cr8);
+    cpu_set_apic_tpr(env, kvm_run->cr8);
     cpu_set_apic_base(env, kvm_run->apic_base);
+}
+
+static void pre_kvm_run(void *opaque, struct kvm_run *kvm_run)
+{
+    CPUState **envs = opaque, *env;
+    env = envs[0];
+
+    kvm_run->cr8 = cpu_get_apic_tpr(env);
 }
 
 void kvm_load_registers(CPUState *env)
@@ -604,6 +609,7 @@ static struct kvm_callbacks qemu_kvm_ops = {
     .io_window = kvm_io_window,
     .try_push_interrupts = try_push_interrupts,
     .post_kvm_run = post_kvm_run,
+    .pre_kvm_run = pre_kvm_run,
 };
 
 int kvm_qemu_init()

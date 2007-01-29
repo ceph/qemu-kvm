@@ -107,6 +107,10 @@ static void test_post_kvm_run(void *opaque, struct kvm_run *kvm_run)
 {
 }
 
+static void test_pre_kvm_run(void *opaque, struct kvm_run *kvm_run)
+{
+}
+
 static struct kvm_callbacks test_callbacks = {
     .cpuid       = test_cpuid,
     .inb         = test_inb,
@@ -120,6 +124,7 @@ static struct kvm_callbacks test_callbacks = {
     .io_window = test_io_window,
     .try_push_interrupts = test_try_push_interrupts,
     .post_kvm_run = test_post_kvm_run,
+    .pre_kvm_run = test_pre_kvm_run,
 };
  
 
