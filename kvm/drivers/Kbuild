@@ -1,0 +1,2 @@
+obj-m := hypercall.o
+#hypercall-objs := hypercall.o

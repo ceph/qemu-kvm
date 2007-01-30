@@ -99,7 +99,7 @@ static void migration_phase_2_dst(migration_state_t *pms);
 static void migration_phase_3_dst(migration_state_t *pms);
 static void migration_phase_4_dst(migration_state_t *pms);
 
-static void migration_ram_send(migration_state_t *pms);
+static void migration_ram_send(migration_state_t *pms, int whole_ram);
 static void migration_ram_recv(migration_state_t *pms);
 
 typedef void (*QemuMigrationPhaseCB)(migration_state_t *pms);
@@ -620,14 +620,16 @@ static void migration_phase_inc(migration_state_t *pms)
 /* four phases for the migration:
  * phase 0: initialization
  * phase 1: online or offline
- *    transfer all RAM pages
- *    enable dirty pages logging
+ *    transfer all RAM pages (online only)
+ *    enable dirty pages logging (for offline migration the whole ram is dirty)
  *
  * phase 2: online only
  *    repeat: transfer all dirty pages
  *    
  * phase 3: offline
+ *    stop the guest.
  *    transfer whatever left (dirty pages + non-ram states)
+ *    for offline migration dirty pages are the whole memory.
  * 
  * phase 4: offline or online
  *    The grand finale: decide with host should continue
@@ -706,19 +708,35 @@ static void migration_start_dst(migration_state_t *pms)
 
 static void migration_phase_1_src(migration_state_t *pms)
 {
+    int goto_next_phase = 1;
+
     if (pms->next_page == 0) {
+        ram_addr_t addr;
         qemu_put_be32(pms->f, QEMU_MIGRATION_MAGIC);
         qemu_put_be32(pms->f, QEMU_MIGRATION_VERSION);
         qemu_put_byte(pms->f, pms->online);
+        qemu_put_be32(pms->f, phys_ram_size >> TARGET_PAGE_BITS);
         qemu_set_fd_handler(pms->fd, NULL, migration_main_loop, pms);
+        for (addr=0; addr<phys_ram_size; addr+=TARGET_PAGE_SIZE)
+            cpu_physical_memory_set_dirty_flags(addr, MIG_DIRTY_FLAG);
     }
 
-    migration_ram_send(pms);
-    if (pms->next_page >=  (phys_ram_size >> TARGET_PAGE_BITS)) {
+    if (pms->online) {
+        migration_ram_send(pms, 0);
+        if (pms->next_page <  (phys_ram_size >> TARGET_PAGE_BITS)) {
+            goto_next_phase = 0;
+        }
+    }
+
+    if (goto_next_phase) {
+        qemu_put_byte(pms->f, MIG_XFER_PAGE_TYPE_END);
         migration_phase_inc(pms);
         qemu_set_fd_handler(pms->fd, NULL, NULL, pms);
     }
+    else
+        pms->yield = 1;
 }
+
 static void migration_phase_2_src(migration_state_t *pms)
 {
     migration_phase_inc(pms);    
@@ -768,12 +786,13 @@ static void migration_phase_4_src(migration_state_t *pms)
 
 static void migration_phase_1_dst(migration_state_t *pms)
 {
-    uint32_t magic, version, online;
+    uint32_t magic, version, online, npages;
 
     if (pms->next_page == 0) {
         magic   = qemu_get_be32(pms->f);
         version = qemu_get_be32(pms->f);
         online  = qemu_get_byte(pms->f);
+        npages  = qemu_get_be32(pms->f);
 
         if ((magic   != QEMU_MIGRATION_MAGIC)   ||
             (version != QEMU_MIGRATION_VERSION)) {
@@ -784,6 +803,12 @@ static void migration_phase_1_dst(migration_state_t *pms)
             return;
         }
 
+        if (npages != (phys_ram_size >> TARGET_PAGE_BITS)) {
+            term_printf("phys_memory_mismatch: %uMB %uMB\n", 
+                        npages >> (20-TARGET_PAGE_BITS), phys_ram_size>>20);
+            migration_cleanup(pms, MIG_STAT_FAIL);
+            return;
+        }
         pms->online = online;
         term_printf("===>received online=%u\n", online);
     }
@@ -880,21 +905,7 @@ static int mig_recv_ram_page(migration_state_t *pms)
     uint8_t val;
     unsigned buflen;
 
-    val         = qemu_get_byte(pms->f);
-    page_number = qemu_get_be32(pms->f);
-
-    if ((pms->phase != 1) && (page_number != pms->next_page)) {
-        term_printf("WARNING: page number mismatch: received %u expected %u\n",
-                    page_number, pms->next_page);
-        return -1;
-    }
-
-    if (page_number >=  (phys_ram_size >> TARGET_PAGE_BITS)) {
-        term_printf("mig_recv_ram_page: page_number is too large: %u (max is %u)\n",
-                    page_number, (phys_ram_size >> TARGET_PAGE_BITS));
-        return -1;
-    }
-
+    val = qemu_get_byte(pms->f);
     switch(val) {
     case MIG_XFER_PAGE_TYPE_END: /* go to the next phase */;
         pms->next_page = phys_ram_size >> TARGET_PAGE_BITS;
@@ -908,6 +919,13 @@ static int mig_recv_ram_page(migration_state_t *pms)
     default: 
         term_printf("mig_recv_ram_page: illegal val received %d\n", val); 
         migration_cleanup(pms, MIG_STAT_FAIL);
+        return -1;
+    }
+
+    page_number = qemu_get_be32(pms->f);
+    if (page_number >=  (phys_ram_size >> TARGET_PAGE_BITS)) {
+        term_printf("mig_recv_ram_page: page_number is too large: %u (max is %u)\n",
+                    page_number, (phys_ram_size >> TARGET_PAGE_BITS));
         return -1;
     }
 
@@ -933,26 +951,27 @@ static int mig_recv_ram_page(migration_state_t *pms)
  *    (needs to be called multiple times).
  * State is kept in pms->next_page.
  */ 
-static void migration_ram_send(migration_state_t *pms)
+static void migration_ram_send(migration_state_t *pms, int whole_ram)
 {
     unsigned num_pages = (phys_ram_size >> TARGET_PAGE_BITS);
+    unsigned chunk;
+    ram_addr_t addr;
 
-    if (pms->next_page == 0) { /* send memory size */
-        qemu_put_be32(pms->f, num_pages);
-    }
-    
-    if (pms->next_page >= num_pages) /* finished already */
-        return;
+    if (whole_ram)
+        chunk = num_pages;
+    else
+        chunk = PAGES_CHUNK;
 
     /* send a few pages (or until network buffers full) */
-    if (num_pages - pms->next_page > PAGES_CHUNK) {
-        num_pages = pms->next_page + PAGES_CHUNK;
+    if (num_pages - pms->next_page > chunk) {
+        num_pages = pms->next_page + chunk;
     }
     for ( /*none*/ ; pms->next_page < num_pages; pms->next_page++) {
-        if ((pms->next_page >= (0xa0000 >> TARGET_PAGE_BITS)) && 
-            (pms->next_page <  (0xc0000 >> TARGET_PAGE_BITS)))
+        addr = pms->next_page << TARGET_PAGE_BITS;
+        if ((kvm_allowed) && (addr >= 0xa0000) && (addr < 0xc0000))
             continue;
-        mig_send_ram_page(pms, pms->next_page);
+        if (cpu_physical_memory_get_dirty(addr, MIG_DIRTY_FLAG))
+            mig_send_ram_page(pms, pms->next_page);
     }
 }
 
@@ -961,18 +980,13 @@ static void migration_ram_recv(migration_state_t *pms)
 {
     unsigned num_pages;
     int rc = 0;
+    ram_addr_t addr;
 
-    num_pages = qemu_get_be32(pms->f);
-    if (num_pages != phys_ram_size >> TARGET_PAGE_BITS) {
-        term_printf("phys_memory_mismatch: %uMB %uMB\n", 
-                    num_pages >> (20-TARGET_PAGE_BITS), phys_ram_size>>20);
-        migration_cleanup(pms, MIG_STAT_FAIL);
-        return;
-    }
+    num_pages = phys_ram_size >> TARGET_PAGE_BITS;
 
-    for (/* none */ ; rc==0 && pms->next_page < num_pages; pms->next_page++) {
-        if ((pms->next_page >= (0xa0000 >> TARGET_PAGE_BITS)) && 
-            (pms->next_page <  (0xc0000 >> TARGET_PAGE_BITS)))
+    for (/* none */ ; rc==0 ; pms->next_page++) {
+        addr = pms->next_page << TARGET_PAGE_BITS;
+        if ((kvm_allowed) && (addr >= 0xa0000) && (addr < 0xc0000))
             continue;
         rc = mig_recv_ram_page(pms); 
         if (rc < 0) {
@@ -990,8 +1004,14 @@ static void migration_ram_recv(migration_state_t *pms)
 void do_migration_getfd(int fd) { TO_BE_IMPLEMENTED; }
 void do_migration_start(char *deadoralive)
 { 
-    if (strcmp(deadoralive, "online") == 0)
+    if (strcmp(deadoralive, "online") == 0) {
         ms.online = 1;
+        if (kvm_allowed) { /* online migration is not supported yet for kvm */
+            ms.online = 0;
+            term_printf("Currently online migration is not supported for kvm,"
+                        " using offline migration\n");
+        }
+    }
     else if (strcmp(deadoralive, "offline") == 0)
         ms.online = 0;
     else {
@@ -1112,6 +1132,24 @@ static int qemu_savevm_method_socket_eof(QEMUFile *f)
     return (pms->fd == FD_UNUSED);
 }
 
+
+static void qemu_savevm_method_socket_ram_save(QEMUFile *f, void *opaque)
+{
+    migration_state_t *pms = (migration_state_t*)f->opaque;
+
+    pms->next_page = 0;
+    migration_ram_send(pms, 1);
+    qemu_put_byte(pms->f, MIG_XFER_PAGE_TYPE_END);
+}
+
+static int qemu_savevm_method_socket_ram_load(QEMUFile *f, void *opaque, int ver)
+{
+    migration_state_t *pms = (migration_state_t*)f->opaque;
+
+    pms->next_page = 0;
+    migration_ram_recv(pms);
+    return 0;
+}
 QEMUFile qemu_savevm_method_socket = {
     .opaque       = NULL, 
     .open         = qemu_savevm_method_socket_open,
@@ -1122,7 +1160,9 @@ QEMUFile qemu_savevm_method_socket = {
     .get_buffer   = qemu_savevm_method_socket_get_buffer,
     .tell         = qemu_savevm_method_socket_tell,
     .seek         = qemu_savevm_method_socket_seek,
-    .eof          = qemu_savevm_method_socket_eof
+    .eof          = qemu_savevm_method_socket_eof,
+    .ram_save     = qemu_savevm_method_socket_ram_save,
+    .ram_load     = qemu_savevm_method_socket_ram_load,
 };
 
 

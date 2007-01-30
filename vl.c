@@ -163,6 +163,9 @@ int vnc_display = -1;
 int acpi_enabled = 1;
 int fd_bootchk = 1;
 
+static void ram_save(QEMUFile *f, void *opaque);
+static int  ram_load(QEMUFile *f, void *opaque, int version_id);
+
 /***********************************************************/
 /* x86 ISA bus support */
 
@@ -4370,7 +4373,9 @@ QEMUFile qemu_savevm_method_file = {
     .get_buffer   = qemu_savevm_method_file_get_buffer,
     .tell         = qemu_savevm_method_file_tell,
     .seek         = qemu_savevm_method_file_seek,
-    .eof          = qemu_savevm_method_file_eof
+    .eof          = qemu_savevm_method_file_eof,
+    .ram_save     = ram_save,
+    .ram_load     = ram_load,
 };
 
 
@@ -4959,6 +4964,15 @@ static int ram_load(QEMUFile *f, void *opaque, int version_id)
             return ret;
     }
     return 0;
+}
+
+static void qemu_ram_save(QEMUFile *f, void* opaque)
+{
+    f->ram_save(f, opaque);
+}
+static int qemu_ram_load(QEMUFile *f, void* opaque, int version_id)
+{
+    return f->ram_load(f, opaque, version_id);
 }
 
 /***********************************************************/
@@ -6368,7 +6382,7 @@ int main(int argc, char **argv)
     }
 
     register_savevm("timer", 0, 1, timer_save, timer_load, NULL);
-    register_savevm("ram", 0, 1, ram_save, ram_load, NULL);
+    register_savevm("ram", 0, 1, qemu_ram_save, qemu_ram_load, NULL);
 
     init_ioports();
 

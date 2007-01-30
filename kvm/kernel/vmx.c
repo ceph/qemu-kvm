@@ -125,6 +125,15 @@ static void __vcpu_clear(void *arg)
 		per_cpu(current_vmcs, cpu) = NULL;
 }
 
+static void vcpu_clear(struct kvm_vcpu *vcpu)
+{
+	if (vcpu->cpu != raw_smp_processor_id() && vcpu->cpu != -1)
+		smp_call_function_single(vcpu->cpu, __vcpu_clear, vcpu, 0, 1);
+	else
+		__vcpu_clear(vcpu);
+	vcpu->launched = 0;
+}
+
 static unsigned long vmcs_readl(unsigned long field)
 {
 	unsigned long value;
@@ -202,10 +211,8 @@ static struct kvm_vcpu *vmx_vcpu_load(struct kvm_vcpu *vcpu)
 
 	cpu = get_cpu();
 
-	if (vcpu->cpu != cpu) {
-		smp_call_function(__vcpu_clear, vcpu, 0, 1);
-		vcpu->launched = 0;
-	}
+	if (vcpu->cpu != cpu)
+		vcpu_clear(vcpu);
 
 	if (per_cpu(current_vmcs, cpu) != vcpu->vmcs) {
 		u8 error;
@@ -241,6 +248,11 @@ static struct kvm_vcpu *vmx_vcpu_load(struct kvm_vcpu *vcpu)
 static void vmx_vcpu_put(struct kvm_vcpu *vcpu)
 {
 	put_cpu();
+}
+
+static void vmx_vcpu_decache(struct kvm_vcpu *vcpu)
+{
+	vcpu_clear(vcpu);
 }
 
 static unsigned long vmx_get_rflags(struct kvm_vcpu *vcpu)
@@ -502,7 +514,7 @@ static __init int vmx_disabled_by_bios(void)
 	return (msr & 5) == 1; /* locked but not enabled */
 }
 
-static __init void hardware_enable(void *garbage)
+static void hardware_enable(void *garbage)
 {
 	int cpu = raw_smp_processor_id();
 	u64 phys_addr = __pa(per_cpu(vmxarea, cpu));
@@ -1373,6 +1385,11 @@ static int handle_external_interrupt(struct kvm_vcpu *vcpu,
 	return 1;
 }
 
+static int handle_triple_fault(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
+{
+	kvm_run->exit_reason = KVM_EXIT_SHUTDOWN;
+	return 0;
+}
 
 static int get_io_count(struct kvm_vcpu *vcpu, u64 *count)
 {
@@ -1633,6 +1650,7 @@ static int (*kvm_vmx_exit_handlers[])(struct kvm_vcpu *vcpu,
 				      struct kvm_run *kvm_run) = {
 	[EXIT_REASON_EXCEPTION_NMI]           = handle_exception,
 	[EXIT_REASON_EXTERNAL_INTERRUPT]      = handle_external_interrupt,
+	[EXIT_REASON_TRIPLE_FAULT]            = handle_triple_fault,
 	[EXIT_REASON_IO_INSTRUCTION]          = handle_io,
 	[EXIT_REASON_CR_ACCESS]               = handle_cr,
 	[EXIT_REASON_DR_ACCESS]               = handle_dr,
@@ -1825,7 +1843,7 @@ again:
 #endif
 		"setbe %0 \n\t"
 		"popf \n\t"
-	      : "=r" (fail)
+	      : "=q" (fail)
 	      : "r"(vcpu->launched), "d"((unsigned long)HOST_RSP),
 		"c"(vcpu),
 		[rax]"i"(offsetof(struct kvm_vcpu, regs[VCPU_REGS_RAX])),
@@ -1857,9 +1875,7 @@ again:
 	fx_restore(vcpu->host_fx_image);
 	vcpu->interrupt_window_open = (vmcs_read32(GUEST_INTERRUPTIBILITY_INFO) & 3) == 0;
 
-#ifndef CONFIG_X86_64
 	asm ("mov %0, %%ds; mov %0, %%es" : : "r"(__USER_DS));
-#endif
 
 	/*
 	 * Profile KVM exit RIPs:
@@ -2010,6 +2026,7 @@ static struct kvm_arch_ops vmx_arch_ops = {
 
 	.vcpu_load = vmx_vcpu_load,
 	.vcpu_put = vmx_vcpu_put,
+	.vcpu_decache = vmx_vcpu_decache,
 
 	.set_guest_debug = set_guest_debug,
 	.get_msr = vmx_get_msr,

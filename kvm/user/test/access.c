@@ -164,7 +164,6 @@ void ac_test_init(ac_test_t *at)
     extern char page_fault, kernel_entry;
     set_idt_entry(&at->idt[14], &page_fault, 0);
     set_idt_entry(&at->idt[0x20], &kernel_entry, 3);
-    at->flags[AC_PTE_PRESENT] = at->flags[AC_ACCESS_WRITE] = 1;
 }
 
 int ac_test_bump(ac_test_t *at)

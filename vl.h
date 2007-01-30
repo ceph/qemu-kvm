@@ -414,6 +414,8 @@ struct QEMUFile_s {
     int64_t (*tell)(QEMUFile *f);
     int64_t (*seek)(QEMUFile *f, int64_t pos, int whence);
     int     (*eof)(QEMUFile *f);
+    void    (*ram_save)(QEMUFile *f, void *opaque);
+    int     (*ram_load)(QEMUFile *f, void *opaque, int version_id);
 };
 
 extern QEMUFile qemu_savevm_method_file;
