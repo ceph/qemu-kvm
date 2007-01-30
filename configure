@@ -114,6 +114,7 @@ bsd="yes"
 oss="yes"
 if [ "$cpu" = "i386" -o "$cpu" = "x86_64" ] ; then
     kqemu="yes"
+    kvm="yes"
 fi
 ;;
 NetBSD)
@@ -137,6 +138,7 @@ linux="yes"
 user="yes"
 if [ "$cpu" = "i386" -o "$cpu" = "x86_64" ] ; then
     kqemu="yes"
+    kvm="yes"
 fi
 ;;
 esac
