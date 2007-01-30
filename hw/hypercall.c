@@ -44,7 +44,7 @@
 int use_hypercall_dev = 0;
 static CharDriverState *vmchannel_hd;
 
-#define HP_MEM_SIZE    0x50
+#define HP_MEM_SIZE    0xE0
 
 typedef struct HypercallState {
     uint32_t cmd;
