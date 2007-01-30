@@ -23,7 +23,7 @@
 #include <errno.h>
 #include "kvmctl.h"
 
-#define EXPECTED_KVM_API_VERSION 2
+#define EXPECTED_KVM_API_VERSION 3
 
 #if EXPECTED_KVM_API_VERSION != KVM_API_VERSION
 #error libkvm: userspace and kernel version mismatch
