@@ -127,7 +127,7 @@ static void __vcpu_clear(void *arg)
 
 static void vcpu_clear(struct kvm_vcpu *vcpu)
 {
-	if (vcpu->cpu != raw_smp_processor_id())
+	if (vcpu->cpu != raw_smp_processor_id() && vcpu->cpu != -1)
 		smp_call_function_single(vcpu->cpu, __vcpu_clear, vcpu, 0, 1);
 	else
 		__vcpu_clear(vcpu);
