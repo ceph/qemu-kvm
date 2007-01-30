@@ -75,7 +75,7 @@ static inline int smp_call_function_single1(int cpu, void (*func)(void *info),
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,21)
 
 #ifndef CONFIG_HOTPLUG_CPU
-#define register_cpu_notifier(nb) do {} while (0)
+#define register_cpu_notifier(nb) (0)
 #endif
 
 #endif
