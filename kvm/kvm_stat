@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 import curses
-import os, time
+import sys, os, time
 
 class Stats:
     def __init__(self):
@@ -17,6 +17,14 @@ class Stats:
                 newdelta = newval - oldval[0]
             self.values[key] = (newval, newdelta)
         return self.values
+
+if not os.access('/sys/kernel/debug', os.F_OK):
+    print 'Please enable CONFIG_DEBUGFS in your kernel'
+    sys.exit(1)
+if not os.access('/sys/kernel/debug/kvm', os.F_OK):
+    print "Please mount debugfs ('mount -t debugfs debugfs /sys/kernel/debug')"
+    print "and ensure the kvm modules are loaded"
+    sys.exit(1)
 
 stats = Stats()
         
