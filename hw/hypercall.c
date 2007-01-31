@@ -115,7 +115,6 @@ static void hp_ioport_write(void *opaque, uint32_t addr, uint32_t val)
             s->txbufferaccu[s->txbufferaccu_offset] = val;
             s->txbufferaccu_offset++;
             if (s->txbufferaccu_offset >= s->txsize) {
-                printf("tranmit txbuf, Len:0x%x\n", s->txbufferaccu_offset);
                 qemu_chr_write(vmchannel_hd, s->txbufferaccu, s->txsize);
                 s->txbufferaccu_offset = 0;
                 s->txsize = 0;
@@ -134,10 +133,6 @@ static uint32_t hp_ioport_read(void *opaque, uint32_t addr)
     HypercallState *s = opaque;
     int ret;
 
-    if (addr != 0xc204) {
-        //printf("hp_ioport_read addr:0x%x\n",addr);
-    }
-
     addr &= 0xff;
 
     if (addr >= offsetof(HypercallState, RxBuff) )
@@ -150,9 +145,6 @@ static uint32_t hp_ioport_read(void *opaque, uint32_t addr)
     switch (addr)
     {
     case HP_ISRSTATUS:
-        if (s->isr != 0){
-            printf("hp_ioport_read s->isr=0x%x\n", s->isr);
-        }
         ret = s->isr;
         if (ret & HPISR_RX) {
             s->isr &= ~HPISR_RX;
@@ -192,13 +184,12 @@ static void hp_map(PCIDevice *pci_dev, int region_num,
 
 static void hypercall_update_irq(HypercallState *s)
 {
-    printf("hypercall_update_irq\n");
 
     if (s->cmd &= HP_CMD_DI) {
         return;
     }
-	/* PCI irq */
-	pci_set_irq(s->pci_dev, 0, 1);
+    /* PCI irq */
+    pci_set_irq(s->pci_dev, 0, 1);
 }
 
 void pci_hypercall_init(PCIBus *bus)
@@ -251,11 +242,7 @@ static void vmchannel_read(void *opaque, const uint8_t *buf, int size)
 {
     int i;
     
-    printf("vmchannel_read buf:%p, size:%d\n", buf, size);
-    for(i = 0; i < size; i++) {
-        printf("%x,", buf[i]);
-    }
-    printf("\n");
+    //printf("vmchannel_read buf:%p, size:%d\n", buf, size);
 
     // if the hypercall device is in interrupts disabled state, don't accept the data
     if (pHypercallState->cmd &= HP_CMD_DI) {
