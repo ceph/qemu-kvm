@@ -217,6 +217,23 @@ static void __devexit hypercall_remove_one(struct pci_dev *pdev)
 	pci_disable_device(pdev);
 }
 
+static int hypercall_tx(struct hypercall_dev *dev, unsigned char *buf, size_t len)
+{
+	void __iomem *ioaddr = (void __iomem*)dev->io_addr;
+	int i;
+
+	if (len > HP_MEM_SIZE)
+		return -EINVAL;
+
+	spin_lock(&dev->lock);
+	HIO_WRITE8(HP_TXSIZE, len, ioaddr);
+	for (i=0; i< len; i++)
+		HIO_WRITE8(HP_TXBUFF, buf[i], ioaddr);
+	spin_unlock(&dev->lock);
+
+	return 0;
+}
+
 /* 
  * The interrupt handler does all of the rx  work and cleans up
  * after the tx
@@ -267,6 +284,9 @@ static irqreturn_t hypercall_interrupt(int irq, void *dev_instance,
 	irq_handled = IRQ_HANDLED;
  out:
 	spin_unlock(&dev->lock);
+
+
+	hypercall_tx(dev, "hello host", sizeof("hello host"));
 	return irq_handled;
 }
 
