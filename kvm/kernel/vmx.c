@@ -27,7 +27,6 @@
 
 #include "segment_descriptor.h"
 
-
 MODULE_AUTHOR("Qumranet");
 MODULE_LICENSE("GPL");
 
