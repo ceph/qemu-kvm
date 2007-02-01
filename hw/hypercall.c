@@ -35,7 +35,8 @@
 // HP_CMD register commands
 #define HP_CMD_DI		1 // disable interrupts
 #define HP_CMD_EI		2 // enable interrupts
-#define HP_CMD_RESET	4 // enable interrupts
+#define HP_CMD_INIT		4 // reset device
+#define HP_CMD_RESET		(HP_CMD_INIT|HP_CMD_DI)
 
 
 /* Bits in HP_ISR - Interrupt status register */
@@ -61,6 +62,9 @@ typedef struct HypercallState {
 
 HypercallState *pHypercallState = NULL;
 
+
+#define HYPERCALL_DEBUG 1
+
 static void hp_reset(HypercallState *s)
 {
     s->cmd = 0;
@@ -71,12 +75,16 @@ static void hp_reset(HypercallState *s)
     s->txbufferaccu_offset = 0;
 }
 
+static void hypercall_update_irq(HypercallState *s);
+
+
 static void hp_ioport_write(void *opaque, uint32_t addr, uint32_t val)
 {
     HypercallState *s = opaque;
 
-    //printf("hp_ioport_write,addr=0x%x, val=0x%x\n",addr, val);
-
+#ifdef HYPERCALL_DEBUG
+    printf("%s: addr=0x%x, val=0x%x\n", __FUNCTION__, addr, val);
+#endif
     addr &= 0xff;
 
     switch(addr)
@@ -84,9 +92,10 @@ static void hp_ioport_write(void *opaque, uint32_t addr, uint32_t val)
         case HP_CMD:
         {
             s->cmd = val;
-            if (val == HP_CMD_RESET){
+	    if (s->cmd & HP_CMD_DI)
+                hypercall_update_irq(s);
+            if (val & HP_CMD_INIT){
                 hp_reset(s);
-                return;
             }
             break;
         }
@@ -133,6 +142,9 @@ static uint32_t hp_ioport_read(void *opaque, uint32_t addr)
     HypercallState *s = opaque;
     int ret;
 
+#ifdef HYPERCALL_DEBUG
+    printf("%s: addr=0x%x\n", __FUNCTION__, addr);
+#endif
     addr &= 0xff;
 
     if (addr >= offsetof(HypercallState, RxBuff) )
@@ -184,12 +196,8 @@ static void hp_map(PCIDevice *pci_dev, int region_num,
 
 static void hypercall_update_irq(HypercallState *s)
 {
-
-    if (s->cmd &= HP_CMD_DI) {
-        return;
-    }
     /* PCI irq */
-    pci_set_irq(s->pci_dev, 0, 1);
+    pci_set_irq(s->pci_dev, 0, !(s->cmd & HP_CMD_DI));
 }
 
 void pci_hypercall_init(PCIBus *bus)
@@ -241,16 +249,17 @@ static int vmchannel_can_read(void *opaque)
 static void vmchannel_read(void *opaque, const uint8_t *buf, int size)
 {
     int i;
-    
-    //printf("vmchannel_read buf:%p, size:%d\n", buf, size);
+
+#ifdef HYPERCALL_DEBUG    
+    printf("vmchannel_read buf:%s, size:%d\n", buf, size);
+#endif
 
     // if the hypercall device is in interrupts disabled state, don't accept the data
-    if (pHypercallState->cmd &= HP_CMD_DI) {
+    if (pHypercallState->cmd & HP_CMD_DI) {
         return;
     }
 
     for(i = 0; i < size; i++) {
-        //printf("buf[i%d]=%x\n",i, buf[i]);
         pHypercallState->RxBuff[i] = buf[i];
     }
     pHypercallState->rxsize = size;
@@ -262,7 +271,9 @@ void vmchannel_init(CharDriverState *hd)
 {
     vmchannel_hd = hd;
 
-    //printf("vmchannel_init\n");
+#ifdef HYPERCALL_DEBUG
+    printf("vmchannel_init\n");
+#endif
     use_hypercall_dev = 1;
     qemu_chr_add_read_handler(vmchannel_hd, vmchannel_can_read, vmchannel_read, &pHypercallState);
 
