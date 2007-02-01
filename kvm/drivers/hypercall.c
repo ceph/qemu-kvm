@@ -230,8 +230,8 @@ static irqreturn_t hypercall_interrupt(int irq, void *dev_instance,
 	int irq_handled = IRQ_NONE;
 	int rx_buf_size;
 	int i;
-	u32 buffer[HP_MEM_SIZE];
-	u32 *pbuf;
+	u8 buffer[HP_MEM_SIZE];
+	u8 *pbuf;
 
 	DPRINTK("base addr is 0x%lx, io_addr=0x%lx\n", dev->base_addr, (long)dev->io_addr);
 	
@@ -259,7 +259,8 @@ static irqreturn_t hypercall_interrupt(int irq, void *dev_instance,
 		*pbuf = HIO_READ8(HP_RXBUFF, ioaddr + i);
 		DPRINTK("Read 0x%x as dword %d\n", *pbuf, i);
 	}
-	DPRINTK("Read buffer %s\n", (char*)buffer);
+	*pbuf = '\0';
+	DPRINTK("Read buffer %s", (char*)buffer);
 
 	HIO_WRITE8(HP_CMD, HP_CMD_EI, ioaddr);
 	DPRINTK("Enable interrupt\n");
