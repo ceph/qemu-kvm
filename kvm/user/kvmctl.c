@@ -522,6 +522,11 @@ static int handle_halt(kvm_context_t kvm, struct kvm_run *kvm_run)
 	return kvm->callbacks->halt(kvm->opaque, kvm_run->vcpu);
 }
 
+static int handle_shutdown(kvm_context_t kvm, struct kvm_run *kvm_run)
+{
+	return kvm->callbacks->shutdown(kvm->opaque, kvm_run->vcpu);
+}
+
 int try_push_interrupts(kvm_context_t kvm)
 {
 	return kvm->callbacks->try_push_interrupts(kvm->opaque);
@@ -599,6 +604,9 @@ again:
 			r = handle_halt(kvm, &kvm_run);
 			break;
 		case KVM_EXIT_IRQ_WINDOW_OPEN:
+			break;
+		case KVM_EXIT_SHUTDOWN:
+			r = handle_shutdown(kvm, &kvm_run);
 			break;
 		default:
 			fprintf(stderr, "unhandled vm exit: 0x%x\n", kvm_run.exit_reason);

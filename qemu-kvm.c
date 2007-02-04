@@ -124,6 +124,15 @@ static void get_seg(SegmentCache *lhs, const struct kvm_segment *rhs)
 	| (rhs->avl * DESC_AVL_MASK);
 }
 
+/* the reset values of qemu are not compatible to SVM
+ * this function is used to fix the segment descriptor values */
+static void fix_realmode_dataseg(struct kvm_segment *seg)
+{
+	seg->type = 0x02;
+	seg->present = 1;
+	seg->s = 1;
+}
+
 static void load_regs(CPUState *env)
 {
     struct kvm_regs regs;
@@ -181,6 +190,12 @@ static void load_regs(CPUState *env)
 		sregs.ss.selector = (sregs.ss.selector & ~3) | 
 			(sregs.cs.selector & 3);
 		sregs.ss.dpl = sregs.ss.selector & 3;
+	    }
+
+	    if (!(env->cr[0] & CR0_PG_MASK)) {
+		    fix_realmode_dataseg(&sregs.ds);
+		    fix_realmode_dataseg(&sregs.es);
+		    fix_realmode_dataseg(&sregs.ss);
 	    }
     }
 
@@ -587,6 +602,12 @@ static int kvm_halt(void *opaque, int vcpu)
 
     return 1;
 }
+
+static int kvm_shutdown(void *opaque, int vcpu)
+{
+    qemu_system_reset_request();
+    return 1;
+}
  
 static struct kvm_callbacks qemu_kvm_ops = {
     .cpuid = kvm_cpuid,
@@ -606,6 +627,7 @@ static struct kvm_callbacks qemu_kvm_ops = {
     .writel = kvm_writel,
     .writeq = kvm_writeq,
     .halt  = kvm_halt,
+    .shutdown = kvm_shutdown,
     .io_window = kvm_io_window,
     .try_push_interrupts = try_push_interrupts,
     .post_kvm_run = post_kvm_run,
