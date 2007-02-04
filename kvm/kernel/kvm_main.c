@@ -1148,6 +1148,7 @@ int kvm_hypercall(struct kvm_vcpu *vcpu, struct kvm_run *run)
 
 	kvm_arch_ops->decache_regs(vcpu);
 	ret = -KVM_EINVAL;
+#ifdef CONFIG_X86_64
 	if (is_long_mode(vcpu)) {
 		nr = vcpu->regs[VCPU_REGS_RAX];
 		a0 = vcpu->regs[VCPU_REGS_RDI];
@@ -1156,7 +1157,9 @@ int kvm_hypercall(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		a3 = vcpu->regs[VCPU_REGS_RCX];
 		a4 = vcpu->regs[VCPU_REGS_R8];
 		a5 = vcpu->regs[VCPU_REGS_R9];
-	} else {
+	} else
+#endif
+	{
 		nr = vcpu->regs[VCPU_REGS_RBX] & -1u;
 		a0 = vcpu->regs[VCPU_REGS_RAX] & -1u;
 		a1 = vcpu->regs[VCPU_REGS_RCX] & -1u;
