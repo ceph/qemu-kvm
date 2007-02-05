@@ -11,7 +11,7 @@
 #include <asm/uaccess.h>
 #include <asm/irq.h>
 
-#define HYPERCALL_DRIVER_NAME "Qumranet hypercall driver"
+#define HYPERCALL_DRIVER_NAME "Qumranet_hypercall_driver"
 #define HYPERCALL_DRIVER_VERSION "1"
 #define PCI_VENDOR_ID_HYPERCALL	0x5002
 #define PCI_DEVICE_ID_HYPERCALL 0x2258
@@ -80,6 +80,7 @@ MODULE_DEVICE_TABLE (pci, hypercall_pci_tbl);
 
 struct hypercall_dev {
 	struct pci_dev  *pci_dev;
+	struct kobject kobject;
 	u32 		state;
 	spinlock_t	lock;
 	u8		name[128];
@@ -95,6 +96,9 @@ static int hypercall_open(struct hypercall_dev *dev);
 static void hypercall_cleanup_dev(struct hypercall_dev *dev);
 static irqreturn_t hypercall_interrupt(int irq, void *dev_instance,
 				       struct pt_regs *regs);
+
+static void __exit hypercall_sysfs_remove(struct hypercall_dev *dev);
+static int hypercall_sysfs_add(struct hypercall_dev *dev);
 
 
 static int __devinit hypercall_init_board(struct pci_dev *pdev,
@@ -203,6 +207,10 @@ static int __devinit hypercall_init_one(struct pci_dev *pdev,
 	printk (KERN_INFO "name=%s: base_addr=0x%lx, io_addr=0x%lx, IRQ=%d\n",
 		dev->name, dev->base_addr, (unsigned long)dev->io_addr, dev->irq);
 	hypercall_open(dev);
+
+	if (hypercall_sysfs_add(dev) != 0)
+		return -1;
+
 	return 0;
 }
 
@@ -213,6 +221,7 @@ static void __devexit hypercall_remove_one(struct pci_dev *pdev)
 	assert(dev != NULL);
 
 	hypercall_close(dev);
+	hypercall_sysfs_remove(dev);
 	hypercall_cleanup_dev(dev);
 	pci_disable_device(pdev);
 }
@@ -367,6 +376,102 @@ static int __init hypercall_init_module(void)
 static void __exit hypercall_cleanup_module(void)
 {
 	pci_unregister_driver(&hypercall_pci_driver);
+}
+
+/*
+ * sysfs support
+ */
+
+struct hypercall_attribute {
+	struct attribute attr;
+	ssize_t (*show)(struct hypercall_dev*, char *buf);
+	ssize_t (*store)(struct hypercall_dev*, const char *buf);
+};
+
+static ssize_t hypercall_attribute_show(struct kobject *kobj,
+		struct attribute *attr, char *buf)
+{
+	struct hypercall_attribute *hypercall_attr;
+	struct hypercall_dev *hdev;
+
+	hypercall_attr = container_of(attr, struct hypercall_attribute, attr);
+	hdev = container_of(kobj, struct hypercall_dev, kobject);
+
+	if (!hypercall_attr->show)
+		return -EIO;
+
+	return hypercall_attr->show(hdev, buf);
+}
+
+#define CUSTOM_HYPERCALL_ATTR(_name, _format, _expression)		\
+static ssize_t _name##_show(struct hypercall_dev *hdev, char *buf)	\
+{									\
+	return sprintf(buf, _format, _expression);			\
+}									\
+struct hypercall_attribute hypercall_attr_##_name = __ATTR_RO(_name)
+
+#define SIMPLE_HYPERCALL_ATTR(_name)	\
+	CUSTOM_HYPERCALL_ATTR(_name, "%lu\n", (unsigned long)hdev->_name)
+
+SIMPLE_HYPERCALL_ATTR(base_addr);
+SIMPLE_HYPERCALL_ATTR(irq);
+
+#define GET_HYPERCALL_ATTR(_name)	(&hypercall_attr_##_name.attr)
+
+static struct attribute *hypercall_default_attrs[] = {
+	GET_HYPERCALL_ATTR(base_addr),
+	GET_HYPERCALL_ATTR(irq),
+	NULL
+};
+
+static struct sysfs_ops hypercall_sysfs_ops = {
+		.show = hypercall_attribute_show
+};
+
+static void hypercall_sysfs_release(struct kobject *kobj)
+{
+	DPRINTK(" called for obj name %s\n", kobj->name);
+}
+
+static struct kobj_type hypercall_ktype = {
+	.release	= hypercall_sysfs_release,
+	.sysfs_ops	= &hypercall_sysfs_ops,
+	.default_attrs	= hypercall_default_attrs
+};
+
+
+static int hypercall_sysfs_add(struct hypercall_dev *dev)
+{
+	int rc;
+
+	kobject_init(&dev->kobject);
+	dev->kobject.ktype = &hypercall_ktype;
+	rc = kobject_set_name(&dev->kobject, "%s", HYPERCALL_DRIVER_NAME);
+	if (rc != 0) {
+		printk("%s: kobject_set_name failed, err=%d\n", __FUNCTION__, rc);
+		return rc;
+	}
+
+        rc = kobject_add(&dev->kobject);
+	if (rc != 0) {
+		printk("%s: kobject_add failed, err=%d\n", __FUNCTION__, rc);
+		return rc;
+	}
+
+        rc = sysfs_create_link(&dev->pci_dev->dev.kobj, &dev->kobject,
+			       HYPERCALL_DRIVER_NAME);
+	if (rc != 0) {
+		printk("%s: sysfs_create_link failed, err=%d\n", __FUNCTION__, rc);
+		kobject_del(&dev->kobject);
+	}
+        
+	return rc;
+}
+
+static void hypercall_sysfs_remove(struct hypercall_dev *dev)
+{
+	sysfs_remove_link(&dev->pci_dev->dev.kobj, HYPERCALL_DRIVER_NAME);
+	kobject_del(&dev->kobject);
 }
 
 module_init(hypercall_init_module);
