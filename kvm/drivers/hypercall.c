@@ -80,7 +80,7 @@ MODULE_DEVICE_TABLE (pci, hypercall_pci_tbl);
 
 struct hypercall_dev {
 	struct pci_dev  *pci_dev;
-	struct kobject kobject;
+	struct kobject	kobject;
 	u32 		state;
 	spinlock_t	lock;
 	u8		name[128];
@@ -88,6 +88,7 @@ struct hypercall_dev {
 	u32		regs_len;
 	void __iomem 	*io_addr;
 	unsigned long	base_addr;	/* device I/O address	*/
+	unsigned long 	cmd;
 };
 
 
@@ -385,7 +386,7 @@ static void __exit hypercall_cleanup_module(void)
 struct hypercall_attribute {
 	struct attribute attr;
 	ssize_t (*show)(struct hypercall_dev*, char *buf);
-	ssize_t (*store)(struct hypercall_dev*, const char *buf);
+	ssize_t (*store)(struct hypercall_dev*, unsigned long val);
 };
 
 static ssize_t hypercall_attribute_show(struct kobject *kobj,
@@ -403,29 +404,65 @@ static ssize_t hypercall_attribute_show(struct kobject *kobj,
 	return hypercall_attr->show(hdev, buf);
 }
 
-#define CUSTOM_HYPERCALL_ATTR(_name, _format, _expression)		\
+static ssize_t hypercall_attribute_store(struct kobject *kobj,
+		struct attribute *attr, const char *buf, size_t count)
+{
+	struct hypercall_attribute *hypercall_attr;
+	struct hypercall_dev *hdev;
+	char *endp;
+	unsigned long val;
+	int rc;
+
+	val = simple_strtoul(buf, &endp, 0);
+
+	hypercall_attr = container_of(attr, struct hypercall_attribute, attr);
+	hdev = container_of(kobj, struct hypercall_dev, kobject);
+
+	if (!hypercall_attr->store)
+		return -EIO;
+
+	rc = hypercall_attr->store(hdev, val);
+	if (!rc)
+		rc = count;
+	return rc;
+}
+
+#define MAKE_HYPERCALL_R_ATTR(_name)					\
 static ssize_t _name##_show(struct hypercall_dev *hdev, char *buf)	\
 {									\
-	return sprintf(buf, _format, _expression);			\
+	return sprintf(buf, "%lu\n", (unsigned long)hdev->_name);	\
 }									\
 struct hypercall_attribute hypercall_attr_##_name = __ATTR_RO(_name)
 
-#define SIMPLE_HYPERCALL_ATTR(_name)	\
-	CUSTOM_HYPERCALL_ATTR(_name, "%lu\n", (unsigned long)hdev->_name)
+#define MAKE_HYPERCALL_WR_ATTR(_name)					\
+static int _name##_store(struct hypercall_dev *hdev, unsigned long val)	\
+{									\
+	hdev->_name = (typeof(hdev->_name))val;				\
+	return 0;							\
+}									\
+static ssize_t _name##_show(struct hypercall_dev *hdev, char *buf)	\
+{									\
+	return sprintf(buf, "%lu\n", (unsigned long)hdev->_name);	\
+}									\
+struct hypercall_attribute hypercall_attr_##_name = 			\
+	__ATTR(_name,S_IRUGO|S_IWUGO,_name##_show,_name##_store)
 
-SIMPLE_HYPERCALL_ATTR(base_addr);
-SIMPLE_HYPERCALL_ATTR(irq);
+MAKE_HYPERCALL_R_ATTR(base_addr);
+MAKE_HYPERCALL_R_ATTR(irq);
+MAKE_HYPERCALL_WR_ATTR(cmd);
 
 #define GET_HYPERCALL_ATTR(_name)	(&hypercall_attr_##_name.attr)
 
 static struct attribute *hypercall_default_attrs[] = {
 	GET_HYPERCALL_ATTR(base_addr),
 	GET_HYPERCALL_ATTR(irq),
+	GET_HYPERCALL_ATTR(cmd),
 	NULL
 };
 
 static struct sysfs_ops hypercall_sysfs_ops = {
-		.show = hypercall_attribute_show
+	.show = hypercall_attribute_show,
+	.store = hypercall_attribute_store,
 };
 
 static void hypercall_sysfs_release(struct kobject *kobj)
