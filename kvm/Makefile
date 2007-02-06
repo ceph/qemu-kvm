@@ -68,4 +68,4 @@ clean:
 	for i in $(if $(WANT_MODULE), kernel) user qemu; do \
 		make -C $$i clean; \
 	done
-	rm -f config.make user/config.mak
+	rm -f config.mak user/config.mak
