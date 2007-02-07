@@ -235,19 +235,21 @@ static int handle_io(kvm_context_t kvm, struct kvm_run *run)
 	int delta;
 	struct translation_cache tr;
 	int _in = (run->io.direction == KVM_EXIT_IO_IN);
+	int r;
 
 	translation_cache_init(&tr);
 
 	if (run->io.string || _in) {
 		regs.vcpu = run->vcpu;
-		ioctl(kvm->fd, KVM_GET_REGS, &regs);
+		r = ioctl(kvm->fd, KVM_GET_REGS, &regs);
+		if (r == -1)
+			return -errno;
 	}
 
 	delta = run->io.string_down ? -run->io.size : run->io.size;
 
 	while (more_io(run, first_time)) {
 		void *value_addr;
-		int r;
 
 		if (!run->io.string) {
 			if (_in)
@@ -327,13 +329,22 @@ static int handle_io(kvm_context_t kvm, struct kvm_run *run)
 		}
 		first_time = 0;
 		if (r) {
-			ioctl(kvm->fd, KVM_SET_REGS, &regs);
-			return r;
+			int savedret = r;
+			r = ioctl(kvm->fd, KVM_SET_REGS, &regs);
+			if (r == -1)
+				return -errno;
+
+			return savedret;
 		}
 	}
 
-	if (run->io.string || _in)
-		ioctl(kvm->fd, KVM_SET_REGS, &regs);
+	if (run->io.string || _in) {
+		r = ioctl(kvm->fd, KVM_SET_REGS, &regs);
+		if (r == -1)
+			return -errno;
+
+	}
+
 	run->emulated = 1;
 	return 0;
 }
