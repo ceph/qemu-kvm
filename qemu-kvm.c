@@ -423,6 +423,7 @@ void kvm_save_registers(CPUState *env)
 
 int kvm_cpu_exec(CPUState *env)
 {
+    int r;
     int pending = (!env->ready_for_interrupt_injection ||
                    ((env->interrupt_request & CPU_INTERRUPT_HARD) &&
 		   (env->eflags & IF_MASK)));
@@ -437,7 +438,11 @@ int kvm_cpu_exec(CPUState *env)
     if (!saved_env[0])
 	saved_env[0] = env;
 
-    kvm_run(kvm_context, 0);
+    r = kvm_run(kvm_context, 0);
+    if (r < 0) {
+        printf("kvm_run returned %d\n", r);
+        exit(1);
+    }
 
     return 0;
 }
