@@ -195,6 +195,8 @@ static void load_regs(CPUState *env)
 	    if (!(env->cr[0] & CR0_PG_MASK)) {
 		    fix_realmode_dataseg(&sregs.ds);
 		    fix_realmode_dataseg(&sregs.es);
+		    fix_realmode_dataseg(&sregs.fs);
+		    fix_realmode_dataseg(&sregs.gs);
 		    fix_realmode_dataseg(&sregs.ss);
 	    }
     }
