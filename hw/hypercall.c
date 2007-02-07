@@ -25,22 +25,22 @@
 #include "vl.h"
 #include <stddef.h>
 
-#define HP_CMD          0x00  // The command register  WR
-#define HP_ISRSTATUS    0x04  // Interrupt status reg RD 
+#define HCR_REGISTER    0x00  // Hypercall Command Register WR
+#define HSR_REGISTER    0x04  // Hypercall Status Register RD
 #define HP_TXSIZE       0x08
 #define HP_TXBUFF       0x0c
 #define HP_RXSIZE       0x10
 #define HP_RXBUFF       0x14
 
-// HP_CMD register commands
-#define HP_CMD_DI		1 // disable interrupts
-#define HP_CMD_EI		2 // enable interrupts
-#define HP_CMD_INIT		4 // reset device
-#define HP_CMD_RESET		(HP_CMD_INIT|HP_CMD_DI)
+// HCR_REGISTER commands
+#define HCR_DI		1 // disable interrupts
+#define HCR_EI		2 // enable interrupts
+#define HCR_GRS		4 // Global reset
+#define HCR_RESET	(HCR_GRS|HCR_DI)
 
 
-/* Bits in HP_ISR - Interrupt status register */
-#define HPISR_RX	0x01  // Data is ready to be read
+// Bits in HSR_REGISTER
+#define HSR_VDR		0x01  // vmchannel Data is ready to be read
 
 int use_hypercall_dev = 0;
 static CharDriverState *vmchannel_hd;
@@ -48,8 +48,8 @@ static CharDriverState *vmchannel_hd;
 #define HP_MEM_SIZE    0xE0
 
 typedef struct HypercallState {
-    uint32_t cmd;
-    uint32_t isr;
+    uint32_t hcr;
+    uint32_t hsr;
     uint32_t txsize;
     uint32_t txbuff;
     uint32_t rxsize;
@@ -67,8 +67,8 @@ HypercallState *pHypercallState = NULL;
 
 static void hp_reset(HypercallState *s)
 {
-    s->cmd = 0;
-    s->isr = 0;
+    s->hcr = 0;
+    s->hsr = 0;
     s->txsize = 0;
     s->txbuff = 0;
     s->rxsize= 0;
@@ -89,12 +89,12 @@ static void hp_ioport_write(void *opaque, uint32_t addr, uint32_t val)
 
     switch(addr)
     {
-        case HP_CMD:
+        case HCR_REGISTER:
         {
-            s->cmd = val;
-	    if (s->cmd & HP_CMD_DI)
+            s->hcr = val;
+	    if (s->hcr & HCR_DI)
                 hypercall_update_irq(s);
-            if (val & HP_CMD_INIT){
+            if (val & HCR_GRS){
                 hp_reset(s);
             }
             break;
@@ -156,10 +156,10 @@ static uint32_t hp_ioport_read(void *opaque, uint32_t addr)
 
     switch (addr)
     {
-    case HP_ISRSTATUS:
-        ret = s->isr;
-        if (ret & HPISR_RX) {
-            s->isr &= ~HPISR_RX;
+    case HSR_REGISTER:
+        ret = s->hsr;
+        if (ret & HSR_VDR) {
+            s->hsr &= ~HSR_VDR;
         }
         break;
     case HP_RXSIZE:
@@ -197,7 +197,7 @@ static void hp_map(PCIDevice *pci_dev, int region_num,
 static void hypercall_update_irq(HypercallState *s)
 {
     /* PCI irq */
-    pci_set_irq(s->pci_dev, 0, !(s->cmd & HP_CMD_DI));
+    pci_set_irq(s->pci_dev, 0, !(s->hcr & HCR_DI));
 }
 
 void pci_hypercall_init(PCIBus *bus)
@@ -255,7 +255,7 @@ static void vmchannel_read(void *opaque, const uint8_t *buf, int size)
 #endif
 
     // if the hypercall device is in interrupts disabled state, don't accept the data
-    if (pHypercallState->cmd & HP_CMD_DI) {
+    if (pHypercallState->hcr & HCR_DI) {
         return;
     }
 
@@ -263,7 +263,7 @@ static void vmchannel_read(void *opaque, const uint8_t *buf, int size)
         pHypercallState->RxBuff[i] = buf[i];
     }
     pHypercallState->rxsize = size;
-    pHypercallState->isr = HPISR_RX;
+    pHypercallState->hsr = HSR_VDR;
     hypercall_update_irq(pHypercallState);
 }
 
