@@ -25,6 +25,8 @@ CFLAGS+=-Wall -O2 -g -fno-strict-aliasing
 #CFLAGS+=-Werror
 LDFLAGS+=-g
 LIBS=
+# libraries we depend on
+DEPLIBS= 
 HELPER_CFLAGS=$(CFLAGS)
 DYNGEN=../dyngen$(EXESUF)
 # user emulator name
@@ -331,6 +333,7 @@ AUDIODRV+= wavcapture.o
 ifdef CONFIG_KVM_KERNEL_INC
 DEFINES += -I $(CONFIG_KVM_KERNEL_INC)
 LIBS += -lkvm
+DEPLIBS += ../user/libkvm.a
 endif
 
 # SCSI layer
@@ -437,7 +440,7 @@ ifdef CONFIG_WIN32
 SDL_LIBS := $(filter-out -mwindows, $(SDL_LIBS)) -mconsole
 endif
 
-$(QEMU_SYSTEM): $(VL_OBJS) libqemu.a
+$(QEMU_SYSTEM): $(VL_OBJS) libqemu.a $(DEPLIBS)
 	$(CC) $(VL_LDFLAGS) -o $@ $^ $(LIBS) $(SDL_LIBS) $(COCOA_LIBS) $(VL_LIBS)
 
 cocoa.o: cocoa.m
