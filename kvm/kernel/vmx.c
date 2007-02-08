@@ -19,6 +19,7 @@
 #include "vmx.h"
 #include "kvm_vmx.h"
 #include <linux/module.h>
+#include <linux/kernel.h>
 #include <linux/mm.h>
 #include <linux/highmem.h>
 #include <linux/profile.h>
@@ -26,7 +27,6 @@
 #include <asm/desc.h>
 
 #include "segment_descriptor.h"
-
 
 MODULE_AUTHOR("Qumranet");
 MODULE_LICENSE("GPL");
@@ -76,7 +76,7 @@ static const u32 vmx_msr_index[] = {
 #endif
 	MSR_EFER, MSR_K6_STAR,
 };
-#define NR_VMX_MSR (sizeof(vmx_msr_index) / sizeof(*vmx_msr_index))
+#define NR_VMX_MSR ARRAY_SIZE(vmx_msr_index)
 
 static inline int is_page_fault(u32 intr_info)
 {
@@ -418,10 +418,9 @@ static int vmx_set_msr(struct kvm_vcpu *vcpu, u32 msr_index, u64 data)
 	case MSR_IA32_SYSENTER_ESP:
 		vmcs_write32(GUEST_SYSENTER_ESP, data);
 		break;
-	case MSR_IA32_TIME_STAMP_COUNTER: {
+	case MSR_IA32_TIME_STAMP_COUNTER:
 		guest_write_tsc(data);
 		break;
-	}
 	default:
 		msr = find_msr_entry(vcpu, msr_index);
 		if (msr) {
@@ -793,6 +792,9 @@ static void vmx_set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
  */
 static void vmx_set_cr0_no_modeswitch(struct kvm_vcpu *vcpu, unsigned long cr0)
 {
+	if (!vcpu->rmode.active && !(cr0 & CR0_PE_MASK))
+		enter_rmode(vcpu);
+
 	vcpu->rmode.active = ((cr0 & CR0_PE_MASK) == 0);
 	update_exception_bitmap(vcpu);
 	vmcs_writel(CR0_READ_SHADOW, cr0);
@@ -1127,6 +1129,8 @@ static int vmx_vcpu_setup(struct kvm_vcpu *vcpu)
 		int j = vcpu->nmsrs;
 
 		if (rdmsr_safe(index, &data_low, &data_high) < 0)
+			continue;
+		if (wrmsr_safe(index, data_low, data_high) < 0)
 			continue;
 		data = data_low | ((u64)data_high << 32);
 		vcpu->host_msrs[j].index = index;
@@ -1465,6 +1469,18 @@ static int handle_io(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	return 0;
 }
 
+static void
+vmx_patch_hypercall(struct kvm_vcpu *vcpu, unsigned char *hypercall)
+{
+	/*
+	 * Patch in the VMCALL instruction:
+	 */
+	hypercall[0] = 0x0f;
+	hypercall[1] = 0x01;
+	hypercall[2] = 0xc1;
+	hypercall[3] = 0xc3;
+}
+
 static int handle_cr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 {
 	u64 exit_qualification;
@@ -1641,6 +1657,12 @@ static int handle_halt(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	return 0;
 }
 
+static int handle_vmcall(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
+{
+	vmcs_writel(GUEST_RIP, vmcs_readl(GUEST_RIP)+3);
+	return kvm_hypercall(vcpu, kvm_run);
+}
+
 /*
  * The exit handlers return 1 if the exit was handled fully and guest execution
  * may resume.  Otherwise they set the kvm_run parameter to indicate what needs
@@ -1659,6 +1681,7 @@ static int (*kvm_vmx_exit_handlers[])(struct kvm_vcpu *vcpu,
 	[EXIT_REASON_MSR_WRITE]               = handle_wrmsr,
 	[EXIT_REASON_PENDING_INTERRUPT]       = handle_interrupt_window,
 	[EXIT_REASON_HLT]                     = handle_halt,
+	[EXIT_REASON_VMCALL]                  = handle_vmcall,
 };
 
 static const int kvm_vmx_max_exit_handlers =
@@ -2060,6 +2083,7 @@ static struct kvm_arch_ops vmx_arch_ops = {
 	.run = vmx_vcpu_run,
 	.skip_emulated_instruction = skip_emulated_instruction,
 	.vcpu_setup = vmx_vcpu_setup,
+	.patch_hypercall = vmx_patch_hypercall,
 };
 
 static int __init vmx_init(void)

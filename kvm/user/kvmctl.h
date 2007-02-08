@@ -59,6 +59,7 @@ struct kvm_callbacks {
 	 * on the host CPU.
 	 */
     int (*halt)(void *opaque, int vcpu);
+    int (*shutdown)(void *opaque, int vcpu);
     int (*io_window)(void *opaque);
     int (*try_push_interrupts)(void *opaque);
     void (*post_kvm_run)(void *opaque, struct kvm_run *kvm_run);
@@ -247,6 +248,6 @@ void *kvm_create_phys_mem(kvm_context_t, unsigned long phys_start,
 			  unsigned long len, int slot, int log, int writable);
 void kvm_destroy_phys_mem(kvm_context_t, unsigned long phys_start, 
 			  unsigned long len);
-void kvm_get_dirty_pages(kvm_context_t, int slot, void *buf);
+int kvm_get_dirty_pages(kvm_context_t, int slot, void *buf);
 
 #endif

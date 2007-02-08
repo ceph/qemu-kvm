@@ -126,10 +126,8 @@ static inline int valid_vcpu(int n)
 	return likely(n >= 0 && n < KVM_MAX_VCPUS);
 }
 
-int kvm_read_guest(struct kvm_vcpu *vcpu,
-			     gva_t addr,
-			     unsigned long size,
-			     void *dest)
+int kvm_read_guest(struct kvm_vcpu *vcpu, gva_t addr, unsigned long size,
+		   void *dest)
 {
 	unsigned char *host_buf = dest;
 	unsigned long req_size = size;
@@ -161,10 +159,8 @@ int kvm_read_guest(struct kvm_vcpu *vcpu,
 }
 EXPORT_SYMBOL_GPL(kvm_read_guest);
 
-int kvm_write_guest(struct kvm_vcpu *vcpu,
-			     gva_t addr,
-			     unsigned long size,
-			     void *data)
+int kvm_write_guest(struct kvm_vcpu *vcpu, gva_t addr, unsigned long size,
+		    void *data)
 {
 	unsigned char *host_buf = data;
 	unsigned long req_size = size;
@@ -457,7 +453,7 @@ EXPORT_SYMBOL_GPL(set_cr4);
 void set_cr3(struct kvm_vcpu *vcpu, unsigned long cr3)
 {
 	if (is_long_mode(vcpu)) {
-		if ( cr3 & CR3_L_MODE_RESEVED_BITS) {
+		if (cr3 & CR3_L_MODE_RESEVED_BITS) {
 			printk(KERN_DEBUG "set_cr3: #GP, reserved bits\n");
 			inject_gp(vcpu);
 			return;
@@ -674,7 +670,7 @@ raced:
 						     | __GFP_ZERO);
 			if (!new.phys_mem[i])
 				goto out_free;
- 			new.phys_mem[i]->private = 0;
+			set_page_private(new.phys_mem[i],0);
 		}
 	}
 
@@ -773,7 +769,6 @@ static int kvm_dev_ioctl_get_dirty_log(struct kvm *kvm,
 	r = -EFAULT;
 	if (copy_to_user(log->dirty_bitmap, memslot->dirty_bitmap, n))
 		goto out;
-
 
 	if (any) {
 		cleared = 0;
@@ -903,8 +898,9 @@ static int emulator_read_emulated(unsigned long addr,
 		return X86EMUL_CONTINUE;
 	else {
 		gpa_t gpa = vcpu->mmu.gva_to_gpa(vcpu, addr);
+
 		if (gpa == UNMAPPED_GVA)
-			return vcpu_printf(vcpu, "not present\n"), X86EMUL_PROPAGATE_FAULT;
+			return X86EMUL_PROPAGATE_FAULT;
 		vcpu->mmio_needed = 1;
 		vcpu->mmio_phys_addr = gpa;
 		vcpu->mmio_size = bytes;
@@ -1142,6 +1138,42 @@ int emulate_instruction(struct kvm_vcpu *vcpu,
 }
 EXPORT_SYMBOL_GPL(emulate_instruction);
 
+int kvm_hypercall(struct kvm_vcpu *vcpu, struct kvm_run *run)
+{
+	unsigned long nr, a0, a1, a2, a3, a4, a5, ret;
+
+	kvm_arch_ops->decache_regs(vcpu);
+	ret = -KVM_EINVAL;
+#ifdef CONFIG_X86_64
+	if (is_long_mode(vcpu)) {
+		nr = vcpu->regs[VCPU_REGS_RAX];
+		a0 = vcpu->regs[VCPU_REGS_RDI];
+		a1 = vcpu->regs[VCPU_REGS_RSI];
+		a2 = vcpu->regs[VCPU_REGS_RDX];
+		a3 = vcpu->regs[VCPU_REGS_RCX];
+		a4 = vcpu->regs[VCPU_REGS_R8];
+		a5 = vcpu->regs[VCPU_REGS_R9];
+	} else
+#endif
+	{
+		nr = vcpu->regs[VCPU_REGS_RBX] & -1u;
+		a0 = vcpu->regs[VCPU_REGS_RAX] & -1u;
+		a1 = vcpu->regs[VCPU_REGS_RCX] & -1u;
+		a2 = vcpu->regs[VCPU_REGS_RDX] & -1u;
+		a3 = vcpu->regs[VCPU_REGS_RSI] & -1u;
+		a4 = vcpu->regs[VCPU_REGS_RDI] & -1u;
+		a5 = vcpu->regs[VCPU_REGS_RBP] & -1u;
+	}
+	switch (nr) {
+	default:
+		;
+	}
+	vcpu->regs[VCPU_REGS_RAX] = ret;
+	kvm_arch_ops->cache_regs(vcpu);
+	return 1;
+}
+EXPORT_SYMBOL_GPL(kvm_hypercall);
+
 static u64 mk_cr_64(u64 curr_cr, u32 new_val)
 {
 	return (curr_cr & ~((1ULL << 32) - 1)) | new_val;
@@ -1206,6 +1238,73 @@ void realmode_set_cr(struct kvm_vcpu *vcpu, int cr, unsigned long val,
 	default:
 		vcpu_printf(vcpu, "%s: unexpected cr %u\n", __FUNCTION__, cr);
 	}
+}
+
+/*
+ * Register the para guest with the host:
+ */
+static int vcpu_register_para(struct kvm_vcpu *vcpu, gpa_t para_state_gpa)
+{
+	struct kvm_vcpu_para_state *para_state;
+	hpa_t para_state_hpa, hypercall_hpa;
+	struct page *para_state_page;
+	unsigned char *hypercall;
+	gpa_t hypercall_gpa;
+
+	printk(KERN_DEBUG "kvm: guest trying to enter paravirtual mode\n");
+	printk(KERN_DEBUG ".... para_state_gpa: %08Lx\n", para_state_gpa);
+
+	/*
+	 * Needs to be page aligned:
+	 */
+	if (para_state_gpa != PAGE_ALIGN(para_state_gpa))
+		goto err_gp;
+
+	para_state_hpa = gpa_to_hpa(vcpu, para_state_gpa);
+	printk(KERN_DEBUG ".... para_state_hpa: %08Lx\n", para_state_hpa);
+	if (is_error_hpa(para_state_hpa))
+		goto err_gp;
+
+	para_state_page = pfn_to_page(para_state_hpa >> PAGE_SHIFT);
+	para_state = kmap_atomic(para_state_page, KM_USER0);
+
+	printk(KERN_DEBUG "....  guest version: %d\n", para_state->guest_version);
+	printk(KERN_DEBUG "....           size: %d\n", para_state->size);
+
+	para_state->host_version = KVM_PARA_API_VERSION;
+	/*
+	 * We cannot support guests that try to register themselves
+	 * with a newer API version than the host supports:
+	 */
+	if (para_state->guest_version > KVM_PARA_API_VERSION) {
+		para_state->ret = -KVM_EINVAL;
+		goto err_kunmap_skip;
+	}
+
+	hypercall_gpa = para_state->hypercall_gpa;
+	hypercall_hpa = gpa_to_hpa(vcpu, hypercall_gpa);
+	printk(KERN_DEBUG ".... hypercall_hpa: %08Lx\n", hypercall_hpa);
+	if (is_error_hpa(hypercall_hpa)) {
+		para_state->ret = -KVM_EINVAL;
+		goto err_kunmap_skip;
+	}
+
+	printk(KERN_DEBUG "kvm: para guest successfully registered.\n");
+	vcpu->para_state_page = para_state_page;
+	vcpu->para_state_gpa = para_state_gpa;
+	vcpu->hypercall_gpa = hypercall_gpa;
+
+	hypercall = kmap_atomic(pfn_to_page(hypercall_hpa >> PAGE_SHIFT),
+				KM_USER1) + (hypercall_hpa & ~PAGE_MASK);
+	kvm_arch_ops->patch_hypercall(vcpu, hypercall);
+	kunmap_atomic(hypercall, KM_USER1);
+
+	para_state->ret = 0;
+err_kunmap_skip:
+	kunmap_atomic(para_state, KM_USER0);
+	return 0;
+err_gp:
+	return 1;
 }
 
 int kvm_get_msr_common(struct kvm_vcpu *vcpu, u32 msr, u64 *pdata)
@@ -1316,6 +1415,12 @@ int kvm_set_msr_common(struct kvm_vcpu *vcpu, u32 msr, u64 data)
 	case MSR_IA32_MISC_ENABLE:
 		vcpu->ia32_misc_enable_msr = data;
 		break;
+	/*
+	 * This is the 'probe whether the host is KVM' logic:
+	 */
+	case MSR_KVM_API_MAGIC:
+		return vcpu_register_para(vcpu, data);
+
 	default:
 		printk(KERN_ERR "kvm: unhandled wrmsr: 0x%x\n", msr);
 		return 1;
@@ -1800,12 +1905,11 @@ static long kvm_dev_ioctl(struct file *filp,
 	case KVM_GET_API_VERSION:
 		r = KVM_API_VERSION;
 		break;
-	case KVM_CREATE_VCPU: {
+	case KVM_CREATE_VCPU:
 		r = kvm_dev_ioctl_create_vcpu(kvm, arg);
 		if (r)
 			goto out;
 		break;
-	}
 	case KVM_RUN: {
 		struct kvm_run kvm_run;
 
@@ -2079,13 +2183,17 @@ static int kvm_cpu_hotplug(struct notifier_block *notifier, unsigned long val,
 	int cpu = (long)v;
 
 	switch (val) {
-	case CPU_DEAD:
+	case CPU_DOWN_PREPARE:
 	case CPU_UP_CANCELED:
+		printk(KERN_INFO "kvm: disabling virtualization on CPU%d\n",
+		       cpu);
 		decache_vcpus_on_cpu(cpu);
 		smp_call_function_single(cpu, kvm_arch_ops->hardware_disable,
 					 NULL, 0, 1);
 		break;
-	case CPU_UP_PREPARE:
+	case CPU_ONLINE:
+		printk(KERN_INFO "kvm: enabling virtualization on CPU%d\n",
+		       cpu);
 		smp_call_function_single(cpu, kvm_arch_ops->hardware_enable,
 					 NULL, 0, 1);
 		break;

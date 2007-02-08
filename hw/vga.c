@@ -1396,9 +1396,13 @@ static void vga_draw_graphic(VGAState *s, int full_update)
     /* HACK ALERT */
 #define BITMAP_SIZE ((8*1024*1024) / 4096 / 8 / sizeof(long))
     unsigned long bitmap[BITMAP_SIZE];
+    int r;
 
-    if (kvm_allowed)
-	    kvm_get_dirty_pages(kvm_context, 1, &bitmap);
+    if (kvm_allowed) {
+	    r = kvm_get_dirty_pages(kvm_context, 1, &bitmap);
+	    if (r < 0)
+		    fprintf(stderr, "kvm: get_dirty_pages returned %d\n", r);
+    }
 #endif
 
     full_update |= update_basic_params(s);

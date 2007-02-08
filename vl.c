@@ -5295,6 +5295,10 @@ int main_loop(void)
             if (reset_requested) {
                 reset_requested = 0;
                 qemu_system_reset();
+#ifdef USE_KVM
+		if (kvm_allowed)
+			kvm_load_registers(env);
+#endif
                 ret = EXCP_INTERRUPT;
             }
             if (powerdown_requested) {

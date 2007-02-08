@@ -72,6 +72,28 @@ static inline int smp_call_function_single1(int cpu, void (*func)(void *info),
  * The cpu hotplug stubs are broken if !CONFIG_CPU_HOTPLUG
  */
 
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,15)
+#define DEFINE_MUTEX(a) DECLARE_MUTEX(a)
+#define mutex_lock_interruptible(a) down_interruptible(a)
+#define mutex_unlock(a) up(a)
+#define mutex_lock(a) down(a)
+#define mutex_init(a) init_MUTEX(a)
+#define mutex_trylock(a) down_trylock(a)
+#define mutex semaphore
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,14)
+#ifndef kzalloc
+#define kzalloc(size,flags)			\
+({						\
+	void *__ret = kmalloc(size, flags);	\
+	if (__ret)
+		memset(__ret, 0, size);
+	__ret;
+})
+#endif
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,21)
 
 #ifndef CONFIG_HOTPLUG_CPU
