@@ -23,29 +23,11 @@
  * THE SOFTWARE.
  */
 #include "vl.h"
+#include "hypercall.h"
 #include <stddef.h>
-
-#define HCR_REGISTER    0x00  // Hypercall Command Register WR
-#define HSR_REGISTER    0x04  // Hypercall Status Register RD
-#define HP_TXSIZE       0x08
-#define HP_TXBUFF       0x0c
-#define HP_RXSIZE       0x10
-#define HP_RXBUFF       0x14
-
-// HCR_REGISTER commands
-#define HCR_DI		1 // disable interrupts
-#define HCR_EI		2 // enable interrupts
-#define HCR_GRS		4 // Global reset
-#define HCR_RESET	(HCR_GRS|HCR_DI)
-
-
-// Bits in HSR_REGISTER
-#define HSR_VDR		0x01  // vmchannel Data is ready to be read
 
 int use_hypercall_dev = 0;
 static CharDriverState *vmchannel_hd;
-
-#define HP_MEM_SIZE    0xE0
 
 typedef struct HypercallState {
     uint32_t hcr;
