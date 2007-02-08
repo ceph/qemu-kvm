@@ -45,7 +45,7 @@ typedef struct HypercallState {
 HypercallState *pHypercallState = NULL;
 
 
-#define HYPERCALL_DEBUG 1
+//#define HYPERCALL_DEBUG 1
 
 static void hp_reset(HypercallState *s)
 {
