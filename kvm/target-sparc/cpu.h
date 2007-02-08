@@ -19,6 +19,12 @@
 
 #define TARGET_HAS_ICE 1
 
+#if !defined(TARGET_SPARC64)
+#define ELF_MACHINE	EM_SPARC
+#else
+#define ELF_MACHINE	EM_SPARCV9
+#endif
+
 /*#define EXCP_INTERRUPT 0x100*/
 
 /* trap definitions */
@@ -269,8 +275,7 @@ void cpu_set_cwp(CPUSPARCState *env1, int new_cwp);
     } while (0)
 #endif
 
-struct siginfo;
-int cpu_sparc_signal_handler(int hostsignum, struct siginfo *info, void *puc);
+int cpu_sparc_signal_handler(int host_signum, void *pinfo, void *puc);
 
 #include "cpu-all.h"
 
