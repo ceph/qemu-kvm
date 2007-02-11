@@ -41,23 +41,26 @@ enum {
 static int map_address (CPUState *env, target_ulong *physical, int *prot,
                         target_ulong address, int rw, int access_type)
 {
-    target_ulong tag = address & (TARGET_PAGE_MASK << 1);
-    uint8_t ASID = env->CP0_EntryHi & 0xFF;
-    tlb_t *tlb;
-    int i, n;
+    int i;
 
-    for (i = 0; i < MIPS_TLB_NB; i++) {
-        tlb = &env->tlb[i];
+    for (i = 0; i < env->tlb_in_use; i++) {
+        tlb_t *tlb = &env->tlb[i];
+        /* 1k pages are not supported. */
+        uint8_t ASID = env->CP0_EntryHi & 0xFF;
+        target_ulong mask = tlb->PageMask | 0x1FFF;
+        target_ulong tag = address & ~mask;
+        int n;
+
         /* Check ASID, virtual page number & size */
         if ((tlb->G == 1 || tlb->ASID == ASID) &&
-            tlb->VPN == tag && address < tlb->end2) {
+            tlb->VPN == tag) {
             /* TLB match */
-            n = (address >> TARGET_PAGE_BITS) & 1;
+            n = !!(address & mask & ~(mask >> 1));
             /* Check access rights */
            if (!(n ? tlb->V1 : tlb->V0))
                 return TLBRET_INVALID;
            if (rw == 0 || (n ? tlb->D1 : tlb->D0)) {
-                *physical = tlb->PFN[n] | (address & ~TARGET_PAGE_MASK);
+                *physical = tlb->PFN[n] | (address & (mask >> 1));
                 *prot = PAGE_READ;
                 if (n ? tlb->D1 : tlb->D0)
                     *prot |= PAGE_WRITE;
@@ -86,7 +89,7 @@ static int get_physical_address (CPUState *env, target_ulong *physical,
 #endif
     if (user_mode && address > 0x7FFFFFFFUL)
         return TLBRET_BADADDR;
-    if (address < 0x80000000UL) {
+    if (address < (int32_t)0x80000000UL) {
         if (!(env->hflags & MIPS_HFLAG_ERL)) {
 #ifdef MIPS_USES_R4K_TLB
             ret = map_address(env, physical, prot, address, rw, access_type);
@@ -98,17 +101,17 @@ static int get_physical_address (CPUState *env, target_ulong *physical,
             *physical = address;
             *prot = PAGE_READ | PAGE_WRITE;
         }
-    } else if (address < 0xA0000000UL) {
+    } else if (address < (int32_t)0xA0000000UL) {
         /* kseg0 */
         /* XXX: check supervisor mode */
-        *physical = address - 0x80000000UL;
+        *physical = address - (int32_t)0x80000000UL;
         *prot = PAGE_READ | PAGE_WRITE;
-    } else if (address < 0xC0000000UL) {
+    } else if (address < (int32_t)0xC0000000UL) {
         /* kseg1 */
         /* XXX: check supervisor mode */
-        *physical = address - 0xA0000000UL;
+        *physical = address - (int32_t)0xA0000000UL;
         *prot = PAGE_READ | PAGE_WRITE;
-    } else if (address < 0xE0000000UL) {
+    } else if (address < (int32_t)0xE0000000UL) {
         /* kseg2 */
 #ifdef MIPS_USES_R4K_TLB
         ret = map_address(env, physical, prot, address, rw, access_type);
@@ -129,8 +132,8 @@ static int get_physical_address (CPUState *env, target_ulong *physical,
     }
 #if 0
     if (logfile) {
-        fprintf(logfile, "%08x %d %d => %08x %d (%d)\n", address, rw,
-                access_type, *physical, *prot, ret);
+        fprintf(logfile, TLSZ " %d %d => " TLSZ " %d (%d)\n",
+		address, rw, access_type, *physical, *prot, ret);
     }
 #endif
 
@@ -171,7 +174,7 @@ int cpu_mips_handle_mmu_fault (CPUState *env, target_ulong address, int rw,
 #if 0
         cpu_dump_state(env, logfile, fprintf, 0);
 #endif
-        fprintf(logfile, "%s pc %08x ad %08x rw %d is_user %d smmu %d\n",
+        fprintf(logfile, "%s pc " TLSZ " ad " TLSZ " rw %d is_user %d smmu %d\n",
                 __func__, env->PC, address, rw, is_user, is_softmmu);
     }
 
@@ -189,7 +192,7 @@ int cpu_mips_handle_mmu_fault (CPUState *env, target_ulong address, int rw,
     ret = get_physical_address(env, &physical, &prot,
                                address, rw, access_type);
     if (logfile) {
-        fprintf(logfile, "%s address=%08x ret %d physical %08x prot %d\n",
+        fprintf(logfile, "%s address=" TLSZ " ret %d physical " TLSZ " prot %d\n",
                 __func__, address, ret, physical, prot);
     }
     if (ret == TLBRET_MATCH) {
@@ -243,13 +246,19 @@ int cpu_mips_handle_mmu_fault (CPUState *env, target_ulong address, int rw,
     return ret;
 }
 
+#if defined(CONFIG_USER_ONLY)
 void do_interrupt (CPUState *env)
 {
-    target_ulong pc, offset;
+    env->exception_index = EXCP_NONE;
+}
+#else
+void do_interrupt (CPUState *env)
+{
+    target_ulong offset;
     int cause = -1;
 
     if (logfile && env->exception_index != EXCP_EXT_INTERRUPT) {
-        fprintf(logfile, "%s enter: PC %08x EPC %08x cause %d excp %d\n",
+        fprintf(logfile, "%s enter: PC " TLSZ " EPC " TLSZ " cause %d excp %d\n",
                 __func__, env->PC, env->CP0_EPC, cause, env->exception_index);
     }
     if (env->exception_index == EXCP_EXT_INTERRUPT &&
@@ -284,8 +293,7 @@ void do_interrupt (CPUState *env)
     set_DEPC:
         if (env->hflags & MIPS_HFLAG_BMASK) {
             /* If the exception was raised from a delay slot,
-             * come back to the jump
-             */
+               come back to the jump.  */
             env->CP0_DEPC = env->PC - 4;
             env->hflags &= ~MIPS_HFLAG_BMASK;
         } else {
@@ -294,47 +302,29 @@ void do_interrupt (CPUState *env)
     enter_debug_mode:
         env->hflags |= MIPS_HFLAG_DM;
         /* EJTAG probe trap enable is not implemented... */
-        pc = 0xBFC00480;
+        env->PC = (int32_t)0xBFC00480;
         break;
     case EXCP_RESET:
-#ifdef MIPS_USES_R4K_TLB
-        env->CP0_random = MIPS_TLB_NB - 1;
-#endif
-        env->CP0_Wired = 0;
-        env->CP0_Config0 = MIPS_CONFIG0;
-#if defined (MIPS_CONFIG1)
-        env->CP0_Config1 = MIPS_CONFIG1;
-#endif
-#if defined (MIPS_CONFIG2)
-        env->CP0_Config2 = MIPS_CONFIG2;
-#endif
-#if defined (MIPS_CONFIG3)
-        env->CP0_Config3 = MIPS_CONFIG3;
-#endif
-        env->CP0_WatchLo = 0;
-        env->CP0_Status = (1 << CP0St_CU0) | (1 << CP0St_BEV);
-        goto set_error_EPC;
+        cpu_reset(env);
+        break;
     case EXCP_SRESET:
-        env->CP0_Status = (1 << CP0St_CU0) | (1 << CP0St_BEV) |
-            (1 << CP0St_SR);
+        env->CP0_Status = (1 << CP0St_SR);
         env->CP0_WatchLo = 0;
         goto set_error_EPC;
     case EXCP_NMI:
-        env->CP0_Status = (1 << CP0St_CU0) | (1 << CP0St_BEV) |
-            (1 << CP0St_NMI);
+        env->CP0_Status = (1 << CP0St_NMI);
     set_error_EPC:
         if (env->hflags & MIPS_HFLAG_BMASK) {
             /* If the exception was raised from a delay slot,
-             * come back to the jump
-             */
+               come back to the jump.  */
             env->CP0_ErrorEPC = env->PC - 4;
             env->hflags &= ~MIPS_HFLAG_BMASK;
         } else {
             env->CP0_ErrorEPC = env->PC;
         }
         env->hflags |= MIPS_HFLAG_ERL;
-	env->CP0_Status |= (1 << CP0St_ERL);
-        pc = 0xBFC00000;
+	env->CP0_Status |= (1 << CP0St_ERL) | (1 << CP0St_BEV);
+        env->PC = (int32_t)0xBFC00000;
         break;
     case EXCP_MCHECK:
         cause = 24;
@@ -391,19 +381,9 @@ void do_interrupt (CPUState *env)
             offset = 0x000;
         goto set_EPC;
     set_EPC:
-        if (env->CP0_Status & (1 << CP0St_BEV)) {
-            pc = 0xBFC00200;
-        } else {
-            pc = 0x80000000;
-        }
-        env->hflags |= MIPS_HFLAG_EXL;
-	env->CP0_Status |= (1 << CP0St_EXL);
-        pc += offset;
-        env->CP0_Cause = (env->CP0_Cause & ~0x7C) | (cause << 2);
         if (env->hflags & MIPS_HFLAG_BMASK) {
             /* If the exception was raised from a delay slot,
-             * come back to the jump
-             */
+               come back to the jump.  */
             env->CP0_EPC = env->PC - 4;
             env->CP0_Cause |= 0x80000000;
             env->hflags &= ~MIPS_HFLAG_BMASK;
@@ -411,6 +391,15 @@ void do_interrupt (CPUState *env)
             env->CP0_EPC = env->PC;
             env->CP0_Cause &= ~0x80000000;
         }
+        if (env->CP0_Status & (1 << CP0St_BEV)) {
+            env->PC = (int32_t)0xBFC00200;
+        } else {
+            env->PC = (int32_t)0x80000000;
+        }
+        env->hflags |= MIPS_HFLAG_EXL;
+        env->CP0_Status |= (1 << CP0St_EXL);
+        env->PC += offset;
+        env->CP0_Cause = (env->CP0_Cause & ~0x7C) | (cause << 2);
         break;
     default:
         if (logfile) {
@@ -420,13 +409,58 @@ void do_interrupt (CPUState *env)
         printf("Invalid MIPS exception %d. Exiting\n", env->exception_index);
         exit(1);
     }
-    env->PC = pc;
     if (logfile && env->exception_index != EXCP_EXT_INTERRUPT) {
-        fprintf(logfile, "%s: PC %08x EPC %08x cause %d excp %d\n"
-                "    S %08x C %08x A %08x D %08x\n",
+        fprintf(logfile, "%s: PC " TLSZ " EPC " TLSZ " cause %d excp %d\n"
+                "    S %08x C %08x A " TLSZ " D " TLSZ "\n",
                 __func__, env->PC, env->CP0_EPC, cause, env->exception_index,
                 env->CP0_Status, env->CP0_Cause, env->CP0_BadVAddr,
                 env->CP0_DEPC);
     }
     env->exception_index = EXCP_NONE;
+}
+#endif /* !defined(CONFIG_USER_ONLY) */
+
+void invalidate_tlb (CPUState *env, int idx, int use_extra)
+{
+    tlb_t *tlb;
+    target_ulong addr;
+    target_ulong end;
+    uint8_t ASID = env->CP0_EntryHi & 0xFF;
+    target_ulong mask;
+
+    tlb = &env->tlb[idx];
+    /* The qemu TLB is flushed then the ASID changes, so no need to
+       flush these entries again.  */
+    if (tlb->G == 0 && tlb->ASID != ASID) {
+        return;
+    }
+
+    if (use_extra && env->tlb_in_use < MIPS_TLB_MAX) {
+        /* For tlbwr, we can shadow the discarded entry into
+	   a new (fake) TLB entry, as long as the guest can not
+	   tell that it's there.  */
+        env->tlb[env->tlb_in_use] = *tlb;
+        env->tlb_in_use++;
+        return;
+    }
+
+    /* 1k pages are not supported. */
+    mask = tlb->PageMask | 0x1FFF;
+    if (tlb->V0) {
+        addr = tlb->VPN;
+        end = addr | (mask >> 1);
+        while (addr < end) {
+            tlb_flush_page (env, addr);
+            addr += TARGET_PAGE_SIZE;
+        }
+    }
+    if (tlb->V1) {
+        addr = tlb->VPN | ((mask >> 1) + 1);
+        addr = tlb->VPN + TARGET_PAGE_SIZE;
+        end = addr | mask;
+        while (addr < end) {
+            tlb_flush_page (env, addr);
+            addr += TARGET_PAGE_SIZE;
+        }
+    }
 }

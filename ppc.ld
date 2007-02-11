@@ -90,11 +90,7 @@ SECTIONS
   /* We want the small data sections together, so single-instruction offsets
      can access them all, and initialized data all before uninitialized, so
      we can shorten the on-disk segment size.  */
-  .sdata     :
-  {
-    PROVIDE (_SDA_BASE_ = 32768);
-    *(.sdata .sdata.* .gnu.linkonce.s.*)
-  }
+  .sdata     : { *(.sdata) }
   _edata  =  .;
   PROVIDE (edata = .);
   __bss_start = .;

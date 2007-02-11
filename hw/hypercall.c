@@ -257,6 +257,7 @@ void vmchannel_init(CharDriverState *hd)
     printf("vmchannel_init\n");
 #endif
     use_hypercall_dev = 1;
+#if 0
     qemu_chr_add_read_handler(vmchannel_hd, vmchannel_can_read, vmchannel_read, &pHypercallState);
-
+#endif
 }

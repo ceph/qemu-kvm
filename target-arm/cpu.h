@@ -22,6 +22,8 @@
 
 #define TARGET_LONG_BITS 32
 
+#define ELF_MACHINE	EM_ARM
+
 #include "cpu-defs.h"
 
 #include "softfloat.h"
@@ -48,7 +50,7 @@ typedef struct CPUARMState {
     /* Regs for current mode.  */
     uint32_t regs[16];
     /* Frequently accessed CPSR bits are stored separately for efficiently.
-       This contains all the other bits.  Use cpsr_{read,write} to accless
+       This contains all the other bits.  Use cpsr_{read,write} to access
        the whole CPSR.  */
     uint32_t uncached_cpsr;
     uint32_t spsr;
@@ -131,8 +133,7 @@ void switch_mode(CPUARMState *, int);
 /* you can call this signal handler from your SIGBUS and SIGSEGV
    signal handlers to inform the virtual CPU of exceptions. non zero
    is returned if the signal was handled by the virtual CPU.  */
-struct siginfo;
-int cpu_arm_signal_handler(int host_signum, struct siginfo *info, 
+int cpu_arm_signal_handler(int host_signum, void *pinfo, 
                            void *puc);
 
 #define CPSR_M (0x1f)

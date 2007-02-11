@@ -26,9 +26,6 @@
 #if defined(__linux__)
 #include <dirent.h>
 #include <sys/ioctl.h>
-/* Some versions of usbdevice_fs.h need __user to be defined for them.   */
-/* This may (harmlessly) conflict with a definition in linux/compiler.h. */
-#define __user
 #include <linux/usbdevice_fs.h>
 #include <linux/version.h>
 
@@ -116,22 +113,21 @@ static int usb_host_handle_control(USBDevice *dev,
    }
 }
 
-static int usb_host_handle_data(USBDevice *dev, int pid, 
-                                uint8_t devep,
-                                uint8_t *data, int len)
+static int usb_host_handle_data(USBDevice *dev, USBPacket *p)
 {
     USBHostDevice *s = (USBHostDevice *)dev;
     struct usbdevfs_bulktransfer bt;
     int ret;
+    uint8_t devep = p->devep;
 
     /* XXX: optimize and handle all data types by looking at the
        config descriptor */
-    if (pid == USB_TOKEN_IN)
+    if (p->pid == USB_TOKEN_IN)
         devep |= 0x80;
     bt.ep = devep;
-    bt.len = len;
+    bt.len = p->len;
     bt.timeout = 50;
-    bt.data = data;
+    bt.data = p->data;
     ret = ioctl(s->fd, USBDEVFS_BULK, &bt);
     if (ret < 0) {
         switch(errno) {

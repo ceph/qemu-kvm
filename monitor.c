@@ -24,10 +24,7 @@
 #include "vl.h"
 #include "disas.h"
 #include <dirent.h>
-#include "migration.h"
-#if USE_KVM
-#include "qemu-kvm.h"
-#endif
+
 //#define DEBUG
 //#define DEBUG_COMPLETION
 
@@ -44,7 +41,6 @@
  * 'i'          32 bit integer
  * 'l'          target long (32 or 64 bit)
  * '/'          optional gdb-like print format (like "/10x")
- * 'A'          pass the rest of cmdline as one argument (for subcommands).
  *
  * '?'          optional type (for 'F', 's' and 'i')
  *
@@ -59,19 +55,15 @@ typedef struct term_cmd_t {
 } term_cmd_t;
 
 static CharDriverState *monitor_hd;
+static int hide_banner;
 
 static term_cmd_t term_cmds[];
 static term_cmd_t info_cmds[];
-static term_cmd_t migration_cmds[];
-static term_cmd_t migration_set_cmds[];
 
 static char term_outbuf[1024];
 static int term_outbuf_index;
 
 static void monitor_start_input(void);
-static void monitor_handle_command(const term_cmd_t *cmds, 
-                                   const char *cmdline);
-
 
 CPUState *mon_cpu = NULL;
 
@@ -113,6 +105,33 @@ void term_printf(const char *fmt, ...)
     va_start(ap, fmt);
     term_vprintf(fmt, ap);
     va_end(ap);
+}
+
+void term_print_filename(const char *filename)
+{
+    int i;
+
+    for (i = 0; filename[i]; i++) {
+	switch (filename[i]) {
+	case ' ':
+	case '"':
+	case '\\':
+	    term_printf("\\%c", filename[i]);
+	    break;
+	case '\t':
+	    term_printf("\\t");
+	    break;
+	case '\r':
+	    term_printf("\\r");
+	    break;
+	case '\n':
+	    term_printf("\\n");
+	    break;
+	default:
+	    term_printf("%c", filename[i]);
+	    break;
+	}
+    }
 }
 
 static int monitor_fprintf(FILE *stream, const char *fmt, ...)
@@ -176,13 +195,16 @@ static void do_help(const char *name)
     help_cmd(name);
 }
 
-static void do_commit(void)
+static void do_commit(const char *device)
 {
-    int i;
-
+    int i, all_devices;
+    
+    all_devices = !strcmp(device, "all");
     for (i = 0; i < MAX_DISKS; i++) {
         if (bs_table[i]) {
-            bdrv_commit(bs_table[i]);
+            if (all_devices || 
+                !strcmp(bdrv_get_device_name(bs_table[i]), device))
+                bdrv_commit(bs_table[i]);
         }
     }
 }
@@ -340,52 +362,6 @@ static void do_eject(int force, const char *filename)
     eject_device(bs, force);
 }
 
-
-int vmdk_snapshot_create(BlockDriverState *bs);
-
-static void do_snapshot(const char *hda, const char *hdb,
-                        const char *hdc, const char *hdd)
-{
-
-    if (!strcmp(hda,"hda")) {
-        if (vmdk_snapshot_create(bs_table[0]) == -1)
-            term_printf("hda snapshot fail\n");
-    }
-
-    if (hdb) {
-        if (!strcmp(hdb,"hdb")) {
-            if (bs_table[1]) {
-                if (vmdk_snapshot_create(bs_table[1]) == -1)
-                    term_printf("hdb snapshot fail\n");
-            }else {
-                term_printf("hdb not exist\n");
-            }
-        }
-    }
-
-    if (hdc) {
-        if (!strcmp(hdc,"hdc")) {
-            if (bs_table[2]) {
-                if (vmdk_snapshot_create(bs_table[2]) == -1)
-                    term_printf("hdc snapshot fail\n");
-            }else {
-                term_printf("hdc not exist\n");
-            }
-        }
-    }
-
-    if (hdd) {
-        if (!strcmp(hdd,"hdd")) {
-            if (bs_table[3]) {
-                if (vmdk_snapshot_create(bs_table[3]) == -1)
-                    term_printf("hdd snapshot fail\n");
-            }else {
-                term_printf("hdd not exist\n");
-            }
-        }
-    }
-}
-
 static void do_change(const char *device, const char *filename)
 {
     BlockDriverState *bs;
@@ -432,18 +408,6 @@ static void do_log(const char *items)
     cpu_set_log(mask);
 }
 
-static void do_savevm(const char *filename)
-{
-    if (qemu_savevm(filename, &qemu_savevm_method_file) < 0)
-        term_printf("I/O error when saving VM to '%s'\n", filename);
-}
-
-static void do_loadvm(const char *filename)
-{
-    if (qemu_loadvm(filename, &qemu_savevm_method_file) < 0)
-        term_printf("I/O error when loading VM from '%s'\n", filename);
-}
-
 static void do_stop(void)
 {
     vm_stop(EXCP_INTERRUPT);
@@ -459,7 +423,7 @@ static void do_gdbserver(int has_port, int port)
 {
     if (!has_port)
         port = DEFAULT_GDBSTUB_PORT;
-    if (gdbserver_start(port) < 0) {
+    if (gdbserver_start_port(port) < 0) {
         qemu_printf("Could not open gdbserver socket on port %d\n", port);
     } else {
         qemu_printf("Waiting gdb connection on port %d\n", port);
@@ -677,6 +641,36 @@ static void do_print(int count, int format, int size, unsigned int valh, unsigne
     }
 #endif
     term_printf("\n");
+}
+
+static void do_memory_save(unsigned int valh, unsigned int vall, 
+                           uint32_t size, const char *filename)
+{
+    FILE *f;
+    target_long addr = GET_TLONG(valh, vall);
+    uint32_t l;
+    CPUState *env;
+    uint8_t buf[1024];
+
+    env = mon_get_cpu();
+    if (!env)
+        return;
+
+    f = fopen(filename, "wb");
+    if (!f) {
+        term_printf("could not open '%s'\n", filename);
+        return;
+    }
+    while (size != 0) {
+        l = sizeof(buf);
+        if (l > size)
+            l = size;
+        cpu_memory_rw_debug(env, addr, buf, l, 0);
+        fwrite(buf, 1, l, f);
+        addr += l;
+        size -= l;
+    }
+    fclose(f);
 }
 
 static void do_sum(uint32_t start, uint32_t size)
@@ -1161,30 +1155,6 @@ static void do_stop_capture (int n)
     }
 }
 
-static void do_migration(const char *subcmdline)
-{
-    if (subcmdline[0] == '\0')
-        subcmdline = "help";
-    monitor_handle_command(migration_cmds, subcmdline);
-}
-
-static void do_migration_help(const char *name)
-{
-    help_cmd1(migration_cmds, "migration ", name);
-}
-
-static void do_migration_set(const char *subcmdline)
-{
-    if (subcmdline[0] == '\0')
-        subcmdline = "help";
-    monitor_handle_command(migration_set_cmds, subcmdline);
-}
-
-static void do_migration_set_help(const char *name)
-{
-    help_cmd1(migration_set_cmds, "migration set ", name);
-}
-
 #ifdef HAS_AUDIO
 int wav_start_capture (CaptureState *s, const char *path, int freq,
                        int bits, int nchannels);
@@ -1217,8 +1187,8 @@ static void do_wav_capture (const char *path,
 static term_cmd_t term_cmds[] = {
     { "help|?", "s?", do_help, 
       "[cmd]", "show the help" },
-    { "commit", "", do_commit, 
-      "", "commit changes to the disk images (if -snapshot is used)" },
+    { "commit", "s", do_commit, 
+      "device|all", "commit changes to the disk images (if -snapshot is used) or backing files" },
     { "info", "s?", do_info,
       "subcommand", "show various information about the system state" },
     { "q|quit", "", do_quit,
@@ -1231,10 +1201,12 @@ static term_cmd_t term_cmds[] = {
       "filename", "save screen into PPM image 'filename'" },
     { "log", "s", do_log,
       "item1[,...]", "activate logging of the specified items to '/tmp/qemu.log'" }, 
-    { "savevm", "F", do_savevm,
-      "filename", "save the whole virtual machine state to 'filename'" }, 
-    { "loadvm", "F", do_loadvm,
-      "filename", "restore the whole virtual machine state from 'filename'" }, 
+    { "savevm", "s?", do_savevm,
+      "tag|id", "save a VM snapshot. If no tag or id are provided, a new snapshot is created" }, 
+    { "loadvm", "s", do_loadvm,
+      "tag|id", "restore a VM snapshot from its tag or id" }, 
+    { "delvm", "s", do_delvm,
+      "tag|id", "delete a VM snapshot from its tag or id" }, 
     { "stop", "", do_stop, 
       "", "stop emulation", },
     { "c|cont", "", do_cont, 
@@ -1270,6 +1242,8 @@ static term_cmd_t term_cmds[] = {
       "dx dy [dz]", "send mouse move events" },
     { "mouse_button", "i", do_mouse_button, 
       "state", "change mouse button state (1=L, 2=M, 4=R)" },
+    { "mouse_set", "i", do_mouse_set,
+      "index", "set which mouse device receives events" },
 #ifdef HAS_AUDIO
     { "wavcapture", "si?i?i?", do_wav_capture,
       "path [frequency bits channels]",
@@ -1277,10 +1251,8 @@ static term_cmd_t term_cmds[] = {
 #endif
      { "stopcapture", "i", do_stop_capture,
        "capture index", "stop capture" },
-     { "create_snapshot", "ss?s?s?", do_snapshot, 
-       "hda [hdb] [hdc] [hdd]", "create snapshot of one or more images (VMDK format)" },
-    { "migration", "A", do_migration, "subcommand|help", 
-      "start/stop/manage migrations"},
+    { "memsave", "lis", do_memory_save, 
+      "addr size file", "save to disk virtual memory dump starting at 'addr' of size 'size'", },
     { NULL, NULL, }, 
 };
 
@@ -1320,34 +1292,14 @@ static term_cmd_t info_cmds[] = {
     { "profile", "", do_info_profile,
       "", "show profiling information", },
     { "capture", "", do_info_capture,
-      "show capture information" },
+      "", "show capture information" },
+    { "snapshots", "", do_info_snapshots,
+      "", "show the currently saved VM snapshots" },
+    { "mice", "", do_info_mice,
+      "", "show which guest mouse is receiving events" },
+    { "vnc", "", do_info_vnc,
+      "", "show the vnc server status"},
     { NULL, NULL, },
-};
-
-
-static term_cmd_t migration_cmds[] = {
-    { "listen", "s?s?", do_migration_listen,
-      "[local_host:port [remote_host:port]]", "listen to a port" },
-    { "connect", "s?s?", do_migration_connect, 
-      "[local_host:port [remote_host:port]]", "connect to a port"},
-    { "getfd", "i", do_migration_getfd, "fd (socket)", 
-      "get established connection"},
-    { "start", "s", do_migration_start, "online|offline" ,
-      "start the migration proccess"},
-    { "cancel", "", do_migration_cancel, "", 
-      "cancel an ongoing migration procces"},
-    { "status", "", do_migration_status, "", "get migration status/progress"},
-    { "set", "A", do_migration_set, "params", "set migration parameters"},
-    { "show",   "",  do_migration_show, "", "show migration parameters"},
-    { "help",   "s?",  do_migration_help, "[subcommand]", "show help message"},
-    { NULL, NULL, },
-};
-
-static term_cmd_t migration_set_cmds[] = {
-    { "rate", "iii", do_migration_set_rate, "min max offline", "bandwidth params" },
-    { "total_time", "i", do_migration_set_total_time, "seconds", "max migration time"},
-    { "help",  "s?", do_migration_set_help, "[subcommand]", "show help message"},
-    { NULL, NULL, }
 };
 
 /*******************************************************************/
@@ -1966,7 +1918,7 @@ static int default_fmt_size = 4;
 
 #define MAX_ARGS 16
 
-static void monitor_handle_command(const term_cmd_t *cmds, const char *cmdline)
+static void monitor_handle_command(const char *cmdline)
 {
     const char *p, *pstart, *typestr;
     char *q;
@@ -1998,7 +1950,7 @@ static void monitor_handle_command(const term_cmd_t *cmds, const char *cmdline)
     cmdname[len] = '\0';
     
     /* find the command */
-    for(cmd = cmds; cmd->name != NULL; cmd++) {
+    for(cmd = term_cmds; cmd->name != NULL; cmd++) {
         if (compare_cmd(cmdname, cmd->name)) 
             goto found;
     }
@@ -2013,8 +1965,6 @@ static void monitor_handle_command(const term_cmd_t *cmds, const char *cmdline)
     typestr = cmd->args_type;
     nb_args = 0;
     for(;;) {
-        while (isspace(*p)) /* eat whitespaces */
-            p++;
         c = *typestr;
         if (c == '\0')
             break;
@@ -2027,6 +1977,8 @@ static void monitor_handle_command(const term_cmd_t *cmds, const char *cmdline)
                 int ret;
                 char *str;
                 
+                while (isspace(*p)) 
+                    p++;
                 if (*typestr == '?') {
                     typestr++;
                     if (*p == '\0') {
@@ -2066,6 +2018,8 @@ static void monitor_handle_command(const term_cmd_t *cmds, const char *cmdline)
             {
                 int count, format, size;
                 
+                while (isspace(*p))
+                    p++;
                 if (*p == '/') {
                     /* format found */
                     p++;
@@ -2144,6 +2098,8 @@ static void monitor_handle_command(const term_cmd_t *cmds, const char *cmdline)
         case 'l':
             {
                 target_long val;
+                while (isspace(*p)) 
+                    p++;
                 if (*typestr == '?' || *typestr == '.') {
                     if (*typestr == '?') {
                         if (*p == '\0')
@@ -2190,11 +2146,6 @@ static void monitor_handle_command(const term_cmd_t *cmds, const char *cmdline)
                 }
             }
             break;
-        case 'A':
-            args[nb_args++] = p;
-            while (*p) /* goto end of cmdline */
-                p++;
-            break;
         case '-':
             {
                 int has_option;
@@ -2203,6 +2154,8 @@ static void monitor_handle_command(const term_cmd_t *cmds, const char *cmdline)
                 c = *typestr++;
                 if (c == '\0')
                     goto bad_type;
+                while (isspace(*p)) 
+                    p++;
                 has_option = 0;
                 if (*p == '-') {
                     p++;
@@ -2233,15 +2186,6 @@ static void monitor_handle_command(const term_cmd_t *cmds, const char *cmdline)
                     cmdname);
         goto fail;
     }
-
-#ifdef USE_KVM
-    if(1)
-    {
-        CPUState *env=mon_get_cpu();
-        if (kvm_allowed)
-            kvm_save_registers(env);
-    }
-#endif    
 
     switch(nb_args) {
     case 0:
@@ -2451,7 +2395,6 @@ void readline_find_completion(const char *cmdline)
             bdrv_iterate(block_completion_it, (void *)str);
             break;
         case 's':
-        case 'A':
             /* XXX: more generic ? */
             if (!strcmp(cmd->name, "info")) {
                 completion_index = strlen(str);
@@ -2462,11 +2405,6 @@ void readline_find_completion(const char *cmdline)
                 completion_index = strlen(str);
                 for(key = key_defs; key->name != NULL; key++) {
                     cmd_completion(str, key->name);
-                }
-            } else if (!strcmp(cmd->name, "migration")) {
-                completion_index = strlen(str);
-                for(cmd = migration_cmds; cmd->name != NULL; cmd++) {
-                    cmd_completion(str, cmd->name);
                 }
             }
             break;
@@ -2494,7 +2432,7 @@ static void monitor_start_input(void);
 
 static void monitor_handle_command1(void *opaque, const char *cmdline)
 {
-    monitor_handle_command(term_cmds, cmdline);
+    monitor_handle_command(cmdline);
     monitor_start_input();
 }
 
@@ -2503,15 +2441,23 @@ static void monitor_start_input(void)
     readline_start("(qemu) ", 0, monitor_handle_command1, NULL);
 }
 
+static void term_event(void *opaque, int event)
+{
+    if (event != CHR_EVENT_RESET)
+	return;
+
+    if (!hide_banner)
+	    term_printf("QEMU %s monitor - type 'help' for more information\n",
+			QEMU_VERSION);
+    monitor_start_input();
+}
+
 void monitor_init(CharDriverState *hd, int show_banner)
 {
     monitor_hd = hd;
-    if (show_banner) {
-        term_printf("QEMU %s monitor - type 'help' for more information\n",
-                    QEMU_VERSION);
-    }
-    qemu_chr_add_read_handler(hd, term_can_read, term_read, NULL);
-    monitor_start_input();
+    hide_banner = !show_banner;
+
+    qemu_chr_add_handlers(hd, term_can_read, term_read, term_event, NULL);
 }
 
 /* XXX: use threads ? */

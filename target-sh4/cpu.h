@@ -25,6 +25,8 @@
 #define TARGET_LONG_BITS 32
 #define TARGET_HAS_ICE 1
 
+#define ELF_MACHINE	EM_SH
+
 #include "cpu-defs.h"
 
 #include "softfloat.h"
@@ -119,9 +121,8 @@ typedef struct CPUSH4State {
 
 CPUSH4State *cpu_sh4_init(void);
 int cpu_sh4_exec(CPUSH4State * s);
-struct siginfo;
-int cpu_sh4_signal_handler(int hostsignum, struct siginfo *info,
-			   void *puc);
+int cpu_sh4_signal_handler(int host_signum, void *pinfo, 
+                           void *puc);
 
 #include "softfloat.h"
 

@@ -783,7 +783,6 @@ static int apic_load(QEMUFile *f, void *opaque, int version_id)
 
     if (version_id >= 2)
         qemu_get_timer(f, s->timer);
-
     return 0;
 }
 
