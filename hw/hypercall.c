@@ -227,6 +227,15 @@ static int vmchannel_can_read(void *opaque)
     return 128;
 }
 
+static void vmchannel_event(void *opaque, int event)
+{
+    PCIHypercallState *s = opaque;
+#ifdef HYPERCALL_DEBUG
+    printf("%s got event %d\n", __FUNCTION__, event);
+#endif
+    return;
+}
+
 // input from vmchannel outside caller
 static void vmchannel_read(void *opaque, const uint8_t *buf, int size)
 {
@@ -257,7 +266,6 @@ void vmchannel_init(CharDriverState *hd)
     printf("vmchannel_init\n");
 #endif
     use_hypercall_dev = 1;
-#if 0
-    qemu_chr_add_read_handler(vmchannel_hd, vmchannel_can_read, vmchannel_read, &pHypercallState);
-#endif
+    qemu_chr_add_handlers(vmchannel_hd, vmchannel_can_read, vmchannel_read,
+			  vmchannel_event, &pHypercallState);
 }
