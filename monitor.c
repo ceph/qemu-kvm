@@ -362,6 +362,55 @@ static void do_eject(int force, const char *filename)
     eject_device(bs, force);
 }
 
+#define USAGE_STR "Usage: read_disk_io hd[a/b/c/d]\n"
+DiskIOStatistics vmdk_io_statistics(BlockDriverState *bs);
+
+static void do_io_statistics(const char *hdx)
+{
+    DiskIOStatistics io[4];
+
+    if ((strcmp(hdx,"hda") != 0) && (strcmp(hdx,"hdb") != 0) &&
+        (strcmp(hdx,"hdc") != 0) && (strcmp(hdx,"hdd") != 0)) {
+        term_printf(USAGE_STR);
+        return;
+    }
+
+    switch (hdx[2]) {
+    case 'a':
+        term_printf("---------- hda io statistics ----------\n");
+        io[0] = vmdk_io_statistics(bs_table[0]);
+        term_printf("read: %lu \nwrite: %lu \n", io[0].read_byte_counter, io[0].write_byte_counter);
+        break;
+    case 'b':
+        term_printf("---------- hdb io statistics ----------\n");
+        if (bs_table[1]) {
+            io[1] = vmdk_io_statistics(bs_table[1]);
+            term_printf("read: %lu \nwrite: %lu \n", io[1].read_byte_counter, io[1].write_byte_counter);
+        }else {
+            term_printf("hdb not exist\n");
+        }
+        break;
+    case 'c':
+        term_printf("---------- hdc io statistics ----------\n");
+        if (bs_table[2]) {
+            io[2] = vmdk_io_statistics(bs_table[2]);
+            term_printf("read: %lu \nwrite: %lu \n", io[2].read_byte_counter, io[2].write_byte_counter);
+        }else {
+            term_printf("hdc not exist\n");
+        }
+        break;
+    case 'd':
+        term_printf("---------- hdd io statistics ----------\n");
+        if (bs_table[3]) {
+            io[3] = vmdk_io_statistics(bs_table[1]);
+            term_printf("read: %lu \nwrite: %lu \n", io[3].read_byte_counter, io[3].write_byte_counter);
+        }else {
+            term_printf("hdd not exist\n");
+        }
+        break;
+    }
+}
+
 static void do_change(const char *device, const char *filename)
 {
     BlockDriverState *bs;
@@ -1252,7 +1301,9 @@ static term_cmd_t term_cmds[] = {
      { "stopcapture", "i", do_stop_capture,
        "capture index", "stop capture" },
     { "memsave", "lis", do_memory_save, 
-      "addr size file", "save to disk virtual memory dump starting at 'addr' of size 'size'", },
+      "addr size file", "save to disk virtual memory dump starting at 'addr' of size 'size'" },
+    { "read_disk_io", "s", do_io_statistics, 
+      "hdx", "read disk I/O statistics (VMDK format)" },
     { NULL, NULL, }, 
 };
 

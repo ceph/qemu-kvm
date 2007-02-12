@@ -75,7 +75,15 @@ typedef struct BDRVVmdkState {
 
     unsigned int cluster_sectors;
     uint32_t parent_cid;
+    DiskIOStatistics io;
 } BDRVVmdkState;
+
+DiskIOStatistics vmdk_io_statistics(BlockDriverState *bs)
+{
+    BDRVVmdkState *s = bs->opaque;
+    // return disk I/O counters
+    return s->io;
+}
 
 static int vmdk_probe(const uint8_t *buf, int buf_size, const char *filename)
 {
@@ -582,6 +590,7 @@ static int vmdk_read(BlockDriverState *bs, int64_t sector_num,
         nb_sectors -= n;
         sector_num += n;
         buf += n * 512;
+        s->io.read_byte_counter += (uint64_t)(n*512);
     }
     return 0;
 }
@@ -607,6 +616,7 @@ static int vmdk_write(BlockDriverState *bs, int64_t sector_num,
         nb_sectors -= n;
         sector_num += n;
         buf += n * 512;
+        s->io.write_byte_counter += (uint64_t)(n*512);
 
         // update CID on the first write every time the virtual disk is opened
         if (!cid_update) {

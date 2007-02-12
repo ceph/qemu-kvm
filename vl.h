@@ -571,6 +571,11 @@ typedef struct QEMUSnapshotInfo {
     uint64_t vm_clock_nsec; /* VM clock relative to boot */
 } QEMUSnapshotInfo;
 
+typedef struct DiskIOStatistics {
+    uint64_t read_byte_counter;
+    uint64_t write_byte_counter;
+}DiskIOStatistics;
+
 #define BDRV_O_RDONLY      0x0000
 #define BDRV_O_RDWR        0x0002
 #define BDRV_O_ACCESS      0x0003
