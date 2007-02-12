@@ -47,25 +47,7 @@ MODULE_DEVICE_TABLE (pci, hypercall_pci_tbl);
 
 
 /****** Hypercall device definitions ***************/
-/* To be moved into a shared file with user space  */
-#define HP_CMD          0x00  // The command register  WR
-#define HP_ISRSTATUS    0x04  // Interrupt status reg RD 
-#define HP_TXSIZE       0x08
-#define HP_TXBUFF       0x0c
-#define HP_RXSIZE       0x10
-#define HP_RXBUFF       0x14
-
-// HP_CMD register commands
-#define HP_CMD_DI		1 // disable interrupts
-#define HP_CMD_EI		2 // enable interrupts
-#define HP_CMD_INIT		4 // reset device
-#define HP_CMD_RESET		(HP_CMD_INIT|HP_CMD_DI)
-
-/* Bits in HP_ISR - Interrupt status register */
-#define HPISR_RX	0x01  // Data is ready to be read
-
-#define HP_MEM_SIZE    0xE0
-/******* End of Hypercall device definitions	   */
+#include <qemu/hw/hypercall.h>
 
 /* read PIO/MMIO register */
 #define HIO_READ8(reg, ioaddr)		ioread8(ioaddr + (reg))
@@ -263,17 +245,17 @@ static irqreturn_t hypercall_interrupt(int irq, void *dev_instance,
 	DPRINTK("base addr is 0x%lx, io_addr=0x%lx\n", dev->base_addr, (long)dev->io_addr);
 	
 	spin_lock(&dev->lock);
-	status = HIO_READ8(HP_ISRSTATUS, ioaddr);
+	status = HIO_READ8(HSR_REGISTER, ioaddr);
 	DPRINTK("irq status is 0x%x\n", status);
 
 	/* shared irq? */
-	if (unlikely((status & HPISR_RX) == 0)) {
+	if (unlikely((status & HSR_VDR) == 0)) {
 		DPRINTK("not handeling irq, not ours\n");
 		goto out;
 	}
 	
 	/* Disable device interrupts */
-	HIO_WRITE8(HP_CMD, HP_CMD_DI, ioaddr);
+	HIO_WRITE8(HCR_REGISTER, HCR_DI, ioaddr);
 	DPRINTK("disable device interrupts\n");
 
 	rx_buf_size = HIO_READ8(HP_RXSIZE, ioaddr);
@@ -289,7 +271,7 @@ static irqreturn_t hypercall_interrupt(int irq, void *dev_instance,
 	*pbuf = '\0';
 	DPRINTK("Read buffer %s", (char*)buffer);
 
-	HIO_WRITE8(HP_CMD, HP_CMD_EI, ioaddr);
+	HIO_WRITE8(HCR_REGISTER, HCR_EI, ioaddr);
 	DPRINTK("Enable interrupt\n");
 	irq_handled = IRQ_HANDLED;
  out:
