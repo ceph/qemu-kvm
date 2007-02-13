@@ -526,7 +526,6 @@ static int kvm_inl(void *opaque, uint16_t addr, uint32_t *data)
 
 static int kvm_outb(void *opaque, uint16_t addr, uint8_t data)
 {
-    printf("outb %x %x\n", addr, data);
     if (addr == 0xb2 && data == 0) {
 	struct kvm_regs regs;
 
