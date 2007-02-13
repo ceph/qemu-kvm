@@ -526,6 +526,19 @@ static int kvm_inl(void *opaque, uint16_t addr, uint32_t *data)
 
 static int kvm_outb(void *opaque, uint16_t addr, uint8_t data)
 {
+    printf("outb %x %x\n", addr, data);
+    if (addr == 0xb2 && data == 0) {
+	struct kvm_regs regs;
+
+	kvm_get_regs(kvm_context, 0, &regs);
+
+	/* hack around smm entry: kvm doesn't emulate smm at this time */
+	if (regs.rip == 0x409f4)
+	    regs.rip += 0x4b;
+	kvm_set_regs(kvm_context, 0, &regs);
+	
+	return 0;
+    }
     cpu_outb(0, addr, data);
     return 0;
 }
