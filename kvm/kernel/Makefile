@@ -1,5 +1,4 @@
-include ../config.mak
-KERNELDIR ?= /lib/modules/$(shell uname -r)/build
+KERNELDIR := /lib/modules/$(shell uname -r)/build
 KVERREL = $(patsubst /lib/modules/%/build,%,$(KERNELDIR))
 
 DESTDIR=
