@@ -7579,9 +7579,12 @@ int main(int argc, char **argv)
     }
 
     if (incoming) {
-	if (migrate_incoming(incoming) == -1) {
-	    printf("Migration failed\n");
-	    exit(1);
+        int rc;
+
+        rc = migrate_incoming(incoming);
+        if (rc != 0) {
+            fprintf(stderr, "Migration failed rc=%d\n", rc);
+            exit(rc);
 	}
     }
 

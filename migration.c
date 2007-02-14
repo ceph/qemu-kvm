@@ -68,10 +68,11 @@ static void migrate_put_buffer(void *opaque, const uint8_t *buf, int64_t pos, in
 	if (len == -1) {
 	    if (errno == EAGAIN || errno == EINTR)
 		continue;
-	    *s->has_error = 1;
+            term_printf("migration: write failed (%s)\n", strerror(errno));
+	    *s->has_error = 10;
 	    break;
 	} else if (len == 0) {
-	    *s->has_error = 1;
+	    *s->has_error = 11;
 	    break;
 	}
 
@@ -84,7 +85,7 @@ static void migrate_close(void *opaque)
     MigrationState *s = opaque;
 
     if (s->release && s->release(s->opaque))
-	*s->has_error = 1;
+	*s->has_error = 12;
 
     qemu_free(s);
     current_migration = NULL;
@@ -108,7 +109,7 @@ static void migrate_finish(MigrationState *s)
     qemu_fclose(f);
     if (ret != 0 || *has_error) {
 	if (!s->detach)
-	    term_printf("Migration failed!\n");
+	    term_printf("Migration failed! ret=%d error=%d\n", ret, *has_error);
 	vm_start();
     }
     if (!s->detach)
@@ -131,11 +132,11 @@ static int migrate_write_buffer(MigrationState *s)
 		goto again;
 	    if (errno == EAGAIN)
 		return 1;
-	    *s->has_error = 1;
+	    *s->has_error = 13;
 	    return 0;
 	}
 	if (len == 0) {
-	    *s->has_error = 1;
+	    *s->has_error = 14;
 	    return 0;
 	}
 
@@ -271,6 +272,10 @@ static MigrationState *migration_init_fd(int detach, int fd)
 
     s->fd = fd;
     s->has_error = qemu_mallocz(sizeof(int));
+    if (s->has_error == NULL) {
+        term_printf("malloc failed (for has_error)\n");
+        return NULL;
+    }
     s->detach = detach;
 
     current_migration = s;
@@ -304,7 +309,15 @@ again:
     if (ret == -1 && errno == EINTR)
 	goto again;
 
-    return (ret == -1 || status != 0);
+    if (ret == -1) {
+        term_printf("migration: waitpid failed (%s)\n", strerror(errno));
+        return -1;
+    }
+    /* FIXME: check and uncomment
+     * if (WIFEXITED(status))
+     *     status = WEXITSTATUS(status);
+     */
+    return status;
 }
 
 static MigrationState *migration_init_cmd(int detach, const char *command, char **argv)
@@ -315,7 +328,7 @@ static MigrationState *migration_init_cmd(int detach, const char *command, char 
     MigrationState *s;
 
     if (pipe(fds) == -1) {
-	term_printf("pipe()\n");
+	term_printf("pipe() (%s)\n", strerror(errno));
 	return NULL;
     }
 
@@ -323,7 +336,7 @@ static MigrationState *migration_init_cmd(int detach, const char *command, char 
     if (pid == -1) {
 	close(fds[0]);
 	close(fds[1]);
-	term_printf("fork error\n");
+	term_printf("fork error (%s)\n", strerror(errno));
 	return NULL;
     }
     if (pid == 0) {
@@ -420,16 +433,20 @@ static MigrationState *migration_init_tcp(int detach, const char *host)
     MigrationState *s;
 
     fd = socket(PF_INET, SOCK_STREAM, 0);
-    if (fd == -1)
+    if (fd == -1) {
+        term_printf("socket() failed %s\n", strerror(errno));
 	return NULL;
+    }
 
     addr.sin_family = AF_INET;
     if (parse_host_port(&addr, host) == -1) {
+        term_printf("parse_host_port() FAILED for %s\n", host);
 	close(fd);
 	return NULL;
     }
 
     if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
+        term_printf("connect() failed %s\n", strerror(errno));
 	close(fd);
 	return NULL;
     }
@@ -452,7 +469,7 @@ static int migrate_incoming_fd(int fd)
     extern void qemu_announce_self(void);
 
     if (qemu_get_be32(f) != phys_ram_size)
-	return -1;
+	return 101;
 
     do {
 	int l;
@@ -461,7 +478,7 @@ static int migrate_incoming_fd(int fd)
 	    break;
 	l = qemu_get_buffer(f, phys_ram_base + addr, TARGET_PAGE_SIZE);
 	if (l != TARGET_PAGE_SIZE)
-	    return -1;
+	    return 102;
     } while (1);
 
 
@@ -481,53 +498,74 @@ static int migrate_incoming_tcp(const char *host)
     ssize_t len;
     uint8_t status = 0;
     int reuse = 1;
+    int rc;
 
     addr.sin_family = AF_INET;
-    if (parse_host_port(&addr, host) == -1)
+    if (parse_host_port(&addr, host) == -1) {
+        fprintf(stderr, "parse_host_port() failed for %s\n", host);
+        rc = 201;
 	goto error;
+    }
 
     fd = socket(PF_INET, SOCK_STREAM, 0);
-    if (fd == -1)
+    if (fd == -1) {
+        perror("socket failed");
+        rc = 202;
 	goto error;
+    }
 
-    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) == -1)
+    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) == -1) {
+        perror("setsockopt() failed");
+        rc = 203;
 	goto error_socket;
+    }
 
-    if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) == -1)
+    if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
+        perror("bind() failed");
+        rc = 204;
 	goto error_socket;
+    }
 
-    if (listen(fd, 1) == -1)
+    if (listen(fd, 1) == -1) {
+        perror("listen() failed");
+        rc = 205;
 	goto error_socket;
+    }
 
 again:
     sfd = accept(fd, (struct sockaddr *)&addr, &addrlen);
     if (sfd == -1) {
 	if (errno == EINTR)
 	    goto again;
+        perror("accept() failed");
+        rc = 206;
 	goto error_socket;
     }
 
-    if (migrate_incoming_fd(sfd) == -1)
+    rc = migrate_incoming_fd(sfd);
+    fprintf(stderr, "migrate_incoming_fd(%d)=%d\n", sfd, rc);
+    if (rc != 0) {
+        rc = 207;
+        fprintf(stderr, "migrate_incoming_fd failed (rc=%d)\n", rc);
 	goto error_accept;
+    }
 
 again1:
     len = write(sfd, &status, 1);
     if (len == -1 && errno == EAGAIN)
 	goto again1;
-    if (len != 1)
+    if (len != 1) {
+        rc = 208;
 	goto error_accept;
 
-    close(fd);
-    close(sfd);
-
-    return 0;
+    }
 
 error_accept:
     close(sfd);
 error_socket:
     close(fd);
 error:
-    return -1;
+    return rc;
 }
 
 int migrate_incoming(const char *device)
@@ -581,7 +619,8 @@ void do_migrate(int detach, const char *uri)
 	end = strchr(host, '/');
 	if (end) *end = 0;
 
-	migration_init_tcp(detach, host);
+	if (migration_init_tcp(detach, host) == NULL)
+            term_printf("migration failed (migration_init_tcp for %s failed)\n", host);
 	free(host);
     } else {
 	term_printf("Unknown migration protocol '%s'\n", uri);
@@ -640,5 +679,5 @@ void do_migrate_cancel(void)
     MigrationState *s = current_migration;
 
     if (s)
-	*s->has_error = 1;
+	*s->has_error = 20;
 }
