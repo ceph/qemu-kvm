@@ -105,8 +105,12 @@ void pstrcpy(char *buf, int buf_size, const char *str);
 char *pstrcat(char *buf, int buf_size, const char *s);
 int strstart(const char *str, const char *val, const char **ptr);
 int stristart(const char *str, const char *val, const char **ptr);
+int hex2bin(char ch);
+char *urldecode(const char *ptr);
 
 /* vl.c */
+void qemu_get_launch_info(int *argc, char ***argv, int *opt_daemonize, const char **opt_incoming);
+
 uint64_t muldiv64(uint64_t a, uint32_t b, uint32_t c);
 
 void hw_error(const char *fmt, ...);
@@ -445,8 +449,8 @@ typedef void (QEMUFileCloseFunc)(void *opaque);
 
 QEMUFile *qemu_fopen(void *opaque, QEMUFilePutBufferFunc *put_buffer,
 		     QEMUFileGetBufferFunc *get_buffer, QEMUFileCloseFunc *close);
-
 QEMUFile *qemu_fopen_file(const char *filename, const char *mode);
+QEMUFile *qemu_fopen_fd(int fd);
 void qemu_fflush(QEMUFile *f);
 void qemu_fclose(QEMUFile *f);
 void qemu_put_buffer(QEMUFile *f, const uint8_t *buf, int size);
@@ -534,6 +538,9 @@ void do_savevm(const char *name);
 void do_loadvm(const char *name);
 void do_delvm(const char *name);
 void do_info_snapshots(void);
+
+int qemu_live_savevm_state(QEMUFile *f);
+int qemu_live_loadvm_state(QEMUFile *f);
 
 /* bottom halves */
 typedef void QEMUBHFunc(void *opaque);
@@ -1395,6 +1402,13 @@ pflash_t *pflash_register (target_ulong base, ram_addr_t off,
 
 #endif /* defined(QEMU_TOOL) */
 
+/* migration.c */
+void do_info_migration(void);
+void do_migrate(int detach, const char *uri);
+void do_migrate_cancel(void);
+void do_migrate_set_speed(const char *value);
+int migrate_incoming(const char *device);
+
 /* monitor.c */
 void monitor_init(CharDriverState *hd, int show_banner);
 void term_puts(const char *str);
@@ -1405,6 +1419,8 @@ void term_flush(void);
 void term_print_help(void);
 void monitor_readline(const char *prompt, int is_password,
                       char *buf, int buf_size);
+void monitor_suspend(void);
+void monitor_resume(void);
 
 /* readline.c */
 typedef void ReadLineFunc(void *opaque, const char *str);

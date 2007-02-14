@@ -173,6 +173,7 @@ int acpi_enabled = 1;
 int fd_bootchk = 1;
 int no_reboot = 0;
 int daemonize = 0;
+const char *incoming;
 const char *option_rom[MAX_OPTION_ROMS];
 int nb_option_roms;
 int semihosting_enabled = 0;
@@ -2305,7 +2306,6 @@ static void udp_chr_update_read_handler(CharDriverState *chr)
     }
 }
 
-int parse_host_port(struct sockaddr_in *saddr, const char *str);
 #ifndef _WIN32
 static int parse_unix_path(struct sockaddr_un *uaddr, const char *str);
 #endif
@@ -4285,6 +4285,44 @@ void qemu_del_wait_object(HANDLE handle, WaitObjectFunc *func, void *opaque)
 }
 #endif
 
+#define SELF_ANNOUNCE_ROUNDS 5
+#define ETH_P_EXPERIMENTAL 0x01F1 /* just a number */
+//#define ETH_P_EXPERIMENTAL 0x0012 /* make it the size of the packet */
+#define EXPERIMENTAL_MAGIC 0xf1f23f4f
+
+static int announce_self_create(uint8_t *buf, 
+				uint8_t *mac_addr)
+{
+    uint32_t magic = EXPERIMENTAL_MAGIC;
+    uint16_t proto = htons(ETH_P_EXPERIMENTAL);
+
+    /* FIXME: should we send a different packet (arp/rarp/ping)? */
+
+    memset(buf, 0xff, 6);         /* h_dst */
+    memcpy(buf + 6, mac_addr, 6); /* h_src */
+    memcpy(buf + 12, &proto, 2);  /* h_proto */
+    memcpy(buf + 14, &magic, 4);  /* magic */
+
+    return 18; /* len */
+}
+
+static void qemu_announce_self(void)
+{
+    int i, j, len;
+    VLANState *vlan;
+    VLANClientState *vc;
+    uint8_t buf[256];
+
+    for (i = 0; i < nb_nics; i++) {
+        len = announce_self_create(buf, nd_table[i].macaddr);
+        vlan = nd_table[i].vlan;
+        for(vc = vlan->first_client; vc != NULL; vc = vc->next) {
+	    for (j=0; j < SELF_ANNOUNCE_ROUNDS; j++)
+		vc->fd_read(vc->opaque, buf, len);
+        }
+    }
+}
+
 /***********************************************************/
 /* savevm/loadvm support */
 
@@ -4312,21 +4350,16 @@ static int fd_get_buffer(void *opaque, uint8_t *buf, int64_t pos, int size)
 {
     QEMUFileFD *s = opaque;
     int offset = 0;
+    ssize_t len;
 
-    while (offset < size) {
-	ssize_t len;
-
-	len = read(s->fd, buf + offset, size - offset);
-	if (len == -1) {
-	    if (errno == EINTR || errno == EAGAIN)
-		continue;
-	    return -1;
-	} else if (len == 0)
-	    break;
-	offset += len;
+again:
+    len = read(s->fd, buf + offset, size - offset);
+    if (len == -1) {
+	if (errno == EINTR || errno == EAGAIN)
+	    goto again;
     }
 
-    return offset;
+    return len;
 }
 
 QEMUFile *qemu_fopen_fd(int fd)
@@ -4745,8 +4778,78 @@ int qemu_loadvm_state(QEMUFile *f)
         }
         /* always seek to exact end of record */
         qemu_fseek(f, cur_pos + record_len, SEEK_SET);
+     }
+    ret = 0;
+ the_end:
+    return ret;
+}
+
+int qemu_live_savevm_state(QEMUFile *f)
+{
+    SaveStateEntry *se;
+    int len, ret;
+
+    qemu_put_be32(f, QEMU_VM_FILE_MAGIC);
+    qemu_put_be32(f, QEMU_VM_FILE_VERSION);
+
+    for(se = first_se; se != NULL; se = se->next) {
+	len = strlen(se->idstr);
+
+	qemu_put_byte(f, len);
+	qemu_put_buffer(f, se->idstr, len);
+	qemu_put_be32(f, se->instance_id);
+	qemu_put_be32(f, se->version_id);
+
+	se->save_state(f, se->opaque);
+    }
+
+    qemu_put_byte(f, 0);
+
+    ret = 0;
+    return ret;
+}
+
+int qemu_live_loadvm_state(QEMUFile *f)
+{
+    SaveStateEntry *se;
+    int len, ret, instance_id, version_id;
+    unsigned int v;
+    char idstr[256];
+    
+    v = qemu_get_be32(f);
+    if (v != QEMU_VM_FILE_MAGIC)
+        goto fail;
+    v = qemu_get_be32(f);
+    if (v != QEMU_VM_FILE_VERSION) {
+    fail:
+        ret = -1;
+        goto the_end;
+    }
+
+    for(;;) {
+        len = qemu_get_byte(f);
+	if (len == 0)
+	    break;
+        qemu_get_buffer(f, idstr, len);
+        idstr[len] = '\0';
+        instance_id = qemu_get_be32(f);
+        version_id = qemu_get_be32(f);
+        se = find_se(idstr, instance_id);
+        if (!se) {
+            fprintf(stderr, "qemu: warning: instance 0x%x of device '%s' not present in current VM\n", 
+                    instance_id, idstr);
+        } else {
+            ret = se->load_state(f, se->opaque, version_id);
+            if (ret < 0) {
+                fprintf(stderr, "qemu: warning: error while loading state for instance 0x%x of device '%s'\n", 
+                        instance_id, idstr);
+            }
+        }
     }
     ret = 0;
+
+    qemu_announce_self();
+
  the_end:
     return ret;
 }
@@ -5593,7 +5696,20 @@ static void ram_decompress_close(RamDecompressState *s)
     inflateEnd(&s->zstream);
 }
 
-static void ram_save(QEMUFile *f, void *opaque)
+static void ram_save_live(QEMUFile *f, void *opaque)
+{
+    target_ulong addr;
+
+    for (addr = 0; addr < phys_ram_size; addr += TARGET_PAGE_SIZE) {
+	if (cpu_physical_memory_get_dirty(addr, MIGRATION_DIRTY_FLAG)) {
+	    qemu_put_be32(f, addr);
+	    qemu_put_buffer(f, phys_ram_base + addr, TARGET_PAGE_SIZE);
+	}
+    }
+    qemu_put_be32(f, 1);
+}
+
+static void ram_save_static(QEMUFile *f, void *opaque)
 {
     int i;
     RamCompressState s1, *s = &s1;
@@ -5637,16 +5753,39 @@ static void ram_save(QEMUFile *f, void *opaque)
     ram_compress_close(s);
 }
 
-static int ram_load(QEMUFile *f, void *opaque, int version_id)
+static void ram_save(QEMUFile *f, void *opaque)
+{
+    int in_migration = cpu_physical_memory_get_dirty_tracking();
+
+    qemu_put_byte(f, in_migration);
+
+    if (in_migration)
+	ram_save_live(f, opaque);
+    else
+	ram_save_static(f, opaque);
+}
+
+static int ram_load_live(QEMUFile *f, void *opaque)
+{
+    target_ulong addr;
+
+    do {
+	addr = qemu_get_be32(f);
+	if (addr == 1)
+	    break;
+
+	qemu_get_buffer(f, phys_ram_base + addr, TARGET_PAGE_SIZE);
+    } while (1);
+
+    return 0;
+}
+
+static int ram_load_static(QEMUFile *f, void *opaque)
 {
     RamDecompressState s1, *s = &s1;
     uint8_t buf[10];
     int i;
 
-    if (version_id == 1)
-        return ram_load_v1(f, opaque);
-    if (version_id != 2)
-        return -EINVAL;
     if (qemu_get_be32(f) != phys_ram_size)
         return -EINVAL;
     if (ram_decompress_open(s, f) < 0)
@@ -5690,6 +5829,30 @@ static int ram_load(QEMUFile *f, void *opaque, int version_id)
     }
     ram_decompress_close(s);
     return 0;
+}
+
+static int ram_load(QEMUFile *f, void *opaque, int version_id)
+{
+    int ret;
+
+    switch (version_id) {
+    case 1:
+        ret = ram_load_v1(f, opaque);
+	break;
+    case 3:
+	if (qemu_get_byte(f)) {
+	    ret = ram_load_live(f, opaque);
+	    break;
+	}
+    case 2:
+	ret = ram_load_static(f, opaque);
+	break;
+    default:
+	ret = -EINVAL;
+	break;
+    }
+
+    return ret;
 }
 
 /***********************************************************/
@@ -6323,7 +6486,8 @@ enum {
     QEMU_OPTION_no_reboot,
     QEMU_OPTION_daemonize,
     QEMU_OPTION_option_rom,
-    QEMU_OPTION_semihosting
+    QEMU_OPTION_semihosting,
+    QEMU_OPTION_incoming,
 };
 
 typedef struct QEMUOption {
@@ -6394,6 +6558,7 @@ const QEMUOption qemu_options[] = {
     { "serial", 1, QEMU_OPTION_serial },
     { "parallel", 1, QEMU_OPTION_parallel },
     { "loadvm", HAS_ARG, QEMU_OPTION_loadvm },
+    { "incoming", 1, QEMU_OPTION_incoming },
     { "full-screen", 0, QEMU_OPTION_full_screen },
 #ifdef CONFIG_SDL
     { "no-quit", 0, QEMU_OPTION_no_quit },
@@ -6618,6 +6783,17 @@ static BOOL WINAPI qemu_ctrl_handler(DWORD type)
 
 #define MAX_NET_CLIENTS 32
 
+static int saved_argc;
+static char **saved_argv;
+
+void qemu_get_launch_info(int *argc, char ***argv, int *opt_daemonize, const char **opt_incoming)
+{
+    *argc = saved_argc;
+    *argv = saved_argv;
+    *opt_daemonize = daemonize;
+    *opt_incoming = incoming;
+}
+
 int main(int argc, char **argv)
 {
 #ifdef CONFIG_GDBSTUB
@@ -6647,6 +6823,9 @@ int main(int argc, char **argv)
     char usb_devices[MAX_USB_CMDLINE][128];
     int usb_devices_index;
     int fds[2];
+
+    saved_argc = argc;
+    saved_argv = argv;
 
     LIST_INIT (&vm_change_state_head);
 #ifndef _WIN32
@@ -7019,6 +7198,9 @@ int main(int argc, char **argv)
 	    case QEMU_OPTION_loadvm:
 		loadvm = optarg;
 		break;
+	    case QEMU_OPTION_incoming:
+		incoming = optarg;
+		break;
             case QEMU_OPTION_full_screen:
                 full_screen = 1;
                 break;
@@ -7097,11 +7279,6 @@ int main(int argc, char **argv)
     }
 
 #ifndef _WIN32
-    if (daemonize && !nographic && vnc_display == NULL) {
-	fprintf(stderr, "Can only daemonize if using -nographic or -vnc\n");
-	daemonize = 0;
-    }
-
     if (daemonize) {
 	pid_t pid;
 
@@ -7136,7 +7313,6 @@ int main(int argc, char **argv)
 	    exit(1);
 
 	umask(027);
-	chdir("/");
 
         signal(SIGTSTP, SIG_IGN);
         signal(SIGTTOU, SIG_IGN);
@@ -7307,7 +7483,7 @@ int main(int argc, char **argv)
     }
 
     register_savevm("timer", 0, 2, timer_save, timer_load, NULL);
-    register_savevm("ram", 0, 2, ram_save, ram_load, NULL);
+    register_savevm("ram", 0, 3, ram_save, ram_load, NULL);
 
     init_ioports();
 
@@ -7398,8 +7574,16 @@ int main(int argc, char **argv)
         }
     } else 
 #endif
-    if (loadvm)
-        do_loadvm(loadvm);
+    if (loadvm) {
+	do_loadvm(loadvm);
+    }
+
+    if (incoming) {
+	if (migrate_incoming(incoming) == -1) {
+	    printf("Migration failed\n");
+	    exit(1);
+	}
+    }
 
     {
         /* XXX: simplify init */
@@ -7422,6 +7606,7 @@ int main(int argc, char **argv)
 	if (len != 1)
 	    exit(1);
 
+	chdir("/");
 	fd = open("/dev/null", O_RDWR);
 	if (fd == -1)
 	    exit(1);
