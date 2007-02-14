@@ -5259,6 +5259,18 @@ void cpu_save(QEMUFile *f, void *opaque)
     qemu_put_be64s(f, &env->kernelgsbase);
 #endif
     qemu_put_be32s(f, &env->smbase);
+
+#ifdef USE_KVM
+    if (kvm_allowed) {
+        for (i = 0; i < NR_IRQ_WORDS ; i++) {
+            qemu_put_betls(f, &env->kvm_interrupt_bitmap[i]);
+        }
+        qemu_put_be64s(f, &env->tsc);
+        qemu_put_be32(f, 0x12345678);
+        term_printf("writing mysig=0x%x *********\n", 0x12345678);
+    }
+#endif
+
 }
 
 #ifdef USE_X86LDOUBLE
@@ -5467,15 +5479,6 @@ void cpu_save(QEMUFile *f, void *opaque)
     /* MMU */
     for(i = 0; i < 16; i++)
         qemu_put_be32s(f, &env->mmuregs[i]);
-#endif
-
-#ifdef USE_KVM
-    if (kvm_allowed) {
-        for (i = 0; i < NR_IRQ_WORDS ; i++) {
-            qemu_put_betls(f, &env->kvm_interrupt_bitmap[i]);
-        }
-        qemu_put_be64s(f, &env->tsc);
-    }
 #endif
 }
 
