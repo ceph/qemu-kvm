@@ -539,7 +539,6 @@ int migrate_incoming(const char *device)
 	ret = migrate_incoming_fd(STDIN_FILENO);
     else if (strstart(device, "tcp://", &ptr)) {
 	char *host, *end;
-	int ret;
 	host = strdup(ptr);
 	end = strchr(host, '/');
 	if (end) *end = 0;
