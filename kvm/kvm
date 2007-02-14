@@ -161,7 +161,7 @@ else:
     cmd = '/usr/bin/kvm'
 
 qemu_args = (cmd, '-boot', bootdisk,
-             '-L', '/usr/share/qemu', '-hda', disk, '-m', '384',
+             '-hda', disk, '-m', '384',
              '-serial', 'file:/tmp/serial.log',
              '-usbdevice', 'tablet'
           )
