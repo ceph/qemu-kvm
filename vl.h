@@ -439,7 +439,14 @@ void cpu_disable_ticks(void);
 
 typedef struct QEMUFile QEMUFile;
 
-QEMUFile *qemu_fopen(const char *filename, const char *mode);
+typedef void (QEMUFilePutBufferFunc)(void *opaque, const uint8_t *buf, int64_t pos, int size);
+typedef int (QEMUFileGetBufferFunc)(void *opaque, uint8_t *buf, int64_t pos, int size);
+typedef void (QEMUFileCloseFunc)(void *opaque);
+
+QEMUFile *qemu_fopen(void *opaque, QEMUFilePutBufferFunc *put_buffer,
+		     QEMUFileGetBufferFunc *get_buffer, QEMUFileCloseFunc *close);
+
+QEMUFile *qemu_fopen_file(const char *filename, const char *mode);
 void qemu_fflush(QEMUFile *f);
 void qemu_fclose(QEMUFile *f);
 void qemu_put_buffer(QEMUFile *f, const uint8_t *buf, int size);
