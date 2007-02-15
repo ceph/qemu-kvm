@@ -5267,8 +5267,6 @@ void cpu_save(QEMUFile *f, void *opaque)
             qemu_put_betls(f, &env->kvm_interrupt_bitmap[i]);
         }
         qemu_put_be64s(f, &env->tsc);
-        qemu_put_be32(f, 0x12345678);
-        term_printf("writing mysig=0x%x *********\n", 0x12345678);
     }
 #endif
 
@@ -5571,6 +5569,10 @@ static int ram_load_v1(QEMUFile *f, void *opaque)
     if (qemu_get_be32(f) != phys_ram_size)
         return -EINVAL;
     for(i = 0; i < phys_ram_size; i+= TARGET_PAGE_SIZE) {
+#ifdef USE_KVM
+        if (kvm_allowed && (i>=0xa0000) && (i<0xc0000)) /* do not access video-addresses */
+            continue;
+#endif
         ret = ram_get_page(f, phys_ram_base + i, TARGET_PAGE_SIZE);
         if (ret)
             return ret;
@@ -5705,6 +5707,10 @@ static void ram_save_live(QEMUFile *f, void *opaque)
     target_ulong addr;
 
     for (addr = 0; addr < phys_ram_size; addr += TARGET_PAGE_SIZE) {
+#ifdef USE_KVM
+        if (kvm_allowed && (addr>=0xa0000) && (addr<0xc0000)) /* do not access video-addresses */
+            continue;
+#endif
 	if (cpu_physical_memory_get_dirty(addr, MIGRATION_DIRTY_FLAG)) {
 	    qemu_put_be32(f, addr);
 	    qemu_put_buffer(f, phys_ram_base + addr, TARGET_PAGE_SIZE);

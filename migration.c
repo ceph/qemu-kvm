@@ -161,6 +161,10 @@ static int migrate_check_convergence(MigrationState *s)
     int dirty_count = 0;
 
     for (addr = 0; addr < phys_ram_size; addr += TARGET_PAGE_SIZE) {
+#ifdef USE_KVM
+        if (kvm_allowed && (addr>=0xa0000) && (addr<0xc0000)) /* do not access video-addresses */
+            continue;
+#endif
 	if (cpu_physical_memory_get_dirty(addr, MIGRATION_DIRTY_FLAG))
 	    dirty_count++;
     }
@@ -184,6 +188,11 @@ static void migrate_write(void *opaque)
     }	
 
     while (s->addr < phys_ram_size) {
+#ifdef USE_KVM
+        if (kvm_allowed && (s->addr>=0xa0000) && (s->addr<0xc0000)) /* do not access video-addresses */
+            s->addr = 0xc0000;
+#endif
+
 	if (cpu_physical_memory_get_dirty(s->addr, MIGRATION_DIRTY_FLAG)) {
 	    uint32_t value = cpu_to_be32(s->addr);
 
@@ -243,6 +252,10 @@ static int start_migration(MigrationState *s)
     fcntl(s->fd, F_SETFL, O_NONBLOCK);
 
     for (addr = 0; addr < phys_ram_size; addr += TARGET_PAGE_SIZE) {
+#ifdef USE_KVM
+        if (kvm_allowed && (addr>=0xa0000) && (addr<0xc0000)) /* do not access video-addresses */
+            continue;
+#endif
 	if (!cpu_physical_memory_get_dirty(addr, MIGRATION_DIRTY_FLAG))
 	    cpu_physical_memory_set_dirty(addr);
     }
@@ -543,7 +556,6 @@ again:
     }
 
     rc = migrate_incoming_fd(sfd);
-    fprintf(stderr, "migrate_incoming_fd(%d)=%d\n", sfd, rc);
     if (rc != 0) {
         rc = 207;
         fprintf(stderr, "migrate_incoming_fd failed (rc=%d)\n", rc);
