@@ -27,7 +27,13 @@
 #include <stddef.h>
 
 int use_hypercall_dev = 0;
-static CharDriverState *vmchannel_hd;
+
+typedef struct VmChannelCharDriverState {
+    CharDriverState *vmchannel_hd;
+    uint32_t deviceid;
+} VmChannelCharDriverState;
+
+VmChannelCharDriverState vmchannel_hds[MAX_VMCHANNEL_DEVICES];
 
 typedef struct HypercallState {
     uint32_t hcr;
@@ -40,12 +46,12 @@ typedef struct HypercallState {
     int      txbufferaccu_offset;
     int      irq;
     PCIDevice *pci_dev;
+    uint32_t index;
 } HypercallState;
 
-HypercallState *pHypercallState = NULL;
+HypercallState *pHypercallStates[MAX_VMCHANNEL_DEVICES] = {NULL};
 
-
-//#define HYPERCALL_DEBUG 1
+#define HYPERCALL_DEBUG 1
 
 static void hp_reset(HypercallState *s)
 {
@@ -106,7 +112,7 @@ static void hp_ioport_write(void *opaque, uint32_t addr, uint32_t val)
             s->txbufferaccu[s->txbufferaccu_offset] = val;
             s->txbufferaccu_offset++;
             if (s->txbufferaccu_offset >= s->txsize) {
-                qemu_chr_write(vmchannel_hd, s->txbufferaccu, s->txsize);
+                qemu_chr_write(vmchannel_hds[s->index].vmchannel_hd, s->txbufferaccu, s->txsize);
                 s->txbufferaccu_offset = 0;
                 s->txsize = 0;
             }
@@ -124,10 +130,11 @@ static uint32_t hp_ioport_read(void *opaque, uint32_t addr)
     HypercallState *s = opaque;
     int ret;
 
-#ifdef HYPERCALL_DEBUG
-    printf("%s: addr=0x%x\n", __FUNCTION__, addr);
-#endif
     addr &= 0xff;
+#ifdef HYPERCALL_DEBUG
+    if (addr != HSR_REGISTER)
+        printf("%s: addr=0x%x\n", __FUNCTION__, addr);
+#endif
 
     if (addr >= offsetof(HypercallState, RxBuff) )
     {
@@ -182,11 +189,16 @@ static void hypercall_update_irq(HypercallState *s)
     pci_set_irq(s->pci_dev, 0, !(s->hcr & HCR_DI));
 }
 
-void pci_hypercall_init(PCIBus *bus)
+void pci_hypercall_single_init(PCIBus *bus, uint32_t deviceid, uint32_t index)
 {
     PCIHypercallState *d;
     HypercallState *s;
     uint8_t *pci_conf;
+    char name[sizeof("HypercallX")];
+
+#ifdef HYPERCALL_DEBUG
+    printf("pci_hypercall_single_init\n");
+#endif
 
     // If the vmchannel wasn't initialized, we don't want the Hypercall device in the guest
     if (use_hypercall_dev == 0) {
@@ -194,15 +206,15 @@ void pci_hypercall_init(PCIBus *bus)
     }
 
     d = (PCIHypercallState *)pci_register_device(bus,
-                                                 "Hypercall", sizeof(PCIHypercallState),
+                                                 name, sizeof(PCIHypercallState),
                                                  -1,
                                                  NULL, NULL);
 
     pci_conf = d->dev.config;
     pci_conf[0x00] = 0x02; // Qumranet vendor ID 0x5002
     pci_conf[0x01] = 0x50;
-    pci_conf[0x02] = 0x58; // Qumranet DeviceID 0x2258
-    pci_conf[0x03] = 0x22;
+    pci_conf[0x02] = deviceid & 0x00ff;
+    pci_conf[0x03] = (deviceid & 0xff00) >> 8;
 
     pci_conf[0x09] = 0x00; // ProgIf
     pci_conf[0x0a] = 0x00; // SubClass
@@ -214,13 +226,25 @@ void pci_hypercall_init(PCIBus *bus)
     pci_register_io_region(&d->dev, 0, 0x100,
                            PCI_ADDRESS_SPACE_IO, hp_map);
     s = &d->hp;
-    pHypercallState = s;
+    pHypercallStates[index] = s;
+    s->index = index;
     s->irq = 16; /* PCI interrupt */
     s->pci_dev = (PCIDevice *)d;
 
     hp_reset(s);
 }
 
+void pci_hypercall_init(PCIBus *bus)
+{
+    int i;
+
+    // loop devices & call pci_hypercall_single_init with device id's
+    for(i = 0; i < MAX_VMCHANNEL_DEVICES; i++){
+        if (vmchannel_hds[i].vmchannel_hd) {
+            pci_hypercall_single_init(bus, vmchannel_hds[i].deviceid, i);
+        }
+    }
+}
 
 static int vmchannel_can_read(void *opaque)
 {
@@ -229,10 +253,12 @@ static int vmchannel_can_read(void *opaque)
 
 static void vmchannel_event(void *opaque, int event)
 {
-    PCIHypercallState *s = opaque;
+    uint64_t index = (uint64_t)opaque;
+    
 #ifdef HYPERCALL_DEBUG
     printf("%s got event %d\n", __FUNCTION__, event);
 #endif
+    
     return;
 }
 
@@ -240,32 +266,36 @@ static void vmchannel_event(void *opaque, int event)
 static void vmchannel_read(void *opaque, const uint8_t *buf, int size)
 {
     int i;
+    uint64_t index = (uint64_t)opaque;
 
 #ifdef HYPERCALL_DEBUG    
     printf("vmchannel_read buf:%s, size:%d\n", buf, size);
 #endif
 
     // if the hypercall device is in interrupts disabled state, don't accept the data
-    if (pHypercallState->hcr & HCR_DI) {
+    if (pHypercallStates[index]->hcr & HCR_DI) {
         return;
     }
 
     for(i = 0; i < size; i++) {
-        pHypercallState->RxBuff[i] = buf[i];
+        pHypercallStates[index]->RxBuff[i] = buf[i];
     }
-    pHypercallState->rxsize = size;
-    pHypercallState->hsr = HSR_VDR;
-    hypercall_update_irq(pHypercallState);
+    pHypercallStates[index]->rxsize = size;
+    pHypercallStates[index]->hsr = HSR_VDR;
+    hypercall_update_irq(pHypercallStates[index]);
 }
 
-void vmchannel_init(CharDriverState *hd)
+void vmchannel_init(CharDriverState *hd, uint32_t deviceid, uint32_t index)
 {
-    vmchannel_hd = hd;
-
 #ifdef HYPERCALL_DEBUG
-    printf("vmchannel_init\n");
+    printf("vmchannel_init, index=%d, deviceid=0x%x\n", index, deviceid);
 #endif
+
+    vmchannel_hds[index].deviceid = deviceid;
+    vmchannel_hds[index].vmchannel_hd = hd;
+  
+   
     use_hypercall_dev = 1;
-    qemu_chr_add_handlers(vmchannel_hd, vmchannel_can_read, vmchannel_read,
-			  vmchannel_event, &pHypercallState);
+    qemu_chr_add_handlers(vmchannel_hds[index].vmchannel_hd, vmchannel_can_read, vmchannel_read,
+			  vmchannel_event, (void *)(uint64_t)index);
 }

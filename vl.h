@@ -347,6 +347,10 @@ int is_graphic_console(void);
 CharDriverState *text_console_init(DisplayState *ds);
 void console_select(unsigned int index);
 
+/* vmchannel devices */
+
+#define MAX_VMCHANNEL_DEVICES 4
+
 /* serial ports */
 
 #define MAX_SERIAL_PORTS 4
@@ -1233,7 +1237,7 @@ typedef struct ADBDevice ADBDevice;
 /* hypercall.c */
 
 void pci_hypercall_init(PCIBus *bus);
-void vmchannel_init(CharDriverState *hd);
+void vmchannel_init(CharDriverState *hd, uint32_t deviceid, uint32_t index);
 
 /* buf = NULL means polling */
 typedef int ADBDeviceRequest(ADBDevice *d, uint8_t *buf_out,
