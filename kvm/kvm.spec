@@ -54,7 +54,10 @@ rm -rf %{buildroot}
 %if !%{_prebuilt}
 cd ..
 make -C user
-(cd qemu; ./kvm-configure)
+(cd qemu;
+   ./configure --target-list=$(uname -i)-softmmu \
+	    --disable-kqemu --enable-kvm --prefix=/usr/kvm
+)
 make -C qemu
 %endif
 
@@ -93,4 +96,6 @@ depmod %{kverrel}
 %{initdir}/kvm  
 %{utilsdir}/kvm
 /etc/udev/rules.d/*kvm*.rules
+/usr/kvm
+/usr/kvm/**
 %changelog
