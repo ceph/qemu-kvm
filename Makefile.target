@@ -533,6 +533,9 @@ endif
 cpu-exec.o: cpu-exec.c
 	$(CC) $(HELPER_CFLAGS) $(CPPFLAGS) $(BASE_CFLAGS) -c -o $@ $<
 
+qemu-kvm.o: qemu-kvm.c
+	$(CC) $(HELPER_CFLAGS) $(CPPFLAGS) $(BASE_CFLAGS) -c -o $@ $<
+
 # Note: this is a workaround. The real fix is to avoid compiling
 # cpu_signal_handler() in cpu-exec.c.
 signal.o: signal.c
