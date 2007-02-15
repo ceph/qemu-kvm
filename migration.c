@@ -72,6 +72,7 @@ static void migrate_put_buffer(void *opaque, const uint8_t *buf, int64_t pos, in
 	    *s->has_error = 10;
 	    break;
 	} else if (len == 0) {
+            term_printf("migration: other side closed connection\n");
 	    *s->has_error = 11;
 	    break;
 	}
@@ -101,15 +102,16 @@ static void migrate_finish(MigrationState *s)
 
     fcntl(s->fd, F_SETFL, 0);
 
-    f = qemu_fopen(s, migrate_put_buffer, NULL, migrate_close);
-    qemu_aio_flush();
-    vm_stop(0);
-    qemu_put_be32(f, 1);
-    ret = qemu_live_savevm_state(f);
-    qemu_fclose(f);
+    if (! *has_error) {
+        f = qemu_fopen(s, migrate_put_buffer, NULL, migrate_close);
+        qemu_aio_flush();
+        vm_stop(0);
+        qemu_put_be32(f, 1);
+        ret = qemu_live_savevm_state(f);
+        qemu_fclose(f);
+    }
     if (ret != 0 || *has_error) {
-	if (!s->detach)
-	    term_printf("Migration failed! ret=%d error=%d\n", ret, *has_error);
+	term_printf("Migration failed! ret=%d error=%d\n", ret, *has_error);
 	vm_start();
     }
     if (!s->detach)
@@ -179,7 +181,7 @@ static void migrate_write(void *opaque)
     if (migrate_write_buffer(s))
 	return;
 
-    if (migrate_check_convergence(s)) {
+    if (migrate_check_convergence(s) || *s->has_error) {
 	qemu_del_timer(s->timer);
 	qemu_free_timer(s->timer);
 	qemu_set_fd_handler2(s->fd, NULL, NULL, NULL, NULL);
