@@ -33,7 +33,7 @@ typedef struct VmChannelCharDriverState {
     uint32_t deviceid;
 } VmChannelCharDriverState;
 
-VmChannelCharDriverState vmchannel_hds[MAX_VMCHANNEL_DEVICES];
+static VmChannelCharDriverState vmchannel_hds[MAX_VMCHANNEL_DEVICES];
 
 typedef struct HypercallState {
     uint32_t hcr;
@@ -51,7 +51,7 @@ typedef struct HypercallState {
 
 HypercallState *pHypercallStates[MAX_VMCHANNEL_DEVICES] = {NULL};
 
-#define HYPERCALL_DEBUG 1
+//#define HYPERCALL_DEBUG 1
 
 static void hp_reset(HypercallState *s)
 {
@@ -132,6 +132,7 @@ static uint32_t hp_ioport_read(void *opaque, uint32_t addr)
 
     addr &= 0xff;
 #ifdef HYPERCALL_DEBUG
+    // Since HSR_REGISTER is being repeatedly read in the guest ISR we don't print it
     if (addr != HSR_REGISTER)
         printf("%s: addr=0x%x\n", __FUNCTION__, addr);
 #endif
@@ -197,7 +198,7 @@ void pci_hypercall_single_init(PCIBus *bus, uint32_t deviceid, uint32_t index)
     char name[sizeof("HypercallX")];
 
 #ifdef HYPERCALL_DEBUG
-    printf("pci_hypercall_single_init\n");
+    printf("%s\n", __FUNCTION__);
 #endif
 
     // If the vmchannel wasn't initialized, we don't want the Hypercall device in the guest
@@ -253,10 +254,11 @@ static int vmchannel_can_read(void *opaque)
 
 static void vmchannel_event(void *opaque, int event)
 {
-    uint64_t index = (uint64_t)opaque;
-    
+
 #ifdef HYPERCALL_DEBUG
-    printf("%s got event %d\n", __FUNCTION__, event);
+    // if index is to be used outside the printf, take it out of the #ifdef block!
+    long index = (long)opaque;
+    printf("%s index:%ld, got event %i\n", __FUNCTION__, index, event);
 #endif
     
     return;
@@ -266,10 +268,10 @@ static void vmchannel_event(void *opaque, int event)
 static void vmchannel_read(void *opaque, const uint8_t *buf, int size)
 {
     int i;
-    uint64_t index = (uint64_t)opaque;
+    long index = (long)opaque;
 
 #ifdef HYPERCALL_DEBUG    
-    printf("vmchannel_read buf:%s, size:%d\n", buf, size);
+    printf("vmchannel_read buf size:%d\n", size);
 #endif
 
     // if the hypercall device is in interrupts disabled state, don't accept the data
@@ -293,9 +295,8 @@ void vmchannel_init(CharDriverState *hd, uint32_t deviceid, uint32_t index)
 
     vmchannel_hds[index].deviceid = deviceid;
     vmchannel_hds[index].vmchannel_hd = hd;
-  
    
     use_hypercall_dev = 1;
     qemu_chr_add_handlers(vmchannel_hds[index].vmchannel_hd, vmchannel_can_read, vmchannel_read,
-			  vmchannel_event, (void *)(uint64_t)index);
+                          vmchannel_event, (void *)(long)index);
 }
