@@ -1462,10 +1462,8 @@ again:
 		load_db_regs(vcpu->svm->db_regs);
 	}
 
-	if (vcpu->fx_active) {
-		fx_save(vcpu->host_fx_image);
-		fx_restore(vcpu->guest_fx_image);
-	}
+	fx_save(vcpu->host_fx_image);
+	fx_restore(vcpu->guest_fx_image);
 
 	asm volatile (
 #ifdef CONFIG_X86_64
@@ -1576,10 +1574,8 @@ again:
 #endif
 		: "cc", "memory" );
 
-	if (vcpu->fx_active) {
-		fx_save(vcpu->guest_fx_image);
-		fx_restore(vcpu->host_fx_image);
-	}
+	fx_save(vcpu->guest_fx_image);
+	fx_restore(vcpu->host_fx_image);
 
 	if ((vcpu->svm->vmcb->save.dr7 & 0xff))
 		load_db_regs(vcpu->svm->host_db_regs);

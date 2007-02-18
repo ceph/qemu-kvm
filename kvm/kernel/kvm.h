@@ -17,7 +17,6 @@
 #include <linux/kvm_para.h>
 
 #define CR0_PE_MASK (1ULL << 0)
-#define CR0_MP_MASK (1ULL << 1)
 #define CR0_TS_MASK (1ULL << 3)
 #define CR0_NE_MASK (1ULL << 5)
 #define CR0_WP_MASK (1ULL << 16)
@@ -264,7 +263,6 @@ struct kvm_vcpu {
 
 	struct kvm_guest_debug guest_debug;
 
-	int fx_active;
 	char fx_buf[FX_BUF_SIZE];
 	char *host_fx_image;
 	char *guest_fx_image;

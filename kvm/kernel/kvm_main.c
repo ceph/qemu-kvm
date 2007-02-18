@@ -404,7 +404,6 @@ void set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 
 	}
 
-	vcpu->fx_active = !((cr0 & CR0_TS_MASK) && (cr0 & CR0_MP_MASK));
 	kvm_arch_ops->set_cr0(vcpu, cr0);
 	vcpu->cr0 = cr0;
 
@@ -531,7 +530,6 @@ void fx_init(struct kvm_vcpu *vcpu)
 	fx_image->mxcsr = 0x1f80;
 	memset(vcpu->guest_fx_image + sizeof(struct fx_image_s),
 	       0, FX_IMAGE_SIZE - sizeof(struct fx_image_s));
-	vcpu->fx_active = 1;
 }
 EXPORT_SYMBOL_GPL(fx_init);
 

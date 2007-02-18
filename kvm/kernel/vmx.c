@@ -1764,10 +1764,8 @@ again:
 	if (vcpu->guest_debug.enabled)
 		kvm_guest_debug_pre(vcpu);
 
-	if (vcpu->fx_active) {
-		fx_save(vcpu->host_fx_image);
-		fx_restore(vcpu->guest_fx_image);
-	}
+	fx_save(vcpu->host_fx_image);
+	fx_restore(vcpu->guest_fx_image);
 
 	save_msrs(vcpu->host_msrs, vcpu->nmsrs);
 	load_msrs(vcpu->guest_msrs, NR_BAD_MSRS);
@@ -1896,11 +1894,8 @@ again:
 	save_msrs(vcpu->guest_msrs, NR_BAD_MSRS);
 	load_msrs(vcpu->host_msrs, NR_BAD_MSRS);
 
-	if (vcpu->fx_active) {
-		fx_save(vcpu->guest_fx_image);
-		fx_restore(vcpu->host_fx_image);
-	}
-
+	fx_save(vcpu->guest_fx_image);
+	fx_restore(vcpu->host_fx_image);
 	vcpu->interrupt_window_open = (vmcs_read32(GUEST_INTERRUPTIBILITY_INFO) & 3) == 0;
 
 	asm ("mov %0, %%ds; mov %0, %%es" : : "r"(__USER_DS));
