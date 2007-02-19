@@ -47,8 +47,8 @@
 MODULE_AUTHOR("Qumranet");
 MODULE_LICENSE("GPL");
 
-static spinlock_t kvm_lock = SPIN_LOCK_UNLOCKED;
-static struct list_head vm_list = LIST_HEAD_INIT(vm_list);
+static DEFINE_SPINLOCK(kvm_lock);
+static LIST_HEAD(vm_list);
 
 struct kvm_arch_ops *kvm_arch_ops;
 struct kvm_stat kvm_stat;
