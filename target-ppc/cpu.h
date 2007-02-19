@@ -32,6 +32,8 @@
 
 #define TARGET_HAS_ICE 1
 
+#define ELF_MACHINE	EM_PPC
+
 /* XXX: this should be tunable: PowerPC 601 & 64 bits PowerPC
  *                              have different cache line sizes
  */
@@ -573,8 +575,7 @@ void cpu_ppc_close(CPUPPCState *s);
 /* you can call this signal handler from your SIGBUS and SIGSEGV
    signal handlers to inform the virtual CPU of exceptions. non zero
    is returned if the signal was handled by the virtual CPU.  */
-struct siginfo;
-int cpu_ppc_signal_handler(int host_signum, struct siginfo *info, 
+int cpu_ppc_signal_handler(int host_signum, void *pinfo, 
                            void *puc);
 
 void do_interrupt (CPUPPCState *env);

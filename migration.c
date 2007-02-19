@@ -1,1184 +1,697 @@
+/*
+ * QEMU migration support
+ * 
+ * Copyright (C) 2007 Anthony Liguori <anthony@codemonkey.ws>
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
 #include "vl.h"
 #include "qemu_socket.h"
-#include "migration.h"
 
-#define TO_BE_IMPLEMENTED term_printf("%s: TO_BE_IMPLEMENTED\n", __FUNCTION__)
-#define USE_NONBLOCKING_SOCKETS
+#include <sys/wait.h>
 
-#ifndef CONFIG_USER_ONLY
+#define MIN_FINALIZE_SIZE	(200 << 10)
 
-/* defined in vl.c */
-int parse_host_port(struct sockaddr_in *saddr, const char *str);
-#ifdef USE_NONBLOCKING_SOCKETS
-void socket_set_block(int fd) /* should be in vl.c ? */
+typedef struct MigrationState
 {
-    int val;
-    val = fcntl(fd, F_GETFL);
-    fcntl(fd, F_SETFL, val & ~O_NONBLOCK);
-}
-#endif
-
-#define FD_UNUSED -1
-#define QEMU_MIGRATION_MAGIC     0x5145564d /* FIXME: our own magic ??? */
-#define QEMU_MIGRATION_VERSION   0x00000001
-
-typedef enum {
-    NONE   = 0,
-    WRITER = 1,
-    READER = 2
-} migration_role_t;	
-
-typedef enum {
-    MIG_STAT_NONE   = 0, /* disconnected */
-    MIG_STAT_LISTEN = 1, /* listening, waiting for the other to connect */
-    MIG_STAT_CONN   = 2, /* connection established */
-    MIG_STAT_START  = 3, /* migration started */
-    MIG_STAT_SUCC   = 4, /* migration completed successfully */
-    MIG_STAT_FAIL   = 5, /* migration failed */
-    MIG_STAT_CANCEL = 6  /* migration canceled */
-} migration_status_t;
-
-
-/* page types to be used when migrating ram pages */
-enum {
-    MIG_XFER_PAGE_TYPE_REGULAR     = 0,  /* regular page           */
-    MIG_XFER_PAGE_TYPE_HOMOGENEOUS = 1,  /* all bytes are the same */
-    MIG_XFER_PAGE_TYPE_END         = 15, /* go to the next phase   */
-};
-
-typedef struct migration_bandwith_params {
-    int min, max, offline, seconds;
-} migration_bandwith_params_t;
-
-typedef struct migration_state {
     int fd;
-    migration_status_t status;
-#define BUFFSIZE ( 256 * 1024)
-    unsigned char buff[BUFFSIZE]; /* FIXME: allocate dynamically; use mutli/double buffer */
-    unsigned buffsize;
-    unsigned head, tail;
-    migration_role_t role;
-    int64_t  head_counter, tail_counter;
-    migration_bandwith_params_t bw;
-    int      phase;
-    int      online;
-    int      yield;
-    QEMUFile *f;
-    unsigned next_page;
-} migration_state_t;
+    int throttle_count;
+    int bps;
+    int updated_pages;
+    int last_updated_pages;
+    int iteration;
+    int n_buffer;
+    int throttled;
+    int *has_error;
+    char buffer[TARGET_PAGE_SIZE + 4];
+    target_ulong addr;
+    QEMUTimer *timer;
+    void *opaque;
+    int detach;
+    int (*release)(void *opaque);
+} MigrationState;
 
-static migration_state_t ms = {
-    .fd       = FD_UNUSED, 
-    .status   = MIG_STAT_NONE,
-    .buff     = { 0 },  
-    .buffsize = BUFFSIZE, 
-    .head = 0, 
-    .tail = 0,
-    .head_counter = 0,
-    .tail_counter = 0,
-    .bw = {0, 0, 0, 0},
-    .phase = 0,
-    .online = 0,
-    .yield = 0,
-    .f     = NULL,
-};
+static uint32_t max_throttle = (32 << 20);
+static MigrationState *current_migration;
 
-static const char *reader_default_addr="localhost:4455";
-static const char *writer_default_addr="localhost:4456";
+/* QEMUFile migration implementation */
 
-/* forward declarations */
-static void migration_cleanup(migration_state_t *pms, migration_status_t stat);
-static void migration_start_src(migration_state_t *pms);
-static void migration_phase_1_src(migration_state_t *pms);
-static void migration_phase_2_src(migration_state_t *pms);
-static void migration_phase_3_src(migration_state_t *pms);
-static void migration_phase_4_src(migration_state_t *pms);
-static void migration_start_dst(migration_state_t *pms);
-static void migration_phase_1_dst(migration_state_t *pms);
-static void migration_phase_2_dst(migration_state_t *pms);
-static void migration_phase_3_dst(migration_state_t *pms);
-static void migration_phase_4_dst(migration_state_t *pms);
-
-static void migration_ram_send(migration_state_t *pms, int whole_ram);
-static void migration_ram_recv(migration_state_t *pms);
-
-typedef void (*QemuMigrationPhaseCB)(migration_state_t *pms);
-#define MIGRATION_NUM_PHASES 5
-QemuMigrationPhaseCB migration_phase_funcs[2][MIGRATION_NUM_PHASES] = {
-    {
-        migration_start_src,
-        migration_phase_1_src,
-        migration_phase_2_src,
-        migration_phase_3_src,
-        migration_phase_4_src    },
-    {
-        migration_start_dst,
-        migration_phase_1_dst,
-        migration_phase_2_dst,
-        migration_phase_3_dst,
-        migration_phase_4_dst    }
-};
-
-/* MIG_ASSERT 
- * assuming pms is defined in the function calling MIG_ASSERT
- * retuns non-0 if the condition is false, 0 if all is OK 
- */
-#define MIG_ASSERT(p) mig_assert(pms, !!(p), __FUNCTION__, __LINE__)
-int mig_assert(migration_state_t *pms, int cond, const char *fname, int line)
+static void migrate_put_buffer(void *opaque, const uint8_t *buf, int64_t pos, int size)
 {
-    if (!cond) {
-        term_printf("assertion failed at %s():%d\n", fname, line);
-        migration_cleanup(&ms, MIG_STAT_FAIL);
-    }
-    return !cond;
-}
+    MigrationState *s = opaque;
+    int offset = 0;
 
-static const char *mig_stat_str(migration_status_t mig_stat)
-{
-    struct {
-        migration_status_t stat;
-        const char *str;
-    } stat_strs[] = {    
-        {MIG_STAT_NONE,   "disconnected"},
-        {MIG_STAT_LISTEN, "listening"},
-        {MIG_STAT_CONN,   "connected"},
-        {MIG_STAT_START,  "migration stared"},
-        {MIG_STAT_SUCC,   "migration completed successfully"},
-        {MIG_STAT_FAIL,   "migration failed"},
-        {MIG_STAT_CANCEL, "migration canceled"}
-    };
+    if (*s->has_error)
+	return;
 
-    int i;
-    
-    for (i=0 ; i<sizeof(stat_strs)/sizeof(stat_strs[0]) ; i++)
-        if (stat_strs[i].stat == mig_stat)
-            return stat_strs[i].str;
-    
-    return "unknown migration_status";
-}
+    while (offset < size) {
+	ssize_t len;
 
-/* circular buffer functions */
-static int migration_buffer_empty(migration_state_t *pms)
-{
-    return (pms->head == pms->tail);
-}
-
-static int migration_buffer_bytes_filled(migration_state_t *pms)
-{
-    return (pms->head - pms->tail) % pms->buffsize;
-}
-
-static int migration_buffer_bytes_empty(migration_state_t *pms)
-{
-    return (pms->tail - pms->head -1) % pms->buffsize;
-}
-
-static int migration_buffer_bytes_head_end(migration_state_t *pms)
-{
-    return pms->buffsize - pms->head;
-}
-
-static int migration_buffer_bytes_tail_end(migration_state_t *pms)
-{
-    return pms->buffsize - pms->tail;
-}
-
-static void migration_state_inc_head(migration_state_t *pms, int n)
-{
-    pms->head = (pms->head + n) % pms->buffsize;
-    pms->head_counter += n;
-}
-
-static void migration_state_inc_tail(migration_state_t *pms, int n)
-{
-    pms->tail = (pms->tail + n) % pms->buffsize;
-    pms->tail_counter += n;
-}
-
-
-/* create a network address according to arg/default_addr */
-static int parse_host_port_and_message(struct sockaddr_in *saddr,
-                                       const char *arg,
-                                       const char *default_addr,
-                                       const char *name)
-{
-    if (!arg)
-        arg = default_addr;
-    if (parse_host_port(saddr, arg) < 0) {
-        term_printf("%s: invalid argument '%s'\n", name, arg);
-        migration_cleanup(&ms, MIG_STAT_FAIL);
-        return -1;
-    }
-    return 0;
-}
-
-static void migration_reset_buffer(migration_state_t *pms)
-{
-    memset(pms->buff, 0, pms->buffsize);
-    pms->head = 0;
-    pms->tail = 0;
-    pms->head_counter = 0;
-    pms->tail_counter = 0;
-}
-
-static void migration_cleanup(migration_state_t *pms, migration_status_t stat)
-{
-    if (pms->fd != FD_UNUSED) {
-#ifdef USE_NONBLOCKING_SOCKETS
-        qemu_set_fd_handler(pms->fd, NULL, NULL, NULL);
-#endif
-        close(pms->fd);
-        pms->fd = FD_UNUSED;
-    }
-    pms->status = stat;
-}
-
-static int migration_read_from_socket(void *opaque)
-{
-    migration_state_t *pms = (migration_state_t *)opaque;
-    int size, toend;
-
-    if (pms->status != MIG_STAT_START)
-        return 0;
-    if (pms->fd == FD_UNUSED) /* not connected */
-        return 0;
-
-    while (1) { /* breaking if O.K. */
-        size = migration_buffer_bytes_empty(pms); /* available size */
-        toend = migration_buffer_bytes_head_end(pms);
-        if (size > toend) /* read till end of buffer */
-            size = toend;
-        size = read(pms->fd, pms->buff + pms->head, size);
-        if (size < 0) {
-            if (socket_error() == EINTR)
-                continue;
-            term_printf("migration_read_from_socket: read failed (%s)\n", strerror(errno) );
-            migration_cleanup(pms, MIG_STAT_FAIL);
-            return size;
-        }
-        if (size == 0) {
-            /* connection closed */
-            term_printf("migration_read_from_socket: CONNECTION CLOSED\n");
-            migration_cleanup(pms, MIG_STAT_FAIL);
-            /* FIXME: call vm_start on A or B according to migration status ? */
-            return size;
-        }
-        else /* we did read something */
-            break;
-    }
-
-    migration_state_inc_head(pms, size);
-    return size;
-}
-
-static int migration_write_into_socket(void *opaque, int len)
-{
-    migration_state_t *pms = (migration_state_t *)opaque;
-    int size, toend;
-
-    if (pms->status != MIG_STAT_START)
-        return 0;
-    if (pms->fd == FD_UNUSED) /* not connected */
-        return 0;
-    while (1) { /* breaking if O.K. */
-        size = migration_buffer_bytes_filled(pms); /* available size */
-        toend = migration_buffer_bytes_tail_end(pms);
-        if (size > toend) /* write till end of buffer */
-            size = toend;
-        if (size > len)
-            size = len;
-        size = write(pms->fd, pms->buff + pms->tail, size);
-        if (size < 0) {
-            if (socket_error() == EINTR)
-                continue;
-            term_printf("migration_write_into_socket: write failed (%s)\n", 
-                        strerror(socket_error()) );
-            migration_cleanup(pms, MIG_STAT_FAIL);
-            return size;
-        }
-        if (size == 0) {
-            /* connection closed */
-            term_printf("migration_write_into_socket: CONNECTION CLOSED\n");
-            migration_cleanup(pms, MIG_STAT_FAIL);
-            return size;
-        }
-        else /* we did write something */
-            break;
-    }
-
-    migration_state_inc_tail(pms, size);
-    return size;
-}
-
-static void migration_start_now(void *opaque)
-{
-    migration_state_t *pms = (migration_state_t *)opaque;
-
-    migration_start_dst(pms);
-}
-
-static void migration_accept(void *opaque)
-{
-    migration_state_t *pms = (migration_state_t *)opaque;
-    socklen_t len;
-    struct sockaddr_in sockaddr;
-    int new_fd;
-
-    for(;;) {
-        len = sizeof(sockaddr);
-        new_fd = accept(pms->fd, (struct sockaddr *)&sockaddr, &len);
-        if (new_fd < 0 && errno != EINTR) {
-            term_printf("migration listen: accept failed (%s)\n",
-                        strerror(errno));
-            migration_cleanup(pms, MIG_STAT_FAIL);
-            return;
-        } else if (new_fd >= 0) {
-            break;
-        }
-    }
-
-    /* FIXME: Need to be modified if we want to have a control connection
-     *        e.g. cancel/abort
-     */
-    migration_cleanup(pms, MIG_STAT_CONN); /* clean old fd */
-    pms->fd = new_fd;
-
-    term_printf("accepted new socket as fd %d\n", pms->fd);
-
-#ifdef USE_NONBLOCKING_SOCKETS
-    /* start handling I/O */
-    qemu_set_fd_handler(pms->fd, migration_start_now, NULL, pms);
-#else 
-    term_printf("waiting for migration to start...\n");
-    migration_start_now(pms);
-#endif
-}
-
-
-void do_migration_listen(char *arg1, char *arg2)
-{
-    struct sockaddr_in local, remote;
-    int val;
-
-    if (ms.fd != FD_UNUSED) {
-        term_printf("Already listening or connection established\n");
-        return;
-    }
-
-    if (parse_host_port_and_message(&local,  arg1, reader_default_addr, "migration listen"))
-        return;
-
-    if (parse_host_port_and_message(&remote, arg2, writer_default_addr, "migration listen"))
-        return;
-
-    ms.fd = socket(PF_INET, SOCK_STREAM, 0);
-    if (ms.fd < 0) {
-        term_printf("migration listen: socket() failed (%s)\n",
-                    strerror(errno));
-        migration_cleanup(&ms, MIG_STAT_FAIL);
-        return;
-    }
-
-    /* fast reuse of address */
-    val = 1;
-    setsockopt(ms.fd, SOL_SOCKET, SO_REUSEADDR, (const char *)&val, sizeof(val));
-    
-    if (bind(ms.fd, &local, sizeof local) < 0 ) {
-        migration_cleanup(&ms, MIG_STAT_FAIL);
-        term_printf("migration listen: bind() failed (%s)\n", strerror(errno));
-        return;
-    }
-    
-    if (listen(ms.fd, 1) < 0) { /* allow only one connection */
-        migration_cleanup(&ms, MIG_STAT_FAIL);
-        term_printf("migration listen: listen() failed (%s)\n", strerror(errno));
-        return;
-    }
-
-    ms.status = MIG_STAT_LISTEN;
-    term_printf("migration listen: listening on fd %d\n", ms.fd);
-
-#ifdef USE_NONBLOCKING_SOCKETS
-    /* FIXME: should I allow BLOCKING socket after vm_stop() to get full bandwidth? */
-    socket_set_nonblock(ms.fd); /* do not block and delay the guest */
-
-    qemu_set_fd_handler(ms.fd, migration_accept, NULL, &ms); /* wait for connect() */
-#else
-    migration_accept(&ms);
-#endif
-}
-
-/* reads from the socket if needed 
- * returns 0  if connection closed
- *         >0 if buffer is not empty, number of bytes filled
- *         <0 if error occure
- */
-static int migration_read_some(void)
-{
-    int size;
-
-    if (migration_buffer_empty(&ms))
-        size = migration_read_from_socket(&ms);
-    else
-        size = migration_buffer_bytes_filled(&ms);
-    return size;
-}
-
-
-/* returns the byte read or 0 on error/connection closed */
-int migration_read_byte(void)
-{
-    int val = 0;
-    
-    if (migration_read_some() > 0) {
-        val = ms.buff[ms.tail];
-        migration_state_inc_tail(&ms, 1);
-    }
-    return val;
-}
-
-/* returns >=0 the number of bytes actually read, 
- *       or <0 if error occured 
- */
-int migration_read_buffer(char *buff, int len)
-{
-    int size, toend, len_req = len;
-    while (len > 0) {
-        size = migration_read_some();
-        if (size < 0)
-            return size;
-        else if (size==0)
-            break;
-        toend = migration_buffer_bytes_tail_end(&ms);
-        if (size > toend)
-            size = toend;
-        if (size > len)
-            size = len;
-        memcpy(buff, &ms.buff[ms.tail], size);
-        migration_state_inc_tail(&ms, size);
-        len -= size;
-        buff += size;
-    }
-    return len_req - len;
-}
-
-
-
-/*
- * buffer the bytes, and send when threshold reached
- * FIXME: bandwidth control can be implemented here
- * returns 0 on success, <0 on error
- */
-static int migration_write_some(int force)
-{
-    int size, threshold = 1024;
-
-    if (ms.status != MIG_STAT_START)
-        return -1;
-
-    if (threshold >= ms.buffsize) /* if buffsize is small */
-        threshold = ms.buffsize / 2;
-    size = migration_buffer_bytes_filled(&ms);
-    while (size && (force || (size > threshold))) {
-        size = migration_write_into_socket(&ms, size);
-        if (size < 0) /* error */
-            return size;
-        if (size == 0) { /* connection closed -- announce ERROR */
+	len = write(s->fd, buf + offset, size - offset);
+	if (len == -1) {
+	    if (errno == EAGAIN || errno == EINTR)
+		continue;
+            term_printf("migration: write failed (%s)\n", strerror(errno));
+	    *s->has_error = 10;
+	    break;
+	} else if (len == 0) {
             term_printf("migration: other side closed connection\n");
-            return -1;
-        }
-        size = migration_buffer_bytes_filled(&ms);
+	    *s->has_error = 11;
+	    break;
+	}
+
+	offset += len;
     }
+}
+
+static void migrate_close(void *opaque)
+{
+    MigrationState *s = opaque;
+
+    if (s->release && s->release(s->opaque))
+	*s->has_error = 12;
+
+    qemu_free(s);
+    current_migration = NULL;
+}
+
+/* Outgoing migration routines */
+
+static void migrate_finish(MigrationState *s)
+{
+    QEMUFile *f;
+    int ret;
+    int *has_error = s->has_error;
+
+    fcntl(s->fd, F_SETFL, 0);
+
+    if (! *has_error) {
+        f = qemu_fopen(s, migrate_put_buffer, NULL, migrate_close);
+        qemu_aio_flush();
+        vm_stop(0);
+        qemu_put_be32(f, 1);
+        ret = qemu_live_savevm_state(f);
+        qemu_fclose(f);
+    }
+    if (ret != 0 || *has_error) {
+	term_printf("Migration failed! ret=%d error=%d\n", ret, *has_error);
+	vm_start();
+    }
+    if (!s->detach)
+	monitor_resume();
+    qemu_free(has_error);
+    cpu_physical_memory_set_dirty_tracking(0);
+}
+
+static int migrate_write_buffer(MigrationState *s)
+{
+    if (*s->has_error)
+	return 0;
+
+    if (s->n_buffer != sizeof(s->buffer)) {
+	ssize_t len;
+    again:
+	len = write(s->fd, s->buffer + s->n_buffer, sizeof(s->buffer) - s->n_buffer);
+	if (len == -1) {
+	    if (errno == EINTR)
+		goto again;
+	    if (errno == EAGAIN)
+		return 1;
+	    *s->has_error = 13;
+	    return 0;
+	}
+	if (len == 0) {
+	    *s->has_error = 14;
+	    return 0;
+	}
+
+	s->throttle_count += len;
+	s->n_buffer += len;
+	if (s->n_buffer != sizeof(s->buffer))
+	    goto again;
+    }
+
+    if (s->throttle_count > max_throttle) {
+	s->throttled = 1;
+	qemu_set_fd_handler2(s->fd, NULL, NULL, NULL, NULL);
+	return 1;
+    }
+
     return 0;
 }
 
-static int migration_write_byte(int val)
+static int migrate_check_convergence(MigrationState *s)
 {
+    target_ulong addr;
+    int dirty_count = 0;
+
+    for (addr = 0; addr < phys_ram_size; addr += TARGET_PAGE_SIZE) {
+#ifdef USE_KVM
+        if (kvm_allowed && (addr>=0xa0000) && (addr<0xc0000)) /* do not access video-addresses */
+            continue;
+#endif
+	if (cpu_physical_memory_get_dirty(addr, MIGRATION_DIRTY_FLAG))
+	    dirty_count++;
+    }
+
+    return ((dirty_count * TARGET_PAGE_SIZE) < MIN_FINALIZE_SIZE);
+}
+
+static void migrate_write(void *opaque)
+{
+    MigrationState *s = opaque;
+
+    if (migrate_write_buffer(s))
+	return;
+
+    if (migrate_check_convergence(s) || *s->has_error) {
+	qemu_del_timer(s->timer);
+	qemu_free_timer(s->timer);
+	qemu_set_fd_handler2(s->fd, NULL, NULL, NULL, NULL);
+	migrate_finish(s);
+	return;
+    }	
+
+    while (s->addr < phys_ram_size) {
+#ifdef USE_KVM
+        if (kvm_allowed && (s->addr>=0xa0000) && (s->addr<0xc0000)) /* do not access video-addresses */
+            s->addr = 0xc0000;
+#endif
+
+	if (cpu_physical_memory_get_dirty(s->addr, MIGRATION_DIRTY_FLAG)) {
+	    uint32_t value = cpu_to_be32(s->addr);
+
+	    memcpy(s->buffer, &value, 4);
+	    memcpy(s->buffer + 4, phys_ram_base + s->addr, TARGET_PAGE_SIZE);
+	    s->n_buffer = 0;
+
+	    cpu_physical_memory_reset_dirty(s->addr, s->addr + TARGET_PAGE_SIZE, MIGRATION_DIRTY_FLAG);
+
+	    s->addr += TARGET_PAGE_SIZE;
+
+	    s->updated_pages++;
+
+	    if (migrate_write_buffer(s))
+		return;
+	} else
+	    s->addr += TARGET_PAGE_SIZE;
+    }
+
+    s->last_updated_pages = s->updated_pages;
+    s->updated_pages = 0;
+    s->addr = 0;
+    s->iteration++;
+}
+
+static void migrate_reset_throttle(void *opaque)
+{
+    MigrationState *s = opaque;
+
+    s->bps = s->throttle_count;
+
+    if (s->throttled) {
+	s->throttled = 0;
+	qemu_set_fd_handler2(s->fd, NULL, NULL, migrate_write, s);
+    }
+    s->throttle_count = 0;
+    qemu_mod_timer(s->timer, qemu_get_clock(rt_clock) + 1000);
+}
+
+static int start_migration(MigrationState *s)
+{
+    uint32_t value = cpu_to_be32(phys_ram_size);
+    target_phys_addr_t addr;
+    size_t offset = 0;
+	
+    while (offset != 4) {
+	ssize_t len = write(s->fd, ((char *)&value) + offset, 4 - offset);
+	if (len == -1 && errno == EINTR)
+	    continue;
+
+	if (len < 1)
+	    return -EIO;
+
+	offset += len;
+    }
+
+    fcntl(s->fd, F_SETFL, O_NONBLOCK);
+
+    for (addr = 0; addr < phys_ram_size; addr += TARGET_PAGE_SIZE) {
+#ifdef USE_KVM
+        if (kvm_allowed && (addr>=0xa0000) && (addr<0xc0000)) /* do not access video-addresses */
+            continue;
+#endif
+	if (!cpu_physical_memory_get_dirty(addr, MIGRATION_DIRTY_FLAG))
+	    cpu_physical_memory_set_dirty(addr);
+    }
+
+    cpu_physical_memory_set_dirty_tracking(1);
+
+    s->addr = 0;
+    s->iteration = 0;
+    s->updated_pages = 0;
+    s->last_updated_pages = 0;
+    s->n_buffer = sizeof(s->buffer);
+    s->timer = qemu_new_timer(rt_clock, migrate_reset_throttle, s);
+
+    qemu_mod_timer(s->timer, qemu_get_clock(rt_clock));
+    qemu_set_fd_handler2(s->fd, NULL, NULL, migrate_write, s);
+}
+
+static MigrationState *migration_init_fd(int detach, int fd)
+{
+    MigrationState *s;
+
+    s = qemu_mallocz(sizeof(MigrationState));
+    if (s == NULL) {
+	term_printf("Allocation error\n");
+	return NULL;
+    }
+
+    s->fd = fd;
+    s->has_error = qemu_mallocz(sizeof(int));
+    if (s->has_error == NULL) {
+        term_printf("malloc failed (for has_error)\n");
+        return NULL;
+    }
+    s->detach = detach;
+
+    current_migration = s;
+    
+    if (start_migration(s) == -1) {
+	term_printf("Could not start migration\n");
+	return NULL;
+    }
+
+    if (!detach)
+	monitor_suspend();
+
+    return s;
+}
+
+typedef struct MigrationCmdState
+{
+    int fd;
+    pid_t pid;
+} MigrationCmdState;
+
+static int cmd_release(void *opaque)
+{
+    MigrationCmdState *c = opaque;
+    int status, ret;
+
+    close(c->fd);
+
+again:
+    ret = waitpid(c->pid, &status, 0);
+    if (ret == -1 && errno == EINTR)
+	goto again;
+
+    if (ret == -1) {
+        term_printf("migration: waitpid failed (%s)\n", strerror(errno));
+        return -1;
+    }
+    /* FIXME: check and uncomment
+     * if (WIFEXITED(status))
+     *     status = WEXITSTATUS(status);
+     */
+    return status;
+}
+
+static MigrationState *migration_init_cmd(int detach, const char *command, char **argv)
+{
+    int fds[2];
+    pid_t pid;
+    int i;
+    MigrationState *s;
+
+    if (pipe(fds) == -1) {
+	term_printf("pipe() (%s)\n", strerror(errno));
+	return NULL;
+    }
+
+    pid = fork();
+    if (pid == -1) {
+	close(fds[0]);
+	close(fds[1]);
+	term_printf("fork error (%s)\n", strerror(errno));
+	return NULL;
+    }
+    if (pid == 0) {
+	close(fds[1]);
+	dup2(fds[0], STDIN_FILENO);
+	execvp(command, argv);
+	exit(1);
+    } else
+	close(fds[0]);
+
+    for (i = 0; argv[i]; i++)
+	qemu_free(argv[i]);
+    qemu_free(argv);
+
+    s = migration_init_fd(detach, fds[1]);
+    if (s) {
+	MigrationCmdState *c = qemu_mallocz(sizeof(*c));
+	c->pid = pid;
+	c->fd = fds[1];
+	s->release = cmd_release;
+	s->opaque = c;
+    }
+
+    return s;
+}
+
+static MigrationState *migration_init_exec(int detach, const char *command)
+{
+    char **argv = NULL;
+
+    argv = qemu_mallocz(sizeof(char *) * 4);
+    argv[0] = strdup("sh");
+    argv[1] = strdup("-c");
+    argv[2] = strdup(command);
+    argv[3] = NULL;
+
+    return migration_init_cmd(detach, "/bin/sh", argv);
+}
+
+static MigrationState *migration_init_ssh(int detach, const char *host)
+{
+    int qemu_argc, daemonize = 0, argc, i;
+    char **qemu_argv, **argv;
+    const char *incoming = NULL;
+	
+    qemu_get_launch_info(&qemu_argc, &qemu_argv, &daemonize, &incoming);
+
+    argc = 3 + qemu_argc;
+    if (!daemonize)
+	argc++;
+    if (!incoming)
+	argc+=2;
+    
+    argv = qemu_mallocz(sizeof(char *) * (argc + 1));
+    argv[0] = strdup("ssh");
+    argv[1] = strdup("-XC");
+    argv[2] = strdup(host);
+
+    for (i = 0; i < qemu_argc; i++)
+	argv[3 + i] = strdup(qemu_argv[i]);
+
+    if (!daemonize)
+	argv[3 + i++] = strdup("-daemonize");
+    if (!incoming) {
+	argv[3 + i++] = strdup("-incoming");
+	argv[3 + i++] = strdup("stdio");
+    }
+
+    argv[3 + i] = NULL;
+
+    return migration_init_cmd(detach, "ssh", argv);
+}
+
+static int tcp_release(void *opaque)
+{
+    MigrationState *s = opaque;
+    uint8_t status = 0;
+    ssize_t len;
+
+again:
+    len = read(s->fd, &status, 1);
+    if (len == -1 && errno == EINTR)
+	goto again;
+
+    close(s->fd);
+
+    return (len != 1 || status != 0);
+}
+
+static MigrationState *migration_init_tcp(int detach, const char *host)
+{
+    int fd;
+    struct sockaddr_in addr;
+    MigrationState *s;
+
+    fd = socket(PF_INET, SOCK_STREAM, 0);
+    if (fd == -1) {
+        term_printf("socket() failed %s\n", strerror(errno));
+	return NULL;
+    }
+
+    addr.sin_family = AF_INET;
+    if (parse_host_port(&addr, host) == -1) {
+        term_printf("parse_host_port() FAILED for %s\n", host);
+	close(fd);
+	return NULL;
+    }
+
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
+        term_printf("connect() failed %s\n", strerror(errno));
+	close(fd);
+	return NULL;
+    }
+
+    s = migration_init_fd(detach, fd);
+    if (s) {
+	s->opaque = s;
+	s->release = tcp_release;
+    }
+    return s;
+}
+
+/* Incoming migration */
+
+static int migrate_incoming_fd(int fd)
+{
+    int ret;
+    QEMUFile *f = qemu_fopen_fd(fd);
+    uint32_t addr;
+    extern void qemu_announce_self(void);
+
+    if (qemu_get_be32(f) != phys_ram_size)
+	return 101;
+
+    do {
+	int l;
+	addr = qemu_get_be32(f);
+	if (addr == 1)
+	    break;
+	l = qemu_get_buffer(f, phys_ram_base + addr, TARGET_PAGE_SIZE);
+	if (l != TARGET_PAGE_SIZE)
+	    return 102;
+    } while (1);
+
+
+    qemu_aio_flush();
+    vm_stop(0);
+    ret = qemu_live_loadvm_state(f);
+    qemu_fclose(f);
+
+    return ret;
+}
+
+static int migrate_incoming_tcp(const char *host)
+{
+    struct sockaddr_in addr;
+    socklen_t addrlen = sizeof(addr);
+    int fd, sfd;
+    ssize_t len;
+    uint8_t status = 0;
+    int reuse = 1;
     int rc;
 
-    rc = migration_write_some(0);
-    if ( rc == 0) {
-        rc = 1;
-        ms.buff[ms.head] = val;
-        migration_state_inc_head(&ms, 1);
+    addr.sin_family = AF_INET;
+    if (parse_host_port(&addr, host) == -1) {
+        fprintf(stderr, "parse_host_port() failed for %s\n", host);
+        rc = 201;
+	goto error;
     }
+
+    fd = socket(PF_INET, SOCK_STREAM, 0);
+    if (fd == -1) {
+        perror("socket failed");
+        rc = 202;
+	goto error;
+    }
+
+    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) == -1) {
+        perror("setsockopt() failed");
+        rc = 203;
+	goto error_socket;
+    }
+
+    if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
+        perror("bind() failed");
+        rc = 204;
+	goto error_socket;
+    }
+
+    if (listen(fd, 1) == -1) {
+        perror("listen() failed");
+        rc = 205;
+	goto error_socket;
+    }
+
+again:
+    sfd = accept(fd, (struct sockaddr *)&addr, &addrlen);
+    if (sfd == -1) {
+	if (errno == EINTR)
+	    goto again;
+        perror("accept() failed");
+        rc = 206;
+	goto error_socket;
+    }
+
+    rc = migrate_incoming_fd(sfd);
+    if (rc != 0) {
+        rc = 207;
+        fprintf(stderr, "migrate_incoming_fd failed (rc=%d)\n", rc);
+	goto error_accept;
+    }
+
+again1:
+    len = write(sfd, &status, 1);
+    if (len == -1 && errno == EAGAIN)
+	goto again1;
+    if (len != 1) {
+        rc = 208;
+	goto error_accept;
+
+    }
+
+error_accept:
+    close(sfd);
+error_socket:
+    close(fd);
+error:
     return rc;
 }
 
-static int migration_write_buffer(const char *buff, int len)
+int migrate_incoming(const char *device)
 {
-    int size, toend, len_req = len;
+    const char *ptr;
+    int ret = 0;
 
-    while (len > 0) {
-        if (migration_write_some(0) < 0)
-            break;
-        size = migration_buffer_bytes_empty(&ms);
-        toend = migration_buffer_bytes_head_end(&ms);
-        if (size > toend)
-            size = toend;
-        if (size > len)
-            size = len;
-        memcpy(&ms.buff[ms.head], buff, size);
-        migration_state_inc_head(&ms, size);
-        len -= size;
-        buff += size;
+    if (strcmp(device, "stdio") == 0)
+	ret = migrate_incoming_fd(STDIN_FILENO);
+    else if (strstart(device, "tcp://", &ptr)) {
+	char *host, *end;
+	host = strdup(ptr);
+	end = strchr(host, '/');
+	if (end) *end = 0;
+	ret = migrate_incoming_tcp(host);
+	qemu_free(host);
+    } else {
+	errno = EINVAL;
+	ret = -1;
     }
-    return len_req - len;
+
+    return ret;
 }
 
-static void migration_connect_check(void *opaque)
+/* Migration monitor command */
+
+/* TODO:
+   1) audit all error paths
+*/
+
+void do_migrate(int detach, const char *uri)
 {
-    migration_state_t *pms = (migration_state_t *)opaque;
-    int err, rc;
-    socklen_t len=sizeof(err);
+    const char *ptr;
 
-    rc = getsockopt(pms->fd, SOL_SOCKET, SO_ERROR, (void *)&err, &len);
-    if (rc != 0) {
-        term_printf("migration connect: getsockopt FAILED (%s)\n", strerror(errno));
-        migration_cleanup(pms, MIG_STAT_FAIL);
-        return;
-    }
-    if (err == 0) {
-        term_printf("migration connect: connected through fd %d\n", pms->fd);
-        pms->status = MIG_STAT_CONN;
-    }
-    else {
-        term_printf("migration connect: failed to conenct (%s)\n", strerror(err));
-        migration_cleanup(pms, MIG_STAT_FAIL);
-        return;
-    }
+    if (strstart(uri, "exec:", &ptr)) {
+	char *command = urldecode(ptr);
+	migration_init_exec(detach, command);
+	free(command);
+    } else if (strstart(uri, "ssh://", &ptr)) {
+	char *host, *end;
 
-#ifdef USE_NONBLOCKING_SOCKETS
-    qemu_set_fd_handler(pms->fd, migration_start_now, NULL, pms);
-#endif
-}
+	host = strdup(ptr);
+	end = strchr(host, '/');
+	if (end) *end = 0;
+	migration_init_ssh(detach, host);
+	qemu_free(host);
+    } else if (strstart(uri, "tcp://", &ptr)) {
+	char *host, *end;
 
+	host = strdup(ptr);
+	end = strchr(host, '/');
+	if (end) *end = 0;
 
-void do_migration_connect(char *arg1, char *arg2)
-{
-    struct sockaddr_in local, remote;
-
-    if (ms.fd != FD_UNUSED) {
-        term_printf("Already connecting or connection established\n");
-        return;
-    }
-
-    ms.role = WRITER;
-
-    if (parse_host_port_and_message(&local,  arg1, writer_default_addr, "migration connect"))
-        return;
-
-    if (parse_host_port_and_message(&remote, arg2, reader_default_addr, "migration connect"))
-        return;
-
-    ms.fd = socket(PF_INET, SOCK_STREAM, 0);
-    if (ms.fd < 0) {
-        term_printf("migration connect: socket() failed (%s)\n",
-                    strerror(errno));
-        migration_cleanup(&ms, MIG_STAT_FAIL);
-        return;
-    }
-
-#ifdef USE_NONBLOCKING_SOCKETS
-    socket_set_nonblock(ms.fd);
-    qemu_set_fd_handler(ms.fd, NULL, migration_connect_check, &ms);
-#endif
-    
-    while (connect(ms.fd, (struct sockaddr*)&remote, sizeof remote) < 0) {
-        if (errno == EINTR)
-            continue;
-        if (errno != EINPROGRESS) {
-            term_printf("migration connect: connect() failed (%s)\n",
-                        strerror(errno));
-            migration_cleanup(&ms, MIG_STAT_FAIL);
-        }
-        return;
-    }
-    
-    migration_connect_check(&ms);
-}
-
-static void migration_disconnect(void *opaque)
-{
-    migration_state_t *pms = (migration_state_t*)opaque;
-    migration_cleanup(pms, pms->status);
-}
-
-static void migration_phase_set(migration_state_t *pms, int phase)
-{
-    int64_t t = qemu_get_clock(rt_clock);
-
-    term_printf("migration: starting phase %d at %" PRId64 "\n",
-                phase, t);
-    pms->phase = phase;
-}
-static void migration_phase_inc(migration_state_t *pms)
-{
-    migration_phase_set(pms, pms->phase + 1);
-}
-
-/* four phases for the migration:
- * phase 0: initialization
- * phase 1: online or offline
- *    transfer all RAM pages (online only)
- *    enable dirty pages logging (for offline migration the whole ram is dirty)
- *
- * phase 2: online only
- *    repeat: transfer all dirty pages
- *    
- * phase 3: offline
- *    stop the guest.
- *    transfer whatever left (dirty pages + non-ram states)
- *    for offline migration dirty pages are the whole memory.
- * 
- * phase 4: offline or online
- *    The grand finale: decide with host should continue
- *    send a "to whom it may concern..."
- *
- *
- * The function migration_main_loop just runs the appropriate function
- *     according to phase.
- */
-
-void migration_main_loop(void *opaque)
-{
-    migration_state_t *pms = (migration_state_t *)opaque;
-    
-    pms->yield = 0;
-    while (! pms->yield) {
-        if (pms->status != MIG_STAT_START)
-            pms->phase = MIGRATION_NUM_PHASES-1; /* last phase -- report */
-        if (MIG_ASSERT(pms->phase < MIGRATION_NUM_PHASES))
-            break;
-        migration_phase_funcs[pms->role-1][pms->phase](pms);
+	if (migration_init_tcp(detach, host) == NULL)
+            term_printf("migration failed (migration_init_tcp for %s failed)\n", host);
+	free(host);
+    } else {
+	term_printf("Unknown migration protocol '%s'\n", uri);
+	return;
     }
 }
 
-static void migration_start_common(migration_state_t *pms)
+void do_migrate_set_speed(const char *value)
 {
-    int64_t start_time;
+    double d;
+    char *ptr;
 
-    if (pms->status != MIG_STAT_CONN) {
-        switch (pms->status) {
-        case MIG_STAT_NONE:
-        case MIG_STAT_FAIL:
-        case MIG_STAT_SUCC:
-        case MIG_STAT_CANCEL:
-            term_printf("migration start: not connected to peer\n");
-            break;
-        case MIG_STAT_START:
-            term_printf("migration start: migration already running\n");
-            break;
-        default:
-            term_printf("migration start: UNKNOWN state %d\n", pms->status);
-        }
-        return;
+    d = strtod(value, &ptr);
+    switch (*ptr) {
+    case 'G': case 'g':
+	d *= 1024;
+    case 'M': case 'm':
+	d *= 1024;
+    case 'K': case 'k':
+	d *= 1024;
+    default:
+	break;
     }
 
-#ifdef USE_NONBLOCKING_SOCKETS
-    qemu_set_fd_handler(pms->fd, NULL, NULL, NULL);
-    socket_set_block(pms->fd); /* read as fast as you can */
-#endif
-
-    start_time = qemu_get_clock(rt_clock);
-    term_printf("\nstarting migration (at %" PRId64 ")\n", start_time);
-    migration_phase_set(pms, 0);
-    migration_reset_buffer(pms);
-    pms->status = MIG_STAT_START;
-    pms->next_page = 0;
-    pms->f = &qemu_savevm_method_socket;
-    pms->f->open(pms->f, NULL, NULL);
-
-    migration_phase_inc(pms);
-    migration_main_loop(pms);
+    max_throttle = (uint32_t)d;
 }
 
-static void migration_start_src(migration_state_t *pms)
+void do_info_migration(void)
 {
-    pms->role = WRITER;
-    migration_start_common(pms);
-}
+    MigrationState *s = current_migration;
 
-static void migration_start_dst(migration_state_t *pms)
-{
-    pms->role = READER;
-    migration_start_common(pms);
-}
+    if (s) {
+	term_printf("Migration active\n");
+	if (s->bps < (1 << 20))
+	    term_printf("Transfer rate %3.1f kb/s\n",
+			(double)s->bps / 1024);
+	else
+	    term_printf("Transfer rate %3.1f mb/s\n",
+			(double)s->bps / (1024 * 1024));
+	term_printf("Iteration %d\n", s->iteration);
+	term_printf("Transferred %d/%d pages\n", s->updated_pages, phys_ram_size >> TARGET_PAGE_BITS);
+	if (s->iteration)
+	    term_printf("Last iteration found %d dirty pages\n", s->last_updated_pages);
+    } else
+	term_printf("Migration inactive\n");
 
-
-static void migration_phase_1_src(migration_state_t *pms)
-{
-    int goto_next_phase = 1;
-
-    if (pms->next_page == 0) {
-        ram_addr_t addr;
-        qemu_put_be32(pms->f, QEMU_MIGRATION_MAGIC);
-        qemu_put_be32(pms->f, QEMU_MIGRATION_VERSION);
-        qemu_put_byte(pms->f, pms->online);
-        qemu_put_be32(pms->f, phys_ram_size >> TARGET_PAGE_BITS);
-        qemu_set_fd_handler(pms->fd, NULL, migration_main_loop, pms);
-        for (addr=0; addr<phys_ram_size; addr+=TARGET_PAGE_SIZE)
-            cpu_physical_memory_set_dirty_flags(addr, MIG_DIRTY_FLAG);
-    }
-
-    if (pms->online) {
-        migration_ram_send(pms, 0);
-        if (pms->next_page <  (phys_ram_size >> TARGET_PAGE_BITS)) {
-            goto_next_phase = 0;
-        }
-    }
-
-    if (goto_next_phase) {
-        qemu_put_byte(pms->f, MIG_XFER_PAGE_TYPE_END);
-        migration_phase_inc(pms);
-        qemu_set_fd_handler(pms->fd, NULL, NULL, pms);
-    }
+    term_printf("Maximum migration speed is ");
+    if (max_throttle < (1 << 20))
+	term_printf("%3.1f kb/s\n", (double)max_throttle / 1024);
     else
-        pms->yield = 1;
+	term_printf("%3.1f mb/s\n", (double)max_throttle / (1024 * 1024));
 }
 
-static void migration_phase_2_src(migration_state_t *pms)
+void do_migrate_cancel(void)
 {
-    migration_phase_inc(pms);    
+    MigrationState *s = current_migration;
+
+    if (s)
+	*s->has_error = 20;
 }
-
-static void migration_phase_3_common(migration_state_t *pms, 
-                                     int (*migrate)(const char*, QEMUFile*))
-{
-    const char *dummy = "migrating";
-    int rc;
-
-    vm_stop(EXCP_INTERRUPT); /* FIXME: use EXCP_MIGRATION ? */
-    rc = migrate(dummy, &qemu_savevm_method_socket);
-    if ((rc==0) && (pms->status == MIG_STAT_START))
-        pms->status = MIG_STAT_SUCC;
-    else
-        if (pms->status == MIG_STAT_START)
-            pms->status = MIG_STAT_FAIL;
-
-    migration_phase_inc(pms);
-}
-static void migration_phase_3_src(migration_state_t *pms)
-{
-    migration_phase_3_common(pms, qemu_savevm);
-}
-static void migration_phase_4_common(migration_state_t *pms, int cont)
-{
-    int64_t end_time = qemu_get_clock(rt_clock);
-    term_printf("migration %s at %" PRId64"\n",
-                (pms->status!=MIG_STAT_SUCC)?"failed":"completed successfully",
-                end_time);
-    if (cont) {
-        migration_cleanup(pms, pms->status);
-        vm_start();
-    }
-    else 
-        if (pms->fd != FD_UNUSED)
-            qemu_set_fd_handler(pms->fd, migration_disconnect, NULL, pms);
-
-    pms->yield = 1;
-}
-
-static void migration_phase_4_src(migration_state_t *pms)
-{
-    migration_phase_4_common(pms, pms->status != MIG_STAT_SUCC);
-}
-
-static void migration_phase_1_dst(migration_state_t *pms)
-{
-    uint32_t magic, version, online, npages;
-
-    if (pms->next_page == 0) {
-        magic   = qemu_get_be32(pms->f);
-        version = qemu_get_be32(pms->f);
-        online  = qemu_get_byte(pms->f);
-        npages  = qemu_get_be32(pms->f);
-
-        if ((magic   != QEMU_MIGRATION_MAGIC)   ||
-            (version != QEMU_MIGRATION_VERSION)) {
-            term_printf("migration header: recv 0x%x 0x%x expecting 0x%x 0x%x\n",
-                        magic, version, 
-                        QEMU_MIGRATION_MAGIC, QEMU_MIGRATION_VERSION);
-            migration_cleanup(pms, MIG_STAT_FAIL);
-            return;
-        }
-
-        if (npages != (phys_ram_size >> TARGET_PAGE_BITS)) {
-            term_printf("phys_memory_mismatch: %uMB %uMB\n", 
-                        npages >> (20-TARGET_PAGE_BITS), phys_ram_size>>20);
-            migration_cleanup(pms, MIG_STAT_FAIL);
-            return;
-        }
-        pms->online = online;
-        term_printf("===>received online=%u\n", online);
-    }
-
-    migration_ram_recv(pms);
-
-    if (pms->next_page  >= (phys_ram_size >> TARGET_PAGE_BITS)) {
-        migration_phase_inc(pms);
-    }
-}
-static void migration_phase_2_dst(migration_state_t *pms)
-{
-    migration_phase_inc(pms);    
-}
-static void migration_phase_3_dst(migration_state_t *pms)
-{
-    migration_phase_3_common(pms, qemu_loadvm);
-}
-static void migration_phase_4_dst(migration_state_t *pms)
-{
-    migration_phase_4_common(pms, pms->status == MIG_STAT_SUCC);
-}
-
-
-/* 
- * FIXME: make it share code in vl.c
- */
-static int ram_page_homogeneous(const uint8_t *buf, const int len)
-{
-    int i, v;
-
-    v = buf[0];
-    for (i=1; i<len; i++)
-        if (buf[i] != v)
-            return 0;
-    return 1;
-}
-
-static void mig_ram_dirty_reset_page(unsigned page_number)
-{
-    ram_addr_t start, end;
-    start = page_number << TARGET_PAGE_BITS;
-    end   = start + TARGET_PAGE_SIZE;
-    cpu_physical_memory_reset_dirty(start, end, MIG_DIRTY_FLAG);
-}
-
-/*
- * Sends a single ram page
- * As in vl.c a single byte is being sent as data if page is "homogeneous"
- * Layout:
- *    header:
- *        byte   -- migration transfer page type
- *        uint32 -- page number
- *    data
- *        a single byte or the whole page (TARGET_PAGE_SIZE bytes).
- */
-static void mig_send_ram_page(migration_state_t *pms, unsigned page_number)
-{
-    const uint8_t* ptr = (const uint8_t *)(unsigned long)phys_ram_base;
-    uint8_t val;
-    unsigned buflen;
-    
-    if (page_number >=  (phys_ram_size >> TARGET_PAGE_BITS)) {
-        term_printf("mig_send_ram_page: page_number is too large: %u (max is %u)\n",
-                    page_number, (phys_ram_size >> TARGET_PAGE_BITS));
-        migration_cleanup(pms, MIG_STAT_FAIL);
-        return;
-    }
-
-    ptr += (page_number << TARGET_PAGE_BITS);
-    if (ram_page_homogeneous(ptr, TARGET_PAGE_SIZE)) {
-        val = MIG_XFER_PAGE_TYPE_HOMOGENEOUS;
-        buflen = 1;
-    }
-    else {
-        val = MIG_XFER_PAGE_TYPE_REGULAR;
-        buflen = TARGET_PAGE_SIZE;
-    }
-    qemu_put_byte(pms->f,   val);
-    qemu_put_be32(pms->f,   page_number);
-    qemu_put_buffer(pms->f, ptr, buflen);
-
-    mig_ram_dirty_reset_page(page_number);
-}
-
-/* returns 0 on success,
- *         1 if this phase is over
- *        -1 on failure
- */
-static int mig_recv_ram_page(migration_state_t *pms)
-{
-    uint8_t *ptr = (uint8_t *)(unsigned long)phys_ram_base;
-    unsigned page_number;
-    uint8_t val;
-    unsigned buflen;
-
-    val = qemu_get_byte(pms->f);
-    switch(val) {
-    case MIG_XFER_PAGE_TYPE_END: /* go to the next phase */;
-        pms->next_page = phys_ram_size >> TARGET_PAGE_BITS;
-        return 1;
-    case MIG_XFER_PAGE_TYPE_REGULAR:
-        buflen = TARGET_PAGE_SIZE;
-        break;
-    case MIG_XFER_PAGE_TYPE_HOMOGENEOUS:
-        buflen = 1;
-        break;
-    default: 
-        term_printf("mig_recv_ram_page: illegal val received %d\n", val); 
-        migration_cleanup(pms, MIG_STAT_FAIL);
-        return -1;
-    }
-
-    page_number = qemu_get_be32(pms->f);
-    if (page_number >=  (phys_ram_size >> TARGET_PAGE_BITS)) {
-        term_printf("mig_recv_ram_page: page_number is too large: %u (max is %u)\n",
-                    page_number, (phys_ram_size >> TARGET_PAGE_BITS));
-        return -1;
-    }
-
-    ptr += (page_number << TARGET_PAGE_BITS);
-    qemu_get_buffer(pms->f, ptr, buflen);
-
-    if (val == MIG_XFER_PAGE_TYPE_HOMOGENEOUS)
-        memset(ptr, ptr[0], TARGET_PAGE_SIZE);
-
-    return 0;
-}
-
-
-/* In order to enable the guest to run while memory is transferred, 
- *    the number of page continuously sent is limited by this constant.
- * When the limit is reached we take a break and continue to send pages
- *    upon another call to migration_ram_send (which would be when data can 
- *    be sent over the socket ( using qemu_set_fd_handler() ).
- */
-#define PAGES_CHUNK ((phys_ram_size >> TARGET_PAGE_BITS) /16 )
-
-/* Sends the whole ram in chunks, each call a few pages are being sent 
- *    (needs to be called multiple times).
- * State is kept in pms->next_page.
- */ 
-static void migration_ram_send(migration_state_t *pms, int whole_ram)
-{
-    unsigned num_pages = (phys_ram_size >> TARGET_PAGE_BITS);
-    unsigned chunk;
-    ram_addr_t addr;
-
-    if (whole_ram)
-        chunk = num_pages;
-    else
-        chunk = PAGES_CHUNK;
-
-    /* send a few pages (or until network buffers full) */
-    if (num_pages - pms->next_page > chunk) {
-        num_pages = pms->next_page + chunk;
-    }
-    for ( /*none*/ ; pms->next_page < num_pages; pms->next_page++) {
-        addr = pms->next_page << TARGET_PAGE_BITS;
-        if ((kvm_allowed) && (addr >= 0xa0000) && (addr < 0xc0000))
-            continue;
-        if (cpu_physical_memory_get_dirty(addr, MIG_DIRTY_FLAG))
-            mig_send_ram_page(pms, pms->next_page);
-    }
-}
-
-/* recv the whole ram (first phase) */
-static void migration_ram_recv(migration_state_t *pms)
-{
-    unsigned num_pages;
-    int rc = 0;
-    ram_addr_t addr;
-
-    num_pages = phys_ram_size >> TARGET_PAGE_BITS;
-
-    for (/* none */ ; rc==0 ; pms->next_page++) {
-        addr = pms->next_page << TARGET_PAGE_BITS;
-        if ((kvm_allowed) && (addr >= 0xa0000) && (addr < 0xc0000))
-            continue;
-        rc = mig_recv_ram_page(pms); 
-        if (rc < 0) {
-            term_printf("mig_recv_ram_page FAILED after %u pages\n", pms->next_page);
-            migration_cleanup(pms, MIG_STAT_FAIL);
-            return;
-        }
-    }
-
-    if (pms->next_page < num_pages)
-        term_printf("migration_ram_recv: WARNING goto next phase after %u pages (of %u)\n",
-                    pms->next_page, num_pages);
-}
-
-void do_migration_getfd(int fd) { TO_BE_IMPLEMENTED; }
-void do_migration_start(char *deadoralive)
-{ 
-    if (strcmp(deadoralive, "online") == 0) {
-        ms.online = 1;
-        if (kvm_allowed) { /* online migration is not supported yet for kvm */
-            ms.online = 0;
-            term_printf("Currently online migration is not supported for kvm,"
-                        " using offline migration\n");
-        }
-    }
-    else if (strcmp(deadoralive, "offline") == 0)
-        ms.online = 0;
-    else {
-        term_printf("migration start: please specify 'online' or 'offline'\n");
-        return;
-    }
-    migration_start_src(&ms);
-}
-
-void do_migration_cancel(void)
-{
-    migration_cleanup(&ms, MIG_STAT_CANCEL);
-}
-void do_migration_status(void){ 
-    term_printf("migration status: %s\n", mig_stat_str(ms.status));
-}
-void do_migration_set_rate(int min, int max, int offline)
-{
-    if ((min<0) || (max<0) || (offline<0)) {
-        term_printf("%s: positive values only please\n", __FUNCTION__);
-        return;
-    }
-    ms.bw.min     = min;
-    ms.bw.max     = max;
-    ms.bw.offline = offline;
-}
-
-void do_migration_set_total_time(int seconds)
-{
-    if (seconds<0){
-        term_printf("%s: positive values only please\n", __FUNCTION__);
-        return;
-    }
-    ms.bw.seconds = seconds;
-}
-void do_migration_show(void)
-{
-    term_printf("%8s %8s %8s %8s\n%8d %8d %8d %8d\n",
-                "min", "max", "offline", "seconds",
-                ms.bw.min, ms.bw.max, ms.bw.offline, ms.bw.seconds); 
-}
-
-
-
-/* 
- * =============================================
- * qemu_savevm_method implementation for sockets 
- * =============================================
- */
-static int qemu_savevm_method_socket_open(QEMUFile *f, const char *filename, 
-                                  const char *flags)
-{
-    if (ms.fd == FD_UNUSED)
-        return -1;
-    f->opaque = (void*)&ms;
-    return 0;
-}
-
-static void qemu_savevm_method_socket_close(QEMUFile *f)
-{
-    migration_state_t *pms = (migration_state_t*)f->opaque;
-    if (pms->role == WRITER) {
-        migration_write_some(1); /* sync */
-    }
-}
-
-static void qemu_savevm_method_socket_put_buffer(QEMUFile *f, const uint8_t *buf, int size)
-{
-    migration_write_buffer(buf, size);
-}
-
-static void qemu_savevm_method_socket_put_byte(QEMUFile *f, int v)
-{
-    migration_write_byte(v);
-}
-
-static int qemu_savevm_method_socket_get_buffer(QEMUFile *f, uint8_t *buf, int size)
-{
-    return migration_read_buffer(buf, size);
-}
-
-static int qemu_savevm_method_socket_get_byte(QEMUFile *f)
-{
-    return migration_read_byte();
-}
-
-static int64_t qemu_savevm_method_socket_tell(QEMUFile *f)
-{
-    migration_state_t *pms = (migration_state_t*)f->opaque;
-    int64_t cnt=-1;
-    if (pms->role == WRITER)
-        cnt = pms->head_counter;
-    else if (pms->role == READER)
-        cnt = pms->tail_counter;
-    return cnt;
-}
-
-/* 
- * hack alert: written to overcome a weakness of our solution (not yet generic).
- * READER: read 4 bytes of the actual length (and maybe do something)
- * WRITER: ignore (or maybe do something)
- */
-static int64_t qemu_savevm_method_socket_seek(QEMUFile *f, int64_t pos, int whence)
-{
-    migration_state_t *pms = (migration_state_t*)f->opaque;
-    unsigned int record_len;
-
-    if (pms->role == READER) {
-        record_len = qemu_get_be32(f);
-    }
-    return 0;
-}
-
-static int qemu_savevm_method_socket_eof(QEMUFile *f)
-{
-    migration_state_t *pms = (migration_state_t*)f->opaque;
-
-    return (pms->fd == FD_UNUSED);
-}
-
-
-static void qemu_savevm_method_socket_ram_save(QEMUFile *f, void *opaque)
-{
-    migration_state_t *pms = (migration_state_t*)f->opaque;
-
-    pms->next_page = 0;
-    migration_ram_send(pms, 1);
-    qemu_put_byte(pms->f, MIG_XFER_PAGE_TYPE_END);
-}
-
-static int qemu_savevm_method_socket_ram_load(QEMUFile *f, void *opaque, int ver)
-{
-    migration_state_t *pms = (migration_state_t*)f->opaque;
-
-    pms->next_page = 0;
-    migration_ram_recv(pms);
-    return 0;
-}
-QEMUFile qemu_savevm_method_socket = {
-    .opaque       = NULL, 
-    .open         = qemu_savevm_method_socket_open,
-    .close        = qemu_savevm_method_socket_close,
-    .put_byte     = qemu_savevm_method_socket_put_byte,
-    .get_byte     = qemu_savevm_method_socket_get_byte,
-    .put_buffer   = qemu_savevm_method_socket_put_buffer,
-    .get_buffer   = qemu_savevm_method_socket_get_buffer,
-    .tell         = qemu_savevm_method_socket_tell,
-    .seek         = qemu_savevm_method_socket_seek,
-    .eof          = qemu_savevm_method_socket_eof,
-    .ram_save     = qemu_savevm_method_socket_ram_save,
-    .ram_load     = qemu_savevm_method_socket_ram_load,
-};
-
-
-
-
-
-#else /* CONFIG_USER_ONLY is defined */
-
-void do_migration_listen(char *arg1, char *arg2) { TO_BE_IMPLEMENTED; }
-void do_migration_connect(char *arg1, char *arg2) { TO_BE_IMPLEMENTED; }
-void do_migration_getfd(int fd) { TO_BE_IMPLEMENTED; }
-void do_migration_start(char *deadoralive) { TO_BE_IMPLEMENTED; }
-void do_migration_cancel(void){ TO_BE_IMPLEMENTED; }
-void do_migration_status(void){ TO_BE_IMPLEMENTED; }
-void do_migration_set_rate(int min, int max, int offline) { TO_BE_IMPLEMENTED; }
-void do_migration_set_total_time(int seconds) { TO_BE_IMPLEMENTED; }
-void do_migration_show(void){ TO_BE_IMPLEMENTED; }
-
-#endif /* of CONFIG_USER_ONLY is defined */

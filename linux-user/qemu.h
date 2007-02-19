@@ -29,6 +29,7 @@ struct image_info {
 	unsigned long	entry;
         target_ulong    code_offset;
         target_ulong    data_offset;
+        char            **host_argv;
 	int		personality;
 };
 
@@ -73,6 +74,9 @@ typedef struct TaskState {
     struct target_vm86plus_struct vm86plus;
     uint32_t v86flags;
     uint32_t v86mask;
+#endif
+#ifdef TARGET_M68K
+    int sim_syscalls;
 #endif
     int used; /* non zero if used */
     struct image_info *info;

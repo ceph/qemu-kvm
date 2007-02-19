@@ -48,7 +48,8 @@
 #define TARGET_IOC_NRBITS	8
 #define TARGET_IOC_TYPEBITS	8
 
-#if defined(TARGET_I386) || defined(TARGET_ARM) || defined(TARGET_SH4)
+#if defined(TARGET_I386) || defined(TARGET_ARM) || defined(TARGET_SH4) \
+    || defined(TARGET_M68K)
 
 #define TARGET_IOC_SIZEBITS	14
 #define TARGET_IOC_DIRBITS	2
@@ -293,7 +294,7 @@ struct target_sigaction;
 int do_sigaction(int sig, const struct target_sigaction *act,
                  struct target_sigaction *oact);
 
-#if defined(TARGET_I386) || defined(TARGET_ARM) || defined(TARGET_SPARC) || defined(TARGET_PPC) || defined(TARGET_MIPS) || defined (TARGET_SH4)
+#if defined(TARGET_I386) || defined(TARGET_ARM) || defined(TARGET_SPARC) || defined(TARGET_PPC) || defined(TARGET_MIPS) || defined (TARGET_SH4) || defined(TARGET_M68K)
 
 #if defined(TARGET_SPARC)
 #define TARGET_SA_NOCLDSTOP    8u
@@ -938,29 +939,29 @@ struct target_stat64 {
 struct target_eabi_stat64 {
         unsigned long long st_dev;
         unsigned int    __pad1;
-        unsigned long   __st_ino;
+        target_ulong    __st_ino;
         unsigned int    st_mode;
         unsigned int    st_nlink;
 
-        unsigned long   st_uid;
-        unsigned long   st_gid;
+        target_ulong    st_uid;
+        target_ulong    st_gid;
 
         unsigned long long st_rdev;
         unsigned int    __pad2[2];
 
         long long       st_size;
-        unsigned long   st_blksize;
+        target_ulong    st_blksize;
         unsigned int    __pad3;
         unsigned long long st_blocks;
 
-        unsigned long   target_st_atime;
-        unsigned long   target_st_atime_nsec;
+        target_ulong    target_st_atime;
+        target_ulong    target_st_atime_nsec;
 
-        unsigned long   target_st_mtime;
-        unsigned long   target_st_mtime_nsec;
+        target_ulong    target_st_mtime;
+        target_ulong    target_st_mtime_nsec;
 
-        unsigned long   target_st_ctime;
-        unsigned long   target_st_ctime_nsec;
+        target_ulong    target_st_ctime;
+        target_ulong    target_st_ctime_nsec;
 
         unsigned long long st_ino;
 } __attribute__ ((packed));
@@ -1069,6 +1070,68 @@ struct target_stat64 {
         target_ulong    __unused4;
         target_ulong    __unused5;
 };
+
+#elif defined(TARGET_M68K)
+
+struct target_stat {
+	unsigned short st_dev;
+	unsigned short __pad1;
+	target_ulong st_ino;
+	unsigned short st_mode;
+	unsigned short st_nlink;
+	unsigned short st_uid;
+	unsigned short st_gid;
+	unsigned short st_rdev;
+	unsigned short __pad2;
+	target_ulong  st_size;
+	target_ulong  st_blksize;
+	target_ulong  st_blocks;
+	target_ulong  target_st_atime;
+	target_ulong  __unused1;
+	target_ulong  target_st_mtime;
+	target_ulong  __unused2;
+	target_ulong  target_st_ctime;
+	target_ulong  __unused3;
+	target_ulong  __unused4;
+	target_ulong  __unused5;
+};
+
+/* This matches struct stat64 in glibc2.1, hence the absolutely
+ * insane amounts of padding around dev_t's.
+ */
+struct target_stat64 {
+	unsigned long long	st_dev;
+	unsigned char	__pad1[2];
+
+#define TARGET_STAT64_HAS_BROKEN_ST_INO	1
+	target_ulong	__st_ino;
+
+	unsigned int	st_mode;
+	unsigned int	st_nlink;
+
+	target_ulong	st_uid;
+	target_ulong	st_gid;
+
+	unsigned long long	st_rdev;
+	unsigned char	__pad3[2];
+
+	long long	st_size;
+	target_ulong	st_blksize;
+
+	target_ulong	__pad4;		/* future possible st_blocks high bits */
+	target_ulong	st_blocks;	/* Number 512-byte blocks allocated. */
+
+	target_ulong	target_st_atime;
+	target_ulong	target_st_atime_nsec;
+
+	target_ulong	target_st_mtime;
+	target_ulong	target_st_mtime_nsec;
+
+	target_ulong	target_st_ctime;
+	target_ulong	target_st_ctime_nsec;
+
+	unsigned long long	st_ino;
+} __attribute__((packed));
 
 #elif defined(TARGET_MIPS)
 

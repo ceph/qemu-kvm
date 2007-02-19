@@ -1,7 +1,7 @@
 
 include config.mak
 
-CFLAGS = -I $(KERNELDIR)/include $(autodepend-flags) -g
+CFLAGS = -I $(KERNELDIR)/include $(autodepend-flags) -g -fomit-frame-pointer
 CXXFLAGS = $(autodepend-flags) 
 
 autodepend-flags = -MMD -MF $(dir $*).$(notdir $*).d

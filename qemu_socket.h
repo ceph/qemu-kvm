@@ -19,6 +19,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <sys/un.h>
 
 #define socket_error() errno
 #define closesocket(s) close(s)
@@ -26,5 +27,7 @@
 #endif /* !_WIN32 */
 
 void socket_set_nonblock(int fd);
+
+int parse_host_port(struct sockaddr_in *saddr, const char *str);
 
 #endif /* QEMU_SOCKET_H */

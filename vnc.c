@@ -68,6 +68,13 @@ struct VncState
     int depth; /* internal VNC frame buffer byte per pixel */
     int has_resize;
     int has_hextile;
+    int has_pointer_type_change;
+    int absolute;
+    int last_x;
+    int last_y;
+
+    const char *display;
+
     Buffer output;
     Buffer input;
     kbd_layout_t *kbd_layout;
@@ -81,9 +88,27 @@ struct VncState
 
     VncReadEvent *read_handler;
     size_t read_handler_expect;
-
-    int size;
+    /* input */
+    uint8_t modifiers_state[256];
 };
+
+static VncState *vnc_state; /* needed for info vnc */
+
+void do_info_vnc(void)
+{
+    if (vnc_state == NULL)
+	term_printf("VNC server disabled\n");
+    else {
+	term_printf("VNC server active on: ");
+	term_print_filename(vnc_state->display);
+	term_printf("\n");
+
+	if (vnc_state->csock == -1)
+	    term_printf("No client connected\n");
+	else
+	    term_printf("Client connected\n");
+    }
+}
 
 /* TODO
    1) Get the queue working for IO.
@@ -167,21 +192,23 @@ static void vnc_framebuffer_update(VncState *vs, int x, int y, int w, int h,
 
 static void vnc_dpy_resize(DisplayState *ds, int w, int h)
 {
+    int size_changed;
     VncState *vs = ds->opaque;
 
     ds->data = realloc(ds->data, w * h * vs->depth);
     vs->old_data = realloc(vs->old_data, w * h * vs->depth);
-    vs->size = w * h * vs->depth;
+
     if (ds->data == NULL || vs->old_data == NULL) {
 	fprintf(stderr, "vnc: memory allocation failed\n");
 	exit(1);
     }
 
     ds->depth = vs->depth * 8;
+    size_changed = ds->width != w || ds->height != h;
     ds->width = w;
     ds->height = h;
     ds->linesize = w * vs->depth;
-    if (vs->csock != -1 && vs->has_resize) {
+    if (vs->csock != -1 && vs->has_resize && size_changed) {
 	vnc_write_u8(vs, 0);  /* msg id */
 	vnc_write_u8(vs, 0);
 	vnc_write_u16(vs, 1); /* number of rects */
@@ -624,7 +651,7 @@ static void vnc_write_u32(VncState *vs, uint32_t value)
 
 static void vnc_write_u16(VncState *vs, uint16_t value)
 {
-    char buf[2];
+    uint8_t buf[2];
 
     buf[0] = (value >> 8) & 0xFF;
     buf[1] = value & 0xFF;
@@ -643,23 +670,23 @@ static void vnc_flush(VncState *vs)
 	vnc_client_write(vs);
 }
 
-static uint8_t read_u8(char *data, size_t offset)
+static uint8_t read_u8(uint8_t *data, size_t offset)
 {
     return data[offset];
 }
 
-static uint16_t read_u16(char *data, size_t offset)
+static uint16_t read_u16(uint8_t *data, size_t offset)
 {
     return ((data[offset] & 0xFF) << 8) | (data[offset + 1] & 0xFF);
 }
 
-static int32_t read_s32(char *data, size_t offset)
+static int32_t read_s32(uint8_t *data, size_t offset)
 {
     return (int32_t)((data[offset] << 24) | (data[offset + 1] << 16) |
 		     (data[offset + 2] << 8) | data[offset + 3]);
 }
 
-static uint32_t read_u32(char *data, size_t offset)
+static uint32_t read_u32(uint8_t *data, size_t offset)
 {
     return ((data[offset] << 24) | (data[offset + 1] << 16) |
 	    (data[offset + 2] << 8) | data[offset + 3]);
@@ -667,6 +694,19 @@ static uint32_t read_u32(char *data, size_t offset)
 
 static void client_cut_text(VncState *vs, size_t len, char *text)
 {
+}
+
+static void check_pointer_type_change(VncState *vs, int absolute)
+{
+    if (vs->has_pointer_type_change && vs->absolute != absolute) {
+	vnc_write_u8(vs, 0);
+	vnc_write_u8(vs, 0);
+	vnc_write_u16(vs, 1);
+	vnc_framebuffer_update(vs, absolute, 0,
+			       vs->ds->width, vs->ds->height, -257);
+	vnc_flush(vs);
+    }
+    vs->absolute = absolute;
 }
 
 static void pointer_event(VncState *vs, int button_mask, int x, int y)
@@ -684,20 +724,38 @@ static void pointer_event(VncState *vs, int button_mask, int x, int y)
 	dz = -1;
     if (button_mask & 0x10)
 	dz = 1;
-	    
-    if (kbd_mouse_is_absolute()) {
+
+    if (vs->absolute) {
 	kbd_mouse_event(x * 0x7FFF / vs->ds->width,
 			y * 0x7FFF / vs->ds->height,
 			dz, buttons);
+    } else if (vs->has_pointer_type_change) {
+	x -= 0x7FFF;
+	y -= 0x7FFF;
+
+	kbd_mouse_event(x, y, dz, buttons);
     } else {
-	static int last_x = -1;
-	static int last_y = -1;
+	if (vs->last_x != -1)
+	    kbd_mouse_event(x - vs->last_x,
+			    y - vs->last_y,
+			    dz, buttons);
+	vs->last_x = x;
+	vs->last_y = y;
+    }
 
-	if (last_x != -1)
-	    kbd_mouse_event(x - last_x, y - last_y, dz, buttons);
+    check_pointer_type_change(vs, kbd_mouse_is_absolute());
+}
 
-	last_x = x;
-	last_y = y;
+static void reset_keys(VncState *vs)
+{
+    int i;
+    for(i = 0; i < 256; i++) {
+        if (vs->modifiers_state[i]) {
+            if (i & 0x80)
+                kbd_put_keycode(0xe0);
+            kbd_put_keycode(i | 0x80);
+            vs->modifiers_state[i] = 0;
+        }
     }
 }
 
@@ -706,13 +764,81 @@ static void do_key_event(VncState *vs, int down, uint32_t sym)
     int keycode;
 
     keycode = keysym2scancode(vs->kbd_layout, sym & 0xFFFF);
+    
+    /* QEMU console switch */
+    switch(keycode) {
+    case 0x2a:                          /* Left Shift */
+    case 0x36:                          /* Right Shift */
+    case 0x1d:                          /* Left CTRL */
+    case 0x9d:                          /* Right CTRL */
+    case 0x38:                          /* Left ALT */
+    case 0xb8:                          /* Right ALT */
+        if (down)
+            vs->modifiers_state[keycode] = 1;
+        else
+            vs->modifiers_state[keycode] = 0;
+        break;
+    case 0x02 ... 0x0a: /* '1' to '9' keys */ 
+        if (down && vs->modifiers_state[0x1d] && vs->modifiers_state[0x38]) {
+            /* Reset the modifiers sent to the current console */
+            reset_keys(vs);
+            console_select(keycode - 0x02);
+            return;
+        }
+        break;
+    }
 
-    if (keycode & 0x80)
-	kbd_put_keycode(0xe0);
-    if (down)
-	kbd_put_keycode(keycode & 0x7f);
-    else
-	kbd_put_keycode(keycode | 0x80);
+    if (is_graphic_console()) {
+        if (keycode & 0x80)
+            kbd_put_keycode(0xe0);
+        if (down)
+            kbd_put_keycode(keycode & 0x7f);
+        else
+            kbd_put_keycode(keycode | 0x80);
+    } else {
+        /* QEMU console emulation */
+        if (down) {
+            switch (keycode) {
+            case 0x2a:                          /* Left Shift */
+            case 0x36:                          /* Right Shift */
+            case 0x1d:                          /* Left CTRL */
+            case 0x9d:                          /* Right CTRL */
+            case 0x38:                          /* Left ALT */
+            case 0xb8:                          /* Right ALT */
+                break;
+            case 0xc8:
+                kbd_put_keysym(QEMU_KEY_UP);
+                break;
+            case 0xd0:
+                kbd_put_keysym(QEMU_KEY_DOWN);
+                break;
+            case 0xcb:
+                kbd_put_keysym(QEMU_KEY_LEFT);
+                break;
+            case 0xcd:
+                kbd_put_keysym(QEMU_KEY_RIGHT);
+                break;
+            case 0xd3:
+                kbd_put_keysym(QEMU_KEY_DELETE);
+                break;
+            case 0xc7:
+                kbd_put_keysym(QEMU_KEY_HOME);
+                break;
+            case 0xcf:
+                kbd_put_keysym(QEMU_KEY_END);
+                break;
+            case 0xc9:
+                kbd_put_keysym(QEMU_KEY_PAGEUP);
+                break;
+            case 0xd1:
+                kbd_put_keysym(QEMU_KEY_PAGEDOWN);
+                break;
+            default:
+                kbd_put_keysym(sym);
+                break;
+            }
+        }
+    }
 }
 
 static void key_event(VncState *vs, int down, uint32_t sym)
@@ -734,15 +860,6 @@ static void framebuffer_update_request(VncState *vs, int incremental,
 	for (i = 0; i < h; i++) {
             vnc_set_bits(vs->dirty_row[y_position + i], 
                          (vs->ds->width / 16), VNC_DIRTY_WORDS);
-            if (old_row + vs->ds->width*vs->depth > vs->old_data + vs->size) {
-                if (0) /* FIXME: */
-                printf("vnc: BUG: %s: x=%d y=%d w=%d h=%d i=%d: "
-                       "old_row(%p) + w*d(0x%x) > old_data(%p) + size(0x%x)\n",
-                       __FUNCTION__, x_position, y_position, w, h, i,
-                       old_row,vs->ds->width * vs->depth, 
-                       vs->old_data, vs->size);
-                break;
-            }
 	    memset(old_row, 42, vs->ds->width * vs->depth);
 	    old_row += vs->ds->linesize;
 	}
@@ -755,6 +872,8 @@ static void set_encodings(VncState *vs, int32_t *encodings, size_t n_encodings)
 
     vs->has_hextile = 0;
     vs->has_resize = 0;
+    vs->has_pointer_type_change = 0;
+    vs->absolute = -1;
     vs->ds->dpy_copy = NULL;
 
     for (i = n_encodings - 1; i >= 0; i--) {
@@ -771,10 +890,15 @@ static void set_encodings(VncState *vs, int32_t *encodings, size_t n_encodings)
 	case -223: /* DesktopResize */
 	    vs->has_resize = 1;
 	    break;
+	case -257:
+	    vs->has_pointer_type_change = 1;
+	    break;
 	default:
 	    break;
 	}
     }
+
+    check_pointer_type_change(vs, kbd_mouse_is_absolute());
 }
 
 static int compute_nbits(unsigned int val)
@@ -1027,10 +1151,18 @@ static void vnc_listen_read(void *opaque)
     }
 }
 
-void vnc_display_init(DisplayState *ds, int display)
+extern int parse_host_port(struct sockaddr_in *saddr, const char *str);
+
+void vnc_display_init(DisplayState *ds, const char *arg)
 {
-    struct sockaddr_in addr;
+    struct sockaddr *addr;
+    struct sockaddr_in iaddr;
+#ifndef _WIN32
+    struct sockaddr_un uaddr;
+#endif
     int reuse_addr, ret;
+    socklen_t addrlen;
+    const char *p;
     VncState *vs;
 
     vs = qemu_mallocz(sizeof(VncState));
@@ -1038,12 +1170,14 @@ void vnc_display_init(DisplayState *ds, int display)
 	exit(1);
 
     ds->opaque = vs;
+    vnc_state = vs;
+    vs->display = arg;
 
     vs->lsock = -1;
     vs->csock = -1;
     vs->depth = 4;
-
-    vs->size = 0;
+    vs->last_x = -1;
+    vs->last_y = -1;
 
     vs->ds = ds;
 
@@ -1054,25 +1188,60 @@ void vnc_display_init(DisplayState *ds, int display)
     if (!vs->kbd_layout)
 	exit(1);
 
-    vs->lsock = socket(PF_INET, SOCK_STREAM, 0);
-    if (vs->lsock == -1) {
-	fprintf(stderr, "Could not create socket\n");
-	exit(1);
+    vs->ds->data = NULL;
+    vs->ds->dpy_update = vnc_dpy_update;
+    vs->ds->dpy_resize = vnc_dpy_resize;
+    vs->ds->dpy_refresh = vnc_dpy_refresh;
+
+    memset(vs->dirty_row, 0xFF, sizeof(vs->dirty_row));
+
+    vnc_dpy_resize(vs->ds, 640, 400);
+
+#ifndef _WIN32
+    if (strstart(arg, "unix:", &p)) {
+	addr = (struct sockaddr *)&uaddr;
+	addrlen = sizeof(uaddr);
+
+	vs->lsock = socket(PF_UNIX, SOCK_STREAM, 0);
+	if (vs->lsock == -1) {
+	    fprintf(stderr, "Could not create socket\n");
+	    exit(1);
+	}
+
+	uaddr.sun_family = AF_UNIX;
+	memset(uaddr.sun_path, 0, 108);
+	snprintf(uaddr.sun_path, 108, "%s", p);
+
+	unlink(uaddr.sun_path);
+    } else
+#endif
+    {
+	addr = (struct sockaddr *)&iaddr;
+	addrlen = sizeof(iaddr);
+
+	vs->lsock = socket(PF_INET, SOCK_STREAM, 0);
+	if (vs->lsock == -1) {
+	    fprintf(stderr, "Could not create socket\n");
+	    exit(1);
+	}
+
+	if (parse_host_port(&iaddr, arg) < 0) {
+	    fprintf(stderr, "Could not parse VNC address\n");
+	    exit(1);
+	}
+	    
+	iaddr.sin_port = htons(ntohs(iaddr.sin_port) + 5900);
+
+	reuse_addr = 1;
+	ret = setsockopt(vs->lsock, SOL_SOCKET, SO_REUSEADDR,
+			 (const char *)&reuse_addr, sizeof(reuse_addr));
+	if (ret == -1) {
+	    fprintf(stderr, "setsockopt() failed\n");
+	    exit(1);
+	}
     }
 
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(5900 + display);
-    memset(&addr.sin_addr, 0, sizeof(addr.sin_addr));
-
-    reuse_addr = 1;
-    ret = setsockopt(vs->lsock, SOL_SOCKET, SO_REUSEADDR,
-		     (const char *)&reuse_addr, sizeof(reuse_addr));
-    if (ret == -1) {
-	fprintf(stderr, "setsockopt() failed\n");
-	exit(1);
-    }
-
-    if (bind(vs->lsock, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
+    if (bind(vs->lsock, addr, addrlen) == -1) {
 	fprintf(stderr, "bind() failed\n");
 	exit(1);
     }
@@ -1086,13 +1255,4 @@ void vnc_display_init(DisplayState *ds, int display)
     if (ret == -1) {
 	exit(1);
     }
-
-    vs->ds->data = NULL;
-    vs->ds->dpy_update = vnc_dpy_update;
-    vs->ds->dpy_resize = vnc_dpy_resize;
-    vs->ds->dpy_refresh = vnc_dpy_refresh;
-
-    memset(vs->dirty_row, 0xFF, sizeof(vs->dirty_row));
-
-    vnc_dpy_resize(vs->ds, 640, 400);
 }

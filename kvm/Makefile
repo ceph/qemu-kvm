@@ -28,7 +28,8 @@ install-rpm:
 	mkdir -p $(DESTDIR)/$(initdir)
 	mkdir -p $(DESTDIR)/$(utilsdir)
 	mkdir -p $(DESTDIR)/etc/udev/rules.d
-	cp qemu/x86_64-softmmu/qemu-system-x86_64 $(DESTDIR)/$(bin)
+	make -C qemu DESTDIR=$(DESTDIR)/ install
+	ln -sf /usr/kvm/bin/qemu-system-x86_64 $(DESTDIR)/$(bin)
 	cp scripts/kvm $(DESTDIR)/$(initdir)/kvm
 	cp scripts/qemu-ifup $(DESTDIR)/$(confdir)/qemu-ifup
 	install -t $(DESTDIR)/etc/udev/rules.d scripts/*kvm*.rules
