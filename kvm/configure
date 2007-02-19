@@ -1,6 +1,6 @@
 #!/bin/bash
 
-prefix=/usr/kvm
+prefix=/usr/local
 kerneldir=/lib/modules/$(uname -r)/build
 want_module=1
 qemu_cc=$(ls /usr/bin/gcc3* /usr/bin/gcc-3* 2>/dev/null | tail -n1)
