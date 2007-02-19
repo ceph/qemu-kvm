@@ -1900,12 +1900,6 @@ again:
 
 	asm ("mov %0, %%ds; mov %0, %%es" : : "r"(__USER_DS));
 
-	/*
-	 * Profile KVM exit RIPs:
-	 */
-	if (unlikely(prof_on == KVM_PROFILING))
-		profile_hit(KVM_PROFILING, (void *)vmcs_readl(GUEST_RIP));
-
 	kvm_run->exit_type = 0;
 	if (fail) {
 		kvm_run->exit_type = KVM_EXIT_TYPE_FAIL_ENTRY;
@@ -1928,6 +1922,12 @@ again:
 
 			reload_tss();
 		}
+		/*
+		 * Profile KVM exit RIPs:
+		 */
+		if (unlikely(prof_on == KVM_PROFILING))
+			profile_hit(KVM_PROFILING, (void *)vmcs_readl(GUEST_RIP));
+
 		vcpu->launched = 1;
 		kvm_run->exit_type = KVM_EXIT_TYPE_VM_EXIT;
 		r = kvm_handle_exit(kvm_run, vcpu);
