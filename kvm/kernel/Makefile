@@ -7,8 +7,16 @@ INSTALLDIR = $(patsubst %/build,%/extra,$(KERNELDIR))
 
 rpmrelease = devel
 
+LINUX = ../linux-2.6
+
 all::
 	$(MAKE) -C $(KERNELDIR) M=`pwd` "$$@"
+
+sync:
+	cp -p "$(LINUX)"/drivers/kvm/*.[ch] .
+	cp -p "$(LINUX)"/include/linux/kvm.h \
+	       "$(LINUX)"/include/linux/kvm_para.h \
+			include/linux
 
 install:
 	mkdir -p $(DESTDIR)/$(INSTALLDIR)
