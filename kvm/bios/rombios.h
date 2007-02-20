@@ -55,4 +55,5 @@
 
 #define ACPI_DATA_SIZE    0x00010000L
 #define PM_IO_BASE        0xb000
+#define SMB_IO_BASE       0xb100
 #define CPU_COUNT_ADDR    0xf000
