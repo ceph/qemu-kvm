@@ -6380,6 +6380,7 @@ void help(void)
            "\n"
            "Debug/Expert options:\n"
            "-monitor dev    redirect the monitor to char device 'dev'\n"
+           "-vmchannel di:DI,dev  redirect the hypercall device with device id DI, to char device 'dev'\n"
            "-serial dev     redirect the serial port to char device 'dev'\n"
            "-parallel dev   redirect the parallel port to char device 'dev'\n"
            "-pidfile file   Write PID to 'file'\n"
