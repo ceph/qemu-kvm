@@ -460,7 +460,10 @@ static MigrationState *migration_init_tcp(int detach, const char *host)
 	return NULL;
     }
 
+again:
     if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
+        if (errno == EINTR)
+            goto again;
         term_printf("connect() failed %s\n", strerror(errno));
 	close(fd);
 	return NULL;
