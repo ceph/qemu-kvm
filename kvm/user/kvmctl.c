@@ -514,12 +514,20 @@ static int handle_cpuid(kvm_context_t kvm, struct kvm_run *run)
 {
 	struct kvm_regs regs;
 	uint32_t orig_eax;
+	uint64_t rax, rbx, rcx, rdx;
 	int r;
 
 	kvm_get_regs(kvm, run->vcpu, &regs);
 	orig_eax = regs.rax;
-	r = kvm->callbacks->cpuid(kvm->opaque, 
-			      &regs.rax, &regs.rbx, &regs.rcx, &regs.rdx);
+	rax = regs.rax;
+	rbx = regs.rbx;
+	rcx = regs.rcx;
+	rdx = regs.rdx;
+	r = kvm->callbacks->cpuid(kvm->opaque, &rax, &rbx, &rcx, &rdx);
+	regs.rax = rax;
+	regs.rbx = rbx;
+	regs.rcx = rcx;
+	regs.rdx = rdx;
 	if (orig_eax == 1)
 		regs.rdx &= ~(1ull << 12); /* disable mtrr support */
 	kvm_set_regs(kvm, run->vcpu, &regs);
