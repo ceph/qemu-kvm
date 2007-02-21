@@ -24,7 +24,7 @@
 #include <sys/ioctl.h>
 #include "kvmctl.h"
 
-#define EXPECTED_KVM_API_VERSION 3
+#define EXPECTED_KVM_API_VERSION 4
 
 #if EXPECTED_KVM_API_VERSION != KVM_API_VERSION
 #error libkvm: userspace and kernel version mismatch
@@ -40,6 +40,8 @@
 struct kvm_context {
 	/// Filedescriptor to /dev/kvm
 	int fd;
+	int vm_fd;
+	int vcpu_fd[1];
 	/// Callbacks that KVM uses to emulate various unvirtualizable functionality
 	struct kvm_callbacks *callbacks;
 	void *opaque;
@@ -68,9 +70,8 @@ static int translate(kvm_context_t kvm, int vcpu, struct translation_cache *tr,
 		int r;
 
 		kvm_tr.linear_address = page;
-		kvm_tr.vcpu = vcpu;
 		
-		r = ioctl(kvm->fd, KVM_TRANSLATE, &kvm_tr);
+		r = ioctl(kvm->vcpu_fd[vcpu], KVM_TRANSLATE, &kvm_tr);
 		if (r == -1)
 			return -errno;
 
@@ -111,6 +112,7 @@ kvm_context_t kvm_init(struct kvm_callbacks *callbacks,
 	}
 	kvm = malloc(sizeof(*kvm));
 	kvm->fd = fd;
+	kvm->vm_fd = -1;
 	kvm->callbacks = callbacks;
 	kvm->opaque = opaque;
 	return kvm;
@@ -121,6 +123,10 @@ kvm_context_t kvm_init(struct kvm_callbacks *callbacks,
 
 void kvm_finalize(kvm_context_t kvm)
 {
+    	if (kvm->vcpu_fd[0] != -1)
+		close(kvm->vcpu_fd[0]);
+    	if (kvm->vm_fd != -1)
+		close(kvm->vm_fd);
 	close(kvm->fd);
 	free(kvm);
 }
@@ -141,6 +147,15 @@ int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem)
 		.memory_size = memory < exmem ? 0 : memory - exmem,
 		.guest_phys_addr = exmem,
 	};
+
+	kvm->vcpu_fd[0] = -1;
+
+	fd = ioctl(fd, KVM_CREATE_VM, 0);
+	if (fd == -1) {
+		fprintf(stderr, "kvm_create_vm: %m\n");
+		return -1;
+	}
+	kvm->vm_fd = fd;
 
 	/* 640K should be enough. */
 	r = ioctl(fd, KVM_SET_MEMORY_REGION, &low_memory);
@@ -168,6 +183,7 @@ int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem)
 		fprintf(stderr, "kvm_create_vcpu: %m\n");
 		return -1;
 	}
+	kvm->vcpu_fd[0] = r;
 	return 0;
 }
 
@@ -176,7 +192,7 @@ void *kvm_create_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 {
 	void *ptr;
 	int r;
-	int fd = kvm->fd;
+	int fd = kvm->vm_fd;
 	int prot = PROT_READ;
 	struct kvm_memory_region memory = {
 		.slot = slot,
@@ -215,7 +231,7 @@ int kvm_get_dirty_pages(kvm_context_t kvm, int slot, void *buf)
 
 	log.dirty_bitmap = buf;
 
-	r = ioctl(kvm->fd, KVM_GET_DIRTY_LOG, &log);
+	r = ioctl(kvm->vm_fd, KVM_GET_DIRTY_LOG, &log);
 	if (r == -1)
 		return -errno;
 	return 0;
@@ -229,7 +245,7 @@ static int more_io(struct kvm_run *run, int first_time)
 		return run->io.count != 0;
 }
 
-static int handle_io(kvm_context_t kvm, struct kvm_run *run)
+static int handle_io(kvm_context_t kvm, struct kvm_run *run, int vcpu)
 {
 	uint16_t addr = run->io.port;
 	struct kvm_regs regs;
@@ -242,8 +258,7 @@ static int handle_io(kvm_context_t kvm, struct kvm_run *run)
 	translation_cache_init(&tr);
 
 	if (run->io.string || _in) {
-		regs.vcpu = run->vcpu;
-		r = ioctl(kvm->fd, KVM_GET_REGS, &regs);
+		r = ioctl(kvm->vcpu_fd[vcpu], KVM_GET_REGS, &regs);
 		if (r == -1)
 			return -errno;
 	}
@@ -259,7 +274,7 @@ static int handle_io(kvm_context_t kvm, struct kvm_run *run)
 			else
 				value_addr = &run->io.value;
 		} else {
-			r = translate(kvm, run->vcpu, &tr, run->io.address, 
+			r = translate(kvm, vcpu, &tr, run->io.address, 
 				      &value_addr);
 			if (r) {
 				fprintf(stderr, "failed translating I/O address %llx\n",
@@ -332,7 +347,7 @@ static int handle_io(kvm_context_t kvm, struct kvm_run *run)
 		first_time = 0;
 		if (r) {
 			int savedret = r;
-			r = ioctl(kvm->fd, KVM_SET_REGS, &regs);
+			r = ioctl(kvm->vcpu_fd[vcpu], KVM_SET_REGS, &regs);
 			if (r == -1)
 				return -errno;
 
@@ -341,7 +356,7 @@ static int handle_io(kvm_context_t kvm, struct kvm_run *run)
 	}
 
 	if (run->io.string || _in) {
-		r = ioctl(kvm->fd, KVM_SET_REGS, &regs);
+		r = ioctl(kvm->vcpu_fd[vcpu], KVM_SET_REGS, &regs);
 		if (r == -1)
 			return -errno;
 
@@ -351,33 +366,29 @@ static int handle_io(kvm_context_t kvm, struct kvm_run *run)
 	return 0;
 }
 
-int handle_debug(kvm_context_t kvm, struct kvm_run *run)
+int handle_debug(kvm_context_t kvm, struct kvm_run *run, int vcpu)
 {
-	return kvm->callbacks->debug(kvm->opaque, run->vcpu);
+	return kvm->callbacks->debug(kvm->opaque, vcpu);
 }
 
 int kvm_get_regs(kvm_context_t kvm, int vcpu, struct kvm_regs *regs)
 {
-    regs->vcpu = vcpu;
-    return ioctl(kvm->fd, KVM_GET_REGS, regs);
+    return ioctl(kvm->vcpu_fd[vcpu], KVM_GET_REGS, regs);
 }
 
 int kvm_set_regs(kvm_context_t kvm, int vcpu, struct kvm_regs *regs)
 {
-    regs->vcpu = vcpu;
-    return ioctl(kvm->fd, KVM_SET_REGS, regs);
+    return ioctl(kvm->vcpu_fd[vcpu], KVM_SET_REGS, regs);
 }
 
 int kvm_get_sregs(kvm_context_t kvm, int vcpu, struct kvm_sregs *sregs)
 {
-    sregs->vcpu = vcpu;
-    return ioctl(kvm->fd, KVM_GET_SREGS, sregs);
+    return ioctl(kvm->vcpu_fd[vcpu], KVM_GET_SREGS, sregs);
 }
 
 int kvm_set_sregs(kvm_context_t kvm, int vcpu, struct kvm_sregs *sregs)
 {
-    sregs->vcpu = vcpu;
-    return ioctl(kvm->fd, KVM_SET_SREGS, sregs);
+    return ioctl(kvm->vcpu_fd[vcpu], KVM_SET_SREGS, sregs);
 }
 
 /*
@@ -418,10 +429,9 @@ int kvm_get_msrs(kvm_context_t kvm, int vcpu, struct kvm_msr_entry *msrs,
 	errno = ENOMEM;
 	return -1;
     }
-    kmsrs->vcpu = vcpu;
     kmsrs->nmsrs = n;
     memcpy(kmsrs->entries, msrs, n * sizeof *msrs);
-    r = ioctl(kvm->fd, KVM_GET_MSRS, kmsrs);
+    r = ioctl(kvm->vcpu_fd[vcpu], KVM_GET_MSRS, kmsrs);
     e = errno;
     memcpy(msrs, kmsrs->entries, n * sizeof *msrs);
     free(kmsrs);
@@ -439,10 +449,9 @@ int kvm_set_msrs(kvm_context_t kvm, int vcpu, struct kvm_msr_entry *msrs,
 	errno = ENOMEM;
 	return -1;
     }
-    kmsrs->vcpu = vcpu;
     kmsrs->nmsrs = n;
     memcpy(kmsrs->entries, msrs, n * sizeof *msrs);
-    r = ioctl(kvm->fd, KVM_SET_MSRS, kmsrs);
+    r = ioctl(kvm->vcpu_fd[vcpu], KVM_SET_MSRS, kmsrs);
     e = errno;
     free(kmsrs);
     errno = e;
@@ -466,12 +475,11 @@ static void print_dt(FILE *file, const char *name, struct kvm_dtable *dt)
 
 void kvm_show_regs(kvm_context_t kvm, int vcpu)
 {
-	int fd = kvm->fd;
+	int fd = kvm->vcpu_fd[vcpu];
 	struct kvm_regs regs;
 	struct kvm_sregs sregs;
 	int r;
 
-	regs.vcpu = vcpu;
 	r = ioctl(fd, KVM_GET_REGS, &regs);
 	if (r == -1) {
 		perror("KVM_GET_REGS");
@@ -488,7 +496,6 @@ void kvm_show_regs(kvm_context_t kvm, int vcpu)
 		regs.r8,  regs.r9,  regs.r10, regs.r11,
 		regs.r12, regs.r13, regs.r14, regs.r15,
 		regs.rip, regs.rflags);
-	sregs.vcpu = vcpu;
 	r = ioctl(fd, KVM_GET_SREGS, &sregs);
 	if (r == -1) {
 		perror("KVM_GET_SREGS");
@@ -510,14 +517,14 @@ void kvm_show_regs(kvm_context_t kvm, int vcpu)
 		sregs.efer);
 }
 
-static int handle_cpuid(kvm_context_t kvm, struct kvm_run *run)
+static int handle_cpuid(kvm_context_t kvm, struct kvm_run *run, int vcpu)
 {
 	struct kvm_regs regs;
 	uint32_t orig_eax;
 	uint64_t rax, rbx, rcx, rdx;
 	int r;
 
-	kvm_get_regs(kvm, run->vcpu, &regs);
+	kvm_get_regs(kvm, vcpu, &regs);
 	orig_eax = regs.rax;
 	rax = regs.rax;
 	rbx = regs.rbx;
@@ -530,7 +537,7 @@ static int handle_cpuid(kvm_context_t kvm, struct kvm_run *run)
 	regs.rdx = rdx;
 	if (orig_eax == 1)
 		regs.rdx &= ~(1ull << 12); /* disable mtrr support */
-	kvm_set_regs(kvm, run->vcpu, &regs);
+	kvm_set_regs(kvm, vcpu, &regs);
 	run->emulated = 1;
 	return r;
 }
@@ -581,14 +588,15 @@ static int handle_io_window(kvm_context_t kvm, struct kvm_run *kvm_run)
 	return kvm->callbacks->io_window(kvm->opaque);
 }
 
-static int handle_halt(kvm_context_t kvm, struct kvm_run *kvm_run)
+static int handle_halt(kvm_context_t kvm, struct kvm_run *kvm_run, int vcpu)
 {
-	return kvm->callbacks->halt(kvm->opaque, kvm_run->vcpu);
+	return kvm->callbacks->halt(kvm->opaque, vcpu);
 }
 
-static int handle_shutdown(kvm_context_t kvm, struct kvm_run *kvm_run)
+static int handle_shutdown(kvm_context_t kvm, struct kvm_run *kvm_run,
+			   int vcpu)
 {
-	return kvm->callbacks->shutdown(kvm->opaque, kvm_run->vcpu);
+	return kvm->callbacks->shutdown(kvm->opaque, vcpu);
 }
 
 int try_push_interrupts(kvm_context_t kvm)
@@ -609,9 +617,8 @@ static void pre_kvm_run(kvm_context_t kvm, struct kvm_run *kvm_run)
 int kvm_run(kvm_context_t kvm, int vcpu)
 {
 	int r;
-	int fd = kvm->fd;
+	int fd = kvm->vcpu_fd[vcpu];
 	struct kvm_run kvm_run = {
-		.vcpu = vcpu,
 		.emulated = 0,
 		.mmio_completed = 0,
 	};
@@ -655,24 +662,24 @@ again:
 			abort();
 			break;
 		case KVM_EXIT_IO:
-			r = handle_io(kvm, &kvm_run);
+			r = handle_io(kvm, &kvm_run, vcpu);
 			break;
 		case KVM_EXIT_CPUID:
-			r = handle_cpuid(kvm, &kvm_run);
+			r = handle_cpuid(kvm, &kvm_run, vcpu);
 			break;
 		case KVM_EXIT_DEBUG:
-			r = handle_debug(kvm, &kvm_run);
+			r = handle_debug(kvm, &kvm_run, vcpu);
 			break;
 		case KVM_EXIT_MMIO:
 			r = handle_mmio(kvm, &kvm_run);
 			break;
 		case KVM_EXIT_HLT:
-			r = handle_halt(kvm, &kvm_run);
+			r = handle_halt(kvm, &kvm_run, vcpu);
 			break;
 		case KVM_EXIT_IRQ_WINDOW_OPEN:
 			break;
 		case KVM_EXIT_SHUTDOWN:
-			r = handle_shutdown(kvm, &kvm_run);
+			r = handle_shutdown(kvm, &kvm_run, vcpu);
 			break;
 		default:
 			fprintf(stderr, "unhandled vm exit: 0x%x\n", kvm_run.exit_reason);
@@ -691,14 +698,11 @@ int kvm_inject_irq(kvm_context_t kvm, int vcpu, unsigned irq)
 {
 	struct kvm_interrupt intr;
 
-	intr.vcpu = vcpu;
 	intr.irq = irq;
-	return ioctl(kvm->fd, KVM_INTERRUPT, &intr);
+	return ioctl(kvm->vcpu_fd[vcpu], KVM_INTERRUPT, &intr);
 }
 
 int kvm_guest_debug(kvm_context_t kvm, int vcpu, struct kvm_debug_guest *dbg)
 {
-	dbg->vcpu = vcpu;
-
-	return ioctl(kvm->fd, KVM_DEBUG_GUEST, dbg);
+	return ioctl(kvm->vcpu_fd[vcpu], KVM_DEBUG_GUEST, dbg);
 }
