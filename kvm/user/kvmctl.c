@@ -21,6 +21,7 @@
 #include <sys/mman.h>
 #include <string.h>
 #include <errno.h>
+#include <sys/ioctl.h>
 #include "kvmctl.h"
 
 #define EXPECTED_KVM_API_VERSION 3
@@ -217,6 +218,7 @@ int kvm_get_dirty_pages(kvm_context_t kvm, int slot, void *buf)
 	r = ioctl(kvm->fd, KVM_GET_DIRTY_LOG, &log);
 	if (r == -1)
 		return -errno;
+	return 0;
 }
 
 static int more_io(struct kvm_run *run, int first_time)
@@ -260,7 +262,7 @@ static int handle_io(kvm_context_t kvm, struct kvm_run *run)
 			r = translate(kvm, run->vcpu, &tr, run->io.address, 
 				      &value_addr);
 			if (r) {
-				fprintf(stderr, "failed translating I/O address %x\n",
+				fprintf(stderr, "failed translating I/O address %llx\n",
 					run->io.address);
 				return r;
 			}
@@ -450,7 +452,7 @@ int kvm_set_msrs(kvm_context_t kvm, int vcpu, struct kvm_msr_entry *msrs,
 static void print_seg(FILE *file, const char *name, struct kvm_segment *seg)
 {
     	fprintf(stderr,
-		"%s %04x (%08x/%08x p %d dpl %d db %d s %d type %x l %d"
+		"%s %04x (%08llx/%08x p %d dpl %d db %d s %d type %x l %d"
 		" g %d avl %d)\n",
 		name, seg->selector, seg->base, seg->limit, seg->present,
 		seg->dpl, seg->db, seg->s, seg->type, seg->l, seg->g,
