@@ -94,7 +94,7 @@ target_cpu() {
 
 cat <<EOF > config.mak
 PREFIX=$prefix
-KERNELDIR="$kerneldir"
+KERNELDIR=$kerneldir
 WANT_MODULE=$want_module
 EOF
 
