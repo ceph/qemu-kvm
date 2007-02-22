@@ -1428,9 +1428,15 @@ void cpu_physical_memory_reset_dirty(ram_addr_t start, ram_addr_t end,
 #endif
 }
 
-void cpu_physical_memory_set_dirty_tracking(int enable)
+int cpu_physical_memory_set_dirty_tracking(int enable)
 {
+    int r=0;
+
+#ifdef USE_KVM
+    r = kvm_physical_memory_set_dirty_tracking(enable);
+#endif
     in_migration = enable;
+    return r;
 }
 
 int cpu_physical_memory_get_dirty_tracking(void)
