@@ -19,6 +19,7 @@ sync:
 	       "$(LINUX)"/include/linux/kvm_para.h \
 			include/linux
 	sed -i 's/f_path\./f_/' kvm_main.c
+	sed -i 's/f_mnt/f_vfsmnt/' kvm_main.c
 	touch -r "$(LINUX)"/drivers/kvm/kvm_main.c kvm_main.c
 
 install:
