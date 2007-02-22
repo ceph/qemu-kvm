@@ -97,7 +97,7 @@ static void migrate_close(void *opaque)
 static void migrate_finish(MigrationState *s)
 {
     QEMUFile *f;
-    int ret;
+    int ret = 0;
     int *has_error = s->has_error;
 
     fcntl(s->fd, F_SETFL, 0);
