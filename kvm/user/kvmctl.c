@@ -32,6 +32,10 @@
 
 #define PAGE_SIZE 4096ul
 
+/* FIXME: share this number with kvm */
+/* FIXME: or dynamically alloc/realloc regions */
+#define KVM_MAX_NUM_MEM_REGIONS 4u
+
 /**
  * \brief The KVM context
  *
@@ -47,6 +51,10 @@ struct kvm_context {
 	void *opaque;
 	/// A pointer to the memory used as the physical memory for the guest
 	void *physical_memory;
+	/// is dirty pages logging enabled for all regions or not
+	int dirty_pages_log_all;
+	/// memory regions parameters
+	struct kvm_memory_region mem_regions[KVM_MAX_NUM_MEM_REGIONS];
 };
 
 struct translation_cache {
@@ -85,6 +93,88 @@ static int translate(kvm_context_t kvm, int vcpu, struct translation_cache *tr,
 	return 0;
 }
 
+/*
+ * memory regions parameters
+ */
+static void kvm_memory_region_save_params(kvm_context_t kvm, 
+					 struct kvm_memory_region *mem)
+{
+	if (!mem || (mem->slot >= KVM_MAX_NUM_MEM_REGIONS)) {
+		fprintf(stderr, "BUG: %s: invalid parameters\n", __FUNCTION__);
+		return;
+	}
+	kvm->mem_regions[mem->slot] = *mem;
+}
+
+static void kvm_memory_region_clear_params(kvm_context_t kvm, int regnum)
+{
+	if (regnum >= KVM_MAX_NUM_MEM_REGIONS) {
+		fprintf(stderr, "BUG: %s: invalid parameters\n", __FUNCTION__);
+		return;
+	}
+	kvm->mem_regions[regnum].memory_size = 0;
+}
+
+/* 
+ * dirty pages logging control 
+ */
+static int kvm_dirty_pages_log_change(kvm_context_t kvm, int regnum, __u32 flag)
+{
+	int r;
+	struct kvm_memory_region *mem;
+
+	if (regnum >= KVM_MAX_NUM_MEM_REGIONS) {
+		fprintf(stderr, "BUG: %s: invalid parameters\n", __FUNCTION__);
+		return 1;
+	}
+	mem = &kvm->mem_regions[regnum];
+	if (mem->memory_size == 0) /* not used */
+		return 0;
+	if (mem->flags & KVM_MEM_LOG_DIRTY_PAGES) /* log already enabled */
+		return 0;
+	mem->flags |= flag;  /* temporary turn on flag */
+	r = ioctl(kvm->vm_fd, KVM_SET_MEMORY_REGION, mem);
+	mem->flags &= ~flag; /* back to previous value */
+	if (r == -1) {
+		fprintf(stderr, "%s: %m\n", __FUNCTION__);
+	}
+	return r;
+}
+
+static int kvm_dirty_pages_log_change_all(kvm_context_t kvm, __u32 flag)
+{
+	int i, r;
+
+	for (i=r=0; i<KVM_MAX_NUM_MEM_REGIONS && r==0; i++) {
+		r = kvm_dirty_pages_log_change(kvm, i, flag);
+	}
+	return r;
+}
+
+/**
+ * Enable dirty page logging for all memory regions
+ */
+int kvm_dirty_pages_log_enable_all(kvm_context_t kvm)
+{
+	if (kvm->dirty_pages_log_all)
+		return 0;
+	kvm->dirty_pages_log_all = 1;
+	return kvm_dirty_pages_log_change_all(kvm, KVM_MEM_LOG_DIRTY_PAGES);
+}
+
+/**
+ * Enable dirty page logging only for memory regions that were created with
+ *     dirty logging enabled (disable for all other memory regions).
+ */
+int kvm_dirty_pages_log_reset(kvm_context_t kvm)
+{
+	if (!kvm->dirty_pages_log_all)
+		return 0;
+	kvm->dirty_pages_log_all = 0;
+	return kvm_dirty_pages_log_change_all(kvm, 0);
+}
+
+
 kvm_context_t kvm_init(struct kvm_callbacks *callbacks,
 		       void *opaque)
 {
@@ -115,6 +205,9 @@ kvm_context_t kvm_init(struct kvm_callbacks *callbacks,
 	kvm->vm_fd = -1;
 	kvm->callbacks = callbacks;
 	kvm->opaque = opaque;
+	kvm->dirty_pages_log_all = 0;
+	memset(&kvm->mem_regions, 0, sizeof(kvm->mem_regions));
+
 	return kvm;
  out_close:
 	close(fd);
@@ -171,6 +264,9 @@ int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem)
 		}
 	}
 
+	kvm_memory_region_save_params(kvm, &low_memory);
+	kvm_memory_region_save_params(kvm, &extended_memory);
+
 	*vm_mem = mmap(0, memory, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 	if (*vm_mem == MAP_FAILED) {
 		fprintf(stderr, "mmap: %m\n");
@@ -205,6 +301,8 @@ void *kvm_create_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 	if (r == -1)
 	    return 0;
 
+	kvm_memory_region_save_params(kvm, &memory);
+
 	if (writable)
 		prot |= PROT_WRITE;
 
@@ -217,6 +315,9 @@ void *kvm_create_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 void kvm_destroy_phys_mem(kvm_context_t kvm, unsigned long phys_start, 
 			  unsigned long len)
 {
+	//for each memory region in (phys_start, phys_start+len) do
+	//    kvm_memory_region_clear_params(kvm, region);
+	kvm_memory_region_clear_params(kvm, 0); /* avoid compiler warning */
 	printf("kvm_destroy_phys_mem: implement me\n");
 	exit(1);
 }

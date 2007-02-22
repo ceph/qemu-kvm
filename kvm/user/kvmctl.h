@@ -250,4 +250,20 @@ void kvm_destroy_phys_mem(kvm_context_t, unsigned long phys_start,
 			  unsigned long len);
 int kvm_get_dirty_pages(kvm_context_t, int slot, void *buf);
 
+/*!
+ * \brief Enable dirty-pages-logging for all memory regions
+ *
+ * \param kvm Pointer to the current kvm_context
+ */
+int kvm_dirty_pages_log_enable_all(kvm_context_t kvm);
+
+/*!
+ * \brief Disable dirty-page-logging for some memory regions
+ *
+ * Disable dirty-pages-logging for those memory regions that were
+ * created with dirty-page-logging disabled.
+ *
+ * \param kvm Pointer to the current kvm_context
+ */
+int kvm_dirty_pages_log_reset(kvm_context_t kvm);
 #endif
