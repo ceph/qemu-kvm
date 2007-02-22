@@ -18,6 +18,8 @@ sync:
 	cp -p "$(LINUX)"/include/linux/kvm.h \
 	       "$(LINUX)"/include/linux/kvm_para.h \
 			include/linux
+	sed -i 's/f_path\./f_/' kvm_main.c
+	touch -r "$(LINUX)"/drivers/kvm/kvm_main.c kvm_main.c
 
 install:
 	mkdir -p $(DESTDIR)/$(INSTALLDIR)
