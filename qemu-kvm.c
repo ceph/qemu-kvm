@@ -706,4 +706,88 @@ int kvm_update_debugger(CPUState *env)
 }
 
 
+/*
+ * dirty pages logging
+ */
+/* FIXME: use unsigned long pointer instead of unsigned char */
+unsigned char *kvm_dirty_bitmap = NULL;
+int kvm_physical_memory_set_dirty_tracking(int enable)
+{
+    int r = 0;
+
+    if (!kvm_allowed)
+        return 0;
+
+    if (enable) {
+        if (!kvm_dirty_bitmap) {
+            unsigned bitmap_size = BITMAP_SIZE(phys_ram_size);
+            kvm_dirty_bitmap = qemu_malloc(bitmap_size);
+            if (kvm_dirty_bitmap == NULL) {
+                perror("Failed to allocate dirty pages bitmap");
+                r=-1;
+            }
+            else {
+                r = kvm_dirty_pages_log_enable_all(kvm_context);
+            }
+        }
+    }
+    else {
+        if (kvm_dirty_bitmap) {
+            r = kvm_dirty_pages_log_reset(kvm_context);
+            qemu_free(kvm_dirty_bitmap);
+            kvm_dirty_bitmap = NULL;
+        }
+    }
+    return r;
+}
+
+/* get kvm's dirty pages bitmap and update qemu's */
+int kvm_get_dirty_pages_log_slot(int slot, 
+                                 unsigned char *bitmap,
+                                 unsigned int offset,
+                                 unsigned int len)
+{
+    int r;
+    unsigned int i, j, n=0;
+    unsigned char c;
+    unsigned page_number, addr, addr1;
+
+    memset(bitmap, 0, len);
+    r = kvm_get_dirty_pages(kvm_context, slot, bitmap);
+    if (r)
+        return r;
+
+    /* 
+     * bitmap-traveling is faster than memory-traveling (for addr...) 
+     * especially when most of the memory is not dirty.
+     */
+    for (i=0; i<len; i++) {
+        c = bitmap[i];
+        while (c>0) {
+            j = ffsl(c) - 1;
+            c &= ~(1u<<j);
+            page_number = i * 8 + j;
+            addr1 = page_number * TARGET_PAGE_SIZE;
+            addr  = offset + addr1;
+            cpu_physical_memory_set_dirty(addr);
+            n++;
+        }
+    }
+    return 0;
+}
+
+/* 
+ * get kvm's dirty pages bitmap and update qemu's
+ * we only care about physical ram, which resides in slots 0 and 3
+ */
+int kvm_update_dirty_pages_log(void)
+{
+    int r = 0, len;
+
+    len = BITMAP_SIZE(0xa0000);
+    r =      kvm_get_dirty_pages_log_slot(3, kvm_dirty_bitmap, 0      , len);
+    len = BITMAP_SIZE(phys_ram_size - 0xc0000);
+    r = r || kvm_get_dirty_pages_log_slot(0, kvm_dirty_bitmap, 0xc0000, len);
+    return r;
+}
 #endif
