@@ -24,6 +24,9 @@
 
 #include "vl.h"
 #include "qemu_socket.h"
+#ifdef USE_KVM
+#include "qemu-kvm.h"
+#endif
 
 #include <sys/wait.h>
 
@@ -181,6 +184,11 @@ static void migrate_write(void *opaque)
     if (migrate_write_buffer(s))
 	return;
 
+#ifdef USE_KVM
+    if (kvm_allowed && !*s->has_error)
+        *s->has_error = kvm_update_dirty_pages_log();
+#endif
+
     if (migrate_check_convergence(s) || *s->has_error) {
 	qemu_del_timer(s->timer);
 	qemu_free_timer(s->timer);
@@ -262,7 +270,10 @@ static int start_migration(MigrationState *s)
 	    cpu_physical_memory_set_dirty(addr);
     }
 
-    cpu_physical_memory_set_dirty_tracking(1);
+    if (cpu_physical_memory_set_dirty_tracking(1)) {
+        *s->has_error = 16;
+        return -1;
+    }
 
     s->addr = 0;
     s->iteration = 0;
@@ -273,6 +284,7 @@ static int start_migration(MigrationState *s)
 
     qemu_mod_timer(s->timer, qemu_get_clock(rt_clock));
     qemu_set_fd_handler2(s->fd, NULL, NULL, migrate_write, s);
+    return 0;
 }
 
 static MigrationState *migration_init_fd(int detach, int fd)
