@@ -14,6 +14,16 @@ pif=${pif:-eth${ifnum}}
 antispoof=${antispoof:-no}
 command=$1
 
+if [ -f /etc/sysconfig/network-scripts/network-functions ]; then
+    . /etc/sysconfig/network-scripts/network-functions
+fi
+
+#check for bonding link aggregation
+bond_int=$(awk < /etc/sysconfig/network-scripts/ifcfg-${pif} '/^MASTER=/ { print $BF }' | sed 's/MASTER=//')
+if [ ${bond_int}"0" != "0" ]; then
+	pif=${bond_int}
+fi
+
 if [ -f /etc/sysconfig/network-scripts/ifcfg-${pif} ]; then
     . /etc/sysconfig/network-scripts/ifcfg-${pif}
 fi
@@ -21,13 +31,28 @@ fi
 get_ip_info() {
     addr=`ip addr show dev $1 | egrep '^ *inet' | sed -e 's/ *inet //' -e 's/ .*//'`
     gateway=$(ip route list | awk '/^default / { print $3 }')
+    broadcast=$(/sbin/ip addr show dev $1 | grep inet | awk '/brd / { print $4 }')
 }
-    
+
+#When a bonding device link goes down, its slave interfaces
+#are getting detached so they should be re-added
+bond_link_up () {
+    dev=$1
+    is_bonding=$(echo ${dev} | awk '/^bond/ { print $NF }')
+    if [ ${is_bonding}"0" != "0" ]; then
+	for slave in `awk < /proc/net/bonding/bond0 '/Slave Interface: / {print $3 }'`; do
+		ifenslave $dev $slave
+	done
+    fi
+}
+
+
 do_ifup() {
      if [ ${addr} ] ; then
         ip addr flush $1 
-        ip addr add ${addr} dev $1 
-        ip link set dev $1 up 
+        bond_link_up $1
+        ip addr add ${addr} broadcast ${broadcast} dev $1 
+        ip link set dev $1 up
      fi
 }
 
@@ -52,15 +77,15 @@ create_switch () {
     ip link set ${switch} up >/dev/null 2>&1
 }
 
+
 add_to_switch () {
     local switch=$1
     local dev=$2
 
-    if [ -e "/sys/class/net/${switch}/brif/${dev}" ]; then
-	ip link set ${dev} up >/dev/null 2>&1 || true
-	return
+    if [ ! -e "/sys/class/net/${switch}/brif/${dev}" ]; then
+    	brctl addif ${switch} ${dev} >/dev/null 2>&1
     fi
-    brctl addif ${switch} ${dev} >/dev/null 2>&1
+
     ip link set ${dev} up >/dev/null 2>&1
 }
 
@@ -101,6 +126,7 @@ change_ips() {
     if [ $BOOTPROTO = "dhcp" ]; then
         ifdown ${src} >/dev/null 2>&1 || true
         ip link set ${src} up >/dev/null 2>&1
+        bond_link_up ${src}
         pkill dhclient >/dev/null 2>&1
 	for ((i=0;i<3;i++)); do
 	    pgrep dhclient >/dev/null 2>&1 || i=4	
@@ -109,8 +135,7 @@ change_ips() {
         dhclient ${dst} >/dev/null 2>&1
     else
         get_ip_info ${src}
-        ifdown ${src} >/dev/null 2>&1 || true
-        ip link set ${src} up >/dev/null 2>&1
+        ifconfig ${src} 0.0.0.0
         do_ifup ${dst}
         transfer_routes ${src} ${dst}
         ip route add default via ${gateway} dev ${dst}
