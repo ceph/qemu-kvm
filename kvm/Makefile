@@ -33,7 +33,6 @@ install-rpm:
 	cp scripts/kvm $(DESTDIR)/$(initdir)/kvm
 	cp scripts/qemu-ifup $(DESTDIR)/$(confdir)/qemu-ifup
 	install -t $(DESTDIR)/etc/udev/rules.d scripts/*kvm*.rules
-	cp kvm $(DESTDIR)/$(utilsdir)/kvm
 
 install:
 	$(kcmd)make -C kernel DESTDIR="$(DESTDIR)" install
@@ -43,16 +42,12 @@ install:
 tmpspec = .tmp.kvm.spec
 RPMDIR=$$(pwd)/RPMS
 
-rpm:	user qemu
+rpm:	srpm
 	mkdir -p $(RPMDIR)/$$(uname -i)
-	sed 's/^Release:.*/Release: $(rpmrelease)/' kvm.spec > $(tmpspec)
-	rpmbuild --define="kverrel $$(uname -r)" \
-		 --define="objdir $$(pwd)" \
+	rpmbuild --rebuild \
 		 --define="_rpmdir $(RPMDIR)" \
 		 --define="_topdir $$(pwd)" \
-		 --define="prebuilt 1" \
-		-bb $(tmpspec)
-	$(RM) $(tmpspec)
+		SRPMS/kvm-0.0-$(rpmrelease).src.rpm
 
 srpm:
 	mkdir -p SOURCES SRPMS
@@ -61,7 +56,7 @@ srpm:
 	tar czf SOURCES/user.tar.gz user
 	tar czf SOURCES/kernel.tar.gz kernel
 	tar czf SOURCES/scripts.tar.gz scripts
-	cp Makefile SOURCES
+	cp Makefile configure SOURCES
 	rpmbuild  --define="_topdir $$(pwd)" -bs $(tmpspec)
 	$(RM) $(tmpspec)
 

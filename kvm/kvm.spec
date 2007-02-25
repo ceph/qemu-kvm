@@ -30,6 +30,7 @@ Source1: user.tar.gz
 Source2: kernel.tar.gz
 Source3: scripts.tar.gz
 Source4: Makefile
+Source5: configure
 %endif
 
 %description
@@ -44,7 +45,7 @@ with hardware support for virtualization: Intel's VT and AMD's AMD-V.
 %setup -T -b 2 -n kernel -D
 %setup -T -b 3 -n scripts -D
 cd ..
-cp %{_sourcedir}/Makefile .
+cp %{_sourcedir}/Makefile %{_sourcedir}/configure .
 %endif
 
 %build
@@ -53,11 +54,17 @@ rm -rf %{buildroot}
 
 %if !%{_prebuilt}
 cd ..
+./configure --prefix=/usr/kvm
 make -C user
-(cd qemu;
-   ./configure --target-list=$(uname -i)-softmmu \
-	    --disable-kqemu --enable-kvm --prefix=/usr/kvm
-)
+#(cd qemu;
+#    ./co
+#   kpath="$(readlink -f ../kernel/include)"
+#   upath="$(readlink -f ../user)"
+#   ./configure --target-list=$(uname -i)-softmmu \
+#	    --extra-cflags="-I$kpath -I$upath" \
+#	    --extra-ldflags="-L$upath" \
+#	    --disable-kqemu --enable-kvm --prefix=/usr/kvm
+#)
 make -C qemu
 %endif
 
@@ -94,7 +101,6 @@ depmod %{kverrel}
 /usr/bin/kvm
 %{confdir}/qemu-ifup
 %{initdir}/kvm  
-%{utilsdir}/kvm
 /etc/udev/rules.d/*kvm*.rules
 /usr/kvm
 /usr/kvm/**
