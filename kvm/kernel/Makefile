@@ -14,8 +14,8 @@ all::
 	$(MAKE) -C $(KERNELDIR) M=`pwd` "$$@"
 
 sync:
-	cp -p "$(LINUX)"/drivers/kvm/*.[ch] .
-	cp -p "$(LINUX)"/include/linux/kvm.h \
+	rsync --exclude='*.mod.c' "$(LINUX)"/drivers/kvm/*.[ch] .
+	rsync "$(LINUX)"/include/linux/kvm.h \
 	       "$(LINUX)"/include/linux/kvm_para.h \
 			include/linux
 	sed -i 's/f_path\./f_/' kvm_main.c
