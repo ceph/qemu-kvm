@@ -101,3 +101,18 @@ static inline int smp_call_function_single1(int cpu, void (*func)(void *info),
 #endif
 
 #endif
+
+/*
+ * get_sb() callback changed.
+ */
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,16)
+
+static struct super_block *kvmfs_get_sb(struct file_system_type *fs_type,
+					int flags, const char *dev_name,
+					void *data)
+{
+	return get_sb_pseudo(fs_type, "kvm:", NULL, KVMFS_MAGIC);
+}
+
+#endif
+
