@@ -54,6 +54,12 @@ typedef struct MigrationState
 static uint32_t max_throttle = (32 << 20);
 static MigrationState *current_migration;
 
+//#define MIGRATION_VERIFY
+#ifdef MIGRATION_VERIFY
+static int save_verify_memory(QEMUFile *f, void *opaque);
+static int load_verify_memory(QEMUFile *f, void *opaque, int version_id);
+#endif /* MIGRATION_VERIFY */
+
 /* QEMUFile migration implementation */
 
 static void migrate_put_buffer(void *opaque, const uint8_t *buf, int64_t pos, int size)
@@ -111,6 +117,9 @@ static void migrate_finish(MigrationState *s)
         vm_stop(0);
         qemu_put_be32(f, 1);
         ret = qemu_live_savevm_state(f);
+#ifdef MIGRATION_VERIFY
+        save_verify_memory(f, NULL);
+#endif /* MIGRATION_VERIFY */
         qemu_fclose(f);
     }
     if (ret != 0 || *has_error) {
@@ -515,6 +524,9 @@ static int migrate_incoming_fd(int fd)
     qemu_aio_flush();
     vm_stop(0);
     ret = qemu_live_loadvm_state(f);
+#ifdef MIGRATION_VERIFY
+    if (ret==0) ret=load_verify_memory(f, NULL, 1);
+#endif /* MIGRATION_VERIFY */
     qemu_fclose(f);
 
     return ret;
@@ -710,3 +722,61 @@ void do_migrate_cancel(void)
     if (s)
 	*s->has_error = 20;
 }
+
+
+
+#ifdef MIGRATION_VERIFY
+unsigned int calc_page_checksum(target_ulong addr)
+{
+    unsigned int sum=0;
+    unsigned int *p = (unsigned int *)(phys_ram_base + addr);
+    unsigned int *q = p + (TARGET_PAGE_SIZE / sizeof(unsigned int));
+
+    for ( /*initialized already */ ; p<q ; p++)
+        sum += *p;
+    return sum;
+}
+
+
+static int save_verify_memory(QEMUFile *f, void *opaque)
+{
+    unsigned int addr;
+    unsigned int sum;
+
+    for (addr = 0; addr < phys_ram_size; addr += TARGET_PAGE_SIZE) {
+#ifdef USE_KVM
+        if (kvm_allowed && (addr>=0xa0000) && (addr<0xc0000)) /* do not access video-addresses */
+            continue;
+#endif
+        sum = calc_page_checksum(addr);
+        qemu_put_be32(f, addr);
+        qemu_put_be32(f, sum);
+    }
+    return 0;
+}
+
+static int load_verify_memory(QEMUFile *f, void *opaque, int version_id)
+{
+    unsigned int addr, raddr;
+    unsigned int sum, rsum;
+    int num_errors = 0;
+    
+    for (addr = 0; addr < phys_ram_size; addr += TARGET_PAGE_SIZE) {
+#ifdef USE_KVM
+        if (kvm_allowed && (addr>=0xa0000) && (addr<0xc0000)) /* do not access video-addresses */
+            continue;
+#endif
+        sum = calc_page_checksum(addr);
+        raddr = qemu_get_be32(f);
+        rsum  = qemu_get_be32(f);
+        if ((raddr != addr) || (rsum != sum)) {
+            term_printf("checksum mismatch: src:0x%x 0x%x , dst:0x%x 0x%x\n",
+                    raddr, rsum, addr, sum);
+            num_errors++;
+        }
+    }
+    printf("memory_verify: num_errors=%d\n", num_errors);
+    term_printf("memory_verify: num_errors=%d\n", num_errors);
+    return 0/* num_errors */;
+}
+#endif /* MIGRATION_VERIFY */
