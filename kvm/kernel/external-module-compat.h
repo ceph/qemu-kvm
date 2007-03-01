@@ -116,3 +116,7 @@ static struct super_block *kvmfs_get_sb(struct file_system_type *fs_type,
 
 #endif
 
+#include <linux/magic.h>
+#ifndef KVMFS_SUPER_MAGIC
+#define KVMFS_SUPER_MAGIC 0x19700426
+#endif
