@@ -10,7 +10,7 @@ BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}
 
 ExclusiveArch:  i386 x86_64
 
-Requires:	qemu kvm-kmod bridge-utils
+Requires:	kvm-kmod bridge-utils
 
 %define fedora_release %(rpm -q --qf '%%{version}' fedora-release)
 
