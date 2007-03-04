@@ -120,3 +120,8 @@ static struct super_block *kvmfs_get_sb(struct file_system_type *fs_type,
 #ifndef KVMFS_SUPER_MAGIC
 #define KVMFS_SUPER_MAGIC 0x19700426
 #endif
+
+#include <linux/miscdevice.h>
+#ifndef KVM_MINOR
+#define KVM_MINOR 232
+#endif
