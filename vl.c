@@ -991,6 +991,7 @@ static void host_alarm_handler(int host_signum)
 
 #define RTC_FREQ 1024
 
+static int use_rtc = 1;
 static int rtc_fd;
 
 static int start_rtc_timer(void)
@@ -1086,7 +1087,7 @@ static void init_timer_alarm(void)
            2.6 kernels */
         if (itv.it_interval.tv_usec > 1000 || 1) {
             /* try to use /dev/rtc to have a faster timer */
-            if (start_rtc_timer() < 0)
+            if (use_rtc && (start_rtc_timer() < 0))
                 goto use_itimer;
             /* disable itimer */
             itv.it_interval.tv_sec = 0;
@@ -6412,6 +6413,9 @@ void help(void)
 #ifndef _WIN32
 	   "-daemonize      daemonize QEMU after initializing\n"
 #endif
+#if defined(__linux__)
+           "-no-rtc         don't use /dev/rtc for timer alarm (do use gettimeofday)\n"
+#endif
 	   "-option-rom rom load a file, rom, into the option ROM space\n"
            "\n"
            "During emulation, the following keys are useful:\n"
@@ -6499,6 +6503,9 @@ enum {
     QEMU_OPTION_option_rom,
     QEMU_OPTION_semihosting,
     QEMU_OPTION_incoming,
+#if defined(__linux__)
+    QEMU_OPTION_no_rtc,
+#endif
 };
 
 typedef struct QEMUOption {
@@ -6589,6 +6596,9 @@ const QEMUOption qemu_options[] = {
     { "option-rom", HAS_ARG, QEMU_OPTION_option_rom },
 #if defined(TARGET_ARM)
     { "semihosting", 0, QEMU_OPTION_semihosting },
+#endif
+#if defined(__linux__)
+    { "no-rtc", 0, QEMU_OPTION_no_rtc },
 #endif
     { NULL },
 };
@@ -7293,6 +7303,11 @@ int main(int argc, char **argv)
             case QEMU_OPTION_semihosting:
                 semihosting_enabled = 1;
                 break;
+#if defined(__linux__)
+	    case QEMU_OPTION_no_rtc:
+		use_rtc = 0;
+		break;
+#endif
             }
         }
     }
