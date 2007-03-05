@@ -153,6 +153,7 @@ int graphic_height = 600;
 int graphic_depth = 15;
 int full_screen = 0;
 int no_quit = 0;
+int balloon_used = 0;
 CharDriverState *vmchannel_hds[MAX_VMCHANNEL_DEVICES];
 CharDriverState *serial_hds[MAX_SERIAL_PORTS];
 CharDriverState *parallel_hds[MAX_PARALLEL_PORTS];
@@ -6382,6 +6383,7 @@ void help(void)
            "Debug/Expert options:\n"
            "-monitor dev    redirect the monitor to char device 'dev'\n"
            "-vmchannel di:DI,dev  redirect the hypercall device with device id DI, to char device 'dev'\n"
+           "-balloon dev    redirect the balloon hypercall device to char device 'dev'\n"
            "-serial dev     redirect the serial port to char device 'dev'\n"
            "-parallel dev   redirect the parallel port to char device 'dev'\n"
            "-pidfile file   Write PID to 'file'\n"
@@ -6482,6 +6484,7 @@ enum {
     QEMU_OPTION_g,
     QEMU_OPTION_std_vga,
     QEMU_OPTION_monitor,
+    QEMU_OPTION_balloon,
     QEMU_OPTION_vmchannel,
     QEMU_OPTION_serial,
     QEMU_OPTION_parallel,
@@ -6572,6 +6575,7 @@ const QEMUOption qemu_options[] = {
     { "localtime", 0, QEMU_OPTION_localtime },
     { "std-vga", 0, QEMU_OPTION_std_vga },
     { "monitor", 1, QEMU_OPTION_monitor },
+    { "balloon", 1, QEMU_OPTION_balloon },
     { "vmchannel", 1, QEMU_OPTION_vmchannel },
     { "serial", 1, QEMU_OPTION_serial },
     { "parallel", 1, QEMU_OPTION_parallel },
@@ -7197,9 +7201,22 @@ int main(int argc, char **argv)
             case QEMU_OPTION_monitor:
                 pstrcpy(monitor_device, sizeof(monitor_device), optarg);
                 break;
+            case QEMU_OPTION_balloon:
+                if (vmchannel_device_index >= MAX_VMCHANNEL_DEVICES) {
+                    fprintf(stderr, "qemu: too many balloon/vmchannel devices\n");
+                    exit(1);
+                }
+                if (balloon_used) {
+                    fprintf(stderr, "qemu: only one balloon device can be used\n");
+                    exit(1);
+                }
+                sprintf(vmchannel_devices[vmchannel_device_index],"di:cdcd,%s", optarg);
+                vmchannel_device_index++;
+                balloon_used = 1;
+                break;
             case QEMU_OPTION_vmchannel:
                 if (vmchannel_device_index >= MAX_VMCHANNEL_DEVICES) {
-                    fprintf(stderr, "qemu: too many vmchannel devices\n");
+                    fprintf(stderr, "qemu: too many balloon/vmchannel devices\n");
                     exit(1);
                 }
                 pstrcpy(vmchannel_devices[vmchannel_device_index], 
