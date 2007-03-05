@@ -17,6 +17,7 @@ sync:
 	rsync --exclude='*.mod.c' "$(LINUX)"/drivers/kvm/*.[ch] .
 	rsync "$(LINUX)"/include/linux/kvm.h \
 	       "$(LINUX)"/include/linux/kvm_para.h \
+	       "$(LINUX)"/include/linux/magic.h \
 			include/linux
 	sed -i 's/f_path\./f_/' kvm_main.c
 	sed -i 's/f_mnt/f_vfsmnt/' kvm_main.c
