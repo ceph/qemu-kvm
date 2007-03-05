@@ -1087,7 +1087,7 @@ static void init_timer_alarm(void)
            2.6 kernels */
         if (itv.it_interval.tv_usec > 1000 || 1) {
             /* try to use /dev/rtc to have a faster timer */
-            if (use_rtc && (start_rtc_timer() < 0))
+            if (!use_rtc || (start_rtc_timer() < 0))
                 goto use_itimer;
             /* disable itimer */
             itv.it_interval.tv_sec = 0;
