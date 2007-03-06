@@ -493,6 +493,37 @@ static int kvm_cpuid(void *opaque, uint64_t *rax, uint64_t *rbx,
 	if ((h_edx & 0x00100000) == 0)
 	    *rdx &= ~0x00100000ull;
     }
+    // sysenter isn't supported on compatibility mode on AMD.  and syscall
+    // isn't supported in compatibility mode on Intel.  so advertise the
+    // actuall cpu, and say goodbye to migration between different vendors
+    // is you use compatibility mode.
+    if (eax == 0) {
+	uint32_t bcd[3];
+	asm (
+#ifdef __x86_64__
+	     "push %%rax; push %%rbx; push %%rcx; push %%rdx \n\t"
+	     "mov $0, %%eax \n\t"
+	     "cpuid \n\t"
+	     "mov (%%rsp), %%rax \n\t"
+	     "mov %%ebx, (%%rax) \n\t"
+	     "mov %%ecx, 4(%%rax) \n\t"
+	     "mov %%edx, 8(%%rax) \n\t"
+	     "pop %%rdx; pop %%rcx; pop %%rbx; pop %%rax"
+#else
+	     "push %%eax; push %%ebx; push %%ecx; push %%edx \n\t"
+	     "mov $0, %%eax \n\t"
+	     "cpuid \n\t"
+	     "mov (%%esp), %%eax \n\t"
+	     "mov %%ebx, (%%eax) \n\t"
+	     "mov %%ecx, 4(%%eax) \n\t"
+	     "mov %%edx, 8(%%eax) \n\t"
+	     "pop %%edx; pop %%ecx; pop %%ebx; pop %%eax"
+#endif
+	     : : "d"(bcd) : "memory");
+	*rbx = bcd[0];
+	*rcx = bcd[1];
+	*rdx = bcd[2];
+    }
     env = saved_env;
     return 0;
 }
