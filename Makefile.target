@@ -185,7 +185,7 @@ OP_CFLAGS+=$(OS_CFLAGS)
 
 #########################################################
 
-CPPFLAGS+=-D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE
+CPPFLAGS+=-D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D__user=
 LIBS+=-lm
 ifndef CONFIG_USER_ONLY
 LIBS+=-lz
