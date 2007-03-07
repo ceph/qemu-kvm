@@ -488,13 +488,25 @@ static int tcp_release(void *opaque)
 {
     MigrationState *s = opaque;
     uint8_t status = 0;
-    ssize_t len;
+    ssize_t len = 0;
 
-again:
+    if (*s->has_error)
+        goto out;
+
+    // FIXME: abort on timeout
+wait_for_ack:
     len = read(s->fd, &status, 1);
     if (len == -1 && errno == EINTR)
-	goto again;
+	goto wait_for_ack;
+    if (len != 1 || status != 0)
+        goto out;
 
+send_go:
+    len = write(s->fd, &status, 1);
+    if (len == -1 && errno == EINTR)
+	goto send_go;
+
+out:
     close(s->fd);
 
     return (len != 1 || status != 0);
@@ -661,15 +673,21 @@ again:
 	goto error_accept;
     }
 
-again1:
+send_ack:
     len = write(sfd, &status, 1);
     if (len == -1 && errno == EAGAIN)
-	goto again1;
+	goto send_ack;
     if (len != 1) {
         rc = 208;
 	goto error_accept;
-
     }
+
+wait_for_go:
+    len = read(sfd, &status, 1);
+    if (len == -1 && errno == EAGAIN)
+	goto wait_for_go;
+    if (len != 1)
+        rc = 209;
 
 error_accept:
     close(sfd);
