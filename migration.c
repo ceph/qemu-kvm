@@ -40,10 +40,11 @@ typedef struct MigrationState
     int updated_pages;
     int last_updated_pages;
     int iteration;
-    int n_buffer;
+    int n_buffer; /* number of bytes in @buffer already sent */
+    int l_buffer; /* number of bytes in @buffer to send */
     int throttled;
     int *has_error;
-    char buffer[TARGET_PAGE_SIZE + 4];
+    char buffer[TARGET_PAGE_SIZE + 4 + 4];
     target_ulong addr;
     QEMUTimer *timer;
     void *opaque;
@@ -102,7 +103,6 @@ static void migrate_close(void *opaque)
 }
 
 /* Outgoing migration routines */
-
 static void migrate_finish(MigrationState *s)
 {
     QEMUFile *f;
@@ -137,10 +137,10 @@ static int migrate_write_buffer(MigrationState *s)
     if (*s->has_error)
 	return 0;
 
-    if (s->n_buffer != sizeof(s->buffer)) {
+    if (s->n_buffer < s->l_buffer) {
 	ssize_t len;
     again:
-	len = write(s->fd, s->buffer + s->n_buffer, sizeof(s->buffer) - s->n_buffer);
+	len = write(s->fd, s->buffer + s->n_buffer, s->l_buffer - s->n_buffer);
 	if (len == -1) {
 	    if (errno == EINTR)
 		goto again;
@@ -156,7 +156,7 @@ static int migrate_write_buffer(MigrationState *s)
 
 	s->throttle_count += len;
 	s->n_buffer += len;
-	if (s->n_buffer != sizeof(s->buffer))
+	if (s->n_buffer < s->l_buffer)
 	    goto again;
     }
 
@@ -186,6 +186,49 @@ static int migrate_check_convergence(MigrationState *s)
     return ((dirty_count * TARGET_PAGE_SIZE) < MIN_FINALIZE_SIZE);
 }
 
+static int ram_page_is_homogeneous(uint32_t addr)
+{
+    int i, n;
+    uint32_t *p, v;
+    
+    n = TARGET_PAGE_SIZE / sizeof(v);
+    p = (uint32 *)(phys_ram_base + addr);
+
+    v = p[0];
+    for (i=1; i<n; i++)
+        if (p[i] != v)
+            return 0;
+    return 1;
+}
+
+static void migrate_prepare_page(MigrationState *s)
+{
+    uint32_t value;
+    char type;
+    const char *buff;
+    int bufflen;
+    
+    value = cpu_to_be32(s->addr);
+    memcpy(s->buffer, &value, 4);
+    
+    if (ram_page_is_homogeneous(s->addr)) {
+        type = 1; /* keeping ram_get_page() values */
+        bufflen = 4;
+        value = cpu_to_be32(s->addr);
+        buff = (const char *)&value;
+    }
+    else {
+        type = 0;
+        bufflen = TARGET_PAGE_SIZE;
+        buff = phys_ram_base + s->addr;
+    }
+    
+    s->buffer[4] = type;
+    memcpy(s->buffer + 4 + 1, phys_ram_base + s->addr, bufflen);
+    s->n_buffer = 0;
+    s->l_buffer = 4 + 1 + bufflen;
+}
+
 static void migrate_write(void *opaque)
 {
     MigrationState *s = opaque;
@@ -213,12 +256,7 @@ static void migrate_write(void *opaque)
 #endif
 
 	if (cpu_physical_memory_get_dirty(s->addr, MIGRATION_DIRTY_FLAG)) {
-	    uint32_t value = cpu_to_be32(s->addr);
-
-	    memcpy(s->buffer, &value, 4);
-	    memcpy(s->buffer + 4, phys_ram_base + s->addr, TARGET_PAGE_SIZE);
-	    s->n_buffer = 0;
-
+            migrate_prepare_page(s);
 	    cpu_physical_memory_reset_dirty(s->addr, s->addr + TARGET_PAGE_SIZE, MIGRATION_DIRTY_FLAG);
 
 	    s->addr += TARGET_PAGE_SIZE;
@@ -288,7 +326,7 @@ static int start_migration(MigrationState *s)
     s->iteration = 0;
     s->updated_pages = 0;
     s->last_updated_pages = 0;
-    s->n_buffer = sizeof(s->buffer);
+    s->n_buffer = s->l_buffer = 0;
     s->timer = qemu_new_timer(rt_clock, migrate_reset_throttle, s);
 
     qemu_mod_timer(s->timer, qemu_get_clock(rt_clock));
@@ -500,6 +538,39 @@ again:
 
 /* Incoming migration */
 
+static void migrate_incoming_homogeneous_page(uint32_t addr, uint32_t v)
+{
+    int i, n;
+    uint32_t *p;
+    
+    n = TARGET_PAGE_SIZE / sizeof(v);
+    p = (uint32 *)(phys_ram_base + addr);
+
+    for (i=0; i<n; i++)
+        p[i] = v;
+}
+
+static int migrate_incoming_page(QEMUFile *f, uint32_t addr)
+{
+    int l, v, ret = 0;
+
+    switch (qemu_get_byte(f)) {
+    case 0: /* the whole page */
+        l = qemu_get_buffer(f, phys_ram_base + addr, TARGET_PAGE_SIZE);
+        if (l != TARGET_PAGE_SIZE)
+            ret = 102;
+        break;
+    case 1: /* homogeneous page -- a single byte */
+        v = qemu_get_be32(f);
+        migrate_incoming_homogeneous_page(addr, v);
+        break;
+    default: 
+        ret = 104;
+    }
+    
+    return ret;
+}
+
 static int migrate_incoming_fd(int fd)
 {
     int ret;
@@ -511,13 +582,12 @@ static int migrate_incoming_fd(int fd)
 	return 101;
 
     do {
-	int l;
 	addr = qemu_get_be32(f);
 	if (addr == 1)
 	    break;
-	l = qemu_get_buffer(f, phys_ram_base + addr, TARGET_PAGE_SIZE);
-	if (l != TARGET_PAGE_SIZE)
-	    return 102;
+        ret = migrate_incoming_page(f, addr);
+        if (ret)
+            return ret;
     } while (1);
 
 
