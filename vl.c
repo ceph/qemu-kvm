@@ -5732,6 +5732,10 @@ static void ram_save_static(QEMUFile *f, void *opaque)
     if (ram_compress_open(s, f) < 0)
         return;
     for(i = 0; i < phys_ram_size; i+= BDRV_HASH_BLOCK_SIZE) {
+#ifdef USE_KVM
+        if (kvm_allowed && (i>=0xa0000) && (i<0xc0000)) /* do not access video-addresses */
+            continue;
+#endif
 #if 0
         if (tight_savevm_enabled) {
             int64_t sector_num;
@@ -5804,6 +5808,10 @@ static int ram_load_static(QEMUFile *f, void *opaque)
     if (ram_decompress_open(s, f) < 0)
         return -EINVAL;
     for(i = 0; i < phys_ram_size; i+= BDRV_HASH_BLOCK_SIZE) {
+#ifdef USE_KVM
+        if (kvm_allowed && (i>=0xa0000) && (i<0xc0000)) /* do not access video-addresses */
+            continue;
+#endif
         if (ram_decompress_buf(s, buf, 1) < 0) {
             fprintf(stderr, "Error while reading ram block header\n");
             goto error;
