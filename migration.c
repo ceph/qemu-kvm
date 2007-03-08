@@ -54,6 +54,7 @@ typedef struct MigrationState
 
 static uint32_t max_throttle = (32 << 20);
 static MigrationState *current_migration;
+static int wait_for_message_timeout = 3000; /* 3 seconds */
 
 //#define MIGRATION_VERIFY
 #ifdef MIGRATION_VERIFY
@@ -484,16 +485,65 @@ static MigrationState *migration_init_ssh(int detach, const char *host)
     return migration_init_cmd(detach, "ssh", argv);
 }
 
+/* (busy) wait timeout (miliseconds) for a message to arrive on fd. */
+/* returns 0 on success error_code otherwise (18 for timeout) */
+static int wait_for_message(const char *msg, int fd, int timeout)
+{
+    fd_set rfds;
+    struct timeval tv;
+    int64_t now, expiration, delta; /* milliseconds */
+    int n = 0;
+
+    now = qemu_get_clock(rt_clock);
+    expiration = now + timeout;
+    do {
+        FD_ZERO(&rfds);
+        FD_SET(fd, &rfds);
+        tv.tv_sec = tv.tv_usec = 0;
+        now = qemu_get_clock(rt_clock);
+        delta = expiration - now;
+        if (delta > 0)
+            tv.tv_usec = delta * 1000;
+        n = select(fd + 1, &rfds, NULL, NULL, &tv);
+    } while ( (n == -1) && (errno == EINTR) );
+
+    switch (n) {
+    case -1: /* error */
+        fprintf(stderr, "%s FAILED: ", msg);
+        perror("");
+        return 17;
+    case 0: /* timeout */
+        fprintf(stderr, "%s: timeout reached\n", msg);
+        return 18;
+    case 1:
+        break;
+    default:
+        fprintf(stderr, "wait_for_message: %s: select returned  %d\n", msg, n);
+    }
+    if (!FD_ISSET(fd, &rfds)) {
+        fprintf(stderr, "wait_for_message: %s: s->fd not set\n", msg);
+        return 19;
+    }
+
+    return 0;
+}
+
 static int tcp_release(void *opaque)
 {
     MigrationState *s = opaque;
     uint8_t status = 0;
     ssize_t len = 0;
+    int n;
 
     if (*s->has_error)
         goto out;
 
-    // FIXME: abort on timeout
+    n = wait_for_message("WAIT FOR ACK", s->fd, wait_for_message_timeout);
+    if (n) {
+        *s->has_error = n;
+        goto out; 
+    }
+
 wait_for_ack:
     len = read(s->fd, &status, 1);
     if (len == -1 && errno == EINTR)
@@ -680,6 +730,11 @@ send_ack:
     if (len != 1) {
         rc = 208;
 	goto error_accept;
+    }
+
+    rc = wait_for_message("WAIT FOR GO", sfd, wait_for_message_timeout);
+    if (rc) {
+        exit(200+rc);
     }
 
 wait_for_go:
