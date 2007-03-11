@@ -1,5 +1,5 @@
 #!/bin/sh
 
-switch=$(ip route list | awk '/^default / { print $NF }')
-ifconfig $1 0.0.0.0 up
-brctl addif ${switch} $1
+switch=$(/sbin/ip route list | awk '/^default / { print $NF }')
+/sbin/ifconfig $1 0.0.0.0 up
+/usr/sbin/brctl addif ${switch} $1

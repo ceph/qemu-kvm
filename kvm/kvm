@@ -178,7 +178,7 @@ if options.debugger:
 if not options.notap:
     mac = options.mac
     if not mac:
-        for line in commands.getoutput('ip link show eth0').splitlines():
+        for line in commands.getoutput('/sbin/ip link show eth0').splitlines():
             m = re.match(r'.*link/ether (..:..:..:..:..:..).*', line)
             if m:
                 mac = m.group(1)
