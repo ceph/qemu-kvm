@@ -32,6 +32,7 @@
 
 #define MIN_FINALIZE_SIZE	(200 << 10)
 #define MAX_ITERATIONS           30
+#define MAX_RAPID_WRITES          2
 
 typedef struct MigrationState
 {
@@ -51,6 +52,7 @@ typedef struct MigrationState
     void *opaque;
     int detach;
     int (*release)(void *opaque);
+    int rapid_writes;
 } MigrationState;
 
 static uint32_t max_throttle = (32 << 20);
@@ -176,8 +178,10 @@ static int migrate_check_convergence(MigrationState *s)
     target_ulong addr;
     int dirty_count = 0;
 
-    if (s->iteration >= MAX_ITERATIONS)
+    if ((s->iteration >= MAX_ITERATIONS) ||
+        (s->rapid_writes >= MAX_RAPID_WRITES) ) {
         return 1;
+    }
 
     for (addr = 0; addr < phys_ram_size; addr += TARGET_PAGE_SIZE) {
 #ifdef USE_KVM
@@ -274,6 +278,9 @@ static void migrate_write(void *opaque)
 	    s->addr += TARGET_PAGE_SIZE;
     }
 
+    if ((s->iteration) && (s->last_updated_pages <= s->updated_pages)) {
+        s->rapid_writes++; /* "dirt-speed" is faster than transfer speed */
+    }
     s->last_updated_pages = s->updated_pages;
     s->updated_pages = 0;
     s->addr = 0;
@@ -332,6 +339,7 @@ static int start_migration(MigrationState *s)
     s->updated_pages = 0;
     s->last_updated_pages = 0;
     s->n_buffer = s->l_buffer = 0;
+    s->rapid_writes = 0;
     s->timer = qemu_new_timer(rt_clock, migrate_reset_throttle, s);
 
     qemu_mod_timer(s->timer, qemu_get_clock(rt_clock));
