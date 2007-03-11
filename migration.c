@@ -31,6 +31,7 @@
 #include <sys/wait.h>
 
 #define MIN_FINALIZE_SIZE	(200 << 10)
+#define MAX_ITERATIONS           30
 
 typedef struct MigrationState
 {
@@ -174,6 +175,9 @@ static int migrate_check_convergence(MigrationState *s)
 {
     target_ulong addr;
     int dirty_count = 0;
+
+    if (s->iteration >= MAX_ITERATIONS)
+        return 1;
 
     for (addr = 0; addr < phys_ram_size; addr += TARGET_PAGE_SIZE) {
 #ifdef USE_KVM
