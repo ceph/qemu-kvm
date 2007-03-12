@@ -60,6 +60,57 @@ static MigrationState *current_migration;
 static int wait_for_message_timeout = 3000; /* 3 seconds */
 static int status; /* last migration status */
 
+enum { /* migration status values */
+    MIG_STAT_SUCCESS           = 0,
+    
+    /* src error codes */
+    MIG_STAT_INVALID_PARAMS    = 1,
+    MIG_STAT_INVALID_ADDR      = 2,
+    MIG_STAT_SOCKET_FAILED     = 3,
+    MIG_STAT_SOCKOPT_FAILED    = 4,
+    MIG_STAT_BIND_FAILED       = 5,
+    MIG_STAT_LISTEN_FAILED     = 6,
+    MIG_STAT_ACCEPT_FAILED     = 7,
+    MIG_STAT_CONNECT_FAILED    = 8,
+    MIG_STAT_WRITE_FAILED      = 9,
+    MIG_STAT_READ_FAILED       = 10,
+    MIG_STAT_CONNECTION_CLOSED = 11,
+    MIG_STAT_SELECT_FAILED     = 12,
+    MIG_STAT_SELECT_TIMEOUT    = 13,
+    MIG_STAT_SELECT_FD_NOT_SET = 14,
+
+    MIG_STAT_SAVEVM_FAILED     = 15,
+
+    MIG_STAT_MIGRATION_CANCEL  = 20,
+
+    /* kvm error codes (on src) */
+    MIG_STAT_KVM_UPDATE_DIRTY_PAGES_LOG_FAILED  = 101,
+    MIG_STAT_KVM_SET_DIRTY_TRACKING_FAILED      = 102,
+
+    /* dst error codes */
+    MIG_STAT_DST_INVALID_PARAMS    = 200 + MIG_STAT_INVALID_PARAMS,
+    MIG_STAT_DST_INVALID_ADDR      = 200 + MIG_STAT_INVALID_ADDR,
+    MIG_STAT_DST_SOCKET_FAILED     = 200 + MIG_STAT_SOCKET_FAILED,
+    MIG_STAT_DST_SOCKOPT_FAILED    = 200 + MIG_STAT_SOCKOPT_FAILED,
+    MIG_STAT_DST_BIND_FAILED       = 200 + MIG_STAT_BIND_FAILED,
+    MIG_STAT_DST_LISTEN_FAILED     = 200 + MIG_STAT_LISTEN_FAILED,
+    MIG_STAT_DST_ACCEPT_FAILED     = 200 + MIG_STAT_ACCEPT_FAILED,
+    MIG_STAT_DST_CONNECT_FAILED    = 200 + MIG_STAT_CONNECT_FAILED,
+    MIG_STAT_DST_WRITE_FAILED      = 200 + MIG_STAT_WRITE_FAILED,
+    MIG_STAT_DST_READ_FAILED       = 200 + MIG_STAT_READ_FAILED,
+
+    MIG_STAT_DST_CONNECTION_CLOSED = 200 + MIG_STAT_CONNECTION_CLOSED,
+    MIG_STAT_DST_SELECT_FAILED     = 200 + MIG_STAT_SELECT_FAILED,
+    MIG_STAT_DST_SELECT_TIMEOUT    = 200 + MIG_STAT_SELECT_TIMEOUT,
+    MIG_STAT_DST_SELECT_FD_NOT_SET = 200 + MIG_STAT_SELECT_FD_NOT_SET,
+
+    MIG_STAT_DST_LOADVM_FAILED     = 200 + MIG_STAT_SAVEVM_FAILED,
+
+    MIG_STAT_DST_GET_PAGE_FAILED       = 230,
+    MIG_STAT_DST_GET_PAGE_UNKNOWN_TYPE = 231,
+    MIG_STAT_DST_MEM_SIZE_MISMATCH     = 232,
+};
+
 //#define MIGRATION_VERIFY
 #ifdef MIGRATION_VERIFY
 static int save_verify_memory(QEMUFile *f, void *opaque);
@@ -84,11 +135,11 @@ static void migrate_put_buffer(void *opaque, const uint8_t *buf, int64_t pos, in
 	    if (errno == EAGAIN || errno == EINTR)
 		continue;
             term_printf("migration: write failed (%s)\n", strerror(errno));
-	    *s->has_error = 10;
+	    *s->has_error = MIG_STAT_WRITE_FAILED;
 	    break;
 	} else if (len == 0) {
             term_printf("migration: other side closed connection\n");
-	    *s->has_error = 11;
+	    *s->has_error = MIG_STAT_CONNECTION_CLOSED;
 	    break;
 	}
 
@@ -100,8 +151,8 @@ static void migrate_close(void *opaque)
 {
     MigrationState *s = opaque;
 
-    if (s->release && s->release(s->opaque))
-	*s->has_error = 12;
+    if (s->release)
+	s->release(s->opaque);
 
     qemu_free(s);
     current_migration = NULL;
@@ -129,7 +180,7 @@ static void migrate_finish(MigrationState *s)
     }
     status = *has_error;
     if (ret && !status)
-        status = 5;
+        status = MIG_STAT_SAVEVM_FAILED;
     if (status) {
 	term_printf("Migration failed! ret=%d error=%d\n", ret, *has_error);
 	vm_start();
@@ -154,11 +205,11 @@ static int migrate_write_buffer(MigrationState *s)
 		goto again;
 	    if (errno == EAGAIN)
 		return 1;
-	    *s->has_error = 13;
+	    *s->has_error = MIG_STAT_WRITE_FAILED;
 	    return 0;
 	}
 	if (len == 0) {
-	    *s->has_error = 14;
+	    *s->has_error = MIG_STAT_CONNECTION_CLOSED;
 	    return 0;
 	}
 
@@ -250,8 +301,8 @@ static void migrate_write(void *opaque)
 	return;
 
 #ifdef USE_KVM
-    if (kvm_allowed && !*s->has_error)
-        *s->has_error = kvm_update_dirty_pages_log();
+    if (kvm_allowed && !*s->has_error && kvm_update_dirty_pages_log())
+        *s->has_error = MIG_STAT_KVM_UPDATE_DIRTY_PAGES_LOG_FAILED;
 #endif
 
     if (migrate_check_convergence(s) || *s->has_error) {
@@ -334,7 +385,7 @@ static int start_migration(MigrationState *s)
     }
 
     if (cpu_physical_memory_set_dirty_tracking(1)) {
-        *s->has_error = 16;
+        *s->has_error = MIG_STAT_KVM_SET_DIRTY_TRACKING_FAILED;
         return -1;
     }
 
@@ -527,10 +578,10 @@ static int wait_for_message(const char *msg, int fd, int timeout)
     case -1: /* error */
         fprintf(stderr, "%s FAILED: ", msg);
         perror("");
-        return 17;
+        return MIG_STAT_SELECT_FAILED;
     case 0: /* timeout */
         fprintf(stderr, "%s: timeout reached\n", msg);
-        return 18;
+        return MIG_STAT_SELECT_TIMEOUT;
     case 1:
         break;
     default:
@@ -538,7 +589,7 @@ static int wait_for_message(const char *msg, int fd, int timeout)
     }
     if (!FD_ISSET(fd, &rfds)) {
         fprintf(stderr, "wait_for_message: %s: s->fd not set\n", msg);
-        return 19;
+        return MIG_STAT_SELECT_FD_NOT_SET;
     }
 
     return 0;
@@ -564,13 +615,21 @@ wait_for_ack:
     len = read(s->fd, &status, 1);
     if (len == -1 && errno == EINTR)
 	goto wait_for_ack;
-    if (len != 1 || status != 0)
+    if (len != 1 || status != 0) {
+        *s->has_error = MIG_STAT_READ_FAILED;
+        fprintf(stderr, "migration: wait_for_ack: read failed l=%ld s=%d\n",
+                len, status);
         goto out;
+    }
 
 send_go:
     len = write(s->fd, &status, 1);
     if (len == -1 && errno == EINTR)
 	goto send_go;
+    if (len != 1) {
+        fprintf(stderr, "migration: send_go: write failed l=%ld\n", len);
+        *s->has_error = MIG_STAT_WRITE_FAILED;
+    }
 
 out:
     close(s->fd);
@@ -587,6 +646,7 @@ static MigrationState *migration_init_tcp(int detach, const char *host)
     fd = socket(PF_INET, SOCK_STREAM, 0);
     if (fd == -1) {
         term_printf("socket() failed %s\n", strerror(errno));
+        status = MIG_STAT_SOCKET_FAILED;
 	return NULL;
     }
 
@@ -594,6 +654,7 @@ static MigrationState *migration_init_tcp(int detach, const char *host)
     if (parse_host_port(&addr, host) == -1) {
         term_printf("parse_host_port() FAILED for %s\n", host);
 	close(fd);
+        status = MIG_STAT_INVALID_ADDR;
 	return NULL;
     }
 
@@ -603,6 +664,7 @@ again:
             goto again;
         term_printf("connect() failed %s\n", strerror(errno));
 	close(fd);
+        status = MIG_STAT_CONNECT_FAILED;
 	return NULL;
     }
 
@@ -636,14 +698,14 @@ static int migrate_incoming_page(QEMUFile *f, uint32_t addr)
     case 0: /* the whole page */
         l = qemu_get_buffer(f, phys_ram_base + addr, TARGET_PAGE_SIZE);
         if (l != TARGET_PAGE_SIZE)
-            ret = 102;
+            ret = MIG_STAT_DST_GET_PAGE_FAILED;
         break;
     case 1: /* homogeneous page -- a single byte */
         v = qemu_get_be32(f);
         migrate_incoming_homogeneous_page(addr, v);
         break;
     default: 
-        ret = 104;
+        ret = MIG_STAT_DST_GET_PAGE_UNKNOWN_TYPE;
     }
     
     return ret;
@@ -651,13 +713,13 @@ static int migrate_incoming_page(QEMUFile *f, uint32_t addr)
 
 static int migrate_incoming_fd(int fd)
 {
-    int ret;
+    int ret = 0;
     QEMUFile *f = qemu_fopen_fd(fd);
     uint32_t addr;
     extern void qemu_announce_self(void);
 
     if (qemu_get_be32(f) != phys_ram_size)
-	return 101;
+	return MIG_STAT_DST_MEM_SIZE_MISMATCH;
 
     do {
 	addr = qemu_get_be32(f);
@@ -671,7 +733,8 @@ static int migrate_incoming_fd(int fd)
 
     qemu_aio_flush();
     vm_stop(0);
-    ret = qemu_live_loadvm_state(f);
+    if (qemu_live_loadvm_state(f))
+        ret = MIG_STAT_DST_LOADVM_FAILED;
 #ifdef MIGRATION_VERIFY
     if (ret==0) ret=load_verify_memory(f, NULL, 1);
 #endif /* MIGRATION_VERIFY */
@@ -693,32 +756,32 @@ static int migrate_incoming_tcp(const char *host)
     addr.sin_family = AF_INET;
     if (parse_host_port(&addr, host) == -1) {
         fprintf(stderr, "parse_host_port() failed for %s\n", host);
-        rc = 201;
+        rc = MIG_STAT_DST_INVALID_ADDR;
 	goto error;
     }
 
     fd = socket(PF_INET, SOCK_STREAM, 0);
     if (fd == -1) {
         perror("socket failed");
-        rc = 202;
+        rc = MIG_STAT_DST_SOCKET_FAILED;
 	goto error;
     }
 
     if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) == -1) {
         perror("setsockopt() failed");
-        rc = 203;
+        rc = MIG_STAT_DST_SOCKOPT_FAILED;
 	goto error_socket;
     }
 
     if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
         perror("bind() failed");
-        rc = 204;
+        rc = MIG_STAT_DST_BIND_FAILED;
 	goto error_socket;
     }
 
     if (listen(fd, 1) == -1) {
         perror("listen() failed");
-        rc = 205;
+        rc = MIG_STAT_DST_LISTEN_FAILED;
 	goto error_socket;
     }
 
@@ -728,13 +791,12 @@ again:
 	if (errno == EINTR)
 	    goto again;
         perror("accept() failed");
-        rc = 206;
+        rc = MIG_STAT_DST_ACCEPT_FAILED;
 	goto error_socket;
     }
 
     rc = migrate_incoming_fd(sfd);
     if (rc != 0) {
-        rc = 207;
         fprintf(stderr, "migrate_incoming_fd failed (rc=%d)\n", rc);
 	goto error_accept;
     }
@@ -744,13 +806,14 @@ send_ack:
     if (len == -1 && errno == EAGAIN)
 	goto send_ack;
     if (len != 1) {
-        rc = 208;
+        rc = MIG_STAT_DST_WRITE_FAILED;
 	goto error_accept;
     }
 
     rc = wait_for_message("WAIT FOR GO", sfd, wait_for_message_timeout);
     if (rc) {
-        exit(200+rc);
+        rc += 200;
+        goto error_accept;
     }
 
 wait_for_go:
@@ -758,7 +821,7 @@ wait_for_go:
     if (len == -1 && errno == EAGAIN)
 	goto wait_for_go;
     if (len != 1)
-        rc = 209;
+        rc = MIG_STAT_DST_READ_FAILED;
 
 error_accept:
     close(sfd);
@@ -784,7 +847,7 @@ int migrate_incoming(const char *device)
 	qemu_free(host);
     } else {
 	errno = EINVAL;
-	ret = -1;
+	ret = MIG_STAT_DST_INVALID_PARAMS;
     }
 
     return ret;
@@ -800,7 +863,7 @@ void do_migrate(int detach, const char *uri)
 {
     const char *ptr;
 
-    status = 4; /* failed to start migration */
+    status = MIG_STAT_INVALID_PARAMS;
     if (strstart(uri, "exec:", &ptr)) {
 	char *command = urldecode(ptr);
 	migration_init_exec(detach, command);
@@ -881,7 +944,7 @@ void do_migrate_cancel(void)
     MigrationState *s = current_migration;
 
     if (s)
-	*s->has_error = 20;
+	*s->has_error = MIG_STAT_MIGRATION_CANCEL;
 }
 
 
