@@ -58,6 +58,7 @@ typedef struct MigrationState
 static uint32_t max_throttle = (32 << 20);
 static MigrationState *current_migration;
 static int wait_for_message_timeout = 3000; /* 3 seconds */
+static int status; /* last migration status */
 
 //#define MIGRATION_VERIFY
 #ifdef MIGRATION_VERIFY
@@ -126,7 +127,10 @@ static void migrate_finish(MigrationState *s)
 #endif /* MIGRATION_VERIFY */
         qemu_fclose(f);
     }
-    if (ret != 0 || *has_error) {
+    status = *has_error;
+    if (ret && !status)
+        status = 5;
+    if (status) {
 	term_printf("Migration failed! ret=%d error=%d\n", ret, *has_error);
 	vm_start();
     }
@@ -796,6 +800,7 @@ void do_migrate(int detach, const char *uri)
 {
     const char *ptr;
 
+    status = 4; /* failed to start migration */
     if (strstart(uri, "exec:", &ptr)) {
 	char *command = urldecode(ptr);
 	migration_init_exec(detach, command);
@@ -868,6 +873,7 @@ void do_info_migration(void)
 	term_printf("%3.1f kb/s\n", (double)max_throttle / 1024);
     else
 	term_printf("%3.1f mb/s\n", (double)max_throttle / (1024 * 1024));
+    term_printf("last migration status is %d\n", status);
 }
 
 void do_migrate_cancel(void)
