@@ -562,6 +562,7 @@ static int kvm_outb(void *opaque, uint16_t addr, uint8_t data)
     if (addr == 0xb2) {
 	switch (data) {
 	case 0: {
+	    cpu_outb(0, 0xb3, 0);
 	    break;
 	}
 	case 0xf0: {
