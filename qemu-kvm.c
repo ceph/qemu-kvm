@@ -300,7 +300,7 @@ static void save_regs(CPUState *env)
     cpu_set_apic_base(env, sregs.apic_base);
 
     env->efer = sregs.efer;
-    cpu_set_apic_tpr(env, sregs.cr8);
+    //cpu_set_apic_tpr(env, sregs.cr8);
 
 #define HFLAG_COPY_MASK ~( \
 			HF_CPL_MASK | HF_PE_MASK | HF_MP_MASK | HF_EM_MASK | \
@@ -401,7 +401,7 @@ static void post_kvm_run(void *opaque, struct kvm_run *kvm_run)
 
     env->eflags = (kvm_run->if_flag) ? env->eflags | IF_MASK:env->eflags & ~IF_MASK;
     env->ready_for_interrupt_injection = kvm_run->ready_for_interrupt_injection;
-    cpu_set_apic_tpr(env, kvm_run->cr8);
+    //cpu_set_apic_tpr(env, kvm_run->cr8);
     cpu_set_apic_base(env, kvm_run->apic_base);
 }
 
@@ -555,18 +555,36 @@ static int kvm_inl(void *opaque, uint16_t addr, uint32_t *data)
     return 0;
 }
 
+#define PM_IO_BASE 0xb000
+
 static int kvm_outb(void *opaque, uint16_t addr, uint8_t data)
 {
-    if (addr == 0xb2 && data == 0) {
-	struct kvm_regs regs;
+    if (addr == 0xb2) {
+	switch (data) {
+	case 0: {
+	    break;
+	}
+	case 0xf0: {
+	    unsigned x;
 
-	kvm_get_regs(kvm_context, 0, &regs);
+	    /* enable acpi */
+	    x = cpu_inw(0, PM_IO_BASE + 4);
+	    x &= ~1;
+	    cpu_outw(0, PM_IO_BASE + 4, x);
+	    break;
+	}
+	case 0xf1: {
+	    unsigned x;
 
-	/* hack around smm entry: kvm doesn't emulate smm at this time */
-	if (regs.rip == 0x409f4)
-	    regs.rip += 0x4b;
-	kvm_set_regs(kvm_context, 0, &regs);
-	
+	    /* enable acpi */
+	    x = cpu_inw(0, PM_IO_BASE + 4);
+	    x |= 1;
+	    cpu_outw(0, PM_IO_BASE + 4, x);
+	    break;
+	}
+	default:
+	    break;
+	}
 	return 0;
     }
     cpu_outb(0, addr, data);

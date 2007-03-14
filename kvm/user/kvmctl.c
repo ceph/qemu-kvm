@@ -229,6 +229,7 @@ int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem)
 	unsigned long dosmem = 0xa0000;
 	unsigned long exmem = 0xc0000;
 	int fd = kvm->fd;
+	int zfd;
 	int r;
 	struct kvm_memory_region low_memory = {
 		.slot = 3,
@@ -273,6 +274,11 @@ int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem)
 		return -1;
 	}
 	kvm->physical_memory = *vm_mem;
+
+	zfd = open("/dev/zero", O_RDONLY);
+	mmap(*vm_mem + 0xa8000, 0x8000, PROT_READ|PROT_WRITE,
+	     MAP_PRIVATE|MAP_FIXED, zfd, 0);
+	close(zfd);
 
 	r = ioctl(fd, KVM_CREATE_VCPU, 0);
 	if (r == -1) {
