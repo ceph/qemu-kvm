@@ -329,7 +329,7 @@ void kvm_destroy_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 }
 
 
-int kvm_get_dirty_pages(kvm_context_t kvm, int slot, void *buf)
+static int kvm_get_map(kvm_context_t kvm, int ioctl_num, int slot, void *buf)
 {
 	int r;
 	struct kvm_dirty_log log = {
@@ -338,10 +338,20 @@ int kvm_get_dirty_pages(kvm_context_t kvm, int slot, void *buf)
 
 	log.dirty_bitmap = buf;
 
-	r = ioctl(kvm->vm_fd, KVM_GET_DIRTY_LOG, &log);
+	r = ioctl(kvm->vm_fd, ioctl_num, &log);
 	if (r == -1)
 		return -errno;
 	return 0;
+}
+
+int kvm_get_dirty_pages(kvm_context_t kvm, int slot, void *buf)
+{
+	return kvm_get_map(kvm, KVM_GET_DIRTY_LOG, slot, buf);
+}
+
+int kvm_get_mem_map(kvm_context_t kvm, int slot, void *buf)
+{
+	return kvm_get_map(kvm, KVM_GET_MEM_MAP, slot, buf);
 }
 
 static int more_io(struct kvm_run *run, int first_time)
