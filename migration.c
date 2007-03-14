@@ -80,12 +80,14 @@ enum { /* migration status values */
     MIG_STAT_SELECT_FD_NOT_SET = 14,
 
     MIG_STAT_SAVEVM_FAILED     = 15,
+    MIG_STAT_NO_MEM            = 16,
 
     MIG_STAT_MIGRATION_CANCEL  = 20,
 
     /* kvm error codes (on src) */
     MIG_STAT_KVM_UPDATE_DIRTY_PAGES_LOG_FAILED  = 101,
     MIG_STAT_KVM_SET_DIRTY_TRACKING_FAILED      = 102,
+    MIG_STAT_KVM_GET_PAGE_BITMAP                = 103,
 
     /* dst error codes */
     MIG_STAT_DST_INVALID_PARAMS    = 200 + MIG_STAT_INVALID_PARAMS,
@@ -105,6 +107,7 @@ enum { /* migration status values */
     MIG_STAT_DST_SELECT_FD_NOT_SET = 200 + MIG_STAT_SELECT_FD_NOT_SET,
 
     MIG_STAT_DST_LOADVM_FAILED     = 200 + MIG_STAT_SAVEVM_FAILED,
+    MIG_STAT_DST_NO_MEM            = 200 + MIG_STAT_NO_MEM,
 
     MIG_STAT_DST_GET_PAGE_FAILED       = 230,
     MIG_STAT_DST_GET_PAGE_UNKNOWN_TYPE = 231,
@@ -356,29 +359,72 @@ static void migrate_reset_throttle(void *opaque)
     qemu_mod_timer(s->timer, qemu_get_clock(rt_clock) + 1000);
 }
 
+static int write_whole_buffer(int fd, const void *buff, size_t size)
+{
+    size_t offset = 0, len;
+
+    while (offset < size) {
+        len = write(fd, buff + offset, size - offset);
+	if (len == -1 && errno == EINTR)
+	    continue;
+	if (len < 1)
+	    return -EIO;
+        
+	offset += len;
+    }
+    return !(offset == size); /* returns 0 on success */
+}
+
+static int bit_is_set(int bit, unsigned char *map)
+{
+    return map[bit/8] & (1 << (bit%8));
+}
+
 static int start_migration(MigrationState *s)
 {
     uint32_t value = cpu_to_be32(phys_ram_size);
     target_phys_addr_t addr;
-    size_t offset = 0;
-	
-    while (offset != 4) {
-	ssize_t len = write(s->fd, ((char *)&value) + offset, 4 - offset);
-	if (len == -1 && errno == EINTR)
-	    continue;
+    int r;
 
-	if (len < 1)
-	    return -EIO;
-
-	offset += len;
+#ifdef USE_KVM
+    int n = 0;
+    unsigned char *phys_ram_page_exist_bitmap = NULL;
+    if (kvm_allowed) {
+        n = BITMAP_SIZE(phys_ram_size);
+        phys_ram_page_exist_bitmap = qemu_malloc(n);
+        if (!phys_ram_page_exist_bitmap) {
+            perror("failed to allocate page bitmap");
+            r = MIG_STAT_NO_MEM;
+            goto out;
+        }
+        if (kvm_get_phys_ram_page_bitmap(phys_ram_page_exist_bitmap)) {
+            r = MIG_STAT_KVM_GET_PAGE_BITMAP;
+            perror("kvm_get_mem_map failed");
+            goto out;
+        }
     }
+#endif
+	
+    r = MIG_STAT_WRITE_FAILED;
+    if (write_whole_buffer(s->fd, &value, sizeof(value)))
+        goto out;
 
+#ifdef USE_KVM
+    if (kvm_allowed) {
+        if (write_whole_buffer(s->fd, phys_ram_page_exist_bitmap, n))
+            goto out;
+    }
+#endif
     fcntl(s->fd, F_SETFL, O_NONBLOCK);
 
     for (addr = 0; addr < phys_ram_size; addr += TARGET_PAGE_SIZE) {
 #ifdef USE_KVM
-        if (kvm_allowed && (addr>=0xa0000) && (addr<0xc0000)) /* do not access video-addresses */
+        if (kvm_allowed && !bit_is_set(addr>>TARGET_PAGE_BITS, phys_ram_page_exist_bitmap)) {
+            cpu_physical_memory_reset_dirty(addr, 
+                                            addr + TARGET_PAGE_SIZE, 
+                                            MIGRATION_DIRTY_FLAG);
             continue;
+        }
 #endif
 	if (!cpu_physical_memory_get_dirty(addr, MIGRATION_DIRTY_FLAG))
 	    cpu_physical_memory_set_dirty(addr);
@@ -399,7 +445,13 @@ static int start_migration(MigrationState *s)
 
     qemu_mod_timer(s->timer, qemu_get_clock(rt_clock));
     qemu_set_fd_handler2(s->fd, NULL, NULL, migrate_write, s);
-    return 0;
+
+ out:
+#ifdef USE_KVM
+    if (phys_ram_page_exist_bitmap)
+        qemu_free(phys_ram_page_exist_bitmap);
+#endif
+    return r;
 }
 
 static MigrationState *migration_init_fd(int detach, int fd)
@@ -720,6 +772,33 @@ static int migrate_incoming_fd(int fd)
 
     if (qemu_get_be32(f) != phys_ram_size)
 	return MIG_STAT_DST_MEM_SIZE_MISMATCH;
+
+#ifdef USE_KVM
+    if (kvm_allowed) {
+        int n, i;
+        unsigned char *phys_ram_page_exist_bitmap = NULL;
+
+        /* allocate memory bitmap */
+        n = BITMAP_SIZE(phys_ram_size);
+        phys_ram_page_exist_bitmap = qemu_malloc(n);
+        if (!phys_ram_page_exist_bitmap) {
+            perror("failed to allocate page bitmap");
+            return MIG_STAT_NO_MEM;
+        }
+        
+        /* receive memory bitmap */
+        qemu_get_buffer(f, phys_ram_page_exist_bitmap, n);
+        /* free dellocated-at-src memory */
+        /* FIXME: currently just print a message */
+        for (i=0; i<n; i++) {
+            if (phys_ram_page_exist_bitmap[i] != 0xFF)
+                printf("phys_ram_page_exist_bitmap[%d]=0x%x\n", 
+                       i, phys_ram_page_exist_bitmap[i]);
+        }
+
+        qemu_free(phys_ram_page_exist_bitmap);
+    }
+#endif
 
     do {
 	addr = qemu_get_be32(f);
