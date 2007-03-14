@@ -55,7 +55,7 @@ HypercallState *pHypercallStates[MAX_VMCHANNEL_DEVICES] = {NULL};
 
 static void hp_reset(HypercallState *s)
 {
-    s->hcr = 0;
+    s->hcr = HCR_DI;
     s->hsr = 0;
     s->txsize = 0;
     s->txbuff = 0;
@@ -134,13 +134,16 @@ static uint32_t hp_ioport_read(void *opaque, uint32_t addr)
 #ifdef HYPERCALL_DEBUG
     // Since HSR_REGISTER is being repeatedly read in the guest ISR we don't print it
     if (addr != HSR_REGISTER)
-        printf("%s: addr=0x%x\n", __FUNCTION__, addr);
+        printf("%s: addr=0x%x", __FUNCTION__, addr);
 #endif
 
     if (addr >= offsetof(HypercallState, RxBuff) )
     {
         int RxBuffOffset = addr - (offsetof(HypercallState, RxBuff));
         ret = s->RxBuff[RxBuffOffset];
+#ifdef HYPERCALL_DEBUG
+    printf(" val=%x\n", ret);
+#endif
         return ret;
     }
 
@@ -160,7 +163,9 @@ static uint32_t hp_ioport_read(void *opaque, uint32_t addr)
         ret = 0x00;
         break;
     }
-
+#ifdef HYPERCALL_DEBUG
+    printf(" val=%x\n", ret);
+#endif
     return ret;
 }
 
