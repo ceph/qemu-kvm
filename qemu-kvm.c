@@ -839,4 +839,22 @@ int kvm_update_dirty_pages_log(void)
     r = r || kvm_get_dirty_pages_log_slot(0, kvm_dirty_bitmap, 0xc0000, len);
     return r;
 }
+
+int kvm_get_phys_ram_page_bitmap(unsigned char *bitmap)
+{
+    int r=0, len, offset;
+    
+    len = BITMAP_SIZE(phys_ram_size);
+    memset(bitmap, 0, len);
+
+    r = kvm_get_mem_map(kvm_context, 3, bitmap);
+    if (r)
+        goto out;
+
+    offset = BITMAP_SIZE(0xc0000);
+    r = kvm_get_mem_map(kvm_context, 0, bitmap + offset);
+
+ out:
+    return r;
+}
 #endif
