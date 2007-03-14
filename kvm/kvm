@@ -163,7 +163,7 @@ else:
 qemu_args = (cmd, '-boot', bootdisk,
              '-hda', disk, '-m', '384',
              '-serial', 'file:/tmp/serial.log',
-             '-usbdevice', 'tablet'
+             #'-usbdevice', 'tablet',
           )
 
 if options.cdrom:
