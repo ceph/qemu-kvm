@@ -351,7 +351,27 @@ int kvm_get_dirty_pages(kvm_context_t kvm, int slot, void *buf)
 
 int kvm_get_mem_map(kvm_context_t kvm, int slot, void *buf)
 {
+#ifdef KVM_GET_MEM_MAP
 	return kvm_get_map(kvm, KVM_GET_MEM_MAP, slot, buf);
+#else /* not KVM_GET_MEM_MAP ==> fake it: all pages exist */
+	unsigned long i, n, m, npages;
+	unsigned char v;
+
+	if (slot >= KVM_MAX_NUM_MEM_REGIONS) {
+		errno = -EINVAL;
+		return -1;
+	}
+	npages = kvm->mem_regions[slot].memory_size / PAGE_SIZE;
+	n = npages / 8;
+	m = npages % 8;
+	memset(buf, 0xff, n); /* all pages exist */
+	v = 0;
+	for (i=0; i<=m; i++) /* last byte may not be "aligned" */
+		v |= 1<<(7-i);
+	if (v)
+		*(unsigned char*)(buf+n) = v;
+	return 0;
+#endif /* KVM_GET_MEM_MAP */
 }
 
 static int more_io(struct kvm_run *run, int first_time)
