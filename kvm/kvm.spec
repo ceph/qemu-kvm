@@ -85,14 +85,11 @@ make DESTDIR=%{buildroot} install-rpm
 %define utilsdir /etc/kvm/utils
 
 %post 
-depmod %{kverrel}
 /sbin/chkconfig --level 2345 kvm on
 /sbin/chkconfig --level 16 kvm off
 /usr/sbin/groupadd -fg 444 kvm
 
 %postun
-
-depmod %{kverrel}
 
 %clean
 %{__rm} -rf %{buildroot}
