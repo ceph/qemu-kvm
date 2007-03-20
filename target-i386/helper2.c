@@ -172,9 +172,9 @@ void cpu_reset(CPUX86State *env)
     env->idt.limit = 0xffff;
     env->gdt.limit = 0xffff;
     env->ldt.limit = 0xffff;
-    env->ldt.flags = DESC_P_MASK;
+    env->ldt.flags = DESC_P_MASK | (2 << DESC_TYPE_SHIFT);
     env->tr.limit = 0xffff;
-    env->tr.flags = DESC_P_MASK;
+    env->tr.flags = DESC_P_MASK | (11 << DESC_TYPE_SHIFT);
     
     cpu_x86_load_seg_cache(env, R_CS, 0xf000, 0xffff0000, 0xffff, 0); 
     cpu_x86_load_seg_cache(env, R_DS, 0, 0, 0xffff, 0);
