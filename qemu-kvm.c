@@ -449,85 +449,6 @@ int kvm_cpu_exec(CPUState *env)
     return 0;
 }
 
-
-static int kvm_cpuid(void *opaque, uint64_t *rax, uint64_t *rbx, 
-		      uint64_t *rcx, uint64_t *rdx)
-{
-    CPUState **envs = opaque;
-    CPUState *saved_env;
-    uint32_t eax = *rax;
-
-    saved_env = env;
-    env = envs[0];
-
-    env->regs[R_EAX] = *rax;
-    env->regs[R_EBX] = *rbx;
-    env->regs[R_ECX] = *rcx;
-    env->regs[R_EDX] = *rdx;
-    helper_cpuid();
-    *rdx = env->regs[R_EDX];
-    *rcx = env->regs[R_ECX];
-    *rbx = env->regs[R_EBX];
-    *rax = env->regs[R_EAX];
-    // don't report long mode/syscall/nx if no native support
-    if (eax == 0x80000001) {
-	unsigned long h_eax = eax, h_edx;
-
-
-	// push/pop hack to workaround gcc 3 register pressure trouble
-	asm (
-#ifdef __x86_64__
-	     "push %%rbx; push %%rcx; cpuid; pop %%rcx; pop %%rbx"
-#else
-	     "push %%ebx; push %%ecx; cpuid; pop %%ecx; pop %%ebx"
-#endif
-	     : "+a"(h_eax), "=d"(h_edx));
-
-	// long mode
-	if ((h_edx & 0x20000000) == 0)
-	    *rdx &= ~0x20000000ull;
-	// syscall
-	if ((h_edx & 0x00000800) == 0)
-	    *rdx &= ~0x00000800ull;
-	// nx
-	if ((h_edx & 0x00100000) == 0)
-	    *rdx &= ~0x00100000ull;
-    }
-    // sysenter isn't supported on compatibility mode on AMD.  and syscall
-    // isn't supported in compatibility mode on Intel.  so advertise the
-    // actuall cpu, and say goodbye to migration between different vendors
-    // is you use compatibility mode.
-    if (eax == 0) {
-	uint32_t bcd[3];
-	asm (
-#ifdef __x86_64__
-	     "push %%rax; push %%rbx; push %%rcx; push %%rdx \n\t"
-	     "mov $0, %%eax \n\t"
-	     "cpuid \n\t"
-	     "mov (%%rsp), %%rax \n\t"
-	     "mov %%ebx, (%%rax) \n\t"
-	     "mov %%ecx, 4(%%rax) \n\t"
-	     "mov %%edx, 8(%%rax) \n\t"
-	     "pop %%rdx; pop %%rcx; pop %%rbx; pop %%rax"
-#else
-	     "push %%eax; push %%ebx; push %%ecx; push %%edx \n\t"
-	     "mov $0, %%eax \n\t"
-	     "cpuid \n\t"
-	     "mov (%%esp), %%eax \n\t"
-	     "mov %%ebx, (%%eax) \n\t"
-	     "mov %%ecx, 4(%%eax) \n\t"
-	     "mov %%edx, 8(%%eax) \n\t"
-	     "pop %%edx; pop %%ecx; pop %%ebx; pop %%eax"
-#endif
-	     : : "d"(bcd) : "memory");
-	*rbx = bcd[0];
-	*rcx = bcd[1];
-	*rdx = bcd[2];
-    }
-    env = saved_env;
-    return 0;
-}
-
 static int kvm_debug(void *opaque, int vcpu)
 {
     CPUState **envs = opaque;
@@ -679,7 +600,6 @@ static int kvm_shutdown(void *opaque, int vcpu)
 }
  
 static struct kvm_callbacks qemu_kvm_ops = {
-    .cpuid = kvm_cpuid,
     .debug = kvm_debug,
     .inb   = kvm_inb,
     .inw   = kvm_inw,
@@ -736,6 +656,78 @@ int kvm_qemu_create_context(void)
 void kvm_qemu_destroy(void)
 {
     kvm_finalize(kvm_context);
+}
+
+static void do_cpuid_ent(struct kvm_cpuid_entry *e, uint32_t function)
+{
+    EAX = function;
+    helper_cpuid();
+    e->function = function;
+    e->eax = EAX;
+    e->ebx = EBX;
+    e->ecx = ECX;
+    e->edx = EDX;
+    if (function == 1)
+	e->edx &= ~(1 << 12); /* disable mtrr support */
+    if (function == 0x80000001) {
+	unsigned long h_eax = function, h_edx;
+
+
+	// push/pop hack to workaround gcc 3 register pressure trouble
+	asm (
+#ifdef __x86_64__
+	     "push %%rbx; push %%rcx; cpuid; pop %%rcx; pop %%rbx"
+#else
+	     "push %%ebx; push %%ecx; cpuid; pop %%ecx; pop %%ebx"
+#endif
+	     : "+a"(h_eax), "=d"(h_edx));
+
+	// long mode
+	if ((h_edx & 0x20000000) == 0)
+	    e->edx &= ~0x20000000u;
+	// syscall
+	if ((h_edx & 0x00000800) == 0)
+	    e->edx &= ~0x00000800u;
+	// nx
+	if ((h_edx & 0x00100000) == 0)
+	    e->edx &= ~0x00100000u;
+    }
+}
+
+int kvm_qemu_init_env(CPUState *cenv)
+{
+    struct kvm_cpuid_entry cpuid_ent[100];
+    int cpuid_nent = 0;
+    CPUState *oldenv = env;
+    CPUState copy;
+    uint32_t i, limit;
+#define DECLARE_HOST_REGS
+#include "hostregs_helper.h"
+
+#define SAVE_HOST_REGS
+#include "hostregs_helper.h"
+
+    copy = *cenv;
+    env = cenv;
+
+    EAX = 0;
+    helper_cpuid();
+    limit = EAX;
+    for (i = 0; i <= limit; ++i)
+	do_cpuid_ent(&cpuid_ent[cpuid_nent++], i);
+    EAX = 0x80000000;
+    helper_cpuid();
+    limit = EAX;
+    for (i = 0x80000000; i <= limit; ++i)
+	do_cpuid_ent(&cpuid_ent[cpuid_nent++], i);
+
+    kvm_setup_cpuid(kvm_context, 0, cpuid_nent, cpuid_ent);
+
+#include "hostregs_helper.h"
+
+    env = oldenv;
+
+    return 0;
 }
 
 int kvm_update_debugger(CPUState *env)

@@ -8,6 +8,7 @@
 #define __user /* temporary, until installed via make headers_install */
 #include <linux/kvm.h>
 #include <stdint.h>
+#include <signal.h>
 
 struct kvm_context;
 
@@ -21,8 +22,6 @@ typedef struct kvm_context *kvm_context_t;
  * accessing hardware devices via MMIO or regular IO.
  */
 struct kvm_callbacks {
-    int (*cpuid)(void *opaque, 
-		  uint64_t *rax, uint64_t *rbx, uint64_t *rcx, uint64_t *rdx);
 	/// For 8bit IO reads from the guest (Usually when executing 'inb')
     int (*inb)(void *opaque, uint16_t addr, uint8_t *data);
 	/// For 16bit IO reads from the guest (Usually when executing 'inw')
@@ -213,6 +212,35 @@ int kvm_set_msrs(kvm_context_t, int vcpu, struct kvm_msr_entry *msrs, int n);
  */
 int kvm_inject_irq(kvm_context_t kvm, int vcpu, unsigned irq);
 int kvm_guest_debug(kvm_context_t, int vcpu, struct kvm_debug_guest *dbg);
+
+/*!
+ * \brief Setup a vcpu's cpuid instruction emulation
+ *
+ * Set up a table of cpuid function to cpuid outputs.\n
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param vcpu Which virtual CPU should be initialized
+ * \param nent number of entries to be installed
+ * \param entries cpuid function entries table
+ * \return 0 on success, or -errno on error
+ */
+int kvm_setup_cpuid(kvm_context_t kvm, int vcpu, int nent,
+		    struct kvm_cpuid_entry *entries);
+
+/*!
+ * \brief Set a vcpu's signal mask for guest mode
+ *
+ * A vcpu can have different signals blocked in guest mode and user mode.
+ * This allows guest execution to be interrupted on a signal, without requiring
+ * that the signal be delivered to a signal handler (the signal can be
+ * dequeued using sigwait(2).
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param vcpu Which virtual CPU should be initialized
+ * \param sigset signal mask for guest mode
+ * \return 0 on success, or -errno on error
+ */
+int kvm_set_signal_mask(kvm_context_t kvm, int vcpu, const sigset_t *sigset);
 
 /*!
  * \brief Dump all VCPU information

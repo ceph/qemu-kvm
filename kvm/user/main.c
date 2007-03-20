@@ -23,13 +23,6 @@
 
 kvm_context_t kvm;
 
-static int test_cpuid(void *opaque, uint64_t *rax, uint64_t *rbx, 
-		       uint64_t *rcx, uint64_t *rdx)
-{
-    printf("cpuid 0x%lx\n", (uint32_t)*rax);
-    return 0;
-}
-
 static int test_inb(void *opaque, uint16_t addr, uint8_t *value)
 {
     printf("inb 0x%x\n", addr);
@@ -112,7 +105,6 @@ static void test_pre_kvm_run(void *opaque, struct kvm_run *kvm_run)
 }
 
 static struct kvm_callbacks test_callbacks = {
-    .cpuid       = test_cpuid,
     .inb         = test_inb,
     .inw         = test_inw,
     .inl         = test_inl,

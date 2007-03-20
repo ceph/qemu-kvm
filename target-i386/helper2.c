@@ -144,6 +144,7 @@ CPUX86State *cpu_x86_init(void)
     kqemu_init(env);
 #endif
 #ifdef USE_KVM
+    kvm_qemu_init_env(env);
     env->ready_for_interrupt_injection = 1;
 #endif
     return env;
