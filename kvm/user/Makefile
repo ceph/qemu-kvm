@@ -19,6 +19,8 @@ all: kvmctl libkvm.a
 
 kvmctl: kvmctl.o main.o
 
+balloon_ctl: balloon_ctl.o
+
 libkvm.a: kvmctl.o
 	$(AR) rcs $@ $^
 
