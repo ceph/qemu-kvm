@@ -357,6 +357,9 @@ static uint32_t pit_ioport_read(void *opaque, uint32_t addr)
     return ret;
 }
 
+/* global counters for time-drift fix */
+int64_t timer_acks=0, timer_interrupts=0;
+
 static void pit_irq_timer_update(PITChannelState *s, int64_t current_time)
 {
     int64_t expire_time;
@@ -367,6 +370,8 @@ static void pit_irq_timer_update(PITChannelState *s, int64_t current_time)
     expire_time = pit_get_next_transition_time(s, current_time);
     irq_level = pit_get_out1(s, current_time);
     pic_set_irq(s->irq, irq_level);
+    if (irq_level==1)
+        timer_interrupts++;
 #ifdef DEBUG_PIT
     printf("irq_level=%d next_delay=%f\n",
            irq_level, 

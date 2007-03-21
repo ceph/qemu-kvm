@@ -220,6 +220,15 @@ static inline void pic_intack(PicState *s, int irq)
     /* We don't clear a level sensitive interrupt here */
     if (!(s->elcr & (1 << irq)))
         s->irr &= ~(1 << irq);
+
+    if (irq == 0) {
+        extern int64_t timer_acks, timer_interrupts;
+        timer_acks++;
+        if (timer_interrupts > timer_acks) {
+            pic_set_irq(0, 0); /* set it low (edge irq)*/
+            pic_set_irq(0, 1); /* interrupt again */
+        }
+    }
 }
 
 int pic_read_irq(PicState2 *s)
