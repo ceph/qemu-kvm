@@ -20,6 +20,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdlib.h>
+#include <string.h>
 
 kvm_context_t kvm;
 
@@ -94,6 +95,7 @@ static int test_io_window(void *opaque)
 
 static int test_try_push_interrupts(void *opaque)
 {
+    return 0;
 }
 
 static void test_post_kvm_run(void *opaque, struct kvm_run *kvm_run)
@@ -183,11 +185,12 @@ int main(int ac, char **av)
 	    fprintf(stderr, "kvm_create failed\n");
 	    return 1;
 	}
-	if (ac > 1)
+	if (ac > 1) {
 	    if (strcmp(av[1], "-32") != 0)
 		load_file(vm_mem + 0xf0000, av[1]);
 	    else
 		enter_32(kvm);
+	}
 	if (ac > 2)
 	    load_file(vm_mem + 0x100000, av[2]);
 	kvm_show_regs(kvm, 0);
