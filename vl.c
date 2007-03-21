@@ -180,6 +180,7 @@ const char *option_rom[MAX_OPTION_ROMS];
 int nb_option_roms;
 int semihosting_enabled = 0;
 int autostart = 1;
+int time_drift_fix = 1;
 
 /***********************************************************/
 /* x86 ISA bus support */
@@ -6424,6 +6425,7 @@ void help(void)
 #ifndef _WIN32
 	   "-daemonize      daemonize QEMU after initializing\n"
 #endif
+           "-no-tdf         do not inject timer interrupts that got lost\n"
 #if defined(__linux__)
            "-no-rtc         don't use /dev/rtc for timer alarm (do use gettimeofday)\n"
 #endif
@@ -6515,6 +6517,7 @@ enum {
     QEMU_OPTION_option_rom,
     QEMU_OPTION_semihosting,
     QEMU_OPTION_incoming,
+    QEMU_OPTION_tdf,
 #if defined(__linux__)
     QEMU_OPTION_no_rtc,
 #endif
@@ -6610,6 +6613,7 @@ const QEMUOption qemu_options[] = {
 #if defined(TARGET_ARM)
     { "semihosting", 0, QEMU_OPTION_semihosting },
 #endif
+    { "no-tdf", 0, QEMU_OPTION_tdf }, /* no time drift fix */
 #if defined(__linux__)
     { "no-rtc", 0, QEMU_OPTION_no_rtc },
 #endif
@@ -7329,6 +7333,8 @@ int main(int argc, char **argv)
             case QEMU_OPTION_semihosting:
                 semihosting_enabled = 1;
                 break;
+            case QEMU_OPTION_tdf:
+                time_drift_fix = 0;
 #if defined(__linux__)
 	    case QEMU_OPTION_no_rtc:
 		use_rtc = 0;

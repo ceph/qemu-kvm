@@ -370,7 +370,7 @@ static void pit_irq_timer_update(PITChannelState *s, int64_t current_time)
     expire_time = pit_get_next_transition_time(s, current_time);
     irq_level = pit_get_out1(s, current_time);
     pic_set_irq(s->irq, irq_level);
-    if (irq_level==1)
+    if (time_drift_fix && irq_level==1)
         timer_interrupts++;
 #ifdef DEBUG_PIT
     printf("irq_level=%d next_delay=%f\n",

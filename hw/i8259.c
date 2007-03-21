@@ -221,7 +221,7 @@ static inline void pic_intack(PicState *s, int irq)
     if (!(s->elcr & (1 << irq)))
         s->irr &= ~(1 << irq);
 
-    if (irq == 0) {
+    if (time_drift_fix && irq == 0) {
         extern int64_t timer_acks, timer_interrupts;
         timer_acks++;
         if (timer_interrupts > timer_acks) {
