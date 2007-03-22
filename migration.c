@@ -788,13 +788,8 @@ static int migrate_incoming_fd(int fd)
         
         /* receive memory bitmap */
         qemu_get_buffer(f, phys_ram_page_exist_bitmap, n);
-        /* free dellocated-at-src memory */
-        /* FIXME: currently just print a message */
-        for (i=0; i<n; i++) {
-            if (phys_ram_page_exist_bitmap[i] != 0xFF)
-                printf("phys_ram_page_exist_bitmap[%d]=0x%x\n", 
-                       i, phys_ram_page_exist_bitmap[i]);
-        }
+
+        /* FIXME: free dellocated-at-src guest memory pages */
 
         qemu_free(phys_ram_page_exist_bitmap);
     }
