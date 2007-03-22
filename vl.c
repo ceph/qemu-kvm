@@ -4779,6 +4779,7 @@ int qemu_loadvm_state(QEMUFile *f)
             if (ret < 0) {
                 fprintf(stderr, "qemu: warning: error while loading state for instance 0x%x of device '%s'\n", 
                         instance_id, idstr);
+                goto the_end;
             }
         }
         /* always seek to exact end of record */
@@ -4848,6 +4849,7 @@ int qemu_live_loadvm_state(QEMUFile *f)
             if (ret < 0) {
                 fprintf(stderr, "qemu: warning: error while loading state for instance 0x%x of device '%s'\n", 
                         instance_id, idstr);
+                goto the_end;
             }
         }
     }
