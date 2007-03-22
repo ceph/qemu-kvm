@@ -22,7 +22,7 @@ sync:
 	sed -i 's/f_mnt/f_vfsmnt/' kvm_main.c
 	mv kvm_main.c kvm_main.c.orig
 	awk '/^static int kvmfs_get_sb/ \
-		 { print "#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,16)\n"; \
+		 { print "#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,17)\n"; \
 		   hacking_get_sb = 1 \
 		 } \
 	     { print } \
