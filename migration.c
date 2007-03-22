@@ -669,8 +669,8 @@ wait_for_ack:
 	goto wait_for_ack;
     if (len != 1 || status != 0) {
         *s->has_error = MIG_STAT_READ_FAILED;
-        fprintf(stderr, "migration: wait_for_ack: read failed l=%ld s=%d\n",
-                len, status);
+        fprintf(stderr, "migration: wait_for_ack: read error l=%ld s=%d(%s)\n",
+                len, status, strerror(errno));
         goto out;
     }
 
@@ -679,7 +679,8 @@ send_go:
     if (len == -1 && errno == EINTR)
 	goto send_go;
     if (len != 1) {
-        fprintf(stderr, "migration: send_go: write failed l=%ld\n", len);
+        fprintf(stderr, "migration: send_go: write error l=%ld(%s)\n", 
+                len, strerror(errno));
         *s->has_error = MIG_STAT_WRITE_FAILED;
     }
 
@@ -767,15 +768,19 @@ static int migrate_incoming_fd(int fd)
 {
     int ret = 0;
     QEMUFile *f = qemu_fopen_fd(fd);
-    uint32_t addr;
+    uint32_t addr, size;
     extern void qemu_announce_self(void);
 
-    if (qemu_get_be32(f) != phys_ram_size)
+    size = qemu_get_be32(f);
+    if (size != phys_ram_size) {
+        fprintf(stderr, "migration: memory size mismatch: recv %u mine %u\n",
+                size, phys_ram_size);
 	return MIG_STAT_DST_MEM_SIZE_MISMATCH;
+    }
 
 #ifdef USE_KVM
     if (kvm_allowed) {
-        int n, i;
+        int n;
         unsigned char *phys_ram_page_exist_bitmap = NULL;
 
         /* allocate memory bitmap */
@@ -880,6 +885,8 @@ send_ack:
     if (len == -1 && errno == EAGAIN)
 	goto send_ack;
     if (len != 1) {
+        fprintf(stderr, "migration: send_ack: write error len=%ld (%s)\n",
+                len, strerror(errno));
         rc = MIG_STAT_DST_WRITE_FAILED;
 	goto error_accept;
     }
@@ -894,8 +901,11 @@ wait_for_go:
     len = read(sfd, &status, 1);
     if (len == -1 && errno == EAGAIN)
 	goto wait_for_go;
-    if (len != 1)
+    if (len != 1) {
         rc = MIG_STAT_DST_READ_FAILED;
+        fprintf(stderr, "migration: wait_for_go: read error len=%ld (%s)\n",
+                len, strerror(errno));
+    }
 
 error_accept:
     close(sfd);
