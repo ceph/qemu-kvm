@@ -18,6 +18,13 @@ optparser.add_option('--install',
                      default = False,
                      )
 
+optparser.add_option('-m', '--memory',
+                     help = 'guest memory in MB',
+		     type = 'int',
+                     default = 384,
+		     dest = 'memory',
+                     )
+
 optparser.add_option('--debugger',
                      help = 'wait for gdb',
                      action = 'store_true',
@@ -161,7 +168,7 @@ else:
     cmd = '/usr/bin/kvm'
 
 qemu_args = (cmd, '-boot', bootdisk,
-             '-hda', disk, '-m', '384',
+             '-hda', disk, '-m', str(options.memory),
              '-serial', 'file:/tmp/serial.log',
              #'-usbdevice', 'tablet',
           )
