@@ -26,13 +26,12 @@
 #define PAGE_SIZE 4096ul
 
 
-static int balloon_op(int *fd, int op, int bytes)
+static int balloon_op(int *fd, int bytes)
 {
 	struct kvm_balloon_op bop;
         int r;
 
 	bop.npages = bytes/PAGE_SIZE;
-	bop.op = op;
 	r = ioctl(*fd, KVM_BALLOON_OP, &bop);
 	if (r == -1)
 		return -errno;
@@ -55,7 +54,6 @@ static int balloon_init(int *fd)
 int main(int argc, char *argv[])
 {
 	int fd;
-	int op;
 	int r;
 	int bytes;
 
@@ -67,10 +65,9 @@ int main(int argc, char *argv[])
 
 	switch (*argv[1]) {
 	case 'i':
-		op = KVM_BALLOON_OP_INFLATE;
 		break;
 	case 'd':
-		op = KVM_BALLOON_OP_DEFLATE;
+		bytes = -bytes;
 		break;
 	default:
 		perror("Wrong op param\n");
@@ -82,7 +79,7 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	if ((r = balloon_op(&fd, op, bytes))) {
+	if ((r = balloon_op(&fd, bytes))) {
 		perror("balloon_op failed\n");
 		goto out;
 	}
