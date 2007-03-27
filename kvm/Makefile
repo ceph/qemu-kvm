@@ -30,6 +30,7 @@ install-rpm:
 	mkdir -p $(DESTDIR)/etc/udev/rules.d
 	make -C qemu DESTDIR=$(DESTDIR)/ install
 	ln -sf /usr/kvm/bin/qemu-system-x86_64 $(DESTDIR)/$(bin)
+	install -m 755 kvm_stat $(DESTDIR)/$(bindir)/kvm_stat
 	cp scripts/kvm $(DESTDIR)/$(initdir)/kvm
 	cp scripts/qemu-ifup $(DESTDIR)/$(confdir)/qemu-ifup
 	install -t $(DESTDIR)/etc/udev/rules.d scripts/*kvm*.rules
@@ -56,7 +57,7 @@ srpm:
 	tar czf SOURCES/user.tar.gz user
 	tar czf SOURCES/kernel.tar.gz kernel
 	tar czf SOURCES/scripts.tar.gz scripts
-	cp Makefile configure SOURCES
+	cp Makefile configure kvm_stat SOURCES
 	rpmbuild  --define="_topdir $$(pwd)" -bs $(tmpspec)
 	$(RM) $(tmpspec)
 

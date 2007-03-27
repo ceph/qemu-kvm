@@ -96,6 +96,7 @@ make DESTDIR=%{buildroot} install-rpm
 
 %files
 /usr/bin/kvm
+/usr/bin/kvm_stat
 %{confdir}/qemu-ifup
 %{initdir}/kvm  
 /etc/udev/rules.d/*kvm*.rules
