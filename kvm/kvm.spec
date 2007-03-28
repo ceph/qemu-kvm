@@ -31,6 +31,7 @@ Source2: kernel.tar.gz
 Source3: scripts.tar.gz
 Source4: Makefile
 Source5: configure
+Source5: kvm_stat
 %endif
 
 %description
@@ -45,7 +46,7 @@ with hardware support for virtualization: Intel's VT and AMD's AMD-V.
 %setup -T -b 2 -n kernel -D
 %setup -T -b 3 -n scripts -D
 cd ..
-cp %{_sourcedir}/Makefile %{_sourcedir}/configure .
+cp %{_sourcedir}/Makefile %{_sourcedir}/configure %{_sourcedir}/kvm_stat .
 %endif
 
 %build
