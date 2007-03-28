@@ -222,9 +222,10 @@ static inline void pic_intack(PicState *s, int irq)
         s->irr &= ~(1 << irq);
 
     if (time_drift_fix && irq == 0) {
-        extern int64_t timer_acks, timer_interrupts;
+        extern int64_t timer_acks, timer_ints_to_push;
         timer_acks++;
-        if (timer_interrupts > timer_acks) {
+        if (timer_ints_to_push > 0) {
+            timer_ints_to_push--;
             pic_set_irq(0, 0); /* set it low (edge irq)*/
             pic_set_irq(0, 1); /* interrupt again */
         }

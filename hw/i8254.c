@@ -358,7 +358,7 @@ static uint32_t pit_ioport_read(void *opaque, uint32_t addr)
 }
 
 /* global counters for time-drift fix */
-int64_t timer_acks=0, timer_interrupts=0;
+int64_t timer_acks=0, timer_interrupts=0, timer_ints_to_push=0;
 
 static void pit_irq_timer_update(PITChannelState *s, int64_t current_time)
 {
@@ -370,8 +370,18 @@ static void pit_irq_timer_update(PITChannelState *s, int64_t current_time)
     expire_time = pit_get_next_transition_time(s, current_time);
     irq_level = pit_get_out1(s, current_time);
     pic_set_irq(s->irq, irq_level);
-    if (time_drift_fix && irq_level==1)
+    if (time_drift_fix && irq_level==1) {
+        /* FIXME: fine tune timer_max_fix (max fix per tick). 
+         *        Should it be 1 (double time), 2 , 4, 10 ? 
+         *        Currently setting it to 5% of ticks-per-second (per tick)
+         */
+        const int64_t timer_max_fix = (s->count>0)? (PIT_FREQ/s->count/20) : 0;
+        const int64_t delta = timer_interrupts - timer_acks;
+        if (delta > 0) {
+            timer_ints_to_push = MIN(delta, timer_max_fix);
+        }
         timer_interrupts++;
+    }
 #ifdef DEBUG_PIT
     printf("irq_level=%d next_delay=%f\n",
            irq_level, 
