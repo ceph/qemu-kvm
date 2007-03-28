@@ -45,6 +45,8 @@ int modify_ldt(int func, void *ptr, unsigned long bytecount)
 #endif
 #endif /* USE_CODE_COPY */
 
+extern const char *cpu_vendor_string;
+
 CPUX86State *cpu_x86_init(void)
 {
     CPUX86State *env;
@@ -118,6 +120,10 @@ CPUX86State *cpu_x86_init(void)
         {
             const char *model_id = "QEMU Virtual CPU version " QEMU_VERSION;
             int c, len, i;
+
+            if (cpu_vendor_string != NULL)
+		model_id = cpu_vendor_string;
+
             len = strlen(model_id);
             for(i = 0; i < 48; i++) {
                 if (i >= len)

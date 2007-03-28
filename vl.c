@@ -181,6 +181,7 @@ int nb_option_roms;
 int semihosting_enabled = 0;
 int autostart = 1;
 int time_drift_fix = 1;
+const char *cpu_vendor_string;
 
 /***********************************************************/
 /* x86 ISA bus support */
@@ -6523,6 +6524,7 @@ enum {
 #if defined(__linux__)
     QEMU_OPTION_no_rtc,
 #endif
+    QEMU_OPTION_cpu_vendor,
 };
 
 typedef struct QEMUOption {
@@ -6619,6 +6621,7 @@ const QEMUOption qemu_options[] = {
 #if defined(__linux__)
     { "no-rtc", 0, QEMU_OPTION_no_rtc },
 #endif
+    { "cpu-vendor", HAS_ARG, QEMU_OPTION_cpu_vendor },
     { NULL },
 };
 
@@ -7342,6 +7345,9 @@ int main(int argc, char **argv)
 		use_rtc = 0;
 		break;
 #endif
+	    case QEMU_OPTION_cpu_vendor:
+		cpu_vendor_string = optarg;
+		break;
             }
         }
     }
