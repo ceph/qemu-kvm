@@ -382,8 +382,8 @@ static void pit_irq_timer_update(PITChannelState *s, int64_t current_time)
         if ((delta >  max_delta) && (pit_ticks_per_sec > 0)) {
             printf("time drift is too long, %ld seconds were lost\n", delta/pit_ticks_per_sec);
             timer_acks = timer_interrupts;
-        }
-        if (delta > 0) {
+            timer_ints_to_push = 0;
+        } else if (delta > 0) {
             timer_ints_to_push = MIN(delta, timer_max_fix);
         }
         timer_interrupts++;
