@@ -140,11 +140,10 @@ if options.kvm and options.reload:
 
 disk = options.image
 if options.install:
-    fd = file(disk, 'w')
-    fd.truncate()
-    fd.seek(10*1024*1024*1024-1)
-    fd.write('\0')
-    fd.close()
+    (status, output) = commands.getstatusoutput(
+        'qemu/qemu-img create -f qcow2 "%s" 10G' % disk)
+    if status:
+        raise Exception, output
 
 bootdisk = 'c'
 if options.install:
