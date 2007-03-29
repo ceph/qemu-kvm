@@ -373,10 +373,16 @@ static void pit_irq_timer_update(PITChannelState *s, int64_t current_time)
     if (time_drift_fix && irq_level==1) {
         /* FIXME: fine tune timer_max_fix (max fix per tick). 
          *        Should it be 1 (double time), 2 , 4, 10 ? 
-         *        Currently setting it to 5% of ticks-per-second (per tick)
+         *        Currently setting it to 5% of PIT-ticks-per-second (per PIT-tick)
          */
-        const int64_t timer_max_fix = (s->count>0)? (PIT_FREQ/s->count/20) : 0;
-        const int64_t delta = timer_interrupts - timer_acks;
+        const long pit_ticks_per_sec = (s->count>0) ? (PIT_FREQ/s->count) : 0;
+        const long timer_max_fix = pit_ticks_per_sec/20;
+        const long delta = timer_interrupts - timer_acks;
+        const long max_delta = pit_ticks_per_sec * 60; /* one minute */
+        if ((delta >  max_delta) && (pit_ticks_per_sec > 0)) {
+            printf("time drift is too long, %ld seconds were lost\n", delta/pit_ticks_per_sec);
+            timer_acks = timer_interrupts;
+        }
         if (delta > 0) {
             timer_ints_to_push = MIN(delta, timer_max_fix);
         }
