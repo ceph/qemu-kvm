@@ -237,6 +237,9 @@ typedef struct CirrusVGAState {
 #ifdef USE_KVM
     unsigned long cirrus_lfb_addr;
     unsigned long cirrus_lfb_end;
+    int aliases_enabled;
+    uint32_t aliased_bank_base[2];
+    uint32_t aliased_bank_limit[2];
 #endif
     uint32_t cirrus_addr_mask;
     uint32_t linear_mmio_mask;
@@ -1302,6 +1305,8 @@ cirrus_hook_write_sr(CirrusVGAState * s, unsigned reg_index, int reg_value)
 	printf("cirrus: handled outport sr_index %02x, sr_value %02x\n",
 	       reg_index, reg_value);
 #endif
+	if (reg_index == 0x07)
+	    cirrus_update_memory_access(s);
 	break;
     case 0x17:			// Configuration Readback and Extended Control
 	s->sr[reg_index] = (s->sr[reg_index] & 0x38) | (reg_value & 0xc7);
@@ -1448,6 +1453,7 @@ cirrus_hook_write_gr(CirrusVGAState * s, unsigned reg_index, int reg_value)
 	s->gr[reg_index] = reg_value;
 	cirrus_update_bank_ptr(s, 0);
 	cirrus_update_bank_ptr(s, 1);
+        cirrus_update_memory_access(s);
         break;
     case 0x0B:
 	s->gr[reg_index] = reg_value;
@@ -2576,12 +2582,50 @@ static int unset_vram_mapping(unsigned long begin, unsigned long end)
     return 0;
 }
 
+static void kvm_update_vga_alias(CirrusVGAState *s, int ok, int bank)
+{
+    unsigned limit, base;
+
+    if (!ok && !s->aliases_enabled)
+	return;
+    limit = s->cirrus_bank_limit[bank];
+    if (limit > 0x8000)
+	limit = 0x8000;
+    if (!ok)
+	limit = 0;
+    base = s->cirrus_lfb_addr + s->cirrus_bank_base[bank];
+    if (ok) {
+	if (!s->aliases_enabled
+	    || base != s->aliased_bank_base[bank]
+	    || limit != s->aliased_bank_limit[bank]) {
+	    kvm_create_memory_alias(kvm_context, bank,
+				    0xa0000 + bank * 0x8000,
+				    limit, base);
+	    s->aliased_bank_base[bank] = s->cirrus_bank_base[bank];
+	    s->aliased_bank_limit[bank] = limit;
+	}
+    } else {
+	kvm_destroy_memory_alias(kvm_context, bank);
+    }
+}
+
+static void kvm_update_vga_aliases(CirrusVGAState *s, int ok)
+{
+    if (kvm_allowed) {
+	kvm_update_vga_alias(s, ok, 0);
+	kvm_update_vga_alias(s, ok, 1);
+    }
+}
+
 #endif
 
 /* Compute the memory access functions */
 static void cirrus_update_memory_access(CirrusVGAState *s)
 {
     unsigned mode;
+#ifdef USE_KVM
+    int want_vga_alias = 0;
+#endif
 
     if ((s->sr[0x17] & 0x44) == 0x44) {
         goto generic_io;
@@ -2613,6 +2657,12 @@ static void cirrus_update_memory_access(CirrusVGAState *s)
                 s->map_addr = s->cirrus_lfb_addr;
                 s->map_end = s->cirrus_lfb_end;
             }
+	    if (kvm_allowed
+		&& !(s->cirrus_srcptr != s->cirrus_srcptr_end)
+		&& !((s->sr[0x07] & 0x01) == 0)
+		&& !((s->gr[0x0B] & 0x14) == 0x14)
+		&& !(s->gr[0x0B] & 0x02))
+		want_vga_alias = 1;
 #endif
             s->cirrus_linear_write[0] = cirrus_linear_mem_writeb;
             s->cirrus_linear_write[1] = cirrus_linear_mem_writew;
@@ -2640,6 +2690,9 @@ static void cirrus_update_memory_access(CirrusVGAState *s)
             s->cirrus_linear_write[2] = cirrus_linear_writel;
         }
     }
+#ifdef USE_KVM
+    kvm_update_vga_aliases(s, want_vga_alias);
+#endif
 }
 
 
