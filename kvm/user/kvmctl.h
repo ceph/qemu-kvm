@@ -278,6 +278,25 @@ void kvm_destroy_phys_mem(kvm_context_t, unsigned long phys_start,
 			  unsigned long len);
 int kvm_get_dirty_pages(kvm_context_t, int slot, void *buf);
 
+
+/*
+ * \brief Create a memory alias
+ *
+ * Aliases a portion of physical memory to another portion.  If the guest
+ * accesses the alias region, it will behave exactly as if it accessed
+ * the target memory.
+ */
+int kvm_create_memory_alias(kvm_context_t, int slot,
+			    uint64_t phys_start, uint64_t len,
+			    uint64_t target_phys);
+
+/*
+ * \brief Destroy a memory alias
+ *
+ * Removes an alias created with kvm_create_memory_alias().
+ */
+int kvm_destroy_memory_alias(kvm_context_t, int slot);
+
 /*!
  * \brief get a bitmap of guest ram pages which are allocated to the guest.
  *
