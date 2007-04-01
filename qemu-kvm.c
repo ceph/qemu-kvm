@@ -136,9 +136,10 @@ static void fix_realmode_dataseg(struct kvm_segment *seg)
 static void load_regs(CPUState *env)
 {
     struct kvm_regs regs;
+    struct kvm_fpu fpu;
     struct kvm_sregs sregs;
     struct kvm_msr_entry msrs[MSR_COUNT];
-    int rc, n;
+    int rc, n, i;
 
     /* hack: save env */
     if (!saved_env[0])
@@ -167,6 +168,17 @@ static void load_regs(CPUState *env)
     regs.rip = env->eip;
 
     kvm_set_regs(kvm_context, 0, &regs);
+
+    memset(&fpu, 0, sizeof fpu);
+    fpu.fsw = env->fpus & ~(7 << 11);
+    fpu.fsw |= (env->fpstt & 7) << 11;
+    fpu.fcw = env->fpuc;
+    for (i = 0; i < 8; ++i)
+	fpu.ftwx |= (!env->fptags[i]) << i;
+    memcpy(fpu.fpr, env->fpregs, sizeof env->fpregs);
+    memcpy(fpu.xmm, env->xmm_regs, sizeof env->xmm_regs);
+    fpu.mxcsr = env->mxcsr;
+    kvm_set_fpu(kvm_context, 0, &fpu);
 
     memcpy(sregs.interrupt_bitmap, env->kvm_interrupt_bitmap, sizeof(sregs.interrupt_bitmap));
 
@@ -245,6 +257,7 @@ static void load_regs(CPUState *env)
 static void save_regs(CPUState *env)
 {
     struct kvm_regs regs;
+    struct kvm_fpu fpu;
     struct kvm_sregs sregs;
     struct kvm_msr_entry msrs[MSR_COUNT];
     uint32_t hflags;
@@ -273,6 +286,16 @@ static void save_regs(CPUState *env)
 
     env->eflags = regs.rflags;
     env->eip = regs.rip;
+
+    kvm_get_fpu(kvm_context, 0, &fpu);
+    env->fpstt = (fpu.fsw >> 11) & 7;
+    env->fpus = fpu.fsw;
+    env->fpuc = fpu.fcw;
+    for (i = 0; i < 8; ++i)
+	env->fptags[i] = !((fpu.ftwx >> i) & 1);
+    memcpy(env->fpregs, fpu.fpr, sizeof env->fpregs);
+    memcpy(env->xmm_regs, fpu.xmm, sizeof env->xmm_regs);
+    env->mxcsr = fpu.mxcsr;
 
     kvm_get_sregs(kvm_context, 0, &sregs);
 
