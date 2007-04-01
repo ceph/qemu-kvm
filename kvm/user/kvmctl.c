@@ -485,6 +485,16 @@ int kvm_set_regs(kvm_context_t kvm, int vcpu, struct kvm_regs *regs)
     return ioctl(kvm->vcpu_fd[vcpu], KVM_SET_REGS, regs);
 }
 
+int kvm_get_fpu(kvm_context_t kvm, int vcpu, struct kvm_fpu *fpu)
+{
+    return ioctl(kvm->vcpu_fd[vcpu], KVM_GET_FPU, fpu);
+}
+
+int kvm_set_fpu(kvm_context_t kvm, int vcpu, struct kvm_fpu *fpu)
+{
+    return ioctl(kvm->vcpu_fd[vcpu], KVM_SET_FPU, fpu);
+}
+
 int kvm_get_sregs(kvm_context_t kvm, int vcpu, struct kvm_sregs *sregs)
 {
     return ioctl(kvm->vcpu_fd[vcpu], KVM_GET_SREGS, sregs);
