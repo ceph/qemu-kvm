@@ -281,15 +281,13 @@ static void migrate_prepare_page(MigrationState *s)
     if (ram_page_is_homogeneous(s->addr)) {
         type = 1; /* keeping ram_get_page() values */
         bufflen = 4;
-        value = cpu_to_be32(s->addr);
-        buff = (const char *)&value;
     }
     else {
         type = 0;
         bufflen = TARGET_PAGE_SIZE;
-        buff = phys_ram_base + s->addr;
     }
     
+    buff = phys_ram_base + s->addr;
     s->buffer[4] = type;
     memcpy(s->buffer + 4 + 1, phys_ram_base + s->addr, bufflen);
     s->n_buffer = 0;
@@ -754,7 +752,9 @@ static int migrate_incoming_page(QEMUFile *f, uint32_t addr)
             ret = MIG_STAT_DST_GET_PAGE_FAILED;
         break;
     case 1: /* homogeneous page -- a single byte */
-        v = qemu_get_be32(f);
+        l = qemu_get_buffer(f, (void*)&v, 4);
+        if (l != 4)
+            ret = MIG_STAT_DST_GET_PAGE_FAILED;
         migrate_incoming_homogeneous_page(addr, v);
         break;
     default: 
