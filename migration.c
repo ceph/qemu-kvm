@@ -167,6 +167,7 @@ static void migrate_finish(MigrationState *s)
     QEMUFile *f;
     int ret = 0;
     int *has_error = s->has_error;
+    int saved_vm_running = vm_running;
 
     fcntl(s->fd, F_SETFL, 0);
 
@@ -186,7 +187,8 @@ static void migrate_finish(MigrationState *s)
         status = MIG_STAT_SAVEVM_FAILED;
     if (status) {
 	term_printf("Migration failed! ret=%d error=%d\n", ret, *has_error);
-	vm_start();
+	if (saved_vm_running)
+            vm_start();
     }
     if (!s->detach)
 	monitor_resume();
@@ -383,6 +385,7 @@ static int start_migration(MigrationState *s)
     uint32_t value = cpu_to_be32(phys_ram_size);
     target_phys_addr_t addr;
     int r;
+    unsigned char running = vm_running?2:1; /* 1 + vm_running */
 
 #ifdef USE_KVM
     int n = 0;
@@ -404,6 +407,8 @@ static int start_migration(MigrationState *s)
 #endif
 	
     r = MIG_STAT_WRITE_FAILED;
+    if (write_whole_buffer(s->fd, &running, sizeof(running)))
+        goto out;
     if (write_whole_buffer(s->fd, &value, sizeof(value)))
         goto out;
 
@@ -770,6 +775,15 @@ static int migrate_incoming_fd(int fd)
     QEMUFile *f = qemu_fopen_fd(fd);
     uint32_t addr, size;
     extern void qemu_announce_self(void);
+    unsigned char running;
+
+    running = qemu_get_byte(f);
+    if ((running != 1) && (running != 2)) {
+        fprintf(stderr, "migration: illegal running value %u, not (1 or 2)\n", 
+                running);
+	return MIG_STAT_DST_MEM_SIZE_MISMATCH;
+    }
+    autostart = running - 1;
 
     size = qemu_get_be32(f);
     if (size != phys_ram_size) {
