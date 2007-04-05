@@ -199,10 +199,7 @@ static void hc_save(QEMUFile* f,void* opaque)
 {
     HypercallState* s=(HypercallState*)opaque;
 
-    if (s->pci_dev)
-    {
-        pci_device_save(s->pci_dev, f);
-    }
+    pci_device_save(s->pci_dev, f);
 
     qemu_put_be32s(f, &s->hcr);
     qemu_put_be32s(f, &s->hsr);
