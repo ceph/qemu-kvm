@@ -195,6 +195,49 @@ static void hypercall_update_irq(HypercallState *s)
     pci_set_irq(s->pci_dev, 0, !(s->hcr & HCR_DI));
 }
 
+static void hc_save(QEMUFile* f,void* opaque)
+{
+    HypercallState* s=(HypercallState*)opaque;
+
+    if (s->pci_dev)
+    {
+        pci_device_save(s->pci_dev, f);
+    }
+
+    qemu_put_be32s(f, &s->hcr);
+    qemu_put_be32s(f, &s->hsr);
+    qemu_put_be32s(f, &s->txsize);
+    qemu_put_be32s(f, &s->txbuff);
+    qemu_put_be32s(f, &s->rxsize);
+    qemu_put_buffer(f, s->RxBuff, HP_MEM_SIZE);
+    qemu_put_buffer(f, s->txbufferaccu, HP_MEM_SIZE);
+    qemu_put_be32s(f, &s->irq);
+    qemu_put_be32s(f, &s->index);
+
+}
+
+static int hc_load(QEMUFile* f,void* opaque,int version_id)
+{
+    HypercallState* s=(HypercallState*)opaque;
+    int ret;
+
+    ret = pci_device_load(s->pci_dev, f);
+    if (ret < 0)
+        return ret;
+
+    qemu_get_be32s(f, &s->hcr);
+    qemu_get_be32s(f, &s->hsr);
+    qemu_get_be32s(f, &s->txsize);
+    qemu_get_be32s(f, &s->txbuff);
+    qemu_get_be32s(f, &s->rxsize);
+    qemu_get_buffer(f, s->RxBuff, HP_MEM_SIZE);
+    qemu_get_buffer(f, s->txbufferaccu, HP_MEM_SIZE);
+    qemu_get_be32s(f, &s->irq);
+    qemu_get_be32s(f, &s->index);
+
+    return 0;
+}
+
 void pci_hypercall_single_init(PCIBus *bus, uint32_t deviceid, uint32_t index)
 {
     PCIHypercallState *d;
@@ -202,8 +245,10 @@ void pci_hypercall_single_init(PCIBus *bus, uint32_t deviceid, uint32_t index)
     uint8_t *pci_conf;
     char name[sizeof("HypercallX")];
 
+    sprintf(name, "Hypercall%d", index);
+
 #ifdef HYPERCALL_DEBUG
-    printf("%s\n", __FUNCTION__);
+    printf("%s, devicename:%s\n", __FUNCTION__, name);
 #endif
 
     // If the vmchannel wasn't initialized, we don't want the Hypercall device in the guest
@@ -238,6 +283,7 @@ void pci_hypercall_single_init(PCIBus *bus, uint32_t deviceid, uint32_t index)
     s->pci_dev = (PCIDevice *)d;
 
     hp_reset(s);
+    register_savevm(name, index, 1, hc_save, hc_load, s);
 }
 
 void pci_hypercall_init(PCIBus *bus)
