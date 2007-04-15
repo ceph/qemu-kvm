@@ -176,6 +176,7 @@ static void migrate_finish(MigrationState *s)
         do {
             qemu_aio_flush();
         } while (qemu_bh_poll());
+        bdrv_flush_all();
         vm_stop(0);
         qemu_put_be32(f, 1);
         ret = qemu_live_savevm_state(f);
