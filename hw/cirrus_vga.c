@@ -2601,7 +2601,7 @@ static void kvm_update_vga_alias(CirrusVGAState *s, int ok, int bank)
 	    kvm_create_memory_alias(kvm_context, bank,
 				    0xa0000 + bank * 0x8000,
 				    limit, base);
-	    s->aliased_bank_base[bank] = s->cirrus_bank_base[bank];
+	    s->aliased_bank_base[bank] = base;
 	    s->aliased_bank_limit[bank] = limit;
 	}
     } else {
@@ -2615,6 +2615,7 @@ static void kvm_update_vga_aliases(CirrusVGAState *s, int ok)
 	kvm_update_vga_alias(s, ok, 0);
 	kvm_update_vga_alias(s, ok, 1);
     }
+    s->aliases_enabled = ok;
 }
 
 #endif
