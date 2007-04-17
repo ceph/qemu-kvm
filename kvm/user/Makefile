@@ -49,6 +49,8 @@ test/access.flat: test/cstart64.o test/access.o test/printf.o test/print.o
 
 test/sieve.flat: test/cstart64.o test/sieve.o test/print.o test/vm.o
 
+test/vmexit.flat: test/cstart.o test/vmexit.o test/printf.o
+
 test/test32.flat: test/test32.o
 
 test/%.o: CFLAGS += -std=gnu99 -ffreestanding
