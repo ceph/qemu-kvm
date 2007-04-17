@@ -7,7 +7,7 @@
 stacktop:
 
 .section .init
-	lea stacktop, %rsp
+	lea stacktop, %esp
 	call main
 1:	hlt
 	jmp 1b
