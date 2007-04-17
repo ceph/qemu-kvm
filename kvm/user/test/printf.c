@@ -144,6 +144,12 @@ int snprintf(char *buf, int size, const char *fmt, ...)
     return r;
 }
 
+void print_serial(const char *buf)
+{
+    while (*buf)
+	asm volatile ("out %%al, $0xf1" : : "a"(*buf++));
+}
+
 int printf(const char *fmt, ...)
 {
     va_list va;
@@ -153,6 +159,6 @@ int printf(const char *fmt, ...)
     va_start(va, fmt);
     r = vsnprintf(buf, sizeof buf, fmt, va);
     va_end(va);
-    print(buf);
+    print_serial(buf);
     return r;
 }
