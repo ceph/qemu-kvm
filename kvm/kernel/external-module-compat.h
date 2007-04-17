@@ -94,6 +94,18 @@ static inline int smp_call_function_single1(int cpu, void (*func)(void *info),
 #endif
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17)
+#ifndef kmem_cache_zalloc
+#define kmem_cache_zalloc(cache,flags)			  \
+({							  \
+	void *__ret = kmem_cache_alloc(cache, flags);	  \
+	if (__ret)                                        \
+		memset(__ret, 0, kmem_cache_size(cache)); \
+	__ret;                                            \
+})
+#endif
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,21)
 
 #ifndef CONFIG_HOTPLUG_CPU
