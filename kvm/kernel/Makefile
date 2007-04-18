@@ -39,7 +39,8 @@ tmpspec = .tmp.kvm-kmod.spec
 RPMDIR = $$(pwd)/../RPMS
 rpm:	all
 	mkdir -p ../BUILD $(RPMDIR)/$$(uname -m)
-	sed 's/^Release:.*/Release: $(rpmrelease)/' kvm-kmod.spec > $(tmpspec)
+	sed 's/^Release:.*/Release: $(rpmrelease)/; s/^%define kverrel.*/%define kverrel $(KVERREL)/' \
+	     kvm-kmod.spec > $(tmpspec)
 	rpmbuild --define="kverrel $(KVERREL)" \
 		 --define="objdir $$(pwd)" \
 		 --define="_rpmdir $(RPMDIR)" \

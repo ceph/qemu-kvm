@@ -24,6 +24,7 @@ rm -rf %{buildroot}
 
 %install
 
+%define kverrel unknown
 %define moddir /lib/modules/%{kverrel}/extra
 mkdir -p %{buildroot}/%{moddir}
 cp %{objdir}/%{kmod_name}.ko %{objdir}/%{kmod_name}-intel.ko %{objdir}/%{kmod_name}-amd.ko %{buildroot}/%{moddir}
