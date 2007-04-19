@@ -11,8 +11,10 @@ DESTDIR =
 
 ifeq ($(shell uname -m), x86_64)
 LIBDIR = /lib64
+cstart.o = test/cstart64.o
 else
 LIBDIR = /lib
+cstart.o = test/cstart.o
 endif
 
 all: kvmctl libkvm.a
@@ -26,7 +28,7 @@ libkvm.a: kvmctl.o
 
 flatfiles: test/simple.flat test/stringio.flat test/memtest1.flat \
 	test/irq.flat test/sieve.flat test/bootstrap \
-	test/access.flat
+	test/access.flat test/vmexit.flat
 
 install:
 	install -D kvmctl.h $(DESTDIR)/$(PREFIX)/include/kvmctl.h
@@ -45,11 +47,11 @@ test/bootstrap: test/bootstrap.o
 
 test/irq.flat: test/print.o
 
-test/access.flat: test/cstart64.o test/access.o test/printf.o test/print.o
+test/access.flat: $(cstart.o) test/access.o test/printf.o test/print.o
 
-test/sieve.flat: test/cstart64.o test/sieve.o test/print.o test/vm.o
+test/sieve.flat: $(cstart.o) test/sieve.o test/print.o test/vm.o
 
-test/vmexit.flat: test/cstart.o test/vmexit.o test/printf.o
+test/vmexit.flat: $(cstart.o) test/vmexit.o test/printf.o
 
 test/test32.flat: test/test32.o
 
