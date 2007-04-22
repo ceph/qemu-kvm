@@ -2,7 +2,7 @@
 include config.mak
 
 CFLAGS = -I $(KERNELDIR)/include $(autodepend-flags) -g -fomit-frame-pointer \
-	-Wall
+	-Wall -m$(bits)
 CXXFLAGS = $(autodepend-flags) 
 
 autodepend-flags = -MMD -MF $(dir $*).$(notdir $*).d
@@ -12,9 +12,13 @@ DESTDIR =
 ifeq ($(shell uname -m), x86_64)
 LIBDIR = /lib64
 cstart.o = test/cstart64.o
+bits = 64
+ldarch = elf64-x86-64
 else
 LIBDIR = /lib
 cstart.o = test/cstart.o
+bits = 32
+ldarch = elf32-i386
 endif
 
 all: kvmctl libkvm.a
@@ -37,13 +41,13 @@ install:
 	install -D libkvm.a $(DESTDIR)/$(PREFIX)/$(LIBDIR)/libkvm.a
 
 %.flat: %.o
-	gcc -nostdlib -o $@ -Wl,-T,flat.lds $^
+	gcc $(CFLAGS) -nostdlib -o $@ -Wl,-T,flat.lds $^
 
 test/bootstrap: test/bootstrap.o
 	gcc -nostdlib -o $@ -Wl,-T,bootstrap.lds $^
 
 %.o: %.S
-	gcc -c -nostdlib -o $@ $^
+	gcc $(CFLAGS) -c -nostdlib -o $@ $^
 
 test/irq.flat: test/print.o
 
