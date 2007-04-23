@@ -682,6 +682,49 @@ void kvm_qemu_destroy(void)
     kvm_finalize(kvm_context);
 }
 
+static void host_cpuid(uint32_t function, uint32_t *eax, uint32_t *ebx,
+		       uint32_t *ecx, uint32_t *edx)
+{
+    uint32_t vec[4];
+
+    vec[0] = function;
+    asm volatile (
+#ifdef __x86_64__
+         "push %0;  push %%rsi \n\t"
+	 "push %%rax; push %%rbx; push %%rcx; push %%rdx \n\t"
+	 "mov 8*5(%%rsp), %%rsi \n\t"
+	 "mov (%%rsi), %%eax \n\t"
+	 "cpuid \n\t"
+	 "mov %%eax, (%%rsi) \n\t"
+	 "mov %%ebx, 4(%%rsi) \n\t"
+	 "mov %%ecx, 8(%%rsi) \n\t"
+	 "mov %%edx, 12(%%rsi) \n\t"
+	 "pop %%rdx; pop %%rcx; pop %%rbx; pop %%rax \n\t"
+	 "pop %%rsi; pop %0 \n\t"
+#else
+         "push %0;  push %%esi \n\t"
+	 "push %%eax; push %%ebx; push %%ecx; push %%edx \n\t"
+	 "mov 4*5(%%esp), %%esi \n\t"
+	 "mov (%%esi), %%eax \n\t"
+	 "cpuid \n\t"
+	 "mov %%eax, (%%esi) \n\t"
+	 "mov %%ebx, 4(%%esi) \n\t"
+	 "mov %%ecx, 8(%%esi) \n\t"
+	 "mov %%edx, 12(%%esi) \n\t"
+	 "pop %%edx; pop %%ecx; pop %%ebx; pop %%eax \n\t"
+	 "pop %%esi; pop %0 \n\t"
+#endif
+	 : : "rm"(vec) : "memory");
+    if (eax)
+	*eax = vec[0];
+    if (ebx)
+	*ebx = vec[1];
+    if (ecx)
+	*ecx = vec[2];
+    if (edx)
+	*edx = vec[3];
+}
+
 static void do_cpuid_ent(struct kvm_cpuid_entry *e, uint32_t function)
 {
     EAX = function;
@@ -694,17 +737,9 @@ static void do_cpuid_ent(struct kvm_cpuid_entry *e, uint32_t function)
     if (function == 1)
 	e->edx &= ~(1 << 12); /* disable mtrr support */
     if (function == 0x80000001) {
-	unsigned long h_eax = function, h_edx;
+	uint32_t h_eax, h_edx;
 
-
-	// push/pop hack to workaround gcc 3 register pressure trouble
-	asm (
-#ifdef __x86_64__
-	     "push %%rbx; push %%rcx; cpuid; pop %%rcx; pop %%rbx"
-#else
-	     "push %%ebx; push %%ecx; cpuid; pop %%ecx; pop %%ebx"
-#endif
-	     : "+a"(h_eax), "=d"(h_edx));
+	host_cpuid(function, &h_eax, NULL, NULL, &h_edx);
 
 	// long mode
 	if ((h_edx & 0x20000000) == 0)
@@ -722,27 +757,8 @@ static void do_cpuid_ent(struct kvm_cpuid_entry *e, uint32_t function)
     // is you use compatibility mode.
     if (function == 0) {
 	uint32_t bcd[3];
-	asm (
-#ifdef __x86_64__
-	     "push %%rax; push %%rbx; push %%rcx; push %%rdx \n\t"
-	     "mov $0, %%eax \n\t"
-	     "cpuid \n\t"
-	     "mov (%%rsp), %%rax \n\t"
-	     "mov %%ebx, (%%rax) \n\t"
-	     "mov %%ecx, 4(%%rax) \n\t"
-	     "mov %%edx, 8(%%rax) \n\t"
-	     "pop %%rdx; pop %%rcx; pop %%rbx; pop %%rax"
-#else
-	     "push %%eax; push %%ebx; push %%ecx; push %%edx \n\t"
-	     "mov $0, %%eax \n\t"
-	     "cpuid \n\t"
-	     "mov (%%esp), %%eax \n\t"
-	     "mov %%ebx, (%%eax) \n\t"
-	     "mov %%ecx, 4(%%eax) \n\t"
-	     "mov %%edx, 8(%%eax) \n\t"
-	     "pop %%edx; pop %%ecx; pop %%ebx; pop %%eax"
-#endif
-	     : : "d"(bcd) : "memory");
+
+	host_cpuid(0, NULL, &bcd[0], &bcd[1], &bcd[2]);
 	e->ebx = bcd[0];
 	e->ecx = bcd[1];
 	e->edx = bcd[2];
