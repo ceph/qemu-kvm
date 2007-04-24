@@ -690,6 +690,7 @@ static void host_cpuid(uint32_t function, uint32_t *eax, uint32_t *ebx,
     vec[0] = function;
     asm volatile (
 #ifdef __x86_64__
+	 "sub $128, %%rsp \n\t"  /* skip red zone */
          "push %0;  push %%rsi \n\t"
 	 "push %%rax; push %%rbx; push %%rcx; push %%rdx \n\t"
 	 "mov 8*5(%%rsp), %%rsi \n\t"
@@ -701,6 +702,7 @@ static void host_cpuid(uint32_t function, uint32_t *eax, uint32_t *ebx,
 	 "mov %%edx, 12(%%rsi) \n\t"
 	 "pop %%rdx; pop %%rcx; pop %%rbx; pop %%rax \n\t"
 	 "pop %%rsi; pop %0 \n\t"
+	 "add $128, %%rsp"
 #else
          "push %0;  push %%esi \n\t"
 	 "push %%eax; push %%ebx; push %%ecx; push %%edx \n\t"
