@@ -736,8 +736,6 @@ static void do_cpuid_ent(struct kvm_cpuid_entry *e, uint32_t function)
     e->ebx = EBX;
     e->ecx = ECX;
     e->edx = EDX;
-    if (function == 1)
-	e->edx &= ~(1 << 12); /* disable mtrr support */
     if (function == 0x80000001) {
 	uint32_t h_eax, h_edx;
 
