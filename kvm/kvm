@@ -131,10 +131,7 @@ if options.kvm and options.reload:
         remove_module(module)
     for module in ['kvm', vendor_module]:
         insert_module(module)
-    for i in range(5):
-        if os.access('/dev/kvm', os.F_OK):
-            break
-        time.sleep(0.1 + 0.2 * i)
+    commands.getstatusoutput('/sbin/udevsettle')
     if not os.access('/dev/kvm', os.F_OK):
         print '/dev/kvm not present'
 
