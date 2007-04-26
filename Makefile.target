@@ -591,7 +591,7 @@ clean:
 
 install: all 
 ifneq ($(PROGS),)
-	$(INSTALL) -m 755 -s $(PROGS) "$(DESTDIR)$(bindir)"
+	$(INSTALL) -m 755 $(PROGS) "$(DESTDIR)$(bindir)"
 endif
 
 ifneq ($(wildcard .depend),)
