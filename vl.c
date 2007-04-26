@@ -180,7 +180,7 @@ const char *option_rom[MAX_OPTION_ROMS];
 int nb_option_roms;
 int semihosting_enabled = 0;
 int autostart = 1;
-int time_drift_fix = 1;
+int time_drift_fix = 0;
 const char *cpu_vendor_string;
 
 /***********************************************************/
