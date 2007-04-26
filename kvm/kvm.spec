@@ -102,5 +102,4 @@ make DESTDIR=%{buildroot} install-rpm
 %{initdir}/kvm  
 /etc/udev/rules.d/*kvm*.rules
 /usr/kvm
-/usr/kvm/**
 %changelog
