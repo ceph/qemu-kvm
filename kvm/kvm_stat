@@ -19,7 +19,7 @@ class Stats:
         return self.values
 
 if not os.access('/sys/kernel/debug', os.F_OK):
-    print 'Please enable CONFIG_DEBUGFS in your kernel'
+    print 'Please enable CONFIG_DEBUG_FS in your kernel'
     sys.exit(1)
 if not os.access('/sys/kernel/debug/kvm', os.F_OK):
     print "Please mount debugfs ('mount -t debugfs debugfs /sys/kernel/debug')"
