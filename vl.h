@@ -1058,6 +1058,7 @@ typedef struct IOAPICState IOAPICState;
 
 int apic_init(CPUState *env);
 int apic_get_interrupt(CPUState *env);
+int apic_accept_pic_intr(CPUState *env);
 IOAPICState *ioapic_init(void);
 void ioapic_set_irq(void *opaque, int vector, int level);
 

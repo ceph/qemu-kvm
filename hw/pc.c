@@ -99,6 +99,9 @@ int cpu_get_pic_interrupt(CPUState *env)
         return intno;
     }
     /* read the irq from the PIC */
+    if (!apic_accept_pic_intr(env))
+        return -1;
+
     intno = pic_read_irq(isa_pic);
     return intno;
 }
