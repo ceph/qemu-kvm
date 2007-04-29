@@ -24,7 +24,7 @@
 #include <sys/ioctl.h>
 #include "kvmctl.h"
 
-#define EXPECTED_KVM_API_VERSION 10
+#define EXPECTED_KVM_API_VERSION 11
 
 #if EXPECTED_KVM_API_VERSION != KVM_API_VERSION
 #error libkvm: userspace and kernel version mismatch
@@ -466,7 +466,6 @@ static int handle_io(kvm_context_t kvm, struct kvm_run *run, int vcpu)
 		p += run->io.size;
 	}
 
-	run->io_completed = 1;
 	return 0;
 }
 
@@ -667,7 +666,6 @@ static int handle_mmio(kvm_context_t kvm, struct kvm_run *kvm_run)
 			r = kvm->callbacks->readq(kvm->opaque, addr, (uint64_t *)data);
 			break;
 		}
-		kvm_run->io_completed = 1;
 	}
 	return r;
 }
@@ -715,7 +713,6 @@ again:
 	r = ioctl(fd, KVM_RUN, 0);
 	post_kvm_run(kvm, run);
 
-	run->io_completed = 0;
 	if (r == -1 && errno != EINTR) {
 		r = -errno;
 		printf("kvm_run: %m\n");
