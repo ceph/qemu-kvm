@@ -98,11 +98,11 @@ static int test_try_push_interrupts(void *opaque)
     return 0;
 }
 
-static void test_post_kvm_run(void *opaque, struct kvm_run *kvm_run)
+static void test_post_kvm_run(void *opaque, int vcpu)
 {
 }
 
-static void test_pre_kvm_run(void *opaque, struct kvm_run *kvm_run)
+static void test_pre_kvm_run(void *opaque, int vcpu)
 {
 }
 

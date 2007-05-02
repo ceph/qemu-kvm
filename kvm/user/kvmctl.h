@@ -61,8 +61,8 @@ struct kvm_callbacks {
     int (*shutdown)(void *opaque, int vcpu);
     int (*io_window)(void *opaque);
     int (*try_push_interrupts)(void *opaque);
-    void (*post_kvm_run)(void *opaque, struct kvm_run *kvm_run);
-    void (*pre_kvm_run)(void *opaque, struct kvm_run *kvm_run);
+    void (*post_kvm_run)(void *opaque, int vcpu);
+    void (*pre_kvm_run)(void *opaque, int vcpu);
 };
 
 /*!
@@ -146,6 +146,50 @@ int kvm_run(kvm_context_t kvm, int vcpu);
  * registers values
  * \return 0 on success
  */
+
+
+/*!
+ * \brief Get interrupt flag from on last exit to userspace
+ *
+ * This gets the CPU interrupt flag as it was on the last exit to userspace.
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param vcpu Which virtual CPU should get dumped
+ * \return interrupt flag value (0 or 1)
+ */
+int kvm_get_interrupt_flag(kvm_context_t kvm, int vcpu);
+/*!
+ * \brief Get the value of the APIC_BASE msr as of last exit to userspace
+ *
+ * This gets the APIC_BASE msr as it was on the last exit to userspace.
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param vcpu Which virtual CPU should get dumped
+ * \return APIC_BASE msr contents
+ */
+uint64_t kvm_get_apic_base(kvm_context_t kvm, int vcpu);
+/*!
+ * \brief Check if a vcpu is ready for interrupt injection
+ *
+ * This checks if vcpu interrupts are not masked by mov ss or sti.
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param vcpu Which virtual CPU should get dumped
+ * \return boolean indicating interrupt injection readiness
+ */
+int kvm_is_ready_for_interrupt_injection(kvm_context_t kvm, int vcpu);
+/*!
+ * \brief Set up cr8 for next time the vcpu is executed
+ *
+ * This is a fast setter for cr8, which will be applied when the
+ * vcpu next enters guest mode.
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param vcpu Which virtual CPU should get dumped
+ * \param cr8 next cr8 value
+ */
+void kvm_set_cr8(kvm_context_t kvm, int vcpu, uint64_t cr8);
+
 int kvm_get_regs(kvm_context_t kvm, int vcpu, struct kvm_regs *regs);
 
 /*!

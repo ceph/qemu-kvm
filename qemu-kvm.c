@@ -418,23 +418,25 @@ static int try_push_interrupts(void *opaque)
     return (env->interrupt_request & CPU_INTERRUPT_HARD) != 0;
 }
 
-static void post_kvm_run(void *opaque, struct kvm_run *kvm_run)
+static void post_kvm_run(void *opaque, int vcpu)
 {
     CPUState **envs = opaque, *env;
     env = envs[0];
 
-    env->eflags = (kvm_run->if_flag) ? env->eflags | IF_MASK:env->eflags & ~IF_MASK;
-    env->ready_for_interrupt_injection = kvm_run->ready_for_interrupt_injection;
+    env->eflags = kvm_get_interrupt_flag(kvm_context, vcpu)
+	? env->eflags | IF_MASK : env->eflags & ~IF_MASK;
+    env->ready_for_interrupt_injection
+	= kvm_is_ready_for_interrupt_injection(kvm_context, vcpu);
     //cpu_set_apic_tpr(env, kvm_run->cr8);
-    cpu_set_apic_base(env, kvm_run->apic_base);
+    cpu_set_apic_base(env, kvm_get_apic_base(kvm_context, vcpu));
 }
 
-static void pre_kvm_run(void *opaque, struct kvm_run *kvm_run)
+static void pre_kvm_run(void *opaque, int vcpu)
 {
     CPUState **envs = opaque, *env;
     env = envs[0];
 
-    kvm_run->cr8 = cpu_get_apic_tpr(env);
+    kvm_set_cr8(kvm_context, vcpu, cpu_get_apic_tpr(env));
 }
 
 void kvm_load_registers(CPUState *env)

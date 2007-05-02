@@ -691,14 +691,42 @@ int try_push_interrupts(kvm_context_t kvm)
 	return kvm->callbacks->try_push_interrupts(kvm->opaque);
 }
 
-static void post_kvm_run(kvm_context_t kvm, struct kvm_run *kvm_run)
+static void post_kvm_run(kvm_context_t kvm, int vcpu)
 {
-	kvm->callbacks->post_kvm_run(kvm->opaque, kvm_run);
+	kvm->callbacks->post_kvm_run(kvm->opaque, vcpu);
 }
 
-static void pre_kvm_run(kvm_context_t kvm, struct kvm_run *kvm_run)
+static void pre_kvm_run(kvm_context_t kvm, int vcpu)
 {
-	kvm->callbacks->pre_kvm_run(kvm->opaque, kvm_run);
+	kvm->callbacks->pre_kvm_run(kvm->opaque, vcpu);
+}
+
+int kvm_get_interrupt_flag(kvm_context_t kvm, int vcpu)
+{
+	struct kvm_run *run = kvm->run[vcpu];
+
+	return run->if_flag;
+}
+
+uint64_t kvm_get_apic_base(kvm_context_t kvm, int vcpu)
+{
+	struct kvm_run *run = kvm->run[vcpu];
+
+	return run->apic_base;
+}
+
+int kvm_is_ready_for_interrupt_injection(kvm_context_t kvm, int vcpu)
+{
+	struct kvm_run *run = kvm->run[vcpu];
+
+	return run->ready_for_interrupt_injection;
+}
+
+void kvm_set_cr8(kvm_context_t kvm, int vcpu, uint64_t cr8)
+{
+	struct kvm_run *run = kvm->run[vcpu];
+
+	run->cr8 = cr8;
 }
 
 int kvm_run(kvm_context_t kvm, int vcpu)
@@ -709,9 +737,9 @@ int kvm_run(kvm_context_t kvm, int vcpu)
 
 again:
 	run->request_interrupt_window = try_push_interrupts(kvm);
-	pre_kvm_run(kvm, run);
+	pre_kvm_run(kvm, vcpu);
 	r = ioctl(fd, KVM_RUN, 0);
-	post_kvm_run(kvm, run);
+	post_kvm_run(kvm, vcpu);
 
 	if (r == -1 && errno != EINTR) {
 		r = -errno;
