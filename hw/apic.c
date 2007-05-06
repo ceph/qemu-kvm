@@ -804,6 +804,13 @@ static void apic_reset(void *opaque)
 {
     APICState *s = opaque;
     apic_init_ipi(s);
+
+    /*
+     * LINT0 delivery mode is set to ExtInt at initialization time
+     * typically by BIOS, so PIC interrupt can be delivered to the
+     * processor when local APIC is enabled.
+     */
+    s->lvt[APIC_LVT_LINT0] = 0x700;
 }
 
 static CPUReadMemoryFunc *apic_mem_read[3] = {
