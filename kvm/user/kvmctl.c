@@ -469,7 +469,7 @@ static int handle_io(kvm_context_t kvm, struct kvm_run *run, int vcpu)
 	return 0;
 }
 
-int handle_debug(kvm_context_t kvm, struct kvm_run *run, int vcpu)
+int handle_debug(kvm_context_t kvm, int vcpu)
 {
 	return kvm->callbacks->debug(kvm->opaque, vcpu);
 }
@@ -670,18 +670,17 @@ static int handle_mmio(kvm_context_t kvm, struct kvm_run *kvm_run)
 	return r;
 }
 
-static int handle_io_window(kvm_context_t kvm, struct kvm_run *kvm_run)
+static int handle_io_window(kvm_context_t kvm)
 {
 	return kvm->callbacks->io_window(kvm->opaque);
 }
 
-static int handle_halt(kvm_context_t kvm, struct kvm_run *kvm_run, int vcpu)
+static int handle_halt(kvm_context_t kvm, int vcpu)
 {
 	return kvm->callbacks->halt(kvm->opaque, vcpu);
 }
 
-static int handle_shutdown(kvm_context_t kvm, struct kvm_run *kvm_run,
-			   int vcpu)
+static int handle_shutdown(kvm_context_t kvm, int vcpu)
 {
 	return kvm->callbacks->shutdown(kvm->opaque, vcpu);
 }
@@ -747,7 +746,7 @@ again:
 		return r;
 	}
 	if (r == -1) {
-		r = handle_io_window(kvm, run);
+		r = handle_io_window(kvm);
 		goto more;
 	}
 	if (1) {
@@ -774,18 +773,18 @@ again:
 			r = handle_io(kvm, run, vcpu);
 			break;
 		case KVM_EXIT_DEBUG:
-			r = handle_debug(kvm, run, vcpu);
+			r = handle_debug(kvm, vcpu);
 			break;
 		case KVM_EXIT_MMIO:
 			r = handle_mmio(kvm, run);
 			break;
 		case KVM_EXIT_HLT:
-			r = handle_halt(kvm, run, vcpu);
+			r = handle_halt(kvm, vcpu);
 			break;
 		case KVM_EXIT_IRQ_WINDOW_OPEN:
 			break;
 		case KVM_EXIT_SHUTDOWN:
-			r = handle_shutdown(kvm, run, vcpu);
+			r = handle_shutdown(kvm, vcpu);
 			break;
 		default:
 			fprintf(stderr, "unhandled vm exit: 0x%x\n", run->exit_reason);
