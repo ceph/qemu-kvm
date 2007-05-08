@@ -162,11 +162,15 @@ kvm_context_t kvm_init(struct kvm_callbacks *callbacks,
 	}
 	r = ioctl(fd, KVM_GET_API_VERSION, 0);
 	if (r == -1) {
-	    fprintf(stderr, "kvm kernel version too old\n");
+	    fprintf(stderr, "kvm kernel version too old: "
+		    "KVM_GET_API_VERSION ioctl not supported\n");
 	    goto out_close;
 	}
 	if (r < EXPECTED_KVM_API_VERSION && r != 10) {
-	    fprintf(stderr, "kvm kernel version too old\n");
+		fprintf(stderr, "kvm kernel version too old: "
+			"We expect API version %d or newer, but got "
+			"version %d\n",
+			EXPECTED_KVM_API_VERSION, r);
 	    goto out_close;
 	}
 	if (r > EXPECTED_KVM_API_VERSION) {
