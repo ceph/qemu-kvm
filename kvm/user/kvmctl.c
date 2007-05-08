@@ -66,37 +66,6 @@ struct translation_cache {
 	void *physical;
 };
 
-static void translation_cache_init(struct translation_cache *tr)
-{
-	tr->physical = 0;
-}
-
-static int translate(kvm_context_t kvm, int vcpu, struct translation_cache *tr,
-		     unsigned long linear, void **physical)
-{
-	unsigned long page = linear & ~(PAGE_SIZE-1);
-	unsigned long offset = linear & (PAGE_SIZE-1);
-
-	if (!(tr->physical && tr->linear == page)) {
-		struct kvm_translation kvm_tr;
-		int r;
-
-		kvm_tr.linear_address = page;
-		
-		r = ioctl(kvm->vcpu_fd[vcpu], KVM_TRANSLATE, &kvm_tr);
-		if (r == -1)
-			return -errno;
-
-		if (!kvm_tr.valid)
-			return -EFAULT;
-
-		tr->linear = page;
-		tr->physical = kvm->physical_memory + kvm_tr.physical_address;
-	}
-	*physical = tr->physical + offset;
-	return 0;
-}
-
 /*
  * memory regions parameters
  */
