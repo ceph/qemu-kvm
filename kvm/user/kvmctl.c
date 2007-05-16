@@ -664,6 +664,36 @@ void kvm_show_regs(kvm_context_t kvm, int vcpu)
 		sregs.efer);
 }
 
+static void kvm_show_code(kvm_context_t kvm, int vcpu)
+{
+	int fd = kvm->vcpu_fd[vcpu];
+	struct kvm_regs regs;
+	struct kvm_sregs sregs;
+	int r;
+	unsigned char code[30];
+	char code_str[sizeof(code) * 3 + 1];
+	unsigned long rip;
+
+	r = ioctl(fd, KVM_GET_REGS, &regs);
+	if (r == -1) {
+		perror("KVM_GET_REGS");
+		return;
+	}
+	r = ioctl(fd, KVM_GET_SREGS, &sregs);
+	if (r == -1) {
+		perror("KVM_GET_SREGS");
+		return;
+	}
+	if (sregs.cr0 & 1)
+		return;
+	rip = sregs.cs.base * 16 + regs.rip;
+	memcpy(code, kvm->physical_memory + rip, sizeof code);
+	*code_str = 0;
+	for (r = 0; r < sizeof code; ++r)
+		sprintf(code_str + strlen(code_str), " %02x", code[r]);
+	fprintf(stderr, "code:%s\n", code_str);
+}
+
 static int handle_mmio_abi10(kvm_context_t kvm, struct kvm_run_abi10 *kvm_run)
 {
 	unsigned long addr = kvm_run->mmio.phys_addr;
@@ -853,6 +883,7 @@ again:
 			       run->ex.exception,
 			       run->ex.error_code);
 			kvm_show_regs(kvm, vcpu);
+			kvm_show_code(kvm, vcpu);
 			abort();
 			break;
 		case KVM_EXIT_IO:
@@ -927,6 +958,7 @@ again:
 			       run->ex.exception,
 			       run->ex.error_code);
 			kvm_show_regs(kvm, vcpu);
+			kvm_show_code(kvm, vcpu);
 			abort();
 			break;
 		case KVM_EXIT_IO:
