@@ -30,9 +30,14 @@ balloon_ctl: balloon_ctl.o
 libkvm.a: kvmctl.o
 	$(AR) rcs $@ $^
 
-flatfiles: test/simple.flat test/stringio.flat test/memtest1.flat \
-	test/irq.flat test/sieve.flat test/bootstrap \
-	test/access.flat test/vmexit.flat
+flatfiles-common = test/simple.flat test/stringio.flat test/memtest1.flat \
+	test/bootstrap test/vmexit.flat
+
+flatfiles-32 = 
+
+flatfiles-64 = test/access.flat test/irq.flat test/sieve.flat
+
+flatfiles: $(flatfiles-common) $(flatfiles-$(bits))
 
 install:
 	install -D kvmctl.h $(DESTDIR)/$(PREFIX)/include/kvmctl.h
