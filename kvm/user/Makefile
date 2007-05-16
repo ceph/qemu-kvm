@@ -21,7 +21,7 @@ bits = 32
 ldarch = elf32-i386
 endif
 
-all: kvmctl libkvm.a
+all: kvmctl libkvm.a flatfiles
 
 kvmctl: kvmctl.o main.o
 
