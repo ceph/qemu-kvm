@@ -1,4 +1,8 @@
 
+#include "vm.h"
+
+void print(const char *s);
+
 #define PAGE_SIZE 4096ul
 #define LARGE_PAGE_SIZE (512 * PAGE_SIZE)
 
@@ -79,7 +83,7 @@ static void install_pte(unsigned long *cr3,
 	}
 	pt = phys_to_virt(pt[offset] & 0xffffffffff000ull);
     }
-    offset = (((unsigned long)virt >> ((level-1) * 9) + 12)) & 511;
+    offset = ((unsigned long)virt >> (((level-1) * 9) + 12)) & 511;
     pt[offset] = pte;
 }
 
@@ -90,7 +94,7 @@ static unsigned long get_pte(unsigned long *cr3, void *virt)
     unsigned offset;
 
     for (level = 4; level > 1; --level) {
-	offset = ((unsigned long)virt >> ((level-1) * 9 + 12)) & 511;
+	offset = ((unsigned long)virt >> (((level-1) * 9) + 12)) & 511;
 	pte = pt[offset];
 	if (!(pte & PTE_PRESENT))
 	    return 0;
@@ -98,7 +102,7 @@ static unsigned long get_pte(unsigned long *cr3, void *virt)
 	    return pte;
 	pt = phys_to_virt(pte & 0xffffffffff000ull);
     }
-    offset = (((unsigned long)virt >> ((level-1) * 9) + 12)) & 511;
+    offset = ((unsigned long)virt >> (((level-1) * 9) + 12)) & 511;
     pte = pt[offset];
     return pte;
 }
@@ -117,12 +121,12 @@ static void install_page(unsigned long *cr3,
     install_pte(cr3, 1, virt, phys | PTE_PRESENT | PTE_WRITE);
 }
 
-static void load_cr3(unsigned long cr3)
+static inline void load_cr3(unsigned long cr3)
 {
     asm ( "mov %0, %%cr3" : : "r"(cr3) );
 }
 
-static unsigned long read_cr3()
+static inline unsigned long read_cr3()
 {
     unsigned long cr3;
 
@@ -130,12 +134,12 @@ static unsigned long read_cr3()
     return cr3;
 }
 
-static void load_cr0(unsigned long cr0)
+static inline void load_cr0(unsigned long cr0)
 {
     asm volatile ( "mov %0, %%cr0" : : "r"(cr0) );
 }
 
-static unsigned long read_cr0()
+static inline unsigned long read_cr0()
 {
     unsigned long cr0;
 
@@ -143,12 +147,12 @@ static unsigned long read_cr0()
     return cr0;
 }
 
-static void load_cr4(unsigned long cr4)
+static inline void load_cr4(unsigned long cr4)
 {
     asm volatile ( "mov %0, %%cr4" : : "r"(cr4) );
 }
 
-static unsigned long read_cr4()
+static inline unsigned long read_cr4()
 {
     unsigned long cr4;
 
@@ -162,7 +166,7 @@ struct gdt_table_descr
     unsigned long *table;
 } __attribute__((packed));
 
-static void load_gdt(unsigned long *table, int nent)
+static inline void load_gdt(unsigned long *table, int nent)
 {
     struct gdt_table_descr descr;
 
@@ -224,7 +228,7 @@ void *vmalloc(unsigned long size)
     return mem;
 }
 
-void *vfree(void *mem)
+void vfree(void *mem)
 {
     unsigned long size = ((unsigned long *)mem)[-1];
     
