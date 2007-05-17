@@ -1,8 +1,17 @@
 
 include config.mak
 
+# cc-option
+# Usage: OP_CFLAGS+=$(call cc-option, -falign-functions=0, -malign-functions=0)
+
+cc-option = $(shell if $(CC) $(1) -S -o /dev/null -xc /dev/null \
+              > /dev/null 2>&1; then echo "$(1)"; else echo "$(2)"; fi ;)
+
 CFLAGS = -I $(KERNELDIR)/include $(autodepend-flags) -g -fomit-frame-pointer \
 	-Wall -m$(bits)
+CFLAGS += $(call cc-option, -fno-stack-protector, "")
+CFLAGS += $(call cc-option, -fno-stack-protector-all, "")
+
 CXXFLAGS = $(autodepend-flags) 
 
 autodepend-flags = -MMD -MF $(dir $*).$(notdir $*).d
