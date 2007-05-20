@@ -1029,15 +1029,15 @@ void do_info_migration(void)
 	term_printf("Transferred %d/%d pages\n", s->updated_pages, phys_ram_size >> TARGET_PAGE_BITS);
 	if (s->iteration)
 	    term_printf("Last iteration found %d dirty pages\n", s->last_updated_pages);
-    } else
+    } else {
 	term_printf("Migration inactive\n");
-
+        term_printf("last migration status is %d\n", status);
+    }
     term_printf("Maximum migration speed is ");
     if (max_throttle < (1 << 20))
 	term_printf("%3.1f kb/s\n", (double)max_throttle / 1024);
     else
 	term_printf("%3.1f mb/s\n", (double)max_throttle / (1024 * 1024));
-    term_printf("last migration status is %d\n", status);
 }
 
 void do_migrate_cancel(void)
