@@ -208,6 +208,7 @@ static void hc_save(QEMUFile* f,void* opaque)
     qemu_put_be32s(f, &s->rxsize);
     qemu_put_buffer(f, s->RxBuff, HP_MEM_SIZE);
     qemu_put_buffer(f, s->txbufferaccu, HP_MEM_SIZE);
+    qemu_put_be32s(f, &s->txbufferaccu_offset);
     qemu_put_be32s(f, &s->irq);
     qemu_put_be32s(f, &s->index);
 
@@ -229,6 +230,7 @@ static int hc_load(QEMUFile* f,void* opaque,int version_id)
     qemu_get_be32s(f, &s->rxsize);
     qemu_get_buffer(f, s->RxBuff, HP_MEM_SIZE);
     qemu_get_buffer(f, s->txbufferaccu, HP_MEM_SIZE);
+    qemu_get_be32s(f, &s->txbufferaccu_offset);
     qemu_get_be32s(f, &s->irq);
     qemu_get_be32s(f, &s->index);
 
