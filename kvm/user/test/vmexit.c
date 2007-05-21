@@ -16,7 +16,7 @@ static inline unsigned long long rdtsc()
 	return r;
 }
 
-#define N (1 << 21)
+#define N (1 << 22)
 
 int main()
 {
