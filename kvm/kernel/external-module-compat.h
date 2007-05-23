@@ -151,3 +151,17 @@ static inline struct super_block *kvmfs_get_sb(
 #define CPU_DEAD_FROZEN                (CPU_DEAD | CPU_TASKS_FROZEN)
 
 #endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
+
+#ifndef _EFER_SCE
+#define _EFER_SCE		0  /* SYSCALL/SYSRET */
+#endif
+
+#ifndef EFER_SCE
+#define EFER_SCE		(1<<_EFER_SCE)
+#endif
+
+#endif
+
+
