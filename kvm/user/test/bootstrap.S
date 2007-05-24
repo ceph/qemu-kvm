@@ -1,6 +1,6 @@
-#
-# minimal bootstrap to set up flat 32-bit protected mode
-#
+/*
+ * minimal bootstrap to set up flat 32-bit protected mode
+ */
 	
 bstart = 0xf0000
 	
@@ -38,8 +38,8 @@ gdt_desc:
 
 gdt:
 	.quad 0
-	.quad 0x00cf9b000000ffff # flat 32-bit code segment
-	.quad 0x00cf93000000ffff # flat 32-bit data segment
+	.quad 0x00cf9b000000ffff // flat 32-bit code segment
+	.quad 0x00cf93000000ffff // flat 32-bit data segment
 gdt_end:
 	
 . = 0xfff0

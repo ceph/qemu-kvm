@@ -36,13 +36,13 @@ gdt64_desc:
 
 gdt64:
 	.quad 0
-	.quad 0x00af9b000000ffff # 64-bit code segment
-	.quad 0x00cf93000000ffff # 64-bit data segment
-	.quad 0x00affb000000ffff # 64-bit code segment (user)
-	.quad 0x00cff3000000ffff # 64-bit data segment (user)
+	.quad 0x00af9b000000ffff // 64-bit code segment
+	.quad 0x00cf93000000ffff // 64-bit data segment
+	.quad 0x00affb000000ffff // 64-bit code segment (user)
+	.quad 0x00cff3000000ffff // 64-bit data segment (user)
 tss_descr:	
-	.quad 0x000089000000ffff # 64-bit avail tss
-	.quad 0                  # tss high addr
+	.quad 0x000089000000ffff // 64-bit avail tss
+	.quad 0                  // tss high addr
 gdt64_end:
 
 tss:
@@ -58,7 +58,7 @@ tss:
 	lgdt gdt64_desc
 	
 	mov %cr4, %eax
-	bts $5, %eax  # pae
+	bts $5, %eax  // pae
 	mov %eax, %cr4
 
 	mov $ptl4, %eax
@@ -95,7 +95,7 @@ start64:
 	ltr %ax
 		
 	call main
-1:	# hlt
+1:	// hlt
 	jmp 1b
 	
 
