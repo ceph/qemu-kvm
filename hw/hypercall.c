@@ -26,6 +26,8 @@
 #include "hypercall.h"
 #include <stddef.h>
 
+#define HYPERCALL_IOPORT_SIZE 0x100
+
 static int use_hypercall_dev = 0;
 
 typedef struct VmChannelCharDriverState {
@@ -183,8 +185,8 @@ static void hp_map(PCIDevice *pci_dev, int region_num,
     PCIHypercallState *d = (PCIHypercallState *)pci_dev;
     HypercallState *s = &d->hp;
 
-    register_ioport_write(addr, 0x100, 1, hp_ioport_write, s);
-    register_ioport_read(addr, 0x100, 1, hp_ioport_read, s);
+    register_ioport_write(addr, HYPERCALL_IOPORT_SIZE, 1, hp_ioport_write, s);
+    register_ioport_read(addr, HYPERCALL_IOPORT_SIZE, 1, hp_ioport_read, s);
 
 }
 
@@ -273,7 +275,7 @@ static void pci_hypercall_single_init(PCIBus *bus, uint32_t deviceid, uint32_t i
     pci_conf[0x0e] = 0x00; // header_type
     pci_conf[0x3d] = 1; // interrupt pin 0
 
-    pci_register_io_region(&d->dev, 0, 0x100,
+    pci_register_io_region(&d->dev, 0, HYPERCALL_IOPORT_SIZE,
                            PCI_ADDRESS_SPACE_IO, hp_map);
     s = &d->hp;
     pHypercallStates[index] = s;
