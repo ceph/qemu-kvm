@@ -164,4 +164,7 @@ static inline struct super_block *kvmfs_get_sb(
 
 #endif
 
-
+/*
+ * For set_64bit(), which is in a new file asm/cmpxchg.h in newer kernels.
+ */
+#include <asm/system.h>
