@@ -132,6 +132,51 @@ int kvm_create(kvm_context_t kvm,
 int kvm_run(kvm_context_t kvm, int vcpu);
 
 /*!
+ * \brief Get interrupt flag from on last exit to userspace
+ *
+ * This gets the CPU interrupt flag as it was on the last exit to userspace.
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param vcpu Which virtual CPU should get dumped
+ * \return interrupt flag value (0 or 1)
+ */
+int kvm_get_interrupt_flag(kvm_context_t kvm, int vcpu);
+
+/*!
+ * \brief Get the value of the APIC_BASE msr as of last exit to userspace
+ *
+ * This gets the APIC_BASE msr as it was on the last exit to userspace.
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param vcpu Which virtual CPU should get dumped
+ * \return APIC_BASE msr contents
+ */
+uint64_t kvm_get_apic_base(kvm_context_t kvm, int vcpu);
+
+/*!
+ * \brief Check if a vcpu is ready for interrupt injection
+ *
+ * This checks if vcpu interrupts are not masked by mov ss or sti.
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param vcpu Which virtual CPU should get dumped
+ * \return boolean indicating interrupt injection readiness
+ */
+int kvm_is_ready_for_interrupt_injection(kvm_context_t kvm, int vcpu);
+
+/*!
+ * \brief Set up cr8 for next time the vcpu is executed
+ *
+ * This is a fast setter for cr8, which will be applied when the
+ * vcpu next enters guest mode.
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param vcpu Which virtual CPU should get dumped
+ * \param cr8 next cr8 value
+ */
+void kvm_set_cr8(kvm_context_t kvm, int vcpu, uint64_t cr8);
+
+/*!
  * \brief Read VCPU registers
  *
  * This gets the GP registers from the VCPU and outputs them
@@ -146,50 +191,6 @@ int kvm_run(kvm_context_t kvm, int vcpu);
  * registers values
  * \return 0 on success
  */
-
-
-/*!
- * \brief Get interrupt flag from on last exit to userspace
- *
- * This gets the CPU interrupt flag as it was on the last exit to userspace.
- *
- * \param kvm Pointer to the current kvm_context
- * \param vcpu Which virtual CPU should get dumped
- * \return interrupt flag value (0 or 1)
- */
-int kvm_get_interrupt_flag(kvm_context_t kvm, int vcpu);
-/*!
- * \brief Get the value of the APIC_BASE msr as of last exit to userspace
- *
- * This gets the APIC_BASE msr as it was on the last exit to userspace.
- *
- * \param kvm Pointer to the current kvm_context
- * \param vcpu Which virtual CPU should get dumped
- * \return APIC_BASE msr contents
- */
-uint64_t kvm_get_apic_base(kvm_context_t kvm, int vcpu);
-/*!
- * \brief Check if a vcpu is ready for interrupt injection
- *
- * This checks if vcpu interrupts are not masked by mov ss or sti.
- *
- * \param kvm Pointer to the current kvm_context
- * \param vcpu Which virtual CPU should get dumped
- * \return boolean indicating interrupt injection readiness
- */
-int kvm_is_ready_for_interrupt_injection(kvm_context_t kvm, int vcpu);
-/*!
- * \brief Set up cr8 for next time the vcpu is executed
- *
- * This is a fast setter for cr8, which will be applied when the
- * vcpu next enters guest mode.
- *
- * \param kvm Pointer to the current kvm_context
- * \param vcpu Which virtual CPU should get dumped
- * \param cr8 next cr8 value
- */
-void kvm_set_cr8(kvm_context_t kvm, int vcpu, uint64_t cr8);
-
 int kvm_get_regs(kvm_context_t kvm, int vcpu, struct kvm_regs *regs);
 
 /*!
@@ -285,6 +286,7 @@ int kvm_set_msrs(kvm_context_t, int vcpu, struct kvm_msr_entry *msrs, int n);
  * \return 0 on success
  */
 int kvm_inject_irq(kvm_context_t kvm, int vcpu, unsigned irq);
+
 int kvm_guest_debug(kvm_context_t, int vcpu, struct kvm_debug_guest *dbg);
 
 /*!
@@ -353,7 +355,7 @@ void kvm_destroy_phys_mem(kvm_context_t, unsigned long phys_start,
 int kvm_get_dirty_pages(kvm_context_t, int slot, void *buf);
 
 
-/*
+/*!
  * \brief Create a memory alias
  *
  * Aliases a portion of physical memory to another portion.  If the guest
@@ -364,7 +366,7 @@ int kvm_create_memory_alias(kvm_context_t, int slot,
 			    uint64_t phys_start, uint64_t len,
 			    uint64_t target_phys);
 
-/*
+/*!
  * \brief Destroy a memory alias
  *
  * Removes an alias created with kvm_create_memory_alias().
@@ -372,7 +374,7 @@ int kvm_create_memory_alias(kvm_context_t, int slot,
 int kvm_destroy_memory_alias(kvm_context_t, int slot);
 
 /*!
- * \brief get a bitmap of guest ram pages which are allocated to the guest.
+ * \brief Get a bitmap of guest ram pages which are allocated to the guest.
  *
  * \param kvm Pointer to the current kvm_context
  * \param slot Memory slot number
