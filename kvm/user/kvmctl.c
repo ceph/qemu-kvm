@@ -503,7 +503,7 @@ static int handle_io(kvm_context_t kvm, struct kvm_run *run, int vcpu)
 	return 0;
 }
 
-int handle_debug(kvm_context_t kvm, int vcpu)
+static int handle_debug(kvm_context_t kvm, int vcpu)
 {
 	return kvm->callbacks->debug(kvm->opaque, vcpu);
 }
