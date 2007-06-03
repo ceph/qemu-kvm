@@ -543,27 +543,27 @@ int kvm_set_sregs(kvm_context_t kvm, int vcpu, struct kvm_sregs *sregs)
  */
 struct kvm_msr_list *kvm_get_msr_list(kvm_context_t kvm)
 {
-    struct kvm_msr_list sizer, *msrs;
-    int r, e;
+	struct kvm_msr_list sizer, *msrs;
+	int r, e;
 
-    sizer.nmsrs = 0;
-    r = ioctl(kvm->fd, KVM_GET_MSR_INDEX_LIST, &sizer);
-    if (r == -1 && errno != E2BIG)
-	return 0;
-    msrs = malloc(sizeof *msrs + sizer.nmsrs * sizeof *msrs->indices);
-    if (!msrs) {
-	errno = ENOMEM;
-	return 0;
-    }
-    msrs->nmsrs = sizer.nmsrs;
-    r = ioctl(kvm->fd, KVM_GET_MSR_INDEX_LIST, msrs);
-    if (r == -1) {
-	e = errno;
-	free(msrs);
-	errno = e;
-	return 0;
-    }
-    return msrs;
+	sizer.nmsrs = 0;
+	r = ioctl(kvm->fd, KVM_GET_MSR_INDEX_LIST, &sizer);
+	if (r == -1 && errno != E2BIG)
+		return NULL;
+	msrs = malloc(sizeof *msrs + sizer.nmsrs * sizeof *msrs->indices);
+	if (!msrs) {
+		errno = ENOMEM;
+		return NULL;
+	}
+	msrs->nmsrs = sizer.nmsrs;
+	r = ioctl(kvm->fd, KVM_GET_MSR_INDEX_LIST, msrs);
+	if (r == -1) {
+		e = errno;
+		free(msrs);
+		errno = e;
+		return NULL;
+	}
+	return msrs;
 }
 
 int kvm_get_msrs(kvm_context_t kvm, int vcpu, struct kvm_msr_entry *msrs,
