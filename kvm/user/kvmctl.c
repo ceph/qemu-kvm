@@ -61,11 +61,6 @@ struct kvm_context {
 	struct kvm_memory_region mem_regions[KVM_MAX_NUM_MEM_REGIONS];
 };
 
-struct translation_cache {
-	unsigned long linear;
-	void *physical;
-};
-
 /*
  * memory regions parameters
  */
