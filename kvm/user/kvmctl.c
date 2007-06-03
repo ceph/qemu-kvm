@@ -666,6 +666,7 @@ void kvm_show_regs(kvm_context_t kvm, int vcpu)
 
 static void kvm_show_code(kvm_context_t kvm, int vcpu)
 {
+#define CR0_PE_MASK	(1ULL<<0)
 	int fd = kvm->vcpu_fd[vcpu];
 	struct kvm_regs regs;
 	struct kvm_sregs sregs;
@@ -674,18 +675,19 @@ static void kvm_show_code(kvm_context_t kvm, int vcpu)
 	char code_str[sizeof(code) * 3 + 1];
 	unsigned long rip;
 
-	r = ioctl(fd, KVM_GET_REGS, &regs);
-	if (r == -1) {
-		perror("KVM_GET_REGS");
-		return;
-	}
 	r = ioctl(fd, KVM_GET_SREGS, &sregs);
 	if (r == -1) {
 		perror("KVM_GET_SREGS");
 		return;
 	}
-	if (sregs.cr0 & 1)
+	if (sregs.cr0 & CR0_PE_MASK)
 		return;
+
+	r = ioctl(fd, KVM_GET_REGS, &regs);
+	if (r == -1) {
+		perror("KVM_GET_REGS");
+		return;
+	}
 	rip = sregs.cs.base * 16 + regs.rip;
 	memcpy(code, kvm->physical_memory + rip, sizeof code);
 	*code_str = 0;
