@@ -26,7 +26,7 @@
 #include "hypercall.h"
 #include <stddef.h>
 
-int use_hypercall_dev = 0;
+static int use_hypercall_dev = 0;
 
 typedef struct VmChannelCharDriverState {
     CharDriverState *vmchannel_hd;
@@ -49,7 +49,7 @@ typedef struct HypercallState {
     uint32_t index;
 } HypercallState;
 
-HypercallState *pHypercallStates[MAX_VMCHANNEL_DEVICES] = {NULL};
+static HypercallState *pHypercallStates[MAX_VMCHANNEL_DEVICES] = {NULL};
 
 //#define HYPERCALL_DEBUG 1
 
@@ -237,7 +237,7 @@ static int hc_load(QEMUFile* f,void* opaque,int version_id)
     return 0;
 }
 
-void pci_hypercall_single_init(PCIBus *bus, uint32_t deviceid, uint32_t index)
+static void pci_hypercall_single_init(PCIBus *bus, uint32_t deviceid, uint32_t index)
 {
     PCIHypercallState *d;
     HypercallState *s;
