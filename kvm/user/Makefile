@@ -32,6 +32,8 @@ endif
 
 all: kvmctl libkvm.a flatfiles
 
+kvmctl: LDFLAGS += -pthread -lrt
+
 kvmctl: kvmctl.o main.o
 
 balloon_ctl: balloon_ctl.o

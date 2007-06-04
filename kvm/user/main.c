@@ -21,8 +21,32 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
+#include <semaphore.h>
+#include <sys/types.h>
+#include <errno.h>
+#include <pthread.h>
+#include <sys/syscall.h>
+#include <linux/unistd.h>
+
+
+static int gettid(void)
+{
+    return syscall(__NR_gettid);
+}
 
 kvm_context_t kvm;
+
+#define MAX_VCPUS 4
+
+static int ncpus = 1;
+static sem_t init_sem;
+
+struct vcpu_info {
+    pid_t tid;
+    sem_t sipi_sem;
+};
+
+struct vcpu_info *vcpus;
 
 static int test_inb(void *opaque, uint16_t addr, uint8_t *value)
 {
@@ -171,6 +195,33 @@ static void enter_32(kvm_context_t kvm)
     kvm_set_sregs(kvm, 0, &sregs);
 }
 
+static void init_vcpu(int n)
+{
+    vcpus[n].tid = gettid();
+    sem_post(&init_sem);
+}
+
+static void *do_create_vcpu(void *_n)
+{
+    int n = (long)_n;
+
+    kvm_create_vcpu(kvm, n);
+    init_vcpu(n);
+    printf("vcpu %d: waiting for sipi\n", n);
+    sem_wait(&vcpus[n].sipi_sem);
+    printf("vcpu %d: running\n", n);
+    kvm_run(kvm, n);
+    return NULL;
+}
+
+static void start_vcpu(int n)
+{
+    pthread_t thread;
+
+    sem_init(&vcpus[n].sipi_sem, 0, 0);
+    pthread_create(&thread, NULL, do_create_vcpu, (void *)(long)n);
+}
+
 const char *progname;
 
 static void usage()
@@ -191,7 +242,7 @@ static int isarg(const char *arg, const char *longform, const char *shortform)
 int main(int ac, char **av)
 {
 	void *vm_mem;
-	int ncpus = 1;
+	int i;
 
 	progname = av[0];
 	while (ac > 1 && av[1][0] =='-') {
@@ -205,6 +256,12 @@ int main(int ac, char **av)
 	    } else
 		usage();
 	    ++av, --ac;
+	}
+
+	vcpus = calloc(ncpus, sizeof *vcpus);
+	if (!vcpus) {
+	    fprintf(stderr, "calloc failed\n");
+	    return 1;
 	}
 
 	kvm = kvm_init(&test_callbacks, 0);
@@ -225,6 +282,12 @@ int main(int ac, char **av)
 	}
 	if (ac > 2)
 	    load_file(vm_mem + 0x100000, av[2]);
+
+	sem_init(&init_sem, 0, 1 - ncpus);
+	init_vcpu(0);
+	for (i = 1; i < ncpus; ++i)
+	    start_vcpu(i);
+	sem_wait(&init_sem);
 
 	kvm_run(kvm, 0);
 
