@@ -171,9 +171,41 @@ static void enter_32(kvm_context_t kvm)
     kvm_set_sregs(kvm, 0, &sregs);
 }
 
+const char *progname;
+
+static void usage()
+{
+    fprintf(stderr, "usage: %s [--smp n] [bootstrap] flatfile\n", progname);
+    exit(1);
+}
+
+static int isarg(const char *arg, const char *longform, const char *shortform)
+{
+    if (longform && strcmp(arg, longform) == 0)
+	return 1;
+    if (shortform && strcmp(arg, shortform) == 0)
+	return 1;
+    return 0;
+}
+
 int main(int ac, char **av)
 {
 	void *vm_mem;
+	int ncpus = 1;
+
+	progname = av[0];
+	while (ac > 1 && av[1][0] =='-') {
+	    if (isarg(av[1], "--smp", "-s")) {
+		if (ac <= 2)
+		    usage();
+		ncpus = atoi(av[2]);
+		if (ncpus < 1)
+		    usage();
+		++av, --ac;
+	    } else
+		usage();
+	    ++av, --ac;
+	}
 
 	kvm = kvm_init(&test_callbacks, 0);
 	if (!kvm) {
