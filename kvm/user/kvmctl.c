@@ -38,6 +38,7 @@ static int kvm_abi = EXPECTED_KVM_API_VERSION;
 /* FIXME: share this number with kvm */
 /* FIXME: or dynamically alloc/realloc regions */
 #define KVM_MAX_NUM_MEM_REGIONS 4u
+#define MAX_VCPUS 4
 
 /**
  * \brief The KVM context
@@ -48,8 +49,8 @@ struct kvm_context {
 	/// Filedescriptor to /dev/kvm
 	int fd;
 	int vm_fd;
-	int vcpu_fd[1];
-	struct kvm_run *run[1];
+	int vcpu_fd[MAX_VCPUS];
+	struct kvm_run *run[MAX_VCPUS];
 	/// Callbacks that KVM uses to emulate various unvirtualizable functionality
 	struct kvm_callbacks *callbacks;
 	void *opaque;
