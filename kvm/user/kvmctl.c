@@ -197,11 +197,38 @@ void kvm_finalize(kvm_context_t kvm)
 	free(kvm);
 }
 
+int kvm_create_vcpu(kvm_context_t kvm, int slot)
+{
+	long mmap_size;
+	int r;
+
+	r = ioctl(kvm->vm_fd, KVM_CREATE_VCPU, slot);
+	if (r == -1) {
+		r = -errno;
+		fprintf(stderr, "kvm_create_vcpu: %m\n");
+		return r;
+	}
+	kvm->vcpu_fd[slot] = r;
+	mmap_size = ioctl(kvm->fd, KVM_GET_VCPU_MMAP_SIZE, 0);
+	if (mmap_size == -1) {
+		r = -errno;
+		fprintf(stderr, "get vcpu mmap size: %m\n");
+		return r;
+	}
+	kvm->run[slot] = mmap(0, mmap_size, PROT_READ|PROT_WRITE, MAP_SHARED,
+			      kvm->vcpu_fd[slot], 0);
+	if (kvm->run[slot] == MAP_FAILED) {
+		r = -errno;
+		fprintf(stderr, "mmap vcpu area: %m\n");
+		return r;
+	}
+	return 0;
+}
+
 int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem)
 {
 	unsigned long dosmem = 0xa0000;
 	unsigned long exmem = 0xc0000;
-	long mmap_size;
 	int fd = kvm->fd;
 	int zfd;
 	int r;
@@ -254,23 +281,10 @@ int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem)
 	     MAP_PRIVATE|MAP_FIXED, zfd, 0);
 	close(zfd);
 
-	r = ioctl(fd, KVM_CREATE_VCPU, 0);
-	if (r == -1) {
-		fprintf(stderr, "kvm_create_vcpu: %m\n");
-		return -1;
-	}
-	kvm->vcpu_fd[0] = r;
-	mmap_size = ioctl(kvm->fd, KVM_GET_VCPU_MMAP_SIZE, 0);
-	if (mmap_size == -1) {
-		fprintf(stderr, "get vcpu mmap size: %m\n");
-		return -1;
-	}
-	kvm->run[0] = mmap(0, mmap_size, PROT_READ|PROT_WRITE, MAP_SHARED,
-			   kvm->vcpu_fd[0], 0);
-	if (kvm->run[0] == MAP_FAILED) {
-		fprintf(stderr, "mmap vcpu area: %m\n");
-		return -1;
-	}
+	r = kvm_create_vcpu(kvm, 0);
+	if (r < 0)
+		return r;
+
 	return 0;
 }
 

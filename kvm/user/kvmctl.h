@@ -107,6 +107,17 @@ void kvm_finalize(kvm_context_t kvm);
 int kvm_create(kvm_context_t kvm,
 	       unsigned long phys_mem_bytes,
 	       void **phys_mem);
+/*!
+ * \brief Create a new virtual cpu
+ *
+ * This creates a new virtual cpu (the first vcpu is created by kvm_create()).
+ * Should be called from a thread dedicated to the vcpu.
+ *
+ * \param kvm kvm context
+ * \param slot vcpu number (> 0)
+ * \return 0 on success, -errno on failure
+ */
+int kvm_create_vcpu(kvm_context_t kvm, int slot);
 
 /*!
  * \brief Start the VCPU
