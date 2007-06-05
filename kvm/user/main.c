@@ -15,6 +15,7 @@
  */
 
 #include "kvmctl.h"
+#include "test/apic.h"
 
 #include <stdio.h>
 #include <unistd.h>
@@ -40,6 +41,7 @@ kvm_context_t kvm;
 
 static int ncpus = 1;
 static sem_t init_sem;
+static __thread int vcpu;
 
 struct vcpu_info {
     pid_t tid;
@@ -47,6 +49,49 @@ struct vcpu_info {
 };
 
 struct vcpu_info *vcpus;
+
+static uint32_t apic_sipi_addr;
+
+static int apic_range(unsigned addr)
+{
+    return (addr >= APIC_BASE) && (addr < APIC_BASE + APIC_SIZE);
+}
+
+static void apic_send_sipi(int vcpu)
+{
+    sem_post(&vcpus[vcpu].sipi_sem);
+}
+
+static int apic_io(unsigned addr, int is_write, uint32_t *value)
+{
+    if (!apic_range(addr))
+	return 0;
+
+    if (!is_write)
+	*value = -1u;
+
+    switch (addr - APIC_BASE) {
+    case APIC_REG_NCPU:
+	if (!is_write)
+	    *value = ncpus;
+	break;
+    case APIC_REG_ID:
+	if (!is_write)
+	    *value = vcpu;
+	break;
+    case APIC_REG_SIPI_ADDR:
+	if (!is_write)
+	    *value = apic_sipi_addr;
+	else
+	    apic_sipi_addr = *value;
+	break;
+    case APIC_REG_SEND_SIPI:
+	if (is_write)
+	    apic_send_sipi(*value);
+	break;
+    }
+    return 1;
+}
 
 static int test_inb(void *opaque, uint16_t addr, uint8_t *value)
 {
@@ -62,6 +107,8 @@ static int test_inw(void *opaque, uint16_t addr, uint16_t *value)
 
 static int test_inl(void *opaque, uint16_t addr, uint32_t *value)
 {
+    if (apic_io(addr, 0, value))
+	return 0;
     printf("inl 0x%x\n", addr);
     return 0;
 }
@@ -95,6 +142,8 @@ static int test_outw(void *opaque, uint16_t addr, uint16_t value)
 
 static int test_outl(void *opaque, uint16_t addr, uint32_t value)
 {
+    if (apic_io(addr, 1, &value))
+	return 0;
     printf("outl $0x%x, 0x%x\n", value, addr);
     return 0;
 }
@@ -198,18 +247,21 @@ static void enter_32(kvm_context_t kvm)
 static void init_vcpu(int n)
 {
     vcpus[n].tid = gettid();
+    vcpu = n;
     sem_post(&init_sem);
 }
 
 static void *do_create_vcpu(void *_n)
 {
     int n = (long)_n;
+    struct kvm_regs regs;
 
     kvm_create_vcpu(kvm, n);
     init_vcpu(n);
-    printf("vcpu %d: waiting for sipi\n", n);
     sem_wait(&vcpus[n].sipi_sem);
-    printf("vcpu %d: running\n", n);
+    kvm_get_regs(kvm, n, &regs);
+    regs.rip = apic_sipi_addr;
+    kvm_set_regs(kvm, n, &regs);
     kvm_run(kvm, n);
     return NULL;
 }
