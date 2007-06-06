@@ -48,7 +48,7 @@ sipi:
 	mov $(APIC_BASE + APIC_REG_ID), %dx
 	inl %dx, %eax
 	mov %eax, cpu_up
-1:	//hlt
+1:	hlt
 	jmp 1b
 
 pmode:

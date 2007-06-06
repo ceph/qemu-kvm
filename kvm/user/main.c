@@ -156,7 +156,7 @@ static int test_debug(void *opaque, int vcpu)
 
 static int test_halt(void *opaque, int vcpu)
 {
-    printf("test_halt\n");
+    pause();
     return 0;
 }
 
