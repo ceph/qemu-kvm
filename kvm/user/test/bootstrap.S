@@ -10,7 +10,10 @@ bstart = 0xf0000
 
 stack_top = 0x1000
 cpu_up = 0x1000
+cpu_up_pmode = 0x1004
 
+ipi_vec = 0xf0
+	
 start:
 	mov $stack_top, %sp
 	call smp_init
@@ -23,6 +26,12 @@ start:
 	ljmpl $8, $pmode + bstart
 
 smp_init:
+	mov $ipi_vec, %eax
+	mov $(APIC_BASE + APIC_REG_IPI_VECTOR), %dx
+	out %eax, %dx
+	movw $ap_switch_to_pmode, ipi_vec*4
+	movw %cs, %ax
+	mov %ax, ipi_vec*4+2
 	mov $sipi, %eax
 	mov $(APIC_BASE + APIC_REG_SIPI_ADDR), %dx
 	outl %eax, %dx
@@ -39,6 +48,13 @@ smp_loop:
 wait_for_cpu:
 	cmp cpu_up, %esi
 	jne wait_for_cpu
+	mov %esi, %eax
+	mov $(APIC_BASE + APIC_REG_SEND_IPI), %dx
+	out %eax, %dx
+wait_for_cpu_pmode:
+	cmp cpu_up_pmode, %esi
+	jne wait_for_cpu_pmode
+	
 	inc %esi
 	jmp smp_loop
 smp_done:
@@ -48,11 +64,39 @@ sipi:
 	mov $(APIC_BASE + APIC_REG_ID), %dx
 	inl %dx, %eax
 	mov %eax, cpu_up
+	shl $12, %eax
+	lea stack_top(%eax), %esp
+	sti
+	nop
 1:	hlt
 	jmp 1b
 
-pmode:
+ap_switch_to_pmode:
+	cs lidtl idt_desc
+	cs lgdtl gdt_desc
+	mov %cr0, %eax
+	or $1, %eax
+	mov %eax, %cr0
+	ljmpl $8, $ap_pmode + bstart
+
 .code32	
+ap_pmode:
+	mov $0x10, %ax
+	mov %ax, %ds
+	mov %ax, %es
+	mov %ax, %fs
+	mov %ax, %gs
+	mov %ax, %ss
+	mov $(APIC_BASE + APIC_REG_ID), %dx
+	in %dx, %eax
+	mov %eax, cpu_up_pmode
+	sti
+	nop
+ap_pmode_wait:
+	hlt
+	jmp ap_pmode_wait
+
+pmode:
 	mov $0x10, %ax
 	mov %ax, %ds
 	mov %ax, %es
@@ -65,7 +109,7 @@ pmode:
 .align 16
 	
 idt_desc:
-	.word 0
+	.word 8*256-1
 	.long 0
 
 gdt_desc:
