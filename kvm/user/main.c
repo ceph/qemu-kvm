@@ -26,6 +26,8 @@
 #include <sys/types.h>
 #include <errno.h>
 #include <pthread.h>
+#include <signal.h>
+#include <pthread.h>
 #include <sys/syscall.h>
 #include <linux/unistd.h>
 
@@ -35,13 +37,23 @@ static int gettid(void)
     return syscall(__NR_gettid);
 }
 
+static int tkill(int pid, int sig)
+{
+    return syscall(__NR_tkill, pid, sig);
+}
+
 kvm_context_t kvm;
 
 #define MAX_VCPUS 4
 
+#define IPI_SIGNAL (SIGRTMIN + 4)
+
 static int ncpus = 1;
 static sem_t init_sem;
 static __thread int vcpu;
+static int apic_ipi_vector = 0xff;
+static sigset_t kernel_sigmask;
+static sigset_t ipi_sigmask;
 
 struct vcpu_info {
     pid_t tid;
@@ -60,6 +72,16 @@ static int apic_range(unsigned addr)
 static void apic_send_sipi(int vcpu)
 {
     sem_post(&vcpus[vcpu].sipi_sem);
+}
+
+static void apic_send_ipi(int vcpu)
+{
+    struct vcpu_info *v;
+
+    if (vcpu < 0 || vcpu >= ncpus)
+	return;
+    v = &vcpus[vcpu];
+    tkill(v->tid, IPI_SIGNAL);
 }
 
 static int apic_io(unsigned addr, int is_write, uint32_t *value)
@@ -88,6 +110,16 @@ static int apic_io(unsigned addr, int is_write, uint32_t *value)
     case APIC_REG_SEND_SIPI:
 	if (is_write)
 	    apic_send_sipi(*value);
+	break;
+    case APIC_REG_IPI_VECTOR:
+	if (!is_write)
+	    *value = apic_ipi_vector;
+	else
+	    apic_ipi_vector = *value;
+	break;
+    case APIC_REG_SEND_IPI:
+	if (is_write)
+	    apic_send_ipi(*value);
 	break;
     }
     return 1;
@@ -156,13 +188,15 @@ static int test_debug(void *opaque, int vcpu)
 
 static int test_halt(void *opaque, int vcpu)
 {
-    pause();
+    int n;
+
+    sigwait(&ipi_sigmask, &n);
+    kvm_inject_irq(kvm, vcpu, apic_ipi_vector);
     return 0;
 }
 
 static int test_io_window(void *opaque)
 {
-    printf("test_io_window\n");
     return 0;
 }
 
@@ -246,8 +280,13 @@ static void enter_32(kvm_context_t kvm)
 
 static void init_vcpu(int n)
 {
+    sigemptyset(&ipi_sigmask);
+    sigaddset(&ipi_sigmask, IPI_SIGNAL);
+    sigprocmask(SIG_UNBLOCK, &ipi_sigmask, NULL);
+    sigprocmask(SIG_BLOCK, &ipi_sigmask, &kernel_sigmask);
     vcpus[n].tid = gettid();
     vcpu = n;
+    kvm_set_signal_mask(kvm, n, &kernel_sigmask);
     sem_post(&init_sem);
 }
 
@@ -291,6 +330,11 @@ static int isarg(const char *arg, const char *longform, const char *shortform)
     return 0;
 }
 
+static void sig_ignore(int sig)
+{
+    write(1, "boo\n", 4);
+}
+
 int main(int ac, char **av)
 {
 	void *vm_mem;
@@ -309,6 +353,8 @@ int main(int ac, char **av)
 		usage();
 	    ++av, --ac;
 	}
+
+	signal(IPI_SIGNAL, sig_ignore);
 
 	vcpus = calloc(ncpus, sizeof *vcpus);
 	if (!vcpus) {
@@ -335,11 +381,12 @@ int main(int ac, char **av)
 	if (ac > 2)
 	    load_file(vm_mem + 0x100000, av[2]);
 
-	sem_init(&init_sem, 0, 1 - ncpus);
+	sem_init(&init_sem, 0, 0);
 	init_vcpu(0);
 	for (i = 1; i < ncpus; ++i)
 	    start_vcpu(i);
-	sem_wait(&init_sem);
+	for (i = 0; i < ncpus; ++i)
+	    sem_wait(&init_sem);
 
 	kvm_run(kvm, 0);
 

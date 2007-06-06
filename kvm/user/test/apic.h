@@ -8,5 +8,7 @@
 #define APIC_REG_ID          0x04
 #define APIC_REG_SIPI_ADDR   0x08
 #define APIC_REG_SEND_SIPI   0x0c
+#define APIC_REG_IPI_VECTOR  0x10
+#define APIC_REG_SEND_IPI    0x14
 
 #endif
