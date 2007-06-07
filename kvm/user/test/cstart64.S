@@ -109,8 +109,6 @@ ap_start64:
 	jmp 1b
 
 start64:
-	lea stacktop, %rsp
-
 	call load_tss
 	call smp_init
 	call main
