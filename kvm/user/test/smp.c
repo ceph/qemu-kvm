@@ -1,5 +1,6 @@
 
 
+#include "smp.h"
 #include "apic.h"
 #include "printf.h"
 
@@ -41,9 +42,15 @@ static void apic_send_ipi(int cpu)
     apic_write(APIC_REG_SEND_IPI, cpu);
 }
 
+static struct spinlock ipi_lock;
+static void (*ipi_function)(void *data);
+static void *ipi_data;
+static volatile int ipi_done;
+
 static __attribute__((used)) void ipi()
 {
-    printf("ipi called, cpu %d\n", apic_get_id());
+    ipi_function(ipi_data);
+    ipi_done = 1;
 }
 
 asm (
@@ -77,6 +84,53 @@ static void set_ipi_descriptor()
 #endif
 }
 
+void spin_lock(struct spinlock *lock)
+{
+    int v = 1;
+
+    do {
+	asm volatile ("xchg %1, %0" : "+m"(lock->v), "+r"(v));
+    } while (v);
+    asm volatile ("" : : : "memory");
+}
+
+void spin_unlock(struct spinlock *lock)
+{
+    asm volatile ("" : : : "memory");
+    lock->v = 0;
+}
+
+int cpu_count(void)
+{
+    return apic_get_cpu_count();
+}
+
+void on_cpu(int cpu, void (*function)(void *data), void *data)
+{
+    spin_lock(&ipi_lock);
+    if (cpu == apic_get_id())
+	function(data);
+    else {
+	ipi_function = function;
+	ipi_data = data;
+	apic_send_ipi(cpu);
+	while (!ipi_done)
+	    ;
+	ipi_done = 0;
+    }
+    spin_unlock(&ipi_lock);
+}
+
+void ipi_test(void *data)
+{
+    int n = (long)data;
+
+    printf("ipi called, cpu %d\n", n);
+    if (n != apic_get_id())
+	printf("but wrong cpu %d\n", apic_get_id());
+}
+
+
 int main()
 {
     int ncpus;
@@ -86,6 +140,6 @@ int main()
     printf("found %d cpus\n", ncpus);
     apic_set_ipi_vector(IPI_VECTOR);
     set_ipi_descriptor();
-    for (i = 1; i < ncpus; ++i)
-	apic_send_ipi(i);
+    for (i = 0; i < ncpus; ++i)
+	on_cpu(i, ipi_test, (void *)(long)i);
 }
