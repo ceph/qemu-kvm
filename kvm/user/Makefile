@@ -12,6 +12,8 @@ CFLAGS = -I $(KERNELDIR)/include $(autodepend-flags) -g -fomit-frame-pointer \
 CFLAGS += $(call cc-option, -fno-stack-protector, "")
 CFLAGS += $(call cc-option, -fno-stack-protector-all, "")
 
+LDFLAGS += $(CFLAGS)
+
 CXXFLAGS = $(autodepend-flags) 
 
 autodepend-flags = -MMD -MF $(dir $*).$(notdir $*).d
@@ -43,7 +45,7 @@ libkvm.a: kvmctl.o
 
 flatfiles-common = test/bootstrap test/vmexit.flat
 
-flatfiles-32 = 
+flatfiles-32 = test/smp.flat
 
 flatfiles-64 = test/access.flat test/irq.flat test/sieve.flat test/simple.flat test/stringio.flat test/memtest1.flat
 
@@ -73,6 +75,8 @@ test/sieve.flat: $(cstart.o) test/sieve.o test/print.o test/vm.o
 test/vmexit.flat: $(cstart.o) test/vmexit.o test/printf.o
 
 test/test32.flat: test/test32.o
+
+test/smp.flat: $(cstart.o) test/smp.o test/printf.o
 
 test/%.o: CFLAGS += -std=gnu99 -ffreestanding
 
