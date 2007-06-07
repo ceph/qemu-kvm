@@ -105,6 +105,11 @@ int cpu_count(void)
     return apic_get_cpu_count();
 }
 
+int smp_id(void)
+{
+    return apic_get_id();
+}
+
 void on_cpu(int cpu, void (*function)(void *data), void *data)
 {
     spin_lock(&ipi_lock);
@@ -121,25 +126,8 @@ void on_cpu(int cpu, void (*function)(void *data), void *data)
     spin_unlock(&ipi_lock);
 }
 
-void ipi_test(void *data)
+void smp_init(void)
 {
-    int n = (long)data;
-
-    printf("ipi called, cpu %d\n", n);
-    if (n != apic_get_id())
-	printf("but wrong cpu %d\n", apic_get_id());
-}
-
-
-int main()
-{
-    int ncpus;
-    int i;
-
-    ncpus = apic_get_cpu_count();
-    printf("found %d cpus\n", ncpus);
     apic_set_ipi_vector(IPI_VECTOR);
     set_ipi_descriptor();
-    for (i = 0; i < ncpus; ++i)
-	on_cpu(i, ipi_test, (void *)(long)i);
 }

@@ -76,7 +76,7 @@ test/vmexit.flat: $(cstart.o) test/vmexit.o test/printf.o
 
 test/test32.flat: test/test32.o
 
-test/smp.flat: $(cstart.o) test/smp.o test/printf.o
+test/smp.flat: $(cstart.o) test/smp.o test/printf.o test/smptest.o
 
 test/%.o: CFLAGS += -std=gnu99 -ffreestanding
 
