@@ -12,6 +12,10 @@ stack_top = 0x1000
 cpu_up = 0x1000
 cpu_up_pmode = 0x1004
 
+pmode_stack_start = 0x10000
+pmode_stack_shift = 16
+pmode_stack_size = (1 << pmode_stack_shift)
+
 ipi_vec = 0xf0
 	
 start:
@@ -90,6 +94,8 @@ ap_pmode:
 	mov $(APIC_BASE + APIC_REG_ID), %dx
 	in %dx, %eax
 	mov %eax, cpu_up_pmode
+	shl $pmode_stack_shift, %eax
+	lea pmode_stack_start + pmode_stack_size(%eax), %esp
 	sti
 	nop
 ap_pmode_wait:
@@ -103,7 +109,7 @@ pmode:
 	mov %ax, %fs
 	mov %ax, %gs
 	mov %ax, %ss
-	mov $0xa0000, %esp
+	mov $pmode_stack_start + pmode_stack_size, %esp
 	ljmp $8, $0x100000
 
 .align 16
