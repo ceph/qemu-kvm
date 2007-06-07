@@ -1,4 +1,5 @@
 
+#include "smp.h"
 #include "printf.h"
 
 typedef unsigned long pt_element_t;
@@ -156,7 +157,7 @@ void ac_test_init(ac_test_t *at)
     set_cr0_wp(1);
     for (int i = 0; i < NR_AC_FLAGS; ++i)
 	at->flags[i] = 0;
-    at->virt = (void *)0x123400000000;
+    at->virt = (void *)(0x123400000000 + 16 * smp_id());
     at->phys = 32 * 1024 * 1024;
     at->pt_pool = 33 * 1024 * 1024;
     memset(at->idt, 0, sizeof at->idt);
@@ -360,6 +361,7 @@ void ac_test_run()
 int main()
 {
     printf("starting test\n\n");
+    smp_init(ac_test_run);
     ac_test_run();
     return 0;
 }
