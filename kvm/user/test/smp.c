@@ -64,11 +64,10 @@ asm (
      );
 
 
-static void set_ipi_descriptor()
+static void set_ipi_descriptor(void (*ipi_entry)(void))
 {
     unsigned short *desc = (void *)(IPI_VECTOR * sizeof(long) * 2);
     unsigned short cs;
-    void ipi_entry();
     unsigned long ipi = (unsigned long)ipi_entry;
 
     asm ("mov %%cs, %0" : "=r"(cs));
@@ -126,8 +125,27 @@ void on_cpu(int cpu, void (*function)(void *data), void *data)
     spin_unlock(&ipi_lock);
 }
 
-void smp_init(void)
+static void (*smp_main_func)(void);
+static volatile int smp_main_running;
+
+asm ("smp_init_entry: \n"
+     "incl smp_main_running \n"
+     "sti \n"
+     "call *smp_main_func");
+
+void smp_init(void (*smp_main)(void))
 {
+    int i;
+    void smp_init_entry(void);
+    void ipi_entry(void);
+
     apic_set_ipi_vector(IPI_VECTOR);
-    set_ipi_descriptor();
+    set_ipi_descriptor(smp_init_entry);
+    smp_main_func = smp_main;
+    for (i = 1; i < cpu_count(); ++i) {
+	apic_send_ipi(i);
+	while (smp_main_running < i)
+	    ;
+    }
+    set_ipi_descriptor(ipi_entry);
 }
