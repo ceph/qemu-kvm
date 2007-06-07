@@ -43,9 +43,9 @@ balloon_ctl: balloon_ctl.o
 libkvm.a: kvmctl.o
 	$(AR) rcs $@ $^
 
-flatfiles-common = test/bootstrap test/vmexit.flat
+flatfiles-common = test/bootstrap test/vmexit.flat test/smp.flat
 
-flatfiles-32 = test/smp.flat
+flatfiles-32 =
 
 flatfiles-64 = test/access.flat test/irq.flat test/sieve.flat test/simple.flat test/stringio.flat test/memtest1.flat
 

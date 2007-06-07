@@ -49,7 +49,11 @@ static __attribute__((used)) void ipi()
 asm (
      "ipi_entry: \n"
      "   call ipi \n"
+#ifndef __x86_64__
      "   iret"
+#else
+     "   iretq"
+#endif
      );
 
 
