@@ -68,11 +68,12 @@ test/bootstrap: test/bootstrap.o
 
 test/irq.flat: test/print.o
 
-test/access.flat: $(cstart.o) test/access.o test/printf.o test/print.o
+test/access.flat: $(cstart.o) test/access.o test/printf.o test/print.o \
+	test/smp.o
 
 test/sieve.flat: $(cstart.o) test/sieve.o test/print.o test/vm.o
 
-test/vmexit.flat: $(cstart.o) test/vmexit.o test/printf.o
+test/vmexit.flat: $(cstart.o) test/vmexit.o test/printf.o test/smp.o
 
 test/test32.flat: test/test32.o
 

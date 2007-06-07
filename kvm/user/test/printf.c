@@ -1,5 +1,8 @@
 #include "printf.h"
+#include "smp.h"
 #include <stdarg.h>
+
+static struct spinlock lock;
 
 void print(const char *s);
 
@@ -159,6 +162,8 @@ int printf(const char *fmt, ...)
     va_start(va, fmt);
     r = vsnprintf(buf, sizeof buf, fmt, va);
     va_end(va);
+    spin_lock(&lock);
     print_serial(buf);
+    spin_unlock(&lock);
     return r;
 }
