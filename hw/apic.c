@@ -410,6 +410,10 @@ static void apic_startup(APICState *s, int vector_num)
     cpu_x86_load_seg_cache(env, R_CS, vector_num << 8, vector_num << 12, 
                            0xffff, 0);
     env->hflags &= ~HF_HALTED_MASK;
+#if USE_KVM
+    if (kvm_allowed)
+	kvm_update_after_sipi(env);
+#endif
 }
 
 static void apic_deliver(APICState *s, uint8_t dest, uint8_t dest_mode,

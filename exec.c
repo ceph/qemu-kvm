@@ -1141,6 +1141,10 @@ void cpu_interrupt(CPUState *env, int mask)
     static int interrupt_lock;
 
     env->interrupt_request |= mask;
+#ifdef USE_KVM
+    if (kvm_allowed)
+	kvm_update_interrupt_request(env);
+#endif
     /* if the cpu is currently executing code, we must unlink it and
        all the potentially executing TB */
     tb = env->current_tb;

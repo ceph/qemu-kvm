@@ -20,6 +20,9 @@ int kvm_get_phys_ram_page_bitmap(unsigned char *bitmap);
 
 void qemu_kvm_call_with_env(void (*func)(void *), void *data, CPUState *env);
 void qemu_kvm_cpuid_on_env(CPUState *env);
+void kvm_update_after_sipi(CPUState *env);
+void kvm_update_interrupt_request(CPUState *env);
+
 
 #define ALIGN(x, y)  (((x)+(y)-1) & ~((y)-1))
 #define BITMAP_SIZE(m) (ALIGN(((m)>>TARGET_PAGE_BITS), HOST_LONG_BITS) / 8)

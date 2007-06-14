@@ -17,6 +17,7 @@ int kvm_allowed = KVM_ALLOWED_DEFAULT;
 
 #include "qemu-kvm.h"
 #include <kvmctl.h>
+#include <pthread.h>
 
 #define MSR_IA32_TSC		0x10
 
@@ -25,6 +26,39 @@ extern void perror(const char *s);
 kvm_context_t kvm_context;
 static struct kvm_msr_list *kvm_msr_list;
 static int kvm_has_msr_star;
+
+extern int smp_cpus;
+
+pthread_mutex_t qemu_mutex = PTHREAD_MUTEX_INITIALIZER;
+static __thread CPUState *vcpu_env;
+
+#define SIG_IPI (SIGRTMIN+4)
+
+struct vcpu_info {
+    int sipi_needed;
+    pthread_t thread;
+    int signalled;
+} vcpu_info[4];
+
+static void sig_ipi_handler(int n)
+{
+}
+
+void kvm_update_interrupt_request(CPUState *env)
+{
+    if (env && vcpu_env && env != vcpu_env) {
+	if (vcpu_info[env->cpu_index].signalled)
+	    return;
+	vcpu_info[env->cpu_index].signalled = 1;
+	pthread_kill(vcpu_info[env->cpu_index].thread, SIG_IPI);
+    }
+}
+
+void kvm_update_after_sipi(CPUState *env)
+{
+    vcpu_info[env->cpu_index].sipi_needed = 1;
+    kvm_update_interrupt_request(env);
+}
 
 static void set_msr_entry(struct kvm_msr_entry *entry, uint32_t index, 
                           uint64_t data)
@@ -167,7 +201,7 @@ static void load_regs(CPUState *env)
     regs.rflags = env->eflags;
     regs.rip = env->eip;
 
-    kvm_set_regs(kvm_context, 0, &regs);
+    kvm_set_regs(kvm_context, env->cpu_index, &regs);
 
     memset(&fpu, 0, sizeof fpu);
     fpu.fsw = env->fpus & ~(7 << 11);
@@ -178,7 +212,7 @@ static void load_regs(CPUState *env)
     memcpy(fpu.fpr, env->fpregs, sizeof env->fpregs);
     memcpy(fpu.xmm, env->xmm_regs, sizeof env->xmm_regs);
     fpu.mxcsr = env->mxcsr;
-    kvm_set_fpu(kvm_context, 0, &fpu);
+    kvm_set_fpu(kvm_context, env->cpu_index, &fpu);
 
     memcpy(sregs.interrupt_bitmap, env->kvm_interrupt_bitmap, sizeof(sregs.interrupt_bitmap));
 
@@ -231,7 +265,7 @@ static void load_regs(CPUState *env)
     sregs.efer = env->efer;
     sregs.cr8 = cpu_get_apic_tpr(env);
 
-    kvm_set_sregs(kvm_context, 0, &sregs);
+    kvm_set_sregs(kvm_context, env->cpu_index, &sregs);
 
     /* msrs */
     n = 0;
@@ -248,7 +282,7 @@ static void load_regs(CPUState *env)
     set_msr_entry(&msrs[n++], MSR_LSTAR  ,           env->lstar);
 #endif
 
-    rc = kvm_set_msrs(kvm_context, 0, msrs, n);
+    rc = kvm_set_msrs(kvm_context, env->cpu_index, msrs, n);
     if (rc == -1)
         perror("kvm_set_msrs FAILED");
 }
@@ -263,7 +297,7 @@ static void save_regs(CPUState *env)
     uint32_t hflags;
     uint32_t i, n, rc;
 
-    kvm_get_regs(kvm_context, 0, &regs);
+    kvm_get_regs(kvm_context, env->cpu_index, &regs);
 
     env->regs[R_EAX] = regs.rax;
     env->regs[R_EBX] = regs.rbx;
@@ -287,7 +321,7 @@ static void save_regs(CPUState *env)
     env->eflags = regs.rflags;
     env->eip = regs.rip;
 
-    kvm_get_fpu(kvm_context, 0, &fpu);
+    kvm_get_fpu(kvm_context, env->cpu_index, &fpu);
     env->fpstt = (fpu.fsw >> 11) & 7;
     env->fpus = fpu.fsw;
     env->fpuc = fpu.fcw;
@@ -297,7 +331,7 @@ static void save_regs(CPUState *env)
     memcpy(env->xmm_regs, fpu.xmm, sizeof env->xmm_regs);
     env->mxcsr = fpu.mxcsr;
 
-    kvm_get_sregs(kvm_context, 0, &sregs);
+    kvm_get_sregs(kvm_context, env->cpu_index, &sregs);
 
     memcpy(env->kvm_interrupt_bitmap, sregs.interrupt_bitmap, sizeof(env->kvm_interrupt_bitmap));
 
@@ -384,7 +418,7 @@ static void save_regs(CPUState *env)
     msrs[n++].index = MSR_FMASK;
     msrs[n++].index = MSR_LSTAR;
 #endif
-    rc = kvm_get_msrs(kvm_context, 0, msrs, n);
+    rc = kvm_get_msrs(kvm_context, env->cpu_index, msrs, n);
     if (rc == -1) {
         perror("kvm_get_msrs FAILED");
     }
@@ -403,13 +437,18 @@ static void save_regs(CPUState *env)
 static int try_push_interrupts(void *opaque)
 {
     CPUState *env = cpu_single_env;
+    int r, irq;
 
     if (env->ready_for_interrupt_injection &&
         (env->interrupt_request & CPU_INTERRUPT_HARD) &&
         (env->eflags & IF_MASK)) {
             env->interrupt_request &= ~CPU_INTERRUPT_HARD;
-            // for now using cpu 0
-            kvm_inject_irq(kvm_context, 0, cpu_get_pic_interrupt(env));
+	    irq = cpu_get_pic_interrupt(env);
+	    if (irq >= 0) {
+		r = kvm_inject_irq(kvm_context, env->cpu_index, irq);
+		if (r < 0)
+		    printf("cpu %d fail inject %x\n", env->cpu_index, irq);
+	    }
     }
 
     return (env->interrupt_request & CPU_INTERRUPT_HARD) != 0;
@@ -417,8 +456,10 @@ static int try_push_interrupts(void *opaque)
 
 static void post_kvm_run(void *opaque, int vcpu)
 {
-    CPUState *env = cpu_single_env;
+    CPUState *env = vcpu_env;
 
+    pthread_mutex_lock(&qemu_mutex);
+    cpu_single_env = env;
     env->eflags = kvm_get_interrupt_flag(kvm_context, vcpu)
 	? env->eflags | IF_MASK : env->eflags & ~IF_MASK;
     env->ready_for_interrupt_injection
@@ -434,6 +475,7 @@ static int pre_kvm_run(void *opaque, int vcpu)
     kvm_set_cr8(kvm_context, vcpu, cpu_get_apic_tpr(env));
     if (env->interrupt_request & CPU_INTERRUPT_EXIT)
 	return 1;
+    pthread_mutex_unlock(&qemu_mutex);
     return 0;
 }
 
@@ -453,7 +495,7 @@ int kvm_cpu_exec(CPUState *env)
 {
     int r;
 
-    r = kvm_run(kvm_context, 0);
+    r = kvm_run(kvm_context, env->cpu_index);
     if (r < 0) {
         printf("kvm_run returned %d\n", r);
         exit(1);
@@ -475,18 +517,64 @@ static int has_work(CPUState *env)
     return 0;
 }
 
-int kvm_main_loop(void)
+static void kvm_main_loop_wait(CPUState *env, int timeout)
 {
-    CPUState *env = first_cpu;
+    if (vcpu_info[env->cpu_index].signalled && timeout)
+	goto shortcut;
+    pthread_mutex_unlock(&qemu_mutex);
+    if (env->cpu_index == 0)
+	main_loop_wait(timeout);
+    else
+	if (timeout) {
+	    sigset_t set;
+	    int n;
 
+	    sigemptyset(&set);
+	    sigaddset(&set, SIG_IPI);
+	    sigwait(&set, &n);
+	}
+    pthread_mutex_lock(&qemu_mutex);
+    cpu_single_env = env;
+ shortcut:
+    vcpu_info[env->cpu_index].signalled = 0;
+}
+
+static void update_regs_for_sipi(CPUState *env)
+{
+    SegmentCache cs = env->segs[R_CS];
+
+    save_regs(env);
+    env->segs[R_CS] = cs;
+    env->eip = 0;
+    load_regs(env);
+    vcpu_info[env->cpu_index].sipi_needed = 0;
+}
+
+static void setup_kernel_sigmask(CPUState *env)
+{
+    sigset_t set;
+
+    sigprocmask(SIG_BLOCK, NULL, &set);
+    sigdelset(&set, SIG_IPI);
+    kvm_set_signal_mask(kvm_context, env->cpu_index, &set);
+}
+
+static int kvm_main_loop_cpu(CPUState *env)
+{
+    setup_kernel_sigmask(env);
+    pthread_mutex_lock(&qemu_mutex);
     cpu_single_env = env;
     while (1) {
 	while (!has_work(env))
-	    main_loop_wait(10);
-	env->hflags &= ~HF_HALTED_MASK;
-	kvm_cpu_exec(env);
+	    kvm_main_loop_wait(env, 10);
+	if (env->interrupt_request & CPU_INTERRUPT_HARD)
+	    env->hflags &= ~HF_HALTED_MASK;
+	if (vcpu_info[env->cpu_index].sipi_needed)
+	    update_regs_for_sipi(env);
+	if (!(env->hflags & HF_HALTED_MASK))
+	    kvm_cpu_exec(env);
 	env->interrupt_request &= ~CPU_INTERRUPT_EXIT;
-	main_loop_wait(0);
+	kvm_main_loop_wait(env, 0);
 	if (qemu_shutdown_requested())
 	    break;
 	else if (qemu_powerdown_requested())
@@ -497,7 +585,38 @@ int kvm_main_loop(void)
 	    load_regs(env);
 	}
     }
+    pthread_mutex_unlock(&qemu_mutex);
     return 0;
+}
+
+static void *ap_main_loop(void *_env)
+{
+    CPUState *env = _env;
+    sigset_t signals;
+
+    vcpu_env = env;
+    sigfillset(&signals);
+    //sigdelset(&signals, SIG_IPI);
+    sigprocmask(SIG_BLOCK, &signals, NULL);
+    kvm_create_vcpu(kvm_context, env->cpu_index);
+    kvm_qemu_init_env(env);
+    kvm_main_loop_cpu(env);
+    return NULL;
+}
+
+int kvm_main_loop(void)
+{
+    CPUState *env = first_cpu->next_cpu;
+    int i;
+
+    vcpu_env = first_cpu;
+    signal(SIG_IPI, sig_ipi_handler);
+    for (i = 1; i < smp_cpus; ++i) {
+	pthread_create(&vcpu_info[i].thread, NULL, ap_main_loop, env);
+	env = env->next_cpu;
+    }
+    vcpu_info[0].thread = pthread_self();
+    return kvm_main_loop_cpu(first_cpu);
 }
 
 static int kvm_debug(void *opaque, int vcpu)
@@ -814,7 +933,7 @@ int kvm_qemu_init_env(CPUState *cenv)
     for (i = 0x80000000; i <= limit; ++i)
 	do_cpuid_ent(&cpuid_ent[cpuid_nent++], i, &copy);
 
-    kvm_setup_cpuid(kvm_context, 0, cpuid_nent, cpuid_ent);
+    kvm_setup_cpuid(kvm_context, cenv->cpu_index, cpuid_nent, cpuid_ent);
 
     return 0;
 }
@@ -833,7 +952,7 @@ int kvm_update_debugger(CPUState *env)
 	}
 	dbg.singlestep = env->singlestep_enabled;
     }
-    return kvm_guest_debug(kvm_context, 0, &dbg);
+    return kvm_guest_debug(kvm_context, env->cpu_index, &dbg);
 }
 
 
