@@ -101,6 +101,13 @@ optparser.add_option('--stopped',
                      default = False,
                      )
 
+optparser.add_option('-s', '--smp',
+		     type = 'int',
+                     default = 1,
+		     dest = 'vcpus',
+                     help = 'define number of vcpus',
+                     )
+
 optparser.add_option('-n', '--dry-run',
                      help = "just print the qemu command line; don't run it",
                      action = 'store_true',
@@ -186,6 +193,7 @@ else:
 qemu_args = (cmd, '-boot', bootdisk,
              '-hda', disk, '-m', str(options.memory),
              '-serial', 'file:/tmp/serial.log',
+             '-smp', str(options.vcpus),
              #'-usbdevice', 'tablet',
           )
 
