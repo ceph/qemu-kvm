@@ -14,6 +14,18 @@
  * This work is licensed under the GNU LGPL license, version 2.
  */
 
+#ifndef __user
+#define __user /* temporary, until installed via make headers_install */
+#endif
+
+#include <linux/kvm.h>
+
+#define EXPECTED_KVM_API_VERSION 12
+
+#if EXPECTED_KVM_API_VERSION != KVM_API_VERSION
+#error libkvm: userspace and kernel version mismatch
+#endif
+
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -24,12 +36,6 @@
 #include <sys/ioctl.h>
 #include "kvmctl.h"
 #include "kvm-abi-10.h"
-
-#define EXPECTED_KVM_API_VERSION 12
-
-#if EXPECTED_KVM_API_VERSION != KVM_API_VERSION
-#error libkvm: userspace and kernel version mismatch
-#endif
 
 static int kvm_abi = EXPECTED_KVM_API_VERSION;
 

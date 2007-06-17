@@ -5,7 +5,10 @@
 #ifndef KVMCTL_H
 #define KVMCTL_H
 
+#ifndef __user
 #define __user /* temporary, until installed via make headers_install */
+#endif
+
 #include <linux/kvm.h>
 #include <stdint.h>
 #include <signal.h>
