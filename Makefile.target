@@ -452,7 +452,7 @@ endif
 ifndef CONFIG_DARWIN
 ifndef CONFIG_WIN32
 ifndef CONFIG_SOLARIS
-VL_LIBS=-lutil -lrt -luuid
+VL_LIBS=-lutil -lrt
 endif
 endif
 endif
