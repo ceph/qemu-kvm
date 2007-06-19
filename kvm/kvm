@@ -2,6 +2,22 @@
 
 import sys, os, time, re
 import optparse, commands
+import ConfigParser, StringIO
+
+class ShellConfigParser(ConfigParser.ConfigParser):
+    def read(self, filename):
+        try:
+            text = open(filename).read()
+        except IOError:
+            pass
+        else:
+            file = StringIO.StringIO("[shell]\n" + text)
+            self.readfp(file, filename)
+
+config = ShellConfigParser()
+config.read('config.mak')
+
+external_module = config.get('shell', 'want_module')
 
 optparser = optparse.OptionParser()
 
@@ -111,8 +127,11 @@ def remove_module(module):
 def insert_module(module):
     if os.spawnl(os.P_WAIT, '/sbin/insmod', 'insmod',
                  'kernel/%s.ko' % (module,)) != 0:
-        if os.spawnl(os.P_WAIT, '/sbin/modprobe', 'modprobe', module) != 0:
-            raise Exception('failed to load kvm module')
+        raise Exception('failed to load kvm module')
+
+def probe_module(module):
+    if os.spawnl(os.P_WAIT, '/sbin/modprobe', 'modprobe', module) != 0:
+        raise Exception('failed to load kvm module')
 
 def vendor():
     for x in file('/proc/cpuinfo').readlines():
@@ -129,8 +148,12 @@ vendor_module = {
 if options.kvm and options.reload:
     for module in [vendor_module, 'kvm']:
         remove_module(module)
+    if external_module:
+        insmod = insert_module
+    else:
+        insmod = probe_module
     for module in ['kvm', vendor_module]:
-        insert_module(module)
+        insmod(module)
     commands.getstatusoutput('/sbin/udevsettle')
     if not os.access('/dev/kvm', os.F_OK):
         print '/dev/kvm not present'
