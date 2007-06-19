@@ -546,9 +546,9 @@ typedef struct CPUX86State {
 #endif
 
 #ifdef USE_KVM
-#define BITS_PER_LONG (8 * sizeof (long))
+#define BITS_PER_LONG (8 * sizeof (uint32_t))
 #define NR_IRQ_WORDS (256/ BITS_PER_LONG)
-    unsigned long kvm_interrupt_bitmap[NR_IRQ_WORDS];
+    uint32_t kvm_interrupt_bitmap[NR_IRQ_WORDS];
 #endif
 
     /* in order to simplify APIC support, we leave this pointer to the
