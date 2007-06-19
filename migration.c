@@ -417,6 +417,9 @@ static int start_migration(MigrationState *s)
 
 #ifdef USE_KVM
     if (kvm_allowed) {
+        value = cpu_to_be32(n);
+        if (write_whole_buffer(s->fd, &value, sizeof(value)))
+            goto out;
         if (write_whole_buffer(s->fd, phys_ram_page_exist_bitmap, n))
             goto out;
     }
@@ -797,11 +800,14 @@ static int migrate_incoming_fd(int fd)
 
 #ifdef USE_KVM
     if (kvm_allowed) {
-        int n;
+        int n, m;
         unsigned char *phys_ram_page_exist_bitmap = NULL;
 
         /* allocate memory bitmap */
         n = BITMAP_SIZE(phys_ram_size);
+        m = qemu_get_be32(f);
+        if (m > n) // allocate enough space
+            n = m;
         phys_ram_page_exist_bitmap = qemu_malloc(n);
         if (!phys_ram_page_exist_bitmap) {
             perror("failed to allocate page bitmap");
@@ -809,7 +815,7 @@ static int migrate_incoming_fd(int fd)
         }
         
         /* receive memory bitmap */
-        qemu_get_buffer(f, phys_ram_page_exist_bitmap, n);
+        qemu_get_buffer(f, phys_ram_page_exist_bitmap, m);
 
         /* FIXME: free dellocated-at-src guest memory pages */
 
