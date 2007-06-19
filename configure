@@ -869,7 +869,8 @@ interp_prefix1=`echo "$interp_prefix" | sed "s/%M/$target_cpu/g"`
 echo "#define CONFIG_QEMU_PREFIX \"$interp_prefix1\"" >> $config_h
 
 configure_kvm() {
-  if test $kvm = "yes" -a "$target_softmmu" = "yes" -a $cpu = "$target_cpu" ; then
+  if test $kvm = "yes" -a "$target_softmmu" = "yes" -a \
+          \( "$cpu" = "i386" -o "$cpu" = "x86_64" \); then
     echo "#define USE_KVM 1" >> $config_h
     echo "CONFIG_KVM_KERNEL_INC=$kernel_path/include" >> $config_mak
   fi
