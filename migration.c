@@ -112,6 +112,7 @@ enum { /* migration status values */
     MIG_STAT_DST_GET_PAGE_FAILED       = 230,
     MIG_STAT_DST_GET_PAGE_UNKNOWN_TYPE = 231,
     MIG_STAT_DST_MEM_SIZE_MISMATCH     = 232,
+    MIG_STAT_DST_MEM_OUT_OF_RANGE      = 233,
 };
 
 //#define MIGRATION_VERIFY
@@ -827,6 +828,8 @@ static int migrate_incoming_fd(int fd)
 	addr = qemu_get_be32(f);
 	if (addr == 1)
 	    break;
+        if (addr >= phys_ram_size)
+            return MIG_STAT_DST_MEM_OUT_OF_RANGE;
         ret = migrate_incoming_page(f, addr);
         if (ret)
             return ret;
