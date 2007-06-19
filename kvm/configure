@@ -74,7 +74,7 @@ fi
 
 target_cpu() {
     if [[ $(uname -m) = i?86 ]]; then
-	echo i386
+	echo x86_64
     else
 	uname -m
     fi
