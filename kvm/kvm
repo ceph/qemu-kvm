@@ -169,11 +169,7 @@ bootdisk = 'c'
 if options.install:
     bootdisk = 'd'
 
-import platform
-arch = platform.machine()
-# check 32-bit userspace on 64-bit kernel
-if platform.architecture()[0] == '32bit':
-    arch = 'i386'
+arch = 'x86_64'
 
 if arch == 'x86_64':
     cmd = 'qemu-system-' + arch
