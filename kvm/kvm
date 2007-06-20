@@ -18,6 +18,7 @@ config = ShellConfigParser()
 config.read('config.mak')
 
 external_module = config.get('shell', 'want_module')
+privileged = os.getuid() == 0
 
 optparser = optparse.OptionParser()
 
@@ -25,7 +26,7 @@ optparser.add_option('--no-reload-module',
                      help = 'do not reload kvm module',
                      action = 'store_false',
                      dest = 'reload',
-                     default = True,
+                     default = privileged,
                      )
 
 optparser.add_option('--install',
@@ -51,7 +52,7 @@ optparser.add_option('--no-tap',
                      help = 'run the guest without tap netif',
                      action = 'store_true',
                      dest = 'notap',
-                     default = False,
+                     default = not privileged,
                      )
 
 optparser.add_option('--mac',
