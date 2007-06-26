@@ -12,9 +12,10 @@ ExclusiveArch:  i386 x86_64
 
 Requires:	kvm-kmod bridge-utils
 
-%define fedora_release %(rpm -q --qf '%%{version}' fedora-release)
+%define Distribution %(cat /etc/redhat-release | awk '{ print $1}' | tr [A-Z] [a-z])
+%define os_release %(rpm -q --qf '%%{version}' %{Distribution}-release)
 
-%if %{fedora_release} == 5
+%if %{Distribution} == "fedora" && %{os_release} == 5 || %{Distribution} == "centos" && %{os_release} == 4
 BuildRequires: compat-gcc-32
 %else
 BuildRequires: compat-gcc-34
