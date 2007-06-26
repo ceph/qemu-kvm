@@ -10,7 +10,7 @@ License:        GPL
 URL:            http://www.qumranet.com
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}
 
-ExclusiveArch:  i586 i686 x86_64
+ExclusiveArch: i386 x86_64
 
 %description
 This kernel module provides support for virtual machines using hardware support
