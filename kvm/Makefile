@@ -44,7 +44,7 @@ tmpspec = .tmp.kvm.spec
 RPMDIR=$$(pwd)/RPMS
 
 rpm:	srpm
-	mkdir -p $(RPMDIR)/$$(uname -i)
+	mkdir -p BUILD $(RPMDIR)/$$(uname -i)
 	rpmbuild --rebuild \
 		 --define="_rpmdir $(RPMDIR)" \
 		 --define="_topdir $$(pwd)" \
