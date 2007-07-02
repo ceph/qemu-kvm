@@ -16,7 +16,7 @@ print:
 	push %rdx
 
 	mov %rdi, %rsi
-	mov $PSEUDO_SERIAL_PORT, %edx
+	mov $(PSEUDO_SERIAL_PORT), %edx
 
 putchar:
 	cmpb $0, (%rsi)
