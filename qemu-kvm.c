@@ -3,6 +3,14 @@
 #include "config-host.h"
 
 #ifdef USE_KVM
+ #define KVM_ALLOWED_DEFAULT 1
+#else
+ #define KVM_ALLOWED_DEFAULT 0
+#endif
+
+int kvm_allowed = KVM_ALLOWED_DEFAULT;
+
+#ifdef USE_KVM
 
 #include "exec.h"
 
@@ -14,7 +22,6 @@
 
 extern void perror(const char *s);
 
-int kvm_allowed = 1;
 kvm_context_t kvm_context;
 static struct kvm_msr_list *kvm_msr_list;
 static int kvm_has_msr_star;
