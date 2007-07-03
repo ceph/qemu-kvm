@@ -441,12 +441,14 @@ static void pre_kvm_run(void *opaque, int vcpu)
 
 void kvm_load_registers(CPUState *env)
 {
-    load_regs(env);
+    if (kvm_allowed)
+	load_regs(env);
 }
 
 void kvm_save_registers(CPUState *env)
 {
-    save_regs(env);
+    if (kvm_allowed)
+	save_regs(env);
 }
 
 int kvm_cpu_exec(CPUState *env)

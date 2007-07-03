@@ -30,6 +30,7 @@
 #include "qemu.h"
 #else
 #include "vl.h"
+#include "qemu-kvm.h"
 #endif
 
 #include "qemu_socket.h"
@@ -871,6 +872,9 @@ static int gdb_handle_packet(GDBState *s, CPUState *env, const char *line_buf)
             addr = strtoull(p, (char **)&p, 16);
 #if defined(TARGET_I386)
             env->eip = addr;
+#ifdef USE_KVM
+	    kvm_load_registers(env);
+#endif
 #elif defined (TARGET_PPC)
             env->nip = addr;
 #elif defined (TARGET_SPARC)
@@ -893,6 +897,9 @@ static int gdb_handle_packet(GDBState *s, CPUState *env, const char *line_buf)
             addr = strtoul(p, (char **)&p, 16);
 #if defined(TARGET_I386)
             env->eip = addr;
+#ifdef USE_KVM
+	    kvm_load_registers(env);
+#endif
 #elif defined (TARGET_PPC)
             env->nip = addr;
 #elif defined (TARGET_SPARC)
@@ -940,6 +947,9 @@ static int gdb_handle_packet(GDBState *s, CPUState *env, const char *line_buf)
         }
         break;
     case 'g':
+#ifdef USE_KVM
+	kvm_save_registers(env);
+#endif
         reg_size = cpu_gdb_read_registers(env, mem_buf);
         memtohex(buf, mem_buf, reg_size);
         put_packet(s, buf);
@@ -949,6 +959,9 @@ static int gdb_handle_packet(GDBState *s, CPUState *env, const char *line_buf)
         len = strlen(p) / 2;
         hextomem((uint8_t *)registers, p, len);
         cpu_gdb_write_registers(env, mem_buf, len);
+#ifdef USE_KVM
+	kvm_load_registers(env);
+#endif
         put_packet(s, "OK");
         break;
     case 'm':
