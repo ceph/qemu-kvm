@@ -18,15 +18,22 @@ sync:
 	rsync "$(LINUX)"/include/linux/kvm.h \
 	       "$(LINUX)"/include/linux/kvm_para.h \
 			include/linux
-	sed -i 's/f_path\./f_/' kvm_main.c
-	sed -i 's/f_mnt/f_vfsmnt/' kvm_main.c
 	mv kvm_main.c kvm_main.c.orig
-	awk '/^static int kvmfs_get_sb/ \
-		 { print "#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,17)\n"; \
-		   hacking_get_sb = 1 \
-		 } \
-	     { print } \
-	     /\}/ && hacking_get_sb { print "\n#endif"; hacking_get_sb = 0 } \
+	awk '/^static __init int kvm_init\(/ { anon_inodes = 1 }          \
+	     /return 0;/ && anon_inodes {                                 \
+			print "\tr = kvm_init_anon_inodes();";            \
+			print "\tif (r) {";                               \
+			print "\t\t__free_page(bad_page);";               \
+			print "\t\tgoto out;";                            \
+			print "\t}";                                      \
+			anon_inodes = 0                                   \
+			}                                                 \
+	     /^static __exit void kvm_exit/ { anon_inodes_exit = 1 }      \
+	     /\}/ && anon_inodes_exit {                                   \
+			print "\tkvm_exit_anon_inodes();";                \
+			anon_inodes_exit = 0                              \
+			}                                                 \
+	     { print }                                                    \
 	     ' kvm_main.c.orig > kvm_main.c
 	rm kvm_main.c.orig
 
