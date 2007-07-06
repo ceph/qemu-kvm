@@ -66,6 +66,7 @@ struct kvm_context {
 	int dirty_pages_log_all;
 	/// memory regions parameters
 	struct kvm_memory_region mem_regions[KVM_MAX_NUM_MEM_REGIONS];
+	int irqchip_in_kernel;
 };
 
 /*
@@ -306,6 +307,15 @@ int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem)
 	     MAP_PRIVATE|MAP_FIXED, zfd, 0);
 	close(zfd);
 
+	kvm->irqchip_in_kernel = 0;
+	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_PIC);
+	if (r > 0) {	/* kernel irqchip supported */
+		r = ioctl(fd, KVM_CREATE_PIC);
+		if (r >= 0)
+			kvm->irqchip_in_kernel = 1;
+		else
+			printf("Create kernel PIC irqchip failed\n");
+	}
 	r = kvm_create_vcpu(kvm, 0);
 	if (r < 0)
 		return r;
@@ -436,6 +446,21 @@ int kvm_get_mem_map(kvm_context_t kvm, int slot, void *buf)
 		*(unsigned char*)(buf+n) = v;
 	return 0;
 #endif /* KVM_GET_MEM_MAP */
+}
+
+int kvm_set_irq_level(kvm_context_t kvm, int irq, int level)
+{
+	struct kvm_irq_level event;
+	int r;
+
+	if (!kvm->irqchip_in_kernel)
+		return 0;
+	event.level = level;
+	event.irq = irq;
+	r = ioctl(kvm->vm_fd, KVM_IRQ_LINE, &event);
+	if (r == -1)
+		perror("kvm_set_irq_level");
+	return 1;
 }
 
 static int handle_io_abi10(kvm_context_t kvm, struct kvm_run_abi10 *run,
@@ -989,10 +1014,12 @@ int kvm_run(kvm_context_t kvm, int vcpu)
 		return kvm_run_abi10(kvm, vcpu);
 
 again:
-	run->request_interrupt_window = try_push_interrupts(kvm);
+	if (!kvm->irqchip_in_kernel)
+		run->request_interrupt_window = try_push_interrupts(kvm);
 	r = pre_kvm_run(kvm, vcpu);
 	if (r)
 	    return r;
+	pre_kvm_run(kvm, vcpu);
 	r = ioctl(fd, KVM_RUN, 0);
 	post_kvm_run(kvm, vcpu);
 
@@ -1071,6 +1098,25 @@ int kvm_guest_debug(kvm_context_t kvm, int vcpu, struct kvm_debug_guest *dbg)
 	return ioctl(kvm->vcpu_fd[vcpu], KVM_DEBUG_GUEST, dbg);
 }
 
+static void cpuid_remove_apic(struct kvm_cpuid *cpuid)
+{
+	int i;
+	struct kvm_cpuid_entry *e, *entry;
+
+	entry = NULL;
+	for (i = 0; i < cpuid->nent; ++i) {
+		e = &cpuid->entries[i];
+		if (e->function == 1) {
+			entry = e;
+			break;
+		}
+	}
+	if (entry) {
+		entry->edx &= ~(1 << 9);
+		printf("Guest APIC capibility removed\n");
+	}
+}
+
 int kvm_setup_cpuid(kvm_context_t kvm, int vcpu, int nent,
 		    struct kvm_cpuid_entry *entries)
 {
@@ -1083,6 +1129,8 @@ int kvm_setup_cpuid(kvm_context_t kvm, int vcpu, int nent,
 
 	cpuid->nent = nent;
 	memcpy(cpuid->entries, entries, nent * sizeof(*entries));
+	/* temply walkaround before merge of in-kernel APIC */
+	cpuid_remove_apic(cpuid);
 	r = ioctl(kvm->vcpu_fd[vcpu], KVM_SET_CPUID, cpuid);
 
 	free(cpuid);

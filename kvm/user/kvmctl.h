@@ -406,6 +406,7 @@ int kvm_destroy_memory_alias(kvm_context_t, int slot);
  * \param bitmap Long aligned address of a big enough bitmap (one bit per page)
  */
 int kvm_get_mem_map(kvm_context_t kvm, int slot, void *bitmap);
+int kvm_set_irq_level(kvm_context_t kvm, int irq, int level);
 
 /*!
  * \brief Enable dirty-pages-logging for all memory regions
