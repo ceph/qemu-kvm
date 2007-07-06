@@ -75,6 +75,7 @@ typedef unsigned long ram_addr_t;
 #define EXCP_HLT        0x10001 /* hlt instruction reached */
 #define EXCP_DEBUG      0x10002 /* cpu stopped after a breakpoint or singlestep */
 #define EXCP_HALTED     0x10003 /* cpu is halted (waiting for external event) */
+#define EXCP_IO_WINDOW  0x10004 /* IO Window for user irq injection */
 #define MAX_BREAKPOINTS 32
 
 #define TB_JMP_CACHE_BITS 12

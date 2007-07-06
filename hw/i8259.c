@@ -177,7 +177,12 @@ int64_t irq_time[16];
 void pic_set_irq_new(void *opaque, int irq, int level)
 {
     PicState2 *s = opaque;
+#ifdef USE_KVM
+    extern int kvm_set_irq(int irq, int level);
 
+    if (kvm_set_irq(irq, level))
+        return;
+#endif
 #if defined(DEBUG_PIC) || defined(DEBUG_IRQ_COUNT)
     if (level != irq_level[irq]) {
 #if defined(DEBUG_PIC)

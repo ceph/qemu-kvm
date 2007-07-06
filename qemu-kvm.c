@@ -931,6 +931,7 @@ static int kvm_writeq(void *opaque, uint64_t addr, uint64_t data)
 
 static int kvm_io_window(void *opaque)
 {
+    env->exception_index = EXCP_IO_WINDOW;
     return 1;
 }
 
@@ -941,7 +942,8 @@ static int kvm_halt(void *opaque, int vcpu)
 
     if (!((env->interrupt_request & CPU_INTERRUPT_HARD) &&
 	  (env->eflags & IF_MASK))) {
-	    env->hflags |= HF_HALTED_MASK;
+	    /* TODO: for halt emulation, temply walkaround now */
+	    /* env->hflags |= HF_HALTED_MASK; */
 	    env->exception_index = EXCP_HLT;
     }
 
@@ -1247,5 +1249,10 @@ int kvm_get_phys_ram_page_bitmap(unsigned char *bitmap)
 
  out:
     return r;
+}
+
+int kvm_set_irq(int irq, int level)
+{
+    return kvm_set_irq_level(kvm_context, irq, level);
 }
 #endif
