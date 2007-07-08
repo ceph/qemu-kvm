@@ -158,3 +158,29 @@ static inline int smp_call_function_single1(int cpu, void (*func)(void *info),
 int kvm_init_anon_inodes(void);
 void kvm_exit_anon_inodes(void);
 
+#include <linux/smp.h>
+
+#define on_cpu kvm_on_cpu
+
+/*
+ * Call a function on one processor, which might be the currently executing
+ * processor.
+ */
+static inline int on_cpu(int cpu, void (*func) (void *info), void *info,
+			 int retry, int wait)
+{
+	int ret;
+	int this_cpu;
+
+	this_cpu = get_cpu();
+	if (this_cpu == cpu) {
+		local_irq_disable();
+		func(info);
+		local_irq_enable();
+		ret = 0;
+	} else
+		ret = smp_call_function_single(cpu, func, info, retry, wait);
+	put_cpu();
+	return ret;
+}
+
