@@ -119,6 +119,7 @@ static inline int smp_call_function_single1(int cpu, void (*func)(void *info),
 #define KVM_MINOR 232
 #endif
 
+#include <linux/notifier.h>
 #ifndef CPU_TASKS_FROZEN
 
 #define CPU_TASKS_FROZEN       0x0010
@@ -129,6 +130,11 @@ static inline int smp_call_function_single1(int cpu, void (*func)(void *info),
 #define CPU_DOWN_FAILED_FROZEN (CPU_DOWN_FAILED | CPU_TASKS_FROZEN)
 #define CPU_DEAD_FROZEN                (CPU_DEAD | CPU_TASKS_FROZEN)
 
+#endif
+
+#ifndef CPU_DYING
+#define CPU_DYING 0x000A
+#define CPU_DYING_FROZEN (CPU_DYING | CPU_TASKS_FROZEN)
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
