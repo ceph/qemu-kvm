@@ -5,6 +5,7 @@ KVERREL = $(patsubst /lib/modules/%/build,%,$(KERNELDIR))
 DESTDIR=
 
 INSTALLDIR = $(patsubst %/build,%/extra,$(KERNELDIR))
+ORIGMODDIR = $(patsubst %/build,%/kernel,$(KERNELDIR))
 
 rpmrelease = devel
 
@@ -40,6 +41,7 @@ sync:
 install:
 	mkdir -p $(DESTDIR)/$(INSTALLDIR)
 	cp *.ko $(DESTDIR)/$(INSTALLDIR)
+	for i in $(ORIGMODDIR)/drivers/kvm/*.ko; do mv $$i $$i.orig; done
 	/sbin/depmod -a
 
 tmpspec = .tmp.kvm-kmod.spec
