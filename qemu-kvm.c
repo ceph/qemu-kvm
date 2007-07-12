@@ -36,6 +36,7 @@ static __thread CPUState *vcpu_env;
 
 struct vcpu_info {
     int sipi_needed;
+    int init;
     pthread_t thread;
     int signalled;
 } vcpu_info[4];
@@ -46,17 +47,24 @@ static void sig_ipi_handler(int n)
 
 void kvm_update_interrupt_request(CPUState *env)
 {
-    if (env && vcpu_env && env != vcpu_env) {
+    if (env && env != vcpu_env) {
 	if (vcpu_info[env->cpu_index].signalled)
 	    return;
 	vcpu_info[env->cpu_index].signalled = 1;
-	pthread_kill(vcpu_info[env->cpu_index].thread, SIG_IPI);
+	if (vcpu_info[env->cpu_index].thread)
+	    pthread_kill(vcpu_info[env->cpu_index].thread, SIG_IPI);
     }
 }
 
 void kvm_update_after_sipi(CPUState *env)
 {
     vcpu_info[env->cpu_index].sipi_needed = 1;
+    kvm_update_interrupt_request(env);
+}
+
+void kvm_apic_init(CPUState *env)
+{
+    vcpu_info[env->cpu_index].init = 1;
     kvm_update_interrupt_request(env);
 }
 
@@ -548,6 +556,13 @@ static void update_regs_for_sipi(CPUState *env)
     env->eip = 0;
     load_regs(env);
     vcpu_info[env->cpu_index].sipi_needed = 0;
+    vcpu_info[env->cpu_index].init = 0;
+}
+
+static void update_regs_for_init(CPUState *env)
+{
+    cpu_reset(env);
+    load_regs(env);
 }
 
 static void setup_kernel_sigmask(CPUState *env)
@@ -571,7 +586,9 @@ static int kvm_main_loop_cpu(CPUState *env)
 	    env->hflags &= ~HF_HALTED_MASK;
 	if (vcpu_info[env->cpu_index].sipi_needed)
 	    update_regs_for_sipi(env);
-	if (!(env->hflags & HF_HALTED_MASK))
+	if (vcpu_info[env->cpu_index].init)
+	    update_regs_for_init(env);
+	if (!(env->hflags & HF_HALTED_MASK) && !vcpu_info[env->cpu_index].init)
 	    kvm_cpu_exec(env);
 	env->interrupt_request &= ~CPU_INTERRUPT_EXIT;
 	kvm_main_loop_wait(env, 0);

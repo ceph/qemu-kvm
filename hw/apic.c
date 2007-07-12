@@ -398,6 +398,11 @@ static void apic_init_ipi(APICState *s)
     s->initial_count = 0;
     s->initial_count_load_time = 0;
     s->next_time = 0;
+#ifdef USE_KVM
+    if (kvm_allowed)
+	if (s->cpu_env)
+	    kvm_apic_init(s->cpu_env);
+#endif
 }
 
 /* send a SIPI message to the CPU to start it */
