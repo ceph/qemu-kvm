@@ -687,7 +687,8 @@ static void kvm_show_code(kvm_context_t kvm, int vcpu)
 	struct kvm_regs regs;
 	struct kvm_sregs sregs;
 	int r;
-	unsigned char code[30];
+	unsigned char code[50];
+	int back_offset;
 	char code_str[sizeof(code) * 3 + 1];
 	unsigned long rip;
 
@@ -705,10 +706,16 @@ static void kvm_show_code(kvm_context_t kvm, int vcpu)
 		return;
 	}
 	rip = sregs.cs.base * 16 + regs.rip;
-	memcpy(code, kvm->physical_memory + rip, sizeof code);
+	back_offset = regs.rip;
+	if (back_offset > 20)
+	    back_offset = 20;
+	memcpy(code, kvm->physical_memory + rip - back_offset, sizeof code);
 	*code_str = 0;
-	for (r = 0; r < sizeof code; ++r)
+	for (r = 0; r < sizeof code; ++r) {
+	    	if (r == back_offset)
+			strcat(code_str, " -->");
 		sprintf(code_str + strlen(code_str), " %02x", code[r]);
+	}
 	fprintf(stderr, "code:%s\n", code_str);
 }
 
