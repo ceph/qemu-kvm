@@ -32,6 +32,8 @@ extern int smp_cpus;
 pthread_mutex_t qemu_mutex = PTHREAD_MUTEX_INITIALIZER;
 static __thread CPUState *vcpu_env;
 
+static sigset_t io_sigset, io_negsigset;
+
 static int wait_hack;
 
 #define SIG_IPI (SIGRTMIN+4)
@@ -551,13 +553,44 @@ static int has_work(CPUState *env)
     return 0;
 }
 
+static void kvm_eat_signals(CPUState *env, int timeout)
+{
+    struct timespec ts;
+    int r, e;
+    siginfo_t siginfo;
+    struct sigaction sa;
+
+    ts.tv_sec = timeout / 1000;
+    ts.tv_nsec = (timeout % 1000) * 1000000;
+    r = sigtimedwait(&io_sigset, &siginfo, &ts);
+    if (r == -1 && (errno == EAGAIN || errno == EINTR) && !timeout)
+	return;
+    e = errno;
+    pthread_mutex_lock(&qemu_mutex);
+    cpu_single_env = vcpu_env;
+    if (r == -1 && !(errno == EAGAIN || errno == EINTR)) {
+	printf("sigtimedwait: %s\n", strerror(e));
+	exit(1);
+    }
+    if (r != -1) {
+	sigaction(siginfo.si_signo, NULL, &sa);
+	sa.sa_handler(siginfo.si_signo);
+    }
+    /*
+     * we call select() even if no signal was received, to account for
+     * for which there is no signal handler installed.
+     */
+    main_loop_wait(0);
+    pthread_mutex_unlock(&qemu_mutex);
+}
+
 static void kvm_main_loop_wait(CPUState *env, int timeout)
 {
     if (vcpu_info[env->cpu_index].signalled && timeout)
 	goto shortcut;
     pthread_mutex_unlock(&qemu_mutex);
     if (env->cpu_index == 0)
-	main_loop_wait(timeout);
+	kvm_eat_signals(env, timeout);
     else
 	if (timeout) {
 	    sigset_t set;
@@ -597,6 +630,9 @@ static void setup_kernel_sigmask(CPUState *env)
 
     sigprocmask(SIG_BLOCK, NULL, &set);
     sigdelset(&set, SIG_IPI);
+    if (env->cpu_index == 0)
+	sigandset(&set, &set, &io_negsigset);
+    
     kvm_set_signal_mask(kvm_context, env->cpu_index, &set);
 }
 
@@ -647,10 +683,24 @@ static void *ap_main_loop(void *_env)
     return NULL;
 }
 
+static void kvm_add_signal(int signum)
+{
+    sigaddset(&io_sigset, signum);
+    sigdelset(&io_negsigset, signum);
+    sigprocmask(SIG_BLOCK,  &io_sigset, NULL);
+}
+
 int kvm_main_loop(void)
 {
     CPUState *env = first_cpu->next_cpu;
     int i;
+
+    sigemptyset(&io_sigset);
+    sigfillset(&io_negsigset);
+    kvm_add_signal(SIGIO);
+    kvm_add_signal(SIGALRM);
+    kvm_add_signal(SIGUSR2);
+    kvm_add_signal(SIG_IPI);
 
     vcpu_env = first_cpu;
     signal(SIG_IPI, sig_ipi_handler);
