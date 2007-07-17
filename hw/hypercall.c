@@ -221,6 +221,9 @@ static int hc_load(QEMUFile* f,void* opaque,int version_id)
     HypercallState* s=(HypercallState*)opaque;
     int ret;
 
+    if (version_id != 1)
+        return -EINVAL;
+
     ret = pci_device_load(s->pci_dev, f);
     if (ret < 0)
         return ret;
