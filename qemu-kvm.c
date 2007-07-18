@@ -942,8 +942,7 @@ static int kvm_halt(void *opaque, int vcpu)
 
     if (!((env->interrupt_request & CPU_INTERRUPT_HARD) &&
 	  (env->eflags & IF_MASK))) {
-	    /* TODO: for halt emulation, temply walkaround now */
-	    /* env->hflags |= HF_HALTED_MASK; */
+	    env->hflags |= HF_HALTED_MASK;
 	    env->exception_index = EXCP_HLT;
     }
 
