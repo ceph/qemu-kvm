@@ -1098,25 +1098,6 @@ int kvm_guest_debug(kvm_context_t kvm, int vcpu, struct kvm_debug_guest *dbg)
 	return ioctl(kvm->vcpu_fd[vcpu], KVM_DEBUG_GUEST, dbg);
 }
 
-static void cpuid_remove_apic(struct kvm_cpuid *cpuid)
-{
-	int i;
-	struct kvm_cpuid_entry *e, *entry;
-
-	entry = NULL;
-	for (i = 0; i < cpuid->nent; ++i) {
-		e = &cpuid->entries[i];
-		if (e->function == 1) {
-			entry = e;
-			break;
-		}
-	}
-	if (entry) {
-		entry->edx &= ~(1 << 9);
-		printf("Guest APIC capibility removed\n");
-	}
-}
-
 int kvm_setup_cpuid(kvm_context_t kvm, int vcpu, int nent,
 		    struct kvm_cpuid_entry *entries)
 {
@@ -1129,8 +1110,6 @@ int kvm_setup_cpuid(kvm_context_t kvm, int vcpu, int nent,
 
 	cpuid->nent = nent;
 	memcpy(cpuid->entries, entries, nent * sizeof(*entries));
-	/* temply walkaround before merge of in-kernel APIC */
-	cpuid_remove_apic(cpuid);
 	r = ioctl(kvm->vcpu_fd[vcpu], KVM_SET_CPUID, cpuid);
 
 	free(cpuid);
