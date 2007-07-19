@@ -931,7 +931,6 @@ static int kvm_writeq(void *opaque, uint64_t addr, uint64_t data)
 
 static int kvm_io_window(void *opaque)
 {
-    env->exception_index = EXCP_IO_WINDOW;
     return 1;
 }
 

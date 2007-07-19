@@ -308,9 +308,9 @@ int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem)
 	close(zfd);
 
 	kvm->irqchip_in_kernel = 0;
-	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_PIC);
+	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_IRQCHIP);
 	if (r > 0) {	/* kernel irqchip supported */
-		r = ioctl(fd, KVM_CREATE_PIC);
+		r = ioctl(fd, KVM_CREATE_IRQCHIP);
 		if (r >= 0)
 			kvm->irqchip_in_kernel = 1;
 		else
