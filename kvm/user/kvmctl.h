@@ -65,7 +65,7 @@ struct kvm_callbacks {
     int (*io_window)(void *opaque);
     int (*try_push_interrupts)(void *opaque);
     void (*post_kvm_run)(void *opaque, int vcpu);
-    void (*pre_kvm_run)(void *opaque, int vcpu);
+    int (*pre_kvm_run)(void *opaque, int vcpu);
 };
 
 /*!

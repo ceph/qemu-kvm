@@ -438,12 +438,13 @@ static void post_kvm_run(void *opaque, int vcpu)
     cpu_set_apic_base(env, kvm_get_apic_base(kvm_context, vcpu));
 }
 
-static void pre_kvm_run(void *opaque, int vcpu)
+static int pre_kvm_run(void *opaque, int vcpu)
 {
     CPUState **envs = opaque, *env;
     env = envs[0];
 
     kvm_set_cr8(kvm_context, vcpu, cpu_get_apic_tpr(env));
+    return 0;
 }
 
 void kvm_load_registers(CPUState *env)

@@ -818,9 +818,9 @@ static void post_kvm_run(kvm_context_t kvm, int vcpu)
 	kvm->callbacks->post_kvm_run(kvm->opaque, vcpu);
 }
 
-static void pre_kvm_run(kvm_context_t kvm, int vcpu)
+static int pre_kvm_run(kvm_context_t kvm, int vcpu)
 {
-	kvm->callbacks->pre_kvm_run(kvm->opaque, vcpu);
+	return kvm->callbacks->pre_kvm_run(kvm->opaque, vcpu);
 }
 
 int kvm_get_interrupt_flag(kvm_context_t kvm, int vcpu)
@@ -869,7 +869,9 @@ static int kvm_run_abi10(kvm_context_t kvm, int vcpu)
 
 again:
 	run->request_interrupt_window = try_push_interrupts(kvm);
-	pre_kvm_run(kvm, vcpu);
+	r = pre_kvm_run(kvm, vcpu);
+	if (r)
+	    return r;
 	r = ioctl(fd, KVM_RUN, 0);
 	post_kvm_run(kvm, vcpu);
 
@@ -945,7 +947,9 @@ int kvm_run(kvm_context_t kvm, int vcpu)
 
 again:
 	run->request_interrupt_window = try_push_interrupts(kvm);
-	pre_kvm_run(kvm, vcpu);
+	r = pre_kvm_run(kvm, vcpu);
+	if (r)
+	    return r;
 	r = ioctl(fd, KVM_RUN, 0);
 	post_kvm_run(kvm, vcpu);
 
