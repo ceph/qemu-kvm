@@ -2586,8 +2586,6 @@ static void piix3_reset(PCIIDEState *d)
     pci_conf[0x06] = 0x80; /* FBC */
     pci_conf[0x07] = 0x02; // PCI_status_devsel_medium
     pci_conf[0x20] = 0x01; /* BMIBA: 20-23h */
-    pci_conf[0x41] = 0x80; // enable port 0
-    pci_conf[0x43] = 0x80; // enable port 1
 }
 
 void pci_piix_ide_init(PCIBus *bus, BlockDriverState **hd_table, int devfn)
