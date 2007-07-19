@@ -23,7 +23,7 @@
 
 static struct vfsmount *anon_inode_mnt __read_mostly;
 static struct inode *anon_inode_inode;
-static const struct file_operations anon_inode_fops;
+static struct file_operations anon_inode_fops;
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,17)
 
@@ -131,7 +131,7 @@ int anon_inode_getfd(int *pfd, struct inode **pinode, struct file **pfile,
 
 	file->f_pos = 0;
 	file->f_flags = O_RDWR;
-	file->f_op = fops;
+	file->f_op = (struct file_operations *)fops;
 	file->f_mode = FMODE_READ | FMODE_WRITE;
 	file->f_version = 0;
 	file->private_data = priv;
