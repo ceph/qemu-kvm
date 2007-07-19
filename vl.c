@@ -6082,6 +6082,27 @@ static int reset_requested;
 static int shutdown_requested;
 static int powerdown_requested;
 
+int qemu_shutdown_requested(void)
+{
+    int r = shutdown_requested;
+    shutdown_requested = 0;
+    return r;
+}
+
+int qemu_reset_requested(void)
+{
+    int r = reset_requested;
+    reset_requested = 0;
+    return r;
+}
+
+int qemu_powerdown_requested(void)
+{
+    int r = powerdown_requested;
+    powerdown_requested = 0;
+    return r;
+}
+
 void qemu_register_reset(QEMUResetHandler *func, void *opaque)
 {
     QEMUResetEntry **pre, *re;
@@ -6096,7 +6117,7 @@ void qemu_register_reset(QEMUResetHandler *func, void *opaque)
     *pre = re;
 }
 
-static void qemu_system_reset(void)
+void qemu_system_reset(void)
 {
     QEMUResetEntry *re;
 
@@ -6256,6 +6277,14 @@ int main_loop(void)
 #endif
     CPUState *env;
 
+
+#ifdef USE_KVM
+    if (kvm_allowed) {
+	kvm_main_loop();
+	cpu_disable_ticks();
+	return 0;
+    }
+#endif
     cur_cpu = first_cpu;
     for(;;) {
         if (vm_running) {

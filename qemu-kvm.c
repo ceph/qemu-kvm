@@ -12,11 +12,11 @@ int kvm_allowed = KVM_ALLOWED_DEFAULT;
 
 #ifdef USE_KVM
 
-#include "exec.h"
+#include <string.h>
+#include "vl.h"
 
 #include "qemu-kvm.h"
 #include <kvmctl.h>
-#include <string.h>
 
 #define MSR_IA32_TSC		0x10
 
@@ -25,9 +25,6 @@ extern void perror(const char *s);
 kvm_context_t kvm_context;
 static struct kvm_msr_list *kvm_msr_list;
 static int kvm_has_msr_star;
-
-#define NR_CPU 16
-static CPUState *saved_env[NR_CPU];
 
 static void set_msr_entry(struct kvm_msr_entry *entry, uint32_t index, 
                           uint64_t data)
@@ -147,10 +144,6 @@ static void load_regs(CPUState *env)
     struct kvm_sregs sregs;
     struct kvm_msr_entry msrs[MSR_COUNT];
     int rc, n, i;
-
-    /* hack: save env */
-    if (!saved_env[0])
-	saved_env[0] = env;
 
     regs.rax = env->regs[R_EAX];
     regs.rbx = env->regs[R_EBX];
@@ -372,12 +365,10 @@ static void save_regs(CPUState *env)
             }
     }
     env->hflags = (env->hflags & HFLAG_COPY_MASK) | hflags;
-    CC_SRC = env->eflags & (CC_O | CC_S | CC_Z | CC_A | CC_P | CC_C);
-    DF = 1 - (2 * ((env->eflags >> 10) & 1));
-    CC_OP = CC_OP_EFLAGS;
+    env->cc_src = env->eflags & (CC_O | CC_S | CC_Z | CC_A | CC_P | CC_C);
+    env->df = 1 - (2 * ((env->eflags >> 10) & 1));
+    env->cc_op = CC_OP_EFLAGS;
     env->eflags &= ~(DF_MASK | CC_O | CC_S | CC_Z | CC_A | CC_P | CC_C);
-
-    tlb_flush(env, 1);
 
     /* msrs */    
     n = 0;
@@ -411,8 +402,7 @@ static void save_regs(CPUState *env)
 
 static int try_push_interrupts(void *opaque)
 {
-    CPUState **envs = opaque, *env;
-    env = envs[0];
+    CPUState *env = cpu_single_env;
 
     if (env->ready_for_interrupt_injection &&
         (env->interrupt_request & CPU_INTERRUPT_HARD) &&
@@ -427,8 +417,7 @@ static int try_push_interrupts(void *opaque)
 
 static void post_kvm_run(void *opaque, int vcpu)
 {
-    CPUState **envs = opaque, *env;
-    env = envs[0];
+    CPUState *env = cpu_single_env;
 
     env->eflags = kvm_get_interrupt_flag(kvm_context, vcpu)
 	? env->eflags | IF_MASK : env->eflags & ~IF_MASK;
@@ -440,10 +429,11 @@ static void post_kvm_run(void *opaque, int vcpu)
 
 static int pre_kvm_run(void *opaque, int vcpu)
 {
-    CPUState **envs = opaque, *env;
-    env = envs[0];
+    CPUState *env = cpu_single_env;
 
     kvm_set_cr8(kvm_context, vcpu, cpu_get_apic_tpr(env));
+    if (env->interrupt_request & CPU_INTERRUPT_EXIT)
+	return 1;
     return 0;
 }
 
@@ -462,19 +452,6 @@ void kvm_save_registers(CPUState *env)
 int kvm_cpu_exec(CPUState *env)
 {
     int r;
-    int pending = (!env->ready_for_interrupt_injection ||
-                   ((env->interrupt_request & CPU_INTERRUPT_HARD) &&
-		   (env->eflags & IF_MASK)));
-
-    if (!pending && (env->interrupt_request & CPU_INTERRUPT_EXIT)) {
-        env->interrupt_request &= ~CPU_INTERRUPT_EXIT;
-        env->exception_index = EXCP_INTERRUPT;
-        cpu_loop_exit();
-    }
-
-    
-    if (!saved_env[0])
-	saved_env[0] = env;
 
     r = kvm_run(kvm_context, 0);
     if (r < 0) {
@@ -485,11 +462,48 @@ int kvm_cpu_exec(CPUState *env)
     return 0;
 }
 
+extern int vm_running;
+
+static int has_work(CPUState *env)
+{
+    if (!vm_running)
+	return 0;
+    if (!(env->hflags & HF_HALTED_MASK))
+	return 1;
+    if (env->interrupt_request & (CPU_INTERRUPT_HARD | CPU_INTERRUPT_EXIT))
+	return 1;
+    return 0;
+}
+
+int kvm_main_loop(void)
+{
+    CPUState *env = first_cpu;
+
+    cpu_single_env = env;
+    while (1) {
+	while (!has_work(env))
+	    main_loop_wait(10);
+	env->hflags &= ~HF_HALTED_MASK;
+	kvm_cpu_exec(env);
+	env->interrupt_request &= ~CPU_INTERRUPT_EXIT;
+	main_loop_wait(0);
+	if (qemu_shutdown_requested())
+	    break;
+	else if (qemu_powerdown_requested())
+	    qemu_system_powerdown();
+	else if (qemu_reset_requested()) {
+	    env->interrupt_request = 0;
+	    qemu_system_reset();
+	    load_regs(env);
+	}
+    }
+    return 0;
+}
+
 static int kvm_debug(void *opaque, int vcpu)
 {
-    CPUState **envs = opaque;
+    CPUState *env = cpu_single_env;
 
-    env = envs[0];
     env->exception_index = EXCP_DEBUG;
     return 1;
 }
@@ -617,9 +631,8 @@ static int kvm_io_window(void *opaque)
  
 static int kvm_halt(void *opaque, int vcpu)
 {
-    CPUState **envs = opaque, *env;
+    CPUState *env = cpu_single_env;
 
-    env = envs[0];
     if (!((env->interrupt_request & CPU_INTERRUPT_HARD) &&
 	  (env->eflags & IF_MASK))) {
 	    env->hflags |= HF_HALTED_MASK;
@@ -662,7 +675,7 @@ static struct kvm_callbacks qemu_kvm_ops = {
 int kvm_qemu_init()
 {
     /* Try to initialize kvm */
-    kvm_context = kvm_init(&qemu_kvm_ops, saved_env);
+    kvm_context = kvm_init(&qemu_kvm_ops, cpu_single_env);
     if (!kvm_context) {
       	return -1;
     }
@@ -739,15 +752,16 @@ static void host_cpuid(uint32_t function, uint32_t *eax, uint32_t *ebx,
 	*edx = vec[3];
 }
 
-static void do_cpuid_ent(struct kvm_cpuid_entry *e, uint32_t function)
+static void do_cpuid_ent(struct kvm_cpuid_entry *e, uint32_t function,
+			 CPUState *env)
 {
-    EAX = function;
-    helper_cpuid();
+    env->regs[R_EAX] = function;
+    qemu_kvm_cpuid_on_env(env);
     e->function = function;
-    e->eax = EAX;
-    e->ebx = EBX;
-    e->ecx = ECX;
-    e->edx = EDX;
+    e->eax = env->regs[R_EAX];
+    e->ebx = env->regs[R_EBX];
+    e->ecx = env->regs[R_ECX];
+    e->edx = env->regs[R_EDX];
     if (function == 0x80000001) {
 	uint32_t h_eax, h_edx;
 
@@ -781,34 +795,26 @@ int kvm_qemu_init_env(CPUState *cenv)
 {
     struct kvm_cpuid_entry cpuid_ent[100];
     int cpuid_nent = 0;
-    CPUState *oldenv = env;
     CPUState copy;
     uint32_t i, limit;
-#define DECLARE_HOST_REGS
-#include "hostregs_helper.h"
-
-#define SAVE_HOST_REGS
-#include "hostregs_helper.h"
 
     copy = *cenv;
-    env = cenv;
 
-    EAX = 0;
-    helper_cpuid();
-    limit = EAX;
+    copy.regs[R_EAX] = 0;
+    qemu_kvm_cpuid_on_env(&copy);
+    limit = copy.regs[R_EAX];
+
     for (i = 0; i <= limit; ++i)
-	do_cpuid_ent(&cpuid_ent[cpuid_nent++], i);
-    EAX = 0x80000000;
-    helper_cpuid();
-    limit = EAX;
+	do_cpuid_ent(&cpuid_ent[cpuid_nent++], i, &copy);
+
+    copy.regs[R_EAX] = 0x80000000;
+    qemu_kvm_cpuid_on_env(&copy);
+    limit = copy.regs[R_EAX];
+
     for (i = 0x80000000; i <= limit; ++i)
-	do_cpuid_ent(&cpuid_ent[cpuid_nent++], i);
+	do_cpuid_ent(&cpuid_ent[cpuid_nent++], i, &copy);
 
     kvm_setup_cpuid(kvm_context, 0, cpuid_nent, cpuid_ent);
-
-#include "hostregs_helper.h"
-
-    env = oldenv;
 
     return 0;
 }

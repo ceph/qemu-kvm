@@ -209,8 +209,9 @@ static void test_post_kvm_run(void *opaque, int vcpu)
 {
 }
 
-static void test_pre_kvm_run(void *opaque, int vcpu)
+static int test_pre_kvm_run(void *opaque, int vcpu)
 {
+    return 0;
 }
 
 static struct kvm_callbacks test_callbacks = {
