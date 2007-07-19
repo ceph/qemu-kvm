@@ -11,6 +11,7 @@
 #include <linux/version.h>
 #include "include/linux/kvm.h"
 #include <linux/cpu.h>
+#include <asm/processor.h>
 
 /*
  * 2.6.16 does not have GFP_NOWAIT
@@ -183,4 +184,63 @@ static inline int on_cpu(int cpu, void (*func) (void *info), void *info,
 	put_cpu();
 	return ret;
 }
+
+#ifndef X86_CR0_PE
+#define X86_CR0_PE 0x00000001
+#endif
+
+#ifndef X86_CR0_MP
+#define X86_CR0_MP 0x00000002
+#endif
+
+#ifndef X86_CR0_EM
+#define X86_CR0_EM 0x00000004
+#endif
+
+#ifndef X86_CR0_TS
+#define X86_CR0_TS 0x00000008
+#endif
+
+#ifndef X86_CR0_ET
+#define X86_CR0_ET 0x00000010
+#endif
+
+#ifndef X86_CR0_NE
+#define X86_CR0_NE 0x00000020
+#endif
+
+#ifndef X86_CR0_WP
+#define X86_CR0_WP 0x00010000
+#endif
+
+#ifndef X86_CR0_AM
+#define X86_CR0_AM 0x00040000
+#endif
+
+#ifndef X86_CR0_NW
+#define X86_CR0_NW 0x20000000
+#endif
+
+#ifndef X86_CR0_CD
+#define X86_CR0_CD 0x40000000
+#endif
+
+#ifndef X86_CR0_PG
+#define X86_CR0_PG 0x80000000
+#endif
+
+#ifndef X86_CR3_PWT
+#define X86_CR3_PWT 0x00000008
+#endif
+
+#ifndef X86_CR3_PCD
+#define X86_CR3_PCD 0x00000010
+#endif
+
+#ifndef X86_CR4_VMXE
+#define X86_CR4_VMXE 0x00002000
+#endif
+
+#undef X86_CR8_TPR
+#define X86_CR8_TPR 0x0f
 
