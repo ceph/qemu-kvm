@@ -599,7 +599,7 @@ static int kvm_eat_signals(CPUState *env, int timeout)
      * we call select() even if no signal was received, to account for
      * for which there is no signal handler installed.
      */
-    pthread_mutex_unlock(&qemu_mutex);
+    pthread_mutex_lock(&qemu_mutex);
     cpu_single_env = vcpu_env;
     main_loop_wait(0);
     pthread_mutex_unlock(&qemu_mutex);
