@@ -244,3 +244,13 @@ static inline int on_cpu(int cpu, void (*func) (void *info), void *info,
 #undef X86_CR8_TPR
 #define X86_CR8_TPR 0x0f
 
+/*
+ * 2.6.23 removed the cache destructor
+ */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
+#  define KMEM_CACHE_CREATE_CTOR_DTOR NULL, NULL
+#else
+#  define KMEM_CACHE_CREATE_CTOR_DTOR NULL
+#endif
+
+#endif

@@ -22,6 +22,9 @@ sync:
 	mv kvm_main.c kvm_main.c.orig
 	awk -f hack-module.awk kvm_main.c.orig > kvm_main.c
 	rm kvm_main.c.orig
+	mv mmu.c mmu.c.orig
+	awk -f hack-module.awk mmu.c.orig > mmu.c
+	rm mmu.c.orig
 
 install:
 	mkdir -p $(DESTDIR)/$(INSTALLDIR)
