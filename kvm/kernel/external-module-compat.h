@@ -253,4 +253,32 @@ static inline int on_cpu(int cpu, void (*func) (void *info), void *info,
 #  define KMEM_CACHE_CREATE_CTOR_DTOR NULL
 #endif
 
+/*
+ * 2.6.22 does not define set_64bit() under nonpae
+ */
+#ifdef CONFIG_X86_32
+
+#include <asm/cmpxchg.h>
+
+static inline void __kvm_set_64bit(u64 *ptr, u64 val)
+{
+	unsigned int low = val;
+	unsigned int high = val >> 32;
+
+	__asm__ __volatile__ (
+		"\n1:\t"
+		"movl (%0), %%eax\n\t"
+		"movl 4(%0), %%edx\n\t"
+		"lock cmpxchg8b (%0)\n\t"
+		"jnz 1b"
+		: /* no outputs */
+		:	"D"(ptr),
+			"b"(low),
+			"c"(high)
+		:	"ax","dx","memory");
+}
+
+#undef  set_64bit
+#define set_64bit __kvm_set_64bit
+
 #endif
