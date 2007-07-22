@@ -553,10 +553,10 @@ static int has_work(CPUState *env)
     return 0;
 }
 
-static void kvm_eat_signals(CPUState *env, int timeout)
+static int kvm_eat_signal(CPUState *env, int timeout)
 {
     struct timespec ts;
-    int r, e;
+    int r, e, ret = 0;
     siginfo_t siginfo;
     struct sigaction sa;
 
@@ -564,7 +564,7 @@ static void kvm_eat_signals(CPUState *env, int timeout)
     ts.tv_nsec = (timeout % 1000) * 1000000;
     r = sigtimedwait(&io_sigset, &siginfo, &ts);
     if (r == -1 && (errno == EAGAIN || errno == EINTR) && !timeout)
-	return;
+	return 0;
     e = errno;
     pthread_mutex_lock(&qemu_mutex);
     cpu_single_env = vcpu_env;
@@ -575,11 +575,32 @@ static void kvm_eat_signals(CPUState *env, int timeout)
     if (r != -1) {
 	sigaction(siginfo.si_signo, NULL, &sa);
 	sa.sa_handler(siginfo.si_signo);
+	ret = 1;
+    }
+    pthread_mutex_unlock(&qemu_mutex);
+
+    return ret;
+}
+
+
+static int kvm_eat_signals(CPUState *env, int timeout)
+{
+    int r = 0;
+
+    while (kvm_eat_signal(env, 0))
+	r = 1;
+    if (!r && timeout) {
+	r = kvm_eat_signal(env, timeout);
+	if (r)
+	    while (kvm_eat_signal(env, 0))
+		;
     }
     /*
      * we call select() even if no signal was received, to account for
      * for which there is no signal handler installed.
      */
+    pthread_mutex_unlock(&qemu_mutex);
+    cpu_single_env = vcpu_env;
     main_loop_wait(0);
     pthread_mutex_unlock(&qemu_mutex);
 }
