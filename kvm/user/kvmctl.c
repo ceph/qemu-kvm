@@ -222,7 +222,7 @@ int kvm_create_vcpu(kvm_context_t kvm, int slot)
 		fprintf(stderr, "get vcpu mmap size: %m\n");
 		return r;
 	}
-	kvm->run[slot] = mmap(0, mmap_size, PROT_READ|PROT_WRITE, MAP_SHARED,
+	kvm->run[slot] = mmap(NULL, mmap_size, PROT_READ|PROT_WRITE, MAP_SHARED,
 			      kvm->vcpu_fd[slot], 0);
 	if (kvm->run[slot] == MAP_FAILED) {
 		r = -errno;
@@ -276,7 +276,7 @@ int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem)
 	kvm_memory_region_save_params(kvm, &low_memory);
 	kvm_memory_region_save_params(kvm, &extended_memory);
 
-	*vm_mem = mmap(0, memory, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+	*vm_mem = mmap(NULL, memory, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 	if (*vm_mem == MAP_FAILED) {
 		fprintf(stderr, "mmap: %m\n");
 		return -1;
@@ -318,7 +318,7 @@ void *kvm_create_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 	if (writable)
 		prot |= PROT_WRITE;
 
-	ptr = mmap(0, len, prot, MAP_SHARED, fd, phys_start);
+	ptr = mmap(NULL, len, prot, MAP_SHARED, fd, phys_start);
 	if (ptr == MAP_FAILED)
 		return 0;
 	return ptr;
