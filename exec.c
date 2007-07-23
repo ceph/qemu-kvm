@@ -34,6 +34,9 @@
 
 #include "cpu.h"
 #include "exec-all.h"
+#ifdef USE_KVM
+#include "qemu-kvm.h"
+#endif
 #if defined(CONFIG_USER_ONLY)
 #include <qemu.h>
 #endif
