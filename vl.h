@@ -635,6 +635,7 @@ int64_t bdrv_getlength(BlockDriverState *bs);
 void bdrv_get_geometry(BlockDriverState *bs, int64_t *nb_sectors_ptr);
 int bdrv_commit(BlockDriverState *bs);
 void bdrv_set_boot_sector(BlockDriverState *bs, const uint8_t *data, int size);
+void bdrv_flush_all(void);
 /* async block I/O */
 typedef struct BlockDriverAIOCB BlockDriverAIOCB;
 typedef void BlockDriverCompletionFunc(void *opaque, int ret);
