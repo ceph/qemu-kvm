@@ -83,6 +83,13 @@ optparser.add_option('--cdrom',
                      dest = 'cdrom',
                      default = None,
                      )
+
+optparser.add_option('--hdb',
+                     help = 'secondary hard disk image',
+                     dest = 'hdb',
+                     default = None,
+                     )
+
 optparser.add_option('--loadvm',
                      help = 'select saved vm-image',
                      dest = 'saved_image',
@@ -199,6 +206,9 @@ qemu_args = (cmd, '-boot', bootdisk,
 
 if options.cdrom:
     qemu_args += ('-cdrom', options.cdrom,)
+
+if options.hdb:
+    qemu_args += ('-hdb', options.hdb,)
 
 if not options.kvm:
     qemu_args += ('-no-kvm',)
