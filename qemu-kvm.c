@@ -659,6 +659,8 @@ static void setup_kernel_sigmask(CPUState *env)
 
 static int kvm_main_loop_cpu(CPUState *env)
 {
+    struct vcpu_info *info = &vcpu_info[env->cpu_index];
+
     setup_kernel_sigmask(env);
     pthread_mutex_lock(&qemu_mutex);
     cpu_single_env = env;
@@ -667,11 +669,11 @@ static int kvm_main_loop_cpu(CPUState *env)
 	    kvm_main_loop_wait(env, 10);
 	if (env->interrupt_request & CPU_INTERRUPT_HARD)
 	    env->hflags &= ~HF_HALTED_MASK;
-	if (vcpu_info[env->cpu_index].sipi_needed)
+	if (info->sipi_needed)
 	    update_regs_for_sipi(env);
-	if (vcpu_info[env->cpu_index].init)
+	if (info->init)
 	    update_regs_for_init(env);
-	if (!(env->hflags & HF_HALTED_MASK) && !vcpu_info[env->cpu_index].init)
+	if (!(env->hflags & HF_HALTED_MASK) && !info->init)
 	    kvm_cpu_exec(env);
 	env->interrupt_request &= ~CPU_INTERRUPT_EXIT;
 	kvm_main_loop_wait(env, 0);
