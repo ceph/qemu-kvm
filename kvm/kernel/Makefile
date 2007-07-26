@@ -11,6 +11,8 @@ rpmrelease = devel
 
 LINUX = ../linux-2.6
 
+version = $(shell cd $(LINUX); git describe)
+
 all::
 	$(MAKE) -C $(KERNELDIR) M=`pwd` "$$@"
 
@@ -20,7 +22,8 @@ sync:
 	       "$(LINUX)"/include/linux/kvm_para.h \
 			include/linux
 	mv kvm_main.c kvm_main.c.orig
-	awk -f hack-module.awk kvm_main.c.orig > kvm_main.c
+	awk -v version=$(version) \
+		-f hack-module.awk kvm_main.c.orig > kvm_main.c
 	rm kvm_main.c.orig
 	mv mmu.c mmu.c.orig
 	awk -f hack-module.awk mmu.c.orig > mmu.c
