@@ -425,4 +425,11 @@ int kvm_dirty_pages_log_enable_all(kvm_context_t kvm);
  */
 int kvm_dirty_pages_log_reset(kvm_context_t kvm);
 
+/*!
+ * \brief Query whether in kernel irqchip is used
+ *
+ * \param kvm Pointer to the current kvm_context
+ */
+int kvm_irqchip_in_kernel(kvm_context_t kvm);
+
 #endif

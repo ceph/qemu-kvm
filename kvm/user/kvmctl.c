@@ -1139,3 +1139,8 @@ int kvm_set_signal_mask(kvm_context_t kvm, int vcpu, const sigset_t *sigset)
 	free(sigmask);
 	return r;
 }
+
+int kvm_irqchip_in_kernel(kvm_context_t kvm)
+{
+    return kvm->irqchip_in_kernel;
+}
