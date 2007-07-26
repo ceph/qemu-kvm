@@ -432,4 +432,27 @@ int kvm_dirty_pages_log_reset(kvm_context_t kvm);
  */
 int kvm_irqchip_in_kernel(kvm_context_t kvm);
 
+/*!
+ * \brief Dump in kernel IRQCHIP contents
+ *
+ * Dump one of the in kernel irq chip devices, including PIC (master/slave)
+ * and IOAPIC into a kvm_irqchip structure
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param chip The irq chip device to be dumped
+ */
+int kvm_get_irqchip(kvm_context_t kvm, struct kvm_irqchip *chip);
+
+/*!
+ * \brief Set in kernel IRQCHIP contents
+ *
+ * Write one of the in kernel irq chip devices, including PIC (master/slave)
+ * and IOAPIC
+ *
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param chip THe irq chip device to be written
+ */
+int kvm_set_irqchip(kvm_context_t kvm, struct kvm_irqchip *chip);
+
 #endif

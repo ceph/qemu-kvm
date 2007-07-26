@@ -463,6 +463,34 @@ int kvm_set_irq_level(kvm_context_t kvm, int irq, int level)
 	return 1;
 }
 
+int kvm_get_irqchip(kvm_context_t kvm, struct kvm_irqchip *chip)
+{
+	int r;
+
+	if (!kvm->irqchip_in_kernel)
+		return 0;
+	r = ioctl(kvm->vm_fd, KVM_GET_IRQCHIP, chip);
+	if (r == -1) {
+		r = -errno;
+		perror("kvm_get_irqchip\n");
+	}
+	return r;
+}
+
+int kvm_set_irqchip(kvm_context_t kvm, struct kvm_irqchip *chip)
+{
+	int r;
+
+	if (!kvm->irqchip_in_kernel)
+		return 0;
+	r = ioctl(kvm->vm_fd, KVM_SET_IRQCHIP, chip);
+	if (r == -1) {
+		r = -errno;
+		perror("kvm_set_irqchip\n");
+	}
+	return r;
+}
+
 static int handle_io_abi10(kvm_context_t kvm, struct kvm_run_abi10 *run,
 			   int vcpu)
 {
