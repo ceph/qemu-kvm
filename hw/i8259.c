@@ -465,9 +465,80 @@ static uint32_t elcr_ioport_read(void *opaque, uint32_t addr1)
     return s->elcr;
 }
 
+#ifdef USE_KVM
+#include "qemu-kvm.h"
+extern int kvm_allowed;
+extern kvm_context_t kvm_context;
+
+static void kvm_kernel_pic_save_to_user(PicState *s)
+{
+    struct kvm_irqchip chip;
+    struct kvm_pic_state *kpic;
+
+    chip.chip_id = (&s->pics_state->pics[0] == s) ?
+                   KVM_IRQCHIP_PIC_MASTER :
+                   KVM_IRQCHIP_PIC_SLAVE;
+    kvm_get_irqchip(kvm_context, &chip);
+    kpic = &chip.chip.pic;
+
+    s->last_irr = kpic->last_irr;
+    s->irr = kpic->irr;
+    s->imr = kpic->imr;
+    s->isr = kpic->isr;
+    s->priority_add = kpic->priority_add;
+    s->irq_base = kpic->irq_base;
+    s->read_reg_select = kpic->read_reg_select;
+    s->poll = kpic->poll;
+    s->special_mask = kpic->special_mask;
+    s->init_state = kpic->init_state;
+    s->auto_eoi = kpic->auto_eoi;
+    s->rotate_on_auto_eoi = kpic->rotate_on_auto_eoi;
+    s->special_fully_nested_mode = kpic->special_fully_nested_mode;
+    s->init4 = kpic->init4;
+    s->elcr = kpic->elcr;
+    s->elcr_mask = kpic->elcr_mask;
+}
+
+static void kvm_kernel_pic_load_from_user(PicState *s)
+{
+    struct kvm_irqchip chip;
+    struct kvm_pic_state *kpic;
+
+    chip.chip_id = (&s->pics_state->pics[0] == s) ?
+                   KVM_IRQCHIP_PIC_MASTER :
+                   KVM_IRQCHIP_PIC_SLAVE;
+    kpic = &chip.chip.pic;
+
+    kpic->last_irr = s->last_irr;
+    kpic->irr = s->irr;
+    kpic->imr = s->imr;
+    kpic->isr = s->isr;
+    kpic->priority_add = s->priority_add;
+    kpic->irq_base = s->irq_base;
+    kpic->read_reg_select = s->read_reg_select;
+    kpic->poll = s->poll;
+    kpic->special_mask = s->special_mask;
+    kpic->init_state = s->init_state;
+    kpic->auto_eoi = s->auto_eoi;
+    kpic->rotate_on_auto_eoi = s->rotate_on_auto_eoi;
+    kpic->special_fully_nested_mode = s->special_fully_nested_mode;
+    kpic->init4 = s->init4;
+    kpic->elcr = s->elcr;
+    kpic->elcr_mask = s->elcr_mask;
+
+    kvm_set_irqchip(kvm_context, &chip);
+}
+#endif
+
 static void pic_save(QEMUFile *f, void *opaque)
 {
     PicState *s = opaque;
+
+#ifdef USE_KVM
+    if (kvm_allowed && kvm_irqchip_in_kernel(kvm_context)) {
+        kvm_kernel_pic_save_to_user(s);
+    }
+#endif
     
     qemu_put_8s(f, &s->last_irr);
     qemu_put_8s(f, &s->irr);
@@ -508,6 +579,13 @@ static int pic_load(QEMUFile *f, void *opaque, int version_id)
     qemu_get_8s(f, &s->special_fully_nested_mode);
     qemu_get_8s(f, &s->init4);
     qemu_get_8s(f, &s->elcr);
+
+#ifdef USE_KVM
+    if (kvm_allowed && kvm_irqchip_in_kernel(kvm_context)) {
+        kvm_kernel_pic_load_from_user(s);
+    }
+#endif
+
     return 0;
 }
 
