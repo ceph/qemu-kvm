@@ -18,6 +18,7 @@ int kvm_allowed = KVM_ALLOWED_DEFAULT;
 #include "qemu-kvm.h"
 #include <kvmctl.h>
 #include <pthread.h>
+#include <sys/utsname.h>
 
 #define MSR_IA32_TSC		0x10
 
@@ -999,11 +1000,15 @@ static void do_cpuid_ent(struct kvm_cpuid_entry *e, uint32_t function,
     e->edx = env->regs[R_EDX];
     if (function == 0x80000001) {
 	uint32_t h_eax, h_edx;
+	struct utsname utsname;
+	int lm_capable_kernel;
 
 	host_cpuid(function, &h_eax, NULL, NULL, &h_edx);
+	uname(&utsname);
+	lm_capable_kernel = strcmp(utsname.machine, "x86_64") == 0;
 
 	// long mode
-	if ((h_edx & 0x20000000) == 0)
+	if ((h_edx & 0x20000000) == 0 || !lm_capable_kernel)
 	    e->edx &= ~0x20000000u;
 	// syscall
 	if ((h_edx & 0x00000800) == 0)
