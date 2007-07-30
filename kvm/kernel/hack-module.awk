@@ -19,8 +19,8 @@
 
 /kmem_cache_create/ { kmem_cache_create = 1 }
 
-/NULL\)/ && kmem_cache_create {
-    sub(/NULL\)/, "KMEM_CACHE_CREATE_CTOR_DTOR)");
+/(NULL|0)\);/ && kmem_cache_create {
+    sub(/(NULL|0)\)/, "KMEM_CACHE_CREATE_CTOR_DTOR)");
     kmem_cache_create = 0
 }
 
