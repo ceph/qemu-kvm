@@ -55,17 +55,52 @@ static void scfs_thunk(void *info)
 static inline int smp_call_function_single1(int cpu, void (*func)(void *info),
 					   void *info, int nonatomic, int wait)
 {
-	int r;
+	int r, this_cpu;
 
-	spin_lock(&scfs_lock);
-	scfs_cpu = cpu;
-	scfs_func = func;
-	r = smp_call_function(scfs_thunk, info, nonatomic, wait);
-	spin_unlock(&scfs_lock);
+	this_cpu = get_cpu();
+	if (cpu == this_cpu) {
+		r = 0;
+		local_irq_disable();
+		func(info);
+		local_irq_enable();
+	} else {
+		spin_lock(&scfs_lock);
+		scfs_cpu = cpu;
+		scfs_func = func;
+		r = smp_call_function(scfs_thunk, info, nonatomic, wait);
+		spin_unlock(&scfs_lock);
+	}
+	put_cpu();
 	return r;
 }
 
 #define smp_call_function_single smp_call_function_single1
+
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
+/*
+ * pre 2.6.23 doesn't handle smp_call_function_single on current cpu
+ */
+
+#include <linux/smp.h>
+
+static inline int smp_call_function_single2(int cpu, void (*func)(void *info),
+					    void *info, int nonatomic, int wait)
+{
+	int this_cpu, r;
+
+	this_cpu = get_cpu();
+	if (cpu == this_cpu) {
+		r = 0;
+		local_irq_disable();
+		func(info);
+		local_irq_enable();
+	} else
+		r = smp_call_function_single(cpu, func, info, nonatomic, wait);
+	put_cpu();
+	return r;
+}
+
+#define smp_call_function_single smp_call_function_single2
 
 #endif
 
