@@ -28,6 +28,9 @@ sync:
 	mv mmu.c mmu.c.orig
 	awk -f hack-module.awk mmu.c.orig > mmu.c
 	rm mmu.c.orig
+	mv vmx.c vmx.c.orig
+	awk -f hack-module.awk vmx.c.orig > vmx.c
+	rm vmx.c.orig
 
 install:
 	mkdir -p $(DESTDIR)/$(INSTALLDIR)

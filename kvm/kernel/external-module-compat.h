@@ -282,3 +282,48 @@ static inline void __kvm_set_64bit(u64 *ptr, u64 val)
 #define set_64bit __kvm_set_64bit
 
 #endif
+
+#ifndef CONFIG_PREEMPT_NOTIFIERS
+
+struct preempt_notifier;
+
+struct preempt_ops {
+	void (*sched_in)(struct preempt_notifier *notifier, int cpu);
+	void (*sched_out)(struct preempt_notifier *notifier,
+			  struct task_struct *next);
+};
+
+struct preempt_notifier {
+	struct list_head link;
+	struct task_struct *tsk;
+	struct preempt_ops *ops;
+};
+
+void preempt_notifier_register(struct preempt_notifier *notifier);
+void preempt_notifier_unregister(struct preempt_notifier *notifier);
+
+static inline void preempt_notifier_init(struct preempt_notifier *notifier,
+				     struct preempt_ops *ops)
+{
+	notifier->ops = ops;
+}
+
+void start_special_insn(void);
+void end_special_insn(void);
+void in_special_section(void);
+void special_reload_dr7(void);
+
+void preempt_notifier_sys_init(void);
+void preempt_notifier_sys_exit(void);
+
+#else
+
+static inline void start_special_insn(void) {}
+static inline void end_special_insn(void) {}
+static inline void in_special_section(void) {}
+static inline void special_reload_dr7(void) {}
+
+static inline void preempt_notifier_sys_init(void) {}
+static inline void preempt_notifier_sys_exit(void) {}
+
+#endif
