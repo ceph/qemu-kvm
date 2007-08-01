@@ -496,7 +496,12 @@ int apic_get_interrupt(CPUState *env)
 int apic_accept_pic_intr(CPUState *env)
 {
     APICState *s = env->apic_state;
-    uint32_t lvt0 = s->lvt[APIC_LVT_LINT0];
+    uint32_t lvt0;
+
+    if (!s)
+        return -1;
+
+    lvt0 = s->lvt[APIC_LVT_LINT0];
 
     if (s->id == 0 &&
         ((s->apicbase & MSR_IA32_APICBASE_ENABLE) == 0 ||
