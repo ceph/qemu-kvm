@@ -7690,7 +7690,7 @@ ASM_END
 
     /* Always check the signature on a HDD boot sector; on FDD, only do
      * the check if the CMOS doesn't tell us to skip it */
-    if (e.type != 0x00 || !((inb_cmos(0x38) & 0x01))) {
+    if ((e.type != 0x01) || !((inb_cmos(0x38) & 0x01))) {
       if (read_word(bootseg,0x1fe) != 0xaa55) {
         print_boot_failure(e.type, 0);
         return;
