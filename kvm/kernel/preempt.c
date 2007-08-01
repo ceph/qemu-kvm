@@ -110,7 +110,7 @@ asm ("pn_int1_handler:  \n\t"
      "orq $0x10000, 16(%rsp) \n\t"
      "iretq \n\t"
 #else
-     "orl $0x10000, 8(%rsp) \n\t"
+     "orl $0x10000, 8(%esp) \n\t"
      "iret \n\t"
 #endif
      ".Lnotme: \n\t"
