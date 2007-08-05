@@ -31,6 +31,9 @@ sync:
 	mv vmx.c vmx.c.orig
 	awk -f hack-module.awk vmx.c.orig > vmx.c
 	rm vmx.c.orig
+	mv svm.c svm.c.orig
+	awk -f hack-module.awk svm.c.orig > svm.c
+	rm svm.c.orig
 
 install:
 	mkdir -p $(DESTDIR)/$(INSTALLDIR)

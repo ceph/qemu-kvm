@@ -60,8 +60,13 @@
     vmx_vcpu_run = 1
 }
 
-/preempt_enable/ && vmx_vcpu_run {
+/static int svm_vcpu_run/ {
+    svm_vcpu_run = 1
+}
+
+/preempt_enable|stgi/ && (vmx_vcpu_run || svm_vcpu_run) {
     print "\tspecial_reload_dr7();";
+    svm_vcpu_run = 0;
     vmx_vcpu_run = 0
 }
 
@@ -76,11 +81,11 @@
 
 { print }
 
-/static void vcpu_put|static int vmx_vcpu_run|static struct kvm_vcpu \*vmx_create_vcpu/ {
+/static void vcpu_put|static int vmx_vcpu_run|static struct kvm_vcpu \*vmx_create_vcpu|static int svm_vcpu_run/ {
     in_tricky_func = 1
 }
 
-/preempt_disable|get_cpu/ && in_tricky_func {
+/preempt_disable|get_cpu|clgi\(\)/ && in_tricky_func {
     printf("\tin_special_section();\n");
     in_tricky_func = 0
 }
