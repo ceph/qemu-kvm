@@ -20,7 +20,9 @@
 #include "vl.h"
 
 #ifdef USE_KVM
-#include "../qemu-kvm.h"
+#include "qemu-kvm.h"
+extern int kvm_allowed;
+extern kvm_context_t kvm_context;
 #endif
 
 //#define DEBUG_APIC
@@ -749,10 +751,92 @@ static void apic_mem_writel(void *opaque, target_phys_addr_t addr, uint32_t val)
     }
 }
 
+#ifdef USE_KVM
+static inline uint32_t kapic_reg(struct kvm_lapic_state *kapic, int reg_id)
+{
+    return *((uint32_t *) (kapic->regs + (reg_id << 4)));
+}
+
+static inline void kapic_set_reg(struct kvm_lapic_state *kapic,
+                                 int reg_id, uint32_t val)
+{
+    *((uint32_t *) (kapic->regs + (reg_id << 4))) = val;
+}
+
+static void kvm_kernel_lapic_save_to_user(APICState *s)
+{
+    struct kvm_lapic_state apic;
+    struct kvm_lapic_state *kapic = &apic;
+    int i, v;
+
+    kvm_get_lapic(kvm_context, s->cpu_env->cpu_index, kapic);
+
+    s->id = kapic_reg(kapic, 0x2);
+    s->tpr = kapic_reg(kapic, 0x8);
+    s->arb_id = kapic_reg(kapic, 0x9);
+    s->log_dest = kapic_reg(kapic, 0xd) >> 24;
+    s->dest_mode = kapic_reg(kapic, 0xe) >> 28;
+    s->spurious_vec = kapic_reg(kapic, 0xf);
+    for (i = 0; i < 8; i++) {
+        s->isr[i] = kapic_reg(kapic, 0x10 + i);
+        s->tmr[i] = kapic_reg(kapic, 0x18 + i);
+        s->irr[i] = kapic_reg(kapic, 0x20 + i);
+    }
+    s->esr = kapic_reg(kapic, 0x28);
+    s->icr[0] = kapic_reg(kapic, 0x30);
+    s->icr[1] = kapic_reg(kapic, 0x31);
+    for (i = 0; i < APIC_LVT_NB; i++)
+	s->lvt[i] = kapic_reg(kapic, 0x32 + i);
+    s->initial_count = kapic_reg(kapic, 0x38);
+    s->divide_conf = kapic_reg(kapic, 0x3e);
+    s->initial_count_load_time = qemu_get_clock(vm_clock);
+    s->next_time = s->initial_count_load_time;
+
+    v = (s->divide_conf & 3) | ((s->divide_conf >> 1) & 4);
+    s->count_shift = (v + 1) & 7;
+
+    qemu_del_timer(s->timer);
+}
+
+static void kvm_kernel_lapic_load_from_user(APICState *s)
+{
+    struct kvm_lapic_state apic;
+    struct kvm_lapic_state *klapic = &apic;
+    int i;
+
+    memset(klapic, 0, sizeof apic);
+    kapic_set_reg(klapic, 0x2, s->id);
+    kapic_set_reg(klapic, 0x8, s->tpr);
+    kapic_set_reg(klapic, 0xd, s->log_dest << 24);
+    kapic_set_reg(klapic, 0xe, s->dest_mode << 28 | 0x0fffffff);
+    kapic_set_reg(klapic, 0xf, s->spurious_vec);
+    for (i = 0; i < 8; i++) {
+        kapic_set_reg(klapic, 0x10 + i, s->isr[i]);
+        kapic_set_reg(klapic, 0x18 + i, s->tmr[i]);
+        kapic_set_reg(klapic, 0x20 + i, s->irr[i]);
+    }
+    kapic_set_reg(klapic, 0x28, s->esr);
+    kapic_set_reg(klapic, 0x30, s->icr[0]);
+    kapic_set_reg(klapic, 0x31, s->icr[1]);
+    for (i = 0; i < APIC_LVT_NB; i++)
+        kapic_set_reg(klapic, 0x32 + i, s->lvt[i]);
+    kapic_set_reg(klapic, 0x38, s->initial_count);
+    kapic_set_reg(klapic, 0x3e, s->divide_conf);
+
+    kvm_set_lapic(kvm_context, s->cpu_env->cpu_index, klapic);
+}
+#endif
+
 static void apic_save(QEMUFile *f, void *opaque)
 {
     APICState *s = opaque;
     int i;
+
+#ifdef USE_KVM
+    if (kvm_allowed && kvm_irqchip_in_kernel(kvm_context)) {
+        kvm_kernel_lapic_save_to_user(s);
+    }
+#endif
 
     qemu_put_be32s(f, &s->apicbase);
     qemu_put_8s(f, &s->id);
@@ -816,6 +900,13 @@ static int apic_load(QEMUFile *f, void *opaque, int version_id)
 
     if (version_id >= 2)
         qemu_get_timer(f, s->timer);
+
+#ifdef USE_KVM
+    if (kvm_allowed && kvm_irqchip_in_kernel(kvm_context)) {
+        kvm_kernel_lapic_load_from_user(s);
+    }
+#endif
+
     return 0;
 }
 
@@ -1022,10 +1113,6 @@ static void ioapic_mem_writel(void *opaque, target_phys_addr_t addr, uint32_t va
 }
 
 #ifdef USE_KVM
-#include "qemu-kvm.h"
-extern int kvm_allowed;
-extern kvm_context_t kvm_context;
-
 static void kvm_kernel_ioapic_save_to_user(IOAPICState *s)
 {
     struct kvm_irqchip chip;
