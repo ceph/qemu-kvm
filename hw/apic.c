@@ -58,6 +58,7 @@
 #define	APIC_INPUT_POLARITY		(1<<13)
 #define	APIC_SEND_PENDING		(1<<12)
 
+/* FIXME: it's now hard coded to be equal with KVM_IOAPIC_NUM_PINS */
 #define IOAPIC_NUM_PINS			0x18
 
 #define ESR_ILLEGAL_ADDRESS (1 << 7)
@@ -1020,10 +1021,57 @@ static void ioapic_mem_writel(void *opaque, target_phys_addr_t addr, uint32_t va
     }
 }
 
+#ifdef USE_KVM
+#include "qemu-kvm.h"
+extern int kvm_allowed;
+extern kvm_context_t kvm_context;
+
+static void kvm_kernel_ioapic_save_to_user(IOAPICState *s)
+{
+    struct kvm_irqchip chip;
+    struct kvm_ioapic_state *kioapic;
+    int i;
+
+    chip.chip_id = KVM_IRQCHIP_IOAPIC;
+    kvm_get_irqchip(kvm_context, &chip);
+    kioapic = &chip.chip.ioapic;
+
+    s->id = kioapic->id;
+    s->ioregsel = kioapic->ioregsel;
+    for (i = 0; i < IOAPIC_NUM_PINS; i++) {
+        s->ioredtbl[i] = kioapic->redirtbl[i].bits;
+    }
+}
+
+static void kvm_kernel_ioapic_load_from_user(IOAPICState *s)
+{
+    struct kvm_irqchip chip;
+    struct kvm_ioapic_state *kioapic;
+    int i;
+
+    chip.chip_id = KVM_IRQCHIP_IOAPIC;
+    kioapic = &chip.chip.ioapic;
+
+    kioapic->id = s->id;
+    kioapic->ioregsel = s->ioregsel;
+    for (i = 0; i < IOAPIC_NUM_PINS; i++) {
+        kioapic->redirtbl[i].bits = s->ioredtbl[i];
+    }
+
+    kvm_set_irqchip(kvm_context, &chip);
+}
+#endif
+
 static void ioapic_save(QEMUFile *f, void *opaque)
 {
     IOAPICState *s = opaque;
     int i;
+
+#ifdef USE_KVM
+    if (kvm_allowed && kvm_irqchip_in_kernel(kvm_context)) {
+        kvm_kernel_ioapic_save_to_user(s);
+    }
+#endif
 
     qemu_put_8s(f, &s->id);
     qemu_put_8s(f, &s->ioregsel);
@@ -1045,6 +1093,13 @@ static int ioapic_load(QEMUFile *f, void *opaque, int version_id)
     for (i = 0; i < IOAPIC_NUM_PINS; i++) {
         qemu_get_be64s(f, &s->ioredtbl[i]);
     }
+
+#ifdef USE_KVM
+    if (kvm_allowed && kvm_irqchip_in_kernel(kvm_context)) {
+        kvm_kernel_ioapic_load_from_user(s);
+    }
+#endif
+
     return 0;
 }
 
