@@ -491,6 +491,32 @@ int kvm_set_irqchip(kvm_context_t kvm, struct kvm_irqchip *chip)
 	return r;
 }
 
+int kvm_get_lapic(kvm_context_t kvm, int vcpu, struct kvm_lapic_state *s)
+{
+	int r;
+	if (!kvm->irqchip_in_kernel)
+		return 0;
+	r = ioctl(kvm->vcpu_fd[vcpu], KVM_GET_LAPIC, s);
+	if (r == -1) {
+		r = -errno;
+		perror("kvm_get_lapic");
+	}
+	return r;
+}
+
+int kvm_set_lapic(kvm_context_t kvm, int vcpu, struct kvm_lapic_state *s)
+{
+	int r;
+	if (!kvm->irqchip_in_kernel)
+		return 0;
+	r = ioctl(kvm->vcpu_fd[vcpu], KVM_SET_LAPIC, s);
+	if (r == -1) {
+		r = -errno;
+		perror("kvm_set_lapic");
+	}
+	return r;
+}
+
 static int handle_io_abi10(kvm_context_t kvm, struct kvm_run_abi10 *run,
 			   int vcpu)
 {

@@ -455,4 +455,26 @@ int kvm_get_irqchip(kvm_context_t kvm, struct kvm_irqchip *chip);
  */
 int kvm_set_irqchip(kvm_context_t kvm, struct kvm_irqchip *chip);
 
+/*!
+ * \brief Get in kernel local APIC for vcpu
+ *
+ * Save the local apic state including the timer of a virtual CPU
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param vcpu Which virtual CPU should be accessed
+ * \param s Local apic state of the specific virtual CPU
+ */
+int kvm_get_lapic(kvm_context_t kvm, int vcpu, struct kvm_lapic_state *s);
+
+/*!
+ * \brief Set in kernel local APIC for vcpu
+ *
+ * Restore the local apic state including the timer of a virtual CPU
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param vcpu Which virtual CPU should be accessed
+ * \param s Local apic state of the specific virtual CPU
+ */
+int kvm_set_lapic(kvm_context_t kvm, int vcpu, struct kvm_lapic_state *s);
+
 #endif
