@@ -714,7 +714,7 @@ static void kvm_add_signal(int signum)
     sigprocmask(SIG_BLOCK,  &io_sigset, NULL);
 }
 
-int kvm_main_loop(void)
+int kvm_init_ap(void)
 {
     CPUState *env = first_cpu->next_cpu;
     int i;
@@ -732,6 +732,11 @@ int kvm_main_loop(void)
 	pthread_create(&vcpu_info[i].thread, NULL, ap_main_loop, env);
 	env = env->next_cpu;
     }
+    return 0;
+}
+
+int kvm_main_loop(void)
+{
     vcpu_info[0].thread = pthread_self();
     return kvm_main_loop_cpu(first_cpu);
 }

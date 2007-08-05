@@ -7704,6 +7704,11 @@ int main(int argc, char **argv)
     gui_timer = qemu_new_timer(rt_clock, gui_update, NULL);
     qemu_mod_timer(gui_timer, qemu_get_clock(rt_clock));
 
+#ifdef USE_KVM
+    if (kvm_allowed)
+	kvm_init_ap();
+#endif
+
 #ifdef CONFIG_GDBSTUB
     if (use_gdbstub) {
         /* XXX: use standard host:port notation and modify options
