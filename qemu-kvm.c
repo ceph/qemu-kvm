@@ -44,6 +44,8 @@ struct vcpu_info {
     int init;
     pthread_t thread;
     int signalled;
+    int stop;
+    int stopped;
 } vcpu_info[4];
 
 static void sig_ipi_handler(int n)
@@ -608,24 +610,74 @@ static int kvm_eat_signals(CPUState *env, int timeout)
 
 static void kvm_main_loop_wait(CPUState *env, int timeout)
 {
-    if (vcpu_info[env->cpu_index].signalled && timeout)
+    if (vcpu_info[env->cpu_index].signalled && timeout
+	&& !vcpu_info[env->cpu_index].stop
+	&& !vcpu_info[env->cpu_index].stopped)
 	goto shortcut;
     pthread_mutex_unlock(&qemu_mutex);
     if (env->cpu_index == 0)
 	kvm_eat_signals(env, timeout);
-    else
-	if (timeout) {
+    else {
+	if (timeout || vcpu_info[env->cpu_index].stopped) {
 	    sigset_t set;
 	    int n;
 
+	paused:
 	    sigemptyset(&set);
 	    sigaddset(&set, SIG_IPI);
 	    sigwait(&set, &n);
 	}
+	if (vcpu_info[env->cpu_index].stop) {
+	    vcpu_info[env->cpu_index].stop = 0;
+	    vcpu_info[env->cpu_index].stopped = 1;
+	    goto paused;
+	}
+    }
     pthread_mutex_lock(&qemu_mutex);
     cpu_single_env = env;
  shortcut:
     vcpu_info[env->cpu_index].signalled = 0;
+}
+
+static int all_threads_paused(void)
+{
+    int i;
+
+    for (i = 1; i < smp_cpus; ++i)
+	if (vcpu_info[i].stopped)
+	    return 0;
+    return 1;
+}
+
+static void pause_other_threads(void)
+{
+    int i;
+
+    for (i = 1; i < smp_cpus; ++i) {
+	vcpu_info[i].stop = 1;
+	pthread_kill(vcpu_info[i].thread, SIG_IPI);
+    }
+    while (!all_threads_paused())
+	kvm_eat_signals(vcpu_env, 0);
+}
+
+static void resume_other_threads(void)
+{
+    int i;
+
+    for (i = 1; i < smp_cpus; ++i) {
+	vcpu_info[i].stop = 0;
+	vcpu_info[i].stopped = 0;
+	pthread_kill(vcpu_info[i].thread, SIG_IPI);
+    }
+}
+
+static void kvm_vm_state_change_handler(void *context, int running)
+{
+    if (running)
+	resume_other_threads();
+    else
+	pause_other_threads();
 }
 
 static void update_regs_for_sipi(CPUState *env)
@@ -719,6 +771,7 @@ int kvm_init_ap(void)
     CPUState *env = first_cpu->next_cpu;
     int i;
 
+    qemu_add_vm_change_state_handler(kvm_vm_state_change_handler, NULL);
     sigemptyset(&io_sigset);
     sigfillset(&io_negsigset);
     kvm_add_signal(SIGIO);
