@@ -173,12 +173,12 @@ static void migrate_finish(MigrationState *s)
     fcntl(s->fd, F_SETFL, 0);
 
     if (! *has_error) {
+        vm_stop(0);
         f = qemu_fopen(s, migrate_put_buffer, NULL, migrate_close);
         do {
             qemu_aio_flush();
         } while (qemu_bh_poll());
         bdrv_flush_all();
-        vm_stop(0);
         qemu_put_be32(f, 1);
         ret = qemu_live_savevm_state(f);
 #ifdef MIGRATION_VERIFY
