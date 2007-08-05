@@ -179,6 +179,10 @@ static void migrate_finish(MigrationState *s)
             qemu_aio_flush();
         } while (qemu_bh_poll());
         bdrv_flush_all();
+#ifdef USE_KVM
+	if (kvm_allowed && !*s->has_error && kvm_update_dirty_pages_log())
+	    *s->has_error = MIG_STAT_KVM_UPDATE_DIRTY_PAGES_LOG_FAILED;
+#endif
         qemu_put_be32(f, 1);
         ret = qemu_live_savevm_state(f);
 #ifdef MIGRATION_VERIFY
