@@ -65,6 +65,15 @@
     vmx_vcpu_run = 0
 }
 
+/^static void vmx_load_host_state/ {
+    vmx_load_host_state = 1
+}
+
+/vmcs_readl\(HOST_GS_BASE\)/ &&  vmx_load_host_state {
+    $0 = "\t\twrmsrl(MSR_GS_BASE, gsbase);";
+    vmx_load_host_state = 0
+}
+
 { print }
 
 /static void vcpu_put|static int vmx_vcpu_run|static struct kvm_vcpu \*vmx_create_vcpu/ {
@@ -75,3 +84,12 @@
     printf("\tin_special_section();\n");
     in_tricky_func = 0
 }
+
+/unsigned long flags;/ &&  vmx_load_host_state {
+    print "\tunsigned long gsbase;"
+}
+
+/local_irq_save/ &&  vmx_load_host_state {
+    print "\t\tgsbase = vmcs_readl(HOST_GS_BASE);"
+}
+
