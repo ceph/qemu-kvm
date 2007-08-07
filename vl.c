@@ -5432,6 +5432,9 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
     tlb_flush(env, 1);
 #ifdef USE_KVM
     if (kvm_allowed) {
+        /* when in-kernel irqchip is used, HF_HALTED_MASK causes deadlock
+           because no userspace IRQs will ever clear this flag */
+        env->hflags &= ~HF_HALTED_MASK;
         for (i = 0; i < NR_IRQ_WORDS ; i++) {
             qemu_get_be32s(f, &env->kvm_interrupt_bitmap[i]);
         }
