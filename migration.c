@@ -169,6 +169,7 @@ static void migrate_finish(MigrationState *s)
     int ret = 0;
     int *has_error = s->has_error;
     int saved_vm_running = vm_running;
+    int detach = s->detach;
 
     fcntl(s->fd, F_SETFL, 0);
 
@@ -198,7 +199,7 @@ static void migrate_finish(MigrationState *s)
 	if (saved_vm_running)
             vm_start();
     }
-    if (!s->detach)
+    if (!detach)
 	monitor_resume();
     qemu_free(has_error);
     cpu_physical_memory_set_dirty_tracking(0);
