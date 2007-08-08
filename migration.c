@@ -977,6 +977,12 @@ int migrate_incoming(const char *device)
 void do_migrate(int detach, const char *uri)
 {
     const char *ptr;
+    MigrationState *s = current_migration;
+
+    if (s) {
+	term_printf("Migration already active\n");
+	return;
+    }
 
     status = MIG_STAT_INVALID_PARAMS;
     if (strstart(uri, "exec:", &ptr)) {
