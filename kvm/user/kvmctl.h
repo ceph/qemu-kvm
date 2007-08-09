@@ -94,6 +94,16 @@ kvm_context_t kvm_init(struct kvm_callbacks *callbacks,
 void kvm_finalize(kvm_context_t kvm);
 
 /*!
+ * \brief Disable the in-kernel IRQCHIP creation
+ *
+ * In-kernel irqchip is enabled by default. If userspace irqchip is to be used,
+ * this should be called prior to kvm_create().
+ *
+ * \param kvm Pointer to the kvm_context
+ */
+void kvm_disable_irqchip_creation(kvm_context_t kvm);
+
+/*!
  * \brief Create new virtual machine
  *
  * This creates a new virtual machine, maps physical RAM to it, and creates a

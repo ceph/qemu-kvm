@@ -66,6 +66,9 @@ struct kvm_context {
 	int dirty_pages_log_all;
 	/// memory regions parameters
 	struct kvm_memory_region mem_regions[KVM_MAX_NUM_MEM_REGIONS];
+	/// do not create in-kernel irqchip if set
+	int no_irqchip_creation;
+	/// in-kernel irqchip status
 	int irqchip_in_kernel;
 };
 
@@ -187,6 +190,7 @@ kvm_context_t kvm_init(struct kvm_callbacks *callbacks,
 	kvm->callbacks = callbacks;
 	kvm->opaque = opaque;
 	kvm->dirty_pages_log_all = 0;
+	kvm->no_irqchip_creation = 0;
 	memset(&kvm->mem_regions, 0, sizeof(kvm->mem_regions));
 
 	return kvm;
@@ -203,6 +207,11 @@ void kvm_finalize(kvm_context_t kvm)
 		close(kvm->vm_fd);
 	close(kvm->fd);
 	free(kvm);
+}
+
+void kvm_disable_irqchip_creation(kvm_context_t kvm)
+{
+	kvm->no_irqchip_creation = 1;
 }
 
 int kvm_create_vcpu(kvm_context_t kvm, int slot)
@@ -308,13 +317,15 @@ int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem)
 	close(zfd);
 
 	kvm->irqchip_in_kernel = 0;
-	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_IRQCHIP);
-	if (r > 0) {	/* kernel irqchip supported */
-		r = ioctl(fd, KVM_CREATE_IRQCHIP);
-		if (r >= 0)
-			kvm->irqchip_in_kernel = 1;
-		else
-			printf("Create kernel PIC irqchip failed\n");
+	if (!kvm->no_irqchip_creation) {
+		r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_IRQCHIP);
+		if (r > 0) {	/* kernel irqchip supported */
+			r = ioctl(fd, KVM_CREATE_IRQCHIP);
+			if (r >= 0)
+				kvm->irqchip_in_kernel = 1;
+			else
+				printf("Create kernel PIC irqchip failed\n");
+		}
 	}
 	r = kvm_create_vcpu(kvm, 0);
 	if (r < 0)
