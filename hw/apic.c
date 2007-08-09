@@ -789,13 +789,12 @@ static void kvm_kernel_lapic_save_to_user(APICState *s)
 	s->lvt[i] = kapic_reg(kapic, 0x32 + i);
     s->initial_count = kapic_reg(kapic, 0x38);
     s->divide_conf = kapic_reg(kapic, 0x3e);
-    s->initial_count_load_time = qemu_get_clock(vm_clock);
-    s->next_time = s->initial_count_load_time;
 
     v = (s->divide_conf & 3) | ((s->divide_conf >> 1) & 4);
     s->count_shift = (v + 1) & 7;
 
-    qemu_del_timer(s->timer);
+    s->initial_count_load_time = qemu_get_clock(vm_clock);
+    apic_timer_update(s, s->initial_count_load_time);
 }
 
 static void kvm_kernel_lapic_load_from_user(APICState *s)
