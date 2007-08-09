@@ -953,7 +953,15 @@ int migrate_incoming(const char *device)
 
     if (strcmp(device, "stdio") == 0)
 	ret = migrate_incoming_fd(STDIN_FILENO);
-    else if (strstart(device, "tcp://", &ptr)) {
+    else if (strstart(device, "file://", &ptr)) {
+	int fd = open(ptr, O_RDONLY);
+	if (fd < 0) {
+	    ret = MIG_STAT_DST_INVALID_PARAMS;
+	} else {
+	    ret = migrate_incoming_fd(fd);
+	    close(fd);
+	}
+    } else if (strstart(device, "tcp://", &ptr)) {
 	char *host, *end;
 	host = strdup(ptr);
 	end = strchr(host, '/');
