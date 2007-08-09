@@ -10,6 +10,7 @@
 
 int kvm_allowed = KVM_ALLOWED_DEFAULT;
 static int lm_capable_kernel;
+int kvm_irqchip = 1;
 
 #ifdef USE_KVM
 
@@ -993,6 +994,9 @@ int kvm_qemu_create_context(void)
 {
     int i;
 
+    if (!kvm_irqchip) {
+        kvm_disable_irqchip_creation(kvm_context);
+    }
     if (kvm_create(kvm_context, phys_ram_size, (void**)&phys_ram_base) < 0) {
 	kvm_qemu_destroy();
 	return -1;

@@ -6573,6 +6573,7 @@ enum {
     QEMU_OPTION_vnc,
     QEMU_OPTION_no_acpi,
     QEMU_OPTION_no_kvm,
+    QEMU_OPTION_no_kvm_irqchip,
     QEMU_OPTION_no_reboot,
     QEMU_OPTION_daemonize,
     QEMU_OPTION_option_rom,
@@ -6642,6 +6643,7 @@ const QEMUOption qemu_options[] = {
 #endif
 #ifdef USE_KVM
     { "no-kvm", 0, QEMU_OPTION_no_kvm },
+    { "no-kvm-irqchip", 0, QEMU_OPTION_no_kvm_irqchip },
 #endif
 #if defined(TARGET_PPC) || defined(TARGET_SPARC)
     { "g", 1, QEMU_OPTION_g },
@@ -7350,6 +7352,9 @@ int main(int argc, char **argv)
 #ifdef USE_KVM
 	    case QEMU_OPTION_no_kvm:
 		kvm_allowed = 0;
+		break;
+	    case QEMU_OPTION_no_kvm_irqchip:
+		kvm_irqchip = 0;
 		break;
 #endif
             case QEMU_OPTION_usb:
