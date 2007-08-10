@@ -190,6 +190,8 @@ static void migrate_finish(MigrationState *s)
         save_verify_memory(f, NULL);
 #endif /* MIGRATION_VERIFY */
         qemu_fclose(f);
+    } else {
+	    migrate_close(s);
     }
     status = *has_error;
     if (ret && !status)
