@@ -630,6 +630,7 @@ static void kvm_main_loop_wait(CPUState *env, int timeout)
 	if (vcpu_info[env->cpu_index].stop) {
 	    vcpu_info[env->cpu_index].stop = 0;
 	    vcpu_info[env->cpu_index].stopped = 1;
+	    pthread_kill(vcpu_info[0].thread, SIG_IPI);
 	    goto paused;
 	}
     }
