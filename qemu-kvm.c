@@ -9,6 +9,7 @@
 #endif
 
 int kvm_allowed = KVM_ALLOWED_DEFAULT;
+static int lm_capable_kernel;
 
 #ifdef USE_KVM
 
@@ -304,10 +305,12 @@ static void load_regs(CPUState *env)
 	set_msr_entry(&msrs[n++], MSR_STAR,              env->star);
     set_msr_entry(&msrs[n++], MSR_IA32_TSC, env->tsc);
 #ifdef TARGET_X86_64
-    set_msr_entry(&msrs[n++], MSR_CSTAR,             env->cstar);
-    set_msr_entry(&msrs[n++], MSR_KERNELGSBASE,      env->kernelgsbase);
-    set_msr_entry(&msrs[n++], MSR_FMASK,             env->fmask);
-    set_msr_entry(&msrs[n++], MSR_LSTAR  ,           env->lstar);
+    if (lm_capable_kernel) {
+        set_msr_entry(&msrs[n++], MSR_CSTAR,             env->cstar);
+        set_msr_entry(&msrs[n++], MSR_KERNELGSBASE,      env->kernelgsbase);
+        set_msr_entry(&msrs[n++], MSR_FMASK,             env->fmask);
+        set_msr_entry(&msrs[n++], MSR_LSTAR  ,           env->lstar);
+    }
 #endif
 
     rc = kvm_set_msrs(kvm_context, env->cpu_index, msrs, n);
@@ -441,10 +444,12 @@ static void save_regs(CPUState *env)
 	msrs[n++].index = MSR_STAR;
     msrs[n++].index = MSR_IA32_TSC;
 #ifdef TARGET_X86_64
-    msrs[n++].index = MSR_CSTAR;
-    msrs[n++].index = MSR_KERNELGSBASE;
-    msrs[n++].index = MSR_FMASK;
-    msrs[n++].index = MSR_LSTAR;
+    if (lm_capable_kernel) {
+        msrs[n++].index = MSR_CSTAR;
+        msrs[n++].index = MSR_KERNELGSBASE;
+        msrs[n++].index = MSR_FMASK;
+        msrs[n++].index = MSR_LSTAR;
+    }
 #endif
     rc = kvm_get_msrs(kvm_context, env->cpu_index, msrs, n);
     if (rc == -1) {
@@ -1060,7 +1065,6 @@ static void do_cpuid_ent(struct kvm_cpuid_entry *e, uint32_t function,
     if (function == 0x80000001) {
 	uint32_t h_eax, h_edx;
 	struct utsname utsname;
-	int lm_capable_kernel;
 
 	host_cpuid(function, &h_eax, NULL, NULL, &h_edx);
 	uname(&utsname);
