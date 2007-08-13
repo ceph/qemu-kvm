@@ -591,7 +591,7 @@ static int kvm_eat_signal(CPUState *env, int timeout)
 }
 
 
-static int kvm_eat_signals(CPUState *env, int timeout)
+static void kvm_eat_signals(CPUState *env, int timeout)
 {
     int r = 0;
 

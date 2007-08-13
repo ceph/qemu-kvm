@@ -28,6 +28,10 @@
 #include "cpu.h"
 #include "exec-all.h"
 
+#ifdef USE_KVM
+#include "../qemu-kvm.h"
+#endif
+
 //#define DEBUG_MMU
 
 #ifdef USE_CODE_COPY

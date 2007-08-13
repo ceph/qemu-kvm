@@ -686,7 +686,7 @@ wait_for_ack:
 	goto wait_for_ack;
     if (len != 1 || status != 0) {
         *s->has_error = MIG_STAT_READ_FAILED;
-        fprintf(stderr, "migration: wait_for_ack: read error l=%ld s=%d(%s)\n",
+        fprintf(stderr, "migration: wait_for_ack: read error l=%zu s=%d(%s)\n",
                 len, status, strerror(errno));
         goto out;
     }
@@ -696,7 +696,7 @@ send_go:
     if (len == -1 && errno == EINTR)
 	goto send_go;
     if (len != 1) {
-        fprintf(stderr, "migration: send_go: write error l=%ld(%s)\n", 
+        fprintf(stderr, "migration: send_go: write error l=%zu (%s)\n",
                 len, strerror(errno));
         *s->has_error = MIG_STAT_WRITE_FAILED;
     }
@@ -918,7 +918,7 @@ send_ack:
     if (len == -1 && errno == EAGAIN)
 	goto send_ack;
     if (len != 1) {
-        fprintf(stderr, "migration: send_ack: write error len=%ld (%s)\n",
+        fprintf(stderr, "migration: send_ack: write error len=%zu (%s)\n",
                 len, strerror(errno));
         rc = MIG_STAT_DST_WRITE_FAILED;
 	goto error_accept;
@@ -936,7 +936,7 @@ wait_for_go:
 	goto wait_for_go;
     if (len != 1) {
         rc = MIG_STAT_DST_READ_FAILED;
-        fprintf(stderr, "migration: wait_for_go: read error len=%ld (%s)\n",
+        fprintf(stderr, "migration: wait_for_go: read error len=%zu (%s)\n",
                 len, strerror(errno));
     }
 

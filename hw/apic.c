@@ -19,6 +19,10 @@
  */
 #include "vl.h"
 
+#ifdef USE_KVM
+#include "../qemu-kvm.h"
+#endif
+
 //#define DEBUG_APIC
 //#define DEBUG_IOAPIC
 
