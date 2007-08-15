@@ -1109,8 +1109,16 @@ static int protocol_client_init(VncState *vs, char *data, size_t len)
 	
     vnc_write(vs, pad, 3);           /* padding */
 
-    vnc_write_u32(vs, 4);        
-    vnc_write(vs, "QEMU", 4);
+#if USE_KVM
+    if (kvm_allowed) {
+        vnc_write_u32(vs, 8);
+        vnc_write(vs, "QEMU/KVM", 8);
+    } else
+#endif
+    {
+        vnc_write_u32(vs, 4);
+        vnc_write(vs, "QEMU", 4);
+    }
     vnc_flush(vs);
 
     vnc_read_when(vs, protocol_client_msg, 1);
