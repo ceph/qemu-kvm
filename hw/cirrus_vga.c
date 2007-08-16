@@ -2591,8 +2591,6 @@ static void kvm_update_vga_alias(CirrusVGAState *s, int ok, int bank)
     limit = s->cirrus_bank_limit[bank];
     if (limit > 0x8000)
 	limit = 0x8000;
-    if (!ok)
-	limit = 0;
     base = s->cirrus_lfb_addr + s->cirrus_bank_base[bank];
     if (ok) {
 	if (!s->aliases_enabled
