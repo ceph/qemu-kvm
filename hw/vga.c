@@ -1792,6 +1792,40 @@ static void vga_map(PCIDevice *pci_dev, int region_num,
         cpu_register_physical_memory(addr, s->bios_size, s->bios_offset);
     } else {
         cpu_register_physical_memory(addr, s->vram_size, s->vram_offset);
+#ifdef USE_KVM
+        if (kvm_allowed) {
+            unsigned long vga_ram_begin, vga_ram_end;
+            void *vram_pointer, *old_vram;
+
+            vga_ram_begin = addr;
+            vga_ram_end   = addr + VGA_RAM_SIZE;
+
+            if (vga_ram_begin == s->map_addr &&
+                vga_ram_end   == s->map_end) {
+                return;
+            }
+
+            if (s->map_addr && s->map_end)
+                unset_vram_mapping(s->map_addr, s->map_end);
+
+            vram_pointer = set_vram_mapping(vga_ram_begin, vga_ram_end);
+            if (!vram_pointer) {
+                fprintf(stderr, "set_vram_mapping failed\n");
+                s->map_addr = s->map_end = 0;
+            }
+            else {
+                fprintf(stderr, "vram_pointer=%p\n", vram_pointer);
+                old_vram = vga_update_vram((VGAState *)s, vram_pointer,
+                                           VGA_RAM_SIZE);
+                if (s->map_addr && s->map_end)
+                    munmap(old_vram, s->map_end - s->map_addr);
+                else
+                    qemu_free(old_vram);
+                s->map_addr = vga_ram_begin;
+                s->map_end  = vga_ram_end;
+            }
+        }
+#endif
     }
 }
 

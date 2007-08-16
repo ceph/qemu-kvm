@@ -145,6 +145,18 @@
 
 typedef struct VGAState {
     VGA_STATE_COMMON
+
+#ifdef USE_KVM
+    int32_t  aliases_enabled;
+    int32_t  pad1;
+    uint32_t aliased_bank_base[2];
+    uint32_t aliased_bank_limit[2];
+
+    unsigned long map_addr;
+    unsigned long map_end;
+#endif
+
+
 } VGAState;
 
 static inline int c6_to_8(int v)
