@@ -2548,7 +2548,7 @@ static CPUWriteMemoryFunc *cirrus_linear_bitblt_write[3] = {
 
 extern kvm_context_t kvm_context;
 
-static void *set_vram_mapping(unsigned long begin, unsigned long end)
+void *set_vram_mapping(unsigned long begin, unsigned long end)
 {
     void *vram_pointer = NULL;
 
@@ -2570,7 +2570,7 @@ static void *set_vram_mapping(unsigned long begin, unsigned long end)
     return vram_pointer;
 }
 
-static int unset_vram_mapping(unsigned long begin, unsigned long end)
+int unset_vram_mapping(unsigned long begin, unsigned long end)
 {
     /* align begin and end address */
     end = begin + VGA_RAM_SIZE;
