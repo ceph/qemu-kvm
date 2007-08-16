@@ -2682,7 +2682,7 @@ static void cirrus_update_memory_access(CirrusVGAState *s)
 		    old_vram = vga_update_vram((VGAState *)s, NULL,
                                                VGA_RAM_SIZE);
                 if (old_vram)
-                    munmap(old_vram, s->map_addr - s->map_end);
+                    munmap(old_vram, s->map_end - s->map_addr);
                 s->map_addr = s->map_end = 0;
             }
 #endif
