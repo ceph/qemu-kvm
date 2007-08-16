@@ -855,6 +855,11 @@ static void mptable_init(void)
     int ioapic_id, i, len;
     int mp_config_table_size;
 
+#ifdef BX_QEMU
+    if (smp_cpus <= 1)
+        return;
+#endif
+
 #ifdef BX_USE_EBDA_TABLES
     mp_config_table = (uint8_t *)(ram_size - ACPI_DATA_SIZE - MPTABLE_MAX_SIZE);
 #else
