@@ -9521,6 +9521,14 @@ rombios32_05:
   rep 
     stosd
 
+  ;; reset the memory (some boot loaders such as syslinux suppose 
+  ;; that the memory is set to zero)
+  mov edi, #0x00040000
+  mov ecx, #0x40000 / 4
+  xor eax, eax
+  rep 
+    stosd
+
   ;; return to 16 bit protected mode first
   db 0xea
   dd rombios32_10
