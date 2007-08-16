@@ -19,7 +19,7 @@
 //  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301 USA
 
 /* define it to include QEMU specific code */
-//#define BX_QEMU
+#define BX_QEMU
 
 #ifndef LEGACY
 #  define BX_ROMBIOS32     1
