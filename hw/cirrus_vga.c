@@ -2577,7 +2577,7 @@ int unset_vram_mapping(unsigned long begin, unsigned long end)
     begin = begin & TARGET_PAGE_MASK;
     end = (end + TARGET_PAGE_SIZE -1 ) & TARGET_PAGE_MASK;
 
-    kvm_destroy_phys_mem(kvm_context, begin, end - begin);
+    kvm_destroy_phys_mem(kvm_context, begin, end - begin, 1);
 
     return 0;
 }
