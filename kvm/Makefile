@@ -5,7 +5,7 @@ DESTDIR=
 
 rpmrelease = devel
 
-.PHONY: kernel user qemu clean
+.PHONY: kernel user qemu bios clean
 
 all: $(if $(WANT_MODULE), kernel) user qemu
 
@@ -15,6 +15,10 @@ qemu kernel user:
 	$(MAKE) -C $@
 
 qemu: user
+
+bios:
+	$(MAKE) -C $@
+	cp bios/BIOS-bochs-latest qemu/pc-bios/bios.bin
 
 bindir = /usr/bin
 bin = $(bindir)/kvm
