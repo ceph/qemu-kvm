@@ -497,7 +497,8 @@ static void post_kvm_run(void *opaque, int vcpu)
 	? env->eflags | IF_MASK : env->eflags & ~IF_MASK;
     env->ready_for_interrupt_injection
 	= kvm_is_ready_for_interrupt_injection(kvm_context, vcpu);
-    //cpu_set_apic_tpr(env, kvm_run->cr8);
+
+    cpu_set_apic_tpr(env, kvm_get_cr8(kvm_context, vcpu));
     cpu_set_apic_base(env, kvm_get_apic_base(kvm_context, vcpu));
 }
 
