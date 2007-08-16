@@ -324,14 +324,27 @@ void *kvm_create_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 	return ptr;
 }
 
+/* destroy/free a whole slot.
+ * phys_start, len and slot are the params passed to kvm_create_phys_mem()
+ */
 void kvm_destroy_phys_mem(kvm_context_t kvm, unsigned long phys_start, 
-			  unsigned long len)
+			  unsigned long len, int slot)
 {
-	//for each memory region in (phys_start, phys_start+len) do
-	//    kvm_memory_region_clear_params(kvm, region);
-	kvm_memory_region_clear_params(kvm, 0); /* avoid compiler warning */
-	printf("kvm_destroy_phys_mem: implement me\n");
-	exit(1);
+	struct kvm_memory_region *mem;
+
+	if (slot >= KVM_MAX_NUM_MEM_REGIONS) {
+		fprintf(stderr, "BUG: %s: invalid parameters (slot=%d)\n",
+			__FUNCTION__, slot);
+		return;
+	}
+	mem = &kvm->mem_regions[slot];
+	if (phys_start != mem->guest_phys_addr) {
+		fprintf(stderr,
+			"WARNING: %s: phys_start is 0x%lx expecting 0x%llx\n",
+			__FUNCTION__, phys_start, mem->guest_phys_addr);
+		phys_start = mem->guest_phys_addr;
+	}
+	kvm_create_phys_mem(kvm, phys_start, 0, slot, 0, 0);
 }
 
 int kvm_create_memory_alias(kvm_context_t kvm,

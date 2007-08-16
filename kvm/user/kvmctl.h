@@ -365,7 +365,7 @@ void kvm_show_regs(kvm_context_t kvm, int vcpu);
 void *kvm_create_phys_mem(kvm_context_t, unsigned long phys_start, 
 			  unsigned long len, int slot, int log, int writable);
 void kvm_destroy_phys_mem(kvm_context_t, unsigned long phys_start, 
-			  unsigned long len);
+			  unsigned long len, int slot);
 int kvm_get_dirty_pages(kvm_context_t, int slot, void *buf);
 
 
