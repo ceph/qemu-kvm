@@ -881,6 +881,11 @@ void kvm_set_cr8(kvm_context_t kvm, int vcpu, uint64_t cr8)
 	run->cr8 = cr8;
 }
 
+__u64 kvm_get_cr8(kvm_context_t kvm, int vcpu)
+{
+	return kvm->run[vcpu]->cr8;
+}
+
 static int kvm_run_abi10(kvm_context_t kvm, int vcpu)
 {
 	int r;
@@ -1019,6 +1024,8 @@ again:
 			break;
 		case KVM_EXIT_SHUTDOWN:
 			r = handle_shutdown(kvm, vcpu);
+			break;
+		case KVM_EXIT_SET_TPR:
 			break;
 		default:
 			fprintf(stderr, "unhandled vm exit: 0x%x\n", run->exit_reason);

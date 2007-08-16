@@ -191,6 +191,17 @@ int kvm_is_ready_for_interrupt_injection(kvm_context_t kvm, int vcpu);
 void kvm_set_cr8(kvm_context_t kvm, int vcpu, uint64_t cr8);
 
 /*!
+ * \brief Get cr8 for sync tpr in qemu apic emulation
+ *
+ * This is a getter for cr8, which used to sync with the tpr in qemu
+ * apic emualtion.
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param vcpu Which virtual CPU should get dumped
+ */
+__u64 kvm_get_cr8(kvm_context_t kvm, int vcpu);
+
+/*!
  * \brief Read VCPU registers
  *
  * This gets the GP registers from the VCPU and outputs them
