@@ -24,6 +24,8 @@
 #include "vl.h"
 #include "vga_int.h"
 
+#include <sys/mman.h>
+
 //#define DEBUG_VGA
 //#define DEBUG_VGA_MEM
 //#define DEBUG_VGA_REG
