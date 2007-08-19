@@ -616,10 +616,6 @@ static void kvm_eat_signals(CPUState *env, int timeout)
 
 static void kvm_main_loop_wait(CPUState *env, int timeout)
 {
-    if (vcpu_info[env->cpu_index].signalled && timeout
-	&& !vcpu_info[env->cpu_index].stop
-	&& !vcpu_info[env->cpu_index].stopped)
-	goto shortcut;
     pthread_mutex_unlock(&qemu_mutex);
     if (env->cpu_index == 0)
 	kvm_eat_signals(env, timeout);
@@ -632,6 +628,16 @@ static void kvm_main_loop_wait(CPUState *env, int timeout)
 	    sigemptyset(&set);
 	    sigaddset(&set, SIG_IPI);
 	    sigwait(&set, &n);
+	} else {
+	    struct timespec ts;
+	    siginfo_t siginfo;
+	    sigset_t set;
+
+	    ts.tv_sec = 0;
+	    ts.tv_nsec = 0;
+	    sigemptyset(&set);
+	    sigaddset(&set, SIG_IPI);
+	    sigtimedwait(&io_sigset, &siginfo, &ts);
 	}
 	if (vcpu_info[env->cpu_index].stop) {
 	    vcpu_info[env->cpu_index].stop = 0;
@@ -642,7 +648,6 @@ static void kvm_main_loop_wait(CPUState *env, int timeout)
     }
     pthread_mutex_lock(&qemu_mutex);
     cpu_single_env = env;
- shortcut:
     vcpu_info[env->cpu_index].signalled = 0;
 }
 
