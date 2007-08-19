@@ -20,6 +20,7 @@
 //  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301 USA
 #include <stdarg.h>
 #include <stddef.h>
+#include <string.h>
 
 #include "rombios.h"
 
@@ -1202,7 +1203,12 @@ static void acpi_build_table_header(struct acpi_table_header *h,
 {
     memcpy(h->signature, sig, 4);
     h->length = cpu_to_le32(len);
-    h->revision = 1;
+    // Desirable by Windows XP - ACPI 1.0b
+    if (strcmp(sig,"FACP") == 0) {
+        h->revision = 2;
+    } else {
+        h->revision = 1;
+    }
 #ifdef BX_QEMU
     memcpy(h->oem_id, "QEMU  ", 6);
     memcpy(h->oem_table_id, "QEMU", 4);
