@@ -25,6 +25,26 @@ DefinitionBlock (
     0x1                 // OEM Revision
     )
 {
+    Scope (_PR)
+    {
+        Processor (CPU0, 0x00, 0x0000b010, 0x06) {}
+        Processor (CPU1, 0x01, 0x0000b010, 0x06) {}
+        Processor (CPU2, 0x02, 0x0000b010, 0x06) {}
+        Processor (CPU3, 0x03, 0x0000b010, 0x06) {}
+        Processor (CPU4, 0x04, 0x0000b010, 0x06) {}
+        Processor (CPU5, 0x05, 0x0000b010, 0x06) {}
+        Processor (CPU6, 0x06, 0x0000b010, 0x06) {}
+        Processor (CPU7, 0x07, 0x0000b010, 0x06) {}
+        Processor (CPU8, 0x08, 0x0000b010, 0x06) {}
+        Processor (CPU9, 0x09, 0x0000b010, 0x06) {}
+        Processor (CPUA, 0x0a, 0x0000b010, 0x06) {}
+        Processor (CPUB, 0x0b, 0x0000b010, 0x06) {}
+        Processor (CPUC, 0x0c, 0x0000b010, 0x06) {}
+        Processor (CPUD, 0x0d, 0x0000b010, 0x06) {}
+        Processor (CPUE, 0x0e, 0x0000b010, 0x06) {}
+        Processor (CPUF, 0x0f, 0x0000b010, 0x06) {}
+    }
+
     Scope (\)
     {
         /* CMOS memory access */
