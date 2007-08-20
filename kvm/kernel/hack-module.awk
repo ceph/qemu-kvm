@@ -56,18 +56,11 @@
     in_vmcs_write = 0
 }
 
-/static int vmx_vcpu_run/ {
-    vmx_vcpu_run = 1
-}
+/ASM_VMX_VMLAUNCH|SVM_VMRUN/ { after_guest_entry = 1 }
 
-/static int svm_vcpu_run/ {
-    svm_vcpu_run = 1
-}
-
-/preempt_enable|stgi/ && (vmx_vcpu_run || svm_vcpu_run) {
+/preempt_enable|stgi/ && after_guest_entry {
     print "\tspecial_reload_dr7();";
-    svm_vcpu_run = 0;
-    vmx_vcpu_run = 0
+    after_guest_entry = 0
 }
 
 /^static void vmx_load_host_state/ {
