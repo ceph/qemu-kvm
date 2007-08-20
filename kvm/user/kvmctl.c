@@ -43,7 +43,7 @@ static int kvm_abi = EXPECTED_KVM_API_VERSION;
 
 /* FIXME: share this number with kvm */
 /* FIXME: or dynamically alloc/realloc regions */
-#define KVM_MAX_NUM_MEM_REGIONS 4u
+#define KVM_MAX_NUM_MEM_REGIONS 8u
 #define MAX_VCPUS 4
 
 /**
@@ -236,6 +236,7 @@ int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem)
 {
 	unsigned long dosmem = 0xa0000;
 	unsigned long exmem = 0xc0000;
+	unsigned long pcimem = 0xf0000000;
 	int fd = kvm->fd;
 	int zfd;
 	int r;
@@ -249,6 +250,14 @@ int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem)
 		.memory_size = memory < exmem ? 0 : memory - exmem,
 		.guest_phys_addr = exmem,
 	};
+	struct kvm_memory_region above_4g_memory = {
+		.slot = 4,
+		.memory_size = memory < pcimem ? 0 : memory - pcimem,
+		.guest_phys_addr = 0x100000000,
+	};
+
+	if (memory >= pcimem)
+		extended_memory.memory_size = pcimem - exmem;
 
 	kvm->vcpu_fd[0] = -1;
 
@@ -273,8 +282,17 @@ int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem)
 		}
 	}
 
+	if (above_4g_memory.memory_size) {
+		r = ioctl(fd, KVM_SET_MEMORY_REGION, &above_4g_memory);
+		if (r == -1) {
+			fprintf(stderr, "kvm_create_memory_region: %m\n");
+			return -1;
+		}
+	}
+
 	kvm_memory_region_save_params(kvm, &low_memory);
 	kvm_memory_region_save_params(kvm, &extended_memory);
+	kvm_memory_region_save_params(kvm, &above_4g_memory);
 
 	*vm_mem = mmap(NULL, memory, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 	if (*vm_mem == MAP_FAILED) {
