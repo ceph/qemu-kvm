@@ -102,7 +102,11 @@
 //#define DEBUG_UNUSED_IOPORT
 //#define DEBUG_IOPORT
 
+#if HOST_LONG_BITS < 64
 #define PHYS_RAM_MAX_SIZE (2047 * 1024 * 1024)
+#else
+#define PHYS_RAM_MAX_SIZE (2047 * 1024 * 1024 * 1024ULL)
+#endif
 
 #ifdef TARGET_PPC
 #define DEFAULT_RAM_SIZE 144
@@ -135,7 +139,7 @@ int nographic;
 const char* keyboard_layout = NULL;
 int64_t ticks_per_sec;
 int boot_device = 'c';
-int ram_size;
+int64_t ram_size;
 int pit_min_timer_count = 0;
 int nb_nics;
 NICInfo nd_table[MAX_NICS];
@@ -7182,7 +7186,7 @@ int main(int argc, char **argv)
                 help();
                 break;
             case QEMU_OPTION_m:
-                ram_size = atoi(optarg) * 1024 * 1024;
+                ram_size = (int64_t)atoi(optarg) * 1024 * 1024;
                 if (ram_size <= 0)
                     help();
                 if (ram_size > PHYS_RAM_MAX_SIZE) {

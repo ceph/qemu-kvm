@@ -163,7 +163,7 @@ static void cmos_init_hd(int type_ofs, int info_ofs, BlockDriverState *hd)
 }
 
 /* hd_table must contain 4 block drivers */
-static void cmos_init(int ram_size, int boot_device, BlockDriverState **hd_table)
+static void cmos_init(ram_addr_t ram_size, int boot_device, BlockDriverState **hd_table)
 {
     RTCState *s = rtc_state;
     int val;
@@ -457,7 +457,7 @@ extern int kvm_allowed;
 #endif
 
 /* PC hardware initialisation */
-static void pc_init1(int ram_size, int vga_ram_size, int boot_device,
+static void pc_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
                      DisplayState *ds, const char **fd_filename, int snapshot,
                      const char *kernel_filename, const char *kernel_cmdline,
                      const char *initrd_filename,
@@ -465,7 +465,7 @@ static void pc_init1(int ram_size, int vga_ram_size, int boot_device,
 {
     char buf[1024];
     int ret, linux_boot, initrd_size, i;
-    unsigned long bios_offset, vga_bios_offset, option_rom_offset;
+    ram_addr_t bios_offset, vga_bios_offset, option_rom_offset;
     ram_addr_t initrd_offset;
     int bios_size, isa_bios_size;
     PCIBus *pci_bus;
@@ -794,7 +794,7 @@ static void pc_init1(int ram_size, int vga_ram_size, int boot_device,
 #endif
 }
 
-static void pc_init_pci(int ram_size, int vga_ram_size, int boot_device,
+static void pc_init_pci(ram_addr_t ram_size, int vga_ram_size, int boot_device,
                         DisplayState *ds, const char **fd_filename, 
                         int snapshot, 
                         const char *kernel_filename, 
@@ -807,7 +807,7 @@ static void pc_init_pci(int ram_size, int vga_ram_size, int boot_device,
              initrd_filename, 1);
 }
 
-static void pc_init_isa(int ram_size, int vga_ram_size, int boot_device,
+static void pc_init_isa(ram_addr_t ram_size, int vga_ram_size, int boot_device,
                         DisplayState *ds, const char **fd_filename, 
                         int snapshot, 
                         const char *kernel_filename, 

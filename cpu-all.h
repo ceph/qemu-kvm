@@ -822,7 +822,7 @@ int cpu_inl(CPUState *env, int addr);
 
 /* memory API */
 
-extern int phys_ram_size;
+extern ram_addr_t phys_ram_size;
 extern int phys_ram_fd;
 extern uint8_t *phys_ram_base;
 extern uint8_t *phys_ram_dirty;

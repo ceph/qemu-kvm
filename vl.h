@@ -153,7 +153,7 @@ void qemu_system_powerdown(void);
 
 void main_loop_wait(int timeout);
 
-extern int ram_size;
+extern int64_t ram_size;
 extern int bios_size;
 extern int rtc_utc;
 extern int cirrus_vga_enabled;
@@ -716,7 +716,7 @@ void path_combine(char *dest, int dest_size,
 
 #ifndef QEMU_TOOL
 
-typedef void QEMUMachineInitFunc(int ram_size, int vga_ram_size, 
+typedef void QEMUMachineInitFunc(ram_addr_t ram_size, int vga_ram_size,
                                  int boot_device,
              DisplayState *ds, const char **fd_filename, int snapshot,
              const char *kernel_filename, const char *kernel_cmdline,

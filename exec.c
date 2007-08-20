@@ -85,7 +85,7 @@ spinlock_t tb_lock = SPIN_LOCK_UNLOCKED;
 uint8_t code_gen_buffer[CODE_GEN_BUFFER_SIZE] __attribute__((aligned (32)));
 uint8_t *code_gen_ptr;
 
-int phys_ram_size;
+ram_addr_t phys_ram_size;
 int phys_ram_fd;
 uint8_t *phys_ram_base;
 uint8_t *phys_ram_dirty;
@@ -111,7 +111,7 @@ typedef struct PageDesc {
 
 typedef struct PhysPageDesc {
     /* offset in host memory of the page + io_index in the low 12 bits */
-    uint32_t phys_offset;
+    ram_addr_t phys_offset;
 } PhysPageDesc;
 
 #define L2_BITS 10
