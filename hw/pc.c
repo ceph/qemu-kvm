@@ -163,7 +163,7 @@ static void cmos_init_hd(int type_ofs, int info_ofs, BlockDriverState *hd)
 }
 
 /* hd_table must contain 4 block drivers */
-static void cmos_init(ram_addr_t ram_size, int boot_device, BlockDriverState **hd_table)
+static void cmos_init(ram_addr_t ram_size, ram_addr_t above_4g_mem_size, int boot_device, BlockDriverState **hd_table)
 {
     RTCState *s = rtc_state;
     int val;
@@ -184,6 +184,12 @@ static void cmos_init(ram_addr_t ram_size, int boot_device, BlockDriverState **h
     rtc_set_memory(s, 0x18, val >> 8);
     rtc_set_memory(s, 0x30, val);
     rtc_set_memory(s, 0x31, val >> 8);
+
+    if (above_4g_mem_size) {
+        rtc_set_memory(s, 0x5b, (unsigned int)above_4g_mem_size >> 16);
+        rtc_set_memory(s, 0x5c, (unsigned int)above_4g_mem_size >> 24);
+        rtc_set_memory(s, 0x5d, above_4g_mem_size >> 32);
+    }
 
     if (ram_size > (16 * 1024 * 1024))
         val = (ram_size / 65536) - ((16 * 1024 * 1024) / 65536);
@@ -465,13 +471,19 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
 {
     char buf[1024];
     int ret, linux_boot, initrd_size, i;
-    ram_addr_t bios_offset, vga_bios_offset, option_rom_offset;
+    ram_addr_t bios_offset, vga_bios_offset, option_rom_offset,
+    above_4g_mem_size = 0;
     ram_addr_t initrd_offset;
     int bios_size, isa_bios_size;
     PCIBus *pci_bus;
     int piix3_devfn = -1;
     CPUState *env;
     NICInfo *nd;
+
+    if (ram_size + (phys_ram_size - ram_size) >= 0xf0000000 ) {
+        above_4g_mem_size = phys_ram_size - 0xf0000000;
+        ram_size = 0xf0000000 - (phys_ram_size - ram_size);
+    }
 
     linux_boot = (kernel_filename != NULL);
 
@@ -493,6 +505,8 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
 
     /* allocate RAM */
     cpu_register_physical_memory(0, ram_size, 0);
+    if (above_4g_mem_size > 0)
+        cpu_register_physical_memory(0x100000000, above_4g_mem_size, 0);
 
     /* BIOS load */
     bios_offset = ram_size + vga_ram_size;
@@ -756,7 +770,7 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
 
     floppy_controller = fdctrl_init(6, 2, 0, 0x3f0, fd_table);
 
-    cmos_init(ram_size, boot_device, bs_table);
+    cmos_init(ram_size, above_4g_mem_size, boot_device, bs_table);
 
     if (pci_enabled && usb_enabled) {
         usb_uhci_init(pci_bus, piix3_devfn + 2);
