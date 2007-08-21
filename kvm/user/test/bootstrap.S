@@ -69,7 +69,8 @@ sipi:
 	inl %dx, %eax
 	mov %eax, cpu_up
 	shl $12, %eax
-	lea stack_top(%eax), %esp
+	addl $stack_top, %eax
+	movl %eax, %esp
 	sti
 	nop
 1:	hlt
