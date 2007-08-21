@@ -67,8 +67,12 @@
 #define TARGET_PHYS_ADDR_SPACE_BITS 41
 #elif defined(TARGET_PPC64)
 #define TARGET_PHYS_ADDR_SPACE_BITS 42
-#else
+#elif USE_KQEMU
 /* Note: for compatibility with kqemu, we use 32 bits for x86_64 */
+#define TARGET_PHYS_ADDR_SPACE_BITS 32
+#elif TARGET_X86_64
+#define TARGET_PHYS_ADDR_SPACE_BITS 42
+#else
 #define TARGET_PHYS_ADDR_SPACE_BITS 32
 #endif
 
