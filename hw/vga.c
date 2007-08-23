@@ -1400,12 +1400,12 @@ extern int kvm_allowed;
  */
 static void vga_draw_graphic(VGAState *s, int full_update)
 {
-    int y1, y, update, page_min, page_max, linesize, y_start, double_scan, mask;
+    int y1, y, update, linesize, y_start, double_scan, mask;
     int width, height, shift_control, line_offset, bwidth;
     int disp_width, multi_scan, multi_run;
     uint8_t *d;
     uint32_t v, addr1, addr;
-    ram_addr_t page0, page1;
+    long page0, page1, page_min, page_max;
     vga_draw_line_func *vga_draw_line;
     
 #ifdef USE_KVM
