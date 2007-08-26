@@ -32,7 +32,7 @@
 
 #define MIN_FINALIZE_SIZE	(200 << 10)
 #define MAX_ITERATIONS           30
-#define MAX_RAPID_WRITES          2
+#define MAX_RAPID_WRITES          5
 
 typedef struct MigrationState
 {
@@ -349,6 +349,8 @@ static void migrate_write(void *opaque)
 
     if ((s->iteration) && (s->last_updated_pages <= s->updated_pages)) {
         s->rapid_writes++; /* "dirt-speed" is faster than transfer speed */
+        if (max_throttle < (1 << 30))
+            max_throttle *= 2; /* try harder */
     }
     s->last_updated_pages = s->updated_pages;
     s->updated_pages = 0;
