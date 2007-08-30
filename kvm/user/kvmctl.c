@@ -1084,11 +1084,10 @@ again:
 	r = pre_kvm_run(kvm, vcpu);
 	if (r)
 	    return r;
-	pre_kvm_run(kvm, vcpu);
 	r = ioctl(fd, KVM_RUN, 0);
 	post_kvm_run(kvm, vcpu);
 
-	if (r == -1 && errno != EINTR) {
+	if (r == -1 && errno != EINTR && errno != EAGAIN) {
 		r = -errno;
 		printf("kvm_run: %m\n");
 		return r;
