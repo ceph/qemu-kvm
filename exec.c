@@ -78,6 +78,7 @@
 
 #ifdef USE_KVM
 extern int kvm_allowed;
+extern kvm_context_t kvm_context;
 #endif
 
 TranslationBlock tbs[CODE_GEN_MAX_BLOCKS];
@@ -1149,7 +1150,7 @@ void cpu_interrupt(CPUState *env, int mask)
 
     env->interrupt_request |= mask;
 #ifdef USE_KVM
-    if (kvm_allowed)
+    if (kvm_allowed && !kvm_irqchip_in_kernel(kvm_context))
 	kvm_update_interrupt_request(env);
 #endif
     /* if the cpu is currently executing code, we must unlink it and

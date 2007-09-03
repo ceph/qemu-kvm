@@ -621,7 +621,8 @@ static void kvm_main_loop_wait(CPUState *env, int timeout)
     if (env->cpu_index == 0)
 	kvm_eat_signals(env, timeout);
     else {
-	if (timeout || vcpu_info[env->cpu_index].stopped) {
+	if (!kvm_irqchip_in_kernel(kvm_context) &&
+	    (timeout || vcpu_info[env->cpu_index].stopped)) {
 	    sigset_t set;
 	    int n;
 
@@ -735,9 +736,9 @@ static int kvm_main_loop_cpu(CPUState *env)
 	    kvm_main_loop_wait(env, 10);
 	if (env->interrupt_request & CPU_INTERRUPT_HARD)
 	    env->hflags &= ~HF_HALTED_MASK;
-	if (info->sipi_needed)
+	if (!kvm_irqchip_in_kernel(kvm_context) && info->sipi_needed)
 	    update_regs_for_sipi(env);
-	if (info->init)
+	if (!kvm_irqchip_in_kernel(kvm_context) && info->init)
 	    update_regs_for_init(env);
 	if (!(env->hflags & HF_HALTED_MASK) && !info->init)
 	    kvm_cpu_exec(env);
@@ -790,7 +791,8 @@ int kvm_init_ap(void)
     kvm_add_signal(SIGIO);
     kvm_add_signal(SIGALRM);
     kvm_add_signal(SIGUSR2);
-    kvm_add_signal(SIG_IPI);
+    if (!kvm_irqchip_in_kernel(kvm_context))
+        kvm_add_signal(SIG_IPI);
 
     vcpu_env = first_cpu;
     signal(SIG_IPI, sig_ipi_handler);

@@ -406,7 +406,7 @@ static void apic_init_ipi(APICState *s)
     s->initial_count_load_time = 0;
     s->next_time = 0;
 #ifdef USE_KVM
-    if (kvm_allowed)
+    if (kvm_allowed && !kvm_irqchip_in_kernel(kvm_context))
 	if (s->cpu_env)
 	    kvm_apic_init(s->cpu_env);
 #endif
@@ -423,7 +423,7 @@ static void apic_startup(APICState *s, int vector_num)
                            0xffff, 0);
     env->hflags &= ~HF_HALTED_MASK;
 #if USE_KVM
-    if (kvm_allowed)
+    if (kvm_allowed && !kvm_irqchip_in_kernel(kvm_context))
 	kvm_update_after_sipi(env);
 #endif
 }
