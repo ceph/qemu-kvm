@@ -214,6 +214,9 @@ static void cmos_init(ram_addr_t ram_size, ram_addr_t above_4g_mem_size, int boo
     case 'd':
         rtc_set_memory(s, 0x3d, 0x03); /* CD-ROM boot */
         break;
+    case 'n':
+        rtc_set_memory(s, 0x3d, 0x04); /* Expansion ROM boot */
+        break;
     }
 
     /* floppy type */
