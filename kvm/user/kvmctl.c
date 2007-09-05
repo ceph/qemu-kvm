@@ -40,6 +40,7 @@
 static int kvm_abi = EXPECTED_KVM_API_VERSION;
 
 #define PAGE_SIZE 4096ul
+#define PAGE_MASK (~(PAGE_SIZE - 1))
 
 /* FIXME: share this number with kvm */
 /* FIXME: or dynamically alloc/realloc regions */
@@ -242,11 +243,12 @@ int kvm_create_vcpu(kvm_context_t kvm, int slot)
 	return 0;
 }
 
-int kvm_create(kvm_context_t kvm, unsigned long memory, void **vm_mem)
+int kvm_create(kvm_context_t kvm, unsigned long phys_mem_bytes, void **vm_mem)
 {
 	unsigned long dosmem = 0xa0000;
 	unsigned long exmem = 0xc0000;
 	unsigned long pcimem = 0xf0000000;
+	unsigned long memory = (phys_mem_bytes + PAGE_SIZE - 1) & PAGE_MASK;
 	int fd = kvm->fd;
 	int zfd;
 	int r;
