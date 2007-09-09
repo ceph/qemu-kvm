@@ -86,7 +86,8 @@ void kvm_update_after_sipi(CPUState *env)
 
 void kvm_apic_init(CPUState *env)
 {
-    vcpu_info[env->cpu_index].init = 1;
+    if (env->cpu_index != 0)
+	vcpu_info[env->cpu_index].init = 1;
     kvm_update_interrupt_request(env);
 }
 
