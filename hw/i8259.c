@@ -180,8 +180,9 @@ void pic_set_irq_new(void *opaque, int irq, int level)
 #ifdef USE_KVM
     extern int kvm_set_irq(int irq, int level);
 
-    if (kvm_set_irq(irq, level))
-        return;
+    if (kvm_allowed)
+	if (kvm_set_irq(irq, level))
+	    return;
 #endif
 #if defined(DEBUG_PIC) || defined(DEBUG_IRQ_COUNT)
     if (level != irq_level[irq]) {
