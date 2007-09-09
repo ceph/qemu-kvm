@@ -770,6 +770,8 @@ static void *ap_main_loop(void *_env)
     sigprocmask(SIG_BLOCK, &signals, NULL);
     kvm_create_vcpu(kvm_context, env->cpu_index);
     kvm_qemu_init_env(env);
+    if (kvm_irqchip_in_kernel(kvm_context))
+	env->hflags &= ~HF_HALTED_MASK;
     kvm_main_loop_cpu(env);
     return NULL;
 }
