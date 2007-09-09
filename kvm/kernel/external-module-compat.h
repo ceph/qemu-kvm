@@ -12,6 +12,7 @@
 #include "include/linux/kvm.h"
 #include <linux/cpu.h>
 #include <asm/processor.h>
+#include <linux/hrtimer.h>
 
 /*
  * 2.6.16 does not have GFP_NOWAIT
@@ -361,4 +362,9 @@ static inline void special_reload_dr7(void) {}
 static inline void preempt_notifier_sys_init(void) {}
 static inline void preempt_notifier_sys_exit(void) {}
 
+#endif
+
+/* HRTIMER_MODE_ABS started life with a different name */
+#ifndef HRTIMER_MODE_ABS
+#define HRTIMER_MODE_ABS HRTIMER_ABS
 #endif
