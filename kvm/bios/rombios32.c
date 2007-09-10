@@ -512,7 +512,12 @@ void smp_probe(void)
         sipi_vector = AP_BOOT_ADDR >> 12;
         writel(APIC_BASE + APIC_ICR_LOW, 0x000C4600 | sipi_vector);
 
+#ifndef BX_QEMU
         delay_ms(10);
+#else
+	while (cmos_readb(0x5f) + 1 != readw(&smp_cpus))
+	    ;
+#endif
     }
     BX_INFO("Found %d cpu(s)\n", readw(&smp_cpus));
 }
