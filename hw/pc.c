@@ -163,7 +163,7 @@ static void cmos_init_hd(int type_ofs, int info_ofs, BlockDriverState *hd)
 }
 
 /* hd_table must contain 4 block drivers */
-static void cmos_init(ram_addr_t ram_size, ram_addr_t above_4g_mem_size, int boot_device, BlockDriverState **hd_table)
+static void cmos_init(ram_addr_t ram_size, ram_addr_t above_4g_mem_size, int boot_device, BlockDriverState **hd_table, int smp_cpus)
 {
     RTCState *s = rtc_state;
     int val;
@@ -190,6 +190,7 @@ static void cmos_init(ram_addr_t ram_size, ram_addr_t above_4g_mem_size, int boo
         rtc_set_memory(s, 0x5c, (unsigned int)above_4g_mem_size >> 24);
         rtc_set_memory(s, 0x5d, above_4g_mem_size >> 32);
     }
+    rtc_set_memory(s, 0x5f, smp_cpus - 1);
 
     if (ram_size > (16 * 1024 * 1024))
         val = (ram_size / 65536) - ((16 * 1024 * 1024) / 65536);
@@ -778,7 +779,7 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
 
     floppy_controller = fdctrl_init(6, 2, 0, 0x3f0, fd_table);
 
-    cmos_init(ram_size, above_4g_mem_size, boot_device, bs_table);
+    cmos_init(ram_size, above_4g_mem_size, boot_device, bs_table, smp_cpus);
 
     if (pci_enabled && usb_enabled) {
         usb_uhci_init(pci_bus, piix3_devfn + 2);
