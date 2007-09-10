@@ -365,6 +365,6 @@ static inline void preempt_notifier_sys_exit(void) {}
 #endif
 
 /* HRTIMER_MODE_ABS started life with a different name */
-#ifndef HRTIMER_MODE_ABS
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,21)
 #define HRTIMER_MODE_ABS HRTIMER_ABS
 #endif
