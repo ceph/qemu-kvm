@@ -13,6 +13,7 @@
 #include <linux/cpu.h>
 #include <asm/processor.h>
 #include <linux/hrtimer.h>
+#include <asm/bitops.h>
 
 /*
  * 2.6.16 does not have GFP_NOWAIT
@@ -367,4 +368,39 @@ static inline void preempt_notifier_sys_exit(void) {}
 /* HRTIMER_MODE_ABS started life with a different name */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,21)
 #define HRTIMER_MODE_ABS HRTIMER_ABS
+#endif
+
+/* div64_64 is fairly new */
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,21)
+
+#ifdef CONFIG_64BIT
+
+static inline uint64_t div64_64(uint64_t dividend, uint64_t divisor)
+{
+	return dividend / divisor;
+}
+
+#else
+
+/* 64bit divisor, dividend and result. dynamic precision */
+static inline uint64_t div64_64(uint64_t dividend, uint64_t divisor)
+{
+	uint32_t high, d;
+
+	high = divisor >> 32;
+	if (high) {
+		unsigned int shift = fls(high);
+
+		d = divisor >> shift;
+		dividend >>= shift;
+	} else
+		d = divisor;
+
+	do_div(dividend, d);
+
+	return dividend;
+}
+
+#endif
+
 #endif
