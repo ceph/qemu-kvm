@@ -56,13 +56,6 @@
     in_vmcs_write = 0
 }
 
-/ASM_VMX_VMLAUNCH|SVM_VMRUN/ { after_guest_entry = 1 }
-
-/preempt_enable|stgi/ && after_guest_entry {
-    print "\tspecial_reload_dr7();";
-    after_guest_entry = 0
-}
-
 /^static void vmx_load_host_state/ {
     vmx_load_host_state = 1
 }
@@ -74,11 +67,15 @@
 
 { print }
 
-/static void vcpu_put|static int vmx_vcpu_run|static struct kvm_vcpu \*vmx_create_vcpu|static int svm_vcpu_run/ {
+/kvm_x86_ops->run/ {
+    print "\tspecial_reload_dr7();"
+}
+
+/static void vcpu_put|static int __vcpu_run|static struct kvm_vcpu \*vmx_create_vcpu/ {
     in_tricky_func = 1
 }
 
-/preempt_disable|get_cpu|clgi\(\)/ && in_tricky_func {
+/preempt_disable|get_cpu/ && in_tricky_func {
     printf("\tin_special_section();\n");
     in_tricky_func = 0
 }
