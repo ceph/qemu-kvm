@@ -14,8 +14,8 @@ LINUX = ../linux-2.6
 version = $(shell cd $(LINUX); git describe)
 
 hack = 	mv $1 $1.orig && \
-	awk -v version=$(version) -f hack-module.awk $1.orig > $1 && \
-	rm $1.orig
+	awk -v version=$(version) -f hack-module.awk $1.orig \
+	    | sed 's/\blapic\b/l_apic/g' > $1 && rm $1.orig
 
 
 all::
