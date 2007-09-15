@@ -404,8 +404,11 @@ static int cmos_readb(int addr)
 
 void ram_probe(void)
 {
+  if (cmos_readb(0x34) | cmos_readb(0x35))
     ram_size = (cmos_readb(0x34) | (cmos_readb(0x35) << 8)) * 65536 + 
         16 * 1024 * 1024;
+  else
+    ram_size = (cmos_readb(0x17) | (cmos_readb(0x18) << 8)) * 1024;
 #ifdef BX_USE_EBDA_TABLES
     ebda_cur_addr = ((*(uint16_t *)(0x40e)) << 4) + 0x380;
 #endif
