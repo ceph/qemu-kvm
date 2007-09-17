@@ -1113,11 +1113,28 @@ static void do_cpuid_ent(struct kvm_cpuid_entry *e, uint32_t function,
 int kvm_qemu_init_env(CPUState *cenv)
 {
     struct kvm_cpuid_entry cpuid_ent[100];
+    struct kvm_cpuid_entry *pv_ent;
+    uint32_t signature[3];
     int cpuid_nent = 0;
     CPUState copy;
     uint32_t i, limit;
 
     copy = *cenv;
+
+    /* Paravirtualization CPUIDs */
+    memcpy(signature, "KVMKVMKVM", 12);
+    pv_ent = &cpuid_ent[cpuid_nent++];
+    memset(pv_ent, 0, sizeof(*pv_ent));
+    pv_ent->function = KVM_CPUID_SIGNATURE;
+    pv_ent->eax = 0;
+    pv_ent->ebx = signature[0];
+    pv_ent->ecx = signature[1];
+    pv_ent->edx = signature[2];
+
+    pv_ent = &cpuid_ent[cpuid_nent++];
+    memset(pv_ent, 0, sizeof(*pv_ent));
+    pv_ent->function = KVM_CPUID_FEATURES;
+    pv_ent->eax = 0;
 
     copy.regs[R_EAX] = 0;
     qemu_kvm_cpuid_on_env(&copy);

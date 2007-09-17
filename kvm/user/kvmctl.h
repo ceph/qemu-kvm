@@ -10,6 +10,7 @@
 #endif
 
 #include <linux/kvm.h>
+#include <linux/kvm_para.h>
 #include <stdint.h>
 #include <signal.h>
 
