@@ -6471,6 +6471,7 @@ void help(void)
 #endif
 #ifdef USE_KVM
 	   "-no-kvm         disable KVM hardware virtualization\n"
+	   "-no-kvm-irqchip disable KVM kernel mode PIC/IOAPIC/LAPIC\n"
 #endif
 #ifdef USE_CODE_COPY
            "-no-code-copy   disable code copy acceleration\n"
