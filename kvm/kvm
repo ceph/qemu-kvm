@@ -115,6 +115,13 @@ optparser.add_option('-s', '--smp',
                      help = 'define number of vcpus',
                      )
 
+optparser.add_option('--no-kvm-irqchip',
+		     action = 'store_false',
+                     default = True,
+		     dest = 'irqchip',
+                     help = 'avoid using in-kernel irqchip',
+                     )
+
 optparser.add_option('-n', '--dry-run',
                      help = "just print the qemu command line; don't run it",
                      action = 'store_true',
@@ -215,6 +222,9 @@ if not options.kvm:
 
 if options.debugger:
     qemu_args += ('-s',)
+
+if not options.irqchip:
+    qemu_args += ('-no-kvm-irqchip',)
 
 if not options.notap:
     mac = options.mac
