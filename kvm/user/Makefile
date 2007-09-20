@@ -55,6 +55,8 @@ install:
 	install -D kvmctl.h $(DESTDIR)/$(PREFIX)/include/kvmctl.h
 	install -D $(KERNELDIR)/include/linux/kvm.h \
 		$(DESTDIR)/$(PREFIX)/include/linux/kvm.h
+	install -D $(KERNELDIR)/include/linux/kvm_para.h \
+		$(DESTDIR)/$(PREFIX)/include/linux/kvm_para.h
 	install -D libkvm.a $(DESTDIR)/$(PREFIX)/$(LIBDIR)/libkvm.a
 
 %.flat: %.o
