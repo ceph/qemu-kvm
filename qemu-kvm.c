@@ -641,7 +641,7 @@ static void kvm_main_loop_wait(CPUState *env, int timeout)
 	    ts.tv_nsec = 0;
 	    sigemptyset(&set);
 	    sigaddset(&set, SIG_IPI);
-	    sigtimedwait(&io_sigset, &siginfo, &ts);
+	    sigtimedwait(&set, &siginfo, &ts);
 	}
 	if (vcpu_info[env->cpu_index].stop) {
 	    vcpu_info[env->cpu_index].stop = 0;
