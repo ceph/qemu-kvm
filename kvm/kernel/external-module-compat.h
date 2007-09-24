@@ -405,3 +405,9 @@ static inline uint64_t div64_64(uint64_t dividend, uint64_t divisor)
 #endif
 
 #endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
+
+typedef _Bool bool;
+
+#endif
