@@ -828,7 +828,7 @@ static void kvm_show_code(kvm_context_t kvm, int vcpu)
 		perror("KVM_GET_REGS");
 		return;
 	}
-	rip = sregs.cs.base * 16 + regs.rip;
+	rip = sregs.cs.base + regs.rip;
 	back_offset = regs.rip;
 	if (back_offset > 20)
 	    back_offset = 20;
