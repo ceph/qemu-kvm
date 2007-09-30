@@ -113,8 +113,6 @@ static void pic_irq_request(void *opaque, int level)
     CPUState *env = opaque;
     if (level && apic_accept_pic_intr(env))
         cpu_interrupt(env, CPU_INTERRUPT_HARD);
-    else
-        cpu_reset_interrupt(env, CPU_INTERRUPT_HARD);
 }
 
 /* PC cmos mappings */
