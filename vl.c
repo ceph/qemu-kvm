@@ -7404,6 +7404,7 @@ int main(int argc, char **argv)
                 break;
             case QEMU_OPTION_tdf:
                 time_drift_fix = 1;
+		break;
 #if defined(__linux__)
 	    case QEMU_OPTION_no_rtc:
 		use_rtc = 0;
