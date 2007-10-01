@@ -1,6 +1,6 @@
 /*
  *  Software MMU support
- * 
+ *
  *  Copyright (c) 2003 Fabrice Bellard
  *
  * This library is free software; you can redistribute it and/or
@@ -63,6 +63,10 @@
 #define CPU_MEM_INDEX ((env->uncached_cpsr & CPSR_M) == ARM_CPU_MODE_USR)
 #elif defined (TARGET_SH4)
 #define CPU_MEM_INDEX ((env->sr & SR_MD) == 0)
+#elif defined (TARGET_ALPHA)
+#define CPU_MEM_INDEX ((env->ps >> 3) & 3)
+#elif defined (TARGET_M68K)
+#define CPU_MEM_INDEX ((env->sr & SR_S) == 0)
 #else
 #error unsupported CPU
 #endif
@@ -82,6 +86,10 @@
 #define CPU_MEM_INDEX ((env->uncached_cpsr & CPSR_M) == ARM_CPU_MODE_USR)
 #elif defined (TARGET_SH4)
 #define CPU_MEM_INDEX ((env->sr & SR_MD) == 0)
+#elif defined (TARGET_ALPHA)
+#define CPU_MEM_INDEX ((env->ps >> 3) & 3)
+#elif defined (TARGET_M68K)
+#define CPU_MEM_INDEX ((env->sr & SR_S) == 0)
 #else
 #error unsupported CPU
 #endif
@@ -143,9 +151,9 @@ static inline RES_TYPE glue(glue(ld, USUFFIX), MEMSUFFIX)(target_ulong ptr)
 #endif
                   "2:\n"
                   : "=r" (res)
-                  : "r" (ptr), 
-                  "i" ((CPU_TLB_SIZE - 1) << CPU_TLB_ENTRY_BITS), 
-                  "i" (TARGET_PAGE_BITS - CPU_TLB_ENTRY_BITS), 
+                  : "r" (ptr),
+                  "i" ((CPU_TLB_SIZE - 1) << CPU_TLB_ENTRY_BITS),
+                  "i" (TARGET_PAGE_BITS - CPU_TLB_ENTRY_BITS),
                   "i" (TARGET_PAGE_MASK | (DATA_SIZE - 1)),
                   "m" (*(uint32_t *)offsetof(CPUState, tlb_table[CPU_MEM_INDEX][0].addr_read)),
                   "i" (CPU_MEM_INDEX),
@@ -190,9 +198,9 @@ static inline int glue(glue(lds, SUFFIX), MEMSUFFIX)(target_ulong ptr)
 #endif
                   "2:\n"
                   : "=r" (res)
-                  : "r" (ptr), 
-                  "i" ((CPU_TLB_SIZE - 1) << CPU_TLB_ENTRY_BITS), 
-                  "i" (TARGET_PAGE_BITS - CPU_TLB_ENTRY_BITS), 
+                  : "r" (ptr),
+                  "i" ((CPU_TLB_SIZE - 1) << CPU_TLB_ENTRY_BITS),
+                  "i" (TARGET_PAGE_BITS - CPU_TLB_ENTRY_BITS),
                   "i" (TARGET_PAGE_MASK | (DATA_SIZE - 1)),
                   "m" (*(uint32_t *)offsetof(CPUState, tlb_table[CPU_MEM_INDEX][0].addr_read)),
                   "i" (CPU_MEM_INDEX),
@@ -238,13 +246,13 @@ static inline void glue(glue(st, SUFFIX), MEMSUFFIX)(target_ulong ptr, RES_TYPE 
 #error unsupported size
 #endif
                   "2:\n"
-                  : 
-                  : "r" (ptr), 
+                  :
+                  : "r" (ptr),
 /* NOTE: 'q' would be needed as constraint, but we could not use it
    with T1 ! */
-                  "r" (v), 
-                  "i" ((CPU_TLB_SIZE - 1) << CPU_TLB_ENTRY_BITS), 
-                  "i" (TARGET_PAGE_BITS - CPU_TLB_ENTRY_BITS), 
+                  "r" (v),
+                  "i" ((CPU_TLB_SIZE - 1) << CPU_TLB_ENTRY_BITS),
+                  "i" (TARGET_PAGE_BITS - CPU_TLB_ENTRY_BITS),
                   "i" (TARGET_PAGE_MASK | (DATA_SIZE - 1)),
                   "m" (*(uint32_t *)offsetof(CPUState, tlb_table[CPU_MEM_INDEX][0].addr_write)),
                   "i" (CPU_MEM_INDEX),
@@ -267,7 +275,7 @@ static inline RES_TYPE glue(glue(ld, USUFFIX), MEMSUFFIX)(target_ulong ptr)
     addr = ptr;
     index = (addr >> TARGET_PAGE_BITS) & (CPU_TLB_SIZE - 1);
     is_user = CPU_MEM_INDEX;
-    if (__builtin_expect(env->tlb_table[is_user][index].ADDR_READ != 
+    if (__builtin_expect(env->tlb_table[is_user][index].ADDR_READ !=
                          (addr & (TARGET_PAGE_MASK | (DATA_SIZE - 1))), 0)) {
         res = glue(glue(__ld, SUFFIX), MMUSUFFIX)(addr, is_user);
     } else {
@@ -288,7 +296,7 @@ static inline int glue(glue(lds, SUFFIX), MEMSUFFIX)(target_ulong ptr)
     addr = ptr;
     index = (addr >> TARGET_PAGE_BITS) & (CPU_TLB_SIZE - 1);
     is_user = CPU_MEM_INDEX;
-    if (__builtin_expect(env->tlb_table[is_user][index].ADDR_READ != 
+    if (__builtin_expect(env->tlb_table[is_user][index].ADDR_READ !=
                          (addr & (TARGET_PAGE_MASK | (DATA_SIZE - 1))), 0)) {
         res = (DATA_STYPE)glue(glue(__ld, SUFFIX), MMUSUFFIX)(addr, is_user);
     } else {
@@ -313,7 +321,7 @@ static inline void glue(glue(st, SUFFIX), MEMSUFFIX)(target_ulong ptr, RES_TYPE 
     addr = ptr;
     index = (addr >> TARGET_PAGE_BITS) & (CPU_TLB_SIZE - 1);
     is_user = CPU_MEM_INDEX;
-    if (__builtin_expect(env->tlb_table[is_user][index].addr_write != 
+    if (__builtin_expect(env->tlb_table[is_user][index].addr_write !=
                          (addr & (TARGET_PAGE_MASK | (DATA_SIZE - 1))), 0)) {
         glue(glue(__st, SUFFIX), MMUSUFFIX)(addr, v, is_user);
     } else {

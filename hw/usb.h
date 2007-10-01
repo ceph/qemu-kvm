@@ -1,8 +1,8 @@
 /*
  * QEMU USB API
- * 
+ *
  * Copyright (c) 2005 Fabrice Bellard
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
@@ -30,7 +30,7 @@
 #define USB_MSG_DETACH   0x101
 #define USB_MSG_RESET    0x102
 
-#define USB_RET_NODEV  (-1) 
+#define USB_RET_NODEV  (-1)
 #define USB_RET_NAK    (-2)
 #define USB_RET_STALL  (-3)
 #define USB_RET_BABBLE (-4)
@@ -119,7 +119,7 @@ struct USBDevice {
     void (*handle_destroy)(USBDevice *dev);
 
     int speed;
-    
+
     /* The following fields are used by the generic USB device
        layer. They are here just to avoid creating a new structure for
        them. */
@@ -129,7 +129,7 @@ struct USBDevice {
     int (*handle_data)(USBDevice *dev, USBPacket *p);
     uint8_t addr;
     char devname[32];
-    
+
     int state;
     uint8_t setup_buf[8];
     uint8_t data_buf[1024];
@@ -164,7 +164,7 @@ struct USBPacket {
     USBCallback *complete_cb;
     void *complete_opaque;
     USBCallback *cancel_cb;
-    void * *cancel_opaque;
+    void *cancel_opaque;
 };
 
 /* Defer completion of a USB packet.  The hadle_packet routine should then
@@ -203,10 +203,13 @@ void usb_packet_complete(USBPacket *p);
 USBDevice *usb_hub_init(int nb_ports);
 
 /* usb-uhci.c */
-void usb_uhci_init(PCIBus *bus, int devfn);
+void usb_uhci_piix3_init(PCIBus *bus, int devfn);
+void usb_uhci_piix4_init(PCIBus *bus, int devfn);
 
 /* usb-ohci.c */
-void usb_ohci_init(struct PCIBus *bus, int num_ports, int devfn);
+void usb_ohci_init_pci(struct PCIBus *bus, int num_ports, int devfn);
+void usb_ohci_init_pxa(target_phys_addr_t base, int num_ports, int devfn,
+                       qemu_irq irq);
 
 /* usb-linux.c */
 USBDevice *usb_host_device_open(const char *devname);
@@ -215,6 +218,10 @@ void usb_host_info(void);
 /* usb-hid.c */
 USBDevice *usb_mouse_init(void);
 USBDevice *usb_tablet_init(void);
+USBDevice *usb_keyboard_init(void);
 
 /* usb-msd.c */
 USBDevice *usb_msd_init(const char *filename);
+
+/* usb-wacom.c */
+USBDevice *usb_wacom_init(void);

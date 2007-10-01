@@ -32,6 +32,10 @@ these four paragraphs for those parts of this code that are retained.
 #ifndef SOFTFLOAT_H
 #define SOFTFLOAT_H
 
+#if defined(HOST_SOLARIS) && defined(NEEDS_LIBSUNMATH)
+#include <sunmath.h>
+#endif
+
 #include <inttypes.h>
 #include "config.h"
 
@@ -193,7 +197,9 @@ floatx80 int32_to_floatx80( int STATUS_PARAM );
 float128 int32_to_float128( int STATUS_PARAM );
 #endif
 float32 int64_to_float32( int64_t STATUS_PARAM );
+float32 uint64_to_float32( uint64_t STATUS_PARAM );
 float64 int64_to_float64( int64_t STATUS_PARAM );
+float64 uint64_to_float64( uint64_t STATUS_PARAM );
 #ifdef FLOATX80
 floatx80 int64_to_floatx80( int64_t STATUS_PARAM );
 #endif
@@ -236,8 +242,8 @@ int float32_le_quiet( float32, float32 STATUS_PARAM );
 int float32_lt_quiet( float32, float32 STATUS_PARAM );
 int float32_compare( float32, float32 STATUS_PARAM );
 int float32_compare_quiet( float32, float32 STATUS_PARAM );
+int float32_is_nan( float32 );
 int float32_is_signaling_nan( float32 );
-int float64_is_nan( float64 a );
 
 INLINE float32 float32_abs(float32 a)
 {
@@ -258,6 +264,8 @@ unsigned int float64_to_uint32( float64 STATUS_PARAM );
 unsigned int float64_to_uint32_round_to_zero( float64 STATUS_PARAM );
 int64_t float64_to_int64( float64 STATUS_PARAM );
 int64_t float64_to_int64_round_to_zero( float64 STATUS_PARAM );
+uint64_t float64_to_uint64 (float64 a STATUS_PARAM);
+uint64_t float64_to_uint64_round_to_zero (float64 a STATUS_PARAM);
 float32 float64_to_float32( float64 STATUS_PARAM );
 #ifdef FLOATX80
 floatx80 float64_to_floatx80( float64 STATUS_PARAM );
@@ -285,6 +293,7 @@ int float64_le_quiet( float64, float64 STATUS_PARAM );
 int float64_lt_quiet( float64, float64 STATUS_PARAM );
 int float64_compare( float64, float64 STATUS_PARAM );
 int float64_compare_quiet( float64, float64 STATUS_PARAM );
+int float64_is_nan( float64 a );
 int float64_is_signaling_nan( float64 );
 
 INLINE float64 float64_abs(float64 a)
@@ -328,6 +337,7 @@ int floatx80_lt( floatx80, floatx80 STATUS_PARAM );
 int floatx80_eq_signaling( floatx80, floatx80 STATUS_PARAM );
 int floatx80_le_quiet( floatx80, floatx80 STATUS_PARAM );
 int floatx80_lt_quiet( floatx80, floatx80 STATUS_PARAM );
+int floatx80_is_nan( floatx80 );
 int floatx80_is_signaling_nan( floatx80 );
 
 INLINE floatx80 floatx80_abs(floatx80 a)
@@ -375,6 +385,7 @@ int float128_lt( float128, float128 STATUS_PARAM );
 int float128_eq_signaling( float128, float128 STATUS_PARAM );
 int float128_le_quiet( float128, float128 STATUS_PARAM );
 int float128_lt_quiet( float128, float128 STATUS_PARAM );
+int float128_is_nan( float128 );
 int float128_is_signaling_nan( float128 );
 
 INLINE float128 float128_abs(float128 a)

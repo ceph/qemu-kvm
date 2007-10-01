@@ -1,8 +1,8 @@
 /*
  * QEMU PPC PREP hardware System Emulator
- * 
- * Copyright (c) 2003-2004 Jocelyn Mayer
- * 
+ *
+ * Copyright (c) 2003-2007 Jocelyn Mayer
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
@@ -76,7 +76,7 @@ static int ne2000_irq[NE2000_NB_MAX] = { 9, 10, 11, 3, 4, 5 };
 int speaker_data_on;
 int dummy_refresh_clock;
 
-static void speaker_ioport_write(void *opaque, uint32_t addr, uint32_t val)
+static void speaker_ioport_write (void *opaque, uint32_t addr, uint32_t val)
 {
 #if 0
     speaker_data_on = (val >> 1) & 1;
@@ -84,29 +84,22 @@ static void speaker_ioport_write(void *opaque, uint32_t addr, uint32_t val)
 #endif
 }
 
-static uint32_t speaker_ioport_read(void *opaque, uint32_t addr)
+static uint32_t speaker_ioport_read (void *opaque, uint32_t addr)
 {
 #if 0
     int out;
     out = pit_get_out(pit, 2, qemu_get_clock(vm_clock));
     dummy_refresh_clock ^= 1;
     return (speaker_data_on << 1) | pit_get_gate(pit, 2) | (out << 5) |
-      (dummy_refresh_clock << 4);
+        (dummy_refresh_clock << 4);
 #endif
     return 0;
 }
 
-static void pic_irq_request(void *opaque, int level)
-{
-    if (level)
-        cpu_interrupt(first_cpu, CPU_INTERRUPT_HARD);
-    else
-        cpu_reset_interrupt(first_cpu, CPU_INTERRUPT_HARD);
-}
-
 /* PCI intack register */
 /* Read-only register (?) */
-static void _PPC_intack_write (void *opaque, target_phys_addr_t addr, uint32_t value)
+static void _PPC_intack_write (void *opaque,
+                               target_phys_addr_t addr, uint32_t value)
 {
     //    printf("%s: 0x%08x => 0x%08x\n", __func__, addr, value);
 }
@@ -117,7 +110,7 @@ static inline uint32_t _PPC_intack_read (target_phys_addr_t addr)
 
     if (addr == 0xBFFFFFF0)
         retval = pic_intack_read(isa_pic);
-       //   printf("%s: 0x%08x <= %d\n", __func__, addr, retval);
+    //   printf("%s: 0x%08x <= %d\n", __func__, addr, retval);
 
     return retval;
 }
@@ -184,12 +177,14 @@ static struct {
     /* Error diagnostic */
 } XCSR;
 
-static void PPC_XCSR_writeb (void *opaque, target_phys_addr_t addr, uint32_t value)
+static void PPC_XCSR_writeb (void *opaque,
+                             target_phys_addr_t addr, uint32_t value)
 {
     printf("%s: 0x%08lx => 0x%08x\n", __func__, (long)addr, value);
 }
 
-static void PPC_XCSR_writew (void *opaque, target_phys_addr_t addr, uint32_t value)
+static void PPC_XCSR_writew (void *opaque,
+                             target_phys_addr_t addr, uint32_t value)
 {
 #ifdef TARGET_WORDS_BIGENDIAN
     value = bswap16(value);
@@ -197,7 +192,8 @@ static void PPC_XCSR_writew (void *opaque, target_phys_addr_t addr, uint32_t val
     printf("%s: 0x%08lx => 0x%08x\n", __func__, (long)addr, value);
 }
 
-static void PPC_XCSR_writel (void *opaque, target_phys_addr_t addr, uint32_t value)
+static void PPC_XCSR_writel (void *opaque,
+                             target_phys_addr_t addr, uint32_t value)
 {
 #ifdef TARGET_WORDS_BIGENDIAN
     value = bswap32(value);
@@ -294,7 +290,7 @@ static void PREP_io_800_writeb (void *opaque, uint32_t addr, uint32_t val)
         /* Special port 92 */
         /* Check soft reset asked */
         if (val & 0x01) {
-            //            cpu_interrupt(first_cpu, CPU_INTERRUPT_RESET);
+            //            cpu_interrupt(first_cpu, PPC_INTERRUPT_RESET);
         }
         /* Check LE mode */
         if (val & 0x02) {
@@ -518,10 +514,12 @@ CPUReadMemoryFunc *PPC_prep_io_read[] = {
 #define NVRAM_SIZE        0x2000
 
 /* PowerPC PREP hardware initialisation */
-static void ppc_prep_init(int ram_size, int vga_ram_size, int boot_device,
-                          DisplayState *ds, const char **fd_filename, int snapshot,
-                          const char *kernel_filename, const char *kernel_cmdline,
-                          const char *initrd_filename)
+static void ppc_prep_init (int ram_size, int vga_ram_size, int boot_device,
+                           DisplayState *ds, const char **fd_filename,
+                           int snapshot, const char *kernel_filename,
+                           const char *kernel_cmdline,
+                           const char *initrd_filename,
+                           const char *cpu_model)
 {
     CPUState *env;
     char buf[1024];
@@ -532,23 +530,23 @@ static void ppc_prep_init(int ram_size, int vga_ram_size, int boot_device,
     uint32_t kernel_base, kernel_size, initrd_base, initrd_size;
     ppc_def_t *def;
     PCIBus *pci_bus;
+    qemu_irq *i8259;
 
     sysctrl = qemu_mallocz(sizeof(sysctrl_t));
     if (sysctrl == NULL)
-	return;
+        return;
 
     linux_boot = (kernel_filename != NULL);
-    
+
     /* init CPUs */
 
     env = cpu_init();
+    qemu_register_reset(&cpu_ppc_reset, env);
     register_savevm("cpu", 0, 3, cpu_save, cpu_load, env);
-    
-    /* Register CPU as a 604 */
-    /* XXX: CPU model (or PVR) should be provided on command line */
-    //    ppc_find_by_name("604r", &def);
-    //    ppc_find_by_name("604e", &def);
-    ppc_find_by_name("604", &def);
+
+    if (cpu_model == NULL)
+        cpu_model = "default";
+    ppc_find_by_name(cpu_model, &def);
     if (def == NULL) {
         cpu_abort(env, "Unable to find PowerPC CPU definition\n");
     }
@@ -564,11 +562,11 @@ static void ppc_prep_init(int ram_size, int vga_ram_size, int boot_device,
     snprintf(buf, sizeof(buf), "%s/%s", bios_dir, BIOS_FILENAME);
     bios_size = load_image(buf, phys_ram_base + bios_offset);
     if (bios_size < 0 || bios_size > BIOS_SIZE) {
-        fprintf(stderr, "qemu: could not load PPC PREP bios '%s'\n", buf);
+        cpu_abort(env, "qemu: could not load PPC PREP bios '%s'\n", buf);
         exit(1);
     }
     bios_size = (bios_size + 0xfff) & ~0xfff;
-    cpu_register_physical_memory((uint32_t)(-bios_size), 
+    cpu_register_physical_memory((uint32_t)(-bios_size),
                                  bios_size, bios_offset | IO_MEM_ROM);
 
     if (linux_boot) {
@@ -576,8 +574,8 @@ static void ppc_prep_init(int ram_size, int vga_ram_size, int boot_device,
         /* now we can load the kernel */
         kernel_size = load_image(kernel_filename, phys_ram_base + kernel_base);
         if (kernel_size < 0) {
-            fprintf(stderr, "qemu: could not load kernel '%s'\n", 
-                    kernel_filename);
+            cpu_abort(env, "qemu: could not load kernel '%s'\n",
+                      kernel_filename);
             exit(1);
         }
         /* load initrd */
@@ -586,8 +584,8 @@ static void ppc_prep_init(int ram_size, int vga_ram_size, int boot_device,
             initrd_size = load_image(initrd_filename,
                                      phys_ram_base + initrd_base);
             if (initrd_size < 0) {
-                fprintf(stderr, "qemu: could not load initial ram disk '%s'\n", 
-                        initrd_filename);
+                cpu_abort(env, "qemu: could not load initial ram disk '%s'\n",
+                          initrd_filename);
                 exit(1);
             }
         } else {
@@ -603,7 +601,12 @@ static void ppc_prep_init(int ram_size, int vga_ram_size, int boot_device,
     }
 
     isa_mem_base = 0xc0000000;
-    pci_bus = pci_prep_init();
+    if (PPC_INPUT(env) != PPC_FLAGS_INPUT_6xx) {
+        cpu_abort(env, "Only 6xx bus is supported on PREP machine\n");
+        exit(1);
+    }
+    i8259 = i8259_init(first_cpu->irq_inputs[PPC6xx_INPUT_INT]);
+    pci_bus = pci_prep_init(i8259);
     //    pci_bus = i440fx_init();
     /* Register 8 MB of ISA IO space (needed for non-contiguous map) */
     PPC_io_memory = cpu_register_io_memory(0, PPC_prep_io_read,
@@ -611,37 +614,40 @@ static void ppc_prep_init(int ram_size, int vga_ram_size, int boot_device,
     cpu_register_physical_memory(0x80000000, 0x00800000, PPC_io_memory);
 
     /* init basic PC hardware */
-    pci_vga_init(pci_bus, ds, phys_ram_base + ram_size, ram_size, 
+    pci_vga_init(pci_bus, ds, phys_ram_base + ram_size, ram_size,
                  vga_ram_size, 0, 0);
-    rtc_init(0x70, 8);
     //    openpic = openpic_init(0x00000000, 0xF0000000, 1);
-    isa_pic = pic_init(pic_irq_request, first_cpu);
-    //    pit = pit_init(0x40, 0);
+    //    pit = pit_init(0x40, i8259[0]);
+    rtc_init(0x70, i8259[8]);
 
-    serial_init(&pic_set_irq_new, isa_pic, 0x3f8, 4, serial_hds[0]);
+    serial_init(0x3f8, i8259[4], serial_hds[0]);
     nb_nics1 = nb_nics;
     if (nb_nics1 > NE2000_NB_MAX)
         nb_nics1 = NE2000_NB_MAX;
     for(i = 0; i < nb_nics1; i++) {
         if (nd_table[0].model == NULL
             || strcmp(nd_table[0].model, "ne2k_isa") == 0) {
-            isa_ne2000_init(ne2000_io[i], ne2000_irq[i], &nd_table[i]);
+            isa_ne2000_init(ne2000_io[i], i8259[ne2000_irq[i]], &nd_table[i]);
+        } else if (strcmp(nd_table[0].model, "?") == 0) {
+            fprintf(stderr, "qemu: Supported NICs: ne2k_isa\n");
+            exit (1);
         } else {
-            fprintf(stderr, "qemu: Unsupported NIC: %s\n", nd_table[0].model);
+            /* Why ? */
+            cpu_abort(env, "qemu: Unsupported NIC: %s\n", nd_table[0].model);
             exit (1);
         }
     }
 
     for(i = 0; i < 2; i++) {
-        isa_ide_init(ide_iobase[i], ide_iobase2[i], ide_irq[i],
+        isa_ide_init(ide_iobase[i], ide_iobase2[i], i8259[ide_irq[i]],
                      bs_table[2 * i], bs_table[2 * i + 1]);
     }
-    kbd_init();
+    i8042_init(i8259[1], i8259[12], 0x60);
     DMA_init(1);
     //    AUD_init();
     //    SB16_init();
 
-    fdctrl_init(6, 2, 0, 0x3f0, fd_table);
+    fdctrl_init(i8259[6], 2, 0, 0x3f0, fd_table);
 
     /* Register speaker port */
     register_ioport_read(0x61, 1, 1, speaker_ioport_read, NULL);
@@ -660,15 +666,16 @@ static void ppc_prep_init(int ram_size, int vga_ram_size, int boot_device,
     cpu_register_physical_memory(0xBFFFFFF0, 0x4, PPC_io_memory);
     /* PowerPC control and status register group */
 #if 0
-    PPC_io_memory = cpu_register_io_memory(0, PPC_XCSR_read, PPC_XCSR_write, NULL);
+    PPC_io_memory = cpu_register_io_memory(0, PPC_XCSR_read, PPC_XCSR_write,
+                                           NULL);
     cpu_register_physical_memory(0xFEFF0000, 0x1000, PPC_io_memory);
 #endif
 
     if (usb_enabled) {
-        usb_ohci_init(pci_bus, 3, -1);
+        usb_ohci_init_pci(pci_bus, 3, -1);
     }
 
-    nvram = m48t59_init(8, 0, 0x0074, NVRAM_SIZE, 59);
+    nvram = m48t59_init(i8259[8], 0, 0x0074, NVRAM_SIZE, 59);
     if (nvram == NULL)
         return;
     sysctrl->nvram = nvram;

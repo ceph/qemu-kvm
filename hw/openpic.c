@@ -1,8 +1,8 @@
 /*
  * OpenPIC emulation
- * 
+ *
  * Copyright (c) 2004 Jocelyn Mayer
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
@@ -30,7 +30,7 @@
  * - Motorola Harrier programmer manuel
  *
  * Serial interrupts, as implemented in Raven chipset are not supported yet.
- * 
+ *
  */
 #include "vl.h"
 
@@ -159,10 +159,10 @@ typedef struct IRQ_dst_t {
     uint32_t pcsr; /* CPU sensitivity register */
     IRQ_queue_t raised;
     IRQ_queue_t servicing;
-    CPUState *env;
+    qemu_irq *irqs;
 } IRQ_dst_t;
 
-struct openpic_t {
+typedef struct openpic_t {
     PCIDevice pci_dev;
     int mem_index;
     /* Global registers */
@@ -170,6 +170,7 @@ struct openpic_t {
     uint32_t glbc; /* Global configuration register  */
     uint32_t micr; /* MPIC interrupt configuration register */
     uint32_t veni; /* Vendor identification register */
+    uint32_t pint; /* Processor initialization register */
     uint32_t spve; /* Spurious vector register */
     uint32_t tifr; /* Timer frequency reporting register */
     /* Source registers */
@@ -195,7 +196,9 @@ struct openpic_t {
 	uint32_t mbr;    /* Mailbox register */
     } mailboxes[MAX_MAILBOXES];
 #endif
-};
+    /* IRQ out is used when in bypass mode (not implemented) */
+    qemu_irq irq_out;
+} openpic_t;
 
 static inline void IRQ_setbit (IRQ_queue_t *q, int n_IRQ)
 {
@@ -221,7 +224,7 @@ static void IRQ_check (openpic_t *opp, IRQ_queue_t *q)
     priority = -1;
     for (i = 0; i < MAX_IRQ; i++) {
 	if (IRQ_testbit(q, i)) {
-            DPRINTF("IRQ_check: irq %d set ipvp_pr=%d pr=%d\n", 
+            DPRINTF("IRQ_check: irq %d set ipvp_pr=%d pr=%d\n",
                     i, IPVP_PRIORITY(opp->src[i].ipvp), priority);
 	    if (IPVP_PRIORITY(opp->src[i].ipvp) > priority) {
 		next = i;
@@ -254,19 +257,34 @@ static void IRQ_local_pipe (openpic_t *opp, int n_CPU, int n_IRQ)
     priority = IPVP_PRIORITY(src->ipvp);
     if (priority <= dst->pctp) {
 	/* Too low priority */
+        DPRINTF("%s: IRQ %d has too low priority on CPU %d\n",
+                __func__, n_IRQ, n_CPU);
 	return;
     }
     if (IRQ_testbit(&dst->raised, n_IRQ)) {
 	/* Interrupt miss */
+        DPRINTF("%s: IRQ %d was missed on CPU %d\n",
+                __func__, n_IRQ, n_CPU);
 	return;
     }
     set_bit(&src->ipvp, IPVP_ACTIVITY);
     IRQ_setbit(&dst->raised, n_IRQ);
-    if (priority > dst->raised.priority) {
-        IRQ_get_next(opp, &dst->raised);
-        DPRINTF("Raise CPU IRQ\n");
-        cpu_interrupt(dst->env, CPU_INTERRUPT_HARD);
+    if (priority < dst->raised.priority) {
+        /* An higher priority IRQ is already raised */
+        DPRINTF("%s: IRQ %d is hidden by raised IRQ %d on CPU %d\n",
+                __func__, n_IRQ, dst->raised.next, n_CPU);
+        return;
     }
+    IRQ_get_next(opp, &dst->raised);
+    if (IRQ_get_next(opp, &dst->servicing) != -1 &&
+        priority < dst->servicing.priority) {
+        DPRINTF("%s: IRQ %d is hidden by servicing IRQ %d on CPU %d\n",
+                __func__, n_IRQ, dst->servicing.next, n_CPU);
+        /* Already servicing a higher priority IRQ */
+        return;
+    }
+    DPRINTF("Raise OpenPIC INT output cpu %d irq %d\n", n_CPU, n_IRQ);
+    qemu_irq_raise(dst->irqs[OPENPIC_OUTPUT_INT]);
 }
 
 /* update pic state because registers for n_IRQ have changed value */
@@ -279,27 +297,34 @@ static void openpic_update_irq(openpic_t *opp, int n_IRQ)
 
     if (!src->pending) {
         /* no irq pending */
+        DPRINTF("%s: IRQ %d is not pending\n", __func__, n_IRQ);
         return;
     }
     if (test_bit(&src->ipvp, IPVP_MASK)) {
 	/* Interrupt source is disabled */
+        DPRINTF("%s: IRQ %d is disabled\n", __func__, n_IRQ);
 	return;
     }
     if (IPVP_PRIORITY(src->ipvp) == 0) {
 	/* Priority set to zero */
+        DPRINTF("%s: IRQ %d has 0 priority\n", __func__, n_IRQ);
 	return;
     }
     if (test_bit(&src->ipvp, IPVP_ACTIVITY)) {
         /* IRQ already active */
+        DPRINTF("%s: IRQ %d is already active\n", __func__, n_IRQ);
         return;
     }
     if (src->ide == 0x00000000) {
 	/* No target */
+        DPRINTF("%s: IRQ %d has no target\n", __func__, n_IRQ);
 	return;
     }
 
-    if (!test_bit(&src->ipvp, IPVP_MODE) ||
-        src->ide == (1 << src->last_cpu)) {
+    if (src->ide == (1 << src->last_cpu)) {
+        /* Only one CPU is allowed to receive this IRQ */
+        IRQ_local_pipe(opp, src->last_cpu, n_IRQ);
+    } else if (!test_bit(&src->ipvp, IPVP_MODE)) {
         /* Directed delivery mode */
         for (i = 0; i < opp->nb_cpus; i++) {
             if (test_bit(&src->ide, i))
@@ -307,9 +332,8 @@ static void openpic_update_irq(openpic_t *opp, int n_IRQ)
         }
     } else {
         /* Distributed delivery mode */
-        /* XXX: incorrect code */
-        for (i = src->last_cpu; i < src->last_cpu; i++) {
-            if (i == MAX_IRQ)
+        for (i = src->last_cpu + 1; i != src->last_cpu; i++) {
+            if (i == opp->nb_cpus)
                 i = 0;
             if (test_bit(&src->ide, i)) {
                 IRQ_local_pipe(opp, i, n_IRQ);
@@ -320,13 +344,13 @@ static void openpic_update_irq(openpic_t *opp, int n_IRQ)
     }
 }
 
-void openpic_set_irq(void *opaque, int n_IRQ, int level)
+static void openpic_set_irq(void *opaque, int n_IRQ, int level)
 {
     openpic_t *opp = opaque;
     IRQ_src_t *src;
 
     src = &opp->src[n_IRQ];
-    DPRINTF("openpic: set irq %d = %d ipvp=%08x\n", 
+    DPRINTF("openpic: set irq %d = %d ipvp=%08x\n",
             n_IRQ, level, src->ipvp);
     if (test_bit(&src->ipvp, IPVP_SENSE)) {
         /* level-sensitive irq */
@@ -349,6 +373,7 @@ static void openpic_reset (openpic_t *opp)
     /* Initialise controller registers */
     opp->frep = ((EXT_IRQ - 1) << 16) | ((MAX_CPU - 1) << 8) | VID;
     opp->veni = VENI;
+    opp->pint = 0x00000000;
     opp->spve = 0x000000FF;
     opp->tifr = 0x003F7A00;
     /* ? */
@@ -359,7 +384,7 @@ static void openpic_reset (openpic_t *opp)
 	opp->src[i].ide  = 0x00000000;
     }
     /* Initialise IRQ destinations */
-    for (i = 0; i < opp->nb_cpus; i++) {
+    for (i = 0; i < MAX_CPU; i++) {
 	opp->dst[i].pctp      = 0x0000000F;
 	opp->dst[i].pcsr      = 0x00000000;
 	memset(&opp->dst[i].raised, 0, sizeof(IRQ_queue_t));
@@ -413,11 +438,11 @@ static inline void write_IRQreg (openpic_t *opp, int n_IRQ,
         /* NOTE: not fully accurate for special IRQs, but simple and
            sufficient */
         /* ACTIVITY bit is read-only */
-	opp->src[n_IRQ].ipvp = 
+	opp->src[n_IRQ].ipvp =
             (opp->src[n_IRQ].ipvp & 0x40000000) |
             (val & 0x800F00FF);
         openpic_update_irq(opp, n_IRQ);
-        DPRINTF("Set IPVP %d to 0x%08x -> 0x%08x\n", 
+        DPRINTF("Set IPVP %d to 0x%08x -> 0x%08x\n",
                 n_IRQ, val, opp->src[n_IRQ].ipvp);
 	break;
     case IRQ_IDE:
@@ -450,7 +475,7 @@ static uint32_t read_doorbell_register (openpic_t *opp,
 
     return retval;
 }
-     
+
 static void write_doorbell_register (penpic_t *opp, int n_dbl,
 				     uint32_t offset, uint32_t value)
 {
@@ -510,6 +535,8 @@ static void write_mailbox_register (openpic_t *opp, int n_mbx,
 static void openpic_gbl_write (void *opaque, uint32_t addr, uint32_t val)
 {
     openpic_t *opp = opaque;
+    IRQ_dst_t *dst;
+    int idx;
 
     DPRINTF("%s: addr %08x <= %08x\n", __func__, addr, val);
     if (addr & 0xF)
@@ -529,11 +556,18 @@ static void openpic_gbl_write (void *opaque, uint32_t addr, uint32_t val)
     case 0x80: /* VENI */
 	break;
     case 0x90: /* PINT */
-        /* XXX: Should be able to reset any CPU */
-        if (val & 1) {
-            DPRINTF("Reset CPU IRQ\n");
-            //            cpu_interrupt(first_cpu, CPU_INTERRUPT_RESET);
+        for (idx = 0; idx < opp->nb_cpus; idx++) {
+            if ((val & (1 << idx)) && !(opp->pint & (1 << idx))) {
+                DPRINTF("Raise OpenPIC RESET output for CPU %d\n", idx);
+                dst = &opp->dst[idx];
+                qemu_irq_raise(dst->irqs[OPENPIC_OUTPUT_RESET]);
+            } else if (!(val & (1 << idx)) && (opp->pint & (1 << idx))) {
+                DPRINTF("Lower OpenPIC RESET output for CPU %d\n", idx);
+                dst = &opp->dst[idx];
+                qemu_irq_lower(dst->irqs[OPENPIC_OUTPUT_RESET]);
+            }
         }
+        opp->pint = val;
 	break;
 #if MAX_IPI > 0
     case 0xA0: /* IPI_IPVP */
@@ -734,7 +768,7 @@ static void openpic_cpu_write (void *opaque, uint32_t addr, uint32_t val)
     openpic_t *opp = opaque;
     IRQ_src_t *src;
     IRQ_dst_t *dst;
-    int idx, n_IRQ;
+    int idx, s_IRQ, n_IRQ;
 
     DPRINTF("%s: addr %08x <= %08x\n", __func__, addr, val);
     if (addr & 0xF)
@@ -769,21 +803,21 @@ static void openpic_cpu_write (void *opaque, uint32_t addr, uint32_t val)
 	break;
     case 0xB0: /* PEOI */
         DPRINTF("PEOI\n");
-	n_IRQ = IRQ_get_next(opp, &dst->servicing);
-	IRQ_resetbit(&dst->servicing, n_IRQ);
+	s_IRQ = IRQ_get_next(opp, &dst->servicing);
+	IRQ_resetbit(&dst->servicing, s_IRQ);
 	dst->servicing.next = -1;
-	src = &opp->src[n_IRQ];
 	/* Set up next servicing IRQ */
-	IRQ_get_next(opp, &dst->servicing);
-	/* Check queued interrupts. */
-	n_IRQ = IRQ_get_next(opp, &dst->raised);
-	if (n_IRQ != -1) {
-	    src = &opp->src[n_IRQ];
-	    if (IPVP_PRIORITY(src->ipvp) > dst->servicing.priority) {
-                DPRINTF("Raise CPU IRQ\n");
-                cpu_interrupt(dst->env, CPU_INTERRUPT_HARD);
-            }
-	}
+	s_IRQ = IRQ_get_next(opp, &dst->servicing);
+        /* Check queued interrupts. */
+        n_IRQ = IRQ_get_next(opp, &dst->raised);
+        src = &opp->src[n_IRQ];
+        if (n_IRQ != -1 &&
+            (s_IRQ == -1 ||
+             IPVP_PRIORITY(src->ipvp) > dst->servicing.priority)) {
+            DPRINTF("Raise OpenPIC INT output cpu %d irq %d\n",
+                    idx, n_IRQ);
+            qemu_irq_raise(dst->irqs[OPENPIC_OUTPUT_INT]);
+        }
 	break;
     default:
         break;
@@ -797,7 +831,7 @@ static uint32_t openpic_cpu_read (void *opaque, uint32_t addr)
     IRQ_dst_t *dst;
     uint32_t retval;
     int idx, n_IRQ;
-    
+
     DPRINTF("%s: addr %08x\n", __func__, addr);
     retval = 0xFFFFFFFF;
     if (addr & 0xF)
@@ -814,11 +848,13 @@ static uint32_t openpic_cpu_read (void *opaque, uint32_t addr)
 	retval = idx;
 	break;
     case 0xA0: /* PIAC */
+        DPRINTF("Lower OpenPIC INT output\n");
+        qemu_irq_lower(dst->irqs[OPENPIC_OUTPUT_INT]);
 	n_IRQ = IRQ_get_next(opp, &dst->raised);
         DPRINTF("PIAC: irq=%d\n", n_IRQ);
 	if (n_IRQ == -1) {
 	    /* No more interrupt pending */
-            retval = opp->spve;
+            retval = IPVP_VECTOR(opp->spve);
 	} else {
 	    src = &opp->src[n_IRQ];
 	    if (!test_bit(&src->ipvp, IPVP_ACTIVITY) ||
@@ -935,7 +971,7 @@ static CPUReadMemoryFunc *openpic_read[] = {
     &openpic_readl,
 };
 
-static void openpic_map(PCIDevice *pci_dev, int region_num, 
+static void openpic_map(PCIDevice *pci_dev, int region_num,
                         uint32_t addr, uint32_t size, int type)
 {
     openpic_t *opp;
@@ -963,13 +999,13 @@ static void openpic_map(PCIDevice *pci_dev, int region_num,
 #endif
 }
 
-openpic_t *openpic_init (PCIBus *bus, int *pmem_index, int nb_cpus,
-                         CPUPPCState **envp)
+qemu_irq *openpic_init (PCIBus *bus, int *pmem_index, int nb_cpus,
+                        qemu_irq **irqs, qemu_irq irq_out)
 {
     openpic_t *opp;
     uint8_t *pci_conf;
     int i, m;
-    
+
     /* XXX: for now, only one CPU is supported */
     if (nb_cpus != 1)
         return NULL;
@@ -987,17 +1023,16 @@ openpic_t *openpic_init (PCIBus *bus, int *pmem_index, int nb_cpus,
         pci_conf[0x0b] = 0x08;
         pci_conf[0x0e] = 0x00; // header_type
         pci_conf[0x3d] = 0x00; // no interrupt pin
-        
+
         /* Register I/O spaces */
         pci_register_io_region((PCIDevice *)opp, 0, 0x40000,
                                PCI_ADDRESS_SPACE_MEM, &openpic_map);
     } else {
         opp = qemu_mallocz(sizeof(openpic_t));
     }
-
     opp->mem_index = cpu_register_io_memory(0, openpic_read,
                                             openpic_write, opp);
-    
+
     //    isu_base &= 0xFFFC0000;
     opp->nb_cpus = nb_cpus;
     /* Set IRQ types */
@@ -1019,9 +1054,11 @@ openpic_t *openpic_init (PCIBus *bus, int *pmem_index, int nb_cpus,
         opp->src[i].type = IRQ_INTERNAL;
     }
     for (i = 0; i < nb_cpus; i++)
-        opp->dst[i].env = envp[i];
+        opp->dst[i].irqs = irqs[i];
+    opp->irq_out = irq_out;
     openpic_reset(opp);
     if (pmem_index)
         *pmem_index = opp->mem_index;
-    return opp;
+
+    return qemu_allocate_irqs(openpic_set_irq, opp, MAX_IRQ);
 }

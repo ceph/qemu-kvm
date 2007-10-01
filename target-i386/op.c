@@ -1,6 +1,6 @@
 /*
  *  i386 micro operations
- * 
+ *
  *  Copyright (c) 2003 Fabrice Bellard
  *
  * This library is free software; you can redistribute it and/or
@@ -513,15 +513,15 @@ typedef union UREG64 {
 } UREG64;
 #endif
 
-#ifdef TARGET_X86_64
-
 #define PARAMQ1 \
 ({\
     UREG64 __p;\
     __p.l.v1 = PARAM1;\
     __p.l.v0 = PARAM2;\
     __p.q;\
-}) 
+})
+
+#ifdef TARGET_X86_64
 
 void OPPROTO op_movq_T0_im64(void)
 {
@@ -728,6 +728,11 @@ void OPPROTO op_boundl(void)
 void OPPROTO op_cmpxchg8b(void)
 {
     helper_cmpxchg8b();
+}
+
+void OPPROTO op_single_step(void)
+{
+    helper_single_step();
 }
 
 void OPPROTO op_movl_T0_0(void)
@@ -1144,7 +1149,7 @@ void OPPROTO op_movl_seg_T0_vm(void)
 {
     int selector;
     SegmentCache *sc;
-    
+
     selector = T0 & 0xffff;
     /* env->segs[] access */
     sc = (SegmentCache *)((char *)env + PARAM1);
@@ -1188,14 +1193,14 @@ void OPPROTO op_arpl(void)
     }
     FORCE_RET();
 }
-            
+
 void OPPROTO op_arpl_update(void)
 {
     int eflags;
     eflags = cc_table[CC_OP].compute_all();
     CC_SRC = (eflags & ~CC_Z) | T1;
 }
-    
+
 /* T0: segment, T1:eip */
 void OPPROTO op_ljmp_protected_T0_T1(void)
 {
@@ -1237,13 +1242,53 @@ void OPPROTO op_ltr_T0(void)
     helper_ltr_T0();
 }
 
-/* CR registers access */
+/* CR registers access. */
 void OPPROTO op_movl_crN_T0(void)
 {
     helper_movl_crN_T0(PARAM1);
 }
 
-#if !defined(CONFIG_USER_ONLY) 
+/* These pseudo-opcodes check for SVM intercepts. */
+void OPPROTO op_svm_check_intercept(void)
+{
+    A0 = PARAM1 & PARAM2;
+    svm_check_intercept(PARAMQ1);
+}
+
+void OPPROTO op_svm_check_intercept_param(void)
+{
+    A0 = PARAM1 & PARAM2;
+    svm_check_intercept_param(PARAMQ1, T1);
+}
+
+void OPPROTO op_svm_vmexit(void)
+{
+    A0 = PARAM1 & PARAM2;
+    vmexit(PARAMQ1, T1);
+}
+
+void OPPROTO op_geneflags(void)
+{
+    CC_SRC = cc_table[CC_OP].compute_all();
+}
+
+/* This pseudo-opcode checks for IO intercepts. */
+#if !defined(CONFIG_USER_ONLY)
+void OPPROTO op_svm_check_intercept_io(void)
+{
+    A0 = PARAM1 & PARAM2;
+    /* PARAMQ1 = TYPE (0 = OUT, 1 = IN; 4 = STRING; 8 = REP)
+       T0      = PORT
+       T1      = next eip */
+    stq_phys(env->vm_vmcb + offsetof(struct vmcb, control.exit_info_2), T1);
+    /* ASIZE does not appear on real hw */
+    svm_check_intercept_param(SVM_EXIT_IOIO,
+                              (PARAMQ1 & ~SVM_IOIO_ASIZE_MASK) |
+                              ((T0 & 0xffff) << 16));
+}
+#endif
+
+#if !defined(CONFIG_USER_ONLY)
 void OPPROTO op_movtl_T0_cr8(void)
 {
     T0 = cpu_get_apic_tpr(env);
@@ -1586,23 +1631,23 @@ CCTable cc_table[CC_OP_NB] = {
     [CC_OP_SUBB] = { compute_all_subb, compute_c_subb  },
     [CC_OP_SUBW] = { compute_all_subw, compute_c_subw  },
     [CC_OP_SUBL] = { compute_all_subl, compute_c_subl  },
-    
+
     [CC_OP_SBBB] = { compute_all_sbbb, compute_c_sbbb  },
     [CC_OP_SBBW] = { compute_all_sbbw, compute_c_sbbw  },
     [CC_OP_SBBL] = { compute_all_sbbl, compute_c_sbbl  },
-    
+
     [CC_OP_LOGICB] = { compute_all_logicb, compute_c_logicb },
     [CC_OP_LOGICW] = { compute_all_logicw, compute_c_logicw },
     [CC_OP_LOGICL] = { compute_all_logicl, compute_c_logicl },
-    
+
     [CC_OP_INCB] = { compute_all_incb, compute_c_incl },
     [CC_OP_INCW] = { compute_all_incw, compute_c_incl },
     [CC_OP_INCL] = { compute_all_incl, compute_c_incl },
-    
+
     [CC_OP_DECB] = { compute_all_decb, compute_c_incl },
     [CC_OP_DECW] = { compute_all_decw, compute_c_incl },
     [CC_OP_DECL] = { compute_all_decl, compute_c_incl },
-    
+
     [CC_OP_SHLB] = { compute_all_shlb, compute_c_shlb },
     [CC_OP_SHLW] = { compute_all_shlw, compute_c_shlw },
     [CC_OP_SHLL] = { compute_all_shll, compute_c_shll },
@@ -1619,11 +1664,11 @@ CCTable cc_table[CC_OP_NB] = {
     [CC_OP_ADCQ] = { compute_all_adcq, compute_c_adcq  },
 
     [CC_OP_SUBQ] = { compute_all_subq, compute_c_subq  },
-    
+
     [CC_OP_SBBQ] = { compute_all_sbbq, compute_c_sbbq  },
-    
+
     [CC_OP_LOGICQ] = { compute_all_logicq, compute_c_logicq },
-    
+
     [CC_OP_INCQ] = { compute_all_incq, compute_c_incl },
 
     [CC_OP_DECQ] = { compute_all_decq, compute_c_incl },
@@ -2447,3 +2492,45 @@ void OPPROTO op_emms(void)
 
 #define SHIFT 1
 #include "ops_sse.h"
+
+/* Secure Virtual Machine ops */
+
+void OPPROTO op_vmrun(void)
+{
+    helper_vmrun(EAX);
+}
+
+void OPPROTO op_vmmcall(void)
+{
+    helper_vmmcall();
+}
+
+void OPPROTO op_vmload(void)
+{
+    helper_vmload(EAX);
+}
+
+void OPPROTO op_vmsave(void)
+{
+    helper_vmsave(EAX);
+}
+
+void OPPROTO op_stgi(void)
+{
+    helper_stgi();
+}
+
+void OPPROTO op_clgi(void)
+{
+    helper_clgi();
+}
+
+void OPPROTO op_skinit(void)
+{
+    helper_skinit();
+}
+
+void OPPROTO op_invlpga(void)
+{
+    helper_invlpga();
+}

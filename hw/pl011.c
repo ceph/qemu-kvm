@@ -1,4 +1,4 @@
-/* 
+/*
  * Arm PrimeCell PL011 UART
  *
  * Copyright (c) 2006 CodeSourcery.
@@ -27,8 +27,7 @@ typedef struct {
     int read_count;
     int read_trigger;
     CharDriverState *chr;
-    void *pic;
-    int irq;
+    qemu_irq irq;
 } pl011_state;
 
 #define PL011_INT_TX 0x20
@@ -45,9 +44,9 @@ static const unsigned char pl011_id[] =
 static void pl011_update(pl011_state *s)
 {
     uint32_t flags;
-    
+
     flags = s->int_level & s->int_enabled;
-    pic_set_irq_new(s->pic, s->irq, flags != 0);
+    qemu_set_irq(s->irq, flags != 0);
 }
 
 static uint32_t pl011_read(void *opaque, target_phys_addr_t offset)
@@ -177,7 +176,7 @@ static void pl011_write(void *opaque, target_phys_addr_t offset,
     }
 }
 
-static int pl011_can_recieve(void *opaque)
+static int pl011_can_receive(void *opaque)
 {
     pl011_state *s = (pl011_state *)opaque;
 
@@ -187,7 +186,7 @@ static int pl011_can_recieve(void *opaque)
         return s->read_count < 1;
 }
 
-static void pl011_recieve(void *opaque, const uint8_t *buf, int size)
+static void pl011_receive(void *opaque, const uint8_t *buf, int size)
 {
     pl011_state *s = (pl011_state *)opaque;
     int slot;
@@ -224,7 +223,7 @@ static CPUWriteMemoryFunc *pl011_writefn[] = {
    pl011_write
 };
 
-void pl011_init(uint32_t base, void *pic, int irq,
+void pl011_init(uint32_t base, qemu_irq irq,
                 CharDriverState *chr)
 {
     int iomemtype;
@@ -233,17 +232,16 @@ void pl011_init(uint32_t base, void *pic, int irq,
     s = (pl011_state *)qemu_mallocz(sizeof(pl011_state));
     iomemtype = cpu_register_io_memory(0, pl011_readfn,
                                        pl011_writefn, s);
-    cpu_register_physical_memory(base, 0x00000fff, iomemtype);
+    cpu_register_physical_memory(base, 0x00001000, iomemtype);
     s->base = base;
-    s->pic = pic;
     s->irq = irq;
     s->chr = chr;
     s->read_trigger = 1;
     s->ifl = 0x12;
     s->cr = 0x300;
     s->flags = 0x90;
-    if (chr){ 
-        qemu_chr_add_handlers(chr, pl011_can_recieve, pl011_recieve,
+    if (chr){
+        qemu_chr_add_handlers(chr, pl011_can_receive, pl011_receive,
                               pl011_event, s);
     }
     /* ??? Save/restore.  */

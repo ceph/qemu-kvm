@@ -1,8 +1,8 @@
 /*
  * QEMU 16450 UART emulation
- * 
+ *
  * Copyright (c) 2003-2004 Fabrice Bellard
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
@@ -83,12 +83,10 @@ struct SerialState {
     /* NOTE: this hidden state is necessary for tx irq generation as
        it can be reset while reading iir */
     int thr_ipending;
-    SetIRQFunc *set_irq;
-    void *irq_opaque;
-    int irq;
+    qemu_irq irq;
     CharDriverState *chr;
     int last_break_enable;
-    target_ulong base;
+    target_phys_addr_t base;
     int it_shift;
 };
 
@@ -102,9 +100,9 @@ static void serial_update_irq(SerialState *s)
         s->iir = UART_IIR_NO_INT;
     }
     if (s->iir != UART_IIR_NO_INT) {
-        s->set_irq(s->irq_opaque, s->irq, 1);
+        qemu_irq_raise(s->irq);
     } else {
-        s->set_irq(s->irq_opaque, s->irq, 0);
+        qemu_irq_lower(s->irq);
     }
 }
 
@@ -121,7 +119,7 @@ static void serial_update_parameters(SerialState *s)
     } else {
             parity = 'N';
     }
-    if (s->lcr & 0x04) 
+    if (s->lcr & 0x04)
         stop_bits = 2;
     else
         stop_bits = 1;
@@ -135,7 +133,7 @@ static void serial_update_parameters(SerialState *s)
     ssp.stop_bits = stop_bits;
     qemu_chr_ioctl(s->chr, CHR_IOCTL_SERIAL_SET_PARAMS, &ssp);
 #if 0
-    printf("speed=%d parity=%c data=%d stop=%d\n", 
+    printf("speed=%d parity=%c data=%d stop=%d\n",
            speed, parity, data_bits, stop_bits);
 #endif
 }
@@ -144,7 +142,7 @@ static void serial_ioport_write(void *opaque, uint32_t addr, uint32_t val)
 {
     SerialState *s = opaque;
     unsigned char ch;
-    
+
     addr &= 7;
 #ifdef DEBUG_SERIAL
     printf("serial: write addr=0x%02x val=0x%02x\n", addr, val);
@@ -189,7 +187,7 @@ static void serial_ioport_write(void *opaque, uint32_t addr, uint32_t val)
             break_enable = (val >> 6) & 1;
             if (break_enable != s->last_break_enable) {
                 s->last_break_enable = break_enable;
-                qemu_chr_ioctl(s->chr, CHR_IOCTL_SERIAL_SET_BREAK, 
+                qemu_chr_ioctl(s->chr, CHR_IOCTL_SERIAL_SET_BREAK,
                                &break_enable);
             }
         }
@@ -217,7 +215,7 @@ static uint32_t serial_ioport_read(void *opaque, uint32_t addr)
     default:
     case 0:
         if (s->lcr & UART_LCR_DLAB) {
-            ret = s->divider & 0xff; 
+            ret = s->divider & 0xff;
         } else {
             ret = s->rbr;
             s->lsr &= ~(UART_LSR_DR | UART_LSR_BI);
@@ -345,16 +343,13 @@ static int serial_load(QEMUFile *f, void *opaque, int version_id)
 }
 
 /* If fd is zero, it means that the serial device uses the console */
-SerialState *serial_init(SetIRQFunc *set_irq, void *opaque,
-                         int base, int irq, CharDriverState *chr)
+SerialState *serial_init(int base, qemu_irq irq, CharDriverState *chr)
 {
     SerialState *s;
 
     s = qemu_mallocz(sizeof(SerialState));
     if (!s)
         return NULL;
-    s->set_irq = set_irq;
-    s->irq_opaque = opaque;
     s->irq = irq;
     s->lsr = UART_LSR_TEMT | UART_LSR_THRE;
     s->iir = UART_IIR_NO_INT;
@@ -371,48 +366,62 @@ SerialState *serial_init(SetIRQFunc *set_irq, void *opaque,
 }
 
 /* Memory mapped interface */
-static uint32_t serial_mm_readb (void *opaque, target_phys_addr_t addr)
+uint32_t serial_mm_readb (void *opaque, target_phys_addr_t addr)
 {
     SerialState *s = opaque;
 
     return serial_ioport_read(s, (addr - s->base) >> s->it_shift) & 0xFF;
 }
 
-static void serial_mm_writeb (void *opaque,
-                              target_phys_addr_t addr, uint32_t value)
+void serial_mm_writeb (void *opaque,
+                       target_phys_addr_t addr, uint32_t value)
 {
     SerialState *s = opaque;
 
     serial_ioport_write(s, (addr - s->base) >> s->it_shift, value & 0xFF);
 }
 
-static uint32_t serial_mm_readw (void *opaque, target_phys_addr_t addr)
+uint32_t serial_mm_readw (void *opaque, target_phys_addr_t addr)
 {
     SerialState *s = opaque;
+    uint32_t val;
 
-    return serial_ioport_read(s, (addr - s->base) >> s->it_shift) & 0xFFFF;
+    val = serial_ioport_read(s, (addr - s->base) >> s->it_shift) & 0xFFFF;
+#ifdef TARGET_WORDS_BIGENDIAN
+    val = bswap16(val);
+#endif
+    return val;
 }
 
-static void serial_mm_writew (void *opaque,
-                              target_phys_addr_t addr, uint32_t value)
+void serial_mm_writew (void *opaque,
+                       target_phys_addr_t addr, uint32_t value)
 {
     SerialState *s = opaque;
-
+#ifdef TARGET_WORDS_BIGENDIAN
+    value = bswap16(value);
+#endif
     serial_ioport_write(s, (addr - s->base) >> s->it_shift, value & 0xFFFF);
 }
 
-static uint32_t serial_mm_readl (void *opaque, target_phys_addr_t addr)
+uint32_t serial_mm_readl (void *opaque, target_phys_addr_t addr)
 {
     SerialState *s = opaque;
+    uint32_t val;
 
-    return serial_ioport_read(s, (addr - s->base) >> s->it_shift);
+    val = serial_ioport_read(s, (addr - s->base) >> s->it_shift);
+#ifdef TARGET_WORDS_BIGENDIAN
+    val = bswap32(val);
+#endif
+    return val;
 }
 
-static void serial_mm_writel (void *opaque,
-                              target_phys_addr_t addr, uint32_t value)
+void serial_mm_writel (void *opaque,
+                       target_phys_addr_t addr, uint32_t value)
 {
     SerialState *s = opaque;
-
+#ifdef TARGET_WORDS_BIGENDIAN
+    value = bswap32(value);
+#endif
     serial_ioport_write(s, (addr - s->base) >> s->it_shift, value);
 }
 
@@ -428,9 +437,9 @@ static CPUWriteMemoryFunc *serial_mm_write[] = {
     &serial_mm_writel,
 };
 
-SerialState *serial_mm_init (SetIRQFunc *set_irq, void *opaque,
-                             target_ulong base, int it_shift,
-                             int irq, CharDriverState *chr)
+SerialState *serial_mm_init (target_phys_addr_t base, int it_shift,
+                             qemu_irq irq, CharDriverState *chr,
+                             int ioregister)
 {
     SerialState *s;
     int s_io_memory;
@@ -438,8 +447,6 @@ SerialState *serial_mm_init (SetIRQFunc *set_irq, void *opaque,
     s = qemu_mallocz(sizeof(SerialState));
     if (!s)
         return NULL;
-    s->set_irq = set_irq;
-    s->irq_opaque = opaque;
     s->irq = irq;
     s->lsr = UART_LSR_TEMT | UART_LSR_THRE;
     s->iir = UART_IIR_NO_INT;
@@ -449,9 +456,11 @@ SerialState *serial_mm_init (SetIRQFunc *set_irq, void *opaque,
 
     register_savevm("serial", base, 2, serial_save, serial_load, s);
 
-    s_io_memory = cpu_register_io_memory(0, serial_mm_read,
-                                         serial_mm_write, s);
-    cpu_register_physical_memory(base, 8 << it_shift, s_io_memory);
+    if (ioregister) {
+        s_io_memory = cpu_register_io_memory(0, serial_mm_read,
+                                             serial_mm_write, s);
+        cpu_register_physical_memory(base, 8 << it_shift, s_io_memory);
+    }
     s->chr = chr;
     qemu_chr_add_handlers(chr, serial_can_receive1, serial_receive1,
                           serial_event, s);

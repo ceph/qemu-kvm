@@ -1,6 +1,6 @@
 /*
  *  MIPS emulation micro-operations templates for reg load & store for qemu.
- * 
+ *
  *  Copyright (c) 2004-2005 Jocelyn Mayer
  *
  * This library is free software; you can redistribute it and/or
@@ -21,31 +21,44 @@
 #if defined(REG)
 void glue(op_load_gpr_T0_gpr, REG) (void)
 {
-    T0 = env->gpr[REG];
+    T0 = env->gpr[REG][env->current_tc];
     RETURN();
 }
 
 void glue(op_store_T0_gpr_gpr, REG) (void)
 {
-    env->gpr[REG] = T0;
+    env->gpr[REG][env->current_tc] = T0;
     RETURN();
 }
 
 void glue(op_load_gpr_T1_gpr, REG) (void)
 {
-    T1 = env->gpr[REG];
+    T1 = env->gpr[REG][env->current_tc];
     RETURN();
 }
 
 void glue(op_store_T1_gpr_gpr, REG) (void)
 {
-    env->gpr[REG] = T1;
+    env->gpr[REG][env->current_tc] = T1;
     RETURN();
 }
 
 void glue(op_load_gpr_T2_gpr, REG) (void)
 {
-    T2 = env->gpr[REG];
+    T2 = env->gpr[REG][env->current_tc];
+    RETURN();
+}
+
+
+void glue(op_load_srsgpr_T0_gpr, REG) (void)
+{
+    T0 = env->gpr[REG][(env->CP0_SRSCtl >> CP0SRSCtl_PSS) & 0xf];
+    RETURN();
+}
+
+void glue(op_store_T0_srsgpr_gpr, REG) (void)
+{
+    env->gpr[REG][(env->CP0_SRSCtl >> CP0SRSCtl_PSS) & 0xf] = T0;
     RETURN();
 }
 #endif
@@ -54,7 +67,7 @@ void glue(op_load_gpr_T2_gpr, REG) (void)
 #define SET_RESET(treg, tregname)        \
     void glue(op_set, tregname)(void)    \
     {                                    \
-        treg = PARAM1;                   \
+        treg = (int32_t)PARAM1;          \
         RETURN();                        \
     }                                    \
     void glue(op_reset, tregname)(void)  \
@@ -68,4 +81,20 @@ SET_RESET(T1, _T1)
 SET_RESET(T2, _T2)
 
 #undef SET_RESET
+
+#if defined(TARGET_MIPSN32) || defined(TARGET_MIPS64)
+#define SET64(treg, tregname)                               \
+    void glue(op_set64, tregname)(void)                     \
+    {                                                       \
+        treg = ((uint64_t)PARAM1 << 32) | (uint32_t)PARAM2; \
+        RETURN();                                           \
+    }
+
+SET64(T0, _T0)
+SET64(T1, _T1)
+SET64(T2, _T2)
+
+#undef SET64
+
+#endif
 #endif

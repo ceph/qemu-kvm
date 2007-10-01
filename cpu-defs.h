@@ -1,6 +1,6 @@
 /*
  * common defines for all CPUs
- * 
+ *
  * Copyright (c) 2003 Fabrice Bellard
  *
  * This library is free software; you can redistribute it and/or
@@ -29,7 +29,7 @@
 #error TARGET_LONG_BITS must be defined before including this header
 #endif
 
-#ifndef TARGET_PHYS_ADDR_BITS 
+#ifndef TARGET_PHYS_ADDR_BITS
 #if TARGET_LONG_BITS >= HOST_LONG_BITS
 #define TARGET_PHYS_ADDR_BITS TARGET_LONG_BITS
 #else
@@ -44,10 +44,14 @@
 typedef int32_t target_long;
 typedef uint32_t target_ulong;
 #define TARGET_FMT_lx "%08x"
+#define TARGET_FMT_ld "%d"
+#define TARGET_FMT_lu "%u"
 #elif TARGET_LONG_SIZE == 8
 typedef int64_t target_long;
 typedef uint64_t target_ulong;
 #define TARGET_FMT_lx "%016" PRIx64
+#define TARGET_FMT_ld "%" PRId64
+#define TARGET_FMT_lu "%" PRIu64
 #else
 #error TARGET_LONG_SIZE undefined
 #endif
@@ -60,8 +64,10 @@ typedef uint64_t target_ulong;
 
 #if TARGET_PHYS_ADDR_BITS == 32
 typedef uint32_t target_phys_addr_t;
+#define TARGET_FMT_plx "%08x"
 #elif TARGET_PHYS_ADDR_BITS == 64
 typedef uint64_t target_phys_addr_t;
+#define TARGET_FMT_plx "%016" PRIx64
 #else
 #error TARGET_PHYS_ADDR_BITS undefined
 #endif
@@ -76,6 +82,7 @@ typedef unsigned long ram_addr_t;
 #define EXCP_DEBUG      0x10002 /* cpu stopped after a breakpoint or singlestep */
 #define EXCP_HALTED     0x10003 /* cpu is halted (waiting for external event) */
 #define MAX_BREAKPOINTS 32
+#define MAX_WATCHPOINTS 32
 
 #define TB_JMP_CACHE_BITS 12
 #define TB_JMP_CACHE_SIZE (1 << TB_JMP_CACHE_BITS)
@@ -92,18 +99,27 @@ typedef unsigned long ram_addr_t;
 #define CPU_TLB_SIZE (1 << CPU_TLB_BITS)
 
 typedef struct CPUTLBEntry {
-    /* bit 31 to TARGET_PAGE_BITS : virtual address 
+    /* bit 31 to TARGET_PAGE_BITS : virtual address
        bit TARGET_PAGE_BITS-1..IO_MEM_SHIFT : if non zero, memory io
                                               zone number
        bit 3                      : indicates that the entry is invalid
        bit 2..0                   : zero
     */
-    target_ulong addr_read; 
-    target_ulong addr_write; 
-    target_ulong addr_code; 
+    target_ulong addr_read;
+    target_ulong addr_write;
+    target_ulong addr_code;
     /* addend to virtual address to get physical address */
-    target_phys_addr_t addend; 
+    target_phys_addr_t addend;
 } CPUTLBEntry;
+
+/* Alpha has 4 different running levels */
+#if defined(TARGET_ALPHA)
+#define NB_MMU_MODES 4
+#elif defined(TARGET_PPC64H) /* PowerPC 64 with hypervisor mode support */
+#define NB_MMU_MODES 3
+#else
+#define NB_MMU_MODES 2
+#endif
 
 #define CPU_COMMON                                                      \
     struct TranslationBlock *current_tb; /* currently executing TB  */  \
@@ -116,7 +132,7 @@ typedef struct CPUTLBEntry {
     target_ulong mem_write_vaddr; /* target virtual addr at which the   \
                                      memory was written */              \
     /* 0 = kernel, 1 = user */                                          \
-    CPUTLBEntry tlb_table[2][CPU_TLB_SIZE];                             \
+    CPUTLBEntry tlb_table[NB_MMU_MODES][CPU_TLB_SIZE];                  \
     struct TranslationBlock *tb_jmp_cache[TB_JMP_CACHE_SIZE];           \
                                                                         \
     /* from this point: preserved by CPU reset */                       \
@@ -124,6 +140,13 @@ typedef struct CPUTLBEntry {
     target_ulong breakpoints[MAX_BREAKPOINTS];                          \
     int nb_breakpoints;                                                 \
     int singlestep_enabled;                                             \
+                                                                        \
+    struct {                                                            \
+        target_ulong vaddr;                                             \
+        target_phys_addr_t addend;                                      \
+    } watchpoint[MAX_WATCHPOINTS];                                      \
+    int nb_watchpoints;                                                 \
+    int watchpoint_hit;                                                 \
                                                                         \
     void *next_cpu; /* next CPU sharing TB cache */                     \
     int cpu_index; /* CPU index (informative) */                        \

@@ -1,4 +1,4 @@
-/* 
+/*
  * USB Mass Storage Device emulation
  *
  * Copyright (c) 2006 CodeSourcery.
@@ -66,7 +66,7 @@ struct usb_msd_csw {
 static const uint8_t qemu_msd_dev_descriptor[] = {
 	0x12,       /*  u8 bLength; */
 	0x01,       /*  u8 bDescriptorType; Device */
-	0x10, 0x00, /*  u16 bcdUSB; v1.0 */
+	0x00, 0x01, /*  u16 bcdUSB; v1.0 */
 
 	0x00,	    /*  u8  bDeviceClass; */
 	0x00,	    /*  u8  bDeviceSubClass; */
@@ -93,13 +93,13 @@ static const uint8_t qemu_msd_config_descriptor[] = {
 	0x01,       /*  u8  bNumInterfaces; (1) */
 	0x01,       /*  u8  bConfigurationValue; */
 	0x00,       /*  u8  iConfiguration; */
-	0xc0,       /*  u8  bmAttributes; 
+	0xc0,       /*  u8  bmAttributes;
 				 Bit 7: must be set,
 				     6: Self-powered,
 				     5: Remote wakeup,
 				     4..0: resvd */
 	0x00,       /*  u8  MaxPower; */
-      
+
 	/* one interface */
 	0x09,       /*  u8  if_bLength; */
 	0x04,       /*  u8  if_bDescriptorType; Interface */
@@ -110,7 +110,7 @@ static const uint8_t qemu_msd_config_descriptor[] = {
 	0x06,       /*  u8  if_bInterfaceSubClass; SCSI */
 	0x50,       /*  u8  if_bInterfaceProtocol; Bulk Only */
 	0x00,       /*  u8  if_iInterface; */
-     
+
 	/* Bulk-In endpoint */
 	0x07,       /*  u8  ep_bLength; */
 	0x05,       /*  u8  ep_bDescriptorType; Endpoint */
@@ -259,12 +259,12 @@ static int usb_msd_handle_control(USBDevice *dev, int request, int value,
     case DeviceRequest | USB_REQ_GET_DESCRIPTOR:
         switch(value >> 8) {
         case USB_DT_DEVICE:
-            memcpy(data, qemu_msd_dev_descriptor, 
+            memcpy(data, qemu_msd_dev_descriptor,
                    sizeof(qemu_msd_dev_descriptor));
             ret = sizeof(qemu_msd_dev_descriptor);
             break;
         case USB_DT_CONFIG:
-            memcpy(data, qemu_msd_config_descriptor, 
+            memcpy(data, qemu_msd_config_descriptor,
                    sizeof(qemu_msd_config_descriptor));
             ret = sizeof(qemu_msd_config_descriptor);
             break;
@@ -521,6 +521,8 @@ USBDevice *usb_msd_init(const char *filename)
 
     bdrv = bdrv_new("usb");
     if (bdrv_open(bdrv, filename, 0) < 0)
+        goto fail;
+    if (qemu_key_check(bdrv, filename))
         goto fail;
     s->bs = bdrv;
 

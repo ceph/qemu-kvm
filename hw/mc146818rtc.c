@@ -1,8 +1,8 @@
 /*
  * QEMU MC146818 RTC emulation
- * 
+ *
  * Copyright (c) 2003-2004 Fabrice Bellard
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
@@ -54,7 +54,9 @@ struct RTCState {
     uint8_t cmos_data[128];
     uint8_t cmos_index;
     struct tm current_tm;
-    int irq;
+    qemu_irq irq;
+    target_phys_addr_t base;
+    int it_shift;
     /* periodic timer */
     QEMUTimer *periodic_timer;
     int64_t next_periodic_time;
@@ -73,7 +75,7 @@ static void rtc_timer_update(RTCState *s, int64_t current_time)
     int64_t cur_clock, next_irq_clock;
 
     period_code = s->cmos_data[RTC_REG_A] & 0x0f;
-    if (period_code != 0 && 
+    if (period_code != 0 &&
         (s->cmos_data[RTC_REG_B] & REG_B_PIE)) {
         if (period_code <= 2)
             period_code += 7;
@@ -95,7 +97,7 @@ static void rtc_periodic_timer(void *opaque)
 
     rtc_timer_update(s, s->next_periodic_time);
     s->cmos_data[RTC_REG_C] |= 0xc0;
-    pic_set_irq(s->irq, 1);
+    qemu_irq_raise(s->irq);
 }
 
 static void cmos_ioport_write(void *opaque, uint32_t addr, uint32_t data)
@@ -108,7 +110,7 @@ static void cmos_ioport_write(void *opaque, uint32_t addr, uint32_t data)
 #ifdef DEBUG_CMOS
         printf("cmos: write index=0x%02x val=0x%02x\n",
                s->cmos_index, data);
-#endif        
+#endif
         switch(s->cmos_index) {
         case RTC_SECONDS_ALARM:
         case RTC_MINUTES_ALARM:
@@ -219,8 +221,8 @@ static void rtc_copy_date(RTCState *s)
 /* month is between 0 and 11. */
 static int get_days_in_month(int month, int year)
 {
-    static const int days_tab[12] = { 
-        31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 
+    static const int days_tab[12] = {
+        31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
     };
     int d;
     if ((unsigned )month >= 12)
@@ -251,7 +253,7 @@ static void rtc_next_second(struct tm *tm)
                 tm->tm_wday++;
                 if ((unsigned)tm->tm_wday >= 7)
                     tm->tm_wday = 0;
-                days_in_month = get_days_in_month(tm->tm_mon, 
+                days_in_month = get_days_in_month(tm->tm_mon,
                                                   tm->tm_year + 1900);
                 tm->tm_mday++;
                 if (tm->tm_mday < 1) {
@@ -281,7 +283,7 @@ static void rtc_update_second(void *opaque)
         qemu_mod_timer(s->second_timer, s->next_second_time);
     } else {
         rtc_next_second(&s->current_tm);
-        
+
         if (!(s->cmos_data[RTC_REG_B] & REG_B_SET)) {
             /* update in progress bit */
             s->cmos_data[RTC_REG_A] |= REG_A_UIP;
@@ -291,7 +293,7 @@ static void rtc_update_second(void *opaque)
         delay = (ticks_per_sec * 1) / 100;
         if (delay < 1)
             delay = 1;
-        qemu_mod_timer(s->second_timer2, 
+        qemu_mod_timer(s->second_timer2,
                        s->next_second_time + delay);
     }
 }
@@ -313,15 +315,15 @@ static void rtc_update_second2(void *opaque)
             ((s->cmos_data[RTC_HOURS_ALARM] & 0xc0) == 0xc0 ||
              s->cmos_data[RTC_HOURS_ALARM] == s->current_tm.tm_hour)) {
 
-            s->cmos_data[RTC_REG_C] |= 0xa0; 
-            pic_set_irq(s->irq, 1);
+            s->cmos_data[RTC_REG_C] |= 0xa0;
+            qemu_irq_raise(s->irq);
         }
     }
 
     /* update ended interrupt */
     if (s->cmos_data[RTC_REG_B] & REG_B_UIE) {
-        s->cmos_data[RTC_REG_C] |= 0x90; 
-        pic_set_irq(s->irq, 1);
+        s->cmos_data[RTC_REG_C] |= 0x90;
+        qemu_irq_raise(s->irq);
     }
 
     /* clear update in progress bit */
@@ -353,8 +355,8 @@ static uint32_t cmos_ioport_read(void *opaque, uint32_t addr)
             break;
         case RTC_REG_C:
             ret = s->cmos_data[s->cmos_index];
-            pic_set_irq(s->irq, 0);
-            s->cmos_data[RTC_REG_C] = 0x00; 
+            qemu_irq_lower(s->irq);
+            s->cmos_data[RTC_REG_C] = 0x00;
             break;
         default:
             ret = s->cmos_data[s->cmos_index];
@@ -409,7 +411,7 @@ static void rtc_save(QEMUFile *f, void *opaque)
 
     qemu_put_buffer(f, s->cmos_data, 128);
     qemu_put_8s(f, &s->cmos_index);
-    
+
     qemu_put_be32s(f, &s->current_tm.tm_sec);
     qemu_put_be32s(f, &s->current_tm.tm_min);
     qemu_put_be32s(f, &s->current_tm.tm_hour);
@@ -453,7 +455,7 @@ static int rtc_load(QEMUFile *f, void *opaque, int version_id)
     return 0;
 }
 
-RTCState *rtc_init(int base, int irq)
+RTCState *rtc_init(int base, qemu_irq irq)
 {
     RTCState *s;
 
@@ -469,11 +471,11 @@ RTCState *rtc_init(int base, int irq)
 
     rtc_set_date_from_host(s);
 
-    s->periodic_timer = qemu_new_timer(vm_clock, 
+    s->periodic_timer = qemu_new_timer(vm_clock,
                                        rtc_periodic_timer, s);
-    s->second_timer = qemu_new_timer(vm_clock, 
+    s->second_timer = qemu_new_timer(vm_clock,
                                      rtc_update_second, s);
-    s->second_timer2 = qemu_new_timer(vm_clock, 
+    s->second_timer2 = qemu_new_timer(vm_clock,
                                       rtc_update_second2, s);
 
     s->next_second_time = qemu_get_clock(vm_clock) + (ticks_per_sec * 99) / 100;
@@ -486,3 +488,109 @@ RTCState *rtc_init(int base, int irq)
     return s;
 }
 
+/* Memory mapped interface */
+uint32_t cmos_mm_readb (void *opaque, target_phys_addr_t addr)
+{
+    RTCState *s = opaque;
+
+    return cmos_ioport_read(s, (addr - s->base) >> s->it_shift) & 0xFF;
+}
+
+void cmos_mm_writeb (void *opaque,
+                     target_phys_addr_t addr, uint32_t value)
+{
+    RTCState *s = opaque;
+
+    cmos_ioport_write(s, (addr - s->base) >> s->it_shift, value & 0xFF);
+}
+
+uint32_t cmos_mm_readw (void *opaque, target_phys_addr_t addr)
+{
+    RTCState *s = opaque;
+    uint32_t val;
+
+    val = cmos_ioport_read(s, (addr - s->base) >> s->it_shift) & 0xFFFF;
+#ifdef TARGET_WORDS_BIGENDIAN
+    val = bswap16(val);
+#endif
+    return val;
+}
+
+void cmos_mm_writew (void *opaque,
+                     target_phys_addr_t addr, uint32_t value)
+{
+    RTCState *s = opaque;
+#ifdef TARGET_WORDS_BIGENDIAN
+    value = bswap16(value);
+#endif
+    cmos_ioport_write(s, (addr - s->base) >> s->it_shift, value & 0xFFFF);
+}
+
+uint32_t cmos_mm_readl (void *opaque, target_phys_addr_t addr)
+{
+    RTCState *s = opaque;
+    uint32_t val;
+
+    val = cmos_ioport_read(s, (addr - s->base) >> s->it_shift);
+#ifdef TARGET_WORDS_BIGENDIAN
+    val = bswap32(val);
+#endif
+    return val;
+}
+
+void cmos_mm_writel (void *opaque,
+                     target_phys_addr_t addr, uint32_t value)
+{
+    RTCState *s = opaque;
+#ifdef TARGET_WORDS_BIGENDIAN
+    value = bswap32(value);
+#endif
+    cmos_ioport_write(s, (addr - s->base) >> s->it_shift, value);
+}
+
+static CPUReadMemoryFunc *rtc_mm_read[] = {
+    &cmos_mm_readb,
+    &cmos_mm_readw,
+    &cmos_mm_readl,
+};
+
+static CPUWriteMemoryFunc *rtc_mm_write[] = {
+    &cmos_mm_writeb,
+    &cmos_mm_writew,
+    &cmos_mm_writel,
+};
+
+RTCState *rtc_mm_init(target_phys_addr_t base, int it_shift, qemu_irq irq)
+{
+    RTCState *s;
+    int io_memory;
+
+    s = qemu_mallocz(sizeof(RTCState));
+    if (!s)
+        return NULL;
+
+    s->irq = irq;
+    s->cmos_data[RTC_REG_A] = 0x26;
+    s->cmos_data[RTC_REG_B] = 0x02;
+    s->cmos_data[RTC_REG_C] = 0x00;
+    s->cmos_data[RTC_REG_D] = 0x80;
+    s->base = base;
+
+    rtc_set_date_from_host(s);
+
+    s->periodic_timer = qemu_new_timer(vm_clock,
+                                       rtc_periodic_timer, s);
+    s->second_timer = qemu_new_timer(vm_clock,
+                                     rtc_update_second, s);
+    s->second_timer2 = qemu_new_timer(vm_clock,
+                                      rtc_update_second2, s);
+
+    s->next_second_time = qemu_get_clock(vm_clock) + (ticks_per_sec * 99) / 100;
+    qemu_mod_timer(s->second_timer2, s->next_second_time);
+
+    io_memory = cpu_register_io_memory(0, rtc_mm_read, rtc_mm_write, s);
+    cpu_register_physical_memory(base, 2 << it_shift, io_memory);
+
+    register_savevm("mc146818rtc", base, 1, rtc_save, rtc_load, s);
+    return s;
+}

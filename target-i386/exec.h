@@ -1,5 +1,5 @@
 /*
- *  i386 execution defines 
+ *  i386 execution defines
  *
  *  Copyright (c) 2003 Fabrice Bellard
  *
@@ -162,17 +162,17 @@ void cpu_x86_update_cr0(CPUX86State *env, uint32_t new_cr0);
 void cpu_x86_update_cr3(CPUX86State *env, target_ulong new_cr3);
 void cpu_x86_update_cr4(CPUX86State *env, uint32_t new_cr4);
 void cpu_x86_flush_tlb(CPUX86State *env, target_ulong addr);
-int cpu_x86_handle_mmu_fault(CPUX86State *env, target_ulong addr, 
+int cpu_x86_handle_mmu_fault(CPUX86State *env, target_ulong addr,
                              int is_write, int is_user, int is_softmmu);
-void tlb_fill(target_ulong addr, int is_write, int is_user, 
+void tlb_fill(target_ulong addr, int is_write, int is_user,
               void *retaddr);
 void __hidden cpu_lock(void);
 void __hidden cpu_unlock(void);
-void do_interrupt(int intno, int is_int, int error_code, 
+void do_interrupt(int intno, int is_int, int error_code,
                   target_ulong next_eip, int is_hw);
-void do_interrupt_user(int intno, int is_int, int error_code, 
+void do_interrupt_user(int intno, int is_int, int error_code,
                        target_ulong next_eip);
-void raise_interrupt(int intno, int is_int, int error_code, 
+void raise_interrupt(int intno, int is_int, int error_code,
                      int next_eip_addend);
 void raise_exception_err(int exception_index, int error_code);
 void raise_exception(int exception_index);
@@ -190,6 +190,7 @@ void helper_divq_EAX_T0(void);
 void helper_idivq_EAX_T0(void);
 void helper_bswapq_T0(void);
 void helper_cmpxchg8b(void);
+void helper_single_step(void);
 void helper_cpuid(void);
 void helper_enter_level(int level, int data32);
 void helper_enter64_level(int level, int data64);
@@ -442,7 +443,7 @@ static inline CPU86_LDouble helper_fldt(target_ulong ptr)
 static inline void helper_fstt(CPU86_LDouble f, target_ulong ptr)
 {
     CPU86_LDoubleU temp;
-    
+
     temp.d = f;
     stq(ptr, temp.l.lower);
     stw(ptr + 8, temp.l.upper);
@@ -501,6 +502,15 @@ void update_fp_status(void);
 void helper_hlt(void);
 void helper_monitor(void);
 void helper_mwait(void);
+void helper_vmrun(target_ulong addr);
+void helper_vmmcall(void);
+void helper_vmload(target_ulong addr);
+void helper_vmsave(target_ulong addr);
+void helper_stgi(void);
+void helper_clgi(void);
+void helper_skinit(void);
+void helper_invlpga(void);
+void vmexit(uint64_t exit_code, uint64_t exit_info_1);
 
 extern const uint8_t parity_table[256];
 extern const uint8_t rclw_table[32];
@@ -516,7 +526,7 @@ static inline void load_eflags(int eflags, int update_mask)
 {
     CC_SRC = eflags & (CC_O | CC_S | CC_Z | CC_A | CC_P | CC_C);
     DF = 1 - (2 * ((eflags >> 10) & 1));
-    env->eflags = (env->eflags & ~update_mask) | 
+    env->eflags = (env->eflags & ~update_mask) |
         (eflags & update_mask);
 }
 
@@ -575,3 +585,17 @@ static inline void regs_to_env(void)
     env->regs[R_EDI] = EDI;
 #endif
 }
+
+static inline int cpu_halted(CPUState *env) {
+    /* handle exit of HALTED state */
+    if (!(env->hflags & HF_HALTED_MASK))
+        return 0;
+    /* disable halt condition */
+    if ((env->interrupt_request & CPU_INTERRUPT_HARD) &&
+        (env->eflags & IF_MASK)) {
+        env->hflags &= ~HF_HALTED_MASK;
+        return 0;
+    }
+    return EXCP_HALTED;
+}
+

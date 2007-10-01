@@ -1,6 +1,6 @@
 /*
  *  MIPS emulation memory micro-operations for qemu.
- * 
+ *
  *  Copyright (c) 2004-2005 Jocelyn Mayer
  *
  * This library is free software; you can redistribute it and/or
@@ -63,7 +63,7 @@ void glue(op_lw, MEMSUFFIX) (void)
 
 void glue(op_lwu, MEMSUFFIX) (void)
 {
-    T0 = glue(ldl, MEMSUFFIX)(T0);
+    T0 = (uint32_t)glue(ldl, MEMSUFFIX)(T0);
     RETURN();
 }
 
@@ -117,6 +117,10 @@ void glue(op_ll, MEMSUFFIX) (void)
 void glue(op_sc, MEMSUFFIX) (void)
 {
     CALL_FROM_TB0(dump_sc);
+    if (T0 & 0x3) {
+        env->CP0_BadVAddr = T0;
+        CALL_FROM_TB1(do_raise_exception, EXCP_AdES);
+    }
     if (T0 == env->CP0_LLAddr) {
         glue(stl, MEMSUFFIX)(T0, T1);
         T0 = 1;
@@ -126,7 +130,7 @@ void glue(op_sc, MEMSUFFIX) (void)
     RETURN();
 }
 
-#ifdef MIPS_HAS_MIPS64
+#if defined(TARGET_MIPSN32) || defined(TARGET_MIPS64)
 void glue(op_ld, MEMSUFFIX) (void)
 {
     T0 = glue(ldq, MEMSUFFIX)(T0);
@@ -182,6 +186,10 @@ void glue(op_lld, MEMSUFFIX) (void)
 void glue(op_scd, MEMSUFFIX) (void)
 {
     CALL_FROM_TB0(dump_sc);
+    if (T0 & 0x7) {
+        env->CP0_BadVAddr = T0;
+        CALL_FROM_TB1(do_raise_exception, EXCP_AdES);
+    }
     if (T0 == env->CP0_LLAddr) {
         glue(stq, MEMSUFFIX)(T0, T1);
         T0 = 1;
@@ -190,9 +198,8 @@ void glue(op_scd, MEMSUFFIX) (void)
     }
     RETURN();
 }
-#endif /* MIPS_HAS_MIPS64 */
+#endif /* TARGET_MIPSN32 || TARGET_MIPS64 */
 
-#ifdef MIPS_USES_FPU
 void glue(op_lwc1, MEMSUFFIX) (void)
 {
     WT0 = glue(ldl, MEMSUFFIX)(T0);
@@ -213,4 +220,13 @@ void glue(op_sdc1, MEMSUFFIX) (void)
     glue(stq, MEMSUFFIX)(T0, DT0);
     RETURN();
 }
-#endif
+void glue(op_luxc1, MEMSUFFIX) (void)
+{
+    DT0 = glue(ldq, MEMSUFFIX)(T0 & ~0x7);
+    RETURN();
+}
+void glue(op_suxc1, MEMSUFFIX) (void)
+{
+    glue(stq, MEMSUFFIX)(T0 & ~0x7, DT0);
+    RETURN();
+}

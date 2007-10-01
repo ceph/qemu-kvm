@@ -1,4 +1,4 @@
-/* 
+/*
  * QEMU LSI53C895A SCSI Host Bus Adapter emulation
  *
  * Copyright (c) 2006 CodeSourcery.
@@ -251,7 +251,7 @@ typedef struct {
     uint32_t ia;
     uint32_t sbc;
     uint32_t csbc;
-    uint32_t scratch[13]; /* SCRATCHA-SCRATCHR */
+    uint32_t scratch[18]; /* SCRATCHA-SCRATCHR */
 
     /* Script ram is stored as 32-bit words in host byteorder.  */
     uint32_t script_ram[2048];
@@ -374,7 +374,7 @@ static void lsi_update_irq(LSIState *s)
                 level, s->dstat, s->sist1, s->sist0);
         last_level = level;
     }
-    pci_set_irq(&s->pci_dev, 0, level);
+    qemu_set_irq(s->pci_dev.irq[0], level);
 }
 
 /* Stop SCRIPTS execution and raise a SCSI interrupt.  */
@@ -855,6 +855,7 @@ again:
             offset = sxt24(addr);
             cpu_physical_memory_read(s->dsa + offset, (uint8_t *)buf, 8);
             s->dbc = cpu_to_le32(buf[0]);
+            s->rbc = s->dbc;
             addr = cpu_to_le32(buf[1]);
         }
         if ((s->sstat1 & PHASE_MASK) != ((insn >> 24) & 7)) {
@@ -864,6 +865,8 @@ again:
             break;
         }
         s->dnad = addr;
+        /* ??? Set ESA.  */
+        s->ia = s->dsp - 8;
         switch (s->sstat1 & 0x7) {
         case PHASE_DO:
             s->waiting = 2;
@@ -898,8 +901,6 @@ again:
         s->sbc = s->dbc;
         s->rbc -= s->dbc;
         s->ua = addr + s->dbc;
-        /* ??? Set ESA.  */
-        s->ia = s->dsp - 8;
         break;
 
     case 1: /* IO or Read/Write instruction.  */
@@ -1038,7 +1039,7 @@ again:
                 op0 |= op1;
                 break;
             case 3: /* XOR */
-                op0 |= op1;
+                op0 ^= op1;
                 break;
             case 4: /* AND */
                 op0 &= op1;
@@ -1046,6 +1047,7 @@ again:
             case 5: /* SHR */
                 op1 = op0 & 1;
                 op0 = (op0 >> 1) | (s->carry << 7);
+                s->carry = op1;
                 break;
             case 6: /* ADD */
                 op0 += op1;
@@ -1388,7 +1390,7 @@ static void lsi_reg_writeb(LSIState *s, int offset, uint8_t val)
         break;
     case 0x02: /* SCNTL2 */
         val &= ~(LSI_SCNTL2_WSR | LSI_SCNTL2_WSS);
-        s->scntl3 = val;
+        s->scntl2 = val;
         break;
     case 0x03: /* SCNTL3 */
         s->scntl3 = val;
@@ -1433,10 +1435,13 @@ static void lsi_reg_writeb(LSIState *s, int offset, uint8_t val)
         if (val & LSI_ISTAT0_SRST) {
             lsi_soft_reset(s);
         }
+        break;
     case 0x16: /* MBOX0 */
         s->mbox0 = val;
+        break;
     case 0x17: /* MBOX1 */
         s->mbox1 = val;
+        break;
     case 0x1b: /* CTEST3 */
         s->ctest3 = val & 0x0f;
         break;
@@ -1453,19 +1458,19 @@ static void lsi_reg_writeb(LSIState *s, int offset, uint8_t val)
         }
         s->ctest5 = val;
         break;
-    case 0x2c: /* DSPS[0:7] */
+    case 0x2c: /* DSP[0:7] */
         s->dsp &= 0xffffff00;
         s->dsp |= val;
         break;
-    case 0x2d: /* DSPS[8:15] */
+    case 0x2d: /* DSP[8:15] */
         s->dsp &= 0xffff00ff;
         s->dsp |= val << 8;
         break;
-    case 0x2e: /* DSPS[16:23] */
+    case 0x2e: /* DSP[16:23] */
         s->dsp &= 0xff00ffff;
         s->dsp |= val << 16;
         break;
-    case 0x2f: /* DSPS[14:31] */
+    case 0x2f: /* DSP[24:31] */
         s->dsp &= 0x00ffffff;
         s->dsp |= val << 24;
         if ((s->dmode & LSI_DMODE_MAN) == 0
@@ -1765,10 +1770,10 @@ static void lsi_io_writel(void *opaque, uint32_t addr, uint32_t val)
     lsi_reg_writeb(s, addr, val & 0xff);
     lsi_reg_writeb(s, addr + 1, (val >> 8) & 0xff);
     lsi_reg_writeb(s, addr + 2, (val >> 16) & 0xff);
-    lsi_reg_writeb(s, addr + 2, (val >> 24) & 0xff);
+    lsi_reg_writeb(s, addr + 3, (val >> 24) & 0xff);
 }
 
-static void lsi_io_mapfunc(PCIDevice *pci_dev, int region_num, 
+static void lsi_io_mapfunc(PCIDevice *pci_dev, int region_num,
                            uint32_t addr, uint32_t size, int type)
 {
     LSIState *s = (LSIState *)pci_dev;
@@ -1783,7 +1788,7 @@ static void lsi_io_mapfunc(PCIDevice *pci_dev, int region_num,
     register_ioport_read(addr, 256, 4, lsi_io_readl, s);
 }
 
-static void lsi_ram_mapfunc(PCIDevice *pci_dev, int region_num, 
+static void lsi_ram_mapfunc(PCIDevice *pci_dev, int region_num,
                             uint32_t addr, uint32_t size, int type)
 {
     LSIState *s = (LSIState *)pci_dev;
@@ -1793,7 +1798,7 @@ static void lsi_ram_mapfunc(PCIDevice *pci_dev, int region_num,
     cpu_register_physical_memory(addr + 0, 0x2000, s->ram_io_addr);
 }
 
-static void lsi_mmio_mapfunc(PCIDevice *pci_dev, int region_num, 
+static void lsi_mmio_mapfunc(PCIDevice *pci_dev, int region_num,
                              uint32_t addr, uint32_t size, int type)
 {
     LSIState *s = (LSIState *)pci_dev;

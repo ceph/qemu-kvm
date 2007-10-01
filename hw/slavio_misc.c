@@ -1,8 +1,8 @@
 /*
  * QEMU Sparc SLAVIO aux io port emulation
- * 
+ *
  * Copyright (c) 2005 Fabrice Bellard
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
@@ -41,22 +41,24 @@ do { printf("MISC: " fmt , ##args); } while (0)
 #endif
 
 typedef struct MiscState {
-    int irq;
+    qemu_irq irq;
     uint8_t config;
     uint8_t aux1, aux2;
     uint8_t diag, mctrl, sysctrl;
 } MiscState;
 
-#define MISC_MAXADDR 1
+#define MISC_SIZE 1
 
 static void slavio_misc_update_irq(void *opaque)
 {
     MiscState *s = opaque;
 
     if ((s->aux2 & 0x4) && (s->config & 0x8)) {
-        pic_set_irq(s->irq, 1);
+        MISC_DPRINTF("Raise IRQ\n");
+        qemu_irq_raise(s->irq);
     } else {
-        pic_set_irq(s->irq, 0);
+        MISC_DPRINTF("Lower IRQ\n");
+        qemu_irq_lower(s->irq);
     }
 }
 
@@ -180,8 +182,10 @@ static CPUWriteMemoryFunc *slavio_misc_mem_write[3] = {
 static void slavio_misc_save(QEMUFile *f, void *opaque)
 {
     MiscState *s = opaque;
+    int tmp;
 
-    qemu_put_be32s(f, &s->irq);
+    tmp = 0;
+    qemu_put_be32s(f, &tmp); /* ignored, was IRQ.  */
     qemu_put_8s(f, &s->config);
     qemu_put_8s(f, &s->aux1);
     qemu_put_8s(f, &s->aux2);
@@ -193,11 +197,12 @@ static void slavio_misc_save(QEMUFile *f, void *opaque)
 static int slavio_misc_load(QEMUFile *f, void *opaque, int version_id)
 {
     MiscState *s = opaque;
+    int tmp;
 
     if (version_id != 1)
         return -EINVAL;
 
-    qemu_get_be32s(f, &s->irq);
+    qemu_get_be32s(f, &tmp);
     qemu_get_8s(f, &s->config);
     qemu_get_8s(f, &s->aux1);
     qemu_get_8s(f, &s->aux2);
@@ -207,7 +212,8 @@ static int slavio_misc_load(QEMUFile *f, void *opaque, int version_id)
     return 0;
 }
 
-void *slavio_misc_init(uint32_t base, int irq)
+void *slavio_misc_init(target_phys_addr_t base, target_phys_addr_t power_base,
+                       qemu_irq irq)
 {
     int slavio_misc_io_memory;
     MiscState *s;
@@ -218,19 +224,25 @@ void *slavio_misc_init(uint32_t base, int irq)
 
     slavio_misc_io_memory = cpu_register_io_memory(0, slavio_misc_mem_read, slavio_misc_mem_write, s);
     // Slavio control
-    cpu_register_physical_memory(base + 0x1800000, MISC_MAXADDR, slavio_misc_io_memory);
+    cpu_register_physical_memory(base + 0x1800000, MISC_SIZE,
+                                 slavio_misc_io_memory);
     // AUX 1
-    cpu_register_physical_memory(base + 0x1900000, MISC_MAXADDR, slavio_misc_io_memory);
+    cpu_register_physical_memory(base + 0x1900000, MISC_SIZE,
+                                 slavio_misc_io_memory);
     // AUX 2
-    cpu_register_physical_memory(base + 0x1910000, MISC_MAXADDR, slavio_misc_io_memory);
+    cpu_register_physical_memory(base + 0x1910000, MISC_SIZE,
+                                 slavio_misc_io_memory);
     // Diagnostics
-    cpu_register_physical_memory(base + 0x1a00000, MISC_MAXADDR, slavio_misc_io_memory);
+    cpu_register_physical_memory(base + 0x1a00000, MISC_SIZE,
+                                 slavio_misc_io_memory);
     // Modem control
-    cpu_register_physical_memory(base + 0x1b00000, MISC_MAXADDR, slavio_misc_io_memory);
+    cpu_register_physical_memory(base + 0x1b00000, MISC_SIZE,
+                                 slavio_misc_io_memory);
     // System control
-    cpu_register_physical_memory(base + 0x1f00000, MISC_MAXADDR, slavio_misc_io_memory);
+    cpu_register_physical_memory(base + 0x1f00000, MISC_SIZE,
+                                 slavio_misc_io_memory);
     // Power management
-    cpu_register_physical_memory(base + 0xa000000, MISC_MAXADDR, slavio_misc_io_memory);
+    cpu_register_physical_memory(power_base, MISC_SIZE, slavio_misc_io_memory);
 
     s->irq = irq;
 

@@ -2,7 +2,7 @@
  * QEMU SPARC iommu emulation
  *
  * Copyright (c) 2003-2005 Fabrice Bellard
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
@@ -59,6 +59,20 @@ do { printf("IOMMU: " fmt , ##args); } while (0)
 #define IOMMU_PGFLUSH       (0x0018 >> 2)
 #define IOMMU_PGFLUSH_MASK  0xffffffff
 
+#define IOMMU_AFSR          (0x1000 >> 2)
+#define IOMMU_AFSR_ERR      0x80000000 /* LE, TO, or BE asserted */
+#define IOMMU_AFSR_LE       0x40000000 /* SBUS reports error after transaction */
+#define IOMMU_AFSR_TO       0x20000000 /* Write access took more than 12.8 us. */
+#define IOMMU_AFSR_BE       0x10000000 /* Write access received error acknowledge */
+#define IOMMU_AFSR_SIZE     0x0e000000 /* Size of transaction causing error */
+#define IOMMU_AFSR_S        0x01000000 /* Sparc was in supervisor mode */
+#define IOMMU_AFSR_RESV     0x00f00000 /* Reserved, forced to 0x8 by hardware */
+#define IOMMU_AFSR_ME       0x00080000 /* Multiple errors occurred */
+#define IOMMU_AFSR_RD       0x00040000 /* A read operation was in progress */
+#define IOMMU_AFSR_FAV      0x00020000 /* IOMMU afar has valid contents */
+
+#define IOMMU_AFAR          (0x1004 >> 2)
+
 #define IOMMU_SBCFG0        (0x1010 >> 2) /* SBUS configration per-slot */
 #define IOMMU_SBCFG1        (0x1014 >> 2) /* SBUS configration per-slot */
 #define IOMMU_SBCFG2        (0x1018 >> 2) /* SBUS configration per-slot */
@@ -87,20 +101,20 @@ do { printf("IOMMU: " fmt , ##args); } while (0)
 #define PAGE_MASK	(PAGE_SIZE - 1)
 
 typedef struct IOMMUState {
-    uint32_t addr;
+    target_phys_addr_t addr;
     uint32_t regs[IOMMU_NREGS];
-    uint32_t iostart;
+    target_phys_addr_t iostart;
 } IOMMUState;
 
 static uint32_t iommu_mem_readw(void *opaque, target_phys_addr_t addr)
 {
     IOMMUState *s = opaque;
-    uint32_t saddr;
+    target_phys_addr_t saddr;
 
     saddr = (addr - s->addr) >> 2;
     switch (saddr) {
     default:
-	DPRINTF("read reg[%d] = %x\n", saddr, s->regs[saddr]);
+	DPRINTF("read reg[%d] = %x\n", (int)saddr, s->regs[saddr]);
 	return s->regs[saddr];
 	break;
     }
@@ -110,40 +124,40 @@ static uint32_t iommu_mem_readw(void *opaque, target_phys_addr_t addr)
 static void iommu_mem_writew(void *opaque, target_phys_addr_t addr, uint32_t val)
 {
     IOMMUState *s = opaque;
-    uint32_t saddr;
+    target_phys_addr_t saddr;
 
     saddr = (addr - s->addr) >> 2;
-    DPRINTF("write reg[%d] = %x\n", saddr, val);
+    DPRINTF("write reg[%d] = %x\n", (int)saddr, val);
     switch (saddr) {
     case IOMMU_CTRL:
 	switch (val & IOMMU_CTRL_RNGE) {
 	case IOMMU_RNGE_16MB:
-	    s->iostart = 0xff000000;
+	    s->iostart = 0xffffffffff000000ULL;
 	    break;
 	case IOMMU_RNGE_32MB:
-	    s->iostart = 0xfe000000;
+	    s->iostart = 0xfffffffffe000000ULL;
 	    break;
 	case IOMMU_RNGE_64MB:
-	    s->iostart = 0xfc000000;
+	    s->iostart = 0xfffffffffc000000ULL;
 	    break;
 	case IOMMU_RNGE_128MB:
-	    s->iostart = 0xf8000000;
+	    s->iostart = 0xfffffffff8000000ULL;
 	    break;
 	case IOMMU_RNGE_256MB:
-	    s->iostart = 0xf0000000;
+	    s->iostart = 0xfffffffff0000000ULL;
 	    break;
 	case IOMMU_RNGE_512MB:
-	    s->iostart = 0xe0000000;
+	    s->iostart = 0xffffffffe0000000ULL;
 	    break;
 	case IOMMU_RNGE_1GB:
-	    s->iostart = 0xc0000000;
+	    s->iostart = 0xffffffffc0000000ULL;
 	    break;
 	default:
 	case IOMMU_RNGE_2GB:
-	    s->iostart = 0x80000000;
+	    s->iostart = 0xffffffff80000000ULL;
 	    break;
 	}
-	DPRINTF("iostart = %x\n", s->iostart);
+	DPRINTF("iostart = " TARGET_FMT_plx "\n", s->iostart);
 	s->regs[saddr] = ((val & IOMMU_CTRL_MASK) | IOMMU_VERSION);
 	break;
     case IOMMU_BASE:
@@ -186,31 +200,56 @@ static CPUWriteMemoryFunc *iommu_mem_write[3] = {
     iommu_mem_writew,
 };
 
-static uint32_t iommu_page_get_flags(IOMMUState *s, uint32_t addr)
+static uint32_t iommu_page_get_flags(IOMMUState *s, target_phys_addr_t addr)
 {
-    uint32_t iopte;
+    uint32_t ret;
+    target_phys_addr_t iopte;
+#ifdef DEBUG_IOMMU
+    target_phys_addr_t pa = addr;
+#endif
 
-    iopte = s->regs[1] << 4;
+    iopte = s->regs[IOMMU_BASE] << 4;
     addr &= ~s->iostart;
     iopte += (addr >> (PAGE_SHIFT - 2)) & ~3;
-    return ldl_phys(iopte);
+    cpu_physical_memory_read(iopte, (uint8_t *)&ret, 4);
+    tswap32s(&ret);
+    DPRINTF("get flags addr " TARGET_FMT_plx " => pte " TARGET_FMT_plx
+            ", *pte = %x\n", pa, iopte, ret);
+
+    return ret;
 }
 
-static uint32_t iommu_translate_pa(IOMMUState *s, uint32_t addr, uint32_t pa)
+static target_phys_addr_t iommu_translate_pa(IOMMUState *s,
+                                             target_phys_addr_t addr,
+                                             uint32_t pte)
 {
     uint32_t tmppte;
+    target_phys_addr_t pa;
 
-    tmppte = pa;
-    pa = ((pa & IOPTE_PAGE) << 4) + (addr & PAGE_MASK);
-    DPRINTF("xlate dva %x => pa %x (iopte = %x)\n", addr, pa, tmppte);
+    tmppte = pte;
+    pa = ((pte & IOPTE_PAGE) << 4) + (addr & PAGE_MASK);
+    DPRINTF("xlate dva " TARGET_FMT_plx " => pa " TARGET_FMT_plx
+            " (iopte = %x)\n", addr, pa, tmppte);
+
     return pa;
+}
+
+static void iommu_bad_addr(IOMMUState *s, target_phys_addr_t addr, int is_write)
+{
+    DPRINTF("bad addr " TARGET_FMT_plx "\n", addr);
+    s->regs[IOMMU_AFSR] = IOMMU_AFSR_ERR | IOMMU_AFSR_LE | (8 << 20) |
+        IOMMU_AFSR_FAV;
+    if (!is_write)
+        s->regs[IOMMU_AFSR] |= IOMMU_AFSR_RD;
+    s->regs[IOMMU_AFAR] = addr;
 }
 
 void sparc_iommu_memory_rw(void *opaque, target_phys_addr_t addr,
                            uint8_t *buf, int len, int is_write)
 {
-    int l, flags;
-    target_ulong page, phys_addr;
+    int l;
+    uint32_t flags;
+    target_phys_addr_t page, phys_addr;
 
     while (len > 0) {
         page = addr & TARGET_PAGE_MASK;
@@ -218,12 +257,16 @@ void sparc_iommu_memory_rw(void *opaque, target_phys_addr_t addr,
         if (l > len)
             l = len;
         flags = iommu_page_get_flags(opaque, page);
-        if (!(flags & IOPTE_VALID))
+        if (!(flags & IOPTE_VALID)) {
+            iommu_bad_addr(opaque, page, is_write);
             return;
+        }
         phys_addr = iommu_translate_pa(opaque, addr, flags);
         if (is_write) {
-            if (!(flags & IOPTE_WRITE))
+            if (!(flags & IOPTE_WRITE)) {
+                iommu_bad_addr(opaque, page, is_write);
                 return;
+            }
             cpu_physical_memory_write(phys_addr, buf, len);
         } else {
             cpu_physical_memory_read(phys_addr, buf, len);
@@ -238,25 +281,23 @@ static void iommu_save(QEMUFile *f, void *opaque)
 {
     IOMMUState *s = opaque;
     int i;
-    
-    qemu_put_be32s(f, &s->addr);
+
     for (i = 0; i < IOMMU_NREGS; i++)
 	qemu_put_be32s(f, &s->regs[i]);
-    qemu_put_be32s(f, &s->iostart);
+    qemu_put_be64s(f, &s->iostart);
 }
 
 static int iommu_load(QEMUFile *f, void *opaque, int version_id)
 {
     IOMMUState *s = opaque;
     int i;
-    
-    if (version_id != 1)
+
+    if (version_id != 2)
         return -EINVAL;
 
-    qemu_get_be32s(f, &s->addr);
     for (i = 0; i < IOMMU_NREGS; i++)
-	qemu_put_be32s(f, &s->regs[i]);
-    qemu_get_be32s(f, &s->iostart);
+        qemu_get_be32s(f, &s->regs[i]);
+    qemu_get_be64s(f, &s->iostart);
 
     return 0;
 }
@@ -267,10 +308,10 @@ static void iommu_reset(void *opaque)
 
     memset(s->regs, 0, IOMMU_NREGS * 4);
     s->iostart = 0;
-    s->regs[0] = IOMMU_VERSION;
+    s->regs[IOMMU_CTRL] = IOMMU_VERSION;
 }
 
-void *iommu_init(uint32_t addr)
+void *iommu_init(target_phys_addr_t addr)
 {
     IOMMUState *s;
     int iommu_io_memory;
@@ -283,8 +324,8 @@ void *iommu_init(uint32_t addr)
 
     iommu_io_memory = cpu_register_io_memory(0, iommu_mem_read, iommu_mem_write, s);
     cpu_register_physical_memory(addr, IOMMU_NREGS * 4, iommu_io_memory);
-    
-    register_savevm("iommu", addr, 1, iommu_save, iommu_load, s);
+
+    register_savevm("iommu", addr, 2, iommu_save, iommu_load, s);
     qemu_register_reset(iommu_reset, s);
     return s;
 }

@@ -50,13 +50,15 @@ static struct {
     unsigned int period_size_out;
     unsigned int threshold;
 
-    int buffer_size_in_overriden;
-    int period_size_in_overriden;
+    int buffer_size_in_overridden;
+    int period_size_in_overridden;
 
-    int buffer_size_out_overriden;
-    int period_size_out_overriden;
+    int buffer_size_out_overridden;
+    int period_size_out_overridden;
     int verbose;
 } conf = {
+#define DEFAULT_BUFFER_SIZE 1024
+#define DEFAULT_PERIOD_SIZE 256
 #ifdef HIGH_LATENCY
     .size_in_usec_in = 1,
     .size_in_usec_out = 1,
@@ -69,16 +71,14 @@ static struct {
     .buffer_size_out = 400000,
     .period_size_out = 400000 / 4,
 #else
-#define DEFAULT_BUFFER_SIZE 1024
-#define DEFAULT_PERIOD_SIZE 256
     .buffer_size_in = DEFAULT_BUFFER_SIZE * 4,
     .period_size_in = DEFAULT_PERIOD_SIZE * 4,
     .buffer_size_out = DEFAULT_BUFFER_SIZE,
     .period_size_out = DEFAULT_PERIOD_SIZE,
-    .buffer_size_in_overriden = 0,
-    .buffer_size_out_overriden = 0,
-    .period_size_in_overriden = 0,
-    .period_size_out_overriden = 0,
+    .buffer_size_in_overridden = 0,
+    .buffer_size_out_overridden = 0,
+    .period_size_in_overridden = 0,
+    .period_size_out_overridden = 0,
 #endif
     .threshold = 0,
     .verbose = 0
@@ -157,6 +157,12 @@ static int aud_to_alsafmt (audfmt_e fmt)
     case AUD_FMT_U16:
         return SND_PCM_FORMAT_U16_LE;
 
+    case AUD_FMT_S32:
+        return SND_PCM_FORMAT_S32_LE;
+
+    case AUD_FMT_U32:
+        return SND_PCM_FORMAT_U32_LE;
+
     default:
         dolog ("Internal logic error: Bad audio format %d\n", fmt);
 #ifdef DEBUG_AUDIO
@@ -197,6 +203,26 @@ static int alsa_to_audfmt (int alsafmt, audfmt_e *fmt, int *endianness)
     case SND_PCM_FORMAT_U16_BE:
         *endianness = 1;
         *fmt = AUD_FMT_U16;
+        break;
+
+    case SND_PCM_FORMAT_S32_LE:
+        *endianness = 0;
+        *fmt = AUD_FMT_S32;
+        break;
+
+    case SND_PCM_FORMAT_U32_LE:
+        *endianness = 0;
+        *fmt = AUD_FMT_U32;
+        break;
+
+    case SND_PCM_FORMAT_S32_BE:
+        *endianness = 1;
+        *fmt = AUD_FMT_S32;
+        break;
+
+    case SND_PCM_FORMAT_U32_BE:
+        *endianness = 1;
+        *fmt = AUD_FMT_U32;
         break;
 
     default:
@@ -388,8 +414,8 @@ static int alsa_open (int in, struct alsa_params_req *req,
                 }
                 else {
                     if (period_size < minval) {
-                        if ((in && conf.period_size_in_overriden)
-                            || (!in && conf.period_size_out_overriden)) {
+                        if ((in && conf.period_size_in_overridden)
+                            || (!in && conf.period_size_out_overridden)) {
                             dolog ("%s period size(%d) is less "
                                    "than minmal period size(%ld)\n",
                                    typ,
@@ -424,8 +450,8 @@ static int alsa_open (int in, struct alsa_params_req *req,
             }
             else {
                 if (buffer_size < minval) {
-                    if ((in && conf.buffer_size_in_overriden)
-                        || (!in && conf.buffer_size_out_overriden)) {
+                    if ((in && conf.buffer_size_in_overridden)
+                        || (!in && conf.buffer_size_out_overridden)) {
                         dolog (
                             "%s buffer size(%d) is less "
                             "than minimal buffer size(%ld)\n",
@@ -919,16 +945,16 @@ static struct audio_option alsa_options[] = {
     {"DAC_SIZE_IN_USEC", AUD_OPT_BOOL, &conf.size_in_usec_out,
      "DAC period/buffer size in microseconds (otherwise in frames)", NULL, 0},
     {"DAC_PERIOD_SIZE", AUD_OPT_INT, &conf.period_size_out,
-     "DAC period size", &conf.period_size_out_overriden, 0},
+     "DAC period size", &conf.period_size_out_overridden, 0},
     {"DAC_BUFFER_SIZE", AUD_OPT_INT, &conf.buffer_size_out,
-     "DAC buffer size", &conf.buffer_size_out_overriden, 0},
+     "DAC buffer size", &conf.buffer_size_out_overridden, 0},
 
     {"ADC_SIZE_IN_USEC", AUD_OPT_BOOL, &conf.size_in_usec_in,
      "ADC period/buffer size in microseconds (otherwise in frames)", NULL, 0},
     {"ADC_PERIOD_SIZE", AUD_OPT_INT, &conf.period_size_in,
-     "ADC period size", &conf.period_size_in_overriden, 0},
+     "ADC period size", &conf.period_size_in_overridden, 0},
     {"ADC_BUFFER_SIZE", AUD_OPT_INT, &conf.buffer_size_in,
-     "ADC buffer size", &conf.buffer_size_in_overriden, 0},
+     "ADC buffer size", &conf.buffer_size_in_overridden, 0},
 
     {"THRESHOLD", AUD_OPT_INT, &conf.threshold,
      "(undocumented)", NULL, 0},

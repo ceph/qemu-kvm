@@ -1,6 +1,6 @@
 /*
  *  ARM micro operations
- * 
+ *
  *  Copyright (c) 2003 Fabrice Bellard
  *  Copyright (c) 2005 CodeSourcery, LLC
  *
@@ -667,7 +667,7 @@ void OPPROTO op_sarl_T1_T0_cc(void)
     if (shift >= 32) {
         env->CF = (T1 >> 31) & 1;
         T1 = (int32_t)T1 >> 31;
-    } else {
+    } else if (shift != 0) {
         env->CF = (T1 >> (shift - 1)) & 1;
         T1 = (int32_t)T1 >> shift;
     }
@@ -774,7 +774,7 @@ void OPPROTO op_addl_T0_T1_saturate(void)
   }
   else
     T0 = res;
-  
+
   FORCE_RET();
 }
 
@@ -792,7 +792,7 @@ void OPPROTO op_subl_T0_T1_saturate(void)
   }
   else
     T0 = res;
-  
+
   FORCE_RET();
 }
 
@@ -819,7 +819,7 @@ void OPPROTO op_shll_T0_im_thumb(void)
     int shift;
     shift = PARAM1;
     if (shift != 0) {
-	env->CF = (T1 >> (32 - shift)) & 1;
+	env->CF = (T0 >> (32 - shift)) & 1;
 	T0 = T0 << shift;
     }
     env->NZF = T0;
@@ -832,7 +832,7 @@ void OPPROTO op_shrl_T0_im_thumb(void)
 
     shift = PARAM1;
     if (shift == 0) {
-	env->CF = ((uint32_t)shift) >> 31;
+	env->CF = ((uint32_t)T0) >> 31;
 	T0 = 0;
     } else {
 	env->CF = (T0 >> (shift - 1)) & 1;
@@ -1127,7 +1127,7 @@ void OPPROTO op_vfp_msr(void)
 void OPPROTO op_vfp_mrrd(void)
 {
     CPU_DoubleU u;
-    
+
     u.d = FT0d;
     T0 = u.l.lower;
     T1 = u.l.upper;
@@ -1136,16 +1136,28 @@ void OPPROTO op_vfp_mrrd(void)
 void OPPROTO op_vfp_mdrr(void)
 {
     CPU_DoubleU u;
-    
+
     u.l.lower = T0;
     u.l.upper = T1;
     FT0d = u.d;
 }
 
-/* Copy the most significant bit to T0 to all bits of T1.  */
+/* Copy the most significant bit of T0 to all bits of T1.  */
 void OPPROTO op_signbit_T1_T0(void)
 {
     T1 = (int32_t)T0 >> 31;
+}
+
+void OPPROTO op_movl_cp_T0(void)
+{
+    helper_set_cp(env, PARAM1, T0);
+    FORCE_RET();
+}
+
+void OPPROTO op_movl_T0_cp(void)
+{
+    T0 = helper_get_cp(env, PARAM1);
+    FORCE_RET();
 }
 
 void OPPROTO op_movl_cp15_T0(void)
@@ -1201,3 +1213,6 @@ void OPPROTO op_movl_T0_T2(void)
 {
     T0 = T2;
 }
+
+/* iwMMXt support */
+#include "op_iwmmxt.c"

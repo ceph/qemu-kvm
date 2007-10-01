@@ -1,3 +1,18 @@
+  - TFTP booting from host directory (Anthony Liguori, Erwan Velu)
+  - Tap device emulation for Solaris (Sittichai Palanisong)
+  - Monitor multiplexing to several I/O channels (Jason Wessel)
+  - ds1225y nvram support (Herve Poussineau)
+  - CPU model selection support (J. Mayer, Paul Brook, Herve Poussineau)
+  - Several Sparc fixes (Aurelien Jarno, Blue Swirl)
+  - MIPS 64-bit FPU support (Thiemo Seufer)
+  - Xscale PDA emulation (Andrzei Zaborowski)
+  - ColdFire system emulation (Paul Brook)
+  - Improved SH4 support (Magnus Damm)
+  - MIPS64 support (Aurelien Jarno, Thiemo Seufer)
+  - Preliminary Alpha guest support (J. Mayer)
+  - Read-only support for Parallels disk images (Alex Beregszaszi)
+  - SVM (x86 virtualization) support (Alexander Graf)
+
 version 0.9.0:
 
   - Support for relative paths in backing files for disk images
@@ -23,7 +38,7 @@ version 0.8.2:
   - switch to OpenBios for SPARC targets (Blue Swirl)
   - VNC server fixes
   - MIPS FPU support (Marius Groeger)
-  - Solaris/SPARC host support (Ben Taylor)
+  - Solaris/SPARC host support (Juergen Keil)
   - PPC breakpoints and single stepping (Jason Wessel)
   - USB updates (Paul Brook)
   - UDP/TCP/telnet character devices (Jason Wessel)
@@ -42,7 +57,7 @@ version 0.8.1:
   - PC speaker support (Joachim Henke)
   - IDE LBA48 support (Jens Axboe)
   - SSE3 support
-  - Solaris port (Ben Taylor)
+  - Solaris port (Juergen Keil)
   - Preliminary SH4 target (Samuel Tardieu)
   - VNC server (Anthony Liguori)
   - slirp fixes (Ed Swierk et al.)
@@ -72,7 +87,7 @@ version 0.8.0:
     (Johannes Schindelin)
 
 version 0.7.2:
-  
+
   - x86_64 fixes (Win2000 and Linux 2.6 boot in 32 bit)
   - merge self modifying code handling in dirty ram page mecanism.
   - MIPS fixes (Ralf Baechle)
@@ -121,7 +136,7 @@ version 0.6.1:
   - Mac OS X port (Pierre d'Herbemont)
   - Virtual console support
   - Better monitor line edition
-  - New block device layer 
+  - New block device layer
   - New 'qcow' growable disk image support with AES encryption and
     transparent decompression
   - VMware 3 and 4 read-only disk image support (untested)
@@ -187,7 +202,7 @@ version 0.5.5:
   - FDC fixes for Win98
 
 version 0.5.4:
-  
+
   - qemu-fast fixes
   - BIOS area protection fix (aka EMM386.EXE fix) (Mike Nordell)
   - keyboard/mouse fix (Mike Nordell)
@@ -214,7 +229,7 @@ version 0.5.3:
   - added accurate CR0.MP/ME/TS emulation
   - fixed DMA memory write access (Win95 boot floppy fix)
   - graphical x86 linux loader
-  - command line monitor 
+  - command line monitor
   - generic removable device support
   - support of CD-ROM change
   - multiple network interface support
@@ -252,7 +267,7 @@ version 0.5.2:
   - eflags optimisation fix for string operations
 
 version 0.5.1:
-  
+
   - float access fixes when using soft mmu
   - PC emulation support on PowerPC
   - A20 support
@@ -267,7 +282,7 @@ version 0.5.1:
   - Major SPARC target fixes (dynamically linked programs begin to work)
 
 version 0.5.0:
-  
+
   - full hardware level VGA emulation
   - graphical display with SDL
   - added PS/2 mouse and keyboard emulation
@@ -305,7 +320,7 @@ version 0.4.2:
  - SMP kernels can at least be booted
 
 version 0.4.1:
-  
+
  - more accurate timer support in vl.
  - more reliable NE2000 probe in vl.
  - added 2.5.66 kernel in vl-test.
@@ -391,7 +406,7 @@ version 0.1.3:
  - added bound, cmpxchg8b, cpuid instructions
  - added 16 bit addressing support/override for string operations
  - poll() fix
- 
+
 version 0.1.2:
 
  - compile fixes

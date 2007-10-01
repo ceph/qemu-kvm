@@ -1,4 +1,4 @@
-/* 
+/*
  * Arm PrimeCell PL080/PL081 DMA controller
  *
  * Copyright (c) 2006 CodeSourcery.
@@ -49,8 +49,7 @@ typedef struct {
     int nchannels;
     /* Flag to avoid recursive DMA invocations.  */
     int running;
-    void *pic;
-    int irq;
+    qemu_irq irq;
 } pl080_state;
 
 static const unsigned char pl080_id[] =
@@ -63,9 +62,9 @@ static void pl080_update(pl080_state *s)
 {
     if ((s->tc_int & s->tc_mask)
             || (s->err_int & s->err_mask))
-        pic_set_irq_new(s->pic, s->irq, 1);
+        qemu_irq_raise(s->irq);
     else
-        pic_set_irq_new(s->pic, s->irq, 1);
+        qemu_irq_lower(s->irq);
 }
 
 static void pl080_run(pl080_state *s)
@@ -112,7 +111,7 @@ again:
                 continue;
             flow = (ch->conf >> 11) & 7;
             if (flow >= 4) {
-                cpu_abort(cpu_single_env, 
+                cpu_abort(cpu_single_env,
                     "pl080_run: Peripheral flow control not implemented\n");
             }
             src_id = (ch->conf >> 1) & 0x1f;
@@ -325,7 +324,7 @@ static CPUWriteMemoryFunc *pl080_writefn[] = {
 
 /* The PL080 and PL081 are the same except for the number of channels
    they implement (8 and 2 respectively).  */
-void *pl080_init(uint32_t base, void *pic, int irq, int nchannels)
+void *pl080_init(uint32_t base, qemu_irq irq, int nchannels)
 {
     int iomemtype;
     pl080_state *s;
@@ -333,9 +332,8 @@ void *pl080_init(uint32_t base, void *pic, int irq, int nchannels)
     s = (pl080_state *)qemu_mallocz(sizeof(pl080_state));
     iomemtype = cpu_register_io_memory(0, pl080_readfn,
                                        pl080_writefn, s);
-    cpu_register_physical_memory(base, 0x00000fff, iomemtype);
+    cpu_register_physical_memory(base, 0x00001000, iomemtype);
     s->base = base;
-    s->pic = pic;
     s->irq = irq;
     s->nchannels = nchannels;
     /* ??? Save/restore.  */

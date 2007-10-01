@@ -12,26 +12,26 @@
  * The license and distribution terms for this file may be
  * found in the file LICENSE in this distribution or at
  *  http://www.rtems.com/license/LICENSE.
- * 
+ *
  * @(#) sh7750_regs.h,v 1.2.4.1 2003/09/04 18:46:00 joel Exp
  */
 
 #ifndef __SH7750_REGS_H__
 #define __SH7750_REGS_H__
 
-/* 
- * All register has 2 addresses: in 0xff000000 - 0xffffffff (P4 address)  and 
+/*
+ * All register has 2 addresses: in 0xff000000 - 0xffffffff (P4 address)  and
  * in 0x1f000000 - 0x1fffffff (area 7 address)
  */
-#define SH7750_P4_BASE       0xff000000	/* Accessable only in 
+#define SH7750_P4_BASE       0xff000000	/* Accessable only in
 					   priveleged mode */
 #define SH7750_A7_BASE       0x1f000000	/* Accessable only using TLB */
 
 #define SH7750_P4_REG32(ofs) (SH7750_P4_BASE + (ofs))
 #define SH7750_A7_REG32(ofs) (SH7750_A7_BASE + (ofs))
 
-/* 
- * MMU Registers 
+/*
+ * MMU Registers
  */
 
 /* Page Table Entry High register - PTEH */
@@ -61,9 +61,9 @@
 #define SH7750_PTEL_PR_RWPO   0x00000020	/*   read-write in priv mode */
 #define SH7750_PTEL_PR_ROPU   0x00000040	/*   read-only in priv or user mode */
 #define SH7750_PTEL_PR_RWPU   0x00000060	/*   read-write in priv or user mode */
-#define SH7750_PTEL_C         0x00000008	/* Cacheability 
+#define SH7750_PTEL_C         0x00000008	/* Cacheability
 						   (0 - page not cacheable) */
-#define SH7750_PTEL_D         0x00000004	/* Dirty bit (1 - write has been 
+#define SH7750_PTEL_D         0x00000004	/* Dirty bit (1 - write has been
 						   performed to a page) */
 #define SH7750_PTEL_SH        0x00000002	/* Share Status bit (1 - page are
 						   shared by processes) */
@@ -130,12 +130,12 @@
 #define SH7750_CCR_A7         SH7750_A7_REG32(SH7750_CCR_REGOFS)
 
 #define SH7750_CCR_IIX      0x00008000	/* IC index enable bit */
-#define SH7750_CCR_ICI      0x00000800	/* IC invalidation bit: 
+#define SH7750_CCR_ICI      0x00000800	/* IC invalidation bit:
 					   set it to clear IC */
 #define SH7750_CCR_ICE      0x00000100	/* IC enable bit */
 #define SH7750_CCR_OIX      0x00000080	/* OC index enable bit */
-#define SH7750_CCR_ORA      0x00000020	/* OC RAM enable bit 
-					   if you set OCE = 0, 
+#define SH7750_CCR_ORA      0x00000020	/* OC RAM enable bit
+					   if you set OCE = 0,
 					   you should set ORA = 0 */
 #define SH7750_CCR_OCI      0x00000008	/* OC invalidation bit */
 #define SH7750_CCR_CB       0x00000004	/* Copy-back bit for P1 area */
@@ -254,7 +254,7 @@
 
 /* Peripheral Module Interrupts - Memory Refresh Unit (REF) */
 #define SH7750_EVT_REF_RCMI            0x580	/* Compare-match Interrupt */
-#define SH7750_EVT_REF_ROVI            0x5A0	/* Refresh Counter Overflow 
+#define SH7750_EVT_REF_ROVI            0x5A0	/* Refresh Counter Overflow
 						   interrupt */
 
 /* Peripheral Module Interrupts - Hitachi User Debug Interface (H-UDI) */
@@ -331,7 +331,7 @@
 #define SH7750_FRQCR          SH7750_P4_REG32(SH7750_FRQCR_REGOFS)
 #define SH7750_FRQCR_A7       SH7750_A7_REG32(SH7750_FRQCR_REGOFS)
 
-#define SH7750_FRQCR_CKOEN    0x0800	/* Clock Output Enable 
+#define SH7750_FRQCR_CKOEN    0x0800	/* Clock Output Enable
 					   0 - CKIO pin goes to HiZ/pullup
 					   1 - Clock is output from CKIO */
 #define SH7750_FRQCR_PLL1EN   0x0400	/* PLL circuit 1 enable */
@@ -524,94 +524,6 @@
 					   year counters are stopped
 					   1 - sec, min, hr, day-of-week, month,
 					   year counters operate normally */
-
-
-/*
- * Timer Unit (TMU)
- */
-/* Timer Output Control Register (byte) - TOCR */
-#define SH7750_TOCR_REGOFS    0xD80000	/* offset */
-#define SH7750_TOCR           SH7750_P4_REG32(SH7750_TOCR_REGOFS)
-#define SH7750_TOCR_A7        SH7750_A7_REG32(SH7750_TOCR_REGOFS)
-#define SH7750_TOCR_TCOE      0x01	/* Timer Clock Pin Control:
-					   0 - TCLK is used as external clock
-					   input or input capture control
-					   1 - TCLK is used as on-chip RTC
-					   output clock pin */
-
-/* Timer Start Register (byte) - TSTR */
-#define SH7750_TSTR_REGOFS    0xD80004	/* offset */
-#define SH7750_TSTR           SH7750_P4_REG32(SH7750_TSTR_REGOFS)
-#define SH7750_TSTR_A7        SH7750_A7_REG32(SH7750_TSTR_REGOFS)
-#define SH7750_TSTR_STR2      0x04	/* TCNT2 performs count operations */
-#define SH7750_TSTR_STR1      0x02	/* TCNT1 performs count operations */
-#define SH7750_TSTR_STR0      0x01	/* TCNT0 performs count operations */
-#define SH7750_TSTR_STR(n)    (1 << (n))
-
-/* Timer Constant Register - TCOR0, TCOR1, TCOR2 */
-#define SH7750_TCOR_REGOFS(n) (0xD80008 + ((n)*12))	/* offset */
-#define SH7750_TCOR(n)        SH7750_P4_REG32(SH7750_TCOR_REGOFS(n))
-#define SH7750_TCOR_A7(n)     SH7750_A7_REG32(SH7750_TCOR_REGOFS(n))
-#define SH7750_TCOR0          SH7750_TCOR(0)
-#define SH7750_TCOR1          SH7750_TCOR(1)
-#define SH7750_TCOR2          SH7750_TCOR(2)
-#define SH7750_TCOR0_A7       SH7750_TCOR_A7(0)
-#define SH7750_TCOR1_A7       SH7750_TCOR_A7(1)
-#define SH7750_TCOR2_A7       SH7750_TCOR_A7(2)
-
-/* Timer Counter Register - TCNT0, TCNT1, TCNT2 */
-#define SH7750_TCNT_REGOFS(n) (0xD8000C + ((n)*12))	/* offset */
-#define SH7750_TCNT(n)        SH7750_P4_REG32(SH7750_TCNT_REGOFS(n))
-#define SH7750_TCNT_A7(n)     SH7750_A7_REG32(SH7750_TCNT_REGOFS(n))
-#define SH7750_TCNT0          SH7750_TCNT(0)
-#define SH7750_TCNT1          SH7750_TCNT(1)
-#define SH7750_TCNT2          SH7750_TCNT(2)
-#define SH7750_TCNT0_A7       SH7750_TCNT_A7(0)
-#define SH7750_TCNT1_A7       SH7750_TCNT_A7(1)
-#define SH7750_TCNT2_A7       SH7750_TCNT_A7(2)
-
-/* Timer Control Register (half) - TCR0, TCR1, TCR2 */
-#define SH7750_TCR_REGOFS(n)  (0xD80010 + ((n)*12))	/* offset */
-#define SH7750_TCR(n)         SH7750_P4_REG32(SH7750_TCR_REGOFS(n))
-#define SH7750_TCR_A7(n)      SH7750_A7_REG32(SH7750_TCR_REGOFS(n))
-#define SH7750_TCR0           SH7750_TCR(0)
-#define SH7750_TCR1           SH7750_TCR(1)
-#define SH7750_TCR2           SH7750_TCR(2)
-#define SH7750_TCR0_A7        SH7750_TCR_A7(0)
-#define SH7750_TCR1_A7        SH7750_TCR_A7(1)
-#define SH7750_TCR2_A7        SH7750_TCR_A7(2)
-
-#define SH7750_TCR2_ICPF       0x200	/* Input Capture Interrupt Flag
-					   (1 - input capture has occured) */
-#define SH7750_TCR_UNF         0x100	/* Underflow flag */
-#define SH7750_TCR2_ICPE       0x0C0	/* Input Capture Control: */
-#define SH7750_TCR2_ICPE_DIS   0x000	/*   Input Capture function is not used */
-#define SH7750_TCR2_ICPE_NOINT 0x080	/*   Input Capture function is used, but
-					   input capture interrupt is not
-					   enabled */
-#define SH7750_TCR2_ICPE_INT   0x0C0	/*   Input Capture function is used,
-					   input capture interrupt enabled */
-#define SH7750_TCR_UNIE        0x020	/* Underflow Interrupt Control
-					   (1 - underflow interrupt enabled) */
-#define SH7750_TCR_CKEG        0x018	/* Clock Edge selection: */
-#define SH7750_TCR_CKEG_RAISE  0x000	/*   Count/capture on rising edge */
-#define SH7750_TCR_CKEG_FALL   0x008	/*   Count/capture on falling edge */
-#define SH7750_TCR_CKEG_BOTH   0x018	/*   Count/capture on both rising and
-					   falling edges */
-#define SH7750_TCR_TPSC         0x007	/* Timer prescaler */
-#define SH7750_TCR_TPSC_DIV4    0x000	/*   Counts on peripheral clock/4 */
-#define SH7750_TCR_TPSC_DIV16   0x001	/*   Counts on peripheral clock/16 */
-#define SH7750_TCR_TPSC_DIV64   0x002	/*   Counts on peripheral clock/64 */
-#define SH7750_TCR_TPSC_DIV256  0x003	/*   Counts on peripheral clock/256 */
-#define SH7750_TCR_TPSC_DIV1024 0x004	/*   Counts on peripheral clock/1024 */
-#define SH7750_TCR_TPSC_RTC     0x006	/*   Counts on on-chip RTC output clk */
-#define SH7750_TCR_TPSC_EXT     0x007	/*   Counts on external clock */
-
-/* Input Capture Register (read-only) - TCPR2 */
-#define SH7750_TCPR2_REGOFS   0xD8002C	/* offset */
-#define SH7750_TCPR2          SH7750_P4_REG32(SH7750_TCPR2_REGOFS)
-#define SH7750_TCPR2_A7       SH7750_A7_REG32(SH7750_TCPR2_REGOFS)
-
 /*
  * Bus State Controller - BSC
  */
@@ -643,7 +555,7 @@
 #define SH7750_BCR1_BREQEN    0x00080000	/* BREQ Enable:
 						   0 - External requests are  not
 						   accepted
-						   1 - External requests are 
+						   1 - External requests are
 						   accepted */
 #define SH7750_BCR1_PSHR      0x00040000	/* Partial Sharing Bit:
 						   0 - Master Mode
@@ -877,7 +789,7 @@
 #define SH7750_MCR_TCAS_1     0x00000000	/*    1 */
 #define SH7750_MCR_TCAS_2     0x00800000	/*    2 */
 
-#define SH7750_MCR_TPC        0x00380000	/* DRAM: RAS Precharge Period 
+#define SH7750_MCR_TPC        0x00380000	/* DRAM: RAS Precharge Period
 						   SDRAM: minimum number of cycles
 						   until the next bank active cmd
 						   is output after precharging */
@@ -1148,7 +1060,7 @@
 #define SH7750_CHCR_DSA_AMEM16  0x0E000000	/* 16-bit attribute memory space */
 
 #define SH7750_CHCR_DTC       0x01000000	/* Destination Address Wait Control
-						   Select, specifies CS5 or CS6 
+						   Select, specifies CS5 or CS6
 						   space wait control for PCMCIA
 						   access */
 
@@ -1186,8 +1098,8 @@
 						   Address Mode (External Addr
 						   Space -> External Device) */
 #define SH7750_CHCR_RS_ER_SA_ED_TO_EA   0x300	/* External Request, Single
-						   Address Mode, (External 
-						   Device -> External Addr 
+						   Address Mode, (External
+						   Device -> External Addr
 						   Space) */
 #define SH7750_CHCR_RS_AR_EA_TO_EA      0x400	/* Auto-Request (External Addr
 						   Space -> External Addr Space) */
@@ -1195,7 +1107,7 @@
 #define SH7750_CHCR_RS_AR_EA_TO_OCP     0x500	/* Auto-Request (External Addr
 						   Space -> On-chip Peripheral
 						   Module) */
-#define SH7750_CHCR_RS_AR_OCP_TO_EA     0x600	/* Auto-Request (On-chip 
+#define SH7750_CHCR_RS_AR_OCP_TO_EA     0x600	/* Auto-Request (On-chip
 						   Peripheral Module ->
 						   External Addr Space */
 #define SH7750_CHCR_RS_SCITX_EA_TO_SC   0x800	/* SCI Transmit-Data-Empty intr
@@ -1255,231 +1167,6 @@
 #define SH7750_DMAOR_AE       0x00000004	/* Address Error flag */
 #define SH7750_DMAOR_NMIF     0x00000002	/* NMI Flag */
 #define SH7750_DMAOR_DME      0x00000001	/* DMAC Master Enable */
-
-/*
- * Serial Communication Interface - SCI
- * Serial Communication Interface with FIFO - SCIF
- */
-/* SCI Receive Data Register (byte, read-only) - SCRDR1, SCFRDR2 */
-#define SH7750_SCRDR_REGOFS(n) ((n) == 1 ? 0xE00014 : 0xE80014)	/* offset */
-#define SH7750_SCRDR(n)       SH7750_P4_REG32(SH7750_SCRDR_REGOFS(n))
-#define SH7750_SCRDR1         SH7750_SCRDR(1)
-#define SH7750_SCRDR2         SH7750_SCRDR(2)
-#define SH7750_SCRDR_A7(n)    SH7750_A7_REG32(SH7750_SCRDR_REGOFS(n))
-#define SH7750_SCRDR1_A7      SH7750_SCRDR_A7(1)
-#define SH7750_SCRDR2_A7      SH7750_SCRDR_A7(2)
-
-/* SCI Transmit Data Register (byte) - SCTDR1, SCFTDR2 */
-#define SH7750_SCTDR_REGOFS(n) ((n) == 1 ? 0xE0000C : 0xE8000C)	/* offset */
-#define SH7750_SCTDR(n)       SH7750_P4_REG32(SH7750_SCTDR_REGOFS(n))
-#define SH7750_SCTDR1         SH7750_SCTDR(1)
-#define SH7750_SCTDR2         SH7750_SCTDR(2)
-#define SH7750_SCTDR_A7(n)    SH7750_A7_REG32(SH7750_SCTDR_REGOFS(n))
-#define SH7750_SCTDR1_A7      SH7750_SCTDR_A7(1)
-#define SH7750_SCTDR2_A7      SH7750_SCTDR_A7(2)
-
-/* SCI Serial Mode Register - SCSMR1(byte), SCSMR2(half) */
-#define SH7750_SCSMR_REGOFS(n) ((n) == 1 ? 0xE00000 : 0xE80000)	/* offset */
-#define SH7750_SCSMR(n)       SH7750_P4_REG32(SH7750_SCSMR_REGOFS(n))
-#define SH7750_SCSMR1         SH7750_SCSMR(1)
-#define SH7750_SCSMR2         SH7750_SCSMR(2)
-#define SH7750_SCSMR_A7(n)    SH7750_A7_REG32(SH7750_SCSMR_REGOFS(n))
-#define SH7750_SCSMR1_A7      SH7750_SCSMR_A7(1)
-#define SH7750_SCSMR2_A7      SH7750_SCSMR_A7(2)
-
-#define SH7750_SCSMR1_CA       0x80	/* Communication Mode (C/A\): */
-#define SH7750_SCSMR1_CA_ASYNC 0x00	/*     Asynchronous Mode */
-#define SH7750_SCSMR1_CA_SYNC  0x80	/*     Synchronous Mode */
-#define SH7750_SCSMR_CHR       0x40	/* Character Length: */
-#define SH7750_SCSMR_CHR_8     0x00	/*     8-bit data */
-#define SH7750_SCSMR_CHR_7     0x40	/*     7-bit data */
-#define SH7750_SCSMR_PE        0x20	/* Parity Enable */
-#define SH7750_SCSMR_PM        0x10	/* Parity Mode: */
-#define SH7750_SCSMR_PM_EVEN   0x00	/*     Even Parity */
-#define SH7750_SCSMR_PM_ODD    0x10	/*     Odd Parity */
-#define SH7750_SCSMR_STOP      0x08	/* Stop Bit Length: */
-#define SH7750_SCSMR_STOP_1    0x00	/*     1 stop bit */
-#define SH7750_SCSMR_STOP_2    0x08	/*     2 stop bit */
-#define SH7750_SCSMR1_MP       0x04	/* Multiprocessor Mode */
-#define SH7750_SCSMR_CKS       0x03	/* Clock Select */
-#define SH7750_SCSMR_CKS_S     0
-#define SH7750_SCSMR_CKS_DIV1  0x00	/*     Periph clock */
-#define SH7750_SCSMR_CKS_DIV4  0x01	/*     Periph clock / 4 */
-#define SH7750_SCSMR_CKS_DIV16 0x02	/*     Periph clock / 16 */
-#define SH7750_SCSMR_CKS_DIV64 0x03	/*     Periph clock / 64 */
-
-/* SCI Serial Control Register - SCSCR1(byte), SCSCR2(half) */
-#define SH7750_SCSCR_REGOFS(n) ((n) == 1 ? 0xE00008 : 0xE80008)	/* offset */
-#define SH7750_SCSCR(n)       SH7750_P4_REG32(SH7750_SCSCR_REGOFS(n))
-#define SH7750_SCSCR1         SH7750_SCSCR(1)
-#define SH7750_SCSCR2         SH7750_SCSCR(2)
-#define SH7750_SCSCR_A7(n)    SH7750_A7_REG32(SH7750_SCSCR_REGOFS(n))
-#define SH7750_SCSCR1_A7      SH7750_SCSCR_A7(1)
-#define SH7750_SCSCR2_A7      SH7750_SCSCR_A7(2)
-
-#define SH7750_SCSCR_TIE      0x80	/* Transmit Interrupt Enable */
-#define SH7750_SCSCR_RIE      0x40	/* Receive Interrupt Enable */
-#define SH7750_SCSCR_TE       0x20	/* Transmit Enable */
-#define SH7750_SCSCR_RE       0x10	/* Receive Enable */
-#define SH7750_SCSCR1_MPIE    0x08	/* Multiprocessor Interrupt Enable */
-#define SH7750_SCSCR2_REIE    0x08	/* Receive Error Interrupt Enable */
-#define SH7750_SCSCR1_TEIE    0x04	/* Transmit End Interrupt Enable */
-#define SH7750_SCSCR1_CKE     0x03	/* Clock Enable: */
-#define SH7750_SCSCR_CKE_INTCLK            0x00	/* Use Internal Clock */
-#define SH7750_SCSCR_CKE_EXTCLK            0x02	/* Use External Clock from SCK */
-#define SH7750_SCSCR1_CKE_ASYNC_SCK_CLKOUT 0x01	/* Use SCK as a clock output
-						   in asynchronous mode */
-
-/* SCI Serial Status Register - SCSSR1(byte), SCSFR2(half) */
-#define SH7750_SCSSR_REGOFS(n) ((n) == 1 ? 0xE00010 : 0xE80010)	/* offset */
-#define SH7750_SCSSR(n)       SH7750_P4_REG32(SH7750_SCSSR_REGOFS(n))
-#define SH7750_SCSSR1         SH7750_SCSSR(1)
-#define SH7750_SCSFR2         SH7750_SCSSR(2)
-#define SH7750_SCSSR_A7(n)    SH7750_A7_REG32(SH7750_SCSSR_REGOFS(n))
-#define SH7750_SCSSR1_A7      SH7750_SCSSR_A7(1)
-#define SH7750_SCSFR2_A7      SH7750_SCSSR_A7(2)
-
-#define SH7750_SCSSR1_TDRE    0x80	/* Transmit Data Register Empty */
-#define SH7750_SCSSR1_RDRF    0x40	/* Receive Data Register Full */
-#define SH7750_SCSSR1_ORER    0x20	/* Overrun Error */
-#define SH7750_SCSSR1_FER     0x10	/* Framing Error */
-#define SH7750_SCSSR1_PER     0x08	/* Parity Error */
-#define SH7750_SCSSR1_TEND    0x04	/* Transmit End */
-#define SH7750_SCSSR1_MPB     0x02	/* Multiprocessor Bit */
-#define SH7750_SCSSR1_MPBT    0x01	/* Multiprocessor Bit Transfer */
-
-#define SH7750_SCFSR2_PERN    0xF000	/* Number of Parity Errors */
-#define SH7750_SCFSR2_PERN_S  12
-#define SH7750_SCFSR2_FERN    0x0F00	/* Number of Framing Errors */
-#define SH7750_SCFSR2_FERN_S  8
-#define SH7750_SCFSR2_ER      0x0080	/* Receive Error */
-#define SH7750_SCFSR2_TEND    0x0040	/* Transmit End */
-#define SH7750_SCFSR2_TDFE    0x0020	/* Transmit FIFO Data Empty */
-#define SH7750_SCFSR2_BRK     0x0010	/* Break Detect */
-#define SH7750_SCFSR2_FER     0x0008	/* Framing Error */
-#define SH7750_SCFSR2_PER     0x0004	/* Parity Error */
-#define SH7750_SCFSR2_RDF     0x0002	/* Receive FIFO Data Full */
-#define SH7750_SCFSR2_DR      0x0001	/* Receive Data Ready */
-
-/* SCI Serial Port Register - SCSPTR1(byte) */
-#define SH7750_SCSPTR1_REGOFS 0xE0001C	/* offset */
-#define SH7750_SCSPTR1        SH7750_P4_REG32(SH7750_SCSPTR1_REGOFS)
-#define SH7750_SCSPTR1_A7     SH7750_A7_REG32(SH7750_SCSPTR1_REGOFS)
-
-#define SH7750_SCSPTR1_EIO    0x80	/* Error Interrupt Only */
-#define SH7750_SCSPTR1_SPB1IO 0x08	/* 1: Output SPB1DT bit to SCK pin */
-#define SH7750_SCSPTR1_SPB1DT 0x04	/* Serial Port Clock Port Data */
-#define SH7750_SCSPTR1_SPB0IO 0x02	/* 1: Output SPB0DT bit to TxD pin */
-#define SH7750_SCSPTR1_SPB0DT 0x01	/* Serial Port Break Data */
-
-/* SCIF Serial Port Register - SCSPTR2(half) */
-#define SH7750_SCSPTR2_REGOFS 0xE80020	/* offset */
-#define SH7750_SCSPTR2        SH7750_P4_REG32(SH7750_SCSPTR2_REGOFS)
-#define SH7750_SCSPTR2_A7     SH7750_A7_REG32(SH7750_SCSPTR2_REGOFS)
-
-#define SH7750_SCSPTR2_RTSIO  0x80	/* 1: Output RTSDT bit to RTS2\ pin */
-#define SH7750_SCSPTR2_RTSDT  0x40	/* RTS Port Data */
-#define SH7750_SCSPTR2_CTSIO  0x20	/* 1: Output CTSDT bit to CTS2\ pin */
-#define SH7750_SCSPTR2_CTSDT  0x10	/* CTS Port Data */
-#define SH7750_SCSPTR2_SPB2IO 0x02	/* 1: Output SPBDT bit to TxD2 pin */
-#define SH7750_SCSPTR2_SPB2DT 0x01	/* Serial Port Break Data */
-
-/* SCI Bit Rate Register - SCBRR1(byte), SCBRR2(byte) */
-#define SH7750_SCBRR_REGOFS(n) ((n) == 1 ? 0xE00004 : 0xE80004)	/* offset */
-#define SH7750_SCBRR(n)       SH7750_P4_REG32(SH7750_SCBRR_REGOFS(n))
-#define SH7750_SCBRR1         SH7750_SCBRR_P4(1)
-#define SH7750_SCBRR2         SH7750_SCBRR_P4(2)
-#define SH7750_SCBRR_A7(n)    SH7750_A7_REG32(SH7750_SCBRR_REGOFS(n))
-#define SH7750_SCBRR1_A7      SH7750_SCBRR_A7(1)
-#define SH7750_SCBRR2_A7      SH7750_SCBRR_A7(2)
-
-/* SCIF FIFO Control Register - SCFCR2(half) */
-#define SH7750_SCFCR2_REGOFS  0xE80018	/* offset */
-#define SH7750_SCFCR2         SH7750_P4_REG32(SH7750_SCFCR2_REGOFS)
-#define SH7750_SCFCR2_A7      SH7750_A7_REG32(SH7750_SCFCR2_REGOFS)
-
-#define SH7750_SCFCR2_RSTRG   0x700	/* RTS2\ Output Active Trigger; RTS2\
-					   signal goes to high level when the
-					   number of received data stored in
-					   FIFO exceeds the trigger number */
-#define SH7750_SCFCR2_RSTRG_15 0x000	/* 15 bytes */
-#define SH7750_SCFCR2_RSTRG_1  0x000	/* 1 byte */
-#define SH7750_SCFCR2_RSTRG_4  0x000	/* 4 bytes */
-#define SH7750_SCFCR2_RSTRG_6  0x000	/* 6 bytes */
-#define SH7750_SCFCR2_RSTRG_8  0x000	/* 8 bytes */
-#define SH7750_SCFCR2_RSTRG_10 0x000	/* 10 bytes */
-#define SH7750_SCFCR2_RSTRG_14 0x000	/* 14 bytes */
-
-#define SH7750_SCFCR2_RTRG    0x0C0	/* Receive FIFO Data Number Trigger,
-					   Receive Data Full (RDF) Flag sets
-					   when number of receive data bytes is
-					   equal or greater than the trigger
-					   number */
-#define SH7750_SCFCR2_RTRG_1  0x000	/* 1 byte */
-#define SH7750_SCFCR2_RTRG_4  0x040	/* 4 bytes */
-#define SH7750_SCFCR2_RTRG_8  0x080	/* 8 bytes */
-#define SH7750_SCFCR2_RTRG_14 0x0C0	/* 14 bytes */
-
-#define SH7750_SCFCR2_TTRG    0x030	/* Transmit FIFO Data Number Trigger,
-					   Transmit FIFO Data Register Empty (TDFE)
-					   flag sets when the number of remaining
-					   transmit data bytes is equal or less
-					   than the trigger number */
-#define SH7750_SCFCR2_TTRG_8  0x000	/* 8 bytes */
-#define SH7750_SCFCR2_TTRG_4  0x010	/* 4 bytes */
-#define SH7750_SCFCR2_TTRG_2  0x020	/* 2 bytes */
-#define SH7750_SCFCR2_TTRG_1  0x030	/* 1 byte */
-
-#define SH7750_SCFCR2_MCE     0x008	/* Modem Control Enable */
-#define SH7750_SCFCR2_TFRST   0x004	/* Transmit FIFO Data Register Reset,
-					   invalidates the transmit data in the
-					   transmit FIFO */
-#define SH7750_SCFCR2_RFRST   0x002	/* Receive FIFO Data Register Reset,
-					   invalidates the receive data in the
-					   receive FIFO data register and resets
-					   it to the empty state */
-#define SH7750_SCFCR2_LOOP    0x001	/* Loopback Test */
-
-/* SCIF FIFO Data Count Register - SCFDR2(half, read-only) */
-#define SH7750_SCFDR2_REGOFS  0xE8001C	/* offset */
-#define SH7750_SCFDR2         SH7750_P4_REG32(SH7750_SCFDR2_REGOFS)
-#define SH7750_SCFDR2_A7      SH7750_A7_REG32(SH7750_SCFDR2_REGOFS)
-
-#define SH7750_SCFDR2_T       0x1F00	/* Number of untransmitted data bytes
-					   in transmit FIFO */
-#define SH7750_SCFDR2_T_S     8
-#define SH7750_SCFDR2_R       0x001F	/* Number of received data bytes in
-					   receive FIFO */
-#define SH7750_SCFDR2_R_S     0
-
-/* SCIF Line Status Register - SCLSR2(half, read-only) */
-#define SH7750_SCLSR2_REGOFS  0xE80024	/* offset */
-#define SH7750_SCLSR2         SH7750_P4_REG32(SH7750_SCLSR2_REGOFS)
-#define SH7750_SCLSR2_A7      SH7750_A7_REG32(SH7750_SCLSR2_REGOFS)
-
-#define SH7750_SCLSR2_ORER    0x0001	/* Overrun Error */
-
-/*
- * SCI-based Smart Card Interface
- */
-/* Smart Card Mode Register - SCSCMR1(byte) */
-#define SH7750_SCSCMR1_REGOFS 0xE00018	/* offset */
-#define SH7750_SCSCMR1        SH7750_P4_REG32(SH7750_SCSCMR1_REGOFS)
-#define SH7750_SCSCMR1_A7     SH7750_A7_REG32(SH7750_SCSCMR1_REGOFS)
-
-#define SH7750_SCSCMR1_SDIR   0x08	/* Smart Card Data Transfer Direction: */
-#define SH7750_SCSCMR1_SDIR_LSBF 0x00	/* LSB-first */
-#define SH7750_SCSCMR1_SDIR_MSBF 0x08	/* MSB-first */
-
-#define SH7750_SCSCMR1_SINV   0x04	/* Smart Card Data Inversion */
-#define SH7750_SCSCMR1_SMIF   0x01	/* Smart Card Interface Mode Select */
-
-/* Smart-card specific bits in other registers */
-/* SCSMR1: */
-#define SH7750_SCSMR1_GSM     0x80	/* GSM mode select */
-
-/* SCSSR1: */
-#define SH7750_SCSSR1_ERS     0x10	/* Error Signal Status */
 
 /*
  * I/O Ports
@@ -1596,7 +1283,7 @@
 #define SH7750_IPRC_HUDI_S    0
 
 
-/* 
+/*
  * User Break Controller registers
  */
 #define SH7750_BARA           0x200000	/* Break address regiser A */

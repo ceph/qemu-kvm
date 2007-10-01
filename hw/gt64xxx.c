@@ -2,7 +2,7 @@
  * QEMU GT64120 PCI host
  *
  * Copyright (c) 2006,2007 Aurelien Jarno
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
@@ -23,8 +23,17 @@
  */
 
 #include "vl.h"
+
 typedef target_phys_addr_t pci_addr_t;
 #include "pci_host.h"
+
+//#define DEBUG
+
+#ifdef DEBUG
+#define dprintf(fmt, ...) fprintf(stderr, "%s: " fmt, __FUNCTION__, ##__VA_ARGS__)
+#else
+#define dprintf(fmt, ...)
+#endif
 
 #define GT_REGS			(0x1000 >> 2)
 
@@ -45,8 +54,6 @@ typedef target_phys_addr_t pci_addr_t;
 #define GT_PCI0IOHD    		(0x050 >> 2)
 #define GT_PCI0M0LD    		(0x058 >> 2)
 #define GT_PCI0M0HD    		(0x060 >> 2)
-#define GT_ISD    		(0x068 >> 2)
-
 #define GT_PCI0M1LD    		(0x080 >> 2)
 #define GT_PCI0M1HD    		(0x088 >> 2)
 #define GT_PCI1IOLD    		(0x090 >> 2)
@@ -55,8 +62,7 @@ typedef target_phys_addr_t pci_addr_t;
 #define GT_PCI1M0HD    		(0x0a8 >> 2)
 #define GT_PCI1M1LD    		(0x0b0 >> 2)
 #define GT_PCI1M1HD    		(0x0b8 >> 2)
-#define GT_PCI1M1LD    		(0x0b0 >> 2)
-#define GT_PCI1M1HD    		(0x0b8 >> 2)
+#define GT_ISD    		(0x068 >> 2)
 
 #define GT_SCS10AR    		(0x0d0 >> 2)
 #define GT_SCS32AR    		(0x0d8 >> 2)
@@ -219,21 +225,78 @@ typedef target_phys_addr_t pci_addr_t;
 
 typedef PCIHostState GT64120PCIState;
 
+#define PCI_MAPPING_ENTRY(regname)            \
+    target_phys_addr_t regname ##_start;      \
+    target_phys_addr_t regname ##_length;     \
+    int regname ##_handle
+
 typedef struct GT64120State {
     GT64120PCIState *pci;
     uint32_t regs[GT_REGS];
+    PCI_MAPPING_ENTRY(PCI0IO);
+    PCI_MAPPING_ENTRY(ISD);
 } GT64120State;
+
+/* Adjust range to avoid touching space which isn't mappable via PCI */
+/* XXX: Hardcoded values for Malta: 0x1e000000 - 0x1f100000
+                                    0x1fc00000 - 0x1fd00000  */
+static void check_reserved_space (target_phys_addr_t *start,
+                                  target_phys_addr_t *length)
+{
+    target_phys_addr_t begin = *start;
+    target_phys_addr_t end = *start + *length;
+
+    if (end >= 0x1e000000LL && end < 0x1f100000LL)
+        end = 0x1e000000LL;
+    if (begin >= 0x1e000000LL && begin < 0x1f100000LL)
+        begin = 0x1f100000LL;
+    if (end >= 0x1fc00000LL && end < 0x1fd00000LL)
+        end = 0x1fc00000LL;
+    if (begin >= 0x1fc00000LL && begin < 0x1fd00000LL)
+        begin = 0x1fd00000LL;
+    /* XXX: This is broken when a reserved range splits the requested range */
+    if (end >= 0x1f100000LL && begin < 0x1e000000LL)
+        end = 0x1e000000LL;
+    if (end >= 0x1fd00000LL && begin < 0x1fc00000LL)
+        end = 0x1fc00000LL;
+
+    *start = begin;
+    *length = end - begin;
+}
+
+static void gt64120_isd_mapping(GT64120State *s)
+{
+    target_phys_addr_t start = s->regs[GT_ISD] << 21;
+    target_phys_addr_t length = 0x1000;
+
+    if (s->ISD_length)
+        cpu_register_physical_memory(s->ISD_start, s->ISD_length,
+                                     IO_MEM_UNASSIGNED);
+    check_reserved_space(&start, &length);
+    length = 0x1000;
+    /* Map new address */
+    dprintf("ISD: %x@%x -> %x@%x, %x\n", s->ISD_length, s->ISD_start,
+            length, start, s->ISD_handle);
+    s->ISD_start = start;
+    s->ISD_length = length;
+    cpu_register_physical_memory(s->ISD_start, s->ISD_length, s->ISD_handle);
+}
 
 static void gt64120_pci_mapping(GT64120State *s)
 {
-    target_phys_addr_t start, length;		   
-
     /* Update IO mapping */
     if ((s->regs[GT_PCI0IOLD] & 0x7f) <= s->regs[GT_PCI0IOHD])
     {
-      start = s->regs[GT_PCI0IOLD] << 21;
-      length = ((s->regs[GT_PCI0IOHD] + 1) - (s->regs[GT_PCI0IOLD] & 0x7f)) << 21;
-      isa_mmio_init(start, length);
+      /* Unmap old IO address */
+      if (s->PCI0IO_length)
+      {
+        cpu_register_physical_memory(s->PCI0IO_start, s->PCI0IO_length, IO_MEM_UNASSIGNED);
+      }
+      /* Map new IO address */
+      s->PCI0IO_start = s->regs[GT_PCI0IOLD] << 21;
+      s->PCI0IO_length = ((s->regs[GT_PCI0IOHD] + 1) - (s->regs[GT_PCI0IOLD] & 0x7f)) << 21;
+      isa_mem_base = s->PCI0IO_start;
+      isa_mmio_init(s->PCI0IO_start, s->PCI0IO_length);
     }
 }
 
@@ -267,37 +330,39 @@ static void gt64120_writel (void *opaque, target_phys_addr_t addr,
     case GT_PCI0M0LD:
         s->regs[GT_PCI0M0LD]    = val & 0x00007fff;
         s->regs[GT_PCI0M0REMAP] = val & 0x000007ff;
-        gt64120_pci_mapping(s);
         break;
     case GT_PCI0M1LD:
         s->regs[GT_PCI0M1LD]    = val & 0x00007fff;
         s->regs[GT_PCI0M1REMAP] = val & 0x000007ff;
-        gt64120_pci_mapping(s);
         break;
     case GT_PCI1IOLD:
         s->regs[GT_PCI1IOLD]    = val & 0x00007fff;
         s->regs[GT_PCI1IOREMAP] = val & 0x000007ff;
-        gt64120_pci_mapping(s);
         break;
     case GT_PCI1M0LD:
         s->regs[GT_PCI1M0LD]    = val & 0x00007fff;
         s->regs[GT_PCI1M0REMAP] = val & 0x000007ff;
-        gt64120_pci_mapping(s);
         break;
     case GT_PCI1M1LD:
         s->regs[GT_PCI1M1LD]    = val & 0x00007fff;
         s->regs[GT_PCI1M1REMAP] = val & 0x000007ff;
-        gt64120_pci_mapping(s);
         break;
     case GT_PCI0IOHD:
+        s->regs[saddr] = val & 0x0000007f;
+        gt64120_pci_mapping(s);
+        break;
     case GT_PCI0M0HD:
     case GT_PCI0M1HD:
     case GT_PCI1IOHD:
     case GT_PCI1M0HD:
     case GT_PCI1M1HD:
         s->regs[saddr] = val & 0x0000007f;
-        gt64120_pci_mapping(s);
         break;
+    case GT_ISD:
+        s->regs[saddr] = val & 0x00007fff;
+        gt64120_isd_mapping(s);
+        break;
+
     case GT_PCI0IOREMAP:
     case GT_PCI0M0REMAP:
     case GT_PCI0M1REMAP:
@@ -305,7 +370,6 @@ static void gt64120_writel (void *opaque, target_phys_addr_t addr,
     case GT_PCI1M0REMAP:
     case GT_PCI1M1REMAP:
         s->regs[saddr] = val & 0x000007ff;
-        gt64120_pci_mapping(s);
         break;
 
     /* CPU Error Report */
@@ -323,6 +387,45 @@ static void gt64120_writel (void *opaque, target_phys_addr_t addr,
 	/* Read-only registers, do nothing */
         break;
 
+    /* SDRAM and Device Address Decode */
+    case GT_SCS0LD:
+    case GT_SCS0HD:
+    case GT_SCS1LD:
+    case GT_SCS1HD:
+    case GT_SCS2LD:
+    case GT_SCS2HD:
+    case GT_SCS3LD:
+    case GT_SCS3HD:
+    case GT_CS0LD:
+    case GT_CS0HD:
+    case GT_CS1LD:
+    case GT_CS1HD:
+    case GT_CS2LD:
+    case GT_CS2HD:
+    case GT_CS3LD:
+    case GT_CS3HD:
+    case GT_BOOTLD:
+    case GT_BOOTHD:
+    case GT_ADERR:
+    /* SDRAM Configuration */
+    case GT_SDRAM_CFG:
+    case GT_SDRAM_OPMODE:
+    case GT_SDRAM_BM:
+    case GT_SDRAM_ADDRDECODE:
+        /* Accept and ignore SDRAM interleave configuration */
+        s->regs[saddr] = val;
+        break;
+
+    /* Device Parameters */
+    case GT_DEV_B0:
+    case GT_DEV_B1:
+    case GT_DEV_B2:
+    case GT_DEV_B3:
+    case GT_DEV_BOOT:
+        /* Not implemented */
+        dprintf ("Unimplemented device register offset 0x%x\n", saddr << 2);
+        break;
+
     /* ECC */
     case GT_ECC_ERRDATALO:
     case GT_ECC_ERRDATAHI:
@@ -332,16 +435,131 @@ static void gt64120_writel (void *opaque, target_phys_addr_t addr,
         /* Read-only registers, do nothing */
         break;
 
+    /* DMA Record */
+    case GT_DMA0_CNT:
+    case GT_DMA1_CNT:
+    case GT_DMA2_CNT:
+    case GT_DMA3_CNT:
+    case GT_DMA0_SA:
+    case GT_DMA1_SA:
+    case GT_DMA2_SA:
+    case GT_DMA3_SA:
+    case GT_DMA0_DA:
+    case GT_DMA1_DA:
+    case GT_DMA2_DA:
+    case GT_DMA3_DA:
+    case GT_DMA0_NEXT:
+    case GT_DMA1_NEXT:
+    case GT_DMA2_NEXT:
+    case GT_DMA3_NEXT:
+    case GT_DMA0_CUR:
+    case GT_DMA1_CUR:
+    case GT_DMA2_CUR:
+    case GT_DMA3_CUR:
+        /* Not implemented */
+        dprintf ("Unimplemented DMA register offset 0x%x\n", saddr << 2);
+        break;
+
+    /* DMA Channel Control */
+    case GT_DMA0_CTRL:
+    case GT_DMA1_CTRL:
+    case GT_DMA2_CTRL:
+    case GT_DMA3_CTRL:
+        /* Not implemented */
+        dprintf ("Unimplemented DMA register offset 0x%x\n", saddr << 2);
+        break;
+
+    /* DMA Arbiter */
+    case GT_DMA_ARB:
+        /* Not implemented */
+        dprintf ("Unimplemented DMA register offset 0x%x\n", saddr << 2);
+        break;
+
+    /* Timer/Counter */
+    case GT_TC0:
+    case GT_TC1:
+    case GT_TC2:
+    case GT_TC3:
+    case GT_TC_CONTROL:
+        /* Not implemented */
+        dprintf ("Unimplemented timer register offset 0x%x\n", saddr << 2);
+        break;
+
     /* PCI Internal */
     case GT_PCI0_CMD:
     case GT_PCI1_CMD:
         s->regs[saddr] = val & 0x0401fc0f;
         break;
+    case GT_PCI0_TOR:
+    case GT_PCI0_BS_SCS10:
+    case GT_PCI0_BS_SCS32:
+    case GT_PCI0_BS_CS20:
+    case GT_PCI0_BS_CS3BT:
+    case GT_PCI1_IACK:
+    case GT_PCI0_IACK:
+    case GT_PCI0_BARE:
+    case GT_PCI0_PREFMBR:
+    case GT_PCI0_SCS10_BAR:
+    case GT_PCI0_SCS32_BAR:
+    case GT_PCI0_CS20_BAR:
+    case GT_PCI0_CS3BT_BAR:
+    case GT_PCI0_SSCS10_BAR:
+    case GT_PCI0_SSCS32_BAR:
+    case GT_PCI0_SCS3BT_BAR:
+    case GT_PCI1_TOR:
+    case GT_PCI1_BS_SCS10:
+    case GT_PCI1_BS_SCS32:
+    case GT_PCI1_BS_CS20:
+    case GT_PCI1_BS_CS3BT:
+    case GT_PCI1_BARE:
+    case GT_PCI1_PREFMBR:
+    case GT_PCI1_SCS10_BAR:
+    case GT_PCI1_SCS32_BAR:
+    case GT_PCI1_CS20_BAR:
+    case GT_PCI1_CS3BT_BAR:
+    case GT_PCI1_SSCS10_BAR:
+    case GT_PCI1_SSCS32_BAR:
+    case GT_PCI1_SCS3BT_BAR:
+    case GT_PCI1_CFGADDR:
+    case GT_PCI1_CFGDATA:
+        /* not implemented */
+        break;
     case GT_PCI0_CFGADDR:
         s->pci->config_reg = val & 0x80fffffc;
         break;
     case GT_PCI0_CFGDATA:
-        pci_host_data_writel(s->pci, 0, val);
+        if (s->pci->config_reg & (1u << 31))
+            pci_host_data_writel(s->pci, 0, val);
+        break;
+
+    /* Interrupts */
+    case GT_INTRCAUSE:
+        /* not really implemented */
+        s->regs[saddr] = ~(~(s->regs[saddr]) | ~(val & 0xfffffffe));
+        s->regs[saddr] |= !!(s->regs[saddr] & 0xfffffffe);
+        dprintf("INTRCAUSE %x\n", val);
+        break;
+    case GT_INTRMASK:
+        s->regs[saddr] = val & 0x3c3ffffe;
+        dprintf("INTRMASK %x\n", val);
+        break;
+    case GT_PCI0_ICMASK:
+        s->regs[saddr] = val & 0x03fffffe;
+        dprintf("ICMASK %x\n", val);
+        break;
+    case GT_PCI0_SERR0MASK:
+        s->regs[saddr] = val & 0x0000003f;
+        dprintf("SERR0MASK %x\n", val);
+        break;
+
+    /* Reserved when only PCI_0 is configured. */
+    case GT_HINTRCAUSE:
+    case GT_CPU_INTSEL:
+    case GT_PCI0_INTSEL:
+    case GT_HINTRMASK:
+    case GT_PCI0_HICMASK:
+    case GT_PCI1_SERR1MASK:
+        /* not implemented */
         break;
 
     /* SDRAM Parameters */
@@ -355,9 +573,7 @@ static void gt64120_writel (void *opaque, target_phys_addr_t addr,
         break;
 
     default:
-#if 0
-        printf ("gt64120_writel: Bad register offset 0x%x\n", (int)addr);
-#endif
+        dprintf ("Bad register offset 0x%x\n", (int)addr);
         break;
     }
 }
@@ -388,7 +604,7 @@ static uint32_t gt64120_readl (void *opaque,
     case GT_CPUERR_DATAHI:
     case GT_CPUERR_PARITY:
         /* Emulated memory has no error, always return the initial
-           values */ 
+           values */
         val = s->regs[saddr];
         break;
 
@@ -398,7 +614,7 @@ static uint32_t gt64120_readl (void *opaque,
         /* Reading those register should empty all FIFO on the PCI
            bus, which are not emulated. The return value should be
            a random value that should be ignored. */
-        val = 0xc000ffee; 
+        val = 0xc000ffee;
         break;
 
     /* ECC */
@@ -408,11 +624,23 @@ static uint32_t gt64120_readl (void *opaque,
     case GT_ECC_CALC:
     case GT_ECC_ERRADDR:
         /* Emulated memory has no error, always return the initial
-           values */ 
+           values */
         val = s->regs[saddr];
         break;
 
     case GT_CPU:
+    case GT_SCS10LD:
+    case GT_SCS10HD:
+    case GT_SCS32LD:
+    case GT_SCS32HD:
+    case GT_CS20LD:
+    case GT_CS20HD:
+    case GT_CS3BOOTLD:
+    case GT_CS3BOOTHD:
+    case GT_SCS10AR:
+    case GT_SCS32AR:
+    case GT_CS20R:
+    case GT_CS3BOOTR:
     case GT_PCI0IOLD:
     case GT_PCI0M0LD:
     case GT_PCI0M1LD:
@@ -425,19 +653,49 @@ static uint32_t gt64120_readl (void *opaque,
     case GT_PCI1IOHD:
     case GT_PCI1M0HD:
     case GT_PCI1M1HD:
-    case GT_PCI0_CMD:
-    case GT_PCI1_CMD:
     case GT_PCI0IOREMAP:
     case GT_PCI0M0REMAP:
     case GT_PCI0M1REMAP:
     case GT_PCI1IOREMAP:
     case GT_PCI1M0REMAP:
     case GT_PCI1M1REMAP:
+    case GT_ISD:
         val = s->regs[saddr];
         break;
     case GT_PCI0_IACK:
-        /* Read the IRQ number */ 
+        /* Read the IRQ number */
         val = pic_read_irq(isa_pic);
+        break;
+
+    /* SDRAM and Device Address Decode */
+    case GT_SCS0LD:
+    case GT_SCS0HD:
+    case GT_SCS1LD:
+    case GT_SCS1HD:
+    case GT_SCS2LD:
+    case GT_SCS2HD:
+    case GT_SCS3LD:
+    case GT_SCS3HD:
+    case GT_CS0LD:
+    case GT_CS0HD:
+    case GT_CS1LD:
+    case GT_CS1HD:
+    case GT_CS2LD:
+    case GT_CS2HD:
+    case GT_CS3LD:
+    case GT_CS3HD:
+    case GT_BOOTLD:
+    case GT_BOOTHD:
+    case GT_ADERR:
+        val = s->regs[saddr];
+        break;
+
+    /* SDRAM Configuration */
+    case GT_SDRAM_CFG:
+    case GT_SDRAM_OPMODE:
+    case GT_SDRAM_BM:
+    case GT_SDRAM_ADDRDECODE:
+        val = s->regs[saddr];
         break;
 
     /* SDRAM Parameters */
@@ -450,27 +708,146 @@ static uint32_t gt64120_readl (void *opaque,
         val = s->regs[saddr];
         break;
 
+    /* Device Parameters */
+    case GT_DEV_B0:
+    case GT_DEV_B1:
+    case GT_DEV_B2:
+    case GT_DEV_B3:
+    case GT_DEV_BOOT:
+        val = s->regs[saddr];
+        break;
+
+    /* DMA Record */
+    case GT_DMA0_CNT:
+    case GT_DMA1_CNT:
+    case GT_DMA2_CNT:
+    case GT_DMA3_CNT:
+    case GT_DMA0_SA:
+    case GT_DMA1_SA:
+    case GT_DMA2_SA:
+    case GT_DMA3_SA:
+    case GT_DMA0_DA:
+    case GT_DMA1_DA:
+    case GT_DMA2_DA:
+    case GT_DMA3_DA:
+    case GT_DMA0_NEXT:
+    case GT_DMA1_NEXT:
+    case GT_DMA2_NEXT:
+    case GT_DMA3_NEXT:
+    case GT_DMA0_CUR:
+    case GT_DMA1_CUR:
+    case GT_DMA2_CUR:
+    case GT_DMA3_CUR:
+        val = s->regs[saddr];
+        break;
+
+    /* DMA Channel Control */
+    case GT_DMA0_CTRL:
+    case GT_DMA1_CTRL:
+    case GT_DMA2_CTRL:
+    case GT_DMA3_CTRL:
+        val = s->regs[saddr];
+        break;
+
+    /* DMA Arbiter */
+    case GT_DMA_ARB:
+        val = s->regs[saddr];
+        break;
+
+    /* Timer/Counter */
+    case GT_TC0:
+    case GT_TC1:
+    case GT_TC2:
+    case GT_TC3:
+    case GT_TC_CONTROL:
+        val = s->regs[saddr];
+        break;
+
     /* PCI Internal */
     case GT_PCI0_CFGADDR:
         val = s->pci->config_reg;
         break;
     case GT_PCI0_CFGDATA:
-        val = pci_host_data_readl(s->pci, 0);
+        if (!(s->pci->config_reg & (1u << 31)))
+            val = 0xffffffff;
+        else
+            val = pci_host_data_readl(s->pci, 0);
+        break;
+
+    case GT_PCI0_CMD:
+    case GT_PCI0_TOR:
+    case GT_PCI0_BS_SCS10:
+    case GT_PCI0_BS_SCS32:
+    case GT_PCI0_BS_CS20:
+    case GT_PCI0_BS_CS3BT:
+    case GT_PCI1_IACK:
+    case GT_PCI0_BARE:
+    case GT_PCI0_PREFMBR:
+    case GT_PCI0_SCS10_BAR:
+    case GT_PCI0_SCS32_BAR:
+    case GT_PCI0_CS20_BAR:
+    case GT_PCI0_CS3BT_BAR:
+    case GT_PCI0_SSCS10_BAR:
+    case GT_PCI0_SSCS32_BAR:
+    case GT_PCI0_SCS3BT_BAR:
+    case GT_PCI1_CMD:
+    case GT_PCI1_TOR:
+    case GT_PCI1_BS_SCS10:
+    case GT_PCI1_BS_SCS32:
+    case GT_PCI1_BS_CS20:
+    case GT_PCI1_BS_CS3BT:
+    case GT_PCI1_BARE:
+    case GT_PCI1_PREFMBR:
+    case GT_PCI1_SCS10_BAR:
+    case GT_PCI1_SCS32_BAR:
+    case GT_PCI1_CS20_BAR:
+    case GT_PCI1_CS3BT_BAR:
+    case GT_PCI1_SSCS10_BAR:
+    case GT_PCI1_SSCS32_BAR:
+    case GT_PCI1_SCS3BT_BAR:
+    case GT_PCI1_CFGADDR:
+    case GT_PCI1_CFGDATA:
+        val = s->regs[saddr];
+        break;
+
+    /* Interrupts */
+    case GT_INTRCAUSE:
+        val = s->regs[saddr];
+        dprintf("INTRCAUSE %x\n", val);
+        break;
+    case GT_INTRMASK:
+        val = s->regs[saddr];
+        dprintf("INTRMASK %x\n", val);
+        break;
+    case GT_PCI0_ICMASK:
+        val = s->regs[saddr];
+        dprintf("ICMASK %x\n", val);
+        break;
+    case GT_PCI0_SERR0MASK:
+        val = s->regs[saddr];
+        dprintf("SERR0MASK %x\n", val);
+        break;
+
+    /* Reserved when only PCI_0 is configured. */
+    case GT_HINTRCAUSE:
+    case GT_CPU_INTSEL:
+    case GT_PCI0_INTSEL:
+    case GT_HINTRMASK:
+    case GT_PCI0_HICMASK:
+    case GT_PCI1_SERR1MASK:
+        val = s->regs[saddr];
         break;
 
     default:
         val = s->regs[saddr];
-#if 0
-        printf ("gt64120_readl: Bad register offset 0x%x\n", (int)addr);
-#endif
+        dprintf ("Bad register offset 0x%x\n", (int)addr);
         break;
     }
 
 #ifdef TARGET_WORDS_BIGENDIAN
-    return bswap32(val);
-#else
-    return val;
+    val = bswap32(val);
 #endif
+    return val;
 }
 
 static CPUWriteMemoryFunc *gt64120_write[] = {
@@ -497,10 +874,10 @@ static int pci_gt64120_map_irq(PCIDevice *pci_dev, int irq_num)
         return 3;
       /* AMD 79C973 Ethernet */
       case 11:
-        return 0;
+        return 1;
       /* Crystal 4281 Sound */
       case 12:
-        return 0;
+        return 2;
       /* PCI slot 1 to 4 */
       case 18 ... 21:
         return ((slot - 18) + irq_num) & 0x03;
@@ -513,7 +890,7 @@ static int pci_gt64120_map_irq(PCIDevice *pci_dev, int irq_num)
 extern PCIDevice *piix4_dev;
 static int pci_irq_levels[4];
 
-static void pci_gt64120_set_irq(void *pic, int irq_num, int level)
+static void pci_gt64120_set_irq(qemu_irq *pic, int irq_num, int level)
 {
     int i, pic_irq, pic_level;
 
@@ -530,7 +907,7 @@ static void pci_gt64120_set_irq(void *pic, int irq_num, int level)
             if (pic_irq == piix4_dev->config[0x60 + i])
                 pic_level |= pci_irq_levels[i];
         }
-        pic_set_irq(pic_irq, pic_level);
+        qemu_set_irq(pic[pic_irq], pic_level);
     }
 }
 
@@ -539,19 +916,31 @@ void gt64120_reset(void *opaque)
 {
     GT64120State *s = opaque;
 
+    /* FIXME: Malta specific hw assumptions ahead */
+
     /* CPU Configuration */
 #ifdef TARGET_WORDS_BIGENDIAN
     s->regs[GT_CPU]           = 0x00000000;
 #else
-    s->regs[GT_CPU]           = 0x00000800;
+    s->regs[GT_CPU]           = 0x00001000;
 #endif
-    s->regs[GT_MULTI]         = 0x00000000;
+    s->regs[GT_MULTI]         = 0x00000003;
 
-    /* CPU Address decode FIXME: not complete*/
+    /* CPU Address decode */
+    s->regs[GT_SCS10LD]       = 0x00000000;
+    s->regs[GT_SCS10HD]       = 0x00000007;
+    s->regs[GT_SCS32LD]       = 0x00000008;
+    s->regs[GT_SCS32HD]       = 0x0000000f;
+    s->regs[GT_CS20LD]        = 0x000000e0;
+    s->regs[GT_CS20HD]        = 0x00000070;
+    s->regs[GT_CS3BOOTLD]     = 0x000000f8;
+    s->regs[GT_CS3BOOTHD]     = 0x0000007f;
+
     s->regs[GT_PCI0IOLD]      = 0x00000080;
     s->regs[GT_PCI0IOHD]      = 0x0000000f;
     s->regs[GT_PCI0M0LD]      = 0x00000090;
     s->regs[GT_PCI0M0HD]      = 0x0000001f;
+    s->regs[GT_ISD]           = 0x000000a0;
     s->regs[GT_PCI0M1LD]      = 0x00000790;
     s->regs[GT_PCI0M1HD]      = 0x0000001f;
     s->regs[GT_PCI1IOLD]      = 0x00000100;
@@ -560,6 +949,12 @@ void gt64120_reset(void *opaque)
     s->regs[GT_PCI1M0HD]      = 0x0000001f;
     s->regs[GT_PCI1M1LD]      = 0x00000120;
     s->regs[GT_PCI1M1HD]      = 0x0000002f;
+
+    s->regs[GT_SCS10AR]       = 0x00000000;
+    s->regs[GT_SCS32AR]       = 0x00000008;
+    s->regs[GT_CS20R]         = 0x000000e0;
+    s->regs[GT_CS3BOOTR]      = 0x000000f8;
+
     s->regs[GT_PCI0IOREMAP]   = 0x00000080;
     s->regs[GT_PCI0M0REMAP]   = 0x00000090;
     s->regs[GT_PCI0M1REMAP]   = 0x00000790;
@@ -574,6 +969,43 @@ void gt64120_reset(void *opaque)
     s->regs[GT_CPUERR_DATAHI] = 0xffffffff;
     s->regs[GT_CPUERR_PARITY] = 0x000000ff;
 
+    /* CPU Sync Barrier */
+    s->regs[GT_PCI0SYNC]      = 0x00000000;
+    s->regs[GT_PCI1SYNC]      = 0x00000000;
+
+    /* SDRAM and Device Address Decode */
+    s->regs[GT_SCS0LD]        = 0x00000000;
+    s->regs[GT_SCS0HD]        = 0x00000007;
+    s->regs[GT_SCS1LD]        = 0x00000008;
+    s->regs[GT_SCS1HD]        = 0x0000000f;
+    s->regs[GT_SCS2LD]        = 0x00000010;
+    s->regs[GT_SCS2HD]        = 0x00000017;
+    s->regs[GT_SCS3LD]        = 0x00000018;
+    s->regs[GT_SCS3HD]        = 0x0000001f;
+    s->regs[GT_CS0LD]         = 0x000000c0;
+    s->regs[GT_CS0HD]         = 0x000000c7;
+    s->regs[GT_CS1LD]         = 0x000000c8;
+    s->regs[GT_CS1HD]         = 0x000000cf;
+    s->regs[GT_CS2LD]         = 0x000000d0;
+    s->regs[GT_CS2HD]         = 0x000000df;
+    s->regs[GT_CS3LD]         = 0x000000f0;
+    s->regs[GT_CS3HD]         = 0x000000fb;
+    s->regs[GT_BOOTLD]        = 0x000000fc;
+    s->regs[GT_BOOTHD]        = 0x000000ff;
+    s->regs[GT_ADERR]         = 0xffffffff;
+
+    /* SDRAM Configuration */
+    s->regs[GT_SDRAM_CFG]     = 0x00000200;
+    s->regs[GT_SDRAM_OPMODE]  = 0x00000000;
+    s->regs[GT_SDRAM_BM]      = 0x00000007;
+    s->regs[GT_SDRAM_ADDRDECODE] = 0x00000002;
+
+    /* SDRAM Parameters */
+    s->regs[GT_SDRAM_B0]      = 0x00000005;
+    s->regs[GT_SDRAM_B1]      = 0x00000005;
+    s->regs[GT_SDRAM_B2]      = 0x00000005;
+    s->regs[GT_SDRAM_B3]      = 0x00000005;
+
     /* ECC */
     s->regs[GT_ECC_ERRDATALO] = 0x00000000;
     s->regs[GT_ECC_ERRDATAHI] = 0x00000000;
@@ -581,68 +1013,155 @@ void gt64120_reset(void *opaque)
     s->regs[GT_ECC_CALC]      = 0x00000000;
     s->regs[GT_ECC_ERRADDR]   = 0x00000000;
 
-    /* SDRAM Parameters */
-    s->regs[GT_SDRAM_B0]      = 0x00000005;    
-    s->regs[GT_SDRAM_B1]      = 0x00000005;    
-    s->regs[GT_SDRAM_B2]      = 0x00000005;    
-    s->regs[GT_SDRAM_B3]      = 0x00000005;    
+    /* Device Parameters */
+    s->regs[GT_DEV_B0]        = 0x386fffff;
+    s->regs[GT_DEV_B1]        = 0x386fffff;
+    s->regs[GT_DEV_B2]        = 0x386fffff;
+    s->regs[GT_DEV_B3]        = 0x386fffff;
+    s->regs[GT_DEV_BOOT]      = 0x146fffff;
 
-    /* PCI Internal FIXME: not complete*/
+    /* DMA registers are all zeroed at reset */
+
+    /* Timer/Counter */
+    s->regs[GT_TC0]           = 0xffffffff;
+    s->regs[GT_TC1]           = 0x00ffffff;
+    s->regs[GT_TC2]           = 0x00ffffff;
+    s->regs[GT_TC3]           = 0x00ffffff;
+    s->regs[GT_TC_CONTROL]    = 0x00000000;
+
+    /* PCI Internal */
 #ifdef TARGET_WORDS_BIGENDIAN
     s->regs[GT_PCI0_CMD]      = 0x00000000;
-    s->regs[GT_PCI1_CMD]      = 0x00000000;
 #else
     s->regs[GT_PCI0_CMD]      = 0x00010001;
+#endif
+    s->regs[GT_PCI0_TOR]      = 0x0000070f;
+    s->regs[GT_PCI0_BS_SCS10] = 0x00fff000;
+    s->regs[GT_PCI0_BS_SCS32] = 0x00fff000;
+    s->regs[GT_PCI0_BS_CS20]  = 0x01fff000;
+    s->regs[GT_PCI0_BS_CS3BT] = 0x00fff000;
+    s->regs[GT_PCI1_IACK]     = 0x00000000;
+    s->regs[GT_PCI0_IACK]     = 0x00000000;
+    s->regs[GT_PCI0_BARE]     = 0x0000000f;
+    s->regs[GT_PCI0_PREFMBR]  = 0x00000040;
+    s->regs[GT_PCI0_SCS10_BAR] = 0x00000000;
+    s->regs[GT_PCI0_SCS32_BAR] = 0x01000000;
+    s->regs[GT_PCI0_CS20_BAR] = 0x1c000000;
+    s->regs[GT_PCI0_CS3BT_BAR] = 0x1f000000;
+    s->regs[GT_PCI0_SSCS10_BAR] = 0x00000000;
+    s->regs[GT_PCI0_SSCS32_BAR] = 0x01000000;
+    s->regs[GT_PCI0_SCS3BT_BAR] = 0x1f000000;
+#ifdef TARGET_WORDS_BIGENDIAN
+    s->regs[GT_PCI1_CMD]      = 0x00000000;
+#else
     s->regs[GT_PCI1_CMD]      = 0x00010001;
 #endif
-    s->regs[GT_PCI0_IACK]     = 0x00000000;
-    s->regs[GT_PCI1_IACK]     = 0x00000000;
+    s->regs[GT_PCI1_TOR]      = 0x0000070f;
+    s->regs[GT_PCI1_BS_SCS10] = 0x00fff000;
+    s->regs[GT_PCI1_BS_SCS32] = 0x00fff000;
+    s->regs[GT_PCI1_BS_CS20]  = 0x01fff000;
+    s->regs[GT_PCI1_BS_CS3BT] = 0x00fff000;
+    s->regs[GT_PCI1_BARE]     = 0x0000000f;
+    s->regs[GT_PCI1_PREFMBR]  = 0x00000040;
+    s->regs[GT_PCI1_SCS10_BAR] = 0x00000000;
+    s->regs[GT_PCI1_SCS32_BAR] = 0x01000000;
+    s->regs[GT_PCI1_CS20_BAR] = 0x1c000000;
+    s->regs[GT_PCI1_CS3BT_BAR] = 0x1f000000;
+    s->regs[GT_PCI1_SSCS10_BAR] = 0x00000000;
+    s->regs[GT_PCI1_SSCS32_BAR] = 0x01000000;
+    s->regs[GT_PCI1_SCS3BT_BAR] = 0x1f000000;
+    s->regs[GT_PCI1_CFGADDR]  = 0x00000000;
+    s->regs[GT_PCI1_CFGDATA]  = 0x00000000;
+    s->regs[GT_PCI0_CFGADDR]  = 0x00000000;
+    s->regs[GT_PCI0_CFGDATA]  = 0x00000000;
 
+    /* Interrupt registers are all zeroed at reset */
+
+    gt64120_isd_mapping(s);
     gt64120_pci_mapping(s);
 }
 
-PCIBus *pci_gt64120_init(void *pic)
+static uint32_t gt64120_read_config(PCIDevice *d, uint32_t address, int len)
+{
+    uint32_t val = pci_default_read_config(d, address, len);
+#ifdef TARGET_WORDS_BIGENDIAN
+    val = bswap32(val);
+#endif
+    return val;
+}
+
+static void gt64120_write_config(PCIDevice *d, uint32_t address, uint32_t val,
+                                 int len)
+{
+#ifdef TARGET_WORDS_BIGENDIAN
+    val = bswap32(val);
+#endif
+    pci_default_write_config(d, address, val, len);
+}
+
+static void gt64120_save(QEMUFile* f, void *opaque)
+{
+    PCIDevice *d = opaque;
+    pci_device_save(d, f);
+}
+
+static int gt64120_load(QEMUFile* f, void *opaque, int version_id)
+{
+    PCIDevice *d = opaque;
+    int ret;
+
+    if (version_id != 1)
+        return -EINVAL;
+    ret = pci_device_load(d, f);
+    if (ret < 0)
+        return ret;
+    return 0;
+}
+
+PCIBus *pci_gt64120_init(qemu_irq *pic)
 {
     GT64120State *s;
     PCIDevice *d;
-    int gt64120;
 
     s = qemu_mallocz(sizeof(GT64120State));
     s->pci = qemu_mallocz(sizeof(GT64120PCIState));
-    gt64120_reset(s);
 
     s->pci->bus = pci_register_bus(pci_gt64120_set_irq, pci_gt64120_map_irq,
                                    pic, 144, 4);
-
-    gt64120 = cpu_register_io_memory(0, gt64120_read,
-                                     gt64120_write, s);
-    cpu_register_physical_memory(0x1be00000LL, 0x1000, gt64120);
-
+    s->ISD_handle = cpu_register_io_memory(0, gt64120_read, gt64120_write, s);
     d = pci_register_device(s->pci->bus, "GT64120 PCI Bus", sizeof(PCIDevice),
-                            0, NULL, NULL);
+                            0, gt64120_read_config, gt64120_write_config);
 
-    d->config[0x00] = 0xab; // vendor_id
+    /* FIXME: Malta specific hw assumptions ahead */
+
+    d->config[0x00] = 0xab; /* vendor_id */
     d->config[0x01] = 0x11;
-    d->config[0x02] = 0x46; // device_id
-    d->config[0x03] = 0x20;
-    d->config[0x04] = 0x06;
+    d->config[0x02] = 0x20; /* device_id */
+    d->config[0x03] = 0x46;
+
+    d->config[0x04] = 0x00;
     d->config[0x05] = 0x00;
     d->config[0x06] = 0x80;
-    d->config[0x07] = 0xa2;
+    d->config[0x07] = 0x02;
+
     d->config[0x08] = 0x10;
     d->config[0x09] = 0x00;
-    d->config[0x0A] = 0x80;
-    d->config[0x0B] = 0x05;
-    d->config[0x0C] = 0x08;
-    d->config[0x0D] = 0x40;
-    d->config[0x0E] = 0x00;
-    d->config[0x0F] = 0x00;
-    d->config[0x17] = 0x08;
+    d->config[0x0A] = 0x00;
+    d->config[0x0B] = 0x06;
+
+    d->config[0x10] = 0x08;
+    d->config[0x14] = 0x08;
+    d->config[0x17] = 0x01;
     d->config[0x1B] = 0x1c;
     d->config[0x1F] = 0x1f;
     d->config[0x23] = 0x14;
+    d->config[0x24] = 0x01;
     d->config[0x27] = 0x14;
     d->config[0x3D] = 0x01;
+
+    gt64120_reset(s);
+
+    register_savevm("GT64120 PCI Bus", 0, 1, gt64120_save, gt64120_load, d);
 
     return s->pci->bus;
 }

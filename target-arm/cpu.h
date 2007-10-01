@@ -1,6 +1,6 @@
 /*
  * ARM virtual CPU header
- * 
+ *
  *  Copyright (c) 2003 Fabrice Bellard
  *
  * This library is free software; you can redistribute it and/or
@@ -38,6 +38,11 @@
 #define EXCP_FIQ             6
 #define EXCP_BKPT            7
 
+typedef void ARMWriteCPFunc(void *opaque, int cp_info,
+                            int srcreg, int operand, uint32_t value);
+typedef uint32_t ARMReadCPFunc(void *opaque, int cp_info,
+                               int dstreg, int operand);
+
 /* We currently assume float and double are IEEE single and double
    precision respectively.
    Doing runtime conversions is tricky because VFP registers may contain
@@ -59,11 +64,11 @@ typedef struct CPUARMState {
     uint32_t banked_spsr[6];
     uint32_t banked_r13[6];
     uint32_t banked_r14[6];
-    
+
     /* These hold r8-r12.  */
     uint32_t usr_regs[5];
     uint32_t fiq_regs[5];
-    
+
     /* cpsr flag cache for faster execution */
     uint32_t CF; /* 0 or 1 */
     uint32_t VF; /* V is the bit 31. All other bits are undefined */
@@ -75,19 +80,37 @@ typedef struct CPUARMState {
     /* System control coprocessor (cp15) */
     struct {
         uint32_t c0_cpuid;
+        uint32_t c0_cachetype;
         uint32_t c1_sys; /* System control register.  */
         uint32_t c1_coproc; /* Coprocessor access register.  */
-        uint32_t c2; /* MMU translation table base.  */
-        uint32_t c3; /* MMU domain access control register.  */
+        uint32_t c1_xscaleauxcr; /* XScale auxiliary control register.  */
+        uint32_t c2_base; /* MMU translation table base.  */
+        uint32_t c2_data; /* MPU data cachable bits.  */
+        uint32_t c2_insn; /* MPU instruction cachable bits.  */
+        uint32_t c3; /* MMU domain access control register
+                        MPU write buffer control.  */
         uint32_t c5_insn; /* Fault status registers.  */
         uint32_t c5_data;
+        uint32_t c6_region[8]; /* MPU base/size registers.  */
         uint32_t c6_insn; /* Fault address registers.  */
         uint32_t c6_data;
         uint32_t c9_insn; /* Cache lockdown registers.  */
         uint32_t c9_data;
         uint32_t c13_fcse; /* FCSE PID.  */
         uint32_t c13_context; /* Context ID.  */
+        uint32_t c15_cpar; /* XScale Coprocessor Access Register */
+        uint32_t c15_ticonfig; /* TI925T configuration byte.  */
+        uint32_t c15_i_max; /* Maximum D-cache dirty line index.  */
+        uint32_t c15_i_min; /* Minimum D-cache dirty line index.  */
+        uint32_t c15_threadid; /* TI debugger thread-ID.  */
     } cp15;
+
+    /* Coprocessor IO used by peripherals */
+    struct {
+        ARMReadCPFunc *cp_read;
+        ARMWriteCPFunc *cp_write;
+        void *opaque;
+    } cp[15];
 
     /* Internal CPU feature flags.  */
     uint32_t features;
@@ -111,9 +134,17 @@ typedef struct CPUARMState {
         /* Temporary variables if we don't have spare fp regs.  */
         float32 tmp0s, tmp1s;
         float64 tmp0d, tmp1d;
-        
+
         float_status fp_status;
     } vfp;
+
+    /* iwMMXt coprocessor state.  */
+    struct {
+        uint64_t regs[16];
+        uint64_t val;
+
+        uint32_t cregs[16];
+    } iwmmxt;
 
 #if defined(CONFIG_USER_ONLY)
     /* For usermode syscall translation.  */
@@ -122,6 +153,13 @@ typedef struct CPUARMState {
 
     CPU_COMMON
 
+    /* These fields after the common ones so they are preserved on reset.  */
+    int ram_size;
+    const char *kernel_filename;
+    const char *kernel_cmdline;
+    const char *initrd_filename;
+    int board_id;
+    target_phys_addr_t loader_start;
 } CPUARMState;
 
 CPUARMState *cpu_arm_init(void);
@@ -133,7 +171,7 @@ void switch_mode(CPUARMState *, int);
 /* you can call this signal handler from your SIGBUS and SIGSEGV
    signal handlers to inform the virtual CPU of exceptions. non zero
    is returned if the signal was handled by the virtual CPU.  */
-int cpu_arm_signal_handler(int host_signum, void *pinfo, 
+int cpu_arm_signal_handler(int host_signum, void *pinfo,
                            void *puc);
 
 #define CPSR_M (0x1f)
@@ -155,7 +193,7 @@ static inline uint32_t cpsr_read(CPUARMState *env)
 {
     int ZF;
     ZF = (env->NZF == 0);
-    return env->uncached_cpsr | (env->NZF & 0x80000000) | (ZF << 30) | 
+    return env->uncached_cpsr | (env->NZF & 0x80000000) | (ZF << 30) |
         (env->CF << 29) | ((env->VF & 0x80000000) >> 3) | (env->QF << 27)
         | (env->thumb << 5);
 }
@@ -198,10 +236,23 @@ enum arm_cpu_mode {
 #define ARM_VFP_FPINST  9
 #define ARM_VFP_FPINST2 10
 
+/* iwMMXt coprocessor control registers.  */
+#define ARM_IWMMXT_wCID		0
+#define ARM_IWMMXT_wCon		1
+#define ARM_IWMMXT_wCSSF	2
+#define ARM_IWMMXT_wCASF	3
+#define ARM_IWMMXT_wCGR0	8
+#define ARM_IWMMXT_wCGR1	9
+#define ARM_IWMMXT_wCGR2	10
+#define ARM_IWMMXT_wCGR3	11
 
 enum arm_features {
     ARM_FEATURE_VFP,
-    ARM_FEATURE_AUXCR /* ARM1026 Auxiliary control register.  */
+    ARM_FEATURE_AUXCR,  /* ARM1026 Auxiliary control register.  */
+    ARM_FEATURE_XSCALE, /* Intel XScale extensions.  */
+    ARM_FEATURE_IWMMXT, /* Intel iwMMXt extension.  */
+    ARM_FEATURE_MPU,    /* Only has Memory Protection Unit, not full MMU.  */
+    ARM_FEATURE_OMAPCP  /* OMAP specific CP15 ops handling.  */
 };
 
 static inline int arm_feature(CPUARMState *env, int feature)
@@ -209,19 +260,46 @@ static inline int arm_feature(CPUARMState *env, int feature)
     return (env->features & (1u << feature)) != 0;
 }
 
-void cpu_arm_set_model(CPUARMState *env, uint32_t id);
+void arm_cpu_list(void);
+void cpu_arm_set_model(CPUARMState *env, const char *name);
 
-#define ARM_CPUID_ARM1026 0x4106a262
-#define ARM_CPUID_ARM926  0x41069265
+void cpu_arm_set_cp_io(CPUARMState *env, int cpnum,
+                       ARMReadCPFunc *cp_read, ARMWriteCPFunc *cp_write,
+                       void *opaque);
+
+#define ARM_CPUID_ARM1026   0x4106a262
+#define ARM_CPUID_ARM926    0x41069265
+#define ARM_CPUID_ARM946    0x41059461
+#define ARM_CPUID_TI915T    0x54029152
+#define ARM_CPUID_TI925T    0x54029252
+#define ARM_CPUID_PXA250    0x69052100
+#define ARM_CPUID_PXA255    0x69052d00
+#define ARM_CPUID_PXA260    0x69052903
+#define ARM_CPUID_PXA261    0x69052d05
+#define ARM_CPUID_PXA262    0x69052d06
+#define ARM_CPUID_PXA270    0x69054110
+#define ARM_CPUID_PXA270_A0 0x69054110
+#define ARM_CPUID_PXA270_A1 0x69054111
+#define ARM_CPUID_PXA270_B0 0x69054112
+#define ARM_CPUID_PXA270_B1 0x69054113
+#define ARM_CPUID_PXA270_C0 0x69054114
+#define ARM_CPUID_PXA270_C5 0x69054117
 
 #if defined(CONFIG_USER_ONLY)
 #define TARGET_PAGE_BITS 12
 #else
 /* The ARM MMU allows 1k pages.  */
 /* ??? Linux doesn't actually use these, and they're deprecated in recent
-   architecture revisions.  Maybe an a configure option to disable them.  */
+   architecture revisions.  Maybe a configure option to disable them.  */
 #define TARGET_PAGE_BITS 10
 #endif
+
+#define CPUState CPUARMState
+#define cpu_init cpu_arm_init
+#define cpu_exec cpu_arm_exec
+#define cpu_gen_code cpu_arm_gen_code
+#define cpu_signal_handler cpu_arm_signal_handler
+
 #include "cpu-all.h"
 
 #endif

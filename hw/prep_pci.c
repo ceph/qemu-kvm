@@ -2,7 +2,7 @@
  * QEMU PREP PCI host
  *
  * Copyright (c) 2006 Fabrice Bellard
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
@@ -123,19 +123,19 @@ static int prep_map_irq(PCIDevice *pci_dev, int irq_num)
     return (irq_num + (pci_dev->devfn >> 3)) & 1;
 }
 
-static void prep_set_irq(void *pic, int irq_num, int level)
+static void prep_set_irq(qemu_irq *pic, int irq_num, int level)
 {
-    pic_set_irq(irq_num ? 11 : 9, level);
+    qemu_set_irq(pic[irq_num ? 11 : 9], level);
 }
 
-PCIBus *pci_prep_init(void)
+PCIBus *pci_prep_init(qemu_irq *pic)
 {
     PREPPCIState *s;
     PCIDevice *d;
     int PPC_io_memory;
 
     s = qemu_mallocz(sizeof(PREPPCIState));
-    s->bus = pci_register_bus(prep_set_irq, prep_map_irq, NULL, 0, 2);
+    s->bus = pci_register_bus(prep_set_irq, prep_map_irq, pic, 0, 2);
 
     register_ioport_write(0xcf8, 4, 4, pci_prep_addr_writel, s);
     register_ioport_read(0xcf8, 4, 4, pci_prep_addr_readl, s);
@@ -147,12 +147,12 @@ PCIBus *pci_prep_init(void)
     register_ioport_read(0xcfc, 4, 2, pci_host_data_readw, s);
     register_ioport_read(0xcfc, 4, 4, pci_host_data_readl, s);
 
-    PPC_io_memory = cpu_register_io_memory(0, PPC_PCIIO_read, 
+    PPC_io_memory = cpu_register_io_memory(0, PPC_PCIIO_read,
                                            PPC_PCIIO_write, s);
     cpu_register_physical_memory(0x80800000, 0x00400000, PPC_io_memory);
 
-    /* PCI host bridge */ 
-    d = pci_register_device(s->bus, "PREP Host Bridge - Motorola Raven", 
+    /* PCI host bridge */
+    d = pci_register_device(s->bus, "PREP Host Bridge - Motorola Raven",
                             sizeof(PCIDevice), 0, NULL, NULL);
     d->config[0x00] = 0x57; // vendor_id : Motorola
     d->config[0x01] = 0x10;

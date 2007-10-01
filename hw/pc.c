@@ -1,8 +1,8 @@
 /*
  * QEMU PC System Emulator
- * 
+ *
  * Copyright (c) 2003-2004 Fabrice Bellard
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
@@ -29,12 +29,9 @@
 #define BIOS_FILENAME "bios.bin"
 #define VGABIOS_FILENAME "vgabios.bin"
 #define VGABIOS_CIRRUS_FILENAME "vgabios-cirrus.bin"
-#define LINUX_BOOT_FILENAME "linux_boot.bin"
 
-#define KERNEL_LOAD_ADDR     0x00100000
-#define INITRD_LOAD_ADDR     0x00600000
-#define KERNEL_PARAMS_ADDR   0x00090000
-#define KERNEL_CMDLINE_ADDR  0x00099000
+/* Leave a chunk of memory at the top of RAM for the BIOS ACPI tables.  */
+#define ACPI_DATA_SIZE       0x10000
 
 static fdctrl_t *floppy_controller;
 static RTCState *rtc_state;
@@ -47,15 +44,16 @@ static void ioport80_write(void *opaque, uint32_t addr, uint32_t data)
 }
 
 /* MSDOS compatibility mode FPU exception support */
+static qemu_irq ferr_irq;
 /* XXX: add IGNNE support */
 void cpu_set_ferr(CPUX86State *s)
 {
-    pic_set_irq(13, 1);
+    qemu_irq_raise(ferr_irq);
 }
 
 static void ioportF0_write(void *opaque, uint32_t addr, uint32_t data)
 {
-    pic_set_irq(13, 0);
+    qemu_irq_lower(ferr_irq);
 }
 
 /* TSC handling */
@@ -67,7 +65,7 @@ uint64_t cpu_get_tsc(CPUX86State *env)
 #if USE_KQEMU
     if (env->kqemu_enabled) {
         return cpu_get_real_ticks();
-    } else 
+    } else
 #endif
     {
         return cpu_get_ticks();
@@ -91,7 +89,7 @@ int cpu_get_pic_interrupt(CPUState *env)
     if (intno >= 0) {
         /* set irq request if a PIC irq is still pending */
         /* XXX: improve that */
-        pic_update_irq(isa_pic); 
+        pic_update_irq(isa_pic);
         return intno;
     }
     /* read the irq from the PIC */
@@ -99,7 +97,7 @@ int cpu_get_pic_interrupt(CPUState *env)
     return intno;
 }
 
-static void pic_irq_request(void *opaque, int level)
+static void pic_irq_request(void *opaque, int irq, int level)
 {
     CPUState *env = opaque;
     if (level)
@@ -136,7 +134,7 @@ static int cmos_get_fd_drive_type(int fd0)
     return val;
 }
 
-static void cmos_init_hd(int type_ofs, int info_ofs, BlockDriverState *hd) 
+static void cmos_init_hd(int type_ofs, int info_ofs, BlockDriverState *hd)
 {
     RTCState *s = rtc_state;
     int cylinders, heads, sectors;
@@ -184,7 +182,7 @@ static void cmos_init(int ram_size, int boot_device, BlockDriverState **hd_table
         val = 65535;
     rtc_set_memory(s, 0x34, val);
     rtc_set_memory(s, 0x35, val >> 8);
-    
+
     switch(boot_device) {
     case 'a':
     case 'b':
@@ -199,6 +197,9 @@ static void cmos_init(int ram_size, int boot_device, BlockDriverState **hd_table
     case 'd':
         rtc_set_memory(s, 0x3d, 0x03); /* CD-ROM boot */
         break;
+    case 'n':
+        rtc_set_memory(s, 0x3d, 0x04); /* Network boot */
+        break;
     }
 
     /* floppy type */
@@ -208,7 +209,7 @@ static void cmos_init(int ram_size, int boot_device, BlockDriverState **hd_table
 
     val = (cmos_get_fd_drive_type(fd0) << 4) | cmos_get_fd_drive_type(fd1);
     rtc_set_memory(s, 0x10, val);
-    
+
     val = 0;
     nb = 0;
     if (fd0 < 3)
@@ -234,7 +235,7 @@ static void cmos_init(int ram_size, int boot_device, BlockDriverState **hd_table
     rtc_set_memory(s, 0x12, (hd_table[0] ? 0xf0 : 0) | (hd_table[1] ? 0x0f : 0));
     if (hd_table[0])
         cmos_init_hd(0x19, 0x1b, hd_table[0]);
-    if (hd_table[1]) 
+    if (hd_table[1])
         cmos_init_hd(0x1a, 0x24, hd_table[1]);
 
     val = 0;
@@ -293,7 +294,7 @@ void bochs_bios_write(void *opaque, uint32_t addr, uint32_t val)
 {
     static const char shutdown_str[8] = "Shutdown";
     static int shutdown_index = 0;
-    
+
     switch(addr) {
         /* Bochs BIOS messages */
     case 0x400:
@@ -347,8 +348,63 @@ void bochs_bios_init(void)
     register_ioport_write(0x503, 1, 1, bochs_bios_write, NULL);
 }
 
+/* Generate an initial boot sector which sets state and jump to
+   a specified vector */
+static void generate_bootsect(uint32_t gpr[8], uint16_t segs[6], uint16_t ip)
+{
+    uint8_t bootsect[512], *p;
+    int i;
 
-int load_kernel(const char *filename, uint8_t *addr, 
+    if (bs_table[0] == NULL) {
+	fprintf(stderr, "A disk image must be given for 'hda' when booting "
+		"a Linux kernel\n");
+	exit(1);
+    }
+
+    memset(bootsect, 0, sizeof(bootsect));
+
+    /* Copy the MSDOS partition table if possible */
+    bdrv_read(bs_table[0], 0, bootsect, 1);
+
+    /* Make sure we have a partition signature */
+    bootsect[510] = 0x55;
+    bootsect[511] = 0xaa;
+
+    /* Actual code */
+    p = bootsect;
+    *p++ = 0xfa;		/* CLI */
+    *p++ = 0xfc;		/* CLD */
+
+    for (i = 0; i < 6; i++) {
+	if (i == 1)		/* Skip CS */
+	    continue;
+
+	*p++ = 0xb8;		/* MOV AX,imm16 */
+	*p++ = segs[i];
+	*p++ = segs[i] >> 8;
+	*p++ = 0x8e;		/* MOV <seg>,AX */
+	*p++ = 0xc0 + (i << 3);
+    }
+
+    for (i = 0; i < 8; i++) {
+	*p++ = 0x66;		/* 32-bit operand size */
+	*p++ = 0xb8 + i;	/* MOV <reg>,imm32 */
+	*p++ = gpr[i];
+	*p++ = gpr[i] >> 8;
+	*p++ = gpr[i] >> 16;
+	*p++ = gpr[i] >> 24;
+    }
+
+    *p++ = 0xea;		/* JMP FAR */
+    *p++ = ip;			/* IP */
+    *p++ = ip >> 8;
+    *p++ = segs[1];		/* CS */
+    *p++ = segs[1] >> 8;
+
+    bdrv_set_boot_sector(bs_table[0], bootsect, sizeof(bootsect));
+}
+
+int load_kernel(const char *filename, uint8_t *addr,
                 uint8_t *real_addr)
 {
     int fd, size;
@@ -364,10 +420,10 @@ int load_kernel(const char *filename, uint8_t *addr,
     setup_sects = real_addr[0x1F1];
     if (!setup_sects)
         setup_sects = 4;
-    if (read(fd, real_addr + 512, setup_sects * 512) != 
+    if (read(fd, real_addr + 512, setup_sects * 512) !=
         setup_sects * 512)
         goto fail;
-    
+
     /* load 32 bit code */
     size = read(fd, addr, 16 * 1024 * 1024);
     if (size < 0)
@@ -377,6 +433,169 @@ int load_kernel(const char *filename, uint8_t *addr,
  fail:
     close(fd);
     return -1;
+}
+
+static long get_file_size(FILE *f)
+{
+    long where, size;
+
+    /* XXX: on Unix systems, using fstat() probably makes more sense */
+
+    where = ftell(f);
+    fseek(f, 0, SEEK_END);
+    size = ftell(f);
+    fseek(f, where, SEEK_SET);
+
+    return size;
+}
+
+static void load_linux(const char *kernel_filename,
+		       const char *initrd_filename,
+		       const char *kernel_cmdline)
+{
+    uint16_t protocol;
+    uint32_t gpr[8];
+    uint16_t seg[6];
+    uint16_t real_seg;
+    int setup_size, kernel_size, initrd_size, cmdline_size;
+    uint32_t initrd_max;
+    uint8_t header[1024];
+    uint8_t *real_addr, *prot_addr, *cmdline_addr, *initrd_addr;
+    FILE *f, *fi;
+
+    /* Align to 16 bytes as a paranoia measure */
+    cmdline_size = (strlen(kernel_cmdline)+16) & ~15;
+
+    /* load the kernel header */
+    f = fopen(kernel_filename, "rb");
+    if (!f || !(kernel_size = get_file_size(f)) ||
+	fread(header, 1, 1024, f) != 1024) {
+	fprintf(stderr, "qemu: could not load kernel '%s'\n",
+		kernel_filename);
+	exit(1);
+    }
+
+    /* kernel protocol version */
+    fprintf(stderr, "header magic: %#x\n", ldl_p(header+0x202));
+    if (ldl_p(header+0x202) == 0x53726448)
+	protocol = lduw_p(header+0x206);
+    else
+	protocol = 0;
+
+    if (protocol < 0x200 || !(header[0x211] & 0x01)) {
+	/* Low kernel */
+	real_addr    = phys_ram_base + 0x90000;
+	cmdline_addr = phys_ram_base + 0x9a000 - cmdline_size;
+	prot_addr    = phys_ram_base + 0x10000;
+    } else if (protocol < 0x202) {
+	/* High but ancient kernel */
+	real_addr    = phys_ram_base + 0x90000;
+	cmdline_addr = phys_ram_base + 0x9a000 - cmdline_size;
+	prot_addr    = phys_ram_base + 0x100000;
+    } else {
+	/* High and recent kernel */
+	real_addr    = phys_ram_base + 0x10000;
+	cmdline_addr = phys_ram_base + 0x20000;
+	prot_addr    = phys_ram_base + 0x100000;
+    }
+
+    fprintf(stderr,
+	    "qemu: real_addr     = %#zx\n"
+	    "qemu: cmdline_addr  = %#zx\n"
+	    "qemu: prot_addr     = %#zx\n",
+	    real_addr-phys_ram_base,
+	    cmdline_addr-phys_ram_base,
+	    prot_addr-phys_ram_base);
+
+    /* highest address for loading the initrd */
+    if (protocol >= 0x203)
+	initrd_max = ldl_p(header+0x22c);
+    else
+	initrd_max = 0x37ffffff;
+
+    if (initrd_max >= ram_size-ACPI_DATA_SIZE)
+	initrd_max = ram_size-ACPI_DATA_SIZE-1;
+
+    /* kernel command line */
+    pstrcpy(cmdline_addr, 4096, kernel_cmdline);
+
+    if (protocol >= 0x202) {
+	stl_p(header+0x228, cmdline_addr-phys_ram_base);
+    } else {
+	stw_p(header+0x20, 0xA33F);
+	stw_p(header+0x22, cmdline_addr-real_addr);
+    }
+
+    /* loader type */
+    /* High nybble = B reserved for Qemu; low nybble is revision number.
+       If this code is substantially changed, you may want to consider
+       incrementing the revision. */
+    if (protocol >= 0x200)
+	header[0x210] = 0xB0;
+
+    /* heap */
+    if (protocol >= 0x201) {
+	header[0x211] |= 0x80;	/* CAN_USE_HEAP */
+	stw_p(header+0x224, cmdline_addr-real_addr-0x200);
+    }
+
+    /* load initrd */
+    if (initrd_filename) {
+	if (protocol < 0x200) {
+	    fprintf(stderr, "qemu: linux kernel too old to load a ram disk\n");
+	    exit(1);
+	}
+
+	fi = fopen(initrd_filename, "rb");
+	if (!fi) {
+	    fprintf(stderr, "qemu: could not load initial ram disk '%s'\n",
+		    initrd_filename);
+	    exit(1);
+	}
+
+	initrd_size = get_file_size(fi);
+	initrd_addr = phys_ram_base + ((initrd_max-initrd_size) & ~4095);
+
+	fprintf(stderr, "qemu: loading initrd (%#x bytes) at %#zx\n",
+		initrd_size, initrd_addr-phys_ram_base);
+
+	if (fread(initrd_addr, 1, initrd_size, fi) != initrd_size) {
+	    fprintf(stderr, "qemu: read error on initial ram disk '%s'\n",
+		    initrd_filename);
+	    exit(1);
+	}
+	fclose(fi);
+
+	stl_p(header+0x218, initrd_addr-phys_ram_base);
+	stl_p(header+0x21c, initrd_size);
+    }
+
+    /* store the finalized header and load the rest of the kernel */
+    memcpy(real_addr, header, 1024);
+
+    setup_size = header[0x1f1];
+    if (setup_size == 0)
+	setup_size = 4;
+
+    setup_size = (setup_size+1)*512;
+    kernel_size -= setup_size;	/* Size of protected-mode code */
+
+    if (fread(real_addr+1024, 1, setup_size-1024, f) != setup_size-1024 ||
+	fread(prot_addr, 1, kernel_size, f) != kernel_size) {
+	fprintf(stderr, "qemu: read error on kernel '%s'\n",
+		kernel_filename);
+	exit(1);
+    }
+    fclose(f);
+
+    /* generate bootsector to set up the initial register state */
+    real_seg = (real_addr-phys_ram_base) >> 4;
+    seg[0] = seg[2] = seg[3] = seg[4] = seg[4] = real_seg;
+    seg[1] = real_seg+0x20;	/* CS */
+    memset(gpr, 0, sizeof gpr);
+    gpr[4] = cmdline_addr-real_addr-16;	/* SP (-16 is paranoia) */
+
+    generate_bootsect(gpr, seg, 0);
 }
 
 static void main_cpu_reset(void *opaque)
@@ -401,7 +620,7 @@ static int parallel_io[MAX_PARALLEL_PORTS] = { 0x378, 0x278, 0x3bc };
 static int parallel_irq[MAX_PARALLEL_PORTS] = { 7, 7, 7 };
 
 #ifdef HAS_AUDIO
-static void audio_init (PCIBus *pci_bus)
+static void audio_init (PCIBus *pci_bus, qemu_irq *pic)
 {
     struct soundhw *c;
     int audio_enabled = 0;
@@ -418,7 +637,7 @@ static void audio_init (PCIBus *pci_bus)
             for (c = soundhw; c->name; ++c) {
                 if (c->enabled) {
                     if (c->isa) {
-                        c->init.init_isa (s);
+                        c->init.init_isa (s, pic);
                     }
                     else {
                         if (pci_bus) {
@@ -432,13 +651,13 @@ static void audio_init (PCIBus *pci_bus)
 }
 #endif
 
-static void pc_init_ne2k_isa(NICInfo *nd)
+static void pc_init_ne2k_isa(NICInfo *nd, qemu_irq *pic)
 {
     static int nb_ne2k = 0;
 
     if (nb_ne2k == NE2000_NB_MAX)
         return;
-    isa_ne2000_init(ne2000_io[nb_ne2k], ne2000_irq[nb_ne2k], nd);
+    isa_ne2000_init(ne2000_io[nb_ne2k], pic[ne2000_irq[nb_ne2k]], nd);
     nb_ne2k++;
 }
 
@@ -450,13 +669,15 @@ static void pc_init1(int ram_size, int vga_ram_size, int boot_device,
                      int pci_enabled)
 {
     char buf[1024];
-    int ret, linux_boot, initrd_size, i;
-    unsigned long bios_offset, vga_bios_offset, option_rom_offset;
-    int bios_size, isa_bios_size;
+    int ret, linux_boot, i;
+    ram_addr_t ram_addr, vga_ram_addr, bios_offset, vga_bios_offset;
+    int bios_size, isa_bios_size, vga_bios_size;
     PCIBus *pci_bus;
     int piix3_devfn = -1;
     CPUState *env;
     NICInfo *nd;
+    qemu_irq *cpu_irq;
+    qemu_irq *i8259;
 
     linux_boot = (kernel_filename != NULL);
 
@@ -474,26 +695,28 @@ static void pc_init1(int ram_size, int vga_ram_size, int boot_device,
         if (pci_enabled) {
             apic_init(env);
         }
+        vmport_init(env);
     }
 
     /* allocate RAM */
-    cpu_register_physical_memory(0, ram_size, 0);
+    ram_addr = qemu_ram_alloc(ram_size);
+    cpu_register_physical_memory(0, ram_size, ram_addr);
+
+    /* allocate VGA RAM */
+    vga_ram_addr = qemu_ram_alloc(vga_ram_size);
 
     /* BIOS load */
-    bios_offset = ram_size + vga_ram_size;
-    vga_bios_offset = bios_offset + 256 * 1024;
-
     snprintf(buf, sizeof(buf), "%s/%s", bios_dir, BIOS_FILENAME);
     bios_size = get_image_size(buf);
-    if (bios_size <= 0 || 
-        (bios_size % 65536) != 0 ||
-        bios_size > (256 * 1024)) {
+    if (bios_size <= 0 ||
+        (bios_size % 65536) != 0) {
         goto bios_error;
     }
+    bios_offset = qemu_ram_alloc(bios_size);
     ret = load_image(buf, phys_ram_base + bios_offset);
     if (ret != bios_size) {
     bios_error:
-        fprintf(stderr, "qemu: could not load PC bios '%s'\n", buf);
+        fprintf(stderr, "qemu: could not load PC BIOS '%s'\n", buf);
         exit(1);
     }
 
@@ -503,102 +726,75 @@ static void pc_init1(int ram_size, int vga_ram_size, int boot_device,
     } else {
         snprintf(buf, sizeof(buf), "%s/%s", bios_dir, VGABIOS_FILENAME);
     }
+    vga_bios_size = get_image_size(buf);
+    if (vga_bios_size <= 0 || vga_bios_size > 65536)
+        goto vga_bios_error;
+    vga_bios_offset = qemu_ram_alloc(65536);
+
     ret = load_image(buf, phys_ram_base + vga_bios_offset);
-    
+    if (ret != vga_bios_size) {
+    vga_bios_error:
+        fprintf(stderr, "qemu: could not load VGA BIOS '%s'\n", buf);
+        exit(1);
+    }
+
     /* setup basic memory access */
-    cpu_register_physical_memory(0xc0000, 0x10000, 
+    cpu_register_physical_memory(0xc0000, 0x10000,
                                  vga_bios_offset | IO_MEM_ROM);
 
     /* map the last 128KB of the BIOS in ISA space */
     isa_bios_size = bios_size;
     if (isa_bios_size > (128 * 1024))
         isa_bios_size = 128 * 1024;
-    cpu_register_physical_memory(0xd0000, (192 * 1024) - isa_bios_size, 
+    cpu_register_physical_memory(0xd0000, (192 * 1024) - isa_bios_size,
                                  IO_MEM_UNASSIGNED);
-    cpu_register_physical_memory(0x100000 - isa_bios_size, 
-                                 isa_bios_size, 
+    cpu_register_physical_memory(0x100000 - isa_bios_size,
+                                 isa_bios_size,
                                  (bios_offset + bios_size - isa_bios_size) | IO_MEM_ROM);
 
-    option_rom_offset = 0;
-    for (i = 0; i < nb_option_roms; i++) {
-	int offset = bios_offset + bios_size + option_rom_offset;
-	int size;
+    {
+        ram_addr_t option_rom_offset;
+        int size, offset;
 
-	size = load_image(option_rom[i], phys_ram_base + offset);
-	if ((size + option_rom_offset) > 0x10000) {
-	    fprintf(stderr, "Too many option ROMS\n");
-	    exit(1);
-	}
-	cpu_register_physical_memory(0xd0000 + option_rom_offset,
-				     size, offset | IO_MEM_ROM);
-	option_rom_offset += size + 2047;
-	option_rom_offset -= (option_rom_offset % 2048);
+        offset = 0;
+        for (i = 0; i < nb_option_roms; i++) {
+            size = get_image_size(option_rom[i]);
+            if (size < 0) {
+                fprintf(stderr, "Could not load option rom '%s'\n",
+                        option_rom[i]);
+                exit(1);
+            }
+            if (size > (0x10000 - offset))
+                goto option_rom_error;
+            option_rom_offset = qemu_ram_alloc(size);
+            ret = load_image(option_rom[i], phys_ram_base + option_rom_offset);
+            if (ret != size) {
+            option_rom_error:
+                fprintf(stderr, "Too many option ROMS\n");
+                exit(1);
+            }
+            size = (size + 4095) & ~4095;
+            cpu_register_physical_memory(0xd0000 + offset,
+                                         size, option_rom_offset | IO_MEM_ROM);
+            offset += size;
+        }
     }
 
     /* map all the bios at the top of memory */
-    cpu_register_physical_memory((uint32_t)(-bios_size), 
+    cpu_register_physical_memory((uint32_t)(-bios_size),
                                  bios_size, bios_offset | IO_MEM_ROM);
-    
+
     bochs_bios_init();
 
-    if (linux_boot) {
-        uint8_t bootsect[512];
-        uint8_t old_bootsect[512];
+    if (linux_boot)
+	load_linux(kernel_filename, initrd_filename, kernel_cmdline);
 
-        if (bs_table[0] == NULL) {
-            fprintf(stderr, "A disk image must be given for 'hda' when booting a Linux kernel\n");
-            exit(1);
-        }
-        snprintf(buf, sizeof(buf), "%s/%s", bios_dir, LINUX_BOOT_FILENAME);
-        ret = load_image(buf, bootsect);
-        if (ret != sizeof(bootsect)) {
-            fprintf(stderr, "qemu: could not load linux boot sector '%s'\n",
-                    buf);
-            exit(1);
-        }
-
-        if (bdrv_read(bs_table[0], 0, old_bootsect, 1) >= 0) {
-            /* copy the MSDOS partition table */
-            memcpy(bootsect + 0x1be, old_bootsect + 0x1be, 0x40);
-        }
-
-        bdrv_set_boot_sector(bs_table[0], bootsect, sizeof(bootsect));
-
-        /* now we can load the kernel */
-        ret = load_kernel(kernel_filename, 
-                          phys_ram_base + KERNEL_LOAD_ADDR,
-                          phys_ram_base + KERNEL_PARAMS_ADDR);
-        if (ret < 0) {
-            fprintf(stderr, "qemu: could not load kernel '%s'\n", 
-                    kernel_filename);
-            exit(1);
-        }
-        
-        /* load initrd */
-        initrd_size = 0;
-        if (initrd_filename) {
-            initrd_size = load_image(initrd_filename, phys_ram_base + INITRD_LOAD_ADDR);
-            if (initrd_size < 0) {
-                fprintf(stderr, "qemu: could not load initial ram disk '%s'\n", 
-                        initrd_filename);
-                exit(1);
-            }
-        }
-        if (initrd_size > 0) {
-            stl_raw(phys_ram_base + KERNEL_PARAMS_ADDR + 0x218, INITRD_LOAD_ADDR);
-            stl_raw(phys_ram_base + KERNEL_PARAMS_ADDR + 0x21c, initrd_size);
-        }
-        pstrcpy(phys_ram_base + KERNEL_CMDLINE_ADDR, 4096,
-                kernel_cmdline);
-        stw_raw(phys_ram_base + KERNEL_PARAMS_ADDR + 0x20, 0xA33F);
-        stw_raw(phys_ram_base + KERNEL_PARAMS_ADDR + 0x22,
-                KERNEL_CMDLINE_ADDR - KERNEL_PARAMS_ADDR);
-        /* loader type */
-        stw_raw(phys_ram_base + KERNEL_PARAMS_ADDR + 0x210, 0x01);
-    }
+    cpu_irq = qemu_allocate_irqs(pic_irq_request, first_cpu, 1);
+    i8259 = i8259_init(cpu_irq[0]);
+    ferr_irq = i8259[13];
 
     if (pci_enabled) {
-        pci_bus = i440fx_init(&i440fx_state);
+        pci_bus = i440fx_init(&i440fx_state, i8259);
         piix3_devfn = piix3_init(pci_bus, -1);
     } else {
         pci_bus = NULL;
@@ -611,24 +807,30 @@ static void pc_init1(int ram_size, int vga_ram_size, int boot_device,
 
     if (cirrus_vga_enabled) {
         if (pci_enabled) {
-            pci_cirrus_vga_init(pci_bus, 
-                                ds, phys_ram_base + ram_size, ram_size, 
-                                vga_ram_size);
+            pci_cirrus_vga_init(pci_bus,
+                                ds, phys_ram_base + vga_ram_addr,
+                                vga_ram_addr, vga_ram_size);
         } else {
-            isa_cirrus_vga_init(ds, phys_ram_base + ram_size, ram_size, 
-                                vga_ram_size);
+            isa_cirrus_vga_init(ds, phys_ram_base + vga_ram_addr,
+                                vga_ram_addr, vga_ram_size);
         }
+    } else if (vmsvga_enabled) {
+        if (pci_enabled)
+            pci_vmsvga_init(pci_bus, ds, phys_ram_base + ram_size,
+                            ram_size, vga_ram_size);
+        else
+            fprintf(stderr, "%s: vmware_vga: no PCI bus\n", __FUNCTION__);
     } else {
         if (pci_enabled) {
-            pci_vga_init(pci_bus, ds, phys_ram_base + ram_size, ram_size, 
-                         vga_ram_size, 0, 0);
+            pci_vga_init(pci_bus, ds, phys_ram_base + vga_ram_addr,
+                         vga_ram_addr, vga_ram_size, 0, 0);
         } else {
-            isa_vga_init(ds, phys_ram_base + ram_size, ram_size, 
-                         vga_ram_size);
+            isa_vga_init(ds, phys_ram_base + vga_ram_addr,
+                         vga_ram_addr, vga_ram_size);
         }
     }
 
-    rtc_state = rtc_init(0x70, 8);
+    rtc_state = rtc_init(0x70, i8259[8]);
 
     register_ioport_read(0x92, 1, 1, ioport92_read, NULL);
     register_ioport_write(0x92, 1, 1, ioport92_write, NULL);
@@ -636,8 +838,7 @@ static void pc_init1(int ram_size, int vga_ram_size, int boot_device,
     if (pci_enabled) {
         ioapic = ioapic_init();
     }
-    isa_pic = pic_init(pic_irq_request, first_cpu);
-    pit = pit_init(0x40, 0);
+    pit = pit_init(0x40, i8259[0]);
     pcspk_init(pit);
     if (pci_enabled) {
         pic_set_alt_irq_func(isa_pic, ioapic_set_irq, ioapic);
@@ -645,14 +846,14 @@ static void pc_init1(int ram_size, int vga_ram_size, int boot_device,
 
     for(i = 0; i < MAX_SERIAL_PORTS; i++) {
         if (serial_hds[i]) {
-            serial_init(&pic_set_irq_new, isa_pic,
-                        serial_io[i], serial_irq[i], serial_hds[i]);
+            serial_init(serial_io[i], i8259[serial_irq[i]], serial_hds[i]);
         }
     }
 
     for(i = 0; i < MAX_PARALLEL_PORTS; i++) {
         if (parallel_hds[i]) {
-            parallel_init(parallel_io[i], parallel_irq[i], parallel_hds[i]);
+            parallel_init(parallel_io[i], i8259[parallel_irq[i]],
+                          parallel_hds[i]);
         }
     }
 
@@ -666,9 +867,14 @@ static void pc_init1(int ram_size, int vga_ram_size, int boot_device,
             }
         }
         if (strcmp(nd->model, "ne2k_isa") == 0) {
-            pc_init_ne2k_isa(nd);
+            pc_init_ne2k_isa(nd, i8259);
         } else if (pci_enabled) {
+            if (strcmp(nd->model, "?") == 0)
+                fprintf(stderr, "qemu: Supported ISA NICs: ne2k_isa\n");
             pci_nic_init(pci_bus, nd, -1);
+        } else if (strcmp(nd->model, "?") == 0) {
+            fprintf(stderr, "qemu: Supported ISA NICs: ne2k_isa\n");
+            exit(1);
         } else {
             fprintf(stderr, "qemu: Unsupported NIC: %s\n", nd->model);
             exit(1);
@@ -676,38 +882,39 @@ static void pc_init1(int ram_size, int vga_ram_size, int boot_device,
     }
 
     if (pci_enabled) {
-        pci_piix3_ide_init(pci_bus, bs_table, piix3_devfn + 1);
+        pci_piix3_ide_init(pci_bus, bs_table, piix3_devfn + 1, i8259);
     } else {
         for(i = 0; i < 2; i++) {
-            isa_ide_init(ide_iobase[i], ide_iobase2[i], ide_irq[i],
+            isa_ide_init(ide_iobase[i], ide_iobase2[i], i8259[ide_irq[i]],
                          bs_table[2 * i], bs_table[2 * i + 1]);
         }
     }
 
-    kbd_init();
+    i8042_init(i8259[1], i8259[12], 0x60);
     DMA_init(0);
 #ifdef HAS_AUDIO
-    audio_init(pci_enabled ? pci_bus : NULL);
+    audio_init(pci_enabled ? pci_bus : NULL, i8259);
 #endif
 
-    floppy_controller = fdctrl_init(6, 2, 0, 0x3f0, fd_table);
+    floppy_controller = fdctrl_init(i8259[6], 2, 0, 0x3f0, fd_table);
 
     cmos_init(ram_size, boot_device, bs_table);
 
     if (pci_enabled && usb_enabled) {
-        usb_uhci_init(pci_bus, piix3_devfn + 2);
+        usb_uhci_piix3_init(pci_bus, piix3_devfn + 2);
     }
 
     if (pci_enabled && acpi_enabled) {
         uint8_t *eeprom_buf = qemu_mallocz(8 * 256); /* XXX: make this persistent */
-        piix4_pm_init(pci_bus, piix3_devfn + 3);
+        i2c_bus *smbus;
+
+        /* TODO: Populate SPD eeprom data.  */
+        smbus = piix4_pm_init(pci_bus, piix3_devfn + 3, 0xb100);
         for (i = 0; i < 8; i++) {
-            SMBusDevice *eeprom = smbus_eeprom_device_init(0x50 + i,
-                eeprom_buf + (i * 256));
-            piix4_smbus_register_device(eeprom, 0x50 + i);
+            smbus_eeprom_device_init(smbus, 0x50 + i, eeprom_buf + (i * 256));
         }
     }
-    
+
     if (i440fx_state) {
         i440fx_init_memory_mappings(i440fx_state);
     }
@@ -731,11 +938,12 @@ static void pc_init1(int ram_size, int vga_ram_size, int boot_device,
 }
 
 static void pc_init_pci(int ram_size, int vga_ram_size, int boot_device,
-                        DisplayState *ds, const char **fd_filename, 
-                        int snapshot, 
-                        const char *kernel_filename, 
+                        DisplayState *ds, const char **fd_filename,
+                        int snapshot,
+                        const char *kernel_filename,
                         const char *kernel_cmdline,
-                        const char *initrd_filename)
+                        const char *initrd_filename,
+                        const char *cpu_model)
 {
     pc_init1(ram_size, vga_ram_size, boot_device,
              ds, fd_filename, snapshot,
@@ -744,11 +952,12 @@ static void pc_init_pci(int ram_size, int vga_ram_size, int boot_device,
 }
 
 static void pc_init_isa(int ram_size, int vga_ram_size, int boot_device,
-                        DisplayState *ds, const char **fd_filename, 
-                        int snapshot, 
-                        const char *kernel_filename, 
+                        DisplayState *ds, const char **fd_filename,
+                        int snapshot,
+                        const char *kernel_filename,
                         const char *kernel_cmdline,
-                        const char *initrd_filename)
+                        const char *initrd_filename,
+                        const char *cpu_model)
 {
     pc_init1(ram_size, vga_ram_size, boot_device,
              ds, fd_filename, snapshot,

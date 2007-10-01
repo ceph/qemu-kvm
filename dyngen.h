@@ -1,6 +1,6 @@
 /*
  * dyngen helpers
- * 
+ *
  *  Copyright (c) 2003 Fabrice Bellard
  *
  * This library is free software; you can redistribute it and/or
@@ -28,25 +28,11 @@ int __op_param1, __op_param2, __op_param3;
 #endif
 int __op_jmp0, __op_jmp1, __op_jmp2, __op_jmp3;
 
-#ifdef __i386__
+#if defined(__i386__) || defined(__x86_64__) || defined(__s390__)
 static inline void flush_icache_range(unsigned long start, unsigned long stop)
 {
 }
-#endif
-
-#ifdef __x86_64__
-static inline void flush_icache_range(unsigned long start, unsigned long stop)
-{
-}
-#endif
-
-#ifdef __s390__
-static inline void flush_icache_range(unsigned long start, unsigned long stop)
-{
-}
-#endif
-
-#ifdef __ia64__
+#elif defined(__ia64__)
 static inline void flush_icache_range(unsigned long start, unsigned long stop)
 {
     while (start < stop) {
@@ -55,9 +41,7 @@ static inline void flush_icache_range(unsigned long start, unsigned long stop)
     }
     asm volatile (";;sync.i;;srlz.i;;");
 }
-#endif
-
-#ifdef __powerpc__
+#elif defined(__powerpc__)
 
 #define MIN_CACHE_LINE_SIZE 8 /* conservative value */
 
@@ -67,7 +51,7 @@ static void inline flush_icache_range(unsigned long start, unsigned long stop)
 
     start &= ~(MIN_CACHE_LINE_SIZE - 1);
     stop = (stop + MIN_CACHE_LINE_SIZE - 1) & ~(MIN_CACHE_LINE_SIZE - 1);
-    
+
     for (p = start; p < stop; p += MIN_CACHE_LINE_SIZE) {
         asm volatile ("dcbst 0,%0" : : "r"(p) : "memory");
     }
@@ -78,17 +62,12 @@ static void inline flush_icache_range(unsigned long start, unsigned long stop)
     asm volatile ("sync" : : : "memory");
     asm volatile ("isync" : : : "memory");
 }
-#endif
-
-#ifdef __alpha__
+#elif defined(__alpha__)
 static inline void flush_icache_range(unsigned long start, unsigned long stop)
 {
     asm ("imb");
 }
-#endif
-
-#ifdef __sparc__
-
+#elif defined(__sparc__)
 static void inline flush_icache_range(unsigned long start, unsigned long stop)
 {
 	unsigned long p;
@@ -99,10 +78,7 @@ static void inline flush_icache_range(unsigned long start, unsigned long stop)
 	for (; p < stop; p += 8)
 		__asm__ __volatile__("flush\t%0" : : "r" (p));
 }
-
-#endif
-
-#ifdef __arm__
+#elif defined(__arm__)
 static inline void flush_icache_range(unsigned long start, unsigned long stop)
 {
     register unsigned long _beg __asm ("a1") = start;
@@ -110,14 +86,22 @@ static inline void flush_icache_range(unsigned long start, unsigned long stop)
     register unsigned long _flg __asm ("a3") = 0;
     __asm __volatile__ ("swi 0x9f0002" : : "r" (_beg), "r" (_end), "r" (_flg));
 }
-#endif
+#elif defined(__mc68000)
 
-#ifdef __mc68000
-#include <asm/cachectl.h>
+# include <asm/cachectl.h>
 static inline void flush_icache_range(unsigned long start, unsigned long stop)
 {
     cacheflush(start,FLUSH_SCOPE_LINE,FLUSH_CACHE_BOTH,stop-start+16);
 }
+#elif defined(__mips__)
+
+#include <sys/cachectl.h>
+static inline void flush_icache_range(unsigned long start, unsigned long stop)
+{
+    _flush_cache ((void *)start, stop - start, BCACHE);
+}
+#else
+#error unsupported CPU
 #endif
 
 #ifdef __alpha__
@@ -164,8 +148,8 @@ static inline void arm_reloc_pc24(uint32_t *ptr, uint32_t insn, int val)
 }
 
 static uint8_t *arm_flush_ldr(uint8_t *gen_code_ptr,
-                              LDREntry *ldr_start, LDREntry *ldr_end, 
-                              uint32_t *data_start, uint32_t *data_end, 
+                              LDREntry *ldr_start, LDREntry *ldr_end,
+                              uint32_t *data_start, uint32_t *data_end,
                               int gen_jmp)
 {
     LDREntry *le;
@@ -174,7 +158,7 @@ static uint8_t *arm_flush_ldr(uint8_t *gen_code_ptr,
     uint8_t *data_ptr;
     uint32_t insn;
     uint32_t mask;
- 
+
     data_size = (data_end - data_start) << 2;
 
     if (gen_jmp) {
@@ -185,17 +169,17 @@ static uint8_t *arm_flush_ldr(uint8_t *gen_code_ptr,
         arm_reloc_pc24((uint32_t *)gen_code_ptr, 0xeafffffe, target);
         gen_code_ptr += 4;
     }
-   
+
     /* copy the data */
     data_ptr = gen_code_ptr;
     memcpy(gen_code_ptr, data_start, data_size);
     gen_code_ptr += data_size;
-    
+
     /* patch the ldr to point to the data */
     for(le = ldr_start; le < ldr_end; le++) {
         ptr = (uint32_t *)le->ptr;
-        offset = ((unsigned long)(le->data_ptr) - (unsigned long)data_start) + 
-            (unsigned long)data_ptr - 
+        offset = ((unsigned long)(le->data_ptr) - (unsigned long)data_start) +
+            (unsigned long)data_ptr -
             (unsigned long)ptr - 8;
         if (offset < 0) {
             fprintf(stderr, "Negative constant pool offset\n");
@@ -247,7 +231,6 @@ static uint8_t *arm_flush_ldr(uint8_t *gen_code_ptr,
 #endif /* __arm__ */
 
 #ifdef __ia64
-
 
 /* Patch instruction with "val" where "mask" has 1 bits. */
 static inline void ia64_patch (uint64_t insn_addr, uint64_t mask, uint64_t val)
@@ -409,7 +392,8 @@ static inline void ia64_apply_fixes (uint8_t **gen_code_pp,
 	0x05, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,	/* nop 0; brl IP */
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc0
     };
-    uint8_t *gen_code_ptr = *gen_code_pp, *plt_start, *got_start, *vp;
+    uint8_t *gen_code_ptr = *gen_code_pp, *plt_start, *got_start;
+    uint64_t *vp;
     struct ia64_fixup *fixup;
     unsigned int offset = 0;
     struct fdesc {
@@ -446,12 +430,12 @@ static inline void ia64_apply_fixes (uint8_t **gen_code_pp,
     /* First, create the GOT: */
     for (fixup = ltoff_fixes; fixup; fixup = fixup->next) {
 	/* first check if we already have this value in the GOT: */
-	for (vp = got_start; vp < gen_code_ptr; ++vp)
-	    if (*(uint64_t *) vp == fixup->value)
+	for (vp = (uint64_t *) got_start; vp < (uint64_t *) gen_code_ptr; ++vp)
+	    if (*vp == fixup->value)
 		break;
-	if (vp == gen_code_ptr) {
+	if (vp == (uint64_t *) gen_code_ptr) {
 	    /* Nope, we need to put the value in the GOT: */
-	    *(uint64_t *) vp = fixup->value;
+	    *vp = fixup->value;
 	    gen_code_ptr += 8;
 	}
 	ia64_imm22(fixup->addr, (long) vp - gp);

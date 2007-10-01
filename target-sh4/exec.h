@@ -1,6 +1,6 @@
 /*
  *  SH4 emulation
- * 
+ *
  *  Copyright (c) 2005 Samuel Tardieu
  *
  * This library is free software; you can redistribute it and/or
@@ -35,6 +35,16 @@ register uint32_t T1 asm(AREG2);
 
 #include "cpu.h"
 #include "exec-all.h"
+
+static inline int cpu_halted(CPUState *env) {
+    if (!env->halted)
+        return 0;
+    if (env->interrupt_request & CPU_INTERRUPT_HARD) {
+        env->halted = 0;
+        return 0;
+    }
+    return EXCP_HALTED;
+}
 
 #ifndef CONFIG_USER_ONLY
 #include "softmmu_exec.h"

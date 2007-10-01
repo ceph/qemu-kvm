@@ -2,7 +2,7 @@
  * QEMU Uninorth PCI host (for all Mac99 and newer machines)
  *
  * Copyright (c) 2006 Fabrice Bellard
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
@@ -146,12 +146,12 @@ static int pci_unin_map_irq(PCIDevice *pci_dev, int irq_num)
     return (irq_num + (pci_dev->devfn >> 3)) & 3;
 }
 
-static void pci_unin_set_irq(void *pic, int irq_num, int level)
+static void pci_unin_set_irq(qemu_irq *pic, int irq_num, int level)
 {
-    openpic_set_irq(pic, irq_num + 8, level);
+    qemu_set_irq(pic[irq_num + 8], level);
 }
 
-PCIBus *pci_pmac_init(void *pic)
+PCIBus *pci_pmac_init(qemu_irq *pic)
 {
     UNINState *s;
     PCIDevice *d;
@@ -163,13 +163,13 @@ PCIBus *pci_pmac_init(void *pic)
     s->bus = pci_register_bus(pci_unin_set_irq, pci_unin_map_irq,
                               pic, 11 << 3, 4);
 
-    pci_mem_config = cpu_register_io_memory(0, pci_unin_main_config_read, 
+    pci_mem_config = cpu_register_io_memory(0, pci_unin_main_config_read,
                                             pci_unin_main_config_write, s);
     pci_mem_data = cpu_register_io_memory(0, pci_unin_main_read,
                                           pci_unin_main_write, s);
     cpu_register_physical_memory(0xf2800000, 0x1000, pci_mem_config);
     cpu_register_physical_memory(0xf2c00000, 0x1000, pci_mem_data);
-    d = pci_register_device(s->bus, "Uni-north main", sizeof(PCIDevice), 
+    d = pci_register_device(s->bus, "Uni-north main", sizeof(PCIDevice),
                             11 << 3, NULL, NULL);
     d->config[0x00] = 0x6b; // vendor_id : Apple
     d->config[0x01] = 0x10;
@@ -217,7 +217,7 @@ PCIBus *pci_pmac_init(void *pic)
 #if 0 // XXX: not needed for now
     /* Uninorth AGP bus */
     s = &pci_bridge[1];
-    pci_mem_config = cpu_register_io_memory(0, pci_unin_config_read, 
+    pci_mem_config = cpu_register_io_memory(0, pci_unin_config_read,
                                             pci_unin_config_write, s);
     pci_mem_data = cpu_register_io_memory(0, pci_unin_read,
                                           pci_unin_write, s);
@@ -242,7 +242,7 @@ PCIBus *pci_pmac_init(void *pic)
 #if 0 // XXX: not needed for now
     /* Uninorth internal bus */
     s = &pci_bridge[2];
-    pci_mem_config = cpu_register_io_memory(0, pci_unin_config_read, 
+    pci_mem_config = cpu_register_io_memory(0, pci_unin_config_read,
                                             pci_unin_config_write, s);
     pci_mem_data = cpu_register_io_memory(0, pci_unin_read,
                                           pci_unin_write, s);

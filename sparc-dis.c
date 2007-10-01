@@ -276,7 +276,7 @@ const struct sparc_opcode_arch sparc_opcode_archs[] = {
   { "v8", MASK_V6 | MASK_V7 | MASK_V8 },
   { "sparclet", MASK_V6 | MASK_V7 | MASK_V8 | MASK_SPARCLET },
   { "sparclite", MASK_V6 | MASK_V7 | MASK_V8 | MASK_SPARCLITE },
-  /* ??? Don't some v8 priviledged insns conflict with v9?  */
+  /* ??? Don't some v8 privileged insns conflict with v9?  */
   { "v9", MASK_V6 | MASK_V7 | MASK_V8 | MASK_V9 },
   /* v9 with ultrasparc additions */
   { "v9a", MASK_V6 | MASK_V7 | MASK_V8 | MASK_V9 | MASK_V9A },
@@ -359,7 +359,7 @@ sparc_opcode_lookup_arch (name)
 #define FBFCC(x)	(((x)&0x3)<<20)	/* v9 */
 
 /* The order of the opcodes in the table is significant:
-	
+
 	* The assembler requires that all instances of the same mnemonic must
 	be consecutive.	If they aren't, the assembler will bomb at runtime.
 
@@ -2206,7 +2206,7 @@ sparc_decode_asi_v8 (int value)
 
 /* Handle membar masks.  */
 
-static arg membar_table[] =
+static const arg membar_table[] =
 {
   { 0x40, "#Sync" },
   { 0x20, "#MemIssue" },
@@ -2238,7 +2238,7 @@ sparc_decode_membar (value)
 
 /* Handle prefetch args.  */
 
-static arg prefetch_table[] =
+static const arg prefetch_table[] =
 {
   { 0, "#n_reads" },
   { 1, "#one_read" },
@@ -2269,7 +2269,7 @@ sparc_decode_prefetch (value)
 
 /* Handle sparclet coprocessor registers.  */
 
-static arg sparclet_cpreg_table[] =
+static const arg sparclet_cpreg_table[] =
 {
   { 0, "%ccsr" },
   { 1, "%ccfr" },
@@ -2320,7 +2320,7 @@ static const struct sparc_opcode **sorted_opcodes;
 /* It is important that we only look at insn code bits as that is how the
    opcode table is hashed.  OPCODE_BITS is a table of valid bits for each
    of the main types (0,1,2,3).  */
-static int opcode_bits[4] = { 0x01c00000, 0x0, 0x01f80000, 0x01f80000 };
+static const int opcode_bits[4] = { 0x01c00000, 0x0, 0x01f80000, 0x01f80000 };
 #define HASH_INSN(INSN) \
   ((((INSN) >> 24) & 0xc0) | (((INSN) & opcode_bits[((INSN) >> 30) & 3]) >> 19))
 struct opcode_hash {
@@ -2340,17 +2340,17 @@ static int compute_arch_mask PARAMS ((unsigned long));
 	((((int)(value)) << ((8 * sizeof (int)) - bits))	\
 			 >> ((8 * sizeof (int)) - bits) )
 
-static  char *reg_names[] =
-{ "g0", "g1", "g2", "g3", "g4", "g5", "g6", "g7",	
-  "o0", "o1", "o2", "o3", "o4", "o5", "sp", "o7",	
-  "l0", "l1", "l2", "l3", "l4", "l5", "l6", "l7",	
-  "i0", "i1", "i2", "i3", "i4", "i5", "fp", "i7",	
-  "f0", "f1", "f2", "f3", "f4", "f5", "f6", "f7",	
-  "f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15",	
+static const char * const reg_names[] =
+{ "g0", "g1", "g2", "g3", "g4", "g5", "g6", "g7",
+  "o0", "o1", "o2", "o3", "o4", "o5", "sp", "o7",
+  "l0", "l1", "l2", "l3", "l4", "l5", "l6", "l7",
+  "i0", "i1", "i2", "i3", "i4", "i5", "fp", "i7",
+  "f0", "f1", "f2", "f3", "f4", "f5", "f6", "f7",
+  "f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15",
   "f16", "f17", "f18", "f19", "f20", "f21", "f22", "f23",
   "f24", "f25", "f26", "f27", "f28", "f29", "f30", "f31",
-  "f32", "f33", "f34", "f35", "f36", "f37", "f38", "f39",	
-  "f40", "f41", "f42", "f43", "f44", "f45", "f46", "f47",	
+  "f32", "f33", "f34", "f35", "f36", "f37", "f38", "f39",
+  "f40", "f41", "f42", "f43", "f44", "f45", "f46", "f47",
   "f48", "f49", "f50", "f51", "f52", "f53", "f54", "f55",
   "f56", "f57", "f58", "f59", "f60", "f61", "f62", "f63",
 /* psr, wim, tbr, fpsr, cpsr are v8 only.  */
@@ -2361,7 +2361,7 @@ static  char *reg_names[] =
 
 /* These are ordered according to there register number in
    rdpr and wrpr insns.  */
-static char *v9_priv_reg_names[] =
+static const char * const v9_priv_reg_names[] =
 {
   "tpc", "tnpc", "tstate", "tt", "tick", "tba", "pstate", "tl",
   "pil", "cwp", "cansave", "canrestore", "cleanwin", "otherwin",
@@ -2371,7 +2371,7 @@ static char *v9_priv_reg_names[] =
 
 /* These are ordered according to there register number in
    rd and wr insns (-16).  */
-static char *v9a_asr_reg_names[] =
+static const char * const v9a_asr_reg_names[] =
 {
   "pcr", "pic", "dcr", "gsr", "set_softint", "clear_softint",
   "softint", "tick_cmpr", "sys_tick", "sys_tick_cmpr"
@@ -2566,7 +2566,7 @@ print_insn_sparc (memaddr, info)
 	  /* Nonzero means that we have found a plus sign in the args
 	     field of the opcode table.  */
 	  int found_plus = 0;
-	  
+
 	  /* Nonzero means we have an annulled branch.  */
 	  int is_annulled = 0;
 
@@ -2621,7 +2621,7 @@ print_insn_sparc (memaddr, info)
 		  }		/* while there are comma started args */
 
 		(*info->fprintf_func) (stream, " ");
-			
+
 		switch (*s)
 		  {
 		  case '+':
@@ -2722,7 +2722,7 @@ print_insn_sparc (memaddr, info)
 			 not before it.  */
 		      if (found_plus)
 			imm_added_to_rs1 = 1;
-		      
+
 		      if (imm <= 9)
 			(*info->fprintf_func) (stream, "%d", imm);
 		      else
@@ -2806,7 +2806,7 @@ print_insn_sparc (memaddr, info)
 		  case 'o':
 		    (*info->fprintf_func) (stream, "%%asi");
 		    break;
-		    
+
 		  case 'W':
 		    (*info->fprintf_func) (stream, "%%tick");
 		    break;
@@ -2859,15 +2859,15 @@ print_insn_sparc (memaddr, info)
 			(*info->fprintf_func) (stream, "%d", X_RD (insn));
 		      break;
 		    }
-		    
+
 		  case 'M':
 		    (*info->fprintf_func) (stream, "%%asr%d", X_RS1 (insn));
 		    break;
-		    
+
 		  case 'm':
 		    (*info->fprintf_func) (stream, "%%asr%d", X_RD (insn));
 		    break;
-		    
+
 		  case 'L':
 		    info->target = memaddr + SEX (X_DISP30 (insn), 30) * 4;
 		    (*info->print_address_func) (info->target, info);
@@ -2999,7 +2999,7 @@ print_insn_sparc (memaddr, info)
 		      && X_RD (prev_insn) == X_RS1 (insn))
 		    {
 		      (*info->fprintf_func) (stream, "\t! ");
-		      info->target = 
+		      info->target =
 			((unsigned) 0xFFFFFFFF
 			 & ((int) X_IMM22 (prev_insn) << 10));
 		      if (imm_added_to_rs1)

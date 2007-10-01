@@ -10,8 +10,10 @@
 #else
 #define TARGET_LONG_BITS 64
 #define TARGET_FPREGS 64
-#define TARGET_PAGE_BITS 12 /* XXX */
+#define TARGET_PAGE_BITS 13 /* 8k */
 #endif
+
+#define TARGET_PHYS_ADDR_BITS 64
 
 #include "cpu-defs.h"
 
@@ -20,9 +22,9 @@
 #define TARGET_HAS_ICE 1
 
 #if !defined(TARGET_SPARC64)
-#define ELF_MACHINE	EM_SPARC
+#define ELF_MACHINE     EM_SPARC
 #else
-#define ELF_MACHINE	EM_SPARCV9
+#define ELF_MACHINE     EM_SPARCV9
 #endif
 
 /*#define EXCP_INTERRUPT 0x100*/
@@ -34,24 +36,33 @@
 #define TT_PRIV_INSN 0x03
 #define TT_NFPU_INSN 0x04
 #define TT_WIN_OVF  0x05
-#define TT_WIN_UNF  0x06 
+#define TT_WIN_UNF  0x06
+#define TT_UNALIGNED 0x07
 #define TT_FP_EXCP  0x08
 #define TT_DFAULT   0x09
+#define TT_TOVF     0x0a
 #define TT_EXTINT   0x10
+#define TT_CODE_ACCESS 0x21
+#define TT_DATA_ACCESS 0x29
 #define TT_DIV_ZERO 0x2a
+#define TT_NCP_INSN 0x24
 #define TT_TRAP     0x80
 #else
 #define TT_TFAULT   0x08
 #define TT_TMISS    0x09
+#define TT_CODE_ACCESS 0x0a
 #define TT_ILL_INSN 0x10
 #define TT_PRIV_INSN 0x11
 #define TT_NFPU_INSN 0x20
 #define TT_FP_EXCP  0x21
+#define TT_TOVF     0x23
 #define TT_CLRWIN   0x24
 #define TT_DIV_ZERO 0x28
 #define TT_DFAULT   0x30
 #define TT_DMISS    0x31
-#define TT_DPROT    0x32
+#define TT_DATA_ACCESS 0x32
+#define TT_DPROT    0x33
+#define TT_UNALIGNED 0x34
 #define TT_PRIV_ACT 0x37
 #define TT_EXTINT   0x40
 #define TT_SPILL    0x80
@@ -78,6 +89,7 @@
 #if defined(TARGET_SPARC64)
 #define PS_IG    (1<<11)
 #define PS_MG    (1<<10)
+#define PS_RMO   (1<<7)
 #define PS_RED   (1<<5)
 #define PS_PEF   (1<<4)
 #define PS_AM    (1<<3)
@@ -124,14 +136,16 @@
 #define FSR_FTT_MASK (FSR_FTT2 | FSR_FTT1 | FSR_FTT0)
 #define FSR_FTT_IEEE_EXCP (1 << 14)
 #define FSR_FTT_UNIMPFPOP (3 << 14)
+#define FSR_FTT_SEQ_ERROR (4 << 14)
 #define FSR_FTT_INVAL_FPR (6 << 14)
 
 #define FSR_FCC1  (1<<11)
 #define FSR_FCC0  (1<<10)
 
 /* MMU */
-#define MMU_E	  (1<<0)
-#define MMU_NF	  (1<<1)
+#define MMU_E     (1<<0)
+#define MMU_NF    (1<<1)
+#define MMU_BM    (1<<14)
 
 #define PTE_ENTRYTYPE_MASK 3
 #define PTE_ACCESS_MASK    0x1c
@@ -139,8 +153,8 @@
 #define PTE_PPN_SHIFT      7
 #define PTE_ADDR_MASK      0xffffff00
 
-#define PG_ACCESSED_BIT	5
-#define PG_MODIFIED_BIT	6
+#define PG_ACCESSED_BIT 5
+#define PG_MODIFIED_BIT 6
 #define PG_CACHE_BIT    7
 
 #define PG_ACCESSED_MASK (1 << PG_ACCESSED_BIT)
@@ -149,6 +163,8 @@
 
 /* 2 <= NWINDOWS <= 32. In QEMU it must also be a power of two. */
 #define NWINDOWS  8
+
+typedef struct sparc_def_t sparc_def_t;
 
 typedef struct CPUSPARCState {
     target_ulong gregs[8]; /* general registers */
@@ -166,8 +182,10 @@ typedef struct CPUSPARCState {
     int      psrs;     /* supervisor mode (extracted from PSR) */
     int      psrps;    /* previous supervisor mode */
     int      psret;    /* enable traps */
-    uint32_t psrpil;   /* interrupt level */
+    uint32_t psrpil;   /* interrupt blocking level */
+    uint32_t pil_in;   /* incoming interrupt level bitmap */
     int      psref;    /* enable fpu */
+    target_ulong version;
     jmp_buf  jmp_env;
     int user_mode_only;
     int exception_index;
@@ -204,7 +222,7 @@ typedef struct CPUSPARCState {
     uint64_t tnpc[MAXTL];
     uint64_t tstate[MAXTL];
     uint32_t tt[MAXTL];
-    uint32_t xcc;		/* Extended integer condition codes */
+    uint32_t xcc;               /* Extended integer condition codes */
     uint32_t asi;
     uint32_t pstate;
     uint32_t tl;
@@ -213,10 +231,14 @@ typedef struct CPUSPARCState {
     uint64_t bgregs[8]; /* backup for normal global registers */
     uint64_t igregs[8]; /* interrupt general registers */
     uint64_t mgregs[8]; /* mmu general registers */
-    uint64_t version;
     uint64_t fprs;
     uint64_t tick_cmpr, stick_cmpr;
+    void *tick, *stick;
     uint64_t gsr;
+    uint32_t gl; // UA2005
+    /* UA 2005 hyperprivileged registers */
+    uint64_t hpstate, htstate[MAXTL], hintp, htba, hver, hstick_cmpr, ssr;
+    void *hstick; // UA 2005
 #endif
 #if !defined(TARGET_SPARC64) && !defined(reg_T2)
     target_ulong t2;
@@ -224,58 +246,75 @@ typedef struct CPUSPARCState {
 } CPUSPARCState;
 #if defined(TARGET_SPARC64)
 #define GET_FSR32(env) (env->fsr & 0xcfc1ffff)
-#define PUT_FSR32(env, val) do { uint32_t _tmp = val;			\
-	env->fsr = (_tmp & 0xcfc1c3ff) | (env->fsr & 0x3f00000000ULL);	\
+#define PUT_FSR32(env, val) do { uint32_t _tmp = val;                   \
+        env->fsr = (_tmp & 0xcfc1c3ff) | (env->fsr & 0x3f00000000ULL);  \
     } while (0)
 #define GET_FSR64(env) (env->fsr & 0x3fcfc1ffffULL)
-#define PUT_FSR64(env, val) do { uint64_t _tmp = val;	\
-	env->fsr = _tmp & 0x3fcfc1c3ffULL;		\
+#define PUT_FSR64(env, val) do { uint64_t _tmp = val;   \
+        env->fsr = _tmp & 0x3fcfc1c3ffULL;              \
     } while (0)
-// Manuf 0x17, version 0x11, mask 0 (UltraSparc-II)
-#define GET_VER(env) ((0x17ULL << 48) | (0x11ULL << 32) |		\
-		      (0 << 24) | (MAXTL << 8) | (NWINDOWS - 1))
 #else
 #define GET_FSR32(env) (env->fsr)
-#define PUT_FSR32(env, val) do { uint32_t _tmp = val;	\
-	env->fsr = _tmp & 0xcfc1ffff;			\
+#define PUT_FSR32(env, val) do { uint32_t _tmp = val;                   \
+        env->fsr = (_tmp & 0xcfc1dfff) | (env->fsr & 0x000e0000);       \
     } while (0)
 #endif
 
 CPUSPARCState *cpu_sparc_init(void);
 int cpu_sparc_exec(CPUSPARCState *s);
 int cpu_sparc_close(CPUSPARCState *s);
+int sparc_find_by_name (const unsigned char *name, const sparc_def_t **def);
+void sparc_cpu_list (FILE *f, int (*cpu_fprintf)(FILE *f, const char *fmt,
+                                                 ...));
+int cpu_sparc_register (CPUSPARCState *env, const sparc_def_t *def);
 
-/* Fake impl 0, version 4 */
-#define GET_PSR(env) ((0 << 28) | (4 << 24) | (env->psr & PSR_ICC) |	\
-		      (env->psref? PSR_EF : 0) |			\
-		      (env->psrpil << 8) |				\
-		      (env->psrs? PSR_S : 0) |				\
-		      (env->psrps? PSR_PS : 0) |			\
-		      (env->psret? PSR_ET : 0) | env->cwp)
+#define GET_PSR(env) (env->version | (env->psr & PSR_ICC) |             \
+                      (env->psref? PSR_EF : 0) |                        \
+                      (env->psrpil << 8) |                              \
+                      (env->psrs? PSR_S : 0) |                          \
+                      (env->psrps? PSR_PS : 0) |                        \
+                      (env->psret? PSR_ET : 0) | env->cwp)
 
 #ifndef NO_CPU_IO_DEFS
 void cpu_set_cwp(CPUSPARCState *env1, int new_cwp);
 #endif
 
-#define PUT_PSR(env, val) do { int _tmp = val;				\
-	env->psr = _tmp & PSR_ICC;					\
-	env->psref = (_tmp & PSR_EF)? 1 : 0;				\
-	env->psrpil = (_tmp & PSR_PIL) >> 8;				\
-	env->psrs = (_tmp & PSR_S)? 1 : 0;				\
-	env->psrps = (_tmp & PSR_PS)? 1 : 0;				\
-	env->psret = (_tmp & PSR_ET)? 1 : 0;				\
-	cpu_set_cwp(env, _tmp & PSR_CWP & (NWINDOWS - 1));		\
+#define PUT_PSR(env, val) do { int _tmp = val;                          \
+        env->psr = _tmp & PSR_ICC;                                      \
+        env->psref = (_tmp & PSR_EF)? 1 : 0;                            \
+        env->psrpil = (_tmp & PSR_PIL) >> 8;                            \
+        env->psrs = (_tmp & PSR_S)? 1 : 0;                              \
+        env->psrps = (_tmp & PSR_PS)? 1 : 0;                            \
+        env->psret = (_tmp & PSR_ET)? 1 : 0;                            \
+        cpu_set_cwp(env, _tmp & PSR_CWP);                               \
     } while (0)
 
 #ifdef TARGET_SPARC64
-#define GET_CCR(env) ((env->xcc << 4) | (env->psr & PSR_ICC))
-#define PUT_CCR(env, val) do { int _tmp = val;				\
-	env->xcc = _tmp >> 4;						\
-	env->psr = (_tmp & 0xf) << 20;					\
+#define GET_CCR(env) (((env->xcc >> 20) << 4) | ((env->psr & PSR_ICC) >> 20))
+#define PUT_CCR(env, val) do { int _tmp = val;                          \
+        env->xcc = (_tmp >> 4) << 20;                                           \
+        env->psr = (_tmp & 0xf) << 20;                                  \
     } while (0)
+#define GET_CWP64(env) (NWINDOWS - 1 - (env)->cwp)
+#define PUT_CWP64(env, val) \
+    cpu_set_cwp(env, NWINDOWS - 1 - ((val) & (NWINDOWS - 1)))
+
 #endif
 
 int cpu_sparc_signal_handler(int host_signum, void *pinfo, void *puc);
+void raise_exception(int tt);
+void do_unassigned_access(target_phys_addr_t addr, int is_write, int is_exec,
+                          int is_asi);
+void do_tick_set_count(void *opaque, uint64_t count);
+uint64_t do_tick_get_count(void *opaque);
+void do_tick_set_limit(void *opaque, uint64_t limit);
+void cpu_check_irqs(CPUSPARCState *env);
+
+#define CPUState CPUSPARCState
+#define cpu_init cpu_sparc_init
+#define cpu_exec cpu_sparc_exec
+#define cpu_gen_code cpu_sparc_gen_code
+#define cpu_signal_handler cpu_sparc_signal_handler
 
 #include "cpu-all.h"
 
