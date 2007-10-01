@@ -53,6 +53,8 @@
 #include <mach/ndr.h>
 #include <mach/mig_errors.h>
 
+#include <sys/xattr.h>
+
 #include "qemu.h"
 
 //#define DEBUG_SYSCALL
@@ -367,7 +369,14 @@ static inline uint32_t target_mach_msg_trap(
         case 200: /* host_info */
         {
             mig_reply_error_t *err = (mig_reply_error_t *)hdr;
-            struct host_basic_info *data = (void *)(err+1);
+            struct {
+                uint32_t unknow1;
+                uint32_t max_cpus;
+                uint32_t avail_cpus;
+                uint32_t memory_size;
+                uint32_t cpu_type;
+                uint32_t cpu_subtype;
+            } *data = (void *)(err+1);
 
             DPRINTF("maxcpu = 0x%x\n",   data->max_cpus);
             DPRINTF("numcpu = 0x%x\n",   data->avail_cpus);
@@ -444,21 +453,49 @@ long do_mach_syscall(void *cpu_env, int num, uint32_t arg1, uint32_t arg2, uint3
     case -31:
         DPRINTF("mach_msg_trap(0x%x, 0x%x, 0x%x, 0x%x, 0x%x, 0x%x, 0x%x)\n",
                 arg1, arg2, arg3, arg4, arg5, arg6, arg7);
-
         ret = target_mach_msg_trap((mach_msg_header_t *)arg1, arg2, arg3, arg4, arg5, arg6, arg7);
-
         break;
+/* may need more translation if target arch is different from host */
+#if (defined(TARGET_I386) && defined(__i386__)) || (defined(TARGET_PPC) && defined(__ppc__))
+    case -33:
+        DPRINTF("semaphore_signal_trap(0x%x)\n", arg1);
+        ret = semaphore_signal_trap(arg1);
+        break;
+    case -34:
+        DPRINTF("semaphore_signal_all_trap(0x%x)\n", arg1);
+        ret = semaphore_signal_all_trap(arg1);
+        break;
+    case -35:
+        DPRINTF("semaphore_signal_thread_trap(0x%x)\n", arg1, arg2);
+        ret = semaphore_signal_thread_trap(arg1,arg2);
+        break;
+#endif
     case -36:
         DPRINTF("semaphore_wait_trap(0x%x)\n", arg1);
         extern int semaphore_wait_trap(int); // XXX: is there any header for that?
         ret = semaphore_wait_trap(arg1);
         break;
+/* may need more translation if target arch is different from host */
+#if (defined(TARGET_I386) && defined(__i386__)) || (defined(TARGET_PPC) && defined(__ppc__))
+    case -37:
+        DPRINTF("semaphore_wait_signal_trap(0x%x, 0x%x)\n", arg1, arg2);
+        ret = semaphore_wait_signal_trap(arg1,arg2);
+        break;
+#endif
     case -43:
         DPRINTF("map_fd(0x%x, 0x%x, 0x%x, 0x%x, 0x%x)\n",
                 arg1, arg2, arg3, arg4, arg5);
         ret = map_fd(arg1, arg2, (void*)arg3, arg4, arg5);
         tswap32s((uint32_t*)arg3);
         break;
+/* may need more translation if target arch is different from host */
+#if (defined(TARGET_I386) && defined(__i386__)) || (defined(TARGET_PPC) && defined(__ppc__))
+    case -61:
+        DPRINTF("syscall_thread_switch(0x%x, 0x%x, 0x%x)\n",
+                arg1, arg2, arg3);
+        ret = syscall_thread_switch(arg1, arg2, arg3);  // just a hint to the scheduler; can drop?
+        break;
+#endif
     case -89:
         DPRINTF("mach_timebase_info(0x%x)\n", arg1);
         struct mach_timebase_info info;
@@ -1299,7 +1336,7 @@ static inline long bswap_syctl(int * mib, int count, void *buf, int size)
         if(!(sysctl = sysctl->childs))
             break;
     }
-    
+
     if(ret->childs)
         qerror("we shouldn't have a directory element\n");
 
@@ -1338,13 +1375,16 @@ long do___sysctl(int * name, uint32_t namelen, void * oldp, size_t * oldlenp, vo
         //bswap_syctl(name, namelen, newp, newlen);
         tswap32s((uint32_t*)oldlenp);
     }
-        
+
     if(name) /* Sometimes sysctl is called with no arg1, ignore */
         ret = get_errno(sysctl(name, namelen, oldp, oldlenp, newp, newlen));
 
+#if defined(TARGET_I386) ^ defined(__i386__) || defined(TARGET_PPC) ^ defined(__ppc__)
     if (!is_error(ret) && bswap_syctl(name, namelen, oldp, *oldlenp) != 0) {
         return -ENOTDIR;
     }
+#endif
+
     if(name) {
         //bswap_syctl(name, namelen, newp, newlen);
         tswap32s((uint32_t*)oldlenp);

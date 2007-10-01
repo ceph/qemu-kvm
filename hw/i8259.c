@@ -1,8 +1,8 @@
 /*
  * QEMU 8259 interrupt controller emulation
- * 
+ *
  * Copyright (c) 2003-2004 Fabrice Bellard
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
@@ -44,6 +44,7 @@ typedef struct PicState {
     uint8_t rotate_on_auto_eoi;
     uint8_t special_fully_nested_mode;
     uint8_t init4; /* true if 4 byte init */
+    uint8_t single_mode; /* true if slave pic is not initialized */
     uint8_t elcr; /* PIIX edge/trigger selection*/
     uint8_t elcr_mask;
     PicState2 *pics_state;
@@ -53,7 +54,7 @@ struct PicState2 {
     /* 0 is master pic, 1 is slave pic */
     /* XXX: better separation between the two pics */
     PicState pics[2];
-    IRQRequestFunc *irq_request;
+    qemu_irq parent_irq;
     void *irq_request_opaque;
     /* IOAPIC callback support */
     SetIRQFunc *alt_irq_func;
@@ -151,21 +152,21 @@ void pic_update_irq(PicState2 *s)
         {
             int i;
             for(i = 0; i < 2; i++) {
-                printf("pic%d: imr=%x irr=%x padd=%d\n", 
-                       i, s->pics[i].imr, s->pics[i].irr, 
+                printf("pic%d: imr=%x irr=%x padd=%d\n",
+                       i, s->pics[i].imr, s->pics[i].irr,
                        s->pics[i].priority_add);
-                
+
             }
         }
         printf("pic: cpu_interrupt\n");
 #endif
-        s->irq_request(s->irq_request_opaque, 1);
+        qemu_irq_raise(s->parent_irq);
     }
 
 /* all targets should do this rather than acking the IRQ in the cpu */
 #if defined(TARGET_MIPS)
     else {
-        s->irq_request(s->irq_request_opaque, 0);
+        qemu_irq_lower(s->parent_irq);
     }
 #endif
 }
@@ -174,7 +175,7 @@ void pic_update_irq(PicState2 *s)
 int64_t irq_time[16];
 #endif
 
-void pic_set_irq_new(void *opaque, int irq, int level)
+void i8259_set_irq(void *opaque, int irq, int level)
 {
     PicState2 *s = opaque;
 #ifdef USE_KVM
@@ -187,7 +188,7 @@ void pic_set_irq_new(void *opaque, int irq, int level)
 #if defined(DEBUG_PIC) || defined(DEBUG_IRQ_COUNT)
     if (level != irq_level[irq]) {
 #if defined(DEBUG_PIC)
-        printf("pic_set_irq: irq=%d level=%d\n", irq, level);
+        printf("i8259_set_irq: irq=%d level=%d\n", irq, level);
 #endif
         irq_level[irq] = level;
 #ifdef DEBUG_IRQ_COUNT
@@ -208,12 +209,6 @@ void pic_set_irq_new(void *opaque, int irq, int level)
     pic_update_irq(s);
 }
 
-/* obsolete function */
-void pic_set_irq(int irq, int level)
-{
-    pic_set_irq_new(isa_pic, irq, level);
-}
-
 /* acknowledge interrupt 'irq' */
 static inline void pic_intack(PicState *s, int irq)
 {
@@ -223,19 +218,11 @@ static inline void pic_intack(PicState *s, int irq)
     } else {
         s->isr |= (1 << irq);
     }
+
     /* We don't clear a level sensitive interrupt here */
     if (!(s->elcr & (1 << irq)))
         s->irr &= ~(1 << irq);
 
-    if (time_drift_fix && irq == 0) {
-        extern int64_t timer_acks, timer_ints_to_push;
-        timer_acks++;
-        if (timer_ints_to_push > 0) {
-            timer_ints_to_push--;
-            pic_set_irq(0, 0); /* set it low (edge irq)*/
-            pic_set_irq(0, 1); /* interrupt again */
-        }
-    }
 }
 
 int pic_read_irq(PicState2 *s)
@@ -244,6 +231,17 @@ int pic_read_irq(PicState2 *s)
 
     irq = pic_get_irq(&s->pics[0]);
     if (irq >= 0) {
+
+	if (time_drift_fix && irq == 0) {
+	    extern int64_t timer_acks, timer_ints_to_push;
+	    timer_acks++;
+	    if (timer_ints_to_push > 0) {
+		timer_ints_to_push--;
+		qemu_irq_lower(s->parent_irq);
+		qemu_irq_raise(s->parent_irq);
+	    }
+	}
+
         pic_intack(&s->pics[0], irq);
         if (irq == 2) {
             irq2 = pic_get_irq(&s->pics[1]);
@@ -264,10 +262,10 @@ int pic_read_irq(PicState2 *s)
         intno = s->pics[0].irq_base + irq;
     }
     pic_update_irq(s);
-        
+
 #ifdef DEBUG_IRQ_LATENCY
-    printf("IRQ%d latency=%0.3fus\n", 
-           irq, 
+    printf("IRQ%d latency=%0.3fus\n",
+           irq,
            (double)(qemu_get_clock(vm_clock) - irq_time[irq]) * 1000000.0 / ticks_per_sec);
 #endif
 #if defined(DEBUG_PIC)
@@ -294,6 +292,7 @@ static void pic_reset(void *opaque)
     s->rotate_on_auto_eoi = 0;
     s->special_fully_nested_mode = 0;
     s->init4 = 0;
+    s->single_mode = 0;
     /* Note: ELCR is not reset */
 }
 
@@ -311,11 +310,10 @@ static void pic_ioport_write(void *opaque, uint32_t addr, uint32_t val)
             /* init */
             pic_reset(s);
             /* deassert a pending interrupt */
-            s->pics_state->irq_request(s->pics_state->irq_request_opaque, 0);
+            qemu_irq_lower(s->pics_state->parent_irq);
             s->init_state = 1;
             s->init4 = val & 1;
-            if (val & 0x02)
-                hw_error("single mode not supported");
+            s->single_mode = val & 2;
             if (val & 0x08)
                 hw_error("level sensitive irq not supported");
         } else if (val & 0x08) {
@@ -372,7 +370,7 @@ static void pic_ioport_write(void *opaque, uint32_t addr, uint32_t val)
             break;
         case 1:
             s->irq_base = val & 0xf8;
-            s->init_state = 2;
+            s->init_state = s->single_mode ? (s->init4 ? 3 : 0) : 2;
             break;
         case 2:
             if (s->init4) {
@@ -450,7 +448,7 @@ uint32_t pic_intack_read(PicState2 *s)
         ret = pic_poll_read(&s->pics[1], 0x80) + 8;
     /* Prepare for ISR read */
     s->pics[0].read_reg_select = 1;
-    
+
     return ret;
 }
 
@@ -540,7 +538,7 @@ static void pic_save(QEMUFile *f, void *opaque)
         kvm_kernel_pic_save_to_user(s);
     }
 #endif
-    
+
     qemu_put_8s(f, &s->last_irr);
     qemu_put_8s(f, &s->irr);
     qemu_put_8s(f, &s->imr);
@@ -555,13 +553,14 @@ static void pic_save(QEMUFile *f, void *opaque)
     qemu_put_8s(f, &s->rotate_on_auto_eoi);
     qemu_put_8s(f, &s->special_fully_nested_mode);
     qemu_put_8s(f, &s->init4);
+    qemu_put_8s(f, &s->single_mode);
     qemu_put_8s(f, &s->elcr);
 }
 
 static int pic_load(QEMUFile *f, void *opaque, int version_id)
 {
     PicState *s = opaque;
-    
+
     if (version_id != 1)
         return -EINVAL;
 
@@ -579,6 +578,7 @@ static int pic_load(QEMUFile *f, void *opaque, int version_id)
     qemu_get_8s(f, &s->rotate_on_auto_eoi);
     qemu_get_8s(f, &s->special_fully_nested_mode);
     qemu_get_8s(f, &s->init4);
+    qemu_get_8s(f, &s->single_mode);
     qemu_get_8s(f, &s->elcr);
 
 #ifdef USE_KVM
@@ -607,15 +607,15 @@ void pic_info(void)
 {
     int i;
     PicState *s;
-    
+
     if (!isa_pic)
         return;
 
     for(i=0;i<2;i++) {
         s = &isa_pic->pics[i];
         term_printf("pic%d: irr=%02x imr=%02x isr=%02x hprio=%d irq_base=%02x rr_sel=%d elcr=%02x fnm=%d\n",
-                    i, s->irr, s->imr, s->isr, s->priority_add, 
-                    s->irq_base, s->read_reg_select, s->elcr, 
+                    i, s->irr, s->imr, s->isr, s->priority_add,
+                    s->irq_base, s->read_reg_select, s->elcr,
                     s->special_fully_nested_mode);
     }
 }
@@ -637,9 +637,10 @@ void irq_info(void)
 #endif
 }
 
-PicState2 *pic_init(IRQRequestFunc *irq_request, void *irq_request_opaque)
+qemu_irq *i8259_init(qemu_irq parent_irq)
 {
     PicState2 *s;
+
     s = qemu_mallocz(sizeof(PicState2));
     if (!s)
         return NULL;
@@ -647,11 +648,11 @@ PicState2 *pic_init(IRQRequestFunc *irq_request, void *irq_request_opaque)
     pic_init1(0xa0, 0x4d1, &s->pics[1]);
     s->pics[0].elcr_mask = 0xf8;
     s->pics[1].elcr_mask = 0xde;
-    s->irq_request = irq_request;
-    s->irq_request_opaque = irq_request_opaque;
+    s->parent_irq = parent_irq;
     s->pics[0].pics_state = s;
     s->pics[1].pics_state = s;
-    return s;
+    isa_pic = s;
+    return qemu_allocate_irqs(i8259_set_irq, s, 16);
 }
 
 void pic_set_alt_irq_func(PicState2 *s, SetIRQFunc *alt_irq_func,

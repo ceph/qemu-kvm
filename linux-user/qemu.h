@@ -9,6 +9,7 @@
 
 #include "cpu.h"
 #include "syscall.h"
+#include "target_signal.h"
 #include "gdbstub.h"
 
 /* This struct is used to hold certain information about the image.
@@ -16,6 +17,7 @@
  * task_struct fields in the kernel
  */
 struct image_info {
+        target_ulong    load_addr;
 	unsigned long	start_code;
 	unsigned long	end_code;
         unsigned long   start_data;
@@ -62,13 +64,9 @@ typedef struct TaskState {
 #ifdef TARGET_ARM
     /* FPA state */
     FPA11 fpa;
-    /* Extra fields for semihosted binaries.  */
-    uint32_t stack_base;
-    uint32_t heap_base;
-    uint32_t heap_limit;
     int swi_errno;
 #endif
-#ifdef TARGET_I386
+#if defined(TARGET_I386) && !defined(TARGET_X86_64)
     target_ulong target_v86;
     struct vm86_saved_state vm86_saved_regs;
     struct target_vm86plus_struct vm86plus;
@@ -77,6 +75,12 @@ typedef struct TaskState {
 #endif
 #ifdef TARGET_M68K
     int sim_syscalls;
+#endif
+#if defined(TARGET_ARM) || defined(TARGET_M68K)
+    /* Extra fields for semihosted binaries.  */
+    uint32_t stack_base;
+    uint32_t heap_base;
+    uint32_t heap_limit;
 #endif
     int used; /* non zero if used */
     struct image_info *info;
@@ -95,7 +99,7 @@ extern const char *qemu_uname_release;
 #define MAX_ARG_PAGES 32
 
 /*
- * This structure is used to hold the arguments that are 
+ * This structure is used to hold the arguments that are
  * used when loading binaries.
  */
 struct linux_binprm {
@@ -113,7 +117,7 @@ struct linux_binprm {
 void do_init_thread(struct target_pt_regs *regs, struct image_info *infop);
 target_ulong loader_build_argptr(int envc, int argc, target_ulong sp,
                                  target_ulong stringp, int push_ptr);
-int loader_exec(const char * filename, char ** argv, char ** envp, 
+int loader_exec(const char * filename, char ** argv, char ** envp,
              struct target_pt_regs * regs, struct image_info *infop);
 
 int load_elf_binary(struct linux_binprm * bprm, struct target_pt_regs * regs,
@@ -124,10 +128,11 @@ int load_flt_binary(struct linux_binprm * bprm, struct target_pt_regs * regs,
 void memcpy_to_target(target_ulong dest, const void *src,
                       unsigned long len);
 void target_set_brk(target_ulong new_brk);
-long do_brk(target_ulong new_brk);
+target_long do_brk(target_ulong new_brk);
 void syscall_init(void);
-long do_syscall(void *cpu_env, int num, long arg1, long arg2, long arg3, 
-                long arg4, long arg5, long arg6);
+target_long do_syscall(void *cpu_env, int num, target_long arg1,
+                       target_long arg2, target_long arg3, target_long arg4,
+                       target_long arg5, target_long arg6);
 void gemu_log(const char *fmt, ...) __attribute__((format(printf,1,2)));
 extern CPUState *global_env;
 void cpu_loop(CPUState *env);
@@ -145,6 +150,9 @@ void host_to_target_siginfo(target_siginfo_t *tinfo, const siginfo_t *info);
 void target_to_host_siginfo(siginfo_t *info, const target_siginfo_t *tinfo);
 long do_sigreturn(CPUState *env);
 long do_rt_sigreturn(CPUState *env);
+int do_sigaltstack(const struct target_sigaltstack *uss,
+                   struct target_sigaltstack *uoss,
+                   target_ulong sp);
 
 #ifdef TARGET_I386
 /* vm86.c */
@@ -156,10 +164,10 @@ int do_vm86(CPUX86State *env, long subfunction, target_ulong v86_addr);
 
 /* mmap.c */
 int target_mprotect(target_ulong start, target_ulong len, int prot);
-long target_mmap(target_ulong start, target_ulong len, int prot, 
+target_long target_mmap(target_ulong start, target_ulong len, int prot,
                  int flags, int fd, target_ulong offset);
 int target_munmap(target_ulong start, target_ulong len);
-long target_mremap(target_ulong old_addr, target_ulong old_size, 
+target_long target_mremap(target_ulong old_addr, target_ulong old_size,
                    target_ulong new_size, unsigned long flags,
                    target_ulong new_addr);
 int target_msync(target_ulong start, target_ulong len, int flags);

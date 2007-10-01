@@ -1,13 +1,9 @@
 #ifndef EXEC_SPARC_H
 #define EXEC_SPARC_H 1
-#include "dyngen-exec.h"
 #include "config.h"
+#include "dyngen-exec.h"
 
-#if defined(__sparc__)
-struct CPUSPARCState *env;
-#else
 register struct CPUSPARCState *env asm(AREG0);
-#endif
 
 #ifdef TARGET_SPARC64
 #define T0 (env->t0)
@@ -15,13 +11,8 @@ register struct CPUSPARCState *env asm(AREG0);
 #define T2 (env->t2)
 #define REGWPTR env->regwptr
 #else
-#if defined(__sparc__)
-register uint32_t T0 asm(AREG3);
-register uint32_t T1 asm(AREG2);
-#else
 register uint32_t T0 asm(AREG1);
 register uint32_t T1 asm(AREG2);
-#endif
 
 #undef REG_REGWPTR // Broken
 #ifdef REG_REGWPTR
@@ -33,11 +24,7 @@ register uint32_t *REGWPTR asm(AREG3);
 #define reg_REGWPTR
 
 #ifdef AREG4
-#if defined(__sparc__)
-register uint32_t T2 asm(AREG0);
-#else
 register uint32_t T2 asm(AREG4);
-#endif
 #define reg_T2
 #else
 #define T2 (env->t2)
@@ -45,13 +32,9 @@ register uint32_t T2 asm(AREG4);
 
 #else
 #define REGWPTR env->regwptr
-#if defined(__sparc__)
-register uint32_t T2 asm(AREG0);
-#else
 register uint32_t T2 asm(AREG3);
 #endif
 #define reg_T2
-#endif
 #endif
 
 #define FT0 (env->ft0)
@@ -67,7 +50,9 @@ void cpu_unlock(void);
 void cpu_loop_exit(void);
 void helper_flush(target_ulong addr);
 void helper_ld_asi(int asi, int size, int sign);
-void helper_st_asi(int asi, int size, int sign);
+void helper_st_asi(int asi, int size);
+void helper_ldf_asi(int asi, int size, int rd);
+void helper_stf_asi(int asi, int size, int rd);
 void helper_rett(void);
 void helper_ldfsr(void);
 void set_cwp(int new_cwp);
@@ -78,6 +63,8 @@ void do_fsqrts(void);
 void do_fsqrtd(void);
 void do_fcmps(void);
 void do_fcmpd(void);
+void do_fcmpes(void);
+void do_fcmped(void);
 #ifdef TARGET_SPARC64
 void do_fabsd(void);
 void do_fcmps_fcc1(void);
@@ -86,6 +73,12 @@ void do_fcmps_fcc2(void);
 void do_fcmpd_fcc2(void);
 void do_fcmps_fcc3(void);
 void do_fcmpd_fcc3(void);
+void do_fcmpes_fcc1(void);
+void do_fcmped_fcc1(void);
+void do_fcmpes_fcc2(void);
+void do_fcmped_fcc2(void);
+void do_fcmpes_fcc3(void);
+void do_fcmped_fcc3(void);
 void do_popc();
 void do_wrpstate();
 void do_done();
@@ -96,6 +89,7 @@ void do_ldd_user(target_ulong addr);
 void do_ldd_raw(target_ulong addr);
 void do_interrupt(int intno);
 void raise_exception(int tt);
+void check_ieee_exceptions();
 void memcpy32(target_ulong *dst, const target_ulong *src);
 target_ulong mmu_probe(CPUState *env, target_ulong address, int mmulev);
 void dump_mmu(CPUState *env);
@@ -122,5 +116,15 @@ static inline void regs_to_env(void)
 
 int cpu_sparc_handle_mmu_fault(CPUState *env, target_ulong address, int rw,
                                int is_user, int is_softmmu);
+
+static inline int cpu_halted(CPUState *env) {
+    if (!env->halted)
+        return 0;
+    if ((env->interrupt_request & CPU_INTERRUPT_HARD) && (env->psret != 0)) {
+        env->halted = 0;
+        return 0;
+    }
+    return EXCP_HALTED;
+}
 
 #endif

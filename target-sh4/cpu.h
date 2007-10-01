@@ -1,6 +1,6 @@
 /*
  *  SH4 emulation
- * 
+ *
  *  Copyright (c) 2005 Samuel Tardieu
  *
  * This library is free software; you can redistribute it and/or
@@ -80,7 +80,7 @@ typedef struct tlb_t {
 typedef struct CPUSH4State {
     uint32_t flags;		/* general execution flags */
     uint32_t gregs[24];		/* general registers */
-    uint32_t fregs[32];		/* floating point registers */
+    float32 fregs[32];		/* floating point registers */
     uint32_t sr;		/* status register */
     uint32_t ssr;		/* saved status register */
     uint32_t spc;		/* saved program counter */
@@ -99,6 +99,7 @@ typedef struct CPUSH4State {
     /* temporary float registers */
     float32 ft0, ft1;
     float64 dt0, dt1;
+    float_status fp_status;
 
     /* Those belong to the specific unit (SH7750) but are handled here */
     uint32_t mmucr;		/* MMU control register */
@@ -114,6 +115,7 @@ typedef struct CPUSH4State {
     jmp_buf jmp_env;
     int user_mode_only;
     int interrupt_request;
+    int halted;
     int exception_index;
      CPU_COMMON tlb_t utlb[UTLB_SIZE];	/* unified translation table */
     tlb_t itlb[ITLB_SIZE];	/* instruction translation table */
@@ -121,10 +123,16 @@ typedef struct CPUSH4State {
 
 CPUSH4State *cpu_sh4_init(void);
 int cpu_sh4_exec(CPUSH4State * s);
-int cpu_sh4_signal_handler(int host_signum, void *pinfo, 
+int cpu_sh4_signal_handler(int host_signum, void *pinfo,
                            void *puc);
 
 #include "softfloat.h"
+
+#define CPUState CPUSH4State
+#define cpu_init cpu_sh4_init
+#define cpu_exec cpu_sh4_exec
+#define cpu_gen_code cpu_sh4_gen_code
+#define cpu_signal_handler cpu_sh4_signal_handler
 
 #include "cpu-all.h"
 

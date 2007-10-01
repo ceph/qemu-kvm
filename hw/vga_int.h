@@ -1,8 +1,8 @@
 /*
  * QEMU internal VGA defines.
- * 
+ *
  * Copyright (c) 2003-2004 Fabrice Bellard
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
@@ -45,20 +45,20 @@
 #define VBE_DISPI_INDEX_X_OFFSET        0x8
 #define VBE_DISPI_INDEX_Y_OFFSET        0x9
 #define VBE_DISPI_INDEX_NB              0xa
-      
+
 #define VBE_DISPI_ID0                   0xB0C0
 #define VBE_DISPI_ID1                   0xB0C1
 #define VBE_DISPI_ID2                   0xB0C2
 #define VBE_DISPI_ID3                   0xB0C3
 #define VBE_DISPI_ID4                   0xB0C4
-  
+
 #define VBE_DISPI_DISABLED              0x00
 #define VBE_DISPI_ENABLED               0x01
 #define VBE_DISPI_GETCAPS               0x02
 #define VBE_DISPI_8BIT_DAC              0x20
 #define VBE_DISPI_LFB_ENABLED           0x40
 #define VBE_DISPI_NOCLEARMEM            0x80
-  
+
 #define VBE_DISPI_LFB_PHYSICAL_ADDRESS  0xE0000000
 
 #ifdef CONFIG_BOCHS_VBE
@@ -85,6 +85,8 @@
     unsigned int vram_size;                                             \
     unsigned long bios_offset;                                          \
     unsigned int bios_size;                                             \
+    target_phys_addr_t base_ctrl;                                       \
+    int it_shift;                                                       \
     PCIDevice *pci_dev;                                                 \
     uint32_t latch;                                                     \
     uint8_t sr_index;                                                   \
@@ -134,6 +136,9 @@
     uint32_t cursor_offset;                                             \
     unsigned int (*rgb_to_pixel)(unsigned int r,                        \
                                  unsigned int g, unsigned b);           \
+    vga_hw_update_ptr update;                                           \
+    vga_hw_invalidate_ptr invalidate;                                   \
+    vga_hw_screen_dump_ptr screen_dump;                                 \
     /* hardware mouse cursor support */                                 \
     uint32_t invalidated_y_table[VGA_MAX_HEIGHT / 32];                  \
     void (*cursor_invalidate)(struct VGAState *s);                      \
@@ -167,22 +172,25 @@ static inline int c6_to_8(int v)
     return (v << 2) | (b << 1) | b;
 }
 
-void vga_common_init(VGAState *s, DisplayState *ds, uint8_t *vga_ram_base, 
+void vga_common_init(VGAState *s, DisplayState *ds, uint8_t *vga_ram_base,
                      unsigned long vga_ram_offset, int vga_ram_size);
+void vga_init(VGAState *s);
 uint32_t vga_mem_readb(void *opaque, target_phys_addr_t addr);
 void vga_mem_writeb(void *opaque, target_phys_addr_t addr, uint32_t val);
 void vga_invalidate_scanlines(VGAState *s, int y1, int y2);
+int ppm_save(const char *filename, uint8_t *data,
+             int w, int h, int linesize);
 
-void vga_draw_cursor_line_8(uint8_t *d1, const uint8_t *src1, 
-                            int poffset, int w, 
+void vga_draw_cursor_line_8(uint8_t *d1, const uint8_t *src1,
+                            int poffset, int w,
                             unsigned int color0, unsigned int color1,
                             unsigned int color_xor);
-void vga_draw_cursor_line_16(uint8_t *d1, const uint8_t *src1, 
-                             int poffset, int w, 
+void vga_draw_cursor_line_16(uint8_t *d1, const uint8_t *src1,
+                             int poffset, int w,
                              unsigned int color0, unsigned int color1,
                              unsigned int color_xor);
-void vga_draw_cursor_line_32(uint8_t *d1, const uint8_t *src1, 
-                             int poffset, int w, 
+void vga_draw_cursor_line_32(uint8_t *d1, const uint8_t *src1,
+                             int poffset, int w,
                              unsigned int color0, unsigned int color1,
                              unsigned int color_xor);
 

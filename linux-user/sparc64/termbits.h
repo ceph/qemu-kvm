@@ -51,6 +51,7 @@ struct target_termios {
 #define TARGET_IXANY	0x00000800
 #define TARGET_IXOFF	0x00001000
 #define TARGET_IMAXBEL	0x00002000
+#define TARGET_IUTF8	0x00004000
 
 /* c_oflag bits */
 #define TARGET_OPOST	0x00000001
@@ -182,7 +183,7 @@ struct target_termios {
 #define TARGET_TCSETSW		TARGET_IOW('T', 10, struct target_termios)
 #define TARGET_TCSETSF		TARGET_IOW('T', 11, struct target_termios)
 
-/* Note that all the ioctls that are not available in Linux have a 
+/* Note that all the ioctls that are not available in Linux have a
  * double underscore on the front to: a) avoid some programs to
  * thing we support some ioctls under Linux (autoconfiguration stuff)
  */

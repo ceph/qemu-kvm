@@ -1,6 +1,6 @@
 /*
  * defines common to all virtual CPUs
- * 
+ *
  *  Copyright (c) 2003 Fabrice Bellard
  *
  * This library is free software; you can redistribute it and/or
@@ -20,20 +20,20 @@
 #ifndef CPU_ALL_H
 #define CPU_ALL_H
 
-#if defined(__arm__) || defined(__sparc__)
+#if defined(__arm__) || defined(__sparc__) || defined(__mips__)
 #define WORDS_ALIGNED
 #endif
 
-/* some important defines: 
- * 
+/* some important defines:
+ *
  * WORDS_ALIGNED : if defined, the host cpu can only make word aligned
  * memory accesses.
- * 
+ *
  * WORDS_BIGENDIAN : if defined, the host cpu is big endian and
  * otherwise little endian.
- * 
+ *
  * (TARGET_WORDS_ALIGNED : same for target cpu (not supported yet))
- * 
+ *
  * TARGET_WORDS_BIGENDIAN : same for target cpu
  */
 
@@ -147,7 +147,7 @@ typedef union {
  * type is:
  * (empty): integer access
  *   f    : float access
- * 
+ *
  * sign is:
  * (empty): for floats or 32 bit size
  *   u    : unsigned
@@ -158,7 +158,7 @@ typedef union {
  *   w: 16 bits
  *   l: 32 bits
  *   q: 64 bits
- * 
+ *
  * endian is:
  * (empty): target cpu endianness or 8 bit access
  *   r    : reversed target cpu endianness (not implemented yet)
@@ -621,7 +621,7 @@ static inline void stfq_be_p(void *ptr, float64 v)
 #define stfq_raw(p, v) stfq_p(saddr((p)), v)
 
 
-#if defined(CONFIG_USER_ONLY) 
+#if defined(CONFIG_USER_ONLY)
 
 /* if user mode, no other memory access functions */
 #define ldub(p) ldub_raw(p)
@@ -644,12 +644,14 @@ static inline void stfq_be_p(void *ptr, float64 v)
 #define lduw_code(p) lduw_raw(p)
 #define ldsw_code(p) ldsw_raw(p)
 #define ldl_code(p) ldl_raw(p)
+#define ldq_code(p) ldq_raw(p)
 
 #define ldub_kernel(p) ldub_raw(p)
 #define ldsb_kernel(p) ldsb_raw(p)
 #define lduw_kernel(p) lduw_raw(p)
 #define ldsw_kernel(p) ldsw_raw(p)
 #define ldl_kernel(p) ldl_raw(p)
+#define ldq_kernel(p) ldq_raw(p)
 #define ldfl_kernel(p) ldfl_raw(p)
 #define ldfq_kernel(p) ldfq_raw(p)
 #define stb_kernel(p, v) stb_raw(p, v)
@@ -683,82 +685,25 @@ extern unsigned long qemu_host_page_mask;
 #define PAGE_VALID     0x0008
 /* original state of the write flag (used when tracking self-modifying
    code */
-#define PAGE_WRITE_ORG 0x0010 
+#define PAGE_WRITE_ORG 0x0010
 
 void page_dump(FILE *f);
 int page_get_flags(target_ulong address);
 void page_set_flags(target_ulong start, target_ulong end, int flags);
 void page_unprotect_range(target_ulong data, target_ulong data_size);
 
-#define SINGLE_CPU_DEFINES
-#ifdef SINGLE_CPU_DEFINES
+CPUState *cpu_copy(CPUState *env);
 
-#if defined(TARGET_I386)
-
-#define CPUState CPUX86State
-#define cpu_init cpu_x86_init
-#define cpu_exec cpu_x86_exec
-#define cpu_gen_code cpu_x86_gen_code
-#define cpu_signal_handler cpu_x86_signal_handler
-
-#elif defined(TARGET_ARM)
-
-#define CPUState CPUARMState
-#define cpu_init cpu_arm_init
-#define cpu_exec cpu_arm_exec
-#define cpu_gen_code cpu_arm_gen_code
-#define cpu_signal_handler cpu_arm_signal_handler
-
-#elif defined(TARGET_SPARC)
-
-#define CPUState CPUSPARCState
-#define cpu_init cpu_sparc_init
-#define cpu_exec cpu_sparc_exec
-#define cpu_gen_code cpu_sparc_gen_code
-#define cpu_signal_handler cpu_sparc_signal_handler
-
-#elif defined(TARGET_PPC)
-
-#define CPUState CPUPPCState
-#define cpu_init cpu_ppc_init
-#define cpu_exec cpu_ppc_exec
-#define cpu_gen_code cpu_ppc_gen_code
-#define cpu_signal_handler cpu_ppc_signal_handler
-
-#elif defined(TARGET_M68K)
-#define CPUState CPUM68KState
-#define cpu_init cpu_m68k_init
-#define cpu_exec cpu_m68k_exec
-#define cpu_gen_code cpu_m68k_gen_code
-#define cpu_signal_handler cpu_m68k_signal_handler
-
-#elif defined(TARGET_MIPS)
-#define CPUState CPUMIPSState
-#define cpu_init cpu_mips_init
-#define cpu_exec cpu_mips_exec
-#define cpu_gen_code cpu_mips_gen_code
-#define cpu_signal_handler cpu_mips_signal_handler
-
-#elif defined(TARGET_SH4)
-#define CPUState CPUSH4State
-#define cpu_init cpu_sh4_init
-#define cpu_exec cpu_sh4_exec
-#define cpu_gen_code cpu_sh4_gen_code
-#define cpu_signal_handler cpu_sh4_signal_handler
-
-#else
-
-#error unsupported target CPU
-
-#endif
-
-#endif /* SINGLE_CPU_DEFINES */
-
-void cpu_dump_state(CPUState *env, FILE *f, 
+void cpu_dump_state(CPUState *env, FILE *f,
                     int (*cpu_fprintf)(FILE *f, const char *fmt, ...),
                     int flags);
+void cpu_dump_statistics (CPUState *env, FILE *f,
+                          int (*cpu_fprintf)(FILE *f, const char *fmt, ...),
+                          int flags);
 
-void cpu_abort(CPUState *env, const char *fmt, ...);
+void cpu_abort(CPUState *env, const char *fmt, ...)
+    __attribute__ ((__format__ (__printf__, 2, 3)))
+    __attribute__ ((__noreturn__));
 extern CPUState *first_cpu;
 extern CPUState *cpu_single_env;
 extern int code_copy_enabled;
@@ -770,10 +715,14 @@ extern int code_copy_enabled;
 #define CPU_INTERRUPT_FIQ    0x10 /* Fast interrupt pending.  */
 #define CPU_INTERRUPT_HALT   0x20 /* CPU halt wanted */
 #define CPU_INTERRUPT_SMI    0x40 /* (x86 only) SMI interrupt pending */
+#define CPU_INTERRUPT_DEBUG  0x80 /* Debug event occured.  */
+#define CPU_INTERRUPT_VIRQ   0x100 /* virtual interrupt pending.  */
 
 void cpu_interrupt(CPUState *s, int mask);
 void cpu_reset_interrupt(CPUState *env, int mask);
 
+int cpu_watchpoint_insert(CPUState *env, target_ulong addr);
+int cpu_watchpoint_remove(CPUState *env, target_ulong addr);
 int cpu_breakpoint_insert(CPUState *env, target_ulong pc);
 int cpu_breakpoint_remove(CPUState *env, target_ulong pc);
 void cpu_single_step(CPUState *env, int enabled);
@@ -782,9 +731,9 @@ void cpu_reset(CPUState *s);
 /* Return the physical page corresponding to a virtual one. Use it
    only for debugging because no protection checks are done. Return -1
    if no page found. */
-target_ulong cpu_get_phys_page_debug(CPUState *env, target_ulong addr);
+target_phys_addr_t cpu_get_phys_page_debug(CPUState *env, target_ulong addr);
 
-#define CPU_LOG_TB_OUT_ASM (1 << 0) 
+#define CPU_LOG_TB_OUT_ASM (1 << 0)
 #define CPU_LOG_TB_IN_ASM  (1 << 1)
 #define CPU_LOG_TB_OP      (1 << 2)
 #define CPU_LOG_TB_OP_OPT  (1 << 3)
@@ -841,14 +790,17 @@ extern uint8_t *bios_mem;
    exception, the write memory callback gets the ram offset instead of
    the physical address */
 #define IO_MEM_ROMD        (1)
+#define IO_MEM_SUBPAGE     (2)
 
 typedef void CPUWriteMemoryFunc(void *opaque, target_phys_addr_t addr, uint32_t value);
 typedef uint32_t CPUReadMemoryFunc(void *opaque, target_phys_addr_t addr);
 
-void cpu_register_physical_memory(target_phys_addr_t start_addr, 
+void cpu_register_physical_memory(target_phys_addr_t start_addr,
                                   unsigned long size,
                                   unsigned long phys_offset);
 uint32_t cpu_get_physical_page_desc(target_phys_addr_t addr);
+ram_addr_t qemu_ram_alloc(unsigned int size);
+void qemu_ram_free(ram_addr_t addr);
 int cpu_register_io_memory(int io_index,
                            CPUReadMemoryFunc **mem_read,
                            CPUWriteMemoryFunc **mem_write,
@@ -858,12 +810,12 @@ CPUReadMemoryFunc **cpu_get_io_memory_read(int io_index);
 
 void cpu_physical_memory_rw(target_phys_addr_t addr, uint8_t *buf,
                             int len, int is_write);
-static inline void cpu_physical_memory_read(target_phys_addr_t addr, 
+static inline void cpu_physical_memory_read(target_phys_addr_t addr,
                                             uint8_t *buf, int len)
 {
     cpu_physical_memory_rw(addr, buf, len, 0);
 }
-static inline void cpu_physical_memory_write(target_phys_addr_t addr, 
+static inline void cpu_physical_memory_write(target_phys_addr_t addr,
                                              const uint8_t *buf, int len)
 {
     cpu_physical_memory_rw(addr, (uint8_t *)buf, len, 1);
@@ -873,14 +825,15 @@ uint32_t lduw_phys(target_phys_addr_t addr);
 uint32_t ldl_phys(target_phys_addr_t addr);
 uint64_t ldq_phys(target_phys_addr_t addr);
 void stl_phys_notdirty(target_phys_addr_t addr, uint32_t val);
+void stq_phys_notdirty(target_phys_addr_t addr, uint64_t val);
 void stb_phys(target_phys_addr_t addr, uint32_t val);
 void stw_phys(target_phys_addr_t addr, uint32_t val);
 void stl_phys(target_phys_addr_t addr, uint32_t val);
 void stq_phys(target_phys_addr_t addr, uint64_t val);
 
-void cpu_physical_memory_write_rom(target_phys_addr_t addr, 
+void cpu_physical_memory_write_rom(target_phys_addr_t addr,
                                    const uint8_t *buf, int len);
-int cpu_memory_rw_debug(CPUState *env, target_ulong addr, 
+int cpu_memory_rw_debug(CPUState *env, target_ulong addr,
                         uint8_t *buf, int len, int is_write);
 
 #define VGA_DIRTY_FLAG  0x01
@@ -893,7 +846,7 @@ static inline int cpu_physical_memory_is_dirty(ram_addr_t addr)
     return phys_ram_dirty[addr >> TARGET_PAGE_BITS] == 0xff;
 }
 
-static inline int cpu_physical_memory_get_dirty(ram_addr_t addr, 
+static inline int cpu_physical_memory_get_dirty(ram_addr_t addr,
                                                 int dirty_flags)
 {
     return phys_ram_dirty[addr >> TARGET_PAGE_BITS] & dirty_flags;
@@ -920,14 +873,14 @@ void dump_exec_info(FILE *f,
 
 #if defined(__powerpc__)
 
-static inline uint32_t get_tbl(void) 
+static inline uint32_t get_tbl(void)
 {
     uint32_t tbl;
     asm volatile("mftb %0" : "=r" (tbl));
     return tbl;
 }
 
-static inline uint32_t get_tbu(void) 
+static inline uint32_t get_tbu(void)
 {
 	uint32_t tbl;
 	asm volatile("mftbu %0" : "=r" (tbl));
@@ -986,7 +939,7 @@ static inline int64_t cpu_get_real_ticks(void)
     return val;
 }
 
-#elif defined(__sparc_v9__)
+#elif defined(__sparc_v8plus__) || defined(__sparc_v8plusa__) || defined(__sparc_v9__)
 
 static inline int64_t cpu_get_real_ticks (void)
 {
@@ -1007,10 +960,31 @@ static inline int64_t cpu_get_real_ticks (void)
         return rval.i64;
 #endif
 }
+
+#elif defined(__mips__)
+
+static inline int64_t cpu_get_real_ticks(void)
+{
+#if __mips_isa_rev >= 2
+    uint32_t count;
+    static uint32_t cyc_per_count = 0;
+
+    if (!cyc_per_count)
+        __asm__ __volatile__("rdhwr %0, $3" : "=r" (cyc_per_count));
+
+    __asm__ __volatile__("rdhwr %1, $2" : "=r" (count));
+    return (int64_t)(count * cyc_per_count);
+#else
+    /* FIXME */
+    static int64_t ticks = 0;
+    return ticks++;
+#endif
+}
+
 #else
 /* The host CPU doesn't have an easily accessible cycle counter.
-   Just return a monotonically increasing vlue.  This will be totally wrong,
-   but hopefully better than nothing.  */
+   Just return a monotonically increasing value.  This will be
+   totally wrong, but hopefully better than nothing.  */
 static inline int64_t cpu_get_real_ticks (void)
 {
     static int64_t ticks = 0;

@@ -15,7 +15,7 @@
  *   Solaris 10 with GCC4 does not need these macros as they
  *   are defined in <iso/math_c99.h> with a compiler directive
  */
-#if defined(HOST_SOLARIS) && (( HOST_SOLARIS <= 9 ) || ( ( HOST_SOLARIS >= 10 ) && ( __GNUC__ <= 4) ))
+#if defined(HOST_SOLARIS) && (( HOST_SOLARIS <= 9 ) || ((HOST_SOLARIS >= 10) && (__GNUC__ <= 4)))
 /*
  * C99 7.12.3 classification macros
  * and
@@ -31,6 +31,29 @@
 #define isless(x, y)            ((!unordered(x, y)) && ((x) < (y)))
 #define islessequal(x, y)       ((!unordered(x, y)) && ((x) <= (y)))
 #define isunordered(x,y)        unordered(x, y)
+#endif
+
+#if defined(__sun__) && !defined(NEED_LIBSUNMATH)
+
+#ifndef isnan
+# define isnan(x) \
+    (sizeof (x) == sizeof (long double) ? isnan_ld (x) \
+     : sizeof (x) == sizeof (double) ? isnan_d (x) \
+     : isnan_f (x))
+static inline int isnan_f  (float       x) { return x != x; }
+static inline int isnan_d  (double      x) { return x != x; }
+static inline int isnan_ld (long double x) { return x != x; }
+#endif
+
+#ifndef isinf
+# define isinf(x) \
+    (sizeof (x) == sizeof (long double) ? isinf_ld (x) \
+     : sizeof (x) == sizeof (double) ? isinf_d (x) \
+     : isinf_f (x))
+static inline int isinf_f  (float       x) { return isnan (x - x); }
+static inline int isinf_d  (double      x) { return isnan (x - x); }
+static inline int isinf_ld (long double x) { return isnan (x - x); }
+#endif
 #endif
 
 typedef float float32;
@@ -99,7 +122,9 @@ void set_floatx80_rounding_precision(int val STATUS_PARAM);
 | Software IEC/IEEE integer-to-floating-point conversion routines.
 *----------------------------------------------------------------------------*/
 float32 int32_to_float32( int STATUS_PARAM);
+float32 uint32_to_float32( unsigned int STATUS_PARAM);
 float64 int32_to_float64( int STATUS_PARAM);
+float64 uint32_to_float64( unsigned int STATUS_PARAM);
 #ifdef FLOATX80
 floatx80 int32_to_floatx80( int STATUS_PARAM);
 #endif
@@ -107,7 +132,9 @@ floatx80 int32_to_floatx80( int STATUS_PARAM);
 float128 int32_to_float128( int STATUS_PARAM);
 #endif
 float32 int64_to_float32( int64_t STATUS_PARAM);
+float32 uint64_to_float32( uint64_t STATUS_PARAM);
 float64 int64_to_float64( int64_t STATUS_PARAM);
+float64 uint64_to_float64( uint64_t v STATUS_PARAM);
 #ifdef FLOATX80
 floatx80 int64_to_floatx80( int64_t STATUS_PARAM);
 #endif
@@ -120,6 +147,8 @@ float128 int64_to_float128( int64_t STATUS_PARAM);
 *----------------------------------------------------------------------------*/
 int float32_to_int32( float32  STATUS_PARAM);
 int float32_to_int32_round_to_zero( float32  STATUS_PARAM);
+unsigned int float32_to_uint32( float32 a STATUS_PARAM);
+unsigned int float32_to_uint32_round_to_zero( float32 a STATUS_PARAM);
 int64_t float32_to_int64( float32  STATUS_PARAM);
 int64_t float32_to_int64_round_to_zero( float32  STATUS_PARAM);
 float64 float32_to_float64( float32  STATUS_PARAM);
@@ -200,8 +229,12 @@ INLINE float32 float32_chs(float32 a)
 *----------------------------------------------------------------------------*/
 int float64_to_int32( float64 STATUS_PARAM );
 int float64_to_int32_round_to_zero( float64 STATUS_PARAM );
+unsigned int float64_to_uint32( float64 STATUS_PARAM );
+unsigned int float64_to_uint32_round_to_zero( float64 STATUS_PARAM );
 int64_t float64_to_int64( float64 STATUS_PARAM );
 int64_t float64_to_int64_round_to_zero( float64 STATUS_PARAM );
+uint64_t float64_to_uint64( float64 STATUS_PARAM );
+uint64_t float64_to_uint64_round_to_zero( float64 STATUS_PARAM );
 float32 float64_to_float32( float64 STATUS_PARAM );
 #ifdef FLOATX80
 floatx80 float64_to_floatx80( float64 STATUS_PARAM );

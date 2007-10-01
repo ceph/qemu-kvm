@@ -1,6 +1,6 @@
 /*
  *  SH4 emulation
- * 
+ *
  *  Copyright (c) 2005 Samuel Tardieu
  *
  * This library is free software; you can redistribute it and/or
@@ -19,11 +19,6 @@
  */
 #include <assert.h>
 #include "exec.h"
-
-void cpu_loop_exit(void)
-{
-    longjmp(env->jmp_env, 1);
-}
 
 void do_raise_exception(void)
 {

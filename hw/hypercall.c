@@ -194,7 +194,7 @@ static void hp_map(PCIDevice *pci_dev, int region_num,
 static void hypercall_update_irq(HypercallState *s)
 {
     /* PCI irq */
-    pci_set_irq(s->pci_dev, 0, !(s->hcr & HCR_DI));
+    qemu_set_irq(s->pci_dev->irq[0], !(s->hcr & HCR_DI));
 }
 
 static void hc_save(QEMUFile* f,void* opaque)

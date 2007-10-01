@@ -2,7 +2,7 @@
  * QEMU Ultrasparc APB PCI host
  *
  * Copyright (c) 2006 Fabrice Bellard
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
@@ -200,19 +200,19 @@ static int pci_pbm_map_irq(PCIDevice *pci_dev, int irq_num)
     return bus_offset + irq_num;
 }
 
-static void pci_apb_set_irq(void *pic, int irq_num, int level)
+static void pci_apb_set_irq(qemu_irq *pic, int irq_num, int level)
 {
     /* PCI IRQ map onto the first 32 INO.  */
-    pic_set_irq_new(pic, irq_num, level);
+    qemu_set_irq(pic[irq_num], level);
 }
 
-PCIBus *pci_apb_init(target_ulong special_base, target_ulong mem_base,
-                     void *pic)
+PCIBus *pci_apb_init(target_phys_addr_t special_base,
+                     target_phys_addr_t mem_base,
+                     qemu_irq *pic)
 {
     APBState *s;
     PCIDevice *d;
     int pci_mem_config, pci_mem_data, apb_config, pci_ioport;
-    PCIDevice *apb;
     PCIBus *secondary;
 
     s = qemu_mallocz(sizeof(APBState));
@@ -233,7 +233,7 @@ PCIBus *pci_apb_init(target_ulong special_base, target_ulong mem_base,
     cpu_register_physical_memory(special_base + 0x2000000ULL, 0x10000, pci_ioport);
     cpu_register_physical_memory(mem_base, 0x10000000, pci_mem_data); // XXX size should be 4G-prom
 
-    d = pci_register_device(s->bus, "Advanced PCI Bus", sizeof(PCIDevice), 
+    d = pci_register_device(s->bus, "Advanced PCI Bus", sizeof(PCIDevice),
                             0, NULL, NULL);
     d->config[0x00] = 0x8e; // vendor_id : Sun
     d->config[0x01] = 0x10;

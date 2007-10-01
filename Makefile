@@ -8,13 +8,11 @@ include config-host.mak
 BASE_CFLAGS=
 BASE_LDFLAGS=
 
-BASE_CFLAGS += $(OS_CFLAGS)
-ifeq ($(ARCH),sparc)
-BASE_CFLAGS += -mcpu=ultrasparc
-endif
+BASE_CFLAGS += $(OS_CFLAGS) $(ARCH_CFLAGS)
+BASE_LDFLAGS += $(OS_LDFLAGS) $(ARCH_LDFLAGS)
+
 CPPFLAGS += -I. -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE
 LIBS=
-TOOLS=qemu-img$(EXESUF)
 ifdef CONFIG_STATIC
 BASE_LDFLAGS += -static
 endif
@@ -24,13 +22,7 @@ else
 DOCS=
 endif
 
-ifndef CONFIG_DARWIN
-ifndef CONFIG_WIN32
-ifndef CONFIG_SOLARIS
-LIBS+=-lrt
-endif
-endif
-endif
+LIBS+=$(AIOLIBS)
 
 all: $(TOOLS) $(DOCS) recurse-all
 
@@ -39,7 +31,7 @@ subdir-%: dyngen$(EXESUF)
 
 recurse-all: $(patsubst %,subdir-%, $(TARGET_DIRS))
 
-qemu-img$(EXESUF): qemu-img.c cutils.c block.c block-raw.c block-cow.c block-qcow.c aes.c block-vmdk.c block-cloop.c block-dmg.c block-bochs.c block-vpc.c block-vvfat.c block-qcow2.c
+qemu-img$(EXESUF): qemu-img.c cutils.c block.c block-raw.c block-cow.c block-qcow.c aes.c block-vmdk.c block-cloop.c block-dmg.c block-bochs.c block-vpc.c block-vvfat.c block-qcow2.c block-parallels.c
 	$(CC) -DQEMU_TOOL $(CFLAGS) $(CPPFLAGS) $(BASE_CFLAGS) $(LDFLAGS) $(BASE_LDFLAGS) -o $@ $^ -lz $(LIBS)
 
 dyngen$(EXESUF): dyngen.c
@@ -47,8 +39,8 @@ dyngen$(EXESUF): dyngen.c
 
 clean:
 # avoid old build problems by removing potentially incorrect old files
-	rm -f config.mak config.h op-i386.h opc-i386.h gen-op-i386.h op-arm.h opc-arm.h gen-op-arm.h 
-	rm -f *.o *.a $(TOOLS) dyngen$(EXESUF) TAGS *.pod *~ */*~
+	rm -f config.mak config.h op-i386.h opc-i386.h gen-op-i386.h op-arm.h opc-arm.h gen-op-arm.h
+	rm -f *.o *.a $(TOOLS) dyngen$(EXESUF) TAGS cscope.* *.pod *~ */*~
 	$(MAKE) -C tests clean
 	for d in $(TARGET_DIRS); do \
 	$(MAKE) -C $$d $@ || exit 1 ; \
@@ -78,7 +70,7 @@ install: all $(if $(BUILD_DOCS),install-doc)
 	$(INSTALL) -m 755 $(TOOLS) "$(DESTDIR)$(bindir)"
 	mkdir -p "$(DESTDIR)$(datadir)"
 	for x in bios.bin vgabios.bin vgabios-cirrus.bin ppc_rom.bin \
-		video.x openbios-sparc32 linux_boot.bin pxe-ne2k_pci.bin \
+		video.x openbios-sparc32 pxe-ne2k_pci.bin \
 		pxe-rtl8139.bin pxe-pcnet.bin; do \
 		$(INSTALL) -m 644 $(SRC_PATH)/pc-bios/$$x "$(DESTDIR)$(datadir)"; \
 	done
@@ -96,7 +88,7 @@ endif
 test speed test2: all
 	$(MAKE) -C tests $@
 
-TAGS: 
+TAGS:
 	etags *.[ch] tests/*.[ch]
 
 cscope:
@@ -140,21 +132,35 @@ tar:
 
 # generate a binary distribution
 tarbin:
-	( cd / ; tar zcvf ~/qemu-$(VERSION)-i386.tar.gz \
+	( cd / ; tar zcvf ~/qemu-$(VERSION)-$(ARCH).tar.gz \
 	$(bindir)/qemu \
 	$(bindir)/qemu-system-ppc \
+	$(bindir)/qemu-system-ppc64 \
+	$(bindir)/qemu-system-ppcemb \
 	$(bindir)/qemu-system-sparc \
 	$(bindir)/qemu-system-x86_64 \
 	$(bindir)/qemu-system-mips \
 	$(bindir)/qemu-system-mipsel \
+	$(bindir)/qemu-system-mips64 \
+	$(bindir)/qemu-system-mips64el \
 	$(bindir)/qemu-system-arm \
+	$(bindir)/qemu-system-m68k \
+	$(bindir)/qemu-system-sh4 \
 	$(bindir)/qemu-i386 \
         $(bindir)/qemu-arm \
         $(bindir)/qemu-armeb \
         $(bindir)/qemu-sparc \
         $(bindir)/qemu-ppc \
+        $(bindir)/qemu-ppc64 \
         $(bindir)/qemu-mips \
         $(bindir)/qemu-mipsel \
+        $(bindir)/qemu-mipsn32 \
+        $(bindir)/qemu-mipsn32el \
+        $(bindir)/qemu-mips64 \
+        $(bindir)/qemu-mips64el \
+        $(bindir)/qemu-alpha \
+        $(bindir)/qemu-m68k \
+        $(bindir)/qemu-sh4 \
         $(bindir)/qemu-img \
 	$(datadir)/bios.bin \
 	$(datadir)/vgabios.bin \
@@ -162,7 +168,6 @@ tarbin:
 	$(datadir)/ppc_rom.bin \
 	$(datadir)/video.x \
 	$(datadir)/openbios-sparc32 \
-	$(datadir)/linux_boot.bin \
         $(datadir)/pxe-ne2k_pci.bin \
 	$(datadir)/pxe-rtl8139.bin \
         $(datadir)/pxe-pcnet.bin \

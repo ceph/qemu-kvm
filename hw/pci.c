@@ -2,7 +2,7 @@
  * QEMU PCI bus manager
  *
  * Copyright (c) 2004 Fabrice Bellard
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
@@ -33,7 +33,7 @@ struct PCIBus {
     uint32_t config_reg; /* XXX: suppress */
     /* low level pic */
     SetIRQFunc *low_set_irq;
-    void *irq_opaque;
+    qemu_irq *irq_opaque;
     PCIDevice *devices[256];
     PCIDevice *parent_dev;
     PCIBus *next;
@@ -43,13 +43,14 @@ struct PCIBus {
 };
 
 static void pci_update_mappings(PCIDevice *d);
+static void pci_set_irq(void *opaque, int irq_num, int level);
 
 target_phys_addr_t pci_mem_base;
 static int pci_irq_index;
 static PCIBus *first_bus;
 
 PCIBus *pci_register_bus(pci_set_irq_fn set_irq, pci_map_irq_fn map_irq,
-                         void *pic, int devfn_min, int nirq)
+                         qemu_irq *pic, int devfn_min, int nirq)
 {
     PCIBus *bus;
     bus = qemu_mallocz(sizeof(PCIBus) + (nirq * sizeof(int)));
@@ -95,16 +96,16 @@ int pci_device_load(PCIDevice *s, QEMUFile *f)
 }
 
 /* -1 for devfn means auto assign */
-PCIDevice *pci_register_device(PCIBus *bus, const char *name, 
+PCIDevice *pci_register_device(PCIBus *bus, const char *name,
                                int instance_size, int devfn,
-                               PCIConfigReadFunc *config_read, 
+                               PCIConfigReadFunc *config_read,
                                PCIConfigWriteFunc *config_write)
 {
     PCIDevice *pci_dev;
 
     if (pci_irq_index >= PCI_DEVICES_MAX)
         return NULL;
-    
+
     if (devfn < 0) {
         for(devfn = bus->devfn_min ; devfn < 256; devfn += 8) {
             if (!bus->devices[devfn])
@@ -129,11 +130,12 @@ PCIDevice *pci_register_device(PCIBus *bus, const char *name,
     pci_dev->config_write = config_write;
     pci_dev->irq_index = pci_irq_index++;
     bus->devices[devfn] = pci_dev;
+    pci_dev->irq = qemu_allocate_irqs(pci_set_irq, pci_dev, 4);
     return pci_dev;
 }
 
-void pci_register_io_region(PCIDevice *pci_dev, int region_num, 
-                            uint32_t size, int type, 
+void pci_register_io_region(PCIDevice *pci_dev, int region_num,
+                            uint32_t size, int type,
                             PCIMapIORegionFunc *map_func)
 {
     PCIIORegion *r;
@@ -164,7 +166,7 @@ static void pci_update_mappings(PCIDevice *d)
     PCIIORegion *r;
     int cmd, i;
     uint32_t last_addr, new_addr, config_ofs;
-    
+
     cmd = le16_to_cpu(*(uint16_t *)(d->config + PCI_COMMAND));
     for(i = 0; i < PCI_NUM_REGIONS; i++) {
         r = &d->io_regions[i];
@@ -176,7 +178,7 @@ static void pci_update_mappings(PCIDevice *d)
         if (r->size != 0) {
             if (r->type & PCI_ADDRESS_SPACE_IO) {
                 if (cmd & PCI_COMMAND_IO) {
-                    new_addr = le32_to_cpu(*(uint32_t *)(d->config + 
+                    new_addr = le32_to_cpu(*(uint32_t *)(d->config +
                                                          config_ofs));
                     new_addr = new_addr & ~(r->size - 1);
                     last_addr = new_addr + r->size - 1;
@@ -190,7 +192,7 @@ static void pci_update_mappings(PCIDevice *d)
                 }
             } else {
                 if (cmd & PCI_COMMAND_MEMORY) {
-                    new_addr = le32_to_cpu(*(uint32_t *)(d->config + 
+                    new_addr = le32_to_cpu(*(uint32_t *)(d->config +
                                                          config_ofs));
                     /* the ROM slot has a specific enable bit */
                     if (i == PCI_ROM_SLOT && !(new_addr & 1))
@@ -225,7 +227,7 @@ static void pci_update_mappings(PCIDevice *d)
                         }
                     } else {
                         cpu_register_physical_memory(pci_to_cpu_addr(r->addr),
-                                                     r->size, 
+                                                     r->size,
                                                      IO_MEM_UNASSIGNED);
                     }
                 }
@@ -238,7 +240,7 @@ static void pci_update_mappings(PCIDevice *d)
     }
 }
 
-uint32_t pci_default_read_config(PCIDevice *d, 
+uint32_t pci_default_read_config(PCIDevice *d,
                                  uint32_t address, int len)
 {
     uint32_t val;
@@ -264,13 +266,13 @@ uint32_t pci_default_read_config(PCIDevice *d,
     return val;
 }
 
-void pci_default_write_config(PCIDevice *d, 
+void pci_default_write_config(PCIDevice *d,
                               uint32_t address, uint32_t val, int len)
 {
     int can_write, i;
     uint32_t end, addr;
 
-    if (len == 4 && ((address >= 0x10 && address < 0x10 + 4 * 6) || 
+    if (len == 4 && ((address >= 0x10 && address < 0x10 + 4 * 6) ||
                      (address >= 0x30 && address < 0x34))) {
         PCIIORegion *r;
         int reg;
@@ -365,7 +367,7 @@ void pci_data_write(void *opaque, uint32_t addr, uint32_t val, int len)
     PCIBus *s = opaque;
     PCIDevice *pci_dev;
     int config_addr, bus_num;
-    
+
 #if defined(DEBUG_PCI) && 0
     printf("pci_data_write: addr=%08x val=%08x len=%d\n",
            addr, val, len);
@@ -433,11 +435,12 @@ uint32_t pci_data_read(void *opaque, uint32_t addr, int len)
 /* generic PCI irq support */
 
 /* 0 <= irq_num <= 3. level must be 0 or 1 */
-void pci_set_irq(PCIDevice *pci_dev, int irq_num, int level)
+static void pci_set_irq(void *opaque, int irq_num, int level)
 {
+    PCIDevice *pci_dev = (PCIDevice *)opaque;
     PCIBus *bus;
     int change;
-    
+
     change = level - pci_dev->irq_state[irq_num];
     if (!change)
         return;
@@ -462,15 +465,42 @@ typedef struct {
     const char *desc;
 } pci_class_desc;
 
-static pci_class_desc pci_class_descriptions[] = 
+static pci_class_desc pci_class_descriptions[] =
 {
     { 0x0100, "SCSI controller"},
     { 0x0101, "IDE controller"},
+    { 0x0102, "Floppy controller"},
+    { 0x0103, "IPI controller"},
+    { 0x0104, "RAID controller"},
+    { 0x0106, "SATA controller"},
+    { 0x0107, "SAS controller"},
+    { 0x0180, "Storage controller"},
     { 0x0200, "Ethernet controller"},
+    { 0x0201, "Token Ring controller"},
+    { 0x0202, "FDDI controller"},
+    { 0x0203, "ATM controller"},
+    { 0x0280, "Network controller"},
     { 0x0300, "VGA controller"},
+    { 0x0301, "XGA controller"},
+    { 0x0302, "3D controller"},
+    { 0x0380, "Display controller"},
+    { 0x0400, "Video controller"},
+    { 0x0401, "Audio controller"},
+    { 0x0402, "Phone"},
+    { 0x0480, "Multimedia controller"},
+    { 0x0500, "RAM controller"},
+    { 0x0501, "Flash controller"},
+    { 0x0580, "Memory controller"},
     { 0x0600, "Host bridge"},
     { 0x0601, "ISA bridge"},
+    { 0x0602, "EISA bridge"},
+    { 0x0603, "MC bridge"},
     { 0x0604, "PCI bridge"},
+    { 0x0605, "PCMCIA bridge"},
+    { 0x0606, "NUBUS bridge"},
+    { 0x0607, "CARDBUS bridge"},
+    { 0x0608, "RACEWAY bridge"},
+    { 0x0680, "Bridge"},
     { 0x0c03, "USB controller"},
     { 0, NULL}
 };
@@ -508,10 +538,10 @@ static void pci_info_device(PCIDevice *d)
         if (r->size != 0) {
             term_printf("      BAR%d: ", i);
             if (r->type & PCI_ADDRESS_SPACE_IO) {
-                term_printf("I/O at 0x%04x [0x%04x].\n", 
+                term_printf("I/O at 0x%04x [0x%04x].\n",
                        r->addr, r->addr + r->size - 1);
             } else {
-                term_printf("32 bit memory at 0x%08x [0x%08x].\n", 
+                term_printf("32 bit memory at 0x%08x [0x%08x].\n",
                        r->addr, r->addr + r->size - 1);
             }
         }
@@ -526,7 +556,7 @@ void pci_for_each_device(int bus_num, void (*fn)(PCIDevice *d))
     PCIBus *bus = first_bus;
     PCIDevice *d;
     int devfn;
-    
+
     while (bus && bus->bus_num != bus_num)
         bus = bus->next;
     if (bus) {
@@ -548,10 +578,20 @@ void pci_nic_init(PCIBus *bus, NICInfo *nd, int devfn)
 {
     if (strcmp(nd->model, "ne2k_pci") == 0) {
         pci_ne2000_init(bus, nd, devfn);
+    } else if (strcmp(nd->model, "i82551") == 0) {
+        pci_i82551_init(bus, nd, devfn);
+    } else if (strcmp(nd->model, "i82557b") == 0) {
+        pci_i82557b_init(bus, nd, devfn);
+    } else if (strcmp(nd->model, "i82559er") == 0) {
+        pci_i82559er_init(bus, nd, devfn);
     } else if (strcmp(nd->model, "rtl8139") == 0) {
         pci_rtl8139_init(bus, nd, devfn);
     } else if (strcmp(nd->model, "pcnet") == 0) {
         pci_pcnet_init(bus, nd, devfn);
+    } else if (strcmp(nd->model, "?") == 0) {
+        fprintf(stderr, "qemu: Supported PCI NICs: i82551 i82557b i82559er"
+                        " ne2k_pci pcnet rtl8139\n");
+        exit (1);
     } else {
         fprintf(stderr, "qemu: Unsupported NIC: %s\n", nd->model);
         exit (1);
@@ -563,7 +603,7 @@ typedef struct {
     PCIBus *bus;
 } PCIBridge;
 
-void pci_bridge_write_config(PCIDevice *d, 
+void pci_bridge_write_config(PCIDevice *d,
                              uint32_t address, uint32_t val, int len)
 {
     PCIBridge *s = (PCIBridge *)d;
@@ -584,10 +624,10 @@ PCIBus *pci_bridge_init(PCIBus *bus, int devfn, uint32_t id,
                         pci_map_irq_fn map_irq, const char *name)
 {
     PCIBridge *s;
-    s = (PCIBridge *)pci_register_device(bus, name, sizeof(PCIBridge), 
+    s = (PCIBridge *)pci_register_device(bus, name, sizeof(PCIBridge),
                                          devfn, NULL, pci_bridge_write_config);
     s->dev.config[0x00] = id >> 16;
-    s->dev.config[0x01] = id > 24;
+    s->dev.config[0x01] = id >> 24;
     s->dev.config[0x02] = id; // device_id
     s->dev.config[0x03] = id >> 8;
     s->dev.config[0x04] = 0x06; // command = bus master, pci mem

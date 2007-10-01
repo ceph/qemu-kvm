@@ -1,8 +1,8 @@
 /*
  * QEMU Sun4u System Emulator
- * 
+ *
  * Copyright (c) 2005 Fabrice Bellard
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
@@ -29,6 +29,7 @@
 #define INITRD_LOAD_ADDR     0x00300000
 #define PROM_SIZE_MAX        (512 * 1024)
 #define PROM_ADDR	     0x1fff0000000ULL
+#define PROM_VADDR	     0x000ffd00000ULL
 #define APB_SPECIAL_BASE     0x1fe00000000ULL
 #define APB_MEM_BASE	     0x1ff00000000ULL
 #define VGA_BASE	     (APB_MEM_BASE + 0x400000ULL)
@@ -170,6 +171,34 @@ uint16_t NVRAM_compute_crc (m48t59_t *nvram, uint32_t start, uint32_t count)
     return crc;
 }
 
+static uint32_t nvram_set_var (m48t59_t *nvram, uint32_t addr,
+                                const unsigned char *str)
+{
+    uint32_t len;
+
+    len = strlen(str) + 1;
+    NVRAM_set_string(nvram, addr, str, len);
+
+    return addr + len;
+}
+
+static void nvram_finish_partition (m48t59_t *nvram, uint32_t start,
+                                    uint32_t end)
+{
+    unsigned int i, sum;
+
+    // Length divided by 16
+    m48t59_write(nvram, start + 2, ((end - start) >> 12) & 0xff);
+    m48t59_write(nvram, start + 3, ((end - start) >> 4) & 0xff);
+    // Checksum
+    sum = m48t59_read(nvram, start);
+    for (i = 0; i < 14; i++) {
+        sum += m48t59_read(nvram, start + 2 + i);
+        sum = (sum + ((sum & 0xff00) >> 8)) & 0xff;
+    }
+    m48t59_write(nvram, start + 1, sum & 0xff);
+}
+
 extern int nographic;
 
 int sun4u_NVRAM_set_params (m48t59_t *nvram, uint16_t NVRAM_size,
@@ -182,6 +211,8 @@ int sun4u_NVRAM_set_params (m48t59_t *nvram, uint16_t NVRAM_size,
                           int width, int height, int depth)
 {
     uint16_t crc;
+    unsigned int i;
+    uint32_t start, end;
 
     /* Set parameters for Open Hack'Ware BIOS */
     NVRAM_set_string(nvram, 0x00, "QEMU_BIOS", 16);
@@ -212,6 +243,28 @@ int sun4u_NVRAM_set_params (m48t59_t *nvram, uint16_t NVRAM_size,
     crc = NVRAM_compute_crc(nvram, 0x00, 0xF8);
     NVRAM_set_word(nvram,  0xFC, crc);
 
+    // OpenBIOS nvram variables
+    // Variable partition
+    start = 256;
+    m48t59_write(nvram, start, 0x70);
+    NVRAM_set_string(nvram, start + 4, "system", 12);
+
+    end = start + 16;
+    for (i = 0; i < nb_prom_envs; i++)
+        end = nvram_set_var(nvram, end, prom_envs[i]);
+
+    m48t59_write(nvram, end++ , 0);
+    end = start + ((end - start + 15) & ~15);
+    nvram_finish_partition(nvram, start, end);
+
+    // free partition
+    start = end;
+    m48t59_write(nvram, start, 0x7f);
+    NVRAM_set_string(nvram, start + 4, "free", 12);
+
+    end = 0x1fd0;
+    nvram_finish_partition(nvram, start, end);
+
     return 0;
 }
 
@@ -223,14 +276,6 @@ void irq_info()
 {
 }
 
-void pic_set_irq(int irq, int level)
-{
-}
-
-void pic_set_irq_new(void *opaque, int irq, int level)
-{
-}
-
 void qemu_system_powerdown(void)
 {
 }
@@ -238,7 +283,39 @@ void qemu_system_powerdown(void)
 static void main_cpu_reset(void *opaque)
 {
     CPUState *env = opaque;
+
     cpu_reset(env);
+    ptimer_set_limit(env->tick, 0x7fffffffffffffffULL, 1);
+    ptimer_run(env->tick, 0);
+    ptimer_set_limit(env->stick, 0x7fffffffffffffffULL, 1);
+    ptimer_run(env->stick, 0);
+    ptimer_set_limit(env->hstick, 0x7fffffffffffffffULL, 1);
+    ptimer_run(env->hstick, 0);
+}
+
+void tick_irq(void *opaque)
+{
+    CPUState *env = opaque;
+
+    cpu_interrupt(env, CPU_INTERRUPT_TIMER);
+}
+
+void stick_irq(void *opaque)
+{
+    CPUState *env = opaque;
+
+    cpu_interrupt(env, CPU_INTERRUPT_TIMER);
+}
+
+void hstick_irq(void *opaque)
+{
+    CPUState *env = opaque;
+
+    cpu_interrupt(env, CPU_INTERRUPT_TIMER);
+}
+
+static void dummy_cpu_set_irq(void *opaque, int irq, int level)
+{
 }
 
 static const int ide_iobase[2] = { 0x1f0, 0x170 };
@@ -257,7 +334,7 @@ static fdctrl_t *floppy_controller;
 static void sun4u_init(int ram_size, int vga_ram_size, int boot_device,
              DisplayState *ds, const char **fd_filename, int snapshot,
              const char *kernel_filename, const char *kernel_cmdline,
-             const char *initrd_filename)
+             const char *initrd_filename, const char *cpu_model)
 {
     CPUState *env;
     char buf[1024];
@@ -266,25 +343,49 @@ static void sun4u_init(int ram_size, int vga_ram_size, int boot_device,
     unsigned int i;
     long prom_offset, initrd_size, kernel_size;
     PCIBus *pci_bus;
+    const sparc_def_t *def;
+    QEMUBH *bh;
+    qemu_irq *irq;
 
     linux_boot = (kernel_filename != NULL);
 
+    /* init CPUs */
+    if (cpu_model == NULL)
+        cpu_model = "TI UltraSparc II";
+    sparc_find_by_name(cpu_model, &def);
+    if (def == NULL) {
+        fprintf(stderr, "Unable to find Sparc CPU definition\n");
+        exit(1);
+    }
     env = cpu_init();
+    cpu_sparc_register(env, def);
+    bh = qemu_bh_new(tick_irq, env);
+    env->tick = ptimer_init(bh);
+    ptimer_set_period(env->tick, 1ULL);
+
+    bh = qemu_bh_new(stick_irq, env);
+    env->stick = ptimer_init(bh);
+    ptimer_set_period(env->stick, 1ULL);
+
+    bh = qemu_bh_new(hstick_irq, env);
+    env->hstick = ptimer_init(bh);
+    ptimer_set_period(env->hstick, 1ULL);
     register_savevm("cpu", 0, 3, cpu_save, cpu_load, env);
     qemu_register_reset(main_cpu_reset, env);
+    main_cpu_reset(env);
 
     /* allocate RAM */
     cpu_register_physical_memory(0, ram_size, 0);
 
     prom_offset = ram_size + vga_ram_size;
-    cpu_register_physical_memory(PROM_ADDR, 
-                                 (PROM_SIZE_MAX + TARGET_PAGE_SIZE) & TARGET_PAGE_MASK, 
+    cpu_register_physical_memory(PROM_ADDR,
+                                 (PROM_SIZE_MAX + TARGET_PAGE_SIZE) & TARGET_PAGE_MASK,
                                  prom_offset | IO_MEM_ROM);
 
     snprintf(buf, sizeof(buf), "%s/%s", bios_dir, PROM_FILENAME);
-    ret = load_elf(buf, 0, NULL);
+    ret = load_elf(buf, PROM_ADDR - PROM_VADDR, NULL, NULL, NULL);
     if (ret < 0) {
-	fprintf(stderr, "qemu: could not load prom '%s'\n", 
+	fprintf(stderr, "qemu: could not load prom '%s'\n",
 		buf);
 	exit(1);
     }
@@ -293,13 +394,13 @@ static void sun4u_init(int ram_size, int vga_ram_size, int boot_device,
     initrd_size = 0;
     if (linux_boot) {
         /* XXX: put correct offset */
-        kernel_size = load_elf(kernel_filename, 0, NULL);
+        kernel_size = load_elf(kernel_filename, 0, NULL, NULL, NULL);
         if (kernel_size < 0)
 	    kernel_size = load_aout(kernel_filename, phys_ram_base + KERNEL_LOAD_ADDR);
 	if (kernel_size < 0)
 	    kernel_size = load_image(kernel_filename, phys_ram_base + KERNEL_LOAD_ADDR);
         if (kernel_size < 0) {
-            fprintf(stderr, "qemu: could not load kernel '%s'\n", 
+            fprintf(stderr, "qemu: could not load kernel '%s'\n",
                     kernel_filename);
 	    exit(1);
         }
@@ -308,7 +409,7 @@ static void sun4u_init(int ram_size, int vga_ram_size, int boot_device,
         if (initrd_filename) {
             initrd_size = load_image(initrd_filename, phys_ram_base + INITRD_LOAD_ADDR);
             if (initrd_size < 0) {
-                fprintf(stderr, "qemu: could not load initial ram disk '%s'\n", 
+                fprintf(stderr, "qemu: could not load initial ram disk '%s'\n",
                         initrd_filename);
                 exit(1);
             }
@@ -330,14 +431,13 @@ static void sun4u_init(int ram_size, int vga_ram_size, int boot_device,
 
     for(i = 0; i < MAX_SERIAL_PORTS; i++) {
         if (serial_hds[i]) {
-            serial_init(&pic_set_irq_new, NULL,
-                        serial_io[i], serial_irq[i], serial_hds[i]);
+            serial_init(serial_io[i], NULL/*serial_irq[i]*/, serial_hds[i]);
         }
     }
 
     for(i = 0; i < MAX_PARALLEL_PORTS; i++) {
         if (parallel_hds[i]) {
-            parallel_init(parallel_io[i], parallel_irq[i], parallel_hds[i]);
+            parallel_init(parallel_io[i], NULL/*parallel_irq[i]*/, parallel_hds[i]);
         }
     }
 
@@ -347,10 +447,13 @@ static void sun4u_init(int ram_size, int vga_ram_size, int boot_device,
 	pci_nic_init(pci_bus, &nd_table[i], -1);
     }
 
-    pci_cmd646_ide_init(pci_bus, bs_table, 1);
-    kbd_init();
-    floppy_controller = fdctrl_init(6, 2, 0, 0x3f0, fd_table);
-    nvram = m48t59_init(8, 0, 0x0074, NVRAM_SIZE, 59);
+    irq = qemu_allocate_irqs(dummy_cpu_set_irq, NULL, 32);
+    // XXX pci_cmd646_ide_init(pci_bus, bs_table, 1);
+    pci_piix3_ide_init(pci_bus, bs_table, -1, irq);
+    /* FIXME: wire up interrupts.  */
+    i8042_init(NULL/*1*/, NULL/*12*/, 0x60);
+    floppy_controller = fdctrl_init(NULL/*6*/, 2, 0, 0x3f0, fd_table);
+    nvram = m48t59_init(NULL/*8*/, 0, 0x0074, NVRAM_SIZE, 59);
     sun4u_NVRAM_set_params(nvram, NVRAM_SIZE, "Sun4u", ram_size, boot_device,
                          KERNEL_LOAD_ADDR, kernel_size,
                          kernel_cmdline,

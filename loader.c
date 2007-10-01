@@ -1,8 +1,8 @@
 /*
  * QEMU Executable loader
- * 
+ *
  * Copyright (c) 2006 Fabrice Bellard
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
@@ -23,6 +23,7 @@
  */
 #include "vl.h"
 #include "disas.h"
+#include "uboot_image.h"
 
 /* return the size or -1 if error */
 int get_image_size(const char *filename)
@@ -195,7 +196,7 @@ static void *load_at(int fd, int offset, int size)
 
 /* return < 0 if error, otherwise the number of bytes loaded in memory */
 int load_elf(const char *filename, int64_t virt_to_phys_addend,
-             uint64_t *pentry)
+             uint64_t *pentry, uint64_t *lowaddr, uint64_t *highaddr)
 {
     int fd, data_order, host_data_order, must_swab, ret;
     uint8_t e_ident[EI_NIDENT];
@@ -229,15 +230,94 @@ int load_elf(const char *filename, int64_t virt_to_phys_addend,
 
     lseek(fd, 0, SEEK_SET);
     if (e_ident[EI_CLASS] == ELFCLASS64) {
-        ret = load_elf64(fd, virt_to_phys_addend, must_swab, pentry);
+        ret = load_elf64(fd, virt_to_phys_addend, must_swab, pentry,
+                         lowaddr, highaddr);
     } else {
-        ret = load_elf32(fd, virt_to_phys_addend, must_swab, pentry);
+        ret = load_elf32(fd, virt_to_phys_addend, must_swab, pentry,
+                         lowaddr, highaddr);
     }
 
     close(fd);
     return ret;
 
  fail:
+    close(fd);
+    return -1;
+}
+
+static void bswap_uboot_header(uboot_image_header_t *hdr)
+{
+#ifndef WORDS_BIGENDIAN
+    bswap32s(&hdr->ih_magic);
+    bswap32s(&hdr->ih_hcrc);
+    bswap32s(&hdr->ih_time);
+    bswap32s(&hdr->ih_size);
+    bswap32s(&hdr->ih_load);
+    bswap32s(&hdr->ih_ep);
+    bswap32s(&hdr->ih_dcrc);
+#endif
+}
+
+/* Load a U-Boot image.  */
+int load_uboot(const char *filename, target_ulong *ep, int *is_linux)
+{
+
+    int fd;
+    int size;
+    uboot_image_header_t h;
+    uboot_image_header_t *hdr = &h;
+    uint8_t *data = NULL;
+
+    fd = open(filename, O_RDONLY | O_BINARY);
+    if (fd < 0)
+        return -1;
+
+    size = read(fd, hdr, sizeof(uboot_image_header_t));
+    if (size < 0)
+        goto fail;
+
+    bswap_uboot_header(hdr);
+
+    if (hdr->ih_magic != IH_MAGIC)
+        goto fail;
+
+    /* TODO: Implement Multi-File images.  */
+    if (hdr->ih_type == IH_TYPE_MULTI) {
+        fprintf(stderr, "Unable to load multi-file u-boot images\n");
+        goto fail;
+    }
+
+    /* TODO: Implement compressed images.  */
+    if (hdr->ih_comp != IH_COMP_NONE) {
+        fprintf(stderr, "Unable to load compressed u-boot images\n");
+        goto fail;
+    }
+
+    /* TODO: Check CPU type.  */
+    if (is_linux) {
+        if (hdr->ih_type == IH_TYPE_KERNEL && hdr->ih_os == IH_OS_LINUX)
+            *is_linux = 1;
+        else
+            *is_linux = 0;
+    }
+
+    *ep = hdr->ih_ep;
+    data = qemu_malloc(hdr->ih_size);
+    if (!data)
+        goto fail;
+
+    if (read(fd, data, hdr->ih_size) != hdr->ih_size) {
+        fprintf(stderr, "Error reading file\n");
+        goto fail;
+    }
+
+    cpu_physical_memory_write_rom(hdr->ih_load, data, hdr->ih_size);
+
+    return hdr->ih_size;
+
+fail:
+    if (data)
+        qemu_free(data);
     close(fd);
     return -1;
 }

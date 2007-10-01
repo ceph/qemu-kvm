@@ -1,6 +1,6 @@
 /*
  *  CFI parallel flash with AMD command set emulation
- * 
+ *
  *  Copyright (c) 2005 Jocelyn Mayer
  *
  * This library is free software; you can redistribute it and/or
@@ -50,9 +50,9 @@ do {                                               \
 
 struct pflash_t {
     BlockDriverState *bs;
-    target_ulong base;
-    target_ulong sector_len;
-    target_ulong total_len;
+    target_phys_addr_t base;
+    uint32_t sector_len;
+    uint32_t total_len;
     int width;
     int wcycle; /* if 0, the flash is read normally */
     int bypass;
@@ -85,13 +85,13 @@ static void pflash_timer (void *opaque)
     pfl->cmd = 0;
 }
 
-static uint32_t pflash_read (pflash_t *pfl, target_ulong offset, int width)
+static uint32_t pflash_read (pflash_t *pfl, uint32_t offset, int width)
 {
-    target_ulong boff;
+    uint32_t boff;
     uint32_t ret;
     uint8_t *p;
 
-    DPRINTF("%s: offset %08x\n", __func__, offset);
+    DPRINTF("%s: offset " TARGET_FMT_lx "\n", __func__, offset);
     ret = -1;
     offset -= pfl->base;
     boff = offset & 0xFF;
@@ -161,7 +161,7 @@ static uint32_t pflash_read (pflash_t *pfl, target_ulong offset, int width)
         default:
             goto flash_read;
         }
-        DPRINTF("%s: ID %d %x\n", __func__, boff, ret);
+        DPRINTF("%s: ID " TARGET_FMT_ld " %x\n", __func__, boff, ret);
         break;
     case 0xA0:
     case 0x10:
@@ -185,7 +185,7 @@ static uint32_t pflash_read (pflash_t *pfl, target_ulong offset, int width)
 }
 
 /* update flash content on disk */
-static void pflash_update(pflash_t *pfl, int offset, 
+static void pflash_update(pflash_t *pfl, int offset,
                           int size)
 {
     int offset_end;
@@ -194,32 +194,37 @@ static void pflash_update(pflash_t *pfl, int offset,
         /* round to sectors */
         offset = offset >> 9;
         offset_end = (offset_end + 511) >> 9;
-        bdrv_write(pfl->bs, offset, pfl->storage + (offset << 9), 
+        bdrv_write(pfl->bs, offset, pfl->storage + (offset << 9),
                    offset_end - offset);
     }
 }
 
-static void pflash_write (pflash_t *pfl, target_ulong offset, uint32_t value,
+static void pflash_write (pflash_t *pfl, uint32_t offset, uint32_t value,
                           int width)
 {
-    target_ulong boff;
+    uint32_t boff;
     uint8_t *p;
     uint8_t cmd;
 
     /* WARNING: when the memory area is in ROMD mode, the offset is a
        ram offset, not a physical address */
-    if (pfl->wcycle == 0)
-        offset -= (target_ulong)(long)pfl->storage;
-    else
-        offset -= pfl->base;
-        
     cmd = value;
-    DPRINTF("%s: offset %08x %08x %d\n", __func__, offset, value, width);
     if (pfl->cmd != 0xA0 && cmd == 0xF0) {
+#if 0
         DPRINTF("%s: flash reset asked (%02x %02x)\n",
                 __func__, pfl->cmd, cmd);
+#endif
         goto reset_flash;
     }
+    DPRINTF("%s: offset " TARGET_FMT_lx " %08x %d %d\n", __func__,
+            offset, value, width, pfl->wcycle);
+    if (pfl->wcycle == 0)
+        offset -= (uint32_t)(long)pfl->storage;
+    else
+        offset -= pfl->base;
+
+    DPRINTF("%s: offset " TARGET_FMT_lx " %08x %d\n", __func__,
+            offset, value, width);
     /* Set the device in I/O access mode */
     cpu_register_physical_memory(pfl->base, pfl->total_len, pfl->fl_mem);
     boff = offset & (pfl->sector_len - 1);
@@ -239,7 +244,7 @@ static void pflash_write (pflash_t *pfl, target_ulong offset, uint32_t value,
             return;
         }
         if (boff != 0x555 || cmd != 0xAA) {
-            DPRINTF("%s: unlock0 failed %04x %02x %04x\n",
+            DPRINTF("%s: unlock0 failed " TARGET_FMT_lx " %02x %04x\n",
                     __func__, boff, cmd, 0x555);
             goto reset_flash;
         }
@@ -249,7 +254,8 @@ static void pflash_write (pflash_t *pfl, target_ulong offset, uint32_t value,
         /* We started an unlock sequence */
     check_unlock1:
         if (boff != 0x2AA || cmd != 0x55) {
-            DPRINTF("%s: unlock1 failed %04x %02x\n", __func__, boff, cmd);
+            DPRINTF("%s: unlock1 failed " TARGET_FMT_lx " %02x\n", __func__,
+                    boff, cmd);
             goto reset_flash;
         }
         DPRINTF("%s: unlock sequence done\n", __func__);
@@ -257,7 +263,8 @@ static void pflash_write (pflash_t *pfl, target_ulong offset, uint32_t value,
     case 2:
         /* We finished an unlock sequence */
         if (!pfl->bypass && boff != 0x555) {
-            DPRINTF("%s: command failed %04x %02x\n", __func__, boff, cmd);
+            DPRINTF("%s: command failed " TARGET_FMT_lx " %02x\n", __func__,
+                    boff, cmd);
             goto reset_flash;
         }
         switch (cmd) {
@@ -281,7 +288,7 @@ static void pflash_write (pflash_t *pfl, target_ulong offset, uint32_t value,
             /* We need another unlock sequence */
             goto check_unlock0;
         case 0xA0:
-            DPRINTF("%s: write data offset %08x %08x %d\n",
+            DPRINTF("%s: write data offset " TARGET_FMT_lx " %08x %d\n",
                     __func__, offset, value, width);
             p = pfl->storage;
             switch (width) {
@@ -352,7 +359,7 @@ static void pflash_write (pflash_t *pfl, target_ulong offset, uint32_t value,
         switch (cmd) {
         case 0x10:
             if (boff != 0x555) {
-                DPRINTF("%s: chip erase: invalid address %04x\n",
+                DPRINTF("%s: chip erase: invalid address " TARGET_FMT_lx "\n",
                         __func__, offset);
                 goto reset_flash;
             }
@@ -362,19 +369,20 @@ static void pflash_write (pflash_t *pfl, target_ulong offset, uint32_t value,
             pfl->status = 0x00;
             pflash_update(pfl, 0, pfl->total_len);
             /* Let's wait 5 seconds before chip erase is done */
-            qemu_mod_timer(pfl->timer, 
+            qemu_mod_timer(pfl->timer,
                            qemu_get_clock(vm_clock) + (ticks_per_sec * 5));
             break;
         case 0x30:
             /* Sector erase */
             p = pfl->storage;
             offset &= ~(pfl->sector_len - 1);
-            DPRINTF("%s: start sector erase at %08x\n", __func__, offset);
+            DPRINTF("%s: start sector erase at " TARGET_FMT_lx "\n", __func__,
+                    offset);
             memset(p + offset, 0xFF, pfl->sector_len);
             pflash_update(pfl, offset, pfl->sector_len);
             pfl->status = 0x00;
             /* Let's wait 1/2 second before sector erase is done */
-            qemu_mod_timer(pfl->timer, 
+            qemu_mod_timer(pfl->timer,
                            qemu_get_clock(vm_clock) + (ticks_per_sec / 2));
             break;
         default:
@@ -412,10 +420,8 @@ static void pflash_write (pflash_t *pfl, target_ulong offset, uint32_t value,
 
     /* Reset flash */
  reset_flash:
-    if (pfl->wcycle != 0) {
-        cpu_register_physical_memory(pfl->base, pfl->total_len,
-                                     pfl->off | IO_MEM_ROMD | pfl->fl_mem);
-    }
+    cpu_register_physical_memory(pfl->base, pfl->total_len,
+                                 pfl->off | IO_MEM_ROMD | pfl->fl_mem);
     pfl->bypass = 0;
     pfl->wcycle = 0;
     pfl->cmd = 0;
@@ -515,25 +521,28 @@ static int ctz32 (uint32_t n)
     return ret;
 }
 
-pflash_t *pflash_register (target_ulong base, ram_addr_t off,
+pflash_t *pflash_register (target_phys_addr_t base, ram_addr_t off,
                            BlockDriverState *bs,
-                           target_ulong sector_len, int nb_blocs, int width,
-                           uint16_t id0, uint16_t id1, 
+                           uint32_t sector_len, int nb_blocs, int width,
+                           uint16_t id0, uint16_t id1,
                            uint16_t id2, uint16_t id3)
 {
     pflash_t *pfl;
-    target_long total_len;
+    int32_t total_len;
 
     total_len = sector_len * nb_blocs;
     /* XXX: to be fixed */
+#if 0
     if (total_len != (8 * 1024 * 1024) && total_len != (16 * 1024 * 1024) &&
         total_len != (32 * 1024 * 1024) && total_len != (64 * 1024 * 1024))
         return NULL;
+#endif
     pfl = qemu_mallocz(sizeof(pflash_t));
     if (pfl == NULL)
         return NULL;
     pfl->storage = phys_ram_base + off;
-    pfl->fl_mem = cpu_register_io_memory(0, pflash_read_ops, pflash_write_ops, pfl);
+    pfl->fl_mem = cpu_register_io_memory(0, pflash_read_ops, pflash_write_ops,
+                                         pfl);
     pfl->off = off;
     cpu_register_physical_memory(base, total_len,
                                  off | pfl->fl_mem | IO_MEM_ROMD);
@@ -609,7 +618,9 @@ pflash_t *pflash_register (target_ulong base, ram_addr_t off,
     pfl->cfi_table[0x28] = 0x02;
     pfl->cfi_table[0x29] = 0x00;
     /* Max number of bytes in multi-bytes write */
-    pfl->cfi_table[0x2A] = 0x05;
+    /* XXX: disable buffered write as it's not supported */
+    //    pfl->cfi_table[0x2A] = 0x05;
+    pfl->cfi_table[0x2A] = 0x00;
     pfl->cfi_table[0x2B] = 0x00;
     /* Number of erase block regions (uniform) */
     pfl->cfi_table[0x2C] = 0x01;

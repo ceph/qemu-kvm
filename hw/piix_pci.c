@@ -2,7 +2,7 @@
  * QEMU i440FX/PIIX3 PCI Bridge Emulation
  *
  * Copyright (c) 2006 Fabrice Bellard
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
@@ -40,7 +40,7 @@ static uint32_t i440fx_addr_readl(void* opaque, uint32_t addr)
     return s->config_reg;
 }
 
-static void piix3_set_irq(void *pic, int irq_num, int level);
+static void piix3_set_irq(qemu_irq *pic, int irq_num, int level);
 
 /* return the global irq number corresponding to a given device irq
    pin. We could also use the bus number to have a more precise
@@ -63,19 +63,19 @@ static void update_pam(PCIDevice *d, uint32_t start, uint32_t end, int r)
     switch(r) {
     case 3:
         /* RAM */
-        cpu_register_physical_memory(start, end - start, 
+        cpu_register_physical_memory(start, end - start,
                                      start);
         break;
     case 1:
         /* ROM (XXX: not quite correct) */
-        cpu_register_physical_memory(start, end - start, 
+        cpu_register_physical_memory(start, end - start,
                                      start | IO_MEM_ROM);
         break;
     case 2:
     case 0:
         /* XXX: should distinguish read/write cases */
         for(addr = start; addr < end; addr += 4096) {
-            cpu_register_physical_memory(addr, 4096, 
+            cpu_register_physical_memory(addr, 4096,
                                          isa_page_descs[(addr - 0xa0000) >> 12]);
         }
         break;
@@ -97,7 +97,7 @@ static void i440fx_update_memory_mappings(PCIDevice *d)
         cpu_register_physical_memory(0xa0000, 0x20000, 0xa0000);
     } else {
         for(addr = 0xa0000; addr < 0xc0000; addr += 4096) {
-            cpu_register_physical_memory(addr, 4096, 
+            cpu_register_physical_memory(addr, 4096,
                                          isa_page_descs[(addr - 0xa0000) >> 12]);
         }
     }
@@ -124,7 +124,7 @@ void i440fx_init_memory_mappings(PCIDevice *d)
     }
 }
 
-static void i440fx_write_config(PCIDevice *d, 
+static void i440fx_write_config(PCIDevice *d,
                                 uint32_t address, uint32_t val, int len)
 {
     /* XXX: implement SMRAM.D_LOCK */
@@ -155,14 +155,14 @@ static int i440fx_load(QEMUFile* f, void *opaque, int version_id)
     return 0;
 }
 
-PCIBus *i440fx_init(PCIDevice **pi440fx_state)
+PCIBus *i440fx_init(PCIDevice **pi440fx_state, qemu_irq *pic)
 {
     PCIBus *b;
     PCIDevice *d;
     I440FXState *s;
 
     s = qemu_mallocz(sizeof(I440FXState));
-    b = pci_register_bus(piix3_set_irq, pci_slot_get_pirq, NULL, 0, 4);
+    b = pci_register_bus(piix3_set_irq, pci_slot_get_pirq, pic, 0, 4);
     s->bus = b;
 
     register_ioport_write(0xcf8, 4, 4, i440fx_addr_writel, s);
@@ -175,7 +175,7 @@ PCIBus *i440fx_init(PCIDevice **pi440fx_state)
     register_ioport_read(0xcfc, 4, 2, pci_host_data_readw, s);
     register_ioport_read(0xcfc, 4, 4, pci_host_data_readl, s);
 
-    d = pci_register_device(b, "i440FX", sizeof(PCIDevice), 0, 
+    d = pci_register_device(b, "i440FX", sizeof(PCIDevice), 0,
                             NULL, i440fx_write_config);
 
     d->config[0x00] = 0x86; // vendor_id
@@ -204,7 +204,7 @@ PCIDevice *piix4_dev;
 
 static int pci_irq_levels[4];
 
-static void piix3_set_irq(void *pic, int irq_num, int level)
+static void piix3_set_irq(qemu_irq *pic, int irq_num, int level)
 {
     int i, pic_irq, pic_level;
 
@@ -221,7 +221,7 @@ static void piix3_set_irq(void *pic, int irq_num, int level)
             if (pic_irq == piix3_dev->config[0x60 + i])
                 pic_level |= pci_irq_levels[i];
         }
-        pic_set_irq(pic_irq, pic_level);
+        qemu_set_irq(pic[pic_irq], pic_level);
     }
 }
 

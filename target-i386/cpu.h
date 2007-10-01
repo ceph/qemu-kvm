@@ -1,6 +1,6 @@
 /*
  * i386 virtual CPU header
- * 
+ *
  *  Copyright (c) 2003 Fabrice Bellard
  *
  * This library is free software; you can redistribute it and/or
@@ -84,6 +84,7 @@
 #define DESC_AVL_MASK   (1 << 20)
 #define DESC_P_MASK     (1 << 15)
 #define DESC_DPL_SHIFT  13
+#define DESC_DPL_MASK   (1 << DESC_DPL_SHIFT)
 #define DESC_S_MASK     (1 << 12)
 #define DESC_TYPE_SHIFT 8
 #define DESC_A_MASK     (1 << 8)
@@ -116,12 +117,12 @@
 #define NT_MASK	         	0x00004000
 #define RF_MASK			0x00010000
 #define VM_MASK			0x00020000
-#define AC_MASK			0x00040000 
+#define AC_MASK			0x00040000
 #define VIF_MASK                0x00080000
 #define VIP_MASK                0x00100000
 #define ID_MASK                 0x00200000
 
-/* hidden flags - used internally by qemu to represent additionnal cpu
+/* hidden flags - used internally by qemu to represent additional cpu
    states. Only the CPL, INHIBIT_IRQ and HALTED are not redundant. We avoid
    using the IOPL_MASK, TF_MASK and VM_MASK bit position to ease oring
    with eflags. */
@@ -149,6 +150,8 @@
 #define HF_VM_SHIFT         17 /* must be same as eflags */
 #define HF_HALTED_SHIFT     18 /* CPU halted */
 #define HF_SMM_SHIFT        19 /* CPU in SMM mode */
+#define HF_GIF_SHIFT        20 /* if set CPU takes interrupts */
+#define HF_HIF_SHIFT        21 /* shadow copy of IF_MASK when in SVM */
 
 #define HF_CPL_MASK          (3 << HF_CPL_SHIFT)
 #define HF_SOFTMMU_MASK      (1 << HF_SOFTMMU_SHIFT)
@@ -168,6 +171,8 @@
 #define HF_VM_MASK           (1 << HF_VM_SHIFT)
 #define HF_HALTED_MASK       (1 << HF_HALTED_SHIFT)
 #define HF_SMM_MASK          (1 << HF_SMM_SHIFT)
+#define HF_GIF_MASK          (1 << HF_GIF_SHIFT)
+#define HF_HIF_MASK          (1 << HF_HIF_SHIFT)
 
 #define CR0_PE_SHIFT 0
 #define CR0_MP_SHIFT 1
@@ -255,6 +260,8 @@
 #define MSR_GSBASE                      0xc0000101
 #define MSR_KERNELGSBASE                0xc0000102
 
+#define MSR_VM_HSAVE_PA                 0xc0010117
+
 /* cpuid_features bits */
 #define CPUID_FP87 (1 << 0)
 #define CPUID_VME  (1 << 1)
@@ -288,6 +295,8 @@
 #define CPUID_EXT2_NX      (1 << 20)
 #define CPUID_EXT2_FFXSR   (1 << 25)
 #define CPUID_EXT2_LM      (1 << 29)
+
+#define CPUID_EXT3_SVM     (1 << 2)
 
 #define EXCP00_DIVZ	0
 #define EXCP01_SSTP	1
@@ -482,7 +491,7 @@ typedef struct CPUX86State {
 	int i32;
         int64_t i64;
     } fp_convert;
-    
+
     float_status sse_status;
     uint32_t mxcsr;
     XMMReg xmm_regs[CPU_NB_REGS];
@@ -495,6 +504,16 @@ typedef struct CPUX86State {
     uint32_t sysenter_eip;
     uint64_t efer;
     uint64_t star;
+
+    target_phys_addr_t vm_hsave;
+    target_phys_addr_t vm_vmcb;
+    uint64_t intercept;
+    uint16_t intercept_cr_read;
+    uint16_t intercept_cr_write;
+    uint16_t intercept_dr_read;
+    uint16_t intercept_dr_write;
+    uint32_t intercept_exceptions;
+
 #ifdef TARGET_X86_64
     target_ulong lstar;
     target_ulong cstar;
@@ -514,7 +533,7 @@ typedef struct CPUX86State {
     uint32_t saved_esp;
     int native_fp_regs; /* if true, the FPU state is in the native CPU regs */
 #endif
-    
+
     /* exception/interrupt handling */
     jmp_buf jmp_env;
     int exception_index;
@@ -523,8 +542,9 @@ typedef struct CPUX86State {
     target_ulong exception_next_eip;
     target_ulong dr[8]; /* debug registers */
     uint32_t smbase;
-    int interrupt_request; 
+    int interrupt_request;
     int user_mode_only; /* user mode only simulation */
+    int old_exception;  /* exception in flight */
 
     CPU_COMMON
 
@@ -539,7 +559,9 @@ typedef struct CPUX86State {
     uint32_t cpuid_xlevel;
     uint32_t cpuid_model[12];
     uint32_t cpuid_ext2_features;
-    
+    uint32_t cpuid_ext3_features;
+    uint32_t cpuid_apic_id;
+
 #ifdef USE_KQEMU
     int kqemu_enabled;
     int last_io_time;
@@ -565,15 +587,15 @@ void cpu_set_ferr(CPUX86State *s);
 
 /* this function must always be used to load data in the segment
    cache: it synchronizes the hflags with the segment cache values */
-static inline void cpu_x86_load_seg_cache(CPUX86State *env, 
+static inline void cpu_x86_load_seg_cache(CPUX86State *env,
                                           int seg_reg, unsigned int selector,
                                           target_ulong base,
-                                          unsigned int limit, 
+                                          unsigned int limit,
                                           unsigned int flags)
 {
     SegmentCache *sc;
     unsigned int new_hflags;
-    
+
     sc = &env->segs[seg_reg];
     sc->selector = selector;
     sc->base = base;
@@ -588,7 +610,7 @@ static inline void cpu_x86_load_seg_cache(CPUX86State *env,
                 /* long mode */
                 env->hflags |= HF_CS32_MASK | HF_SS32_MASK | HF_CS64_MASK;
                 env->hflags &= ~(HF_ADDSEG_MASK);
-            } else 
+            } else
 #endif
             {
                 /* legacy / compatibility case */
@@ -602,7 +624,7 @@ static inline void cpu_x86_load_seg_cache(CPUX86State *env,
             >> (DESC_B_SHIFT - HF_SS32_SHIFT);
         if (env->hflags & HF_CS64_MASK) {
             /* zero base assumed for DS, ES and SS in long mode */
-        } else if (!(env->cr[0] & CR0_PE_MASK) || 
+        } else if (!(env->cr[0] & CR0_PE_MASK) ||
                    (env->eflags & VM_MASK) ||
                    !(env->hflags & HF_CS32_MASK)) {
             /* XXX: try to avoid this test. The problem comes from the
@@ -612,12 +634,12 @@ static inline void cpu_x86_load_seg_cache(CPUX86State *env,
                translate-i386.c. */
             new_hflags |= HF_ADDSEG_MASK;
         } else {
-            new_hflags |= ((env->segs[R_DS].base | 
+            new_hflags |= ((env->segs[R_DS].base |
                             env->segs[R_ES].base |
-                            env->segs[R_SS].base) != 0) << 
+                            env->segs[R_SS].base) != 0) <<
                 HF_ADDSEG_SHIFT;
         }
-        env->hflags = (env->hflags & 
+        env->hflags = (env->hflags &
                        ~(HF_SS32_MASK | HF_ADDSEG_MASK)) | new_hflags;
     }
 }
@@ -645,7 +667,7 @@ void cpu_x86_frstor(CPUX86State *s, uint8_t *ptr, int data32);
 /* you can call this signal handler from your SIGBUS and SIGSEGV
    signal handlers to inform the virtual CPU of exceptions. non zero
    is returned if the signal was handled by the virtual CPU.  */
-int cpu_x86_signal_handler(int host_signum, void *pinfo, 
+int cpu_x86_signal_handler(int host_signum, void *pinfo,
                            void *puc);
 void cpu_x86_set_a20(CPUX86State *env, int a20_state);
 
@@ -676,6 +698,15 @@ static inline int cpu_get_time_fast(void)
 #endif
 
 #define TARGET_PAGE_BITS 12
+
+#define CPUState CPUX86State
+#define cpu_init cpu_x86_init
+#define cpu_exec cpu_x86_exec
+#define cpu_gen_code cpu_x86_gen_code
+#define cpu_signal_handler cpu_x86_signal_handler
+
 #include "cpu-all.h"
+
+#include "svm.h"
 
 #endif /* CPU_I386_H */

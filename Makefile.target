@@ -8,7 +8,16 @@ TARGET_BASE_ARCH:=$(TARGET_ARCH)
 ifeq ($(TARGET_ARCH), x86_64)
 TARGET_BASE_ARCH:=i386
 endif
+ifeq ($(TARGET_ARCH), mipsn32)
+TARGET_BASE_ARCH:=mips
+endif
+ifeq ($(TARGET_ARCH), mips64)
+TARGET_BASE_ARCH:=mips
+endif
 ifeq ($(TARGET_ARCH), ppc64)
+TARGET_BASE_ARCH:=ppc
+endif
+ifeq ($(TARGET_ARCH), ppcemb)
 TARGET_BASE_ARCH:=ppc
 endif
 ifeq ($(TARGET_ARCH), sparc64)
@@ -48,6 +57,16 @@ ifeq ($(TARGET_ARCH),mips)
     TARGET_ARCH2=mipsel
   endif
 endif
+ifeq ($(TARGET_ARCH),mipsn32)
+  ifneq ($(TARGET_WORDS_BIGENDIAN),yes)
+    TARGET_ARCH2=mipsn32el
+  endif
+endif
+ifeq ($(TARGET_ARCH),mips64)
+  ifneq ($(TARGET_WORDS_BIGENDIAN),yes)
+    TARGET_ARCH2=mips64el
+  endif
+endif
 QEMU_USER=qemu-$(TARGET_ARCH2)
 # system emulator name
 ifdef CONFIG_SOFTMMU
@@ -74,16 +93,27 @@ BASE_LDFLAGS+=-static
 endif
 
 # We require -O2 to avoid the stack setup prologue in EXIT_TB
-OP_CFLAGS = -Wall -O2 -g -fno-strict-aliasing
+OP_CFLAGS := -Wall -O2 -g -fno-strict-aliasing
+
+# cc-option
+# Usage: OP_CFLAGS+=$(call cc-option, -falign-functions=0, -malign-functions=0)
+
+cc-option = $(shell if $(CC) $(OP_CFLAGS) $(1) -S -o /dev/null -xc /dev/null \
+              > /dev/null 2>&1; then echo "$(1)"; else echo "$(2)"; fi ;)
+
+OP_CFLAGS+=$(call cc-option, -fno-reorder-blocks, "")
+OP_CFLAGS+=$(call cc-option, -fno-gcse, "")
+OP_CFLAGS+=$(call cc-option, -fno-tree-ch, "")
+OP_CFLAGS+=$(call cc-option, -fno-optimize-sibling-calls, "")
+OP_CFLAGS+=$(call cc-option, -fno-crossjumping, "")
+OP_CFLAGS+=$(call cc-option, -fno-align-labels, "")
+OP_CFLAGS+=$(call cc-option, -fno-align-jumps, "")
+OP_CFLAGS+=$(call cc-option, -fno-align-functions, $(call cc-option, -malign-functions=0, ""))
+OP_CFLAGS+=$(call cc-option, -fno-section-anchors, "")
 
 ifeq ($(ARCH),i386)
 HELPER_CFLAGS+=-fomit-frame-pointer
 OP_CFLAGS+=-mpreferred-stack-boundary=2 -fomit-frame-pointer
-ifeq ($(HAVE_GCC3_OPTIONS),yes)
-OP_CFLAGS+= -falign-functions=0 -fno-gcse
-else
-OP_CFLAGS+= -malign-functions=0
-endif
 ifdef TARGET_GPROF
 USE_I386_LD=y
 endif
@@ -118,25 +148,25 @@ BASE_LDFLAGS+=-Wl,-T,$(SRC_PATH)/$(ARCH).ld
 endif
 
 ifeq ($(ARCH),sparc)
-ifeq ($(CONFIG_SOLARIS),yes)
-BASE_CFLAGS+=-mcpu=ultrasparc -m32 -ffixed-g2 -ffixed-g3
-BASE_LDFLAGS+=-m32
-OP_CFLAGS+=-fno-delayed-branch -fno-omit-frame-pointer -ffixed-i0
-else
-BASE_CFLAGS+=-mcpu=ultrasparc -m32 -ffixed-g1 -ffixed-g2 -ffixed-g3 -ffixed-g6
-BASE_LDFLAGS+=-m32
-OP_CFLAGS+=-fno-delayed-branch -ffixed-i0
-HELPER_CFLAGS=$(CFLAGS) -ffixed-i0 -mflat
-# -static is used to avoid g1/g3 usage by the dynamic linker
-BASE_LDFLAGS+=-Wl,-T,$(SRC_PATH)/$(ARCH).ld -static
-endif
+  BASE_CFLAGS+=-ffixed-g2 -ffixed-g3
+  OP_CFLAGS+=-fno-delayed-branch -ffixed-i0
+  ifeq ($(CONFIG_SOLARIS),yes)
+    OP_CFLAGS+=-fno-omit-frame-pointer
+  else
+    BASE_CFLAGS+=-ffixed-g1 -ffixed-g6
+    HELPER_CFLAGS=$(CFLAGS) -ffixed-i0 -mflat
+    # -static is used to avoid g1/g3 usage by the dynamic linker
+    BASE_LDFLAGS+=-Wl,-T,$(SRC_PATH)/$(ARCH).ld -static
+  endif
 endif
 
 ifeq ($(ARCH),sparc64)
-BASE_CFLAGS+=-mcpu=ultrasparc -m64 -ffixed-g1 -ffixed-g4 -ffixed-g5 -ffixed-g7
-BASE_LDFLAGS+=-m64
-BASE_LDFLAGS+=-Wl,-T,$(SRC_PATH)/$(ARCH).ld
-OP_CFLAGS+=-mcpu=ultrasparc -m64 -ffixed-g1 -ffixed-g4 -ffixed-g5 -ffixed-g7 -fno-delayed-branch -ffixed-i0
+  BASE_CFLAGS+=-ffixed-g1 -ffixed-g4 -ffixed-g5 -ffixed-g7
+  OP_CFLAGS+=-mcpu=ultrasparc -m64 -fno-delayed-branch -ffixed-i0
+  ifneq ($(CONFIG_SOLARIS),yes)
+    BASE_LDFLAGS+=-Wl,-T,$(SRC_PATH)/$(ARCH).ld
+    OP_CFLAGS+=-ffixed-g1 -ffixed-g4 -ffixed-g5 -ffixed-g7
+  endif
 endif
 
 ifeq ($(ARCH),alpha)
@@ -164,12 +194,21 @@ BASE_LDFLAGS+=-Wl,-T,$(SRC_PATH)/$(ARCH).ld
 endif
 
 ifeq ($(ARCH),mips)
+OP_CFLAGS+=-mabi=32 -G0 -fno-PIC -mno-abicalls -fomit-frame-pointer -fno-delayed-branch -Wa,-O0
+ifeq ($(WORDS_BIGENDIAN),yes)
 BASE_LDFLAGS+=-Wl,-T,$(SRC_PATH)/$(ARCH).ld
+else
+BASE_LDFLAGS+=-Wl,-T,$(SRC_PATH)/$(ARCH)el.ld
+endif
 endif
 
-ifeq ($(HAVE_GCC3_OPTIONS),yes)
-# very important to generate a return at the end of every operation
-OP_CFLAGS+=-fno-reorder-blocks -fno-optimize-sibling-calls
+ifeq ($(ARCH),mips64)
+OP_CFLAGS+=-mabi=n32 -G0 -fno-PIC -mno-abicalls -fomit-frame-pointer -fno-delayed-branch -Wa,-O0
+ifeq ($(WORDS_BIGENDIAN),yes)
+BASE_LDFLAGS+=-Wl,-T,$(SRC_PATH)/$(ARCH).ld
+else
+BASE_LDFLAGS+=-Wl,-T,$(SRC_PATH)/$(ARCH)el.ld
+endif
 endif
 
 ifeq ($(CONFIG_DARWIN),yes)
@@ -181,7 +220,10 @@ ifdef CONFIG_DARWIN_USER
 BASE_LDFLAGS+=-Wl,-segaddr,__STD_PROG_ZONE,0x1000 -image_base 0x0e000000
 endif
 
-OP_CFLAGS+=$(OS_CFLAGS)
+BASE_CFLAGS+=$(OS_CFLAGS) $(ARCH_CFLAGS)
+BASE_LDFLAGS+=$(OS_LDFLAGS) $(ARCH_LDFLAGS)
+OP_CFLAGS+=$(OS_CFLAGS) $(ARCH_CFLAGS)
+OP_LDFLAGS+=$(OS_LDFLAGS) $(ARCH_LDFLAGS)
 
 #########################################################
 
@@ -195,6 +237,12 @@ LIBS+=-lwinmm -lws2_32 -liphlpapi
 endif
 ifdef CONFIG_SOLARIS
 LIBS+=-lsocket -lnsl -lresolv
+ifdef NEEDS_LIBSUNMATH
+LIBS+=-lsunmath
+LDFLAGS+=-L/opt/SUNWspro/prod/lib -R/opt/SUNWspro/prod/lib
+OP_CFLAGS+=-I/opt/SUNWspro/prod/include/cc
+BASE_CFLAGS+=-I/opt/SUNWspro/prod/include/cc
+endif
 endif
 
 # profiling code
@@ -206,6 +254,7 @@ endif
 ifdef CONFIG_LINUX_USER
 OBJS= main.o syscall.o mmap.o signal.o path.o osdep.o thunk.o \
       elfload.o linuxload.o
+LIBS+= $(AIOLIBS)
 ifdef TARGET_HAS_BFLT
 OBJS+= flatload.o
 endif
@@ -232,7 +281,7 @@ OBJS+= libqemu.a
 
 # cpu emulator library
 LIBOBJS=exec.o kqemu.o qemu-kvm.o translate-op.o translate-all.o cpu-exec.o\
-        translate.o op.o qemu-kvm-helper.o
+        translate.o op.o host-utils.o qemu-kvm-helper.o
 ifdef CONFIG_SOFTFLOAT
 LIBOBJS+=fpu/softfloat.o
 else
@@ -255,7 +304,7 @@ ifeq ($(TARGET_BASE_ARCH), ppc)
 LIBOBJS+= op_helper.o helper.o
 endif
 
-ifeq ($(TARGET_ARCH), mips)
+ifeq ($(TARGET_BASE_ARCH), mips)
 LIBOBJS+= op_helper.o helper.o
 endif
 
@@ -272,11 +321,15 @@ LIBOBJS+= op_helper.o helper.o
 endif
 
 ifeq ($(TARGET_BASE_ARCH), m68k)
-LIBOBJS+= helper.o
+LIBOBJS+= op_helper.o helper.o
+endif
+
+ifeq ($(TARGET_BASE_ARCH), alpha)
+LIBOBJS+= op_helper.o helper.o alpha_palcode.o
 endif
 
 # NOTE: the disassembler code is only needed for debugging
-LIBOBJS+=disas.o 
+LIBOBJS+=disas.o
 ifeq ($(findstring i386, $(TARGET_ARCH) $(ARCH)),i386)
 USE_I386_DIS=y
 endif
@@ -292,7 +345,7 @@ endif
 ifeq ($(findstring ppc, $(TARGET_BASE_ARCH) $(ARCH)),ppc)
 LIBOBJS+=ppc-dis.o
 endif
-ifeq ($(findstring mips, $(TARGET_ARCH) $(ARCH)),mips)
+ifeq ($(findstring mips, $(TARGET_BASE_ARCH) $(ARCH)),mips)
 LIBOBJS+=mips-dis.o
 endif
 ifeq ($(findstring sparc, $(TARGET_BASE_ARCH) $(ARCH)),sparc)
@@ -306,6 +359,9 @@ LIBOBJS+=m68k-dis.o
 endif
 ifeq ($(findstring sh4, $(TARGET_ARCH) $(ARCH)),sh4)
 LIBOBJS+=sh4-dis.o
+endif
+ifeq ($(findstring s390, $(TARGET_ARCH) $(ARCH)),s390)
+LIBOBJS+=s390-dis.o
 endif
 
 ifdef CONFIG_GDBSTUB
@@ -326,13 +382,14 @@ endif
 VL_OBJS=vl.o osdep.o readline.o monitor.o pci.o console.o loader.o isa_mmio.o
 VL_OBJS+=cutils.o migration.o
 VL_OBJS+=block.o block-raw.o
-VL_OBJS+=block-cow.o block-qcow.o aes.o block-vmdk.o block-cloop.o block-dmg.o block-bochs.o block-vpc.o block-vvfat.o block-qcow2.o
+VL_OBJS+=block-cow.o block-qcow.o aes.o block-vmdk.o block-cloop.o block-dmg.o block-bochs.o block-vpc.o block-vvfat.o block-qcow2.o block-parallels.o
+VL_OBJS+=irq.o
 ifdef CONFIG_WIN32
 VL_OBJS+=tap-win32.o
 endif
 
 SOUND_HW = sb16.o es1370.o
-AUDIODRV = audio.o noaudio.o wavaudio.o
+AUDIODRV = audio.o noaudio.o wavaudio.o mixeng.o
 ifdef CONFIG_SDL
 AUDIODRV += sdlaudio.o
 endif
@@ -365,14 +422,28 @@ LIBS += -lkvm
 DEPLIBS += ../user/libkvm.a
 endif
 
+ifdef CONFIG_VNC_TLS
+CPPFLAGS += $(CONFIG_VNC_TLS_CFLAGS)
+LIBS += $(CONFIG_VNC_TLS_LIBS)
+endif
+
+VL_OBJS += i2c.o smbus.o
+
 # SCSI layer
 VL_OBJS+= scsi-disk.o cdrom.o lsi53c895a.o
 
 # USB layer
 VL_OBJS+= usb.o usb-hub.o usb-linux.o usb-hid.o usb-ohci.o usb-msd.o
+VL_OBJS+= usb-wacom.o
+
+# EEPROM emulation
+VL_OBJS += eeprom93xx.o
 
 # PCI network cards
-VL_OBJS+= ne2000.o rtl8139.o pcnet.o
+VL_OBJS += eepro100.o
+VL_OBJS += ne2000.o
+VL_OBJS += pcnet.o
+VL_OBJS += rtl8139.o
 
 # PCI Hypercall
 VL_OBJS+= hypercall.o
@@ -381,51 +452,63 @@ ifeq ($(TARGET_BASE_ARCH), i386)
 # Hardware support
 VL_OBJS+= ide.o pckbd.o ps2.o vga.o $(SOUND_HW) dma.o $(AUDIODRV)
 VL_OBJS+= fdc.o mc146818rtc.o serial.o i8259.o i8254.o pcspk.o pc.o
-VL_OBJS+= cirrus_vga.o mixeng.o apic.o parallel.o acpi.o piix_pci.o
-VL_OBJS+= usb-uhci.o smbus_eeprom.o
-CPPFLAGS += -DHAS_AUDIO
+VL_OBJS+= cirrus_vga.o apic.o parallel.o acpi.o piix_pci.o
+VL_OBJS+= usb-uhci.o smbus_eeprom.o vmmouse.o vmport.o vmware_vga.o
+CPPFLAGS += -DHAS_AUDIO -DHAS_AUDIO_CHOICE
 endif
 ifeq ($(TARGET_BASE_ARCH), ppc)
 VL_OBJS+= ppc.o ide.o pckbd.o ps2.o vga.o $(SOUND_HW) dma.o $(AUDIODRV)
-VL_OBJS+= mc146818rtc.o serial.o i8259.o i8254.o fdc.o m48t59.o
-VL_OBJS+= ppc_prep.o ppc_chrp.o cuda.o adb.o openpic.o heathrow_pic.o mixeng.o
-VL_OBJS+= grackle_pci.o prep_pci.o unin_pci.o
-CPPFLAGS += -DHAS_AUDIO
+VL_OBJS+= mc146818rtc.o serial.o i8259.o i8254.o fdc.o m48t59.o pflash_cfi02.o
+VL_OBJS+= ppc_prep.o ppc_chrp.o cuda.o adb.o openpic.o heathrow_pic.o
+VL_OBJS+= grackle_pci.o prep_pci.o unin_pci.o ppc405_uc.o ppc405_boards.o
+CPPFLAGS += -DHAS_AUDIO -DHAS_AUDIO_CHOICE
 endif
-ifeq ($(TARGET_ARCH), mips)
-VL_OBJS+= mips_r4k.o mips_malta.o mips_timer.o mips_int.o dma.o vga.o serial.o i8254.o i8259.o
-VL_OBJS+= ide.o gt64xxx.o pckbd.o ps2.o fdc.o mc146818rtc.o usb-uhci.o acpi.o
-VL_OBJS+= piix_pci.o parallel.o mixeng.o cirrus_vga.o $(SOUND_HW) $(AUDIODRV)
-DEFINES += -DHAS_AUDIO
+ifeq ($(TARGET_BASE_ARCH), mips)
+VL_OBJS+= mips_r4k.o mips_malta.o mips_pica61.o
+VL_OBJS+= mips_timer.o mips_int.o dma.o vga.o serial.o i8254.o i8259.o
+VL_OBJS+= jazz_led.o
+VL_OBJS+= ide.o gt64xxx.o pckbd.o ps2.o fdc.o mc146818rtc.o usb-uhci.o acpi.o ds1225y.o
+VL_OBJS+= piix_pci.o smbus_eeprom.o parallel.o mixeng.o cirrus_vga.o $(SOUND_HW) $(AUDIODRV)
+CPPFLAGS += -DHAS_AUDIO
 endif
 ifeq ($(TARGET_BASE_ARCH), sparc)
 ifeq ($(TARGET_ARCH), sparc64)
 VL_OBJS+= sun4u.o ide.o pckbd.o ps2.o vga.o apb_pci.o
 VL_OBJS+= fdc.o mc146818rtc.o serial.o m48t59.o
-VL_OBJS+= cirrus_vga.o parallel.o
+VL_OBJS+= cirrus_vga.o parallel.o ptimer.o
 else
 VL_OBJS+= sun4m.o tcx.o pcnet.o iommu.o m48t59.o slavio_intctl.o
 VL_OBJS+= slavio_timer.o slavio_serial.o slavio_misc.o fdc.o esp.o sparc32_dma.o
-VL_OBJS+= cs4231.o
+VL_OBJS+= cs4231.o ptimer.o
 endif
 endif
 ifeq ($(TARGET_BASE_ARCH), arm)
 VL_OBJS+= integratorcp.o versatilepb.o ps2.o smc91c111.o arm_pic.o arm_timer.o
-VL_OBJS+= arm_boot.o pl011.o pl050.o pl080.o pl110.o pl190.o
-VL_OBJS+= versatile_pci.o
+VL_OBJS+= arm_boot.o pl011.o pl031.o pl050.o pl080.o pl110.o pl181.o pl190.o
+VL_OBJS+= versatile_pci.o sd.o ptimer.o
 VL_OBJS+= arm_gic.o realview.o arm_sysctl.o
 VL_OBJS+= arm-semi.o
+VL_OBJS+= pxa2xx.o pxa2xx_pic.o pxa2xx_gpio.o pxa2xx_timer.o pxa2xx_dma.o
+VL_OBJS+= pxa2xx_lcd.o pxa2xx_mmci.o pxa2xx_pcmcia.o max111x.o max7310.o
+VL_OBJS+= spitz.o ads7846.o ide.o serial.o nand.o $(AUDIODRV) wm8750.o
+VL_OBJS+= omap.o omap_lcdc.o omap1_clk.o omap_mmc.o palm.o ecc.o
+CPPFLAGS += -DHAS_AUDIO
 endif
 ifeq ($(TARGET_BASE_ARCH), sh4)
-VL_OBJS+= shix.o sh7750.o sh7750_regnames.o tc58128.o
+VL_OBJS+= shix.o r2d.o sh7750.o sh7750_regnames.o tc58128.o
+VL_OBJS+= sh_timer.o ptimer.o sh_serial.o
+endif
+ifeq ($(TARGET_BASE_ARCH), m68k)
+VL_OBJS+= an5206.o mcf5206.o ptimer.o mcf_uart.o mcf_intc.o mcf5208.o mcf_fec.o
+VL_OBJS+= m68k-semi.o
 endif
 ifdef CONFIG_GDBSTUB
-VL_OBJS+=gdbstub.o 
+VL_OBJS+=gdbstub.o
 endif
 ifdef CONFIG_SDL
 VL_OBJS+=sdl.o x_keymap.o
 endif
-VL_OBJS+=vnc.o
+VL_OBJS+=vnc.o d3des.o
 ifdef CONFIG_COCOA
 VL_OBJS+=cocoa.o
 COCOA_LIBS=-F/System/Library/Frameworks -framework Cocoa -framework IOKit
@@ -441,18 +524,19 @@ tcp_subr.o tcp_timer.o udp.o bootp.o debug.o tftp.o
 VL_OBJS+=$(addprefix slirp/, $(SLIRP_OBJS))
 endif
 
-VL_LDFLAGS=$(LDFLAGS_BASE)
+VL_LDFLAGS=$(VL_OS_LDFLAGS)
+VL_LIBS=$(AIOLIBS)
 # specific flags are needed for non soft mmu emulator
 ifdef CONFIG_STATIC
 VL_LDFLAGS+=-static
 endif
 ifndef CONFIG_SOFTMMU
-VL_LDFLAGS+=-Wl,-T,$(SRC_PATH)/i386-vl.ld 
+VL_LDFLAGS+=-Wl,-T,$(SRC_PATH)/i386-vl.ld
 endif
 ifndef CONFIG_DARWIN
 ifndef CONFIG_WIN32
 ifndef CONFIG_SOLARIS
-VL_LIBS=-lutil -lrt
+VL_LIBS+=-lutil
 endif
 endif
 endif
@@ -466,8 +550,10 @@ VL_LDFLAGS+=-Wl,-G0 -Wl,-T,$(SRC_PATH)/ia64.ld
 endif
 
 ifeq ($(ARCH),sparc64)
-VL_LDFLAGS+=-m64
-VL_LDFLAGS+=-Wl,-T,$(SRC_PATH)/sparc64.ld
+  VL_LDFLAGS+=-m64
+  ifneq ($(CONFIG_SOLARIS),yes)
+    VL_LDFLAGS+=-Wl,-T,$(SRC_PATH)/$(ARCH).ld
+  endif
 endif
 
 ifdef CONFIG_WIN32
@@ -475,7 +561,7 @@ SDL_LIBS := $(filter-out -mwindows, $(SDL_LIBS)) -mconsole
 endif
 
 $(QEMU_SYSTEM): $(VL_OBJS) libqemu.a $(DEPLIBS)
-	$(CC) $(VL_LDFLAGS) -o $@ $^ $(LIBS) $(SDL_LIBS) $(COCOA_LIBS) $(VL_LIBS)
+	$(CC) $(VL_LDFLAGS) $(LDFLAGS) -o $@ $^ $(LIBS) $(SDL_LIBS) $(COCOA_LIBS) $(VL_LIBS)
 
 cocoa.o: cocoa.m
 	$(CC) $(CFLAGS) $(CPPFLAGS) $(BASE_CFLAGS) -c -o $@ $<
@@ -483,7 +569,7 @@ cocoa.o: cocoa.m
 sdl.o: sdl.c keymaps.c sdl_keysym.h
 	$(CC) $(CFLAGS) $(CPPFLAGS) $(SDL_CFLAGS) $(BASE_CFLAGS) -c -o $@ $<
 
-vnc.o: vnc.c keymaps.c sdl_keysym.h vnchextile.h
+vnc.o: vnc.c keymaps.c sdl_keysym.h vnchextile.h d3des.c d3des.h
 	$(CC) $(CFLAGS) $(CPPFLAGS) $(BASE_CFLAGS) -c -o $@ $<
 
 sdlaudio.o: sdlaudio.c
@@ -495,7 +581,7 @@ depend: $(SRCS)
 vldepend: $(VL_OBJS:.o=.c)
 	$(CC) -MM $(CFLAGS) $(CPPFLAGS) $(BASE_CFLAGS) $^ 1>.depend
 
-# libqemu 
+# libqemu
 
 libqemu.a: $(LIBOBJS)
 	rm -f $@
@@ -543,6 +629,10 @@ qemu-kvm-helper.o: qemu-kvm-helper.c
 signal.o: signal.c
 	$(CC) $(HELPER_CFLAGS) $(CPPFLAGS) $(BASE_CFLAGS) -c -o $@ $<
 
+vga.o: pixel_ops.h
+
+tcx.o: pixel_ops.h
+
 ifeq ($(TARGET_BASE_ARCH), i386)
 op.o: op.c opreg_template.h ops_template.h ops_template_mem.h ops_mem.h ops_sse.h
 endif
@@ -553,19 +643,23 @@ pl110.o: pl110_template.h
 endif
 
 ifeq ($(TARGET_BASE_ARCH), sparc)
-op.o: op.c op_template.h op_mem.h fop_template.h fbranch_template.h
-magic_load.o: elf_op.h
+helper.o: cpu.h exec-all.h
+op.o: op.c op_template.h op_mem.h fop_template.h fbranch_template.h exec.h cpu.h
+op_helper.o: exec.h softmmu_template.h cpu.h
+translate.o: cpu.h exec-all.h disas.h
 endif
 
 ifeq ($(TARGET_BASE_ARCH), ppc)
-op.o: op.c op_template.h op_mem.h
-op_helper.o: op_helper_mem.h
+op.o: op.c op_template.h op_mem.h op_helper.h
+op_helper.o: op_helper.c mfrom_table.c op_helper_mem.h op_helper.h
 translate.o: translate.c translate_init.c
 endif
 
-ifeq ($(TARGET_ARCH), mips)
-op.o: op.c op_template.c fop_template.c op_mem.c
-op_helper.o: op_helper_mem.c
+ifeq ($(TARGET_BASE_ARCH), mips)
+helper.o: cpu.h exec-all.h
+op.o: op_template.c fop_template.c op_mem.c exec.h cpu.h
+op_helper.o: op_helper_mem.c exec.h softmmu_template.h cpu.h
+translate.o: translate_init.c exec-all.h disas.h
 endif
 
 loader.o: loader.c elf_ops.h
@@ -580,6 +674,11 @@ sh7750_regnames.o: sh7750_regnames.c sh7750_regnames.h sh7750_regs.h
 tc58128.o: tc58128.c
 endif
 
+ifeq ($(TARGET_BASE_ARCH), alpha)
+op.o: op.c op_template.h op_mem.h
+op_helper.o: op_helper_mem.h
+endif
+
 $(OBJS) $(LIBOBJS) $(VL_OBJS): config.h ../config-host.h
 
 %.o: %.c
@@ -591,7 +690,7 @@ $(OBJS) $(LIBOBJS) $(VL_OBJS): config.h ../config-host.h
 clean:
 	rm -f *.o  *.a *~ $(PROGS) gen-op.h opc.h op.h nwfpe/*.o slirp/*.o fpu/*.o
 
-install: all 
+install: all
 ifneq ($(PROGS),)
 	$(INSTALL) -m 755 $(PROGS) "$(DESTDIR)$(bindir)"
 endif

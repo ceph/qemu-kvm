@@ -1,6 +1,6 @@
 /*
  * gdb server stub
- * 
+ *
  * Copyright (c) 2003-2005 Fabrice Bellard
  *
  * This library is free software; you can redistribute it and/or
@@ -387,7 +387,7 @@ static int cpu_gdb_read_registers(CPUState *env, uint8_t *mem_buf)
     registers[41] = 0; /* foseg */
     registers[42] = 0; /* fooff */
     registers[43] = 0; /* fop */
-    
+
     for(i = 0; i < 16; i++)
         tswapls(&registers[i]);
     for(i = 36; i < 44; i++)
@@ -442,7 +442,7 @@ static int cpu_gdb_read_registers(CPUState *env, uint8_t *mem_buf)
     registers[98] = tswapl(tmp);
     registers[99] = tswapl(env->lr);
     registers[100] = tswapl(env->ctr);
-    registers[101] = tswapl(do_load_xer(env));
+    registers[101] = tswapl(ppc_load_xer(env));
     registers[102] = 0;
 
     return 103 * 4;
@@ -470,7 +470,7 @@ static void cpu_gdb_write_registers(CPUState *env, uint8_t *mem_buf, int size)
         env->crf[i] = (registers[98] >> (32 - ((i + 1) * 4))) & 0xF;
     env->lr = tswapl(registers[99]);
     env->ctr = tswapl(registers[100]);
-    do_store_xer(env, tswapl(registers[101]));
+    ppc_store_xer(env, tswapl(registers[101]));
 }
 #elif defined (TARGET_SPARC)
 static int cpu_gdb_read_registers(CPUState *env, uint8_t *mem_buf)
@@ -512,13 +512,16 @@ static int cpu_gdb_read_registers(CPUState *env, uint8_t *mem_buf)
     for (i = 0; i < 64; i += 2) {
 	uint64_t tmp;
 
-        tmp = (uint64_t)tswap32(*((uint32_t *)&env->fpr[i])) << 32;
-        tmp |= tswap32(*((uint32_t *)&env->fpr[i + 1]));
-        registers[i/2 + 32] = tmp;
+        tmp = ((uint64_t)*(uint32_t *)&env->fpr[i]) << 32;
+        tmp |= *(uint32_t *)&env->fpr[i + 1];
+        registers[i / 2 + 32] = tswap64(tmp);
     }
     registers[64] = tswapl(env->pc);
     registers[65] = tswapl(env->npc);
-    registers[66] = tswapl(env->tstate[env->tl]);
+    registers[66] = tswapl(((uint64_t)GET_CCR(env) << 32) |
+                           ((env->asi & 0xff) << 24) |
+                           ((env->pstate & 0xfff) << 8) |
+                           GET_CWP64(env));
     registers[67] = tswapl(env->fsr);
     registers[68] = tswapl(env->fprs);
     registers[69] = tswapl(env->y);
@@ -554,12 +557,22 @@ static void cpu_gdb_write_registers(CPUState *env, uint8_t *mem_buf, int size)
     env->fsr = tswapl(registers[70]);
 #else
     for (i = 0; i < 64; i += 2) {
-	*((uint32_t *)&env->fpr[i]) = tswap32(registers[i/2 + 32] >> 32);
-	*((uint32_t *)&env->fpr[i + 1]) = tswap32(registers[i/2 + 32] & 0xffffffff);
+        uint64_t tmp;
+
+        tmp = tswap64(registers[i / 2 + 32]);
+	*((uint32_t *)&env->fpr[i]) = tmp >> 32;
+	*((uint32_t *)&env->fpr[i + 1]) = tmp & 0xffffffff;
     }
     env->pc = tswapl(registers[64]);
     env->npc = tswapl(registers[65]);
-    env->tstate[env->tl] = tswapl(registers[66]);
+    {
+        uint64_t tmp = tswapl(registers[66]);
+
+        PUT_CCR(env, tmp >> 32);
+        env->asi = (tmp >> 24) & 0xff;
+        env->pstate = (tmp >> 8) & 0xfff;
+        PUT_CWP64(env, tmp & 0xff);
+    }
     env->fsr = tswapl(registers[67]);
     env->fprs = tswapl(registers[68]);
     env->y = tswapl(registers[69]);
@@ -665,7 +678,7 @@ static void cpu_gdb_write_registers(CPUState *env, uint8_t *mem_buf, int size)
     /* F0-F7.  The 68881/68040 have 12-bit extended precision registers.
        ColdFire has 8-bit double precision registers.  */
     for (i = 0; i < 8; i++) {
-        u.l.upper = tswap32(*(uint32_t *)ptr); 
+        u.l.upper = tswap32(*(uint32_t *)ptr);
         u.l.lower = tswap32(*(uint32_t *)ptr);
         env->fregs[i] = u.d;
     }
@@ -681,41 +694,42 @@ static int cpu_gdb_read_registers(CPUState *env, uint8_t *mem_buf)
     ptr = mem_buf;
     for (i = 0; i < 32; i++)
       {
-        *(uint32_t *)ptr = tswapl(env->gpr[i]);
-        ptr += 4;
+        *(target_ulong *)ptr = tswapl(env->gpr[i][env->current_tc]);
+        ptr += sizeof(target_ulong);
       }
 
-    *(uint32_t *)ptr = tswapl(env->CP0_Status);
-    ptr += 4;
+    *(target_ulong *)ptr = tswapl(env->CP0_Status);
+    ptr += sizeof(target_ulong);
 
-    *(uint32_t *)ptr = tswapl(env->LO);
-    ptr += 4;
+    *(target_ulong *)ptr = tswapl(env->LO[0][env->current_tc]);
+    ptr += sizeof(target_ulong);
 
-    *(uint32_t *)ptr = tswapl(env->HI);
-    ptr += 4;
+    *(target_ulong *)ptr = tswapl(env->HI[0][env->current_tc]);
+    ptr += sizeof(target_ulong);
 
-    *(uint32_t *)ptr = tswapl(env->CP0_BadVAddr);
-    ptr += 4;
+    *(target_ulong *)ptr = tswapl(env->CP0_BadVAddr);
+    ptr += sizeof(target_ulong);
 
-    *(uint32_t *)ptr = tswapl(env->CP0_Cause);
-    ptr += 4;
+    *(target_ulong *)ptr = tswapl(env->CP0_Cause);
+    ptr += sizeof(target_ulong);
 
-    *(uint32_t *)ptr = tswapl(env->PC);
-    ptr += 4;
+    *(target_ulong *)ptr = tswapl(env->PC[env->current_tc]);
+    ptr += sizeof(target_ulong);
 
-#ifdef MIPS_USES_FPU
-    for (i = 0; i < 32; i++)
+    if (env->CP0_Config1 & (1 << CP0C1_FP))
       {
-        *(uint32_t *)ptr = tswapl(FPR_W (env, i));
-        ptr += 4;
+        for (i = 0; i < 32; i++)
+          {
+            *(target_ulong *)ptr = tswapl(env->fpu->fpr[i].fs[FP_ENDIAN_IDX]);
+            ptr += sizeof(target_ulong);
+          }
+
+        *(target_ulong *)ptr = tswapl(env->fpu->fcr31);
+        ptr += sizeof(target_ulong);
+
+        *(target_ulong *)ptr = tswapl(env->fpu->fcr0);
+        ptr += sizeof(target_ulong);
       }
-
-    *(uint32_t *)ptr = tswapl(env->fcr31);
-    ptr += 4;
-
-    *(uint32_t *)ptr = tswapl(env->fcr0);
-    ptr += 4;
-#endif
 
     /* 32 FP registers, fsr, fir, fp.  Not yet implemented.  */
     /* what's 'fp' mean here?  */
@@ -732,7 +746,7 @@ static unsigned int ieee_rm[] =
     float_round_down
   };
 #define RESTORE_ROUNDING_MODE \
-    set_float_rounding_mode(ieee_rm[env->fcr31 & 3], &env->fp_status)
+    set_float_rounding_mode(ieee_rm[env->fpu->fcr31 & 3], &env->fpu->fp_status)
 
 static void cpu_gdb_write_registers(CPUState *env, uint8_t *mem_buf, int size)
 {
@@ -742,51 +756,55 @@ static void cpu_gdb_write_registers(CPUState *env, uint8_t *mem_buf, int size)
     ptr = mem_buf;
     for (i = 0; i < 32; i++)
       {
-        env->gpr[i] = tswapl(*(uint32_t *)ptr);
-        ptr += 4;
+        env->gpr[i][env->current_tc] = tswapl(*(target_ulong *)ptr);
+        ptr += sizeof(target_ulong);
       }
 
-    env->CP0_Status = tswapl(*(uint32_t *)ptr);
-    ptr += 4;
+    env->CP0_Status = tswapl(*(target_ulong *)ptr);
+    ptr += sizeof(target_ulong);
 
-    env->LO = tswapl(*(uint32_t *)ptr);
-    ptr += 4;
+    env->LO[0][env->current_tc] = tswapl(*(target_ulong *)ptr);
+    ptr += sizeof(target_ulong);
 
-    env->HI = tswapl(*(uint32_t *)ptr);
-    ptr += 4;
+    env->HI[0][env->current_tc] = tswapl(*(target_ulong *)ptr);
+    ptr += sizeof(target_ulong);
 
-    env->CP0_BadVAddr = tswapl(*(uint32_t *)ptr);
-    ptr += 4;
+    env->CP0_BadVAddr = tswapl(*(target_ulong *)ptr);
+    ptr += sizeof(target_ulong);
 
-    env->CP0_Cause = tswapl(*(uint32_t *)ptr);
-    ptr += 4;
+    env->CP0_Cause = tswapl(*(target_ulong *)ptr);
+    ptr += sizeof(target_ulong);
 
-    env->PC = tswapl(*(uint32_t *)ptr);
-    ptr += 4;
+    env->PC[env->current_tc] = tswapl(*(target_ulong *)ptr);
+    ptr += sizeof(target_ulong);
 
-#ifdef MIPS_USES_FPU
-    for (i = 0; i < 32; i++)
+    if (env->CP0_Config1 & (1 << CP0C1_FP))
       {
-	FPR_W (env, i) = tswapl(*(uint32_t *)ptr);
-        ptr += 4;
-      }
+        for (i = 0; i < 32; i++)
+          {
+            env->fpu->fpr[i].fs[FP_ENDIAN_IDX] = tswapl(*(target_ulong *)ptr);
+            ptr += sizeof(target_ulong);
+          }
 
-    env->fcr31 = tswapl(*(uint32_t *)ptr) & 0x0183FFFF;
-    ptr += 4;
+        env->fpu->fcr31 = tswapl(*(target_ulong *)ptr) & 0x0183FFFF;
+        ptr += sizeof(target_ulong);
 
-    env->fcr0 = tswapl(*(uint32_t *)ptr);
-    ptr += 4;
+        env->fpu->fcr0 = tswapl(*(target_ulong *)ptr);
+        ptr += sizeof(target_ulong);
 
-    /* set rounding mode */
-    RESTORE_ROUNDING_MODE;
+        /* set rounding mode */
+        RESTORE_ROUNDING_MODE;
 
 #ifndef CONFIG_SOFTFLOAT
-    /* no floating point exception for native float */
-    SET_FP_ENABLE(env->fcr31, 0);
+        /* no floating point exception for native float */
+        SET_FP_ENABLE(env->fcr31, 0);
 #endif
-#endif
+      }
 }
 #elif defined (TARGET_SH4)
+
+/* Hint: Use "set architecture sh4" in GDB to see fpu registers */
+
 static int cpu_gdb_read_registers(CPUState *env, uint8_t *mem_buf)
 {
   uint32_t *ptr = (uint32_t *)mem_buf;
@@ -806,12 +824,14 @@ static int cpu_gdb_read_registers(CPUState *env, uint8_t *mem_buf)
   SAVE (env->mach);
   SAVE (env->macl);
   SAVE (env->sr);
-  SAVE (0); /* TICKS */
-  SAVE (0); /* STALLS */
-  SAVE (0); /* CYCLES */
-  SAVE (0); /* INSTS */
-  SAVE (0); /* PLR */
-
+  SAVE (env->fpul);
+  SAVE (env->fpscr);
+  for (i = 0; i < 16; i++)
+      SAVE(env->fregs[i + ((env->fpscr & FPSCR_FR) ? 16 : 0)]);
+  SAVE (env->ssr);
+  SAVE (env->spc);
+  for (i = 0; i < 8; i++) SAVE(env->gregs[i]);
+  for (i = 0; i < 8; i++) SAVE(env->gregs[i + 16]);
   return ((uint8_t *)ptr - mem_buf);
 }
 
@@ -834,6 +854,14 @@ static void cpu_gdb_write_registers(CPUState *env, uint8_t *mem_buf, int size)
   LOAD (env->mach);
   LOAD (env->macl);
   LOAD (env->sr);
+  LOAD (env->fpul);
+  LOAD (env->fpscr);
+  for (i = 0; i < 16; i++)
+      LOAD(env->fregs[i + ((env->fpscr & FPSCR_FR) ? 16 : 0)]);
+  LOAD (env->ssr);
+  LOAD (env->spc);
+  for (i = 0; i < 8; i++) LOAD(env->gregs[i]);
+  for (i = 0; i < 8; i++) LOAD(env->gregs[i + 16]);
 }
 #else
 static int cpu_gdb_read_registers(CPUState *env, uint8_t *mem_buf)
@@ -855,7 +883,7 @@ static int gdb_handle_packet(GDBState *s, CPUState *env, const char *line_buf)
     uint8_t mem_buf[2000];
     uint32_t *registers;
     target_ulong addr, len;
-    
+
 #ifdef DEBUG_GDB
     printf("command='%s'\n", line_buf);
 #endif
@@ -883,7 +911,9 @@ static int gdb_handle_packet(GDBState *s, CPUState *env, const char *line_buf)
 #elif defined (TARGET_ARM)
             env->regs[15] = addr;
 #elif defined (TARGET_SH4)
-	    env->pc = addr;
+            env->pc = addr;
+#elif defined (TARGET_MIPS)
+            env->PC[env->current_tc] = addr;
 #endif
         }
 #ifdef CONFIG_USER_ONLY
@@ -894,7 +924,7 @@ static int gdb_handle_packet(GDBState *s, CPUState *env, const char *line_buf)
 	return RS_IDLE;
     case 's':
         if (*p != '\0') {
-            addr = strtoul(p, (char **)&p, 16);
+            addr = strtoull(p, (char **)&p, 16);
 #if defined(TARGET_I386)
             env->eip = addr;
 #ifdef USE_KVM
@@ -908,7 +938,9 @@ static int gdb_handle_packet(GDBState *s, CPUState *env, const char *line_buf)
 #elif defined (TARGET_ARM)
             env->regs[15] = addr;
 #elif defined (TARGET_SH4)
-	    env->pc = addr;
+            env->pc = addr;
+#elif defined (TARGET_MIPS)
+            env->PC[env->current_tc] = addr;
 #endif
         }
         cpu_single_step(env, 1);
@@ -1001,6 +1033,12 @@ static int gdb_handle_packet(GDBState *s, CPUState *env, const char *line_buf)
             if (cpu_breakpoint_insert(env, addr) < 0)
                 goto breakpoint_error;
             put_packet(s, "OK");
+#ifndef CONFIG_USER_ONLY
+        } else if (type == 2) {
+            if (cpu_watchpoint_insert(env, addr) < 0)
+                goto breakpoint_error;
+            put_packet(s, "OK");
+#endif
         } else {
         breakpoint_error:
             put_packet(s, "E22");
@@ -1017,6 +1055,11 @@ static int gdb_handle_packet(GDBState *s, CPUState *env, const char *line_buf)
         if (type == 0 || type == 1) {
             cpu_breakpoint_remove(env, addr);
             put_packet(s, "OK");
+#ifndef CONFIG_USER_ONLY
+        } else if (type == 2) {
+            cpu_watchpoint_remove(env, addr);
+            put_packet(s, "OK");
+#endif
         } else {
             goto breakpoint_error;
         }
@@ -1026,8 +1069,11 @@ static int gdb_handle_packet(GDBState *s, CPUState *env, const char *line_buf)
         if (strncmp(p, "Offsets", 7) == 0) {
             TaskState *ts = env->opaque;
 
-            sprintf(buf, "Text=%x;Data=%x;Bss=%x", ts->info->code_offset,
-                ts->info->data_offset, ts->info->data_offset);
+            sprintf(buf,
+                    "Text=" TARGET_FMT_lx ";Data=" TARGET_FMT_lx ";Bss=" TARGET_FMT_lx,
+                    ts->info->code_offset,
+                    ts->info->data_offset,
+                    ts->info->data_offset);
             put_packet(s, buf);
             break;
         }
@@ -1059,6 +1105,14 @@ static void gdb_vm_stopped(void *opaque, int reason)
     cpu_single_step(s->env, 0);
 
     if (reason == EXCP_DEBUG) {
+        if (s->env->watchpoint_hit) {
+            snprintf(buf, sizeof(buf), "T%02xwatch:" TARGET_FMT_lx ";",
+                     SIGTRAP,
+                     s->env->watchpoint[s->env->watchpoint_hit - 1].vaddr);
+            put_packet(s, buf);
+            s->env->watchpoint_hit = 0;
+            return;
+        }
 	tb_flush(s->env);
         ret = SIGTRAP;
     } else if (reason == EXCP_INTERRUPT) {
@@ -1073,14 +1127,16 @@ static void gdb_vm_stopped(void *opaque, int reason)
 
 /* Send a gdb syscall request.
    This accepts limited printf-style format specifiers, specifically:
-    %x - target_ulong argument printed in hex.
-    %s - string pointer (target_ulong) and length (int) pair.  */
+    %x  - target_ulong argument printed in hex.
+    %lx - 64-bit argument printed in hex.
+    %s  - string pointer (target_ulong) and length (int) pair.  */
 void gdb_do_syscall(gdb_syscall_complete_cb cb, char *fmt, ...)
 {
     va_list va;
     char buf[256];
     char *p;
     target_ulong addr;
+    uint64_t i64;
     GDBState *s;
 
     s = gdb_syscall_state;
@@ -1103,11 +1159,18 @@ void gdb_do_syscall(gdb_syscall_complete_cb cb, char *fmt, ...)
                 addr = va_arg(va, target_ulong);
                 p += sprintf(p, TARGET_FMT_lx, addr);
                 break;
+            case 'l':
+                if (*(fmt++) != 'x')
+                    goto bad_format;
+                i64 = va_arg(va, uint64_t);
+                p += sprintf(p, "%" PRIx64, i64);
+                break;
             case 's':
                 addr = va_arg(va, target_ulong);
                 p += sprintf(p, TARGET_FMT_lx "/%x", addr, va_arg(va, int));
                 break;
             default:
+            bad_format:
                 fprintf(stderr, "gdbstub: Bad syscall format string '%s'\n",
                         fmt - 1);
                 break;
@@ -1116,6 +1179,7 @@ void gdb_do_syscall(gdb_syscall_complete_cb cb, char *fmt, ...)
             *(p++) = *(fmt++);
         }
     }
+    *p = 0;
     va_end(va);
     put_packet(s, buf);
 #ifdef CONFIG_USER_ONLY
@@ -1156,7 +1220,7 @@ static void gdb_read_byte(GDBState *s, int ch)
         /* when the CPU is running, we cannot do anything except stop
            it when receiving a char */
         vm_stop(EXCP_INTERRUPT);
-    } else 
+    } else
 #endif
     {
         switch(s->state) {
@@ -1284,7 +1348,7 @@ static void gdb_accept(void *opaque)
     /* set short latency */
     val = 1;
     setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *)&val, sizeof(val));
-    
+
     s = &gdbserver_state;
     memset (s, 0, sizeof (GDBState));
     s->env = first_cpu; /* XXX: allow to change CPU */
@@ -1336,12 +1400,12 @@ int gdbserver_start(int port)
     return 0;
 }
 #else
-static int gdb_chr_can_recieve(void *opaque)
+static int gdb_chr_can_receive(void *opaque)
 {
   return 1;
 }
 
-static void gdb_chr_recieve(void *opaque, const uint8_t *buf, int size)
+static void gdb_chr_receive(void *opaque, const uint8_t *buf, int size)
 {
     GDBState *s = opaque;
     int i;
@@ -1363,10 +1427,26 @@ static void gdb_chr_event(void *opaque, int event)
     }
 }
 
-int gdbserver_start(CharDriverState *chr)
+int gdbserver_start(const char *port)
 {
     GDBState *s;
+    char gdbstub_port_name[128];
+    int port_num;
+    char *p;
+    CharDriverState *chr;
 
+    if (!port || !*port)
+      return -1;
+
+    port_num = strtol(port, &p, 10);
+    if (*p == 0) {
+        /* A numeric value is interpreted as a port number.  */
+        snprintf(gdbstub_port_name, sizeof(gdbstub_port_name),
+                 "tcp::%d,nowait,nodelay,server", port_num);
+        port = gdbstub_port_name;
+    }
+
+    chr = qemu_chr_open(port);
     if (!chr)
         return -1;
 
@@ -1376,23 +1456,9 @@ int gdbserver_start(CharDriverState *chr)
     }
     s->env = first_cpu; /* XXX: allow to change CPU */
     s->chr = chr;
-    qemu_chr_add_handlers(chr, gdb_chr_can_recieve, gdb_chr_recieve,
+    qemu_chr_add_handlers(chr, gdb_chr_can_receive, gdb_chr_receive,
                           gdb_chr_event, s);
     qemu_add_vm_stop_handler(gdb_vm_stopped, s);
     return 0;
 }
-
-int gdbserver_start_port(int port)
-{
-    CharDriverState *chr;
-    char gdbstub_port_name[128];
-
-    snprintf(gdbstub_port_name, sizeof(gdbstub_port_name),
-             "tcp::%d,nowait,nodelay,server", port);
-    chr = qemu_chr_open(gdbstub_port_name);
-    if (!chr) 
-        return -EIO;
-    return gdbserver_start(chr);
-}
-
 #endif

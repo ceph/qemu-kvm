@@ -1,6 +1,6 @@
 /*
  *  SH4 emulation
- * 
+ *
  *  Copyright (c) 2005 Samuel Tardieu
  *
  * This library is free software; you can redistribute it and/or
@@ -509,6 +509,9 @@ void OPPROTO op_##store##_##target##_T0 (void) \
 void OPPROTO op_lds_T0_fpscr(void)
 {
     env->fpscr = T0 & 0x003fffff;
+    env->fp_status.float_rounding_mode = T0 & 0x01 ?
+      float_round_to_zero : float_round_nearest_even;
+
     RETURN();
 }
 
@@ -561,14 +564,14 @@ void OPPROTO op_shal_Rn(void)
 void OPPROTO op_shar_Rn(void)
 {
     cond_t(env->gregs[PARAM1] & 1);
-    *(int32_t *) & env->gregs[PARAM1] >>= 1;
+    env->gregs[PARAM1] >>= 1;
     RETURN();
 }
 
 void OPPROTO op_shlr_Rn(void)
 {
     cond_t(env->gregs[PARAM1] & 1);
-    *(uint32_t *) & env->gregs[PARAM1] >>= 1;
+    env->gregs[PARAM1] >>= 1;
     RETURN();
 }
 
@@ -592,19 +595,19 @@ void OPPROTO op_shll16_Rn(void)
 
 void OPPROTO op_shlr2_Rn(void)
 {
-    *(uint32_t *) & env->gregs[PARAM1] >>= 2;
+    env->gregs[PARAM1] >>= 2;
     RETURN();
 }
 
 void OPPROTO op_shlr8_Rn(void)
 {
-    *(uint32_t *) & env->gregs[PARAM1] >>= 8;
+    env->gregs[PARAM1] >>= 8;
     RETURN();
 }
 
 void OPPROTO op_shlr16_Rn(void)
 {
-    *(uint32_t *) & env->gregs[PARAM1] >>= 16;
+    env->gregs[PARAM1] >>= 16;
     RETURN();
 }
 
@@ -695,25 +698,127 @@ void OPPROTO op_movl_imm_rN(void)
 
 void OPPROTO op_fmov_frN_FT0(void)
 {
-    FT0 = *(float32 *)&env->fregs[PARAM1];
+    FT0 = env->fregs[PARAM1];
     RETURN();
 }
 
 void OPPROTO op_fmov_drN_DT0(void)
 {
-    DT0 = *(float64 *)&env->fregs[PARAM1];
+    CPU_DoubleU d;
+
+    d.l.upper = *(uint32_t *)&env->fregs[PARAM1];
+    d.l.lower = *(uint32_t *)&env->fregs[PARAM1 + 1];
+    DT0 = d.d;
+    RETURN();
+}
+
+void OPPROTO op_fmov_frN_FT1(void)
+{
+    FT1 = env->fregs[PARAM1];
+    RETURN();
+}
+
+void OPPROTO op_fmov_drN_DT1(void)
+{
+    CPU_DoubleU d;
+
+    d.l.upper = *(uint32_t *)&env->fregs[PARAM1];
+    d.l.lower = *(uint32_t *)&env->fregs[PARAM1 + 1];
+    DT1 = d.d;
     RETURN();
 }
 
 void OPPROTO op_fmov_FT0_frN(void)
 {
-    *(float32 *)&env->fregs[PARAM1] = FT0;
+    env->fregs[PARAM1] = FT0;
     RETURN();
 }
 
 void OPPROTO op_fmov_DT0_drN(void)
 {
-    *(float64 *)&env->fregs[PARAM1] = DT0;
+    CPU_DoubleU d;
+
+    d.d = DT0;
+    *(uint32_t *)&env->fregs[PARAM1] = d.l.upper;
+    *(uint32_t *)&env->fregs[PARAM1 + 1] = d.l.lower;
+    RETURN();
+}
+
+void OPPROTO op_fadd_FT(void)
+{
+    FT0 = float32_add(FT0, FT1, &env->fp_status);
+    RETURN();
+}
+
+void OPPROTO op_fadd_DT(void)
+{
+    DT0 = float64_add(DT0, DT1, &env->fp_status);
+    RETURN();
+}
+
+void OPPROTO op_fsub_FT(void)
+{
+    FT0 = float32_sub(FT0, FT1, &env->fp_status);
+    RETURN();
+}
+
+void OPPROTO op_fsub_DT(void)
+{
+    DT0 = float64_sub(DT0, DT1, &env->fp_status);
+    RETURN();
+}
+
+void OPPROTO op_fmul_FT(void)
+{
+    FT0 = float32_mul(FT0, FT1, &env->fp_status);
+    RETURN();
+}
+
+void OPPROTO op_fmul_DT(void)
+{
+    DT0 = float64_mul(DT0, DT1, &env->fp_status);
+    RETURN();
+}
+
+void OPPROTO op_fdiv_FT(void)
+{
+    FT0 = float32_div(FT0, FT1, &env->fp_status);
+    RETURN();
+}
+
+void OPPROTO op_fdiv_DT(void)
+{
+    DT0 = float64_div(DT0, DT1, &env->fp_status);
+    RETURN();
+}
+
+void OPPROTO op_float_FT(void)
+{
+    FT0 = int32_to_float32(env->fpul, &env->fp_status);
+    RETURN();
+}
+
+void OPPROTO op_float_DT(void)
+{
+    DT0 = int32_to_float64(env->fpul, &env->fp_status);
+    RETURN();
+}
+
+void OPPROTO op_ftrc_FT(void)
+{
+    env->fpul = float32_to_int32_round_to_zero(FT0, &env->fp_status);
+    RETURN();
+}
+
+void OPPROTO op_ftrc_DT(void)
+{
+    env->fpul = float64_to_int32_round_to_zero(DT0, &env->fp_status);
+    RETURN();
+}
+
+void OPPROTO op_fmov_T0_frN(void)
+{
+    *(unsigned int *)&env->fregs[PARAM1] = T0;
     RETURN();
 }
 
@@ -737,7 +842,7 @@ void OPPROTO op_dec4_rN(void)
 
 void OPPROTO op_dec8_rN(void)
 {
-    env->gregs[PARAM1] -= 4;
+    env->gregs[PARAM1] -= 8;
     RETURN();
 }
 
@@ -761,7 +866,7 @@ void OPPROTO op_inc4_rN(void)
 
 void OPPROTO op_inc8_rN(void)
 {
-    env->gregs[PARAM1] += 4;
+    env->gregs[PARAM1] += 8;
     RETURN();
 }
 

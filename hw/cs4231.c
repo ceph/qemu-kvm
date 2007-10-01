@@ -30,6 +30,7 @@
  * In addition to Crystal CS4231 there is a DMA controller on Sparc.
  */
 #define CS_MAXADDR 0x3f
+#define CS_SIZE (CS_MAXADDR + 1)
 #define CS_REGS 16
 #define CS_DREGS 32
 #define CS_MAXDREG (CS_DREGS - 1)
@@ -47,9 +48,6 @@ typedef struct CSState {
 #ifdef DEBUG_CS
 #define DPRINTF(fmt, args...)                           \
     do { printf("CS: " fmt , ##args); } while (0)
-#define pic_set_irq_new(intctl, irq, level)                             \
-    do { printf("CS: set_irq(%d): %d\n", (irq), (level));               \
-        pic_set_irq_new((intctl), (irq),(level));} while (0)
 #else
 #define DPRINTF(fmt, args...)
 #endif
@@ -176,7 +174,7 @@ void cs_init(target_phys_addr_t base, int irq, void *intctl)
         return;
 
     cs_io_memory = cpu_register_io_memory(0, cs_mem_read, cs_mem_write, s);
-    cpu_register_physical_memory(base, CS_MAXADDR, cs_io_memory);
+    cpu_register_physical_memory(base, CS_SIZE, cs_io_memory);
     register_savevm("cs4231", base, 1, cs_save, cs_load, s);
     qemu_register_reset(cs_reset, s);
     cs_reset(s);

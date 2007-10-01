@@ -1,4 +1,4 @@
-/* 
+/*
  * Arm PrimeCell PL110 Color LCD Controller
  *
  * Copyright (c) 2005-2006 CodeSourcery.
@@ -29,7 +29,6 @@ typedef struct {
     DisplayState *ds;
     /* The Versatile/PB uses a slightly modified PL110 controller.  */
     int versatile;
-    void *pic;
     uint32_t timing[4];
     uint32_t cr;
     uint32_t upbase;
@@ -42,7 +41,7 @@ typedef struct {
     int invalidate;
     uint32_t pallette[256];
     uint32_t raw_pallette[128];
-    int irq;
+    qemu_irq irq;
 } pl110_state;
 
 static const unsigned char pl110_id[] =
@@ -118,7 +117,7 @@ static void pl110_update_display(void *opaque)
 
     if (!pl110_enabled(s))
         return;
-    
+
     switch (s->ds->depth) {
     case 0:
         return;
@@ -152,7 +151,7 @@ static void pl110_update_display(void *opaque)
       fn = fntable[s->bpp + 12];
     else
       fn = fntable[s->bpp];
-    
+
     src_width = s->cols;
     switch (s->bpp) {
     case BPP_1:
@@ -303,8 +302,12 @@ static uint32_t pl110_read(void *opaque, target_phys_addr_t offset)
     case 5: /* LCDLPBASE */
         return s->lpbase;
     case 6: /* LCDIMSC */
+	if (s->versatile)
+	  return s->cr;
         return s->int_mask;
     case 7: /* LCDControl */
+	if (s->versatile)
+	  return s->int_mask;
         return s->cr;
     case 8: /* LCDRIS */
         return s->int_status;
@@ -399,7 +402,7 @@ static CPUWriteMemoryFunc *pl110_writefn[] = {
    pl110_write
 };
 
-void *pl110_init(DisplayState *ds, uint32_t base, void *pic, int irq,
+void *pl110_init(DisplayState *ds, uint32_t base, qemu_irq irq,
                  int versatile)
 {
     pl110_state *s;
@@ -408,11 +411,10 @@ void *pl110_init(DisplayState *ds, uint32_t base, void *pic, int irq,
     s = (pl110_state *)qemu_mallocz(sizeof(pl110_state));
     iomemtype = cpu_register_io_memory(0, pl110_readfn,
                                        pl110_writefn, s);
-    cpu_register_physical_memory(base, 0x00000fff, iomemtype);
+    cpu_register_physical_memory(base, 0x00001000, iomemtype);
     s->base = base;
     s->ds = ds;
     s->versatile = versatile;
-    s->pic = pic;
     s->irq = irq;
     graphic_console_init(ds, pl110_update_display, pl110_invalidate_display,
                          NULL, s);

@@ -1,8 +1,8 @@
 /*
  * SHIX 2.0 board description
- * 
+ *
  * Copyright (c) 2005 Samuel Tardieu
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
@@ -21,7 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-/* 
+/*
    Shix 2.0 board by Alexis Polti, described at
    http://perso.enst.fr/~polti/realisations/shix20/
 
@@ -38,11 +38,6 @@ void DMA_run(void)
 }
 
 void irq_info(void)
-{
-    /* XXXXX */
-}
-
-void pic_set_irq(int irq, int level)
 {
     /* XXXXX */
 }
@@ -70,7 +65,7 @@ void vga_screen_dump(const char *filename)
 void shix_init(int ram_size, int vga_ram_size, int boot_device,
 	       DisplayState * ds, const char **fd_filename, int snapshot,
 	       const char *kernel_filename, const char *kernel_cmdline,
-	       const char *initrd_filename)
+	       const char *initrd_filename, const char *cpu_model)
 {
     int ret;
     CPUState *env;

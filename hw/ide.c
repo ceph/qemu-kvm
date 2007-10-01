@@ -1,8 +1,9 @@
 /*
  * QEMU IDE disk and CD-ROM Emulator
- * 
+ *
  * Copyright (c) 2003 Fabrice Bellard
- * 
+ * Copyright (c) 2006 Openedhand Ltd.
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
@@ -131,6 +132,7 @@
 #define WIN_SPECIFY			0x91 /* set drive geometry translation */
 #define WIN_DOWNLOAD_MICROCODE		0x92
 #define WIN_STANDBYNOW2			0x94
+#define CFA_IDLEIMMEDIATE		0x95 /* force drive to become "ready" */
 #define WIN_STANDBY2			0x96
 #define WIN_SETIDLE2			0x97
 #define WIN_CHECKPOWERMODE2		0x98
@@ -142,7 +144,8 @@
 #define WIN_PIDENTIFY			0xA1 /* identify ATAPI device	*/
 #define WIN_QUEUED_SERVICE		0xA2
 #define WIN_SMART			0xB0 /* self-monitoring and reporting */
-#define CFA_ERASE_SECTORS       	0xC0
+#define CFA_ACCESS_METADATA_STORAGE	0xB8
+#define CFA_ERASE_SECTORS       	0xC0 /* microdrives implement as NOP */
 #define WIN_MULTREAD			0xC4 /* read sectors using multiple mode*/
 #define WIN_MULTWRITE			0xC5 /* write sectors using multiple mode */
 #define WIN_SETMULT			0xC6 /* enable/disable multiple mode */
@@ -153,7 +156,7 @@
 #define WIN_WRITEDMA_ONCE		0xCB /* 28-Bit - without retries */
 #define WIN_WRITEDMA_QUEUED		0xCC /* write sectors using Queued DMA transfers */
 #define CFA_WRITE_MULTI_WO_ERASE	0xCD /* CFA Write multiple without erase */
-#define WIN_GETMEDIASTATUS		0xDA	
+#define WIN_GETMEDIASTATUS		0xDA
 #define WIN_ACKMEDIACHANGE		0xDB /* ATA-1, ATA-2 vendor */
 #define WIN_POSTBOOT			0xDC
 #define WIN_PREBOOT			0xDD
@@ -176,11 +179,13 @@
 #define WIN_IDENTIFY_DMA		0xEE /* same as WIN_IDENTIFY, but DMA */
 #define WIN_SETFEATURES			0xEF /* set special drive features */
 #define EXABYTE_ENABLE_NEST		0xF0
+#define IBM_SENSE_CONDITION		0xF0 /* measure disk temperature */
 #define WIN_SECURITY_SET_PASS		0xF1
 #define WIN_SECURITY_UNLOCK		0xF2
 #define WIN_SECURITY_ERASE_PREPARE	0xF3
 #define WIN_SECURITY_ERASE_UNIT		0xF4
 #define WIN_SECURITY_FREEZE_LOCK	0xF5
+#define CFA_WEAR_LEVEL			0xF5 /* microdrives implement as NOP */
 #define WIN_SECURITY_DISABLE		0xF6
 #define WIN_READ_NATIVE_MAX		0xF8 /* return the native maximum address */
 #define WIN_SET_MAX			0xF9
@@ -243,12 +248,12 @@
 #define GPCMD_VERIFY_10			    0x2f
 #define GPCMD_WRITE_10			    0x2a
 #define GPCMD_WRITE_AND_VERIFY_10	    0x2e
-/* This is listed as optional in ATAPI 2.6, but is (curiously) 
+/* This is listed as optional in ATAPI 2.6, but is (curiously)
  * missing from Mt. Fuji, Table 57.  It _is_ mentioned in Mt. Fuji
  * Table 377 as an MMC command for SCSi devices though...  Most ATAPI
  * drives support it. */
 #define GPCMD_SET_SPEED			    0xbb
-/* This seems to be a SCSI specific CD-ROM opcode 
+/* This seems to be a SCSI specific CD-ROM opcode
  * to play data at track/index */
 #define GPCMD_PLAYAUDIO_TI		    0x48
 /*
@@ -256,6 +261,7 @@
  * older drives only.
  */
 #define GPCMD_GET_MEDIA_STATUS		    0xda
+#define GPCMD_MODE_SENSE_6		    0x1a
 
 /* Mode page codes for mode sense/set */
 #define GPMODE_R_W_ERROR_PAGE		0x01
@@ -282,6 +288,12 @@
 #define ASC_MEDIUM_NOT_PRESENT               0x3a
 #define ASC_SAVING_PARAMETERS_NOT_SUPPORTED  0x39
 
+#define CFA_NO_ERROR            0x00
+#define CFA_MISC_ERROR          0x09
+#define CFA_INVALID_COMMAND     0x20
+#define CFA_INVALID_ADDRESS     0x21
+#define CFA_ADDRESS_OVERFLOW    0x2f
+
 #define SENSE_NONE            0
 #define SENSE_NOT_READY       2
 #define SENSE_ILLEGAL_REQUEST 5
@@ -295,14 +307,13 @@ typedef void EndTransferFunc(struct IDEState *);
 typedef struct IDEState {
     /* ide config */
     int is_cdrom;
+    int is_cf;
     int cylinders, heads, sectors;
     int64_t nb_sectors;
     int mult_sectors;
     int identify_set;
     uint16_t identify_data[256];
-    SetIRQFunc *set_irq;
-    void *irq_opaque;
-    int irq;
+    qemu_irq irq;
     PCIDevice *pci_dev;
     struct BMDMAState *bmdma;
     int drive_serial;
@@ -328,7 +339,7 @@ typedef struct IDEState {
     /* set for lba48 access */
     uint8_t lba48;
     /* depends on bit 4 in select, only meaningful for drive 0 */
-    struct IDEState *cur_drive; 
+    struct IDEState *cur_drive;
     BlockDriverState *bs;
     /* ATAPI specific */
     uint8_t sense_key;
@@ -349,6 +360,12 @@ typedef struct IDEState {
     uint8_t io_buffer[MAX_MULT_SECTORS*512 + 4];
     QEMUTimer *sector_write_timer; /* only used for win2k instal hack */
     uint32_t irq_count; /* counts IRQs when using win2k install hack */
+    /* CF-ATA extended error */
+    uint8_t ext_error;
+    /* CF-ATA metadata storage */
+    uint32_t mdata_size;
+    uint8_t *mdata_storage;
+    int media_changed;
 } IDEState;
 
 #define BM_STATUS_DMAING 0x01
@@ -360,6 +377,7 @@ typedef struct IDEState {
 
 #define IDE_TYPE_PIIX3   0
 #define IDE_TYPE_CMD646  1
+#define IDE_TYPE_PIIX4   2
 
 /* CMD646 specific */
 #define MRDMODE		0x71
@@ -374,7 +392,7 @@ typedef struct BMDMAState {
     uint8_t cmd;
     uint8_t status;
     uint32_t addr;
-    
+
     struct PCIIDEState *pci_dev;
     /* current transfer state */
     uint32_t cur_addr;
@@ -439,11 +457,11 @@ static void ide_identify(IDEState *s)
     memset(s->io_buffer, 0, 512);
     p = (uint16_t *)s->io_buffer;
     put_le16(p + 0, 0x0040);
-    put_le16(p + 1, s->cylinders); 
+    put_le16(p + 1, s->cylinders);
     put_le16(p + 3, s->heads);
     put_le16(p + 4, 512 * s->sectors); /* XXX: retired, remove ? */
     put_le16(p + 5, 512); /* XXX: retired, remove ? */
-    put_le16(p + 6, s->sectors); 
+    put_le16(p + 6, s->sectors);
     snprintf(buf, sizeof(buf), "QM%05d", s->drive_serial);
     padstr((uint8_t *)(p + 10), buf, 20); /* serial number */
     put_le16(p + 20, 3); /* XXX: retired, remove ? */
@@ -451,7 +469,7 @@ static void ide_identify(IDEState *s)
     put_le16(p + 22, 4); /* ecc bytes */
     padstr((uint8_t *)(p + 23), QEMU_VERSION, 8); /* firmware version */
     padstr((uint8_t *)(p + 27), "QEMU HARDDISK", 40); /* model */
-#if MAX_MULT_SECTORS > 1    
+#if MAX_MULT_SECTORS > 1
     put_le16(p + 47, 0x8000 | MAX_MULT_SECTORS);
 #endif
     put_le16(p + 48, 1); /* dword I/O */
@@ -544,6 +562,74 @@ static void ide_atapi_identify(IDEState *s)
     s->identify_set = 1;
 }
 
+static void ide_cfata_identify(IDEState *s)
+{
+    uint16_t *p;
+    uint32_t cur_sec;
+    char buf[20];
+
+    p = (uint16_t *) s->identify_data;
+    if (s->identify_set)
+        goto fill_buffer;
+
+    memset(p, 0, sizeof(s->identify_data));
+
+    cur_sec = s->cylinders * s->heads * s->sectors;
+
+    put_le16(p + 0, 0x848a);			/* CF Storage Card signature */
+    put_le16(p + 1, s->cylinders);		/* Default cylinders */
+    put_le16(p + 3, s->heads);			/* Default heads */
+    put_le16(p + 6, s->sectors);		/* Default sectors per track */
+    put_le16(p + 7, s->nb_sectors >> 16);	/* Sectors per card */
+    put_le16(p + 8, s->nb_sectors);		/* Sectors per card */
+    snprintf(buf, sizeof(buf), "QM%05d", s->drive_serial);
+    padstr((uint8_t *)(p + 10), buf, 20);	/* Serial number in ASCII */
+    put_le16(p + 22, 0x0004);			/* ECC bytes */
+    padstr((uint8_t *) (p + 23), QEMU_VERSION, 8);	/* Firmware Revision */
+    padstr((uint8_t *) (p + 27), "QEMU MICRODRIVE", 40);/* Model number */
+#if MAX_MULT_SECTORS > 1
+    put_le16(p + 47, 0x8000 | MAX_MULT_SECTORS);
+#else
+    put_le16(p + 47, 0x0000);
+#endif
+    put_le16(p + 49, 0x0f00);			/* Capabilities */
+    put_le16(p + 51, 0x0002);			/* PIO cycle timing mode */
+    put_le16(p + 52, 0x0001);			/* DMA cycle timing mode */
+    put_le16(p + 53, 0x0003);			/* Translation params valid */
+    put_le16(p + 54, s->cylinders);		/* Current cylinders */
+    put_le16(p + 55, s->heads);			/* Current heads */
+    put_le16(p + 56, s->sectors);		/* Current sectors */
+    put_le16(p + 57, cur_sec);			/* Current capacity */
+    put_le16(p + 58, cur_sec >> 16);		/* Current capacity */
+    if (s->mult_sectors)			/* Multiple sector setting */
+        put_le16(p + 59, 0x100 | s->mult_sectors);
+    put_le16(p + 60, s->nb_sectors);		/* Total LBA sectors */
+    put_le16(p + 61, s->nb_sectors >> 16);	/* Total LBA sectors */
+    put_le16(p + 63, 0x0203);			/* Multiword DMA capability */
+    put_le16(p + 64, 0x0001);			/* Flow Control PIO support */
+    put_le16(p + 65, 0x0096);			/* Min. Multiword DMA cycle */
+    put_le16(p + 66, 0x0096);			/* Rec. Multiword DMA cycle */
+    put_le16(p + 68, 0x00b4);			/* Min. PIO cycle time */
+    put_le16(p + 82, 0x400c);			/* Command Set supported */
+    put_le16(p + 83, 0x7068);			/* Command Set supported */
+    put_le16(p + 84, 0x4000);			/* Features supported */
+    put_le16(p + 85, 0x000c);			/* Command Set enabled */
+    put_le16(p + 86, 0x7044);			/* Command Set enabled */
+    put_le16(p + 87, 0x4000);			/* Features enabled */
+    put_le16(p + 91, 0x4060);			/* Current APM level */
+    put_le16(p + 129, 0x0002);			/* Current features option */
+    put_le16(p + 130, 0x0005);			/* Reassigned sectors */
+    put_le16(p + 131, 0x0001);			/* Initial power mode */
+    put_le16(p + 132, 0x0000);			/* User signature */
+    put_le16(p + 160, 0x8100);			/* Power requirement */
+    put_le16(p + 161, 0x8001);			/* CF command set */
+
+    s->identify_set = 1;
+
+fill_buffer:
+    memcpy(s->io_buffer, p, sizeof(s->identify_data));
+}
+
 static void ide_set_signature(IDEState *s)
 {
     s->select &= 0xf0; /* clear head */
@@ -575,12 +661,12 @@ static inline void ide_set_irq(IDEState *s)
         if (bm) {
             bm->status |= BM_STATUS_INT;
         }
-        s->set_irq(s->irq_opaque, s->irq, 1);
+        qemu_irq_raise(s->irq);
     }
 }
 
 /* prepare data transfer and tell what to do after */
-static void ide_transfer_start(IDEState *s, uint8_t *buf, int size, 
+static void ide_transfer_start(IDEState *s, uint8_t *buf, int size,
                                EndTransferFunc *end_transfer_func)
 {
     s->end_transfer_func = end_transfer_func;
@@ -685,7 +771,7 @@ static int dma_buf_rw(BMDMAState *bm, int is_write)
 
     for(;;) {
         l = s->io_buffer_size - s->io_buffer_index;
-        if (l <= 0) 
+        if (l <= 0)
             break;
         if (bm->cur_prd_len == 0) {
             /* end of table (with a fail safe of one page) */
@@ -707,10 +793,10 @@ static int dma_buf_rw(BMDMAState *bm, int is_write)
             l = bm->cur_prd_len;
         if (l > 0) {
             if (is_write) {
-                cpu_physical_memory_write(bm->cur_prd_addr, 
+                cpu_physical_memory_write(bm->cur_prd_addr,
                                           s->io_buffer + s->io_buffer_index, l);
             } else {
-                cpu_physical_memory_read(bm->cur_prd_addr, 
+                cpu_physical_memory_read(bm->cur_prd_addr,
                                           s->io_buffer + s->io_buffer_index, l);
             }
             bm->cur_prd_addr += l;
@@ -761,7 +847,7 @@ static void ide_read_dma_cb(void *opaque, int ret)
 #ifdef DEBUG_AIO
     printf("aio_read: sector_num=%lld n=%d\n", sector_num, n);
 #endif
-    bm->aiocb = bdrv_aio_read(s->bs, sector_num, s->io_buffer, n, 
+    bm->aiocb = bdrv_aio_read(s->bs, sector_num, s->io_buffer, n,
                               ide_read_dma_cb, bm);
 }
 
@@ -779,10 +865,44 @@ static void ide_sector_write_timer_cb(void *opaque)
     ide_set_irq(s);
 }
 
+static void ide_sector_write_aio_cb(void *opaque, int ret)
+{
+    BMDMAState *bm = opaque;
+    IDEState *s = bm->ide_if;
+
+#ifdef TARGET_I386
+    if (win2k_install_hack && ((++s->irq_count % 16) == 0)) {
+	/* It seems there is a bug in the Windows 2000 installer HDD
+	   IDE driver which fills the disk with empty logs when the
+	   IDE write IRQ comes too early. This hack tries to correct
+	   that at the expense of slower write performances. Use this
+	   option _only_ to install Windows 2000. You must disable it
+	   for normal use. */
+	qemu_mod_timer(s->sector_write_timer,
+		       qemu_get_clock(vm_clock) + (ticks_per_sec / 1000));
+    } else
+#endif
+    {
+	ide_set_irq(s);
+    }
+    bm->aiocb = NULL;
+}
+
 static void ide_sector_write(IDEState *s)
 {
+    BMDMAState *bm;
     int64_t sector_num;
-    int ret, n, n1;
+    int n, n1;
+
+    s->io_buffer_index = 0;
+    s->io_buffer_size = 0;
+    bm = s->bmdma;
+    if(bm == NULL) {
+	bm = qemu_mallocz(sizeof(BMDMAState));
+	s->bmdma = bm;
+    }
+    bm->ide_if = s;
+    bm->dma_cb = ide_sector_write_aio_cb;
 
     s->status = READY_STAT | SEEK_STAT;
     sector_num = ide_get_sector(s);
@@ -792,10 +912,9 @@ static void ide_sector_write(IDEState *s)
     n = s->nsector;
     if (n > s->req_nb_sectors)
         n = s->req_nb_sectors;
-    ret = bdrv_write(s->bs, sector_num, s->io_buffer, n);
     s->nsector -= n;
     if (s->nsector == 0) {
-        /* no more sector to write */
+        /* no more sectors to write */
         ide_transfer_stop(s);
     } else {
         n1 = s->nsector;
@@ -804,22 +923,9 @@ static void ide_sector_write(IDEState *s)
         ide_transfer_start(s, s->io_buffer, 512 * n1, ide_sector_write);
     }
     ide_set_sector(s, sector_num + n);
-    
-#ifdef TARGET_I386
-    if (win2k_install_hack && ((++s->irq_count % 16) == 0)) {
-        /* It seems there is a bug in the Windows 2000 installer HDD
-           IDE driver which fills the disk with empty logs when the
-           IDE write IRQ comes too early. This hack tries to correct
-           that at the expense of slower write performances. Use this
-           option _only_ to install Windows 2000. You must disable it
-           for normal use. */
-        qemu_mod_timer(s->sector_write_timer, 
-                       qemu_get_clock(vm_clock) + (ticks_per_sec / 1000));
-    } else 
-#endif
-    {
-        ide_set_irq(s);
-    }
+
+    bm->aiocb = bdrv_aio_write(s->bs, sector_num, s->io_buffer, n,
+			       ide_sector_write_aio_cb, bm);
 }
 
 /* XXX: handle errors */
@@ -863,7 +969,7 @@ static void ide_write_dma_cb(void *opaque, int ret)
 #ifdef DEBUG_AIO
     printf("aio_write: sector_num=%lld n=%d\n", sector_num, n);
 #endif
-    bm->aiocb = bdrv_aio_write(s->bs, sector_num, s->io_buffer, n, 
+    bm->aiocb = bdrv_aio_write(s->bs, sector_num, s->io_buffer, n,
                                ide_write_dma_cb, bm);
 }
 
@@ -945,7 +1051,7 @@ static void cd_data_to_raw(uint8_t *buf, int lba)
     memset(buf, 0, 288);
 }
 
-static int cd_read_sector(BlockDriverState *bs, int lba, uint8_t *buf, 
+static int cd_read_sector(BlockDriverState *bs, int lba, uint8_t *buf,
                            int sector_size)
 {
     int ret;
@@ -971,10 +1077,10 @@ static void ide_atapi_io_error(IDEState *s, int ret)
 {
     /* XXX: handle more errors */
     if (ret == -ENOMEDIUM) {
-        ide_atapi_cmd_error(s, SENSE_NOT_READY, 
+        ide_atapi_cmd_error(s, SENSE_NOT_READY,
                             ASC_MEDIUM_NOT_PRESENT);
     } else {
-        ide_atapi_cmd_error(s, SENSE_ILLEGAL_REQUEST, 
+        ide_atapi_cmd_error(s, SENSE_ILLEGAL_REQUEST,
                             ASC_LOGICAL_BLOCK_OOR);
     }
 }
@@ -984,7 +1090,7 @@ static void ide_atapi_cmd_reply_end(IDEState *s)
 {
     int byte_count_limit, size, ret;
 #ifdef DEBUG_IDE_ATAPI
-    printf("reply: tx_size=%d elem_tx_size=%d index=%d\n", 
+    printf("reply: tx_size=%d elem_tx_size=%d index=%d\n",
            s->packet_transfer_size,
            s->elementary_transfer_size,
            s->io_buffer_index);
@@ -1016,7 +1122,7 @@ static void ide_atapi_cmd_reply_end(IDEState *s)
             size = s->cd_sector_size - s->io_buffer_index;
             if (size > s->elementary_transfer_size)
                 size = s->elementary_transfer_size;
-            ide_transfer_start(s, s->io_buffer + s->io_buffer_index, 
+            ide_transfer_start(s, s->io_buffer + s->io_buffer_index,
                                size, ide_atapi_cmd_reply_end);
             s->packet_transfer_size -= size;
             s->elementary_transfer_size -= size;
@@ -1045,7 +1151,7 @@ static void ide_atapi_cmd_reply_end(IDEState *s)
                 if (size > (s->cd_sector_size - s->io_buffer_index))
                     size = (s->cd_sector_size - s->io_buffer_index);
             }
-            ide_transfer_start(s, s->io_buffer + s->io_buffer_index, 
+            ide_transfer_start(s, s->io_buffer + s->io_buffer_index,
                                size, ide_atapi_cmd_reply_end);
             s->packet_transfer_size -= size;
             s->elementary_transfer_size -= size;
@@ -1140,7 +1246,7 @@ static void ide_atapi_cmd_read_dma_cb(void *opaque, int ret)
         bm->aiocb = NULL;
         return;
     }
-    
+
     s->io_buffer_index = 0;
     if (s->cd_sector_size == 2352) {
         n = 1;
@@ -1156,12 +1262,12 @@ static void ide_atapi_cmd_read_dma_cb(void *opaque, int ret)
 #ifdef DEBUG_AIO
     printf("aio_read_cd: lba=%u n=%d\n", s->lba, n);
 #endif
-    bm->aiocb = bdrv_aio_read(s->bs, (int64_t)s->lba << 2, 
-                              s->io_buffer + data_offset, n * 4, 
+    bm->aiocb = bdrv_aio_read(s->bs, (int64_t)s->lba << 2,
+                              s->io_buffer + data_offset, n * 4,
                               ide_atapi_cmd_read_dma_cb, bm);
     if (!bm->aiocb) {
         /* Note: media not present is the most likely case */
-        ide_atapi_cmd_error(s, SENSE_NOT_READY, 
+        ide_atapi_cmd_error(s, SENSE_NOT_READY,
                             ASC_MEDIUM_NOT_PRESENT);
         goto eot;
     }
@@ -1183,7 +1289,7 @@ static void ide_atapi_cmd_read_dma(IDEState *s, int lba, int nb_sectors,
     ide_dma_start(s, ide_atapi_cmd_read_dma_cb);
 }
 
-static void ide_atapi_cmd_read(IDEState *s, int lba, int nb_sectors, 
+static void ide_atapi_cmd_read(IDEState *s, int lba, int nb_sectors,
                                int sector_size)
 {
 #ifdef DEBUG_IDE_ATAPI
@@ -1220,14 +1326,18 @@ static void ide_atapi_cmd(IDEState *s)
         if (bdrv_is_inserted(s->bs)) {
             ide_atapi_cmd_ok(s);
         } else {
-            ide_atapi_cmd_error(s, SENSE_NOT_READY, 
+            ide_atapi_cmd_error(s, SENSE_NOT_READY,
                                 ASC_MEDIUM_NOT_PRESENT);
         }
         break;
+    case GPCMD_MODE_SENSE_6:
     case GPCMD_MODE_SENSE_10:
         {
             int action, code;
-            max_len = ube16_to_cpu(packet + 7);
+            if (packet[0] == GPCMD_MODE_SENSE_10)
+                max_len = ube16_to_cpu(packet + 7);
+            else
+                max_len = packet[4];
             action = packet[2] >> 6;
             code = packet[2] & 0x3f;
             switch(action) {
@@ -1263,9 +1373,9 @@ static void ide_atapi_cmd(IDEState *s)
 
                     buf[8] = 0x2a;
                     buf[9] = 0x12;
-                    buf[10] = 0x00;
+                    buf[10] = 0x08;
                     buf[11] = 0x00;
-                    
+
                     buf[12] = 0x70;
                     buf[13] = 3 << 5;
                     buf[14] = (1 << 0) | (1 << 3) | (1 << 5);
@@ -1293,7 +1403,7 @@ static void ide_atapi_cmd(IDEState *s)
                 goto error_cmd;
             default:
             case 3: /* saved values */
-                ide_atapi_cmd_error(s, SENSE_ILLEGAL_REQUEST, 
+                ide_atapi_cmd_error(s, SENSE_ILLEGAL_REQUEST,
                                     ASC_SAVING_PARAMETERS_NOT_SUPPORTED);
                 break;
             }
@@ -1313,7 +1423,7 @@ static void ide_atapi_cmd(IDEState *s)
             bdrv_set_locked(s->bs, packet[4] & 1);
             ide_atapi_cmd_ok(s);
         } else {
-            ide_atapi_cmd_error(s, SENSE_NOT_READY, 
+            ide_atapi_cmd_error(s, SENSE_NOT_READY,
                                 ASC_MEDIUM_NOT_PRESENT);
         }
         break;
@@ -1359,7 +1469,7 @@ static void ide_atapi_cmd(IDEState *s)
                 ide_atapi_cmd_read(s, lba, nb_sectors, 2352);
                 break;
             default:
-                ide_atapi_cmd_error(s, SENSE_ILLEGAL_REQUEST, 
+                ide_atapi_cmd_error(s, SENSE_ILLEGAL_REQUEST,
                                     ASC_INV_FIELD_IN_CMD_PACKET);
                 break;
             }
@@ -1373,13 +1483,13 @@ static void ide_atapi_cmd(IDEState *s)
             bdrv_get_geometry(s->bs, &total_sectors);
             total_sectors >>= 2;
             if (total_sectors <= 0) {
-                ide_atapi_cmd_error(s, SENSE_NOT_READY, 
+                ide_atapi_cmd_error(s, SENSE_NOT_READY,
                                     ASC_MEDIUM_NOT_PRESENT);
                 break;
             }
             lba = ube32_to_cpu(packet + 2);
             if (lba >= total_sectors) {
-                ide_atapi_cmd_error(s, SENSE_ILLEGAL_REQUEST, 
+                ide_atapi_cmd_error(s, SENSE_ILLEGAL_REQUEST,
                                     ASC_LOGICAL_BLOCK_OOR);
                 break;
             }
@@ -1391,7 +1501,7 @@ static void ide_atapi_cmd(IDEState *s)
             int start, eject;
             start = packet[4] & 1;
             eject = (packet[4] >> 1) & 1;
-            
+
             if (eject && !start) {
                 /* eject the disk */
                 bdrv_eject(s->bs, 1);
@@ -1423,7 +1533,7 @@ static void ide_atapi_cmd(IDEState *s)
             bdrv_get_geometry(s->bs, &total_sectors);
             total_sectors >>= 2;
             if (total_sectors <= 0) {
-                ide_atapi_cmd_error(s, SENSE_NOT_READY, 
+                ide_atapi_cmd_error(s, SENSE_NOT_READY,
                                     ASC_MEDIUM_NOT_PRESENT);
                 break;
             }
@@ -1454,7 +1564,7 @@ static void ide_atapi_cmd(IDEState *s)
                 break;
             default:
             error_cmd:
-                ide_atapi_cmd_error(s, SENSE_ILLEGAL_REQUEST, 
+                ide_atapi_cmd_error(s, SENSE_ILLEGAL_REQUEST,
                                     ASC_INV_FIELD_IN_CMD_PACKET);
                 break;
             }
@@ -1467,7 +1577,7 @@ static void ide_atapi_cmd(IDEState *s)
             bdrv_get_geometry(s->bs, &total_sectors);
             total_sectors >>= 2;
             if (total_sectors <= 0) {
-                ide_atapi_cmd_error(s, SENSE_NOT_READY, 
+                ide_atapi_cmd_error(s, SENSE_NOT_READY,
                                     ASC_MEDIUM_NOT_PRESENT);
                 break;
             }
@@ -1477,13 +1587,57 @@ static void ide_atapi_cmd(IDEState *s)
             ide_atapi_cmd_reply(s, 8, 8);
         }
         break;
+    case GPCMD_READ_DVD_STRUCTURE:
+        {
+            int media = packet[1];
+            int layer = packet[6];
+            int format = packet[2];
+            int64_t total_sectors;
+
+            if (media != 0 || layer != 0)
+            {
+                ide_atapi_cmd_error(s, SENSE_ILLEGAL_REQUEST,
+                                    ASC_INV_FIELD_IN_CMD_PACKET);
+            }
+
+            switch (format) {
+                case 0:
+                    bdrv_get_geometry(s->bs, &total_sectors);
+                    total_sectors >>= 2;
+
+                    memset(buf, 0, 2052);
+
+                    buf[4] = 1;   // DVD-ROM, part version 1
+                    buf[5] = 0xf; // 120mm disc, maximum rate unspecified
+                    buf[6] = 0;   // one layer, embossed data
+                    buf[7] = 0;
+
+                    cpu_to_ube32(buf + 8, 0);
+                    cpu_to_ube32(buf + 12, total_sectors - 1);
+                    cpu_to_ube32(buf + 16, total_sectors - 1);
+
+                    cpu_to_be16wu((uint16_t *)buf, 2048 + 4);
+
+                    ide_atapi_cmd_reply(s, 2048 + 3, 2048 + 4);
+                    break;
+
+                default:
+                    ide_atapi_cmd_error(s, SENSE_ILLEGAL_REQUEST,
+                                        ASC_INV_FIELD_IN_CMD_PACKET);
+                    break;
+            }
+        }
+        break;
+    case GPCMD_SET_SPEED:
+        ide_atapi_cmd_ok(s);
+        break;
     case GPCMD_INQUIRY:
         max_len = packet[4];
         buf[0] = 0x05; /* CD-ROM */
         buf[1] = 0x80; /* removable */
         buf[2] = 0x00; /* ISO */
         buf[3] = 0x21; /* ATAPI-2 (XXX: put ATAPI-4 ?) */
-        buf[4] = 31; /* additionnal length */
+        buf[4] = 31; /* additional length */
         buf[5] = 0; /* reserved */
         buf[6] = 0; /* reserved */
         buf[7] = 0; /* reserved */
@@ -1492,11 +1646,87 @@ static void ide_atapi_cmd(IDEState *s)
         padstr8(buf + 32, 4, QEMU_VERSION);
         ide_atapi_cmd_reply(s, 36, max_len);
         break;
+    case GPCMD_GET_CONFIGURATION:
+        {
+            int64_t total_sectors;
+
+            /* only feature 0 is supported */
+            if (packet[2] != 0 || packet[3] != 0) {
+                ide_atapi_cmd_error(s, SENSE_ILLEGAL_REQUEST,
+                                    ASC_INV_FIELD_IN_CMD_PACKET);
+                break;
+            }
+            memset(buf, 0, 32);
+            bdrv_get_geometry(s->bs, &total_sectors);
+            buf[3] = 16;
+            buf[7] = total_sectors <= 1433600 ? 0x08 : 0x10; /* current profile */
+            buf[10] = 0x10 | 0x1;
+            buf[11] = 0x08; /* size of profile list */
+            buf[13] = 0x10; /* DVD-ROM profile */
+            buf[14] = buf[7] == 0x10; /* (in)active */
+            buf[17] = 0x08; /* CD-ROM profile */
+            buf[18] = buf[7] == 0x08; /* (in)active */
+            ide_atapi_cmd_reply(s, 32, 32);
+            break;
+        }
     default:
-        ide_atapi_cmd_error(s, SENSE_ILLEGAL_REQUEST, 
+        ide_atapi_cmd_error(s, SENSE_ILLEGAL_REQUEST,
                             ASC_ILLEGAL_OPCODE);
         break;
     }
+}
+
+static void ide_cfata_metadata_inquiry(IDEState *s)
+{
+    uint16_t *p;
+    uint32_t spd;
+
+    p = (uint16_t *) s->io_buffer;
+    memset(p, 0, 0x200);
+    spd = ((s->mdata_size - 1) >> 9) + 1;
+
+    put_le16(p + 0, 0x0001);			/* Data format revision */
+    put_le16(p + 1, 0x0000);			/* Media property: silicon */
+    put_le16(p + 2, s->media_changed);		/* Media status */
+    put_le16(p + 3, s->mdata_size & 0xffff);	/* Capacity in bytes (low) */
+    put_le16(p + 4, s->mdata_size >> 16);	/* Capacity in bytes (high) */
+    put_le16(p + 5, spd & 0xffff);		/* Sectors per device (low) */
+    put_le16(p + 6, spd >> 16);			/* Sectors per device (high) */
+}
+
+static void ide_cfata_metadata_read(IDEState *s)
+{
+    uint16_t *p;
+
+    if (((s->hcyl << 16) | s->lcyl) << 9 > s->mdata_size + 2) {
+        s->status = ERR_STAT;
+        s->error = ABRT_ERR;
+        return;
+    }
+
+    p = (uint16_t *) s->io_buffer;
+    memset(p, 0, 0x200);
+
+    put_le16(p + 0, s->media_changed);		/* Media status */
+    memcpy(p + 1, s->mdata_storage + (((s->hcyl << 16) | s->lcyl) << 9),
+                    MIN(MIN(s->mdata_size - (((s->hcyl << 16) | s->lcyl) << 9),
+                                    s->nsector << 9), 0x200 - 2));
+}
+
+static void ide_cfata_metadata_write(IDEState *s)
+{
+    if (((s->hcyl << 16) | s->lcyl) << 9 > s->mdata_size + 2) {
+        s->status = ERR_STAT;
+        s->error = ABRT_ERR;
+        return;
+    }
+
+    s->media_changed = 0;
+
+    memcpy(s->mdata_storage + (((s->hcyl << 16) | s->lcyl) << 9),
+                    s->io_buffer + 2,
+                    MIN(MIN(s->mdata_size - (((s->hcyl << 16) | s->lcyl) << 9),
+                                    s->nsector << 9), 0x200 - 2));
 }
 
 /* called when the inserted state of the media has changed */
@@ -1608,13 +1838,16 @@ static void ide_ioport_write(void *opaque, uint32_t addr, uint32_t val)
 #endif
         s = ide_if->cur_drive;
         /* ignore commands to non existant slave */
-        if (s != ide_if && !s->bs) 
+        if (s != ide_if && !s->bs)
             break;
 
         switch(val) {
         case WIN_IDENTIFY:
             if (s->bs && !s->is_cdrom) {
-                ide_identify(s);
+                if (!s->is_cf)
+                    ide_identify(s);
+                else
+                    ide_cfata_identify(s);
                 s->status = READY_STAT | SEEK_STAT;
                 ide_transfer_start(s, s->io_buffer, 512, ide_transfer_stop);
             } else {
@@ -1632,12 +1865,16 @@ static void ide_ioport_write(void *opaque, uint32_t addr, uint32_t val)
             ide_set_irq(s);
             break;
         case WIN_SETMULT:
-            if (s->nsector > MAX_MULT_SECTORS || 
-                s->nsector == 0 ||
-                (s->nsector & (s->nsector - 1)) != 0) {
+            if (s->is_cf && s->nsector == 0) {
+                /* Disable Read and Write Multiple */
+                s->mult_sectors = 0;
+                s->status = READY_STAT;
+            } else if ((s->nsector & 0xff) != 0 &&
+                ((s->nsector & 0xff) > MAX_MULT_SECTORS ||
+                 (s->nsector & (s->nsector - 1)) != 0)) {
                 ide_abort_command(s);
             } else {
-                s->mult_sectors = s->nsector;
+                s->mult_sectors = s->nsector & 0xff;
                 s->status = READY_STAT;
             }
             ide_set_irq(s);
@@ -1655,7 +1892,7 @@ static void ide_ioport_write(void *opaque, uint32_t addr, uint32_t val)
 	    lba48 = 1;
         case WIN_READ:
         case WIN_READ_ONCE:
-            if (!s->bs) 
+            if (!s->bs)
                 goto abort_cmd;
 	    ide_cmd_lba48_transform(s, lba48);
             s->req_nb_sectors = 1;
@@ -1665,11 +1902,14 @@ static void ide_ioport_write(void *opaque, uint32_t addr, uint32_t val)
 	    lba48 = 1;
         case WIN_WRITE:
         case WIN_WRITE_ONCE:
+        case CFA_WRITE_SECT_WO_ERASE:
+        case WIN_WRITE_VERIFY:
 	    ide_cmd_lba48_transform(s, lba48);
             s->error = 0;
             s->status = SEEK_STAT | READY_STAT;
             s->req_nb_sectors = 1;
             ide_transfer_start(s, s->io_buffer, 512, ide_sector_write);
+            s->media_changed = 1;
             break;
 	case WIN_MULTREAD_EXT:
 	    lba48 = 1;
@@ -1683,6 +1923,7 @@ static void ide_ioport_write(void *opaque, uint32_t addr, uint32_t val)
         case WIN_MULTWRITE_EXT:
 	    lba48 = 1;
         case WIN_MULTWRITE:
+        case CFA_WRITE_MULTI_WO_ERASE:
             if (!s->mult_sectors)
                 goto abort_cmd;
 	    ide_cmd_lba48_transform(s, lba48);
@@ -1693,12 +1934,13 @@ static void ide_ioport_write(void *opaque, uint32_t addr, uint32_t val)
             if (n > s->req_nb_sectors)
                 n = s->req_nb_sectors;
             ide_transfer_start(s, s->io_buffer, 512 * n, ide_sector_write);
+            s->media_changed = 1;
             break;
 	case WIN_READDMA_EXT:
 	    lba48 = 1;
         case WIN_READDMA:
         case WIN_READDMA_ONCE:
-            if (!s->bs) 
+            if (!s->bs)
                 goto abort_cmd;
 	    ide_cmd_lba48_transform(s, lba48);
             ide_sector_read_dma(s);
@@ -1707,10 +1949,11 @@ static void ide_ioport_write(void *opaque, uint32_t addr, uint32_t val)
 	    lba48 = 1;
         case WIN_WRITEDMA:
         case WIN_WRITEDMA_ONCE:
-            if (!s->bs) 
+            if (!s->bs)
                 goto abort_cmd;
 	    ide_cmd_lba48_transform(s, lba48);
             ide_sector_write_dma(s);
+            s->media_changed = 1;
             break;
         case WIN_READ_NATIVE_MAX_EXT:
 	    lba48 = 1;
@@ -1721,6 +1964,7 @@ static void ide_ioport_write(void *opaque, uint32_t addr, uint32_t val)
             ide_set_irq(s);
             break;
         case WIN_CHECKPOWERMODE1:
+        case WIN_CHECKPOWERMODE2:
             s->nsector = 0xff; /* device active or idle */
             s->status = READY_STAT;
             ide_set_irq(s);
@@ -1730,10 +1974,20 @@ static void ide_ioport_write(void *opaque, uint32_t addr, uint32_t val)
                 goto abort_cmd;
             /* XXX: valid for CDROM ? */
             switch(s->feature) {
+            case 0xcc: /* reverting to power-on defaults enable */
+            case 0x66: /* reverting to power-on defaults disable */
             case 0x02: /* write cache enable */
             case 0x82: /* write cache disable */
             case 0xaa: /* read look-ahead enable */
             case 0x55: /* read look-ahead disable */
+            case 0x05: /* set advanced power management mode */
+            case 0x85: /* disable advanced power management mode */
+            case 0x69: /* NOP */
+            case 0x67: /* NOP */
+            case 0x96: /* NOP */
+            case 0x9a: /* NOP */
+            case 0x42: /* enable Automatic Acoustic Mode */
+            case 0xc2: /* disable Automatic Acoustic Mode */
                 s->status = READY_STAT | SEEK_STAT;
                 ide_set_irq(s);
                 break;
@@ -1772,9 +2026,17 @@ static void ide_ioport_write(void *opaque, uint32_t addr, uint32_t val)
 	    s->status = READY_STAT;
             ide_set_irq(s);
             break;
-	case WIN_STANDBYNOW1:
+        case WIN_STANDBY:
+        case WIN_STANDBY2:
+        case WIN_STANDBYNOW1:
+        case WIN_STANDBYNOW2:
         case WIN_IDLEIMMEDIATE:
-	    s->status = READY_STAT;
+        case CFA_IDLEIMMEDIATE:
+        case WIN_SETIDLE1:
+        case WIN_SETIDLE2:
+        case WIN_SLEEPNOW1:
+        case WIN_SLEEPNOW2:
+            s->status = READY_STAT;
             ide_set_irq(s);
             break;
             /* ATAPI commands */
@@ -1809,8 +2071,81 @@ static void ide_ioport_write(void *opaque, uint32_t addr, uint32_t val)
             s->status = READY_STAT;
             s->atapi_dma = s->feature & 1;
             s->nsector = 1;
-            ide_transfer_start(s, s->io_buffer, ATAPI_PACKET_SIZE, 
+            ide_transfer_start(s, s->io_buffer, ATAPI_PACKET_SIZE,
                                ide_atapi_cmd);
+            break;
+        /* CF-ATA commands */
+        case CFA_REQ_EXT_ERROR_CODE:
+            if (!s->is_cf)
+                goto abort_cmd;
+            s->error = 0x09;    /* miscellaneous error */
+            s->status = READY_STAT;
+            ide_set_irq(s);
+            break;
+        case CFA_ERASE_SECTORS:
+        case CFA_WEAR_LEVEL:
+            if (!s->is_cf)
+                goto abort_cmd;
+            if (val == CFA_WEAR_LEVEL)
+                s->nsector = 0;
+            if (val == CFA_ERASE_SECTORS)
+                s->media_changed = 1;
+            s->error = 0x00;
+            s->status = READY_STAT;
+            ide_set_irq(s);
+            break;
+        case CFA_TRANSLATE_SECTOR:
+            if (!s->is_cf)
+                goto abort_cmd;
+            s->error = 0x00;
+            s->status = READY_STAT;
+            memset(s->io_buffer, 0, 0x200);
+            s->io_buffer[0x00] = s->hcyl;			/* Cyl MSB */
+            s->io_buffer[0x01] = s->lcyl;			/* Cyl LSB */
+            s->io_buffer[0x02] = s->select;			/* Head */
+            s->io_buffer[0x03] = s->sector;			/* Sector */
+            s->io_buffer[0x04] = ide_get_sector(s) >> 16;	/* LBA MSB */
+            s->io_buffer[0x05] = ide_get_sector(s) >> 8;	/* LBA */
+            s->io_buffer[0x06] = ide_get_sector(s) >> 0;	/* LBA LSB */
+            s->io_buffer[0x13] = 0x00;				/* Erase flag */
+            s->io_buffer[0x18] = 0x00;				/* Hot count */
+            s->io_buffer[0x19] = 0x00;				/* Hot count */
+            s->io_buffer[0x1a] = 0x01;				/* Hot count */
+            ide_transfer_start(s, s->io_buffer, 0x200, ide_transfer_stop);
+            ide_set_irq(s);
+            break;
+        case CFA_ACCESS_METADATA_STORAGE:
+            if (!s->is_cf)
+                goto abort_cmd;
+            switch (s->feature) {
+            case 0x02:	/* Inquiry Metadata Storage */
+                ide_cfata_metadata_inquiry(s);
+                break;
+            case 0x03:	/* Read Metadata Storage */
+                ide_cfata_metadata_read(s);
+                break;
+            case 0x04:	/* Write Metadata Storage */
+                ide_cfata_metadata_write(s);
+                break;
+            default:
+                goto abort_cmd;
+            }
+            ide_transfer_start(s, s->io_buffer, 0x200, ide_transfer_stop);
+            s->status = 0x00; /* NOTE: READY is _not_ set */
+            ide_set_irq(s);
+            break;
+        case IBM_SENSE_CONDITION:
+            if (!s->is_cf)
+                goto abort_cmd;
+            switch (s->feature) {
+            case 0x01:  /* sense temperature in device */
+                s->nsector = 0x50;      /* +20 C */
+                break;
+            default:
+                goto abort_cmd;
+            }
+            s->status = READY_STAT;
+            ide_set_irq(s);
             break;
         default:
         abort_cmd:
@@ -1889,7 +2224,7 @@ static uint32_t ide_ioport_read(void *opaque, uint32_t addr1)
             ret = 0;
         else
             ret = s->status;
-        s->set_irq(s->irq_opaque, s->irq, 0);
+        qemu_irq_lower(s->irq);
         break;
     }
 #ifdef DEBUG_IDE
@@ -1995,7 +2330,7 @@ static uint32_t ide_data_readl(void *opaque, uint32_t addr)
     IDEState *s = ((IDEState *)opaque)->cur_drive;
     uint8_t *p;
     int ret;
-    
+
     p = s->data_ptr;
     ret = cpu_to_le32(*(uint32_t *)p);
     p += 4;
@@ -2017,7 +2352,10 @@ static void ide_dummy_transfer_stop(IDEState *s)
 
 static void ide_reset(IDEState *s)
 {
-    s->mult_sectors = MAX_MULT_SECTORS;
+    if (s->is_cf)
+        s->mult_sectors = 0;
+    else
+        s->mult_sectors = MAX_MULT_SECTORS;
     s->cur_drive = s;
     s->select = 0xa0;
     s->status = READY_STAT;
@@ -2026,6 +2364,7 @@ static void ide_reset(IDEState *s)
        accesses */
     s->end_transfer_func = ide_dummy_transfer_stop;
     ide_dummy_transfer_stop(s);
+    s->media_changed = 0;
 }
 
 struct partition {
@@ -2042,7 +2381,7 @@ struct partition {
 } __attribute__((packed));
 
 /* try to guess the disk logical geometry from the MSDOS partition table. Return 0 if OK, -1 if could not guess */
-static int guess_disk_lchs(IDEState *s, 
+static int guess_disk_lchs(IDEState *s,
                            int *pcylinders, int *pheads, int *psectors)
 {
     uint8_t buf[512];
@@ -2073,7 +2412,7 @@ static int guess_disk_lchs(IDEState *s,
             *psectors = sectors;
             *pcylinders = cylinders;
 #if 0
-            printf("guessed geometry: LCHS=%d %d %d\n", 
+            printf("guessed geometry: LCHS=%d %d %d\n",
                    cylinders, heads, sectors);
 #endif
             return 0;
@@ -2084,7 +2423,7 @@ static int guess_disk_lchs(IDEState *s,
 
 static void ide_init2(IDEState *ide_state,
                       BlockDriverState *hd0, BlockDriverState *hd1,
-                      SetIRQFunc *set_irq, void *irq_opaque, int irq)
+                      qemu_irq irq)
 {
     IDEState *s;
     static int drive_serial = 1;
@@ -2155,10 +2494,8 @@ static void ide_init2(IDEState *ide_state,
             }
         }
         s->drive_serial = drive_serial++;
-        s->set_irq = set_irq;
-        s->irq_opaque = irq_opaque;
         s->irq = irq;
-        s->sector_write_timer = qemu_new_timer(vm_clock, 
+        s->sector_write_timer = qemu_new_timer(vm_clock,
                                                ide_sector_write_timer_cb, s);
         ide_reset(s);
     }
@@ -2172,7 +2509,7 @@ static void ide_init_ioport(IDEState *ide_state, int iobase, int iobase2)
         register_ioport_read(iobase2, 1, 1, ide_status_read, ide_state);
         register_ioport_write(iobase2, 1, 1, ide_cmd_write, ide_state);
     }
-    
+
     /* data ports */
     register_ioport_write(iobase, 2, 2, ide_data_writew, ide_state);
     register_ioport_read(iobase, 2, 2, ide_data_readw, ide_state);
@@ -2180,10 +2517,66 @@ static void ide_init_ioport(IDEState *ide_state, int iobase, int iobase2)
     register_ioport_read(iobase, 4, 4, ide_data_readl, ide_state);
 }
 
+/* save per IDE drive data */
+static void ide_save(QEMUFile* f, IDEState *s)
+{
+    qemu_put_be32s(f, &s->mult_sectors);
+    qemu_put_be32s(f, &s->identify_set);
+    if (s->identify_set) {
+        qemu_put_buffer(f, (const uint8_t *)s->identify_data, 512);
+    }
+    qemu_put_8s(f, &s->feature);
+    qemu_put_8s(f, &s->error);
+    qemu_put_be32s(f, &s->nsector);
+    qemu_put_8s(f, &s->sector);
+    qemu_put_8s(f, &s->lcyl);
+    qemu_put_8s(f, &s->hcyl);
+    qemu_put_8s(f, &s->hob_feature);
+    qemu_put_8s(f, &s->hob_nsector);
+    qemu_put_8s(f, &s->hob_sector);
+    qemu_put_8s(f, &s->hob_lcyl);
+    qemu_put_8s(f, &s->hob_hcyl);
+    qemu_put_8s(f, &s->select);
+    qemu_put_8s(f, &s->status);
+    qemu_put_8s(f, &s->lba48);
+
+    qemu_put_8s(f, &s->sense_key);
+    qemu_put_8s(f, &s->asc);
+    /* XXX: if a transfer is pending, we do not save it yet */
+}
+
+/* load per IDE drive data */
+static void ide_load(QEMUFile* f, IDEState *s)
+{
+    qemu_get_be32s(f, &s->mult_sectors);
+    qemu_get_be32s(f, &s->identify_set);
+    if (s->identify_set) {
+        qemu_get_buffer(f, (uint8_t *)s->identify_data, 512);
+    }
+    qemu_get_8s(f, &s->feature);
+    qemu_get_8s(f, &s->error);
+    qemu_get_be32s(f, &s->nsector);
+    qemu_get_8s(f, &s->sector);
+    qemu_get_8s(f, &s->lcyl);
+    qemu_get_8s(f, &s->hcyl);
+    qemu_get_8s(f, &s->hob_feature);
+    qemu_get_8s(f, &s->hob_nsector);
+    qemu_get_8s(f, &s->hob_sector);
+    qemu_get_8s(f, &s->hob_lcyl);
+    qemu_get_8s(f, &s->hob_hcyl);
+    qemu_get_8s(f, &s->select);
+    qemu_get_8s(f, &s->status);
+    qemu_get_8s(f, &s->lba48);
+
+    qemu_get_8s(f, &s->sense_key);
+    qemu_get_8s(f, &s->asc);
+    /* XXX: if a transfer is pending, we do not save it yet */
+}
+
 /***********************************************************/
 /* ISA IDE definitions */
 
-void isa_ide_init(int iobase, int iobase2, int irq,
+void isa_ide_init(int iobase, int iobase2, qemu_irq irq,
                   BlockDriverState *hd0, BlockDriverState *hd1)
 {
     IDEState *ide_state;
@@ -2191,8 +2584,8 @@ void isa_ide_init(int iobase, int iobase2, int irq,
     ide_state = qemu_mallocz(sizeof(IDEState) * 2);
     if (!ide_state)
         return;
-    
-    ide_init2(ide_state, hd0, hd1, pic_set_irq_new, isa_pic, irq);
+
+    ide_init2(ide_state, hd0, hd1, irq);
     ide_init_ioport(ide_state, iobase, iobase2);
 }
 
@@ -2201,7 +2594,7 @@ void isa_ide_init(int iobase, int iobase2, int irq,
 
 static void cmd646_update_irq(PCIIDEState *d);
 
-static void ide_map(PCIDevice *pci_dev, int region_num, 
+static void ide_map(PCIDevice *pci_dev, int region_num,
                     uint32_t addr, uint32_t size, int type)
 {
     PCIIDEState *d = (PCIIDEState *)pci_dev;
@@ -2278,9 +2671,9 @@ static uint32_t bmdma_readb(void *opaque, uint32_t addr)
     BMDMAState *bm = opaque;
     PCIIDEState *pci_dev;
     uint32_t val;
-    
+
     switch(addr & 3) {
-    case 0: 
+    case 0:
         val = bm->cmd;
         break;
     case 1:
@@ -2326,7 +2719,7 @@ static void bmdma_writeb(void *opaque, uint32_t addr, uint32_t val)
     case 1:
         pci_dev = bm->pci_dev;
         if (pci_dev->type == IDE_TYPE_CMD646) {
-            pci_dev->dev.config[MRDMODE] = 
+            pci_dev->dev.config[MRDMODE] =
                 (pci_dev->dev.config[MRDMODE] & ~0x30) | (val & 0x30);
             cmd646_update_irq(pci_dev);
         }
@@ -2367,7 +2760,7 @@ static void bmdma_addr_writel(void *opaque, uint32_t addr, uint32_t val)
     bm->cur_addr = bm->addr;
 }
 
-static void bmdma_map(PCIDevice *pci_dev, int region_num, 
+static void bmdma_map(PCIDevice *pci_dev, int region_num,
                     uint32_t addr, uint32_t size, int type)
 {
     PCIIDEState *d = (PCIIDEState *)pci_dev;
@@ -2399,7 +2792,7 @@ static void cmd646_update_irq(PCIIDEState *d)
                  !(d->dev.config[MRDMODE] & MRDMODE_BLK_CH0)) ||
         ((d->dev.config[MRDMODE] & MRDMODE_INTR_CH1) &&
          !(d->dev.config[MRDMODE] & MRDMODE_BLK_CH1));
-    pci_set_irq((PCIDevice *)d, 0, pci_level);
+    qemu_set_irq(d->dev.irq[0], pci_level);
 }
 
 /* the PCI irq level is the logical OR of the two channels */
@@ -2423,10 +2816,11 @@ void pci_cmd646_ide_init(PCIBus *bus, BlockDriverState **hd_table,
     PCIIDEState *d;
     uint8_t *pci_conf;
     int i;
+    qemu_irq *irq;
 
-    d = (PCIIDEState *)pci_register_device(bus, "CMD646 IDE", 
+    d = (PCIIDEState *)pci_register_device(bus, "CMD646 IDE",
                                            sizeof(PCIIDEState),
-                                           -1, 
+                                           -1,
                                            NULL, NULL);
     d->type = IDE_TYPE_CMD646;
     pci_conf = d->dev.config;
@@ -2436,36 +2830,36 @@ void pci_cmd646_ide_init(PCIBus *bus, BlockDriverState **hd_table,
     pci_conf[0x03] = 0x06;
 
     pci_conf[0x08] = 0x07; // IDE controller revision
-    pci_conf[0x09] = 0x8f; 
+    pci_conf[0x09] = 0x8f;
 
     pci_conf[0x0a] = 0x01; // class_sub = PCI_IDE
     pci_conf[0x0b] = 0x01; // class_base = PCI_mass_storage
     pci_conf[0x0e] = 0x00; // header_type
-    
+
     if (secondary_ide_enabled) {
         /* XXX: if not enabled, really disable the seconday IDE controller */
         pci_conf[0x51] = 0x80; /* enable IDE1 */
     }
 
-    pci_register_io_region((PCIDevice *)d, 0, 0x8, 
+    pci_register_io_region((PCIDevice *)d, 0, 0x8,
                            PCI_ADDRESS_SPACE_IO, ide_map);
-    pci_register_io_region((PCIDevice *)d, 1, 0x4, 
+    pci_register_io_region((PCIDevice *)d, 1, 0x4,
                            PCI_ADDRESS_SPACE_IO, ide_map);
-    pci_register_io_region((PCIDevice *)d, 2, 0x8, 
+    pci_register_io_region((PCIDevice *)d, 2, 0x8,
                            PCI_ADDRESS_SPACE_IO, ide_map);
-    pci_register_io_region((PCIDevice *)d, 3, 0x4, 
+    pci_register_io_region((PCIDevice *)d, 3, 0x4,
                            PCI_ADDRESS_SPACE_IO, ide_map);
-    pci_register_io_region((PCIDevice *)d, 4, 0x10, 
+    pci_register_io_region((PCIDevice *)d, 4, 0x10,
                            PCI_ADDRESS_SPACE_IO, bmdma_map);
 
     pci_conf[0x3d] = 0x01; // interrupt on pin 1
-    
+
     for(i = 0; i < 4; i++)
         d->ide_if[i].pci_dev = (PCIDevice *)d;
-    ide_init2(&d->ide_if[0], hd_table[0], hd_table[1],
-              cmd646_set_irq, d, 0);
-    ide_init2(&d->ide_if[2], hd_table[2], hd_table[3],
-              cmd646_set_irq, d, 1);
+
+    irq = qemu_allocate_irqs(cmd646_set_irq, d, 2);
+    ide_init2(&d->ide_if[0], hd_table[0], hd_table[1], irq[0]);
+    ide_init2(&d->ide_if[2], hd_table[2], hd_table[3], irq[1]);
 }
 
 static void pci_ide_save(QEMUFile* f, void *opaque)
@@ -2494,30 +2888,7 @@ static void pci_ide_save(QEMUFile* f, void *opaque)
 
     /* per IDE drive data */
     for(i = 0; i < 4; i++) {
-        IDEState *s = &d->ide_if[i];
-        qemu_put_be32s(f, &s->mult_sectors);
-        qemu_put_be32s(f, &s->identify_set);
-        if (s->identify_set) {
-            qemu_put_buffer(f, (const uint8_t *)s->identify_data, 512);
-        }
-        qemu_put_8s(f, &s->feature);
-        qemu_put_8s(f, &s->error);
-        qemu_put_be32s(f, &s->nsector);
-        qemu_put_8s(f, &s->sector);
-        qemu_put_8s(f, &s->lcyl);
-        qemu_put_8s(f, &s->hcyl);
-        qemu_put_8s(f, &s->hob_feature);
-        qemu_put_8s(f, &s->hob_nsector);
-        qemu_put_8s(f, &s->hob_sector);
-        qemu_put_8s(f, &s->hob_lcyl);
-        qemu_put_8s(f, &s->hob_hcyl);
-        qemu_put_8s(f, &s->select);
-        qemu_put_8s(f, &s->status);
-        qemu_put_8s(f, &s->lba48);
-
-        qemu_put_8s(f, &s->sense_key);
-        qemu_put_8s(f, &s->asc);
-        /* XXX: if a transfer is pending, we do not save it yet */
+        ide_save(f, &d->ide_if[i]);
     }
 }
 
@@ -2551,30 +2922,7 @@ static int pci_ide_load(QEMUFile* f, void *opaque, int version_id)
 
     /* per IDE drive data */
     for(i = 0; i < 4; i++) {
-        IDEState *s = &d->ide_if[i];
-        qemu_get_be32s(f, &s->mult_sectors);
-        qemu_get_be32s(f, &s->identify_set);
-        if (s->identify_set) {
-            qemu_get_buffer(f, (uint8_t *)s->identify_data, 512);
-        }
-        qemu_get_8s(f, &s->feature);
-        qemu_get_8s(f, &s->error);
-        qemu_get_be32s(f, &s->nsector);
-        qemu_get_8s(f, &s->sector);
-        qemu_get_8s(f, &s->lcyl);
-        qemu_get_8s(f, &s->hcyl);
-        qemu_get_8s(f, &s->hob_feature);
-        qemu_get_8s(f, &s->hob_nsector);
-        qemu_get_8s(f, &s->hob_sector);
-        qemu_get_8s(f, &s->hob_lcyl);
-        qemu_get_8s(f, &s->hob_hcyl);
-        qemu_get_8s(f, &s->select);
-        qemu_get_8s(f, &s->status);
-        qemu_get_8s(f, &s->lba48);
-
-        qemu_get_8s(f, &s->sense_key);
-        qemu_get_8s(f, &s->asc);
-        /* XXX: if a transfer is pending, we do not save it yet */
+        ide_load(f, &d->ide_if[i]);
     }
     return 0;
 }
@@ -2590,53 +2938,16 @@ static void piix3_reset(PCIIDEState *d)
     pci_conf[0x20] = 0x01; /* BMIBA: 20-23h */
 }
 
-void pci_piix_ide_init(PCIBus *bus, BlockDriverState **hd_table, int devfn)
-{
-    PCIIDEState *d;
-    uint8_t *pci_conf;
-    
-    /* register a function 1 of PIIX */
-    d = (PCIIDEState *)pci_register_device(bus, "PIIX IDE", 
-                                           sizeof(PCIIDEState),
-                                           devfn,
-                                           NULL, NULL);
-    d->type = IDE_TYPE_PIIX3;
-
-    pci_conf = d->dev.config;
-    pci_conf[0x00] = 0x86; // Intel
-    pci_conf[0x01] = 0x80;
-    pci_conf[0x02] = 0x30;
-    pci_conf[0x03] = 0x12;
-    pci_conf[0x08] = 0x02; // Step A1
-    pci_conf[0x09] = 0x80; // legacy ATA mode
-    pci_conf[0x0a] = 0x01; // class_sub = PCI_IDE
-    pci_conf[0x0b] = 0x01; // class_base = PCI_mass_storage
-    pci_conf[0x0e] = 0x00; // header_type
-
-    piix3_reset(d);
-
-    pci_register_io_region((PCIDevice *)d, 4, 0x10, 
-                           PCI_ADDRESS_SPACE_IO, bmdma_map);
-
-    ide_init2(&d->ide_if[0], hd_table[0], hd_table[1],
-              pic_set_irq_new, isa_pic, 14);
-    ide_init2(&d->ide_if[2], hd_table[2], hd_table[3],
-              pic_set_irq_new, isa_pic, 15);
-    ide_init_ioport(&d->ide_if[0], 0x1f0, 0x3f6);
-    ide_init_ioport(&d->ide_if[2], 0x170, 0x376);
-
-    register_savevm("ide", 0, 1, pci_ide_save, pci_ide_load, d);
-}
-
 /* hd_table must contain 4 block drivers */
 /* NOTE: for the PIIX3, the IRQs and IOports are hardcoded */
-void pci_piix3_ide_init(PCIBus *bus, BlockDriverState **hd_table, int devfn)
+void pci_piix3_ide_init(PCIBus *bus, BlockDriverState **hd_table, int devfn,
+                        qemu_irq *pic)
 {
     PCIIDEState *d;
     uint8_t *pci_conf;
-    
+
     /* register a function 1 of PIIX3 */
-    d = (PCIIDEState *)pci_register_device(bus, "PIIX3 IDE", 
+    d = (PCIIDEState *)pci_register_device(bus, "PIIX3 IDE",
                                            sizeof(PCIIDEState),
                                            devfn,
                                            NULL, NULL);
@@ -2654,13 +2965,49 @@ void pci_piix3_ide_init(PCIBus *bus, BlockDriverState **hd_table, int devfn)
 
     piix3_reset(d);
 
-    pci_register_io_region((PCIDevice *)d, 4, 0x10, 
+    pci_register_io_region((PCIDevice *)d, 4, 0x10,
                            PCI_ADDRESS_SPACE_IO, bmdma_map);
 
-    ide_init2(&d->ide_if[0], hd_table[0], hd_table[1],
-              pic_set_irq_new, isa_pic, 14);
-    ide_init2(&d->ide_if[2], hd_table[2], hd_table[3],
-              pic_set_irq_new, isa_pic, 15);
+    ide_init2(&d->ide_if[0], hd_table[0], hd_table[1], pic[14]);
+    ide_init2(&d->ide_if[2], hd_table[2], hd_table[3], pic[15]);
+    ide_init_ioport(&d->ide_if[0], 0x1f0, 0x3f6);
+    ide_init_ioport(&d->ide_if[2], 0x170, 0x376);
+
+    register_savevm("ide", 0, 1, pci_ide_save, pci_ide_load, d);
+}
+
+/* hd_table must contain 4 block drivers */
+/* NOTE: for the PIIX4, the IRQs and IOports are hardcoded */
+void pci_piix4_ide_init(PCIBus *bus, BlockDriverState **hd_table, int devfn,
+                        qemu_irq *pic)
+{
+    PCIIDEState *d;
+    uint8_t *pci_conf;
+
+    /* register a function 1 of PIIX4 */
+    d = (PCIIDEState *)pci_register_device(bus, "PIIX4 IDE",
+                                           sizeof(PCIIDEState),
+                                           devfn,
+                                           NULL, NULL);
+    d->type = IDE_TYPE_PIIX4;
+
+    pci_conf = d->dev.config;
+    pci_conf[0x00] = 0x86; // Intel
+    pci_conf[0x01] = 0x80;
+    pci_conf[0x02] = 0x11;
+    pci_conf[0x03] = 0x71;
+    pci_conf[0x09] = 0x80; // legacy ATA mode
+    pci_conf[0x0a] = 0x01; // class_sub = PCI_IDE
+    pci_conf[0x0b] = 0x01; // class_base = PCI_mass_storage
+    pci_conf[0x0e] = 0x00; // header_type
+
+    piix3_reset(d);
+
+    pci_register_io_region((PCIDevice *)d, 4, 0x10,
+                           PCI_ADDRESS_SPACE_IO, bmdma_map);
+
+    ide_init2(&d->ide_if[0], hd_table[0], hd_table[1], pic[14]);
+    ide_init2(&d->ide_if[2], hd_table[2], hd_table[3], pic[15]);
     ide_init_ioport(&d->ide_if[0], 0x1f0, 0x3f6);
     ide_init_ioport(&d->ide_if[2], 0x170, 0x376);
 
@@ -2674,7 +3021,7 @@ void pci_piix3_ide_init(PCIBus *bus, BlockDriverState **hd_table, int devfn)
 static void pmac_ide_writeb (void *opaque,
                              target_phys_addr_t addr, uint32_t val)
 {
-    addr = (addr & 0xFFF) >> 4; 
+    addr = (addr & 0xFFF) >> 4;
     switch (addr) {
     case 1 ... 7:
         ide_ioport_write(opaque, addr, val);
@@ -2711,7 +3058,7 @@ static uint32_t pmac_ide_readb (void *opaque,target_phys_addr_t addr)
 static void pmac_ide_writew (void *opaque,
                              target_phys_addr_t addr, uint32_t val)
 {
-    addr = (addr & 0xFFF) >> 4; 
+    addr = (addr & 0xFFF) >> 4;
 #ifdef TARGET_WORDS_BIGENDIAN
     val = bswap16(val);
 #endif
@@ -2724,7 +3071,7 @@ static uint32_t pmac_ide_readw (void *opaque,target_phys_addr_t addr)
 {
     uint16_t retval;
 
-    addr = (addr & 0xFFF) >> 4; 
+    addr = (addr & 0xFFF) >> 4;
     if (addr == 0) {
         retval = ide_data_readw(opaque, 0);
     } else {
@@ -2739,7 +3086,7 @@ static uint32_t pmac_ide_readw (void *opaque,target_phys_addr_t addr)
 static void pmac_ide_writel (void *opaque,
                              target_phys_addr_t addr, uint32_t val)
 {
-    addr = (addr & 0xFFF) >> 4; 
+    addr = (addr & 0xFFF) >> 4;
 #ifdef TARGET_WORDS_BIGENDIAN
     val = bswap32(val);
 #endif
@@ -2752,7 +3099,7 @@ static uint32_t pmac_ide_readl (void *opaque,target_phys_addr_t addr)
 {
     uint32_t retval;
 
-    addr = (addr & 0xFFF) >> 4; 
+    addr = (addr & 0xFFF) >> 4;
     if (addr == 0) {
         retval = ide_data_readl(opaque, 0);
     } else {
@@ -2779,17 +3126,559 @@ static CPUReadMemoryFunc *pmac_ide_read[] = {
 /* hd_table must contain 4 block drivers */
 /* PowerMac uses memory mapped registers, not I/O. Return the memory
    I/O index to access the ide. */
-int pmac_ide_init (BlockDriverState **hd_table,
-                   SetIRQFunc *set_irq, void *irq_opaque, int irq)
+int pmac_ide_init (BlockDriverState **hd_table, qemu_irq irq)
 {
     IDEState *ide_if;
     int pmac_ide_memory;
 
     ide_if = qemu_mallocz(sizeof(IDEState) * 2);
-    ide_init2(&ide_if[0], hd_table[0], hd_table[1],
-              set_irq, irq_opaque, irq);
-    
+    ide_init2(&ide_if[0], hd_table[0], hd_table[1], irq);
+
     pmac_ide_memory = cpu_register_io_memory(0, pmac_ide_read,
                                              pmac_ide_write, &ide_if[0]);
     return pmac_ide_memory;
+}
+
+/***********************************************************/
+/* CF-ATA Microdrive */
+
+#define METADATA_SIZE	0x20
+
+/* DSCM-1XXXX Microdrive hard disk with CF+ II / PCMCIA interface.  */
+struct md_s {
+    IDEState ide[2];
+    struct pcmcia_card_s card;
+    uint32_t attr_base;
+    uint32_t io_base;
+
+    /* Card state */
+    uint8_t opt;
+    uint8_t stat;
+    uint8_t pins;
+
+    uint8_t ctrl;
+    uint16_t io;
+    int cycle;
+};
+
+/* Register bitfields */
+enum md_opt {
+    OPT_MODE_MMAP	= 0,
+    OPT_MODE_IOMAP16	= 1,
+    OPT_MODE_IOMAP1	= 2,
+    OPT_MODE_IOMAP2	= 3,
+    OPT_MODE		= 0x3f,
+    OPT_LEVIREQ		= 0x40,
+    OPT_SRESET		= 0x80,
+};
+enum md_cstat {
+    STAT_INT		= 0x02,
+    STAT_PWRDWN		= 0x04,
+    STAT_XE		= 0x10,
+    STAT_IOIS8		= 0x20,
+    STAT_SIGCHG		= 0x40,
+    STAT_CHANGED	= 0x80,
+};
+enum md_pins {
+    PINS_MRDY		= 0x02,
+    PINS_CRDY		= 0x20,
+};
+enum md_ctrl {
+    CTRL_IEN		= 0x02,
+    CTRL_SRST		= 0x04,
+};
+
+static inline void md_interrupt_update(struct md_s *s)
+{
+    if (!s->card.slot)
+        return;
+
+    qemu_set_irq(s->card.slot->irq,
+                    !(s->stat & STAT_INT) &&	/* Inverted */
+                    !(s->ctrl & (CTRL_IEN | CTRL_SRST)) &&
+                    !(s->opt & OPT_SRESET));
+}
+
+static void md_set_irq(void *opaque, int irq, int level)
+{
+    struct md_s *s = (struct md_s *) opaque;
+    if (level)
+        s->stat |= STAT_INT;
+    else
+        s->stat &= ~STAT_INT;
+
+    md_interrupt_update(s);
+}
+
+static void md_reset(struct md_s *s)
+{
+    s->opt = OPT_MODE_MMAP;
+    s->stat = 0;
+    s->pins = 0;
+    s->cycle = 0;
+    s->ctrl = 0;
+    ide_reset(s->ide);
+}
+
+static uint8_t md_attr_read(void *opaque, uint32_t at)
+{
+    struct md_s *s = (struct md_s *) opaque;
+    if (at < s->attr_base) {
+        if (at < s->card.cis_len)
+            return s->card.cis[at];
+        else
+            return 0x00;
+    }
+
+    at -= s->attr_base;
+
+    switch (at) {
+    case 0x00:	/* Configuration Option Register */
+        return s->opt;
+    case 0x02:	/* Card Configuration Status Register */
+        if (s->ctrl & CTRL_IEN)
+            return s->stat & ~STAT_INT;
+        else
+            return s->stat;
+    case 0x04:	/* Pin Replacement Register */
+        return (s->pins & PINS_CRDY) | 0x0c;
+    case 0x06:	/* Socket and Copy Register */
+        return 0x00;
+#ifdef VERBOSE
+    default:
+        printf("%s: Bad attribute space register %02x\n", __FUNCTION__, at);
+#endif
+    }
+
+    return 0;
+}
+
+static void md_attr_write(void *opaque, uint32_t at, uint8_t value)
+{
+    struct md_s *s = (struct md_s *) opaque;
+    at -= s->attr_base;
+
+    switch (at) {
+    case 0x00:	/* Configuration Option Register */
+        s->opt = value & 0xcf;
+        if (value & OPT_SRESET)
+            md_reset(s);
+        md_interrupt_update(s);
+        break;
+    case 0x02:	/* Card Configuration Status Register */
+        if ((s->stat ^ value) & STAT_PWRDWN)
+            s->pins |= PINS_CRDY;
+        s->stat &= 0x82;
+        s->stat |= value & 0x74;
+        md_interrupt_update(s);
+        /* Word 170 in Identify Device must be equal to STAT_XE */
+        break;
+    case 0x04:	/* Pin Replacement Register */
+        s->pins &= PINS_CRDY;
+        s->pins |= value & PINS_MRDY;
+        break;
+    case 0x06:	/* Socket and Copy Register */
+        break;
+    default:
+        printf("%s: Bad attribute space register %02x\n", __FUNCTION__, at);
+    }
+}
+
+static uint16_t md_common_read(void *opaque, uint32_t at)
+{
+    struct md_s *s = (struct md_s *) opaque;
+    uint16_t ret;
+    at -= s->io_base;
+
+    switch (s->opt & OPT_MODE) {
+    case OPT_MODE_MMAP:
+        if ((at & ~0x3ff) == 0x400)
+            at = 0;
+        break;
+    case OPT_MODE_IOMAP16:
+        at &= 0xf;
+        break;
+    case OPT_MODE_IOMAP1:
+        if ((at & ~0xf) == 0x3f0)
+            at -= 0x3e8;
+        else if ((at & ~0xf) == 0x1f0)
+            at -= 0x1f0;
+        break;
+    case OPT_MODE_IOMAP2:
+        if ((at & ~0xf) == 0x370)
+            at -= 0x368;
+        else if ((at & ~0xf) == 0x170)
+            at -= 0x170;
+    }
+
+    switch (at) {
+    case 0x0:	/* Even RD Data */
+    case 0x8:
+        return ide_data_readw(s->ide, 0);
+
+        /* TODO: 8-bit accesses */
+        if (s->cycle)
+            ret = s->io >> 8;
+        else {
+            s->io = ide_data_readw(s->ide, 0);
+            ret = s->io & 0xff;
+        }
+        s->cycle = !s->cycle;
+        return ret;
+    case 0x9:	/* Odd RD Data */
+        return s->io >> 8;
+    case 0xd:	/* Error */
+        return ide_ioport_read(s->ide, 0x1);
+    case 0xe:	/* Alternate Status */
+        if (s->ide->cur_drive->bs)
+            return s->ide->cur_drive->status;
+        else
+            return 0;
+    case 0xf:	/* Device Address */
+        return 0xc2 | ((~s->ide->select << 2) & 0x3c);
+    default:
+        return ide_ioport_read(s->ide, at);
+    }
+
+    return 0;
+}
+
+static void md_common_write(void *opaque, uint32_t at, uint16_t value)
+{
+    struct md_s *s = (struct md_s *) opaque;
+    at -= s->io_base;
+
+    switch (s->opt & OPT_MODE) {
+    case OPT_MODE_MMAP:
+        if ((at & ~0x3ff) == 0x400)
+            at = 0;
+        break;
+    case OPT_MODE_IOMAP16:
+        at &= 0xf;
+        break;
+    case OPT_MODE_IOMAP1:
+        if ((at & ~0xf) == 0x3f0)
+            at -= 0x3e8;
+        else if ((at & ~0xf) == 0x1f0)
+            at -= 0x1f0;
+        break;
+    case OPT_MODE_IOMAP2:
+        if ((at & ~0xf) == 0x370)
+            at -= 0x368;
+        else if ((at & ~0xf) == 0x170)
+            at -= 0x170;
+    }
+
+    switch (at) {
+    case 0x0:	/* Even WR Data */
+    case 0x8:
+        ide_data_writew(s->ide, 0, value);
+        break;
+
+        /* TODO: 8-bit accesses */
+        if (s->cycle)
+            ide_data_writew(s->ide, 0, s->io | (value << 8));
+        else
+            s->io = value & 0xff;
+        s->cycle = !s->cycle;
+        break;
+    case 0x9:
+        s->io = value & 0xff;
+        s->cycle = !s->cycle;
+        break;
+    case 0xd:	/* Features */
+        ide_ioport_write(s->ide, 0x1, value);
+        break;
+    case 0xe:	/* Device Control */
+        s->ctrl = value;
+        if (value & CTRL_SRST)
+            md_reset(s);
+        md_interrupt_update(s);
+        break;
+    default:
+        if (s->stat & STAT_PWRDWN) {
+            s->pins |= PINS_CRDY;
+            s->stat &= ~STAT_PWRDWN;
+        }
+        ide_ioport_write(s->ide, at, value);
+    }
+}
+
+static void md_save(QEMUFile *f, void *opaque)
+{
+    struct md_s *s = (struct md_s *) opaque;
+    int i;
+    uint8_t drive1_selected;
+
+    qemu_put_8s(f, &s->opt);
+    qemu_put_8s(f, &s->stat);
+    qemu_put_8s(f, &s->pins);
+
+    qemu_put_8s(f, &s->ctrl);
+    qemu_put_be16s(f, &s->io);
+    qemu_put_byte(f, s->cycle);
+
+    drive1_selected = (s->ide->cur_drive != s->ide);
+    qemu_put_8s(f, &s->ide->cmd);
+    qemu_put_8s(f, &drive1_selected);
+
+    for (i = 0; i < 2; i ++)
+        ide_save(f, &s->ide[i]);
+}
+
+static int md_load(QEMUFile *f, void *opaque, int version_id)
+{
+    struct md_s *s = (struct md_s *) opaque;
+    int i;
+    uint8_t drive1_selected;
+
+    qemu_get_8s(f, &s->opt);
+    qemu_get_8s(f, &s->stat);
+    qemu_get_8s(f, &s->pins);
+
+    qemu_get_8s(f, &s->ctrl);
+    qemu_get_be16s(f, &s->io);
+    s->cycle = qemu_get_byte(f);
+
+    qemu_get_8s(f, &s->ide->cmd);
+    qemu_get_8s(f, &drive1_selected);
+    s->ide->cur_drive = &s->ide[(drive1_selected != 0)];
+
+    for (i = 0; i < 2; i ++)
+        ide_load(f, &s->ide[i]);
+
+    return 0;
+}
+
+static int md_iid = 0;
+
+static const uint8_t dscm1xxxx_cis[0x14a] = {
+    [0x000] = CISTPL_DEVICE,	/* 5V Device Information */
+    [0x002] = 0x03,		/* Tuple length = 4 bytes */
+    [0x004] = 0xdb,		/* ID: DTYPE_FUNCSPEC, non WP, DSPEED_150NS */
+    [0x006] = 0x01,		/* Size = 2K bytes */
+    [0x008] = CISTPL_ENDMARK,
+
+    [0x00a] = CISTPL_DEVICE_OC,	/* Additional Device Information */
+    [0x00c] = 0x04,		/* Tuple length = 4 byest */
+    [0x00e] = 0x03,		/* Conditions: Ext = 0, Vcc 3.3V, MWAIT = 1 */
+    [0x010] = 0xdb,		/* ID: DTYPE_FUNCSPEC, non WP, DSPEED_150NS */
+    [0x012] = 0x01,		/* Size = 2K bytes */
+    [0x014] = CISTPL_ENDMARK,
+
+    [0x016] = CISTPL_JEDEC_C,	/* JEDEC ID */
+    [0x018] = 0x02,		/* Tuple length = 2 bytes */
+    [0x01a] = 0xdf,		/* PC Card ATA with no Vpp required */
+    [0x01c] = 0x01,
+
+    [0x01e] = CISTPL_MANFID,	/* Manufacture ID */
+    [0x020] = 0x04,		/* Tuple length = 4 bytes */
+    [0x022] = 0xa4,		/* TPLMID_MANF = 00a4 (IBM) */
+    [0x024] = 0x00,
+    [0x026] = 0x00,		/* PLMID_CARD = 0000 */
+    [0x028] = 0x00,
+
+    [0x02a] = CISTPL_VERS_1,	/* Level 1 Version */
+    [0x02c] = 0x12,		/* Tuple length = 23 bytes */
+    [0x02e] = 0x04,		/* Major Version = JEIDA 4.2 / PCMCIA 2.1 */
+    [0x030] = 0x01,		/* Minor Version = 1 */
+    [0x032] = 'I',
+    [0x034] = 'B',
+    [0x036] = 'M',
+    [0x038] = 0x00,
+    [0x03a] = 'm',
+    [0x03c] = 'i',
+    [0x03e] = 'c',
+    [0x040] = 'r',
+    [0x042] = 'o',
+    [0x044] = 'd',
+    [0x046] = 'r',
+    [0x048] = 'i',
+    [0x04a] = 'v',
+    [0x04c] = 'e',
+    [0x04e] = 0x00,
+    [0x050] = CISTPL_ENDMARK,
+
+    [0x052] = CISTPL_FUNCID,	/* Function ID */
+    [0x054] = 0x02,		/* Tuple length = 2 bytes */
+    [0x056] = 0x04,		/* TPLFID_FUNCTION = Fixed Disk */
+    [0x058] = 0x01,		/* TPLFID_SYSINIT: POST = 1, ROM = 0 */
+
+    [0x05a] = CISTPL_FUNCE,	/* Function Extension */
+    [0x05c] = 0x02,		/* Tuple length = 2 bytes */
+    [0x05e] = 0x01,		/* TPLFE_TYPE = Disk Device Interface */
+    [0x060] = 0x01,		/* TPLFE_DATA = PC Card ATA Interface */
+
+    [0x062] = CISTPL_FUNCE,	/* Function Extension */
+    [0x064] = 0x03,		/* Tuple length = 3 bytes */
+    [0x066] = 0x02,		/* TPLFE_TYPE = Basic PC Card ATA Interface */
+    [0x068] = 0x08,		/* TPLFE_DATA: Rotating, Unique, Single */
+    [0x06a] = 0x0f,		/* TPLFE_DATA: Sleep, Standby, Idle, Auto */
+
+    [0x06c] = CISTPL_CONFIG,	/* Configuration */
+    [0x06e] = 0x05,		/* Tuple length = 5 bytes */
+    [0x070] = 0x01,		/* TPCC_RASZ = 2 bytes, TPCC_RMSZ = 1 byte */
+    [0x072] = 0x07,		/* TPCC_LAST = 7 */
+    [0x074] = 0x00,		/* TPCC_RADR = 0200 */
+    [0x076] = 0x02,
+    [0x078] = 0x0f,		/* TPCC_RMSK = 200, 202, 204, 206 */
+
+    [0x07a] = CISTPL_CFTABLE_ENTRY,	/* 16-bit PC Card Configuration */
+    [0x07c] = 0x0b,		/* Tuple length = 11 bytes */
+    [0x07e] = 0xc0,		/* TPCE_INDX = Memory Mode, Default, Iface */
+    [0x080] = 0xc0,		/* TPCE_IF = Memory, no BVDs, no WP, READY */
+    [0x082] = 0xa1,		/* TPCE_FS = Vcc only, no I/O, Memory, Misc */
+    [0x084] = 0x27,		/* NomV = 1, MinV = 1, MaxV = 1, Peakl = 1 */
+    [0x086] = 0x55,		/* NomV: 5.0 V */
+    [0x088] = 0x4d,		/* MinV: 4.5 V */
+    [0x08a] = 0x5d,		/* MaxV: 5.5 V */
+    [0x08c] = 0x4e,		/* Peakl: 450 mA */
+    [0x08e] = 0x08,		/* TPCE_MS = 1 window, 1 byte, Host address */
+    [0x090] = 0x00,		/* Window descriptor: Window length = 0 */
+    [0x092] = 0x20,		/* TPCE_MI: support power down mode, RW */
+
+    [0x094] = CISTPL_CFTABLE_ENTRY,	/* 16-bit PC Card Configuration */
+    [0x096] = 0x06,		/* Tuple length = 6 bytes */
+    [0x098] = 0x00,		/* TPCE_INDX = Memory Mode, no Default */
+    [0x09a] = 0x01,		/* TPCE_FS = Vcc only, no I/O, no Memory */
+    [0x09c] = 0x21,		/* NomV = 1, MinV = 0, MaxV = 0, Peakl = 1 */
+    [0x09e] = 0xb5,		/* NomV: 3.3 V */
+    [0x0a0] = 0x1e,
+    [0x0a2] = 0x3e,		/* Peakl: 350 mA */
+
+    [0x0a4] = CISTPL_CFTABLE_ENTRY,	/* 16-bit PC Card Configuration */
+    [0x0a6] = 0x0d,		/* Tuple length = 13 bytes */
+    [0x0a8] = 0xc1,		/* TPCE_INDX = I/O and Memory Mode, Default */
+    [0x0aa] = 0x41,		/* TPCE_IF = I/O and Memory, no BVD, no WP */
+    [0x0ac] = 0x99,		/* TPCE_FS = Vcc only, I/O, Interrupt, Misc */
+    [0x0ae] = 0x27,		/* NomV = 1, MinV = 1, MaxV = 1, Peakl = 1 */
+    [0x0b0] = 0x55,		/* NomV: 5.0 V */
+    [0x0b2] = 0x4d,		/* MinV: 4.5 V */
+    [0x0b4] = 0x5d,		/* MaxV: 5.5 V */
+    [0x0b6] = 0x4e,		/* Peakl: 450 mA */
+    [0x0b8] = 0x64,		/* TPCE_IO = 16-byte boundary, 16/8 accesses */
+    [0x0ba] = 0xf0,		/* TPCE_IR =  MASK, Level, Pulse, Share */
+    [0x0bc] = 0xff,		/* IRQ0..IRQ7 supported */
+    [0x0be] = 0xff,		/* IRQ8..IRQ15 supported */
+    [0x0c0] = 0x20,		/* TPCE_MI = support power down mode */
+
+    [0x0c2] = CISTPL_CFTABLE_ENTRY,	/* 16-bit PC Card Configuration */
+    [0x0c4] = 0x06,		/* Tuple length = 6 bytes */
+    [0x0c6] = 0x01,		/* TPCE_INDX = I/O and Memory Mode */
+    [0x0c8] = 0x01,		/* TPCE_FS = Vcc only, no I/O, no Memory */
+    [0x0ca] = 0x21,		/* NomV = 1, MinV = 0, MaxV = 0, Peakl = 1 */
+    [0x0cc] = 0xb5,		/* NomV: 3.3 V */
+    [0x0ce] = 0x1e,
+    [0x0d0] = 0x3e,		/* Peakl: 350 mA */
+
+    [0x0d2] = CISTPL_CFTABLE_ENTRY,	/* 16-bit PC Card Configuration */
+    [0x0d4] = 0x12,		/* Tuple length = 18 bytes */
+    [0x0d6] = 0xc2,		/* TPCE_INDX = I/O Primary Mode */
+    [0x0d8] = 0x41,		/* TPCE_IF = I/O and Memory, no BVD, no WP */
+    [0x0da] = 0x99,		/* TPCE_FS = Vcc only, I/O, Interrupt, Misc */
+    [0x0dc] = 0x27,		/* NomV = 1, MinV = 1, MaxV = 1, Peakl = 1 */
+    [0x0de] = 0x55,		/* NomV: 5.0 V */
+    [0x0e0] = 0x4d,		/* MinV: 4.5 V */
+    [0x0e2] = 0x5d,		/* MaxV: 5.5 V */
+    [0x0e4] = 0x4e,		/* Peakl: 450 mA */
+    [0x0e6] = 0xea,		/* TPCE_IO = 1K boundary, 16/8 access, Range */
+    [0x0e8] = 0x61,		/* Range: 2 fields, 2 bytes addr, 1 byte len */
+    [0x0ea] = 0xf0,		/* Field 1 address = 0x01f0 */
+    [0x0ec] = 0x01,
+    [0x0ee] = 0x07,		/* Address block length = 8 */
+    [0x0f0] = 0xf6,		/* Field 2 address = 0x03f6 */
+    [0x0f2] = 0x03,
+    [0x0f4] = 0x01,		/* Address block length = 2 */
+    [0x0f6] = 0xee,		/* TPCE_IR = IRQ E, Level, Pulse, Share */
+    [0x0f8] = 0x20,		/* TPCE_MI = support power down mode */
+
+    [0x0fa] = CISTPL_CFTABLE_ENTRY,	/* 16-bit PC Card Configuration */
+    [0x0fc] = 0x06,		/* Tuple length = 6 bytes */
+    [0x0fe] = 0x02,		/* TPCE_INDX = I/O Primary Mode, no Default */
+    [0x100] = 0x01,		/* TPCE_FS = Vcc only, no I/O, no Memory */
+    [0x102] = 0x21,		/* NomV = 1, MinV = 0, MaxV = 0, Peakl = 1 */
+    [0x104] = 0xb5,		/* NomV: 3.3 V */
+    [0x106] = 0x1e,
+    [0x108] = 0x3e,		/* Peakl: 350 mA */
+
+    [0x10a] = CISTPL_CFTABLE_ENTRY,	/* 16-bit PC Card Configuration */
+    [0x10c] = 0x12,		/* Tuple length = 18 bytes */
+    [0x10e] = 0xc3,		/* TPCE_INDX = I/O Secondary Mode, Default */
+    [0x110] = 0x41,		/* TPCE_IF = I/O and Memory, no BVD, no WP */
+    [0x112] = 0x99,		/* TPCE_FS = Vcc only, I/O, Interrupt, Misc */
+    [0x114] = 0x27,		/* NomV = 1, MinV = 1, MaxV = 1, Peakl = 1 */
+    [0x116] = 0x55,		/* NomV: 5.0 V */
+    [0x118] = 0x4d,		/* MinV: 4.5 V */
+    [0x11a] = 0x5d,		/* MaxV: 5.5 V */
+    [0x11c] = 0x4e,		/* Peakl: 450 mA */
+    [0x11e] = 0xea,		/* TPCE_IO = 1K boundary, 16/8 access, Range */
+    [0x120] = 0x61,		/* Range: 2 fields, 2 byte addr, 1 byte len */
+    [0x122] = 0x70,		/* Field 1 address = 0x0170 */
+    [0x124] = 0x01,
+    [0x126] = 0x07,		/* Address block length = 8 */
+    [0x128] = 0x76,		/* Field 2 address = 0x0376 */
+    [0x12a] = 0x03,
+    [0x12c] = 0x01,		/* Address block length = 2 */
+    [0x12e] = 0xee,		/* TPCE_IR = IRQ E, Level, Pulse, Share */
+    [0x130] = 0x20,		/* TPCE_MI = support power down mode */
+
+    [0x132] = CISTPL_CFTABLE_ENTRY,	/* 16-bit PC Card Configuration */
+    [0x134] = 0x06,		/* Tuple length = 6 bytes */
+    [0x136] = 0x03,		/* TPCE_INDX = I/O Secondary Mode */
+    [0x138] = 0x01,		/* TPCE_FS = Vcc only, no I/O, no Memory */
+    [0x13a] = 0x21,		/* NomV = 1, MinV = 0, MaxV = 0, Peakl = 1 */
+    [0x13c] = 0xb5,		/* NomV: 3.3 V */
+    [0x13e] = 0x1e,
+    [0x140] = 0x3e,		/* Peakl: 350 mA */
+
+    [0x142] = CISTPL_NO_LINK,	/* No Link */
+    [0x144] = 0x00,		/* Tuple length = 0 bytes */
+
+    [0x146] = CISTPL_END,	/* Tuple End */
+};
+
+static int dscm1xxxx_attach(void *opaque)
+{
+    struct md_s *md = (struct md_s *) opaque;
+    md->card.attr_read = md_attr_read;
+    md->card.attr_write = md_attr_write;
+    md->card.common_read = md_common_read;
+    md->card.common_write = md_common_write;
+    md->card.io_read = md_common_read;
+    md->card.io_write = md_common_write;
+
+    md->attr_base = md->card.cis[0x74] | (md->card.cis[0x76] << 8);
+    md->io_base = 0x0;
+
+    md_reset(md);
+    md_interrupt_update(md);
+
+    md->card.slot->card_string = "DSCM-1xxxx Hitachi Microdrive";
+    return 0;
+}
+
+static int dscm1xxxx_detach(void *opaque)
+{
+    struct md_s *md = (struct md_s *) opaque;
+    md_reset(md);
+    return 0;
+}
+
+struct pcmcia_card_s *dscm1xxxx_init(BlockDriverState *bdrv)
+{
+    struct md_s *md = (struct md_s *) qemu_mallocz(sizeof(struct md_s));
+    md->card.state = md;
+    md->card.attach = dscm1xxxx_attach;
+    md->card.detach = dscm1xxxx_detach;
+    md->card.cis = dscm1xxxx_cis;
+    md->card.cis_len = sizeof(dscm1xxxx_cis);
+
+    ide_init2(md->ide, bdrv, 0, qemu_allocate_irqs(md_set_irq, md, 1)[0]);
+    md->ide->is_cf = 1;
+    md->ide->mdata_size = METADATA_SIZE;
+    md->ide->mdata_storage = (uint8_t *) qemu_mallocz(METADATA_SIZE);
+
+    register_savevm("microdrive", md_iid ++, 0, md_save, md_load, md);
+
+    return &md->card;
 }

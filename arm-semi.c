@@ -1,6 +1,6 @@
 /*
  *  Arm "Angel" semihosting syscalls
- * 
+ *
  *  Copyright (c) 2005, 2007 CodeSourcery.
  *  Written by Paul Brook.
  *
@@ -112,69 +112,26 @@ static inline uint32_t set_swi_errno(CPUState *env, uint32_t code)
     return code;
 }
 
-static uint32_t softmmu_tget32(CPUState *env, uint32_t addr)
-{
-    uint32_t val;
-
-    cpu_memory_rw_debug(env, addr, (uint8_t *)&val, 4, 0);
-    return tswap32(val);
-}
-static uint32_t softmmu_tget8(CPUState *env, uint32_t addr)
-{
-    uint8_t val;
-
-    cpu_memory_rw_debug(env, addr, &val, 1, 0);
-    return val;
-}
-#define tget32(p) softmmu_tget32(env, p)
-#define tget8(p) softmmu_tget8(env, p)
-
-static void *softmmu_lock_user(CPUState *env, uint32_t addr, uint32_t len,
-                               int copy)
-{
-    char *p;
-    /* TODO: Make this something that isn't fixed size.  */
-    p = malloc(len);
-    if (copy)
-        cpu_memory_rw_debug(env, addr, p, len, 0);
-    return p;
-}
-#define lock_user(p, len, copy) softmmu_lock_user(env, p, len, copy)
-static char *softmmu_lock_user_string(CPUState *env, uint32_t addr)
-{
-    char *p;
-    char *s;
-    uint8_t c;
-    /* TODO: Make this something that isn't fixed size.  */
-    s = p = malloc(1024);
-    do {
-        cpu_memory_rw_debug(env, addr, &c, 1, 0);
-        addr++;
-        *(p++) = c;
-    } while (c);
-    return s;
-}
-#define lock_user_string(p) softmmu_lock_user_string(env, p)
-static void softmmu_unlock_user(CPUState *env, void *p, target_ulong addr,
-                                target_ulong len)
-{
-    if (len)
-        cpu_memory_rw_debug(env, addr, p, len, 1);
-    free(p);
-}
-#define unlock_user(s, args, len) softmmu_unlock_user(env, s, args, len)
+#include "softmmu-semi.h"
 #endif
 
 static target_ulong arm_semi_syscall_len;
+
+#if !defined(CONFIG_USER_ONLY)
+static target_ulong syscall_err;
+#endif
 
 static void arm_semi_cb(CPUState *env, target_ulong ret, target_ulong err)
 {
 #ifdef CONFIG_USER_ONLY
     TaskState *ts = env->opaque;
 #endif
+
     if (ret == (target_ulong)-1) {
 #ifdef CONFIG_USER_ONLY
         ts->swi_errno = err;
+#else
+	syscall_err = err;
 #endif
         env->regs[0] = ret;
     } else {
@@ -192,6 +149,20 @@ static void arm_semi_cb(CPUState *env, target_ulong ret, target_ulong err)
             break;
         }
     }
+}
+
+static void arm_semi_flen_cb(CPUState *env, target_ulong ret, target_ulong err)
+{
+    /* The size is always stored in big-endian order, extract
+       the value. We assume the size always fit in 32 bits.  */
+    uint32_t size;
+    cpu_memory_rw_debug(env, env->regs[13]-64+32, (uint8_t *)&size, 4, 0);
+    env->regs[0] = be32_to_cpu(size);
+#ifdef CONFIG_USER_ONLY
+    ((TaskState *)env->opaque)->swi_errno = err;
+#else
+    syscall_err = err;
+#endif
 }
 
 #define ARG(n) tget32(args + (n) * 4)
@@ -223,8 +194,8 @@ uint32_t do_arm_semihosting(CPUState *env)
                 return STDOUT_FILENO;
         }
         if (use_gdb_syscalls()) {
-            gdb_do_syscall(arm_semi_cb, "open,%s,%x,1a4", ARG(0), (int)ARG(2),
-                           gdb_open_modeflags[ARG(1)]);
+            gdb_do_syscall(arm_semi_cb, "open,%s,%x,1a4", ARG(0),
+			   (int)ARG(2)+1, gdb_open_modeflags[ARG(1)]);
             return env->regs[0];
         } else {
             ret = set_swi_errno(ts, open(s, open_modeflags[ARG(1)], 0644));
@@ -302,7 +273,7 @@ uint32_t do_arm_semihosting(CPUState *env)
         }
     case SYS_SEEK:
         if (use_gdb_syscalls()) {
-            gdb_do_syscall(arm_semi_cb, "fseek,%x,%x,0", ARG(0), ARG(1));
+            gdb_do_syscall(arm_semi_cb, "lseek,%x,%x,0", ARG(0), ARG(1));
             return env->regs[0];
         } else {
             ret = set_swi_errno(ts, lseek(ARG(0), ARG(1), SEEK_SET));
@@ -312,8 +283,9 @@ uint32_t do_arm_semihosting(CPUState *env)
         }
     case SYS_FLEN:
         if (use_gdb_syscalls()) {
-            /* TODO: Use stat syscall.  */
-            return -1;
+            gdb_do_syscall(arm_semi_flen_cb, "fstat,%x,%x",
+			   ARG(0), env->regs[13]-64);
+            return env->regs[0];
         } else {
             struct stat buf;
             ret = set_swi_errno(ts, fstat(ARG(0), &buf));
@@ -326,7 +298,7 @@ uint32_t do_arm_semihosting(CPUState *env)
         return -1;
     case SYS_REMOVE:
         if (use_gdb_syscalls()) {
-            gdb_do_syscall(arm_semi_cb, "unlink,%s", ARG(0), (int)ARG(1));
+            gdb_do_syscall(arm_semi_cb, "unlink,%s", ARG(0), (int)ARG(1)+1);
             ret = env->regs[0];
         } else {
             s = lock_user_string(ARG(0));
@@ -337,7 +309,7 @@ uint32_t do_arm_semihosting(CPUState *env)
     case SYS_RENAME:
         if (use_gdb_syscalls()) {
             gdb_do_syscall(arm_semi_cb, "rename,%s,%s",
-                           ARG(0), (int)ARG(1), ARG(2), (int)ARG(3));
+                           ARG(0), (int)ARG(1)+1, ARG(2), (int)ARG(3)+1);
             return env->regs[0];
         } else {
             char *s2;
@@ -354,7 +326,7 @@ uint32_t do_arm_semihosting(CPUState *env)
         return set_swi_errno(ts, time(NULL));
     case SYS_SYSTEM:
         if (use_gdb_syscalls()) {
-            gdb_do_syscall(arm_semi_cb, "system,%s", ARG(0), (int)ARG(1));
+            gdb_do_syscall(arm_semi_cb, "system,%s", ARG(0), (int)ARG(1)+1);
             return env->regs[0];
         } else {
             s = lock_user_string(ARG(0));
@@ -365,7 +337,7 @@ uint32_t do_arm_semihosting(CPUState *env)
 #ifdef CONFIG_USER_ONLY
         return ts->swi_errno;
 #else
-        return 0;
+        return syscall_err;
 #endif
     case SYS_GET_CMDLINE:
 #ifdef CONFIG_USER_ONLY
@@ -429,7 +401,7 @@ uint32_t do_arm_semihosting(CPUState *env)
                 }
                 ts->heap_limit = limit;
             }
-              
+
             ptr = lock_user(ARG(0), 16, 0);
             ptr[0] = tswap32(ts->heap_base);
             ptr[1] = tswap32(ts->heap_limit);
