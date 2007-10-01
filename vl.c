@@ -1170,7 +1170,8 @@ static void host_alarm_handler(int host_signum)
         last_clock = ti;
     }
 #endif
-    if (alarm_has_dynticks(alarm_timer) ||
+    if (1 ||
+	alarm_has_dynticks(alarm_timer) ||
         qemu_timer_expired(active_timers[QEMU_TIMER_VIRTUAL],
                            qemu_get_clock(vm_clock)) ||
         qemu_timer_expired(active_timers[QEMU_TIMER_REALTIME],
@@ -3847,6 +3848,7 @@ static TAPState *net_tap_fd_init(VLANState *vlan, int fd)
     if (!s)
         return NULL;
     s->fd = fd;
+    enable_sigio_timer(fd);
     s->vc = qemu_new_vlan_client(vlan, tap_receive, NULL, s);
     qemu_set_fd_handler(s->fd, tap_send, NULL, s);
     snprintf(s->vc->info_str, sizeof(s->vc->info_str), "tap: fd=%d", fd);
