@@ -243,6 +243,36 @@ int kvm_create_vcpu(kvm_context_t kvm, int slot)
 	return 0;
 }
 
+int kvm_set_shadow_pages(kvm_context_t kvm, unsigned int nrshadow_pages)
+{
+	int r;
+
+	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION,
+		  KVM_CAP_MMU_SHADOW_CACHE_CONTROL);
+	if (r > 0) {
+		r = ioctl(kvm->vm_fd, KVM_SET_NR_MMU_PAGES, nrshadow_pages);
+		if (r == -1) {
+			fprintf(stderr, "kvm_set_shadow_pages: %m\n");
+			return -errno;
+		}
+		return 0;
+	}
+	return -1;
+}
+
+int kvm_get_shadow_pages(kvm_context_t kvm, unsigned int *nrshadow_pages)
+{
+	int r;
+
+	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION,
+		  KVM_CAP_MMU_SHADOW_CACHE_CONTROL);
+	if (r > 0) {
+		*nrshadow_pages = ioctl(kvm->vm_fd, KVM_GET_NR_MMU_PAGES);
+		return 0;
+	}
+	return -1;
+}
+
 int kvm_create(kvm_context_t kvm, unsigned long phys_mem_bytes, void **vm_mem)
 {
 	unsigned long dosmem = 0xa0000;
