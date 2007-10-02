@@ -2,13 +2,18 @@
 
 prefix=/usr/local
 kerneldir=/lib/modules/$(uname -r)/build
+cc=gcc
+ld=ld
+arch=`uname -m | sed -e s/i.86/x86/`
 
 usage() {
     cat <<-EOF
 	Usage: $0 [options]
 
 	Options include:
-
+	    --arch=ARCH            architecture to compile for ($arch)
+	    --cc=CC		   c compiler to use ($cc)
+	    --ld=LD		   ld linker to use ($ld)
 	    --prefix=PREFIX        where to install things ($prefix)
 	    --kerneldir=DIR        kernel build directory for kvm.h ($kerneldir)
 EOF
@@ -29,6 +34,15 @@ while [[ "$1" = -* ]]; do
 	--kerneldir)
 	    kerneldir="$arg"
 	    ;;
+        --arch)
+	    arch="$arg"
+	    ;;
+	--cc)
+	    cc="$arg"
+	    ;;
+	--ld)
+	    ld="$arg"
+	    ;;
 	--help)
 	    usage
 	    ;;
@@ -41,4 +55,7 @@ done
 cat <<EOF > config.mak
 PREFIX=$prefix
 KERNELDIR=$(readlink -f $kerneldir)
+ARCH=$arch
+CC=$cc
+LD=$ld
 EOF
