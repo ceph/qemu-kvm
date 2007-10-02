@@ -219,6 +219,7 @@ int nb_option_roms;
 int semihosting_enabled = 0;
 int autostart = 1;
 int time_drift_fix = 0;
+unsigned int kvm_shadow_memory = 0;
 const char *cpu_vendor_string;
 #ifdef TARGET_ARM
 int old_param = 0;
@@ -7432,6 +7433,7 @@ static void help(int exitcode)
 	   "-daemonize      daemonize QEMU after initializing\n"
 #endif
            "-tdf            inject timer interrupts that got lost\n"
+           "-kvm-shadow-memory megs set the amount of shadow pages to be allocated\n"
 	   "-option-rom rom load a file, rom, into the option ROM space\n"
 #ifdef TARGET_SPARC
            "-prom-env variable=value  set OpenBIOS nvram variables\n"
@@ -7543,6 +7545,7 @@ enum {
     QEMU_OPTION_clock,
     QEMU_OPTION_incoming,
     QEMU_OPTION_tdf,
+    QEMU_OPTION_kvm_shadow_memory,
 };
 
 typedef struct QEMUOption {
@@ -7649,6 +7652,7 @@ const QEMUOption qemu_options[] = {
     { "semihosting", 0, QEMU_OPTION_semihosting },
 #endif
     { "tdf", 0, QEMU_OPTION_tdf }, /* enable time drift fix */
+    { "kvm-shadow-memory", HAS_ARG, QEMU_OPTION_kvm_shadow_memory },
     { "name", HAS_ARG, QEMU_OPTION_name },
 #if defined(TARGET_SPARC)
     { "prom-env", HAS_ARG, QEMU_OPTION_prom_env },
@@ -8477,6 +8481,9 @@ int main(int argc, char **argv)
             case QEMU_OPTION_tdf:
                 time_drift_fix = 1;
 		break;
+            case QEMU_OPTION_kvm_shadow_memory:
+                kvm_shadow_memory = (int64_t)atoi(optarg) * 1024 * 1024 / 4096;
+                break;
             case QEMU_OPTION_name:
                 qemu_name = optarg;
                 break;

@@ -31,6 +31,7 @@ static struct kvm_msr_list *kvm_msr_list;
 static int kvm_has_msr_star;
 
 extern int smp_cpus;
+extern unsigned int kvm_shadow_memory;
 
 pthread_mutex_t qemu_mutex = PTHREAD_MUTEX_INITIALIZER;
 static __thread CPUState *vcpu_env;
@@ -1007,6 +1008,8 @@ int kvm_qemu_create_context(void)
 	kvm_qemu_destroy();
 	return -1;
     }
+    if (kvm_shadow_memory)
+        kvm_set_shadow_pages(kvm_context, kvm_shadow_memory);
     kvm_msr_list = kvm_get_msr_list(kvm_context);
     if (!kvm_msr_list) {
 	kvm_qemu_destroy();
