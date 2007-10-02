@@ -126,9 +126,9 @@ static inline int smp_call_function_single2(int cpu, void (*func)(void *info),
 #define kzalloc(size,flags)			\
 ({						\
 	void *__ret = kmalloc(size, flags);	\
-	if (__ret)
-		memset(__ret, 0, size);
-	__ret;
+	if (__ret)				\
+		memset(__ret, 0, size);		\
+	__ret;					\
 })
 #endif
 #endif
