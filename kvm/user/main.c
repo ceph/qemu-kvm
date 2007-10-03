@@ -14,6 +14,8 @@
  * This work is licensed under the GNU LGPL license, version 2.
  */
 
+#define _GNU_SOURCE
+
 #include "kvmctl.h"
 #include "test/apic.h"
 
@@ -30,6 +32,8 @@
 #include <pthread.h>
 #include <sys/syscall.h>
 #include <linux/unistd.h>
+#include <getopt.h>
+#include <stdbool.h>
 
 static int gettid(void)
 {
@@ -313,21 +317,18 @@ static void start_vcpu(int n)
 	pthread_create(&thread, NULL, do_create_vcpu, (void *)(long)n);
 }
 
-const char *progname;
-
-static void usage()
+static void usage(const char *progname)
 {
-	fprintf(stderr, "usage: %s [--smp n] [bootstrap] flatfile\n", progname);
-	exit(1);
-}
-
-static int isarg(const char *arg, const char *longform, const char *shortform)
-{
-	if (longform && strcmp(arg, longform) == 0)
-		return 1;
-	if (shortform && strcmp(arg, shortform) == 0)
-		return 1;
-	return 0;
+	fprintf(stderr,
+		"Usage: %s [OPTIONS] [bootstrap] flatfile\n"
+		"KVM test harness.\n"
+		"\n"
+		"  -s, --smp=NUM          create a VM with NUM virtual CPUs\n"
+		"  -p, --protected-mode   start VM in protected mode\n"
+		"  -h, --help             display this help screen and exit\n"
+		"\n"
+		"Report bugs to <kvm-devel@lists.sourceforge.net>.\n"
+		, progname);
 }
 
 static void sig_ignore(int sig)
@@ -335,23 +336,48 @@ static void sig_ignore(int sig)
 	write(1, "boo\n", 4);
 }
 
-int main(int ac, char **av)
+int main(int argc, char **argv)
 {
 	void *vm_mem;
 	int i;
+	const char *sopts = "s:ph";
+	struct option lopts[] = {
+		{ "smp", 1, 0, 's' },
+		{ "protected-mode", 0, 0, 'p' },
+		{ "help", 0, 0, 'h' },
+		{ 0 },
+	};
+	int opt_ind, ch;
+	bool enter_protected_mode = false;
+	int nb_args;
 
-	progname = av[0];
-	while (ac > 1 && av[1][0] =='-') {
-		if (isarg(av[1], "--smp", "-s")) {
-			if (ac <= 2)
-				usage();
-			ncpus = atoi(av[2]);
-			if (ncpus < 1)
-				usage();
-			++av, --ac;
-		} else
-			usage();
-		++av, --ac;
+	while ((ch = getopt_long(argc, argv, sopts, lopts, &opt_ind)) != -1) {
+		switch (ch) {
+		case 's':
+			ncpus = atoi(optarg);
+			break;
+		case 'p':
+			enter_protected_mode = true;
+			break;
+		case 'h':
+			usage(argv[0]);
+			exit(0);
+		case '?':
+		default:
+			fprintf(stderr,
+				"Try `%s --help' for more information.\n",
+				argv[0]);
+			exit(1);
+		}
+	}
+
+	nb_args = argc - optind;
+	if (nb_args < 1 || nb_args > 2) {
+		fprintf(stderr,
+			"Incorrect number of arguments.\n"
+			"Try `%s --help' for more information.\n",
+			argv[0]);
+		exit(1);
 	}
 
 	signal(IPI_SIGNAL, sig_ignore);
@@ -372,14 +398,14 @@ int main(int ac, char **av)
 		fprintf(stderr, "kvm_create failed\n");
 		return 1;
 	}
-	if (ac > 1) {
-		if (strcmp(av[1], "-32") != 0)
-			load_file(vm_mem + 0xf0000, av[1]);
-		else
-			enter_32(kvm);
-	}
-	if (ac > 2)
-		load_file(vm_mem + 0x100000, av[2]);
+
+	if (enter_protected_mode)
+		enter_32(kvm);
+	else
+		load_file(vm_mem + 0xf0000, argv[optind]);
+
+	if (nb_args > 1)
+		load_file(vm_mem + 0x100000, argv[optind + 1]);
 
 	sem_init(&init_sem, 0, 0);
 	init_vcpu(0);
