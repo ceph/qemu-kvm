@@ -23,6 +23,7 @@
  */
 #include "vl.h"
 #include "cpu-all.h"
+#include "kvmctl.h"
 
 #define VMPORT_CMD_GETVERSION 0x0a
 #define VMPORT_CMD_GETRAMSIZE 0x14
@@ -53,6 +54,18 @@ static uint32_t vmport_ioport_read(void *opaque, uint32_t addr)
     VMPortState *s = opaque;
     unsigned char command;
     target_ulong eax;
+    uint32_t ret;
+
+#ifdef USE_KVM
+    struct kvm_regs regs;
+    extern kvm_context_t kvm_context;
+    if (kvm_allowed) {
+        kvm_get_regs(kvm_context, s->env->cpu_index, &regs);
+        s->env->regs[R_EAX] = regs.rax; s->env->regs[R_EBX] = regs.rbx;
+        s->env->regs[R_ECX] = regs.rcx; s->env->regs[R_EDX] = regs.rdx;
+        s->env->regs[R_ESI] = regs.rsi; s->env->regs[R_EDI] = regs.rdi;
+    }
+#endif
 
     eax = s->env->regs[R_EAX];
     if (eax != VMPORT_MAGIC)
@@ -67,7 +80,18 @@ static uint32_t vmport_ioport_read(void *opaque, uint32_t addr)
         return eax;
     }
 
-    return s->func[command](s->opaque[command], addr);
+    ret = s->func[command](s->opaque[command], addr);
+
+#ifdef USE_KVM
+    if (kvm_allowed) {
+        regs.rax = s->env->regs[R_EAX]; regs.rbx = s->env->regs[R_EBX];
+        regs.rcx = s->env->regs[R_ECX]; regs.rdx = s->env->regs[R_EDX];
+        regs.rsi = s->env->regs[R_ESI]; regs.rdi = s->env->regs[R_EDI];
+        kvm_set_regs(kvm_context, s->env->cpu_index, &regs);
+    }
+#endif
+
+    return ret;
 }
 
 static uint32_t vmport_cmd_get_version(void *opaque, uint32_t addr)
