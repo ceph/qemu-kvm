@@ -218,7 +218,7 @@ static void sdl_process_key(SDL_KeyboardEvent *ev)
 
 static void sdl_update_caption(void)
 {
-    char buf[1024];
+    char buf[1024], appname[20] = "QEMU";
     const char *status = "";
 
     if (!vm_running)
@@ -230,18 +230,18 @@ static void sdl_update_caption(void)
             status = " - Press Ctrl-Alt-Shift to exit grab";
     }
 
-    if (qemu_name)
-        snprintf(buf, sizeof(buf), "QEMU (%s)%s", qemu_name, status);
-    else
-        snprintf(buf, sizeof(buf), "QEMU%s", status);
-
 #if USE_KVM
     if (kvm_allowed) {
-        strcat(buf, "/KVM");
+        strncat(appname, "/KVM", sizeof(appname));
     }
 #endif
 
-    SDL_WM_SetCaption(buf, "QEMU");
+    if (qemu_name)
+        snprintf(buf, sizeof(buf), "%s (%s)%s", appname, qemu_name, status);
+    else
+        snprintf(buf, sizeof(buf), "%s%s", appname, status);
+
+    SDL_WM_SetCaption(buf, appname);
 }
 
 static void sdl_hide_cursor(void)
