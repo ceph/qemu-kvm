@@ -41,6 +41,7 @@ RANLIB = ranlib
 
 BCC = bcc
 GCC = gcc -m32
+HOST_CC = gcc
 AS86 = as86
 
 BX_INCDIRS = -I.. -I$(srcdir)/.. -I../iodev -I$(srcdir)/../iodev
@@ -112,4 +113,4 @@ BIOS-bochs-latest: rombios16.bin rombios32.bin
 	cat rombios32.bin rombios16.bin > $@
 
 biossums: biossums.c
-	$(GCC) -o biossums biossums.c
+	$(HOST_CC) -o biossums biossums.c
