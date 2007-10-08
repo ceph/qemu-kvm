@@ -1053,8 +1053,8 @@ again:
 	if (1) {
 		switch (run->exit_reason) {
 		case KVM_EXIT_UNKNOWN:
-			fprintf(stderr, "unhandled vm exit:  0x%x\n", 
-				(unsigned)run->hw.hardware_exit_reason);
+			fprintf(stderr, "unhandled vm exit: 0x%x vcpu_id %d\n",
+				(unsigned)run->hw.hardware_exit_reason, vcpu);
 			kvm_show_regs(kvm, vcpu);
 			abort();
 			break;
@@ -1131,8 +1131,8 @@ again:
 	if (1) {
 		switch (run->exit_reason) {
 		case KVM_EXIT_UNKNOWN:
-			fprintf(stderr, "unhandled vm exit:  0x%x\n", 
-				(unsigned)run->hw.hardware_exit_reason);
+			fprintf(stderr, "unhandled vm exit: 0x%x vcpu_id %d\n",
+				(unsigned)run->hw.hardware_exit_reason, vcpu);
 			kvm_show_regs(kvm, vcpu);
 			abort();
 			break;
