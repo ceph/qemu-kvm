@@ -1,14 +1,22 @@
 
 include config.mak
 
+DESTDIR :=
+
+#make sure env CFLAGS variable is not used
+CFLAGS =
+
+#include architecure specific make rules
+include config-$(ARCH).mak
+
 # cc-option
 # Usage: OP_CFLAGS+=$(call cc-option, -falign-functions=0, -malign-functions=0)
 
 cc-option = $(shell if $(CC) $(1) -S -o /dev/null -xc /dev/null \
               > /dev/null 2>&1; then echo "$(1)"; else echo "$(2)"; fi ;)
 
-CFLAGS = -I $(KERNELDIR)/include $(autodepend-flags) -g -fomit-frame-pointer \
-	-Wall -m$(bits)
+CFLAGS += -I $(KERNELDIR)/include $(autodepend-flags) -g -fomit-frame-pointer \
+	-Wall
 CFLAGS += $(call cc-option, -fno-stack-protector, "")
 CFLAGS += $(call cc-option, -fno-stack-protector-all, "")
 
@@ -17,20 +25,6 @@ LDFLAGS += $(CFLAGS)
 CXXFLAGS = $(autodepend-flags) 
 
 autodepend-flags = -MMD -MF $(dir $*).$(notdir $*).d
-
-DESTDIR = 
-
-ifeq ($(shell uname -m), x86_64)
-LIBDIR = /lib64
-cstart.o = test/cstart64.o
-bits = 64
-ldarch = elf64-x86-64
-else
-LIBDIR = /lib
-cstart.o = test/cstart.o
-bits = 32
-ldarch = elf32-i386
-endif
 
 all: kvmctl libkvm.a flatfiles
 
@@ -45,11 +39,7 @@ libkvm.a: kvmctl.o
 
 flatfiles-common = test/bootstrap test/vmexit.flat test/smp.flat
 
-flatfiles-32 =
-
-flatfiles-64 = test/access.flat test/irq.flat test/sieve.flat test/simple.flat test/stringio.flat test/memtest1.flat
-
-flatfiles: $(flatfiles-common) $(flatfiles-$(bits))
+flatfiles: $(flatfiles-common) $(flatfiles)
 
 install:
 	install -D kvmctl.h $(DESTDIR)/$(PREFIX)/include/kvmctl.h
@@ -60,13 +50,13 @@ install:
 	install -D libkvm.a $(DESTDIR)/$(PREFIX)/$(LIBDIR)/libkvm.a
 
 %.flat: %.o
-	gcc $(CFLAGS) -nostdlib -o $@ -Wl,-T,flat.lds $^
+	$(CC) $(CFLAGS) -nostdlib -o $@ -Wl,-T,flat.lds $^
 
 test/bootstrap: test/bootstrap.o
-	gcc -nostdlib -o $@ -Wl,-T,bootstrap.lds $^
+	$(CC) -nostdlib -o $@ -Wl,-T,bootstrap.lds $^
 
 %.o: %.S
-	gcc $(CFLAGS) -c -nostdlib -o $@ $^
+	$(CC) $(CFLAGS) -c -nostdlib -o $@ $^
 
 test/irq.flat: test/print.o
 
