@@ -903,6 +903,12 @@ static int kvm_readw(void *opaque, uint64_t addr, uint16_t *data)
 
 static int kvm_readl(void *opaque, uint64_t addr, uint32_t *data)
 {
+    /* hack: Red Hat 7.1 generates some wierd accesses. */
+    if (addr > 0xa0000 - 4 && addr < 0xa0000) {
+	*data = 0;
+	return 0;
+    }
+
     *data = ldl_phys(addr);
     return 0;
 }
