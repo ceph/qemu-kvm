@@ -4,7 +4,8 @@ prefix=/usr/local
 kerneldir=/lib/modules/$(uname -r)/build
 cc=gcc
 ld=ld
-arch=`uname -m | sed -e s/i.86/x86/`
+arch=`uname -m | sed -e s/i.86/i386/`
+cross_prefix=
 
 usage() {
     cat <<-EOF
@@ -12,6 +13,7 @@ usage() {
 
 	Options include:
 	    --arch=ARCH            architecture to compile for ($arch)
+	    --cross-prefix=PREFIX  cross compiler prefix
 	    --cc=CC		   c compiler to use ($cc)
 	    --ld=LD		   ld linker to use ($ld)
 	    --prefix=PREFIX        where to install things ($prefix)
@@ -37,6 +39,9 @@ while [[ "$1" = -* ]]; do
         --arch)
 	    arch="$arg"
 	    ;;
+	--cross-prefix)
+	    cross_prefix="$arg"
+	    ;;
 	--cc)
 	    cc="$arg"
 	    ;;
@@ -56,6 +61,6 @@ cat <<EOF > config.mak
 PREFIX=$prefix
 KERNELDIR=$(readlink -f $kerneldir)
 ARCH=$arch
-CC=$cc
-LD=$ld
+CC=$cross_prefix$cc
+LD=$cross_prefix$ld
 EOF
