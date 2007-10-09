@@ -919,6 +919,10 @@ static int handle_mmio(kvm_context_t kvm, struct kvm_run *kvm_run)
 	void *data = kvm_run->mmio.data;
 	int r = -1;
 
+	/* hack: Red Hat 7.1 generates these wierd accesses. */
+	if (addr == 0xa0000 && kvm_run->mmio.len == 3)
+	    return 0;
+
 	if (kvm_run->mmio.is_write) {
 		switch (kvm_run->mmio.len) {
 		case 1:
