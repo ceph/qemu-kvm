@@ -42,7 +42,6 @@ DefinitionBlock (
         Processor (CPUC, 0x0c, 0x0000b010, 0x06) {}
         Processor (CPUD, 0x0d, 0x0000b010, 0x06) {}
         Processor (CPUE, 0x0e, 0x0000b010, 0x06) {}
-        Processor (CPUF, 0x0f, 0x0000b010, 0x06) {}
     }
 
     Scope (\)
