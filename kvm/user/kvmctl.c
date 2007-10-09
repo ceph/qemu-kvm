@@ -86,6 +86,18 @@ static void kvm_memory_region_save_params(kvm_context_t kvm,
 	kvm->mem_regions[mem->slot] = *mem;
 }
 
+static void kvm_userspace_memory_region_save_params(kvm_context_t kvm,
+					struct kvm_userspace_memory_region *mem)
+{
+	struct kvm_memory_region kvm_mem;
+
+	kvm_mem.slot = mem->slot;
+	kvm_mem.memory_size = mem->memory_size;
+	kvm_mem.guest_phys_addr = mem->guest_phys_addr;
+
+	kvm_memory_region_save_params(kvm, &kvm_mem);
+}
+
 static void kvm_memory_region_clear_params(kvm_context_t kvm, int regnum)
 {
 	if (regnum >= KVM_MAX_NUM_MEM_REGIONS) {
@@ -273,14 +285,12 @@ int kvm_get_shadow_pages(kvm_context_t kvm, unsigned int *nrshadow_pages)
 	return -1;
 }
 
-int kvm_create(kvm_context_t kvm, unsigned long phys_mem_bytes, void **vm_mem)
+int kvm_alloc_kernel_memory(kvm_context_t kvm, unsigned long memory,
+								void **vm_mem)
 {
 	unsigned long dosmem = 0xa0000;
 	unsigned long exmem = 0xc0000;
 	unsigned long pcimem = 0xf0000000;
-	unsigned long memory = (phys_mem_bytes + PAGE_SIZE - 1) & PAGE_MASK;
-	int fd = kvm->fd;
-	int zfd;
 	int r;
 	struct kvm_memory_region low_memory = {
 		.slot = 3,
@@ -301,23 +311,14 @@ int kvm_create(kvm_context_t kvm, unsigned long phys_mem_bytes, void **vm_mem)
 	if (memory >= pcimem)
 		extended_memory.memory_size = pcimem - exmem;
 
-	kvm->vcpu_fd[0] = -1;
-
-	fd = ioctl(fd, KVM_CREATE_VM, 0);
-	if (fd == -1) {
-		fprintf(stderr, "kvm_create_vm: %m\n");
-		return -1;
-	}
-	kvm->vm_fd = fd;
-
 	/* 640K should be enough. */
-	r = ioctl(fd, KVM_SET_MEMORY_REGION, &low_memory);
+	r = ioctl(kvm->vm_fd, KVM_SET_MEMORY_REGION, &low_memory);
 	if (r == -1) {
 		fprintf(stderr, "kvm_create_memory_region: %m\n");
 		return -1;
 	}
 	if (extended_memory.memory_size) {
-		r = ioctl(fd, KVM_SET_MEMORY_REGION, &extended_memory);
+		r = ioctl(kvm->vm_fd, KVM_SET_MEMORY_REGION, &extended_memory);
 		if (r == -1) {
 			fprintf(stderr, "kvm_create_memory_region: %m\n");
 			return -1;
@@ -325,7 +326,7 @@ int kvm_create(kvm_context_t kvm, unsigned long phys_mem_bytes, void **vm_mem)
 	}
 
 	if (above_4g_memory.memory_size) {
-		r = ioctl(fd, KVM_SET_MEMORY_REGION, &above_4g_memory);
+		r = ioctl(kvm->vm_fd, KVM_SET_MEMORY_REGION, &above_4g_memory);
 		if (r == -1) {
 			fprintf(stderr, "kvm_create_memory_region: %m\n");
 			return -1;
@@ -336,17 +337,126 @@ int kvm_create(kvm_context_t kvm, unsigned long phys_mem_bytes, void **vm_mem)
 	kvm_memory_region_save_params(kvm, &extended_memory);
 	kvm_memory_region_save_params(kvm, &above_4g_memory);
 
-	*vm_mem = mmap(NULL, memory, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+	*vm_mem = mmap(NULL, memory, PROT_READ|PROT_WRITE, MAP_SHARED, kvm->vm_fd, 0);
+
+	return 0;
+}
+
+int kvm_alloc_userspace_memory(kvm_context_t kvm, unsigned long memory,
+								void **vm_mem)
+{
+	unsigned long dosmem = 0xa0000;
+	unsigned long exmem = 0xc0000;
+	unsigned long pcimem = 0xf0000000;
+	int r;
+	struct kvm_userspace_memory_region low_memory = {
+		.slot = 3,
+		.memory_size = memory  < dosmem ? memory : dosmem,
+		.guest_phys_addr = 0,
+	};
+	struct kvm_userspace_memory_region extended_memory = {
+		.slot = 0,
+		.memory_size = memory < exmem ? 0 : memory - exmem,
+		.guest_phys_addr = exmem,
+	};
+	struct kvm_userspace_memory_region above_4g_memory = {
+		.slot = 4,
+		.memory_size = memory < pcimem ? 0 : memory - pcimem,
+		.guest_phys_addr = 0x100000000,
+	};
+
+	if (memory >= pcimem) {
+		extended_memory.memory_size = pcimem - exmem;
+		*vm_mem = mmap(NULL, memory + 0x100000000 - pcimem,
+				PROT_READ|PROT_WRITE, MAP_ANONYMOUS |
+							MAP_SHARED, -1, 0);
+	}
+	else
+		*vm_mem = mmap(NULL, memory, PROT_READ|PROT_WRITE, MAP_ANONYMOUS
+							| MAP_SHARED, -1, 0);
 	if (*vm_mem == MAP_FAILED) {
-		fprintf(stderr, "mmap: %m\n");
+		fprintf(stderr, "kvm_alloc_userspace_memory: %s", strerror(errno));
 		return -1;
 	}
-	kvm->physical_memory = *vm_mem;
 
-	zfd = open("/dev/zero", O_RDONLY);
-	mmap(*vm_mem + 0xa8000, 0x8000, PROT_READ|PROT_WRITE,
-	     MAP_PRIVATE|MAP_FIXED, zfd, 0);
-	close(zfd);
+
+	low_memory.userspace_addr = (unsigned long)*vm_mem;
+	memset((unsigned long *)low_memory.userspace_addr, 0, low_memory.memory_size);
+	/* 640K should be enough. */
+	r = ioctl(kvm->vm_fd, KVM_SET_USER_MEMORY_REGION, &low_memory);
+	if (r == -1) {
+		fprintf(stderr, "kvm_create_memory_region: %m\n");
+		return -1;
+	}
+	if (extended_memory.memory_size) {
+		r = munmap(*vm_mem + dosmem, exmem - dosmem);
+		if (r == -1) {
+			fprintf(stderr, "kvm_alloc_userspace_memory: %s",
+							strerror(errno));
+			return -1;
+		}
+		extended_memory.userspace_addr = (unsigned long)(*vm_mem + exmem);
+		memset((unsigned long *)extended_memory.userspace_addr, 0, extended_memory.memory_size);
+		r = ioctl(kvm->vm_fd, KVM_SET_USER_MEMORY_REGION, &extended_memory);
+		if (r == -1) {
+			fprintf(stderr, "kvm_create_memory_region: %m\n");
+			return -1;
+		}
+	}
+
+	if (above_4g_memory.memory_size) {
+		r = munmap(*vm_mem + pcimem, 0x100000000 - pcimem);
+		if (r == -1) {
+			fprintf(stderr, "kvm_alloc_userspace_memory: %s",
+							strerror(errno));
+			return -1;
+		}
+		above_4g_memory.userspace_addr = (unsigned long)(*vm_mem + 0x100000000);
+		memset((unsigned long *)above_4g_memory.userspace_addr, 0, above_4g_memory.memory_size);
+		r = ioctl(kvm->vm_fd, KVM_SET_USER_MEMORY_REGION, &above_4g_memory);
+		if (r == -1) {
+			fprintf(stderr, "kvm_create_memory_region: %m\n");
+			return -1;
+		}
+	}
+
+	kvm_userspace_memory_region_save_params(kvm, &low_memory);
+	kvm_userspace_memory_region_save_params(kvm, &extended_memory);
+	kvm_userspace_memory_region_save_params(kvm, &above_4g_memory);
+
+	return 0;
+}
+
+int kvm_create(kvm_context_t kvm, unsigned long phys_mem_bytes, void **vm_mem)
+{
+	unsigned long memory = (phys_mem_bytes + PAGE_SIZE - 1) & PAGE_MASK;
+	int fd = kvm->fd;
+	int zfd;
+	int r;
+
+	kvm->vcpu_fd[0] = -1;
+
+	fd = ioctl(fd, KVM_CREATE_VM, 0);
+	if (fd == -1) {
+		fprintf(stderr, "kvm_create_vm: %m\n");
+		return -1;
+	}
+	kvm->vm_fd = fd;
+
+	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_USER_MEMORY);
+	if (r > 0)
+		r = kvm_alloc_userspace_memory(kvm, memory, vm_mem);
+	else
+		r = kvm_alloc_kernel_memory(kvm, memory, vm_mem);
+	if (r < 0)
+		return r;
+
+        zfd = open("/dev/zero", O_RDONLY);
+        mmap(*vm_mem + 0xa8000, 0x8000, PROT_READ|PROT_WRITE,
+             MAP_PRIVATE|MAP_FIXED, zfd, 0);
+        close(zfd);
+
+	kvm->physical_memory = *vm_mem;
 
 	kvm->irqchip_in_kernel = 0;
 	if (!kvm->no_irqchip_creation) {
@@ -366,13 +476,12 @@ int kvm_create(kvm_context_t kvm, unsigned long phys_mem_bytes, void **vm_mem)
 	return 0;
 }
 
-void *kvm_create_phys_mem(kvm_context_t kvm, unsigned long phys_start, 
-			  unsigned long len, int slot, int log, int writable)
+void *kvm_create_kernel_phys_mem(kvm_context_t kvm, unsigned long phys_start,
+			unsigned long len, int slot, int log, int writable)
 {
-	void *ptr;
 	int r;
-	int fd = kvm->vm_fd;
 	int prot = PROT_READ;
+	void *ptr;
 	struct kvm_memory_region memory = {
 		.slot = slot,
 		.memory_size = len,
@@ -380,19 +489,73 @@ void *kvm_create_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 		.flags = log ? KVM_MEM_LOG_DIRTY_PAGES : 0,
 	};
 
-	r = ioctl(fd, KVM_SET_MEMORY_REGION, &memory);
-	if (r == -1)
-	    return 0;
-
+	r = ioctl(kvm->vm_fd, KVM_SET_MEMORY_REGION, &memory);
+	if (r == -1) {
+		fprintf(stderr, "create_kernel_phys_mem: %s", strerror(errno));
+		return 0;
+	}
 	kvm_memory_region_save_params(kvm, &memory);
 
 	if (writable)
 		prot |= PROT_WRITE;
 
-	ptr = mmap(NULL, len, prot, MAP_SHARED, fd, phys_start);
-	if (ptr == MAP_FAILED)
+	ptr = mmap(NULL, len, prot, MAP_SHARED, kvm->vm_fd, phys_start);
+	if (ptr == MAP_FAILED) {
+		fprintf(stderr, "create_kernel_phys_mem: %s", strerror(errno));
 		return 0;
+	}
+
 	return ptr;
+}
+
+void *kvm_create_userspace_phys_mem(kvm_context_t kvm, unsigned long phys_start,
+			unsigned long len, int slot, int log, int writable)
+{
+	int r;
+	int prot = PROT_READ;
+	void *ptr;
+	struct kvm_userspace_memory_region memory = {
+		.slot = slot,
+		.memory_size = len,
+		.guest_phys_addr = phys_start,
+		.flags = log ? KVM_MEM_LOG_DIRTY_PAGES : 0,
+	};
+
+	if (writable)
+		prot |= PROT_WRITE;
+
+	ptr = mmap(NULL, len, prot, MAP_ANONYMOUS | MAP_SHARED, -1, 0);
+	if (ptr == MAP_FAILED) {
+		fprintf(stderr, "create_userspace_phys_mem: %s", strerror(errno));
+		return 0;
+	}
+
+	memset(ptr, 0, len);
+
+	memory.userspace_addr = (unsigned long)ptr;
+	r = ioctl(kvm->vm_fd, KVM_SET_USER_MEMORY_REGION, &memory);
+	if (r == -1) {
+		fprintf(stderr, "create_userspace_phys_mem: %s", strerror(errno));
+		return 0;
+	}
+
+	kvm_userspace_memory_region_save_params(kvm, &memory);
+
+        return ptr;
+}
+
+void *kvm_create_phys_mem(kvm_context_t kvm, unsigned long phys_start,
+			  unsigned long len, int slot, int log, int writable)
+{
+	int r;
+
+	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_USER_MEMORY);
+	if (r > 0)
+		return kvm_create_userspace_phys_mem(kvm, phys_start, len, slot,
+								log, writable);
+	else
+		return kvm_create_kernel_phys_mem(kvm, phys_start, len, slot,
+								log, writable);
 }
 
 /* destroy/free a whole slot.
