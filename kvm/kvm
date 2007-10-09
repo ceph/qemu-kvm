@@ -183,7 +183,7 @@ if options.kvm and options.reload:
 disk = options.image
 if options.install:
     (status, output) = commands.getstatusoutput(
-        'qemu/qemu-img create -f qcow2 "%s" 10G' % disk)
+        'qemu/qemu-img create -f qcow2 "%s" 30G' % disk)
     if status:
         raise Exception, output
 
