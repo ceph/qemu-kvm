@@ -5,13 +5,22 @@
 #ifndef KVMCTL_H
 #define KVMCTL_H
 
+#include <stdint.h>
+
 #ifndef __user
 #define __user /* temporary, until installed via make headers_install */
 #endif
 
 #include <linux/kvm.h>
+
+#define u32 uint32_t  /* older kvm_para.h had a u32 exposed */
+#define u64 uint32_t  /* older kvm_para.h had a u32 exposed */
+#define PAGE_SIZE 4096
 #include <linux/kvm_para.h>
-#include <stdint.h>
+#undef u32
+#undef u64
+#undef PAGE_SIZE
+
 #include <signal.h>
 
 struct kvm_context;
@@ -459,6 +468,7 @@ int kvm_dirty_pages_log_reset(kvm_context_t kvm);
  */
 int kvm_irqchip_in_kernel(kvm_context_t kvm);
 
+#ifdef KVM_CAP_IRQCHIP
 /*!
  * \brief Dump in kernel IRQCHIP contents
  *
@@ -503,5 +513,7 @@ int kvm_get_lapic(kvm_context_t kvm, int vcpu, struct kvm_lapic_state *s);
  * \param s Local apic state of the specific virtual CPU
  */
 int kvm_set_lapic(kvm_context_t kvm, int vcpu, struct kvm_lapic_state *s);
+
+#endif
 
 #endif

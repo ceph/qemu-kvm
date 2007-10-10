@@ -86,6 +86,8 @@ static void kvm_memory_region_save_params(kvm_context_t kvm,
 	kvm->mem_regions[mem->slot] = *mem;
 }
 
+#ifdef KVM_CAP_USER_MEMORY
+
 static void kvm_userspace_memory_region_save_params(kvm_context_t kvm,
 					struct kvm_userspace_memory_region *mem)
 {
@@ -97,6 +99,8 @@ static void kvm_userspace_memory_region_save_params(kvm_context_t kvm,
 
 	kvm_memory_region_save_params(kvm, &kvm_mem);
 }
+
+#endif
 
 static void kvm_memory_region_clear_params(kvm_context_t kvm, int regnum)
 {
@@ -257,6 +261,7 @@ int kvm_create_vcpu(kvm_context_t kvm, int slot)
 
 int kvm_set_shadow_pages(kvm_context_t kvm, unsigned int nrshadow_pages)
 {
+#ifdef KVM_CAP_MMU_SHADOW_CACHE_CONTROL
 	int r;
 
 	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION,
@@ -269,11 +274,13 @@ int kvm_set_shadow_pages(kvm_context_t kvm, unsigned int nrshadow_pages)
 		}
 		return 0;
 	}
+#endif
 	return -1;
 }
 
 int kvm_get_shadow_pages(kvm_context_t kvm, unsigned int *nrshadow_pages)
 {
+#ifdef KVM_CAP_MMU_SHADOW_CACHE_CONTROL
 	int r;
 
 	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION,
@@ -282,6 +289,7 @@ int kvm_get_shadow_pages(kvm_context_t kvm, unsigned int *nrshadow_pages)
 		*nrshadow_pages = ioctl(kvm->vm_fd, KVM_GET_NR_MMU_PAGES);
 		return 0;
 	}
+#endif
 	return -1;
 }
 
@@ -341,6 +349,8 @@ int kvm_alloc_kernel_memory(kvm_context_t kvm, unsigned long memory,
 
 	return 0;
 }
+
+#ifdef KVM_CAP_USER_MEMORY
 
 int kvm_alloc_userspace_memory(kvm_context_t kvm, unsigned long memory,
 								void **vm_mem)
@@ -427,6 +437,8 @@ int kvm_alloc_userspace_memory(kvm_context_t kvm, unsigned long memory,
 	return 0;
 }
 
+#endif
+
 int kvm_create(kvm_context_t kvm, unsigned long phys_mem_bytes, void **vm_mem)
 {
 	unsigned long memory = (phys_mem_bytes + PAGE_SIZE - 1) & PAGE_MASK;
@@ -443,10 +455,12 @@ int kvm_create(kvm_context_t kvm, unsigned long phys_mem_bytes, void **vm_mem)
 	}
 	kvm->vm_fd = fd;
 
+#ifdef KVM_CAP_USER_MEMORY
 	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_USER_MEMORY);
 	if (r > 0)
 		r = kvm_alloc_userspace_memory(kvm, memory, vm_mem);
 	else
+#endif
 		r = kvm_alloc_kernel_memory(kvm, memory, vm_mem);
 	if (r < 0)
 		return r;
@@ -459,6 +473,7 @@ int kvm_create(kvm_context_t kvm, unsigned long phys_mem_bytes, void **vm_mem)
 	kvm->physical_memory = *vm_mem;
 
 	kvm->irqchip_in_kernel = 0;
+#ifdef KVM_CAP_IRQCHIP
 	if (!kvm->no_irqchip_creation) {
 		r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_IRQCHIP);
 		if (r > 0) {	/* kernel irqchip supported */
@@ -469,6 +484,7 @@ int kvm_create(kvm_context_t kvm, unsigned long phys_mem_bytes, void **vm_mem)
 				printf("Create kernel PIC irqchip failed\n");
 		}
 	}
+#endif
 	r = kvm_create_vcpu(kvm, 0);
 	if (r < 0)
 		return r;
@@ -508,6 +524,8 @@ void *kvm_create_kernel_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 	return ptr;
 }
 
+#ifdef KVM_CAP_USER_MEMORY
+
 void *kvm_create_userspace_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 			unsigned long len, int slot, int log, int writable)
 {
@@ -544,9 +562,12 @@ void *kvm_create_userspace_phys_mem(kvm_context_t kvm, unsigned long phys_start,
         return ptr;
 }
 
+#endif
+
 void *kvm_create_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 			  unsigned long len, int slot, int log, int writable)
 {
+#ifdef KVM_CAP_USER_MEMORY
 	int r;
 
 	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_USER_MEMORY);
@@ -554,6 +575,7 @@ void *kvm_create_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 		return kvm_create_userspace_phys_mem(kvm, phys_start, len, slot,
 								log, writable);
 	else
+#endif
 		return kvm_create_kernel_phys_mem(kvm, phys_start, len, slot,
 								log, writable);
 }
@@ -654,6 +676,8 @@ int kvm_get_mem_map(kvm_context_t kvm, int slot, void *buf)
 #endif /* KVM_GET_MEM_MAP */
 }
 
+#ifdef KVM_CAP_IRQCHIP
+
 int kvm_set_irq_level(kvm_context_t kvm, int irq, int level)
 {
 	struct kvm_irq_level event;
@@ -722,6 +746,8 @@ int kvm_set_lapic(kvm_context_t kvm, int vcpu, struct kvm_lapic_state *s)
 	}
 	return r;
 }
+
+#endif
 
 static int handle_io_abi10(kvm_context_t kvm, struct kvm_run_abi10 *run,
 			   int vcpu)
@@ -1333,8 +1359,10 @@ again:
 		case KVM_EXIT_SHUTDOWN:
 			r = handle_shutdown(kvm, vcpu);
 			break;
+#ifdef KVM_EXIT_SET_TPR
 		case KVM_EXIT_SET_TPR:
 			break;
+#endif
 		default:
 			fprintf(stderr, "unhandled vm exit: 0x%x\n", run->exit_reason);
 			kvm_show_regs(kvm, vcpu);
