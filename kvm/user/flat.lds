@@ -13,6 +13,5 @@ SECTIONS
     .bss : { *(.bss) }
     . = ALIGN(4K);
     edata = .;
-    end_of_memory = 128M;
 }
 

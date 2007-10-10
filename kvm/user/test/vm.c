@@ -58,7 +58,8 @@ void free_page(void *page)
     free = page;
 }
 
-extern char edata, end_of_memory;
+extern char edata;
+static unsigned long end_of_memory;
 
 #define PTE_PRESENT (1ull << 0)
 #define PTE_PSE     (1ull << 7)
@@ -202,10 +203,18 @@ static void setup_mmu(unsigned long len)
     print("paging enabled\n");
 }
 
+static unsigned int inl(unsigned short port)
+{
+    unsigned int val;
+    asm volatile("inl %w1, %0" : "=a"(val) : "Nd"(port));
+    return val;
+}
+
 void setup_vm()
 {
-    free_memory(&edata, &end_of_memory - &edata);
-    setup_mmu((long)&end_of_memory);
+    end_of_memory = inl(0xd1);
+    free_memory(&edata, end_of_memory - (unsigned long)&edata);
+    setup_mmu(end_of_memory);
 }
 
 void *vmalloc(unsigned long size)

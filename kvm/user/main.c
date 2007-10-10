@@ -144,7 +144,15 @@ static int test_inl(void *opaque, uint16_t addr, uint32_t *value)
 {
 	if (apic_io(addr, 0, value))
 		return 0;
-	printf("inl 0x%x\n", addr);
+
+	switch (addr) {
+	case 0xd1:
+		*value = 128 * 1024 * 1024;
+		break;
+	default:
+		printf("inl 0x%x\n", addr);
+		break;
+	}
 	return 0;
 }
 
