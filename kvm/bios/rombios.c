@@ -1581,8 +1581,6 @@ bios_printf(action, s)
           c = read_byte(get_CS(), s); /* is it ld,lx,lu? */
           arg_ptr++; /* increment to next arg */
           hibyte = read_word(arg_seg, arg_ptr);
-          if (format_width == 0)
-            format_width = 8;
           if (c == 'd') {
             if (arg & 0x8000)
               put_luint(action, 0L-(((Bit32u) hibyte << 16) | arg), format_width-1, 1);
@@ -1594,10 +1592,12 @@ bios_printf(action, s)
            }
           else /* c == 'x' */
            {
-          for (i=format_width-1; i>=0; i--) {
-            nibble = ((((Bit32u) hibyte <<16) | arg) >> (4 * i)) & 0x000f;
-            send (action, (nibble<=9)? (nibble+'0') : (nibble-10+'A'));
-            }
+            if (format_width == 0)
+              format_width = 8;
+            for (i=format_width-1; i>=0; i--) {
+              nibble = ((((Bit32u) hibyte <<16) | arg) >> (4 * i)) & 0x000f;
+              send (action, (nibble<=9)? (nibble+'0') : (nibble-10+'A'));
+              }
            }
           }
         else if (c == 'd') {
@@ -5496,7 +5496,7 @@ int13_cdrom_rme_end:
         write_byte(ebda_seg, &EbdaData->ata.dpte.revision, 0x11);
 
         checksum=0;
-        for (i=0; i<15; i++) checksum+=read_byte(ebda_seg, (&EbdaData->ata.dpte) + i);
+        for (i=0; i<15; i++) checksum+=read_byte(ebda_seg, ((Bit8u*)(&EbdaData->ata.dpte)) + i);
         checksum = ~checksum;
         write_byte(ebda_seg, &EbdaData->ata.dpte.checksum, checksum);
         }
