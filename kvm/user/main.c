@@ -57,6 +57,7 @@ static __thread int vcpu;
 static int apic_ipi_vector = 0xff;
 static sigset_t kernel_sigmask;
 static sigset_t ipi_sigmask;
+static uint64_t memory_size = 128 * 1024 * 1024;
 
 struct vcpu_info {
 	pid_t tid;
@@ -147,7 +148,7 @@ static int test_inl(void *opaque, uint16_t addr, uint32_t *value)
 
 	switch (addr) {
 	case 0xd1:
-		*value = 128 * 1024 * 1024;
+		*value = memory_size;
 		break;
 	default:
 		printf("inl 0x%x\n", addr);
@@ -328,14 +329,16 @@ static void start_vcpu(int n)
 static void usage(const char *progname)
 {
 	fprintf(stderr,
-		"Usage: %s [OPTIONS] [bootstrap] flatfile\n"
-		"KVM test harness.\n"
-		"\n"
-		"  -s, --smp=NUM          create a VM with NUM virtual CPUs\n"
-		"  -p, --protected-mode   start VM in protected mode\n"
-		"  -h, --help             display this help screen and exit\n"
-		"\n"
-		"Report bugs to <kvm-devel@lists.sourceforge.net>.\n"
+"Usage: %s [OPTIONS] [bootstrap] flatfile\n"
+"KVM test harness.\n"
+"\n"
+"  -s, --smp=NUM          create a VM with NUM virtual CPUs\n"
+"  -p, --protected-mode   start VM in protected mode\n"
+"  -m, --memory=NUM[GMKB] allocate NUM memory for virtual machine.  A suffix\n"
+"                         can be used to change the unit (default: `M')\n"
+"  -h, --help             display this help screen and exit\n"
+"\n"
+"Report bugs to <kvm-devel@lists.sourceforge.net>.\n"
 		, progname);
 }
 
@@ -348,16 +351,18 @@ int main(int argc, char **argv)
 {
 	void *vm_mem;
 	int i;
-	const char *sopts = "s:ph";
+	const char *sopts = "s:phm:";
 	struct option lopts[] = {
 		{ "smp", 1, 0, 's' },
 		{ "protected-mode", 0, 0, 'p' },
+		{ "memory", 1, 0, 'm' },
 		{ "help", 0, 0, 'h' },
 		{ 0 },
 	};
 	int opt_ind, ch;
 	bool enter_protected_mode = false;
 	int nb_args;
+	char *endptr;
 
 	while ((ch = getopt_long(argc, argv, sopts, lopts, &opt_ind)) != -1) {
 		switch (ch) {
@@ -366,6 +371,31 @@ int main(int argc, char **argv)
 			break;
 		case 'p':
 			enter_protected_mode = true;
+			break;
+		case 'm':
+			memory_size = strtoull(optarg, &endptr, 0);
+			switch (*endptr) {
+			case 'G': case 'g':
+				memory_size <<= 30;
+				break;
+			case '\0':
+			case 'M': case 'm':
+				memory_size <<= 20;
+				break;
+			case 'K': case 'k':
+				memory_size <<= 10;
+				break;
+			default:
+				fprintf(stderr,
+					"Unrecongized memory suffix: %c\n",
+					*endptr);
+				exit(1);
+			}
+			if (memory_size == 0) {
+				fprintf(stderr,
+					"Invalid memory size: 0\n");
+				exit(1);
+			}
 			break;
 		case 'h':
 			usage(argv[0]);
@@ -401,7 +431,7 @@ int main(int argc, char **argv)
 		fprintf(stderr, "kvm_init failed\n");
 		return 1;
 	}
-	if (kvm_create(kvm, 128 * 1024 * 1024, &vm_mem) < 0) {
+	if (kvm_create(kvm, memory_size, &vm_mem) < 0) {
 		kvm_finalize(kvm);
 		fprintf(stderr, "kvm_create failed\n");
 		return 1;
