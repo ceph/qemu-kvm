@@ -1122,14 +1122,17 @@ static void do_cpuid_ent(struct kvm_cpuid_entry *e, uint32_t function,
 int kvm_qemu_init_env(CPUState *cenv)
 {
     struct kvm_cpuid_entry cpuid_ent[100];
+#ifdef KVM_CPUID_SIGNATURE
     struct kvm_cpuid_entry *pv_ent;
     uint32_t signature[3];
+#endif
     int cpuid_nent = 0;
     CPUState copy;
     uint32_t i, limit;
 
     copy = *cenv;
 
+#ifdef KVM_CPUID_SIGNATURE
     /* Paravirtualization CPUIDs */
     memcpy(signature, "KVMKVMKVM", 12);
     pv_ent = &cpuid_ent[cpuid_nent++];
@@ -1144,6 +1147,7 @@ int kvm_qemu_init_env(CPUState *cenv)
     memset(pv_ent, 0, sizeof(*pv_ent));
     pv_ent->function = KVM_CPUID_FEATURES;
     pv_ent->eax = 0;
+#endif
 
     copy.regs[R_EAX] = 0;
     qemu_kvm_cpuid_on_env(&copy);
@@ -1285,8 +1289,13 @@ int kvm_get_phys_ram_page_bitmap(unsigned char *bitmap)
     return r;
 }
 
+#ifdef KVM_CAP_IRQCHIP
+
 int kvm_set_irq(int irq, int level)
 {
     return kvm_set_irq_level(kvm_context, irq, level);
 }
+
+#endif
+
 #endif

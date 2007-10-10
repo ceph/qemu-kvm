@@ -752,6 +752,9 @@ static void apic_mem_writel(void *opaque, target_phys_addr_t addr, uint32_t val)
 }
 
 #ifdef USE_KVM
+
+#ifdef KVM_CAP_IRQCHIP
+
 static inline uint32_t kapic_reg(struct kvm_lapic_state *kapic, int reg_id)
 {
     return *((uint32_t *) (kapic->regs + (reg_id << 4)));
@@ -824,6 +827,9 @@ static void kvm_kernel_lapic_load_from_user(APICState *s)
 
     kvm_set_lapic(kvm_context, s->cpu_env->cpu_index, klapic);
 }
+
+#endif
+
 #endif
 
 static void apic_save(QEMUFile *f, void *opaque)
@@ -832,9 +838,11 @@ static void apic_save(QEMUFile *f, void *opaque)
     int i;
 
 #ifdef USE_KVM
+#ifdef KVM_CAP_IRQCHIP
     if (kvm_allowed && kvm_irqchip_in_kernel(kvm_context)) {
         kvm_kernel_lapic_save_to_user(s);
     }
+#endif
 #endif
 
     qemu_put_be32s(f, &s->apicbase);
@@ -901,9 +909,11 @@ static int apic_load(QEMUFile *f, void *opaque, int version_id)
         qemu_get_timer(f, s->timer);
 
 #ifdef USE_KVM
+#ifdef KVM_CAP_IRQCHIP
     if (kvm_allowed && kvm_irqchip_in_kernel(kvm_context)) {
         kvm_kernel_lapic_load_from_user(s);
     }
+#endif
 #endif
 
     return 0;
@@ -1115,6 +1125,7 @@ static void ioapic_mem_writel(void *opaque, target_phys_addr_t addr, uint32_t va
 #ifdef USE_KVM
 static void kvm_kernel_ioapic_save_to_user(IOAPICState *s)
 {
+#ifdef KVM_CAP_IRQCHIP
     struct kvm_irqchip chip;
     struct kvm_ioapic_state *kioapic;
     int i;
@@ -1128,10 +1139,12 @@ static void kvm_kernel_ioapic_save_to_user(IOAPICState *s)
     for (i = 0; i < IOAPIC_NUM_PINS; i++) {
         s->ioredtbl[i] = kioapic->redirtbl[i].bits;
     }
+#endif
 }
 
 static void kvm_kernel_ioapic_load_from_user(IOAPICState *s)
 {
+#ifdef KVM_CAP_IRQCHIP
     struct kvm_irqchip chip;
     struct kvm_ioapic_state *kioapic;
     int i;
@@ -1146,6 +1159,7 @@ static void kvm_kernel_ioapic_load_from_user(IOAPICState *s)
     }
 
     kvm_set_irqchip(kvm_context, &chip);
+#endif
 }
 #endif
 

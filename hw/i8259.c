@@ -23,6 +23,10 @@
  */
 #include "vl.h"
 
+#ifdef USE_KVM
+#include "qemu-kvm.h"
+#endif
+
 /* debug PIC */
 //#define DEBUG_PIC
 
@@ -179,11 +183,13 @@ void i8259_set_irq(void *opaque, int irq, int level)
 {
     PicState2 *s = opaque;
 #ifdef USE_KVM
+#ifdef KVM_CAP_IRQCHIP
     extern int kvm_set_irq(int irq, int level);
 
     if (kvm_allowed)
 	if (kvm_set_irq(irq, level))
 	    return;
+#endif
 #endif
 #if defined(DEBUG_PIC) || defined(DEBUG_IRQ_COUNT)
     if (level != irq_level[irq]) {
@@ -471,6 +477,7 @@ extern kvm_context_t kvm_context;
 
 static void kvm_kernel_pic_save_to_user(PicState *s)
 {
+#ifdef KVM_CAP_IRQCHIP
     struct kvm_irqchip chip;
     struct kvm_pic_state *kpic;
 
@@ -496,10 +503,12 @@ static void kvm_kernel_pic_save_to_user(PicState *s)
     s->init4 = kpic->init4;
     s->elcr = kpic->elcr;
     s->elcr_mask = kpic->elcr_mask;
+#endif
 }
 
 static void kvm_kernel_pic_load_from_user(PicState *s)
 {
+#ifdef KVM_CAP_IRQCHIP
     struct kvm_irqchip chip;
     struct kvm_pic_state *kpic;
 
@@ -526,6 +535,7 @@ static void kvm_kernel_pic_load_from_user(PicState *s)
     kpic->elcr_mask = s->elcr_mask;
 
     kvm_set_irqchip(kvm_context, &chip);
+#endif
 }
 #endif
 
