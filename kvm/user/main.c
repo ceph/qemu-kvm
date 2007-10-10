@@ -51,6 +51,24 @@ kvm_context_t kvm;
 
 #define IPI_SIGNAL (SIGRTMIN + 4)
 
+#define MAX_IO_TABLE	50
+
+typedef int (io_table_handler_t)(void *, int, int, uint64_t, uint64_t *);
+
+struct io_table_entry
+{
+	uint64_t start;
+	uint64_t end;
+	io_table_handler_t *handler;
+	void *opaque;
+};
+
+struct io_table
+{
+	int nr_entries;
+	struct io_table_entry entries[MAX_IO_TABLE];
+};
+
 static int ncpus = 1;
 static sem_t init_sem;
 static __thread int vcpu;
@@ -58,6 +76,8 @@ static int apic_ipi_vector = 0xff;
 static sigset_t kernel_sigmask;
 static sigset_t ipi_sigmask;
 static uint64_t memory_size = 128 * 1024 * 1024;
+
+static struct io_table pio_table;
 
 struct vcpu_info {
 	pid_t tid;
@@ -68,9 +88,36 @@ struct vcpu_info *vcpus;
 
 static uint32_t apic_sipi_addr;
 
-static int apic_range(unsigned addr)
+struct io_table_entry *io_table_lookup(struct io_table *io_table, uint64_t addr)
 {
-	return (addr >= APIC_BASE) && (addr < APIC_BASE + APIC_SIZE);
+	int i;
+
+	for (i = 0; i < io_table->nr_entries; i++) {
+		if (io_table->entries[i].start <= addr &&
+		    addr < io_table->entries[i].end)
+			return &io_table->entries[i];
+	}
+
+	return NULL;
+}
+
+int io_table_register(struct io_table *io_table, uint64_t start, uint64_t size,
+		      io_table_handler_t *handler, void *opaque)
+{
+	struct io_table_entry *entry;
+
+	if (io_table->nr_entries == MAX_IO_TABLE)
+		return -ENOSPC;
+
+	entry = &io_table->entries[io_table->nr_entries];
+	io_table->nr_entries++;
+
+	entry->start = start;
+	entry->end = start + size;
+	entry->handler = handler;
+	entry->opaque = opaque;
+
+	return 0;
 }
 
 static void apic_send_sipi(int vcpu)
@@ -88,11 +135,9 @@ static void apic_send_ipi(int vcpu)
 	tkill(v->tid, IPI_SIGNAL);
 }
 
-static int apic_io(unsigned addr, int is_write, uint32_t *value)
+static int apic_io(void *opaque, int size, int is_write,
+		   uint64_t addr, uint64_t *value)
 {
-	if (!apic_range(addr))
-		return 0;
-
 	if (!is_write)
 		*value = -1u;
 
@@ -126,69 +171,153 @@ static int apic_io(unsigned addr, int is_write, uint32_t *value)
 			apic_send_ipi(*value);
 		break;
 	}
-	return 1;
+
+	return 0;
+}
+
+static int apic_init(void)
+{
+	return io_table_register(&pio_table, APIC_BASE,
+				 APIC_SIZE, apic_io, NULL);
+}
+
+static int misc_io(void *opaque, int size, int is_write,
+		   uint64_t addr, uint64_t *value)
+{
+	static int newline = 1;
+
+	if (!is_write)
+		*value = -1;
+
+	switch (addr) {
+	case 0xff: // irq injector
+		if (is_write) {
+			printf("injecting interrupt 0x%x\n", (uint8_t)*value);
+			kvm_inject_irq(kvm, 0, *value);
+		}
+		break;
+	case 0xf1: // serial
+		if (is_write) {
+			if (newline)
+				fputs("GUEST: ", stdout);
+			putchar(*value);
+			newline = *value == '\n';
+		}
+		break;
+	case 0xd1:
+		if (!is_write)
+			*value = memory_size;
+		break;
+	}
+
+	return 0;
+}
+
+static int misc_init(void)
+{
+	int err;
+
+	err = io_table_register(&pio_table, 0xff, 1, misc_io, NULL);
+	if (err < 0)
+		return err;
+
+	err = io_table_register(&pio_table, 0xf1, 1, misc_io, NULL);
+	if (err < 0)
+		return err;
+
+	return io_table_register(&pio_table, 0xd1, 1, misc_io, NULL);
 }
 
 static int test_inb(void *opaque, uint16_t addr, uint8_t *value)
 {
-	printf("inb 0x%x\n", addr);
+	struct io_table_entry *entry;
+
+	entry = io_table_lookup(&pio_table, addr);
+	if (entry) {
+		uint64_t val;
+		entry->handler(entry->opaque, 1, 0, addr, &val);
+		*value = val;
+	} else {
+		*value = -1;
+		printf("inb 0x%x\n", addr);
+	}
+
 	return 0;
 }
 
 static int test_inw(void *opaque, uint16_t addr, uint16_t *value)
 {
-	printf("inw 0x%x\n", addr);
+	struct io_table_entry *entry;
+
+	entry = io_table_lookup(&pio_table, addr);
+	if (entry) {
+		uint64_t val;
+		entry->handler(entry->opaque, 2, 0, addr, &val);
+		*value = val;
+	} else {
+		*value = -1;
+		printf("inw 0x%x\n", addr);
+	}
+
 	return 0;
 }
 
 static int test_inl(void *opaque, uint16_t addr, uint32_t *value)
 {
-	if (apic_io(addr, 0, value))
-		return 0;
+	struct io_table_entry *entry;
 
-	switch (addr) {
-	case 0xd1:
-		*value = memory_size;
-		break;
-	default:
+	entry = io_table_lookup(&pio_table, addr);
+	if (entry) {
+		uint64_t val;
+		entry->handler(entry->opaque, 4, 0, addr, &val);
+		*value = val;
+	} else {
+		*value = -1;
 		printf("inl 0x%x\n", addr);
-		break;
 	}
+
 	return 0;
 }
 
 static int test_outb(void *opaque, uint16_t addr, uint8_t value)
 {
-	static int newline = 1;
+	struct io_table_entry *entry;
 
-	switch (addr) {
-	case 0xff: // irq injector
-		printf("injecting interrupt 0x%x\n", value);
-		kvm_inject_irq(kvm, 0, value);
-		break;
-	case 0xf1: // serial
-		if (newline)
-			fputs("GUEST: ", stdout);
-		putchar(value);
-		newline = value == '\n';
-		break;
-	default:
+	entry = io_table_lookup(&pio_table, addr);
+	if (entry) {
+		uint64_t val = value;
+		entry->handler(entry->opaque, 1, 1, addr, &val);
+	} else
 		printf("outb $0x%x, 0x%x\n", value, addr);
-	}
+
 	return 0;
 }
 
 static int test_outw(void *opaque, uint16_t addr, uint16_t value)
 {
-	printf("outw $0x%x, 0x%x\n", value, addr);
+	struct io_table_entry *entry;
+
+	entry = io_table_lookup(&pio_table, addr);
+	if (entry) {
+		uint64_t val = value;
+		entry->handler(entry->opaque, 2, 1, addr, &val);
+	} else
+		printf("outw $0x%x, 0x%x\n", value, addr);
+
 	return 0;
 }
 
 static int test_outl(void *opaque, uint16_t addr, uint32_t value)
 {
-	if (apic_io(addr, 1, &value))
-		return 0;
-	printf("outl $0x%x, 0x%x\n", value, addr);
+	struct io_table_entry *entry;
+
+	entry = io_table_lookup(&pio_table, addr);
+	if (entry) {
+		uint64_t val = value;
+		entry->handler(entry->opaque, 4, 1, addr, &val);
+	} else
+		printf("outl $0x%x, 0x%x\n", value, addr);
+
 	return 0;
 }
 
@@ -444,6 +573,9 @@ int main(int argc, char **argv)
 
 	if (nb_args > 1)
 		load_file(vm_mem + 0x100000, argv[optind + 1]);
+
+	apic_init();
+	misc_init();
 
 	sem_init(&init_sem, 0, 0);
 	init_vcpu(0);
