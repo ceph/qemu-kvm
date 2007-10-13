@@ -391,7 +391,6 @@ int kvm_alloc_userspace_memory(kvm_context_t kvm, unsigned long memory,
 
 
 	low_memory.userspace_addr = (unsigned long)*vm_mem;
-	memset((unsigned long *)low_memory.userspace_addr, 0, low_memory.memory_size);
 	/* 640K should be enough. */
 	r = ioctl(kvm->vm_fd, KVM_SET_USER_MEMORY_REGION, &low_memory);
 	if (r == -1) {
@@ -406,7 +405,6 @@ int kvm_alloc_userspace_memory(kvm_context_t kvm, unsigned long memory,
 			return -1;
 		}
 		extended_memory.userspace_addr = (unsigned long)(*vm_mem + exmem);
-		memset((unsigned long *)extended_memory.userspace_addr, 0, extended_memory.memory_size);
 		r = ioctl(kvm->vm_fd, KVM_SET_USER_MEMORY_REGION, &extended_memory);
 		if (r == -1) {
 			fprintf(stderr, "kvm_create_memory_region: %m\n");
@@ -422,7 +420,6 @@ int kvm_alloc_userspace_memory(kvm_context_t kvm, unsigned long memory,
 			return -1;
 		}
 		above_4g_memory.userspace_addr = (unsigned long)(*vm_mem + 0x100000000);
-		memset((unsigned long *)above_4g_memory.userspace_addr, 0, above_4g_memory.memory_size);
 		r = ioctl(kvm->vm_fd, KVM_SET_USER_MEMORY_REGION, &above_4g_memory);
 		if (r == -1) {
 			fprintf(stderr, "kvm_create_memory_region: %m\n");
