@@ -3,32 +3,32 @@
 prefix=/usr/local
 kerneldir=/lib/modules/$(uname -r)/build
 want_module=1
-qemu_cc=$(ls /usr/bin/gcc3* /usr/bin/gcc-3* 2>/dev/null | tail -n1)
+qemu_cc=
+qemu_cflags=
+qemu_ldflags=
 disable_gcc_check=
+cross_prefix=
+arch=`uname -m`
+target_exec=
 
 usage() {
     cat <<-EOF
 	Usage: $0 [options]
 
 	Options include:
-
+	    --arch=ARCH            architecture to compile for ($arch)
+	    --cross-prefix=PREFIX  prefix for cross compile
 	    --prefix=PREFIX        where to install things ($prefix)
 	    --with-patched-kernel  don't use external module
 	    --kerneldir=DIR        kernel build directory ($kerneldir)
-	    --qemu-cc="$qemu_cc"   compiler for qemu (needs gcc3.x) ($qemu_cc)
+	    --qemu-cc=CC           specify compiler for qemu (must be gcc-3.x)
+	    --qemu-cflags=CFLAGS   CFLAGS to add to qemu configuration
+	    --qemu-ldflags=LDFLAGS LDFLAGS to add to qemu configuration
 	    --disable-gcc-check    don't insist on gcc-3.x
-                                   - this will break running without kvm
+	                           CAUTION: this will break running without kvm
 EOF
     exit 1
 }
-
-
-# prefer gcc if its version is 3.* ( over a compat-gcc )
-# do it before parsing command line arguments to enable the user
-#    to specify a specific gcc he/she likes.
-if gcc -v 2>&1 | grep -q 'gcc *version *3\.[2-4]\.[0-9]'; then
-	qemu_cc=gcc
-fi
 
 while [[ "$1" = -* ]]; do
     opt="$1"; shift
@@ -50,9 +50,21 @@ while [[ "$1" = -* ]]; do
 	--qemu-cc)
 	    qemu_cc="$arg"
 	    ;;
+	--qemu-cflags)
+	    qemu_cflags="$arg"
+	    ;;
+	--qemu-ldflags)
+	    qemu_ldflags="$arg"
+	    ;;
 	--disable-gcc-check)
 	    disable_gcc_check=1
 	    ;;
+	--arch)
+	    arch="$arg"
+	    ;;
+	--cross-prefix)
+	    cross_prefix="$arg"
+            ;;
 	--help)
 	    usage
 	    ;;
@@ -62,39 +74,47 @@ while [[ "$1" = -* ]]; do
     esac
 done
 
-if [[ -z "$qemu_cc" ]]; then
-    echo "$0: cannot locate gcc 3.x. please install it or specify with --qemu-cc"
-    exit 1
-fi
 
+#set kenel directory
 libkvm_kerneldir="$kerneldir"
 if (( want_module )); then
     libkvm_kerneldir=$(readlink -f kernel)
 fi
 
-target_cpu() {
-    if [[ $(uname -m) = i?86 ]]; then
-	echo x86_64
-    else
-	uname -m
-    fi
-}
+#if arch is an x86 arch set to i386
+if [[ $arch = i?86 ]]; then
+  arch="i386"
+fi
 
-(cd user; ./configure --prefix="$prefix" --kerneldir="$libkvm_kerneldir")
-(cd qemu; ./configure --target-list=$(target_cpu)-softmmu --cc="$qemu_cc" \
-    --disable-kqemu --extra-cflags="-I $PWD/../user" \
-    --extra-ldflags="-L $PWD/../user" \
+#set parameters compiling
+qemu_opts=
+if [ "$arch" = "i386" -o "$arch" = "x86_64" ]; then
+    target_exec="x86_64-softmmu"
+    qemu_opts+=" --enable-alsa"
+fi
+
+#configure user dir
+(cd user; ./configure --prefix="$prefix" --kerneldir="$libkvm_kerneldir" \
+          --arch="$arch" \
+          ${cross_prefix:+"--cross-prefix=$cross_prefix"})
+
+#configure qemu
+(cd qemu; ./configure --target-list=$target_exec \
+    --disable-kqemu --extra-cflags="-I $PWD/../user $qemu_cflags" \
+    --extra-ldflags="-L $PWD/../user $qemu_ldflags" \
     --enable-kvm --kernel-path="$libkvm_kerneldir" \
-    --enable-alsa \
     ${disable_gcc_check:+"--disable-gcc-check"} \
-    --prefix="$prefix"
+    --prefix="$prefix" \
+    ${qemu_cc:+"--cc=$qemu_cc"} \
+    ${cross_prefix:+"--cross-prefix=$cross_prefix --cpu=$arch"} \
+    $qemu_opts
 )
 
 
-
 cat <<EOF > config.mak
+ARCH=$arch
 PREFIX=$prefix
 KERNELDIR=$kerneldir
 WANT_MODULE=$want_module
+CROSS_COMPILE=$cross_prefix
 EOF
-
