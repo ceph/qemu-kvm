@@ -411,3 +411,13 @@ static inline uint64_t div64_64(uint64_t dividend, uint64_t divisor)
 typedef _Bool bool;
 
 #endif
+
+/*
+ * PF_VCPU is a Linux 2.6.24 addition
+ */
+
+#include <linux/sched.h>
+
+#ifndef PF_VCPU
+#define PF_VCPU 0
+#endif
