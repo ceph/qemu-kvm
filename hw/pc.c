@@ -724,10 +724,6 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
     /* allocate RAM */
     ram_addr = qemu_ram_alloc(ram_size);
     cpu_register_physical_memory(0, ram_size, ram_addr);
-    if (above_4g_mem_size > 0) {
-	ram_addr = qemu_ram_alloc(above_4g_mem_size);
-        cpu_register_physical_memory(0x100000000, above_4g_mem_size, ram_addr);
-    }
 
     /* allocate VGA RAM */
     vga_ram_addr = qemu_ram_alloc(vga_ram_size);
@@ -763,6 +759,12 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
     vga_bios_error:
         fprintf(stderr, "qemu: could not load VGA BIOS '%s'\n", buf);
         exit(1);
+    }
+
+    /* above 4giga memory allocation */
+    if (above_4g_mem_size > 0) {
+        ram_addr = qemu_ram_alloc(above_4g_mem_size);
+        cpu_register_physical_memory(0x100000000, above_4g_mem_size, ram_addr);
     }
 
     /* setup basic memory access */
