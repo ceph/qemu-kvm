@@ -116,7 +116,8 @@ fi
     ${disable_gcc_check:+"--disable-gcc-check"} \
     --prefix="$prefix" \
     ${qemu_cc:+"--cc=$qemu_cc"} \
-    ${cross_prefix:+"--cross-prefix=$cross_prefix --cpu=$arch"} \
+    ${cross_prefix:+"--cross-prefix=$cross_prefix"} \
+    ${cross_prefix:+"--cpu=$arch"}
 )
 
 
