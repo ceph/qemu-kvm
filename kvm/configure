@@ -6,6 +6,7 @@ want_module=1
 qemu_cc=
 qemu_cflags=
 qemu_ldflags=
+enable_alsa=
 disable_gcc_check=
 cross_prefix=
 arch=`uname -m`
@@ -24,6 +25,7 @@ usage() {
 	    --qemu-cc=CC           specify compiler for qemu (must be gcc-3.x)
 	    --qemu-cflags=CFLAGS   CFLAGS to add to qemu configuration
 	    --qemu-ldflags=LDFLAGS LDFLAGS to add to qemu configuration
+	    --enable-alsa          enable alsa support for qemu
 	    --disable-gcc-check    don't insist on gcc-3.x
 	                           CAUTION: this will break running without kvm
 EOF
@@ -56,6 +58,9 @@ while [[ "$1" = -* ]]; do
 	--qemu-ldflags)
 	    qemu_ldflags="$arg"
 	    ;;
+	--enable-alsa)
+	    enable_alsa=1
+	    ;;
 	--disable-gcc-check)
 	    disable_gcc_check=1
 	    ;;
@@ -87,10 +92,8 @@ if [[ $arch = i?86 ]]; then
 fi
 
 #set parameters compiling
-qemu_opts=
 if [ "$arch" = "i386" -o "$arch" = "x86_64" ]; then
     target_exec="x86_64-softmmu"
-    qemu_opts+=" --enable-alsa"
 fi
 
 #configure user dir
@@ -103,11 +106,11 @@ fi
     --disable-kqemu --extra-cflags="-I $PWD/../user $qemu_cflags" \
     --extra-ldflags="-L $PWD/../user $qemu_ldflags" \
     --enable-kvm --kernel-path="$libkvm_kerneldir" \
+    ${enable_alsa:+"--enable-alsa"} \
     ${disable_gcc_check:+"--disable-gcc-check"} \
     --prefix="$prefix" \
     ${qemu_cc:+"--cc=$qemu_cc"} \
     ${cross_prefix:+"--cross-prefix=$cross_prefix --cpu=$arch"} \
-    $qemu_opts
 )
 
 
