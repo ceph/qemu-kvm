@@ -436,12 +436,9 @@ int kvm_alloc_userspace_memory(kvm_context_t kvm, unsigned long memory,
 
 #endif
 
-int kvm_create(kvm_context_t kvm, unsigned long phys_mem_bytes, void **vm_mem)
+int kvm_create_vm(kvm_context_t kvm)
 {
-	unsigned long memory = (phys_mem_bytes + PAGE_SIZE - 1) & PAGE_MASK;
 	int fd = kvm->fd;
-	int zfd;
-	int r;
 
 	kvm->vcpu_fd[0] = -1;
 
@@ -451,6 +448,16 @@ int kvm_create(kvm_context_t kvm, unsigned long phys_mem_bytes, void **vm_mem)
 		return -1;
 	}
 	kvm->vm_fd = fd;
+	return 0;
+}
+
+static int kvm_create_default_phys_mem(kvm_context_t kvm,
+				       unsigned long phys_mem_bytes,
+				       void **vm_mem)
+{
+	unsigned long memory = (phys_mem_bytes + PAGE_SIZE - 1) & PAGE_MASK;
+	int zfd;
+	int r;
 
 #ifdef KVM_CAP_USER_MEMORY
 	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_USER_MEMORY);
@@ -468,13 +475,19 @@ int kvm_create(kvm_context_t kvm, unsigned long phys_mem_bytes, void **vm_mem)
         close(zfd);
 
 	kvm->physical_memory = *vm_mem;
+	return 0;
+}
+
+void kvm_create_irqchip(kvm_context_t kvm)
+{
+	int r;
 
 	kvm->irqchip_in_kernel = 0;
 #ifdef KVM_CAP_IRQCHIP
 	if (!kvm->no_irqchip_creation) {
 		r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_IRQCHIP);
 		if (r > 0) {	/* kernel irqchip supported */
-			r = ioctl(fd, KVM_CREATE_IRQCHIP);
+			r = ioctl(kvm->vm_fd, KVM_CREATE_IRQCHIP);
 			if (r >= 0)
 				kvm->irqchip_in_kernel = 1;
 			else
@@ -482,6 +495,19 @@ int kvm_create(kvm_context_t kvm, unsigned long phys_mem_bytes, void **vm_mem)
 		}
 	}
 #endif
+}
+
+int kvm_create(kvm_context_t kvm, unsigned long phys_mem_bytes, void **vm_mem)
+{
+	int r;
+	
+	r = kvm_create_vm(kvm);
+	if (r < 0)
+	        return r;
+	r = kvm_create_default_phys_mem(kvm, phys_mem_bytes, vm_mem);
+	if (r < 0)
+	        return r;
+	kvm_create_irqchip(kvm);
 	r = kvm_create_vcpu(kvm, 0);
 	if (r < 0)
 		return r;
@@ -575,6 +601,32 @@ void *kvm_create_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 #endif
 		return kvm_create_kernel_phys_mem(kvm, phys_start, len, slot,
 								log, writable);
+}
+
+int kvm_register_userspace_phys_mem(kvm_context_t kvm,
+			unsigned long phys_start, void *userspace_addr,
+			unsigned long len, int slot, int log)
+{
+	struct kvm_userspace_memory_region memory = {
+		.slot = slot,
+		.memory_size = len,
+		.guest_phys_addr = phys_start,
+		.userspace_addr = (intptr_t)userspace_addr,
+		.flags = log ? KVM_MEM_LOG_DIRTY_PAGES : 0,
+	};
+	int r;
+
+	if (!kvm->physical_memory)
+		kvm->physical_memory = userspace_addr - phys_start;
+
+	r = ioctl(kvm->vm_fd, KVM_SET_USER_MEMORY_REGION, &memory);
+	if (r == -1) {
+		fprintf(stderr, "create_userspace_phys_mem: %s\n", strerror(errno));
+		return -1;
+	}
+
+	kvm_userspace_memory_region_save_params(kvm, &memory);
+        return 0;
 }
 
 /* destroy/free a whole slot.

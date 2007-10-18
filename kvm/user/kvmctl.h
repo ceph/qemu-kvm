@@ -146,6 +146,9 @@ int kvm_get_shadow_pages(kvm_context_t kvm , unsigned int *nrshadow_pages);
 int kvm_create(kvm_context_t kvm,
 	       unsigned long phys_mem_bytes,
 	       void **phys_mem);
+int kvm_create_vm(kvm_context_t kvm);
+void kvm_create_irqchip(kvm_context_t kvm);
+
 /*!
  * \brief Create a new virtual cpu
  *
@@ -413,6 +416,9 @@ void *kvm_create_phys_mem(kvm_context_t, unsigned long phys_start,
 			  unsigned long len, int slot, int log, int writable);
 void kvm_destroy_phys_mem(kvm_context_t, unsigned long phys_start, 
 			  unsigned long len, int slot);
+int kvm_register_userspace_phys_mem(kvm_context_t kvm,
+			unsigned long phys_start, void *userspace_addr,
+			unsigned long len, int slot, int log);
 int kvm_get_dirty_pages(kvm_context_t, int slot, void *buf);
 
 
