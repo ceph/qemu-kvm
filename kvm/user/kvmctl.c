@@ -313,7 +313,7 @@ int kvm_alloc_kernel_memory(kvm_context_t kvm, unsigned long memory,
 	struct kvm_memory_region above_4g_memory = {
 		.slot = 4,
 		.memory_size = memory < pcimem ? 0 : memory - pcimem,
-		.guest_phys_addr = 0x100000000,
+		.guest_phys_addr = 0x100000000ULL,
 	};
 
 	if (memory >= pcimem)
@@ -372,12 +372,12 @@ int kvm_alloc_userspace_memory(kvm_context_t kvm, unsigned long memory,
 	struct kvm_userspace_memory_region above_4g_memory = {
 		.slot = 4,
 		.memory_size = memory < pcimem ? 0 : memory - pcimem,
-		.guest_phys_addr = 0x100000000,
+		.guest_phys_addr = 0x100000000ULL,
 	};
 
 	if (memory >= pcimem) {
 		extended_memory.memory_size = pcimem - exmem;
-		*vm_mem = mmap(NULL, memory + 0x100000000 - pcimem,
+		*vm_mem = mmap(NULL, memory + 0x100000000ULL - pcimem,
 				PROT_READ|PROT_WRITE, MAP_ANONYMOUS |
 							MAP_SHARED, -1, 0);
 	}
@@ -413,13 +413,13 @@ int kvm_alloc_userspace_memory(kvm_context_t kvm, unsigned long memory,
 	}
 
 	if (above_4g_memory.memory_size) {
-		r = munmap(*vm_mem + pcimem, 0x100000000 - pcimem);
+		r = munmap(*vm_mem + pcimem, 0x100000000ULL - pcimem);
 		if (r == -1) {
 			fprintf(stderr, "kvm_alloc_userspace_memory: %s",
 							strerror(errno));
 			return -1;
 		}
-		above_4g_memory.userspace_addr = (unsigned long)(*vm_mem + 0x100000000);
+		above_4g_memory.userspace_addr = (unsigned long)(*vm_mem + 0x100000000ULL);
 		r = ioctl(kvm->vm_fd, KVM_SET_USER_MEMORY_REGION, &above_4g_memory);
 		if (r == -1) {
 			fprintf(stderr, "kvm_create_memory_region: %m\n");
