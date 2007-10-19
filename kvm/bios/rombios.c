@@ -1522,12 +1522,11 @@ void put_str(action, s)
 
 //--------------------------------------------------------------------------
 // bios_printf()
-//   A compact variable argument printf function which prints its output via
-//   an I/O port so that it can be logged by Bochs/Plex.
-//   Currently, only %x is supported (or %02x, %04x, etc).
+//   A compact variable argument printf function.
 //
-//   Supports %[format_width][format]
-//   where format can be d,x,c,s
+//   Supports %[format_width][length]format
+//   where format can be x,X,u,d,s,c
+//   and the optional length modifier is l (ell)
 //--------------------------------------------------------------------------
   void
 bios_printf(action, s)
