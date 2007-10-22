@@ -831,8 +831,8 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
             cpu_register_physical_memory(0xd0000 + offset,
                                          size, option_rom_offset | IO_MEM_ROM);
 	    if (kvm_allowed)
-		memcpy(phys_ram_base + 0xd0000 + option_rom_offset,
-		       phys_ram_base + offset, size);
+		memcpy(phys_ram_base + 0xd0000 + offset,
+		       phys_ram_base + option_rom_offset, size);
 
             offset += size;
         }
