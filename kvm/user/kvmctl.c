@@ -607,6 +607,7 @@ int kvm_register_userspace_phys_mem(kvm_context_t kvm,
 			unsigned long phys_start, void *userspace_addr,
 			unsigned long len, int slot, int log)
 {
+#ifdef KVM_CAP_USER_MEMORY
 	struct kvm_userspace_memory_region memory = {
 		.slot = slot,
 		.memory_size = len,
@@ -627,7 +628,11 @@ int kvm_register_userspace_phys_mem(kvm_context_t kvm,
 
 	kvm_userspace_memory_region_save_params(kvm, &memory);
         return 0;
+#else
+	return -ENOSYS;
+#endif
 }
+
 
 /* destroy/free a whole slot.
  * phys_start, len and slot are the params passed to kvm_create_phys_mem()
