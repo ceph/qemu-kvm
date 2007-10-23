@@ -427,6 +427,9 @@ typedef _Bool bool;
  */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
+
+#include <linux/smp.h>
+
 struct kvm_call_data_struct {
 	void (*func) (void *info);
 	void *info;
@@ -454,7 +457,7 @@ static void kvm_ack_smp_call(void *_data)
 	}
 }
 
-static inline int smp_call_function_mask(cpumask_t mask,
+static inline int kvm_smp_call_function_mask(cpumask_t mask,
 	void (*func) (void *info), void *info, int wait)
 {
 	struct kvm_call_data_struct data;
@@ -495,4 +498,7 @@ static inline int smp_call_function_mask(cpumask_t mask,
 	}
 	return 0;
 }
+
+#define smp_call_function_mask kvm_smp_call_function_mask
+
 #endif
