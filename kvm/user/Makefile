@@ -15,8 +15,7 @@ include config-$(ARCH).mak
 cc-option = $(shell if $(CC) $(1) -S -o /dev/null -xc /dev/null \
               > /dev/null 2>&1; then echo "$(1)"; else echo "$(2)"; fi ;)
 
-CFLAGS += -I $(KERNELDIR)/include $(autodepend-flags) -g -fomit-frame-pointer \
-	-Wall
+CFLAGS += $(autodepend-flags) -g -fomit-frame-pointer -Wall 
 CFLAGS += $(call cc-option, -fno-stack-protector, "")
 CFLAGS += $(call cc-option, -fno-stack-protector-all, "")
 
@@ -25,21 +24,6 @@ LDFLAGS += $(CFLAGS)
 CXXFLAGS = $(autodepend-flags) 
 
 autodepend-flags = -MMD -MF $(dir $*).$(notdir $*).d
-
-all: kvmctl libkvm.a flatfiles
-
-kvmctl: LDFLAGS += -pthread -lrt
-
-kvmctl: kvmctl.o main.o
-
-balloon_ctl: balloon_ctl.o
-
-libkvm.a: kvmctl.o
-	$(AR) rcs $@ $^
-
-flatfiles-common = test/bootstrap test/vmexit.flat test/smp.flat
-
-flatfiles: $(flatfiles-common) $(flatfiles)
 
 install:
 	install -D kvmctl.h $(DESTDIR)/$(PREFIX)/include/kvmctl.h
