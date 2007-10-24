@@ -3,6 +3,8 @@ include config.mak
 
 DESTDIR :=
 
+.PHONY: arch_clean clean
+
 #make sure env CFLAGS variable is not used
 CFLAGS =
 
@@ -15,15 +17,22 @@ include config-$(ARCH).mak
 cc-option = $(shell if $(CC) $(1) -S -o /dev/null -xc /dev/null \
               > /dev/null 2>&1; then echo "$(1)"; else echo "$(2)"; fi ;)
 
-CFLAGS += $(autodepend-flags) -g -fomit-frame-pointer -Wall 
+CFLAGS += $(autodepend-flags) -g -fomit-frame-pointer -Wall
 CFLAGS += $(call cc-option, -fno-stack-protector, "")
 CFLAGS += $(call cc-option, -fno-stack-protector-all, "")
 
 LDFLAGS += $(CFLAGS)
 
-CXXFLAGS = $(autodepend-flags) 
+CXXFLAGS = $(autodepend-flags)
 
 autodepend-flags = -MMD -MF $(dir $*).$(notdir $*).d
+
+kvmctl: LDFLAGS += -pthread -lrt
+
+kvmctl: $(kvmctl_objs)
+
+libkvm.a: $(libkvm_objs)
+	$(AR) rcs $@ $^
 
 install:
 	install -D kvmctl.h $(DESTDIR)/$(PREFIX)/include/kvmctl.h
@@ -36,29 +45,10 @@ install:
 %.flat: %.o
 	$(CC) $(CFLAGS) -nostdlib -o $@ -Wl,-T,flat.lds $^
 
-test/bootstrap: test/bootstrap.o
-	$(CC) -nostdlib -o $@ -Wl,-T,bootstrap.lds $^
-
 %.o: %.S
 	$(CC) $(CFLAGS) -c -nostdlib -o $@ $^
 
-test/irq.flat: test/print.o
-
-test/access.flat: $(cstart.o) test/access.o test/printf.o test/print.o \
-	test/smp.o
-
-test/sieve.flat: $(cstart.o) test/sieve.o test/print.o test/vm.o
-
-test/vmexit.flat: $(cstart.o) test/vmexit.o test/printf.o test/smp.o
-
-test/test32.flat: test/test32.o
-
-test/smp.flat: $(cstart.o) test/smp.o test/printf.o test/smptest.o
-
-test/%.o: CFLAGS += -std=gnu99 -ffreestanding
-
 -include .*.d
 
-clean:
+clean: arch_clean
 	$(RM) kvmctl *.o *.a .*.d
-	$(RM) test/bootstrap test/*.o test/*.flat test/.*.d
