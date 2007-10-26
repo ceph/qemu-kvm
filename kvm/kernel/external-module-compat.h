@@ -502,3 +502,9 @@ static inline int kvm_smp_call_function_mask(cpumask_t mask,
 #define smp_call_function_mask kvm_smp_call_function_mask
 
 #endif
+
+/* CONFIG_HAS_IOMEM is apparently fairly new too (2.6.21 for x86_64). */
+#ifndef CONFIG_HAS_IOMEM
+#define CONFIG_HAS_IOMEM 1
+#endif
+
