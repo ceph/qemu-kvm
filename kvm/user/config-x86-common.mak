@@ -19,7 +19,7 @@ $(TEST_DIR)/%.o: CFLAGS += -std=gnu99 -ffreestanding
 $(TEST_DIR)/bootstrap: $(TEST_DIR)/bootstrap.o
 	$(CC) -nostdlib -o $@ -Wl,-T,bootstrap.lds $^
  
-$(TEST_DIR)/irq.flat: $(TEST_DIR)/test/print.o
+$(TEST_DIR)/irq.flat: $(TEST_DIR)/print.o
  
 $(TEST_DIR)/access.flat: $(cstart.o) $(TEST_DIR)/access.o \
 	$(TEST_DIR)/printf.o $(TEST_DIR)/print.o $(TEST_DIR)/smp.o
