@@ -351,7 +351,7 @@ int kvm_alloc_kernel_memory(kvm_context_t kvm, unsigned long memory,
 {
 	unsigned long dosmem = 0xa0000;
 	unsigned long exmem = 0xc0000;
-	unsigned long pcimem = 0xf0000000;
+	unsigned long pcimem = 0xe0000000;
 	int r;
 	int tss_ext;
 	struct kvm_memory_region low_memory = {
@@ -426,7 +426,7 @@ int kvm_alloc_userspace_memory(kvm_context_t kvm, unsigned long memory,
 {
 	unsigned long dosmem = 0xa0000;
 	unsigned long exmem = 0xc0000;
-	unsigned long pcimem = 0xf0000000;
+	unsigned long pcimem = 0xe0000000;
 	int r;
 	int tss_ext;
 	struct kvm_userspace_memory_region low_memory = {
