@@ -2613,7 +2613,7 @@ void *set_vram_mapping(unsigned long begin, unsigned long end)
     end = begin + VGA_RAM_SIZE;
     end = (end + TARGET_PAGE_SIZE -1 ) & TARGET_PAGE_MASK;
 
-    vram_pointer = kvm_create_phys_mem(kvm_context, begin, end - begin, 1, 
+    vram_pointer = kvm_create_phys_mem(kvm_context, begin, end - begin,
 				       1, 1);
 
     if (vram_pointer == NULL) {
@@ -2633,12 +2633,13 @@ int unset_vram_mapping(unsigned long begin, unsigned long end)
     begin = begin & TARGET_PAGE_MASK;
     end = (end + TARGET_PAGE_SIZE -1 ) & TARGET_PAGE_MASK;
 
-    kvm_destroy_phys_mem(kvm_context, begin, end - begin, 1);
+    kvm_destroy_phys_mem(kvm_context, begin, end - begin);
 
     return 0;
 }
 
-static void kvm_update_vga_alias(CirrusVGAState *s, int ok, int bank)
+static void kvm_update_vga_alias(CirrusVGAState *s, int ok, int bank,
+                                 unsigned long phys_addr)
 {
     unsigned limit, base;
 
@@ -2652,22 +2653,22 @@ static void kvm_update_vga_alias(CirrusVGAState *s, int ok, int bank)
 	if (!s->aliases_enabled
 	    || base != s->aliased_bank_base[bank]
 	    || limit != s->aliased_bank_limit[bank]) {
-	    kvm_create_memory_alias(kvm_context, bank,
+	    kvm_create_memory_alias(kvm_context, phys_addr,
 				    0xa0000 + bank * 0x8000,
 				    limit, base);
 	    s->aliased_bank_base[bank] = base;
 	    s->aliased_bank_limit[bank] = limit;
 	}
     } else {
-	kvm_destroy_memory_alias(kvm_context, bank);
+	kvm_destroy_memory_alias(kvm_context, phys_addr);
     }
 }
 
 static void kvm_update_vga_aliases(CirrusVGAState *s, int ok)
 {
     if (kvm_allowed) {
-	kvm_update_vga_alias(s, ok, 0);
-	kvm_update_vga_alias(s, ok, 1);
+	kvm_update_vga_alias(s, ok, 0, 0xc0000);
+	kvm_update_vga_alias(s, ok, 1, s->map_addr);
     }
     s->aliases_enabled = ok;
 }

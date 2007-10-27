@@ -415,13 +415,13 @@ void kvm_show_regs(kvm_context_t kvm, int vcpu);
 int kvm_set_tss_addr(kvm_context_t kvm, unsigned long addr);
 
 void *kvm_create_phys_mem(kvm_context_t, unsigned long phys_start, 
-			  unsigned long len, int slot, int log, int writable);
+			  unsigned long len, int log, int writable);
 void kvm_destroy_phys_mem(kvm_context_t, unsigned long phys_start, 
-			  unsigned long len, int slot);
+			  unsigned long len);
 int kvm_register_userspace_phys_mem(kvm_context_t kvm,
 			unsigned long phys_start, void *userspace_addr,
-			unsigned long len, int slot, int log);
-int kvm_get_dirty_pages(kvm_context_t, int slot, void *buf);
+			unsigned long len, int log);
+int kvm_get_dirty_pages(kvm_context_t, unsigned long phys_addr, void *buf);
 
 
 /*!
@@ -431,7 +431,7 @@ int kvm_get_dirty_pages(kvm_context_t, int slot, void *buf);
  * accesses the alias region, it will behave exactly as if it accessed
  * the target memory.
  */
-int kvm_create_memory_alias(kvm_context_t, int slot,
+int kvm_create_memory_alias(kvm_context_t, uint64_t phys_addr,
 			    uint64_t phys_start, uint64_t len,
 			    uint64_t target_phys);
 
@@ -440,16 +440,16 @@ int kvm_create_memory_alias(kvm_context_t, int slot,
  *
  * Removes an alias created with kvm_create_memory_alias().
  */
-int kvm_destroy_memory_alias(kvm_context_t, int slot);
+int kvm_destroy_memory_alias(kvm_context_t, uint64_t phys_addr);
 
 /*!
  * \brief Get a bitmap of guest ram pages which are allocated to the guest.
  *
  * \param kvm Pointer to the current kvm_context
- * \param slot Memory slot number
+ * \param phys_addr Memory slot phys addr
  * \param bitmap Long aligned address of a big enough bitmap (one bit per page)
  */
-int kvm_get_mem_map(kvm_context_t kvm, int slot, void *bitmap);
+int kvm_get_mem_map(kvm_context_t kvm, unsigned long phys_addr, void *bitmap);
 int kvm_set_irq_level(kvm_context_t kvm, int irq, int level);
 
 /*!

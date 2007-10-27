@@ -796,7 +796,7 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
 #ifdef USE_KVM
     if (kvm_allowed) {
 	    bios_mem = kvm_create_phys_mem(kvm_context, (uint32_t)(-bios_size),
-					   bios_size, 2, 0, 1);
+					   bios_size, 0, 1);
 	    if (!bios_mem)
 		    exit(1);
 	    memcpy(bios_mem, phys_ram_base + bios_offset, bios_size);
