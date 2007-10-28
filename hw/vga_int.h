@@ -79,6 +79,14 @@
 #define CH_ATTR_SIZE (160 * 100)
 #define VGA_MAX_HEIGHT 2048
 
+#ifdef USE_KVM
+#define VGA_KVM_STATE				\
+    unsigned long map_addr;			\
+    unsigned long map_end;
+#else
+#define VGA_KVM_STATE
+#endif
+
 #define VGA_STATE_COMMON                                                \
     uint8_t *vram_ptr;                                                  \
     unsigned long vram_offset;                                          \
@@ -145,7 +153,8 @@
     void (*cursor_draw_line)(struct VGAState *s, uint8_t *d, int y);    \
     /* tell for each page if it has been updated since the last time */ \
     uint32_t last_palette[256];                                         \
-    uint32_t last_ch_attr[CH_ATTR_SIZE]; /* XXX: make it dynamic */
+    uint32_t last_ch_attr[CH_ATTR_SIZE]; /* XXX: make it dynamic */	\
+    VGA_KVM_STATE
 
 
 typedef struct VGAState {
@@ -156,9 +165,6 @@ typedef struct VGAState {
     int32_t  pad1;
     uint32_t aliased_bank_base[2];
     uint32_t aliased_bank_limit[2];
-
-    unsigned long map_addr;
-    unsigned long map_end;
 #endif
 
 

@@ -277,10 +277,6 @@ typedef struct CirrusVGAState {
     int last_hw_cursor_y_end;
     int real_vram_size; /* XXX: suppress that */
     CPUWriteMemoryFunc **cirrus_linear_write;
-#ifdef USE_KVM
-    unsigned long map_addr;
-    unsigned long map_end;
-#endif
 } CirrusVGAState;
 
 typedef struct PCICirrusVGAState {
