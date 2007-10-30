@@ -1223,7 +1223,7 @@ int kvm_physical_memory_set_dirty_tracking(int enable)
 }
 
 /* get kvm's dirty pages bitmap and update qemu's */
-int kvm_get_dirty_pages_log_slot(int slot, 
+int kvm_get_dirty_pages_log_slot(unsigned long start_addr,
                                  unsigned char *bitmap,
                                  unsigned int offset,
                                  unsigned int len)
@@ -1234,7 +1234,7 @@ int kvm_get_dirty_pages_log_slot(int slot,
     unsigned page_number, addr, addr1;
 
     memset(bitmap, 0, len);
-    r = kvm_get_dirty_pages(kvm_context, slot, bitmap);
+    r = kvm_get_dirty_pages(kvm_context, start_addr, bitmap);
     if (r)
         return r;
 
@@ -1266,9 +1266,9 @@ int kvm_update_dirty_pages_log(void)
     int r = 0, len;
 
     len = BITMAP_SIZE(0xa0000);
-    r =      kvm_get_dirty_pages_log_slot(3, kvm_dirty_bitmap, 0      , len);
+    r =      kvm_get_dirty_pages_log_slot(0, kvm_dirty_bitmap, 0      , len);
     len = BITMAP_SIZE(phys_ram_size - 0xc0000);
-    r = r || kvm_get_dirty_pages_log_slot(0, kvm_dirty_bitmap, 0xc0000, len);
+    r = r || kvm_get_dirty_pages_log_slot(0xc0000, kvm_dirty_bitmap, 0xc0000, len);
     return r;
 }
 
@@ -1279,12 +1279,12 @@ int kvm_get_phys_ram_page_bitmap(unsigned char *bitmap)
     len = BITMAP_SIZE(phys_ram_size);
     memset(bitmap, 0, len);
 
-    r = kvm_get_mem_map(kvm_context, 3, bitmap);
+    r = kvm_get_mem_map(kvm_context, 0, bitmap);
     if (r)
         goto out;
 
     offset = BITMAP_SIZE(0xc0000);
-    r = kvm_get_mem_map(kvm_context, 0, bitmap + offset);
+    r = kvm_get_mem_map(kvm_context, 0xc0000, bitmap + offset);
 
  out:
     return r;
