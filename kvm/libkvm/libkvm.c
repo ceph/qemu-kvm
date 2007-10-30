@@ -412,7 +412,8 @@ int kvm_alloc_kernel_memory(kvm_context_t kvm, unsigned long memory,
 
 	kvm_memory_region_save_params(kvm, &low_memory);
 	kvm_memory_region_save_params(kvm, &extended_memory);
-	kvm_memory_region_save_params(kvm, &above_4g_memory);
+	if (above_4g_memory.memory_size)
+		kvm_memory_region_save_params(kvm, &above_4g_memory);
 
 	*vm_mem = mmap(NULL, memory, PROT_READ|PROT_WRITE, MAP_SHARED, kvm->vm_fd, 0);
 
@@ -513,7 +514,8 @@ int kvm_alloc_userspace_memory(kvm_context_t kvm, unsigned long memory,
 
 	kvm_userspace_memory_region_save_params(kvm, &low_memory);
 	kvm_userspace_memory_region_save_params(kvm, &extended_memory);
-	kvm_userspace_memory_region_save_params(kvm, &above_4g_memory);
+	if (above_4g_memory.memory_size)
+		kvm_userspace_memory_region_save_params(kvm, &above_4g_memory);
 
 	return 0;
 }
