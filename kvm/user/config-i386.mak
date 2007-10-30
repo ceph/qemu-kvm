@@ -1,4 +1,3 @@
-LIBDIR = /lib
 TEST_DIR=test/x86
 cstart.o = $(TEST_DIR)/cstart.o
 bits = 32

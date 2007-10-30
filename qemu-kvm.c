@@ -18,7 +18,7 @@ int kvm_irqchip = 1;
 #include "vl.h"
 
 #include "qemu-kvm.h"
-#include <kvmctl.h>
+#include <libkvm.h>
 #include <pthread.h>
 #include <sys/utsname.h>
 

@@ -1,4 +1,3 @@
-LIBDIR = /lib64
 TEST_DIR=test/x86
 cstart.o = $(TEST_DIR)/cstart64.o
 bits = 64

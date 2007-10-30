@@ -1,0 +1,2 @@
+
+LIBDIR := /lib64

@@ -23,7 +23,7 @@
  */
 #include "vl.h"
 #include "cpu-all.h"
-#include "kvmctl.h"
+#include "libkvm.h"
 
 #define VMPORT_CMD_GETVERSION 0x0a
 #define VMPORT_CMD_GETRAMSIZE 0x14

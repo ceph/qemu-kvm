@@ -1413,7 +1413,7 @@ void vga_invalidate_scanlines(VGAState *s, int y1, int y2)
 
 #ifdef USE_KVM
 
-#include "kvmctl.h"
+#include "libkvm.h"
 extern kvm_context_t kvm_context;
 
 static int bitmap_get_dirty(unsigned long *bitmap, unsigned nr)

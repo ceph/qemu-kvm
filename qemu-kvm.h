@@ -2,7 +2,7 @@
 #define QEMU_KVM_H
 
 #include "cpu.h"
-#include "kvmctl.h"
+#include "libkvm.h"
 
 int kvm_main_loop(void);
 int kvm_qemu_init(void);

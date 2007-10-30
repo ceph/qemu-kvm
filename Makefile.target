@@ -419,7 +419,7 @@ AUDIODRV+= wavcapture.o
 ifdef CONFIG_KVM_KERNEL_INC
 CFLAGS += -I $(CONFIG_KVM_KERNEL_INC)
 LIBS += -lkvm
-DEPLIBS += ../user/libkvm.a
+DEPLIBS += ../libkvm/libkvm.a
 endif
 
 ifdef CONFIG_VNC_TLS

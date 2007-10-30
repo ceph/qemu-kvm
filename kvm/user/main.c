@@ -16,7 +16,7 @@
 
 #define _GNU_SOURCE
 
-#include "kvmctl.h"
+#include <libkvm.h>
 #include "test/x86/apic.h"
 
 #include <stdio.h>

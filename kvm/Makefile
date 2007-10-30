@@ -5,16 +5,17 @@ DESTDIR=
 
 rpmrelease = devel
 
-.PHONY: kernel user qemu bios clean
+.PHONY: kernel user libkvm qemu bios clean
 
-all: $(if $(WANT_MODULE), kernel) user qemu
+all: $(if $(WANT_MODULE), kernel) user libkvm qemu
 
 kcmd = $(if $(WANT_MODULE),,@\#)
 
-qemu kernel user:
+qemu kernel user libkvm:
 	$(MAKE) -C $@
 
-qemu: user
+qemu: libkvm
+user: libkvm
 
 bios:
 	$(MAKE) -C $@
@@ -41,7 +42,7 @@ install-rpm:
 
 install:
 	$(kcmd)make -C kernel DESTDIR="$(DESTDIR)" install
-	make -C user DESTDIR="$(DESTDIR)" install
+	make -C libkvm DESTDIR="$(DESTDIR)" install
 	make -C qemu DESTDIR="$(DESTDIR)" install
 
 tmpspec = .tmp.kvm.spec
@@ -59,6 +60,7 @@ srpm:
 	sed 's/^Release:.*/Release: $(rpmrelease)/' kvm.spec > $(tmpspec)
 	tar czf SOURCES/kvm.tar.gz qemu
 	tar czf SOURCES/user.tar.gz user
+	tar czf SOURCES/libkvm.tar.gz libkvm
 	tar czf SOURCES/kernel.tar.gz kernel
 	tar czf SOURCES/scripts.tar.gz scripts
 	cp Makefile configure kvm_stat SOURCES
@@ -66,7 +68,7 @@ srpm:
 	$(RM) $(tmpspec)
 
 clean:
-	for i in $(if $(WANT_MODULE), kernel) user qemu; do \
+	for i in $(if $(WANT_MODULE), kernel) user libkvm qemu; do \
 		make -C $$i clean; \
 	done
 	rm -f config.mak user/config.mak

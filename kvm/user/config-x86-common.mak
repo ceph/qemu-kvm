@@ -1,10 +1,8 @@
 #This is a make file with common rules for both x86 & x86-64
 
-all: kvmctl libkvm.a test_cases
+all: kvmctl test_cases
 
-kvmctl_objs=kvmctl.o main.o
-
-libkvm_objs=kvmctl.o
+kvmctl_objs=../libkvm/libkvm.a main.o
 
 balloon_ctl: balloon_ctl.o
 

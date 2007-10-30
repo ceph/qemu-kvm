@@ -34,7 +34,7 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/ioctl.h>
-#include "kvmctl.h"
+#include "libkvm.h"
 #include "kvm-abi-10.h"
 
 static int kvm_abi = EXPECTED_KVM_API_VERSION;

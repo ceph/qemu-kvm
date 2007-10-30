@@ -2,8 +2,8 @@
  * libkvm API
  */
 
-#ifndef KVMCTL_H
-#define KVMCTL_H
+#ifndef LIBKVM_H
+#define LIBKVM_H
 
 #include <stdint.h>
 
