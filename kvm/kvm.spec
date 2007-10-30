@@ -32,7 +32,8 @@ Source2: kernel.tar.gz
 Source3: scripts.tar.gz
 Source4: Makefile
 Source5: configure
-Source5: kvm_stat
+Source6: kvm_stat
+Source7: libkvm.tar.gz
 %endif
 
 %description
@@ -45,6 +46,7 @@ with hardware support for virtualization: Intel's VT and AMD's AMD-V.
 %setup -T -b 0 -n qemu
 %setup -T -b 1 -n user -D
 %setup -T -b 2 -n kernel -D
+%setup -T -b 7 -n libkvm -D
 %setup -T -b 3 -n scripts -D
 cd ..
 cp %{_sourcedir}/Makefile %{_sourcedir}/configure %{_sourcedir}/kvm_stat .
