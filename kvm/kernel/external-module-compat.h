@@ -464,15 +464,17 @@ static inline int kvm_smp_call_function_mask(cpumask_t mask,
 	cpumask_t allbutself;
 	int cpus;
 	int cpu;
+	int me;
 
+	me = get_cpu();
 	allbutself = cpu_online_map;
-	cpu_clear(smp_processor_id(), allbutself);
+	cpu_clear(me, allbutself);
 
 	cpus_and(mask, mask, allbutself);
 	cpus = cpus_weight(mask);
 
 	if (!cpus)
-		return 0;
+		goto out;
 
 	data.func = func;
 	data.info = info;
@@ -490,12 +492,14 @@ static inline int kvm_smp_call_function_mask(cpumask_t mask,
 	}
 
 	if (!wait)
-		return 0;
+		goto out;
 
 	while (atomic_read(&data.finished) != cpus) {
 		cpu_relax();
 		barrier();
 	}
+out:
+	put_cpu();
 	return 0;
 }
 
