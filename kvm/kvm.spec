@@ -59,6 +59,7 @@ rm -rf %{buildroot}
 %if !%{_prebuilt}
 cd ..
 ./configure --prefix=/usr/kvm
+make -C libkvm
 make -C user
 #(cd qemu;
 #    ./co
