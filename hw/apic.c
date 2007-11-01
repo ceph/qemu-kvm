@@ -930,6 +930,13 @@ static void apic_reset(void *opaque)
      * processor when local APIC is enabled.
      */
     s->lvt[APIC_LVT_LINT0] = 0x700;
+#ifdef USE_KVM
+#ifdef KVM_CAP_IRQCHIP
+    if (kvm_allowed && kvm_irqchip_in_kernel(kvm_context)) {
+        kvm_kernel_lapic_load_from_user(s);
+    }
+#endif
+#endif
 }
 
 static CPUReadMemoryFunc *apic_mem_read[3] = {
