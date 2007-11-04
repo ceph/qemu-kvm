@@ -208,6 +208,10 @@ static int misc_io(void *opaque, int size, int is_write,
 		if (!is_write)
 			*value = memory_size;
 		break;
+	case 0xf4: // exit
+		if (is_write)
+			exit(*value);
+		break;
 	}
 
 	return 0;
