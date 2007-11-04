@@ -32,6 +32,7 @@ sync:
 	$(call hack, mmu.c)
 	$(call hack, vmx.c)
 	$(call hack, svm.c)
+	$(call hack, x86.c)
 
 install:
 	mkdir -p $(DESTDIR)/$(INSTALLDIR)
