@@ -335,10 +335,6 @@ int kvm_get_sregs(kvm_context_t kvm, int vcpu, struct kvm_sregs *regs);
  */
 int kvm_set_sregs(kvm_context_t kvm, int vcpu, struct kvm_sregs *regs);
 
-struct kvm_msr_list *kvm_get_msr_list(kvm_context_t);
-int kvm_get_msrs(kvm_context_t, int vcpu, struct kvm_msr_entry *msrs, int n);
-int kvm_set_msrs(kvm_context_t, int vcpu, struct kvm_msr_entry *msrs, int n);
-
 /*!
  * \brief Simulate an external vectored interrupt
  *
