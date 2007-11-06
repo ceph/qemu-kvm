@@ -12,10 +12,23 @@ ExclusiveArch:  i386 x86_64
 
 Requires:	kvm-kmod bridge-utils
 
-%define Distribution %(cat /etc/redhat-release | awk '{ print $1}' | tr [A-Z] [a-z])
-%define os_release %(rpm -q --qf '%%{version}' %{Distribution}-release)
+%define Distribution %(rpm -q -qf /etc/redhat-release --qf '%{name}' | cut -d"-"  -f 1)
+%define os_version %(rpm -q --qf '%%{version}' %{Distribution}-release)
+%define os_release %(rpm -q --qf '%%{release}' %{Distribution}-release | cut -d"." -f 1)
 
-%if %{Distribution} == "fedora" && %{os_release} == 5 || %{Distribution} == "centos" && %{os_release} == 4
+%if %([ x"%{Distribution}" = x"fedora" -a x"%{os_version}" = x"5" ] && echo 1 || echo 0)
+%define require_gccver 32
+%endif
+
+%if %([ x"%{Distribution}" = x"centos" -a x"%{os_version}" = x"4" ] && echo 1 || echo 0)
+%define require_gccver 32
+%endif
+
+%if %([ x"%{Distribution}" = x"redhat" -a x"%{os_release}" = x"5" ] && echo 1 || echo 0)
+%define require_gccver 34
+%endif
+
+%if %( [ x"%{require_gccver}" = x"32" ] && echo 1 || echo 0)
 BuildRequires: compat-gcc-32
 %else
 BuildRequires: compat-gcc-34
@@ -90,11 +103,15 @@ make DESTDIR=%{buildroot} install-rpm
 %define utilsdir /etc/kvm/utils
 
 %post 
+/sbin/chkconfig --add kvm
 /sbin/chkconfig --level 2345 kvm on
 /sbin/chkconfig --level 16 kvm off
 /usr/sbin/groupadd -fg 444 kvm
 
 %postun
+/sbin/service kvm stop
+/sbin/chkconfig --level 2345 kvm off
+/sbin/chkconfig --del kvm
 
 %clean
 %{__rm} -rf %{buildroot}
