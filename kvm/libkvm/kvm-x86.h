@@ -20,6 +20,8 @@
 
 #include "kvm-common.h"
 
+#include "kvm-common.h"
+
 #define PAGE_SIZE 4096ul
 #define PAGE_MASK (~(PAGE_SIZE - 1))
 
@@ -32,5 +34,8 @@ int kvm_alloc_userspace_memory(kvm_context_t kvm, unsigned long memory,
 
 int kvm_set_tss_addr(kvm_context_t kvm, unsigned long addr);
 
+
+void *kvm_create_kernel_phys_mem(kvm_context_t kvm, unsigned long phys_start,
+			unsigned long len, int log, int writable);
 
 #endif

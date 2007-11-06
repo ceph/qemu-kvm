@@ -261,4 +261,36 @@ int kvm_arch_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
 	return 0;
 }
 
+void *kvm_create_kernel_phys_mem(kvm_context_t kvm, unsigned long phys_start,
+			unsigned long len, int log, int writable)
+{
+	int r;
+	int prot = PROT_READ;
+	void *ptr;
+	struct kvm_memory_region memory = {
+		.memory_size = len,
+		.guest_phys_addr = phys_start,
+		.flags = log ? KVM_MEM_LOG_DIRTY_PAGES : 0,
+	};
+
+	memory.slot = get_free_slot(kvm);
+	r = ioctl(kvm->vm_fd, KVM_SET_MEMORY_REGION, &memory);
+	if (r == -1) {
+		fprintf(stderr, "create_kernel_phys_mem: %s", strerror(errno));
+		return 0;
+	}
+	register_slot(memory.slot, memory.guest_phys_addr);
+	kvm_memory_region_save_params(kvm, &memory);
+
+	if (writable)
+		prot |= PROT_WRITE;
+
+	ptr = mmap(NULL, len, prot, MAP_SHARED, kvm->vm_fd, phys_start);
+	if (ptr == MAP_FAILED) {
+		fprintf(stderr, "create_kernel_phys_mem: %s", strerror(errno));
+		return 0;
+	}
+
+	return ptr;
+}
 
