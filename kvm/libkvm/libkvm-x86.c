@@ -703,4 +703,12 @@ void kvm_show_regs(kvm_context_t kvm, int vcpu)
 		sregs.efer);
 }
 
+uint64_t kvm_get_apic_base(kvm_context_t kvm, int vcpu)
+{
+	struct kvm_run *run = kvm->run[vcpu];
+
+	if (kvm_abi == 10)
+		return ((struct kvm_run_abi10 *)run)->apic_base;
+	return run->apic_base;
+}
 

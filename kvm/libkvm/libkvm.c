@@ -786,15 +786,6 @@ int kvm_get_interrupt_flag(kvm_context_t kvm, int vcpu)
 	return run->if_flag;
 }
 
-uint64_t kvm_get_apic_base(kvm_context_t kvm, int vcpu)
-{
-	struct kvm_run *run = kvm->run[vcpu];
-
-	if (kvm_abi == 10)
-		return ((struct kvm_run_abi10 *)run)->apic_base;
-	return run->apic_base;
-}
-
 int kvm_is_ready_for_interrupt_injection(kvm_context_t kvm, int vcpu)
 {
 	struct kvm_run *run = kvm->run[vcpu];
