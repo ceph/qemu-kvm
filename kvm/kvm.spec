@@ -108,10 +108,12 @@ make DESTDIR=%{buildroot} install-rpm
 /sbin/chkconfig --level 16 kvm off
 /usr/sbin/groupadd -fg 444 kvm
 
-%postun
-/sbin/service kvm stop
-/sbin/chkconfig --level 2345 kvm off
-/sbin/chkconfig --del kvm
+%preun
+if [ "$1" != 0 ]; then
+	/sbin/service kvm stop
+	/sbin/chkconfig --level 2345 kvm off
+	/sbin/chkconfig --del kvm
+fi
 
 %clean
 %{__rm} -rf %{buildroot}
