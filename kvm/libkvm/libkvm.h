@@ -1,4 +1,4 @@
-/** \file kvmctl.h
+/** \file libkvm.h
  * libkvm API
  */
 

@@ -37,43 +37,14 @@
 #include "libkvm.h"
 #include "kvm-abi-10.h"
 
+#if defined(__x86_64__) || defined(__i386__)
+#include "kvm-x86.h"
+#endif
+
 static int kvm_abi = EXPECTED_KVM_API_VERSION;
 
-#define PAGE_SIZE 4096ul
-#define PAGE_MASK (~(PAGE_SIZE - 1))
-
-/* FIXME: share this number with kvm */
-/* FIXME: or dynamically alloc/realloc regions */
-#define KVM_MAX_NUM_MEM_REGIONS 8u
 int free_slots[KVM_MAX_NUM_MEM_REGIONS];
 unsigned long phys_addr_slots[KVM_MAX_NUM_MEM_REGIONS];
-#define MAX_VCPUS 4
-
-/**
- * \brief The KVM context
- *
- * The verbose KVM context
- */
-struct kvm_context {
-	/// Filedescriptor to /dev/kvm
-	int fd;
-	int vm_fd;
-	int vcpu_fd[MAX_VCPUS];
-	struct kvm_run *run[MAX_VCPUS];
-	/// Callbacks that KVM uses to emulate various unvirtualizable functionality
-	struct kvm_callbacks *callbacks;
-	void *opaque;
-	/// A pointer to the memory used as the physical memory for the guest
-	void *physical_memory;
-	/// is dirty pages logging enabled for all regions or not
-	int dirty_pages_log_all;
-	/// memory regions parameters
-	struct kvm_memory_region mem_regions[KVM_MAX_NUM_MEM_REGIONS];
-	/// do not create in-kernel irqchip if set
-	int no_irqchip_creation;
-	/// in-kernel irqchip status
-	int irqchip_in_kernel;
-};
 
 static void init_slots()
 {
