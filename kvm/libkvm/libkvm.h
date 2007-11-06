@@ -13,14 +13,6 @@
 
 #include <linux/kvm.h>
 
-#define u32 uint32_t  /* older kvm_para.h had a u32 exposed */
-#define u64 uint32_t  /* older kvm_para.h had a u32 exposed */
-#define PAGE_SIZE 4096
-#include <linux/kvm_para.h>
-#undef u32
-#undef u64
-#undef PAGE_SIZE
-
 #include <signal.h>
 
 struct kvm_context;
