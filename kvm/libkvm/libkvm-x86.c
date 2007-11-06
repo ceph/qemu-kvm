@@ -323,3 +323,34 @@ int kvm_destroy_memory_alias(kvm_context_t kvm, uint64_t phys_addr)
 	return kvm_create_memory_alias(kvm, phys_addr, 0, 0, 0);
 }
 
+#ifdef KVM_CAP_IRQCHIP
+
+int kvm_get_lapic(kvm_context_t kvm, int vcpu, struct kvm_lapic_state *s)
+{
+	int r;
+	if (!kvm->irqchip_in_kernel)
+		return 0;
+	r = ioctl(kvm->vcpu_fd[vcpu], KVM_GET_LAPIC, s);
+	if (r == -1) {
+		r = -errno;
+		perror("kvm_get_lapic");
+	}
+	return r;
+}
+
+int kvm_set_lapic(kvm_context_t kvm, int vcpu, struct kvm_lapic_state *s)
+{
+	int r;
+	if (!kvm->irqchip_in_kernel)
+		return 0;
+	r = ioctl(kvm->vcpu_fd[vcpu], KVM_SET_LAPIC, s);
+	if (r == -1) {
+		r = -errno;
+		perror("kvm_set_lapic");
+	}
+	return r;
+}
+
+#endif
+
+
