@@ -890,24 +890,6 @@ int kvm_guest_debug(kvm_context_t kvm, int vcpu, struct kvm_debug_guest *dbg)
 	return ioctl(kvm->vcpu_fd[vcpu], KVM_DEBUG_GUEST, dbg);
 }
 
-int kvm_setup_cpuid(kvm_context_t kvm, int vcpu, int nent,
-		    struct kvm_cpuid_entry *entries)
-{
-	struct kvm_cpuid *cpuid;
-	int r;
-
-	cpuid = malloc(sizeof(*cpuid) + nent * sizeof(*entries));
-	if (!cpuid)
-		return -ENOMEM;
-
-	cpuid->nent = nent;
-	memcpy(cpuid->entries, entries, nent * sizeof(*entries));
-	r = ioctl(kvm->vcpu_fd[vcpu], KVM_SET_CPUID, cpuid);
-
-	free(cpuid);
-	return r;
-}
-
 int kvm_set_signal_mask(kvm_context_t kvm, int vcpu, const sigset_t *sigset)
 {
 	struct kvm_signal_mask *sigmask;
