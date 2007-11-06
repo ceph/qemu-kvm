@@ -7,6 +7,10 @@
 #include <stropts.h>
 #include <sys/mman.h>
 #include <stdio.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 int kvm_alloc_kernel_memory(kvm_context_t kvm, unsigned long memory,
 								void **vm_mem)
@@ -185,4 +189,76 @@ int kvm_alloc_userspace_memory(kvm_context_t kvm, unsigned long memory,
 }
 
 #endif
+
+int kvm_set_tss_addr(kvm_context_t kvm, unsigned long addr)
+{
+#ifdef KVM_CAP_SET_TSS_ADDR
+	int r;
+
+	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_SET_TSS_ADDR);
+	if (r > 0) {
+		r = ioctl(kvm->vm_fd, KVM_SET_TSS_ADDR, addr);
+		if (r == -1) {
+			fprintf(stderr, "kvm_set_tss_addr: %m\n");
+			return -errno;
+		}
+		return 0;
+	}
+#endif
+	return -ENOSYS;
+}
+
+static int kvm_init_tss(kvm_context_t kvm)
+{
+#ifdef KVM_CAP_SET_TSS_ADDR
+	int r;
+
+	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_SET_TSS_ADDR);
+	if (r > 0) {
+		/*
+		 * this address is 3 pages before the bios, and the bios should present
+		 * as unavaible memory
+		 */
+		r = kvm_set_tss_addr(kvm, 0xfffbd000);
+		if (r < 0) {
+			printf("kvm_init_tss: unable to set tss addr\n");
+			return r;
+		}
+
+	}
+#endif
+	return 0;
+}
+
+int kvm_arch_create_default_phys_mem(kvm_context_t kvm,
+				       unsigned long phys_mem_bytes,
+				       void **vm_mem)
+{
+	int zfd;
+
+	zfd = open("/dev/zero", O_RDONLY);
+	if (zfd == -1) {
+		perror("open /dev/zero");
+		return -1;
+	}
+        mmap(*vm_mem + 0xa8000, 0x8000, PROT_READ|PROT_WRITE,
+             MAP_PRIVATE|MAP_FIXED, zfd, 0);
+        close(zfd);
+
+	return 0;
+}
+
+
+int kvm_arch_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
+ 			void **vm_mem)
+{
+	int r = 0;
+
+	r = kvm_init_tss(kvm);
+	if (r < 0)
+		return r;
+
+	return 0;
+}
+
 

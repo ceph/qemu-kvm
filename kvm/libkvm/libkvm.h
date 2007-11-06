@@ -412,7 +412,6 @@ int kvm_dump_vcpu(kvm_context_t kvm, int vcpu);
  */
 void kvm_show_regs(kvm_context_t kvm, int vcpu);
 
-int kvm_set_tss_addr(kvm_context_t kvm, unsigned long addr);
 
 void *kvm_create_phys_mem(kvm_context_t, unsigned long phys_start, 
 			  unsigned long len, int log, int writable);

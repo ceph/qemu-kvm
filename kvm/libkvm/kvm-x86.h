@@ -30,4 +30,7 @@ int kvm_alloc_kernel_memory(kvm_context_t kvm, unsigned long memory,
 int kvm_alloc_userspace_memory(kvm_context_t kvm, unsigned long memory,
 								void **vm_mem);
 
+int kvm_set_tss_addr(kvm_context_t kvm, unsigned long addr);
+
+
 #endif

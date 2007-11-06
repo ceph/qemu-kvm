@@ -333,52 +333,11 @@ int kvm_create_vm(kvm_context_t kvm)
 	return 0;
 }
 
-int kvm_set_tss_addr(kvm_context_t kvm, unsigned long addr)
-{
-#ifdef KVM_CAP_SET_TSS_ADDR
-	int r;
-
-	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_SET_TSS_ADDR);
-	if (r > 0) {
-		r = ioctl(kvm->vm_fd, KVM_SET_TSS_ADDR, addr);
-		if (r == -1) {
-			fprintf(stderr, "kvm_set_tss_addr: %m\n");
-			return -errno;
-		}
-		return 0;
-	}
-#endif
-	return -ENOSYS;
-}
-
-static int kvm_init_tss(kvm_context_t kvm)
-{
-#ifdef KVM_CAP_SET_TSS_ADDR
-	int r;
-
-	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_SET_TSS_ADDR);
-	if (r > 0) {
-		/*
-		 * this address is 3 pages before the bios, and the bios should present
-		 * as unavaible memory
-		 */
-		r = kvm_set_tss_addr(kvm, 0xfffbd000);
-		if (r < 0) {
-			printf("kvm_init_tss: unable to set tss addr\n");
-			return r;
-		}
-
-	}
-#endif
-	return 0;
-}
-
 static int kvm_create_default_phys_mem(kvm_context_t kvm,
 				       unsigned long phys_mem_bytes,
 				       void **vm_mem)
 {
 	unsigned long memory = (phys_mem_bytes + PAGE_SIZE - 1) & PAGE_MASK;
-	int zfd;
 	int r;
 
 #ifdef KVM_CAP_USER_MEMORY
@@ -391,10 +350,9 @@ static int kvm_create_default_phys_mem(kvm_context_t kvm,
 	if (r < 0)
 		return r;
 
-        zfd = open("/dev/zero", O_RDONLY);
-        mmap(*vm_mem + 0xa8000, 0x8000, PROT_READ|PROT_WRITE,
-             MAP_PRIVATE|MAP_FIXED, zfd, 0);
-        close(zfd);
+	r = kvm_arch_create_default_phys_mem(kvm, phys_mem_bytes, vm_mem);
+	if (r < 0)
+		return r;
 
 	kvm->physical_memory = *vm_mem;
 	return 0;
@@ -426,7 +384,7 @@ int kvm_create(kvm_context_t kvm, unsigned long phys_mem_bytes, void **vm_mem)
 	r = kvm_create_vm(kvm);
 	if (r < 0)
 	        return r;
-	r = kvm_init_tss(kvm);
+	r = kvm_arch_create(kvm, phys_mem_bytes, vm_mem);
 	if (r < 0)
 		return r;
 	init_slots();
