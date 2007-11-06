@@ -21,7 +21,7 @@ autodepend-flags = -MMD -MF $(dir $*).$(notdir $*).d
 
 all: libkvm.a
 
-libkvm.a: libkvm.o
+libkvm.a: libkvm.o $(libkvm-$(ARCH)-objs)
 	$(AR) rcs $@ $^
 
 install:

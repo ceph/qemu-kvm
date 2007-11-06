@@ -23,4 +23,8 @@
 #define PAGE_SIZE 4096ul
 #define PAGE_MASK (~(PAGE_SIZE - 1))
 
+
+int kvm_alloc_kernel_memory(kvm_context_t kvm, unsigned long memory,
+								void **vm_mem);
+
 #endif
