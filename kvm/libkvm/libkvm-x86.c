@@ -712,3 +712,19 @@ uint64_t kvm_get_apic_base(kvm_context_t kvm, int vcpu)
 	return run->apic_base;
 }
 
+void kvm_set_cr8(kvm_context_t kvm, int vcpu, uint64_t cr8)
+{
+	struct kvm_run *run = kvm->run[vcpu];
+
+	if (kvm_abi == 10) {
+		((struct kvm_run_abi10 *)run)->cr8 = cr8;
+		return;
+	}
+	run->cr8 = cr8;
+}
+
+__u64 kvm_get_cr8(kvm_context_t kvm, int vcpu)
+{
+	return kvm->run[vcpu]->cr8;
+}
+

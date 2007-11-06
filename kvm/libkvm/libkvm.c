@@ -795,22 +795,6 @@ int kvm_is_ready_for_interrupt_injection(kvm_context_t kvm, int vcpu)
 	return run->ready_for_interrupt_injection;
 }
 
-void kvm_set_cr8(kvm_context_t kvm, int vcpu, uint64_t cr8)
-{
-	struct kvm_run *run = kvm->run[vcpu];
-
-	if (kvm_abi == 10) {
-		((struct kvm_run_abi10 *)run)->cr8 = cr8;
-		return;
-	}
-	run->cr8 = cr8;
-}
-
-__u64 kvm_get_cr8(kvm_context_t kvm, int vcpu)
-{
-	return kvm->run[vcpu]->cr8;
-}
-
 int kvm_run(kvm_context_t kvm, int vcpu)
 {
 	int r;
