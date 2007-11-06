@@ -27,4 +27,7 @@
 int kvm_alloc_kernel_memory(kvm_context_t kvm, unsigned long memory,
 								void **vm_mem);
 
+int kvm_alloc_userspace_memory(kvm_context_t kvm, unsigned long memory,
+								void **vm_mem);
+
 #endif
