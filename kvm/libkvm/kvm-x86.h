@@ -38,4 +38,8 @@ int kvm_set_tss_addr(kvm_context_t kvm, unsigned long addr);
 void *kvm_create_kernel_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 			unsigned long len, int log, int writable);
 
+int kvm_run_abi10(kvm_context_t kvm, int vcpu);
+
+void kvm_show_code(kvm_context_t kvm, int vcpu);
+
 #endif
