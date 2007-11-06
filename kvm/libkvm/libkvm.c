@@ -725,7 +725,7 @@ static int handle_io(kvm_context_t kvm, struct kvm_run *run, int vcpu)
 	return 0;
 }
 
-static int handle_debug(kvm_context_t kvm, int vcpu)
+int handle_debug(kvm_context_t kvm, int vcpu)
 {
 	return kvm->callbacks->debug(kvm->opaque, vcpu);
 }
@@ -1010,17 +1010,17 @@ static int handle_mmio(kvm_context_t kvm, struct kvm_run *kvm_run)
 	return r;
 }
 
-static int handle_io_window(kvm_context_t kvm)
+int handle_io_window(kvm_context_t kvm)
 {
 	return kvm->callbacks->io_window(kvm->opaque);
 }
 
-static int handle_halt(kvm_context_t kvm, int vcpu)
+int handle_halt(kvm_context_t kvm, int vcpu)
 {
 	return kvm->callbacks->halt(kvm->opaque, vcpu);
 }
 
-static int handle_shutdown(kvm_context_t kvm, int vcpu)
+int handle_shutdown(kvm_context_t kvm, int vcpu)
 {
 	return kvm->callbacks->shutdown(kvm->opaque, vcpu);
 }
@@ -1030,12 +1030,12 @@ int try_push_interrupts(kvm_context_t kvm)
 	return kvm->callbacks->try_push_interrupts(kvm->opaque);
 }
 
-static void post_kvm_run(kvm_context_t kvm, int vcpu)
+void post_kvm_run(kvm_context_t kvm, int vcpu)
 {
 	kvm->callbacks->post_kvm_run(kvm->opaque, vcpu);
 }
 
-static int pre_kvm_run(kvm_context_t kvm, int vcpu)
+int pre_kvm_run(kvm_context_t kvm, int vcpu)
 {
 	return kvm->callbacks->pre_kvm_run(kvm->opaque, vcpu);
 }

@@ -65,4 +65,12 @@ int kvm_arch_create_default_phys_mem(kvm_context_t kvm,
                                        unsigned long phys_mem_bytes,
                                        void **vm_mem);
 
+int handle_halt(kvm_context_t kvm, int vcpu);
+int handle_shutdown(kvm_context_t kvm, int vcpu);
+void post_kvm_run(kvm_context_t kvm, int vcpu);
+int pre_kvm_run(kvm_context_t kvm, int vcpu);
+int handle_io_window(kvm_context_t kvm);
+int handle_debug(kvm_context_t kvm, int vcpu);
+int try_push_interrupts(kvm_context_t kvm);
+
 #endif
