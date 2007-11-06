@@ -49,4 +49,14 @@ struct kvm_context {
 	int irqchip_in_kernel;
 };
 
+void init_slots(void);
+int get_free_slot(kvm_context_t kvm);
+void register_slot(int slot, unsigned long phys_addr);
+int get_slot(unsigned long phys_addr);
+void kvm_memory_region_save_params(kvm_context_t kvm,
+                                        struct kvm_memory_region *mem);
+void kvm_userspace_memory_region_save_params(kvm_context_t kvm,
+                                struct kvm_userspace_memory_region *mem);
+void kvm_memory_region_clear_params(kvm_context_t kvm, int regnum);
+
 #endif

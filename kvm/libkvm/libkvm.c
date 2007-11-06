@@ -46,7 +46,7 @@ static int kvm_abi = EXPECTED_KVM_API_VERSION;
 int free_slots[KVM_MAX_NUM_MEM_REGIONS];
 unsigned long phys_addr_slots[KVM_MAX_NUM_MEM_REGIONS];
 
-static void init_slots()
+void init_slots(void)
 {
 	int i;
 
@@ -54,7 +54,7 @@ static void init_slots()
 		free_slots[i] = 0;
 }
 
-static int get_free_slot(kvm_context_t kvm)
+int get_free_slot(kvm_context_t kvm)
 {
 	int i;
 	int tss_ext;
@@ -81,13 +81,13 @@ static int get_free_slot(kvm_context_t kvm)
 	return -1;
 }
 
-static void register_slot(int slot, unsigned long phys_addr)
+void register_slot(int slot, unsigned long phys_addr)
 {
 	free_slots[slot] = 1;
 	phys_addr_slots[slot] = phys_addr;
 }
 
-static int get_slot(unsigned long phys_addr)
+int get_slot(unsigned long phys_addr)
 {
 	int i;
 
@@ -100,7 +100,7 @@ static int get_slot(unsigned long phys_addr)
 /*
  * memory regions parameters
  */
-static void kvm_memory_region_save_params(kvm_context_t kvm, 
+void kvm_memory_region_save_params(kvm_context_t kvm,
 					 struct kvm_memory_region *mem)
 {
 	if (!mem || (mem->slot >= KVM_MAX_NUM_MEM_REGIONS)) {
@@ -112,7 +112,7 @@ static void kvm_memory_region_save_params(kvm_context_t kvm,
 
 #ifdef KVM_CAP_USER_MEMORY
 
-static void kvm_userspace_memory_region_save_params(kvm_context_t kvm,
+void kvm_userspace_memory_region_save_params(kvm_context_t kvm,
 					struct kvm_userspace_memory_region *mem)
 {
 	struct kvm_memory_region kvm_mem;
@@ -126,7 +126,7 @@ static void kvm_userspace_memory_region_save_params(kvm_context_t kvm,
 
 #endif
 
-static void kvm_memory_region_clear_params(kvm_context_t kvm, int regnum)
+void kvm_memory_region_clear_params(kvm_context_t kvm, int regnum)
 {
 	if (regnum >= KVM_MAX_NUM_MEM_REGIONS) {
 		fprintf(stderr, "BUG: %s: invalid parameters\n", __FUNCTION__);
