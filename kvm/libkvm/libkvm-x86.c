@@ -294,3 +294,32 @@ void *kvm_create_kernel_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 	return ptr;
 }
 
+int kvm_create_memory_alias(kvm_context_t kvm,
+			    uint64_t phys_addr,
+			    uint64_t phys_start,
+			    uint64_t len,
+			    uint64_t target_phys)
+{
+	struct kvm_memory_alias alias = {
+		.flags = 0,
+		.guest_phys_addr = phys_start,
+		.memory_size = len,
+		.target_phys_addr = target_phys,
+	};
+	int fd = kvm->vm_fd;
+	int r;
+
+	alias.slot = get_slot(phys_addr);
+
+	r = ioctl(fd, KVM_SET_MEMORY_ALIAS, &alias);
+	if (r == -1)
+	    return -errno;
+
+	return 0;
+}
+
+int kvm_destroy_memory_alias(kvm_context_t kvm, uint64_t phys_addr)
+{
+	return kvm_create_memory_alias(kvm, phys_addr, 0, 0, 0);
+}
+
