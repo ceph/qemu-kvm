@@ -41,7 +41,7 @@
 #include "kvm-x86.h"
 #endif
 
-static int kvm_abi = EXPECTED_KVM_API_VERSION;
+int kvm_abi = EXPECTED_KVM_API_VERSION;
 
 int free_slots[KVM_MAX_NUM_MEM_REGIONS];
 unsigned long phys_addr_slots[KVM_MAX_NUM_MEM_REGIONS];

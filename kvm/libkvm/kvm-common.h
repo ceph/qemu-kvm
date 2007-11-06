@@ -21,6 +21,8 @@
 #define KVM_MAX_NUM_MEM_REGIONS 8u
 #define MAX_VCPUS 4
 
+/* kvm abi verison variable */
+extern int kvm_abi;
 
 /**
  * \brief The KVM context
