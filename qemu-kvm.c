@@ -1105,6 +1105,9 @@ static void do_cpuid_ent(struct kvm_cpuid_entry *e, uint32_t function,
 	// nx
 	if ((h_edx & 0x00100000) == 0)
 	    e->edx &= ~0x00100000u;
+	// svm
+	if (e->ecx & 4)
+	    e->ecx &= ~4u;
     }
     // sysenter isn't supported on compatibility mode on AMD.  and syscall
     // isn't supported in compatibility mode on Intel.  so advertise the
