@@ -698,7 +698,7 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
     qemu_irq *i8259;
 
     if (ram_size + (phys_ram_size - ram_size) >= 0xe0000000 ) {
-        above_4g_mem_size = phys_ram_size - 0xe0000000;
+        above_4g_mem_size = ram_size - 0xe0000000;
         ram_size = 0xe0000000 - (phys_ram_size - ram_size);
     }
 
