@@ -82,12 +82,6 @@ int kvm_alloc_kernel_memory(kvm_context_t kvm, unsigned long memory,
 			      above_4g_memory.memory_size, 0, 0);
 	}
 
-	kvm_memory_region_save_params(kvm, &low_memory);
-	kvm_memory_region_save_params(kvm, &extended_memory);
-	kvm_memory_region_save_params(kvm, &above_4g_memory);
-	if (above_4g_memory.memory_size)
-		kvm_memory_region_save_params(kvm, &above_4g_memory);
-
 	*vm_mem = mmap(NULL, memory, PROT_READ|PROT_WRITE, MAP_SHARED, kvm->vm_fd, 0);
 
 	return 0;
@@ -191,11 +185,6 @@ int kvm_alloc_userspace_memory(kvm_context_t kvm, unsigned long memory,
 			      above_4g_memory.userspace_addr);
 	}
 
-	kvm_userspace_memory_region_save_params(kvm, &low_memory);
-	kvm_userspace_memory_region_save_params(kvm, &extended_memory);
-	if (above_4g_memory.memory_size)
-		kvm_userspace_memory_region_save_params(kvm, &above_4g_memory);
-
 	return 0;
 }
 
@@ -292,7 +281,6 @@ void *kvm_create_kernel_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 	}
 	register_slot(memory.slot, memory.guest_phys_addr, memory.memory_size,
 		      0, 0);
-	kvm_memory_region_save_params(kvm, &memory);
 
 	if (writable)
 		prot |= PROT_WRITE;

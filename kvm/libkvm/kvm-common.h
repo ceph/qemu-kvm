@@ -57,12 +57,6 @@ void register_slot(int slot, unsigned long phys_addr, unsigned long len,
 		   int user_alloc, unsigned long userspace_addr);
 void free_slot(int slot);
 int get_slot(unsigned long phys_addr);
-void kvm_memory_region_save_params(kvm_context_t kvm,
-                                        struct kvm_memory_region *mem);
-void kvm_userspace_memory_region_save_params(kvm_context_t kvm,
-                                struct kvm_userspace_memory_region *mem);
-void kvm_memory_region_clear_params(kvm_context_t kvm, int regnum);
-
 int kvm_arch_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
                         void **vm_mem);
 int kvm_arch_create_default_phys_mem(kvm_context_t kvm,
