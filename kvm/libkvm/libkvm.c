@@ -466,6 +466,19 @@ int kvm_is_intersecting_mem(kvm_context_t kvm, unsigned long phys_start)
 	return get_intersecting_slot(phys_start) != -1;
 }
 
+int kvm_is_allocated_mem(kvm_context_t kvm, unsigned long phys_start,
+			 unsigned long len)
+{
+	int slot;
+
+	slot = get_slot(phys_start);
+	if (slot == -1)
+		return 0;
+	if (slots[slot].len == len)
+		return 1;
+	return 0;
+}
+
 int kvm_create_mem_hole(kvm_context_t kvm, unsigned long phys_start,
 			unsigned long len)
 {
