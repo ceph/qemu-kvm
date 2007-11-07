@@ -53,7 +53,9 @@ struct kvm_context {
 
 void init_slots(void);
 int get_free_slot(kvm_context_t kvm);
-void register_slot(int slot, unsigned long phys_addr);
+void register_slot(int slot, unsigned long phys_addr, unsigned long len,
+		   int user_alloc, unsigned long userspace_addr);
+void free_slot(int slot);
 int get_slot(unsigned long phys_addr);
 void kvm_memory_region_save_params(kvm_context_t kvm,
                                         struct kvm_memory_region *mem);

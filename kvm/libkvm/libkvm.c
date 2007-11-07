@@ -43,15 +43,21 @@
 
 int kvm_abi = EXPECTED_KVM_API_VERSION;
 
-int free_slots[KVM_MAX_NUM_MEM_REGIONS];
-unsigned long phys_addr_slots[KVM_MAX_NUM_MEM_REGIONS];
+struct slot_info {
+	unsigned long phys_addr;
+	unsigned long len;
+	int user_alloc;
+	unsigned long userspace_addr;
+};
+
+struct slot_info slots[KVM_MAX_NUM_MEM_REGIONS];
 
 void init_slots(void)
 {
 	int i;
 
 	for (i = 0; i < KVM_MAX_NUM_MEM_REGIONS; ++i)
-		free_slots[i] = 0;
+		slots[i].len = 0;
 }
 
 int get_free_slot(kvm_context_t kvm)
@@ -76,24 +82,34 @@ int get_free_slot(kvm_context_t kvm)
 		i = 1;
 
 	for (; i < KVM_MAX_NUM_MEM_REGIONS; ++i)
-		if (!free_slots[i])
+		if (!slots[i].len)
 			return i;
 	return -1;
 }
 
-void register_slot(int slot, unsigned long phys_addr)
+void register_slot(int slot, unsigned long phys_addr, unsigned long len,
+		   int user_alloc, unsigned long userspace_addr)
 {
-	free_slots[slot] = 1;
-	phys_addr_slots[slot] = phys_addr;
+	slots[slot].phys_addr = phys_addr;
+	slots[slot].len = len;
+	slots[slot].user_alloc = user_alloc;
+	slots[slot].userspace_addr = userspace_addr;
+}
+
+void free_slot(int slot)
+{
+	slots[slot].len = 0;
 }
 
 int get_slot(unsigned long phys_addr)
 {
 	int i;
 
-	for (i = 0; i < KVM_MAX_NUM_MEM_REGIONS; ++i)
-		if (free_slots[i] && phys_addr_slots[i] == phys_addr)
+	for (i = 0; i < KVM_MAX_NUM_MEM_REGIONS ; ++i) {
+		if (slots[i].len && slots[i].phys_addr <= phys_addr &&
+	 	    (slots[i].phys_addr + slots[i].len) >= phys_addr)
 			return i;
+	}
 	return -1;
 }
 
@@ -432,7 +448,8 @@ void *kvm_create_userspace_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 		fprintf(stderr, "create_userspace_phys_mem: %s", strerror(errno));
 		return 0;
 	}
-	register_slot(memory.slot, memory.guest_phys_addr);
+	register_slot(memory.slot, memory.guest_phys_addr, memory.memory_size,
+		      1, memory.userspace_addr);
 
 	kvm_userspace_memory_region_save_params(kvm, &memory);
 
@@ -479,7 +496,8 @@ int kvm_register_userspace_phys_mem(kvm_context_t kvm,
 		fprintf(stderr, "create_userspace_phys_mem: %s\n", strerror(errno));
 		return -1;
 	}
-	register_slot(memory.slot, memory.guest_phys_addr);
+	register_slot(memory.slot, memory.guest_phys_addr, memory.memory_size,
+		      1, memory.userspace_addr);
 
 	kvm_userspace_memory_region_save_params(kvm, &memory);
         return 0;

@@ -51,7 +51,9 @@ int kvm_alloc_kernel_memory(kvm_context_t kvm, unsigned long memory,
 		fprintf(stderr, "kvm_create_memory_region: %m\n");
 		return -1;
 	}
-	register_slot(low_memory.slot, low_memory.guest_phys_addr);
+	register_slot(low_memory.slot, low_memory.guest_phys_addr,
+		      low_memory.memory_size, 0, 0);
+
 
 	if (extended_memory.memory_size) {
 		if (tss_ext > 0)
@@ -63,8 +65,9 @@ int kvm_alloc_kernel_memory(kvm_context_t kvm, unsigned long memory,
 			fprintf(stderr, "kvm_create_memory_region: %m\n");
 			return -1;
 		}
-		register_slot(extended_memory.slot,
-			      extended_memory.guest_phys_addr);
+ 		register_slot(extended_memory.slot,
+			      extended_memory.guest_phys_addr,
+			      extended_memory.memory_size, 0, 0);
 	}
 
 	if (above_4g_memory.memory_size) {
@@ -74,8 +77,9 @@ int kvm_alloc_kernel_memory(kvm_context_t kvm, unsigned long memory,
 			fprintf(stderr, "kvm_create_memory_region: %m\n");
 			return -1;
 		}
-		register_slot(above_4g_memory.slot,
-			      above_4g_memory.guest_phys_addr);
+ 		register_slot(above_4g_memory.slot,
+			      above_4g_memory.guest_phys_addr,
+			      above_4g_memory.memory_size, 0, 0);
 	}
 
 	kvm_memory_region_save_params(kvm, &low_memory);
@@ -141,7 +145,8 @@ int kvm_alloc_userspace_memory(kvm_context_t kvm, unsigned long memory,
 		fprintf(stderr, "kvm_create_memory_region: %m\n");
 		return -1;
 	}
-	register_slot(low_memory.slot, low_memory.guest_phys_addr);
+	register_slot(low_memory.slot, low_memory.guest_phys_addr,
+		      low_memory.memory_size, 1, low_memory.userspace_addr);
 
 	if (extended_memory.memory_size) {
 		r = munmap(*vm_mem + dosmem, exmem - dosmem);
@@ -161,7 +166,9 @@ int kvm_alloc_userspace_memory(kvm_context_t kvm, unsigned long memory,
 			return -1;
 		}
 		register_slot(extended_memory.slot,
-			      extended_memory.guest_phys_addr);
+			      extended_memory.guest_phys_addr,
+			      extended_memory.memory_size, 1,
+			      extended_memory.userspace_addr);
 	}
 
 	if (above_4g_memory.memory_size) {
@@ -179,7 +186,9 @@ int kvm_alloc_userspace_memory(kvm_context_t kvm, unsigned long memory,
 			return -1;
 		}
 		register_slot(above_4g_memory.slot,
-			      above_4g_memory.guest_phys_addr);
+			      above_4g_memory.guest_phys_addr,
+			      above_4g_memory.memory_size, 1,
+			      above_4g_memory.userspace_addr);
 	}
 
 	kvm_userspace_memory_region_save_params(kvm, &low_memory);
@@ -281,7 +290,8 @@ void *kvm_create_kernel_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 		fprintf(stderr, "create_kernel_phys_mem: %s", strerror(errno));
 		return 0;
 	}
-	register_slot(memory.slot, memory.guest_phys_addr);
+	register_slot(memory.slot, memory.guest_phys_addr, memory.memory_size,
+		      0, 0);
 	kvm_memory_region_save_params(kvm, &memory);
 
 	if (writable)
