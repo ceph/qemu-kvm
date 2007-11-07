@@ -411,6 +411,7 @@ void *kvm_create_phys_mem(kvm_context_t, unsigned long phys_start,
 			  unsigned long len, int log, int writable);
 void kvm_destroy_phys_mem(kvm_context_t, unsigned long phys_start, 
 			  unsigned long len);
+int kvm_is_intersecting_mem(kvm_context_t kvm, unsigned long phys_start);
 int kvm_create_mem_hole(kvm_context_t kvm, unsigned long phys_start,
 			unsigned long len);
 int kvm_register_userspace_phys_mem(kvm_context_t kvm,

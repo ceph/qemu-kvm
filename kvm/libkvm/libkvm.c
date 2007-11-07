@@ -461,6 +461,11 @@ void *kvm_create_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 								log, writable);
 }
 
+int kvm_is_intersecting_mem(kvm_context_t kvm, unsigned long phys_start)
+{
+	return get_intersecting_slot(phys_start) != -1;
+}
+
 int kvm_create_mem_hole(kvm_context_t kvm, unsigned long phys_start,
 			unsigned long len)
 {
