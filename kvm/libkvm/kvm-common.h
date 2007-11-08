@@ -57,11 +57,24 @@ void register_slot(int slot, unsigned long phys_addr, unsigned long len,
 		   int user_alloc, unsigned long userspace_addr);
 void free_slot(int slot);
 int get_slot(unsigned long phys_addr);
+
+int kvm_alloc_kernel_memory(kvm_context_t kvm, unsigned long memory,
+								void **vm_mem);
+int kvm_alloc_userspace_memory(kvm_context_t kvm, unsigned long memory,
+								void **vm_mem);
+void *kvm_create_kernel_phys_mem(kvm_context_t kvm, unsigned long phys_start,
+			unsigned long len, int log, int writable);
+
+
 int kvm_arch_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
                         void **vm_mem);
 int kvm_arch_create_default_phys_mem(kvm_context_t kvm,
                                        unsigned long phys_mem_bytes,
                                        void **vm_mem);
+
+void kvm_show_code(kvm_context_t kvm, int vcpu);
+int kvm_run_abi10(kvm_context_t kvm, int vcpu);
+
 
 int handle_halt(kvm_context_t kvm, int vcpu);
 int handle_shutdown(kvm_context_t kvm, int vcpu);
