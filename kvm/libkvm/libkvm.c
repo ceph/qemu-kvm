@@ -113,6 +113,17 @@ int get_slot(unsigned long phys_addr)
 	return -1;
 }
 
+int get_intersecting_slot(unsigned long phys_addr)
+{
+	int i;
+
+	for (i = 0; i < KVM_MAX_NUM_MEM_REGIONS ; ++i)
+		if (slots[i].len && slots[i].phys_addr < phys_addr &&
+		    (slots[i].phys_addr + slots[i].len) > phys_addr)
+			return i;
+	return -1;
+}
+
 /* 
  * dirty pages logging control 
  */
@@ -448,6 +459,69 @@ void *kvm_create_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 #endif
 		return kvm_create_kernel_phys_mem(kvm, phys_start, len,
 								log, writable);
+}
+
+int kvm_create_mem_hole(kvm_context_t kvm, unsigned long phys_start,
+			unsigned long len)
+{
+#ifdef KVM_CAP_USER_MEMORY
+	int slot;
+	int r;
+	struct kvm_userspace_memory_region rmslot;
+	struct kvm_userspace_memory_region newslot1;
+	struct kvm_userspace_memory_region newslot2;
+
+	len = (len + PAGE_SIZE - 1) & PAGE_MASK;
+
+	slot = get_intersecting_slot(phys_start);
+	/* no need to create hole, as there is already hole */
+	if (slot == -1)
+		return 0;
+
+	memset(&rmslot, 0, sizeof(struct kvm_userspace_memory_region));
+	memset(&newslot1, 0, sizeof(struct kvm_userspace_memory_region));
+	memset(&newslot2, 0, sizeof(struct kvm_userspace_memory_region));
+
+	rmslot.guest_phys_addr = slots[slot].phys_addr;
+	rmslot.slot = slot;
+
+	newslot1.guest_phys_addr = slots[slot].phys_addr;
+	newslot1.memory_size = phys_start - slots[slot].phys_addr;
+	newslot1.slot = slot;
+	newslot1.userspace_addr = slots[slot].userspace_addr;
+
+	newslot2.guest_phys_addr = newslot1.guest_phys_addr +
+				   newslot1.memory_size + len;
+	newslot2.memory_size = slots[slot].phys_addr +
+			       slots[slot].len - newslot2.guest_phys_addr;
+	newslot2.userspace_addr = newslot1.userspace_addr +
+				  newslot1.memory_size;
+	newslot2.slot = get_free_slot(kvm);
+
+	r = ioctl(kvm->vm_fd, KVM_SET_USER_MEMORY_REGION, &rmslot);
+	if (r == -1) {
+		fprintf(stderr, "kvm_create_mem_hole: %s\n", strerror(errno));
+		return -1;
+	}
+	free_slot(slot);
+
+	r = ioctl(kvm->vm_fd, KVM_SET_USER_MEMORY_REGION, &newslot1);
+	if (r == -1) {
+		fprintf(stderr, "kvm_create_mem_hole: %s\n", strerror(errno));
+		return -1;
+	}
+	register_slot(newslot1.slot, newslot1.guest_phys_addr,
+		      newslot1.memory_size, 1, newslot1.userspace_addr);
+
+	r = ioctl(kvm->vm_fd, KVM_SET_USER_MEMORY_REGION, &newslot2);
+	if (r == -1) {
+		fprintf(stderr, "kvm_create_mem_hole: %s\n", strerror(errno));
+		return -1;
+	}
+	register_slot(newslot2.slot, newslot2.guest_phys_addr,
+		      newslot2.memory_size, 1, newslot2.userspace_addr);
+#endif
+	return 0;
 }
 
 int kvm_register_userspace_phys_mem(kvm_context_t kvm,
