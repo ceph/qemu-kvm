@@ -31,6 +31,7 @@ autodepend-flags = -MMD -MF $(dir $*).$(notdir $*).d
 kvmctl: LDFLAGS += -pthread -lrt
 
 kvmctl: $(kvmctl_objs)
+	$(CC) $(LDFLAGS) $^ -o $@
 
 %.flat: %.o
 	$(CC) $(CFLAGS) -nostdlib -o $@ -Wl,-T,flat.lds $^
