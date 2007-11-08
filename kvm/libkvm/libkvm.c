@@ -363,6 +363,16 @@ static int kvm_create_default_phys_mem(kvm_context_t kvm,
 	return 0;
 }
 
+int kvm_check_extension(kvm_context_t kvm, int ext)
+{
+	int ret;
+
+	ret = ioctl(kvm->fd, KVM_CHECK_EXTENSION, ext);
+	if (ret > 0)
+		return 1;
+	return 0;
+}
+
 void kvm_create_irqchip(kvm_context_t kvm)
 {
 	int r;

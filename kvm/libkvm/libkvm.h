@@ -145,6 +145,7 @@ int kvm_create(kvm_context_t kvm,
 	       unsigned long phys_mem_bytes,
 	       void **phys_mem);
 int kvm_create_vm(kvm_context_t kvm);
+int kvm_check_extension(kvm_context_t kvm, int ext);
 void kvm_create_irqchip(kvm_context_t kvm);
 
 /*!
