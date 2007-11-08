@@ -348,7 +348,7 @@ static int kvm_create_default_phys_mem(kvm_context_t kvm,
 #ifdef KVM_CAP_USER_MEMORY
 	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_USER_MEMORY);
 	if (r > 0)
-		r = kvm_alloc_userspace_memory(kvm, memory, vm_mem);
+		return 0;
 	else
 #endif
 		r = kvm_alloc_kernel_memory(kvm, memory, vm_mem);

@@ -8664,6 +8664,20 @@ int main(int argc, char **argv)
 		    fprintf(stderr, "Could not create KVM context\n");
 		    exit(1);
 	    }
+#ifdef KVM_CAP_USER_MEMORY
+{
+            int ret;
+
+            ret = kvm_qemu_check_extension(KVM_CAP_USER_MEMORY);
+            if (ret) {
+                phys_ram_base = qemu_vmalloc(phys_ram_size);
+	        if (!phys_ram_base) {
+		        fprintf(stderr, "Could not allocate physical memory\n");
+		        exit(1);
+	        }
+            }
+}
+#endif
     } else {
 	    phys_ram_base = qemu_vmalloc(phys_ram_size);
 	    if (!phys_ram_base) {

@@ -697,9 +697,9 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
     qemu_irq *cpu_irq;
     qemu_irq *i8259;
 
-    if (ram_size + (phys_ram_size - ram_size) >= 0xe0000000 ) {
+    if (ram_size >= 0xe0000000 ) {
         above_4g_mem_size = ram_size - 0xe0000000;
-        ram_size = 0xe0000000 - (phys_ram_size - ram_size);
+        ram_size = 0xe0000000;
     }
 
     linux_boot = (kernel_filename != NULL);
@@ -722,9 +722,23 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
     }
 
     /* allocate RAM */
-    ram_addr = qemu_ram_alloc(ram_size);
-    cpu_register_physical_memory(0, ram_size, ram_addr);
-
+#ifdef USE_KVM
+ #ifdef KVM_CAP_USER_MEMORY
+    if (kvm_allowed && kvm_qemu_check_extension(KVM_CAP_USER_MEMORY)) {
+        ram_addr = qemu_ram_alloc(ram_size - 0x100000);
+        cpu_register_physical_memory(0x100000, ram_size - 0x100000, ram_addr);
+        kvm_cpu_register_physical_memory(0x100000, ram_size - 0x100000,
+                                         ram_addr);
+        ram_addr = qemu_ram_alloc(0xa0000);
+        cpu_register_physical_memory(0, 0xa0000, ram_addr);
+        kvm_cpu_register_physical_memory(0, 0xa0000, ram_addr);
+    } else
+ #endif
+#endif
+    {
+        ram_addr = qemu_ram_alloc(ram_size);
+        cpu_register_physical_memory(0, ram_size, ram_addr);
+    }
     /* allocate VGA RAM */
     vga_ram_addr = qemu_ram_alloc(vga_ram_size);
 
@@ -765,6 +779,11 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
     if (above_4g_mem_size > 0) {
         ram_addr = qemu_ram_alloc(above_4g_mem_size);
         cpu_register_physical_memory(0x100000000, above_4g_mem_size, ram_addr);
+#ifdef USE_KVM
+    if (kvm_allowed)
+        kvm_cpu_register_physical_memory(0x100000000, above_4g_mem_size,
+                                         ram_addr);
+#endif
     }
 
     /* setup basic memory access */
@@ -772,8 +791,8 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
                                  vga_bios_offset | IO_MEM_ROM);
 #ifdef USE_KVM
     if (kvm_allowed)
-	    memcpy(phys_ram_base + 0xc0000, phys_ram_base + vga_bios_offset,
-		   0x10000);
+        kvm_cpu_register_physical_memory(0xc0000, 0x10000,
+                                         vga_bios_offset | IO_MEM_ROM);
 #endif
 
     /* map the last 128KB of the BIOS in ISA space */
@@ -785,26 +804,13 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
     cpu_register_physical_memory(0x100000 - isa_bios_size,
                                  isa_bios_size,
                                  (bios_offset + bios_size - isa_bios_size) | IO_MEM_ROM);
-
 #ifdef USE_KVM
     if (kvm_allowed)
-	    memcpy(phys_ram_base + 0x100000 - isa_bios_size,
-		   phys_ram_base + (bios_offset + bios_size - isa_bios_size),
-		   isa_bios_size);
+        kvm_cpu_register_physical_memory(0x100000 - isa_bios_size,
+                                         isa_bios_size,
+                                         (bios_offset + bios_size - isa_bios_size) | IO_MEM_ROM);
 #endif
 
-#ifdef USE_KVM
-    if (kvm_allowed) {
-	    bios_mem = kvm_create_phys_mem(kvm_context, (uint32_t)(-bios_size),
-					   bios_size, 0, 1);
-	    if (!bios_mem)
-		    exit(1);
-	    memcpy(bios_mem, phys_ram_base + bios_offset, bios_size);
-
-	    cpu_register_physical_memory(phys_ram_size - KVM_EXTRA_PAGES * 4096, KVM_EXTRA_PAGES * 4096,
-					 (phys_ram_size - KVM_EXTRA_PAGES * 4096) | IO_MEM_ROM);
-    }
-#endif
 
     {
         ram_addr_t option_rom_offset;
@@ -830,9 +836,12 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
             size = (size + 4095) & ~4095;
             cpu_register_physical_memory(0xd0000 + offset,
                                          size, option_rom_offset | IO_MEM_ROM);
-	    if (kvm_allowed)
-		memcpy(phys_ram_base + 0xd0000 + offset,
-		       phys_ram_base + option_rom_offset, size);
+#ifdef USE_KVM
+            if (kvm_allowed)
+                kvm_cpu_register_physical_memory(0xd0000 + offset,
+                                             size, option_rom_offset |
+                                             IO_MEM_ROM);
+#endif
 
             offset += size;
         }
@@ -841,6 +850,25 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
     /* map all the bios at the top of memory */
     cpu_register_physical_memory((uint32_t)(-bios_size),
                                  bios_size, bios_offset | IO_MEM_ROM);
+#ifdef USE_KVM
+    if (kvm_allowed) {
+        int r;
+#ifdef KVM_CAP_USER_MEMORY
+        r = kvm_qemu_check_extension(KVM_CAP_USER_MEMORY);
+        if (r)
+            kvm_cpu_register_physical_memory((uint32_t)(-bios_size),
+                                           bios_size, bios_offset | IO_MEM_ROM);
+        else
+#endif
+        {
+            bios_mem = kvm_create_phys_mem(kvm_context, (uint32_t)(-bios_size),
+                                           bios_size, 0, 1);
+	    if (!bios_mem)
+                exit(1);
+            memcpy(bios_mem, phys_ram_base + bios_offset, bios_size);
+        }
+    }
+#endif
 
     bochs_bios_init();
 
