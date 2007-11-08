@@ -42,8 +42,4 @@ int kvm_run_abi10(kvm_context_t kvm, int vcpu);
 
 void kvm_show_code(kvm_context_t kvm, int vcpu);
 
-struct kvm_msr_list *kvm_get_msr_list(kvm_context_t);
-int kvm_get_msrs(kvm_context_t, int vcpu, struct kvm_msr_entry *msrs, int n);
-int kvm_set_msrs(kvm_context_t, int vcpu, struct kvm_msr_entry *msrs, int n);
-
 #endif
