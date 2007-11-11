@@ -45,20 +45,25 @@
 #include <linux/spinlock.h>
 #include <linux/smp.h>
 
-static spinlock_t scfs_lock = SPIN_LOCK_UNLOCKED;
-static int scfs_cpu;
-static void (*scfs_func)(void *info);
+struct scfs_thunk_info {
+	int cpu;
+	void (*func)(void *info);
+	void *info;
+};
 
-static void scfs_thunk(void *info)
+static inline void scfs_thunk(void *_thunk)
 {
-	if (raw_smp_processor_id() == scfs_cpu)
-		scfs_func(info);
+	struct scfs_thunk_info *thunk = _thunk;
+
+	if (raw_smp_processor_id() == thunk->cpu)
+		thunk->func(thunk->info);
 }
 
 static inline int smp_call_function_single1(int cpu, void (*func)(void *info),
 					   void *info, int nonatomic, int wait)
 {
 	int r, this_cpu;
+	struct scfs_thunk_info thunk;
 
 	this_cpu = get_cpu();
 	if (cpu == this_cpu) {
@@ -67,11 +72,10 @@ static inline int smp_call_function_single1(int cpu, void (*func)(void *info),
 		func(info);
 		local_irq_enable();
 	} else {
-		spin_lock(&scfs_lock);
-		scfs_cpu = cpu;
-		scfs_func = func;
-		r = smp_call_function(scfs_thunk, info, nonatomic, wait);
-		spin_unlock(&scfs_lock);
+		thunk.cpu = cpu;
+		thunk.func = func;
+		thunk.info = info;
+		r = smp_call_function(scfs_thunk, &thunk, 0, 1);
 	}
 	put_cpu();
 	return r;
