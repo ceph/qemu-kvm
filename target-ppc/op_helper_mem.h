@@ -19,14 +19,15 @@
  */
 
 /* Multiple word / string load and store */
-static inline target_ulong glue(ld32r, MEMSUFFIX) (target_ulong EA)
+static always_inline target_ulong glue(ld32r, MEMSUFFIX) (target_ulong EA)
 {
     uint32_t tmp = glue(ldl, MEMSUFFIX)(EA);
     return ((tmp & 0xFF000000UL) >> 24) | ((tmp & 0x00FF0000UL) >> 8) |
         ((tmp & 0x0000FF00UL) << 8) | ((tmp & 0x000000FFUL) << 24);
 }
 
-static inline void glue(st32r, MEMSUFFIX) (target_ulong EA, target_ulong data)
+static always_inline void glue(st32r, MEMSUFFIX) (target_ulong EA,
+                                                  target_ulong data)
 {
     uint32_t tmp =
         ((data & 0xFF000000UL) >> 24) | ((data & 0x00FF0000UL) >> 8) |
@@ -251,9 +252,10 @@ void glue(do_icbi, MEMSUFFIX) (void)
      * (not a fetch) by the MMU. To be sure it will be so,
      * do the load "by hand".
      */
+    T0 &= ~(env->icache_line_size - 1);
     tmp = glue(ldl, MEMSUFFIX)((uint32_t)T0);
-    T0 &= ~(ICACHE_LINE_SIZE - 1);
-    tb_invalidate_page_range((uint32_t)T0, (uint32_t)(T0 + ICACHE_LINE_SIZE));
+    tb_invalidate_page_range((uint32_t)T0,
+                             (uint32_t)(T0 + env->icache_line_size));
 }
 
 #if defined(TARGET_PPC64)
@@ -265,9 +267,102 @@ void glue(do_icbi_64, MEMSUFFIX) (void)
      * (not a fetch) by the MMU. To be sure it will be so,
      * do the load "by hand".
      */
+    T0 &= ~(env->icache_line_size - 1);
     tmp = glue(ldq, MEMSUFFIX)((uint64_t)T0);
-    T0 &= ~(ICACHE_LINE_SIZE - 1);
-    tb_invalidate_page_range((uint64_t)T0, (uint64_t)(T0 + ICACHE_LINE_SIZE));
+    tb_invalidate_page_range((uint64_t)T0,
+                             (uint64_t)(T0 + env->icache_line_size));
+}
+#endif
+
+void glue(do_dcbz, MEMSUFFIX) (void)
+{
+    int dcache_line_size = env->dcache_line_size;
+
+    /* XXX: should be 970 specific (?) */
+    if (((env->spr[SPR_970_HID5] >> 7) & 0x3) == 1)
+        dcache_line_size = 32;
+    glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x00), 0);
+    glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x04), 0);
+    glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x08), 0);
+    glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x0C), 0);
+    glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x10), 0);
+    glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x14), 0);
+    glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x18), 0);
+    glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x1C), 0);
+    if (dcache_line_size >= 64) {
+        glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x20UL), 0);
+        glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x24UL), 0);
+        glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x28UL), 0);
+        glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x2CUL), 0);
+        glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x30UL), 0);
+        glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x34UL), 0);
+        glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x38UL), 0);
+        glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x3CUL), 0);
+        if (dcache_line_size >= 128) {
+            glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x40UL), 0);
+            glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x44UL), 0);
+            glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x48UL), 0);
+            glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x4CUL), 0);
+            glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x50UL), 0);
+            glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x54UL), 0);
+            glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x58UL), 0);
+            glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x5CUL), 0);
+            glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x60UL), 0);
+            glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x64UL), 0);
+            glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x68UL), 0);
+            glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x6CUL), 0);
+            glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x70UL), 0);
+            glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x74UL), 0);
+            glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x78UL), 0);
+            glue(stl, MEMSUFFIX)((uint32_t)(T0 + 0x7CUL), 0);
+        }
+    }
+}
+
+#if defined(TARGET_PPC64)
+void glue(do_dcbz_64, MEMSUFFIX) (void)
+{
+    int dcache_line_size = env->dcache_line_size;
+
+    /* XXX: should be 970 specific (?) */
+    if (((env->spr[SPR_970_HID5] >> 6) & 0x3) == 0x2)
+        dcache_line_size = 32;
+    glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x00), 0);
+    glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x04), 0);
+    glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x08), 0);
+    glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x0C), 0);
+    glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x10), 0);
+    glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x14), 0);
+    glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x18), 0);
+    glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x1C), 0);
+    if (dcache_line_size >= 64) {
+        glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x20UL), 0);
+        glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x24UL), 0);
+        glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x28UL), 0);
+        glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x2CUL), 0);
+        glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x30UL), 0);
+        glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x34UL), 0);
+        glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x38UL), 0);
+        glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x3CUL), 0);
+        if (dcache_line_size >= 128) {
+            glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x40UL), 0);
+            glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x44UL), 0);
+            glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x48UL), 0);
+            glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x4CUL), 0);
+            glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x50UL), 0);
+            glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x54UL), 0);
+            glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x58UL), 0);
+            glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x5CUL), 0);
+            glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x60UL), 0);
+            glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x64UL), 0);
+            glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x68UL), 0);
+            glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x6CUL), 0);
+            glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x70UL), 0);
+            glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x74UL), 0);
+            glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x78UL), 0);
+            glue(stl, MEMSUFFIX)((uint64_t)(T0 + 0x7CUL), 0);
+        }
+    }
 }
 #endif
 
@@ -305,7 +400,7 @@ void glue(do_POWER2_lfq, MEMSUFFIX) (void)
     FT1 = glue(ldfq, MEMSUFFIX)((uint32_t)(T0 + 4));
 }
 
-static inline double glue(ldfqr, MEMSUFFIX) (target_ulong EA)
+static always_inline double glue(ldfqr, MEMSUFFIX) (target_ulong EA)
 {
     union {
         double d;
@@ -337,7 +432,7 @@ void glue(do_POWER2_stfq, MEMSUFFIX) (void)
     glue(stfq, MEMSUFFIX)((uint32_t)(T0 + 4), FT1);
 }
 
-static inline void glue(stfqr, MEMSUFFIX) (target_ulong EA, double d)
+static always_inline void glue(stfqr, MEMSUFFIX) (target_ulong EA, double d)
 {
     union {
         double d;

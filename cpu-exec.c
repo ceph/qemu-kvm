@@ -173,6 +173,7 @@ static inline TranslationBlock *tb_find_fast(void)
         flags |= (1 << 6);
     if (env->vfp.xregs[ARM_VFP_FPEXC] & (1 << 30))
         flags |= (1 << 7);
+    flags |= (env->condexec_bits << 8);
     cs_base = 0;
     pc = env->regs[15];
 #elif defined(TARGET_SPARC)
@@ -181,10 +182,8 @@ static inline TranslationBlock *tb_find_fast(void)
     flags = (((env->pstate & PS_PEF) >> 1) | ((env->fprs & FPRS_FEF) << 2))
         | (env->pstate & PS_PRIV) | ((env->lsu & (DMMU_E | IMMU_E)) >> 2);
 #else
-    // FPU enable . MMU Boot . MMU enabled . MMU no-fault . Supervisor
-    flags = (env->psref << 4) | (((env->mmuregs[0] & MMU_BM) >> 14) << 3)
-        | ((env->mmuregs[0] & (MMU_E | MMU_NF)) << 1)
-        | env->psrs;
+    // FPU enable . Supervisor
+    flags = (env->psref << 4) | env->psrs;
 #endif
     cs_base = env->npc;
     pc = env->pc;
@@ -208,6 +207,10 @@ static inline TranslationBlock *tb_find_fast(void)
     pc = env->pc;
 #elif defined(TARGET_ALPHA)
     flags = env->ps;
+    cs_base = 0;
+    pc = env->pc;
+#elif defined(TARGET_CRIS)
+    flags = 0;
     cs_base = 0;
     pc = env->pc;
 #else
@@ -284,6 +287,7 @@ int cpu_exec(CPUState *env1)
 #elif defined(TARGET_PPC)
 #elif defined(TARGET_MIPS)
 #elif defined(TARGET_SH4)
+#elif defined(TARGET_CRIS)
     /* XXXXX */
 #else
 #error unsupported target CPU
@@ -335,6 +339,8 @@ int cpu_exec(CPUState *env1)
 		    do_interrupt(env);
 #elif defined(TARGET_ALPHA)
                     do_interrupt(env);
+#elif defined(TARGET_CRIS)
+                    do_interrupt(env);
 #elif defined(TARGET_M68K)
                     do_interrupt(0);
 #endif
@@ -385,7 +391,7 @@ int cpu_exec(CPUState *env1)
                         cpu_loop_exit();
                     }
 #if defined(TARGET_ARM) || defined(TARGET_SPARC) || defined(TARGET_MIPS) || \
-    defined(TARGET_PPC) || defined(TARGET_ALPHA)
+    defined(TARGET_PPC) || defined(TARGET_ALPHA) || defined(TARGET_CRIS)
                     if (interrupt_request & CPU_INTERRUPT_HALT) {
                         env->interrupt_request &= ~CPU_INTERRUPT_HALT;
                         env->halted = 1;
@@ -506,8 +512,18 @@ int cpu_exec(CPUState *env1)
                         env->exception_index = EXCP_FIQ;
                         do_interrupt(env);
                     }
+                    /* ARMv7-M interrupt return works by loading a magic value
+                       into the PC.  On real hardware the load causes the
+                       return to occur.  The qemu implementation performs the
+                       jump normally, then does the exception return when the
+                       CPU tries to execute code at the magic address.
+                       This will cause the magic PC value to be pushed to
+                       the stack if an interrupt occured at the wrong time.
+                       We avoid this by disabling interrupts when
+                       pc contains a magic address.  */
                     if (interrupt_request & CPU_INTERRUPT_HARD
-                        && !(env->uncached_cpsr & CPSR_I)) {
+                        && ((IS_M(env) && env->regs[15] < 0xfffffff0)
+                            || !(env->uncached_cpsr & CPSR_I))) {
                         env->exception_index = EXCP_IRQ;
                         do_interrupt(env);
                     }
@@ -516,6 +532,11 @@ int cpu_exec(CPUState *env1)
 #elif defined(TARGET_ALPHA)
                     if (interrupt_request & CPU_INTERRUPT_HARD) {
                         do_interrupt(env);
+                    }
+#elif defined(TARGET_CRIS)
+                    if (interrupt_request & CPU_INTERRUPT_HARD) {
+                        do_interrupt(env);
+			env->interrupt_request &= ~CPU_INTERRUPT_HARD;
                     }
 #elif defined(TARGET_M68K)
                     if (interrupt_request & CPU_INTERRUPT_HARD
@@ -576,6 +597,8 @@ int cpu_exec(CPUState *env1)
 		    cpu_dump_state(env, logfile, fprintf, 0);
 #elif defined(TARGET_ALPHA)
                     cpu_dump_state(env, logfile, fprintf, 0);
+#elif defined(TARGET_CRIS)
+                    cpu_dump_state(env, logfile, fprintf, 0);
 #else
 #error unsupported target CPU
 #endif
@@ -600,19 +623,9 @@ int cpu_exec(CPUState *env1)
 #if USE_KQEMU
                         (env->kqemu_enabled != 2) &&
 #endif
-                        tb->page_addr[1] == -1
-#if defined(TARGET_I386) && defined(USE_CODE_COPY)
-                    && (tb->cflags & CF_CODE_COPY) ==
-                    (((TranslationBlock *)(T0 & ~3))->cflags & CF_CODE_COPY)
-#endif
-                    ) {
+                        tb->page_addr[1] == -1) {
                     spin_lock(&tb_lock);
                     tb_add_jump((TranslationBlock *)(long)(T0 & ~3), T0 & 3, tb);
-#if defined(USE_CODE_COPY)
-                    /* propagates the FP use info */
-                    ((TranslationBlock *)(T0 & ~3))->cflags |=
-                        (tb->cflags & CF_FP_USED);
-#endif
                     spin_unlock(&tb_lock);
                 }
                 }
@@ -636,80 +649,6 @@ int cpu_exec(CPUState *env1)
                               : /* no outputs */
                               : "r" (gen_func)
                               : "r1", "r2", "r3", "r8", "r9", "r10", "r12", "r14");
-#elif defined(TARGET_I386) && defined(USE_CODE_COPY)
-{
-    if (!(tb->cflags & CF_CODE_COPY)) {
-        if ((tb->cflags & CF_FP_USED) && env->native_fp_regs) {
-            save_native_fp_state(env);
-        }
-        gen_func();
-    } else {
-        if ((tb->cflags & CF_FP_USED) && !env->native_fp_regs) {
-            restore_native_fp_state(env);
-        }
-        /* we work with native eflags */
-        CC_SRC = cc_table[CC_OP].compute_all();
-        CC_OP = CC_OP_EFLAGS;
-        asm(".globl exec_loop\n"
-            "\n"
-            "debug1:\n"
-            "    pushl %%ebp\n"
-            "    fs movl %10, %9\n"
-            "    fs movl %11, %%eax\n"
-            "    andl $0x400, %%eax\n"
-            "    fs orl %8, %%eax\n"
-            "    pushl %%eax\n"
-            "    popf\n"
-            "    fs movl %%esp, %12\n"
-            "    fs movl %0, %%eax\n"
-            "    fs movl %1, %%ecx\n"
-            "    fs movl %2, %%edx\n"
-            "    fs movl %3, %%ebx\n"
-            "    fs movl %4, %%esp\n"
-            "    fs movl %5, %%ebp\n"
-            "    fs movl %6, %%esi\n"
-            "    fs movl %7, %%edi\n"
-            "    fs jmp *%9\n"
-            "exec_loop:\n"
-            "    fs movl %%esp, %4\n"
-            "    fs movl %12, %%esp\n"
-            "    fs movl %%eax, %0\n"
-            "    fs movl %%ecx, %1\n"
-            "    fs movl %%edx, %2\n"
-            "    fs movl %%ebx, %3\n"
-            "    fs movl %%ebp, %5\n"
-            "    fs movl %%esi, %6\n"
-            "    fs movl %%edi, %7\n"
-            "    pushf\n"
-            "    popl %%eax\n"
-            "    movl %%eax, %%ecx\n"
-            "    andl $0x400, %%ecx\n"
-            "    shrl $9, %%ecx\n"
-            "    andl $0x8d5, %%eax\n"
-            "    fs movl %%eax, %8\n"
-            "    movl $1, %%eax\n"
-            "    subl %%ecx, %%eax\n"
-            "    fs movl %%eax, %11\n"
-            "    fs movl %9, %%ebx\n" /* get T0 value */
-            "    popl %%ebp\n"
-            :
-            : "m" (*(uint8_t *)offsetof(CPUState, regs[0])),
-            "m" (*(uint8_t *)offsetof(CPUState, regs[1])),
-            "m" (*(uint8_t *)offsetof(CPUState, regs[2])),
-            "m" (*(uint8_t *)offsetof(CPUState, regs[3])),
-            "m" (*(uint8_t *)offsetof(CPUState, regs[4])),
-            "m" (*(uint8_t *)offsetof(CPUState, regs[5])),
-            "m" (*(uint8_t *)offsetof(CPUState, regs[6])),
-            "m" (*(uint8_t *)offsetof(CPUState, regs[7])),
-            "m" (*(uint8_t *)offsetof(CPUState, cc_src)),
-            "m" (*(uint8_t *)offsetof(CPUState, tmp0)),
-            "a" (gen_func),
-            "m" (*(uint8_t *)offsetof(CPUState, df)),
-            "m" (*(uint8_t *)offsetof(CPUState, saved_esp))
-            : "%ecx", "%edx"
-            );
-    }
-}
 #elif defined(__ia64)
 		struct fptr {
 			void *ip;
@@ -747,11 +686,6 @@ int cpu_exec(CPUState *env1)
 
 
 #if defined(TARGET_I386)
-#if defined(USE_CODE_COPY)
-    if (env->native_fp_regs) {
-        save_native_fp_state(env);
-    }
-#endif
     /* restore flags in standard format */
     env->eflags = env->eflags | cc_table[CC_OP].compute_all() | (DF & DF_MASK);
 #elif defined(TARGET_ARM)
@@ -769,6 +703,7 @@ int cpu_exec(CPUState *env1)
 #elif defined(TARGET_MIPS)
 #elif defined(TARGET_SH4)
 #elif defined(TARGET_ALPHA)
+#elif defined(TARGET_CRIS)
     /* XXXXX */
 #else
 #error unsupported target CPU
@@ -816,26 +751,26 @@ void cpu_x86_load_seg(CPUX86State *s, int seg_reg, int selector)
     env = saved_env;
 }
 
-void cpu_x86_fsave(CPUX86State *s, uint8_t *ptr, int data32)
+void cpu_x86_fsave(CPUX86State *s, target_ulong ptr, int data32)
 {
     CPUX86State *saved_env;
 
     saved_env = env;
     env = s;
 
-    helper_fsave((target_ulong)ptr, data32);
+    helper_fsave(ptr, data32);
 
     env = saved_env;
 }
 
-void cpu_x86_frstor(CPUX86State *s, uint8_t *ptr, int data32)
+void cpu_x86_frstor(CPUX86State *s, target_ulong ptr, int data32)
 {
     CPUX86State *saved_env;
 
     saved_env = env;
     env = s;
 
-    helper_frstor((target_ulong)ptr, data32);
+    helper_frstor(ptr, data32);
 
     env = saved_env;
 }
@@ -869,8 +804,7 @@ static inline int handle_cpu_signal(unsigned long pc, unsigned long address,
     }
 
     /* see if it is an MMU fault */
-    ret = cpu_x86_handle_mmu_fault(env, address, is_write,
-                                   ((env->hflags & HF_CPL_MASK) == 3), 0);
+    ret = cpu_x86_handle_mmu_fault(env, address, is_write, MMU_USER_IDX, 0);
     if (ret < 0)
         return 0; /* not an MMU fault */
     if (ret == 0)
@@ -919,7 +853,7 @@ static inline int handle_cpu_signal(unsigned long pc, unsigned long address,
         return 1;
     }
     /* see if it is an MMU fault */
-    ret = cpu_arm_handle_mmu_fault(env, address, is_write, 1, 0);
+    ret = cpu_arm_handle_mmu_fault(env, address, is_write, MMU_USER_IDX, 0);
     if (ret < 0)
         return 0; /* not an MMU fault */
     if (ret == 0)
@@ -955,7 +889,7 @@ static inline int handle_cpu_signal(unsigned long pc, unsigned long address,
         return 1;
     }
     /* see if it is an MMU fault */
-    ret = cpu_sparc_handle_mmu_fault(env, address, is_write, 1, 0);
+    ret = cpu_sparc_handle_mmu_fault(env, address, is_write, MMU_USER_IDX, 0);
     if (ret < 0)
         return 0; /* not an MMU fault */
     if (ret == 0)
@@ -992,7 +926,7 @@ static inline int handle_cpu_signal(unsigned long pc, unsigned long address,
     }
 
     /* see if it is an MMU fault */
-    ret = cpu_ppc_handle_mmu_fault(env, address, is_write, msr_pr, 0);
+    ret = cpu_ppc_handle_mmu_fault(env, address, is_write, MMU_USER_IDX, 0);
     if (ret < 0)
         return 0; /* not an MMU fault */
     if (ret == 0)
@@ -1041,7 +975,7 @@ static inline int handle_cpu_signal(unsigned long pc, unsigned long address,
         return 1;
     }
     /* see if it is an MMU fault */
-    ret = cpu_m68k_handle_mmu_fault(env, address, is_write, 1, 0);
+    ret = cpu_m68k_handle_mmu_fault(env, address, is_write, MMU_USER_IDX, 0);
     if (ret < 0)
         return 0; /* not an MMU fault */
     if (ret == 0)
@@ -1081,7 +1015,7 @@ static inline int handle_cpu_signal(unsigned long pc, unsigned long address,
     }
 
     /* see if it is an MMU fault */
-    ret = cpu_mips_handle_mmu_fault(env, address, is_write, 1, 0);
+    ret = cpu_mips_handle_mmu_fault(env, address, is_write, MMU_USER_IDX, 0);
     if (ret < 0)
         return 0; /* not an MMU fault */
     if (ret == 0)
@@ -1131,7 +1065,7 @@ static inline int handle_cpu_signal(unsigned long pc, unsigned long address,
     }
 
     /* see if it is an MMU fault */
-    ret = cpu_sh4_handle_mmu_fault(env, address, is_write, 1, 0);
+    ret = cpu_sh4_handle_mmu_fault(env, address, is_write, MMU_USER_IDX, 0);
     if (ret < 0)
         return 0; /* not an MMU fault */
     if (ret == 0)
@@ -1176,7 +1110,7 @@ static inline int handle_cpu_signal(unsigned long pc, unsigned long address,
     }
 
     /* see if it is an MMU fault */
-    ret = cpu_alpha_handle_mmu_fault(env, address, is_write, 1, 0);
+    ret = cpu_alpha_handle_mmu_fault(env, address, is_write, MMU_USER_IDX, 0);
     if (ret < 0)
         return 0; /* not an MMU fault */
     if (ret == 0)
@@ -1200,6 +1134,51 @@ static inline int handle_cpu_signal(unsigned long pc, unsigned long address,
     /* never comes here */
     return 1;
 }
+#elif defined (TARGET_CRIS)
+static inline int handle_cpu_signal(unsigned long pc, unsigned long address,
+                                    int is_write, sigset_t *old_set,
+                                    void *puc)
+{
+    TranslationBlock *tb;
+    int ret;
+
+    if (cpu_single_env)
+        env = cpu_single_env; /* XXX: find a correct solution for multithread */
+#if defined(DEBUG_SIGNAL)
+    printf("qemu: SIGSEGV pc=0x%08lx address=%08lx w=%d oldset=0x%08lx\n",
+           pc, address, is_write, *(unsigned long *)old_set);
+#endif
+    /* XXX: locking issue */
+    if (is_write && page_unprotect(h2g(address), pc, puc)) {
+        return 1;
+    }
+
+    /* see if it is an MMU fault */
+    ret = cpu_cris_handle_mmu_fault(env, address, is_write, MMU_USER_IDX, 0);
+    if (ret < 0)
+        return 0; /* not an MMU fault */
+    if (ret == 0)
+        return 1; /* the MMU fault was handled without causing real CPU fault */
+
+    /* now we have a real cpu fault */
+    tb = tb_find_pc(pc);
+    if (tb) {
+        /* the PC is inside the translated code. It means that we have
+           a virtual CPU fault */
+        cpu_restore_state(tb, env, pc, puc);
+    }
+#if 0
+        printf("PF exception: NIP=0x%08x error=0x%x %p\n",
+               env->nip, env->error_code, tb);
+#endif
+    /* we restore the process signal mask as the sigreturn should
+       do it (XXX: use sigsetjmp) */
+    sigprocmask(SIG_SETMASK, old_set, NULL);
+    cpu_loop_exit();
+    /* never comes here */
+    return 1;
+}
+
 #else
 #error unsupported target CPU
 #endif
@@ -1218,26 +1197,6 @@ static inline int handle_cpu_signal(unsigned long pc, unsigned long address,
 # define ERROR_sig(context)   ((context)->uc_mcontext.gregs[REG_ERR])
 #endif
 
-#if defined(USE_CODE_COPY)
-static void cpu_send_trap(unsigned long pc, int trap,
-                          struct ucontext *uc)
-{
-    TranslationBlock *tb;
-
-    if (cpu_single_env)
-        env = cpu_single_env; /* XXX: find a correct solution for multithread */
-    /* now we have a real cpu fault */
-    tb = tb_find_pc(pc);
-    if (tb) {
-        /* the PC is inside the translated code. It means that we have
-           a virtual CPU fault */
-        cpu_restore_state(tb, env, pc, uc);
-    }
-    sigprocmask(SIG_SETMASK, &uc->uc_sigmask, NULL);
-    raise_exception_err(trap, env->error_code);
-}
-#endif
-
 int cpu_signal_handler(int host_signum, void *pinfo,
                        void *puc)
 {
@@ -1254,17 +1213,10 @@ int cpu_signal_handler(int host_signum, void *pinfo,
 #endif
     pc = EIP_sig(uc);
     trapno = TRAP_sig(uc);
-#if defined(TARGET_I386) && defined(USE_CODE_COPY)
-    if (trapno == 0x00 || trapno == 0x05) {
-        /* send division by zero or bound exception */
-        cpu_send_trap(pc, trapno, uc);
-        return 1;
-    } else
-#endif
-        return handle_cpu_signal(pc, (unsigned long)info->si_addr,
-                                 trapno == 0xe ?
-                                 (ERROR_sig(uc) >> 1) & 1 : 0,
-                                 &uc->uc_sigmask, puc);
+    return handle_cpu_signal(pc, (unsigned long)info->si_addr,
+                             trapno == 0xe ?
+                             (ERROR_sig(uc) >> 1) & 1 : 0,
+                             &uc->uc_sigmask, puc);
 }
 
 #elif defined(__x86_64__)

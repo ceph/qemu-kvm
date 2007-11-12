@@ -4,7 +4,7 @@
  * Copyright (c) 2006 Openedhand Ltd.
  * Written by Andrzej Zaborowski <balrog@zabor.org>
  *
- * This code is licenced under the GPL.
+ * This code is licenced under the GNU GPL v2.
  */
 #ifndef PXA_H
 # define PXA_H			"pxa.h"
@@ -203,7 +203,7 @@ struct pxa2xx_i2s_s {
 };
 
 # define PA_FMT			"0x%08lx"
-# define REG_FMT		"0x%lx"
+# define REG_FMT		"0x" TARGET_FMT_plx
 
 struct pxa2xx_state_s *pxa270_init(unsigned int sdram_size, DisplayState *ds,
                 const char *revision);

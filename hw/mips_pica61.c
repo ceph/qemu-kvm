@@ -51,11 +51,10 @@ static void main_cpu_reset(void *opaque)
 {
     CPUState *env = opaque;
     cpu_reset(env);
-    cpu_mips_register(env, NULL);
 }
 
 static
-void mips_pica61_init (int ram_size, int vga_ram_size, int boot_device,
+void mips_pica61_init (int ram_size, int vga_ram_size, const char *boot_device,
                     DisplayState *ds, const char **fd_filename, int snapshot,
                     const char *kernel_filename, const char *kernel_cmdline,
                     const char *initrd_filename, const char *cpu_model)
@@ -65,7 +64,6 @@ void mips_pica61_init (int ram_size, int vga_ram_size, int boot_device,
     int bios_size;
     CPUState *env;
     int i;
-    mips_def_t *def;
     int available_ram;
     qemu_irq *i8259;
 
@@ -78,10 +76,11 @@ void mips_pica61_init (int ram_size, int vga_ram_size, int boot_device,
         cpu_model = "24Kf";
 #endif
     }
-    if (mips_find_by_name(cpu_model, &def) != 0)
-        def = NULL;
-    env = cpu_init();
-    cpu_mips_register(env, def);
+    env = cpu_init(cpu_model);
+    if (!env) {
+        fprintf(stderr, "Unable to find CPU definition\n");
+        exit(1);
+    }
     register_savevm("cpu", 0, 3, cpu_save, cpu_load, env);
     qemu_register_reset(main_cpu_reset, env);
 
@@ -94,7 +93,9 @@ void mips_pica61_init (int ram_size, int vga_ram_size, int boot_device,
 
     /* load a BIOS image */
     bios_offset = ram_size + vga_ram_size;
-    snprintf(buf, sizeof(buf), "%s/%s", bios_dir, BIOS_FILENAME);
+    if (bios_name == NULL)
+        bios_name = BIOS_FILENAME;
+    snprintf(buf, sizeof(buf), "%s/%s", bios_dir, bios_name);
     bios_size = load_image(buf, phys_ram_base + bios_offset);
     if ((bios_size <= 0) || (bios_size > BIOS_SIZE)) {
         /* fatal */

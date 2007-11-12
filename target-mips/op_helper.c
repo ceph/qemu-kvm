@@ -20,7 +20,13 @@
 #include <stdlib.h>
 #include "exec.h"
 
-#define GETPC() (__builtin_return_address(0))
+#include "host-utils.h"
+
+#ifdef __s390__
+# define GETPC() ((void*)((unsigned long)__builtin_return_address(0) & 0x7fffffffUL))
+#else
+# define GETPC() (__builtin_return_address(0))
+#endif
 
 /*****************************************************************************/
 /* Exceptions processing helpers */
@@ -62,19 +68,7 @@ void do_raise_exception_direct (uint32_t exception)
     do_raise_exception_direct_err (exception, 0);
 }
 
-#define MEMSUFFIX _raw
-#include "op_helper_mem.c"
-#undef MEMSUFFIX
-#if !defined(CONFIG_USER_ONLY)
-#define MEMSUFFIX _user
-#include "op_helper_mem.c"
-#undef MEMSUFFIX
-#define MEMSUFFIX _kernel
-#include "op_helper_mem.c"
-#undef MEMSUFFIX
-#endif
-
-#if defined(TARGET_MIPSN32) || defined(TARGET_MIPS64)
+#if defined(TARGET_MIPS64)
 #if TARGET_LONG_BITS > HOST_LONG_BITS
 /* Those might call libgcc functions.  */
 void do_dsll (void)
@@ -153,17 +147,28 @@ void do_drotrv (void)
     } else
        T0 = T1;
 }
+
+void do_dclo (void)
+{
+    T0 = clo64(T0);
+}
+
+void do_dclz (void)
+{
+    T0 = clz64(T0);
+}
+
 #endif /* TARGET_LONG_BITS > HOST_LONG_BITS */
-#endif /* TARGET_MIPSN32 || TARGET_MIPS64 */
+#endif /* TARGET_MIPS64 */
 
 /* 64 bits arithmetic for 32 bits hosts */
 #if TARGET_LONG_BITS > HOST_LONG_BITS
-static inline uint64_t get_HILO (void)
+static always_inline uint64_t get_HILO (void)
 {
     return (env->HI[0][env->current_tc] << 32) | (uint32_t)env->LO[0][env->current_tc];
 }
 
-static inline void set_HILO (uint64_t HILO)
+static always_inline void set_HILO (uint64_t HILO)
 {
     env->LO[0][env->current_tc] = (int32_t)HILO;
     env->HI[0][env->current_tc] = (int32_t)(HILO >> 32);
@@ -223,7 +228,7 @@ void do_div (void)
 }
 #endif
 
-#if defined(TARGET_MIPSN32) || defined(TARGET_MIPS64)
+#if defined(TARGET_MIPS64)
 void do_ddiv (void)
 {
     if (T1 != 0) {
@@ -242,7 +247,7 @@ void do_ddivu (void)
     }
 }
 #endif
-#endif /* TARGET_MIPSN32 || TARGET_MIPS64 */
+#endif /* TARGET_MIPS64 */
 
 #if defined(CONFIG_USER_ONLY)
 void do_mfc0_random (void)
@@ -314,8 +319,12 @@ void do_mtc0_status_debug(uint32_t old, uint32_t val)
             old, old & env->CP0_Cause & CP0Ca_IP_mask,
             val, val & env->CP0_Cause & CP0Ca_IP_mask,
             env->CP0_Cause);
-    (env->hflags & MIPS_HFLAG_UM) ? fputs(", UM\n", logfile)
-                                  : fputs("\n", logfile);
+    switch (env->hflags & MIPS_HFLAG_KSU) {
+    case MIPS_HFLAG_UM: fputs(", UM\n", logfile); break;
+    case MIPS_HFLAG_SM: fputs(", SM\n", logfile); break;
+    case MIPS_HFLAG_KM: fputs("\n", logfile); break;
+    default: cpu_abort(env, "Invalid MMU mode!\n"); break;
+    }
 }
 
 void do_mtc0_status_irqraise_debug(void)
@@ -383,7 +392,7 @@ static void r4k_fill_tlb (int idx)
     /* XXX: detect conflicting TLBs and raise a MCHECK exception when needed */
     tlb = &env->tlb->mmu.r4k.tlb[idx];
     tlb->VPN = env->CP0_EntryHi & (TARGET_PAGE_MASK << 1);
-#if defined(TARGET_MIPSN32) || defined(TARGET_MIPS64)
+#if defined(TARGET_MIPS64)
     tlb->VPN &= env->SEGMask;
 #endif
     tlb->ASID = env->CP0_EntryHi & 0xFF;
@@ -517,10 +526,12 @@ void debug_post_eret (void)
         fprintf(logfile, " ErrorEPC " TARGET_FMT_lx, env->CP0_ErrorEPC);
     if (env->hflags & MIPS_HFLAG_DM)
         fprintf(logfile, " DEPC " TARGET_FMT_lx, env->CP0_DEPC);
-    if (env->hflags & MIPS_HFLAG_UM)
-        fputs(", UM\n", logfile);
-    else
-        fputs("\n", logfile);
+    switch (env->hflags & MIPS_HFLAG_KSU) {
+    case MIPS_HFLAG_UM: fputs(", UM\n", logfile); break;
+    case MIPS_HFLAG_SM: fputs(", SM\n", logfile); break;
+    case MIPS_HFLAG_KM: fputs("\n", logfile); break;
+    default: cpu_abort(env, "Invalid MMU mode!\n"); break;
+    }
 }
 
 void do_pmon (int function)
@@ -575,7 +586,7 @@ static void do_unaligned_access (target_ulong addr, int is_write, int is_user, v
     do_raise_exception ((is_write == 1) ? EXCP_AdES : EXCP_AdEL);
 }
 
-void tlb_fill (target_ulong addr, int is_write, int is_user, void *retaddr)
+void tlb_fill (target_ulong addr, int is_write, int mmu_idx, void *retaddr)
 {
     TranslationBlock *tb;
     CPUState *saved_env;
@@ -586,7 +597,7 @@ void tlb_fill (target_ulong addr, int is_write, int is_user, void *retaddr)
        generated code */
     saved_env = env;
     env = cpu_single_env;
-    ret = cpu_mips_handle_mmu_fault(env, addr, is_write, is_user, 1);
+    ret = cpu_mips_handle_mmu_fault(env, addr, is_write, mmu_idx, 1);
     if (ret) {
         if (retaddr) {
             /* now we have a real cpu fault */
@@ -603,6 +614,14 @@ void tlb_fill (target_ulong addr, int is_write, int is_user, void *retaddr)
     env = saved_env;
 }
 
+void do_unassigned_access(target_phys_addr_t addr, int is_write, int is_exec,
+                          int unused)
+{
+    if (is_exec)
+        do_raise_exception(EXCP_IBE);
+    else
+        do_raise_exception(EXCP_DBE);
+}
 #endif
 
 /* Complex FPU operations which may need stack space. */
@@ -685,7 +704,7 @@ void do_ctc1 (int reg)
         do_raise_exception(EXCP_FPE);
 }
 
-inline char ieee_ex_to_mips(char xcpt)
+static always_inline char ieee_ex_to_mips(char xcpt)
 {
     return (xcpt & float_flag_inexact) >> 5 |
            (xcpt & float_flag_underflow) >> 3 |
@@ -694,7 +713,7 @@ inline char ieee_ex_to_mips(char xcpt)
            (xcpt & float_flag_invalid) << 4;
 }
 
-inline char mips_ex_to_ieee(char xcpt)
+static always_inline char mips_ex_to_ieee(char xcpt)
 {
     return (xcpt & FP_INEXACT) << 5 |
            (xcpt & FP_UNDERFLOW) << 3 |
@@ -703,7 +722,7 @@ inline char mips_ex_to_ieee(char xcpt)
            (xcpt & FP_INVALID) >> 4;
 }
 
-inline void update_fcr31(void)
+static always_inline void update_fcr31(void)
 {
     int tmp = ieee_ex_to_mips(get_float_exception_flags(&env->fpu->fp_status));
 

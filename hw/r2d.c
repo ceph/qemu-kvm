@@ -27,7 +27,7 @@
 #define SDRAM_BASE 0x0c000000 /* Physical location of SDRAM: Area 3 */
 #define SDRAM_SIZE 0x04000000
 
-void r2d_init(int ram_size, int vga_ram_size, int boot_device,
+static void r2d_init(int ram_size, int vga_ram_size, const char *boot_device,
 	      DisplayState * ds, const char **fd_filename, int snapshot,
 	      const char *kernel_filename, const char *kernel_cmdline,
 	      const char *initrd_filename, const char *cpu_model)
@@ -35,7 +35,14 @@ void r2d_init(int ram_size, int vga_ram_size, int boot_device,
     CPUState *env;
     struct SH7750State *s;
 
-    env = cpu_init();
+    if (!cpu_model)
+        cpu_model = "any";
+
+    env = cpu_init(cpu_model);
+    if (!env) {
+        fprintf(stderr, "Unable to find CPU definition\n");
+        exit(1);
+    }
 
     /* Allocate memory space */
     cpu_register_physical_memory(SDRAM_BASE, SDRAM_SIZE, 0);

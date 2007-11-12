@@ -12,7 +12,11 @@
 #define spitz_printf(format, ...)	\
     fprintf(stderr, "%s: " format, __FUNCTION__, ##__VA_ARGS__)
 #undef REG_FMT
+#if TARGET_PHYS_ADDR_BITS == 32
+#define REG_FMT			"0x%02x"
+#else
 #define REG_FMT			"0x%02lx"
+#endif
 
 /* Spitz Flash */
 #define FLASH_BASE		0x0c000000
@@ -194,8 +198,8 @@ static int spitz_keymap[SPITZ_KEY_SENSE_NUM + 1][SPITZ_KEY_STROBE_NUM] = {
     { 0x0f, 0x10, 0x12, 0x14, 0x22, 0x16, 0x24, 0x25,  -1 ,  -1 ,  -1  },
     { 0x3c, 0x11, 0x1f, 0x21, 0x2f, 0x23, 0x32, 0x26,  -1 , 0x36,  -1  },
     { 0x3b, 0x1e, 0x20, 0x2e, 0x30, 0x31, 0x34,  -1 , 0x1c, 0x2a,  -1  },
-    { 0x44, 0x2c, 0x2d, 0x0c, 0x39, 0x33,  -1 , 0x48,  -1 ,  -1 , 0x3d },
-    { 0x37, 0x38,  -1 , 0x45, 0x57, 0x58, 0x4b, 0x50, 0x4d,  -1 ,  -1  },
+    { 0x44, 0x2c, 0x2d, 0x0c, 0x39, 0x33,  -1 , 0x48,  -1 ,  -1 , 0x38 },
+    { 0x37, 0x3d,  -1 , 0x45, 0x57, 0x58, 0x4b, 0x50, 0x4d,  -1 ,  -1  },
     { 0x52, 0x43, 0x01, 0x47, 0x49,  -1 ,  -1 ,  -1 ,  -1 ,  -1 ,  -1  },
 };
 
@@ -415,13 +419,17 @@ static void spitz_keyboard_pre_map(struct spitz_keyboard_s *s)
     s->pre_map[0x0d | SHIFT	] = 0x13 | FN;		/* plus */
     s->pre_map[0x1a		] = 0x14 | FN;		/* bracketleft */
     s->pre_map[0x1b		] = 0x15 | FN;		/* bracketright */
+    s->pre_map[0x1a | SHIFT	] = 0x16 | FN;		/* braceleft */
+    s->pre_map[0x1b | SHIFT	] = 0x17 | FN;		/* braceright */
     s->pre_map[0x27		] = 0x22 | FN;		/* semicolon */
     s->pre_map[0x27 | SHIFT	] = 0x23 | FN;		/* colon */
     s->pre_map[0x09 | SHIFT	] = 0x24 | FN;		/* asterisk */
     s->pre_map[0x2b		] = 0x25 | FN;		/* backslash */
     s->pre_map[0x2b | SHIFT	] = 0x26 | FN;		/* bar */
     s->pre_map[0x0c | SHIFT	] = 0x30 | FN;		/* underscore */
+    s->pre_map[0x33 | SHIFT	] = 0x33 | FN;		/* less */
     s->pre_map[0x35		] = 0x33 | SHIFT;	/* slash */
+    s->pre_map[0x34 | SHIFT	] = 0x34 | FN;		/* greater */
     s->pre_map[0x35 | SHIFT	] = 0x34 | SHIFT;	/* question */
     s->pre_map[0x49		] = 0x48 | FN;		/* Page_Up */
     s->pre_map[0x51		] = 0x50 | FN;		/* Page_Down */
@@ -1224,8 +1232,9 @@ static void spitz_common_init(int ram_size, int vga_ram_size,
     sl_bootparam_write(SL_PXA_PARAM_BASE - PXA2XX_SDRAM_BASE);
 }
 
-static void spitz_init(int ram_size, int vga_ram_size, int boot_device,
-                DisplayState *ds, const char **fd_filename, int snapshot,
+static void spitz_init(int ram_size, int vga_ram_size,
+                const char *boot_device, DisplayState *ds,
+                const char **fd_filename, int snapshot,
                 const char *kernel_filename, const char *kernel_cmdline,
                 const char *initrd_filename, const char *cpu_model)
 {
@@ -1233,8 +1242,9 @@ static void spitz_init(int ram_size, int vga_ram_size, int boot_device,
                 kernel_cmdline, initrd_filename, cpu_model, spitz, 0x2c9);
 }
 
-static void borzoi_init(int ram_size, int vga_ram_size, int boot_device,
-                DisplayState *ds, const char **fd_filename, int snapshot,
+static void borzoi_init(int ram_size, int vga_ram_size,
+                const char *boot_device, DisplayState *ds,
+                const char **fd_filename, int snapshot,
                 const char *kernel_filename, const char *kernel_cmdline,
                 const char *initrd_filename, const char *cpu_model)
 {
@@ -1242,8 +1252,9 @@ static void borzoi_init(int ram_size, int vga_ram_size, int boot_device,
                 kernel_cmdline, initrd_filename, cpu_model, borzoi, 0x33f);
 }
 
-static void akita_init(int ram_size, int vga_ram_size, int boot_device,
-                DisplayState *ds, const char **fd_filename, int snapshot,
+static void akita_init(int ram_size, int vga_ram_size,
+                const char *boot_device, DisplayState *ds,
+                const char **fd_filename, int snapshot,
                 const char *kernel_filename, const char *kernel_cmdline,
                 const char *initrd_filename, const char *cpu_model)
 {
@@ -1251,8 +1262,9 @@ static void akita_init(int ram_size, int vga_ram_size, int boot_device,
                 kernel_cmdline, initrd_filename, cpu_model, akita, 0x2e8);
 }
 
-static void terrier_init(int ram_size, int vga_ram_size, int boot_device,
-                DisplayState *ds, const char **fd_filename, int snapshot,
+static void terrier_init(int ram_size, int vga_ram_size,
+                const char *boot_device, DisplayState *ds,
+                const char **fd_filename, int snapshot,
                 const char *kernel_filename, const char *kernel_cmdline,
                 const char *initrd_filename, const char *cpu_model)
 {

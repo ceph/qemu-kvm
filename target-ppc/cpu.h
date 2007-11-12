@@ -24,46 +24,51 @@
 #include <inttypes.h>
 
 #if defined (TARGET_PPC64)
+/* PowerPC 64 definitions */
 typedef uint64_t ppc_gpr_t;
 #define TARGET_GPR_BITS  64
 #define TARGET_LONG_BITS 64
 #define REGX "%016" PRIx64
 #define TARGET_PAGE_BITS 12
-#elif defined(TARGET_PPCEMB)
-/* BookE have 36 bits physical address space */
-#define TARGET_PHYS_ADDR_BITS 64
-/* GPR are 64 bits: used by vector extension */
-typedef uint64_t ppc_gpr_t;
-#define TARGET_GPR_BITS  64
-#define TARGET_LONG_BITS 32
-#define REGX "%016" PRIx64
-#if defined(CONFIG_USER_ONLY)
-/* It looks like a lot of Linux programs assume page size
- * is 4kB long. This is evil, but we have to deal with it...
- */
-#define TARGET_PAGE_BITS 12
-#else
-/* Pages can be 1 kB small */
-#define TARGET_PAGE_BITS 10
-#endif
-#else
+
+#else /* defined (TARGET_PPC64) */
+/* PowerPC 32 definitions */
 #if (HOST_LONG_BITS >= 64)
 /* When using 64 bits temporary registers,
  * we can use 64 bits GPR with no extra cost
- * It's even an optimization as it will prevent
+ * It's even an optimization as this will prevent
  * the compiler to do unuseful masking in the micro-ops.
  */
 typedef uint64_t ppc_gpr_t;
 #define TARGET_GPR_BITS  64
 #define REGX "%08" PRIx64
-#else
+#else /* (HOST_LONG_BITS >= 64) */
 typedef uint32_t ppc_gpr_t;
 #define TARGET_GPR_BITS  32
 #define REGX "%08" PRIx32
-#endif
+#endif /* (HOST_LONG_BITS >= 64) */
+
 #define TARGET_LONG_BITS 32
+
+#if defined(TARGET_PPCEMB)
+/* Specific definitions for PowerPC embedded */
+/* BookE have 36 bits physical address space */
+#define TARGET_PHYS_ADDR_BITS 64
+#if defined(CONFIG_USER_ONLY)
+/* It looks like a lot of Linux programs assume page size
+ * is 4kB long. This is evil, but we have to deal with it...
+ */
 #define TARGET_PAGE_BITS 12
-#endif
+#else /* defined(CONFIG_USER_ONLY) */
+/* Pages can be 1 kB small */
+#define TARGET_PAGE_BITS 10
+#endif /* defined(CONFIG_USER_ONLY) */
+#else /* defined(TARGET_PPCEMB) */
+/* "standard" PowerPC 32 definitions */
+#define TARGET_PAGE_BITS 12
+#endif /* defined(TARGET_PPCEMB) */
+
+#endif /* defined (TARGET_PPC64) */
 
 #include "cpu-defs.h"
 
@@ -82,22 +87,12 @@ typedef uint32_t ppc_gpr_t;
 #define ELF_MACHINE     EM_PPC
 #endif
 
-/* XXX: this should be tunable: PowerPC 601 & 64 bits PowerPC
- *                              have different cache line sizes
- */
-#define ICACHE_LINE_SIZE 32
-#define DCACHE_LINE_SIZE 32
-
 /*****************************************************************************/
 /* MMU model                                                                 */
 enum {
     POWERPC_MMU_UNKNOWN    = 0,
     /* Standard 32 bits PowerPC MMU                            */
     POWERPC_MMU_32B,
-    /* Standard 64 bits PowerPC MMU                            */
-    POWERPC_MMU_64B,
-    /* PowerPC 601 MMU                                         */
-    POWERPC_MMU_601,
     /* PowerPC 6xx MMU with software TLB                       */
     POWERPC_MMU_SOFT_6xx,
     /* PowerPC 74xx MMU with software TLB                      */
@@ -112,8 +107,12 @@ enum {
     POWERPC_MMU_BOOKE,
     /* BookE FSL MMU model                                     */
     POWERPC_MMU_BOOKE_FSL,
-    /* 64 bits "bridge" PowerPC MMU                            */
-    POWERPC_MMU_64BRIDGE,
+    /* PowerPC 601 MMU model (specific BATs format)            */
+    POWERPC_MMU_601,
+#if defined(TARGET_PPC64)
+    /* 64 bits PowerPC MMU                                     */
+    POWERPC_MMU_64B,
+#endif /* defined(TARGET_PPC64) */
 };
 
 /*****************************************************************************/
@@ -142,10 +141,12 @@ enum {
     POWERPC_EXCP_7x5,
     /* PowerPC 74xx exception model     */
     POWERPC_EXCP_74xx,
-    /* PowerPC 970 exception model      */
-    POWERPC_EXCP_970,
     /* BookE exception model            */
     POWERPC_EXCP_BOOKE,
+#if defined(TARGET_PPC64)
+    /* PowerPC 970 exception model      */
+    POWERPC_EXCP_970,
+#endif /* defined(TARGET_PPC64) */
 };
 
 /*****************************************************************************/
@@ -170,14 +171,12 @@ enum {
     POWERPC_EXCP_ITLB     = 14, /* Instruction TLB error                     */
     POWERPC_EXCP_DEBUG    = 15, /* Debug interrupt                           */
     /* Vectors 16 to 31 are reserved                                         */
-#if defined(TARGET_PPCEMB)
     POWERPC_EXCP_SPEU     = 32, /* SPE/embedded floating-point unavailable   */
     POWERPC_EXCP_EFPDI    = 33, /* Embedded floating-point data interrupt    */
     POWERPC_EXCP_EFPRI    = 34, /* Embedded floating-point round interrupt   */
     POWERPC_EXCP_EPERFM   = 35, /* Embedded performance monitor interrupt    */
     POWERPC_EXCP_DOORI    = 36, /* Embedded doorbell interrupt               */
     POWERPC_EXCP_DOORCI   = 37, /* Embedded doorbell critical interrupt      */
-#endif /* defined(TARGET_PPCEMB) */
     /* Vectors 38 to 63 are reserved                                         */
     /* Exceptions defined in the PowerPC server specification                */
     POWERPC_EXCP_RESET    = 64, /* System reset exception                    */
@@ -229,7 +228,6 @@ enum {
     POWERPC_EXCP_SYSCALL_USER = 0x203, /* System call in user mode only      */
 };
 
-
 /* Exceptions error codes                                                    */
 enum {
     /* Exception subtypes for POWERPC_EXCP_ALIGN                             */
@@ -246,7 +244,7 @@ enum {
     POWERPC_EXCP_FP_UX         = 0x02,  /* FP underflow                      */
     POWERPC_EXCP_FP_ZX         = 0x03,  /* FP divide by zero                 */
     POWERPC_EXCP_FP_XX         = 0x04,  /* FP inexact                        */
-    POWERPC_EXCP_FP_VXNAN      = 0x05,  /* FP invalid SNaN op                */
+    POWERPC_EXCP_FP_VXSNAN     = 0x05,  /* FP invalid SNaN op                */
     POWERPC_EXCP_FP_VXISI      = 0x06,  /* FP invalid infinite subtraction   */
     POWERPC_EXCP_FP_VXIDI      = 0x07,  /* FP invalid infinite divide        */
     POWERPC_EXCP_FP_VXZDZ      = 0x08,  /* FP invalid zero divide            */
@@ -297,7 +295,7 @@ typedef struct CPUPPCState CPUPPCState;
 typedef struct ppc_tb_t ppc_tb_t;
 typedef struct ppc_spr_t ppc_spr_t;
 typedef struct ppc_dcr_t ppc_dcr_t;
-typedef struct ppc_avr_t ppc_avr_t;
+typedef union ppc_avr_t ppc_avr_t;
 typedef union ppc_tlb_t ppc_tlb_t;
 
 /* SPR access micro-ops generations callbacks */
@@ -316,8 +314,11 @@ struct ppc_spr_t {
 };
 
 /* Altivec registers (128 bits) */
-struct ppc_avr_t {
-    uint32_t u[4];
+union ppc_avr_t {
+    uint8_t u8[16];
+    uint16_t u16[8];
+    uint32_t u32[4];
+    uint64_t u64[2];
 };
 
 /* Software TLB cache */
@@ -351,83 +352,170 @@ union ppc_tlb_t {
 #define MSR_CM   31 /* Computation mode for BookE                     hflags */
 #define MSR_ICM  30 /* Interrupt computation mode for BookE                  */
 #define MSR_UCLE 26 /* User-mode cache lock enable for BookE                 */
-#define MSR_VR   25 /* altivec available                              hflags */
-#define MSR_SPE  25 /* SPE enable for BookE                           hflags */
+#define MSR_VR   25 /* altivec available                            x hflags */
+#define MSR_SPE  25 /* SPE enable for BookE                         x hflags */
 #define MSR_AP   23 /* Access privilege state on 602                  hflags */
 #define MSR_SA   22 /* Supervisor access mode on 602                  hflags */
 #define MSR_KEY  19 /* key bit on 603e                                       */
 #define MSR_POW  18 /* Power management                                      */
-#define MSR_WE   18 /* Wait state enable on embedded PowerPC                 */
-#define MSR_TGPR 17 /* TGPR usage on 602/603                                 */
-#define MSR_TLB  17 /* TLB update on ?                                       */
-#define MSR_CE   17 /* Critical interrupt enable on embedded PowerPC         */
+#define MSR_TGPR 17 /* TGPR usage on 602/603                        x        */
+#define MSR_CE   17 /* Critical interrupt enable on embedded PowerPC x       */
 #define MSR_ILE  16 /* Interrupt little-endian mode                          */
 #define MSR_EE   15 /* External interrupt enable                             */
 #define MSR_PR   14 /* Problem state                                  hflags */
 #define MSR_FP   13 /* Floating point available                       hflags */
 #define MSR_ME   12 /* Machine check interrupt enable                        */
 #define MSR_FE0  11 /* Floating point exception mode 0                hflags */
-#define MSR_SE   10 /* Single-step trace enable                       hflags */
-#define MSR_DWE  10 /* Debug wait enable on 405                              */
-#define MSR_UBLE 10 /* User BTB lock enable on e500                          */
-#define MSR_BE   9  /* Branch trace enable                            hflags */
-#define MSR_DE   9  /* Debug interrupts enable on embedded PowerPC           */
+#define MSR_SE   10 /* Single-step trace enable                     x hflags */
+#define MSR_DWE  10 /* Debug wait enable on 405                     x        */
+#define MSR_UBLE 10 /* User BTB lock enable on e500                 x        */
+#define MSR_BE   9  /* Branch trace enable                          x hflags */
+#define MSR_DE   9  /* Debug interrupts enable on embedded PowerPC  x        */
 #define MSR_FE1  8  /* Floating point exception mode 1                hflags */
 #define MSR_AL   7  /* AL bit on POWER                                       */
-#define MSR_IP   6  /* Interrupt prefix                                      */
+#define MSR_EP   6  /* Exception prefix on 601                               */
 #define MSR_IR   5  /* Instruction relocate                                  */
-#define MSR_IS   5  /* Instruction address space on embedded PowerPC         */
 #define MSR_DR   4  /* Data relocate                                         */
-#define MSR_DS   4  /* Data address space on embedded PowerPC                */
 #define MSR_PE   3  /* Protection enable on 403                              */
-#define MSR_EP   3  /* Exception prefix on 601                               */
-#define MSR_PX   2  /* Protection exclusive on 403                           */
-#define MSR_PMM  2  /* Performance monitor mark on POWER                     */
-#define MSR_RI   1  /* Recoverable interrupt                                 */
-#define MSR_LE   0  /* Little-endian mode                             hflags */
-#define msr_sf   env->msr[MSR_SF]
-#define msr_isf  env->msr[MSR_ISF]
-#define msr_hv   env->msr[MSR_HV]
-#define msr_cm   env->msr[MSR_CM]
-#define msr_icm  env->msr[MSR_ICM]
-#define msr_ucle env->msr[MSR_UCLE]
-#define msr_vr   env->msr[MSR_VR]
-#define msr_spe  env->msr[MSR_SPE]
-#define msr_ap   env->msr[MSR_AP]
-#define msr_sa   env->msr[MSR_SA]
-#define msr_key  env->msr[MSR_KEY]
-#define msr_pow  env->msr[MSR_POW]
-#define msr_we   env->msr[MSR_WE]
-#define msr_tgpr env->msr[MSR_TGPR]
-#define msr_tlb  env->msr[MSR_TLB]
-#define msr_ce   env->msr[MSR_CE]
-#define msr_ile  env->msr[MSR_ILE]
-#define msr_ee   env->msr[MSR_EE]
-#define msr_pr   env->msr[MSR_PR]
-#define msr_fp   env->msr[MSR_FP]
-#define msr_me   env->msr[MSR_ME]
-#define msr_fe0  env->msr[MSR_FE0]
-#define msr_se   env->msr[MSR_SE]
-#define msr_dwe  env->msr[MSR_DWE]
-#define msr_uble env->msr[MSR_UBLE]
-#define msr_be   env->msr[MSR_BE]
-#define msr_de   env->msr[MSR_DE]
-#define msr_fe1  env->msr[MSR_FE1]
-#define msr_al   env->msr[MSR_AL]
-#define msr_ip   env->msr[MSR_IP]
-#define msr_ir   env->msr[MSR_IR]
-#define msr_is   env->msr[MSR_IS]
-#define msr_dr   env->msr[MSR_DR]
-#define msr_ds   env->msr[MSR_DS]
-#define msr_pe   env->msr[MSR_PE]
-#define msr_ep   env->msr[MSR_EP]
-#define msr_px   env->msr[MSR_PX]
-#define msr_pmm  env->msr[MSR_PMM]
-#define msr_ri   env->msr[MSR_RI]
-#define msr_le   env->msr[MSR_LE]
+#define MSR_PX   2  /* Protection exclusive on 403                  x        */
+#define MSR_PMM  2  /* Performance monitor mark on POWER            x        */
+#define MSR_RI   1  /* Recoverable interrupt                        1        */
+#define MSR_LE   0  /* Little-endian mode                           1 hflags */
+
+#define msr_sf   ((env->msr >> MSR_SF)   & 1)
+#define msr_isf  ((env->msr >> MSR_ISF)  & 1)
+#define msr_hv   ((env->msr >> MSR_HV)   & 1)
+#define msr_cm   ((env->msr >> MSR_CM)   & 1)
+#define msr_icm  ((env->msr >> MSR_ICM)  & 1)
+#define msr_ucle ((env->msr >> MSR_UCLE) & 1)
+#define msr_vr   ((env->msr >> MSR_VR)   & 1)
+#define msr_spe  ((env->msr >> MSR_SE)   & 1)
+#define msr_ap   ((env->msr >> MSR_AP)   & 1)
+#define msr_sa   ((env->msr >> MSR_SA)   & 1)
+#define msr_key  ((env->msr >> MSR_KEY)  & 1)
+#define msr_pow  ((env->msr >> MSR_POW)  & 1)
+#define msr_tgpr ((env->msr >> MSR_TGPR) & 1)
+#define msr_ce   ((env->msr >> MSR_CE)   & 1)
+#define msr_ile  ((env->msr >> MSR_ILE)  & 1)
+#define msr_ee   ((env->msr >> MSR_EE)   & 1)
+#define msr_pr   ((env->msr >> MSR_PR)   & 1)
+#define msr_fp   ((env->msr >> MSR_FP)   & 1)
+#define msr_me   ((env->msr >> MSR_ME)   & 1)
+#define msr_fe0  ((env->msr >> MSR_FE0)  & 1)
+#define msr_se   ((env->msr >> MSR_SE)   & 1)
+#define msr_dwe  ((env->msr >> MSR_DWE)  & 1)
+#define msr_uble ((env->msr >> MSR_UBLE) & 1)
+#define msr_be   ((env->msr >> MSR_BE)   & 1)
+#define msr_de   ((env->msr >> MSR_DE)   & 1)
+#define msr_fe1  ((env->msr >> MSR_FE1)  & 1)
+#define msr_al   ((env->msr >> MSR_AL)   & 1)
+#define msr_ep   ((env->msr >> MSR_EP)   & 1)
+#define msr_ir   ((env->msr >> MSR_IR)   & 1)
+#define msr_dr   ((env->msr >> MSR_DR)   & 1)
+#define msr_pe   ((env->msr >> MSR_PE)   & 1)
+#define msr_px   ((env->msr >> MSR_PX)   & 1)
+#define msr_pmm  ((env->msr >> MSR_PMM)  & 1)
+#define msr_ri   ((env->msr >> MSR_RI)   & 1)
+#define msr_le   ((env->msr >> MSR_LE)   & 1)
+
+enum {
+    POWERPC_FLAG_NONE = 0x00000000,
+    /* Flag for MSR bit 25 signification (VRE/SPE)                           */
+    POWERPC_FLAG_SPE  = 0x00000001,
+    POWERPC_FLAG_VRE  = 0x00000002,
+    /* Flag for MSR bit 17 signification (TGPR/CE)                           */
+    POWERPC_FLAG_TGPR = 0x00000004,
+    POWERPC_FLAG_CE   = 0x00000008,
+    /* Flag for MSR bit 10 signification (SE/DWE/UBLE)                       */
+    POWERPC_FLAG_SE   = 0x00000010,
+    POWERPC_FLAG_DWE  = 0x00000020,
+    POWERPC_FLAG_UBLE = 0x00000040,
+    /* Flag for MSR bit 9 signification (BE/DE)                              */
+    POWERPC_FLAG_BE   = 0x00000080,
+    POWERPC_FLAG_DE   = 0x00000100,
+    /* Flag for MSR but 2 signification (PX/PMM)                             */
+    POWERPC_FLAG_PX   = 0x00000200,
+    POWERPC_FLAG_PMM  = 0x00000400,
+};
+
+/*****************************************************************************/
+/* Floating point status and control register                                */
+#define FPSCR_FX     31 /* Floating-point exception summary                  */
+#define FPSCR_FEX    30 /* Floating-point enabled exception summary          */
+#define FPSCR_VX     29 /* Floating-point invalid operation exception summ.  */
+#define FPSCR_OX     28 /* Floating-point overflow exception                 */
+#define FPSCR_UX     27 /* Floating-point underflow exception                */
+#define FPSCR_ZX     26 /* Floating-point zero divide exception              */
+#define FPSCR_XX     25 /* Floating-point inexact exception                  */
+#define FPSCR_VXSNAN 24 /* Floating-point invalid operation exception (sNan) */
+#define FPSCR_VXISI  23 /* Floating-point invalid operation exception (inf)  */
+#define FPSCR_VXIDI  22 /* Floating-point invalid operation exception (inf)  */
+#define FPSCR_VXZDZ  21 /* Floating-point invalid operation exception (zero) */
+#define FPSCR_VXIMZ  20 /* Floating-point invalid operation exception (inf)  */
+#define FPSCR_VXVC   19 /* Floating-point invalid operation exception (comp) */
+#define FPSCR_FR     18 /* Floating-point fraction rounded                   */
+#define FPSCR_FI     17 /* Floating-point fraction inexact                   */
+#define FPSCR_C      16 /* Floating-point result class descriptor            */
+#define FPSCR_FL     15 /* Floating-point less than or negative              */
+#define FPSCR_FG     14 /* Floating-point greater than or negative           */
+#define FPSCR_FE     13 /* Floating-point equal or zero                      */
+#define FPSCR_FU     12 /* Floating-point unordered or NaN                   */
+#define FPSCR_FPCC   12 /* Floating-point condition code                     */
+#define FPSCR_FPRF   12 /* Floating-point result flags                       */
+#define FPSCR_VXSOFT 10 /* Floating-point invalid operation exception (soft) */
+#define FPSCR_VXSQRT 9  /* Floating-point invalid operation exception (sqrt) */
+#define FPSCR_VXCVI  8  /* Floating-point invalid operation exception (int)  */
+#define FPSCR_VE     7  /* Floating-point invalid operation exception enable */
+#define FPSCR_OE     6  /* Floating-point overflow exception enable          */
+#define FPSCR_UE     5  /* Floating-point undeflow exception enable          */
+#define FPSCR_ZE     4  /* Floating-point zero divide exception enable       */
+#define FPSCR_XE     3  /* Floating-point inexact exception enable           */
+#define FPSCR_NI     2  /* Floating-point non-IEEE mode                      */
+#define FPSCR_RN1    1
+#define FPSCR_RN     0  /* Floating-point rounding control                   */
+#define fpscr_fex    (((env->fpscr) >> FPSCR_FEX)    & 0x1)
+#define fpscr_vx     (((env->fpscr) >> FPSCR_VX)     & 0x1)
+#define fpscr_ox     (((env->fpscr) >> FPSCR_OX)     & 0x1)
+#define fpscr_ux     (((env->fpscr) >> FPSCR_UX)     & 0x1)
+#define fpscr_zx     (((env->fpscr) >> FPSCR_ZX)     & 0x1)
+#define fpscr_xx     (((env->fpscr) >> FPSCR_XX)     & 0x1)
+#define fpscr_vxsnan (((env->fpscr) >> FPSCR_VXSNAN) & 0x1)
+#define fpscr_vxisi  (((env->fpscr) >> FPSCR_VXISI)  & 0x1)
+#define fpscr_vxidi  (((env->fpscr) >> FPSCR_VXIDI)  & 0x1)
+#define fpscr_vxzdz  (((env->fpscr) >> FPSCR_VXZDZ)  & 0x1)
+#define fpscr_vximz  (((env->fpscr) >> FPSCR_VXIMZ)  & 0x1)
+#define fpscr_vxvc   (((env->fpscr) >> FPSCR_VXVC)   & 0x1)
+#define fpscr_fpcc   (((env->fpscr) >> FPSCR_FPCC)   & 0xF)
+#define fpscr_vxsoft (((env->fpscr) >> FPSCR_VXSOFT) & 0x1)
+#define fpscr_vxsqrt (((env->fpscr) >> FPSCR_VXSQRT) & 0x1)
+#define fpscr_vxcvi  (((env->fpscr) >> FPSCR_VXCVI)  & 0x1)
+#define fpscr_ve     (((env->fpscr) >> FPSCR_VE)     & 0x1)
+#define fpscr_oe     (((env->fpscr) >> FPSCR_OE)     & 0x1)
+#define fpscr_ue     (((env->fpscr) >> FPSCR_UE)     & 0x1)
+#define fpscr_ze     (((env->fpscr) >> FPSCR_ZE)     & 0x1)
+#define fpscr_xe     (((env->fpscr) >> FPSCR_XE)     & 0x1)
+#define fpscr_ni     (((env->fpscr) >> FPSCR_NI)     & 0x1)
+#define fpscr_rn     (((env->fpscr) >> FPSCR_RN)     & 0x3)
+/* Invalid operation exception summary */
+#define fpscr_ix ((env->fpscr) & ((1 << FPSCR_VXSNAN) | (1 << FPSCR_VXISI)  | \
+                                  (1 << FPSCR_VXIDI)  | (1 << FPSCR_VXZDZ)  | \
+                                  (1 << FPSCR_VXIMZ)  | (1 << FPSCR_VXVC)   | \
+                                  (1 << FPSCR_VXSOFT) | (1 << FPSCR_VXSQRT) | \
+                                  (1 << FPSCR_VXCVI)))
+/* exception summary */
+#define fpscr_ex  (((env->fpscr) >> FPSCR_XX) & 0x1F)
+/* enabled exception summary */
+#define fpscr_eex (((env->fpscr) >> FPSCR_XX) & ((env->fpscr) >> FPSCR_XE) &  \
+                   0x1F)
 
 /*****************************************************************************/
 /* The whole PowerPC CPU context */
+#if defined(TARGET_PPC64H)
+#define NB_MMU_MODES 3
+#else
+#define NB_MMU_MODES 2
+#endif
+
 struct CPUPPCState {
     /* First are the most commonly used resources
      * during translated code execution
@@ -438,10 +526,14 @@ struct CPUPPCState {
      */
     ppc_gpr_t t0, t1, t2;
 #endif
-    ppc_avr_t t0_avr, t1_avr, t2_avr;
+    ppc_avr_t avr0, avr1, avr2;
 
     /* general purpose registers */
     ppc_gpr_t gpr[32];
+#if TARGET_GPR_BITS < 64
+    /* Storage for GPR MSB, used by the SPE extension */
+    ppc_gpr_t gprh[32];
+#endif
     /* LR */
     target_ulong lr;
     /* CTR */
@@ -456,7 +548,7 @@ struct CPUPPCState {
 
     /* Those ones are used in supervisor mode only */
     /* machine state register */
-    uint8_t msr[64];
+    target_ulong msr;
     /* temporary general purpose registers */
     ppc_gpr_t tgpr[4]; /* Used to speed-up TLB assist handlers */
 
@@ -469,7 +561,7 @@ struct CPUPPCState {
     /* floating point registers */
     float64 fpr[32];
     /* floating point status and control register */
-    uint8_t fpscr[8];
+    uint32_t fpscr;
 
     CPU_COMMON
 
@@ -478,9 +570,14 @@ struct CPUPPCState {
     int access_type; /* when a memory exception occurs, the access
                         type is stored here */
 
-    /* MMU context */
+    /* MMU context - only relevant for full system emulation */
+#if !defined(CONFIG_USER_ONLY)
+#if defined(TARGET_PPC64)
     /* Address space register */
     target_ulong asr;
+    /* PowerPC 64 SLB area */
+    int slb_nr;
+#endif
     /* segment registers */
     target_ulong sdr1;
     target_ulong sr[16];
@@ -488,10 +585,22 @@ struct CPUPPCState {
     int nb_BATs;
     target_ulong DBAT[2][8];
     target_ulong IBAT[2][8];
+    /* PowerPC TLB registers (for 4xx and 60x software driven TLBs) */
+    int nb_tlb;      /* Total number of TLB                                  */
+    int tlb_per_way; /* Speed-up helper: used to avoid divisions at run time */
+    int nb_ways;     /* Number of ways in the TLB set                        */
+    int last_way;    /* Last used way used to allocate TLB in a LRU way      */
+    int id_tlbs;     /* If 1, MMU has separated TLBs for instructions & data */
+    int nb_pids;     /* Number of available PID registers                    */
+    ppc_tlb_t *tlb;  /* TLB is optional. Allocate them only if needed        */
+    /* 403 dedicated access protection registers */
+    target_ulong pb[4];
+#endif
 
     /* Other registers */
     /* Special purpose registers */
     target_ulong spr[1024];
+    ppc_spr_t spr_cb[1024];
     /* Altivec registers */
     ppc_avr_t avr[32];
     uint32_t vscr;
@@ -506,16 +615,8 @@ struct CPUPPCState {
     /* Device control registers */
     ppc_dcr_t *dcr_env;
 
-    /* PowerPC TLB registers (for 4xx and 60x software driven TLBs) */
-    int nb_tlb;      /* Total number of TLB                                  */
-    int tlb_per_way; /* Speed-up helper: used to avoid divisions at run time */
-    int nb_ways;     /* Number of ways in the TLB set                        */
-    int last_way;    /* Last used way used to allocate TLB in a LRU way      */
-    int id_tlbs;     /* If 1, MMU has separated TLBs for instructions & data */
-    int nb_pids;     /* Number of available PID registers                    */
-    ppc_tlb_t *tlb;  /* TLB is optional. Allocate them only if needed        */
-    /* 403 dedicated access protection registers */
-    target_ulong pb[4];
+    int dcache_line_size;
+    int icache_line_size;
 
     /* Those resources are used during exception processing */
     /* CPU model definition */
@@ -542,23 +643,26 @@ struct CPUPPCState {
     target_ulong excp_prefix;
     target_ulong ivor_mask;
     target_ulong ivpr_mask;
+    target_ulong hreset_vector;
 #endif
 
     /* Those resources are used only during code translation */
     /* Next instruction pointer */
     target_ulong nip;
-    /* SPR translation callbacks */
-    ppc_spr_t spr_cb[1024];
+
     /* opcode handlers */
     opc_handler_t *opcodes[0x40];
 
     /* Those resources are used only in Qemu core */
     jmp_buf jmp_env;
     int user_mode_only; /* user mode only simulation */
-    target_ulong hflags; /* hflags is a MSR & HFLAGS_MASK */
+    target_ulong hflags;      /* hflags is a MSR & HFLAGS_MASK         */
+    target_ulong hflags_nmsr; /* specific hflags, not comming from MSR */
+    int mmu_idx;         /* precomputed MMU index to speed up mem accesses */
 
     /* Power management */
     int power_mode;
+    int (*check_pow)(CPUPPCState *env);
 
     /* temporary hack to handle OSI calls (only used if non NULL) */
     int (*osi_call)(struct CPUPPCState *env);
@@ -572,10 +676,11 @@ struct mmu_ctx_t {
     target_phys_addr_t pg_addr[2]; /* PTE tables base addresses */
     target_ulong ptem;             /* Virtual segment ID | API  */
     int key;                       /* Access key                */
+    int nx;                        /* Non-execute area          */
 };
 
 /*****************************************************************************/
-CPUPPCState *cpu_ppc_init (void);
+CPUPPCState *cpu_ppc_init (const char *cpu_model);
 int cpu_ppc_exec (CPUPPCState *s);
 void cpu_ppc_close (CPUPPCState *s);
 /* you can call this signal handler from your SIGBUS and SIGSEGV
@@ -599,32 +704,31 @@ target_ulong do_load_dbatu (CPUPPCState *env, int nr);
 target_ulong do_load_dbatl (CPUPPCState *env, int nr);
 void do_store_dbatu (CPUPPCState *env, int nr, target_ulong value);
 void do_store_dbatl (CPUPPCState *env, int nr, target_ulong value);
+void do_store_ibatu_601 (CPUPPCState *env, int nr, target_ulong value);
+void do_store_ibatl_601 (CPUPPCState *env, int nr, target_ulong value);
 target_ulong do_load_sdr1 (CPUPPCState *env);
 void do_store_sdr1 (CPUPPCState *env, target_ulong value);
 #if defined(TARGET_PPC64)
 target_ulong ppc_load_asr (CPUPPCState *env);
 void ppc_store_asr (CPUPPCState *env, target_ulong value);
-#endif
+target_ulong ppc_load_slb (CPUPPCState *env, int slb_nr);
+void ppc_store_slb (CPUPPCState *env, int slb_nr, target_ulong rs);
+#endif /* defined(TARGET_PPC64) */
+#if 0 // Unused
 target_ulong do_load_sr (CPUPPCState *env, int srnum);
-void do_store_sr (CPUPPCState *env, int srnum, target_ulong value);
 #endif
+void do_store_sr (CPUPPCState *env, int srnum, target_ulong value);
+#endif /* !defined(CONFIG_USER_ONLY) */
 target_ulong ppc_load_xer (CPUPPCState *env);
 void ppc_store_xer (CPUPPCState *env, target_ulong value);
-target_ulong do_load_msr (CPUPPCState *env);
-void do_store_msr (CPUPPCState *env, target_ulong value);
-#if defined(TARGET_PPC64)
-void ppc_store_msr_32 (CPUPPCState *env, uint32_t value);
-#endif
+void ppc_store_msr (CPUPPCState *env, target_ulong value);
 
-void do_compute_hflags (CPUPPCState *env);
 void cpu_ppc_reset (void *opaque);
-CPUPPCState *cpu_ppc_init (void);
-void cpu_ppc_close(CPUPPCState *env);
 
-int ppc_find_by_name (const unsigned char *name, ppc_def_t **def);
-int ppc_find_by_pvr (uint32_t apvr, ppc_def_t **def);
 void ppc_cpu_list (FILE *f, int (*cpu_fprintf)(FILE *f, const char *fmt, ...));
-int cpu_ppc_register (CPUPPCState *env, ppc_def_t *def);
+
+const ppc_def_t *cpu_ppc_find_by_name (const unsigned char *name);
+int cpu_ppc_register_internal (CPUPPCState *env, const ppc_def_t *def);
 
 /* Time-base and decrementer management */
 #ifndef NO_CPU_IO_DEFS
@@ -674,6 +778,19 @@ int ppc_dcr_write (ppc_dcr_t *dcr_env, int dcrn, target_ulong val);
 #define cpu_exec cpu_ppc_exec
 #define cpu_gen_code cpu_ppc_gen_code
 #define cpu_signal_handler cpu_ppc_signal_handler
+#define cpu_list ppc_cpu_list
+
+/* MMU modes definitions */
+#define MMU_MODE0_SUFFIX _user
+#define MMU_MODE1_SUFFIX _kernel
+#if defined(TARGET_PPC64H)
+#define MMU_MODE2_SUFFIX _hypv
+#endif
+#define MMU_USER_IDX 0
+static inline int cpu_mmu_index (CPUState *env)
+{
+    return env->mmu_idx;
+}
 
 #include "cpu-all.h"
 
@@ -1040,7 +1157,7 @@ int ppc_dcr_write (ppc_dcr_t *dcr_env, int dcrn, target_ulong val);
 #define SPR_440_DBDR     (0x3F3)
 #define SPR_LDSTDB       (0x3F4)
 #define SPR_40x_IAC1     (0x3F4)
-#define SPR_BOOKE_MMUCSR0 (0x3F4)
+#define SPR_MMUCSR0      (0x3F4)
 #define SPR_DABR         (0x3F5)
 #define DABR_MASK (~(target_ulong)0x7)
 #define SPR_E500_BUCSR   (0x3F5)
@@ -1048,10 +1165,11 @@ int ppc_dcr_write (ppc_dcr_t *dcr_env, int dcrn, target_ulong val);
 #define SPR_601_HID5     (0x3F5)
 #define SPR_40x_DAC1     (0x3F6)
 #define SPR_MSSCR0       (0x3F6)
+#define SPR_970_HID5     (0x3F6)
 #define SPR_MSSSR0       (0x3F7)
 #define SPR_DABRX        (0x3F7)
 #define SPR_40x_DAC2     (0x3F7)
-#define SPR_BOOKE_MMUCFG (0x3F7)
+#define SPR_MMUCFG       (0x3F7)
 #define SPR_LDSTCR       (0x3F8)
 #define SPR_L2PMCR       (0x3F8)
 #define SPR_750_HID2     (0x3F8)
@@ -1108,6 +1226,9 @@ enum {
     PPC6xx_INPUT_MCP        = 3,
     PPC6xx_INPUT_SMI        = 4,
     PPC6xx_INPUT_INT        = 5,
+    PPC6xx_INPUT_TBEN       = 6,
+    PPC6xx_INPUT_WAKEUP     = 7,
+    PPC6xx_INPUT_NB,
 };
 
 enum {
@@ -1119,6 +1240,7 @@ enum {
     PPCBookE_INPUT_SMI        = 4,
     PPCBookE_INPUT_INT        = 5,
     PPCBookE_INPUT_CINT       = 6,
+    PPCBookE_INPUT_NB,
 };
 
 enum {
@@ -1133,18 +1255,7 @@ enum {
     PPC40x_INPUT_NB,
 };
 
-enum {
-    /* PowerPC 620 (and probably others) input pins */
-    PPC620_INPUT_HRESET     = 0,
-    PPC620_INPUT_SRESET     = 1,
-    PPC620_INPUT_CKSTP      = 2,
-    PPC620_INPUT_TBEN       = 3,
-    PPC620_INPUT_WAKEUP     = 4,
-    PPC620_INPUT_MCP        = 5,
-    PPC620_INPUT_SMI        = 6,
-    PPC620_INPUT_INT        = 7,
-};
-
+#if defined(TARGET_PPC64)
 enum {
     /* PowerPC 970 input pins */
     PPC970_INPUT_HRESET     = 0,
@@ -1155,26 +1266,28 @@ enum {
     PPC970_INPUT_INT        = 5,
     PPC970_INPUT_THINT      = 6,
 };
+#endif
 
 /* Hardware exceptions definitions */
 enum {
     /* External hardware exception sources */
     PPC_INTERRUPT_RESET     = 0,  /* Reset exception                      */
-    PPC_INTERRUPT_MCK       = 1,  /* Machine check exception              */
-    PPC_INTERRUPT_EXT       = 2,  /* External interrupt                   */
-    PPC_INTERRUPT_SMI       = 3,  /* System management interrupt          */
-    PPC_INTERRUPT_CEXT      = 4,  /* Critical external interrupt          */
-    PPC_INTERRUPT_DEBUG     = 5,  /* External debug exception             */
-    PPC_INTERRUPT_THERM     = 6,  /* Thermal exception                    */
+    PPC_INTERRUPT_WAKEUP,         /* Wakeup exception                     */
+    PPC_INTERRUPT_MCK,            /* Machine check exception              */
+    PPC_INTERRUPT_EXT,            /* External interrupt                   */
+    PPC_INTERRUPT_SMI,            /* System management interrupt          */
+    PPC_INTERRUPT_CEXT,           /* Critical external interrupt          */
+    PPC_INTERRUPT_DEBUG,          /* External debug exception             */
+    PPC_INTERRUPT_THERM,          /* Thermal exception                    */
     /* Internal hardware exception sources */
-    PPC_INTERRUPT_DECR      = 7,  /* Decrementer exception                */
-    PPC_INTERRUPT_HDECR     = 8,  /* Hypervisor decrementer exception     */
-    PPC_INTERRUPT_PIT       = 9,  /* Programmable inteval timer interrupt */
-    PPC_INTERRUPT_FIT       = 10, /* Fixed interval timer interrupt       */
-    PPC_INTERRUPT_WDT       = 11, /* Watchdog timer interrupt             */
-    PPC_INTERRUPT_CDOORBELL = 12, /* Critical doorbell interrupt          */
-    PPC_INTERRUPT_DOORBELL  = 13, /* Doorbell interrupt                   */
-    PPC_INTERRUPT_PERFM     = 14, /* Performance monitor interrupt        */
+    PPC_INTERRUPT_DECR,           /* Decrementer exception                */
+    PPC_INTERRUPT_HDECR,          /* Hypervisor decrementer exception     */
+    PPC_INTERRUPT_PIT,            /* Programmable inteval timer interrupt */
+    PPC_INTERRUPT_FIT,            /* Fixed interval timer interrupt       */
+    PPC_INTERRUPT_WDT,            /* Watchdog timer interrupt             */
+    PPC_INTERRUPT_CDOORBELL,      /* Critical doorbell interrupt          */
+    PPC_INTERRUPT_DOORBELL,       /* Doorbell interrupt                   */
+    PPC_INTERRUPT_PERFM,          /* Performance monitor interrupt        */
 };
 
 /*****************************************************************************/

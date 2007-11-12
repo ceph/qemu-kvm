@@ -54,12 +54,17 @@ typedef struct DisasContext {
     struct TranslationBlock *tb;
 } DisasContext;
 
+typedef struct sparc_def_t sparc_def_t;
+
 struct sparc_def_t {
     const unsigned char *name;
     target_ulong iu_version;
     uint32_t fpu_version;
     uint32_t mmu_version;
+    uint32_t mmu_bm;
 };
+
+static const sparc_def_t *cpu_sparc_find_by_name(const unsigned char *name);
 
 static uint16_t *gen_opc_ptr;
 static uint32_t *gen_opparam_ptr;
@@ -87,7 +92,7 @@ enum {
 #define GET_FIELD_SPs(x,a,b) sign_extend (GET_FIELD_SP(x,a,b), ((b) - (a) + 1))
 
 #ifdef TARGET_SPARC64
-#define DFPREG(r) (((r & 1) << 6) | (r & 0x1e))
+#define DFPREG(r) (((r & 1) << 5) | (r & 0x1e))
 #else
 #define DFPREG(r) (r & 0x1e)
 #endif
@@ -346,13 +351,6 @@ GEN32(gen_op_load_fpr_DT1, gen_op_load_fpr_DT1_fprf);
 GEN32(gen_op_store_DT0_fpr, gen_op_store_DT0_fpr_fprf);
 GEN32(gen_op_store_DT1_fpr, gen_op_store_DT1_fpr_fprf);
 
-#ifdef ALIGN_7_BUGS_FIXED
-#else
-#ifndef CONFIG_USER_ONLY
-#define gen_op_check_align_T0_7()
-#endif
-#endif
-
 /* moves */
 #ifdef CONFIG_USER_ONLY
 #define supervisor(dc) 0
@@ -361,16 +359,23 @@ GEN32(gen_op_store_DT1_fpr, gen_op_store_DT1_fpr_fprf);
 #endif
 #define gen_op_ldst(name)        gen_op_##name##_raw()
 #else
-#define supervisor(dc) (dc->mem_idx == 1)
+#define supervisor(dc) (dc->mem_idx >= 1)
 #ifdef TARGET_SPARC64
 #define hypervisor(dc) (dc->mem_idx == 2)
-#endif
-#define gen_op_ldst(name)        (*gen_op_##name[dc->mem_idx])()
+#define OP_LD_TABLE(width)                                              \
+    static GenOpFunc * const gen_op_##width[] = {                       \
+        &gen_op_##width##_user,                                         \
+        &gen_op_##width##_kernel,                                       \
+        &gen_op_##width##_hypv,                                         \
+    };
+#else
 #define OP_LD_TABLE(width)                                              \
     static GenOpFunc * const gen_op_##width[] = {                       \
         &gen_op_##width##_user,                                         \
         &gen_op_##width##_kernel,                                       \
     };
+#endif
+#define gen_op_ldst(name)        (*gen_op_##name[dc->mem_idx])()
 #endif
 
 #ifndef CONFIG_USER_ONLY
@@ -431,7 +436,7 @@ static inline void gen_ldf_asi(int insn, int size)
 {
     int asi, offset, rd;
 
-    rd = GET_FIELD(insn, 2, 6);
+    rd = DFPREG(GET_FIELD(insn, 2, 6));
     if (IS_IMM) {
         offset = GET_FIELD(insn, 25, 31);
         gen_op_ldf_asi_reg(offset, size, rd);
@@ -445,7 +450,7 @@ static inline void gen_stf_asi(int insn, int size)
 {
     int asi, offset, rd;
 
-    rd = GET_FIELD(insn, 2, 6);
+    rd = DFPREG(GET_FIELD(insn, 2, 6));
     if (IS_IMM) {
         offset = GET_FIELD(insn, 25, 31);
         gen_op_stf_asi_reg(offset, size, rd);
@@ -2027,10 +2032,12 @@ static void disas_sparc_insn(DisasContext * dc)
                         gen_movl_T0_reg(rd);
                         break;
                     case 0x22: /* taddcctv */
+                        save_state(dc);
                         gen_op_tadd_T1_T0_ccTV();
                         gen_movl_T0_reg(rd);
                         break;
                     case 0x23: /* tsubcctv */
+                        save_state(dc);
                         gen_op_tsub_T1_T0_ccTV();
                         gen_movl_T0_reg(rd);
                         break;
@@ -2932,9 +2939,7 @@ static void disas_sparc_insn(DisasContext * dc)
                 (xop > 0x2c && xop <= 0x33) || xop == 0x1f || xop == 0x3d) {
                 switch (xop) {
                 case 0x0:       /* load word */
-#ifdef CONFIG_USER_ONLY
                     gen_op_check_align_T0_3();
-#endif
 #ifndef TARGET_SPARC64
                     gen_op_ldst(ld);
 #else
@@ -2945,15 +2950,13 @@ static void disas_sparc_insn(DisasContext * dc)
                     gen_op_ldst(ldub);
                     break;
                 case 0x2:       /* load unsigned halfword */
-#ifdef CONFIG_USER_ONLY
                     gen_op_check_align_T0_1();
-#endif
                     gen_op_ldst(lduh);
                     break;
                 case 0x3:       /* load double word */
-                    gen_op_check_align_T0_7();
                     if (rd & 1)
                         goto illegal_insn;
+                    gen_op_check_align_T0_7();
                     gen_op_ldst(ldd);
                     gen_movl_T0_reg(rd + 1);
                     break;
@@ -2961,18 +2964,14 @@ static void disas_sparc_insn(DisasContext * dc)
                     gen_op_ldst(ldsb);
                     break;
                 case 0xa:       /* load signed halfword */
-#ifdef CONFIG_USER_ONLY
                     gen_op_check_align_T0_1();
-#endif
                     gen_op_ldst(ldsh);
                     break;
                 case 0xd:       /* ldstub -- XXX: should be atomically */
                     gen_op_ldst(ldstub);
                     break;
                 case 0x0f:      /* swap register with memory. Also atomically */
-#ifdef CONFIG_USER_ONLY
                     gen_op_check_align_T0_3();
-#endif
                     gen_movl_reg_T1(rd);
                     gen_op_ldst(swap);
                     break;
@@ -2983,9 +2982,8 @@ static void disas_sparc_insn(DisasContext * dc)
                         goto illegal_insn;
                     if (!supervisor(dc))
                         goto priv_insn;
-#elif CONFIG_USER_ONLY
-                    gen_op_check_align_T0_3();
 #endif
+                    gen_op_check_align_T0_3();
                     gen_ld_asi(insn, 4, 0);
                     break;
                 case 0x11:      /* load unsigned byte alternate */
@@ -3003,9 +3001,8 @@ static void disas_sparc_insn(DisasContext * dc)
                         goto illegal_insn;
                     if (!supervisor(dc))
                         goto priv_insn;
-#elif CONFIG_USER_ONLY
-                    gen_op_check_align_T0_1();
 #endif
+                    gen_op_check_align_T0_1();
                     gen_ld_asi(insn, 2, 0);
                     break;
                 case 0x13:      /* load double word alternate */
@@ -3036,9 +3033,8 @@ static void disas_sparc_insn(DisasContext * dc)
                         goto illegal_insn;
                     if (!supervisor(dc))
                         goto priv_insn;
-#elif CONFIG_USER_ONLY
-                    gen_op_check_align_T0_1();
 #endif
+                    gen_op_check_align_T0_1();
                     gen_ld_asi(insn, 2, 1);
                     break;
                 case 0x1d:      /* ldstuba -- XXX: should be atomically */
@@ -3056,9 +3052,8 @@ static void disas_sparc_insn(DisasContext * dc)
                         goto illegal_insn;
                     if (!supervisor(dc))
                         goto priv_insn;
-#elif CONFIG_USER_ONLY
-                    gen_op_check_align_T0_3();
 #endif
+                    gen_op_check_align_T0_3();
                     gen_movl_reg_T1(rd);
                     gen_swap_asi(insn);
                     break;
@@ -3072,9 +3067,7 @@ static void disas_sparc_insn(DisasContext * dc)
 #endif
 #ifdef TARGET_SPARC64
                 case 0x08: /* V9 ldsw */
-#ifdef CONFIG_USER_ONLY
                     gen_op_check_align_T0_3();
-#endif
                     gen_op_ldst(ldsw);
                     break;
                 case 0x0b: /* V9 ldx */
@@ -3082,9 +3075,7 @@ static void disas_sparc_insn(DisasContext * dc)
                     gen_op_ldst(ldx);
                     break;
                 case 0x18: /* V9 ldswa */
-#ifdef CONFIG_USER_ONLY
                     gen_op_check_align_T0_3();
-#endif
                     gen_ld_asi(insn, 4, 1);
                     break;
                 case 0x1b: /* V9 ldxa */
@@ -3094,9 +3085,7 @@ static void disas_sparc_insn(DisasContext * dc)
                 case 0x2d: /* V9 prefetch, no effect */
                     goto skip_move;
                 case 0x30: /* V9 ldfa */
-#ifdef CONFIG_USER_ONLY
                     gen_op_check_align_T0_3();
-#endif
                     gen_ldf_asi(insn, 4);
                     goto skip_move;
                 case 0x33: /* V9 lddfa */
@@ -3120,16 +3109,12 @@ static void disas_sparc_insn(DisasContext * dc)
                     goto jmp_insn;
                 switch (xop) {
                 case 0x20:      /* load fpreg */
-#ifdef CONFIG_USER_ONLY
                     gen_op_check_align_T0_3();
-#endif
                     gen_op_ldst(ldf);
                     gen_op_store_FT0_fpr(rd);
                     break;
                 case 0x21:      /* load fsr */
-#ifdef CONFIG_USER_ONLY
                     gen_op_check_align_T0_3();
-#endif
                     gen_op_ldst(ldf);
                     gen_op_ldfsr();
                     break;
@@ -3148,18 +3133,14 @@ static void disas_sparc_insn(DisasContext * dc)
                 gen_movl_reg_T1(rd);
                 switch (xop) {
                 case 0x4:
-#ifdef CONFIG_USER_ONLY
                     gen_op_check_align_T0_3();
-#endif
                     gen_op_ldst(st);
                     break;
                 case 0x5:
                     gen_op_ldst(stb);
                     break;
                 case 0x6:
-#ifdef CONFIG_USER_ONLY
                     gen_op_check_align_T0_1();
-#endif
                     gen_op_ldst(sth);
                     break;
                 case 0x7:
@@ -3178,9 +3159,7 @@ static void disas_sparc_insn(DisasContext * dc)
                     if (!supervisor(dc))
                         goto priv_insn;
 #endif
-#ifdef CONFIG_USER_ONLY
                     gen_op_check_align_T0_3();
-#endif
                     gen_st_asi(insn, 4);
                     break;
                 case 0x15:
@@ -3199,9 +3178,7 @@ static void disas_sparc_insn(DisasContext * dc)
                     if (!supervisor(dc))
                         goto priv_insn;
 #endif
-#ifdef CONFIG_USER_ONLY
                     gen_op_check_align_T0_1();
-#endif
                     gen_st_asi(insn, 2);
                     break;
                 case 0x17:
@@ -3237,9 +3214,7 @@ static void disas_sparc_insn(DisasContext * dc)
                     goto jmp_insn;
                 switch (xop) {
                 case 0x24:
-#ifdef CONFIG_USER_ONLY
                     gen_op_check_align_T0_3();
-#endif
                     gen_op_load_fpr_FT0(rd);
                     gen_op_ldst(stf);
                     break;
@@ -3270,9 +3245,7 @@ static void disas_sparc_insn(DisasContext * dc)
                 switch (xop) {
 #ifdef TARGET_SPARC64
                 case 0x34: /* V9 stfa */
-#ifdef CONFIG_USER_ONLY
                     gen_op_check_align_T0_3();
-#endif
                     gen_op_load_fpr_FT0(rd);
                     gen_stf_asi(insn, 4);
                     break;
@@ -3282,9 +3255,7 @@ static void disas_sparc_insn(DisasContext * dc)
                     gen_stf_asi(insn, 8);
                     break;
                 case 0x3c: /* V9 casa */
-#ifdef CONFIG_USER_ONLY
                     gen_op_check_align_T0_3();
-#endif
                     flush_T2(dc);
                     gen_movl_reg_T2(rd);
                     gen_cas_asi(insn);
@@ -3376,17 +3347,8 @@ static inline int gen_intermediate_code_internal(TranslationBlock * tb,
     dc->pc = pc_start;
     last_pc = dc->pc;
     dc->npc = (target_ulong) tb->cs_base;
-#if defined(CONFIG_USER_ONLY)
-    dc->mem_idx = 0;
-    dc->fpu_enabled = 1;
-#else
-    dc->mem_idx = ((env->psrs) != 0);
-#ifdef TARGET_SPARC64
-    dc->fpu_enabled = (((env->pstate & PS_PEF) != 0) && ((env->fprs & FPRS_FEF) != 0));
-#else
-    dc->fpu_enabled = ((env->psref) != 0);
-#endif
-#endif
+    dc->mem_idx = cpu_mmu_index(env);
+    dc->fpu_enabled = cpu_fpu_enabled(env);
     gen_opc_ptr = gen_opc_buf;
     gen_opc_end = gen_opc_buf + OPC_MAX_SIZE;
     gen_opparam_ptr = gen_opparam_buf;
@@ -3520,87 +3482,303 @@ void cpu_reset(CPUSPARCState *env)
     env->psrps = 1;
 #ifdef TARGET_SPARC64
     env->pstate = PS_PRIV;
+    env->hpstate = HS_PRIV;
     env->pc = 0x1fff0000000ULL;
 #else
     env->pc = 0;
     env->mmuregs[0] &= ~(MMU_E | MMU_NF);
-    env->mmuregs[0] |= MMU_BM;
+    env->mmuregs[0] |= env->mmu_bm;
 #endif
     env->npc = env->pc + 4;
 #endif
 }
 
-CPUSPARCState *cpu_sparc_init(void)
+CPUSPARCState *cpu_sparc_init(const char *cpu_model)
 {
     CPUSPARCState *env;
+    const sparc_def_t *def;
+
+    def = cpu_sparc_find_by_name(cpu_model);
+    if (!def)
+        return NULL;
 
     env = qemu_mallocz(sizeof(CPUSPARCState));
     if (!env)
         return NULL;
     cpu_exec_init(env);
+    env->version = def->iu_version;
+    env->fsr = def->fpu_version;
+#if !defined(TARGET_SPARC64)
+    env->mmu_bm = def->mmu_bm;
+    env->mmuregs[0] |= def->mmu_version;
+    cpu_sparc_set_id(env, 0);
+#endif
     cpu_reset(env);
-    return (env);
+    
+    return env;
+}
+
+void cpu_sparc_set_id(CPUSPARCState *env, unsigned int cpu)
+{
+#if !defined(TARGET_SPARC64)
+    env->mxccregs[7] = ((cpu + 8) & 0xf) << 24;
+#endif
 }
 
 static const sparc_def_t sparc_defs[] = {
 #ifdef TARGET_SPARC64
     {
+        .name = "Fujitsu Sparc64",
+        .iu_version = ((0x04ULL << 48) | (0x02ULL << 32) | (0ULL << 24)
+                       | (MAXTL << 8) | (NWINDOWS - 1)),
+        .fpu_version = 0x00000000,
+        .mmu_version = 0,
+    },
+    {
+        .name = "Fujitsu Sparc64 III",
+        .iu_version = ((0x04ULL << 48) | (0x03ULL << 32) | (0ULL << 24)
+                       | (MAXTL << 8) | (NWINDOWS - 1)),
+        .fpu_version = 0x00000000,
+        .mmu_version = 0,
+    },
+    {
+        .name = "Fujitsu Sparc64 IV",
+        .iu_version = ((0x04ULL << 48) | (0x04ULL << 32) | (0ULL << 24)
+                       | (MAXTL << 8) | (NWINDOWS - 1)),
+        .fpu_version = 0x00000000,
+        .mmu_version = 0,
+    },
+    {
+        .name = "Fujitsu Sparc64 V",
+        .iu_version = ((0x04ULL << 48) | (0x05ULL << 32) | (0x51ULL << 24)
+                       | (MAXTL << 8) | (NWINDOWS - 1)),
+        .fpu_version = 0x00000000,
+        .mmu_version = 0,
+    },
+    {
+        .name = "TI UltraSparc I",
+        .iu_version = ((0x17ULL << 48) | (0x10ULL << 32) | (0x40ULL << 24)
+                       | (MAXTL << 8) | (NWINDOWS - 1)),
+        .fpu_version = 0x00000000,
+        .mmu_version = 0,
+    },
+    {
         .name = "TI UltraSparc II",
-        .iu_version = ((0x17ULL << 48) | (0x11ULL << 32) | (0 << 24)
+        .iu_version = ((0x17ULL << 48) | (0x11ULL << 32) | (0x20ULL << 24)
+                       | (MAXTL << 8) | (NWINDOWS - 1)),
+        .fpu_version = 0x00000000,
+        .mmu_version = 0,
+    },
+    {
+        .name = "TI UltraSparc IIi",
+        .iu_version = ((0x17ULL << 48) | (0x12ULL << 32) | (0x91ULL << 24)
+                       | (MAXTL << 8) | (NWINDOWS - 1)),
+        .fpu_version = 0x00000000,
+        .mmu_version = 0,
+    },
+    {
+        .name = "TI UltraSparc IIe",
+        .iu_version = ((0x17ULL << 48) | (0x13ULL << 32) | (0x14ULL << 24)
+                       | (MAXTL << 8) | (NWINDOWS - 1)),
+        .fpu_version = 0x00000000,
+        .mmu_version = 0,
+    },
+    {
+        .name = "Sun UltraSparc III",
+        .iu_version = ((0x3eULL << 48) | (0x14ULL << 32) | (0x34ULL << 24)
+                       | (MAXTL << 8) | (NWINDOWS - 1)),
+        .fpu_version = 0x00000000,
+        .mmu_version = 0,
+    },
+    {
+        .name = "Sun UltraSparc III Cu",
+        .iu_version = ((0x3eULL << 48) | (0x15ULL << 32) | (0x41ULL << 24)
+                       | (MAXTL << 8) | (NWINDOWS - 1)),
+        .fpu_version = 0x00000000,
+        .mmu_version = 0,
+    },
+    {
+        .name = "Sun UltraSparc IIIi",
+        .iu_version = ((0x3eULL << 48) | (0x16ULL << 32) | (0x34ULL << 24)
+                       | (MAXTL << 8) | (NWINDOWS - 1)),
+        .fpu_version = 0x00000000,
+        .mmu_version = 0,
+    },
+    {
+        .name = "Sun UltraSparc IV",
+        .iu_version = ((0x3eULL << 48) | (0x18ULL << 32) | (0x31ULL << 24)
+                       | (MAXTL << 8) | (NWINDOWS - 1)),
+        .fpu_version = 0x00000000,
+        .mmu_version = 0,
+    },
+    {
+        .name = "Sun UltraSparc IV+",
+        .iu_version = ((0x3eULL << 48) | (0x19ULL << 32) | (0x22ULL << 24)
+                       | (MAXTL << 8) | (NWINDOWS - 1)),
+        .fpu_version = 0x00000000,
+        .mmu_version = 0,
+    },
+    {
+        .name = "Sun UltraSparc IIIi+",
+        .iu_version = ((0x3eULL << 48) | (0x22ULL << 32) | (0ULL << 24)
+                       | (MAXTL << 8) | (NWINDOWS - 1)),
+        .fpu_version = 0x00000000,
+        .mmu_version = 0,
+    },
+    {
+        .name = "NEC UltraSparc I",
+        .iu_version = ((0x22ULL << 48) | (0x10ULL << 32) | (0x40ULL << 24)
                        | (MAXTL << 8) | (NWINDOWS - 1)),
         .fpu_version = 0x00000000,
         .mmu_version = 0,
     },
 #else
     {
+        .name = "Fujitsu MB86900",
+        .iu_version = 0x00 << 24, /* Impl 0, ver 0 */
+        .fpu_version = 4 << 17, /* FPU version 4 (Meiko) */
+        .mmu_version = 0x00 << 24, /* Impl 0, ver 0 */
+        .mmu_bm = 0x00004000,
+    },
+    {
         .name = "Fujitsu MB86904",
         .iu_version = 0x04 << 24, /* Impl 0, ver 4 */
         .fpu_version = 4 << 17, /* FPU version 4 (Meiko) */
         .mmu_version = 0x04 << 24, /* Impl 0, ver 4 */
+        .mmu_bm = 0x00004000,
     },
     {
         .name = "Fujitsu MB86907",
         .iu_version = 0x05 << 24, /* Impl 0, ver 5 */
         .fpu_version = 4 << 17, /* FPU version 4 (Meiko) */
         .mmu_version = 0x05 << 24, /* Impl 0, ver 5 */
+        .mmu_bm = 0x00004000,
     },
     {
-        .name = "TI MicroSparc I",
-        .iu_version = 0x41000000,
-        .fpu_version = 4 << 17,
-        .mmu_version = 0x41000000,
+        .name = "LSI L64811",
+        .iu_version = 0x10 << 24, /* Impl 1, ver 0 */
+        .fpu_version = 1 << 17, /* FPU version 1 (LSI L64814) */
+        .mmu_version = 0x10 << 24,
+        .mmu_bm = 0x00004000,
+    },
+    {
+        .name = "Cypress CY7C601",
+        .iu_version = 0x11 << 24, /* Impl 1, ver 1 */
+        .fpu_version = 3 << 17, /* FPU version 3 (Cypress CY7C602) */
+        .mmu_version = 0x10 << 24,
+        .mmu_bm = 0x00004000,
+    },
+    {
+        .name = "Cypress CY7C611",
+        .iu_version = 0x13 << 24, /* Impl 1, ver 3 */
+        .fpu_version = 3 << 17, /* FPU version 3 (Cypress CY7C602) */
+        .mmu_version = 0x10 << 24,
+        .mmu_bm = 0x00004000,
     },
     {
         .name = "TI SuperSparc II",
         .iu_version = 0x40000000,
         .fpu_version = 0 << 17,
         .mmu_version = 0x04000000,
+        .mmu_bm = 0x00002000,
+    },
+    {
+        .name = "TI MicroSparc I",
+        .iu_version = 0x41000000,
+        .fpu_version = 4 << 17,
+        .mmu_version = 0x41000000,
+        .mmu_bm = 0x00004000,
+    },
+    {
+        .name = "TI MicroSparc II",
+        .iu_version = 0x42000000,
+        .fpu_version = 4 << 17,
+        .mmu_version = 0x02000000,
+        .mmu_bm = 0x00004000,
+    },
+    {
+        .name = "TI MicroSparc IIep",
+        .iu_version = 0x42000000,
+        .fpu_version = 4 << 17,
+        .mmu_version = 0x04000000,
+        .mmu_bm = 0x00004000,
+    },
+    {
+        .name = "TI SuperSparc 51",
+        .iu_version = 0x43000000,
+        .fpu_version = 0 << 17,
+        .mmu_version = 0x04000000,
+        .mmu_bm = 0x00002000,
+    },
+    {
+        .name = "TI SuperSparc 61",
+        .iu_version = 0x44000000,
+        .fpu_version = 0 << 17,
+        .mmu_version = 0x04000000,
+        .mmu_bm = 0x00002000,
+    },
+    {
+        .name = "Ross RT625",
+        .iu_version = 0x1e000000,
+        .fpu_version = 1 << 17,
+        .mmu_version = 0x1e000000,
+        .mmu_bm = 0x00004000,
     },
     {
         .name = "Ross RT620",
-        .iu_version = 0x1e000000,
+        .iu_version = 0x1f000000,
         .fpu_version = 1 << 17,
-        .mmu_version = 0x17000000,
+        .mmu_version = 0x1f000000,
+        .mmu_bm = 0x00004000,
+    },
+    {
+        .name = "BIT B5010",
+        .iu_version = 0x20000000,
+        .fpu_version = 0 << 17, /* B5010/B5110/B5120/B5210 */
+        .mmu_version = 0x20000000,
+        .mmu_bm = 0x00004000,
+    },
+    {
+        .name = "Matsushita MN10501",
+        .iu_version = 0x50000000,
+        .fpu_version = 0 << 17,
+        .mmu_version = 0x50000000,
+        .mmu_bm = 0x00004000,
+    },
+    {
+        .name = "Weitek W8601",
+        .iu_version = 0x90 << 24, /* Impl 9, ver 0 */
+        .fpu_version = 3 << 17, /* FPU version 3 (Weitek WTL3170/2) */
+        .mmu_version = 0x10 << 24,
+        .mmu_bm = 0x00004000,
+    },
+    {
+        .name = "LEON2",
+        .iu_version = 0xf2000000,
+        .fpu_version = 4 << 17, /* FPU version 4 (Meiko) */
+        .mmu_version = 0xf2000000,
+        .mmu_bm = 0x00004000,
+    },
+    {
+        .name = "LEON3",
+        .iu_version = 0xf3000000,
+        .fpu_version = 4 << 17, /* FPU version 4 (Meiko) */
+        .mmu_version = 0xf3000000,
+        .mmu_bm = 0x00004000,
     },
 #endif
 };
 
-int sparc_find_by_name(const unsigned char *name, const sparc_def_t **def)
+static const sparc_def_t *cpu_sparc_find_by_name(const unsigned char *name)
 {
-    int ret;
     unsigned int i;
 
-    ret = -1;
-    *def = NULL;
     for (i = 0; i < sizeof(sparc_defs) / sizeof(sparc_def_t); i++) {
         if (strcasecmp(name, sparc_defs[i].name) == 0) {
-            *def = &sparc_defs[i];
-            ret = 0;
-            break;
+            return &sparc_defs[i];
         }
     }
-
-    return ret;
+    return NULL;
 }
 
 void sparc_cpu_list (FILE *f, int (*cpu_fprintf)(FILE *f, const char *fmt, ...))
@@ -3614,16 +3792,6 @@ void sparc_cpu_list (FILE *f, int (*cpu_fprintf)(FILE *f, const char *fmt, ...))
                        sparc_defs[i].fpu_version,
                        sparc_defs[i].mmu_version);
     }
-}
-
-int cpu_sparc_register (CPUSPARCState *env, const sparc_def_t *def)
-{
-    env->version = def->iu_version;
-    env->fsr = def->fpu_version;
-#if !defined(TARGET_SPARC64)
-    env->mmuregs[0] |= def->mmu_version;
-#endif
-    return 0;
 }
 
 #define GET_FLAG(a,b) ((env->psr & a)?b:'-')
@@ -3687,7 +3855,7 @@ target_phys_addr_t cpu_get_phys_page_debug(CPUState *env, target_ulong addr)
 #else
 extern int get_physical_address (CPUState *env, target_phys_addr_t *physical, int *prot,
                                  int *access_index, target_ulong address, int rw,
-                                 int is_user);
+                                 int mmu_idx);
 
 target_phys_addr_t cpu_get_phys_page_debug(CPUState *env, target_ulong addr)
 {

@@ -93,6 +93,9 @@ int cpu_get_pic_interrupt(CPUState *env)
         return intno;
     }
     /* read the irq from the PIC */
+    if (!apic_accept_pic_intr(env))
+        return -1;
+
     intno = pic_read_irq(isa_pic);
     return intno;
 }
@@ -100,10 +103,8 @@ int cpu_get_pic_interrupt(CPUState *env)
 static void pic_irq_request(void *opaque, int irq, int level)
 {
     CPUState *env = opaque;
-    if (level)
+    if (level && apic_accept_pic_intr(env))
         cpu_interrupt(env, CPU_INTERRUPT_HARD);
-    else
-        cpu_reset_interrupt(env, CPU_INTERRUPT_HARD);
 }
 
 /* PC cmos mappings */
@@ -151,10 +152,28 @@ static void cmos_init_hd(int type_ofs, int info_ofs, BlockDriverState *hd)
     rtc_set_memory(s, info_ofs + 8, sectors);
 }
 
+/* convert boot_device letter to something recognizable by the bios */
+static int boot_device2nibble(char boot_device)
+{
+    switch(boot_device) {
+    case 'a':
+    case 'b':
+        return 0x01; /* floppy boot */
+    case 'c':
+        return 0x02; /* hard drive boot */
+    case 'd':
+        return 0x03; /* CD-ROM boot */
+    case 'n':
+        return 0x04; /* Network boot */
+    }
+    return 0;
+}
+
 /* hd_table must contain 4 block drivers */
-static void cmos_init(int ram_size, int boot_device, BlockDriverState **hd_table)
+static void cmos_init(int ram_size, const char *boot_device, BlockDriverState **hd_table)
 {
     RTCState *s = rtc_state;
+    int nbds, bds[3] = { 0, };
     int val;
     int fd0, fd1, nb;
     int i;
@@ -183,24 +202,23 @@ static void cmos_init(int ram_size, int boot_device, BlockDriverState **hd_table
     rtc_set_memory(s, 0x34, val);
     rtc_set_memory(s, 0x35, val >> 8);
 
-    switch(boot_device) {
-    case 'a':
-    case 'b':
-        rtc_set_memory(s, 0x3d, 0x01); /* floppy boot */
-        if (!fd_bootchk)
-            rtc_set_memory(s, 0x38, 0x01); /* disable signature check */
-        break;
-    default:
-    case 'c':
-        rtc_set_memory(s, 0x3d, 0x02); /* hard drive boot */
-        break;
-    case 'd':
-        rtc_set_memory(s, 0x3d, 0x03); /* CD-ROM boot */
-        break;
-    case 'n':
-        rtc_set_memory(s, 0x3d, 0x04); /* Network boot */
-        break;
+    /* set boot devices, and disable floppy signature check if requested */
+#define PC_MAX_BOOT_DEVICES 3
+    nbds = strlen(boot_device);
+    if (nbds > PC_MAX_BOOT_DEVICES) {
+        fprintf(stderr, "Too many boot devices for PC\n");
+        exit(1);
     }
+    for (i = 0; i < nbds; i++) {
+        bds[i] = boot_device2nibble(boot_device[i]);
+        if (bds[i] == 0) {
+            fprintf(stderr, "Invalid boot device for PC: '%c'\n",
+                    boot_device[i]);
+            exit(1);
+        }
+    }
+    rtc_set_memory(s, 0x3d, (bds[1] << 4) | bds[0]);
+    rtc_set_memory(s, 0x38, (bds[2] << 4) | (fd_bootchk ?  0x0 : 0x1));
 
     /* floppy type */
 
@@ -476,7 +494,9 @@ static void load_linux(const char *kernel_filename,
     }
 
     /* kernel protocol version */
+#if 0
     fprintf(stderr, "header magic: %#x\n", ldl_p(header+0x202));
+#endif
     if (ldl_p(header+0x202) == 0x53726448)
 	protocol = lduw_p(header+0x206);
     else
@@ -499,6 +519,7 @@ static void load_linux(const char *kernel_filename,
 	prot_addr    = phys_ram_base + 0x100000;
     }
 
+#if 0
     fprintf(stderr,
 	    "qemu: real_addr     = %#zx\n"
 	    "qemu: cmdline_addr  = %#zx\n"
@@ -506,6 +527,7 @@ static void load_linux(const char *kernel_filename,
 	    real_addr-phys_ram_base,
 	    cmdline_addr-phys_ram_base,
 	    prot_addr-phys_ram_base);
+#endif
 
     /* highest address for loading the initrd */
     if (protocol >= 0x203)
@@ -662,11 +684,11 @@ static void pc_init_ne2k_isa(NICInfo *nd, qemu_irq *pic)
 }
 
 /* PC hardware initialisation */
-static void pc_init1(int ram_size, int vga_ram_size, int boot_device,
+static void pc_init1(int ram_size, int vga_ram_size, const char *boot_device,
                      DisplayState *ds, const char **fd_filename, int snapshot,
                      const char *kernel_filename, const char *kernel_cmdline,
                      const char *initrd_filename,
-                     int pci_enabled)
+                     int pci_enabled, const char *cpu_model)
 {
     char buf[1024];
     int ret, linux_boot, i;
@@ -682,8 +704,20 @@ static void pc_init1(int ram_size, int vga_ram_size, int boot_device,
     linux_boot = (kernel_filename != NULL);
 
     /* init CPUs */
+    if (cpu_model == NULL) {
+#ifdef TARGET_X86_64
+        cpu_model = "qemu64";
+#else
+        cpu_model = "qemu32";
+#endif
+    }
+    
     for(i = 0; i < smp_cpus; i++) {
-        env = cpu_init();
+        env = cpu_init(cpu_model);
+        if (!env) {
+            fprintf(stderr, "Unable to find x86 CPU definition\n");
+            exit(1);
+        }
         if (i != 0)
             env->hflags |= HF_HALTED_MASK;
         if (smp_cpus > 1) {
@@ -706,7 +740,9 @@ static void pc_init1(int ram_size, int vga_ram_size, int boot_device,
     vga_ram_addr = qemu_ram_alloc(vga_ram_size);
 
     /* BIOS load */
-    snprintf(buf, sizeof(buf), "%s/%s", bios_dir, BIOS_FILENAME);
+    if (bios_name == NULL)
+        bios_name = BIOS_FILENAME;
+    snprintf(buf, sizeof(buf), "%s/%s", bios_dir, bios_name);
     bios_size = get_image_size(buf);
     if (bios_size <= 0 ||
         (bios_size % 65536) != 0) {
@@ -937,7 +973,7 @@ static void pc_init1(int ram_size, int vga_ram_size, int boot_device,
 #endif
 }
 
-static void pc_init_pci(int ram_size, int vga_ram_size, int boot_device,
+static void pc_init_pci(int ram_size, int vga_ram_size, const char *boot_device,
                         DisplayState *ds, const char **fd_filename,
                         int snapshot,
                         const char *kernel_filename,
@@ -948,10 +984,10 @@ static void pc_init_pci(int ram_size, int vga_ram_size, int boot_device,
     pc_init1(ram_size, vga_ram_size, boot_device,
              ds, fd_filename, snapshot,
              kernel_filename, kernel_cmdline,
-             initrd_filename, 1);
+             initrd_filename, 1, cpu_model);
 }
 
-static void pc_init_isa(int ram_size, int vga_ram_size, int boot_device,
+static void pc_init_isa(int ram_size, int vga_ram_size, const char *boot_device,
                         DisplayState *ds, const char **fd_filename,
                         int snapshot,
                         const char *kernel_filename,
@@ -962,7 +998,7 @@ static void pc_init_isa(int ram_size, int vga_ram_size, int boot_device,
     pc_init1(ram_size, vga_ram_size, boot_device,
              ds, fd_filename, snapshot,
              kernel_filename, kernel_cmdline,
-             initrd_filename, 0);
+             initrd_filename, 0, cpu_model);
 }
 
 QEMUMachine pc_machine = {

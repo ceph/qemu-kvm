@@ -27,14 +27,13 @@
 
 #include "cpu-defs.h"
 
-
 #include <setjmp.h>
 
 #include "softfloat.h"
 
 #define TARGET_HAS_ICE 1
 
-#define ELF_MACHINE	EM_ALPHA
+#define ELF_MACHINE     EM_ALPHA
 
 #define ICACHE_LINE_SIZE 32
 #define DCACHE_LINE_SIZE 32
@@ -256,6 +255,8 @@ struct pal_handler_t {
     void (*call_pal)(CPUAlphaState *env, uint32_t palcode);
 };
 
+#define NB_MMU_MODES 4
+
 struct CPUAlphaState {
     uint64_t ir[31];
     float64  fir[31];
@@ -301,6 +302,17 @@ struct CPUAlphaState {
 #define cpu_exec cpu_alpha_exec
 #define cpu_gen_code cpu_alpha_gen_code
 #define cpu_signal_handler cpu_alpha_signal_handler
+
+/* MMU modes definitions */
+#define MMU_MODE0_SUFFIX _kernel
+#define MMU_MODE1_SUFFIX _executive
+#define MMU_MODE2_SUFFIX _supervisor
+#define MMU_MODE3_SUFFIX _user
+#define MMU_USER_IDX 3
+static inline int cpu_mmu_index (CPUState *env)
+{
+    return (env->ps >> 3) & 3;
+}
 
 #include "cpu-all.h"
 
@@ -384,7 +396,7 @@ enum {
     IR_ZERO = 31,
 };
 
-CPUAlphaState * cpu_alpha_init (void);
+CPUAlphaState * cpu_alpha_init (const char *cpu_model);
 int cpu_alpha_exec(CPUAlphaState *s);
 /* you can call this signal handler from your SIGBUS and SIGSEGV
    signal handlers to inform the virtual CPU of exceptions. non zero

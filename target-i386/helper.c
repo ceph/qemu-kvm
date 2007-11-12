@@ -18,6 +18,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 #include "exec.h"
+#include "host-utils.h"
 
 //#define DEBUG_PCALL
 
@@ -3724,7 +3725,7 @@ void helper_mulq_EAX_T0(void)
 {
     uint64_t r0, r1;
 
-    mulu64(&r1, &r0, EAX, T0);
+    mulu64(&r0, &r1, EAX, T0);
     EAX = r0;
     EDX = r1;
     CC_DST = r0;
@@ -3735,7 +3736,7 @@ void helper_imulq_EAX_T0(void)
 {
     uint64_t r0, r1;
 
-    muls64(&r1, &r0, EAX, T0);
+    muls64(&r0, &r1, EAX, T0);
     EAX = r0;
     EDX = r1;
     CC_DST = r0;
@@ -3746,7 +3747,7 @@ void helper_imulq_T0_T1(void)
 {
     uint64_t r0, r1;
 
-    muls64(&r1, &r0, T0, T1);
+    muls64(&r0, &r1, T0, T1);
     T0 = r0;
     CC_DST = r0;
     CC_SRC = ((int64_t)r1 != ((int64_t)r0 >> 63));
@@ -3865,7 +3866,11 @@ void update_fp_status(void)
 #if !defined(CONFIG_USER_ONLY)
 
 #define MMUSUFFIX _mmu
-#define GETPC() (__builtin_return_address(0))
+#ifdef __s390__
+# define GETPC() ((void*)((unsigned long)__builtin_return_address(0) & 0x7fffffffUL))
+#else
+# define GETPC() (__builtin_return_address(0))
+#endif
 
 #define SHIFT 0
 #include "softmmu_template.h"
@@ -3885,7 +3890,7 @@ void update_fp_status(void)
    NULL, it means that the function was called in C code (i.e. not
    from generated code or from helper.c) */
 /* XXX: fix it to restore all registers */
-void tlb_fill(target_ulong addr, int is_write, int is_user, void *retaddr)
+void tlb_fill(target_ulong addr, int is_write, int mmu_idx, void *retaddr)
 {
     TranslationBlock *tb;
     int ret;
@@ -3897,7 +3902,7 @@ void tlb_fill(target_ulong addr, int is_write, int is_user, void *retaddr)
     saved_env = env;
     env = cpu_single_env;
 
-    ret = cpu_x86_handle_mmu_fault(env, addr, is_write, is_user, 1);
+    ret = cpu_x86_handle_mmu_fault(env, addr, is_write, mmu_idx, 1);
     if (ret) {
         if (retaddr) {
             /* now we have a real cpu fault */

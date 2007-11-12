@@ -339,10 +339,10 @@ void tb_flush(CPUState *env1)
 {
     CPUState *env;
 #if defined(DEBUG_FLUSH)
-    printf("qemu: flush code_size=%d nb_tbs=%d avg_tb_size=%d\n",
-           code_gen_ptr - code_gen_buffer,
-           nb_tbs,
-           nb_tbs > 0 ? (code_gen_ptr - code_gen_buffer) / nb_tbs : 0);
+    printf("qemu: flush code_size=%ld nb_tbs=%d avg_tb_size=%ld\n",
+           (unsigned long)(code_gen_ptr - code_gen_buffer),
+           nb_tbs, nb_tbs > 0 ?
+           ((unsigned long)(code_gen_ptr - code_gen_buffer)) / nb_tbs : 0);
 #endif
     nb_tbs = 0;
 
@@ -889,7 +889,7 @@ static inline void tb_alloc_page(TranslationBlock *tb,
         mprotect(g2h(page_addr), qemu_host_page_size,
                  (prot & PAGE_BITS) & ~PAGE_WRITE);
 #ifdef DEBUG_TB_INVALIDATE
-        printf("protecting code page: 0x%08lx\n",
+        printf("protecting code page: 0x" TARGET_FMT_lx "\n",
                page_addr);
 #endif
     }
@@ -944,11 +944,6 @@ void tb_link_phys(TranslationBlock *tb,
     tb->jmp_first = (TranslationBlock *)((long)tb | 2);
     tb->jmp_next[0] = NULL;
     tb->jmp_next[1] = NULL;
-#ifdef USE_CODE_COPY
-    tb->cflags &= ~CF_FP_USED;
-    if (tb->cflags & CF_TB_FP_USED)
-        tb->cflags |= CF_FP_USED;
-#endif
 
     /* init original jump addresses */
     if (tb->tb_next_offset[0] != 0xffff)
@@ -1319,6 +1314,8 @@ void cpu_abort(CPUState *env, const char *fmt, ...)
 
 CPUState *cpu_copy(CPUState *env)
 {
+#if 0
+    /* XXX: broken, must be handled by each CPU */
     CPUState *new_env = cpu_init();
     /* preserve chaining and index */
     CPUState *next_cpu = new_env->next_cpu;
@@ -1327,6 +1324,9 @@ CPUState *cpu_copy(CPUState *env)
     new_env->next_cpu = next_cpu;
     new_env->cpu_index = cpu_index;
     return new_env;
+#else
+    return NULL;
+#endif
 }
 
 #if !defined(CONFIG_USER_ONLY)
@@ -1608,7 +1608,7 @@ static inline void tlb_set_dirty(CPUState *env,
    conflicting with the host address space). */
 int tlb_set_page_exec(CPUState *env, target_ulong vaddr,
                       target_phys_addr_t paddr, int prot,
-                      int is_user, int is_softmmu)
+                      int mmu_idx, int is_softmmu)
 {
     PhysPageDesc *p;
     unsigned long pd;
@@ -1626,8 +1626,8 @@ int tlb_set_page_exec(CPUState *env, target_ulong vaddr,
         pd = p->phys_offset;
     }
 #if defined(DEBUG_TLB)
-    printf("tlb_set_page: vaddr=" TARGET_FMT_lx " paddr=0x%08x prot=%x u=%d smmu=%d pd=0x%08lx\n",
-           vaddr, (int)paddr, prot, is_user, is_softmmu, pd);
+    printf("tlb_set_page: vaddr=" TARGET_FMT_lx " paddr=0x%08x prot=%x idx=%d smmu=%d pd=0x%08lx\n",
+           vaddr, (int)paddr, prot, mmu_idx, is_softmmu, pd);
 #endif
 
     ret = 0;
@@ -1664,7 +1664,7 @@ int tlb_set_page_exec(CPUState *env, target_ulong vaddr,
 
         index = (vaddr >> TARGET_PAGE_BITS) & (CPU_TLB_SIZE - 1);
         addend -= vaddr;
-        te = &env->tlb_table[is_user][index];
+        te = &env->tlb_table[mmu_idx][index];
         te->addend = addend;
         if (prot & PAGE_READ) {
             te->addr_read = address;
@@ -1790,7 +1790,7 @@ void tlb_flush_page(CPUState *env, target_ulong addr)
 
 int tlb_set_page_exec(CPUState *env, target_ulong vaddr,
                       target_phys_addr_t paddr, int prot,
-                      int is_user, int is_softmmu)
+                      int mmu_idx, int is_softmmu)
 {
     return 0;
 }
@@ -1873,6 +1873,33 @@ void page_set_flags(target_ulong start, target_ulong end, int flags)
         p->flags = flags;
     }
     spin_unlock(&tb_lock);
+}
+
+int page_check_range(target_ulong start, target_ulong len, int flags)
+{
+    PageDesc *p;
+    target_ulong end;
+    target_ulong addr;
+
+    end = TARGET_PAGE_ALIGN(start+len); /* must do before we loose bits in the next step */
+    start = start & TARGET_PAGE_MASK;
+
+    if( end < start )
+        /* we've wrapped around */
+        return -1;
+    for(addr = start; addr < end; addr += TARGET_PAGE_SIZE) {
+        p = page_find(addr >> TARGET_PAGE_BITS);
+        if( !p )
+            return -1;
+        if( !(p->flags & PAGE_VALID) )
+            return -1;
+
+        if (!(p->flags & PAGE_READ) && (flags & PAGE_READ) )
+            return -1;
+        if (!(p->flags & PAGE_WRITE) && (flags & PAGE_WRITE) )
+            return -1;
+    }
+    return 0;
 }
 
 /* called from signal handler: invalidate the code and unprotect the
@@ -2062,9 +2089,11 @@ void qemu_ram_free(ram_addr_t addr)
 static uint32_t unassigned_mem_readb(void *opaque, target_phys_addr_t addr)
 {
 #ifdef DEBUG_UNASSIGNED
-    printf("Unassigned mem read " TARGET_FMT_lx "\n", addr);
+    printf("Unassigned mem read " TARGET_FMT_plx "\n", addr);
 #endif
 #ifdef TARGET_SPARC
+    do_unassigned_access(addr, 0, 0, 0);
+#elif TARGET_CRIS
     do_unassigned_access(addr, 0, 0, 0);
 #endif
     return 0;
@@ -2073,9 +2102,11 @@ static uint32_t unassigned_mem_readb(void *opaque, target_phys_addr_t addr)
 static void unassigned_mem_writeb(void *opaque, target_phys_addr_t addr, uint32_t val)
 {
 #ifdef DEBUG_UNASSIGNED
-    printf("Unassigned mem write " TARGET_FMT_lx " = 0x%x\n", addr, val);
+    printf("Unassigned mem write " TARGET_FMT_plx " = 0x%x\n", addr, val);
 #endif
 #ifdef TARGET_SPARC
+    do_unassigned_access(addr, 1, 0, 0);
+#elif TARGET_CRIS
     do_unassigned_access(addr, 1, 0, 0);
 #endif
 }
@@ -2479,13 +2510,19 @@ void cpu_physical_memory_rw(target_phys_addr_t addr, uint8_t *buf,
         if (is_write) {
             if (!(flags & PAGE_WRITE))
                 return;
-            p = lock_user(addr, len, 0);
+            /* XXX: this code should not depend on lock_user */
+            if (!(p = lock_user(VERIFY_WRITE, addr, len, 0)))
+                /* FIXME - should this return an error rather than just fail? */
+                return;
             memcpy(p, buf, len);
             unlock_user(p, addr, len);
         } else {
             if (!(flags & PAGE_READ))
                 return;
-            p = lock_user(addr, len, 1);
+            /* XXX: this code should not depend on lock_user */
+            if (!(p = lock_user(VERIFY_READ, addr, len, 1)))
+                /* FIXME - should this return an error rather than just fail? */
+                return;
             memcpy(buf, p, len);
             unlock_user(p, addr, 0);
         }

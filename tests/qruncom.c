@@ -193,14 +193,11 @@ int main(int argc, char **argv)
         act.sa_sigaction = host_segv_handler;
         sigaction(SIGSEGV, &act, NULL);
         sigaction(SIGBUS, &act, NULL);
-#if defined (TARGET_I386) && defined(USE_CODE_COPY)
-        sigaction(SIGFPE, &act, NULL);
-#endif
     }
 
     //    cpu_set_log(CPU_LOG_TB_IN_ASM | CPU_LOG_TB_OUT_ASM | CPU_LOG_EXEC);
 
-    env = cpu_init();
+    env = cpu_init("qemu32");
 
     /* disable code copy to simplify debugging */
     code_copy_enabled = 0;

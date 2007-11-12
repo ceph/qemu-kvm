@@ -24,6 +24,7 @@
  */
 
 #include "dis-asm.h"
+#include "host-utils.h"
 
 //#define PPC_DUMP_CPU
 //#define PPC_DEBUG_SPR
@@ -32,15 +33,16 @@
 struct ppc_def_t {
     const unsigned char *name;
     uint32_t pvr;
-    uint32_t pvr_mask;
     uint64_t insns_flags;
     uint64_t msr_mask;
     uint8_t mmu_model;
     uint8_t excp_model;
     uint8_t bus_model;
     uint8_t pad;
+    uint32_t flags;
     int bfd_mach;
     void (*init_proc)(CPUPPCState *env);
+    int (*check_pow)(CPUPPCState *env);
 };
 
 /* For user-mode emulation, we don't emulate any IRQ controller */
@@ -239,7 +241,7 @@ static void spr_read_dbat (void *opaque, int sprn)
 
 static void spr_read_dbat_h (void *opaque, int sprn)
 {
-    gen_op_load_dbat(sprn & 1, (sprn - SPR_DBAT4U) / 2);
+    gen_op_load_dbat(sprn & 1, ((sprn - SPR_DBAT4U) / 2) + 4);
 }
 
 static void spr_write_dbatu (void *opaque, int sprn)
@@ -249,7 +251,7 @@ static void spr_write_dbatu (void *opaque, int sprn)
 
 static void spr_write_dbatu_h (void *opaque, int sprn)
 {
-    gen_op_store_dbatu((sprn - SPR_DBAT4U) / 2);
+    gen_op_store_dbatu(((sprn - SPR_DBAT4U) / 2) + 4);
 }
 
 static void spr_write_dbatl (void *opaque, int sprn)
@@ -259,7 +261,7 @@ static void spr_write_dbatl (void *opaque, int sprn)
 
 static void spr_write_dbatl_h (void *opaque, int sprn)
 {
-    gen_op_store_dbatl((sprn - SPR_DBAT4L) / 2);
+    gen_op_store_dbatl(((sprn - SPR_DBAT4L) / 2) + 4);
 }
 
 /* SDR1 */
@@ -311,6 +313,15 @@ static void spr_write_601_rtcu (void *opaque, int sprn)
 static void spr_write_601_rtcl (void *opaque, int sprn)
 {
     gen_op_store_601_rtcl();
+}
+
+static void spr_write_hid0_601 (void *opaque, int sprn)
+{
+    DisasContext *ctx = opaque;
+
+    gen_op_store_hid0_601();
+    /* Must stop the translation as endianness may have changed */
+    GEN_STOP(ctx);
 }
 #endif
 
@@ -532,6 +543,7 @@ static void gen_spr_ne_601 (CPUPPCState *env)
 /* BATs 0-3 */
 static void gen_low_BATs (CPUPPCState *env)
 {
+#if !defined(CONFIG_USER_ONLY)
     spr_register(env, SPR_IBAT0U, "IBAT0U",
                  SPR_NOACCESS, SPR_NOACCESS,
                  &spr_read_ibat, &spr_write_ibatu,
@@ -597,11 +609,13 @@ static void gen_low_BATs (CPUPPCState *env)
                  &spr_read_dbat, &spr_write_dbatl,
                  0x00000000);
     env->nb_BATs += 4;
+#endif
 }
 
 /* BATs 4-7 */
 static void gen_high_BATs (CPUPPCState *env)
 {
+#if !defined(CONFIG_USER_ONLY)
     spr_register(env, SPR_IBAT4U, "IBAT4U",
                  SPR_NOACCESS, SPR_NOACCESS,
                  &spr_read_ibat_h, &spr_write_ibatu_h,
@@ -667,6 +681,7 @@ static void gen_high_BATs (CPUPPCState *env)
                  &spr_read_dbat_h, &spr_write_dbatl_h,
                  0x00000000);
     env->nb_BATs += 4;
+#endif
 }
 
 /* Generic PowerPC time base */
@@ -693,6 +708,7 @@ static void gen_tbl (CPUPPCState *env)
 /* Softare table search registers */
 static void gen_6xx_7xx_soft_tlb (CPUPPCState *env, int nb_tlbs, int nb_ways)
 {
+#if !defined(CONFIG_USER_ONLY)
     env->nb_tlb = nb_tlbs;
     env->nb_ways = nb_ways;
     env->id_tlbs = 1;
@@ -724,6 +740,7 @@ static void gen_6xx_7xx_soft_tlb (CPUPPCState *env, int nb_tlbs, int nb_ways)
                  SPR_NOACCESS, SPR_NOACCESS,
                  &spr_read_generic, &spr_write_generic,
                  0x00000000);
+#endif
 }
 
 /* SPR common to MPC755 and G2 */
@@ -1104,6 +1121,7 @@ static void gen_spr_601 (CPUPPCState *env)
                  &spr_read_generic, &spr_write_generic,
                  0x00000000);
     /* Memory management */
+#if !defined(CONFIG_USER_ONLY)
     spr_register(env, SPR_IBAT0U, "IBAT0U",
                  SPR_NOACCESS, SPR_NOACCESS,
                  &spr_read_601_ubat, &spr_write_601_ubatu,
@@ -1137,6 +1155,7 @@ static void gen_spr_601 (CPUPPCState *env)
                  &spr_read_601_ubat, &spr_write_601_ubatl,
                  0x00000000);
     env->nb_BATs = 4;
+#endif
 }
 
 static void gen_spr_74xx (CPUPPCState *env)
@@ -1237,6 +1256,7 @@ static void gen_l3_ctrl (CPUPPCState *env)
 
 static void gen_74xx_soft_tlb (CPUPPCState *env, int nb_tlbs, int nb_ways)
 {
+#if !defined(CONFIG_USER_ONLY)
     env->nb_tlb = nb_tlbs;
     env->nb_ways = nb_ways;
     env->id_tlbs = 1;
@@ -1255,6 +1275,7 @@ static void gen_74xx_soft_tlb (CPUPPCState *env, int nb_tlbs, int nb_ways)
                  SPR_NOACCESS, SPR_NOACCESS,
                  &spr_read_generic, &spr_write_generic,
                  0x00000000);
+#endif
 }
 
 /* PowerPC BookE SPR */
@@ -1511,6 +1532,7 @@ static void gen_spr_BookE (CPUPPCState *env)
 /* FSL storage control registers */
 static void gen_spr_BookE_FSL (CPUPPCState *env)
 {
+#if !defined(CONFIG_USER_ONLY)
     /* TLB assist registers */
     /* XXX : not implemented */
     spr_register(env, SPR_BOOKE_MAS0, "MAS0",
@@ -1562,12 +1584,12 @@ static void gen_spr_BookE_FSL (CPUPPCState *env)
                      0x00000000);
     }
     /* XXX : not implemented */
-    spr_register(env, SPR_BOOKE_MMUCFG, "MMUCFG",
+    spr_register(env, SPR_MMUCFG, "MMUCFG",
                  SPR_NOACCESS, SPR_NOACCESS,
                  &spr_read_generic, SPR_NOACCESS,
                  0x00000000); /* TOFIX */
     /* XXX : not implemented */
-    spr_register(env, SPR_BOOKE_MMUCSR0, "MMUCSR0",
+    spr_register(env, SPR_MMUCSR0, "MMUCSR0",
                  SPR_NOACCESS, SPR_NOACCESS,
                  &spr_read_generic, &spr_write_generic,
                  0x00000000); /* TOFIX */
@@ -1604,6 +1626,7 @@ static void gen_spr_BookE_FSL (CPUPPCState *env)
     default:
         break;
     }
+#endif
 }
 
 /* SPR specific to PowerPC 440 implementation */
@@ -2232,9 +2255,11 @@ static void init_excp_4xx_real (CPUPPCState *env)
     env->excp_vectors[POWERPC_EXCP_FIT]      = 0x00001010;
     env->excp_vectors[POWERPC_EXCP_WDT]      = 0x00001020;
     env->excp_vectors[POWERPC_EXCP_DEBUG]    = 0x00002000;
-    env->excp_prefix = 0x00000000;
-    env->ivor_mask = 0x0000FFF0;
-    env->ivpr_mask = 0xFFFF0000;
+    env->excp_prefix = 0x00000000UL;
+    env->ivor_mask = 0x0000FFF0UL;
+    env->ivpr_mask = 0xFFFF0000UL;
+    /* Hardware reset vector */
+    env->hreset_vector = 0xFFFFFFFCUL;
 #endif
 }
 
@@ -2255,9 +2280,11 @@ static void init_excp_4xx_softmmu (CPUPPCState *env)
     env->excp_vectors[POWERPC_EXCP_DTLB]     = 0x00001100;
     env->excp_vectors[POWERPC_EXCP_ITLB]     = 0x00001200;
     env->excp_vectors[POWERPC_EXCP_DEBUG]    = 0x00002000;
-    env->excp_prefix = 0x00000000;
-    env->ivor_mask = 0x0000FFF0;
-    env->ivpr_mask = 0xFFFF0000;
+    env->excp_prefix = 0x00000000UL;
+    env->ivor_mask = 0x0000FFF0UL;
+    env->ivpr_mask = 0xFFFF0000UL;
+    /* Hardware reset vector */
+    env->hreset_vector = 0xFFFFFFFCUL;
 #endif
 }
 
@@ -2280,9 +2307,11 @@ static void init_excp_BookE (CPUPPCState *env)
     env->excp_vectors[POWERPC_EXCP_DTLB]     = 0x00000000;
     env->excp_vectors[POWERPC_EXCP_ITLB]     = 0x00000000;
     env->excp_vectors[POWERPC_EXCP_DEBUG]    = 0x00000000;
-    env->excp_prefix = 0x00000000;
-    env->ivor_mask = 0x0000FFE0;
-    env->ivpr_mask = 0xFFFF0000;
+    env->excp_prefix = 0x00000000UL;
+    env->ivor_mask = 0x0000FFE0UL;
+    env->ivpr_mask = 0xFFFF0000UL;
+    /* Hardware reset vector */
+    env->hreset_vector = 0xFFFFFFFCUL;
 #endif
 }
 
@@ -2301,7 +2330,9 @@ static void init_excp_601 (CPUPPCState *env)
     env->excp_vectors[POWERPC_EXCP_IO]       = 0x00000A00;
     env->excp_vectors[POWERPC_EXCP_SYSCALL]  = 0x00000C00;
     env->excp_vectors[POWERPC_EXCP_RUNM]     = 0x00002000;
-    env->excp_prefix = 0xFFF00000;
+    env->excp_prefix = 0xFFF00000UL;
+    /* Hardware reset vector */
+    env->hreset_vector = 0x00000100UL;
 #endif
 }
 
@@ -2327,7 +2358,9 @@ static void init_excp_602 (CPUPPCState *env)
     env->excp_vectors[POWERPC_EXCP_SMI]      = 0x00001400;
     env->excp_vectors[POWERPC_EXCP_WDT]      = 0x00001500;
     env->excp_vectors[POWERPC_EXCP_EMUL]     = 0x00001600;
-    env->excp_prefix = 0xFFF00000;
+    env->excp_prefix = 0xFFF00000UL;
+    /* Hardware reset vector */
+    env->hreset_vector = 0xFFFFFFFCUL;
 #endif
 }
 
@@ -2350,6 +2383,9 @@ static void init_excp_603 (CPUPPCState *env)
     env->excp_vectors[POWERPC_EXCP_DSTLB]    = 0x00001200;
     env->excp_vectors[POWERPC_EXCP_IABR]     = 0x00001300;
     env->excp_vectors[POWERPC_EXCP_SMI]      = 0x00001400;
+    env->excp_prefix = 0x00000000UL;
+    /* Hardware reset vector */
+    env->hreset_vector = 0xFFFFFFFCUL;
 #endif
 }
 
@@ -2373,6 +2409,9 @@ static void init_excp_G2 (CPUPPCState *env)
     env->excp_vectors[POWERPC_EXCP_DSTLB]    = 0x00001200;
     env->excp_vectors[POWERPC_EXCP_IABR]     = 0x00001300;
     env->excp_vectors[POWERPC_EXCP_SMI]      = 0x00001400;
+    env->excp_prefix = 0x00000000UL;
+    /* Hardware reset vector */
+    env->hreset_vector = 0xFFFFFFFCUL;
 #endif
 }
 
@@ -2393,6 +2432,9 @@ static void init_excp_604 (CPUPPCState *env)
     env->excp_vectors[POWERPC_EXCP_PERFM]    = 0x00000F00;
     env->excp_vectors[POWERPC_EXCP_IABR]     = 0x00001300;
     env->excp_vectors[POWERPC_EXCP_SMI]      = 0x00001400;
+    env->excp_prefix = 0x00000000UL;
+    /* Hardware reset vector */
+    env->hreset_vector = 0xFFFFFFFCUL;
 #endif
 }
 
@@ -2403,7 +2445,9 @@ static void init_excp_620 (CPUPPCState *env)
     env->excp_vectors[POWERPC_EXCP_RESET]    = 0x00000100;
     env->excp_vectors[POWERPC_EXCP_MCHECK]   = 0x00000200;
     env->excp_vectors[POWERPC_EXCP_DSI]      = 0x00000300;
+    env->excp_vectors[POWERPC_EXCP_DSEG]     = 0x00000380;
     env->excp_vectors[POWERPC_EXCP_ISI]      = 0x00000400;
+    env->excp_vectors[POWERPC_EXCP_ISEG]     = 0x00000480;
     env->excp_vectors[POWERPC_EXCP_EXTERNAL] = 0x00000500;
     env->excp_vectors[POWERPC_EXCP_ALIGN]    = 0x00000600;
     env->excp_vectors[POWERPC_EXCP_PROGRAM]  = 0x00000700;
@@ -2415,6 +2459,9 @@ static void init_excp_620 (CPUPPCState *env)
     env->excp_vectors[POWERPC_EXCP_PERFM]    = 0x00000F00;
     env->excp_vectors[POWERPC_EXCP_IABR]     = 0x00001300;
     env->excp_vectors[POWERPC_EXCP_SMI]      = 0x00001400;
+    env->excp_prefix = 0xFFF00000UL;
+    /* Hardware reset vector */
+    env->hreset_vector = 0x0000000000000100ULL;
 #endif
 }
 #endif /* defined(TARGET_PPC64) */
@@ -2436,6 +2483,9 @@ static void init_excp_7x0 (CPUPPCState *env)
     env->excp_vectors[POWERPC_EXCP_PERFM]    = 0x00000F00;
     env->excp_vectors[POWERPC_EXCP_IABR]     = 0x00001300;
     env->excp_vectors[POWERPC_EXCP_THERM]    = 0x00001700;
+    env->excp_prefix = 0x00000000UL;
+    /* Hardware reset vector */
+    env->hreset_vector = 0xFFFFFFFCUL;
 #endif
 }
 
@@ -2457,6 +2507,36 @@ static void init_excp_750FX (CPUPPCState *env)
     env->excp_vectors[POWERPC_EXCP_IABR]     = 0x00001300;
     env->excp_vectors[POWERPC_EXCP_SMI]      = 0x00001400;
     env->excp_vectors[POWERPC_EXCP_THERM]    = 0x00001700;
+    env->excp_prefix = 0x00000000UL;
+    /* Hardware reset vector */
+    env->hreset_vector = 0xFFFFFFFCUL;
+#endif
+}
+
+/* XXX: Check if this is correct */
+static void init_excp_7x5 (CPUPPCState *env)
+{
+#if !defined(CONFIG_USER_ONLY)
+    env->excp_vectors[POWERPC_EXCP_RESET]    = 0x00000100;
+    env->excp_vectors[POWERPC_EXCP_MCHECK]   = 0x00000200;
+    env->excp_vectors[POWERPC_EXCP_DSI]      = 0x00000300;
+    env->excp_vectors[POWERPC_EXCP_ISI]      = 0x00000400;
+    env->excp_vectors[POWERPC_EXCP_EXTERNAL] = 0x00000500;
+    env->excp_vectors[POWERPC_EXCP_ALIGN]    = 0x00000600;
+    env->excp_vectors[POWERPC_EXCP_PROGRAM]  = 0x00000700;
+    env->excp_vectors[POWERPC_EXCP_FPU]      = 0x00000800;
+    env->excp_vectors[POWERPC_EXCP_DECR]     = 0x00000900;
+    env->excp_vectors[POWERPC_EXCP_SYSCALL]  = 0x00000C00;
+    env->excp_vectors[POWERPC_EXCP_TRACE]    = 0x00000D00;
+    env->excp_vectors[POWERPC_EXCP_IFTLB]    = 0x00001000;
+    env->excp_vectors[POWERPC_EXCP_DLTLB]    = 0x00001100;
+    env->excp_vectors[POWERPC_EXCP_DSTLB]    = 0x00001200;
+    env->excp_vectors[POWERPC_EXCP_PERFM]    = 0x00000F00;
+    env->excp_vectors[POWERPC_EXCP_IABR]     = 0x00001300;
+    env->excp_vectors[POWERPC_EXCP_SMI]      = 0x00001400;
+    env->excp_prefix = 0x00000000UL;
+    /* Hardware reset vector */
+    env->hreset_vector = 0xFFFFFFFCUL;
 #endif
 }
 
@@ -2480,6 +2560,9 @@ static void init_excp_7400 (CPUPPCState *env)
     env->excp_vectors[POWERPC_EXCP_SMI]      = 0x00001400;
     env->excp_vectors[POWERPC_EXCP_VPUA]     = 0x00001600;
     env->excp_vectors[POWERPC_EXCP_THERM]    = 0x00001700;
+    env->excp_prefix = 0x00000000UL;
+    /* Hardware reset vector */
+    env->hreset_vector = 0xFFFFFFFCUL;
 #endif
 }
 
@@ -2505,6 +2588,9 @@ static void init_excp_7450 (CPUPPCState *env)
     env->excp_vectors[POWERPC_EXCP_IABR]     = 0x00001300;
     env->excp_vectors[POWERPC_EXCP_SMI]      = 0x00001400;
     env->excp_vectors[POWERPC_EXCP_VPUA]     = 0x00001600;
+    env->excp_prefix = 0x00000000UL;
+    /* Hardware reset vector */
+    env->hreset_vector = 0xFFFFFFFCUL;
 #endif
 }
 
@@ -2534,15 +2620,38 @@ static void init_excp_970 (CPUPPCState *env)
     env->excp_vectors[POWERPC_EXCP_MAINT]    = 0x00001600;
     env->excp_vectors[POWERPC_EXCP_VPUA]     = 0x00001700;
     env->excp_vectors[POWERPC_EXCP_THERM]    = 0x00001800;
+    env->excp_prefix   = 0x00000000FFF00000ULL;
+    /* Hardware reset vector */
+    env->hreset_vector = 0x0000000000000100ULL;
 #endif
 }
 #endif
 
 /*****************************************************************************/
+/* Power management enable checks                                            */
+static int check_pow_none (CPUPPCState *env)
+{
+    return 0;
+}
+
+static int check_pow_nocheck (CPUPPCState *env)
+{
+    return 1;
+}
+
+static int check_pow_hid0 (CPUPPCState *env)
+{
+    if (env->spr[SPR_HID0] & 0x00E00000)
+        return 1;
+
+    return 0;
+}
+
+/*****************************************************************************/
 /* PowerPC implementations definitions                                       */
 
 /* PowerPC 40x instruction set                                               */
-#define POWERPC_INSNS_EMB    (PPC_INSNS_BASE | PPC_EMB_COMMON)
+#define POWERPC_INSNS_EMB    (PPC_INSNS_BASE | PPC_CACHE_DCBZ | PPC_EMB_COMMON)
 
 /* PowerPC 401                                                               */
 #define POWERPC_INSNS_401    (POWERPC_INSNS_EMB |                             \
@@ -2553,6 +2662,8 @@ static void init_excp_970 (CPUPPCState *env)
 #define POWERPC_EXCP_401     (POWERPC_EXCP_40x)
 #define POWERPC_INPUT_401    (PPC_FLAGS_INPUT_401)
 #define POWERPC_BFDM_401     (bfd_mach_ppc_403)
+#define POWERPC_FLAG_401     (POWERPC_FLAG_CE | POWERPC_FLAG_DE)
+#define check_pow_401        check_pow_nocheck
 
 static void init_proc_401 (CPUPPCState *env)
 {
@@ -2560,6 +2671,8 @@ static void init_proc_401 (CPUPPCState *env)
     gen_spr_401_403(env);
     gen_spr_401(env);
     init_excp_4xx_real(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
     /* Allocate hardware IRQ controller */
     ppc40x_irq_init(env);
 }
@@ -2575,6 +2688,8 @@ static void init_proc_401 (CPUPPCState *env)
 #define POWERPC_EXCP_401x2   (POWERPC_EXCP_40x)
 #define POWERPC_INPUT_401x2  (PPC_FLAGS_INPUT_401)
 #define POWERPC_BFDM_401x2   (bfd_mach_ppc_403)
+#define POWERPC_FLAG_401x2   (POWERPC_FLAG_CE | POWERPC_FLAG_DE)
+#define check_pow_401x2      check_pow_nocheck
 
 static void init_proc_401x2 (CPUPPCState *env)
 {
@@ -2583,10 +2698,14 @@ static void init_proc_401x2 (CPUPPCState *env)
     gen_spr_401x2(env);
     gen_spr_compress(env);
     /* Memory management */
+#if !defined(CONFIG_USER_ONLY)
     env->nb_tlb = 64;
     env->nb_ways = 1;
     env->id_tlbs = 0;
+#endif
     init_excp_4xx_softmmu(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
     /* Allocate hardware IRQ controller */
     ppc40x_irq_init(env);
 }
@@ -2602,6 +2721,8 @@ static void init_proc_401x2 (CPUPPCState *env)
 #define POWERPC_EXCP_401x3   (POWERPC_EXCP_40x)
 #define POWERPC_INPUT_401x3  (PPC_FLAGS_INPUT_401)
 #define POWERPC_BFDM_401x3   (bfd_mach_ppc_403)
+#define POWERPC_FLAG_401x3   (POWERPC_FLAG_CE | POWERPC_FLAG_DE)
+#define check_pow_401x3      check_pow_nocheck
 
 __attribute__ (( unused ))
 static void init_proc_401x3 (CPUPPCState *env)
@@ -2612,6 +2733,8 @@ static void init_proc_401x3 (CPUPPCState *env)
     gen_spr_401x2(env);
     gen_spr_compress(env);
     init_excp_4xx_softmmu(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
     /* Allocate hardware IRQ controller */
     ppc40x_irq_init(env);
 }
@@ -2627,6 +2750,8 @@ static void init_proc_401x3 (CPUPPCState *env)
 #define POWERPC_EXCP_IOP480  (POWERPC_EXCP_40x)
 #define POWERPC_INPUT_IOP480 (PPC_FLAGS_INPUT_401)
 #define POWERPC_BFDM_IOP480  (bfd_mach_ppc_403)
+#define POWERPC_FLAG_IOP480  (POWERPC_FLAG_CE | POWERPC_FLAG_DE)
+#define check_pow_IOP480     check_pow_nocheck
 
 static void init_proc_IOP480 (CPUPPCState *env)
 {
@@ -2635,10 +2760,14 @@ static void init_proc_IOP480 (CPUPPCState *env)
     gen_spr_401x2(env);
     gen_spr_compress(env);
     /* Memory management */
+#if !defined(CONFIG_USER_ONLY)
     env->nb_tlb = 64;
     env->nb_ways = 1;
     env->id_tlbs = 0;
+#endif
     init_excp_4xx_softmmu(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
     /* Allocate hardware IRQ controller */
     ppc40x_irq_init(env);
 }
@@ -2646,13 +2775,14 @@ static void init_proc_IOP480 (CPUPPCState *env)
 /* PowerPC 403                                                               */
 #define POWERPC_INSNS_403    (POWERPC_INSNS_EMB |                             \
                               PPC_MEM_SYNC | PPC_MEM_EIEIO |                  \
-                              PPC_40x_TLB | PPC_MEM_TLBIA | PPC_MEM_TLBSYNC | \
                               PPC_4xx_COMMON | PPC_40x_EXCP | PPC_40x_ICBT)
 #define POWERPC_MSRM_403     (0x000000000007D00DULL)
 #define POWERPC_MMU_403      (POWERPC_MMU_REAL_4xx)
 #define POWERPC_EXCP_403     (POWERPC_EXCP_40x)
 #define POWERPC_INPUT_403    (PPC_FLAGS_INPUT_401)
 #define POWERPC_BFDM_403     (bfd_mach_ppc_403)
+#define POWERPC_FLAG_403     (POWERPC_FLAG_CE | POWERPC_FLAG_PX)
+#define check_pow_403        check_pow_nocheck
 
 static void init_proc_403 (CPUPPCState *env)
 {
@@ -2661,8 +2791,14 @@ static void init_proc_403 (CPUPPCState *env)
     gen_spr_403(env);
     gen_spr_403_real(env);
     init_excp_4xx_real(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
     /* Allocate hardware IRQ controller */
     ppc40x_irq_init(env);
+#if !defined(CONFIG_USER_ONLY)
+    /* Hardware reset vector */
+    env->hreset_vector = 0xFFFFFFFCUL;
+#endif
 }
 
 /* PowerPC 403 GCX                                                           */
@@ -2675,6 +2811,8 @@ static void init_proc_403 (CPUPPCState *env)
 #define POWERPC_EXCP_403GCX  (POWERPC_EXCP_40x)
 #define POWERPC_INPUT_403GCX (PPC_FLAGS_INPUT_401)
 #define POWERPC_BFDM_403GCX  (bfd_mach_ppc_403)
+#define POWERPC_FLAG_403GCX  (POWERPC_FLAG_CE | POWERPC_FLAG_PX)
+#define check_pow_403GCX     check_pow_nocheck
 
 static void init_proc_403GCX (CPUPPCState *env)
 {
@@ -2695,10 +2833,14 @@ static void init_proc_403GCX (CPUPPCState *env)
                  &spr_read_generic, &spr_write_generic,
                  0x00000000);
     /* Memory management */
+#if !defined(CONFIG_USER_ONLY)
     env->nb_tlb = 64;
     env->nb_ways = 1;
     env->id_tlbs = 0;
+#endif
     init_excp_4xx_softmmu(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
     /* Allocate hardware IRQ controller */
     ppc40x_irq_init(env);
 }
@@ -2714,6 +2856,9 @@ static void init_proc_403GCX (CPUPPCState *env)
 #define POWERPC_EXCP_405     (POWERPC_EXCP_40x)
 #define POWERPC_INPUT_405    (PPC_FLAGS_INPUT_405)
 #define POWERPC_BFDM_405     (bfd_mach_ppc_403)
+#define POWERPC_FLAG_405     (POWERPC_FLAG_CE | POWERPC_FLAG_DWE |            \
+                              POWERPC_FLAG_DE)
+#define check_pow_405        check_pow_nocheck
 
 static void init_proc_405 (CPUPPCState *env)
 {
@@ -2733,10 +2878,14 @@ static void init_proc_405 (CPUPPCState *env)
                  &spr_read_generic, &spr_write_generic,
                  0x00000000);
     /* Memory management */
+#if !defined(CONFIG_USER_ONLY)
     env->nb_tlb = 64;
     env->nb_ways = 1;
     env->id_tlbs = 0;
+#endif
     init_excp_4xx_softmmu(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
     /* Allocate hardware IRQ controller */
     ppc40x_irq_init(env);
 }
@@ -2751,6 +2900,9 @@ static void init_proc_405 (CPUPPCState *env)
 #define POWERPC_EXCP_440EP   (POWERPC_EXCP_BOOKE)
 #define POWERPC_INPUT_440EP  (PPC_FLAGS_INPUT_BookE)
 #define POWERPC_BFDM_440EP   (bfd_mach_ppc_403)
+#define POWERPC_FLAG_440EP   (POWERPC_FLAG_CE | POWERPC_FLAG_DWE |            \
+                              POWERPC_FLAG_DE)
+#define check_pow_440EP      check_pow_nocheck
 
 static void init_proc_440EP (CPUPPCState *env)
 {
@@ -2777,10 +2929,14 @@ static void init_proc_440EP (CPUPPCState *env)
                  &spr_read_generic, &spr_write_generic,
                  0x00000000);
     /* Memory management */
+#if !defined(CONFIG_USER_ONLY)
     env->nb_tlb = 64;
     env->nb_ways = 1;
     env->id_tlbs = 0;
+#endif
     init_excp_BookE(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
     /* XXX: TODO: allocate internal IRQ controller */
 }
 
@@ -2794,6 +2950,9 @@ static void init_proc_440EP (CPUPPCState *env)
 #define POWERPC_EXCP_440GP   (POWERPC_EXCP_BOOKE)
 #define POWERPC_INPUT_440GP  (PPC_FLAGS_INPUT_BookE)
 #define POWERPC_BFDM_440GP   (bfd_mach_ppc_403)
+#define POWERPC_FLAG_440GP   (POWERPC_FLAG_CE | POWERPC_FLAG_DWE |            \
+                              POWERPC_FLAG_DE)
+#define check_pow_440GP      check_pow_nocheck
 
 static void init_proc_440GP (CPUPPCState *env)
 {
@@ -2802,10 +2961,14 @@ static void init_proc_440GP (CPUPPCState *env)
     gen_spr_BookE(env);
     gen_spr_440(env);
     /* Memory management */
+#if !defined(CONFIG_USER_ONLY)
     env->nb_tlb = 64;
     env->nb_ways = 1;
     env->id_tlbs = 0;
+#endif
     init_excp_BookE(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
     /* XXX: TODO: allocate internal IRQ controller */
 }
 
@@ -2819,6 +2982,9 @@ static void init_proc_440GP (CPUPPCState *env)
 #define POWERPC_EXCP_440x4   (POWERPC_EXCP_BOOKE)
 #define POWERPC_INPUT_440x4  (PPC_FLAGS_INPUT_BookE)
 #define POWERPC_BFDM_440x4   (bfd_mach_ppc_403)
+#define POWERPC_FLAG_440x4   (POWERPC_FLAG_CE | POWERPC_FLAG_DWE |            \
+                              POWERPC_FLAG_DE)
+#define check_pow_440x4      check_pow_nocheck
 
 __attribute__ (( unused ))
 static void init_proc_440x4 (CPUPPCState *env)
@@ -2828,10 +2994,14 @@ static void init_proc_440x4 (CPUPPCState *env)
     gen_spr_BookE(env);
     gen_spr_440(env);
     /* Memory management */
+#if !defined(CONFIG_USER_ONLY)
     env->nb_tlb = 64;
     env->nb_ways = 1;
     env->id_tlbs = 0;
+#endif
     init_excp_BookE(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
     /* XXX: TODO: allocate internal IRQ controller */
 }
 
@@ -2845,6 +3015,9 @@ static void init_proc_440x4 (CPUPPCState *env)
 #define POWERPC_EXCP_440x5   (POWERPC_EXCP_BOOKE)
 #define POWERPC_INPUT_440x5  (PPC_FLAGS_INPUT_BookE)
 #define POWERPC_BFDM_440x5   (bfd_mach_ppc_403)
+#define POWERPC_FLAG_440x5   (POWERPC_FLAG_CE | POWERPC_FLAG_DWE |           \
+                              POWERPC_FLAG_DE)
+#define check_pow_440x5      check_pow_nocheck
 
 static void init_proc_440x5 (CPUPPCState *env)
 {
@@ -2871,10 +3044,14 @@ static void init_proc_440x5 (CPUPPCState *env)
                  &spr_read_generic, &spr_write_generic,
                  0x00000000);
     /* Memory management */
+#if !defined(CONFIG_USER_ONLY)
     env->nb_tlb = 64;
     env->nb_ways = 1;
     env->id_tlbs = 0;
+#endif
     init_excp_BookE(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
     /* XXX: TODO: allocate internal IRQ controller */
 }
 
@@ -2888,6 +3065,9 @@ static void init_proc_440x5 (CPUPPCState *env)
 #define POWERPC_EXCP_460     (POWERPC_EXCP_BOOKE)
 #define POWERPC_INPUT_460    (PPC_FLAGS_INPUT_BookE)
 #define POWERPC_BFDM_460     (bfd_mach_ppc_403)
+#define POWERPC_FLAG_460     (POWERPC_FLAG_CE | POWERPC_FLAG_DWE |            \
+                              POWERPC_FLAG_DE)
+#define check_pow_460        check_pow_nocheck
 
 __attribute__ (( unused ))
 static void init_proc_460 (CPUPPCState *env)
@@ -2920,10 +3100,14 @@ static void init_proc_460 (CPUPPCState *env)
                  &spr_read_generic, &spr_write_generic,
                  0x00000000);
     /* Memory management */
+#if !defined(CONFIG_USER_ONLY)
     env->nb_tlb = 64;
     env->nb_ways = 1;
     env->id_tlbs = 0;
+#endif
     init_excp_BookE(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
     /* XXX: TODO: allocate internal IRQ controller */
 }
 
@@ -2940,6 +3124,9 @@ static void init_proc_460 (CPUPPCState *env)
 #define POWERPC_EXCP_460F    (POWERPC_EXCP_BOOKE)
 #define POWERPC_INPUT_460F   (PPC_FLAGS_INPUT_BookE)
 #define POWERPC_BFDM_460F    (bfd_mach_ppc_403)
+#define POWERPC_FLAG_460F    (POWERPC_FLAG_CE | POWERPC_FLAG_DWE |            \
+                              POWERPC_FLAG_DE)
+#define check_pow_460F       check_pow_nocheck
 
 __attribute__ (( unused ))
 static void init_proc_460F (CPUPPCState *env)
@@ -2972,10 +3159,14 @@ static void init_proc_460F (CPUPPCState *env)
                  &spr_read_generic, &spr_write_generic,
                  0x00000000);
     /* Memory management */
+#if !defined(CONFIG_USER_ONLY)
     env->nb_tlb = 64;
     env->nb_ways = 1;
     env->id_tlbs = 0;
+#endif
     init_excp_BookE(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
     /* XXX: TODO: allocate internal IRQ controller */
 }
 
@@ -2992,11 +3183,15 @@ static void init_proc_460F (CPUPPCState *env)
 #define POWERPC_EXCP_BookE   (POWERPC_EXCP_BOOKE)
 #define POWERPC_INPUT_BookE  (PPC_FLAGS_INPUT_BookE)
 #define POWERPC_BFDM_BookE   (bfd_mach_ppc_403)
+#define POWERPC_FLAG_BookE   (POWERPC_FLAG_NONE)
+#define check_pow_BookE      check_pow_nocheck
 
 __attribute__ (( unused ))
 static void init_proc_BookE (CPUPPCState *env)
 {
     init_excp_BookE(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
 }
 
 /* e200 core                                                                 */
@@ -3012,6 +3207,8 @@ static void init_proc_BookE (CPUPPCState *env)
 #define POWERPC_EXCP_e500    (POWERPC_EXCP_40x)
 #define POWERPC_INPUT_e500   (PPC_FLAGS_INPUT_BookE)
 #define POWERPC_BFDM_e500    (bfd_mach_ppc_403)
+#define POWERPC_FLAG_e500    (POWERPC_FLAG_SPE)
+#define check_pow_e500       check_pow_hid0
 
 __attribute__ (( unused ))
 static void init_proc_e500 (CPUPPCState *env)
@@ -3021,10 +3218,14 @@ static void init_proc_e500 (CPUPPCState *env)
     gen_spr_BookE(env);
     /* Memory management */
     gen_spr_BookE_FSL(env);
+#if !defined(CONFIG_USER_ONLY)
     env->nb_tlb = 64;
     env->nb_ways = 1;
     env->id_tlbs = 0;
+#endif
     init_excp_BookE(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
     /* XXX: TODO: allocate internal IRQ controller */
 }
 
@@ -3033,12 +3234,13 @@ static void init_proc_e500 (CPUPPCState *env)
 /* Non-embedded PowerPC                                                      */
 /* Base instructions set for all 6xx/7xx/74xx/970 PowerPC                    */
 #define POWERPC_INSNS_6xx    (PPC_INSNS_BASE | PPC_FLOAT | PPC_MEM_SYNC |     \
-                              PPC_MEM_EIEIO | PPC_SEGMENT | PPC_MEM_TLBIE)
+                              PPC_MEM_EIEIO | PPC_MEM_TLBIE)
 /* Instructions common to all 6xx/7xx/74xx/970 PowerPC except 601 & 602      */
 #define POWERPC_INSNS_WORKS  (POWERPC_INSNS_6xx | PPC_FLOAT_FSQRT |           \
                               PPC_FLOAT_FRES | PPC_FLOAT_FRSQRTE |            \
                               PPC_FLOAT_FSEL | PPC_FLOAT_STFIWX |             \
-                              PPC_MEM_TLBSYNC | PPC_MFTB)
+                              PPC_MEM_TLBSYNC | PPC_CACHE_DCBZ | PPC_MFTB |   \
+                              PPC_SEGMENT)
 
 /* POWER : same as 601, without mfmsr, mfsr                                  */
 #if defined(TODO)
@@ -3048,12 +3250,15 @@ static void init_proc_e500 (CPUPPCState *env)
 #endif /* TODO */
 
 /* PowerPC 601                                                               */
-#define POWERPC_INSNS_601    (POWERPC_INSNS_6xx | PPC_EXTERN | PPC_POWER_BR)
-#define POWERPC_MSRM_601     (0x000000000000FE70ULL)
+#define POWERPC_INSNS_601    (POWERPC_INSNS_6xx | PPC_CACHE_DCBZ |            \
+                              PPC_SEGMENT | PPC_EXTERN | PPC_POWER_BR)
+#define POWERPC_MSRM_601     (0x000000000000FD70ULL)
 //#define POWERPC_MMU_601      (POWERPC_MMU_601)
 //#define POWERPC_EXCP_601     (POWERPC_EXCP_601)
 #define POWERPC_INPUT_601    (PPC_FLAGS_INPUT_6xx)
 #define POWERPC_BFDM_601     (bfd_mach_ppc_601)
+#define POWERPC_FLAG_601     (POWERPC_FLAG_SE)
+#define check_pow_601        check_pow_none
 
 static void init_proc_601 (CPUPPCState *env)
 {
@@ -3063,8 +3268,8 @@ static void init_proc_601 (CPUPPCState *env)
     /* XXX : not implemented */
     spr_register(env, SPR_HID0, "HID0",
                  SPR_NOACCESS, SPR_NOACCESS,
-                 &spr_read_generic, &spr_write_generic,
-                 0x00000000);
+                 &spr_read_generic, &spr_write_hid0_601,
+                 0x80010080);
     /* XXX : not implemented */
     spr_register(env, SPR_HID1, "HID1",
                  SPR_NOACCESS, SPR_NOACCESS,
@@ -3086,24 +3291,32 @@ static void init_proc_601 (CPUPPCState *env)
                  &spr_read_generic, &spr_write_generic,
                  0x00000000);
     /* Memory management */
+#if !defined(CONFIG_USER_ONLY)
     env->nb_tlb = 64;
     env->nb_ways = 2;
     env->id_tlbs = 0;
-    env->id_tlbs = 0;
+#endif
     init_excp_601(env);
-    /* XXX: TODO: allocate internal IRQ controller */
+    env->dcache_line_size = 64;
+    env->icache_line_size = 64;
+    /* Allocate hardware IRQ controller */
+    ppc6xx_irq_init(env);
 }
 
 /* PowerPC 602                                                               */
 #define POWERPC_INSNS_602    (POWERPC_INSNS_6xx | PPC_MFTB |                  \
                               PPC_FLOAT_FRES | PPC_FLOAT_FRSQRTE |            \
                               PPC_FLOAT_FSEL | PPC_FLOAT_STFIWX |             \
-                              PPC_6xx_TLB | PPC_MEM_TLBSYNC | PPC_602_SPEC)
+                              PPC_6xx_TLB | PPC_MEM_TLBSYNC | PPC_CACHE_DCBZ |\
+                              PPC_SEGMENT | PPC_602_SPEC)
 #define POWERPC_MSRM_602     (0x000000000033FF73ULL)
 #define POWERPC_MMU_602      (POWERPC_MMU_SOFT_6xx)
 //#define POWERPC_EXCP_602     (POWERPC_EXCP_602)
 #define POWERPC_INPUT_602    (PPC_FLAGS_INPUT_6xx)
 #define POWERPC_BFDM_602     (bfd_mach_ppc_602)
+#define POWERPC_FLAG_602     (POWERPC_FLAG_TGPR | POWERPC_FLAG_SE |           \
+                              POWERPC_FLAG_BE)
+#define check_pow_602        check_pow_hid0
 
 static void init_proc_602 (CPUPPCState *env)
 {
@@ -3126,17 +3339,22 @@ static void init_proc_602 (CPUPPCState *env)
     gen_low_BATs(env);
     gen_6xx_7xx_soft_tlb(env, 64, 2);
     init_excp_602(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
     /* Allocate hardware IRQ controller */
     ppc6xx_irq_init(env);
 }
 
 /* PowerPC 603                                                               */
 #define POWERPC_INSNS_603    (POWERPC_INSNS_WORKS | PPC_6xx_TLB | PPC_EXTERN)
-#define POWERPC_MSRM_603     (0x000000000001FF73ULL)
+#define POWERPC_MSRM_603     (0x000000000007FF73ULL)
 #define POWERPC_MMU_603      (POWERPC_MMU_SOFT_6xx)
 //#define POWERPC_EXCP_603     (POWERPC_EXCP_603)
 #define POWERPC_INPUT_603    (PPC_FLAGS_INPUT_6xx)
 #define POWERPC_BFDM_603     (bfd_mach_ppc_603)
+#define POWERPC_FLAG_603     (POWERPC_FLAG_TGPR | POWERPC_FLAG_SE |           \
+                              POWERPC_FLAG_BE)
+#define check_pow_603        check_pow_hid0
 
 static void init_proc_603 (CPUPPCState *env)
 {
@@ -3159,6 +3377,8 @@ static void init_proc_603 (CPUPPCState *env)
     gen_low_BATs(env);
     gen_6xx_7xx_soft_tlb(env, 64, 2);
     init_excp_603(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
     /* Allocate hardware IRQ controller */
     ppc6xx_irq_init(env);
 }
@@ -3170,6 +3390,9 @@ static void init_proc_603 (CPUPPCState *env)
 //#define POWERPC_EXCP_603E    (POWERPC_EXCP_603E)
 #define POWERPC_INPUT_603E   (PPC_FLAGS_INPUT_6xx)
 #define POWERPC_BFDM_603E    (bfd_mach_ppc_ec603e)
+#define POWERPC_FLAG_603E    (POWERPC_FLAG_TGPR | POWERPC_FLAG_SE |           \
+                              POWERPC_FLAG_BE)
+#define check_pow_603E       check_pow_hid0
 
 static void init_proc_603E (CPUPPCState *env)
 {
@@ -3197,6 +3420,8 @@ static void init_proc_603E (CPUPPCState *env)
     gen_low_BATs(env);
     gen_6xx_7xx_soft_tlb(env, 64, 2);
     init_excp_603(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
     /* Allocate hardware IRQ controller */
     ppc6xx_irq_init(env);
 }
@@ -3208,6 +3433,9 @@ static void init_proc_603E (CPUPPCState *env)
 //#define POWERPC_EXCP_G2      (POWERPC_EXCP_G2)
 #define POWERPC_INPUT_G2     (PPC_FLAGS_INPUT_6xx)
 #define POWERPC_BFDM_G2      (bfd_mach_ppc_ec603e)
+#define POWERPC_FLAG_G2      (POWERPC_FLAG_TGPR | POWERPC_FLAG_SE |           \
+                              POWERPC_FLAG_BE)
+#define check_pow_G2         check_pow_hid0
 
 static void init_proc_G2 (CPUPPCState *env)
 {
@@ -3237,6 +3465,8 @@ static void init_proc_G2 (CPUPPCState *env)
     gen_high_BATs(env);
     gen_6xx_7xx_soft_tlb(env, 64, 2);
     init_excp_G2(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
     /* Allocate hardware IRQ controller */
     ppc6xx_irq_init(env);
 }
@@ -3248,6 +3478,9 @@ static void init_proc_G2 (CPUPPCState *env)
 #define POWERPC_EXCP_G2LE    (POWERPC_EXCP_G2)
 #define POWERPC_INPUT_G2LE   (PPC_FLAGS_INPUT_6xx)
 #define POWERPC_BFDM_G2LE    (bfd_mach_ppc_ec603e)
+#define POWERPC_FLAG_G2LE    (POWERPC_FLAG_TGPR | POWERPC_FLAG_SE |           \
+                              POWERPC_FLAG_BE)
+#define check_pow_G2LE       check_pow_hid0
 
 static void init_proc_G2LE (CPUPPCState *env)
 {
@@ -3277,6 +3510,8 @@ static void init_proc_G2LE (CPUPPCState *env)
     gen_high_BATs(env);
     gen_6xx_7xx_soft_tlb(env, 64, 2);
     init_excp_G2(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
     /* Allocate hardware IRQ controller */
     ppc6xx_irq_init(env);
 }
@@ -3288,6 +3523,9 @@ static void init_proc_G2LE (CPUPPCState *env)
 //#define POWERPC_EXCP_604     (POWERPC_EXCP_604)
 #define POWERPC_INPUT_604    (PPC_FLAGS_INPUT_6xx)
 #define POWERPC_BFDM_604     (bfd_mach_ppc_604)
+#define POWERPC_FLAG_604     (POWERPC_FLAG_SE | POWERPC_FLAG_BE |             \
+                              POWERPC_FLAG_PMM)
+#define check_pow_604        check_pow_nocheck
 
 static void init_proc_604 (CPUPPCState *env)
 {
@@ -3309,17 +3547,22 @@ static void init_proc_604 (CPUPPCState *env)
     /* Memory management */
     gen_low_BATs(env);
     init_excp_604(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
     /* Allocate hardware IRQ controller */
     ppc6xx_irq_init(env);
 }
 
 /* PowerPC 740/750 (aka G3)                                                  */
 #define POWERPC_INSNS_7x0    (POWERPC_INSNS_WORKS | PPC_EXTERN)
-#define POWERPC_MSRM_7x0     (0x000000000007FF77ULL)
+#define POWERPC_MSRM_7x0     (0x000000000005FF77ULL)
 #define POWERPC_MMU_7x0      (POWERPC_MMU_32B)
 //#define POWERPC_EXCP_7x0     (POWERPC_EXCP_7x0)
 #define POWERPC_INPUT_7x0    (PPC_FLAGS_INPUT_6xx)
 #define POWERPC_BFDM_7x0     (bfd_mach_ppc_750)
+#define POWERPC_FLAG_7x0     (POWERPC_FLAG_SE | POWERPC_FLAG_BE |             \
+                              POWERPC_FLAG_PMM)
+#define check_pow_7x0        check_pow_hid0
 
 static void init_proc_7x0 (CPUPPCState *env)
 {
@@ -3343,17 +3586,22 @@ static void init_proc_7x0 (CPUPPCState *env)
     /* Memory management */
     gen_low_BATs(env);
     init_excp_7x0(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
     /* Allocate hardware IRQ controller */
     ppc6xx_irq_init(env);
 }
 
 /* PowerPC 750FX/GX                                                          */
 #define POWERPC_INSNS_750fx  (POWERPC_INSNS_WORKS | PPC_EXTERN)
-#define POWERPC_MSRM_750fx   (0x000000000007FF77ULL)
+#define POWERPC_MSRM_750fx   (0x000000000005FF77ULL)
 #define POWERPC_MMU_750fx    (POWERPC_MMU_32B)
 #define POWERPC_EXCP_750fx   (POWERPC_EXCP_7x0)
 #define POWERPC_INPUT_750fx  (PPC_FLAGS_INPUT_6xx)
 #define POWERPC_BFDM_750fx   (bfd_mach_ppc_750)
+#define POWERPC_FLAG_750fx   (POWERPC_FLAG_SE | POWERPC_FLAG_BE |             \
+                              POWERPC_FLAG_PMM)
+#define check_pow_750fx      check_pow_hid0
 
 static void init_proc_750fx (CPUPPCState *env)
 {
@@ -3384,17 +3632,22 @@ static void init_proc_750fx (CPUPPCState *env)
     /* PowerPC 750fx & 750gx has 8 DBATs and 8 IBATs */
     gen_high_BATs(env);
     init_excp_750FX(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
     /* Allocate hardware IRQ controller */
     ppc6xx_irq_init(env);
 }
 
 /* PowerPC 745/755                                                           */
 #define POWERPC_INSNS_7x5    (POWERPC_INSNS_WORKS | PPC_EXTERN | PPC_6xx_TLB)
-#define POWERPC_MSRM_7x5     (0x000000000007FF77ULL)
+#define POWERPC_MSRM_7x5     (0x000000000005FF77ULL)
 #define POWERPC_MMU_7x5      (POWERPC_MMU_SOFT_6xx)
 //#define POWERPC_EXCP_7x5     (POWERPC_EXCP_7x5)
 #define POWERPC_INPUT_7x5    (PPC_FLAGS_INPUT_6xx)
 #define POWERPC_BFDM_7x5     (bfd_mach_ppc_750)
+#define POWERPC_FLAG_7x5     (POWERPC_FLAG_SE | POWERPC_FLAG_BE |             \
+                              POWERPC_FLAG_PMM)
+#define check_pow_7x5        check_pow_hid0
 
 static void init_proc_7x5 (CPUPPCState *env)
 {
@@ -3433,8 +3686,15 @@ static void init_proc_7x5 (CPUPPCState *env)
     gen_low_BATs(env);
     gen_high_BATs(env);
     gen_6xx_7xx_soft_tlb(env, 64, 2);
+    init_excp_7x5(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
     /* Allocate hardware IRQ controller */
     ppc6xx_irq_init(env);
+#if !defined(CONFIG_USER_ONLY)
+    /* Hardware reset vector */
+    env->hreset_vector = 0xFFFFFFFCUL;
+#endif
 }
 
 /* PowerPC 7400 (aka G4)                                                     */
@@ -3446,6 +3706,9 @@ static void init_proc_7x5 (CPUPPCState *env)
 #define POWERPC_EXCP_7400    (POWERPC_EXCP_74xx)
 #define POWERPC_INPUT_7400   (PPC_FLAGS_INPUT_6xx)
 #define POWERPC_BFDM_7400    (bfd_mach_ppc_7400)
+#define POWERPC_FLAG_7400    (POWERPC_FLAG_VRE | POWERPC_FLAG_SE |            \
+                              POWERPC_FLAG_BE | POWERPC_FLAG_PMM)
+#define check_pow_7400       check_pow_hid0
 
 static void init_proc_7400 (CPUPPCState *env)
 {
@@ -3460,6 +3723,8 @@ static void init_proc_7400 (CPUPPCState *env)
     /* Memory management */
     gen_low_BATs(env);
     init_excp_7400(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
     /* Allocate hardware IRQ controller */
     ppc6xx_irq_init(env);
 }
@@ -3473,6 +3738,9 @@ static void init_proc_7400 (CPUPPCState *env)
 #define POWERPC_EXCP_7410    (POWERPC_EXCP_74xx)
 #define POWERPC_INPUT_7410   (PPC_FLAGS_INPUT_6xx)
 #define POWERPC_BFDM_7410    (bfd_mach_ppc_7400)
+#define POWERPC_FLAG_7410    (POWERPC_FLAG_VRE | POWERPC_FLAG_SE |            \
+                              POWERPC_FLAG_BE | POWERPC_FLAG_PMM)
+#define check_pow_7410       check_pow_hid0
 
 static void init_proc_7410 (CPUPPCState *env)
 {
@@ -3499,6 +3767,8 @@ static void init_proc_7410 (CPUPPCState *env)
     /* Memory management */
     gen_low_BATs(env);
     init_excp_7400(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
     /* Allocate hardware IRQ controller */
     ppc6xx_irq_init(env);
 }
@@ -3512,6 +3782,9 @@ static void init_proc_7410 (CPUPPCState *env)
 #define POWERPC_EXCP_7440    (POWERPC_EXCP_74xx)
 #define POWERPC_INPUT_7440   (PPC_FLAGS_INPUT_6xx)
 #define POWERPC_BFDM_7440    (bfd_mach_ppc_7400)
+#define POWERPC_FLAG_7440    (POWERPC_FLAG_VRE | POWERPC_FLAG_SE |            \
+                              POWERPC_FLAG_BE | POWERPC_FLAG_PMM)
+#define check_pow_7440       check_pow_hid0
 
 __attribute__ (( unused ))
 static void init_proc_7440 (CPUPPCState *env)
@@ -3564,6 +3837,9 @@ static void init_proc_7440 (CPUPPCState *env)
     /* Memory management */
     gen_low_BATs(env);
     gen_74xx_soft_tlb(env, 128, 2);
+    init_excp_7450(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
     /* Allocate hardware IRQ controller */
     ppc6xx_irq_init(env);
 }
@@ -3577,6 +3853,9 @@ static void init_proc_7440 (CPUPPCState *env)
 #define POWERPC_EXCP_7450    (POWERPC_EXCP_74xx)
 #define POWERPC_INPUT_7450   (PPC_FLAGS_INPUT_6xx)
 #define POWERPC_BFDM_7450    (bfd_mach_ppc_7400)
+#define POWERPC_FLAG_7450    (POWERPC_FLAG_VRE | POWERPC_FLAG_SE |            \
+                              POWERPC_FLAG_BE | POWERPC_FLAG_PMM)
+#define check_pow_7450       check_pow_hid0
 
 __attribute__ (( unused ))
 static void init_proc_7450 (CPUPPCState *env)
@@ -3632,6 +3911,8 @@ static void init_proc_7450 (CPUPPCState *env)
     gen_low_BATs(env);
     gen_74xx_soft_tlb(env, 128, 2);
     init_excp_7450(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
     /* Allocate hardware IRQ controller */
     ppc6xx_irq_init(env);
 }
@@ -3645,6 +3926,9 @@ static void init_proc_7450 (CPUPPCState *env)
 #define POWERPC_EXCP_7445    (POWERPC_EXCP_74xx)
 #define POWERPC_INPUT_7445   (PPC_FLAGS_INPUT_6xx)
 #define POWERPC_BFDM_7445    (bfd_mach_ppc_7400)
+#define POWERPC_FLAG_7445    (POWERPC_FLAG_VRE | POWERPC_FLAG_SE |            \
+                              POWERPC_FLAG_BE | POWERPC_FLAG_PMM)
+#define check_pow_7445       check_pow_hid0
 
 __attribute__ (( unused ))
 static void init_proc_7445 (CPUPPCState *env)
@@ -3732,6 +4016,8 @@ static void init_proc_7445 (CPUPPCState *env)
     gen_high_BATs(env);
     gen_74xx_soft_tlb(env, 128, 2);
     init_excp_7450(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
     /* Allocate hardware IRQ controller */
     ppc6xx_irq_init(env);
 }
@@ -3745,6 +4031,9 @@ static void init_proc_7445 (CPUPPCState *env)
 #define POWERPC_EXCP_7455    (POWERPC_EXCP_74xx)
 #define POWERPC_INPUT_7455   (PPC_FLAGS_INPUT_6xx)
 #define POWERPC_BFDM_7455    (bfd_mach_ppc_7400)
+#define POWERPC_FLAG_7455    (POWERPC_FLAG_VRE | POWERPC_FLAG_SE |            \
+                              POWERPC_FLAG_BE | POWERPC_FLAG_PMM)
+#define check_pow_7455       check_pow_hid0
 
 __attribute__ (( unused ))
 static void init_proc_7455 (CPUPPCState *env)
@@ -3834,20 +4123,42 @@ static void init_proc_7455 (CPUPPCState *env)
     gen_high_BATs(env);
     gen_74xx_soft_tlb(env, 128, 2);
     init_excp_7450(env);
+    env->dcache_line_size = 32;
+    env->icache_line_size = 32;
     /* Allocate hardware IRQ controller */
     ppc6xx_irq_init(env);
 }
 
 #if defined (TARGET_PPC64)
+#define POWERPC_INSNS_WORK64  (POWERPC_INSNS_6xx | PPC_FLOAT_FSQRT |          \
+                               PPC_FLOAT_FRES | PPC_FLOAT_FRSQRTE |           \
+                               PPC_FLOAT_FSEL | PPC_FLOAT_STFIWX |            \
+                               PPC_MEM_TLBSYNC | PPC_CACHE_DCBZT | PPC_MFTB)
 /* PowerPC 970                                                               */
-#define POWERPC_INSNS_970    (POWERPC_INSNS_WORKS | PPC_FLOAT_FSQRT |         \
+#define POWERPC_INSNS_970    (POWERPC_INSNS_WORK64 | PPC_FLOAT_FSQRT |        \
                               PPC_64B | PPC_ALTIVEC |                         \
-                              PPC_64_BRIDGE | PPC_SLBI)
+                              PPC_SEGMENT_64B | PPC_SLBI)
 #define POWERPC_MSRM_970     (0x900000000204FF36ULL)
-#define POWERPC_MMU_970      (POWERPC_MMU_64BRIDGE)
+#define POWERPC_MMU_970      (POWERPC_MMU_64B)
 //#define POWERPC_EXCP_970     (POWERPC_EXCP_970)
 #define POWERPC_INPUT_970    (PPC_FLAGS_INPUT_970)
 #define POWERPC_BFDM_970     (bfd_mach_ppc64)
+#define POWERPC_FLAG_970     (POWERPC_FLAG_VRE | POWERPC_FLAG_SE |            \
+                              POWERPC_FLAG_BE | POWERPC_FLAG_PMM)
+
+#if defined(CONFIG_USER_ONLY)
+#define POWERPC970_HID5_INIT 0x00000080
+#else
+#define POWERPC970_HID5_INIT 0x00000000
+#endif
+
+static int check_pow_970 (CPUPPCState *env)
+{
+    if (env->spr[SPR_HID0] & 0x00600000)
+        return 1;
+
+    return 0;
+}
 
 static void init_proc_970 (CPUPPCState *env)
 {
@@ -3859,8 +4170,8 @@ static void init_proc_970 (CPUPPCState *env)
     /* XXX : not implemented */
     spr_register(env, SPR_HID0, "HID0",
                  SPR_NOACCESS, SPR_NOACCESS,
-                 &spr_read_generic, &spr_write_generic,
-                 0x00000000);
+                 &spr_read_generic, &spr_write_clear,
+                 0x60000000);
     /* XXX : not implemented */
     spr_register(env, SPR_HID1, "HID1",
                  SPR_NOACCESS, SPR_NOACCESS,
@@ -3871,26 +4182,57 @@ static void init_proc_970 (CPUPPCState *env)
                  SPR_NOACCESS, SPR_NOACCESS,
                  &spr_read_generic, &spr_write_generic,
                  0x00000000);
+    /* XXX : not implemented */
+    spr_register(env, SPR_970_HID5, "HID5",
+                 SPR_NOACCESS, SPR_NOACCESS,
+                 &spr_read_generic, &spr_write_generic,
+                 POWERPC970_HID5_INIT);
     /* Memory management */
     /* XXX: not correct */
     gen_low_BATs(env);
-#if 0 // TODO
+    /* XXX : not implemented */
+    spr_register(env, SPR_MMUCFG, "MMUCFG",
+                 SPR_NOACCESS, SPR_NOACCESS,
+                 &spr_read_generic, SPR_NOACCESS,
+                 0x00000000); /* TOFIX */
+    /* XXX : not implemented */
+    spr_register(env, SPR_MMUCSR0, "MMUCSR0",
+                 SPR_NOACCESS, SPR_NOACCESS,
+                 &spr_read_generic, &spr_write_generic,
+                 0x00000000); /* TOFIX */
+    spr_register(env, SPR_HIOR, "SPR_HIOR",
+                 SPR_NOACCESS, SPR_NOACCESS,
+                 &spr_read_generic, &spr_write_generic,
+                 0xFFF00000); /* XXX: This is a hack */
+#if !defined(CONFIG_USER_ONLY)
     env->slb_nr = 32;
 #endif
     init_excp_970(env);
+    env->dcache_line_size = 128;
+    env->icache_line_size = 128;
     /* Allocate hardware IRQ controller */
     ppc970_irq_init(env);
 }
 
 /* PowerPC 970FX (aka G5)                                                    */
-#define POWERPC_INSNS_970FX  (POWERPC_INSNS_WORKS | PPC_FLOAT_FSQRT |         \
+#define POWERPC_INSNS_970FX  (POWERPC_INSNS_WORK64 | PPC_FLOAT_FSQRT |        \
                               PPC_64B | PPC_ALTIVEC |                         \
-                              PPC_64_BRIDGE | PPC_SLBI)
+                              PPC_SEGMENT_64B | PPC_SLBI)
 #define POWERPC_MSRM_970FX   (0x800000000204FF36ULL)
-#define POWERPC_MMU_970FX    (POWERPC_MMU_64BRIDGE)
+#define POWERPC_MMU_970FX    (POWERPC_MMU_64B)
 #define POWERPC_EXCP_970FX   (POWERPC_EXCP_970)
 #define POWERPC_INPUT_970FX  (PPC_FLAGS_INPUT_970)
 #define POWERPC_BFDM_970FX   (bfd_mach_ppc64)
+#define POWERPC_FLAG_970FX   (POWERPC_FLAG_VRE | POWERPC_FLAG_SE |            \
+                              POWERPC_FLAG_BE | POWERPC_FLAG_PMM)
+
+static int check_pow_970FX (CPUPPCState *env)
+{
+    if (env->spr[SPR_HID0] & 0x00600000)
+        return 1;
+
+    return 0;
+}
 
 static void init_proc_970FX (CPUPPCState *env)
 {
@@ -3902,8 +4244,8 @@ static void init_proc_970FX (CPUPPCState *env)
     /* XXX : not implemented */
     spr_register(env, SPR_HID0, "HID0",
                  SPR_NOACCESS, SPR_NOACCESS,
-                 &spr_read_generic, &spr_write_generic,
-                 0x00000000);
+                 &spr_read_generic, &spr_write_clear,
+                 0x60000000);
     /* XXX : not implemented */
     spr_register(env, SPR_HID1, "HID1",
                  SPR_NOACCESS, SPR_NOACCESS,
@@ -3914,26 +4256,57 @@ static void init_proc_970FX (CPUPPCState *env)
                  SPR_NOACCESS, SPR_NOACCESS,
                  &spr_read_generic, &spr_write_generic,
                  0x00000000);
+    /* XXX : not implemented */
+    spr_register(env, SPR_970_HID5, "HID5",
+                 SPR_NOACCESS, SPR_NOACCESS,
+                 &spr_read_generic, &spr_write_generic,
+                 POWERPC970_HID5_INIT);
     /* Memory management */
     /* XXX: not correct */
     gen_low_BATs(env);
-#if 0 // TODO
+    /* XXX : not implemented */
+    spr_register(env, SPR_MMUCFG, "MMUCFG",
+                 SPR_NOACCESS, SPR_NOACCESS,
+                 &spr_read_generic, SPR_NOACCESS,
+                 0x00000000); /* TOFIX */
+    /* XXX : not implemented */
+    spr_register(env, SPR_MMUCSR0, "MMUCSR0",
+                 SPR_NOACCESS, SPR_NOACCESS,
+                 &spr_read_generic, &spr_write_generic,
+                 0x00000000); /* TOFIX */
+    spr_register(env, SPR_HIOR, "SPR_HIOR",
+                 SPR_NOACCESS, SPR_NOACCESS,
+                 &spr_read_generic, &spr_write_generic,
+                 0xFFF00000); /* XXX: This is a hack */
+#if !defined(CONFIG_USER_ONLY)
     env->slb_nr = 32;
 #endif
     init_excp_970(env);
+    env->dcache_line_size = 128;
+    env->icache_line_size = 128;
     /* Allocate hardware IRQ controller */
     ppc970_irq_init(env);
 }
 
 /* PowerPC 970 GX                                                            */
-#define POWERPC_INSNS_970GX  (POWERPC_INSNS_WORKS | PPC_FLOAT_FSQRT |         \
+#define POWERPC_INSNS_970GX  (POWERPC_INSNS_WORK64 | PPC_FLOAT_FSQRT |        \
                               PPC_64B | PPC_ALTIVEC |                         \
-                              PPC_64_BRIDGE | PPC_SLBI)
+                              PPC_SEGMENT_64B | PPC_SLBI)
 #define POWERPC_MSRM_970GX   (0x800000000204FF36ULL)
-#define POWERPC_MMU_970GX    (POWERPC_MMU_64BRIDGE)
+#define POWERPC_MMU_970GX    (POWERPC_MMU_64B)
 #define POWERPC_EXCP_970GX   (POWERPC_EXCP_970)
 #define POWERPC_INPUT_970GX  (PPC_FLAGS_INPUT_970)
 #define POWERPC_BFDM_970GX   (bfd_mach_ppc64)
+#define POWERPC_FLAG_970GX   (POWERPC_FLAG_VRE | POWERPC_FLAG_SE |            \
+                              POWERPC_FLAG_BE | POWERPC_FLAG_PMM)
+
+static int check_pow_970GX (CPUPPCState *env)
+{
+    if (env->spr[SPR_HID0] & 0x00600000)
+        return 1;
+
+    return 0;
+}
 
 static void init_proc_970GX (CPUPPCState *env)
 {
@@ -3945,8 +4318,8 @@ static void init_proc_970GX (CPUPPCState *env)
     /* XXX : not implemented */
     spr_register(env, SPR_HID0, "HID0",
                  SPR_NOACCESS, SPR_NOACCESS,
-                 &spr_read_generic, &spr_write_generic,
-                 0x00000000);
+                 &spr_read_generic, &spr_write_clear,
+                 0x60000000);
     /* XXX : not implemented */
     spr_register(env, SPR_HID1, "HID1",
                  SPR_NOACCESS, SPR_NOACCESS,
@@ -3957,13 +4330,108 @@ static void init_proc_970GX (CPUPPCState *env)
                  SPR_NOACCESS, SPR_NOACCESS,
                  &spr_read_generic, &spr_write_generic,
                  0x00000000);
+    /* XXX : not implemented */
+    spr_register(env, SPR_970_HID5, "HID5",
+                 SPR_NOACCESS, SPR_NOACCESS,
+                 &spr_read_generic, &spr_write_generic,
+                 POWERPC970_HID5_INIT);
     /* Memory management */
     /* XXX: not correct */
     gen_low_BATs(env);
-#if 0 // TODO
+    /* XXX : not implemented */
+    spr_register(env, SPR_MMUCFG, "MMUCFG",
+                 SPR_NOACCESS, SPR_NOACCESS,
+                 &spr_read_generic, SPR_NOACCESS,
+                 0x00000000); /* TOFIX */
+    /* XXX : not implemented */
+    spr_register(env, SPR_MMUCSR0, "MMUCSR0",
+                 SPR_NOACCESS, SPR_NOACCESS,
+                 &spr_read_generic, &spr_write_generic,
+                 0x00000000); /* TOFIX */
+    spr_register(env, SPR_HIOR, "SPR_HIOR",
+                 SPR_NOACCESS, SPR_NOACCESS,
+                 &spr_read_generic, &spr_write_generic,
+                 0xFFF00000); /* XXX: This is a hack */
+#if !defined(CONFIG_USER_ONLY)
     env->slb_nr = 32;
 #endif
     init_excp_970(env);
+    env->dcache_line_size = 128;
+    env->icache_line_size = 128;
+    /* Allocate hardware IRQ controller */
+    ppc970_irq_init(env);
+}
+
+/* PowerPC 970 MP                                                            */
+#define POWERPC_INSNS_970MP  (POWERPC_INSNS_WORK64 | PPC_FLOAT_FSQRT |        \
+                              PPC_64B | PPC_ALTIVEC |                         \
+                              PPC_SEGMENT_64B | PPC_SLBI)
+#define POWERPC_MSRM_970MP   (0x900000000204FF36ULL)
+#define POWERPC_MMU_970MP    (POWERPC_MMU_64B)
+#define POWERPC_EXCP_970MP   (POWERPC_EXCP_970)
+#define POWERPC_INPUT_970MP  (PPC_FLAGS_INPUT_970)
+#define POWERPC_BFDM_970MP   (bfd_mach_ppc64)
+#define POWERPC_FLAG_970MP   (POWERPC_FLAG_VRE | POWERPC_FLAG_SE |            \
+                              POWERPC_FLAG_BE | POWERPC_FLAG_PMM)
+
+static int check_pow_970MP (CPUPPCState *env)
+{
+    if (env->spr[SPR_HID0] & 0x01C00000)
+        return 1;
+
+    return 0;
+}
+
+static void init_proc_970MP (CPUPPCState *env)
+{
+    gen_spr_ne_601(env);
+    gen_spr_7xx(env);
+    /* Time base */
+    gen_tbl(env);
+    /* Hardware implementation registers */
+    /* XXX : not implemented */
+    spr_register(env, SPR_HID0, "HID0",
+                 SPR_NOACCESS, SPR_NOACCESS,
+                 &spr_read_generic, &spr_write_clear,
+                 0x60000000);
+    /* XXX : not implemented */
+    spr_register(env, SPR_HID1, "HID1",
+                 SPR_NOACCESS, SPR_NOACCESS,
+                 &spr_read_generic, &spr_write_generic,
+                 0x00000000);
+    /* XXX : not implemented */
+    spr_register(env, SPR_750_HID2, "HID2",
+                 SPR_NOACCESS, SPR_NOACCESS,
+                 &spr_read_generic, &spr_write_generic,
+                 0x00000000);
+    /* XXX : not implemented */
+    spr_register(env, SPR_970_HID5, "HID5",
+                 SPR_NOACCESS, SPR_NOACCESS,
+                 &spr_read_generic, &spr_write_generic,
+                 POWERPC970_HID5_INIT);
+    /* Memory management */
+    /* XXX: not correct */
+    gen_low_BATs(env);
+    /* XXX : not implemented */
+    spr_register(env, SPR_MMUCFG, "MMUCFG",
+                 SPR_NOACCESS, SPR_NOACCESS,
+                 &spr_read_generic, SPR_NOACCESS,
+                 0x00000000); /* TOFIX */
+    /* XXX : not implemented */
+    spr_register(env, SPR_MMUCSR0, "MMUCSR0",
+                 SPR_NOACCESS, SPR_NOACCESS,
+                 &spr_read_generic, &spr_write_generic,
+                 0x00000000); /* TOFIX */
+    spr_register(env, SPR_HIOR, "SPR_HIOR",
+                 SPR_NOACCESS, SPR_NOACCESS,
+                 &spr_read_generic, &spr_write_generic,
+                 0xFFF00000); /* XXX: This is a hack */
+#if !defined(CONFIG_USER_ONLY)
+    env->slb_nr = 32;
+#endif
+    init_excp_970(env);
+    env->dcache_line_size = 128;
+    env->icache_line_size = 128;
     /* Allocate hardware IRQ controller */
     ppc970_irq_init(env);
 }
@@ -3974,8 +4442,10 @@ static void init_proc_970GX (CPUPPCState *env)
 #define POWERPC_MSRM_620     (0x800000000005FF73ULL)
 #define POWERPC_MMU_620      (POWERPC_MMU_64B)
 #define POWERPC_EXCP_620     (POWERPC_EXCP_970)
-#define POWERPC_INPUT_620    (PPC_FLAGS_INPUT_970)
+#define POWERPC_INPUT_620    (PPC_FLAGS_INPUT_6xx)
 #define POWERPC_BFDM_620     (bfd_mach_ppc64)
+#define POWERPC_FLAG_620     (POWERPC_FLAG_SE | POWERPC_FLAG_BE)
+#define check_pow_620        check_pow_nocheck /* Check this */
 
 __attribute__ (( unused ))
 static void init_proc_620 (CPUPPCState *env)
@@ -3994,7 +4464,10 @@ static void init_proc_620 (CPUPPCState *env)
     gen_low_BATs(env);
     gen_high_BATs(env);
     init_excp_620(env);
-    /* XXX: TODO: initialize internal interrupt controller */
+    env->dcache_line_size = 64;
+    env->icache_line_size = 64;
+    /* Allocate hardware IRQ controller */
+    ppc6xx_irq_init(env);
 }
 #endif /* defined (TARGET_PPC64) */
 
@@ -4005,8 +4478,10 @@ static void init_proc_620 (CPUPPCState *env)
 #define POWERPC_MMU_PPC32     POWERPC_MMU_604
 #define POWERPC_EXCP_PPC32    POWERPC_EXCP_604
 #define POWERPC_INPUT_PPC32   POWERPC_INPUT_604
-#define init_proc_PPC32       init_proc_604
 #define POWERPC_BFDM_PPC32    POWERPC_BFDM_604
+#define POWERPC_FLAG_PPC32    POWERPC_FLAG_604
+#define check_pow_PPC32       check_pow_604
+#define init_proc_PPC32       init_proc_604
 
 /* Default 64 bits PowerPC target will be 970 FX */
 #define CPU_POWERPC_PPC64     CPU_POWERPC_970FX
@@ -4015,8 +4490,10 @@ static void init_proc_620 (CPUPPCState *env)
 #define POWERPC_MMU_PPC64     POWERPC_MMU_970FX
 #define POWERPC_EXCP_PPC64    POWERPC_EXCP_970FX
 #define POWERPC_INPUT_PPC64   POWERPC_INPUT_970FX
-#define init_proc_PPC64       init_proc_970FX
 #define POWERPC_BFDM_PPC64    POWERPC_BFDM_970FX
+#define POWERPC_FLAG_PPC64    POWERPC_FLAG_970FX
+#define check_pow_PPC64       check_pow_970FX
+#define init_proc_PPC64       init_proc_970FX
 
 /* Default PowerPC target will be PowerPC 32 */
 #if defined (TARGET_PPC64) && 0 // XXX: TODO
@@ -4026,8 +4503,10 @@ static void init_proc_620 (CPUPPCState *env)
 #define POWERPC_MMU_DEFAULT   POWERPC_MMU_PPC64
 #define POWERPC_EXCP_DEFAULT  POWERPC_EXCP_PPC64
 #define POWERPC_INPUT_DEFAULT POWERPC_INPUT_PPC64
-#define init_proc_DEFAULT     init_proc_PPC64
 #define POWERPC_BFDM_DEFAULT  POWERPC_BFDM_PPC64
+#define POWERPC_FLAG_DEFAULT  POWERPC_FLAG_PPC64
+#define check_pow_DEFAULT     check_pow_PPC64
+#define init_proc_DEFAULT     init_proc_PPC64
 #else
 #define CPU_POWERPC_DEFAULT   CPU_POWERPC_PPC32
 #define POWERPC_INSNS_DEFAULT POWERPC_INSNS_PPC32
@@ -4035,8 +4514,10 @@ static void init_proc_620 (CPUPPCState *env)
 #define POWERPC_MMU_DEFAULT   POWERPC_MMU_PPC32
 #define POWERPC_EXCP_DEFAULT  POWERPC_EXCP_PPC32
 #define POWERPC_INPUT_DEFAULT POWERPC_INPUT_PPC32
-#define init_proc_DEFAULT     init_proc_PPC32
 #define POWERPC_BFDM_DEFAULT  POWERPC_BFDM_PPC32
+#define POWERPC_FLAG_DEFAULT  POWERPC_FLAG_PPC32
+#define check_pow_DEFAULT     check_pow_PPC32
+#define init_proc_DEFAULT     init_proc_PPC32
 #endif
 
 /*****************************************************************************/
@@ -4448,6 +4929,7 @@ enum {
     CPU_POWERPC_74x7_v11    = 0x80030101, /* aka B: 1.1 */
     CPU_POWERPC_74x7_v12    = 0x80020102, /* aka C: 1.2 */
     /* 64 bits PowerPC */
+#if defined(TARGET_PPC64)
     CPU_POWERPC_620         = 0x00140000,
     CPU_POWERPC_630         = 0x00400000,
     CPU_POWERPC_631         = 0x00410104,
@@ -4481,6 +4963,7 @@ enum {
     CPU_POWERPC_RS64II      = 0x00340000,
     CPU_POWERPC_RS64III     = 0x00360000,
     CPU_POWERPC_RS64IV      = 0x00370000,
+#endif /* defined(TARGET_PPC64) */
     /* Original POWER */
     /* XXX: should be POWER (RIOS), RSC3308, RSC4608,
      * POWER2 (RIOS2) & RSC2 (P2SC) here
@@ -4521,905 +5004,872 @@ enum {
 
 /*****************************************************************************/
 /* PowerPC CPU definitions                                                   */
-#define POWERPC_DEF(_name, _pvr, _pvr_mask, _type)                            \
+#define POWERPC_DEF(_name, _pvr, _type)                                       \
     {                                                                         \
         .name        = _name,                                                 \
         .pvr         = _pvr,                                                  \
-        .pvr_mask    = _pvr_mask,                                             \
         .insns_flags = glue(POWERPC_INSNS_,_type),                            \
         .msr_mask    = glue(POWERPC_MSRM_,_type),                             \
         .mmu_model   = glue(POWERPC_MMU_,_type),                              \
         .excp_model  = glue(POWERPC_EXCP_,_type),                             \
         .bus_model   = glue(POWERPC_INPUT_,_type),                            \
         .bfd_mach    = glue(POWERPC_BFDM_,_type),                             \
+        .flags       = glue(POWERPC_FLAG_,_type),                             \
         .init_proc   = &glue(init_proc_,_type),                               \
+        .check_pow   = &glue(check_pow_,_type),                               \
     }
 
-static ppc_def_t ppc_defs[] = {
+static const ppc_def_t ppc_defs[] = {
     /* Embedded PowerPC                                                      */
     /* PowerPC 401 family                                                    */
     /* Generic PowerPC 401 */
-    POWERPC_DEF("401",         CPU_POWERPC_401,         0xFFFF0000, 401),
+    POWERPC_DEF("401",         CPU_POWERPC_401,         401),
     /* PowerPC 401 cores                                                     */
     /* PowerPC 401A1 */
-    POWERPC_DEF("401A1",       CPU_POWERPC_401A1,       0xFFFFFFFF, 401),
+    POWERPC_DEF("401A1",       CPU_POWERPC_401A1,       401),
     /* PowerPC 401B2                                                         */
-    POWERPC_DEF("401B2",       CPU_POWERPC_401B2,       0xFFFFFFFF, 401x2),
+    POWERPC_DEF("401B2",       CPU_POWERPC_401B2,       401x2),
 #if defined (TODO)
     /* PowerPC 401B3                                                         */
-    POWERPC_DEF("401B3",       CPU_POWERPC_401B3,       0xFFFFFFFF, 401x3),
+    POWERPC_DEF("401B3",       CPU_POWERPC_401B3,       401x3),
 #endif
     /* PowerPC 401C2                                                         */
-    POWERPC_DEF("401C2",       CPU_POWERPC_401C2,       0xFFFFFFFF, 401x2),
+    POWERPC_DEF("401C2",       CPU_POWERPC_401C2,       401x2),
     /* PowerPC 401D2                                                         */
-    POWERPC_DEF("401D2",       CPU_POWERPC_401D2,       0xFFFFFFFF, 401x2),
+    POWERPC_DEF("401D2",       CPU_POWERPC_401D2,       401x2),
     /* PowerPC 401E2                                                         */
-    POWERPC_DEF("401E2",       CPU_POWERPC_401E2,       0xFFFFFFFF, 401x2),
+    POWERPC_DEF("401E2",       CPU_POWERPC_401E2,       401x2),
     /* PowerPC 401F2                                                         */
-    POWERPC_DEF("401F2",       CPU_POWERPC_401F2,       0xFFFFFFFF, 401x2),
+    POWERPC_DEF("401F2",       CPU_POWERPC_401F2,       401x2),
     /* PowerPC 401G2                                                         */
     /* XXX: to be checked */
-    POWERPC_DEF("401G2",       CPU_POWERPC_401G2,       0xFFFFFFFF, 401x2),
+    POWERPC_DEF("401G2",       CPU_POWERPC_401G2,       401x2),
     /* PowerPC 401 microcontrolers                                           */
 #if defined (TODO)
     /* PowerPC 401GF                                                         */
-    POWERPC_DEF("401GF",       CPU_POWERPC_401GF,       0xFFFFFFFF, 401),
+    POWERPC_DEF("401GF",       CPU_POWERPC_401GF,       401),
 #endif
     /* IOP480 (401 microcontroler)                                           */
-    POWERPC_DEF("IOP480",      CPU_POWERPC_IOP480,      0xFFFFFFFF, IOP480),
+    POWERPC_DEF("IOP480",      CPU_POWERPC_IOP480,      IOP480),
     /* IBM Processor for Network Resources                                   */
-    POWERPC_DEF("Cobra",       CPU_POWERPC_COBRA,       0xFFFFFFFF, 401),
+    POWERPC_DEF("Cobra",       CPU_POWERPC_COBRA,       401),
 #if defined (TODO)
-    POWERPC_DEF("Xipchip",     CPU_POWERPC_XIPCHIP,     0xFFFFFFFF, 401),
+    POWERPC_DEF("Xipchip",     CPU_POWERPC_XIPCHIP,     401),
 #endif
     /* PowerPC 403 family                                                    */
     /* Generic PowerPC 403                                                   */
-    POWERPC_DEF("403",         CPU_POWERPC_403,         0xFFFF0000, 403),
+    POWERPC_DEF("403",         CPU_POWERPC_403,         403),
     /* PowerPC 403 microcontrolers                                           */
     /* PowerPC 403 GA                                                        */
-    POWERPC_DEF("403GA",       CPU_POWERPC_403GA,       0xFFFFFFFF, 403),
+    POWERPC_DEF("403GA",       CPU_POWERPC_403GA,       403),
     /* PowerPC 403 GB                                                        */
-    POWERPC_DEF("403GB",       CPU_POWERPC_403GB,       0xFFFFFFFF, 403),
+    POWERPC_DEF("403GB",       CPU_POWERPC_403GB,       403),
     /* PowerPC 403 GC                                                        */
-    POWERPC_DEF("403GC",       CPU_POWERPC_403GC,       0xFFFFFFFF, 403),
+    POWERPC_DEF("403GC",       CPU_POWERPC_403GC,       403),
     /* PowerPC 403 GCX                                                       */
-    POWERPC_DEF("403GCX",      CPU_POWERPC_403GCX,      0xFFFFFFFF, 403GCX),
+    POWERPC_DEF("403GCX",      CPU_POWERPC_403GCX,      403GCX),
 #if defined (TODO)
     /* PowerPC 403 GP                                                        */
-    POWERPC_DEF("403GP",       CPU_POWERPC_403GP,       0xFFFFFFFF, 403),
+    POWERPC_DEF("403GP",       CPU_POWERPC_403GP,       403),
 #endif
     /* PowerPC 405 family                                                    */
     /* Generic PowerPC 405                                                   */
-    POWERPC_DEF("405",         CPU_POWERPC_405,         0xFFFF0000, 405),
+    POWERPC_DEF("405",         CPU_POWERPC_405,         405),
     /* PowerPC 405 cores                                                     */
 #if defined (TODO)
     /* PowerPC 405 A3                                                        */
-    POWERPC_DEF("405A3",       CPU_POWERPC_405A3,       0xFFFFFFFF, 405),
+    POWERPC_DEF("405A3",       CPU_POWERPC_405A3,       405),
 #endif
 #if defined (TODO)
     /* PowerPC 405 A4                                                        */
-    POWERPC_DEF("405A4",       CPU_POWERPC_405A4,       0xFFFFFFFF, 405),
+    POWERPC_DEF("405A4",       CPU_POWERPC_405A4,       405),
 #endif
 #if defined (TODO)
     /* PowerPC 405 B3                                                        */
-    POWERPC_DEF("405B3",       CPU_POWERPC_405B3,       0xFFFFFFFF, 405),
+    POWERPC_DEF("405B3",       CPU_POWERPC_405B3,       405),
 #endif
 #if defined (TODO)
     /* PowerPC 405 B4                                                        */
-    POWERPC_DEF("405B4",       CPU_POWERPC_405B4,       0xFFFFFFFF, 405),
+    POWERPC_DEF("405B4",       CPU_POWERPC_405B4,       405),
 #endif
 #if defined (TODO)
     /* PowerPC 405 C3                                                        */
-    POWERPC_DEF("405C3",       CPU_POWERPC_405C3,       0xFFFFFFFF, 405),
+    POWERPC_DEF("405C3",       CPU_POWERPC_405C3,       405),
 #endif
 #if defined (TODO)
     /* PowerPC 405 C4                                                        */
-    POWERPC_DEF("405C4",       CPU_POWERPC_405C4,       0xFFFFFFFF, 405),
+    POWERPC_DEF("405C4",       CPU_POWERPC_405C4,       405),
 #endif
     /* PowerPC 405 D2                                                        */
-    POWERPC_DEF("405D2",       CPU_POWERPC_405D2,       0xFFFFFFFF, 405),
+    POWERPC_DEF("405D2",       CPU_POWERPC_405D2,       405),
 #if defined (TODO)
     /* PowerPC 405 D3                                                        */
-    POWERPC_DEF("405D3",       CPU_POWERPC_405D3,       0xFFFFFFFF, 405),
+    POWERPC_DEF("405D3",       CPU_POWERPC_405D3,       405),
 #endif
     /* PowerPC 405 D4                                                        */
-    POWERPC_DEF("405D4",       CPU_POWERPC_405D4,       0xFFFFFFFF, 405),
+    POWERPC_DEF("405D4",       CPU_POWERPC_405D4,       405),
 #if defined (TODO)
     /* PowerPC 405 D5                                                        */
-    POWERPC_DEF("405D5",       CPU_POWERPC_405D5,       0xFFFFFFFF, 405),
+    POWERPC_DEF("405D5",       CPU_POWERPC_405D5,       405),
 #endif
 #if defined (TODO)
     /* PowerPC 405 E4                                                        */
-    POWERPC_DEF("405E4",       CPU_POWERPC_405E4,       0xFFFFFFFF, 405),
+    POWERPC_DEF("405E4",       CPU_POWERPC_405E4,       405),
 #endif
 #if defined (TODO)
     /* PowerPC 405 F4                                                        */
-    POWERPC_DEF("405F4",       CPU_POWERPC_405F4,       0xFFFFFFFF, 405),
+    POWERPC_DEF("405F4",       CPU_POWERPC_405F4,       405),
 #endif
 #if defined (TODO)
     /* PowerPC 405 F5                                                        */
-    POWERPC_DEF("405F5",       CPU_POWERPC_405F5,       0xFFFFFFFF, 405),
+    POWERPC_DEF("405F5",       CPU_POWERPC_405F5,       405),
 #endif
 #if defined (TODO)
     /* PowerPC 405 F6                                                        */
-    POWERPC_DEF("405F6",       CPU_POWERPC_405F6,       0xFFFFFFFF, 405),
+    POWERPC_DEF("405F6",       CPU_POWERPC_405F6,       405),
 #endif
     /* PowerPC 405 microcontrolers                                           */
     /* PowerPC 405 CR                                                        */
-    POWERPC_DEF("405CR",       CPU_POWERPC_405CR,       0xFFFFFFFF, 405),
+    POWERPC_DEF("405CR",       CPU_POWERPC_405CR,       405),
     /* PowerPC 405 CRa                                                       */
-    POWERPC_DEF("405CRa",      CPU_POWERPC_405CRa,      0xFFFFFFFF, 405),
+    POWERPC_DEF("405CRa",      CPU_POWERPC_405CRa,      405),
     /* PowerPC 405 CRb                                                       */
-    POWERPC_DEF("405CRb",      CPU_POWERPC_405CRb,      0xFFFFFFFF, 405),
+    POWERPC_DEF("405CRb",      CPU_POWERPC_405CRb,      405),
     /* PowerPC 405 CRc                                                       */
-    POWERPC_DEF("405CRc",      CPU_POWERPC_405CRc,      0xFFFFFFFF, 405),
+    POWERPC_DEF("405CRc",      CPU_POWERPC_405CRc,      405),
     /* PowerPC 405 EP                                                        */
-    POWERPC_DEF("405EP",       CPU_POWERPC_405EP,       0xFFFFFFFF, 405),
+    POWERPC_DEF("405EP",       CPU_POWERPC_405EP,       405),
 #if defined(TODO)
     /* PowerPC 405 EXr                                                       */
-    POWERPC_DEF("405EXr",      CPU_POWERPC_405EXr,      0xFFFFFFFF, 405),
+    POWERPC_DEF("405EXr",      CPU_POWERPC_405EXr,      405),
 #endif
     /* PowerPC 405 EZ                                                        */
-    POWERPC_DEF("405EZ",       CPU_POWERPC_405EZ,       0xFFFFFFFF, 405),
+    POWERPC_DEF("405EZ",       CPU_POWERPC_405EZ,       405),
 #if defined(TODO)
     /* PowerPC 405 FX                                                        */
-    POWERPC_DEF("405FX",       CPU_POWERPC_405FX,       0xFFFFFFFF, 405),
+    POWERPC_DEF("405FX",       CPU_POWERPC_405FX,       405),
 #endif
     /* PowerPC 405 GP                                                        */
-    POWERPC_DEF("405GP",       CPU_POWERPC_405GP,       0xFFFFFFFF, 405),
+    POWERPC_DEF("405GP",       CPU_POWERPC_405GP,       405),
     /* PowerPC 405 GPa                                                       */
-    POWERPC_DEF("405GPa",      CPU_POWERPC_405GPa,      0xFFFFFFFF, 405),
+    POWERPC_DEF("405GPa",      CPU_POWERPC_405GPa,      405),
     /* PowerPC 405 GPb                                                       */
-    POWERPC_DEF("405GPb",      CPU_POWERPC_405GPb,      0xFFFFFFFF, 405),
+    POWERPC_DEF("405GPb",      CPU_POWERPC_405GPb,      405),
     /* PowerPC 405 GPc                                                       */
-    POWERPC_DEF("405GPc",      CPU_POWERPC_405GPc,      0xFFFFFFFF, 405),
+    POWERPC_DEF("405GPc",      CPU_POWERPC_405GPc,      405),
     /* PowerPC 405 GPd                                                       */
-    POWERPC_DEF("405GPd",      CPU_POWERPC_405GPd,      0xFFFFFFFF, 405),
+    POWERPC_DEF("405GPd",      CPU_POWERPC_405GPd,      405),
     /* PowerPC 405 GPe                                                       */
-    POWERPC_DEF("405GPe",      CPU_POWERPC_405GPe,      0xFFFFFFFF, 405),
+    POWERPC_DEF("405GPe",      CPU_POWERPC_405GPe,      405),
     /* PowerPC 405 GPR                                                       */
-    POWERPC_DEF("405GPR",      CPU_POWERPC_405GPR,      0xFFFFFFFF, 405),
+    POWERPC_DEF("405GPR",      CPU_POWERPC_405GPR,      405),
 #if defined(TODO)
     /* PowerPC 405 H                                                         */
-    POWERPC_DEF("405H",        CPU_POWERPC_405H,        0xFFFFFFFF, 405),
+    POWERPC_DEF("405H",        CPU_POWERPC_405H,        405),
 #endif
 #if defined(TODO)
     /* PowerPC 405 L                                                         */
-    POWERPC_DEF("405L",        CPU_POWERPC_405L,        0xFFFFFFFF, 405),
+    POWERPC_DEF("405L",        CPU_POWERPC_405L,        405),
 #endif
     /* PowerPC 405 LP                                                        */
-    POWERPC_DEF("405LP",       CPU_POWERPC_405LP,       0xFFFFFFFF, 405),
+    POWERPC_DEF("405LP",       CPU_POWERPC_405LP,       405),
 #if defined(TODO)
     /* PowerPC 405 PM                                                        */
-    POWERPC_DEF("405PM",       CPU_POWERPC_405PM,       0xFFFFFFFF, 405),
+    POWERPC_DEF("405PM",       CPU_POWERPC_405PM,       405),
 #endif
 #if defined(TODO)
     /* PowerPC 405 PS                                                        */
-    POWERPC_DEF("405PS",       CPU_POWERPC_405PS,       0xFFFFFFFF, 405),
+    POWERPC_DEF("405PS",       CPU_POWERPC_405PS,       405),
 #endif
 #if defined(TODO)
     /* PowerPC 405 S                                                         */
-    POWERPC_DEF("405S",        CPU_POWERPC_405S,        0xFFFFFFFF, 405),
+    POWERPC_DEF("405S",        CPU_POWERPC_405S,        405),
 #endif
     /* Npe405 H                                                              */
-    POWERPC_DEF("Npe405H",     CPU_POWERPC_NPE405H,     0xFFFFFFFF, 405),
+    POWERPC_DEF("Npe405H",     CPU_POWERPC_NPE405H,     405),
     /* Npe405 H2                                                             */
-    POWERPC_DEF("Npe405H2",    CPU_POWERPC_NPE405H2,    0xFFFFFFFF, 405),
+    POWERPC_DEF("Npe405H2",    CPU_POWERPC_NPE405H2,    405),
     /* Npe405 L                                                              */
-    POWERPC_DEF("Npe405L",     CPU_POWERPC_NPE405L,     0xFFFFFFFF, 405),
+    POWERPC_DEF("Npe405L",     CPU_POWERPC_NPE405L,     405),
     /* Npe4GS3                                                               */
-    POWERPC_DEF("Npe4GS3",     CPU_POWERPC_NPE4GS3,     0xFFFFFFFF, 405),
+    POWERPC_DEF("Npe4GS3",     CPU_POWERPC_NPE4GS3,     405),
 #if defined (TODO)
-    POWERPC_DEF("Npcxx1",      CPU_POWERPC_NPCxx1,      0xFFFFFFFF, 405),
+    POWERPC_DEF("Npcxx1",      CPU_POWERPC_NPCxx1,      405),
 #endif
 #if defined (TODO)
-    POWERPC_DEF("Npr161",      CPU_POWERPC_NPR161,      0xFFFFFFFF, 405),
+    POWERPC_DEF("Npr161",      CPU_POWERPC_NPR161,      405),
 #endif
 #if defined (TODO)
     /* PowerPC LC77700 (Sanyo)                                               */
-    POWERPC_DEF("LC77700",     CPU_POWERPC_LC77700,     0xFFFFFFFF, 405),
+    POWERPC_DEF("LC77700",     CPU_POWERPC_LC77700,     405),
 #endif
     /* PowerPC 401/403/405 based set-top-box microcontrolers                 */
 #if defined (TODO)
     /* STB010000                                                             */
-    POWERPC_DEF("STB01000",    CPU_POWERPC_STB01000,    0xFFFFFFFF, 401x2),
+    POWERPC_DEF("STB01000",    CPU_POWERPC_STB01000,    401x2),
 #endif
 #if defined (TODO)
     /* STB01010                                                              */
-    POWERPC_DEF("STB01010",    CPU_POWERPC_STB01010,    0xFFFFFFFF, 401x2),
+    POWERPC_DEF("STB01010",    CPU_POWERPC_STB01010,    401x2),
 #endif
 #if defined (TODO)
     /* STB0210                                                               */
-    POWERPC_DEF("STB0210",     CPU_POWERPC_STB0210,     0xFFFFFFFF, 401x3),
+    POWERPC_DEF("STB0210",     CPU_POWERPC_STB0210,     401x3),
 #endif
     /* STB03xx                                                               */
-    POWERPC_DEF("STB03",       CPU_POWERPC_STB03,       0xFFFFFFFF, 405),
+    POWERPC_DEF("STB03",       CPU_POWERPC_STB03,       405),
 #if defined (TODO)
     /* STB043x                                                               */
-    POWERPC_DEF("STB043",      CPU_POWERPC_STB043,      0xFFFFFFFF, 405),
+    POWERPC_DEF("STB043",      CPU_POWERPC_STB043,      405),
 #endif
 #if defined (TODO)
     /* STB045x                                                               */
-    POWERPC_DEF("STB045",      CPU_POWERPC_STB045,      0xFFFFFFFF, 405),
+    POWERPC_DEF("STB045",      CPU_POWERPC_STB045,      405),
 #endif
     /* STB04xx                                                               */
-    POWERPC_DEF("STB04",       CPU_POWERPC_STB04,       0xFFFF0000, 405),
+    POWERPC_DEF("STB04",       CPU_POWERPC_STB04,       405),
     /* STB25xx                                                               */
-    POWERPC_DEF("STB25",       CPU_POWERPC_STB25,       0xFFFFFFFF, 405),
+    POWERPC_DEF("STB25",       CPU_POWERPC_STB25,       405),
 #if defined (TODO)
     /* STB130                                                                */
-    POWERPC_DEF("STB130",      CPU_POWERPC_STB130,      0xFFFFFFFF, 405),
+    POWERPC_DEF("STB130",      CPU_POWERPC_STB130,      405),
 #endif
     /* Xilinx PowerPC 405 cores                                              */
-    POWERPC_DEF("x2vp4",       CPU_POWERPC_X2VP4,       0xFFFFFFFF, 405),
-    POWERPC_DEF("x2vp7",       CPU_POWERPC_X2VP7,       0xFFFFFFFF, 405),
-    POWERPC_DEF("x2vp20",      CPU_POWERPC_X2VP20,      0xFFFFFFFF, 405),
-    POWERPC_DEF("x2vp50",      CPU_POWERPC_X2VP50,      0xFFFFFFFF, 405),
+    POWERPC_DEF("x2vp4",       CPU_POWERPC_X2VP4,       405),
+    POWERPC_DEF("x2vp7",       CPU_POWERPC_X2VP7,       405),
+    POWERPC_DEF("x2vp20",      CPU_POWERPC_X2VP20,      405),
+    POWERPC_DEF("x2vp50",      CPU_POWERPC_X2VP50,      405),
 #if defined (TODO)
     /* Zarlink ZL10310                                                       */
-    POWERPC_DEF("zl10310",     CPU_POWERPC_ZL10310,     0xFFFFFFFF, 405),
+    POWERPC_DEF("zl10310",     CPU_POWERPC_ZL10310,     405),
 #endif
 #if defined (TODO)
     /* Zarlink ZL10311                                                       */
-    POWERPC_DEF("zl10311",     CPU_POWERPC_ZL10311,     0xFFFFFFFF, 405),
+    POWERPC_DEF("zl10311",     CPU_POWERPC_ZL10311,     405),
 #endif
 #if defined (TODO)
     /* Zarlink ZL10320                                                       */
-    POWERPC_DEF("zl10320",     CPU_POWERPC_ZL10320,     0xFFFFFFFF, 405),
+    POWERPC_DEF("zl10320",     CPU_POWERPC_ZL10320,     405),
 #endif
 #if defined (TODO)
     /* Zarlink ZL10321                                                       */
-    POWERPC_DEF("zl10321",     CPU_POWERPC_ZL10321,     0xFFFFFFFF, 405),
+    POWERPC_DEF("zl10321",     CPU_POWERPC_ZL10321,     405),
 #endif
     /* PowerPC 440 family                                                    */
     /* Generic PowerPC 440                                                   */
-    POWERPC_DEF("440",         CPU_POWERPC_440,         0xFFFFFFFF, 440GP),
+    POWERPC_DEF("440",         CPU_POWERPC_440,         440GP),
     /* PowerPC 440 cores                                                     */
 #if defined (TODO)
     /* PowerPC 440 A4                                                        */
-    POWERPC_DEF("440A4",       CPU_POWERPC_440A4,       0xFFFFFFFF, 440x4),
+    POWERPC_DEF("440A4",       CPU_POWERPC_440A4,       440x4),
 #endif
 #if defined (TODO)
     /* PowerPC 440 A5                                                        */
-    POWERPC_DEF("440A5",       CPU_POWERPC_440A5,       0xFFFFFFFF, 440x5),
+    POWERPC_DEF("440A5",       CPU_POWERPC_440A5,       440x5),
 #endif
 #if defined (TODO)
     /* PowerPC 440 B4                                                        */
-    POWERPC_DEF("440B4",       CPU_POWERPC_440B4,       0xFFFFFFFF, 440x4),
+    POWERPC_DEF("440B4",       CPU_POWERPC_440B4,       440x4),
 #endif
 #if defined (TODO)
     /* PowerPC 440 G4                                                        */
-    POWERPC_DEF("440G4",       CPU_POWERPC_440G4,       0xFFFFFFFF, 440x4),
+    POWERPC_DEF("440G4",       CPU_POWERPC_440G4,       440x4),
 #endif
 #if defined (TODO)
     /* PowerPC 440 F5                                                        */
-    POWERPC_DEF("440F5",       CPU_POWERPC_440F5,       0xFFFFFFFF, 440x5),
+    POWERPC_DEF("440F5",       CPU_POWERPC_440F5,       440x5),
 #endif
 #if defined (TODO)
     /* PowerPC 440 G5                                                        */
-    POWERPC_DEF("440G5",       CPU_POWERPC_440G5,       0xFFFFFFFF, 440x5),
+    POWERPC_DEF("440G5",       CPU_POWERPC_440G5,       440x5),
 #endif
 #if defined (TODO)
     /* PowerPC 440H4                                                         */
-    POWERPC_DEF("440H4",       CPU_POWERPC_440H4,       0xFFFFFFFF, 440x4),
+    POWERPC_DEF("440H4",       CPU_POWERPC_440H4,       440x4),
 #endif
 #if defined (TODO)
     /* PowerPC 440H6                                                         */
-    POWERPC_DEF("440H6",       CPU_POWERPC_440H6,       0xFFFFFFFF, 440Gx5),
+    POWERPC_DEF("440H6",       CPU_POWERPC_440H6,       440Gx5),
 #endif
     /* PowerPC 440 microcontrolers                                           */
     /* PowerPC 440 EP                                                        */
-    POWERPC_DEF("440EP",       CPU_POWERPC_440EP,       0xFFFFFFFF, 440EP),
+    POWERPC_DEF("440EP",       CPU_POWERPC_440EP,       440EP),
     /* PowerPC 440 EPa                                                       */
-    POWERPC_DEF("440EPa",      CPU_POWERPC_440EPa,      0xFFFFFFFF, 440EP),
+    POWERPC_DEF("440EPa",      CPU_POWERPC_440EPa,      440EP),
     /* PowerPC 440 EPb                                                       */
-    POWERPC_DEF("440EPb",      CPU_POWERPC_440EPb,      0xFFFFFFFF, 440EP),
+    POWERPC_DEF("440EPb",      CPU_POWERPC_440EPb,      440EP),
     /* PowerPC 440 EPX                                                       */
-    POWERPC_DEF("440EPX",      CPU_POWERPC_440EPX,      0xFFFFFFFF, 440EP),
+    POWERPC_DEF("440EPX",      CPU_POWERPC_440EPX,      440EP),
     /* PowerPC 440 GP                                                        */
-    POWERPC_DEF("440GP",       CPU_POWERPC_440GP,       0xFFFFFFFF, 440GP),
+    POWERPC_DEF("440GP",       CPU_POWERPC_440GP,       440GP),
     /* PowerPC 440 GPb                                                       */
-    POWERPC_DEF("440GPb",      CPU_POWERPC_440GPb,      0xFFFFFFFF, 440GP),
+    POWERPC_DEF("440GPb",      CPU_POWERPC_440GPb,      440GP),
     /* PowerPC 440 GPc                                                       */
-    POWERPC_DEF("440GPc",      CPU_POWERPC_440GPc,      0xFFFFFFFF, 440GP),
+    POWERPC_DEF("440GPc",      CPU_POWERPC_440GPc,      440GP),
     /* PowerPC 440 GR                                                        */
-    POWERPC_DEF("440GR",       CPU_POWERPC_440GR,       0xFFFFFFFF, 440x5),
+    POWERPC_DEF("440GR",       CPU_POWERPC_440GR,       440x5),
     /* PowerPC 440 GRa                                                       */
-    POWERPC_DEF("440GRa",      CPU_POWERPC_440GRa,      0xFFFFFFFF, 440x5),
+    POWERPC_DEF("440GRa",      CPU_POWERPC_440GRa,      440x5),
     /* PowerPC 440 GRX                                                       */
-    POWERPC_DEF("440GRX",      CPU_POWERPC_440GRX,      0xFFFFFFFF, 440x5),
+    POWERPC_DEF("440GRX",      CPU_POWERPC_440GRX,      440x5),
     /* PowerPC 440 GX                                                        */
-    POWERPC_DEF("440GX",       CPU_POWERPC_440GX,       0xFFFFFFFF, 440EP),
+    POWERPC_DEF("440GX",       CPU_POWERPC_440GX,       440EP),
     /* PowerPC 440 GXa                                                       */
-    POWERPC_DEF("440GXa",      CPU_POWERPC_440GXa,      0xFFFFFFFF, 440EP),
+    POWERPC_DEF("440GXa",      CPU_POWERPC_440GXa,      440EP),
     /* PowerPC 440 GXb                                                       */
-    POWERPC_DEF("440GXb",      CPU_POWERPC_440GXb,      0xFFFFFFFF, 440EP),
+    POWERPC_DEF("440GXb",      CPU_POWERPC_440GXb,      440EP),
     /* PowerPC 440 GXc                                                       */
-    POWERPC_DEF("440GXc",      CPU_POWERPC_440GXc,      0xFFFFFFFF, 440EP),
+    POWERPC_DEF("440GXc",      CPU_POWERPC_440GXc,      440EP),
     /* PowerPC 440 GXf                                                       */
-    POWERPC_DEF("440GXf",      CPU_POWERPC_440GXf,      0xFFFFFFFF, 440EP),
+    POWERPC_DEF("440GXf",      CPU_POWERPC_440GXf,      440EP),
 #if defined(TODO)
     /* PowerPC 440 S                                                         */
-    POWERPC_DEF("440S",        CPU_POWERPC_440S,        0xFFFFFFFF, 440),
+    POWERPC_DEF("440S",        CPU_POWERPC_440S,        440),
 #endif
     /* PowerPC 440 SP                                                        */
-    POWERPC_DEF("440SP",       CPU_POWERPC_440SP,       0xFFFFFFFF, 440EP),
+    POWERPC_DEF("440SP",       CPU_POWERPC_440SP,       440EP),
     /* PowerPC 440 SP2                                                       */
-    POWERPC_DEF("440SP2",      CPU_POWERPC_440SP2,      0xFFFFFFFF, 440EP),
+    POWERPC_DEF("440SP2",      CPU_POWERPC_440SP2,      440EP),
     /* PowerPC 440 SPE                                                       */
-    POWERPC_DEF("440SPE",      CPU_POWERPC_440SPE,      0xFFFFFFFF, 440EP),
+    POWERPC_DEF("440SPE",      CPU_POWERPC_440SPE,      440EP),
     /* PowerPC 460 family                                                    */
 #if defined (TODO)
     /* Generic PowerPC 464                                                   */
-    POWERPC_DEF("464",         CPU_POWERPC_464,         0xFFFFFFFF, 460),
+    POWERPC_DEF("464",         CPU_POWERPC_464,         460),
 #endif
     /* PowerPC 464 microcontrolers                                           */
 #if defined (TODO)
     /* PowerPC 464H90                                                        */
-    POWERPC_DEF("464H90",      CPU_POWERPC_464H90,      0xFFFFFFFF, 460),
+    POWERPC_DEF("464H90",      CPU_POWERPC_464H90,      460),
 #endif
 #if defined (TODO)
     /* PowerPC 464H90F                                                       */
-    POWERPC_DEF("464H90F",     CPU_POWERPC_464H90F,     0xFFFFFFFF, 460F),
+    POWERPC_DEF("464H90F",     CPU_POWERPC_464H90F,     460F),
 #endif
     /* Freescale embedded PowerPC cores                                      */
     /* e200 family                                                           */
 #if defined (TODO)
     /* Generic PowerPC e200 core                                             */
-    POWERPC_DEF("e200",        CPU_POWERPC_e200,        0xFFFFFFFF, e200),
+    POWERPC_DEF("e200",        CPU_POWERPC_e200,        e200),
 #endif
 #if defined (TODO)
     /* PowerPC e200z5 core                                                   */
-    POWERPC_DEF("e200z5",      CPU_POWERPC_e200z5,      0xFFFFFFFF, e200),
+    POWERPC_DEF("e200z5",      CPU_POWERPC_e200z5,      e200),
 #endif
 #if defined (TODO)
     /* PowerPC e200z6 core                                                   */
-    POWERPC_DEF("e200z6",      CPU_POWERPC_e200z6,      0xFFFFFFFF, e200),
+    POWERPC_DEF("e200z6",      CPU_POWERPC_e200z6,      e200),
 #endif
     /* e300 family                                                           */
 #if defined (TODO)
     /* Generic PowerPC e300 core                                             */
-    POWERPC_DEF("e300",        CPU_POWERPC_e300,        0xFFFFFFFF, e300),
+    POWERPC_DEF("e300",        CPU_POWERPC_e300,        e300),
 #endif
 #if defined (TODO)
     /* PowerPC e300c1 core                                                   */
-    POWERPC_DEF("e300c1",      CPU_POWERPC_e300c1,      0xFFFFFFFF, e300),
+    POWERPC_DEF("e300c1",      CPU_POWERPC_e300c1,      e300),
 #endif
 #if defined (TODO)
     /* PowerPC e300c2 core                                                   */
-    POWERPC_DEF("e300c2",      CPU_POWERPC_e300c2,      0xFFFFFFFF, e300),
+    POWERPC_DEF("e300c2",      CPU_POWERPC_e300c2,      e300),
 #endif
 #if defined (TODO)
     /* PowerPC e300c3 core                                                   */
-    POWERPC_DEF("e300c3",      CPU_POWERPC_e300c3,      0xFFFFFFFF, e300),
+    POWERPC_DEF("e300c3",      CPU_POWERPC_e300c3,      e300),
 #endif
     /* e500 family                                                           */
 #if defined (TODO)
     /* PowerPC e500 core                                                     */
-    POWERPC_DEF("e500",        CPU_POWERPC_e500,        0xFFFFFFFF, e500),
+    POWERPC_DEF("e500",        CPU_POWERPC_e500,        e500),
 #endif
 #if defined (TODO)
     /* PowerPC e500 v1.1 core                                                */
-    POWERPC_DEF("e500v1.1",    CPU_POWERPC_e500_v11,    0xFFFFFFFF, e500),
+    POWERPC_DEF("e500v1.1",    CPU_POWERPC_e500_v11,    e500),
 #endif
 #if defined (TODO)
     /* PowerPC e500 v1.2 core                                                */
-    POWERPC_DEF("e500v1.2",    CPU_POWERPC_e500_v12,    0xFFFFFFFF, e500),
+    POWERPC_DEF("e500v1.2",    CPU_POWERPC_e500_v12,    e500),
 #endif
 #if defined (TODO)
     /* PowerPC e500 v2.1 core                                                */
-    POWERPC_DEF("e500v2.1",    CPU_POWERPC_e500_v21,    0xFFFFFFFF, e500),
+    POWERPC_DEF("e500v2.1",    CPU_POWERPC_e500_v21,    e500),
 #endif
 #if defined (TODO)
     /* PowerPC e500 v2.2 core                                                */
-    POWERPC_DEF("e500v2.2",    CPU_POWERPC_e500_v22,    0xFFFFFFFF, e500),
+    POWERPC_DEF("e500v2.2",    CPU_POWERPC_e500_v22,    e500),
 #endif
     /* e600 family                                                           */
 #if defined (TODO)
     /* PowerPC e600 core                                                     */
-    POWERPC_DEF("e600",        CPU_POWERPC_e600,        0xFFFFFFFF, e600),
+    POWERPC_DEF("e600",        CPU_POWERPC_e600,        e600),
 #endif
     /* PowerPC MPC 5xx cores                                                 */
 #if defined (TODO)
     /* PowerPC MPC 5xx                                                       */
-    POWERPC_DEF("mpc5xx",      CPU_POWERPC_5xx,         0xFFFFFFFF, 5xx),
+    POWERPC_DEF("mpc5xx",      CPU_POWERPC_5xx,         5xx),
 #endif
     /* PowerPC MPC 8xx cores                                                 */
 #if defined (TODO)
     /* PowerPC MPC 8xx                                                       */
-    POWERPC_DEF("mpc8xx",      CPU_POWERPC_8xx,         0xFFFFFFFF, 8xx),
+    POWERPC_DEF("mpc8xx",      CPU_POWERPC_8xx,         8xx),
 #endif
     /* PowerPC MPC 8xxx cores                                                */
 #if defined (TODO)
     /* PowerPC MPC 82xx HIP3                                                 */
-    POWERPC_DEF("mpc82xxhip3", CPU_POWERPC_82xx_HIP3,   0xFFFFFFFF, 82xx),
+    POWERPC_DEF("mpc82xxhip3", CPU_POWERPC_82xx_HIP3,   82xx),
 #endif
 #if defined (TODO)
     /* PowerPC MPC 82xx HIP4                                                 */
-    POWERPC_DEF("mpc82xxhip4", CPU_POWERPC_82xx_HIP4,   0xFFFFFFFF, 82xx),
+    POWERPC_DEF("mpc82xxhip4", CPU_POWERPC_82xx_HIP4,   82xx),
 #endif
 #if defined (TODO)
     /* PowerPC MPC 827x                                                      */
-    POWERPC_DEF("mpc827x",     CPU_POWERPC_827x,        0xFFFFFFFF, 827x),
+    POWERPC_DEF("mpc827x",     CPU_POWERPC_827x,        827x),
 #endif
 
     /* 32 bits "classic" PowerPC                                             */
     /* PowerPC 6xx family                                                    */
     /* PowerPC 601                                                           */
-    POWERPC_DEF("601",         CPU_POWERPC_601,         0xFFFFFFFF, 601),
+    POWERPC_DEF("601",         CPU_POWERPC_601,         601),
     /* PowerPC 601v2                                                         */
-    POWERPC_DEF("601a",        CPU_POWERPC_601a,        0xFFFFFFFF, 601),
+    POWERPC_DEF("601a",        CPU_POWERPC_601a,        601),
     /* PowerPC 602                                                           */
-    POWERPC_DEF("602",         CPU_POWERPC_602,         0xFFFFFFFF, 602),
+    POWERPC_DEF("602",         CPU_POWERPC_602,         602),
     /* PowerPC 603                                                           */
-    POWERPC_DEF("603",         CPU_POWERPC_603,         0xFFFFFFFF, 603),
+    POWERPC_DEF("603",         CPU_POWERPC_603,         603),
     /* Code name for PowerPC 603                                             */
-    POWERPC_DEF("Vanilla",     CPU_POWERPC_603,         0xFFFFFFFF, 603),
+    POWERPC_DEF("Vanilla",     CPU_POWERPC_603,         603),
     /* PowerPC 603e                                                          */
-    POWERPC_DEF("603e",        CPU_POWERPC_603E,        0xFFFFFFFF, 603E),
+    POWERPC_DEF("603e",        CPU_POWERPC_603E,        603E),
     /* Code name for PowerPC 603e                                            */
-    POWERPC_DEF("Stretch",     CPU_POWERPC_603E,        0xFFFFFFFF, 603E),
+    POWERPC_DEF("Stretch",     CPU_POWERPC_603E,        603E),
     /* PowerPC 603e v1.1                                                     */
-    POWERPC_DEF("603e1.1",     CPU_POWERPC_603E_v11,    0xFFFFFFFF, 603E),
+    POWERPC_DEF("603e1.1",     CPU_POWERPC_603E_v11,    603E),
     /* PowerPC 603e v1.2                                                     */
-    POWERPC_DEF("603e1.2",     CPU_POWERPC_603E_v12,    0xFFFFFFFF, 603E),
+    POWERPC_DEF("603e1.2",     CPU_POWERPC_603E_v12,    603E),
     /* PowerPC 603e v1.3                                                     */
-    POWERPC_DEF("603e1.3",     CPU_POWERPC_603E_v13,    0xFFFFFFFF, 603E),
+    POWERPC_DEF("603e1.3",     CPU_POWERPC_603E_v13,    603E),
     /* PowerPC 603e v1.4                                                     */
-    POWERPC_DEF("603e1.4",     CPU_POWERPC_603E_v14,    0xFFFFFFFF, 603E),
+    POWERPC_DEF("603e1.4",     CPU_POWERPC_603E_v14,    603E),
     /* PowerPC 603e v2.2                                                     */
-    POWERPC_DEF("603e2.2",     CPU_POWERPC_603E_v22,    0xFFFFFFFF, 603E),
+    POWERPC_DEF("603e2.2",     CPU_POWERPC_603E_v22,    603E),
     /* PowerPC 603e v3                                                       */
-    POWERPC_DEF("603e3",       CPU_POWERPC_603E_v3,     0xFFFFFFFF, 603E),
+    POWERPC_DEF("603e3",       CPU_POWERPC_603E_v3,     603E),
     /* PowerPC 603e v4                                                       */
-    POWERPC_DEF("603e4",       CPU_POWERPC_603E_v4,     0xFFFFFFFF, 603E),
+    POWERPC_DEF("603e4",       CPU_POWERPC_603E_v4,     603E),
     /* PowerPC 603e v4.1                                                     */
-    POWERPC_DEF("603e4.1",     CPU_POWERPC_603E_v41,    0xFFFFFFFF, 603E),
+    POWERPC_DEF("603e4.1",     CPU_POWERPC_603E_v41,    603E),
     /* PowerPC 603e                                                          */
-    POWERPC_DEF("603e7",       CPU_POWERPC_603E7,       0xFFFFFFFF, 603E),
+    POWERPC_DEF("603e7",       CPU_POWERPC_603E7,       603E),
     /* PowerPC 603e7t                                                        */
-    POWERPC_DEF("603e7t",      CPU_POWERPC_603E7t,      0xFFFFFFFF, 603E),
+    POWERPC_DEF("603e7t",      CPU_POWERPC_603E7t,      603E),
     /* PowerPC 603e7v                                                        */
-    POWERPC_DEF("603e7v",      CPU_POWERPC_603E7v,      0xFFFFFFFF, 603E),
+    POWERPC_DEF("603e7v",      CPU_POWERPC_603E7v,      603E),
     /* Code name for PowerPC 603ev                                           */
-    POWERPC_DEF("Vaillant",    CPU_POWERPC_603E7v,      0xFFFFFFFF, 603E),
+    POWERPC_DEF("Vaillant",    CPU_POWERPC_603E7v,      603E),
     /* PowerPC 603e7v1                                                       */
-    POWERPC_DEF("603e7v1",     CPU_POWERPC_603E7v1,     0xFFFFFFFF, 603E),
+    POWERPC_DEF("603e7v1",     CPU_POWERPC_603E7v1,     603E),
     /* PowerPC 603e7v2                                                       */
-    POWERPC_DEF("603e7v2",     CPU_POWERPC_603E7v2,     0xFFFFFFFF, 603E),
+    POWERPC_DEF("603e7v2",     CPU_POWERPC_603E7v2,     603E),
     /* PowerPC 603p                                                          */
     /* to be checked */
-    POWERPC_DEF("603p",        CPU_POWERPC_603P,        0xFFFFFFFF, 603),
+    POWERPC_DEF("603p",        CPU_POWERPC_603P,        603),
     /* PowerPC 603r                                                          */
-    POWERPC_DEF("603r",        CPU_POWERPC_603R,        0xFFFFFFFF, 603E),
+    POWERPC_DEF("603r",        CPU_POWERPC_603R,        603E),
     /* Code name for PowerPC 603r                                            */
-    POWERPC_DEF("Goldeneye",   CPU_POWERPC_603R,        0xFFFFFFFF, 603E),
+    POWERPC_DEF("Goldeneye",   CPU_POWERPC_603R,        603E),
     /* PowerPC G2 core                                                       */
-    POWERPC_DEF("G2",          CPU_POWERPC_G2,          0xFFFFFFFF, G2),
+    POWERPC_DEF("G2",          CPU_POWERPC_G2,          G2),
     /* PowerPC G2 H4                                                         */
-    POWERPC_DEF("G2H4",        CPU_POWERPC_G2H4,        0xFFFFFFFF, G2),
+    POWERPC_DEF("G2H4",        CPU_POWERPC_G2H4,        G2),
     /* PowerPC G2 GP                                                         */
-    POWERPC_DEF("G2GP",        CPU_POWERPC_G2gp,        0xFFFFFFFF, G2),
+    POWERPC_DEF("G2GP",        CPU_POWERPC_G2gp,        G2),
     /* PowerPC G2 LS                                                         */
-    POWERPC_DEF("G2LS",        CPU_POWERPC_G2ls,        0xFFFFFFFF, G2),
+    POWERPC_DEF("G2LS",        CPU_POWERPC_G2ls,        G2),
     /* PowerPC G2LE                                                          */
     /* Same as G2, with little-endian mode support                           */
-    POWERPC_DEF("G2le",        CPU_POWERPC_G2LE,        0xFFFFFFFF, G2LE),
+    POWERPC_DEF("G2le",        CPU_POWERPC_G2LE,        G2LE),
     /* PowerPC G2LE GP                                                       */
-    POWERPC_DEF("G2leGP",      CPU_POWERPC_G2LEgp,      0xFFFFFFFF, G2LE),
+    POWERPC_DEF("G2leGP",      CPU_POWERPC_G2LEgp,      G2LE),
     /* PowerPC G2LE LS                                                       */
-    POWERPC_DEF("G2leLS",      CPU_POWERPC_G2LEls,      0xFFFFFFFF, G2LE),
+    POWERPC_DEF("G2leLS",      CPU_POWERPC_G2LEls,      G2LE),
     /* PowerPC 604                                                           */
-    POWERPC_DEF("604",         CPU_POWERPC_604,         0xFFFFFFFF, 604),
+    POWERPC_DEF("604",         CPU_POWERPC_604,         604),
     /* PowerPC 604e                                                          */
-    POWERPC_DEF("604e",        CPU_POWERPC_604E,        0xFFFFFFFF, 604),
+    /* XXX: code names "Sirocco" "Mach 5" */
+    POWERPC_DEF("604e",        CPU_POWERPC_604E,        604),
     /* PowerPC 604e v1.0                                                     */
-    POWERPC_DEF("604e1.0",     CPU_POWERPC_604E_v10,    0xFFFFFFFF, 604),
+    POWERPC_DEF("604e1.0",     CPU_POWERPC_604E_v10,    604),
     /* PowerPC 604e v2.2                                                     */
-    POWERPC_DEF("604e2.2",     CPU_POWERPC_604E_v22,    0xFFFFFFFF, 604),
+    POWERPC_DEF("604e2.2",     CPU_POWERPC_604E_v22,    604),
     /* PowerPC 604e v2.4                                                     */
-    POWERPC_DEF("604e2.4",     CPU_POWERPC_604E_v24,    0xFFFFFFFF, 604),
+    POWERPC_DEF("604e2.4",     CPU_POWERPC_604E_v24,    604),
     /* PowerPC 604r                                                          */
-    POWERPC_DEF("604r",        CPU_POWERPC_604R,        0xFFFFFFFF, 604),
+    POWERPC_DEF("604r",        CPU_POWERPC_604R,        604),
 #if defined(TODO)
     /* PowerPC 604ev                                                         */
-    POWERPC_DEF("604ev",       CPU_POWERPC_604EV,       0xFFFFFFFF, 604),
+    POWERPC_DEF("604ev",       CPU_POWERPC_604EV,       604),
 #endif
     /* PowerPC 7xx family                                                    */
     /* Generic PowerPC 740 (G3)                                              */
-    POWERPC_DEF("740",         CPU_POWERPC_7x0,         0xFFFFFFFF, 7x0),
+    POWERPC_DEF("740",         CPU_POWERPC_7x0,         7x0),
     /* Generic PowerPC 750 (G3)                                              */
-    POWERPC_DEF("750",         CPU_POWERPC_7x0,         0xFFFFFFFF, 7x0),
+    POWERPC_DEF("750",         CPU_POWERPC_7x0,         7x0),
     /* Code name for generic PowerPC 740/750 (G3)                            */
-    POWERPC_DEF("Arthur",      CPU_POWERPC_7x0,         0xFFFFFFFF, 7x0),
+    POWERPC_DEF("Arthur",      CPU_POWERPC_7x0,         7x0),
+    /* XXX: 750 codename "Typhoon" */
     /* PowerPC 740/750 is also known as G3                                   */
-    POWERPC_DEF("G3",          CPU_POWERPC_7x0,         0xFFFFFFFF, 7x0),
+    POWERPC_DEF("G3",          CPU_POWERPC_7x0,         7x0),
     /* PowerPC 740 v2.0 (G3)                                                 */
-    POWERPC_DEF("740v2.0",     CPU_POWERPC_7x0_v20,     0xFFFFFFFF, 7x0),
+    POWERPC_DEF("740v2.0",     CPU_POWERPC_7x0_v20,     7x0),
     /* PowerPC 750 v2.0 (G3)                                                 */
-    POWERPC_DEF("750v2.0",     CPU_POWERPC_7x0_v20,     0xFFFFFFFF, 7x0),
+    POWERPC_DEF("750v2.0",     CPU_POWERPC_7x0_v20,     7x0),
     /* PowerPC 740 v2.1 (G3)                                                 */
-    POWERPC_DEF("740v2.1",     CPU_POWERPC_7x0_v21,     0xFFFFFFFF, 7x0),
+    POWERPC_DEF("740v2.1",     CPU_POWERPC_7x0_v21,     7x0),
     /* PowerPC 750 v2.1 (G3)                                                 */
-    POWERPC_DEF("750v2.1",     CPU_POWERPC_7x0_v21,     0xFFFFFFFF, 7x0),
+    POWERPC_DEF("750v2.1",     CPU_POWERPC_7x0_v21,     7x0),
     /* PowerPC 740 v2.2 (G3)                                                 */
-    POWERPC_DEF("740v2.2",     CPU_POWERPC_7x0_v22,     0xFFFFFFFF, 7x0),
+    POWERPC_DEF("740v2.2",     CPU_POWERPC_7x0_v22,     7x0),
     /* PowerPC 750 v2.2 (G3)                                                 */
-    POWERPC_DEF("750v2.2",     CPU_POWERPC_7x0_v22,     0xFFFFFFFF, 7x0),
+    POWERPC_DEF("750v2.2",     CPU_POWERPC_7x0_v22,     7x0),
     /* PowerPC 740 v3.0 (G3)                                                 */
-    POWERPC_DEF("740v3.0",     CPU_POWERPC_7x0_v30,     0xFFFFFFFF, 7x0),
+    POWERPC_DEF("740v3.0",     CPU_POWERPC_7x0_v30,     7x0),
     /* PowerPC 750 v3.0 (G3)                                                 */
-    POWERPC_DEF("750v3.0",     CPU_POWERPC_7x0_v30,     0xFFFFFFFF, 7x0),
+    POWERPC_DEF("750v3.0",     CPU_POWERPC_7x0_v30,     7x0),
     /* PowerPC 740 v3.1 (G3)                                                 */
-    POWERPC_DEF("740v3.1",     CPU_POWERPC_7x0_v31,     0xFFFFFFFF, 7x0),
+    POWERPC_DEF("740v3.1",     CPU_POWERPC_7x0_v31,     7x0),
     /* PowerPC 750 v3.1 (G3)                                                 */
-    POWERPC_DEF("750v3.1",     CPU_POWERPC_7x0_v31,     0xFFFFFFFF, 7x0),
+    POWERPC_DEF("750v3.1",     CPU_POWERPC_7x0_v31,     7x0),
     /* PowerPC 740E (G3)                                                     */
-    POWERPC_DEF("740e",        CPU_POWERPC_740E,        0xFFFFFFFF, 7x0),
+    POWERPC_DEF("740e",        CPU_POWERPC_740E,        7x0),
     /* PowerPC 740P (G3)                                                     */
-    POWERPC_DEF("740p",        CPU_POWERPC_7x0P,        0xFFFFFFFF, 7x0),
+    POWERPC_DEF("740p",        CPU_POWERPC_7x0P,        7x0),
     /* PowerPC 750P (G3)                                                     */
-    POWERPC_DEF("750p",        CPU_POWERPC_7x0P,        0xFFFFFFFF, 7x0),
+    POWERPC_DEF("750p",        CPU_POWERPC_7x0P,        7x0),
     /* Code name for PowerPC 740P/750P (G3)                                  */
-    POWERPC_DEF("Conan/Doyle", CPU_POWERPC_7x0P,        0xFFFFFFFF, 7x0),
+    POWERPC_DEF("Conan/Doyle", CPU_POWERPC_7x0P,        7x0),
     /* PowerPC 750CL (G3 embedded)                                           */
-    POWERPC_DEF("750cl",       CPU_POWERPC_750CL,       0xFFFFFFFF, 7x0),
+    POWERPC_DEF("750cl",       CPU_POWERPC_750CL,       7x0),
     /* PowerPC 750CX (G3 embedded)                                           */
-    POWERPC_DEF("750cx",       CPU_POWERPC_750CX,       0xFFFFFFFF, 7x0),
+    POWERPC_DEF("750cx",       CPU_POWERPC_750CX,       7x0),
     /* PowerPC 750CX v2.1 (G3 embedded)                                      */
-    POWERPC_DEF("750cx2.1",    CPU_POWERPC_750CX_v21,   0xFFFFFFFF, 7x0),
+    POWERPC_DEF("750cx2.1",    CPU_POWERPC_750CX_v21,   7x0),
     /* PowerPC 750CX v2.2 (G3 embedded)                                      */
-    POWERPC_DEF("750cx2.2",    CPU_POWERPC_750CX_v22,   0xFFFFFFFF, 7x0),
+    POWERPC_DEF("750cx2.2",    CPU_POWERPC_750CX_v22,   7x0),
     /* PowerPC 750CXe (G3 embedded)                                          */
-    POWERPC_DEF("750cxe",      CPU_POWERPC_750CXE,      0xFFFFFFFF, 7x0),
+    POWERPC_DEF("750cxe",      CPU_POWERPC_750CXE,      7x0),
     /* PowerPC 750CXe v2.1 (G3 embedded)                                     */
-    POWERPC_DEF("750cxe21",    CPU_POWERPC_750CXE_v21,  0xFFFFFFFF, 7x0),
+    POWERPC_DEF("750cxe21",    CPU_POWERPC_750CXE_v21,  7x0),
     /* PowerPC 750CXe v2.2 (G3 embedded)                                     */
-    POWERPC_DEF("750cxe22",    CPU_POWERPC_750CXE_v22,  0xFFFFFFFF, 7x0),
+    POWERPC_DEF("750cxe22",    CPU_POWERPC_750CXE_v22,  7x0),
     /* PowerPC 750CXe v2.3 (G3 embedded)                                     */
-    POWERPC_DEF("750cxe23",    CPU_POWERPC_750CXE_v23,  0xFFFFFFFF, 7x0),
+    POWERPC_DEF("750cxe23",    CPU_POWERPC_750CXE_v23,  7x0),
     /* PowerPC 750CXe v2.4 (G3 embedded)                                     */
-    POWERPC_DEF("750cxe24",    CPU_POWERPC_750CXE_v24,  0xFFFFFFFF, 7x0),
+    POWERPC_DEF("750cxe24",    CPU_POWERPC_750CXE_v24,  7x0),
     /* PowerPC 750CXe v2.4b (G3 embedded)                                    */
-    POWERPC_DEF("750cxe24b",   CPU_POWERPC_750CXE_v24b, 0xFFFFFFFF, 7x0),
+    POWERPC_DEF("750cxe24b",   CPU_POWERPC_750CXE_v24b, 7x0),
     /* PowerPC 750CXe v3.1 (G3 embedded)                                     */
-    POWERPC_DEF("750cxe31",    CPU_POWERPC_750CXE_v31,  0xFFFFFFFF, 7x0),
+    POWERPC_DEF("750cxe31",    CPU_POWERPC_750CXE_v31,  7x0),
     /* PowerPC 750CXe v3.1b (G3 embedded)                                    */
-    POWERPC_DEF("750cxe3.1b",  CPU_POWERPC_750CXE_v31b, 0xFFFFFFFF, 7x0),
+    POWERPC_DEF("750cxe3.1b",  CPU_POWERPC_750CXE_v31b, 7x0),
     /* PowerPC 750CXr (G3 embedded)                                          */
-    POWERPC_DEF("750cxr",      CPU_POWERPC_750CXR,      0xFFFFFFFF, 7x0),
+    POWERPC_DEF("750cxr",      CPU_POWERPC_750CXR,      7x0),
     /* PowerPC 750E (G3)                                                     */
-    POWERPC_DEF("750e",        CPU_POWERPC_750E,        0xFFFFFFFF, 7x0),
+    POWERPC_DEF("750e",        CPU_POWERPC_750E,        7x0),
     /* PowerPC 750FL (G3 embedded)                                           */
-    POWERPC_DEF("750fl",       CPU_POWERPC_750FL,       0xFFFFFFFF, 750fx),
+    POWERPC_DEF("750fl",       CPU_POWERPC_750FL,       750fx),
     /* PowerPC 750FX (G3 embedded)                                           */
-    POWERPC_DEF("750fx",       CPU_POWERPC_750FX,       0xFFFFFFFF, 750fx),
+    POWERPC_DEF("750fx",       CPU_POWERPC_750FX,       750fx),
     /* PowerPC 750FX v1.0 (G3 embedded)                                      */
-    POWERPC_DEF("750fx1.0",    CPU_POWERPC_750FX_v10,   0xFFFFFFFF, 750fx),
+    POWERPC_DEF("750fx1.0",    CPU_POWERPC_750FX_v10,   750fx),
     /* PowerPC 750FX v2.0 (G3 embedded)                                      */
-    POWERPC_DEF("750fx2.0",    CPU_POWERPC_750FX_v20,   0xFFFFFFFF, 750fx),
+    POWERPC_DEF("750fx2.0",    CPU_POWERPC_750FX_v20,   750fx),
     /* PowerPC 750FX v2.1 (G3 embedded)                                      */
-    POWERPC_DEF("750fx2.1",    CPU_POWERPC_750FX_v21,   0xFFFFFFFF, 750fx),
+    POWERPC_DEF("750fx2.1",    CPU_POWERPC_750FX_v21,   750fx),
     /* PowerPC 750FX v2.2 (G3 embedded)                                      */
-    POWERPC_DEF("750fx2.2",    CPU_POWERPC_750FX_v22,   0xFFFFFFFF, 750fx),
+    POWERPC_DEF("750fx2.2",    CPU_POWERPC_750FX_v22,   750fx),
     /* PowerPC 750FX v2.3 (G3 embedded)                                      */
-    POWERPC_DEF("750fx2.3",    CPU_POWERPC_750FX_v23,   0xFFFFFFFF, 750fx),
+    POWERPC_DEF("750fx2.3",    CPU_POWERPC_750FX_v23,   750fx),
     /* PowerPC 750GL (G3 embedded)                                           */
-    POWERPC_DEF("750gl",       CPU_POWERPC_750GL,       0xFFFFFFFF, 750fx),
+    POWERPC_DEF("750gl",       CPU_POWERPC_750GL,       750fx),
     /* PowerPC 750GX (G3 embedded)                                           */
-    POWERPC_DEF("750gx",       CPU_POWERPC_750GX,       0xFFFFFFFF, 750fx),
+    POWERPC_DEF("750gx",       CPU_POWERPC_750GX,       750fx),
     /* PowerPC 750GX v1.0 (G3 embedded)                                      */
-    POWERPC_DEF("750gx1.0",    CPU_POWERPC_750GX_v10,   0xFFFFFFFF, 750fx),
+    POWERPC_DEF("750gx1.0",    CPU_POWERPC_750GX_v10,   750fx),
     /* PowerPC 750GX v1.1 (G3 embedded)                                      */
-    POWERPC_DEF("750gx1.1",    CPU_POWERPC_750GX_v11,   0xFFFFFFFF, 750fx),
+    POWERPC_DEF("750gx1.1",    CPU_POWERPC_750GX_v11,   750fx),
     /* PowerPC 750GX v1.2 (G3 embedded)                                      */
-    POWERPC_DEF("750gx1.2",    CPU_POWERPC_750GX_v12,   0xFFFFFFFF, 750fx),
+    POWERPC_DEF("750gx1.2",    CPU_POWERPC_750GX_v12,   750fx),
     /* PowerPC 750L (G3 embedded)                                            */
-    POWERPC_DEF("750l",        CPU_POWERPC_750L,        0xFFFFFFFF, 7x0),
+    POWERPC_DEF("750l",        CPU_POWERPC_750L,        7x0),
     /* Code name for PowerPC 750L (G3 embedded)                              */
-    POWERPC_DEF("LoneStar",    CPU_POWERPC_750L,        0xFFFFFFFF, 7x0),
+    POWERPC_DEF("LoneStar",    CPU_POWERPC_750L,        7x0),
     /* PowerPC 750L v2.2 (G3 embedded)                                       */
-    POWERPC_DEF("750l2.2",     CPU_POWERPC_750L_v22,    0xFFFFFFFF, 7x0),
+    POWERPC_DEF("750l2.2",     CPU_POWERPC_750L_v22,    7x0),
     /* PowerPC 750L v3.0 (G3 embedded)                                       */
-    POWERPC_DEF("750l3.0",     CPU_POWERPC_750L_v30,    0xFFFFFFFF, 7x0),
+    POWERPC_DEF("750l3.0",     CPU_POWERPC_750L_v30,    7x0),
     /* PowerPC 750L v3.2 (G3 embedded)                                       */
-    POWERPC_DEF("750l3.2",     CPU_POWERPC_750L_v32,    0xFFFFFFFF, 7x0),
+    POWERPC_DEF("750l3.2",     CPU_POWERPC_750L_v32,    7x0),
     /* Generic PowerPC 745                                                   */
-    POWERPC_DEF("745",         CPU_POWERPC_7x5,         0xFFFFFFFF, 7x5),
+    POWERPC_DEF("745",         CPU_POWERPC_7x5,         7x5),
     /* Generic PowerPC 755                                                   */
-    POWERPC_DEF("755",         CPU_POWERPC_7x5,         0xFFFFFFFF, 7x5),
+    POWERPC_DEF("755",         CPU_POWERPC_7x5,         7x5),
     /* Code name for PowerPC 745/755                                         */
-    POWERPC_DEF("Goldfinger",  CPU_POWERPC_7x5,         0xFFFFFFFF, 7x5),
+    POWERPC_DEF("Goldfinger",  CPU_POWERPC_7x5,         7x5),
     /* PowerPC 745 v1.0                                                      */
-    POWERPC_DEF("745v1.0",     CPU_POWERPC_7x5_v10,     0xFFFFFFFF, 7x5),
+    POWERPC_DEF("745v1.0",     CPU_POWERPC_7x5_v10,     7x5),
     /* PowerPC 755 v1.0                                                      */
-    POWERPC_DEF("755v1.0",     CPU_POWERPC_7x5_v10,     0xFFFFFFFF, 7x5),
+    POWERPC_DEF("755v1.0",     CPU_POWERPC_7x5_v10,     7x5),
     /* PowerPC 745 v1.1                                                      */
-    POWERPC_DEF("745v1.1",     CPU_POWERPC_7x5_v11,     0xFFFFFFFF, 7x5),
+    POWERPC_DEF("745v1.1",     CPU_POWERPC_7x5_v11,     7x5),
     /* PowerPC 755 v1.1                                                      */
-    POWERPC_DEF("755v1.1",     CPU_POWERPC_7x5_v11,     0xFFFFFFFF, 7x5),
+    POWERPC_DEF("755v1.1",     CPU_POWERPC_7x5_v11,     7x5),
     /* PowerPC 745 v2.0                                                      */
-    POWERPC_DEF("745v2.0",     CPU_POWERPC_7x5_v20,     0xFFFFFFFF, 7x5),
+    POWERPC_DEF("745v2.0",     CPU_POWERPC_7x5_v20,     7x5),
     /* PowerPC 755 v2.0                                                      */
-    POWERPC_DEF("755v2.0",     CPU_POWERPC_7x5_v20,     0xFFFFFFFF, 7x5),
+    POWERPC_DEF("755v2.0",     CPU_POWERPC_7x5_v20,     7x5),
     /* PowerPC 745 v2.1                                                      */
-    POWERPC_DEF("745v2.1",     CPU_POWERPC_7x5_v21,     0xFFFFFFFF, 7x5),
+    POWERPC_DEF("745v2.1",     CPU_POWERPC_7x5_v21,     7x5),
     /* PowerPC 755 v2.1                                                      */
-    POWERPC_DEF("755v2.1",     CPU_POWERPC_7x5_v21,     0xFFFFFFFF, 7x5),
+    POWERPC_DEF("755v2.1",     CPU_POWERPC_7x5_v21,     7x5),
     /* PowerPC 745 v2.2                                                      */
-    POWERPC_DEF("745v2.2",     CPU_POWERPC_7x5_v22,     0xFFFFFFFF, 7x5),
+    POWERPC_DEF("745v2.2",     CPU_POWERPC_7x5_v22,     7x5),
     /* PowerPC 755 v2.2                                                      */
-    POWERPC_DEF("755v2.2",     CPU_POWERPC_7x5_v22,     0xFFFFFFFF, 7x5),
+    POWERPC_DEF("755v2.2",     CPU_POWERPC_7x5_v22,     7x5),
     /* PowerPC 745 v2.3                                                      */
-    POWERPC_DEF("745v2.3",     CPU_POWERPC_7x5_v23,     0xFFFFFFFF, 7x5),
+    POWERPC_DEF("745v2.3",     CPU_POWERPC_7x5_v23,     7x5),
     /* PowerPC 755 v2.3                                                      */
-    POWERPC_DEF("755v2.3",     CPU_POWERPC_7x5_v23,     0xFFFFFFFF, 7x5),
+    POWERPC_DEF("755v2.3",     CPU_POWERPC_7x5_v23,     7x5),
     /* PowerPC 745 v2.4                                                      */
-    POWERPC_DEF("745v2.4",     CPU_POWERPC_7x5_v24,     0xFFFFFFFF, 7x5),
+    POWERPC_DEF("745v2.4",     CPU_POWERPC_7x5_v24,     7x5),
     /* PowerPC 755 v2.4                                                      */
-    POWERPC_DEF("755v2.4",     CPU_POWERPC_7x5_v24,     0xFFFFFFFF, 7x5),
+    POWERPC_DEF("755v2.4",     CPU_POWERPC_7x5_v24,     7x5),
     /* PowerPC 745 v2.5                                                      */
-    POWERPC_DEF("745v2.5",     CPU_POWERPC_7x5_v25,     0xFFFFFFFF, 7x5),
+    POWERPC_DEF("745v2.5",     CPU_POWERPC_7x5_v25,     7x5),
     /* PowerPC 755 v2.5                                                      */
-    POWERPC_DEF("755v2.5",     CPU_POWERPC_7x5_v25,     0xFFFFFFFF, 7x5),
+    POWERPC_DEF("755v2.5",     CPU_POWERPC_7x5_v25,     7x5),
     /* PowerPC 745 v2.6                                                      */
-    POWERPC_DEF("745v2.6",     CPU_POWERPC_7x5_v26,     0xFFFFFFFF, 7x5),
+    POWERPC_DEF("745v2.6",     CPU_POWERPC_7x5_v26,     7x5),
     /* PowerPC 755 v2.6                                                      */
-    POWERPC_DEF("755v2.6",     CPU_POWERPC_7x5_v26,     0xFFFFFFFF, 7x5),
+    POWERPC_DEF("755v2.6",     CPU_POWERPC_7x5_v26,     7x5),
     /* PowerPC 745 v2.7                                                      */
-    POWERPC_DEF("745v2.7",     CPU_POWERPC_7x5_v27,     0xFFFFFFFF, 7x5),
+    POWERPC_DEF("745v2.7",     CPU_POWERPC_7x5_v27,     7x5),
     /* PowerPC 755 v2.7                                                      */
-    POWERPC_DEF("755v2.7",     CPU_POWERPC_7x5_v27,     0xFFFFFFFF, 7x5),
+    POWERPC_DEF("755v2.7",     CPU_POWERPC_7x5_v27,     7x5),
     /* PowerPC 745 v2.8                                                      */
-    POWERPC_DEF("745v2.8",     CPU_POWERPC_7x5_v28,     0xFFFFFFFF, 7x5),
+    POWERPC_DEF("745v2.8",     CPU_POWERPC_7x5_v28,     7x5),
     /* PowerPC 755 v2.8                                                      */
-    POWERPC_DEF("755v2.8",     CPU_POWERPC_7x5_v28,     0xFFFFFFFF, 7x5),
+    POWERPC_DEF("755v2.8",     CPU_POWERPC_7x5_v28,     7x5),
 #if defined (TODO)
     /* PowerPC 745P (G3)                                                     */
-    POWERPC_DEF("745p",        CPU_POWERPC_7x5P,        0xFFFFFFFF, 7x5),
+    POWERPC_DEF("745p",        CPU_POWERPC_7x5P,        7x5),
     /* PowerPC 755P (G3)                                                     */
-    POWERPC_DEF("755p",        CPU_POWERPC_7x5P,        0xFFFFFFFF, 7x5),
+    POWERPC_DEF("755p",        CPU_POWERPC_7x5P,        7x5),
 #endif
     /* PowerPC 74xx family                                                   */
     /* PowerPC 7400 (G4)                                                     */
-    POWERPC_DEF("7400",        CPU_POWERPC_7400,        0xFFFFFFFF, 7400),
+    POWERPC_DEF("7400",        CPU_POWERPC_7400,        7400),
     /* Code name for PowerPC 7400                                            */
-    POWERPC_DEF("Max",         CPU_POWERPC_7400,        0xFFFFFFFF, 7400),
+    POWERPC_DEF("Max",         CPU_POWERPC_7400,        7400),
     /* PowerPC 74xx is also well known as G4                                 */
-    POWERPC_DEF("G4",          CPU_POWERPC_7400,        0xFFFFFFFF, 7400),
+    POWERPC_DEF("G4",          CPU_POWERPC_7400,        7400),
     /* PowerPC 7400 v1.0 (G4)                                                */
-    POWERPC_DEF("7400v1.0",    CPU_POWERPC_7400_v10,    0xFFFFFFFF, 7400),
+    POWERPC_DEF("7400v1.0",    CPU_POWERPC_7400_v10,    7400),
     /* PowerPC 7400 v1.1 (G4)                                                */
-    POWERPC_DEF("7400v1.1",    CPU_POWERPC_7400_v11,    0xFFFFFFFF, 7400),
+    POWERPC_DEF("7400v1.1",    CPU_POWERPC_7400_v11,    7400),
     /* PowerPC 7400 v2.0 (G4)                                                */
-    POWERPC_DEF("7400v2.0",    CPU_POWERPC_7400_v20,    0xFFFFFFFF, 7400),
+    POWERPC_DEF("7400v2.0",    CPU_POWERPC_7400_v20,    7400),
     /* PowerPC 7400 v2.2 (G4)                                                */
-    POWERPC_DEF("7400v2.2",    CPU_POWERPC_7400_v22,    0xFFFFFFFF, 7400),
+    POWERPC_DEF("7400v2.2",    CPU_POWERPC_7400_v22,    7400),
     /* PowerPC 7400 v2.6 (G4)                                                */
-    POWERPC_DEF("7400v2.6",    CPU_POWERPC_7400_v26,    0xFFFFFFFF, 7400),
+    POWERPC_DEF("7400v2.6",    CPU_POWERPC_7400_v26,    7400),
     /* PowerPC 7400 v2.7 (G4)                                                */
-    POWERPC_DEF("7400v2.7",    CPU_POWERPC_7400_v27,    0xFFFFFFFF, 7400),
+    POWERPC_DEF("7400v2.7",    CPU_POWERPC_7400_v27,    7400),
     /* PowerPC 7400 v2.8 (G4)                                                */
-    POWERPC_DEF("7400v2.8",    CPU_POWERPC_7400_v28,    0xFFFFFFFF, 7400),
+    POWERPC_DEF("7400v2.8",    CPU_POWERPC_7400_v28,    7400),
     /* PowerPC 7400 v2.9 (G4)                                                */
-    POWERPC_DEF("7400v2.9",    CPU_POWERPC_7400_v29,    0xFFFFFFFF, 7400),
+    POWERPC_DEF("7400v2.9",    CPU_POWERPC_7400_v29,    7400),
     /* PowerPC 7410 (G4)                                                     */
-    POWERPC_DEF("7410",        CPU_POWERPC_7410,        0xFFFFFFFF, 7410),
+    POWERPC_DEF("7410",        CPU_POWERPC_7410,        7410),
     /* Code name for PowerPC 7410                                            */
-    POWERPC_DEF("Nitro",       CPU_POWERPC_7410,        0xFFFFFFFF, 7410),
+    POWERPC_DEF("Nitro",       CPU_POWERPC_7410,        7410),
     /* PowerPC 7410 v1.0 (G4)                                                */
-    POWERPC_DEF("7410v1.0",    CPU_POWERPC_7410_v10,    0xFFFFFFFF, 7410),
+    POWERPC_DEF("7410v1.0",    CPU_POWERPC_7410_v10,    7410),
     /* PowerPC 7410 v1.1 (G4)                                                */
-    POWERPC_DEF("7410v1.1",    CPU_POWERPC_7410_v11,    0xFFFFFFFF, 7410),
+    POWERPC_DEF("7410v1.1",    CPU_POWERPC_7410_v11,    7410),
     /* PowerPC 7410 v1.2 (G4)                                                */
-    POWERPC_DEF("7410v1.2",    CPU_POWERPC_7410_v12,    0xFFFFFFFF, 7410),
+    POWERPC_DEF("7410v1.2",    CPU_POWERPC_7410_v12,    7410),
     /* PowerPC 7410 v1.3 (G4)                                                */
-    POWERPC_DEF("7410v1.3",    CPU_POWERPC_7410_v13,    0xFFFFFFFF, 7410),
+    POWERPC_DEF("7410v1.3",    CPU_POWERPC_7410_v13,    7410),
     /* PowerPC 7410 v1.4 (G4)                                                */
-    POWERPC_DEF("7410v1.4",    CPU_POWERPC_7410_v14,    0xFFFFFFFF, 7410),
+    POWERPC_DEF("7410v1.4",    CPU_POWERPC_7410_v14,    7410),
     /* PowerPC 7448 (G4)                                                     */
-    POWERPC_DEF("7448",        CPU_POWERPC_7448,        0xFFFFFFFF, 7400),
+    POWERPC_DEF("7448",        CPU_POWERPC_7448,        7400),
     /* PowerPC 7448 v1.0 (G4)                                                */
-    POWERPC_DEF("7448v1.0",    CPU_POWERPC_7448_v10,    0xFFFFFFFF, 7400),
+    POWERPC_DEF("7448v1.0",    CPU_POWERPC_7448_v10,    7400),
     /* PowerPC 7448 v1.1 (G4)                                                */
-    POWERPC_DEF("7448v1.1",    CPU_POWERPC_7448_v11,    0xFFFFFFFF, 7400),
+    POWERPC_DEF("7448v1.1",    CPU_POWERPC_7448_v11,    7400),
     /* PowerPC 7448 v2.0 (G4)                                                */
-    POWERPC_DEF("7448v2.0",    CPU_POWERPC_7448_v20,    0xFFFFFFFF, 7400),
+    POWERPC_DEF("7448v2.0",    CPU_POWERPC_7448_v20,    7400),
     /* PowerPC 7448 v2.1 (G4)                                                */
-    POWERPC_DEF("7448v2.1",    CPU_POWERPC_7448_v21,    0xFFFFFFFF, 7400),
-#if defined (TODO)
+    POWERPC_DEF("7448v2.1",    CPU_POWERPC_7448_v21,    7400),
     /* PowerPC 7450 (G4)                                                     */
-    POWERPC_DEF("7450",        CPU_POWERPC_7450,        0xFFFFFFFF, 7450),
+    POWERPC_DEF("7450",        CPU_POWERPC_7450,        7450),
     /* Code name for PowerPC 7450                                            */
-    POWERPC_DEF("Vger",        CPU_POWERPC_7450,        0xFFFFFFFF, 7450),
-#endif
-#if defined (TODO)
+    POWERPC_DEF("Vger",        CPU_POWERPC_7450,        7450),
     /* PowerPC 7450 v1.0 (G4)                                                */
-    POWERPC_DEF("7450v1.0",    CPU_POWERPC_7450_v10,    0xFFFFFFFF, 7450),
-#endif
-#if defined (TODO)
+    POWERPC_DEF("7450v1.0",    CPU_POWERPC_7450_v10,    7450),
     /* PowerPC 7450 v1.1 (G4)                                                */
-    POWERPC_DEF("7450v1.1",    CPU_POWERPC_7450_v11,    0xFFFFFFFF, 7450),
-#endif
-#if defined (TODO)
+    POWERPC_DEF("7450v1.1",    CPU_POWERPC_7450_v11,    7450),
     /* PowerPC 7450 v1.2 (G4)                                                */
-    POWERPC_DEF("7450v1.2",    CPU_POWERPC_7450_v12,    0xFFFFFFFF, 7450),
-#endif
-#if defined (TODO)
+    POWERPC_DEF("7450v1.2",    CPU_POWERPC_7450_v12,    7450),
     /* PowerPC 7450 v2.0 (G4)                                                */
-    POWERPC_DEF("7450v2.0",    CPU_POWERPC_7450_v20,    0xFFFFFFFF, 7450),
-#endif
-#if defined (TODO)
+    POWERPC_DEF("7450v2.0",    CPU_POWERPC_7450_v20,    7450),
     /* PowerPC 7450 v2.1 (G4)                                                */
-    POWERPC_DEF("7450v2.1",    CPU_POWERPC_7450_v21,    0xFFFFFFFF, 7450),
-#endif
-#if defined (TODO)
+    POWERPC_DEF("7450v2.1",    CPU_POWERPC_7450_v21,    7450),
     /* PowerPC 7441 (G4)                                                     */
-    POWERPC_DEF("7441",        CPU_POWERPC_74x1,        0xFFFFFFFF, 7440),
+    POWERPC_DEF("7441",        CPU_POWERPC_74x1,        7440),
     /* PowerPC 7451 (G4)                                                     */
-    POWERPC_DEF("7451",        CPU_POWERPC_74x1,        0xFFFFFFFF, 7450),
-#endif
-#if defined (TODO)
+    POWERPC_DEF("7451",        CPU_POWERPC_74x1,        7450),
     /* PowerPC 7441g (G4)                                                    */
-    POWERPC_DEF("7441g",       CPU_POWERPC_74x1G,       0xFFFFFFFF, 7440),
+    POWERPC_DEF("7441g",       CPU_POWERPC_74x1G,       7440),
     /* PowerPC 7451g (G4)                                                    */
-    POWERPC_DEF("7451g",       CPU_POWERPC_74x1G,       0xFFFFFFFF, 7450),
-#endif
-#if defined (TODO)
+    POWERPC_DEF("7451g",       CPU_POWERPC_74x1G,       7450),
     /* PowerPC 7445 (G4)                                                     */
-    POWERPC_DEF("7445",        CPU_POWERPC_74x5,        0xFFFFFFFF, 7445),
+    POWERPC_DEF("7445",        CPU_POWERPC_74x5,        7445),
     /* PowerPC 7455 (G4)                                                     */
-    POWERPC_DEF("7455",        CPU_POWERPC_74x5,        0xFFFFFFFF, 7455),
+    POWERPC_DEF("7455",        CPU_POWERPC_74x5,        7455),
     /* Code name for PowerPC 7445/7455                                       */
-    POWERPC_DEF("Apollo6",     CPU_POWERPC_74x5,        0xFFFFFFFF, 7455),
-#endif
-#if defined (TODO)
+    POWERPC_DEF("Apollo6",     CPU_POWERPC_74x5,        7455),
     /* PowerPC 7445 v1.0 (G4)                                                */
-    POWERPC_DEF("7445v1.0",    CPU_POWERPC_74x5_v10,    0xFFFFFFFF, 7445),
+    POWERPC_DEF("7445v1.0",    CPU_POWERPC_74x5_v10,    7445),
     /* PowerPC 7455 v1.0 (G4)                                                */
-    POWERPC_DEF("7455v1.0",    CPU_POWERPC_74x5_v10,    0xFFFFFFFF, 7455),
-#endif
-#if defined (TODO)
+    POWERPC_DEF("7455v1.0",    CPU_POWERPC_74x5_v10,    7455),
     /* PowerPC 7445 v2.1 (G4)                                                */
-    POWERPC_DEF("7445v2.1",    CPU_POWERPC_74x5_v21,    0xFFFFFFFF, 7445),
+    POWERPC_DEF("7445v2.1",    CPU_POWERPC_74x5_v21,    7445),
     /* PowerPC 7455 v2.1 (G4)                                                */
-    POWERPC_DEF("7455v2.1",    CPU_POWERPC_74x5_v21,    0xFFFFFFFF, 7455),
-#endif
-#if defined (TODO)
+    POWERPC_DEF("7455v2.1",    CPU_POWERPC_74x5_v21,    7455),
     /* PowerPC 7445 v3.2 (G4)                                                */
-    POWERPC_DEF("7445v3.2",    CPU_POWERPC_74x5_v32,    0xFFFFFFFF, 7445),
+    POWERPC_DEF("7445v3.2",    CPU_POWERPC_74x5_v32,    7445),
     /* PowerPC 7455 v3.2 (G4)                                                */
-    POWERPC_DEF("7455v3.2",    CPU_POWERPC_74x5_v32,    0xFFFFFFFF, 7455),
-#endif
-#if defined (TODO)
+    POWERPC_DEF("7455v3.2",    CPU_POWERPC_74x5_v32,    7455),
     /* PowerPC 7445 v3.3 (G4)                                                */
-    POWERPC_DEF("7445v3.3",    CPU_POWERPC_74x5_v33,    0xFFFFFFFF, 7445),
+    POWERPC_DEF("7445v3.3",    CPU_POWERPC_74x5_v33,    7445),
     /* PowerPC 7455 v3.3 (G4)                                                */
-    POWERPC_DEF("7455v3.3",    CPU_POWERPC_74x5_v33,    0xFFFFFFFF, 7455),
-#endif
-#if defined (TODO)
+    POWERPC_DEF("7455v3.3",    CPU_POWERPC_74x5_v33,    7455),
     /* PowerPC 7445 v3.4 (G4)                                                */
-    POWERPC_DEF("7445v3.4",    CPU_POWERPC_74x5_v34,    0xFFFFFFFF, 7445),
+    POWERPC_DEF("7445v3.4",    CPU_POWERPC_74x5_v34,    7445),
     /* PowerPC 7455 v3.4 (G4)                                                */
-    POWERPC_DEF("7455v3.4",    CPU_POWERPC_74x5_v34,    0xFFFFFFFF, 7455),
-#endif
-#if defined (TODO)
+    POWERPC_DEF("7455v3.4",    CPU_POWERPC_74x5_v34,    7455),
     /* PowerPC 7447 (G4)                                                     */
-    POWERPC_DEF("7447",        CPU_POWERPC_74x7,        0xFFFFFFFF, 7445),
+    POWERPC_DEF("7447",        CPU_POWERPC_74x7,        7445),
     /* PowerPC 7457 (G4)                                                     */
-    POWERPC_DEF("7457",        CPU_POWERPC_74x7,        0xFFFFFFFF, 7455),
+    POWERPC_DEF("7457",        CPU_POWERPC_74x7,        7455),
     /* Code name for PowerPC 7447/7457                                       */
-    POWERPC_DEF("Apollo7",     CPU_POWERPC_74x7,        0xFFFFFFFF, 7455),
-#endif
-#if defined (TODO)
+    POWERPC_DEF("Apollo7",     CPU_POWERPC_74x7,        7455),
     /* PowerPC 7447 v1.0 (G4)                                                */
-    POWERPC_DEF("7447v1.0",    CPU_POWERPC_74x7_v10,    0xFFFFFFFF, 7445),
+    POWERPC_DEF("7447v1.0",    CPU_POWERPC_74x7_v10,    7445),
     /* PowerPC 7457 v1.0 (G4)                                                */
-    POWERPC_DEF("7457v1.0",    CPU_POWERPC_74x7_v10,    0xFFFFFFFF, 7455),
+    POWERPC_DEF("7457v1.0",    CPU_POWERPC_74x7_v10,    7455),
     /* Code name for PowerPC 7447A/7457A                                     */
-    POWERPC_DEF("Apollo7PM",   CPU_POWERPC_74x7_v10,    0xFFFFFFFF, 7455),
-#endif
-#if defined (TODO)
+    POWERPC_DEF("Apollo7PM",   CPU_POWERPC_74x7_v10,    7455),
     /* PowerPC 7447 v1.1 (G4)                                                */
-    POWERPC_DEF("7447v1.1",    CPU_POWERPC_74x7_v11,    0xFFFFFFFF, 7445),
+    POWERPC_DEF("7447v1.1",    CPU_POWERPC_74x7_v11,    7445),
     /* PowerPC 7457 v1.1 (G4)                                                */
-    POWERPC_DEF("7457v1.1",    CPU_POWERPC_74x7_v11,    0xFFFFFFFF, 7455),
-#endif
-#if defined (TODO)
+    POWERPC_DEF("7457v1.1",    CPU_POWERPC_74x7_v11,    7455),
     /* PowerPC 7447 v1.2 (G4)                                                */
-    POWERPC_DEF("7447v1.2",    CPU_POWERPC_74x7_v12,    0xFFFFFFFF, 7445),
+    POWERPC_DEF("7447v1.2",    CPU_POWERPC_74x7_v12,    7445),
     /* PowerPC 7457 v1.2 (G4)                                                */
-    POWERPC_DEF("7457v1.2",    CPU_POWERPC_74x7_v12,    0xFFFFFFFF, 7455),
-#endif
+    POWERPC_DEF("7457v1.2",    CPU_POWERPC_74x7_v12,    7455),
     /* 64 bits PowerPC                                                       */
 #if defined (TARGET_PPC64)
-#if defined (TODO)
     /* PowerPC 620                                                           */
-    POWERPC_DEF("620",         CPU_POWERPC_620,         0xFFFFFFFF, 620),
-#endif
+    /* XXX: code name "Trident" */
+    POWERPC_DEF("620",         CPU_POWERPC_620,         620),
 #if defined (TODO)
     /* PowerPC 630 (POWER3)                                                  */
-    POWERPC_DEF("630",         CPU_POWERPC_630,         0xFFFFFFFF, 630),
-    POWERPC_DEF("POWER3",      CPU_POWERPC_630,         0xFFFFFFFF, 630),
+    /* XXX: code names: "Boxer" "Dino" */
+    POWERPC_DEF("630",         CPU_POWERPC_630,         630),
+    POWERPC_DEF("POWER3",      CPU_POWERPC_630,         630),
 #endif
 #if defined (TODO)
     /* PowerPC 631 (Power 3+)                                                */
-    POWERPC_DEF("631",         CPU_POWERPC_631,         0xFFFFFFFF, 631),
-    POWERPC_DEF("POWER3+",     CPU_POWERPC_631,         0xFFFFFFFF, 631),
+    POWERPC_DEF("631",         CPU_POWERPC_631,         631),
+    POWERPC_DEF("POWER3+",     CPU_POWERPC_631,         631),
 #endif
 #if defined (TODO)
     /* POWER4                                                                */
-    POWERPC_DEF("POWER4",      CPU_POWERPC_POWER4,      0xFFFFFFFF, POWER4),
+    POWERPC_DEF("POWER4",      CPU_POWERPC_POWER4,      POWER4),
 #endif
 #if defined (TODO)
     /* POWER4p                                                               */
-    POWERPC_DEF("POWER4+",     CPU_POWERPC_POWER4P,     0xFFFFFFFF, POWER4P),
+    POWERPC_DEF("POWER4+",     CPU_POWERPC_POWER4P,     POWER4P),
 #endif
 #if defined (TODO)
     /* POWER5                                                                */
-    POWERPC_DEF("POWER5",      CPU_POWERPC_POWER5,      0xFFFFFFFF, POWER5),
+    POWERPC_DEF("POWER5",      CPU_POWERPC_POWER5,      POWER5),
     /* POWER5GR                                                              */
-    POWERPC_DEF("POWER5gr",    CPU_POWERPC_POWER5GR,    0xFFFFFFFF, POWER5),
+    POWERPC_DEF("POWER5gr",    CPU_POWERPC_POWER5GR,    POWER5),
 #endif
 #if defined (TODO)
     /* POWER5+                                                               */
-    POWERPC_DEF("POWER5+",     CPU_POWERPC_POWER5P,     0xFFFFFFFF, POWER5P),
+    POWERPC_DEF("POWER5+",     CPU_POWERPC_POWER5P,     POWER5P),
     /* POWER5GS                                                              */
-    POWERPC_DEF("POWER5gs",    CPU_POWERPC_POWER5GS,    0xFFFFFFFF, POWER5P),
+    POWERPC_DEF("POWER5gs",    CPU_POWERPC_POWER5GS,    POWER5P),
 #endif
 #if defined (TODO)
     /* POWER6                                                                */
-    POWERPC_DEF("POWER6",      CPU_POWERPC_POWER6,      0xFFFFFFFF, POWER6),
+    POWERPC_DEF("POWER6",      CPU_POWERPC_POWER6,      POWER6),
     /* POWER6 running in POWER5 mode                                         */
-    POWERPC_DEF("POWER6_5",    CPU_POWERPC_POWER6_5,    0xFFFFFFFF, POWER5),
+    POWERPC_DEF("POWER6_5",    CPU_POWERPC_POWER6_5,    POWER5),
     /* POWER6A                                                               */
-    POWERPC_DEF("POWER6A",     CPU_POWERPC_POWER6A,     0xFFFFFFFF, POWER6),
+    POWERPC_DEF("POWER6A",     CPU_POWERPC_POWER6A,     POWER6),
 #endif
     /* PowerPC 970                                                           */
-    POWERPC_DEF("970",         CPU_POWERPC_970,         0xFFFFFFFF, 970),
+    POWERPC_DEF("970",         CPU_POWERPC_970,         970),
     /* PowerPC 970FX (G5)                                                    */
-    POWERPC_DEF("970fx",       CPU_POWERPC_970FX,       0xFFFFFFFF, 970FX),
+    POWERPC_DEF("970fx",       CPU_POWERPC_970FX,       970FX),
     /* PowerPC 970FX v1.0 (G5)                                               */
-    POWERPC_DEF("970fx1.0",    CPU_POWERPC_970FX_v10,   0xFFFFFFFF, 970FX),
+    POWERPC_DEF("970fx1.0",    CPU_POWERPC_970FX_v10,   970FX),
     /* PowerPC 970FX v2.0 (G5)                                               */
-    POWERPC_DEF("970fx2.0",    CPU_POWERPC_970FX_v20,   0xFFFFFFFF, 970FX),
+    POWERPC_DEF("970fx2.0",    CPU_POWERPC_970FX_v20,   970FX),
     /* PowerPC 970FX v2.1 (G5)                                               */
-    POWERPC_DEF("970fx2.1",    CPU_POWERPC_970FX_v21,   0xFFFFFFFF, 970FX),
+    POWERPC_DEF("970fx2.1",    CPU_POWERPC_970FX_v21,   970FX),
     /* PowerPC 970FX v3.0 (G5)                                               */
-    POWERPC_DEF("970fx3.0",    CPU_POWERPC_970FX_v30,   0xFFFFFFFF, 970FX),
+    POWERPC_DEF("970fx3.0",    CPU_POWERPC_970FX_v30,   970FX),
     /* PowerPC 970FX v3.1 (G5)                                               */
-    POWERPC_DEF("970fx3.1",    CPU_POWERPC_970FX_v31,   0xFFFFFFFF, 970FX),
+    POWERPC_DEF("970fx3.1",    CPU_POWERPC_970FX_v31,   970FX),
     /* PowerPC 970GX (G5)                                                    */
-    POWERPC_DEF("970gx",       CPU_POWERPC_970GX,       0xFFFFFFFF, 970GX),
+    POWERPC_DEF("970gx",       CPU_POWERPC_970GX,       970GX),
     /* PowerPC 970MP                                                         */
-    POWERPC_DEF("970mp",       CPU_POWERPC_970MP,       0xFFFFFFFF, 970),
+    POWERPC_DEF("970mp",       CPU_POWERPC_970MP,       970MP),
     /* PowerPC 970MP v1.0                                                    */
-    POWERPC_DEF("970mp1.0",    CPU_POWERPC_970MP_v10,   0xFFFFFFFF, 970),
+    POWERPC_DEF("970mp1.0",    CPU_POWERPC_970MP_v10,   970MP),
     /* PowerPC 970MP v1.1                                                    */
-    POWERPC_DEF("970mp1.1",    CPU_POWERPC_970MP_v11,   0xFFFFFFFF, 970),
+    POWERPC_DEF("970mp1.1",    CPU_POWERPC_970MP_v11,   970MP),
 #if defined (TODO)
     /* PowerPC Cell                                                          */
-    POWERPC_DEF("Cell",        CPU_POWERPC_CELL,        0xFFFFFFFF, 970),
+    POWERPC_DEF("Cell",        CPU_POWERPC_CELL,        970),
 #endif
 #if defined (TODO)
     /* PowerPC Cell v1.0                                                     */
-    POWERPC_DEF("Cell1.0",     CPU_POWERPC_CELL_v10,    0xFFFFFFFF, 970),
+    POWERPC_DEF("Cell1.0",     CPU_POWERPC_CELL_v10,    970),
 #endif
 #if defined (TODO)
     /* PowerPC Cell v2.0                                                     */
-    POWERPC_DEF("Cell2.0",     CPU_POWERPC_CELL_v20,    0xFFFFFFFF, 970),
+    POWERPC_DEF("Cell2.0",     CPU_POWERPC_CELL_v20,    970),
 #endif
 #if defined (TODO)
     /* PowerPC Cell v3.0                                                     */
-    POWERPC_DEF("Cell3.0",     CPU_POWERPC_CELL_v30,    0xFFFFFFFF, 970),
+    POWERPC_DEF("Cell3.0",     CPU_POWERPC_CELL_v30,    970),
 #endif
 #if defined (TODO)
     /* PowerPC Cell v3.1                                                     */
-    POWERPC_DEF("Cell3.1",     CPU_POWERPC_CELL_v31,    0xFFFFFFFF, 970),
+    POWERPC_DEF("Cell3.1",     CPU_POWERPC_CELL_v31,    970),
 #endif
 #if defined (TODO)
     /* PowerPC Cell v3.2                                                     */
-    POWERPC_DEF("Cell3.2",     CPU_POWERPC_CELL_v32,    0xFFFFFFFF, 970),
+    POWERPC_DEF("Cell3.2",     CPU_POWERPC_CELL_v32,    970),
 #endif
 #if defined (TODO)
     /* RS64 (Apache/A35)                                                     */
@@ -5427,64 +5877,64 @@ static ppc_def_t ppc_defs[] = {
      * and the PowerPC 64 one.
      */
     /* What about A10 & A30 ? */
-    POWERPC_DEF("RS64",        CPU_POWERPC_RS64,        0xFFFFFFFF, RS64),
-    POWERPC_DEF("Apache",      CPU_POWERPC_RS64,        0xFFFFFFFF, RS64),
-    POWERPC_DEF("A35",         CPU_POWERPC_RS64,        0xFFFFFFFF, RS64),
+    POWERPC_DEF("RS64",        CPU_POWERPC_RS64,        RS64),
+    POWERPC_DEF("Apache",      CPU_POWERPC_RS64,        RS64),
+    POWERPC_DEF("A35",         CPU_POWERPC_RS64,        RS64),
 #endif
 #if defined (TODO)
     /* RS64-II (NorthStar/A50)                                               */
-    POWERPC_DEF("RS64-II",     CPU_POWERPC_RS64II,      0xFFFFFFFF, RS64),
-    POWERPC_DEF("NorthStar",   CPU_POWERPC_RS64II,      0xFFFFFFFF, RS64),
-    POWERPC_DEF("A50",         CPU_POWERPC_RS64II,      0xFFFFFFFF, RS64),
+    POWERPC_DEF("RS64-II",     CPU_POWERPC_RS64II,      RS64),
+    POWERPC_DEF("NorthStar",   CPU_POWERPC_RS64II,      RS64),
+    POWERPC_DEF("A50",         CPU_POWERPC_RS64II,      RS64),
 #endif
 #if defined (TODO)
     /* RS64-III (Pulsar)                                                     */
-    POWERPC_DEF("RS64-III",    CPU_POWERPC_RS64III,     0xFFFFFFFF, RS64),
-    POWERPC_DEF("Pulsar",      CPU_POWERPC_RS64III,     0xFFFFFFFF, RS64),
+    POWERPC_DEF("RS64-III",    CPU_POWERPC_RS64III,     RS64),
+    POWERPC_DEF("Pulsar",      CPU_POWERPC_RS64III,     RS64),
 #endif
 #if defined (TODO)
     /* RS64-IV (IceStar/IStar/SStar)                                         */
-    POWERPC_DEF("RS64-IV",     CPU_POWERPC_RS64IV,      0xFFFFFFFF, RS64),
-    POWERPC_DEF("IceStar",     CPU_POWERPC_RS64IV,      0xFFFFFFFF, RS64),
-    POWERPC_DEF("IStar",       CPU_POWERPC_RS64IV,      0xFFFFFFFF, RS64),
-    POWERPC_DEF("SStar",       CPU_POWERPC_RS64IV,      0xFFFFFFFF, RS64),
+    POWERPC_DEF("RS64-IV",     CPU_POWERPC_RS64IV,      RS64),
+    POWERPC_DEF("IceStar",     CPU_POWERPC_RS64IV,      RS64),
+    POWERPC_DEF("IStar",       CPU_POWERPC_RS64IV,      RS64),
+    POWERPC_DEF("SStar",       CPU_POWERPC_RS64IV,      RS64),
 #endif
 #endif /* defined (TARGET_PPC64) */
     /* POWER                                                                 */
 #if defined (TODO)
     /* Original POWER                                                        */
-    POWERPC_DEF("POWER",       CPU_POWERPC_POWER,       0xFFFFFFFF, POWER),
-    POWERPC_DEF("RIOS",        CPU_POWERPC_POWER,       0xFFFFFFFF, POWER),
-    POWERPC_DEF("RSC",         CPU_POWERPC_POWER,       0xFFFFFFFF, POWER),
-    POWERPC_DEF("RSC3308",     CPU_POWERPC_POWER,       0xFFFFFFFF, POWER),
-    POWERPC_DEF("RSC4608",     CPU_POWERPC_POWER,       0xFFFFFFFF, POWER),
+    POWERPC_DEF("POWER",       CPU_POWERPC_POWER,       POWER),
+    POWERPC_DEF("RIOS",        CPU_POWERPC_POWER,       POWER),
+    POWERPC_DEF("RSC",         CPU_POWERPC_POWER,       POWER),
+    POWERPC_DEF("RSC3308",     CPU_POWERPC_POWER,       POWER),
+    POWERPC_DEF("RSC4608",     CPU_POWERPC_POWER,       POWER),
 #endif
 #if defined (TODO)
     /* POWER2                                                                */
-    POWERPC_DEF("POWER2",      CPU_POWERPC_POWER2,      0xFFFFFFFF, POWER),
-    POWERPC_DEF("RSC2",        CPU_POWERPC_POWER2,      0xFFFFFFFF, POWER),
-    POWERPC_DEF("P2SC",        CPU_POWERPC_POWER2,      0xFFFFFFFF, POWER),
+    POWERPC_DEF("POWER2",      CPU_POWERPC_POWER2,      POWER),
+    POWERPC_DEF("RSC2",        CPU_POWERPC_POWER2,      POWER),
+    POWERPC_DEF("P2SC",        CPU_POWERPC_POWER2,      POWER),
 #endif
     /* PA semi cores                                                         */
 #if defined (TODO)
     /* PA PA6T */
-    POWERPC_DEF("PA6T",        CPU_POWERPC_PA6T,        0xFFFFFFFF, PA6T),
+    POWERPC_DEF("PA6T",        CPU_POWERPC_PA6T,        PA6T),
 #endif
     /* Generic PowerPCs                                                      */
 #if defined (TARGET_PPC64)
 #if defined (TODO)
-    POWERPC_DEF("ppc64",       CPU_POWERPC_PPC64,       0xFFFFFFFF, PPC64),
+    POWERPC_DEF("ppc64",       CPU_POWERPC_PPC64,       PPC64),
 #endif
 #endif
-    POWERPC_DEF("ppc32",       CPU_POWERPC_PPC32,       0xFFFFFFFF, PPC32),
-    POWERPC_DEF("ppc",         CPU_POWERPC_DEFAULT,     0xFFFFFFFF, DEFAULT),
+    POWERPC_DEF("ppc32",       CPU_POWERPC_PPC32,       PPC32),
+    POWERPC_DEF("ppc",         CPU_POWERPC_DEFAULT,     DEFAULT),
     /* Fallback                                                              */
-    POWERPC_DEF("default",     CPU_POWERPC_DEFAULT,     0xFFFFFFFF, DEFAULT),
+    POWERPC_DEF("default",     CPU_POWERPC_DEFAULT,     DEFAULT),
 };
 
 /*****************************************************************************/
 /* Generic CPU instanciation routine                                         */
-static void init_ppc_proc (CPUPPCState *env, ppc_def_t *def)
+static void init_ppc_proc (CPUPPCState *env, const ppc_def_t *def)
 {
 #if !defined(CONFIG_USER_ONLY)
     int i;
@@ -5496,11 +5946,11 @@ static void init_ppc_proc (CPUPPCState *env, ppc_def_t *def)
     env->excp_prefix = 0x00000000;
     env->ivor_mask = 0x00000000;
     env->ivpr_mask = 0x00000000;
-#endif
     /* Default MMU definitions */
     env->nb_BATs = 0;
     env->nb_tlb = 0;
     env->nb_ways = 0;
+#endif
     /* Register SPR common to all PowerPC implementations */
     gen_spr_generic(env);
     spr_register(env, SPR_PVR, "PVR",
@@ -5509,7 +5959,89 @@ static void init_ppc_proc (CPUPPCState *env, ppc_def_t *def)
                  def->pvr);
     /* PowerPC implementation specific initialisations (SPRs, timers, ...) */
     (*def->init_proc)(env);
+    /* MSR bits & flags consistency checks */
+    if (env->msr_mask & (1 << 25)) {
+        switch (env->flags & (POWERPC_FLAG_SPE | POWERPC_FLAG_VRE)) {
+        case POWERPC_FLAG_SPE:
+        case POWERPC_FLAG_VRE:
+            break;
+        default:
+            fprintf(stderr, "PowerPC MSR definition inconsistency\n"
+                    "Should define POWERPC_FLAG_SPE or POWERPC_FLAG_VRE\n");
+            exit(1);
+        }
+    } else if (env->flags & (POWERPC_FLAG_SPE | POWERPC_FLAG_VRE)) {
+        fprintf(stderr, "PowerPC MSR definition inconsistency\n"
+                "Should not define POWERPC_FLAG_SPE nor POWERPC_FLAG_VRE\n");
+        exit(1);
+    }
+    if (env->msr_mask & (1 << 17)) {
+        switch (env->flags & (POWERPC_FLAG_TGPR | POWERPC_FLAG_CE)) {
+        case POWERPC_FLAG_TGPR:
+        case POWERPC_FLAG_CE:
+            break;
+        default:
+            fprintf(stderr, "PowerPC MSR definition inconsistency\n"
+                    "Should define POWERPC_FLAG_TGPR or POWERPC_FLAG_CE\n");
+            exit(1);
+        }
+    } else if (env->flags & (POWERPC_FLAG_TGPR | POWERPC_FLAG_CE)) {
+        fprintf(stderr, "PowerPC MSR definition inconsistency\n"
+                "Should not define POWERPC_FLAG_TGPR nor POWERPC_FLAG_CE\n");
+        exit(1);
+    }
+    if (env->msr_mask & (1 << 10)) {
+        switch (env->flags & (POWERPC_FLAG_SE | POWERPC_FLAG_DWE |
+                              POWERPC_FLAG_UBLE)) {
+        case POWERPC_FLAG_SE:
+        case POWERPC_FLAG_DWE:
+        case POWERPC_FLAG_UBLE:
+            break;
+        default:
+            fprintf(stderr, "PowerPC MSR definition inconsistency\n"
+                    "Should define POWERPC_FLAG_SE or POWERPC_FLAG_DWE or "
+                    "POWERPC_FLAG_UBLE\n");
+            exit(1);
+        }
+    } else if (env->flags & (POWERPC_FLAG_SE | POWERPC_FLAG_DWE |
+                             POWERPC_FLAG_UBLE)) {
+        fprintf(stderr, "PowerPC MSR definition inconsistency\n"
+                "Should not define POWERPC_FLAG_SE nor POWERPC_FLAG_DWE nor "
+                "POWERPC_FLAG_UBLE\n");
+            exit(1);
+    }
+    if (env->msr_mask & (1 << 9)) {
+        switch (env->flags & (POWERPC_FLAG_BE | POWERPC_FLAG_DE)) {
+        case POWERPC_FLAG_BE:
+        case POWERPC_FLAG_DE:
+            break;
+        default:
+            fprintf(stderr, "PowerPC MSR definition inconsistency\n"
+                    "Should define POWERPC_FLAG_BE or POWERPC_FLAG_DE\n");
+            exit(1);
+        }
+    } else if (env->flags & (POWERPC_FLAG_BE | POWERPC_FLAG_DE)) {
+        fprintf(stderr, "PowerPC MSR definition inconsistency\n"
+                "Should not define POWERPC_FLAG_BE nor POWERPC_FLAG_DE\n");
+        exit(1);
+    }
+    if (env->msr_mask & (1 << 2)) {
+        switch (env->flags & (POWERPC_FLAG_PX | POWERPC_FLAG_PMM)) {
+        case POWERPC_FLAG_PX:
+        case POWERPC_FLAG_PMM:
+            break;
+        default:
+            fprintf(stderr, "PowerPC MSR definition inconsistency\n"
+                    "Should define POWERPC_FLAG_PX or POWERPC_FLAG_PMM\n");
+            exit(1);
+        }
+    } else if (env->flags & (POWERPC_FLAG_PX | POWERPC_FLAG_PMM)) {
+        fprintf(stderr, "PowerPC MSR definition inconsistency\n"
+                "Should not define POWERPC_FLAG_PX nor POWERPC_FLAG_PMM\n");
+        exit(1);
+    }
     /* Allocate TLBs buffer when needed */
+#if !defined(CONFIG_USER_ONLY)
     if (env->nb_tlb != 0) {
         int nb_tlb = env->nb_tlb;
         if (env->id_tlbs != 0)
@@ -5518,12 +6050,16 @@ static void init_ppc_proc (CPUPPCState *env, ppc_def_t *def)
         /* Pre-compute some useful values */
         env->tlb_per_way = env->nb_tlb / env->nb_ways;
     }
-#if !defined(CONFIG_USER_ONLY)
     if (env->irq_inputs == NULL) {
         fprintf(stderr, "WARNING: no internal IRQ controller registered.\n"
                 " Attempt Qemu to crash very soon !\n");
     }
 #endif
+    if (env->check_pow == NULL) {
+        fprintf(stderr, "WARNING: no power management check handler "
+                "registered.\n"
+                " Attempt Qemu to crash very soon !\n");
+    }
 }
 
 #if defined(PPC_DUMP_CPU)
@@ -5743,7 +6279,7 @@ static void fix_opcode_tables (opc_handler_t **ppc_opcodes)
 }
 
 /*****************************************************************************/
-static int create_ppc_opcodes (CPUPPCState *env, ppc_def_t *def)
+static int create_ppc_opcodes (CPUPPCState *env, const ppc_def_t *def)
 {
     opcode_t *opc, *start, *end;
 
@@ -5773,7 +6309,7 @@ static int create_ppc_opcodes (CPUPPCState *env, ppc_def_t *def)
 }
 
 #if defined(PPC_DUMP_CPU)
-static int dump_ppc_insns (CPUPPCState *env)
+static void dump_ppc_insns (CPUPPCState *env)
 {
     opc_handler_t **table, *handler;
     uint8_t opc1, opc2, opc3;
@@ -5818,13 +6354,15 @@ static int dump_ppc_insns (CPUPPCState *env)
 }
 #endif
 
-int cpu_ppc_register (CPUPPCState *env, ppc_def_t *def)
+int cpu_ppc_register_internal (CPUPPCState *env, const ppc_def_t *def)
 {
     env->msr_mask = def->msr_mask;
     env->mmu_model = def->mmu_model;
     env->excp_model = def->excp_model;
     env->bus_model = def->bus_model;
+    env->flags = def->flags;
     env->bfd_mach = def->bfd_mach;
+    env->check_pow = def->check_pow;
     if (create_ppc_opcodes(env, def) < 0)
         return -1;
     init_ppc_proc(env, def);
@@ -5834,12 +6372,6 @@ int cpu_ppc_register (CPUPPCState *env, ppc_def_t *def)
         switch (env->mmu_model) {
         case POWERPC_MMU_32B:
             mmu_model = "PowerPC 32";
-            break;
-        case POWERPC_MMU_64B:
-            mmu_model = "PowerPC 64";
-            break;
-        case POWERPC_MMU_601:
-            mmu_model = "PowerPC 601";
             break;
         case POWERPC_MMU_SOFT_6xx:
             mmu_model = "PowerPC 6xx/7xx with software driven TLBs";
@@ -5863,9 +6395,11 @@ int cpu_ppc_register (CPUPPCState *env, ppc_def_t *def)
         case POWERPC_MMU_BOOKE_FSL:
             mmu_model = "PowerPC BookE FSL";
             break;
-        case POWERPC_MMU_64BRIDGE:
-            mmu_model = "PowerPC 64 bridge";
+#if defined (TARGET_PPC64)
+        case POWERPC_MMU_64B:
+            mmu_model = "PowerPC 64";
             break;
+#endif
         default:
             mmu_model = "Unknown or invalid";
             break;
@@ -5901,12 +6435,14 @@ int cpu_ppc_register (CPUPPCState *env, ppc_def_t *def)
         case POWERPC_EXCP_74xx:
             excp_model = "PowerPC 74xx";
             break;
-        case POWERPC_EXCP_970:
-            excp_model = "PowerPC 970";
-            break;
         case POWERPC_EXCP_BOOKE:
             excp_model = "PowerPC BookE";
             break;
+#if defined (TARGET_PPC64)
+        case POWERPC_EXCP_970:
+            excp_model = "PowerPC 970";
+            break;
+#endif
         default:
             excp_model = "Unknown or invalid";
             break;
@@ -5921,12 +6457,14 @@ int cpu_ppc_register (CPUPPCState *env, ppc_def_t *def)
         case PPC_FLAGS_INPUT_405:
             bus_model = "PowerPC 405";
             break;
-        case PPC_FLAGS_INPUT_970:
-            bus_model = "PowerPC 970";
-            break;
         case PPC_FLAGS_INPUT_401:
             bus_model = "PowerPC 401/403";
             break;
+#if defined (TARGET_PPC64)
+        case PPC_FLAGS_INPUT_970:
+            bus_model = "PowerPC 970";
+            break;
+#endif
         default:
             bus_model = "Unknown or invalid";
             break;
@@ -5934,14 +6472,42 @@ int cpu_ppc_register (CPUPPCState *env, ppc_def_t *def)
         printf("PowerPC %-12s : PVR %08x MSR %016" PRIx64 "\n"
                "    MMU model        : %s\n",
                def->name, def->pvr, def->msr_mask, mmu_model);
+#if !defined(CONFIG_USER_ONLY)
         if (env->tlb != NULL) {
             printf("                       %d %s TLB in %d ways\n",
                    env->nb_tlb, env->id_tlbs ? "splitted" : "merged",
                    env->nb_ways);
         }
+#endif
         printf("    Exceptions model : %s\n"
                "    Bus model        : %s\n",
                excp_model, bus_model);
+        printf("    MSR features     :\n");
+        if (env->flags & POWERPC_FLAG_SPE)
+            printf("                        signal processing engine enable"
+                   "\n");
+        else if (env->flags & POWERPC_FLAG_VRE)
+            printf("                        vector processor enable\n");
+        if (env->flags & POWERPC_FLAG_TGPR)
+            printf("                        temporary GPRs\n");
+        else if (env->flags & POWERPC_FLAG_CE)
+            printf("                        critical input enable\n");
+        if (env->flags & POWERPC_FLAG_SE)
+            printf("                        single-step trace mode\n");
+        else if (env->flags & POWERPC_FLAG_DWE)
+            printf("                        debug wait enable\n");
+        else if (env->flags & POWERPC_FLAG_UBLE)
+            printf("                        user BTB lock enable\n");
+        if (env->flags & POWERPC_FLAG_BE)
+            printf("                        branch-step trace mode\n");
+        else if (env->flags & POWERPC_FLAG_DE)
+            printf("                        debug interrupt enable\n");
+        if (env->flags & POWERPC_FLAG_PX)
+            printf("                        inclusive protection\n");
+        else if (env->flags & POWERPC_FLAG_PMM)
+            printf("                        performance monitor mark\n");
+        if (env->flags == POWERPC_FLAG_NONE)
+            printf("                        none\n");
     }
     dump_ppc_insns(env);
     dump_ppc_sprs(env);
@@ -5951,36 +6517,72 @@ int cpu_ppc_register (CPUPPCState *env, ppc_def_t *def)
     return 0;
 }
 
-int ppc_find_by_name (const unsigned char *name, ppc_def_t **def)
+static const ppc_def_t *ppc_find_by_pvr (uint32_t pvr)
 {
-    int i, max, ret;
+    const ppc_def_t *ret;
+    uint32_t pvr_rev;
+    int i, best, match, best_match, max;
 
-    ret = -1;
-    *def = NULL;
+    ret = NULL;
     max = sizeof(ppc_defs) / sizeof(ppc_def_t);
+    best = -1;
+    pvr_rev = pvr & 0xFFFF;
+    /* We want all specified bits to match */
+    best_match = 32 - ctz32(pvr_rev);
     for (i = 0; i < max; i++) {
-        if (strcasecmp(name, ppc_defs[i].name) == 0) {
-            *def = &ppc_defs[i];
-            ret = 0;
-            break;
+        /* We check that the 16 higher bits are the same to ensure the CPU
+         * model will be the choosen one.
+         */
+        if (((pvr ^ ppc_defs[i].pvr) >> 16) == 0) {
+            /* We want as much as possible of the low-level 16 bits
+             * to be the same but we allow inexact matches.
+             */
+            match = clz32(pvr_rev ^ (ppc_defs[i].pvr & 0xFFFF));
+            /* We check '>=' instead of '>' because the PPC_defs table
+             * is ordered by increasing revision.
+             * Then, we will match the higher revision compatible 
+             * with the requested PVR
+             */
+            if (match >= best_match) {
+                best = i;
+                best_match = match;
+            }
         }
     }
+    if (best != -1)
+        ret = &ppc_defs[best];
 
     return ret;
 }
 
-int ppc_find_by_pvr (uint32_t pvr, ppc_def_t **def)
-{
-    int i, max, ret;
+#include <ctype.h>
 
-    ret = -1;
-    *def = NULL;
+const ppc_def_t *cpu_ppc_find_by_name (const unsigned char *name)
+{
+    const ppc_def_t *ret;
+    const unsigned char *p;
+    int i, max, len;
+
+    /* Check if the given name is a PVR */
+    len = strlen(name);
+    if (len == 10 && name[0] == '0' && name[1] == 'x') {
+        p = name + 2;
+        goto check_pvr;
+    } else if (len == 8) {
+        p = name;
+    check_pvr:
+        for (i = 0; i < 8; i++) {
+            if (!isxdigit(*p++))
+                break;
+        }
+        if (i == 8)
+            return ppc_find_by_pvr(strtoul(name, NULL, 16));
+    }
+    ret = NULL;
     max = sizeof(ppc_defs) / sizeof(ppc_def_t);
     for (i = 0; i < max; i++) {
-        if ((pvr & ppc_defs[i].pvr_mask) ==
-            (ppc_defs[i].pvr & ppc_defs[i].pvr_mask)) {
-            *def = &ppc_defs[i];
-            ret = 0;
+        if (strcasecmp(name, ppc_defs[i].name) == 0) {
+            ret = &ppc_defs[i];
             break;
         }
     }

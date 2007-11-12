@@ -91,9 +91,6 @@ void optimize_flags_init(void);
 extern FILE *logfile;
 extern int loglevel;
 
-void muls64(int64_t *phigh, int64_t *plow, int64_t a, int64_t b);
-void mulu64(uint64_t *phigh, uint64_t *plow, uint64_t a, uint64_t b);
-
 int gen_intermediate_code(CPUState *env, struct TranslationBlock *tb);
 int gen_intermediate_code_pc(CPUState *env, struct TranslationBlock *tb);
 void dump_ops(const uint16_t *opc_buf, const uint32_t *opparam_buf);
@@ -117,14 +114,14 @@ void tlb_flush_page(CPUState *env, target_ulong addr);
 void tlb_flush(CPUState *env, int flush_global);
 int tlb_set_page_exec(CPUState *env, target_ulong vaddr,
                       target_phys_addr_t paddr, int prot,
-                      int is_user, int is_softmmu);
+                      int mmu_idx, int is_softmmu);
 static inline int tlb_set_page(CPUState *env, target_ulong vaddr,
                                target_phys_addr_t paddr, int prot,
-                               int is_user, int is_softmmu)
+                               int mmu_idx, int is_softmmu)
 {
     if (prot & PAGE_READ)
         prot |= PAGE_EXEC;
-    return tlb_set_page_exec(env, vaddr, paddr, prot, is_user, is_softmmu);
+    return tlb_set_page_exec(env, vaddr, paddr, prot, mmu_idx, is_softmmu);
 }
 
 #define CODE_GEN_MAX_SIZE        65536
@@ -562,10 +559,10 @@ extern int tb_invalidated_flag;
 
 #if !defined(CONFIG_USER_ONLY)
 
-void tlb_fill(target_ulong addr, int is_write, int is_user,
+void tlb_fill(target_ulong addr, int is_write, int mmu_idx,
               void *retaddr);
 
-#define ACCESS_TYPE 3
+#define ACCESS_TYPE (NB_MMU_MODES + 1)
 #define MEMSUFFIX _code
 #define env cpu_single_env
 
@@ -598,41 +595,23 @@ static inline target_ulong get_phys_addr_code(CPUState *env, target_ulong addr)
    is the offset relative to phys_ram_base */
 static inline target_ulong get_phys_addr_code(CPUState *env, target_ulong addr)
 {
-    int is_user, index, pd;
+    int mmu_idx, index, pd;
 
     index = (addr >> TARGET_PAGE_BITS) & (CPU_TLB_SIZE - 1);
-#if defined(TARGET_I386)
-    is_user = ((env->hflags & HF_CPL_MASK) == 3);
-#elif defined (TARGET_PPC)
-    is_user = msr_pr;
-#elif defined (TARGET_MIPS)
-    is_user = ((env->hflags & MIPS_HFLAG_MODE) == MIPS_HFLAG_UM);
-#elif defined (TARGET_SPARC)
-    is_user = (env->psrs == 0);
-#elif defined (TARGET_ARM)
-    is_user = ((env->uncached_cpsr & CPSR_M) == ARM_CPU_MODE_USR);
-#elif defined (TARGET_SH4)
-    is_user = ((env->sr & SR_MD) == 0);
-#elif defined (TARGET_ALPHA)
-    is_user = ((env->ps >> 3) & 3);
-#elif defined (TARGET_M68K)
-    is_user = ((env->sr & SR_S) == 0);
-#else
-#error unimplemented CPU
-#endif
-    if (__builtin_expect(env->tlb_table[is_user][index].addr_code !=
+    mmu_idx = cpu_mmu_index(env);
+    if (__builtin_expect(env->tlb_table[mmu_idx][index].addr_code !=
                          (addr & TARGET_PAGE_MASK), 0)) {
         ldub_code(addr);
     }
-    pd = env->tlb_table[is_user][index].addr_code & ~TARGET_PAGE_MASK;
+    pd = env->tlb_table[mmu_idx][index].addr_code & ~TARGET_PAGE_MASK;
     if (pd > IO_MEM_ROM && !(pd & IO_MEM_ROMD)) {
-#ifdef TARGET_SPARC
+#if defined(TARGET_SPARC) || defined(TARGET_MIPS)
         do_unassigned_access(addr, 0, 1, 0);
 #else
         cpu_abort(env, "Trying to execute code outside RAM or ROM at 0x" TARGET_FMT_lx "\n", addr);
 #endif
     }
-    return addr + env->tlb_table[is_user][index].addend - (unsigned long)phys_ram_base;
+    return addr + env->tlb_table[mmu_idx][index].addend - (unsigned long)phys_ram_base;
 }
 #endif
 

@@ -1365,6 +1365,10 @@ static term_cmd_t info_cmds[] = {
     { "cpustats", "", do_info_cpu_stats,
       "", "show CPU statistics", },
 #endif
+#if defined(CONFIG_SLIRP)
+    { "slirp", "", do_info_slirp,
+      "", "show SLIRP statistics", },
+#endif
     { NULL, NULL, },
 };
 
@@ -1415,7 +1419,7 @@ static target_long monitor_get_msr (struct MonitorDef *md, int val)
     CPUState *env = mon_get_cpu();
     if (!env)
         return 0;
-    return do_load_msr(env);
+    return env->msr;
 }
 
 static target_long monitor_get_xer (struct MonitorDef *md, int val)

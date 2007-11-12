@@ -534,7 +534,7 @@ void OPPROTO op_tadd_T1_T0_ccTV(void)
          ((src1 & 0xffffffff) ^ (T0 & 0xffffffff))) & (1 << 31))
         raise_exception(TT_TOVF);
 #else
-    if ((src1 & 0x03) || (T1 & 0x03))
+    if (((src1 ^ T1 ^ -1) & (src1 ^ T0)) & (1 << 31))
         raise_exception(TT_TOVF);
 #endif
 
@@ -1023,6 +1023,11 @@ void OPPROTO op_sra(void)
 
 #define MEMSUFFIX _kernel
 #include "op_mem.h"
+
+#ifdef TARGET_SPARC64
+#define MEMSUFFIX _hypv
+#include "op_mem.h"
+#endif
 #endif
 
 void OPPROTO op_ldfsr(void)
@@ -1706,6 +1711,9 @@ void OPPROTO op_fcmped_fcc3(void)
 /* Integer to float conversion.  */
 #ifdef USE_INT_TO_FLOAT_HELPERS
 F_HELPER(ito);
+#ifdef TARGET_SPARC64
+F_HELPER(xto);
+#endif
 #else
 F_OP(ito, s)
 {

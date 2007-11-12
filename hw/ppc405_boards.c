@@ -171,9 +171,9 @@ static void ref405ep_fpga_init (uint32_t base)
     }
 }
 
-static void ref405ep_init (int ram_size, int vga_ram_size, int boot_device,
-                           DisplayState *ds, const char **fd_filename,
-                           int snapshot,
+static void ref405ep_init (int ram_size, int vga_ram_size,
+                           const char *boot_device, DisplayState *ds,
+                           const char **fd_filename, int snapshot,
                            const char *kernel_filename,
                            const char *kernel_cmdline,
                            const char *initrd_filename,
@@ -191,6 +191,7 @@ static void ref405ep_init (int ram_size, int vga_ram_size, int boot_device,
     target_ulong kernel_base, kernel_size, initrd_base, initrd_size;
     int linux_boot;
     int fl_idx, fl_sectors, len;
+    int ppc_boot_device = boot_device[0];
 
     /* XXX: fix this */
     ram_bases[0] = 0x00000000;
@@ -226,8 +227,8 @@ static void ref405ep_init (int ram_size, int vga_ram_size, int boot_device,
                fl_idx, bios_size, bios_offset, -bios_size,
                bdrv_get_device_name(pflash_table[fl_idx]), fl_sectors);
 #endif
-        pflash_register(-(bios_size), bios_offset, pflash_table[fl_idx],
-                        65536, fl_sectors, 2,
+        pflash_register((uint32_t)(-bios_size), bios_offset,
+                        pflash_table[fl_idx], 65536, fl_sectors, 2,
                         0x0001, 0x22DA, 0x0000, 0x0000);
         fl_idx++;
     } else
@@ -236,7 +237,9 @@ static void ref405ep_init (int ram_size, int vga_ram_size, int boot_device,
 #ifdef DEBUG_BOARD_INIT
         printf("Load BIOS from file\n");
 #endif
-        snprintf(buf, sizeof(buf), "%s/%s", bios_dir, BIOS_FILENAME);
+        if (bios_name == NULL)
+            bios_name = BIOS_FILENAME;
+        snprintf(buf, sizeof(buf), "%s/%s", bios_dir, bios_name);
         bios_size = load_image(buf, phys_ram_base + bios_offset);
         if (bios_size < 0 || bios_size > BIOS_SIZE) {
             fprintf(stderr, "qemu: could not load PowerPC bios '%s'\n", buf);
@@ -266,7 +269,7 @@ static void ref405ep_init (int ram_size, int vga_ram_size, int boot_device,
         memset(&bd, 0, sizeof(bd));
         bd.bi_memstart = 0x00000000;
         bd.bi_memsize = ram_size;
-        bd.bi_flashstart = -(bios_size);
+        bd.bi_flashstart = -bios_size;
         bd.bi_flashsize = -bios_size;
         bd.bi_flashoffset = 0;
         bd.bi_sramstart = 0xFFF00000;
@@ -320,7 +323,7 @@ static void ref405ep_init (int ram_size, int vga_ram_size, int boot_device,
         }
         env->gpr[4] = initrd_base;
         env->gpr[5] = initrd_size;
-        boot_device = 'm';
+        ppc_boot_device = 'm';
         if (kernel_cmdline != NULL) {
             len = strlen(kernel_cmdline);
             bdloc -= ((len + 255) & ~255);
@@ -494,9 +497,9 @@ static void taihu_cpld_init (uint32_t base)
     }
 }
 
-static void taihu_405ep_init(int ram_size, int vga_ram_size, int boot_device,
-                             DisplayState *ds, const char **fd_filename,
-                             int snapshot,
+static void taihu_405ep_init(int ram_size, int vga_ram_size,
+                             const char *boot_device, DisplayState *ds,
+                             const char **fd_filename, int snapshot,
                              const char *kernel_filename,
                              const char *kernel_cmdline,
                              const char *initrd_filename,
@@ -511,6 +514,7 @@ static void taihu_405ep_init(int ram_size, int vga_ram_size, int boot_device,
     target_ulong kernel_base, kernel_size, initrd_base, initrd_size;
     int linux_boot;
     int fl_idx, fl_sectors;
+    int ppc_boot_device = boot_device[0];
 
     /* RAM is soldered to the board so the size cannot be changed */
     ram_bases[0] = 0x00000000;
@@ -539,8 +543,8 @@ static void taihu_405ep_init(int ram_size, int vga_ram_size, int boot_device,
                fl_idx, bios_size, bios_offset, -bios_size,
                bdrv_get_device_name(pflash_table[fl_idx]), fl_sectors);
 #endif
-        pflash_register(-(bios_size), bios_offset, pflash_table[fl_idx],
-                        65536, fl_sectors, 4,
+        pflash_register((uint32_t)(-bios_size), bios_offset,
+                        pflash_table[fl_idx], 65536, fl_sectors, 4,
                         0x0001, 0x22DA, 0x0000, 0x0000);
         fl_idx++;
     } else
@@ -549,7 +553,9 @@ static void taihu_405ep_init(int ram_size, int vga_ram_size, int boot_device,
 #ifdef DEBUG_BOARD_INIT
         printf("Load BIOS from file\n");
 #endif
-        snprintf(buf, sizeof(buf), "%s/%s", bios_dir, BIOS_FILENAME);
+        if (bios_name == NULL)
+            bios_name = BIOS_FILENAME;
+        snprintf(buf, sizeof(buf), "%s/%s", bios_dir, bios_name);
         bios_size = load_image(buf, phys_ram_base + bios_offset);
         if (bios_size < 0 || bios_size > BIOS_SIZE) {
             fprintf(stderr, "qemu: could not load PowerPC bios '%s'\n", buf);
@@ -611,7 +617,7 @@ static void taihu_405ep_init(int ram_size, int vga_ram_size, int boot_device,
             initrd_base = 0;
             initrd_size = 0;
         }
-        boot_device = 'm';
+        ppc_boot_device = 'm';
     } else {
         kernel_base = 0;
         kernel_size = 0;

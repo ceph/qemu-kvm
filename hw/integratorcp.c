@@ -99,7 +99,7 @@ static uint32_t integratorcm_read(void *opaque, target_phys_addr_t offset)
         return 0;
     default:
         cpu_abort (cpu_single_env,
-            "integratorcm_read: Unimplemented offset 0x%x\n", offset);
+            "integratorcm_read: Unimplemented offset 0x%x\n", (int)offset);
         return 0;
     }
 }
@@ -207,7 +207,7 @@ static void integratorcm_write(void *opaque, target_phys_addr_t offset,
         break;
     default:
         cpu_abort (cpu_single_env,
-            "integratorcm_write: Unimplemented offset 0x%x\n", offset);
+            "integratorcm_write: Unimplemented offset 0x%x\n", (int)offset);
         break;
     }
 }
@@ -414,7 +414,8 @@ static uint32_t icp_control_read(void *opaque, target_phys_addr_t offset)
     case 3: /* CP_DECODE */
         return 0x11;
     default:
-        cpu_abort (cpu_single_env, "icp_control_read: Bad offset %x\n", offset);
+        cpu_abort (cpu_single_env, "icp_control_read: Bad offset %x\n",
+                   (int)offset);
         return 0;
     }
 }
@@ -431,7 +432,8 @@ static void icp_control_write(void *opaque, target_phys_addr_t offset,
         /* Nothing interesting implemented yet.  */
         break;
     default:
-        cpu_abort (cpu_single_env, "icp_control_write: Bad offset %x\n", offset);
+        cpu_abort (cpu_single_env, "icp_control_write: Bad offset %x\n",
+                   (int)offset);
     }
 }
 static CPUReadMemoryFunc *icp_control_readfn[] = {
@@ -462,8 +464,9 @@ static void icp_control_init(uint32_t base)
 
 /* Board init.  */
 
-static void integratorcp_init(int ram_size, int vga_ram_size, int boot_device,
-                     DisplayState *ds, const char **fd_filename, int snapshot,
+static void integratorcp_init(int ram_size, int vga_ram_size,
+                     const char *boot_device, DisplayState *ds,
+                     const char **fd_filename, int snapshot,
                      const char *kernel_filename, const char *kernel_cmdline,
                      const char *initrd_filename, const char *cpu_model)
 {
@@ -472,10 +475,13 @@ static void integratorcp_init(int ram_size, int vga_ram_size, int boot_device,
     qemu_irq *pic;
     qemu_irq *cpu_pic;
 
-    env = cpu_init();
     if (!cpu_model)
         cpu_model = "arm926";
-    cpu_arm_set_model(env, cpu_model);
+    env = cpu_init(cpu_model);
+    if (!env) {
+        fprintf(stderr, "Unable to find CPU definition\n");
+        exit(1);
+    }
     bios_offset = ram_size + vga_ram_size;
     /* ??? On a real system the first 1Mb is mapped as SSRAM or boot flash.  */
     /* ??? RAM shoud repeat to fill physical memory space.  */
@@ -491,8 +497,8 @@ static void integratorcp_init(int ram_size, int vga_ram_size, int boot_device,
     icp_pic_init(0xca000000, pic[26], NULL);
     icp_pit_init(0x13000000, pic, 5);
     pl031_init(0x15000000, pic[8]);
-    pl011_init(0x16000000, pic[1], serial_hds[0]);
-    pl011_init(0x17000000, pic[2], serial_hds[1]);
+    pl011_init(0x16000000, pic[1], serial_hds[0], PL011_ARM);
+    pl011_init(0x17000000, pic[2], serial_hds[1], PL011_ARM);
     icp_control_init(0xcb000000);
     pl050_init(0x18000000, pic[3], 0);
     pl050_init(0x19000000, pic[4], 1);

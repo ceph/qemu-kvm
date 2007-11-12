@@ -49,10 +49,10 @@
 #define KERNEL_LOAD_ADDR     0x00004000
 #define CMDLINE_ADDR         0x007ff000
 #define INITRD_LOAD_ADDR     0x00800000
-#define PROM_SIZE_MAX        (256 * 1024)
+#define PROM_SIZE_MAX        (512 * 1024)
 #define PROM_PADDR           0xff0000000ULL
 #define PROM_VADDR           0xffd00000
-#define PROM_FILENAME	     "openbios-sparc32"
+#define PROM_FILENAME        "openbios-sparc32"
 
 #define MAX_CPUS 16
 #define MAX_PILS 16
@@ -158,9 +158,9 @@ static void nvram_finish_partition (m48t59_t *nvram, uint32_t start,
 extern int nographic;
 
 static void nvram_init(m48t59_t *nvram, uint8_t *macaddr, const char *cmdline,
-		       int boot_device, uint32_t RAM_size,
-		       uint32_t kernel_size,
-		       int width, int height, int depth,
+                       const char *boot_device, uint32_t RAM_size,
+                       uint32_t kernel_size,
+                       int width, int height, int depth,
                        int machine_id)
 {
     unsigned char tmp = 0;
@@ -175,12 +175,12 @@ static void nvram_init(m48t59_t *nvram, uint8_t *macaddr, const char *cmdline,
     m48t59_write(nvram, 0x2E, 0);
     m48t59_write(nvram, 0x2F, nographic & 0xff);
     nvram_set_lword(nvram,  0x30, RAM_size);
-    m48t59_write(nvram, 0x34, boot_device & 0xff);
+    m48t59_write(nvram, 0x34, boot_device[0] & 0xff);
     nvram_set_lword(nvram,  0x38, KERNEL_LOAD_ADDR);
     nvram_set_lword(nvram,  0x3C, kernel_size);
     if (cmdline) {
-	strcpy(phys_ram_base + CMDLINE_ADDR, cmdline);
-	nvram_set_lword(nvram,  0x40, CMDLINE_ADDR);
+        strcpy(phys_ram_base + CMDLINE_ADDR, cmdline);
+        nvram_set_lword(nvram,  0x40, CMDLINE_ADDR);
         nvram_set_lword(nvram,  0x44, strlen(cmdline));
     }
     // initrd_image, initrd_size passed differently
@@ -313,21 +313,19 @@ static void *sun4m_hw_init(const struct hwdef *hwdef, int RAM_size,
     CPUState *env, *envs[MAX_CPUS];
     unsigned int i;
     void *iommu, *espdma, *ledma, *main_esp, *nvram;
-    const sparc_def_t *def;
     qemu_irq *cpu_irqs[MAX_CPUS], *slavio_irq, *slavio_cpu_irq,
         *espdma_irq, *ledma_irq;
     qemu_irq *esp_reset, *le_reset;
 
     /* init CPUs */
-    sparc_find_by_name(cpu_model, &def);
-    if (def == NULL) {
-        fprintf(stderr, "Unable to find Sparc CPU definition\n");
-        exit(1);
-    }
 
     for(i = 0; i < smp_cpus; i++) {
-        env = cpu_init();
-        cpu_sparc_register(env, def);
+        env = cpu_init(cpu_model);
+        if (!env) {
+            fprintf(stderr, "Unable to find Sparc CPU definition\n");
+            exit(1);
+        }
+        cpu_sparc_set_id(env, i);
         envs[i] = env;
         if (i == 0) {
             qemu_register_reset(main_cpu_reset, env);
@@ -380,19 +378,18 @@ static void *sun4m_hw_init(const struct hwdef *hwdef, int RAM_size,
 
     nvram = m48t59_init(slavio_irq[0], hwdef->nvram_base, 0,
                         hwdef->nvram_size, 8);
-    for (i = 0; i < MAX_CPUS; i++) {
-        slavio_timer_init(hwdef->counter_base +
-                          (target_phys_addr_t)(i * TARGET_PAGE_SIZE),
-                           slavio_cpu_irq[i], 0);
-    }
-    slavio_timer_init(hwdef->counter_base + 0x10000ULL,
-                      slavio_irq[hwdef->clock1_irq], 2);
+
+    slavio_timer_init_all(hwdef->counter_base, slavio_irq[hwdef->clock1_irq],
+                          slavio_cpu_irq);
+
     slavio_serial_ms_kbd_init(hwdef->ms_kb_base, slavio_irq[hwdef->ms_kb_irq]);
     // Slavio TTYA (base+4, Linux ttyS0) is the first Qemu serial device
     // Slavio TTYB (base+0, Linux ttyS1) is the second Qemu serial device
     slavio_serial_init(hwdef->serial_base, slavio_irq[hwdef->ser_irq],
                        serial_hds[1], serial_hds[0]);
-    fdctrl_init(slavio_irq[hwdef->fd_irq], 0, 1, hwdef->fd_base, fd_table);
+
+    if (hwdef->fd_base != (target_phys_addr_t)-1)
+        sun4m_fdctrl_init(slavio_irq[hwdef->fd_irq], hwdef->fd_base, fd_table);
 
     main_esp = esp_init(bs_table, hwdef->esp_base, espdma, *espdma_irq,
                         esp_reset);
@@ -411,7 +408,8 @@ static void *sun4m_hw_init(const struct hwdef *hwdef, int RAM_size,
     return nvram;
 }
 
-static void sun4m_load_kernel(long vram_size, int RAM_size, int boot_device,
+static void sun4m_load_kernel(long vram_size, int RAM_size,
+                              const char *boot_device,
                               const char *kernel_filename,
                               const char *kernel_cmdline,
                               const char *initrd_filename,
@@ -430,25 +428,30 @@ static void sun4m_load_kernel(long vram_size, int RAM_size, int boot_device,
                                  (PROM_SIZE_MAX + TARGET_PAGE_SIZE - 1) & TARGET_PAGE_MASK,
                                  prom_offset | IO_MEM_ROM);
 
-    snprintf(buf, sizeof(buf), "%s/%s", bios_dir, PROM_FILENAME);
+    if (bios_name == NULL)
+        bios_name = PROM_FILENAME;
+    snprintf(buf, sizeof(buf), "%s/%s", bios_dir, bios_name);
     ret = load_elf(buf, PROM_PADDR - PROM_VADDR, NULL, NULL, NULL);
-    if (ret < 0) {
-	fprintf(stderr, "qemu: could not load prom '%s'\n",
-		buf);
-	exit(1);
+    if (ret < 0 || ret > PROM_SIZE_MAX)
+        ret = load_image(buf, phys_ram_base + prom_offset);
+    if (ret < 0 || ret > PROM_SIZE_MAX) {
+        fprintf(stderr, "qemu: could not load prom '%s'\n",
+                buf);
+        exit(1);
     }
 
     kernel_size = 0;
     if (linux_boot) {
-        kernel_size = load_elf(kernel_filename, -0xf0000000, NULL, NULL, NULL);
+        kernel_size = load_elf(kernel_filename, -0xf0000000ULL, NULL, NULL,
+                               NULL);
         if (kernel_size < 0)
-	    kernel_size = load_aout(kernel_filename, phys_ram_base + KERNEL_LOAD_ADDR);
-	if (kernel_size < 0)
-	    kernel_size = load_image(kernel_filename, phys_ram_base + KERNEL_LOAD_ADDR);
+            kernel_size = load_aout(kernel_filename, phys_ram_base + KERNEL_LOAD_ADDR);
+        if (kernel_size < 0)
+            kernel_size = load_image(kernel_filename, phys_ram_base + KERNEL_LOAD_ADDR);
         if (kernel_size < 0) {
             fprintf(stderr, "qemu: could not load kernel '%s'\n",
                     kernel_filename);
-	    exit(1);
+            exit(1);
         }
 
         /* load initrd */
@@ -462,14 +465,14 @@ static void sun4m_load_kernel(long vram_size, int RAM_size, int boot_device,
             }
         }
         if (initrd_size > 0) {
-	    for (i = 0; i < 64 * TARGET_PAGE_SIZE; i += TARGET_PAGE_SIZE) {
-		if (ldl_raw(phys_ram_base + KERNEL_LOAD_ADDR + i)
-		    == 0x48647253) { // HdrS
-		    stl_raw(phys_ram_base + KERNEL_LOAD_ADDR + i + 16, INITRD_LOAD_ADDR);
-		    stl_raw(phys_ram_base + KERNEL_LOAD_ADDR + i + 20, initrd_size);
-		    break;
-		}
-	    }
+            for (i = 0; i < 64 * TARGET_PAGE_SIZE; i += TARGET_PAGE_SIZE) {
+                if (ldl_raw(phys_ram_base + KERNEL_LOAD_ADDR + i)
+                    == 0x48647253) { // HdrS
+                    stl_raw(phys_ram_base + KERNEL_LOAD_ADDR + i + 16, INITRD_LOAD_ADDR);
+                    stl_raw(phys_ram_base + KERNEL_LOAD_ADDR + i + 20, initrd_size);
+                    break;
+                }
+            }
         }
     }
     nvram_init(nvram, (uint8_t *)&nd_table[0].macaddr, kernel_cmdline,
@@ -507,8 +510,8 @@ static const struct hwdef hwdefs[] = {
         .cs_irq = 5,
         .machine_id = 0x80,
         .intbit_to_level = {
-            2, 3, 5, 7, 9, 11, 0, 14,	3, 5, 7, 9, 11, 13, 12, 12,
-            6, 0, 4, 10, 8, 0, 11, 0,	0, 0, 0, 0, 15, 0, 15, 0,
+            2, 3, 5, 7, 9, 11, 0, 14,   3, 5, 7, 9, 11, 13, 12, 12,
+            6, 0, 4, 10, 8, 0, 11, 0,   0, 0, 0, 0, 15, 0, 15, 0,
         },
     },
     /* SS-10 */
@@ -540,13 +543,46 @@ static const struct hwdef hwdefs[] = {
         .cs_irq = -1,
         .machine_id = 0x72,
         .intbit_to_level = {
-            2, 3, 5, 7, 9, 11, 0, 14,	3, 5, 7, 9, 11, 13, 12, 12,
-            6, 0, 4, 10, 8, 0, 11, 0,	0, 0, 0, 0, 15, 0, 15, 0,
+            2, 3, 5, 7, 9, 11, 0, 14,   3, 5, 7, 9, 11, 13, 12, 12,
+            6, 0, 4, 10, 8, 0, 11, 0,   0, 0, 0, 0, 15, 0, 15, 0,
+        },
+    },
+    /* SS-600MP */
+    {
+        .iommu_base   = 0xfe0000000ULL,
+        .tcx_base     = 0xe20000000ULL,
+        .cs_base      = -1,
+        .slavio_base  = 0xff0000000ULL,
+        .ms_kb_base   = 0xff1000000ULL,
+        .serial_base  = 0xff1100000ULL,
+        .nvram_base   = 0xff1200000ULL,
+        .fd_base      = -1,
+        .counter_base = 0xff1300000ULL,
+        .intctl_base  = 0xff1400000ULL,
+        .dma_base     = 0xef0081000ULL,
+        .esp_base     = 0xef0080000ULL,
+        .le_base      = 0xef0060000ULL,
+        .power_base   = 0xefa000000ULL,
+        .vram_size    = 0x00100000,
+        .nvram_size   = 0x2000,
+        .esp_irq = 18,
+        .le_irq = 16,
+        .clock_irq = 7,
+        .clock1_irq = 19,
+        .ms_kb_irq = 14,
+        .ser_irq = 15,
+        .fd_irq = 22,
+        .me_irq = 30,
+        .cs_irq = -1,
+        .machine_id = 0x71,
+        .intbit_to_level = {
+            2, 3, 5, 7, 9, 11, 0, 14,   3, 5, 7, 9, 11, 13, 12, 12,
+            6, 0, 4, 10, 8, 0, 11, 0,   0, 0, 0, 0, 15, 0, 15, 0,
         },
     },
 };
 
-static void sun4m_common_init(int RAM_size, int boot_device, DisplayState *ds,
+static void sun4m_common_init(int RAM_size, const char *boot_device, DisplayState *ds,
                               const char *kernel_filename, const char *kernel_cmdline,
                               const char *initrd_filename, const char *cpu_model,
                               unsigned int machine, int max_ram)
@@ -567,7 +603,7 @@ static void sun4m_common_init(int RAM_size, int boot_device, DisplayState *ds,
 }
 
 /* SPARCstation 5 hardware initialisation */
-static void ss5_init(int RAM_size, int vga_ram_size, int boot_device,
+static void ss5_init(int RAM_size, int vga_ram_size, const char *boot_device,
                        DisplayState *ds, const char **fd_filename, int snapshot,
                        const char *kernel_filename, const char *kernel_cmdline,
                        const char *initrd_filename, const char *cpu_model)
@@ -580,7 +616,7 @@ static void ss5_init(int RAM_size, int vga_ram_size, int boot_device,
 }
 
 /* SPARCstation 10 hardware initialisation */
-static void ss10_init(int RAM_size, int vga_ram_size, int boot_device,
+static void ss10_init(int RAM_size, int vga_ram_size, const char *boot_device,
                             DisplayState *ds, const char **fd_filename, int snapshot,
                             const char *kernel_filename, const char *kernel_cmdline,
                             const char *initrd_filename, const char *cpu_model)
@@ -590,6 +626,19 @@ static void ss10_init(int RAM_size, int vga_ram_size, int boot_device,
     sun4m_common_init(RAM_size, boot_device, ds, kernel_filename,
                       kernel_cmdline, initrd_filename, cpu_model,
                       1, 0xffffffff); // XXX actually first 62GB ok
+}
+
+/* SPARCserver 600MP hardware initialisation */
+static void ss600mp_init(int RAM_size, int vga_ram_size, const char *boot_device,
+                         DisplayState *ds, const char **fd_filename, int snapshot,
+                         const char *kernel_filename, const char *kernel_cmdline,
+                         const char *initrd_filename, const char *cpu_model)
+{
+    if (cpu_model == NULL)
+        cpu_model = "TI SuperSparc II";
+    sun4m_common_init(RAM_size, boot_device, ds, kernel_filename,
+                      kernel_cmdline, initrd_filename, cpu_model,
+                      2, 0xffffffff); // XXX actually first 62GB ok
 }
 
 QEMUMachine ss5_machine = {
@@ -602,4 +651,10 @@ QEMUMachine ss10_machine = {
     "SS-10",
     "Sun4m platform, SPARCstation 10",
     ss10_init,
+};
+
+QEMUMachine ss600mp_machine = {
+    "SS-600MP",
+    "Sun4m platform, SPARCserver 600MP",
+    ss600mp_init,
 };

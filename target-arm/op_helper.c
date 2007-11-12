@@ -1,7 +1,7 @@
 /*
  *  ARM helper routines
  *
- *  Copyright (c) 2005 CodeSourcery, LLC
+ *  Copyright (c) 2005-2007 CodeSourcery, LLC
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -175,10 +175,89 @@ void do_vfp_get_fpscr(void)
     T0 |= vfp_exceptbits_from_host(i);
 }
 
+float32 helper_recps_f32(float32 a, float32 b)
+{
+    float_status *s = &env->vfp.fp_status;
+    float32 two = int32_to_float32(2, s);
+    return float32_sub(two, float32_mul(a, b, s), s);
+}
+
+float32 helper_rsqrts_f32(float32 a, float32 b)
+{
+    float_status *s = &env->vfp.fp_status;
+    float32 three = int32_to_float32(3, s);
+    return float32_sub(three, float32_mul(a, b, s), s);
+}
+
+/* TODO: The architecture specifies the value that the estimate functions
+   should return.  We return the exact reciprocal/root instead.  */
+float32 helper_recpe_f32(float32 a)
+{
+    float_status *s = &env->vfp.fp_status;
+    float32 one = int32_to_float32(1, s);
+    return float32_div(one, a, s);
+}
+
+float32 helper_rsqrte_f32(float32 a)
+{
+    float_status *s = &env->vfp.fp_status;
+    float32 one = int32_to_float32(1, s);
+    return float32_div(one, float32_sqrt(a, s), s);
+}
+
+uint32_t helper_recpe_u32(uint32_t a)
+{
+    float_status *s = &env->vfp.fp_status;
+    float32 tmp;
+    tmp = int32_to_float32(a, s);
+    tmp = float32_scalbn(tmp, -32, s);
+    tmp = helper_recpe_f32(tmp);
+    tmp = float32_scalbn(tmp, 31, s);
+    return float32_to_int32(tmp, s);
+}
+
+uint32_t helper_rsqrte_u32(uint32_t a)
+{
+    float_status *s = &env->vfp.fp_status;
+    float32 tmp;
+    tmp = int32_to_float32(a, s);
+    tmp = float32_scalbn(tmp, -32, s);
+    tmp = helper_rsqrte_f32(tmp);
+    tmp = float32_scalbn(tmp, 31, s);
+    return float32_to_int32(tmp, s);
+}
+
+void helper_neon_tbl(int rn, int maxindex)
+{
+    uint32_t val;
+    uint32_t mask;
+    uint32_t tmp;
+    int index;
+    int shift;
+    uint64_t *table;
+    table = (uint64_t *)&env->vfp.regs[rn];
+    val = 0;
+    mask = 0;
+    for (shift = 0; shift < 32; shift += 8) {
+        index = (T1 >> shift) & 0xff;
+        if (index <= maxindex) {
+            tmp = (table[index >> 3] >> (index & 7)) & 0xff;
+            val |= tmp << shift;
+        } else {
+            val |= T0 & (0xff << shift);
+        }
+    }
+    T0 = val;
+}
+
 #if !defined(CONFIG_USER_ONLY)
 
 #define MMUSUFFIX _mmu
-#define GETPC() (__builtin_return_address(0))
+#ifdef __s390__
+# define GETPC() ((void*)((unsigned long)__builtin_return_address(0) & 0x7fffffffUL))
+#else
+# define GETPC() (__builtin_return_address(0))
+#endif
 
 #define SHIFT 0
 #include "softmmu_template.h"
@@ -196,22 +275,22 @@ void do_vfp_get_fpscr(void)
    NULL, it means that the function was called in C code (i.e. not
    from generated code or from helper.c) */
 /* XXX: fix it to restore all registers */
-void tlb_fill (target_ulong addr, int is_write, int is_user, void *retaddr)
+void tlb_fill (target_ulong addr, int is_write, int mmu_idx, void *retaddr)
 {
     TranslationBlock *tb;
     CPUState *saved_env;
-    target_phys_addr_t pc;
+    unsigned long pc;
     int ret;
 
     /* XXX: hack to restore env in all cases, even if not called from
        generated code */
     saved_env = env;
     env = cpu_single_env;
-    ret = cpu_arm_handle_mmu_fault(env, addr, is_write, is_user, 1);
+    ret = cpu_arm_handle_mmu_fault(env, addr, is_write, mmu_idx, 1);
     if (__builtin_expect(ret, 0)) {
         if (retaddr) {
             /* now we have a real cpu fault */
-            pc = (target_phys_addr_t)retaddr;
+            pc = (unsigned long)retaddr;
             tb = tb_find_pc(pc);
             if (tb) {
                 /* the PC is inside the translated code. It means that we have
@@ -223,5 +302,4 @@ void tlb_fill (target_ulong addr, int is_write, int is_user, void *retaddr)
     }
     env = saved_env;
 }
-
 #endif

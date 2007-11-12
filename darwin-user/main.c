@@ -224,11 +224,6 @@ void cpu_loop(CPUPPCState *env)
             case POWERPC_EXCP_FP:
                 EXCP_DUMP(env, "Floating point program exception\n");
                 /* Set FX */
-                env->fpscr[7] |= 0x8;
-                /* Finally, update FEX */
-                if ((((env->fpscr[7] & 0x3) << 3) | (env->fpscr[6] >> 1)) &
-                    ((env->fpscr[1] << 1) | (env->fpscr[0] >> 3)))
-                    env->fpscr[7] |= 0x4;
                 info.si_signo = SIGFPE;
                 info.si_errno = 0;
                 switch (env->error_code & 0xF) {
@@ -248,7 +243,7 @@ void cpu_loop(CPUPPCState *env)
                 case POWERPC_EXCP_FP_VXSOFT:
                     info.si_code = FPE_FLTINV;
                     break;
-                case POWERPC_EXCP_FP_VXNAN:
+                case POWERPC_EXCP_FP_VXSNAN:
                 case POWERPC_EXCP_FP_VXISI:
                 case POWERPC_EXCP_FP_VXIDI:
                 case POWERPC_EXCP_FP_VXIMZ:
@@ -362,7 +357,6 @@ void cpu_loop(CPUPPCState *env)
         case POWERPC_EXCP_DEBUG:    /* Debug interrupt                       */
             gdb_handlesig (env, SIGTRAP);
             break;
-#if defined(TARGET_PPCEMB)
         case POWERPC_EXCP_SPEU:     /* SPE/embedded floating-point unavail.  */
             EXCP_DUMP(env, "No SPE/floating-point instruction allowed\n");
             info.si_signo = SIGILL;
@@ -388,7 +382,6 @@ void cpu_loop(CPUPPCState *env)
             cpu_abort(env, "Doorbell critical interrupt while in user mode. "
                       "Aborting\n");
             break;
-#endif /* defined(TARGET_PPCEMB) */
         case POWERPC_EXCP_RESET:    /* System reset exception                */
             cpu_abort(env, "Reset interrupt while in user mode. "
                       "Aborting\n");
@@ -762,9 +755,6 @@ void usage(void)
            "-s size      set the stack size in bytes (default=%ld)\n"
            "\n"
            "debug options:\n"
-#ifdef USE_CODE_COPY
-           "-no-code-copy   disable code copy acceleration\n"
-#endif
            "-d options   activate log (logfile='%s')\n"
            "-g wait for gdb on port 1234\n"
            "-p pagesize  set the host page size to 'pagesize'\n",
@@ -793,6 +783,7 @@ int main(int argc, char **argv)
     int optind;
     short use_gdbstub = 0;
     const char *r;
+    const char *cpu_model;
 
     if (argc <= 1)
         usage();
@@ -850,11 +841,6 @@ int main(int argc, char **argv)
         if (!strcmp(r, "g")) {
             use_gdbstub = 1;
         } else
-#ifdef USE_CODE_COPY
-        if (!strcmp(r, "no-code-copy")) {
-            code_copy_enabled = 0;
-        } else
-#endif
         {
             usage();
         }
@@ -868,7 +854,15 @@ int main(int argc, char **argv)
 
     /* NOTE: we need to init the CPU at this stage to get
        qemu_host_page_size */
-    env = cpu_init();
+#if defined(TARGET_I386)
+    cpu_model = "qemu32";
+#elif defined(TARGET_PPC)
+    cpu_model = "750";
+#else
+#error unsupported CPU
+#endif
+    
+    env = cpu_init(cpu_model);
 
     printf("Starting %s with qemu\n----------------\n", filename);
 

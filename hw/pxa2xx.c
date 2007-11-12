@@ -25,22 +25,34 @@ static struct {
     { 0, 0 }
 };
 
-static struct {
+typedef struct PXASSPDef {
     target_phys_addr_t io_base;
     int irqn;
-} pxa250_ssp[] = {
+} PXASSPDef;
+
+#if 0
+static PXASSPDef pxa250_ssp[] = {
     { 0x41000000, PXA2XX_PIC_SSP },
     { 0, 0 }
-}, pxa255_ssp[] = {
+};
+#endif
+
+static PXASSPDef pxa255_ssp[] = {
     { 0x41000000, PXA2XX_PIC_SSP },
     { 0x41400000, PXA25X_PIC_NSSP },
     { 0, 0 }
-}, pxa26x_ssp[] = {
+};
+
+#if 0
+static PXASSPDef pxa26x_ssp[] = {
     { 0x41000000, PXA2XX_PIC_SSP },
     { 0x41400000, PXA25X_PIC_NSSP },
     { 0x41500000, PXA26X_PIC_ASSP },
     { 0, 0 }
-}, pxa27x_ssp[] = {
+};
+#endif
+
+static PXASSPDef pxa27x_ssp[] = {
     { 0x41000000, PXA2XX_PIC_SSP },
     { 0x41700000, PXA27X_PIC_SSP2 },
     { 0x41900000, PXA2XX_PIC_SSP3 },
@@ -297,7 +309,7 @@ static void pxa2xx_clkpwr_write(void *opaque, int op2, int reg, int crm,
                     ARM_CPU_MODE_SVC | CPSR_A | CPSR_F | CPSR_I;
             s->env->cp15.c1_sys = 0;
             s->env->cp15.c1_coproc = 0;
-            s->env->cp15.c2_base = 0;
+            s->env->cp15.c2_base0 = 0;
             s->env->cp15.c3 = 0;
             s->pm_regs[PSSR >> 2] |= 0x8;	/* Set STS */
             s->pm_regs[RCSR >> 2] |= 0x8;	/* Set GPR */
@@ -2023,10 +2035,16 @@ struct pxa2xx_state_s *pxa270_init(unsigned int sdram_size,
         fprintf(stderr, "Machine requires a PXA27x processor.\n");
         exit(1);
     }
-
-    s->env = cpu_init();
-    cpu_arm_set_model(s->env, revision ?: "pxa270");
-    register_savevm("cpu", 0, 0, cpu_save, cpu_load, s->env);
+    if (!revision)
+        revision = "pxa270";
+    
+    s->env = cpu_init(revision);
+    if (!s->env) {
+        fprintf(stderr, "Unable to find CPU definition\n");
+        exit(1);
+    }
+    register_savevm("cpu", 0, ARM_CPU_SAVE_VERSION, cpu_save, cpu_load,
+                    s->env);
 
     /* SDRAM & Internal Memory Storage */
     cpu_register_physical_memory(PXA2XX_SDRAM_BASE,
@@ -2132,11 +2150,16 @@ struct pxa2xx_state_s *pxa255_init(unsigned int sdram_size,
     struct pxa2xx_state_s *s;
     struct pxa2xx_ssp_s *ssp;
     int iomemtype, i;
+
     s = (struct pxa2xx_state_s *) qemu_mallocz(sizeof(struct pxa2xx_state_s));
 
-    s->env = cpu_init();
-    cpu_arm_set_model(s->env, "pxa255");
-    register_savevm("cpu", 0, 0, cpu_save, cpu_load, s->env);
+    s->env = cpu_init("pxa255");
+    if (!s->env) {
+        fprintf(stderr, "Unable to find CPU definition\n");
+        exit(1);
+    }
+    register_savevm("cpu", 0, ARM_CPU_SAVE_VERSION, cpu_save, cpu_load,
+                    s->env);
 
     /* SDRAM & Internal Memory Storage */
     cpu_register_physical_memory(PXA2XX_SDRAM_BASE, sdram_size,

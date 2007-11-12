@@ -13,14 +13,17 @@
 #define NGROUPS 32
 
 /* ??? This should really be somewhere else.  */
-void memcpy_to_target(target_ulong dest, const void *src,
-                      unsigned long len)
+abi_long memcpy_to_target(abi_ulong dest, const void *src,
+                          unsigned long len)
 {
     void *host_ptr;
 
-    host_ptr = lock_user(dest, len, 0);
+    host_ptr = lock_user(VERIFY_WRITE, dest, len, 0);
+    if (!host_ptr)
+        return -TARGET_EFAULT;
     memcpy(host_ptr, src, len);
     unlock_user(host_ptr, dest, 1);
+    return 0;
 }
 
 static int in_group_p(gid_t g)
@@ -109,12 +112,12 @@ static int prepare_binprm(struct linux_binprm *bprm)
 }
 
 /* Construct the envp and argv tables on the target stack.  */
-target_ulong loader_build_argptr(int envc, int argc, target_ulong sp,
-                                 target_ulong stringp, int push_ptr)
+abi_ulong loader_build_argptr(int envc, int argc, abi_ulong sp,
+                              abi_ulong stringp, int push_ptr)
 {
-    int n = sizeof(target_ulong);
-    target_ulong envp;
-    target_ulong argv;
+    int n = sizeof(abi_ulong);
+    abi_ulong envp;
+    abi_ulong argv;
 
     sp -= (envc + 1) * n;
     envp = sp;
@@ -169,7 +172,11 @@ int loader_exec(const char * filename, char ** argv, char ** envp,
                 && bprm.buf[1] == 'E'
                 && bprm.buf[2] == 'L'
                 && bprm.buf[3] == 'F') {
+#ifndef TARGET_HAS_ELFLOAD32
             retval = load_elf_binary(&bprm,regs,infop);
+#else
+            retval = load_elf_binary_multi(&bprm, regs, infop);
+#endif
 #if defined(TARGET_HAS_BFLT)
         } else if (bprm.buf[0] == 'b'
                 && bprm.buf[1] == 'F'
