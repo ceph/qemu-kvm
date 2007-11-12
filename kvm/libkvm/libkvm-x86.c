@@ -158,6 +158,23 @@ int kvm_arch_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
 	return 0;
 }
 
+int kvm_arch_run(struct kvm_run *run,kvm_context_t kvm, int vcpu)
+{
+	int r = 0;
+
+	switch (run->exit_reason) {
+#ifdef KVM_EXIT_SET_TPR
+		case KVM_EXIT_SET_TPR:
+			break;
+#endif
+		default:
+			r = 1;
+			break;
+	}
+
+	return r;
+}
+
 void *kvm_create_kernel_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 			unsigned long len, int log, int writable)
 {

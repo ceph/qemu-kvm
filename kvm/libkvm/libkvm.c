@@ -954,14 +954,13 @@ again:
 		case KVM_EXIT_SHUTDOWN:
 			r = handle_shutdown(kvm, vcpu);
 			break;
-#ifdef KVM_EXIT_SET_TPR
-		case KVM_EXIT_SET_TPR:
-			break;
-#endif
 		default:
-			fprintf(stderr, "unhandled vm exit: 0x%x\n", run->exit_reason);
-			kvm_show_regs(kvm, vcpu);
-			abort();
+			if (kvm_arch_run(run, kvm, vcpu)) {
+				fprintf(stderr, "unhandled vm exit: 0x%x\n",
+							run->exit_reason);
+				kvm_show_regs(kvm, vcpu);
+				abort();
+			}
 			break;
 		}
 	}
