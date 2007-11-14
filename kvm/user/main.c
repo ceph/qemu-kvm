@@ -574,6 +574,8 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+	vm_mem = kvm_create_phys_mem(kvm, 0, memory_size, 0, 1);
+
 	if (enter_protected_mode)
 		enter_32(kvm);
 	else
