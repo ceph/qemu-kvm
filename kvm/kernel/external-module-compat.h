@@ -517,6 +517,9 @@ out:
 #endif
 
 /* Some kernels don't make dest_* available with some configs. */
+
+#include <asm/io_apic.h>
+
 #ifndef dest_Fixed
 #define dest_Fixed        0
 #define dest_LowestPrio   1
