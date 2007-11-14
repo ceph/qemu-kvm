@@ -229,6 +229,10 @@ static int misc_init(void)
 	if (err < 0)
 		return err;
 
+	err = io_table_register(&pio_table, 0xf4, 1, misc_io, NULL);
+	if (err < 0)
+		return err;
+
 	return io_table_register(&pio_table, 0xd1, 1, misc_io, NULL);
 }
 
