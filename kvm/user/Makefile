@@ -28,13 +28,15 @@ CXXFLAGS = $(autodepend-flags)
 
 autodepend-flags = -MMD -MF $(dir $*).$(notdir $*).d
 
+FLATLIBS = $(TEST_DIR)/libcflat.a
+
 kvmctl: LDFLAGS += -pthread -lrt
 
 kvmctl: $(kvmctl_objs)
 	$(CC) $(LDFLAGS) $^ -o $@
 
-%.flat: %.o
-	$(CC) $(CFLAGS) -nostdlib -o $@ -Wl,-T,flat.lds $^
+%.flat: %.o $(FLATLIBS)
+	$(CC) $(CFLAGS) -nostdlib -o $@ -Wl,-T,flat.lds $^ $(FLATLIBS)
 
 %.o: %.S
 	$(CC) $(CFLAGS) -c -nostdlib -o $@ $^

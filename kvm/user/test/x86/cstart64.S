@@ -112,9 +112,8 @@ start64:
 	call load_tss
 	call smp_init
 	call main
-
-1:	hlt
-	jmp 1b
+	mov %eax, %edi
+	call exit
 
 load_tss:
 	mov $0, %eax
