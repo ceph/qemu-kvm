@@ -334,7 +334,7 @@ int ac_test_do_access(ac_test_t *at)
     return 1;
 }
 
-void ac_test_exec(ac_test_t *at)
+int ac_test_exec(ac_test_t *at)
 {
     int r;
 
@@ -345,23 +345,30 @@ void ac_test_exec(ac_test_t *at)
     printf(": ");
     ac_test_setup_pte(at);
     r = ac_test_do_access(at);
+    return r;
 }
 
-void ac_test_run()
+int ac_test_run()
 {
     static ac_test_t at;
+    int tests, successes;
 
     printf("run\n");
+    tests = successes = 0;
     ac_test_init(&at);
     do {
-	ac_test_exec(&at);
+	++tests;
+	successes += ac_test_exec(&at);
     } while (ac_test_bump(&at));
+    return successes == tests;
 }
 
 int main()
 {
+    int r;
+
     printf("starting test\n\n");
     smp_init(ac_test_run);
-    ac_test_run();
-    return 0;
+    r = ac_test_run();
+    return r ? 0 : 1;
 }
