@@ -1,5 +1,5 @@
 
-/^static __init int kvm_init\(/ { anon_inodes = 1 }
+/^int kvm_init\(/ { anon_inodes = 1 }
 
 /return 0;/ && anon_inodes {
     print "\tr = kvm_init_anon_inodes();";
@@ -11,7 +11,7 @@
     anon_inodes = 0
 }
 
-/^static __exit void kvm_exit/ { anon_inodes_exit = 1 }
+/^void kvm_exit/ { anon_inodes_exit = 1 }
 
 /\}/ && anon_inodes_exit {
     print "\tkvm_exit_anon_inodes();";
