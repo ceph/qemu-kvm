@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 import curses
-import sys, os, time
+import sys, os, time, optparse
 
 class Stats:
     def __init__(self):
@@ -31,7 +31,7 @@ stats = Stats()
 label_width = 20
 number_width = 10
 
-def main(screen, stats):
+def tui(screen, stats):
     curses.use_default_colors()
     curses.noecho()
     def refresh():
@@ -62,8 +62,26 @@ def main(screen, stats):
             break
         except curses.error:
             continue
-        
 
-import curses.wrapper
-curses.wrapper(main, stats)
+def batch(stats):
+    s = stats.get()
+    time.sleep(1)
+    s = stats.get()
+    for key in sorted(s.keys()):
+        values = s[key]
+        print '%-22s%10d%10d' % (key, values[0], values[1])
 
+options = optparse.OptionParser()
+options.add_option('-1', '--once', '--batch',
+                   action = 'store_true',
+                   default = False,
+                   dest = 'once',
+                   help = 'run in batch mode for one second',
+                   )
+(options, args) = options.parse_args(sys.argv)
+
+if not options.once:
+    import curses.wrapper
+    curses.wrapper(tui, stats)
+else:
+    batch(stats)
