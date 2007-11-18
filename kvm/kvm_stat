@@ -27,7 +27,10 @@ if not os.access('/sys/kernel/debug/kvm', os.F_OK):
     sys.exit(1)
 
 stats = Stats()
-        
+
+label_width = 20
+number_width = 10
+
 def main(screen, stats):
     curses.use_default_colors()
     curses.noecho()
@@ -38,10 +41,13 @@ def main(screen, stats):
         s = stats.get()
         for key in sorted(s.keys()):
             values = s[key]
-            screen.addstr(row, 1, key)
-            screen.addstr(row, 12, '%10d' % (values[0],))
+            col = 1
+            screen.addstr(row, col, key)
+            col += label_width
+            screen.addstr(row, col, '%10d' % (values[0],))
+            col += number_width
             if values[1] is not None:
-                screen.addstr(row, 22, '%8d' % (values[1],))
+                screen.addstr(row, col, '%8d' % (values[1],))
             row += 1
         screen.refresh()
 
