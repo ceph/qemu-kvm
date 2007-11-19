@@ -530,3 +530,15 @@ out:
 #define dest__reserved_2  6
 #define dest_ExtINT       7
 #endif
+
+/* empty_zero_page isn't exported in all kernels */
+#include <asm/pgtable.h>
+
+#define empty_zero_page kvm_empty_zero_page
+
+static char empty_zero_page[PAGE_SIZE];
+
+static inline void blahblah(void)
+{
+	(void)empty_zero_page[0];
+}
