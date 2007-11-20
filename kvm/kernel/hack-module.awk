@@ -8,6 +8,7 @@
     print "\t\tgoto out;";
     print "\t}";
     print "\tpreempt_notifier_sys_init();";
+    printf("\tprintk(\"loaded kvm module (%s)\\n\");\n", version);
     anon_inodes = 0
 }
 
