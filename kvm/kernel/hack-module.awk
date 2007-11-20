@@ -19,13 +19,6 @@
     anon_inodes_exit = 0
 }
 
-/kmem_cache_create/ { kmem_cache_create = 1 }
-
-/(NULL|0)\);/ && kmem_cache_create {
-    sub(/(NULL|0)\)/, "KMEM_CACHE_CREATE_CTOR_DTOR)");
-    kmem_cache_create = 0
-}
-
 /MODULE_AUTHOR/ {
     printf("MODULE_INFO(version, \"%s\");\n", version)
 }
