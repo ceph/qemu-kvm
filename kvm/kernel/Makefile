@@ -27,6 +27,7 @@ sync:
 	       "$(LINUX)"/include/linux/kvm_para.h \
 			include/linux
 	rsync "$(LINUX)"/include/asm-x86/kvm_para.h include/asm
+	rsync "$(LINUX)"/include/asm-x86/kvm.h include/asm
 
 	$(call hack, kvm_main.c)
 	$(call hack, mmu.c)
