@@ -59,6 +59,8 @@
     vmx_load_host_state = 0
 }
 
+/atomic_inc\(&kvm->mm->mm_count\);/ { $0 = "//" $0 }
+
 { print }
 
 /kvm_x86_ops->run/ {

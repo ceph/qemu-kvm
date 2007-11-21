@@ -548,3 +548,13 @@ static inline void blahblah(void)
 {
 	(void)empty_zero_page[0];
 }
+
+/* __mmdrop() is not exported before 2.6.25 */
+#include <linux/sched.h>
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25)
+
+#define mmdrop(x) do { (void)(x); } while (0)
+
+#endif
+
