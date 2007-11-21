@@ -10,6 +10,9 @@
 
 #include <asm/desc_defs.h>
 
+#undef desc_struct
+#undef desc_ptr
+
 /*
  * Avoid picking up the kernel's kvm.h in case we have a newer one.
  */
@@ -565,3 +568,7 @@ static inline void blahblah(void)
 #ifndef X86_FEATURE_NX
 #define X86_FEATURE_NX (1*32+20)
 #endif
+
+#define desc_struct kvm_desc_struct
+#define desc_ptr kvm_desc_ptr
+
