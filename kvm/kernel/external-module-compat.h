@@ -558,3 +558,10 @@ static inline void blahblah(void)
 
 #endif
 
+/* X86_FEATURE_NX is missing in some x86_64 kernels */
+
+#include <asm/cpufeature.h>
+
+#ifndef X86_FEATURE_NX
+#define X86_FEATURE_NX (1*32+20)
+#endif
