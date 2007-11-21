@@ -3,6 +3,13 @@
  * Compatibility header for building as an external module.
  */
 
+/* use own set of desc_struct, desc_ptr */
+
+#define desc_struct kvm_desc_struct
+#define desc_ptr kvm_desc_ptr
+
+#include <asm/desc_defs.h>
+
 /*
  * Avoid picking up the kernel's kvm.h in case we have a newer one.
  */
