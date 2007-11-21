@@ -14,6 +14,7 @@ void kvm_save_registers(CPUState *env);
 int kvm_cpu_exec(CPUState *env);
 int kvm_update_debugger(CPUState *env);
 int kvm_qemu_init_env(CPUState *env);
+int kvm_qemu_check_extension(int ext);
 void kvm_apic_init(CPUState *env);
 
 int kvm_physical_memory_set_dirty_tracking(int enable);
