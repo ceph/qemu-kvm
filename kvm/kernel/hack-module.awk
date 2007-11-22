@@ -61,6 +61,8 @@
 
 /atomic_inc\(&kvm->mm->mm_count\);/ { $0 = "//" $0 }
 
+/asm\/desc_defs.h/ { $0 = "#include <asm/kvm_desc_defs.h>" }
+
 { print }
 
 /kvm_x86_ops->run/ {
