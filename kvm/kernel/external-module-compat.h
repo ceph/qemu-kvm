@@ -572,3 +572,8 @@ static inline void blahblah(void)
 #define desc_struct kvm_desc_struct
 #define desc_ptr kvm_desc_ptr
 
+#undef true
+#define true 1
+#undef false
+#define false 0
+
