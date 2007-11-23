@@ -3,16 +3,6 @@
  * Compatibility header for building as an external module.
  */
 
-/* use own set of desc_struct, desc_ptr */
-
-#include <asm/desc.h>
-
-#define desc_struct kvm_desc_struct
-#define desc_ptr kvm_desc_ptr
-#define ldttss_desc kvm_ldttss_struct
-
-#include <asm/kvm_desc_defs.h>
-
 /*
  * Avoid picking up the kernel's kvm.h in case we have a newer one.
  */
@@ -568,9 +558,6 @@ static inline void blahblah(void)
 #ifndef X86_FEATURE_NX
 #define X86_FEATURE_NX (1*32+20)
 #endif
-
-#define desc_struct kvm_desc_struct
-#define desc_ptr kvm_desc_ptr
 
 #undef true
 #define true 1
