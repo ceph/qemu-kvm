@@ -40,6 +40,8 @@ def tui(screen, stats):
         row = 2
         s = stats.get()
         for key in sorted(s.keys()):
+            if row >= screen.getmaxyx()[0]:
+                break
             values = s[key]
             col = 1
             screen.addstr(row, col, key)
