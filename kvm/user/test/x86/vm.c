@@ -247,3 +247,22 @@ void vfree(void *mem)
 	size -= PAGE_SIZE;
     }
 }
+
+void *vmap(unsigned long long phys, unsigned long size)
+{
+    void *mem, *p;
+    unsigned pages;
+
+    size = (size + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+    vfree_top -= size;
+    phys &= ~(unsigned long long)(PAGE_SIZE - 1);
+
+    mem = p = vfree_top;
+    pages = size / PAGE_SIZE;
+    while (pages--) {
+	install_page(phys_to_virt(read_cr3()), phys, p);
+	phys += PAGE_SIZE;
+	p += PAGE_SIZE;
+    }
+    return mem;
+}
