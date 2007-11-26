@@ -348,6 +348,7 @@ int kvm_inject_irq(kvm_context_t kvm, int vcpu, unsigned irq);
 
 int kvm_guest_debug(kvm_context_t, int vcpu, struct kvm_debug_guest *dbg);
 
+#if defined(__i386__) || defined(__x86_64__)
 /*!
  * \brief Setup a vcpu's cpuid instruction emulation
  *
@@ -361,6 +362,7 @@ int kvm_guest_debug(kvm_context_t, int vcpu, struct kvm_debug_guest *dbg);
  */
 int kvm_setup_cpuid(kvm_context_t kvm, int vcpu, int nent,
 		    struct kvm_cpuid_entry *entries);
+#endif
 
 /*!
  * \brief Set a vcpu's signal mask for guest mode
@@ -499,6 +501,7 @@ int kvm_get_irqchip(kvm_context_t kvm, struct kvm_irqchip *chip);
  */
 int kvm_set_irqchip(kvm_context_t kvm, struct kvm_irqchip *chip);
 
+#if defined(__i386__) || defined(__x86_64__)
 /*!
  * \brief Get in kernel local APIC for vcpu
  *
@@ -520,6 +523,7 @@ int kvm_get_lapic(kvm_context_t kvm, int vcpu, struct kvm_lapic_state *s);
  * \param s Local apic state of the specific virtual CPU
  */
 int kvm_set_lapic(kvm_context_t kvm, int vcpu, struct kvm_lapic_state *s);
+#endif
 
 #endif
 
