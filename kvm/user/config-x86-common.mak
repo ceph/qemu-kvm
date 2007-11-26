@@ -12,31 +12,28 @@ tests-common = $(TEST_DIR)/bootstrap \
 
 test_cases: $(tests-common) $(tests)
 
-$(TEST_DIR)/%.o: CFLAGS += -std=gnu99 -ffreestanding
+$(TEST_DIR)/%.o: CFLAGS += -std=gnu99 -ffreestanding -I$(TEST_DIR)/lib
  
 $(TEST_DIR)/bootstrap: $(TEST_DIR)/bootstrap.o
 	$(CC) -nostdlib -o $@ -Wl,-T,bootstrap.lds $^
  
 $(TEST_DIR)/irq.flat: $(TEST_DIR)/print.o
  
-$(TEST_DIR)/access.flat: $(cstart.o) $(TEST_DIR)/access.o \
-	$(TEST_DIR)/printf.o $(TEST_DIR)/print.o $(TEST_DIR)/smp.o
+$(TEST_DIR)/access.flat: $(cstart.o) $(TEST_DIR)/access.o $(TEST_DIR)/print.o
  
 $(TEST_DIR)/sieve.flat: $(cstart.o) $(TEST_DIR)/sieve.o \
 		$(TEST_DIR)/print.o $(TEST_DIR)/vm.o
  
-$(TEST_DIR)/vmexit.flat: $(cstart.o) $(TEST_DIR)/vmexit.o \
-	$(TEST_DIR)/printf.o $(TEST_DIR)/smp.o
+$(TEST_DIR)/vmexit.flat: $(cstart.o) $(TEST_DIR)/vmexit.o
  
 $(TEST_DIR)/test32.flat: $(TEST_DIR)/test32.o
 
-$(TEST_DIR)/smp.flat: $(cstart.o) $(TEST_DIR)/smp.o $(TEST_DIR)/printf.o \
-			$(TEST_DIR)/smptest.o
+$(TEST_DIR)/smp.flat: $(cstart.o) $(TEST_DIR)/smptest.o
  
-$(TEST_DIR)/emulator.flat: $(cstart.o) $(TEST_DIR)/printf.o $(TEST_DIR)/vm.o \
-			   $(TEST_DIR)/smp.o $(TEST_DIR)/print.o
+$(TEST_DIR)/emulator.flat: $(cstart.o) $(TEST_DIR)/vm.o $(TEST_DIR)/print.o
 
-$(TEST_DIR)/libcflat.a: $(TEST_DIR)/lib/exit.o
+$(TEST_DIR)/libcflat.a: $(TEST_DIR)/lib/exit.o $(TEST_DIR)/lib/printf.o \
+	$(TEST_DIR)/lib/smp.o
 	ar rcs $@ $^
 
 arch_clean:
