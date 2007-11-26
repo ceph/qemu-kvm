@@ -419,7 +419,7 @@ static int test_writel(void *opaque, uint64_t addr, uint32_t data)
 
 static int test_writeq(void *opaque, uint64_t addr, uint64_t data)
 {
-	return test_mem_write(addr, &data, 4);
+	return test_mem_write(addr, &data, 8);
 }
 
 static struct kvm_callbacks test_callbacks = {
