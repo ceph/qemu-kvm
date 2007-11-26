@@ -30,7 +30,7 @@ int main()
 		     : [t2]"=r"(t2)
 		     : [t1]"r"(t1), [mem]"r"(mem)
 		     : "memory");
-	report("mov reg, r/m (1)", t2 != 0x123456789abcdef);
+	report("mov reg, r/m (1)", t2 == 0x123456789abcdef);
 
 	printf("\nSUMMARY: %d tests, %d failures\n", tests, fails);
 	return fails ? 1 : 0;
