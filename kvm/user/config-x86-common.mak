@@ -33,6 +33,9 @@ $(TEST_DIR)/test32.flat: $(TEST_DIR)/test32.o
 $(TEST_DIR)/smp.flat: $(cstart.o) $(TEST_DIR)/smp.o $(TEST_DIR)/printf.o \
 			$(TEST_DIR)/smptest.o
  
+$(TEST_DIR)/emulator.flat: $(cstart.o) $(TEST_DIR)/printf.o $(TEST_DIR)/vm.o \
+			   $(TEST_DIR)/smp.o $(TEST_DIR)/print.o
+
 $(TEST_DIR)/libcflat.a: $(TEST_DIR)/lib/exit.o
 	ar rcs $@ $^
 
