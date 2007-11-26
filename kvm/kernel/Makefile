@@ -17,6 +17,8 @@ hack = 	mv $1 $1.orig && \
 	awk -v version=$(version) -f hack-module.awk $1.orig \
 	    | sed 's/\blapic\b/l_apic/g' > $1 && rm $1.orig
 
+unifdef = mv $1 $1.orig && \
+	  unifdef -DCONFIG_X86 $1.orig > $1; rm $1.orig
 
 all::
 	$(MAKE) -C $(KERNELDIR) M=`pwd` "$$@"
@@ -29,6 +31,10 @@ sync:
 	rsync "$(LINUX)"/include/asm-x86/kvm_para.h include/asm
 	rsync "$(LINUX)"/include/asm-x86/kvm.h include/asm
 
+	$(call unifdef, include/linux/kvm.h)
+	$(call unifdef, include/linux/kvm_para.h)
+	$(call unifdef, include/asm/kvm.h)
+	$(call unifdef, include/asm/kvm_para.h)
 	$(call hack, kvm_main.c)
 	$(call hack, mmu.c)
 	$(call hack, vmx.c)
