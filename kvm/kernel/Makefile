@@ -18,7 +18,7 @@ hack = 	mv $1 $1.orig && \
 	    | sed 's/\blapic\b/l_apic/g' > $1 && rm $1.orig
 
 unifdef = mv $1 $1.orig && \
-	  unifdef -DCONFIG_X86 $1.orig > $1; rm $1.orig
+	  unifdef -DCONFIG_X86 $1.orig > $1; (( $$? <= 1 )) && rm $1.orig
 
 all::
 	$(MAKE) -C $(KERNELDIR) M=`pwd` "$$@"
