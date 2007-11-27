@@ -108,7 +108,8 @@ fi
 
 #configure qemu
 (cd qemu; ./configure --target-list=$target_exec \
-    --disable-kqemu --extra-cflags="-I $PWD/../libkvm $qemu_cflags" \
+    --disable-kqemu \
+    --extra-cflags="-I $PWD/../libkvm $qemu_cflags -DCONFIG_X86" \
     --extra-ldflags="-L $PWD/../libkvm $qemu_ldflags" \
     --enable-kvm --kernel-path="$libkvm_kerneldir" \
     ${enable_alsa:+"--enable-alsa"} \
