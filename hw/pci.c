@@ -39,6 +39,7 @@ struct PCIBus {
     PCIBus *next;
     /* The bus IRQ state is the logical OR of the connected devices.
        Keep a count of the number of devices with raised IRQs.  */
+    int nirq;
     int irq_count[];
 };
 
@@ -49,16 +50,51 @@ target_phys_addr_t pci_mem_base;
 static int pci_irq_index;
 static PCIBus *first_bus;
 
+static void pcibus_save(QEMUFile *f, void *opaque)
+{
+    PCIBus *bus = (PCIBus *)opaque;
+    int i;
+
+    qemu_put_be32s(f, &bus->nirq);
+    for (i=0; i<bus->nirq; i++)
+        qemu_put_be32s(f, &bus->irq_count[i]);
+}
+
+static int  pcibus_load(QEMUFile *f, void *opaque, int version_id)
+{
+    PCIBus *bus = (PCIBus *)opaque;
+    int i, nirq;
+
+    if (version_id != 1)
+        return -EINVAL;
+
+    qemu_get_be32s(f, &nirq);
+    if (bus->nirq != nirq) {
+        fprintf(stderr, "pcibus_load: nirq mismatch: src=%d dst=%d\n",
+                nirq, bus->nirq);
+        return -EINVAL;
+    }
+
+    for (i=0; i<nirq; i++)
+        qemu_get_be32s(f, &bus->irq_count[i]);
+
+    return 0;
+}
+
 PCIBus *pci_register_bus(pci_set_irq_fn set_irq, pci_map_irq_fn map_irq,
                          qemu_irq *pic, int devfn_min, int nirq)
 {
     PCIBus *bus;
+    static int nbus = 0;
+
     bus = qemu_mallocz(sizeof(PCIBus) + (nirq * sizeof(int)));
     bus->set_irq = set_irq;
     bus->map_irq = map_irq;
     bus->irq_opaque = pic;
     bus->devfn_min = devfn_min;
+    bus->nirq = nirq;
     first_bus = bus;
+    register_savevm("PCIBUS", nbus++, 1, pcibus_save, pcibus_load, bus);
     return bus;
 }
 
