@@ -38,4 +38,4 @@ $(TEST_DIR)/libcflat.a: $(TEST_DIR)/lib/exit.o $(TEST_DIR)/lib/printf.o \
 
 arch_clean:
 	$(RM) $(TEST_DIR)/bootstrap $(TEST_DIR)/*.o $(TEST_DIR)/*.flat \
-	$(TEST_DIR)/.*.d
+	$(TEST_DIR)/.*.d $(TEST_DIR)/lib/.*.d $(TEST_DIR)/lib/*.o
