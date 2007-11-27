@@ -1132,7 +1132,7 @@ static void ioapic_mem_writel(void *opaque, target_phys_addr_t addr, uint32_t va
 #ifdef USE_KVM
 static void kvm_kernel_ioapic_save_to_user(IOAPICState *s)
 {
-#ifdef KVM_CAP_IRQCHIP
+#if defined(KVM_CAP_IRQCHIP) && defined(TARGET_I386)
     struct kvm_irqchip chip;
     struct kvm_ioapic_state *kioapic;
     int i;
@@ -1151,7 +1151,7 @@ static void kvm_kernel_ioapic_save_to_user(IOAPICState *s)
 
 static void kvm_kernel_ioapic_load_from_user(IOAPICState *s)
 {
-#ifdef KVM_CAP_IRQCHIP
+#if defined(KVM_CAP_IRQCHIP) && defined(TARGET_I386)
     struct kvm_irqchip chip;
     struct kvm_ioapic_state *kioapic;
     int i;
