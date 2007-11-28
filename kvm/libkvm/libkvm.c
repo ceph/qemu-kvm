@@ -52,6 +52,7 @@ struct slot_info {
 	unsigned long len;
 	int user_alloc;
 	unsigned long userspace_addr;
+	unsigned flags;
 };
 
 struct slot_info slots[KVM_MAX_NUM_MEM_REGIONS];
@@ -92,12 +93,13 @@ int get_free_slot(kvm_context_t kvm)
 }
 
 void register_slot(int slot, unsigned long phys_addr, unsigned long len,
-		   int user_alloc, unsigned long userspace_addr)
+		   int user_alloc, unsigned long userspace_addr, unsigned flags)
 {
 	slots[slot].phys_addr = phys_addr;
 	slots[slot].len = len;
 	slots[slot].user_alloc = user_alloc;
 	slots[slot].userspace_addr = userspace_addr;
+        slots[slot].flags = flags;
 }
 
 void free_slot(int slot)
@@ -142,6 +144,7 @@ static int kvm_dirty_pages_log_change(kvm_context_t kvm, unsigned long phys_addr
 		fprintf(stderr, "BUG: %s: invalid parameters\n", __FUNCTION__);
 		return 1;
 	}
+	flag |= slots[slot].flags;
 #ifdef KVM_CAP_USER_MEMORY
 	if (slots[slot].user_alloc) {
 		struct kvm_userspace_memory_region mem = {
@@ -418,7 +421,7 @@ void *kvm_create_userspace_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 		return 0;
 	}
 	register_slot(memory.slot, memory.guest_phys_addr, memory.memory_size,
-		      1, memory.userspace_addr);
+		      1, memory.userspace_addr, memory.flags);
 
         return ptr;
 }
@@ -487,6 +490,7 @@ int kvm_create_mem_hole(kvm_context_t kvm, unsigned long phys_start,
 	newslot1.memory_size = phys_start - slots[slot].phys_addr;
 	newslot1.slot = slot;
 	newslot1.userspace_addr = slots[slot].userspace_addr;
+	newslot1.flags = slots[slot].flags;
 
 	newslot2.guest_phys_addr = newslot1.guest_phys_addr +
 				   newslot1.memory_size + len;
@@ -495,6 +499,7 @@ int kvm_create_mem_hole(kvm_context_t kvm, unsigned long phys_start,
 	newslot2.userspace_addr = newslot1.userspace_addr +
 				  newslot1.memory_size;
 	newslot2.slot = get_free_slot(kvm);
+	newslot2.flags = newslot1.flags;
 
 	r = ioctl(kvm->vm_fd, KVM_SET_USER_MEMORY_REGION, &rmslot);
 	if (r == -1) {
@@ -509,7 +514,8 @@ int kvm_create_mem_hole(kvm_context_t kvm, unsigned long phys_start,
 		return -1;
 	}
 	register_slot(newslot1.slot, newslot1.guest_phys_addr,
-		      newslot1.memory_size, 1, newslot1.userspace_addr);
+		      newslot1.memory_size, 1, newslot1.userspace_addr,
+		      newslot1.flags);
 
 	r = ioctl(kvm->vm_fd, KVM_SET_USER_MEMORY_REGION, &newslot2);
 	if (r == -1) {
@@ -517,7 +523,8 @@ int kvm_create_mem_hole(kvm_context_t kvm, unsigned long phys_start,
 		return -1;
 	}
 	register_slot(newslot2.slot, newslot2.guest_phys_addr,
-		      newslot2.memory_size, 1, newslot2.userspace_addr);
+		      newslot2.memory_size, 1, newslot2.userspace_addr,
+		      newslot2.flags);
 #endif
 	return 0;
 }
@@ -526,6 +533,7 @@ int kvm_register_userspace_phys_mem(kvm_context_t kvm,
 			unsigned long phys_start, void *userspace_addr,
 			unsigned long len, int log)
 {
+
 #ifdef KVM_CAP_USER_MEMORY
 	struct kvm_userspace_memory_region memory = {
 		.memory_size = len,
@@ -545,7 +553,7 @@ int kvm_register_userspace_phys_mem(kvm_context_t kvm,
 		return -1;
 	}
 	register_slot(memory.slot, memory.guest_phys_addr, memory.memory_size,
-		      1, memory.userspace_addr);
+		      1, memory.userspace_addr, memory.flags);
         return 0;
 #else
 	return -ENOSYS;
