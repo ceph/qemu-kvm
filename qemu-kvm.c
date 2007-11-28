@@ -1051,7 +1051,7 @@ void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
                 kvm_create_mem_hole(kvm_context, start_addr, size);
             r = kvm_register_userspace_phys_mem(kvm_context, start_addr,
                                                 phys_ram_base + phys_offset,
-                                                size, 1);
+                                                size, 0);
         }
         if (phys_offset & IO_MEM_ROM) {
             phys_offset &= ~IO_MEM_ROM;
@@ -1060,7 +1060,7 @@ void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
                 kvm_create_mem_hole(kvm_context, start_addr, size);
             r = kvm_register_userspace_phys_mem(kvm_context, start_addr,
                                                 phys_ram_base + phys_offset,
-                                                size, 1);
+                                                size, 0);
         }
         if (r < 0) {
             printf("kvm_cpu_register_physical_memory: failed\n");
