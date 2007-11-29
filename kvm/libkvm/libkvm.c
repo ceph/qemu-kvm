@@ -44,6 +44,10 @@
 #include "kvm-ia64.h"
 #endif
 
+#if defined(__powerpc__)
+#include "kvm-powerpc.h"
+#endif
+
 int kvm_abi = EXPECTED_KVM_API_VERSION;
 int kvm_page_size;
 
