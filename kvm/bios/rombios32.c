@@ -583,9 +583,11 @@ static void bios_shadow_init(PCIDevice *d)
 
     /* remap the BIOS to shadow RAM an keep it read/write while we
        are writing tables */
-    memcpy((void *)BIOS_TMP_STORAGE, (void *)0x000f0000, 0x10000);
     v = pci_config_readb(d, 0x59);
-    v = (v & 0x0f) | (0x30);
+    v &= 0xcf;
+    pci_config_writeb(d, 0x59, v);
+    memcpy((void *)BIOS_TMP_STORAGE, (void *)0x000f0000, 0x10000);
+    v |= 0x30;
     pci_config_writeb(d, 0x59, v);
     memcpy((void *)0x000f0000, (void *)BIOS_TMP_STORAGE, 0x10000);
     
