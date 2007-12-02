@@ -564,3 +564,10 @@ static inline void blahblah(void)
 #undef false
 #define false 0
 
+/* EFER_LMA and EFER_LME are missing in pre 2.6.24 i386 kernels */
+#ifndef EFER_LME
+#define _EFER_LME           8  /* Long mode enable */
+#define _EFER_LMA           10 /* Long mode active (read-only) */
+#define EFER_LME            (1<<_EFER_LME)
+#define EFER_LMA            (1<<_EFER_LMA)
+#endif
