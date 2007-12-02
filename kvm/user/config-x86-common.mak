@@ -21,6 +21,8 @@ $(TEST_DIR)/irq.flat: $(TEST_DIR)/print.o
  
 $(TEST_DIR)/access.flat: $(cstart.o) $(TEST_DIR)/access.o $(TEST_DIR)/print.o
  
+$(TEST_DIR)/hypercall.flat: $(cstart.o) $(TEST_DIR)/hypercall.o $(TEST_DIR)/print.o
+ 
 $(TEST_DIR)/sieve.flat: $(cstart.o) $(TEST_DIR)/sieve.o \
 		$(TEST_DIR)/print.o $(TEST_DIR)/vm.o
  

@@ -8,6 +8,7 @@ CFLAGS += -I $(KERNELDIR)/include
 
 tests = $(TEST_DIR)/access.flat $(TEST_DIR)/irq.flat $(TEST_DIR)/sieve.flat \
       $(TEST_DIR)/simple.flat $(TEST_DIR)/stringio.flat \
-      $(TEST_DIR)/memtest1.flat $(TEST_DIR)/emulator.flat
+      $(TEST_DIR)/memtest1.flat $(TEST_DIR)/emulator.flat \
+      $(TEST_DIR)/hypercall.flat
 
 include config-x86-common.mak
