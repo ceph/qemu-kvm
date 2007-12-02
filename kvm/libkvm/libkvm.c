@@ -647,7 +647,7 @@ int kvm_get_mem_map(kvm_context_t kvm, unsigned long phys_addr, void *buf)
 		errno = -EINVAL;
 		return -1;
 	}
-	npages = kvm->mem_regions[slot].memory_size / PAGE_SIZE;
+	npages = slots[slot].len / PAGE_SIZE;
 	n = npages / 8;
 	m = npages % 8;
 	memset(buf, 0xff, n); /* all pages exist */
