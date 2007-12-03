@@ -201,29 +201,6 @@ uint64_t kvm_get_apic_base(kvm_context_t kvm, int vcpu);
 int kvm_is_ready_for_interrupt_injection(kvm_context_t kvm, int vcpu);
 
 /*!
- * \brief Set up cr8 for next time the vcpu is executed
- *
- * This is a fast setter for cr8, which will be applied when the
- * vcpu next enters guest mode.
- *
- * \param kvm Pointer to the current kvm_context
- * \param vcpu Which virtual CPU should get dumped
- * \param cr8 next cr8 value
- */
-void kvm_set_cr8(kvm_context_t kvm, int vcpu, uint64_t cr8);
-
-/*!
- * \brief Get cr8 for sync tpr in qemu apic emulation
- *
- * This is a getter for cr8, which used to sync with the tpr in qemu
- * apic emualtion.
- *
- * \param kvm Pointer to the current kvm_context
- * \param vcpu Which virtual CPU should get dumped
- */
-__u64 kvm_get_cr8(kvm_context_t kvm, int vcpu);
-
-/*!
  * \brief Read VCPU registers
  *
  * This gets the GP registers from the VCPU and outputs them
@@ -362,6 +339,29 @@ int kvm_set_shadow_pages(kvm_context_t kvm, unsigned int nrshadow_pages);
  * \param nrshadow_pages number of pages to be allocated
  */
 int kvm_get_shadow_pages(kvm_context_t kvm , unsigned int *nrshadow_pages);
+
+/*!
+ * \brief Set up cr8 for next time the vcpu is executed
+ *
+ * This is a fast setter for cr8, which will be applied when the
+ * vcpu next enters guest mode.
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param vcpu Which virtual CPU should get dumped
+ * \param cr8 next cr8 value
+ */
+void kvm_set_cr8(kvm_context_t kvm, int vcpu, uint64_t cr8);
+
+/*!
+ * \brief Get cr8 for sync tpr in qemu apic emulation
+ *
+ * This is a getter for cr8, which used to sync with the tpr in qemu
+ * apic emualtion.
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param vcpu Which virtual CPU should get dumped
+ */
+__u64 kvm_get_cr8(kvm_context_t kvm, int vcpu);
 #endif
 
 /*!
