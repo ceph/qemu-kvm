@@ -171,10 +171,7 @@ static int has_work(CPUState *env)
 	return 0;
     if (!(env->hflags & HF_HALTED_MASK))
 	return 1;
-    if ((env->interrupt_request & (CPU_INTERRUPT_HARD | CPU_INTERRUPT_EXIT)) &&
-	(env->eflags & IF_MASK))
-	return 1;
-    return 0;
+    return kvm_arch_has_work(env);
 }
 
 static int kvm_eat_signal(CPUState *env, int timeout)

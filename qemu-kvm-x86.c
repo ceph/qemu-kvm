@@ -587,4 +587,12 @@ void kvm_arch_post_kvm_run(void *opaque, int vcpu)
     cpu_set_apic_tpr(env, kvm_get_cr8(kvm_context, vcpu));
     cpu_set_apic_base(env, kvm_get_apic_base(kvm_context, vcpu));
 }
+
+int kvm_arch_has_work(CPUState *env)
+{
+    if ((env->interrupt_request & (CPU_INTERRUPT_HARD | CPU_INTERRUPT_EXIT)) &&
+	(env->eflags & IF_MASK))
+	return 1;
+    return 0;
+}
 #endif
