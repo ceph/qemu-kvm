@@ -658,3 +658,36 @@ int kvm_setup_cpuid(kvm_context_t kvm, int vcpu, int nent,
 	return r;
 }
 
+int kvm_set_shadow_pages(kvm_context_t kvm, unsigned int nrshadow_pages)
+{
+#ifdef KVM_CAP_MMU_SHADOW_CACHE_CONTROL
+	int r;
+
+	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION,
+		  KVM_CAP_MMU_SHADOW_CACHE_CONTROL);
+	if (r > 0) {
+		r = ioctl(kvm->vm_fd, KVM_SET_NR_MMU_PAGES, nrshadow_pages);
+		if (r == -1) {
+			fprintf(stderr, "kvm_set_shadow_pages: %m\n");
+			return -errno;
+		}
+		return 0;
+	}
+#endif
+	return -1;
+}
+
+int kvm_get_shadow_pages(kvm_context_t kvm, unsigned int *nrshadow_pages)
+{
+#ifdef KVM_CAP_MMU_SHADOW_CACHE_CONTROL
+	int r;
+
+	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION,
+		  KVM_CAP_MMU_SHADOW_CACHE_CONTROL);
+	if (r > 0) {
+		*nrshadow_pages = ioctl(kvm->vm_fd, KVM_GET_NR_MMU_PAGES);
+		return 0;
+	}
+#endif
+	return -1;
+}

@@ -112,22 +112,6 @@ void kvm_finalize(kvm_context_t kvm);
 void kvm_disable_irqchip_creation(kvm_context_t kvm);
 
 /*!
- * \brief Setting the number of shadow pages to be allocated to the vm
- *
- * \param kvm pointer to kvm_context
- * \param nrshadow_pages number of pages to be allocated
- */
-int kvm_set_shadow_pages(kvm_context_t kvm, unsigned int nrshadow_pages);
-
-/*!
- * \breif Getting the number of shadow pages that are allocated to the vm
- *
- * \param kvm pointer to kvm_context
- * \param nrshadow_pages number of pages to be allocated
- */
-int kvm_get_shadow_pages(kvm_context_t kvm , unsigned int *nrshadow_pages);
-
-/*!
  * \brief Create new virtual machine
  *
  * This creates a new virtual machine, maps physical RAM to it, and creates a
@@ -362,6 +346,22 @@ int kvm_guest_debug(kvm_context_t, int vcpu, struct kvm_debug_guest *dbg);
  */
 int kvm_setup_cpuid(kvm_context_t kvm, int vcpu, int nent,
 		    struct kvm_cpuid_entry *entries);
+
+/*!
+ * \brief Setting the number of shadow pages to be allocated to the vm
+ *
+ * \param kvm pointer to kvm_context
+ * \param nrshadow_pages number of pages to be allocated
+ */
+int kvm_set_shadow_pages(kvm_context_t kvm, unsigned int nrshadow_pages);
+
+/*!
+ * \breif Getting the number of shadow pages that are allocated to the vm
+ *
+ * \param kvm pointer to kvm_context
+ * \param nrshadow_pages number of pages to be allocated
+ */
+int kvm_get_shadow_pages(kvm_context_t kvm , unsigned int *nrshadow_pages);
 #endif
 
 /*!
