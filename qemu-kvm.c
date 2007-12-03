@@ -570,15 +570,7 @@ static int kvm_io_window(void *opaque)
  
 static int kvm_halt(void *opaque, int vcpu)
 {
-    CPUState *env = cpu_single_env;
-
-    if (!((env->interrupt_request & CPU_INTERRUPT_HARD) &&
-	  (env->eflags & IF_MASK))) {
-	    env->hflags |= HF_HALTED_MASK;
-	    env->exception_index = EXCP_HLT;
-    }
-
-    return 1;
+    return kvm_arch_halt(opaque, vcpu);
 }
 
 static int kvm_shutdown(void *opaque, int vcpu)

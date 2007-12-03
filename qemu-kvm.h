@@ -33,6 +33,7 @@ int kvm_arch_qemu_create_context(void);
 void kvm_arch_save_regs(CPUState *env);
 void kvm_arch_load_regs(CPUState *env);
 int kvm_arch_qemu_init_env(CPUState *cenv);
+int kvm_arch_halt(void *opaque, int vcpu);
 
 #define ALIGN(x, y)  (((x)+(y)-1) & ~((y)-1))
 #define BITMAP_SIZE(m) (ALIGN(((m)>>TARGET_PAGE_BITS), HOST_LONG_BITS) / 8)

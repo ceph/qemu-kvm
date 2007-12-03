@@ -553,4 +553,16 @@ int kvm_arch_qemu_init_env(CPUState *cenv)
     return 0;
 }
 
+int kvm_arch_halt(void *opaque, int vcpu)
+{
+    CPUState *env = cpu_single_env;
+
+    if (!((env->interrupt_request & CPU_INTERRUPT_HARD) &&
+	  (env->eflags & IF_MASK))) {
+	    env->hflags |= HF_HALTED_MASK;
+	    env->exception_index = EXCP_HLT;
+    }
+    return 1;
+}
+
 #endif
