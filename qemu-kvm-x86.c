@@ -23,6 +23,7 @@ extern kvm_context_t kvm_context;
 static int kvm_has_msr_star;
 
 static int lm_capable_kernel;
+extern __thread CPUState *vcpu_env;
 
 int kvm_arch_qemu_create_context(void)
 {
@@ -573,4 +574,17 @@ void kvm_arch_pre_kvm_run(void *opaque, int vcpu)
 	kvm_set_cr8(kvm_context, vcpu, cpu_get_apic_tpr(env));
 }
 
+void kvm_arch_post_kvm_run(void *opaque, int vcpu)
+{
+    CPUState *env = vcpu_env;
+    cpu_single_env = env;
+
+    env->eflags = kvm_get_interrupt_flag(kvm_context, vcpu)
+	? env->eflags | IF_MASK : env->eflags & ~IF_MASK;
+    env->ready_for_interrupt_injection
+	= kvm_is_ready_for_interrupt_injection(kvm_context, vcpu);
+
+    cpu_set_apic_tpr(env, kvm_get_cr8(kvm_context, vcpu));
+    cpu_set_apic_base(env, kvm_get_apic_base(kvm_context, vcpu));
+}
 #endif

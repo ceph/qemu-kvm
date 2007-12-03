@@ -28,7 +28,7 @@ kvm_context_t kvm_context;
 extern int smp_cpus;
 
 pthread_mutex_t qemu_mutex = PTHREAD_MUTEX_INITIALIZER;
-static __thread CPUState *vcpu_env;
+__thread CPUState *vcpu_env;
 
 static sigset_t io_sigset, io_negsigset;
 
@@ -110,17 +110,9 @@ static int try_push_interrupts(void *opaque)
 
 static void post_kvm_run(void *opaque, int vcpu)
 {
-    CPUState *env = vcpu_env;
 
     pthread_mutex_lock(&qemu_mutex);
-    cpu_single_env = env;
-    env->eflags = kvm_get_interrupt_flag(kvm_context, vcpu)
-	? env->eflags | IF_MASK : env->eflags & ~IF_MASK;
-    env->ready_for_interrupt_injection
-	= kvm_is_ready_for_interrupt_injection(kvm_context, vcpu);
-
-    cpu_set_apic_tpr(env, kvm_get_cr8(kvm_context, vcpu));
-    cpu_set_apic_base(env, kvm_get_apic_base(kvm_context, vcpu));
+    kvm_arch_post_kvm_run(opaque, vcpu);
 }
 
 static int pre_kvm_run(void *opaque, int vcpu)
