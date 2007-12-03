@@ -90,22 +90,7 @@ void kvm_apic_init(CPUState *env)
 
 static int try_push_interrupts(void *opaque)
 {
-    CPUState *env = cpu_single_env;
-    int r, irq;
-
-    if (env->ready_for_interrupt_injection &&
-        (env->interrupt_request & CPU_INTERRUPT_HARD) &&
-        (env->eflags & IF_MASK)) {
-            env->interrupt_request &= ~CPU_INTERRUPT_HARD;
-	    irq = cpu_get_pic_interrupt(env);
-	    if (irq >= 0) {
-		r = kvm_inject_irq(kvm_context, env->cpu_index, irq);
-		if (r < 0)
-		    printf("cpu %d fail inject %x\n", env->cpu_index, irq);
-	    }
-    }
-
-    return (env->interrupt_request & CPU_INTERRUPT_HARD) != 0;
+    return kvm_arch_try_push_interrupts(opaque);
 }
 
 static void post_kvm_run(void *opaque, int vcpu)
