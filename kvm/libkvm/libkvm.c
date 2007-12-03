@@ -41,7 +41,12 @@
 #include "kvm-x86.h"
 #endif
 
+#if defined(__ia64__)
+#include "kvm-ia64.h"
+#endif
+
 int kvm_abi = EXPECTED_KVM_API_VERSION;
+int kvm_page_size;
 
 struct slot_info {
 	unsigned long phys_addr;
@@ -230,6 +235,7 @@ kvm_context_t kvm_init(struct kvm_callbacks *callbacks,
 	    goto out_close;
 	}
 	kvm_abi = r;
+	kvm_page_size = getpagesize();
 	kvm = malloc(sizeof(*kvm));
 	kvm->fd = fd;
 	kvm->vm_fd = -1;
