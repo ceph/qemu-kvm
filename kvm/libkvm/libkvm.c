@@ -245,7 +245,6 @@ kvm_context_t kvm_init(struct kvm_callbacks *callbacks,
 	kvm->opaque = opaque;
 	kvm->dirty_pages_log_all = 0;
 	kvm->no_irqchip_creation = 0;
-	memset(&kvm->mem_regions, 0, sizeof(kvm->mem_regions));
 
 	return kvm;
  out_close:
@@ -577,8 +576,7 @@ void kvm_destroy_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 			__FUNCTION__, slot);
 		return;
 	}
-	mem = &kvm->mem_regions[slot];
-	if (phys_start != mem->guest_phys_addr) {
+	if (phys_start != slots[slot].phys_addr) {
 		fprintf(stderr,
 			"WARNING: %s: phys_start is 0x%lx expecting 0x%llx\n",
 			__FUNCTION__, phys_start, mem->guest_phys_addr);

@@ -43,8 +43,6 @@ struct kvm_context {
 	void *physical_memory;
 	/// is dirty pages logging enabled for all regions or not
 	int dirty_pages_log_all;
-	/// memory regions parameters
-	struct kvm_memory_region mem_regions[KVM_MAX_NUM_MEM_REGIONS];
 	/// do not create in-kernel irqchip if set
 	int no_irqchip_creation;
 	/// in-kernel irqchip status
