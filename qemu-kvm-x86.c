@@ -565,4 +565,12 @@ int kvm_arch_halt(void *opaque, int vcpu)
     return 1;
 }
 
+void kvm_arch_pre_kvm_run(void *opaque, int vcpu)
+{
+    CPUState *env = cpu_single_env;
+
+    if (!kvm_irqchip_in_kernel(kvm_context))
+	kvm_set_cr8(kvm_context, vcpu, cpu_get_apic_tpr(env));
+}
+
 #endif

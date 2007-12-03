@@ -138,8 +138,8 @@ static int pre_kvm_run(void *opaque, int vcpu)
 	pthread_mutex_lock(&qemu_mutex);
     }
 
-    if (!kvm_irqchip_in_kernel(kvm_context))
-	kvm_set_cr8(kvm_context, vcpu, cpu_get_apic_tpr(env));
+    kvm_arch_pre_kvm_run(opaque, vcpu);
+
     if (env->interrupt_request & CPU_INTERRUPT_EXIT)
 	return 1;
     pthread_mutex_unlock(&qemu_mutex);
