@@ -27,11 +27,9 @@ int kvm_irqchip = 1;
 extern void perror(const char *s);
 
 kvm_context_t kvm_context;
-static struct kvm_msr_list *kvm_msr_list;
-static int kvm_has_msr_star;
+int kvm_has_msr_star;
 
 extern int smp_cpus;
-extern unsigned int kvm_shadow_memory;
 
 pthread_mutex_t qemu_mutex = PTHREAD_MUTEX_INITIALIZER;
 static __thread CPUState *vcpu_env;
@@ -1006,8 +1004,7 @@ int kvm_qemu_init()
 
 int kvm_qemu_create_context(void)
 {
-    int i;
-
+    int r;
     if (!kvm_irqchip) {
         kvm_disable_irqchip_creation(kvm_context);
     }
@@ -1015,16 +1012,9 @@ int kvm_qemu_create_context(void)
 	kvm_qemu_destroy();
 	return -1;
     }
-    if (kvm_shadow_memory)
-        kvm_set_shadow_pages(kvm_context, kvm_shadow_memory);
-    kvm_msr_list = kvm_get_msr_list(kvm_context);
-    if (!kvm_msr_list) {
+    r = kvm_arch_qemu_create_context();
+    if(r <0)
 	kvm_qemu_destroy();
-	return -1;
-    }
-    for (i = 0; i < kvm_msr_list->nmsrs; ++i)
-	if (kvm_msr_list->indices[i] == MSR_STAR)
-	    kvm_has_msr_star = 1;
     return 0;
 }
 

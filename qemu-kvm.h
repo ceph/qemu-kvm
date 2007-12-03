@@ -28,6 +28,7 @@ void kvm_update_interrupt_request(CPUState *env);
 void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
                                       unsigned long size,
                                       unsigned long phys_offset);
+int kvm_arch_qemu_create_context(void);
 
 #define ALIGN(x, y)  (((x)+(y)-1) & ~((y)-1))
 #define BITMAP_SIZE(m) (ALIGN(((m)>>TARGET_PAGE_BITS), HOST_LONG_BITS) / 8)
