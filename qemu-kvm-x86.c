@@ -616,4 +616,13 @@ int kvm_arch_try_push_interrupts(void *opaque)
     return (env->interrupt_request & CPU_INTERRUPT_HARD) != 0;
 }
 
+void kvm_arch_update_regs_for_sipi(CPUState *env)
+{
+    SegmentCache cs = env->segs[R_CS];
+
+    kvm_arch_save_regs(env);
+    env->segs[R_CS] = cs;
+    env->eip = 0;
+    kvm_arch_load_regs(env);
+}
 #endif

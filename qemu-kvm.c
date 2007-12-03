@@ -292,12 +292,7 @@ static void kvm_vm_state_change_handler(void *context, int running)
 
 static void update_regs_for_sipi(CPUState *env)
 {
-    SegmentCache cs = env->segs[R_CS];
-
-    kvm_arch_save_regs(env);
-    env->segs[R_CS] = cs;
-    env->eip = 0;
-    kvm_arch_load_regs(env);
+    kvm_arch_update_regs_for_sipi(env);
     vcpu_info[env->cpu_index].sipi_needed = 0;
     vcpu_info[env->cpu_index].init = 0;
 }
