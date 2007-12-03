@@ -9,7 +9,6 @@
 #endif
 
 int kvm_allowed = KVM_ALLOWED_DEFAULT;
-int lm_capable_kernel;
 int kvm_irqchip = 1;
 
 #ifdef USE_KVM
@@ -691,143 +690,9 @@ int kvm_qemu_check_extension(int ext)
     return kvm_check_extension(kvm_context, ext);
 }
 
-static void host_cpuid(uint32_t function, uint32_t *eax, uint32_t *ebx,
-		       uint32_t *ecx, uint32_t *edx)
-{
-    uint32_t vec[4];
-
-    vec[0] = function;
-    asm volatile (
-#ifdef __x86_64__
-	 "sub $128, %%rsp \n\t"  /* skip red zone */
-         "push %0;  push %%rsi \n\t"
-	 "push %%rax; push %%rbx; push %%rcx; push %%rdx \n\t"
-	 "mov 8*5(%%rsp), %%rsi \n\t"
-	 "mov (%%rsi), %%eax \n\t"
-	 "cpuid \n\t"
-	 "mov %%eax, (%%rsi) \n\t"
-	 "mov %%ebx, 4(%%rsi) \n\t"
-	 "mov %%ecx, 8(%%rsi) \n\t"
-	 "mov %%edx, 12(%%rsi) \n\t"
-	 "pop %%rdx; pop %%rcx; pop %%rbx; pop %%rax \n\t"
-	 "pop %%rsi; pop %0 \n\t"
-	 "add $128, %%rsp"
-#else
-         "push %0;  push %%esi \n\t"
-	 "push %%eax; push %%ebx; push %%ecx; push %%edx \n\t"
-	 "mov 4*5(%%esp), %%esi \n\t"
-	 "mov (%%esi), %%eax \n\t"
-	 "cpuid \n\t"
-	 "mov %%eax, (%%esi) \n\t"
-	 "mov %%ebx, 4(%%esi) \n\t"
-	 "mov %%ecx, 8(%%esi) \n\t"
-	 "mov %%edx, 12(%%esi) \n\t"
-	 "pop %%edx; pop %%ecx; pop %%ebx; pop %%eax \n\t"
-	 "pop %%esi; pop %0 \n\t"
-#endif
-	 : : "rm"(vec) : "memory");
-    if (eax)
-	*eax = vec[0];
-    if (ebx)
-	*ebx = vec[1];
-    if (ecx)
-	*ecx = vec[2];
-    if (edx)
-	*edx = vec[3];
-}
-
-static void do_cpuid_ent(struct kvm_cpuid_entry *e, uint32_t function,
-			 CPUState *env)
-{
-    env->regs[R_EAX] = function;
-    qemu_kvm_cpuid_on_env(env);
-    e->function = function;
-    e->eax = env->regs[R_EAX];
-    e->ebx = env->regs[R_EBX];
-    e->ecx = env->regs[R_ECX];
-    e->edx = env->regs[R_EDX];
-    if (function == 0x80000001) {
-	uint32_t h_eax, h_edx;
-	struct utsname utsname;
-
-	host_cpuid(function, &h_eax, NULL, NULL, &h_edx);
-	uname(&utsname);
-	lm_capable_kernel = strcmp(utsname.machine, "x86_64") == 0;
-
-	// long mode
-	if ((h_edx & 0x20000000) == 0 || !lm_capable_kernel)
-	    e->edx &= ~0x20000000u;
-	// syscall
-	if ((h_edx & 0x00000800) == 0)
-	    e->edx &= ~0x00000800u;
-	// nx
-	if ((h_edx & 0x00100000) == 0)
-	    e->edx &= ~0x00100000u;
-	// svm
-	if (e->ecx & 4)
-	    e->ecx &= ~4u;
-    }
-    // sysenter isn't supported on compatibility mode on AMD.  and syscall
-    // isn't supported in compatibility mode on Intel.  so advertise the
-    // actuall cpu, and say goodbye to migration between different vendors
-    // is you use compatibility mode.
-    if (function == 0) {
-	uint32_t bcd[3];
-
-	host_cpuid(0, NULL, &bcd[0], &bcd[1], &bcd[2]);
-	e->ebx = bcd[0];
-	e->ecx = bcd[1];
-	e->edx = bcd[2];
-    }
-}
-
 int kvm_qemu_init_env(CPUState *cenv)
 {
-    struct kvm_cpuid_entry cpuid_ent[100];
-#ifdef KVM_CPUID_SIGNATURE
-    struct kvm_cpuid_entry *pv_ent;
-    uint32_t signature[3];
-#endif
-    int cpuid_nent = 0;
-    CPUState copy;
-    uint32_t i, limit;
-
-    copy = *cenv;
-
-#ifdef KVM_CPUID_SIGNATURE
-    /* Paravirtualization CPUIDs */
-    memcpy(signature, "KVMKVMKVM", 12);
-    pv_ent = &cpuid_ent[cpuid_nent++];
-    memset(pv_ent, 0, sizeof(*pv_ent));
-    pv_ent->function = KVM_CPUID_SIGNATURE;
-    pv_ent->eax = 0;
-    pv_ent->ebx = signature[0];
-    pv_ent->ecx = signature[1];
-    pv_ent->edx = signature[2];
-
-    pv_ent = &cpuid_ent[cpuid_nent++];
-    memset(pv_ent, 0, sizeof(*pv_ent));
-    pv_ent->function = KVM_CPUID_FEATURES;
-    pv_ent->eax = 0;
-#endif
-
-    copy.regs[R_EAX] = 0;
-    qemu_kvm_cpuid_on_env(&copy);
-    limit = copy.regs[R_EAX];
-
-    for (i = 0; i <= limit; ++i)
-	do_cpuid_ent(&cpuid_ent[cpuid_nent++], i, &copy);
-
-    copy.regs[R_EAX] = 0x80000000;
-    qemu_kvm_cpuid_on_env(&copy);
-    limit = copy.regs[R_EAX];
-
-    for (i = 0x80000000; i <= limit; ++i)
-	do_cpuid_ent(&cpuid_ent[cpuid_nent++], i, &copy);
-
-    kvm_setup_cpuid(kvm_context, cenv->cpu_index, cpuid_nent, cpuid_ent);
-
-    return 0;
+    return kvm_arch_qemu_init_env(cenv);
 }
 
 int kvm_update_debugger(CPUState *env)
