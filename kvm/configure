@@ -101,6 +101,10 @@ if [ "$arch" = "i386" -o "$arch" = "x86_64" ]; then
     target_exec="x86_64-softmmu"
 fi
 
+if [ "$arch" = "ia64" ]; then
+    target_exec="ia64-softmmu"
+fi
+
 #configure user dir
 (cd user; ./configure --prefix="$prefix" --kerneldir="$libkvm_kerneldir" \
           --arch="$arch" \
