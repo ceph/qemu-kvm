@@ -1,6 +1,5 @@
 #include "libkvm.h"
 #include "kvm-x86.h"
-#include "kvm-abi-10.h"
 #include <errno.h>
 #include <sys/ioctl.h>
 #include <string.h>
@@ -267,188 +266,6 @@ int kvm_set_lapic(kvm_context_t kvm, int vcpu, struct kvm_lapic_state *s)
 
 #endif
 
-static int handle_io_abi10(kvm_context_t kvm, struct kvm_run_abi10 *run,
-			   int vcpu)
-{
-	uint16_t addr = run->io.port;
-	int r;
-	int i;
-	void *p = (void *)run + run->io.data_offset;
-
-	for (i = 0; i < run->io.count; ++i) {
-		switch (run->io.direction) {
-		case KVM_EXIT_IO_IN:
-			switch (run->io.size) {
-			case 1:
-				r = kvm->callbacks->inb(kvm->opaque, addr, p);
-				break;
-			case 2:
-				r = kvm->callbacks->inw(kvm->opaque, addr, p);
-				break;
-			case 4:
-				r = kvm->callbacks->inl(kvm->opaque, addr, p);
-				break;
-			default:
-				fprintf(stderr, "bad I/O size %d\n", run->io.size);
-				return -EMSGSIZE;
-			}
-			break;
-		case KVM_EXIT_IO_OUT:
-		    	switch (run->io.size) {
-			case 1:
-				r = kvm->callbacks->outb(kvm->opaque, addr,
-						     *(uint8_t *)p);
-				break;
-			case 2:
-				r = kvm->callbacks->outw(kvm->opaque, addr,
-						     *(uint16_t *)p);
-				break;
-			case 4:
-				r = kvm->callbacks->outl(kvm->opaque, addr,
-						     *(uint32_t *)p);
-				break;
-			default:
-				fprintf(stderr, "bad I/O size %d\n", run->io.size);
-				return -EMSGSIZE;
-			}
-			break;
-		default:
-			fprintf(stderr, "bad I/O direction %d\n", run->io.direction);
-			return -EPROTO;
-		}
-
-		p += run->io.size;
-	}
-	run->io_completed = 1;
-
-	return 0;
-}
-
-static int handle_mmio_abi10(kvm_context_t kvm, struct kvm_run_abi10 *kvm_run)
-{
-	unsigned long addr = kvm_run->mmio.phys_addr;
-	void *data = kvm_run->mmio.data;
-	int r = -1;
-
-	if (kvm_run->mmio.is_write) {
-		switch (kvm_run->mmio.len) {
-		case 1:
-			r = kvm->callbacks->writeb(kvm->opaque, addr,
-							*(uint8_t *)data);
-			break;
-		case 2:
-			r = kvm->callbacks->writew(kvm->opaque, addr,
-							*(uint16_t *)data);
-			break;
-		case 4:
-			r = kvm->callbacks->writel(kvm->opaque, addr,
-							*(uint32_t *)data);
-			break;
-		case 8:
-			r = kvm->callbacks->writeq(kvm->opaque, addr,
-							*(uint64_t *)data);
-			break;
-		}
-	} else {
-		switch (kvm_run->mmio.len) {
-		case 1:
-			r = kvm->callbacks->readb(kvm->opaque, addr,
-							(uint8_t *)data);
-			break;
-		case 2:
-			r = kvm->callbacks->readw(kvm->opaque, addr,
-							(uint16_t *)data);
-			break;
-		case 4:
-			r = kvm->callbacks->readl(kvm->opaque, addr,
-							(uint32_t *)data);
-			break;
-		case 8:
-			r = kvm->callbacks->readq(kvm->opaque, addr,
-							(uint64_t *)data);
-			break;
-		}
-		kvm_run->io_completed = 1;
-	}
-	return r;
-}
-
-int kvm_run_abi10(kvm_context_t kvm, int vcpu)
-{
-	int r;
-	int fd = kvm->vcpu_fd[vcpu];
-	struct kvm_run_abi10 *run = (struct kvm_run_abi10 *)kvm->run[vcpu];
-
-again:
-	run->request_interrupt_window = try_push_interrupts(kvm);
-	r = pre_kvm_run(kvm, vcpu);
-	if (r)
-	    return r;
-	r = ioctl(fd, KVM_RUN, 0);
-	post_kvm_run(kvm, vcpu);
-
-	run->io_completed = 0;
-	if (r == -1 && errno != EINTR) {
-		r = -errno;
-		printf("kvm_run: %m\n");
-		return r;
-	}
-	if (r == -1) {
-		r = handle_io_window(kvm);
-		goto more;
-	}
-	if (1) {
-		switch (run->exit_reason) {
-		case KVM_EXIT_UNKNOWN:
-			fprintf(stderr, "unhandled vm exit: 0x%x vcpu_id %d\n",
-				(unsigned)run->hw.hardware_exit_reason, vcpu);
-			kvm_show_regs(kvm, vcpu);
-			abort();
-			break;
-		case KVM_EXIT_FAIL_ENTRY:
-			fprintf(stderr, "kvm_run: failed entry, reason %u\n",
-				(unsigned)run->fail_entry.hardware_entry_failure_reason & 0xffff);
-			return -ENOEXEC;
-			break;
-		case KVM_EXIT_EXCEPTION:
-			fprintf(stderr, "exception %d (%x)\n",
-			       run->ex.exception,
-			       run->ex.error_code);
-			kvm_show_regs(kvm, vcpu);
-			kvm_show_code(kvm, vcpu);
-			abort();
-			break;
-		case KVM_EXIT_IO:
-			r = handle_io_abi10(kvm, run, vcpu);
-			break;
-		case KVM_EXIT_DEBUG:
-			r = handle_debug(kvm, vcpu);
-			break;
-		case KVM_EXIT_MMIO:
-			r = handle_mmio_abi10(kvm, run);
-			break;
-		case KVM_EXIT_HLT:
-			r = handle_halt(kvm, vcpu);
-			break;
-		case KVM_EXIT_IRQ_WINDOW_OPEN:
-			break;
-		case KVM_EXIT_SHUTDOWN:
-			r = handle_shutdown(kvm, vcpu);
-			break;
-		default:
-			fprintf(stderr, "unhandled vm exit: 0x%x\n", run->exit_reason);
-			kvm_show_regs(kvm, vcpu);
-			abort();
-			break;
-		}
-	}
-more:
-	if (!r)
-		goto again;
-	return r;
-}
-
-
 void kvm_show_code(kvm_context_t kvm, int vcpu)
 {
 #define CR0_PE_MASK	(1ULL<<0)
@@ -619,8 +436,6 @@ uint64_t kvm_get_apic_base(kvm_context_t kvm, int vcpu)
 {
 	struct kvm_run *run = kvm->run[vcpu];
 
-	if (kvm_abi == 10)
-		return ((struct kvm_run_abi10 *)run)->apic_base;
 	return run->apic_base;
 }
 
@@ -628,10 +443,6 @@ void kvm_set_cr8(kvm_context_t kvm, int vcpu, uint64_t cr8)
 {
 	struct kvm_run *run = kvm->run[vcpu];
 
-	if (kvm_abi == 10) {
-		((struct kvm_run_abi10 *)run)->cr8 = cr8;
-		return;
-	}
 	run->cr8 = cr8;
 }
 

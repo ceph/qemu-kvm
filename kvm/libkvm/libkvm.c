@@ -35,7 +35,6 @@
 #include <errno.h>
 #include <sys/ioctl.h>
 #include "libkvm.h"
-#include "kvm-abi-10.h"
 
 #if defined(__x86_64__) || defined(__i386__)
 #include "kvm-x86.h"
@@ -223,7 +222,7 @@ kvm_context_t kvm_init(struct kvm_callbacks *callbacks,
 		    "KVM_GET_API_VERSION ioctl not supported\n");
 	    goto out_close;
 	}
-	if (r < EXPECTED_KVM_API_VERSION && r != 10) {
+	if (r < EXPECTED_KVM_API_VERSION) {
 		fprintf(stderr, "kvm kernel version too old: "
 			"We expect API version %d or newer, but got "
 			"version %d\n",
@@ -846,8 +845,6 @@ int kvm_get_interrupt_flag(kvm_context_t kvm, int vcpu)
 {
 	struct kvm_run *run = kvm->run[vcpu];
 
-	if (kvm_abi == 10)
-		return ((struct kvm_run_abi10 *)run)->if_flag;
 	return run->if_flag;
 }
 
@@ -855,8 +852,6 @@ int kvm_is_ready_for_interrupt_injection(kvm_context_t kvm, int vcpu)
 {
 	struct kvm_run *run = kvm->run[vcpu];
 
-	if (kvm_abi == 10)
-		return ((struct kvm_run_abi10 *)run)->ready_for_interrupt_injection;
 	return run->ready_for_interrupt_injection;
 }
 
@@ -865,9 +860,6 @@ int kvm_run(kvm_context_t kvm, int vcpu)
 	int r;
 	int fd = kvm->vcpu_fd[vcpu];
 	struct kvm_run *run = kvm->run[vcpu];
-
-	if (kvm_abi == 10)
-		return kvm_run_abi10(kvm, vcpu);
 
 again:
 	if (!kvm->irqchip_in_kernel)

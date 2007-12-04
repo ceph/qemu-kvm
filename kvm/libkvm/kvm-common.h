@@ -75,8 +75,6 @@ int kvm_arch_run(struct kvm_run *run, kvm_context_t kvm, int vcpu);
 
 
 void kvm_show_code(kvm_context_t kvm, int vcpu);
-int kvm_run_abi10(kvm_context_t kvm, int vcpu);
-
 
 int handle_halt(kvm_context_t kvm, int vcpu);
 int handle_shutdown(kvm_context_t kvm, int vcpu);
