@@ -725,13 +725,15 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
 #ifdef USE_KVM
  #ifdef KVM_CAP_USER_MEMORY
     if (kvm_allowed && kvm_qemu_check_extension(KVM_CAP_USER_MEMORY)) {
+        ram_addr = qemu_ram_alloc(0xa0000);
+        cpu_register_physical_memory(0, 0xa0000, ram_addr);
+        kvm_cpu_register_physical_memory(0, 0xa0000, ram_addr);
+
+        ram_addr = qemu_ram_alloc(0x100000 - 0xa0000);   // hole
         ram_addr = qemu_ram_alloc(ram_size - 0x100000);
         cpu_register_physical_memory(0x100000, ram_size - 0x100000, ram_addr);
         kvm_cpu_register_physical_memory(0x100000, ram_size - 0x100000,
                                          ram_addr);
-        ram_addr = qemu_ram_alloc(0xa0000);
-        cpu_register_physical_memory(0, 0xa0000, ram_addr);
-        kvm_cpu_register_physical_memory(0, 0xa0000, ram_addr);
     } else
  #endif
 #endif
