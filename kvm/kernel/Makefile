@@ -28,8 +28,9 @@ sync:
 	rsync "$(LINUX)"/include/linux/kvm.h \
 	       "$(LINUX)"/include/linux/kvm_para.h \
 			include/linux
-	rsync "$(LINUX)"/include/asm-x86/kvm_para.h include/asm
-	rsync "$(LINUX)"/include/asm-x86/kvm.h include/asm
+	rsync "$(LINUX)"/include/asm-x86/kvm_para.h include/asm-x86
+	rsync "$(LINUX)"/include/asm-x86/kvm.h include/asm-x86
+	ln -sf asm-x86 include/asm
 
 	$(call unifdef, include/linux/kvm.h)
 	$(call unifdef, include/linux/kvm_para.h)
