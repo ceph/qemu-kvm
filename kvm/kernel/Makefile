@@ -13,33 +13,40 @@ LINUX = ../linux-2.6
 
 version = $(shell cd $(LINUX); git describe)
 
-hack = 	mv $1 $1.orig && \
+_hack = mv $1 $1.orig && \
 	awk -v version=$(version) -f hack-module.awk $1.orig \
 	    | sed 's/\blapic\b/l_apic/g' > $1 && rm $1.orig
 
-unifdef = mv $1 $1.orig && \
-	  unifdef -DCONFIG_X86 $1.orig > $1; (( $$? <= 1 )) && rm $1.orig
+_unifdef = mv $1 $1.orig && \
+	  unifdef -DCONFIG_X86 $1.orig > $1; \
+          (( $$? <= 1 )) && rm $1.orig
+
+hack = $(call _hack,tmp/$(strip $1))
+unifdef = $(call _unifdef,tmp/$(strip $1))
 
 all::
 	$(MAKE) -C $(KERNELDIR) M=`pwd` "$$@"
 
 sync:
+	rm -rf tmp
 	rsync --exclude='*.mod.c' -R \
              "$(LINUX)"/drivers/kvm/./*.[ch] \
 	     "$(LINUX)"/./include/linux/kvm*.h \
 	     "$(LINUX)"/./include/asm-x86/kvm*.h \
-             .
+             tmp/
 	ln -sf asm-x86 include/asm
 
 	$(call unifdef, include/linux/kvm.h)
 	$(call unifdef, include/linux/kvm_para.h)
-	$(call unifdef, include/asm/kvm.h)
-	$(call unifdef, include/asm/kvm_para.h)
+	$(call unifdef, include/asm-x86/kvm.h)
+	$(call unifdef, include/asm-x86/kvm_para.h)
 	$(call hack, kvm_main.c)
 	$(call hack, mmu.c)
 	$(call hack, vmx.c)
 	$(call hack, svm.c)
 	$(call hack, x86.c)
+	@$(foreach i, $(shell find tmp -type f -printf '%P\n'), \
+		if ! cmp -s $i tmp/$i; then cp tmp/$i $i; fi && ) :
 
 install:
 	mkdir -p $(DESTDIR)/$(INSTALLDIR)
