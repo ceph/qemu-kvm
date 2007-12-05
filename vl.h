@@ -207,7 +207,11 @@ extern unsigned int nb_prom_envs;
 #endif
 
 /* XXX: make it dynamic */
+#ifndef TARGET_IA64
 #define MAX_BIOS_SIZE (4 * 1024 * 1024)
+#else
+#define MAX_BIOS_SIZE (16 * 1024 *1026)
+#endif
 #if defined (TARGET_PPC) || defined (TARGET_SPARC64)
 #define BIOS_SIZE ((512 + 32) * 1024)
 #elif defined(TARGET_MIPS)
@@ -215,7 +219,11 @@ extern unsigned int nb_prom_envs;
 #endif
 
 #if USE_KVM
+#ifdef TARGET_IA64
+#define KVM_EXTRA_PAGES 0
+#else
 #define KVM_EXTRA_PAGES 3
+#endif
 #endif
 
 /* keyboard/mouse support */
@@ -1216,6 +1224,9 @@ extern int fd_bootchk;
 
 void ioport_set_a20(int enable);
 int ioport_get_a20(void);
+
+/* ipf.c*/
+extern QEMUMachine ipf_machine;
 
 /* ppc.c */
 extern QEMUMachine prep_machine;
