@@ -192,6 +192,11 @@ if [ "$cpu" = "i386" -o "$cpu" = "x86_64" ] ; then
     kqemu="yes"
     kvm="yes"
 fi
+if [ "$cpu" = "ia64" ] ; then
+     kvm="yes"
+     gdbstub="no"
+     slirp="no"
+fi
 ;;
 esac
 
@@ -1010,7 +1015,7 @@ echo "#define CONFIG_QEMU_PREFIX \"$interp_prefix1\"" >> $config_h
 
 configure_kvm() {
   if test $kvm = "yes" -a "$target_softmmu" = "yes" -a \
-          \( "$cpu" = "i386" -o "$cpu" = "x86_64" \); then
+          \( "$cpu" = "i386" -o "$cpu" = "x86_64" -o "$cpu" = "ia64" \); then
     echo "#define USE_KVM 1" >> $config_h
     echo "CONFIG_KVM_KERNEL_INC=$kernel_path/include" >> $config_mak
   fi
@@ -1023,6 +1028,11 @@ if test "$target_cpu" = "i386" ; then
   if test $kqemu = "yes" -a "$target_softmmu" = "yes" -a $cpu = "i386" ; then
     echo "#define USE_KQEMU 1" >> $config_h
   fi
+  configure_kvm
+elif test "$target_cpu" = "ia64" ; then
+  echo "TARGET_ARCH=ia64" >> $config_mak
+  echo "#define TARGET_ARCH \"ia64\"" >> $config_h
+  echo "#define TARGET_IA64 1" >> $config_h
   configure_kvm
 elif test "$target_cpu" = "arm" -o "$target_cpu" = "armeb" ; then
   echo "TARGET_ARCH=arm" >> $config_mak
