@@ -61,6 +61,11 @@
 
 /atomic_inc\(&kvm->mm->mm_count\);/ { $0 = "//" $0 }
 
+/^\t\.fault = / {
+    fcn = gensub(/,/, "", "g", $3)
+    $0 = "\t.VMA_OPS_FAULT(fault) = VMA_OPS_FAULT_FUNC(" fcn "),"
+}
+
 { print }
 
 /kvm_x86_ops->run/ {

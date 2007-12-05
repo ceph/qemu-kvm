@@ -571,3 +571,62 @@ static inline void blahblah(void)
 #define EFER_LME            (1<<_EFER_LME)
 #define EFER_LMA            (1<<_EFER_LMA)
 #endif
+
+/* vm ops ->fault() was introduced in 2.6.23. */
+#include <linux/mm.h>
+
+#ifdef KVM_MAIN
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
+
+struct vm_fault {
+	unsigned int flags;
+	pgoff_t pgoff;
+	void __user *virtual_address;
+	struct page *page;
+};
+
+static int kvm_vcpu_fault(struct vm_area_struct *vma, struct vm_fault *vmf);
+static int kvm_vm_fault(struct vm_area_struct *vma, struct vm_fault *vmf);
+
+static inline struct page *kvm_nopage_to_fault(
+	int (*fault)(struct vm_area_struct *vma, struct vm_fault *vmf),
+	struct vm_area_struct *vma,
+	unsigned long address,
+	int *type)
+{
+	struct vm_fault vmf;
+	int ret;
+
+	vmf.pgoff = ((address - vma->vm_start) >> PAGE_SHIFT) + vma->vm_pgoff;
+	vmf.virtual_address = (void __user *)address;
+	ret = fault(vma, &vmf);
+	if (ret)
+		return NOPAGE_SIGBUS;
+	*type = VM_FAULT_MINOR;
+	return vmf.page;
+}
+
+static inline struct page *__kvm_vcpu_fault(struct vm_area_struct *vma,
+					    unsigned long address,
+					    int *type)
+{
+	return kvm_nopage_to_fault(kvm_vcpu_fault, vma, address, type);
+}
+
+static inline struct page *__kvm_vm_fault(struct vm_area_struct *vma,
+					  unsigned long address,
+					  int *type)
+{
+	return kvm_nopage_to_fault(kvm_vm_fault, vma, address, type);
+}
+
+#define VMA_OPS_FAULT(x) nopage
+#define VMA_OPS_FAULT_FUNC(x) __##x
+
+#else
+
+#define VMA_OPS_FAULT(x) x
+#define VMA_OPS_FAULT_FUNC(x) x
+
+#endif
+#endif

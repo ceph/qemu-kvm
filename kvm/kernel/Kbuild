@@ -4,3 +4,5 @@ kvm-objs := kvm_main.o x86.o mmu.o x86_emulate.o anon_inodes.o irq.o i8259.o \
 	 lapic.o ioapic.o preempt.o
 kvm-intel-objs := vmx.o vmx-debug.o
 kvm-amd-objs := svm.o
+
+CFLAGS_kvm_main.o = -DKVM_MAIN
