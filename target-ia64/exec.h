@@ -1,0 +1,46 @@
+/*
+ *  IA64 execution defines
+ *
+ *  Copyright (c) 2003 Fabrice Bellard
+ *  Copyright (c) 2007 Intel Corporation
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ */
+//#include "dyngen-exec.h"
+
+#include "cpu.h"
+#include "exec-all.h"
+uint32_t T0;
+uint32_t T1;
+uint32_t T2;
+
+static inline void env_to_regs(void)
+{
+}
+
+static inline void regs_to_env(void)
+{
+}
+
+void cpu_lock(void);
+void cpu_unlock(void);
+void cpu_loop_exit(void);
+
+static inline int cpu_halted(CPUState *env) {
+    /* handle exit of HALTED state */
+    if (!(env->hflags & HF_HALTED_MASK))
+        return 0;
+    return EXCP_HALTED;
+}
