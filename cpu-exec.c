@@ -215,6 +215,10 @@ static inline TranslationBlock *tb_find_fast(void)
     flags = env->ps;
     cs_base = 0;
     pc = env->pc;
+#elif defined(TARGET_IA64)
+    flags = 0;
+    cs_base = 0;         /* XXXXX */
+    pc = 0;
 #else
 #error unsupported CPU
 #endif
@@ -289,6 +293,7 @@ int cpu_exec(CPUState *env1)
 #elif defined(TARGET_PPC)
 #elif defined(TARGET_MIPS)
 #elif defined(TARGET_SH4)
+#elif defined(TARGET_IA64)
     /* XXXXX */
 #else
 #error unsupported target CPU
@@ -342,6 +347,8 @@ int cpu_exec(CPUState *env1)
                     do_interrupt(env);
 #elif defined(TARGET_M68K)
                     do_interrupt(0);
+#elif defined(TARGET_IA64)
+		    do_interrupt(env);
 #endif
                 }
                 env->exception_index = -1;
@@ -779,6 +786,7 @@ int cpu_exec(CPUState *env1)
               | env->cc_dest | (env->cc_x << 4);
 #elif defined(TARGET_MIPS)
 #elif defined(TARGET_SH4)
+#elif defined(TARGET_IA64)
 #elif defined(TARGET_ALPHA)
     /* XXXXX */
 #else
