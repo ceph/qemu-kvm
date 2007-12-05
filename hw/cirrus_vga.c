@@ -2637,7 +2637,7 @@ int unset_vram_mapping(unsigned long begin, unsigned long end)
 
     return 0;
 }
-
+#ifdef CONFIG_X86
 static void kvm_update_vga_alias(CirrusVGAState *s, int ok, int bank,
                                  unsigned long phys_addr)
 {
@@ -2672,14 +2672,14 @@ static void kvm_update_vga_aliases(CirrusVGAState *s, int ok)
     }
     s->aliases_enabled = ok;
 }
-
+#endif
 #endif
 
 /* Compute the memory access functions */
 static void cirrus_update_memory_access(CirrusVGAState *s)
 {
     unsigned mode;
-#ifdef USE_KVM
+#if defined(USE_KVM) && defined(CONFIG_X86)
     int want_vga_alias = 0;
 #endif
 
@@ -2713,12 +2713,14 @@ static void cirrus_update_memory_access(CirrusVGAState *s)
                 s->map_addr = s->cirrus_lfb_addr;
                 s->map_end = s->cirrus_lfb_end;
             }
+#ifdef CONFIG_X86
 	    if (kvm_allowed
 		&& !(s->cirrus_srcptr != s->cirrus_srcptr_end)
 		&& !((s->sr[0x07] & 0x01) == 0)
 		&& !((s->gr[0x0B] & 0x14) == 0x14)
 		&& !(s->gr[0x0B] & 0x02))
 		want_vga_alias = 1;
+#endif
 #endif
             s->cirrus_linear_write[0] = cirrus_linear_mem_writeb;
             s->cirrus_linear_write[1] = cirrus_linear_mem_writew;
@@ -2746,9 +2748,10 @@ static void cirrus_update_memory_access(CirrusVGAState *s)
             s->cirrus_linear_write[2] = cirrus_linear_writel;
         }
     }
-#ifdef USE_KVM
+#if defined(USE_KVM) && defined(CONFIG_X86)
     kvm_update_vga_aliases(s, want_vga_alias);
 #endif
+
 }
 
 
