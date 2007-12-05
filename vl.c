@@ -7305,7 +7305,8 @@ int main_loop(void)
 
 static void help(int exitcode)
 {
-    printf("QEMU PC emulator version " QEMU_VERSION ", Copyright (c) 2003-2007 Fabrice Bellard\n"
+    printf("QEMU PC emulator version " QEMU_VERSION " (" KVM_VERSION ")"
+	   ", Copyright (c) 2003-2007 Fabrice Bellard\n"
            "usage: %s [options] [disk_image]\n"
            "\n"
            "'disk_image' is a raw hard image image for IDE hard disk 0\n"
