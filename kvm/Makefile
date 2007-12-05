@@ -46,25 +46,24 @@ install:
 	make -C qemu DESTDIR="$(DESTDIR)" install
 
 tmpspec = .tmp.kvm.spec
-RPMDIR=$$(pwd)/RPMS
+RPMTOPDIR = $$(pwd)/rpmtop
 
 rpm:	srpm
-	mkdir -p BUILD $(RPMDIR)/$$(uname -i)
+	mkdir -p $(RPMTOPDIR)/{BUILD,RPMS/$$(uname -i)}
 	rpmbuild --rebuild \
-		 --define="_rpmdir $(RPMDIR)" \
-		 --define="_topdir $$(pwd)" \
-		SRPMS/kvm-0.0-$(rpmrelease).src.rpm
+		 --define="_topdir $(RPMTOPDIR)" \
+		$(RPMTOPDIR)/SRPMS/kvm-0.0-$(rpmrelease).src.rpm
 
 srpm:
-	mkdir -p SOURCES SRPMS
+	mkdir -p $(RPMTOPDIR)/{SOURCES,SRPMS}
 	sed 's/^Release:.*/Release: $(rpmrelease)/' kvm.spec > $(tmpspec)
-	tar czf SOURCES/kvm.tar.gz qemu
-	tar czf SOURCES/user.tar.gz user
-	tar czf SOURCES/libkvm.tar.gz libkvm
-	tar czf SOURCES/kernel.tar.gz kernel
-	tar czf SOURCES/scripts.tar.gz scripts
-	cp Makefile configure kvm_stat SOURCES
-	rpmbuild  --define="_topdir $$(pwd)" -bs $(tmpspec)
+	tar czf $(RPMTOPDIR)/SOURCES/kvm.tar.gz qemu
+	tar czf $(RPMTOPDIR)/SOURCES/user.tar.gz user
+	tar czf $(RPMTOPDIR)/SOURCES/libkvm.tar.gz libkvm
+	tar czf $(RPMTOPDIR)/SOURCES/kernel.tar.gz kernel
+	tar czf $(RPMTOPDIR)/SOURCES/scripts.tar.gz scripts
+	cp Makefile configure kvm_stat $(RPMTOPDIR)/SOURCES
+	rpmbuild  --define="_topdir $(RPMTOPDIR)" -bs $(tmpspec)
 	$(RM) $(tmpspec)
 
 clean:
