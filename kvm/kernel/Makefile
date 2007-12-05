@@ -19,7 +19,7 @@ _hack = mv $1 $1.orig && \
 
 _unifdef = mv $1 $1.orig && \
 	  unifdef -DCONFIG_X86 $1.orig > $1; \
-          (( $$? <= 1 )) && rm $1.orig
+          [ $$? -le 1 ] && rm $1.orig
 
 hack = $(call _hack,tmp/$(strip $1))
 unifdef = $(call _unifdef,tmp/$(strip $1))
