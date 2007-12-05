@@ -90,6 +90,8 @@
 #define CPU_MEM_INDEX ((env->ps >> 3) & 3)
 #elif defined (TARGET_M68K)
 #define CPU_MEM_INDEX ((env->sr & SR_S) == 0)
+#elif defined (TARGET_IA64)
+#define CPU_MEM_INDEX (0)
 #else
 #error unsupported CPU
 #endif
