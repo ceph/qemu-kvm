@@ -6465,6 +6465,15 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
     return 0;
 }
 
+#elif defined(TARGET_IA64)
+void cpu_save(QEMUFile *f, void *opaque)
+{
+}
+
+int cpu_load(QEMUFile *f, void *opaque, int version_id)
+{
+    return 0;
+}
 #else
 
 #warning No CPU save/restore functions
@@ -7762,6 +7771,8 @@ void register_machines(void)
 #elif defined(TARGET_M68K)
     qemu_register_machine(&mcf5208evb_machine);
     qemu_register_machine(&an5206_machine);
+#elif defined(TARGET_IA64)
+    qemu_register_machine(&ipf_machine);
 #else
 #error unsupported CPU
 #endif
@@ -8660,7 +8671,7 @@ int main(int argc, char **argv)
 #if USE_KVM
     /* Initialize kvm */
     if (kvm_allowed) {
-	    phys_ram_size += KVM_EXTRA_PAGES * 4096;
+	    phys_ram_size += KVM_EXTRA_PAGES * TARGET_PAGE_SIZE;
 	    if (kvm_qemu_create_context() < 0) {
 		    fprintf(stderr, "Could not create KVM context\n");
 		    exit(1);
