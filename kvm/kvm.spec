@@ -12,12 +12,18 @@ ExclusiveArch:  i386 x86_64
 
 Requires:	kvm-kmod bridge-utils
 
-%define Distribution %(rpm -q -qf /etc/redhat-release --qf '%{name}' | cut -d"-"  -f 1)
+%define Distribution %(rpm -q -qf /etc/redhat-release --qf '%%{name}' | cut -d"-"  -f 1)
 %define os_version %(rpm -q --qf '%%{version}' %{Distribution}-release)
 %define os_release %(rpm -q --qf '%%{release}' %{Distribution}-release | cut -d"." -f 1)
 
 %if %([ x"%{Distribution}" = x"fedora" -a x"%{os_version}" = x"5" ] && echo 1 || echo 0)
 %define require_gccver 32
+%endif
+
+%if %([ x"%{Distribution}" = x"fedora" -a 0"%{os_version}" -ge "8" ] && echo 1 || echo 0)
+%define qemuldflags --qemu-ldflags=-Wl,--build-id
+%else
+%define qemuldflags ""
 %endif
 
 %if %([ x"%{Distribution}" = x"centos" -a x"%{os_version}" = x"4" ] && echo 1 || echo 0)
@@ -71,7 +77,7 @@ rm -rf %{buildroot}
 
 %if !%{_prebuilt}
 cd ..
-./configure --prefix=/usr/kvm
+./configure --prefix=/usr/kvm %{qemuldflags}
 make -C libkvm
 make -C user
 #(cd qemu;
