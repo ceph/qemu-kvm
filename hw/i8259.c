@@ -239,6 +239,7 @@ int pic_read_irq(PicState2 *s)
     if (irq >= 0) {
 
         pic_intack(&s->pics[0], irq);
+#ifndef TARGET_IA64
 	if (time_drift_fix && irq == 0) {
 	    extern int64_t timer_acks, timer_ints_to_push;
 	    timer_acks++;
@@ -249,7 +250,7 @@ int pic_read_irq(PicState2 *s)
                 pic_set_irq1(&s->pics[0], 0, 1);
 	    }
 	}
-
+#endif
         if (irq == 2) {
             irq2 = pic_get_irq(&s->pics[1]);
             if (irq2 >= 0) {
