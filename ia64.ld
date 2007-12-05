@@ -9,7 +9,7 @@ SEARCH_DIR("/usr/ia64-linux/lib"); SEARCH_DIR("/usr/local/lib"); SEARCH_DIR("/li
 SECTIONS
 {
   /* Read-only sections, merged into text segment: */
-  PROVIDE (__executable_start = 0x60000000); . = 0x60000000 + SIZEOF_HEADERS;
+  PROVIDE (__executable_start = 0x4000000060000000); . = 0x4000000060000000 + SIZEOF_HEADERS;
   .interp         : { *(.interp) }
   .hash           : { *(.hash) }
   .dynsym         : { *(.dynsym) }
