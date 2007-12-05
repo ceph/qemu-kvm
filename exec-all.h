@@ -492,11 +492,10 @@ static inline int testandset (int *p)
 }
 #elif defined(__ia64)
 
-#include <ia64intrin.h>
-
+#include "ia64intrin.h"
 static inline int testandset (int *p)
 {
-    return __sync_lock_test_and_set (p, 1);
+    return (int)cmpxchg_acq(p,0,1);
 }
 #elif defined(__mips__)
 static inline int testandset (int *p)
@@ -617,6 +616,8 @@ static inline target_ulong get_phys_addr_code(CPUState *env, target_ulong addr)
     is_user = ((env->ps >> 3) & 3);
 #elif defined (TARGET_M68K)
     is_user = ((env->sr & SR_S) == 0);
+#elif defined (TARGET_IA64)
+    is_user = 0;
 #else
 #error unimplemented CPU
 #endif
