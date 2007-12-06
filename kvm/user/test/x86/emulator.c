@@ -92,6 +92,17 @@ void test_cmps(void *mem)
 
 }
 
+void test_cr8(void)
+{
+	unsigned long src, dst;
+
+	dst = 777;
+	src = 3;
+	asm volatile("mov %[src], %%cr8; mov %%cr8, %[dst]"
+		     : [dst]"+r"(dst), [src]"+r"(src));
+	report("mov %cr8", dst == 3 && src == 3);
+}
+
 void test_push(void *mem)
 {
 	unsigned long tmp;
@@ -138,6 +149,8 @@ int main()
 	test_cmps(mem);
 
 	test_push(mem);
+
+	test_cr8();
 
 	printf("\nSUMMARY: %d tests, %d failures\n", tests, fails);
 	return fails ? 1 : 0;
