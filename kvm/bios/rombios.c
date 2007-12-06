@@ -430,7 +430,7 @@ typedef unsigned long  Bit32u;
       mov  ds, ax
       mov  bx, 6[bp] ; offset
       mov  ax, [bx]
-      add  bx, 2
+      add  bx, #2
       mov  dx, [bx]
       ;; ax = return value (word)
       ;; dx = return value (word)
@@ -459,7 +459,7 @@ typedef unsigned long  Bit32u;
       mov  bx, 6[bp] ; offset
       mov  ax, 8[bp] ; data word
       mov  [bx], ax  ; write data word
-      add  bx, 2
+      add  bx, #2
       mov  ax, 10[bp] ; data word
       mov  [bx], ax  ; write data word
       pop  ds
@@ -9628,7 +9628,7 @@ pcibios_init_irqs:
   mov  dx, #0x0cfc
   mov  ax, #0x8080
   out  dx, ax ;; reset PIRQ route control
-  add  dx, 2
+  add  dx, #2
   out  dx, ax
   mov  ax, [si+6]
   sub  ax, #0x20
@@ -10114,9 +10114,9 @@ normal_post:
 
 post_default_ints:
   mov  [bx], ax
-  add  bx, 2
+  add  bx, #2
   mov  [bx], dx
-  add  bx, 2
+  add  bx, #2
   loop post_default_ints
 
   ;; set vector 0x79 to zero
