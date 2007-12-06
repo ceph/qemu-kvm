@@ -323,7 +323,7 @@ int ac_test_do_access(ac_test_t *at)
 	return 0;
     }
     if (fault && e != at->expected_error) {
-	printf("error code %x expected %x\n", e, at->expected_fault);
+	printf("error code %x expected %x\n", e, at->expected_error);
 	return 0;
     }
     if (*at->ptep != at->expected_pte) {
