@@ -2,6 +2,8 @@
 #include "vm.h"
 #include "printf.h"
 
+#define memset __builtin_memset
+
 int fails, tests;
 
 void report(const char *name, int result)
@@ -90,6 +92,32 @@ void test_cmps(void *mem)
 
 }
 
+void test_push(void *mem)
+{
+	unsigned long tmp;
+	unsigned long *stack_top = mem + 4096;
+	unsigned long *new_stack_top;
+	unsigned long memw = 0x123456789abcdeful;
+
+	memset(mem, 0x55, (void *)stack_top - mem);
+
+	asm volatile("mov %%rsp, %[tmp] \n\t"
+		     "mov %[stack_top], %%rsp \n\t"
+		     "pushq $-7 \n\t"
+		     "pushq %[reg] \n\t"
+		     "pushq (%[mem]) \n\t"
+		     "mov %%rsp, %[new_stack_top] \n\t"
+		     "mov %[tmp], %%rsp"
+		     : [new_stack_top]"=r"(new_stack_top)
+		     : [tmp]"r"(tmp), [stack_top]"r"(stack_top),
+		       [reg]"r"(-17l), [mem]"r"(&memw)
+		     : "memory");
+
+	report("push $imm8", stack_top[-1] == -7ul);
+	report("push %reg", stack_top[-2] == -17ul);
+	report("push mem", stack_top[-3] == 0x123456789abcdeful);
+}
+
 int main()
 {
 	void *mem;
@@ -108,6 +136,8 @@ int main()
 	report("mov reg, r/m (1)", t2 == 0x123456789abcdef);
 
 	test_cmps(mem);
+
+	test_push(mem);
 
 	printf("\nSUMMARY: %d tests, %d failures\n", tests, fails);
 	return fails ? 1 : 0;
