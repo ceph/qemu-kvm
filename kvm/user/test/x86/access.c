@@ -2,6 +2,9 @@
 #include "smp.h"
 #include "printf.h"
 
+#define true 1
+#define false 0
+
 typedef unsigned long pt_element_t;
 
 #define PAGE_SIZE ((pt_element_t)4096)
@@ -14,12 +17,17 @@ typedef unsigned long pt_element_t;
 #define PT_USER_MASK       ((pt_element_t)1 << 2)
 #define PT_ACCESSED_MASK   ((pt_element_t)1 << 5)
 #define PT_DIRTY_MASK      ((pt_element_t)1 << 6)
+#define PT_NX_MASK         ((pt_element_t)1 << 63)
 
 #define CR0_WP_MASK (1UL << 16)
 
 #define PFERR_PRESENT_MASK (1U << 0)
 #define PFERR_WRITE_MASK (1U << 1)
 #define PFERR_USER_MASK (1U << 2)
+#define PFERR_FETCH_MASK (1U << 4)
+
+#define MSR_EFER 0xc0000080
+#define EFER_NX_MASK		(1ull << 11)
 
 /*
  * page table access check tests
@@ -31,11 +39,11 @@ enum {
     AC_PTE_USER,
     AC_PTE_ACCESSED,
     AC_PTE_DIRTY,
-    // AC_PTE_NX,
+    AC_PTE_NX,
 
     AC_ACCESS_USER,
     AC_ACCESS_WRITE,
-    // AC_ACCESS_FETCH,
+    AC_ACCESS_FETCH,
     // AC_ACCESS_PTE,
 
     // AC_CPU_EFER_NX,
@@ -50,8 +58,10 @@ const char *ac_names[] = {
     [AC_PTE_WRITABLE] = "pte.rw",
     [AC_PTE_USER] = "pte.user",
     [AC_PTE_DIRTY] = "pte.d",
+    [AC_PTE_NX] = "pte.nx",
     [AC_ACCESS_WRITE] = "write",
     [AC_ACCESS_USER] = "user",
+    [AC_ACCESS_FETCH] = "fetch",
     [AC_CPU_CR0_WP] = "cr0.wp",
 };
 
@@ -130,6 +140,21 @@ unsigned short read_cs()
     return r;
 }
 
+unsigned long long rdmsr(unsigned index)
+{
+    unsigned a, d;
+
+    asm volatile("rdmsr" : "=a"(a), "=d"(d) : "c"(index));
+    return ((unsigned long long)d << 32) | a;
+}
+
+void wrmsr(unsigned index, unsigned long long val)
+{
+    unsigned a = val, d = val >> 32;
+
+    asm volatile("wrmsr" : : "a"(a), "d"(d), "c"(index));
+}
+
 void set_idt_entry(idt_entry_t *e, void *addr, int dpl)
 {
     memset(e, 0, sizeof *e);
@@ -153,8 +178,21 @@ void set_cr0_wp(int wp)
     write_cr0(cr0);
 }
 
+void set_efer_nx(int nx)
+{
+    unsigned long long efer;
+
+    efer = rdmsr(MSR_EFER);
+    efer &= ~EFER_NX_MASK;
+    if (nx)
+	efer |= EFER_NX_MASK;
+    wrmsr(MSR_EFER, efer);
+}
+
+
 void ac_test_init(ac_test_t *at)
 {
+    wrmsr(MSR_EFER, rdmsr(MSR_EFER) | EFER_NX_MASK);
     set_cr0_wp(1);
     for (int i = 0; i < NR_AC_FLAGS; ++i)
 	at->flags[i] = 0;
@@ -168,7 +206,7 @@ void ac_test_init(ac_test_t *at)
     set_idt_entry(&at->idt[0x20], &kernel_entry, 3);
 }
 
-int ac_test_bump(ac_test_t *at)
+int ac_test_bump_one(ac_test_t *at)
 {
     for (int i = 0; i < NR_AC_FLAGS; ++i)
 	if (!at->flags[i]) {
@@ -177,6 +215,23 @@ int ac_test_bump(ac_test_t *at)
 	} else
 	    at->flags[i] = 0;
     return 0;
+}
+
+_Bool ac_test_legal(ac_test_t *at)
+{
+    if (at->flags[AC_ACCESS_FETCH] && at->flags[AC_ACCESS_WRITE])
+	return false;
+    return true;
+}
+
+int ac_test_bump(ac_test_t *at)
+{
+    int ret;
+
+    ret = ac_test_bump_one(at);
+    while (ret && !ac_test_legal(at))
+	ret = ac_test_bump_one(at);
+    return ret;
 }
 
 unsigned long read_cr3()
@@ -224,6 +279,8 @@ void ac_test_setup_pte(ac_test_t *at)
 		pte |= PT_ACCESSED_MASK;
 	    if (at->flags[AC_PTE_DIRTY])
 		pte |= PT_DIRTY_MASK;
+	    if (at->flags[AC_PTE_NX])
+		pte |= PT_NX_MASK;
 	    at->ptep = &vroot[index];
 	}
 	vroot[index] = pte;
@@ -254,6 +311,12 @@ void ac_test_setup_pte(ac_test_t *at)
 	}
     }
 
+    if (at->flags[AC_ACCESS_FETCH]) {
+	at->expected_error |= PFERR_FETCH_MASK;
+	if (at->flags[AC_PTE_NX])
+	    at->expected_fault = 1;
+    }
+
     if (!at->expected_fault) {
 	at->expected_pte |= PT_ACCESSED_MASK;
     }
@@ -269,6 +332,8 @@ int ac_test_do_access(ac_test_t *at)
 
     ++unique;
 
+    *((unsigned char *)at->phys) = 0xc3; /* ret */
+
     unsigned r = unique;
     set_cr0_wp(at->flags[AC_CPU_CR0_WP]);
     asm volatile ("mov %%rsp, %%rdx \n\t"
@@ -282,11 +347,15 @@ int ac_test_do_access(ac_test_t *at)
 		  "pushq $do_access \n\t"
 		  "iretq \n"
 		  "do_access: \n\t"
+		  "cmp $0, %[fetch] \n\t"
+		  "jnz 2f \n\t"
 		  "cmp $0, %[write] \n\t"
 		  "jnz 1f \n\t"
 		  "mov (%[addr]), %[reg] \n\t"
 		  "jmp done \n\t"
 		  "1: mov %[reg], (%[addr]) \n\t"
+		  "jmp done \n\t"
+		  "2: call *%[addr] \n\t"
 		  "done: \n"
 		  "fixed1: \n"
 		  "int %[kernel_entry_vector] \n\t"
@@ -295,6 +364,7 @@ int ac_test_do_access(ac_test_t *at)
 		  : [addr]"r"(at->virt),
 		    [write]"r"(at->flags[AC_ACCESS_WRITE]),
 		    [user]"r"(at->flags[AC_ACCESS_USER]),
+		    [fetch]"r"(at->flags[AC_ACCESS_FETCH]),
 		    [user_ds]"i"(32+3),
 		    [user_cs]"i"(24+3),
 		    [user_stack_top]"r"(user_stack + sizeof user_stack),
