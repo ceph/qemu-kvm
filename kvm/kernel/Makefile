@@ -45,6 +45,7 @@ sync:
 	$(call hack, vmx.c)
 	$(call hack, svm.c)
 	$(call hack, x86.c)
+	$(call hack, irq.h)
 	@$(foreach i, $(shell find tmp -type f -printf '%P\n'), \
 		if ! cmp -s $i tmp/$i; then cp tmp/$i $i; fi && ) :
 

@@ -66,6 +66,8 @@
     $0 = "\t.VMA_OPS_FAULT(fault) = VMA_OPS_FAULT_FUNC(" fcn "),"
 }
 
+{ sub(/linux\/mm_types\.h/, "linux/mm.h") }
+
 { print }
 
 /kvm_x86_ops->run/ {
