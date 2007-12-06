@@ -17,6 +17,7 @@ include config-$(ARCH).mak
 cc-option = $(shell if $(CC) $(1) -S -o /dev/null -xc /dev/null \
               > /dev/null 2>&1; then echo "$(1)"; else echo "$(2)"; fi ;)
 
+CFLAGS += -O1
 CFLAGS += $(autodepend-flags) -g -fomit-frame-pointer -Wall
 CFLAGS += $(call cc-option, -fno-stack-protector, "")
 CFLAGS += $(call cc-option, -fno-stack-protector-all, "")
