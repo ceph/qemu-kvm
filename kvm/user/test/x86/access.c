@@ -127,6 +127,7 @@ unsigned short read_cs()
     unsigned short r;
 
     asm volatile ("mov %%cs, %0" : "=r"(r));
+    return r;
 }
 
 void set_idt_entry(idt_entry_t *e, void *addr, int dpl)
