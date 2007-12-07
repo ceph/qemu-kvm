@@ -52,6 +52,7 @@ enum {
     AC_ACCESS_USER,
     AC_ACCESS_WRITE,
     AC_ACCESS_FETCH,
+    AC_ACCESS_TWICE,
     // AC_ACCESS_PTE,
 
     // AC_CPU_EFER_NX,
@@ -76,6 +77,7 @@ const char *ac_names[] = {
     [AC_ACCESS_WRITE] = "write",
     [AC_ACCESS_USER] = "user",
     [AC_ACCESS_FETCH] = "fetch",
+    [AC_ACCESS_TWICE] = "twice",
     [AC_CPU_CR0_WP] = "cr0.wp",
 };
 
@@ -344,6 +346,14 @@ void ac_test_setup_pte(ac_test_t *at)
     at->expected_fault = 0;
     at->expected_error = PFERR_PRESENT_MASK;
 
+    if (at->flags[AC_ACCESS_TWICE]) {
+	if (at->flags[AC_PDE_PRESENT]) {
+	    at->expected_pde |= PT_ACCESSED_MASK;
+	    if (at->flags[AC_PTE_PRESENT])
+		at->expected_pte |= PT_ACCESSED_MASK;
+	}
+    }
+
     if (at->flags[AC_ACCESS_USER])
 	at->expected_error |= PFERR_USER_MASK;
 
@@ -415,7 +425,21 @@ int ac_test_do_access(ac_test_t *at)
 
     unsigned r = unique;
     set_cr0_wp(at->flags[AC_CPU_CR0_WP]);
-    asm volatile ("mov %%rsp, %%rdx \n\t"
+
+    if (at->flags[AC_ACCESS_TWICE]) {
+	asm volatile (
+	    "mov $fixed2, %%rsi \n\t"
+	    "mov (%[addr]), %[reg] \n\t"
+	    "fixed2:"
+	    : [reg]"=r"(r), [fault]"=a"(fault), "=b"(e)
+	    : [addr]"r"(at->virt)
+	    : "rsi"
+	    );
+	fault = 0;
+    }
+
+    asm volatile ("mov $fixed1, %%rsi \n\t"
+		  "mov %%rsp, %%rdx \n\t"
 		  "cmp $0, %[user] \n\t"
 		  "jz do_access \n\t"
 		  "push %%rax; mov %[user_ds], %%ax; mov %%ax, %%ds; pop %%rax  \n\t"
@@ -447,12 +471,13 @@ int ac_test_do_access(ac_test_t *at)
 		    [user_ds]"i"(32+3),
 		    [user_cs]"i"(24+3),
 		    [user_stack_top]"r"(user_stack + sizeof user_stack),
-		    [kernel_entry_vector]"i"(0x20));
+		    [kernel_entry_vector]"i"(0x20)
+		  : "rsi");
 
     asm volatile (".section .text.pf \n\t"
 		  "page_fault: \n\t"
 		  "pop %rbx \n\t"
-		  "movq $fixed1, (%rsp) \n\t"
+		  "mov %rsi, (%rsp) \n\t"
 		  "movl $1, %eax \n\t"
 		  "iretq \n\t"
 		  ".section .text");
