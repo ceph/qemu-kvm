@@ -117,6 +117,8 @@ typedef struct {
     void *virt;
     pt_element_t phys;
     pt_element_t pt_pool;
+    unsigned pt_pool_size;
+    unsigned pt_pool_current;
     pt_element_t *ptep;
     pt_element_t expected_pte;
     pt_element_t *pdep;
@@ -215,6 +217,8 @@ void ac_test_init(ac_test_t *at)
     at->virt = (void *)(0x123400000000 + 16 * smp_id());
     at->phys = 32 * 1024 * 1024;
     at->pt_pool = 33 * 1024 * 1024;
+    at->pt_pool_size = 120 * 1024 * 1024 - at->pt_pool;
+    at->pt_pool_current = 0;
     memset(at->idt, 0, sizeof at->idt);
     lidt(at->idt, 256);
     extern char page_fault, kernel_entry;
@@ -265,14 +269,27 @@ void invlpg(void *addr)
 
 pt_element_t ac_test_alloc_pt(ac_test_t *at)
 {
-    pt_element_t ret = at->pt_pool;
-    at->pt_pool += PAGE_SIZE;
+    pt_element_t ret = at->pt_pool + at->pt_pool_current;
+    at->pt_pool_current += PAGE_SIZE;
     return ret;
+}
+
+_Bool ac_test_enough_room(ac_test_t *at)
+{
+    return at->pt_pool_current + 4 * PAGE_SIZE <= at->pt_pool_size;
+}
+
+void ac_test_reset_pt_pool(ac_test_t *at)
+{
+    at->pt_pool_current = 0;
 }
 
 void ac_test_setup_pte(ac_test_t *at)
 {
     unsigned long root = read_cr3();
+
+    if (!ac_test_enough_room(at))
+	ac_test_reset_pt_pool(at);
 
     for (int i = 4; i >= 1; --i) {
 	pt_element_t *vroot = va(root & PT_BASE_ADDR_MASK);
@@ -282,8 +299,7 @@ void ac_test_setup_pte(ac_test_t *at)
 	case 4:
 	case 3:
 	    pte = vroot[index];
-	    if (!(pte & PT_PRESENT_MASK))
-		pte = ac_test_alloc_pt(at) | PT_PRESENT_MASK;
+	    pte = ac_test_alloc_pt(at) | PT_PRESENT_MASK;
 	    pte |= PT_WRITABLE_MASK | PT_USER_MASK;
 	    break;
 	case 2:
