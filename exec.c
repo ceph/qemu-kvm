@@ -2600,6 +2600,9 @@ void cpu_physical_memory_rw(target_phys_addr_t addr, uint8_t *buf,
                     phys_ram_dirty[addr1 >> TARGET_PAGE_BITS] |=
                         (0xff & ~CODE_DIRTY_FLAG);
                 }
+#ifdef __ia64__
+		kvm_sync_icache((unsigned long)ptr, l);
+#endif
             }
         } else {
             if ((pd & ~TARGET_PAGE_MASK) > IO_MEM_ROM &&
