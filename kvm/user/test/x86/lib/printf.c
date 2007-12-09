@@ -1,6 +1,7 @@
 #include "printf.h"
 #include "smp.h"
 #include <stdarg.h>
+#include "string.h"
 
 static struct spinlock lock;
 
@@ -149,8 +150,9 @@ int snprintf(char *buf, int size, const char *fmt, ...)
 
 void print_serial(const char *buf)
 {
-    while (*buf)
-	asm volatile ("out %%al, $0xf1" : : "a"(*buf++));
+    unsigned long len = strlen(buf);
+
+    asm volatile ("rep/outsb" : "+S"(buf), "+c"(len) : "d"(0xf1));
 }
 
 int printf(const char *fmt, ...)
