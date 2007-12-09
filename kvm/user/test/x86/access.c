@@ -489,28 +489,28 @@ int ac_test_do_access(ac_test_t *at)
 		  ".section .text");
 
     if (fault && !at->expected_fault) {
-	printf("unexpected fault\n");
+	printf("FAIL: unexpected fault\n");
 	return 0;
     }
     if (!fault && at->expected_fault) {
-	printf("unexpected access\n");
+	printf("FAIL: unexpected access\n");
 	return 0;
     }
     if (fault && e != at->expected_error) {
-	printf("error code %x expected %x\n", e, at->expected_error);
+	printf("FAIL: error code %x expected %x\n", e, at->expected_error);
 	return 0;
     }
     if (*at->ptep != at->expected_pte) {
-	printf("pte %x expected %x\n", *at->ptep, at->expected_pte);
+	printf("FAIL: pte %x expected %x\n", *at->ptep, at->expected_pte);
 	return 0;
     }
 
     if (*at->pdep != at->expected_pde) {
-	printf("pde %x expected %x\n", *at->pdep, at->expected_pde);
+	printf("FAIL: pde %x expected %x\n", *at->pdep, at->expected_pde);
 	return 0;
     }
 
-    printf("OK\n");
+    printf("PASS\n");
     return 1;
 }
 
@@ -540,6 +540,9 @@ int ac_test_run()
 	++tests;
 	successes += ac_test_exec(&at);
     } while (ac_test_bump(&at));
+
+    printf("\n%d tests, %d failures\n", tests, tests - successes);
+
     return successes == tests;
 }
 
