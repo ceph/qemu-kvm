@@ -35,7 +35,7 @@ $(TEST_DIR)/smp.flat: $(cstart.o) $(TEST_DIR)/smptest.o
 $(TEST_DIR)/emulator.flat: $(cstart.o) $(TEST_DIR)/vm.o $(TEST_DIR)/print.o
 
 $(TEST_DIR)/libcflat.a: $(TEST_DIR)/lib/exit.o $(TEST_DIR)/lib/printf.o \
-	$(TEST_DIR)/lib/smp.o
+	$(TEST_DIR)/lib/smp.o $(TEST_DIR)/lib/string.o
 	ar rcs $@ $^
 
 arch_clean:
