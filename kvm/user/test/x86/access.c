@@ -11,12 +11,14 @@ typedef unsigned long pt_element_t;
 #define PAGE_MASK (~(PAGE_SIZE-1))
 
 #define PT_BASE_ADDR_MASK ((pt_element_t)((((pt_element_t)1 << 40) - 1) & PAGE_MASK))
+#define PT_PSE_BASE_ADDR_MASK (PT_BASE_ADDR_MASK & ~(1ull << 21))
 
 #define PT_PRESENT_MASK    ((pt_element_t)1 << 0)
 #define PT_WRITABLE_MASK   ((pt_element_t)1 << 1)
 #define PT_USER_MASK       ((pt_element_t)1 << 2)
 #define PT_ACCESSED_MASK   ((pt_element_t)1 << 5)
 #define PT_DIRTY_MASK      ((pt_element_t)1 << 6)
+#define PT_PSE_MASK        ((pt_element_t)1 << 7)
 #define PT_NX_MASK         ((pt_element_t)1 << 63)
 
 #define CR0_WP_MASK (1UL << 16)
@@ -47,6 +49,7 @@ enum {
     AC_PDE_USER,
     AC_PDE_ACCESSED,
     AC_PDE_DIRTY,
+    AC_PDE_PSE,
     AC_PDE_NX,
 
     AC_ACCESS_USER,
@@ -73,6 +76,7 @@ const char *ac_names[] = {
     [AC_PDE_WRITABLE] = "pde.rw",
     [AC_PDE_USER] = "pde.user",
     [AC_PDE_DIRTY] = "pde.d",
+    [AC_PDE_PSE] = "pde.pse",
     [AC_PDE_NX] = "pde.nx",
     [AC_ACCESS_WRITE] = "write",
     [AC_ACCESS_USER] = "user",
@@ -293,10 +297,11 @@ void ac_test_setup_pte(ac_test_t *at)
     if (!ac_test_enough_room(at))
 	ac_test_reset_pt_pool(at);
 
-    for (int i = 4; i >= 1; --i) {
+    at->ptep = 0;
+    for (int i = 4; i >= 1 && (i >= 2 || !at->flags[AC_PDE_PSE]); --i) {
 	pt_element_t *vroot = va(root & PT_BASE_ADDR_MASK);
 	unsigned index = ((unsigned long)at->virt >> (12 + (i-1) * 9)) & 511;
-	pt_element_t pte;
+	pt_element_t pte = 0;
 	switch (i) {
 	case 4:
 	case 3:
@@ -305,7 +310,12 @@ void ac_test_setup_pte(ac_test_t *at)
 	    pte |= PT_WRITABLE_MASK | PT_USER_MASK;
 	    break;
 	case 2:
-	    pte = ac_test_alloc_pt(at);
+	    if (!at->flags[AC_PDE_PSE])
+		pte = ac_test_alloc_pt(at);
+	    else {
+		pte = at->phys & PT_PSE_BASE_ADDR_MASK;
+		pte |= PT_PSE_MASK;
+	    }
 	    if (at->flags[AC_PDE_PRESENT])
 		pte |= PT_PRESENT_MASK;
 	    if (at->flags[AC_PDE_WRITABLE])
@@ -341,7 +351,8 @@ void ac_test_setup_pte(ac_test_t *at)
 	root = vroot[index];
     }
     invlpg(at->virt);
-    at->expected_pte = *at->ptep;
+    if (at->ptep)
+	at->expected_pte = *at->ptep;
     at->expected_pde = *at->pdep;
     at->expected_fault = 0;
     at->expected_error = PFERR_PRESENT_MASK;
@@ -384,6 +395,12 @@ void ac_test_setup_pte(ac_test_t *at)
 
     at->expected_pde |= PT_ACCESSED_MASK;
 
+    if (at->flags[AC_PDE_PSE]) {
+	if (at->flags[AC_ACCESS_WRITE])
+	    at->expected_pde |= PT_DIRTY_MASK;
+	goto no_pte;
+    }
+
     if (!at->flags[AC_PTE_PRESENT]) {
 	at->expected_fault = 1;
 	at->expected_error &= ~PFERR_PRESENT_MASK;
@@ -407,6 +424,7 @@ void ac_test_setup_pte(ac_test_t *at)
     if (at->flags[AC_ACCESS_WRITE])
 	at->expected_pte |= PT_DIRTY_MASK;
 
+no_pte:
 fault:
     ;
 }
@@ -500,7 +518,7 @@ int ac_test_do_access(ac_test_t *at)
 	printf("FAIL: error code %x expected %x\n", e, at->expected_error);
 	return 0;
     }
-    if (*at->ptep != at->expected_pte) {
+    if (at->ptep && *at->ptep != at->expected_pte) {
 	printf("FAIL: pte %x expected %x\n", *at->ptep, at->expected_pte);
 	return 0;
     }
