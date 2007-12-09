@@ -535,12 +535,17 @@ int ac_test_do_access(ac_test_t *at)
 int ac_test_exec(ac_test_t *at)
 {
     int r;
+    char line[5000];
 
-    printf("test");
+    *line = 0;
+    strcat(line, "test");
     for (int i = 0; i < NR_AC_FLAGS; ++i)
-	if (at->flags[i])
-	    printf(" %s", ac_names[i]);
-    printf(": ");
+	if (at->flags[i]) {
+	    strcat(line, " ");
+	    strcat(line, ac_names[i]);
+	}
+    strcat(line, ": ");
+    printf("%s", line);
     ac_test_setup_pte(at);
     r = ac_test_do_access(at);
     return r;
