@@ -454,6 +454,10 @@ int kvm_destroy_memory_alias(kvm_context_t, uint64_t phys_addr);
  * \param bitmap Long aligned address of a big enough bitmap (one bit per page)
  */
 int kvm_get_mem_map(kvm_context_t kvm, unsigned long phys_addr, void *bitmap);
+int kvm_get_mem_map_range(kvm_context_t kvm, unsigned long phys_addr,
+			   unsigned long len, void *buf, void *opaque,
+			   int (*cb)(unsigned long start,unsigned long len,
+				     void* bitmap, void* opaque));
 int kvm_set_irq_level(kvm_context_t kvm, int irq, int level);
 
 /*!

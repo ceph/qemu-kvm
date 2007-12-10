@@ -759,21 +759,34 @@ int kvm_update_dirty_pages_log(void)
     return r;
 }
 
+int kvm_get_phys_ram_bitmap_cb(unsigned long start, unsigned long len,
+                               void *local_bitmap, void *qemu_bitmap)
+{
+    unsigned int bsize  = ((len/TARGET_PAGE_SIZE) + 7) / 8;
+    unsigned int offset = ((start/TARGET_PAGE_SIZE) + 7) / 8;
+
+    memcpy(qemu_bitmap + offset, local_bitmap, bsize);
+
+    return 0;
+}
+
 int kvm_get_phys_ram_page_bitmap(unsigned char *bitmap)
 {
-    int r=0, len, offset;
-    
-    len = BITMAP_SIZE(phys_ram_size);
-    memset(bitmap, 0, len);
+    int r=0;
+    void *local_bitmap;
+    unsigned int bsize = BITMAP_SIZE(phys_ram_size);
 
-    r = kvm_get_mem_map(kvm_context, 0, bitmap);
-    if (r)
-        goto out;
+    local_bitmap = qemu_malloc(bsize);
+    if (!local_bitmap) {
+        fprintf(stderr, "could not allocate memory for phys_page bitmap\n");
+        return 1;
+    }
 
-    offset = BITMAP_SIZE(0xc0000);
-    r = kvm_get_mem_map(kvm_context, 0xc0000, bitmap + offset);
+    r = kvm_get_mem_map_range(kvm_context, 0, phys_ram_size,
+                              local_bitmap, bitmap,
+                              kvm_get_phys_ram_bitmap_cb);
 
- out:
+    qemu_free(local_bitmap);
     return r;
 }
 
