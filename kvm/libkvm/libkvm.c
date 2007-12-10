@@ -608,6 +608,32 @@ int kvm_get_dirty_pages(kvm_context_t kvm, unsigned long phys_addr, void *buf)
 	return kvm_get_map(kvm, KVM_GET_DIRTY_LOG, slot, buf);
 }
 
+#define ALIGN(x, y)  (((x)+(y)-1) & ~((y)-1))
+#define BITMAP_SIZE(m) (ALIGN(((m)/PAGE_SIZE), sizeof(long) * 8) / 8)
+
+int kvm_get_dirty_pages_range(kvm_context_t kvm, unsigned long phys_addr,
+			      unsigned long len, void *buf, void *opaque,
+			      int (*cb)(unsigned long start, unsigned long len,
+					void*bitmap, void *opaque))
+{
+	int i;
+	int r;
+	unsigned long end_addr = phys_addr + len;
+
+	for (i = 0; i < KVM_MAX_NUM_MEM_REGIONS; ++i) {
+		if ((slots[i].len && slots[i].phys_addr >= phys_addr) &&
+		    (slots[i].phys_addr + slots[i].len  <= end_addr)) {
+			r = kvm_get_map(kvm, KVM_GET_DIRTY_LOG, i, buf);
+			if (r)
+				return r;
+			r = cb(slots[i].phys_addr, slots[i].len, buf, opaque);
+			if (r)
+				return r;
+		}
+	}
+	return 0;
+}
+
 int kvm_get_mem_map(kvm_context_t kvm, unsigned long phys_addr, void *buf)
 {
 	int slot;

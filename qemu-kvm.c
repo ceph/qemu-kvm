@@ -710,20 +710,15 @@ int kvm_physical_memory_set_dirty_tracking(int enable)
 }
 
 /* get kvm's dirty pages bitmap and update qemu's */
-int kvm_get_dirty_pages_log_slot(unsigned long start_addr,
-                                 unsigned char *bitmap,
-                                 unsigned int offset,
-                                 unsigned int len)
+int kvm_get_dirty_pages_log_range(unsigned long start_addr,
+                                  unsigned char *bitmap,
+                                  unsigned int offset,
+                                  unsigned long mem_size)
 {
-    int r;
     unsigned int i, j, n=0;
     unsigned char c;
     unsigned page_number, addr, addr1;
-
-    memset(bitmap, 0, len);
-    r = kvm_get_dirty_pages(kvm_context, start_addr, bitmap);
-    if (r)
-        return r;
+    unsigned int len = ((mem_size/TARGET_PAGE_SIZE) + 7) / 8;
 
     /* 
      * bitmap-traveling is faster than memory-traveling (for addr...) 
@@ -743,6 +738,11 @@ int kvm_get_dirty_pages_log_slot(unsigned long start_addr,
     }
     return 0;
 }
+int kvm_get_dirty_bitmap_cb(unsigned long start, unsigned long len,
+                            void *bitmap, void *opaque)
+{
+    return kvm_get_dirty_pages_log_range(start, bitmap, start, len);
+}
 
 /* 
  * get kvm's dirty pages bitmap and update qemu's
@@ -750,12 +750,12 @@ int kvm_get_dirty_pages_log_slot(unsigned long start_addr,
  */
 int kvm_update_dirty_pages_log(void)
 {
-    int r = 0, len;
+    int r = 0;
 
-    len = BITMAP_SIZE(0xa0000);
-    r =      kvm_get_dirty_pages_log_slot(0, kvm_dirty_bitmap, 0      , len);
-    len = BITMAP_SIZE(phys_ram_size - 0xc0000);
-    r = r || kvm_get_dirty_pages_log_slot(0xc0000, kvm_dirty_bitmap, 0xc0000, len);
+
+    r = kvm_get_dirty_pages_range(kvm_context, 0, phys_ram_size,
+                                  kvm_dirty_bitmap, NULL,
+                                  kvm_get_dirty_bitmap_cb);
     return r;
 }
 
