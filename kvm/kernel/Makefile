@@ -46,8 +46,8 @@ sync:
 	$(call hack, svm.c)
 	$(call hack, x86.c)
 	$(call hack, irq.h)
-	@$(foreach i, $(shell find tmp -type f -printf '%P\n'), \
-		if ! cmp -s $i tmp/$i; then cp tmp/$i $i; fi && ) :
+	for i in $$(find tmp -type f -printf '%P '); \
+		do cmp -s $$i tmp/$$i || cp tmp/$$i $$i; done
 
 install:
 	mkdir -p $(DESTDIR)/$(INSTALLDIR)
