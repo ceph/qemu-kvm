@@ -27,6 +27,8 @@
 #include "vl.h"
 #include "firmware.h"
 #include "ia64intrin.h"
+#include <unistd.h>
+
 #ifdef USE_KVM
 #include "qemu-kvm.h"
 extern int kvm_allowed;
@@ -143,6 +145,14 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
 	NICInfo *nd;
 	qemu_irq *cpu_irq;
 	qemu_irq *i8259;
+	int page_size;
+
+	page_size = getpagesize();
+	if (page_size != TARGET_PAGE_SIZE) {
+		fprintf(stderr,"Error! Host page size != qemu target page size,"
+			" you may need to change TARGET_PAGE_BITS in qemu!\n");
+		exit(-1);
+	}
 
 	if (ram_size >= 0xc0000000 ) {
 		above_4g_mem_size = ram_size - 0xc0000000;
