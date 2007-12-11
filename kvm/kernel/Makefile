@@ -58,15 +58,19 @@ install:
 	/sbin/depmod -a
 
 tmpspec = .tmp.kvm-kmod.spec
-RPMDIR = $$(pwd)/../RPMS
+
+rpm-topdir := $$(pwd)/../rpmtop
+
+RPMDIR = $(rpm-topdir)/RPMS
+
 rpm:	all
-	mkdir -p ../BUILD $(RPMDIR)/$$(uname -i)
+	mkdir -p $(rpm-topdir)/BUILD $(RPMDIR)/$$(uname -i)
 	sed 's/^Release:.*/Release: $(rpmrelease)/; s/^%define kverrel.*/%define kverrel $(KVERREL)/' \
 	     kvm-kmod.spec > $(tmpspec)
 	rpmbuild --define="kverrel $(KVERREL)" \
 		 --define="objdir $$(pwd)" \
 		 --define="_rpmdir $(RPMDIR)" \
-		 --define="_topdir $$(pwd)/.." \
+		 --define="_topdir $(rpm-topdir)" \
 		-bb $(tmpspec)
 
 clean:
