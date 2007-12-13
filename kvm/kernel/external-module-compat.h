@@ -322,6 +322,28 @@ static inline void __kvm_set_64bit(u64 *ptr, u64 val)
 #undef  set_64bit
 #define set_64bit __kvm_set_64bit
 
+static inline unsigned long long __kvm_cmpxchg64(volatile void *ptr,
+						 unsigned long long old,
+						 unsigned long long new)
+{
+	unsigned long long prev;
+	__asm__ __volatile__(LOCK_PREFIX "cmpxchg8b %3"
+			     : "=A"(prev)
+			     : "b"((unsigned long)new),
+			       "c"((unsigned long)(new >> 32)),
+			       "m"(*__xg(ptr)),
+			       "0"(old)
+			     : "memory");
+	return prev;
+}
+
+#define kvm_cmpxchg64(ptr,o,n)\
+	((__typeof__(*(ptr)))__kvm_cmpxchg64((ptr),(unsigned long long)(o),\
+					(unsigned long long)(n)))
+
+#undef cmpxchg64
+#define cmpxchg64(ptr, o, n) kvm_cmpxchg64(ptr, o, n)
+
 #endif
 
 #ifndef CONFIG_PREEMPT_NOTIFIERS
