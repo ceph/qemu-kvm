@@ -210,7 +210,7 @@ extern unsigned int nb_prom_envs;
 #ifndef TARGET_IA64
 #define MAX_BIOS_SIZE (4 * 1024 * 1024)
 #else
-#define MAX_BIOS_SIZE (16 * 1024 *1026)
+#define MAX_BIOS_SIZE (16 * 1024 *1024)
 #endif
 #if defined (TARGET_PPC) || defined (TARGET_SPARC64)
 #define BIOS_SIZE ((512 + 32) * 1024)
