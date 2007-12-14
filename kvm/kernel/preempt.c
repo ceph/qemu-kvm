@@ -218,6 +218,8 @@ void preempt_notifier_sys_init(void)
 	struct idt_desc idt_desc;
 	struct intr_gate *int1_gate;
 
+	printk("kvm: emulating preempt notifiers;"
+	       " do not benchmark on this machine\n");
 	dprintk("\n");
 	asm ("sidt %0" : "=m"(idt_desc));
 	int1_gate = &idt_desc.gates[1];
