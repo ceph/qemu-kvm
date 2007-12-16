@@ -16,7 +16,7 @@
 
 #include <linux/highmem.h>
 
-#include "kvm.h"
+#include <linux/kvm_host.h>
 #include "debug.h"
 
 #ifdef KVM_DEBUG

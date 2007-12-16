@@ -30,7 +30,8 @@ all::
 sync:
 	rm -rf tmp
 	rsync --exclude='*.mod.c' -R \
-             "$(LINUX)"/drivers/kvm/./*.[ch] \
+             "$(LINUX)"/arch/x86/kvm/./*.[ch] \
+             "$(LINUX)"/virt/kvm/./*.[ch] \
 	     "$(LINUX)"/./include/linux/kvm*.h \
 	     "$(LINUX)"/./include/asm-x86/kvm*.h \
              tmp/
