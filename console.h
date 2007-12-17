@@ -151,4 +151,6 @@ const char *readline_get_history(unsigned int index);
 void readline_start(const char *prompt, int is_password,
                     ReadLineFunc *readline_func, void *opaque);
 
+void decorate_application_name(char *name, int max_len);
+
 #endif

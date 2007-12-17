@@ -232,11 +232,7 @@ static void sdl_update_caption(void)
             status = " - Press Ctrl-Alt-Shift to exit grab";
     }
 
-#if USE_KVM
-    if (kvm_allowed) {
-        strncat(appname, "/KVM", sizeof(appname));
-    }
-#endif
+    decorate_application_name(appname, sizeof appname);
 
     if (qemu_name)
         snprintf(buf, sizeof(buf), "%s (%s)%s", appname, qemu_name, status);

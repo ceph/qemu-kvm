@@ -254,6 +254,19 @@ static int event_pending = 1;
 
 #define TFR(expr) do { if ((expr) != -1) break; } while (errno == EINTR)
 
+void decorate_application_name(char *appname, int max_len)
+{
+#if USE_KVM
+    if (kvm_allowed)
+    {
+        int remain = max_len - strlen(appname) - 1;
+
+        if (remain > 0)
+            strncat(appname, "/KVM", remain);
+    }
+#endif
+}
+
 /***********************************************************/
 /* x86 ISA bus support */
 
