@@ -113,7 +113,7 @@ int get_slot(unsigned long phys_addr)
 
 	for (i = 0; i < KVM_MAX_NUM_MEM_REGIONS ; ++i) {
 		if (slots[i].len && slots[i].phys_addr <= phys_addr &&
-	 	    (slots[i].phys_addr + slots[i].len) >= phys_addr)
+	 	    (slots[i].phys_addr + slots[i].len-1) >= phys_addr)
 			return i;
 	}
 	return -1;
