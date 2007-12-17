@@ -53,6 +53,8 @@
 #define EXCP_RTE            0x100
 #define EXCP_HALT_INSN      0x101
 
+#define NB_MMU_MODES 2
+
 typedef struct CPUM68KState {
     uint32_t dregs[8];
     uint32_t aregs[8];
@@ -98,8 +100,6 @@ typedef struct CPUM68KState {
     uint32_t rambar0;
     uint32_t cacr;
 
-    uint32_t features;
-
     /* ??? remove this.  */
     uint32_t t1;
 
@@ -116,9 +116,11 @@ typedef struct CPUM68KState {
     uint32_t qregs[MAX_QREGS];
 
     CPU_COMMON
+
+    uint32_t features;
 } CPUM68KState;
 
-CPUM68KState *cpu_m68k_init(void);
+CPUM68KState *cpu_m68k_init(const char *cpu_model);
 int cpu_m68k_exec(CPUM68KState *s);
 void cpu_m68k_close(CPUM68KState *s);
 void do_interrupt(int is_hw);
@@ -172,10 +174,6 @@ enum {
 #define MACSR_V     0x002
 #define MACSR_EV    0x001
 
-typedef struct m68k_def_t m68k_def_t;
-
-int cpu_m68k_set_model(CPUM68KState *env, const char * name);
-
 void m68k_set_irq_level(CPUM68KState *env, int level, uint8_t vector);
 void m68k_set_macsr(CPUM68KState *env, uint32_t val);
 void m68k_switch_sp(CPUM68KState *env);
@@ -222,6 +220,15 @@ void register_m68k_insns (CPUM68KState *env);
 #define cpu_exec cpu_m68k_exec
 #define cpu_gen_code cpu_m68k_gen_code
 #define cpu_signal_handler cpu_m68k_signal_handler
+
+/* MMU modes definitions */
+#define MMU_MODE0_SUFFIX _kernel
+#define MMU_MODE1_SUFFIX _user
+#define MMU_USER_IDX 1
+static inline int cpu_mmu_index (CPUState *env)
+{
+    return (env->sr & SR_S) == 0 ? 1 : 0;
+}
 
 #include "cpu-all.h"
 

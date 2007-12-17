@@ -35,7 +35,10 @@
  * http://www.ibiblio.org/pub/historic-linux/early-ports/Sparc/NCR/NCR92C990.txt
  */
 
-#include "vl.h"
+#include "hw.h"
+#include "pci.h"
+#include "net.h"
+#include "qemu-timer.h"
 
 //#define PCNET_DEBUG
 //#define PCNET_DEBUG_IO
@@ -1840,9 +1843,9 @@ static void pcnet_save(QEMUFile *f, void *opaque)
     if (s->pci_dev)
         pci_device_save(s->pci_dev, f);
 
-    qemu_put_be32s(f, &s->rap);
-    qemu_put_be32s(f, &s->isr);
-    qemu_put_be32s(f, &s->lnkst);
+    qemu_put_be32(f, s->rap);
+    qemu_put_be32(f, s->isr);
+    qemu_put_be32(f, s->lnkst);
     qemu_put_be32s(f, &s->rdra);
     qemu_put_be32s(f, &s->tdra);
     qemu_put_buffer(f, s->prom, 16);
@@ -1851,10 +1854,10 @@ static void pcnet_save(QEMUFile *f, void *opaque)
     for (i = 0; i < 32; i++)
         qemu_put_be16s(f, &s->bcr[i]);
     qemu_put_be64s(f, &s->timer);
-    qemu_put_be32s(f, &s->xmit_pos);
-    qemu_put_be32s(f, &s->recv_pos);
+    qemu_put_be32(f, s->xmit_pos);
+    qemu_put_be32(f, s->recv_pos);
     qemu_put_buffer(f, s->buffer, 4096);
-    qemu_put_be32s(f, &s->tx_busy);
+    qemu_put_be32(f, s->tx_busy);
     qemu_put_timer(f, s->poll_timer);
 }
 
@@ -1872,9 +1875,9 @@ static int pcnet_load(QEMUFile *f, void *opaque, int version_id)
             return ret;
     }
 
-    qemu_get_be32s(f, &s->rap);
-    qemu_get_be32s(f, &s->isr);
-    qemu_get_be32s(f, &s->lnkst);
+    qemu_get_be32s(f, (uint32_t*)&s->rap);
+    qemu_get_be32s(f, (uint32_t*)&s->isr);
+    qemu_get_be32s(f, (uint32_t*)&s->lnkst);
     qemu_get_be32s(f, &s->rdra);
     qemu_get_be32s(f, &s->tdra);
     qemu_get_buffer(f, s->prom, 16);
@@ -1883,10 +1886,10 @@ static int pcnet_load(QEMUFile *f, void *opaque, int version_id)
     for (i = 0; i < 32; i++)
         qemu_get_be16s(f, &s->bcr[i]);
     qemu_get_be64s(f, &s->timer);
-    qemu_get_be32s(f, &s->xmit_pos);
-    qemu_get_be32s(f, &s->recv_pos);
+    qemu_get_be32s(f, (uint32_t*)&s->xmit_pos);
+    qemu_get_be32s(f, (uint32_t*)&s->recv_pos);
     qemu_get_buffer(f, s->buffer, 4096);
-    qemu_get_be32s(f, &s->tx_busy);
+    qemu_get_be32s(f, (uint32_t*)&s->tx_busy);
     qemu_get_timer(f, s->poll_timer);
 
     return 0;
@@ -2008,6 +2011,7 @@ void pci_pcnet_init(PCIBus *bus, NICInfo *nd, int devfn)
 /* SPARC32 interface */
 
 #if defined (TARGET_SPARC) && !defined(TARGET_SPARC64) // Avoid compile failure
+#include "sun4m.h"
 
 static void parent_lance_reset(void *opaque, int irq, int level)
 {

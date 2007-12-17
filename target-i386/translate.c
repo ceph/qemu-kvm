@@ -4888,9 +4888,6 @@ static target_ulong disas_insn(DisasContext *s, target_ulong pc_start)
                 goto illegal_op;
             }
         }
-#ifdef USE_CODE_COPY
-        s->tb->cflags |= CF_TB_FP_USED;
-#endif
         break;
         /************************/
         /* string ops */
@@ -5661,6 +5658,10 @@ static target_ulong disas_insn(DisasContext *s, target_ulong pc_start)
         gen_jmp_im(pc_start - s->cs_base);
         gen_op_rdtsc();
         break;
+    case 0x133: /* rdpmc */
+        gen_jmp_im(pc_start - s->cs_base);
+        gen_op_rdpmc();
+        break;
     case 0x134: /* sysenter */
         if (CODE64(s))
             goto illegal_op;
@@ -6010,7 +6011,7 @@ static target_ulong disas_insn(DisasContext *s, target_ulong pc_start)
         if (s->cpl != 0) {
             gen_exception(s, EXCP0D_GPF, pc_start - s->cs_base);
         } else {
-            if (gen_svm_check_intercept(s, pc_start, SVM_EXIT_INVD))
+            if (gen_svm_check_intercept(s, pc_start, (b & 2) ? SVM_EXIT_INVD : SVM_EXIT_WBINVD))
                 break;
             /* nothing to do */
         }

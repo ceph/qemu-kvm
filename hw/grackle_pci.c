@@ -1,7 +1,8 @@
 /*
- * QEMU Grackle (heathrow PPC) PCI host
+ * QEMU Grackle PCI host (heathrow OldWorld PowerMac)
  *
- * Copyright (c) 2006 Fabrice Bellard
+ * Copyright (c) 2006-2007 Fabrice Bellard
+ * Copyright (c) 2007 Jocelyn Mayer
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +23,10 @@
  * THE SOFTWARE.
  */
 
-#include "vl.h"
+#include "hw.h"
+#include "ppc_mac.h"
+#include "pci.h"
+
 typedef target_phys_addr_t pci_addr_t;
 #include "pci_host.h"
 
@@ -82,7 +86,7 @@ static int pci_grackle_map_irq(PCIDevice *pci_dev, int irq_num)
 
 static void pci_grackle_set_irq(qemu_irq *pic, int irq_num, int level)
 {
-    qemu_set_irq(pic[irq_num + 8], level);
+    qemu_set_irq(pic[irq_num + 0x15], level);
 }
 
 PCIBus *pci_grackle_init(uint32_t base, qemu_irq *pic)
@@ -93,7 +97,7 @@ PCIBus *pci_grackle_init(uint32_t base, qemu_irq *pic)
 
     s = qemu_mallocz(sizeof(GrackleState));
     s->bus = pci_register_bus(pci_grackle_set_irq, pci_grackle_map_irq,
-                              pic, 0, 0);
+                              pic, 0, 4);
 
     pci_mem_config = cpu_register_io_memory(0, pci_grackle_config_read,
                                             pci_grackle_config_write, s);
@@ -112,22 +116,6 @@ PCIBus *pci_grackle_init(uint32_t base, qemu_irq *pic)
     d->config[0x0a] = 0x00; // class_sub = host
     d->config[0x0b] = 0x06; // class_base = PCI_bridge
     d->config[0x0e] = 0x00; // header_type
-
-    d->config[0x18] = 0x00;  // primary_bus
-    d->config[0x19] = 0x01;  // secondary_bus
-    d->config[0x1a] = 0x00;  // subordinate_bus
-    d->config[0x1c] = 0x00;
-    d->config[0x1d] = 0x00;
-
-    d->config[0x20] = 0x00; // memory_base
-    d->config[0x21] = 0x00;
-    d->config[0x22] = 0x01; // memory_limit
-    d->config[0x23] = 0x00;
-
-    d->config[0x24] = 0x00; // prefetchable_memory_base
-    d->config[0x25] = 0x00;
-    d->config[0x26] = 0x00; // prefetchable_memory_limit
-    d->config[0x27] = 0x00;
 
 #if 0
     /* PCI2PCI bridge same values as PearPC - check this */

@@ -75,6 +75,9 @@ const argtype *thunk_convert(void *dst, const void *src,
 
 extern StructEntry struct_entries[];
 
+int thunk_type_size_array(const argtype *type_ptr, int is_host);
+int thunk_type_align_array(const argtype *type_ptr, int is_host);
+
 static inline int thunk_type_size(const argtype *type_ptr, int is_host)
 {
     int type, size;
@@ -98,12 +101,12 @@ static inline int thunk_type_size(const argtype *type_ptr, int is_host)
         if (is_host) {
             return HOST_LONG_SIZE;
         } else {
-            return TARGET_LONG_SIZE;
+            return TARGET_ABI_BITS / 8;
         }
         break;
     case TYPE_ARRAY:
         size = type_ptr[1];
-        return size * thunk_type_size(type_ptr + 2, is_host);
+        return size * thunk_type_size_array(type_ptr + 2, is_host);
     case TYPE_STRUCT:
         se = struct_entries + type_ptr[1];
         return se->size[is_host];
@@ -135,11 +138,11 @@ static inline int thunk_type_align(const argtype *type_ptr, int is_host)
         if (is_host) {
             return HOST_LONG_SIZE;
         } else {
-            return TARGET_LONG_SIZE;
+            return TARGET_ABI_BITS / 8;
         }
         break;
     case TYPE_ARRAY:
-        return thunk_type_align(type_ptr + 2, is_host);
+        return thunk_type_align_array(type_ptr + 2, is_host);
     case TYPE_STRUCT:
         se = struct_entries + type_ptr[1];
         return se->align[is_host];

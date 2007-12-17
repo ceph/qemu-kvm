@@ -1,6 +1,6 @@
 -include ../config-host.mak
 
-CFLAGS=-Wall -O2 -g
+CFLAGS=-Wall -O2 -g -fno-strict-aliasing
 #CFLAGS+=-msse2
 LDFLAGS=
 
@@ -92,11 +92,9 @@ hello-mips: hello-mips.c
 hello-mipsel: hello-mips.c
 	mipsel-linux-gnu-gcc -nostdlib -static -mno-abicalls -fno-PIC -mabi=32 -Wall -Wextra -g -O2 -o $@ $<
 
-# XXX: find a way to compile easily a test for each arch
-test2:
-	@for arch in i386 arm armeb sparc ppc mips mipsel; do \
-           ../$${arch}-linux-user/qemu-$${arch} $${arch}/ls -l linux-test.c ; \
-        done
+# testsuite for the CRIS port.
+test-cris:
+	$(MAKE) -C cris check
 
 clean:
 	rm -f *~ *.o test-i386.out test-i386.ref \

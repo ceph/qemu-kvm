@@ -21,36 +21,6 @@
 /* allow to see translation results - the slowdown should be negligible, so we leave it */
 #define DEBUG_DISAS
 
-#ifndef glue
-#define xglue(x, y) x ## y
-#define glue(x, y) xglue(x, y)
-#define stringify(s)	tostring(s)
-#define tostring(s)	#s
-#endif
-
-#ifndef likely
-#if __GNUC__ < 3
-#define __builtin_expect(x, n) (x)
-#endif
-
-#define likely(x)   __builtin_expect(!!(x), 1)
-#define unlikely(x)   __builtin_expect(!!(x), 0)
-#endif
-
-#ifndef always_inline
-#if (__GNUC__ < 3) || defined(__APPLE__)
-#define always_inline inline
-#else
-#define always_inline __attribute__ (( always_inline )) inline
-#endif
-#endif
-
-#ifdef __i386__
-#define REGPARM(n) __attribute((regparm(n)))
-#else
-#define REGPARM(n)
-#endif
-
 /* is_jmp field values */
 #define DISAS_NEXT    0 /* next instruction can be analyzed */
 #define DISAS_JUMP    1 /* only pc was modified dynamically */
@@ -91,14 +61,12 @@ void optimize_flags_init(void);
 extern FILE *logfile;
 extern int loglevel;
 
-void muls64(int64_t *phigh, int64_t *plow, int64_t a, int64_t b);
-void mulu64(uint64_t *phigh, uint64_t *plow, uint64_t a, uint64_t b);
-
 int gen_intermediate_code(CPUState *env, struct TranslationBlock *tb);
 int gen_intermediate_code_pc(CPUState *env, struct TranslationBlock *tb);
 void dump_ops(const uint16_t *opc_buf, const uint32_t *opparam_buf);
+unsigned long code_gen_max_block_size(void);
 int cpu_gen_code(CPUState *env, struct TranslationBlock *tb,
-                 int max_code_size, int *gen_code_size_ptr);
+                 int *gen_code_size_ptr);
 int cpu_restore_state(struct TranslationBlock *tb,
                       CPUState *env, unsigned long searched_pc,
                       void *puc);
@@ -117,17 +85,16 @@ void tlb_flush_page(CPUState *env, target_ulong addr);
 void tlb_flush(CPUState *env, int flush_global);
 int tlb_set_page_exec(CPUState *env, target_ulong vaddr,
                       target_phys_addr_t paddr, int prot,
-                      int is_user, int is_softmmu);
+                      int mmu_idx, int is_softmmu);
 static inline int tlb_set_page(CPUState *env, target_ulong vaddr,
                                target_phys_addr_t paddr, int prot,
-                               int is_user, int is_softmmu)
+                               int mmu_idx, int is_softmmu)
 {
     if (prot & PAGE_READ)
         prot |= PAGE_EXEC;
-    return tlb_set_page_exec(env, vaddr, paddr, prot, is_user, is_softmmu);
+    return tlb_set_page_exec(env, vaddr, paddr, prot, mmu_idx, is_softmmu);
 }
 
-#define CODE_GEN_MAX_SIZE        65536
 #define CODE_GEN_ALIGN           16 /* must be >= of the size of a icache line */
 
 #define CODE_GEN_PHYS_HASH_BITS     15
@@ -353,24 +320,6 @@ do {\
 		  "1:\n");\
 } while (0)
 
-#elif defined(__s390__)
-/* GCC spills R13, so we have to restore it before branching away */
-
-#define GOTO_TB(opname, tbparam, n)\
-do {\
-    static void __attribute__((used)) *dummy ## n = &&dummy_label ## n;\
-    static void __attribute__((used)) *__op_label ## n \
-        __asm__(ASM_OP_LABEL_NAME(n, opname)) = &&label ## n;\
-	__asm__ __volatile__ ( \
-		"l %%r13,52(%%r15)\n" \
-		"br %0\n" \
-	: : "r" (((TranslationBlock*)tbparam)->tb_next[n]));\
-	\
-	for(;*((int*)0);); /* just to keep GCC busy */ \
-label ## n: ;\
-dummy_label ## n: ;\
-} while(0)
-
 #else
 
 /* jump to next block operations (more portable code, does not need
@@ -561,10 +510,10 @@ extern int tb_invalidated_flag;
 
 #if !defined(CONFIG_USER_ONLY)
 
-void tlb_fill(target_ulong addr, int is_write, int is_user,
+void tlb_fill(target_ulong addr, int is_write, int mmu_idx,
               void *retaddr);
 
-#define ACCESS_TYPE 3
+#define ACCESS_TYPE (NB_MMU_MODES + 1)
 #define MEMSUFFIX _code
 #define env cpu_single_env
 
@@ -597,43 +546,23 @@ static inline target_ulong get_phys_addr_code(CPUState *env, target_ulong addr)
    is the offset relative to phys_ram_base */
 static inline target_ulong get_phys_addr_code(CPUState *env, target_ulong addr)
 {
-    int is_user, index, pd;
+    int mmu_idx, index, pd;
 
     index = (addr >> TARGET_PAGE_BITS) & (CPU_TLB_SIZE - 1);
-#if defined(TARGET_I386)
-    is_user = ((env->hflags & HF_CPL_MASK) == 3);
-#elif defined (TARGET_PPC)
-    is_user = msr_pr;
-#elif defined (TARGET_MIPS)
-    is_user = ((env->hflags & MIPS_HFLAG_MODE) == MIPS_HFLAG_UM);
-#elif defined (TARGET_SPARC)
-    is_user = (env->psrs == 0);
-#elif defined (TARGET_ARM)
-    is_user = ((env->uncached_cpsr & CPSR_M) == ARM_CPU_MODE_USR);
-#elif defined (TARGET_SH4)
-    is_user = ((env->sr & SR_MD) == 0);
-#elif defined (TARGET_ALPHA)
-    is_user = ((env->ps >> 3) & 3);
-#elif defined (TARGET_M68K)
-    is_user = ((env->sr & SR_S) == 0);
-#elif defined (TARGET_IA64)
-    is_user = 0;
-#else
-#error unimplemented CPU
-#endif
-    if (__builtin_expect(env->tlb_table[is_user][index].addr_code !=
+    mmu_idx = cpu_mmu_index(env);
+    if (__builtin_expect(env->tlb_table[mmu_idx][index].addr_code !=
                          (addr & TARGET_PAGE_MASK), 0)) {
         ldub_code(addr);
     }
-    pd = env->tlb_table[is_user][index].addr_code & ~TARGET_PAGE_MASK;
+    pd = env->tlb_table[mmu_idx][index].addr_code & ~TARGET_PAGE_MASK;
     if (pd > IO_MEM_ROM && !(pd & IO_MEM_ROMD)) {
-#ifdef TARGET_SPARC
+#if defined(TARGET_SPARC) || defined(TARGET_MIPS)
         do_unassigned_access(addr, 0, 1, 0);
 #else
         cpu_abort(env, "Trying to execute code outside RAM or ROM at 0x" TARGET_FMT_lx "\n", addr);
 #endif
     }
-    return addr + env->tlb_table[is_user][index].addend - (unsigned long)phys_ram_base;
+    return addr + env->tlb_table[mmu_idx][index].addend - (unsigned long)phys_ram_base;
 }
 #endif
 

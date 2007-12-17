@@ -21,7 +21,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#include "vl.h"
+#include "qemu-common.h"
+#include "console.h"
+#include "qemu-timer.h"
 
 //#define DEBUG_CONSOLE
 #define DEFAULT_BACKSCROLL 512
@@ -59,7 +61,7 @@ typedef struct QEMUFIFO {
     int count, wptr, rptr;
 } QEMUFIFO;
 
-int qemu_fifo_write(QEMUFIFO *f, const uint8_t *buf, int len1)
+static int qemu_fifo_write(QEMUFIFO *f, const uint8_t *buf, int len1)
 {
     int l, len;
 
@@ -82,7 +84,7 @@ int qemu_fifo_write(QEMUFIFO *f, const uint8_t *buf, int len1)
     return len1;
 }
 
-int qemu_fifo_read(QEMUFIFO *f, uint8_t *buf, int len1)
+static int qemu_fifo_read(QEMUFIFO *f, uint8_t *buf, int len1)
 {
     int l, len;
 
@@ -509,7 +511,7 @@ static void text_console_resize(TextConsole *s)
             c++;
         }
     }
-    free(s->cells);
+    qemu_free(s->cells);
     s->cells = cells;
 }
 
@@ -1167,11 +1169,21 @@ int is_graphic_console(void)
     return active_console->console_type == GRAPHIC_CONSOLE;
 }
 
+void console_color_init(DisplayState *ds)
+{
+    int i, j;
+    for (j = 0; j < 2; j++) {
+        for (i = 0; i < 8; i++) {
+            color_table[j][i] = col_expand(ds, 
+                   vga_get_color(ds, color_table_rgb[j][i]));
+        }
+    }
+}
+
 CharDriverState *text_console_init(DisplayState *ds, const char *p)
 {
     CharDriverState *chr;
     TextConsole *s;
-    int i,j;
     unsigned width;
     unsigned height;
     static int color_inited;
@@ -1195,12 +1207,7 @@ CharDriverState *text_console_init(DisplayState *ds, const char *p)
 
     if (!color_inited) {
         color_inited = 1;
-        for(j = 0; j < 2; j++) {
-            for(i = 0; i < 8; i++) {
-                color_table[j][i] = col_expand(s->ds,
-                        vga_get_color(s->ds, color_table_rgb[j][i]));
-            }
-        }
+        console_color_init(s->ds);
     }
     s->y_displayed = 0;
     s->y_base = 0;

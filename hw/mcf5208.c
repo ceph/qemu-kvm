@@ -5,7 +5,12 @@
  *
  * This code is licenced under the GPL
  */
-#include "vl.h"
+#include "hw.h"
+#include "mcf.h"
+#include "qemu-timer.h"
+#include "sysemu.h"
+#include "net.h"
+#include "boards.h"
 
 #define SYS_FREQ 66000000
 
@@ -197,8 +202,8 @@ static void mcf5208_sys_init(qemu_irq *pic)
     }
 }
 
-static void mcf5208evb_init(int ram_size, int vga_ram_size, int boot_device,
-                     DisplayState *ds, const char **fd_filename, int snapshot,
+static void mcf5208evb_init(int ram_size, int vga_ram_size,
+                     const char *boot_device, DisplayState *ds,
                      const char *kernel_filename, const char *kernel_cmdline,
                      const char *initrd_filename, const char *cpu_model)
 {
@@ -208,11 +213,12 @@ static void mcf5208evb_init(int ram_size, int vga_ram_size, int boot_device,
     target_ulong entry;
     qemu_irq *pic;
 
-    env = cpu_init();
     if (!cpu_model)
         cpu_model = "m5208";
-    if (cpu_m68k_set_model(env, cpu_model)) {
-        cpu_abort(env, "Unable to find m68k CPU definition\n");
+    env = cpu_init(cpu_model);
+    if (!env) {
+        fprintf(stderr, "Unable to find m68k CPU definition\n");
+        exit(1);
     }
 
     /* Initialize CPU registers.  */

@@ -6,7 +6,10 @@
  * This code is licenced under the GPL
  */
 
-#include "vl.h"
+#include "hw.h"
+#include "mcf.h"
+#include "sysemu.h"
+#include "boards.h"
 
 #define KERNEL_LOAD_ADDR 0x10000
 #define AN5206_MBAR_ADDR 0x10000000
@@ -27,8 +30,8 @@ void DMA_run (void)
 
 /* Board init.  */
 
-static void an5206_init(int ram_size, int vga_ram_size, int boot_device,
-                     DisplayState *ds, const char **fd_filename, int snapshot,
+static void an5206_init(int ram_size, int vga_ram_size,
+                     const char *boot_device, DisplayState *ds,
                      const char *kernel_filename, const char *kernel_cmdline,
                      const char *initrd_filename, const char *cpu_model)
 {
@@ -37,10 +40,10 @@ static void an5206_init(int ram_size, int vga_ram_size, int boot_device,
     uint64_t elf_entry;
     target_ulong entry;
 
-    env = cpu_init();
     if (!cpu_model)
         cpu_model = "m5206";
-    if (cpu_m68k_set_model(env, cpu_model)) {
+    env = cpu_init(cpu_model);
+    if (!env) {
         cpu_abort(env, "Unable to find m68k CPU definition\n");
     }
 

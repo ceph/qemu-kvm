@@ -9,7 +9,9 @@
 
 /* TODO: Implement PEC.  */
 
-#include "vl.h"
+#include "hw.h"
+#include "i2c.h"
+#include "smbus.h"
 
 //#define DEBUG_SMBUS 1
 
@@ -59,7 +61,7 @@ static void smbus_do_write(SMBusDevice *dev)
     }
 }
 
-void smbus_i2c_event(i2c_slave *s, enum i2c_event event)
+static void smbus_i2c_event(i2c_slave *s, enum i2c_event event)
 {
     SMBusDevice *dev = (SMBusDevice *)s;
     switch (event) {
@@ -194,7 +196,7 @@ SMBusDevice *smbus_device_init(i2c_bus *bus, int address, int size)
     SMBusDevice *dev;
 
     if (size < sizeof(SMBusDevice))
-        cpu_abort(cpu_single_env, "SMBus struct too small");
+        hw_error("SMBus struct too small");
 
     dev = (SMBusDevice *)i2c_slave_init(bus, address, size);
     dev->i2c.event = smbus_i2c_event;

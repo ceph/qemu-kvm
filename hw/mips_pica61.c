@@ -22,7 +22,13 @@
  * THE SOFTWARE.
  */
 
-#include "vl.h"
+#include "hw.h"
+#include "mips.h"
+#include "isa.h"
+#include "pc.h"
+#include "fdc.h"
+#include "sysemu.h"
+#include "boards.h"
 
 #ifdef TARGET_WORDS_BIGENDIAN
 #define BIOS_FILENAME "mips_bios.bin"
@@ -38,6 +44,9 @@
 
 #define VIRT_TO_PHYS_ADDEND (-((int64_t)(int32_t)0x80000000))
 
+#define MAX_IDE_BUS 2
+#define MAX_FD 2
+
 static const int ide_iobase[2] = { 0x1f0, 0x170 };
 static const int ide_iobase2[2] = { 0x3f6, 0x376 };
 static const int ide_irq[2] = { 14, 15 };
@@ -51,12 +60,11 @@ static void main_cpu_reset(void *opaque)
 {
     CPUState *env = opaque;
     cpu_reset(env);
-    cpu_mips_register(env, NULL);
 }
 
 static
-void mips_pica61_init (int ram_size, int vga_ram_size, int boot_device,
-                    DisplayState *ds, const char **fd_filename, int snapshot,
+void mips_pica61_init (int ram_size, int vga_ram_size,
+                       const char *boot_device, DisplayState *ds,
                     const char *kernel_filename, const char *kernel_cmdline,
                     const char *initrd_filename, const char *cpu_model)
 {
@@ -65,9 +73,10 @@ void mips_pica61_init (int ram_size, int vga_ram_size, int boot_device,
     int bios_size;
     CPUState *env;
     int i;
-    mips_def_t *def;
     int available_ram;
     qemu_irq *i8259;
+    int index;
+    BlockDriverState *fd[MAX_FD];
 
     /* init CPUs */
     if (cpu_model == NULL) {
@@ -78,10 +87,11 @@ void mips_pica61_init (int ram_size, int vga_ram_size, int boot_device,
         cpu_model = "24Kf";
 #endif
     }
-    if (mips_find_by_name(cpu_model, &def) != 0)
-        def = NULL;
-    env = cpu_init();
-    cpu_mips_register(env, def);
+    env = cpu_init(cpu_model);
+    if (!env) {
+        fprintf(stderr, "Unable to find CPU definition\n");
+        exit(1);
+    }
     register_savevm("cpu", 0, 3, cpu_save, cpu_load, env);
     qemu_register_reset(main_cpu_reset, env);
 
@@ -94,7 +104,9 @@ void mips_pica61_init (int ram_size, int vga_ram_size, int boot_device,
 
     /* load a BIOS image */
     bios_offset = ram_size + vga_ram_size;
-    snprintf(buf, sizeof(buf), "%s/%s", bios_dir, BIOS_FILENAME);
+    if (bios_name == NULL)
+        bios_name = BIOS_FILENAME;
+    snprintf(buf, sizeof(buf), "%s/%s", bios_dir, bios_name);
     bios_size = load_image(buf, phys_ram_base + bios_offset);
     if ((bios_size <= 0) || (bios_size > BIOS_SIZE)) {
         /* fatal */
@@ -134,9 +146,20 @@ void mips_pica61_init (int ram_size, int vga_ram_size, int boot_device,
     i8042_mm_init(i8259[6], i8259[7], 0x80005060, 0);
 
     /* IDE controller */
-    for(i = 0; i < 2; i++)
+
+    if (drive_get_max_bus(IF_IDE) >= MAX_IDE_BUS) {
+        fprintf(stderr, "qemu: too many IDE bus\n");
+        exit(1);
+    }
+
+    for(i = 0; i < MAX_IDE_BUS; i++) {
+        int hd0, hd1;
+        hd0 = drive_get_index(IF_IDE, i, 0);
+        hd1 = drive_get_index(IF_IDE, i, 1);
         isa_ide_init(ide_iobase[i], ide_iobase2[i], i8259[ide_irq[i]],
-                     bs_table[2 * i], bs_table[2 * i + 1]);
+                     hd0 == -1 ? NULL : drives_table[hd0].bdrv,
+                     hd1 == -1 ? NULL : drives_table[hd1].bdrv);
+    }
 
     /* Network controller */
     /* FIXME: missing NS SONIC DP83932 */
@@ -145,7 +168,15 @@ void mips_pica61_init (int ram_size, int vga_ram_size, int boot_device,
     /* FIXME: missing NCR 53C94 */
 
     /* ISA devices (floppy, serial, parallel) */
-    fdctrl_init(i8259[1], 1, 1, 0x80003000, fd_table);
+
+    for (i = 0; i < MAX_FD; i++) {
+        index = drive_get_index(IF_FLOPPY, 0, i);
+        if (index == -1)
+            fd[i] = NULL;
+        else
+            fd[i] = drives_table[index].bdrv;
+    }
+    fdctrl_init(i8259[1], 1, 1, 0x80003000, fd);
     for(i = 0; i < MAX_SERIAL_PORTS; i++) {
         if (serial_hds[i]) {
             serial_mm_init(serial_base[i], 0, i8259[serial_irq[i]], serial_hds[i], 1);

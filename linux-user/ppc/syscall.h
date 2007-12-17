@@ -26,29 +26,37 @@
 #define __USER_DS	(1)
 
 struct target_pt_regs {
-	unsigned long gpr[32];
-	unsigned long nip;
-	unsigned long msr;
-	unsigned long orig_gpr3;	/* Used for restarting system calls */
-	unsigned long ctr;
-	unsigned long link;
-	unsigned long xer;
-	unsigned long ccr;
-	unsigned long mq;		/* 601 only (not used at present) */
+	abi_ulong gpr[32];
+	abi_ulong nip;
+	abi_ulong msr;
+	abi_ulong orig_gpr3;	/* Used for restarting system calls */
+	abi_ulong ctr;
+	abi_ulong link;
+	abi_ulong xer;
+	abi_ulong ccr;
+#if defined(TARGET_PPC64) && !defined(TARGET_ABI32)
+        abi_ulong softe;
+#else
+	abi_ulong mq;		/* 601 only (not used at present) */
+#endif
 					/* Used on APUS to hold IPL value. */
-	unsigned long trap;		/* Reason for being here */
-	unsigned long dar;		/* Fault registers */
-	unsigned long dsisr;
-	unsigned long result; 		/* Result of a system call */
+	abi_ulong trap;		/* Reason for being here */
+	abi_ulong dar;		/* Fault registers */
+	abi_ulong dsisr;
+	abi_ulong result; 		/* Result of a system call */
 };
 
 /* ioctls */
 struct target_revectored_struct {
-	target_ulong __map[8];			/* 256 bits */
+	abi_ulong __map[8];			/* 256 bits */
 };
 
 /*
  * flags masks
  */
 
+#if defined(TARGET_PPC64) && !defined(TARGET_ABI32)
+#define UNAME_MACHINE "ppc64"
+#else
 #define UNAME_MACHINE "ppc"
+#endif

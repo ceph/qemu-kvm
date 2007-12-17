@@ -7,7 +7,13 @@
  * This code is licenced under the GPL.
  */
 
-# include "vl.h"
+#include "hw.h"
+#include "pxa.h"
+#include "sysemu.h"
+#include "pc.h"
+#include "i2c.h"
+#include "qemu-timer.h"
+#include "qemu-char.h"
 
 static struct {
     target_phys_addr_t io_base;
@@ -25,22 +31,34 @@ static struct {
     { 0, 0 }
 };
 
-static struct {
+typedef struct PXASSPDef {
     target_phys_addr_t io_base;
     int irqn;
-} pxa250_ssp[] = {
+} PXASSPDef;
+
+#if 0
+static PXASSPDef pxa250_ssp[] = {
     { 0x41000000, PXA2XX_PIC_SSP },
     { 0, 0 }
-}, pxa255_ssp[] = {
+};
+#endif
+
+static PXASSPDef pxa255_ssp[] = {
     { 0x41000000, PXA2XX_PIC_SSP },
     { 0x41400000, PXA25X_PIC_NSSP },
     { 0, 0 }
-}, pxa26x_ssp[] = {
+};
+
+#if 0
+static PXASSPDef pxa26x_ssp[] = {
     { 0x41000000, PXA2XX_PIC_SSP },
     { 0x41400000, PXA25X_PIC_NSSP },
     { 0x41500000, PXA26X_PIC_ASSP },
     { 0, 0 }
-}, pxa27x_ssp[] = {
+};
+#endif
+
+static PXASSPDef pxa27x_ssp[] = {
     { 0x41000000, PXA2XX_PIC_SSP },
     { 0x41700000, PXA27X_PIC_SSP2 },
     { 0x41900000, PXA2XX_PIC_SSP3 },
@@ -297,7 +315,7 @@ static void pxa2xx_clkpwr_write(void *opaque, int op2, int reg, int crm,
                     ARM_CPU_MODE_SVC | CPSR_A | CPSR_F | CPSR_I;
             s->env->cp15.c1_sys = 0;
             s->env->cp15.c1_coproc = 0;
-            s->env->cp15.c2_base = 0;
+            s->env->cp15.c2_base0 = 0;
             s->env->cp15.c3 = 0;
             s->pm_regs[PSSR >> 2] |= 0x8;	/* Set STS */
             s->pm_regs[RCSR >> 2] |= 0x8;	/* Set GPR */
@@ -2001,9 +2019,10 @@ static struct pxa2xx_fir_s *pxa2xx_fir_init(target_phys_addr_t base,
     return s;
 }
 
-void pxa2xx_reset(int line, int level, void *opaque)
+static void pxa2xx_reset(void *opaque, int line, int level)
 {
     struct pxa2xx_state_s *s = (struct pxa2xx_state_s *) opaque;
+
     if (level && (s->pm_regs[PCFR >> 2] & 0x10)) {	/* GPR_EN */
         cpu_reset(s->env);
         /* TODO: reset peripherals */
@@ -2017,16 +2036,25 @@ struct pxa2xx_state_s *pxa270_init(unsigned int sdram_size,
     struct pxa2xx_state_s *s;
     struct pxa2xx_ssp_s *ssp;
     int iomemtype, i;
+    int index;
     s = (struct pxa2xx_state_s *) qemu_mallocz(sizeof(struct pxa2xx_state_s));
 
     if (revision && strncmp(revision, "pxa27", 5)) {
         fprintf(stderr, "Machine requires a PXA27x processor.\n");
         exit(1);
     }
+    if (!revision)
+        revision = "pxa270";
+    
+    s->env = cpu_init(revision);
+    if (!s->env) {
+        fprintf(stderr, "Unable to find CPU definition\n");
+        exit(1);
+    }
+    register_savevm("cpu", 0, ARM_CPU_SAVE_VERSION, cpu_save, cpu_load,
+                    s->env);
 
-    s->env = cpu_init();
-    cpu_arm_set_model(s->env, revision ?: "pxa270");
-    register_savevm("cpu", 0, 0, cpu_save, cpu_load, s->env);
+    s->reset = qemu_allocate_irqs(pxa2xx_reset, s, 1)[0];
 
     /* SDRAM & Internal Memory Storage */
     cpu_register_physical_memory(PXA2XX_SDRAM_BASE,
@@ -2043,7 +2071,13 @@ struct pxa2xx_state_s *pxa270_init(unsigned int sdram_size,
 
     s->gpio = pxa2xx_gpio_init(0x40e00000, s->env, s->pic, 121);
 
-    s->mmc = pxa2xx_mmci_init(0x41100000, s->pic[PXA2XX_PIC_MMC], s->dma);
+    index = drive_get_index(IF_SD, 0, 0);
+    if (index == -1) {
+        fprintf(stderr, "qemu: missing SecureDigital device\n");
+        exit(1);
+    }
+    s->mmc = pxa2xx_mmci_init(0x41100000, drives_table[index].bdrv,
+                              s->pic[PXA2XX_PIC_MMC], s->dma);
 
     for (i = 0; pxa270_serial[i].io_base; i ++)
         if (serial_hds[i])
@@ -2119,9 +2153,11 @@ struct pxa2xx_state_s *pxa270_init(unsigned int sdram_size,
 
     s->i2s = pxa2xx_i2s_init(0x40400000, s->pic[PXA2XX_PIC_I2S], s->dma);
 
+    s->kp = pxa27x_keypad_init(0x41500000, s->pic[PXA2XX_PIC_KEYPAD]);
+
     /* GPIO1 resets the processor */
     /* The handler can be overridden by board-specific code */
-    pxa2xx_gpio_handler_set(s->gpio, 1, pxa2xx_reset, s);
+    pxa2xx_gpio_out_set(s->gpio, 1, s->reset);
     return s;
 }
 
@@ -2132,11 +2168,19 @@ struct pxa2xx_state_s *pxa255_init(unsigned int sdram_size,
     struct pxa2xx_state_s *s;
     struct pxa2xx_ssp_s *ssp;
     int iomemtype, i;
+    int index;
+
     s = (struct pxa2xx_state_s *) qemu_mallocz(sizeof(struct pxa2xx_state_s));
 
-    s->env = cpu_init();
-    cpu_arm_set_model(s->env, "pxa255");
-    register_savevm("cpu", 0, 0, cpu_save, cpu_load, s->env);
+    s->env = cpu_init("pxa255");
+    if (!s->env) {
+        fprintf(stderr, "Unable to find CPU definition\n");
+        exit(1);
+    }
+    register_savevm("cpu", 0, ARM_CPU_SAVE_VERSION, cpu_save, cpu_load,
+                    s->env);
+
+    s->reset = qemu_allocate_irqs(pxa2xx_reset, s, 1)[0];
 
     /* SDRAM & Internal Memory Storage */
     cpu_register_physical_memory(PXA2XX_SDRAM_BASE, sdram_size,
@@ -2152,7 +2196,13 @@ struct pxa2xx_state_s *pxa255_init(unsigned int sdram_size,
 
     s->gpio = pxa2xx_gpio_init(0x40e00000, s->env, s->pic, 85);
 
-    s->mmc = pxa2xx_mmci_init(0x41100000, s->pic[PXA2XX_PIC_MMC], s->dma);
+    index = drive_get_index(IF_SD, 0, 0);
+    if (index == -1) {
+        fprintf(stderr, "qemu: missing SecureDigital device\n");
+        exit(1);
+    }
+    s->mmc = pxa2xx_mmci_init(0x41100000, drives_table[index].bdrv,
+                              s->pic[PXA2XX_PIC_MMC], s->dma);
 
     for (i = 0; pxa255_serial[i].io_base; i ++)
         if (serial_hds[i])
@@ -2230,6 +2280,6 @@ struct pxa2xx_state_s *pxa255_init(unsigned int sdram_size,
 
     /* GPIO1 resets the processor */
     /* The handler can be overridden by board-specific code */
-    pxa2xx_gpio_handler_set(s->gpio, 1, pxa2xx_reset, s);
+    pxa2xx_gpio_out_set(s->gpio, 1, s->reset);
     return s;
 }

@@ -8,7 +8,7 @@ extern int kvm_irqchip;
 #ifdef USE_KVM
 
 #include <string.h>
-#include "vl.h"
+#include "hw/hw.h"
 
 #include "qemu-kvm.h"
 #include <libkvm.h>

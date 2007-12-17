@@ -1,9 +1,25 @@
 #include "exec.h"
+#include "host-utils.h"
 
 //#define DEBUG_PCALL
 //#define DEBUG_MMU
+//#define DEBUG_MXCC
 //#define DEBUG_UNALIGNED
 //#define DEBUG_UNASSIGNED
+
+#ifdef DEBUG_MMU
+#define DPRINTF_MMU(fmt, args...) \
+do { printf("MMU: " fmt , ##args); } while (0)
+#else
+#define DPRINTF_MMU(fmt, args...)
+#endif
+
+#ifdef DEBUG_MXCC
+#define DPRINTF_MXCC(fmt, args...) \
+do { printf("MXCC: " fmt , ##args); } while (0)
+#else
+#define DPRINTF_MXCC(fmt, args...)
+#endif
 
 void raise_exception(int tt)
 {
@@ -54,6 +70,38 @@ void do_fitod(void)
 {
     DT0 = int32_to_float64(*((int32_t *)&FT1), &env->fp_status);
 }
+
+#if defined(CONFIG_USER_ONLY)
+void do_fitoq(void)
+{
+    QT0 = int32_to_float128(*((int32_t *)&FT1), &env->fp_status);
+}
+#endif
+
+#ifdef TARGET_SPARC64
+void do_fxtos(void)
+{
+    set_float_exception_flags(0, &env->fp_status);
+    FT0 = int64_to_float32(*((int64_t *)&DT1), &env->fp_status);
+    check_ieee_exceptions();
+}
+
+void do_fxtod(void)
+{
+    set_float_exception_flags(0, &env->fp_status);
+    DT0 = int64_to_float64(*((int64_t *)&DT1), &env->fp_status);
+    check_ieee_exceptions();
+}
+
+#if defined(CONFIG_USER_ONLY)
+void do_fxtoq(void)
+{
+    set_float_exception_flags(0, &env->fp_status);
+    QT0 = int64_to_float128(*((int32_t *)&DT1), &env->fp_status);
+    check_ieee_exceptions();
+}
+#endif
+#endif
 #endif
 
 void do_fabss(void)
@@ -66,6 +114,13 @@ void do_fabsd(void)
 {
     DT0 = float64_abs(DT1);
 }
+
+#if defined(CONFIG_USER_ONLY)
+void do_fabsq(void)
+{
+    QT0 = float128_abs(QT1);
+}
+#endif
 #endif
 
 void do_fsqrts(void)
@@ -81,6 +136,15 @@ void do_fsqrtd(void)
     DT0 = float64_sqrt(DT1, &env->fp_status);
     check_ieee_exceptions();
 }
+
+#if defined(CONFIG_USER_ONLY)
+void do_fsqrtq(void)
+{
+    set_float_exception_flags(0, &env->fp_status);
+    QT0 = float128_sqrt(QT1, &env->fp_status);
+    check_ieee_exceptions();
+}
+#endif
 
 #define GEN_FCMP(name, size, reg1, reg2, FS, TRAP)                      \
     void glue(do_, name) (void)                                         \
@@ -117,6 +181,11 @@ GEN_FCMP(fcmpd, float64, DT0, DT1, 0, 0);
 GEN_FCMP(fcmpes, float32, FT0, FT1, 0, 1);
 GEN_FCMP(fcmped, float64, DT0, DT1, 0, 1);
 
+#ifdef CONFIG_USER_ONLY
+GEN_FCMP(fcmpq, float128, QT0, QT1, 0, 0);
+GEN_FCMP(fcmpeq, float128, QT0, QT1, 0, 1);
+#endif
+
 #ifdef TARGET_SPARC64
 GEN_FCMP(fcmps_fcc1, float32, FT0, FT1, 22, 0);
 GEN_FCMP(fcmpd_fcc1, float64, DT0, DT1, 22, 0);
@@ -135,16 +204,79 @@ GEN_FCMP(fcmped_fcc2, float64, DT0, DT1, 24, 1);
 
 GEN_FCMP(fcmpes_fcc3, float32, FT0, FT1, 26, 1);
 GEN_FCMP(fcmped_fcc3, float64, DT0, DT1, 26, 1);
+#ifdef CONFIG_USER_ONLY
+GEN_FCMP(fcmpq_fcc1, float128, QT0, QT1, 22, 0);
+GEN_FCMP(fcmpq_fcc2, float128, QT0, QT1, 24, 0);
+GEN_FCMP(fcmpq_fcc3, float128, QT0, QT1, 26, 0);
+GEN_FCMP(fcmpeq_fcc1, float128, QT0, QT1, 22, 1);
+GEN_FCMP(fcmpeq_fcc2, float128, QT0, QT1, 24, 1);
+GEN_FCMP(fcmpeq_fcc3, float128, QT0, QT1, 26, 1);
+#endif
 #endif
 
 #ifndef TARGET_SPARC64
 #ifndef CONFIG_USER_ONLY
+
+#ifdef DEBUG_MXCC
+static void dump_mxcc(CPUState *env)
+{
+    printf("mxccdata: %016llx %016llx %016llx %016llx\n",
+        env->mxccdata[0], env->mxccdata[1], env->mxccdata[2], env->mxccdata[3]);
+    printf("mxccregs: %016llx %016llx %016llx %016llx\n"
+           "          %016llx %016llx %016llx %016llx\n",
+        env->mxccregs[0], env->mxccregs[1], env->mxccregs[2], env->mxccregs[3],
+        env->mxccregs[4], env->mxccregs[5], env->mxccregs[6], env->mxccregs[7]);
+}
+#endif
+
 void helper_ld_asi(int asi, int size, int sign)
 {
     uint32_t ret = 0;
+    uint64_t tmp;
+#ifdef DEBUG_MXCC
+    uint32_t last_T0 = T0;
+#endif
 
     switch (asi) {
     case 2: /* SuperSparc MXCC registers */
+        switch (T0) {
+        case 0x01c00a00: /* MXCC control register */
+            if (size == 8) {
+                ret = env->mxccregs[3] >> 32;
+                T0 = env->mxccregs[3];
+            } else
+                DPRINTF_MXCC("%08x: unimplemented access size: %d\n", T0, size);
+            break;
+        case 0x01c00a04: /* MXCC control register */
+            if (size == 4)
+                ret = env->mxccregs[3];
+            else
+                DPRINTF_MXCC("%08x: unimplemented access size: %d\n", T0, size);
+            break;
+        case 0x01c00c00: /* Module reset register */
+            if (size == 8) {
+                ret = env->mxccregs[5] >> 32;
+                T0 = env->mxccregs[5];
+                // should we do something here?
+            } else
+                DPRINTF_MXCC("%08x: unimplemented access size: %d\n", T0, size);
+            break;
+        case 0x01c00f00: /* MBus port address register */
+            if (size == 8) {
+                ret = env->mxccregs[7] >> 32;
+                T0 = env->mxccregs[7];
+            } else
+                DPRINTF_MXCC("%08x: unimplemented access size: %d\n", T0, size);
+            break;
+        default:
+            DPRINTF_MXCC("%08x: unimplemented address, size: %d\n", T0, size);
+            break;
+        }
+        DPRINTF_MXCC("asi = %d, size = %d, sign = %d, T0 = %08x -> ret = %08x,"
+                     "T0 = %08x\n", asi, size, sign, last_T0, ret, T0);
+#ifdef DEBUG_MXCC
+        dump_mxcc(env);
+#endif
         break;
     case 3: /* MMU probe */
         {
@@ -157,21 +289,21 @@ void helper_ld_asi(int asi, int size, int sign)
                 ret = mmu_probe(env, T0, mmulev);
                 //bswap32s(&ret);
             }
-#ifdef DEBUG_MMU
-            printf("mmu_probe: 0x%08x (lev %d) -> 0x%08x\n", T0, mmulev, ret);
-#endif
+            DPRINTF_MMU("mmu_probe: 0x%08x (lev %d) -> 0x%08x\n", T0, mmulev, ret);
         }
         break;
     case 4: /* read MMU regs */
         {
-            int reg = (T0 >> 8) & 0xf;
+            int reg = (T0 >> 8) & 0x1f;
 
             ret = env->mmuregs[reg];
             if (reg == 3) /* Fault status cleared on read */
-                env->mmuregs[reg] = 0;
-#ifdef DEBUG_MMU
-            printf("mmu_read: reg[%d] = 0x%08x\n", reg, ret);
-#endif
+                env->mmuregs[3] = 0;
+            else if (reg == 0x13) /* Fault status read */
+                ret = env->mmuregs[3];
+            else if (reg == 0x14) /* Fault address read */
+                ret = env->mmuregs[4];
+            DPRINTF_MMU("mmu_read: reg[%d] = 0x%08x\n", reg, ret);
         }
         break;
     case 9: /* Supervisor code access */
@@ -187,8 +319,9 @@ void helper_ld_asi(int asi, int size, int sign)
             ret = ldl_code(T0 & ~3);
             break;
         case 8:
-            ret = ldl_code(T0 & ~3);
-            T0 = ldl_code((T0 + 4) & ~3);
+            tmp = ldq_code(T0 & ~7);
+            ret = tmp >> 32;
+            T0 = tmp;
             break;
         }
         break;
@@ -205,8 +338,9 @@ void helper_ld_asi(int asi, int size, int sign)
             ret = ldl_user(T0 & ~3);
             break;
         case 8:
-            ret = ldl_user(T0 & ~3);
-            T0 = ldl_user((T0 + 4) & ~3);
+            tmp = ldq_user(T0 & ~7);
+            ret = tmp >> 32;
+            T0 = tmp;
             break;
         }
         break;
@@ -223,8 +357,9 @@ void helper_ld_asi(int asi, int size, int sign)
             ret = ldl_kernel(T0 & ~3);
             break;
         case 8:
-            ret = ldl_kernel(T0 & ~3);
-            T0 = ldl_kernel((T0 + 4) & ~3);
+            tmp = ldq_kernel(T0 & ~7);
+            ret = tmp >> 32;
+            T0 = tmp;
             break;
         }
         break;
@@ -246,8 +381,9 @@ void helper_ld_asi(int asi, int size, int sign)
             ret = ldl_phys(T0 & ~3);
             break;
         case 8:
-            ret = ldl_phys(T0 & ~3);
-            T0 = ldl_phys((T0 + 4) & ~3);
+            tmp = ldq_phys(T0 & ~7);
+            ret = tmp >> 32;
+            T0 = tmp;
             break;
         }
         break;
@@ -268,12 +404,15 @@ void helper_ld_asi(int asi, int size, int sign)
                            | ((target_phys_addr_t)(asi & 0xf) << 32));
             break;
         case 8:
-            ret = ldl_phys((target_phys_addr_t)(T0 & ~3)
+            tmp = ldq_phys((target_phys_addr_t)(T0 & ~7)
                            | ((target_phys_addr_t)(asi & 0xf) << 32));
-            T0 = ldl_phys((target_phys_addr_t)((T0 + 4) & ~3)
-                           | ((target_phys_addr_t)(asi & 0xf) << 32));
+            ret = tmp >> 32;
+            T0 = tmp;
             break;
         }
+        break;
+    case 0x39: /* data cache diagnostic register */
+        ret = 0;
         break;
     case 0x21 ... 0x2d: /* MMU passthrough, unassigned */
     default:
@@ -302,15 +441,91 @@ void helper_st_asi(int asi, int size)
 {
     switch(asi) {
     case 2: /* SuperSparc MXCC registers */
+        switch (T0) {
+        case 0x01c00000: /* MXCC stream data register 0 */
+            if (size == 8)
+                env->mxccdata[0] = ((uint64_t)T1 << 32) | T2;
+            else
+                DPRINTF_MXCC("%08x: unimplemented access size: %d\n", T0, size);
+            break;
+        case 0x01c00008: /* MXCC stream data register 1 */
+            if (size == 8)
+                env->mxccdata[1] = ((uint64_t)T1 << 32) | T2;
+            else
+                DPRINTF_MXCC("%08x: unimplemented access size: %d\n", T0, size);
+            break;
+        case 0x01c00010: /* MXCC stream data register 2 */
+            if (size == 8)
+                env->mxccdata[2] = ((uint64_t)T1 << 32) | T2;
+            else
+                DPRINTF_MXCC("%08x: unimplemented access size: %d\n", T0, size);
+            break;
+        case 0x01c00018: /* MXCC stream data register 3 */
+            if (size == 8)
+                env->mxccdata[3] = ((uint64_t)T1 << 32) | T2;
+            else
+                DPRINTF_MXCC("%08x: unimplemented access size: %d\n", T0, size);
+            break;
+        case 0x01c00100: /* MXCC stream source */
+            if (size == 8)
+                env->mxccregs[0] = ((uint64_t)T1 << 32) | T2;
+            else
+                DPRINTF_MXCC("%08x: unimplemented access size: %d\n", T0, size);
+            env->mxccdata[0] = ldq_phys((env->mxccregs[0] & 0xffffffffULL) +  0);
+            env->mxccdata[1] = ldq_phys((env->mxccregs[0] & 0xffffffffULL) +  8);
+            env->mxccdata[2] = ldq_phys((env->mxccregs[0] & 0xffffffffULL) + 16);
+            env->mxccdata[3] = ldq_phys((env->mxccregs[0] & 0xffffffffULL) + 24);
+            break;
+        case 0x01c00200: /* MXCC stream destination */
+            if (size == 8)
+                env->mxccregs[1] = ((uint64_t)T1 << 32) | T2;
+            else
+                DPRINTF_MXCC("%08x: unimplemented access size: %d\n", T0, size);
+            stq_phys((env->mxccregs[1] & 0xffffffffULL) +  0, env->mxccdata[0]);
+            stq_phys((env->mxccregs[1] & 0xffffffffULL) +  8, env->mxccdata[1]);
+            stq_phys((env->mxccregs[1] & 0xffffffffULL) + 16, env->mxccdata[2]);
+            stq_phys((env->mxccregs[1] & 0xffffffffULL) + 24, env->mxccdata[3]);
+            break;
+        case 0x01c00a00: /* MXCC control register */
+            if (size == 8)
+                env->mxccregs[3] = ((uint64_t)T1 << 32) | T2;
+            else
+                DPRINTF_MXCC("%08x: unimplemented access size: %d\n", T0, size);
+            break;
+        case 0x01c00a04: /* MXCC control register */
+            if (size == 4)
+                env->mxccregs[3] = (env->mxccregs[0xa] & 0xffffffff00000000ULL) | T1;
+            else
+                DPRINTF_MXCC("%08x: unimplemented access size: %d\n", T0, size);
+            break;
+        case 0x01c00e00: /* MXCC error register  */
+            // writing a 1 bit clears the error
+            if (size == 8)
+                env->mxccregs[6] &= ~(((uint64_t)T1 << 32) | T2);
+            else
+                DPRINTF_MXCC("%08x: unimplemented access size: %d\n", T0, size);
+            break;
+        case 0x01c00f00: /* MBus port address register */
+            if (size == 8)
+                env->mxccregs[7] = ((uint64_t)T1 << 32) | T2;
+            else
+                DPRINTF_MXCC("%08x: unimplemented access size: %d\n", T0, size);
+            break;
+        default:
+            DPRINTF_MXCC("%08x: unimplemented address, size: %d\n", T0, size);
+            break;
+        }
+        DPRINTF_MXCC("asi = %d, size = %d, T0 = %08x, T1 = %08x\n", asi, size, T0, T1);
+#ifdef DEBUG_MXCC
+        dump_mxcc(env);
+#endif
         break;
     case 3: /* MMU flush */
         {
             int mmulev;
 
             mmulev = (T0 >> 8) & 15;
-#ifdef DEBUG_MMU
-            printf("mmu flush level %d\n", mmulev);
-#endif
+            DPRINTF_MMU("mmu flush level %d\n", mmulev);
             switch (mmulev) {
             case 0: // flush page
                 tlb_flush_page(env, T0 & 0xfffff000);
@@ -331,17 +546,18 @@ void helper_st_asi(int asi, int size)
         }
     case 4: /* write MMU regs */
         {
-            int reg = (T0 >> 8) & 0xf;
+            int reg = (T0 >> 8) & 0x1f;
             uint32_t oldreg;
 
             oldreg = env->mmuregs[reg];
             switch(reg) {
             case 0:
-                env->mmuregs[reg] &= ~(MMU_E | MMU_NF | MMU_BM);
-                env->mmuregs[reg] |= T1 & (MMU_E | MMU_NF | MMU_BM);
+                env->mmuregs[reg] = (env->mmuregs[reg] & 0xff000000) |
+                                    (T1 & 0x00ffffff);
                 // Mappings generated during no-fault mode or MMU
                 // disabled mode are invalid in normal mode
-                if (oldreg != env->mmuregs[reg])
+                if ((oldreg & (MMU_E | MMU_NF | env->mmu_bm)) !=
+                    (env->mmuregs[reg] & (MMU_E | MMU_NF | env->mmu_bm)))
                     tlb_flush(env, 1);
                 break;
             case 2:
@@ -355,14 +571,20 @@ void helper_st_asi(int asi, int size)
             case 3:
             case 4:
                 break;
+            case 0x13:
+                env->mmuregs[3] = T1;
+                break;
+            case 0x14:
+                env->mmuregs[4] = T1;
+                break;
             default:
                 env->mmuregs[reg] = T1;
                 break;
             }
-#ifdef DEBUG_MMU
             if (oldreg != env->mmuregs[reg]) {
-                printf("mmu change reg[%d]: 0x%08x -> 0x%08x\n", reg, oldreg, env->mmuregs[reg]);
+                DPRINTF_MMU("mmu change reg[%d]: 0x%08x -> 0x%08x\n", reg, oldreg, env->mmuregs[reg]);
             }
+#ifdef DEBUG_MMU
             dump_mmu(env);
 #endif
             return;
@@ -380,8 +602,7 @@ void helper_st_asi(int asi, int size)
             stl_user(T0 & ~3, T1);
             break;
         case 8:
-            stl_user(T0 & ~3, T1);
-            stl_user((T0 + 4) & ~3, T2);
+            stq_user(T0 & ~7, ((uint64_t)T1 << 32) | T2);
             break;
         }
         break;
@@ -398,8 +619,7 @@ void helper_st_asi(int asi, int size)
             stl_kernel(T0 & ~3, T1);
             break;
         case 8:
-            stl_kernel(T0 & ~3, T1);
-            stl_kernel((T0 + 4) & ~3, T2);
+            stq_kernel(T0 & ~7, ((uint64_t)T1 << 32) | T2);
             break;
         }
         break;
@@ -456,8 +676,7 @@ void helper_st_asi(int asi, int size)
                 stl_phys(T0 & ~3, T1);
                 break;
             case 8:
-                stl_phys(T0 & ~3, T1);
-                stl_phys((T0 + 4) & ~3, T2);
+                stq_phys(T0 & ~7, ((uint64_t)T1 << 32) | T2);
                 break;
             }
         }
@@ -480,17 +699,20 @@ void helper_st_asi(int asi, int size)
                            | ((target_phys_addr_t)(asi & 0xf) << 32), T1);
                 break;
             case 8:
-                stl_phys((target_phys_addr_t)(T0 & ~3)
-                           | ((target_phys_addr_t)(asi & 0xf) << 32), T1);
-                stl_phys((target_phys_addr_t)((T0 + 4) & ~3)
-                           | ((target_phys_addr_t)(asi & 0xf) << 32), T1);
+                stq_phys((target_phys_addr_t)(T0 & ~7)
+                           | ((target_phys_addr_t)(asi & 0xf) << 32),
+                         ((uint64_t)T1 << 32) | T2);
                 break;
             }
         }
         return;
-    case 0x31: /* Ross RT620 I-cache flush */
+    case 0x30: /* store buffer tags */
+    case 0x31: /* store buffer data or Ross RT620 I-cache flush */
+    case 0x32: /* store buffer control */
     case 0x36: /* I-cache flash clear */
     case 0x37: /* D-cache flash clear */
+    case 0x38: /* breakpoint diagnostics */
+    case 0x4c: /* breakpoint action */
         break;
     case 9: /* Supervisor code access, XXX */
     case 0x21 ... 0x2d: /* MMU passthrough, unassigned */
@@ -654,7 +876,8 @@ void helper_ld_asi(int asi, int size, int sign)
 {
     uint64_t ret = 0;
 
-    if (asi < 0x80 && (env->pstate & PS_PRIV) == 0)
+    if ((asi < 0x80 && (env->pstate & PS_PRIV) == 0)
+        || (asi >= 0x30 && asi < 0x80 && !(env->hpstate & HS_PRIV)))
         raise_exception(TT_PRIV_ACT);
 
     switch (asi) {
@@ -665,20 +888,38 @@ void helper_ld_asi(int asi, int size, int sign)
     case 0x88: // Primary LE
     case 0x8a: // Primary no-fault LE
         if ((asi & 0x80) && (env->pstate & PS_PRIV)) {
-            switch(size) {
-            case 1:
-                ret = ldub_kernel(T0);
-                break;
-            case 2:
-                ret = lduw_kernel(T0 & ~1);
-                break;
-            case 4:
-                ret = ldl_kernel(T0 & ~3);
-                break;
-            default:
-            case 8:
-                ret = ldq_kernel(T0 & ~7);
-                break;
+            if (env->hpstate & HS_PRIV) {
+                switch(size) {
+                case 1:
+                    ret = ldub_hypv(T0);
+                    break;
+                case 2:
+                    ret = lduw_hypv(T0 & ~1);
+                    break;
+                case 4:
+                    ret = ldl_hypv(T0 & ~3);
+                    break;
+                default:
+                case 8:
+                    ret = ldq_hypv(T0 & ~7);
+                    break;
+                }
+            } else {
+                switch(size) {
+                case 1:
+                    ret = ldub_kernel(T0);
+                    break;
+                case 2:
+                    ret = lduw_kernel(T0 & ~1);
+                    break;
+                case 4:
+                    ret = ldl_kernel(T0 & ~3);
+                    break;
+                default:
+                case 8:
+                    ret = ldq_kernel(T0 & ~7);
+                    break;
+                }
             }
         } else {
             switch(size) {
@@ -852,7 +1093,8 @@ void helper_ld_asi(int asi, int size, int sign)
 
 void helper_st_asi(int asi, int size)
 {
-    if (asi < 0x80 && (env->pstate & PS_PRIV) == 0)
+    if ((asi < 0x80 && (env->pstate & PS_PRIV) == 0)
+        || (asi >= 0x30 && asi < 0x80 && !(env->hpstate & HS_PRIV)))
         raise_exception(TT_PRIV_ACT);
 
     /* Convert to little endian */
@@ -862,7 +1104,6 @@ void helper_st_asi(int asi, int size)
     case 0x19: // As if user secondary LE
     case 0x1c: // Bypass LE
     case 0x1d: // Bypass, non-cacheable LE
-    case 0x81: // Secondary
     case 0x88: // Primary LE
     case 0x89: // Secondary LE
         switch(size) {
@@ -888,20 +1129,38 @@ void helper_st_asi(int asi, int size)
     case 0x80: // Primary
     case 0x88: // Primary LE
         if ((asi & 0x80) && (env->pstate & PS_PRIV)) {
-            switch(size) {
-            case 1:
-                stb_kernel(T0, T1);
-                break;
-            case 2:
-                stw_kernel(T0 & ~1, T1);
-                break;
-            case 4:
-                stl_kernel(T0 & ~3, T1);
-                break;
-            case 8:
-            default:
-                stq_kernel(T0 & ~7, T1);
-                break;
+            if (env->hpstate & HS_PRIV) {
+                switch(size) {
+                case 1:
+                    stb_hypv(T0, T1);
+                    break;
+                case 2:
+                    stw_hypv(T0 & ~1, T1);
+                    break;
+                case 4:
+                    stl_hypv(T0 & ~3, T1);
+                    break;
+                case 8:
+                default:
+                    stq_hypv(T0 & ~7, T1);
+                    break;
+                }
+            } else {
+                switch(size) {
+                case 1:
+                    stb_kernel(T0, T1);
+                    break;
+                case 2:
+                    stw_kernel(T0 & ~1, T1);
+                    break;
+                case 4:
+                    stl_kernel(T0 & ~3, T1);
+                    break;
+                case 8:
+                default:
+                    stq_kernel(T0 & ~7, T1);
+                    break;
+                }
             }
         } else {
             switch(size) {
@@ -950,6 +1209,7 @@ void helper_st_asi(int asi, int size)
     case 0x24: // Nucleus quad LDD 128 bit atomic
     case 0x2c: // Nucleus quad LDD 128 bit atomic
     case 0x4a: // UPA config
+    case 0x81: // Secondary
     case 0x89: // Secondary LE
         // XXX
         return;
@@ -962,8 +1222,8 @@ void helper_st_asi(int asi, int size)
             // Mappings generated during D/I MMU disabled mode are
             // invalid in normal mode
             if (oldreg != env->lsu) {
+                DPRINTF_MMU("LSU change: 0x%" PRIx64 " -> 0x%" PRIx64 "\n", oldreg, env->lsu);
 #ifdef DEBUG_MMU
-                printf("LSU change: 0x%" PRIx64 " -> 0x%" PRIx64 "\n", oldreg, env->lsu);
                 dump_mmu(env);
 #endif
                 tlb_flush(env, 1);
@@ -995,10 +1255,10 @@ void helper_st_asi(int asi, int size)
                 break;
             }
             env->immuregs[reg] = T1;
-#ifdef DEBUG_MMU
             if (oldreg != env->immuregs[reg]) {
-                printf("mmu change reg[%d]: 0x%08" PRIx64 " -> 0x%08" PRIx64 "\n", reg, oldreg, env->immuregs[reg]);
+                DPRINTF_MMU("mmu change reg[%d]: 0x%08" PRIx64 " -> 0x%08" PRIx64 "\n", reg, oldreg, env->immuregs[reg]);
             }
+#ifdef DEBUG_MMU
             dump_mmu(env);
 #endif
             return;
@@ -1064,10 +1324,10 @@ void helper_st_asi(int asi, int size)
                 break;
             }
             env->dmmuregs[reg] = T1;
-#ifdef DEBUG_MMU
             if (oldreg != env->dmmuregs[reg]) {
-                printf("mmu change reg[%d]: 0x%08" PRIx64 " -> 0x%08" PRIx64 "\n", reg, oldreg, env->dmmuregs[reg]);
+                DPRINTF_MMU("mmu change reg[%d]: 0x%08" PRIx64 " -> 0x%08" PRIx64 "\n", reg, oldreg, env->dmmuregs[reg]);
             }
+#ifdef DEBUG_MMU
             dump_mmu(env);
 #endif
             return;
@@ -1137,10 +1397,18 @@ void helper_ldf_asi(int asi, int size, int rd)
     case 0xf1: // Block load secondary
     case 0xf8: // Block load primary LE
     case 0xf9: // Block load secondary LE
-        for (i = 0; i < 8; i++) {
-            helper_ld_asi(asi & 0x8f, 8, 0);
-            *((int64_t *)&DT0) = T1;
-            T0 += 8;
+        if (rd & 7) {
+            raise_exception(TT_ILL_INSN);
+            return;
+        }
+        if (T0 & 0x3f) {
+            raise_exception(TT_UNALIGNED);
+            return;
+        }
+        for (i = 0; i < 16; i++) {
+            helper_ld_asi(asi & 0x8f, 4, 0);
+            *(uint32_t *)&env->fpr[rd++] = T1;
+            T0 += 4;
         }
         T0 = tmp_T0;
         T1 = tmp_T1;
@@ -1159,6 +1427,11 @@ void helper_ldf_asi(int asi, int size, int rd)
     case 8:
         *((int64_t *)&DT0) = T1;
         break;
+#if defined(CONFIG_USER_ONLY)
+    case 16:
+        // XXX
+        break;
+#endif
     }
     T1 = tmp_T1;
 }
@@ -1173,10 +1446,18 @@ void helper_stf_asi(int asi, int size, int rd)
     case 0xf1: // Block store secondary
     case 0xf8: // Block store primary LE
     case 0xf9: // Block store secondary LE
-        for (i = 0; i < 8; i++) {
-            T1 = *((int64_t *)&DT0);
-            helper_st_asi(asi & 0x8f, 8);
-            T0 += 8;
+        if (rd & 7) {
+            raise_exception(TT_ILL_INSN);
+            return;
+        }
+        if (T0 & 0x3f) {
+            raise_exception(TT_UNALIGNED);
+            return;
+        }
+        for (i = 0; i < 16; i++) {
+            T1 = *(uint32_t *)&env->fpr[rd++];
+            helper_st_asi(asi & 0x8f, 4);
+            T0 += 4;
         }
         T0 = tmp_T0;
         T1 = tmp_T1;
@@ -1194,6 +1475,11 @@ void helper_stf_asi(int asi, int size, int rd)
     case 8:
         T1 = *((int64_t *)&DT0);
         break;
+#if defined(CONFIG_USER_ONLY)
+    case 16:
+        // XXX
+        break;
+#endif
     }
     helper_st_asi(asi, size);
     T1 = tmp_T1;
@@ -1264,12 +1550,7 @@ void do_rdpsr()
 
 void do_popc()
 {
-    T0 = (T1 & 0x5555555555555555ULL) + ((T1 >> 1) & 0x5555555555555555ULL);
-    T0 = (T0 & 0x3333333333333333ULL) + ((T0 >> 2) & 0x3333333333333333ULL);
-    T0 = (T0 & 0x0f0f0f0f0f0f0f0fULL) + ((T0 >> 4) & 0x0f0f0f0f0f0f0f0fULL);
-    T0 = (T0 & 0x00ff00ff00ff00ffULL) + ((T0 >> 8) & 0x00ff00ff00ff00ffULL);
-    T0 = (T0 & 0x0000ffff0000ffffULL) + ((T0 >> 16) & 0x0000ffff0000ffffULL);
-    T0 = (T0 & 0x00000000ffffffffULL) + ((T0 >> 32) & 0x00000000ffffffffULL);
+    T0 = ctpop64(T1);
 }
 
 static inline uint64_t *get_gregset(uint64_t pstate)
@@ -1479,7 +1760,11 @@ static void do_unaligned_access(target_ulong addr, int is_write, int is_user,
 
 #define MMUSUFFIX _mmu
 #define ALIGNED_ONLY
-#define GETPC() (__builtin_return_address(0))
+#ifdef __s390__
+# define GETPC() ((void*)((unsigned long)__builtin_return_address(0) & 0x7fffffffUL))
+#else
+# define GETPC() (__builtin_return_address(0))
+#endif
 
 #define SHIFT 0
 #include "softmmu_template.h"
@@ -1506,7 +1791,7 @@ static void do_unaligned_access(target_ulong addr, int is_write, int is_user,
    NULL, it means that the function was called in C code (i.e. not
    from generated code or from helper.c) */
 /* XXX: fix it to restore all registers */
-void tlb_fill(target_ulong addr, int is_write, int is_user, void *retaddr)
+void tlb_fill(target_ulong addr, int is_write, int mmu_idx, void *retaddr)
 {
     TranslationBlock *tb;
     int ret;
@@ -1518,7 +1803,7 @@ void tlb_fill(target_ulong addr, int is_write, int is_user, void *retaddr)
     saved_env = env;
     env = cpu_single_env;
 
-    ret = cpu_sparc_handle_mmu_fault(env, addr, is_write, is_user, 1);
+    ret = cpu_sparc_handle_mmu_fault(env, addr, is_write, mmu_idx, 1);
     if (ret) {
         if (retaddr) {
             /* now we have a real cpu fault */
@@ -1593,27 +1878,3 @@ void do_unassigned_access(target_phys_addr_t addr, int is_write, int is_exec,
 }
 #endif
 
-#ifdef TARGET_SPARC64
-void do_tick_set_count(void *opaque, uint64_t count)
-{
-#if !defined(CONFIG_USER_ONLY)
-    ptimer_set_count(opaque, -count);
-#endif
-}
-
-uint64_t do_tick_get_count(void *opaque)
-{
-#if !defined(CONFIG_USER_ONLY)
-    return -ptimer_get_count(opaque);
-#else
-    return 0;
-#endif
-}
-
-void do_tick_set_limit(void *opaque, uint64_t limit)
-{
-#if !defined(CONFIG_USER_ONLY)
-    ptimer_set_limit(opaque, -limit, 0);
-#endif
-}
-#endif

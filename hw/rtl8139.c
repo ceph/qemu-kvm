@@ -43,7 +43,10 @@
  *                                  Added rx/tx buffer reset when enabling rx/tx operation
  */
 
-#include "vl.h"
+#include "hw.h"
+#include "pci.h"
+#include "qemu-timer.h"
+#include "net.h"
 
 /* debug RTL8139 card */
 //#define DEBUG_RTL8139 1
@@ -494,7 +497,7 @@ typedef struct RTL8139State {
 
 } RTL8139State;
 
-void prom9346_decode_command(EEprom9346 *eeprom, uint8_t command)
+static void prom9346_decode_command(EEprom9346 *eeprom, uint8_t command)
 {
     DEBUG_PRINT(("RTL8139: eeprom command 0x%02x\n", command));
 
@@ -540,7 +543,7 @@ void prom9346_decode_command(EEprom9346 *eeprom, uint8_t command)
     }
 }
 
-void prom9346_shift_clock(EEprom9346 *eeprom)
+static void prom9346_shift_clock(EEprom9346 *eeprom)
 {
     int bit = eeprom->eedi?1:0;
 
@@ -632,7 +635,7 @@ void prom9346_shift_clock(EEprom9346 *eeprom)
     }
 }
 
-int prom9346_get_wire(RTL8139State *s)
+static int prom9346_get_wire(RTL8139State *s)
 {
     EEprom9346 *eeprom = &s->eeprom;
     if (!eeprom->eecs)
@@ -641,7 +644,8 @@ int prom9346_get_wire(RTL8139State *s)
     return eeprom->eedo;
 }
 
-void prom9346_set_wire(RTL8139State *s, int eecs, int eesk, int eedi)
+/* FIXME: This should be merged into/replaced by eeprom93xx.c.  */
+static void prom9346_set_wire(RTL8139State *s, int eecs, int eesk, int eedi)
 {
     EEprom9346 *eeprom = &s->eeprom;
     uint8_t old_eecs = eeprom->eecs;
@@ -1445,7 +1449,7 @@ static uint32_t rtl8139_IntrMitigate_read(RTL8139State *s)
     return ret;
 }
 
-int rtl8139_config_writeable(RTL8139State *s)
+static int rtl8139_config_writeable(RTL8139State *s)
 {
     if (s->Cfg9346 & Cfg9346_Unlock)
     {
@@ -1464,7 +1468,7 @@ static void rtl8139_BasicModeCtrl_write(RTL8139State *s, uint32_t val)
     DEBUG_PRINT(("RTL8139: BasicModeCtrl register write(w) val=0x%04x\n", val));
 
     /* mask unwriteable bits */
-    uint32 mask = 0x4cff;
+    uint32_t mask = 0x4cff;
 
     if (1 || !rtl8139_config_writeable(s))
     {
@@ -3115,7 +3119,7 @@ static uint32_t rtl8139_mmio_readl(void *opaque, target_phys_addr_t addr)
 static void rtl8139_save(QEMUFile* f,void* opaque)
 {
     RTL8139State* s=(RTL8139State*)opaque;
-    int i;
+    unsigned int i;
 
     pci_device_save(s->pci_dev, f);
 
@@ -3168,7 +3172,7 @@ static void rtl8139_save(QEMUFile* f,void* opaque)
     i = 0;
     qemu_put_be32s(f, &i); /* unused.  */
     qemu_put_buffer(f, s->macaddr, 6);
-    qemu_put_be32s(f, &s->rtl8139_mmio_io_addr);
+    qemu_put_be32(f, s->rtl8139_mmio_io_addr);
 
     qemu_put_be32s(f, &s->currTxDesc);
     qemu_put_be32s(f, &s->currCPlusRxDesc);
@@ -3180,7 +3184,7 @@ static void rtl8139_save(QEMUFile* f,void* opaque)
     {
         qemu_put_be16s(f, &s->eeprom.contents[i]);
     }
-    qemu_put_be32s(f, &s->eeprom.mode);
+    qemu_put_be32(f, s->eeprom.mode);
     qemu_put_be32s(f, &s->eeprom.tick);
     qemu_put_8s(f, &s->eeprom.address);
     qemu_put_be16s(f, &s->eeprom.input);
@@ -3193,7 +3197,7 @@ static void rtl8139_save(QEMUFile* f,void* opaque)
 
     qemu_put_be32s(f, &s->TCTR);
     qemu_put_be32s(f, &s->TimerInt);
-    qemu_put_be64s(f, &s->TCTR_base);
+    qemu_put_be64(f, s->TCTR_base);
 
     RTL8139TallyCounters_save(f, &s->tally_counters);
 }
@@ -3201,7 +3205,8 @@ static void rtl8139_save(QEMUFile* f,void* opaque)
 static int rtl8139_load(QEMUFile* f,void* opaque,int version_id)
 {
     RTL8139State* s=(RTL8139State*)opaque;
-    int i, ret;
+    unsigned int i;
+    int ret;
 
     /* just 2 versions for now */
     if (version_id > 3)
@@ -3262,7 +3267,7 @@ static int rtl8139_load(QEMUFile* f,void* opaque,int version_id)
 
     qemu_get_be32s(f, &i); /* unused.  */
     qemu_get_buffer(f, s->macaddr, 6);
-    qemu_get_be32s(f, &s->rtl8139_mmio_io_addr);
+    s->rtl8139_mmio_io_addr=qemu_get_be32(f);
 
     qemu_get_be32s(f, &s->currTxDesc);
     qemu_get_be32s(f, &s->currCPlusRxDesc);
@@ -3274,7 +3279,7 @@ static int rtl8139_load(QEMUFile* f,void* opaque,int version_id)
     {
         qemu_get_be16s(f, &s->eeprom.contents[i]);
     }
-    qemu_get_be32s(f, &s->eeprom.mode);
+    s->eeprom.mode=qemu_get_be32(f);
     qemu_get_be32s(f, &s->eeprom.tick);
     qemu_get_8s(f, &s->eeprom.address);
     qemu_get_be16s(f, &s->eeprom.input);
@@ -3290,7 +3295,7 @@ static int rtl8139_load(QEMUFile* f,void* opaque,int version_id)
     {
         qemu_get_be32s(f, &s->TCTR);
         qemu_get_be32s(f, &s->TimerInt);
-        qemu_get_be64s(f, &s->TCTR_base);
+        s->TCTR_base=qemu_get_be64(f);
 
         RTL8139TallyCounters_load(f, &s->tally_counters);
     }

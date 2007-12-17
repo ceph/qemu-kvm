@@ -7,7 +7,9 @@
  * This code is licenced under the GPL.
  */
 
-#include "vl.h"
+#include "hw.h"
+#include "primecell.h"
+#include "ps2.h"
 
 typedef struct {
     void *dev;
@@ -79,7 +81,7 @@ static uint32_t pl050_read(void *opaque, target_phys_addr_t offset)
     case 4: /* KMIIR */
         return s->pending | 2;
     default:
-        cpu_abort (cpu_single_env, "pl050_read: Bad offset %x\n", offset);
+        cpu_abort (cpu_single_env, "pl050_read: Bad offset %x\n", (int)offset);
         return 0;
     }
 }
@@ -108,7 +110,7 @@ static void pl050_write(void *opaque, target_phys_addr_t offset,
         s->clk = value;
         return;
     default:
-        cpu_abort (cpu_single_env, "pl050_write: Bad offset %x\n", offset);
+        cpu_abort (cpu_single_env, "pl050_write: Bad offset %x\n", (int)offset);
     }
 }
 static CPUReadMemoryFunc *pl050_readfn[] = {

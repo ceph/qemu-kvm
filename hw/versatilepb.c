@@ -7,8 +7,14 @@
  * This code is licenced under the GPL.
  */
 
-#include "vl.h"
-#include "arm_pic.h"
+#include "hw.h"
+#include "arm-misc.h"
+#include "primecell.h"
+#include "devices.h"
+#include "net.h"
+#include "sysemu.h"
+#include "pci.h"
+#include "boards.h"
 
 /* Primary interrupt controller.  */
 
@@ -151,8 +157,8 @@ static qemu_irq *vpb_sic_init(uint32_t base, qemu_irq *parent, int irq)
    peripherans and expansion busses.  For now we emulate a subset of the
    PB peripherals and just change the board ID.  */
 
-static void versatile_init(int ram_size, int vga_ram_size, int boot_device,
-                     DisplayState *ds, const char **fd_filename, int snapshot,
+static void versatile_init(int ram_size, int vga_ram_size,
+                     const char *boot_device, DisplayState *ds,
                      const char *kernel_filename, const char *kernel_cmdline,
                      const char *initrd_filename, const char *cpu_model,
                      int board_id)
@@ -165,11 +171,15 @@ static void versatile_init(int ram_size, int vga_ram_size, int boot_device,
     NICInfo *nd;
     int n;
     int done_smc = 0;
+    int index;
 
-    env = cpu_init();
     if (!cpu_model)
         cpu_model = "arm926";
-    cpu_arm_set_model(env, cpu_model);
+    env = cpu_init(cpu_model);
+    if (!env) {
+        fprintf(stderr, "Unable to find CPU definition\n");
+        exit(1);
+    }
     /* ??? RAM shoud repeat to fill physical memory space.  */
     /* SDRAM at address zero.  */
     cpu_register_physical_memory(0, ram_size, IO_MEM_RAM);
@@ -197,17 +207,22 @@ static void versatile_init(int ram_size, int vga_ram_size, int boot_device,
     if (usb_enabled) {
         usb_ohci_init_pci(pci_bus, 3, -1);
     }
+    if (drive_get_max_bus(IF_SCSI) > 0) {
+        fprintf(stderr, "qemu: too many SCSI bus\n");
+        exit(1);
+    }
     scsi_hba = lsi_scsi_init(pci_bus, -1);
-    for (n = 0; n < MAX_DISKS; n++) {
-        if (bs_table[n]) {
-            lsi_scsi_attach(scsi_hba, bs_table[n], n);
-        }
+    for (n = 0; n < LSI_MAX_DEVS; n++) {
+        index = drive_get_index(IF_SCSI, 0, n);
+        if (index == -1)
+            continue;
+        lsi_scsi_attach(scsi_hba, drives_table[index].bdrv, n);
     }
 
-    pl011_init(0x101f1000, pic[12], serial_hds[0]);
-    pl011_init(0x101f2000, pic[13], serial_hds[1]);
-    pl011_init(0x101f3000, pic[14], serial_hds[2]);
-    pl011_init(0x10009000, sic[6], serial_hds[3]);
+    pl011_init(0x101f1000, pic[12], serial_hds[0], PL011_ARM);
+    pl011_init(0x101f2000, pic[13], serial_hds[1], PL011_ARM);
+    pl011_init(0x101f3000, pic[14], serial_hds[2], PL011_ARM);
+    pl011_init(0x10009000, sic[6], serial_hds[3], PL011_ARM);
 
     pl080_init(0x10130000, pic[17], 8);
     sp804_init(0x101e2000, pic[4]);
@@ -217,7 +232,13 @@ static void versatile_init(int ram_size, int vga_ram_size, int boot_device,
        that includes hardware cursor support from the PL111.  */
     pl110_init(ds, 0x10120000, pic[16], 1);
 
-    pl181_init(0x10005000, sd_bdrv, sic[22], sic[1]);
+    index = drive_get_index(IF_SD, 0, 0);
+    if (index == -1) {
+        fprintf(stderr, "qemu: missing SecureDigital card\n");
+        exit(1);
+    }
+
+    pl181_init(0x10005000, drives_table[index].bdrv, sic[22], sic[1]);
 #if 0
     /* Disabled because there's no way of specifying a block device.  */
     pl181_init(0x1000b000, NULL, sic, 23, 2);
@@ -266,24 +287,24 @@ static void versatile_init(int ram_size, int vga_ram_size, int boot_device,
                     initrd_filename, board_id, 0x0);
 }
 
-static void vpb_init(int ram_size, int vga_ram_size, int boot_device,
-                     DisplayState *ds, const char **fd_filename, int snapshot,
+static void vpb_init(int ram_size, int vga_ram_size,
+                     const char *boot_device, DisplayState *ds,
                      const char *kernel_filename, const char *kernel_cmdline,
                      const char *initrd_filename, const char *cpu_model)
 {
-    versatile_init(ram_size, vga_ram_size, boot_device,
-                   ds, fd_filename, snapshot,
+    versatile_init(ram_size, vga_ram_size,
+                   boot_device, ds,
                    kernel_filename, kernel_cmdline,
                    initrd_filename, cpu_model, 0x183);
 }
 
-static void vab_init(int ram_size, int vga_ram_size, int boot_device,
-                     DisplayState *ds, const char **fd_filename, int snapshot,
+static void vab_init(int ram_size, int vga_ram_size,
+                     const char *boot_device, DisplayState *ds,
                      const char *kernel_filename, const char *kernel_cmdline,
                      const char *initrd_filename, const char *cpu_model)
 {
-    versatile_init(ram_size, vga_ram_size, boot_device,
-                   ds, fd_filename, snapshot,
+    versatile_init(ram_size, vga_ram_size,
+                   boot_device, ds,
                    kernel_filename, kernel_cmdline,
                    initrd_filename, cpu_model, 0x25e);
 }

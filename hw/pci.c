@@ -21,7 +21,10 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#include "vl.h"
+#include "hw.h"
+#include "pci.h"
+#include "console.h"
+#include "net.h"
 
 //#define DEBUG_PCI
 
@@ -55,9 +58,9 @@ static void pcibus_save(QEMUFile *f, void *opaque)
     PCIBus *bus = (PCIBus *)opaque;
     int i;
 
-    qemu_put_be32s(f, &bus->nirq);
-    for (i=0; i<bus->nirq; i++)
-        qemu_put_be32s(f, &bus->irq_count[i]);
+    qemu_put_be32(f, bus->nirq);
+    for (i = 0; i < bus->nirq; i++)
+        qemu_put_be32(f, bus->irq_count[i]);
 }
 
 static int  pcibus_load(QEMUFile *f, void *opaque, int version_id)
@@ -68,15 +71,15 @@ static int  pcibus_load(QEMUFile *f, void *opaque, int version_id)
     if (version_id != 1)
         return -EINVAL;
 
-    qemu_get_be32s(f, &nirq);
+    nirq = qemu_get_be32(f);
     if (bus->nirq != nirq) {
         fprintf(stderr, "pcibus_load: nirq mismatch: src=%d dst=%d\n",
                 nirq, bus->nirq);
         return -EINVAL;
     }
 
-    for (i=0; i<nirq; i++)
-        qemu_get_be32s(f, &bus->irq_count[i]);
+    for (i = 0; i < nirq; i++)
+        bus->irq_count[i] = qemu_get_be32(f);
 
     return 0;
 }
@@ -98,7 +101,7 @@ PCIBus *pci_register_bus(pci_set_irq_fn set_irq, pci_map_irq_fn map_irq,
     return bus;
 }
 
-PCIBus *pci_register_secondary_bus(PCIDevice *dev, pci_map_irq_fn map_irq)
+static PCIBus *pci_register_secondary_bus(PCIDevice *dev, pci_map_irq_fn map_irq)
 {
     PCIBus *bus;
     bus = qemu_mallocz(sizeof(PCIBus));
@@ -120,8 +123,8 @@ void pci_device_save(PCIDevice *s, QEMUFile *f)
 
     qemu_put_be32(f, 2); /* PCI device version */
     qemu_put_buffer(f, s->config, 256);
-    for (i=0; i<4; i++)
-        qemu_put_be32s(f, &s->irq_state[i]);
+    for (i = 0; i < 4; i++)
+        qemu_put_be32(f, s->irq_state[i]);
 }
 
 int pci_device_load(PCIDevice *s, QEMUFile *f)
@@ -136,8 +139,8 @@ int pci_device_load(PCIDevice *s, QEMUFile *f)
     pci_update_mappings(s);
 
     if (version_id >= 2)
-        for (i=0; i<4; i++)
-            qemu_get_be32s(f, &s->irq_state[i]);
+        for (i = 0; i < 4; i ++)
+            s->irq_state[i] = qemu_get_be32(f);
 
     return 0;
 }
@@ -203,7 +206,7 @@ void pci_register_io_region(PCIDevice *pci_dev, int region_num,
     *(uint32_t *)(pci_dev->config + addr) = cpu_to_le32(type);
 }
 
-target_phys_addr_t pci_to_cpu_addr(target_phys_addr_t addr)
+static target_phys_addr_t pci_to_cpu_addr(target_phys_addr_t addr)
 {
     return addr + pci_mem_base;
 }
@@ -650,7 +653,7 @@ typedef struct {
     PCIBus *bus;
 } PCIBridge;
 
-void pci_bridge_write_config(PCIDevice *d,
+static void pci_bridge_write_config(PCIDevice *d,
                              uint32_t address, uint32_t val, int len)
 {
     PCIBridge *s = (PCIBridge *)d;

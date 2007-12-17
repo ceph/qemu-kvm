@@ -21,7 +21,10 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#include "vl.h"
+#include "hw.h"
+#include "pc.h"
+#include "isa.h"
+#include "qemu-timer.h"
 
 //#define DEBUG_PIT
 
@@ -360,6 +363,8 @@ static uint32_t pit_ioport_read(void *opaque, uint32_t addr)
 /* global counters for time-drift fix */
 int64_t timer_acks=0, timer_interrupts=0, timer_ints_to_push=0;
 
+extern int time_drift_fix;
+
 static void pit_irq_timer_update(PITChannelState *s, int64_t current_time)
 {
     int64_t expire_time;
@@ -415,7 +420,7 @@ static void pit_save(QEMUFile *f, void *opaque)
 
     for(i = 0; i < 3; i++) {
         s = &pit->channels[i];
-        qemu_put_be32s(f, &s->count);
+        qemu_put_be32(f, s->count);
         qemu_put_be16s(f, &s->latched_count);
         qemu_put_8s(f, &s->count_latched);
         qemu_put_8s(f, &s->status_latched);
@@ -427,9 +432,9 @@ static void pit_save(QEMUFile *f, void *opaque)
         qemu_put_8s(f, &s->mode);
         qemu_put_8s(f, &s->bcd);
         qemu_put_8s(f, &s->gate);
-        qemu_put_be64s(f, &s->count_load_time);
+        qemu_put_be64(f, s->count_load_time);
         if (s->irq_timer) {
-            qemu_put_be64s(f, &s->next_transition_time);
+            qemu_put_be64(f, s->next_transition_time);
             qemu_put_timer(f, s->irq_timer);
         }
     }
@@ -446,7 +451,7 @@ static int pit_load(QEMUFile *f, void *opaque, int version_id)
 
     for(i = 0; i < 3; i++) {
         s = &pit->channels[i];
-        qemu_get_be32s(f, &s->count);
+        s->count=qemu_get_be32(f);
         qemu_get_be16s(f, &s->latched_count);
         qemu_get_8s(f, &s->count_latched);
         qemu_get_8s(f, &s->status_latched);
@@ -458,9 +463,9 @@ static int pit_load(QEMUFile *f, void *opaque, int version_id)
         qemu_get_8s(f, &s->mode);
         qemu_get_8s(f, &s->bcd);
         qemu_get_8s(f, &s->gate);
-        qemu_get_be64s(f, &s->count_load_time);
+        s->count_load_time=qemu_get_be64(f);
         if (s->irq_timer) {
-            qemu_get_be64s(f, &s->next_transition_time);
+            s->next_transition_time=qemu_get_be64(f);
             qemu_get_timer(f, s->irq_timer);
         }
     }

@@ -24,7 +24,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#include "vl.h"
+#include "hw.h"
+#include "sh.h"
+#include "qemu-char.h"
 #include <assert.h>
 
 //#define DEBUG_SERIAL
@@ -250,14 +252,14 @@ static void sh_serial_event(void *opaque, int event)
         sh_serial_receive_break(s);
 }
 
-uint32_t sh_serial_read (void *opaque, target_phys_addr_t addr)
+static uint32_t sh_serial_read (void *opaque, target_phys_addr_t addr)
 {
     sh_serial_state *s = opaque;
     return sh_serial_ioport_read(s, addr - s->base);
 }
 
-void sh_serial_write (void *opaque,
-		      target_phys_addr_t addr, uint32_t value)
+static void sh_serial_write (void *opaque,
+                             target_phys_addr_t addr, uint32_t value)
 {
     sh_serial_state *s = opaque;
     sh_serial_ioport_write(s, addr - s->base, value);
@@ -291,7 +293,7 @@ void sh_serial_init (target_phys_addr_t base, int feat,
 
     s->smr = 0;
     s->brr = 0xff;
-    s->scr = 0;
+    s->scr = 1 << 5; /* pretend that TX is enabled so early printk works */
     s->sptr = 0;
 
     if (feat & SH_SERIAL_FEAT_SCIF) {

@@ -21,7 +21,11 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#include "vl.h"
+#include "hw.h"
+#include "qemu-timer.h"
+#include "sysemu.h"
+#include "pc.h"
+#include "isa.h"
 
 //#define DEBUG_CMOS
 
@@ -386,18 +390,23 @@ void rtc_set_date(RTCState *s, const struct tm *tm)
 #define REG_IBM_CENTURY_BYTE        0x32
 #define REG_IBM_PS2_CENTURY_BYTE    0x37
 
-void rtc_set_date_from_host(RTCState *s)
+static void rtc_set_date_from_host(RTCState *s)
 {
     time_t ti;
     struct tm *tm;
     int val;
 
     /* set the CMOS date */
-    time(&ti);
-    if (rtc_utc)
+    if (rtc_start_date == -1) {
+        time(&ti);
+        if (rtc_utc)
+            tm = gmtime(&ti);
+        else
+            tm = localtime(&ti);
+    } else {
+        ti = rtc_start_date;
         tm = gmtime(&ti);
-    else
-        tm = localtime(&ti);
+    }
     rtc_set_date(s, tm);
 
     val = to_bcd(s, (tm->tm_year / 100) + 19);
@@ -412,18 +421,18 @@ static void rtc_save(QEMUFile *f, void *opaque)
     qemu_put_buffer(f, s->cmos_data, 128);
     qemu_put_8s(f, &s->cmos_index);
 
-    qemu_put_be32s(f, &s->current_tm.tm_sec);
-    qemu_put_be32s(f, &s->current_tm.tm_min);
-    qemu_put_be32s(f, &s->current_tm.tm_hour);
-    qemu_put_be32s(f, &s->current_tm.tm_wday);
-    qemu_put_be32s(f, &s->current_tm.tm_mday);
-    qemu_put_be32s(f, &s->current_tm.tm_mon);
-    qemu_put_be32s(f, &s->current_tm.tm_year);
+    qemu_put_be32(f, s->current_tm.tm_sec);
+    qemu_put_be32(f, s->current_tm.tm_min);
+    qemu_put_be32(f, s->current_tm.tm_hour);
+    qemu_put_be32(f, s->current_tm.tm_wday);
+    qemu_put_be32(f, s->current_tm.tm_mday);
+    qemu_put_be32(f, s->current_tm.tm_mon);
+    qemu_put_be32(f, s->current_tm.tm_year);
 
     qemu_put_timer(f, s->periodic_timer);
-    qemu_put_be64s(f, &s->next_periodic_time);
+    qemu_put_be64(f, s->next_periodic_time);
 
-    qemu_put_be64s(f, &s->next_second_time);
+    qemu_put_be64(f, s->next_second_time);
     qemu_put_timer(f, s->second_timer);
     qemu_put_timer(f, s->second_timer2);
 }
@@ -438,18 +447,18 @@ static int rtc_load(QEMUFile *f, void *opaque, int version_id)
     qemu_get_buffer(f, s->cmos_data, 128);
     qemu_get_8s(f, &s->cmos_index);
 
-    qemu_get_be32s(f, &s->current_tm.tm_sec);
-    qemu_get_be32s(f, &s->current_tm.tm_min);
-    qemu_get_be32s(f, &s->current_tm.tm_hour);
-    qemu_get_be32s(f, &s->current_tm.tm_wday);
-    qemu_get_be32s(f, &s->current_tm.tm_mday);
-    qemu_get_be32s(f, &s->current_tm.tm_mon);
-    qemu_get_be32s(f, &s->current_tm.tm_year);
+    s->current_tm.tm_sec=qemu_get_be32(f);
+    s->current_tm.tm_min=qemu_get_be32(f);
+    s->current_tm.tm_hour=qemu_get_be32(f);
+    s->current_tm.tm_wday=qemu_get_be32(f);
+    s->current_tm.tm_mday=qemu_get_be32(f);
+    s->current_tm.tm_mon=qemu_get_be32(f);
+    s->current_tm.tm_year=qemu_get_be32(f);
 
     qemu_get_timer(f, s->periodic_timer);
-    qemu_get_be64s(f, &s->next_periodic_time);
+    s->next_periodic_time=qemu_get_be64(f);
 
-    qemu_get_be64s(f, &s->next_second_time);
+    s->next_second_time=qemu_get_be64(f);
     qemu_get_timer(f, s->second_timer);
     qemu_get_timer(f, s->second_timer2);
     return 0;
@@ -489,22 +498,22 @@ RTCState *rtc_init(int base, qemu_irq irq)
 }
 
 /* Memory mapped interface */
-uint32_t cmos_mm_readb (void *opaque, target_phys_addr_t addr)
+static uint32_t cmos_mm_readb (void *opaque, target_phys_addr_t addr)
 {
     RTCState *s = opaque;
 
     return cmos_ioport_read(s, (addr - s->base) >> s->it_shift) & 0xFF;
 }
 
-void cmos_mm_writeb (void *opaque,
-                     target_phys_addr_t addr, uint32_t value)
+static void cmos_mm_writeb (void *opaque,
+                            target_phys_addr_t addr, uint32_t value)
 {
     RTCState *s = opaque;
 
     cmos_ioport_write(s, (addr - s->base) >> s->it_shift, value & 0xFF);
 }
 
-uint32_t cmos_mm_readw (void *opaque, target_phys_addr_t addr)
+static uint32_t cmos_mm_readw (void *opaque, target_phys_addr_t addr)
 {
     RTCState *s = opaque;
     uint32_t val;
@@ -516,8 +525,8 @@ uint32_t cmos_mm_readw (void *opaque, target_phys_addr_t addr)
     return val;
 }
 
-void cmos_mm_writew (void *opaque,
-                     target_phys_addr_t addr, uint32_t value)
+static void cmos_mm_writew (void *opaque,
+                            target_phys_addr_t addr, uint32_t value)
 {
     RTCState *s = opaque;
 #ifdef TARGET_WORDS_BIGENDIAN
@@ -526,7 +535,7 @@ void cmos_mm_writew (void *opaque,
     cmos_ioport_write(s, (addr - s->base) >> s->it_shift, value & 0xFFFF);
 }
 
-uint32_t cmos_mm_readl (void *opaque, target_phys_addr_t addr)
+static uint32_t cmos_mm_readl (void *opaque, target_phys_addr_t addr)
 {
     RTCState *s = opaque;
     uint32_t val;
@@ -538,8 +547,8 @@ uint32_t cmos_mm_readl (void *opaque, target_phys_addr_t addr)
     return val;
 }
 
-void cmos_mm_writel (void *opaque,
-                     target_phys_addr_t addr, uint32_t value)
+static void cmos_mm_writel (void *opaque,
+                            target_phys_addr_t addr, uint32_t value)
 {
     RTCState *s = opaque;
 #ifdef TARGET_WORDS_BIGENDIAN

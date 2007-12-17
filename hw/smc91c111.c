@@ -7,7 +7,9 @@
  * This code is licenced under the GPL
  */
 
-#include "vl.h"
+#include "hw.h"
+#include "net.h"
+#include "devices.h"
 /* For crc32 */
 #include <zlib.h>
 
@@ -413,7 +415,7 @@ static void smc91c111_writeb(void *opaque, target_phys_addr_t offset,
         break;
     }
     cpu_abort (cpu_single_env, "smc91c111_write: Bad reg %d:%x\n",
-               s->bank, offset);
+               s->bank, (int)offset);
 }
 
 static uint32_t smc91c111_readb(void *opaque, target_phys_addr_t offset)
@@ -555,7 +557,7 @@ static uint32_t smc91c111_readb(void *opaque, target_phys_addr_t offset)
         break;
     }
     cpu_abort (cpu_single_env, "smc91c111_read: Bad reg %d:%x\n",
-               s->bank, offset);
+               s->bank, (int)offset);
     return 0;
 }
 

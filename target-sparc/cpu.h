@@ -98,6 +98,8 @@
 #define PS_AG    (1<<0)
 
 #define FPRS_FEF (1<<2)
+
+#define HS_PRIV  (1<<2)
 #endif
 
 /* Fcc */
@@ -145,7 +147,6 @@
 /* MMU */
 #define MMU_E     (1<<0)
 #define MMU_NF    (1<<1)
-#define MMU_BM    (1<<14)
 
 #define PTE_ENTRYTYPE_MASK 3
 #define PTE_ACCESS_MASK    0x1c
@@ -164,7 +165,11 @@
 /* 2 <= NWINDOWS <= 32. In QEMU it must also be a power of two. */
 #define NWINDOWS  8
 
-typedef struct sparc_def_t sparc_def_t;
+#if !defined(TARGET_SPARC64)
+#define NB_MMU_MODES 2
+#else
+#define NB_MMU_MODES 3
+#endif
 
 typedef struct CPUSPARCState {
     target_ulong gregs[8]; /* general registers */
@@ -192,6 +197,7 @@ typedef struct CPUSPARCState {
     int interrupt_index;
     int interrupt_request;
     int halted;
+    uint32_t mmu_bm;
     /* NOTE: we allow 8 more registers to handle wrapping */
     target_ulong regbase[NWINDOWS * 16 + 8];
 
@@ -209,11 +215,17 @@ typedef struct CPUSPARCState {
     uint64_t dtlb_tag[64];
     uint64_t dtlb_tte[64];
 #else
-    uint32_t mmuregs[16];
+    uint32_t mmuregs[32];
+    uint64_t mxccdata[4];
+    uint64_t mxccregs[8];
+    uint64_t prom_addr;
 #endif
     /* temporary float registers */
     float32 ft0, ft1;
     float64 dt0, dt1;
+#if defined(CONFIG_USER_ONLY)
+    float128 qt0, qt1;
+#endif
     float_status fp_status;
 #if defined(TARGET_SPARC64)
 #define MAXTL 4
@@ -260,13 +272,12 @@ typedef struct CPUSPARCState {
     } while (0)
 #endif
 
-CPUSPARCState *cpu_sparc_init(void);
+CPUSPARCState *cpu_sparc_init(const char *cpu_model);
 int cpu_sparc_exec(CPUSPARCState *s);
 int cpu_sparc_close(CPUSPARCState *s);
-int sparc_find_by_name (const unsigned char *name, const sparc_def_t **def);
 void sparc_cpu_list (FILE *f, int (*cpu_fprintf)(FILE *f, const char *fmt,
                                                  ...));
-int cpu_sparc_register (CPUSPARCState *env, const sparc_def_t *def);
+void cpu_sparc_set_id(CPUSPARCState *env, unsigned int cpu);
 
 #define GET_PSR(env) (env->version | (env->psr & PSR_ICC) |             \
                       (env->psref? PSR_EF : 0) |                        \
@@ -315,6 +326,41 @@ void cpu_check_irqs(CPUSPARCState *env);
 #define cpu_exec cpu_sparc_exec
 #define cpu_gen_code cpu_sparc_gen_code
 #define cpu_signal_handler cpu_sparc_signal_handler
+#define cpu_list sparc_cpu_list
+
+/* MMU modes definitions */
+#define MMU_MODE0_SUFFIX _user
+#define MMU_MODE1_SUFFIX _kernel
+#ifdef TARGET_SPARC64
+#define MMU_MODE2_SUFFIX _hypv
+#endif
+#define MMU_USER_IDX 0
+static inline int cpu_mmu_index (CPUState *env)
+{
+#if defined(CONFIG_USER_ONLY)
+    return 0;
+#elif !defined(TARGET_SPARC64)
+    return env->psrs;
+#else
+    if (!env->psrs)
+        return 0;
+    else if ((env->hpstate & HS_PRIV) == 0)
+        return 1;
+    else
+        return 2;
+#endif
+}
+
+static inline int cpu_fpu_enabled(CPUState *env)
+{
+#if defined(CONFIG_USER_ONLY)
+    return 1;
+#elif !defined(TARGET_SPARC64)
+    return env->psref;
+#else
+    return ((env->pstate & PS_PEF) != 0) && ((env->fprs & FPRS_FEF) != 0);
+#endif
+}
 
 #include "cpu-all.h"
 

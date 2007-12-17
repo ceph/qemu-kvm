@@ -24,6 +24,8 @@
 #ifndef BLOCK_INT_H
 #define BLOCK_INT_H
 
+#include "block.h"
+
 #define BLOCK_FLAG_ENCRYPT	1
 #define BLOCK_FLAG_COMPRESS	2
 #define BLOCK_FLAG_COMPAT6	4
@@ -112,6 +114,12 @@ struct BlockDriverState {
 
     void *sync_aiocb;
 
+    /* I/O stats (display with "info blockstats"). */
+    uint64_t rd_bytes;
+    uint64_t wr_bytes;
+    uint64_t rd_ops;
+    uint64_t wr_ops;
+
     /* NOTE: the following infos are only hints for real hardware
        drivers. They are not used by the block driver */
     int cyls, heads, secs, translation;
@@ -132,5 +140,7 @@ void get_tmp_filename(char *filename, int size);
 void *qemu_aio_get(BlockDriverState *bs, BlockDriverCompletionFunc *cb,
                    void *opaque);
 void qemu_aio_release(void *p);
+
+BlockDriverState *bdrv_first;
 
 #endif /* BLOCK_INT_H */

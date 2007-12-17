@@ -21,7 +21,10 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#include "vl.h"
+#include "hw.h"
+#include "qemu-char.h"
+#include "isa.h"
+#include "pc.h"
 
 //#define DEBUG_SERIAL
 
@@ -220,6 +223,7 @@ static uint32_t serial_ioport_read(void *opaque, uint32_t addr)
             ret = s->rbr;
             s->lsr &= ~(UART_LSR_DR | UART_LSR_BI);
             serial_update_irq(s);
+            qemu_chr_accept_input(s->chr);
         }
         break;
     case 1:

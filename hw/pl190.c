@@ -7,8 +7,9 @@
  * This code is licenced under the GPL.
  */
 
-#include "vl.h"
-#include "arm_pic.h"
+#include "hw.h"
+#include "primecell.h"
+#include "arm-misc.h"
 
 /* The number of virtual priority levels.  16 user vectors plus the
    unvectored IRQ.  Chained interrupts would require an additional level
@@ -139,7 +140,7 @@ static uint32_t pl190_read(void *opaque, target_phys_addr_t offset)
     case 13: /* DEFVECTADDR */
         return s->vect_addr[16];
     default:
-        cpu_abort (cpu_single_env, "pl190_read: Bad offset %x\n", offset);
+        cpu_abort (cpu_single_env, "pl190_read: Bad offset %x\n", (int)offset);
         return 0;
     }
 }
@@ -197,7 +198,7 @@ static void pl190_write(void *opaque, target_phys_addr_t offset, uint32_t val)
             cpu_abort(cpu_single_env, "pl190: Test mode not implemented\n");
         break;
     default:
-        cpu_abort(cpu_single_env, "pl190_write: Bad offset %x\n", offset);
+        cpu_abort(cpu_single_env, "pl190_write: Bad offset %x\n", (int)offset);
         return;
     }
     pl190_update(s);
@@ -215,7 +216,7 @@ static CPUWriteMemoryFunc *pl190_writefn[] = {
    pl190_write
 };
 
-void pl190_reset(pl190_state *s)
+static void pl190_reset(pl190_state *s)
 {
   int i;
 

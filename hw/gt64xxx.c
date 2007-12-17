@@ -22,7 +22,10 @@
  * THE SOFTWARE.
  */
 
-#include "vl.h"
+#include "hw.h"
+#include "mips.h"
+#include "pci.h"
+#include "pc.h"
 
 typedef target_phys_addr_t pci_addr_t;
 #include "pci_host.h"
@@ -306,9 +309,8 @@ static void gt64120_writel (void *opaque, target_phys_addr_t addr,
     GT64120State *s = opaque;
     uint32_t saddr;
 
-#ifdef TARGET_WORDS_BIGENDIAN
-    val = bswap32(val);
-#endif
+    if (!(s->regs[GT_PCI0_CMD] & 1))
+        val = bswap32(val);
 
     saddr = (addr & 0xfff) >> 2;
     switch (saddr) {
@@ -528,8 +530,7 @@ static void gt64120_writel (void *opaque, target_phys_addr_t addr,
         s->pci->config_reg = val & 0x80fffffc;
         break;
     case GT_PCI0_CFGDATA:
-        if (s->pci->config_reg & (1u << 31))
-            pci_host_data_writel(s->pci, 0, val);
+        pci_host_data_writel(s->pci, 0, val);
         break;
 
     /* Interrupts */
@@ -585,9 +586,7 @@ static uint32_t gt64120_readl (void *opaque,
     uint32_t val;
     uint32_t saddr;
 
-    val = 0;
     saddr = (addr & 0xfff) >> 2;
-
     switch (saddr) {
 
     /* CPU Configuration */
@@ -768,10 +767,7 @@ static uint32_t gt64120_readl (void *opaque,
         val = s->pci->config_reg;
         break;
     case GT_PCI0_CFGDATA:
-        if (!(s->pci->config_reg & (1u << 31)))
-            val = 0xffffffff;
-        else
-            val = pci_host_data_readl(s->pci, 0);
+        val = pci_host_data_readl(s->pci, 0);
         break;
 
     case GT_PCI0_CMD:
@@ -844,9 +840,9 @@ static uint32_t gt64120_readl (void *opaque,
         break;
     }
 
-#ifdef TARGET_WORDS_BIGENDIAN
-    val = bswap32(val);
-#endif
+    if (!(s->regs[GT_PCI0_CMD] & 1))
+        val = bswap32(val);
+
     return val;
 }
 
@@ -912,7 +908,7 @@ static void pci_gt64120_set_irq(qemu_irq *pic, int irq_num, int level)
 }
 
 
-void gt64120_reset(void *opaque)
+static void gt64120_reset(void *opaque)
 {
     GT64120State *s = opaque;
 
@@ -1083,19 +1079,12 @@ void gt64120_reset(void *opaque)
 
 static uint32_t gt64120_read_config(PCIDevice *d, uint32_t address, int len)
 {
-    uint32_t val = pci_default_read_config(d, address, len);
-#ifdef TARGET_WORDS_BIGENDIAN
-    val = bswap32(val);
-#endif
-    return val;
+    return pci_default_read_config(d, address, len);
 }
 
 static void gt64120_write_config(PCIDevice *d, uint32_t address, uint32_t val,
                                  int len)
 {
-#ifdef TARGET_WORDS_BIGENDIAN
-    val = bswap32(val);
-#endif
     pci_default_write_config(d, address, val, len);
 }
 
@@ -1122,6 +1111,11 @@ PCIBus *pci_gt64120_init(qemu_irq *pic)
 {
     GT64120State *s;
     PCIDevice *d;
+
+    (void)&pci_host_data_writeb; /* avoid warning */
+    (void)&pci_host_data_writew; /* avoid warning */
+    (void)&pci_host_data_readb; /* avoid warning */
+    (void)&pci_host_data_readw; /* avoid warning */
 
     s = qemu_mallocz(sizeof(GT64120State));
     s->pci = qemu_mallocz(sizeof(GT64120PCIState));

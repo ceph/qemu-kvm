@@ -18,7 +18,8 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
  * MA 02111-1307 USA
  */
-#include "vl.h"
+#include "hw.h"
+#include "omap.h"
 #include "sd.h"
 
 struct omap_mmc_s {
@@ -268,7 +269,7 @@ static uint32_t omap_mmc_read(void *opaque, target_phys_addr_t offset)
 {
     uint16_t i;
     struct omap_mmc_s *s = (struct omap_mmc_s *) opaque;
-    offset -= s->base;
+    offset &= OMAP_MPUI_REG_MASK;
 
     switch (offset) {
     case 0x00:	/* MMC_CMD */
@@ -350,7 +351,7 @@ static void omap_mmc_write(void *opaque, target_phys_addr_t offset,
 {
     int i;
     struct omap_mmc_s *s = (struct omap_mmc_s *) opaque;
-    offset -= s->base;
+    offset &= OMAP_MPUI_REG_MASK;
 
     switch (offset) {
     case 0x00:	/* MMC_CMD */
@@ -507,6 +508,7 @@ void omap_mmc_reset(struct omap_mmc_s *host)
 }
 
 struct omap_mmc_s *omap_mmc_init(target_phys_addr_t base,
+                BlockDriverState *bd,
                 qemu_irq irq, qemu_irq dma[], omap_clk clk)
 {
     int iomemtype;
@@ -523,9 +525,12 @@ struct omap_mmc_s *omap_mmc_init(target_phys_addr_t base,
     cpu_register_physical_memory(s->base, 0x800, iomemtype);
 
     /* Instantiate the storage */
-    s->card = sd_init(sd_bdrv);
+    s->card = sd_init(bd, 0);
 
     return s;
 }
 
-/* TODO: insertion and read-only handlers */
+void omap_mmc_handlers(struct omap_mmc_s *s, qemu_irq ro, qemu_irq cover)
+{
+    sd_set_cb(s->card, ro, cover);
+}

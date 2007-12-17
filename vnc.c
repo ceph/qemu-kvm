@@ -23,8 +23,11 @@
  * THE SOFTWARE.
  */
 
-#include "vl.h"
+#include "qemu-common.h"
+#include "console.h"
+#include "sysemu.h"
 #include "qemu_socket.h"
+#include "qemu-timer.h"
 
 #define VNC_REFRESH_INTERVAL (1000 / 30)
 
@@ -57,12 +60,12 @@ typedef struct Buffer
 {
     size_t capacity;
     size_t offset;
-    char *buffer;
+    uint8_t *buffer;
 } Buffer;
 
 typedef struct VncState VncState;
 
-typedef int VncReadEvent(VncState *vs, char *data, size_t len);
+typedef int VncReadEvent(VncState *vs, uint8_t *data, size_t len);
 
 typedef void VncWritePixels(VncState *vs, void *data, int size);
 
@@ -255,6 +258,13 @@ static void vnc_dpy_update(DisplayState *ds, int x, int y, int w, int h)
 
     h += y;
 
+    /* round x down to ensure the loop only spans one 16-pixel block per,
+       iteration.  otherwise, if (x % 16) != 0, the last iteration may span
+       two 16-pixel blocks but we only mark the first as dirty
+    */
+    w += (x % 16);
+    x -= (x % 16);
+
     for (; y < h; y++)
 	for (i = 0; i < w; i += 16)
 	    vnc_set_bit(vs->dirty_row[y], (x + i) / 16);
@@ -284,7 +294,10 @@ static void vnc_dpy_resize(DisplayState *ds, int w, int h)
 	exit(1);
     }
 
-    ds->depth = vs->depth * 8;
+    if (ds->depth != vs->depth * 8) {
+        ds->depth = vs->depth * 8;
+        console_color_init(ds);
+    }
     size_changed = ds->width != w || ds->height != h;
     ds->width = w;
     ds->height = h;
@@ -363,7 +376,7 @@ static void vnc_write_pixels_generic(VncState *vs, void *pixels1, int size)
 static void send_framebuffer_update_raw(VncState *vs, int x, int y, int w, int h)
 {
     int i;
-    char *row;
+    uint8_t *row;
 
     vnc_framebuffer_update(vs, x, y, w, h, 0);
 
@@ -427,8 +440,8 @@ static void send_framebuffer_update(VncState *vs, int x, int y, int w, int h)
 static void vnc_copy(DisplayState *ds, int src_x, int src_y, int dst_x, int dst_y, int w, int h)
 {
     int src, dst;
-    char *src_row;
-    char *dst_row;
+    uint8_t *src_row;
+    uint8_t *dst_row;
     char *old_row;
     int y = 0;
     int pitch = ds->linesize;
@@ -486,7 +499,7 @@ static void vnc_update_client(void *opaque)
 
     if (vs->need_update && vs->csock != -1) {
 	int y;
-	char *row;
+	uint8_t *row;
 	char *old_row;
 	uint32_t width_mask[VNC_DIRTY_WORDS];
 	int n_rectangles;
@@ -503,10 +516,11 @@ static void vnc_update_client(void *opaque)
 	for (y = 0; y < vs->height; y++) {
 	    if (vnc_and_bits(vs->dirty_row[y], width_mask, VNC_DIRTY_WORDS)) {
 		int x;
-		char *ptr, *old_ptr;
+		uint8_t *ptr;
+		char *old_ptr;
 
 		ptr = row;
-		old_ptr = old_row;
+		old_ptr = (char*)old_row;
 
 		for (x = 0; x < vs->ds->width; x += 16) {
 		    if (memcmp(old_ptr, ptr, 16 * vs->depth) == 0) {
@@ -609,7 +623,7 @@ static int buffer_empty(Buffer *buffer)
     return buffer->offset == 0;
 }
 
-static char *buffer_end(Buffer *buffer)
+static uint8_t *buffer_end(Buffer *buffer)
 {
     return buffer->buffer + buffer->offset;
 }
@@ -806,9 +820,9 @@ static uint32_t read_u32(uint8_t *data, size_t offset)
 }
 
 #if CONFIG_VNC_TLS
-ssize_t vnc_tls_push(gnutls_transport_ptr_t transport,
-		     const void *data,
-		     size_t len) {
+static ssize_t vnc_tls_push(gnutls_transport_ptr_t transport,
+                            const void *data,
+                            size_t len) {
     struct VncState *vs = (struct VncState *)transport;
     int ret;
 
@@ -823,9 +837,9 @@ ssize_t vnc_tls_push(gnutls_transport_ptr_t transport,
 }
 
 
-ssize_t vnc_tls_pull(gnutls_transport_ptr_t transport,
-		     void *data,
-		     size_t len) {
+static ssize_t vnc_tls_pull(gnutls_transport_ptr_t transport,
+                            void *data,
+                            size_t len) {
     struct VncState *vs = (struct VncState *)transport;
     int ret;
 
@@ -840,7 +854,7 @@ ssize_t vnc_tls_pull(gnutls_transport_ptr_t transport,
 }
 #endif /* CONFIG_VNC_TLS */
 
-static void client_cut_text(VncState *vs, size_t len, char *text)
+static void client_cut_text(VncState *vs, size_t len, uint8_t *text)
 {
 }
 
@@ -907,6 +921,12 @@ static void reset_keys(VncState *vs)
     }
 }
 
+static void press_key(VncState *vs, int keysym)
+{
+    kbd_put_keycode(keysym2scancode(vs->kbd_layout, keysym) & 0x7f);
+    kbd_put_keycode(keysym2scancode(vs->kbd_layout, keysym) | 0x80);
+}
+
 static void do_key_event(VncState *vs, int down, uint32_t sym)
 {
     int keycode;
@@ -934,6 +954,28 @@ static void do_key_event(VncState *vs, int down, uint32_t sym)
             return;
         }
         break;
+    case 0x45:			/* NumLock */
+        if (!down)
+            vs->modifiers_state[keycode] ^= 1;
+        break;
+    }
+
+    if (keycode_is_keypad(vs->kbd_layout, keycode)) {
+        /* If the numlock state needs to change then simulate an additional
+           keypress before sending this one.  This will happen if the user
+           toggles numlock away from the VNC window.
+        */
+        if (keysym_is_numlock(vs->kbd_layout, sym & 0xFFFF)) {
+            if (!vs->modifiers_state[0x45]) {
+                vs->modifiers_state[0x45] = 1;
+                press_key(vs, 0xff7f);
+            }
+        } else {
+            if (vs->modifiers_state[0x45]) {
+                vs->modifiers_state[0x45] = 0;
+                press_key(vs, 0xff7f);
+            }
+        }
     }
 
     if (is_graphic_console()) {
@@ -991,7 +1033,7 @@ static void do_key_event(VncState *vs, int down, uint32_t sym)
 
 static void key_event(VncState *vs, int down, uint32_t sym)
 {
-    if (sym >= 'A' && sym <= 'Z')
+    if (sym >= 'A' && sym <= 'Z' && is_graphic_console())
 	sym = sym - 'A' + 'a';
     do_key_event(vs, down, sym);
 }
@@ -1140,7 +1182,7 @@ static void set_pixel_format(VncState *vs,
     vga_hw_update();
 }
 
-static int protocol_client_msg(VncState *vs, char *data, size_t len)
+static int protocol_client_msg(VncState *vs, uint8_t *data, size_t len)
 {
     int i;
     uint16_t limit;
@@ -1213,7 +1255,7 @@ static int protocol_client_msg(VncState *vs, char *data, size_t len)
     return 0;
 }
 
-static int protocol_client_init(VncState *vs, char *data, size_t len)
+static int protocol_client_init(VncState *vs, uint8_t *data, size_t len)
 {
     char pad[3] = { 0, 0, 0 };
     char buf[1024];
@@ -1292,11 +1334,11 @@ static void make_challenge(VncState *vs)
         vs->challenge[i] = (int) (256.0*rand()/(RAND_MAX+1.0));
 }
 
-static int protocol_client_auth_vnc(VncState *vs, char *data, size_t len)
+static int protocol_client_auth_vnc(VncState *vs, uint8_t *data, size_t len)
 {
-    char response[VNC_AUTH_CHALLENGE_SIZE];
+    unsigned char response[VNC_AUTH_CHALLENGE_SIZE];
     int i, j, pwlen;
-    char key[8];
+    unsigned char key[8];
 
     if (!vs->password || !vs->password[0]) {
 	VNC_DEBUG("No password configured on server");
@@ -1703,7 +1745,7 @@ static int vnc_start_tls(struct VncState *vs) {
     return vnc_continue_handshake(vs);
 }
 
-static int protocol_client_vencrypt_auth(VncState *vs, char *data, size_t len)
+static int protocol_client_vencrypt_auth(VncState *vs, uint8_t *data, size_t len)
 {
     int auth = read_u32(data, 0);
 
@@ -1733,7 +1775,7 @@ static int protocol_client_vencrypt_auth(VncState *vs, char *data, size_t len)
     return 0;
 }
 
-static int protocol_client_vencrypt_init(VncState *vs, char *data, size_t len)
+static int protocol_client_vencrypt_init(VncState *vs, uint8_t *data, size_t len)
 {
     if (data[0] != 0 ||
 	data[1] != 2) {
@@ -1763,7 +1805,7 @@ static int start_auth_vencrypt(VncState *vs)
 }
 #endif /* CONFIG_VNC_TLS */
 
-static int protocol_client_auth(VncState *vs, char *data, size_t len)
+static int protocol_client_auth(VncState *vs, uint8_t *data, size_t len)
 {
     /* We only advertise 1 auth scheme at a time, so client
      * must pick the one we sent. Verify this */
@@ -1812,7 +1854,7 @@ static int protocol_client_auth(VncState *vs, char *data, size_t len)
     return 0;
 }
 
-static int protocol_version(VncState *vs, char *version, size_t len)
+static int protocol_version(VncState *vs, uint8_t *version, size_t len)
 {
     char local[13];
 

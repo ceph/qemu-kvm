@@ -40,6 +40,9 @@ int kvm_arch_has_work(CPUState *env);
 int kvm_arch_try_push_interrupts(void *opaque);
 void kvm_arch_update_regs_for_sipi(CPUState *env);
 
+extern int kvm_allowed;
+extern int kvm_irqchip;
+
 #define ALIGN(x, y)  (((x)+(y)-1) & ~((y)-1))
 #define BITMAP_SIZE(m) (ALIGN(((m)>>TARGET_PAGE_BITS), HOST_LONG_BITS) / 8)
 #endif

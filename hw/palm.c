@@ -18,7 +18,13 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
  * MA 02111-1307 USA
  */
-#include "vl.h"
+#include "hw.h"
+#include "audio/audio.h"
+#include "sysemu.h"
+#include "console.h"
+#include "omap.h"
+#include "boards.h"
+#include "arm-misc.h"
 
 static uint32_t static_readb(void *opaque, target_phys_addr_t offset)
 {
@@ -37,7 +43,8 @@ static uint32_t static_readw(void *opaque, target_phys_addr_t offset) {
 }
 
 static void static_write(void *opaque, target_phys_addr_t offset,
-                uint32_t value) {
+                uint32_t value)
+{
 #ifdef SPY
     printf("%s: value %08lx written at " PA_FMT "\n",
                     __FUNCTION__, value, offset);
@@ -57,12 +64,127 @@ static CPUWriteMemoryFunc *static_writefn[] = {
 };
 
 /* Palm Tunsgten|E support */
+
+/* Shared GPIOs */
+#define PALMTE_USBDETECT_GPIO	0
+#define PALMTE_USB_OR_DC_GPIO	1
+#define PALMTE_TSC_GPIO		4
+#define PALMTE_PINTDAV_GPIO	6
+#define PALMTE_MMC_WP_GPIO	8
+#define PALMTE_MMC_POWER_GPIO	9
+#define PALMTE_HDQ_GPIO		11
+#define PALMTE_HEADPHONES_GPIO	14
+#define PALMTE_SPEAKER_GPIO	15
+/* MPU private GPIOs */
+#define PALMTE_DC_GPIO		2
+#define PALMTE_MMC_SWITCH_GPIO	4
+#define PALMTE_MMC1_GPIO	6
+#define PALMTE_MMC2_GPIO	7
+#define PALMTE_MMC3_GPIO	11
+
 static void palmte_microwire_setup(struct omap_mpu_state_s *cpu)
 {
+    struct uwire_slave_s *tsc;
+    AudioState *audio = 0;
+
+#ifdef HAS_AUDIO
+    audio = AUD_init();
+#endif
+
+    tsc = tsc2102_init(omap_gpio_in_get(cpu->gpio)[PALMTE_PINTDAV_GPIO],
+                    audio);
+
+    omap_uwire_attach(cpu->microwire, tsc, 0);
+    omap_mcbsp_i2s_attach(cpu->mcbsp1, tsc210x_codec(tsc));
 }
 
-static void palmte_init(int ram_size, int vga_ram_size, int boot_device,
-                DisplayState *ds, const char **fd_filename, int snapshot,
+static struct {
+    int row;
+    int column;
+} palmte_keymap[0x80] = {
+    [0 ... 0x7f] = { -1, -1 },
+    [0x3b] = { 0, 0 },	/* F1	-> Calendar */
+    [0x3c] = { 1, 0 },	/* F2	-> Contacts */
+    [0x3d] = { 2, 0 },	/* F3	-> Tasks List */
+    [0x3e] = { 3, 0 },	/* F4	-> Note Pad */
+    [0x01] = { 4, 0 },	/* Esc	-> Power */
+    [0x4b] = { 0, 1 },	/* 	   Left */
+    [0x50] = { 1, 1 },	/* 	   Down */
+    [0x48] = { 2, 1 },	/*	   Up */
+    [0x4d] = { 3, 1 },	/*	   Right */
+    [0x4c] = { 4, 1 },	/* 	   Centre */
+    [0x39] = { 4, 1 },	/* Spc	-> Centre */
+};
+
+static void palmte_button_event(void *opaque, int keycode)
+{
+    struct omap_mpu_state_s *cpu = (struct omap_mpu_state_s *) opaque;
+
+    if (palmte_keymap[keycode & 0x7f].row != -1)
+        omap_mpuio_key(cpu->mpuio,
+                        palmte_keymap[keycode & 0x7f].row,
+                        palmte_keymap[keycode & 0x7f].column,
+                        !(keycode & 0x80));
+}
+
+static void palmte_onoff_gpios(void *opaque, int line, int level)
+{
+    switch (line) {
+    case 0:
+        printf("%s: current to MMC/SD card %sabled.\n",
+                        __FUNCTION__, level ? "dis" : "en");
+        break;
+    case 1:
+        printf("%s: internal speaker amplifier %s.\n",
+                        __FUNCTION__, level ? "down" : "on");
+        break;
+
+    /* These LCD & Audio output signals have not been identified yet.  */
+    case 2:
+    case 3:
+    case 4:
+        printf("%s: LCD GPIO%i %s.\n",
+                        __FUNCTION__, line - 1, level ? "high" : "low");
+        break;
+    case 5:
+    case 6:
+        printf("%s: Audio GPIO%i %s.\n",
+                        __FUNCTION__, line - 4, level ? "high" : "low");
+        break;
+    }
+}
+
+static void palmte_gpio_setup(struct omap_mpu_state_s *cpu)
+{
+    qemu_irq *misc_gpio;
+
+    omap_mmc_handlers(cpu->mmc,
+                    omap_gpio_in_get(cpu->gpio)[PALMTE_MMC_WP_GPIO],
+                    qemu_irq_invert(omap_mpuio_in_get(cpu->mpuio)
+                            [PALMTE_MMC_SWITCH_GPIO]));
+
+    misc_gpio = qemu_allocate_irqs(palmte_onoff_gpios, cpu, 7);
+    omap_gpio_out_set(cpu->gpio, PALMTE_MMC_POWER_GPIO,	misc_gpio[0]);
+    omap_gpio_out_set(cpu->gpio, PALMTE_SPEAKER_GPIO,	misc_gpio[1]);
+    omap_gpio_out_set(cpu->gpio, 11,			misc_gpio[2]);
+    omap_gpio_out_set(cpu->gpio, 12,			misc_gpio[3]);
+    omap_gpio_out_set(cpu->gpio, 13,			misc_gpio[4]);
+    omap_mpuio_out_set(cpu->mpuio, 1,			misc_gpio[5]);
+    omap_mpuio_out_set(cpu->mpuio, 3,			misc_gpio[6]);
+
+    /* Reset some inputs to initial state.  */
+    qemu_irq_lower(omap_gpio_in_get(cpu->gpio)[PALMTE_USBDETECT_GPIO]);
+    qemu_irq_lower(omap_gpio_in_get(cpu->gpio)[PALMTE_USB_OR_DC_GPIO]);
+    qemu_irq_lower(omap_gpio_in_get(cpu->gpio)[4]);
+    qemu_irq_lower(omap_gpio_in_get(cpu->gpio)[PALMTE_HEADPHONES_GPIO]);
+    qemu_irq_lower(omap_mpuio_in_get(cpu->mpuio)[PALMTE_DC_GPIO]);
+    qemu_irq_raise(omap_mpuio_in_get(cpu->mpuio)[6]);
+    qemu_irq_raise(omap_mpuio_in_get(cpu->mpuio)[7]);
+    qemu_irq_raise(omap_mpuio_in_get(cpu->mpuio)[11]);
+}
+
+static void palmte_init(int ram_size, int vga_ram_size,
+                const char *boot_device, DisplayState *ds,
                 const char *kernel_filename, const char *kernel_cmdline,
                 const char *initrd_filename, const char *cpu_model)
 {
@@ -100,6 +222,10 @@ static void palmte_init(int ram_size, int vga_ram_size, int boot_device,
     cpu_register_physical_memory(OMAP_CS3_BASE, OMAP_CS3_SIZE, io);
 
     palmte_microwire_setup(cpu);
+
+    qemu_add_kbd_event_handler(palmte_button_event, cpu);
+
+    palmte_gpio_setup(cpu);
 
     /* Setup initial (reset) machine state */
     if (nb_option_roms) {

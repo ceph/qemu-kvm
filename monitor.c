@@ -21,11 +21,26 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#include "vl.h"
+#include "hw/hw.h"
+#include "hw/usb.h"
+#include "hw/pcmcia.h"
+#include "hw/pc.h"
+#include "hw/pci.h"
+#include "gdbstub.h"
+#include "net.h"
+#include "qemu-char.h"
+#include "sysemu.h"
+#include "console.h"
+#include "block.h"
+#include "audio/audio.h"
 #include "disas.h"
+#include "migration.h"
 #include <dirent.h>
 
 #include "qemu-kvm.h"
+#ifdef CONFIG_PROFILER
+#include "qemu-timer.h" /* for ticks_per_sec */
+#endif
 
 //#define DEBUG
 //#define DEBUG_COMPLETION
@@ -63,7 +78,7 @@ static int hide_banner;
 static term_cmd_t term_cmds[];
 static term_cmd_t info_cmds[];
 
-static char term_outbuf[1024];
+static uint8_t term_outbuf[1024];
 static int term_outbuf_index;
 
 static void monitor_start_input(void);
@@ -84,7 +99,7 @@ void term_flush(void)
 /* flush at every end of line or if the buffer is full */
 void term_puts(const char *str)
 {
-    int c;
+    char c;
     for(;;) {
         c = *str++;
         if (c == '\0')
@@ -206,16 +221,11 @@ static void do_commit(const char *device)
     int i, all_devices;
 
     all_devices = !strcmp(device, "all");
-    for (i = 0; i < MAX_DISKS; i++) {
-        if (bs_table[i]) {
+    for (i = 0; i < nb_drives; i++) {
             if (all_devices ||
-                !strcmp(bdrv_get_device_name(bs_table[i]), device))
-                bdrv_commit(bs_table[i]);
-        }
+                !strcmp(bdrv_get_device_name(drives_table[i].bdrv), device))
+                bdrv_commit(drives_table[i].bdrv);
     }
-    if (mtd_bdrv)
-        if (all_devices || !strcmp(bdrv_get_device_name(mtd_bdrv), device))
-            bdrv_commit(mtd_bdrv);
 }
 
 static void do_info(const char *item)
@@ -251,8 +261,13 @@ static void do_info_block(void)
     bdrv_info();
 }
 
+static void do_info_blockstats(void)
+{
+    bdrv_info_stats();
+}
+
 /* get the current CPU defined by the user */
-int mon_set_cpu(int cpu_index)
+static int mon_set_cpu(int cpu_index)
 {
     CPUState *env;
 
@@ -265,7 +280,7 @@ int mon_set_cpu(int cpu_index)
     return -1;
 }
 
-CPUState *mon_get_cpu(void)
+static CPUState *mon_get_cpu(void)
 {
     if (!mon_cpu) {
         mon_set_cpu(0);
@@ -395,59 +410,6 @@ static void do_eject(int force, const char *filename)
         return;
     }
     eject_device(bs, force);
-}
-
-#define USAGE_STR "Usage: read_disk_io hd[a/b/c/d]\n"
-DiskIOStatistics vmdk_io_statistics(BlockDriverState *bs);
-
-static void do_io_statistics(const char *hdx)
-{
-    DiskIOStatistics io[4];
-
-    if ((strcmp(hdx,"hda") != 0) && (strcmp(hdx,"hdb") != 0) &&
-        (strcmp(hdx,"hdc") != 0) && (strcmp(hdx,"hdd") != 0)) {
-        term_printf(USAGE_STR);
-        return;
-    }
-
-    switch (hdx[2]) {
-    case 'a':
-        term_printf("---------- hda io statistics ----------\n");
-        io[0] = vmdk_io_statistics(bs_table[0]);
-        term_printf("read: %" PRIu64 " \nwrite: %" PRIu64 " \n",
-		    io[0].read_byte_counter, io[0].write_byte_counter);
-        break;
-    case 'b':
-        term_printf("---------- hdb io statistics ----------\n");
-        if (bs_table[1]) {
-            io[1] = vmdk_io_statistics(bs_table[1]);
-            term_printf("read: %" PRIu64 " \nwrite: %" PRIu64 " \n",
-			io[1].read_byte_counter, io[1].write_byte_counter);
-        }else {
-            term_printf("hdb not exist\n");
-        }
-        break;
-    case 'c':
-        term_printf("---------- hdc io statistics ----------\n");
-        if (bs_table[2]) {
-            io[2] = vmdk_io_statistics(bs_table[2]);
-            term_printf("read: %" PRIu64 " \nwrite: %" PRIu64 " \n",
-			io[2].read_byte_counter, io[2].write_byte_counter);
-        }else {
-            term_printf("hdc not exist\n");
-        }
-        break;
-    case 'd':
-        term_printf("---------- hdd io statistics ----------\n");
-        if (bs_table[3]) {
-            io[3] = vmdk_io_statistics(bs_table[3]);
-            term_printf("read: %" PRIu64 " \nwrite: %" PRIu64 " \n",
-			io[3].read_byte_counter, io[3].write_byte_counter);
-        }else {
-            term_printf("hdd not exist\n");
-        }
-        break;
-    }
 }
 
 static void do_change_block(const char *device, const char *filename)
@@ -1371,8 +1333,6 @@ static term_cmd_t term_cmds[] = {
        "capture index", "stop capture" },
     { "memsave", "lis", do_memory_save,
       "addr size file", "save to disk virtual memory dump starting at 'addr' of size 'size'", },
-    { "read_disk_io", "s", do_io_statistics,
-      "hdx", "read disk I/O statistics (VMDK format)" },
     { "migrate", "-ds", do_migrate,
       "[-d] command", "migrate the VM using command (use -d to not wait for command to complete)" },
     { "migrate_cancel", "", do_migrate_cancel,
@@ -1389,6 +1349,8 @@ static term_cmd_t info_cmds[] = {
       "", "show the network state" },
     { "block", "", do_info_block,
       "", "show the block devices" },
+    { "blockstats", "", do_info_blockstats,
+      "", "show block device statistics" },
     { "registers", "", do_info_registers,
       "", "show the cpu registers" },
     { "cpus", "", do_info_cpus,
@@ -1432,6 +1394,10 @@ static term_cmd_t info_cmds[] = {
 #if defined(TARGET_PPC)
     { "cpustats", "", do_info_cpu_stats,
       "", "show CPU statistics", },
+#endif
+#if defined(CONFIG_SLIRP)
+    { "slirp", "", do_info_slirp,
+      "", "show SLIRP statistics", },
 #endif
     { "migration", "", do_info_migration,
       "", "show migration information" },
@@ -1485,7 +1451,7 @@ static target_long monitor_get_msr (struct MonitorDef *md, int val)
     CPUState *env = mon_get_cpu();
     if (!env)
         return 0;
-    return do_load_msr(env);
+    return env->msr;
 }
 
 static target_long monitor_get_xer (struct MonitorDef *md, int val)
@@ -2652,6 +2618,8 @@ void monitor_init(CharDriverState *hd, int show_banner)
     hide_banner = !show_banner;
 
     qemu_chr_add_handlers(hd, term_can_read, term_read, term_event, NULL);
+
+    readline_start("", 0, monitor_handle_command1, NULL);
 }
 
 /* XXX: use threads ? */

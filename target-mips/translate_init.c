@@ -53,7 +53,6 @@
    Define a major version 1, minor version 0. */
 #define MIPS_FCR0 ((0 << FCR0_S) | (0x1 << FCR0_PRID) | (0x10 << FCR0_REV))
 
-
 struct mips_def_t {
     const unsigned char *name;
     int32_t CP0_PRid;
@@ -102,6 +101,23 @@ static mips_def_t mips_defs[] =
         .insn_flags = CPU_MIPS32 | ASE_MIPS16,
     },
     {
+        .name = "4Km",
+        .CP0_PRid = 0x00018300,
+        /* Config1 implemented, fixed mapping MMU,
+           no virtual icache, uncached coherency. */
+        .CP0_Config0 = (1 << CP0C0_M) |
+                    (0x3 << CP0C0_MT) | (0x2 << CP0C0_K0),
+        .CP0_Config1 = MIPS_CONFIG1 |
+		    (0 << CP0C1_IS) | (3 << CP0C1_IL) | (1 << CP0C1_IA) |
+		    (0 << CP0C1_DS) | (3 << CP0C1_DL) | (1 << CP0C1_DA),
+        .CP0_Config2 = MIPS_CONFIG2,
+        .CP0_Config3 = MIPS_CONFIG3,
+        .SYNCI_Step = 32,
+        .CCRes = 2,
+        .CP0_Status_rw_bitmask = 0x1258FF17,
+        .insn_flags = CPU_MIPS32 | ASE_MIPS16,
+    },
+    {
         .name = "4KEcR1",
         .CP0_PRid = 0x00018400,
         .CP0_Config0 = MIPS_CONFIG0,
@@ -113,6 +129,23 @@ static mips_def_t mips_defs[] =
         .SYNCI_Step = 32,
         .CCRes = 2,
         .CP0_Status_rw_bitmask = 0x1278FF17,
+        .insn_flags = CPU_MIPS32 | ASE_MIPS16,
+    },
+    {
+        .name = "4KEmR1",
+        .CP0_PRid = 0x00018500,
+        /* Config1 implemented, fixed mapping MMU,
+           no virtual icache, uncached coherency. */
+        .CP0_Config0 = (1 << CP0C0_M) |
+                    (0x3 << CP0C0_MT) | (0x2 << CP0C0_K0),
+        .CP0_Config1 = MIPS_CONFIG1 |
+		    (0 << CP0C1_IS) | (3 << CP0C1_IL) | (1 << CP0C1_IA) |
+		    (0 << CP0C1_DS) | (3 << CP0C1_DL) | (1 << CP0C1_DA),
+        .CP0_Config2 = MIPS_CONFIG2,
+        .CP0_Config3 = MIPS_CONFIG3,
+        .SYNCI_Step = 32,
+        .CCRes = 2,
+        .CP0_Status_rw_bitmask = 0x1258FF17,
         .insn_flags = CPU_MIPS32 | ASE_MIPS16,
     },
     {
@@ -130,6 +163,23 @@ static mips_def_t mips_defs[] =
         .insn_flags = CPU_MIPS32R2 | ASE_MIPS16,
     },
     {
+        .name = "4KEm",
+        .CP0_PRid = 0x00019100,
+        /* Config1 implemented, MIPS32R2, fixed mapping MMU,
+           no virtual icache, uncached coherency. */
+        .CP0_Config0 = (1 << CP0C0_M) | (0x1 << CP0C0_AR) |
+                    (0x3 << CP0C0_MT) | (0x2 << CP0C0_K0),
+        .CP0_Config1 = MIPS_CONFIG1 |
+		    (0 << CP0C1_IS) | (3 << CP0C1_IL) | (1 << CP0C1_IA) |
+		    (0 << CP0C1_DS) | (3 << CP0C1_DL) | (1 << CP0C1_DA),
+        .CP0_Config2 = MIPS_CONFIG2,
+        .CP0_Config3 = MIPS_CONFIG3,
+        .SYNCI_Step = 32,
+        .CCRes = 2,
+        .CP0_Status_rw_bitmask = 0x1258FF17,
+        .insn_flags = CPU_MIPS32R2 | ASE_MIPS16,
+    },
+    {
         .name = "24Kc",
         .CP0_PRid = 0x00019300,
         .CP0_Config0 = MIPS_CONFIG0 | (0x1 << CP0C0_AR),
@@ -142,7 +192,7 @@ static mips_def_t mips_defs[] =
         .CCRes = 2,
         /* No DSP implemented. */
         .CP0_Status_rw_bitmask = 0x1278FF1F,
-        .insn_flags = CPU_MIPS32R2 | ASE_MIPS16 | ASE_DSP,
+        .insn_flags = CPU_MIPS32R2 | ASE_MIPS16,
     },
     {
         .name = "24Kf",
@@ -159,7 +209,7 @@ static mips_def_t mips_defs[] =
         .CP0_Status_rw_bitmask = 0x3678FF1F,
         .CP1_fcr0 = (1 << FCR0_F64) | (1 << FCR0_L) | (1 << FCR0_W) |
                     (1 << FCR0_D) | (1 << FCR0_S) | (0x93 << FCR0_PRID),
-        .insn_flags = CPU_MIPS32R2 | ASE_MIPS16 | ASE_DSP,
+        .insn_flags = CPU_MIPS32R2 | ASE_MIPS16,
     },
     {
         .name = "34Kf",
@@ -199,9 +249,9 @@ static mips_def_t mips_defs[] =
         .CP0_SRSConf4_rw_bitmask = 0x3fffffff,
         .CP0_SRSConf4 = (0x3fe << CP0SRSC4_SRS15) |
                     (0x3fe << CP0SRSC4_SRS14) | (0x3fe << CP0SRSC4_SRS13),
-        .insn_flags = CPU_MIPS32R2 | ASE_MIPS16 | ASE_DSP,
+        .insn_flags = CPU_MIPS32R2 | ASE_MIPS16 | ASE_DSP | ASE_MT,
     },
-#if defined(TARGET_MIPSN32) || defined(TARGET_MIPS64)
+#if defined(TARGET_MIPS64)
     {
         .name = "R4000",
         .CP0_PRid = 0x00000400,
@@ -276,24 +326,40 @@ static mips_def_t mips_defs[] =
         .SEGBITS = 40,
         .insn_flags = CPU_MIPS64 | ASE_MIPS3D,
     },
+    {
+	/* A generic CPU providing MIPS64 Release 2 features.
+           FIXME: Eventually this should be replaced by a real CPU model. */
+        .name = "MIPS64R2-generic",
+        .CP0_PRid = 0x00010000,
+        .CP0_Config0 = MIPS_CONFIG0 | (0x2 << CP0C0_AT) | (0x1 << CP0C0_AR),
+        .CP0_Config1 = MIPS_CONFIG1 | (1 << CP0C1_FP) | (63 << CP0C1_MMU) |
+		    (2 << CP0C1_IS) | (4 << CP0C1_IL) | (3 << CP0C1_IA) |
+		    (2 << CP0C1_DS) | (4 << CP0C1_DL) | (3 << CP0C1_DA) |
+		    (1 << CP0C1_PC) | (1 << CP0C1_WR) | (1 << CP0C1_EP),
+        .CP0_Config2 = MIPS_CONFIG2,
+        .CP0_Config3 = MIPS_CONFIG3,
+        .SYNCI_Step = 32,
+        .CCRes = 2,
+        .CP0_Status_rw_bitmask = 0x36FBFFFF,
+        .CP1_fcr0 = (1 << FCR0_3D) | (1 << FCR0_PS) | (1 << FCR0_L) |
+                    (1 << FCR0_W) | (1 << FCR0_D) | (1 << FCR0_S) |
+                    (0x00 << FCR0_PRID) | (0x0 << FCR0_REV),
+        .SEGBITS = 40,
+        .insn_flags = CPU_MIPS64R2 | ASE_MIPS3D,
+    },
 #endif
 };
 
-int mips_find_by_name (const unsigned char *name, mips_def_t **def)
+static const mips_def_t *cpu_mips_find_by_name (const unsigned char *name)
 {
-    int i, ret;
+    int i;
 
-    ret = -1;
-    *def = NULL;
     for (i = 0; i < sizeof(mips_defs) / sizeof(mips_defs[0]); i++) {
         if (strcasecmp(name, mips_defs[i].name) == 0) {
-            *def = &mips_defs[i];
-            ret = 0;
-            break;
+            return &mips_defs[i];
         }
     }
-
-    return ret;
+    return NULL;
 }
 
 void mips_cpu_list (FILE *f, int (*cpu_fprintf)(FILE *f, const char *fmt, ...))
@@ -307,19 +373,19 @@ void mips_cpu_list (FILE *f, int (*cpu_fprintf)(FILE *f, const char *fmt, ...))
 }
 
 #ifndef CONFIG_USER_ONLY
-static void no_mmu_init (CPUMIPSState *env, mips_def_t *def)
+static void no_mmu_init (CPUMIPSState *env, const mips_def_t *def)
 {
     env->tlb->nb_tlb = 1;
     env->tlb->map_address = &no_mmu_map_address;
 }
 
-static void fixed_mmu_init (CPUMIPSState *env, mips_def_t *def)
+static void fixed_mmu_init (CPUMIPSState *env, const mips_def_t *def)
 {
     env->tlb->nb_tlb = 1;
     env->tlb->map_address = &fixed_mmu_map_address;
 }
 
-static void r4k_mmu_init (CPUMIPSState *env, mips_def_t *def)
+static void r4k_mmu_init (CPUMIPSState *env, const mips_def_t *def)
 {
     env->tlb->nb_tlb = 1 + ((def->CP0_Config1 >> CP0C1_MMU) & 63);
     env->tlb->map_address = &r4k_map_address;
@@ -329,7 +395,7 @@ static void r4k_mmu_init (CPUMIPSState *env, mips_def_t *def)
     env->tlb->do_tlbr = r4k_do_tlbr;
 }
 
-static void mmu_init (CPUMIPSState *env, mips_def_t *def)
+static void mmu_init (CPUMIPSState *env, const mips_def_t *def)
 {
     env->tlb = qemu_mallocz(sizeof(CPUMIPSTLBContext));
 
@@ -355,7 +421,7 @@ static void mmu_init (CPUMIPSState *env, mips_def_t *def)
 }
 #endif /* CONFIG_USER_ONLY */
 
-static void fpu_init (CPUMIPSState *env, mips_def_t *def)
+static void fpu_init (CPUMIPSState *env, const mips_def_t *def)
 {
     env->fpu = qemu_mallocz(sizeof(CPUMIPSFPUContext));
 
@@ -368,7 +434,7 @@ static void fpu_init (CPUMIPSState *env, mips_def_t *def)
 #endif
 }
 
-static void mvp_init (CPUMIPSState *env, mips_def_t *def)
+static void mvp_init (CPUMIPSState *env, const mips_def_t *def)
 {
     env->mvp = qemu_mallocz(sizeof(CPUMIPSMVPContext));
 
@@ -394,13 +460,8 @@ static void mvp_init (CPUMIPSState *env, mips_def_t *def)
                              (0x1 << CP0MVPC1_PCP1);
 }
 
-int cpu_mips_register (CPUMIPSState *env, mips_def_t *def)
+static int cpu_mips_register (CPUMIPSState *env, const mips_def_t *def)
 {
-    if (!def)
-        def = env->cpu_model;
-    if (!def)
-        cpu_abort(env, "Unable to find MIPS CPU definition\n");
-    env->cpu_model = def;
     env->CP0_PRid = def->CP0_PRid;
     env->CP0_Config0 = def->CP0_Config0;
 #ifdef TARGET_WORDS_BIGENDIAN
@@ -416,7 +477,7 @@ int cpu_mips_register (CPUMIPSState *env, mips_def_t *def)
     env->CP0_Status_rw_bitmask = def->CP0_Status_rw_bitmask;
     env->CP0_TCStatus_rw_bitmask = def->CP0_TCStatus_rw_bitmask;
     env->CP0_SRSCtl = def->CP0_SRSCtl;
-#if defined(TARGET_MIPSN32) || defined(TARGET_MIPS64)
+#if defined(TARGET_MIPS64)
     if (def->insn_flags & ISA_MIPS3)
     {
         env->hflags |= MIPS_HFLAG_64;

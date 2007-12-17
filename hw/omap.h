@@ -57,7 +57,8 @@ void omap_clk_reparent(omap_clk clk, omap_clk parent);
 /* omap.c */
 struct omap_intr_handler_s;
 struct omap_intr_handler_s *omap_inth_init(target_phys_addr_t base,
-                unsigned long size, qemu_irq parent[2], omap_clk clk);
+                unsigned long size, unsigned char nbanks,
+                qemu_irq parent_irq, qemu_irq parent_fiq, omap_clk clk);
 
 /*
  * Common IRQ numbers for level 1 interrupt handler
@@ -335,19 +336,32 @@ struct omap_intr_handler_s *omap_inth_init(target_phys_addr_t base,
 # define OMAP_INT_243X_HS_USB_DMA	93
 # define OMAP_INT_243X_CARKIT		94
 
+enum omap_dma_model {
+    omap_dma_3_1 = 0,
+    omap_dma_3_2
+};
+
 struct omap_dma_s;
-struct omap_dma_s *omap_dma_init(target_phys_addr_t base,
-                qemu_irq pic[], struct omap_mpu_state_s *mpu, omap_clk clk);
+struct omap_dma_s *omap_dma_init(target_phys_addr_t base, qemu_irq *irqs,
+                qemu_irq lcd_irq, struct omap_mpu_state_s *mpu, omap_clk clk,
+                enum omap_dma_model model);
 
 enum omap_dma_port {
     emiff = 0,
     emifs,
-    imif,
+    imif,	/* omap16xx: ocp_t1 */
     tipb,
-    local,
+    local,	/* omap16xx: ocp_t2 */
     tipb_mpui,
     omap_dma_port_last,
 };
+
+typedef enum {
+    constant = 0,
+    post_incremented,
+    single_index,
+    double_index,
+} omap_dma_addressing_t;
 
 struct omap_dma_lcd_channel_s {
     enum omap_dma_port src;
@@ -355,6 +369,35 @@ struct omap_dma_lcd_channel_s {
     target_phys_addr_t src_f1_bottom;
     target_phys_addr_t src_f2_top;
     target_phys_addr_t src_f2_bottom;
+
+    /* Used in OMAP DMA 3.2 gigacell */
+    unsigned char brust_f1;
+    unsigned char pack_f1;
+    unsigned char data_type_f1;
+    unsigned char brust_f2;
+    unsigned char pack_f2;
+    unsigned char data_type_f2;
+    unsigned char end_prog;
+    unsigned char repeat;
+    unsigned char auto_init;
+    unsigned char priority;
+    unsigned char fs;
+    unsigned char running;
+    unsigned char bs;
+    unsigned char omap_3_1_compatible_disable;
+    unsigned char dst;
+    unsigned char lch_type;
+    int16_t element_index_f1;
+    int16_t element_index_f2;
+    int32_t frame_index_f1;
+    int32_t frame_index_f2;
+    uint16_t elements_f1;
+    uint16_t frames_f1;
+    uint16_t elements_f2;
+    uint16_t frames_f2;
+    omap_dma_addressing_t mode_f1;
+    omap_dma_addressing_t mode_f2;
+
     /* Destination port is fixed.  */
     int interrupts;
     int condition;
@@ -450,6 +493,67 @@ struct omap_uart_s;
 struct omap_uart_s *omap_uart_init(target_phys_addr_t base,
                 qemu_irq irq, omap_clk clk, CharDriverState *chr);
 
+struct omap_mpuio_s;
+struct omap_mpuio_s *omap_mpuio_init(target_phys_addr_t base,
+                qemu_irq kbd_int, qemu_irq gpio_int, qemu_irq wakeup,
+                omap_clk clk);
+qemu_irq *omap_mpuio_in_get(struct omap_mpuio_s *s);
+void omap_mpuio_out_set(struct omap_mpuio_s *s, int line, qemu_irq handler);
+void omap_mpuio_key(struct omap_mpuio_s *s, int row, int col, int down);
+
+struct omap_gpio_s;
+struct omap_gpio_s *omap_gpio_init(target_phys_addr_t base,
+                qemu_irq irq, omap_clk clk);
+qemu_irq *omap_gpio_in_get(struct omap_gpio_s *s);
+void omap_gpio_out_set(struct omap_gpio_s *s, int line, qemu_irq handler);
+
+struct uwire_slave_s {
+    uint16_t (*receive)(void *opaque);
+    void (*send)(void *opaque, uint16_t data);
+    void *opaque;
+};
+struct omap_uwire_s;
+struct omap_uwire_s *omap_uwire_init(target_phys_addr_t base,
+                qemu_irq *irq, qemu_irq dma, omap_clk clk);
+void omap_uwire_attach(struct omap_uwire_s *s,
+                struct uwire_slave_s *slave, int chipselect);
+
+struct omap_rtc_s;
+struct omap_rtc_s *omap_rtc_init(target_phys_addr_t base,
+                qemu_irq *irq, omap_clk clk);
+
+struct i2s_codec_s {
+    void *opaque;
+
+    /* The CPU can call this if it is generating the clock signal on the
+     * i2s port.  The CODEC can ignore it if it is set up as a clock
+     * master and generates its own clock.  */
+    void (*set_rate)(void *opaque, int in, int out);
+
+    void (*tx_swallow)(void *opaque);
+    qemu_irq rx_swallow;
+    qemu_irq tx_start;
+
+    int tx_rate;
+    int cts;
+    int rx_rate;
+    int rts;
+
+    struct i2s_fifo_s {
+        uint8_t *fifo;
+        int len;
+        int start;
+        int size;
+    } in, out;
+};
+struct omap_mcbsp_s;
+struct omap_mcbsp_s *omap_mcbsp_init(target_phys_addr_t base,
+                qemu_irq *irq, qemu_irq *dma, omap_clk clk);
+void omap_mcbsp_i2s_attach(struct omap_mcbsp_s *s, struct i2s_codec_s *slave);
+
+struct omap_lpg_s;
+struct omap_lpg_s *omap_lpg_init(target_phys_addr_t base, omap_clk clk);
+
 /* omap_lcdc.c */
 struct omap_lcd_panel_s;
 void omap_lcdc_reset(struct omap_lcd_panel_s *s);
@@ -460,8 +564,17 @@ struct omap_lcd_panel_s *omap_lcdc_init(target_phys_addr_t base, qemu_irq irq,
 /* omap_mmc.c */
 struct omap_mmc_s;
 struct omap_mmc_s *omap_mmc_init(target_phys_addr_t base,
+                BlockDriverState *bd,
                 qemu_irq irq, qemu_irq dma[], omap_clk clk);
 void omap_mmc_reset(struct omap_mmc_s *s);
+void omap_mmc_handlers(struct omap_mmc_s *s, qemu_irq ro, qemu_irq cover);
+
+/* omap_i2c.c */
+struct omap_i2c_s;
+struct omap_i2c_s *omap_i2c_init(target_phys_addr_t base,
+                qemu_irq irq, qemu_irq *dma, omap_clk clk);
+void omap_i2c_reset(struct omap_i2c_s *s);
+i2c_bus *omap_i2c_bus(struct omap_i2c_s *s);
 
 # define cpu_is_omap310(cpu)		(cpu->mpu_model == omap310)
 # define cpu_is_omap1510(cpu)		(cpu->mpu_model == omap1510)
@@ -495,15 +608,43 @@ struct omap_mpu_state_s {
     unsigned long sram_size;
 
     /* MPUI-TIPB peripherals */
-    struct omap_uart_s *uart3;
+    struct omap_uart_s *uart[3];
+
+    struct omap_gpio_s *gpio;
+
+    struct omap_mcbsp_s *mcbsp1;
+    struct omap_mcbsp_s *mcbsp3;
 
     /* MPU public TIPB peripherals */
     struct omap_32khz_timer_s *os_timer;
 
-    struct omap_uart_s *uart1;
-    struct omap_uart_s *uart2;
-
     struct omap_mmc_s *mmc;
+
+    struct omap_mpuio_s *mpuio;
+
+    struct omap_uwire_s *microwire;
+
+    struct {
+        uint8_t output;
+        uint8_t level;
+        uint8_t enable;
+        int clk;
+    } pwl;
+
+    struct {
+        uint8_t frc;
+        uint8_t vrc;
+        uint8_t gcr;
+        omap_clk clk;
+    } pwt;
+
+    struct omap_i2c_s *i2c;
+
+    struct omap_rtc_s *rtc;
+
+    struct omap_mcbsp_s *mcbsp2;
+
+    struct omap_lpg_s *led[2];
 
     /* MPU private TIPB peripherals */
     struct omap_intr_handler_s *ih[2];
@@ -574,6 +715,9 @@ struct omap_mpu_state_s {
 #  error TARGET_PHYS_ADDR_BITS undefined
 # endif
 
+uint32_t omap_badwidth_read8(void *opaque, target_phys_addr_t addr);
+void omap_badwidth_write8(void *opaque, target_phys_addr_t addr,
+                uint32_t value);
 uint32_t omap_badwidth_read16(void *opaque, target_phys_addr_t addr);
 void omap_badwidth_write16(void *opaque, target_phys_addr_t addr,
                 uint32_t value);
@@ -586,11 +730,125 @@ void omap_badwidth_write32(void *opaque, target_phys_addr_t addr,
 # define OMAP_RO_REG(paddr)		\
         printf("%s: Read-only register " OMAP_FMT_plx "\n",	\
                         __FUNCTION__, paddr)
-# define OMAP_16B_REG(paddr)		\
+
+# define TCMI_VERBOSE			1
+//# define MEM_VERBOSE			1
+
+# ifdef TCMI_VERBOSE
+#  define OMAP_8B_REG(paddr)		\
+        printf("%s: 8-bit register " OMAP_FMT_plx "\n",	\
+                        __FUNCTION__, paddr)
+#  define OMAP_16B_REG(paddr)		\
         printf("%s: 16-bit register " OMAP_FMT_plx "\n",	\
                         __FUNCTION__, paddr)
-# define OMAP_32B_REG(paddr)		\
+#  define OMAP_32B_REG(paddr)		\
         printf("%s: 32-bit register " OMAP_FMT_plx "\n",	\
                         __FUNCTION__, paddr)
+# else
+#  define OMAP_8B_REG(paddr)
+#  define OMAP_16B_REG(paddr)
+#  define OMAP_32B_REG(paddr)
+# endif
+
+# define OMAP_MPUI_REG_MASK		0x000007ff
+
+# ifdef MEM_VERBOSE
+struct io_fn {
+    CPUReadMemoryFunc **mem_read;
+    CPUWriteMemoryFunc **mem_write;
+    void *opaque;
+    int in;
+};
+
+static uint32_t io_readb(void *opaque, target_phys_addr_t addr)
+{
+    struct io_fn *s = opaque;
+    uint32_t ret;
+
+    s->in ++;
+    ret = s->mem_read[0](s->opaque, addr);
+    s->in --;
+    if (!s->in)
+        fprintf(stderr, "%08x ---> %02x\n", (uint32_t) addr, ret);
+    return ret;
+}
+static uint32_t io_readh(void *opaque, target_phys_addr_t addr)
+{
+    struct io_fn *s = opaque;
+    uint32_t ret;
+
+    s->in ++;
+    ret = s->mem_read[1](s->opaque, addr);
+    s->in --;
+    if (!s->in)
+        fprintf(stderr, "%08x ---> %04x\n", (uint32_t) addr, ret);
+    return ret;
+}
+static uint32_t io_readw(void *opaque, target_phys_addr_t addr)
+{
+    struct io_fn *s = opaque;
+    uint32_t ret;
+
+    s->in ++;
+    ret = s->mem_read[2](s->opaque, addr);
+    s->in --;
+    if (!s->in)
+        fprintf(stderr, "%08x ---> %08x\n", (uint32_t) addr, ret);
+    return ret;
+}
+static void io_writeb(void *opaque, target_phys_addr_t addr, uint32_t value)
+{
+    struct io_fn *s = opaque;
+
+    if (!s->in)
+        fprintf(stderr, "%08x <--- %02x\n", (uint32_t) addr, value);
+    s->in ++;
+    s->mem_write[0](s->opaque, addr, value);
+    s->in --;
+}
+static void io_writeh(void *opaque, target_phys_addr_t addr, uint32_t value)
+{
+    struct io_fn *s = opaque;
+
+    if (!s->in)
+        fprintf(stderr, "%08x <--- %04x\n", (uint32_t) addr, value);
+    s->in ++;
+    s->mem_write[1](s->opaque, addr, value);
+    s->in --;
+}
+static void io_writew(void *opaque, target_phys_addr_t addr, uint32_t value)
+{
+    struct io_fn *s = opaque;
+
+    if (!s->in)
+        fprintf(stderr, "%08x <--- %08x\n", (uint32_t) addr, value);
+    s->in ++;
+    s->mem_write[2](s->opaque, addr, value);
+    s->in --;
+}
+
+static CPUReadMemoryFunc *io_readfn[] = { io_readb, io_readh, io_readw, };
+static CPUWriteMemoryFunc *io_writefn[] = { io_writeb, io_writeh, io_writew, };
+
+inline static int debug_register_io_memory(int io_index,
+                CPUReadMemoryFunc **mem_read, CPUWriteMemoryFunc **mem_write,
+                void *opaque)
+{
+    struct io_fn *s = qemu_malloc(sizeof(struct io_fn));
+
+    s->mem_read = mem_read;
+    s->mem_write = mem_write;
+    s->opaque = opaque;
+    s->in = 0;
+    return cpu_register_io_memory(io_index, io_readfn, io_writefn, s);
+}
+#  define cpu_register_io_memory	debug_register_io_memory
+# endif
+
+/* Not really omap specific, but is the only thing that uses the
+   uwire interface.  */
+/* tsc210x.c */
+struct uwire_slave_s *tsc2102_init(qemu_irq pint, AudioState *audio);
+struct i2s_codec_s *tsc210x_codec(struct uwire_slave_s *chip);
 
 #endif /* hw_omap_h */

@@ -22,7 +22,12 @@
  * THE SOFTWARE.
  */
 
-#include "vl.h"
+#include "hw/hw.h"
+#include "sysemu.h"
+#include "block.h"
+#include "console.h"
+#include "qemu-timer.h"
+#include "migration.h"
 #include "qemu_socket.h"
 #ifdef USE_KVM
 #include "qemu-kvm.h"

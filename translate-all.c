@@ -53,7 +53,7 @@ uint8_t gen_opc_cc_op[OPC_BUF_SIZE];
 #elif defined(TARGET_SPARC)
 target_ulong gen_opc_npc[OPC_BUF_SIZE];
 target_ulong gen_opc_jump_pc[2];
-#elif defined(TARGET_MIPS)
+#elif defined(TARGET_MIPS) || defined(TARGET_SH4)
 uint32_t gen_opc_hflags[OPC_BUF_SIZE];
 #endif
 
@@ -132,47 +132,52 @@ static void dyngen_labels(long *gen_labels, int nb_gen_labels,
     }
 }
 
+unsigned long code_gen_max_block_size(void)
+{
+    static unsigned long max;
+
+    if (max == 0) {
+#define DEF(s, n, copy_size) max = copy_size > max? copy_size : max;
+#include "opc.h"
+#undef DEF
+        max *= OPC_MAX_SIZE;
+    }
+
+    return max;
+}
+
 /* return non zero if the very first instruction is invalid so that
    the virtual CPU can trigger an exception.
 
    '*gen_code_size_ptr' contains the size of the generated code (host
    code).
 */
-int cpu_gen_code(CPUState *env, TranslationBlock *tb,
-                 int max_code_size, int *gen_code_size_ptr)
+int cpu_gen_code(CPUState *env, TranslationBlock *tb, int *gen_code_size_ptr)
 {
     uint8_t *gen_code_buf;
     int gen_code_size;
 
-#ifdef USE_CODE_COPY
-    if (code_copy_enabled &&
-        cpu_gen_code_copy(env, tb, max_code_size, &gen_code_size) == 0) {
-        /* nothing more to do */
-    } else
-#endif
-    {
-        if (gen_intermediate_code(env, tb) < 0)
-            return -1;
-
-        /* generate machine code */
-        tb->tb_next_offset[0] = 0xffff;
-        tb->tb_next_offset[1] = 0xffff;
-        gen_code_buf = tb->tc_ptr;
+    if (gen_intermediate_code(env, tb) < 0)
+        return -1;
+    
+    /* generate machine code */
+    tb->tb_next_offset[0] = 0xffff;
+    tb->tb_next_offset[1] = 0xffff;
+    gen_code_buf = tb->tc_ptr;
 #ifdef USE_DIRECT_JUMP
-        /* the following two entries are optional (only used for string ops) */
-        tb->tb_jmp_offset[2] = 0xffff;
-        tb->tb_jmp_offset[3] = 0xffff;
+    /* the following two entries are optional (only used for string ops) */
+    tb->tb_jmp_offset[2] = 0xffff;
+    tb->tb_jmp_offset[3] = 0xffff;
 #endif
-        dyngen_labels(gen_labels, nb_gen_labels, gen_code_buf, gen_opc_buf);
-
-        gen_code_size = dyngen_code(gen_code_buf, tb->tb_next_offset,
+    dyngen_labels(gen_labels, nb_gen_labels, gen_code_buf, gen_opc_buf);
+    
+    gen_code_size = dyngen_code(gen_code_buf, tb->tb_next_offset,
 #ifdef USE_DIRECT_JUMP
-                                    tb->tb_jmp_offset,
+                                tb->tb_jmp_offset,
 #else
-                                    NULL,
+                                NULL,
 #endif
-                                    gen_opc_buf, gen_opparam_buf, gen_labels);
-    }
+                                gen_opc_buf, gen_opparam_buf, gen_labels);
     *gen_code_size_ptr = gen_code_size;
 #ifdef DEBUG_DISAS
     if (loglevel & CPU_LOG_TB_OUT_ASM) {
@@ -195,11 +200,6 @@ int cpu_restore_state(TranslationBlock *tb,
     unsigned long tc_ptr;
     uint16_t *opc_ptr;
 
-#ifdef USE_CODE_COPY
-    if (tb->cflags & CF_CODE_COPY) {
-        return cpu_restore_state_copy(tb, env, searched_pc, puc);
-    }
-#endif
     if (gen_intermediate_code_pc(env, tb) < 0)
         return -1;
 
@@ -254,7 +254,7 @@ int cpu_restore_state(TranslationBlock *tb,
         if (npc == 1) {
             /* dynamic NPC: already stored */
         } else if (npc == 2) {
-            target_ulong t2 = (target_ulong)puc;
+            target_ulong t2 = (target_ulong)(unsigned long)puc;
             /* jump PC: use T2 and the jump targets of the translation */
             if (t2)
                 env->npc = gen_opc_jump_pc[0];
@@ -277,7 +277,8 @@ int cpu_restore_state(TranslationBlock *tb,
 #else
 #define CASE3(op)\
         case INDEX_op_ ## op ## _user:\
-        case INDEX_op_ ## op ## _kernel
+        case INDEX_op_ ## op ## _kernel:\
+        case INDEX_op_ ## op ## _hypv
 #endif
 
         CASE3(stfd):
@@ -310,6 +311,9 @@ int cpu_restore_state(TranslationBlock *tb,
     env->hflags |= gen_opc_hflags[j];
 #elif defined(TARGET_ALPHA)
     env->pc = gen_opc_pc[j];
+#elif defined(TARGET_SH4)
+    env->pc = gen_opc_pc[j];
+    env->flags = gen_opc_hflags[j];
 #endif
     return 0;
 }

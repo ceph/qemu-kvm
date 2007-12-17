@@ -5,7 +5,9 @@
  *
  * This code is licenced under the GPL
  */
-#include "vl.h"
+#include "hw.h"
+#include "net.h"
+#include "mcf.h"
 /* For crc32 */
 #include <zlib.h>
 
@@ -249,7 +251,7 @@ static uint32_t mcf_fec_read(void *opaque, target_phys_addr_t addr)
     }
 }
 
-void mcf_fec_write(void *opaque, target_phys_addr_t addr, uint32_t value)
+static void mcf_fec_write(void *opaque, target_phys_addr_t addr, uint32_t value)
 {
     mcf_fec_state *s = (mcf_fec_state *)opaque;
     switch (addr & 0x3ff) {

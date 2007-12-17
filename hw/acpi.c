@@ -16,7 +16,13 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
-#include "vl.h"
+#include "hw.h"
+#include "pc.h"
+#include "pci.h"
+#include "qemu-timer.h"
+#include "sysemu.h"
+#include "i2c.h"
+#include "smbus.h"
 
 //#define DEBUG
 
@@ -400,7 +406,7 @@ static void pm_io_space_update(PIIX4PMState *s)
 
     if (s->dev.config[0x80] & 1) {
         pm_io_base = le32_to_cpu(*(uint32_t *)(s->dev.config + 0x40));
-        pm_io_base &= 0xfffe;
+        pm_io_base &= 0xffc0;
 
         /* XXX: need to improve memory and ioport allocation */
 #if defined(DEBUG)
@@ -433,7 +439,7 @@ static void pm_save(QEMUFile* f,void *opaque)
     qemu_put_8s(f, &s->apmc);
     qemu_put_8s(f, &s->apms);
     qemu_put_timer(f, s->tmr_timer);
-    qemu_put_be64s(f, &s->tmr_overflow_time);
+    qemu_put_be64(f, s->tmr_overflow_time);
 }
 
 static int pm_load(QEMUFile* f,void* opaque,int version_id)
@@ -454,7 +460,7 @@ static int pm_load(QEMUFile* f,void* opaque,int version_id)
     qemu_get_8s(f, &s->apmc);
     qemu_get_8s(f, &s->apms);
     qemu_get_timer(f, s->tmr_timer);
-    qemu_get_be64s(f, &s->tmr_overflow_time);
+    s->tmr_overflow_time=qemu_get_be64(f);
 
     pm_io_space_update(s);
 
@@ -474,6 +480,8 @@ i2c_bus *piix4_pm_init(PCIBus *bus, int devfn, uint32_t smb_io_base)
     pci_conf[0x01] = 0x80;
     pci_conf[0x02] = 0x13;
     pci_conf[0x03] = 0x71;
+    pci_conf[0x06] = 0x80;
+    pci_conf[0x07] = 0x02;
     pci_conf[0x08] = 0x00; // revision number
     pci_conf[0x09] = 0x00;
     pci_conf[0x0a] = 0x80; // other bridge device

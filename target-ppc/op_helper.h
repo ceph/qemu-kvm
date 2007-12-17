@@ -22,14 +22,13 @@
 
 /* Memory load/store helpers */
 void glue(do_lsw, MEMSUFFIX) (int dst);
-void glue(do_lsw_le, MEMSUFFIX) (int dst);
 void glue(do_stsw, MEMSUFFIX) (int src);
-void glue(do_stsw_le, MEMSUFFIX) (int src);
 void glue(do_lmw, MEMSUFFIX) (int dst);
 void glue(do_lmw_le, MEMSUFFIX) (int dst);
 void glue(do_stmw, MEMSUFFIX) (int src);
 void glue(do_stmw_le, MEMSUFFIX) (int src);
 void glue(do_icbi, MEMSUFFIX) (void);
+void glue(do_dcbz, MEMSUFFIX) (void);
 void glue(do_POWER_lscbx, MEMSUFFIX) (int dest, int ra, int rb);
 void glue(do_POWER2_lfq, MEMSUFFIX) (void);
 void glue(do_POWER2_lfq_le, MEMSUFFIX) (void);
@@ -38,14 +37,13 @@ void glue(do_POWER2_stfq_le, MEMSUFFIX) (void);
 
 #if defined(TARGET_PPC64)
 void glue(do_lsw_64, MEMSUFFIX) (int dst);
-void glue(do_lsw_le_64, MEMSUFFIX) (int dst);
 void glue(do_stsw_64, MEMSUFFIX) (int src);
-void glue(do_stsw_le_64, MEMSUFFIX) (int src);
 void glue(do_lmw_64, MEMSUFFIX) (int dst);
 void glue(do_lmw_le_64, MEMSUFFIX) (int dst);
 void glue(do_stmw_64, MEMSUFFIX) (int src);
 void glue(do_stmw_le_64, MEMSUFFIX) (int src);
 void glue(do_icbi_64, MEMSUFFIX) (void);
+void glue(do_dcbz_64, MEMSUFFIX) (void);
 #endif
 
 #else
@@ -55,12 +53,10 @@ void do_print_mem_EA (target_ulong EA);
 /* Registers load and stores */
 void do_load_cr (void);
 void do_store_cr (uint32_t mask);
-void do_load_xer (void);
-void do_store_xer (void);
 #if defined(TARGET_PPC64)
 void do_store_pri (int prio);
 #endif
-void do_load_fpscr (void);
+void do_fpscr_setbit (int bit);
 void do_store_fpscr (uint32_t mask);
 target_ulong ppc_load_dump_spr (int sprn);
 void ppc_store_dump_spr (int sprn, target_ulong val);
@@ -75,12 +71,14 @@ void do_nego (void);
 void do_subfe (void);
 void do_subfmeo (void);
 void do_subfzeo (void);
+void do_cntlzw (void);
+#if defined(TARGET_PPC64)
+void do_cntlzd (void);
+#endif
 void do_sraw (void);
 #if defined(TARGET_PPC64)
 void do_adde_64 (void);
 void do_addmeo_64 (void);
-void do_imul64 (uint64_t *tl, uint64_t *th);
-void do_mul64 (uint64_t *tl, uint64_t *th);
 void do_divdo (void);
 void do_divduo (void);
 void do_mulldo (void);
@@ -96,6 +94,16 @@ void do_popcntb_64 (void);
 #endif
 
 /* Floating-point arithmetic helpers */
+void do_compute_fprf (int set_class);
+#ifdef CONFIG_SOFTFLOAT
+void do_float_check_status (void);
+#endif
+#if USE_PRECISE_EMULATION
+void do_fadd (void);
+void do_fsub (void);
+void do_fmul (void);
+void do_fdiv (void);
+#endif
 void do_fsqrt (void);
 void do_fre (void);
 void do_fres (void);
@@ -107,6 +115,9 @@ void do_fmsub (void);
 #endif
 void do_fnmadd (void);
 void do_fnmsub (void);
+#if USE_PRECISE_EMULATION
+void do_frsp (void);
+#endif
 void do_fctiw (void);
 void do_fctiwz (void);
 #if defined(TARGET_PPC64)
@@ -127,11 +138,10 @@ void do_tw (int flags);
 void do_td (int flags);
 #endif
 #if !defined(CONFIG_USER_ONLY)
+void do_store_msr (void);
 void do_rfi (void);
 #if defined(TARGET_PPC64)
 void do_rfid (void);
-#endif
-#if defined(TARGET_PPC64H)
 void do_hrfid (void);
 #endif
 void do_load_6xx_tlb (int is_code);
@@ -139,7 +149,6 @@ void do_load_74xx_tlb (int is_code);
 #endif
 
 /* POWER / PowerPC 601 specific helpers */
-void do_store_601_batu (int nr);
 void do_POWER_abso (void);
 void do_POWER_clcs (void);
 void do_POWER_div (void);
@@ -152,6 +161,7 @@ void do_POWER_mulo (void);
 #if !defined(CONFIG_USER_ONLY)
 void do_POWER_rac (void);
 void do_POWER_rfsvc (void);
+void do_store_hid0_601 (void);
 #endif
 
 /* PowerPC 602 specific helper */
@@ -166,7 +176,6 @@ void do_440_tlbwe (int word);
 #endif
 
 /* PowerPC 4xx specific helpers */
-void do_405_check_ov (void);
 void do_405_check_sat (void);
 void do_load_dcr (void);
 void do_store_dcr (void);
@@ -190,7 +199,6 @@ void do_load_403_pb (int num);
 void do_store_403_pb (int num);
 #endif
 
-#if defined(TARGET_PPCEMB)
 /* SPE extension helpers */
 void do_brinc (void);
 /* Fixed-point vector helpers */
@@ -271,96 +279,22 @@ void do_evfsctsi (void);
 void do_evfsctui (void);
 void do_evfsctsiz (void);
 void do_evfsctuiz (void);
-#endif /* defined(TARGET_PPCEMB) */
 
-/* Inlined helpers: used in micro-operation as well as helpers */
-/* Generic fixed-point helpers */
-static inline int _do_cntlzw (uint32_t val)
-{
-    int cnt = 0;
-    if (!(val & 0xFFFF0000UL)) {
-        cnt += 16;
-        val <<= 16;
-    }
-    if (!(val & 0xFF000000UL)) {
-        cnt += 8;
-        val <<= 8;
-    }
-    if (!(val & 0xF0000000UL)) {
-        cnt += 4;
-        val <<= 4;
-    }
-    if (!(val & 0xC0000000UL)) {
-        cnt += 2;
-        val <<= 2;
-    }
-    if (!(val & 0x80000000UL)) {
-        cnt++;
-        val <<= 1;
-    }
-    if (!(val & 0x80000000UL)) {
-        cnt++;
-    }
-    return cnt;
-}
-
-static inline int _do_cntlzd (uint64_t val)
-{
-    int cnt = 0;
-#if HOST_LONG_BITS == 64
-    if (!(val & 0xFFFFFFFF00000000ULL)) {
-        cnt += 32;
-        val <<= 32;
-    }
-    if (!(val & 0xFFFF000000000000ULL)) {
-        cnt += 16;
-        val <<= 16;
-    }
-    if (!(val & 0xFF00000000000000ULL)) {
-        cnt += 8;
-        val <<= 8;
-    }
-    if (!(val & 0xF000000000000000ULL)) {
-        cnt += 4;
-        val <<= 4;
-    }
-    if (!(val & 0xC000000000000000ULL)) {
-        cnt += 2;
-        val <<= 2;
-    }
-    if (!(val & 0x8000000000000000ULL)) {
-        cnt++;
-        val <<= 1;
-    }
-    if (!(val & 0x8000000000000000ULL)) {
-        cnt++;
-    }
-#else
-    /* Make it easier on 32 bits host machines */
-    if (!(val >> 32))
-        cnt = _do_cntlzw(val) + 32;
-    else
-        cnt = _do_cntlzw(val >> 32);
-#endif
-    return cnt;
-}
-
-#if defined(TARGET_PPCEMB)
 /* SPE extension */
 /* Single precision floating-point helpers */
-static inline uint32_t _do_efsabs (uint32_t val)
+static always_inline uint32_t _do_efsabs (uint32_t val)
 {
     return val & ~0x80000000;
 }
-static inline uint32_t _do_efsnabs (uint32_t val)
+static always_inline uint32_t _do_efsnabs (uint32_t val)
 {
     return val | 0x80000000;
 }
-static inline uint32_t _do_efsneg (uint32_t val)
+static always_inline uint32_t _do_efsneg (uint32_t val)
 {
     return val ^ 0x80000000;
 }
-static inline uint32_t _do_efsadd (uint32_t op1, uint32_t op2)
+static always_inline uint32_t _do_efsadd (uint32_t op1, uint32_t op2)
 {
     union {
         uint32_t u;
@@ -371,7 +305,7 @@ static inline uint32_t _do_efsadd (uint32_t op1, uint32_t op2)
     u1.f = float32_add(u1.f, u2.f, &env->spe_status);
     return u1.u;
 }
-static inline uint32_t _do_efssub (uint32_t op1, uint32_t op2)
+static always_inline uint32_t _do_efssub (uint32_t op1, uint32_t op2)
 {
     union {
         uint32_t u;
@@ -382,7 +316,7 @@ static inline uint32_t _do_efssub (uint32_t op1, uint32_t op2)
     u1.f = float32_sub(u1.f, u2.f, &env->spe_status);
     return u1.u;
 }
-static inline uint32_t _do_efsmul (uint32_t op1, uint32_t op2)
+static always_inline uint32_t _do_efsmul (uint32_t op1, uint32_t op2)
 {
     union {
         uint32_t u;
@@ -393,7 +327,7 @@ static inline uint32_t _do_efsmul (uint32_t op1, uint32_t op2)
     u1.f = float32_mul(u1.f, u2.f, &env->spe_status);
     return u1.u;
 }
-static inline uint32_t _do_efsdiv (uint32_t op1, uint32_t op2)
+static always_inline uint32_t _do_efsdiv (uint32_t op1, uint32_t op2)
 {
     union {
         uint32_t u;
@@ -405,7 +339,7 @@ static inline uint32_t _do_efsdiv (uint32_t op1, uint32_t op2)
     return u1.u;
 }
 
-static inline int _do_efststlt (uint32_t op1, uint32_t op2)
+static always_inline int _do_efststlt (uint32_t op1, uint32_t op2)
 {
     union {
         uint32_t u;
@@ -415,7 +349,7 @@ static inline int _do_efststlt (uint32_t op1, uint32_t op2)
     u2.u = op2;
     return float32_lt(u1.f, u2.f, &env->spe_status) ? 1 : 0;
 }
-static inline int _do_efststgt (uint32_t op1, uint32_t op2)
+static always_inline int _do_efststgt (uint32_t op1, uint32_t op2)
 {
     union {
         uint32_t u;
@@ -425,7 +359,7 @@ static inline int _do_efststgt (uint32_t op1, uint32_t op2)
     u2.u = op2;
     return float32_le(u1.f, u2.f, &env->spe_status) ? 0 : 1;
 }
-static inline int _do_efststeq (uint32_t op1, uint32_t op2)
+static always_inline int _do_efststeq (uint32_t op1, uint32_t op2)
 {
     union {
         uint32_t u;
@@ -436,7 +370,7 @@ static inline int _do_efststeq (uint32_t op1, uint32_t op2)
     return float32_eq(u1.f, u2.f, &env->spe_status) ? 1 : 0;
 }
 /* Double precision floating-point helpers */
-static inline int _do_efdtstlt (uint64_t op1, uint64_t op2)
+static always_inline int _do_efdtstlt (uint64_t op1, uint64_t op2)
 {
     union {
         uint64_t u;
@@ -446,7 +380,7 @@ static inline int _do_efdtstlt (uint64_t op1, uint64_t op2)
     u2.u = op2;
     return float64_lt(u1.f, u2.f, &env->spe_status) ? 1 : 0;
 }
-static inline int _do_efdtstgt (uint64_t op1, uint64_t op2)
+static always_inline int _do_efdtstgt (uint64_t op1, uint64_t op2)
 {
     union {
         uint64_t u;
@@ -456,7 +390,7 @@ static inline int _do_efdtstgt (uint64_t op1, uint64_t op2)
     u2.u = op2;
     return float64_le(u1.f, u2.f, &env->spe_status) ? 0 : 1;
 }
-static inline int _do_efdtsteq (uint64_t op1, uint64_t op2)
+static always_inline int _do_efdtsteq (uint64_t op1, uint64_t op2)
 {
     union {
         uint64_t u;
@@ -466,5 +400,4 @@ static inline int _do_efdtsteq (uint64_t op1, uint64_t op2)
     u2.u = op2;
     return float64_eq(u1.f, u2.f, &env->spe_status) ? 1 : 0;
 }
-#endif /* defined(TARGET_PPCEMB) */
 #endif

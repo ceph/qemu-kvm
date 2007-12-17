@@ -183,12 +183,20 @@ enum bfd_architecture
   bfd_arch_alpha,      /* Dec Alpha */
 #define bfd_mach_alpha 1
   bfd_arch_arm,        /* Advanced Risc Machines ARM */
-#define bfd_mach_arm_2         1
-#define bfd_mach_arm_2a                2
-#define bfd_mach_arm_3         3
-#define bfd_mach_arm_3M        4
-#define bfd_mach_arm_4                 5
-#define bfd_mach_arm_4T        6
+#define bfd_mach_arm_unknown	0
+#define bfd_mach_arm_2		1
+#define bfd_mach_arm_2a		2
+#define bfd_mach_arm_3		3
+#define bfd_mach_arm_3M 	4
+#define bfd_mach_arm_4 		5
+#define bfd_mach_arm_4T 	6
+#define bfd_mach_arm_5 		7
+#define bfd_mach_arm_5T		8
+#define bfd_mach_arm_5TE	9
+#define bfd_mach_arm_XScale	10
+#define bfd_mach_arm_ep9312	11
+#define bfd_mach_arm_iWMMXt	12
+#define bfd_mach_arm_iWMMXt2	13
   bfd_arch_ns32k,      /* National Semiconductors ns32000 */
   bfd_arch_w65,        /* WDC 65816 */
   bfd_arch_tic30,      /* Texas Instruments TMS320C30 */
@@ -200,6 +208,10 @@ enum bfd_architecture
 #define bfd_mach_m32r          0  /* backwards compatibility */
   bfd_arch_mn10200,    /* Matsushita MN10200 */
   bfd_arch_mn10300,    /* Matsushita MN10300 */
+  bfd_arch_cris,       /* Axis CRIS */
+#define bfd_mach_cris_v0_v10   255
+#define bfd_mach_cris_v32      32
+#define bfd_mach_cris_v10_v32  1032
   bfd_arch_last
   };
 #define bfd_mach_s390_31 31
@@ -382,6 +394,7 @@ extern int print_insn_tic30		PARAMS ((bfd_vma, disassemble_info*));
 extern int print_insn_ppc		PARAMS ((bfd_vma, disassemble_info*));
 extern int print_insn_alpha             PARAMS ((bfd_vma, disassemble_info*));
 extern int print_insn_s390		PARAMS ((bfd_vma, disassemble_info*));
+extern int print_insn_crisv32           PARAMS ((bfd_vma, disassemble_info*));
 
 #if 0
 /* Fetch the disassembler for a given BFD, if that support is available.  */

@@ -7,7 +7,9 @@
  * This code is licenced under the GPL.
  */
 
-#include "vl.h"
+#include "hw.h"
+#include "qemu-char.h"
+#include "primecell.h"
 
 typedef struct {
     uint32_t base;
@@ -28,6 +30,7 @@ typedef struct {
     int read_trigger;
     CharDriverState *chr;
     qemu_irq irq;
+    enum pl011_type type;
 } pl011_state;
 
 #define PL011_INT_TX 0x20
@@ -38,8 +41,10 @@ typedef struct {
 #define PL011_FLAG_TXFF 0x20
 #define PL011_FLAG_RXFE 0x10
 
-static const unsigned char pl011_id[] =
-{ 0x11, 0x10, 0x14, 0x00, 0x0d, 0xf0, 0x05, 0xb1 };
+static const unsigned char pl011_id[2][8] = {
+  { 0x11, 0x10, 0x14, 0x00, 0x0d, 0xf0, 0x05, 0xb1 }, /* PL011_ARM */
+  { 0x11, 0x00, 0x18, 0x01, 0x0d, 0xf0, 0x05, 0xb1 }, /* PL011_LUMINARY */
+};
 
 static void pl011_update(pl011_state *s)
 {
@@ -56,7 +61,7 @@ static uint32_t pl011_read(void *opaque, target_phys_addr_t offset)
 
     offset -= s->base;
     if (offset >= 0xfe0 && offset < 0x1000) {
-        return pl011_id[(offset - 0xfe0) >> 2];
+        return pl011_id[s->type][(offset - 0xfe0) >> 2];
     }
     switch (offset >> 2) {
     case 0: /* UARTDR */
@@ -73,6 +78,7 @@ static uint32_t pl011_read(void *opaque, target_phys_addr_t offset)
         if (s->read_count == s->read_trigger - 1)
             s->int_level &= ~ PL011_INT_RX;
         pl011_update(s);
+        qemu_chr_accept_input(s->chr);
         return c;
     case 1: /* UARTCR */
         return 0;
@@ -99,7 +105,7 @@ static uint32_t pl011_read(void *opaque, target_phys_addr_t offset)
     case 18: /* UARTDMACR */
         return s->dmacr;
     default:
-        cpu_abort (cpu_single_env, "pl011_read: Bad offset %x\n", offset);
+        cpu_abort (cpu_single_env, "pl011_read: Bad offset %x\n", (int)offset);
         return 0;
     }
 }
@@ -137,6 +143,9 @@ static void pl011_write(void *opaque, target_phys_addr_t offset,
     case 1: /* UARTCR */
         s->cr = value;
         break;
+    case 6: /* UARTFR */
+        /* Writes to Flag register are ignored.  */
+        break;
     case 8: /* UARTUARTILPR */
         s->ilpr = value;
         break;
@@ -172,7 +181,7 @@ static void pl011_write(void *opaque, target_phys_addr_t offset,
             cpu_abort(cpu_single_env, "PL011: DMA not implemented\n");
         break;
     default:
-        cpu_abort (cpu_single_env, "pl011_write: Bad offset %x\n", offset);
+        cpu_abort (cpu_single_env, "pl011_write: Bad offset %x\n", (int)offset);
     }
 }
 
@@ -224,7 +233,7 @@ static CPUWriteMemoryFunc *pl011_writefn[] = {
 };
 
 void pl011_init(uint32_t base, qemu_irq irq,
-                CharDriverState *chr)
+                CharDriverState *chr, enum pl011_type type)
 {
     int iomemtype;
     pl011_state *s;
@@ -235,6 +244,7 @@ void pl011_init(uint32_t base, qemu_irq irq,
     cpu_register_physical_memory(base, 0x00001000, iomemtype);
     s->base = base;
     s->irq = irq;
+    s->type = type;
     s->chr = chr;
     s->read_trigger = 1;
     s->ifl = 0x12;

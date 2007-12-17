@@ -8,11 +8,14 @@
 #define TARGET_PAGE_BITS 12
 #define MIPS_TLB_MAX 128
 
-#if defined(TARGET_MIPSN32) || defined(TARGET_MIPS64)
+#if defined(TARGET_MIPS64)
 #define TARGET_LONG_BITS 64
 #else
 #define TARGET_LONG_BITS 32
 #endif
+
+/* Even MIPS32 can have 36 bits physical address space. */
+#define TARGET_PHYS_ADDR_BITS 64
 
 /* Masks used to mark instructions to indicate which ISA level they
    were introduced in. */
@@ -32,6 +35,8 @@
 #define		ASE_MDMX	0x00004000
 #define		ASE_DSP		0x00008000
 #define		ASE_DSPR2	0x00010000
+#define		ASE_MT		0x00020000
+#define		ASE_SMARTMIPS	0x00040000
 
 /* Chip specific instructions.   */
 /* Currently void */

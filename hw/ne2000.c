@@ -21,7 +21,10 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#include "vl.h"
+#include "hw.h"
+#include "pci.h"
+#include "pc.h"
+#include "net.h"
 
 /* debug NE2000 card */
 //#define DEBUG_NE2000
@@ -646,7 +649,7 @@ static uint32_t ne2000_reset_ioport_read(void *opaque, uint32_t addr)
 static void ne2000_save(QEMUFile* f,void* opaque)
 {
 	NE2000State* s=(NE2000State*)opaque;
-        int tmp;
+        uint32_t tmp;
 
         if (s->pci_dev)
             pci_device_save(s->pci_dev, f);
@@ -678,7 +681,7 @@ static int ne2000_load(QEMUFile* f,void* opaque,int version_id)
 {
 	NE2000State* s=(NE2000State*)opaque;
         int ret;
-        int tmp;
+        uint32_t tmp;
 
         if (version_id > 3)
             return -EINVAL;

@@ -7,7 +7,8 @@
  * This code is licenced under the GPL.
  */
 
-#include "vl.h"
+#include "hw.h"
+#include "primecell.h"
 
 #define PL080_MAX_CHANNELS 8
 #define PL080_CONF_E    0x1
@@ -243,7 +244,7 @@ static uint32_t pl080_read(void *opaque, target_phys_addr_t offset)
         return s->sync;
     default:
     bad_offset:
-        cpu_abort(cpu_single_env, "pl080_read: Bad offset %x\n", offset);
+        cpu_abort(cpu_single_env, "pl080_read: Bad offset %x\n", (int)offset);
         return 0;
     }
 }
@@ -305,7 +306,7 @@ static void pl080_write(void *opaque, target_phys_addr_t offset,
         break;
     default:
     bad_offset:
-        cpu_abort(cpu_single_env, "pl080_write: Bad offset %x\n", offset);
+        cpu_abort(cpu_single_env, "pl080_write: Bad offset %x\n", (int)offset);
     }
     pl080_update(s);
 }

@@ -46,16 +46,16 @@
 #define FPSCR_SZ (1 << 20)
 #define FPSCR_PR (1 << 19)
 #define FPSCR_DN (1 << 18)
-
-#define DELAY_SLOT             (1 << 0) /* Must be the same as SR_T.  */
-/* This flag is set if the next insn is a delay slot for a conditional jump.
-   The dynamic value of the DELAY_SLOT determines whether the jup is taken. */
+#define DELAY_SLOT             (1 << 0)
 #define DELAY_SLOT_CONDITIONAL (1 << 1)
-/* Those are used in contexts only */
-#define BRANCH                 (1 << 2)
-#define BRANCH_CONDITIONAL     (1 << 3)
-#define MODE_CHANGE            (1 << 4)	/* Potential MD|RB change */
-#define BRANCH_EXCEPTION       (1 << 5)	/* Branch after exception */
+#define DELAY_SLOT_TRUE        (1 << 2)
+#define DELAY_SLOT_CLEARME     (1 << 3)
+/* The dynamic value of the DELAY_SLOT_TRUE flag determines whether the jump
+ * after the delay slot should be taken or not. It is calculated from SR_T.
+ *
+ * It is unclear if it is permitted to modify the SR_T flag in a delay slot.
+ * The use of DELAY_SLOT_TRUE flag makes us accept such SR_T modification.
+ */
 
 /* XXXXX The structure could be made more compact */
 typedef struct tlb_t {
@@ -76,6 +76,8 @@ typedef struct tlb_t {
 
 #define UTLB_SIZE 64
 #define ITLB_SIZE 4
+
+#define NB_MMU_MODES 2
 
 typedef struct CPUSH4State {
     uint32_t flags;		/* general execution flags */
@@ -119,9 +121,10 @@ typedef struct CPUSH4State {
     int exception_index;
      CPU_COMMON tlb_t utlb[UTLB_SIZE];	/* unified translation table */
     tlb_t itlb[ITLB_SIZE];	/* instruction translation table */
+    void *intc_handle;
 } CPUSH4State;
 
-CPUSH4State *cpu_sh4_init(void);
+CPUSH4State *cpu_sh4_init(const char *cpu_model);
 int cpu_sh4_exec(CPUSH4State * s);
 int cpu_sh4_signal_handler(int host_signum, void *pinfo,
                            void *puc);
@@ -133,6 +136,15 @@ int cpu_sh4_signal_handler(int host_signum, void *pinfo,
 #define cpu_exec cpu_sh4_exec
 #define cpu_gen_code cpu_sh4_gen_code
 #define cpu_signal_handler cpu_sh4_signal_handler
+
+/* MMU modes definitions */
+#define MMU_MODE0_SUFFIX _kernel
+#define MMU_MODE1_SUFFIX _user
+#define MMU_USER_IDX 1
+static inline int cpu_mmu_index (CPUState *env)
+{
+    return (env->sr & SR_MD) == 0 ? 1 : 0;
+}
 
 #include "cpu-all.h"
 

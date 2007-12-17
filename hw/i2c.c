@@ -7,7 +7,8 @@
  * This code is licenced under the LGPL.
  */
 
-#include "vl.h"
+#include "hw.h"
+#include "i2c.h"
 
 struct i2c_bus
 {
@@ -30,7 +31,7 @@ i2c_slave *i2c_slave_init(i2c_bus *bus, int address, int size)
     i2c_slave *dev;
 
     if (size < sizeof(i2c_slave))
-        cpu_abort(cpu_single_env, "I2C struct too small");
+        hw_error("I2C struct too small");
 
     dev = (i2c_slave *)qemu_mallocz(size);
     dev->address = address;
@@ -51,8 +52,7 @@ int i2c_bus_busy(i2c_bus *bus)
     return bus->current_dev != NULL;
 }
 
-/* Returns nonzero if the bus is already busy, or is the address is not
-   valid.  */
+/* Returns non-zero if the address is not valid.  */
 /* TODO: Make this handle multiple masters.  */
 int i2c_start_transfer(i2c_bus *bus, int address, int recv)
 {

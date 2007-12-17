@@ -22,7 +22,15 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#include "vl.h"
+#include "hw.h"
+#include "pc.h"
+#include "pci.h"
+#include "scsi-disk.h"
+#include "pcmcia.h"
+#include "block.h"
+#include "qemu-timer.h"
+#include "sysemu.h"
+#include "ppc_mac.h"
 
 /* debug IDE devices */
 //#define DEBUG_IDE
@@ -358,7 +366,7 @@ typedef struct IDEState {
     uint8_t *data_ptr;
     uint8_t *data_end;
     uint8_t io_buffer[MAX_MULT_SECTORS*512 + 4];
-    QEMUTimer *sector_write_timer; /* only used for win2k instal hack */
+    QEMUTimer *sector_write_timer; /* only used for win2k install hack */
     uint32_t irq_count; /* counts IRQs when using win2k install hack */
     /* CF-ATA extended error */
     uint8_t ext_error;
@@ -463,12 +471,12 @@ static void ide_identify(IDEState *s)
     put_le16(p + 5, 512); /* XXX: retired, remove ? */
     put_le16(p + 6, s->sectors);
     snprintf(buf, sizeof(buf), "QM%05d", s->drive_serial);
-    padstr((uint8_t *)(p + 10), buf, 20); /* serial number */
+    padstr((char *)(p + 10), buf, 20); /* serial number */
     put_le16(p + 20, 3); /* XXX: retired, remove ? */
     put_le16(p + 21, 512); /* cache size in sectors */
     put_le16(p + 22, 4); /* ecc bytes */
-    padstr((uint8_t *)(p + 23), QEMU_VERSION, 8); /* firmware version */
-    padstr((uint8_t *)(p + 27), "QEMU HARDDISK", 40); /* model */
+    padstr((char *)(p + 23), QEMU_VERSION, 8); /* firmware version */
+    padstr((char *)(p + 27), "QEMU HARDDISK", 40); /* model */
 #if MAX_MULT_SECTORS > 1
     put_le16(p + 47, 0x8000 | MAX_MULT_SECTORS);
 #endif
@@ -528,12 +536,12 @@ static void ide_atapi_identify(IDEState *s)
     /* Removable CDROM, 50us response, 12 byte packets */
     put_le16(p + 0, (2 << 14) | (5 << 8) | (1 << 7) | (2 << 5) | (0 << 0));
     snprintf(buf, sizeof(buf), "QM%05d", s->drive_serial);
-    padstr((uint8_t *)(p + 10), buf, 20); /* serial number */
+    padstr((char *)(p + 10), buf, 20); /* serial number */
     put_le16(p + 20, 3); /* buffer type */
     put_le16(p + 21, 512); /* cache size in sectors */
     put_le16(p + 22, 4); /* ecc bytes */
-    padstr((uint8_t *)(p + 23), QEMU_VERSION, 8); /* firmware version */
-    padstr((uint8_t *)(p + 27), "QEMU CD-ROM", 40); /* model */
+    padstr((char *)(p + 23), QEMU_VERSION, 8); /* firmware version */
+    padstr((char *)(p + 27), "QEMU CD-ROM", 40); /* model */
     put_le16(p + 48, 1); /* dword I/O (XXX: should not be set on CDROM) */
 #ifdef USE_DMA_CDROM
     put_le16(p + 49, 1 << 9 | 1 << 8); /* DMA and LBA supported */
@@ -583,10 +591,10 @@ static void ide_cfata_identify(IDEState *s)
     put_le16(p + 7, s->nb_sectors >> 16);	/* Sectors per card */
     put_le16(p + 8, s->nb_sectors);		/* Sectors per card */
     snprintf(buf, sizeof(buf), "QM%05d", s->drive_serial);
-    padstr((uint8_t *)(p + 10), buf, 20);	/* Serial number in ASCII */
+    padstr((char *)(p + 10), buf, 20);	/* Serial number in ASCII */
     put_le16(p + 22, 0x0004);			/* ECC bytes */
-    padstr((uint8_t *) (p + 23), QEMU_VERSION, 8);	/* Firmware Revision */
-    padstr((uint8_t *) (p + 27), "QEMU MICRODRIVE", 40);/* Model number */
+    padstr((char *) (p + 23), QEMU_VERSION, 8);	/* Firmware Revision */
+    padstr((char *) (p + 27), "QEMU MICRODRIVE", 40);/* Model number */
 #if MAX_MULT_SECTORS > 1
     put_le16(p + 47, 0x8000 | MAX_MULT_SECTORS);
 #else
@@ -865,44 +873,10 @@ static void ide_sector_write_timer_cb(void *opaque)
     ide_set_irq(s);
 }
 
-static void ide_sector_write_aio_cb(void *opaque, int ret)
-{
-    BMDMAState *bm = opaque;
-    IDEState *s = bm->ide_if;
-
-#ifdef TARGET_I386
-    if (win2k_install_hack && ((++s->irq_count % 16) == 0)) {
-	/* It seems there is a bug in the Windows 2000 installer HDD
-	   IDE driver which fills the disk with empty logs when the
-	   IDE write IRQ comes too early. This hack tries to correct
-	   that at the expense of slower write performances. Use this
-	   option _only_ to install Windows 2000. You must disable it
-	   for normal use. */
-	qemu_mod_timer(s->sector_write_timer,
-		       qemu_get_clock(vm_clock) + (ticks_per_sec / 1000));
-    } else
-#endif
-    {
-	ide_set_irq(s);
-    }
-    bm->aiocb = NULL;
-}
-
 static void ide_sector_write(IDEState *s)
 {
-    BMDMAState *bm;
     int64_t sector_num;
-    int n, n1;
-
-    s->io_buffer_index = 0;
-    s->io_buffer_size = 0;
-    bm = s->bmdma;
-    if(bm == NULL) {
-	bm = qemu_mallocz(sizeof(BMDMAState));
-	s->bmdma = bm;
-    }
-    bm->ide_if = s;
-    bm->dma_cb = ide_sector_write_aio_cb;
+    int ret, n, n1;
 
     s->status = READY_STAT | SEEK_STAT;
     sector_num = ide_get_sector(s);
@@ -912,6 +886,7 @@ static void ide_sector_write(IDEState *s)
     n = s->nsector;
     if (n > s->req_nb_sectors)
         n = s->req_nb_sectors;
+    ret = bdrv_write(s->bs, sector_num, s->io_buffer, n);
     s->nsector -= n;
     if (s->nsector == 0) {
         /* no more sectors to write */
@@ -924,8 +899,21 @@ static void ide_sector_write(IDEState *s)
     }
     ide_set_sector(s, sector_num + n);
 
-    bm->aiocb = bdrv_aio_write(s->bs, sector_num, s->io_buffer, n,
-			       ide_sector_write_aio_cb, bm);
+#ifdef TARGET_I386
+    if (win2k_install_hack && ((++s->irq_count % 16) == 0)) {
+        /* It seems there is a bug in the Windows 2000 installer HDD
+           IDE driver which fills the disk with empty logs when the
+           IDE write IRQ comes too early. This hack tries to correct
+           that at the expense of slower write performances. Use this
+           option _only_ to install Windows 2000. You must disable it
+           for normal use. */
+        qemu_mod_timer(s->sector_write_timer, 
+                       qemu_get_clock(vm_clock) + (ticks_per_sec / 1000));
+    } else 
+#endif
+    {
+        ide_set_irq(s);
+    }
 }
 
 /* XXX: handle errors */
@@ -1373,7 +1361,7 @@ static void ide_atapi_cmd(IDEState *s)
 
                     buf[8] = 0x2a;
                     buf[9] = 0x12;
-                    buf[10] = 0x08;
+                    buf[10] = 0x00;
                     buf[11] = 0x00;
 
                     buf[12] = 0x70;
@@ -2054,6 +2042,7 @@ static void ide_ioport_write(void *opaque, uint32_t addr, uint32_t val)
             ide_set_signature(s);
             s->status = 0x00; /* NOTE: READY is _not_ set */
             s->error = 0x01;
+            ide_set_irq(s);
             break;
         case WIN_SRST:
             if (!s->is_cdrom)
@@ -2520,8 +2509,8 @@ static void ide_init_ioport(IDEState *ide_state, int iobase, int iobase2)
 /* save per IDE drive data */
 static void ide_save(QEMUFile* f, IDEState *s)
 {
-    qemu_put_be32s(f, &s->mult_sectors);
-    qemu_put_be32s(f, &s->identify_set);
+    qemu_put_be32(f, s->mult_sectors);
+    qemu_put_be32(f, s->identify_set);
     if (s->identify_set) {
         qemu_put_buffer(f, (const uint8_t *)s->identify_data, 512);
     }
@@ -2548,8 +2537,8 @@ static void ide_save(QEMUFile* f, IDEState *s)
 /* load per IDE drive data */
 static void ide_load(QEMUFile* f, IDEState *s)
 {
-    qemu_get_be32s(f, &s->mult_sectors);
-    qemu_get_be32s(f, &s->identify_set);
+    s->mult_sectors=qemu_get_be32(f);
+    s->identify_set=qemu_get_be32(f);
     if (s->identify_set) {
         qemu_get_buffer(f, (uint8_t *)s->identify_data, 512);
     }

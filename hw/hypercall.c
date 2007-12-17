@@ -22,7 +22,12 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#include "vl.h"
+#include "hw/hw.h"
+#include "sysemu.h"
+#include "qemu-char.h"
+#include "hw/isa.h"
+#include "hw/irq.h"
+#include "hw/pci.h"
 #include "hypercall.h"
 #include <stddef.h>
 

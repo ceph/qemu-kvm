@@ -22,7 +22,10 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#include "vl.h"
+#include "hw.h"
+#include "qemu-char.h"
+#include "isa.h"
+#include "pc.h"
 
 //#define DEBUG_PARALLEL
 
@@ -455,45 +458,45 @@ ParallelState *parallel_init(int base, qemu_irq irq, CharDriverState *chr)
 }
 
 /* Memory mapped interface */
-uint32_t parallel_mm_readb (void *opaque, target_phys_addr_t addr)
+static uint32_t parallel_mm_readb (void *opaque, target_phys_addr_t addr)
 {
     ParallelState *s = opaque;
 
     return parallel_ioport_read_sw(s, (addr - s->base) >> s->it_shift) & 0xFF;
 }
 
-void parallel_mm_writeb (void *opaque,
-                       target_phys_addr_t addr, uint32_t value)
+static void parallel_mm_writeb (void *opaque,
+                                target_phys_addr_t addr, uint32_t value)
 {
     ParallelState *s = opaque;
 
     parallel_ioport_write_sw(s, (addr - s->base) >> s->it_shift, value & 0xFF);
 }
 
-uint32_t parallel_mm_readw (void *opaque, target_phys_addr_t addr)
+static uint32_t parallel_mm_readw (void *opaque, target_phys_addr_t addr)
 {
     ParallelState *s = opaque;
 
     return parallel_ioport_read_sw(s, (addr - s->base) >> s->it_shift) & 0xFFFF;
 }
 
-void parallel_mm_writew (void *opaque,
-                       target_phys_addr_t addr, uint32_t value)
+static void parallel_mm_writew (void *opaque,
+                                target_phys_addr_t addr, uint32_t value)
 {
     ParallelState *s = opaque;
 
     parallel_ioport_write_sw(s, (addr - s->base) >> s->it_shift, value & 0xFFFF);
 }
 
-uint32_t parallel_mm_readl (void *opaque, target_phys_addr_t addr)
+static uint32_t parallel_mm_readl (void *opaque, target_phys_addr_t addr)
 {
     ParallelState *s = opaque;
 
     return parallel_ioport_read_sw(s, (addr - s->base) >> s->it_shift);
 }
 
-void parallel_mm_writel (void *opaque,
-                       target_phys_addr_t addr, uint32_t value)
+static void parallel_mm_writel (void *opaque,
+                                target_phys_addr_t addr, uint32_t value)
 {
     ParallelState *s = opaque;
 

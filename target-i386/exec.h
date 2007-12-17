@@ -163,8 +163,8 @@ void cpu_x86_update_cr3(CPUX86State *env, target_ulong new_cr3);
 void cpu_x86_update_cr4(CPUX86State *env, uint32_t new_cr4);
 void cpu_x86_flush_tlb(CPUX86State *env, target_ulong addr);
 int cpu_x86_handle_mmu_fault(CPUX86State *env, target_ulong addr,
-                             int is_write, int is_user, int is_softmmu);
-void tlb_fill(target_ulong addr, int is_write, int is_user,
+                             int is_write, int mmu_idx, int is_softmmu);
+void tlb_fill(target_ulong addr, int is_write, int mmu_idx,
               void *retaddr);
 void __hidden cpu_lock(void);
 void __hidden cpu_unlock(void);
@@ -199,6 +199,7 @@ void helper_sysexit(void);
 void helper_syscall(int next_eip_addend);
 void helper_sysret(int dflag);
 void helper_rdtsc(void);
+void helper_rdpmc(void);
 void helper_rdmsr(void);
 void helper_wrmsr(void);
 void helper_lsl(void);
@@ -419,12 +420,12 @@ static inline void helper_fstt(CPU86_LDouble f, target_ulong ptr)
 
 static inline CPU86_LDouble helper_fldt(target_ulong ptr)
 {
-    return *(CPU86_LDouble *)ptr;
+    return *(CPU86_LDouble *)(unsigned long)ptr;
 }
 
 static inline void helper_fstt(CPU86_LDouble f, target_ulong ptr)
 {
-    *(CPU86_LDouble *)ptr = f;
+    *(CPU86_LDouble *)(unsigned long)ptr = f;
 }
 
 #else

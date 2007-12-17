@@ -232,7 +232,7 @@ enum {
 
 int do_swap;
 
-void __attribute__((noreturn)) __attribute__((format (printf, 1, 2))) error(const char *fmt, ...)
+static void __attribute__((noreturn)) __attribute__((format (printf, 1, 2))) error(const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
@@ -243,7 +243,7 @@ void __attribute__((noreturn)) __attribute__((format (printf, 1, 2))) error(cons
     exit(1);
 }
 
-void *load_data(int fd, long offset, unsigned int size)
+static void *load_data(int fd, long offset, unsigned int size)
 {
     char *data;
 
@@ -701,6 +701,8 @@ int load_object(const char *filename)
     uint32_t *n_strtab;
     EXE_SYM *sym;
     EXE_RELOC *rel;
+    const char *p;
+    int aux_size, j;
 
     fd = open(filename, O_RDONLY
 #ifdef _WIN32
@@ -727,7 +729,6 @@ int load_object(const char *filename)
     sdata = malloc(sizeof(void *) * fhdr.f_nscns);
     memset(sdata, 0, sizeof(void *) * fhdr.f_nscns);
 
-    const char *p;
     for(i = 0;i < fhdr.f_nscns; i++) {
         sec = &shdr[i];
         if (!strstart(sec->s_name,  ".bss", &p))
@@ -771,7 +772,6 @@ int load_object(const char *filename)
 	/* set coff symbol */
 	symtab = malloc(sizeof(struct coff_sym) * nb_syms);
 
-	int aux_size, j;
 	for (i = 0, ext_sym = coff_symtab, sym = symtab; i < nb_syms; i++, ext_sym++, sym++) {
 		memset(sym, 0, sizeof(*sym));
 		sym->st_syment = ext_sym;
@@ -1495,8 +1495,8 @@ void gen_code(const char *name, host_ulong offset, host_ulong size,
         p = (void *)(p_end - 2);
         if (p == p_start)
             error("empty code for %s", name);
-        if (get16((uint16_t *)p) != 0x07fe && get16((uint16_t *)p) != 0x07f4)
-            error("br %%r14 expected at the end of %s", name);
+        if ((get16((uint16_t *)p) & 0xfff0) != 0x07f0)
+            error("br expected at the end of %s", name);
         copy_size = p - p_start;
     }
 #elif defined(HOST_ALPHA)
@@ -2119,6 +2119,19 @@ void gen_code(const char *name, host_ulong offset, host_ulong size,
                         case R_390_8:
                             fprintf(outfile, "    *(uint8_t *)(gen_code_ptr + %d) = %s + %d;\n",
                                     reloc_offset, relname, addend);
+                            break;
+                        case R_390_PC32DBL:
+                            if (ELF32_ST_TYPE(symtab[ELFW(R_SYM)(rel->r_info)].st_info) == STT_SECTION) {
+                                fprintf(outfile,
+                                        "    *(uint32_t *)(gen_code_ptr + %d) += "
+                                        "((long)&%s - (long)gen_code_ptr) >> 1;\n",
+                                        reloc_offset, name);
+                            }
+                            else
+                                fprintf(outfile,
+                                        "    *(uint32_t *)(gen_code_ptr + %d) = "
+                                        "(%s + %d - ((uint32_t)gen_code_ptr + %d)) >> 1;\n",
+                                        reloc_offset, relname, addend, reloc_offset);
                             break;
                         default:
                             error("unsupported s390 relocation (%d)", type);

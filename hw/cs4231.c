@@ -21,7 +21,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#include "vl.h"
+#include "hw.h"
+#include "sun4m.h"
 
 /* debug CS4231 */
 //#define DEBUG_CS
@@ -79,11 +80,11 @@ static uint32_t cs_mem_readl(void *opaque, target_phys_addr_t addr)
             break;
         }
         DPRINTF("read dreg[%d]: 0x%8.8x\n", CS_RAP(s), ret);
-	break;
+        break;
     default:
         ret = s->regs[saddr];
         DPRINTF("read reg[%d]: 0x%8.8x\n", saddr, ret);
-	break;
+        break;
     }
     return ret;
 }
@@ -122,7 +123,7 @@ static void cs_mem_writel(void *opaque, target_phys_addr_t addr, uint32_t val)
         break;
     default:
         s->regs[saddr] = val;
-	break;
+        break;
     }
 }
 

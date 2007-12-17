@@ -1,13 +1,33 @@
 #ifndef QEMU_H
 #define QEMU_H
 
-#include "thunk.h"
-
 #include <signal.h>
 #include <string.h>
-#include "syscall_defs.h"
 
 #include "cpu.h"
+
+#ifdef TARGET_ABI32
+typedef uint32_t abi_ulong;
+typedef int32_t abi_long;
+#define TARGET_ABI_FMT_lx "%08x"
+#define TARGET_ABI_FMT_ld "%d"
+#define TARGET_ABI_FMT_lu "%u"
+#define TARGET_ABI_BITS 32
+#else
+typedef target_ulong abi_ulong;
+typedef target_long abi_long;
+#define TARGET_ABI_FMT_lx TARGET_FMT_lx
+#define TARGET_ABI_FMT_ld TARGET_FMT_ld
+#define TARGET_ABI_FMT_lu TARGET_FMT_lu
+#define TARGET_ABI_BITS TARGET_LONG_BITS
+/* for consistency, define ABI32 too */
+#if TARGET_ABI_BITS == 32
+#define TARGET_ABI32 1
+#endif
+#endif
+
+#include "thunk.h"
+#include "syscall_defs.h"
 #include "syscall.h"
 #include "target_signal.h"
 #include "gdbstub.h"
@@ -17,20 +37,20 @@
  * task_struct fields in the kernel
  */
 struct image_info {
-        target_ulong    load_addr;
-	unsigned long	start_code;
-	unsigned long	end_code;
-        unsigned long   start_data;
-	unsigned long	end_data;
-	unsigned long	start_brk;
-	unsigned long	brk;
-	unsigned long	start_mmap;
-	unsigned long	mmap;
-	unsigned long	rss;
-	unsigned long	start_stack;
-	unsigned long	entry;
-        target_ulong    code_offset;
-        target_ulong    data_offset;
+        abi_ulong       load_addr;
+        abi_ulong       start_code;
+        abi_ulong       end_code;
+        abi_ulong       start_data;
+        abi_ulong       end_data;
+        abi_ulong       start_brk;
+        abi_ulong       brk;
+        abi_ulong       start_mmap;
+        abi_ulong       mmap;
+        abi_ulong       rss;
+        abi_ulong       start_stack;
+        abi_ulong       entry;
+        abi_ulong       code_offset;
+        abi_ulong       data_offset;
         char            **host_argv;
 	int		personality;
 };
@@ -67,7 +87,7 @@ typedef struct TaskState {
     int swi_errno;
 #endif
 #if defined(TARGET_I386) && !defined(TARGET_X86_64)
-    target_ulong target_v86;
+    abi_ulong target_v86;
     struct vm86_saved_state vm86_saved_regs;
     struct target_vm86plus_struct vm86plus;
     uint32_t v86flags;
@@ -105,7 +125,7 @@ extern const char *qemu_uname_release;
 struct linux_binprm {
         char buf[128];
         void *page[MAX_ARG_PAGES];
-        unsigned long p;
+        abi_ulong p;
 	int fd;
         int e_uid, e_gid;
         int argc, envc;
@@ -115,8 +135,8 @@ struct linux_binprm {
 };
 
 void do_init_thread(struct target_pt_regs *regs, struct image_info *infop);
-target_ulong loader_build_argptr(int envc, int argc, target_ulong sp,
-                                 target_ulong stringp, int push_ptr);
+abi_ulong loader_build_argptr(int envc, int argc, abi_ulong sp,
+                              abi_ulong stringp, int push_ptr);
 int loader_exec(const char * filename, char ** argv, char ** envp,
              struct target_pt_regs * regs, struct image_info *infop);
 
@@ -124,23 +144,36 @@ int load_elf_binary(struct linux_binprm * bprm, struct target_pt_regs * regs,
                     struct image_info * info);
 int load_flt_binary(struct linux_binprm * bprm, struct target_pt_regs * regs,
                     struct image_info * info);
+#ifdef TARGET_HAS_ELFLOAD32
+int load_elf_binary_multi(struct linux_binprm *bprm,
+                          struct target_pt_regs *regs,
+                          struct image_info *info);
+#endif
 
-void memcpy_to_target(target_ulong dest, const void *src,
-                      unsigned long len);
-void target_set_brk(target_ulong new_brk);
-target_long do_brk(target_ulong new_brk);
+abi_long memcpy_to_target(abi_ulong dest, const void *src,
+                          unsigned long len);
+void target_set_brk(abi_ulong new_brk);
+abi_long do_brk(abi_ulong new_brk);
 void syscall_init(void);
-target_long do_syscall(void *cpu_env, int num, target_long arg1,
-                       target_long arg2, target_long arg3, target_long arg4,
-                       target_long arg5, target_long arg6);
+abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
+                    abi_long arg2, abi_long arg3, abi_long arg4,
+                    abi_long arg5, abi_long arg6);
 void gemu_log(const char *fmt, ...) __attribute__((format(printf,1,2)));
 extern CPUState *global_env;
 void cpu_loop(CPUState *env);
 void init_paths(const char *prefix);
 const char *path(const char *pathname);
+char *target_strerror(int err);
 
 extern int loglevel;
 extern FILE *logfile;
+
+/* strace.c */
+void print_syscall(int num,
+                   abi_long arg1, abi_long arg2, abi_long arg3,
+                   abi_long arg4, abi_long arg5, abi_long arg6);
+void print_syscall_ret(int num, abi_long arg1);
+extern int do_strace;
 
 /* signal.c */
 void process_pending_signals(void *cpu_env);
@@ -150,51 +183,59 @@ void host_to_target_siginfo(target_siginfo_t *tinfo, const siginfo_t *info);
 void target_to_host_siginfo(siginfo_t *info, const target_siginfo_t *tinfo);
 long do_sigreturn(CPUState *env);
 long do_rt_sigreturn(CPUState *env);
-int do_sigaltstack(const struct target_sigaltstack *uss,
-                   struct target_sigaltstack *uoss,
-                   target_ulong sp);
+abi_long do_sigaltstack(abi_ulong uss_addr, abi_ulong uoss_addr, abi_ulong sp);
 
 #ifdef TARGET_I386
 /* vm86.c */
 void save_v86_state(CPUX86State *env);
 void handle_vm86_trap(CPUX86State *env, int trapno);
 void handle_vm86_fault(CPUX86State *env);
-int do_vm86(CPUX86State *env, long subfunction, target_ulong v86_addr);
+int do_vm86(CPUX86State *env, long subfunction, abi_ulong v86_addr);
+#elif defined(TARGET_SPARC64)
+void sparc64_set_context(CPUSPARCState *env);
+void sparc64_get_context(CPUSPARCState *env);
 #endif
 
 /* mmap.c */
-int target_mprotect(target_ulong start, target_ulong len, int prot);
-target_long target_mmap(target_ulong start, target_ulong len, int prot,
-                 int flags, int fd, target_ulong offset);
-int target_munmap(target_ulong start, target_ulong len);
-target_long target_mremap(target_ulong old_addr, target_ulong old_size,
-                   target_ulong new_size, unsigned long flags,
-                   target_ulong new_addr);
-int target_msync(target_ulong start, target_ulong len, int flags);
+int target_mprotect(abi_ulong start, abi_ulong len, int prot);
+abi_long target_mmap(abi_ulong start, abi_ulong len, int prot,
+                     int flags, int fd, abi_ulong offset);
+int target_munmap(abi_ulong start, abi_ulong len);
+abi_long target_mremap(abi_ulong old_addr, abi_ulong old_size,
+                       abi_ulong new_size, unsigned long flags,
+                       abi_ulong new_addr);
+int target_msync(abi_ulong start, abi_ulong len, int flags);
 
 /* user access */
 
 #define VERIFY_READ 0
-#define VERIFY_WRITE 1
+#define VERIFY_WRITE 1 /* implies read access */
 
-#define access_ok(type,addr,size) (1)
+static inline int access_ok(int type, abi_ulong addr, abi_ulong size)
+{
+    return page_check_range((target_ulong)addr, size,
+                            (type == VERIFY_READ) ? PAGE_READ : (PAGE_READ | PAGE_WRITE)) == 0;
+}
 
-/* NOTE get_user and put_user use host addresses.  */
-#define __put_user(x,ptr)\
+/* NOTE __get_user and __put_user use host pointers and don't check access. */
+/* These are usually used to access struct data members once the
+ * struct has been locked - usually with lock_user_struct().
+ */
+#define __put_user(x, hptr)\
 ({\
-    int size = sizeof(*ptr);\
+    int size = sizeof(*hptr);\
     switch(size) {\
     case 1:\
-        *(uint8_t *)(ptr) = (typeof(*ptr))(x);\
+        *(uint8_t *)(hptr) = (uint8_t)(typeof(*hptr))(x);\
         break;\
     case 2:\
-        *(uint16_t *)(ptr) = tswap16((typeof(*ptr))(x));\
+        *(uint16_t *)(hptr) = tswap16((typeof(*hptr))(x));\
         break;\
     case 4:\
-        *(uint32_t *)(ptr) = tswap32((typeof(*ptr))(x));\
+        *(uint32_t *)(hptr) = tswap32((typeof(*hptr))(x));\
         break;\
     case 8:\
-        *(uint64_t *)(ptr) = tswap64((typeof(*ptr))(x));\
+        *(uint64_t *)(hptr) = tswap64((typeof(*hptr))(x));\
         break;\
     default:\
         abort();\
@@ -202,47 +243,92 @@ int target_msync(target_ulong start, target_ulong len, int flags);
     0;\
 })
 
-#define __get_user(x, ptr) \
+#define __get_user(x, hptr) \
 ({\
-    int size = sizeof(*ptr);\
+    int size = sizeof(*hptr);\
     switch(size) {\
     case 1:\
-        x = (typeof(*ptr))*(uint8_t *)(ptr);\
+        x = (typeof(*hptr))*(uint8_t *)(hptr);\
         break;\
     case 2:\
-        x = (typeof(*ptr))tswap16(*(uint16_t *)(ptr));\
+        x = (typeof(*hptr))tswap16(*(uint16_t *)(hptr));\
         break;\
     case 4:\
-        x = (typeof(*ptr))tswap32(*(uint32_t *)(ptr));\
+        x = (typeof(*hptr))tswap32(*(uint32_t *)(hptr));\
         break;\
     case 8:\
-        x = (typeof(*ptr))tswap64(*(uint64_t *)(ptr));\
+        x = (typeof(*hptr))tswap64(*(uint64_t *)(hptr));\
         break;\
     default:\
+        /* avoid warning */\
+        x = 0;\
         abort();\
     }\
     0;\
 })
 
-#define put_user(x,ptr)\
-({\
-    int __ret;\
-    if (access_ok(VERIFY_WRITE, ptr, sizeof(*ptr)))\
-        __ret = __put_user(x, ptr);\
-    else\
-        __ret = -EFAULT;\
-    __ret;\
+/* put_user()/get_user() take a guest address and check access */
+/* These are usually used to access an atomic data type, such as an int,
+ * that has been passed by address.  These internally perform locking
+ * and unlocking on the data type.
+ */
+#define put_user(x, gaddr, target_type)					\
+({									\
+    abi_ulong __gaddr = (gaddr);					\
+    target_type *__hptr;						\
+    abi_long __ret;							\
+    if ((__hptr = lock_user(VERIFY_WRITE, __gaddr, sizeof(target_type), 0))) { \
+        __ret = __put_user((x), __hptr);				\
+        unlock_user(__hptr, __gaddr, sizeof(target_type));		\
+    } else								\
+        __ret = -TARGET_EFAULT;						\
+    __ret;								\
 })
 
-#define get_user(x,ptr)\
-({\
-    int __ret;\
-    if (access_ok(VERIFY_READ, ptr, sizeof(*ptr)))\
-        __ret = __get_user(x, ptr);\
-    else\
-        __ret = -EFAULT;\
-    __ret;\
+#define get_user(x, gaddr, target_type)					\
+({									\
+    abi_ulong __gaddr = (gaddr);					\
+    target_type *__hptr;						\
+    abi_long __ret;							\
+    if ((__hptr = lock_user(VERIFY_READ, __gaddr, sizeof(target_type), 1))) { \
+        __ret = __get_user((x), __hptr);				\
+        unlock_user(__hptr, __gaddr, 0);				\
+    } else {								\
+        /* avoid warning */						\
+        (x) = 0;							\
+        __ret = -TARGET_EFAULT;						\
+    }									\
+    __ret;								\
 })
+
+#define put_user_ual(x, gaddr) put_user((x), (gaddr), abi_ulong)
+#define put_user_sal(x, gaddr) put_user((x), (gaddr), abi_long)
+#define put_user_u64(x, gaddr) put_user((x), (gaddr), uint64_t)
+#define put_user_s64(x, gaddr) put_user((x), (gaddr), int64_t)
+#define put_user_u32(x, gaddr) put_user((x), (gaddr), uint32_t)
+#define put_user_s32(x, gaddr) put_user((x), (gaddr), int32_t)
+#define put_user_u16(x, gaddr) put_user((x), (gaddr), uint16_t)
+#define put_user_s16(x, gaddr) put_user((x), (gaddr), int16_t)
+#define put_user_u8(x, gaddr)  put_user((x), (gaddr), uint8_t)
+#define put_user_s8(x, gaddr)  put_user((x), (gaddr), int8_t)
+
+#define get_user_ual(x, gaddr) get_user((x), (gaddr), abi_ulong)
+#define get_user_sal(x, gaddr) get_user((x), (gaddr), abi_long)
+#define get_user_u64(x, gaddr) get_user((x), (gaddr), uint64_t)
+#define get_user_s64(x, gaddr) get_user((x), (gaddr), int64_t)
+#define get_user_u32(x, gaddr) get_user((x), (gaddr), uint32_t)
+#define get_user_s32(x, gaddr) get_user((x), (gaddr), int32_t)
+#define get_user_u16(x, gaddr) get_user((x), (gaddr), uint16_t)
+#define get_user_s16(x, gaddr) get_user((x), (gaddr), int16_t)
+#define get_user_u8(x, gaddr)  get_user((x), (gaddr), uint8_t)
+#define get_user_s8(x, gaddr)  get_user((x), (gaddr), int8_t)
+
+/* copy_from_user() and copy_to_user() are usually used to copy data
+ * buffers between the target and host.  These internally perform
+ * locking/unlocking of the memory.
+ */
+abi_long copy_from_user(void *hptr, abi_ulong gaddr, size_t len);
+abi_long copy_to_user(abi_ulong gaddr, void *hptr, size_t len);
 
 /* Functions for accessing guest memory.  The tget and tput functions
    read/write single values, byteswapping as neccessary.  The lock_user
@@ -252,69 +338,61 @@ int target_msync(target_ulong start, target_ulong len, int flags);
 
 /* Lock an area of guest memory into the host.  If copy is true then the
    host area will have the same contents as the guest.  */
-static inline void *lock_user(target_ulong guest_addr, long len, int copy)
+static inline void *lock_user(int type, abi_ulong guest_addr, long len, int copy)
 {
+    if (!access_ok(type, guest_addr, len))
+        return NULL;
 #ifdef DEBUG_REMAP
-    void *addr;
-    addr = malloc(len);
-    if (copy)
-        memcpy(addr, g2h(guest_addr), len);
-    else
-        memset(addr, 0, len);
-    return addr;
+    {
+        void *addr;
+        addr = malloc(len);
+        if (copy)
+            memcpy(addr, g2h(guest_addr), len);
+        else
+            memset(addr, 0, len);
+        return addr;
+    }
 #else
     return g2h(guest_addr);
 #endif
 }
 
-/* Unlock an area of guest memory.  The first LEN bytes must be flushed back
-   to guest memory.  */
-static inline void unlock_user(void *host_addr, target_ulong guest_addr,
-                                long len)
+/* Unlock an area of guest memory.  The first LEN bytes must be
+   flushed back to guest memory. host_ptr = NULL is explicitely
+   allowed and does nothing. */
+static inline void unlock_user(void *host_ptr, abi_ulong guest_addr,
+                               long len)
 {
+
 #ifdef DEBUG_REMAP
-    if (host_addr == g2h(guest_addr))
+    if (!host_ptr)
+        return;
+    if (host_ptr == g2h(guest_addr))
         return;
     if (len > 0)
-        memcpy(g2h(guest_addr), host_addr, len);
-    free(host_addr);
+        memcpy(g2h(guest_ptr), host_ptr, len);
+    free(host_ptr);
 #endif
 }
 
-/* Return the length of a string in target memory.  */
-static inline int target_strlen(target_ulong ptr)
-{
-  return strlen(g2h(ptr));
-}
+/* Return the length of a string in target memory or -TARGET_EFAULT if
+   access error. */
+abi_long target_strlen(abi_ulong gaddr);
 
 /* Like lock_user but for null terminated strings.  */
-static inline void *lock_user_string(target_ulong guest_addr)
+static inline void *lock_user_string(abi_ulong guest_addr)
 {
-    long len;
-    len = target_strlen(guest_addr) + 1;
-    return lock_user(guest_addr, len, 1);
+    abi_long len;
+    len = target_strlen(guest_addr);
+    if (len < 0)
+        return NULL;
+    return lock_user(VERIFY_READ, guest_addr, (long)(len + 1), 1);
 }
 
 /* Helper macros for locking/ulocking a target struct.  */
-#define lock_user_struct(host_ptr, guest_addr, copy) \
-    host_ptr = lock_user(guest_addr, sizeof(*host_ptr), copy)
-#define unlock_user_struct(host_ptr, guest_addr, copy) \
+#define lock_user_struct(type, host_ptr, guest_addr, copy)	\
+    (host_ptr = lock_user(type, guest_addr, sizeof(*host_ptr), copy))
+#define unlock_user_struct(host_ptr, guest_addr, copy)		\
     unlock_user(host_ptr, guest_addr, (copy) ? sizeof(*host_ptr) : 0)
-
-#define tget8(addr) ldub(addr)
-#define tput8(addr, val) stb(addr, val)
-#define tget16(addr) lduw(addr)
-#define tput16(addr, val) stw(addr, val)
-#define tget32(addr) ldl(addr)
-#define tput32(addr, val) stl(addr, val)
-#define tget64(addr) ldq(addr)
-#define tput64(addr, val) stq(addr, val)
-#if TARGET_LONG_BITS == 64
-#define tgetl(addr) ldq(addr)
-#define tputl(addr, val) stq(addr, val)
-#else
-#define tgetl(addr) ldl(addr)
-#define tputl(addr, val) stl(addr, val)
-#endif
 
 #endif /* QEMU_H */

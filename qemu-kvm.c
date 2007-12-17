@@ -14,7 +14,8 @@ int kvm_irqchip = 1;
 #ifdef USE_KVM
 
 #include <string.h>
-#include "vl.h"
+#include "hw/hw.h"
+#include "sysemu.h"
 
 #include "qemu-kvm.h"
 #include <libkvm.h>
@@ -321,6 +322,10 @@ static int kvm_main_loop_cpu(CPUState *env)
 
     setup_kernel_sigmask(env);
     pthread_mutex_lock(&qemu_mutex);
+
+    kvm_qemu_init_env(env);
+    env->ready_for_interrupt_injection = 1;
+
     cpu_single_env = env;
     while (1) {
 	while (!has_work(env))

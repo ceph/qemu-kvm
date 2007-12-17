@@ -1,4 +1,5 @@
-#include "vl.h"
+#include "hw.h"
+#include "sh.h"
 #include "sh7750_regs.h"
 
 #define REGNAME(r) {r, #r},
@@ -76,9 +77,6 @@ static regname_t regnames[] = {
 	REGNAME(SH7750_PDTRB_A7)
 	REGNAME(SH7750_GPIOIC_A7)
 	REGNAME(SH7750_ICR_A7)
-	REGNAME(SH7750_IPRA_A7)
-	REGNAME(SH7750_IPRB_A7)
-	REGNAME(SH7750_IPRC_A7)
 	REGNAME(SH7750_BCR3_A7)
 	REGNAME(SH7750_BCR4_A7)
 	REGNAME(SH7750_PRECHARGE0_A7)

@@ -26,7 +26,10 @@
  * Reference: Finn Thogersons' VGADOC4b
  *   available at http://home.worldonline.dk/~finth/
  */
-#include "vl.h"
+#include "hw.h"
+#include "pc.h"
+#include "pci.h"
+#include "console.h"
 #include "vga_int.h"
 #ifndef _WIN32
 #include <sys/mman.h>
@@ -3121,7 +3124,7 @@ static void cirrus_vga_save(QEMUFile *f, void *opaque)
     qemu_put_buffer(f, s->gr + 2, 254);
     qemu_put_8s(f, &s->ar_index);
     qemu_put_buffer(f, s->ar, 21);
-    qemu_put_be32s(f, &s->ar_flip_flop);
+    qemu_put_be32(f, s->ar_flip_flop);
     qemu_put_8s(f, &s->cr_index);
     qemu_put_buffer(f, s->cr, 256);
     qemu_put_8s(f, &s->msr);
@@ -3136,7 +3139,7 @@ static void cirrus_vga_save(QEMUFile *f, void *opaque)
     qemu_put_buffer(f, s->dac_cache, 3);
     qemu_put_buffer(f, s->palette, 768);
 
-    qemu_put_be32s(f, &s->bank_offset);
+    qemu_put_be32(f, s->bank_offset);
 
     qemu_put_8s(f, &s->cirrus_hidden_dac_lockindex);
     qemu_put_8s(f, &s->cirrus_hidden_dac_data);
@@ -3179,7 +3182,7 @@ static int cirrus_vga_load(QEMUFile *f, void *opaque, int version_id)
     qemu_get_buffer(f, s->gr + 2, 254);
     qemu_get_8s(f, &s->ar_index);
     qemu_get_buffer(f, s->ar, 21);
-    qemu_get_be32s(f, &s->ar_flip_flop);
+    s->ar_flip_flop=qemu_get_be32(f);
     qemu_get_8s(f, &s->cr_index);
     qemu_get_buffer(f, s->cr, 256);
     qemu_get_8s(f, &s->msr);
@@ -3194,7 +3197,7 @@ static int cirrus_vga_load(QEMUFile *f, void *opaque, int version_id)
     qemu_get_buffer(f, s->dac_cache, 3);
     qemu_get_buffer(f, s->palette, 768);
 
-    qemu_get_be32s(f, &s->bank_offset);
+    s->bank_offset=qemu_get_be32(f);
 
     qemu_get_8s(f, &s->cirrus_hidden_dac_lockindex);
     qemu_get_8s(f, &s->cirrus_hidden_dac_data);

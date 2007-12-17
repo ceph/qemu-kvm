@@ -24,6 +24,7 @@
 #include <inttypes.h>
 
 #include "config.h"
+#include "osdep.h"
 
 enum {
 #define DEF(s, n, copy_size) INDEX_op_ ## s,
@@ -33,5 +34,8 @@ enum {
 };
 
 #include "dyngen.h"
+extern int dyngen_code(uint8_t *gen_code_buf,
+                       uint16_t *label_offsets, uint16_t *jmp_offsets,
+                       const uint16_t *opc_buf, const uint32_t *opparam_buf, const long *gen_labels);
 #include "op.h"
 

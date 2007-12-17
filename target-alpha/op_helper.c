@@ -19,6 +19,7 @@
  */
 
 #include "exec.h"
+#include "host-utils.h"
 #include "softfloat.h"
 
 #include "op_helper.h"
@@ -27,13 +28,19 @@
 #include "op_helper_mem.h"
 
 #if !defined(CONFIG_USER_ONLY)
-#define MEMSUFFIX _user
-#include "op_helper_mem.h"
-
 #define MEMSUFFIX _kernel
 #include "op_helper_mem.h"
 
-/* Those are used for supervisor and executive modes */
+#define MEMSUFFIX _executive
+#include "op_helper_mem.h"
+
+#define MEMSUFFIX _supervisor
+#include "op_helper_mem.h"
+
+#define MEMSUFFIX _user
+#include "op_helper_mem.h"
+
+/* This is used for pal modes */
 #define MEMSUFFIX _data
 #include "op_helper_mem.h"
 #endif
@@ -193,118 +200,32 @@ void helper_mullv (void)
 
 void helper_mulqv ()
 {
-    uint64_t res, tmp0, tmp1;
+    uint64_t tl, th;
 
-    res = (T0 >> 32) * (T1 >> 32);
-    tmp0 = ((T0 & 0xFFFFFFFF) * (T1 >> 32)) +
-        ((T0 >> 32) * (T1 & 0xFFFFFFFF));
-    tmp1 = (T0 & 0xFFFFFFFF) * (T1 & 0xFFFFFFFF);
-    tmp0 += tmp1 >> 32;
-    res += tmp0 >> 32;
-    T0 *= T1;
-    if (unlikely(res != 0)) {
+    muls64(&tl, &th, T0, T1);
+    /* If th != 0 && th != -1, then we had an overflow */
+    if (unlikely((th + 1) > 1)) {
         helper_excp(EXCP_ARITH, EXCP_ARITH_OVERFLOW);
     }
-}
-
-void helper_umulh (void)
-{
-    uint64_t tmp0, tmp1;
-
-    tmp0 = ((T0 & 0xFFFFFFFF) * (T1 >> 32)) +
-        ((T0 >> 32) * (T1 & 0xFFFFFFFF));
-    tmp1 = (T0 & 0xFFFFFFFF) * (T1 & 0xFFFFFFFF);
-    tmp0 += tmp1 >> 32;
-    T0 = (T0 >> 32) * (T0 >> 32);
-    T0 += tmp0 >> 32;
+    T0 = tl;
 }
 
 void helper_ctpop (void)
 {
-    int n;
-
-    for (n = 0; T0 != 0; n++)
-        T0 = T0 ^ (T0 - 1);
-    T0 = n;
+    T0 = ctpop64(T0);
 }
 
 void helper_ctlz (void)
 {
-    uint32_t op32;
-    int n;
-
-    n = 0;
-    if (!(T0 & 0xFFFFFFFF00000000ULL)) {
-        n += 32;
-        T0 <<= 32;
-    }
-    /* Make it easier for 32 bits hosts */
-    op32 = T0 >> 32;
-    if (!(op32 & 0xFFFF0000UL)) {
-        n += 16;
-        op32 <<= 16;
-    }
-    if (!(op32 & 0xFF000000UL)) {
-        n += 8;
-        op32 <<= 8;
-    }
-    if (!(op32 & 0xF0000000UL)) {
-        n += 4;
-        op32 <<= 4;
-    }
-    if (!(op32 & 0xC0000000UL)) {
-        n += 2;
-        op32 <<= 2;
-    }
-    if (!(op32 & 0x80000000UL)) {
-        n++;
-        op32 <<= 1;
-    }
-    if (!(op32 & 0x80000000UL)) {
-        n++;
-    }
-    T0 = n;
+    T0 = clz64(T0);
 }
 
 void helper_cttz (void)
 {
-    uint32_t op32;
-    int n;
-
-    n = 0;
-    if (!(T0 & 0x00000000FFFFFFFFULL)) {
-        n += 32;
-        T0 >>= 32;
-    }
-    /* Make it easier for 32 bits hosts */
-    op32 = T0;
-    if (!(op32 & 0x0000FFFFUL)) {
-        n += 16;
-        op32 >>= 16;
-    }
-    if (!(op32 & 0x000000FFUL)) {
-        n += 8;
-        op32 >>= 8;
-    }
-    if (!(op32 & 0x0000000FUL)) {
-        n += 4;
-        op32 >>= 4;
-    }
-    if (!(op32 & 0x00000003UL)) {
-        n += 2;
-        op32 >>= 2;
-    }
-    if (!(op32 & 0x00000001UL)) {
-        n++;
-        op32 >>= 1;
-    }
-    if (!(op32 & 0x00000001UL)) {
-        n++;
-    }
-    T0 = n;
+    T0 = ctz64(T0);
 }
 
-static inline uint64_t byte_zap (uint64_t op, uint8_t mskb)
+static always_inline uint64_t byte_zap (uint64_t op, uint8_t mskb)
 {
     uint64_t mask;
 
@@ -619,7 +540,7 @@ void helper_ftoit (void)
     FT0 = p.d;
 }
 
-static int vaxf_is_valid (float ff)
+static always_inline int vaxf_is_valid (float ff)
 {
     union {
         float f;
@@ -638,7 +559,7 @@ static int vaxf_is_valid (float ff)
     return 1;
 }
 
-static float vaxf_to_ieee32 (float ff)
+static always_inline float vaxf_to_ieee32 (float ff)
 {
     union {
         float f;
@@ -658,7 +579,7 @@ static float vaxf_to_ieee32 (float ff)
     return p.f;
 }
 
-static float ieee32_to_vaxf (float fi)
+static always_inline float ieee32_to_vaxf (float fi)
 {
     union {
         float f;
@@ -761,7 +682,7 @@ void helper_itoff (void)
     /* XXX: TODO */
 }
 
-static int vaxg_is_valid (double ff)
+static always_inline int vaxg_is_valid (double ff)
 {
     union {
         double f;
@@ -780,7 +701,7 @@ static int vaxg_is_valid (double ff)
     return 1;
 }
 
-static double vaxg_to_ieee64 (double fg)
+static always_inline double vaxg_to_ieee64 (double fg)
 {
     union {
         double f;
@@ -800,7 +721,7 @@ static double vaxg_to_ieee64 (double fg)
     return p.f;
 }
 
-static double ieee64_to_vaxg (double fi)
+static always_inline double ieee64_to_vaxg (double fi)
 {
     union {
         double f;
@@ -1054,7 +975,7 @@ void helper_cvtlq (void)
     FT0 = q.d;
 }
 
-static inline void __helper_cvtql (int s, int v)
+static always_inline void __helper_cvtql (int s, int v)
 {
     union {
         double d;
@@ -1151,11 +1072,32 @@ void helper_mtpr (int iprn)
 }
 #endif
 
+#if defined(HOST_SPARC) || defined(HOST_SPARC64)
+void helper_reset_FT0 (void)
+{
+    FT0 = 0;
+}
+
+void helper_reset_FT1 (void)
+{
+    FT1 = 0;
+}
+
+void helper_reset_FT2 (void)
+{
+    FT2 = 0;
+}
+#endif
+
 /*****************************************************************************/
 /* Softmmu support */
 #if !defined (CONFIG_USER_ONLY)
 
-#define GETPC() (__builtin_return_address(0))
+#ifdef __s390__
+# define GETPC() ((void*)((unsigned long)__builtin_return_address(0) & 0x7fffffffUL))
+#else
+# define GETPC() (__builtin_return_address(0))
+#endif
 
 /* XXX: the two following helpers are pure hacks.
  *      Hopefully, we emulate the PALcode, then we should never see
@@ -1164,20 +1106,20 @@ void helper_mtpr (int iprn)
 void helper_ld_phys_to_virt (void)
 {
     uint64_t tlb_addr, physaddr;
-    int index, is_user;
+    int index, mmu_idx;
     void *retaddr;
 
-    is_user = (env->ps >> 3) & 3;
+    mmu_idx = cpu_mmu_index(env);
     index = (T0 >> TARGET_PAGE_BITS) & (CPU_TLB_SIZE - 1);
  redo:
-    tlb_addr = env->tlb_table[is_user][index].addr_read;
+    tlb_addr = env->tlb_table[mmu_idx][index].addr_read;
     if ((T0 & TARGET_PAGE_MASK) ==
         (tlb_addr & (TARGET_PAGE_MASK | TLB_INVALID_MASK))) {
-        physaddr = T0 + env->tlb_table[is_user][index].addend;
+        physaddr = T0 + env->tlb_table[mmu_idx][index].addend;
     } else {
         /* the page is not in the TLB : fill it */
         retaddr = GETPC();
-        tlb_fill(T0, 0, is_user, retaddr);
+        tlb_fill(T0, 0, mmu_idx, retaddr);
         goto redo;
     }
     T0 = physaddr;
@@ -1186,20 +1128,20 @@ void helper_ld_phys_to_virt (void)
 void helper_st_phys_to_virt (void)
 {
     uint64_t tlb_addr, physaddr;
-    int index, is_user;
+    int index, mmu_idx;
     void *retaddr;
 
-    is_user = (env->ps >> 3) & 3;
+    mmu_idx = cpu_mmu_index(env);
     index = (T0 >> TARGET_PAGE_BITS) & (CPU_TLB_SIZE - 1);
  redo:
-    tlb_addr = env->tlb_table[is_user][index].addr_write;
+    tlb_addr = env->tlb_table[mmu_idx][index].addr_write;
     if ((T0 & TARGET_PAGE_MASK) ==
         (tlb_addr & (TARGET_PAGE_MASK | TLB_INVALID_MASK))) {
-        physaddr = T0 + env->tlb_table[is_user][index].addend;
+        physaddr = T0 + env->tlb_table[mmu_idx][index].addend;
     } else {
         /* the page is not in the TLB : fill it */
         retaddr = GETPC();
-        tlb_fill(T0, 1, is_user, retaddr);
+        tlb_fill(T0, 1, mmu_idx, retaddr);
         goto redo;
     }
     T0 = physaddr;
@@ -1223,22 +1165,22 @@ void helper_st_phys_to_virt (void)
    NULL, it means that the function was called in C code (i.e. not
    from generated code or from helper.c) */
 /* XXX: fix it to restore all registers */
-void tlb_fill (target_ulong addr, int is_write, int is_user, void *retaddr)
+void tlb_fill (target_ulong addr, int is_write, int mmu_idx, void *retaddr)
 {
     TranslationBlock *tb;
     CPUState *saved_env;
-    target_phys_addr_t pc;
+    unsigned long pc;
     int ret;
 
     /* XXX: hack to restore env in all cases, even if not called from
        generated code */
     saved_env = env;
     env = cpu_single_env;
-    ret = cpu_alpha_handle_mmu_fault(env, addr, is_write, is_user, 1);
+    ret = cpu_alpha_handle_mmu_fault(env, addr, is_write, mmu_idx, 1);
     if (!likely(ret == 0)) {
         if (likely(retaddr)) {
             /* now we have a real cpu fault */
-            pc = (target_phys_addr_t)retaddr;
+            pc = (unsigned long)retaddr;
             tb = tb_find_pc(pc);
             if (likely(tb)) {
                 /* the PC is inside the translated code. It means that we have

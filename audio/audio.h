@@ -24,7 +24,7 @@
 #ifndef QEMU_AUDIO_H
 #define QEMU_AUDIO_H
 
-#include "config.h"
+#include "config-host.h"
 #include "sys-queue.h"
 
 typedef void (*audio_callback_fn_t) (void *opaque, int avail);
@@ -73,7 +73,6 @@ typedef struct CaptureState {
     LIST_ENTRY (CaptureState) entries;
 } CaptureState;
 
-typedef struct AudioState AudioState;
 typedef struct SWVoiceOut SWVoiceOut;
 typedef struct CaptureVoiceOut CaptureVoiceOut;
 typedef struct SWVoiceIn SWVoiceIn;

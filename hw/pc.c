@@ -21,7 +21,17 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#include "vl.h"
+#include "hw.h"
+#include "pc.h"
+#include "fdc.h"
+#include "pci.h"
+#include "block.h"
+#include "sysemu.h"
+#include "audio/audio.h"
+#include "net.h"
+#include "smbus.h"
+#include "boards.h"
+
 #ifdef USE_KVM
 #include "qemu-kvm.h"
 extern int kvm_allowed;
@@ -36,6 +46,8 @@ extern int kvm_allowed;
 
 /* Leave a chunk of memory at the top of RAM for the BIOS ACPI tables.  */
 #define ACPI_DATA_SIZE       0x10000
+
+#define MAX_IDE_BUS 2
 
 static fdctrl_t *floppy_controller;
 static RTCState *rtc_state;
@@ -156,10 +168,30 @@ static void cmos_init_hd(int type_ofs, int info_ofs, BlockDriverState *hd)
     rtc_set_memory(s, info_ofs + 8, sectors);
 }
 
+/* convert boot_device letter to something recognizable by the bios */
+static int boot_device2nibble(char boot_device)
+{
+    switch(boot_device) {
+    case 'a':
+    case 'b':
+        return 0x01; /* floppy boot */
+    case 'c':
+        return 0x02; /* hard drive boot */
+    case 'd':
+        return 0x03; /* CD-ROM boot */
+    case 'n':
+        return 0x04; /* Network boot */
+    }
+    return 0;
+}
+
 /* hd_table must contain 4 block drivers */
-static void cmos_init(ram_addr_t ram_size, ram_addr_t above_4g_mem_size, int boot_device, BlockDriverState **hd_table, int smp_cpus)
+static void cmos_init(ram_addr_t ram_size, ram_addr_t above_4g_mem_size,
+                      const char *boot_device, BlockDriverState **hd_table,
+                      int smp_cpus)
 {
     RTCState *s = rtc_state;
+    int nbds, bds[3] = { 0, };
     int val;
     int fd0, fd1, nb;
     int i;
@@ -195,24 +227,23 @@ static void cmos_init(ram_addr_t ram_size, ram_addr_t above_4g_mem_size, int boo
     rtc_set_memory(s, 0x34, val);
     rtc_set_memory(s, 0x35, val >> 8);
 
-    switch(boot_device) {
-    case 'a':
-    case 'b':
-        rtc_set_memory(s, 0x3d, 0x01); /* floppy boot */
-        if (!fd_bootchk)
-            rtc_set_memory(s, 0x38, 0x01); /* disable signature check */
-        break;
-    default:
-    case 'c':
-        rtc_set_memory(s, 0x3d, 0x02); /* hard drive boot */
-        break;
-    case 'd':
-        rtc_set_memory(s, 0x3d, 0x03); /* CD-ROM boot */
-        break;
-    case 'n':
-        rtc_set_memory(s, 0x3d, 0x04); /* Network boot */
-        break;
+    /* set boot devices, and disable floppy signature check if requested */
+#define PC_MAX_BOOT_DEVICES 3
+    nbds = strlen(boot_device);
+    if (nbds > PC_MAX_BOOT_DEVICES) {
+        fprintf(stderr, "Too many boot devices for PC\n");
+        exit(1);
     }
+    for (i = 0; i < nbds; i++) {
+        bds[i] = boot_device2nibble(boot_device[i]);
+        if (bds[i] == 0) {
+            fprintf(stderr, "Invalid boot device for PC: '%c'\n",
+                    boot_device[i]);
+            exit(1);
+        }
+    }
+    rtc_set_memory(s, 0x3d, (bds[1] << 4) | bds[0]);
+    rtc_set_memory(s, 0x38, (bds[2] << 4) | (fd_bootchk ?  0x0 : 0x1));
 
     /* floppy type */
 
@@ -302,7 +333,7 @@ static uint32_t ioport92_read(void *opaque, uint32_t addr)
 /***********************************************************/
 /* Bochs BIOS debug ports */
 
-void bochs_bios_write(void *opaque, uint32_t addr, uint32_t val)
+static void bochs_bios_write(void *opaque, uint32_t addr, uint32_t val)
 {
     static const char shutdown_str[8] = "Shutdown";
     static int shutdown_index = 0;
@@ -346,7 +377,7 @@ void bochs_bios_write(void *opaque, uint32_t addr, uint32_t val)
     }
 }
 
-void bochs_bios_init(void)
+static void bochs_bios_init(void)
 {
     register_ioport_write(0x400, 1, 2, bochs_bios_write, NULL);
     register_ioport_write(0x401, 1, 2, bochs_bios_write, NULL);
@@ -366,8 +397,10 @@ static void generate_bootsect(uint32_t gpr[8], uint16_t segs[6], uint16_t ip)
 {
     uint8_t bootsect[512], *p;
     int i;
+    int hda;
 
-    if (bs_table[0] == NULL) {
+    hda = drive_get_index(IF_IDE, 0, 0);
+    if (hda == -1) {
 	fprintf(stderr, "A disk image must be given for 'hda' when booting "
 		"a Linux kernel\n");
 	exit(1);
@@ -376,7 +409,7 @@ static void generate_bootsect(uint32_t gpr[8], uint16_t segs[6], uint16_t ip)
     memset(bootsect, 0, sizeof(bootsect));
 
     /* Copy the MSDOS partition table if possible */
-    bdrv_read(bs_table[0], 0, bootsect, 1);
+    bdrv_read(drives_table[hda].bdrv, 0, bootsect, 1);
 
     /* Make sure we have a partition signature */
     bootsect[510] = 0x55;
@@ -413,11 +446,11 @@ static void generate_bootsect(uint32_t gpr[8], uint16_t segs[6], uint16_t ip)
     *p++ = segs[1];		/* CS */
     *p++ = segs[1] >> 8;
 
-    bdrv_set_boot_sector(bs_table[0], bootsect, sizeof(bootsect));
+    bdrv_set_boot_sector(drives_table[hda].bdrv, bootsect, sizeof(bootsect));
 }
 
-int load_kernel(const char *filename, uint8_t *addr,
-                uint8_t *real_addr)
+static int load_kernel(const char *filename, uint8_t *addr,
+                       uint8_t *real_addr)
 {
     int fd, size;
     int setup_sects;
@@ -488,7 +521,9 @@ static void load_linux(const char *kernel_filename,
     }
 
     /* kernel protocol version */
+#if 0
     fprintf(stderr, "header magic: %#x\n", ldl_p(header+0x202));
+#endif
     if (ldl_p(header+0x202) == 0x53726448)
 	protocol = lduw_p(header+0x206);
     else
@@ -511,6 +546,7 @@ static void load_linux(const char *kernel_filename,
 	prot_addr    = phys_ram_base + 0x100000;
     }
 
+#if 0
     fprintf(stderr,
 	    "qemu: real_addr     = %#zx\n"
 	    "qemu: cmdline_addr  = %#zx\n"
@@ -518,6 +554,7 @@ static void load_linux(const char *kernel_filename,
 	    real_addr-phys_ram_base,
 	    cmdline_addr-phys_ram_base,
 	    prot_addr-phys_ram_base);
+#endif
 
     /* highest address for loading the initrd */
     if (protocol >= 0x203)
@@ -529,7 +566,7 @@ static void load_linux(const char *kernel_filename,
 	initrd_max = ram_size-ACPI_DATA_SIZE-1;
 
     /* kernel command line */
-    pstrcpy(cmdline_addr, 4096, kernel_cmdline);
+    pstrcpy((char*)cmdline_addr, 4096, kernel_cmdline);
 
     if (protocol >= 0x202) {
 	stl_p(header+0x228, cmdline_addr-phys_ram_base);
@@ -679,11 +716,11 @@ extern int kvm_allowed;
 #endif
 
 /* PC hardware initialisation */
-static void pc_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
-                     DisplayState *ds, const char **fd_filename, int snapshot,
+static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
+                     const char *boot_device, DisplayState *ds,
                      const char *kernel_filename, const char *kernel_cmdline,
                      const char *initrd_filename,
-                     int pci_enabled)
+                     int pci_enabled, const char *cpu_model)
 {
     char buf[1024];
     int ret, linux_boot, i;
@@ -696,6 +733,9 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
     NICInfo *nd;
     qemu_irq *cpu_irq;
     qemu_irq *i8259;
+    int index;
+    BlockDriverState *hd[MAX_IDE_BUS * MAX_IDE_DEVS];
+    BlockDriverState *fd[MAX_FD];
 
     if (ram_size >= 0xe0000000 ) {
         above_4g_mem_size = ram_size - 0xe0000000;
@@ -705,8 +745,20 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
     linux_boot = (kernel_filename != NULL);
 
     /* init CPUs */
+    if (cpu_model == NULL) {
+#ifdef TARGET_X86_64
+        cpu_model = "qemu64";
+#else
+        cpu_model = "qemu32";
+#endif
+    }
+    
     for(i = 0; i < smp_cpus; i++) {
-        env = cpu_init();
+        env = cpu_init(cpu_model);
+        if (!env) {
+            fprintf(stderr, "Unable to find x86 CPU definition\n");
+            exit(1);
+        }
         if (i != 0)
             env->hflags |= HF_HALTED_MASK;
         if (smp_cpus > 1) {
@@ -745,7 +797,9 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
     vga_ram_addr = qemu_ram_alloc(vga_ram_size);
 
     /* BIOS load */
-    snprintf(buf, sizeof(buf), "%s/%s", bios_dir, BIOS_FILENAME);
+    if (bios_name == NULL)
+        bios_name = BIOS_FILENAME;
+    snprintf(buf, sizeof(buf), "%s/%s", bios_dir, bios_name);
     bios_size = get_image_size(buf);
     if (bios_size <= 0 ||
         (bios_size % 65536) != 0) {
@@ -973,12 +1027,26 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
 #ifdef USE_HYPERCALL
     pci_hypercall_init(pci_bus);
 #endif
+
+    if (drive_get_max_bus(IF_IDE) >= MAX_IDE_BUS) {
+        fprintf(stderr, "qemu: too many IDE bus\n");
+        exit(1);
+    }
+
+    for(i = 0; i < MAX_IDE_BUS * MAX_IDE_DEVS; i++) {
+        index = drive_get_index(IF_IDE, i / MAX_IDE_DEVS, i % MAX_IDE_DEVS);
+	if (index != -1)
+	    hd[i] = drives_table[index].bdrv;
+	else
+	    hd[i] = NULL;
+    }
+
     if (pci_enabled) {
-        pci_piix3_ide_init(pci_bus, bs_table, piix3_devfn + 1, i8259);
+        pci_piix3_ide_init(pci_bus, hd, piix3_devfn + 1, i8259);
     } else {
-        for(i = 0; i < 2; i++) {
+        for(i = 0; i < MAX_IDE_BUS; i++) {
             isa_ide_init(ide_iobase[i], ide_iobase2[i], i8259[ide_irq[i]],
-                         bs_table[2 * i], bs_table[2 * i + 1]);
+	                 hd[MAX_IDE_DEVS * i], hd[MAX_IDE_DEVS * i + 1]);
         }
     }
 
@@ -988,9 +1056,16 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
     audio_init(pci_enabled ? pci_bus : NULL, i8259);
 #endif
 
-    floppy_controller = fdctrl_init(i8259[6], 2, 0, 0x3f0, fd_table);
+    for(i = 0; i < MAX_FD; i++) {
+        index = drive_get_index(IF_FLOPPY, 0, i);
+	if (index != -1)
+	    fd[i] = drives_table[index].bdrv;
+	else
+	    fd[i] = NULL;
+    }
+    floppy_controller = fdctrl_init(i8259[6], 2, 0, 0x3f0, fd);
 
-    cmos_init(ram_size, above_4g_mem_size, boot_device, bs_table, smp_cpus);
+    cmos_init(ram_size, above_4g_mem_size, boot_device, hd, smp_cpus);
 
     if (pci_enabled && usb_enabled) {
         usb_uhci_piix3_init(pci_bus, piix3_devfn + 2);
@@ -1010,51 +1085,48 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
     if (i440fx_state) {
         i440fx_init_memory_mappings(i440fx_state);
     }
-#if 0
-    /* ??? Need to figure out some way for the user to
-       specify SCSI devices.  */
+
     if (pci_enabled) {
+	int max_bus;
+        int bus, unit;
         void *scsi;
-        BlockDriverState *bdrv;
 
-        scsi = lsi_scsi_init(pci_bus, -1);
-        bdrv = bdrv_new("scsidisk");
-        bdrv_open(bdrv, "scsi_disk.img", 0);
-        lsi_scsi_attach(scsi, bdrv, -1);
-        bdrv = bdrv_new("scsicd");
-        bdrv_open(bdrv, "scsi_cd.iso", 0);
-        bdrv_set_type_hint(bdrv, BDRV_TYPE_CDROM);
-        lsi_scsi_attach(scsi, bdrv, -1);
+        max_bus = drive_get_max_bus(IF_SCSI);
+
+	for (bus = 0; bus <= max_bus; bus++) {
+            scsi = lsi_scsi_init(pci_bus, -1);
+            for (unit = 0; unit < LSI_MAX_DEVS; unit++) {
+	        index = drive_get_index(IF_SCSI, bus, unit);
+		if (index == -1)
+		    continue;
+		lsi_scsi_attach(scsi, drives_table[index].bdrv, unit);
+	    }
+        }
     }
-#endif
 }
 
-static void pc_init_pci(ram_addr_t ram_size, int vga_ram_size, int boot_device,
-                        DisplayState *ds, const char **fd_filename,
-                        int snapshot,
+static void pc_init_pci(ram_addr_t ram_size, int vga_ram_size,
+                        const char *boot_device, DisplayState *ds,
                         const char *kernel_filename,
                         const char *kernel_cmdline,
                         const char *initrd_filename,
                         const char *cpu_model)
 {
-    pc_init1(ram_size, vga_ram_size, boot_device,
-             ds, fd_filename, snapshot,
+    pc_init1(ram_size, vga_ram_size, boot_device, ds,
              kernel_filename, kernel_cmdline,
-             initrd_filename, 1);
+             initrd_filename, 1, cpu_model);
 }
 
-static void pc_init_isa(ram_addr_t ram_size, int vga_ram_size, int boot_device,
-                        DisplayState *ds, const char **fd_filename,
-                        int snapshot,
+static void pc_init_isa(ram_addr_t ram_size, int vga_ram_size,
+                        const char *boot_device, DisplayState *ds,
                         const char *kernel_filename,
                         const char *kernel_cmdline,
                         const char *initrd_filename,
                         const char *cpu_model)
 {
-    pc_init1(ram_size, vga_ram_size, boot_device,
-             ds, fd_filename, snapshot,
+    pc_init1(ram_size, vga_ram_size, boot_device, ds,
              kernel_filename, kernel_cmdline,
-             initrd_filename, 0);
+             initrd_filename, 0, cpu_model);
 }
 
 QEMUMachine pc_machine = {
