@@ -35,6 +35,7 @@
 #include "cpu.h"
 #include "exec-all.h"
 #ifdef USE_KVM
+#include "dyngen.h"
 #include "qemu-kvm.h"
 #endif
 #if defined(CONFIG_USER_ONLY)
@@ -2650,8 +2651,10 @@ void cpu_physical_memory_rw(target_phys_addr_t addr, uint8_t *buf,
                     phys_ram_dirty[addr1 >> TARGET_PAGE_BITS] |=
                         (0xff & ~CODE_DIRTY_FLAG);
                 }
-#ifdef __ia64__
-		kvm_sync_icache((unsigned long)ptr, l);
+#ifdef USE_KVM
+		/* qemu doesn't execute guest code directly, but kvm does
+		   therefore fluch instruction caches */
+		flush_icache_range((unsigned long)ptr, ((unsigned long)ptr)+l);
 #endif
             }
         } else {

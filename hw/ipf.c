@@ -273,17 +273,6 @@ static void pc_init_ne2k_isa(NICInfo *nd, qemu_irq *pic)
 #ifdef USE_KVM
 extern kvm_context_t kvm_context;
 extern int kvm_allowed;
-
-void kvm_sync_icache(unsigned long address, int len)
-{
-	int l;
-
-	for(l = 0; l < (len + 32); l += 32)
-		__ia64_fc(address + l);
-
-	ia64_sync_i();
-	ia64_srlz_i();
-}
 #endif
 
 static void main_cpu_reset(void *opaque)

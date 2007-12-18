@@ -73,9 +73,4 @@ CPUState *cpu_ia64_init(void);
 
 #include "cpu-all.h"
 
-/* IA64 has seperate I/D cache, with coherence maintained by DMA controller.
- * So to emulate right behavior that guest OS is assumed, we need to flush
- * I/D cache here.
- */
-void kvm_sync_icache(unsigned long address, int len);
 #endif
