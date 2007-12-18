@@ -567,7 +567,6 @@ void kvm_destroy_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 			  unsigned long len)
 {
 	int slot;
-	struct kvm_memory_region *mem;
 
 	slot = get_slot(phys_start);
 
@@ -578,9 +577,9 @@ void kvm_destroy_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 	}
 	if (phys_start != slots[slot].phys_addr) {
 		fprintf(stderr,
-			"WARNING: %s: phys_start is 0x%lx expecting 0x%llx\n",
-			__FUNCTION__, phys_start, mem->guest_phys_addr);
-		phys_start = mem->guest_phys_addr;
+			"WARNING: %s: phys_start is 0x%lx expecting 0x%lx\n",
+			__FUNCTION__, phys_start, slots[slot].phys_addr);
+		phys_start = slots[slot].phys_addr;
 	}
 	kvm_create_phys_mem(kvm, phys_start, 0, 0, 0);
 }
