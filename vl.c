@@ -7673,16 +7673,20 @@ void main_loop_wait(int timeout)
         slirp_select_fill(&nfds, &rfds, &wfds, &xfds);
     }
 #endif
+ moreio:
     ret = select(nfds + 1, &rfds, &wfds, &xfds, &tv);
     if (ret > 0) {
         IOHandlerRecord **pioh;
+        int more = 0;
 
         for(ioh = first_io_handler; ioh != NULL; ioh = ioh->next) {
             if (!ioh->deleted && ioh->fd_read && FD_ISSET(ioh->fd, &rfds)) {
                 ioh->fd_read(ioh->opaque);
+                more = 1;
             }
             if (!ioh->deleted && ioh->fd_write && FD_ISSET(ioh->fd, &wfds)) {
                 ioh->fd_write(ioh->opaque);
+                more = 1;
             }
         }
 
@@ -7696,6 +7700,8 @@ void main_loop_wait(int timeout)
             } else
                 pioh = &ioh->next;
         }
+        if (more)
+            goto moreio;
     }
 #if defined(CONFIG_SLIRP)
     if (slirp_inited) {
