@@ -366,7 +366,7 @@ static int test_pre_kvm_run(void *opaque, int vcpu)
 	return 0;
 }
 
-static int test_mem_read(uint64_t addr, void *data, unsigned len)
+static int test_mem_read(void *opaque, uint64_t addr, void *data, unsigned len)
 {
 	if (addr < IORAM_BASE_PHYS || addr + len > IORAM_BASE_PHYS + IORAM_LEN)
 		return 1;
@@ -374,52 +374,12 @@ static int test_mem_read(uint64_t addr, void *data, unsigned len)
 	return 0;
 }
 
-static int test_mem_write(uint64_t addr, void *data, unsigned len)
+static int test_mem_write(void *opaque, uint64_t addr, void *data, unsigned len)
 {
 	if (addr < IORAM_BASE_PHYS || addr + len > IORAM_BASE_PHYS + IORAM_LEN)
 		return 1;
 	memcpy(ioram + addr - IORAM_BASE_PHYS, data, len);
 	return 0;
-}
-
-static int test_readb(void *opaque, uint64_t addr, uint8_t *data)
-{
-	return test_mem_read(addr, data, 1);
-}
-
-static int test_readw(void *opaque, uint64_t addr, uint16_t *data)
-{
-	return test_mem_read(addr, data, 2);
-}
-
-static int test_readl(void *opaque, uint64_t addr, uint32_t *data)
-{
-	return test_mem_read(addr, data, 4);
-
-}
-static int test_readq(void *opaque, uint64_t addr, uint64_t *data)
-{
-	return test_mem_read(addr, data, 8);
-}
-
-static int test_writeb(void *opaque, uint64_t addr, uint8_t data)
-{
-	return test_mem_write(addr, &data, 1);
-}
-
-static int test_writew(void *opaque, uint64_t addr, uint16_t data)
-{
-	return test_mem_write(addr, &data, 2);
-}
-
-static int test_writel(void *opaque, uint64_t addr, uint32_t data)
-{
-	return test_mem_write(addr, &data, 4);
-}
-
-static int test_writeq(void *opaque, uint64_t addr, uint64_t data)
-{
-	return test_mem_write(addr, &data, 8);
 }
 
 static struct kvm_callbacks test_callbacks = {
@@ -429,14 +389,8 @@ static struct kvm_callbacks test_callbacks = {
 	.outb        = test_outb,
 	.outw        = test_outw,
 	.outl        = test_outl,
-	.readb       = test_readb,
-	.readw       = test_readw,
-	.readl       = test_readl,
-	.readq       = test_readq,
-	.writeb      = test_writeb,
-	.writew      = test_writew,
-	.writel      = test_writel,
-	.writeq      = test_writeq,
+	.mmio_read   = test_mem_read,
+	.mmio_write  = test_mem_write,
 	.debug       = test_debug,
 	.halt        = test_halt,
 	.io_window = test_io_window,

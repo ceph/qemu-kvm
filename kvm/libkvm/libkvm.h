@@ -45,22 +45,12 @@ struct kvm_callbacks {
     int (*outw)(void *opaque, uint16_t addr, uint16_t data);
 	/// For 32bit IO writes from the guest (Usually when executing 'outl')
     int (*outl)(void *opaque, uint16_t addr, uint32_t data);
-	/// For 8bit memory reads from unmapped memory (For MMIO devices)
-    int (*readb)(void *opaque, uint64_t addr, uint8_t *data);
-	/// For 16bit memory reads from unmapped memory (For MMIO devices)
-    int (*readw)(void *opaque, uint64_t addr, uint16_t *data);
-	/// For 32bit memory reads from unmapped memory (For MMIO devices)
-    int (*readl)(void *opaque, uint64_t addr, uint32_t *data);
-	/// For 64bit memory reads from unmapped memory (For MMIO devices)
-    int (*readq)(void *opaque, uint64_t addr, uint64_t *data);
-	/// For 8bit memory writes to unmapped memory (For MMIO devices)
-    int (*writeb)(void *opaque, uint64_t addr, uint8_t data);
-	/// For 16bit memory writes to unmapped memory (For MMIO devices)
-    int (*writew)(void *opaque, uint64_t addr, uint16_t data);
-	/// For 32bit memory writes to unmapped memory (For MMIO devices)
-    int (*writel)(void *opaque, uint64_t addr, uint32_t data);
-	/// For 64bit memory writes to unmapped memory (For MMIO devices)
-    int (*writeq)(void *opaque, uint64_t addr, uint64_t data);
+	/// generic memory reads to unmapped memory (For MMIO devices)
+    int (*mmio_read)(void *opaque, uint64_t addr, uint8_t *data,
+					int len);
+	/// generic memory writes to unmapped memory (For MMIO devices)
+    int (*mmio_write)(void *opaque, uint64_t addr, uint8_t *data,
+					int len);
     int (*debug)(void *opaque, int vcpu);
 	/*!
 	 * \brief Called when the VCPU issues an 'hlt' instruction.

@@ -825,44 +825,17 @@ static int handle_mmio(kvm_context_t kvm, struct kvm_run *kvm_run)
 {
 	unsigned long addr = kvm_run->mmio.phys_addr;
 	void *data = kvm_run->mmio.data;
-	int r = -1;
 
-	/* hack: Red Hat 7.1 generates these wierd accesses. */
-	if (addr == 0xa0000 && kvm_run->mmio.len == 3)
+	/* hack: Red Hat 7.1 generates these weird accesses. */
+	if ((addr > 0xa0000-4 && addr <= 0xa0000) && kvm_run->mmio.len == 3)
 	    return 0;
 
-	if (kvm_run->mmio.is_write) {
-		switch (kvm_run->mmio.len) {
-		case 1:
-			r = kvm->callbacks->writeb(kvm->opaque, addr, *(uint8_t *)data);
-			break;
-		case 2:
-			r = kvm->callbacks->writew(kvm->opaque, addr, *(uint16_t *)data);
-			break;
-		case 4:
-			r = kvm->callbacks->writel(kvm->opaque, addr, *(uint32_t *)data);
-			break;
-		case 8:
-			r = kvm->callbacks->writeq(kvm->opaque, addr, *(uint64_t *)data);
-			break;
-		}
-	} else {
-		switch (kvm_run->mmio.len) {
-		case 1:
-			r = kvm->callbacks->readb(kvm->opaque, addr, (uint8_t *)data);
-			break;
-		case 2:
-			r = kvm->callbacks->readw(kvm->opaque, addr, (uint16_t *)data);
-			break;
-		case 4:
-			r = kvm->callbacks->readl(kvm->opaque, addr, (uint32_t *)data);
-			break;
-		case 8:
-			r = kvm->callbacks->readq(kvm->opaque, addr, (uint64_t *)data);
-			break;
-		}
-	}
-	return r;
+	if (kvm_run->mmio.is_write)
+		return kvm->callbacks->mmio_write(kvm->opaque, addr, data,
+					kvm_run->mmio.len);
+	else
+		return kvm->callbacks->mmio_read(kvm->opaque, addr, data,
+					kvm_run->mmio.len);
 }
 
 int handle_io_window(kvm_context_t kvm)

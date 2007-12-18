@@ -482,58 +482,18 @@ static int kvm_outl(void *opaque, uint16_t addr, uint32_t data)
     return 0;
 }
 
-static int kvm_readb(void *opaque, uint64_t addr, uint8_t *data)
+static int kvm_mmio_read(void *opaque, uint64_t addr,
+					uint8_t *data, int len, int is_write)
 {
-    *data = ldub_phys(addr);
-    return 0;
-}
- 
-static int kvm_readw(void *opaque, uint64_t addr, uint16_t *data)
-{
-    *data = lduw_phys(addr);
-    return 0;
-}
-
-static int kvm_readl(void *opaque, uint64_t addr, uint32_t *data)
-{
-    /* hack: Red Hat 7.1 generates some wierd accesses. */
-    if (addr > 0xa0000 - 4 && addr < 0xa0000) {
-	*data = 0;
+	cpu_physical_memory_rw(addr, data, len, 0);
 	return 0;
-    }
-
-    *data = ldl_phys(addr);
-    return 0;
 }
 
-static int kvm_readq(void *opaque, uint64_t addr, uint64_t *data)
+static int kvm_mmio_write(void *opaque, uint64_t addr,
+					uint8_t *data, int len, int is_write)
 {
-    *data = ldq_phys(addr);
-    return 0;
-}
-
-static int kvm_writeb(void *opaque, uint64_t addr, uint8_t data)
-{
-    stb_phys(addr, data);
-    return 0;
-}
-
-static int kvm_writew(void *opaque, uint64_t addr, uint16_t data)
-{
-    stw_phys(addr, data);
-    return 0;
-}
-
-static int kvm_writel(void *opaque, uint64_t addr, uint32_t data)
-{
-    stl_phys(addr, data);
-    return 0;
-}
-
-static int kvm_writeq(void *opaque, uint64_t addr, uint64_t data)
-{
-    stq_phys(addr, data);
-    return 0;
+	cpu_physical_memory_rw(addr, data, len, 1);
+	return 0;
 }
 
 static int kvm_io_window(void *opaque)
@@ -561,14 +521,8 @@ static struct kvm_callbacks qemu_kvm_ops = {
     .outb  = kvm_outb,
     .outw  = kvm_outw,
     .outl  = kvm_outl,
-    .readb = kvm_readb,
-    .readw = kvm_readw,
-    .readl = kvm_readl,
-    .readq = kvm_readq,
-    .writeb = kvm_writeb,
-    .writew = kvm_writew,
-    .writel = kvm_writel,
-    .writeq = kvm_writeq,
+    .mmio_read = kvm_mmio_read,
+    .mmio_write = kvm_mmio_write,
     .halt  = kvm_halt,
     .shutdown = kvm_shutdown,
     .io_window = kvm_io_window,
