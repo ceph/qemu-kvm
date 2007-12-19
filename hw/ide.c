@@ -1636,6 +1636,7 @@ static void ide_atapi_cmd(IDEState *s)
         break;
     case GPCMD_GET_CONFIGURATION:
         {
+            uint32_t len;
             int64_t total_sectors;
 
             /* only feature 0 is supported */
@@ -1644,17 +1645,27 @@ static void ide_atapi_cmd(IDEState *s)
                                     ASC_INV_FIELD_IN_CMD_PACKET);
                 break;
             }
-            memset(buf, 0, 32);
+            max_len = ube16_to_cpu(packet + 7);
             bdrv_get_geometry(s->bs, &total_sectors);
-            buf[3] = 16;
-            buf[7] = total_sectors <= 1433600 ? 0x08 : 0x10; /* current profile */
-            buf[10] = 0x10 | 0x1;
-            buf[11] = 0x08; /* size of profile list */
+            memset(buf, 0, 32);
+            if (total_sectors) {
+                if (total_sectors > 1433600) {
+                    buf[7] = 0x10; /* DVD-ROM */
+                } else {
+                    buf[7] = 0x08; /* CD-ROM */
+                }
+            } else {
+                buf[7] = 0x00; /* no current profile */
+            }
+            buf[10] = 0x02 | 0x01; /* persistent and current */
+            buf[11] = 0x08; /* size of profile list = 4 bytes per profile */
             buf[13] = 0x10; /* DVD-ROM profile */
-            buf[14] = buf[7] == 0x10; /* (in)active */
+            buf[14] = buf[13] == buf[7]; /* (in)active */
             buf[17] = 0x08; /* CD-ROM profile */
-            buf[18] = buf[7] == 0x08; /* (in)active */
-            ide_atapi_cmd_reply(s, 32, 32);
+            buf[18] = buf[17] == buf[7]; /* (in)active */
+            len = 8 + 4 + buf[11]; /* headers + size of profile list */
+            cpu_to_ube32(buf, len - 4); /* data length */
+            ide_atapi_cmd_reply(s, len, max_len);
             break;
         }
     default:
