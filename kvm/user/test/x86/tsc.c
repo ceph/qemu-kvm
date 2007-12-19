@@ -24,7 +24,7 @@ void test_wrtsc(u64 t1)
 
 	wrtsc(t1);
 	t2 = rdtsc();
-	printf("rdtsc after wrtsc(%d): %d\n", t1, t2);
+	printf("rdtsc after wrtsc(%d): %lld\n", t1, t2);
 }
 
 int main()
@@ -33,7 +33,7 @@ int main()
 
 	t1 = rdtsc();
 	t2 = rdtsc();
-	printf("rdtsc latency %d\n", (unsigned)(t2 - t1));
+	printf("rdtsc latency %lld\n", (unsigned)(t2 - t1));
 
 	test_wrtsc(0);
 	test_wrtsc(100000000000ull);
