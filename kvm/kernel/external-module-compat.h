@@ -9,6 +9,7 @@
 
 #include <linux/compiler.h>
 #include <linux/version.h>
+#include <linux/string.h>
 #include "include/linux/kvm.h"
 #include "include/linux/kvm_para.h"
 #include <linux/cpu.h>
