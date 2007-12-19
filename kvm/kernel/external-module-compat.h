@@ -573,6 +573,11 @@ static inline void blahblah(void)
 
 #endif
 
+/* apicdef.h doesn't get included before 2.6.21 if non-smp */
+#ifndef MAX_IO_APICS
+#define MAX_IO_APICS 64
+#endif
+
 /* X86_FEATURE_NX is missing in some x86_64 kernels */
 
 #include <asm/cpufeature.h>
