@@ -541,7 +541,7 @@ static void ide_atapi_identify(IDEState *s)
     put_le16(p + 21, 512); /* cache size in sectors */
     put_le16(p + 22, 4); /* ecc bytes */
     padstr((char *)(p + 23), QEMU_VERSION, 8); /* firmware version */
-    padstr((char *)(p + 27), "QEMU CD-ROM", 40); /* model */
+    padstr((char *)(p + 27), "QEMU DVD-ROM", 40); /* model */
     put_le16(p + 48, 1); /* dword I/O (XXX: should not be set on CDROM) */
 #ifdef USE_DMA_CDROM
     put_le16(p + 49, 1 << 9 | 1 << 8); /* DMA and LBA supported */
@@ -1630,7 +1630,7 @@ static void ide_atapi_cmd(IDEState *s)
         buf[6] = 0; /* reserved */
         buf[7] = 0; /* reserved */
         padstr8(buf + 8, 8, "QEMU");
-        padstr8(buf + 16, 16, "QEMU CD-ROM");
+        padstr8(buf + 16, 16, "QEMU DVD-ROM");
         padstr8(buf + 32, 4, QEMU_VERSION);
         ide_atapi_cmd_reply(s, 36, max_len);
         break;
