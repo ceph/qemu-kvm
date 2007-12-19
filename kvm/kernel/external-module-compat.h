@@ -538,21 +538,6 @@ out:
 #define CONFIG_HAS_IOMEM 1
 #endif
 
-/* Some kernels don't make dest_* available with some configs. */
-
-#include <asm/io_apic.h>
-
-#ifndef dest_Fixed
-#define dest_Fixed        0
-#define dest_LowestPrio   1
-#define dest_SMI          2
-#define dest__reserved_1  3
-#define dest_NMI          4
-#define dest_INIT         5
-#define dest__reserved_2  6
-#define dest_ExtINT       7
-#endif
-
 /* empty_zero_page isn't exported in all kernels */
 #include <asm/pgtable.h>
 
