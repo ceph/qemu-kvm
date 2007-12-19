@@ -30,7 +30,7 @@ void print_str(pstream_t *p, const char *s)
 
 static char digits[16] = "0123456789abcdef";
 
-void print_int(pstream_t *ps, long n, int base)
+void print_int(pstream_t *ps, long long n, int base)
 {
     char buf[sizeof(long) * 3 + 2], *p = buf;
     int s = 0, i;
@@ -64,7 +64,7 @@ void print_int(pstream_t *ps, long n, int base)
     print_str(ps, buf);
 }
 
-void print_unsigned(pstream_t *ps, unsigned long n, int base)
+void print_unsigned(pstream_t *ps, unsigned long long n, int base)
 {
     char buf[sizeof(long) * 3 + 1], *p = buf;
     int i;
@@ -100,11 +100,13 @@ int vsnprintf(char *buf, int size, const char *fmt, va_list va)
     s.added = 0;
     while (*fmt) {
 	char f = *fmt++;
+	int nlong = 0;
 
 	if (f != '%') {
 	    addchar(&s, f);
 	    continue;
 	}
+    morefmt:
 	f = *fmt++;
 	switch (f) {
 	case '%':
@@ -113,11 +115,34 @@ int vsnprintf(char *buf, int size, const char *fmt, va_list va)
 	case '\0':
 	    --fmt;
 	    break;
+	case 'l':
+	    ++nlong;
+	    goto morefmt;
 	case 'd':
-	    print_int(&s, va_arg(va, int), 10);
+	    switch (nlong) {
+	    case 0:
+		print_int(&s, va_arg(va, int), 10);
+		break;
+	    case 1:
+		print_int(&s, va_arg(va, long), 10);
+		break;
+	    default:
+		print_int(&s, va_arg(va, long long), 10);
+		break;
+	    }
 	    break;
 	case 'x':
-	    print_unsigned(&s, va_arg(va, int), 16);
+	    switch (nlong) {
+	    case 0:
+		print_unsigned(&s, va_arg(va, unsigned), 16);
+		break;
+	    case 1:
+		print_unsigned(&s, va_arg(va, unsigned long), 16);
+		break;
+	    default:
+		print_unsigned(&s, va_arg(va, unsigned long long), 16);
+		break;
+	    }
 	    break;
 	case 'p':
 	    print_str(&s, "0x");
