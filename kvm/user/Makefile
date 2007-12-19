@@ -29,7 +29,9 @@ CXXFLAGS = $(autodepend-flags)
 
 autodepend-flags = -MMD -MF $(dir $*).$(notdir $*).d
 
-FLATLIBS = $(TEST_DIR)/libcflat.a
+libgcc := $(shell gcc --print-libgcc-file-name)
+
+FLATLIBS = $(TEST_DIR)/libcflat.a $(libgcc)
 
 kvmctl: LDFLAGS += -pthread -lrt
 
