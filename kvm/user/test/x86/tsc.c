@@ -24,7 +24,7 @@ void test_wrtsc(u64 t1)
 
 	wrtsc(t1);
 	t2 = rdtsc();
-	printf("rdtsc after wrtsc(%d): %lld\n", t1, t2);
+	printf("rdtsc after wrtsc(%lld): %lld\n", t1, t2);
 }
 
 int main()
