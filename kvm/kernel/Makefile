@@ -35,7 +35,8 @@ sync:
 	     "$(LINUX)"/./include/linux/kvm*.h \
 	     "$(LINUX)"/./include/asm-x86/kvm*.h \
              tmp/
-	ln -sf asm-x86 include/asm
+	rm -rf include/asm
+	ln -s asm-x86 include/asm
 
 	$(call unifdef, include/linux/kvm.h)
 	$(call unifdef, include/linux/kvm_para.h)
