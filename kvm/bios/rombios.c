@@ -2584,7 +2584,7 @@ Bit16u device;
   outb(iobase2+ATA_CB_DC, ATA_CB_DC_HD15 | ATA_CB_DC_NIEN | ATA_CB_DC_SRST);
 
 // 8.2.1 (b) -- wait for BSY
-  if (await_ide(BSY, iobase1, 20)) return;
+  await_ide(BSY, iobase1, 20);
 
 // 8.2.1 (f) -- clear SRST
   outb(iobase2+ATA_CB_DC, ATA_CB_DC_HD15 | ATA_CB_DC_NIEN);
@@ -2599,10 +2599,10 @@ Bit16u device;
     sn = inb(iobase1+ATA_CB_SN);
 
     if ( (sc==0x01) && (sn==0x01) ) {
-    if (type == ATA_TYPE_ATA) //ATA
-      await_ide(NOT_BSY_RDY, iobase1, IDE_TIMEOUT);
-    else //ATAPI
-      await_ide(NOT_BSY, iobase1, IDE_TIMEOUT);
+      if (type == ATA_TYPE_ATA) //ATA
+        await_ide(NOT_BSY_RDY, iobase1, IDE_TIMEOUT);
+      else //ATAPI
+        await_ide(NOT_BSY, iobase1, IDE_TIMEOUT);
     }
 
 // 8.2.1 (h) -- wait for not BSY
