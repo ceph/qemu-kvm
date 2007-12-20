@@ -72,6 +72,7 @@ typedef enum {
     HOB_TYPE_PAL_VM_INFO,
     HOB_TYPE_PAL_VM_PAGE_SIZE,
     HOB_TYPE_NR_VCPU,
+    HOB_TYPE_NR_NVRAM,
     HOB_TYPE_MAX
 } hob_type_t;
 
@@ -191,6 +192,13 @@ get_hob_size(void* hob_buf)
     return phit->length;
 }
 
+static  int
+add_max_hob_entry(void* hob_buf)
+{
+    long max_hob = 0;
+    return hob_add(hob_buf, HOB_TYPE_MAX, &max_hob, sizeof(long));
+}
+
 static int
 build_hob(void* hob_buf, unsigned long hob_buf_size,
           unsigned long dom_mem_size, unsigned long vcpus)
@@ -216,6 +224,10 @@ build_hob(void* hob_buf, unsigned long hob_buf_size,
         goto err_out;
     }
 
+    if (add_max_hob_entry(hob_buf) < 0) {
+        Hob_Output("Add max hob entry failed, buffer too small");
+        goto err_out;
+    }
     return 0;
 
 err_out:
