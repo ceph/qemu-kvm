@@ -497,8 +497,7 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
 
 	floppy_controller = fdctrl_init(i8259[6], 2, 0, 0x3f0, fd_table);
 
-	/*Disable cmos support for ia64.*/
-	//cmos_init(ram_size, above_4g_mem_size, boot_device, bs_table, smp_cpus);
+	cmos_init(ram_size, above_4g_mem_size, boot_device, bs_table, smp_cpus);
 
 	if (pci_enabled && usb_enabled) {
 		usb_uhci_piix3_init(pci_bus, piix3_devfn + 2);
