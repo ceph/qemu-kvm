@@ -49,6 +49,9 @@ void do_loadvm(const char *name);
 void do_delvm(const char *name);
 void do_info_snapshots(void);
 
+int qemu_live_savevm_state(QEMUFile *f);
+int qemu_live_loadvm_state(QEMUFile *f);
+
 void main_loop_wait(int timeout);
 
 /* Polling handling */
