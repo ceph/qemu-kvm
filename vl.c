@@ -37,6 +37,7 @@
 #include "qemu-char.h"
 #include "block.h"
 #include "audio/audio.h"
+#include "migration.h"
 #include "qemu-kvm.h"
 
 #include <unistd.h>
