@@ -140,6 +140,7 @@ extern int drive_get_max_bus(BlockInterfaceType interface);
 /* vmchannel devices */
 
 #define MAX_VMCHANNEL_DEVICES 4
+void vmchannel_init(CharDriverState *hd, uint32_t deviceid, uint32_t index);
 
 /* serial ports */
 
