@@ -109,6 +109,8 @@ void bdrv_flush(BlockDriverState *bs);
 #define BIOS_ATA_TRANSLATION_LARGE  3
 #define BIOS_ATA_TRANSLATION_RECHS  4
 
+void bdrv_flush_all(void);
+
 void bdrv_set_geometry_hint(BlockDriverState *bs,
                             int cyls, int heads, int secs);
 void bdrv_set_type_hint(BlockDriverState *bs, int type);
