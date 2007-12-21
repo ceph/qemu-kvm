@@ -39,6 +39,7 @@ int qemu_powerdown_requested(void);
 #else
 void qemu_system_powerdown(void);
 #endif
+void qemu_system_reset(void);
 
 void cpu_save(QEMUFile *f, void *opaque);
 int cpu_load(QEMUFile *f, void *opaque, int version_id);
