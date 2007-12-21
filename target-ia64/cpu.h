@@ -30,11 +30,11 @@
 
 #define TARGET_LONG_BITS 64
 
-
-#define TARGET_PAGE_BITS 14
+#define TARGET_PAGE_BITS 16
 
 #define ELF_MACHINE	EM_IA_64
 
+#define NB_MMU_MODES 2
 #define CPU_PAL_HALT 1
 #define HF_HALTED_MASK       (1 << CPU_PAL_HALT)
 
@@ -69,7 +69,11 @@ void cpu_dump_state(CPUState *env, FILE *f,
                     int (*cpu_fprintf)(FILE *f, const char *fmt, ...),
                     int flags);
 
-CPUState *cpu_ia64_init(void);
+CPUState *cpu_ia64_init(char * cpu_model);
+static inline int cpu_mmu_index (CPUState *env)
+{
+	return 0;
+}
 
 #include "cpu-all.h"
 

@@ -26,7 +26,7 @@
 
 extern int kvm_allowed;
 
-CPUState *cpu_ia64_init(void){
+CPUState *cpu_ia64_init(char *cpu_model){
     CPUState *env;
     env = qemu_mallocz(sizeof(CPUState));
     if (!env)

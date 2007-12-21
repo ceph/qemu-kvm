@@ -253,7 +253,6 @@ load_hob(void *hob_buf,
     return 0;
 }
 
-#define MIN(x, y) ((x) < (y)) ? (x) : (y)
 static int
 add_mem_hob(void* hob_buf, unsigned long dom_mem_size)
 {

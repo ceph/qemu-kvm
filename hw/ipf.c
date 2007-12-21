@@ -24,9 +24,20 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#include "vl.h"
+
+#include "hw.h"
+#include "pc.h"
+#include "fdc.h"
+#include "pci.h"
+#include "block.h"
+#include "sysemu.h"
+#include "audio/audio.h"
+#include "net.h"
+#include "smbus.h"
+#include "boards.h"
 #include "firmware.h"
 #include "ia64intrin.h"
+#include "dyngen.h"
 #include <unistd.h>
 
 #ifdef USE_KVM
@@ -34,34 +45,23 @@
 extern int kvm_allowed;
 #endif
 
-/* output Bochs bios info messages */
-//#define DEBUG_BIOS
-
 #define FW_FILENAME "Flash.fd"
 
 /* Leave a chunk of memory at the top of RAM for the BIOS ACPI tables.  */
 #define ACPI_DATA_SIZE       0x10000
 
+#define MAX_IDE_BUS 2
+
 static fdctrl_t *floppy_controller;
 static RTCState *rtc_state;
 static PCIDevice *i440fx_state;
 
-static const int ide_iobase[2] = { 0x1f0, 0x170 };
-static const int ide_iobase2[2] = { 0x3f6, 0x376 };
-static const int ide_irq[2] = { 14, 15 };
+static void pic_irq_request(void *opaque, int irq, int level)
+{
+	fprintf(stderr,"pic_irq_request called!\n");
+}
 
-#define NE2000_NB_MAX 6
-
-static int ne2000_io[NE2000_NB_MAX] = { 0x300, 0x320, 0x340, 0x360, 0x280, 0x380 };
-static int ne2000_irq[NE2000_NB_MAX] = { 9, 10, 11, 3, 4, 5 };
-
-static int serial_io[MAX_SERIAL_PORTS] = { 0x3f8, 0x2f8, 0x3e8, 0x2e8 };
-static int serial_irq[MAX_SERIAL_PORTS] = { 4, 3, 4, 3 };
-
-static int parallel_io[MAX_PARALLEL_PORTS] = { 0x378, 0x278, 0x3bc };
-static int parallel_irq[MAX_PARALLEL_PORTS] = { 7, 7, 7 };
-
-/* cmos mappings */
+/* PC cmos mappings */
 
 #define REG_EQUIPMENT_BYTE          0x14
 
@@ -106,10 +106,30 @@ static void cmos_init_hd(int type_ofs, int info_ofs, BlockDriverState *hd)
     rtc_set_memory(s, info_ofs + 8, sectors);
 }
 
+/* convert boot_device letter to something recognizable by the bios */
+static int boot_device2nibble(char boot_device)
+{
+    switch(boot_device) {
+    case 'a':
+    case 'b':
+        return 0x01; /* floppy boot */
+    case 'c':
+        return 0x02; /* hard drive boot */
+    case 'd':
+        return 0x03; /* CD-ROM boot */
+    case 'n':
+        return 0x04; /* Network boot */
+    }
+    return 0;
+}
+
 /* hd_table must contain 4 block drivers */
-static void cmos_init(ram_addr_t ram_size, ram_addr_t above_4g_mem_size, int boot_device, BlockDriverState **hd_table, int smp_cpus)
+static void cmos_init(ram_addr_t ram_size, ram_addr_t above_4g_mem_size,
+                      const char *boot_device, BlockDriverState **hd_table,
+                      int smp_cpus)
 {
     RTCState *s = rtc_state;
+    int nbds, bds[3] = { 0, };
     int val;
     int fd0, fd1, nb;
     int i;
@@ -145,24 +165,23 @@ static void cmos_init(ram_addr_t ram_size, ram_addr_t above_4g_mem_size, int boo
     rtc_set_memory(s, 0x34, val);
     rtc_set_memory(s, 0x35, val >> 8);
 
-    switch(boot_device) {
-    case 'a':
-    case 'b':
-        rtc_set_memory(s, 0x3d, 0x01); /* floppy boot */
-        if (!fd_bootchk)
-            rtc_set_memory(s, 0x38, 0x01); /* disable signature check */
-        break;
-    default:
-    case 'c':
-        rtc_set_memory(s, 0x3d, 0x02); /* hard drive boot */
-        break;
-    case 'd':
-        rtc_set_memory(s, 0x3d, 0x03); /* CD-ROM boot */
-        break;
-    case 'n':
-        rtc_set_memory(s, 0x3d, 0x04); /* Network boot */
-        break;
+    /* set boot devices, and disable floppy signature check if requested */
+#define PC_MAX_BOOT_DEVICES 3
+    nbds = strlen(boot_device);
+    if (nbds > PC_MAX_BOOT_DEVICES) {
+        fprintf(stderr, "Too many boot devices for PC\n");
+        exit(1);
     }
+    for (i = 0; i < nbds; i++) {
+        bds[i] = boot_device2nibble(boot_device[i]);
+        if (bds[i] == 0) {
+            fprintf(stderr, "Invalid boot device for PC: '%c'\n",
+                    boot_device[i]);
+            exit(1);
+        }
+    }
+    rtc_set_memory(s, 0x3d, (bds[1] << 4) | bds[0]);
+    rtc_set_memory(s, 0x38, (bds[2] << 4) | (fd_bootchk ?  0x0 : 0x1));
 
     /* floppy type */
 
@@ -227,47 +246,67 @@ static void cmos_init(ram_addr_t ram_size, ram_addr_t above_4g_mem_size, int boo
     rtc_set_memory(s, 0x39, val);
 }
 
+static void main_cpu_reset(void *opaque)
+{
+    CPUState *env = opaque;
+    cpu_reset(env);
+}
+
+static const int ide_iobase[2] = { 0x1f0, 0x170 };
+static const int ide_iobase2[2] = { 0x3f6, 0x376 };
+static const int ide_irq[2] = { 14, 15 };
+
+#define NE2000_NB_MAX 6
+
+static int ne2000_io[NE2000_NB_MAX] = { 0x300, 0x320, 0x340, 0x360, 0x280, 0x380 };
+static int ne2000_irq[NE2000_NB_MAX] = { 9, 10, 11, 3, 4, 5 };
+
+static int serial_io[MAX_SERIAL_PORTS] = { 0x3f8, 0x2f8, 0x3e8, 0x2e8 };
+static int serial_irq[MAX_SERIAL_PORTS] = { 4, 3, 4, 3 };
+
+static int parallel_io[MAX_PARALLEL_PORTS] = { 0x378, 0x278, 0x3bc };
+static int parallel_irq[MAX_PARALLEL_PORTS] = { 7, 7, 7 };
 
 #ifdef HAS_AUDIO
 static void audio_init (PCIBus *pci_bus, qemu_irq *pic)
 {
-	struct soundhw *c;
-	int audio_enabled = 0;
+    struct soundhw *c;
+    int audio_enabled = 0;
 
-	for (c = soundhw; !audio_enabled && c->name; ++c) {
-		audio_enabled = c->enabled;
-	}
+    for (c = soundhw; !audio_enabled && c->name; ++c) {
+        audio_enabled = c->enabled;
+    }
 
-	if (audio_enabled) {
-		AudioState *s;
+    if (audio_enabled) {
+        AudioState *s;
 
-		s = AUD_init ();
-		if (s) {
-			for (c = soundhw; c->name; ++c) {
-				if (c->enabled) {
-					if (c->isa) {
-						c->init.init_isa (s, pic);
-					}
-					else {
-					if (pci_bus) {
-						c->init.init_pci (pci_bus, s);
-						}
-					}
-				}
-			}
-		}
-	}
+        s = AUD_init ();
+        if (s) {
+            for (c = soundhw; c->name; ++c) {
+                if (c->enabled) {
+                    if (c->isa) {
+                        c->init.init_isa (s, pic);
+                    }
+                    else {
+                        if (pci_bus) {
+                            c->init.init_pci (pci_bus, s);
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 #endif
 
 static void pc_init_ne2k_isa(NICInfo *nd, qemu_irq *pic)
 {
-	static int nb_ne2k = 0;
+    static int nb_ne2k = 0;
 
-	if (nb_ne2k == NE2000_NB_MAX)
-		return;
-	isa_ne2000_init(ne2000_io[nb_ne2k], pic[ne2000_irq[nb_ne2k]], nd);
-	nb_ne2k++;
+    if (nb_ne2k == NE2000_NB_MAX)
+        return;
+    isa_ne2000_init(ne2000_io[nb_ne2k], pic[ne2000_irq[nb_ne2k]], nd);
+    nb_ne2k++;
 }
 
 #ifdef USE_KVM
@@ -275,55 +314,57 @@ extern kvm_context_t kvm_context;
 extern int kvm_allowed;
 #endif
 
-static void main_cpu_reset(void *opaque)
+/* Itanium hardware initialisation */
+static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
+                     const char *boot_device, DisplayState *ds,
+                     const char *kernel_filename, const char *kernel_cmdline,
+                     const char *initrd_filename,
+                     int pci_enabled, const char *cpu_model)
 {
-	CPUState *env = opaque;
-	cpu_reset(env);
-}
-static void pic_irq_request(void *opaque, int irq, int level)
-{
-	fprintf(stderr,"pic_irq_request called!\n");
-}
+    char buf[1024];
+    int i;
+    ram_addr_t ram_addr, vga_ram_addr;
+    ram_addr_t above_4g_mem_size = 0;
+    PCIBus *pci_bus;
+    int piix3_devfn = -1;
+    CPUState *env;
+    NICInfo *nd;
+    qemu_irq *cpu_irq;
+    qemu_irq *i8259;
+    int page_size;
+    int index;
+    BlockDriverState *hd[MAX_IDE_BUS * MAX_IDE_DEVS];
+    BlockDriverState *fd[MAX_FD];
 
-/* IPF hardware initialisation */
-static void ipf_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
-		DisplayState *ds, const char **fd_filename, int snapshot,
-		const char *kernel_filename, const char *kernel_cmdline,
-		const char *initrd_filename,
-		int pci_enabled)
-{
-	char buf[1024];
-	int i;
-	ram_addr_t ram_addr, vga_ram_addr;
-	ram_addr_t above_4g_mem_size = 0;
-	PCIBus *pci_bus;
-	int piix3_devfn = -1;
-	CPUState *env;
-	NICInfo *nd;
-	qemu_irq *cpu_irq;
-	qemu_irq *i8259;
-	int page_size;
-
-	page_size = getpagesize();
-	if (page_size != TARGET_PAGE_SIZE) {
-		fprintf(stderr,"Error! Host page size != qemu target page size,"
-			" you may need to change TARGET_PAGE_BITS in qemu!\n");
+    page_size = getpagesize();
+    if (page_size != TARGET_PAGE_SIZE) {
+	fprintf(stderr,"Error! Host page size != qemu target page size,"
+			" you may need to change TARGET_PAGE_BITS in qemu!"
+			"host page size:0x%x\n", page_size);
 		exit(-1);
-	}
+    };
 
-	if (ram_size >= 0xc0000000 ) {
-		above_4g_mem_size = ram_size - 0xc0000000;
-		ram_size = 0xc0000000;
-	}
+    if (ram_size >= 0xc0000000 ) {
+        above_4g_mem_size = ram_size - 0xc0000000;
+        ram_size = 0xc0000000;
+    }
 
-	/* init CPUs */
-	for(i = 0; i < smp_cpus; i++) {
-		env = cpu_init();
-		if (i != 0)
-			env->hflags |= HF_HALTED_MASK;
-		register_savevm("cpu", i, 4, cpu_save, cpu_load, env);
-		qemu_register_reset(main_cpu_reset, env);
-	}
+    /* init CPUs */
+    if (cpu_model == NULL) {
+        cpu_model = "IA64";
+    }
+
+    for(i = 0; i < smp_cpus; i++) {
+        env = cpu_init(cpu_model);
+        if (!env) {
+            fprintf(stderr, "Unable to find CPU definition\n");
+            exit(1);
+        }
+        if (i != 0)
+            env->hflags |= HF_HALTED_MASK;
+        register_savevm("cpu", i, 4, cpu_save, cpu_load, env);
+        qemu_register_reset(main_cpu_reset, env);
+    }
 
 	/* allocate RAM */
 #ifdef USE_KVM
@@ -346,20 +387,20 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
 	} else
 #endif
 #endif
-	{
-		ram_addr = qemu_ram_alloc(ram_size);
-		cpu_register_physical_memory(0, ram_size, ram_addr);
-	}
-	/* allocate VGA RAM */
-	vga_ram_addr = qemu_ram_alloc(vga_ram_size);
+    {
+        ram_addr = qemu_ram_alloc(ram_size);
+        cpu_register_physical_memory(0, ram_size, ram_addr);
+    }
+    /* allocate VGA RAM */
+    vga_ram_addr = qemu_ram_alloc(vga_ram_size);
 
 	/* above 4giga memory allocation */
 	if (above_4g_mem_size > 0) {
 		ram_addr = qemu_ram_alloc(above_4g_mem_size);
 		cpu_register_physical_memory(0x100000000, above_4g_mem_size, ram_addr);
 #ifdef USE_KVM
-		if (kvm_allowed)
-			kvm_cpu_register_physical_memory(0x100000000, above_4g_mem_size,
+	if (kvm_allowed)
+		kvm_cpu_register_physical_memory(0x100000000, above_4g_mem_size,
 					ram_addr);
 #endif
 	}
@@ -400,158 +441,180 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size, int boot_device,
 			memcpy(fw_image_start, image, image_size);
 		}
 		free(image);
-		kvm_sync_icache((unsigned long)fw_image_start, image_size);
+		flush_icache_range((unsigned long)fw_image_start,
+			(unsigned long)fw_image_start + image_size);
 		kvm_ia64_build_hob(ram_size, smp_cpus, fw_start);
 	}
 #endif
 
-	cpu_irq = qemu_allocate_irqs(pic_irq_request, first_cpu, 1);
-	i8259 = i8259_init(cpu_irq[0]);
+    cpu_irq = qemu_allocate_irqs(pic_irq_request, first_cpu, 1);
+    i8259 = i8259_init(cpu_irq[0]);
 
-	if (pci_enabled) {
-		pci_bus = i440fx_init(&i440fx_state, i8259);
-		piix3_devfn = piix3_init(pci_bus, -1);
-	} else {
-		pci_bus = NULL;
-	}
+    if (pci_enabled) {
+        pci_bus = i440fx_init(&i440fx_state, i8259);
+        piix3_devfn = piix3_init(pci_bus, -1);
+    } else {
+        pci_bus = NULL;
+    }
 
-	if (cirrus_vga_enabled) {
-		if (pci_enabled) {
-			pci_cirrus_vga_init(pci_bus,
-					ds, phys_ram_base + vga_ram_addr,
-					vga_ram_addr, vga_ram_size);
-		} else {
-			isa_cirrus_vga_init(ds, phys_ram_base + vga_ram_addr,
-					vga_ram_addr, vga_ram_size);
-		}
-	} else {
-		if (pci_enabled) {
-			pci_vga_init(pci_bus, ds, phys_ram_base + vga_ram_addr,
-					vga_ram_addr, vga_ram_size, 0, 0);
-		} else {
-			isa_vga_init(ds, phys_ram_base + vga_ram_addr,
-					vga_ram_addr, vga_ram_size);
-		}
-	}
-    	rtc_state = rtc_init(0x70, i8259[8]);
+    if (cirrus_vga_enabled) {
+        if (pci_enabled) {
+            pci_cirrus_vga_init(pci_bus,
+                                ds, phys_ram_base + vga_ram_addr,
+                                vga_ram_addr, vga_ram_size);
+        } else {
+            isa_cirrus_vga_init(ds, phys_ram_base + vga_ram_addr,
+                                vga_ram_addr, vga_ram_size);
+        }
+    } else {
+        if (pci_enabled) {
+            pci_vga_init(pci_bus, ds, phys_ram_base + vga_ram_addr,
+                         vga_ram_addr, vga_ram_size, 0, 0);
+        } else {
+            isa_vga_init(ds, phys_ram_base + vga_ram_addr,
+                         vga_ram_addr, vga_ram_size);
+        }
+    }
 
-	if (pci_enabled) {
-		pic_set_alt_irq_func(isa_pic, NULL, NULL);
-	}
+    rtc_state = rtc_init(0x70, i8259[8]);
 
-	for(i = 0; i < MAX_SERIAL_PORTS; i++) {
-		if (serial_hds[i]) {
-			serial_init(serial_io[i], i8259[serial_irq[i]], serial_hds[i]);
-		}
-	}
+    if (pci_enabled) {
+        pic_set_alt_irq_func(isa_pic, NULL, NULL);
+    }
 
-	for(i = 0; i < MAX_PARALLEL_PORTS; i++) {
-		if (parallel_hds[i]) {
-			parallel_init(parallel_io[i], i8259[parallel_irq[i]],
-					parallel_hds[i]);
-		}
-	}
+    for(i = 0; i < MAX_SERIAL_PORTS; i++) {
+        if (serial_hds[i]) {
+            serial_init(serial_io[i], i8259[serial_irq[i]], serial_hds[i]);
+        }
+    }
 
-	for(i = 0; i < nb_nics; i++) {
-		nd = &nd_table[i];
-		if (!nd->model) {
-			if (pci_enabled) {
-				nd->model = "ne2k_pci";
-			} else {
-				nd->model = "ne2k_isa";
-			}
-		}
-		if (strcmp(nd->model, "ne2k_isa") == 0) {
-			pc_init_ne2k_isa(nd, i8259);
-		} else if (pci_enabled) {
-			if (strcmp(nd->model, "?") == 0)
-				fprintf(stderr, "qemu: Supported ISA NICs: ne2k_isa\n");
-			pci_nic_init(pci_bus, nd, -1);
-		} else if (strcmp(nd->model, "?") == 0) {
-			fprintf(stderr, "qemu: Supported ISA NICs: ne2k_isa\n");
-			exit(1);
-		} else {
-			fprintf(stderr, "qemu: Unsupported NIC: %s\n", nd->model);
-			exit(1);
-		}
-	}
+    for(i = 0; i < MAX_PARALLEL_PORTS; i++) {
+        if (parallel_hds[i]) {
+            parallel_init(parallel_io[i], i8259[parallel_irq[i]],
+                          parallel_hds[i]);
+        }
+    }
 
-#undef USE_HYPERCALL  // Disable hypercall now, due to shor of support for VT-i.
+    for(i = 0; i < nb_nics; i++) {
+        nd = &nd_table[i];
+        if (!nd->model) {
+            if (pci_enabled) {
+                nd->model = "ne2k_pci";
+            } else {
+                nd->model = "ne2k_isa";
+            }
+        }
+        if (strcmp(nd->model, "ne2k_isa") == 0) {
+            pc_init_ne2k_isa(nd, i8259);
+        } else if (pci_enabled) {
+            if (strcmp(nd->model, "?") == 0)
+                fprintf(stderr, "qemu: Supported ISA NICs: ne2k_isa\n");
+            pci_nic_init(pci_bus, nd, -1);
+        } else if (strcmp(nd->model, "?") == 0) {
+            fprintf(stderr, "qemu: Supported ISA NICs: ne2k_isa\n");
+            exit(1);
+        } else {
+            fprintf(stderr, "qemu: Unsupported NIC: %s\n", nd->model);
+            exit(1);
+        }
+    }
+
+#undef USE_HYPERCALL  //Disable it now, need to implement later!
 #ifdef USE_HYPERCALL
-	pci_hypercall_init(pci_bus);
+    pci_hypercall_init(pci_bus);
 #endif
-	if (pci_enabled) {
-		pci_piix3_ide_init(pci_bus, bs_table, piix3_devfn + 1, i8259);
-	} else {
-		for(i = 0; i < 2; i++) {
-			isa_ide_init(ide_iobase[i], ide_iobase2[i], i8259[ide_irq[i]],
-					bs_table[2 * i], bs_table[2 * i + 1]);
-		}
-	}
 
-	i8042_init(i8259[1], i8259[12], 0x60);
-	DMA_init(0);
+    if (drive_get_max_bus(IF_IDE) >= MAX_IDE_BUS) {
+        fprintf(stderr, "qemu: too many IDE bus\n");
+        exit(1);
+    }
+
+    for(i = 0; i < MAX_IDE_BUS * MAX_IDE_DEVS; i++) {
+        index = drive_get_index(IF_IDE, i / MAX_IDE_DEVS, i % MAX_IDE_DEVS);
+	if (index != -1)
+	    hd[i] = drives_table[index].bdrv;
+	else
+	    hd[i] = NULL;
+    }
+
+    if (pci_enabled) {
+        pci_piix3_ide_init(pci_bus, hd, piix3_devfn + 1, i8259);
+    } else {
+        for(i = 0; i < MAX_IDE_BUS; i++) {
+            isa_ide_init(ide_iobase[i], ide_iobase2[i], i8259[ide_irq[i]],
+	                 hd[MAX_IDE_DEVS * i], hd[MAX_IDE_DEVS * i + 1]);
+        }
+    }
+
+    i8042_init(i8259[1], i8259[12], 0x60);
+    DMA_init(0);
 #ifdef HAS_AUDIO
-	audio_init(pci_enabled ? pci_bus : NULL, i8259);
+    audio_init(pci_enabled ? pci_bus : NULL, i8259);
 #endif
 
-	floppy_controller = fdctrl_init(i8259[6], 2, 0, 0x3f0, fd_table);
+    for(i = 0; i < MAX_FD; i++) {
+        index = drive_get_index(IF_FLOPPY, 0, i);
+	if (index != -1)
+	    fd[i] = drives_table[index].bdrv;
+	else
+	    fd[i] = NULL;
+    }
+    floppy_controller = fdctrl_init(i8259[6], 2, 0, 0x3f0, fd);
 
-	cmos_init(ram_size, above_4g_mem_size, boot_device, bs_table, smp_cpus);
+    cmos_init(ram_size, above_4g_mem_size, boot_device, hd, smp_cpus);
 
-	if (pci_enabled && usb_enabled) {
-		usb_uhci_piix3_init(pci_bus, piix3_devfn + 2);
-	}
+    if (pci_enabled && usb_enabled) {
+        usb_uhci_piix3_init(pci_bus, piix3_devfn + 2);
+    }
 
-	if (pci_enabled && acpi_enabled) {
-		uint8_t *eeprom_buf = qemu_mallocz(8 * 256); /* XXX: make this persistent */
-		i2c_bus *smbus;
+    if (pci_enabled && acpi_enabled) {
+        uint8_t *eeprom_buf = qemu_mallocz(8 * 256); /* XXX: make this persistent */
+        i2c_bus *smbus;
 
-		/* TODO: Populate SPD eeprom data.  */
-		smbus = piix4_pm_init(pci_bus, piix3_devfn + 3, 0xb100);
-		for (i = 0; i < 8; i++) {
-			smbus_eeprom_device_init(smbus, 0x50 + i, eeprom_buf + (i * 256));
-		}
-	}
+        /* TODO: Populate SPD eeprom data.  */
+        smbus = piix4_pm_init(pci_bus, piix3_devfn + 3, 0xb100);
+        for (i = 0; i < 8; i++) {
+            smbus_eeprom_device_init(smbus, 0x50 + i, eeprom_buf + (i * 256));
+        }
+    }
 
-	if (i440fx_state) {
-		i440fx_init_memory_mappings(i440fx_state);
-	}
-#if 0
-	/* ??? Need to figure out some way for the user to
-	   specify SCSI devices.  */
-	if (pci_enabled) {
-		void *scsi;
-		BlockDriverState *bdrv;
+    if (i440fx_state) {
+        i440fx_init_memory_mappings(i440fx_state);
+    }
 
-		scsi = lsi_scsi_init(pci_bus, -1);
-		bdrv = bdrv_new("scsidisk");
-		bdrv_open(bdrv, "scsi_disk.img", 0);
-		lsi_scsi_attach(scsi, bdrv, -1);
-		bdrv = bdrv_new("scsicd");
-		bdrv_open(bdrv, "scsi_cd.iso", 0);
-		bdrv_set_type_hint(bdrv, BDRV_TYPE_CDROM);
-		lsi_scsi_attach(scsi, bdrv, -1);
-	}
-#endif
+    if (pci_enabled) {
+	int max_bus;
+        int bus, unit;
+        void *scsi;
+
+        max_bus = drive_get_max_bus(IF_SCSI);
+
+	for (bus = 0; bus <= max_bus; bus++) {
+            scsi = lsi_scsi_init(pci_bus, -1);
+            for (unit = 0; unit < LSI_MAX_DEVS; unit++) {
+	        index = drive_get_index(IF_SCSI, bus, unit);
+		if (index == -1)
+		    continue;
+		lsi_scsi_attach(scsi, drives_table[index].bdrv, unit);
+	    }
+        }
+    }
 }
 
-static void ipf_init_pci(ram_addr_t ram_size, int vga_ram_size, int boot_device,
-		DisplayState *ds, const char **fd_filename,
-		int snapshot,
-		const char *kernel_filename,
-		const char *kernel_cmdline,
-		const char *initrd_filename,
-		const char *cpu_model)
+static void ipf_init_pci(ram_addr_t ram_size, int vga_ram_size,
+                        const char *boot_device, DisplayState *ds,
+                        const char *kernel_filename,
+                        const char *kernel_cmdline,
+                        const char *initrd_filename,
+                        const char *cpu_model)
 {
-	ipf_init1(ram_size, vga_ram_size, boot_device,
-			ds, fd_filename, snapshot,
-			kernel_filename, kernel_cmdline,
-			initrd_filename, 1);
+    ipf_init1(ram_size, vga_ram_size, boot_device, ds,
+             kernel_filename, kernel_cmdline,
+             initrd_filename, 1, cpu_model);
 }
 
 QEMUMachine ipf_machine = {
-	"itanium",
-	"Itanium Platform",
-	ipf_init_pci,
+    "itanium",
+    "Itanium Platform",
+    ipf_init_pci,
 };

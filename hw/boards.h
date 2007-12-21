@@ -96,4 +96,7 @@ extern QEMUMachine dummy_m68k_machine;
 /* mainstone.c */
 extern QEMUMachine mainstone2_machine;
 
+/* ipf.c */
+extern QEMUMachine ipf_machine;
+
 #endif
