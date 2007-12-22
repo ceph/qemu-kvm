@@ -50,6 +50,7 @@ sync:
 	$(call hack, irq.h)
 	for i in $$(find tmp -type f -printf '%P '); \
 		do cmp -s $$i tmp/$$i || cp tmp/$$i $$i; done
+	rm -rf tmp
 
 install:
 	mkdir -p $(DESTDIR)/$(INSTALLDIR)
