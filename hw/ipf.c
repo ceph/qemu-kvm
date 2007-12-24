@@ -443,7 +443,7 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
 		free(image);
 		flush_icache_range((unsigned long)fw_image_start,
 			(unsigned long)fw_image_start + image_size);
-		kvm_ia64_build_hob(ram_size, smp_cpus, fw_start);
+		kvm_ia64_build_hob(ram_size + above_4g_mem_size, smp_cpus, fw_start);
 	}
 #endif
 
