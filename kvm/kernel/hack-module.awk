@@ -24,32 +24,6 @@
     printf("MODULE_INFO(version, \"%s\");\n", version)
 }
 
-/^static unsigned long vmcs_readl/ {
-    in_vmcs_read = 1
-}
-
-/ASM_VMX_VMREAD_RDX_RAX/ && in_vmcs_read {
-    printf("\tstart_special_insn();\n")
-}
-
-/return/ && in_vmcs_read {
-    printf("\tend_special_insn();\n");
-    in_vmcs_read = 0
-}
-
-/^static void vmcs_writel/ {
-    in_vmcs_write = 1
-}
-
-/ASM_VMX_VMWRITE_RAX_RDX/ && in_vmcs_write {
-    printf("\tstart_special_insn();\n")
-}
-
-/if/ && in_vmcs_write {
-    printf("\tend_special_insn();\n");
-    in_vmcs_write = 0
-}
-
 /^static void vmx_load_host_state/ {
     vmx_load_host_state = 1
 }
@@ -74,15 +48,6 @@
     print "\tspecial_reload_dr7();"
 }
 
-/static void vcpu_put|static int __vcpu_run|static struct kvm_vcpu \*vmx_create_vcpu/ {
-    in_tricky_func = 1
-}
-
-/preempt_disable|get_cpu/ && in_tricky_func {
-    printf("\tin_special_section();\n");
-    in_tricky_func = 0
-}
-
 /unsigned long flags;/ &&  vmx_load_host_state {
     print "\tunsigned long gsbase;"
 }
@@ -90,4 +55,3 @@
 /local_irq_save/ &&  vmx_load_host_state {
     print "\t\tgsbase = vmcs_readl(HOST_GS_BASE);"
 }
-
