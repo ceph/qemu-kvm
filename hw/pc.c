@@ -857,14 +857,16 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
         isa_bios_size = 128 * 1024;
     cpu_register_physical_memory(0xd0000, (192 * 1024) - isa_bios_size,
                                  IO_MEM_UNASSIGNED);
+    /* kvm tpr optimization needs the bios accessible for write, at least to qemu itself */
     cpu_register_physical_memory(0x100000 - isa_bios_size,
                                  isa_bios_size,
-                                 (bios_offset + bios_size - isa_bios_size) | IO_MEM_ROM);
+                                 (bios_offset + bios_size - isa_bios_size) /* | IO_MEM_ROM */);
 #ifdef USE_KVM
     if (kvm_allowed)
         kvm_cpu_register_physical_memory(0x100000 - isa_bios_size,
                                          isa_bios_size,
-                                         (bios_offset + bios_size - isa_bios_size) | IO_MEM_ROM);
+                                         (bios_offset + bios_size - isa_bios_size)
+					 /* | IO_MEM_ROM */);
 #endif
 
 

@@ -327,6 +327,7 @@ static int kvm_main_loop_cpu(CPUState *env)
     env->ready_for_interrupt_injection = 1;
 
     cpu_single_env = env;
+    kvm_tpr_opt_setup(env);
     while (1) {
 	while (!has_work(env))
 	    kvm_main_loop_wait(env, 10);
@@ -513,6 +514,13 @@ static int kvm_shutdown(void *opaque, int vcpu)
     return 1;
 }
  
+static int handle_tpr_access(void *opaque, int vcpu,
+			     uint64_t rip, int is_write)
+{
+    kvm_tpr_access_report(cpu_single_env, rip, is_write);
+    return 0;
+}
+
 static struct kvm_callbacks qemu_kvm_ops = {
     .debug = kvm_debug,
     .inb   = kvm_inb,
@@ -529,6 +537,7 @@ static struct kvm_callbacks qemu_kvm_ops = {
     .try_push_interrupts = try_push_interrupts,
     .post_kvm_run = post_kvm_run,
     .pre_kvm_run = pre_kvm_run,
+    .tpr_access = handle_tpr_access,
 };
 
 int kvm_qemu_init()
