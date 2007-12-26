@@ -157,6 +157,34 @@ int kvm_arch_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
 	return 0;
 }
 
+#ifdef KVM_EXIT_TPR_ACCESS
+
+static int handle_tpr_access(kvm_context_t kvm, struct kvm_run *run, int vcpu)
+{
+	return kvm->callbacks->tpr_access(kvm->opaque, vcpu,
+					  run->tpr_access.rip,
+					  run->tpr_access.is_write);
+}
+
+
+int kvm_enable_vapic(kvm_context_t kvm, int vcpu, uint64_t vapic)
+{
+	int r;
+	struct kvm_vapic_addr va = {
+		.vapic_addr = vapic,
+	};
+
+	r = ioctl(kvm->vcpu_fd[vcpu], KVM_SET_VAPIC_ADDR, &va);
+	if (r == -1) {
+		r = -errno;
+		perror("kvm_enable_vapic");
+		return r;
+	}
+	return 0;
+}
+
+#endif
+
 int kvm_arch_run(struct kvm_run *run,kvm_context_t kvm, int vcpu)
 {
 	int r = 0;
@@ -166,7 +194,11 @@ int kvm_arch_run(struct kvm_run *run,kvm_context_t kvm, int vcpu)
 		case KVM_EXIT_SET_TPR:
 			break;
 #endif
-		default:
+#ifdef KVM_EXIT_TPR_ACCESS
+		case KVM_EXIT_TPR_ACCESS:
+			r = handle_tpr_access(kvm, run, vcpu);
+			break;
+#endif		default:
 			r = 1;
 			break;
 	}
@@ -502,3 +534,36 @@ int kvm_get_shadow_pages(kvm_context_t kvm, unsigned int *nrshadow_pages)
 #endif
 	return -1;
 }
+
+#ifdef KVM_CAP_VAPIC
+
+static int tpr_access_reporting(kvm_context_t kvm, int vcpu, int enabled)
+{
+	int r;
+	struct kvm_tpr_access_ctl tac = {
+		.enabled = enabled,
+	};
+
+	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_VAPIC);
+	if (r == -1 || r == 0)
+		return -ENOSYS;
+	r = ioctl(kvm->vcpu_fd[vcpu], KVM_TPR_ACCESS_REPORTING, &tac);
+	if (r == -1) {
+		r = -errno;
+		perror("KVM_TPR_ACCESS_REPORTING");
+		return r;
+	}
+	return 0;
+}
+
+int kvm_enable_tpr_access_reporting(kvm_context_t kvm, int vcpu)
+{
+	return tpr_access_reporting(kvm, vcpu, 1);
+}
+
+int kvm_disable_tpr_access_reporting(kvm_context_t kvm, int vcpu)
+{
+	return tpr_access_reporting(kvm, vcpu, 0);
+}
+
+#endif

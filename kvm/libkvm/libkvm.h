@@ -64,6 +64,7 @@ struct kvm_callbacks {
     int (*try_push_interrupts)(void *opaque);
     void (*post_kvm_run)(void *opaque, int vcpu);
     int (*pre_kvm_run)(void *opaque, int vcpu);
+    int (*tpr_access)(void *opaque, int vcpu, uint64_t rip, int is_write);
 };
 
 /*!
@@ -521,6 +522,33 @@ int kvm_get_lapic(kvm_context_t kvm, int vcpu, struct kvm_lapic_state *s);
  */
 int kvm_set_lapic(kvm_context_t kvm, int vcpu, struct kvm_lapic_state *s);
 #endif
+
+#endif
+
+#ifdef KVM_CAP_VAPIC
+
+/*!
+ * \brief Enable kernel tpr access reporting
+ *
+ * When tpr access reporting is enabled, the kernel will call the
+ * ->tpr_access() callback every time the guest vcpu accesses the tpr.
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param vcpu vcpu to enable tpr access reporting on
+ */
+int kvm_enable_tpr_access_reporting(kvm_context_t kvm, int vcpu);
+
+/*!
+ * \brief Disable kernel tpr access reporting
+ *
+ * Undoes the effect of kvm_enable_tpr_access_reporting().
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param vcpu vcpu to disable tpr access reporting on
+ */
+int kvm_disable_tpr_access_reporting(kvm_context_t kvm, int vcpu);
+
+int kvm_enable_vapic(kvm_context_t kvm, int vcpu, uint64_t vapic);
 
 #endif
 
