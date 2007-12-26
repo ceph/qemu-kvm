@@ -97,8 +97,8 @@ rombios32.bin: rombios32.out rombios.h
 	objcopy -O binary $< $@
 	./biossums -pad $@
 
-rombios32.out: rombios32start.o rombios32.o rombios32.ld
-	ld -o $@ -T rombios32.ld rombios32start.o rombios32.o
+rombios32.out: rombios32start.o rombios32.o vapic.o rombios32.ld
+	ld -o $@ -T rombios32.ld rombios32start.o vapic.o rombios32.o
 
 rombios32.o: rombios32.c acpi-dsdt.hex
 	$(GCC) -m32 -O2 -Wall -c -o $@ $<
@@ -107,6 +107,9 @@ acpi-dsdt.hex: acpi-dsdt.dsl
 	iasl -tc -p $@ $<
 
 rombios32start.o: rombios32start.S
+	$(GCC) -m32 -c -o $@ $<
+
+vapic.o: vapic.S
 	$(GCC) -m32 -c -o $@ $<
 
 BIOS-bochs-latest: rombios16.bin rombios32.bin

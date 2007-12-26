@@ -6,6 +6,10 @@ SECTIONS
         . = 0x00040000;
         .text     : { *(.text)    } 
         .rodata    : { *(.rodata) }
+        . = ALIGN(64);
+        fixup_start = .;
+        .fixup    : { *(.fixup) }
+        fixup_end = .;
         . = ALIGN(4096);
         .data     : { *(.data)    } 
         __bss_start = . ;
