@@ -137,7 +137,7 @@ typedef enum {
 
 typedef struct DriveInfo {
     BlockDriverState *bdrv;
-    BlockInterfaceType interface;
+    BlockInterfaceType type;
     int bus;
     int unit;
 } DriveInfo;
@@ -149,8 +149,8 @@ typedef struct DriveInfo {
 int nb_drives;
 DriveInfo drives_table[MAX_DRIVES+1];
 
-extern int drive_get_index(BlockInterfaceType interface, int bus, int unit);
-extern int drive_get_max_bus(BlockInterfaceType interface);
+extern int drive_get_index(BlockInterfaceType type, int bus, int unit);
+extern int drive_get_max_bus(BlockInterfaceType type);
 
 /* vmchannel devices */
 

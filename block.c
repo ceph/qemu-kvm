@@ -26,6 +26,7 @@
 #include "console.h"
 #endif
 #include "block_int.h"
+#include "osdep.h"
 
 #ifdef _BSD
 #include <sys/types.h>
@@ -380,7 +381,7 @@ int bdrv_open2(BlockDriverState *bs, const char *filename, int flags,
     /* Note: for compatibility, we open disk image files as RDWR, and
        RDONLY as fallback */
     if (!(flags & BDRV_O_FILE))
-        open_flags = BDRV_O_RDWR;
+        open_flags = BDRV_O_RDWR | (flags & BDRV_O_DIRECT);
     else
         open_flags = flags & ~(BDRV_O_FILE | BDRV_O_SNAPSHOT);
     ret = drv->bdrv_open(bs, filename, open_flags);
@@ -459,7 +460,7 @@ int bdrv_commit(BlockDriverState *bs)
     BlockDriver *drv = bs->drv;
     int64_t i, total_sectors;
     int n, j;
-    unsigned char sector[512];
+    unsigned char *sector[512];
 
     if (!drv)
         return -ENOMEDIUM;
@@ -717,7 +718,7 @@ int64_t bdrv_getlength(BlockDriverState *bs)
 }
 
 /* return 0 as number of sectors if no device present or error */
-void bdrv_get_geometry(BlockDriverState *bs, int64_t *nb_sectors_ptr)
+void bdrv_get_geometry(BlockDriverState *bs, uint64_t *nb_sectors_ptr)
 {
     int64_t length;
     length = bdrv_getlength(bs);
@@ -755,11 +756,15 @@ struct partition {
 static int guess_disk_lchs(BlockDriverState *bs,
                            int *pcylinders, int *pheads, int *psectors)
 {
-    uint8_t buf[512];
+    uint8_t *buf;
     int ret, i, heads, sectors, cylinders;
     struct partition *p;
     uint32_t nr_sects;
     int64_t nb_sectors;
+
+    buf = qemu_memalign(512, 512);
+    if (buf == NULL)
+        return -1;
 
     bdrv_get_geometry(bs, &nb_sectors);
 
@@ -767,8 +772,10 @@ static int guess_disk_lchs(BlockDriverState *bs,
     if (ret < 0)
         return -1;
     /* test msdos magic */
-    if (buf[510] != 0x55 || buf[511] != 0xaa)
+    if (buf[510] != 0x55 || buf[511] != 0xaa) {
+        qemu_free(buf);
         return -1;
+    }
     for(i = 0; i < 4; i++) {
         p = ((struct partition *)(buf + 0x1be)) + i;
         nr_sects = le32_to_cpu(p->nr_sects);
@@ -789,9 +796,11 @@ static int guess_disk_lchs(BlockDriverState *bs,
             printf("guessed geometry: LCHS=%d %d %d\n",
                    cylinders, heads, sectors);
 #endif
+            qemu_free(buf);
             return 0;
         }
     }
+    qemu_free(buf);
     return -1;
 }
 
@@ -900,6 +909,11 @@ int bdrv_is_removable(BlockDriverState *bs)
 int bdrv_is_read_only(BlockDriverState *bs)
 {
     return bs->read_only;
+}
+
+int bdrv_is_sg(BlockDriverState *bs)
+{
+    return bs->sg;
 }
 
 /* XXX: no longer used */
@@ -1524,4 +1538,15 @@ void bdrv_set_locked(BlockDriverState *bs, int locked)
     if (drv && drv->bdrv_set_locked) {
         drv->bdrv_set_locked(bs, locked);
     }
+}
+
+/* needed for generic scsi interface */
+
+int bdrv_ioctl(BlockDriverState *bs, unsigned long int req, void *buf)
+{
+    BlockDriver *drv = bs->drv;
+
+    if (drv && drv->bdrv_ioctl)
+        return drv->bdrv_ioctl(bs, req, buf);
+    return -ENOTSUP;
 }

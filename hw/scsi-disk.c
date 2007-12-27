@@ -46,7 +46,7 @@ typedef struct SCSIRequest {
     int sector_count;
     /* The amounnt of data in the buffer.  */
     int buf_len;
-    uint8_t dma_buf[SCSI_DMA_BUF_SIZE];
+    uint8_t *dma_buf;
     BlockDriverAIOCB *aiocb;
     struct SCSIRequest *next;
 } SCSIRequest;
@@ -78,6 +78,7 @@ static SCSIRequest *scsi_new_request(SCSIDeviceState *s, uint32_t tag)
         free_requests = r->next;
     } else {
         r = qemu_malloc(sizeof(SCSIRequest));
+        r->dma_buf = qemu_memalign(512, SCSI_DMA_BUF_SIZE);
     }
     r->dev = s;
     r->tag = tag;
@@ -284,7 +285,7 @@ static int32_t scsi_send_command(SCSIDevice *d, uint32_t tag,
                                  uint8_t *buf, int lun)
 {
     SCSIDeviceState *s = d->state;
-    int64_t nb_sectors;
+    uint64_t nb_sectors;
     uint32_t lba;
     uint32_t len;
     int cmdlen;

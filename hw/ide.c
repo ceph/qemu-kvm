@@ -365,7 +365,7 @@ typedef struct IDEState {
     EndTransferFunc *end_transfer_func;
     uint8_t *data_ptr;
     uint8_t *data_end;
-    uint8_t io_buffer[MAX_MULT_SECTORS*512 + 4];
+    uint8_t *io_buffer;
     QEMUTimer *sector_write_timer; /* only used for win2k install hack */
     uint32_t irq_count; /* counts IRQs when using win2k install hack */
     /* CF-ATA extended error */
@@ -430,8 +430,7 @@ static void padstr(char *str, const char *src, int len)
             v = *src++;
         else
             v = ' ';
-        *(char *)((long)str ^ 1) = v;
-        str++;
+        str[i^1] = v;
     }
 }
 
@@ -1465,12 +1464,12 @@ static void ide_atapi_cmd(IDEState *s)
         break;
     case GPCMD_SEEK:
         {
-            int lba;
-            int64_t total_sectors;
+            unsigned int lba;
+            uint64_t total_sectors;
 
             bdrv_get_geometry(s->bs, &total_sectors);
             total_sectors >>= 2;
-            if (total_sectors <= 0) {
+            if (total_sectors == 0) {
                 ide_atapi_cmd_error(s, SENSE_NOT_READY,
                                     ASC_MEDIUM_NOT_PRESENT);
                 break;
@@ -1516,11 +1515,11 @@ static void ide_atapi_cmd(IDEState *s)
     case GPCMD_READ_TOC_PMA_ATIP:
         {
             int format, msf, start_track, len;
-            int64_t total_sectors;
+            uint64_t total_sectors;
 
             bdrv_get_geometry(s->bs, &total_sectors);
             total_sectors >>= 2;
-            if (total_sectors <= 0) {
+            if (total_sectors == 0) {
                 ide_atapi_cmd_error(s, SENSE_NOT_READY,
                                     ASC_MEDIUM_NOT_PRESENT);
                 break;
@@ -1560,11 +1559,11 @@ static void ide_atapi_cmd(IDEState *s)
         break;
     case GPCMD_READ_CDVD_CAPACITY:
         {
-            int64_t total_sectors;
+            uint64_t total_sectors;
 
             bdrv_get_geometry(s->bs, &total_sectors);
             total_sectors >>= 2;
-            if (total_sectors <= 0) {
+            if (total_sectors == 0) {
                 ide_atapi_cmd_error(s, SENSE_NOT_READY,
                                     ASC_MEDIUM_NOT_PRESENT);
                 break;
@@ -1580,7 +1579,7 @@ static void ide_atapi_cmd(IDEState *s)
             int media = packet[1];
             int layer = packet[6];
             int format = packet[2];
-            int64_t total_sectors;
+            uint64_t total_sectors;
 
             if (media != 0 || layer != 0)
             {
@@ -1592,6 +1591,11 @@ static void ide_atapi_cmd(IDEState *s)
                 case 0:
                     bdrv_get_geometry(s->bs, &total_sectors);
                     total_sectors >>= 2;
+                    if (total_sectors == 0) {
+                        ide_atapi_cmd_error(s, SENSE_NOT_READY,
+                                            ASC_MEDIUM_NOT_PRESENT);
+                        break;
+                    }
 
                     memset(buf, 0, 2052);
 
@@ -1637,7 +1641,7 @@ static void ide_atapi_cmd(IDEState *s)
     case GPCMD_GET_CONFIGURATION:
         {
             uint32_t len;
-            int64_t total_sectors;
+            uint64_t total_sectors;
 
             /* only feature 0 is supported */
             if (packet[2] != 0 || packet[3] != 0) {
@@ -1732,7 +1736,7 @@ static void ide_cfata_metadata_write(IDEState *s)
 static void cdrom_change_cb(void *opaque)
 {
     IDEState *s = opaque;
-    int64_t nb_sectors;
+    uint64_t nb_sectors;
 
     /* XXX: send interrupt too */
     bdrv_get_geometry(s->bs, &nb_sectors);
@@ -2374,10 +2378,11 @@ static void ide_init2(IDEState *ide_state,
     IDEState *s;
     static int drive_serial = 1;
     int i, cylinders, heads, secs;
-    int64_t nb_sectors;
+    uint64_t nb_sectors;
 
     for(i = 0; i < 2; i++) {
         s = ide_state + i;
+        s->io_buffer = qemu_memalign(512, MAX_MULT_SECTORS*512 + 4);
         if (i == 0)
             s->bs = hd0;
         else

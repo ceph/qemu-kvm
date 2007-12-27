@@ -26,6 +26,7 @@
 #include <assert.h>
 
 #ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #endif
 
@@ -53,6 +54,33 @@ void *qemu_mallocz(size_t size)
     memset(ptr, 0, size);
     return ptr;
 }
+
+#ifdef _WIN32
+
+void *qemu_memalign(size_t alignment, size_t size)
+{
+    return VirtualAlloc(NULL, size, MEM_COMMIT, PAGE_READWRITE);
+}
+
+#else
+
+void *qemu_memalign(size_t alignment, size_t size)
+{
+#if defined(_POSIX_C_SOURCE)
+    int ret;
+    void *ptr;
+    ret = posix_memalign(&ptr, alignment, size);
+    if (ret != 0)
+        return NULL;
+    return ptr;
+#elif defined(_BSD)
+    return valloc(size);
+#else
+    return memalign(alignment, size);
+#endif
+}
+
+#endif
 
 char *qemu_strdup(const char *str)
 {
@@ -235,7 +263,7 @@ static int img_create(int argc, char **argv)
     const char *fmt = "raw";
     const char *filename;
     const char *base_filename = NULL;
-    int64_t size;
+    uint64_t size;
     const char *p;
     BlockDriver *drv;
 
@@ -300,7 +328,7 @@ static int img_create(int argc, char **argv)
         printf(", backing_file=%s",
                base_filename);
     }
-    printf(", size=%" PRId64 " kB\n", (int64_t) (size / 1024));
+    printf(", size=%" PRIu64 " kB\n", size / 1024);
     ret = bdrv_create(drv, filename, size / 512, base_filename, flags);
     if (ret < 0) {
         if (ret == -ENOTSUP) {
@@ -410,7 +438,8 @@ static int img_convert(int argc, char **argv)
     const char *fmt, *out_fmt, *out_filename;
     BlockDriver *drv;
     BlockDriverState **bs, *out_bs;
-    int64_t total_sectors, nb_sectors, sector_num, bs_offset, bs_sectors;
+    int64_t total_sectors, nb_sectors, sector_num, bs_offset;
+    uint64_t bs_sectors;
     uint8_t buf[IO_BUF_SIZE];
     const uint8_t *buf1;
     BlockDriverInfo bdi;
@@ -655,7 +684,8 @@ static int img_info(int argc, char **argv)
     BlockDriver *drv;
     BlockDriverState *bs;
     char fmt_name[128], size_buf[128], dsize_buf[128];
-    int64_t total_sectors, allocated_size;
+    uint64_t total_sectors;
+    int64_t allocated_size;
     char backing_filename[1024];
     char backing_filename2[1024];
     BlockDriverInfo bdi;
