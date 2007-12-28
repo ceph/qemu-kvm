@@ -483,15 +483,13 @@ static int kvm_outl(void *opaque, uint16_t addr, uint32_t data)
     return 0;
 }
 
-static int kvm_mmio_read(void *opaque, uint64_t addr,
-					uint8_t *data, int len, int is_write)
+static int kvm_mmio_read(void *opaque, uint64_t addr, uint8_t *data, int len)
 {
 	cpu_physical_memory_rw(addr, data, len, 0);
 	return 0;
 }
 
-static int kvm_mmio_write(void *opaque, uint64_t addr,
-					uint8_t *data, int len, int is_write)
+static int kvm_mmio_write(void *opaque, uint64_t addr, uint8_t *data, int len)
 {
 	cpu_physical_memory_rw(addr, data, len, 1);
 	return 0;

@@ -366,7 +366,7 @@ static int test_pre_kvm_run(void *opaque, int vcpu)
 	return 0;
 }
 
-static int test_mem_read(void *opaque, uint64_t addr, void *data, unsigned len)
+static int test_mem_read(void *opaque, uint64_t addr, uint8_t *data, int len)
 {
 	if (addr < IORAM_BASE_PHYS || addr + len > IORAM_BASE_PHYS + IORAM_LEN)
 		return 1;
@@ -374,7 +374,7 @@ static int test_mem_read(void *opaque, uint64_t addr, void *data, unsigned len)
 	return 0;
 }
 
-static int test_mem_write(void *opaque, uint64_t addr, void *data, unsigned len)
+static int test_mem_write(void *opaque, uint64_t addr, uint8_t *data, int len)
 {
 	if (addr < IORAM_BASE_PHYS || addr + len > IORAM_BASE_PHYS + IORAM_LEN)
 		return 1;
