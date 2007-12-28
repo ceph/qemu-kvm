@@ -198,7 +198,8 @@ int kvm_arch_run(struct kvm_run *run,kvm_context_t kvm, int vcpu)
 		case KVM_EXIT_TPR_ACCESS:
 			r = handle_tpr_access(kvm, run, vcpu);
 			break;
-#endif		default:
+#endif
+		default:
 			r = 1;
 			break;
 	}
