@@ -34,6 +34,9 @@ void qemu_handler_true(void *opaque);
 
 void do_info_network(void);
 
+/* virtio hack for zero copy receive */
+int hack_around_tap(void *opaque);
+
 /* NIC info */
 
 #define MAX_NICS 8

@@ -3886,7 +3886,14 @@ typedef struct TAPState {
     VLANClientState *vc;
     int fd;
     char down_script[1024];
+    int no_poll;
 } TAPState;
+
+static int tap_read_poll(void *opaque)
+{
+    TAPState *s = opaque;
+    return (!s->no_poll);
+}
 
 static void tap_receive(void *opaque, const uint8_t *buf, int size)
 {
@@ -3921,6 +3928,22 @@ static void tap_send(void *opaque)
     }
 }
 
+int hack_around_tap(void *opaque)
+{
+    VLANClientState *vc = opaque;
+    TAPState *ts = vc->opaque;
+
+    if (vc->fd_read != tap_receive)
+        return -1;
+
+    if (ts) {
+       ts->no_poll = 1;
+       return ts->fd;
+    }
+
+    return -1;
+}
+
 /* fd support */
 
 static TAPState *net_tap_fd_init(VLANState *vlan, int fd)
@@ -3931,9 +3954,10 @@ static TAPState *net_tap_fd_init(VLANState *vlan, int fd)
     if (!s)
         return NULL;
     s->fd = fd;
+    s->no_poll = 0;
     enable_sigio_timer(fd);
     s->vc = qemu_new_vlan_client(vlan, tap_receive, NULL, s);
-    qemu_set_fd_handler(s->fd, tap_send, NULL, s);
+    qemu_set_fd_handler2(s->fd, tap_read_poll, tap_send, NULL, s);
     snprintf(s->vc->info_str, sizeof(s->vc->info_str), "tap: fd=%d", fd);
     return s;
 }
@@ -7742,6 +7766,8 @@ void main_loop_wait(int timeout)
         slirp_select_poll(&rfds, &wfds, &xfds);
     }
 #endif
+    virtio_net_poll();
+
     qemu_aio_poll();
 
     if (vm_running) {
