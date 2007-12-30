@@ -463,6 +463,9 @@ VL_OBJS += rtl8139.o
 # PCI Hypercall
 VL_OBJS+= hypercall.o
 
+# virtio devices
+VL_OBJS += virtio.o
+
 ifeq ($(TARGET_BASE_ARCH), i386)
 # Hardware support
 VL_OBJS+= ide.o pckbd.o ps2.o vga.o $(SOUND_HW) dma.o
