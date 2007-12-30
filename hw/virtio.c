@@ -158,6 +158,25 @@ static void virtio_update_irq(VirtIODevice *vdev)
     qemu_set_irq(vdev->pci_dev.irq[0], vdev->isr & 1);
 }
 
+void virtio_reset(void *opaque)
+{
+    VirtIODevice *vdev = opaque;
+    int i;
+
+    vdev->features = 0;
+    vdev->queue_sel = 0;
+    vdev->status = 0;
+    vdev->isr = 0;
+
+    for(i = 0; i < VIRTIO_PCI_QUEUE_MAX; i++) {
+        vdev->vq[i].vring.desc = NULL;
+        vdev->vq[i].vring.avail = NULL;
+        vdev->vq[i].vring.used = NULL;
+        vdev->vq[i].last_avail_idx = 0;
+        vdev->vq[i].pfn = 0;
+    }
+}
+
 static void virtio_ioport_write(void *opaque, uint32_t addr, uint32_t val)
 {
     VirtIODevice *vdev = to_virtio_device(opaque);
@@ -175,9 +194,7 @@ static void virtio_ioport_write(void *opaque, uint32_t addr, uint32_t val)
 	pa = (ram_addr_t)val << TARGET_PAGE_BITS;
 	vdev->vq[vdev->queue_sel].pfn = val;
 	if (pa == 0) {
-	    vdev->vq[vdev->queue_sel].vring.desc = NULL;
-	    vdev->vq[vdev->queue_sel].vring.avail = NULL;
-	    vdev->vq[vdev->queue_sel].vring.used = NULL;
+            virtio_reset(vdev);
 	} else if (pa < (ram_size - TARGET_PAGE_SIZE)) {
 	    virtqueue_init(&vdev->vq[vdev->queue_sel], phys_ram_base + pa);
 	    /* FIXME if pa == 0, deal with device tear down */
@@ -417,6 +434,7 @@ VirtIODevice *virtio_init_pci(PCIBus *bus, const char *name,
 
     pci_register_io_region(pci_dev, 0, 20 + config_size, PCI_ADDRESS_SPACE_IO,
 			   virtio_map);
+    qemu_register_reset(virtio_reset, vdev);
 
     return vdev;
 }
