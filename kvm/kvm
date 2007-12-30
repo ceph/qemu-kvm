@@ -55,6 +55,12 @@ optparser.add_option('--no-tap',
                      default = not privileged,
                      )
 
+optparser.add_option('--nictype',
+                     help = 'use this specific nic type (vendor)',
+                     dest = 'nictype',
+                     default = 'rtl8139',
+                     )
+
 optparser.add_option('--mac',
                      help = 'use this specific mac addr',
                      dest = 'mac',
@@ -239,7 +245,7 @@ if not options.notap:
         mac_components[0] = 'a0'
         mac = ':'.join(mac_components)
             
-    qemu_args += ('-net', 'nic,macaddr=%s,model=rtl8139' % (mac,),
+    qemu_args += ('-net', 'nic,macaddr=%s,model=%s' % (mac,options.nictype,),
                   '-net', 'tap,script=/etc/kvm/qemu-ifup',)
 
 if options.vnc:
