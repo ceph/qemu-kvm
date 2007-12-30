@@ -142,4 +142,9 @@ void pci_piix4_ide_init(PCIBus *bus, BlockDriverState **hd_table, int devfn,
 
 void isa_ne2000_init(int base, qemu_irq irq, NICInfo *nd);
 
+/* virtio-net.c */
+
+void *virtio_net_init(PCIBus *bus, NICInfo *nd, int devfn);
+
+
 #endif

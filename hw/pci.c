@@ -25,6 +25,7 @@
 #include "pci.h"
 #include "console.h"
 #include "net.h"
+#include "pc.h"
 
 //#define DEBUG_PCI
 
@@ -638,9 +639,11 @@ void pci_nic_init(PCIBus *bus, NICInfo *nd, int devfn)
         pci_rtl8139_init(bus, nd, devfn);
     } else if (strcmp(nd->model, "pcnet") == 0) {
         pci_pcnet_init(bus, nd, devfn);
+    } else if (strcmp(nd->model, "virtio") == 0) {
+	virtio_net_init(bus, nd, devfn);
     } else if (strcmp(nd->model, "?") == 0) {
         fprintf(stderr, "qemu: Supported PCI NICs: i82551 i82557b i82559er"
-                        " ne2k_pci pcnet rtl8139\n");
+                        " ne2k_pci pcnet rtl8139 virtio\n");
         exit (1);
     } else {
         fprintf(stderr, "qemu: Unsupported NIC: %s\n", nd->model);
