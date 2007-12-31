@@ -4976,6 +4976,9 @@ static int drive_init(const char *str, int snapshot, QEMUMachine *machine)
 	} else if (!strcmp(buf, "sd")) {
 	    type = IF_SD;
             max_devs = 0;
+	} else if (!strcmp(buf, "virtio")) {
+	    type = IF_VIRTIO;
+	    max_devs = 0;
 	} else {
             fprintf(stderr, "qemu: '%s' unsupported bus type '%s'\n", str, buf);
             return -1;
@@ -5164,6 +5167,7 @@ static int drive_init(const char *str, int snapshot, QEMUMachine *machine)
         break;
     case IF_PFLASH:
     case IF_MTD:
+    case IF_VIRTIO:
         break;
     }
     if (!file[0])

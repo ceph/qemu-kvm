@@ -464,7 +464,7 @@ VL_OBJS += rtl8139.o
 VL_OBJS+= hypercall.o
 
 # virtio devices
-VL_OBJS += virtio.o virtio-net.o
+VL_OBJS += virtio.o virtio-net.o virtio-blk.o
 
 ifeq ($(TARGET_BASE_ARCH), i386)
 # Hardware support

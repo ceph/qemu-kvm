@@ -147,4 +147,8 @@ void isa_ne2000_init(int base, qemu_irq irq, NICInfo *nd);
 void *virtio_net_init(PCIBus *bus, NICInfo *nd, int devfn);
 
 
+/* virtio-blk.h */
+void *virtio_blk_init(PCIBus *bus, uint16_t vendor, uint16_t device,
+		      BlockDriverState *bs);
+
 #endif
