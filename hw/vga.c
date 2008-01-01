@@ -1860,7 +1860,6 @@ static void vga_map(PCIDevice *pci_dev, int region_num,
                 s->map_addr = s->map_end = 0;
             }
             else {
-                fprintf(stderr, "vram_pointer=%p\n", vram_pointer);
                 old_vram = vga_update_vram((VGAState *)s, vram_pointer,
                                            VGA_RAM_SIZE);
                 if (s->map_addr && s->map_end)
