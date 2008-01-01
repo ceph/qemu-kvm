@@ -5,7 +5,7 @@ DESTDIR=
 
 rpmrelease = devel
 
-.PHONY: kernel user libkvm qemu bios clean
+.PHONY: kernel user libkvm qemu bios vgabios clean
 
 all: $(if $(WANT_MODULE), kernel) user libkvm qemu
 
@@ -20,6 +20,11 @@ user: libkvm
 bios:
 	$(MAKE) -C $@
 	cp bios/BIOS-bochs-latest qemu/pc-bios/bios.bin
+
+vgabios:
+	$(MAKE) -C $@
+	cp vgabios/VGABIOS-lgpl-latest.bin qemu/pc-bios/vgabios.bin
+	cp vgabios/VGABIOS-lgpl-latest.cirrus.bin qemu/pc-bios/vgabios-cirrus.bin
 
 bindir = /usr/bin
 bin = $(bindir)/kvm
