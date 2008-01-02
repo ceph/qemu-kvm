@@ -7,7 +7,6 @@ qemu_cc=
 qemu_cflags=
 qemu_ldflags=
 enable_alsa=
-disable_vnc_tls=
 disable_gcc_check=
 cross_prefix=
 arch=`uname -m`
@@ -27,7 +26,6 @@ usage() {
 	    --qemu-cflags=CFLAGS   CFLAGS to add to qemu configuration
 	    --qemu-ldflags=LDFLAGS LDFLAGS to add to qemu configuration
 	    --enable-alsa          enable alsa support for qemu
-	    --disable-vnc-tls      disable vnc tls support for qemu
 	    --disable-gcc-check    don't insist on gcc-3.x
 	                           CAUTION: this will break running without kvm
 EOF
@@ -62,9 +60,6 @@ while [[ "$1" = -* ]]; do
 	    ;;
 	--enable-alsa)
 	    enable_alsa=1
-	    ;;
-	--disable-vnc-tls)
-	    disable_vnc_tls=1
 	    ;;
 	--disable-gcc-check)
 	    disable_gcc_check=1
@@ -118,7 +113,6 @@ fi
     --extra-ldflags="-L $PWD/../libkvm $qemu_ldflags" \
     --enable-kvm --kernel-path="$libkvm_kerneldir" \
     ${enable_alsa:+"--enable-alsa"} \
-    ${disable_vnc_tls:+"--disable-vnc-tls"} \
     ${disable_gcc_check:+"--disable-gcc-check"} \
     --prefix="$prefix" \
     ${qemu_cc:+"--cc=$qemu_cc"} \
