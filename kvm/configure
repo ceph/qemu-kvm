@@ -7,7 +7,6 @@ qemu_cc=
 qemu_cflags=
 qemu_ldflags=
 qemu_opts=
-disable_gcc_check=
 cross_prefix=
 arch=`uname -m`
 target_exec=
@@ -57,9 +56,6 @@ while [[ "$1" = -* ]]; do
 	--qemu-ldflags)
 	    qemu_ldflags="$arg"
 	    ;;
-	--disable-gcc-check)
-	    disable_gcc_check=1
-	    ;;
 	--arch)
 	    arch="$arg"
 	    ;;
@@ -108,7 +104,6 @@ fi
     --extra-cflags="-I $PWD/../libkvm $qemu_cflags" \
     --extra-ldflags="-L $PWD/../libkvm $qemu_ldflags" \
     --enable-kvm --kernel-path="$libkvm_kerneldir" \
-    ${disable_gcc_check:+"--disable-gcc-check"} \
     --prefix="$prefix" \
     ${qemu_cc:+"--cc=$qemu_cc"} \
     ${cross_prefix:+"--cross-prefix=$cross_prefix"} \
