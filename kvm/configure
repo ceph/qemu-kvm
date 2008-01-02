@@ -24,9 +24,17 @@ usage() {
 	    --qemu-cc=CC           specify compiler for qemu (must be gcc-3.x)
 	    --qemu-cflags=CFLAGS   CFLAGS to add to qemu configuration
 	    --qemu-ldflags=LDFLAGS LDFLAGS to add to qemu configuration
+
+	Any additional option is given to qemu's configure verbatim; including:
+
 	    --disable-gcc-check    don't insist on gcc-3.x
 	                           CAUTION: this will break running without kvm
 EOF
+    cd qemu
+    ./configure --help | egrep "enable-|disable-" \
+	| grep -v user | grep -v system | grep -v kqemu | grep -v kvm \
+	| sed -e "s/^  /    /g" \
+	| sed -e"s/  enable/enable/g" | sed -e "s/  disable/disable/g"
     exit 1
 }
 
@@ -66,7 +74,7 @@ while [[ "$1" = -* ]]; do
 	    usage
 	    ;;
 	*)
-	    usage
+	    qemu_opts="$qemu_opts $opt"
 	    ;;
     esac
 done
