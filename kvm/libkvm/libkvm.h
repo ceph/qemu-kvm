@@ -65,6 +65,10 @@ struct kvm_callbacks {
     void (*post_kvm_run)(void *opaque, int vcpu);
     int (*pre_kvm_run)(void *opaque, int vcpu);
     int (*tpr_access)(void *opaque, int vcpu, uint64_t rip, int is_write);
+#if defined(__powerpc__)
+    int (*powerpc_dcr_read)(kvm_context_t kvm, uint32_t dcrn, uint32_t *data);
+    int (*powerpc_dcr_write)(kvm_context_t kvm, uint32_t dcrn, uint32_t data);
+#endif
 };
 
 /*!
