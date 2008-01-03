@@ -22,6 +22,10 @@
 #include <string.h>
 #include <stdlib.h>
 #include <zlib.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #include "cpu.h"
 
 #include "firmware.h"
@@ -514,16 +518,17 @@ char *read_image(const char *filename, unsigned long *size)
     if ( (filename == NULL) || (size == NULL) )
         return NULL;
 
-    if ( (kernel_fd = open(filename, O_RDONLY)) < 0 )
+    kernel_fd = open(filename, O_RDONLY);
+    if (kernel_fd < 0)
     {
-        Hob_Output("Could not open kernel image");
-        goto out;
+        Hob_Output("Could not open kernel image\n");
+        goto out_1;
     }
 
     if ( (kernel_gfd = gzdopen(kernel_fd, "rb")) == NULL )
     {
-        Hob_Output("Could not allocate decompression state for state file");
-        goto out;
+        Hob_Output("Could not allocate decompression state for state file\n");
+        goto out_1;
     }
 
     *size = 0;
@@ -577,6 +582,9 @@ char *read_image(const char *filename, unsigned long *size)
     else if ( kernel_fd >= 0 )
         close(kernel_fd);
     return image;
+
+out_1:
+    return NULL;
 }
 
 /*

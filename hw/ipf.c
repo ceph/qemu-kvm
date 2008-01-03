@@ -419,7 +419,8 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
 		image = read_image(buf, &image_size );
 		if (NULL == image || !image_size) {
 			fprintf(stderr, "Error when reading Guest Firmware!\n");
-			return ;
+			fprintf(stderr, "Please check Guest firmware at %s\n", buf);
+			exit(1);
 		}
 		fw_image_start = fw_start + GFW_SIZE - image_size;
 

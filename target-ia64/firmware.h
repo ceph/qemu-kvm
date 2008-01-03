@@ -36,7 +36,7 @@
 #define HOB_OFFSET              (GFW_HOB_START-GFW_START)
 
 #define Hob_Output(s) \
-    fprintf(stderr, strcat("HOB:",s))
+    fprintf(stderr, s)
 
 extern int kvm_ia64_build_hob(unsigned long memsize,
             unsigned long vcpus, uint8_t* fw_start);
