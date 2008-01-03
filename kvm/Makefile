@@ -5,7 +5,7 @@ DESTDIR=
 
 rpmrelease = devel
 
-.PHONY: kernel user libkvm qemu bios vgabios clean
+.PHONY: kernel user libkvm qemu bios vgabios extboot clean
 
 all: $(if $(WANT_MODULE), kernel) user libkvm qemu
 
@@ -14,7 +14,7 @@ kcmd = $(if $(WANT_MODULE),,@\#)
 qemu kernel user libkvm:
 	$(MAKE) -C $@
 
-qemu: libkvm
+qemu: libkvm extboot
 user: libkvm
 
 bios:
@@ -25,6 +25,14 @@ vgabios:
 	$(MAKE) -C $@
 	cp vgabios/VGABIOS-lgpl-latest.bin qemu/pc-bios/vgabios.bin
 	cp vgabios/VGABIOS-lgpl-latest.cirrus.bin qemu/pc-bios/vgabios-cirrus.bin
+
+extboot:
+	$(MAKE) -C $@
+	if ! [ -f qemu/pc-bios/extboot.bin ] \
+           || ! cmp -s qemu/pc-bios/extboot.bin extboot/extboot.bin; then \
+		cp extboot/extboot.bin qemu/pc-bios/extboot.bin; \
+	fi
+
 
 bindir = /usr/bin
 bin = $(bindir)/kvm
