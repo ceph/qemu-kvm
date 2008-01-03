@@ -865,8 +865,7 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
     if (kvm_allowed)
         kvm_cpu_register_physical_memory(0x100000 - isa_bios_size,
                                          isa_bios_size,
-                                         (bios_offset + bios_size - isa_bios_size)
-					 /* | IO_MEM_ROM */);
+                                         (bios_offset + bios_size - isa_bios_size) | IO_MEM_ROM);
 #endif
 
 
