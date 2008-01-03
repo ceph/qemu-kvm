@@ -1004,7 +1004,7 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
         nd = &nd_table[i];
         if (!nd->model) {
             if (pci_enabled) {
-                nd->model = "ne2k_pci";
+                nd->model = "rtl8139";
             } else {
                 nd->model = "ne2k_isa";
             }
