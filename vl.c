@@ -221,6 +221,8 @@ const char *vnc_display;
 #define MAX_CPUS 16
 #elif defined(TARGET_I386)
 #define MAX_CPUS 255
+#elif defined(TARGET_IA64)
+#define MAX_CPUS 4
 #else
 #define MAX_CPUS 1
 #endif
