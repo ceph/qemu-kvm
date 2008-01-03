@@ -151,4 +151,8 @@ void virtio_net_poll(void);
 void *virtio_blk_init(PCIBus *bus, uint16_t vendor, uint16_t device,
 		      BlockDriverState *bs);
 
+/* extboot.c */
+
+void extboot_init(BlockDriverState *bs, int cmd);
+
 #endif

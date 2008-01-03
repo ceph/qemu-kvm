@@ -43,6 +43,7 @@ extern int kvm_allowed;
 #define BIOS_FILENAME "bios.bin"
 #define VGABIOS_FILENAME "vgabios.bin"
 #define VGABIOS_CIRRUS_FILENAME "vgabios-cirrus.bin"
+#define EXTBOOT_FILENAME "extboot.bin"
 
 /* Leave a chunk of memory at the top of RAM for the BIOS ACPI tables.  */
 #define ACPI_DATA_SIZE       0x10000
@@ -715,6 +716,37 @@ extern kvm_context_t kvm_context;
 extern int kvm_allowed;
 #endif
 
+static int load_option_rom(const char *filename, int offset)
+{
+    ram_addr_t option_rom_offset;
+    int size, ret;
+
+    size = get_image_size(filename);
+    if (size < 0) {
+	fprintf(stderr, "Could not load option rom '%s'\n", filename);
+	exit(1);
+    }
+    if (size > (0x10000 - offset))
+	goto option_rom_error;
+    option_rom_offset = qemu_ram_alloc(size);
+    ret = load_image(filename, phys_ram_base + option_rom_offset);
+    if (ret != size) {
+    option_rom_error:
+	fprintf(stderr, "Too many option ROMS\n");
+	exit(1);
+    }
+    size = (size + 4095) & ~4095;
+    cpu_register_physical_memory(0xd0000 + offset,
+				 size, option_rom_offset | IO_MEM_ROM);
+#ifdef USE_KVM
+    if (kvm_allowed)
+	    kvm_cpu_register_physical_memory(0xd0000 + offset,
+                                             size, option_rom_offset |
+                                             IO_MEM_ROM);
+#endif
+    return size;
+}
+
 /* PC hardware initialisation */
 static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
                      const char *boot_device, DisplayState *ds,
@@ -726,7 +758,7 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
     int ret, linux_boot, i;
     ram_addr_t ram_addr, vga_ram_addr, bios_offset, vga_bios_offset;
     ram_addr_t above_4g_mem_size = 0;
-    int bios_size, isa_bios_size, vga_bios_size;
+    int bios_size, isa_bios_size, vga_bios_size, opt_rom_offset;
     PCIBus *pci_bus;
     int piix3_devfn = -1;
     CPUState *env;
@@ -868,40 +900,13 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
                                          (bios_offset + bios_size - isa_bios_size) | IO_MEM_ROM);
 #endif
 
+    opt_rom_offset = 0;
+    for (i = 0; i < nb_option_roms; i++)
+	opt_rom_offset += load_option_rom(option_rom[i], opt_rom_offset);
 
-    {
-        ram_addr_t option_rom_offset;
-        int size, offset;
-
-        offset = 0;
-        for (i = 0; i < nb_option_roms; i++) {
-            size = get_image_size(option_rom[i]);
-            if (size < 0) {
-                fprintf(stderr, "Could not load option rom '%s'\n",
-                        option_rom[i]);
-                exit(1);
-            }
-            if (size > (0x10000 - offset))
-                goto option_rom_error;
-            option_rom_offset = qemu_ram_alloc(size);
-            ret = load_image(option_rom[i], phys_ram_base + option_rom_offset);
-            if (ret != size) {
-            option_rom_error:
-                fprintf(stderr, "Too many option ROMS\n");
-                exit(1);
-            }
-            size = (size + 4095) & ~4095;
-            cpu_register_physical_memory(0xd0000 + offset,
-                                         size, option_rom_offset | IO_MEM_ROM);
-#ifdef USE_KVM
-            if (kvm_allowed)
-                kvm_cpu_register_physical_memory(0xd0000 + offset,
-                                             size, option_rom_offset |
-                                             IO_MEM_ROM);
-#endif
-
-            offset += size;
-        }
+    if (extboot_drive != -1) {
+	snprintf(buf, sizeof(buf), "%s/%s", bios_dir, EXTBOOT_FILENAME);
+	opt_rom_offset += load_option_rom(buf, opt_rom_offset);
     }
 
     /* map all the bios at the top of memory */
@@ -1115,6 +1120,18 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
 			    drives_table[index].bdrv);
 	    unit_id++;
 	}
+    }
+
+    if (extboot_drive != -1) {
+	DriveInfo *info = &drives_table[extboot_drive];
+	int cyls, heads, secs;
+
+	if (info->type != IF_IDE) {
+	    bdrv_guess_geometry(info->bdrv, &cyls, &heads, &secs);
+	    bdrv_set_geometry_hint(info->bdrv, cyls, heads, secs);
+	}
+
+	extboot_init(info->bdrv, 1);
     }
 }
 

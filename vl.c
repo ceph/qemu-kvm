@@ -177,6 +177,7 @@ IOPortWriteFunc *ioport_write_table[3][MAX_IOPORTS];
    to store the VM snapshots */
 DriveInfo drives_table[MAX_DRIVES+1];
 int nb_drives;
+int extboot_drive = -1;
 /* point to the block driver where the snapshots are managed */
 BlockDriverState *bs_snapshots;
 int vga_ram_size;
@@ -4930,7 +4931,7 @@ static int drive_init(const char *str, int snapshot, QEMUMachine *machine)
     int bdrv_flags;
     char *params[] = { "bus", "unit", "if", "index", "cyls", "heads",
                        "secs", "trans", "media", "snapshot", "file",
-                       "cache", NULL };
+                       "cache", "boot", NULL };
 
     if (check_params(buf, sizeof(buf), params, str) < 0) {
          fprintf(stderr, "qemu: unknowm parameter '%s' in '%s'\n",
@@ -5099,6 +5100,19 @@ static int drive_init(const char *str, int snapshot, QEMUMachine *machine)
            fprintf(stderr, "qemu: invalid cache option\n");
            return -1;
         }
+    }
+
+    if (get_param_value(buf, sizeof(buf), "boot", str)) {
+	if (!strcmp(buf, "on")) {
+	    if (extboot_drive != -1) {
+		fprintf(stderr, "qemu: two bootable drives specified\n");
+		return -1;
+	    }
+	    extboot_drive = nb_drives;
+	} else if (strcmp(buf, "off")) {
+	    fprintf(stderr, "qemu: '%s' invalid boot option\n", str);
+	    return -1;
+	}
     }
 
     get_param_value(file, sizeof(file), "file", str);
@@ -7895,8 +7909,8 @@ static void help(int exitcode)
            "-hdc/-hdd file  use 'file' as IDE hard disk 2/3 image\n"
            "-cdrom file     use 'file' as IDE cdrom image (cdrom is ide1 master)\n"
 	   "-drive [file=file][,if=type][,bus=n][,unit=m][,media=d][index=i]\n"
-           "       [,cyls=c,heads=h,secs=s[,trans=t]][snapshot=on|off]"
-           "       [,cache=on|off]\n"
+           "       [,cyls=c,heads=h,secs=s[,trans=t]][snapshot=on|off]\n"
+           "       [,cache=on|off][,boot=on|off]\n"
 	   "                use 'file' as a drive image\n"
            "-mtdblock file  use 'file' as on-board Flash memory image\n"
            "-sd file        use 'file' as SecureDigital card image\n"

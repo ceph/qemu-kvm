@@ -148,6 +148,7 @@ typedef struct DriveInfo {
 
 int nb_drives;
 DriveInfo drives_table[MAX_DRIVES+1];
+int extboot_drive;
 
 extern int drive_get_index(BlockInterfaceType type, int bus, int unit);
 extern int drive_get_max_bus(BlockInterfaceType type);
