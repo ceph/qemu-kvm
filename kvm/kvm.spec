@@ -53,6 +53,7 @@ Source4: Makefile
 Source5: configure
 Source6: kvm_stat
 Source7: libkvm.tar.gz
+Source8: extboot.tar.gz
 %endif
 
 %description
@@ -67,6 +68,7 @@ with hardware support for virtualization: Intel's VT and AMD's AMD-V.
 %setup -T -b 2 -n kernel -D
 %setup -T -b 7 -n libkvm -D
 %setup -T -b 3 -n scripts -D
+%setup -T -b 8 -n extboot -D
 cd ..
 cp %{_sourcedir}/Makefile %{_sourcedir}/configure %{_sourcedir}/kvm_stat .
 %endif
@@ -80,6 +82,7 @@ cd ..
 ./configure --prefix=/usr/kvm %{qemuldflags}
 make -C libkvm
 make -C user
+make extboot
 #(cd qemu;
 #    ./co
 #   kpath="$(readlink -f ../kernel/include)"

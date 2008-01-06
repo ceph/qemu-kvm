@@ -76,6 +76,7 @@ srpm:
 	tar czf $(RPMTOPDIR)/SOURCES/libkvm.tar.gz libkvm
 	tar czf $(RPMTOPDIR)/SOURCES/kernel.tar.gz kernel
 	tar czf $(RPMTOPDIR)/SOURCES/scripts.tar.gz scripts
+	tar czf $(RPMTOPDIR)/SOURCES/extboot.tar.gz extboot
 	cp Makefile configure kvm_stat $(RPMTOPDIR)/SOURCES
 	rpmbuild  --define="_topdir $(RPMTOPDIR)" -bs $(tmpspec)
 	$(RM) $(tmpspec)
