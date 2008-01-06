@@ -625,4 +625,12 @@ void kvm_arch_update_regs_for_sipi(CPUState *env)
     env->eip = 0;
     kvm_arch_load_regs(env);
 }
+
+int handle_tpr_access(void *opaque, int vcpu,
+			     uint64_t rip, int is_write)
+{
+    kvm_tpr_access_report(cpu_single_env, rip, is_write);
+    return 0;
+}
+
 #endif

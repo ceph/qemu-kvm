@@ -45,6 +45,8 @@ extern int kvm_irqchip;
 
 void kvm_tpr_opt_setup(CPUState *env);
 void kvm_tpr_access_report(CPUState *env, uint64_t rip, int is_write);
+int handle_tpr_access(void *opaque, int vcpu,
+			     uint64_t rip, int is_write);
 
 #define ALIGN(x, y)  (((x)+(y)-1) & ~((y)-1))
 #define BITMAP_SIZE(m) (ALIGN(((m)>>TARGET_PAGE_BITS), HOST_LONG_BITS) / 8)

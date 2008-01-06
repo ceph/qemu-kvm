@@ -299,7 +299,7 @@ OBJS+= libqemu.a
 
 # cpu emulator library
 LIBOBJS=exec.o kqemu.o qemu-kvm.o translate-op.o translate-all.o cpu-exec.o\
-        translate.o op.o host-utils.o qemu-kvm-helper.o kvm-tpr-opt.o
+        translate.o op.o host-utils.o qemu-kvm-helper.o
 ifdef CONFIG_SOFTFLOAT
 LIBOBJS+=fpu/softfloat.o
 else
@@ -309,12 +309,12 @@ CPPFLAGS+=-I$(SRC_PATH)/fpu
 
 ifeq ($(TARGET_ARCH), i386)
 LIBOBJS+=helper.o helper2.o
-LIBOBJS+=qemu-kvm-x86.o
+LIBOBJS+=qemu-kvm-x86.o kvm-tpr-opt.o
 endif
 
 ifeq ($(TARGET_ARCH), x86_64)
 LIBOBJS+=helper.o helper2.o
-LIBOBJS+=qemu-kvm-x86.o
+LIBOBJS+=qemu-kvm-x86.o kvm-tpr-opt.o
 endif
 
 ifeq ($(TARGET_BASE_ARCH), ppc)
