@@ -376,6 +376,7 @@ void delay_ms(int n)
 }
 
 int smp_cpus;
+uint32_t cpuid_signature;
 uint32_t cpuid_features;
 uint32_t cpuid_ext_features;
 unsigned long ram_size;
@@ -392,6 +393,7 @@ void cpu_probe(void)
 {
     uint32_t eax, ebx, ecx, edx;
     cpuid(1, eax, ebx, ecx, edx);
+    cpuid_signature = eax;
     cpuid_features = edx;
     cpuid_ext_features = ecx;
 }
