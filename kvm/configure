@@ -106,6 +106,8 @@ fi
           --arch="$arch" \
           ${cross_prefix:+"--cross-prefix=$cross_prefix"})
 
+(cd libkvm; ln -sf "$kerneldir/include/asm-$arch" asm)
+
 #configure qemu
 (cd qemu; ./configure --target-list=$target_exec \
     --disable-kqemu \
