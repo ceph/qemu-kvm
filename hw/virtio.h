@@ -39,6 +39,7 @@
 
 /* This means don't notify other side when buffer added. */
 #define VRING_USED_F_NO_NOTIFY	1
+#define VRING_USED_F_NOTIFY_ON_FULL  2
 /* This means don't interrupt guest when buffer consumed. */
 #define VRING_AVAIL_F_NO_INTERRUPT	1
 

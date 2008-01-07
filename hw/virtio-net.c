@@ -14,6 +14,7 @@
 #include "virtio.h"
 #include "net.h"
 #include "pc.h"
+#include "qemu-timer.h"
 
 /* from Linux's virtio_net.h */
 
@@ -27,6 +28,10 @@
 #define VIRTIO_NET_F_TSO4_ECN	3
 #define VIRTIO_NET_F_TSO6	4
 #define VIRTIO_NET_F_MAC	5
+
+#define USE_TX_TIMER
+
+#define TX_TIMER_INTERVAL (1000 / 500)
 
 /* The config defining mac address (6 bytes) */
 struct virtio_net_config
@@ -63,6 +68,8 @@ typedef struct VirtIONet
     int tap_fd;
     struct VirtIONet *next;
     int do_notify;
+    QEMUTimer *tx_timer;
+    int tx_timer_active;
 } VirtIONet;
 
 static VirtIONet *VirtIONetHead = NULL;
@@ -222,10 +229,10 @@ again:
 }
 
 /* TX */
-static void virtio_net_handle_tx(VirtIODevice *vdev, VirtQueue *vq)
+static void virtio_net_flush_tx(VirtIONet *n, VirtQueue *vq)
 {
-    VirtIONet *n = to_virtio_net(vdev);
     VirtQueueElement elem;
+    int count = 0;
 
     if (!(n->vdev.status & VIRTIO_CONFIG_S_DRIVER_OK))
         return;
@@ -241,9 +248,37 @@ static void virtio_net_handle_tx(VirtIODevice *vdev, VirtQueue *vq)
 	    len += elem.out_sg[i].iov_len;
 	}
 
+	count++;
+
 	virtqueue_push(vq, &elem, sizeof(struct virtio_net_hdr) + len);
 	virtio_notify(&n->vdev, vq);
     }
+}
+
+static void virtio_net_handle_tx(VirtIODevice *vdev, VirtQueue *vq)
+{
+    VirtIONet *n = to_virtio_net(vdev);
+
+    if (n->tx_timer_active &&
+	(vq->vring.avail->idx - vq->last_avail_idx) == 64) {
+	vq->vring.used->flags &= ~VRING_USED_F_NOTIFY_ON_FULL;
+	qemu_del_timer(n->tx_timer);
+	n->tx_timer_active = 0;
+	virtio_net_flush_tx(n, vq);
+    } else {
+	qemu_mod_timer(n->tx_timer, qemu_get_clock(vm_clock) + TX_TIMER_INTERVAL);
+	n->tx_timer_active = 1;
+	vq->vring.used->flags |= VRING_USED_F_NOTIFY_ON_FULL;
+    }
+}
+
+static void virtio_net_tx_timer(void *opaque)
+{
+    VirtIONet *n = opaque;
+
+    n->tx_vq->vring.used->flags &= ~VRING_USED_F_NOTIFY_ON_FULL;
+    n->tx_timer_active = 0;
+    virtio_net_flush_tx(n, n->tx_vq);
 }
 
 void *virtio_net_init(PCIBus *bus, NICInfo *nd, int devfn)
@@ -269,6 +304,9 @@ void *virtio_net_init(PCIBus *bus, NICInfo *nd, int devfn)
         //push the device on top of the list
         VirtIONetHead = n;
     }
+
+    n->tx_timer = qemu_new_timer(vm_clock, virtio_net_tx_timer, n);
+    n->tx_timer_active = 0;
 
     return &n->vdev;
 }
