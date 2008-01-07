@@ -71,6 +71,8 @@ typedef struct PIIX4PMState {
 #define SMBHSTDAT1 0x06
 #define SMBBLKDAT 0x07
 
+PIIX4PMState *pm_state;
+
 static uint32_t get_pmtmr(PIIX4PMState *s)
 {
     uint32_t d;
@@ -476,6 +478,7 @@ i2c_bus *piix4_pm_init(PCIBus *bus, int devfn, uint32_t smb_io_base)
     s = (PIIX4PMState *)pci_register_device(bus,
                                          "PM", sizeof(PIIX4PMState),
                                          devfn, NULL, pm_write_config);
+    pm_state = s;
     pci_conf = s->dev.config;
     pci_conf[0x00] = 0x86;
     pci_conf[0x01] = 0x80;
@@ -517,3 +520,13 @@ i2c_bus *piix4_pm_init(PCIBus *bus, int devfn, uint32_t smb_io_base)
     s->smbus = i2c_init_bus();
     return s->smbus;
 }
+
+#if defined(TARGET_I386)
+void qemu_system_powerdown(void)
+{
+    if(pm_state->pmen & PWRBTN_EN) {
+        pm_state->pmsts |= PWRBTN_EN;
+	pm_update_sci(pm_state);
+    }
+}
+#endif
