@@ -55,6 +55,9 @@ typedef unsigned long long uint64_t;
 #define APIC_ID      0x020
 #define APIC_LVT3    0x370
 
+/* IRQs 5,9,10,11 */
+#define PCI_ISA_IRQ_MASK    0x0e20U
+
 #define APIC_ENABLED 0x0100
 
 #define AP_BOOT_ADDR 0x9f000
@@ -1290,6 +1293,14 @@ struct madt_io_apic
 			  * lines start */
 } __attribute__((__packed__));
 
+struct madt_intsrcovr {
+	APIC_HEADER_DEF
+	uint8_t  bus;
+	uint8_t  source;
+	uint32_t gsi;
+	uint16_t flags;
+};
+
 #include "acpi-dsdt.hex"
 
 static inline uint16_t cpu_to_le16(uint16_t x)
@@ -1502,6 +1513,7 @@ void acpi_bios_init(void)
     {
         struct madt_processor_apic *apic;
         struct madt_io_apic *io_apic;
+        struct madt_intsrcovr *intsrcovr;
 
         memset(madt, 0, madt_size);
         madt->local_apic_address = cpu_to_le32(0xfee00000);
@@ -1522,6 +1534,22 @@ void acpi_bios_init(void)
         io_apic->address = cpu_to_le32(0xfec00000);
         io_apic->interrupt = cpu_to_le32(0);
 
+        intsrcovr = (struct madt_intsrcovr*)(io_apic + 1);
+        for ( i = 0; i < 16; i++ ) {
+            if ( PCI_ISA_IRQ_MASK & (1U << i) ) {
+                memset(intsrcovr, 0, sizeof(*intsrcovr));
+                intsrcovr->type   = APIC_XRUPT_OVERRIDE;
+                intsrcovr->length = sizeof(*intsrcovr);
+                intsrcovr->source = i;
+                intsrcovr->gsi    = i;
+                intsrcovr->flags  = 0xd; /* active high, level triggered */
+            } else {
+                /* No need for a INT source override structure. */
+                continue;
+            }
+            intsrcovr++;
+            madt_size += sizeof(struct madt_intsrcovr);
+        }
         acpi_build_table_header((struct acpi_table_header *)madt,
                                 "APIC", madt_size, 1);
     }
