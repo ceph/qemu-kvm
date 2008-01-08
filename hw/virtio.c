@@ -380,7 +380,9 @@ VirtQueue *virtio_add_queue(VirtIODevice *vdev, int queue_size,
 
 void virtio_notify(VirtIODevice *vdev, VirtQueue *vq)
 {
-    if (vq->vring.avail->flags & VRING_AVAIL_F_NO_INTERRUPT)
+    /* Always notify when queue is empty */
+    if (vq->vring.avail->idx != vq->last_avail_idx &&
+	(vq->vring.avail->flags & VRING_AVAIL_F_NO_INTERRUPT))
 	return;
 
     vdev->isr = 1;

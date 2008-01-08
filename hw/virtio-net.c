@@ -29,8 +29,6 @@
 #define VIRTIO_NET_F_TSO6	4
 #define VIRTIO_NET_F_MAC	5
 
-#define USE_TX_TIMER
-
 #define TX_TIMER_INTERVAL (1000 / 500)
 
 /* The config defining mac address (6 bytes) */
@@ -261,14 +259,15 @@ static void virtio_net_handle_tx(VirtIODevice *vdev, VirtQueue *vq)
 
     if (n->tx_timer_active &&
 	(vq->vring.avail->idx - vq->last_avail_idx) == 64) {
-	vq->vring.used->flags &= ~VRING_USED_F_NOTIFY_ON_FULL;
+	vq->vring.used->flags &= ~VRING_USED_F_NO_NOTIFY;
 	qemu_del_timer(n->tx_timer);
 	n->tx_timer_active = 0;
 	virtio_net_flush_tx(n, vq);
     } else {
-	qemu_mod_timer(n->tx_timer, qemu_get_clock(vm_clock) + TX_TIMER_INTERVAL);
+	qemu_mod_timer(n->tx_timer,
+		       qemu_get_clock(vm_clock) + TX_TIMER_INTERVAL);
 	n->tx_timer_active = 1;
-	vq->vring.used->flags |= VRING_USED_F_NOTIFY_ON_FULL;
+	vq->vring.used->flags |= VRING_USED_F_NO_NOTIFY;
     }
 }
 
@@ -276,7 +275,7 @@ static void virtio_net_tx_timer(void *opaque)
 {
     VirtIONet *n = opaque;
 
-    n->tx_vq->vring.used->flags &= ~VRING_USED_F_NOTIFY_ON_FULL;
+    n->tx_vq->vring.used->flags &= ~VRING_USED_F_NO_NOTIFY;
     n->tx_timer_active = 0;
     virtio_net_flush_tx(n, n->tx_vq);
 }
