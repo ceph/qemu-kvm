@@ -9288,7 +9288,7 @@ int main(int argc, char **argv)
 	    char buf[1024];
             if (net_boot & (1 << i)) {
                 if (model == NULL)
-                    model = "ne2k_pci";
+                    model = "rtl8139";
                 snprintf(buf, sizeof(buf), "%s/pxe-%s.bin", bios_dir, model);
                 if (get_image_size(buf) > 0) {
                     if (nb_option_roms >= MAX_OPTION_ROMS) {

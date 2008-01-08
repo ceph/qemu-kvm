@@ -500,7 +500,7 @@ Network options:
 
 @item -net nic[,vlan=@var{n}][,macaddr=@var{addr}][,model=@var{type}]
 Create a new Network Interface Card and connect it to VLAN @var{n} (@var{n}
-= 0 is the default). The NIC is an ne2k_pci by default on the PC
+= 0 is the default). The NIC is an rtl8139 by default on the PC
 target. Optionally, the MAC address can be changed. If no
 @option{-net} option is specified, a single NIC is created.
 Qemu can emulate several different models of network card.
