@@ -637,57 +637,6 @@ int kvm_get_dirty_pages_range(kvm_context_t kvm, unsigned long phys_addr,
 	return 0;
 }
 
-int kvm_get_mem_map(kvm_context_t kvm, unsigned long phys_addr, void *buf)
-{
-	int slot;
-
-	slot = get_slot(phys_addr);
-#ifdef KVM_GET_MEM_MAP
-	return kvm_get_map(kvm, KVM_GET_MEM_MAP, slot, buf);
-#else /* not KVM_GET_MEM_MAP ==> fake it: all pages exist */
-	unsigned long i, n, m, npages;
-	unsigned char v;
-
-	if (slot >= KVM_MAX_NUM_MEM_REGIONS) {
-		errno = -EINVAL;
-		return -1;
-	}
-	npages = slots[slot].len / PAGE_SIZE;
-	n = npages / 8;
-	m = npages % 8;
-	memset(buf, 0xff, n); /* all pages exist */
-	v = 0;
-	for (i=0; i<=m; i++) /* last byte may not be "aligned" */
-		v |= 1<<(7-i);
-	if (v)
-		*(unsigned char*)(buf+n) = v;
-	return 0;
-#endif /* KVM_GET_MEM_MAP */
-}
-
-int kvm_get_mem_map_range(kvm_context_t kvm, unsigned long phys_addr,
-			  unsigned long len, void *buf, void *opaque,
-			  int (*cb)(unsigned long addr,unsigned long len,
-			  void* bitmap, void* opaque))
-{
-	int i;
-	int r;
-	unsigned long end_addr = phys_addr + len;
-
-	for (i = 0; i < KVM_MAX_NUM_MEM_REGIONS; ++i) {
-		if (slots[i].len && slots[i].phys_addr >= phys_addr &&
-		    (slots[i].phys_addr + slots[i].len) <= end_addr) {
-			r = kvm_get_mem_map(kvm, slots[i].phys_addr, buf);
-			if (r)
-				return r;
-			r = cb(slots[i].phys_addr, slots[i].len, buf, opaque);
-			if (r)
-				return r;
-		}
-	}
-	return 0;
-}
-
 #ifdef KVM_CAP_IRQCHIP
 
 int kvm_set_irq_level(kvm_context_t kvm, int irq, int level)

@@ -722,17 +722,6 @@ int kvm_update_dirty_pages_log(void)
     return r;
 }
 
-int kvm_get_phys_ram_bitmap_cb(unsigned long start, unsigned long len,
-                               void *local_bitmap, void *qemu_bitmap)
-{
-    unsigned int bsize  = ((len/TARGET_PAGE_SIZE) + 7) / 8;
-    unsigned int offset = ((start/TARGET_PAGE_SIZE) + 7) / 8;
-
-    memcpy(qemu_bitmap + offset, local_bitmap, bsize);
-
-    return 0;
-}
-
 int kvm_get_phys_ram_page_bitmap(unsigned char *bitmap)
 {
     unsigned int bsize  = BITMAP_SIZE(phys_ram_size);
