@@ -735,22 +735,18 @@ int kvm_get_phys_ram_bitmap_cb(unsigned long start, unsigned long len,
 
 int kvm_get_phys_ram_page_bitmap(unsigned char *bitmap)
 {
-    int r=0;
-    void *local_bitmap;
-    unsigned int bsize = BITMAP_SIZE(phys_ram_size);
+    unsigned int bsize  = BITMAP_SIZE(phys_ram_size);
+    unsigned int brsize = BITMAP_SIZE(ram_size);
+    unsigned int extra_pages = (phys_ram_size - ram_size) / TARGET_PAGE_SIZE;
+    unsigned int extra_bytes = (extra_pages +7)/8;
+    unsigned int hole_start = BITMAP_SIZE(0xa0000);
+    unsigned int hole_end   = BITMAP_SIZE(0xc0000);
 
-    local_bitmap = qemu_malloc(bsize);
-    if (!local_bitmap) {
-        fprintf(stderr, "could not allocate memory for phys_page bitmap\n");
-        return 1;
-    }
+    memset(bitmap, 0xFF, brsize + extra_bytes);
+    memset(bitmap + hole_start, 0, hole_end - hole_start);
+    memset(bitmap + brsize + extra_bytes, 0, bsize - brsize - extra_bytes);
 
-    r = kvm_get_mem_map_range(kvm_context, 0, phys_ram_size,
-                              local_bitmap, bitmap,
-                              kvm_get_phys_ram_bitmap_cb);
-
-    qemu_free(local_bitmap);
-    return r;
+    return 0;
 }
 
 #ifdef KVM_CAP_IRQCHIP
