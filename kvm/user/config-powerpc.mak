@@ -1,14 +1,26 @@
-TEST_DIR=test/powerpc
 CFLAGS += -m32
 CFLAGS += -D__powerpc__
 CFLAGS += -I $(KERNELDIR)/include
+# for some reaons binutils hates tlbsx unless we say we're 405  :(
+CFLAGS += -Wa,-mregnames,-m405
 
-tests= $(TEST_DIR)/io.S \
-	$(TEST_DIR)/spin.S \
-	$(TEST_DIR)/sprg.S \
-	$(TEST_DIR)/44x/tlbsx.S \
-	$(TEST_DIR)/44x/tlbwe_16KB.S \
-	$(TEST_DIR)/44x/tlbwe_hole.S \
-	$(TEST_DIR)/44x/tlbwe.S
+%.bin: %.o
+	$(OBJCOPY) -O binary $^ $@
 
-kvmctl_objs = main.o ../libkvm/libkvm.a
+testobjs := \
+	io.bin \
+	spin.bin \
+	sprg.bin \
+	44x/tlbsx.bin \
+	44x/tlbwe_16KB.bin \
+	44x/tlbwe_hole.bin \
+	44x/tlbwe.bin
+
+tests := $(addprefix test/powerpc/, $(testobjs))
+
+all: kvmctl $(tests)
+
+kvmctl_objs = main-ppc.o ../libkvm/libkvm.a
+
+arch_clean:
+	rm -f $(tests)
