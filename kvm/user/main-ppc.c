@@ -106,6 +106,19 @@ static int test_mem_write(void *opaque, uint64_t addr, uint8_t *data, int len)
 	return 0;
 }
 
+static int test_dcr_read(kvm_context_t kvm, uint32_t dcrn, uint32_t *data)
+{
+	printf("%s: dcrn %04X\n", __func__, dcrn);
+	*data = 0;
+	return 0;
+}
+
+static int test_dcr_write(kvm_context_t kvm, uint32_t dcrn, uint32_t data)
+{
+	printf("%s: dcrn %04X data %04X\n", __func__, dcrn, data);
+	return 0;
+}
+
 static struct kvm_callbacks test_callbacks = {
 	.mmio_read   = test_mem_read,
 	.mmio_write  = test_mem_write,
@@ -115,6 +128,8 @@ static struct kvm_callbacks test_callbacks = {
 	.try_push_interrupts = test_try_push_interrupts,
 	.post_kvm_run = test_post_kvm_run,
 	.pre_kvm_run = test_pre_kvm_run,
+	.powerpc_dcr_read = test_dcr_read,
+	.powerpc_dcr_write = test_dcr_write,
 };
 
 static unsigned long load_file(void *mem, const char *fname, int inval_icache)
