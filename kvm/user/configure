@@ -4,6 +4,7 @@ prefix=/usr/local
 kerneldir=/lib/modules/$(uname -r)/build
 cc=gcc
 ld=ld
+objcopy=objcopy
 arch=`uname -m | sed -e s/i.86/i386/`
 cross_prefix=
 
@@ -63,4 +64,5 @@ KERNELDIR=$(readlink -f $kerneldir)
 ARCH=$arch
 CC=$cross_prefix$cc
 LD=$cross_prefix$ld
+OBJCOPY=$cross_prefix$objcopy
 EOF
