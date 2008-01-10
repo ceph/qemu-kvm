@@ -7,14 +7,20 @@ rpmrelease = devel
 
 .PHONY: kernel user libkvm qemu bios vgabios extboot clean
 
-all: $(if $(WANT_MODULE), kernel) user libkvm qemu
+all: libkvm qemu
+ifneq '$(filter $(ARCH), x86_64 i386 ia64)' ''
+    all: $(if $(WANT_MODULE), kernel) user
+endif
 
 kcmd = $(if $(WANT_MODULE),,@\#)
 
 qemu kernel user libkvm:
 	$(MAKE) -C $@
 
-qemu: libkvm extboot
+qemu: libkvm
+ifneq '$(filter $(ARCH), i386 x86_64)' ''
+    qemu: extboot
+endif
 user: libkvm
 
 bios:
