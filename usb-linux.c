@@ -26,6 +26,8 @@
 #include "console.h"
 
 #if defined(__linux__)
+#define __user
+
 #include <dirent.h>
 #include <sys/ioctl.h>
 #include <linux/usbdevice_fs.h>
