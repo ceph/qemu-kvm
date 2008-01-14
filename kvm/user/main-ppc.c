@@ -106,14 +106,14 @@ static int test_mem_write(void *opaque, uint64_t addr, uint8_t *data, int len)
 	return 0;
 }
 
-static int test_dcr_read(kvm_context_t kvm, uint32_t dcrn, uint32_t *data)
+static int test_dcr_read(uint32_t dcrn, uint32_t *data)
 {
 	printf("%s: dcrn %04X\n", __func__, dcrn);
 	*data = 0;
 	return 0;
 }
 
-static int test_dcr_write(kvm_context_t kvm, uint32_t dcrn, uint32_t data)
+static int test_dcr_write(uint32_t dcrn, uint32_t data)
 {
 	printf("%s: dcrn %04X data %04X\n", __func__, dcrn, data);
 	return 0;

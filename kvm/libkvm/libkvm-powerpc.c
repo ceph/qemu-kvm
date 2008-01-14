@@ -31,11 +31,11 @@ int handle_dcr(struct kvm_run *run,  kvm_context_t kvm)
 	int ret = 0;
 
 	if (run->dcr.is_write)
-		ret = kvm->callbacks->powerpc_dcr_write(kvm,
-					run->dcr.dcrn,run->dcr.data);
+		ret = kvm->callbacks->powerpc_dcr_write(run->dcr.dcrn,
+							run->dcr.data);
 	else
-		ret = kvm->callbacks->powerpc_dcr_read(kvm,
-					run->dcr.dcrn, &(run->dcr.data));
+		ret = kvm->callbacks->powerpc_dcr_read(run->dcr.dcrn,
+							&(run->dcr.data));
 
 	return ret;
 }

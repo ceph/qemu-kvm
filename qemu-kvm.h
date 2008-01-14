@@ -48,6 +48,11 @@ void kvm_tpr_access_report(CPUState *env, uint64_t rip, int is_write);
 int handle_tpr_access(void *opaque, int vcpu,
 			     uint64_t rip, int is_write);
 
+#ifdef TARGET_PPC
+int handle_powerpc_dcr_read(uint32_t dcrn, uint32_t *data);
+int handle_powerpc_dcr_write(uint32_t dcrn, uint32_t data);
+#endif
+
 #define ALIGN(x, y)  (((x)+(y)-1) & ~((y)-1))
 #define BITMAP_SIZE(m) (ALIGN(((m)>>TARGET_PAGE_BITS), HOST_LONG_BITS) / 8)
 
