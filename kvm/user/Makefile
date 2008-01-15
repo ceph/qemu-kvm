@@ -8,7 +8,7 @@ DESTDIR :=
 #make sure env CFLAGS variable is not used
 CFLAGS =
 
-libgcc := $(shell gcc --print-libgcc-file-name)
+libgcc := $(shell $(CC) --print-libgcc-file-name)
 
 #include architecure specific make rules
 include config-$(ARCH).mak
