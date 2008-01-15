@@ -37,6 +37,8 @@
 #include <stdbool.h>
 #include <inttypes.h>
 
+#include "iotable.h"
+
 static int gettid(void)
 {
 	return syscall(__NR_gettid);
@@ -45,6 +47,8 @@ static int gettid(void)
 kvm_context_t kvm;
 
 #define IPI_SIGNAL (SIGRTMIN + 4)
+
+struct io_table mmio_table;
 
 static int ncpus = 1;
 static sem_t init_sem;
@@ -92,18 +96,63 @@ static int test_pre_kvm_run(void *opaque, int vcpu)
 	return 0;
 }
 
+static int mmio_handler(void *opaque, int len, int is_write, uint64_t offset,
+                        uint64_t *data)
+{
+	int r = 0;
+
+	switch (offset) {
+	case 0: /* putc */
+		putc(*(char *)data, stdout);
+		fflush(stdout);
+		break;
+	case 1: /* exit */
+		r = *(char *)data;
+		break;
+	default:
+		printf("%s: offset %"PRIx64" len %d data %"PRIx64"\n",
+		       __func__, offset, len, *(uint64_t *)data);
+		r = -EINVAL;
+	}
+
+	return r;
+}
+
 static int test_mem_read(void *opaque, uint64_t addr, uint8_t *data, int len)
 {
+	struct io_table_entry *iodev;
+
+#if 0
 	printf("%s: addr %"PRIx64" len %d\n", __func__, addr, len);
-	memset(data, 0, len);
-	return 0;
+#endif
+
+	iodev = io_table_lookup(&mmio_table, addr);
+	if (!iodev) {
+		printf("couldn't find device\n");
+		return -ENODEV;
+	}
+
+	return iodev->handler(iodev->opaque, len, 0, addr - iodev->start,
+	                      (uint64_t *)data);
 }
 
 static int test_mem_write(void *opaque, uint64_t addr, uint8_t *data, int len)
 {
+	struct io_table_entry *iodev;
+
+#if 0
 	printf("%s: addr %"PRIx64" len %d data %"PRIx64"\n",
 	       __func__, addr, len, *(uint64_t *)data);
-	return 0;
+#endif
+
+	iodev = io_table_lookup(&mmio_table, addr);
+	if (!iodev) {
+		printf("couldn't find device\n");
+		return -ENODEV;
+	}
+
+	return iodev->handler(iodev->opaque, len, 1, addr - iodev->start,
+	                      (uint64_t *)data);
 }
 
 static int test_dcr_read(uint32_t dcrn, uint32_t *data)
@@ -173,11 +222,13 @@ void sync_caches(void *mem, unsigned long len)
 
 static void init_vcpu(int n, unsigned long entry)
 {
+	/* XXX must set initial TLB state and stack
 	struct kvm_regs regs = {
 		.pc = entry,
 	};
 
 	kvm_set_regs(kvm, 0, &regs);
+	*/
 
 	sigemptyset(&ipi_sigmask);
 	sigaddset(&ipi_sigmask, IPI_SIGNAL);
@@ -324,7 +375,7 @@ int main(int argc, char **argv)
 	for (i = 0; i < ncpus; ++i)
 		sem_wait(&init_sem);
 
-	kvm_run(kvm, 0);
+	io_table_register(&mmio_table, 0xf0000000, 64, mmio_handler, NULL);
 
-	return 0;
+	return kvm_run(kvm, 0);
 }
