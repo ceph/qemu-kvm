@@ -8,6 +8,8 @@ DESTDIR :=
 #make sure env CFLAGS variable is not used
 CFLAGS =
 
+libgcc := $(shell gcc --print-libgcc-file-name)
+
 #include architecure specific make rules
 include config-$(ARCH).mak
 
@@ -29,17 +31,10 @@ CXXFLAGS = $(autodepend-flags)
 
 autodepend-flags = -MMD -MF $(dir $*).$(notdir $*).d
 
-libgcc := $(shell gcc --print-libgcc-file-name)
-
-FLATLIBS = $(TEST_DIR)/libcflat.a $(libgcc)
-
 kvmctl: LDFLAGS += -pthread -lrt
 
 kvmctl: $(kvmctl_objs)
 	$(CC) $(LDFLAGS) $^ -o $@
-
-%.flat: %.o $(FLATLIBS)
-	$(CC) $(CFLAGS) -nostdlib -o $@ -Wl,-T,flat.lds $^ $(FLATLIBS)
 
 %.o: %.S
 	$(CC) $(CFLAGS) -c -nostdlib -o $@ $^

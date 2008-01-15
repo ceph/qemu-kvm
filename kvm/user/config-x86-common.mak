@@ -6,6 +6,10 @@ kvmctl_objs= main.o iotable.o ../libkvm/libkvm.a
 
 balloon_ctl: balloon_ctl.o
 
+FLATLIBS = $(TEST_DIR)/libcflat.a $(libgcc)
+%.flat: %.o $(FLATLIBS)
+	$(CC) $(CFLAGS) -nostdlib -o $@ -Wl,-T,flat.lds $^ $(FLATLIBS)
+
 tests-common = $(TEST_DIR)/bootstrap \
 			$(TEST_DIR)/vmexit.flat $(TEST_DIR)/tsc.flat \
 			$(TEST_DIR)/smp.flat  $(TEST_DIR)/port80.flat
