@@ -20,7 +20,7 @@ tests := $(addprefix test/powerpc/, $(testobjs))
 
 all: kvmctl $(tests)
 
-kvmctl_objs = main-ppc.o ../libkvm/libkvm.a
+kvmctl_objs = main-ppc.o iotable.o ../libkvm/libkvm.a
 
 arch_clean:
 	rm -f $(tests)

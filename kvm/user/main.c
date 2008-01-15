@@ -36,6 +36,8 @@
 #include <getopt.h>
 #include <stdbool.h>
 
+#include "iotable.h"
+
 static uint8_t ioram[IORAM_LEN];
 
 static int gettid(void)
@@ -53,24 +55,6 @@ kvm_context_t kvm;
 #define MAX_VCPUS 4
 
 #define IPI_SIGNAL (SIGRTMIN + 4)
-
-#define MAX_IO_TABLE	50
-
-typedef int (io_table_handler_t)(void *, int, int, uint64_t, uint64_t *);
-
-struct io_table_entry
-{
-	uint64_t start;
-	uint64_t end;
-	io_table_handler_t *handler;
-	void *opaque;
-};
-
-struct io_table
-{
-	int nr_entries;
-	struct io_table_entry entries[MAX_IO_TABLE];
-};
 
 static int ncpus = 1;
 static sem_t init_sem;
@@ -90,38 +74,6 @@ struct vcpu_info {
 struct vcpu_info *vcpus;
 
 static uint32_t apic_sipi_addr;
-
-struct io_table_entry *io_table_lookup(struct io_table *io_table, uint64_t addr)
-{
-	int i;
-
-	for (i = 0; i < io_table->nr_entries; i++) {
-		if (io_table->entries[i].start <= addr &&
-		    addr < io_table->entries[i].end)
-			return &io_table->entries[i];
-	}
-
-	return NULL;
-}
-
-int io_table_register(struct io_table *io_table, uint64_t start, uint64_t size,
-		      io_table_handler_t *handler, void *opaque)
-{
-	struct io_table_entry *entry;
-
-	if (io_table->nr_entries == MAX_IO_TABLE)
-		return -ENOSPC;
-
-	entry = &io_table->entries[io_table->nr_entries];
-	io_table->nr_entries++;
-
-	entry->start = start;
-	entry->end = start + size;
-	entry->handler = handler;
-	entry->opaque = opaque;
-
-	return 0;
-}
 
 static void apic_send_sipi(int vcpu)
 {

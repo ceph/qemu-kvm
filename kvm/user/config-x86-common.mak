@@ -2,7 +2,7 @@
 
 all: kvmctl test_cases
 
-kvmctl_objs= main.o ../libkvm/libkvm.a
+kvmctl_objs= main.o iotable.o ../libkvm/libkvm.a
 
 balloon_ctl: balloon_ctl.o
 
