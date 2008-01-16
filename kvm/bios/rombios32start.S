@@ -42,6 +42,10 @@ _start:
 smp_ap_boot_code_start:
   xor %ax, %ax
   mov %ax, %ds
+  xor %eax, %eax
+  xor %edx, %edx
+  mov $0x10, %ecx
+  wrmsr
   incw CPU_COUNT_ADDR
 1:
   hlt
