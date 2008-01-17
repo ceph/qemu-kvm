@@ -67,6 +67,10 @@ void kvm_show_regs(kvm_context_t kvm, int vcpu)
 	if (kvm_get_regs(kvm, vcpu, &regs))
 		return;
 
+	fprintf(stderr,"guest vcpu #%d\n", vcpu);
+	fprintf(stderr,"pc:   %08x msr:  %08x\n", regs.pc, regs.msr);
+	fprintf(stderr,"lr:   %08x ctr:  %08x\n", regs.lr, regs.ctr);
+	fprintf(stderr,"srr0: %08x srr1: %08x\n", regs.srr0, regs.srr1);
 	for (i=0; i<32; i+=4)
 	{
 		fprintf(stderr, "gpr%02d: %08x %08x %08x %08x\n", i,
