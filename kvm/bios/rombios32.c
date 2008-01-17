@@ -879,6 +879,10 @@ static void pci_bios_init_device(PCIDevice *d)
 
     if (vendor_id == PCI_VENDOR_ID_INTEL && device_id == PCI_DEVICE_ID_INTEL_82371AB_3) {
         /* PIIX4 Power Management device (for ACPI) */
+
+        // acpi sci is hardwired to 9
+        pci_config_writeb(d, PCI_INTERRUPT_LINE, 9);
+
         pm_io_base = PM_IO_BASE;
         smb_io_base = SMB_IO_BASE;
         pm_sci_int = pci_config_readb(d, PCI_INTERRUPT_LINE);
