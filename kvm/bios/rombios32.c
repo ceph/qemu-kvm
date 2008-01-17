@@ -769,6 +769,10 @@ static void pci_bios_init_device(PCIDevice *d)
 
     if (vendor_id == 0x8086 && device_id == 0x7113) {
         /* PIIX4 Power Management device (for ACPI) */
+
+        // acpi sci is hardwired to 9
+        pci_config_writeb(d, PCI_INTERRUPT_LINE, 9);
+
         pm_io_base = PM_IO_BASE;
         pci_config_writel(d, 0x40, pm_io_base | 1);
         pci_config_writeb(d, 0x80, 0x01); /* enable PM io space */
