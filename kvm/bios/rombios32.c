@@ -1196,7 +1196,7 @@ struct madt_intsrcovr {
 	uint8_t  source;
 	uint32_t gsi;
 	uint16_t flags;
-};
+} __attribute__((packed));
 
 #include "acpi-dsdt.hex"
 
