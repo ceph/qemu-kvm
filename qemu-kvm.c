@@ -310,10 +310,9 @@ static void setup_kernel_sigmask(CPUState *env)
 
     sigprocmask(SIG_BLOCK, NULL, &set);
     sigdelset(&set, SIG_IPI);
-    if (env->cpu_index == 0) {
-	sigaddset(&set, SIGUSR2);
+    if (env->cpu_index == 0)
 	sigandset(&set, &set, &io_negsigset);
-    }
+    
     kvm_set_signal_mask(kvm_context, env->cpu_index, &set);
 }
 
@@ -392,6 +391,7 @@ int kvm_init_ap(void)
     sigfillset(&io_negsigset);
     kvm_add_signal(SIGIO);
     kvm_add_signal(SIGALRM);
+    kvm_add_signal(SIGUSR2);
     if (!kvm_irqchip_in_kernel(kvm_context))
         kvm_add_signal(SIG_IPI);
 
