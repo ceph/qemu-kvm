@@ -10049,7 +10049,6 @@ bios_table_area_start:
 ;- POST -
 ;--------
 .org 0xe05b ; POST Entry Point
-bios_table_area_end:
 post:
 
   xor ax, ax
@@ -11106,5 +11105,6 @@ static Bit8u vgafont8[128*8]=
 
 ASM_START
 .org 0xcc00
+bios_table_area_end:
 // bcc-generated data will be placed here
 ASM_END
