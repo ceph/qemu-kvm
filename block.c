@@ -460,7 +460,7 @@ int bdrv_commit(BlockDriverState *bs)
     BlockDriver *drv = bs->drv;
     int64_t i, total_sectors;
     int n, j;
-    unsigned char *sector[512];
+    unsigned char sector[512];
 
     if (!drv)
         return -ENOMEDIUM;
