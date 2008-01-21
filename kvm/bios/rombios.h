@@ -57,3 +57,12 @@
 #define PM_IO_BASE        0xb000
 #define SMB_IO_BASE       0xb100
 #define CPU_COUNT_ADDR    0xf000
+
+  // Define the application NAME
+#if defined(BX_QEMU)
+#  define BX_APPNAME "QEMU"
+#elif defined(PLEX86)
+#  define BX_APPNAME "Plex86"
+#else
+#  define BX_APPNAME "Bochs"
+#endif

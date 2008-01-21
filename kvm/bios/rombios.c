@@ -181,15 +181,6 @@
 #define IPL_TYPE_CDROM       0x03
 #define IPL_TYPE_BEV         0x80
 
-  // Define the application NAME
-#if defined(BX_QEMU)
-#  define BX_APPNAME "QEMU"
-#elif defined(PLEX86)
-#  define BX_APPNAME "Plex86"
-#else
-#  define BX_APPNAME "Bochs"
-#endif
-
   // Sanity Checks
 #if BX_USE_ATADRV && BX_CPU<3
 #    error The ATA/ATAPI Driver can only to be used with a 386+ cpu
