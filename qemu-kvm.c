@@ -407,6 +407,7 @@ int kvm_init_ap(void)
 int kvm_main_loop(void)
 {
     vcpu_info[0].thread = pthread_self();
+    pthread_mutex_unlock(&qemu_mutex);
     return kvm_main_loop_cpu(first_cpu);
 }
 
@@ -546,6 +547,7 @@ int kvm_qemu_init()
     if (!kvm_context) {
       	return -1;
     }
+    pthread_mutex_lock(&qemu_mutex);
 
     return 0;
 }
