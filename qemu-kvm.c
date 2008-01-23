@@ -29,6 +29,7 @@ kvm_context_t kvm_context;
 extern int smp_cpus;
 
 pthread_mutex_t qemu_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t qemu_aio_cond = PTHREAD_COND_INITIALIZER;
 __thread CPUState *vcpu_env;
 
 static sigset_t io_sigset, io_negsigset;
@@ -182,6 +183,8 @@ static int kvm_eat_signal(CPUState *env, int timeout)
     if (r != -1) {
 	sigaction(siginfo.si_signo, NULL, &sa);
 	sa.sa_handler(siginfo.si_signo);
+	if (siginfo.si_signo == SIGUSR2)
+	    pthread_cond_signal(&qemu_aio_cond);
 	ret = 1;
     }
     pthread_mutex_unlock(&qemu_mutex);
@@ -752,5 +755,24 @@ int kvm_set_irq(int irq, int level)
 }
 
 #endif
+
+void qemu_kvm_aio_wait_start(void)
+{
+}
+
+void qemu_kvm_aio_wait(void)
+{
+    if (!cpu_single_env || cpu_single_env->cpu_index == 0) {
+	pthread_mutex_unlock(&qemu_mutex);
+	kvm_eat_signal(cpu_single_env, 1000);
+	pthread_mutex_lock(&qemu_mutex);
+    } else {
+	pthread_cond_wait(&qemu_aio_cond, &qemu_mutex);
+    }
+}
+
+void qemu_kvm_aio_wait_end(void)
+{
+}
 
 #endif

@@ -40,6 +40,10 @@ int kvm_arch_has_work(CPUState *env);
 int kvm_arch_try_push_interrupts(void *opaque);
 void kvm_arch_update_regs_for_sipi(CPUState *env);
 
+void qemu_kvm_aio_wait_start(void);
+void qemu_kvm_aio_wait(void);
+void qemu_kvm_aio_wait_end(void);
+
 extern int kvm_allowed;
 extern int kvm_irqchip;
 
