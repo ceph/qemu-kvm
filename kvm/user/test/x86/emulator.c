@@ -23,7 +23,6 @@ void test_cmps(void *mem)
 	unsigned char m3[1024];
 	void *rsi, *rdi;
 	long rcx, tmp;
-	int i;
 
 	for (int i = 0; i < 100; ++i)
 		m1[i] = m2[i] = m3[i] = i;
@@ -119,8 +118,8 @@ void test_push(void *mem)
 		     "pushq (%[mem]) \n\t"
 		     "mov %%rsp, %[new_stack_top] \n\t"
 		     "mov %[tmp], %%rsp"
-		     : [new_stack_top]"=r"(new_stack_top)
-		     : [tmp]"r"(tmp), [stack_top]"r"(stack_top),
+		     : [tmp]"=&r"(tmp), [new_stack_top]"=r"(new_stack_top)
+		     : [stack_top]"r"(stack_top),
 		       [reg]"r"(-17l), [mem]"r"(&memw)
 		     : "memory");
 

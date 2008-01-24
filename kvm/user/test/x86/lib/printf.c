@@ -92,7 +92,6 @@ void print_unsigned(pstream_t *ps, unsigned long long n, int base)
 
 int vsnprintf(char *buf, int size, const char *fmt, va_list va)
 {
-    int n;
     pstream_t s;
 
     s.buffer = buf;
