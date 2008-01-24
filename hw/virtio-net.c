@@ -23,11 +23,8 @@
 
 /* The feature bitmap for virtio net */
 #define VIRTIO_NET_F_NO_CSUM	0
-#define VIRTIO_NET_F_TSO4	1
-#define VIRTIO_NET_F_UFO	2
-#define VIRTIO_NET_F_TSO4_ECN	3
-#define VIRTIO_NET_F_TSO6	4
 #define VIRTIO_NET_F_MAC	5
+#define VIRTIO_NET_F_GS0	6
 
 #define TX_TIMER_INTERVAL (1000 / 500)
 
@@ -49,7 +46,9 @@ struct virtio_net_hdr
 #define VIRTIO_NET_HDR_GSO_TCPV4_ECN	2	// GSO frame, IPv4 TCP w/ ECN
 #define VIRTIO_NET_HDR_GSO_UDP		3	// GSO frame, IPv4 UDP (UFO)
 #define VIRTIO_NET_HDR_GSO_TCPV6	4	// GSO frame, IPv6 TCP
+#define VIRTIO_NET_HDR_GSO_ECN		0x80	// TCP has ECN set
     uint8_t gso_type;
+    uint16_t hdr_len;
     uint16_t gso_size;
     uint16_t csum_start;
     uint16_t csum_offset;

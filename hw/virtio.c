@@ -210,6 +210,8 @@ static void virtio_ioport_write(void *opaque, uint32_t addr, uint32_t val)
 	break;
     case VIRTIO_PCI_STATUS:
 	vdev->status = val & 0xFF;
+	if (vdev->status == 0)
+	    virtio_reset(vdev);
 	break;
     }
 }
