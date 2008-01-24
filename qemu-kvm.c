@@ -34,8 +34,6 @@ __thread CPUState *vcpu_env;
 
 static sigset_t io_sigset, io_negsigset;
 
-static int wait_hack;
-
 #define SIG_IPI (SIGRTMIN+4)
 
 struct vcpu_info {
@@ -66,19 +64,6 @@ void kvm_update_after_sipi(CPUState *env)
 {
     vcpu_info[env->cpu_index].sipi_needed = 1;
     kvm_update_interrupt_request(env);
-
-    /*
-     * the qemu bios waits using a busy loop that's much too short for
-     * kvm.  add a wait after the first sipi.
-     */
-    {
-	static int first_sipi = 1;
-
-	if (first_sipi) {
-	    wait_hack = 1;
-	    first_sipi = 0;
-	}
-    }
 }
 
 void kvm_apic_init(CPUState *env)
@@ -105,17 +90,6 @@ static void post_kvm_run(void *opaque, int vcpu)
 static int pre_kvm_run(void *opaque, int vcpu)
 {
     CPUState *env = cpu_single_env;
-
-    if (env->cpu_index == 0 && wait_hack) {
-	int i;
-
-	wait_hack = 0;
-
-	pthread_mutex_unlock(&qemu_mutex);
-	for (i = 0; i < 10; ++i)
-	    usleep(1000);
-	pthread_mutex_lock(&qemu_mutex);
-    }
 
     kvm_arch_pre_kvm_run(opaque, vcpu);
 
