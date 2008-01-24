@@ -425,18 +425,26 @@ static int start_migration(MigrationState *s)
 #endif
 	
     r = MIG_STAT_WRITE_FAILED;
-    if (write_whole_buffer(s->fd, &running, sizeof(running)))
+    if (write_whole_buffer(s->fd, &running, sizeof(running))) {
+        perror("vm_running write failed");
         goto out;
-    if (write_whole_buffer(s->fd, &value, sizeof(value)))
+    }
+    if (write_whole_buffer(s->fd, &value, sizeof(value))) {
+        perror("phys_ram_size write failed");
         goto out;
+    }
 
 #ifdef USE_KVM
     if (kvm_allowed) {
         value = cpu_to_be32(n);
-        if (write_whole_buffer(s->fd, &value, sizeof(value)))
+        if (write_whole_buffer(s->fd, &value, sizeof(value))) {
+            perror("phys_ram_size_bitmap size write failed");
             goto out;
-        if (write_whole_buffer(s->fd, phys_ram_page_exist_bitmap, n))
+	}
+        if (write_whole_buffer(s->fd, phys_ram_page_exist_bitmap, n)) {
+            perror("phys_ram_page_exist_bitmap write failed");
             goto out;
+	}
     }
 #endif
     fcntl(s->fd, F_SETFL, O_NONBLOCK);
@@ -456,7 +464,8 @@ static int start_migration(MigrationState *s)
 
     if (cpu_physical_memory_set_dirty_tracking(1)) {
         *s->has_error = MIG_STAT_KVM_SET_DIRTY_TRACKING_FAILED;
-        return -1;
+        r = MIG_STAT_KVM_SET_DIRTY_TRACKING_FAILED;
+        goto out;
     }
 
     s->addr = 0;
@@ -469,6 +478,8 @@ static int start_migration(MigrationState *s)
 
     qemu_mod_timer(s->timer, qemu_get_clock(rt_clock));
     qemu_set_fd_handler2(s->fd, NULL, NULL, migrate_write, s);
+
+    r = 0;
 
  out:
 #ifdef USE_KVM
@@ -498,8 +509,9 @@ static MigrationState *migration_init_fd(int detach, int fd)
 
     current_migration = s;
     
-    if (start_migration(s) == -1) {
+    if (start_migration(s)) {
 	term_printf("Could not start migration\n");
+	migrate_finish(s);
 	return NULL;
     }
 
