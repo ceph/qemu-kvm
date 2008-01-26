@@ -3,7 +3,7 @@ Short term :
 
 General
   - Fix init mode (ah=00). Should use more BIOS variables
-  - Add new functionalities and modify static functionality table 
+  - Add new functionalities and modify static functionality table
   - Performance : 16 bits IO
 
 v0.7

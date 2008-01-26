@@ -17,7 +17,7 @@ VGABIOS_DATE = "-DVGABIOS_DATE=\"$(RELDATE)\""
 all: bios cirrus-bios
 
 
-bios: biossums vgabios.bin vgabios.debug.bin 
+bios: biossums vgabios.bin vgabios.debug.bin
 
 cirrus-bios: vgabios-cirrus.bin vgabios-cirrus.debug.bin
 
