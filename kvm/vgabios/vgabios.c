@@ -4,7 +4,7 @@
  */
 // ============================================================================================
 //  
-//  Copyright (C) 2001,2002 the LGPL VGABios developers Team
+//  Copyright (C) 2001-2008 the LGPL VGABios developers Team
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
@@ -149,15 +149,23 @@ vgabios_entry_point:
            
   jmp vgabios_init_func
 
-vgabios_name:
-.ascii	"Plex86/Bochs VGABios"
-.ascii	" "
-.byte	0x00
+#ifdef PCIBIOS
+.org 0x18
+.word vgabios_pci_data
+#endif
 
 // Info from Bart Oldeman
 .org 0x1e
 .ascii  "IBM"
 .byte   0x00
+
+vgabios_name:
+.ascii	"Plex86/Bochs VGABios"
+#ifdef PCIBIOS
+.ascii	" (PCI)"
+#endif
+.ascii	" "
+.byte	0x00
 
 vgabios_version:
 #ifndef VGABIOS_VERS
@@ -173,7 +181,7 @@ vgabios_date:
 .byte	0x00
 
 vgabios_copyright:
-.ascii	"(C) 2003 the LGPL VGABios developers Team"
+.ascii	"(C) 2008 the LGPL VGABios developers Team"
 .byte	0x0a,0x0d
 .byte	0x00
 
@@ -194,7 +202,28 @@ vgabios_website:
 .byte	0x0a,0x0d
 .byte	0x0a,0x0d
 .byte	0x00
- 
+
+#ifdef PCIBIOS
+vgabios_pci_data:
+.ascii "PCIR"
+#ifdef CIRRUS
+.word 0x1013
+.word 0x00b8 // CLGD5446
+#else
+#error "Unknown PCI vendor and device id"
+#endif
+.word 0 // reserved
+.word 0x18 // dlen
+.byte 0 // revision
+.byte 0x0 // class,hi: vga display
+.word 0x300 // class,lo: vga display
+.word 0x40 // bios size
+.word 1 // revision
+.byte 0 // intel x86 data
+.byte 0x80 // last image
+.word 0 // reserved
+#endif
+
 
 ;; ============================================================================================
 ;;
@@ -408,7 +437,7 @@ init_vga_card:
 
 #if defined(USE_BX_INFO) || defined(DEBUG)
 msg_vga_init:
-.ascii "VGABios $Id: vgabios.c,v 1.66 2006/07/10 07:47:51 vruppert Exp $"
+.ascii "VGABios $Id$"
 .byte 0x0d,0x0a,0x00
 #endif
 ASM_END

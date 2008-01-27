@@ -29,7 +29,6 @@ byte chksum_bios_calc_value( byte* data, long offset );
 byte chksum_bios_get_value(  byte* data, long offset );
 void chksum_bios_set_value(  byte* data, long offset, byte value );
 
-
 #define PMID_LEN        20
 #define PMID_CHKSUM     19
 
@@ -37,6 +36,10 @@ long chksum_pmid_get_offset( byte* data, long offset );
 byte chksum_pmid_calc_value( byte* data, long offset );
 byte chksum_pmid_get_value(  byte* data, long offset );
 void chksum_pmid_set_value(  byte* data, long offset, byte value );
+
+#define PCIR_LEN        24
+
+long chksum_pcir_get_offset( byte* data, long offset );
 
 
 byte bios_data[MAX_BIOS_DATA];
@@ -46,7 +49,7 @@ long bios_len;
 int main(int argc, char* argv[])
 {
   FILE* stream;
-  long  offset, tmp_offset;
+  long  offset, tmp_offset, pcir_offset;
   byte  bios_len_byte, cur_val = 0, new_val = 0;
   int   hits, modified;
 
@@ -111,6 +114,20 @@ int main(int argc, char* argv[])
     printf("\n");
   }
 
+  offset = 0L;
+  pcir_offset = chksum_pcir_get_offset( bios_data, offset );
+  if (pcir_offset != -1L) {
+    if (bios_data[pcir_offset + 16] != bios_data[2]) {
+      bios_data[pcir_offset + 16] = bios_data[2];
+      if (modified == 0) {
+        bios_len += 0x200;
+        bios_data[2]++;
+        bios_data[pcir_offset + 16]++;
+      }
+      modified = 1;
+    }
+  }
+
   offset  = 0L;
   do {
     offset  = chksum_bios_get_offset(bios_data, offset);
@@ -119,6 +136,9 @@ int main(int argc, char* argv[])
     if ((cur_val != new_val) && (modified == 0)) {
       bios_len += 0x200;
       bios_data[2]++;
+      if (pcir_offset != -1L) {
+        bios_data[pcir_offset + 16]++;
+      }
       modified = 1;
     } else {
       printf("\nBios checksum at:   0x%4lX\n", offset);
@@ -240,4 +260,22 @@ void chksum_pmid_set_value( byte* data, long offset, byte value ) {
 
   check((offset + PMID_CHKSUM) <= (bios_len - 1), "PMID checksum out of bounds" );
   *( data + offset + PMID_CHKSUM ) = value;
+}
+
+
+long chksum_pcir_get_offset( byte* data, long offset ) {
+
+  long result = -1L;
+
+  while ((offset + PCIR_LEN) < (bios_len - 1)) {
+    offset = offset + 1;
+    if( *( data + offset + 0 ) == 'P' && \
+        *( data + offset + 1 ) == 'C' && \
+        *( data + offset + 2 ) == 'I' && \
+        *( data + offset + 3 ) == 'R' ) {
+      result = offset;
+      break;
+    }
+  }
+  return( result );
 }
