@@ -32,7 +32,12 @@ pthread_mutex_t qemu_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t qemu_aio_cond = PTHREAD_COND_INITIALIZER;
 __thread CPUState *vcpu_env;
 
-static sigset_t io_sigset, io_negsigset;
+struct qemu_kvm_signal_table {
+    sigset_t sigset;
+    sigset_t negsigset;
+};
+
+static struct qemu_kvm_signal_table io_signal_table;
 
 #define SIG_IPI (SIGRTMIN+4)
 
@@ -144,7 +149,7 @@ static int kvm_eat_signal(CPUState *env, int timeout)
 
     ts.tv_sec = timeout / 1000;
     ts.tv_nsec = (timeout % 1000) * 1000000;
-    r = sigtimedwait(&io_sigset, &siginfo, &ts);
+    r = sigtimedwait(&io_signal_table.sigset, &siginfo, &ts);
     if (r == -1 && (errno == EAGAIN || errno == EINTR) && !timeout)
 	return 0;
     e = errno;
@@ -288,7 +293,7 @@ static void setup_kernel_sigmask(CPUState *env)
     sigprocmask(SIG_BLOCK, NULL, &set);
     sigdelset(&set, SIG_IPI);
     if (env->cpu_index == 0)
-	sigandset(&set, &set, &io_negsigset);
+	sigandset(&set, &set, &io_signal_table.negsigset);
     
     kvm_set_signal_mask(kvm_context, env->cpu_index, &set);
 }
@@ -351,11 +356,10 @@ static void *ap_main_loop(void *_env)
     return NULL;
 }
 
-static void kvm_add_signal(int signum)
+static void kvm_add_signal(struct qemu_kvm_signal_table *sigtab, int signum)
 {
-    sigaddset(&io_sigset, signum);
-    sigdelset(&io_negsigset, signum);
-    sigprocmask(SIG_BLOCK,  &io_sigset, NULL);
+    sigaddset(&sigtab->sigset, signum);
+    sigdelset(&sigtab->negsigset, signum);
 }
 
 int kvm_init_ap(void)
@@ -364,12 +368,13 @@ int kvm_init_ap(void)
     int i;
 
     qemu_add_vm_change_state_handler(kvm_vm_state_change_handler, NULL);
-    sigemptyset(&io_sigset);
-    sigfillset(&io_negsigset);
-    kvm_add_signal(SIGIO);
-    kvm_add_signal(SIGALRM);
-    kvm_add_signal(SIGUSR2);
-    kvm_add_signal(SIG_IPI);
+    sigemptyset(&io_signal_table.sigset);
+    sigfillset(&io_signal_table.negsigset);
+    kvm_add_signal(&io_signal_table, SIGIO);
+    kvm_add_signal(&io_signal_table, SIGALRM);
+    kvm_add_signal(&io_signal_table, SIGUSR2);
+    kvm_add_signal(&io_signal_table, SIG_IPI);
+    sigprocmask(SIG_BLOCK, &io_signal_table.sigset, NULL);
 
     vcpu_env = first_cpu;
     signal(SIG_IPI, sig_ipi_handler);
