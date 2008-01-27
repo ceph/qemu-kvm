@@ -23,7 +23,6 @@ extern kvm_context_t kvm_context;
 static int kvm_has_msr_star;
 
 static int lm_capable_kernel;
-extern __thread CPUState *vcpu_env;
 
 int kvm_arch_qemu_create_context(void)
 {
@@ -576,7 +575,7 @@ void kvm_arch_pre_kvm_run(void *opaque, int vcpu)
 
 void kvm_arch_post_kvm_run(void *opaque, int vcpu)
 {
-    CPUState *env = vcpu_env;
+    CPUState *env = qemu_kvm_cpu_env(vcpu);
     cpu_single_env = env;
 
     env->eflags = kvm_get_interrupt_flag(kvm_context, vcpu)

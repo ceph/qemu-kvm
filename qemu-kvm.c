@@ -30,7 +30,7 @@ extern int smp_cpus;
 
 pthread_mutex_t qemu_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t qemu_aio_cond = PTHREAD_COND_INITIALIZER;
-__thread CPUState *vcpu_env;
+__thread struct vcpu_info *vcpu;
 
 struct qemu_kvm_signal_table {
     sigset_t sigset;
@@ -42,6 +42,7 @@ static struct qemu_kvm_signal_table io_signal_table;
 #define SIG_IPI (SIGRTMIN+4)
 
 struct vcpu_info {
+    CPUState *env;
     int sipi_needed;
     int init;
     pthread_t thread;
@@ -50,13 +51,18 @@ struct vcpu_info {
     int stopped;
 } vcpu_info[4];
 
+CPUState *qemu_kvm_cpu_env(int index)
+{
+    return vcpu_info[index].env;
+}
+
 static void sig_ipi_handler(int n)
 {
 }
 
 void kvm_update_interrupt_request(CPUState *env)
 {
-    if (env && env != vcpu_env) {
+    if (env && vcpu && env != vcpu->env) {
 	if (vcpu_info[env->cpu_index].signalled)
 	    return;
 	vcpu_info[env->cpu_index].signalled = 1;
@@ -154,7 +160,8 @@ static int kvm_eat_signal(CPUState *env, int timeout)
 	return 0;
     e = errno;
     pthread_mutex_lock(&qemu_mutex);
-    cpu_single_env = vcpu_env;
+    if (vcpu)
+        cpu_single_env = vcpu->env;
     if (r == -1 && !(errno == EAGAIN || errno == EINTR)) {
 	printf("sigtimedwait: %s\n", strerror(e));
 	exit(1);
@@ -189,7 +196,7 @@ static void kvm_eat_signals(CPUState *env, int timeout)
      * for which there is no signal handler installed.
      */
     pthread_mutex_lock(&qemu_mutex);
-    cpu_single_env = vcpu_env;
+    cpu_single_env = vcpu->env;
     main_loop_wait(0);
     pthread_mutex_unlock(&qemu_mutex);
 }
@@ -251,7 +258,7 @@ static void pause_other_threads(void)
 	pthread_kill(vcpu_info[i].thread, SIG_IPI);
     }
     while (!all_threads_paused())
-	kvm_eat_signals(vcpu_env, 0);
+	kvm_eat_signals(vcpu->env, 0);
 }
 
 static void resume_other_threads(void)
@@ -344,7 +351,8 @@ static void *ap_main_loop(void *_env)
     CPUState *env = _env;
     sigset_t signals;
 
-    vcpu_env = env;
+    vcpu = &vcpu_info[env->cpu_index];
+    vcpu->env = env;
     sigfillset(&signals);
     //sigdelset(&signals, SIG_IPI);
     sigprocmask(SIG_BLOCK, &signals, NULL);
@@ -381,7 +389,8 @@ int kvm_init_ap(void)
     kvm_add_signal(&io_signal_table, SIG_IPI);
     sigprocmask(SIG_BLOCK, &io_signal_table.sigset, NULL);
 
-    vcpu_env = first_cpu;
+    vcpu = &vcpu_info[0];
+    vcpu->env = first_cpu;
     signal(SIG_IPI, sig_ipi_handler);
     for (i = 1; i < smp_cpus; ++i) {
 	pthread_create(&vcpu_info[i].thread, NULL, ap_main_loop, env);
