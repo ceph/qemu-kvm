@@ -369,8 +369,7 @@ int kvm_init_ap(void)
     kvm_add_signal(SIGIO);
     kvm_add_signal(SIGALRM);
     kvm_add_signal(SIGUSR2);
-    if (!kvm_irqchip_in_kernel(kvm_context))
-        kvm_add_signal(SIG_IPI);
+    kvm_add_signal(SIG_IPI);
 
     vcpu_env = first_cpu;
     signal(SIG_IPI, sig_ipi_handler);
