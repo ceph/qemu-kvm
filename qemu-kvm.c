@@ -356,6 +356,12 @@ static void *ap_main_loop(void *_env)
     return NULL;
 }
 
+static void qemu_kvm_init_signal_table(struct qemu_kvm_signal_table *sigtab)
+{
+    sigemptyset(&sigtab->sigset);
+    sigfillset(&sigtab->negsigset);
+}
+
 static void kvm_add_signal(struct qemu_kvm_signal_table *sigtab, int signum)
 {
     sigaddset(&sigtab->sigset, signum);
@@ -368,8 +374,7 @@ int kvm_init_ap(void)
     int i;
 
     qemu_add_vm_change_state_handler(kvm_vm_state_change_handler, NULL);
-    sigemptyset(&io_signal_table.sigset);
-    sigfillset(&io_signal_table.negsigset);
+    qemu_kvm_init_signal_table(&io_signal_table);
     kvm_add_signal(&io_signal_table, SIGIO);
     kvm_add_signal(&io_signal_table, SIGALRM);
     kvm_add_signal(&io_signal_table, SIGUSR2);
