@@ -9950,6 +9950,10 @@ bios_table_area_start:
 .org 0xe05b ; POST Entry Point
 bios_table_area_end:
 post:
+  ;; enable cache
+  mov eax, cr0
+  and eax, #0x9fffffff
+  mov cr0, eax
 
   xor ax, ax
 
