@@ -144,6 +144,27 @@ int kvm_arch_create_default_phys_mem(kvm_context_t kvm,
 	return 0;
 }
 
+int kvm_create_pit(kvm_context_t kvm)
+{
+#ifdef KVM_CAP_PIT
+	int r;
+
+	kvm->pit_in_kernel = 0;
+	if (!kvm->no_pit_creation) {
+		r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_PIT);
+		if (r > 0) {
+			r = ioctl(kvm->vm_fd, KVM_CREATE_PIT);
+			if (r >= 0)
+				kvm->pit_in_kernel = 1;
+			else {
+				printf("Create kernel PIC irqchip failed\n");
+				return r;
+			}
+		}
+	}
+#endif
+	return 0;
+}
 
 int kvm_arch_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
  			void **vm_mem)
@@ -151,6 +172,10 @@ int kvm_arch_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
 	int r = 0;
 
 	r = kvm_init_tss(kvm);
+	if (r < 0)
+		return r;
+
+	r = kvm_create_pit(kvm);
 	if (r < 0)
 		return r;
 

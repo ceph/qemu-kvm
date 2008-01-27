@@ -47,6 +47,10 @@ struct kvm_context {
 	int no_irqchip_creation;
 	/// in-kernel irqchip status
 	int irqchip_in_kernel;
+	/// do not create in-kernel pit if set
+	int no_pit_creation;
+	/// in-kernel pit status
+	int pit_in_kernel;
 };
 
 void init_slots(void);

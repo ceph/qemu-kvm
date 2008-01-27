@@ -271,6 +271,11 @@ void kvm_disable_irqchip_creation(kvm_context_t kvm)
 	kvm->no_irqchip_creation = 1;
 }
 
+void kvm_disable_pit_creation(kvm_context_t kvm)
+{
+	kvm->no_pit_creation = 1;
+}
+
 int kvm_create_vcpu(kvm_context_t kvm, int slot)
 {
 	long mmap_size;
