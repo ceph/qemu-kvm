@@ -4,7 +4,7 @@
 /* Devices used by sparc32 system.  */
 
 /* iommu.c */
-void *iommu_init(target_phys_addr_t addr, uint32_t version);
+void *iommu_init(target_phys_addr_t addr, uint32_t version, qemu_irq irq);
 void sparc_iommu_memory_rw(void *opaque, target_phys_addr_t addr,
                                  uint8_t *buf, int len, int is_write);
 static inline void sparc_iommu_memory_read(void *opaque,
@@ -34,6 +34,14 @@ void *slavio_intctl_init(target_phys_addr_t addr, target_phys_addr_t addrg,
 void slavio_pic_info(void *opaque);
 void slavio_irq_info(void *opaque);
 
+/* sbi.c */
+void *sbi_init(target_phys_addr_t addr, qemu_irq **irq, qemu_irq **cpu_irq,
+               qemu_irq **parent_irq);
+
+/* sun4c_intctl.c */
+void *sun4c_intctl_init(target_phys_addr_t addr, qemu_irq **irq,
+                        qemu_irq *parent_irq);
+
 /* slavio_timer.c */
 void slavio_timer_init_all(target_phys_addr_t base, qemu_irq master_irq,
                            qemu_irq *cpu_irqs, unsigned int num_cpus);
@@ -46,7 +54,9 @@ void slavio_serial_ms_kbd_init(target_phys_addr_t base, qemu_irq irq,
 
 /* slavio_misc.c */
 void *slavio_misc_init(target_phys_addr_t base, target_phys_addr_t power_base,
-                       qemu_irq irq);
+                       target_phys_addr_t aux1_base,
+                       target_phys_addr_t aux2_base, qemu_irq irq,
+                       CPUState *env);
 void slavio_set_power_fail(void *opaque, int power_failing);
 
 /* esp.c */
@@ -73,6 +83,6 @@ void lance_init(NICInfo *nd, target_phys_addr_t leaddr, void *dma_opaque,
                 qemu_irq irq, qemu_irq *reset);
 
 /* eccmemctl.c */
-void *ecc_init(target_phys_addr_t base, uint32_t version);
+void *ecc_init(target_phys_addr_t base, qemu_irq irq, uint32_t version);
 
 #endif

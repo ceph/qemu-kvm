@@ -1730,7 +1730,7 @@ static void ide_atapi_cmd(IDEState *s)
                 max_len = 512;
 
             memset(buf, 0, max_len);
-            /*
+            /* 
              * the number of sectors from the media tells us which profile
              * to use as current.  0 means there is no media
              *
@@ -2141,7 +2141,7 @@ static void ide_ioport_write(void *opaque, uint32_t addr, uint32_t val)
             break;
         case WIN_DIAGNOSE:
             ide_set_signature(s);
-            s->status = 0x00; /* NOTE: READY is _not_ set */
+            s->status = READY_STAT;
             s->error = 0x01;
             ide_set_irq(s);
             break;

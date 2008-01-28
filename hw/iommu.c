@@ -34,7 +34,7 @@ do { printf("IOMMU: " fmt , ##args); } while (0)
 #define DPRINTF(fmt, args...)
 #endif
 
-#define IOMMU_NREGS (3*4096/4)
+#define IOMMU_NREGS         (4*4096/4)
 #define IOMMU_CTRL          (0x0000 >> 2)
 #define IOMMU_CTRL_IMPL     0xf0000000 /* Implementation */
 #define IOMMU_CTRL_VERS     0x0f000000 /* Version */
@@ -95,6 +95,12 @@ do { printf("IOMMU: " fmt , ##args); } while (0)
 #define IOMMU_ARBEN_MASK    0x001f0000
 #define IOMMU_MID           0x00000008
 
+#define IOMMU_MASK_ID       (0x3018 >> 2) /* Mask ID */
+#define IOMMU_MASK_ID_MASK  0x00ffffff
+
+#define IOMMU_MSII_MASK     0x26000000 /* microSPARC II mask number */
+#define IOMMU_TS_MASK       0x23000000 /* turboSPARC mask number */
+
 /* The format of an iopte in the page tables */
 #define IOPTE_PAGE          0xffffff00 /* Physical page number (PA[35:12]) */
 #define IOPTE_CACHE         0x00000080 /* Cached (in vme IOCACHE or
@@ -112,24 +118,31 @@ typedef struct IOMMUState {
     uint32_t regs[IOMMU_NREGS];
     target_phys_addr_t iostart;
     uint32_t version;
+    qemu_irq irq;
 } IOMMUState;
 
-static uint32_t iommu_mem_readw(void *opaque, target_phys_addr_t addr)
+static uint32_t iommu_mem_readl(void *opaque, target_phys_addr_t addr)
 {
     IOMMUState *s = opaque;
     target_phys_addr_t saddr;
+    uint32_t ret;
 
     saddr = (addr - s->addr) >> 2;
     switch (saddr) {
     default:
-        DPRINTF("read reg[%d] = %x\n", (int)saddr, s->regs[saddr]);
-        return s->regs[saddr];
+        ret = s->regs[saddr];
+        break;
+    case IOMMU_AFAR:
+    case IOMMU_AFSR:
+        ret = s->regs[saddr];
+        qemu_irq_lower(s->irq);
         break;
     }
-    return 0;
+    DPRINTF("read reg[%d] = %x\n", (int)saddr, ret);
+    return ret;
 }
 
-static void iommu_mem_writew(void *opaque, target_phys_addr_t addr,
+static void iommu_mem_writel(void *opaque, target_phys_addr_t addr,
                              uint32_t val)
 {
     IOMMUState *s = opaque;
@@ -180,8 +193,13 @@ static void iommu_mem_writew(void *opaque, target_phys_addr_t addr,
         DPRINTF("page flush %x\n", val);
         s->regs[saddr] = val & IOMMU_PGFLUSH_MASK;
         break;
+    case IOMMU_AFAR:
+        s->regs[saddr] = val;
+        qemu_irq_lower(s->irq);
+        break;
     case IOMMU_AFSR:
         s->regs[saddr] = (val & IOMMU_AFSR_MASK) | IOMMU_AFSR_RESV;
+        qemu_irq_lower(s->irq);
         break;
     case IOMMU_SBCFG0:
     case IOMMU_SBCFG1:
@@ -194,6 +212,9 @@ static void iommu_mem_writew(void *opaque, target_phys_addr_t addr,
         // addresses, fault cause and address stored to MMU/IOMMU
         s->regs[saddr] = (val & IOMMU_ARBEN_MASK) | IOMMU_MID;
         break;
+    case IOMMU_MASK_ID:
+        s->regs[saddr] |= val & IOMMU_MASK_ID_MASK;
+        break;
     default:
         s->regs[saddr] = val;
         break;
@@ -201,15 +222,15 @@ static void iommu_mem_writew(void *opaque, target_phys_addr_t addr,
 }
 
 static CPUReadMemoryFunc *iommu_mem_read[3] = {
-    iommu_mem_readw,
-    iommu_mem_readw,
-    iommu_mem_readw,
+    NULL,
+    NULL,
+    iommu_mem_readl,
 };
 
 static CPUWriteMemoryFunc *iommu_mem_write[3] = {
-    iommu_mem_writew,
-    iommu_mem_writew,
-    iommu_mem_writew,
+    NULL,
+    NULL,
+    iommu_mem_writel,
 };
 
 static uint32_t iommu_page_get_flags(IOMMUState *s, target_phys_addr_t addr)
@@ -255,6 +276,7 @@ static void iommu_bad_addr(IOMMUState *s, target_phys_addr_t addr,
     if (!is_write)
         s->regs[IOMMU_AFSR] |= IOMMU_AFSR_RD;
     s->regs[IOMMU_AFAR] = addr;
+    qemu_irq_raise(s->irq);
 }
 
 void sparc_iommu_memory_rw(void *opaque, target_phys_addr_t addr,
@@ -324,9 +346,11 @@ static void iommu_reset(void *opaque)
     s->regs[IOMMU_CTRL] = s->version;
     s->regs[IOMMU_ARBEN] = IOMMU_MID;
     s->regs[IOMMU_AFSR] = IOMMU_AFSR_RESV;
+    s->regs[IOMMU_MASK_ID] = IOMMU_TS_MASK;
+    qemu_irq_lower(s->irq);
 }
 
-void *iommu_init(target_phys_addr_t addr, uint32_t version)
+void *iommu_init(target_phys_addr_t addr, uint32_t version, qemu_irq irq)
 {
     IOMMUState *s;
     int iommu_io_memory;
@@ -337,6 +361,7 @@ void *iommu_init(target_phys_addr_t addr, uint32_t version)
 
     s->addr = addr;
     s->version = version;
+    s->irq = irq;
 
     iommu_io_memory = cpu_register_io_memory(0, iommu_mem_read,
                                              iommu_mem_write, s);

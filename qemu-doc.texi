@@ -74,7 +74,7 @@ For system emulation, the following hardware targets are supported:
 @item PREP (PowerPC processor)
 @item G3 BW PowerMac (PowerPC processor)
 @item Mac99 PowerMac (PowerPC processor, in progress)
-@item Sun4m (32-bit Sparc processor)
+@item Sun4m/Sun4c/Sun4d (32-bit Sparc processor)
 @item Sun4u (64-bit Sparc processor, in progress)
 @item Malta board (32-bit and 64-bit MIPS processors)
 @item ARM Integrator/CP (ARM)
@@ -166,20 +166,27 @@ Creative SoundBlaster 16 sound card
 @item
 ENSONIQ AudioPCI ES1370 sound card
 @item
+Intel 82801AA AC97 Audio compatible sound card
+@item
 Adlib(OPL2) - Yamaha YM3812 compatible chip
+@item
+Gravis Ultrasound GF1 sound card
 @item
 PCI UHCI USB controller and a virtual USB hub.
 @end itemize
 
 SMP is supported with up to 255 CPUs.
 
-Note that adlib is only available when QEMU was configured with
--enable-adlib
+Note that adlib, ac97 and gus are only available when QEMU was configured
+with --enable-adlib, --enable-ac97 or --enable-gus respectively.
 
 QEMU uses the PC BIOS from the Bochs project and the Plex86/Bochs LGPL
 VGA BIOS.
 
 QEMU uses YM3812 emulation by Tatsuyuki Satoh.
+
+QEMU uses GUS emulation(GUSEMU32 @url{http://www.deinmeister.de/gusemu/})
+by Tibor "TS" Schütz.
 
 @c man end
 
@@ -234,7 +241,8 @@ Define a new drive. Valid options are:
 @table @code
 @item file=@var{file}
 This option defines which disk image (@pxref{disk_images}) to use with
-this drive.
+this drive. If the filename contains comma, you must double it
+(for instance, "file=my,,file" to use file "my,file").
 @item if=@var{interface}
 This option defines on which type on interface the drive is connected.
 Available types are: ide, scsi, sd, mtd, floppy, pflash.
@@ -333,8 +341,16 @@ available sound hardware.
 @example
 qemu -soundhw sb16,adlib hda
 qemu -soundhw es1370 hda
+qemu -soundhw ac97 hda
 qemu -soundhw all hda
 qemu -soundhw ?
+@end example
+
+Note that Linux's i810_audio OSS kernel (for AC97) module might
+require manually specifying clocking.
+
+@example
+modprobe i810_audio clocking=48000
 @end example
 
 @item -localtime
@@ -346,6 +362,17 @@ Windows.
 Set the initial date of the real time clock. Valid format for
 @var{date} are: @code{now} or @code{2006-06-17T16:01:21} or
 @code{2006-06-17}. The default value is @code{now}.
+
+@item -translation @var{setting1[,...]}
+Select dynamic translation options @var{setting}, @code{-translation ?}
+shows a list of settings. Valid settings are:
+
+@table @code
+@item @var{no-cache}
+This option disables caching of translated code. Is useful for low-level
+debugging of the emulated environment. This option incurs a massive
+slow-down in emulation speed.
+@end table
 
 @item -pidfile @var{file}
 Store the QEMU process PID in @var{file}. It is useful if you launch QEMU
@@ -492,6 +519,32 @@ Enable the USB driver (will be the default soon)
 
 @item -usbdevice @var{devname}
 Add the USB device @var{devname}. @xref{usb_devices}.
+
+@table @code
+
+@item mouse
+Virtual Mouse. This will override the PS/2 mouse emulation when activated.
+
+@item tablet
+Pointer device that uses absolute coordinates (like a touchscreen). This
+means qemu is able to report the mouse position without having to grab the
+mouse. Also overrides the PS/2 mouse emulation when activated.
+
+@item disk:file
+Mass storage device based on file
+
+@item host:bus.addr
+Pass through the host device identified by bus.addr (Linux only).
+
+@item host:vendor_id:product_id
+Pass through the host device identified by vendor_id:product_id (Linux only).
+
+@item serial:[vendorid=@var{vendor_id}][,productid=@var{product_id}]:@var{dev}
+Serial converter to host character device @var{dev}, see @code{-serial} for the
+available devices.
+
+@end table
+
 @end table
 
 Network options:
@@ -1527,27 +1580,37 @@ as necessary to connect multiple USB devices.
 USB devices can be connected with the @option{-usbdevice} commandline option
 or the @code{usb_add} monitor command.  Available devices are:
 
-@table @var
-@item @code{mouse}
+@table @code
+@item mouse
 Virtual Mouse.  This will override the PS/2 mouse emulation when activated.
-@item @code{tablet}
+@item tablet
 Pointer device that uses absolute coordinates (like a touchscreen).
 This means qemu is able to report the mouse position without having
 to grab the mouse.  Also overrides the PS/2 mouse emulation when activated.
-@item @code{disk:@var{file}}
+@item disk:@var{file}
 Mass storage device based on @var{file} (@pxref{disk_images})
-@item @code{host:@var{bus.addr}}
+@item host:@var{bus.addr}
 Pass through the host device identified by @var{bus.addr}
 (Linux only)
-@item @code{host:@var{vendor_id:product_id}}
+@item host:@var{vendor_id:product_id}
 Pass through the host device identified by @var{vendor_id:product_id}
 (Linux only)
-@item @code{wacom-tablet}
+@item wacom-tablet
 Virtual Wacom PenPartner tablet.  This device is similar to the @code{tablet}
 above but it can be used with the tslib library because in addition to touch
 coordinates it reports touch pressure.
-@item @code{keyboard}
+@item keyboard
 Standard USB keyboard.  Will override the PS/2 keyboard (if present).
+@item serial:[vendorid=@var{vendor_id}][,product_id=@var{product_id}]:@var{dev}
+Serial converter. This emulates an FTDI FT232BM chip connected to host character
+device @var{dev}. The available character devices are the same as for the
+@code{-serial} option. The @code{vendorid} and @code{productid} options can be
+used to override the default 0403:6001. For instance, 
+@example
+usb_add serial:productid=FA00:tcp:192.168.0.2:4444
+@end example
+will connect to tcp port 4444 of ip 192.168.0.2, and plug that to the virtual
+serial converter, faking a Matrix Orbital LCD Display (USB ID 0403:FA00).
 @end table
 
 @node host_usb_devices
@@ -2026,15 +2089,17 @@ More information is available at
 @section Sparc32 System emulator
 
 Use the executable @file{qemu-system-sparc} to simulate a SPARCstation
-5, SPARCstation 10, or SPARCserver 600MP (sun4m architecture). The
-emulation is somewhat complete.  SMP up to 16 CPUs is supported, but
-Linux limits the number of usable CPUs to 4.
+5, SPARCstation 10, SPARCstation 20, SPARCserver 600MP (sun4m
+architecture), SPARCstation 2 (sun4c architecture), SPARCserver 1000,
+or SPARCcenter 2000 (sun4d architecture). The emulation is somewhat
+complete.  SMP up to 16 CPUs is supported, but Linux limits the number
+of usable CPUs to 4.
 
-QEMU emulates the following sun4m peripherals:
+QEMU emulates the following sun4m/sun4d peripherals:
 
 @itemize @minus
 @item
-IOMMU
+IOMMU or IO-UNITs
 @item
 TCX Frame buffer
 @item
@@ -2054,7 +2119,7 @@ CS4231 sound device (only on SS-5, not working yet)
 
 The number of peripherals is fixed in the architecture.  Maximum
 memory size depends on the machine type, for SS-5 it is 256MB and for
-SS-10 and SS-600MP 2047MB.
+others 2047MB.
 
 Since version 0.8.2, QEMU uses OpenBIOS
 @url{http://www.openbios.org/}. OpenBIOS is a free (GPL v2) portable
@@ -2085,7 +2150,7 @@ qemu-system-sparc -prom-env 'auto-boot?=false' \
  -prom-env 'boot-device=sd(0,2,0):d' -prom-env 'boot-args=linux single'
 @end example
 
-@item -M [SS-5|SS-10|SS-600MP]
+@item -M [SS-5|SS-10|SS-20|SS-600MP|SS-2|SS-1000|SS-2000]
 
 Set the emulated machine type. Default is SS-5.
 
