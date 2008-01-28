@@ -50,9 +50,10 @@ typedef uint32_t ppc_gpr_t;
 /* Specific definitions for PowerPC embedded */
 /* BookE have 36 bits physical address space */
 #define TARGET_PHYS_ADDR_BITS 64
-#if defined(CONFIG_USER_ONLY)
+#if defined(CONFIG_USER_ONLY) || defined(USE_KVM)
 /* It looks like a lot of Linux programs assume page size
  * is 4kB long. This is evil, but we have to deal with it...
+ * Also kvm for embedded powerpc needs (atm) 4kB aligned pages
  */
 #define TARGET_PAGE_BITS 12
 #else /* defined(CONFIG_USER_ONLY) */
