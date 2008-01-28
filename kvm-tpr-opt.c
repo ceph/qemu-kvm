@@ -98,10 +98,12 @@ struct vapic_bios {
     uint32_t vapic_size;
     uint32_t vcpu_shift;
     uint32_t real_tpr;
-    uint32_t set_tpr;
-    uint32_t set_tpr_eax;
-    uint32_t get_tpr[8];
-};
+    struct vapic_patches {
+	uint32_t set_tpr;
+	uint32_t set_tpr_eax;
+	uint32_t get_tpr[8];
+    } __attribute__((packed)) up, mp;
+} __attribute__((packed));
 
 static struct vapic_bios vapic_bios;
 
@@ -214,9 +216,11 @@ static int enable_vapic(CPUState *env)
 {
     struct kvm_sregs sregs;
 
-    kvm_get_sregs(kvm_context, env->cpu_index, &sregs);
-    sregs.tr.selector = 0xdb + (env->cpu_index << 8);
-    kvm_set_sregs(kvm_context, env->cpu_index, &sregs);
+    if (smp_cpus > 1) {/* uniprocessor doesn't need cpu id */
+	kvm_get_sregs(kvm_context, env->cpu_index, &sregs);
+	sregs.tr.selector = 0xdb + (env->cpu_index << 8);
+	kvm_set_sregs(kvm_context, env->cpu_index, &sregs);
+    }
 
     kvm_enable_vapic(kvm_context, env->cpu_index,
 		     vapic_phys + (env->cpu_index << 7));
@@ -238,23 +242,25 @@ static void patch_call(CPUState *env, uint64_t rip, uint32_t target)
 static void patch_instruction(CPUState *env, uint64_t rip)
 {
     uint8_t b1, b2;
+    struct vapic_patches *vp;
 
+    vp = smp_cpus == 1 ? &vapic_bios.up : &vapic_bios.mp;
     b1 = read_byte_virt(env, rip);
     b2 = read_byte_virt(env, rip + 1);
     switch (b1) {
     case 0x89: /* mov r32 to r/m32 */
 	write_byte_virt(env, rip, 0x50 + modrm_reg(b2));  /* push reg */
-	patch_call(env, rip + 1, vapic_bios.set_tpr);
+	patch_call(env, rip + 1, vp->set_tpr);
 	break;
     case 0x8b: /* mov r/m32 to r32 */
 	write_byte_virt(env, rip, 0x90);
-	patch_call(env, rip + 1, vapic_bios.get_tpr[modrm_reg(b2)]);
+	patch_call(env, rip + 1, vp->get_tpr[modrm_reg(b2)]);
 	break;
     case 0xa1: /* mov abs to eax */
-	patch_call(env, rip, vapic_bios.get_tpr[0]);
+	patch_call(env, rip, vp->get_tpr[0]);
 	break;
     case 0xa3: /* mov eax to abs */
-	patch_call(env, rip, vapic_bios.set_tpr_eax);
+	patch_call(env, rip, vp->set_tpr_eax);
 	break;
     case 0xc7: /* mov imm32, r/m32 (c7/0) */
 	write_byte_virt(env, rip, 0x68);  /* push imm32 */
@@ -262,7 +268,7 @@ static void patch_instruction(CPUState *env, uint64_t rip)
 	write_byte_virt(env, rip + 2, read_byte_virt(env, rip+7));
 	write_byte_virt(env, rip + 3, read_byte_virt(env, rip+8));
 	write_byte_virt(env, rip + 4, read_byte_virt(env, rip+9));
-	patch_call(env, rip + 5, vapic_bios.set_tpr);
+	patch_call(env, rip + 5, vp->set_tpr);
 	break;
     default:
 	printf("funny insn %02x %02x\n", b1, b2);
