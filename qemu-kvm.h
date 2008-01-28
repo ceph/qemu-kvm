@@ -55,8 +55,8 @@ int handle_tpr_access(void *opaque, int vcpu,
 			     uint64_t rip, int is_write);
 
 #ifdef TARGET_PPC
-int handle_powerpc_dcr_read(uint32_t dcrn, uint32_t *data);
-int handle_powerpc_dcr_write(uint32_t dcrn, uint32_t data);
+int handle_powerpc_dcr_read(int vcpu, uint32_t dcrn, uint32_t *data);
+int handle_powerpc_dcr_write(int vcpu,uint32_t dcrn, uint32_t data);
 #endif
 
 #define ALIGN(x, y)  (((x)+(y)-1) & ~((y)-1))

@@ -574,6 +574,10 @@ struct CPUPPCState {
     /* temporary general purpose registers */
     ppc_gpr_t tgpr[4]; /* Used to speed-up TLB assist handlers */
 
+#ifdef USE_KVM
+    uint8_t ready_for_interrupt_injection;
+#endif
+
     /* Floating point execution context */
     /* temporary float registers */
     float64 ft0;
@@ -1420,5 +1424,12 @@ enum {
 };
 
 /*****************************************************************************/
+
+/* hidden flags (hflags) - used internally by qemu to represent additional
+ * cpu states.
+ */
+#define HF_HALTED_SHIFT 1
+
+#define HF_HALTED_MASK 1<<HF_HALTED_SHIFT
 
 #endif /* !defined (__CPU_PPC_H__) */
