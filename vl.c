@@ -9313,10 +9313,10 @@ int main(int argc, char **argv)
 
 #if USE_KVM
     /* Initialize kvm */
-#ifdef TARGET_IA64
-#define KVM_EXTRA_PAGES 0
-#else
+#if defined(TARGET_I386) || defined(TARGET_X86_64)
 #define KVM_EXTRA_PAGES 3
+#else
+#define KVM_EXTRA_PAGES 0
 #endif
     if (kvm_allowed) {
 	    phys_ram_size += KVM_EXTRA_PAGES * TARGET_PAGE_SIZE;
