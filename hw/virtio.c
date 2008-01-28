@@ -47,6 +47,9 @@
 
 #define VIRTIO_PCI_CONFIG		20
 
+/* Virtio ABI version, if we increment this, we break the guest driver. */
+#define VIRTIO_PCI_ABI_VERSION		0
+
 /* QEMU doesn't strictly need write barriers since everything runs in
  * lock-step.  We'll leave the calls to wmb() in though to make it obvious for
  * KVM or if kqemu gets SMP support.
@@ -416,6 +419,8 @@ VirtIODevice *virtio_init_pci(PCIBus *bus, const char *name,
     config[0x01] = (vendor >> 8) & 0xFF;
     config[0x02] = device & 0xFF;
     config[0x03] = (device >> 8) & 0xFF;
+
+    config[0x08] = VIRTIO_PCI_ABI_VERSION;
 
     config[0x09] = pif;
     config[0x0a] = subclass_code;
