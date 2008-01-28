@@ -200,6 +200,9 @@ if [ "$cpu" = "ia64" ] ; then
      gdbstub="no"
      slirp="no"
 fi
+if [ "$cpu" = "powerpc" ]; then
+     kvm="yes"
+fi
 ;;
 esac
 
@@ -1067,7 +1070,7 @@ echo "#define CONFIG_QEMU_PREFIX \"$interp_prefix1\"" >> $config_h
 
 configure_kvm() {
   if test $kvm = "yes" -a "$target_softmmu" = "yes" -a \
-          \( "$cpu" = "i386" -o "$cpu" = "x86_64" -o "$cpu" = "ia64" \); then
+          \( "$cpu" = "i386" -o "$cpu" = "x86_64" -o "$cpu" = "ia64" -o "$cpu" = "powerpc" \); then
     echo "#define USE_KVM 1" >> $config_h
     echo "CONFIG_KVM_KERNEL_INC=$kernel_path/include" >> $config_mak
   fi
@@ -1118,6 +1121,7 @@ elif test "$target_cpu" = "ppcemb" ; then
   echo "#define TARGET_ARCH \"ppcemb\"" >> $config_h
   echo "#define TARGET_PPC 1" >> $config_h
   echo "#define TARGET_PPCEMB 1" >> $config_h
+  configure_kvm
 elif test "$target_cpu" = "ppc64" ; then
   echo "TARGET_ARCH=ppc64" >> $config_mak
   echo "TARGET_ABI_DIR=ppc" >> $config_mak

@@ -299,7 +299,7 @@ OBJS+= libqemu.a
 
 # cpu emulator library
 LIBOBJS=exec.o kqemu.o qemu-kvm.o translate-op.o translate-all.o cpu-exec.o\
-        translate.o op.o host-utils.o qemu-kvm-helper.o
+        translate.o op.o host-utils.o
 ifdef CONFIG_SOFTFLOAT
 LIBOBJS+=fpu/softfloat.o
 else
@@ -310,15 +310,18 @@ CPPFLAGS+=-I$(SRC_PATH)/fpu
 ifeq ($(TARGET_ARCH), i386)
 LIBOBJS+=helper.o helper2.o
 LIBOBJS+=qemu-kvm-x86.o kvm-tpr-opt.o
+LIBOBJS+=qemu-kvm-helper.o
 endif
 
 ifeq ($(TARGET_ARCH), x86_64)
 LIBOBJS+=helper.o helper2.o
 LIBOBJS+=qemu-kvm-x86.o kvm-tpr-opt.o
+LIBOBJS+=qemu-kvm-helper.o
 endif
 
 ifeq ($(TARGET_BASE_ARCH), ppc)
 LIBOBJS+= op_helper.o helper.o
+LIBOBJS+= qemu-kvm-powerpc.o
 endif
 
 ifeq ($(TARGET_BASE_ARCH), mips)
@@ -486,6 +489,7 @@ ifeq ($(TARGET_BASE_ARCH), ppc)
 CPPFLAGS += -DHAS_AUDIO -DHAS_AUDIO_CHOICE
 # shared objects
 VL_OBJS+= ppc.o ide.o vga.o $(SOUND_HW) dma.o openpic.o
+VL_OBJS+= cirrus_vga.o
 # PREP target
 VL_OBJS+= pckbd.o ps2.o serial.o i8259.o i8254.o fdc.o m48t59.o mc146818rtc.o
 VL_OBJS+= prep_pci.o ppc_prep.o
@@ -497,6 +501,7 @@ VL_OBJS+= heathrow_pic.o grackle_pci.o ppc_oldworld.o
 VL_OBJS+= unin_pci.o ppc_chrp.o
 # PowerPC 4xx boards
 VL_OBJS+= pflash_cfi02.o ppc4xx_devs.o ppc405_uc.o ppc405_boards.o
+VL_OBJS+= ppc440.o ppc440_bamboo.o
 endif
 ifeq ($(TARGET_BASE_ARCH), mips)
 VL_OBJS+= mips_r4k.o mips_malta.o mips_pica61.o mips_mipssim.o
@@ -654,6 +659,10 @@ ifeq ($(TARGET_ARCH), ia64)
 qemu-kvm-ia64.o: qemu-kvm-ia64.c qemu-kvm.h
 firmware.o: firmware.c
 	$(CC) $(HELPER_CFLAGS) $(CPPFLAGS) $(BASE_CFLAGS) -c -o $@ $<
+endif
+
+ifeq ($(TARGET_ARCH), ppc)
+qemu-kvm-powerpc.o: qemu-kvm-powerpc.c qemu-kvm.h
 endif
 
 cpu-exec.o: cpu-exec.c
