@@ -26,15 +26,17 @@
 #include <errno.h>
 #include <stdio.h>
 
-int handle_dcr(struct kvm_run *run,  kvm_context_t kvm)
+int handle_dcr(struct kvm_run *run,  kvm_context_t kvm, int vcpu)
 {
 	int ret = 0;
 
 	if (run->dcr.is_write)
-		ret = kvm->callbacks->powerpc_dcr_write(run->dcr.dcrn,
+		ret = kvm->callbacks->powerpc_dcr_write(vcpu,
+							run->dcr.dcrn,
 							run->dcr.data);
 	else
-		ret = kvm->callbacks->powerpc_dcr_read(run->dcr.dcrn,
+		ret = kvm->callbacks->powerpc_dcr_read(vcpu,
+							run->dcr.dcrn,
 							&(run->dcr.data));
 
 	return ret;
@@ -102,7 +104,7 @@ int kvm_arch_run(struct kvm_run *run, kvm_context_t kvm, int vcpu)
 
 	switch (run->exit_reason){
 	case KVM_EXIT_DCR:
-		ret = handle_dcr(run, kvm);
+		ret = handle_dcr(run, kvm, vcpu);
 		break;
 	default:
 		ret = 1;
