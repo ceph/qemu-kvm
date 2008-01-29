@@ -19,7 +19,6 @@ extern int kvm_irqchip;
 #include <sys/utsname.h>
 
 extern kvm_context_t kvm_context;
-extern __thread CPUState *vcpu_env;
 
 void cpu_reset(CPUState *env)
 {

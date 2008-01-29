@@ -18,8 +18,6 @@ extern int kvm_irqchip;
 
 extern kvm_context_t kvm_context;
 
-extern __thread CPUState *vcpu_env;
-
 int kvm_arch_qemu_create_context(void)
 {
 	return 0;
