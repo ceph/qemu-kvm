@@ -346,8 +346,8 @@ void qemu_aio_wait_start(void)
 
     if (!aio_initialized)
         qemu_aio_init();
-#ifdef USE_KVM
-    if (kvm_allowed) {
+#ifndef QEMU_IMG
+    if (kvm_enabled()) {
         qemu_kvm_aio_wait_start();
         return;
     }
@@ -365,9 +365,7 @@ void qemu_aio_wait(void)
 #ifndef QEMU_IMG
     if (qemu_bh_poll())
         return;
-#endif
-#ifdef USE_KVM
-    if (kvm_allowed) {
+    if (kvm_enabled()) {
         qemu_kvm_aio_wait();
         qemu_aio_poll();
         return;
@@ -381,8 +379,8 @@ void qemu_aio_wait(void)
 
 void qemu_aio_wait_end(void)
 {
-#ifdef USE_KVM
-    if (kvm_allowed) {
+#ifndef QEMU_IMG
+    if (kvm_enabled()) {
         qemu_kvm_aio_wait_end();
         return;
     }

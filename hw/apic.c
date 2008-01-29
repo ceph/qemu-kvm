@@ -21,11 +21,7 @@
 #include "pc.h"
 #include "qemu-timer.h"
 
-#ifdef USE_KVM
 #include "qemu-kvm.h"
-extern int kvm_allowed;
-extern kvm_context_t kvm_context;
-#endif
 
 //#define DEBUG_APIC
 //#define DEBUG_IOAPIC
@@ -407,11 +403,10 @@ static void apic_init_ipi(APICState *s)
     s->initial_count = 0;
     s->initial_count_load_time = 0;
     s->next_time = 0;
-#ifdef USE_KVM
-    if (kvm_allowed && !kvm_irqchip_in_kernel(kvm_context))
+
+    if (kvm_enabled() && !qemu_kvm_irqchip_in_kernel())
 	if (s->cpu_env)
 	    kvm_apic_init(s->cpu_env);
-#endif
 }
 
 /* send a SIPI message to the CPU to start it */
@@ -424,10 +419,8 @@ static void apic_startup(APICState *s, int vector_num)
     cpu_x86_load_seg_cache(env, R_CS, vector_num << 8, vector_num << 12,
                            0xffff, 0);
     env->hflags &= ~HF_HALTED_MASK;
-#if USE_KVM
-    if (kvm_allowed && !kvm_irqchip_in_kernel(kvm_context))
+    if (kvm_enabled() && !qemu_kvm_irqchip_in_kernel())
 	kvm_update_after_sipi(env);
-#endif
 }
 
 static void apic_deliver(APICState *s, uint8_t dest, uint8_t dest_mode,
@@ -753,8 +746,6 @@ static void apic_mem_writel(void *opaque, target_phys_addr_t addr, uint32_t val)
     }
 }
 
-#ifdef USE_KVM
-
 #ifdef KVM_CAP_IRQCHIP
 
 static inline uint32_t kapic_reg(struct kvm_lapic_state *kapic, int reg_id)
@@ -832,19 +823,15 @@ static void kvm_kernel_lapic_load_from_user(APICState *s)
 
 #endif
 
-#endif
-
 static void apic_save(QEMUFile *f, void *opaque)
 {
     APICState *s = opaque;
     int i;
 
-#ifdef USE_KVM
 #ifdef KVM_CAP_IRQCHIP
-    if (kvm_allowed && kvm_irqchip_in_kernel(kvm_context)) {
+    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
         kvm_kernel_lapic_save_to_user(s);
     }
-#endif
 #endif
 
     qemu_put_be32s(f, &s->apicbase);
@@ -910,12 +897,10 @@ static int apic_load(QEMUFile *f, void *opaque, int version_id)
     if (version_id >= 2)
         qemu_get_timer(f, s->timer);
 
-#ifdef USE_KVM
 #ifdef KVM_CAP_IRQCHIP
-    if (kvm_allowed && kvm_irqchip_in_kernel(kvm_context)) {
+    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
         kvm_kernel_lapic_load_from_user(s);
     }
-#endif
 #endif
 
     return 0;
@@ -932,12 +917,10 @@ static void apic_reset(void *opaque)
      * processor when local APIC is enabled.
      */
     s->lvt[APIC_LVT_LINT0] = 0x700;
-#ifdef USE_KVM
 #ifdef KVM_CAP_IRQCHIP
-    if (kvm_allowed && kvm_irqchip_in_kernel(kvm_context)) {
+    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
         kvm_kernel_lapic_load_from_user(s);
     }
-#endif
 #endif
 }
 
@@ -1131,7 +1114,6 @@ static void ioapic_mem_writel(void *opaque, target_phys_addr_t addr, uint32_t va
     }
 }
 
-#ifdef USE_KVM
 static void kvm_kernel_ioapic_save_to_user(IOAPICState *s)
 {
 #if defined(KVM_CAP_IRQCHIP) && defined(TARGET_I386)
@@ -1170,18 +1152,15 @@ static void kvm_kernel_ioapic_load_from_user(IOAPICState *s)
     kvm_set_irqchip(kvm_context, &chip);
 #endif
 }
-#endif
 
 static void ioapic_save(QEMUFile *f, void *opaque)
 {
     IOAPICState *s = opaque;
     int i;
 
-#ifdef USE_KVM
-    if (kvm_allowed && kvm_irqchip_in_kernel(kvm_context)) {
+    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
         kvm_kernel_ioapic_save_to_user(s);
     }
-#endif
 
     qemu_put_8s(f, &s->id);
     qemu_put_8s(f, &s->ioregsel);
@@ -1204,11 +1183,9 @@ static int ioapic_load(QEMUFile *f, void *opaque, int version_id)
         qemu_get_be64s(f, &s->ioredtbl[i]);
     }
 
-#ifdef USE_KVM
-    if (kvm_allowed && kvm_irqchip_in_kernel(kvm_context)) {
+    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
         kvm_kernel_ioapic_load_from_user(s);
     }
-#endif
 
     return 0;
 }

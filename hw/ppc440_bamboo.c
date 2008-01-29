@@ -12,9 +12,7 @@
 
 #define KERNEL_LOAD_ADDR 0x400000 /* uboot loader puts kernel at 4MB */
 
-#if USE_KVM
 #include "qemu-kvm.h"
-#endif
 
 /* PPC 440 refrence demo board
  *
@@ -75,9 +73,9 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 
 	/* Register mem */
 	cpu_register_physical_memory(0, ram_size, 0);
-#if USE_KVM
-	kvm_cpu_register_physical_memory(0, ram_size, 0);
-#endif
+	if (kvm_enabled())
+	    kvm_cpu_register_physical_memory(0, ram_size, 0);
+
 	/* load kernel with uboot loader */
 	printf("%s: load kernel\n", __func__);
 	kernel_size = load_uboot(kernel_filename, &ep, &is_linux);
@@ -101,18 +99,18 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 		}
 	}
 
-#if USE_KVM
-	/* XXX insert TLB entries */
-	env->gpr[1] = (16<<20) - 8;
-	env->gpr[4] = initrd_base;
-	env->gpr[5] = initrd_size;
+	if (kvm_enabled()) {
+	    /* XXX insert TLB entries */
+	    env->gpr[1] = (16<<20) - 8;
+	    env->gpr[4] = initrd_base;
+	    env->gpr[5] = initrd_size;
 
-	env->nip = ep;
+	    env->nip = ep;
 
-	env->cpu_index = 0;
-	printf("%s: loading kvm registers\n", __func__);
-	kvm_load_registers(env);
-#endif
+	    env->cpu_index = 0;
+	    printf("%s: loading kvm registers\n", __func__);
+	    kvm_load_registers(env);
+	}
 
 	printf("%s: DONE\n", __func__);
 }

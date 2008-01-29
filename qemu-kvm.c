@@ -2,16 +2,8 @@
 #include "config.h"
 #include "config-host.h"
 
-#ifdef USE_KVM
- #define KVM_ALLOWED_DEFAULT 1
-#else
- #define KVM_ALLOWED_DEFAULT 0
-#endif
-
-int kvm_allowed = KVM_ALLOWED_DEFAULT;
+int kvm_allowed = 1;
 int kvm_irqchip = 1;
-
-#ifdef USE_KVM
 
 #include <string.h>
 #include "hw/hw.h"
@@ -112,13 +104,13 @@ static int pre_kvm_run(void *opaque, int vcpu)
 
 void kvm_load_registers(CPUState *env)
 {
-    if (kvm_allowed)
+    if (kvm_enabled())
 	kvm_arch_load_regs(env);
 }
 
 void kvm_save_registers(CPUState *env)
 {
-    if (kvm_allowed)
+    if (kvm_enabled())
 	kvm_arch_save_regs(env);
 }
 
@@ -647,7 +639,7 @@ int kvm_physical_memory_set_dirty_tracking(int enable)
 {
     int r = 0;
 
-    if (!kvm_allowed)
+    if (!kvm_enabled())
         return 0;
 
     if (enable) {
@@ -767,4 +759,19 @@ void qemu_kvm_aio_wait_end(void)
 {
 }
 
-#endif
+int qemu_kvm_get_dirty_pages(unsigned long phys_addr, void *buf)
+{
+    return kvm_get_dirty_pages(kvm_context, phys_addr, buf);
+}
+
+void *kvm_cpu_create_phys_mem(target_phys_addr_t start_addr,
+			      unsigned long size, int log, int writable)
+{
+    return kvm_create_phys_mem(kvm_context, start_addr, size, log, writable);
+}
+
+void kvm_cpu_destroy_phys_mem(target_phys_addr_t start_addr,
+			      unsigned long size)
+{
+    kvm_destroy_phys_mem(kvm_context, start_addr, size);
+}

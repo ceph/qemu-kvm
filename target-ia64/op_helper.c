@@ -24,7 +24,7 @@
 #include "cpu.h"
 #include "exec-all.h"
 
-extern int kvm_allowed;
+#include "qemu-kvm.h"
 
 CPUState *cpu_ia64_init(char *cpu_model){
     CPUState *env;
@@ -33,14 +33,10 @@ CPUState *cpu_ia64_init(char *cpu_model){
         return NULL;
     cpu_exec_init(env);
     cpu_reset(env);
-#ifdef USE_KVM
-    {
-        if (kvm_allowed) {
-            kvm_qemu_init_env(env);
-            env->ready_for_interrupt_injection = 1;
-        }
+    if (kvm_enabled()) {
+	kvm_qemu_init_env(env);
+	env->ready_for_interrupt_injection = 1;
     }
-#endif
     return env;
 }
 
@@ -74,12 +70,10 @@ void switch_mode(CPUState *env, int mode)
 /* Handle a CPU exception.  */
 void do_interrupt(CPUIA64State *env)
 {
-#ifdef USE_KVM
-    if (kvm_allowed) {
+    if (kvm_enabled()) {
 	printf("%s: unexpect\n", __FUNCTION__);
 	exit(-1);
     }
-#endif
 }
 
 

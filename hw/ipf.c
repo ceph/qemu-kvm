@@ -40,10 +40,7 @@
 #include "dyngen.h"
 #include <unistd.h>
 
-#ifdef USE_KVM
 #include "qemu-kvm.h"
-extern int kvm_allowed;
-#endif
 
 #define FW_FILENAME "Flash.fd"
 
@@ -309,11 +306,6 @@ static void pc_init_ne2k_isa(NICInfo *nd, qemu_irq *pic)
     nb_ne2k++;
 }
 
-#ifdef USE_KVM
-extern kvm_context_t kvm_context;
-extern int kvm_allowed;
-#endif
-
 /* Itanium hardware initialisation */
 static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
                      const char *boot_device, DisplayState *ds,
@@ -367,9 +359,8 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
     }
 
 	/* allocate RAM */
-#ifdef USE_KVM
 #ifdef KVM_CAP_USER_MEMORY
-	if (kvm_allowed && kvm_qemu_check_extension(KVM_CAP_USER_MEMORY)) {
+	if (kvm_enabled() && kvm_qemu_check_extension(KVM_CAP_USER_MEMORY)) {
 		ram_addr = qemu_ram_alloc(0xa0000);
 		cpu_register_physical_memory(0, 0xa0000, ram_addr);
 		kvm_cpu_register_physical_memory(0, 0xa0000, ram_addr);
@@ -386,7 +377,6 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
 				ram_addr);
 	} else
 #endif
-#endif
     {
         ram_addr = qemu_ram_alloc(ram_size);
         cpu_register_physical_memory(0, ram_size, ram_addr);
@@ -398,16 +388,13 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
 	if (above_4g_mem_size > 0) {
 		ram_addr = qemu_ram_alloc(above_4g_mem_size);
 		cpu_register_physical_memory(0x100000000, above_4g_mem_size, ram_addr);
-#ifdef USE_KVM
-	if (kvm_allowed)
+	if (kvm_enabled())
 		kvm_cpu_register_physical_memory(0x100000000, above_4g_mem_size,
 					ram_addr);
-#endif
 	}
 
 	/*Load firware to its proper position.*/
-#ifdef USE_KVM
-	if (kvm_allowed) {
+	if (kvm_enabled()) {
 		int r;
 		unsigned long  image_size;
 		char *image = NULL;
@@ -446,7 +433,6 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
 			(unsigned long)fw_image_start + image_size);
 		kvm_ia64_build_hob(ram_size + above_4g_mem_size, smp_cpus, fw_start);
 	}
-#endif
 
     cpu_irq = qemu_allocate_irqs(pic_irq_request, first_cpu, 1);
     i8259 = i8259_init(cpu_irq[0]);

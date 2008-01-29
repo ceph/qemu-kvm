@@ -2,7 +2,6 @@
 #define QEMU_KVM_H
 
 #include "cpu.h"
-#include "libkvm.h"
 
 int kvm_main_loop(void);
 int kvm_qemu_init(void);
@@ -16,6 +15,7 @@ int kvm_update_debugger(CPUState *env);
 int kvm_qemu_init_env(CPUState *env);
 int kvm_qemu_check_extension(int ext);
 void kvm_apic_init(CPUState *env);
+int kvm_set_irq(int irq, int level);
 
 int kvm_physical_memory_set_dirty_tracking(int enable);
 int kvm_update_dirty_pages_log(void);
@@ -28,6 +28,12 @@ void kvm_update_interrupt_request(CPUState *env);
 void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
                                       unsigned long size,
                                       unsigned long phys_offset);
+void *kvm_cpu_create_phys_mem(target_phys_addr_t start_addr,
+			      unsigned long size, int log, int writable);
+
+void kvm_cpu_destroy_phys_mem(target_phys_addr_t start_addr,
+			      unsigned long size);
+
 int kvm_arch_qemu_create_context(void);
 
 void kvm_arch_save_regs(CPUState *env);
@@ -46,13 +52,12 @@ void qemu_kvm_aio_wait_start(void);
 void qemu_kvm_aio_wait(void);
 void qemu_kvm_aio_wait_end(void);
 
-extern int kvm_allowed;
-extern int kvm_irqchip;
-
 void kvm_tpr_opt_setup(CPUState *env);
 void kvm_tpr_access_report(CPUState *env, uint64_t rip, int is_write);
 int handle_tpr_access(void *opaque, int vcpu,
 			     uint64_t rip, int is_write);
+
+int qemu_kvm_get_dirty_pages(unsigned long phys_addr, void *buf);
 
 #ifdef TARGET_PPC
 int handle_powerpc_dcr_read(int vcpu, uint32_t dcrn, uint32_t *data);
@@ -62,5 +67,17 @@ int handle_powerpc_dcr_write(int vcpu,uint32_t dcrn, uint32_t data);
 #define ALIGN(x, y)  (((x)+(y)-1) & ~((y)-1))
 #define BITMAP_SIZE(m) (ALIGN(((m)>>TARGET_PAGE_BITS), HOST_LONG_BITS) / 8)
 
+#ifdef USE_KVM
+#include "libkvm.h"
+
+extern int kvm_allowed;
+extern kvm_context_t kvm_context;
+
+#define kvm_enabled() (kvm_allowed)
+#define qemu_kvm_irqchip_in_kernel() kvm_irqchip_in_kernel(kvm_context)
+#else
+#define kvm_enabled() (0)
+#define qemu_kvm_irqchip_in_kernel() (0)
+#endif
 
 #endif

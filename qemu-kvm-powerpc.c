@@ -2,11 +2,6 @@
 #include "config.h"
 #include "config-host.h"
 
-extern int kvm_allowed;
-extern int kvm_irqchip;
-
-#ifdef USE_KVM
-
 #include <string.h>
 #include "hw/hw.h"
 #include "sysemu.h"
@@ -193,5 +188,3 @@ int handle_powerpc_dcr_write(int vcpu, uint32_t dcrn, uint32_t data)
     ppc_dcr_write(env->dcr_env, dcrn, data);
     return 0; /* XXX ignore failed DCR ops */
 }
-
-#endif

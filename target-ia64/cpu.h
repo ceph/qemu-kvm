@@ -51,9 +51,7 @@ typedef struct CPUIA64State {
    int user_mode_only;
    uint32_t hflags;
 
-#ifdef USE_KVM
-      uint8_t ready_for_interrupt_injection;
-#endif
+    uint8_t ready_for_interrupt_injection;
 
 } CPUIA64State;
 

@@ -295,8 +295,12 @@ SRCS:= $(OBJS:.o=.c)
 OBJS+= libqemu.a
 
 # cpu emulator library
-LIBOBJS=exec.o kqemu.o qemu-kvm.o translate-op.o translate-all.o cpu-exec.o\
+LIBOBJS=exec.o kqemu.o translate-op.o translate-all.o cpu-exec.o\
         translate.o op.o host-utils.o
+ifeq ($(USE_KVM), 1)
+LIBOBJS+=qemu-kvm.o
+endif
+
 ifdef CONFIG_SOFTFLOAT
 LIBOBJS+=fpu/softfloat.o
 else
@@ -306,19 +310,25 @@ CPPFLAGS+=-I$(SRC_PATH)/fpu
 
 ifeq ($(TARGET_ARCH), i386)
 LIBOBJS+=helper.o helper2.o
+ifeq ($(USE_KVM), 1)
 LIBOBJS+=qemu-kvm-x86.o kvm-tpr-opt.o
 LIBOBJS+=qemu-kvm-helper.o
+endif
 endif
 
 ifeq ($(TARGET_ARCH), x86_64)
 LIBOBJS+=helper.o helper2.o
+ifeq ($(USE_KVM), 1)
 LIBOBJS+=qemu-kvm-x86.o kvm-tpr-opt.o
 LIBOBJS+=qemu-kvm-helper.o
+endif
 endif
 
 ifeq ($(TARGET_BASE_ARCH), ppc)
 LIBOBJS+= op_helper.o helper.o
+ifeq ($(USE_KVM), 1)
 LIBOBJS+= qemu-kvm-powerpc.o
+endif
 endif
 
 ifeq ($(TARGET_BASE_ARCH), mips)
@@ -347,7 +357,9 @@ endif
 
 ifeq ($(TARGET_BASE_ARCH), ia64)
 LIBOBJS+=op_helper.o firmware.o
+ifeq ($(USE_KVM), 1)
 LIBOBJS+=qemu-kvm-ia64.o
+endif
 endif
 
 ifeq ($(TARGET_BASE_ARCH), cris)

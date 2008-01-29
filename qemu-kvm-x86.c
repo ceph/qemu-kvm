@@ -2,11 +2,6 @@
 #include "config.h"
 #include "config-host.h"
 
-extern int kvm_allowed;
-extern int kvm_irqchip;
-
-#ifdef USE_KVM
-
 #include <string.h>
 #include "hw/hw.h"
 
@@ -633,5 +628,3 @@ int handle_tpr_access(void *opaque, int vcpu,
     kvm_tpr_access_report(cpu_single_env, rip, is_write);
     return 0;
 }
-
-#endif

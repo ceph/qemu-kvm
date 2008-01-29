@@ -26,7 +26,6 @@
 #include "isa.h"
 #include "pc.h"
 #include "sysemu.h"
-#include "libkvm.h"
 #include "qemu-kvm.h"
 
 #define VMPORT_CMD_GETVERSION 0x0a
@@ -60,16 +59,8 @@ static uint32_t vmport_ioport_read(void *opaque, uint32_t addr)
     uint32_t eax;
     uint32_t ret;
 
-#ifdef USE_KVM
-    struct kvm_regs regs;
-    extern kvm_context_t kvm_context;
-    if (kvm_allowed) {
-        kvm_get_regs(kvm_context, s->env->cpu_index, &regs);
-        s->env->regs[R_EAX] = regs.rax; s->env->regs[R_EBX] = regs.rbx;
-        s->env->regs[R_ECX] = regs.rcx; s->env->regs[R_EDX] = regs.rdx;
-        s->env->regs[R_ESI] = regs.rsi; s->env->regs[R_EDI] = regs.rdi;
-    }
-#endif
+    if (kvm_enabled())
+	kvm_save_registers(s->env);
 
     eax = s->env->regs[R_EAX];
     if (eax != VMPORT_MAGIC)
@@ -86,14 +77,8 @@ static uint32_t vmport_ioport_read(void *opaque, uint32_t addr)
 
     ret = s->func[command](s->opaque[command], addr);
 
-#ifdef USE_KVM
-    if (kvm_allowed) {
-        regs.rax = s->env->regs[R_EAX]; regs.rbx = s->env->regs[R_EBX];
-        regs.rcx = s->env->regs[R_ECX]; regs.rdx = s->env->regs[R_EDX];
-        regs.rsi = s->env->regs[R_ESI]; regs.rdi = s->env->regs[R_EDI];
-        kvm_set_regs(kvm_context, s->env->cpu_index, &regs);
-    }
-#endif
+    if (kvm_enabled())
+	kvm_load_registers(s->env);
 
     return ret;
 }

@@ -300,7 +300,7 @@ for opt do
   ;;
   --disable-kqemu) kqemu="no"
   ;;
-  --enable-kvm) kvm="yes"
+  --disable-kvm) kvm="no"
   ;;
   --enable-profiler) profiler="yes"
   ;;
@@ -415,7 +415,7 @@ echo ""
 echo "kqemu kernel acceleration support:"
 echo "  --disable-kqemu          disable kqemu support"
 echo "  --kernel-path=PATH       set the kernel path (configure probes it)"
-echo "  --enable-kvm             enable kernel virtual machine support"
+echo "  --disable-kvm            disable kernel virtual machine support"
 echo ""
 echo "Advanced options (experts only):"
 echo "  --source-path=PATH       path of source code [$source_path]"
@@ -1100,6 +1100,7 @@ configure_kvm() {
   if test $kvm = "yes" -a "$target_softmmu" = "yes" -a \
           \( "$cpu" = "i386" -o "$cpu" = "x86_64" -o "$cpu" = "ia64" -o "$cpu" = "powerpc" \); then
     echo "#define USE_KVM 1" >> $config_h
+    echo "USE_KVM=1" >> $config_mak
     echo "CONFIG_KVM_KERNEL_INC=$kernel_path/include" >> $config_mak
   fi
 }

@@ -29,9 +29,7 @@
 #include "exec-all.h"
 #include "svm.h"
 
-#ifdef USE_KVM
-#include "../qemu-kvm.h"
-#endif
+#include "qemu-kvm.h"
 
 //#define DEBUG_MMU
 

@@ -286,9 +286,8 @@ static CPUState *mon_get_cpu(void)
         mon_set_cpu(0);
     }
 
-#ifdef USE_KVM
-    kvm_save_registers(mon_cpu);
-#endif
+    if (kvm_enabled())
+	kvm_save_registers(mon_cpu);
 
     return mon_cpu;
 }

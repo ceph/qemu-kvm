@@ -26,9 +26,7 @@
 #include "isa.h"
 #include "console.h"
 
-#ifdef USE_KVM
 #include "qemu-kvm.h"
-#endif
 
 /* debug PIC */
 //#define DEBUG_PIC
@@ -185,14 +183,10 @@ int64_t irq_time[16];
 static void i8259_set_irq(void *opaque, int irq, int level)
 {
     PicState2 *s = opaque;
-#ifdef USE_KVM
 #ifdef KVM_CAP_IRQCHIP
-    extern int kvm_set_irq(int irq, int level);
-
-    if (kvm_allowed)
+    if (kvm_enabled())
 	if (kvm_set_irq(irq, level))
 	    return;
-#endif
 #endif
 #if defined(DEBUG_PIC) || defined(DEBUG_IRQ_COUNT)
     if (level != irq_level[irq]) {
@@ -477,11 +471,6 @@ static uint32_t elcr_ioport_read(void *opaque, uint32_t addr1)
     return s->elcr;
 }
 
-#ifdef USE_KVM
-#include "qemu-kvm.h"
-extern int kvm_allowed;
-extern kvm_context_t kvm_context;
-
 static void kvm_kernel_pic_save_to_user(PicState *s)
 {
 #if defined(KVM_CAP_IRQCHIP) && defined(TARGET_I386)
@@ -544,17 +533,14 @@ static void kvm_kernel_pic_load_from_user(PicState *s)
     kvm_set_irqchip(kvm_context, &chip);
 #endif
 }
-#endif
 
 static void pic_save(QEMUFile *f, void *opaque)
 {
     PicState *s = opaque;
 
-#ifdef USE_KVM
-    if (kvm_allowed && kvm_irqchip_in_kernel(kvm_context)) {
+    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
         kvm_kernel_pic_save_to_user(s);
     }
-#endif
 
     qemu_put_8s(f, &s->last_irr);
     qemu_put_8s(f, &s->irr);
@@ -598,11 +584,9 @@ static int pic_load(QEMUFile *f, void *opaque, int version_id)
     qemu_get_8s(f, &s->single_mode);
     qemu_get_8s(f, &s->elcr);
 
-#ifdef USE_KVM
-    if (kvm_allowed && kvm_irqchip_in_kernel(kvm_context)) {
+    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
         kvm_kernel_pic_load_from_user(s);
     }
-#endif
 
     return 0;
 }

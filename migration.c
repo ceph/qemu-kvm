@@ -29,9 +29,7 @@
 #include "qemu-timer.h"
 #include "migration.h"
 #include "qemu_socket.h"
-#ifdef USE_KVM
 #include "qemu-kvm.h"
-#endif
 
 #include <sys/wait.h>
 
@@ -185,10 +183,10 @@ static void migrate_finish(MigrationState *s)
             qemu_aio_flush();
         } while (qemu_bh_poll());
         bdrv_flush_all();
-#ifdef USE_KVM
-	if (kvm_allowed && !*s->has_error && kvm_update_dirty_pages_log())
+
+	if (kvm_enabled() && !*s->has_error && kvm_update_dirty_pages_log())
 	    *s->has_error = MIG_STAT_KVM_UPDATE_DIRTY_PAGES_LOG_FAILED;
-#endif
+
         qemu_put_be32(f, 1);
         ret = qemu_live_savevm_state(f);
 #ifdef MIGRATION_VERIFY
@@ -260,10 +258,8 @@ static int migrate_check_convergence(MigrationState *s)
     }
 
     for (addr = 0; addr < phys_ram_size; addr += TARGET_PAGE_SIZE) {
-#ifdef USE_KVM
-        if (kvm_allowed && (addr>=0xa0000) && (addr<0xc0000)) /* do not access video-addresses */
+        if (kvm_enabled() && (addr>=0xa0000) && (addr<0xc0000)) /* do not access video-addresses */
             continue;
-#endif
 	if (cpu_physical_memory_get_dirty(addr, MIGRATION_DIRTY_FLAG))
 	    dirty_count++;
     }
@@ -319,10 +315,8 @@ static void migrate_write(void *opaque)
     if (migrate_write_buffer(s))
 	return;
 
-#ifdef USE_KVM
-    if (kvm_allowed && !*s->has_error && kvm_update_dirty_pages_log())
+    if (kvm_enabled() && !*s->has_error && kvm_update_dirty_pages_log())
         *s->has_error = MIG_STAT_KVM_UPDATE_DIRTY_PAGES_LOG_FAILED;
-#endif
 
     if (migrate_check_convergence(s) || *s->has_error) {
 	qemu_del_timer(s->timer);
@@ -333,10 +327,8 @@ static void migrate_write(void *opaque)
     }	
 
     while (s->addr < phys_ram_size) {
-#ifdef USE_KVM
-        if (kvm_allowed && (s->addr>=0xa0000) && (s->addr<0xc0000)) /* do not access video-addresses */
+        if (kvm_enabled() && (s->addr>=0xa0000) && (s->addr<0xc0000)) /* do not access video-addresses */
             s->addr = 0xc0000;
-#endif
 
 	if (cpu_physical_memory_get_dirty(s->addr, MIGRATION_DIRTY_FLAG)) {
             migrate_prepare_page(s);
@@ -404,11 +396,10 @@ static int start_migration(MigrationState *s)
     target_phys_addr_t addr;
     int r;
     unsigned char running = vm_running?2:1; /* 1 + vm_running */
-
-#ifdef USE_KVM
     int n = 0;
     unsigned char *phys_ram_page_exist_bitmap = NULL;
-    if (kvm_allowed) {
+
+    if (kvm_enabled()) {
         n = BITMAP_SIZE(phys_ram_size);
         phys_ram_page_exist_bitmap = qemu_malloc(n);
         if (!phys_ram_page_exist_bitmap) {
@@ -422,7 +413,6 @@ static int start_migration(MigrationState *s)
             goto out;
         }
     }
-#endif
 	
     r = MIG_STAT_WRITE_FAILED;
     if (write_whole_buffer(s->fd, &running, sizeof(running))) {
@@ -434,8 +424,7 @@ static int start_migration(MigrationState *s)
         goto out;
     }
 
-#ifdef USE_KVM
-    if (kvm_allowed) {
+    if (kvm_enabled()) {
         value = cpu_to_be32(n);
         if (write_whole_buffer(s->fd, &value, sizeof(value))) {
             perror("phys_ram_size_bitmap size write failed");
@@ -446,18 +435,16 @@ static int start_migration(MigrationState *s)
             goto out;
 	}
     }
-#endif
+
     fcntl(s->fd, F_SETFL, O_NONBLOCK);
 
     for (addr = 0; addr < phys_ram_size; addr += TARGET_PAGE_SIZE) {
-#ifdef USE_KVM
-        if (kvm_allowed && !bit_is_set(addr>>TARGET_PAGE_BITS, phys_ram_page_exist_bitmap)) {
+        if (kvm_enabled() && !bit_is_set(addr>>TARGET_PAGE_BITS, phys_ram_page_exist_bitmap)) {
             cpu_physical_memory_reset_dirty(addr, 
                                             addr + TARGET_PAGE_SIZE, 
                                             MIGRATION_DIRTY_FLAG);
             continue;
         }
-#endif
 	if (!cpu_physical_memory_get_dirty(addr, MIGRATION_DIRTY_FLAG))
 	    cpu_physical_memory_set_dirty(addr);
     }
@@ -482,10 +469,8 @@ static int start_migration(MigrationState *s)
     r = 0;
 
  out:
-#ifdef USE_KVM
-    if (phys_ram_page_exist_bitmap)
+    if (kvm_enabled() && phys_ram_page_exist_bitmap)
         qemu_free(phys_ram_page_exist_bitmap);
-#endif
     return r;
 }
 
@@ -825,8 +810,7 @@ static int migrate_incoming_fd(int fd)
 	return MIG_STAT_DST_MEM_SIZE_MISMATCH;
     }
 
-#ifdef USE_KVM
-    if (kvm_allowed) {
+    if (kvm_enabled()) {
         int n, m;
         unsigned char *phys_ram_page_exist_bitmap = NULL;
 
@@ -848,7 +832,6 @@ static int migrate_incoming_fd(int fd)
 
         qemu_free(phys_ram_page_exist_bitmap);
     }
-#endif
 
     do {
 	addr = qemu_get_be32(f);
@@ -1118,10 +1101,8 @@ static int save_verify_memory(QEMUFile *f, void *opaque)
     unsigned int sum;
 
     for (addr = 0; addr < phys_ram_size; addr += TARGET_PAGE_SIZE) {
-#ifdef USE_KVM
-        if (kvm_allowed && (addr>=0xa0000) && (addr<0xc0000)) /* do not access video-addresses */
+        if (kvm_enabled() && (addr>=0xa0000) && (addr<0xc0000)) /* do not access video-addresses */
             continue;
-#endif
         sum = calc_page_checksum(addr);
         qemu_put_be32(f, addr);
         qemu_put_be32(f, sum);
@@ -1136,10 +1117,8 @@ static int load_verify_memory(QEMUFile *f, void *opaque, int version_id)
     int num_errors = 0;
     
     for (addr = 0; addr < phys_ram_size; addr += TARGET_PAGE_SIZE) {
-#ifdef USE_KVM
-        if (kvm_allowed && (addr>=0xa0000) && (addr<0xc0000)) /* do not access video-addresses */
+        if (kvm_enabled() && (addr>=0xa0000) && (addr<0xc0000)) /* do not access video-addresses */
             continue;
-#endif
         sum = calc_page_checksum(addr);
         raddr = qemu_get_be32(f);
         rsum  = qemu_get_be32(f);

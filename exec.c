@@ -35,10 +35,8 @@
 
 #include "cpu.h"
 #include "exec-all.h"
-#ifdef USE_KVM
 #include "dyngen.h"
 #include "qemu-kvm.h"
-#endif
 #if defined(CONFIG_USER_ONLY)
 #include <qemu.h>
 #endif
@@ -86,11 +84,6 @@
 #define TARGET_PHYS_ADDR_SPACE_BITS 36
 #else
 #define TARGET_PHYS_ADDR_SPACE_BITS 32
-#endif
-
-#ifdef USE_KVM
-extern int kvm_allowed;
-extern kvm_context_t kvm_context;
 #endif
 
 TranslationBlock tbs[CODE_GEN_MAX_BLOCKS];
@@ -1147,10 +1140,8 @@ int cpu_breakpoint_insert(CPUState *env, target_ulong pc)
         return -1;
     env->breakpoints[env->nb_breakpoints++] = pc;
 
-#ifdef USE_KVM
-    if (kvm_allowed)
+    if (kvm_enabled())
 	kvm_update_debugger(env);
-#endif
 
     breakpoint_invalidate(env, pc);
     return 0;
@@ -1174,10 +1165,8 @@ int cpu_breakpoint_remove(CPUState *env, target_ulong pc)
     if (i < env->nb_breakpoints)
       env->breakpoints[i] = env->breakpoints[env->nb_breakpoints];
 
-#ifdef USE_KVM
-    if (kvm_allowed)
+    if (kvm_enabled())
 	kvm_update_debugger(env);
-#endif
     
     breakpoint_invalidate(env, pc);
     return 0;
@@ -1197,10 +1186,8 @@ void cpu_single_step(CPUState *env, int enabled)
         /* XXX: only flush what is necessary */
         tb_flush(env);
     }
-#ifdef USE_KVM
-    if (kvm_allowed)
+    if (kvm_enabled())
 	kvm_update_debugger(env);
-#endif
 #endif
 }
 
@@ -1248,10 +1235,9 @@ void cpu_interrupt(CPUState *env, int mask)
     static int interrupt_lock;
 
     env->interrupt_request |= mask;
-#ifdef USE_KVM
-    if (kvm_allowed && !kvm_irqchip_in_kernel(kvm_context))
+    if (kvm_enabled() && !qemu_kvm_irqchip_in_kernel())
 	kvm_update_interrupt_request(env);
-#endif
+
     /* if the cpu is currently executing code, we must unlink it and
        all the potentially executing TB */
     tb = env->current_tb;
@@ -1599,9 +1585,8 @@ int cpu_physical_memory_set_dirty_tracking(int enable)
 {
     int r=0;
 
-#ifdef USE_KVM
-    r = kvm_physical_memory_set_dirty_tracking(enable);
-#endif
+    if (kvm_enabled())
+	r = kvm_physical_memory_set_dirty_tracking(enable);
     in_migration = enable;
     return r;
 }
@@ -2662,11 +2647,11 @@ void cpu_physical_memory_rw(target_phys_addr_t addr, uint8_t *buf,
                     phys_ram_dirty[addr1 >> TARGET_PAGE_BITS] |=
                         (0xff & ~CODE_DIRTY_FLAG);
                 }
-#ifdef USE_KVM
 		/* qemu doesn't execute guest code directly, but kvm does
 		   therefore fluch instruction caches */
-		flush_icache_range((unsigned long)ptr, ((unsigned long)ptr)+l);
-#endif
+		if (kvm_enabled())
+		    flush_icache_range((unsigned long)ptr,
+				       ((unsigned long)ptr)+l);
             }
         } else {
             if ((pd & ~TARGET_PAGE_MASK) > IO_MEM_ROM &&

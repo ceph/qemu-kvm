@@ -34,6 +34,7 @@
 #ifndef _WIN32
 #include <sys/mman.h>
 #endif
+#include "qemu-kvm.h"
 
 /*
  * TODO:
@@ -237,13 +238,11 @@ typedef struct CirrusVGAState {
     int cirrus_linear_io_addr;
     int cirrus_linear_bitblt_io_addr;
     int cirrus_mmio_io_addr;
-#ifdef USE_KVM
     unsigned long cirrus_lfb_addr;
     unsigned long cirrus_lfb_end;
     int aliases_enabled;
     uint32_t aliased_bank_base[2];
     uint32_t aliased_bank_limit[2];
-#endif
     uint32_t cirrus_addr_mask;
     uint32_t linear_mmio_mask;
     uint8_t cirrus_shadow_gr0;
@@ -2601,12 +2600,6 @@ static CPUWriteMemoryFunc *cirrus_linear_bitblt_write[3] = {
     cirrus_linear_bitblt_writel,
 };
 
-#ifdef USE_KVM
-
-#include "qemu-kvm.h"
-
-extern kvm_context_t kvm_context;
-
 void *set_vram_mapping(unsigned long begin, unsigned long end)
 {
     void *vram_pointer = NULL;
@@ -2616,8 +2609,8 @@ void *set_vram_mapping(unsigned long begin, unsigned long end)
     end = begin + VGA_RAM_SIZE;
     end = (end + TARGET_PAGE_SIZE -1 ) & TARGET_PAGE_MASK;
 
-    vram_pointer = kvm_create_phys_mem(kvm_context, begin, end - begin,
-				       1, 1);
+    if (kvm_enabled())
+	vram_pointer = kvm_cpu_create_phys_mem(begin, end - begin, 1, 1);
 
     if (vram_pointer == NULL) {
         printf("set_vram_mapping: cannot allocate memory: %m\n");
@@ -2636,7 +2629,8 @@ int unset_vram_mapping(unsigned long begin, unsigned long end)
     begin = begin & TARGET_PAGE_MASK;
     end = (end + TARGET_PAGE_SIZE -1 ) & TARGET_PAGE_MASK;
 
-    kvm_destroy_phys_mem(kvm_context, begin, end - begin);
+    if (kvm_enabled())
+	kvm_cpu_destroy_phys_mem(begin, end - begin);
 
     return 0;
 }
@@ -2669,20 +2663,19 @@ static void kvm_update_vga_alias(CirrusVGAState *s, int ok, int bank,
 
 static void kvm_update_vga_aliases(CirrusVGAState *s, int ok)
 {
-    if (kvm_allowed) {
+    if (kvm_enabled()) {
 	kvm_update_vga_alias(s, ok, 0, 0xc0000);
 	kvm_update_vga_alias(s, ok, 1, s->map_addr);
     }
     s->aliases_enabled = ok;
 }
 #endif
-#endif
 
 /* Compute the memory access functions */
 static void cirrus_update_memory_access(CirrusVGAState *s)
 {
     unsigned mode;
-#if defined(USE_KVM) && defined(CONFIG_X86)
+#ifdef CONFIG_X86
     int want_vga_alias = 0;
 #endif
 
@@ -2699,8 +2692,7 @@ static void cirrus_update_memory_access(CirrusVGAState *s)
 
 	mode = s->gr[0x05] & 0x7;
 	if (mode < 4 || mode > 5 || ((s->gr[0x0B] & 0x4) == 0)) {
-#ifdef USE_KVM
-            if (kvm_allowed && s->cirrus_lfb_addr && s->cirrus_lfb_end &&
+            if (kvm_enabled() && s->cirrus_lfb_addr && s->cirrus_lfb_end &&
 		!s->map_addr) {
                 void *vram_pointer, *old_vram;
 
@@ -2717,21 +2709,19 @@ static void cirrus_update_memory_access(CirrusVGAState *s)
                 s->map_end = s->cirrus_lfb_end;
             }
 #ifdef CONFIG_X86
-	    if (kvm_allowed
+	    if (kvm_enabled()
 		&& !(s->cirrus_srcptr != s->cirrus_srcptr_end)
 		&& !((s->sr[0x07] & 0x01) == 0)
 		&& !((s->gr[0x0B] & 0x14) == 0x14)
 		&& !(s->gr[0x0B] & 0x02))
 		want_vga_alias = 1;
 #endif
-#endif
             s->cirrus_linear_write[0] = cirrus_linear_mem_writeb;
             s->cirrus_linear_write[1] = cirrus_linear_mem_writew;
             s->cirrus_linear_write[2] = cirrus_linear_mem_writel;
         } else {
         generic_io:
-#ifdef USE_KVM
-            if (kvm_allowed && s->cirrus_lfb_addr && s->cirrus_lfb_end &&
+            if (kvm_enabled() && s->cirrus_lfb_addr && s->cirrus_lfb_end &&
 		s->map_addr) {
 		int error;
                 void *old_vram = NULL;
@@ -2745,13 +2735,12 @@ static void cirrus_update_memory_access(CirrusVGAState *s)
                     munmap(old_vram, s->map_end - s->map_addr);
                 s->map_addr = s->map_end = 0;
             }
-#endif
             s->cirrus_linear_write[0] = cirrus_linear_writeb;
             s->cirrus_linear_write[1] = cirrus_linear_writew;
             s->cirrus_linear_write[2] = cirrus_linear_writel;
         }
     }
-#if defined(USE_KVM) && defined(CONFIG_X86)
+#if defined(CONFIG_X86)
     kvm_update_vga_aliases(s, want_vga_alias);
 #endif
 
@@ -3149,12 +3138,10 @@ static void cirrus_vga_save(QEMUFile *f, void *opaque)
     /* XXX: we do not save the bitblt state - we assume we do not save
        the state when the blitter is active */
 
-#ifdef USE_KVM
-    if (kvm_allowed) { /* XXX: KVM images ought to be loadable in QEMU */
+    if (kvm_enabled()) { /* XXX: KVM images ought to be loadable in QEMU */
 	qemu_put_be32s(f, &s->real_vram_size);
 	qemu_put_buffer(f, s->vram_ptr, s->real_vram_size);
     }
-#endif
 }
 
 static int cirrus_vga_load(QEMUFile *f, void *opaque, int version_id)
@@ -3205,8 +3192,7 @@ static int cirrus_vga_load(QEMUFile *f, void *opaque, int version_id)
     qemu_get_be32s(f, &s->hw_cursor_x);
     qemu_get_be32s(f, &s->hw_cursor_y);
 
-#ifdef USE_KVM
-    if (kvm_allowed) {
+    if (kvm_enabled()) {
         int real_vram_size;
         qemu_get_be32s(f, &real_vram_size);
         if (real_vram_size != s->real_vram_size) {
@@ -3218,7 +3204,6 @@ static int cirrus_vga_load(QEMUFile *f, void *opaque, int version_id)
         qemu_get_buffer(f, s->vram_ptr, real_vram_size);
         cirrus_update_memory_access(s);
     }
-#endif
 
 
     /* force refresh */
@@ -3376,8 +3361,7 @@ static void cirrus_pci_lfb_map(PCIDevice *d, int region_num,
     /* XXX: add byte swapping apertures */
     cpu_register_physical_memory(addr, s->vram_size,
 				 s->cirrus_linear_io_addr);
-#ifdef USE_KVM
-    if (kvm_allowed) {
+    if (kvm_enabled()) {
 	s->cirrus_lfb_addr = addr;
 	s->cirrus_lfb_end = addr + VGA_RAM_SIZE;
 
@@ -3385,7 +3369,6 @@ static void cirrus_pci_lfb_map(PCIDevice *d, int region_num,
 	    (s->cirrus_lfb_end != s->map_end))
 	    printf("cirrus vga map change while on lfb mode\n");
     }
-#endif
 
     cpu_register_physical_memory(addr + 0x1000000, 0x400000,
 				 s->cirrus_linear_bitblt_io_addr);

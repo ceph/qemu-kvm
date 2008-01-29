@@ -2,11 +2,6 @@
 #include "config.h"
 #include "config-host.h"
 
-extern int kvm_allowed;
-extern int kvm_irqchip;
-
-#ifdef USE_KVM
-
 #include <string.h>
 
 #include "hw/hw.h"
@@ -66,4 +61,3 @@ int kvm_arch_try_push_interrupts(void *opaque)
 void kvm_arch_update_regs_for_sipi(CPUState *env)
 {
 }
-#endif

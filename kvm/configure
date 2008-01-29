@@ -115,7 +115,7 @@ fi
     --disable-kqemu \
     --extra-cflags="-I $PWD/../libkvm $qemu_cflags" \
     --extra-ldflags="-L $PWD/../libkvm $qemu_ldflags" \
-    --enable-kvm --kernel-path="$libkvm_kerneldir" \
+    --kernel-path="$libkvm_kerneldir" \
     --prefix="$prefix" \
     ${qemu_cc:+"--cc=$qemu_cc"} \
     ${cross_prefix:+"--cross-prefix=$cross_prefix"} \
