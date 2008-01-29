@@ -182,14 +182,14 @@ void kvm_arch_update_regs_for_sipi(CPUState *env)
 /* map dcr access to existing qemu dcr emulation */
 int handle_powerpc_dcr_read(int vcpu, uint32_t dcrn, uint32_t *data)
 {
-    CPUState *env = qemu_kvm_cpu_env(vcpu);
+    CPUState *env = cpu_single_env;
     ppc_dcr_read(env->dcr_env, dcrn, data);
     return 0; /* XXX ignore failed DCR ops */
 }
 
 int handle_powerpc_dcr_write(int vcpu, uint32_t dcrn, uint32_t data)
 {
-    CPUState *env = qemu_kvm_cpu_env(vcpu);
+    CPUState *env = cpu_single_env;
     ppc_dcr_write(env->dcr_env, dcrn, data);
     return 0; /* XXX ignore failed DCR ops */
 }
