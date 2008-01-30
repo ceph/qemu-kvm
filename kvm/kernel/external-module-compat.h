@@ -348,6 +348,8 @@ static inline unsigned long long __kvm_cmpxchg64(volatile void *ptr,
 #endif
 
 #ifndef CONFIG_PREEMPT_NOTIFIERS
+#define CONFIG_PREEMPT_NOTIFIERS
+#define CONFIG_PREEMPT_NOTIFIERS_COMPAT
 
 struct preempt_notifier;
 

@@ -1,5 +1,5 @@
 
-#ifndef CONFIG_PREEMPT_NOTIFIERS
+#ifdef CONFIG_PREEMPT_NOTIFIERS_COMPAT
 
 #include <linux/sched.h>
 #include <linux/percpu.h>
