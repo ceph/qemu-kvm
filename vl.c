@@ -1106,7 +1106,6 @@ static void qemu_run_timers(QEMUTimer **ptimer_head, int64_t current_time)
         /* run the callback (the timer list can be modified) */
         ts->cb(ts->opaque);
     }
-    qemu_rearm_alarm_timer(alarm_timer);
 }
 
 int64_t qemu_get_clock(QEMUClock *clock)
