@@ -27,6 +27,11 @@ static int lm_capable_kernel;
 int kvm_arch_qemu_create_context(void)
 {
     int i;
+    struct utsname utsname;
+
+    uname(&utsname);
+    lm_capable_kernel = strcmp(utsname.machine, "x86_64") == 0;
+
     if (kvm_shadow_memory)
         kvm_set_shadow_pages(kvm_context, kvm_shadow_memory);
 
@@ -472,11 +477,8 @@ static void do_cpuid_ent(struct kvm_cpuid_entry *e, uint32_t function,
     e->edx = env->regs[R_EDX];
     if (function == 0x80000001) {
 	uint32_t h_eax, h_edx;
-	struct utsname utsname;
 
 	host_cpuid(function, &h_eax, NULL, NULL, &h_edx);
-	uname(&utsname);
-	lm_capable_kernel = strcmp(utsname.machine, "x86_64") == 0;
 
 	// long mode
 	if ((h_edx & 0x20000000) == 0 || !lm_capable_kernel)
