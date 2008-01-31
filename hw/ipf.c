@@ -53,6 +53,64 @@ static fdctrl_t *floppy_controller;
 static RTCState *rtc_state;
 static PCIDevice *i440fx_state;
 
+static uint32_t ipf_to_legacy_io(target_phys_addr_t addr)
+{
+	return (uint32_t)(((addr&0x3ffffff) >> 12 << 2)|((addr) & 0x3));
+}
+
+static void ipf_legacy_io_writeb(void *opaque, target_phys_addr_t addr,
+				 uint32_t val) {
+	uint32_t port = ipf_to_legacy_io(addr);
+	cpu_outb(0, port, val);
+}
+
+static void ipf_legacy_io_writew(void *opaque, target_phys_addr_t addr,
+				 uint32_t val) {
+	uint32_t port = ipf_to_legacy_io(addr);
+
+	cpu_outw(0, port, val);
+}
+
+static void ipf_legacy_io_writel(void *opaque, target_phys_addr_t addr,
+				 uint32_t val) {
+	uint32_t port = ipf_to_legacy_io(addr);
+
+	cpu_outl(0, port, val);
+}
+
+static uint32_t ipf_legacy_io_readb(void *opaque, target_phys_addr_t addr)
+{
+	uint32_t port = ipf_to_legacy_io(addr);
+
+	return cpu_inb(0, port);
+}
+
+static uint32_t ipf_legacy_io_readw(void *opaque, target_phys_addr_t addr)
+{
+	uint32_t port = ipf_to_legacy_io(addr);
+
+	return cpu_inw(0, port);
+}
+
+static uint32_t ipf_legacy_io_readl(void *opaque, target_phys_addr_t addr)
+{
+	uint32_t port = ipf_to_legacy_io(addr);
+
+	return cpu_inl(0, port);
+}
+
+static CPUReadMemoryFunc *ipf_legacy_io_read[3] = {
+    ipf_legacy_io_readb,
+    ipf_legacy_io_readw,
+    ipf_legacy_io_readl,
+};
+
+static CPUWriteMemoryFunc *ipf_legacy_io_write[3] = {
+    ipf_legacy_io_writeb,
+    ipf_legacy_io_writew,
+    ipf_legacy_io_writel,
+};
+
 static void pic_irq_request(void *opaque, int irq, int level)
 {
 	fprintf(stderr,"pic_irq_request called!\n");
@@ -325,6 +383,7 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
     qemu_irq *i8259;
     int page_size;
     int index;
+    unsigned long ipf_legacy_io_base, ipf_legacy_io_mem;
     BlockDriverState *hd[MAX_IDE_BUS * MAX_IDE_DEVS];
     BlockDriverState *fd[MAX_FD];
 
@@ -433,6 +492,12 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
 			(unsigned long)fw_image_start + image_size);
 		kvm_ia64_build_hob(ram_size + above_4g_mem_size, smp_cpus, fw_start);
 	}
+
+    /*Register legacy io address space, size:64M*/
+    ipf_legacy_io_base = 0xE0000000;
+    ipf_legacy_io_mem = cpu_register_io_memory(0, ipf_legacy_io_read,
+						ipf_legacy_io_write, NULL);
+    cpu_register_physical_memory(ipf_legacy_io_base, 64*1024*1024, ipf_legacy_io_mem);
 
     cpu_irq = qemu_allocate_irqs(pic_irq_request, first_cpu, 1);
     i8259 = i8259_init(cpu_irq[0]);
