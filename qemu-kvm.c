@@ -306,11 +306,11 @@ static int kvm_main_loop_cpu(CPUState *env)
 
     kvm_qemu_init_env(env);
     env->ready_for_interrupt_injection = 1;
+#ifdef TARGET_I386
+    kvm_tpr_vcpu_start(env);
+#endif
 
     cpu_single_env = env;
-#ifdef TARGET_I386
-    kvm_tpr_opt_setup(env);
-#endif
     while (1) {
 	while (!has_work(env))
 	    kvm_main_loop_wait(env, 10);
@@ -373,6 +373,9 @@ int kvm_init_ap(void)
     CPUState *env = first_cpu->next_cpu;
     int i;
 
+#ifdef TARGET_I386
+    kvm_tpr_opt_setup();
+#endif
     qemu_add_vm_change_state_handler(kvm_vm_state_change_handler, NULL);
     qemu_kvm_init_signal_table(&io_signal_table);
     kvm_add_signal(&io_signal_table, SIGIO);

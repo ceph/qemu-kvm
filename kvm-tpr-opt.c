@@ -224,6 +224,8 @@ static int enable_vapic(CPUState *env)
 
     kvm_enable_vapic(kvm_context, env->cpu_index,
 		     vapic_phys + (env->cpu_index << 7));
+    bios_enabled = 1;
+
     return 1;
 }
 
@@ -286,9 +288,48 @@ void kvm_tpr_access_report(CPUState *env, uint64_t rip, int is_write)
     patch_instruction(env, rip);
 }
 
-void kvm_tpr_opt_setup(CPUState *env)
+void kvm_tpr_vcpu_start(CPUState *env)
 {
     if (smp_cpus > 1)
 	return;
     kvm_enable_tpr_access_reporting(kvm_context, env->cpu_index);
+    if (bios_enabled)
+	enable_vapic(env);
 }
+
+static void tpr_save(QEMUFile *f, void *s)
+{
+    int i;
+
+    for (i = 0; i < (sizeof vapic_bios) / 4; ++i)
+	qemu_put_be32s(f, &((uint32_t *)&vapic_bios)[i]);
+    qemu_put_be32s(f, &bios_enabled);
+    qemu_put_be32s(f, &real_tpr);
+    qemu_put_be32s(f, &bios_addr);
+    qemu_put_be32s(f, &vapic_phys);
+    qemu_put_be32s(f, &vbios_desc_phys);
+}
+
+static int tpr_load(QEMUFile *f, void *s, int version_id)
+{
+    int i;
+
+    if (version_id != 1)
+	return -EINVAL;
+
+    for (i = 0; i < (sizeof vapic_bios) / 4; ++i)
+	qemu_get_be32s(f, &((uint32_t *)&vapic_bios)[i]);
+    qemu_get_be32s(f, &bios_enabled);
+    qemu_get_be32s(f, &real_tpr);
+    qemu_get_be32s(f, &bios_addr);
+    qemu_get_be32s(f, &vapic_phys);
+    qemu_get_be32s(f, &vbios_desc_phys);
+
+    return 0;
+}
+
+void kvm_tpr_opt_setup(CPUState *env)
+{
+    register_savevm("kvm-tpr-opt", 0, 1, tpr_save, tpr_load, NULL);
+}
+

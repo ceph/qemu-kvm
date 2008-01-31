@@ -52,10 +52,11 @@ void qemu_kvm_aio_wait_start(void);
 void qemu_kvm_aio_wait(void);
 void qemu_kvm_aio_wait_end(void);
 
-void kvm_tpr_opt_setup(CPUState *env);
+void kvm_tpr_opt_setup();
 void kvm_tpr_access_report(CPUState *env, uint64_t rip, int is_write);
 int handle_tpr_access(void *opaque, int vcpu,
 			     uint64_t rip, int is_write);
+void kvm_tpr_vcpu_start(CPUState *env);
 
 int qemu_kvm_get_dirty_pages(unsigned long phys_addr, void *buf);
 
