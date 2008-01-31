@@ -4,7 +4,7 @@
  * Copyright 2007 IBM Corporation.
  * Authors: Jerone Young <jyoung5@us.ibm.com>
  *
- * This work is licensed under the GNU LGPL license, version 2.
+ * This work is licensed under the GNU GPL license version 2 or later.
  *
  */
 

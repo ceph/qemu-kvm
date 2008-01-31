@@ -1,3 +1,16 @@
+/*
+ * qemu-kvm-power.c
+ *
+ * Add KVM PowerPC specific calls for qemu.
+ *
+ * Copyright 2007 IBM Corporation.
+ * Added by & Authors:
+ * 	Jerone Young <jyoung5@us.ibm.com>
+ * 	Christian Ehrhardt <ehrhardt@linux.vnet.ibm.com>
+ *
+ * This work is licensed under the GNU GPL licence version 2 or later.
+ *
+ */
 
 #include "config.h"
 #include "config-host.h"
