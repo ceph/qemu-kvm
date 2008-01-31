@@ -582,6 +582,14 @@ static inline void blahblah(void)
 #define EFER_LMA            (1<<_EFER_LMA)
 #endif
 
+/* pagefault_enable(), page_fault_disable() - 2.6.20 */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
+
+#define pagefault_enable()  do {} while (0)
+#define pagefault_disable() do {} while (0)
+
+#endif
+
 /* vm ops ->fault() was introduced in 2.6.23. */
 #include <linux/mm.h>
 
