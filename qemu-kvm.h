@@ -1,3 +1,10 @@
+/*
+ * qemu/kvm integration
+ *
+ * Copyright (C) 2006-2008 Qumranet Technologies
+ *
+ * Licensed under the terms of the GNU GPL version 2 or higher.
+ */
 #ifndef QEMU_KVM_H
 #define QEMU_KVM_H
 

@@ -1,3 +1,10 @@
+/*
+ * tpr optimization for qemu/kvm
+ *
+ * Copyright (C) 2007-2008 Qumranet Technologies
+ *
+ * Licensed under the terms of the GNU GPL version 2 or higher.
+ */
 
 #include "config.h"
 #include "config-host.h"
