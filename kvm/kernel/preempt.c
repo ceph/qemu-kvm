@@ -143,10 +143,10 @@ unsigned long orig_int1_handler;
 
 asm ("pn_int1_handler:  \n\t"
      "push "  TMP " \n\t"
-     "mov %db6, " TMP " \n\t"
-     "test $1, " TMP " \n\t"
+     "mov %db7, " TMP " \n\t"
+     "cmp $0x701, " TMP " \n\t"
      "pop "  TMP " \n\t"
-     "jz .Lnotme \n\t"
+     "jnz .Lnotme \n\t"
      SAVE_REGS "\n\t"
 #ifdef CONFIG_X86_64
      "leaq 120(%rsp),%rdi\n\t"
