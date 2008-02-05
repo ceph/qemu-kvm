@@ -331,6 +331,13 @@ static int tpr_load(QEMUFile *f, void *s, int version_id)
     qemu_get_be32s(f, &bios_addr);
     qemu_get_be32s(f, &vapic_phys);
     qemu_get_be32s(f, &vbios_desc_phys);
+  
+    if (bios_enabled) {
+        CPUState *env = first_cpu->next_cpu;
+
+        for (env = first_cpu; env != NULL; env = env->next_cpu)
+            enable_vapic(env);
+    }
 
     return 0;
 }
