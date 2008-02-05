@@ -60,6 +60,7 @@
 
 /* FIXME: it's now hard coded to be equal with KVM_IOAPIC_NUM_PINS */
 #define IOAPIC_NUM_PINS			0x18
+#define IOAPIC_DEFAULT_BASE_ADDRESS  0xfec00000
 
 #define ESR_ILLEGAL_ADDRESS (1 << 7)
 
@@ -94,6 +95,7 @@ typedef struct APICState {
 struct IOAPICState {
     uint8_t id;
     uint8_t ioregsel;
+    uint64_t base_address;
 
     uint32_t irr;
     uint64_t ioredtbl[IOAPIC_NUM_PINS];
@@ -1127,6 +1129,8 @@ static void kvm_kernel_ioapic_save_to_user(IOAPICState *s)
 
     s->id = kioapic->id;
     s->ioregsel = kioapic->ioregsel;
+    s->base_address = kioapic->base_address;
+    s->irr = kioapic->irr;
     for (i = 0; i < IOAPIC_NUM_PINS; i++) {
         s->ioredtbl[i] = kioapic->redirtbl[i].bits;
     }
@@ -1145,6 +1149,8 @@ static void kvm_kernel_ioapic_load_from_user(IOAPICState *s)
 
     kioapic->id = s->id;
     kioapic->ioregsel = s->ioregsel;
+    kioapic->base_address = s->base_address;
+    kioapic->irr = s->irr;
     for (i = 0; i < IOAPIC_NUM_PINS; i++) {
         kioapic->redirtbl[i].bits = s->ioredtbl[i];
     }
@@ -1164,6 +1170,8 @@ static void ioapic_save(QEMUFile *f, void *opaque)
 
     qemu_put_8s(f, &s->id);
     qemu_put_8s(f, &s->ioregsel);
+    qemu_put_be64s(f, &s->base_address);
+    qemu_put_be32s(f, &s->irr);
     for (i = 0; i < IOAPIC_NUM_PINS; i++) {
         qemu_put_be64s(f, &s->ioredtbl[i]);
     }
@@ -1174,11 +1182,21 @@ static int ioapic_load(QEMUFile *f, void *opaque, int version_id)
     IOAPICState *s = opaque;
     int i;
 
-    if (version_id != 1)
+    if (version_id < 1 || version_id > 2)
         return -EINVAL;
 
     qemu_get_8s(f, &s->id);
     qemu_get_8s(f, &s->ioregsel);
+    if (version_id == 2) {
+      /* for version 2, we get this data off of the wire */
+      qemu_get_be64s(f, &s->base_address);
+      qemu_get_be32s(f, &s->irr);
+    }
+    else {
+      /* in case we are doing version 1, we just set these to sane values */
+      s->base_address = IOAPIC_DEFAULT_BASE_ADDRESS;
+      s->irr = 0;
+    }
     for (i = 0; i < IOAPIC_NUM_PINS; i++) {
         qemu_get_be64s(f, &s->ioredtbl[i]);
     }
@@ -1227,7 +1245,7 @@ IOAPICState *ioapic_init(void)
                                        ioapic_mem_write, s);
     cpu_register_physical_memory(0xfec00000, 0x1000, io_memory);
 
-    register_savevm("ioapic", 0, 1, ioapic_save, ioapic_load, s);
+    register_savevm("ioapic", 0, 2, ioapic_save, ioapic_load, s);
     qemu_register_reset(ioapic_reset, s);
 
     return s;
