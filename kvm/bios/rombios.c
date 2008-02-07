@@ -6615,7 +6615,7 @@ get_hd_geometry(drive, hd_cylinders, hd_heads, hd_sectors)
     hd_type = inb_cmos(0x12) & 0x0f;
     if (hd_type != 0x0f)
       BX_INFO(panic_msg_reg12h,1);
-    hd_type = inb_cmos(0x1a); // HD0: extended type
+    hd_type = inb_cmos(0x1a); // HD1: extended type
     if (hd_type != 47)
       BX_INFO(panic_msg_reg19h,0,0x1a);
     iobase = 0x24;
