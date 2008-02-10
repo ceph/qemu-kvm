@@ -117,7 +117,6 @@ case $targetos in
 CYGWIN*)
 mingw32="yes"
 OS_CFLAGS="-mno-cygwin"
-VL_OS_LDFLAGS="-mno-cygwin"
 if [ "$cpu" = "i386" ] ; then
     kqemu="yes"
 fi
@@ -218,16 +217,14 @@ fi
 
 # find source path
 source_path=`dirname "$0"`
+source_path_used="no"
+workdir=`pwd`
 if [ -z "$source_path" ]; then
-    source_path=`pwd`
+    source_path=$workdir
 else
     source_path=`cd "$source_path"; pwd`
 fi
-if test "$source_path" = `pwd` ; then
-    source_path_used="no"
-else
-    source_path_used="yes"
-fi
+[ -f "$workdir/vl.c" ] || source_path_used="yes"
 
 werror="no"
 # generate compile errors on warnings for development builds
@@ -365,7 +362,7 @@ fi
 # If cpu ~= sparc and  sparc_cpu hasn't been defined, plug in the right
 # ARCH_CFLAGS/ARCH_LDFLAGS (assume sparc_v8plus for 32-bit and sparc_v9 for 64-bit)
 #
-case $cpu in
+case "$cpu" in
     sparc) if test -z "$sparc_cpu" ; then
                ARCH_CFLAGS="-m32 -mcpu=ultrasparc -D__sparc_v8plus__"
                ARCH_LDFLAGS="-m32"
@@ -385,18 +382,15 @@ case $cpu in
     s390)
            ARCH_CFLAGS="-march=z900"
            ;;
+    i386)
+           ARCH_CFLAGS="-m32"
+           ARCH_LDFLAGS="-m32"
+           ;;
+    x86_64)
+           ARCH_CFLAGS="-m64"
+           ARCH_LDFLAGS="-m64"
+           ;;
 esac
-
-if [ "$solaris" = "yes" -a  "$cpu" = "x86_64" ] ; then
-    CFLAGS="${CFLAGS} -m64"
-    OS_CFLAGS="${OS_CFLAGS} -m64"
-    OS_LDFLAGS="${OS_LDFLAGS} -m64"
-fi
-
-if [ "$solaris" = "yes" -a  "$cpu" = "i386" ] ; then
-    CFLAGS="${CFLAGS} -m32"
-    OS_CFLAGS="${OS_CFLAGS} -m32"
-fi
 
 if test x"$show_help" = x"yes" ; then
 cat << EOF
@@ -462,7 +456,7 @@ cat > $TMPC <<EOF
 int main(void) {}
 EOF
 
-if $cc -c -o $TMPO $TMPC 2> /dev/null ; then
+if $cc $ARCH_CFLAGS -c -o $TMPO $TMPC 2> /dev/null ; then
   : C compiler works ok
 else
     echo "ERROR: \"$cc\" either does not exist or does not work"
@@ -483,7 +477,7 @@ if test "$check_gcc" = "yes" ; then
 #endif
 int main(){return 0;}
 EOF
-    if "$cc" -o $TMPE $TMPC 2> /dev/null ; then
+    if "$cc" $ARCH_CFLAGS -o $TMPE $TMPC 2> /dev/null ; then
 	echo "WARNING: \"$cc\" looks like gcc 4.x"
 	found_compat_cc="no"
 	if test "$gcc3_search" = "yes" ; then
@@ -583,7 +577,7 @@ int main(int argc, char ** argv){
 }
 EOF
 
-if $cc -o $TMPE $TMPC 2> /dev/null ; then
+if $cc $ARCH_CFLAGS -o $TMPE $TMPC 2> /dev/null ; then
 $TMPE && bigendian="yes"
 else
 echo big/little test failed
@@ -631,7 +625,7 @@ cat > $TMPC << EOF
 #undef main /* We don't want SDL to override our main() */
 int main( void ) { return SDL_Init (SDL_INIT_VIDEO); }
 EOF
-        if $cc -o $TMPE ${OS_CFLAGS} `$sdl_config --cflags 2> /dev/null` $TMPC `$sdl_config --libs 2> /dev/null` 2> /tmp/qemu-$$-sdl-config.log ; then
+        if $cc $ARCH_CFLAGS -o $TMPE ${OS_CFLAGS} `$sdl_config --cflags 2> /dev/null` $TMPC `$sdl_config --libs 2> /dev/null` 2> /tmp/qemu-$$-sdl-config.log ; then
             _sdlversion=`$sdl_config --version | sed 's/[^0-9]//g'`
             if test "$_sdlversion" -lt 121 ; then
                 sdl_too_old=yes
@@ -682,7 +676,7 @@ if test "$alsa" = "yes" ; then
 #include <alsa/asoundlib.h>
 int main(void) { snd_pcm_t **handle; return snd_pcm_close(*handle); }
 EOF
-  if $cc -o $TMPE $TMPC -lasound 2> /dev/null ; then
+  if $cc $ARCH_CFLAGS -o $TMPE $TMPC -lasound 2> /dev/null ; then
     :
   else
     echo
@@ -727,6 +721,7 @@ fi
 echo "Source path       $source_path"
 echo "C compiler        $cc"
 echo "Host C compiler   $host_cc"
+echo "ARCH_CFLAGS       $ARCH_CFLAGS"
 echo "make              $make"
 echo "install           $install"
 echo "host CPU          $cpu"
@@ -813,9 +808,11 @@ echo "CC=$cc" >> $config_mak
 echo "HOST_CC=$host_cc" >> $config_mak
 echo "AR=$ar" >> $config_mak
 echo "STRIP=$strip -s -R .comment -R .note" >> $config_mak
+# XXX: only use CFLAGS and LDFLAGS ?  
+# XXX: should export HOST_CFLAGS and HOST_LDFLAGS for cross
+# compilation of dyngen tool (useful for win32 build on Linux host)
 echo "OS_CFLAGS=$OS_CFLAGS" >> $config_mak
 echo "OS_LDFLAGS=$OS_LDFLAGS" >> $config_mak
-echo "VL_OS_LDFLAGS=$VL_OS_LDFLAGS" >> $config_mak
 echo "ARCH_CFLAGS=$ARCH_CFLAGS" >> $config_mak
 echo "ARCH_LDFLAGS=$ARCH_LDFLAGS" >> $config_mak
 echo "CFLAGS=$CFLAGS" >> $config_mak
@@ -881,7 +878,7 @@ else
 #include <byteswap.h>
 int main(void) { return bswap_32(0); }
 EOF
-  if $cc -o $TMPE $TMPC 2> /dev/null ; then
+  if $cc $ARCH_CFLAGS -o $TMPE $TMPC 2> /dev/null ; then
     echo "#define HAVE_BYTESWAP_H 1" >> $config_h
   fi
 fi
@@ -1073,6 +1070,7 @@ test -f $config_h && mv $config_h ${config_h}~
 
 mkdir -p $target_dir
 mkdir -p $target_dir/fpu
+mkdir -p $target_dir/tcg
 if test "$target" = "arm-linux-user" -o "$target" = "armeb-linux-user" ; then
   mkdir -p $target_dir/nwfpe
 fi

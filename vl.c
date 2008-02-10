@@ -257,8 +257,6 @@ static CPUState *cur_cpu;
 static CPUState *next_cpu;
 static int event_pending = 1;
 
-extern char *logfilename;
-
 #define TFR(expr) do { if ((expr) != -1) break; } while (errno == EINTR)
 
 void decorate_application_name(char *appname, int max_len)
@@ -1336,11 +1334,14 @@ static void hpet_stop_timer(struct qemu_alarm_timer *t)
 static int rtc_start_timer(struct qemu_alarm_timer *t)
 {
     int rtc_fd;
+    unsigned long current_rtc_freq = 0;
 
     TFR(rtc_fd = open("/dev/rtc", O_RDONLY));
     if (rtc_fd < 0)
         return -1;
-    if (ioctl(rtc_fd, RTC_IRQP_SET, RTC_FREQ) < 0) {
+    ioctl(rtc_fd, RTC_IRQP_READ, &current_rtc_freq);
+    if (current_rtc_freq != RTC_FREQ &&
+        ioctl(rtc_fd, RTC_IRQP_SET, RTC_FREQ) < 0) {
         fprintf(stderr, "Could not configure '/dev/rtc' to have a 1024 Hz timer. This is not a fatal\n"
                 "error, but for better emulation accuracy either use a 2.6 host Linux kernel or\n"
                 "type 'echo 1024 > /proc/sys/dev/rtc/max-user-freq' as root.\n");
@@ -8071,9 +8072,7 @@ static void help(int exitcode)
 #endif
            "-clock          force the use of the given methods for timer alarm.\n"
            "                To see what timers are available use -clock help\n"
-           "-startdate      select initial date of the Qemu clock\n"
-           "-translation setting1,... configures code translation\n"
-           "                (use -translation ? for a list of settings)\n"
+           "-startdate      select initial date of the clock\n"
            "\n"
            "During emulation, the following keys are useful:\n"
            "ctrl-alt-f      toggle full screen\n"
@@ -8089,7 +8088,7 @@ static void help(int exitcode)
            DEFAULT_NETWORK_DOWN_SCRIPT,
 #endif
            DEFAULT_GDBSTUB_PORT,
-           logfilename);
+           "/tmp/qemu.log");
     exit(exitcode);
 }
 
@@ -8304,7 +8303,6 @@ const QEMUOption qemu_options[] = {
 #endif
     { "clock", HAS_ARG, QEMU_OPTION_clock },
     { "startdate", HAS_ARG, QEMU_OPTION_startdate },
-    { "translation", HAS_ARG, QEMU_OPTION_translation },
     { NULL },
 };
 
@@ -9212,22 +9210,6 @@ int main(int argc, char **argv)
                             exit(1);
                         }
                     }
-                }
-                break;
-            case QEMU_OPTION_translation:
-                {
-                    int mask;
-                    CPUTranslationSetting *setting;
-
-                    mask = cpu_str_to_translation_mask(optarg);
-                    if (!mask) {
-                        printf("Translation settings (comma separated):\n");
-                        for(setting = cpu_translation_settings; setting->mask != 0; setting++) {
-                            printf("%-10s %s\n", setting->name, setting->help);
-                    }
-                    exit(1);
-                    }
-                    cpu_set_translation_settings(mask);
                 }
                 break;
             }

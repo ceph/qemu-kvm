@@ -787,20 +787,6 @@ void cpu_set_log(int log_flags);
 void cpu_set_log_filename(const char *filename);
 int cpu_str_to_log_mask(const char *str);
 
-#define CPU_SETTING_NO_CACHE (1 << 0)
-
-/* define translation settings */
-typedef struct CPUTranslationSetting {
-    int mask;
-    const char *name;
-    const char *help;
-} CPUTranslationSetting;
-
-extern CPUTranslationSetting cpu_translation_settings[];
-
-void cpu_set_translation_settings(int translation_flags);
-int cpu_str_to_translation_mask(const char *str);
-
 /* IO ports API */
 
 /* NOTE: as these functions may be even used when there is an isa
@@ -1054,6 +1040,18 @@ extern int64_t kqemu_ret_int_count;
 extern int64_t kqemu_ret_excp_count;
 extern int64_t kqemu_ret_intr_count;
 
+extern int64_t dyngen_tb_count1;
+extern int64_t dyngen_tb_count;
+extern int64_t dyngen_op_count;
+extern int64_t dyngen_old_op_count;
+extern int64_t dyngen_tcg_del_op_count;
+extern int dyngen_op_count_max;
+extern int64_t dyngen_code_in_len;
+extern int64_t dyngen_code_out_len;
+extern int64_t dyngen_interm_time;
+extern int64_t dyngen_code_time;
+extern int64_t dyngen_restore_count;
+extern int64_t dyngen_restore_time;
 #endif
 
 #endif /* CPU_ALL_H */
