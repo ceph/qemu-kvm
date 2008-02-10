@@ -51,6 +51,8 @@
 
 { sub(/linux\/mm_types\.h/, "linux/mm.h") }
 
+/^\t\.name = "kvm"/ { $0 = "\tset_kset_name(\"kvm\")," }
+
 { print }
 
 /kvm_x86_ops->run/ {

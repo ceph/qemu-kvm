@@ -671,3 +671,12 @@ static inline struct page *__kvm_vm_fault(struct vm_area_struct *vma,
 	}
 
 #endif
+
+/* set_kset_name() is gone in 2.6.25 */
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
+
+#define set_kset_name(x) .name = x
+
+#endif
+
