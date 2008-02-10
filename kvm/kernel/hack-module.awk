@@ -40,6 +40,15 @@
     $0 = "\t.VMA_OPS_FAULT(fault) = VMA_OPS_FAULT_FUNC(" fcn "),"
 }
 
+/^static int .*_stat_get/ {
+    $3 = "__" $3
+}
+
+/DEFINE_SIMPLE_ATTRIBUTE.*_stat_get/ {
+    name = gensub(/,/, "", "g", $2);
+    print "MAKE_SIMPLE_ATTRIBUTE_GETTER(" name ")"
+}
+
 { sub(/linux\/mm_types\.h/, "linux/mm.h") }
 
 { print }

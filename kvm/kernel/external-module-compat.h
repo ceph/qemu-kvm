@@ -648,3 +648,26 @@ static inline struct page *__kvm_vm_fault(struct vm_area_struct *vma,
 
 #endif
 #endif
+
+/* simple vfs attribute getter signature has changed to add a return code */
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25)
+
+#define MAKE_SIMPLE_ATTRIBUTE_GETTER(x)       \
+	static u64 x(void *v)                 \
+	{				      \
+		u64 ret = 0;		      \
+					      \
+		__##x(v, &ret);		      \
+		return ret;		      \
+	}
+
+#else
+
+#define MAKE_SIMPLE_ATTRIBUTE_GETTER(x)       \
+	static int x(void *v, u64 *val)	      \
+	{				      \
+		return __##x(v, val);	      \
+	}
+
+#endif
