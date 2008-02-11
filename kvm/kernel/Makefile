@@ -25,18 +25,23 @@ hack = $(call _hack,tmp/$(strip $1))
 unifdef = $(call _unifdef,tmp/$(strip $1))
 
 all::
-	$(MAKE) -C $(KERNELDIR) M=`pwd` "$$@"
+	# include header priority 1) $LINUX 2) $KERNELDIR 3) include-compat
+	$(MAKE) -C $(KERNELDIR) M=`pwd` \
+		LINUXINCLUDE="-I`pwd`/include -Iinclude -I`pwd`/include-compat \
+		-include include/linux/autoconf.h" \
+		"$$@"
 
 sync:
-	rm -rf tmp
+	rm -rf tmp include
 	rsync --exclude='*.mod.c' -R \
              "$(LINUX)"/arch/x86/kvm/./*.[ch] \
              "$(LINUX)"/virt/kvm/./*.[ch] \
 	     "$(LINUX)"/./include/linux/kvm*.h \
 	     "$(LINUX)"/./include/asm-x86/kvm*.h \
              tmp/
-	rm -rf include/asm
+	mkdir -p include/linux include/asm-x86
 	ln -s asm-x86 include/asm
+	ln -sf asm-x86 include-compat/asm
 
 	$(call unifdef, include/linux/kvm.h)
 	$(call unifdef, include/linux/kvm_para.h)
@@ -78,6 +83,7 @@ rpm:	all
 
 clean:
 	$(MAKE) -C $(KERNELDIR) M=`pwd` $@
+	rm -rf include
 
 svnclean:
 	svn st | grep '^\?' | awk '{print $2}' | xargs rm -rf

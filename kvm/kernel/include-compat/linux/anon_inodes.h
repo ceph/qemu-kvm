@@ -13,4 +13,3 @@ int anon_inode_getfd(int *pfd, struct inode **pinode, struct file **pfile,
 		     void *priv);
 
 #endif /* _LINUX_ANON_INODES_H */
-
