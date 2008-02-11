@@ -541,7 +541,7 @@ int kvm_register_userspace_phys_mem(kvm_context_t kvm,
 	struct kvm_userspace_memory_region memory = {
 		.memory_size = len,
 		.guest_phys_addr = phys_start,
-		.userspace_addr = (intptr_t)userspace_addr,
+		.userspace_addr = (unsigned long)(intptr_t)userspace_addr,
 		.flags = log ? KVM_MEM_LOG_DIRTY_PAGES : 0,
 	};
 	int r;
