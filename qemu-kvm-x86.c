@@ -16,6 +16,7 @@
 #include <libkvm.h>
 #include <pthread.h>
 #include <sys/utsname.h>
+#include <linux/kvm_para.h>
 
 #define MSR_IA32_TSC		0x10
 
