@@ -520,6 +520,10 @@ int kvm_arch_qemu_init_env(CPUState *cenv)
     int cpuid_nent = 0;
     CPUState copy;
     uint32_t i, limit;
+    int has_clocksource = 0;
+#ifdef KVM_CAP_CLOCKSOURCE
+    has_clocksource = kvm_check_extension(kvm_context, KVM_CAP_CLOCKSOURCE);
+#endif
 
     copy = *cenv;
 
@@ -537,7 +541,7 @@ int kvm_arch_qemu_init_env(CPUState *cenv)
     pv_ent = &cpuid_ent[cpuid_nent++];
     memset(pv_ent, 0, sizeof(*pv_ent));
     pv_ent->function = KVM_CPUID_FEATURES;
-    pv_ent->eax = 0;
+    pv_ent->eax = (has_clocksource << KVM_FEATURE_CLOCKSOURCE);
 #endif
 
     copy.regs[R_EAX] = 0;
