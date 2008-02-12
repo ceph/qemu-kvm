@@ -348,6 +348,12 @@ static inline unsigned long long __kvm_cmpxchg64(volatile void *ptr,
 #endif
 
 #ifndef CONFIG_PREEMPT_NOTIFIERS
+/*
+ * Include sched|preempt.h before defining CONFIG_PREEMPT_NOTIFIERS to avoid
+ * a miscompile.
+ */
+#include <linux/sched.h>
+#include <linux/preempt.h>
 #define CONFIG_PREEMPT_NOTIFIERS
 #define CONFIG_PREEMPT_NOTIFIERS_COMPAT
 
