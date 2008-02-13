@@ -35,7 +35,11 @@
 
 #include "cpu.h"
 #include "exec-all.h"
+
+#if !defined(NO_CPU_EMULATION)
 #include "tcg-target.h"
+#endif
+
 #include "qemu-kvm.h"
 #if defined(CONFIG_USER_ONLY)
 #include <qemu.h>

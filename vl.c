@@ -8050,7 +8050,9 @@ static void help(int exitcode)
            "-no-kqemu       disable KQEMU kernel module usage\n"
 #endif
 #ifdef USE_KVM
+#ifndef NO_CPU_EMULATION
 	   "-no-kvm         disable KVM hardware virtualization\n"
+#endif
 	   "-no-kvm-irqchip disable KVM kernel mode PIC/IOAPIC/LAPIC\n"
 #endif
 #ifdef TARGET_I386
@@ -8250,7 +8252,9 @@ const QEMUOption qemu_options[] = {
     { "kernel-kqemu", 0, QEMU_OPTION_kernel_kqemu },
 #endif
 #ifdef USE_KVM
+#ifndef NO_CPU_EMULATION
     { "no-kvm", 0, QEMU_OPTION_no_kvm },
+#endif
     { "no-kvm-irqchip", 0, QEMU_OPTION_no_kvm_irqchip },
 #endif
 #if defined(TARGET_PPC) || defined(TARGET_SPARC)
@@ -9266,6 +9270,10 @@ int main(int argc, char **argv)
 	if (kvm_qemu_init() < 0) {
 	    extern int kvm_allowed;
 	    fprintf(stderr, "Could not initialize KVM, will disable KVM support\n");
+#ifdef NO_CPU_EMULATION
+	    fprintf(stderr, "Compiled with --disable-cpu-emulation, exiting.\n");
+	    exit(1);
+#endif
 	    kvm_allowed = 0;
 	}
     }
