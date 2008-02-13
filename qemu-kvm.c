@@ -137,7 +137,7 @@ extern int vm_running;
 
 static int has_work(CPUState *env)
 {
-    if (!vm_running)
+    if (!vm_running || env && vcpu_info[env->cpu_index].stopped)
 	return 0;
     if (!(env->hflags & HF_HALTED_MASK))
 	return 1;
@@ -171,6 +171,11 @@ static int kvm_eat_signal(CPUState *env, int timeout)
 	    pthread_cond_signal(&qemu_aio_cond);
 	ret = 1;
     }
+    if (env && vcpu_info[env->cpu_index].stop) {
+	vcpu_info[env->cpu_index].stop = 0;
+	vcpu_info[env->cpu_index].stopped = 1;
+	pthread_kill(vcpu_info[0].thread, SIG_IPI);
+    }
     pthread_mutex_unlock(&qemu_mutex);
 
     return ret;
@@ -195,43 +200,15 @@ static void kvm_eat_signals(CPUState *env, int timeout)
      */
     pthread_mutex_lock(&qemu_mutex);
     cpu_single_env = vcpu->env;
-    main_loop_wait(0);
+    if (env->cpu_index == 0)
+	main_loop_wait(0);
     pthread_mutex_unlock(&qemu_mutex);
 }
 
 static void kvm_main_loop_wait(CPUState *env, int timeout)
 {
     pthread_mutex_unlock(&qemu_mutex);
-    if (env->cpu_index == 0)
-	kvm_eat_signals(env, timeout);
-    else {
-	if (!kvm_irqchip_in_kernel(kvm_context) &&
-	    (timeout || vcpu_info[env->cpu_index].stopped)) {
-	    sigset_t set;
-	    int n;
-
-	paused:
-	    sigemptyset(&set);
-	    sigaddset(&set, SIG_IPI);
-	    sigwait(&set, &n);
-	} else {
-	    struct timespec ts;
-	    siginfo_t siginfo;
-	    sigset_t set;
-
-	    ts.tv_sec = 0;
-	    ts.tv_nsec = 0;
-	    sigemptyset(&set);
-	    sigaddset(&set, SIG_IPI);
-	    sigtimedwait(&set, &siginfo, &ts);
-	}
-	if (vcpu_info[env->cpu_index].stop) {
-	    vcpu_info[env->cpu_index].stop = 0;
-	    vcpu_info[env->cpu_index].stopped = 1;
-	    pthread_kill(vcpu_info[0].thread, SIG_IPI);
-	    goto paused;
-	}
-    }
+    kvm_eat_signals(env, timeout);
     pthread_mutex_lock(&qemu_mutex);
     cpu_single_env = env;
     vcpu_info[env->cpu_index].signalled = 0;
