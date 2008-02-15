@@ -686,3 +686,9 @@ static inline struct page *__kvm_vm_fault(struct vm_area_struct *vma,
 
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
+#ifndef FASTCALL
+#define FASTCALL(x)	x
+#define fastcall
+#endif
+#endif
