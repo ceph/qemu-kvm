@@ -37,7 +37,6 @@
 #include "boards.h"
 #include "firmware.h"
 #include "ia64intrin.h"
-#include "dyngen.h"
 #include <unistd.h>
 
 #include "qemu-kvm.h"

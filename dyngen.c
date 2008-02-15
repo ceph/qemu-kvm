@@ -2767,7 +2767,6 @@ fprintf(outfile,
 "    uint8_t *arm_pool_ptr = gen_code_buf + 0x1000000;\n");
 #endif
 #ifdef HOST_IA64
-#error broken
     {
 	long addend, not_first = 0;
 	unsigned long sym_idx;
