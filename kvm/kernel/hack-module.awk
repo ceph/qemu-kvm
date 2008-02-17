@@ -51,6 +51,8 @@
 
 { sub(/linux\/mm_types\.h/, "linux/mm.h") }
 
+{ sub(/tsc_khz/, "kvm_tsc_khz") }
+
 /^\t\.name = "kvm"/ { $0 = "\tset_kset_name(\"kvm\")," }
 
 { print }
