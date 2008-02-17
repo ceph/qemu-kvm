@@ -42,13 +42,13 @@
 
 #define printf(format, p...)  bios_printf(BIOS_PRINTF_SCREEN, format, ##p)
 
-// Defines the output macros. 
-// BX_DEBUG goes to INFO port until we can easily choose debug info on a 
+// Defines the output macros.
+// BX_DEBUG goes to INFO port until we can easily choose debug info on a
 // per-device basis. Debug info are sent only in debug mode
 #if DEBUG_ROMBIOS
-#  define BX_DEBUG(format, p...)  bios_printf(BIOS_PRINTF_INFO, format, ##p)    
+#  define BX_DEBUG(format, p...)  bios_printf(BIOS_PRINTF_INFO, format, ##p)
 #else
-#  define BX_DEBUG(format, p...) 
+#  define BX_DEBUG(format, p...)
 #endif
 #define BX_INFO(format, p...)   bios_printf(BIOS_PRINTF_INFO, format, ##p)
 #define BX_PANIC(format, p...)  bios_printf(BIOS_PRINTF_DEBHALT, format, ##p)
@@ -57,3 +57,12 @@
 #define PM_IO_BASE        0xb000
 #define SMB_IO_BASE       0xb100
 #define CPU_COUNT_ADDR    0xf000
+
+  // Define the application NAME
+#if defined(BX_QEMU)
+#  define BX_APPNAME "QEMU"
+#elif defined(PLEX86)
+#  define BX_APPNAME "Plex86"
+#else
+#  define BX_APPNAME "Bochs"
+#endif

@@ -169,14 +169,17 @@
 #define EBDA_SIZE          1              // In KiB
 #define BASE_MEM_IN_K   (640 - EBDA_SIZE)
 
-  // Define the application NAME
-#if defined(BX_QEMU)
-#  define BX_APPNAME "QEMU"
-#elif defined(PLEX86)
-#  define BX_APPNAME "Plex86"
-#else
-#  define BX_APPNAME "Bochs"
-#endif
+/* 256 bytes at 0x9ff00 -- 0x9ffff is used for the IPL boot table. */
+#define IPL_SEG              0x9ff0
+#define IPL_TABLE_OFFSET     0x0000
+#define IPL_TABLE_ENTRIES    8
+#define IPL_COUNT_OFFSET     0x0080  /* u16: number of valid table entries */
+#define IPL_SEQUENCE_OFFSET  0x0082  /* u16: next boot device */
+#define IPL_SIZE             0xff
+#define IPL_TYPE_FLOPPY      0x01
+#define IPL_TYPE_HARDDISK    0x02
+#define IPL_TYPE_CDROM       0x03
+#define IPL_TYPE_BEV         0x80
 
   // Sanity Checks
 #if BX_USE_ATADRV && BX_CPU<3
@@ -289,7 +292,7 @@ typedef unsigned long  Bit32u;
       push di
 
       mov  cx, 10[bp] ; count
-      cmp  cx, #0x00
+      test cx, cx
       je   memsetb_end
       mov  ax, 4[bp] ; segment
       mov  es, ax
@@ -331,7 +334,7 @@ typedef unsigned long  Bit32u;
       push si
 
       mov  cx, 12[bp] ; count
-      cmp  cx, #0x0000
+      test cx, cx
       je   memcpyb_end
       mov  ax, 4[bp] ; dsegment
       mov  es, ax
@@ -378,7 +381,7 @@ typedef unsigned long  Bit32u;
       push si
 
       mov  cx, 12[bp] ; count
-      cmp  cx, #0x0000
+      test cx, cx
       je   memcpyd_end
       mov  ax, 4[bp] ; dsegment
       mov  es, ax
@@ -423,8 +426,7 @@ typedef unsigned long  Bit32u;
       mov  ds, ax
       mov  bx, 6[bp] ; offset
       mov  ax, [bx]
-      inc  bx
-      inc  bx
+      add  bx, #2
       mov  dx, [bx]
       ;; ax = return value (word)
       ;; dx = return value (word)
@@ -453,8 +455,7 @@ typedef unsigned long  Bit32u;
       mov  bx, 6[bp] ; offset
       mov  ax, 8[bp] ; data word
       mov  [bx], ax  ; write data word
-      inc  bx
-      inc  bx
+      add  bx, #2
       mov  ax, 10[bp] ; data word
       mov  [bx], ax  ; write data word
       pop  ds
@@ -491,7 +492,7 @@ typedef unsigned long  Bit32u;
   lcmpul:
     and eax, #0x0000FFFF
     shl ebx, #16
-    add eax, ebx
+    or  eax, ebx
     shr ebx, #16
     SEG SS
       cmp eax, dword ptr [di]
@@ -511,7 +512,7 @@ typedef unsigned long  Bit32u;
   lmulul:
     and eax, #0x0000FFFF
     shl ebx, #16
-    add eax, ebx
+    or  eax, ebx
     SEG SS
     mul eax, dword ptr [di]
     mov ebx, eax
@@ -546,7 +547,7 @@ typedef unsigned long  Bit32u;
   ltstul:
     and eax, #0x0000FFFF
     shl ebx, #16
-    add eax, ebx
+    or  eax, ebx
     shr ebx, #16
     test eax, eax
     ret
@@ -557,7 +558,7 @@ typedef unsigned long  Bit32u;
     jcxz lsr_exit
     and  eax, #0x0000FFFF
     shl  ebx, #16
-    add  eax, ebx
+    or   eax, ebx
   lsr_loop:
     shr  eax, #1
     loop lsr_loop
@@ -573,7 +574,7 @@ typedef unsigned long  Bit32u;
     jcxz lsl_exit
     and  eax, #0x0000FFFF
     shl  ebx, #16
-    add  eax, ebx
+    or   eax, ebx
   lsl_loop:
     shl  eax, #1
     loop lsl_loop
@@ -595,7 +596,7 @@ typedef unsigned long  Bit32u;
   ldivul:
     and  eax, #0x0000FFFF
     shl  ebx, #16
-    add  eax, ebx
+    or   eax, ebx
     xor  edx, edx
     SEG SS
     mov  bx,  2[di]
@@ -657,8 +658,7 @@ typedef struct {
     Bit8u  device;       // Detected type of attached devices (hd/cd/none)
     Bit8u  removable;    // Removable device flag
     Bit8u  lock;         // Locks for removable devices
-    // Bit8u  lba_capable;  // LBA capable flag - always yes for bochs devices
-    Bit8u  mode;         // transfert mode : PIO 16/32 bits - IRQ - ISADMA - PCIDMA
+    Bit8u  mode;         // transfer mode : PIO 16/32 bits - IRQ - ISADMA - PCIDMA
     Bit16u blksize;      // block size
 
     Bit8u  translation;  // type of translation
@@ -758,8 +758,8 @@ typedef struct {
     Bit32u  sector_count1;
     Bit32u  sector_count2;
     Bit16u  blksize;
-    Bit16u  dpte_segment;
     Bit16u  dpte_offset;
+    Bit16u  dpte_segment;
     Bit16u  key;
     Bit8u   dpi_length;
     Bit8u   reserved1;
@@ -836,6 +836,14 @@ typedef struct {
   Bit16u cs;
   flags_t flags;
   } iret_addr_t;
+
+typedef struct {
+  Bit16u type;
+  Bit16u flags;
+  Bit32u vector;
+  Bit32u description;
+  Bit32u reserved;
+  } ipl_entry_t;
 
 
 
@@ -1104,7 +1112,7 @@ static struct {
       { 0x5300, 0x532e,   none,   none, 0x20 }, /* Del */
       {   none,   none,   none,   none, none },
       {   none,   none,   none,   none, none },
-      { 0x565c, 0x567c,   none,   none, none }, /* \| */    
+      { 0x565c, 0x567c,   none,   none, none }, /* \| */
       { 0x5700, 0x5700,   none,   none, none }, /* F11 */
       { 0x5800, 0x5800,   none,   none, none }  /* F12 */
       };
@@ -1523,12 +1531,11 @@ void put_str(action, s)
 
 //--------------------------------------------------------------------------
 // bios_printf()
-//   A compact variable argument printf function which prints its output via
-//   an I/O port so that it can be logged by Bochs/Plex.
-//   Currently, only %x is supported (or %02x, %04x, etc).
+//   A compact variable argument printf function.
 //
-//   Supports %[format_width][format]
-//   where format can be d,x,c,s
+//   Supports %[format_width][length]format
+//   where format can be x,X,u,d,s,c
+//   and the optional length modifier is l (ell)
 //--------------------------------------------------------------------------
   void
 bios_printf(action, s)
@@ -1539,7 +1546,7 @@ bios_printf(action, s)
   bx_bool  in_format;
   short i;
   Bit16u  *arg_ptr;
-  Bit16u   arg_seg, arg, nibble, hibyte, shift_count, format_width;
+  Bit16u   arg_seg, arg, nibble, hibyte, shift_count, format_width, hexadd;
 
   arg_ptr = &s;
   arg_seg = get_SS();
@@ -1566,12 +1573,16 @@ bios_printf(action, s)
       else {
         arg_ptr++; // increment to next arg
         arg = read_word(arg_seg, arg_ptr);
-        if (c == 'x') {
+        if (c == 'x' || c == 'X') {
           if (format_width == 0)
             format_width = 4;
+          if (c == 'x')
+            hexadd = 'a';
+          else
+            hexadd = 'A';
           for (i=format_width-1; i>=0; i--) {
             nibble = (arg >> (4 * i)) & 0x000f;
-            send (action, (nibble<=9)? (nibble+'0') : (nibble-10+'A'));
+            send (action, (nibble<=9)? (nibble+'0') : (nibble-10+hexadd));
             }
           }
         else if (c == 'u') {
@@ -1579,9 +1590,31 @@ bios_printf(action, s)
           }
         else if (c == 'l') {
           s++;
+          c = read_byte(get_CS(), s); /* is it ld,lx,lu? */
           arg_ptr++; /* increment to next arg */
           hibyte = read_word(arg_seg, arg_ptr);
-          put_luint(action, ((Bit32u) hibyte << 16) | arg, format_width, 0);
+          if (c == 'd') {
+            if (hibyte & 0x8000)
+              put_luint(action, 0L-(((Bit32u) hibyte << 16) | arg), format_width-1, 1);
+            else
+              put_luint(action, ((Bit32u) hibyte << 16) | arg, format_width, 0);
+           }
+          else if (c == 'u') {
+            put_luint(action, ((Bit32u) hibyte << 16) | arg, format_width, 0);
+           }
+          else if (c == 'x' || c == 'X')
+           {
+            if (format_width == 0)
+              format_width = 8;
+            if (c == 'x')
+              hexadd = 'a';
+            else
+              hexadd = 'A';
+            for (i=format_width-1; i>=0; i--) {
+              nibble = ((((Bit32u) hibyte <<16) | arg) >> (4 * i)) & 0x000f;
+              send (action, (nibble<=9)? (nibble+'0') : (nibble-10+hexadd));
+              }
+           }
           }
         else if (c == 'd') {
           if (arg & 0x8000)
@@ -1836,44 +1869,30 @@ print_bios_banner()
 // http://www.phoenix.com/en/Customer+Services/White+Papers-Specs/pc+industry+specifications.htm
 //--------------------------------------------------------------------------
 
-/* 256 bytes at 0x9ff00 -- 0x9ffff is used for the IPL boot table. */
-#define IPL_SEG              0x9ff0
-#define IPL_TABLE_OFFSET     0x0000
-#define IPL_TABLE_ENTRIES    8
-#define IPL_COUNT_OFFSET     0x0080  /* u16: number of valid table entries */
-#define IPL_SEQUENCE_OFFSET  0x0082  /* u16: next boot device */
-
-struct ipl_entry {
-  Bit16u type;
-  Bit16u flags;
-  Bit32u vector;
-  Bit32u description;
-  Bit32u reserved;
-};
 
 static void
-init_boot_vectors() 
+init_boot_vectors()
 {
-  struct ipl_entry e;
+  ipl_entry_t e;
   Bit16u count = 0;
   Bit16u ss = get_SS();
 
   /* Clear out the IPL table. */
-  memsetb(IPL_SEG, IPL_TABLE_OFFSET, 0, 0xff);
+  memsetb(IPL_SEG, IPL_TABLE_OFFSET, 0, IPL_SIZE);
 
   /* Floppy drive */
-  e.type = 1; e.flags = 0; e.vector = 0; e.description = 0; e.reserved = 0;
+  e.type = IPL_TYPE_FLOPPY; e.flags = 0; e.vector = 0; e.description = 0; e.reserved = 0;
   memcpyb(IPL_SEG, IPL_TABLE_OFFSET + count * sizeof (e), ss, &e, sizeof (e));
   count++;
 
   /* First HDD */
-  e.type = 2; e.flags = 0; e.vector = 0; e.description = 0; e.reserved = 0;
+  e.type = IPL_TYPE_HARDDISK; e.flags = 0; e.vector = 0; e.description = 0; e.reserved = 0;
   memcpyb(IPL_SEG, IPL_TABLE_OFFSET + count * sizeof (e), ss, &e, sizeof (e));
   count++;
 
 #if BX_ELTORITO_BOOT
   /* CDROM */
-  e.type = 3; e.flags = 0; e.vector = 0; e.description = 0; e.reserved = 0;
+  e.type = IPL_TYPE_CDROM; e.flags = 0; e.vector = 0; e.description = 0; e.reserved = 0;
   memcpyb(IPL_SEG, IPL_TABLE_OFFSET + count * sizeof (e), ss, &e, sizeof (e));
   count++;
 #endif
@@ -1886,7 +1905,7 @@ init_boot_vectors()
 
 static Bit8u
 get_boot_vector(i, e)
-Bit16u i; struct ipl_entry *e;
+Bit16u i; ipl_entry_t *e;
 {
   Bit16u count;
   Bit16u ss = get_SS();
@@ -1911,8 +1930,8 @@ print_boot_device(type)
   Bit16u type;
 {
   /* NIC appears as type 0x80 */
-  if (type == 0x80 ) type = 0x4;
-  if (type == 0 || type > 0x4) BX_PANIC("Bad drive type\n"); 
+  if (type == IPL_TYPE_BEV) type = 0x4;
+  if (type == 0 || type > 0x4) BX_PANIC("Bad drive type\n");
   printf("Booting from %s...\n", drivetypes[type]);
 }
 
@@ -2050,6 +2069,7 @@ debugger_off()
 // bits 7-4 of the device/head (CB_DH) reg
 #define ATA_CB_DH_DEV0 0xa0    // select device 0
 #define ATA_CB_DH_DEV1 0xb0    // select device 1
+#define ATA_CB_DH_LBA 0x40    // use LBA
 
 // status reg (CB_STAT and CB_ASTAT) bits
 #define ATA_CB_STAT_BSY  0x80  // busy
@@ -2099,6 +2119,7 @@ debugger_off()
 #define ATA_CMD_READ_SECTORS                 0x20
 #define ATA_CMD_READ_VERIFY_SECTORS          0x40
 #define ATA_CMD_RECALIBRATE                  0x10
+#define ATA_CMD_REQUEST_SENSE                0x03
 #define ATA_CMD_SEEK                         0x70
 #define ATA_CMD_SET_FEATURES                 0xEF
 #define ATA_CMD_SET_MULTIPLE_MODE            0xC6
@@ -2187,6 +2208,58 @@ void ata_init( )
 
   write_byte(ebda_seg,&EbdaData->ata.hdcount,0);
   write_byte(ebda_seg,&EbdaData->ata.cdcount,0);
+}
+
+#define TIMEOUT 0
+#define BSY 1
+#define NOT_BSY 2
+#define NOT_BSY_DRQ 3
+#define NOT_BSY_NOT_DRQ 4
+#define NOT_BSY_RDY 5
+
+#define IDE_TIMEOUT 32000u //32 seconds max for IDE ops
+
+int await_ide();
+static int await_ide(when_done,base,timeout)
+  Bit8u when_done;
+  Bit16u base;
+  Bit16u timeout;
+{
+  Bit32u time=0,last=0;
+  Bit16u status;
+  Bit8u result;
+  status = inb(base + ATA_CB_STAT); // for the times you're supposed to throw one away
+  for(;;) {
+    status = inb(base+ATA_CB_STAT);
+    time++;
+    if (when_done == BSY)
+      result = status & ATA_CB_STAT_BSY;
+    else if (when_done == NOT_BSY)
+      result = !(status & ATA_CB_STAT_BSY);
+    else if (when_done == NOT_BSY_DRQ)
+      result = !(status & ATA_CB_STAT_BSY) && (status & ATA_CB_STAT_DRQ);
+    else if (when_done == NOT_BSY_NOT_DRQ)
+      result = !(status & ATA_CB_STAT_BSY) && !(status & ATA_CB_STAT_DRQ);
+    else if (when_done == NOT_BSY_RDY)
+      result = !(status & ATA_CB_STAT_BSY) && (status & ATA_CB_STAT_RDY);
+    else if (when_done == TIMEOUT)
+      result = 0;
+
+    if (result) return 0;
+    if (time>>16 != last) // mod 2048 each 16 ms
+    {
+      last = time >>16;
+      BX_DEBUG_ATA("await_ide: (TIMEOUT,BSY,!BSY,!BSY_DRQ,!BSY_!DRQ,!BSY_RDY) %d time= %ld timeout= %d\n",when_done,time>>11, timeout);
+    }
+    if (status & ATA_CB_STAT_ERR)
+    {
+      BX_DEBUG_ATA("await_ide: ERROR (TIMEOUT,BSY,!BSY,!BSY_DRQ,!BSY_!DRQ,!BSY_RDY) %d time= %ld timeout= %d\n",when_done,time>>11, timeout);
+      return -1;
+    }
+    if ((timeout == 0) || ((time>>11) > timeout)) break;
+  }
+  BX_INFO("IDE time out\n");
+  return -1;
 }
 
 // ---------------------------------------------------------------------------
@@ -2447,10 +2520,10 @@ void ata_detect( )
         case ATA_TYPE_ATA:
           printf("ata%d %s: ",channel,slave?" slave":"master");
           i=0; while(c=read_byte(get_SS(),model+i++)) printf("%c",c);
-          if (sizeinmb < 1UL<<16)
-            printf(" ATA-%d Hard-Disk (%04u MBytes)\n",version,(Bit16u)sizeinmb);
-          else
-            printf(" ATA-%d Hard-Disk (%04u GBytes)\n",version,(Bit16u)(sizeinmb>>10));
+	  if (sizeinmb < (1UL<<16))
+            printf(" ATA-%d Hard-Disk (%4u MBytes)\n", version, (Bit16u)sizeinmb);
+	  else
+            printf(" ATA-%d Hard-Disk (%4u GBytes)\n", version, (Bit16u)(sizeinmb>>10));
           break;
         case ATA_TYPE_ATAPI:
           printf("ata%d %s: ",channel,slave?" slave":"master");
@@ -2492,6 +2565,7 @@ Bit16u device;
   Bit16u ebda_seg=read_word(0x0040,0x000E);
   Bit16u iobase1, iobase2;
   Bit8u  channel, slave, sn, sc;
+  Bit8u  type;
   Bit16u max;
 
   channel = device / 2;
@@ -2506,16 +2580,13 @@ Bit16u device;
   outb(iobase2+ATA_CB_DC, ATA_CB_DC_HD15 | ATA_CB_DC_NIEN | ATA_CB_DC_SRST);
 
 // 8.2.1 (b) -- wait for BSY
-  max=0xff;
-  while(--max>0) {
-    Bit8u status = inb(iobase1+ATA_CB_STAT);
-    if ((status & ATA_CB_STAT_BSY) != 0) break;
-  }
+  await_ide(BSY, iobase1, 20);
 
 // 8.2.1 (f) -- clear SRST
   outb(iobase2+ATA_CB_DC, ATA_CB_DC_HD15 | ATA_CB_DC_NIEN);
 
-  if (read_byte(ebda_seg,&EbdaData->ata.devices[device].type) != ATA_TYPE_NONE) {
+  type=read_byte(ebda_seg,&EbdaData->ata.devices[device].type);
+  if (type != ATA_TYPE_NONE) {
 
 // 8.2.1 (g) -- check for sc==sn==0x01
     // select device
@@ -2524,21 +2595,14 @@ Bit16u device;
     sn = inb(iobase1+ATA_CB_SN);
 
     if ( (sc==0x01) && (sn==0x01) ) {
-
-// 8.2.1 (h) -- wait for not BSY
-      max=0xff;
-      while(--max>0) {
-        Bit8u status = inb(iobase1+ATA_CB_STAT);
-        if ((status & ATA_CB_STAT_BSY) == 0) break;
-        }
-      }
+      if (type == ATA_TYPE_ATA) //ATA
+        await_ide(NOT_BSY_RDY, iobase1, IDE_TIMEOUT);
+      else //ATAPI
+        await_ide(NOT_BSY, iobase1, IDE_TIMEOUT);
     }
 
-// 8.2.1 (i) -- wait for DRDY
-  max=0xfff;
-  while(--max>0) {
-    Bit8u status = inb(iobase1+ATA_CB_STAT);
-      if ((status & ATA_CB_STAT_RDY) != 0) break;
+// 8.2.1 (h) -- wait for not BSY
+    await_ide(NOT_BSY, iobase1, IDE_TIMEOUT);
   }
 
   // Enable interrupts
@@ -2606,11 +2670,9 @@ Bit32u lba;
       lba &= (1UL << 24) - 1;
       }
     sector = (Bit16u) (lba & 0x000000ffL);
-    lba >>= 8;
-    cylinder = (Bit16u) (lba & 0x0000ffffL);
-    lba >>= 16;
-    head = ((Bit16u) (lba & 0x0000000fL)) | 0x40;
-    }
+    cylinder = (Bit16u) ((lba>>8) & 0x0000ffffL);
+    head = ((Bit16u) ((lba>>24) & 0x0000000fL)) | ATA_CB_DH_LBA;
+  }
 
   outb(iobase1 + ATA_CB_FR, 0x00);
   outb(iobase1 + ATA_CB_SC, count);
@@ -2620,10 +2682,8 @@ Bit32u lba;
   outb(iobase1 + ATA_CB_DH, (slave ? ATA_CB_DH_DEV1 : ATA_CB_DH_DEV0) | (Bit8u) head );
   outb(iobase1 + ATA_CB_CMD, command);
 
-  while (1) {
-    status = inb(iobase1 + ATA_CB_STAT);
-    if ( !(status & ATA_CB_STAT_BSY) ) break;
-    }
+  await_ide(NOT_BSY_DRQ, iobase1, IDE_TIMEOUT);
+  status = inb(iobase1 + ATA_CB_STAT);
 
   if (status & ATA_CB_STAT_ERR) {
     BX_DEBUG_ATA("ata_cmd_data_in : read error\n");
@@ -2683,6 +2743,7 @@ ASM_END
     current++;
     write_word(ebda_seg, &EbdaData->ata.trsfsectors,current);
     count--;
+    await_ide(NOT_BSY, iobase1, IDE_TIMEOUT);
     status = inb(iobase1 + ATA_CB_STAT);
     if (count == 0) {
       if ( (status & (ATA_CB_STAT_BSY | ATA_CB_STAT_RDY | ATA_CB_STAT_DRQ | ATA_CB_STAT_ERR) )
@@ -2760,11 +2821,9 @@ Bit32u lba;
       lba &= (1UL << 24) - 1;
       }
     sector = (Bit16u) (lba & 0x000000ffL);
-    lba >>= 8;
-    cylinder = (Bit16u) (lba & 0x0000ffffL);
-    lba >>= 16;
-    head = ((Bit16u) (lba & 0x0000000fL)) | 0x40;
-    }
+    cylinder = (Bit16u) ((lba>>8) & 0x0000ffffL);
+    head = ((Bit16u) ((lba>>24) & 0x0000000fL)) | ATA_CB_DH_LBA;
+  }
 
   outb(iobase1 + ATA_CB_FR, 0x00);
   outb(iobase1 + ATA_CB_SC, count);
@@ -2774,10 +2833,8 @@ Bit32u lba;
   outb(iobase1 + ATA_CB_DH, (slave ? ATA_CB_DH_DEV1 : ATA_CB_DH_DEV0) | (Bit8u) head );
   outb(iobase1 + ATA_CB_CMD, command);
 
-  while (1) {
-    status = inb(iobase1 + ATA_CB_STAT);
-    if ( !(status & ATA_CB_STAT_BSY) ) break;
-    }
+  await_ide(NOT_BSY_DRQ, iobase1, IDE_TIMEOUT);
+  status = inb(iobase1 + ATA_CB_STAT);
 
   if (status & ATA_CB_STAT_ERR) {
     BX_DEBUG_ATA("ata_cmd_data_out : read error\n");
@@ -2916,19 +2973,17 @@ Bit32u length;
   if (status & ATA_CB_STAT_BSY) return 2;
 
   outb(iobase2 + ATA_CB_DC, ATA_CB_DC_HD15 | ATA_CB_DC_NIEN);
-  // outb(iobase1 + ATA_CB_FR, 0x00);
-  // outb(iobase1 + ATA_CB_SC, 0x00);
-  // outb(iobase1 + ATA_CB_SN, 0x00);
+  outb(iobase1 + ATA_CB_FR, 0x00);
+  outb(iobase1 + ATA_CB_SC, 0x00);
+  outb(iobase1 + ATA_CB_SN, 0x00);
   outb(iobase1 + ATA_CB_CL, 0xfff0 & 0x00ff);
   outb(iobase1 + ATA_CB_CH, 0xfff0 >> 8);
   outb(iobase1 + ATA_CB_DH, slave ? ATA_CB_DH_DEV1 : ATA_CB_DH_DEV0);
   outb(iobase1 + ATA_CB_CMD, ATA_CMD_PACKET);
 
   // Device should ok to receive command
-  while (1) {
-    status = inb(iobase1 + ATA_CB_STAT);
-    if ( !(status & ATA_CB_STAT_BSY) ) break;
-    }
+  await_ide(NOT_BSY_DRQ, iobase1, IDE_TIMEOUT);
+  status = inb(iobase1 + ATA_CB_STAT);
 
   if (status & ATA_CB_STAT_ERR) {
     BX_DEBUG_ATA("ata_cmd_packet : error, status is %02x\n",status);
@@ -2964,27 +3019,33 @@ ASM_START
 ASM_END
 
   if (inout == ATA_DATA_NO) {
+    await_ide(NOT_BSY, iobase1, IDE_TIMEOUT);
     status = inb(iobase1 + ATA_CB_STAT);
     }
   else {
+        Bit16u loops = 0;
+        Bit8u sc;
   while (1) {
 
+      if (loops == 0) {//first time through
+        status = inb(iobase2 + ATA_CB_ASTAT);
+        await_ide(NOT_BSY_DRQ, iobase1, IDE_TIMEOUT);
+      }
+      else
+        await_ide(NOT_BSY, iobase1, IDE_TIMEOUT);
+      loops++;
+
       status = inb(iobase1 + ATA_CB_STAT);
+      sc = inb(iobase1 + ATA_CB_SC);
 
       // Check if command completed
-      if ( (status & (ATA_CB_STAT_BSY | ATA_CB_STAT_DRQ) ) ==0 ) break;
+      if(((inb(iobase1 + ATA_CB_SC)&0x7)==0x3) &&
+         ((status & (ATA_CB_STAT_RDY | ATA_CB_STAT_ERR)) == ATA_CB_STAT_RDY)) break;
 
       if (status & ATA_CB_STAT_ERR) {
         BX_DEBUG_ATA("ata_cmd_packet : error (status %02x)\n",status);
         return 3;
       }
-
-      // Device must be ready to send data
-      if ( (status & (ATA_CB_STAT_BSY | ATA_CB_STAT_RDY | ATA_CB_STAT_DRQ | ATA_CB_STAT_ERR) )
-            != (ATA_CB_STAT_RDY | ATA_CB_STAT_DRQ) ) {
-        BX_DEBUG_ATA("ata_cmd_packet : not ready (status %02x)\n", status);
-        return 4;
-        }
 
       // Normalize address
       bufseg += (bufoff / 16);
@@ -3144,24 +3205,23 @@ ASM_END
 // ---------------------------------------------------------------------------
 
   Bit16u
-atapi_get_sense(device)
+atapi_get_sense(device, seg, asc, ascq)
   Bit16u device;
 {
   Bit8u  atacmd[12];
-  Bit8u  buffer[16];
+  Bit8u  buffer[18];
   Bit8u i;
 
   memsetb(get_SS(),atacmd,0,12);
 
   // Request SENSE
-  atacmd[0]=0x03;
-  atacmd[4]=0x20;
-  if (ata_cmd_packet(device, 12, get_SS(), atacmd, 0, 16L, ATA_DATA_IN, get_SS(), buffer) != 0)
+  atacmd[0]=ATA_CMD_REQUEST_SENSE;
+  atacmd[4]=sizeof(buffer);
+  if (ata_cmd_packet(device, 12, get_SS(), atacmd, 0, 18L, ATA_DATA_IN, get_SS(), buffer) != 0)
     return 0x0002;
 
-  if ((buffer[0] & 0x7e) == 0x70) {
-    return (((Bit16u)buffer[2]&0x0f)*0x100)+buffer[12];
-    }
+  write_byte(seg,asc,buffer[12]);
+  write_byte(seg,ascq,buffer[13]);
 
   return 0;
 }
@@ -3170,24 +3230,78 @@ atapi_get_sense(device)
 atapi_is_ready(device)
   Bit16u device;
 {
-  Bit8u  atacmd[12];
-  Bit8u  buffer[];
+  Bit8u packet[12];
+  Bit8u buf[8];
+  Bit32u block_len;
+  Bit32u sectors;
+  Bit32u timeout; //measured in ms
+  Bit32u time;
+  Bit8u asc, ascq;
+  Bit8u in_progress;
+  Bit16u ebda_seg = read_word(0x0040,0x000E);
+  if (read_byte(ebda_seg,&EbdaData->ata.devices[device].type) != ATA_TYPE_ATAPI) {
+    printf("not implemented for non-ATAPI device\n");
+    return -1;
+  }
 
-  memsetb(get_SS(),atacmd,0,12);
+  BX_DEBUG_ATA("ata_detect_medium: begin\n");
+  memsetb(get_SS(),packet, 0, sizeof packet);
+  packet[0] = 0x25; /* READ CAPACITY */
 
-  // Test Unit Ready
-  if (ata_cmd_packet(device, 12, get_SS(), atacmd, 0, 0L, ATA_DATA_NO, get_SS(), buffer) != 0)
-    return 0x000f;
+  /* Retry READ CAPACITY 50 times unless MEDIUM NOT PRESENT
+   * is reported by the device. If the device reports "IN PROGRESS",
+   * 30 seconds is added. */
+  timeout = 5000;
+  time = 0;
+  in_progress = 0;
+  while (time < timeout) {
+    if (ata_cmd_packet(device, sizeof(packet), get_SS(), packet, 0, 8L, ATA_DATA_IN, get_SS(), buf) == 0)
+      goto ok;
 
-  if (atapi_get_sense(device) !=0 ) {
-    memsetb(get_SS(),atacmd,0,12);
+    if (atapi_get_sense(device, get_SS(), &asc, &ascq) == 0) {
+      if (asc == 0x3a) { /* MEDIUM NOT PRESENT */
+        BX_DEBUG_ATA("Device reports MEDIUM NOT PRESENT\n");
+        return -1;
+      }
 
-    // try to send Test Unit Ready again
-    if (ata_cmd_packet(device, 12, get_SS(), atacmd, 0, 0L, ATA_DATA_NO, get_SS(), buffer) != 0)
-      return 0x000f;
-
-    return atapi_get_sense(device);
+      if (asc == 0x04 && ascq == 0x01 && !in_progress) {
+        /* IN PROGRESS OF BECOMING READY */
+        printf("Waiting for device to detect medium... ");
+        /* Allow 30 seconds more */
+        timeout = 30000;
+        in_progress = 1;
+      }
     }
+    time += 100;
+  }
+  BX_DEBUG_ATA("read capacity failed\n");
+  return -1;
+ok:
+
+  block_len = (Bit32u) buf[4] << 24
+    | (Bit32u) buf[5] << 16
+    | (Bit32u) buf[6] << 8
+    | (Bit32u) buf[7] << 0;
+  BX_DEBUG_ATA("block_len=%u\n", block_len);
+
+  if (block_len!= 2048 && block_len!= 512)
+  {
+    printf("Unsupported sector size %u\n", block_len);
+    return -1;
+  }
+  write_dword(ebda_seg,&EbdaData->ata.devices[device].blksize, block_len);
+
+  sectors = (Bit32u) buf[0] << 24
+    | (Bit32u) buf[1] << 16
+    | (Bit32u) buf[2] << 8
+    | (Bit32u) buf[3] << 0;
+
+  BX_DEBUG_ATA("sectors=%u\n", sectors);
+  if (block_len == 2048)
+    sectors <<= 2; /* # of sectors in 512-byte "soft" sector */
+  if (sectors != read_dword(ebda_seg,&EbdaData->ata.devices[device].sectors))
+    printf("%dMB medium detected\n", sectors>>(20-9));
+  write_dword(ebda_seg,&EbdaData->ata.devices[device].sectors, sectors);
   return 0;
 }
 
@@ -4154,10 +4268,10 @@ ASM_START
       ;; Get the count in eax
       mov  bx, sp
       SEG SS
-        mov  ax, _int15_function.CX [bx]
+        mov  ax, _int15_function32.CX [bx]
       shl  eax, #16
       SEG SS
-        mov  ax, _int15_function.DX [bx]
+        mov  ax, _int15_function32.DX [bx]
 
       ;; convert to numbers of 15usec ticks
       mov ebx, #15
@@ -5039,13 +5153,13 @@ int13_harddisk(EHAX, DS, ES, DI, SI, BP, ELDX, BX, DX, CX, AX, IP, CS, FLAGS)
 
     case 0x15: /* read disk drive size */
 
-      // Get physical geometry from table
-      npc   = read_word(ebda_seg, &EbdaData->ata.devices[device].pchs.cylinders);
-      nph   = read_word(ebda_seg, &EbdaData->ata.devices[device].pchs.heads);
-      npspt = read_word(ebda_seg, &EbdaData->ata.devices[device].pchs.spt);
+      // Get logical geometry from table
+      nlc   = read_word(ebda_seg, &EbdaData->ata.devices[device].lchs.cylinders);
+      nlh   = read_word(ebda_seg, &EbdaData->ata.devices[device].lchs.heads);
+      nlspt = read_word(ebda_seg, &EbdaData->ata.devices[device].lchs.spt);
 
       // Compute sector count seen by int13
-      lba = (Bit32u)(npc - 1) * (Bit32u)nph * (Bit32u)npspt;
+      lba = (Bit32u)(nlc - 1) * (Bit32u)nlh * (Bit32u)nlspt;
       CX = lba >> 16;
       DX = lba & 0xffff;
 
@@ -5133,8 +5247,16 @@ int13_harddisk(EHAX, DS, ES, DI, SI, BP, ELDX, BX, DX, CX, AX, IP, CS, FLAGS)
         blksize = read_word(ebda_seg, &EbdaData->ata.devices[device].blksize);
 
         write_word(DS, SI+(Bit16u)&Int13DPT->size, 0x1a);
-        write_word(DS, SI+(Bit16u)&Int13DPT->infos, 0x02); // geometry is valid
-        write_dword(DS, SI+(Bit16u)&Int13DPT->cylinders, (Bit32u)npc);
+        if ((lba/npspt)/nph > 0x3fff)
+        {
+          write_word(DS, SI+(Bit16u)&Int13DPT->infos, 0x00); // geometry is invalid
+          write_dword(DS, SI+(Bit16u)&Int13DPT->cylinders, 0x3fff);
+        }
+        else
+        {
+          write_word(DS, SI+(Bit16u)&Int13DPT->infos, 0x02); // geometry is valid
+          write_dword(DS, SI+(Bit16u)&Int13DPT->cylinders, (Bit32u)npc);
+        }
         write_dword(DS, SI+(Bit16u)&Int13DPT->heads, (Bit32u)nph);
         write_dword(DS, SI+(Bit16u)&Int13DPT->spt, (Bit32u)npspt);
         write_dword(DS, SI+(Bit16u)&Int13DPT->sector_count1, lba);  // FIXME should be Bit64
@@ -5160,14 +5282,14 @@ int13_harddisk(EHAX, DS, ES, DI, SI, BP, ELDX, BX, DX, CX, AX, IP, CS, FLAGS)
         mode = read_byte(ebda_seg, &EbdaData->ata.devices[device].mode);
         translation = read_byte(ebda_seg, &EbdaData->ata.devices[device].translation);
 
-        options  = (translation==ATA_TRANSLATION_NONE?0:1<<3); // chs translation
+        options  = (translation==ATA_TRANSLATION_NONE?0:1)<<3; // chs translation
         options |= (1<<4); // lba translation
-        options |= (mode==ATA_MODE_PIO32?1:0<<7);
-        options |= (translation==ATA_TRANSLATION_LBA?1:0<<9);
-        options |= (translation==ATA_TRANSLATION_RECHS?3:0<<9);
+        options |= (mode==ATA_MODE_PIO32?1:0)<<7;
+        options |= (translation==ATA_TRANSLATION_LBA?1:0)<<9;
+        options |= (translation==ATA_TRANSLATION_RECHS?3:0)<<9;
 
         write_word(ebda_seg, &EbdaData->ata.dpte.iobase1, iobase1);
-        write_word(ebda_seg, &EbdaData->ata.dpte.iobase2, iobase2);
+        write_word(ebda_seg, &EbdaData->ata.dpte.iobase2, iobase2 + ATA_CB_DC);
         write_byte(ebda_seg, &EbdaData->ata.dpte.prefix, (0xe | (device % 2))<<4 );
         write_byte(ebda_seg, &EbdaData->ata.dpte.unused, 0xcb );
         write_byte(ebda_seg, &EbdaData->ata.dpte.irq, irq );
@@ -5176,10 +5298,13 @@ int13_harddisk(EHAX, DS, ES, DI, SI, BP, ELDX, BX, DX, CX, AX, IP, CS, FLAGS)
         write_byte(ebda_seg, &EbdaData->ata.dpte.pio, 0 );
         write_word(ebda_seg, &EbdaData->ata.dpte.options, options);
         write_word(ebda_seg, &EbdaData->ata.dpte.reserved, 0);
-        write_byte(ebda_seg, &EbdaData->ata.dpte.revision, 0x11);
+        if (size >=0x42)
+          write_byte(ebda_seg, &EbdaData->ata.dpte.revision, 0x11);
+        else
+          write_byte(ebda_seg, &EbdaData->ata.dpte.revision, 0x10);
 
         checksum=0;
-        for (i=0; i<15; i++) checksum+=read_byte(ebda_seg, (&EbdaData->ata.dpte) + i);
+        for (i=0; i<15; i++) checksum+=read_byte(ebda_seg, ((Bit8u*)(&EbdaData->ata.dpte)) + i);
         checksum = ~checksum;
         write_byte(ebda_seg, &EbdaData->ata.dpte.checksum, checksum);
         }
@@ -5452,7 +5577,7 @@ int13_cdrom(EHBX, DS, ES, DI, SI, BP, ELDX, BX, DX, CX, AX, IP, CS, FLAGS)
         mov  bp, sp
 
         mov ah, #0x52
-        int 15
+        int #0x15
         mov _int13_cdrom.status + 2[bp], ah
         jnc int13_cdrom_rme_end
         mov _int13_cdrom.status, #1
@@ -5515,7 +5640,7 @@ int13_cdrom_rme_end:
         options |= (mode==ATA_MODE_PIO32?1:0<<7);
 
         write_word(ebda_seg, &EbdaData->ata.dpte.iobase1, iobase1);
-        write_word(ebda_seg, &EbdaData->ata.dpte.iobase2, iobase2);
+        write_word(ebda_seg, &EbdaData->ata.dpte.iobase2, iobase2 + ATA_CB_DC);
         write_byte(ebda_seg, &EbdaData->ata.dpte.prefix, (0xe | (device % 2))<<4 );
         write_byte(ebda_seg, &EbdaData->ata.dpte.unused, 0xcb );
         write_byte(ebda_seg, &EbdaData->ata.dpte.irq, irq );
@@ -5527,7 +5652,7 @@ int13_cdrom_rme_end:
         write_byte(ebda_seg, &EbdaData->ata.dpte.revision, 0x11);
 
         checksum=0;
-        for (i=0; i<15; i++) checksum+=read_byte(ebda_seg, (&EbdaData->ata.dpte) + i);
+        for (i=0; i<15; i++) checksum+=read_byte(ebda_seg, ((Bit8u*)(&EbdaData->ata.dpte)) + i);
         checksum = ~checksum;
         write_byte(ebda_seg, &EbdaData->ata.dpte.checksum, checksum);
         }
@@ -6521,7 +6646,7 @@ get_hd_geometry(drive, hd_cylinders, hd_heads, hd_sectors)
     hd_type = inb_cmos(0x12) & 0x0f;
     if (hd_type != 0x0f)
       BX_INFO(panic_msg_reg12h,1);
-    hd_type = inb_cmos(0x1a); // HD0: extended type
+    hd_type = inb_cmos(0x1a); // HD1: extended type
     if (hd_type != 47)
       BX_INFO(panic_msg_reg19h,0,0x1a);
     iobase = 0x24;
@@ -6540,6 +6665,7 @@ get_hd_geometry(drive, hd_cylinders, hd_heads, hd_sectors)
 
 #endif //else BX_USE_ATADRV
 
+#if BX_SUPPORT_FLOPPY
 
 //////////////////////
 // FLOPPY functions //
@@ -6813,7 +6939,6 @@ floppy_drive_exists(drive)
     return(1);
 }
 
-#if BX_SUPPORT_FLOPPY
   void
 int13_diskette_function(DS, ES, DI, SI, BP, ELDX, BX, DX, CX, AX, IP, CS, FLAGS)
   Bit16u DS, ES, DI, SI, BP, ELDX, BX, DX, CX, AX, IP, CS, FLAGS;
@@ -7655,7 +7780,7 @@ Bit16u seq_nr;
   Bit16u bootip;
   Bit16u status;
 
-  struct ipl_entry e;
+  ipl_entry_t e;
 
   // if BX_ELTORITO_BOOT is not defined, old behavior
   //   check bit 5 in CMOS reg 0x2d.  load either 0x00 or 0x80 into DL
@@ -7705,10 +7830,10 @@ Bit16u seq_nr;
   print_boot_device(e.type);
 
   switch(e.type) {
-  case 0x01: /* FDD */
-  case 0x02: /* HDD */
+  case IPL_TYPE_FLOPPY: /* FDD */
+  case IPL_TYPE_HARDDISK: /* HDD */
 
-    bootdrv = (e.type == 0x02) ? 0x80 : 0x00;
+    bootdrv = (e.type == IPL_TYPE_HARDDISK) ? 0x80 : 0x00;
     bootseg = 0x07c0;
     status = 0;
 
@@ -7749,7 +7874,7 @@ ASM_END
 
     /* Always check the signature on a HDD boot sector; on FDD, only do
      * the check if the CMOS doesn't tell us to skip it */
-    if ((e.type != 0x01) || !((inb_cmos(0x38) & 0x01))) {
+    if ((e.type != IPL_TYPE_FLOPPY) || !((inb_cmos(0x38) & 0x01))) {
       if (read_word(bootseg,0x1fe) != 0xaa55) {
         print_boot_failure(e.type, 0);
         return;
@@ -7762,7 +7887,7 @@ ASM_END
   break;
 
 #if BX_ELTORITO_BOOT
-  case 0x03: /* CD-ROM */
+  case IPL_TYPE_CDROM: /* CD-ROM */
     status = cdrom_boot();
 
     // If failure
@@ -7780,7 +7905,7 @@ ASM_END
     break;
 #endif
 
-  case 0x80: /* Expansion ROM with a Bootstrap Entry Vector (a far pointer) */
+  case IPL_TYPE_BEV: /* Expansion ROM with a Bootstrap Entry Vector (a far pointer) */
     bootseg = e.vector >> 16;
     bootip = e.vector & 0xffff;
     break;
@@ -8311,7 +8436,7 @@ int19_relocated: ;; Boot function, relocated
 
   push bp
   mov  bp, sp
-  
+
   ;; Reset SS and SP
   mov  ax, #0xfffe
   mov  sp, ax
@@ -9550,8 +9675,7 @@ pcibios_init_irqs:
   mov  dx, #0x0cfc
   mov  ax, #0x8080
   out  dx, ax ;; reset PIRQ route control
-  inc  dx
-  inc  dx
+  add  dx, #2
   out  dx, ax
   mov  ax, [si+6]
   sub  ax, #0x20
@@ -9685,20 +9809,12 @@ rombios32_05:
   mov eax, #0x00040000
   call eax
 
-  ;; reset the memory (some boot loaders such as syslinux suppose 
+  ;; reset the memory (some boot loaders such as syslinux suppose
   ;; that the memory is set to zero)
   mov edi, #0x00040000
   mov ecx, #0x40000 / 4
   xor eax, eax
   rep
-    stosd
-
-  ;; reset the memory (some boot loaders such as syslinux suppose 
-  ;; that the memory is set to zero)
-  mov edi, #0x00040000
-  mov ecx, #0x40000 / 4
-  xor eax, eax
-  rep 
     stosd
 
   ;; return to 16 bit protected mode first
@@ -9829,7 +9945,7 @@ checksum_loop:
   ret
 
 
-;; We need a copy of this string, but we are not actually a PnP BIOS, 
+;; We need a copy of this string, but we are not actually a PnP BIOS,
 ;; so make sure it is *not* aligned, so OSes will not see it if they scan.
 .align 16
   db 0
@@ -9850,8 +9966,8 @@ rom_scan:
   ;;   2         ROM length in 512-byte blocks
   ;;   3         ROM initialization entry point (FAR CALL)
 
-  mov  cx, #0xc000
 rom_scan_loop:
+  push ax       ;; Save AX
   mov  ds, cx
   mov  ax, #0x0004 ;; start with increment of 4 (512-byte) blocks = 2k
   cmp [0], #0xAA55 ;; look for signature
@@ -9876,11 +9992,11 @@ block_count_rounded:
   push cx       ;; Push seg
   push #0x0003  ;; Push offset
 
-  ;; Point ES:DI at "$PnP", which tells the ROM that we are a PnP BIOS.  
+  ;; Point ES:DI at "$PnP", which tells the ROM that we are a PnP BIOS.
   ;; That should stop it grabbing INT 19h; we will use its BEV instead.
   mov  ax, #0xf000
   mov  es, ax
-  lea  di, pnp_string 
+  lea  di, pnp_string
 
   mov  bp, sp   ;; Call ROM init routine using seg:off on stack
   db   0xff     ;; call_far ss:[bp+0]
@@ -9890,8 +10006,8 @@ block_count_rounded:
   add  sp, #2   ;; Pop offset value
   pop  cx       ;; Pop seg value (restore CX)
 
-  ;; Look at the ROM's PnP Expansion header.  Properly, we're supposed 
-  ;; to init all the ROMs and then go back and build an IPL table of 
+  ;; Look at the ROM's PnP Expansion header.  Properly, we're supposed
+  ;; to init all the ROMs and then go back and build an IPL table of
   ;; all the bootable devices, but we can get away with one pass.
   mov  ds, cx       ;; ROM base
   mov  bx, 0x001a   ;; 0x1A is the offset into ROM header that contains...
@@ -9899,22 +10015,28 @@ block_count_rounded:
   cmp  ax, #0x5024  ;; we look for signature "$PnP"
   jne  no_bev
   mov  ax, 2[bx]
-  cmp  ax, #0x506e 
+  cmp  ax, #0x506e
   jne  no_bev
   mov  ax, 0x1a[bx] ;; 0x1A is also the offset into the expansion header of...
   cmp  ax, #0x0000  ;; the Bootstrap Entry Vector, or zero if there is none.
   je   no_bev
 
-  ;; Found a device that thinks it can boot the system.  Record its BEV.
-  mov  bx, #IPL_SEG            ;; Go to the segment where the IPL table lives 
+  ;; Found a device that thinks it can boot the system.  Record its BEV and product name string.
+  mov  di, 0x10[bx]            ;; Pointer to the product name string or zero if none
+  mov  bx, #IPL_SEG            ;; Go to the segment where the IPL table lives
   mov  ds, bx
   mov  bx, IPL_COUNT_OFFSET    ;; Read the number of entries so far
   cmp  bx, #IPL_TABLE_ENTRIES
   je   no_bev                  ;; Get out if the table is full
   shl  bx, #0x4                ;; Turn count into offset (entries are 16 bytes)
-  mov  0[bx], #0x80            ;; This entry is a BEV device
+  mov  0[bx], #IPL_TYPE_BEV    ;; This entry is a BEV device
   mov  6[bx], cx               ;; Build a far pointer from the segment...
   mov  4[bx], ax               ;; and the offset
+  cmp  di, #0x0000
+  je   no_prod_str
+  mov  0xA[bx], cx             ;; Build a far pointer from the segment...
+  mov  8[bx], di               ;; and the offset
+no_prod_str:
   shr  bx, #0x4                ;; Turn the offset back into a count
   inc  bx                      ;; We have one more entry now
   mov  IPL_COUNT_OFFSET, bx    ;; Remember that.
@@ -9926,7 +10048,8 @@ rom_scan_increment:
   shl  ax, #5   ;; convert 512-bytes blocks to 16-byte increments
                 ;; because the segment selector is shifted left 4 bits.
   add  cx, ax
-  cmp  cx, #0xe000
+  pop  ax       ;; Restore AX
+  cmp  cx, ax
   jbe  rom_scan_loop
 
   xor  ax, ax   ;; Restore DS back to 0000:
@@ -9948,7 +10071,6 @@ bios_table_area_start:
 ;- POST -
 ;--------
 .org 0xe05b ; POST Entry Point
-bios_table_area_end:
 post:
   ;; enable cache
   mov eax, cr0
@@ -10043,11 +10165,9 @@ normal_post:
 
 post_default_ints:
   mov  [bx], ax
-  inc  bx
-  inc  bx
+  add  bx, #2
   mov  [bx], dx
-  inc  bx
-  inc  bx
+  add  bx, #2
   loop post_default_ints
 
   ;; set vector 0x79 to zero
@@ -10216,18 +10336,20 @@ post_default_ints:
 #endif
   out  0xa1, AL ;slave  pic: unmask IRQ 12, 13, 14
 
-#if BX_ROMBIOS32
-  call rombios32_init
-#else
-  call pcibios_init_iomem_bases
-  call pcibios_init_irqs
-#endif
-
-  call _init_boot_vectors
-
+  mov  cx, #0xc000  ;; init vga bios
+  mov  ax, #0xc780
   call rom_scan
 
   call _print_bios_banner
+
+#if BX_ROMBIOS32
+  call rombios32_init
+#else
+#if BX_PCIBIOS
+  call pcibios_init_iomem_bases
+  call pcibios_init_irqs
+#endif //BX_PCIBIOS
+#endif
 
   ;;
   ;; Floppy setup
@@ -10264,9 +10386,14 @@ post_default_ints:
   ;;
 #endif // BX_ELTORITO_BOOT
 
+  call _init_boot_vectors
+
+  mov  cx, #0xc800  ;; init option roms
+  mov  ax, #0xe000
+  call rom_scan
+
   sti        ;; enable interrupts
   int  #0x19
-
 
 .org 0xe2c3 ; NMI Handler Entry Point
 nmi:
@@ -11004,5 +11131,6 @@ static Bit8u vgafont8[128*8]=
 
 ASM_START
 .org 0xcc00
+bios_table_area_end:
 // bcc-generated data will be placed here
 ASM_END

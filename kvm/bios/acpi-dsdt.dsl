@@ -1,8 +1,8 @@
 /*
  * Bochs/QEMU ACPI DSDT ASL definition
- * 
+ *
  * Copyright (c) 2006 Fabrice Bellard
- * 
+ *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License version 2 as published by the Free Software Foundation.
@@ -25,24 +25,6 @@ DefinitionBlock (
     0x1                 // OEM Revision
     )
 {
-    Scope (_PR)
-    {
-        Processor (CPU0, 0x00, 0x0000b010, 0x06) {}
-        Processor (CPU1, 0x01, 0x0000b010, 0x06) {}
-        Processor (CPU2, 0x02, 0x0000b010, 0x06) {}
-        Processor (CPU3, 0x03, 0x0000b010, 0x06) {}
-        Processor (CPU4, 0x04, 0x0000b010, 0x06) {}
-        Processor (CPU5, 0x05, 0x0000b010, 0x06) {}
-        Processor (CPU6, 0x06, 0x0000b010, 0x06) {}
-        Processor (CPU7, 0x07, 0x0000b010, 0x06) {}
-        Processor (CPU8, 0x08, 0x0000b010, 0x06) {}
-        Processor (CPU9, 0x09, 0x0000b010, 0x06) {}
-        Processor (CPUA, 0x0a, 0x0000b010, 0x06) {}
-        Processor (CPUB, 0x0b, 0x0000b010, 0x06) {}
-        Processor (CPUC, 0x0c, 0x0000b010, 0x06) {}
-        Processor (CPUD, 0x0d, 0x0000b010, 0x06) {}
-        Processor (CPUE, 0x0e, 0x0000b010, 0x06) {}
-    }
 
     Scope (\)
     {
@@ -50,7 +32,7 @@ DefinitionBlock (
         OperationRegion (CMS, SystemIO, 0x70, 0x02)
         Field (CMS, ByteAcc, NoLock, Preserve)
         {
-            CMSI,   8, 
+            CMSI,   8,
             CMSD,   8
         }
         Method (CMRD, 1, NotSerialized)
@@ -64,7 +46,7 @@ DefinitionBlock (
         OperationRegion (DBG, SystemIO, 0xb044, 0x04)
         Field (DBG, DWordAcc, NoLock, Preserve)
         {
-            DBGL,   32, 
+            DBGL,   32,
         }
     }
 
@@ -80,42 +62,42 @@ DefinitionBlock (
                    section 6.2.8.1 */
                 /* Note: we provide the same info as the PCI routing
                    table of the Bochs BIOS */
-                   
+
                 // PCI Slot 0
-                Package() {0x0000ffff, 0, LNKD, 0}, 
-                Package() {0x0000ffff, 1, LNKA, 0}, 
-                Package() {0x0000ffff, 2, LNKB, 0}, 
-                Package() {0x0000ffff, 3, LNKC, 0}, 
+                Package() {0x0000ffff, 0, LNKD, 0},
+                Package() {0x0000ffff, 1, LNKA, 0},
+                Package() {0x0000ffff, 2, LNKB, 0},
+                Package() {0x0000ffff, 3, LNKC, 0},
 
                 // PCI Slot 1
-                Package() {0x0001ffff, 0, LNKA, 0}, 
-                Package() {0x0001ffff, 1, LNKB, 0}, 
-                Package() {0x0001ffff, 2, LNKC, 0}, 
-                Package() {0x0001ffff, 3, LNKD, 0}, 
-                
+                Package() {0x0001ffff, 0, LNKA, 0},
+                Package() {0x0001ffff, 1, LNKB, 0},
+                Package() {0x0001ffff, 2, LNKC, 0},
+                Package() {0x0001ffff, 3, LNKD, 0},
+
                 // PCI Slot 2
-                Package() {0x0002ffff, 0, LNKB, 0}, 
-                Package() {0x0002ffff, 1, LNKC, 0}, 
-                Package() {0x0002ffff, 2, LNKD, 0}, 
-                Package() {0x0002ffff, 3, LNKA, 0}, 
+                Package() {0x0002ffff, 0, LNKB, 0},
+                Package() {0x0002ffff, 1, LNKC, 0},
+                Package() {0x0002ffff, 2, LNKD, 0},
+                Package() {0x0002ffff, 3, LNKA, 0},
 
                 // PCI Slot 3
-                Package() {0x0003ffff, 0, LNKC, 0}, 
-                Package() {0x0003ffff, 1, LNKD, 0}, 
-                Package() {0x0003ffff, 2, LNKA, 0}, 
-                Package() {0x0003ffff, 3, LNKB, 0}, 
+                Package() {0x0003ffff, 0, LNKC, 0},
+                Package() {0x0003ffff, 1, LNKD, 0},
+                Package() {0x0003ffff, 2, LNKA, 0},
+                Package() {0x0003ffff, 3, LNKB, 0},
 
                 // PCI Slot 4
-                Package() {0x0004ffff, 0, LNKD, 0}, 
-                Package() {0x0004ffff, 1, LNKA, 0}, 
-                Package() {0x0004ffff, 2, LNKB, 0}, 
-                Package() {0x0004ffff, 3, LNKC, 0}, 
+                Package() {0x0004ffff, 0, LNKD, 0},
+                Package() {0x0004ffff, 1, LNKA, 0},
+                Package() {0x0004ffff, 2, LNKB, 0},
+                Package() {0x0004ffff, 3, LNKC, 0},
 
                 // PCI Slot 5
-                Package() {0x0005ffff, 0, LNKA, 0}, 
-                Package() {0x0005ffff, 1, LNKB, 0}, 
-                Package() {0x0005ffff, 2, LNKC, 0}, 
-                Package() {0x0005ffff, 3, LNKD, 0}, 
+                Package() {0x0005ffff, 0, LNKA, 0},
+                Package() {0x0005ffff, 1, LNKB, 0},
+                Package() {0x0005ffff, 2, LNKC, 0},
+                Package() {0x0005ffff, 3, LNKD, 0},
             })
 
             Method (_CRS, 0, NotSerialized)
@@ -185,10 +167,21 @@ DefinitionBlock (
 	/* PIIX3 ISA bridge */
         Device (ISA) {
             Name (_ADR, 0x00010000)
-        
+
             /* PIIX PCI to ISA irq remapping */
             OperationRegion (P40C, PCI_Config, 0x60, 0x04)
 
+            /* Real-time clock */
+            Device (RTC)
+            {
+                Name (_HID, EisaId ("PNP0B00"))
+                Name (_CRS, ResourceTemplate ()
+                {
+                    IO (Decode16, 0x0070, 0x0070, 0x10, 0x02)
+                    IRQNoFlags () {8}
+                    IO (Decode16, 0x0072, 0x0072, 0x02, 0x06)
+                })
+            }
 
             /* Keyboard seems to be important for WinXP install */
             Device (KBD)
@@ -223,7 +216,7 @@ DefinitionBlock (
             }
 
 	    /* PS/2 mouse */
-            Device (MOU) 
+            Device (MOU)
             {
                 Name (_HID, EisaId ("PNP0F13"))
                 Method (_STA, 0, NotSerialized)
@@ -372,9 +365,9 @@ DefinitionBlock (
     Scope(\_SB) {
          Field (\_SB.PCI0.ISA.P40C, ByteAcc, NoLock, Preserve)
          {
-             PRQ0,   8, 
-             PRQ1,   8, 
-             PRQ2,   8, 
+             PRQ0,   8,
+             PRQ1,   8,
+             PRQ2,   8,
              PRQ3,   8
          }
 
@@ -562,8 +555,8 @@ DefinitionBlock (
 
     /* S5 = power off state */
     Name (_S5, Package (4) {
-        0x00, // PM1a_CNT.SLP_TYP 
-        0x00, // PM2a_CNT.SLP_TYP 
+        0x00, // PM1a_CNT.SLP_TYP
+        0x00, // PM2a_CNT.SLP_TYP
         0x00, // reserved
         0x00, // reserved
     })

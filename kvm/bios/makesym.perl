@@ -2,7 +2,7 @@
 #
 # $Id: makesym.perl,v 1.1 2002/11/24 22:45:40 bdenney Exp $
 #
-# Read output file from as86 (e.g. rombios.txt) and write out a symbol 
+# Read output file from as86 (e.g. rombios.txt) and write out a symbol
 # table suitable for the Bochs debugger.
 #
 
