@@ -83,7 +83,3 @@ rpm:	all
 
 clean:
 	$(MAKE) -C $(KERNELDIR) M=`pwd` $@
-
-svnclean:
-	svn st | grep '^\?' | awk '{print $2}' | xargs rm -rf
-
