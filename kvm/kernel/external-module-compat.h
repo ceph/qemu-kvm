@@ -564,6 +564,11 @@ static inline void blahblah(void)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25)
 
 #define mmdrop(x) do { (void)(x); } while (0)
+#define mmget(x) do { (void)(x); } while (0)
+
+#else
+
+#define mmget(x) do { atomic_inc(x); } while (0)
 
 #endif
 

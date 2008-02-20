@@ -33,7 +33,7 @@
     vmx_load_host_state = 0
 }
 
-/atomic_inc\(&kvm->mm->mm_count\);/ { $0 = "//" $0 }
+/atomic_inc\(&kvm->mm->mm_count\);/ { $0 = "mmget(&kvm->mm->mm_count);" }
 
 /^\t\.fault = / {
     fcn = gensub(/,/, "", "g", $3)
