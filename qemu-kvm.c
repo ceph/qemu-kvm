@@ -137,7 +137,7 @@ extern int vm_running;
 
 static int has_work(CPUState *env)
 {
-    if (!vm_running || env && vcpu_info[env->cpu_index].stopped)
+    if (!vm_running || (env && vcpu_info[env->cpu_index].stopped))
 	return 0;
     if (!(env->hflags & HF_HALTED_MASK))
 	return 1;
