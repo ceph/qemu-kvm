@@ -19,7 +19,7 @@
 /* FIXME: share this number with kvm */
 /* FIXME: or dynamically alloc/realloc regions */
 #define KVM_MAX_NUM_MEM_REGIONS 8u
-#define MAX_VCPUS 4
+#define MAX_VCPUS 16
 
 /* kvm abi verison variable */
 extern int kvm_abi;

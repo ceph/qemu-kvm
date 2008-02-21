@@ -47,7 +47,7 @@ struct vcpu_info {
     int signalled;
     int stop;
     int stopped;
-} vcpu_info[4];
+} vcpu_info[256];
 
 CPUState *qemu_kvm_cpu_env(int index)
 {
