@@ -591,6 +591,35 @@ static MigrationState *migration_init_exec(int detach, const char *command)
     return migration_init_cmd(detach, "/bin/sh", argv);
 }
 
+
+static int file_release(void *opaque)
+{
+    int fd = (int)(long)opaque;
+    close(fd);
+    return 0;
+}
+
+static MigrationState *migration_init_file(int detach, const char *filename)
+{
+    int fd;
+    MigrationState *s;
+
+    fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    if (fd == -1) {
+        term_printf("open file %s failed (%s)\n", filename, strerror(errno));
+        return NULL;
+    }
+
+    s = migration_init_fd(detach, fd);
+    if (s) {
+        s->release = file_release;
+        s->opaque = (void*)(long)fd;
+        max_throttle = 1U << 31;
+    }
+
+    return s;
+}
+
 static MigrationState *migration_init_ssh(int detach, const char *host)
 {
     int qemu_argc, daemonize = 0, argc, i;
@@ -1019,6 +1048,9 @@ void do_migrate(int detach, const char *uri)
 	if (migration_init_tcp(detach, host) == NULL)
             term_printf("migration failed (migration_init_tcp for %s failed)\n", host);
 	free(host);
+    } else if (strstart(uri, "file://", &ptr)) {
+        if (migration_init_file(detach, ptr) == NULL)
+            term_printf("migration failed (migration_init_file for %s failed)\n", ptr);
     } else {
 	term_printf("Unknown migration protocol '%s'\n", uri);
 	return;
