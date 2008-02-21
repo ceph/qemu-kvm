@@ -7786,7 +7786,10 @@ void main_loop_wait(int timeout)
         for(ioh = first_io_handler; ioh != NULL; ioh = ioh->next) {
             if (!ioh->deleted && ioh->fd_read && FD_ISSET(ioh->fd, &rfds)) {
                 ioh->fd_read(ioh->opaque);
-                more = 1;
+                if (!ioh->fd_read_poll || ioh->fd_read_poll(ioh->opaque))
+                    more = 1;
+                else
+                    FD_CLR(ioh->fd, &rfds);
             }
             if (!ioh->deleted && ioh->fd_write && FD_ISSET(ioh->fd, &wfds)) {
                 ioh->fd_write(ioh->opaque);
