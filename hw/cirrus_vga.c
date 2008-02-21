@@ -2635,8 +2635,7 @@ int unset_vram_mapping(unsigned long begin, unsigned long end)
     return 0;
 }
 #ifdef CONFIG_X86
-static void kvm_update_vga_alias(CirrusVGAState *s, int ok, int bank,
-                                 unsigned long phys_addr)
+static void kvm_update_vga_alias(CirrusVGAState *s, int ok, int bank)
 {
     unsigned limit, base;
 
@@ -2650,22 +2649,22 @@ static void kvm_update_vga_alias(CirrusVGAState *s, int ok, int bank,
 	if (!s->aliases_enabled
 	    || base != s->aliased_bank_base[bank]
 	    || limit != s->aliased_bank_limit[bank]) {
-	    kvm_create_memory_alias(kvm_context, phys_addr,
+	    kvm_create_memory_alias(kvm_context,
 				    0xa0000 + bank * 0x8000,
 				    limit, base);
 	    s->aliased_bank_base[bank] = base;
 	    s->aliased_bank_limit[bank] = limit;
 	}
     } else {
-	kvm_destroy_memory_alias(kvm_context, phys_addr);
+	kvm_destroy_memory_alias(kvm_context, 0xa0000 + bank * 0x8000);
     }
 }
 
 static void kvm_update_vga_aliases(CirrusVGAState *s, int ok)
 {
     if (kvm_enabled()) {
-	kvm_update_vga_alias(s, ok, 0, 0xc0000);
-	kvm_update_vga_alias(s, ok, 1, s->map_addr);
+	kvm_update_vga_alias(s, ok, 0);
+	kvm_update_vga_alias(s, ok, 1);
     }
     s->aliases_enabled = ok;
 }

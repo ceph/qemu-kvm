@@ -430,7 +430,7 @@ int kvm_get_dirty_pages_range(kvm_context_t kvm, unsigned long phys_addr,
  * accesses the alias region, it will behave exactly as if it accessed
  * the target memory.
  */
-int kvm_create_memory_alias(kvm_context_t, uint64_t phys_addr,
+int kvm_create_memory_alias(kvm_context_t,
 			    uint64_t phys_start, uint64_t len,
 			    uint64_t target_phys);
 
@@ -439,7 +439,7 @@ int kvm_create_memory_alias(kvm_context_t, uint64_t phys_addr,
  *
  * Removes an alias created with kvm_create_memory_alias().
  */
-int kvm_destroy_memory_alias(kvm_context_t, uint64_t phys_addr);
+int kvm_destroy_memory_alias(kvm_context_t, uint64_t phys_start);
 
 /*!
  * \brief Get a bitmap of guest ram pages which are allocated to the guest.
