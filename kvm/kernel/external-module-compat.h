@@ -707,3 +707,25 @@ static inline struct page *__kvm_vm_fault(struct vm_area_struct *vma,
 #define kvm_tsc_khz tsc_khz
 
 #endif
+
+struct kvm_desc_struct {
+	union {
+		struct { unsigned int a, b; };
+		struct {
+			u16 limit0;
+			u16 base0;
+			unsigned base1: 8, type: 4, s: 1, dpl: 2, p: 1;
+			unsigned limit: 4, avl: 1, l: 1, d: 1, g: 1, base2: 8;
+		};
+
+	};
+} __attribute__((packed));
+
+struct kvm_ldttss_desc64 {
+	u16 limit0;
+	u16 base0;
+	unsigned base1 : 8, type : 5, dpl : 2, p : 1;
+	unsigned limit1 : 4, zero0 : 3, g : 1, base2 : 8;
+	u32 base3;
+	u32 zero1;
+} __attribute__((packed));
