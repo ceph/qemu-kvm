@@ -193,5 +193,7 @@ void *set_vram_mapping(unsigned long begin, unsigned long end);
 int unset_vram_mapping(unsigned long begin, unsigned long end);
 
 void *vga_update_vram(VGAState *s, void *vga_ram_base, int vga_ram_size);
+void vga_update_vram_mapping(VGAState *s, unsigned long vga_ram_begin,
+			     unsigned long vga_ram_end);
 extern const uint8_t sr_mask[8];
 extern const uint8_t gr_mask[16];
