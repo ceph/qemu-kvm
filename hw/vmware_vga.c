@@ -36,6 +36,9 @@
 # include "vga_int.h"
 #endif
 
+#include "qemu-kvm.h"
+#include "pc.h"
+
 struct vmsvga_state_s {
 #ifdef EMBED_STDVGA
     VGA_STATE_COMMON
@@ -1155,6 +1158,8 @@ static void pci_vmsvga_map(PCIDevice *pci_dev, int region_num,
     } else {
         cpu_register_physical_memory(addr, s->vram_size, s->iomemtype);
 	s->vram_addr = addr;
+        if (kvm_enabled())
+	    vga_update_vram_mapping((VGAState *)s, addr, addr + VGA_RAM_SIZE);
 	s->vram = s->vram_ptr;
     }
 }
