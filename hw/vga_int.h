@@ -147,18 +147,15 @@
     uint32_t last_palette[256];                                         \
     uint32_t last_ch_attr[CH_ATTR_SIZE]; /* XXX: make it dynamic */	\
     unsigned long map_addr;						\
-    unsigned long map_end;
+    unsigned long map_end;                                              \
+    int32_t  aliases_enabled;                                           \
+    int32_t  pad1;                                                      \
+    uint32_t aliased_bank_base[2];                                      \
+    uint32_t aliased_bank_limit[2];
 
 
 typedef struct VGAState {
     VGA_STATE_COMMON
-
-    int32_t  aliases_enabled;
-    int32_t  pad1;
-    uint32_t aliased_bank_base[2];
-    uint32_t aliased_bank_limit[2];
-
-
 } VGAState;
 
 static inline int c6_to_8(int v)

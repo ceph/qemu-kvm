@@ -240,9 +240,6 @@ typedef struct CirrusVGAState {
     int cirrus_mmio_io_addr;
     unsigned long cirrus_lfb_addr;
     unsigned long cirrus_lfb_end;
-    int aliases_enabled;
-    uint32_t aliased_bank_base[2];
-    uint32_t aliased_bank_limit[2];
     uint32_t cirrus_addr_mask;
     uint32_t linear_mmio_mask;
     uint8_t cirrus_shadow_gr0;
