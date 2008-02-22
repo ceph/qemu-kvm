@@ -20,6 +20,8 @@
 
 #define MSR_IA32_TSC		0x10
 
+#define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
+
 static struct kvm_msr_list *kvm_msr_list;
 extern unsigned int kvm_shadow_memory;
 extern kvm_context_t kvm_context;
@@ -497,6 +499,37 @@ static void do_cpuid_ent(struct kvm_cpuid_entry *e, uint32_t function,
     }
 }
 
+struct kvm_para_features {
+	int cap;
+	int feature;
+} para_features[] = {
+#ifdef KVM_CAP_CLOCKSOURCE
+	{ KVM_CAP_CLOCKSOURCE, KVM_FEATURE_CLOCKSOURCE },
+#endif
+#ifdef KVM_CAP_NOP_IO_DELAY
+	{ KVM_CAP_NOP_IO_DELAY, KVM_FEATURE_NOP_IO_DELAY },
+#endif
+#ifdef KVM_CAP_PV_MMU
+	{ KVM_CAP_PV_MMU, KVM_FEATURE_MMU_OP },
+#endif
+#ifdef KVM_CAP_CR3_CACHE
+	{ KVM_CAP_CR3_CACHE, KVM_FEATURE_CR3_CACHE },
+#endif
+	{ -1, -1 }
+};
+
+static int get_para_features(kvm_context_t kvm_context)
+{
+	int i, features = 0;
+
+	for (i = 0; i < ARRAY_SIZE(para_features)-1; i++) {
+		if (kvm_check_extension(kvm_context, para_features[i].cap))
+			features |= (1 << para_features[i].feature);
+	}
+
+	return features;
+}
+
 int kvm_arch_qemu_init_env(CPUState *cenv)
 {
     struct kvm_cpuid_entry cpuid_ent[100];
@@ -507,10 +540,6 @@ int kvm_arch_qemu_init_env(CPUState *cenv)
     int cpuid_nent = 0;
     CPUState copy;
     uint32_t i, limit;
-    int has_clocksource = 0;
-#ifdef KVM_CAP_CLOCKSOURCE
-    has_clocksource = kvm_check_extension(kvm_context, KVM_CAP_CLOCKSOURCE);
-#endif
 
     copy = *cenv;
 
@@ -528,9 +557,7 @@ int kvm_arch_qemu_init_env(CPUState *cenv)
     pv_ent = &cpuid_ent[cpuid_nent++];
     memset(pv_ent, 0, sizeof(*pv_ent));
     pv_ent->function = KVM_CPUID_FEATURES;
-#ifdef KVM_CAP_CLOCKSOURCE
-    pv_ent->eax = (has_clocksource << KVM_FEATURE_CLOCKSOURCE);
-#endif
+    pv_ent->eax = get_para_features(kvm_context);
 #endif
 
     copy.regs[R_EAX] = 0;
