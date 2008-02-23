@@ -99,6 +99,7 @@ extern int no_quit;
 extern int semihosting_enabled;
 extern int autostart;
 extern int old_param;
+extern int hpagesize;
 extern const char *bootp_filename;
 
 

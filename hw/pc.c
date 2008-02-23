@@ -854,6 +854,15 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
     /* above 4giga memory allocation */
     if (above_4g_mem_size > 0) {
         ram_addr = qemu_ram_alloc(above_4g_mem_size);
+	if (hpagesize) {
+		if (ram_addr & (hpagesize-1)) {
+			unsigned long aligned_addr;
+			aligned_addr = (ram_addr + hpagesize - 1) &
+					 ~(hpagesize-1);
+			qemu_ram_alloc(aligned_addr - ram_addr);
+			ram_addr = aligned_addr;
+		}
+	}
         cpu_register_physical_memory(0x100000000, above_4g_mem_size, ram_addr);
 
 	if (kvm_enabled())
