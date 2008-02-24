@@ -848,13 +848,16 @@ again:
 	if (r)
 	    return r;
 	r = ioctl(fd, KVM_RUN, 0);
-	post_kvm_run(kvm, vcpu);
 
 	if (r == -1 && errno != EINTR && errno != EAGAIN) {
 		r = -errno;
-		printf("kvm_run: %m\n");
+		post_kvm_run(kvm, vcpu);
+		printf("kvm_run: %s\n", strerror(-r));
 		return r;
 	}
+
+	post_kvm_run(kvm, vcpu);
+
 	if (r == -1) {
 		r = handle_io_window(kvm);
 		goto more;
