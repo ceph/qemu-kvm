@@ -1568,7 +1568,7 @@ static void vga_draw_graphic(VGAState *s, int full_update)
             update |= cpu_physical_memory_get_dirty(page0 + TARGET_PAGE_SIZE,
                                                     VGA_DIRTY_FLAG);
 	    if (kvm_enabled())
-		update |= bitmap_get_dirty(bitmap, (page0 - s->vram_offset) >> TARGET_PAGE_BITS);
+		update |= bitmap_get_dirty(bitmap, (page0 + TARGET_PAGE_SIZE - s->vram_offset) >> TARGET_PAGE_BITS);
         }
         /* explicit invalidation for the hardware cursor */
         update |= (s->invalidated_y_table[y >> 5] >> (y & 0x1f)) & 1;
