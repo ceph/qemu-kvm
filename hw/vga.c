@@ -1438,7 +1438,7 @@ static void vga_draw_graphic(VGAState *s, int full_update)
     long page0, page1, page_min, page_max;
     vga_draw_line_func *vga_draw_line;
     /* HACK ALERT */
-#define VGA_BITMAP_SIZE ((8*1024*1024) / 4096 / 8 / sizeof(long))
+#define VGA_BITMAP_SIZE (VGA_RAM_SIZE / 4096 / 8 / sizeof(long))
     unsigned long bitmap[VGA_BITMAP_SIZE];
 #ifndef TARGET_IA64
     int r;

@@ -108,9 +108,9 @@ int piix4_init(PCIBus *bus, int devfn);
 /* vga.c */
 
 #ifndef TARGET_SPARC
-#define VGA_RAM_SIZE (8192 * 1024)
+#define VGA_RAM_SIZE (16 * 1024 * 1024)
 #else
-#define VGA_RAM_SIZE (9 * 1024 * 1024)
+#define VGA_RAM_SIZE (17 * 1024 * 1024)
 #endif
 
 int isa_vga_init(DisplayState *ds, uint8_t *vga_ram_base,
