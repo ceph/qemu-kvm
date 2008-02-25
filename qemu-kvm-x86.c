@@ -427,19 +427,36 @@ static void host_cpuid(uint32_t function, uint32_t *eax, uint32_t *ebx,
 {
     uint32_t vec[4];
 
+    vec[0] = function;
+    asm volatile (
 #ifdef __x86_64__
-    asm volatile("cpuid"
-		 : "=a"(vec[0]), "=b"(vec[1]), "=c"(vec[2]), "=d"(vec[3])
-		 : "0"(function));
+	 "sub $128, %%rsp \n\t"  /* skip red zone */
+         "push %0;  push %%rsi \n\t"
+	 "push %%rax; push %%rbx; push %%rcx; push %%rdx \n\t"
+	 "mov 8*5(%%rsp), %%rsi \n\t"
+	 "mov (%%rsi), %%eax \n\t"
+	 "cpuid \n\t"
+	 "mov %%eax, (%%rsi) \n\t"
+	 "mov %%ebx, 4(%%rsi) \n\t"
+	 "mov %%ecx, 8(%%rsi) \n\t"
+	 "mov %%edx, 12(%%rsi) \n\t"
+	 "pop %%rdx; pop %%rcx; pop %%rbx; pop %%rax \n\t"
+	 "pop %%rsi; pop %0 \n\t"
+	 "add $128, %%rsp"
 #else
-    asm volatile("movl %%ebx, %%esi \n\t"
-		 "cpuid \n\t"
-		 "movl %%ebx, %1 \n\t"
-		 "movl %%esi, %%ebx"
-		 : "=a"(vec[0]), "=r"(vec[1]), "=c"(vec[2]), "=d"(vec[3])
-		 : "0"(function)
-		 : "esi");
+         "push %0;  push %%esi \n\t"
+	 "push %%eax; push %%ebx; push %%ecx; push %%edx \n\t"
+	 "mov 4*5(%%esp), %%esi \n\t"
+	 "mov (%%esi), %%eax \n\t"
+	 "cpuid \n\t"
+	 "mov %%eax, (%%esi) \n\t"
+	 "mov %%ebx, 4(%%esi) \n\t"
+	 "mov %%ecx, 8(%%esi) \n\t"
+	 "mov %%edx, 12(%%esi) \n\t"
+	 "pop %%edx; pop %%ecx; pop %%ebx; pop %%eax \n\t"
+	 "pop %%esi; pop %0 \n\t"
 #endif
+	 : : "rm"(vec) : "memory");
     if (eax)
 	*eax = vec[0];
     if (ebx)
