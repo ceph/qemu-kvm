@@ -27,6 +27,13 @@ DefinitionBlock (
 {
    Scope (\_PR)
    {
+	OperationRegion( PRST, SystemIO, 0xaf00, 0x02)
+	Field (PRST, ByteAcc, NoLock, WriteAsZeros)
+	{
+		PRU, 8,
+		PRD, 8,
+	}
+
         Processor (CPU0, 0x00, 0x0000b010, 0x06) {Method (_STA) { Return(0xF)}}
         Processor (CPU1, 0x01, 0x0000b010, 0x06) {Method (_STA) { Return(0xF)}}
         Processor (CPU2, 0x02, 0x0000b010, 0x06) {Method (_STA) { Return(0xF)}}
