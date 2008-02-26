@@ -1358,57 +1358,6 @@ static void acpi_build_table_header(struct acpi_table_header *h,
     h->checksum = acpi_checksum((void *)h, len);
 }
 
-int acpi_build_processor_ssdt(uint8_t *ssdt)
-{
-    uint8_t *ssdt_ptr = ssdt;
-    int i, length;
-    int acpi_cpus = smp_cpus > 0xff ? 0xff : smp_cpus;
-
-    ssdt_ptr[9] = 0; // checksum;
-    ssdt_ptr += sizeof(struct acpi_table_header);
-
-    // caluculate the length of processor block and scope block excluding PkgLength
-    length = 0x0d * acpi_cpus + 4;
-
-    // build processor scope header
-    *(ssdt_ptr++) = 0x10; // ScopeOp
-    if (length <= 0x3e) {
-        *(ssdt_ptr++) = length + 1;
-    } else {
-        *(ssdt_ptr++) = 0x7F;
-        *(ssdt_ptr++) = (length + 2) >> 6;
-    }
-    *(ssdt_ptr++) = '_'; // Name
-    *(ssdt_ptr++) = 'P';
-    *(ssdt_ptr++) = 'R';
-    *(ssdt_ptr++) = '_';
-
-    // build object for each processor
-    for(i=0;i<acpi_cpus;i++) {
-        *(ssdt_ptr++) = 0x5B; // ProcessorOp
-        *(ssdt_ptr++) = 0x83;
-        *(ssdt_ptr++) = 0x0B; // Length
-        *(ssdt_ptr++) = 'C';  // Name (CPUxx)
-        *(ssdt_ptr++) = 'P';
-        if ((i & 0xf0) != 0)
-            *(ssdt_ptr++) = (i >> 4) < 0xa ? (i >> 4) + '0' : (i >> 4) + 'A' - 0xa;
-        else
-            *(ssdt_ptr++) = 'U';
-        *(ssdt_ptr++) = (i & 0xf) < 0xa ? (i & 0xf) + '0' : (i & 0xf) + 'A' - 0xa;
-        *(ssdt_ptr++) = i;
-        *(ssdt_ptr++) = 0x10; // Processor block address
-        *(ssdt_ptr++) = 0xb0;
-        *(ssdt_ptr++) = 0;
-        *(ssdt_ptr++) = 0;
-        *(ssdt_ptr++) = 6;    // Processor block length
-    }
-
-    acpi_build_table_header((struct acpi_table_header *)ssdt,
-                            "SSDT", ssdt_ptr - ssdt, 1);
-
-    return ssdt_ptr - ssdt;
-}
-
 /* base_addr must be a multiple of 4KB */
 void acpi_bios_init(void)
 {
@@ -1451,10 +1400,6 @@ void acpi_bios_init(void)
     dsdt_addr = addr;
     dsdt = (void *)(addr);
     addr += sizeof(AmlCode);
-
-    ssdt_addr = addr;
-    ssdt = (void *)(addr);
-    addr += acpi_build_processor_ssdt(ssdt);
 
     addr = (addr + 7) & ~7;
     madt_addr = addr;
