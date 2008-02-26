@@ -13,6 +13,7 @@
 int kvm_main_loop(void);
 int kvm_qemu_init(void);
 int kvm_qemu_create_context(void);
+void kvm_init_new_ap(int cpu, CPUState *env);
 int kvm_init_ap(void);
 void kvm_qemu_destroy(void);
 void kvm_load_registers(CPUState *env);

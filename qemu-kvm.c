@@ -351,6 +351,11 @@ static void kvm_add_signal(struct qemu_kvm_signal_table *sigtab, int signum)
     sigdelset(&sigtab->negsigset, signum);
 }
 
+void kvm_init_new_ap(int cpu, CPUState *env)
+{
+    pthread_create(&vcpu_info[cpu].thread, NULL, ap_main_loop, env);
+}
+
 int kvm_init_ap(void)
 {
     CPUState *env = first_cpu->next_cpu;
@@ -371,8 +376,8 @@ int kvm_init_ap(void)
     vcpu->env = first_cpu;
     signal(SIG_IPI, sig_ipi_handler);
     for (i = 1; i < smp_cpus; ++i) {
-	pthread_create(&vcpu_info[i].thread, NULL, ap_main_loop, env);
-	env = env->next_cpu;
+        kvm_init_new_ap(i, env);
+        env = env->next_cpu;
     }
     return 0;
 }
