@@ -154,6 +154,9 @@ int extboot_drive;
 extern int drive_get_index(BlockInterfaceType type, int bus, int unit);
 extern int drive_get_max_bus(BlockInterfaceType type);
 
+/* acpi */
+void qemu_system_cpu_hot_add(int cpu, int state);
+
 /* vmchannel devices */
 
 #define MAX_VMCHANNEL_DEVICES 4

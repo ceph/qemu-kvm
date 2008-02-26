@@ -533,3 +533,7 @@ void qemu_system_powerdown(void)
     }
 }
 #endif
+
+void qemu_system_cpu_hot_add(int cpu, int state)
+{
+}

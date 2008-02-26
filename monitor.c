@@ -345,6 +345,21 @@ static void do_cpu_set(int index)
         term_printf("Invalid CPU index\n");
 }
 
+static void do_cpu_set_nr(int value, const char *status)
+{
+    int state;
+
+    if (!strcmp(status, "online"))
+       state = 1;
+    else if (!strcmp(status, "offline"))
+       state = 0;
+    else {
+       term_printf("invalid status: %s\n", status);
+       return;
+    }
+    qemu_system_cpu_hot_add(value, state);
+}
+
 static void do_info_jit(void)
 {
     dump_exec_info(NULL, monitor_fprintf);
@@ -1338,6 +1353,7 @@ static term_cmd_t term_cmds[] = {
       "", "cancel the current VM migration" },
     { "migrate_set_speed", "s", do_migrate_set_speed,
       "value", "set maximum speed (in bytes) for migrations" },
+    { "cpu_set", "is", do_cpu_set_nr, "cpu [online|offline]", "change cpu state" },
     { NULL, NULL, },
 };
 
