@@ -23,6 +23,9 @@
 #include "sysemu.h"
 #include "i2c.h"
 #include "smbus.h"
+#ifdef USE_KVM
+#include "qemu-kvm.h"
+#endif
 
 //#define DEBUG
 
@@ -640,6 +643,19 @@ static void disable_processor(struct gpe_regs *g, int cpu)
 
 void qemu_system_cpu_hot_add(int cpu, int state)
 {
+    CPUState *env;
+
+    if ((state) && (!qemu_kvm_cpu_env(cpu))) {
+        env = pc_new_cpu(cpu, model, 1);
+        if (!env) {
+            fprintf(stderr, "cpu %d creation failed\n", cpu);
+            return;
+        }
+#ifdef USE_KVM
+        kvm_init_new_ap(cpu, env);
+#endif
+    }
+
     qemu_set_irq(pm_state->irq, 1);
     gpe.up = 0;
     gpe.down = 0;
