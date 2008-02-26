@@ -57,6 +57,8 @@
 #define PM_IO_BASE        0xb000
 #define SMB_IO_BASE       0xb100
 
+#define MAX_CPUS 16
+
   // Define the application NAME
 #if defined(BX_QEMU)
 #  define BX_APPNAME "QEMU"

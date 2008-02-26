@@ -1007,20 +1007,22 @@ static void mptable_init(void)
     putstr(&q, "0.1         "); /* vendor id */
     putle32(&q, 0); /* OEM table ptr */
     putle16(&q, 0); /* OEM table size */
-    putle16(&q, smp_cpus + 18); /* entry count */
+    putle16(&q, MAX_CPUS + 18); /* entry count */
     putle32(&q, 0xfee00000); /* local APIC addr */
     putle16(&q, 0); /* ext table length */
     putb(&q, 0); /* ext table checksum */
     putb(&q, 0); /* reserved */
 
-    for(i = 0; i < smp_cpus; i++) {
+    for(i = 0; i < MAX_CPUS ; i++) {
         putb(&q, 0); /* entry type = processor */
         putb(&q, i); /* APIC id */
         putb(&q, 0x11); /* local APIC version number */
         if (i == 0)
             putb(&q, 3); /* cpu flags: enabled, bootstrap cpu */
-        else
+        else if ( i < smp_cpus)
             putb(&q, 1); /* cpu flags: enabled */
+        else
+            putb(&q, 0); /* cpu flags: disabled */
         putb(&q, 0); /* cpu signature */
         putb(&q, 6);
         putb(&q, 0);
@@ -1040,7 +1042,7 @@ static void mptable_init(void)
     putstr(&q, "ISA   ");
 
     /* ioapic */
-    ioapic_id = smp_cpus;
+    ioapic_id = MAX_CPUS;
     putb(&q, 2); /* entry type = I/O APIC */
     putb(&q, ioapic_id); /* apic ID */
     putb(&q, 0x11); /* I/O APIC version number */
@@ -1457,7 +1459,7 @@ void acpi_bios_init(void)
     addr = (addr + 7) & ~7;
     madt_addr = addr;
     madt_size = sizeof(*madt) +
-        sizeof(struct madt_processor_apic) * smp_cpus +
+        sizeof(struct madt_processor_apic) * MAX_CPUS +
         sizeof(struct madt_io_apic);
     madt = (void *)(addr);
     addr += madt_size;
@@ -1531,18 +1533,21 @@ void acpi_bios_init(void)
         madt->local_apic_address = cpu_to_le32(0xfee00000);
         madt->flags = cpu_to_le32(1);
         apic = (void *)(madt + 1);
-        for(i=0;i<smp_cpus;i++) {
+        for(i=0;i<MAX_CPUS;i++) {
             apic->type = APIC_PROCESSOR;
             apic->length = sizeof(*apic);
             apic->processor_id = i;
             apic->local_apic_id = i;
-            apic->flags = cpu_to_le32(1);
+            if (i < smp_cpus)
+                apic->flags = cpu_to_le32(1);
+            else
+                apic->flags = 0;
             apic++;
         }
         io_apic = (void *)apic;
         io_apic->type = APIC_IO;
         io_apic->length = sizeof(*io_apic);
-        io_apic->io_apic_id = smp_cpus;
+        io_apic->io_apic_id = MAX_CPUS;
         io_apic->address = cpu_to_le32(0xfec00000);
         io_apic->interrupt = cpu_to_le32(0);
 
