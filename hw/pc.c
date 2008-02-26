@@ -737,6 +737,28 @@ static int load_option_rom(const char *filename, int offset)
     return size;
 }
 
+CPUState *pc_new_cpu(int cpu, const char *cpu_model, int pci_enabled)
+{
+        CPUState *env = cpu_init(cpu_model);
+        if (!env) {
+            fprintf(stderr, "Unable to find x86 CPU definition\n");
+            exit(1);
+        }
+        if (cpu != 0)
+            env->hflags |= HF_HALTED_MASK;
+        if (smp_cpus > 1) {
+            /* XXX: enable it in all cases */
+            env->cpuid_features |= CPUID_APIC;
+        }
+        register_savevm("cpu", cpu, 4, cpu_save, cpu_load, env);
+        qemu_register_reset(main_cpu_reset, env);
+        if (pci_enabled) {
+            apic_init(env);
+        }
+        vmport_init(env);
+	return env;
+}
+
 /* PC hardware initialisation */
 static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
                      const char *boot_device, DisplayState *ds,
@@ -776,23 +798,7 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
     }
     
     for(i = 0; i < smp_cpus; i++) {
-        env = cpu_init(cpu_model);
-        if (!env) {
-            fprintf(stderr, "Unable to find x86 CPU definition\n");
-            exit(1);
-        }
-        if (i != 0)
-            env->hflags |= HF_HALTED_MASK;
-        if (smp_cpus > 1) {
-            /* XXX: enable it in all cases */
-            env->cpuid_features |= CPUID_APIC;
-        }
-        register_savevm("cpu", i, 4, cpu_save, cpu_load, env);
-        qemu_register_reset(main_cpu_reset, env);
-        if (pci_enabled) {
-            apic_init(env);
-        }
-        vmport_init(env);
+	env = pc_new_cpu(i, cpu_model, pci_enabled);
     }
 
     /* allocate RAM */
