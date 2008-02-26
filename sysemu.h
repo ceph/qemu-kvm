@@ -156,6 +156,7 @@ extern int drive_get_max_bus(BlockInterfaceType type);
 
 /* acpi */
 void qemu_system_cpu_hot_add(int cpu, int state);
+void qemu_system_hot_add_init(char *cpu_model);
 
 /* vmchannel devices */
 

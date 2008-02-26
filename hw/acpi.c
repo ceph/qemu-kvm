@@ -533,6 +533,40 @@ void qemu_system_powerdown(void)
     }
 }
 #endif
+#define GPE_BASE 0xafe0
+
+struct gpe_regs {
+    uint16_t sts; /* status */
+    uint16_t en;  /* enabled */
+};
+
+static struct gpe_regs gpe;
+
+static uint32_t gpe_readb(void *opaque, uint32_t addr)
+{
+    uint32_t val = 0;
+#if defined(DEBUG)
+    printf("gpe read %lx == %lx\n", addr, val);
+#endif
+    return val;
+}
+
+static void gpe_writeb(void *opaque, uint32_t addr, uint32_t val)
+{
+#if defined(DEBUG)
+    printf("gpe write %lx <== %d\n", addr, val);
+#endif
+}
+
+static char *model;
+
+void qemu_system_hot_add_init(char *cpu_model)
+{
+    register_ioport_write(GPE_BASE, 4, 1, gpe_writeb, &gpe);
+    register_ioport_read(GPE_BASE, 4, 1,  gpe_readb, &gpe);
+
+    model = cpu_model;
+}
 
 void qemu_system_cpu_hot_add(int cpu, int state)
 {
