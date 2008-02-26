@@ -58,6 +58,8 @@
 #define SMB_IO_BASE       0xb100
 #define CPU_COUNT_ADDR    0xf000
 
+#define MAX_CPUS 16
+
   // Define the application NAME
 #if defined(BX_QEMU)
 #  define BX_APPNAME "QEMU"
