@@ -445,6 +445,7 @@ echo "  --fmod-lib               path to FMOD library"
 echo "  --fmod-inc               path to FMOD includes"
 echo "  --enable-uname-release=R Return R for uname -r in usermode emulation"
 echo "  --sparc_cpu=V            Build qemu for Sparc architecture v7, v8, v8plus, v8plusa, v9"
+echo "  --disable-cpu-emulation  disables use of qemu cpu emulation code"
 echo ""
 echo "NOTE: The object files are built at the place where configure is launched"
 exit 1
