@@ -357,7 +357,9 @@ static void do_cpu_set_nr(int value, const char *status)
        term_printf("invalid status: %s\n", status);
        return;
     }
+#if defined(TARGET_I386) || defined(TARGET_X86_64)
     qemu_system_cpu_hot_add(value, state);
+#endif
 }
 
 static void do_info_jit(void)
