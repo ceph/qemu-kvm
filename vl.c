@@ -237,8 +237,7 @@ int semihosting_enabled = 0;
 int autostart = 1;
 int time_drift_fix = 0;
 unsigned int kvm_shadow_memory = 0;
-const char *hugetlbpath = NULL;
-const char *hugetlbfile = NULL;
+const char *mem_path = NULL;
 int hpagesize = 0;
 const char *cpu_vendor_string;
 #ifdef TARGET_ARM
@@ -8074,7 +8073,7 @@ static void help(int exitcode)
 #endif
            "-tdf            inject timer interrupts that got lost\n"
            "-kvm-shadow-memory megs set the amount of shadow pages to be allocated\n"
-           "-hugetlb-path   set the path to hugetlbfs mounted directory, also enables allocation of guest memory with huge pages\n"
+           "-mem-path       set the path to hugetlbfs/tmpfs mounted directory, also enables allocation of guest memory with huge pages\n"
 	   "-option-rom rom load a file, rom, into the option ROM space\n"
 #ifdef TARGET_SPARC
            "-prom-env variable=value  set OpenBIOS nvram variables\n"
@@ -8193,7 +8192,7 @@ enum {
     QEMU_OPTION_incoming,
     QEMU_OPTION_tdf,
     QEMU_OPTION_kvm_shadow_memory,
-    QEMU_OPTION_hugetlbpath,
+    QEMU_OPTION_mempath,
 };
 
 typedef struct QEMUOption {
@@ -8315,7 +8314,7 @@ const QEMUOption qemu_options[] = {
 #endif
     { "clock", HAS_ARG, QEMU_OPTION_clock },
     { "startdate", HAS_ARG, QEMU_OPTION_startdate },
-    { "hugetlb-path", HAS_ARG, QEMU_OPTION_hugetlbpath },
+    { "mem-path", HAS_ARG, QEMU_OPTION_mempath },
     { NULL },
 };
 
@@ -8570,89 +8569,82 @@ void qemu_get_launch_info(int *argc, char ***argv, int *opt_daemonize, const cha
 
 static int gethugepagesize(void)
 {
-	int ret, fd;
-	char buf[4096];
-	char *needle = "Hugepagesize:";
-	char *size;
-	unsigned long hugepagesize;
+    int ret, fd;
+    char buf[4096];
+    char *needle = "Hugepagesize:";
+    char *size;
+    unsigned long hugepagesize;
 
-	fd = open("/proc/meminfo", O_RDONLY);
-	if (fd < 0) {
-		perror("open");
-		exit(0);
-	}
+    fd = open("/proc/meminfo", O_RDONLY);
+    if (fd < 0) {
+	perror("open");
+	exit(0);
+    }
 
-	ret = read(fd, buf, sizeof(buf));
-	if (ret < 0) {
-		perror("read");
-		exit(0);
-	}
+    ret = read(fd, buf, sizeof(buf));
+    if (ret < 0) {
+	perror("read");
+	exit(0);
+    }
 
-	size = strstr(buf, needle);
-	if (!size)
-		return 0;
-	size += strlen(needle);
-	hugepagesize = strtol(size, NULL, 0);
-	return hugepagesize;
+    size = strstr(buf, needle);
+    if (!size)
+	return 0;
+    size += strlen(needle);
+    hugepagesize = strtol(size, NULL, 0);
+    return hugepagesize;
 }
 
-void cleanup_hugetlb(void)
+void *alloc_mem_area(unsigned long memory, const char *path)
 {
-	if (hugetlbfile)
-		unlink(hugetlbfile);
-}
+    char *filename;
+    void *area;
+    int fd;
 
-void *alloc_huge_area(unsigned long memory, const char *path)
-{
-	void *area;
-	int fd;
-	char *filename;
-	char *tmpfile = "/kvm.XXXXXX";
+    if (asprintf(&filename, "%s/kvm.XXXXXX", path) == -1)
+	return NULL;
 
-	filename = qemu_malloc(4096);
-	if (!filename)
-		return NULL;
+    hpagesize = gethugepagesize() * 1024;
+    if (!hpagesize)
+	return NULL;
 
-	memset(filename, 0, 4096);
-	strncpy(filename, path, 4096 - strlen(tmpfile) - 1);
-	strcat(filename, tmpfile);
+    fd = mkstemp(filename);
+    if (fd < 0) {
+	perror("mkstemp");
+	free(filename);
+	return NULL;
+    }
+    unlink(filename);
+    free(filename);
 
-	hpagesize = gethugepagesize() * 1024;
-	if (!hpagesize)
-		return NULL;
+    memory = (memory+hpagesize-1) & ~(hpagesize-1);
 
-	mkstemp(filename);
-	fd = open(filename, O_RDWR);
-	if (fd < 0) {
-		perror("open");
-		hpagesize = 0;
-		exit(0);
-	}
-	memory = (memory+hpagesize-1) & ~(hpagesize-1);
+    if (ftruncate(fd, memory) == -1) {
+	perror("ftruncate");
+	close(fd);
+	return NULL;
+    }
 
-	area = mmap(0, memory, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
-	if (area == MAP_FAILED) {
-		perror("mmap");
-		hpagesize = 0;
-		exit(0);
-	}
+    area = mmap(0, memory, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
+    if (area == MAP_FAILED) {
+	perror("mmap");
+	close(fd);
+	return NULL;
+    }
 
-	hugetlbfile = filename;
-	atexit(cleanup_hugetlb);
-
-	return area;
+    return area;
 }
 
 void *qemu_alloc_physram(unsigned long memory)
 {
-	void *area = NULL;
+    void *area = NULL;
 
-	if (hugetlbpath)
-		area = alloc_huge_area(memory, hugetlbpath);
-	if (!area)
-		area = qemu_vmalloc(memory);
+    if (mem_path)
+	area = alloc_mem_area(memory, mem_path);
+    if (!area)
+	area = qemu_vmalloc(memory);
 
-	return area;
+    return area;
 }
 
 int main(int argc, char **argv)
@@ -9253,8 +9245,8 @@ int main(int argc, char **argv)
             case QEMU_OPTION_kvm_shadow_memory:
                 kvm_shadow_memory = (int64_t)atoi(optarg) * 1024 * 1024 / 4096;
                 break;
-            case QEMU_OPTION_hugetlbpath:
-		hugetlbpath = optarg;
+            case QEMU_OPTION_mempath:
+		mem_path = optarg;
 		break;
             case QEMU_OPTION_name:
                 qemu_name = optarg;
