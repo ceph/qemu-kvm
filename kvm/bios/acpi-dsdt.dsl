@@ -235,6 +235,162 @@ DefinitionBlock (
                 Package() {0x0005ffff, 1, LNKB, 0},
                 Package() {0x0005ffff, 2, LNKC, 0},
                 Package() {0x0005ffff, 3, LNKD, 0},
+
+                // PCI Slot 6
+                Package() {0x0006ffff, 0, LNKB, 0},
+                Package() {0x0006ffff, 1, LNKC, 0},
+                Package() {0x0006ffff, 2, LNKD, 0},
+                Package() {0x0006ffff, 3, LNKA, 0},
+
+                // PCI Slot 7
+                Package() {0x0007ffff, 0, LNKC, 0},
+                Package() {0x0007ffff, 1, LNKD, 0},
+                Package() {0x0007ffff, 2, LNKA, 0},
+                Package() {0x0007ffff, 3, LNKB, 0},
+
+                // PCI Slot 8
+                Package() {0x0008ffff, 0, LNKD, 0},
+                Package() {0x0008ffff, 1, LNKA, 0},
+                Package() {0x0008ffff, 2, LNKB, 0},
+                Package() {0x0008ffff, 3, LNKC, 0},
+
+                // PCI Slot 9
+                Package() {0x0008ffff, 0, LNKA, 0},
+                Package() {0x0008ffff, 1, LNKB, 0},
+                Package() {0x0008ffff, 2, LNKC, 0},
+                Package() {0x0008ffff, 3, LNKD, 0},
+
+                // PCI Slot 10
+                Package() {0x000affff, 0, LNKB, 0},
+                Package() {0x000affff, 1, LNKC, 0},
+                Package() {0x000affff, 2, LNKD, 0},
+                Package() {0x000affff, 3, LNKA, 0},
+
+                // PCI Slot 11
+                Package() {0x000bffff, 0, LNKC, 0},
+                Package() {0x000bffff, 1, LNKD, 0},
+                Package() {0x000bffff, 2, LNKA, 0},
+                Package() {0x000bffff, 3, LNKB, 0},
+
+                // PCI Slot 12
+                Package() {0x000cffff, 0, LNKD, 0},
+                Package() {0x000cffff, 1, LNKA, 0},
+                Package() {0x000cffff, 2, LNKB, 0},
+                Package() {0x000cffff, 3, LNKC, 0},
+
+                // PCI Slot 13
+                Package() {0x000dffff, 0, LNKA, 0},
+                Package() {0x000dffff, 1, LNKB, 0},
+                Package() {0x000dffff, 2, LNKC, 0},
+                Package() {0x000dffff, 3, LNKD, 0},
+
+                // PCI Slot 14
+                Package() {0x000effff, 0, LNKB, 0},
+                Package() {0x000effff, 1, LNKC, 0},
+                Package() {0x000effff, 2, LNKD, 0},
+                Package() {0x000effff, 3, LNKA, 0},
+
+                // PCI Slot 15
+                Package() {0x000fffff, 0, LNKC, 0},
+                Package() {0x000fffff, 1, LNKD, 0},
+                Package() {0x000fffff, 2, LNKA, 0},
+                Package() {0x000fffff, 3, LNKB, 0},
+
+                // PCI Slot 16
+                Package() {0x0010ffff, 0, LNKD, 0},
+                Package() {0x0010ffff, 1, LNKA, 0},
+                Package() {0x0010ffff, 2, LNKB, 0},
+                Package() {0x0010ffff, 3, LNKC, 0},
+
+                // PCI Slot 17
+                Package() {0x0011ffff, 0, LNKA, 0},
+                Package() {0x0011ffff, 1, LNKB, 0},
+                Package() {0x0011ffff, 2, LNKC, 0},
+                Package() {0x0011ffff, 3, LNKD, 0},
+
+                // PCI Slot 18
+                Package() {0x0012ffff, 0, LNKB, 0},
+                Package() {0x0012ffff, 1, LNKC, 0},
+                Package() {0x0012ffff, 2, LNKD, 0},
+                Package() {0x0012ffff, 3, LNKA, 0},
+
+                // PCI Slot 19
+                Package() {0x0013ffff, 0, LNKC, 0},
+                Package() {0x0013ffff, 1, LNKD, 0},
+                Package() {0x0013ffff, 2, LNKA, 0},
+                Package() {0x0013ffff, 3, LNKB, 0},
+
+                // PCI Slot 20
+                Package() {0x0014ffff, 0, LNKD, 0},
+                Package() {0x0014ffff, 1, LNKA, 0},
+                Package() {0x0014ffff, 2, LNKB, 0},
+                Package() {0x0014ffff, 3, LNKC, 0},
+
+                // PCI Slot 21
+                Package() {0x0015ffff, 0, LNKA, 0},
+                Package() {0x0015ffff, 1, LNKB, 0},
+                Package() {0x0015ffff, 2, LNKC, 0},
+                Package() {0x0015ffff, 3, LNKD, 0},
+
+                // PCI Slot 22
+                Package() {0x0016ffff, 0, LNKB, 0},
+                Package() {0x0016ffff, 1, LNKC, 0},
+                Package() {0x0016ffff, 2, LNKD, 0},
+                Package() {0x0016ffff, 3, LNKA, 0},
+
+                // PCI Slot 23
+                Package() {0x0017ffff, 0, LNKC, 0},
+                Package() {0x0017ffff, 1, LNKD, 0},
+                Package() {0x0017ffff, 2, LNKA, 0},
+                Package() {0x0017ffff, 3, LNKB, 0},
+
+                // PCI Slot 24
+                Package() {0x0018ffff, 0, LNKD, 0},
+                Package() {0x0018ffff, 1, LNKA, 0},
+                Package() {0x0018ffff, 2, LNKB, 0},
+                Package() {0x0018ffff, 3, LNKC, 0},
+
+                // PCI Slot 25
+                Package() {0x0018ffff, 0, LNKA, 0},
+                Package() {0x0018ffff, 1, LNKB, 0},
+                Package() {0x0018ffff, 2, LNKC, 0},
+                Package() {0x0018ffff, 3, LNKD, 0},
+
+                // PCI Slot 26
+                Package() {0x001affff, 0, LNKB, 0},
+                Package() {0x001affff, 1, LNKC, 0},
+                Package() {0x001affff, 2, LNKD, 0},
+                Package() {0x001affff, 3, LNKA, 0},
+
+                // PCI Slot 27
+                Package() {0x001bffff, 0, LNKC, 0},
+                Package() {0x001bffff, 1, LNKD, 0},
+                Package() {0x001bffff, 2, LNKA, 0},
+                Package() {0x001bffff, 3, LNKB, 0},
+
+                // PCI Slot 28
+                Package() {0x001cffff, 0, LNKD, 0},
+                Package() {0x001cffff, 1, LNKA, 0},
+                Package() {0x001cffff, 2, LNKB, 0},
+                Package() {0x001cffff, 3, LNKC, 0},
+
+                // PCI Slot 29
+                Package() {0x001dffff, 0, LNKA, 0},
+                Package() {0x001dffff, 1, LNKB, 0},
+                Package() {0x001dffff, 2, LNKC, 0},
+                Package() {0x001dffff, 3, LNKD, 0},
+
+                // PCI Slot 30
+                Package() {0x001effff, 0, LNKB, 0},
+                Package() {0x001effff, 1, LNKC, 0},
+                Package() {0x001effff, 2, LNKD, 0},
+                Package() {0x001effff, 3, LNKA, 0},
+
+                // PCI Slot 31
+                Package() {0x001fffff, 0, LNKC, 0},
+                Package() {0x001fffff, 1, LNKD, 0},
+                Package() {0x001fffff, 2, LNKA, 0},
+                Package() {0x001fffff, 3, LNKB, 0},
             })
 
             Name (_CRS, ResourceTemplate ()
