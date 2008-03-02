@@ -853,6 +853,10 @@ Bit16u *AX;Bit16u ES;Bit16u DI;
                   write_word(ES, DI + cur_ptr, cur_info->mode);
                   cur_mode++;
                   cur_ptr+=2;
+                } else {
+#ifdef DEBUG
+                  printf("VBE mode %x (xres=%x / bpp=%02x) not supported by display\n", cur_info->mode,cur_info->info.XResolution,cur_info->info.BitsPerPixel);
+#endif
                 }
                 cur_info++;
         } while (cur_info->mode != VBE_VESA_MODE_END_OF_LIST);
