@@ -1091,7 +1091,7 @@ struct rsdp_descriptor         /* Root System Descriptor Pointer */
 struct rsdt_descriptor_rev1
 {
 	ACPI_TABLE_HEADER_DEF                           /* ACPI common table header */
-	uint32_t                             table_offset_entry [3]; /* Array of pointers to other */
+	uint32_t                             table_offset_entry [2]; /* Array of pointers to other */
 			 /* ACPI tables */
 };
 
@@ -1302,8 +1302,8 @@ void acpi_bios_init(void)
     struct fadt_descriptor_rev1 *fadt;
     struct facs_descriptor_rev1 *facs;
     struct multiple_apic_table *madt;
-    uint8_t *dsdt, *ssdt;
-    uint32_t base_addr, rsdt_addr, fadt_addr, addr, facs_addr, dsdt_addr, ssdt_addr;
+    uint8_t *dsdt;
+    uint32_t base_addr, rsdt_addr, fadt_addr, addr, facs_addr, dsdt_addr;
     uint32_t acpi_tables_size, madt_addr, madt_size;
     int i;
 
@@ -1366,7 +1366,6 @@ void acpi_bios_init(void)
     memset(rsdt, 0, sizeof(*rsdt));
     rsdt->table_offset_entry[0] = cpu_to_le32(fadt_addr);
     rsdt->table_offset_entry[1] = cpu_to_le32(madt_addr);
-    rsdt->table_offset_entry[2] = cpu_to_le32(ssdt_addr);
     acpi_build_table_header((struct acpi_table_header *)rsdt,
                             "RSDT", sizeof(*rsdt), 1);
 
