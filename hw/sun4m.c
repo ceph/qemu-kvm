@@ -31,6 +31,7 @@
 #include "net.h"
 #include "boards.h"
 #include "firmware_abi.h"
+#include "scsi.h"
 
 //#define DEBUG_IRQ
 
@@ -492,7 +493,7 @@ static void sun4m_hw_init(const struct hwdef *hwdef, int RAM_size,
 
     if (hwdef->fd_base != (target_phys_addr_t)-1) {
         /* there is zero or one floppy drive */
-        fd[1] = fd[0] = NULL;
+        memset(fd, 0, sizeof(fd));
         index = drive_get_index(IF_FLOPPY, 0, 0);
         if (index != -1)
             fd[0] = drives_table[index].bdrv;
@@ -505,8 +506,9 @@ static void sun4m_hw_init(const struct hwdef *hwdef, int RAM_size,
         exit(1);
     }
 
-    main_esp = esp_init(hwdef->esp_base, espdma, *espdma_irq,
-                        esp_reset);
+    main_esp = esp_init(hwdef->esp_base,
+                        espdma_memory_read, espdma_memory_write,
+                        espdma, *espdma_irq, esp_reset);
 
     for (i = 0; i < ESP_MAX_DEVS; i++) {
         index = drive_get_index(IF_SCSI, 0, i);
@@ -653,8 +655,9 @@ static void sun4c_hw_init(const struct hwdef *hwdef, int RAM_size,
         exit(1);
     }
 
-    main_esp = esp_init(hwdef->esp_base, espdma, *espdma_irq,
-                        esp_reset);
+    main_esp = esp_init(hwdef->esp_base,
+                        espdma_memory_read, espdma_memory_write,
+                        espdma, *espdma_irq, esp_reset);
 
     for (i = 0; i < ESP_MAX_DEVS; i++) {
         index = drive_get_index(IF_SCSI, 0, i);
@@ -823,8 +826,8 @@ static const struct hwdef hwdefs[] = {
         .esp_base     = 0xef0800000ULL,
         .le_base      = 0xef0c00000ULL,
         .apc_base     = 0xefa000000ULL, // XXX should not exist
-        .aux1_base    = 0xff1900000ULL, // XXX 0xff1800000ULL,
-        .aux2_base    = 0xff1910000ULL, // XXX 0xff1a01000ULL,
+        .aux1_base    = 0xff1800000ULL,
+        .aux2_base    = 0xff1a01000ULL,
         .ecc_base     = 0xf00000000ULL,
         .ecc_version  = 0x20000000, // version 0, implementation 2
         .sun4c_intctl_base  = -1,
@@ -1158,8 +1161,9 @@ static void sun4d_hw_init(const struct sun4d_hwdef *hwdef, int RAM_size,
         exit(1);
     }
 
-    main_esp = esp_init(hwdef->esp_base, espdma, *espdma_irq,
-                        esp_reset);
+    main_esp = esp_init(hwdef->esp_base,
+                        espdma_memory_read, espdma_memory_write,
+                        espdma, *espdma_irq, esp_reset);
 
     for (i = 0; i < ESP_MAX_DEVS; i++) {
         index = drive_get_index(IF_SCSI, 0, i);

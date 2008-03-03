@@ -181,6 +181,7 @@ BlockDriverState *bs_snapshots;
 int vga_ram_size;
 static DisplayState display_state;
 int nographic;
+int curses;
 const char* keyboard_layout = NULL;
 int64_t ticks_per_sec;
 int64_t ram_size;
@@ -188,8 +189,8 @@ int pit_min_timer_count = 0;
 int nb_nics;
 NICInfo nd_table[MAX_NICS];
 int vm_running;
-int rtc_utc = 1;
-int rtc_start_date = -1; /* -1 means now */
+static int rtc_utc = 1;
+static int rtc_date_offset = -1; /* -1 means no change */
 int cirrus_vga_enabled = 1;
 int vmsvga_enabled = 0;
 #ifdef TARGET_SPARC
@@ -1592,6 +1593,43 @@ static void quit_timers(void)
 {
     alarm_timer->stop(alarm_timer);
     alarm_timer = NULL;
+}
+
+/***********************************************************/
+/* host time/date access */
+void qemu_get_timedate(struct tm *tm, int offset)
+{
+    time_t ti;
+    struct tm *ret;
+
+    time(&ti);
+    ti += offset;
+    if (rtc_date_offset == -1) {
+        if (rtc_utc)
+            ret = gmtime(&ti);
+        else
+            ret = localtime(&ti);
+    } else {
+        ti -= rtc_date_offset;
+        ret = gmtime(&ti);
+    }
+
+    memcpy(tm, ret, sizeof(struct tm));
+}
+
+int qemu_timedate_diff(struct tm *tm)
+{
+    time_t seconds;
+
+    if (rtc_date_offset == -1)
+        if (rtc_utc)
+            seconds = mktimegm(tm);
+        else
+            seconds = mktime(tm);
+    else
+        seconds = mktimegm(tm) + rtc_date_offset;
+
+    return seconds - time(NULL);
 }
 
 /***********************************************************/
@@ -4983,7 +5021,7 @@ static int drive_init(struct drive_opt *arg, int snapshot,
                        "cache", "boot", NULL };
 
     if (check_params(buf, sizeof(buf), params, str) < 0) {
-         fprintf(stderr, "qemu: unknowm parameter '%s' in '%s'\n",
+         fprintf(stderr, "qemu: unknown parameter '%s' in '%s'\n",
                          buf, str);
          return -1;
     }
@@ -8065,6 +8103,9 @@ static void help(int exitcode)
            "                (default is CL-GD5446 PCI VGA)\n"
            "-no-acpi        disable ACPI\n"
 #endif
+#ifdef CONFIG_CURSES
+           "-curses         use a curses/ncurses interface instead of SDL\n"
+#endif
            "-no-reboot      exit instead of rebooting\n"
            "-loadvm file    start right away with a saved state (loadvm in monitor)\n"
 	   "-vnc display    start a VNC server on display\n"
@@ -8175,6 +8216,7 @@ enum {
     QEMU_OPTION_smp,
     QEMU_OPTION_vnc,
     QEMU_OPTION_no_acpi,
+    QEMU_OPTION_curses,
     QEMU_OPTION_no_kvm,
     QEMU_OPTION_no_kvm_irqchip,
     QEMU_OPTION_no_reboot,
@@ -8289,6 +8331,9 @@ const QEMUOption qemu_options[] = {
     { "usbdevice", HAS_ARG, QEMU_OPTION_usbdevice },
     { "smp", HAS_ARG, QEMU_OPTION_smp },
     { "vnc", HAS_ARG, QEMU_OPTION_vnc },
+#ifdef CONFIG_CURSES
+    { "curses", 0, QEMU_OPTION_curses },
+#endif
 
     /* temporary options */
     { "usb", 0, QEMU_OPTION_usb },
@@ -8729,6 +8774,7 @@ int main(int argc, char **argv)
 #endif
     snapshot = 0;
     nographic = 0;
+    curses = 0;
     kernel_filename = NULL;
     kernel_cmdline = "";
     cyls = heads = secs = 0;
@@ -8907,6 +8953,11 @@ int main(int argc, char **argv)
                 pstrcpy(monitor_device, sizeof(monitor_device), "stdio");
                 nographic = 1;
                 break;
+#ifdef CONFIG_CURSES
+            case QEMU_OPTION_curses:
+                curses = 1;
+                break;
+#endif
             case QEMU_OPTION_portrait:
                 graphic_rotate = 1;
                 break;
@@ -9275,8 +9326,9 @@ int main(int argc, char **argv)
             case QEMU_OPTION_startdate:
                 {
                     struct tm tm;
+                    time_t rtc_start_date;
                     if (!strcmp(optarg, "now")) {
-                        rtc_start_date = -1;
+                        rtc_date_offset = -1;
                     } else {
                         if (sscanf(optarg, "%d-%d-%dT%d:%d:%d",
                                &tm.tm_year,
@@ -9305,6 +9357,7 @@ int main(int argc, char **argv)
                                     "'now' or '2006-06-17T16:01:21' or '2006-06-17'\n");
                             exit(1);
                         }
+                        rtc_date_offset = time(NULL) - rtc_start_date;
                     }
                 }
                 break;
@@ -9530,13 +9583,23 @@ int main(int argc, char **argv)
     /* terminal init */
     memset(&display_state, 0, sizeof(display_state));
     if (nographic) {
+        if (curses) {
+            fprintf(stderr, "fatal: -nographic can't be used with -curses\n");
+            exit(1);
+        }
         /* nearly nothing to do */
         dumb_display_init(ds);
     } else if (vnc_display != NULL) {
         vnc_display_init(ds);
         if (vnc_display_open(ds, vnc_display) < 0)
             exit(1);
-    } else {
+    } else
+#if defined(CONFIG_CURSES)
+    if (curses) {
+        curses_display_init(ds, full_screen);
+    } else
+#endif
+    {
 #if defined(CONFIG_SDL)
         sdl_display_init(ds, full_screen, no_frame);
 #elif defined(CONFIG_COCOA)

@@ -189,6 +189,9 @@ LIBOBJS+= translate-all.o translate.o op.o
 LIBOBJS+= tcg/tcg.o tcg/tcg-dyngen.o tcg/tcg-runtime.o
 CPPFLAGS+=-I$(SRC_PATH)/tcg -I$(SRC_PATH)/tcg/$(ARCH)
 endif
+ifeq ($(ARCH),sparc64)
+CPPFLAGS+=-I$(SRC_PATH)/tcg/sparc
+endif
 
 ifeq ($(USE_KVM), 1)
 LIBOBJS+=qemu-kvm.o
@@ -555,7 +558,7 @@ LIBS += $(CONFIG_VNC_TLS_LIBS)
 endif
 
 # SCSI layer
-OBJS+= lsi53c895a.o
+OBJS+= lsi53c895a.o esp.o
 
 # USB layer
 OBJS+= usb-ohci.o
@@ -632,7 +635,7 @@ OBJS+= fdc.o mc146818rtc.o serial.o m48t59.o
 OBJS+= cirrus_vga.o parallel.o ptimer.o
 else
 OBJS+= sun4m.o tcx.o pcnet.o iommu.o m48t59.o slavio_intctl.o
-OBJS+= slavio_timer.o slavio_serial.o slavio_misc.o fdc.o esp.o sparc32_dma.o
+OBJS+= slavio_timer.o slavio_serial.o slavio_misc.o fdc.o sparc32_dma.o
 OBJS+= cs4231.o ptimer.o eccmemctl.o sbi.o sun4c_intctl.o
 endif
 endif
@@ -710,7 +713,7 @@ firmware.o: firmware.c
 endif
 
 $(QEMU_PROG): $(OBJS) ../libqemu_common.a libqemu.a
-	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS) $(SDL_LIBS) $(COCOA_LIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS) $(SDL_LIBS) $(COCOA_LIBS) $(CURSES_LIBS)
 
 endif # !CONFIG_USER_ONLY
 

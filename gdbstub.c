@@ -611,17 +611,17 @@ static int cpu_gdb_read_registers(CPUState *env, uint8_t *mem_buf)
     ptr = mem_buf;
     for (i = 0; i < 32; i++)
       {
-        *(target_ulong *)ptr = tswapl(env->gpr[i][env->current_tc]);
+        *(target_ulong *)ptr = tswapl(env->gpr[env->current_tc][i]);
         ptr += sizeof(target_ulong);
       }
 
     *(target_ulong *)ptr = (int32_t)tswap32(env->CP0_Status);
     ptr += sizeof(target_ulong);
 
-    *(target_ulong *)ptr = tswapl(env->LO[0][env->current_tc]);
+    *(target_ulong *)ptr = tswapl(env->LO[env->current_tc][0]);
     ptr += sizeof(target_ulong);
 
-    *(target_ulong *)ptr = tswapl(env->HI[0][env->current_tc]);
+    *(target_ulong *)ptr = tswapl(env->HI[env->current_tc][0]);
     ptr += sizeof(target_ulong);
 
     *(target_ulong *)ptr = tswapl(env->CP0_BadVAddr);
@@ -688,17 +688,17 @@ static void cpu_gdb_write_registers(CPUState *env, uint8_t *mem_buf, int size)
     ptr = mem_buf;
     for (i = 0; i < 32; i++)
       {
-        env->gpr[i][env->current_tc] = tswapl(*(target_ulong *)ptr);
+        env->gpr[env->current_tc][i] = tswapl(*(target_ulong *)ptr);
         ptr += sizeof(target_ulong);
       }
 
     env->CP0_Status = tswapl(*(target_ulong *)ptr);
     ptr += sizeof(target_ulong);
 
-    env->LO[0][env->current_tc] = tswapl(*(target_ulong *)ptr);
+    env->LO[env->current_tc][0] = tswapl(*(target_ulong *)ptr);
     ptr += sizeof(target_ulong);
 
-    env->HI[0][env->current_tc] = tswapl(*(target_ulong *)ptr);
+    env->HI[env->current_tc][0] = tswapl(*(target_ulong *)ptr);
     ptr += sizeof(target_ulong);
 
     env->CP0_BadVAddr = tswapl(*(target_ulong *)ptr);
@@ -829,7 +829,7 @@ static int cpu_gdb_read_registers(CPUState *env, uint8_t *mem_buf)
   for (i = 0; i < 16; i++)
 	  ptr += cris_save_32 (ptr, env->regs[i]);
 
-  srs = env->pregs[SR_SRS];
+  srs = env->pregs[PR_SRS];
 
   ptr += cris_save_8 (ptr, env->pregs[0]);
   ptr += cris_save_8 (ptr, env->pregs[1]);

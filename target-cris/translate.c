@@ -71,6 +71,8 @@
 #define BUG() (gen_BUG(dc, __FILE__, __LINE__))
 #define BUG_ON(x) ({if (x) BUG();})
 
+#define DISAS_SWI 5
+
 /* Used by the decoder.  */
 #define EXTRACT_FIELD(src, start, end) \
             (((src) >> start) & ((1 << (end - start + 1)) - 1))
@@ -882,7 +884,7 @@ static unsigned int dec_addoq(DisasContext *dc)
 	/* Fetch register operand,  */
 	gen_movl_T0_reg[dc->op2]();
 	gen_op_movl_T1_im(imm);
-	crisv32_alu_op(dc, CC_OP_ADD, REG_ACR, 4);
+	crisv32_alu_op(dc, CC_OP_ADD, R_ACR, 4);
 	return 2;
 }
 static unsigned int dec_addq(DisasContext *dc)
@@ -1293,7 +1295,7 @@ static unsigned int dec_addi_acr(DisasContext *dc)
 	dec_prep_alu_r(dc, dc->op1, dc->op2, 4, 0);
 	gen_op_lsll_T0_im(dc->zzsize);
 	gen_op_addl_T0_T1();
-	gen_movl_reg_T0[REG_ACR]();
+	gen_movl_reg_T0[R_ACR]();
 	return 2;
 }
 
@@ -1736,7 +1738,7 @@ static unsigned int dec_addo_m(DisasContext *dc)
 
 	cris_cc_mask(dc, 0);
 	insn_len = dec_prep_alu_m(dc, 1, memsize);
-	crisv32_alu_op(dc, CC_OP_ADD, REG_ACR, 4);
+	crisv32_alu_op(dc, CC_OP_ADD, R_ACR, 4);
 	do_postinc(dc, memsize);
 	return insn_len;
 }
@@ -2112,6 +2114,7 @@ static unsigned int dec_rfe_etc(DisasContext *dc)
 			gen_op_movl_pc_T0();
 			/* Breaks start at 16 in the exception vector.  */
 			gen_op_break_im(dc->op1 + 16);
+			dc->is_jmp = DISAS_SWI;
 			break;
 		default:
 			printf ("op2=%x\n", dc->op2);
@@ -2120,6 +2123,18 @@ static unsigned int dec_rfe_etc(DisasContext *dc)
 
 	}
   done:
+	return 2;
+}
+
+static unsigned int dec_ftag_fidx_d_m(DisasContext *dc)
+{
+	/* Ignore D-cache flushes.  */
+	return 2;
+}
+
+static unsigned int dec_ftag_fidx_i_m(DisasContext *dc)
+{
+	/* Ignore I-cache flushes.  */
 	return 2;
 }
 
@@ -2213,8 +2228,8 @@ struct decoder_info {
 	{DEC_NEG_R, dec_neg_r},
 	{DEC_MOVE_R, dec_move_r},
 
-	/* ftag_fidx_i_m.  */
-	/* ftag_fidx_d_m.  */
+	{DEC_FTAG_FIDX_I_M, dec_ftag_fidx_i_m},
+	{DEC_FTAG_FIDX_D_M, dec_ftag_fidx_d_m},
 
 	{DEC_MULS_R, dec_muls_r},
 	{DEC_MULU_R, dec_mulu_r},
@@ -2320,7 +2335,8 @@ gen_intermediate_code_internal(CPUState *env, TranslationBlock *tb,
 	do
 	{
 		check_breakpoint(env, dc);
-		if (dc->is_jmp == DISAS_JUMP)
+		if (dc->is_jmp == DISAS_JUMP
+		    || dc->is_jmp == DISAS_SWI)
 			goto done;
 
 		if (search_pc) {
@@ -2340,9 +2356,9 @@ gen_intermediate_code_internal(CPUState *env, TranslationBlock *tb,
 		if (!dc->flagx_live
 		    || (dc->flagx_live &&
 			!(dc->cc_op == CC_OP_FLAGS && dc->flags_x))) {
-			gen_movl_T0_preg[SR_CCS]();
+			gen_movl_T0_preg[PR_CCS]();
 			gen_op_andl_T0_im(~X_FLAG);
-			gen_movl_preg_T0[SR_CCS]();
+			gen_movl_preg_T0[PR_CCS]();
 			dc->flagx_live = 1;
 			dc->flags_x = 0;
 		}
@@ -2392,6 +2408,7 @@ gen_intermediate_code_internal(CPUState *env, TranslationBlock *tb,
 				   to find the next TB */
 				tcg_gen_exit_tb(0);
 				break;
+			case DISAS_SWI:
 			case DISAS_TB_JUMP:
 				/* nothing more to generate */
 				break;
@@ -2441,7 +2458,7 @@ void cpu_dump_state (CPUState *env, FILE *f,
 	cpu_fprintf(f, "PC=%x CCS=%x btaken=%d btarget=%x\n"
 		    "cc_op=%d cc_src=%d cc_dest=%d cc_result=%x cc_mask=%x\n"
 		    "debug=%x %x %x\n",
-		    env->pc, env->pregs[SR_CCS], env->btaken, env->btarget,
+		    env->pc, env->pregs[PR_CCS], env->btaken, env->btarget,
 		    env->cc_op,
 		    env->cc_src, env->cc_dest, env->cc_result, env->cc_mask,
 		    env->debug1, env->debug2, env->debug3);
@@ -2457,7 +2474,7 @@ void cpu_dump_state (CPUState *env, FILE *f,
 		if ((i + 1) % 4 == 0)
 			cpu_fprintf(f, "\n");
 	}
-	srs = env->pregs[SR_SRS];
+	srs = env->pregs[PR_SRS];
 	cpu_fprintf(f, "\nsupport function regs bank %d:\n", srs);
 	if (srs < 256) {
 		for (i = 0; i < 16; i++) {

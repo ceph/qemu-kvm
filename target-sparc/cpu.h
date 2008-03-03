@@ -198,6 +198,10 @@ typedef struct CPUSPARCState {
     int interrupt_request;
     int halted;
     uint32_t mmu_bm;
+    uint32_t mmu_ctpr_mask;
+    uint32_t mmu_cxr_mask;
+    uint32_t mmu_sfsr_mask;
+    uint32_t mmu_trcr_mask;
     /* NOTE: we allow 8 more registers to handle wrapping */
     target_ulong regbase[NWINDOWS * 16 + 8];
 
@@ -316,9 +320,6 @@ int cpu_sparc_signal_handler(int host_signum, void *pinfo, void *puc);
 void raise_exception(int tt);
 void do_unassigned_access(target_phys_addr_t addr, int is_write, int is_exec,
                           int is_asi);
-void do_tick_set_count(void *opaque, uint64_t count);
-uint64_t do_tick_get_count(void *opaque);
-void do_tick_set_limit(void *opaque, uint64_t limit);
 void cpu_check_irqs(CPUSPARCState *env);
 
 #define CPUState CPUSPARCState
@@ -334,20 +335,23 @@ void cpu_check_irqs(CPUSPARCState *env);
 #ifdef TARGET_SPARC64
 #define MMU_MODE2_SUFFIX _hypv
 #endif
-#define MMU_USER_IDX 0
+#define MMU_USER_IDX   0
+#define MMU_KERNEL_IDX 1
+#define MMU_HYPV_IDX   2
+
 static inline int cpu_mmu_index (CPUState *env)
 {
 #if defined(CONFIG_USER_ONLY)
-    return 0;
+    return MMU_USER_IDX;
 #elif !defined(TARGET_SPARC64)
     return env->psrs;
 #else
     if (!env->psrs)
-        return 0;
+        return MMU_USER_IDX;
     else if ((env->hpstate & HS_PRIV) == 0)
-        return 1;
+        return MMU_KERNEL_IDX;
     else
-        return 2;
+        return MMU_HYPV_IDX;
 #endif
 }
 
