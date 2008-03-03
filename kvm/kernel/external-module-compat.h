@@ -753,3 +753,8 @@ static inline ktime_t ktime_get(void)
 
 #endif
 
+/* __aligned arrived in 2.6.21 */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,21)
+#define __aligned(x) __attribute__((__aligned__(x)))
+#endif
+
