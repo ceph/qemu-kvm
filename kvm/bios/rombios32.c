@@ -983,7 +983,7 @@ static void mptable_init(void)
     putstr(&q, "ISA   ");
 
     /* ioapic */
-    ioapic_id = MAX_CPUS;
+    ioapic_id = smp_cpus;
     putb(&q, 2); /* entry type = I/O APIC */
     putb(&q, ioapic_id); /* apic ID */
     putb(&q, 0x11); /* I/O APIC version number */
@@ -1426,7 +1426,7 @@ void acpi_bios_init(void)
         io_apic = (void *)apic;
         io_apic->type = APIC_IO;
         io_apic->length = sizeof(*io_apic);
-        io_apic->io_apic_id = MAX_CPUS;
+        io_apic->io_apic_id = smp_cpus;
         io_apic->address = cpu_to_le32(0xfec00000);
         io_apic->interrupt = cpu_to_le32(0);
 
