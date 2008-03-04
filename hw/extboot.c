@@ -26,6 +26,7 @@ union extboot_cmd
 	uint16_t cylinders;
 	uint16_t heads;
 	uint16_t sectors;
+	uint64_t nb_sectors;
     } query_geometry;
     struct {
 	uint16_t type;
@@ -75,6 +76,7 @@ static void extboot_write_cmd(void *opaque, uint32_t addr, uint32_t value)
     union extboot_cmd *cmd = (void *)(phys_ram_base + ((value & 0xFFFF) << 4));
     BlockDriverState *bs = opaque;
     int cylinders, heads, sectors, err;
+    int64_t nb_sectors;
 
     get_translated_chs(bs, &cylinders, &heads, &sectors);
 
@@ -88,9 +90,11 @@ static void extboot_write_cmd(void *opaque, uint32_t addr, uint32_t value)
 
     switch (cmd->type) {
     case 0x00:
+	bdrv_get_geometry(bs, &nb_sectors);
 	cmd->query_geometry.cylinders = cylinders;
 	cmd->query_geometry.heads = heads;
 	cmd->query_geometry.sectors = sectors;
+	cmd->query_geometry.nb_sectors = nb_sectors;
 	cpu_physical_memory_set_dirty((value & 0xFFFF) << 4);
 	break;
     case 0x01:
