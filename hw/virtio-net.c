@@ -274,8 +274,13 @@ static void virtio_net_tx_timer(void *opaque)
 {
     VirtIONet *n = opaque;
 
-    n->tx_vq->vring.used->flags &= ~VRING_USED_F_NO_NOTIFY;
     n->tx_timer_active = 0;
+
+    /* Just in case the driver is not ready on more */
+    if (!(n->vdev.status & VIRTIO_CONFIG_S_DRIVER_OK))
+        return;
+
+    n->tx_vq->vring.used->flags &= ~VRING_USED_F_NO_NOTIFY;
     virtio_net_flush_tx(n, n->tx_vq);
 }
 
