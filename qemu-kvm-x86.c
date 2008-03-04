@@ -528,7 +528,9 @@ int kvm_arch_qemu_init_env(CPUState *cenv)
     pv_ent = &cpuid_ent[cpuid_nent++];
     memset(pv_ent, 0, sizeof(*pv_ent));
     pv_ent->function = KVM_CPUID_FEATURES;
+#ifdef KVM_CAP_CLOCKSOURCE
     pv_ent->eax = (has_clocksource << KVM_FEATURE_CLOCKSOURCE);
+#endif
 #endif
 
     copy.regs[R_EAX] = 0;
