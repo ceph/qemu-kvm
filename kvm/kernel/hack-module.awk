@@ -55,6 +55,7 @@
 
 { sub(/\<desc_struct\>/, "kvm_desc_struct") }
 { sub(/\<ldttss_desc64\>/, "kvm_ldttss_desc64") }
+{ sub(/\<desc_ptr\>/, "kvm_desc_ptr") }
 
 /^\t\.name = "kvm"/ { $0 = "\tset_kset_name(\"kvm\")," }
 

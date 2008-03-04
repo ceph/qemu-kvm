@@ -729,3 +729,9 @@ struct kvm_ldttss_desc64 {
 	u32 base3;
 	u32 zero1;
 } __attribute__((packed));
+
+struct kvm_desc_ptr {
+	unsigned short size;
+	unsigned long address;
+} __attribute__((packed));
+
