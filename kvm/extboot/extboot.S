@@ -351,7 +351,7 @@ disk_reset:
 	sub $1, %ax
 	mov %ax, 4(%bp)
 
-	alloca $8
+	alloca $16
 
 	movw $0, 0(%bx) /* read c,h,s */
 	push %bx
@@ -426,7 +426,7 @@ read_disk_drive_parameters:
 	push %bx
 
 	/* allocate memory for packet, pointer gets returned in bx */
-	alloca $8
+	alloca $16
 
 	/* issue command */
 	movw $0, 0(%bx) /* cmd = 0, read c,h,s */
@@ -481,7 +481,7 @@ alternate_disk_reset:
 
 read_disk_drive_size:
 	push %bx
-	alloca $8
+	alloca $16
 
 	movw $0, 0(%bx) /* cmd = 0, read c,h,s */
 	push %bx
@@ -572,29 +572,20 @@ extended_write_sectors:
 	extended_read_write_sectors $0x02
 
 get_extended_drive_parameters:
-	mov $1, %ah
-	stc
-	ret
-#if 0
-	/* this function is seriously borked */
-1:
 	push %ax
 	push %bp
 	push %cx
 	push %dx
 
-	allocbpa $8
+	allocbpa $16
 
 	movw $0, 0(%bp) /* read c,h,s */
 	push %bp
 	call send_command
 	add $2, %sp
 
-	/* check the size of the passed in data */
-	cmpw $26, 0(%si)
-	mov 0(%si), %ax
-	dump %ax
-	jle 0b
+	/* write size */
+	movw $26, 0(%si)
 
 	/* set flags to 2 */
 	movw $2, 2(%si)
@@ -617,46 +608,19 @@ get_extended_drive_parameters:
 	xor %ax, %ax
 	mov %ax, 14(%si)
 
-	/* calculate total sectors */
-
-	/* cx:dx = cylinders */
-	mov 2(%bp), %dx
-	xor %cx, %cx
-
-	/* *= heads */
-	push 4(%bp)
-	push $0
-	push %dx
-	push %cx
-	call mul32
-	add $8, %sp
-
-	/* *= sectors */
-	push 6(%bp)
-	push $0
-	push %dx
-	push %cx
-	call mul32
-	add $8, %sp
-
-	/* total number of sectors */
-	mov %dx, 16(%si)
-	mov %cx, 18(%si)
-	xor %ax, %ax
+	/* set total number of sectors */
+	mov 8(%bp), %ax
+	mov %ax, 16(%si)
+	mov 10(%bp), %ax
+	mov %ax, 18(%si)
+	mov 12(%bp), %ax
 	mov %ax, 20(%si)
+	mov 14(%bp), %ax
 	mov %ax, 22(%si)
 
 	/* number of bytes per sector */
 	movw $512, 24(%si)
 
-	/* optional segmention:offset to EDD config */
-	cmpw $30, 0(%si)
-	jl 1f
-
-	movw $0xFFFF, 26(%si)
-	movw $0xFFFF, 28(%si)
-
-1:
 	freebpa
 
 	pop %dx
@@ -667,7 +631,6 @@ get_extended_drive_parameters:
 	mov $0, %ah
 	clc
 	ret
-#endif
 
 terminate_disk_emulation:
 	mov $1, %ah
