@@ -335,6 +335,7 @@ static void do_info_cpus(void)
         if (env->halted)
             term_printf(" (halted)");
 #endif
+        term_printf(" thread_id=%d", env->thread_id);
         term_printf("\n");
     }
 }
