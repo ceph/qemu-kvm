@@ -340,6 +340,11 @@ void cpu_exec_init(CPUState *env)
     }
     env->cpu_index = cpu_index;
     env->nb_watchpoints = 0;
+#ifdef __WIN32
+    env->thread_id = GetCurrentProcessId();
+#else
+    env->thread_id = getpid();
+#endif
     *penv = env;
 }
 
