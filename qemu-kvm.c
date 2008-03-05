@@ -19,6 +19,7 @@ int kvm_irqchip = 1;
 #include <libkvm.h>
 #include <pthread.h>
 #include <sys/utsname.h>
+#include <sys/syscall.h>
 
 extern void perror(const char *s);
 
@@ -48,6 +49,11 @@ struct vcpu_info {
     int stop;
     int stopped;
 } vcpu_info[256];
+
+static inline unsigned long kvm_get_thread_id(void)
+{
+    return syscall(SYS_gettid);
+}
 
 CPUState *qemu_kvm_cpu_env(int index)
 {
@@ -328,6 +334,7 @@ static void *ap_main_loop(void *_env)
 
     vcpu = &vcpu_info[env->cpu_index];
     vcpu->env = env;
+    vcpu->env->thread_id = kvm_get_thread_id();
     sigfillset(&signals);
     //sigdelset(&signals, SIG_IPI);
     sigprocmask(SIG_BLOCK, &signals, NULL);
@@ -374,6 +381,7 @@ int kvm_init_ap(void)
 
     vcpu = &vcpu_info[0];
     vcpu->env = first_cpu;
+    vcpu->env->thread_id = kvm_get_thread_id();
     signal(SIG_IPI, sig_ipi_handler);
     for (i = 1; i < smp_cpus; ++i) {
         kvm_init_new_ap(i, env);
