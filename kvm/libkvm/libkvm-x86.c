@@ -361,6 +361,36 @@ int kvm_set_lapic(kvm_context_t kvm, int vcpu, struct kvm_lapic_state *s)
 
 #endif
 
+#ifdef KVM_CAP_PIT
+
+int kvm_get_pit(kvm_context_t kvm, struct kvm_pit_state *s)
+{
+	int r;
+	if (!kvm->pit_in_kernel)
+		return 0;
+	r = ioctl(kvm->vm_fd, KVM_GET_PIT, s);
+	if (r == -1) {
+		r = -errno;
+		perror("kvm_get_pit");
+	}
+	return r;
+}
+
+int kvm_set_pit(kvm_context_t kvm, struct kvm_pit_state *s)
+{
+	int r;
+	if (!kvm->pit_in_kernel)
+		return 0;
+	r = ioctl(kvm->vm_fd, KVM_SET_PIT, s);
+	if (r == -1) {
+		r = -errno;
+		perror("kvm_set_pit");
+	}
+	return r;
+}
+
+#endif
+
 void kvm_show_code(kvm_context_t kvm, int vcpu)
 {
 #define CR0_PE_MASK	(1ULL<<0)

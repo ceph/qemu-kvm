@@ -525,7 +525,33 @@ int kvm_get_lapic(kvm_context_t kvm, int vcpu, struct kvm_lapic_state *s);
  * \param s Local apic state of the specific virtual CPU
  */
 int kvm_set_lapic(kvm_context_t kvm, int vcpu, struct kvm_lapic_state *s);
+
 #endif
+
+#endif
+
+#ifdef KVM_CAP_PIT
+
+/*!
+ * \brief Get in kernel PIT of the virtual domain
+ *
+ * Save the PIT state.
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param s PIT state of the virtual domain
+ */
+int kvm_get_pit(kvm_context_t kvm, struct kvm_pit_state *s);
+
+/*!
+ * \brief Set in kernel PIT of the virtual domain
+ *
+ * Restore the PIT state.
+ * Timer would be retriggerred after restored.
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param s PIT state of the virtual domain
+ */
+int kvm_set_pit(kvm_context_t kvm, struct kvm_pit_state *s);
 
 #endif
 
