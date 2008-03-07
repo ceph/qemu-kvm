@@ -735,3 +735,21 @@ struct kvm_desc_ptr {
 	unsigned long address;
 } __attribute__((packed));
 
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,21)
+
+#include <linux/ktime.h>
+#include <linux/hrtimer.h>
+
+#define ktime_get kvm_ktime_get
+
+static inline ktime_t ktime_get(void)
+{
+	struct timespec now;
+
+	ktime_get_ts(&now);
+
+	return timespec_to_ktime(now);
+}
+
+#endif
+
