@@ -84,9 +84,11 @@ extern kvm_context_t kvm_context;
 
 #define kvm_enabled() (kvm_allowed)
 #define qemu_kvm_irqchip_in_kernel() kvm_irqchip_in_kernel(kvm_context)
+#define qemu_kvm_pit_in_kernel() kvm_pit_in_kernel(kvm_context)
 #else
 #define kvm_enabled() (0)
 #define qemu_kvm_irqchip_in_kernel() (0)
+#define qemu_kvm_pit_in_kernel() (0)
 #endif
 
 #endif

@@ -630,3 +630,12 @@ int kvm_disable_tpr_access_reporting(kvm_context_t kvm, int vcpu)
 }
 
 #endif
+
+int kvm_pit_in_kernel(kvm_context_t kvm)
+{
+#ifdef KVM_CAP_PIT
+	return kvm->pit_in_kernel;
+#else
+	return 0;
+#endif
+}

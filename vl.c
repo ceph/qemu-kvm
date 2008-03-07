@@ -8097,6 +8097,7 @@ static void help(int exitcode)
 	   "-no-kvm         disable KVM hardware virtualization\n"
 #endif
 	   "-no-kvm-irqchip disable KVM kernel mode PIC/IOAPIC/LAPIC\n"
+	   "-no-kvm-pit	    disable KVM kernel mode PIT\n"
 #endif
 #ifdef TARGET_I386
            "-std-vga        simulate a standard VGA card with VESA Bochs Extensions\n"
@@ -8219,6 +8220,7 @@ enum {
     QEMU_OPTION_curses,
     QEMU_OPTION_no_kvm,
     QEMU_OPTION_no_kvm_irqchip,
+    QEMU_OPTION_no_kvm_pit,
     QEMU_OPTION_no_reboot,
     QEMU_OPTION_show_cursor,
     QEMU_OPTION_daemonize,
@@ -8305,6 +8307,7 @@ const QEMUOption qemu_options[] = {
     { "no-kvm", 0, QEMU_OPTION_no_kvm },
 #endif
     { "no-kvm-irqchip", 0, QEMU_OPTION_no_kvm_irqchip },
+    { "no-kvm-pit", 0, QEMU_OPTION_no_kvm_pit },
 #endif
 #if defined(TARGET_PPC) || defined(TARGET_SPARC)
     { "g", 1, QEMU_OPTION_g },
@@ -9238,8 +9241,14 @@ int main(int argc, char **argv)
 		kvm_allowed = 0;
 		break;
 	    case QEMU_OPTION_no_kvm_irqchip: {
-		extern int kvm_irqchip;
+		extern int kvm_irqchip, kvm_pit;
 		kvm_irqchip = 0;
+		kvm_pit = 0;
+		break;
+	    }
+	    case QEMU_OPTION_no_kvm_pit: {
+		extern int kvm_pit;
+		kvm_pit = 0;
 		break;
 	    }
 #endif

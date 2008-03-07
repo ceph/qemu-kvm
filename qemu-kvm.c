@@ -10,6 +10,7 @@
 
 int kvm_allowed = 1;
 int kvm_irqchip = 1;
+int kvm_pit = 1;
 
 #include <string.h>
 #include "hw/hw.h"
@@ -543,6 +544,9 @@ int kvm_qemu_create_context(void)
     int r;
     if (!kvm_irqchip) {
         kvm_disable_irqchip_creation(kvm_context);
+    }
+    if (!kvm_pit) {
+        kvm_disable_pit_creation(kvm_context);
     }
     if (kvm_create(kvm_context, phys_ram_size, (void**)&phys_ram_base) < 0) {
 	kvm_qemu_destroy();

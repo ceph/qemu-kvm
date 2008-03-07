@@ -26,6 +26,8 @@
 #include "isa.h"
 #include "qemu-timer.h"
 
+#include "qemu-kvm.h"
+
 //#define DEBUG_PIT
 
 #define RW_STATE_LSB 1
@@ -491,10 +493,12 @@ PITState *pit_init(int base, qemu_irq irq)
     PITState *pit = &pit_state;
     PITChannelState *s;
 
-    s = &pit->channels[0];
-    /* the timer 0 is connected to an IRQ */
-    s->irq_timer = qemu_new_timer(vm_clock, pit_irq_timer, s);
-    s->irq = irq;
+    if (!kvm_enabled() || !qemu_kvm_pit_in_kernel()) {
+	    s = &pit->channels[0];
+	    /* the timer 0 is connected to an IRQ */
+	    s->irq_timer = qemu_new_timer(vm_clock, pit_irq_timer, s);
+	    s->irq = irq;
+    }
 
     register_savevm("i8254", base, 1, pit_save, pit_load, pit);
 
