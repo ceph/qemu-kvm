@@ -538,6 +538,7 @@ void qemu_system_powerdown(void)
 #endif
 #define GPE_BASE 0xafe0
 #define PROC_BASE 0xaf00
+#define PCI_BASE 0xae00
 
 struct gpe_regs {
     uint16_t sts; /* status */
@@ -546,7 +547,13 @@ struct gpe_regs {
     uint8_t down;
 };
 
+struct pci_status {
+    uint32_t up;
+    uint32_t down;
+};
+
 static struct gpe_regs gpe;
+static struct pci_status pci0_status;
 
 static uint32_t gpe_readb(void *opaque, uint32_t addr)
 {
@@ -614,6 +621,45 @@ static void gpe_writeb(void *opaque, uint32_t addr, uint32_t val)
 #endif
 }
 
+static uint32_t pcihotplug_read(void *opaque, uint32_t addr)
+{
+    uint32_t val = 0;
+    struct pci_status *g = opaque;
+    switch (addr) {
+        case PCI_BASE:
+            val = g->up;
+            break;
+        case PCI_BASE + 4:
+            val = g->down;
+            break;
+        default:
+            break;
+    }
+
+#if defined(DEBUG)
+    printf("pcihotplug read %lx == %lx\n", addr, val);
+#endif
+    return val;
+}
+
+static void pcihotplug_write(void *opaque, uint32_t addr, uint32_t val)
+{
+    struct pci_status *g = opaque;
+    switch (addr) {
+        case PCI_BASE:
+            g->up = val;
+            break;
+        case PCI_BASE + 4:
+            g->down = val;
+            break;
+   }
+
+#if defined(DEBUG)
+    printf("pcihotplug write %lx <== %d\n", addr, val);
+#endif
+}
+
+
 static char *model;
 
 void qemu_system_hot_add_init(char *cpu_model)
@@ -623,6 +669,9 @@ void qemu_system_hot_add_init(char *cpu_model)
 
     register_ioport_write(PROC_BASE, 4, 1, gpe_writeb, &gpe);
     register_ioport_read(PROC_BASE, 4, 1,  gpe_readb, &gpe);
+
+    register_ioport_write(PCI_BASE, 8, 4, pcihotplug_write, &pci0_status);
+    register_ioport_read(PCI_BASE, 8, 4,  pcihotplug_read, &pci0_status);
 
     model = cpu_model;
 }
@@ -663,5 +712,31 @@ void qemu_system_cpu_hot_add(int cpu, int state)
         enable_processor(&gpe, cpu);
     else
         disable_processor(&gpe, cpu);
+    qemu_set_irq(pm_state->irq, 0);
+}
+
+static void enable_device(struct pci_status *p, struct gpe_regs *g, int slot)
+{
+    g->sts |= 2;
+    g->en |= 2;
+    p->up |= (1 << slot);
+}
+
+static void disable_device(struct pci_status *p, struct gpe_regs *g, int slot)
+{
+    g->sts |= 2;
+    g->en |= 2;
+    p->down |= (1 << slot);
+}
+
+void qemu_system_device_hot_add(int slot, int state)
+{
+    qemu_set_irq(pm_state->irq, 1);
+    pci0_status.up = 0;
+    pci0_status.down = 0;
+    if (state)
+        enable_device(&pci0_status, &gpe, slot);
+    else
+        disable_device(&pci0_status, &gpe, slot);
     qemu_set_irq(pm_state->irq, 0);
 }
