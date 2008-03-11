@@ -26,6 +26,7 @@
 #ifdef USE_KVM
 #include "qemu-kvm.h"
 #endif
+#include "string.h"
 
 //#define DEBUG
 
@@ -539,6 +540,7 @@ void qemu_system_powerdown(void)
 #define GPE_BASE 0xafe0
 #define PROC_BASE 0xaf00
 #define PCI_BASE 0xae00
+#define PCI_EJ_BASE 0xae08
 
 struct gpe_regs {
     uint16_t sts; /* status */
@@ -659,6 +661,23 @@ static void pcihotplug_write(void *opaque, uint32_t addr, uint32_t val)
 #endif
 }
 
+static uint32_t pciej_read(void *opaque, uint32_t addr)
+{
+#if defined(DEBUG)
+    printf("pciej read %lx == %lx\n", addr, val);
+#endif
+    return 0;
+}
+
+static void pciej_write(void *opaque, uint32_t addr, uint32_t val)
+{
+    int slot = ffs(val) - 1;
+
+#if defined(DEBUG)
+    printf("pciej write %lx <== %d\n", addr, val);
+#endif
+}
+
 
 static char *model;
 
@@ -672,6 +691,9 @@ void qemu_system_hot_add_init(char *cpu_model)
 
     register_ioport_write(PCI_BASE, 8, 4, pcihotplug_write, &pci0_status);
     register_ioport_read(PCI_BASE, 8, 4,  pcihotplug_read, &pci0_status);
+
+    register_ioport_write(PCI_EJ_BASE, 4, 4, pciej_write, NULL);
+    register_ioport_read(PCI_EJ_BASE, 4, 4,  pciej_read, NULL);
 
     model = cpu_model;
 }
