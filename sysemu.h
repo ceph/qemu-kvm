@@ -166,6 +166,9 @@ struct drive_opt {
 extern struct drive_opt drives_opt[MAX_DRIVES];
 extern int nb_drives_opt;
 
+extern int drive_add(const char *file, const char *fmt, ...);
+extern int drive_init(struct drive_opt *arg, int snapshot, void *machine);
+
 /* acpi */
 void qemu_system_cpu_hot_add(int cpu, int state);
 void qemu_system_hot_add_init(char *cpu_model);

@@ -4797,7 +4797,7 @@ static int nic_get_free_idx(void)
     return -1;
 }
 
-static int net_client_init(const char *str)
+int net_client_init(const char *str)
 {
     const char *p;
     char *q;
@@ -4856,7 +4856,7 @@ static int net_client_init(const char *str)
         nd->used = 1;
         nb_nics++;
         vlan->nb_guest_devs++;
-        ret = 0;
+        ret = idx;
     } else
     if (!strcmp(device, "none")) {
         /* does nothing. It is needed to signal that no network cards
@@ -4986,14 +4986,14 @@ static int drive_get_free_idx(void)
     return -1;
 }
 
-static int drive_add(const char *file, const char *fmt, ...)
+int drive_add(const char *file, const char *fmt, ...)
 {
     va_list ap;
     int index = drive_opt_get_free_idx();
 
     if (nb_drives_opt >= MAX_DRIVES || index == -1) {
         fprintf(stderr, "qemu: too many drives\n");
-        exit(1);
+        return -1;
     }
 
     drives_opt[index].file = file;
@@ -5056,9 +5056,10 @@ void drive_uninit(BlockDriverState *bdrv)
         }
 }
 
-static int drive_init(struct drive_opt *arg, int snapshot,
-                      QEMUMachine *machine)
+int drive_init(struct drive_opt *arg, int snapshot,
+                      void *opaque)
 {
+    QEMUMachine *machine = opaque;
     char buf[128];
     char file[1024];
     char devname[128];
@@ -5311,7 +5312,7 @@ static int drive_init(struct drive_opt *arg, int snapshot,
      */
 
     if (drive_get_index(type, bus_id, unit_id) != -1)
-        return 0;
+        return -2;
 
     /* init */
 
@@ -5359,7 +5360,7 @@ static int drive_init(struct drive_opt *arg, int snapshot,
         break;
     }
     if (!file[0])
-        return 0;
+        return -2;
     bdrv_flags = 0;
     if (snapshot)
         bdrv_flags |= BDRV_O_SNAPSHOT;
@@ -5370,7 +5371,7 @@ static int drive_init(struct drive_opt *arg, int snapshot,
                         file);
         return -1;
     }
-    return 0;
+    return drives_table_idx;
 }
 
 /***********************************************************/

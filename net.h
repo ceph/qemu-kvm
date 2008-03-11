@@ -37,6 +37,8 @@ void do_info_network(void);
 /* virtio hack for zero copy receive */
 int hack_around_tap(void *opaque);
 
+int net_client_init(const char *str);
+
 /* NIC info */
 
 #define MAX_NICS 8
