@@ -161,5 +161,5 @@ void *virtio_blk_init(PCIBus *bus, uint16_t vendor, uint16_t device,
 
     virtio_add_queue(&s->vdev, 128, virtio_blk_handle_output);
 
-    return &s->vdev;
+    return s;
 }
