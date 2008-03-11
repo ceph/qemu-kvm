@@ -93,6 +93,7 @@ uint32_t pci_data_read(void *opaque, uint32_t addr, int len);
 int pci_bus_num(PCIBus *s);
 void pci_for_each_device(int bus_num, void (*fn)(PCIDevice *d));
 PCIBus *pci_find_bus(int bus_num);
+PCIDevice *pci_find_device(int bus_num, int slot);
 
 void pci_info(void);
 PCIBus *pci_bridge_init(PCIBus *bus, int devfn, uint32_t id,

@@ -689,6 +689,23 @@ PCIBus *pci_find_bus(int bus_num)
     return bus;
 }
 
+PCIDevice *pci_find_device(int bus_num, int slot)
+{
+    int devfn;
+    PCIDevice *d;
+    PCIBus *bus = pci_find_bus(bus_num);
+
+    if (!bus)
+        return NULL;
+
+    for(devfn = 0; devfn < 256; devfn++) {
+        d = bus->devices[devfn];
+            if (d && PCI_SLOT(devfn) == slot)
+                return d;
+    }
+    return NULL;
+}
+
 PCIBus *pci_bridge_init(PCIBus *bus, int devfn, uint32_t id,
                         pci_map_irq_fn map_irq, const char *name)
 {
