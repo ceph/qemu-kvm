@@ -579,6 +579,8 @@ OBJS+= hypercall.o
 # virtio devices
 OBJS += virtio.o virtio-net.o virtio-blk.o
 
+OBJS += device-hotplug.o
+
 ifeq ($(TARGET_BASE_ARCH), i386)
 # Hardware support
 OBJS+= ide.o pckbd.o ps2.o vga.o $(SOUND_HW) dma.o

@@ -7610,6 +7610,7 @@ void qemu_bh_delete(QEMUBH *bh)
 /* machine registration */
 
 QEMUMachine *first_machine = NULL;
+QEMUMachine *current_machine = NULL;
 
 int qemu_register_machine(QEMUMachine *m)
 {
@@ -9766,6 +9767,8 @@ int main(int argc, char **argv)
 
     machine->init(ram_size, vga_ram_size, boot_devices, ds,
                   kernel_filename, kernel_cmdline, initrd_filename, cpu_model);
+
+    current_machine = machine;
 
     /* init USB devices */
     if (usb_enabled) {

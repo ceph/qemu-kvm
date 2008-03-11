@@ -176,6 +176,11 @@ extern int drive_init(struct drive_opt *arg, int snapshot, void *machine);
 /* acpi */
 void qemu_system_cpu_hot_add(int cpu, int state);
 void qemu_system_hot_add_init(char *cpu_model);
+void qemu_system_device_hot_add(int slot, int state);
+
+/* device-hotplug */
+void device_hot_add(int pcibus, const char *type, const char *opts);
+void drive_hot_add(int pcibus, const char *devfn_string, const char *opts);
 
 /* vmchannel devices */
 

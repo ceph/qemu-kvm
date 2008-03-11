@@ -19,6 +19,8 @@ typedef struct QEMUMachine {
 
 int qemu_register_machine(QEMUMachine *m);
 
+extern QEMUMachine *current_machine;
+
 /* Axis ETRAX.  */
 extern QEMUMachine bareetraxfs_machine;
 
