@@ -139,6 +139,7 @@ typedef struct DriveInfo {
     BlockInterfaceType type;
     int bus;
     int unit;
+    int used;
 } DriveInfo;
 
 #define MAX_IDE_DEVS	2

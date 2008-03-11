@@ -254,6 +254,7 @@ int nb_drives_opt;
 struct drive_opt {
     const char *file;
     char opt[1024];
+    int used;
 } drives_opt[MAX_DRIVES];
 
 static CPUState *cur_cpu;
@@ -4952,22 +4953,50 @@ void do_info_network(void)
 #define MTD_ALIAS "if=mtd"
 #define SD_ALIAS "index=0,if=sd"
 
+static int drive_opt_get_free_idx(void)
+{
+    int index;
+
+    for (index = 0; index < MAX_DRIVES; index++)
+        if (!drives_opt[index].used) {
+            drives_opt[index].used = 1;
+            return index;
+        }
+
+    return -1;
+}
+
+static int drive_get_free_idx(void)
+{
+    int index;
+
+    for (index = 0; index < MAX_DRIVES; index++)
+        if (!drives_table[index].used) {
+            drives_table[index].used = 1;
+            return index;
+        }
+
+    return -1;
+}
+
 static int drive_add(const char *file, const char *fmt, ...)
 {
     va_list ap;
+    int index = drive_opt_get_free_idx();
 
-    if (nb_drives_opt >= MAX_DRIVES) {
+    if (nb_drives_opt >= MAX_DRIVES || index == -1) {
         fprintf(stderr, "qemu: too many drives\n");
         exit(1);
     }
 
-    drives_opt[nb_drives_opt].file = file;
+    drives_opt[index].file = file;
     va_start(ap, fmt);
-    vsnprintf(drives_opt[nb_drives_opt].opt,
+    vsnprintf(drives_opt[index].opt,
               sizeof(drives_opt[0].opt), fmt, ap);
     va_end(ap);
 
-    return nb_drives_opt++;
+    nb_drives_opt++;
+    return index;
 }
 
 int drive_get_index(BlockInterfaceType type, int bus, int unit)
@@ -4976,10 +5005,11 @@ int drive_get_index(BlockInterfaceType type, int bus, int unit)
 
     /* seek interface, bus and unit */
 
-    for (index = 0; index < nb_drives; index++)
+    for (index = 0; index < MAX_DRIVES; index++)
         if (drives_table[index].type == type &&
 	    drives_table[index].bus == bus &&
-	    drives_table[index].unit == unit)
+	    drives_table[index].unit == unit &&
+	    drives_table[index].used)
         return index;
 
     return -1;
@@ -5015,6 +5045,7 @@ static int drive_init(struct drive_opt *arg, int snapshot,
     int index;
     int cache;
     int bdrv_flags;
+    int drives_table_idx;
     char *str = arg->opt;
     char *params[] = { "bus", "unit", "if", "index", "cyls", "heads",
                        "secs", "trans", "media", "snapshot", "file",
@@ -5266,10 +5297,11 @@ static int drive_init(struct drive_opt *arg, int snapshot,
         snprintf(buf, sizeof(buf), "%s%s%i",
                  devname, mediastr, unit_id);
     bdrv = bdrv_new(buf);
-    drives_table[nb_drives].bdrv = bdrv;
-    drives_table[nb_drives].type = type;
-    drives_table[nb_drives].bus = bus_id;
-    drives_table[nb_drives].unit = unit_id;
+    drives_table_idx = drive_get_free_idx();
+    drives_table[drives_table_idx].bdrv = bdrv;
+    drives_table[drives_table_idx].type = type;
+    drives_table[drives_table_idx].bus = bus_id;
+    drives_table[drives_table_idx].unit = unit_id;
     nb_drives++;
 
     switch(type) {
@@ -9578,8 +9610,10 @@ int main(int argc, char **argv)
     if (nb_drives_opt < MAX_DRIVES)
         drive_add(NULL, SD_ALIAS);
 
-    /* open the virtual block devices */
-
+    /* open the virtual block devices
+     * note that migration with device
+     * hot add/remove is broken.
+     */
     for(i = 0; i < nb_drives_opt; i++)
         if (drive_init(&drives_opt[i], snapshot, machine) == -1)
 	    exit(1);
