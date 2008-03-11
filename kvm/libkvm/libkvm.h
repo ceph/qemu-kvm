@@ -530,6 +530,13 @@ int kvm_set_lapic(kvm_context_t kvm, int vcpu, struct kvm_lapic_state *s);
 
 #endif
 
+/*!
+ * \brief Query wheather in kernel pit is used
+ *
+ *  \param kvm Pointer to the current kvm_context
+ */
+int kvm_pit_in_kernel(kvm_context_t kvm);
+
 #ifdef KVM_CAP_PIT
 
 /*!

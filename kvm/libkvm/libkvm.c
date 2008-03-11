@@ -962,3 +962,8 @@ int kvm_irqchip_in_kernel(kvm_context_t kvm)
 {
     return kvm->irqchip_in_kernel;
 }
+
+int kvm_pit_in_kernel(kvm_context_t kvm)
+{
+	return kvm->pit_in_kernel;
+}
