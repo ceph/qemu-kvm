@@ -407,6 +407,13 @@ DefinitionBlock (
                 Package() {0x001fffff, 3, LNKB, 0},
             })
 
+            OperationRegion(PCST, SystemIO, 0xae00, 0x08)
+            Field (PCST, DWordAcc, NoLock, WriteAsZeros)
+	    {
+		PCIU, 32,
+		PCID, 32,
+	    }
+
             Device (S1) {              // Slot 1
                Name (_ADR, 0x00010000)
                Method (_EJ0,1) { Return (0x0) }
@@ -1142,6 +1149,256 @@ DefinitionBlock (
             Return(0x01)
         }
         Method(_L01) {
+            /* Up status */
+            If (And(\_SB.PCI0.PCIU, 0x2)) {
+                Notify(\_SB.PCI0.S1, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x4)) {
+                Notify(\_SB.PCI0.S2, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x8)) {
+                Notify(\_SB.PCI0.S3, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x10)) {
+                Notify(\_SB.PCI0.S4, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x20)) {
+                Notify(\_SB.PCI0.S5, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x40)) {
+                Notify(\_SB.PCI0.S6, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x80)) {
+                Notify(\_SB.PCI0.S7, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x0100)) {
+                Notify(\_SB.PCI0.S8, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x0200)) {
+                Notify(\_SB.PCI0.S9, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x0400)) {
+                Notify(\_SB.PCI0.S10, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x0800)) {
+                Notify(\_SB.PCI0.S11, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x1000)) {
+                Notify(\_SB.PCI0.S12, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x2000)) {
+                Notify(\_SB.PCI0.S13, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x4000)) {
+                Notify(\_SB.PCI0.S14, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x8000)) {
+                Notify(\_SB.PCI0.S15, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x10000)) {
+                Notify(\_SB.PCI0.S16, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x20000)) {
+                Notify(\_SB.PCI0.S17, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x40000)) {
+                Notify(\_SB.PCI0.S18, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x80000)) {
+                Notify(\_SB.PCI0.S19, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x100000)) {
+                Notify(\_SB.PCI0.S20, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x200000)) {
+                Notify(\_SB.PCI0.S21, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x400000)) {
+                Notify(\_SB.PCI0.S22, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x800000)) {
+                Notify(\_SB.PCI0.S23, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x1000000)) {
+                Notify(\_SB.PCI0.S24, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x2000000)) {
+                Notify(\_SB.PCI0.S25, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x4000000)) {
+                Notify(\_SB.PCI0.S26, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x8000000)) {
+                Notify(\_SB.PCI0.S27, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x10000000)) {
+                Notify(\_SB.PCI0.S28, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x20000000)) {
+                Notify(\_SB.PCI0.S29, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x40000000)) {
+                Notify(\_SB.PCI0.S30, 0x1)
+            }
+
+            If (And(\_SB.PCI0.PCIU, 0x80000000)) {
+                Notify(\_SB.PCI0.S31, 0x1)
+            }
+
+            /* Down status */
+            If (And(\_SB.PCI0.PCID, 0x2)) {
+                Notify(\_SB.PCI0.S1, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x4)) {
+                Notify(\_SB.PCI0.S2, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x8)) {
+                Notify(\_SB.PCI0.S3, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x10)) {
+                Notify(\_SB.PCI0.S4, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x20)) {
+                Notify(\_SB.PCI0.S5, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x40)) {
+                Notify(\_SB.PCI0.S6, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x80)) {
+                Notify(\_SB.PCI0.S7, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x0100)) {
+                Notify(\_SB.PCI0.S8, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x0200)) {
+                Notify(\_SB.PCI0.S9, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x0400)) {
+                Notify(\_SB.PCI0.S10, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x0800)) {
+                Notify(\_SB.PCI0.S11, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x1000)) {
+                Notify(\_SB.PCI0.S12, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x2000)) {
+                Notify(\_SB.PCI0.S13, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x4000)) {
+                Notify(\_SB.PCI0.S14, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x8000)) {
+                Notify(\_SB.PCI0.S15, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x10000)) {
+                Notify(\_SB.PCI0.S16, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x20000)) {
+                Notify(\_SB.PCI0.S17, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x40000)) {
+                Notify(\_SB.PCI0.S18, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x80000)) {
+                Notify(\_SB.PCI0.S19, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x100000)) {
+                Notify(\_SB.PCI0.S20, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x200000)) {
+                Notify(\_SB.PCI0.S21, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x400000)) {
+                Notify(\_SB.PCI0.S22, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x800000)) {
+                Notify(\_SB.PCI0.S23, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x1000000)) {
+                Notify(\_SB.PCI0.S24, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x2000000)) {
+                Notify(\_SB.PCI0.S25, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x4000000)) {
+                Notify(\_SB.PCI0.S26, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x8000000)) {
+                Notify(\_SB.PCI0.S27, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x10000000)) {
+                Notify(\_SB.PCI0.S28, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x20000000)) {
+                Notify(\_SB.PCI0.S29, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x40000000)) {
+                Notify(\_SB.PCI0.S30, 0x3)
+            }
+
+            If (And(\_SB.PCI0.PCID, 0x80000000)) {
+                Notify(\_SB.PCI0.S31, 0x3)
+            }
+
             Return(0x01)
         }
         Method(_L02) {
