@@ -57,6 +57,10 @@ int qemu_live_loadvm_state(QEMUFile *f);
 
 void main_loop_wait(int timeout);
 
+int check_params(char *buf, int buf_size, char **params, const char *str);
+int get_param_value(char *buf, int buf_size, const char *tag,
+                    const char *str);
+
 /* Polling handling */
 
 /* return TRUE if no sleep should be done afterwards */

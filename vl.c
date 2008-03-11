@@ -4737,8 +4737,8 @@ static const char *get_opt_value(char *buf, int buf_size, const char *p)
     return p;
 }
 
-static int get_param_value(char *buf, int buf_size,
-                           const char *tag, const char *str)
+int get_param_value(char *buf, int buf_size,
+                    const char *tag, const char *str)
 {
     const char *p;
     char option[128];
@@ -4762,8 +4762,8 @@ static int get_param_value(char *buf, int buf_size,
     return 0;
 }
 
-static int check_params(char *buf, int buf_size,
-                        char **params, const char *str)
+int check_params(char *buf, int buf_size,
+                 char **params, const char *str)
 {
     const char *p;
     int i;
