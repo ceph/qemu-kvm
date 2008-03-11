@@ -5010,6 +5010,12 @@ static int drive_add(const char *file, const char *fmt, ...)
     return index;
 }
 
+void drive_remove(int index)
+{
+    drives_opt[index].used = 0;
+    nb_drives_opt--;
+}
+
 int drive_get_index(BlockInterfaceType type, int bus, int unit)
 {
     int index;
@@ -5038,6 +5044,20 @@ int drive_get_max_bus(BlockInterfaceType type)
             max_bus = drives_table[index].bus;
     }
     return max_bus;
+}
+
+void drive_uninit(BlockDriverState *bdrv)
+{
+    int i;
+
+    for (i = 0; i < MAX_DRIVES; i++)
+        if (drives_table[i].bdrv == bdrv) {
+            drives_table[i].bdrv = NULL;
+            drives_table[i].used = 0;
+            drive_remove(drives_table[i].drive_opt_idx);
+            nb_drives--;
+            break;
+        }
 }
 
 static int drive_init(struct drive_opt *arg, int snapshot,
@@ -5313,6 +5333,7 @@ static int drive_init(struct drive_opt *arg, int snapshot,
     drives_table[drives_table_idx].type = type;
     drives_table[drives_table_idx].bus = bus_id;
     drives_table[drives_table_idx].unit = unit_id;
+    drives_table[drives_table_idx].drive_opt_idx = arg - drives_opt;
     nb_drives++;
 
     switch(type) {

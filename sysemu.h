@@ -140,6 +140,7 @@ typedef struct DriveInfo {
     int bus;
     int unit;
     int used;
+    int drive_opt_idx;
 } DriveInfo;
 
 #define MAX_IDE_DEVS	2
@@ -152,6 +153,9 @@ int extboot_drive;
 
 extern int drive_get_index(BlockInterfaceType type, int bus, int unit);
 extern int drive_get_max_bus(BlockInterfaceType type);
+
+extern void drive_uninit(BlockDriverState *bdrv);
+extern void drive_remove(int index);
 
 /* acpi */
 void qemu_system_cpu_hot_add(int cpu, int state);
