@@ -4937,6 +4937,14 @@ int net_client_init(const char *str)
     return ret;
 }
 
+void net_client_uninit(NICInfo *nd)
+{
+    nd->vlan->nb_guest_devs--; /* XXX: free vlan on last reference */
+    nb_nics--;
+    nd->used = 0;
+    free(nd->model);
+}
+
 void do_info_network(void)
 {
     VLANState *vlan;

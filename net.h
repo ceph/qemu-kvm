@@ -38,6 +38,7 @@ void do_info_network(void);
 int hack_around_tap(void *opaque);
 
 int net_client_init(const char *str);
+void net_client_uninit(NICInfo *nd);
 
 /* NIC info */
 
