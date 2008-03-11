@@ -675,6 +675,16 @@ static void pci_bridge_write_config(PCIDevice *d,
     pci_default_write_config(d, address, val, len);
 }
 
+PCIBus *pci_find_bus(int bus_num)
+{
+    PCIBus *bus = first_bus;
+
+    while (bus && bus->bus_num != bus_num)
+        bus = bus->next;
+
+    return bus;
+}
+
 PCIBus *pci_bridge_init(PCIBus *bus, int devfn, uint32_t id,
                         pci_map_irq_fn map_irq, const char *name)
 {
