@@ -146,7 +146,7 @@ void isa_ne2000_init(int base, qemu_irq irq, NICInfo *nd);
 
 /* virtio-net.c */
 
-void *virtio_net_init(PCIBus *bus, NICInfo *nd, int devfn);
+PCIDevice *virtio_net_init(PCIBus *bus, NICInfo *nd, int devfn);
 void virtio_net_poll(void);
 
 /* virtio-blk.h */

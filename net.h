@@ -45,6 +45,7 @@ struct NICInfo {
     uint8_t macaddr[6];
     const char *model;
     VLANState *vlan;
+    int devfn;
 };
 
 extern int nb_nics;

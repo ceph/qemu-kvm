@@ -625,24 +625,26 @@ void pci_info(void)
 }
 
 /* Initialize a PCI NIC.  */
-void pci_nic_init(PCIBus *bus, NICInfo *nd, int devfn)
+PCIDevice *pci_nic_init(PCIBus *bus, NICInfo *nd, int devfn)
 {
+    PCIDevice *pci_dev;
+
     if (strcmp(nd->model, "ne2k_pci") == 0) {
-        pci_ne2000_init(bus, nd, devfn);
+        pci_dev = pci_ne2000_init(bus, nd, devfn);
     } else if (strcmp(nd->model, "i82551") == 0) {
-        pci_i82551_init(bus, nd, devfn);
+        pci_dev = pci_i82551_init(bus, nd, devfn);
     } else if (strcmp(nd->model, "i82557b") == 0) {
-        pci_i82557b_init(bus, nd, devfn);
+        pci_dev = pci_i82557b_init(bus, nd, devfn);
     } else if (strcmp(nd->model, "i82559er") == 0) {
-        pci_i82559er_init(bus, nd, devfn);
+        pci_dev = pci_i82559er_init(bus, nd, devfn);
     } else if (strcmp(nd->model, "rtl8139") == 0) {
-        pci_rtl8139_init(bus, nd, devfn);
+        pci_dev = pci_rtl8139_init(bus, nd, devfn);
     } else if (strcmp(nd->model, "e1000") == 0) {
-        pci_e1000_init(bus, nd, devfn);
+        pci_dev = pci_e1000_init(bus, nd, devfn);
     } else if (strcmp(nd->model, "pcnet") == 0) {
-        pci_pcnet_init(bus, nd, devfn);
+        pci_dev = pci_pcnet_init(bus, nd, devfn);
     } else if (strcmp(nd->model, "virtio") == 0) {
-	virtio_net_init(bus, nd, devfn);
+	pci_dev = virtio_net_init(bus, nd, devfn);
     } else if (strcmp(nd->model, "?") == 0) {
         fprintf(stderr, "qemu: Supported PCI NICs: i82551 i82557b i82559er"
                         " ne2k_pci pcnet rtl8139 e1000 virtio\n");
@@ -651,6 +653,8 @@ void pci_nic_init(PCIBus *bus, NICInfo *nd, int devfn)
         fprintf(stderr, "qemu: Unsupported NIC: %s\n", nd->model);
         exit (1);
     }
+    nd->devfn = pci_dev->devfn;
+    return pci_dev;
 }
 
 typedef struct {

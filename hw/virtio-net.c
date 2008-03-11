@@ -279,7 +279,7 @@ static void virtio_net_tx_timer(void *opaque)
     virtio_net_flush_tx(n, n->tx_vq);
 }
 
-void *virtio_net_init(PCIBus *bus, NICInfo *nd, int devfn)
+PCIDevice *virtio_net_init(PCIBus *bus, NICInfo *nd, int devfn)
 {
     VirtIONet *n;
 
@@ -306,5 +306,5 @@ void *virtio_net_init(PCIBus *bus, NICInfo *nd, int devfn)
     n->tx_timer = qemu_new_timer(vm_clock, virtio_net_tx_timer, n);
     n->tx_timer_active = 0;
 
-    return &n->vdev;
+    return (PCIDevice *)n;
 }

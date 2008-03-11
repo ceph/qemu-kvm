@@ -1958,7 +1958,7 @@ static void pci_physical_memory_read(void *dma_opaque, target_phys_addr_t addr,
     cpu_physical_memory_read(addr, buf, len);
 }
 
-void pci_pcnet_init(PCIBus *bus, NICInfo *nd, int devfn)
+PCIDevice *pci_pcnet_init(PCIBus *bus, NICInfo *nd, int devfn)
 {
     PCNetState *d;
     uint8_t *pci_conf;
@@ -2006,6 +2006,7 @@ void pci_pcnet_init(PCIBus *bus, NICInfo *nd, int devfn)
     d->pci_dev = &d->dev;
 
     pcnet_common_init(d, nd, "pcnet");
+    return (PCIDevice *)d;
 }
 
 /* SPARC32 interface */
