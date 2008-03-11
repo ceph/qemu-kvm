@@ -13,6 +13,7 @@
 
 #include "virtio.h"
 #include "block.h"
+#include "block_int.h"
 #include "pc.h"
 
 /* from Linux's linux/virtio_blk.h */
@@ -156,6 +157,7 @@ void *virtio_blk_init(PCIBus *bus, uint16_t vendor, uint16_t device,
     s->vdev.update_config = virtio_blk_update_config;
     s->vdev.get_features = virtio_blk_get_features;
     s->bs = bs;
+    bs->devfn = s->vdev.pci_dev.devfn;
 
     virtio_add_queue(&s->vdev, 128, virtio_blk_handle_output);
 

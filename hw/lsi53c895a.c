@@ -13,6 +13,7 @@
 #include "hw.h"
 #include "pci.h"
 #include "scsi-disk.h"
+#include "block_int.h"
 
 //#define DEBUG_LSI
 //#define DEBUG_LSI_REG
@@ -1845,6 +1846,7 @@ void lsi_scsi_attach(void *opaque, BlockDriverState *bd, int id)
     s->scsi_dev[id] = scsi_generic_init(bd, 1, lsi_command_complete, s);
     if (s->scsi_dev[id] == NULL)
         s->scsi_dev[id] = scsi_disk_init(bd, 1, lsi_command_complete, s);
+    bd->devfn = s->pci_dev.devfn;
 }
 
 void *lsi_scsi_init(PCIBus *bus, int devfn)
