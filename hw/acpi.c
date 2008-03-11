@@ -673,6 +673,8 @@ static void pciej_write(void *opaque, uint32_t addr, uint32_t val)
 {
     int slot = ffs(val) - 1;
 
+    device_hot_remove_success(0, slot);
+
 #if defined(DEBUG)
     printf("pciej write %lx <== %d\n", addr, val);
 #endif
@@ -751,7 +753,7 @@ static void disable_device(struct pci_status *p, struct gpe_regs *g, int slot)
     p->down |= (1 << slot);
 }
 
-void qemu_system_device_hot_add(int slot, int state)
+void qemu_system_device_hot_add(int pcibus, int slot, int state)
 {
     qemu_set_irq(pm_state->irq, 1);
     pci0_status.up = 0;

@@ -5,6 +5,10 @@
 #include "sysemu.h"
 #include "pc.h"
 #include "console.h"
+#include "block_int.h"
+
+#define PCI_BASE_CLASS_STORAGE          0x01
+#define PCI_BASE_CLASS_NETWORK          0x02
 
 static PCIDevice *qemu_system_hot_add_nic(const char *opts, int bus_nr)
 {
@@ -148,10 +152,75 @@ void device_hot_add(int pcibus, const char *type, const char *opts)
         term_printf("invalid type: %s\n", type);
 
     if (dev) {
-        qemu_system_device_hot_add(PCI_SLOT(dev->devfn), 1);
+        qemu_system_device_hot_add(pcibus, PCI_SLOT(dev->devfn), 1);
         term_printf("OK bus %d, slot %d, function %d (devfn %d)\n",
                     pci_bus_num(dev->bus), PCI_SLOT(dev->devfn),
                     PCI_FUNC(dev->devfn), dev->devfn);
     } else
         term_printf("failed to add %s\n", opts);
 }
+
+void device_hot_remove(int pcibus, int slot)
+{
+    PCIDevice *d = pci_find_device(pcibus, slot);
+
+    if (!d) {
+        term_printf("invalid slot %d\n", slot);
+        return;
+    }
+
+    qemu_system_device_hot_add(pcibus, slot, 0);
+}
+
+static void destroy_nic(int slot)
+{
+    int i;
+
+    for (i = 0; i < MAX_NICS; i++)
+        if (nd_table[i].used &&
+            PCI_SLOT(nd_table[i].devfn) == slot)
+                net_client_uninit(&nd_table[i]);
+}
+
+static void destroy_bdrvs(int slot)
+{
+    int i;
+    struct BlockDriverState *bs;
+
+    for (i = 0; i <= MAX_DRIVES; i++) {
+        bs = drives_table[i].bdrv;
+        if (bs && (PCI_SLOT(bs->devfn) == slot)) {
+            drive_uninit(bs);
+            bdrv_delete(bs);
+        }
+    }
+}
+
+/*
+ * OS has executed _EJ0 method, we now can remove the device
+ */
+void device_hot_remove_success(int pcibus, int slot)
+{
+    PCIDevice *d = pci_find_device(pcibus, slot);
+    int class_code;
+
+    if (!d) {
+        term_printf("invalid slot %d\n", slot);
+        return;
+    }
+
+    class_code = d->config_read(d, PCI_CLASS_DEVICE+1, 1);
+
+    pci_unregister_device(d);
+
+    switch(class_code) {
+    case PCI_BASE_CLASS_STORAGE:
+        destroy_bdrvs(slot);
+        break;
+    case PCI_BASE_CLASS_NETWORK:
+        destroy_nic(slot);
+        break;
+    }
+
+}
+
