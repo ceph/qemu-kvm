@@ -46,6 +46,7 @@ struct NICInfo {
     const char *model;
     VLANState *vlan;
     int devfn;
+    int used;
 };
 
 extern int nb_nics;
