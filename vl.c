@@ -251,11 +251,7 @@ unsigned int nb_prom_envs = 0;
 const char *prom_envs[MAX_PROM_ENVS];
 #endif
 int nb_drives_opt;
-struct drive_opt {
-    const char *file;
-    char opt[1024];
-    int used;
-} drives_opt[MAX_DRIVES];
+struct drive_opt drives_opt[MAX_DRIVES];
 
 static CPUState *cur_cpu;
 static CPUState *next_cpu;

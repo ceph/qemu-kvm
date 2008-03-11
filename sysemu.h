@@ -157,6 +157,15 @@ extern int drive_get_max_bus(BlockInterfaceType type);
 extern void drive_uninit(BlockDriverState *bdrv);
 extern void drive_remove(int index);
 
+struct drive_opt {
+    const char *file;
+    char opt[1024];
+    int used;
+};
+
+extern struct drive_opt drives_opt[MAX_DRIVES];
+extern int nb_drives_opt;
+
 /* acpi */
 void qemu_system_cpu_hot_add(int cpu, int state);
 void qemu_system_hot_add_init(char *cpu_model);
