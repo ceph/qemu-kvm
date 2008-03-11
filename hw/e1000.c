@@ -930,6 +930,16 @@ e1000_mmio_map(PCIDevice *pci_dev, int region_num,
     cpu_register_physical_memory(addr, PNPMMIO_SIZE, d->mmio_index);
 }
 
+static int
+pci_e1000_uninit(PCIDevice *dev)
+{
+    E1000State *d = (E1000State *) dev;
+
+    cpu_unregister_io_memory(d->mmio_index);
+
+    return 0;
+}
+
 PCIDevice *
 pci_e1000_init(PCIBus *bus, NICInfo *nd, int devfn)
 {
@@ -994,6 +1004,7 @@ pci_e1000_init(PCIBus *bus, NICInfo *nd, int devfn)
              d->nd->macaddr[3], d->nd->macaddr[4], d->nd->macaddr[5]);
 
     register_savevm(info_str, d->instance, 1, nic_save, nic_load, d);
+    d->dev.unregister = pci_e1000_uninit;
 
     return (PCIDevice *)d;
 }

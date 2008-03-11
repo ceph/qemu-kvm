@@ -1849,6 +1849,18 @@ void lsi_scsi_attach(void *opaque, BlockDriverState *bd, int id)
     bd->devfn = s->pci_dev.devfn;
 }
 
+int lsi_scsi_uninit(PCIDevice *d)
+{
+    LSIState *s = (LSIState *) d;
+
+    cpu_unregister_io_memory(s->mmio_io_addr);
+    cpu_unregister_io_memory(s->ram_io_addr);
+
+    qemu_free(s->queue);
+
+    return 0;
+}
+
 void *lsi_scsi_init(PCIBus *bus, int devfn)
 {
     LSIState *s;
@@ -1881,6 +1893,7 @@ void *lsi_scsi_init(PCIBus *bus, int devfn)
     s->queue = qemu_malloc(sizeof(lsi_queue));
     s->queue_len = 1;
     s->active_commands = 0;
+    s->pci_dev.unregister = lsi_scsi_uninit;
 
     lsi_soft_reset(s);
 
