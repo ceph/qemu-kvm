@@ -404,6 +404,7 @@ VirtIODevice *virtio_init_pci(PCIBus *bus, const char *name,
     VirtIODevice *vdev;
     PCIDevice *pci_dev;
     uint8_t *config;
+    uint32_t size;
 
     pci_dev = pci_register_device(bus, name, struct_size,
 				  -1, NULL, NULL);
@@ -441,7 +442,11 @@ VirtIODevice *virtio_init_pci(PCIBus *bus, const char *name,
     else
 	vdev->config = NULL;
 
-    pci_register_io_region(pci_dev, 0, 20 + config_size, PCI_ADDRESS_SPACE_IO,
+    size = 20 + config_size;
+    if (size & (size-1))
+        size = 1 << fls(size);
+
+    pci_register_io_region(pci_dev, 0, size, PCI_ADDRESS_SPACE_IO,
 			   virtio_map);
     qemu_register_reset(virtio_reset, vdev);
 
