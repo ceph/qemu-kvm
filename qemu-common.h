@@ -87,6 +87,7 @@ int stristart(const char *str, const char *val, const char **ptr);
 time_t mktimegm(struct tm *tm);
 int hex2bin(char ch);
 char *urldecode(const char *ptr);
+int fls(int i);
 
 /* Error handling.  */
 

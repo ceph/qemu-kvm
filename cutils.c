@@ -135,3 +135,13 @@ char *urldecode(const char *ptr)
     return ret;
 }
 
+int fls(int i)
+{
+    int bit;
+
+    for (bit=31; bit >= 0; bit--)
+        if (i & (1 << bit))
+            return bit+1;
+
+    return 0;
+}
