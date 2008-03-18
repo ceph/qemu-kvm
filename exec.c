@@ -2519,7 +2519,7 @@ static void io_mem_init(void)
     cpu_register_io_memory(IO_MEM_UNASSIGNED >> IO_MEM_SHIFT, unassigned_mem_read, unassigned_mem_write, NULL);
     cpu_register_io_memory(IO_MEM_NOTDIRTY >> IO_MEM_SHIFT, error_mem_read, notdirty_mem_write, NULL);
     for (i=0; i<5; i++)
-        io_mem_used[i] = 0;
+        io_mem_used[i] = 1;
 
 #if defined(CONFIG_SOFTMMU)
     io_mem_watch = cpu_register_io_memory(-1, watch_mem_read,
