@@ -26,6 +26,8 @@
 #include "sysemu.h"
 #include "uboot_image.h"
 
+#include <zlib.h>
+
 /* return the size or -1 if error */
 int get_image_size(const char *filename)
 {
@@ -263,14 +265,106 @@ static void bswap_uboot_header(uboot_image_header_t *hdr)
 }
 
 /* Load a U-Boot image.  */
-int load_uboot(const char *filename, target_ulong *ep, int *is_linux)
-{
 
+/* gunzip functionality is derived from gunzip function
+ * in uboot source code
+ */
+
+#define	ZALLOC_ALIGNMENT	16
+
+static void *zalloc(void *x, unsigned items, unsigned size)
+{
+	void *p;
+
+	size *= items;
+	size = (size + ZALLOC_ALIGNMENT - 1) & ~(ZALLOC_ALIGNMENT - 1);
+
+	p = malloc (size);
+
+	return (p);
+}
+
+static void zfree(void *x, void *addr, unsigned nb)
+{
+	free (addr);
+}
+
+
+#define HEAD_CRC	2
+#define EXTRA_FIELD	4
+#define ORIG_NAME	8
+#define COMMENT		0x10
+#define RESERVED	0xe0
+
+#define DEFLATED	8
+
+static int gunzip(void *dst, int dstlen, unsigned char *src,
+		unsigned long *lenp)
+{
+	z_stream s;
+	int r, i, flags;
+
+	/* skip header */
+	i = 10;
+	flags = src[3];
+	if (src[2] != DEFLATED || (flags & RESERVED) != 0) {
+		puts ("Error: Bad gzipped data\n");
+		return -1;
+	}
+	if ((flags & EXTRA_FIELD) != 0)
+		i = 12 + src[10] + (src[11] << 8);
+	if ((flags & ORIG_NAME) != 0)
+		while (src[i++] != 0)
+			;
+	if ((flags & COMMENT) != 0)
+		while (src[i++] != 0)
+			;
+	if ((flags & HEAD_CRC) != 0)
+		i += 2;
+	if (i >= *lenp) {
+		puts ("Error: gunzip out of data in header\n");
+		return -1;
+	}
+
+	s.zalloc = zalloc;
+	s.zfree = (free_func)zfree;
+
+	r = inflateInit2(&s, -MAX_WBITS);
+	if (r != Z_OK) {
+		printf ("Error: inflateInit2() returned %d\n", r);
+		return (-1);
+	}
+	s.next_in = src + i;
+	s.avail_in = *lenp - i;
+	s.next_out = dst;
+	s.avail_out = dstlen;
+	r = inflate(&s, Z_FINISH);
+	if (r != Z_OK && r != Z_STREAM_END) {
+		printf ("Error: inflate() returned %d\n", r);
+		return -1;
+	}
+	*lenp = s.next_out - (unsigned char *) dst;
+	inflateEnd(&s);
+
+	return 0;
+}
+
+
+#define MAX_KERNEL_SIZE 8<<20  //8MB
+/* This functions can load uImage & cuImage files */
+int load_uimage(const char *filename, target_ulong *ep,
+                target_ulong *load_address,
+                target_ulong *loaded_image_size,
+                int *is_linux)
+{
     int fd;
     int size;
+    int ret;
     uboot_image_header_t h;
     uboot_image_header_t *hdr = &h;
     uint8_t *data = NULL;
+    uint8_t *uncompressed_data = NULL;
+    unsigned long tmp_loaded_image_size;
 
     fd = open(filename, O_RDONLY | O_BINARY);
     if (fd < 0)
@@ -291,13 +385,14 @@ int load_uboot(const char *filename, target_ulong *ep, int *is_linux)
         goto fail;
     }
 
-    /* TODO: Implement compressed images.  */
-    if (hdr->ih_comp != IH_COMP_NONE) {
-        fprintf(stderr, "Unable to load compressed u-boot images\n");
+    /* TODO bzip2 support */
+    if (hdr->ih_comp == IH_COMP_BZIP2) {
+        fprintf(stderr, "Unable to load bzip2 compressed u-boot images\n");
         goto fail;
     }
 
     /* TODO: Check CPU type.  */
+
     if (is_linux) {
         if (hdr->ih_type == IH_TYPE_KERNEL && hdr->ih_os == IH_OS_LINUX)
             *is_linux = 1;
@@ -306,6 +401,7 @@ int load_uboot(const char *filename, target_ulong *ep, int *is_linux)
     }
 
     *ep = hdr->ih_ep;
+
     data = qemu_malloc(hdr->ih_size);
     if (!data)
         goto fail;
@@ -315,13 +411,55 @@ int load_uboot(const char *filename, target_ulong *ep, int *is_linux)
         goto fail;
     }
 
-    cpu_physical_memory_write_rom(hdr->ih_load, data, hdr->ih_size);
+    tmp_loaded_image_size = hdr->ih_size;
 
-    return hdr->ih_size;
+    if (hdr->ih_comp == IH_COMP_GZIP) {
+        uncompressed_data = qemu_malloc(MAX_KERNEL_SIZE);
+        ret = gunzip(uncompressed_data, MAX_KERNEL_SIZE,
+                    (unsigned char *) data,
+                    &tmp_loaded_image_size);
+
+        if (ret < 0) {
+            fprintf(stderr, "Unable to decompress gziped image!\n");
+            goto fail;
+        }
+
+        qemu_free(data);
+        cpu_physical_memory_write_rom(hdr->ih_load, uncompressed_data,
+                                    tmp_loaded_image_size);
+    } else {
+        cpu_physical_memory_write_rom(hdr->ih_load, data,
+                                    tmp_loaded_image_size);
+    }
+
+    if (loaded_image_size != NULL)
+        *loaded_image_size = tmp_loaded_image_size;
+
+    if (load_address != NULL)
+        *load_address = hdr->ih_load;
+
+    return 0;
 
 fail:
     if (data)
         qemu_free(data);
     close(fd);
     return -1;
+}
+
+/* XXX this function is to keep compatibility with other
+ * qemu callers. Once those callers are modified. This function
+ * should be removed from here & sysemu.h
+ */
+int load_uboot(const char *filename, target_ulong *ep, int *is_linux)
+{
+    int ret;
+    target_ulong size;
+
+    ret = load_uimage(filename, ep, NULL, &size, is_linux);
+
+    if (ret < 0)
+        return ret;
+    else
+        return (int)size;
 }

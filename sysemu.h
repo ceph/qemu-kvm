@@ -210,6 +210,9 @@ int load_elf(const char *filename, int64_t virt_to_phys_addend,
              uint64_t *pentry, uint64_t *lowaddr, uint64_t *highaddr);
 int load_aout(const char *filename, uint8_t *addr);
 int load_uboot(const char *filename, target_ulong *ep, int *is_linux);
+int load_uimage(const char *filename, target_ulong *ep,
+             target_ulong *la, target_ulong *loaded_image_size,
+             int *is_linux);
 #endif
 
 #ifdef HAS_AUDIO
