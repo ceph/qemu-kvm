@@ -62,8 +62,7 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 	printf("Ram size of domain is %d bytes\n", (int)ram_size);
 
 	/* Setup CPU */
-	/* XXX We cheat for now and use 405 */
-	env = cpu_ppc_init("405");
+	env = cpu_ppc_init("440");
 	if (!env) {
 		fprintf(stderr, "Unable to initilize CPU!\n");
 		exit(1);
@@ -71,7 +70,7 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 
 	/* call init */
 	printf("Calling function ppc440_init\n");
-	ppc440_init(env, ram_bases, ram_sizes, &pic,1);
+	ppc440ep_init(env, ram_bases, ram_sizes, &pic,1);
 	printf("Done calling ppc440_init\n");
 
 	/* Register mem */

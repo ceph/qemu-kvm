@@ -20,7 +20,7 @@
 #include "exec-all.h"
 #include "boards.h"
 
-void ppc440_init(CPUState *env,
+void ppc440ep_init(CPUState *env,
 		target_phys_addr_t ram_bases[2],
 		target_phys_addr_t ram_sizes[2],
 		qemu_irq **picp,
