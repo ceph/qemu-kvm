@@ -4,20 +4,16 @@
  * Copyright 2007 IBM Corporation.
  * Authors: Jerone Young <jyoung5@us.ibm.com>
  *
- * This work is licensed under the GNU GPL licence version 2 or later.
+ * This work is licensed under the GNU GPL license version 2 or later.
  *
  */
 
+#include "config.h"
 #include "ppc440.h"
-
-#define KERNEL_LOAD_ADDR 0x400000 /* uboot loader puts kernel at 4MB */
-
 #include "qemu-kvm.h"
+#include "device_tree.h"
 
-/* PPC 440 refrence demo board
- *
- * 440 PowerPC CPU
- */
+#define BINARY_DEVICE_TREE_FILE "bamboo.dtb"
 
 void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 			const char *boot_device, DisplayState *ds,
@@ -26,14 +22,21 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 			const char *initrd_filename,
 			const char *cpu_model)
 {
+	char *buf=NULL;
 	target_phys_addr_t ram_bases[2], ram_sizes[2];
 	qemu_irq *pic;
 	CPUState *env;
-	target_ulong ep;
+	target_ulong ep=0;
+	target_ulong la=0;
 	int is_linux=1; /* Will assume allways is Linux for now */
-	long kernel_size=0;
+	target_long kernel_size=0;
 	target_ulong initrd_base=0;
-	target_ulong initrd_size=0;
+	target_long initrd_size=0;
+	target_ulong dt_base=0;
+	void *fdt;
+	int ret;
+	uint32_t cpu_freq;
+	uint32_t timebase_freq;
 
 	printf("%s: START\n", __func__);
 
@@ -78,18 +81,23 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 
 	/* load kernel with uboot loader */
 	printf("%s: load kernel\n", __func__);
-	kernel_size = load_uboot(kernel_filename, &ep, &is_linux);
-	if (kernel_size < 0) {
+	ret = load_uimage(kernel_filename, &ep, &la, &kernel_size, &is_linux);
+	if (ret < 0) {
 		fprintf(stderr, "qemu: could not load kernel '%s'\n",
 			kernel_filename);
 		exit(1);
 	}
+	printf("kernel is at guest address: 0x%lx\n", (unsigned long)la);
 
 	/* load initrd */
 	if (initrd_filename) {
-		initrd_base = kernel_size + KERNEL_LOAD_ADDR;
+		initrd_base = kernel_size + la;
+		printf("%s: load initrd\n", __func__);
 		initrd_size = load_image(initrd_filename,
 				phys_ram_base + initrd_base);
+
+		printf("initrd is at guest address: 0x%lx\n",
+					(unsigned long) initrd_base);
 
 		if (initrd_size < 0) {
 			fprintf(stderr,
@@ -99,17 +107,62 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 		}
 	}
 
+#ifdef CONFIG_LIBFDT
+	/* get variable for device tree */
+	cpu_freq = read_proc_dt_prop_cell("cpus/cpu@0/clock-frequency");
+	timebase_freq = read_proc_dt_prop_cell("cpus/cpu@0/timebase-frequency");
+
+	/* load binary device tree into qemu (not guest memory) */
+	printf("%s: load device tree file\n", __func__);
+
+	/* get string size */
+	ret = asprintf(&buf, "%s/%s", bios_dir,
+		BINARY_DEVICE_TREE_FILE);
+
+	if (ret < 0) {
+		printf("%s: Unable to malloc string buffer buf\n",
+			__func__);
+		exit(1);
+	}
+
+	/* set base for device tree that will be in guest memory */
+	if (initrd_base)
+		dt_base = initrd_base + initrd_size;
+	else
+		dt_base = kernel_size + la;
+
+	fdt = load_device_tree(buf, (unsigned long)(phys_ram_base + dt_base));
+	if (fdt == NULL) {
+		printf("Loading device tree failed!\n");
+		exit(1);
+	}
+
+	printf("device tree address is at guest address: 0x%lx\n",
+		(unsigned long) dt_base);
+
+	free(buf);
+
+	/* manipulate device tree in memory */
+	dt_cell(fdt, "/cpus/cpu@0", "clock-frequency", cpu_freq);
+	dt_cell(fdt, "/cpus/cpu@0", "timebase-frequency", timebase_freq);
+	dt_cell(fdt, "/chosen", "linux,initrd-start", initrd_base);
+	dt_cell(fdt, "/chosen", "linux,initrd-end",
+				(initrd_base + initrd_size));
+	dt_string(fdt, "/chosen", "bootargs", (char *)kernel_cmdline);
+#endif
+
 	if (kvm_enabled()) {
-	    /* XXX insert TLB entries */
-	    env->gpr[1] = (16<<20) - 8;
-	    env->gpr[4] = initrd_base;
-	    env->gpr[5] = initrd_size;
+		/* XXX insert TLB entries */
+		env->gpr[1] = (16<<20) - 8;
 
-	    env->nip = ep;
+#ifdef CONFIG_LIBFDT
+		/* location of device tree in register */
+		env->gpr[3] = dt_base;
+#endif
+		env->nip = ep;
 
-	    env->cpu_index = 0;
-	    printf("%s: loading kvm registers\n", __func__);
-	    kvm_load_registers(env);
+		printf("%s: loading kvm registers\n", __func__);
+		kvm_load_registers(env);
 	}
 
 	printf("%s: DONE\n", __func__);
