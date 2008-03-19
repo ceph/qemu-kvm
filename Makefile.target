@@ -557,6 +557,11 @@ CPPFLAGS += $(CONFIG_VNC_TLS_CFLAGS)
 LIBS += $(CONFIG_VNC_TLS_LIBS)
 endif
 
+ifdef CONFIG_LIBFDT
+LIBS += -lfdt
+DEPLIBS += libfdt.a
+endif
+
 # SCSI layer
 OBJS+= lsi53c895a.o esp.o
 
