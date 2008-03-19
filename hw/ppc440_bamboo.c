@@ -15,6 +15,8 @@
 
 #define BINARY_DEVICE_TREE_FILE "bamboo.dtb"
 
+#define bytes_to_mb(a) (a>>20)
+
 void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 			const char *boot_device, DisplayState *ds,
 			const char *kernel_filename,
@@ -23,7 +25,7 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 			const char *cpu_model)
 {
 	char *buf=NULL;
-	target_phys_addr_t ram_bases[2], ram_sizes[2];
+	target_phys_addr_t ram_bases[4], ram_sizes[4];
 	qemu_irq *pic;
 	CPUState *env;
 	target_ulong ep=0;
@@ -35,31 +37,36 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 	target_ulong dt_base=0;
 	void *fdt;
 	int ret;
+	int ram_stick_sizes[] = {256<<20, 128<<20, 64<<20,
+				32<<20, 16<<20, 8<<20 }; /* in bytes */
+	ram_addr_t tmp_ram_size;
+	int i=0, k=0;
 	uint32_t cpu_freq;
 	uint32_t timebase_freq;
 
 	printf("%s: START\n", __func__);
 
 	/* Setup Memory */
-	if (ram_size) {
-		printf("Ram size specified on command line is %i bytes\n",
-								(int)ram_size);
-		printf("WARNING: RAM is hard coded to 144MB\n");
-	}
-	else {
-		printf("Using defualt ram size of %iMB\n",
-						((int)ram_size/1024)/1024);
+	printf("Ram size passed is: %i MB\n",
+				bytes_to_mb((int)ram_size));
+
+	tmp_ram_size = ram_size;
+
+	for (i=0; i < (sizeof(ram_sizes)/sizeof(ram_sizes[0])); i++) {
+		for (k=0; k < (sizeof(ram_stick_sizes)/sizeof(ram_stick_sizes[0])); k++) {
+			if ((tmp_ram_size/ram_stick_sizes[k]) > 0) {
+				ram_sizes[i] = ram_stick_sizes[k];
+				tmp_ram_size -= ram_stick_sizes[k];
+				break;
+			}
+		}
 	}
 
-	/* Each bank can only have memory in configurations of
-	 *   16MB, 32MB, 64MB, 128MB, or 256MB
-	 */
-	ram_bases[0] = 0x0;
-	ram_sizes[0] = 0x08000000;
-	ram_bases[1] = 0x0;
-	ram_sizes[1] = 0x01000000;
-
-	printf("Ram size of domain is %d bytes\n", (int)ram_size);
+	if (tmp_ram_size) {
+		printf("WARNING: %i MB left over memory is ram\n",
+			bytes_to_mb((int)tmp_ram_size));
+		ram_size -= tmp_ram_size;
+	}
 
 	/* Setup CPU */
 	env = cpu_ppc_init("440");
@@ -76,7 +83,7 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 	/* Register mem */
 	cpu_register_physical_memory(0, ram_size, 0);
 	if (kvm_enabled())
-	    kvm_cpu_register_physical_memory(0, ram_size, 0);
+	  kvm_cpu_register_physical_memory(0, ram_size, 0);
 
 	/* load kernel with uboot loader */
 	printf("%s: load kernel\n", __func__);
