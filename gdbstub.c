@@ -122,6 +122,16 @@ int use_gdb_syscalls(void)
     return gdb_syscall_mode == GDB_SYS_ENABLED;
 }
 
+/* Resume execution.  */
+static inline void gdb_continue(GDBState *s)
+{
+#ifdef CONFIG_USER_ONLY
+    s->running_state = 1;
+#else
+    vm_start();
+#endif
+}
+
 static void put_buffer(GDBState *s, const uint8_t *buf, int len)
 {
 #ifdef CONFIG_USER_ONLY
@@ -911,11 +921,7 @@ static int gdb_handle_packet(GDBState *s, CPUState *env, const char *line_buf)
             env->pc = addr;
 #endif
         }
-#ifdef CONFIG_USER_ONLY
-        s->running_state = 1;
-#else
-        vm_start();
-#endif
+        gdb_continue(s);
 	return RS_IDLE;
     case 's':
         if (*p != '\0') {
@@ -940,11 +946,7 @@ static int gdb_handle_packet(GDBState *s, CPUState *env, const char *line_buf)
 #endif
         }
         cpu_single_step(env, 1);
-#ifdef CONFIG_USER_ONLY
-        s->running_state = 1;
-#else
-        vm_start();
-#endif
+        gdb_continue(s);
 	return RS_IDLE;
     case 'F':
         {
@@ -966,11 +968,7 @@ static int gdb_handle_packet(GDBState *s, CPUState *env, const char *line_buf)
             if (type == 'C') {
                 put_packet(s, "T02");
             } else {
-#ifdef CONFIG_USER_ONLY
-                s->running_state = 1;
-#else
-                vm_start();
-#endif
+                gdb_continue(s);
             }
         }
         break;

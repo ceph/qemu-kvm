@@ -626,9 +626,12 @@ CPPFLAGS += -DHAS_AUDIO
 endif
 ifeq ($(TARGET_BASE_ARCH), cris)
 OBJS+= etraxfs.o
-OBJS+= ptimer.o
+OBJS+= etraxfs_pic.o
 OBJS+= etraxfs_timer.o
 OBJS+= etraxfs_ser.o
+
+OBJS+= ptimer.o
+OBJS+= pflash_cfi01.o
 endif
 ifeq ($(TARGET_BASE_ARCH), sparc)
 ifeq ($(TARGET_ARCH), sparc64)
@@ -653,7 +656,7 @@ OBJS+= pxa2xx.o pxa2xx_pic.o pxa2xx_gpio.o pxa2xx_timer.o pxa2xx_dma.o
 OBJS+= pxa2xx_lcd.o pxa2xx_mmci.o pxa2xx_pcmcia.o pxa2xx_keypad.o
 OBJS+= pflash_cfi01.o gumstix.o
 OBJS+= spitz.o ide.o serial.o nand.o ecc.o
-OBJS+= omap.o omap_lcdc.o omap1_clk.o omap_mmc.o omap_i2c.o
+OBJS+= omap1.o omap_lcdc.o omap_dma.o omap_clk.o omap_mmc.o omap_i2c.o
 OBJS+= palm.o tsc210x.o
 OBJS+= mst_fpga.o mainstone.o
 CPPFLAGS += -DHAS_AUDIO

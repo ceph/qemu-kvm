@@ -32,7 +32,7 @@ const char *tcg_target_reg_names[TCG_TARGET_NB_REGS] = {
     "%edi",
 };
 
-int tcg_target_reg_alloc_order[TCG_TARGET_NB_REGS] = {
+int tcg_target_reg_alloc_order[] = {
     TCG_REG_EAX,
     TCG_REG_EDX,
     TCG_REG_ECX,
@@ -255,15 +255,15 @@ static inline void tcg_out_movi(TCGContext *s, TCGType type,
     }
 }
 
-static inline void tcg_out_ld(TCGContext *s, int ret, 
-                              int arg1, int32_t arg2)
+static inline void tcg_out_ld(TCGContext *s, TCGType type, int ret,
+                              int arg1, tcg_target_long arg2)
 {
     /* movl */
     tcg_out_modrm_offset(s, 0x8b, ret, arg1, arg2);
 }
 
-static inline void tcg_out_st(TCGContext *s, int arg, 
-                              int arg1, int32_t arg2)
+static inline void tcg_out_st(TCGContext *s, TCGType type, int arg,
+                              int arg1, tcg_target_long arg2)
 {
     /* movl */
     tcg_out_modrm_offset(s, 0x89, arg, arg1, arg2);

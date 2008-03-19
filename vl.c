@@ -617,7 +617,7 @@ void kbd_mouse_event(int dx, int dy, int dz, int buttons_state)
             if (qemu_put_mouse_event_current->qemu_put_mouse_event_absolute)
                 width = 0x7fff;
             else
-                width = graphic_width;
+                width = graphic_width - 1;
             mouse_event(mouse_event_opaque,
                                  width - dy, dx, dz, buttons_state);
         } else
@@ -928,7 +928,7 @@ static struct qemu_alarm_timer alarm_timers[] = {
     {NULL, }
 };
 
-static void show_available_alarms()
+static void show_available_alarms(void)
 {
     int i;
 
@@ -945,7 +945,7 @@ static void configure_alarms(char const *opt)
     char *arg;
     char *name;
 
-    if (!strcmp(opt, "help")) {
+    if (!strcmp(opt, "?")) {
         show_available_alarms();
         exit(0);
     }
@@ -987,10 +987,10 @@ next:
 	/* Disable remaining timers */
         for (i = cur; i < count; i++)
             alarm_timers[i].name = NULL;
+    } else {
+        show_available_alarms();
+        exit(1);
     }
-
-    /* debug */
-    show_available_alarms();
 }
 
 QEMUClock *rt_clock;
@@ -7643,7 +7643,11 @@ static void gui_update(void *opaque)
 {
     DisplayState *ds = opaque;
     ds->dpy_refresh(ds);
-    qemu_mod_timer(ds->gui_timer, GUI_REFRESH_INTERVAL + qemu_get_clock(rt_clock));
+    qemu_mod_timer(ds->gui_timer,
+        (ds->gui_timer_interval ?
+	    ds->gui_timer_interval :
+	    GUI_REFRESH_INTERVAL)
+	+ qemu_get_clock(rt_clock));
 }
 
 struct vm_change_state_entry {
@@ -8193,7 +8197,7 @@ static void help(int exitcode)
            "-prom-env variable=value  set OpenBIOS nvram variables\n"
 #endif
            "-clock          force the use of the given methods for timer alarm.\n"
-           "                To see what timers are available use -clock help\n"
+           "                To see what timers are available use -clock ?\n"
            "-startdate      select initial date of the clock\n"
            "\n"
            "During emulation, the following keys are useful:\n"
@@ -8504,6 +8508,11 @@ static void register_machines(void)
     qemu_register_machine(&ss600mp_machine);
     qemu_register_machine(&ss20_machine);
     qemu_register_machine(&ss2_machine);
+    qemu_register_machine(&voyager_machine);
+    qemu_register_machine(&ss_lx_machine);
+    qemu_register_machine(&ss4_machine);
+    qemu_register_machine(&scls_machine);
+    qemu_register_machine(&sbook_machine);
     qemu_register_machine(&ss1000_machine);
     qemu_register_machine(&ss2000_machine);
 #endif

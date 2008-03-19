@@ -1172,7 +1172,7 @@ static inline void tcg_gen_qemu_ld8s(TCGv ret, TCGv addr, int mem_index)
     tcg_gen_op3i(INDEX_op_qemu_ld8s, ret, addr, mem_index);
 #else
     tcg_gen_op4i(INDEX_op_qemu_ld8s, ret, addr, TCGV_HIGH(addr), mem_index);
-    tcg_gen_ext8s_i32(TCGV_HIGH(ret), ret);
+    tcg_gen_sari_i32(TCGV_HIGH(ret), ret, 31);
 #endif
 }
 
@@ -1192,7 +1192,7 @@ static inline void tcg_gen_qemu_ld16s(TCGv ret, TCGv addr, int mem_index)
     tcg_gen_op3i(INDEX_op_qemu_ld16s, ret, addr, mem_index);
 #else
     tcg_gen_op4i(INDEX_op_qemu_ld16s, ret, addr, TCGV_HIGH(addr), mem_index);
-    tcg_gen_ext16s_i32(TCGV_HIGH(ret), ret);
+    tcg_gen_sari_i32(TCGV_HIGH(ret), ret, 31);
 #endif
 }
 
@@ -1358,6 +1358,7 @@ static inline void tcg_gen_qemu_st64(TCGv arg, TCGv addr, int mem_index)
 #define tcg_gen_sar_tl tcg_gen_sar_i64
 #define tcg_gen_sari_tl tcg_gen_sari_i64
 #define tcg_gen_brcond_tl tcg_gen_brcond_i64
+#define tcg_const_tl tcg_const_i64
 #else
 #define TCG_TYPE_TL TCG_TYPE_I32
 #define tcg_gen_movi_tl tcg_gen_movi_i32
@@ -1390,4 +1391,5 @@ static inline void tcg_gen_qemu_st64(TCGv arg, TCGv addr, int mem_index)
 #define tcg_gen_sar_tl tcg_gen_sar_i32
 #define tcg_gen_sari_tl tcg_gen_sari_i32
 #define tcg_gen_brcond_tl tcg_gen_brcond_i32
+#define tcg_const_tl tcg_const_i32
 #endif

@@ -50,7 +50,7 @@ void helper_trapcc(target_ulong nb_trap, target_ulong do_trap)
     }
 }
 
-void check_ieee_exceptions(void)
+void helper_check_ieee_exceptions(void)
 {
     target_ulong status;
 
@@ -79,12 +79,15 @@ void check_ieee_exceptions(void)
     }
 }
 
+void helper_clear_float_exceptions(void)
+{
+    set_float_exception_flags(0, &env->fp_status);
+}
+
 #ifdef USE_INT_TO_FLOAT_HELPERS
 void do_fitos(void)
 {
-    set_float_exception_flags(0, &env->fp_status);
     FT0 = int32_to_float32(*((int32_t *)&FT1), &env->fp_status);
-    check_ieee_exceptions();
 }
 
 void do_fitod(void)
@@ -102,73 +105,61 @@ void do_fitoq(void)
 #ifdef TARGET_SPARC64
 void do_fxtos(void)
 {
-    set_float_exception_flags(0, &env->fp_status);
     FT0 = int64_to_float32(*((int64_t *)&DT1), &env->fp_status);
-    check_ieee_exceptions();
 }
 
 void do_fxtod(void)
 {
-    set_float_exception_flags(0, &env->fp_status);
     DT0 = int64_to_float64(*((int64_t *)&DT1), &env->fp_status);
-    check_ieee_exceptions();
 }
 
 #if defined(CONFIG_USER_ONLY)
 void do_fxtoq(void)
 {
-    set_float_exception_flags(0, &env->fp_status);
     QT0 = int64_to_float128(*((int32_t *)&DT1), &env->fp_status);
-    check_ieee_exceptions();
 }
 #endif
 #endif
 #endif
 
-void do_fabss(void)
+void helper_fabss(void)
 {
     FT0 = float32_abs(FT1);
 }
 
 #ifdef TARGET_SPARC64
-void do_fabsd(void)
+void helper_fabsd(void)
 {
     DT0 = float64_abs(DT1);
 }
 
 #if defined(CONFIG_USER_ONLY)
-void do_fabsq(void)
+void helper_fabsq(void)
 {
     QT0 = float128_abs(QT1);
 }
 #endif
 #endif
 
-void do_fsqrts(void)
+void helper_fsqrts(void)
 {
-    set_float_exception_flags(0, &env->fp_status);
     FT0 = float32_sqrt(FT1, &env->fp_status);
-    check_ieee_exceptions();
 }
 
-void do_fsqrtd(void)
+void helper_fsqrtd(void)
 {
-    set_float_exception_flags(0, &env->fp_status);
     DT0 = float64_sqrt(DT1, &env->fp_status);
-    check_ieee_exceptions();
 }
 
 #if defined(CONFIG_USER_ONLY)
-void do_fsqrtq(void)
+void helper_fsqrtq(void)
 {
-    set_float_exception_flags(0, &env->fp_status);
     QT0 = float128_sqrt(QT1, &env->fp_status);
-    check_ieee_exceptions();
 }
 #endif
 
 #define GEN_FCMP(name, size, reg1, reg2, FS, TRAP)                      \
-    void glue(do_, name) (void)                                         \
+    void glue(helper_, name) (void)                                     \
     {                                                                   \
         target_ulong new_fsr;                                           \
                                                                         \
@@ -1599,6 +1590,8 @@ uint64_t helper_pack64(target_ulong high, target_ulong low)
 void helper_ldfsr(void)
 {
     int rnd_mode;
+
+    PUT_FSR32(env, *((uint32_t *) &FT0));
     switch (env->fsr & FSR_RD_MASK) {
     case FSR_RD_NEAREST:
         rnd_mode = float_round_nearest_even;
@@ -1617,7 +1610,12 @@ void helper_ldfsr(void)
     set_float_rounding_mode(rnd_mode, &env->fp_status);
 }
 
-void helper_debug()
+void helper_stfsr(void)
+{
+    *((uint32_t *) &FT0) = GET_FSR32(env);
+}
+
+void helper_debug(void)
 {
     env->exception_index = EXCP_DEBUG;
     cpu_loop_exit();
@@ -1684,23 +1682,25 @@ void helper_wrpstate(target_ulong new_state)
 void helper_done(void)
 {
     env->tl--;
-    env->pc = env->tnpc[env->tl];
-    env->npc = env->tnpc[env->tl] + 4;
-    PUT_CCR(env, env->tstate[env->tl] >> 32);
-    env->asi = (env->tstate[env->tl] >> 24) & 0xff;
-    change_pstate((env->tstate[env->tl] >> 8) & 0xf3f);
-    PUT_CWP64(env, env->tstate[env->tl] & 0xff);
+    env->tsptr = &env->ts[env->tl];
+    env->pc = env->tsptr->tpc;
+    env->npc = env->tsptr->tnpc + 4;
+    PUT_CCR(env, env->tsptr->tstate >> 32);
+    env->asi = (env->tsptr->tstate >> 24) & 0xff;
+    change_pstate((env->tsptr->tstate >> 8) & 0xf3f);
+    PUT_CWP64(env, env->tsptr->tstate & 0xff);
 }
 
 void helper_retry(void)
 {
     env->tl--;
-    env->pc = env->tpc[env->tl];
-    env->npc = env->tnpc[env->tl];
-    PUT_CCR(env, env->tstate[env->tl] >> 32);
-    env->asi = (env->tstate[env->tl] >> 24) & 0xff;
-    change_pstate((env->tstate[env->tl] >> 8) & 0xf3f);
-    PUT_CWP64(env, env->tstate[env->tl] & 0xff);
+    env->tsptr = &env->ts[env->tl];
+    env->pc = env->tsptr->tpc;
+    env->npc = env->tsptr->tnpc;
+    PUT_CCR(env, env->tsptr->tstate >> 32);
+    env->asi = (env->tsptr->tstate >> 24) & 0xff;
+    change_pstate((env->tsptr->tstate >> 8) & 0xf3f);
+    PUT_CWP64(env, env->tsptr->tstate & 0xff);
 }
 #endif
 
@@ -1822,11 +1822,12 @@ void do_interrupt(int intno)
         return;
     }
 #endif
-    env->tstate[env->tl] = ((uint64_t)GET_CCR(env) << 32) | ((env->asi & 0xff) << 24) |
-        ((env->pstate & 0xf3f) << 8) | GET_CWP64(env);
-    env->tpc[env->tl] = env->pc;
-    env->tnpc[env->tl] = env->npc;
-    env->tt[env->tl] = intno;
+    env->tsptr->tstate = ((uint64_t)GET_CCR(env) << 32) |
+        ((env->asi & 0xff) << 24) | ((env->pstate & 0xf3f) << 8) |
+        GET_CWP64(env);
+    env->tsptr->tpc = env->pc;
+    env->tsptr->tnpc = env->npc;
+    env->tsptr->tt = intno;
     change_pstate(PS_PEF | PS_PRIV | PS_AG);
 
     if (intno == TT_CLRWIN)
@@ -1844,6 +1845,7 @@ void do_interrupt(int intno)
         if (env->tl != MAXTL)
             env->tl++;
     }
+    env->tsptr = &env->ts[env->tl];
     env->pc = env->tbr;
     env->npc = env->pc + 4;
     env->exception_index = 0;

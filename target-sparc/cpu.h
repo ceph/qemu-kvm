@@ -169,6 +169,12 @@
 #define NB_MMU_MODES 2
 #else
 #define NB_MMU_MODES 3
+typedef struct trap_state {
+    uint64_t tpc;
+    uint64_t tnpc;
+    uint64_t tstate;
+    uint32_t tt;
+} trap_state;
 #endif
 
 typedef struct CPUSPARCState {
@@ -178,6 +184,11 @@ typedef struct CPUSPARCState {
     target_ulong pc;       /* program counter */
     target_ulong npc;      /* next program counter */
     target_ulong y;        /* multiply/divide register */
+
+    /* emulator internal flags handling */
+    target_ulong cc_src;
+    target_ulong cc_dst;
+
     uint32_t psr;      /* processor state register */
     target_ulong fsr;      /* FPU state register */
     uint32_t cwp;      /* index of current register window (extracted
@@ -234,10 +245,8 @@ typedef struct CPUSPARCState {
 #if defined(TARGET_SPARC64)
 #define MAXTL 4
     uint64_t t0, t1, t2;
-    uint64_t tpc[MAXTL];
-    uint64_t tnpc[MAXTL];
-    uint64_t tstate[MAXTL];
-    uint32_t tt[MAXTL];
+    trap_state *tsptr;
+    trap_state ts[MAXTL];
     uint32_t xcc;               /* Extended integer condition codes */
     uint32_t asi;
     uint32_t pstate;
@@ -317,7 +326,6 @@ void cpu_set_cwp(CPUSPARCState *env1, int new_cwp);
 #endif
 
 int cpu_sparc_signal_handler(int host_signum, void *pinfo, void *puc);
-void raise_exception(int tt);
 void do_unassigned_access(target_phys_addr_t addr, int is_write, int is_exec,
                           int is_asi);
 void cpu_check_irqs(CPUSPARCState *env);
