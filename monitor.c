@@ -1359,6 +1359,7 @@ static term_cmd_t term_cmds[] = {
     { "migrate_set_speed", "s", do_migrate_set_speed,
       "value", "set maximum speed (in bytes) for migrations" },
     { "cpu_set", "is", do_cpu_set_nr, "cpu [online|offline]", "change cpu state" },
+#if defined(TARGET_I386) || defined(TARGET_X86_64)
     { "drive_add", "iss", drive_hot_add, "pcibus pcidevfn [file=file][,if=type][,bus=n]\n"
                                         "[,unit=m][,media=d][index=i]\n"
                                         "[,cyls=c,heads=h,secs=s[,trans=t]]\n"
@@ -1366,6 +1367,7 @@ static term_cmd_t term_cmds[] = {
                                         "add drive to PCI storage controller" },
     { "pci_add", "iss", device_hot_add, "bus nic|storage [[vlan=n][,macaddr=addr][,model=type]] [file=file][,if=type][,bus=nr]...", "hot-add PCI device" },
     { "pci_del", "ii", device_hot_remove, "bus slot-number", "hot remove PCI device" },
+#endif
     { NULL, NULL, },
 };
 

@@ -140,6 +140,7 @@ static PCIDevice *qemu_system_hot_add_storage(const char *opts, int bus_nr)
     return opaque;
 }
 
+#if defined(TARGET_I386) || defined(TARGET_X86_64)
 void device_hot_add(int pcibus, const char *type, const char *opts)
 {
     PCIDevice *dev = NULL;
@@ -171,6 +172,7 @@ void device_hot_remove(int pcibus, int slot)
 
     qemu_system_device_hot_add(pcibus, slot, 0);
 }
+#endif
 
 static void destroy_nic(int slot)
 {
