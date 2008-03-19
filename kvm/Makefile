@@ -5,7 +5,7 @@ DESTDIR=
 
 rpmrelease = devel
 
-.PHONY: kernel user libkvm qemu bios vgabios extboot clean
+.PHONY: kernel user libkvm qemu bios vgabios extboot clean libfdt
 
 all: libkvm qemu
 ifneq '$(filter $(ARCH), x86_64 i386 ia64)' ''
@@ -20,6 +20,9 @@ qemu kernel user libkvm:
 qemu: libkvm
 ifneq '$(filter $(ARCH), i386 x86_64)' ''
     qemu: extboot
+endif
+ifneq '$(filter $(ARCH), powerpc)' ''
+    qemu: libfdt
 endif
 user: libkvm
 
@@ -38,6 +41,8 @@ extboot:
            || ! cmp -s qemu/pc-bios/extboot.bin extboot/extboot.bin; then \
 		cp extboot/extboot.bin qemu/pc-bios/extboot.bin; \
 	fi
+libfdt:
+	$(MAKE) -C $@
 
 
 bindir = /usr/bin
@@ -88,7 +93,7 @@ srpm:
 	$(RM) $(tmpspec)
 
 clean:
-	for i in $(if $(WANT_MODULE), kernel) user libkvm qemu; do \
+	for i in $(if $(WANT_MODULE), kernel) user libkvm qemu libfdt; do \
 		make -C $$i clean; \
 	done
 

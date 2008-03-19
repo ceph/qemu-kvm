@@ -103,6 +103,8 @@ fi
 
 if [ "$arch" = "powerpc" ]; then
     target_exec="ppcemb-softmmu"
+    qemu_cflags="$qemu_cflags -I $PWD/libfdt"
+    qemu_ldflags="$qemu_ldflags -L $PWD/libfdt"
 fi
 
 #configure user dir
