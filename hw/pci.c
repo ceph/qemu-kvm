@@ -691,10 +691,10 @@ PCIDevice *pci_nic_init(PCIBus *bus, NICInfo *nd, int devfn)
     } else if (strcmp(nd->model, "?") == 0) {
         fprintf(stderr, "qemu: Supported PCI NICs: i82551 i82557b i82559er"
                         " ne2k_pci pcnet rtl8139 e1000 virtio\n");
-        exit (1);
+        return NULL;
     } else {
         fprintf(stderr, "qemu: Unsupported NIC: %s\n", nd->model);
-        exit (1);
+        return NULL;
     }
     nd->devfn = pci_dev->devfn;
     return pci_dev;

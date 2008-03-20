@@ -676,7 +676,8 @@ static void ppc_prep_init (int ram_size, int vga_ram_size,
             || strcmp(nd_table[i].model, "ne2k_isa") == 0) {
             isa_ne2000_init(ne2000_io[i], i8259[ne2000_irq[i]], &nd_table[i]);
         } else {
-            pci_nic_init(pci_bus, &nd_table[i], -1);
+            if (!pci_nic_init(pci_bus, &nd_table[i], -1))
+                exit(1);
         }
     }
 

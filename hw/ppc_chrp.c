@@ -268,7 +268,8 @@ static void ppc_core99_init (int ram_size, int vga_ram_size,
     for(i = 0; i < nb_nics; i++) {
         if (!nd_table[i].model)
             nd_table[i].model = "ne2k_pci";
-        pci_nic_init(pci_bus, &nd_table[i], -1);
+        if (!pci_nic_init(pci_bus, &nd_table[i], -1))
+            exit(1);
     }
     if (drive_get_max_bus(IF_IDE) >= MAX_IDE_BUS) {
         fprintf(stderr, "qemu: too many IDE bus\n");

@@ -342,7 +342,8 @@ static void sun4u_init(int ram_size, int vga_ram_size,
     for(i = 0; i < nb_nics; i++) {
         if (!nd_table[i].model)
             nd_table[i].model = "ne2k_pci";
-        pci_nic_init(pci_bus, &nd_table[i], -1);
+        if (!pci_nic_init(pci_bus, &nd_table[i], -1))
+            exit(1);
     }
 
     irq = qemu_allocate_irqs(dummy_cpu_set_irq, NULL, 32);

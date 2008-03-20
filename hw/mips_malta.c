@@ -495,9 +495,11 @@ static void network_init (PCIBus *pci_bus)
         }
         if (i == 0  && strcmp(nd->model, "pcnet") == 0) {
             /* The malta board has a PCNet card using PCI SLOT 11 */
-            pci_nic_init(pci_bus, nd, 88);
+            if (!pci_nic_init(pci_bus, nd, 88))
+                exit(1);
         } else {
-            pci_nic_init(pci_bus, nd, -1);
+            if (!pci_nic_init(pci_bus, nd, -1))
+                exit(1);
         }
     }
 }

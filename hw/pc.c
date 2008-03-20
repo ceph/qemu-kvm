@@ -1016,7 +1016,8 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
         } else if (pci_enabled) {
             if (strcmp(nd->model, "?") == 0)
                 fprintf(stderr, "qemu: Supported ISA NICs: ne2k_isa\n");
-            pci_nic_init(pci_bus, nd, -1);
+            if (!pci_nic_init(pci_bus, nd, -1))
+                exit(1);
         } else if (strcmp(nd->model, "?") == 0) {
             fprintf(stderr, "qemu: Supported ISA NICs: ne2k_isa\n");
             exit(1);
