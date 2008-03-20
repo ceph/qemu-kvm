@@ -719,6 +719,7 @@ static void disable_processor(struct gpe_regs *g, int cpu)
     g->down |= (1 << cpu);
 }
 
+#if defined(TARGET_I386) || defined(TARGET_X86_64)
 void qemu_system_cpu_hot_add(int cpu, int state)
 {
     CPUState *env;
@@ -743,6 +744,7 @@ void qemu_system_cpu_hot_add(int cpu, int state)
         disable_processor(&gpe, cpu);
     qemu_set_irq(pm_state->irq, 0);
 }
+#endif
 
 static void enable_device(struct pci_status *p, struct gpe_regs *g, int slot)
 {
