@@ -4494,6 +4494,7 @@ ASM_END
                     extended_memory_size <<= 8;
                     extended_memory_size |= inb_cmos(0x30);
                     extended_memory_size *= 1024;
+                    extended_memory_size += (1L * 1024 * 1024);
                 }
 
                 switch(regs.u.r16.bx)
