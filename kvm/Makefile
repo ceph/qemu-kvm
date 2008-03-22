@@ -91,4 +91,6 @@ clean:
 	for i in $(if $(WANT_MODULE), kernel) user libkvm qemu; do \
 		make -C $$i clean; \
 	done
+
+distclean: clean
 	rm -f config.mak user/config.mak
