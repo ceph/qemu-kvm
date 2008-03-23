@@ -558,20 +558,6 @@ static inline void blahblah(void)
 	(void)empty_zero_page[0];
 }
 
-/* __mmdrop() is not exported before 2.6.25 */
-#include <linux/sched.h>
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25)
-
-#define mmdrop(x) do { (void)(x); } while (0)
-#define mmget(x) do { (void)(x); } while (0)
-
-#else
-
-#define mmget(x) do { atomic_inc(x); } while (0)
-
-#endif
-
 /* X86_FEATURE_NX is missing in some x86_64 kernels */
 
 #include <asm/cpufeature.h>
