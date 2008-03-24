@@ -54,8 +54,11 @@
 { sub(/\<desc_struct\>/, "kvm_desc_struct") }
 { sub(/\<ldttss_desc64\>/, "kvm_ldttss_desc64") }
 { sub(/\<desc_ptr\>/, "kvm_desc_ptr") }
+{ sub(/\<__user\>/, " ") }
 
 /^\t\.name = "kvm"/ { $0 = "\tset_kset_name(\"kvm\")," }
+
+/#include <linux\/compiler.h>/ { $0 = "" }
 
 { print }
 

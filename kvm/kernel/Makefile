@@ -47,6 +47,7 @@ sync:
 	$(call unifdef, include/linux/kvm_para.h)
 	$(call unifdef, include/asm-x86/kvm.h)
 	$(call unifdef, include/asm-x86/kvm_para.h)
+	$(call hack, include/linux/kvm.h)
 	$(call hack, kvm_main.c)
 	$(call hack, mmu.c)
 	$(call hack, vmx.c)
