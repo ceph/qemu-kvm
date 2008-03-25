@@ -202,6 +202,10 @@
 
 /* set to 1 set disable mult support */
 #define MAX_MULT_SECTORS 16
+#define IDE_DMA_BUF_SIZE 131072
+#if (IDE_DMA_BUF_SIZE < MAX_MULT_SECTORS * 512)
+#error "IDE_DMA_BUF_SIZE must be bigger or equal to MAX_MULT_SECTORS * 512"
+#endif
 
 /* ATAPI defines */
 
@@ -900,8 +904,8 @@ static void ide_read_dma_cb(void *opaque, int ret)
 
     /* launch next transfer */
     n = s->nsector;
-    if (n > MAX_MULT_SECTORS)
-        n = MAX_MULT_SECTORS;
+    if (n > IDE_DMA_BUF_SIZE / 512)
+        n = IDE_DMA_BUF_SIZE / 512;
     s->io_buffer_index = 0;
     s->io_buffer_size = n * 512;
 #ifdef DEBUG_AIO
@@ -999,8 +1003,8 @@ static void ide_write_dma_cb(void *opaque, int ret)
 
     /* launch next transfer */
     n = s->nsector;
-    if (n > MAX_MULT_SECTORS)
-        n = MAX_MULT_SECTORS;
+    if (n > IDE_DMA_BUF_SIZE / 512)
+        n = IDE_DMA_BUF_SIZE / 512;
     s->io_buffer_index = 0;
     s->io_buffer_size = n * 512;
 
@@ -1294,8 +1298,8 @@ static void ide_atapi_cmd_read_dma_cb(void *opaque, int ret)
         data_offset = 16;
     } else {
         n = s->packet_transfer_size >> 11;
-        if (n > (MAX_MULT_SECTORS / 4))
-            n = (MAX_MULT_SECTORS / 4);
+        if (n > (IDE_DMA_BUF_SIZE / 2048))
+            n = (IDE_DMA_BUF_SIZE / 2048);
         s->io_buffer_size = n * 2048;
         data_offset = 0;
     }
@@ -2469,7 +2473,7 @@ static void ide_init2(IDEState *ide_state,
 
     for(i = 0; i < 2; i++) {
         s = ide_state + i;
-        s->io_buffer = qemu_memalign(512, MAX_MULT_SECTORS*512 + 4);
+        s->io_buffer = qemu_memalign(512, IDE_DMA_BUF_SIZE + 4);
         if (i == 0)
             s->bs = hd0;
         else
