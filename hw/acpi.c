@@ -685,10 +685,9 @@ static void pciej_write(void *opaque, uint32_t addr, uint32_t val)
 #endif
 }
 
+static const char *model;
 
-static char *model;
-
-void qemu_system_hot_add_init(char *cpu_model)
+void qemu_system_hot_add_init(const char *cpu_model)
 {
     register_ioport_write(GPE_BASE, 4, 1, gpe_writeb, &gpe);
     register_ioport_read(GPE_BASE, 4, 1,  gpe_readb, &gpe);
