@@ -1,5 +1,5 @@
 *.o
-.*.d
+*.d
 *~
 *.flat
 *.a
@@ -27,3 +27,9 @@ kernel/include/linux/kvm*.h
 kernel/Module.symvers
 kernel/Modules.symvers
 kernel/.tmp_versions
+bios/*.bin
+bios/*.sym
+bios/*.txt
+bios/acpi-dsdt.aml
+vgabios/*.bin
+vgabios/*.txt
