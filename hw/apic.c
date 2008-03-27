@@ -615,6 +615,8 @@ static uint32_t apic_mem_readl(void *opaque, target_phys_addr_t addr)
         /* ppr */
         val = apic_get_ppr(s);
         break;
+    case 0x0b:
+        break;
     case 0x0d:
         val = s->log_dest << 24;
         break;
