@@ -107,6 +107,16 @@ void kvm_finalize(kvm_context_t kvm);
 void kvm_disable_irqchip_creation(kvm_context_t kvm);
 
 /*!
+ * \brief Disable the in-kernel PIT creation
+ *
+ * In-kernel pit is enabled by default. If userspace pit is to be used,
+ * this should be called prior to kvm_create().
+ *
+ *  \param kvm Pointer to the kvm_context
+ */
+void kvm_disable_pit_creation(kvm_context_t kvm);
+
+/*!
  * \brief Create new virtual machine
  *
  * This creates a new virtual machine, maps physical RAM to it, and creates a
