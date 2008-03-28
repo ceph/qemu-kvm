@@ -20,8 +20,6 @@
 
 #define MSR_IA32_TSC		0x10
 
-#define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
-
 static struct kvm_msr_list *kvm_msr_list;
 extern unsigned int kvm_shadow_memory;
 extern kvm_context_t kvm_context;
