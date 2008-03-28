@@ -734,3 +734,10 @@ static inline ktime_t ktime_get(void)
 #define __aligned(x) __attribute__((__aligned__(x)))
 #endif
 
+#include <asm/msr.h>
+#ifndef MSR_FS_BASE
+#define MSR_FS_BASE 0xc0000100
+#endif
+#ifndef MSR_GS_BASE
+#define MSR_GS_BASE 0xc0000101
+#endif
