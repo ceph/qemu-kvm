@@ -42,7 +42,7 @@ _start:
 smp_ap_boot_code_start:
   xor %ax, %ax
   mov %ax, %ds
-  incw CPU_COUNT_ADDR
+  lock incw CPU_COUNT_ADDR
 1:
   hlt
   jmp 1b
