@@ -3,10 +3,12 @@
 
 /* PCI includes legacy ISA access.  */
 #include "isa.h"
-#include <linux/pci.h>
+
+/* imported from <linux/pci.h> */
+#define PCI_SLOT(devfn)         (((devfn) >> 3) & 0x1f)
+#define PCI_FUNC(devfn)         ((devfn) & 0x07)
 
 /* PCI bus */
-
 extern target_phys_addr_t pci_mem_base;
 
 typedef void PCIConfigWriteFunc(PCIDevice *pci_dev,
