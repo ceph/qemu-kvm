@@ -741,3 +741,29 @@ static inline ktime_t ktime_get(void)
 #ifndef MSR_GS_BASE
 #define MSR_GS_BASE 0xc0000101
 #endif
+
+#include <linux/mm.h>
+
+/* The shrinker API changed in 2.6.23 */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
+
+struct kvm_shrinker {
+	int (*shrink)(int nr_to_scan, gfp_t gfp_mask);
+	int seeks;
+	struct shrinker *kshrinker;
+};
+
+static inline void register_shrinker(struct kvm_shrinker *shrinker)
+{
+	shrinker->kshrinker = set_shrinker(shrinker->seeks, shrinker->shrink);
+}
+
+static inline void unregister_shrinker(struct kvm_shrinker *shrinker)
+{
+	if (shrinker->kshrinker)
+		remove_shrinker(shrinker->kshrinker);
+}
+
+#define shrinker kvm_shrinker
+
+#endif
