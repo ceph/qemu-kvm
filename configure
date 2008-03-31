@@ -100,6 +100,7 @@ bsd="no"
 linux="no"
 kqemu="no"
 kvm="no"
+kvm_cap_pit="no"
 profiler="no"
 kernel_path=""
 cocoa="no"
@@ -614,6 +615,22 @@ cat > $TMPC <<EOF
 int main(void) {
 }
 EOF
+
+##########################################
+# KVM probe
+
+if test "$kvm" = "yes" ; then
+cat > $TMPC <<EOF
+#include <libkvm.h>
+#ifndef KVM_CAP_PIT
+#error "kvm no pit capability"
+#endif
+int main(void) { return 0; }
+EOF
+    if $cc $ARCH_CFLAGS $CFLAGS -I"$kernel_path"/include -o $TMPE ${OS_CFLAGS} $TMPC 2> /dev/null ; then
+	kvm_cap_pit="yes"
+    fi
+fi
 
 ##########################################
 # SDL probe
@@ -1168,6 +1185,9 @@ configure_kvm() {
     echo "#define USE_KVM 1" >> $config_h
     echo "USE_KVM=1" >> $config_mak
     echo "CONFIG_KVM_KERNEL_INC=$kernel_path/include" >> $config_mak
+    if test $kvm_cap_pit = "yes" ; then
+	echo "USE_KVM_PIT=1" >> $config_mak
+    fi
     disable_cpu_emulation
   fi
 }
