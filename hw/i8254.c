@@ -30,6 +30,9 @@
 
 //#define DEBUG_PIT
 
+#define PIT_SAVEVM_NAME "i8254"
+#define PIT_SAVEVM_VERSION 1
+
 #define RW_STATE_LSB 1
 #define RW_STATE_MSB 2
 #define RW_STATE_WORD0 3
@@ -414,77 +417,11 @@ static void pit_irq_timer(void *opaque)
     pit_irq_timer_update(s, s->next_transition_time);
 }
 
-#ifdef KVM_CAP_PIT
-
-static void kvm_kernel_pit_save_to_user(PITState *s)
-{
-    struct kvm_pit_state pit;
-    struct kvm_pit_channel_state *c;
-    struct PITChannelState *sc;
-    int i;
-
-    kvm_get_pit(kvm_context, &pit);
-
-    for (i = 0; i < 3; i++) {
-	c = &pit.channels[i];
-	sc = &s->channels[i];
-	sc->count = c->count;
-	sc->latched_count = c->latched_count;
-	sc->count_latched = c->count_latched;
-	sc->status_latched = c->status_latched;
-	sc->status = c->status;
-	sc->read_state = c->read_state;
-	sc->write_state = c->write_state;
-	sc->write_latch = c->write_latch;
-	sc->rw_mode = c->rw_mode;
-	sc->mode = c->mode;
-	sc->bcd = c->bcd;
-	sc->gate = c->gate;
-	sc->count_load_time = c->count_load_time;
-    }
-}
-
-static void kvm_kernel_pit_load_from_user(PITState *s)
-{
-    struct kvm_pit_state pit;
-    struct kvm_pit_channel_state *c;
-    struct PITChannelState *sc;
-    int i;
-
-    for (i = 0; i < 3; i++) {
-	c = &pit.channels[i];
-	sc = &s->channels[i];
-	c->count = sc->count;
-	c->latched_count = sc->latched_count;
-	c->count_latched = sc->count_latched;
-	c->status_latched = sc->status_latched;
-	c->status = sc->status;
-	c->read_state = sc->read_state;
-	c->write_state = sc->write_state;
-	c->write_latch = sc->write_latch;
-	c->rw_mode = sc->rw_mode;
-	c->mode = sc->mode;
-	c->bcd = sc->bcd;
-	c->gate = sc->gate;
-	c->count_load_time = sc->count_load_time;
-    }
-
-    kvm_set_pit(kvm_context, &pit);
-}
-
-#endif
-
 static void pit_save(QEMUFile *f, void *opaque)
 {
     PITState *pit = opaque;
     PITChannelState *s;
     int i;
-
-#ifdef KVM_CAP_PIT
-    if (kvm_enabled() && qemu_kvm_pit_in_kernel()) {
-        kvm_kernel_pit_save_to_user(pit);
-    }
-#endif
 
     for(i = 0; i < 3; i++) {
         s = &pit->channels[i];
@@ -538,12 +475,6 @@ static int pit_load(QEMUFile *f, void *opaque, int version_id)
         }
     }
 
-#ifdef KVM_CAP_PIT
-    if (kvm_enabled() && qemu_kvm_pit_in_kernel()) {
-        kvm_kernel_pit_load_from_user(pit);
-    }
-#endif
-
     return 0;
 }
 
@@ -566,14 +497,13 @@ PITState *pit_init(int base, qemu_irq irq)
     PITState *pit = &pit_state;
     PITChannelState *s;
 
-    if (!kvm_enabled() || !qemu_kvm_pit_in_kernel()) {
-	    s = &pit->channels[0];
-	    /* the timer 0 is connected to an IRQ */
-	    s->irq_timer = qemu_new_timer(vm_clock, pit_irq_timer, s);
-	    s->irq = irq;
-    }
+    s = &pit->channels[0];
+    /* the timer 0 is connected to an IRQ */
+    s->irq_timer = qemu_new_timer(vm_clock, pit_irq_timer, s);
+    s->irq = irq;
 
-    register_savevm("i8254", base, 1, pit_save, pit_load, pit);
+    register_savevm(PIT_SAVEVM_NAME, base, PIT_SAVEVM_VERSION,
+		    pit_save, pit_load, pit);
 
     qemu_register_reset(pit_reset, pit);
     register_ioport_write(base, 4, 1, pit_ioport_write, pit);
@@ -583,3 +513,83 @@ PITState *pit_init(int base, qemu_irq irq)
 
     return pit;
 }
+
+#ifdef KVM_CAP_PIT
+
+static void kvm_pit_save(QEMUFile *f, void *opaque)
+{
+    PITState *s = opaque;
+    struct kvm_pit_state pit;
+    struct kvm_pit_channel_state *c;
+    struct PITChannelState *sc;
+    int i;
+
+    kvm_get_pit(kvm_context, &pit);
+
+    for (i = 0; i < 3; i++) {
+	c = &pit.channels[i];
+	sc = &s->channels[i];
+	sc->count = c->count;
+	sc->latched_count = c->latched_count;
+	sc->count_latched = c->count_latched;
+	sc->status_latched = c->status_latched;
+	sc->status = c->status;
+	sc->read_state = c->read_state;
+	sc->write_state = c->write_state;
+	sc->write_latch = c->write_latch;
+	sc->rw_mode = c->rw_mode;
+	sc->mode = c->mode;
+	sc->bcd = c->bcd;
+	sc->gate = c->gate;
+	sc->count_load_time = c->count_load_time;
+    }
+
+    pit_save(f, s);
+}
+
+static int kvm_pit_load(QEMUFile *f, void *opaque, int version_id)
+{
+    PITState *s = opaque;
+    struct kvm_pit_state pit;
+    struct kvm_pit_channel_state *c;
+    struct PITChannelState *sc;
+    int i;
+
+    pit_load(f, s, version_id);
+
+    for (i = 0; i < 3; i++) {
+	c = &pit.channels[i];
+	sc = &s->channels[i];
+	c->count = sc->count;
+	c->latched_count = sc->latched_count;
+	c->count_latched = sc->count_latched;
+	c->status_latched = sc->status_latched;
+	c->status = sc->status;
+	c->read_state = sc->read_state;
+	c->write_state = sc->write_state;
+	c->write_latch = sc->write_latch;
+	c->rw_mode = sc->rw_mode;
+	c->mode = sc->mode;
+	c->bcd = sc->bcd;
+	c->gate = sc->gate;
+	c->count_load_time = sc->count_load_time;
+    }
+
+    kvm_set_pit(kvm_context, &pit);
+
+    return 0;
+}
+
+PITState *kvm_pit_init(int base, qemu_irq irq)
+{
+    PITState *pit = &pit_state;
+
+    register_savevm(PIT_SAVEVM_NAME, base, PIT_SAVEVM_VERSION,
+		    kvm_pit_save, kvm_pit_load, pit);
+
+    qemu_register_reset(pit_reset, pit);
+    pit_reset(pit);
+
+    return pit;
+}
+#endif

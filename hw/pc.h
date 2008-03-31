@@ -58,6 +58,10 @@ int pit_get_initial_count(PITState *pit, int channel);
 int pit_get_mode(PITState *pit, int channel);
 int pit_get_out(PITState *pit, int channel, int64_t current_time);
 
+/* i8254-kvm.c */
+
+PITState *kvm_pit_init(int base, qemu_irq irq);
+
 /* vmport.c */
 void vmport_init(CPUState *env);
 void vmport_register(unsigned char command, IOPortReadFunc *func, void *opaque);
