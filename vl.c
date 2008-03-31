@@ -8748,11 +8748,13 @@ void *alloc_mem_area(unsigned long memory, const char *path)
 
     memory = (memory+hpagesize-1) & ~(hpagesize-1);
 
-    if (ftruncate(fd, memory) == -1) {
-	perror("ftruncate");
-	close(fd);
-	return NULL;
-    }
+    /*
+     * ftruncate is not supported by hugetlbfs in older
+     * hosts, so don't bother checking for errors.
+     * If anything goes wrong with it under other filesystems,
+     * mmap will fail.
+     */
+    ftruncate(fd, memory);
 
     area = mmap(0, memory, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
     if (area == MAP_FAILED) {
