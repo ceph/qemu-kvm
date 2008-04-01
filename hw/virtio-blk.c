@@ -134,8 +134,8 @@ static void virtio_blk_update_config(VirtIODevice *vdev, uint8_t *config)
     int64_t capacity;
 
     bdrv_get_geometry(s->bs, &capacity);
-    blkcfg.capacity = capacity;
-    blkcfg.seg_max = 128 - 2;
+    blkcfg.capacity = cpu_to_le64(capacity);
+    blkcfg.seg_max = cpu_to_le32(128 - 2);
     memcpy(config, &blkcfg, sizeof(blkcfg));
 }
 
