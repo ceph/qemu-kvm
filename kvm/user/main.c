@@ -560,8 +560,7 @@ int main(int argc, char **argv)
 	misc_init();
 
 	sem_init(&init_sem, 0, 0);
-	init_vcpu(0);
-	for (i = 1; i < ncpus; ++i)
+	for (i = 0; i < ncpus; ++i)
 		start_vcpu(i);
 	for (i = 0; i < ncpus; ++i)
 		sem_wait(&init_sem);

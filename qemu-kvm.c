@@ -28,6 +28,8 @@ kvm_context_t kvm_context;
 
 extern int smp_cpus;
 
+static int qemu_kvm_reset_requested;
+
 pthread_mutex_t qemu_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t qemu_aio_cond = PTHREAD_COND_INITIALIZER;
 __thread struct vcpu_info *vcpu;
@@ -38,6 +40,7 @@ struct qemu_kvm_signal_table {
 };
 
 static struct qemu_kvm_signal_table io_signal_table;
+static struct qemu_kvm_signal_table vcpu_signal_table;
 
 #define SIG_IPI (SIGRTMIN+4)
 
@@ -50,6 +53,8 @@ struct vcpu_info {
     int stop;
     int stopped;
 } vcpu_info[256];
+
+pthread_t io_thread;
 
 static inline unsigned long kvm_get_thread_id(void)
 {
@@ -67,12 +72,19 @@ static void sig_ipi_handler(int n)
 
 void kvm_update_interrupt_request(CPUState *env)
 {
-    if (env && vcpu && env != vcpu->env) {
-	if (vcpu_info[env->cpu_index].signalled)
-	    return;
-	vcpu_info[env->cpu_index].signalled = 1;
-	if (vcpu_info[env->cpu_index].thread)
-	    pthread_kill(vcpu_info[env->cpu_index].thread, SIG_IPI);
+    int signal = 0;
+
+    if (env) {
+        if (!vcpu)
+            signal = 1;
+        if (vcpu && env != vcpu->env && !vcpu_info[env->cpu_index].signalled)
+            signal = 1;
+
+        if (signal) {
+            vcpu_info[env->cpu_index].signalled = 1;
+                if (vcpu_info[env->cpu_index].thread)
+                    pthread_kill(vcpu_info[env->cpu_index].thread, SIG_IPI);
+        }
     }
 }
 
@@ -105,7 +117,7 @@ static void post_kvm_run(void *opaque, int vcpu)
 
 static int pre_kvm_run(void *opaque, int vcpu)
 {
-    CPUState *env = cpu_single_env;
+    CPUState *env = qemu_kvm_cpu_env(vcpu);
 
     kvm_arch_pre_kvm_run(opaque, vcpu);
 
@@ -151,7 +163,8 @@ static int has_work(CPUState *env)
     return kvm_arch_has_work(env);
 }
 
-static int kvm_eat_signal(CPUState *env, int timeout)
+static int kvm_eat_signal(struct qemu_kvm_signal_table *waitset, CPUState *env,
+                          int timeout)
 {
     struct timespec ts;
     int r, e, ret = 0;
@@ -160,12 +173,12 @@ static int kvm_eat_signal(CPUState *env, int timeout)
 
     ts.tv_sec = timeout / 1000;
     ts.tv_nsec = (timeout % 1000) * 1000000;
-    r = sigtimedwait(&io_signal_table.sigset, &siginfo, &ts);
+    r = sigtimedwait(&waitset->sigset, &siginfo, &ts);
     if (r == -1 && (errno == EAGAIN || errno == EINTR) && !timeout)
 	return 0;
     e = errno;
     pthread_mutex_lock(&qemu_mutex);
-    if (vcpu)
+    if (env && vcpu)
         cpu_single_env = vcpu->env;
     if (r == -1 && !(errno == EAGAIN || errno == EINTR)) {
 	printf("sigtimedwait: %s\n", strerror(e));
@@ -181,7 +194,7 @@ static int kvm_eat_signal(CPUState *env, int timeout)
     if (env && vcpu_info[env->cpu_index].stop) {
 	vcpu_info[env->cpu_index].stop = 0;
 	vcpu_info[env->cpu_index].stopped = 1;
-	pthread_kill(vcpu_info[0].thread, SIG_IPI);
+	pthread_kill(io_thread, SIGUSR1);
     }
     pthread_mutex_unlock(&qemu_mutex);
 
@@ -192,24 +205,16 @@ static int kvm_eat_signal(CPUState *env, int timeout)
 static void kvm_eat_signals(CPUState *env, int timeout)
 {
     int r = 0;
+    struct qemu_kvm_signal_table *waitset = &vcpu_signal_table;
 
-    while (kvm_eat_signal(env, 0))
+    while (kvm_eat_signal(waitset, env, 0))
 	r = 1;
     if (!r && timeout) {
-	r = kvm_eat_signal(env, timeout);
+	r = kvm_eat_signal(waitset, env, timeout);
 	if (r)
-	    while (kvm_eat_signal(env, 0))
+	    while (kvm_eat_signal(waitset, env, 0))
 		;
     }
-    /*
-     * we call select() even if no signal was received, to account for
-     * for which there is no signal handler installed.
-     */
-    pthread_mutex_lock(&qemu_mutex);
-    cpu_single_env = vcpu->env;
-    if (env->cpu_index == 0)
-	main_loop_wait(0);
-    pthread_mutex_unlock(&qemu_mutex);
 }
 
 static void kvm_main_loop_wait(CPUState *env, int timeout)
@@ -225,29 +230,29 @@ static int all_threads_paused(void)
 {
     int i;
 
-    for (i = 1; i < smp_cpus; ++i)
+    for (i = 0; i < smp_cpus; ++i)
 	if (vcpu_info[i].stopped)
 	    return 0;
     return 1;
 }
 
-static void pause_other_threads(void)
+static void pause_all_threads(void)
 {
     int i;
 
-    for (i = 1; i < smp_cpus; ++i) {
+    for (i = 0; i < smp_cpus; ++i) {
 	vcpu_info[i].stop = 1;
 	pthread_kill(vcpu_info[i].thread, SIG_IPI);
     }
     while (!all_threads_paused())
-	kvm_eat_signals(vcpu->env, 0);
+	kvm_eat_signal(&io_signal_table, NULL, 1000);
 }
 
-static void resume_other_threads(void)
+static void resume_all_threads(void)
 {
     int i;
 
-    for (i = 1; i < smp_cpus; ++i) {
+    for (i = 0; i < smp_cpus; ++i) {
 	vcpu_info[i].stop = 0;
 	vcpu_info[i].stopped = 0;
 	pthread_kill(vcpu_info[i].thread, SIG_IPI);
@@ -257,9 +262,9 @@ static void resume_other_threads(void)
 static void kvm_vm_state_change_handler(void *context, int running)
 {
     if (running)
-	resume_other_threads();
+	resume_all_threads();
     else
-	pause_other_threads();
+	pause_all_threads();
 }
 
 static void update_regs_for_sipi(CPUState *env)
@@ -281,8 +286,6 @@ static void setup_kernel_sigmask(CPUState *env)
 
     sigprocmask(SIG_BLOCK, NULL, &set);
     sigdelset(&set, SIG_IPI);
-    if (env->cpu_index == 0)
-	sigandset(&set, &set, &io_signal_table.negsigset);
     
     kvm_set_signal_mask(kvm_context, env->cpu_index, &set);
 }
@@ -314,11 +317,8 @@ static int kvm_main_loop_cpu(CPUState *env)
 	    kvm_cpu_exec(env);
 	env->interrupt_request &= ~CPU_INTERRUPT_EXIT;
 	kvm_main_loop_wait(env, 0);
-	if (qemu_shutdown_requested())
-	    break;
-	else if (qemu_powerdown_requested())
-	    qemu_system_powerdown();
-	else if (qemu_reset_requested()) {
+        if (qemu_kvm_reset_requested && env->cpu_index == 0) {
+	    qemu_kvm_reset_requested = 0;
 	    env->interrupt_request = 0;
 	    qemu_system_reset();
 	    kvm_arch_load_regs(env);
@@ -337,7 +337,7 @@ static void *ap_main_loop(void *_env)
     vcpu->env = env;
     vcpu->env->thread_id = kvm_get_thread_id();
     sigfillset(&signals);
-    //sigdelset(&signals, SIG_IPI);
+    sigdelset(&signals, SIG_IPI);
     sigprocmask(SIG_BLOCK, &signals, NULL);
     kvm_create_vcpu(kvm_context, env->cpu_index);
     kvm_qemu_init_env(env);
@@ -364,38 +364,68 @@ void kvm_init_new_ap(int cpu, CPUState *env)
     pthread_create(&vcpu_info[cpu].thread, NULL, ap_main_loop, env);
 }
 
+static void qemu_kvm_init_signal_tables(void)
+{
+    qemu_kvm_init_signal_table(&io_signal_table);
+    qemu_kvm_init_signal_table(&vcpu_signal_table);
+
+    kvm_add_signal(&io_signal_table, SIGIO);
+    kvm_add_signal(&io_signal_table, SIGALRM);
+    kvm_add_signal(&io_signal_table, SIGUSR1);
+    kvm_add_signal(&io_signal_table, SIGUSR2);
+
+    kvm_add_signal(&vcpu_signal_table, SIG_IPI);
+
+    sigprocmask(SIG_BLOCK, &io_signal_table.sigset, NULL);
+}
+
 int kvm_init_ap(void)
 {
-    CPUState *env = first_cpu->next_cpu;
+    CPUState *env = first_cpu;
     int i;
 
 #ifdef TARGET_I386
     kvm_tpr_opt_setup();
 #endif
     qemu_add_vm_change_state_handler(kvm_vm_state_change_handler, NULL);
-    qemu_kvm_init_signal_table(&io_signal_table);
-    kvm_add_signal(&io_signal_table, SIGIO);
-    kvm_add_signal(&io_signal_table, SIGALRM);
-    kvm_add_signal(&io_signal_table, SIGUSR2);
-    kvm_add_signal(&io_signal_table, SIG_IPI);
-    sigprocmask(SIG_BLOCK, &io_signal_table.sigset, NULL);
+    qemu_kvm_init_signal_tables();
 
-    vcpu = &vcpu_info[0];
-    vcpu->env = first_cpu;
-    vcpu->env->thread_id = kvm_get_thread_id();
     signal(SIG_IPI, sig_ipi_handler);
-    for (i = 1; i < smp_cpus; ++i) {
+    for (i = 0; i < smp_cpus; ++i) {
         kvm_init_new_ap(i, env);
         env = env->next_cpu;
     }
     return 0;
 }
 
+/*
+ * The IO thread has all signals that inform machine events
+ * blocked (io_signal_table), so it won't get interrupted
+ * while processing in main_loop_wait().
+ */
+
 int kvm_main_loop(void)
 {
-    vcpu_info[0].thread = pthread_self();
+    io_thread = pthread_self();
     pthread_mutex_unlock(&qemu_mutex);
-    return kvm_main_loop_cpu(first_cpu);
+    while (1) {
+        kvm_eat_signal(&io_signal_table, NULL, 1000);
+        pthread_mutex_lock(&qemu_mutex);
+        cpu_single_env = NULL;
+        main_loop_wait(0);
+        if (qemu_shutdown_requested())
+            break;
+        else if (qemu_powerdown_requested())
+            qemu_system_powerdown();
+        else if (qemu_reset_requested()) {
+            pthread_kill(vcpu_info[0].thread, SIG_IPI);
+            qemu_kvm_reset_requested = 1;
+        }
+        pthread_mutex_unlock(&qemu_mutex);
+    }
+
+    pthread_mutex_unlock(&qemu_mutex);
+    return 0;
 }
 
 static int kvm_debug(void *opaque, int vcpu)
@@ -749,12 +779,16 @@ void qemu_kvm_aio_wait_start(void)
 
 void qemu_kvm_aio_wait(void)
 {
-    if (!cpu_single_env || cpu_single_env->cpu_index == 0) {
-	pthread_mutex_unlock(&qemu_mutex);
-	kvm_eat_signal(cpu_single_env, 1000);
-	pthread_mutex_lock(&qemu_mutex);
+    CPUState *cpu_single = cpu_single_env;
+
+    if (!cpu_single_env) {
+        pthread_mutex_unlock(&qemu_mutex);
+        kvm_eat_signal(&io_signal_table, NULL, 1000);
+        pthread_mutex_lock(&qemu_mutex);
+        cpu_single_env = NULL;
     } else {
-	pthread_cond_wait(&qemu_aio_cond, &qemu_mutex);
+        pthread_cond_wait(&qemu_aio_cond, &qemu_mutex);
+        cpu_single_env = cpu_single;
     }
 }
 

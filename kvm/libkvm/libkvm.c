@@ -388,9 +388,6 @@ int kvm_create(kvm_context_t kvm, unsigned long phys_mem_bytes, void **vm_mem)
 	if (r < 0)
 	        return r;
 	kvm_create_irqchip(kvm);
-	r = kvm_create_vcpu(kvm, 0);
-	if (r < 0)
-		return r;
 
 	return 0;
 }
