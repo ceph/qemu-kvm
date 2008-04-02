@@ -163,13 +163,30 @@ static int has_work(CPUState *env)
     return kvm_arch_has_work(env);
 }
 
+static int kvm_process_signal(int si_signo)
+{
+    struct sigaction sa;
+
+    switch (si_signo) {
+    case SIGUSR2:
+        pthread_cond_signal(&qemu_aio_cond);
+        break;
+    case SIGALRM:
+    case SIGIO:
+        sigaction(si_signo, NULL, &sa);
+        sa.sa_handler(si_signo);
+        break;
+    }
+
+    return 1;
+}
+
 static int kvm_eat_signal(struct qemu_kvm_signal_table *waitset, CPUState *env,
                           int timeout)
 {
     struct timespec ts;
     int r, e, ret = 0;
     siginfo_t siginfo;
-    struct sigaction sa;
 
     ts.tv_sec = timeout / 1000;
     ts.tv_nsec = (timeout % 1000) * 1000000;
@@ -184,13 +201,9 @@ static int kvm_eat_signal(struct qemu_kvm_signal_table *waitset, CPUState *env,
 	printf("sigtimedwait: %s\n", strerror(e));
 	exit(1);
     }
-    if (r != -1) {
-	sigaction(siginfo.si_signo, NULL, &sa);
-	sa.sa_handler(siginfo.si_signo);
-	if (siginfo.si_signo == SIGUSR2)
-	    pthread_cond_signal(&qemu_aio_cond);
-	ret = 1;
-    }
+    if (r != -1)
+        ret = kvm_process_signal(siginfo.si_signo);
+
     if (env && vcpu_info[env->cpu_index].stop) {
 	vcpu_info[env->cpu_index].stop = 0;
 	vcpu_info[env->cpu_index].stopped = 1;
