@@ -7588,6 +7588,8 @@ void qemu_bh_schedule(QEMUBH *bh)
     if (env) {
         cpu_interrupt(env, CPU_INTERRUPT_EXIT);
     }
+    if (kvm_enabled())
+        qemu_kvm_notify_work();
 }
 
 void qemu_bh_cancel(QEMUBH *bh)

@@ -411,6 +411,12 @@ int kvm_init_ap(void)
     return 0;
 }
 
+void qemu_kvm_notify_work(void)
+{
+    if (io_thread)
+        pthread_kill(io_thread, SIGUSR1);
+}
+
 /*
  * The IO thread has all signals that inform machine events
  * blocked (io_signal_table), so it won't get interrupted
