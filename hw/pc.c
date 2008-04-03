@@ -755,7 +755,7 @@ CPUState *pc_new_cpu(int cpu, const char *cpu_model, int pci_enabled)
         if (pci_enabled) {
             apic_init(env);
         }
-        vmport_init(env);
+        vmport_init();
 	return env;
 }
 
