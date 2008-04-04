@@ -61,7 +61,8 @@ sync:
 install:
 	mkdir -p $(DESTDIR)/$(INSTALLDIR)
 	cp *.ko $(DESTDIR)/$(INSTALLDIR)
-	for i in $(ORIGMODDIR)/drivers/kvm/*.ko; do \
+	for i in $(ORIGMODDIR)/drivers/kvm/*.ko \
+		 $(ORIGMODDIR)/arch/x86/kvm/*.ko; do \
 		if [ -f "$$i" ]; then mv "$$i" "$$i.orig"; fi; \
 	done
 	/sbin/depmod -a
