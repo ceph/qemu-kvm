@@ -565,6 +565,7 @@ int kvm_pit_in_kernel(kvm_context_t kvm);
 
 #ifdef KVM_CAP_PIT
 
+#if defined(__i386__) || defined(__x86_64__)
 /*!
  * \brief Get in kernel PIT of the virtual domain
  *
@@ -585,6 +586,7 @@ int kvm_get_pit(kvm_context_t kvm, struct kvm_pit_state *s);
  * \param s PIT state of the virtual domain
  */
 int kvm_set_pit(kvm_context_t kvm, struct kvm_pit_state *s);
+#endif
 
 #endif
 
