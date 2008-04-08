@@ -25,7 +25,7 @@ hack = $(call _hack,tmp/$(strip $1))
 unifdef = $(call _unifdef,tmp/$(strip $1))
 
 all::
-	# include header priority 1) $LINUX 2) $KERNELDIR 3) include-compat
+#	include header priority 1) $LINUX 2) $KERNELDIR 3) include-compat
 	$(MAKE) -C $(KERNELDIR) M=`pwd` \
 		LINUXINCLUDE="-I`pwd`/include -Iinclude -I`pwd`/include-compat \
 		-include include/linux/autoconf.h" \
