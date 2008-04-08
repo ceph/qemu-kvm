@@ -4527,10 +4527,17 @@ ASM_END
                         return;
                         break;
                     case 3:
+#if BX_ROMBIOS32
                         set_e820_range(ES, regs.u.r16.di,
                                        0x00100000L,
                                        extended_memory_size - ACPI_DATA_SIZE, 1);
                         regs.u.r32.ebx = 4;
+#else
+                        set_e820_range(ES, regs.u.r16.di,
+                                       0x00100000L,
+                                       extended_memory_size, 1);
+                        regs.u.r32.ebx = 5;
+#endif
                         regs.u.r32.eax = 0x534D4150;
                         regs.u.r32.ecx = 0x14;
                         CLEAR_CF();
