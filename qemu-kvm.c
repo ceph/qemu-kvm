@@ -244,7 +244,7 @@ static int all_threads_paused(void)
     int i;
 
     for (i = 0; i < smp_cpus; ++i)
-	if (vcpu_info[i].stopped)
+	if (vcpu_info[i].stop)
 	    return 0;
     return 1;
 }
@@ -257,8 +257,12 @@ static void pause_all_threads(void)
 	vcpu_info[i].stop = 1;
 	pthread_kill(vcpu_info[i].thread, SIG_IPI);
     }
-    while (!all_threads_paused())
+    while (!all_threads_paused()) {
+	pthread_mutex_unlock(&qemu_mutex);
 	kvm_eat_signal(&io_signal_table, NULL, 1000);
+	pthread_mutex_lock(&qemu_mutex);
+	cpu_single_env = NULL;
+    }
 }
 
 static void resume_all_threads(void)
