@@ -983,9 +983,11 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
     if (pci_enabled) {
         ioapic = ioapic_init();
     }
+#ifdef USE_KVM_PIT
     if (kvm_enabled() && qemu_kvm_pit_in_kernel())
 	pit = kvm_pit_init(0x40, i8259[0]);
     else
+#endif
 	pit = pit_init(0x40, i8259[0]);
     pcspk_init(pit);
     if (pci_enabled) {

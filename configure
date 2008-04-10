@@ -1187,6 +1187,7 @@ configure_kvm() {
     echo "CONFIG_KVM_KERNEL_INC=$kernel_path/include" >> $config_mak
     if test $kvm_cap_pit = "yes" ; then
 	echo "USE_KVM_PIT=1" >> $config_mak
+	echo "#define USE_KVM_PIT 1" >> $config_h
     fi
     disable_cpu_emulation
   fi
