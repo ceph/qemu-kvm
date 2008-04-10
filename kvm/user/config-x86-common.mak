@@ -1,9 +1,9 @@
 #This is a make file with common rules for both x86 & x86-64
 
-all: kvmctl test_cases
+all: kvmctl kvmtrace test_cases
 
 kvmctl_objs= main.o iotable.o ../libkvm/libkvm.a
-
+kvmtrace_objs= kvmtrace.o
 balloon_ctl: balloon_ctl.o
 
 FLATLIBS = $(TEST_DIR)/libcflat.a $(libgcc)

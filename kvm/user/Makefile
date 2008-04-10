@@ -31,9 +31,12 @@ CXXFLAGS = $(autodepend-flags)
 
 autodepend-flags = -MMD -MF $(dir $*).$(notdir $*).d
 
-kvmctl: LDFLAGS += -pthread -lrt
+LDFLAGS += -pthread -lrt
 
 kvmctl: $(kvmctl_objs)
+	$(CC) $(LDFLAGS) $^ -o $@
+
+kvmtrace: $(kvmtrace_objs)
 	$(CC) $(LDFLAGS) $^ -o $@
 
 %.o: %.S
@@ -42,4 +45,4 @@ kvmctl: $(kvmctl_objs)
 -include .*.d
 
 clean: arch_clean
-	$(RM) kvmctl *.o *.a .*.d
+	$(RM) kvmctl kvmtrace *.o *.a .*.d
