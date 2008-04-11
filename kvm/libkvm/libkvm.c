@@ -776,6 +776,28 @@ int kvm_set_sregs(kvm_context_t kvm, int vcpu, struct kvm_sregs *sregs)
     return ioctl(kvm->vcpu_fd[vcpu], KVM_SET_SREGS, sregs);
 }
 
+#ifdef KVM_CAP_MP_STATE
+int kvm_get_mpstate(kvm_context_t kvm, int vcpu, struct kvm_mp_state *mp_state)
+{
+    int r;
+
+    r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_MP_STATE);
+    if (r > 0)
+        return ioctl(kvm->vcpu_fd[vcpu], KVM_GET_MP_STATE, mp_state);
+    return -ENOSYS;
+}
+
+int kvm_set_mpstate(kvm_context_t kvm, int vcpu, struct kvm_mp_state *mp_state)
+{
+    int r;
+
+    r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_MP_STATE);
+    if (r > 0)
+        return ioctl(kvm->vcpu_fd[vcpu], KVM_SET_MP_STATE, mp_state);
+    return -ENOSYS;
+}
+#endif
+
 static int handle_mmio(kvm_context_t kvm, struct kvm_run *kvm_run)
 {
 	unsigned long addr = kvm_run->mmio.phys_addr;

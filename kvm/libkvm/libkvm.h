@@ -300,6 +300,22 @@ int kvm_get_sregs(kvm_context_t kvm, int vcpu, struct kvm_sregs *regs);
  */
 int kvm_set_sregs(kvm_context_t kvm, int vcpu, struct kvm_sregs *regs);
 
+#ifdef KVM_CAP_MP_STATE
+/*!
+ *  * \brief Read VCPU MP state
+ *
+ */
+int kvm_get_mpstate(kvm_context_t kvm, int vcpu,
+                    struct kvm_mp_state *mp_state);
+
+/*!
+ *  * \brief Write VCPU MP state
+ *
+ */
+int kvm_set_mpstate(kvm_context_t kvm, int vcpu,
+                    struct kvm_mp_state *mp_state);
+#endif
+
 /*!
  * \brief Simulate an external vectored interrupt
  *
