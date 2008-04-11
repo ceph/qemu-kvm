@@ -248,13 +248,8 @@ void kvm_arch_load_regs(CPUState *env)
     sregs.cr3 = env->cr[3];
     sregs.cr4 = env->cr[4];
 
-    if (kvm_irqchip_in_kernel(kvm_context)) {
-        sregs.cr8 = kvm_get_cr8(kvm_context, env->cpu_index);
-        sregs.apic_base = kvm_get_apic_base(kvm_context, env->cpu_index);
-    } else {
-        sregs.cr8 = cpu_get_apic_tpr(env);
-        sregs.apic_base = cpu_get_apic_base(env);
-    }
+    sregs.cr8 = cpu_get_apic_tpr(env);
+    sregs.apic_base = cpu_get_apic_base(env);
 
     sregs.efer = env->efer;
 

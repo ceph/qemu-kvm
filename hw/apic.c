@@ -248,8 +248,11 @@ void cpu_set_apic_base(CPUState *env, uint64_t val)
 #ifdef DEBUG_APIC
     printf("cpu_set_apic_base: %016" PRIx64 "\n", val);
 #endif
-    s->apicbase = (val & 0xfffff000) |
-        (s->apicbase & (MSR_IA32_APICBASE_BSP | MSR_IA32_APICBASE_ENABLE));
+    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel())
+        s->apicbase = val;
+    else
+        s->apicbase = (val & 0xfffff000) |
+            (s->apicbase & (MSR_IA32_APICBASE_BSP | MSR_IA32_APICBASE_ENABLE));
     /* if disabled, cannot be enabled again */
     if (!(val & MSR_IA32_APICBASE_ENABLE)) {
         s->apicbase &= ~MSR_IA32_APICBASE_ENABLE;
