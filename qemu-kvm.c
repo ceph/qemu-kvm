@@ -354,7 +354,6 @@ static void *ap_main_loop(void *_env)
     vcpu->env = env;
     vcpu->env->thread_id = kvm_get_thread_id();
     sigfillset(&signals);
-    sigdelset(&signals, SIG_IPI);
     sigprocmask(SIG_BLOCK, &signals, NULL);
     kvm_create_vcpu(kvm_context, env->cpu_index);
     kvm_qemu_init_env(env);
