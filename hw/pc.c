@@ -750,7 +750,7 @@ CPUState *pc_new_cpu(int cpu, const char *cpu_model, int pci_enabled)
             /* XXX: enable it in all cases */
             env->cpuid_features |= CPUID_APIC;
         }
-        register_savevm("cpu", cpu, 4, cpu_save, cpu_load, env);
+        register_savevm("cpu", cpu, 5, cpu_save, cpu_load, env);
         qemu_register_reset(main_cpu_reset, env);
         if (pci_enabled) {
             apic_init(env);

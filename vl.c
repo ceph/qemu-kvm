@@ -6655,8 +6655,10 @@ void cpu_save(QEMUFile *f, void *opaque)
     uint32_t hflags;
     int i;
 
-    if (kvm_enabled())
+    if (kvm_enabled()) {
         kvm_save_registers(env);
+        kvm_save_mpstate(env);
+    }
 
     for(i = 0; i < CPU_NB_REGS; i++)
         qemu_put_betls(f, &env->regs[i]);
@@ -6748,6 +6750,7 @@ void cpu_save(QEMUFile *f, void *opaque)
             qemu_put_be32s(f, &env->kvm_interrupt_bitmap[i]);
         }
         qemu_put_be64s(f, &env->tsc);
+        qemu_put_be32s(f, &env->mp_state);
     }
 }
 
@@ -6782,7 +6785,7 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
     uint32_t hflags;
     uint16_t fpus, fpuc, fptag, fpregs_format;
 
-    if (version_id != 3 && version_id != 4)
+    if (version_id < 3 || version_id > 5)
         return -EINVAL;
     for(i = 0; i < CPU_NB_REGS; i++)
         qemu_get_betls(f, &env->regs[i]);
@@ -6900,6 +6903,10 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
         }
         qemu_get_be64s(f, &env->tsc);
         kvm_load_registers(env);
+        if (version_id >= 5) {
+            qemu_get_be32s(f, &env->mp_state);
+            kvm_load_mpstate(env);
+        }
     }
     return 0;
 }

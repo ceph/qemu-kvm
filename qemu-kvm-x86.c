@@ -277,6 +277,33 @@ void kvm_arch_load_regs(CPUState *env)
         perror("kvm_set_msrs FAILED");
 }
 
+void kvm_save_mpstate(CPUState *env)
+{
+#ifdef KVM_CAP_MP_STATE
+    int r;
+    struct kvm_mp_state mp_state;
+
+    r = kvm_get_mpstate(kvm_context, env->cpu_index, &mp_state);
+    if (r < 0)
+        env->mp_state = -1;
+    else
+        env->mp_state = mp_state.mp_state;
+#endif
+}
+
+void kvm_load_mpstate(CPUState *env)
+{
+#ifdef KVM_CAP_MP_STATE
+    struct kvm_mp_state mp_state = { .mp_state = env->mp_state };
+
+    /*
+     * -1 indicates that the host did not support GET_MP_STATE ioctl,
+     *  so don't touch it.
+     */
+    if (env->mp_state != -1)
+        kvm_set_mpstate(kvm_context, env->cpu_index, &mp_state);
+#endif
+}
 
 void kvm_arch_save_regs(CPUState *env)
 {

@@ -599,6 +599,7 @@ typedef struct CPUX86State {
     /* in order to simplify APIC support, we leave this pointer to the
        user */
     struct APICState *apic_state;
+    int mp_state;
 } CPUX86State;
 
 CPUX86State *cpu_x86_init(const char *cpu_model);
