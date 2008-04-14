@@ -128,6 +128,28 @@ void test_push(void *mem)
 	report("push mem", stack_top[-3] == 0x123456789abcdeful);
 }
 
+void test_smsw(void *mem)
+{
+	unsigned short msw, msw_orig, *pmsw;
+	unsigned long cr0;
+	int i, zero;
+
+	asm("mov %%cr0, %0" : "=r"(cr0));
+	msw_orig = cr0;
+
+	asm("smsw %0" : "=r"(msw));
+	report("smsw (1)", msw == msw_orig);
+
+	memset(mem, 0, 16);
+	pmsw = mem;
+	asm("smsw %0" : "=m"(pmsw[4]));
+	zero = 1;
+	for (i = 0; i < 8; ++i)
+		if (i != 4 && pmsw[i])
+			zero = 0;
+	report("smsw (2)", msw == pmsw[4] && zero);
+}
+
 int main()
 {
 	void *mem;
@@ -150,6 +172,8 @@ int main()
 	test_push(mem);
 
 	test_cr8();
+
+	test_smsw(mem);
 
 	printf("\nSUMMARY: %d tests, %d failures\n", tests, fails);
 	return fails ? 1 : 0;
