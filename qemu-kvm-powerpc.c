@@ -120,6 +120,12 @@ void kvm_arch_save_regs(CPUState *env)
 
 int kvm_arch_qemu_init_env(CPUState *cenv)
 {
+    if (cenv->cpu_index == 0) {
+        /* load any registers set in env into
+           kvm  for the first guest vcpu */
+        kvm_load_registers(cenv);
+    }
+
     return 0;
 }
 
