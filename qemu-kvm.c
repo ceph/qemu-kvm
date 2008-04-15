@@ -52,6 +52,7 @@ struct vcpu_info {
     int signalled;
     int stop;
     int stopped;
+    int reload_regs;
 } vcpu_info[256];
 
 pthread_t io_thread;
@@ -307,6 +308,17 @@ static void setup_kernel_sigmask(CPUState *env)
     kvm_set_signal_mask(kvm_context, env->cpu_index, &set);
 }
 
+void qemu_kvm_system_reset_request(void)
+{
+    int i;
+
+    for (i = 0; i < smp_cpus; ++i) {
+	vcpu_info[i].reload_regs = 1;
+	pthread_kill(vcpu_info[i].thread, SIG_IPI);
+    }
+    qemu_system_reset();
+}
+
 static int kvm_main_loop_cpu(CPUState *env)
 {
     struct vcpu_info *info = &vcpu_info[env->cpu_index];
@@ -334,11 +346,10 @@ static int kvm_main_loop_cpu(CPUState *env)
 	    kvm_cpu_exec(env);
 	env->interrupt_request &= ~CPU_INTERRUPT_EXIT;
 	kvm_main_loop_wait(env, 0);
-        if (qemu_kvm_reset_requested && env->cpu_index == 0) {
-	    qemu_kvm_reset_requested = 0;
-	    env->interrupt_request = 0;
-	    qemu_system_reset();
-	    kvm_arch_load_regs(env);
+        if (info->reload_regs) {
+	    info->reload_regs = 0;
+	    if (env->cpu_index == 0) /* ap needs to be placed in INIT */
+		kvm_arch_load_regs(env);
 	}
     }
     pthread_mutex_unlock(&qemu_mutex);

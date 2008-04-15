@@ -72,6 +72,8 @@ void kvm_tpr_vcpu_start(CPUState *env);
 
 int qemu_kvm_get_dirty_pages(unsigned long phys_addr, void *buf);
 
+void qemu_kvm_system_reset_request(void);
+
 #ifdef TARGET_PPC
 int handle_powerpc_dcr_read(int vcpu, uint32_t dcrn, uint32_t *data);
 int handle_powerpc_dcr_write(int vcpu,uint32_t dcrn, uint32_t data);
