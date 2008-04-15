@@ -128,14 +128,20 @@ void test_push(void *mem)
 	report("push mem", stack_top[-3] == 0x123456789abcdeful);
 }
 
+unsigned long read_cr0(void)
+{
+	unsigned long cr0;
+
+	asm volatile ("mov %%cr0, %0" : "=r"(cr0));
+	return cr0;
+}
+
 void test_smsw(void *mem)
 {
 	unsigned short msw, msw_orig, *pmsw;
-	unsigned long cr0;
 	int i, zero;
 
-	asm("mov %%cr0, %0" : "=r"(cr0));
-	msw_orig = cr0;
+	msw_orig = read_cr0();
 
 	asm("smsw %0" : "=r"(msw));
 	report("smsw (1)", msw == msw_orig);
@@ -148,6 +154,25 @@ void test_smsw(void *mem)
 		if (i != 4 && pmsw[i])
 			zero = 0;
 	report("smsw (2)", msw == pmsw[4] && zero);
+}
+
+void test_lmsw(void *mem)
+{
+	unsigned short msw, *pmsw;
+	unsigned long cr0;
+
+	cr0 = read_cr0();
+
+	msw = cr0 ^ 8;
+	asm("lmsw %0" : : "r"(msw));
+	printf("before %lx after %lx\n", cr0, read_cr0());
+	report("lmsw (1)", (cr0 ^ read_cr0()) == 8);
+
+	pmsw = mem;
+	*pmsw = cr0;
+	asm("lmsw %0" : : "m"(*pmsw));
+	printf("before %lx after %lx\n", cr0, read_cr0());
+	report("lmsw (2)", cr0 == read_cr0());
 }
 
 int main()
@@ -174,6 +199,7 @@ int main()
 	test_cr8();
 
 	test_smsw(mem);
+	test_lmsw(mem);
 
 	printf("\nSUMMARY: %d tests, %d failures\n", tests, fails);
 	return fails ? 1 : 0;
