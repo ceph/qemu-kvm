@@ -166,9 +166,6 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 		env->gpr[3] = dt_base;
 #endif
 		env->nip = ep;
-
-		printf("%s: loading kvm registers\n", __func__);
-		kvm_load_registers(env);
 	}
 
 	printf("%s: DONE\n", __func__);
