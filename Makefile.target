@@ -135,6 +135,11 @@ ifeq ($(ARCH),alpha)
 CFLAGS+=-msmall-data
 endif
 
+ifeq ($(ARCH),hppa)
+OP_CFLAGS=-O1 -fno-delayed-branch
+BASE_LDFLAGS+=-Wl,-T,$(SRC_PATH)/$(ARCH).ld
+endif
+
 ifeq ($(ARCH),ia64)
 CFLAGS+=-mno-sdata
 OP_CFLAGS+=-mno-sdata
@@ -179,12 +184,16 @@ all: $(PROGS)
 
 #########################################################
 # cpu emulator library
+<<<<<<< HEAD:qemu/Makefile.target
 LIBOBJS=exec.o kqemu.o cpu-exec.o host-utils.o
 
 ifeq ($(NO_CPU_EMULATION), 1)
 LIBOBJS+=fake-exec.o
 else
-LIBOBJS+= translate-all.o translate.o op.o
+LIBOBJS+= translate-all.o translate.o
+ifndef CONFIG_NO_DYNGEN_OP
+LIBOBJS+=op.o
+endif
 # TCG code generator
 LIBOBJS+= tcg/tcg.o tcg/tcg-dyngen.o tcg/tcg-runtime.o
 CPPFLAGS+=-I$(SRC_PATH)/tcg -I$(SRC_PATH)/tcg/$(ARCH)
@@ -235,7 +244,7 @@ LIBOBJS+= op_helper.o helper.o
 endif
 
 ifeq ($(TARGET_BASE_ARCH), arm)
-LIBOBJS+= op_helper.o helper.o
+LIBOBJS+= op_helper.o helper.o neon_helper.o iwmmxt_helper.o
 endif
 
 ifeq ($(TARGET_BASE_ARCH), sh4)
@@ -299,13 +308,18 @@ endif
 ifeq ($(findstring sh4, $(TARGET_ARCH) $(ARCH)),sh4)
 LIBOBJS+=sh4-dis.o
 endif
+ifeq ($(findstring hppa, $(TARGET_BASE_ARCH) $(ARCH)),hppa)
+LIBOBJS+=hppa-dis.o
+endif
 ifeq ($(findstring s390, $(TARGET_ARCH) $(ARCH)),s390)
 LIBOBJS+=s390-dis.o
 endif
 
 # libqemu
 
+ifndef CONFIG_NO_DYNGEN_OP
 OPC_H = gen-op.h dyngen-opc.h op.h
+endif
 
 libqemu.a: $(LIBOBJS)
 	rm -f $@
@@ -355,10 +369,10 @@ qemu-kvm-helper.o: qemu-kvm-helper.c
 
 ifdef CONFIG_LINUX_USER
 
-VPATH+=:$(SRC_PATH)/linux-user
 ifndef TARGET_ABI_DIR
   TARGET_ABI_DIR=$(TARGET_ARCH)
 endif
+VPATH+=:$(SRC_PATH)/linux-user:$(SRC_PATH)/linux-user/$(TARGET_ABI_DIR)
 CPPFLAGS+=-I$(SRC_PATH)/linux-user -I$(SRC_PATH)/linux-user/$(TARGET_ABI_DIR)
 
 ifdef CONFIG_STATIC
@@ -463,6 +477,7 @@ OBJS+=gdbstub.o
 endif
 
 OBJS+= libqemu.a
+OBJS+= ../libqemu_common.a
 
 # Note: this is a workaround. The real fix is to avoid compiling
 # cpu_signal_handler() in cpu-exec.c.
@@ -623,14 +638,14 @@ OBJS+= pflash_cfi02.o ppc4xx_devs.o ppc405_uc.o ppc405_boards.o
 OBJS+= ppc440.o ppc440_bamboo.o device_tree.o
 endif
 ifeq ($(TARGET_BASE_ARCH), mips)
-OBJS+= mips_r4k.o mips_malta.o mips_pica61.o mips_mipssim.o
-OBJS+= mips_timer.o mips_int.o dma.o vga.o serial.o i8254.o i8259.o
-OBJS+= jazz_led.o
+OBJS+= mips_r4k.o mips_jazz.o mips_malta.o mips_mipssim.o
+OBJS+= mips_timer.o mips_int.o dma.o vga.o serial.o i8254.o i8259.o rc4030.o
+OBJS+= g364fb.o jazz_led.o
 OBJS+= ide.o gt64xxx.o pckbd.o ps2.o fdc.o mc146818rtc.o usb-uhci.o acpi.o ds1225y.o
-OBJS+= piix_pci.o parallel.o cirrus_vga.o $(SOUND_HW)
+OBJS+= piix_pci.o parallel.o cirrus_vga.o pcspk.o $(SOUND_HW)
 OBJS+= mipsnet.o
 OBJS+= pflash_cfi01.o
-CPPFLAGS += -DHAS_AUDIO
+CPPFLAGS += -DHAS_AUDIO -DHAS_AUDIO_CHOICE
 endif
 ifeq ($(TARGET_BASE_ARCH), cris)
 OBJS+= etraxfs.o
@@ -665,7 +680,9 @@ OBJS+= pxa2xx_lcd.o pxa2xx_mmci.o pxa2xx_pcmcia.o pxa2xx_keypad.o
 OBJS+= pflash_cfi01.o gumstix.o
 OBJS+= spitz.o ide.o serial.o nand.o ecc.o
 OBJS+= omap1.o omap_lcdc.o omap_dma.o omap_clk.o omap_mmc.o omap_i2c.o
+OBJS+= omap2.o omap_dss.o
 OBJS+= palm.o tsc210x.o
+OBJS+= nseries.o blizzard.o onenand.o vga.o cbus.o
 OBJS+= mst_fpga.o mainstone.o
 CPPFLAGS += -DHAS_AUDIO
 endif
@@ -726,7 +743,7 @@ firmware.o: firmware.c
 endif
 
 $(QEMU_PROG): $(OBJS) ../libqemu_common.a libqemu.a
-	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS) $(SDL_LIBS) $(COCOA_LIBS) $(CURSES_LIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS) $(SDL_LIBS) $(COCOA_LIBS) $(CURSES_LIBS) $(BRLAPI_LIBS)
 
 endif # !CONFIG_USER_ONLY
 

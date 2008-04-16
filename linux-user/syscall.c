@@ -4086,10 +4086,8 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
 #endif
 #ifdef TARGET_NR_mmap2
     case TARGET_NR_mmap2:
-#if defined(TARGET_SPARC) || defined(TARGET_MIPS)
+#ifndef MMAP_SHIFT
 #define MMAP_SHIFT 12
-#else
-#define MMAP_SHIFT TARGET_PAGE_BITS
 #endif
         ret = get_errno(target_mmap(arg1, arg2, arg3,
                                     target_to_host_bitmask(arg4, mmap_flags_tbl),
@@ -4874,6 +4872,20 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
         if (!(p = lock_user(VERIFY_READ, arg2, arg3, 1)))
             goto efault;
         ret = get_errno(pwrite(arg1, p, arg3, arg4));
+        unlock_user(p, arg2, 0);
+        break;
+#endif
+#ifdef TARGET_NR_pread64
+    case TARGET_NR_pread64:
+        if (!(p = lock_user(VERIFY_WRITE, arg2, arg3, 0)))
+            goto efault;
+        ret = get_errno(pread64(arg1, p, arg3, target_offset64(arg4, arg5)));
+        unlock_user(p, arg2, ret);
+        break;
+    case TARGET_NR_pwrite64:
+        if (!(p = lock_user(VERIFY_READ, arg2, arg3, 1)))
+            goto efault;
+        ret = get_errno(pwrite64(arg1, p, arg3, target_offset64(arg4, arg5)));
         unlock_user(p, arg2, 0);
         break;
 #endif

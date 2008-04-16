@@ -41,6 +41,8 @@
 #endif
 
 #include "qemu-kvm.h"
+#include "qemu-common.h"
+
 #if defined(CONFIG_USER_ONLY)
 #include <qemu.h>
 #endif
@@ -386,6 +388,9 @@ void tb_flush(CPUState *env1)
            nb_tbs, nb_tbs > 0 ?
            ((unsigned long)(code_gen_ptr - code_gen_buffer)) / nb_tbs : 0);
 #endif
+    if ((unsigned long)(code_gen_ptr - code_gen_buffer) > CODE_GEN_BUFFER_SIZE)
+        cpu_abort(env1, "Internal error: code buffer overflow\n");
+
     nb_tbs = 0;
 
     for(env = first_cpu; env != NULL; env = env->next_cpu) {
@@ -1242,7 +1247,7 @@ void cpu_set_log_filename(const char *filename)
 void cpu_interrupt(CPUState *env, int mask)
 {
     TranslationBlock *tb;
-    static int interrupt_lock;
+    static spinlock_t interrupt_lock = SPIN_LOCK_UNLOCKED;
 
     env->interrupt_request |= mask;
     if (kvm_enabled() && !qemu_kvm_irqchip_in_kernel())
@@ -1254,7 +1259,7 @@ void cpu_interrupt(CPUState *env, int mask)
     if (tb && !testandset(&interrupt_lock)) {
         env->current_tb = NULL;
         tb_reset_jump_recursive(tb);
-        interrupt_lock = 0;
+        resetlock(&interrupt_lock);
     }
 }
 

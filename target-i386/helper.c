@@ -1008,6 +1008,7 @@ void helper_syscall(int next_eip_addend)
                                DESC_S_MASK |
                                DESC_W_MASK | DESC_A_MASK);
         env->eflags &= ~env->fmask;
+        load_eflags(env->eflags, 0);
         if (code64)
             env->eip = env->lstar;
         else
@@ -2382,6 +2383,7 @@ void helper_iret_real(int shift)
     if (shift == 0)
         eflags_mask &= 0xffff;
     load_eflags(new_eflags, eflags_mask);
+    env->hflags &= ~HF_NMI_MASK;
 }
 
 static inline void validate_seg(int seg_reg, int cpl)
@@ -2633,6 +2635,7 @@ void helper_iret_protected(int shift, int next_eip)
     } else {
         helper_ret_protected(shift, 1, 0);
     }
+    env->hflags &= ~HF_NMI_MASK;
 #ifdef USE_KQEMU
     if (kqemu_is_ok(env)) {
         CC_OP = CC_OP_EFLAGS;
@@ -4000,7 +4003,6 @@ static inline uint16_t cpu2vmcb_attrib(uint32_t cpu_attrib)
 	    | ((cpu_attrib & 0xf00000) >> 12);       /* AVL, L, DB, G */
 }
 
-extern uint8_t *phys_ram_base;
 void helper_vmrun(target_ulong addr)
 {
     uint32_t event_inj;

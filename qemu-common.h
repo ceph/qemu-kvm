@@ -89,6 +89,14 @@ int hex2bin(char ch);
 char *urldecode(const char *ptr);
 int fls(int i);
 
+void *qemu_malloc(size_t size);
+void *qemu_mallocz(size_t size);
+void qemu_free(void *ptr);
+char *qemu_strdup(const char *str);
+
+void *get_mmap_addr(unsigned long size);
+
+
 /* Error handling.  */
 
 void hw_error(const char *fmt, ...)

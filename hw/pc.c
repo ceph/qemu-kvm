@@ -116,9 +116,16 @@ int cpu_get_pic_interrupt(CPUState *env)
 
 static void pic_irq_request(void *opaque, int irq, int level)
 {
-    CPUState *env = opaque;
-    if (level && apic_accept_pic_intr(env))
-        cpu_interrupt(env, CPU_INTERRUPT_HARD);
+    CPUState *env = first_cpu;
+
+    if (!level)
+        return;
+
+    while (env) {
+        if (apic_accept_pic_intr(env))
+            apic_local_deliver(env, APIC_LINT0);
+        env = env->next_cpu;
+    }
 }
 
 /* PC cmos mappings */
@@ -224,6 +231,9 @@ static void cmos_init(ram_addr_t ram_size, ram_addr_t above_4g_mem_size,
         val = 65535;
     rtc_set_memory(s, 0x34, val);
     rtc_set_memory(s, 0x35, val >> 8);
+
+    /* set the number of CPU */
+    rtc_set_memory(s, 0x5f, smp_cpus - 1);
 
     /* set boot devices, and disable floppy signature check if requested */
 #define PC_MAX_BOOT_DEVICES 3
@@ -755,7 +765,6 @@ CPUState *pc_new_cpu(int cpu, const char *cpu_model, int pci_enabled)
         if (pci_enabled) {
             apic_init(env);
         }
-        vmport_init();
 	return env;
 }
 
@@ -800,6 +809,8 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
     for(i = 0; i < smp_cpus; i++) {
 	env = pc_new_cpu(i, cpu_model, pci_enabled);
     }
+
+    vmport_init();
 
     /* allocate RAM */
 #ifdef KVM_CAP_USER_MEMORY
@@ -934,7 +945,7 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
     if (linux_boot)
 	load_linux(kernel_filename, initrd_filename, kernel_cmdline);
 
-    cpu_irq = qemu_allocate_irqs(pic_irq_request, first_cpu, 1);
+    cpu_irq = qemu_allocate_irqs(pic_irq_request, NULL, 1);
     i8259 = i8259_init(cpu_irq[0]);
     ferr_irq = i8259[13];
 

@@ -20,7 +20,7 @@
 #ifndef CPU_ALL_H
 #define CPU_ALL_H
 
-#if defined(__arm__) || defined(__sparc__) || defined(__mips__)
+#if defined(__arm__) || defined(__sparc__) || defined(__mips__) || defined(__hppa__)
 #define WORDS_ALIGNED
 #endif
 
@@ -753,6 +753,7 @@ extern int code_copy_enabled;
 #define CPU_INTERRUPT_SMI    0x40 /* (x86 only) SMI interrupt pending */
 #define CPU_INTERRUPT_DEBUG  0x80 /* Debug event occured.  */
 #define CPU_INTERRUPT_VIRQ   0x100 /* virtual interrupt pending.  */
+#define CPU_INTERRUPT_NMI    0x200 /* NMI pending. */
 
 void cpu_interrupt(CPUState *s, int mask);
 void cpu_reset_interrupt(CPUState *env, int mask);
@@ -956,6 +957,15 @@ static inline int64_t cpu_get_real_ticks(void)
     val = high;
     val <<= 32;
     val |= low;
+    return val;
+}
+
+#elif defined(__hppa__)
+
+static inline int64_t cpu_get_real_ticks(void)
+{
+    int val;
+    asm volatile ("mfctl %%cr16, %0" : "=r"(val));
     return val;
 }
 

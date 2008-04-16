@@ -457,6 +457,12 @@ int cpu_exec(CPUState *env1)
                         env->interrupt_request &= ~CPU_INTERRUPT_SMI;
                         do_smm_enter();
                         BREAK_CHAIN;
+                    } else if ((interrupt_request & CPU_INTERRUPT_NMI) &&
+                        !(env->hflags & HF_NMI_MASK)) {
+                        env->interrupt_request &= ~CPU_INTERRUPT_NMI;
+                        env->hflags |= HF_NMI_MASK;
+                        do_interrupt(EXCP02_NMI, 0, 0, 0, 1);
+                        BREAK_CHAIN;
                     } else if ((interrupt_request & CPU_INTERRUPT_HARD) &&
                         (env->eflags & IF_MASK || env->hflags & HF_HIF_MASK) &&
                         !(env->hflags & HF_INHIBIT_IRQ_MASK)) {
@@ -670,6 +676,17 @@ int cpu_exec(CPUState *env1)
                                        "o0", "o1", "o2", "o3", "o4", "o5",
                                        "l0", "l1", "l2", "l3", "l4", "l5",
                                        "l6", "l7");
+#elif defined(__hppa__)
+                asm volatile ("ble  0(%%sr4,%1)\n"
+                              "copy %%r31,%%r18\n"
+                              "copy %%r28,%0\n"
+                              : "=r" (T0)
+                              : "r" (gen_func)
+                              : "r1", "r2", "r3", "r4", "r5", "r6", "r7",
+                                "r8", "r9", "r10", "r11", "r12", "r13",
+                                "r18", "r19", "r20", "r21", "r22", "r23",
+                                "r24", "r25", "r26", "r27", "r28", "r29",
+                                "r30", "r31");
 #elif defined(__arm__)
                 asm volatile ("mov pc, %0\n\t"
                               ".global exec_loop\n\t"
@@ -896,6 +913,8 @@ static inline int handle_cpu_signal(unsigned long pc, unsigned long address,
        do it (XXX: use sigsetjmp) */
     sigprocmask(SIG_SETMASK, old_set, NULL);
     cpu_loop_exit();
+    /* never comes here */
+    return 1;
 }
 #elif defined(TARGET_SPARC)
 static inline int handle_cpu_signal(unsigned long pc, unsigned long address,
@@ -932,6 +951,8 @@ static inline int handle_cpu_signal(unsigned long pc, unsigned long address,
        do it (XXX: use sigsetjmp) */
     sigprocmask(SIG_SETMASK, old_set, NULL);
     cpu_loop_exit();
+    /* never comes here */
+    return 1;
 }
 #elif defined (TARGET_PPC)
 static inline int handle_cpu_signal(unsigned long pc, unsigned long address,
@@ -1496,6 +1517,24 @@ int cpu_signal_handler(int host_signum, void *pinfo,
     is_write = 0;
     return handle_cpu_signal(pc, (unsigned long)info->si_addr,
                              is_write, &uc->uc_sigmask, puc);
+}
+
+#elif defined(__hppa__)
+
+int cpu_signal_handler(int host_signum, void *pinfo,
+                       void *puc)
+{
+    struct siginfo *info = pinfo;
+    struct ucontext *uc = puc;
+    unsigned long pc;
+    int is_write;
+
+    pc = uc->uc_mcontext.sc_iaoq[0];
+    /* FIXME: compute is_write */
+    is_write = 0;
+    return handle_cpu_signal(pc, (unsigned long)info->si_addr, 
+                             is_write,
+                             &uc->uc_sigmask, puc);
 }
 
 #else

@@ -23,8 +23,10 @@
  */
 #include "tcg.h"
 
+#ifndef CONFIG_NO_DYNGEN_OP
 /* legacy dyngen operations */
 #include "gen-op.h"
+#endif
 
 int gen_new_label(void);
 
@@ -155,6 +157,11 @@ static inline void gen_set_label(int n)
     tcg_gen_op1i(INDEX_op_set_label, n);
 }
 
+static inline void tcg_gen_br(int label)
+{
+    tcg_gen_op1i(INDEX_op_br, label);
+}
+
 static inline void tcg_gen_mov_i32(TCGv ret, TCGv arg)
 {
     tcg_gen_op2(INDEX_op_mov_i32, ret, arg);
@@ -190,6 +197,18 @@ static inline void tcg_gen_helper_0_2(void *func, TCGv arg1, TCGv arg2)
     tcg_gen_call(&tcg_ctx, 
                  tcg_const_ptr((tcg_target_long)func), TCG_HELPER_CALL_FLAGS,
                  0, NULL, 2, args);
+}
+
+static inline void tcg_gen_helper_0_3(void *func,
+                                      TCGv arg1, TCGv arg2, TCGv arg3)
+{
+    TCGv args[3];
+    args[0] = arg1;
+    args[1] = arg2;
+    args[2] = arg3;
+    tcg_gen_call(&tcg_ctx,
+                 tcg_const_ptr((tcg_target_long)func), TCG_HELPER_CALL_FLAGS,
+                 0, NULL, 3, args);
 }
 
 static inline void tcg_gen_helper_0_4(void *func, TCGv arg1, TCGv arg2,
@@ -228,6 +247,18 @@ static inline void tcg_gen_helper_1_2(void *func, TCGv ret,
     tcg_gen_call(&tcg_ctx, 
                  tcg_const_ptr((tcg_target_long)func), TCG_HELPER_CALL_FLAGS,
                  1, &ret, 2, args);
+}
+
+static inline void tcg_gen_helper_1_3(void *func, TCGv ret,
+                                      TCGv arg1, TCGv arg2, TCGv arg3)
+{
+    TCGv args[3];
+    args[0] = arg1;
+    args[1] = arg2;
+    args[2] = arg3;
+    tcg_gen_call(&tcg_ctx,
+                 tcg_const_ptr((tcg_target_long)func), TCG_HELPER_CALL_FLAGS,
+                 1, &ret, 3, args);
 }
 
 static inline void tcg_gen_helper_1_4(void *func, TCGv ret,
@@ -1264,6 +1295,7 @@ static inline void tcg_gen_qemu_st64(TCGv arg, TCGv addr, int mem_index)
 }
 
 #define tcg_gen_ld_ptr tcg_gen_ld_i32
+#define tcg_gen_discard_ptr tcg_gen_discard_i32
 
 #else /* TCG_TARGET_REG_BITS == 32 */
 
@@ -1323,6 +1355,7 @@ static inline void tcg_gen_qemu_st64(TCGv arg, TCGv addr, int mem_index)
 }
 
 #define tcg_gen_ld_ptr tcg_gen_ld_i64
+#define tcg_gen_discard_ptr tcg_gen_discard_i64
 
 #endif /* TCG_TARGET_REG_BITS != 32 */
 
@@ -1358,6 +1391,13 @@ static inline void tcg_gen_qemu_st64(TCGv arg, TCGv addr, int mem_index)
 #define tcg_gen_sar_tl tcg_gen_sar_i64
 #define tcg_gen_sari_tl tcg_gen_sari_i64
 #define tcg_gen_brcond_tl tcg_gen_brcond_i64
+#define tcg_gen_discard_tl tcg_gen_discard_i64
+#define tcg_gen_trunc_tl_i32 tcg_gen_trunc_i64_i32
+#define tcg_gen_trunc_i64_tl tcg_gen_mov_i64
+#define tcg_gen_extu_i32_tl tcg_gen_extu_i32_i64
+#define tcg_gen_ext_i32_tl tcg_gen_ext_i32_i64
+#define tcg_gen_extu_tl_i64 tcg_gen_mov_i64
+#define tcg_gen_ext_tl_i64 tcg_gen_mov_i64
 #define tcg_const_tl tcg_const_i64
 #else
 #define TCG_TYPE_TL TCG_TYPE_I32
@@ -1391,5 +1431,19 @@ static inline void tcg_gen_qemu_st64(TCGv arg, TCGv addr, int mem_index)
 #define tcg_gen_sar_tl tcg_gen_sar_i32
 #define tcg_gen_sari_tl tcg_gen_sari_i32
 #define tcg_gen_brcond_tl tcg_gen_brcond_i32
+#define tcg_gen_discard_tl tcg_gen_discard_i32
+#define tcg_gen_trunc_tl_i32 tcg_gen_mov_i32
+#define tcg_gen_trunc_i64_tl tcg_gen_trunc_i64_i32
+#define tcg_gen_extu_i32_tl tcg_gen_mov_i32
+#define tcg_gen_ext_i32_tl tcg_gen_mov_i32
+#define tcg_gen_extu_tl_i64 tcg_gen_extu_i32_i64
+#define tcg_gen_ext_tl_i64 tcg_gen_ext_i32_i64
 #define tcg_const_tl tcg_const_i32
 #endif
+
+#if TCG_TARGET_REG_BITS == 32
+#define tcg_gen_addi_ptr tcg_gen_addi_i32
+#else /* TCG_TARGET_REG_BITS == 32 */
+#define tcg_gen_addi_ptr tcg_gen_addi_i64
+#endif /* TCG_TARGET_REG_BITS != 32 */
+

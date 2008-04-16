@@ -39,11 +39,12 @@ extern QEMUMachine bamboo_machine;
 /* mips_r4k.c */
 extern QEMUMachine mips_machine;
 
+/* mips_jazz.c */
+extern QEMUMachine mips_magnum_machine;
+extern QEMUMachine mips_pica61_machine;
+
 /* mips_malta.c */
 extern QEMUMachine mips_malta_machine;
-
-/* mips_pica61.c */
-extern QEMUMachine mips_pica61_machine;
 
 /* mips_mipssim.c */
 extern QEMUMachine mips_mipssim_machine;
@@ -82,6 +83,9 @@ extern QEMUMachine terrierpda_machine;
 
 /* palm.c */
 extern QEMUMachine palmte_machine;
+
+/* nseries.c */
+extern QEMUMachine n800_machine;
 
 /* gumstix.c */
 extern QEMUMachine connex_machine;

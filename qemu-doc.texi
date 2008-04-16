@@ -77,6 +77,7 @@ For system emulation, the following hardware targets are supported:
 @item Sun4m/Sun4c/Sun4d (32-bit Sparc processor)
 @item Sun4u (64-bit Sparc processor, in progress)
 @item Malta board (32-bit and 64-bit MIPS processors)
+@item MIPS Magnum (64-bit MIPS processor)
 @item ARM Integrator/CP (ARM)
 @item ARM Versatile baseboard (ARM)
 @item ARM RealView Emulation baseboard (ARM)
@@ -400,11 +401,21 @@ command line application. The emulated serial port is redirected on
 the console. Therefore, you can still use QEMU to debug a Linux kernel
 with a serial console.
 
+@item -curses
+
+Normally, QEMU uses SDL to display the VGA output.  With this option,
+QEMU can display the VGA output when in text mode using a 
+curses/ncurses interface.  Nothing is displayed in graphical mode.
+
 @item -no-frame
 
 Do not use decorations for SDL windows and start them using the whole
 available screen space. This makes the using QEMU in a dedicated desktop
 workspace more convenient.
+
+@item -no-quit
+
+Disable SDL window close capability.
 
 @item -full-screen
 Start in full screen.
@@ -538,6 +549,10 @@ Pass through the host device identified by vendor_id:product_id (Linux only).
 @item serial:[vendorid=@var{vendor_id}][,productid=@var{product_id}]:@var{dev}
 Serial converter to host character device @var{dev}, see @code{-serial} for the
 available devices.
+
+@item braille
+Braille device.  This will use BrlAPI to display the braille output on a real
+or fake device.
 
 @end table
 
@@ -852,6 +867,10 @@ listening on port 4444 would be:
 @item -serial mon:telnet::4444,server,nowait
 @end table
 
+@item braille
+Braille device.  This will use BrlAPI to display the braille output on a real
+or fake device.
+
 @end table
 
 @item -parallel @var{dev}
@@ -916,6 +935,11 @@ only).
 
 @item -no-reboot
 Exit instead of rebooting.
+
+@item -no-shutdown
+Don't exit QEMU on guest shutdown, but instead only stop the emulation.
+This allows for instance switching to monitor to commit changes to the
+disk image.
 
 @item -loadvm file
 Start right away with a saved state (@code{loadvm} in monitor)
@@ -1067,7 +1091,7 @@ Change the configuration of a device.
 Change the medium for a removable disk device to point to @var{filename}. eg
 
 @example
-(qemu) change cdrom /path/to/some.iso
+(qemu) change ide1-cd0 /path/to/some.iso
 @end example
 
 @item change vnc @var{display},@var{options}
@@ -1607,6 +1631,9 @@ usb_add serial:productid=FA00:tcp:192.168.0.2:4444
 @end example
 will connect to tcp port 4444 of ip 192.168.0.2, and plug that to the virtual
 serial converter, faking a Matrix Orbital LCD Display (USB ID 0403:FA00).
+@item braille
+Braille device.  This will use BrlAPI to display the braille output on a real
+or fake device.
 @end table
 
 @node host_usb_devices
@@ -2179,7 +2206,7 @@ PC-compatible serial ports
 Four executables cover simulation of 32 and 64-bit MIPS systems in
 both endian options, @file{qemu-system-mips}, @file{qemu-system-mipsel}
 @file{qemu-system-mips64} and @file{qemu-system-mips64el}.
-Four different machine types are emulated:
+Five different machine types are emulated:
 
 @itemize @minus
 @item
@@ -2190,6 +2217,8 @@ The MIPS Malta prototype board "malta"
 An ACER Pica "pica61". This machine needs the 64-bit emulator.
 @item
 MIPS emulator pseudo board "mipssim"
+@item
+A MIPS Magnum R4000 machine "magnum". This machine needs the 64-bit emulator.
 @end itemize
 
 The generic emulation is supported by Debian 'Etch' and is able to
@@ -2249,6 +2278,22 @@ PC style serial port
 @item
 MIPSnet network emulation
 @end itemize
+
+The MIPS Magnum R4000 emulation supports:
+
+@itemize @minus
+@item
+MIPS R4000 CPU
+@item
+PC-style IRQ controller
+@item
+PC Keyboard
+@item
+SCSI controller
+@item
+G364 framebuffer
+@end itemize
+
 
 @node ARM System emulator
 @section ARM System emulator

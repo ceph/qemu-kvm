@@ -55,6 +55,8 @@ typedef void ARMWriteCPFunc(void *opaque, int cp_info,
 typedef uint32_t ARMReadCPFunc(void *opaque, int cp_info,
                                int dstreg, int operand);
 
+struct arm_boot_info;
+
 #define NB_MMU_MODES 2
 
 /* We currently assume float and double are IEEE single and double
@@ -86,10 +88,11 @@ typedef struct CPUARMState {
     /* cpsr flag cache for faster execution */
     uint32_t CF; /* 0 or 1 */
     uint32_t VF; /* V is the bit 31. All other bits are undefined */
-    uint32_t NZF; /* N is bit 31. Z is computed from NZF */
+    uint32_t NF; /* N is bit 31. All other bits are undefined.  */
+    uint32_t ZF; /* Z set if zero.  */
     uint32_t QF; /* 0 or 1 */
     uint32_t GE; /* cpsr[19:16] */
-    int thumb; /* cprs[5]. 0 = arm mode, 1 = thumb mode. */
+    uint32_t thumb; /* cpsr[5]. 0 = arm mode, 1 = thumb mode. */
     uint32_t condexec_bits; /* IT bits.  cpsr[15:10,26:25].  */
 
     /* System control coprocessor (cp15) */
@@ -168,9 +171,6 @@ typedef struct CPUARMState {
         int vec_len;
         int vec_stride;
 
-        /* Temporary variables if we don't have spare fp regs.  */
-        float32 tmp0s, tmp1s;
-        float64 tmp0d, tmp1d;
         /* scratch space when Tn are not sufficient.  */
         uint32_t scratch[8];
 
@@ -198,15 +198,11 @@ typedef struct CPUARMState {
     CPU_COMMON
 
     /* These fields after the common ones so they are preserved on reset.  */
-    int ram_size;
-    const char *kernel_filename;
-    const char *kernel_cmdline;
-    const char *initrd_filename;
-    int board_id;
-    target_phys_addr_t loader_start;
+    struct arm_boot_info *boot_info;
 } CPUARMState;
 
 CPUARMState *cpu_arm_init(const char *cpu_model);
+void arm_translate_init(void);
 int cpu_arm_exec(CPUARMState *s);
 void cpu_arm_close(CPUARMState *s);
 void do_interrupt(CPUARMState *);
@@ -256,8 +252,8 @@ void cpsr_write(CPUARMState *env, uint32_t val, uint32_t mask);
 static inline uint32_t xpsr_read(CPUARMState *env)
 {
     int ZF;
-    ZF = (env->NZF == 0);
-    return (env->NZF & 0x80000000) | (ZF << 30)
+    ZF = (env->ZF == 0);
+    return (env->NF & 0x80000000) | (ZF << 30)
         | (env->CF << 29) | ((env->VF & 0x80000000) >> 3) | (env->QF << 27)
         | (env->thumb << 24) | ((env->condexec_bits & 3) << 25)
         | ((env->condexec_bits & 0xfc) << 8)
@@ -267,9 +263,9 @@ static inline uint32_t xpsr_read(CPUARMState *env)
 /* Set the xPSR.  Note that some bits of mask must be all-set or all-clear.  */
 static inline void xpsr_write(CPUARMState *env, uint32_t val, uint32_t mask)
 {
-    /* NOTE: N = 1 and Z = 1 cannot be stored currently */
     if (mask & CPSR_NZCV) {
-        env->NZF = (val & 0xc0000000) ^ 0x40000000;
+        env->ZF = (~val) & CPSR_Z;
+        env->NF = val;
         env->CF = (val >> 29) & 1;
         env->VF = (val << 3) & 0x80000000;
     }
@@ -377,6 +373,7 @@ void cpu_arm_set_cp_io(CPUARMState *env, int cpnum,
 #define ARM_CPUID_PXA270_C0   0x69054114
 #define ARM_CPUID_PXA270_C5   0x69054117
 #define ARM_CPUID_ARM1136     0x4117b363
+#define ARM_CPUID_ARM1136_R2  0x4107b362
 #define ARM_CPUID_ARM11MPCORE 0x410fb022
 #define ARM_CPUID_CORTEXA8    0x410fc080
 #define ARM_CPUID_CORTEXM3    0x410fc231

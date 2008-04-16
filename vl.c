@@ -26,9 +26,9 @@
 #include "hw/usb.h"
 #include "hw/pcmcia.h"
 #include "hw/pc.h"
-#include "hw/fdc.h"
 #include "hw/audiodev.h"
 #include "hw/isa.h"
+#include "hw/baum.h"
 #include "net.h"
 #include "console.h"
 #include "sysemu.h"
@@ -228,6 +228,7 @@ const char *vnc_display;
 int acpi_enabled = 1;
 int fd_bootchk = 1;
 int no_reboot = 0;
+int no_shutdown = 0;
 int cursor_hide = 1;
 int graphic_rotate = 0;
 int daemonize = 0;
@@ -3503,7 +3504,12 @@ CharDriverState *qemu_chr_open(const char *filename)
     } else
     if (strstart(filename, "file:", &p)) {
         return qemu_chr_open_win_file_out(p);
-    }
+    } else
+#endif
+#ifdef CONFIG_BRLAPI
+    if (!strcmp(filename, "braille")) {
+        return chr_baum_init();
+    } else
 #endif
     {
         return NULL;
@@ -4892,6 +4898,7 @@ int net_client_init(const char *str)
         vlan->nb_host_devs++;
         if (get_param_value(buf, sizeof(buf), "fd", p) > 0) {
             fd = strtol(buf, NULL, 0);
+            fcntl(fd, F_SETFL, O_NONBLOCK);
             ret = -1;
             if (net_tap_fd_init(vlan, fd))
                 ret = 0;
@@ -5424,6 +5431,10 @@ static int usb_device_add(const char *devname)
         dev = usb_wacom_init();
     } else if (strstart(devname, "serial:", &p)) {
         dev = usb_serial_init(p);
+#ifdef CONFIG_BRLAPI
+    } else if (!strcmp(devname, "braille")) {
+        dev = usb_baum_init();
+#endif
     } else {
         return -1;
     }
@@ -8007,7 +8018,7 @@ static int main_loop(void)
                 qemu_time += profile_getclock() - ti;
 #endif
                 next_cpu = env->next_cpu ?: first_cpu;
-                if (event_pending) {
+                if (event_pending && likely(ret != EXCP_DEBUG)) {
                     ret = EXCP_INTERRUPT;
                     event_pending = 0;
                     break;
@@ -8027,7 +8038,12 @@ static int main_loop(void)
 
             if (shutdown_requested) {
                 ret = EXCP_INTERRUPT;
-                break;
+                if (no_shutdown) {
+                    vm_stop(0);
+                    no_shutdown = 0;
+                }
+                else
+                    break;
             }
             if (reset_requested) {
                 reset_requested = 0;
@@ -8041,7 +8057,7 @@ static int main_loop(void)
 		qemu_system_powerdown();
                 ret = EXCP_INTERRUPT;
             }
-            if (ret == EXCP_DEBUG) {
+            if (unlikely(ret == EXCP_DEBUG)) {
                 vm_stop(EXCP_DEBUG);
             }
             /* If all cpus are halted then wait until the next IRQ */
@@ -8198,6 +8214,7 @@ static void help(int exitcode)
            "-curses         use a curses/ncurses interface instead of SDL\n"
 #endif
            "-no-reboot      exit instead of rebooting\n"
+           "-no-shutdown    stop before shutdown\n"
            "-loadvm file    start right away with a saved state (loadvm in monitor)\n"
 	   "-vnc display    start a VNC server on display\n"
 #ifndef _WIN32
@@ -8312,6 +8329,7 @@ enum {
     QEMU_OPTION_no_kvm_irqchip,
     QEMU_OPTION_no_kvm_pit,
     QEMU_OPTION_no_reboot,
+    QEMU_OPTION_no_shutdown,
     QEMU_OPTION_show_cursor,
     QEMU_OPTION_daemonize,
     QEMU_OPTION_option_rom,
@@ -8434,6 +8452,7 @@ const QEMUOption qemu_options[] = {
     { "vmwarevga", 0, QEMU_OPTION_vmsvga },
     { "no-acpi", 0, QEMU_OPTION_no_acpi },
     { "no-reboot", 0, QEMU_OPTION_no_reboot },
+    { "no-shutdown", 0, QEMU_OPTION_no_shutdown },
     { "show-cursor", 0, QEMU_OPTION_show_cursor },
     { "daemonize", 0, QEMU_OPTION_daemonize },
     { "option-rom", HAS_ARG, QEMU_OPTION_option_rom },
@@ -8510,6 +8529,7 @@ static void register_machines(void)
     qemu_register_machine(&bamboo_machine);
 #elif defined(TARGET_MIPS)
     qemu_register_machine(&mips_machine);
+    qemu_register_machine(&mips_magnum_machine);
     qemu_register_machine(&mips_malta_machine);
     qemu_register_machine(&mips_pica61_machine);
     qemu_register_machine(&mips_mipssim_machine);
@@ -8540,6 +8560,7 @@ static void register_machines(void)
     qemu_register_machine(&borzoipda_machine);
     qemu_register_machine(&terrierpda_machine);
     qemu_register_machine(&palmte_machine);
+    qemu_register_machine(&n800_machine);
     qemu_register_machine(&lm3s811evb_machine);
     qemu_register_machine(&lm3s6965evb_machine);
     qemu_register_machine(&connex_machine);
@@ -8566,7 +8587,7 @@ static void register_machines(void)
 #ifdef HAS_AUDIO
 struct soundhw soundhw[] = {
 #ifdef HAS_AUDIO_CHOICE
-#ifdef TARGET_I386
+#if defined(TARGET_I386) || defined(TARGET_MIPS)
     {
         "pcspk",
         "PC speaker",
@@ -8806,23 +8827,23 @@ int main(int argc, char **argv)
     const char *boot_devices = "";
     DisplayState *ds = &display_state;
     int cyls, heads, secs, translation;
-    char net_clients[MAX_NET_CLIENTS][256];
+    const char *net_clients[MAX_NET_CLIENTS];
     int nb_net_clients;
     int hda_index;
     int optind;
     const char *r, *optarg;
     CharDriverState *monitor_hd;
-    char monitor_device[128];
+    const char *monitor_device;
+    const char *serial_devices[MAX_SERIAL_PORTS];
+    int serial_device_index;
     char vmchannel_devices[MAX_VMCHANNEL_DEVICES][128];
     int vmchannel_device_index;
-    char serial_devices[MAX_SERIAL_PORTS][128];
-    int serial_device_index;
-    char parallel_devices[MAX_PARALLEL_PORTS][128];
+    const char *parallel_devices[MAX_PARALLEL_PORTS];
     int parallel_device_index;
     const char *loadvm = NULL;
     QEMUMachine *machine;
     const char *cpu_model;
-    char usb_devices[MAX_USB_CMDLINE][128];
+    const char *usb_devices[MAX_USB_CMDLINE];
     int usb_devices_index;
     int fds[2];
     const char *pid_file = NULL;
@@ -8879,20 +8900,20 @@ int main(int argc, char **argv)
     kernel_cmdline = "";
     cyls = heads = secs = 0;
     translation = BIOS_ATA_TRANSLATION_AUTO;
-    pstrcpy(monitor_device, sizeof(monitor_device), "vc");
+    monitor_device = "vc";
 
     for(i = 0; i < MAX_VMCHANNEL_DEVICES; i++)
         vmchannel_devices[i][0] = '\0';
     vmchannel_device_index = 0;
 
-    pstrcpy(serial_devices[0], sizeof(serial_devices[0]), "vc");
+    serial_devices[0] = "vc";
     for(i = 1; i < MAX_SERIAL_PORTS; i++)
-        serial_devices[i][0] = '\0';
+        serial_devices[i] = NULL;
     serial_device_index = 0;
 
-    pstrcpy(parallel_devices[0], sizeof(parallel_devices[0]), "vc");
+    parallel_devices[0] = "vc";
     for(i = 1; i < MAX_PARALLEL_PORTS; i++)
-        parallel_devices[i][0] = '\0';
+        parallel_devices[i] = NULL;
     parallel_device_index = 0;
 
     usb_devices_index = 0;
@@ -9048,9 +9069,9 @@ int main(int argc, char **argv)
                 }
                 break;
             case QEMU_OPTION_nographic:
-                pstrcpy(serial_devices[0], sizeof(serial_devices[0]), "stdio");
-                pstrcpy(parallel_devices[0], sizeof(parallel_devices[0]), "null");
-                pstrcpy(monitor_device, sizeof(monitor_device), "stdio");
+                serial_devices[0] = "stdio";
+                parallel_devices[0] = "null";
+                monitor_device = "stdio";
                 nographic = 1;
                 break;
 #ifdef CONFIG_CURSES
@@ -9118,9 +9139,7 @@ int main(int argc, char **argv)
                     fprintf(stderr, "qemu: too many network clients\n");
                     exit(1);
                 }
-                pstrcpy(net_clients[nb_net_clients],
-                        sizeof(net_clients[0]),
-                        optarg);
+                net_clients[nb_net_clients] = optarg;
                 nb_net_clients++;
                 break;
 #ifdef CONFIG_SLIRP
@@ -9255,7 +9274,7 @@ int main(int argc, char **argv)
                     break;
                 }
             case QEMU_OPTION_monitor:
-                pstrcpy(monitor_device, sizeof(monitor_device), optarg);
+                monitor_device = optarg;
                 break;
             case QEMU_OPTION_balloon:
                 if (vmchannel_device_index >= MAX_VMCHANNEL_DEVICES) {
@@ -9284,8 +9303,7 @@ int main(int argc, char **argv)
                     fprintf(stderr, "qemu: too many serial ports\n");
                     exit(1);
                 }
-                pstrcpy(serial_devices[serial_device_index],
-                        sizeof(serial_devices[0]), optarg);
+                serial_devices[serial_device_index] = optarg;
                 serial_device_index++;
                 break;
             case QEMU_OPTION_parallel:
@@ -9293,8 +9311,7 @@ int main(int argc, char **argv)
                     fprintf(stderr, "qemu: too many parallel ports\n");
                     exit(1);
                 }
-                pstrcpy(parallel_devices[parallel_device_index],
-                        sizeof(parallel_devices[0]), optarg);
+                parallel_devices[parallel_device_index] = optarg;
                 parallel_device_index++;
                 break;
 	    case QEMU_OPTION_loadvm:
@@ -9358,9 +9375,7 @@ int main(int argc, char **argv)
                     fprintf(stderr, "Too many USB devices\n");
                     exit(1);
                 }
-                pstrcpy(usb_devices[usb_devices_index],
-                        sizeof(usb_devices[usb_devices_index]),
-                        optarg);
+                usb_devices[usb_devices_index] = optarg;
                 usb_devices_index++;
                 break;
             case QEMU_OPTION_smp:
@@ -9378,6 +9393,9 @@ int main(int argc, char **argv)
                 break;
             case QEMU_OPTION_no_reboot:
                 no_reboot = 1;
+                break;
+            case QEMU_OPTION_no_shutdown:
+                no_shutdown = 1;
                 break;
             case QEMU_OPTION_show_cursor:
                 cursor_hide = 0;
@@ -9568,10 +9586,8 @@ int main(int argc, char **argv)
     /* init network clients */
     if (nb_net_clients == 0) {
         /* if no clients, we use a default config */
-        pstrcpy(net_clients[0], sizeof(net_clients[0]),
-                "nic");
-        pstrcpy(net_clients[1], sizeof(net_clients[0]),
-                "user");
+        net_clients[0] = "nic";
+        net_clients[1] = "user";
         nb_net_clients = 2;
     }
 
@@ -9720,17 +9736,18 @@ int main(int argc, char **argv)
     /* Maintain compatibility with multiple stdio monitors */
     if (!strcmp(monitor_device,"stdio")) {
         for (i = 0; i < MAX_SERIAL_PORTS; i++) {
-            if (!strcmp(serial_devices[i],"mon:stdio")) {
-                monitor_device[0] = '\0';
+            const char *devname = serial_devices[i];
+            if (devname && !strcmp(devname,"mon:stdio")) {
+                monitor_device = NULL;
                 break;
-            } else if (!strcmp(serial_devices[i],"stdio")) {
-                monitor_device[0] = '\0';
-                pstrcpy(serial_devices[0], sizeof(serial_devices[0]), "mon:stdio");
+            } else if (devname && !strcmp(devname,"stdio")) {
+                monitor_device = NULL;
+                serial_devices[i] = "mon:stdio";
                 break;
             }
         }
     }
-    if (monitor_device[0] != '\0') {
+    if (monitor_device) {
         monitor_hd = qemu_chr_open(monitor_device);
         if (!monitor_hd) {
             fprintf(stderr, "qemu: could not open monitor device '%s'\n", monitor_device);
@@ -9766,7 +9783,7 @@ int main(int argc, char **argv)
 
     for(i = 0; i < MAX_SERIAL_PORTS; i++) {
         const char *devname = serial_devices[i];
-        if (devname[0] != '\0' && strcmp(devname, "none")) {
+        if (devname && strcmp(devname, "none")) {
             serial_hds[i] = qemu_chr_open(devname);
             if (!serial_hds[i]) {
                 fprintf(stderr, "qemu: could not open serial device '%s'\n",
@@ -9780,7 +9797,7 @@ int main(int argc, char **argv)
 
     for(i = 0; i < MAX_PARALLEL_PORTS; i++) {
         const char *devname = parallel_devices[i];
-        if (devname[0] != '\0' && strcmp(devname, "none")) {
+        if (devname && strcmp(devname, "none")) {
             parallel_hds[i] = qemu_chr_open(devname);
             if (!parallel_hds[i]) {
                 fprintf(stderr, "qemu: could not open parallel device '%s'\n",
