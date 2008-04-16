@@ -25,13 +25,17 @@
 #define VIRTIO_BLK_F_BARRIER	0	/* Does host support barriers? */
 #define VIRTIO_BLK_F_SIZE_MAX	1	/* Indicates maximum segment size */
 #define VIRTIO_BLK_F_SEG_MAX	2	/* Indicates maximum # of segments */
+#define VIRTIO_BLK_F_GEOMETRY	4	/* Indicates support of legacy geometry */
 
 struct virtio_blk_config
 {
     uint64_t capacity;
     uint32_t size_max;
     uint32_t seg_max;
-};
+    uint16_t cylinders;
+    uint8_t heads;
+    uint8_t sectors;
+} __attribute__((packed));
 
 /* These two define direction. */
 #define VIRTIO_BLK_T_IN		0
@@ -132,32 +136,40 @@ static void virtio_blk_update_config(VirtIODevice *vdev, uint8_t *config)
     VirtIOBlock *s = to_virtio_blk(vdev);
     struct virtio_blk_config blkcfg;
     int64_t capacity;
+    int cylinders, heads, secs;
 
     bdrv_get_geometry(s->bs, &capacity);
+    bdrv_get_geometry_hint(s->bs, &cylinders, &heads, &secs);
     blkcfg.capacity = cpu_to_le64(capacity);
     blkcfg.seg_max = cpu_to_le32(128 - 2);
+    blkcfg.cylinders = cpu_to_le16(cylinders);
+    blkcfg.heads = heads;
+    blkcfg.sectors = secs;
     memcpy(config, &blkcfg, sizeof(blkcfg));
 }
 
 static uint32_t virtio_blk_get_features(VirtIODevice *vdev)
 {
-    return (1 << VIRTIO_BLK_F_SEG_MAX);
+    return (1 << VIRTIO_BLK_F_SEG_MAX | 1 << VIRTIO_BLK_F_GEOMETRY);
 }
 
 void *virtio_blk_init(PCIBus *bus, uint16_t vendor, uint16_t device,
 		      BlockDriverState *bs)
 {
     VirtIOBlock *s;
+    int cylinders, heads, secs;
 
     s = (VirtIOBlock *)virtio_init_pci(bus, "virtio-blk", vendor, device,
 				       0, VIRTIO_ID_BLOCK,
 				       0x01, 0x80, 0x00,
-				       16, sizeof(VirtIOBlock));
+				       sizeof(struct virtio_blk_config), sizeof(VirtIOBlock));
 
     s->vdev.update_config = virtio_blk_update_config;
     s->vdev.get_features = virtio_blk_get_features;
     s->bs = bs;
     bs->devfn = s->vdev.pci_dev.devfn;
+    bdrv_guess_geometry(s->bs, &cylinders, &heads, &secs);
+    bdrv_set_geometry_hint(s->bs, cylinders, heads, secs);
 
     virtio_add_queue(&s->vdev, 128, virtio_blk_handle_output);
 

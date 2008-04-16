@@ -1141,7 +1141,7 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
 	DriveInfo *info = &drives_table[extboot_drive];
 	int cyls, heads, secs;
 
-	if (info->type != IF_IDE) {
+	if (info->type != IF_IDE && info->type != IF_VIRTIO) {
 	    bdrv_guess_geometry(info->bdrv, &cyls, &heads, &secs);
 	    bdrv_set_geometry_hint(info->bdrv, cyls, heads, secs);
 	}
