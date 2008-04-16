@@ -9809,6 +9809,9 @@ int main(int argc, char **argv)
         }
     }
 
+    if (kvm_enabled())
+	kvm_init_ap();
+
     machine->init(ram_size, vga_ram_size, boot_devices, ds,
                   kernel_filename, kernel_cmdline, initrd_filename, cpu_model);
 
@@ -9828,9 +9831,6 @@ int main(int argc, char **argv)
         display_state.gui_timer = qemu_new_timer(rt_clock, gui_update, &display_state);
         qemu_mod_timer(display_state.gui_timer, qemu_get_clock(rt_clock));
     }
-
-    if (kvm_enabled())
-	kvm_init_ap();
 
 #ifdef CONFIG_GDBSTUB
     if (use_gdbstub) {

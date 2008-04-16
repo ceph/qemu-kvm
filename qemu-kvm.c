@@ -389,6 +389,8 @@ static void kvm_add_signal(struct qemu_kvm_signal_table *sigtab, int signum)
 void kvm_init_new_ap(int cpu, CPUState *env)
 {
     pthread_create(&vcpu_info[cpu].thread, NULL, ap_main_loop, env);
+    /* FIXME: wait for thread to spin up */
+    usleep(200);
 }
 
 static void qemu_kvm_init_signal_tables(void)
@@ -408,9 +410,6 @@ static void qemu_kvm_init_signal_tables(void)
 
 int kvm_init_ap(void)
 {
-    CPUState *env = first_cpu;
-    int i;
-
 #ifdef TARGET_I386
     kvm_tpr_opt_setup();
 #endif
@@ -418,10 +417,6 @@ int kvm_init_ap(void)
     qemu_kvm_init_signal_tables();
 
     signal(SIG_IPI, sig_ipi_handler);
-    for (i = 0; i < smp_cpus; ++i) {
-        kvm_init_new_ap(i, env);
-        env = env->next_cpu;
-    }
     return 0;
 }
 
