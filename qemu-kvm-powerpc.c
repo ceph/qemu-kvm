@@ -72,7 +72,6 @@ void kvm_arch_load_regs(CPUState *env)
 
     for (i = 0;i < 32; i++){
         regs.gpr[i] = env->gpr[i];
-        regs.fpr[i] = env->fpr[i];
     }
 
     rc = kvm_set_regs(kvm_context, env->cpu_index, &regs);
@@ -113,7 +112,6 @@ void kvm_arch_save_regs(CPUState *env)
 
     for (i = 0;i < 32; i++){
         env->gpr[i] = regs.gpr[i];
-        env->fpr[i] = regs.fpr[i];
     }
 
 }
