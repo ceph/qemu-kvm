@@ -1970,6 +1970,8 @@ PCIDevice *pci_pcnet_init(PCIBus *bus, NICInfo *nd, int devfn)
 
     d = (PCNetState *)pci_register_device(bus, "PCNet", sizeof(PCNetState),
                                           devfn, NULL, NULL);
+    if (!d)
+	return NULL;
 
     pci_conf = d->dev.config;
 

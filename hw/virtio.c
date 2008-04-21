@@ -408,6 +408,9 @@ VirtIODevice *virtio_init_pci(PCIBus *bus, const char *name,
 
     pci_dev = pci_register_device(bus, name, struct_size,
 				  -1, NULL, NULL);
+    if (!pci_dev)
+	return NULL;
+
     vdev = to_virtio_device(pci_dev);
 
     vdev->status = 0;

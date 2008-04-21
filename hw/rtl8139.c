@@ -3411,6 +3411,9 @@ PCIDevice *pci_rtl8139_init(PCIBus *bus, NICInfo *nd, int devfn)
                                               "RTL8139", sizeof(PCIRTL8139State),
                                               devfn,
                                               NULL, NULL);
+    if (!d)
+	return NULL;
+
     pci_conf = d->dev.config;
     pci_conf[0x00] = 0xec; /* Realtek 8139 */
     pci_conf[0x01] = 0x10;

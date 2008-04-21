@@ -796,6 +796,9 @@ PCIDevice *pci_ne2000_init(PCIBus *bus, NICInfo *nd, int devfn)
                                               "NE2000", sizeof(PCINE2000State),
                                               devfn,
                                               NULL, NULL);
+    if (!d)
+       return NULL;
+
     pci_conf = d->dev.config;
     pci_conf[0x00] = 0xec; // Realtek 8029
     pci_conf[0x01] = 0x10;

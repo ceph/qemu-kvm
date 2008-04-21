@@ -696,6 +696,12 @@ PCIDevice *pci_nic_init(PCIBus *bus, NICInfo *nd, int devfn)
         fprintf(stderr, "qemu: Unsupported NIC: %s\n", nd->model);
         return NULL;
     }
+
+    if (!pci_dev) {
+        fprintf(stderr, "qemu: Unable to initialze NIC: %s\n", nd->model);
+        return NULL;
+    }
+
     nd->devfn = pci_dev->devfn;
     return pci_dev;
 }

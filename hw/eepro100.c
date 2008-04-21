@@ -1753,6 +1753,8 @@ static PCIDevice *nic_init(PCIBus * bus, NICInfo * nd,
     d = (PCIEEPRO100State *) pci_register_device(bus, name,
                                                  sizeof(PCIEEPRO100State), -1,
                                                  NULL, NULL);
+    if (!d)
+        return NULL;
 
     s = &d->eepro100;
     s->device = device;

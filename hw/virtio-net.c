@@ -292,6 +292,8 @@ PCIDevice *virtio_net_init(PCIBus *bus, NICInfo *nd, int devfn)
 				     0, VIRTIO_ID_NET,
 				     0x02, 0x00, 0x00,
 				     6, sizeof(VirtIONet));
+    if (!n)
+	return NULL;
 
     n->vdev.update_config = virtio_net_update_config;
     n->vdev.get_features = virtio_net_get_features;
