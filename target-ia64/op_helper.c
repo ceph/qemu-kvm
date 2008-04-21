@@ -25,6 +25,7 @@
 #include "exec-all.h"
 
 #include "qemu-kvm.h"
+#include "qemu-common.h"
 
 CPUState *cpu_ia64_init(char *cpu_model){
     CPUState *env;
