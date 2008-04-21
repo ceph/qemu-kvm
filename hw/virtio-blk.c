@@ -163,6 +163,8 @@ void *virtio_blk_init(PCIBus *bus, uint16_t vendor, uint16_t device,
 				       0, VIRTIO_ID_BLOCK,
 				       0x01, 0x80, 0x00,
 				       sizeof(struct virtio_blk_config), sizeof(VirtIOBlock));
+    if (!s)
+	return NULL;
 
     s->vdev.update_config = virtio_blk_update_config;
     s->vdev.get_features = virtio_blk_get_features;
