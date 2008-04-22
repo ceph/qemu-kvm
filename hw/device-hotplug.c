@@ -125,7 +125,7 @@ static PCIDevice *qemu_system_hot_add_storage(const char *opts, int bus_nr)
     switch (type) {
     case IF_SCSI:
         opaque = lsi_scsi_init (pci_bus, -1);
-        if (drive_idx >= 0)
+        if (opaque && drive_idx >= 0)
             lsi_scsi_attach (opaque, drives_table[drive_idx].bdrv,
                              drives_table[drive_idx].unit);
         break;
