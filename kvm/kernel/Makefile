@@ -21,8 +21,8 @@ _unifdef = mv $1 $1.orig && \
 	  unifdef -DCONFIG_X86 $1.orig > $1; \
           [ $$? -le 1 ] && rm $1.orig
 
-hack = $(call _hack,tmp/$(strip $1))
-unifdef = $(call _unifdef,tmp/$(strip $1))
+hack = $(call _hack,$T/$(strip $1))
+unifdef = $(call _unifdef,$T/$(strip $1))
 
 all::
 #	include header priority 1) $LINUX 2) $KERNELDIR 3) include-compat
@@ -31,14 +31,16 @@ all::
 		-include include/linux/autoconf.h" \
 		"$$@"
 
-sync:
-	rm -rf tmp include
-	rsync --exclude='*.mod.c' -R \
-             "$(LINUX)"/arch/x86/kvm/./*.[ch] \
-             "$(LINUX)"/virt/kvm/./*.[ch] \
+sync: header-sync source-sync
+
+T = $(subst -sync,,$@)-tmp
+
+header-sync:
+	rm -rf $T include
+	rsync -R \
 	     "$(LINUX)"/./include/linux/kvm*.h \
 	     "$(LINUX)"/./include/asm-x86/kvm*.h \
-             tmp/
+             $T/
 	mkdir -p include/linux include/asm-x86
 	ln -s asm-x86 include/asm
 	ln -sf asm-x86 include-compat/asm
@@ -48,15 +50,25 @@ sync:
 	$(call unifdef, include/asm-x86/kvm.h)
 	$(call unifdef, include/asm-x86/kvm_para.h)
 	$(call hack, include/linux/kvm.h)
+	for i in $$(find $T -type f -printf '%P '); \
+		do cmp -s $$i $T/$$i || cp $T/$$i $$i; done
+	rm -rf $T
+
+source-sync:
+	rm -rf $T
+	rsync --exclude='*.mod.c' -R \
+             "$(LINUX)"/arch/x86/kvm/./*.[ch] \
+             "$(LINUX)"/virt/kvm/./*.[ch] \
+             $T/
 	$(call hack, kvm_main.c)
 	$(call hack, mmu.c)
 	$(call hack, vmx.c)
 	$(call hack, svm.c)
 	$(call hack, x86.c)
 	$(call hack, irq.h)
-	for i in $$(find tmp -type f -printf '%P '); \
-		do cmp -s $$i tmp/$$i || cp tmp/$$i $$i; done
-	rm -rf tmp
+	for i in $$(find $T -type f -printf '%P '); \
+		do cmp -s $$i $T/$$i || cp $T/$$i $$i; done
+	rm -rf $T
 
 install:
 	mkdir -p $(DESTDIR)/$(INSTALLDIR)
