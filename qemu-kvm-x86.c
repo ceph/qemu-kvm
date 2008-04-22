@@ -523,6 +523,9 @@ static void do_cpuid_ent(struct kvm_cpuid_entry *e, uint32_t function,
 	e->ecx = bcd[1];
 	e->edx = bcd[2];
     }
+    // "Hypervisor present" bit for Microsoft guests
+    if (function == 1)
+	e->ecx |= (1u << 31);
 }
 
 struct kvm_para_features {
