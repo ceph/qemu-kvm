@@ -36,13 +36,13 @@ sync: header-sync source-sync
 T = $(subst -sync,,$@)-tmp
 
 header-sync:
-	rm -rf $T include
+	rm -rf $T
 	rsync -R \
 	     "$(LINUX)"/./include/linux/kvm*.h \
 	     "$(LINUX)"/./include/asm-x86/kvm*.h \
              $T/
 	mkdir -p include/linux include/asm-x86
-	ln -s asm-x86 include/asm
+	ln -sf asm-x86 include/asm
 	ln -sf asm-x86 include-compat/asm
 
 	$(call unifdef, include/linux/kvm.h)
