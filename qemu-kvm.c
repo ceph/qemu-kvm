@@ -452,7 +452,9 @@ int kvm_main_loop(void)
         pthread_mutex_unlock(&qemu_mutex);
     }
 
+    pause_all_threads();
     pthread_mutex_unlock(&qemu_mutex);
+
     return 0;
 }
 
