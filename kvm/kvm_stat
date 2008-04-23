@@ -4,11 +4,17 @@ import curses
 import sys, os, time, optparse
 
 class Stats:
-    def __init__(self):
+    def __init__(self, fields = None):
+        def wanted(key):
+            import re
+            if not fields:
+                return True
+            return re.match(fields, key) != None
         self.base = '/sys/kernel/debug/kvm'
         self.values = {}
         for key in os.listdir(self.base):
-            self.values[key] = None
+            if wanted(key):
+                self.values[key] = None
     def get(self):
         for key, oldval in self.values.iteritems():
             newval = int(file(self.base + '/' + key).read())
@@ -25,8 +31,6 @@ if not os.access('/sys/kernel/debug/kvm', os.F_OK):
     print "Please mount debugfs ('mount -t debugfs debugfs /sys/kernel/debug')"
     print "and ensure the kvm modules are loaded"
     sys.exit(1)
-
-stats = Stats()
 
 label_width = 20
 number_width = 10
@@ -106,7 +110,15 @@ options.add_option('-l', '--log',
                    dest = 'log',
                    help = 'run in logging mode (like vmstat)',
                    )
+options.add_option('-f', '--fields',
+                   action = 'store',
+                   default = None,
+                   dest = 'fields',
+                   help = 'fields to display (regex)',
+                   )
 (options, args) = options.parse_args(sys.argv)
+
+stats = Stats(fields = options.fields)
 
 if options.log:
     log(stats)
