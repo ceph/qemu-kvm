@@ -73,6 +73,26 @@ def batch(stats):
         values = s[key]
         print '%-22s%10d%10d' % (key, values[0], values[1])
 
+def log(stats):
+    keys = sorted(stats.get().iterkeys())
+    def banner():
+        for k in keys:
+            print '%10s' % k[0:9],
+        print
+    def statline():
+        s = stats.get()
+        for k in keys:
+            print ' %9d' % s[k][1],
+        print
+    line = 0
+    banner_repeat = 20
+    while True:
+        time.sleep(1)
+        if line % banner_repeat == 0:
+            banner()
+        statline()
+        line += 1
+
 options = optparse.OptionParser()
 options.add_option('-1', '--once', '--batch',
                    action = 'store_true',
@@ -80,9 +100,17 @@ options.add_option('-1', '--once', '--batch',
                    dest = 'once',
                    help = 'run in batch mode for one second',
                    )
+options.add_option('-l', '--log',
+                   action = 'store_true',
+                   default = False,
+                   dest = 'log',
+                   help = 'run in logging mode (like vmstat)',
+                   )
 (options, args) = options.parse_args(sys.argv)
 
-if not options.once:
+if options.log:
+    log(stats)
+elif not options.once:
     import curses.wrapper
     curses.wrapper(tui, stats)
 else:
