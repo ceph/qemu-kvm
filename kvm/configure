@@ -81,10 +81,7 @@ done
 
 
 #set kenel directory
-libkvm_kerneldir="$kerneldir"
-if (( want_module )); then
-    libkvm_kerneldir=$(readlink -f kernel)
-fi
+libkvm_kerneldir=$(readlink -f kernel)
 
 #if arch is an x86 arch set to i386
 if [[ $arch = i?86 ]]; then
