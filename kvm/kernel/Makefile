@@ -17,12 +17,11 @@ _hack = mv $1 $1.orig && \
 	gawk -v version=$(version) -f hack-module.awk $1.orig \
 	    | sed '/\#include/! s/\blapic\b/l_apic/g' > $1 && rm $1.orig
 
-_unifdef = mv $1 $1.orig && \
+unifdef = mv $1 $1.orig && \
 	  unifdef -DCONFIG_X86 $1.orig > $1; \
           [ $$? -le 1 ] && rm $1.orig
 
 hack = $(call _hack,$T/$(strip $1))
-unifdef = $(call _unifdef,$T/$(strip $1))
 
 all::
 #	include header priority 1) $LINUX 2) $KERNELDIR 3) include-compat
@@ -39,20 +38,19 @@ header-sync:
 	rm -rf $T
 	rsync -R \
 	     "$(LINUX)"/./include/linux/kvm*.h \
-	     "$(LINUX)"/./include/asm-x86/kvm*.h \
+	     "$(LINUX)"/./include/asm-*/kvm*.h \
              $T/
-	mkdir -p include/linux include/asm-x86
+
+	set -e && for i in $(find $T -name '*.h'); do \
+		$(call unifdef,$$i); done
+	$(call hack, include/linux/kvm.h)
+	set -e && for i in $$(find $T -type f -printf '%P '); \
+		do mkdir -p $$(dirname $$i); cmp -s $$i $T/$$i || cp $T/$$i $$i; done
+	rm -rf $T
+
+	rm -f include/asm
 	ln -sf asm-x86 include/asm
 	ln -sf asm-x86 include-compat/asm
-
-	$(call unifdef, include/linux/kvm.h)
-	$(call unifdef, include/linux/kvm_para.h)
-	$(call unifdef, include/asm-x86/kvm.h)
-	$(call unifdef, include/asm-x86/kvm_para.h)
-	$(call hack, include/linux/kvm.h)
-	for i in $$(find $T -type f -printf '%P '); \
-		do cmp -s $$i $T/$$i || cp $T/$$i $$i; done
-	rm -rf $T
 
 source-sync:
 	rm -rf $T
