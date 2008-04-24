@@ -31,6 +31,7 @@ int kvm_smp_call_function_single(int cpu, void (*func)(void *info),
 	struct scfs_thunk_info thunk;
 
 	this_cpu = get_cpu();
+	WARN_ON(irqs_disabled());
 	if (cpu == this_cpu) {
 		r = 0;
 		local_irq_disable();
@@ -63,6 +64,7 @@ int kvm_smp_call_function_single(int cpu, void (*func)(void *info),
 	int this_cpu, r;
 
 	this_cpu = get_cpu();
+	WARN_ON(irqs_disabled());
 	if (cpu == this_cpu) {
 		r = 0;
 		local_irq_disable();
@@ -151,6 +153,7 @@ int kvm_smp_call_function_mask(cpumask_t mask,
 	int me;
 
 	me = get_cpu();
+	WARN_ON(irqs_disabled());
 	allbutself = cpu_online_map;
 	cpu_clear(me, allbutself);
 
