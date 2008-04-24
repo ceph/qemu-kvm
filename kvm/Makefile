@@ -5,6 +5,8 @@ DESTDIR=
 
 rpmrelease = devel
 
+sane-arch = $(subst i386,x86,$(subst x86_64,x86,$(ARCH)))
+
 .PHONY: kernel user libkvm qemu bios vgabios extboot clean libfdt
 
 all: libkvm qemu
@@ -25,6 +27,15 @@ ifneq '$(filter $(ARCH), powerpc)' ''
     qemu: libfdt
 endif
 user: libkvm
+
+user libkvm qemu: header-sync-$(if $(WANT_MODULE),n,y)
+
+header-sync-n:
+
+header-sync-y:
+	make -C kernel LINUX=$(KERNELDIR) header-sync
+	rm -f kernel/include/asm
+	ln -sf asm-$(sane-arch) kernel/include/asm
 
 bios:
 	$(MAKE) -C $@
