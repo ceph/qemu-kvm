@@ -360,80 +360,8 @@ typedef _Bool bool;
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
 
-#include <linux/smp.h>
-
-struct kvm_call_data_struct {
-	void (*func) (void *info);
-	void *info;
-	atomic_t started;
-	atomic_t finished;
-	int wait;
-};
-
-static void kvm_ack_smp_call(void *_data)
-{
-	struct kvm_call_data_struct *data = _data;
-	/* if wait == 0, data can be out of scope
-	 * after atomic_inc(info->started)
-	 */
-	void (*func) (void *info) = data->func;
-	void *info = data->info;
-	int wait = data->wait;
-
-	smp_mb();
-	atomic_inc(&data->started);
-	(*func)(info);
-	if (wait) {
-		smp_mb();
-		atomic_inc(&data->finished);
-	}
-}
-
-static inline int kvm_smp_call_function_mask(cpumask_t mask,
-	void (*func) (void *info), void *info, int wait)
-{
-	struct kvm_call_data_struct data;
-	cpumask_t allbutself;
-	int cpus;
-	int cpu;
-	int me;
-
-	me = get_cpu();
-	allbutself = cpu_online_map;
-	cpu_clear(me, allbutself);
-
-	cpus_and(mask, mask, allbutself);
-	cpus = cpus_weight(mask);
-
-	if (!cpus)
-		goto out;
-
-	data.func = func;
-	data.info = info;
-	atomic_set(&data.started, 0);
-	data.wait = wait;
-	if (wait)
-		atomic_set(&data.finished, 0);
-
-	for (cpu = first_cpu(mask); cpu != NR_CPUS; cpu = next_cpu(cpu, mask))
-		smp_call_function_single(cpu, kvm_ack_smp_call, &data, 1, 0);
-
-	while (atomic_read(&data.started) != cpus) {
-		cpu_relax();
-		barrier();
-	}
-
-	if (!wait)
-		goto out;
-
-	while (atomic_read(&data.finished) != cpus) {
-		cpu_relax();
-		barrier();
-	}
-out:
-	put_cpu();
-	return 0;
-}
+int kvm_smp_call_function_mask(cpumask_t mask, void (*func) (void *info),
+			       void *info, int wait);
 
 #define smp_call_function_mask kvm_smp_call_function_mask
 
