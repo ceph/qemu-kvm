@@ -77,3 +77,32 @@ int kvm_smp_call_function_single(int cpu, void (*func)(void *info),
 #define smp_call_function_single kvm_smp_call_function_single
 
 #endif
+
+/* div64_64 is fairly new */
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,21)
+
+#ifndef CONFIG_64BIT
+
+/* 64bit divisor, dividend and result. dynamic precision */
+uint64_t div64_64(uint64_t dividend, uint64_t divisor)
+{
+	uint32_t high, d;
+
+	high = divisor >> 32;
+	if (high) {
+		unsigned int shift = fls(high);
+
+		d = divisor >> shift;
+		dividend >>= shift;
+	} else
+		d = divisor;
+
+	do_div(dividend, d);
+
+	return dividend;
+}
+
+#endif
+
+#endif
+
