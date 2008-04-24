@@ -332,24 +332,7 @@ static inline uint64_t div64_64(uint64_t dividend, uint64_t divisor)
 
 #else
 
-/* 64bit divisor, dividend and result. dynamic precision */
-static inline uint64_t div64_64(uint64_t dividend, uint64_t divisor)
-{
-	uint32_t high, d;
-
-	high = divisor >> 32;
-	if (high) {
-		unsigned int shift = fls(high);
-
-		d = divisor >> shift;
-		dividend >>= shift;
-	} else
-		d = divisor;
-
-	do_div(dividend, d);
-
-	return dividend;
-}
+uint64_t div64_64(uint64_t dividend, uint64_t divisor);
 
 #endif
 
