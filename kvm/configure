@@ -2,6 +2,9 @@
 
 prefix=/usr/local
 kerneldir=/lib/modules/$(uname -r)/build
+cc=cc
+ld=ld
+objcopy=objcopy
 want_module=1
 qemu_cc=
 qemu_cflags=
@@ -128,4 +131,7 @@ PREFIX=$prefix
 KERNELDIR=$kerneldir
 WANT_MODULE=$want_module
 CROSS_COMPILE=$cross_prefix
+CC=$cross_prefix$cc
+LD=$cross_prefix$ld
+OBJCOPY=$cross_prefix$objcopy
 EOF

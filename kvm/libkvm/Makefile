@@ -1,5 +1,4 @@
 include ../config.mak
-include ../user/config.mak
 include config-$(ARCH).mak
 
 # cc-option
