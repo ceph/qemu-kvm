@@ -249,6 +249,7 @@ kvm_context_t kvm_init(struct kvm_callbacks *callbacks,
 	kvm->opaque = opaque;
 	kvm->dirty_pages_log_all = 0;
 	kvm->no_irqchip_creation = 0;
+	kvm->no_pit_creation = 0;
 
 	return kvm;
  out_close:
