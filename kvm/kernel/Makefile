@@ -34,7 +34,8 @@ all::
 #	include header priority 1) $LINUX 2) $KERNELDIR 3) include-compat
 	$(MAKE) -C $(KERNELDIR) M=`pwd` \
 		LINUXINCLUDE="-I`pwd`/include -Iinclude -I`pwd`/include-compat \
-		-include include/linux/autoconf.h" \
+		-include include/linux/autoconf.h \
+		-include `pwd`/external-module-compat.h"
 		"$$@"
 
 sync: header-sync source-sync
