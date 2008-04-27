@@ -9,7 +9,7 @@ cc-option = $(shell if $(CC) $(1) -S -o /dev/null -xc /dev/null \
 CFLAGS += $(autodepend-flags) -g -fomit-frame-pointer -Wall
 CFLAGS += $(call cc-option, -fno-stack-protector, "")
 CFLAGS += $(call cc-option, -fno-stack-protector-all, "")
-CFLAGS += -I $(KERNELDIR)/include
+CFLAGS += -I $(LIBKVM_KERNELDIR)/include
 
 LDFLAGS += $(CFLAGS)
 
@@ -25,9 +25,9 @@ libkvm.a: libkvm.o $(libkvm-$(ARCH)-objs)
 
 install:
 	install -D libkvm.h $(DESTDIR)/$(PREFIX)/include/libkvm.h
-	install -D $(KERNELDIR)/include/linux/kvm.h \
+	install -D $(LIBKVM_KERNELDIR)/include/linux/kvm.h \
 		$(DESTDIR)/$(PREFIX)/include/linux/kvm.h
-	install -D $(KERNELDIR)/include/linux/kvm_para.h \
+	install -D $(LIBKVM_KERNELDIR)/include/linux/kvm_para.h \
 		$(DESTDIR)/$(PREFIX)/include/linux/kvm_para.h
 	install -D libkvm.a $(DESTDIR)/$(PREFIX)/$(LIBDIR)/libkvm.a
 

@@ -129,6 +129,7 @@ cat <<EOF > config.mak
 ARCH=$arch
 PREFIX=$prefix
 KERNELDIR=$kerneldir
+LIBKVM_KERNELDIR=$libkvm_kerneldir
 WANT_MODULE=$want_module
 CROSS_COMPILE=$cross_prefix
 CC=$cross_prefix$cc
