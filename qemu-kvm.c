@@ -32,7 +32,11 @@ static int qemu_kvm_reset_requested;
 
 pthread_mutex_t qemu_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t qemu_aio_cond = PTHREAD_COND_INITIALIZER;
+pthread_cond_t qemu_vcpu_cond = PTHREAD_COND_INITIALIZER;
+pthread_cond_t qemu_system_cond = PTHREAD_COND_INITIALIZER;
 __thread struct vcpu_info *vcpu;
+
+static int qemu_system_ready;
 
 struct qemu_kvm_signal_table {
     sigset_t sigset;
@@ -53,6 +57,7 @@ struct vcpu_info {
     int stop;
     int stopped;
     int reload_regs;
+    int created;
 } vcpu_info[256];
 
 pthread_t io_thread;
@@ -324,6 +329,7 @@ static int kvm_main_loop_cpu(CPUState *env)
     struct vcpu_info *info = &vcpu_info[env->cpu_index];
 
     setup_kernel_sigmask(env);
+
     pthread_mutex_lock(&qemu_mutex);
     if (kvm_irqchip_in_kernel(kvm_context))
 	env->hflags &= ~HF_HALTED_MASK;
@@ -370,6 +376,17 @@ static void *ap_main_loop(void *_env)
     sigprocmask(SIG_BLOCK, &signals, NULL);
     kvm_create_vcpu(kvm_context, env->cpu_index);
     kvm_qemu_init_env(env);
+
+    /* signal VCPU creation */
+    pthread_mutex_lock(&qemu_mutex);
+    vcpu->created = 1;
+    pthread_cond_signal(&qemu_vcpu_cond);
+
+    /* and wait for machine initialization */
+    while (!qemu_system_ready)
+	pthread_cond_wait(&qemu_system_cond, &qemu_mutex);
+    pthread_mutex_unlock(&qemu_mutex);
+
     kvm_main_loop_cpu(env);
     return NULL;
 }
@@ -389,8 +406,9 @@ static void kvm_add_signal(struct qemu_kvm_signal_table *sigtab, int signum)
 void kvm_init_new_ap(int cpu, CPUState *env)
 {
     pthread_create(&vcpu_info[cpu].thread, NULL, ap_main_loop, env);
-    /* FIXME: wait for thread to spin up */
-    usleep(200);
+
+    while (vcpu_info[cpu].created == 0)
+	pthread_cond_wait(&qemu_vcpu_cond, &qemu_mutex);
 }
 
 static void qemu_kvm_init_signal_tables(void)
@@ -435,7 +453,11 @@ void qemu_kvm_notify_work(void)
 int kvm_main_loop(void)
 {
     io_thread = pthread_self();
+    qemu_system_ready = 1;
     pthread_mutex_unlock(&qemu_mutex);
+
+    pthread_cond_broadcast(&qemu_system_cond);
+
     while (1) {
         kvm_eat_signal(&io_signal_table, NULL, 1000);
         pthread_mutex_lock(&qemu_mutex);
