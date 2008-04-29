@@ -405,11 +405,12 @@ static void generate_bootsect(uint32_t gpr[8], uint16_t segs[6], uint16_t ip)
 {
     uint8_t bootsect[512], *p;
     int i;
-    int hda;
+    int hda = extboot_drive;
 
-    hda = drive_get_index(IF_IDE, 0, 0);
+    if (hda == -1)
+      hda = drive_get_index(IF_IDE, 0, 0);
     if (hda == -1) {
-	fprintf(stderr, "A disk image must be given for 'hda' when booting "
+	fprintf(stderr, "-hda or -drive boot=on must be given when booting "
 		"a Linux kernel\n");
 	exit(1);
     }
