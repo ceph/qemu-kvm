@@ -24,6 +24,7 @@ void ppc440ep_init(CPUState *env,
 		target_phys_addr_t ram_bases[2],
 		target_phys_addr_t ram_sizes[2],
 		qemu_irq **picp,
+		ppc4xx_pci_t **pcip,
 		int do_init);
 
 #endif

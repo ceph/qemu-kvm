@@ -9,6 +9,11 @@
  */
 
 #include "config.h"
+#include "qemu-common.h"
+#include "net.h"
+#include "hw.h"
+#include "pci.h"
+#include "sysemu.h"
 #include "ppc440.h"
 #include "qemu-kvm.h"
 #include "device_tree.h"
@@ -26,7 +31,9 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 {
 	char *buf=NULL;
 	target_phys_addr_t ram_bases[4], ram_sizes[4];
+	NICInfo *nd;
 	qemu_irq *pic;
+	ppc4xx_pci_t *pci;
 	CPUState *env;
 	target_ulong ep=0;
 	target_ulong la=0;
@@ -77,7 +84,7 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 
 	/* call init */
 	printf("Calling function ppc440_init\n");
-	ppc440ep_init(env, ram_bases, ram_sizes, &pic,1);
+	ppc440ep_init(env, ram_bases, ram_sizes, &pic, &pci, 1);
 	printf("Done calling ppc440_init\n");
 
 	/* Register mem */
@@ -166,6 +173,25 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 		env->gpr[3] = dt_base;
 #endif
 		env->nip = ep;
+	}
+
+	if (pci) {
+		int unit_id = 0;
+
+		/* Add virtio block devices. */
+		while ((i = drive_get_index(IF_VIRTIO, 0, unit_id)) != -1) {
+			virtio_blk_init(pci->bus, 0x1AF4, 0x1001,
+				drives_table[i].bdrv);
+			unit_id++;
+		}
+
+		/* Register network interfaces. */
+		for (i = 0; i < nb_nics; i++) {
+			nd = &nd_table[i];
+			if (!nd->model)
+				nd->model = "virtio";
+			pci_nic_init(pci->bus, nd, -1);
+		}
 	}
 
 	printf("%s: DONE\n", __func__);

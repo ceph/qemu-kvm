@@ -8,17 +8,32 @@
  *
  */
 
+
+#include "hw.h"
+#include "hw/isa.h"
 #include "ppc440.h"
+
+#define PPC440EP_PCI_CONFIG 0xeec00000
+#define PPC440EP_PCI_INTACK 0xeed00000
+#define PPC440EP_PCI_SPECIAL 0xeed00000
+#define PPC440EP_PCI_REGS 0xef400000
+#define PPC440EP_PCI_IO 0xe8000000
+#define PPC440EP_PCI_IOLEN 0x10000
+#define PPC440EP_PCI_MEM 0xa0000000
+#define PPC440EP_PCI_MEMLEN 0x20000000
+
 
 void ppc440ep_init(CPUState *env,
 		target_phys_addr_t ram_bases[2],
 		target_phys_addr_t ram_sizes[2],
 		qemu_irq **picp,
+		ppc4xx_pci_t **pcip,
 		int do_init)
 {
 	ppc4xx_mmio_t *mmio;
 	qemu_irq *pic, *irqs;
 	ram_addr_t offset;
+	ppc4xx_pci_t *pci;
 	int i;
 
 	ppc_dcr_init(env, NULL, NULL);
@@ -44,6 +59,18 @@ void ppc440ep_init(CPUState *env,
 	offset = 0;
 	for (i = 0; i < 2; i++)
 		offset += ram_sizes[i];
+
+	/* PCI */
+	pci = ppc4xx_pci_init(env, pic,
+	                      PPC440EP_PCI_CONFIG,
+	                      PPC440EP_PCI_INTACK,
+	                      PPC440EP_PCI_SPECIAL,
+	                      PPC440EP_PCI_REGS);
+	if (!pci)
+		printf("couldn't create PCI controller!\n");
+	*pcip = pci;
+
+	isa_mmio_init(PPC440EP_PCI_IO, PPC440EP_PCI_IOLEN);
 
 	/* serial ports on page 126 of 440EP user manual */
 	if (serial_hds[0]) {
