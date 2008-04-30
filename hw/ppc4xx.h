@@ -3,6 +3,9 @@
  *
  * Copyright (c) 2007 Jocelyn Mayer
  *
+ * Copyright 2008 IBM Corp.
+ * Authors: Hollis Blanchard <hollisb@us.ibm.com>
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
@@ -45,5 +48,42 @@ enum {
 };
 qemu_irq *ppcuic_init (CPUState *env, qemu_irq *irqs,
                        uint32_t dcr_base, int has_ssr, int has_vr);
+
+
+struct pci_master_map {
+    uint32_t la;
+    uint32_t ma;
+    uint32_t pcila;
+    uint32_t pciha;
+};
+
+struct pci_target_map {
+    uint32_t ms;
+    uint32_t la;
+    uint32_t bar;
+};
+
+#define PPC44x_PCI_NR_PMMS 3
+#define PPC44x_PCI_NR_PTMS 2
+
+struct ppc4xx_pci_t {
+    target_phys_addr_t config_space;
+    target_phys_addr_t registers;
+    struct pci_master_map pmm[PPC44x_PCI_NR_PMMS];
+    struct pci_target_map ptm[PPC44x_PCI_NR_PTMS];
+
+    unsigned int pmm_offset_flags;
+    qemu_irq *pic;
+
+    uint32_t pcic0_cfgaddr;
+    PCIBus *bus;
+};
+typedef struct ppc4xx_pci_t ppc4xx_pci_t;
+
+ppc4xx_pci_t *ppc4xx_pci_init(CPUState *env, qemu_irq *pic,
+                              target_phys_addr_t config_space,
+                              target_phys_addr_t int_ack,
+                              target_phys_addr_t special_cycle,
+                              target_phys_addr_t registers);
 
 #endif /* !defined(PPC_4XX_H) */
