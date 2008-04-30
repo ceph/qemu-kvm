@@ -168,11 +168,11 @@ int kvm_arch_try_push_interrupts(void *opaque)
     int r;
     unsigned irq;
 
+    /* PowerPC Qemu tracks the various core input pins (interrupt, critical
+     * interrupt, reset, etc) in PPC-specific env->irq_input_state. */
     if (env->ready_for_interrupt_injection &&
-        (env->interrupt_request & CPU_INTERRUPT_HARD))
+        (env->irq_input_state & (1<<PPC40x_INPUT_INT)))
        {
-            env->interrupt_request &= ~CPU_INTERRUPT_HARD;
-
             /* For now KVM disregards the 'irq' argument. However, in the
              * future KVM could cache it in-kernel to avoid a heavyweight exit
              * when reading the UIC.
@@ -184,7 +184,10 @@ int kvm_arch_try_push_interrupts(void *opaque)
                 printf("cpu %d fail inject %x\n", env->cpu_index, irq);
     }
 
-    return (env->interrupt_request & CPU_INTERRUPT_HARD) != 0;
+    /* We don't know if there are more interrupts pending after this. However,
+     * the guest will return to userspace in the course of handling this one
+     * anyways, so we will get a chance to deliver the rest. */
+    return 0;
 }
 
 void kvm_arch_update_regs_for_sipi(CPUState *env)
