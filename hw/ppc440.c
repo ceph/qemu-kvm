@@ -39,6 +39,7 @@ void ppc440ep_init(CPUState *env,
 
 	/* SDRAM controller */
 	printf("trying to setup sdram controller\n");
+	/* XXX 440EP's ECC interrupts are on UIC1 */
 	ppc405_sdram_init(env, pic[14], 2, ram_bases, ram_sizes, do_init);
 	offset = 0;
 	for (i = 0; i < 2; i++)
@@ -47,10 +48,10 @@ void ppc440ep_init(CPUState *env,
 	/* serial ports on page 126 of 440EP user manual */
 	if (serial_hds[0]) {
 		printf("Initializing first serial port\n");
-		ppc405_serial_init(env, mmio,0x300, pic[31], serial_hds[0]);
+		ppc405_serial_init(env, mmio,0x300, pic[0], serial_hds[0]);
 	}
 	if (serial_hds[1]) {
 		printf("Initializing 2nd serial port\n");
-		ppc405_serial_init(env, mmio,0x400, pic[30], serial_hds[1]);
+		ppc405_serial_init(env, mmio,0x400, pic[1], serial_hds[1]);
 	}
 }
