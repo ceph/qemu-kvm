@@ -22,3 +22,4 @@
 0x00020012  %(tsc)d (+%(reltsc)8d)  CLTS          vcpu = 0x%(vcpu)08x  pid = 0x%(pid)08x
 0x00020013  %(tsc)d (+%(reltsc)8d)  LMSW          vcpu = 0x%(vcpu)08x  pid = 0x%(pid)08x [ value = 0x%(1)08x ]
 0x00020014  %(tsc)d (+%(reltsc)8d)  APIC_ACCESS   vcpu = 0x%(vcpu)08x  pid = 0x%(pid)08x [ offset = 0x%(1)08x ]
+0x00020015  %(tsc)d (+%(reltsc)8d)  TDP_FAULT     vcpu = 0x%(vcpu)08x  pid = 0x%(pid)08x [ errorcode = 0x%(1)08x, virt = 0x%(3)08x %(2)08x ]
