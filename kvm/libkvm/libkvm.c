@@ -368,7 +368,7 @@ void kvm_create_irqchip(kvm_context_t kvm)
 			if (r >= 0)
 				kvm->irqchip_in_kernel = 1;
 			else
-				printf("Create kernel PIC irqchip failed\n");
+				fprintf(stderr, "Create kernel PIC irqchip failed\n");
 		}
 	}
 #endif
@@ -877,7 +877,7 @@ again:
 	if (r == -1 && errno != EINTR && errno != EAGAIN) {
 		r = -errno;
 		post_kvm_run(kvm, vcpu);
-		printf("kvm_run: %s\n", strerror(-r));
+		fprintf(stderr, "kvm_run: %s\n", strerror(-r));
 		return r;
 	}
 

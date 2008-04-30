@@ -117,7 +117,7 @@ static int kvm_init_tss(kvm_context_t kvm)
 		 */
 		r = kvm_set_tss_addr(kvm, 0xfffbd000);
 		if (r < 0) {
-			printf("kvm_init_tss: unable to set tss addr\n");
+			fprintf(stderr, "kvm_init_tss: unable to set tss addr\n");
 			return r;
 		}
 
@@ -157,7 +157,7 @@ int kvm_create_pit(kvm_context_t kvm)
 			if (r >= 0)
 				kvm->pit_in_kernel = 1;
 			else {
-				printf("Create kernel PIC irqchip failed\n");
+				fprintf(stderr, "Create kernel PIC irqchip failed\n");
 				return r;
 			}
 		}
