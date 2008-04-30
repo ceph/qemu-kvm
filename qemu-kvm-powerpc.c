@@ -199,13 +199,17 @@ void kvm_arch_update_regs_for_sipi(CPUState *env)
 int handle_powerpc_dcr_read(int vcpu, uint32_t dcrn, uint32_t *data)
 {
     CPUState *env = cpu_single_env;
-    ppc_dcr_read(env->dcr_env, dcrn, data);
+    if (ppc_dcr_read(env->dcr_env, dcrn, data) < 0)
+        fprintf(stderr, "Read to unhandled DCR (0x%x)\n", dcrn);
+
     return 0; /* XXX ignore failed DCR ops */
 }
 
 int handle_powerpc_dcr_write(int vcpu, uint32_t dcrn, uint32_t data)
 {
     CPUState *env = cpu_single_env;
-    ppc_dcr_write(env->dcr_env, dcrn, data);
+    if (ppc_dcr_write(env->dcr_env, dcrn, data) < 0)
+        fprintf(stderr, "Write to unhandled DCR (0x%x)\n", dcrn);
+
     return 0; /* XXX ignore failed DCR ops */
 }
