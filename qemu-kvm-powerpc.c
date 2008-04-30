@@ -19,6 +19,7 @@
 #include "hw/hw.h"
 #include "sysemu.h"
 #include "cpu.h"
+#include "exec-all.h"
 #include "helper_regs.h"
 
 #include "qemu-kvm.h"
