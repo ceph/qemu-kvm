@@ -2,7 +2,7 @@
 
 prefix=/usr/local
 kerneldir=/lib/modules/$(uname -r)/build
-cc=cc
+cc=gcc
 ld=ld
 objcopy=objcopy
 want_module=1
