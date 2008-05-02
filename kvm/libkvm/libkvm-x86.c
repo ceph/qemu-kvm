@@ -393,14 +393,14 @@ int kvm_set_pit(kvm_context_t kvm, struct kvm_pit_state *s)
 
 void kvm_show_code(kvm_context_t kvm, int vcpu)
 {
-#define CR0_PE_MASK	(1ULL<<0)
+#define SHOW_CODE_LEN 50
 	int fd = kvm->vcpu_fd[vcpu];
 	struct kvm_regs regs;
 	struct kvm_sregs sregs;
-	int r;
-	unsigned char code[50];
+	int r, n;
 	int back_offset;
-	char code_str[sizeof(code) * 3 + 1];
+	unsigned char code;
+	char code_str[SHOW_CODE_LEN * 3 + 1];
 	unsigned long rip;
 
 	r = ioctl(fd, KVM_GET_SREGS, &sregs);
@@ -408,9 +408,6 @@ void kvm_show_code(kvm_context_t kvm, int vcpu)
 		perror("KVM_GET_SREGS");
 		return;
 	}
-	if (sregs.cr0 & CR0_PE_MASK)
-		return;
-
 	r = ioctl(fd, KVM_GET_REGS, &regs);
 	if (r == -1) {
 		perror("KVM_GET_REGS");
@@ -420,12 +417,16 @@ void kvm_show_code(kvm_context_t kvm, int vcpu)
 	back_offset = regs.rip;
 	if (back_offset > 20)
 	    back_offset = 20;
-	memcpy(code, kvm->physical_memory + rip - back_offset, sizeof code);
 	*code_str = 0;
-	for (r = 0; r < sizeof code; ++r) {
-	    	if (r == back_offset)
+	for (n = -back_offset; n < SHOW_CODE_LEN-back_offset; ++n) {
+		if (n == 0)
 			strcat(code_str, " -->");
-		sprintf(code_str + strlen(code_str), " %02x", code[r]);
+		r = kvm->callbacks->mmio_read(kvm->opaque, rip + n, &code, 1);
+		if (r < 0) {
+			strcat(code_str, " xx");
+			continue;
+		}
+		sprintf(code_str + strlen(code_str), " %02x", code);
 	}
 	fprintf(stderr, "code:%s\n", code_str);
 }
