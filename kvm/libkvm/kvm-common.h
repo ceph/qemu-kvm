@@ -39,8 +39,6 @@ struct kvm_context {
 	/// Callbacks that KVM uses to emulate various unvirtualizable functionality
 	struct kvm_callbacks *callbacks;
 	void *opaque;
-	/// A pointer to the memory used as the physical memory for the guest
-	void *physical_memory;
 	/// is dirty pages logging enabled for all regions or not
 	int dirty_pages_log_all;
 	/// do not create in-kernel irqchip if set

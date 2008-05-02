@@ -341,7 +341,6 @@ static int kvm_create_default_phys_mem(kvm_context_t kvm,
 	if (r < 0)
 		return r;
 
-	kvm->physical_memory = *vm_mem;
 	return 0;
 }
 
@@ -548,9 +547,6 @@ int kvm_register_userspace_phys_mem(kvm_context_t kvm,
 		.flags = log ? KVM_MEM_LOG_DIRTY_PAGES : 0,
 	};
 	int r;
-
-	if (!kvm->physical_memory)
-		kvm->physical_memory = userspace_addr - phys_start;
 
 	memory.slot = get_free_slot(kvm);
 	r = ioctl(kvm->vm_fd, KVM_SET_USER_MEMORY_REGION, &memory);
