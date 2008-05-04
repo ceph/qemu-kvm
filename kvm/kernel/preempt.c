@@ -14,18 +14,16 @@ static LIST_HEAD(pn_list);
 	} while (0)
 
 #if !defined(CONFIG_X86_64) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25))
-#define COMPAT_DEBUGREG
+#define debugreg(x) debugreg[x]
+#else
+#define debugreg(x) debugreg##x
 #endif
 
 static void preempt_enable_sched_out_notifiers(void)
 {
 	asm volatile ("mov %0, %%db0" : : "r"(schedule));
 	asm volatile ("mov %0, %%db7" : : "r"(0x701ul));
-#ifndef COMPAT_DEBUGREG
-	current->thread.debugreg7 = 0ul;
-#else
-	current->thread.debugreg[7] = 0ul;
-#endif
+	current->thread.debugreg(7) = 0ul;
 #ifdef TIF_DEBUG
 	clear_tsk_thread_flag(current, TIF_DEBUG);
 #endif
@@ -35,13 +33,8 @@ static void preempt_enable_sched_in_notifiers(void * addr)
 {
 	asm volatile ("mov %0, %%db0" : : "r"(addr));
 	asm volatile ("mov %0, %%db7" : : "r"(0x701ul));
-#ifndef COMPAT_DEBUGREG
-	current->thread.debugreg0 = (unsigned long) addr;
-	current->thread.debugreg7 = 0x701ul;
-#else
-	current->thread.debugreg[0] = (unsigned long) addr;
-	current->thread.debugreg[7] = 0x701ul;
-#endif
+	current->thread.debugreg(0) = (unsigned long) addr;
+	current->thread.debugreg(7) = 0x701ul;
 #ifdef TIF_DEBUG
 	set_tsk_thread_flag(current, TIF_DEBUG);
 #endif
@@ -61,11 +54,7 @@ static void __preempt_disable_notifiers(void)
 static void preempt_disable_notifiers(void)
 {
 	__preempt_disable_notifiers();
-#ifndef COMPAT_DEBUGREG
-	current->thread.debugreg7 = 0ul;
-#else
-	current->thread.debugreg[7] = 0ul;
-#endif
+	current->thread.debugreg(7) = 0ul;
 #ifdef TIF_DEBUG
 	clear_tsk_thread_flag(current, TIF_DEBUG);
 #endif
@@ -247,11 +236,7 @@ static void do_disable(void *blah)
 #ifdef TIF_DEBUG
 	if (!test_tsk_thread_flag(current, TIF_DEBUG))
 #else
-#ifndef COMPAT_DEBUGREG
-	if (!current->thread.debugreg7)
-#else
-	if (!current->thread.debugreg[7])
-#endif
+	if (!current->thread.debugreg(7))
 #endif
 		__preempt_disable_notifiers();
 }
