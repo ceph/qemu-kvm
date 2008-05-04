@@ -325,19 +325,21 @@ static inline void preempt_notifier_sys_exit(void) {}
 #define HRTIMER_MODE_ABS HRTIMER_ABS
 #endif
 
-/* div64_64 is fairly new */
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,21)
+/* div64_u64 is fairly new */
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,26)
+
+#define div64_u64 kvm_div64_u64
 
 #ifdef CONFIG_64BIT
 
-static inline uint64_t div64_64(uint64_t dividend, uint64_t divisor)
+static inline uint64_t div64_u64(uint64_t dividend, uint64_t divisor)
 {
 	return dividend / divisor;
 }
 
 #else
 
-uint64_t div64_64(uint64_t dividend, uint64_t divisor);
+uint64_t div64_u64(uint64_t dividend, uint64_t divisor);
 
 #endif
 

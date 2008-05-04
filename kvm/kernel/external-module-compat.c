@@ -86,7 +86,7 @@ int kvm_smp_call_function_single(int cpu, void (*func)(void *info),
 #ifndef CONFIG_64BIT
 
 /* 64bit divisor, dividend and result. dynamic precision */
-uint64_t div64_64(uint64_t dividend, uint64_t divisor)
+uint64_t div64_u64(uint64_t dividend, uint64_t divisor)
 {
 	uint32_t high, d;
 
