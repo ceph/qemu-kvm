@@ -69,9 +69,6 @@ static struct dentry_operations anon_inodefs_dentry_operations = {
  *                    anonymous inode, and a dentry that describe the "class"
  *                    of the file
  *
- * @pfd:     [out]   pointer to the file descriptor
- * @dpinode: [out]   pointer to the inode
- * @pfile:   [out]   pointer to the file struct
  * @name:    [in]    name of the "class" of the new file
  * @fops     [in]    file operations for the new file
  * @priv     [in]    private data for the new file (will be file's private_data)
@@ -80,10 +77,9 @@ static struct dentry_operations anon_inodefs_dentry_operations = {
  * that do not need to have a full-fledged inode in order to operate correctly.
  * All the files created with anon_inode_getfd() will share a single inode, by
  * hence saving memory and avoiding code duplication for the file/inode/dentry
- * setup.
+ * setup. Returns new descriptor or -error.
  */
-int anon_inode_getfd(int *pfd, struct inode **pinode, struct file **pfile,
-		     const char *name, const struct file_operations *fops,
+int anon_inode_getfd(const char *name, const struct file_operations *fops,
 		     void *priv)
 {
 	struct qstr this;
@@ -138,10 +134,7 @@ int anon_inode_getfd(int *pfd, struct inode **pinode, struct file **pfile,
 
 	fd_install(fd, file);
 
-	*pfd = fd;
-	*pinode = inode;
-	*pfile = file;
-	return 0;
+	return fd;
 
 err_put_unused_fd:
 	put_unused_fd(fd);

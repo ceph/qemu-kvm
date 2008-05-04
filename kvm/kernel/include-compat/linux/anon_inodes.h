@@ -8,8 +8,9 @@
 #ifndef _LINUX_ANON_INODES_H
 #define _LINUX_ANON_INODES_H
 
-int anon_inode_getfd(int *pfd, struct inode **pinode, struct file **pfile,
-		     const char *name, const struct file_operations *fops,
+struct file_operations;
+
+int anon_inode_getfd(const char *name, const struct file_operations *fops,
 		     void *priv);
 
 #endif /* _LINUX_ANON_INODES_H */

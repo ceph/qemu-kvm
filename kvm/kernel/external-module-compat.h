@@ -137,9 +137,14 @@ int kvm_smp_call_function_single(int cpu, void (*func)(void *info),
  */
 #include <asm/system.h>
 
+struct inode;
+#include <linux/anon_inodes.h>
 #define anon_inode_getfd kvm_anon_inode_getfd
 int kvm_init_anon_inodes(void);
 void kvm_exit_anon_inodes(void);
+int anon_inode_getfd(const char *name,
+		     const struct file_operations *fops,
+		     void *priv);
 
 #include <linux/smp.h>
 
