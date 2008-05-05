@@ -177,7 +177,7 @@ static void ref405ep_fpga_init (uint32_t base)
     }
 }
 
-static void ref405ep_init (int ram_size, int vga_ram_size,
+static void ref405ep_init (ram_addr_t ram_size, int vga_ram_size,
                            const char *boot_device, DisplayState *ds,
                            const char *kernel_filename,
                            const char *kernel_cmdline,
@@ -235,8 +235,8 @@ static void ref405ep_init (int ram_size, int vga_ram_size,
                bdrv_get_device_name(drives_table[index].bdrv), fl_sectors);
 #endif
         pflash_cfi02_register((uint32_t)(-bios_size), bios_offset,
-                              drives_table[index].bdrv, 65536, fl_sectors, 2,
-                              0x0001, 0x22DA, 0x0000, 0x0000);
+                              drives_table[index].bdrv, 65536, fl_sectors, 1,
+                              2, 0x0001, 0x22DA, 0x0000, 0x0000, 0x555, 0x2AA);
         fl_idx++;
     } else
 #endif
@@ -360,6 +360,7 @@ QEMUMachine ref405ep_machine = {
     "ref405ep",
     "ref405ep",
     ref405ep_init,
+    (128 * 1024 * 1024 + 4096 + 512 * 1024 + BIOS_SIZE) | RAMSIZE_FIXED,
 };
 
 /*****************************************************************************/
@@ -504,7 +505,7 @@ static void taihu_cpld_init (uint32_t base)
     }
 }
 
-static void taihu_405ep_init(int ram_size, int vga_ram_size,
+static void taihu_405ep_init(ram_addr_t ram_size, int vga_ram_size,
                              const char *boot_device, DisplayState *ds,
                              const char *kernel_filename,
                              const char *kernel_cmdline,
@@ -552,8 +553,8 @@ static void taihu_405ep_init(int ram_size, int vga_ram_size,
                bdrv_get_device_name(drives_table[index].bdrv), fl_sectors);
 #endif
         pflash_cfi02_register((uint32_t)(-bios_size), bios_offset,
-                              drives_table[index].bdrv, 65536, fl_sectors, 4,
-                              0x0001, 0x22DA, 0x0000, 0x0000);
+                              drives_table[index].bdrv, 65536, fl_sectors, 1,
+                              4, 0x0001, 0x22DA, 0x0000, 0x0000, 0x555, 0x2AA);
         fl_idx++;
     } else
 #endif
@@ -588,8 +589,8 @@ static void taihu_405ep_init(int ram_size, int vga_ram_size,
                bdrv_get_device_name(drives_table[index].bdrv));
 #endif
         pflash_cfi02_register(0xfc000000, bios_offset,
-                              drives_table[index].bdrv, 65536, fl_sectors, 4,
-                              0x0001, 0x22DA, 0x0000, 0x0000);
+                              drives_table[index].bdrv, 65536, fl_sectors, 1,
+                              4, 0x0001, 0x22DA, 0x0000, 0x0000, 0x555, 0x2AA);
         fl_idx++;
     }
     /* Register CLPD & LCD display */
@@ -642,4 +643,5 @@ QEMUMachine taihu_machine = {
     "taihu",
     "taihu",
     taihu_405ep_init,
+    (128 * 1024 * 1024 + 4096 + BIOS_SIZE + 32 * 1024 * 1024) | RAMSIZE_FIXED,
 };

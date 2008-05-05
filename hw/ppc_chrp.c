@@ -57,7 +57,7 @@ static CPUReadMemoryFunc *unin_read[] = {
 };
 
 /* PowerPC Mac99 hardware initialisation */
-static void ppc_core99_init (int ram_size, int vga_ram_size,
+static void ppc_core99_init (ram_addr_t ram_size, int vga_ram_size,
                              const char *boot_device, DisplayState *ds,
                              const char *kernel_filename,
                              const char *kernel_cmdline,
@@ -264,7 +264,7 @@ static void ppc_core99_init (int ram_size, int vga_ram_size,
     dummy_irq = i8259_init(NULL);
 
     /* XXX: use Mac Serial port */
-    serial_init(0x3f8, dummy_irq[4], serial_hds[0]);
+    serial_init(0x3f8, dummy_irq[4], 115200, serial_hds[0]);
     for(i = 0; i < nb_nics; i++) {
         if (!nd_table[i].model)
             nd_table[i].model = "ne2k_pci";
@@ -336,4 +336,5 @@ QEMUMachine core99_machine = {
     "mac99",
     "Mac99 based PowerMAC",
     ppc_core99_init,
+    BIOS_SIZE + VGA_RAM_SIZE,
 };

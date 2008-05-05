@@ -71,10 +71,14 @@
 #define TT_TRAP     0x100
 #endif
 
-#define PSR_NEG   (1<<23)
-#define PSR_ZERO  (1<<22)
-#define PSR_OVF   (1<<21)
-#define PSR_CARRY (1<<20)
+#define PSR_NEG_SHIFT 23
+#define PSR_NEG   (1 << PSR_NEG_SHIFT)
+#define PSR_ZERO_SHIFT 22
+#define PSR_ZERO  (1 << PSR_ZERO_SHIFT)
+#define PSR_OVF_SHIFT 21
+#define PSR_OVF   (1 << PSR_OVF_SHIFT)
+#define PSR_CARRY_SHIFT 20
+#define PSR_CARRY (1 << PSR_CARRY_SHIFT)
 #define PSR_ICC   (PSR_NEG|PSR_ZERO|PSR_OVF|PSR_CARRY)
 #define PSR_EF    (1<<12)
 #define PSR_PIL   0xf00
@@ -141,8 +145,10 @@
 #define FSR_FTT_SEQ_ERROR (4 << 14)
 #define FSR_FTT_INVAL_FPR (6 << 14)
 
-#define FSR_FCC1  (1<<11)
-#define FSR_FCC0  (1<<10)
+#define FSR_FCC1_SHIFT 11
+#define FSR_FCC1  (1 << FSR_FCC1_SHIFT)
+#define FSR_FCC0_SHIFT 10
+#define FSR_FCC0  (1 << FSR_FCC0_SHIFT)
 
 /* MMU */
 #define MMU_E     (1<<0)
@@ -244,7 +250,7 @@ typedef struct CPUSPARCState {
     float_status fp_status;
 #if defined(TARGET_SPARC64)
 #define MAXTL 4
-    uint64_t t0, t1, t2;
+    uint64_t t0;
     trap_state *tsptr;
     trap_state ts[MAXTL];
     uint32_t xcc;               /* Extended integer condition codes */
@@ -265,9 +271,7 @@ typedef struct CPUSPARCState {
     uint64_t hpstate, htstate[MAXTL], hintp, htba, hver, hstick_cmpr, ssr;
     void *hstick; // UA 2005
 #endif
-#if !defined(TARGET_SPARC64) && !defined(reg_T2)
-    target_ulong t2;
-#endif
+    target_ulong t1, t2;
 } CPUSPARCState;
 #if defined(TARGET_SPARC64)
 #define GET_FSR32(env) (env->fsr & 0xcfc1ffff)

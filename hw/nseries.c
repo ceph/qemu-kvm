@@ -42,6 +42,7 @@ struct n800_s {
 
     int keymap[0x80];
 
+    struct tusb_s *usb;
     void *retu;
     void *tahvo;
 };
@@ -565,6 +566,29 @@ static void n800_cbus_setup(struct n800_s *s)
     cbus_attach(cbus, s->tahvo = tahvo_init(tahvo_irq, 1));
 }
 
+static void n800_usb_power_cb(void *opaque, int line, int level)
+{
+    struct n800_s *s = opaque;
+
+    tusb6010_power(s->usb, level);
+}
+
+static void n800_usb_setup(struct n800_s *s)
+{
+    qemu_irq tusb_irq = omap2_gpio_in_get(s->cpu->gpif, N8X0_TUSB_INT_GPIO)[0];
+    qemu_irq tusb_pwr = qemu_allocate_irqs(n800_usb_power_cb, s, 1)[0];
+    struct tusb_s *tusb = tusb6010_init(tusb_irq);
+
+    /* Using the NOR interface */
+    omap_gpmc_attach(s->cpu->gpmc, N8X0_USB_ASYNC_CS,
+                    tusb6010_async_io(tusb), 0, 0, tusb);
+    omap_gpmc_attach(s->cpu->gpmc, N8X0_USB_SYNC_CS,
+                    tusb6010_sync_io(tusb), 0, 0, tusb);
+
+    s->usb = tusb;
+    omap2_gpio_out_set(s->cpu->gpif, N800_TUSB_ENABLE_GPIO, tusb_pwr);
+}
+
 /* This task is normally performed by the bootloader.  If we're loading
  * a kernel directly, we need to set up GPMC mappings ourselves.  */
 static void n800_gpmc_init(struct n800_s *s)
@@ -867,7 +891,7 @@ static struct arm_boot_info n800_binfo = {
     .atag_board = n800_atag_setup,
 };
 
-static void n800_init(int ram_size, int vga_ram_size,
+static void n800_init(ram_addr_t ram_size, int vga_ram_size,
                 const char *boot_device, DisplayState *ds,
                 const char *kernel_filename, const char *kernel_cmdline,
                 const char *initrd_filename, const char *cpu_model)
@@ -891,6 +915,8 @@ static void n800_init(int ram_size, int vga_ram_size,
     n800_spi_setup(s);
     n800_dss_setup(s, ds);
     n800_cbus_setup(s);
+    if (usb_enabled)
+        n800_usb_setup(s);
 
     /* Setup initial (reset) machine state */
 
@@ -915,4 +941,5 @@ QEMUMachine n800_machine = {
     "n800",
     "Nokia N800 aka. RX-34 tablet (OMAP2420)",
     n800_init,
+    (0x08000000 + 0x00010000 + OMAP242X_SRAM_SIZE) | RAMSIZE_FIXED,
 };

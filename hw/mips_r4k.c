@@ -14,6 +14,7 @@
 #include "net.h"
 #include "sysemu.h"
 #include "boards.h"
+#include "flash.h"
 
 #ifdef TARGET_WORDS_BIGENDIAN
 #define BIOS_FILENAME "mips_bios.bin"
@@ -144,8 +145,9 @@ static void main_cpu_reset(void *opaque)
         load_kernel (env);
 }
 
+static const int sector_len = 32 * 1024;
 static
-void mips_r4k_init (int ram_size, int vga_ram_size,
+void mips_r4k_init (ram_addr_t ram_size, int vga_ram_size,
                     const char *boot_device, DisplayState *ds,
                     const char *kernel_filename, const char *kernel_cmdline,
                     const char *initrd_filename, const char *cpu_model)
@@ -197,7 +199,17 @@ void mips_r4k_init (int ram_size, int vga_ram_size,
     if ((bios_size > 0) && (bios_size <= BIOS_SIZE)) {
 	cpu_register_physical_memory(0x1fc00000,
 				     BIOS_SIZE, bios_offset | IO_MEM_ROM);
-    } else {
+    } else if ((index = drive_get_index(IF_PFLASH, 0, 0)) > -1) {
+        uint32_t mips_rom = 0x00400000;
+        cpu_register_physical_memory(0x1fc00000, mips_rom,
+	                     qemu_ram_alloc(mips_rom) | IO_MEM_ROM);
+        if (!pflash_cfi01_register(0x1fc00000, qemu_ram_alloc(mips_rom),
+            drives_table[index].bdrv, sector_len, mips_rom / sector_len,
+            4, 0, 0, 0, 0)) {
+            fprintf(stderr, "qemu: Error registering flash memory.\n");
+	}
+    }
+    else {
 	/* not fatal */
         fprintf(stderr, "qemu: Warning, could not load MIPS bios '%s'\n",
 		buf);
@@ -229,7 +241,8 @@ void mips_r4k_init (int ram_size, int vga_ram_size,
 
     for(i = 0; i < MAX_SERIAL_PORTS; i++) {
         if (serial_hds[i]) {
-            serial_init(serial_io[i], i8259[serial_irq[i]], serial_hds[i]);
+            serial_init(serial_io[i], i8259[serial_irq[i]], 115200,
+                        serial_hds[i]);
         }
     }
 
@@ -274,4 +287,5 @@ QEMUMachine mips_machine = {
     "mips",
     "mips r4k platform",
     mips_r4k_init,
+    VGA_RAM_SIZE + BIOS_SIZE,
 };

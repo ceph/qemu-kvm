@@ -116,7 +116,7 @@ void espdma_memory_write(void *opaque, uint8_t *buf, int len)
 #define MAGNUM_BIOS_SIZE (BIOS_SIZE < MAGNUM_BIOS_SIZE_MAX ? BIOS_SIZE : MAGNUM_BIOS_SIZE_MAX)
 
 static
-void mips_jazz_init (int ram_size, int vga_ram_size,
+void mips_jazz_init (ram_addr_t ram_size, int vga_ram_size,
                      DisplayState *ds, const char *cpu_model,
                      enum jazz_model_e jazz_model)
 {
@@ -234,9 +234,9 @@ void mips_jazz_init (int ram_size, int vga_ram_size,
 
     /* Serial ports */
     if (serial_hds[0])
-        serial_mm_init(0x80006000, 0, rc4030[8], serial_hds[0], 1);
+        serial_mm_init(0x80006000, 0, rc4030[8], 8000000/16, serial_hds[0], 1);
     if (serial_hds[1])
-        serial_mm_init(0x80007000, 0, rc4030[9], serial_hds[1], 1);
+        serial_mm_init(0x80007000, 0, rc4030[9], 8000000/16, serial_hds[1], 1);
 
     /* Parallel port */
     if (parallel_hds[0])
@@ -256,7 +256,7 @@ void mips_jazz_init (int ram_size, int vga_ram_size,
 }
 
 static
-void mips_magnum_init (int ram_size, int vga_ram_size,
+void mips_magnum_init (ram_addr_t ram_size, int vga_ram_size,
                        const char *boot_device, DisplayState *ds,
                        const char *kernel_filename, const char *kernel_cmdline,
                        const char *initrd_filename, const char *cpu_model)
@@ -265,7 +265,7 @@ void mips_magnum_init (int ram_size, int vga_ram_size,
 }
 
 static
-void mips_pica61_init (int ram_size, int vga_ram_size,
+void mips_pica61_init (ram_addr_t ram_size, int vga_ram_size,
                        const char *boot_device, DisplayState *ds,
                        const char *kernel_filename, const char *kernel_cmdline,
                        const char *initrd_filename, const char *cpu_model)
@@ -277,10 +277,12 @@ QEMUMachine mips_magnum_machine = {
     "magnum",
     "MIPS Magnum",
     mips_magnum_init,
+    MAGNUM_BIOS_SIZE + VGA_RAM_SIZE,
 };
 
 QEMUMachine mips_pica61_machine = {
     "pica61",
     "Acer Pica 61",
     mips_pica61_init,
+    MAGNUM_BIOS_SIZE + VGA_RAM_SIZE,
 };

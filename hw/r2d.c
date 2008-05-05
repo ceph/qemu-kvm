@@ -30,7 +30,7 @@
 #define SDRAM_BASE 0x0c000000 /* Physical location of SDRAM: Area 3 */
 #define SDRAM_SIZE 0x04000000
 
-static void r2d_init(int ram_size, int vga_ram_size,
+static void r2d_init(ram_addr_t ram_size, int vga_ram_size,
               const char *boot_device, DisplayState * ds,
 	      const char *kernel_filename, const char *kernel_cmdline,
 	      const char *initrd_filename, const char *cpu_model)
@@ -69,5 +69,6 @@ static void r2d_init(int ram_size, int vga_ram_size,
 QEMUMachine r2d_machine = {
     "r2d",
     "r2d-plus board",
-    r2d_init
+    r2d_init,
+    SDRAM_SIZE | RAMSIZE_FIXED
 };

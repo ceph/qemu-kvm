@@ -535,7 +535,7 @@ CPUReadMemoryFunc *PPC_prep_io_read[] = {
 #define NVRAM_SIZE        0x2000
 
 /* PowerPC PREP hardware initialisation */
-static void ppc_prep_init (int ram_size, int vga_ram_size,
+static void ppc_prep_init (ram_addr_t ram_size, int vga_ram_size,
                            const char *boot_device, DisplayState *ds,
                            const char *kernel_filename,
                            const char *kernel_cmdline,
@@ -667,7 +667,7 @@ static void ppc_prep_init (int ram_size, int vga_ram_size,
     //    pit = pit_init(0x40, i8259[0]);
     rtc_init(0x70, i8259[8]);
 
-    serial_init(0x3f8, i8259[4], serial_hds[0]);
+    serial_init(0x3f8, i8259[4], 115200, serial_hds[0]);
     nb_nics1 = nb_nics;
     if (nb_nics1 > NE2000_NB_MAX)
         nb_nics1 = NE2000_NB_MAX;
@@ -765,4 +765,5 @@ QEMUMachine prep_machine = {
     "prep",
     "PowerPC PREP platform",
     ppc_prep_init,
+    BIOS_SIZE + VGA_RAM_SIZE,
 };

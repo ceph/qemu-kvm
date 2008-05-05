@@ -83,7 +83,6 @@ int tap_win32_init(VLANState *vlan, const char *ifname);
 /* SLIRP */
 void do_info_slirp(void);
 
-extern int64_t ram_size;
 extern int bios_size;
 extern int cirrus_vga_enabled;
 extern int vmsvga_enabled;
@@ -117,13 +116,6 @@ extern int nb_option_roms;
 #define MAX_PROM_ENVS 128
 extern const char *prom_envs[MAX_PROM_ENVS];
 extern unsigned int nb_prom_envs;
-#endif
-
-/* XXX: make it dynamic */
-#ifndef TARGET_IA64
-#define MAX_BIOS_SIZE (4 * 1024 * 1024)
-#else
-#define MAX_BIOS_SIZE (16 * 1024 * 1024)
 #endif
 
 #if defined (TARGET_PPC)
@@ -170,8 +162,10 @@ struct drive_opt {
 extern struct drive_opt drives_opt[MAX_DRIVES];
 extern int nb_drives_opt;
 
+struct QEMUMachine;
 extern int drive_add(const char *file, const char *fmt, ...);
-extern int drive_init(struct drive_opt *arg, int snapshot, void *machine);
+extern int drive_init(struct drive_opt *arg, int snapshot,
+                      struct QEMUMachine *machine);
 
 /* acpi */
 void qemu_system_cpu_hot_add(int cpu, int state);

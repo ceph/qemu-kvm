@@ -1431,7 +1431,7 @@ static int bitmap_get_dirty(unsigned long *bitmap, unsigned nr)
 static void vga_draw_graphic(VGAState *s, int full_update)
 {
     int y1, y, update, linesize, y_start, double_scan, mask;
-    int width, height, shift_control, line_offset, bwidth;
+    int width, height, shift_control, line_offset, bwidth, bits;
     int disp_width, multi_scan, multi_run;
     uint8_t *d;
     uint32_t v, addr1, addr;
@@ -1482,6 +1482,7 @@ static void vga_draw_graphic(VGAState *s, int full_update)
         } else {
             v = VGA_DRAW_LINE4;
         }
+        bits = 4;
     } else if (shift_control == 1) {
         full_update |= update_palette16(s);
         if (s->sr[0x01] & 8) {
@@ -1490,28 +1491,35 @@ static void vga_draw_graphic(VGAState *s, int full_update)
         } else {
             v = VGA_DRAW_LINE2;
         }
+        bits = 4;
     } else {
         switch(s->get_bpp(s)) {
         default:
         case 0:
             full_update |= update_palette256(s);
             v = VGA_DRAW_LINE8D2;
+            bits = 4;
             break;
         case 8:
             full_update |= update_palette256(s);
             v = VGA_DRAW_LINE8;
+            bits = 8;
             break;
         case 15:
             v = VGA_DRAW_LINE15;
+            bits = 16;
             break;
         case 16:
             v = VGA_DRAW_LINE16;
+            bits = 16;
             break;
         case 24:
             v = VGA_DRAW_LINE24;
+            bits = 24;
             break;
         case 32:
             v = VGA_DRAW_LINE32;
+            bits = 32;
             break;
         }
     }
@@ -1535,7 +1543,7 @@ static void vga_draw_graphic(VGAState *s, int full_update)
            width, height, v, line_offset, s->cr[9], s->cr[0x17], s->line_compare, s->sr[0x01]);
 #endif
     addr1 = (s->start_addr * 4);
-    bwidth = width * 4;
+    bwidth = (width * bits + 7) / 8;
     y_start = -1;
     page_min = 0x7fffffff;
     page_max = -1;

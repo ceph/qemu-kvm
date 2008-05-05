@@ -436,7 +436,7 @@ static MaltaFPGAState *malta_fpga_init(target_phys_addr_t base, CPUState *env)
     cpu_register_physical_memory(base, 0x900, malta);
     cpu_register_physical_memory(base + 0xa00, 0x100000 - 0xa00, malta);
 
-    s->display = qemu_chr_open("vc");
+    s->display = qemu_chr_open("vc:320x200");
     qemu_chr_printf(s->display, "\e[HMalta LEDBAR\r\n");
     qemu_chr_printf(s->display, "+--------+\r\n");
     qemu_chr_printf(s->display, "+        +\r\n");
@@ -447,9 +447,10 @@ static MaltaFPGAState *malta_fpga_init(target_phys_addr_t base, CPUState *env)
     qemu_chr_printf(s->display, "+        +\r\n");
     qemu_chr_printf(s->display, "+--------+\r\n");
 
-    uart_chr = qemu_chr_open("vc");
+    uart_chr = qemu_chr_open("vc:80Cx24C");
     qemu_chr_printf(uart_chr, "CBUS UART\r\n");
-    s->uart = serial_mm_init(base + 0x900, 3, env->irq[2], uart_chr, 1);
+    s->uart =
+        serial_mm_init(base + 0x900, 3, env->irq[2], 230400, uart_chr, 1);
 
     malta_fpga_reset(s);
     qemu_register_reset(malta_fpga_reset, s);
@@ -765,7 +766,7 @@ static void main_cpu_reset(void *opaque)
 }
 
 static
-void mips_malta_init (int ram_size, int vga_ram_size,
+void mips_malta_init (ram_addr_t ram_size, int vga_ram_size,
                       const char *boot_device, DisplayState *ds,
                       const char *kernel_filename, const char *kernel_cmdline,
                       const char *initrd_filename, const char *cpu_model)
@@ -920,9 +921,9 @@ void mips_malta_init (int ram_size, int vga_ram_size,
     i8042_init(i8259[1], i8259[12], 0x60);
     rtc_state = rtc_init(0x70, i8259[8]);
     if (serial_hds[0])
-        serial_init(0x3f8, i8259[4], serial_hds[0]);
+        serial_init(0x3f8, i8259[4], 115200, serial_hds[0]);
     if (serial_hds[1])
-        serial_init(0x2f8, i8259[3], serial_hds[1]);
+        serial_init(0x2f8, i8259[3], 115200, serial_hds[1]);
     if (parallel_hds[0])
         parallel_init(0x378, i8259[7], parallel_hds[0]);
     for(i = 0; i < MAX_FD; i++) {
@@ -951,4 +952,5 @@ QEMUMachine mips_malta_machine = {
     "malta",
     "MIPS Malta Core LV",
     mips_malta_init,
+    VGA_RAM_SIZE + BIOS_SIZE,
 };

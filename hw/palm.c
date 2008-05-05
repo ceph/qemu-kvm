@@ -85,6 +85,12 @@ static CPUWriteMemoryFunc *static_writefn[] = {
 #define PALMTE_MMC2_GPIO	7
 #define PALMTE_MMC3_GPIO	11
 
+static struct mouse_transform_info_s palmte_pointercal = {
+    .x = 320,
+    .y = 320,
+    .a = { -5909, 8, 22465308, 104, 7644, -1219972, 65536 },
+};
+
 static void palmte_microwire_setup(struct omap_mpu_state_s *cpu)
 {
     struct uwire_slave_s *tsc;
@@ -99,6 +105,8 @@ static void palmte_microwire_setup(struct omap_mpu_state_s *cpu)
 
     omap_uwire_attach(cpu->microwire, tsc, 0);
     omap_mcbsp_i2s_attach(cpu->mcbsp1, tsc210x_codec(tsc));
+
+    tsc210x_set_transform(tsc, &palmte_pointercal);
 }
 
 static struct {
@@ -192,7 +200,7 @@ static struct arm_boot_info palmte_binfo = {
     .board_id = 0x331,
 };
 
-static void palmte_init(int ram_size, int vga_ram_size,
+static void palmte_init(ram_addr_t ram_size, int vga_ram_size,
                 const char *boot_device, DisplayState *ds,
                 const char *kernel_filename, const char *kernel_cmdline,
                 const char *initrd_filename, const char *cpu_model)
@@ -274,4 +282,5 @@ QEMUMachine palmte_machine = {
     "cheetah",
     "Palm Tungsten|E aka. Cheetah PDA (OMAP310)",
     palmte_init,
+    (0x02000000 + 0x00800000 + OMAP15XX_SRAM_SIZE) | RAMSIZE_FIXED,
 };

@@ -14,10 +14,13 @@ typedef struct QEMUMachine {
     const char *name;
     const char *desc;
     QEMUMachineInitFunc *init;
+#define RAMSIZE_FIXED	(1 << 0)
+    ram_addr_t ram_require;
     struct QEMUMachine *next;
 } QEMUMachine;
 
 int qemu_register_machine(QEMUMachine *m);
+void register_machines(void);
 
 extern QEMUMachine *current_machine;
 
@@ -106,6 +109,9 @@ extern QEMUMachine dummy_m68k_machine;
 
 /* mainstone.c */
 extern QEMUMachine mainstone2_machine;
+
+/* musicpal.c */
+extern QEMUMachine musicpal_machine;
 
 /* ipf.c */
 extern QEMUMachine ipf_machine;

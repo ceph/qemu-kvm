@@ -98,7 +98,6 @@ static void *kqemu_vmalloc(size_t size)
             int64_t free_space;
             int ram_mb;
 
-            extern int64_t ram_size;
             free_space = (int64_t)stfs.f_bavail * stfs.f_bsize;
             if ((ram_size + 8192 * 1024) >= free_space) {
                 ram_mb = (ram_size / (1024 * 1024));
@@ -107,8 +106,7 @@ static void *kqemu_vmalloc(size_t size)
                         tmpdir, ram_mb);
                 if (strcmp(tmpdir, "/dev/shm") == 0) {
                     fprintf(stderr, "To have more space available provided you have enough RAM and swap, do as root:\n"
-                            "umount /dev/shm\n"
-                            "mount -t tmpfs -o size=%dm none /dev/shm\n",
+                            "mount -o remount,size=%dm /dev/shm\n",
                             ram_mb + 16);
                 } else {
                     fprintf(stderr,

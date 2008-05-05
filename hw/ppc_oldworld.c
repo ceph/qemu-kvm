@@ -103,7 +103,7 @@ static int vga_osi_call (CPUState *env)
     return 1; /* osi_call handled */
 }
 
-static void ppc_heathrow_init (int ram_size, int vga_ram_size,
+static void ppc_heathrow_init (ram_addr_t ram_size, int vga_ram_size,
                                const char *boot_device, DisplayState *ds,
                                const char *kernel_filename,
                                const char *kernel_cmdline,
@@ -287,7 +287,7 @@ static void ppc_heathrow_init (int ram_size, int vga_ram_size,
     dummy_irq = i8259_init(NULL);
 
     /* XXX: use Mac Serial port */
-    serial_init(0x3f8, dummy_irq[4], serial_hds[0]);
+    serial_init(0x3f8, dummy_irq[4], 115200, serial_hds[0]);
 
     for(i = 0; i < nb_nics; i++) {
         if (!nd_table[i].model)
@@ -370,4 +370,5 @@ QEMUMachine heathrow_machine = {
     "g3bw",
     "Heathrow based PowerMAC",
     ppc_heathrow_init,
+    BIOS_SIZE + VGA_RAM_SIZE,
 };
