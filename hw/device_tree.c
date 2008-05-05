@@ -162,6 +162,21 @@ void dt_cell(void *fdt, char *node_path, char *property,
 	}
 }
 
+/* This function is to manipulate a cell with multiple values */
+void dt_cell_multi(void *fdt, char *node_path, char *property,
+			uint32_t *val_array, int size)
+{
+	int offset;
+	int ret;
+	offset = get_offset_of_node(fdt, node_path);
+	ret = fdt_setprop(fdt, offset, property, val_array, size);
+	if (ret < 0) {
+		printf("Unable to set device tree property '%s'\n",
+			property);
+		exit(1);
+	}
+}
+
 void dt_string(void *fdt, char *node_path, char *property,
 		char *string)
 {

@@ -19,6 +19,8 @@ void *load_device_tree(char *filename_path, target_ulong load_addr);
 void dump_device_tree_to_file(void *fdt, char *filename);
 void dt_cell(void *fdt, char *node_path, char *property,
 		uint32_t val);
+void dt_cell_multi(void *fdt, char *node_path, char *property,
+		uint32_t *val_array, int size);
 void dt_string(void *fdt, char *node_path, char *property,
 		char *string);
 #endif
