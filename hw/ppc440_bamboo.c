@@ -50,6 +50,7 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 	int i=0, k=0;
 	uint32_t cpu_freq;
 	uint32_t timebase_freq;
+	uint32_t mem_reg_property[]={0, 0, ram_size};
 
 	printf("%s: START\n", __func__);
 
@@ -73,6 +74,7 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 		printf("WARNING: %i MB left over memory is ram\n",
 			bytes_to_mb((int)tmp_ram_size));
 		ram_size -= tmp_ram_size;
+		mem_reg_property[2] = ram_size;
 	}
 
 	/* Setup CPU */
@@ -158,6 +160,8 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 	/* manipulate device tree in memory */
 	dt_cell(fdt, "/cpus/cpu@0", "clock-frequency", cpu_freq);
 	dt_cell(fdt, "/cpus/cpu@0", "timebase-frequency", timebase_freq);
+	dt_cell_multi(fdt, "/memory", "reg", mem_reg_property,
+			sizeof(mem_reg_property));
 	dt_cell(fdt, "/chosen", "linux,initrd-start", initrd_base);
 	dt_cell(fdt, "/chosen", "linux,initrd-end",
 				(initrd_base + initrd_size));
