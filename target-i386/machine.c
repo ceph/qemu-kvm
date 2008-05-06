@@ -168,7 +168,7 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
     uint16_t fpus, fpuc, fptag, fpregs_format;
     int32_t a20_mask;
 
-    if (version_id != 3 && version_id != 4)
+    if (version_id < 3 || version_id > 5)
         return -EINVAL;
     for(i = 0; i < CPU_NB_REGS; i++)
         qemu_get_betls(f, &env->regs[i]);
