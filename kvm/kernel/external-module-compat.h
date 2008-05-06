@@ -326,7 +326,7 @@ static inline void preempt_notifier_sys_exit(void) {}
 #endif
 
 /* div64_u64 is fairly new */
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,26)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26)
 
 #define div64_u64 kvm_div64_u64
 

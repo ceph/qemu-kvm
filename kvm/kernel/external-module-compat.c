@@ -80,8 +80,8 @@ int kvm_smp_call_function_single(int cpu, void (*func)(void *info),
 
 #endif
 
-/* div64_64 is fairly new */
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,21)
+/* div64_u64 is fairly new */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26)
 
 #ifndef CONFIG_64BIT
 
