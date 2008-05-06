@@ -526,6 +526,10 @@ static void do_cpuid_ent(struct kvm_cpuid_entry *e, uint32_t function,
     // "Hypervisor present" bit for Microsoft guests
     if (function == 1)
 	e->ecx |= (1u << 31);
+
+    // 3dnow isn't properly emulated yet
+    if (function == 0x80000001)
+	e->edx &= ~0xc0000000;
 }
 
 struct kvm_para_features {
