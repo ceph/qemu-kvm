@@ -255,10 +255,10 @@ DefinitionBlock (
                 Package() {0x0008ffff, 3, LNKC, 0},
 
                 // PCI Slot 9
-                Package() {0x0008ffff, 0, LNKA, 0},
-                Package() {0x0008ffff, 1, LNKB, 0},
-                Package() {0x0008ffff, 2, LNKC, 0},
-                Package() {0x0008ffff, 3, LNKD, 0},
+                Package() {0x0009ffff, 0, LNKA, 0},
+                Package() {0x0009ffff, 1, LNKB, 0},
+                Package() {0x0009ffff, 2, LNKC, 0},
+                Package() {0x0009ffff, 3, LNKD, 0},
 
                 // PCI Slot 10
                 Package() {0x000affff, 0, LNKB, 0},
@@ -351,10 +351,10 @@ DefinitionBlock (
                 Package() {0x0018ffff, 3, LNKC, 0},
 
                 // PCI Slot 25
-                Package() {0x0018ffff, 0, LNKA, 0},
-                Package() {0x0018ffff, 1, LNKB, 0},
-                Package() {0x0018ffff, 2, LNKC, 0},
-                Package() {0x0018ffff, 3, LNKD, 0},
+                Package() {0x0019ffff, 0, LNKA, 0},
+                Package() {0x0019ffff, 1, LNKB, 0},
+                Package() {0x0019ffff, 2, LNKC, 0},
+                Package() {0x0019ffff, 3, LNKD, 0},
 
                 // PCI Slot 26
                 Package() {0x001affff, 0, LNKB, 0},
