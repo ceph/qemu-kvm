@@ -190,7 +190,6 @@ all: $(PROGS)
 
 #########################################################
 # cpu emulator library
-<<<<<<< HEAD:qemu/Makefile.target
 LIBOBJS=exec.o kqemu.o cpu-exec.o host-utils.o
 
 ifeq ($(NO_CPU_EMULATION), 1)
