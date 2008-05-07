@@ -426,24 +426,6 @@ void qemu_kvm_notify_work(void)
 	fprintf(stderr, "failed to notify io thread\n");
 }
 
-static int received_signal;
-
-/* QEMU relies on periodically breaking out of select via EINTR to poll for IO
-   and timer signals.  Since we're now using a file descriptor to handle
-   signals, select() won't be interrupted by a signal.  We need to forcefully
-   break the select() loop when a signal is received hence
-   kvm_check_received_signal(). */
-
-int kvm_check_received_signal(void)
-{
-    if (received_signal) {
-	received_signal = 0;
-	return 1;
-    }
-
-    return 0;
-}
-
 /* If we have signalfd, we mask out the signals we want to handle and then
  * use signalfd to listen for them.  We rely on whatever the current signal
  * handler is to dispatch the signals when we receive them.
@@ -477,8 +459,6 @@ static void sigfd_handler(void *opaque)
 	    pthread_cond_signal(&qemu_aio_cond);
 	}
     }
-
-    received_signal = 1;
 }
 
 /* Used to break IO thread out of select */
@@ -500,8 +480,6 @@ static void io_thread_wakeup(void *opaque)
 
 	offset += len;
     }
-
-    received_signal = 1;
 }
 
 int kvm_main_loop(void)
