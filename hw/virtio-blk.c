@@ -56,8 +56,6 @@ struct virtio_blk_outhdr
     uint32_t ioprio;
     /* Sector (ie. 512 byte offset) */
     uint64_t sector;
-    /* Where to put reply. */
-    uint64_t id;
 };
 
 #define VIRTIO_BLK_S_OK		0
@@ -93,6 +91,17 @@ static void virtio_blk_handle_output(VirtIODevice *vdev, VirtQueue *vq)
 	unsigned int wlen;
 	off_t off;
 	int i;
+
+	if (elem.out_num < 1 || elem.in_num < 1) {
+	    fprintf(stderr, "virtio-blk missing headers\n");
+	    exit(1);
+	}
+
+	if (elem.out_sg[0].iov_len != sizeof(*out) ||
+	    elem.in_sg[elem.in_num - 1].iov_len != sizeof(*in)) {
+	    fprintf(stderr, "virtio-blk header not in correct element\n");
+	    exit(1);
+	}
 
 	out = (void *)elem.out_sg[0].iov_base;
 	in = (void *)elem.in_sg[elem.in_num - 1].iov_base;

@@ -125,6 +125,11 @@ static void virtio_net_receive(void *opaque, const uint8_t *buf, int size)
 	return;
     }
 
+    if (elem.in_num < 1 || elem.in_sg[0].iov_len != sizeof(*hdr)) {
+	fprintf(stderr, "virtio-net header not in first element\n");
+	exit(1);
+    }
+
     hdr = (void *)elem.in_sg[0].iov_base;
     hdr->flags = 0;
     hdr->gso_type = VIRTIO_NET_HDR_GSO_NONE;
@@ -196,6 +201,11 @@ void virtio_net_poll(void)
                 vnet->can_receive = 0;
                 continue;
             }
+
+	    if (elem.in_num < 1 || elem.in_sg[0].iov_len != sizeof(*hdr)) {
+		fprintf(stderr, "virtio-net header not in first element\n");
+		exit(1);
+	    }
 
             hdr = (void *)elem.in_sg[0].iov_base;
             hdr->flags = 0;
