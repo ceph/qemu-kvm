@@ -79,6 +79,8 @@ int handle_powerpc_dcr_read(int vcpu, uint32_t dcrn, uint32_t *data);
 int handle_powerpc_dcr_write(int vcpu,uint32_t dcrn, uint32_t data);
 #endif
 
+int kvm_eventfd(int *fds);
+
 #define ALIGN(x, y)  (((x)+(y)-1) & ~((y)-1))
 #define BITMAP_SIZE(m) (ALIGN(((m)>>TARGET_PAGE_BITS), HOST_LONG_BITS) / 8)
 
