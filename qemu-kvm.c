@@ -15,6 +15,8 @@ int kvm_pit = 1;
 #include <string.h>
 #include "hw/hw.h"
 #include "sysemu.h"
+#include "qemu-common.h"
+#include "console.h"
 
 #include "qemu-kvm.h"
 #include <libkvm.h>
@@ -61,6 +63,7 @@ struct vcpu_info {
 } vcpu_info[256];
 
 pthread_t io_thread;
+static int io_thread_fd = -1;
 
 static inline unsigned long kvm_get_thread_id(void)
 {
@@ -213,7 +216,7 @@ static int kvm_eat_signal(struct qemu_kvm_signal_table *waitset, CPUState *env,
     if (env && vcpu_info[env->cpu_index].stop) {
 	vcpu_info[env->cpu_index].stop = 0;
 	vcpu_info[env->cpu_index].stopped = 1;
-	pthread_kill(io_thread, SIGUSR1);
+	qemu_kvm_notify_work();
     }
     pthread_mutex_unlock(&qemu_mutex);
 
@@ -418,7 +421,6 @@ static void qemu_kvm_init_signal_tables(void)
 
     kvm_add_signal(&io_signal_table, SIGIO);
     kvm_add_signal(&io_signal_table, SIGALRM);
-    kvm_add_signal(&io_signal_table, SIGUSR1);
     kvm_add_signal(&io_signal_table, SIGUSR2);
 
     kvm_add_signal(&vcpu_signal_table, SIG_IPI);
@@ -440,8 +442,51 @@ int kvm_init_ap(void)
 
 void qemu_kvm_notify_work(void)
 {
-    if (io_thread)
-        pthread_kill(io_thread, SIGUSR1);
+    uint64_t value = 1;
+    char buffer[8];
+    size_t offset = 0;
+
+    if (io_thread_fd == -1)
+	return;
+
+    memcpy(buffer, &value, sizeof(value));
+
+    while (offset < 8) {
+	ssize_t len;
+
+	len = write(io_thread_fd, buffer + offset, 8 - offset);
+	if (len == -1 && errno == EINTR)
+	    continue;
+
+	if (len <= 0)
+	    break;
+
+	offset += len;
+    }
+
+    if (offset != 8)
+	fprintf(stderr, "failed to notify io thread\n");
+}
+
+/* Used to break IO thread out of select */
+static void io_thread_wakeup(void *opaque)
+{
+    int fd = (unsigned long)opaque;
+    char buffer[8];
+    size_t offset = 0;
+
+    while (offset < 8) {
+	ssize_t len;
+
+	len = read(fd, buffer + offset, 8 - offset);
+	if (len == -1 && errno == EINTR)
+	    continue;
+
+	if (len <= 0)
+	    break;
+
+	offset += len;
+    }
 }
 
 /*
@@ -452,8 +497,20 @@ void qemu_kvm_notify_work(void)
 
 int kvm_main_loop(void)
 {
+    int fds[2];
+
     io_thread = pthread_self();
     qemu_system_ready = 1;
+
+    if (kvm_eventfd(fds) == -1) {
+	fprintf(stderr, "failed to create eventfd\n");
+	return -errno;
+    }
+
+    qemu_set_fd_handler2(fds[0], NULL, io_thread_wakeup, NULL,
+			 (void *)(unsigned long)fds[0]);
+
+    io_thread_fd = fds[1];
     pthread_mutex_unlock(&qemu_mutex);
 
     pthread_cond_broadcast(&qemu_system_cond);
