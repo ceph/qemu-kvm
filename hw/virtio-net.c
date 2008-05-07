@@ -14,6 +14,7 @@
 #include "virtio.h"
 #include "net.h"
 #include "qemu-timer.h"
+#include "qemu-kvm.h"
 
 /* from Linux's virtio_net.h */
 
@@ -60,10 +61,13 @@ typedef struct VirtIONet
     VirtQueue *rx_vq;
     VirtQueue *tx_vq;
     VLANClientState *vc;
-    int can_receive;
     QEMUTimer *tx_timer;
     int tx_timer_active;
 } VirtIONet;
+
+/* TODO
+ * - we could suppress RX interrupt if we were so inclined.
+ */
 
 static VirtIONet *to_virtio_net(VirtIODevice *vdev)
 {
@@ -88,15 +92,24 @@ static uint32_t virtio_net_get_features(VirtIODevice *vdev)
 
 static void virtio_net_handle_rx(VirtIODevice *vdev, VirtQueue *vq)
 {
-    VirtIONet *n = to_virtio_net(vdev);
-    n->can_receive = 1;
+    /* We now have RX buffers, signal to the IO thread to break out of the
+       select to re-poll the tap file descriptor */
+    if (kvm_enabled())
+	qemu_kvm_notify_work();
 }
 
 static int virtio_net_can_receive(void *opaque)
 {
     VirtIONet *n = opaque;
 
-    return (n->vdev.status & VIRTIO_CONFIG_S_DRIVER_OK) && n->can_receive;
+    if (n->rx_vq->vring.avail == NULL ||
+	!(n->vdev.status & VIRTIO_CONFIG_S_DRIVER_OK))
+	return 0;
+
+    if (n->rx_vq->vring.avail->idx == n->rx_vq->last_avail_idx)
+	return 0;
+
+    return 1;
 }
 
 static void virtio_net_receive(void *opaque, const uint8_t *buf, int size)
@@ -106,15 +119,8 @@ static void virtio_net_receive(void *opaque, const uint8_t *buf, int size)
     struct virtio_net_hdr *hdr;
     int offset, i;
 
-    /* FIXME: the drivers really need to set their status better */
-    if (n->rx_vq->vring.avail == NULL) {
-	n->can_receive = 0;
-	return;
-    }
-
     if (virtqueue_pop(n->rx_vq, &elem) == 0) {
-	/* wait until the guest adds some rx bufs */
-	n->can_receive = 0;
+	fprintf(stderr, "virtio_net: this should not happen\n");
 	return;
     }
 
@@ -243,9 +249,8 @@ PCIDevice *virtio_net_init(PCIBus *bus, NICInfo *nd, int devfn)
 
     n->vdev.update_config = virtio_net_update_config;
     n->vdev.get_features = virtio_net_get_features;
-    n->rx_vq = virtio_add_queue(&n->vdev, 512, virtio_net_handle_rx);
+    n->rx_vq = virtio_add_queue(&n->vdev, 128, virtio_net_handle_rx);
     n->tx_vq = virtio_add_queue(&n->vdev, 128, virtio_net_handle_tx);
-    n->can_receive = 0;
     memcpy(n->mac, nd->macaddr, 6);
     n->vc = qemu_new_vlan_client(nd->vlan, virtio_net_receive,
                                  virtio_net_can_receive, n);
