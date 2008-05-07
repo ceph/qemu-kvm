@@ -10,6 +10,8 @@
 
 #include "cpu.h"
 
+#include <signal.h>
+
 int kvm_main_loop(void);
 int kvm_qemu_init(void);
 int kvm_qemu_create_context(void);
@@ -79,6 +81,16 @@ int handle_powerpc_dcr_read(int vcpu, uint32_t dcrn, uint32_t *data);
 int handle_powerpc_dcr_write(int vcpu,uint32_t dcrn, uint32_t data);
 #endif
 
+#if !defined(SYS_signalfd)
+struct signalfd_siginfo {
+    uint32_t ssi_signo;
+    uint8_t pad[124];
+};
+#else
+#include <linux/signalfd.h>
+#endif
+
+int kvm_signalfd(const sigset_t *mask);
 int kvm_eventfd(int *fds);
 
 #define ALIGN(x, y)  (((x)+(y)-1) & ~((y)-1))
