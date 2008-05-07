@@ -13,7 +13,6 @@
 
 #include "virtio.h"
 #include "net.h"
-#include "pc.h"
 #include "qemu-timer.h"
 
 /* from Linux's virtio_net.h */
@@ -62,14 +61,9 @@ typedef struct VirtIONet
     VirtQueue *tx_vq;
     VLANClientState *vc;
     int can_receive;
-    int tap_fd;
-    struct VirtIONet *next;
-    int do_notify;
     QEMUTimer *tx_timer;
     int tx_timer_active;
 } VirtIONet;
-
-static VirtIONet *VirtIONetHead = NULL;
 
 static VirtIONet *to_virtio_net(VirtIODevice *vdev)
 {
@@ -105,7 +99,6 @@ static int virtio_net_can_receive(void *opaque)
     return (n->vdev.status & VIRTIO_CONFIG_S_DRIVER_OK) && n->can_receive;
 }
 
-/* -net user receive function */
 static void virtio_net_receive(void *opaque, const uint8_t *buf, int size)
 {
     VirtIONet *n = opaque;
@@ -147,92 +140,6 @@ static void virtio_net_receive(void *opaque, const uint8_t *buf, int size)
     /* signal other side */
     virtqueue_push(n->rx_vq, &elem, sizeof(*hdr) + offset);
     virtio_notify(&n->vdev, n->rx_vq);
-}
-
-/* -net tap receive handler */
-void virtio_net_poll(void)
-{
-    VirtIONet *vnet;
-    int len;
-    fd_set rfds;
-    struct timeval tv;
-    int max_fd = -1;
-    VirtQueueElement elem;
-    struct virtio_net_hdr *hdr;
-    int did_notify;
-
-    FD_ZERO(&rfds);
-    tv.tv_sec = 0;
-    tv.tv_usec = 0;
-
-    while (1) {
-
-        // Prepare the set of device to select from
-        for (vnet = VirtIONetHead; vnet; vnet = vnet->next) {
-
-            if (vnet->tap_fd == -1)
-                continue;
-
-            vnet->do_notify = 0;
-            //first check if the driver is ok
-            if (!virtio_net_can_receive(vnet))
-                continue;
-
-            /* FIXME: the drivers really need to set their status better */
-            if (vnet->rx_vq->vring.avail == NULL) {
-                vnet->can_receive = 0;
-                continue;
-            }
-
-            FD_SET(vnet->tap_fd, &rfds);
-            if (max_fd < vnet->tap_fd) max_fd = vnet->tap_fd;
-        }
-
-        if (select(max_fd + 1, &rfds, NULL, NULL, &tv) <= 0)
-            break;
-
-        // Now check who has data pending in the tap
-        for (vnet = VirtIONetHead; vnet; vnet = vnet->next) {
-
-            if (!FD_ISSET(vnet->tap_fd, &rfds))
-                continue;
-
-            if (virtqueue_pop(vnet->rx_vq, &elem) == 0) {
-                vnet->can_receive = 0;
-                continue;
-            }
-
-	    if (elem.in_num < 1 || elem.in_sg[0].iov_len != sizeof(*hdr)) {
-		fprintf(stderr, "virtio-net header not in first element\n");
-		exit(1);
-	    }
-
-            hdr = (void *)elem.in_sg[0].iov_base;
-            hdr->flags = 0;
-            hdr->gso_type = VIRTIO_NET_HDR_GSO_NONE;
-again:
-            len = readv(vnet->tap_fd, &elem.in_sg[1], elem.in_num - 1);
-            if (len == -1) {
-                if (errno == EINTR || errno == EAGAIN)
-                    goto again;
-                else
-                    fprintf(stderr, "reading network error %d", len);
-            }
-            virtqueue_push(vnet->rx_vq, &elem, sizeof(*hdr) + len);
-            vnet->do_notify = 1;
-        }
-
-        /* signal other side */
-        did_notify = 0;
-        for (vnet = VirtIONetHead; vnet; vnet = vnet->next)
-            if (vnet->do_notify) {
-                virtio_notify(&vnet->vdev, vnet->rx_vq);
-                did_notify++;
-            }
-        if (!did_notify)
-            break;
-     }
-
 }
 
 /* TX */
@@ -342,12 +249,6 @@ PCIDevice *virtio_net_init(PCIBus *bus, NICInfo *nd, int devfn)
     memcpy(n->mac, nd->macaddr, 6);
     n->vc = qemu_new_vlan_client(nd->vlan, virtio_net_receive,
                                  virtio_net_can_receive, n);
-    n->tap_fd = hack_around_tap(n->vc->vlan->first_client);
-    if (n->tap_fd != -1) {
-        n->next = VirtIONetHead;
-        //push the device on top of the list
-        VirtIONetHead = n;
-    }
 
     n->tx_timer = qemu_new_timer(vm_clock, virtio_net_tx_timer, n);
     n->tx_timer_active = 0;
