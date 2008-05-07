@@ -58,6 +58,48 @@
 
 /* virt queue functions */
 
+static void *virtio_map_gpa(target_phys_addr_t addr, size_t size)
+{
+    ram_addr_t off;
+    target_phys_addr_t addr1;
+
+    off = cpu_get_physical_page_desc(addr);
+    if ((off & ~TARGET_PAGE_MASK) != IO_MEM_RAM) {
+	fprintf(stderr, "virtio DMA to IO ram\n");
+	exit(1);
+    }
+
+    off = (off & TARGET_PAGE_MASK) | (addr & ~TARGET_PAGE_MASK);
+
+    for (addr1 = addr + TARGET_PAGE_SIZE;
+	 addr1 < TARGET_PAGE_ALIGN(addr + size);
+	 addr1 += TARGET_PAGE_SIZE) {
+	ram_addr_t off1;
+
+	off1 = cpu_get_physical_page_desc(addr1);
+	if ((off1 & ~TARGET_PAGE_MASK) != IO_MEM_RAM) {
+	    fprintf(stderr, "virtio DMA to IO ram\n");
+	    exit(1);
+	}
+
+	off1 = (off1 & TARGET_PAGE_MASK) | (addr1 & ~TARGET_PAGE_MASK);
+
+	if (off1 != (off + (addr1 - addr))) {
+	    fprintf(stderr, "discontigous virtio memory\n");
+	    exit(1);
+	}
+    }
+
+    return phys_ram_base + off;
+}
+
+static size_t virtqueue_size(int num)
+{
+    return TARGET_PAGE_ALIGN((sizeof(VRingDesc) * num) +
+			     (sizeof(VRingAvail) + sizeof(uint16_t) * num)) +
+	(sizeof(VRingUsed) + sizeof(VRingUsedElem) * num);
+}
+
 static void virtqueue_init(VirtQueue *vq, void *p)
 {
     vq->vring.desc = p;
@@ -127,9 +169,6 @@ int virtqueue_pop(VirtQueue *vq, VirtQueueElement *elem)
     do {
 	struct iovec *sg;
 
-	if ((vq->vring.desc[i].addr + vq->vring.desc[i].len) > ram_size)
-	    errx(1, "Guest sent invalid pointer");
-
 	if (vq->vring.desc[i].flags & VRING_DESC_F_WRITE)
 	    sg = &elem->in_sg[elem->in_num++];
 	else
@@ -137,7 +176,9 @@ int virtqueue_pop(VirtQueue *vq, VirtQueueElement *elem)
 
 	/* Grab the first descriptor, and check it's OK. */
 	sg->iov_len = vq->vring.desc[i].len;
-	sg->iov_base = phys_ram_base + vq->vring.desc[i].addr;
+	sg->iov_base = virtio_map_gpa(vq->vring.desc[i].addr, sg->iov_len);
+	if (sg->iov_base == NULL)
+	    errx(1, "Invalid mapping\n");
 
 	/* If we've got too many, that implies a descriptor loop. */
 	if ((elem->in_num + elem->out_num) > vq->vring.num)
@@ -198,9 +239,10 @@ static void virtio_ioport_write(void *opaque, uint32_t addr, uint32_t val)
 	vdev->vq[vdev->queue_sel].pfn = val;
 	if (pa == 0) {
             virtio_reset(vdev);
-	} else if (pa < (ram_size - TARGET_PAGE_SIZE)) {
-	    virtqueue_init(&vdev->vq[vdev->queue_sel], phys_ram_base + pa);
-	    /* FIXME if pa == 0, deal with device tear down */
+	} else {
+	    size_t size = virtqueue_size(vdev->vq[vdev->queue_sel].vring.num);
+	    virtqueue_init(&vdev->vq[vdev->queue_sel],
+			   virtio_map_gpa(pa, size));
 	}
 	break;
     case VIRTIO_PCI_QUEUE_SEL:
