@@ -12,6 +12,8 @@
 
 #include <signal.h>
 
+#include <signal.h>
+
 int kvm_main_loop(void);
 int kvm_qemu_init(void);
 int kvm_qemu_create_context(void);
@@ -110,5 +112,29 @@ extern kvm_context_t kvm_context;
 #define qemu_kvm_irqchip_in_kernel() (0)
 #define qemu_kvm_pit_in_kernel() (0)
 #endif
+
+void kvm_mutex_unlock(void);
+void kvm_mutex_lock(void);
+
+static inline void kvm_sleep_begin(void)
+{
+    if (kvm_enabled())
+	kvm_mutex_unlock();
+}
+
+static inline void kvm_sleep_end(void)
+{
+    if (kvm_enabled())
+	kvm_mutex_lock();
+}
+
+int kvm_check_received_signal(void);
+
+static inline int kvm_received_signal(void)
+{
+    if (kvm_enabled())
+	return kvm_check_received_signal();
+    return 0;
+}
 
 #endif

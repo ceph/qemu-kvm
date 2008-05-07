@@ -17,6 +17,7 @@ int kvm_pit = 1;
 #include "sysemu.h"
 #include "qemu-common.h"
 #include "console.h"
+#include "block.h"
 
 #include "qemu-kvm.h"
 #include <libkvm.h>
@@ -36,17 +37,10 @@ pthread_mutex_t qemu_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t qemu_aio_cond = PTHREAD_COND_INITIALIZER;
 pthread_cond_t qemu_vcpu_cond = PTHREAD_COND_INITIALIZER;
 pthread_cond_t qemu_system_cond = PTHREAD_COND_INITIALIZER;
+pthread_cond_t qemu_pause_cond = PTHREAD_COND_INITIALIZER;
 __thread struct vcpu_info *vcpu;
 
 static int qemu_system_ready;
-
-struct qemu_kvm_signal_table {
-    sigset_t sigset;
-    sigset_t negsigset;
-};
-
-static struct qemu_kvm_signal_table io_signal_table;
-static struct qemu_kvm_signal_table vcpu_signal_table;
 
 #define SIG_IPI (SIGRTMIN+4)
 
@@ -64,6 +58,7 @@ struct vcpu_info {
 
 pthread_t io_thread;
 static int io_thread_fd = -1;
+static int io_thread_sigfd = -1;
 
 static inline unsigned long kvm_get_thread_id(void)
 {
@@ -172,37 +167,23 @@ static int has_work(CPUState *env)
     return kvm_arch_has_work(env);
 }
 
-static int kvm_process_signal(int si_signo)
-{
-    struct sigaction sa;
-
-    switch (si_signo) {
-    case SIGUSR2:
-        pthread_cond_signal(&qemu_aio_cond);
-        break;
-    case SIGALRM:
-    case SIGIO:
-        sigaction(si_signo, NULL, &sa);
-        sa.sa_handler(si_signo);
-        break;
-    }
-
-    return 1;
-}
-
-static int kvm_eat_signal(struct qemu_kvm_signal_table *waitset, CPUState *env,
-                          int timeout)
+static int kvm_eat_signal(CPUState *env, int timeout)
 {
     struct timespec ts;
     int r, e, ret = 0;
     siginfo_t siginfo;
+    sigset_t waitset;
 
     ts.tv_sec = timeout / 1000;
     ts.tv_nsec = (timeout % 1000) * 1000000;
-    r = sigtimedwait(&waitset->sigset, &siginfo, &ts);
+    sigemptyset(&waitset);
+    sigaddset(&waitset, SIG_IPI);
+
+    r = sigtimedwait(&waitset, &siginfo, &ts);
     if (r == -1 && (errno == EAGAIN || errno == EINTR) && !timeout)
 	return 0;
     e = errno;
+
     pthread_mutex_lock(&qemu_mutex);
     if (env && vcpu)
         cpu_single_env = vcpu->env;
@@ -211,12 +192,12 @@ static int kvm_eat_signal(struct qemu_kvm_signal_table *waitset, CPUState *env,
 	exit(1);
     }
     if (r != -1)
-        ret = kvm_process_signal(siginfo.si_signo);
+	ret = 1;
 
     if (env && vcpu_info[env->cpu_index].stop) {
 	vcpu_info[env->cpu_index].stop = 0;
 	vcpu_info[env->cpu_index].stopped = 1;
-	qemu_kvm_notify_work();
+	pthread_cond_signal(&qemu_pause_cond);
     }
     pthread_mutex_unlock(&qemu_mutex);
 
@@ -227,14 +208,13 @@ static int kvm_eat_signal(struct qemu_kvm_signal_table *waitset, CPUState *env,
 static void kvm_eat_signals(CPUState *env, int timeout)
 {
     int r = 0;
-    struct qemu_kvm_signal_table *waitset = &vcpu_signal_table;
 
-    while (kvm_eat_signal(waitset, env, 0))
+    while (kvm_eat_signal(env, 0))
 	r = 1;
     if (!r && timeout) {
-	r = kvm_eat_signal(waitset, env, timeout);
+	r = kvm_eat_signal(env, timeout);
 	if (r)
-	    while (kvm_eat_signal(waitset, env, 0))
+	    while (kvm_eat_signal(env, 0))
 		;
     }
 }
@@ -267,10 +247,9 @@ static void pause_all_threads(void)
 	pthread_kill(vcpu_info[i].thread, SIG_IPI);
     }
     while (!all_threads_paused()) {
-	pthread_mutex_unlock(&qemu_mutex);
-	kvm_eat_signal(&io_signal_table, NULL, 1000);
-	pthread_mutex_lock(&qemu_mutex);
-	cpu_single_env = NULL;
+	CPUState *env = cpu_single_env;
+	pthread_cond_wait(&qemu_pause_cond, &qemu_mutex);
+	cpu_single_env = env;
     }
 }
 
@@ -310,6 +289,12 @@ static void setup_kernel_sigmask(CPUState *env)
 {
     sigset_t set;
 
+    sigemptyset(&set);
+    sigaddset(&set, SIGUSR2);
+    sigaddset(&set, SIGIO);
+    sigaddset(&set, SIGALRM);
+    sigprocmask(SIG_BLOCK, &set, NULL);
+
     sigprocmask(SIG_BLOCK, NULL, &set);
     sigdelset(&set, SIG_IPI);
     
@@ -346,7 +331,7 @@ static int kvm_main_loop_cpu(CPUState *env)
     cpu_single_env = env;
     while (1) {
 	while (!has_work(env))
-	    kvm_main_loop_wait(env, 10);
+	    kvm_main_loop_wait(env, 1000);
 	if (env->interrupt_request & CPU_INTERRUPT_HARD)
 	    env->hflags &= ~HF_HALTED_MASK;
 	if (!kvm_irqchip_in_kernel(kvm_context) && info->sipi_needed)
@@ -394,18 +379,6 @@ static void *ap_main_loop(void *_env)
     return NULL;
 }
 
-static void qemu_kvm_init_signal_table(struct qemu_kvm_signal_table *sigtab)
-{
-    sigemptyset(&sigtab->sigset);
-    sigfillset(&sigtab->negsigset);
-}
-
-static void kvm_add_signal(struct qemu_kvm_signal_table *sigtab, int signum)
-{
-    sigaddset(&sigtab->sigset, signum);
-    sigdelset(&sigtab->negsigset, signum);
-}
-
 void kvm_init_new_ap(int cpu, CPUState *env)
 {
     pthread_create(&vcpu_info[cpu].thread, NULL, ap_main_loop, env);
@@ -414,27 +387,12 @@ void kvm_init_new_ap(int cpu, CPUState *env)
 	pthread_cond_wait(&qemu_vcpu_cond, &qemu_mutex);
 }
 
-static void qemu_kvm_init_signal_tables(void)
-{
-    qemu_kvm_init_signal_table(&io_signal_table);
-    qemu_kvm_init_signal_table(&vcpu_signal_table);
-
-    kvm_add_signal(&io_signal_table, SIGIO);
-    kvm_add_signal(&io_signal_table, SIGALRM);
-    kvm_add_signal(&io_signal_table, SIGUSR2);
-
-    kvm_add_signal(&vcpu_signal_table, SIG_IPI);
-
-    sigprocmask(SIG_BLOCK, &io_signal_table.sigset, NULL);
-}
-
 int kvm_init_ap(void)
 {
 #ifdef TARGET_I386
     kvm_tpr_opt_setup();
 #endif
     qemu_add_vm_change_state_handler(kvm_vm_state_change_handler, NULL);
-    qemu_kvm_init_signal_tables();
 
     signal(SIG_IPI, sig_ipi_handler);
     return 0;
@@ -468,6 +426,61 @@ void qemu_kvm_notify_work(void)
 	fprintf(stderr, "failed to notify io thread\n");
 }
 
+static int received_signal;
+
+/* QEMU relies on periodically breaking out of select via EINTR to poll for IO
+   and timer signals.  Since we're now using a file descriptor to handle
+   signals, select() won't be interrupted by a signal.  We need to forcefully
+   break the select() loop when a signal is received hence
+   kvm_check_received_signal(). */
+
+int kvm_check_received_signal(void)
+{
+    if (received_signal) {
+	received_signal = 0;
+	return 1;
+    }
+
+    return 0;
+}
+
+/* If we have signalfd, we mask out the signals we want to handle and then
+ * use signalfd to listen for them.  We rely on whatever the current signal
+ * handler is to dispatch the signals when we receive them.
+ */
+
+static void sigfd_handler(void *opaque)
+{
+    int fd = (unsigned long)opaque;
+    struct signalfd_siginfo info;
+    struct sigaction action;
+    ssize_t len;
+
+    while (1) {
+	do {
+	    len = read(fd, &info, sizeof(info));
+	} while (len == -1 && errno == EINTR);
+
+	if (len == -1 && errno == EAGAIN)
+	    break;
+
+	if (len != sizeof(info)) {
+	    printf("read from sigfd returned %ld: %m\n", len);
+	    return;
+	}
+
+	sigaction(info.ssi_signo, NULL, &action);
+	if (action.sa_handler)
+	    action.sa_handler(info.ssi_signo);
+
+	if (info.ssi_signo == SIGUSR2) {
+	    pthread_cond_signal(&qemu_aio_cond);
+	}
+    }
+
+    received_signal = 1;
+}
+
 /* Used to break IO thread out of select */
 static void io_thread_wakeup(void *opaque)
 {
@@ -487,17 +500,15 @@ static void io_thread_wakeup(void *opaque)
 
 	offset += len;
     }
-}
 
-/*
- * The IO thread has all signals that inform machine events
- * blocked (io_signal_table), so it won't get interrupted
- * while processing in main_loop_wait().
- */
+    received_signal = 1;
+}
 
 int kvm_main_loop(void)
 {
     int fds[2];
+    sigset_t mask;
+    int sigfd;
 
     io_thread = pthread_self();
     qemu_system_ready = 1;
@@ -511,15 +522,31 @@ int kvm_main_loop(void)
 			 (void *)(unsigned long)fds[0]);
 
     io_thread_fd = fds[1];
-    pthread_mutex_unlock(&qemu_mutex);
+
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGIO);
+    sigaddset(&mask, SIGALRM);
+    sigaddset(&mask, SIGUSR2);
+    sigprocmask(SIG_BLOCK, &mask, NULL);
+
+    sigfd = kvm_signalfd(&mask);
+    if (sigfd == -1) {
+	fprintf(stderr, "failed to create signalfd\n");
+	return -errno;
+    }
+
+    fcntl(sigfd, F_SETFL, O_NONBLOCK);
+
+    qemu_set_fd_handler2(sigfd, NULL, sigfd_handler, NULL,
+			 (void *)(unsigned long)sigfd);
 
     pthread_cond_broadcast(&qemu_system_cond);
 
+    io_thread_sigfd = sigfd;
+    cpu_single_env = NULL;
+
     while (1) {
-        kvm_eat_signal(&io_signal_table, NULL, 1000);
-        pthread_mutex_lock(&qemu_mutex);
-        cpu_single_env = NULL;
-        main_loop_wait(0);
+        main_loop_wait(1000);
         if (qemu_shutdown_requested())
             break;
         else if (qemu_powerdown_requested())
@@ -528,7 +555,6 @@ int kvm_main_loop(void)
             pthread_kill(vcpu_info[0].thread, SIG_IPI);
             qemu_kvm_reset_requested = 1;
         }
-        pthread_mutex_unlock(&qemu_mutex);
     }
 
     pause_all_threads();
@@ -891,10 +917,21 @@ void qemu_kvm_aio_wait(void)
     CPUState *cpu_single = cpu_single_env;
 
     if (!cpu_single_env) {
-        pthread_mutex_unlock(&qemu_mutex);
-        kvm_eat_signal(&io_signal_table, NULL, 1000);
-        pthread_mutex_lock(&qemu_mutex);
-        cpu_single_env = NULL;
+	if (io_thread_sigfd != -1) {
+	    fd_set rfds;
+	    int ret;
+
+	    FD_ZERO(&rfds);
+	    FD_SET(io_thread_sigfd, &rfds);
+
+	    /* this is a rare case where we do want to hold qemu_mutex
+	     * while sleeping.  We cannot allow anything else to run
+	     * right now. */
+	    ret = select(io_thread_sigfd + 1, &rfds, NULL, NULL, NULL);
+	    if (ret > 0 && FD_ISSET(io_thread_sigfd, &rfds))
+		sigfd_handler((void *)(unsigned long)io_thread_sigfd);
+	}
+	qemu_aio_poll();
     } else {
         pthread_cond_wait(&qemu_aio_cond, &qemu_mutex);
         cpu_single_env = cpu_single;
@@ -920,4 +957,15 @@ void kvm_cpu_destroy_phys_mem(target_phys_addr_t start_addr,
 			      unsigned long size)
 {
     kvm_destroy_phys_mem(kvm_context, start_addr, size);
+}
+
+void kvm_mutex_unlock(void)
+{
+    pthread_mutex_unlock(&qemu_mutex);
+}
+
+void kvm_mutex_lock(void)
+{
+    pthread_mutex_lock(&qemu_mutex);
+    cpu_single_env = NULL;
 }

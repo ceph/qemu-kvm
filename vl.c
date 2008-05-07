@@ -7271,6 +7271,23 @@ void qemu_register_boot_set(QEMUBootSetHandler *func)
 	qemu_boot_set_handler = func;
 }
 
+static int qemu_select(int max_fd, fd_set *rfds, fd_set *wfds, fd_set *xfds,
+		       struct timeval *tv)
+{
+    int ret;
+
+    /* KVM holds a mutex while QEMU code is running, we need hooks to
+       release the mutex whenever QEMU code sleeps. */
+
+    kvm_sleep_begin();
+
+    ret = select(max_fd, rfds, wfds, xfds, tv);
+
+    kvm_sleep_end();
+
+    return ret;
+}
+
 void main_loop_wait(int timeout)
 {
     IOHandlerRecord *ioh;
@@ -7342,11 +7359,12 @@ void main_loop_wait(int timeout)
         }
     }
 
-    tv.tv_sec = 0;
 #ifdef _WIN32
+    tv.tv_sec = 0;
     tv.tv_usec = 0;
 #else
-    tv.tv_usec = timeout * 1000;
+    tv.tv_sec = timeout / 1000;
+    tv.tv_usec = (timeout % 1000) * 1000;
 #endif
 #if defined(CONFIG_SLIRP)
     if (slirp_inited) {
@@ -7354,7 +7372,7 @@ void main_loop_wait(int timeout)
     }
 #endif
  moreio:
-    ret = select(nfds + 1, &rfds, &wfds, &xfds, &tv);
+    ret = qemu_select(nfds + 1, &rfds, &wfds, &xfds, &tv);
     if (ret > 0) {
         IOHandlerRecord **pioh;
         int more = 0;
@@ -7383,7 +7401,7 @@ void main_loop_wait(int timeout)
             } else
                 pioh = &ioh->next;
         }
-        if (more)
+        if (more && !kvm_received_signal())
             goto moreio;
     }
 #if defined(CONFIG_SLIRP)
