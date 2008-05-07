@@ -3804,10 +3804,11 @@ int qemu_can_send_packet(VLANClientState *vc1)
     return 0;
 }
 
-void qemu_send_packet(VLANClientState *vc1, const uint8_t *buf, int size)
+int qemu_send_packet(VLANClientState *vc1, const uint8_t *buf, int size)
 {
     VLANState *vlan = vc1->vlan;
     VLANClientState *vc;
+    int ret = -EAGAIN;
 
 #if 0
     printf("vlan %d send:\n", vlan->id);
@@ -3815,9 +3816,14 @@ void qemu_send_packet(VLANClientState *vc1, const uint8_t *buf, int size)
 #endif
     for(vc = vlan->first_client; vc != NULL; vc = vc->next) {
         if (vc != vc1) {
-            vc->fd_read(vc->opaque, buf, size);
+	    if (!vc->fd_can_read || vc->fd_can_read(vc->opaque)) {
+		vc->fd_read(vc->opaque, buf, size);
+		ret = 0;
+	    }
         }
     }
+
+    return ret;
 }
 
 static ssize_t vc_sendv_compat(VLANClientState *vc, const struct iovec *iov,
@@ -4064,6 +4070,8 @@ typedef struct TAPState {
     VLANClientState *vc;
     int fd;
     char down_script[1024];
+    char buf[4096];
+    int size;
 } TAPState;
 
 static void tap_receive(void *opaque, const uint8_t *buf, int size)
@@ -4092,24 +4100,70 @@ static ssize_t tap_readv(void *opaque, const struct iovec *iov,
     return len;
 }
 
+static int tap_can_send(void *opaque)
+{
+    TAPState *s = opaque;
+    VLANClientState *vc;
+    int can_receive = 0;
+
+    /* Check to see if any of our clients can receive a packet */
+    for (vc = s->vc->vlan->first_client; vc; vc = vc->next) {
+	/* Skip ourselves */
+	if (vc == s->vc)
+	    continue;
+
+	if (!vc->fd_can_read) {
+	    /* no fd_can_read handler, they always can receive */
+	    can_receive = 1;
+	} else
+	    can_receive = vc->fd_can_read(vc->opaque);
+
+	/* Once someone can receive, we try to send a packet */
+	if (can_receive)
+	    break;
+    }
+
+    return can_receive;
+}
+
 static void tap_send(void *opaque)
 {
     TAPState *s = opaque;
-    uint8_t buf[4096];
-    int size;
 
-#ifdef __sun__
-    struct strbuf sbuf;
-    int f = 0;
-    sbuf.maxlen = sizeof(buf);
-    sbuf.buf = buf;
-    size = getmsg(s->fd, NULL, &sbuf, &f) >=0 ? sbuf.len : -1;
-#else
-    size = read(s->fd, buf, sizeof(buf));
-#endif
-    if (size > 0) {
-        qemu_send_packet(s->vc, buf, size);
+    /* First try to send any buffered packet */
+    if (s->size > 0) {
+	int err;
+
+	/* If noone can receive the packet, buffer it */
+	err = qemu_send_packet(s->vc, s->buf, s->size);
+	if (err == -EAGAIN)
+	    return;
     }
+
+    /* Read packets until we hit EAGAIN */
+    do {
+#ifdef __sun__
+	struct strbuf sbuf;
+	int f = 0;
+	sbuf.maxlen = sizeof(s->buf);
+	sbuf.buf = s->buf;
+	s->size = getmsg(s->fd, NULL, &sbuf, &f) >=0 ? sbuf.len : -1;
+#else
+	s->size = read(s->fd, s->buf, sizeof(s->buf));
+#endif
+
+	if (s->size == -1 && errno == EINTR)
+	    continue;
+
+	if (s->size > 0) {
+	    int err;
+
+	    /* If noone can receive the packet, buffer it */
+	    err = qemu_send_packet(s->vc, s->buf, s->size);
+	    if (err == -EAGAIN)
+		break;
+	}
+    } while (s->size > 0);
 }
 
 /* fd support */
@@ -4124,7 +4178,7 @@ static TAPState *net_tap_fd_init(VLANState *vlan, int fd)
     s->fd = fd;
     s->vc = qemu_new_vlan_client(vlan, tap_receive, NULL, s);
     s->vc->fd_readv = tap_readv;
-    qemu_set_fd_handler2(s->fd, NULL, tap_send, NULL, s);
+    qemu_set_fd_handler2(s->fd, tap_can_send, tap_send, NULL, s);
     snprintf(s->vc->info_str, sizeof(s->vc->info_str), "tap: fd=%d", fd);
     return s;
 }
