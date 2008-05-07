@@ -254,6 +254,16 @@ static int event_pending = 1;
 
 #define TFR(expr) do { if ((expr) != -1) break; } while (errno == EINTR)
 
+/* KVM runs the main loop in a separate thread.  If we update one of the lists
+ * that are polled before or after select(), we need to make sure to break out
+ * of the select() to ensure the new item is serviced.
+ */
+static void main_loop_break(void)
+{
+    if (kvm_enabled())
+	qemu_kvm_notify_work();
+}
+
 void decorate_application_name(char *appname, int max_len)
 {
     if (kvm_enabled())
@@ -5693,6 +5703,7 @@ int qemu_set_fd_handler2(int fd,
         ioh->opaque = opaque;
         ioh->deleted = 0;
     }
+    main_loop_break();
     return 0;
 }
 
@@ -7033,8 +7044,7 @@ void qemu_bh_schedule(QEMUBH *bh)
     if (env) {
         cpu_interrupt(env, CPU_INTERRUPT_EXIT);
     }
-    if (kvm_enabled())
-        qemu_kvm_notify_work();
+    main_loop_break();
 }
 
 void qemu_bh_cancel(QEMUBH *bh)
