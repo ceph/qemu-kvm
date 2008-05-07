@@ -136,8 +136,9 @@ unsigned long read_cr0(void)
 	return cr0;
 }
 
-void test_smsw(void *mem)
+void test_smsw(void)
 {
+	char mem[16];
 	unsigned short msw, msw_orig, *pmsw;
 	int i, zero;
 
@@ -147,7 +148,7 @@ void test_smsw(void *mem)
 	report("smsw (1)", msw == msw_orig);
 
 	memset(mem, 0, 16);
-	pmsw = mem;
+	pmsw = (void *)mem;
 	asm("smsw %0" : "=m"(pmsw[4]));
 	zero = 1;
 	for (i = 0; i < 8; ++i)
@@ -156,8 +157,9 @@ void test_smsw(void *mem)
 	report("smsw (2)", msw == pmsw[4] && zero);
 }
 
-void test_lmsw(void *mem)
+void test_lmsw(void)
 {
+	char mem[16];
 	unsigned short msw, *pmsw;
 	unsigned long cr0;
 
@@ -168,7 +170,7 @@ void test_lmsw(void *mem)
 	printf("before %lx after %lx\n", cr0, read_cr0());
 	report("lmsw (1)", (cr0 ^ read_cr0()) == 8);
 
-	pmsw = mem;
+	pmsw = (void *)mem;
 	*pmsw = cr0;
 	asm("lmsw %0" : : "m"(*pmsw));
 	printf("before %lx after %lx\n", cr0, read_cr0());
@@ -198,8 +200,8 @@ int main()
 
 	test_cr8();
 
-	test_smsw(mem);
-	test_lmsw(mem);
+	test_smsw();
+	test_lmsw();
 
 	printf("\nSUMMARY: %d tests, %d failures\n", tests, fails);
 	return fails ? 1 : 0;
