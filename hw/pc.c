@@ -31,6 +31,7 @@
 #include "net.h"
 #include "smbus.h"
 #include "boards.h"
+#include "console.h"
 
 #include "qemu-kvm.h"
 

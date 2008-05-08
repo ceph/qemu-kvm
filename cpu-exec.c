@@ -260,7 +260,7 @@ static inline TranslationBlock *tb_find_fast(void)
     cs_base = 0;
     pc = env->pc;
 #elif defined(TARGET_CRIS)
-    flags = env->pregs[PR_CCS] & (U_FLAG | X_FLAG);
+    flags = env->pregs[PR_CCS] & U_FLAG;
     cs_base = 0;
     pc = env->pc;
 #elif defined(TARGET_IA64)
@@ -1446,7 +1446,7 @@ int cpu_signal_handler(int host_signum, void *pinfo,
     unsigned long pc;
     int is_write;
 
-    pc = uc->uc_mcontext.gregs[R15];
+    pc = uc->uc_mcontext.arm_pc;
     /* XXX: compute is_write */
     is_write = 0;
     return handle_cpu_signal(pc, (unsigned long)info->si_addr,
