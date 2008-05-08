@@ -87,7 +87,6 @@ struct VirtQueue
     uint32_t pfn;
     uint16_t last_avail_idx;
     void (*handle_output)(VirtIODevice *vdev, VirtQueue *vq);
-    int index;
 };
 
 #define VIRTQUEUE_MAX_SIZE 1024
@@ -108,8 +107,6 @@ struct VirtIODevice
     PCIDevice pci_dev;
     const char *name;
     uint32_t addr;
-    uint16_t vendor;
-    uint16_t device;
     uint8_t status;
     uint8_t isr;
     uint16_t queue_sel;
@@ -139,5 +136,9 @@ void virtqueue_push(VirtQueue *vq, const VirtQueueElement *elem,
 int virtqueue_pop(VirtQueue *vq, VirtQueueElement *elem);
 
 void virtio_notify(VirtIODevice *vdev, VirtQueue *vq);
+
+void virtio_save(VirtIODevice *vdev, QEMUFile *f);
+
+void virtio_load(VirtIODevice *vdev, QEMUFile *f);
 
 #endif

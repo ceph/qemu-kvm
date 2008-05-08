@@ -420,7 +420,6 @@ VirtQueue *virtio_add_queue(VirtIODevice *vdev, int queue_size,
 
     vdev->vq[i].vring.num = queue_size;
     vdev->vq[i].handle_output = handle_output;
-    vdev->vq[i].index = i;
 
     return &vdev->vq[i];
 }
@@ -433,6 +432,71 @@ void virtio_notify(VirtIODevice *vdev, VirtQueue *vq)
 	return;
 
     vdev->isr = 1;
+    virtio_update_irq(vdev);
+}
+
+void virtio_save(VirtIODevice *vdev, QEMUFile *f)
+{
+    int i;
+
+    pci_device_save(&vdev->pci_dev, f);
+
+    qemu_put_be32s(f, &vdev->addr);
+    qemu_put_8s(f, &vdev->status);
+    qemu_put_8s(f, &vdev->isr);
+    qemu_put_be16s(f, &vdev->queue_sel);
+    qemu_put_be32s(f, &vdev->features);
+    qemu_put_be32(f, vdev->config_len);
+    qemu_put_buffer(f, vdev->config, vdev->config_len);
+
+    for (i = 0; i < VIRTIO_PCI_QUEUE_MAX; i++) {
+	if (vdev->vq[i].vring.num == 0)
+	    break;
+    }
+
+    qemu_put_be32(f, i);
+
+    for (i = 0; i < VIRTIO_PCI_QUEUE_MAX; i++) {
+	if (vdev->vq[i].vring.num == 0)
+	    break;
+
+	qemu_put_be32(f, vdev->vq[i].vring.num);
+	qemu_put_be32s(f, &vdev->vq[i].pfn);
+	qemu_put_be16s(f, &vdev->vq[i].last_avail_idx);
+    }
+}
+
+void virtio_load(VirtIODevice *vdev, QEMUFile *f)
+{
+    int num, i;
+
+    pci_device_load(&vdev->pci_dev, f);
+
+    qemu_get_be32s(f, &vdev->addr);
+    qemu_get_8s(f, &vdev->status);
+    qemu_get_8s(f, &vdev->isr);
+    qemu_get_be16s(f, &vdev->queue_sel);
+    qemu_get_be32s(f, &vdev->features);
+    vdev->config_len = qemu_get_be32(f);
+    qemu_get_buffer(f, vdev->config, vdev->config_len);
+
+    num = qemu_get_be32(f);
+
+    for (i = 0; i < num; i++) {
+	vdev->vq[i].vring.num = qemu_get_be32(f);
+	qemu_get_be32s(f, &vdev->vq[i].pfn);
+	qemu_get_be16s(f, &vdev->vq[i].last_avail_idx);
+
+	if (vdev->vq[i].pfn) {
+	    size_t size;
+	    target_phys_addr_t pa;
+
+	    pa = (ram_addr_t)vdev->vq[i].pfn << TARGET_PAGE_BITS;
+	    size = virtqueue_size(vdev->vq[i].vring.num);
+	    virtqueue_init(&vdev->vq[i], virtio_map_gpa(pa, size));
+	}
+    }
+
     virtio_update_irq(vdev);
 }
 
