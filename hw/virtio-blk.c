@@ -162,11 +162,30 @@ static uint32_t virtio_blk_get_features(VirtIODevice *vdev)
     return (1 << VIRTIO_BLK_F_SEG_MAX | 1 << VIRTIO_BLK_F_GEOMETRY);
 }
 
+static void virtio_blk_save(QEMUFile *f, void *opaque)
+{
+    VirtIOBlock *s = opaque;
+    virtio_save(&s->vdev, f);
+}
+
+static int virtio_blk_load(QEMUFile *f, void *opaque, int version_id)
+{
+    VirtIOBlock *s = opaque;
+
+    if (version_id != 1)
+	return -EINVAL;
+
+    virtio_load(&s->vdev, f);
+
+    return 0;
+}
+
 void *virtio_blk_init(PCIBus *bus, uint16_t vendor, uint16_t device,
 		      BlockDriverState *bs)
 {
     VirtIOBlock *s;
     int cylinders, heads, secs;
+    static int virtio_blk_id;
 
     s = (VirtIOBlock *)virtio_init_pci(bus, "virtio-blk", vendor, device,
 				       0, VIRTIO_ID_BLOCK,
@@ -183,6 +202,9 @@ void *virtio_blk_init(PCIBus *bus, uint16_t vendor, uint16_t device,
     bdrv_set_geometry_hint(s->bs, cylinders, heads, secs);
 
     virtio_add_queue(&s->vdev, 128, virtio_blk_handle_output);
+
+    register_savevm("virtio-blk", virtio_blk_id++, 1,
+		    virtio_blk_save, virtio_blk_load, s);
 
     return s;
 }
