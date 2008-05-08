@@ -535,7 +535,8 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
 
     for(i = 0; i < MAX_SERIAL_PORTS; i++) {
         if (serial_hds[i]) {
-            serial_init(serial_io[i], i8259[serial_irq[i]], serial_hds[i]);
+            serial_init(serial_io[i], i8259[serial_irq[i]], 115200,
+					serial_hds[i]);
         }
     }
 
@@ -669,4 +670,5 @@ QEMUMachine ipf_machine = {
     "itanium",
     "Itanium Platform",
     ipf_init_pci,
+    VGA_RAM_SIZE + VGA_RAM_SIZE,
 };
