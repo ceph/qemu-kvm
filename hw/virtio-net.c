@@ -294,9 +294,40 @@ static void virtio_net_tx_timer(void *opaque)
     virtio_net_flush_tx(n, n->tx_vq);
 }
 
+static void virtio_net_save(QEMUFile *f, void *opaque)
+{
+    VirtIONet *n = opaque;
+
+    virtio_save(&n->vdev, f);
+
+    qemu_put_buffer(f, n->mac, 6);
+    qemu_put_be32(f, n->tx_timer_active);
+}
+
+static int virtio_net_load(QEMUFile *f, void *opaque, int version_id)
+{
+    VirtIONet *n = opaque;
+
+    if (version_id != 1)
+	return -EINVAL;
+
+    virtio_load(&n->vdev, f);
+
+    qemu_get_buffer(f, n->mac, 6);
+    n->tx_timer_active = qemu_get_be32(f);
+
+    if (n->tx_timer_active) {
+	qemu_mod_timer(n->tx_timer,
+		       qemu_get_clock(vm_clock) + TX_TIMER_INTERVAL);
+    }
+
+    return 0;
+}
+
 PCIDevice *virtio_net_init(PCIBus *bus, NICInfo *nd, int devfn)
 {
     VirtIONet *n;
+    static int virtio_net_id;
 
     n = (VirtIONet *)virtio_init_pci(bus, "virtio-net", 6900, 0x1000,
 				     0, VIRTIO_ID_NET,
@@ -322,6 +353,9 @@ PCIDevice *virtio_net_init(PCIBus *bus, NICInfo *nd, int devfn)
 
     n->tx_timer = qemu_new_timer(vm_clock, virtio_net_tx_timer, n);
     n->tx_timer_active = 0;
+
+    register_savevm("virtio-net", virtio_net_id++, 1,
+		    virtio_net_save, virtio_net_load, n);
 
     return (PCIDevice *)n;
 }
