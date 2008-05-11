@@ -149,15 +149,6 @@ static void get_seg(SegmentCache *lhs, const struct kvm_segment *rhs)
 	| (rhs->avl * DESC_AVL_MASK);
 }
 
-/* the reset values of qemu are not compatible to SVM
- * this function is used to fix the segment descriptor values */
-static void fix_realmode_dataseg(struct kvm_segment *seg)
-{
-	seg->type = 0x02;
-	seg->present = 1;
-	seg->s = 1;
-}
-
 void kvm_arch_load_regs(CPUState *env)
 {
     struct kvm_regs regs;
@@ -223,15 +214,6 @@ void kvm_arch_load_regs(CPUState *env)
 		sregs.ss.selector = (sregs.ss.selector & ~3) |
 			(sregs.cs.selector & 3);
 		sregs.ss.dpl = sregs.ss.selector & 3;
-	    }
-
-	    if (!(env->cr[0] & CR0_PG_MASK)) {
-		    fix_realmode_dataseg(&sregs.cs);
-		    fix_realmode_dataseg(&sregs.ds);
-		    fix_realmode_dataseg(&sregs.es);
-		    fix_realmode_dataseg(&sregs.fs);
-		    fix_realmode_dataseg(&sregs.gs);
-		    fix_realmode_dataseg(&sregs.ss);
 	    }
     }
 
