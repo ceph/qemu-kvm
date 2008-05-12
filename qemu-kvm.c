@@ -12,6 +12,7 @@ int kvm_allowed = 1;
 int kvm_irqchip = 1;
 int kvm_pit = 1;
 
+#include <assert.h>
 #include <string.h>
 #include "hw/hw.h"
 #include "sysemu.h"
@@ -63,6 +64,14 @@ static int io_thread_sigfd = -1;
 static inline unsigned long kvm_get_thread_id(void)
 {
     return syscall(SYS_gettid);
+}
+
+static void qemu_cond_wait(pthread_cond_t *cond)
+{
+    CPUState *env = cpu_single_env;
+
+    pthread_cond_wait(cond, &qemu_mutex);
+    cpu_single_env = env;
 }
 
 CPUState *qemu_kvm_cpu_env(int index)
@@ -246,11 +255,8 @@ static void pause_all_threads(void)
 	vcpu_info[i].stop = 1;
 	pthread_kill(vcpu_info[i].thread, SIG_IPI);
     }
-    while (!all_threads_paused()) {
-	CPUState *env = cpu_single_env;
-	pthread_cond_wait(&qemu_pause_cond, &qemu_mutex);
-	cpu_single_env = env;
-    }
+    while (!all_threads_paused())
+	qemu_cond_wait(&qemu_pause_cond);
 }
 
 static void resume_all_threads(void)
@@ -372,7 +378,7 @@ static void *ap_main_loop(void *_env)
 
     /* and wait for machine initialization */
     while (!qemu_system_ready)
-	pthread_cond_wait(&qemu_system_cond, &qemu_mutex);
+	qemu_cond_wait(&qemu_system_cond);
     pthread_mutex_unlock(&qemu_mutex);
 
     kvm_main_loop_cpu(env);
@@ -384,7 +390,7 @@ void kvm_init_new_ap(int cpu, CPUState *env)
     pthread_create(&vcpu_info[cpu].thread, NULL, ap_main_loop, env);
 
     while (vcpu_info[cpu].created == 0)
-	pthread_cond_wait(&qemu_vcpu_cond, &qemu_mutex);
+	qemu_cond_wait(&qemu_vcpu_cond);
 }
 
 int kvm_init_ap(void)
@@ -892,8 +898,6 @@ void qemu_kvm_aio_wait_start(void)
 
 void qemu_kvm_aio_wait(void)
 {
-    CPUState *cpu_single = cpu_single_env;
-
     if (!cpu_single_env) {
 	if (io_thread_sigfd != -1) {
 	    fd_set rfds;
@@ -910,10 +914,8 @@ void qemu_kvm_aio_wait(void)
 		sigfd_handler((void *)(unsigned long)io_thread_sigfd);
 	}
 	qemu_aio_poll();
-    } else {
-        pthread_cond_wait(&qemu_aio_cond, &qemu_mutex);
-        cpu_single_env = cpu_single;
-    }
+    } else
+        qemu_cond_wait(&qemu_aio_cond);
 }
 
 void qemu_kvm_aio_wait_end(void)
@@ -939,6 +941,7 @@ void kvm_cpu_destroy_phys_mem(target_phys_addr_t start_addr,
 
 void kvm_mutex_unlock(void)
 {
+    assert(!cpu_single_env);
     pthread_mutex_unlock(&qemu_mutex);
 }
 
