@@ -7389,11 +7389,7 @@ void qemu_system_reset_request(void)
     }
     if (cpu_single_env)
         cpu_interrupt(cpu_single_env, CPU_INTERRUPT_EXIT);
-#ifdef USE_KVM
-    if (kvm_allowed)
-        if (!no_reboot)
-            qemu_kvm_system_reset_request();
-#endif
+    main_loop_break();
 }
 
 void qemu_system_shutdown_request(void)

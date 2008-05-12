@@ -61,3 +61,7 @@ int kvm_arch_try_push_interrupts(void *opaque)
 void kvm_arch_update_regs_for_sipi(CPUState *env)
 {
 }
+
+void kvm_arch_cpu_reset(CPUState *env)
+{
+}

@@ -213,3 +213,7 @@ int handle_powerpc_dcr_write(int vcpu, uint32_t dcrn, uint32_t data)
 
     return 0; /* XXX ignore failed DCR ops */
 }
+
+void kvm_arch_cpu_reset(CPUState *env)
+{
+}

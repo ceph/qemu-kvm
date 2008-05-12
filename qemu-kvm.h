@@ -59,6 +59,7 @@ void kvm_arch_post_kvm_run(void *opaque, int vcpu);
 int kvm_arch_has_work(CPUState *env);
 int kvm_arch_try_push_interrupts(void *opaque);
 void kvm_arch_update_regs_for_sipi(CPUState *env);
+void kvm_arch_cpu_reset(CPUState *env);
 
 CPUState *qemu_kvm_cpu_env(int index);
 
