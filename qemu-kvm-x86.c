@@ -671,3 +671,19 @@ int handle_tpr_access(void *opaque, int vcpu,
     kvm_tpr_access_report(cpu_single_env, rip, is_write);
     return 0;
 }
+
+void kvm_arch_cpu_reset(CPUState *env)
+{
+    struct kvm_mp_state mp_state = { .mp_state = KVM_MP_STATE_UNINITIALIZED };
+
+    kvm_arch_load_regs(env);
+    if (env->cpu_index != 0) {
+	if (kvm_irqchip_in_kernel(kvm_context))
+	    kvm_set_mpstate(kvm_context, env->cpu_index, &mp_state);
+	else {
+	    env->interrupt_request &= ~CPU_INTERRUPT_HARD;
+	    env->hflags |= HF_HALTED_MASK;
+	    env->exception_index = EXCP_HLT;
+	}
+    }
+}

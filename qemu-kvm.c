@@ -32,8 +32,6 @@ kvm_context_t kvm_context;
 
 extern int smp_cpus;
 
-static int qemu_kvm_reset_requested;
-
 pthread_mutex_t qemu_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t qemu_aio_cond = PTHREAD_COND_INITIALIZER;
 pthread_cond_t qemu_vcpu_cond = PTHREAD_COND_INITIALIZER;
@@ -53,7 +51,6 @@ struct vcpu_info {
     int signalled;
     int stop;
     int stopped;
-    int reload_regs;
     int created;
 } vcpu_info[256];
 
@@ -251,6 +248,8 @@ static void pause_all_threads(void)
 {
     int i;
 
+    assert(!cpu_single_env);
+
     for (i = 0; i < smp_cpus; ++i) {
 	vcpu_info[i].stop = 1;
 	pthread_kill(vcpu_info[i].thread, SIG_IPI);
@@ -262,6 +261,8 @@ static void pause_all_threads(void)
 static void resume_all_threads(void)
 {
     int i;
+
+    assert(!cpu_single_env);
 
     for (i = 0; i < smp_cpus; ++i) {
 	vcpu_info[i].stop = 0;
@@ -307,15 +308,18 @@ static void setup_kernel_sigmask(CPUState *env)
     kvm_set_signal_mask(kvm_context, env->cpu_index, &set);
 }
 
-void qemu_kvm_system_reset_request(void)
+void qemu_kvm_system_reset(void)
 {
     int i;
 
-    for (i = 0; i < smp_cpus; ++i) {
-	vcpu_info[i].reload_regs = 1;
-	pthread_kill(vcpu_info[i].thread, SIG_IPI);
-    }
+    pause_all_threads();
+
     qemu_system_reset();
+
+    for (i = 0; i < smp_cpus; ++i)
+	kvm_arch_cpu_reset(vcpu_info[i].env);
+
+    resume_all_threads();
 }
 
 static int kvm_main_loop_cpu(CPUState *env)
@@ -348,11 +352,6 @@ static int kvm_main_loop_cpu(CPUState *env)
 	    kvm_cpu_exec(env);
 	env->interrupt_request &= ~CPU_INTERRUPT_EXIT;
 	kvm_main_loop_wait(env, 0);
-        if (info->reload_regs) {
-	    info->reload_regs = 0;
-	    if (env->cpu_index == 0) /* ap needs to be placed in INIT */
-		kvm_arch_load_regs(env);
-	}
     }
     pthread_mutex_unlock(&qemu_mutex);
     return 0;
@@ -535,10 +534,8 @@ int kvm_main_loop(void)
             break;
         else if (qemu_powerdown_requested())
             qemu_system_powerdown();
-        else if (qemu_reset_requested()) {
-            pthread_kill(vcpu_info[0].thread, SIG_IPI);
-            qemu_kvm_reset_requested = 1;
-        }
+        else if (qemu_reset_requested())
+	    qemu_kvm_system_reset();
     }
 
     pause_all_threads();
@@ -647,6 +644,9 @@ static int kvm_halt(void *opaque, int vcpu)
 
 static int kvm_shutdown(void *opaque, int vcpu)
 {
+    /* stop the current vcpu from going back to guest mode */
+    vcpu_info[cpu_single_env->cpu_index].stopped = 1;
+
     qemu_system_reset_request();
     return 1;
 }
