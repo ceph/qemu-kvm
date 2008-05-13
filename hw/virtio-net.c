@@ -239,23 +239,15 @@ again:
 static void virtio_net_flush_tx(VirtIONet *n, VirtQueue *vq)
 {
     VirtQueueElement elem;
-    int count = 0;
 
     if (!(n->vdev.status & VIRTIO_CONFIG_S_DRIVER_OK))
         return;
 
     while (virtqueue_pop(vq, &elem)) {
-	int i;
-	size_t len = 0;
+	ssize_t len = 0;
 
 	/* ignore the header for now */
-	for (i = 1; i < elem.out_num; i++) {
-	    qemu_send_packet(n->vc, elem.out_sg[i].iov_base,
-			     elem.out_sg[i].iov_len);
-	    len += elem.out_sg[i].iov_len;
-	}
-
-	count++;
+	len = qemu_sendv_packet(n->vc, &elem.out_sg[1], elem.out_num - 1);
 
 	virtqueue_push(vq, &elem, sizeof(struct virtio_net_hdr) + len);
 	virtio_notify(&n->vdev, vq);
