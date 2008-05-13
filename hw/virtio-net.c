@@ -246,6 +246,12 @@ static void virtio_net_flush_tx(VirtIONet *n, VirtQueue *vq)
     while (virtqueue_pop(vq, &elem)) {
 	ssize_t len = 0;
 
+	if (elem.out_num < 1 ||
+	    elem.out_sg[0].iov_len != sizeof(struct virtio_net_hdr)) {
+		fprintf(stderr, "virtio-net header not in first element\n");
+		exit(1);
+	}
+
 	/* ignore the header for now */
 	len = qemu_sendv_packet(n->vc, &elem.out_sg[1], elem.out_num - 1);
 
