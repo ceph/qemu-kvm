@@ -1,12 +1,17 @@
 #ifndef QEMU_NET_H
 #define QEMU_NET_H
 
+#include <sys/uio.h>
+
 /* VLANs support */
+
+typedef ssize_t (IOReadvHandler)(void *, const struct iovec *, int);
 
 typedef struct VLANClientState VLANClientState;
 
 struct VLANClientState {
     IOReadHandler *fd_read;
+    IOReadvHandler *fd_readv;
     /* Packets may still be sent if this returns zero.  It's used to
        rate-limit the slirp code.  */
     IOCanRWHandler *fd_can_read;
@@ -30,6 +35,8 @@ VLANClientState *qemu_new_vlan_client(VLANState *vlan,
                                       void *opaque);
 int qemu_can_send_packet(VLANClientState *vc);
 void qemu_send_packet(VLANClientState *vc, const uint8_t *buf, int size);
+ssize_t qemu_sendv_packet(VLANClientState *vc, const struct iovec *iov,
+			  int iovcnt);
 void qemu_handler_true(void *opaque);
 
 void do_info_network(void);
