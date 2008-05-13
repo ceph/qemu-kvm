@@ -4086,6 +4086,19 @@ static void tap_receive(void *opaque, const uint8_t *buf, int size)
     }
 }
 
+static ssize_t tap_readv(void *opaque, const struct iovec *iov,
+			 int iovcnt)
+{
+    TAPState *s = opaque;
+    ssize_t len;
+
+    do {
+	len = writev(s->fd, iov, iovcnt);
+    } while (len == -1 && (errno == EINTR || errno == EAGAIN));
+
+    return len;
+}
+
 static void tap_send(void *opaque)
 {
     TAPState *s = opaque;
@@ -4135,6 +4148,7 @@ static TAPState *net_tap_fd_init(VLANState *vlan, int fd)
     s->no_poll = 0;
     enable_sigio_timer(fd);
     s->vc = qemu_new_vlan_client(vlan, tap_receive, NULL, s);
+    s->vc->fd_readv = tap_readv;
     qemu_set_fd_handler2(s->fd, tap_read_poll, tap_send, NULL, s);
     snprintf(s->vc->info_str, sizeof(s->vc->info_str), "tap: fd=%d", fd);
     return s;
