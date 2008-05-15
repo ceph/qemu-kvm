@@ -412,6 +412,7 @@ DefinitionBlock (
                     Store(0x2, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 1)
             }
 
             Device (S2) {              // Slot 2
@@ -420,6 +421,7 @@ DefinitionBlock (
                     Store(0x4, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 2)
             }
 
             Device (S3) {              // Slot 3
@@ -428,6 +430,7 @@ DefinitionBlock (
                     Store (0x8, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 3)
             }
 
             Device (S4) {              // Slot 4
@@ -436,6 +439,7 @@ DefinitionBlock (
                     Store(0x10, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 4)
             }
 
             Device (S5) {              // Slot 5
@@ -444,6 +448,7 @@ DefinitionBlock (
                     Store(0x20, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 5)
             }
 
             Device (S6) {              // Slot 6
@@ -452,6 +457,7 @@ DefinitionBlock (
                     Store(0x40, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 6)
             }
 
             Device (S7) {              // Slot 7
@@ -460,6 +466,7 @@ DefinitionBlock (
                     Store(0x80, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 7)
             }
 
             Device (S8) {              // Slot 8
@@ -468,6 +475,7 @@ DefinitionBlock (
                     Store(0x100, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 8)
             }
 
             Device (S9) {              // Slot 9
@@ -476,6 +484,7 @@ DefinitionBlock (
                     Store(0x200, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 9)
             }
 
             Device (S10) {              // Slot 10
@@ -484,6 +493,7 @@ DefinitionBlock (
                     Store(0x400, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 10)
             }
 
             Device (S11) {              // Slot 11
@@ -492,6 +502,7 @@ DefinitionBlock (
                     Store(0x800, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 11)
             }
 
             Device (S12) {              // Slot 12
@@ -500,6 +511,7 @@ DefinitionBlock (
                     Store(0x1000, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 13)
             }
 
             Device (S13) {              // Slot 13
@@ -508,6 +520,7 @@ DefinitionBlock (
                     Store(0x2000, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 13)
             }
 
             Device (S14) {              // Slot 14
@@ -516,6 +529,7 @@ DefinitionBlock (
                     Store(0x4000, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 14)
             }
 
             Device (S15) {              // Slot 15
@@ -524,6 +538,7 @@ DefinitionBlock (
                     Store(0x8000, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 15)
             }
 
             Device (S16) {              // Slot 16
@@ -532,6 +547,7 @@ DefinitionBlock (
                     Store(0x10000, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 16)
             }
 
             Device (S17) {              // Slot 17
@@ -540,6 +556,7 @@ DefinitionBlock (
                     Store(0x20000, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 17)
             }
 
             Device (S18) {              // Slot 18
@@ -548,6 +565,7 @@ DefinitionBlock (
                     Store(0x40000, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 18)
             }
 
             Device (S19) {              // Slot 19
@@ -556,6 +574,7 @@ DefinitionBlock (
                     Store(0x80000, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 19)
             }
 
             Device (S20) {              // Slot 20
@@ -564,6 +583,7 @@ DefinitionBlock (
                     Store(0x100000, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 20)
             }
 
             Device (S21) {              // Slot 21
@@ -572,6 +592,7 @@ DefinitionBlock (
                     Store(0x200000, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 21)
             }
 
             Device (S22) {              // Slot 22
@@ -580,6 +601,7 @@ DefinitionBlock (
                     Store(0x400000, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 22)
             }
 
             Device (S23) {              // Slot 23
@@ -588,6 +610,7 @@ DefinitionBlock (
                     Store(0x800000, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 23)
             }
 
             Device (S24) {              // Slot 24
@@ -596,6 +619,7 @@ DefinitionBlock (
                     Store(0x1000000, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 24)
             }
 
             Device (S25) {              // Slot 25
@@ -604,6 +628,7 @@ DefinitionBlock (
                     Store(0x2000000, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 25)
             }
 
             Device (S26) {              // Slot 26
@@ -612,6 +637,7 @@ DefinitionBlock (
                     Store(0x4000000, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 26)
             }
 
             Device (S27) {              // Slot 27
@@ -620,6 +646,7 @@ DefinitionBlock (
                     Store(0x8000000, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 27)
             }
 
             Device (S28) {              // Slot 28
@@ -628,6 +655,7 @@ DefinitionBlock (
                     Store(0x10000000, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 28)
             }
 
             Device (S29) {              // Slot 29
@@ -636,6 +664,7 @@ DefinitionBlock (
                     Store(0x20000000, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 29)
             }
 
             Device (S30) {              // Slot 30
@@ -644,6 +673,7 @@ DefinitionBlock (
                     Store(0x40000000, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 30)
             }
 
             Device (S31) {              // Slot 31
@@ -652,6 +682,7 @@ DefinitionBlock (
                     Store(0x80000000, B0EJ)
                     Return (0x0)
                }
+               Name (_SUN, 31)
             }
 
             Name (_CRS, ResourceTemplate ()
