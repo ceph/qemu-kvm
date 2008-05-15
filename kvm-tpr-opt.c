@@ -83,19 +83,6 @@ static void write_byte_virt(CPUState *env, target_ulong virt, uint8_t b)
     stb_phys(map_addr(&sregs, virt, NULL), b);
 }
 
-static uint32_t get_bios_map(CPUState *env, unsigned *perms)
-{
-    uint32_t v;
-    struct kvm_sregs sregs;
-
-    kvm_get_sregs(kvm_context, env->cpu_index, &sregs);
-
-    for (v = -4096u; v != 0; v -= 4096)
-	if (map_addr(&sregs, v, perms) == 0xe0000)
-	    return v;
-    return -1u;
-}
-
 struct vapic_bios {
     char signature[8];
     uint32_t virt_base;
