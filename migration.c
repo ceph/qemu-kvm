@@ -834,8 +834,8 @@ static int migrate_incoming_fd(int fd)
 
     size = qemu_get_be32(f);
     if (size != phys_ram_size) {
-        fprintf(stderr, "migration: memory size mismatch: recv %u mine %u\n",
-                size, phys_ram_size);
+        fprintf(stderr, "migration: memory size mismatch: recv %u mine %llu\n",
+                size, (unsigned long long)phys_ram_size);
 	return MIG_STAT_DST_MEM_SIZE_MISMATCH;
     }
 
@@ -1090,7 +1090,8 @@ void do_info_migration(void)
 	    term_printf("Transfer rate %3.1f mb/s\n",
 			(double)s->bps / (1024 * 1024));
 	term_printf("Iteration %d\n", s->iteration);
-	term_printf("Transferred %d/%d pages\n", s->updated_pages, phys_ram_size >> TARGET_PAGE_BITS);
+	term_printf("Transferred %d/%llu pages\n", s->updated_pages,
+		    (unsigned long long)phys_ram_size >> TARGET_PAGE_BITS);
 	if (s->iteration)
 	    term_printf("Last iteration found %d dirty pages\n", s->last_updated_pages);
     } else {
