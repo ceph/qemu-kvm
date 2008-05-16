@@ -173,12 +173,14 @@ static int has_work(CPUState *env)
     return kvm_arch_has_work(env);
 }
 
-static int kvm_eat_signal(CPUState *env, int timeout)
+static void kvm_main_loop_wait(CPUState *env, int timeout)
 {
     struct timespec ts;
-    int r, e, ret = 0;
+    int r, e;
     siginfo_t siginfo;
     sigset_t waitset;
+
+    pthread_mutex_unlock(&qemu_mutex);
 
     ts.tv_sec = timeout / 1000;
     ts.tv_nsec = (timeout % 1000) * 1000000;
@@ -186,51 +188,22 @@ static int kvm_eat_signal(CPUState *env, int timeout)
     sigaddset(&waitset, SIG_IPI);
 
     r = sigtimedwait(&waitset, &siginfo, &ts);
-    if (r == -1 && (errno == EAGAIN || errno == EINTR) && !timeout)
-	return 0;
     e = errno;
 
     pthread_mutex_lock(&qemu_mutex);
-    if (env && vcpu)
-        cpu_single_env = vcpu->env;
-    if (r == -1 && !(errno == EAGAIN || errno == EINTR)) {
+
+    if (r == -1 && !(e == EAGAIN || e == EINTR)) {
 	printf("sigtimedwait: %s\n", strerror(e));
 	exit(1);
     }
-    if (r != -1)
-	ret = 1;
 
-    if (env && vcpu_info[env->cpu_index].stop) {
+    if (vcpu_info[env->cpu_index].stop) {
 	vcpu_info[env->cpu_index].stop = 0;
 	vcpu_info[env->cpu_index].stopped = 1;
 	pthread_cond_signal(&qemu_pause_cond);
     }
-    pthread_mutex_unlock(&qemu_mutex);
-
-    return ret;
-}
-
-
-static void kvm_eat_signals(CPUState *env, int timeout)
-{
-    int r = 0;
-
-    while (kvm_eat_signal(env, 0))
-	r = 1;
-    if (!r && timeout) {
-	r = kvm_eat_signal(env, timeout);
-	if (r)
-	    while (kvm_eat_signal(env, 0))
-		;
-    }
-}
-
-static void kvm_main_loop_wait(CPUState *env, int timeout)
-{
-    pthread_mutex_unlock(&qemu_mutex);
-    kvm_eat_signals(env, timeout);
-    pthread_mutex_lock(&qemu_mutex);
     cpu_single_env = env;
+
     vcpu_info[env->cpu_index].signalled = 0;
 }
 
