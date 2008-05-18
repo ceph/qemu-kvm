@@ -9621,10 +9621,10 @@ pci_routing_table_structure:
   db 0x08 ;; PCI interrupt router DevFunc
   dw 0x0000 ;; PCI exclusive IRQs
   dw 0x8086 ;; compatible PCI interrupt router vendor ID
-  dw 0x7000 ;; compatible PCI interrupt router device ID
+  dw 0x122e ;; compatible PCI interrupt router device ID
   dw 0,0 ;; Miniport data
   db 0,0,0,0,0,0,0,0,0,0,0 ;; reserved
-  db 0x07 ;; checksum
+  db 0x37 ;; checksum
 pci_routing_table_structure_start:
   ;; first slot entry PCI-to-ISA (embedded)
   db 0 ;; pci bus number
