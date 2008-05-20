@@ -191,3 +191,10 @@ out:
 }
 
 #endif
+
+/* manually export hrtimer_init/start/cancel */
+void (*hrtimer_init_p)(struct hrtimer *timer, clockid_t which_clock,
+		       enum hrtimer_mode mode);
+int (*hrtimer_start_p)(struct hrtimer *timer, ktime_t tim,
+		       const enum hrtimer_mode mode);
+int (*hrtimer_cancel_p)(struct hrtimer *timer);

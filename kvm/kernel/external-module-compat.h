@@ -624,3 +624,69 @@ static inline void unregister_shrinker(struct kvm_shrinker *shrinker)
 #define shrinker kvm_shrinker
 
 #endif
+
+/* undefine lapic */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,18)
+
+#undef lapic
+
+#endif
+
+/* clocksource */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,18)
+static inline u32 clocksource_khz2mult(u32 khz, u32 shift_constant)
+{
+	/*  khz = cyc/(Million ns)
+	 *  mult/2^shift  = ns/cyc
+	 *  mult = ns/cyc * 2^shift
+	 *  mult = 1Million/khz * 2^shift
+	 *  mult = 1000000 * 2^shift / khz
+	 *  mult = (1000000<<shift) / khz
+	 */
+	u64 tmp = ((u64)1000000) << shift_constant;
+
+	tmp += khz/2; /* round for do_div */
+	do_div(tmp, khz);
+
+	return (u32)tmp;
+}
+#else
+#include <linux/clocksource.h>
+#endif
+
+/* manually export hrtimer_init/start/cancel */
+#include <linux/kallsyms.h>
+extern void (*hrtimer_init_p)(struct hrtimer *timer, clockid_t which_clock,
+			      enum hrtimer_mode mode);
+extern int (*hrtimer_start_p)(struct hrtimer *timer, ktime_t tim,
+			      const enum hrtimer_mode mode);
+extern int (*hrtimer_cancel_p)(struct hrtimer *timer);
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19) && defined(CONFIG_KALLSYMS)
+static inline void hrtimer_kallsyms_resolve(void)
+{
+	hrtimer_init_p = (void *) kallsyms_lookup_name("hrtimer_init");
+	BUG_ON(!hrtimer_init_p);
+	hrtimer_start_p = (void *) kallsyms_lookup_name("hrtimer_start");
+	BUG_ON(!hrtimer_start_p);
+	hrtimer_cancel_p = (void *) kallsyms_lookup_name("hrtimer_cancel");
+	BUG_ON(!hrtimer_cancel_p);
+}
+#else
+static inline void hrtimer_kallsyms_resolve(void)
+{
+	hrtimer_init_p = hrtimer_init;
+	hrtimer_start_p = hrtimer_start;
+	hrtimer_cancel_p = hrtimer_cancel;
+}
+#endif
+
+/* handle old hrtimer API with data pointer */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17)
+static inline void hrtimer_data_pointer(struct hrtimer *timer)
+{
+	timer->data = (void *)timer;
+}
+#else
+static inline void hrtimer_data_pointer(struct hrtimer *timer) {}
+#endif
