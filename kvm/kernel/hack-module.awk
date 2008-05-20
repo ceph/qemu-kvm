@@ -61,6 +61,11 @@
 /^\t\.name = "kvm"/ { $0 = "\tset_kset_name(\"kvm\")," }
 
 /#include <linux\/compiler.h>/ { $0 = "" }
+/#include <linux\/clocksource.h>/ { $0 = "" }
+
+{ sub(/hrtimer_init/, "hrtimer_init_p") }
+{ sub(/hrtimer_start/, "hrtimer_start_p") }
+{ sub(/hrtimer_cancel/, "hrtimer_cancel_p") }
 
 { print }
 
@@ -74,4 +79,14 @@
 
 /local_irq_save/ &&  vmx_load_host_state {
     print "\t\tgsbase = vmcs_readl(HOST_GS_BASE);"
+}
+
+/\tkvm_init_debug/ {
+    print "\thrtimer_kallsyms_resolve();"
+}
+/apic->timer.dev.function =/ {
+    print "\thrtimer_data_pointer(&apic->timer.dev);"
+}
+/pt->timer.function =/ {
+    print "\thrtimer_data_pointer(&pt->timer);"
 }

@@ -26,7 +26,7 @@ unifdef = mv $1 $1.orig && \
 
 hack = $(call _hack,$T/$(strip $1))
 
-hack-files-x86 = kvm_main.c mmu.c vmx.c svm.c x86.c irq.h
+hack-files-x86 = kvm_main.c mmu.c vmx.c svm.c x86.c irq.h lapic.c i8254.c
 
 hack-files = $(hack-files-$(ARCH_DIR))
 
