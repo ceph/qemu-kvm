@@ -314,6 +314,15 @@ int kvm_get_mpstate(kvm_context_t kvm, int vcpu,
  */
 int kvm_set_mpstate(kvm_context_t kvm, int vcpu,
                     struct kvm_mp_state *mp_state);
+/*!
+ *  * \brief Reset VCPU MP state
+ *
+ */
+static inline int kvm_reset_mpstate(kvm_context_t kvm, int vcpu)
+{
+    struct kvm_mp_state mp_state = {.mp_state = KVM_MP_STATE_UNINITIALIZED};
+    return kvm_set_mpstate(kvm, vcpu, &mp_state);
+}
 #endif
 
 /*!
