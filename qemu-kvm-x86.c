@@ -674,13 +674,13 @@ int handle_tpr_access(void *opaque, int vcpu,
 
 void kvm_arch_cpu_reset(CPUState *env)
 {
-    struct kvm_mp_state mp_state = { .mp_state = KVM_MP_STATE_UNINITIALIZED };
-
     kvm_arch_load_regs(env);
     if (env->cpu_index != 0) {
-	if (kvm_irqchip_in_kernel(kvm_context))
-	    kvm_set_mpstate(kvm_context, env->cpu_index, &mp_state);
-	else {
+	if (kvm_irqchip_in_kernel(kvm_context)) {
+#ifdef KVM_CAP_MP_STATE
+	    kvm_reset_mpstate(kvm_context, env->cpu_index);
+#endif
+	} else {
 	    env->interrupt_request &= ~CPU_INTERRUPT_HARD;
 	    env->hflags |= HF_HALTED_MASK;
 	    env->exception_index = EXCP_HLT;
