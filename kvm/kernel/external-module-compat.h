@@ -248,7 +248,7 @@ static inline unsigned long long __kvm_cmpxchg64(volatile void *ptr,
 						 unsigned long long new)
 {
 	unsigned long long prev;
-	__asm__ __volatile__(LOCK_PREFIX "cmpxchg8b %3"
+	__asm__ __volatile__("lock cmpxchg8b %3"
 			     : "=A"(prev)
 			     : "b"((unsigned long)new),
 			       "c"((unsigned long)(new >> 32)),
