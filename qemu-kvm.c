@@ -71,6 +71,8 @@ pthread_t io_thread;
 static int io_thread_fd = -1;
 static int io_thread_sigfd = -1;
 
+static int kvm_debug_stop_requested;
+
 static inline unsigned long kvm_get_thread_id(void)
 {
     return syscall(SYS_gettid);
@@ -581,6 +583,10 @@ int kvm_main_loop(void)
             qemu_system_powerdown();
         else if (qemu_reset_requested())
 	    qemu_kvm_system_reset();
+	else if (kvm_debug_stop_requested) {
+	    vm_stop(EXCP_DEBUG);
+	    kvm_debug_stop_requested = 0;
+	}
     }
 
     pause_all_threads();
@@ -593,7 +599,8 @@ static int kvm_debug(void *opaque, int vcpu)
 {
     CPUState *env = cpu_single_env;
 
-    env->exception_index = EXCP_DEBUG;
+    kvm_debug_stop_requested = 1;
+    vcpu_info[vcpu].stopped = 1;
     return 1;
 }
 
