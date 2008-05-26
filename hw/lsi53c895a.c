@@ -1872,8 +1872,8 @@ void *lsi_scsi_init(PCIBus *bus, int devfn)
         return NULL;
     }
 
-    s->pci_dev.config[0x00] = 0x00;
-    s->pci_dev.config[0x01] = 0x10;
+    s->pci_dev.config[0x00] = s->pci_dev.config[0x2c] = 0x00;
+    s->pci_dev.config[0x01] = s->pci_dev.config[0x2d] = 0x10;
     s->pci_dev.config[0x02] = 0x12;
     s->pci_dev.config[0x03] = 0x00;
     s->pci_dev.config[0x0b] = 0x01;
