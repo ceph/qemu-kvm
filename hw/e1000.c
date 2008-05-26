@@ -975,6 +975,7 @@ pci_e1000_init(PCIBus *bus, NICInfo *nd, int devfn)
     pci_conf[0x0a] = 0x00; // ethernet network controller
     pci_conf[0x0b] = 0x02;
     pci_conf[0x0c] = 0x10;
+    *(uint16_t *)(pci_conf+0x2c) = cpu_to_le16(0x8086);
 
     pci_conf[0x3d] = 1; // interrupt pin 0
 
