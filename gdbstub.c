@@ -904,8 +904,7 @@ static int gdb_handle_packet(GDBState *s, CPUState *env, const char *line_buf)
             addr = strtoull(p, (char **)&p, 16);
 #if defined(TARGET_I386)
             env->eip = addr;
-	    if (kvm_enabled())
-		kvm_load_registers(env);
+            kvm_load_registers(env);
 #elif defined (TARGET_PPC)
             env->nip = addr;
 #elif defined (TARGET_SPARC)
@@ -928,8 +927,7 @@ static int gdb_handle_packet(GDBState *s, CPUState *env, const char *line_buf)
             addr = strtoull(p, (char **)&p, 16);
 #if defined(TARGET_I386)
             env->eip = addr;
-	    if (kvm_enabled())
-		kvm_load_registers(env);
+            kvm_load_registers(env);
 #elif defined (TARGET_PPC)
             env->nip = addr;
 #elif defined (TARGET_SPARC)
@@ -973,8 +971,7 @@ static int gdb_handle_packet(GDBState *s, CPUState *env, const char *line_buf)
         }
         break;
     case 'g':
-	if (kvm_enabled())
-	    kvm_save_registers(env);
+        kvm_save_registers(env);
         reg_size = cpu_gdb_read_registers(env, mem_buf);
         memtohex(buf, mem_buf, reg_size);
         put_packet(s, buf);
@@ -984,8 +981,7 @@ static int gdb_handle_packet(GDBState *s, CPUState *env, const char *line_buf)
         len = strlen(p) / 2;
         hextomem((uint8_t *)registers, p, len);
         cpu_gdb_write_registers(env, mem_buf, len);
-	if (kvm_enabled())
-	    kvm_load_registers(env);
+        kvm_load_registers(env);
         put_packet(s, "OK");
         break;
     case 'm':
