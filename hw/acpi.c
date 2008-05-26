@@ -485,8 +485,8 @@ i2c_bus *piix4_pm_init(PCIBus *bus, int devfn, uint32_t smb_io_base,
                                          devfn, NULL, pm_write_config);
     pm_state = s;
     pci_conf = s->dev.config;
-    pci_conf[0x00] = 0x86;
-    pci_conf[0x01] = 0x80;
+    pci_conf[0x00] = pci_conf[0x2c] = 0x86;
+    pci_conf[0x01] = pci_conf[0x2d] = 0x80;
     pci_conf[0x02] = 0x13;
     pci_conf[0x03] = 0x71;
     pci_conf[0x06] = 0x80;
