@@ -286,8 +286,7 @@ static CPUState *mon_get_cpu(void)
         mon_set_cpu(0);
     }
 
-    if (kvm_enabled())
-	kvm_save_registers(mon_cpu);
+    kvm_save_registers(mon_cpu);
 
     return mon_cpu;
 }
@@ -315,8 +314,7 @@ static void do_info_cpus(void)
     mon_get_cpu();
 
     for(env = first_cpu; env != NULL; env = env->next_cpu) {
-        if (kvm_enabled())
-            kvm_save_registers(env);
+        kvm_save_registers(env);
         term_printf("%c CPU #%d:",
                     (env == mon_cpu) ? '*' : ' ',
                     env->cpu_index);
