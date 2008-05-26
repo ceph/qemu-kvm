@@ -2406,8 +2406,8 @@ int pci_vga_init(PCIBus *bus, DisplayState *ds, uint8_t *vga_ram_base,
     s->pci_dev = &d->dev;
 
     pci_conf = d->dev.config;
-    pci_conf[0x00] = 0x34; // dummy VGA (same as Bochs ID)
-    pci_conf[0x01] = 0x12;
+    pci_conf[0x00] = pci_conf[0x2c] = 0x34; // dummy VGA (same as Bochs ID)
+    pci_conf[0x01] = pci_conf[0x2d] = 0x12;
     pci_conf[0x02] = 0x11;
     pci_conf[0x03] = 0x11;
     pci_conf[0x0a] = 0x00; // VGA controller
