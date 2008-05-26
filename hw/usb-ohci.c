@@ -1655,8 +1655,8 @@ void usb_ohci_init_pci(struct PCIBus *bus, int num_ports, int devfn)
         return;
     }
 
-    ohci->pci_dev.config[0x00] = vid & 0xff;
-    ohci->pci_dev.config[0x01] = (vid >> 8) & 0xff;
+    ohci->pci_dev.config[0x00] = ohci->pci_dev.config[0x2c] = vid & 0xff;
+    ohci->pci_dev.config[0x01] = ohci->pci_dev.config[0x2d] = (vid >> 8) & 0xff;
     ohci->pci_dev.config[0x02] = did & 0xff;
     ohci->pci_dev.config[0x03] = (did >> 8) & 0xff;
     ohci->pci_dev.config[0x09] = 0x10; /* OHCI */
