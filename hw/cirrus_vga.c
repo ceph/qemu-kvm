@@ -3425,8 +3425,8 @@ void pci_cirrus_vga_init(PCIBus *bus, DisplayState *ds, uint8_t *vga_ram_base,
                                                  sizeof(PCICirrusVGAState),
                                                  -1, NULL, NULL);
     pci_conf = d->dev.config;
-    pci_conf[0x00] = (uint8_t) (PCI_VENDOR_CIRRUS & 0xff);
-    pci_conf[0x01] = (uint8_t) (PCI_VENDOR_CIRRUS >> 8);
+    pci_conf[0x00] = pci_conf[0x2c] = (uint8_t) (PCI_VENDOR_CIRRUS & 0xff);
+    pci_conf[0x01] = pci_conf[0x2d] = (uint8_t) (PCI_VENDOR_CIRRUS >> 8);
     pci_conf[0x02] = (uint8_t) (device_id & 0xff);
     pci_conf[0x03] = (uint8_t) (device_id >> 8);
     pci_conf[0x04] = PCI_COMMAND_IOACCESS | PCI_COMMAND_MEMACCESS;
