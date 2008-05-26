@@ -192,8 +192,8 @@ PCIBus *i440fx_init(PCIDevice **pi440fx_state, qemu_irq *pic)
     d = pci_register_device(b, "i440FX", sizeof(PCIDevice), 0,
                             NULL, i440fx_write_config);
 
-    d->config[0x00] = 0x86; // vendor_id
-    d->config[0x01] = 0x80;
+    d->config[0x00] = d->config[0x2c] = 0x86; // vendor_id
+    d->config[0x01] = d->config[0x2d] = 0x80;
     d->config[0x02] = 0x37; // device_id
     d->config[0x03] = 0x12;
     d->config[0x08] = 0x02; // revision
@@ -337,8 +337,8 @@ int piix3_init(PCIBus *bus, int devfn)
     piix3_dev = d;
     pci_conf = d->config;
 
-    pci_conf[0x00] = 0x86; // Intel
-    pci_conf[0x01] = 0x80;
+    pci_conf[0x00] = pci_conf[0x2c] = 0x86; // Intel
+    pci_conf[0x01] = pci_conf[0x2d] = 0x80;
     pci_conf[0x02] = 0x00; // 82371SB PIIX3 PCI-to-ISA bridge (Step A1)
     pci_conf[0x03] = 0x70;
     pci_conf[0x0a] = 0x01; // class_sub = PCI_ISA
@@ -361,8 +361,8 @@ int piix4_init(PCIBus *bus, int devfn)
     piix4_dev = d;
     pci_conf = d->config;
 
-    pci_conf[0x00] = 0x86; // Intel
-    pci_conf[0x01] = 0x80;
+    pci_conf[0x00] = pci_conf[0x2c] = 0x86; // Intel
+    pci_conf[0x01] = pci_conf[0x2d] = 0x80;
     pci_conf[0x02] = 0x10; // 82371AB/EB/MB PIIX4 PCI-to-ISA bridge
     pci_conf[0x03] = 0x71;
     pci_conf[0x0a] = 0x01; // class_sub = PCI_ISA
