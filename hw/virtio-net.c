@@ -239,7 +239,7 @@ PCIDevice *virtio_net_init(PCIBus *bus, NICInfo *nd, int devfn)
     static int virtio_net_id;
 
     n = (VirtIONet *)virtio_init_pci(bus, "virtio-net", 6900, 0x1000,
-				     0, VIRTIO_ID_NET,
+				     6900, VIRTIO_ID_NET,
 				     0x02, 0x00, 0x00,
 				     6, sizeof(VirtIONet));
     if (!n)
