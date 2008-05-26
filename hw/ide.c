@@ -2976,8 +2976,8 @@ void pci_cmd646_ide_init(PCIBus *bus, BlockDriverState **hd_table,
                                            NULL, NULL);
     d->type = IDE_TYPE_CMD646;
     pci_conf = d->dev.config;
-    pci_conf[0x00] = 0x95; // CMD646
-    pci_conf[0x01] = 0x10;
+    pci_conf[0x00] = pci_conf[0x2c] = 0x95; // CMD646
+    pci_conf[0x01] = pci_conf[0x2d] = 0x10;
     pci_conf[0x02] = 0x46;
     pci_conf[0x03] = 0x06;
 
@@ -3107,8 +3107,8 @@ void pci_piix3_ide_init(PCIBus *bus, BlockDriverState **hd_table, int devfn,
     d->type = IDE_TYPE_PIIX3;
 
     pci_conf = d->dev.config;
-    pci_conf[0x00] = 0x86; // Intel
-    pci_conf[0x01] = 0x80;
+    pci_conf[0x00] = pci_conf[0x2c] = 0x86; // Intel
+    pci_conf[0x01] = pci_conf[0x2d] = 0x80;
     pci_conf[0x02] = 0x10;
     pci_conf[0x03] = 0x70;
     pci_conf[0x09] = 0x80; // legacy ATA mode
@@ -3149,8 +3149,8 @@ void pci_piix4_ide_init(PCIBus *bus, BlockDriverState **hd_table, int devfn,
     d->type = IDE_TYPE_PIIX4;
 
     pci_conf = d->dev.config;
-    pci_conf[0x00] = 0x86; // Intel
-    pci_conf[0x01] = 0x80;
+    pci_conf[0x00] = pci_conf[0x2c] = 0x86; // Intel
+    pci_conf[0x01] = pci_conf[0x2d] = 0x80;
     pci_conf[0x02] = 0x11;
     pci_conf[0x03] = 0x71;
     pci_conf[0x09] = 0x80; // legacy ATA mode
