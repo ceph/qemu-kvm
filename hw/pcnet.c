@@ -1975,6 +1975,7 @@ PCIDevice *pci_pcnet_init(PCIBus *bus, NICInfo *nd, int devfn)
     pci_conf = d->dev.config;
 
     *(uint16_t *)&pci_conf[0x00] = cpu_to_le16(0x1022);
+    *(uint16_t *)&pci_conf[0x2c] = cpu_to_le16(0x1022);
     *(uint16_t *)&pci_conf[0x02] = cpu_to_le16(0x2000);
     *(uint16_t *)&pci_conf[0x04] = cpu_to_le16(0x0007);
     *(uint16_t *)&pci_conf[0x06] = cpu_to_le16(0x0280);
