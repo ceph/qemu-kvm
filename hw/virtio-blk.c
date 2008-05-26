@@ -249,7 +249,7 @@ void *virtio_blk_init(PCIBus *bus, uint16_t vendor, uint16_t device,
     static int virtio_blk_id;
 
     s = (VirtIOBlock *)virtio_init_pci(bus, "virtio-blk", vendor, device,
-				       0, VIRTIO_ID_BLOCK,
+				       vendor, VIRTIO_ID_BLOCK,
 				       0x01, 0x80, 0x00,
 				       sizeof(struct virtio_blk_config), sizeof(VirtIOBlock));
     if (!s)
