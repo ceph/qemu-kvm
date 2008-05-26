@@ -64,6 +64,8 @@
 #define PCI_BASE_ADDRESS_4      0x20    /* 32 bits */
 #define PCI_BASE_ADDRESS_5      0x24    /* 32 bits */
 
+#define PCI_SUBSYSTEM_VENDOR_ID 0x2c    /* 16 bits */
+
 #define PCI_CONFIG_8(offset, value) \
     (pci_conf[offset] = (value))
 #define PCI_CONFIG_16(offset, value) \
@@ -423,6 +425,7 @@ static void pci_reset(EEPRO100State * s)
 
     /* PCI Vendor ID */
     PCI_CONFIG_16(PCI_VENDOR_ID, 0x8086);
+    PCI_CONFIG_16(PCI_SUBSYSTEM_VENDOR_ID, 0x8086);
     /* PCI Device ID */
     PCI_CONFIG_16(PCI_DEVICE_ID, 0x1209);
     /* PCI Command */
