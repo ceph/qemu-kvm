@@ -41,11 +41,19 @@ pthread_cond_t qemu_aio_cond = PTHREAD_COND_INITIALIZER;
 pthread_cond_t qemu_vcpu_cond = PTHREAD_COND_INITIALIZER;
 pthread_cond_t qemu_system_cond = PTHREAD_COND_INITIALIZER;
 pthread_cond_t qemu_pause_cond = PTHREAD_COND_INITIALIZER;
+pthread_cond_t qemu_work_cond = PTHREAD_COND_INITIALIZER;
 __thread struct vcpu_info *vcpu;
 
 static int qemu_system_ready;
 
 #define SIG_IPI (SIGRTMIN+4)
+
+struct qemu_kvm_work_item {
+    struct qemu_kvm_work_item *next;
+    void (*func)(void *data);
+    void *data;
+    bool done;
+};
 
 struct vcpu_info {
     CPUState *env;
@@ -56,6 +64,7 @@ struct vcpu_info {
     int stop;
     int stopped;
     int created;
+    struct qemu_kvm_work_item *queued_work_first, *queued_work_last;
 } vcpu_info[256];
 
 pthread_t io_thread;
@@ -82,6 +91,31 @@ CPUState *qemu_kvm_cpu_env(int index)
 
 static void sig_ipi_handler(int n)
 {
+}
+
+static void on_vcpu(CPUState *env, void (*func)(void *data), void *data)
+{
+    struct vcpu_info *vi = &vcpu_info[env->cpu_index];
+    struct qemu_kvm_work_item wi;
+
+    if (vi == vcpu) {
+        func(data);
+        return;
+    }
+
+    wi.func = func;
+    wi.data = data;
+    if (!vi->queued_work_first)
+        vi->queued_work_first = &wi;
+    else
+        vi->queued_work_last->next = &wi;
+    vi->queued_work_last = &wi;
+    wi.next = NULL;
+    wi.done = false;
+
+    pthread_kill(vi->thread, SIG_IPI);
+    while (!wi.done)
+        qemu_cond_wait(&qemu_work_cond);
 }
 
 void kvm_update_interrupt_request(CPUState *env)
@@ -177,6 +211,23 @@ static int has_work(CPUState *env)
     return kvm_arch_has_work(env);
 }
 
+static void flush_queued_work(CPUState *env)
+{
+    struct vcpu_info *vi = &vcpu_info[env->cpu_index];
+    struct qemu_kvm_work_item *wi;
+
+    if (!vi->queued_work_first)
+        return;
+
+    while ((wi = vi->queued_work_first)) {
+        vi->queued_work_first = wi->next;
+        wi->func(wi->data);
+        wi->done = true;
+    }
+    vi->queued_work_last = NULL;
+    pthread_cond_broadcast(&qemu_work_cond);
+}
+
 static void kvm_main_loop_wait(CPUState *env, int timeout)
 {
     struct timespec ts;
@@ -200,6 +251,9 @@ static void kvm_main_loop_wait(CPUState *env, int timeout)
 	printf("sigtimedwait: %s\n", strerror(e));
 	exit(1);
     }
+
+
+    flush_queued_work(env);
 
     if (vcpu_info[env->cpu_index].stop) {
 	vcpu_info[env->cpu_index].stop = 0;
