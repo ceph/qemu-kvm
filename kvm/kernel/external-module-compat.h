@@ -16,6 +16,7 @@
 #include <asm/processor.h>
 #include <linux/hrtimer.h>
 #include <asm/bitops.h>
+#include <asm/msr.h>
 
 /*
  * 2.6.16 does not have GFP_NOWAIT
@@ -689,4 +690,24 @@ static inline void hrtimer_data_pointer(struct hrtimer *timer)
 }
 #else
 static inline void hrtimer_data_pointer(struct hrtimer *timer) {}
+#endif
+
+#ifndef MSR_MTRRcap
+#define MSR_MTRRcap            0x0fe
+#define MSR_MTRRfix64K_00000   0x250
+#define MSR_MTRRfix16K_80000   0x258
+#define MSR_MTRRfix16K_A0000   0x259
+#define MSR_MTRRfix4K_C0000    0x268
+#define MSR_MTRRfix4K_C8000    0x269
+#define MSR_MTRRfix4K_D0000    0x26a
+#define MSR_MTRRfix4K_D8000    0x26b
+#define MSR_MTRRfix4K_E0000    0x26c
+#define MSR_MTRRfix4K_E8000    0x26d
+#define MSR_MTRRfix4K_F0000    0x26e
+#define MSR_MTRRfix4K_F8000    0x26f
+#define MSR_MTRRdefType        0x2ff
+#endif
+
+#ifndef MSR_IA32_CR_PAT
+#define MSR_IA32_CR_PAT        0x00000277
 #endif
