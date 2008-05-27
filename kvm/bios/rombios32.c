@@ -426,6 +426,23 @@ int pm_sci_int;
 unsigned long bios_table_cur_addr;
 unsigned long bios_table_end_addr;
 
+void init_smp_msrs(void)
+{
+    *(uint32_t *)SMP_MSR_ADDR = 0;
+}
+
+void wrmsr_smp(uint32_t index, uint64_t val)
+{
+    static struct { uint32_t ecx, eax, edx; } *p = (void *)SMP_MSR_ADDR;
+
+    wrmsr(index, val);
+    p->ecx = index;
+    p->eax = val;
+    p->edx = val >> 32;
+    ++p;
+    p->ecx = 0;
+}
+
 void uuid_probe(void)
 {
 #ifdef BX_QEMU
@@ -488,32 +505,32 @@ void setup_mtrr(void)
     for (i = 0; i < 8; ++i)
         if (ram_size >= 65536 * (i + 1))
             u.valb[i] = 6;
-    wrmsr(MSR_MTRRfix64K_00000, u.val);
+    wrmsr_smp(MSR_MTRRfix64K_00000, u.val);
     u.val = 0;
     for (i = 0; i < 8; ++i)
         if (ram_size >= 65536 * 8 + 16384 * (i + 1))
             u.valb[i] = 6;
-    wrmsr(MSR_MTRRfix16K_80000, u.val);
-    wrmsr(MSR_MTRRfix16K_A0000, 0);
-    wrmsr(MSR_MTRRfix4K_C0000, 0);
-    wrmsr(MSR_MTRRfix4K_C8000, 0);
-    wrmsr(MSR_MTRRfix4K_D0000, 0);
-    wrmsr(MSR_MTRRfix4K_D8000, 0);
-    wrmsr(MSR_MTRRfix4K_E0000, 0);
-    wrmsr(MSR_MTRRfix4K_E8000, 0);
-    wrmsr(MSR_MTRRfix4K_F0000, 0);
-    wrmsr(MSR_MTRRfix4K_F8000, 0);
+    wrmsr_smp(MSR_MTRRfix16K_80000, u.val);
+    wrmsr_smp(MSR_MTRRfix16K_A0000, 0);
+    wrmsr_smp(MSR_MTRRfix4K_C0000, 0);
+    wrmsr_smp(MSR_MTRRfix4K_C8000, 0);
+    wrmsr_smp(MSR_MTRRfix4K_D0000, 0);
+    wrmsr_smp(MSR_MTRRfix4K_D8000, 0);
+    wrmsr_smp(MSR_MTRRfix4K_E0000, 0);
+    wrmsr_smp(MSR_MTRRfix4K_E8000, 0);
+    wrmsr_smp(MSR_MTRRfix4K_F0000, 0);
+    wrmsr_smp(MSR_MTRRfix4K_F8000, 0);
     vbase = 0;
     --vcnt; /* leave one mtrr for VRAM */
     for (i = 0; i < vcnt && vbase < ram_size; ++i) {
         vmask = (1ull << 40) - 1;
         while (vbase + vmask + 1 > ram_size)
             vmask >>= 1;
-        wrmsr(MTRRphysBase_MSR(i), vbase | 6);
-        wrmsr(MTRRphysMask_MSR(i), (~vmask & 0xfffffff000ull) | 0x800);
+        wrmsr_smp(MTRRphysBase_MSR(i), vbase | 6);
+        wrmsr_smp(MTRRphysMask_MSR(i), (~vmask & 0xfffffff000ull) | 0x800);
         vbase += vmask + 1;
     }
-    wrmsr(MSR_MTRRdefType, 0xc00);
+    wrmsr_smp(MSR_MTRRdefType, 0xc00);
 }
 
 void ram_probe(void)
@@ -2038,6 +2055,8 @@ void smbios_init(void)
 void rombios32_init(void)
 {
     BX_INFO("Starting rombios32\n");
+
+    init_smp_msrs();
 
     ram_probe();
 
