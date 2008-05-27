@@ -175,16 +175,30 @@ static int pre_kvm_run(void *opaque, int vcpu)
     return 0;
 }
 
+static void kvm_do_load_registers(void *_env)
+{
+    CPUState *env = _env;
+
+    kvm_arch_load_regs(env);
+}
+
 void kvm_load_registers(CPUState *env)
 {
     if (kvm_enabled())
-	kvm_arch_load_regs(env);
+        on_vcpu(env->cpu_index, kvm_do_load_registers, env);
+}
+
+static void kvm_do_save_registers(void *_env)
+{
+    CPUState *env = _env;
+
+    kvm_arch_save_regs(env);
 }
 
 void kvm_save_registers(CPUState *env)
 {
     if (kvm_enabled())
-	kvm_arch_save_regs(env);
+        on_vcpu(env, kvm_do_save_registers, env);
 }
 
 int kvm_cpu_exec(CPUState *env)
