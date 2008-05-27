@@ -816,23 +816,37 @@ int kvm_qemu_init_env(CPUState *cenv)
     return kvm_arch_qemu_init_env(cenv);
 }
 
+struct kvm_guest_debug_data {
+    struct kvm_debug_guest dbg;
+    int err;
+};
+
+void kvm_invoke_guest_debug(void *data)
+{
+    struct kvm_guest_debug_data *dbg_data = data;
+
+    dbg_data->err = kvm_guest_debug(kvm_context, cpu_single_env->cpu_index,
+                                    &dbg_data->dbg);
+}
+
 int kvm_update_debugger(CPUState *env)
 {
-    struct kvm_debug_guest dbg;
+    struct kvm_guest_debug_data data;
     int i;
 
-    memset(dbg.breakpoints, 0, sizeof(dbg.breakpoints));
+    memset(data.dbg.breakpoints, 0, sizeof(data.dbg.breakpoints));
 
-    dbg.enabled = 0;
+    data.dbg.enabled = 0;
     if (env->nb_breakpoints || env->singlestep_enabled) {
-	dbg.enabled = 1;
+	data.dbg.enabled = 1;
 	for (i = 0; i < 4 && i < env->nb_breakpoints; ++i) {
-	    dbg.breakpoints[i].enabled = 1;
-	    dbg.breakpoints[i].address = env->breakpoints[i];
+	    data.dbg.breakpoints[i].enabled = 1;
+	    data.dbg.breakpoints[i].address = env->breakpoints[i];
 	}
-	dbg.singlestep = env->singlestep_enabled;
+	data.dbg.singlestep = env->singlestep_enabled;
     }
-    return kvm_guest_debug(kvm_context, env->cpu_index, &dbg);
+    on_vcpu(env, kvm_invoke_guest_debug, &data);
+    return data.err;
 }
 
 
