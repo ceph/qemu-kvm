@@ -187,7 +187,7 @@ static void kvm_do_load_registers(void *_env)
 void kvm_load_registers(CPUState *env)
 {
     if (kvm_enabled())
-        on_vcpu(env->cpu_index, kvm_do_load_registers, env);
+        on_vcpu(env, kvm_do_load_registers, env);
 }
 
 static void kvm_do_save_registers(void *_env)
