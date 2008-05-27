@@ -26,6 +26,10 @@ int kvm_pit = 1;
 #include <sys/utsname.h>
 #include <sys/syscall.h>
 
+#define bool _Bool
+#define false 0
+#define true 1
+
 extern void perror(const char *s);
 
 kvm_context_t kvm_context;
