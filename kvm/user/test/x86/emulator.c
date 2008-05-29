@@ -116,6 +116,7 @@ void test_push(void *mem)
 		     "pushq $-7 \n\t"
 		     "pushq %[reg] \n\t"
 		     "pushq (%[mem]) \n\t"
+		     "pushq $-7070707 \n\t"
 		     "mov %%rsp, %[new_stack_top] \n\t"
 		     "mov %[tmp], %%rsp"
 		     : [tmp]"=&r"(tmp), [new_stack_top]"=r"(new_stack_top)
@@ -126,6 +127,7 @@ void test_push(void *mem)
 	report("push $imm8", stack_top[-1] == -7ul);
 	report("push %reg", stack_top[-2] == -17ul);
 	report("push mem", stack_top[-3] == 0x123456789abcdeful);
+	report("push $imm", stack_top[-4] == -7070707);
 }
 
 unsigned long read_cr0(void)
