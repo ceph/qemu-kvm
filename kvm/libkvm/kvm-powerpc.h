@@ -26,4 +26,11 @@ extern int kvm_page_size;
 #define PAGE_SIZE kvm_page_size
 #define PAGE_MASK (~(PAGE_SIZE - 1))
 
+static inline void eieio(void)
+{
+	asm volatile("eieio" : : : "memory");
+}
+
+#define smp_wmb()	eieio()
+
 #endif
