@@ -67,6 +67,12 @@ void *kvm_create_kernel_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 int kvm_arch_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
 			void **vm_mem)
 {
+	int r;
+
+	r = kvm_init_coalesced_mmio(kvm);
+	if (r < 0)
+		return r;
+
 	return 0;
 }
 

@@ -25,4 +25,7 @@ extern int kvm_page_size;
 #define PAGE_SIZE kvm_page_size
 #define PAGE_MASK (~(kvm_page_size - 1))
 
+#define ia64_mf()	asm volatile ("mf" ::: "memory")
+#define smp_wmb()	ia64_mf()
+
 #endif
