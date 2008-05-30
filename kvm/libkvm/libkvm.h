@@ -457,6 +457,10 @@ int kvm_get_dirty_pages_range(kvm_context_t kvm, unsigned long phys_addr,
 			      unsigned long end_addr, void *buf, void*opaque,
 			      int (*cb)(unsigned long start, unsigned long len,
 					void*bitmap, void *opaque));
+int kvm_register_coalesced_mmio(kvm_context_t kvm,
+				uint64_t addr, uint32_t size);
+int kvm_unregister_coalesced_mmio(kvm_context_t kvm,
+				  uint64_t addr, uint32_t size);
 
 /*!
  * \brief Create a memory alias

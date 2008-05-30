@@ -879,6 +879,22 @@ again:
 
 	post_kvm_run(kvm, vcpu);
 
+#if defined(KVM_CAP_COALESCED_MMIO)
+	if (kvm->coalesced_mmio) {
+	        struct kvm_coalesced_mmio_ring *ring = (void *)run +
+						kvm->coalesced_mmio * PAGE_SIZE;
+		while (ring->first != ring->last) {
+			kvm->callbacks->mmio_write(kvm->opaque,
+				 ring->coalesced_mmio[ring->first].phys_addr,
+				&ring->coalesced_mmio[ring->first].data[0],
+				 ring->coalesced_mmio[ring->first].len);
+			smp_wmb();
+			ring->first = (ring->first + 1) %
+							KVM_COALESCED_MMIO_MAX;
+		}
+	}
+#endif
+
 	if (r == -1) {
 		r = handle_io_window(kvm);
 		goto more;
@@ -983,3 +999,62 @@ int kvm_pit_in_kernel(kvm_context_t kvm)
 {
 	return kvm->pit_in_kernel;
 }
+
+int kvm_init_coalesced_mmio(kvm_context_t kvm)
+{
+	int r = 0;
+	kvm->coalesced_mmio = 0;
+#ifdef KVM_CAP_COALESCED_MMIO
+	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_COALESCED_MMIO);
+	if (r > 0) {
+		kvm->coalesced_mmio = r;
+		return 0;
+	}
+#endif
+	return r;
+}
+
+int kvm_register_coalesced_mmio(kvm_context_t kvm, uint64_t addr, uint32_t size)
+{
+#ifdef KVM_CAP_COALESCED_MMIO
+	struct kvm_coalesced_mmio_zone zone;
+	int r;
+
+	if (kvm->coalesced_mmio) {
+
+		zone.addr = addr;
+		zone.size = size;
+
+		r = ioctl(kvm->vm_fd, KVM_REGISTER_COALESCED_MMIO, &zone);
+		if (r == -1) {
+			perror("kvm_register_coalesced_mmio_zone");
+			return -errno;
+		}
+		return 0;
+	}
+#endif
+	return -ENOSYS;
+}
+
+int kvm_unregister_coalesced_mmio(kvm_context_t kvm, uint64_t addr, uint32_t size)
+{
+#ifdef KVM_CAP_COALESCED_MMIO
+	struct kvm_coalesced_mmio_zone zone;
+	int r;
+
+	if (kvm->coalesced_mmio) {
+
+		zone.addr = addr;
+		zone.size = size;
+
+		r = ioctl(kvm->vm_fd, KVM_UNREGISTER_COALESCED_MMIO, &zone);
+		if (r == -1) {
+			perror("kvm_unregister_coalesced_mmio_zone");
+			return -errno;
+		}
+		return 0;
+	}
+#endif
+	return -ENOSYS;
+}
+

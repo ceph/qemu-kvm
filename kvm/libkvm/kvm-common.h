@@ -49,6 +49,8 @@ struct kvm_context {
 	int no_pit_creation;
 	/// in-kernel pit status
 	int pit_in_kernel;
+	/// in-kernel coalesced mmio
+	int coalesced_mmio;
 };
 
 void init_slots(void);
