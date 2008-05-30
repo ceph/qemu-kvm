@@ -268,7 +268,7 @@ static void kvm_main_loop_wait(CPUState *env, int timeout)
 	exit(1);
     }
 
-
+    cpu_single_env = env;
     flush_queued_work(env);
 
     if (vcpu_info[env->cpu_index].stop) {
@@ -276,7 +276,6 @@ static void kvm_main_loop_wait(CPUState *env, int timeout)
 	vcpu_info[env->cpu_index].stopped = 1;
 	pthread_cond_signal(&qemu_pause_cond);
     }
-    cpu_single_env = env;
 
     vcpu_info[env->cpu_index].signalled = 0;
 }
