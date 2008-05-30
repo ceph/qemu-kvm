@@ -50,4 +50,6 @@ int kvm_disable_tpr_access_reporting(kvm_context_t kvm, int vcpu);
 
 #endif
 
+#define smp_wmb()   asm volatile("" ::: "memory")
+
 #endif
