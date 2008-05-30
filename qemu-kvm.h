@@ -76,6 +76,10 @@ int handle_tpr_access(void *opaque, int vcpu,
 void kvm_tpr_vcpu_start(CPUState *env);
 
 int qemu_kvm_get_dirty_pages(unsigned long phys_addr, void *buf);
+int qemu_kvm_register_coalesced_mmio(target_phys_addr_t addr,
+				     unsigned int size);
+int qemu_kvm_unregister_coalesced_mmio(target_phys_addr_t addr,
+				       unsigned int size);
 
 void qemu_kvm_system_reset_request(void);
 

@@ -1017,3 +1017,14 @@ void kvm_mutex_lock(void)
     pthread_mutex_lock(&qemu_mutex);
     cpu_single_env = NULL;
 }
+
+int qemu_kvm_register_coalesced_mmio(target_phys_addr_t addr, unsigned int size)
+{
+    return kvm_register_coalesced_mmio(kvm_context, addr, size);
+}
+
+int qemu_kvm_unregister_coalesced_mmio(target_phys_addr_t addr,
+				       unsigned int size)
+{
+    return kvm_unregister_coalesced_mmio(kvm_context, addr, size);
+}
