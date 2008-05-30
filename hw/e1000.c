@@ -26,6 +26,7 @@
 #include "hw.h"
 #include "pci.h"
 #include "net.h"
+#include "qemu-kvm.h"
 
 #include "e1000_hw.h"
 
@@ -938,6 +939,18 @@ e1000_mmio_map(PCIDevice *pci_dev, int region_num,
 
     d->mmio_base = addr;
     cpu_register_physical_memory(addr, PNPMMIO_SIZE, d->mmio_index);
+
+    if (kvm_enabled()) {
+	int i;
+        uint32_t excluded_regs[] = {
+            E1000_MDIC, E1000_ICR, E1000_ICS, E1000_IMS,
+            E1000_IMC, E1000_TCTL, E1000_TDT, PNPMMIO_SIZE
+        };
+        qemu_kvm_register_coalesced_mmio(addr, excluded_regs[0]);
+        for (i = 0; excluded_regs[i] != PNPMMIO_SIZE; i++)
+            qemu_kvm_register_coalesced_mmio(addr + excluded_regs[i] + 4,
+                             excluded_regs[i + 1] - excluded_regs[i] - 4);
+    }
 }
 
 static int
