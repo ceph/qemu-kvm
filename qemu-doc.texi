@@ -266,6 +266,8 @@ These options have the same definition as they have in @option{-hdachs}.
 Specify which disk @var{format} will be used rather than detecting
 the format.  Can be used to specifiy format=raw to avoid interpreting
 an untrusted format header.
+@item boot=@var{boot}
+@var{boot} if "on" enables extboot for a given drive so it can be used as a boot drive.
 @end table
 
 Instead of @option{-cdrom} you can use:
@@ -295,6 +297,12 @@ qemu -drive if=ide,index=1,media=cdrom
 You can connect a SCSI disk with unit ID 6 on the bus #0:
 @example
 qemu -drive file=file,if=scsi,bus=0,unit=6
+@end example
+
+To boot from a SCSI disk, one would use:
+
+@example
+qemu -drive file=file,if=scsi,boot=on
 @end example
 
 Instead of @option{-fda}, @option{-fdb}, you can use:
