@@ -9048,7 +9048,10 @@ ebda_post:
 ;--------------------
 ; relocated here because the primary POST area isnt big enough.
 eoi_jmp_post:
-  call eoi_both_pics
+  mov   al, #0x20
+  out   #0xA0, al ;; slave  PIC EOI
+  mov   al, #0x20
+  out   #0x20, al ;; master PIC EOI
 
   xor ax, ax
   mov ds, ax
