@@ -79,16 +79,46 @@ static VirtIOBlock *to_virtio_blk(VirtIODevice *vdev)
     return (VirtIOBlock *)vdev;
 }
 
+typedef struct VirtIOBlockReq
+{
+    VirtIODevice *vdev;
+    VirtQueue *vq;
+    struct iovec in_sg_status;
+    unsigned int pending;
+    unsigned int len;
+    unsigned int elem_idx;
+    int status;
+} VirtIOBlockReq;
+
+static void virtio_blk_rw_complete(void *opaque, int ret)
+{
+    VirtIOBlockReq *req = opaque;
+    struct virtio_blk_inhdr *in;
+    VirtQueueElement elem;
+
+    req->status |= ret;
+    if (--req->pending > 0)
+        return;
+
+    elem.index = req->elem_idx;
+    in = (void *)req->in_sg_status.iov_base;
+
+    in->status = req->status ? VIRTIO_BLK_S_IOERR : VIRTIO_BLK_S_OK;
+    virtqueue_push(req->vq, &elem, req->len);
+    virtio_notify(req->vdev, req->vq);
+    qemu_free(req);
+}
+
 static void virtio_blk_handle_output(VirtIODevice *vdev, VirtQueue *vq)
 {
     VirtIOBlock *s = to_virtio_blk(vdev);
     VirtQueueElement elem;
+    VirtIOBlockReq *req;
     unsigned int count;
 
     while ((count = virtqueue_pop(vq, &elem)) != 0) {
 	struct virtio_blk_inhdr *in;
 	struct virtio_blk_outhdr *out;
-	unsigned int wlen;
 	off_t off;
 	int i;
 
@@ -103,41 +133,72 @@ static void virtio_blk_handle_output(VirtIODevice *vdev, VirtQueue *vq)
 	    exit(1);
 	}
 
+	/*
+	 * FIXME: limit the number of in-flight requests
+	 */
+	req = qemu_malloc(sizeof(VirtIOBlockReq));
+	if (!req)
+	    return;
+	memset(req, 0, sizeof(*req));
+	memcpy(&req->in_sg_status, &elem.in_sg[elem.in_num - 1],
+	       sizeof(req->in_sg_status));
+	req->vdev = vdev;
+	req->vq = vq;
+	req->elem_idx = elem.index;
+
 	out = (void *)elem.out_sg[0].iov_base;
 	in = (void *)elem.in_sg[elem.in_num - 1].iov_base;
 	off = out->sector;
 
 	if (out->type & VIRTIO_BLK_T_SCSI_CMD) {
-	    wlen = sizeof(*in);
+	    unsigned int len = sizeof(*in);
+
 	    in->status = VIRTIO_BLK_S_UNSUPP;
+	    virtqueue_push(vq, &elem, len);
+	    virtio_notify(vdev, vq);
+	    qemu_free(req);
 	} else if (out->type & VIRTIO_BLK_T_OUT) {
-	    wlen = sizeof(*in);
+	    req->pending = elem.out_num - 1;
 
 	    for (i = 1; i < elem.out_num; i++) {
-		bdrv_write(s->bs, off,
+		req->len += elem.out_sg[i].iov_len;
+		bdrv_aio_write(s->bs, off,
 			   elem.out_sg[i].iov_base,
-			   elem.out_sg[i].iov_len / 512);
+			   elem.out_sg[i].iov_len / 512,
+			   virtio_blk_rw_complete,
+			   req);
 		off += elem.out_sg[i].iov_len / 512;
 	    }
-
-	    in->status = VIRTIO_BLK_S_OK;
 	} else {
-	    wlen = sizeof(*in);
+	    req->pending = elem.in_num - 1;
 
 	    for (i = 0; i < elem.in_num - 1; i++) {
-		bdrv_read(s->bs, off,
+		req->len += elem.in_sg[i].iov_len;
+		bdrv_aio_read(s->bs, off,
 			  elem.in_sg[i].iov_base,
-			  elem.in_sg[i].iov_len / 512);
+			  elem.in_sg[i].iov_len / 512,
+			  virtio_blk_rw_complete,
+			  req);
 		off += elem.in_sg[i].iov_len / 512;
-		wlen += elem.in_sg[i].iov_len;
 	    }
-
-	    in->status = VIRTIO_BLK_S_OK;
 	}
-
-	virtqueue_push(vq, &elem, wlen);
-	virtio_notify(vdev, vq);
     }
+    /*
+     * FIXME: Want to check for completions before returning to guest mode,
+     * so cached reads and writes are reported as quickly as possible. But
+     * that should be done in the generic block layer.
+     */
+}
+
+static void virtio_blk_reset(VirtIODevice *vdev)
+{
+    VirtIOBlock *s = to_virtio_blk(vdev);
+
+    /*
+     * This should cancel pending requests, but can't do nicely until there
+     * are per-device request lists.
+     */
+    qemu_aio_flush();
 }
 
 static void virtio_blk_update_config(VirtIODevice *vdev, uint8_t *config)
@@ -196,6 +257,7 @@ void *virtio_blk_init(PCIBus *bus, uint16_t vendor, uint16_t device,
 
     s->vdev.update_config = virtio_blk_update_config;
     s->vdev.get_features = virtio_blk_get_features;
+    s->vdev.reset = virtio_blk_reset;
     s->bs = bs;
     bs->devfn = s->vdev.pci_dev.devfn;
     bdrv_guess_geometry(s->bs, &cylinders, &heads, &secs);
