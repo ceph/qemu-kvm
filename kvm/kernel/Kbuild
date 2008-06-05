@@ -1,6 +1,7 @@
 obj-m := kvm.o kvm-intel.o kvm-amd.o
 kvm-objs := kvm_main.o x86.o mmu.o x86_emulate.o anon_inodes.o irq.o i8259.o \
-	 lapic.o ioapic.o preempt.o i8254.o external-module-compat.o
+	 lapic.o ioapic.o preempt.o i8254.o coalesced_mmio.o \
+	 external-module-compat.o
 ifeq ($(CONFIG_KVM_TRACE),y)
 kvm-objs += kvm_trace.o
 endif
