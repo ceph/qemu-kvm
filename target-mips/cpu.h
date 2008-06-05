@@ -159,6 +159,7 @@ struct CPUMIPSState {
     CPUMIPSFPUContext *fpu;
     uint32_t current_tc;
     target_ulong *current_tc_gprs;
+    target_ulong *current_tc_hi;
 
     uint32_t SEGBITS;
     target_ulong SEGMask;
@@ -411,8 +412,6 @@ struct CPUMIPSState {
     int32_t CP0_DESAVE;
     /* Qemu */
     int interrupt_request;
-    jmp_buf jmp_env;
-    int exception_index;
     int error_code;
     int user_mode_only; /* user mode only simulation */
     uint32_t hflags;    /* CPU State */
@@ -447,8 +446,6 @@ struct CPUMIPSState {
 #define MIPS_HFLAG_BR     0x0800 /* branch to register (can't link TB) */
     target_ulong btarget;        /* Jump / branch target               */
     int bcond;                   /* Branch condition (if needed)       */
-
-    int halted; /* TRUE if the CPU is in suspend state */
 
     int SYNCI_Step; /* Address step size for SYNCI */
     int CCRes; /* Cycle count resolution/divisor */
@@ -502,6 +499,16 @@ static inline int cpu_mmu_index (CPUState *env)
 {
     return env->hflags & MIPS_HFLAG_KSU;
 }
+
+#if defined(CONFIG_USER_ONLY)
+static inline void cpu_clone_regs(CPUState *env, target_ulong newsp)
+{
+    if (newsp)
+        env->gpr[env->current_tc][29] = newsp;
+    env->gpr[env->current_tc][7] = 0;
+    env->gpr[env->current_tc][2] = 0;
+}
+#endif
 
 #include "cpu-all.h"
 

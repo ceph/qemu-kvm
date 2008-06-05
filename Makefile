@@ -17,7 +17,7 @@ ifdef CONFIG_STATIC
 LDFLAGS += -static
 endif
 ifdef BUILD_DOCS
-DOCS=qemu-doc.html qemu-tech.html qemu.1 qemu-img.1
+DOCS=qemu-doc.html qemu-tech.html qemu.1 qemu-img.1 qemu-nbd.8
 else
 DOCS=
 endif
@@ -26,10 +26,15 @@ LIBS+=$(AIOLIBS)
 
 all: $(TOOLS) $(DOCS) recurse-all 
 
-subdir-%: dyngen$(EXESUF) libqemu_common.a
+SUBDIR_RULES=$(patsubst %,subdir-%, $(TARGET_DIRS))
+
+subdir-%: dyngen$(EXESUF)
 	$(MAKE) -C $(subst subdir-,,$@) all
 
-recurse-all: $(patsubst %,subdir-%, $(TARGET_DIRS))
+$(filter %-softmmu,$(SUBDIR_RULES)): libqemu_common.a
+$(filter %-user,$(SUBDIR_RULES)): libqemu_user.a
+
+recurse-all: $(SUBDIR_RULES)
 
 #######################################################################
 # BLOCK_OBJS is code used by both qemu system emulation and qemu-img
@@ -52,7 +57,7 @@ OBJS+=block.o
 OBJS+=irq.o
 OBJS+=i2c.o smbus.o smbus_eeprom.o max7310.o max111x.o wm8750.o
 OBJS+=ssd0303.o ssd0323.o ads7846.o stellaris_input.o twl92230.o
-OBJS+=tmp105.o
+OBJS+=tmp105.o lm832x.o
 OBJS+=scsi-disk.o cdrom.o
 OBJS+=scsi-generic.o
 OBJS+=usb.o usb-hub.o usb-linux.o usb-hid.o usb-msd.o usb-wacom.o usb-serial.o
@@ -141,6 +146,14 @@ libqemu_common.a: $(OBJS)
 	rm -f $@ 
 	$(AR) rcs $@ $(OBJS)
 
+#######################################################################
+# USER_OBJS is code used by qemu userspace emulation
+USER_OBJS=cutils.o
+
+libqemu_user.a: $(USER_OBJS)
+	rm -f $@ 
+	$(AR) rcs $@ $(USER_OBJS)
+
 QEMU_IMG_BLOCK_OBJS = $(BLOCK_OBJS)
 ifdef CONFIG_WIN32
 QEMU_IMG_BLOCK_OBJS += qemu-img-block-raw-win32.o
@@ -158,6 +171,10 @@ qemu-img-%.o: %.c
 
 %.o: %.c
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
+
+qemu-nbd$(EXESUF):  qemu-nbd.o nbd.o qemu-img-block.o \
+		    $(QEMU_IMG_BLOCK_OBJS)
+	$(CC) $(LDFLAGS) -o $@ $^ -lz $(LIBS)
 
 # dyngen host tool
 dyngen$(EXESUF): dyngen.c
@@ -191,6 +208,8 @@ install-doc: $(DOCS)
 ifndef CONFIG_WIN32
 	mkdir -p "$(DESTDIR)$(mandir)/man1"
 	$(INSTALL) qemu.1 qemu-img.1 "$(DESTDIR)$(mandir)/man1"
+	mkdir -p "$(DESTDIR)$(mandir)/man8"
+	$(INSTALL) qemu-nbd.8 "$(DESTDIR)$(mandir)/man8"
 endif
 
 install: all $(if $(BUILD_DOCS),install-doc)
@@ -246,6 +265,10 @@ qemu-img.1: qemu-img.texi
 	$(SRC_PATH)/texi2pod.pl $< qemu-img.pod
 	pod2man --section=1 --center=" " --release=" " qemu-img.pod > $@
 
+qemu-nbd.8: qemu-nbd.texi
+	$(SRC_PATH)/texi2pod.pl $< qemu-nbd.pod
+	pod2man --section=8 --center=" " --release=" " qemu-nbd.pod > $@
+
 info: qemu-doc.info qemu-tech.info
 
 dvi: qemu-doc.dvi qemu-tech.dvi
@@ -298,6 +321,7 @@ tarbin:
         $(bindir)/qemu-sh4eb \
         $(bindir)/qemu-cris \
         $(bindir)/qemu-img \
+        $(bindir)/qemu-nbd \
 	$(datadir)/bios.bin \
 	$(datadir)/vgabios.bin \
 	$(datadir)/vgabios-cirrus.bin \
@@ -312,6 +336,7 @@ tarbin:
 	$(docdir)/qemu-doc.html \
 	$(docdir)/qemu-tech.html \
 	$(mandir)/man1/qemu.1 $(mandir)/man1/qemu-img.1
+	$(mandir)/man8/qemu-nbd.8
 
 # Include automatically generated dependency files
 -include $(wildcard *.d audio/*.d slirp/*.d)

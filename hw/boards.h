@@ -114,6 +114,9 @@ extern QEMUMachine mainstone2_machine;
 /* musicpal.c */
 extern QEMUMachine musicpal_machine;
 
+/* tosa.c */
+extern QEMUMachine tosapda_machine;
+
 /* ipf.c */
 extern QEMUMachine ipf_machine;
 

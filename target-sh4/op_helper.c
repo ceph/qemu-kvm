@@ -28,11 +28,6 @@ void do_raise_exception(void)
 #ifndef CONFIG_USER_ONLY
 
 #define MMUSUFFIX _mmu
-#ifdef __s390__
-# define GETPC() ((void*)((unsigned long)__builtin_return_address(0) & 0x7fffffffUL))
-#else
-# define GETPC() (__builtin_return_address(0))
-#endif
 
 #define SHIFT 0
 #include "softmmu_template.h"
@@ -75,6 +70,16 @@ void tlb_fill(target_ulong addr, int is_write, int mmu_idx, void *retaddr)
 }
 
 #endif
+
+void helper_ldtlb(void)
+{
+#ifdef CONFIG_USER_ONLY
+    /* XXXXX */
+    assert(0);
+#else
+    cpu_load_tlb(env);
+#endif
+}
 
 void helper_addc_T0_T1(void)
 {

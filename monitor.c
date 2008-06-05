@@ -320,21 +320,15 @@ static void do_info_cpus(void)
                     env->cpu_index);
 #if defined(TARGET_I386)
         term_printf(" pc=0x" TARGET_FMT_lx, env->eip + env->segs[R_CS].base);
-        if (env->hflags & HF_HALTED_MASK)
-            term_printf(" (halted)");
 #elif defined(TARGET_PPC)
         term_printf(" nip=0x" TARGET_FMT_lx, env->nip);
-        if (env->halted)
-            term_printf(" (halted)");
 #elif defined(TARGET_SPARC)
         term_printf(" pc=0x" TARGET_FMT_lx " npc=0x" TARGET_FMT_lx, env->pc, env->npc);
-        if (env->halted)
-            term_printf(" (halted)");
 #elif defined(TARGET_MIPS)
         term_printf(" PC=0x" TARGET_FMT_lx, env->PC[env->current_tc]);
+#endif
         if (env->halted)
             term_printf(" (halted)");
-#endif
         term_printf(" thread_id=%d", env->thread_id);
         term_printf("\n");
     }
@@ -897,6 +891,7 @@ static const KeyDef key_defs[] = {
     { 0x4e, "kp_add" },
     { 0x9c, "kp_enter" },
     { 0x53, "kp_decimal" },
+    { 0x54, "sysrq" },
 
     { 0x52, "kp_0" },
     { 0x4f, "kp_1" },
@@ -949,33 +944,38 @@ static int get_keycode(const char *key)
     return -1;
 }
 
-static void do_send_key(const char *string)
+static void do_sendkey(const char *string)
 {
-    char keybuf[16], *q;
     uint8_t keycodes[16];
-    const char *p;
-    int nb_keycodes, keycode, i;
+    int nb_keycodes = 0;
+    char keyname_buf[16];
+    char *separator;
+    int keyname_len, keycode, i;
 
-    nb_keycodes = 0;
-    p = string;
-    while (*p != '\0') {
-        q = keybuf;
-        while (*p != '\0' && *p != '-') {
-            if ((q - keybuf) < sizeof(keybuf) - 1) {
-                *q++ = *p;
+    while (1) {
+        separator = strchr(string, '-');
+        keyname_len = separator ? separator - string : strlen(string);
+        if (keyname_len > 0) {
+            pstrcpy(keyname_buf, sizeof(keyname_buf), string);
+            if (keyname_len > sizeof(keyname_buf) - 1) {
+                term_printf("invalid key: '%s...'\n", keyname_buf);
+                return;
             }
-            p++;
+            if (nb_keycodes == sizeof(keycodes)) {
+                term_printf("too many keys\n");
+                return;
+            }
+            keyname_buf[keyname_len] = 0;
+            keycode = get_keycode(keyname_buf);
+            if (keycode < 0) {
+                term_printf("unknown key: '%s'\n", keyname_buf);
+                return;
+            }
+            keycodes[nb_keycodes++] = keycode;
         }
-        *q = '\0';
-        keycode = get_keycode(keybuf);
-        if (keycode < 0) {
-            term_printf("unknown key: '%s'\n", keybuf);
-            return;
-        }
-        keycodes[nb_keycodes++] = keycode;
-        if (*p == '\0')
+        if (!separator)
             break;
-        p++;
+        string = separator + 1;
     }
     /* key down events */
     for(i = 0; i < nb_keycodes; i++) {
@@ -1350,7 +1350,7 @@ static term_cmd_t term_cmds[] = {
       "device filename", "change a removable medium" },
     { "screendump", "F", do_screen_dump,
       "filename", "save screen into PPM image 'filename'" },
-    { "logfile", "s", do_logfile,
+    { "logfile", "F", do_logfile,
       "filename", "output logs to 'filename'" },
     { "log", "s", do_log,
       "item1[,...]", "activate logging of the specified items to '/tmp/qemu.log'" },
@@ -1377,7 +1377,7 @@ static term_cmd_t term_cmds[] = {
     { "i", "/ii.", do_ioport_read,
       "/fmt addr", "I/O port read" },
 
-    { "sendkey", "s", do_send_key,
+    { "sendkey", "s", do_sendkey,
       "keys", "send keys to the VM (e.g. 'sendkey ctrl-alt-f1')" },
     { "system_reset", "", do_system_reset,
       "", "reset the system" },

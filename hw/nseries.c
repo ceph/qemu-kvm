@@ -45,6 +45,7 @@ struct n800_s {
     i2c_bus *i2c;
 
     int keymap[0x80];
+    i2c_slave *kbd;
 
     struct tusb_s *usb;
     void *retu;
@@ -55,11 +56,13 @@ struct n800_s {
 #define N8X0_TUSB_ENABLE_GPIO		0
 #define N800_MMC2_WP_GPIO		8
 #define N800_UNKNOWN_GPIO0		9	/* out */
+#define N810_MMC2_VIOSD_GPIO		9
 #define N800_UNKNOWN_GPIO1		10	/* out */
 #define N800_CAM_TURN_GPIO		12
 #define N810_GPS_RESET_GPIO		12
 #define N800_BLIZZARD_POWERDOWN_GPIO	15
 #define N800_MMC1_WP_GPIO		23
+#define N810_MMC2_VSD_GPIO		23
 #define N8X0_ONENAND_GPIO		26
 #define N810_BLIZZARD_RESET_GPIO	30
 #define N800_UNKNOWN_GPIO2		53	/* out */
@@ -92,16 +95,22 @@ struct n800_s {
 #define N8X0_TAHVO_GPIO			111
 #define N800_UNKNOWN_GPIO4		112	/* out */
 #define N810_SLEEPX_LED_GPIO		112
-#define N810_TSC_UNKNOWN_GPIO		118	/* out */
-#define N800_TSC_RESET_GPIO		119	/* ? */
+#define N800_TSC_RESET_GPIO		118	/* ? */
+#define N800_TSC_UNKNOWN_GPIO		119	/* out */
 #define N8X0_TMP105_GPIO		125
 
 /* Config */
 #define XLDR_LL_UART			1
 
-/* Addresses on the I2C bus */
-#define N8X0_TMP105_ADDR		0x48
-#define N8X0_MENELAUS_ADDR		0x72
+/* Addresses on the I2C bus 0 */
+#define N810_TLV320AIC33_ADDR		0x18	/* Audio CODEC */
+#define N8X0_TCM825x_ADDR		0x29	/* Camera */
+#define N810_LP5521_ADDR		0x32	/* LEDs */
+#define N810_TSL2563_ADDR		0x3d	/* Light sensor */
+#define N810_LM8323_ADDR		0x45	/* Keyboard */
+/* Addresses on the I2C bus 1 */
+#define N8X0_TMP105_ADDR		0x48	/* Temperature sensor */
+#define N8X0_MENELAUS_ADDR		0x72	/* Power management */
 
 /* Chipselects on GPMC NOR interface */
 #define N8X0_ONENAND_CS			0
@@ -190,12 +199,12 @@ static const int n800_keys[16] = {
     28,	/* Enter */
     77,	/* Right */
     -1,
-    1,	/* Cycle (ESC) */
+     1,	/* Cycle (ESC) */
     80,	/* Down */
     62,	/* Menu (F4) */
     -1,
     66,	/* Zoom- (F8) */
-    64,	/* FS (F6) */
+    64,	/* FullScreen (F6) */
     65,	/* Zoom+ (F7) */
     -1,
 };
@@ -233,6 +242,107 @@ static void n810_tsc_setup(struct n800_s *s)
     s->ts.txrx = tsc2005_txrx;
 
     tsc2005_set_transform(s->ts.opaque, &n810_pointercal);
+}
+
+/* N810 Keyboard controller */
+static void n810_key_event(void *opaque, int keycode)
+{
+    struct n800_s *s = (struct n800_s *) opaque;
+    int code = s->keymap[keycode & 0x7f];
+
+    if (code == -1) {
+        if ((keycode & 0x7f) == RETU_KEYCODE)
+            retu_key_event(s->retu, !(keycode & 0x80));
+        return;
+    }
+
+    lm832x_key_event(s->kbd, code, !(keycode & 0x80));
+}
+
+#define M	0
+
+static int n810_keys[0x80] = {
+    [0x01] = 16,	/* Q */
+    [0x02] = 37,	/* K */
+    [0x03] = 24,	/* O */
+    [0x04] = 25,	/* P */
+    [0x05] = 14,	/* Backspace */
+    [0x06] = 30,	/* A */
+    [0x07] = 31,	/* S */
+    [0x08] = 32,	/* D */
+    [0x09] = 33,	/* F */
+    [0x0a] = 34,	/* G */
+    [0x0b] = 35,	/* H */
+    [0x0c] = 36,	/* J */
+
+    [0x11] = 17,	/* W */
+    [0x12] = 62,	/* Menu (F4) */
+    [0x13] = 38,	/* L */
+    [0x14] = 40,	/* ' (Apostrophe) */
+    [0x16] = 44,	/* Z */
+    [0x17] = 45,	/* X */
+    [0x18] = 46,	/* C */
+    [0x19] = 47,	/* V */
+    [0x1a] = 48,	/* B */
+    [0x1b] = 49,	/* N */
+    [0x1c] = 42,	/* Shift (Left shift) */
+    [0x1f] = 65,	/* Zoom+ (F7) */
+
+    [0x21] = 18,	/* E */
+    [0x22] = 39,	/* ; (Semicolon) */
+    [0x23] = 12,	/* - (Minus) */
+    [0x24] = 13,	/* = (Equal) */
+    [0x2b] = 56,	/* Fn (Left Alt) */
+    [0x2c] = 50,	/* M */
+    [0x2f] = 66,	/* Zoom- (F8) */
+
+    [0x31] = 19,	/* R */
+    [0x32] = 29 | M,	/* Right Ctrl */
+    [0x34] = 57,	/* Space */
+    [0x35] = 51,	/* , (Comma) */
+    [0x37] = 72 | M,	/* Up */
+    [0x3c] = 82 | M,	/* Compose (Insert) */
+    [0x3f] = 64,	/* FullScreen (F6) */
+
+    [0x41] = 20,	/* T */
+    [0x44] = 52,	/* . (Dot) */
+    [0x46] = 77 | M,	/* Right */
+    [0x4f] = 63,	/* Home (F5) */
+    [0x51] = 21,	/* Y */
+    [0x53] = 80 | M,	/* Down */
+    [0x55] = 28,	/* Enter */
+    [0x5f] =  1,	/* Cycle (ESC) */
+
+    [0x61] = 22,	/* U */
+    [0x64] = 75 | M,	/* Left */
+
+    [0x71] = 23,	/* I */
+#if 0
+    [0x75] = 28 | M,	/* KP Enter (KP Enter) */
+#else
+    [0x75] = 15,	/* KP Enter (Tab) */
+#endif
+};
+
+#undef M
+
+static void n810_kbd_setup(struct n800_s *s)
+{
+    qemu_irq kbd_irq = omap2_gpio_in_get(s->cpu->gpif, N810_KEYBOARD_GPIO)[0];
+    int i;
+
+    for (i = 0; i < 0x80; i ++)
+        s->keymap[i] = -1;
+    for (i = 0; i < 0x80; i ++)
+        if (n810_keys[i] > 0)
+            s->keymap[n810_keys[i]] = i;
+
+    qemu_add_kbd_event_handler(n810_key_event, s);
+
+    /* Attach the LM8322 keyboard to the I2C bus,
+     * should happen in n8x0_i2c_setup and s->kbd be initialised here.  */
+    s->kbd = lm8323_init(s->i2c, kbd_irq);
+    i2c_set_slave_address(s->kbd, N810_LM8323_ADDR);
 }
 
 /* LCD MIPI DBI-C controller (URAL) */
@@ -620,6 +730,176 @@ static void n8x0_usb_setup(struct n800_s *s)
     omap2_gpio_out_set(s->cpu->gpif, N8X0_TUSB_ENABLE_GPIO, tusb_pwr);
 }
 
+/* Setup done before the main bootloader starts by some early setup code
+ * - used when we want to run the main bootloader in emulation.  This
+ * isn't documented.  */
+static uint32_t n800_pinout[104] = {
+    0x080f00d8, 0x00d40808, 0x03080808, 0x080800d0,
+    0x00dc0808, 0x0b0f0f00, 0x080800b4, 0x00c00808,
+    0x08080808, 0x180800c4, 0x00b80000, 0x08080808,
+    0x080800bc, 0x00cc0808, 0x08081818, 0x18180128,
+    0x01241800, 0x18181818, 0x000000f0, 0x01300000,
+    0x00001b0b, 0x1b0f0138, 0x00e0181b, 0x1b031b0b,
+    0x180f0078, 0x00740018, 0x0f0f0f1a, 0x00000080,
+    0x007c0000, 0x00000000, 0x00000088, 0x00840000,
+    0x00000000, 0x00000094, 0x00980300, 0x0f180003,
+    0x0000008c, 0x00900f0f, 0x0f0f1b00, 0x0f00009c,
+    0x01140000, 0x1b1b0f18, 0x0818013c, 0x01400008,
+    0x00001818, 0x000b0110, 0x010c1800, 0x0b030b0f,
+    0x181800f4, 0x00f81818, 0x00000018, 0x000000fc,
+    0x00401808, 0x00000000, 0x0f1b0030, 0x003c0008,
+    0x00000000, 0x00000038, 0x00340000, 0x00000000,
+    0x1a080070, 0x00641a1a, 0x08080808, 0x08080060,
+    0x005c0808, 0x08080808, 0x08080058, 0x00540808,
+    0x08080808, 0x0808006c, 0x00680808, 0x08080808,
+    0x000000a8, 0x00b00000, 0x08080808, 0x000000a0,
+    0x00a40000, 0x00000000, 0x08ff0050, 0x004c0808,
+    0xffffffff, 0xffff0048, 0x0044ffff, 0xffffffff,
+    0x000000ac, 0x01040800, 0x08080b0f, 0x18180100,
+    0x01081818, 0x0b0b1808, 0x1a0300e4, 0x012c0b1a,
+    0x02020018, 0x0b000134, 0x011c0800, 0x0b1b1b00,
+    0x0f0000c8, 0x00ec181b, 0x000f0f02, 0x00180118,
+    0x01200000, 0x0f0b1b1b, 0x0f0200e8, 0x0000020b,
+};
+
+static void n800_setup_nolo_tags(void *sram_base)
+{
+    int i;
+    uint32_t *p = sram_base + 0x8000;
+    uint32_t *v = sram_base + 0xa000;
+
+    memset(p, 0, 0x3000);
+
+    strcpy((void *) (p + 0), "QEMU N800");
+
+    strcpy((void *) (p + 8), "F5");
+
+    stl_raw(p + 10, 0x04f70000);
+    strcpy((void *) (p + 9), "RX-34");
+
+    /* RAM size in MB? */
+    stl_raw(p + 12, 0x80);
+
+    /* Pointer to the list of tags */
+    stl_raw(p + 13, OMAP2_SRAM_BASE + 0x9000);
+
+    /* The NOLO tags start here */
+    p = sram_base + 0x9000;
+#define ADD_TAG(tag, len)				\
+    stw_raw((uint16_t *) p + 0, tag);			\
+    stw_raw((uint16_t *) p + 1, len); p ++;		\
+    stl_raw(p ++, OMAP2_SRAM_BASE | (((void *) v - sram_base) & 0xffff));
+
+    /* OMAP STI console? Pin out settings? */
+    ADD_TAG(0x6e01, 414);
+    for (i = 0; i < sizeof(n800_pinout) / 4; i ++)
+        stl_raw(v ++, n800_pinout[i]);
+
+    /* Kernel memsize? */
+    ADD_TAG(0x6e05, 1);
+    stl_raw(v ++, 2);
+
+    /* NOLO serial console */
+    ADD_TAG(0x6e02, 4);
+    stl_raw(v ++, XLDR_LL_UART);	/* UART number (1 - 3) */
+
+#if 0
+    /* CBUS settings (Retu/AVilma) */
+    ADD_TAG(0x6e03, 6);
+    stw_raw((uint16_t *) v + 0, 65);	/* CBUS GPIO0 */
+    stw_raw((uint16_t *) v + 1, 66);	/* CBUS GPIO1 */
+    stw_raw((uint16_t *) v + 2, 64);	/* CBUS GPIO2 */
+    v += 2;
+#endif
+
+    /* Nokia ASIC BB5 (Retu/Tahvo) */
+    ADD_TAG(0x6e0a, 4);
+    stw_raw((uint16_t *) v + 0, 111);	/* "Retu" interrupt GPIO */
+    stw_raw((uint16_t *) v + 1, 108);	/* "Tahvo" interrupt GPIO */
+    v ++;
+
+    /* LCD console? */
+    ADD_TAG(0x6e04, 4);
+    stw_raw((uint16_t *) v + 0, 30);	/* ??? */
+    stw_raw((uint16_t *) v + 1, 24);	/* ??? */
+    v ++;
+
+#if 0
+    /* LCD settings */
+    ADD_TAG(0x6e06, 2);
+    stw_raw((uint16_t *) (v ++), 15);	/* ??? */
+#endif
+
+    /* I^2C (Menelaus) */
+    ADD_TAG(0x6e07, 4);
+    stl_raw(v ++, 0x00720000);		/* ??? */
+
+    /* Unknown */
+    ADD_TAG(0x6e0b, 6);
+    stw_raw((uint16_t *) v + 0, 94);	/* ??? */
+    stw_raw((uint16_t *) v + 1, 23);	/* ??? */
+    stw_raw((uint16_t *) v + 2, 0);	/* ??? */
+    v += 2;
+
+    /* OMAP gpio switch info */
+    ADD_TAG(0x6e0c, 80);
+    strcpy((void *) v, "bat_cover");	v += 3;
+    stw_raw((uint16_t *) v + 0, 110);	/* GPIO num ??? */
+    stw_raw((uint16_t *) v + 1, 1);	/* GPIO num ??? */
+    v += 2;
+    strcpy((void *) v, "cam_act");	v += 3;
+    stw_raw((uint16_t *) v + 0, 95);	/* GPIO num ??? */
+    stw_raw((uint16_t *) v + 1, 32);	/* GPIO num ??? */
+    v += 2;
+    strcpy((void *) v, "cam_turn");	v += 3;
+    stw_raw((uint16_t *) v + 0, 12);	/* GPIO num ??? */
+    stw_raw((uint16_t *) v + 1, 33);	/* GPIO num ??? */
+    v += 2;
+    strcpy((void *) v, "headphone");	v += 3;
+    stw_raw((uint16_t *) v + 0, 107);	/* GPIO num ??? */
+    stw_raw((uint16_t *) v + 1, 17);	/* GPIO num ??? */
+    v += 2;
+
+    /* Bluetooth */
+    ADD_TAG(0x6e0e, 12);
+    stl_raw(v ++, 0x5c623d01);		/* ??? */
+    stl_raw(v ++, 0x00000201);		/* ??? */
+    stl_raw(v ++, 0x00000000);		/* ??? */
+
+    /* CX3110x WLAN settings */
+    ADD_TAG(0x6e0f, 8);
+    stl_raw(v ++, 0x00610025);		/* ??? */
+    stl_raw(v ++, 0xffff0057);		/* ??? */
+
+    /* MMC host settings */
+    ADD_TAG(0x6e10, 12);
+    stl_raw(v ++, 0xffff000f);		/* ??? */
+    stl_raw(v ++, 0xffffffff);		/* ??? */
+    stl_raw(v ++, 0x00000060);		/* ??? */
+
+    /* OneNAND chip select */
+    ADD_TAG(0x6e11, 10);
+    stl_raw(v ++, 0x00000401);		/* ??? */
+    stl_raw(v ++, 0x0002003a);		/* ??? */
+    stl_raw(v ++, 0x00000002);		/* ??? */
+
+    /* TEA5761 sensor settings */
+    ADD_TAG(0x6e12, 2);
+    stl_raw(v ++, 93);			/* GPIO num ??? */
+
+#if 0
+    /* Unknown tag */
+    ADD_TAG(6e09, 0);
+
+    /* Kernel UART / console */
+    ADD_TAG(6e12, 0);
+#endif
+
+    /* End of the list */
+    stl_raw(p ++, 0x00000000);
+    stl_raw(p ++, 0x00000000);
+}
+
 /* This task is normally performed by the bootloader.  If we're loading
  * a kernel directly, we need to set up GPMC mappings ourselves.  */
 static void n800_gpmc_init(struct n800_s *s)
@@ -691,6 +971,10 @@ static void n8x0_boot_init(void *opaque)
     /* CPU setup */
     s->cpu->env->regs[15] = s->cpu->env->boot_info->loader_start;
     s->cpu->env->GE = 0x5;
+
+    /* If the machine has a slided keyboard, open it */
+    if (s->kbd)
+        qemu_irq_raise(omap2_gpio_in_get(s->cpu->gpif, N810_SLIDE_GPIO)[0]);
 }
 
 #define OMAP_TAG_NOKIA_BT	0x4e01
@@ -949,13 +1233,40 @@ static void n8x0_init(ram_addr_t ram_size, const char *boot_device,
 
     s->cpu = omap2420_mpu_init(sdram_size, NULL, cpu_model);
 
+    /* Setup peripherals
+     *
+     * Believed external peripherals layout in the N810:
+     * (spi bus 1)
+     *   tsc2005
+     *   lcd_mipid
+     * (spi bus 2)
+     *   Conexant cx3110x (WLAN)
+     *   optional: pc2400m (WiMAX)
+     * (i2c bus 0)
+     *   TLV320AIC33 (audio codec)
+     *   TCM825x (camera by Toshiba)
+     *   lp5521 (clever LEDs)
+     *   tsl2563 (light sensor, hwmon, model 7, rev. 0)
+     *   lm8323 (keypad, manf 00, rev 04)
+     * (i2c bus 1)
+     *   tmp105 (temperature sensor, hwmon)
+     *   menelaus (pm)
+     * (somewhere on i2c - maybe N800-only)
+     *   tea5761 (FM tuner)
+     * (serial 0)
+     *   GPS
+     * (some serial port)
+     *   csr41814 (Bluetooth)
+     */
     n8x0_gpio_setup(s);
     n8x0_nand_setup(s);
     n8x0_i2c_setup(s);
     if (model == 800)
         n800_tsc_kbd_setup(s);
-    else if (model == 810)
+    else if (model == 810) {
         n810_tsc_setup(s);
+        n810_kbd_setup(s);
+    }
     n8x0_spi_setup(s);
     n8x0_dss_setup(s, ds);
     n8x0_cbus_setup(s);
@@ -976,6 +1287,25 @@ static void n8x0_init(ram_addr_t ram_size, const char *boot_device,
 
         qemu_register_reset(n8x0_boot_init, s);
         n8x0_boot_init(s);
+    }
+
+    if (option_rom[0] && (boot_device[0] == 'n' || !kernel_filename)) {
+        /* No, wait, better start at the ROM.  */
+        s->cpu->env->regs[15] = OMAP2_Q2_BASE + 0x400000;
+
+        /* This is intended for loading the `secondary.bin' program from
+         * Nokia images (the NOLO bootloader).  The entry point seems
+         * to be at OMAP2_Q2_BASE + 0x400000.
+         *
+         * The `2nd.bin' files contain some kind of earlier boot code and
+         * for them the entry point needs to be set to OMAP2_SRAM_BASE.
+         *
+         * The code above is for loading the `zImage' file from Nokia
+         * images.  */
+        printf("%i bytes of image loaded\n", load_image(option_rom[0],
+                                phys_ram_base + 0x400000));
+
+        n800_setup_nolo_tags(phys_ram_base + sdram_size);
     }
 
     dpy_resize(ds, 800, 480);

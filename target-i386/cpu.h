@@ -119,9 +119,9 @@
 #define ID_MASK                 0x00200000
 
 /* hidden flags - used internally by qemu to represent additional cpu
-   states. Only the CPL, INHIBIT_IRQ and HALTED are not redundant. We avoid
-   using the IOPL_MASK, TF_MASK and VM_MASK bit position to ease oring
-   with eflags. */
+   states. Only the CPL, INHIBIT_IRQ, SMM and SVMI are not
+   redundant. We avoid using the IOPL_MASK, TF_MASK and VM_MASK bit
+   position to ease oring with eflags. */
 /* current cpl */
 #define HF_CPL_SHIFT         0
 /* true if soft mmu is being used */
@@ -144,11 +144,9 @@
 #define HF_CS64_SHIFT       15 /* only used on x86_64: 64 bit code segment  */
 #define HF_OSFXSR_SHIFT     16 /* CR4.OSFXSR */
 #define HF_VM_SHIFT         17 /* must be same as eflags */
-#define HF_HALTED_SHIFT     18 /* CPU halted */
 #define HF_SMM_SHIFT        19 /* CPU in SMM mode */
-#define HF_GIF_SHIFT        20 /* if set CPU takes interrupts */
-#define HF_HIF_SHIFT        21 /* shadow copy of IF_MASK when in SVM */
-#define HF_NMI_SHIFT        22 /* CPU serving NMI */
+#define HF_SVME_SHIFT       20 /* SVME enabled (copy of EFER.SVME) */
+#define HF_SVMI_SHIFT       21 /* SVM intercepts are active */
 
 #define HF_CPL_MASK          (3 << HF_CPL_SHIFT)
 #define HF_SOFTMMU_MASK      (1 << HF_SOFTMMU_SHIFT)
@@ -166,11 +164,21 @@
 #define HF_CS64_MASK         (1 << HF_CS64_SHIFT)
 #define HF_OSFXSR_MASK       (1 << HF_OSFXSR_SHIFT)
 #define HF_VM_MASK           (1 << HF_VM_SHIFT)
-#define HF_HALTED_MASK       (1 << HF_HALTED_SHIFT)
 #define HF_SMM_MASK          (1 << HF_SMM_SHIFT)
-#define HF_GIF_MASK          (1 << HF_GIF_SHIFT)
-#define HF_HIF_MASK          (1 << HF_HIF_SHIFT)
-#define HF_NMI_MASK          (1 << HF_NMI_SHIFT)
+#define HF_SVME_MASK         (1 << HF_SVME_SHIFT)
+#define HF_SVMI_MASK         (1 << HF_SVMI_SHIFT)
+
+/* hflags2 */
+
+#define HF2_GIF_SHIFT        0 /* if set CPU takes interrupts */
+#define HF2_HIF_SHIFT        1 /* value of IF_MASK when entering SVM */
+#define HF2_NMI_SHIFT        2 /* CPU serving NMI */
+#define HF2_VINTR_SHIFT      3 /* value of V_INTR_MASKING bit */
+
+#define HF2_GIF_MASK          (1 << HF2_GIF_SHIFT)
+#define HF2_HIF_MASK          (1 << HF2_HIF_SHIFT) 
+#define HF2_NMI_MASK          (1 << HF2_NMI_SHIFT)
+#define HF2_VINTR_MASK        (1 << HF2_VINTR_SHIFT)
 
 #define CR0_PE_SHIFT 0
 #define CR0_MP_SHIFT 1
@@ -248,6 +256,7 @@
 #define MSR_EFER_LME   (1 << 8)
 #define MSR_EFER_LMA   (1 << 10)
 #define MSR_EFER_NXE   (1 << 11)
+#define MSR_EFER_SVME  (1 << 12)
 #define MSR_EFER_FFXSR (1 << 14)
 
 #define MSR_STAR                        0xc0000081
@@ -328,6 +337,7 @@
 #define CPUID_EXT3_3DNOWPREFETCH (1 << 8)
 #define CPUID_EXT3_OSVW    (1 << 9)
 #define CPUID_EXT3_IBS     (1 << 10)
+#define CPUID_EXT3_SKINIT  (1 << 12)
 
 #define EXCP00_DIVZ	0
 #define EXCP01_SSTP	1
@@ -353,7 +363,7 @@
 
 enum {
     CC_OP_DYNAMIC, /* must use dynamic code to get cc_op */
-    CC_OP_EFLAGS,  /* all cc are explicitely computed, CC_SRC = flags */
+    CC_OP_EFLAGS,  /* all cc are explicitly computed, CC_SRC = flags */
 
     CC_OP_MULB, /* modify all flags, C, O = (CC_SRC != 0) */
     CC_OP_MULW,
@@ -478,11 +488,6 @@ typedef union {
 #define NB_MMU_MODES 2
 
 typedef struct CPUX86State {
-#if TARGET_LONG_BITS > HOST_LONG_BITS
-    /* temporaries if we cannot store them in host registers */
-    target_ulong t0, t1, t2;
-#endif
-
     /* standard registers */
     target_ulong regs[CPU_NB_REGS];
     target_ulong eip;
@@ -495,7 +500,9 @@ typedef struct CPUX86State {
     target_ulong cc_dst;
     uint32_t cc_op;
     int32_t df; /* D flag : 1 if D = 0, -1 if D = 1 */
-    uint32_t hflags; /* hidden flags, see HF_xxx constants */
+    uint32_t hflags; /* TB flags, see HF_xxx constants. These flags
+                        are known at translation time. */
+    uint32_t hflags2; /* various other flags, see HF2_xxx constants. */
 
     /* segments */
     SegmentCache segs[6]; /* selector values */
@@ -504,7 +511,7 @@ typedef struct CPUX86State {
     SegmentCache gdt; /* only base and limit are used */
     SegmentCache idt; /* only base and limit are used */
 
-    target_ulong cr[9]; /* NOTE: cr1, cr5-7 are unused */
+    target_ulong cr[5]; /* NOTE: cr1 is unused */
     uint64_t a20_mask;
 
     /* FPU state */
@@ -524,12 +531,6 @@ typedef struct CPUX86State {
     /* emulator internal variables */
     float_status fp_status;
     CPU86_LDouble ft0;
-    union {
-	float f;
-        double d;
-	int i32;
-        int64_t i64;
-    } fp_convert;
 
     float_status mmx_status; /* for 3DNow! float ops */
     float_status sse_status;
@@ -537,6 +538,7 @@ typedef struct CPUX86State {
     XMMReg xmm_regs[CPU_NB_REGS];
     XMMReg xmm_t0;
     MMXReg mmx_t0;
+    target_ulong cc_tmp; /* temporary for rcr/rcl */
 
     /* sysenter registers */
     uint32_t sysenter_cs;
@@ -545,14 +547,16 @@ typedef struct CPUX86State {
     uint64_t efer;
     uint64_t star;
 
-    target_phys_addr_t vm_hsave;
-    target_phys_addr_t vm_vmcb;
+    uint64_t vm_hsave;
+    uint64_t vm_vmcb;
+    uint64_t tsc_offset;
     uint64_t intercept;
     uint16_t intercept_cr_read;
     uint16_t intercept_cr_write;
     uint16_t intercept_dr_read;
     uint16_t intercept_dr_write;
     uint32_t intercept_exceptions;
+    uint8_t v_tpr;
 
 #ifdef TARGET_X86_64
     target_ulong lstar;
@@ -566,8 +570,6 @@ typedef struct CPUX86State {
     uint64_t pat;
 
     /* exception/interrupt handling */
-    jmp_buf jmp_env;
-    int exception_index;
     int error_code;
     int exception_is_int;
     target_ulong exception_next_eip;
@@ -746,6 +748,24 @@ static inline int cpu_mmu_index (CPUState *env)
 {
     return (env->hflags & HF_CPL_MASK) == 3 ? 1 : 0;
 }
+
+void optimize_flags_init(void);
+
+typedef struct CCTable {
+    int (*compute_all)(void); /* return all the flags */
+    int (*compute_c)(void);  /* return the C flag */
+} CCTable;
+
+extern CCTable cc_table[];
+
+#if defined(CONFIG_USER_ONLY)
+static inline void cpu_clone_regs(CPUState *env, target_ulong newsp)
+{
+    if (newsp)
+        env->regs[R_ESP] = newsp;
+    env->regs[R_EAX] = 0;
+}
+#endif
 
 #include "cpu-all.h"
 

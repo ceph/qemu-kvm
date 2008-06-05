@@ -7552,6 +7552,7 @@ void main_loop_wait(int timeout)
 #endif
     qemu_aio_poll();
     if (vm_running) {
+        if (likely(!cur_cpu || !(cur_cpu->singlestep_enabled & SSTEP_NOTIMER)))
         qemu_run_timers(&active_timers[QEMU_TIMER_VIRTUAL],
                         qemu_get_clock(vm_clock));
         /* run dma transfers, if any */
@@ -7801,7 +7802,7 @@ static void help(int exitcode)
 #endif
            "-no-reboot      exit instead of rebooting\n"
            "-no-shutdown    stop before shutdown\n"
-           "-loadvm file    start right away with a saved state (loadvm in monitor)\n"
+           "-loadvm [tag|id]  start right away with a saved state (loadvm in monitor)\n"
 	   "-vnc display    start a VNC server on display\n"
 #ifndef _WIN32
 	   "-daemonize      daemonize QEMU after initializing\n"
@@ -7883,7 +7884,6 @@ enum {
     QEMU_OPTION_hdachs,
     QEMU_OPTION_L,
     QEMU_OPTION_bios,
-    QEMU_OPTION_no_code_copy,
     QEMU_OPTION_k,
     QEMU_OPTION_localtime,
     QEMU_OPTION_cirrusvga,
@@ -7926,6 +7926,7 @@ enum {
     QEMU_OPTION_old_param,
     QEMU_OPTION_clock,
     QEMU_OPTION_startdate,
+    QEMU_OPTION_tb_size,
     QEMU_OPTION_translation,
     QEMU_OPTION_incoming,
     QEMU_OPTION_tdf,
@@ -7991,7 +7992,6 @@ const QEMUOption qemu_options[] = {
     { "hdachs", HAS_ARG, QEMU_OPTION_hdachs },
     { "L", HAS_ARG, QEMU_OPTION_L },
     { "bios", HAS_ARG, QEMU_OPTION_bios },
-    { "no-code-copy", 0, QEMU_OPTION_no_code_copy },
 #ifdef USE_KQEMU
     { "no-kqemu", 0, QEMU_OPTION_no_kqemu },
     { "kernel-kqemu", 0, QEMU_OPTION_kernel_kqemu },
@@ -8057,6 +8057,7 @@ const QEMUOption qemu_options[] = {
 #endif
     { "clock", HAS_ARG, QEMU_OPTION_clock },
     { "startdate", HAS_ARG, QEMU_OPTION_startdate },
+    { "tb-size", HAS_ARG, QEMU_OPTION_tb_size },
     { "mem-path", HAS_ARG, QEMU_OPTION_mempath },
     { NULL },
 };
@@ -8362,6 +8363,7 @@ int main(int argc, char **argv)
     const char *usb_devices[MAX_USB_CMDLINE];
     int usb_devices_index;
     int fds[2];
+    int tb_size;
     const char *pid_file = NULL;
     VLANState *vlan;
 
@@ -8440,8 +8442,9 @@ int main(int argc, char **argv)
     hda_index = -1;
 
     nb_nics = 0;
-    /* default mac address of the first network interface */
 
+    tb_size = 0;
+    
     optind = 1;
     for(;;) {
         if (optind >= argc)
@@ -8647,9 +8650,6 @@ int main(int argc, char **argv)
                 fd_bootchk = 0;
                 break;
 #endif
-            case QEMU_OPTION_no_code_copy:
-                code_copy_enabled = 0;
-                break;
             case QEMU_OPTION_net:
                 if (nb_net_clients >= MAX_NET_CLIENTS) {
                     fprintf(stderr, "qemu: too many network clients\n");
@@ -9024,6 +9024,11 @@ int main(int argc, char **argv)
                     }
                 }
                 break;
+            case QEMU_OPTION_tb_size:
+                tb_size = strtol(optarg, NULL, 0);
+                if (tb_size < 0)
+                    tb_size = 0;
+                break;
             }
         }
     }
@@ -9230,6 +9235,9 @@ int main(int argc, char **argv)
 		    exit(1);
 	    }
     }
+
+    /* init the dynamic translator */
+    cpu_exec_init_all(tb_size * 1024 * 1024);
 
     bdrv_init();
 

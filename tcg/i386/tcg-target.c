@@ -40,11 +40,12 @@ int tcg_target_reg_alloc_order[] = {
     TCG_REG_ESI,
     TCG_REG_EDI,
     TCG_REG_EBP,
-    TCG_REG_ESP,
 };
 
 const int tcg_target_call_iarg_regs[3] = { TCG_REG_EAX, TCG_REG_EDX, TCG_REG_ECX };
 const int tcg_target_call_oarg_regs[2] = { TCG_REG_EAX, TCG_REG_EDX };
+
+static uint8_t *tb_ret_addr;
 
 static void patch_reloc(uint8_t *code_ptr, int type, 
                         tcg_target_long value, tcg_target_long addend)
@@ -327,38 +328,17 @@ static void tcg_out_brcond(TCGContext *s, int cond,
                            TCGArg arg1, TCGArg arg2, int const_arg2,
                            int label_index)
 {
-    int c;
     if (const_arg2) {
         if (arg2 == 0) {
-            /* use test */
-            switch(cond) {
-            case TCG_COND_EQ:
-                c = JCC_JE;
-                break;
-            case TCG_COND_NE:
-                c = JCC_JNE;
-                break;
-            case TCG_COND_LT:
-                c = JCC_JS;
-                break;
-            case TCG_COND_GE:
-                c = JCC_JNS;
-                break;
-            default:
-                goto do_cmpi;
-            }
             /* test r, r */
             tcg_out_modrm(s, 0x85, arg1, arg1);
-            tcg_out_jxx(s, c, label_index);
         } else {
-        do_cmpi:
             tgen_arithi(s, ARITH_CMP, arg1, arg2);
-            tcg_out_jxx(s, tcg_cond_to_jcc[cond], label_index);
         }
     } else {
         tcg_out_modrm(s, 0x01 | (ARITH_CMP << 3), arg2, arg1);
-        tcg_out_jxx(s, tcg_cond_to_jcc[cond], label_index);
     }
+    tcg_out_jxx(s, tcg_cond_to_jcc[cond], label_index);
 }
 
 /* XXX: we implement it at the target level to avoid having to
@@ -379,42 +359,42 @@ static void tcg_out_brcond2(TCGContext *s,
         break;
     case TCG_COND_LT:
         tcg_out_brcond(s, TCG_COND_LT, args[1], args[3], const_args[3], args[5]);
-        tcg_out_brcond(s, TCG_COND_NE, args[1], args[3], const_args[3], label_next);
+        tcg_out_jxx(s, JCC_JNE, label_next);
         tcg_out_brcond(s, TCG_COND_LT, args[0], args[2], const_args[2], args[5]);
         break;
     case TCG_COND_LE:
         tcg_out_brcond(s, TCG_COND_LT, args[1], args[3], const_args[3], args[5]);
-        tcg_out_brcond(s, TCG_COND_NE, args[1], args[3], const_args[3], label_next);
+        tcg_out_jxx(s, JCC_JNE, label_next);
         tcg_out_brcond(s, TCG_COND_LE, args[0], args[2], const_args[2], args[5]);
         break;
     case TCG_COND_GT:
         tcg_out_brcond(s, TCG_COND_GT, args[1], args[3], const_args[3], args[5]);
-        tcg_out_brcond(s, TCG_COND_NE, args[1], args[3], const_args[3], label_next);
+        tcg_out_jxx(s, JCC_JNE, label_next);
         tcg_out_brcond(s, TCG_COND_GT, args[0], args[2], const_args[2], args[5]);
         break;
     case TCG_COND_GE:
         tcg_out_brcond(s, TCG_COND_GT, args[1], args[3], const_args[3], args[5]);
-        tcg_out_brcond(s, TCG_COND_NE, args[1], args[3], const_args[3], label_next);
+        tcg_out_jxx(s, JCC_JNE, label_next);
         tcg_out_brcond(s, TCG_COND_GE, args[0], args[2], const_args[2], args[5]);
         break;
     case TCG_COND_LTU:
         tcg_out_brcond(s, TCG_COND_LTU, args[1], args[3], const_args[3], args[5]);
-        tcg_out_brcond(s, TCG_COND_NE, args[1], args[3], const_args[3], label_next);
+        tcg_out_jxx(s, JCC_JNE, label_next);
         tcg_out_brcond(s, TCG_COND_LTU, args[0], args[2], const_args[2], args[5]);
         break;
     case TCG_COND_LEU:
         tcg_out_brcond(s, TCG_COND_LTU, args[1], args[3], const_args[3], args[5]);
-        tcg_out_brcond(s, TCG_COND_NE, args[1], args[3], const_args[3], label_next);
+        tcg_out_jxx(s, JCC_JNE, label_next);
         tcg_out_brcond(s, TCG_COND_LEU, args[0], args[2], const_args[2], args[5]);
         break;
     case TCG_COND_GTU:
         tcg_out_brcond(s, TCG_COND_GTU, args[1], args[3], const_args[3], args[5]);
-        tcg_out_brcond(s, TCG_COND_NE, args[1], args[3], const_args[3], label_next);
+        tcg_out_jxx(s, JCC_JNE, label_next);
         tcg_out_brcond(s, TCG_COND_GTU, args[0], args[2], const_args[2], args[5]);
         break;
     case TCG_COND_GEU:
         tcg_out_brcond(s, TCG_COND_GTU, args[1], args[3], const_args[3], args[5]);
-        tcg_out_brcond(s, TCG_COND_NE, args[1], args[3], const_args[3], label_next);
+        tcg_out_jxx(s, JCC_JNE, label_next);
         tcg_out_brcond(s, TCG_COND_GEU, args[0], args[2], const_args[2], args[5]);
         break;
     default:
@@ -879,7 +859,8 @@ static inline void tcg_out_op(TCGContext *s, int opc,
     switch(opc) {
     case INDEX_op_exit_tb:
         tcg_out_movi(s, TCG_TYPE_I32, TCG_REG_EAX, args[0]);
-        tcg_out8(s, 0xc3); /* ret */
+        tcg_out8(s, 0xe9); /* jmp tb_ret_addr */
+        tcg_out32(s, tb_ret_addr - s->code_ptr - 4);
         break;
     case INDEX_op_goto_tb:
         if (s->tb_jmp_offset) {
@@ -1144,6 +1125,53 @@ static const TCGTargetOpDef x86_op_defs[] = {
 #endif
     { -1 },
 };
+
+static int tcg_target_callee_save_regs[] = {
+    /*    TCG_REG_EBP, */ /* currently used for the global env, so no
+                             need to save */
+    TCG_REG_EBX,
+    TCG_REG_ESI,
+    TCG_REG_EDI,
+};
+
+static inline void tcg_out_push(TCGContext *s, int reg)
+{
+    tcg_out_opc(s, 0x50 + reg);
+}
+
+static inline void tcg_out_pop(TCGContext *s, int reg)
+{
+    tcg_out_opc(s, 0x58 + reg);
+}
+
+/* Generate global QEMU prologue and epilogue code */
+void tcg_target_qemu_prologue(TCGContext *s)
+{
+    int i, frame_size, push_size, stack_addend;
+    
+    /* TB prologue */
+    /* save all callee saved registers */
+    for(i = 0; i < ARRAY_SIZE(tcg_target_callee_save_regs); i++) {
+        tcg_out_push(s, tcg_target_callee_save_regs[i]);
+    }
+    /* reserve some stack space */
+    push_size = 4 + ARRAY_SIZE(tcg_target_callee_save_regs) * 4;
+    frame_size = push_size + TCG_STATIC_CALL_ARGS_SIZE;
+    frame_size = (frame_size + TCG_TARGET_STACK_ALIGN - 1) & 
+        ~(TCG_TARGET_STACK_ALIGN - 1);
+    stack_addend = frame_size - push_size;
+    tcg_out_addi(s, TCG_REG_ESP, -stack_addend);
+
+    tcg_out_modrm(s, 0xff, 4, TCG_REG_EAX); /* jmp *%eax */
+    
+    /* TB epilogue */
+    tb_ret_addr = s->code_ptr;
+    tcg_out_addi(s, TCG_REG_ESP, stack_addend);
+    for(i = ARRAY_SIZE(tcg_target_callee_save_regs) - 1; i >= 0; i--) {
+        tcg_out_pop(s, tcg_target_callee_save_regs[i]);
+    }
+    tcg_out8(s, 0xc3); /* ret */
+}
 
 void tcg_target_init(TCGContext *s)
 {

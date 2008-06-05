@@ -73,19 +73,22 @@ enum {
 
 /* used for function call generation */
 #define TCG_REG_CALL_STACK TCG_REG_O6
-#define TCG_TARGET_STACK_ALIGN 16
-
-#if defined(__sparc_v9__) && !defined(__sparc_v8plus__)
+#ifdef __arch64__
 #define TCG_TARGET_STACK_MINFRAME 176
+#define TCG_TARGET_CALL_STACK_OFFSET (2047 + 176)
+#define TCG_TARGET_STACK_ALIGN 16
 #else
 #define TCG_TARGET_STACK_MINFRAME 92
+#define TCG_TARGET_CALL_STACK_OFFSET 92
+#define TCG_TARGET_STACK_ALIGN 8
 #endif
 
 /* optional instructions */
 //#define TCG_TARGET_HAS_bswap_i32
 //#define TCG_TARGET_HAS_bswap_i64
+//#define TCG_TARGET_HAS_neg_i32
+//#define TCG_TARGET_HAS_neg_i64
 
-#define TCG_TARGET_NEEDS_PROLOGUE 1
 
 /* Note: must be synced with dyngen-exec.h */
 #ifdef HOST_SOLARIS

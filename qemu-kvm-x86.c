@@ -599,7 +599,7 @@ int kvm_arch_halt(void *opaque, int vcpu)
 
     if (!((env->interrupt_request & CPU_INTERRUPT_HARD) &&
 	  (env->eflags & IF_MASK))) {
-	    env->hflags |= HF_HALTED_MASK;
+            env->halted = 1;
 	    env->exception_index = EXCP_HLT;
     }
     return 1;
@@ -682,7 +682,7 @@ void kvm_arch_cpu_reset(CPUState *env)
 #endif
 	} else {
 	    env->interrupt_request &= ~CPU_INTERRUPT_HARD;
-	    env->hflags |= HF_HALTED_MASK;
+	    env->halted = 1;
 	    env->exception_index = EXCP_HLT;
 	}
     }

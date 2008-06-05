@@ -126,6 +126,20 @@ void cpu_save(QEMUFile *f, void *opaque)
     qemu_put_be64s(f, &env->kernelgsbase);
 #endif
     qemu_put_be32s(f, &env->smbase);
+    qemu_put_be64s(f, &env->pat);
+    qemu_put_be32s(f, &env->hflags2);
+    qemu_put_be32s(f, (uint32_t *)&env->halted);
+    
+    qemu_put_be64s(f, &env->vm_hsave);
+    qemu_put_be64s(f, &env->vm_vmcb);
+    qemu_put_be64s(f, &env->tsc_offset);
+    qemu_put_be64s(f, &env->intercept);
+    qemu_put_be16s(f, &env->intercept_cr_read);
+    qemu_put_be16s(f, &env->intercept_cr_write);
+    qemu_put_be16s(f, &env->intercept_dr_read);
+    qemu_put_be16s(f, &env->intercept_dr_write);
+    qemu_put_be32s(f, &env->intercept_exceptions);
+    qemu_put_8s(f, &env->v_tpr);
 
     if (kvm_enabled()) {
         for (i = 0; i < NR_IRQ_WORDS ; i++) {
@@ -168,7 +182,7 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
     uint16_t fpus, fpuc, fptag, fpregs_format;
     int32_t a20_mask;
 
-    if (version_id < 3 || version_id > 5)
+    if (version_id != 3 && version_id != 4 && version_id != 5)
         return -EINVAL;
     for(i = 0; i < CPU_NB_REGS; i++)
         qemu_get_betls(f, &env->regs[i]);
@@ -272,16 +286,33 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
     qemu_get_be64s(f, &env->fmask);
     qemu_get_be64s(f, &env->kernelgsbase);
 #endif
-    if (version_id >= 4)
+    if (version_id >= 4) {
         qemu_get_be32s(f, &env->smbase);
+    }
+    if (version_id >= 5) {
+        qemu_get_be64s(f, &env->pat);
+        qemu_get_be32s(f, &env->hflags2);
+        qemu_get_be32s(f, (uint32_t *)&env->halted);
 
-    /* XXX: compute hflags from scratch, except for CPL and IIF */
+        qemu_get_be64s(f, &env->vm_hsave);
+        qemu_get_be64s(f, &env->vm_vmcb);
+        qemu_get_be64s(f, &env->tsc_offset);
+        qemu_get_be64s(f, &env->intercept);
+        qemu_get_be16s(f, &env->intercept_cr_read);
+        qemu_get_be16s(f, &env->intercept_cr_write);
+        qemu_get_be16s(f, &env->intercept_dr_read);
+        qemu_get_be16s(f, &env->intercept_dr_write);
+        qemu_get_be32s(f, &env->intercept_exceptions);
+        qemu_get_8s(f, &env->v_tpr);
+    }
+    /* XXX: ensure compatiblity for halted bit ? */
+    /* XXX: compute redundant hflags bits */
     env->hflags = hflags;
     tlb_flush(env, 1);
     if (kvm_enabled()) {
-        /* when in-kernel irqchip is used, HF_HALTED_MASK causes deadlock
+        /* when in-kernel irqchip is used, env->halted causes deadlock
            because no userspace IRQs will ever clear this flag */
-        env->hflags &= ~HF_HALTED_MASK;
+        env->halted = 0;
         for (i = 0; i < NR_IRQ_WORDS ; i++) {
             qemu_get_be32s(f, &env->kvm_interrupt_bitmap[i]);
         }
