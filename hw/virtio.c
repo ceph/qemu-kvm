@@ -207,6 +207,9 @@ void virtio_reset(void *opaque)
     VirtIODevice *vdev = opaque;
     int i;
 
+    if (vdev->reset)
+        vdev->reset(vdev);
+
     vdev->features = 0;
     vdev->queue_sel = 0;
     vdev->status = 0;

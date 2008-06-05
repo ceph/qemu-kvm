@@ -116,6 +116,7 @@ struct VirtIODevice
     uint32_t (*get_features)(VirtIODevice *vdev);
     void (*set_features)(VirtIODevice *vdev, uint32_t val);
     void (*update_config)(VirtIODevice *vdev, uint8_t *config);
+    void (*reset)(VirtIODevice *vdev);
     VirtQueue vq[VIRTIO_PCI_QUEUE_MAX];
 };
 
