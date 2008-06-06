@@ -150,8 +150,6 @@ void kvm_arch_post_kvm_run(void *opaque, int vcpu)
 {
     CPUState *env = qemu_kvm_cpu_env(vcpu);
     cpu_single_env = env;
-    env->ready_for_interrupt_injection = \
-	kvm_is_ready_for_interrupt_injection(kvm_context, vcpu);
 }
 
 int kvm_arch_has_work(CPUState *env)
@@ -170,7 +168,7 @@ int kvm_arch_try_push_interrupts(void *opaque)
 
     /* PowerPC Qemu tracks the various core input pins (interrupt, critical
      * interrupt, reset, etc) in PPC-specific env->irq_input_state. */
-    if (env->ready_for_interrupt_injection &&
+    if (kvm_is_ready_for_interrupt_injection(kvm_context, env->cpu_index) &&
         (env->irq_input_state & (1<<PPC40x_INPUT_INT)))
        {
             /* For now KVM disregards the 'irq' argument. However, in the

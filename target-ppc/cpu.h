@@ -574,8 +574,6 @@ struct CPUPPCState {
     /* temporary general purpose registers */
     ppc_gpr_t tgpr[4]; /* Used to speed-up TLB assist handlers */
 
-    uint8_t ready_for_interrupt_injection;
-
     /* Floating point execution context */
     /* temporary float registers */
     float64 ft0;

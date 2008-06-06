@@ -36,7 +36,6 @@ CPUState *cpu_ia64_init(char *cpu_model){
     cpu_reset(env);
     if (kvm_enabled()) {
 	kvm_qemu_init_env(env);
-	env->ready_for_interrupt_injection = 1;
 	kvm_init_new_ap(env->cpu_index, env);
     }
     return env;

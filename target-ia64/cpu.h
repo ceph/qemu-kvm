@@ -51,8 +51,6 @@ typedef struct CPUIA64State {
    int user_mode_only;
    uint32_t hflags;
 
-    uint8_t ready_for_interrupt_injection;
-
 } CPUIA64State;
 
 #define CPUState CPUIA64State

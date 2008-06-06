@@ -566,7 +566,6 @@ typedef struct CPUX86State {
 #endif
 
     uint64_t tsc; /* time stamp counter */
-    uint8_t ready_for_interrupt_injection;
     uint64_t pat;
 
     /* exception/interrupt handling */

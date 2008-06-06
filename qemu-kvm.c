@@ -387,7 +387,6 @@ static int kvm_main_loop_cpu(CPUState *env)
 	env->halted = 0;
 
     kvm_qemu_init_env(env);
-    env->ready_for_interrupt_injection = 1;
 #ifdef TARGET_I386
     kvm_tpr_vcpu_start(env);
 #endif
