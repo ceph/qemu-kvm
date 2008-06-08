@@ -431,6 +431,32 @@ void *kvm_create_userspace_phys_mem(kvm_context_t kvm, unsigned long phys_start,
         return ptr;
 }
 
+void kvm_destroy_userspace_phys_mem(kvm_context_t kvm,
+				    unsigned long phys_start)
+{
+	int r;
+	struct kvm_userspace_memory_region memory = {
+		.memory_size = 0,
+		.guest_phys_addr = phys_start,
+		.flags = 0,
+	};
+
+	memory.userspace_addr = 0;
+	memory.slot = get_slot(phys_start);
+
+	if (memory.slot == -1)
+		return;
+
+	r = ioctl(kvm->vm_fd, KVM_SET_USER_MEMORY_REGION, &memory);
+	if (r == -1) {
+		fprintf(stderr, "destroy_userspace_phys_mem: %s",
+			strerror(errno));
+		return;
+	}
+
+	free_slot(memory.slot);
+}
+
 #endif
 
 void *kvm_create_phys_mem(kvm_context_t kvm, unsigned long phys_start,
@@ -584,7 +610,13 @@ void kvm_destroy_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 			__FUNCTION__, phys_start, slots[slot].phys_addr);
 		phys_start = slots[slot].phys_addr;
 	}
-	kvm_create_phys_mem(kvm, phys_start, 0, 0, 0);
+
+#ifdef KVM_CAP_USER_MEMORY
+	if (ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_USER_MEMORY) > 0)
+		kvm_destroy_userspace_phys_mem(kvm, phys_start);
+	else
+#endif
+		kvm_create_kernel_phys_mem(kvm, phys_start, 0, 0, 0);
 }
 
 static int kvm_get_map(kvm_context_t kvm, int ioctl_num, int slot, void *buf)
