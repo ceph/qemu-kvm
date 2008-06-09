@@ -983,6 +983,7 @@ static int gdb_handle_packet(GDBState *s, CPUState *env, const char *line_buf)
             kvm_load_registers(env);
 #elif defined (TARGET_PPC)
             env->nip = addr;
+            kvm_load_registers(env);
 #elif defined (TARGET_SPARC)
             env->pc = addr;
             env->npc = addr + 4;
@@ -1021,6 +1022,7 @@ static int gdb_handle_packet(GDBState *s, CPUState *env, const char *line_buf)
             kvm_load_registers(env);
 #elif defined (TARGET_PPC)
             env->nip = addr;
+            kvm_load_registers(env);
 #elif defined (TARGET_SPARC)
             env->pc = addr;
             env->npc = addr + 4;
