@@ -58,6 +58,7 @@ tr_vcpu_signature = 0xdb
 
 mp_get_tpr_eax:
 	pushf
+	cli
 	push %ecx
 
 	str %eax
@@ -126,6 +127,7 @@ mp_set_tpr:
 	push %ecx
 	push %edx
 	push %ebx
+	cli
 
 mp_set_tpr_failed:
 	str %eax
