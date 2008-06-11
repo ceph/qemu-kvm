@@ -284,8 +284,6 @@ void kvm_tpr_access_report(CPUState *env, uint64_t rip, int is_write)
 
 void kvm_tpr_vcpu_start(CPUState *env)
 {
-    if (smp_cpus > 1)
-	return;
     kvm_enable_tpr_access_reporting(kvm_context, env->cpu_index);
     if (bios_enabled)
 	enable_vapic(env);
