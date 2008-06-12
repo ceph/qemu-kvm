@@ -93,13 +93,14 @@ defs = read_defs(arg[0])
 # tsc_in means TSC data exists(1) or not(0).
 # if tsc_in == 0, TSC(Q) does not exists.
 #
-HDRREC = "III"
-TSCREC = "Q"
-D1REC  = "I"
-D2REC  = "II"
-D3REC  = "III"
-D4REC  = "IIII"
-D5REC  = "IIIII"
+HDRREC = "<III"
+TSCREC = "<Q"
+D1REC  = "<I"
+D2REC  = "<II"
+D3REC  = "<III"
+D4REC  = "<IIII"
+D5REC  = "<IIIII"
+KMAGIC  = "<I"
 
 last_tsc = 0
 
@@ -108,6 +109,30 @@ i=0
 while not interrupted:
     try:
         i=i+1
+
+        if i == 1:
+            line = sys.stdin.read(struct.calcsize(KMAGIC))
+            if not line:
+                break
+            kmgc = struct.unpack(KMAGIC, line)[0]
+
+            #firstly try to parse data file as little endian
+            # if "kvmtrace-metadata".kmagic != kmagic
+            # then data file must be big endian"
+            if kmgc != 0x12345678:
+                if kmgc != 0x78563412:
+                    print >> sys.stderr, "Bad data file: magic number error."
+                    break;
+                else:
+                    HDRREC = ">III"
+                    TSCREC = ">Q"
+                    D1REC  = ">I"
+                    D2REC  = ">II"
+                    D3REC  = ">III"
+                    D4REC  = ">IIII"
+                    D5REC  = ">IIIII"
+            continue
+
         line = sys.stdin.read(struct.calcsize(HDRREC))
         if not line:
             break
