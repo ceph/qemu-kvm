@@ -525,7 +525,7 @@ DefinitionBlock (
                     Store(0x1000, B0EJ)
                     Return (0x0)
                }
-               Name (_SUN, 13)
+               Name (_SUN, 12)
             }
 
             Device (S13) {              // Slot 13
