@@ -160,284 +160,47 @@ DefinitionBlock (
                 B0EJ, 32,
             }
 
-            Device (S1) {              // Slot 1
-               Name (_ADR, 0x00010000)
-               Method (_EJ0,1) {
-                    Store(0x2, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 1)
+#define hotplug_slot(name, nr) \
+            Device (S##name) {                    \
+               Name (_ADR, nr##0000)              \
+               Method (_EJ0,1) {                  \
+                    Store(ShiftLeft(1, nr), B0EJ) \
+                    Return (0x0)                  \
+               }                                  \
+               Name (_SUN, name)                  \
             }
 
-            Device (S2) {              // Slot 2
-               Name (_ADR, 0x00020000)
-               Method (_EJ0,1) {
-                    Store(0x4, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 2)
-            }
-
-            Device (S3) {              // Slot 3
-               Name (_ADR, 0x00030000)
-               Method (_EJ0,1) {
-                    Store (0x8, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 3)
-            }
-
-            Device (S4) {              // Slot 4
-               Name (_ADR, 0x00040000)
-               Method (_EJ0,1) {
-                    Store(0x10, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 4)
-            }
-
-            Device (S5) {              // Slot 5
-               Name (_ADR, 0x00050000)
-               Method (_EJ0,1) {
-                    Store(0x20, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 5)
-            }
-
-            Device (S6) {              // Slot 6
-               Name (_ADR, 0x00060000)
-               Method (_EJ0,1) {
-                    Store(0x40, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 6)
-            }
-
-            Device (S7) {              // Slot 7
-               Name (_ADR, 0x00070000)
-               Method (_EJ0,1) {
-                    Store(0x80, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 7)
-            }
-
-            Device (S8) {              // Slot 8
-               Name (_ADR, 0x00080000)
-               Method (_EJ0,1) {
-                    Store(0x100, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 8)
-            }
-
-            Device (S9) {              // Slot 9
-               Name (_ADR, 0x00090000)
-               Method (_EJ0,1) {
-                    Store(0x200, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 9)
-            }
-
-            Device (S10) {              // Slot 10
-               Name (_ADR, 0x000A0000)
-               Method (_EJ0,1) {
-                    Store(0x400, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 10)
-            }
-
-            Device (S11) {              // Slot 11
-               Name (_ADR, 0x000B0000)
-               Method (_EJ0,1) {
-                    Store(0x800, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 11)
-            }
-
-            Device (S12) {              // Slot 12
-               Name (_ADR, 0x000C0000)
-               Method (_EJ0,1) {
-                    Store(0x1000, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 12)
-            }
-
-            Device (S13) {              // Slot 13
-               Name (_ADR, 0x000D0000)
-               Method (_EJ0,1) {
-                    Store(0x2000, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 13)
-            }
-
-            Device (S14) {              // Slot 14
-               Name (_ADR, 0x000E0000)
-               Method (_EJ0,1) {
-                    Store(0x4000, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 14)
-            }
-
-            Device (S15) {              // Slot 15
-               Name (_ADR, 0x000F0000)
-               Method (_EJ0,1) {
-                    Store(0x8000, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 15)
-            }
-
-            Device (S16) {              // Slot 16
-               Name (_ADR, 0x00100000)
-               Method (_EJ0,1) {
-                    Store(0x10000, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 16)
-            }
-
-            Device (S17) {              // Slot 17
-               Name (_ADR, 0x00110000)
-               Method (_EJ0,1) {
-                    Store(0x20000, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 17)
-            }
-
-            Device (S18) {              // Slot 18
-               Name (_ADR, 0x00120000)
-               Method (_EJ0,1) {
-                    Store(0x40000, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 18)
-            }
-
-            Device (S19) {              // Slot 19
-               Name (_ADR, 0x00130000)
-               Method (_EJ0,1) {
-                    Store(0x80000, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 19)
-            }
-
-            Device (S20) {              // Slot 20
-               Name (_ADR, 0x00140000)
-               Method (_EJ0,1) {
-                    Store(0x100000, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 20)
-            }
-
-            Device (S21) {              // Slot 21
-               Name (_ADR, 0x00150000)
-               Method (_EJ0,1) {
-                    Store(0x200000, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 21)
-            }
-
-            Device (S22) {              // Slot 22
-               Name (_ADR, 0x00160000)
-               Method (_EJ0,1) {
-                    Store(0x400000, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 22)
-            }
-
-            Device (S23) {              // Slot 23
-               Name (_ADR, 0x00170000)
-               Method (_EJ0,1) {
-                    Store(0x800000, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 23)
-            }
-
-            Device (S24) {              // Slot 24
-               Name (_ADR, 0x00180000)
-               Method (_EJ0,1) {
-                    Store(0x1000000, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 24)
-            }
-
-            Device (S25) {              // Slot 25
-               Name (_ADR, 0x00190000)
-               Method (_EJ0,1) {
-                    Store(0x2000000, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 25)
-            }
-
-            Device (S26) {              // Slot 26
-               Name (_ADR, 0x001A0000)
-               Method (_EJ0,1) {
-                    Store(0x4000000, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 26)
-            }
-
-            Device (S27) {              // Slot 27
-               Name (_ADR, 0x001B0000)
-               Method (_EJ0,1) {
-                    Store(0x8000000, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 27)
-            }
-
-            Device (S28) {              // Slot 28
-               Name (_ADR, 0x001C0000)
-               Method (_EJ0,1) {
-                    Store(0x10000000, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 28)
-            }
-
-            Device (S29) {              // Slot 29
-               Name (_ADR, 0x001D0000)
-               Method (_EJ0,1) {
-                    Store(0x20000000, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 29)
-            }
-
-            Device (S30) {              // Slot 30
-               Name (_ADR, 0x001E0000)
-               Method (_EJ0,1) {
-                    Store(0x40000000, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 30)
-            }
-
-            Device (S31) {              // Slot 31
-               Name (_ADR, 0x001F0000)
-               Method (_EJ0,1) {
-                    Store(0x80000000, B0EJ)
-                    Return (0x0)
-               }
-               Name (_SUN, 31)
-            }
+	    hotplug_slot(1, 0x0001)
+	    hotplug_slot(2, 0x0002)
+	    hotplug_slot(3, 0x0003)
+	    hotplug_slot(4, 0x0004)
+	    hotplug_slot(5, 0x0005)
+	    hotplug_slot(6, 0x0006)
+	    hotplug_slot(7, 0x0007)
+	    hotplug_slot(8, 0x0008)
+	    hotplug_slot(9, 0x0009)
+	    hotplug_slot(10, 0x000a)
+	    hotplug_slot(11, 0x000b)
+	    hotplug_slot(12, 0x000c)
+	    hotplug_slot(13, 0x000d)
+	    hotplug_slot(14, 0x000e)
+	    hotplug_slot(15, 0x000f)
+	    hotplug_slot(16, 0x0010)
+	    hotplug_slot(17, 0x0011)
+	    hotplug_slot(18, 0x0012)
+	    hotplug_slot(19, 0x0013)
+	    hotplug_slot(20, 0x0014)
+	    hotplug_slot(21, 0x0015)
+	    hotplug_slot(22, 0x0016)
+	    hotplug_slot(23, 0x0017)
+	    hotplug_slot(24, 0x0018)
+	    hotplug_slot(25, 0x0019)
+	    hotplug_slot(26, 0x001a)
+	    hotplug_slot(27, 0x001b)
+	    hotplug_slot(28, 0x001c)
+	    hotplug_slot(29, 0x001d)
+	    hotplug_slot(30, 0x001e)
+	    hotplug_slot(31, 0x001f)
 
             Method (_CRS, 0, NotSerialized)
             {
