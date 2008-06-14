@@ -668,120 +668,30 @@ DefinitionBlock (
     })
     Scope (\_GPE)
     {
+
+#define gen_cpu_hotplug(name, nr)                      \
+	If (And(\_PR.PRU, ShiftLeft(1, nr))) {     \
+	    Notify(\_PR.CPU##name, 1)              \
+        }                                          \
+	If (And(\_PR.PRD, ShiftLeft(1, nr))) {     \
+	    Notify(\_PR.CPU##name, 3)              \
+        }
+
         Method(_L00) {
-            /* Up status */
-            If (And(\_PR.PRU, 0x2)) {
-                Notify(\_PR.CPU1,1)
-            }
-
-            If (And(\_PR.PRU, 0x4)) {
-                Notify(\_PR.CPU2,1)
-            }
-
-            If (And(\_PR.PRU, 0x8)) {
-                Notify(\_PR.CPU3,1)
-            }
-
-            If (And(\_PR.PRU, 0x10)) {
-                Notify(\_PR.CPU4,1)
-            }
-
-            If (And(\_PR.PRU, 0x20)) {
-                Notify(\_PR.CPU5,1)
-            }
-
-            If (And(\_PR.PRU, 0x40)) {
-                Notify(\_PR.CPU6,1)
-            }
-
-            If (And(\_PR.PRU, 0x80)) {
-                Notify(\_PR.CPU7,1)
-            }
-
-            If (And(\_PR.PRU, 0x100)) {
-                Notify(\_PR.CPU8,1)
-            }
-
-            If (And(\_PR.PRU, 0x200)) {
-                Notify(\_PR.CPU9,1)
-            }
-
-            If (And(\_PR.PRU, 0x400)) {
-                Notify(\_PR.CPUA,1)
-            }
-
-            If (And(\_PR.PRU, 0x800)) {
-                Notify(\_PR.CPUB,1)
-            }
-
-            If (And(\_PR.PRU, 0x1000)) {
-                Notify(\_PR.CPUC,1)
-            }
-
-            If (And(\_PR.PRU, 0x2000)) {
-                Notify(\_PR.CPUD,1)
-            }
-
-            If (And(\_PR.PRU, 0x4000)) {
-                Notify(\_PR.CPUE,1)
-            }
-
-            /* Down status */
-            If (And(\_PR.PRD, 0x2)) {
-                Notify(\_PR.CPU1,3)
-            }
-
-            If (And(\_PR.PRD, 0x4)) {
-                Notify(\_PR.CPU2,3)
-            }
-
-            If (And(\_PR.PRD, 0x8)) {
-                Notify(\_PR.CPU3,3)
-            }
-
-            If (And(\_PR.PRD, 0x10)) {
-                Notify(\_PR.CPU4,3)
-            }
-
-            If (And(\_PR.PRD, 0x20)) {
-                Notify(\_PR.CPU5,3)
-            }
-
-            If (And(\_PR.PRD, 0x40)) {
-                Notify(\_PR.CPU6,3)
-            }
-
-            If (And(\_PR.PRD, 0x80)) {
-                Notify(\_PR.CPU7,3)
-            }
-
-            If (And(\_PR.PRD, 0x100)) {
-                Notify(\_PR.CPU8,3)
-            }
-
-            If (And(\_PR.PRD, 0x200)) {
-                Notify(\_PR.CPU9,3)
-            }
-
-            If (And(\_PR.PRD, 0x400)) {
-                Notify(\_PR.CPUA,3)
-            }
-
-            If (And(\_PR.PRD, 0x800)) {
-                Notify(\_PR.CPUB,3)
-            }
-
-            If (And(\_PR.PRD, 0x1000)) {
-                Notify(\_PR.CPUC,3)
-            }
-
-            If (And(\_PR.PRD, 0x2000)) {
-                Notify(\_PR.CPUD,3)
-            }
-
-            If (And(\_PR.PRD, 0x4000)) {
-                Notify(\_PR.CPUE,3)
-            }
+	    gen_cpu_hotplug(1, 1)
+	    gen_cpu_hotplug(2, 2)
+	    gen_cpu_hotplug(3, 3)
+	    gen_cpu_hotplug(4, 4)
+	    gen_cpu_hotplug(5, 5)
+	    gen_cpu_hotplug(6, 6)
+	    gen_cpu_hotplug(7, 7)
+	    gen_cpu_hotplug(8, 8)
+	    gen_cpu_hotplug(9, 9)
+	    gen_cpu_hotplug(A, 10)
+	    gen_cpu_hotplug(B, 11)
+	    gen_cpu_hotplug(C, 12)
+	    gen_cpu_hotplug(D, 13)
+	    gen_cpu_hotplug(E, 14)
 
             Return(0x01)
         }
