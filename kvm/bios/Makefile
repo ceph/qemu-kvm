@@ -104,7 +104,9 @@ rombios32.o: rombios32.c acpi-dsdt.hex
 	$(GCC) -m32 -O2 -Wall -c -o $@ $<
 
 acpi-dsdt.hex: acpi-dsdt.dsl
-	iasl -tc -p $@ $<
+	cpp -P $< $<.i
+	iasl -tc -p $@ $<.i
+	rm $<.i
 
 rombios32start.o: rombios32start.S
 	$(GCC) -m32 -c -o $@ $<
