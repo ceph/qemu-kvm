@@ -34,147 +34,35 @@ DefinitionBlock (
 		PRD, 8,
 	}
 
+#define gen_processor(nr, name) 				            \
+	Processor (CPU##name, nr, 0x0000b010, 0x06) {                       \
+            Name (TMP, Buffer(0x8) {0x0, 0x8, nr, nr, 0x1, 0x0, 0x0, 0x0})  \
+            Method(_MAT, 0) {                                               \
+                If (And(\_PR.PRU, ShiftLeft(1, nr))) { Return(TMP) }        \
+                Else { Return(0x0) }                                        \
+            }                                                               \
+            Method (_STA) {                                                 \
+                Return(0xF)                                                 \
+            }                                                               \
+        }                                                                   \
+
+
+
         Processor (CPU0, 0x00, 0x0000b010, 0x06) {Method (_STA) { Return(0xF)}}
-        Processor (CPU1, 0x01, 0x0000b010, 0x06) {
-            Name (TMP, Buffer(0x8) {0x0, 0x8, 0x01, 0x01, 0x1, 0x0, 0x0, 0x0})
-            Method(_MAT, 0) {
-                If (And(\_PR.PRU, 0x2)) { Return(TMP) }
-                Else { Return(0x0) }
-            }
-            Method (_STA) {
-                Return(0xF)
-            }
-        }
-        Processor (CPU2, 0x02, 0x0000b010, 0x06) {
-            Name (TMP, Buffer(0x8) {0x0, 0x8, 0x02, 0x02, 0x1, 0x0, 0x0, 0x0})
-            Method(_MAT, 0) {
-                If (And(\_PR.PRU, 0x4)) { Return(TMP) }
-                Else { Return(0x0) }
-            }
-            Method (_STA) {
-                Return(0xF)
-            }
-        }
-        Processor (CPU3, 0x03, 0x0000b010, 0x06) {
-            Name (TMP, Buffer(0x8) {0x0, 0x8, 0x03, 0x03, 0x1, 0x0, 0x0, 0x0})
-            Method(_MAT, 0) {
-                If (And(\_PR.PRU, 0x8)) { Return(TMP) }
-                Else { Return(0x0) }
-            }
-            Method (_STA) {
-                Return(0xF)
-            }
-        }
-        Processor (CPU4, 0x04, 0x0000b010, 0x06) {
-            Name (TMP, Buffer(0x8) {0x0, 0x8, 0x04, 0x04, 0x1, 0x0, 0x0, 0x0})
-            Method(_MAT, 0) {
-                If (And(\_PR.PRU, 0x10)) { Return(TMP) }
-                Else { Return(0x0) }
-            }
-            Method (_STA) {
-                Return(0xF)
-            }
-        }
-        Processor (CPU5, 0x05, 0x0000b010, 0x06) {
-            Name (TMP, Buffer(0x8) {0x0, 0x8, 0x05, 0x05, 0x1, 0x0, 0x0, 0x0})
-            Method(_MAT, 0) {
-                If (And(\_PR.PRU, 0x20)) { Return(TMP) }
-                Else { Return(0x0) }
-            }
-            Method (_STA) {
-                Return(0xF)
-            }
-        }
-        Processor (CPU6, 0x06, 0x0000b010, 0x06) {
-            Name (TMP, Buffer(0x8) {0x0, 0x8, 0x06, 0x06, 0x1, 0x0, 0x0, 0x0})
-            Method(_MAT, 0) {
-                If (And(\_PR.PRU, 0x40)) { Return(TMP) }
-                Else { Return(0x0) }
-            }
-            Method (_STA) {
-                Return(0xF)
-            }
-        }
-        Processor (CPU7, 0x07, 0x0000b010, 0x06) {
-            Name (TMP, Buffer(0x8) {0x0, 0x8, 0x07, 0x07, 0x1, 0x0, 0x0, 0x0})
-            Method(_MAT, 0) {
-                If (And(\_PR.PRU, 0x80)) { Return(TMP) }
-                Else { Return(0x0) }
-            }
-            Method (_STA) {
-                Return(0xF)
-            }
-        }
-        Processor (CPU8, 0x08, 0x0000b010, 0x06) {
-            Name (TMP, Buffer(0x8) {0x0, 0x8, 0x08, 0x08, 0x1, 0x0, 0x0, 0x0})
-            Method(_MAT, 0) {
-                If (And(\_PR.PRU, 0x100)) { Return(TMP) }
-                Else { Return(0x0) }
-            }
-            Method (_STA) {
-                Return(0xF)
-            }
-        }
-        Processor (CPU9, 0x09, 0x0000b010, 0x06) {
-            Name (TMP, Buffer(0x8) {0x0, 0x8, 0x09, 0x09, 0x1, 0x0, 0x0, 0x0})
-            Method(_MAT, 0) {
-                If (And(\_PR.PRU, 0x200)) { Return(TMP) }
-                Else { Return(0x0) }
-            }
-            Method (_STA) {
-                Return(0xF)
-            }
-        }
-        Processor (CPUA, 0x0a, 0x0000b010, 0x06) {
-            Name (TMP, Buffer(0x8) {0x0, 0x8, 0x0A, 0x0A, 0x1, 0x0, 0x0, 0x0})
-            Method(_MAT, 0) {
-                If (And(\_PR.PRU, 0x400)) { Return(TMP) }
-                Else { Return(0x0) }
-            }
-            Method (_STA) {
-                Return(0xF)
-            }
-        }
-        Processor (CPUB, 0x0b, 0x0000b010, 0x06) {
-            Name (TMP, Buffer(0x8) {0x0, 0x8, 0x0B, 0x0B, 0x1, 0x0, 0x0, 0x0})
-            Method(_MAT, 0) {
-                If (And(\_PR.PRU, 0x800)) { Return(TMP) }
-                Else { Return(0x0) }
-            }
-            Method (_STA) {
-                Return(0xF)
-            }
-        }
-        Processor (CPUC, 0x0c, 0x0000b010, 0x06) {
-            Name (TMP, Buffer(0x8) {0x0, 0x8, 0x0C, 0x0C, 0x1, 0x0, 0x0, 0x0})
-            Method(_MAT, 0) {
-                If (And(\_PR.PRU, 0x1000)) { Return(TMP) }
-                Else { Return(0x0) }
-            }
-            Method (_STA) {
-                Return(0xF)
-            }
-        }
-        Processor (CPUD, 0x0d, 0x0000b010, 0x06) {
-            Name (TMP, Buffer(0x8) {0x0, 0x8, 0x0D, 0x0D, 0x1, 0x0, 0x0, 0x0})
-            Method(_MAT, 0) {
-                If (And(\_PR.PRU, 0x2000)) { Return(TMP) }
-                Else { Return(0x0) }
-            }
-            Method (_STA) {
-                Return(0xF)
-            }
-        }
-        Processor (CPUE, 0x0e, 0x0000b010, 0x06) {
-            Name (TMP, Buffer(0x8) {0x0, 0x8, 0x0E, 0x0E, 0x1, 0x0, 0x0, 0x0})
-            Method(_MAT, 0) {
-                If (And(\_PR.PRU, 0x4000)) { Return(TMP) }
-                Else { Return(0x0) }
-            }
-            Method (_STA) {
-                Return(0xF)
-            }
-        }
+	gen_processor(1, 1)
+	gen_processor(2, 2)
+	gen_processor(3, 3)
+	gen_processor(4, 4)
+	gen_processor(5, 5)
+	gen_processor(6, 6)
+	gen_processor(7, 7)
+	gen_processor(8, 8)
+	gen_processor(9, 9)
+	gen_processor(10, A)
+	gen_processor(11, B)
+	gen_processor(12, C)
+	gen_processor(13, D)
+	gen_processor(14, E)
     }
 
     Scope (\)
