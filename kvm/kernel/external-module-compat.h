@@ -692,6 +692,11 @@ static inline void hrtimer_data_pointer(struct hrtimer *timer)
 static inline void hrtimer_data_pointer(struct hrtimer *timer) {}
 #endif
 
+#include <asm/hw_irq.h>
+#ifndef NMI_VECTOR
+#define NMI_VECTOR 2
+#endif
+
 #ifndef MSR_MTRRcap
 #define MSR_MTRRcap            0x0fe
 #define MSR_MTRRfix64K_00000   0x250
