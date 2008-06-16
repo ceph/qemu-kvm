@@ -194,7 +194,7 @@ static void kvm_do_load_registers(void *_env)
 
 void kvm_load_registers(CPUState *env)
 {
-    if (kvm_enabled())
+    if (kvm_enabled() && qemu_system_ready)
         on_vcpu(env, kvm_do_load_registers, env);
 }
 
@@ -392,6 +392,8 @@ static int kvm_main_loop_cpu(CPUState *env)
 #endif
 
     cpu_single_env = env;
+    kvm_load_registers(env);
+
     while (1) {
 	while (!has_work(env))
 	    kvm_main_loop_wait(env, 1000);
