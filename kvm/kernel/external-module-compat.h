@@ -663,7 +663,7 @@ extern int (*hrtimer_start_p)(struct hrtimer *timer, ktime_t tim,
 			      const enum hrtimer_mode mode);
 extern int (*hrtimer_cancel_p)(struct hrtimer *timer);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19) && defined(CONFIG_KALLSYMS)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17) && defined(CONFIG_KALLSYMS)
 static inline void hrtimer_kallsyms_resolve(void)
 {
 	hrtimer_init_p = (void *) kallsyms_lookup_name("hrtimer_init");
