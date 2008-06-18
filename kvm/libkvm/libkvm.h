@@ -576,6 +576,15 @@ int kvm_set_lapic(kvm_context_t kvm, int vcpu, struct kvm_lapic_state *s);
  */
 int kvm_pit_in_kernel(kvm_context_t kvm);
 
+/*!
+ * \brief Initialize coalesced MMIO
+ *
+ * Check for coalesced MMIO capability and store in context
+ *
+ * \param kvm Pointer to the current kvm_context
+ */
+int kvm_init_coalesced_mmio(kvm_context_t kvm);
+
 #ifdef KVM_CAP_PIT
 
 #if defined(__i386__) || defined(__x86_64__)
