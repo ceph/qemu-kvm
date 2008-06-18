@@ -28,8 +28,6 @@ usage() {
 
 	Any additional option is given to qemu's configure verbatim; including:
 
-	    --disable-gcc-check    don't insist on gcc-3.x
-	                           CAUTION: this will break running without kvm
 EOF
     cd qemu
     ./configure --help | egrep "enable-|disable-" \
