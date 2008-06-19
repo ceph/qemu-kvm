@@ -236,6 +236,9 @@ kvm_context_t kvm_init(struct kvm_callbacks *callbacks,
 	kvm_abi = r;
 	kvm_page_size = getpagesize();
 	kvm = malloc(sizeof(*kvm));
+	if (kvm == NULL)
+		goto out_close;
+	memset(kvm, 0, sizeof(*kvm));
 	kvm->fd = fd;
 	kvm->vm_fd = -1;
 	kvm->callbacks = callbacks;
