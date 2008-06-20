@@ -18,7 +18,7 @@ testobjs := \
 
 tests := $(addprefix test/powerpc/, $(testobjs))
 
-all: kvmctl $(tests)
+all: kvmtrace kvmctl $(tests)
 
 kvmctl_objs = main-ppc.o iotable.o ../libkvm/libkvm.a
 
