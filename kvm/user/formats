@@ -23,3 +23,13 @@
 0x00020013  %(tsc)d (+%(reltsc)8d)  LMSW          vcpu = 0x%(vcpu)08x  pid = 0x%(pid)08x [ value = 0x%(1)08x ]
 0x00020014  %(tsc)d (+%(reltsc)8d)  APIC_ACCESS   vcpu = 0x%(vcpu)08x  pid = 0x%(pid)08x [ offset = 0x%(1)08x ]
 0x00020015  %(tsc)d (+%(reltsc)8d)  TDP_FAULT     vcpu = 0x%(vcpu)08x  pid = 0x%(pid)08x [ errorcode = 0x%(1)08x, virt = 0x%(3)08x %(2)08x ]
+# ppc: context switch
+0x00020016  %(tsc)d (+%(reltsc)8d)  CONT_SWITCH   vcpu = 0x%(vcpu)08x  pid = 0x%(pid)08x
+# ppc: tlb write
+0x00020017  %(tsc)d (+%(reltsc)8d)  TLB_WRITE    vcpu = 0x%(vcpu)08x  pid = 0x%(pid)08x [ index = 0x%(1)08x, tid = 0x%(2)08x, word1=0x%(3)08x, word2=0x%(4)08x, word3=0x%(5)08x ]
+# ppc: tlb invalidate
+0x00020018  %(tsc)d (+%(reltsc)8d)  TLB_INVAL     vcpu = 0x%(vcpu)08x  pid = 0x%(pid)08x [ index = 0x%(1)08x, tid = 0x%(2)08x, word1=0x%(3)08x, word2=0x%(4)08x, word3=0x%(5)08x ]
+# ppc: guest TLB write
+0x00020019  %(tsc)d (+%(reltsc)8d)  GTLB_WRITE    vcpu = 0x%(vcpu)08x  pid = 0x%(pid)08x [ index = 0x%(1)08x, tid = 0x%(2)08x, word1=0x%(3)08x, word2=0x%(4)08x, word3=0x%(5)08x ]
+# ppc: shadow TLB write
+0x00020020  %(tsc)d (+%(reltsc)8d)  STLB_WRITE   vcpu = 0x%(vcpu)08x  pid = 0x%(pid)08x [ index = 0x%(1)08x, tid = 0x%(2)08x, word1=0x%(3)08x, word2=0x%(4)08x, word3=0x%(5)08x ]
