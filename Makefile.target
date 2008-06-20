@@ -201,8 +201,10 @@ ifdef CONFIG_DYNGEN_OP
 LIBOBJS+=op.o
 endif
 # TCG code generator
+ifneq ($(TARGET_ARCH), ia64)
 LIBOBJS+= tcg/tcg.o tcg/tcg-dyngen.o tcg/tcg-runtime.o
 CPPFLAGS+=-I$(SRC_PATH)/tcg -I$(SRC_PATH)/tcg/$(ARCH)
+endif
 ifeq ($(ARCH),sparc64)
 CPPFLAGS+=-I$(SRC_PATH)/tcg/sparc
 endif
@@ -239,7 +241,11 @@ LIBOBJS+= qemu-kvm-powerpc.o
 endif
 endif
 
-LIBOBJS+= op_helper.o helper.o
+LIBOBJS+= op_helper.o
+
+ifneq ($(TARGET_ARCH), ia64)
+LIBOBJS+= helper.o
+endif
 
 ifeq ($(TARGET_BASE_ARCH), arm)
 LIBOBJS+= neon_helper.o iwmmxt_helper.o

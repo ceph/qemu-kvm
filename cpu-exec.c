@@ -21,7 +21,9 @@
 #define CPU_NO_GLOBAL_REGS
 #include "exec.h"
 #include "disas.h"
+#if !defined(TARGET_IA64)
 #include "tcg.h"
+#endif
 
 #if !defined(CONFIG_SOFTMMU)
 #undef EAX

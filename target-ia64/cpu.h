@@ -43,9 +43,6 @@
 #include "softfloat.h"
 typedef struct CPUIA64State {
     CPU_COMMON;
-    /* exception/interrupt handling */
-   jmp_buf jmp_env;
-   int exception_index;
 
    int interrupt_request;
    int user_mode_only;

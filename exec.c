@@ -37,7 +37,9 @@
 #include "exec-all.h"
 #include "qemu-common.h"
 
+#if !defined(TARGET_IA64)
 #include "tcg.h"
+#endif
 #include "qemu-kvm.h"
 
 #if defined(CONFIG_USER_ONLY)

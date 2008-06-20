@@ -33,6 +33,12 @@ int cpu_ia64_gen_code(CPUState *env, TranslationBlock *tb, int *gen_code_size_pt
     return 0;
 }
 
+void tcg_dump_info(FILE *f,
+                   int (*cpu_fprintf)(FILE *f, const char *fmt, ...))
+{
+    return;
+}
+
 void flush_icache_range(unsigned long start, unsigned long stop)
 {
     while (start < stop) {
