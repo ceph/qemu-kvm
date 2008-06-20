@@ -3,7 +3,6 @@
 all: kvmctl kvmtrace test_cases
 
 kvmctl_objs= main.o iotable.o ../libkvm/libkvm.a
-kvmtrace_objs= kvmtrace.o
 balloon_ctl: balloon_ctl.o
 
 FLATLIBS = $(TEST_DIR)/libcflat.a $(libgcc)

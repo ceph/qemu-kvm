@@ -33,6 +33,8 @@ autodepend-flags = -MMD -MF $(dir $*).$(notdir $*).d
 
 LDFLAGS += -pthread -lrt
 
+kvmtrace_objs= kvmtrace.o
+
 kvmctl: $(kvmctl_objs)
 	$(CC) $(LDFLAGS) $^ -o $@
 
