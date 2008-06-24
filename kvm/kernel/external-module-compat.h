@@ -13,6 +13,7 @@
 #include <linux/kvm.h>
 #include <linux/kvm_para.h>
 #include <linux/cpu.h>
+#include <linux/time.h>
 #include <asm/processor.h>
 #include <linux/hrtimer.h>
 #include <asm/bitops.h>
