@@ -24,7 +24,7 @@
     printf("MODULE_INFO(version, \"%s\");\n", version)
 }
 
-/^static void vmx_load_host_state/ {
+/^static void __vmx_load_host_state/ {
     vmx_load_host_state = 1
 }
 
