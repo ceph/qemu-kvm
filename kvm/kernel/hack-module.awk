@@ -51,7 +51,7 @@
 
 { sub(/linux\/mm_types\.h/, "linux/mm.h") }
 
-{ sub(/tsc_khz/, "kvm_tsc_khz") }
+{ sub(/\<tsc_khz\>/, "kvm_tsc_khz") }
 
 { sub(/\<desc_struct\>/, "kvm_desc_struct") }
 { sub(/\<ldttss_desc64\>/, "kvm_ldttss_desc64") }
