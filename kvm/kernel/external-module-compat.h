@@ -533,7 +533,7 @@ static inline struct page *__kvm_vm_fault(struct vm_area_struct *vma,
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
 
-#define kvm_tsc_khz 2000000
+static unsigned  __attribute__((__used__)) kvm_tsc_khz = 2000000;
 
 #else
 
