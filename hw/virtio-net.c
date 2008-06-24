@@ -119,10 +119,8 @@ static void virtio_net_receive(void *opaque, const uint8_t *buf, int size)
     struct virtio_net_hdr *hdr;
     int offset, i;
 
-    if (virtqueue_pop(n->rx_vq, &elem) == 0) {
-	fprintf(stderr, "virtio_net: this should not happen\n");
+    if (virtqueue_pop(n->rx_vq, &elem) == 0)
 	return;
-    }
 
     if (elem.in_num < 1 || elem.in_sg[0].iov_len != sizeof(*hdr)) {
 	fprintf(stderr, "virtio-net header not in first element\n");
