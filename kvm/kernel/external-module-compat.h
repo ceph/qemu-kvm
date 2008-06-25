@@ -691,3 +691,11 @@ static inline void hrtimer_data_pointer(struct hrtimer *timer)
 #else
 static inline void hrtimer_data_pointer(struct hrtimer *timer) {}
 #endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
+
+#define ns_to_timespec kvm_ns_to_timespec
+
+struct timespec kvm_ns_to_timespec(const s64 nsec);
+
+#endif
