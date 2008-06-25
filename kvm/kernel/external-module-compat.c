@@ -198,3 +198,37 @@ void (*hrtimer_init_p)(struct hrtimer *timer, clockid_t which_clock,
 int (*hrtimer_start_p)(struct hrtimer *timer, ktime_t tim,
 		       const enum hrtimer_mode mode);
 int (*hrtimer_cancel_p)(struct hrtimer *timer);
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
+
+static void kvm_set_normalized_timespec(struct timespec *ts, time_t sec,
+					long nsec)
+{
+        while (nsec >= NSEC_PER_SEC) {
+                nsec -= NSEC_PER_SEC;
+                ++sec;
+        }
+        while (nsec < 0) {
+                nsec += NSEC_PER_SEC;
+                --sec;
+        }
+        ts->tv_sec = sec;
+        ts->tv_nsec = nsec;
+}
+
+struct timespec kvm_ns_to_timespec(const s64 nsec)
+{
+        struct timespec ts;
+
+        if (!nsec)
+                return (struct timespec) {0, 0};
+
+        ts.tv_sec = div_long_long_rem_signed(nsec, NSEC_PER_SEC, &ts.tv_nsec);
+        if (unlikely(nsec < 0))
+                kvm_set_normalized_timespec(&ts, ts.tv_sec, ts.tv_nsec);
+
+        return ts;
+}
+
+#endif
+

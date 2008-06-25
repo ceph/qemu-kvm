@@ -717,3 +717,11 @@ static inline void hrtimer_data_pointer(struct hrtimer *timer) {}
 #ifndef MSR_IA32_CR_PAT
 #define MSR_IA32_CR_PAT        0x00000277
 #endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
+
+#define ns_to_timespec kvm_ns_to_timespec
+
+struct timespec kvm_ns_to_timespec(const s64 nsec);
+
+#endif
