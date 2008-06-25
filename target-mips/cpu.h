@@ -70,11 +70,6 @@ typedef struct CPUMIPSFPUContext CPUMIPSFPUContext;
 struct CPUMIPSFPUContext {
     /* Floating point registers */
     fpr_t fpr[32];
-#ifndef USE_HOST_FLOAT_REGS
-    fpr_t ft0;
-    fpr_t ft1;
-    fpr_t ft2;
-#endif
     float_status fp_status;
     /* fpu implementation/revision register (fir) */
     uint32_t fcr0;
@@ -145,9 +140,11 @@ struct CPUMIPSState {
     target_ulong gpr[MIPS_SHADOW_SET_MAX][32];
     /* Special registers */
     target_ulong PC[MIPS_TC_MAX];
-#if TARGET_LONG_BITS > HOST_LONG_BITS
-    target_ulong t0;
-    target_ulong t1;
+    /* temporary hack for FP globals */
+#ifndef USE_HOST_FLOAT_REGS
+    fpr_t ft0;
+    fpr_t ft1;
+    fpr_t ft2;
 #endif
     target_ulong HI[MIPS_TC_MAX][MIPS_DSP_ACC];
     target_ulong LO[MIPS_TC_MAX][MIPS_DSP_ACC];

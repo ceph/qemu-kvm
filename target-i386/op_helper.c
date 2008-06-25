@@ -1837,6 +1837,8 @@ void helper_cmpxchg8b(target_ulong a0)
         stq(a0, ((uint64_t)ECX << 32) | (uint32_t)EBX);
         eflags |= CC_Z;
     } else {
+        /* always do the store */
+        stq(a0, d); 
         EDX = (uint32_t)(d >> 32);
         EAX = (uint32_t)d;
         eflags &= ~CC_Z;
@@ -1850,6 +1852,8 @@ void helper_cmpxchg16b(target_ulong a0)
     uint64_t d0, d1;
     int eflags;
 
+    if ((a0 & 0xf) != 0)
+        raise_exception(EXCP0D_GPF);
     eflags = cc_table[CC_OP].compute_all();
     d0 = ldq(a0);
     d1 = ldq(a0 + 8);
@@ -1858,6 +1862,9 @@ void helper_cmpxchg16b(target_ulong a0)
         stq(a0 + 8, ECX);
         eflags |= CC_Z;
     } else {
+        /* always do the store */
+        stq(a0, d0); 
+        stq(a0 + 8, d1); 
         EDX = d1;
         EAX = d0;
         eflags &= ~CC_Z;
@@ -4547,14 +4554,20 @@ void helper_idivq_EAX(target_ulong t0)
 }
 #endif
 
-void helper_hlt(void)
+static void do_hlt(void)
 {
-    helper_svm_check_intercept_param(SVM_EXIT_HLT, 0);
-    
     env->hflags &= ~HF_INHIBIT_IRQ_MASK; /* needed if sti is just before */
     env->halted = 1;
     env->exception_index = EXCP_HLT;
     cpu_loop_exit();
+}
+
+void helper_hlt(int next_eip_addend)
+{
+    helper_svm_check_intercept_param(SVM_EXIT_HLT, 0);
+    EIP += next_eip_addend;
+    
+    do_hlt();
 }
 
 void helper_monitor(target_ulong ptr)
@@ -4565,17 +4578,19 @@ void helper_monitor(target_ulong ptr)
     helper_svm_check_intercept_param(SVM_EXIT_MONITOR, 0);
 }
 
-void helper_mwait(void)
+void helper_mwait(int next_eip_addend)
 {
     if ((uint32_t)ECX != 0)
         raise_exception(EXCP0D_GPF);
     helper_svm_check_intercept_param(SVM_EXIT_MWAIT, 0);
+    EIP += next_eip_addend;
+
     /* XXX: not complete but not completely erroneous */
     if (env->cpu_index != 0 || env->next_cpu != NULL) {
         /* more than one CPU: do not sleep because another CPU may
            wake this one */
     } else {
-        helper_hlt();
+        do_hlt();
     }
 }
 
@@ -4767,7 +4782,7 @@ static inline void svm_save_seg(target_phys_addr_t addr,
     stl_phys(addr + offsetof(struct vmcb_seg, limit), 
              sc->limit);
     stw_phys(addr + offsetof(struct vmcb_seg, attrib), 
-             (sc->flags >> 8) | ((sc->flags >> 12) & 0x0f00));
+             ((sc->flags >> 8) & 0xff) | ((sc->flags >> 12) & 0x0f00));
 }
                                 
 static inline void svm_load_seg(target_phys_addr_t addr, SegmentCache *sc)

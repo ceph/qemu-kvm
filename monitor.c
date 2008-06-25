@@ -36,11 +36,9 @@
 #include "disas.h"
 #include "migration.h"
 #include <dirent.h>
+#include "qemu-timer.h"
 
 #include "qemu-kvm.h"
-#ifdef CONFIG_PROFILER
-#include "qemu-timer.h" /* for ticks_per_sec */
-#endif
 
 //#define DEBUG
 //#define DEBUG_COMPLETION
@@ -423,18 +421,26 @@ static void do_eject(int force, const char *filename)
     eject_device(bs, force);
 }
 
-static void do_change_block(const char *device, const char *filename)
+static void do_change_block(const char *device, const char *filename, const char *fmt)
 {
     BlockDriverState *bs;
+    BlockDriver *drv = NULL;
 
     bs = bdrv_find(device);
     if (!bs) {
         term_printf("device not found\n");
         return;
     }
+    if (fmt) {
+        drv = bdrv_find_format(fmt);
+        if (!drv) {
+            term_printf("invalid format %s\n", fmt);
+            return;
+        }
+    }
     if (eject_device(bs, 0) < 0)
         return;
-    bdrv_open(bs, filename, 0);
+    bdrv_open2(bs, filename, 0, drv);
     qemu_key_check(bs, filename);
 }
 
@@ -453,12 +459,12 @@ static void do_change_vnc(const char *target)
     }
 }
 
-static void do_change(const char *device, const char *target)
+static void do_change(const char *device, const char *target, const char *fmt)
 {
     if (strcmp(device, "vnc") == 0) {
 	do_change_vnc(target);
     } else {
-	do_change_block(device, target);
+	do_change_block(device, target, fmt);
     }
 }
 
@@ -923,6 +929,23 @@ static const KeyDef key_defs[] = {
 
     { 0xd2, "insert" },
     { 0xd3, "delete" },
+#if defined(TARGET_SPARC) && !defined(TARGET_SPARC64)
+    { 0xf0, "stop" },
+    { 0xf1, "again" },
+    { 0xf2, "props" },
+    { 0xf3, "undo" },
+    { 0xf4, "front" },
+    { 0xf5, "copy" },
+    { 0xf6, "open" },
+    { 0xf7, "paste" },
+    { 0xf8, "find" },
+    { 0xf9, "cut" },
+    { 0xfa, "lf" },
+    { 0xfb, "help" },
+    { 0xfc, "meta_l" },
+    { 0xfd, "meta_r" },
+    { 0xfe, "compose" },
+#endif
     { 0, NULL },
 };
 
@@ -944,14 +967,37 @@ static int get_keycode(const char *key)
     return -1;
 }
 
-static void do_sendkey(const char *string)
+#define MAX_KEYCODES 16
+static uint8_t keycodes[MAX_KEYCODES];
+static int nb_pending_keycodes;
+static QEMUTimer *key_timer;
+
+static void release_keys(void *opaque)
 {
-    uint8_t keycodes[16];
-    int nb_keycodes = 0;
+    int keycode;
+
+    while (nb_pending_keycodes > 0) {
+        nb_pending_keycodes--;
+        keycode = keycodes[nb_pending_keycodes];
+        if (keycode & 0x80)
+            kbd_put_keycode(0xe0);
+        kbd_put_keycode(keycode | 0x80);
+    }
+}
+
+static void do_sendkey(const char *string, int has_hold_time, int hold_time)
+{
     char keyname_buf[16];
     char *separator;
     int keyname_len, keycode, i;
 
+    if (nb_pending_keycodes > 0) {
+        qemu_del_timer(key_timer);
+        release_keys(NULL);
+    }
+    if (!has_hold_time)
+        hold_time = 100;
+    i = 0;
     while (1) {
         separator = strchr(string, '-');
         keyname_len = separator ? separator - string : strlen(string);
@@ -961,7 +1007,7 @@ static void do_sendkey(const char *string)
                 term_printf("invalid key: '%s...'\n", keyname_buf);
                 return;
             }
-            if (nb_keycodes == sizeof(keycodes)) {
+            if (i == MAX_KEYCODES) {
                 term_printf("too many keys\n");
                 return;
             }
@@ -971,26 +1017,23 @@ static void do_sendkey(const char *string)
                 term_printf("unknown key: '%s'\n", keyname_buf);
                 return;
             }
-            keycodes[nb_keycodes++] = keycode;
+            keycodes[i++] = keycode;
         }
         if (!separator)
             break;
         string = separator + 1;
     }
+    nb_pending_keycodes = i;
     /* key down events */
-    for(i = 0; i < nb_keycodes; i++) {
+    for (i = 0; i < nb_pending_keycodes; i++) {
         keycode = keycodes[i];
         if (keycode & 0x80)
             kbd_put_keycode(0xe0);
         kbd_put_keycode(keycode & 0x7f);
     }
-    /* key up events */
-    for(i = nb_keycodes - 1; i >= 0; i--) {
-        keycode = keycodes[i];
-        if (keycode & 0x80)
-            kbd_put_keycode(0xe0);
-        kbd_put_keycode(keycode | 0x80);
-    }
+    /* delayed key up events */
+    qemu_mod_timer(key_timer, qemu_get_clock(vm_clock) +
+                    muldiv64(ticks_per_sec, hold_time, 1000));
 }
 
 static int mouse_button_state;
@@ -1043,12 +1086,22 @@ static void do_ioport_read(int count, int format, int size, int addr, int has_in
                 suffix, addr, size * 2, val);
 }
 
+/* boot_set handler */
+static QEMUBootSetHandler *qemu_boot_set_handler = NULL;
+static void *boot_opaque;
+
+void qemu_register_boot_set(QEMUBootSetHandler *func, void *opaque)
+{
+    qemu_boot_set_handler = func;
+    boot_opaque = opaque;
+}
+
 static void do_boot_set(const char *bootdevice)
 {
     int res;
 
     if (qemu_boot_set_handler)  {
-        res = qemu_boot_set_handler(bootdevice);
+        res = qemu_boot_set_handler(boot_opaque, bootdevice);
         if (res == 0)
             term_printf("boot device list now set to %s\n", bootdevice);
         else
@@ -1346,8 +1399,8 @@ static term_cmd_t term_cmds[] = {
       "", "quit the emulator" },
     { "eject", "-fB", do_eject,
       "[-f] device", "eject a removable medium (use -f to force it)" },
-    { "change", "BF", do_change,
-      "device filename", "change a removable medium" },
+    { "change", "BFs?", do_change,
+      "device filename [format]", "change a removable medium, optional format" },
     { "screendump", "F", do_screen_dump,
       "filename", "save screen into PPM image 'filename'" },
     { "logfile", "F", do_logfile,
@@ -1377,8 +1430,8 @@ static term_cmd_t term_cmds[] = {
     { "i", "/ii.", do_ioport_read,
       "/fmt addr", "I/O port read" },
 
-    { "sendkey", "s", do_sendkey,
-      "keys", "send keys to the VM (e.g. 'sendkey ctrl-alt-f1')" },
+    { "sendkey", "si?", do_sendkey,
+      "keys [hold_ms]", "send keys to the VM (e.g. 'sendkey ctrl-alt-f1', default hold time=100 ms)" },
     { "system_reset", "", do_system_reset,
       "", "reset the system" },
     { "system_powerdown", "", do_system_powerdown,
@@ -2694,6 +2747,9 @@ void monitor_init(CharDriverState *hd, int show_banner)
     int i;
 
     if (is_first_init) {
+        key_timer = qemu_new_timer(vm_clock, release_keys, NULL);
+        if (!key_timer)
+            return;
         for (i = 0; i < MAX_MON; i++) {
             monitor_hd[i] = NULL;
         }

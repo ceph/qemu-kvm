@@ -108,41 +108,6 @@ int hex2bin(char ch)
     return -1;
 }
 
-void *get_mmap_addr(unsigned long size)
-{
-    return NULL;
-}
-
-void qemu_free(void *ptr)
-{
-    free(ptr);
-}
-
-void *qemu_malloc(size_t size)
-{
-    return malloc(size);
-}
-
-void *qemu_mallocz(size_t size)
-{
-    void *ptr;
-    ptr = qemu_malloc(size);
-    if (!ptr)
-        return NULL;
-    memset(ptr, 0, size);
-    return ptr;
-}
-
-char *qemu_strdup(const char *str)
-{
-    char *ptr;
-    ptr = qemu_malloc(strlen(str) + 1);
-    if (!ptr)
-        return NULL;
-    strcpy(ptr, str);
-    return ptr;
-}
-
 char *urldecode(const char *ptr)
 {
     char *ret;

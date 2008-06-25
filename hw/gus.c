@@ -58,7 +58,7 @@ typedef struct GUSState {
     QEMUSoundCard card;
     int freq;
     int pos, left, shift, irqs;
-    uint16_t *mixbuf;
+    GUSsample *mixbuf;
     uint8_t himem[1024 * 1024 + 32 + 4096];
     int samples;
     SWVoiceOut *voice;
@@ -198,7 +198,7 @@ void GUS_dmarequest (GUSEmuState *der)
 int GUS_read_DMA (void *opaque, int nchan, int dma_pos, int dma_len)
 {
     GUSState *s = opaque;
-    int8_t tmpbuf[4096];
+    char tmpbuf[4096];
     int pos = dma_pos, mode, left = dma_len - dma_pos;
 
     ldebug ("read DMA %#x %d\n", dma_pos, dma_len);
@@ -218,6 +218,38 @@ int GUS_read_DMA (void *opaque, int nchan, int dma_pos, int dma_len)
         DMA_release_DREQ (s->emu.gusdma);
     }
     return dma_len;
+}
+
+static void GUS_save (QEMUFile *f, void *opaque)
+{
+    int32_t val;
+    GUSState *s = opaque;
+
+    val = s->pos;     qemu_put_be32s (f, &val);
+    val = s->left;    qemu_put_be32s (f, &val);
+    val = s->shift;   qemu_put_be32s (f, &val);
+    val = s->irqs;    qemu_put_be32s (f, &val);
+    val = s->samples; qemu_put_be32s (f, &val);
+    qemu_put_be64s (f, &s->last_ticks);
+    qemu_put_buffer (f, s->himem, sizeof (s->himem));
+}
+
+static int GUS_load (QEMUFile *f, void *opaque, int version_id)
+{
+    int32_t val;
+    GUSState *s = opaque;
+
+    if (version_id != 2)
+        return -EINVAL;
+
+    qemu_get_be32s (f, &val); s->pos = val;
+    qemu_get_be32s (f, &val); s->left = val;
+    qemu_get_be32s (f, &val); s->shift = val;
+    qemu_get_be32s (f, &val); s->irqs = val;
+    qemu_get_be32s (f, &val); s->samples = val;
+    qemu_get_be64s (f, &s->last_ticks);
+    qemu_get_buffer (f, s->himem, sizeof (s->himem));
+    return 0;
 }
 
 int GUS_init (AudioState *audio, qemu_irq *pic)
@@ -296,5 +328,7 @@ int GUS_init (AudioState *audio, qemu_irq *pic)
     s->pic = pic;
 
     AUD_set_active_out (s->voice, 1);
+
+    register_savevm ("gus", 0, 2, GUS_save, GUS_load, s);
     return 0;
 }
