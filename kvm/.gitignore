@@ -50,6 +50,8 @@ kernel/mmu.h
 kernel/modules.order
 kernel/tss.h
 kernel/x86.c
+kernel/coalesced_mmio.c
+kernel/coalesced_mmio.h
 qemu/pc-bios/extboot.bin
 qemu/qemu-doc.html
 qemu/*.1
