@@ -349,7 +349,17 @@ uint64_t div64_u64(uint64_t dividend, uint64_t divisor);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
 
+#ifdef RHEL_RELEASE_CODE
+#if RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(5,2)
+#define RHEL_BOOL 1
+#endif
+#endif
+
+#ifndef RHEL_BOOL
+
 typedef _Bool bool;
+
+#endif
 
 #endif
 
