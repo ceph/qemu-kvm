@@ -7,6 +7,8 @@ KVERREL = $(patsubst /lib/modules/%/build,%,$(KERNELDIR))
 
 DESTDIR=
 
+MAKEFILE_PRE = $(ARCH_DIR)/Makefile.pre
+
 INSTALLDIR = $(patsubst %/build,%/extra,$(KERNELDIR))
 ORIGMODDIR = $(patsubst %/build,%/kernel,$(KERNELDIR))
 
@@ -27,10 +29,11 @@ unifdef = mv $1 $1.orig && \
 hack = $(call _hack,$T/$(strip $1))
 
 hack-files-x86 = kvm_main.c mmu.c vmx.c svm.c x86.c irq.h lapic.c i8254.c
+hack-files-ia64 =
 
 hack-files = $(hack-files-$(ARCH_DIR))
 
-all::
+all:: header-link
 #	include header priority 1) $LINUX 2) $KERNELDIR 3) include-compat
 	$(MAKE) -C $(KERNELDIR) M=`pwd` \
 		LINUXINCLUDE="-I`pwd`/include -Iinclude -I`pwd`/include-compat \
@@ -38,7 +41,12 @@ all::
 		-include `pwd`/$(ARCH_DIR)/external-module-compat.h"
 		"$$@"
 
-sync: header-sync source-sync
+sync: header-sync source-sync header-link prerequisite
+
+header-link:
+	rm -f include/asm
+	ln -sf asm-$(ARCH_DIR) include/asm
+	ln -sf asm-$(ARCH_DIR) include-compat/asm
 
 T = $(subst -sync,,$@)-tmp
 
@@ -56,15 +64,11 @@ header-sync:
 		do mkdir -p $$(dirname $$i); cmp -s $$i $T/$$i || cp $T/$$i $$i; done
 	rm -rf $T
 
-	rm -f include/asm
-	ln -sf asm-$(ARCH_DIR) include/asm
-	ln -sf asm-$(ARCH_DIR) include-compat/asm
-
 source-sync:
 	rm -rf $T
 	rsync --exclude='*.mod.c' -R \
-	     "$(LINUX)"/arch/$(ARCH_DIR)/kvm/./*.[ch] \
-	     "$(LINUX)"/virt/kvm/./*.[ch] \
+	     "$(LINUX)"/arch/$(ARCH_DIR)/kvm/./*.[cSh] \
+	     "$(LINUX)"/virt/kvm/./*.[cSh] \
 	     $T/
 
 	set -e && for i in $(find $T -name '*.c'); do \
@@ -76,6 +80,8 @@ source-sync:
 	for i in $$(find $T -type f -printf '%P '); \
 		do cmp -s $(ARCH_DIR)/$$i $T/$$i || cp $T/$$i $(ARCH_DIR)/$$i; done
 	rm -rf $T
+
+include $(MAKEFILE_PRE)
 
 install:
 	mkdir -p $(DESTDIR)/$(INSTALLDIR)
