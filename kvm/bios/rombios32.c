@@ -340,6 +340,17 @@ int vsnprintf(char *buf, int buflen, const char *fmt, va_list args)
     return buf - buf0;
 }
 
+int snprintf(char *buf, int buflen, const char *fmt, ...)
+{
+    va_list ap;
+    int ret;
+
+    va_start(ap, fmt);
+    ret = vsnprintf(buf, buflen, fmt, ap);
+    va_end(ap);
+    return ret;
+}
+
 void bios_printf(int flags, const char *fmt, ...)
 {
     va_list ap;
@@ -385,7 +396,9 @@ int smp_cpus;
 uint32_t cpuid_signature;
 uint32_t cpuid_features;
 uint32_t cpuid_ext_features;
+uint8_t cpuid_vendor[13];
 unsigned long ram_size;
+uint32_t high_ram_size;
 uint8_t bios_uuid[16];
 #ifdef BX_USE_EBDA_TABLES
 unsigned long ebda_cur_addr;
@@ -426,13 +439,37 @@ void uuid_probe(void)
 void cpu_probe(void)
 {
     uint32_t eax, ebx, ecx, edx;
+    cpuid(0, eax, ebx, ecx, edx);
+    memcpy(cpuid_vendor, &ebx, 4);
+    memcpy(cpuid_vendor + 4, &edx, 4);
+    memcpy(cpuid_vendor + 8, &ecx, 4);
     cpuid(1, eax, ebx, ecx, edx);
     cpuid_signature = eax;
     cpuid_features = edx;
     cpuid_ext_features = ecx;
 }
 
-static int cmos_readb(int addr)
+int cpu_name_string(char *buf)
+{
+    uint32_t eax, ebx, ecx, edx, i;
+    char *p = buf;
+
+    cpuid(0x80000000, eax, ebx, ecx, edx);
+    if(eax < 4)
+            return 0;
+    for(i = 0; i < 3; i++) {
+            cpuid(0x80000002 + i, eax, ebx, ecx, edx);
+            memcpy(p, &eax, 4); p += 4;
+            memcpy(p, &ebx, 4); p += 4;
+            memcpy(p, &ecx, 4); p += 4;
+            memcpy(p, &edx, 4); p += 4;
+    }
+
+    *p = '\0';
+    return strlen(buf);
+}
+
+static uint32_t cmos_readb(int addr)
 {
     outb(0x70, addr);
     return inb(0x71);
@@ -445,6 +482,8 @@ void ram_probe(void)
         16 * 1024 * 1024;
   else
     ram_size = (cmos_readb(0x17) | (cmos_readb(0x18) << 8)) * 1024;
+
+  high_ram_size = (cmos_readb(0x5b) | (cmos_readb(0x5c) << 8) | (cmos_readb(0x5d) << 16));
 #ifdef BX_USE_EBDA_TABLES
     ebda_cur_addr = ((*(uint16_t *)(0x40e)) << 4) + 0x380;
 #endif
@@ -1607,6 +1646,40 @@ struct smbios_type_127 {
 	struct smbios_structure_header header;
 } __attribute__((__packed__));
 
+static uint8_t cpuid2dmi_family(void)
+{
+    uint8_t dmi_family = 0x01; /* other */
+    uint16_t family = ((cpuid_signature >> 8) & 0x0f) +
+            ((cpuid_signature >> 20) & 0xff);
+
+    switch(*(uint32_t*)&cpuid_vendor[8]) {
+        case 0x444d4163: /* "cAMD" */
+            switch(family) {
+                case 0x4: dmi_family = 0x0a; break;
+                case 0x5: dmi_family = 0x1a; break;
+                case 0x6: dmi_family = 0x83; break;
+                case 0x7: dmi_family = 0x84; break;
+                case 0xf: dmi_family = 0x85; break;
+                default: break;
+            }
+        break;
+        case 0x6c65746e: /* "ntel" */
+            switch(family) {
+                case 0x4: dmi_family = 0x0a; break;
+                case 0x5: dmi_family = 0x0c; break;
+                case 0x6: dmi_family = 0x0d; break;
+                case 0x7: dmi_family = 0x11; break;
+                case 0xf: dmi_family = 0xb2; break;
+                default: break;
+            }
+        break;
+        default:
+        break;
+    }
+
+    return dmi_family;
+}
+
 static void
 smbios_entry_point_init(void *start,
                         uint16_t max_structure_size,
@@ -1648,6 +1721,7 @@ smbios_entry_point_init(void *start,
 
 /* Type 0 -- BIOS Information */
 #define RELEASE_DATE_STR "01/01/2007"
+#define BIOS_VERSION "V1.0"
 static void *
 smbios_type_0_init(void *start)
 {
@@ -1658,15 +1732,15 @@ smbios_type_0_init(void *start)
     p->header.handle = 0;
 
     p->vendor_str = 1;
-    p->bios_version_str = 1;
+    p->bios_version_str = 2;
     p->bios_starting_address_segment = 0xe800;
-    p->bios_release_date_str = 2;
+    p->bios_release_date_str = 3;
     p->bios_rom_size = 0; /* FIXME */
 
     memset(p->bios_characteristics, 0, 7);
     p->bios_characteristics[7] = 0x08; /* BIOS characteristics not supported */
     p->bios_characteristics_extension_bytes[0] = 0;
-    p->bios_characteristics_extension_bytes[1] = 0;
+    p->bios_characteristics_extension_bytes[1] = 0x04; /* Enable targeted content distribution */
 
     p->system_bios_major_release = 1;
     p->system_bios_minor_release = 0;
@@ -1676,6 +1750,8 @@ smbios_type_0_init(void *start)
     start += sizeof(struct smbios_type_0);
     memcpy((char *)start, BX_APPNAME, sizeof(BX_APPNAME));
     start += sizeof(BX_APPNAME);
+    memcpy((char *)start, BIOS_VERSION, sizeof(BIOS_VERSION));
+    start += sizeof(BIOS_VERSION);
     memcpy((char *)start, RELEASE_DATE_STR, sizeof(RELEASE_DATE_STR));
     start += sizeof(RELEASE_DATE_STR);
     *((uint8_t *)start) = 0;
@@ -1684,6 +1760,8 @@ smbios_type_0_init(void *start)
 }
 
 /* Type 1 -- System Information */
+#define MANUFACTURER "Qumranet"
+#define PRODUCT "KVM"
 static void *
 smbios_type_1_init(void *start)
 {
@@ -1692,8 +1770,8 @@ smbios_type_1_init(void *start)
     p->header.length = sizeof(struct smbios_type_1);
     p->header.handle = 0x100;
 
-    p->manufacturer_str = 0;
-    p->product_name_str = 0;
+    p->manufacturer_str = 1;
+    p->product_name_str = 2;
     p->version_str = 0;
     p->serial_number_str = 0;
 
@@ -1704,9 +1782,13 @@ smbios_type_1_init(void *start)
     p->family_str = 0;
 
     start += sizeof(struct smbios_type_1);
-    *((uint16_t *)start) = 0;
+    memcpy((char *)start, MANUFACTURER, sizeof(MANUFACTURER));
+    start += sizeof(MANUFACTURER);
+    memcpy((char *)start, PRODUCT, sizeof(PRODUCT));
+    start += sizeof(PRODUCT);
+    *((uint8_t *)start) = 0;
 
-    return start+2;
+    return start+1;
 }
 
 /* Type 3 -- System Enclosure */
@@ -1719,7 +1801,7 @@ smbios_type_3_init(void *start)
     p->header.length = sizeof(struct smbios_type_3);
     p->header.handle = 0x300;
 
-    p->manufacturer_str = 0;
+    p->manufacturer_str = 1;
     p->type = 0x01; /* other */
     p->version_str = 0;
     p->serial_number_str = 0;
@@ -1734,9 +1816,11 @@ smbios_type_3_init(void *start)
     p->contained_element_count = 0;
 
     start += sizeof(struct smbios_type_3);
-    *((uint16_t *)start) = 0;
+    memcpy((char *)start, MANUFACTURER, sizeof(MANUFACTURER));
+    start += sizeof(MANUFACTURER);
+    *((uint8_t *)start) = 0;
 
-    return start+2;
+    return start+1;
 }
 
 /* Type 4 -- Processor Information */
@@ -1744,6 +1828,10 @@ static void *
 smbios_type_4_init(void *start, unsigned int cpu_number)
 {
     struct smbios_type_4 *p = (struct smbios_type_4 *)start;
+    char buf[49];
+    int len, cpu_str_len;
+
+    cpu_str_len = cpu_name_string(buf);
 
     p->header.type = 4;
     p->header.length = sizeof(struct smbios_type_4);
@@ -1751,13 +1839,13 @@ smbios_type_4_init(void *start, unsigned int cpu_number)
 
     p->socket_designation_str = 1;
     p->processor_type = 0x03; /* CPU */
-    p->processor_family = 0x01; /* other */
-    p->processor_manufacturer_str = 0;
+    p->processor_family = cpuid2dmi_family();
+    p->processor_manufacturer_str = 2;
 
     p->processor_id[0] = cpuid_signature;
     p->processor_id[1] = cpuid_features;
 
-    p->processor_version_str = 0;
+    p->processor_version_str = cpu_str_len ? 3 : 0;
     p->voltage = 0;
     p->external_clock = 0;
 
@@ -1769,10 +1857,17 @@ smbios_type_4_init(void *start, unsigned int cpu_number)
 
     start += sizeof(struct smbios_type_4);
 
-    memcpy((char *)start, "CPU  " "\0" "" "\0" "", 7);
-	((char *)start)[4] = cpu_number + '0';
+    len = snprintf(start, 10, "CPU %d", cpu_number) + 1;
+    start += len;
+    memcpy(start, cpuid_vendor, 13);
+    start += 13;
+    if(cpu_str_len) {
+        memcpy(start, buf, cpu_str_len + 1);
+	start += (cpu_str_len + 1);
+    }
+    *((uint8_t *)start) = 0;
 
-    return start+7;
+    return start+1;
 }
 
 /* Type 16 -- Physical Memory Array */
@@ -1840,7 +1935,7 @@ smbios_type_19_init(void *start, uint32_t memory_size_mb)
     p->header.handle = 0x1300;
 
     p->starting_address = 0;
-    p->ending_address = (memory_size_mb-1) * 1024;
+    p->ending_address = memory_size_mb * 1024 - 1;
     p->memory_array_handle = 0x1000;
     p->partition_width = 1;
 
@@ -1861,7 +1956,7 @@ smbios_type_20_init(void *start, uint32_t memory_size_mb)
     p->header.handle = 0x1400;
 
     p->starting_address = 0;
-    p->ending_address = (memory_size_mb-1)*1024;
+    p->ending_address = memory_size_mb * 1024 - 1;
     p->memory_device_handle = 0x1100;
     p->memory_array_mapped_address_handle = 0x1300;
     p->partition_row_position = 1;
@@ -1912,7 +2007,7 @@ void smbios_init(void)
 {
     unsigned cpu_num, nr_structs = 0, max_struct_size = 0;
     char *start, *p, *q;
-    int memsize = ram_size / (1024 * 1024);
+    int memsize = (high_ram_size >> 4) + (ram_size >> 20);
 
 #ifdef BX_USE_EBDA_TABLES
     ebda_cur_addr = align(ebda_cur_addr, 16);
