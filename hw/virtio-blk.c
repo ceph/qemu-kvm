@@ -186,7 +186,7 @@ static void virtio_blk_handle_output(VirtIODevice *vdev, VirtQueue *vq)
 	    for (i = 1; i < req->elem.out_num; i++) {
 		size_t len;
 
-		len = MIN(req->elem.in_sg[i].iov_len,
+		len = MIN(req->elem.out_sg[i].iov_len,
 			  req->size - offset);
 		memcpy(req->buffer + offset,
 		       req->elem.out_sg[i].iov_base,
