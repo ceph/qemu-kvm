@@ -67,16 +67,19 @@ source-sync:
 	     "$(LINUX)"/virt/kvm/./*.[ch] \
 	     $T/
 
+	set -e && for i in $(find $T -name '*.c'); do \
+		$(call unifdef,$$i); done
+
 	for i in $(hack-files); \
 		do $(call hack, $$i); done
 
 	for i in $$(find $T -type f -printf '%P '); \
-		do cmp -s $$i $T/$$i || cp $T/$$i $$i; done
+		do cmp -s $(ARCH_DIR)/$$i $T/$$i || cp $T/$$i $(ARCH_DIR)/$$i; done
 	rm -rf $T
 
 install:
 	mkdir -p $(DESTDIR)/$(INSTALLDIR)
-	cp *.ko $(DESTDIR)/$(INSTALLDIR)
+	cp $(ARCH_DIR)/*.ko $(DESTDIR)/$(INSTALLDIR)
 	for i in $(ORIGMODDIR)/drivers/kvm/*.ko \
 		 $(ORIGMODDIR)/arch/$(ARCH_DIR)/kvm/*.ko; do \
 		if [ -f "$$i" ]; then mv "$$i" "$$i.orig"; fi; \
@@ -94,7 +97,7 @@ rpm:	all
 	sed 's/^Release:.*/Release: $(rpmrelease)/; s/^%define kverrel.*/%define kverrel $(KVERREL)/' \
 	     kvm-kmod.spec > $(tmpspec)
 	rpmbuild --define="kverrel $(KVERREL)" \
-		 --define="objdir $$(pwd)" \
+		 --define="objdir $$(pwd)/$(ARCH_DIR)" \
 		 --define="_rpmdir $(RPMDIR)" \
 		 --define="_topdir $(rpm-topdir)" \
 		-bb $(tmpspec)
