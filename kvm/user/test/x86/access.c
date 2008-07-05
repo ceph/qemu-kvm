@@ -1,7 +1,6 @@
 
+#include "libcflat.h"
 #include "smp.h"
-#include "printf.h"
-#include "string.h"
 
 #define true 1
 #define false 0

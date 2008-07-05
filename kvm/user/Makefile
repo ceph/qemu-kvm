@@ -10,6 +10,12 @@ CFLAGS =
 
 libgcc := $(shell $(CC) --print-libgcc-file-name)
 
+libcflat := test/lib/libcflat.a
+cflatobjs := \
+	test/lib/panic.o \
+	test/lib/printf.o \
+	test/lib/string.o
+
 #include architecure specific make rules
 include config-$(ARCH).mak
 
@@ -41,10 +47,13 @@ kvmctl: $(kvmctl_objs)
 kvmtrace: $(kvmtrace_objs)
 	$(CC) $(LDFLAGS) $^ -o $@
 
+$(libcflat): $(cflatobjs)
+	ar rcs $@ $^
+
 %.o: %.S
 	$(CC) $(CFLAGS) -c -nostdlib -o $@ $^
 
 -include .*.d
 
 clean: arch_clean
-	$(RM) kvmctl kvmtrace *.o *.a .*.d
+	$(RM) kvmctl kvmtrace *.o *.a .*.d $(libcflat) $(cflatobjs)

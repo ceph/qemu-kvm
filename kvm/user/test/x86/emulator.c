@@ -1,6 +1,6 @@
 #include "ioram.h"
 #include "vm.h"
-#include "printf.h"
+#include "libcflat.h"
 
 #define memset __builtin_memset
 

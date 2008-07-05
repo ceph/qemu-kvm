@@ -1,4 +1,4 @@
-#include "printf.h"
+#include "libcflat.h"
 
 #define KVM_HYPERCALL ".byte 0x0f,0x01,0xc1"
 

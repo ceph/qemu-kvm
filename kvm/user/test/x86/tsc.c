@@ -1,5 +1,4 @@
-
-#include "printf.h"
+#include "libcflat.h"
 
 typedef unsigned long long u64;
 

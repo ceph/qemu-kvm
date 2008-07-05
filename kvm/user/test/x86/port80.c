@@ -1,5 +1,4 @@
-
-#include "printf.h"
+#include "libcflat.h"
 
 int main()
 {

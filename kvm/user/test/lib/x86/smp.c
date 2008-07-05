@@ -1,8 +1,7 @@
 
-
+#include <libcflat.h>
 #include "smp.h"
 #include "apic.h"
-#include "printf.h"
 
 #define IPI_VECTOR 0x20
 

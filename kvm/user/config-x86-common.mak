@@ -5,7 +5,15 @@ all: kvmctl kvmtrace test_cases
 kvmctl_objs= main.o iotable.o ../libkvm/libkvm.a
 balloon_ctl: balloon_ctl.o
 
-FLATLIBS = $(TEST_DIR)/libcflat.a $(libgcc)
+cflatobjs += \
+	test/lib/x86/io.o \
+	test/lib/x86/smp.o
+
+$(libcflat): LDFLAGS += -nostdlib
+$(libcflat): CFLAGS += -ffreestanding -I test/lib
+
+
+FLATLIBS = test/lib/libcflat.a $(libgcc)
 %.flat: %.o $(FLATLIBS)
 	$(CC) $(CFLAGS) -nostdlib -o $@ -Wl,-T,flat.lds $^ $(FLATLIBS)
 
@@ -15,7 +23,7 @@ tests-common = $(TEST_DIR)/bootstrap \
 
 test_cases: $(tests-common) $(tests)
 
-$(TEST_DIR)/%.o: CFLAGS += -std=gnu99 -ffreestanding -I$(TEST_DIR)/lib
+$(TEST_DIR)/%.o: CFLAGS += -std=gnu99 -ffreestanding -I test/lib -I test/lib/x86
  
 $(TEST_DIR)/bootstrap: $(TEST_DIR)/bootstrap.o
 	$(CC) -nostdlib -o $@ -Wl,-T,bootstrap.lds $^
@@ -40,10 +48,6 @@ $(TEST_DIR)/emulator.flat: $(cstart.o) $(TEST_DIR)/vm.o $(TEST_DIR)/print.o
 $(TEST_DIR)/port80.flat: $(cstart.o) $(TEST_DIR)/port80.o
 
 $(TEST_DIR)/tsc.flat: $(cstart.o) $(TEST_DIR)/tsc.o
-
-$(TEST_DIR)/libcflat.a: $(TEST_DIR)/lib/exit.o $(TEST_DIR)/lib/printf.o \
-	$(TEST_DIR)/lib/smp.o $(TEST_DIR)/lib/string.o
-	ar rcs $@ $^
 
 arch_clean:
 	$(RM) $(TEST_DIR)/bootstrap $(TEST_DIR)/*.o $(TEST_DIR)/*.flat \

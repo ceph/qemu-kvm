@@ -1,11 +1,4 @@
-#include "printf.h"
-#include "smp.h"
-#include <stdarg.h>
-#include "string.h"
-
-static struct spinlock lock;
-
-void print(const char *s);
+#include "libcflat.h"
 
 typedef struct pstream {
     char *buffer;
@@ -34,7 +27,7 @@ void print_int(pstream_t *ps, long long n, int base)
 {
     char buf[sizeof(long) * 3 + 2], *p = buf;
     int s = 0, i;
-    
+
     if (n < 0) {
 	n = -n;
 	s = 1;
@@ -44,13 +37,13 @@ void print_int(pstream_t *ps, long long n, int base)
 	*p++ = digits[n % base];
 	n /= base;
     }
-    
+
     if (s)
 	*p++ = '-';
 
     if (p == buf)
 	*p++ = '0';
-    
+
     for (i = 0; i < (p - buf) / 2; ++i) {
 	char tmp;
 
@@ -68,15 +61,15 @@ void print_unsigned(pstream_t *ps, unsigned long long n, int base)
 {
     char buf[sizeof(long) * 3 + 1], *p = buf;
     int i;
-    
+
     while (n) {
 	*p++ = digits[n % base];
 	n /= base;
     }
-    
+
     if (p == buf)
 	*p++ = '0';
-    
+
     for (i = 0; i < (p - buf) / 2; ++i) {
 	char tmp;
 
@@ -172,13 +165,6 @@ int snprintf(char *buf, int size, const char *fmt, ...)
     return r;
 }
 
-void print_serial(const char *buf)
-{
-    unsigned long len = strlen(buf);
-
-    asm volatile ("rep/outsb" : "+S"(buf), "+c"(len) : "d"(0xf1));
-}
-
 int printf(const char *fmt, ...)
 {
     va_list va;
@@ -188,8 +174,6 @@ int printf(const char *fmt, ...)
     va_start(va, fmt);
     r = vsnprintf(buf, sizeof buf, fmt, va);
     va_end(va);
-    spin_lock(&lock);
-    print_serial(buf);
-    spin_unlock(&lock);
+    puts(buf);
     return r;
 }

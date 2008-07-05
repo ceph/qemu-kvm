@@ -1,6 +1,5 @@
-
+#include "libcflat.h"
 #include "smp.h"
-#include "printf.h"
 
 static void ipi_test(void *data)
 {

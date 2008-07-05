@@ -1,4 +1,4 @@
-#include "string.h"
+#include "libcflat.h"
 
 unsigned long strlen(const char *buf)
 {
