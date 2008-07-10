@@ -103,10 +103,6 @@ typedef struct CPUM68KState {
     /* ??? remove this.  */
     uint32_t t1;
 
-    /* exception/interrupt handling */
-    int interrupt_request;
-    int user_mode_only;
-
     int pending_vector;
     int pending_level;
 
@@ -234,6 +230,8 @@ static inline void cpu_clone_regs(CPUState *env, target_ulong newsp)
     env->dregs[0] = 0;
 }
 #endif
+
+#define CPU_PC_FROM_TB(env, tb) env->pc = tb->pc
 
 #include "cpu-all.h"
 

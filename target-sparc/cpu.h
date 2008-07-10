@@ -215,9 +215,7 @@ typedef struct CPUSPARCState {
     uint32_t pil_in;   /* incoming interrupt level bitmap */
     int      psref;    /* enable fpu */
     target_ulong version;
-    int user_mode_only;
     int interrupt_index;
-    int interrupt_request;
     uint32_t mmu_bm;
     uint32_t mmu_ctpr_mask;
     uint32_t mmu_cxr_mask;
@@ -388,6 +386,8 @@ void cpu_check_irqs(CPUSPARCState *env);
 #define cpu_signal_handler cpu_sparc_signal_handler
 #define cpu_list sparc_cpu_list
 
+#define CPU_SAVE_VERSION 4
+
 /* MMU modes definitions */
 #define MMU_MODE0_SUFFIX _user
 #define MMU_MODE1_SUFFIX _kernel
@@ -436,6 +436,11 @@ static inline void cpu_clone_regs(CPUState *env, target_ulong newsp)
     printf ("HELPME: %s:%d\n", __FILE__, __LINE__);
 }
 #endif
+
+#define CPU_PC_FROM_TB(env, tb) do { \
+    env->pc = tb->pc; \
+    env->npc = tb->cs_base; \
+    } while(0)
 
 #include "cpu-all.h"
 

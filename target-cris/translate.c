@@ -77,6 +77,8 @@ TCGv env_btaken;
 TCGv env_btarget;
 TCGv env_pc;
 
+#include "gen-icount.h"
+
 /* This is the state at translation time.  */
 typedef struct DisasContext {
 	CPUState *env;
@@ -3032,6 +3034,8 @@ gen_intermediate_code_internal(CPUState *env, TranslationBlock *tb,
 	struct DisasContext *dc = &ctx;
 	uint32_t next_page_start;
 	target_ulong npc;
+        int num_insns;
+        int max_insns;
 
 	if (!logfile)
 		logfile = stderr;
@@ -3071,14 +3075,15 @@ gen_intermediate_code_internal(CPUState *env, TranslationBlock *tb,
 
 	if (loglevel & CPU_LOG_TB_IN_ASM) {
 		fprintf(logfile,
-			"srch=%d pc=%x %x flg=%llx bt=%x ds=%lld ccs=%x\n"
+			"srch=%d pc=%x %x flg=%llx bt=%x ds=%u ccs=%x\n"
 			"pid=%x usp=%x\n"
 			"%x.%x.%x.%x\n"
 			"%x.%x.%x.%x\n"
 			"%x.%x.%x.%x\n"
 			"%x.%x.%x.%x\n",
-			search_pc, dc->pc, dc->ppc, tb->flags,
-			env->btarget, tb->flags & 7,
+			search_pc, dc->pc, dc->ppc,
+			(unsigned long long)tb->flags,
+			env->btarget, (unsigned)tb->flags & 7,
 			env->pregs[PR_CCS], 
 			env->pregs[PR_PID], env->pregs[PR_USP],
 			env->regs[0], env->regs[1], env->regs[2], env->regs[3],
@@ -3092,6 +3097,12 @@ gen_intermediate_code_internal(CPUState *env, TranslationBlock *tb,
 
 	next_page_start = (pc_start & TARGET_PAGE_MASK) + TARGET_PAGE_SIZE;
 	lj = -1;
+        num_insns = 0;
+        max_insns = tb->cflags & CF_COUNT_MASK;
+        if (max_insns == 0)
+            max_insns = CF_COUNT_MASK;
+
+        gen_icount_start();
 	do
 	{
 		check_breakpoint(env, dc);
@@ -3108,6 +3119,7 @@ gen_intermediate_code_internal(CPUState *env, TranslationBlock *tb,
 			else
 				gen_opc_pc[lj] = dc->pc;
 			gen_opc_instr_start[lj] = 1;
+                        gen_opc_icount[lj] = num_insns;
 		}
 
 		/* Pretty disas.  */
@@ -3116,6 +3128,8 @@ gen_intermediate_code_internal(CPUState *env, TranslationBlock *tb,
 			DIS(fprintf(logfile, "%x ", dc->pc));
 		}
 
+                if (num_insns + 1 == max_insns && (tb->cflags & CF_LAST_IO))
+                    gen_io_start();
 		dc->clear_x = 1;
 		if (unlikely(loglevel & CPU_LOG_TB_OP))
 			tcg_gen_debug_insn_start(dc->pc);
@@ -3125,8 +3139,9 @@ gen_intermediate_code_internal(CPUState *env, TranslationBlock *tb,
 		if (dc->clear_x)
 			cris_clear_x_flag(dc);
 
+                num_insns++;
 		/* Check for delayed branches here. If we do it before
-		   actually genereating any host code, the simulator will just
+		   actually generating any host code, the simulator will just
 		   loop doing nothing for on this program location.  */
 		if (dc->delayed_branch) {
 			dc->delayed_branch--;
@@ -3151,12 +3166,15 @@ gen_intermediate_code_internal(CPUState *env, TranslationBlock *tb,
 		if (!(tb->pc & 1) && env->singlestep_enabled)
 			break;
 	} while (!dc->is_jmp && gen_opc_ptr < gen_opc_end
-		 && (dc->pc < next_page_start));
+		 && (dc->pc < next_page_start)
+                 && num_insns < max_insns);
 
 	npc = dc->pc;
 	if (dc->jmp == JMP_DIRECT && !dc->delayed_branch)
 		npc = dc->jmp_pc;
 
+        if (tb->cflags & CF_LAST_IO)
+            gen_io_end();
 	/* Force an update if the per-tb cpu state has changed.  */
 	if (dc->is_jmp == DISAS_NEXT
 	    && (dc->cpustate_changed || !dc->flagx_known 
@@ -3173,7 +3191,7 @@ gen_intermediate_code_internal(CPUState *env, TranslationBlock *tb,
 
 	cris_evaluate_flags (dc);
 
-	if (__builtin_expect(env->singlestep_enabled, 0)) {
+	if (unlikely(env->singlestep_enabled)) {
 		tcg_gen_movi_tl(env_pc, npc);
 		t_gen_raise_exception(EXCP_DEBUG);
 	} else {
@@ -3194,6 +3212,7 @@ gen_intermediate_code_internal(CPUState *env, TranslationBlock *tb,
 				break;
 		}
 	}
+        gen_icount_end(tb, num_insns);
 	*gen_opc_ptr = INDEX_op_end;
 	if (search_pc) {
 		j = gen_opc_ptr - gen_opc_buf;
@@ -3202,6 +3221,7 @@ gen_intermediate_code_internal(CPUState *env, TranslationBlock *tb,
 			gen_opc_instr_start[lj++] = 0;
 	} else {
 		tb->size = dc->pc - pc_start;
+                tb->icount = num_insns;
 	}
 
 #ifdef DEBUG_DISAS
@@ -3209,7 +3229,7 @@ gen_intermediate_code_internal(CPUState *env, TranslationBlock *tb,
 		fprintf(logfile, "--------------\n");
 		fprintf(logfile, "IN: %s\n", lookup_symbol(pc_start));
 		target_disas(logfile, pc_start, dc->pc - pc_start, 0);
-		fprintf(logfile, "\nisize=%d osize=%d\n", 
+		fprintf(logfile, "\nisize=%d osize=%zd\n",
 			dc->pc - pc_start, gen_opc_ptr - gen_opc_buf);
 	}
 #endif

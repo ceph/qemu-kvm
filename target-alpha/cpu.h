@@ -282,11 +282,9 @@ struct CPUAlphaState {
     /* Those resources are used only in Qemu core */
     CPU_COMMON
 
-    int user_mode_only; /* user mode only simulation */
     uint32_t hflags;
 
     int error_code;
-    int interrupt_request;
 
     uint32_t features;
     uint32_t amask;
@@ -414,5 +412,7 @@ int cpu_alpha_mtpr (CPUState *env, int iprn, uint64_t val, uint64_t *oldvalp);
 void cpu_loop_exit (void);
 void pal_init (CPUState *env);
 void call_pal (CPUState *env, int palcode);
+
+#define CPU_PC_FROM_TB(env, tb) env->pc = tb->pc
 
 #endif /* !defined (__CPU_ALPHA_H__) */

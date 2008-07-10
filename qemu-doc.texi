@@ -183,8 +183,8 @@ PCI UHCI USB controller and a virtual USB hub.
 SMP is supported with up to 255 CPUs.
 
 Note that adlib, ac97, gus and cs4231a are only available when QEMU
-was configured with --enable-adlib, --enable-ac97, --enable-gus or
---enable-cs4231a respectively.
+was configured with --audio-card-list option containing the name(s) of
+required card(s).
 
 QEMU uses the PC BIOS from the Bochs project and the Plex86/Bochs LGPL
 VGA BIOS.
@@ -973,6 +973,17 @@ On M68K this implements the "ColdFire GDB" interface used by libgloss.
 
 Note that this allows guest direct access to the host filesystem,
 so should only be used with trusted guest OS.
+
+@item -icount [N|auto]
+Enable virtual instruction counter.  The virtual cpu will execute one
+instruction every 2^N ns of virtual time.  If @code{auto} is specified
+then the virtual cpu speed will be automatically adjusted to keep virtual
+time within a few seconds of real time.
+
+Note that while this option can give deterministic behavior, it does not
+provide cycle accurate emulation.  Modern CPUs contain superscalar out of
+order cores with complex cache hierarchies.  The number of instructions
+executed often has little or no correlation with actual performance.
 @end table
 
 @c man end
@@ -1315,8 +1326,10 @@ snapshots.
 * disk_images_snapshot_mode:: Snapshot mode
 * vm_snapshots::              VM snapshots
 * qemu_img_invocation::       qemu-img Invocation
+* qemu_nbd_invocation::       qemu-nbd Invocation
 * host_drives::               Using host drives
 * disk_images_fat_images::    Virtual FAT disk images
+* disk_images_nbd::           NBD access
 @end menu
 
 @node disk_images_quickstart
@@ -1396,6 +1409,11 @@ state is not saved or restored properly (in particular USB).
 @subsection @code{qemu-img} Invocation
 
 @include qemu-img.texi
+
+@node qemu_nbd_invocation
+@subsection @code{qemu-nbd} Invocation
+
+@include qemu-nbd.texi
 
 @node host_drives
 @subsection Using host drives
@@ -1493,6 +1511,40 @@ What you should @emph{never} do:
 @item expect it to work when loadvm'ing ;
 @item write to the FAT directory on the host system while accessing it with the guest system.
 @end itemize
+
+@node disk_images_nbd
+@subsection NBD access
+
+QEMU can access directly to block device exported using the Network Block Device
+protocol.
+
+@example
+qemu linux.img -hdb nbd:my_nbd_server.mydomain.org:1024
+@end example
+
+If the NBD server is located on the same host, you can use an unix socket instead
+of an inet socket:
+
+@example
+qemu linux.img -hdb nbd:unix:/tmp/my_socket
+@end example
+
+In this case, the block device must be exported using qemu-nbd:
+
+@example
+qemu-nbd --socket=/tmp/my_socket my_disk.qcow2
+@end example
+
+The use of qemu-nbd allows to share a disk between several guests:
+@example
+qemu-nbd --socket=/tmp/my_socket --share=2 my_disk.qcow2
+@end example
+
+and then you can use it with two guests:
+@example
+qemu linux1.img -hdb nbd:unix:/tmp/my_socket
+qemu linux2.img -hdb nbd:unix:/tmp/my_socket
+@end example
 
 @node pcsys_network
 @section Network emulation

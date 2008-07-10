@@ -86,15 +86,40 @@ void cpu_resume_from_signal(CPUState *env1, void *puc)
     longjmp(env->jmp_env, 1);
 }
 
+/* Execute the code without caching the generated code. An interpreter
+   could be used if available. */
+static void cpu_exec_nocache(int max_cycles, TranslationBlock *orig_tb)
+{
+    unsigned long next_tb;
+    TranslationBlock *tb;
+
+    /* Should never happen.
+       We only end up here when an existing TB is too long.  */
+    if (max_cycles > CF_COUNT_MASK)
+        max_cycles = CF_COUNT_MASK;
+
+    tb = tb_gen_code(env, orig_tb->pc, orig_tb->cs_base, orig_tb->flags,
+                     max_cycles);
+    env->current_tb = tb;
+    /* execute the generated code */
+    next_tb = tcg_qemu_tb_exec(tb->tc_ptr);
+
+    if ((next_tb & 3) == 2) {
+        /* Restore PC.  This may happen if async event occurs before
+           the TB starts executing.  */
+        CPU_PC_FROM_TB(env, tb);
+    }
+    tb_phys_invalidate(tb, -1);
+    tb_free(tb);
+}
+
 static TranslationBlock *tb_find_slow(target_ulong pc,
                                       target_ulong cs_base,
                                       uint64_t flags)
 {
     TranslationBlock *tb, **ptb1;
-    int code_gen_size;
     unsigned int h;
     target_ulong phys_pc, phys_page1, phys_page2, virt_page2;
-    uint8_t *tc_ptr;
 
     tb_invalidated_flag = 0;
 
@@ -128,30 +153,8 @@ static TranslationBlock *tb_find_slow(target_ulong pc,
         ptb1 = &tb->phys_hash_next;
     }
  not_found:
-    /* if no translated code available, then translate it now */
-    tb = tb_alloc(pc);
-    if (!tb) {
-        /* flush must be done */
-        tb_flush(env);
-        /* cannot fail at this point */
-        tb = tb_alloc(pc);
-        /* don't forget to invalidate previous TB info */
-        tb_invalidated_flag = 1;
-    }
-    tc_ptr = code_gen_ptr;
-    tb->tc_ptr = tc_ptr;
-    tb->cs_base = cs_base;
-    tb->flags = flags;
-    cpu_gen_code(env, tb, &code_gen_size);
-    code_gen_ptr = (void *)(((unsigned long)code_gen_ptr + code_gen_size + CODE_GEN_ALIGN - 1) & ~(CODE_GEN_ALIGN - 1));
-
-    /* check next page if needed */
-    virt_page2 = (pc + tb->size - 1) & TARGET_PAGE_MASK;
-    phys_page2 = -1;
-    if ((pc & TARGET_PAGE_MASK) != virt_page2) {
-        phys_page2 = get_phys_addr_code(env, virt_page2);
-    }
-    tb_link_phys(tb, phys_pc, phys_page2);
+   /* if no translated code available, then translate it now */
+    tb = tb_gen_code(env, pc, cs_base, flags, 0);
 
  found:
     /* we add the TB in the virtual pc hash table */
@@ -201,7 +204,7 @@ static inline TranslationBlock *tb_find_fast(void)
 #elif defined(TARGET_MIPS)
     flags = env->hflags & (MIPS_HFLAG_TMASK | MIPS_HFLAG_BMASK);
     cs_base = 0;
-    pc = env->PC[env->current_tc];
+    pc = env->active_tc.PC;
 #elif defined(TARGET_M68K)
     flags = (env->fpcr & M68K_FPCR_PREC)  /* Bit  6 */
             | (env->sr & SR_S)            /* Bit  13 */
@@ -229,8 +232,8 @@ static inline TranslationBlock *tb_find_fast(void)
 #error unsupported CPU
 #endif
     tb = env->tb_jmp_cache[tb_jmp_cache_hash_func(pc)];
-    if (__builtin_expect(!tb || tb->pc != pc || tb->cs_base != cs_base ||
-                         tb->flags != flags, 0)) {
+    if (unlikely(!tb || tb->pc != pc || tb->cs_base != cs_base ||
+                 tb->flags != flags)) {
         tb = tb_find_slow(pc, cs_base, flags);
     }
     return tb;
@@ -372,7 +375,7 @@ int cpu_exec(CPUState *env1)
             next_tb = 0; /* force lookup of first TB */
             for(;;) {
                 interrupt_request = env->interrupt_request;
-                if (__builtin_expect(interrupt_request, 0) &&
+                if (unlikely(interrupt_request) &&
                     likely(!(env->singlestep_enabled & SSTEP_NOIRQ))) {
                     if (interrupt_request & CPU_INTERRUPT_DEBUG) {
                         env->interrupt_request &= ~CPU_INTERRUPT_DEBUG;
@@ -598,6 +601,7 @@ int cpu_exec(CPUState *env1)
                        of memory exceptions while generating the code, we
                        must recompute the hash index here */
                     next_tb = 0;
+                    tb_invalidated_flag = 0;
                 }
 #ifdef DEBUG_EXEC
                 if ((loglevel & CPU_LOG_EXEC)) {
@@ -619,16 +623,45 @@ int cpu_exec(CPUState *env1)
                 }
                 }
                 spin_unlock(&tb_lock);
-                tc_ptr = tb->tc_ptr;
                 env->current_tb = tb;
+                while (env->current_tb) {
+                    tc_ptr = tb->tc_ptr;
                 /* execute the generated code */
 #if defined(__sparc__) && !defined(HOST_SOLARIS)
 #undef env
-                env = cpu_single_env;
+                    env = cpu_single_env;
 #define env cpu_single_env
 #endif
-                next_tb = tcg_qemu_tb_exec(tc_ptr);
-                env->current_tb = NULL;
+                    next_tb = tcg_qemu_tb_exec(tc_ptr);
+                    env->current_tb = NULL;
+                    if ((next_tb & 3) == 2) {
+                        /* Instruction counter expired.  */
+                        int insns_left;
+                        tb = (TranslationBlock *)(long)(next_tb & ~3);
+                        /* Restore PC.  */
+                        CPU_PC_FROM_TB(env, tb);
+                        insns_left = env->icount_decr.u32;
+                        if (env->icount_extra && insns_left >= 0) {
+                            /* Refill decrementer and continue execution.  */
+                            env->icount_extra += insns_left;
+                            if (env->icount_extra > 0xffff) {
+                                insns_left = 0xffff;
+                            } else {
+                                insns_left = env->icount_extra;
+                            }
+                            env->icount_extra -= insns_left;
+                            env->icount_decr.u16.low = insns_left;
+                        } else {
+                            if (insns_left > 0) {
+                                /* Execute remaining instructions.  */
+                                cpu_exec_nocache(insns_left, tb);
+                            }
+                            env->exception_index = EXCP_INTERRUPT;
+                            next_tb = 0;
+                            cpu_loop_exit();
+                        }
+                    }
+                }
                 /* reset soft MMU for next block (it can currently
                    only be set by a memory fault) */
 #if defined(USE_KQEMU)
@@ -1342,7 +1375,7 @@ int cpu_signal_handler(int host_signum, void *pinfo,
     unsigned long pc;
     int is_write;
 
-#if (__GLIBC__ < 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ =< 3))
+#if (__GLIBC__ < 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ <= 3))
     pc = uc->uc_mcontext.gregs[R15];
 #else
     pc = uc->uc_mcontext.arm_pc;

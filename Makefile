@@ -10,7 +10,7 @@ VPATH=$(SRC_PATH):$(SRC_PATH)/hw
 CFLAGS += $(OS_CFLAGS) $(ARCH_CFLAGS)
 LDFLAGS += $(OS_LDFLAGS) $(ARCH_LDFLAGS)
 
-CPPFLAGS += -I. -I$(SRC_PATH) -MMD -MP
+CPPFLAGS += -I. -I$(SRC_PATH) -MMD -MP -MT $@
 CPPFLAGS += -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE
 LIBS=
 ifdef CONFIG_STATIC
@@ -42,7 +42,7 @@ recurse-all: $(SUBDIR_RULES)
 BLOCK_OBJS=cutils.o qemu-malloc.o
 BLOCK_OBJS+=block-cow.o block-qcow.o aes.o block-vmdk.o block-cloop.o
 BLOCK_OBJS+=block-dmg.o block-bochs.o block-vpc.o block-vvfat.o
-BLOCK_OBJS+=block-qcow2.o block-parallels.o
+BLOCK_OBJS+=block-qcow2.o block-parallels.o block-nbd.o
 
 ######################################################################
 # libqemu_common.a: Target independent part of system emulation. The
@@ -50,7 +50,7 @@ BLOCK_OBJS+=block-qcow2.o block-parallels.o
 # system emulation, i.e. a single QEMU executable should support all
 # CPUs and machines.
 
-OBJS=$(BLOCK_OBJS)
+OBJS=nbd.o $(BLOCK_OBJS)
 OBJS+=readline.o console.o
 OBJS+=block.o
 
@@ -97,6 +97,11 @@ ifdef CONFIG_ESD
 AUDIO_PT = yes
 AUDIO_PT_INT = yes
 AUDIO_OBJS += esdaudio.o
+endif
+ifdef CONFIG_PA
+AUDIO_PT = yes
+AUDIO_PT_INT = yes
+AUDIO_OBJS += paaudio.o
 endif
 ifdef AUDIO_PT
 LDFLAGS += -pthread
@@ -154,7 +159,7 @@ libqemu_user.a: $(USER_OBJS)
 	rm -f $@ 
 	$(AR) rcs $@ $(USER_OBJS)
 
-QEMU_IMG_BLOCK_OBJS = $(BLOCK_OBJS)
+QEMU_IMG_BLOCK_OBJS = nbd.o $(BLOCK_OBJS)
 ifdef CONFIG_WIN32
 QEMU_IMG_BLOCK_OBJS += qemu-img-block-raw-win32.o
 else
@@ -172,8 +177,11 @@ qemu-img-%.o: %.c
 %.o: %.c
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
 
-qemu-nbd$(EXESUF):  qemu-nbd.o nbd.o qemu-img-block.o \
-		    $(QEMU_IMG_BLOCK_OBJS)
+qemu-nbd-%.o: %.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) -DQEMU_NBD -c -o $@ $<
+
+qemu-nbd$(EXESUF):  qemu-nbd.o qemu-nbd-nbd.o qemu-img-block.o \
+		    osdep.o qemu-nbd-block-raw-posix.o $(BLOCK_OBJS)
 	$(CC) $(LDFLAGS) -o $@ $^ -lz $(LIBS)
 
 # dyngen host tool

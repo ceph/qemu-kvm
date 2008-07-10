@@ -648,7 +648,6 @@ struct CPUPPCState {
     uint32_t flags;
 
     int error_code;
-    int interrupt_request;
     uint32_t pending_interrupts;
 #if !defined(CONFIG_USER_ONLY)
     /* This is the IRQ controller, which is implementation dependant
@@ -672,7 +671,6 @@ struct CPUPPCState {
     opc_handler_t *opcodes[0x40];
 
     /* Those resources are used only in Qemu core */
-    int user_mode_only; /* user mode only simulation */
     target_ulong hflags;      /* hflags is a MSR & HFLAGS_MASK         */
     target_ulong hflags_nmsr; /* specific hflags, not comming from MSR */
     int mmu_idx;         /* precomputed MMU index to speed up mem accesses */
@@ -698,6 +696,7 @@ struct mmu_ctx_t {
 
 /*****************************************************************************/
 CPUPPCState *cpu_ppc_init (const char *cpu_model);
+void ppc_translate_init(void);
 int cpu_ppc_exec (CPUPPCState *s);
 void cpu_ppc_close (CPUPPCState *s);
 /* you can call this signal handler from your SIGBUS and SIGSEGV
@@ -813,6 +812,8 @@ int ppc_dcr_write (ppc_dcr_t *dcr_env, int dcrn, target_ulong val);
 #define cpu_signal_handler cpu_ppc_signal_handler
 #define cpu_list ppc_cpu_list
 
+#define CPU_SAVE_VERSION 3
+
 /* MMU modes definitions */
 #define MMU_MODE0_SUFFIX _user
 #define MMU_MODE1_SUFFIX _kernel
@@ -833,6 +834,8 @@ static inline void cpu_clone_regs(CPUState *env, target_ulong newsp)
         env->gpr[i] = 0;
 }
 #endif
+
+#define CPU_PC_FROM_TB(env, tb) env->nip = tb->pc
 
 #include "cpu-all.h"
 

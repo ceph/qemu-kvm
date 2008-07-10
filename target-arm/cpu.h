@@ -156,10 +156,6 @@ typedef struct CPUARMState {
     int (*get_irq_vector)(struct CPUARMState *);
     void *irq_opaque;
 
-    /* exception/interrupt handling */
-    int interrupt_request;
-    int user_mode_only;
-
     /* VFP coprocessor state.  */
     struct {
         float64 regs[32];
@@ -397,7 +393,7 @@ void cpu_arm_set_cp_io(CPUARMState *env, int cpnum,
 #define cpu_signal_handler cpu_arm_signal_handler
 #define cpu_list arm_cpu_list
 
-#define ARM_CPU_SAVE_VERSION 1
+#define CPU_SAVE_VERSION 1
 
 /* MMU modes definitions */
 #define MMU_MODE0_SUFFIX _kernel
@@ -416,6 +412,8 @@ static inline void cpu_clone_regs(CPUState *env, target_ulong newsp)
     env->regs[0] = 0;
 }
 #endif
+
+#define CPU_PC_FROM_TB(env, tb) env->regs[15] = tb->pc
 
 #include "cpu-all.h"
 

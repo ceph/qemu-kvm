@@ -61,7 +61,7 @@ void tlb_fill (target_ulong addr, int is_write, int mmu_idx, void *retaddr)
     D(fprintf(logfile, "%s pc=%x tpc=%x ra=%x\n", __func__, 
 	     env->pc, env->debug1, retaddr));
     ret = cpu_cris_handle_mmu_fault(env, addr, is_write, mmu_idx, 1);
-    if (__builtin_expect(ret, 0)) {
+    if (unlikely(ret)) {
         if (retaddr) {
             /* now we have a real cpu fault */
             pc = (unsigned long)retaddr;
@@ -121,8 +121,8 @@ void helper_movl_sreg_reg (uint32_t sreg, uint32_t reg)
 		if (sreg == 6) {
 			/* Writes to tlb-hi write to mm_cause as a side 
 			   effect.  */
-			env->sregs[SFR_RW_MM_TLB_HI] = T0;
-			env->sregs[SFR_R_MM_CAUSE] = T0;
+			env->sregs[SFR_RW_MM_TLB_HI] = env->regs[reg];
+			env->sregs[SFR_R_MM_CAUSE] = env->regs[reg];
 		}
 		else if (sreg == 5) {
 			uint32_t set;

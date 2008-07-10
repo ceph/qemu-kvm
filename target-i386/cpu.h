@@ -574,8 +574,6 @@ typedef struct CPUX86State {
     target_ulong exception_next_eip;
     target_ulong dr[8]; /* debug registers */
     uint32_t smbase;
-    int interrupt_request;
-    int user_mode_only; /* user mode only simulation */
     int old_exception;  /* exception in flight */
 
     CPU_COMMON
@@ -739,6 +737,8 @@ static inline int cpu_get_time_fast(void)
 #define cpu_signal_handler cpu_x86_signal_handler
 #define cpu_list x86_cpu_list
 
+#define CPU_SAVE_VERSION 6
+
 /* MMU modes definitions */
 #define MMU_MODE0_SUFFIX _kernel
 #define MMU_MODE1_SUFFIX _user
@@ -765,6 +765,8 @@ static inline void cpu_clone_regs(CPUState *env, target_ulong newsp)
     env->regs[R_EAX] = 0;
 }
 #endif
+
+#define CPU_PC_FROM_TB(env, tb) env->eip = tb->pc - tb->cs_base
 
 #include "cpu-all.h"
 

@@ -185,7 +185,11 @@ void *qemu_vmalloc(size_t size)
 #ifdef _BSD
     return valloc(size);
 #else
-    return memalign(TARGET_PAGE_SIZE, size);
+#ifndef __ia64__
+    return memalign(4096, size);
+#else
+    return memalign(65536, size);
+#endif
 #endif
 }
 

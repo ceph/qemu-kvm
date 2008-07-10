@@ -260,8 +260,7 @@ static uint32_t get_queue(void *opaque)
 
 static int slavio_serial_update_irq_chn(ChannelState *s)
 {
-    if ((s->wregs[W_INTR] & INTR_INTALL) && // interrupts enabled
-        (((s->wregs[W_INTR] & INTR_TXINT) && s->txint == 1) ||
+    if ((((s->wregs[W_INTR] & INTR_TXINT) && s->txint == 1) ||
          // tx ints enabled, pending
          ((((s->wregs[W_INTR] & INTR_RXMODEMSK) == INTR_RXINT1ST) ||
            ((s->wregs[W_INTR] & INTR_RXMODEMSK) == INTR_RXINTALL)) &&
@@ -529,10 +528,10 @@ static void slavio_serial_mem_writeb(void *opaque, target_phys_addr_t addr,
             default:
                 break;
             case MINTR_RST_B:
-                slavio_serial_reset_chn(&serial->chn[1]);
+                slavio_serial_reset_chn(&serial->chn[0]);
                 return;
             case MINTR_RST_A:
-                slavio_serial_reset_chn(&serial->chn[0]);
+                slavio_serial_reset_chn(&serial->chn[1]);
                 return;
             case MINTR_RST_ALL:
                 slavio_serial_reset(serial);

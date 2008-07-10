@@ -125,7 +125,6 @@ typedef struct CPUCRISState {
 	/* X flag at the time of cc snapshot.  */
 	int cc_x;
 
-	int interrupt_request;
 	int interrupt_vector;
 	int fault_vector;
 	int trap_vector;
@@ -155,8 +154,6 @@ typedef struct CPUCRISState {
 		uint32_t hi;
 		uint32_t lo;
 	} tlbsets[2][4][16];
-
-	int user_mode_only;
 
 	CPU_COMMON
 } CPUCRISState;
@@ -210,6 +207,8 @@ enum {
 #define cpu_gen_code cpu_cris_gen_code
 #define cpu_signal_handler cpu_cris_signal_handler
 
+#define CPU_SAVE_VERSION 1
+
 /* MMU modes definitions */
 #define MMU_MODE0_SUFFIX _kernel
 #define MMU_MODE1_SUFFIX _user
@@ -237,6 +236,8 @@ static inline void cpu_clone_regs(CPUState *env, target_ulong newsp)
 #define SFR_RW_MM_TLB_SEL  env->pregs[PR_SRS]][4
 #define SFR_RW_MM_TLB_LO   env->pregs[PR_SRS]][5
 #define SFR_RW_MM_TLB_HI   env->pregs[PR_SRS]][6
+
+#define CPU_PC_FROM_TB(env, tb) env->pc = tb->pc
 
 #include "cpu-all.h"
 #endif

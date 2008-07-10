@@ -84,6 +84,9 @@ static TCGv cpu_V0, cpu_V1, cpu_M0;
 static TCGv cpu_T[2];
 static TCGv cpu_F0s, cpu_F1s, cpu_F0d, cpu_F1d;
 
+#define ICOUNT_TEMP cpu_T[0]
+#include "gen-icount.h"
+
 /* initialize TCG globals.  */
 void arm_translate_init(void)
 {
@@ -3390,7 +3393,7 @@ static inline void gen_goto_tb(DisasContext *s, int n, uint32_t dest)
 
 static inline void gen_jmp (DisasContext *s, uint32_t dest)
 {
-    if (__builtin_expect(s->singlestep_enabled, 0)) {
+    if (unlikely(s->singlestep_enabled)) {
         /* An indirect jump so that we still trigger the debug exception.  */
         if (s->thumb)
             dest |= 1;
@@ -3754,6 +3757,7 @@ static int disas_neon_ls_insn(CPUState * env, DisasContext *s, uint32_t insn)
                     }
                 } else /* size == 0 */ {
                     if (load) {
+                        TCGV_UNUSED(tmp2);
                         for (n = 0; n < 4; n++) {
                             tmp = gen_ld8u(cpu_T[1], IS_USER(s));
                             gen_op_addl_T1_im(stride);
@@ -3809,6 +3813,8 @@ static int disas_neon_ls_insn(CPUState * env, DisasContext *s, uint32_t insn)
                     break;
                 case 3:
                     return 1;
+                default: /* Avoid compiler warnings.  */
+                    abort();
                 }
                 gen_op_addl_T1_im(1 << size);
                 tmp2 = new_tmp();
@@ -3851,6 +3857,8 @@ static int disas_neon_ls_insn(CPUState * env, DisasContext *s, uint32_t insn)
                     case 2:
                         tmp = gen_ld32(cpu_T[1], IS_USER(s));
                         break;
+                    default: /* Avoid compiler warnings.  */
+                        abort();
                     }
                     if (size != 2) {
                         tmp2 = neon_load_reg(rd, pass);
@@ -4853,9 +4861,11 @@ static int disas_neon_data_insn(CPUState * env, DisasContext *s, uint32_t insn)
                     NEON_GET_REG(T0, rn, 1);
                     gen_neon_movl_scratch_T0(2);
                 }
+                TCGV_UNUSED(tmp3);
                 for (pass = 0; pass < 2; pass++) {
                     if (src1_wide) {
                         neon_load_reg64(cpu_V0, rn + pass);
+                        TCGV_UNUSED(tmp);
                     } else {
                         if (pass == 1 && rd == rn) {
                             gen_neon_movl_T0_scratch(2);
@@ -4870,6 +4880,7 @@ static int disas_neon_data_insn(CPUState * env, DisasContext *s, uint32_t insn)
                     }
                     if (src2_wide) {
                         neon_load_reg64(cpu_V1, rm + pass);
+                        TCGV_UNUSED(tmp2);
                     } else {
                         if (pass == 1 && rd == rm) {
                             gen_neon_movl_T0_scratch(2);
@@ -5281,6 +5292,7 @@ static int disas_neon_data_insn(CPUState * env, DisasContext *s, uint32_t insn)
                 case 36: case 37: /* VMOVN, VQMOVUN, VQMOVN */
                     if (size == 3)
                         return 1;
+                    TCGV_UNUSED(tmp2);
                     for (pass = 0; pass < 2; pass++) {
                         neon_load_reg64(cpu_V0, rm + pass);
                         tmp = new_tmp();
@@ -6639,6 +6651,7 @@ static void disas_arm_insn(CPUState * env, DisasContext *s)
 
                 /* compute total size */
                 loaded_base = 0;
+                TCGV_UNUSED(loaded_var);
                 n = 0;
                 for(i=0;i<16;i++) {
                     if (insn & (1 << i))
@@ -8336,6 +8349,7 @@ static void disas_thumb_insn(CPUState *env, DisasContext *s)
                     tcg_gen_addi_i32(addr, addr, 4);
                 }
             }
+            TCGV_UNUSED(tmp);
             if (insn & (1 << 8)) {
                 if (insn & (1 << 11)) {
                     /* pop pc */
@@ -8539,6 +8553,8 @@ static inline int gen_intermediate_code_internal(CPUState *env,
     int j, lj;
     target_ulong pc_start;
     uint32_t next_page_start;
+    int num_insns;
+    int max_insns;
 
     /* generate intermediate code */
     num_temps = 0;
@@ -8575,6 +8591,12 @@ static inline int gen_intermediate_code_internal(CPUState *env,
     cpu_M0 = tcg_temp_new(TCG_TYPE_I64);
     next_page_start = (pc_start & TARGET_PAGE_MASK) + TARGET_PAGE_SIZE;
     lj = -1;
+    num_insns = 0;
+    max_insns = tb->cflags & CF_COUNT_MASK;
+    if (max_insns == 0)
+        max_insns = CF_COUNT_MASK;
+
+    gen_icount_start();
     /* Reset the conditional execution bits immediately. This avoids
        complications trying to do it at the end of the block.  */
     if (env->condexec_bits)
@@ -8625,7 +8647,11 @@ static inline int gen_intermediate_code_internal(CPUState *env,
             }
             gen_opc_pc[lj] = dc->pc;
             gen_opc_instr_start[lj] = 1;
+            gen_opc_icount[lj] = num_insns;
         }
+
+        if (num_insns + 1 == max_insns && (tb->cflags & CF_LAST_IO))
+            gen_io_start();
 
         if (env->thumb) {
             disas_thumb_insn(env, dc);
@@ -8658,15 +8684,26 @@ static inline int gen_intermediate_code_internal(CPUState *env,
         /* Translation stops when a conditional branch is enoutered.
          * Otherwise the subsequent code could get translated several times.
          * Also stop translation when a page boundary is reached.  This
-         * ensures prefech aborts occur at the right place.  */
+         * ensures prefetch aborts occur at the right place.  */
+        num_insns ++;
     } while (!dc->is_jmp && gen_opc_ptr < gen_opc_end &&
              !env->singlestep_enabled &&
-             dc->pc < next_page_start);
+             dc->pc < next_page_start &&
+             num_insns < max_insns);
+
+    if (tb->cflags & CF_LAST_IO) {
+        if (dc->condjmp) {
+            /* FIXME:  This can theoretically happen with self-modifying
+               code.  */
+            cpu_abort(env, "IO on conditional branch instruction");
+        }
+        gen_io_end();
+    }
 
     /* At this stage dc->condjmp will only be set when the skipped
        instruction was a conditional branch or trap, and the PC has
        already been written.  */
-    if (__builtin_expect(env->singlestep_enabled, 0)) {
+    if (unlikely(env->singlestep_enabled)) {
         /* Make sure the pc is updated, and raise a debug exception.  */
         if (dc->condjmp) {
             gen_set_condexec(dc);
@@ -8726,7 +8763,9 @@ static inline int gen_intermediate_code_internal(CPUState *env,
             dc->condjmp = 0;
         }
     }
+
 done_generating:
+    gen_icount_end(tb, num_insns);
     *gen_opc_ptr = INDEX_op_end;
 
 #ifdef DEBUG_DISAS
@@ -8744,6 +8783,7 @@ done_generating:
             gen_opc_instr_start[lj++] = 0;
     } else {
         tb->size = dc->pc - pc_start;
+        tb->icount = num_insns;
     }
     return 0;
 }
@@ -8768,6 +8808,7 @@ void cpu_dump_state(CPUState *env, FILE *f,
                     int flags)
 {
     int i;
+#if 0
     union {
         uint32_t i;
         float s;
@@ -8779,6 +8820,7 @@ void cpu_dump_state(CPUState *env, FILE *f,
         float64 f64;
         double d;
     } d0;
+#endif
     uint32_t psr;
 
     for(i=0;i<16;i++) {

@@ -667,7 +667,7 @@ static inline void stfq_be_p(void *ptr, float64 v)
 
 /* All direct uses of g2h and h2g need to go away for usermode softmmu.  */
 #define g2h(x) ((void *)((unsigned long)(x) + GUEST_BASE))
-#define h2g(x) ((target_ulong)(x - GUEST_BASE))
+#define h2g(x) ((target_ulong)((unsigned long)(x) - GUEST_BASE))
 
 #define saddr(x) g2h(x)
 #define laddr(x) g2h(x)
@@ -782,6 +782,8 @@ void cpu_abort(CPUState *env, const char *fmt, ...)
     __attribute__ ((__noreturn__));
 extern CPUState *first_cpu;
 extern CPUState *cpu_single_env;
+extern int64_t qemu_icount;
+extern int use_icount;
 
 #define CPU_INTERRUPT_EXIT   0x01 /* wants exit from main loop */
 #define CPU_INTERRUPT_HARD   0x02 /* hardware interrupt pending */

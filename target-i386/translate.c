@@ -65,6 +65,8 @@ static TCGv cpu_T[2], cpu_T3;
 static TCGv cpu_tmp0, cpu_tmp1_i64, cpu_tmp2_i32, cpu_tmp3_i32, cpu_tmp4, cpu_ptr0, cpu_ptr1;
 static TCGv cpu_tmp5, cpu_tmp6;
 
+#include "gen-icount.h"
+
 #ifdef TARGET_X86_64
 static int x86_64_hregs;
 #endif
@@ -1203,6 +1205,8 @@ static inline void gen_cmps(DisasContext *s, int ot)
 
 static inline void gen_ins(DisasContext *s, int ot)
 {
+    if (use_icount)
+        gen_io_start();
     gen_string_movl_A0_EDI(s);
     /* Note: we must do this dummy write first to be restartable in
        case of page fault. */
@@ -1215,10 +1219,14 @@ static inline void gen_ins(DisasContext *s, int ot)
     gen_op_st_T0_A0(ot + s->mem_index);
     gen_op_movl_T0_Dshift(ot);
     gen_op_add_reg_T0(s->aflag, R_EDI);
+    if (use_icount)
+        gen_io_end();
 }
 
 static inline void gen_outs(DisasContext *s, int ot)
 {
+    if (use_icount)
+        gen_io_start();
     gen_string_movl_A0_ESI(s);
     gen_op_ld_T0_A0(ot + s->mem_index);
 
@@ -1230,6 +1238,8 @@ static inline void gen_outs(DisasContext *s, int ot)
 
     gen_op_movl_T0_Dshift(ot);
     gen_op_add_reg_T0(s->aflag, R_ESI);
+    if (use_icount)
+        gen_io_end();
 }
 
 /* same method as Valgrind : we generate jumps to current or next
@@ -3330,8 +3340,12 @@ static void gen_sse(DisasContext *s, int b, target_ulong pc_start, int rex_r)
             op1_offset = offsetof(CPUX86State,xmm_regs[reg]);
             tcg_gen_addi_ptr(cpu_ptr0, cpu_env, op1_offset);
             sse_op2 = sse_op_table3[(s->dflag == 2) * 2 + ((b >> 8) - 2)];
-            tcg_gen_trunc_tl_i32(cpu_tmp2_i32, cpu_T[0]);
-            tcg_gen_helper_0_2(sse_op2, cpu_ptr0, cpu_tmp2_i32);
+            if (ot == OT_LONG) {
+                tcg_gen_trunc_tl_i32(cpu_tmp2_i32, cpu_T[0]);
+                tcg_gen_helper_0_2(sse_op2, cpu_ptr0, cpu_tmp2_i32);
+            } else {
+                tcg_gen_helper_0_2(sse_op2, cpu_ptr0, cpu_T[0]);
+            }
             break;
         case 0x02c: /* cvttps2pi */
         case 0x12c: /* cvttpd2pi */
@@ -5465,7 +5479,7 @@ static target_ulong disas_insn(DisasContext *s, target_ulong pc_start)
             case 0x18 ... 0x1b:
                 {
                     int op1, l1;
-                    const static uint8_t fcmov_cc[8] = {
+                    static const uint8_t fcmov_cc[8] = {
                         (JCC_B << 1),
                         (JCC_Z << 1),
                         (JCC_BE << 1),
@@ -5570,6 +5584,9 @@ static target_ulong disas_insn(DisasContext *s, target_ulong pc_start)
             gen_repz_ins(s, ot, pc_start - s->cs_base, s->pc - s->cs_base);
         } else {
             gen_ins(s, ot);
+            if (use_icount) {
+                gen_jmp(s, s->pc - s->cs_base);
+            }
         }
         break;
     case 0x6e: /* outsS */
@@ -5586,6 +5603,9 @@ static target_ulong disas_insn(DisasContext *s, target_ulong pc_start)
             gen_repz_outs(s, ot, pc_start - s->cs_base, s->pc - s->cs_base);
         } else {
             gen_outs(s, ot);
+            if (use_icount) {
+                gen_jmp(s, s->pc - s->cs_base);
+            }
         }
         break;
 
@@ -5602,9 +5622,15 @@ static target_ulong disas_insn(DisasContext *s, target_ulong pc_start)
         gen_op_movl_T0_im(val);
         gen_check_io(s, ot, pc_start - s->cs_base,
                      SVM_IOIO_TYPE_MASK | svm_is_rep(prefixes));
+        if (use_icount)
+            gen_io_start();
         tcg_gen_trunc_tl_i32(cpu_tmp2_i32, cpu_T[0]);
         tcg_gen_helper_1_1(helper_in_func[ot], cpu_T[1], cpu_tmp2_i32);
         gen_op_mov_reg_T1(ot, R_EAX);
+        if (use_icount) {
+            gen_io_end();
+            gen_jmp(s, s->pc - s->cs_base);
+        }
         break;
     case 0xe6:
     case 0xe7:
@@ -5618,10 +5644,16 @@ static target_ulong disas_insn(DisasContext *s, target_ulong pc_start)
                      svm_is_rep(prefixes));
         gen_op_mov_TN_reg(ot, 1, R_EAX);
 
+        if (use_icount)
+            gen_io_start();
         tcg_gen_trunc_tl_i32(cpu_tmp2_i32, cpu_T[0]);
         tcg_gen_andi_i32(cpu_tmp2_i32, cpu_tmp2_i32, 0xffff);
         tcg_gen_trunc_tl_i32(cpu_tmp3_i32, cpu_T[1]);
         tcg_gen_helper_0_2(helper_out_func[ot], cpu_tmp2_i32, cpu_tmp3_i32);
+        if (use_icount) {
+            gen_io_end();
+            gen_jmp(s, s->pc - s->cs_base);
+        }
         break;
     case 0xec:
     case 0xed:
@@ -5633,9 +5665,15 @@ static target_ulong disas_insn(DisasContext *s, target_ulong pc_start)
         gen_op_andl_T0_ffff();
         gen_check_io(s, ot, pc_start - s->cs_base,
                      SVM_IOIO_TYPE_MASK | svm_is_rep(prefixes));
+        if (use_icount)
+            gen_io_start();
         tcg_gen_trunc_tl_i32(cpu_tmp2_i32, cpu_T[0]);
         tcg_gen_helper_1_1(helper_in_func[ot], cpu_T[1], cpu_tmp2_i32);
         gen_op_mov_reg_T1(ot, R_EAX);
+        if (use_icount) {
+            gen_io_end();
+            gen_jmp(s, s->pc - s->cs_base);
+        }
         break;
     case 0xee:
     case 0xef:
@@ -5649,10 +5687,16 @@ static target_ulong disas_insn(DisasContext *s, target_ulong pc_start)
                      svm_is_rep(prefixes));
         gen_op_mov_TN_reg(ot, 1, R_EAX);
 
+        if (use_icount)
+            gen_io_start();
         tcg_gen_trunc_tl_i32(cpu_tmp2_i32, cpu_T[0]);
         tcg_gen_andi_i32(cpu_tmp2_i32, cpu_tmp2_i32, 0xffff);
         tcg_gen_trunc_tl_i32(cpu_tmp3_i32, cpu_T[1]);
         tcg_gen_helper_0_2(helper_out_func[ot], cpu_tmp2_i32, cpu_tmp3_i32);
+        if (use_icount) {
+            gen_io_end();
+            gen_jmp(s, s->pc - s->cs_base);
+        }
         break;
 
         /************************/
@@ -6342,7 +6386,13 @@ static target_ulong disas_insn(DisasContext *s, target_ulong pc_start)
         if (s->cc_op != CC_OP_DYNAMIC)
             gen_op_set_cc_op(s->cc_op);
         gen_jmp_im(pc_start - s->cs_base);
+        if (use_icount)
+            gen_io_start();
         tcg_gen_helper_0_0(helper_rdtsc);
+        if (use_icount) {
+            gen_io_end();
+            gen_jmp(s, s->pc - s->cs_base);
+        }
         break;
     case 0x133: /* rdpmc */
         if (s->cc_op != CC_OP_DYNAMIC)
@@ -7109,6 +7159,8 @@ static inline int gen_intermediate_code_internal(CPUState *env,
     uint64_t flags;
     target_ulong pc_start;
     target_ulong cs_base;
+    int num_insns;
+    int max_insns;
 
     /* generate intermediate code */
     pc_start = tb->pc;
@@ -7179,7 +7231,12 @@ static inline int gen_intermediate_code_internal(CPUState *env,
     dc->is_jmp = DISAS_NEXT;
     pc_ptr = pc_start;
     lj = -1;
+    num_insns = 0;
+    max_insns = tb->cflags & CF_COUNT_MASK;
+    if (max_insns == 0)
+        max_insns = CF_COUNT_MASK;
 
+    gen_icount_start();
     for(;;) {
         if (env->nb_breakpoints > 0) {
             for(j = 0; j < env->nb_breakpoints; j++) {
@@ -7199,8 +7256,13 @@ static inline int gen_intermediate_code_internal(CPUState *env,
             gen_opc_pc[lj] = pc_ptr;
             gen_opc_cc_op[lj] = dc->cc_op;
             gen_opc_instr_start[lj] = 1;
+            gen_opc_icount[lj] = num_insns;
         }
+        if (num_insns + 1 == max_insns && (tb->cflags & CF_LAST_IO))
+            gen_io_start();
+
         pc_ptr = disas_insn(dc, pc_ptr);
+        num_insns++;
         /* stop translation if indicated */
         if (dc->is_jmp)
             break;
@@ -7210,20 +7272,23 @@ static inline int gen_intermediate_code_internal(CPUState *env,
            the flag and abort the translation to give the irqs a
            change to be happen */
         if (dc->tf || dc->singlestep_enabled ||
-            (flags & HF_INHIBIT_IRQ_MASK) ||
-            (cflags & CF_SINGLE_INSN)) {
+            (flags & HF_INHIBIT_IRQ_MASK)) {
             gen_jmp_im(pc_ptr - dc->cs_base);
             gen_eob(dc);
             break;
         }
         /* if too long translation, stop generation too */
         if (gen_opc_ptr >= gen_opc_end ||
-            (pc_ptr - pc_start) >= (TARGET_PAGE_SIZE - 32)) {
+            (pc_ptr - pc_start) >= (TARGET_PAGE_SIZE - 32) ||
+            num_insns >= max_insns) {
             gen_jmp_im(pc_ptr - dc->cs_base);
             gen_eob(dc);
             break;
         }
     }
+    if (tb->cflags & CF_LAST_IO)
+        gen_io_end();
+    gen_icount_end(tb, num_insns);
     *gen_opc_ptr = INDEX_op_end;
     /* we don't forget to fill the last values */
     if (search_pc) {
@@ -7252,8 +7317,10 @@ static inline int gen_intermediate_code_internal(CPUState *env,
     }
 #endif
 
-    if (!search_pc)
+    if (!search_pc) {
         tb->size = pc_ptr - pc_start;
+        tb->icount = num_insns;
+    }
     return 0;
 }
 

@@ -65,7 +65,7 @@ static void load_kernel (CPUState *env)
     if (kernel_size >= 0) {
         if ((entry & ~0x7fffffffULL) == 0x80000000)
             entry = (int32_t)entry;
-        env->PC[env->current_tc] = entry;
+        env->active_tc.PC = entry;
     } else {
         fprintf(stderr, "qemu: could not load kernel '%s'\n",
                 loaderparams.kernel_filename);
@@ -129,7 +129,6 @@ mips_mipssim_init (ram_addr_t ram_size, int vga_ram_size,
         fprintf(stderr, "Unable to find CPU definition\n");
         exit(1);
     }
-    register_savevm("cpu", 0, 3, cpu_save, cpu_load, env);
     qemu_register_reset(main_cpu_reset, env);
 
     /* Allocate RAM. */
@@ -152,7 +151,7 @@ mips_mipssim_init (ram_addr_t ram_size, int vga_ram_size,
         cpu_register_physical_memory(0x1fc00000LL,
                                      bios_size, bios_offset | IO_MEM_ROM);
         /* We have a boot vector start address. */
-        env->PC[env->current_tc] = (target_long)(int32_t)0xbfc00000;
+        env->active_tc.PC = (target_long)(int32_t)0xbfc00000;
     }
 
     if (kernel_filename) {
