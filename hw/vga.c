@@ -2516,11 +2516,11 @@ int ppm_save(const char *filename, uint8_t *data,
 static void vga_screen_dump(void *opaque, const char *filename)
 {
     VGAState *s = (VGAState *)opaque;
-    DisplayState *saved_ds, ds1, *ds = &ds1;
+    DisplayState saved_ds, *ds = s->ds;
 
     /* XXX: this is a little hackish */
     vga_invalidate_display(s);
-    saved_ds = s->ds;
+    saved_ds = *s->ds;
 
     memset(ds, 0, sizeof(DisplayState));
     ds->dpy_update = vga_save_dpy_update;
@@ -2528,7 +2528,6 @@ static void vga_screen_dump(void *opaque, const char *filename)
     ds->dpy_refresh = vga_save_dpy_refresh;
     ds->depth = 32;
 
-    s->ds = ds;
     s->graphic_mode = -1;
     vga_update_display(s);
 
@@ -2537,5 +2536,5 @@ static void vga_screen_dump(void *opaque, const char *filename)
                  s->ds->linesize);
         qemu_free(ds->data);
     }
-    s->ds = saved_ds;
+    *s->ds = saved_ds;
 }
