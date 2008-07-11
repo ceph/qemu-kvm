@@ -10250,11 +10250,6 @@ rom_scan_increment:
   mov  ds, ax
   ret
 
-;; for 'C' strings and other data, insert them here with
-;; a the following hack:
-;; DATA_SEG_DEFS_HERE
-
-
 ;; the following area can be used to write dynamically generated tables
   .align 16
 bios_table_area_start:
