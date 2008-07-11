@@ -234,6 +234,7 @@ endif
 		pxe-rtl8139.bin pxe-pcnet.bin pxe-e1000.bin extboot.bin \
 		bamboo.dtb; \
         do \
+		[ -f $(SRC_PATH)/pc-bios/$$x ] && \
 		$(INSTALL) -m 644 $(SRC_PATH)/pc-bios/$$x "$(DESTDIR)$(datadir)"; \
 	done
 ifndef CONFIG_WIN32

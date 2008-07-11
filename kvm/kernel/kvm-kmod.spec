@@ -10,11 +10,11 @@ License:        GPL
 URL:            http://www.qumranet.com
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}
 
-ExclusiveArch: i386 x86_64
+ExclusiveArch: i386 x86_64 ia64
 
 %description
 This kernel module provides support for virtual machines using hardware support
-(Intel VT or AMD SVM).
+(Intel VT-x&VT-i or AMD SVM).
 
 %prep
 
@@ -27,7 +27,7 @@ rm -rf %{buildroot}
 %define kverrel unknown
 %define moddir /lib/modules/%{kverrel}/extra
 mkdir -p %{buildroot}/%{moddir}
-cp %{objdir}/%{kmod_name}.ko %{objdir}/%{kmod_name}-intel.ko %{objdir}/%{kmod_name}-amd.ko %{buildroot}/%{moddir}
+cp %{objdir}/%{kmod_name}.ko %{objdir}/%{kmod_name}-*.ko %{buildroot}/%{moddir}
 chmod u+x %{buildroot}/%{moddir}/%{kmod_name}*.ko
 
 %post 
@@ -43,7 +43,9 @@ depmod %{kverrel}
 
 %files
 %{moddir}/%{kmod_name}.ko
+%ifarch i386 x86_64
 %{moddir}/%{kmod_name}-amd.ko
+%endif
 %{moddir}/%{kmod_name}-intel.ko
 
 

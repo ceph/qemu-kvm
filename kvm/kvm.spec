@@ -8,7 +8,7 @@ License:        GPL
 URL:            http://www.qumranet.com
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}
 
-ExclusiveArch:  i386 x86_64
+ExclusiveArch:  i386 x86_64 ia64
 
 Requires:	kvm-kmod bridge-utils
 
@@ -58,7 +58,7 @@ Source8: extboot.tar.gz
 
 %description
 The Kernel Virtual Machine provides a virtualization enviroment for processors
-with hardware support for virtualization: Intel's VT and AMD's AMD-V.
+with hardware support for virtualization: Intel's VT-x&VT-i and AMD's AMD-V.
 
 %prep
 
@@ -82,7 +82,9 @@ cd ..
 ./configure --prefix=/usr/kvm %{qemuldflags}
 make -C libkvm
 make -C user
+%ifarch i386 x86_64
 make extboot
+%endif
 #(cd qemu;
 #    ./co
 #   kpath="$(readlink -f ../kernel/include)"

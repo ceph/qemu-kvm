@@ -23,7 +23,7 @@ qemu: libkvm
 ifneq '$(filter $(ARCH), i386 x86_64)' ''
     qemu: extboot
 endif
-ifneq '$(filter $(ARCH), powerpc)' ''
+ifneq '$(filter $(ARCH), powerpc, ia64)' ''
     qemu: libfdt
 endif
 user: libkvm
