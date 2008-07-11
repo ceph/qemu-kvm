@@ -42,10 +42,7 @@
 
 #include "softfloat.h"
 typedef struct CPUIA64State {
-    CPU_COMMON;
-
-   int interrupt_request;
-   int user_mode_only;
+   CPU_COMMON;
    uint32_t hflags;
 
 } CPUIA64State;

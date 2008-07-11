@@ -14,8 +14,8 @@
  * This work is licensed under the GNU GPL licence version 2 or later.
  *
  */
-#include "exec.h"
 #include "cpu.h"
+#include "exec-all.h"
 
 int code_copy_enabled = 0;
 
@@ -48,3 +48,10 @@ void flush_icache_range(unsigned long start, unsigned long stop)
     asm volatile (";;sync.i;;srlz.i;;");
 }
 
+int cpu_restore_state(TranslationBlock *tb,
+                      CPUState *env, unsigned long searched_pc,
+                      void *puc)
+
+{
+    return 0;
+}
