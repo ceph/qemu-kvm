@@ -17,7 +17,7 @@ def usage():
           {event_id}{whitespace}{text format string}
 
           The textual format string may include format specifiers, such as:
-            %(tsc)d, %(event)d, %(pid)d %(vcpu)d %(1)d, %(2)d,
+            %(ts)d, %(event)d, %(pid)d %(vcpu)d %(1)d, %(2)d,
 	    %(3)d, %(4)d, %(5)d
           [ the 'd' format specifier outputs in decimal, alternatively 'x'
             will output in hexadecimal and 'o' will output in octal ]
@@ -31,8 +31,6 @@ def usage():
           kvmtrace output to a file for processing off-line.
 
           kvmtrace_format has the following additional switches
-          -c mhz - specifies the mhz of the traced machine used to convert
-                   cycle data in trace records into time
           -s     - if this switch is set additional trace statistics are
                    created and printed at the end of the output
           """
@@ -362,7 +360,6 @@ def get_special(instr):
 
 ##### Main code
 
-mhz = 0
 summary = False
 
 if len(sys.argv) < 2:
@@ -371,7 +368,6 @@ if len(sys.argv) < 2:
 try:
     opts, arg = getopt.getopt(sys.argv[1:], "sc:" )
     for opt in opts:
-        if opt[0] == '-c' : mhz = int(opt[1])
         if opt[0] == '-s' : summary = True
 
 except getopt.GetoptError:
@@ -388,12 +384,12 @@ defs = read_defs(arg[0])
 # structure of trace record (as output by kvmtrace):
 # HDR(I) {TSC(Q)} D1(I) D2(I) D3(I) D4(I) D5(I)
 #
-# HDR consists of EVENT:28:, n_data:3:, tsc_in:1:
+# HDR consists of EVENT:28:, n_data:3:, ts_in:1:
 # pid:32, vcpu_id:32
 # EVENT means Event ID
 # n_data means number of data (like D1, D2, ...)
-# tsc_in means TSC data exists(1) or not(0).
-# if tsc_in == 0, TSC(Q) does not exists.
+# ts_in means Timestamp data exists(1) or not(0).
+# if ts_in == 0, TSC(Q) does not exists.
 #
 HDRREC = "<III"
 TSCREC = "<Q"
@@ -404,7 +400,7 @@ D4REC  = "<IIII"
 D5REC  = "<IIIII"
 KMAGIC  = "<I"
 
-last_tsc = 0
+last_ts = 0
 
 i=0
 
@@ -441,7 +437,7 @@ while not interrupted:
 	(event, pid, vcpu_id) = struct.unpack(HDRREC, line)
 
         n_data = event >> 28 & 0x7
-        tsc_in = event >> 31
+        ts_in = event >> 31
 
         d1 = 0
         d2 = 0
@@ -449,13 +445,13 @@ while not interrupted:
         d4 = 0
         d5 = 0
 
-        tsc = 0
+        ts = 0
 
-        if tsc_in == 1:
+        if ts_in == 1:
             line = sys.stdin.read(struct.calcsize(TSCREC))
             if not line:
                 break
-            tsc = struct.unpack(TSCREC, line)[0]
+            ts = struct.unpack(TSCREC, line)[0]
         if n_data == 1:
             line = sys.stdin.read(struct.calcsize(D1REC))
             if not line:
@@ -486,20 +482,17 @@ while not interrupted:
 
         # provide relative TSC
 
-        if last_tsc > 0 and tsc_in == 1:
-            reltsc = tsc - last_tsc
+        if last_ts > 0 and ts_in == 1:
+            relts = ts - last_ts
         else:
-            reltsc = 0
+            relts = 0
 
-        if tsc_in == 1:
-            last_tsc = tsc
+        if ts_in == 1:
+            last_ts = ts
 
-        if mhz:
-            tsc = tsc / (mhz*1000000.0)
-
-        args = {'tsc'   : tsc,
+        args = {'ts'   : ts,
                 'event' : event,
-                'reltsc': reltsc,
+                'relts': relts,
 		'pid'   : pid,
 		'vcpu'  : vcpu_id,
                 '1'     : d1,
@@ -511,7 +504,7 @@ while not interrupted:
         # some event types need more than just formats mapping they are if/elif
         # chained here and the last default else is the mapping via formats
         if event == 0x00020019:
-            pdata = (tsc, reltsc, vcpu_id, pid, d1, d2, d3, get_name(d1), get_special(d1))
+            pdata = (ts, relts, vcpu_id, pid, d1, d2, d3, get_name(d1), get_special(d1))
             print "%d (+%12d)  PPC_INSTR vcpu = 0x%08x  pid = 0x%08x [ instr = 0x%08x, pc = 0x%08x, emul = %01d, mnemonic = %8s %s" % pdata
         else:
             try:
