@@ -440,8 +440,30 @@ static inline void blahblah(void)
 /* pagefault_enable(), page_fault_disable() - 2.6.20 */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
 
-#define pagefault_enable()  do {} while (0)
-#define pagefault_disable() do {} while (0)
+static inline void pagefault_disable(void)
+{
+	inc_preempt_count();
+	/*
+	 * make sure to have issued the store before a pagefault
+	 * can hit.
+	 */
+	barrier();
+}
+
+static inline void pagefault_enable(void)
+{
+	/*
+	 * make sure to issue those last loads/stores before enabling
+	 * the pagefault handler again.
+	 */
+	barrier();
+	dec_preempt_count();
+	/*
+	 * make sure we do..
+	 */
+	barrier();
+	preempt_check_resched();
+}
 
 #endif
 
