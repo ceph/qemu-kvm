@@ -4,7 +4,7 @@
 
 # Program for reformatting trace buffer output according to user-supplied rules
 
-import re, sys, string, signal, struct, os, getopt
+import re, sys, string, signal, struct, os, getopt, operator
 
 def usage():
     print >> sys.stderr, \
@@ -29,6 +29,12 @@ def usage():
           this script may not be able to keep up with the output of kvmtrace
           if it is piped directly.  In these circumstances you should have
           kvmtrace output to a file for processing off-line.
+
+          kvmtrace_format has the following additional switches
+          -c mhz - specifies the mhz of the traced machine used to convert
+                   cycle data in trace records into time
+          -s     - if this switch is set additional trace statistics are
+                   created and printed at the end of the output
           """
     sys.exit(1)
 
@@ -60,6 +66,33 @@ def sighand(x,y):
     interrupted = 1
 
 # ppc instruction decoding for event type 0x00020019 (PPC_INSTR)
+# some globals for statistic summaries
+stat_ppc_instr_mnemonic = {};
+stat_ppc_instr_spr = {};
+stat_ppc_instr_dcr = {};
+stat_ppc_instr_tlb = {};
+
+def ppc_instr_print_summary(sortedlist, colname):
+	print "\n\n%14s + %10s" % (colname, "count")
+	print "%s" % (15*"-"+"+"+11*"-")
+	sum = 0
+	for value, key in sortedlist:
+		sum += key
+		print "%14s | %10d" % (value, key)
+	print "%14s = %10d" % ("sum", sum)
+
+
+def ppc_instr_summary():
+	# don't print empty statistics
+        if stat_ppc_instr_mnemonic:
+		ppc_instr_print_summary(sorted(stat_ppc_instr_mnemonic.iteritems(), key=operator.itemgetter(1), reverse=True), "mnemonic")
+        if stat_ppc_instr_spr:
+		ppc_instr_print_summary(sorted(stat_ppc_instr_spr.iteritems(), key=operator.itemgetter(1), reverse=True), "mnemonic-spr")
+        if stat_ppc_instr_dcr:
+		ppc_instr_print_summary(sorted(stat_ppc_instr_dcr.iteritems(), key=operator.itemgetter(1), reverse=True), "mnemonic-dcr")
+        if stat_ppc_instr_tlb:
+		ppc_instr_print_summary(sorted(stat_ppc_instr_tlb.iteritems(), key=operator.itemgetter(1), reverse=True), "mnemonic-tlb")
+
 def get_op(instr):
         return (instr >> 26);
 
@@ -293,28 +326,53 @@ def get_sprn_name(sprn):
 			return "UNKNOWN"
 
 def get_special(instr):
+	name = get_name(instr);
+	if stat_ppc_instr_mnemonic.has_key(name):
+		stat_ppc_instr_mnemonic[name] += 1
+	else:
+		stat_ppc_instr_mnemonic[name] = 1
+
 	if get_op(instr) == 31:
 		if (get_xop(instr) == 339) or (get_xop(instr) == 467):
 			sprn = get_sprn(instr);
-			return ("- sprn 0x%03x %8s" % (sprn, get_sprn_name(sprn)))
+			sprn_name = get_sprn_name(sprn);
+			stat_idx = name+"-"+sprn_name
+			if stat_ppc_instr_spr.has_key(stat_idx):
+				stat_ppc_instr_spr[stat_idx] += 1
+			else:
+				stat_ppc_instr_spr[stat_idx] = 1
+			return ("- sprn 0x%03x %8s" % (sprn, sprn_name))
 		elif (get_xop(instr) == 323 ) or (get_xop(instr) == 451):
-			return ("- dcrn 0x%03x" % get_dcrn(instr))
+			dcrn = get_dcrn(instr);
+			stat_idx = name+"-"+("%04X"%dcrn)
+			if stat_ppc_instr_dcr.has_key(stat_idx):
+				stat_ppc_instr_dcr[stat_idx] += 1
+			else:
+				stat_ppc_instr_dcr[stat_idx] = 1
+			return ("- dcrn 0x%03x" % dcrn)
 		elif (get_xop(instr) == 978 ) or (get_xop(instr) == 451):
-			return ("- ws -> %8s" % get_tlbwe_type(instr))
+			tlbwe_type = get_tlbwe_type(instr)
+			stat_idx = name+"-"+tlbwe_type
+			if stat_ppc_instr_tlb.has_key(stat_idx):
+				stat_ppc_instr_tlb[stat_idx] += 1
+			else:
+				stat_ppc_instr_tlb[stat_idx] = 1
+			return ("- ws -> %8s" % tlbwe_type)
 	return ""
 
 ##### Main code
 
 mhz = 0
+summary = False
 
 if len(sys.argv) < 2:
     usage()
 
 try:
-    opts, arg = getopt.getopt(sys.argv[1:], "c:" )
-
+    opts, arg = getopt.getopt(sys.argv[1:], "sc:" )
     for opt in opts:
         if opt[0] == '-c' : mhz = int(opt[1])
+        if opt[0] == '-s' : summary = True
 
 except getopt.GetoptError:
     usage()
@@ -471,3 +529,6 @@ while not interrupted:
                         print args
 
     except IOError, struct.error: sys.exit()
+
+if summary:
+	ppc_instr_summary()
