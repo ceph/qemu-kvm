@@ -96,6 +96,7 @@ struct vapic_bios {
 	uint32_t set_tpr;
 	uint32_t set_tpr_eax;
 	uint32_t get_tpr[8];
+        uint32_t get_tpr_stack;
     } __attribute__((packed)) up, mp;
 } __attribute__((packed));
 
@@ -151,6 +152,10 @@ static int instruction_is_ok(CPUState *env, uint64_t rip, int is_write)
     case 0xa3: /* mov eax to abs */
 	addr_offset = 1;
 	break;
+    case 0xff: /* push r/m32 */
+        if (modrm_reg(b2) != 6 || !is_abs_modrm(b2))
+            return 0;
+        addr_offset = 2;
     default:
 	return 0;
     }
@@ -266,6 +271,11 @@ static void patch_instruction(CPUState *env, uint64_t rip)
 	write_byte_virt(env, rip + 4, read_byte_virt(env, rip+9));
 	patch_call(env, rip + 5, vp->set_tpr);
 	break;
+    case 0xff: /* push r/m32 */
+        printf("patching push\n");
+        write_byte_virt(env, rip, 0x50); /* push eax */
+        patch_call(env, rip + 1, vp->get_tpr_stack);
+        break;
     default:
 	printf("funny insn %02x %02x\n", b1, b2);
     }
