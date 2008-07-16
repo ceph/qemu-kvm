@@ -12,8 +12,6 @@
 
 #include <signal.h>
 
-#include <signal.h>
-
 int kvm_main_loop(void);
 int kvm_qemu_init(void);
 int kvm_qemu_create_context(void);
