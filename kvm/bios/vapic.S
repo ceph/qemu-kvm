@@ -35,6 +35,7 @@ real_tpr:
 	.long up_get_tpr_ebp	; fixup
 	.long up_get_tpr_esi	; fixup
 	.long up_get_tpr_edi	; fixup
+	.long up_get_tpr_stack  ; fixup
 	.long mp_set_tpr	; fixup
 	.long mp_set_tpr_eax	; fixup
 	.long mp_get_tpr_eax	; fixup
@@ -45,6 +46,7 @@ real_tpr:
 	.long mp_get_tpr_ebp	; fixup
 	.long mp_get_tpr_esi	; fixup
 	.long mp_get_tpr_edi	; fixup
+	.long mp_get_tpr_stack  ; fixup
 
 .macro kvm_hypercall
 	.byte 0x0f, 0x01, 0xc1
@@ -114,6 +116,11 @@ mp_get_tpr_ebp:
 	mov %eax, %ebp
 	call mp_get_tpr_eax
 	xchg %eax, %ebp
+	ret
+
+mp_get_tpr_stack:
+	call mp_get_tpr_eax
+	xchg %eax, 4(%esp)
 	ret
 
 mp_set_tpr_eax:
@@ -206,6 +213,11 @@ up_get_tpr_edi:
 
 up_get_tpr_ebp:
 	movzbl vapic, %ebp ; fixup
+	ret
+
+up_get_tpr_stack:
+	movzbl vapic, %eax ; fixup
+	xchg %eax, 4(%esp)
 	ret
 
 up_set_tpr_eax:
