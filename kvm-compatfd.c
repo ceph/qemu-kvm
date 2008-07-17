@@ -27,8 +27,10 @@ static void *sigwait_compat(void *opaque)
 {
     struct sigfd_compat_info *info = opaque;
     int err;
+    sigset_t all;
 
-    sigprocmask(SIG_BLOCK, &info->mask, NULL);
+    sigfillset(&all);
+    sigprocmask(SIG_BLOCK, &all, NULL);
 
     do {
 	siginfo_t siginfo;
