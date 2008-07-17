@@ -21,6 +21,8 @@
 
 #include <asm/uaccess.h>
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
+
 static struct vfsmount *anon_inode_mnt __read_mostly;
 static struct inode *anon_inode_inode;
 static struct file_operations anon_inode_fops;
@@ -212,3 +214,46 @@ void kvm_exit_anon_inodes(void)
 	mntput(anon_inode_mnt);
 	unregister_filesystem(&anon_inode_fs_type);
 }
+
+#else
+
+int kvm_init_anon_inodes(void)
+{
+	return 0;
+}
+
+void kvm_exit_anon_inodes(void)
+{
+}
+
+#undef anon_inode_getfd
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26)
+
+int kvm_anon_inode_getfd(const char *name,
+			 const struct file_operations *fops,
+			 void *priv)
+{
+	int r;
+	int fd;
+	struct inode *inode;
+	struct file *file;
+
+	r = anon_inode_getfd(&fd, &inode, &file, name, fops, priv);
+	if (r < 0)
+		return r;
+	return fd;
+}
+
+#else
+
+int kvm_anon_inode_getfd(const char *name,
+			 const struct file_operations *fops,
+			 void *priv)
+{
+	return anon_inode_getfd(&fd, &inode, &file, name, fops, priv);
+}
+
+#endif
+
+#endif
