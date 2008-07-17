@@ -5,6 +5,10 @@
 #ifndef LIBKVM_H
 #define LIBKVM_H
 
+#if defined(__s390__)
+#include <asm/ptrace.h>
+#endif
+
 #include <stdint.h>
 
 #ifndef __user
@@ -68,6 +72,12 @@ struct kvm_callbacks {
 #if defined(__powerpc__)
     int (*powerpc_dcr_read)(int vcpu, uint32_t dcrn, uint32_t *data);
     int (*powerpc_dcr_write)(int vcpu, uint32_t dcrn, uint32_t data);
+#endif
+#if defined(__s390__)
+    int (*s390_handle_intercept)(kvm_context_t context, int vcpu,
+	struct kvm_run *run);
+    int (*s390_handle_reset)(kvm_context_t context, int vcpu,
+	 struct kvm_run *run);
 #endif
 };
 
@@ -639,4 +649,11 @@ int kvm_enable_vapic(kvm_context_t kvm, int vcpu, uint64_t vapic);
 
 #endif
 
+#if defined(__s390__)
+int kvm_s390_initial_reset(kvm_context_t kvm, int slot);
+int kvm_s390_interrupt(kvm_context_t kvm, int slot,
+	struct kvm_s390_interrupt *kvmint);
+int kvm_s390_set_initial_psw(kvm_context_t kvm, int slot, psw_t psw);
+int kvm_s390_store_status(kvm_context_t kvm, int slot, unsigned long addr);
+#endif
 #endif

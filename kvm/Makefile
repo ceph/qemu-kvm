@@ -5,7 +5,7 @@ DESTDIR=
 
 rpmrelease = devel
 
-sane-arch = $(subst i386,x86,$(subst x86_64,x86,$(ARCH)))
+sane-arch = $(subst i386,x86,$(subst x86_64,x86,$(subst s390x,s390,$(ARCH))))
 
 .PHONY: kernel user libkvm qemu bios vgabios extboot clean libfdt
 

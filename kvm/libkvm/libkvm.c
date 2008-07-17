@@ -48,6 +48,10 @@
 #include "kvm-powerpc.h"
 #endif
 
+#if defined(__s390__)
+#include "kvm-s390.h"
+#endif
+
 int kvm_abi = EXPECTED_KVM_API_VERSION;
 int kvm_page_size;
 
@@ -74,7 +78,7 @@ int get_free_slot(kvm_context_t kvm)
 	int i;
 	int tss_ext;
 
-#ifdef KVM_CAP_SET_TSS_ADDR
+#if defined(KVM_CAP_SET_TSS_ADDR) && !defined(__s390__)
 	tss_ext = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_SET_TSS_ADDR);
 #else
 	tss_ext = 0;
@@ -410,7 +414,12 @@ void *kvm_create_userspace_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 	if (writable)
 		prot |= PROT_WRITE;
 
+#if !defined(__s390__)
 	ptr = mmap(NULL, len, prot, MAP_ANONYMOUS | MAP_SHARED, -1, 0);
+#else
+	ptr = mmap(LIBKVM_S390_ORIGIN, len, prot | PROT_EXEC,
+		MAP_FIXED | MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+#endif
 	if (ptr == MAP_FAILED) {
 		fprintf(stderr, "create_userspace_phys_mem: %s", strerror(errno));
 		return 0;
@@ -895,8 +904,10 @@ int kvm_run(kvm_context_t kvm, int vcpu)
 	struct kvm_run *run = kvm->run[vcpu];
 
 again:
+#if !defined(__s390__)
 	if (!kvm->irqchip_in_kernel)
 		run->request_interrupt_window = try_push_interrupts(kvm);
+#endif
 	r = pre_kvm_run(kvm, vcpu);
 	if (r)
 	    return r;
@@ -927,10 +938,12 @@ again:
 	}
 #endif
 
+#if !defined(__s390__)
 	if (r == -1) {
 		r = handle_io_window(kvm);
 		goto more;
 	}
+#endif
 	if (1) {
 		switch (run->exit_reason) {
 		case KVM_EXIT_UNKNOWN:
@@ -969,6 +982,14 @@ again:
 		case KVM_EXIT_SHUTDOWN:
 			r = handle_shutdown(kvm, vcpu);
 			break;
+#if defined(__s390__)
+		case KVM_EXIT_S390_SIEIC:
+			r = kvm->callbacks->s390_handle_intercept(kvm, vcpu,
+				run);
+			break;
+		case KVM_EXIT_S390_RESET:
+			r = kvm->callbacks->s390_handle_reset(kvm, vcpu, run);
+#endif
 		default:
 			if (kvm_arch_run(run, kvm, vcpu)) {
 				fprintf(stderr, "unhandled vm exit: 0x%x\n",
