@@ -41,9 +41,6 @@ void qemu_handler_true(void *opaque);
 
 void do_info_network(void);
 
-/* virtio hack for zero copy receive */
-int hack_around_tap(void *opaque);
-
 int net_client_init(const char *str);
 void net_client_uninit(NICInfo *nd);
 
