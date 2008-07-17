@@ -270,17 +270,6 @@ static void main_loop_break(void)
 	qemu_kvm_notify_work();
 }
 
-void decorate_application_name(char *appname, int max_len)
-{
-    if (kvm_enabled())
-    {
-        int remain = max_len - strlen(appname) - 1;
-
-        if (remain > 0)
-            strncat(appname, "/KVM", remain);
-    }
-}
-
 /***********************************************************/
 /* x86 ISA bus support */
 

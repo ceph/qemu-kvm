@@ -1270,7 +1270,6 @@ static int protocol_client_init(VncState *vs, uint8_t *data, size_t len)
     char pad[3] = { 0, 0, 0 };
     char buf[1024];
     int size;
-    char prog[30] = "QEMU";
 
     vs->width = vs->ds->width;
     vs->height = vs->ds->height;
@@ -1315,12 +1314,10 @@ static int protocol_client_init(VncState *vs, uint8_t *data, size_t len)
 
     vnc_write(vs, pad, 3);           /* padding */
 
-    decorate_application_name((char *)prog, sizeof prog);
-
     if (qemu_name)
-        size = snprintf(buf, sizeof(buf), "%s (%s)", prog, qemu_name);
+        size = snprintf(buf, sizeof(buf), "QEMU (%s)", qemu_name);
     else
-        size = snprintf(buf, sizeof(buf), "%s", prog);
+        size = snprintf(buf, sizeof(buf), "QEMU");
 
     vnc_write_u32(vs, size);
     vnc_write(vs, buf, size);
