@@ -1055,10 +1055,6 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
     }
 
     qemu_system_hot_add_init(cpu_model);
-#define USE_HYPERCALL
-#ifdef USE_HYPERCALL
-    pci_hypercall_init(pci_bus);
-#endif
 
     if (drive_get_max_bus(IF_IDE) >= MAX_IDE_BUS) {
         fprintf(stderr, "qemu: too many IDE bus\n");

@@ -199,8 +199,6 @@ int graphic_depth = 15;
 int full_screen = 0;
 int no_frame = 0;
 int no_quit = 0;
-int balloon_used = 0;
-CharDriverState *vmchannel_hds[MAX_VMCHANNEL_DEVICES];
 CharDriverState *serial_hds[MAX_SERIAL_PORTS];
 CharDriverState *parallel_hds[MAX_PARALLEL_PORTS];
 #ifdef TARGET_I386
@@ -7946,8 +7944,6 @@ static void help(int exitcode)
            "\n"
            "Debug/Expert options:\n"
            "-monitor dev    redirect the monitor to char device 'dev'\n"
-           "-vmchannel di:DI,dev  redirect the hypercall device with device id DI, to char device 'dev'\n"
-           "-balloon dev    redirect the balloon hypercall device to char device 'dev'\n"
            "-serial dev     redirect the serial port to char device 'dev'\n"
            "-parallel dev   redirect the parallel port to char device 'dev'\n"
            "-pidfile file   Write PID to 'file'\n"
@@ -8071,8 +8067,6 @@ enum {
     QEMU_OPTION_std_vga,
     QEMU_OPTION_echr,
     QEMU_OPTION_monitor,
-    QEMU_OPTION_balloon,
-    QEMU_OPTION_vmchannel,
     QEMU_OPTION_serial,
     QEMU_OPTION_parallel,
     QEMU_OPTION_loadvm,
@@ -8189,8 +8183,6 @@ const QEMUOption qemu_options[] = {
     { "localtime", 0, QEMU_OPTION_localtime },
     { "std-vga", 0, QEMU_OPTION_std_vga },
     { "monitor", 1, QEMU_OPTION_monitor },
-    { "balloon", 1, QEMU_OPTION_balloon },
-    { "vmchannel", 1, QEMU_OPTION_vmchannel },
     { "echr", HAS_ARG, QEMU_OPTION_echr },
     { "monitor", HAS_ARG, QEMU_OPTION_monitor },
     { "serial", HAS_ARG, QEMU_OPTION_serial },
@@ -8544,8 +8536,6 @@ int main(int argc, char **argv)
     const char *monitor_device;
     const char *serial_devices[MAX_SERIAL_PORTS];
     int serial_device_index;
-    char vmchannel_devices[MAX_VMCHANNEL_DEVICES][128];
-    int vmchannel_device_index;
     const char *parallel_devices[MAX_PARALLEL_PORTS];
     int parallel_device_index;
     const char *loadvm = NULL;
@@ -8610,10 +8600,6 @@ int main(int argc, char **argv)
     cyls = heads = secs = 0;
     translation = BIOS_ATA_TRANSLATION_AUTO;
     monitor_device = "vc";
-
-    for(i = 0; i < MAX_VMCHANNEL_DEVICES; i++)
-        vmchannel_devices[i][0] = '\0';
-    vmchannel_device_index = 0;
 
     serial_devices[0] = "vc:80Cx24C";
     for(i = 1; i < MAX_SERIAL_PORTS; i++)
@@ -9005,28 +8991,6 @@ int main(int argc, char **argv)
                 }
             case QEMU_OPTION_monitor:
                 monitor_device = optarg;
-                break;
-            case QEMU_OPTION_balloon:
-                if (vmchannel_device_index >= MAX_VMCHANNEL_DEVICES) {
-                    fprintf(stderr, "qemu: too many balloon/vmchannel devices\n");
-                    exit(1);
-                }
-                if (balloon_used) {
-                    fprintf(stderr, "qemu: only one balloon device can be used\n");
-                    exit(1);
-                }
-                sprintf(vmchannel_devices[vmchannel_device_index],"di:cdcd,%s", optarg);
-                vmchannel_device_index++;
-                balloon_used = 1;
-                break;
-            case QEMU_OPTION_vmchannel:
-                if (vmchannel_device_index >= MAX_VMCHANNEL_DEVICES) {
-                    fprintf(stderr, "qemu: too many balloon/vmchannel devices\n");
-                    exit(1);
-                }
-                pstrcpy(vmchannel_devices[vmchannel_device_index], 
-                        sizeof(vmchannel_devices[0]), optarg);
-                vmchannel_device_index++;
                 break;
             case QEMU_OPTION_serial:
                 if (serial_device_index >= MAX_SERIAL_PORTS) {
@@ -9535,31 +9499,6 @@ int main(int argc, char **argv)
             exit(1);
         }
         monitor_init(monitor_hd, !nographic);
-    }
-
-    for(i = 0; i < MAX_VMCHANNEL_DEVICES; i++) {
-        const char *devname = vmchannel_devices[i];
-        if (devname[0] != '\0' && strcmp(devname, "none")) {
-            int devid;
-            char *termn;
-
-            if (strstart(devname, "di:", &devname)) {
-                devid = strtol(devname, &termn, 16);
-                devname = termn + 1;
-            }
-            else {
-                fprintf(stderr, "qemu: could not find vmchannel device id '%s'\n", 
-                        devname);
-                exit(1);
-            }
-            vmchannel_hds[i] = qemu_chr_open(devname);
-            if (!vmchannel_hds[i]) {
-                fprintf(stderr, "qemu: could not open vmchannel device '%s'\n", 
-                        devname);
-                exit(1);
-            }
-            vmchannel_init(vmchannel_hds[i], devid, i);
-        }
     }
 
     for(i = 0; i < MAX_SERIAL_PORTS; i++) {

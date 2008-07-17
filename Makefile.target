@@ -591,9 +591,6 @@ OBJS += pcnet.o
 OBJS += rtl8139.o
 OBJS += e1000.o
 
-# PCI Hypercall
-OBJS+= hypercall.o
-
 # virtio devices
 OBJS += virtio.o virtio-net.o virtio-blk.o
 

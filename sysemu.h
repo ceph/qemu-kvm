@@ -172,12 +172,6 @@ void drive_hot_add(int pcibus, const char *devfn_string, const char *opts);
 void device_hot_remove(int pcibus, int slot);
 void device_hot_remove_success(int pcibus, int slot);
 
-/* vmchannel devices */
-
-#define MAX_VMCHANNEL_DEVICES 4
-void pci_hypercall_init(PCIBus *bus);
-void vmchannel_init(CharDriverState *hd, uint32_t deviceid, uint32_t index);
-
 /* serial ports */
 
 #define MAX_SERIAL_PORTS 4
