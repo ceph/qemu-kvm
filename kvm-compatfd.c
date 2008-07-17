@@ -36,8 +36,10 @@ static void *sigwait_compat(void *opaque)
 	siginfo_t siginfo;
 
 	err = sigwaitinfo(&info->mask, &siginfo);
-	if (err == -1 && errno == EINTR)
-	    continue;
+	if (err == -1 && errno == EINTR) {
+            err = 0;
+            continue;
+        }
 
 	if (err > 0) {
 	    char buffer[128];
