@@ -76,7 +76,6 @@ typedef struct E1000State_st {
     PCIDevice dev;
     VLANClientState *vc;
     NICInfo *nd;
-    uint32_t instance;
     uint32_t mmio_base;
     int mmio_index;
 
@@ -801,7 +800,6 @@ nic_save(QEMUFile *f, void *opaque)
     int i, j;
 
     pci_device_save(&s->dev, f);
-    qemu_put_be32s(f, &s->instance);
     qemu_put_be32s(f, &s->mmio_base);
     qemu_put_be32s(f, &s->rxbuf_size);
     qemu_put_be32s(f, &s->rxbuf_min_shift);
@@ -846,7 +844,8 @@ nic_load(QEMUFile *f, void *opaque, int version_id)
 
     if ((ret = pci_device_load(&s->dev, f)) < 0)
         return ret;
-    qemu_get_be32s(f, &s->instance);
+    if (version_id == 1)
+        qemu_get_be32s(f, &i); /* once some unused instance id */
     qemu_get_be32s(f, &s->mmio_base);
     qemu_get_be32s(f, &s->rxbuf_size);
     qemu_get_be32s(f, &s->rxbuf_min_shift);
@@ -955,7 +954,6 @@ pci_e1000_init(PCIBus *bus, NICInfo *nd, int devfn)
 {
     E1000State *d;
     uint8_t *pci_conf;
-    static int instance;
     uint16_t checksum = 0;
     char *info_str = "e1000";
     int i;
@@ -989,8 +987,6 @@ pci_e1000_init(PCIBus *bus, NICInfo *nd, int devfn)
     pci_register_io_region((PCIDevice *)d, 1, IOPORT_SIZE,
                            PCI_ADDRESS_SPACE_IO, ioport_map);
 
-    d->instance = instance++;
-
     d->nd = nd;
     memmove(d->eeprom_data, e1000_eeprom_template,
         sizeof e1000_eeprom_template);
@@ -1016,7 +1012,7 @@ pci_e1000_init(PCIBus *bus, NICInfo *nd, int devfn)
              d->nd->macaddr[0], d->nd->macaddr[1], d->nd->macaddr[2],
              d->nd->macaddr[3], d->nd->macaddr[4], d->nd->macaddr[5]);
 
-    register_savevm(info_str, d->instance, 1, nic_save, nic_load, d);
+    register_savevm(info_str, -1, 2, nic_save, nic_load, d);
     d->dev.unregister = pci_e1000_uninit;
 
     return (PCIDevice *)d;
