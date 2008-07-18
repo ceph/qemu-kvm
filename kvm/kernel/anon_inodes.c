@@ -21,7 +21,7 @@
 
 #include <asm/uaccess.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
 
 static struct vfsmount *anon_inode_mnt __read_mostly;
 static struct inode *anon_inode_inode;
