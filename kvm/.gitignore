@@ -12,6 +12,7 @@ user/kvmctl
 qemu/dyngen
 qemu/x86_64-softmmu
 qemu/qemu-img
+qemu/qemu-nbd
 *.ko
 *.mod.c
 kernel/kvm_main.c
@@ -49,12 +50,13 @@ kernel/lapic.[ch]
 kernel/mmu.h
 kernel/modules.order
 kernel/tss.h
-kernel/x86.c
+kernel/x86.[ch]
 kernel/coalesced_mmio.c
 kernel/coalesced_mmio.h
+kernel/kvm_cache_regs.h
 qemu/pc-bios/extboot.bin
 qemu/qemu-doc.html
-qemu/*.1
+qemu/*.[18]
 qemu/*.pod
 qemu/qemu-tech.html
 user/kvmtrace
