@@ -25,44 +25,35 @@
 _start:
 	.short 0xaa55
 	.byte (_end - _start) / 512
-	push %ax
-	push %bx
-	push %cx
-	push %dx
+	push %eax
 	push %ds
 
 	/* setup ds so we can access the IVT */
 	xor %ax, %ax
 	mov %ax, %ds
 
-	/* save old int 19 at int 2b */
-	mov $(0x19 * 4), %bx
-	mov 0(%bx), %ax
-	mov 2(%bx), %cx
-
-	mov $(0x2b * 4), %bx
-	mov %ax, 0(%bx)
-	mov %cx, 2(%bx)
+	/* save old int 19 */
+	mov (0x19*4), %eax
+	mov %eax, %cs:old_int19
 
 	/* install out int 19 handler */
-	mov $(0x19 * 4), %bx
-	mov $int19_handler, %ax
-	mov %ax, 0(%bx)
-	mov %cs, 2(%bx)
+	movw $int19_handler, (0x19*4)
+	mov %cs, (0x19*4+2)
 
 	pop %ds
-	pop %dx
-	pop %cx
-	pop %bx
-	pop %ax
+	pop %eax
 	lret
 
 int19_handler:
-	push %ax
+	push %eax
 	push %bx
 	push %cx
 	push %dx
 	push %ds
+
+	/* setup ds to access IVT */
+	xor %ax, %ax
+	mov %ax, %ds
 
 	movw $0x404, %dx
 	inb %dx, %al
@@ -73,25 +64,13 @@ int19_handler:
 	jmp 3f
 
 1: /* hook int13: intb(0x404) == 1 */
-	/* setup ds to access IVT */
-	xor %ax, %ax
-	mov %ax, %ds
-
 	/* save old int 13 to int 2c */
-	mov $(0x13 * 4), %bx
-	mov 0(%bx), %ax
-	mov 2(%bx), %cx
-
-	mov $(0x2c * 4), %bx
-	mov %ax, 0(%bx)
-	mov %cx, 2(%bx)
+	mov (0x13*4), %eax
+	mov %eax, %cs:old_int13
 
 	/* install our int 13 handler */
-	mov $(0x13 * 4), %bx
-	mov $int13_handler, %ax
-
-	mov %ax, 0(%bx)
-	mov %cs, 2(%bx)
+	movw $int13_handler, (0x13*4)
+	mov %cs, (0x13*4+2)
 	jmp 3f
 
 2: /* linux boot: intb(0x404) == 2 */
@@ -107,12 +86,16 @@ int19_handler:
 	ljmp $0x9000 + 0x20, $0
 
 3: /* fall through: inb(0x404) == 0 */
+	/* restore previous int $0x19 handler */
+	mov %cs:old_int19,%eax
+	mov %eax,(0x19*4)
+	
 	pop %ds
 	pop %dx
 	pop %cx
 	pop %bx
-	pop %ax
-	int $0x2b
+	pop %eax
+	ljmpw *%cs:old_int19
 
 #define FLAGS_CF	0x01
 
@@ -640,8 +623,7 @@ terminate_disk_emulation:
 int13_handler:
 	cmp $0x80, %dl
 	je 1f
-	int $0x2c
-	iret
+	ljmpw *%cs:old_int13
 1:
 	cmp $0x0, %ah
 	jne 1f
@@ -701,5 +683,10 @@ int13_handler:
 	int $0x18  /* boot failed */
 	iret
 
+/* Variables */
+.align 4, 0
+old_int13:	.long 0
+old_int19:	.long 0
+	
 .align 512, 0
 _end:
