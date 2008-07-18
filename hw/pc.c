@@ -718,7 +718,7 @@ static void pc_init_ne2k_isa(NICInfo *nd, qemu_irq *pic)
     nb_ne2k++;
 }
 
-static int load_option_rom(const char *filename, int offset)
+static int load_option_rom(const char *filename, int offset, int type)
 {
     ram_addr_t option_rom_offset;
     int size, ret;
@@ -739,11 +739,10 @@ static int load_option_rom(const char *filename, int offset)
     }
     size = (size + 4095) & ~4095;
     cpu_register_physical_memory(0xd0000 + offset,
-				 size, option_rom_offset | IO_MEM_ROM);
+				 size, option_rom_offset | type);
     if (kvm_enabled())
 	    kvm_cpu_register_physical_memory(0xd0000 + offset,
-                                             size, option_rom_offset |
-                                             IO_MEM_ROM);
+                                             size, option_rom_offset | type);
     return size;
 }
 
@@ -919,13 +918,18 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
                                          isa_bios_size,
                                          (bios_offset + bios_size - isa_bios_size) | IO_MEM_ROM);
 
+    /* XXX: for DDIM support, "ROM space" should be writable during
+       initialization, and (optionally) marked readonly by the BIOS
+       before INT 19h.  See the PNPBIOS specification, appendix B.
+       DDIM support is mandatory for proper PCI expansion ROM support. */
     opt_rom_offset = 0;
     for (i = 0; i < nb_option_roms; i++)
-	opt_rom_offset += load_option_rom(option_rom[i], opt_rom_offset);
+	opt_rom_offset += load_option_rom(option_rom[i], opt_rom_offset,
+					  IO_MEM_ROM);
 
     if (extboot_drive != -1) {
 	snprintf(buf, sizeof(buf), "%s/%s", bios_dir, EXTBOOT_FILENAME);
-	opt_rom_offset += load_option_rom(buf, opt_rom_offset);
+	opt_rom_offset += load_option_rom(buf, opt_rom_offset, IO_MEM_RAM);
     }
 
     /* map all the bios at the top of memory */
