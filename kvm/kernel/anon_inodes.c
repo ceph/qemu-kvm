@@ -251,7 +251,7 @@ int kvm_anon_inode_getfd(const char *name,
 			 const struct file_operations *fops,
 			 void *priv)
 {
-	return anon_inode_getfd(&fd, &inode, &file, name, fops, priv);
+	return anon_inode_getfd(name, fops, priv);
 }
 
 #endif
