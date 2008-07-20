@@ -252,6 +252,8 @@ static CPUState *cur_cpu;
 static CPUState *next_cpu;
 static int event_pending = 1;
 
+uint8_t qemu_uuid[16];
+
 #define TFR(expr) do { if ((expr) != -1) break; } while (errno == EINTR)
 
 /* KVM runs the main loop in a separate thread.  If we update one of the lists
@@ -7728,6 +7730,7 @@ static void help(int exitcode)
            "-g WxH[xDEPTH]  Set the initial graphical resolution and depth\n"
 #endif
            "-name string    set the name of the guest\n"
+           "-uuid %%08x-%%04x-%%04x-%%04x-%%012x specify machine UUID\n"
            "\n"
            "Network options:\n"
            "-net nic[,vlan=n][,macaddr=addr][,model=type]\n"
@@ -7935,6 +7938,7 @@ enum {
     QEMU_OPTION_tdf,
     QEMU_OPTION_kvm_shadow_memory,
     QEMU_OPTION_mempath,
+    QEMU_OPTION_uuid,
 };
 
 typedef struct QEMUOption {
@@ -8035,6 +8039,7 @@ const QEMUOption qemu_options[] = {
 #ifdef CONFIG_CURSES
     { "curses", 0, QEMU_OPTION_curses },
 #endif
+    { "uuid", HAS_ARG, QEMU_OPTION_uuid },
 
     /* temporary options */
     { "usb", 0, QEMU_OPTION_usb },
@@ -8236,6 +8241,23 @@ static BOOL WINAPI qemu_ctrl_handler(DWORD type)
     return TRUE;
 }
 #endif
+
+static int qemu_uuid_parse(const char *str, uint8_t *uuid)
+{
+    int ret;
+
+    if(strlen(str) != 36)
+        return -1;
+
+    ret = sscanf(str, UUID_FMT, &uuid[0], &uuid[1], &uuid[2], &uuid[3],
+            &uuid[4], &uuid[5], &uuid[6], &uuid[7], &uuid[8], &uuid[9],
+            &uuid[10], &uuid[11], &uuid[12], &uuid[13], &uuid[14], &uuid[15]);
+
+    if(ret != 16)
+        return -1;
+
+    return 0;
+}
 
 #define MAX_NET_CLIENTS 32
 
@@ -8942,6 +8964,13 @@ int main(int argc, char **argv)
                 break;
             case QEMU_OPTION_show_cursor:
                 cursor_hide = 0;
+                break;
+            case QEMU_OPTION_uuid:
+                if(qemu_uuid_parse(optarg, qemu_uuid) < 0) {
+                    fprintf(stderr, "Fail to parse UUID string."
+                            " Wrong format.\n");
+                    exit(1);
+                }
                 break;
 	    case QEMU_OPTION_daemonize:
 		daemonize = 1;
