@@ -42,12 +42,12 @@
 
 /*
  * smp_call_function_single() is not exported below 2.6.20, and has different
- * semantics below 2.6.23.
+ * semantics below 2.6.23.  The 'nonatomic' argument was removed in 2.6.27.
  */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
 
 int kvm_smp_call_function_single(int cpu, void (*func)(void *info),
-				 void *info, int nonatomic, int wait);
+				 void *info, int wait);
 
 #define smp_call_function_single kvm_smp_call_function_single
 

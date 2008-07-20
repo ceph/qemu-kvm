@@ -25,7 +25,7 @@ static void scfs_thunk(void *_thunk)
 }
 
 int kvm_smp_call_function_single(int cpu, void (*func)(void *info),
-				 void *info, int nonatomic, int wait)
+				 void *info, int wait)
 {
 	int r, this_cpu;
 	struct scfs_thunk_info thunk;
@@ -59,7 +59,7 @@ int kvm_smp_call_function_single(int cpu, void (*func)(void *info),
 #include <linux/smp.h>
 
 int kvm_smp_call_function_single(int cpu, void (*func)(void *info),
-				 void *info, int nonatomic, int wait)
+				 void *info, int wait)
 {
 	int this_cpu, r;
 
@@ -71,9 +71,25 @@ int kvm_smp_call_function_single(int cpu, void (*func)(void *info),
 		func(info);
 		local_irq_enable();
 	} else
-		r = smp_call_function_single(cpu, func, info, nonatomic, wait);
+		r = smp_call_function_single(cpu, func, info, 0, wait);
 	put_cpu();
 	return r;
+}
+
+#define smp_call_function_single kvm_smp_call_function_single
+
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
+
+/* The 'nonatomic' argument was removed in 2.6.27. */
+
+#undef smp_call_function_single
+
+#include <linux/smp.h>
+
+int kvm_smp_call_function_single(int cpu, void (*func)(void *info),
+				 void *info, int wait)
+{
+	return smp_call_function_single(cpu, func, info, 0, wait);
 }
 
 #define smp_call_function_single kvm_smp_call_function_single
@@ -171,7 +187,7 @@ int kvm_smp_call_function_mask(cpumask_t mask,
 		atomic_set(&data.finished, 0);
 
 	for (cpu = first_cpu(mask); cpu != NR_CPUS; cpu = next_cpu(cpu, mask))
-		smp_call_function_single(cpu, kvm_ack_smp_call, &data, 1, 0);
+		smp_call_function_single(cpu, kvm_ack_smp_call, &data, 0);
 
 	while (atomic_read(&data.started) != cpus) {
 		cpu_relax();
