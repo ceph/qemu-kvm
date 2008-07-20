@@ -28,6 +28,7 @@
 #include "sysemu.h"
 #include "qemu-kvm.h"
 
+#define VMPORT_CMD_GETCPUSPEED 0x01
 #define VMPORT_CMD_GETVERSION 0x0a
 #define VMPORT_CMD_GETRAMSIZE 0x14
 #define VMPORT_CMD_GETBIOSUUID 0x13
@@ -138,12 +139,95 @@ static uint32_t vmport_cmd_bios_uuid(void *opaque, uint32_t addr)
     return uuid2reg(qemu_uuid, 0);
 }
 
+
+/* get_freq () function is taken from conky source code */
+#define CPUFREQ_PREFIX "/sys/devices/system/cpu"
+#define CPUFREQ_POSTFIX "cpufreq/scaling_cur_freq"
+
+/* return system frequency in MHz (use divisor=1) or GHz (use divisor=1000) */
+static double get_freq(int divisor, unsigned int cpu)
+{
+	FILE *f;
+	char frequency[32];
+	char s[256];
+	double freq = 0;
+
+	if (divisor <= 0)
+		return 0;
+
+	snprintf(s, 256, "%s/cpu%d/%s", CPUFREQ_PREFIX, cpu - 1,
+			CPUFREQ_POSTFIX);
+	f = fopen(s, "r");
+	if (f) {
+		/* if there's a cpufreq /sys node, read the current frequency from
+		 * this node and divide by 1000 to get Mhz. */
+		if (fgets(s, sizeof(s), f)) {
+			s[strlen(s) - 1] = '\0';
+			freq = strtod(s, NULL);
+		}
+		fclose(f);
+		return (freq / 1000) / divisor;
+	}
+
+	// open the CPU information file
+	f = fopen("/proc/cpuinfo", "r");
+	if (!f) {
+		perror("Failed to access '/proc/cpuinfo' at get_freq()");
+		return 0;
+	}
+
+	// read the file
+	while (fgets(s, sizeof(s), f) != NULL) {
+
+#if defined(__i386) || defined(__x86_64)
+		// and search for the cpu mhz
+		if (strncmp(s, "cpu MHz", 7) == 0 && cpu == 0) {
+#else
+#if defined(__alpha)
+		// different on alpha
+		if (strncmp(s, "cycle frequency [Hz]", 20) == 0 && cpu == 0) {
+#else
+		// this is different on ppc for some reason
+		if (strncmp(s, "clock", 5) == 0 && cpu == 0) {
+#endif // defined(__alpha)
+#endif // defined(__i386) || defined(__x86_64)
+
+			// copy just the number
+			strcpy(frequency, strchr(s, ':') + 2);
+#if defined(__alpha)
+			// strip " est.\n"
+			frequency[strlen(frequency) - 6] = '\0';
+			// kernel reports in Hz
+			freq = strtod(frequency, NULL) / 1000000;
+#else
+			// strip \n
+			frequency[strlen(frequency) - 1] = '\0';
+			freq = strtod(frequency, NULL);
+#endif
+			break;
+		}
+		if (strncmp(s, "processor", 9) == 0) {
+			cpu--;
+			continue;
+		}
+	}
+
+	fclose(f);
+	return freq / divisor;
+}
+
+static uint32_t vmport_cmd_get_cpuspeed(void *opaque, uint32_t addr)
+{
+	return (int)get_freq(1, 1);
+}
+
 void vmport_init(void)
 {
     register_ioport_read(0x5658, 1, 4, vmport_ioport_read, &port_state);
     register_ioport_write(0x5658, 1, 4, vmport_ioport_write, &port_state);
 
     /* Register some generic port commands */
+    vmport_register(VMPORT_CMD_GETCPUSPEED, vmport_cmd_get_cpuspeed, NULL);
     vmport_register(VMPORT_CMD_GETVERSION, vmport_cmd_get_version, NULL);
     vmport_register(VMPORT_CMD_GETRAMSIZE, vmport_cmd_ram_size, NULL);
     vmport_register(VMPORT_CMD_GETBIOSUUID, vmport_cmd_bios_uuid, NULL);

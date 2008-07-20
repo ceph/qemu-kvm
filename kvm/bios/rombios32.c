@@ -1823,6 +1823,17 @@ smbios_type_3_init(void *start)
     return start+1;
 }
 
+static int qery_cpu_freq(void)
+{
+    uint32_t eax;
+
+    asm volatile ("outl %%eax, %%dx"
+        : "=a" (eax)
+        : "a" (0x564d5868), "c" (0x01), "d" (0x5658));
+
+    return eax;
+}
+
 /* Type 4 -- Processor Information */
 static void *
 smbios_type_4_init(void *start, unsigned int cpu_number)
@@ -1849,8 +1860,8 @@ smbios_type_4_init(void *start, unsigned int cpu_number)
     p->voltage = 0;
     p->external_clock = 0;
 
-    p->max_speed = 0; /* unknown */
-    p->current_speed = 0; /* unknown */
+    p->max_speed = 0x0FA0; /* 4000 MHZ */
+    p->current_speed = qery_cpu_freq();
 
     p->status = 0x41; /* socket populated, CPU enabled */
     p->processor_upgrade = 0x01; /* other */
