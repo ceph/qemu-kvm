@@ -83,6 +83,14 @@ static void write_byte_virt(CPUState *env, target_ulong virt, uint8_t b)
     stb_phys(map_addr(&sregs, virt, NULL), b);
 }
 
+static __u64 kvm_rsp_read(CPUState *env)
+{
+    struct kvm_regs regs;
+
+    kvm_get_regs(kvm_context, env->cpu_index, &regs);
+    return regs.rsp;
+}
+
 struct vapic_bios {
     char signature[8];
     uint32_t virt_base;
@@ -135,6 +143,8 @@ static int instruction_is_ok(CPUState *env, uint64_t rip, int is_write)
 
     if ((rip & 0xf0000000) != 0x80000000 && (rip & 0xf0000000) != 0xe0000000)
 	return 0;
+    if (kvm_rsp_read(env) == 0)
+        return 0;
     b1 = read_byte_virt(env, rip);
     b2 = read_byte_virt(env, rip + 1);
     switch (b1) {
