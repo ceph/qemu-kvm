@@ -135,6 +135,11 @@ int inet_aton(const char *cp, struct in_addr *ia);
 
 #include "qemu-kvm.h"
 
+#ifdef CONFIG_UUID
+#include <uuid/uuid.h>
+static int uuid_dont_generate;
+#endif
+
 #define DEFAULT_NETWORK_SCRIPT "/etc/qemu-ifup"
 #define DEFAULT_NETWORK_DOWN_SCRIPT "/etc/qemu-ifdown"
 #ifdef __sun__
@@ -8971,6 +8976,9 @@ int main(int argc, char **argv)
                             " Wrong format.\n");
                     exit(1);
                 }
+#ifdef CONFIG_UUID
+                uuid_dont_generate = 1;
+#endif
                 break;
 	    case QEMU_OPTION_daemonize:
 		daemonize = 1;
@@ -9060,6 +9068,11 @@ int main(int argc, char **argv)
             }
         }
     }
+
+#if CONFIG_UUID
+    if (!uuid_dont_generate)
+        uuid_generate(qemu_uuid);
+#endif
 
 #ifndef _WIN32
     if (daemonize) {

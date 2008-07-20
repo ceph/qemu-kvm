@@ -585,6 +585,10 @@ LIBS += -lfdt
 DEPLIBS += libfdt.a
 endif
 
+ifdef CONFIG_UUID
+LIBS += -luuid
+endif
+
 # SCSI layer
 OBJS+= lsi53c895a.o esp.o
 

@@ -117,6 +117,7 @@ uname_release=""
 curses="yes"
 cpu_emulation="yes"
 device_tree_support=""
+uuid="yes"
 
 # OS specific
 targetos=`uname -s`
@@ -331,6 +332,8 @@ for opt do
   --enable-darwin-user) darwin_user="yes"
   ;;
   --enable-uname-release=*) uname_release="$optarg"
+  ;;
+  --disable-uuid) uuid="no"
   ;;
   --sparc_cpu=*)
       sparc_cpu="$optarg"
@@ -749,6 +752,12 @@ if test "$vnc_tls" = "yes" ; then
 fi
 
 ##########################################
+# uuid library
+if test "$uuid" = "yes" ; then
+  `pkg-config uuid 2> /dev/null` || uuid="no"
+fi
+
+##########################################
 # alsa sound support libraries
 
 if test "$alsa" = "yes" ; then
@@ -912,6 +921,7 @@ echo "brlapi support    $brlapi"
 echo "Documentation     $build_docs"
 [ ! -z "$uname_release" ] && \
 echo "uname -r          $uname_release"
+echo "UUID support      $uuid"
 
 if test $sdl_too_old = "yes"; then
 echo "-> Your SDL version is too old - please upgrade to have SDL support"
@@ -1119,6 +1129,10 @@ if test "$vnc_tls" = "yes" ; then
   echo "CONFIG_VNC_TLS_CFLAGS=$vnc_tls_cflags" >> $config_mak
   echo "CONFIG_VNC_TLS_LIBS=$vnc_tls_libs" >> $config_mak
   echo "#define CONFIG_VNC_TLS 1" >> $config_h
+fi
+if test "$uuid" = "yes" ; then
+  echo "CONFIG_UUID=yes" >> $config_mak
+  echo "#define CONFIG_UUID 1" >> $config_h
 fi
 qemu_version=`head $source_path/VERSION`
 echo "VERSION=$qemu_version" >>$config_mak
