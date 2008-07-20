@@ -51,16 +51,10 @@ void vmport_register(unsigned char command, IOPortReadFunc *func, void *opaque)
     port_state.opaque[command] = opaque;
 }
 
-static uint32_t vmport_ioport_read(void *opaque, uint32_t addr)
+static uint32_t vmport_ioport_rw(VMPortState *s, CPUState *env, uint32_t addr)
 {
-    VMPortState *s = opaque;
-    CPUState *env = cpu_single_env;
     unsigned char command;
     uint32_t eax;
-    uint32_t ret;
-
-    if (kvm_enabled())
-	kvm_save_registers(env);
 
     eax = env->regs[R_EAX];
     if (eax != VMPORT_MAGIC)
@@ -75,12 +69,38 @@ static uint32_t vmport_ioport_read(void *opaque, uint32_t addr)
         return eax;
     }
 
-    ret = s->func[command](s->opaque[command], addr);
+    return s->func[command](s->opaque[command], addr);
+}
+
+static uint32_t vmport_ioport_read(void *opaque, uint32_t addr)
+{
+    VMPortState *s = opaque;
+    CPUState *env = cpu_single_env;
+    uint32_t ret;
+
+    if (kvm_enabled())
+	kvm_save_registers(env);
+
+    ret = vmport_ioport_rw(s, env, addr);
 
     if (kvm_enabled())
 	kvm_load_registers(env);
 
     return ret;
+}
+
+static void vmport_ioport_write(void *opaque, uint32_t addr, uint32_t val)
+{
+    VMPortState *s = opaque;
+    CPUState *env = cpu_single_env;
+
+    if (kvm_enabled())
+	kvm_save_registers(env);
+
+    env->regs[R_EAX] = vmport_ioport_rw(s, env, addr);
+
+    if (kvm_enabled())
+	kvm_load_registers(env);
 }
 
 static uint32_t vmport_cmd_get_version(void *opaque, uint32_t addr)
@@ -100,6 +120,7 @@ static uint32_t vmport_cmd_ram_size(void *opaque, uint32_t addr)
 void vmport_init(void)
 {
     register_ioport_read(0x5658, 1, 4, vmport_ioport_read, &port_state);
+    register_ioport_write(0x5658, 1, 4, vmport_ioport_write, &port_state);
 
     /* Register some generic port commands */
     vmport_register(VMPORT_CMD_GETVERSION, vmport_cmd_get_version, NULL);
