@@ -30,6 +30,7 @@
 
 #define VMPORT_CMD_GETVERSION 0x0a
 #define VMPORT_CMD_GETRAMSIZE 0x14
+#define VMPORT_CMD_GETBIOSUUID 0x13
 
 #define VMPORT_ENTRIES 0x2c
 #define VMPORT_MAGIC   0x564D5868
@@ -117,6 +118,26 @@ static uint32_t vmport_cmd_ram_size(void *opaque, uint32_t addr)
     return ram_size;
 }
 
+static inline uint32_t uuid2reg(const uint8_t *uuid, uint32_t idx)
+{
+    int i;
+    uint32_t reg = 0;
+
+    for (i = 0; i < 4; i++)
+        reg |= ((uint32_t)uuid[(idx*4) + i] << (i*8));
+
+    return reg;
+}
+
+static uint32_t vmport_cmd_bios_uuid(void *opaque, uint32_t addr)
+{
+    CPUState *env = cpu_single_env;
+    env->regs[R_EBX] = uuid2reg(qemu_uuid, 1);
+    env->regs[R_ECX] = uuid2reg(qemu_uuid, 2);
+    env->regs[R_EDX] = uuid2reg(qemu_uuid, 3);
+    return uuid2reg(qemu_uuid, 0);
+}
+
 void vmport_init(void)
 {
     register_ioport_read(0x5658, 1, 4, vmport_ioport_read, &port_state);
@@ -125,4 +146,5 @@ void vmport_init(void)
     /* Register some generic port commands */
     vmport_register(VMPORT_CMD_GETVERSION, vmport_cmd_get_version, NULL);
     vmport_register(VMPORT_CMD_GETRAMSIZE, vmport_cmd_ram_size, NULL);
+    vmport_register(VMPORT_CMD_GETBIOSUUID, vmport_cmd_bios_uuid, NULL);
 }
