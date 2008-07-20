@@ -52,6 +52,17 @@ int kvm_smp_call_function_single(int cpu, void (*func)(void *info),
 
 #endif
 
+/* on_each_cpu() lost an argument in 2.6.27. */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
+
+#define kvm_on_each_cpu(func, info, blah, wait) on_each_cpu(func, info, 0, wait)
+
+#else
+
+#define kvm_on_each_cpu(func, info, blah, wait) on_each_cpu(func, info, wait)
+
+#endif
+
 /*
  * The cpu hotplug stubs are broken if !CONFIG_CPU_HOTPLUG
  */

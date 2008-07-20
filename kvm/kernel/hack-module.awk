@@ -58,6 +58,8 @@
 { sub(/\<desc_ptr\>/, "kvm_desc_ptr") }
 { sub(/\<__user\>/, " ") }
 
+{ sub(/\<on_each_cpu\>/, "kvm_on_each_cpu") }
+
 /^\t\.name = "kvm"/ { $0 = "\tset_kset_name(\"kvm\")," }
 
 /#include <linux\/compiler.h>/ { $0 = "" }
