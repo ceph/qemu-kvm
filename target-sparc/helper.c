@@ -449,6 +449,7 @@ static int get_physical_address_data(CPUState *env,
 #ifdef DEBUG_MMU
     printf("DMISS at 0x%" PRIx64 "\n", address);
 #endif
+    env->dmmuregs[6] = (address & ~0x1fffULL) | (env->dmmuregs[1] & 0x1fff);
     env->exception_index = TT_DMISS;
     return 1;
 }
@@ -507,6 +508,7 @@ static int get_physical_address_code(CPUState *env,
 #ifdef DEBUG_MMU
     printf("TMISS at 0x%" PRIx64 "\n", address);
 #endif
+    env->immuregs[6] = (address & ~0x1fffULL) | (env->dmmuregs[1] & 0x1fff);
     env->exception_index = TT_TMISS;
     return 1;
 }
@@ -655,7 +657,7 @@ target_phys_addr_t cpu_get_phys_page_debug(CPUState *env, target_ulong addr)
 
 #ifdef TARGET_SPARC64
 #ifdef DEBUG_PCALL
-static const char * const excp_names[0x50] = {
+static const char * const excp_names[0x80] = {
     [TT_TFAULT] = "Instruction Access Fault",
     [TT_TMISS] = "Instruction Access MMU Miss",
     [TT_CODE_ACCESS] = "Instruction Access Error",
@@ -699,7 +701,7 @@ void do_interrupt(CPUState *env)
         static int count;
         const char *name;
 
-        if (intno < 0 || intno >= 0x180 || (intno > 0x4f && intno < 0x80))
+        if (intno < 0 || intno >= 0x180)
             name = "Unknown";
         else if (intno >= 0x100)
             name = "Trap Instruction";
@@ -742,13 +744,22 @@ void do_interrupt(CPUState *env)
         return;
     }
 #endif
+    if (env->tl < MAXTL - 1) {
+        env->tl++;
+    } else {
+        env->pstate |= PS_RED;
+        if (env->tl != MAXTL)
+            env->tl++;
+    }
+    env->tsptr = &env->ts[env->tl];
     env->tsptr->tstate = ((uint64_t)GET_CCR(env) << 32) |
         ((env->asi & 0xff) << 24) | ((env->pstate & 0xf3f) << 8) |
         GET_CWP64(env);
     env->tsptr->tpc = env->pc;
     env->tsptr->tnpc = env->npc;
     env->tsptr->tt = intno;
-    change_pstate(PS_PEF | PS_PRIV | PS_AG);
+    if (!(env->features & CPU_FEATURE_GL))
+        change_pstate(PS_PEF | PS_PRIV | PS_AG);
 
     if (intno == TT_CLRWIN)
         cpu_set_cwp(env, cpu_cwp_dec(env, env->cwp - 1));
@@ -758,14 +769,6 @@ void do_interrupt(CPUState *env)
         cpu_set_cwp(env, cpu_cwp_inc(env, env->cwp + 1));
     env->tbr &= ~0x7fffULL;
     env->tbr |= ((env->tl > 1) ? 1 << 14 : 0) | (intno << 5);
-    if (env->tl < MAXTL - 1) {
-        env->tl++;
-    } else {
-        env->pstate |= PS_RED;
-        if (env->tl != MAXTL)
-            env->tl++;
-    }
-    env->tsptr = &env->ts[env->tl];
     env->pc = env->tbr;
     env->npc = env->pc + 4;
     env->exception_index = 0;
@@ -932,6 +935,7 @@ static int cpu_sparc_register(CPUSPARCState *env, const char *cpu_model)
     env->mmuregs[0] |= def->mmu_version;
     cpu_sparc_set_id(env, 0);
 #else
+    env->mmu_version = def->mmu_version;
     env->version |= def->nwindows - 1;
 #endif
     return 0;
@@ -976,7 +980,7 @@ static const sparc_def_t sparc_defs[] = {
         .iu_version = ((0x04ULL << 48) | (0x02ULL << 32) | (0ULL << 24)
                        | (MAXTL << 8)),
         .fpu_version = 0x00000000,
-        .mmu_version = 0,
+        .mmu_version = mmu_us_12,
         .nwindows = 4,
         .features = CPU_DEFAULT_FEATURES,
     },
@@ -985,7 +989,7 @@ static const sparc_def_t sparc_defs[] = {
         .iu_version = ((0x04ULL << 48) | (0x03ULL << 32) | (0ULL << 24)
                        | (MAXTL << 8)),
         .fpu_version = 0x00000000,
-        .mmu_version = 0,
+        .mmu_version = mmu_us_12,
         .nwindows = 5,
         .features = CPU_DEFAULT_FEATURES,
     },
@@ -994,7 +998,7 @@ static const sparc_def_t sparc_defs[] = {
         .iu_version = ((0x04ULL << 48) | (0x04ULL << 32) | (0ULL << 24)
                        | (MAXTL << 8)),
         .fpu_version = 0x00000000,
-        .mmu_version = 0,
+        .mmu_version = mmu_us_12,
         .nwindows = 8,
         .features = CPU_DEFAULT_FEATURES,
     },
@@ -1003,7 +1007,7 @@ static const sparc_def_t sparc_defs[] = {
         .iu_version = ((0x04ULL << 48) | (0x05ULL << 32) | (0x51ULL << 24)
                        | (MAXTL << 8)),
         .fpu_version = 0x00000000,
-        .mmu_version = 0,
+        .mmu_version = mmu_us_12,
         .nwindows = 8,
         .features = CPU_DEFAULT_FEATURES,
     },
@@ -1012,7 +1016,7 @@ static const sparc_def_t sparc_defs[] = {
         .iu_version = ((0x17ULL << 48) | (0x10ULL << 32) | (0x40ULL << 24)
                        | (MAXTL << 8)),
         .fpu_version = 0x00000000,
-        .mmu_version = 0,
+        .mmu_version = mmu_us_12,
         .nwindows = 8,
         .features = CPU_DEFAULT_FEATURES,
     },
@@ -1021,7 +1025,7 @@ static const sparc_def_t sparc_defs[] = {
         .iu_version = ((0x17ULL << 48) | (0x11ULL << 32) | (0x20ULL << 24)
                        | (MAXTL << 8)),
         .fpu_version = 0x00000000,
-        .mmu_version = 0,
+        .mmu_version = mmu_us_12,
         .nwindows = 8,
         .features = CPU_DEFAULT_FEATURES,
     },
@@ -1030,7 +1034,7 @@ static const sparc_def_t sparc_defs[] = {
         .iu_version = ((0x17ULL << 48) | (0x12ULL << 32) | (0x91ULL << 24)
                        | (MAXTL << 8)),
         .fpu_version = 0x00000000,
-        .mmu_version = 0,
+        .mmu_version = mmu_us_12,
         .nwindows = 8,
         .features = CPU_DEFAULT_FEATURES,
     },
@@ -1039,7 +1043,7 @@ static const sparc_def_t sparc_defs[] = {
         .iu_version = ((0x17ULL << 48) | (0x13ULL << 32) | (0x14ULL << 24)
                        | (MAXTL << 8)),
         .fpu_version = 0x00000000,
-        .mmu_version = 0,
+        .mmu_version = mmu_us_12,
         .nwindows = 8,
         .features = CPU_DEFAULT_FEATURES,
     },
@@ -1048,7 +1052,7 @@ static const sparc_def_t sparc_defs[] = {
         .iu_version = ((0x3eULL << 48) | (0x14ULL << 32) | (0x34ULL << 24)
                        | (MAXTL << 8)),
         .fpu_version = 0x00000000,
-        .mmu_version = 0,
+        .mmu_version = mmu_us_12,
         .nwindows = 8,
         .features = CPU_DEFAULT_FEATURES,
     },
@@ -1057,7 +1061,7 @@ static const sparc_def_t sparc_defs[] = {
         .iu_version = ((0x3eULL << 48) | (0x15ULL << 32) | (0x41ULL << 24)
                        | (MAXTL << 8)),
         .fpu_version = 0x00000000,
-        .mmu_version = 0,
+        .mmu_version = mmu_us_3,
         .nwindows = 8,
         .features = CPU_DEFAULT_FEATURES,
     },
@@ -1066,7 +1070,7 @@ static const sparc_def_t sparc_defs[] = {
         .iu_version = ((0x3eULL << 48) | (0x16ULL << 32) | (0x34ULL << 24)
                        | (MAXTL << 8)),
         .fpu_version = 0x00000000,
-        .mmu_version = 0,
+        .mmu_version = mmu_us_12,
         .nwindows = 8,
         .features = CPU_DEFAULT_FEATURES,
     },
@@ -1075,7 +1079,7 @@ static const sparc_def_t sparc_defs[] = {
         .iu_version = ((0x3eULL << 48) | (0x18ULL << 32) | (0x31ULL << 24)
                        | (MAXTL << 8)),
         .fpu_version = 0x00000000,
-        .mmu_version = 0,
+        .mmu_version = mmu_us_4,
         .nwindows = 8,
         .features = CPU_DEFAULT_FEATURES,
     },
@@ -1084,16 +1088,16 @@ static const sparc_def_t sparc_defs[] = {
         .iu_version = ((0x3eULL << 48) | (0x19ULL << 32) | (0x22ULL << 24)
                        | (MAXTL << 8)),
         .fpu_version = 0x00000000,
-        .mmu_version = 0,
+        .mmu_version = mmu_us_12,
         .nwindows = 8,
-        .features = CPU_DEFAULT_FEATURES,
+        .features = CPU_DEFAULT_FEATURES | CPU_FEATURE_CMT,
     },
     {
         .name = "Sun UltraSparc IIIi+",
         .iu_version = ((0x3eULL << 48) | (0x22ULL << 32) | (0ULL << 24)
                        | (MAXTL << 8)),
         .fpu_version = 0x00000000,
-        .mmu_version = 0,
+        .mmu_version = mmu_us_3,
         .nwindows = 8,
         .features = CPU_DEFAULT_FEATURES,
     },
@@ -1102,7 +1106,7 @@ static const sparc_def_t sparc_defs[] = {
         .iu_version = ((0x22ULL << 48) | (0x10ULL << 32) | (0x40ULL << 24)
                        | (MAXTL << 8)),
         .fpu_version = 0x00000000,
-        .mmu_version = 0,
+        .mmu_version = mmu_us_12,
         .nwindows = 8,
         .features = CPU_DEFAULT_FEATURES,
     },
@@ -1415,6 +1419,9 @@ static const char * const feature_name[] = {
     "vis1",
     "vis2",
     "fsmuld",
+    "hypv",
+    "cmt",
+    "gl",
 };
 
 static void print_features(FILE *f,
@@ -1563,11 +1570,14 @@ void sparc_cpu_list(FILE *f, int (*cpu_fprintf)(FILE *f, const char *fmt, ...))
                        sparc_defs[i].features, "+");
         (*cpu_fprintf)(f, "\n");
     }
-    (*cpu_fprintf)(f, "CPU feature flags (+/-): ");
-    print_features(f, cpu_fprintf, -1, NULL);
+    (*cpu_fprintf)(f, "Default CPU feature flags (use '-' to remove): ");
+    print_features(f, cpu_fprintf, CPU_DEFAULT_FEATURES, NULL);
     (*cpu_fprintf)(f, "\n");
-    (*cpu_fprintf)(f, "Numerical features (=): iu_version fpu_version "
-                   "mmu_version nwindows\n");
+    (*cpu_fprintf)(f, "Available CPU feature flags (use '+' to add): ");
+    print_features(f, cpu_fprintf, ~CPU_DEFAULT_FEATURES, NULL);
+    (*cpu_fprintf)(f, "\n");
+    (*cpu_fprintf)(f, "Numerical features (use '=' to set): iu_version "
+                   "fpu_version mmu_version nwindows\n");
 }
 
 #define GET_FLAG(a,b) ((env->psr & a)?b:'-')

@@ -1794,8 +1794,7 @@ static PCIDevice *nic_init(PCIBus * bus, NICInfo * nd,
 
     qemu_register_reset(nic_reset, s);
 
-    /* XXX: instance number ? */
-    register_savevm(name, 0, 3, nic_save, nic_load, s);
+    register_savevm(name, -1, 3, nic_save, nic_load, s);
     return (PCIDevice *)d;
 }
 

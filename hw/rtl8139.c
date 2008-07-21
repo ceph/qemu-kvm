@@ -3405,7 +3405,6 @@ PCIDevice *pci_rtl8139_init(PCIBus *bus, NICInfo *nd, int devfn)
     PCIRTL8139State *d;
     RTL8139State *s;
     uint8_t *pci_conf;
-    static int rtl8139_id;
 
     d = (PCIRTL8139State *)pci_register_device(bus,
                                               "RTL8139", sizeof(PCIRTL8139State),
@@ -3458,8 +3457,7 @@ PCIDevice *pci_rtl8139_init(PCIBus *bus, NICInfo *nd, int devfn)
     s->cplus_txbuffer_len = 0;
     s->cplus_txbuffer_offset = 0;
 
-    /* XXX: instance number ? */
-    register_savevm("rtl8139", rtl8139_id++, 3, rtl8139_save, rtl8139_load, s);
+    register_savevm("rtl8139", -1, 3, rtl8139_save, rtl8139_load, s);
 
 #if RTL8139_ONBOARD_TIMER
     s->timer = qemu_new_timer(vm_clock, rtl8139_timer, s);

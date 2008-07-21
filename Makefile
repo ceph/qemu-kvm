@@ -60,7 +60,8 @@ OBJS+=ssd0303.o ssd0323.o ads7846.o stellaris_input.o twl92230.o
 OBJS+=tmp105.o lm832x.o
 OBJS+=scsi-disk.o cdrom.o
 OBJS+=scsi-generic.o
-OBJS+=usb.o usb-hub.o usb-linux.o usb-hid.o usb-msd.o usb-wacom.o usb-serial.o
+OBJS+=usb.o usb-hub.o usb-linux.o usb-hid.o usb-msd.o usb-wacom.o
+OBJS+=usb-serial.o usb-net.o
 OBJS+=sd.o ssi-sd.o
 
 ifdef CONFIG_BRLAPI
@@ -131,6 +132,8 @@ slirp.o mbuf.o misc.o sbuf.o socket.o tcp_input.o tcp_output.o \
 tcp_subr.o tcp_timer.o udp.o bootp.o debug.o tftp.o
 OBJS+=$(addprefix slirp/, $(SLIRP_OBJS))
 endif
+
+LIBS+=$(VDE_LIBS)
 
 cocoa.o: cocoa.m
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<

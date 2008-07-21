@@ -108,6 +108,10 @@ int inet_aton(const char *cp, struct in_addr *ia);
 #include "libslirp.h"
 #endif
 
+#if defined(CONFIG_VDE)
+#include <libvdeplug.h>
+#endif
+
 #ifdef _WIN32
 #include <malloc.h>
 #include <sys/timeb.h>
@@ -2164,7 +2168,9 @@ static inline int send_all(int fd, const uint8_t *buf, int len1)
 
 void socket_set_nonblock(int fd)
 {
-    fcntl(fd, F_SETFL, O_NONBLOCK);
+    int f;
+    f = fcntl(fd, F_GETFL);
+    fcntl(fd, F_SETFL, f | O_NONBLOCK);
 }
 #endif /* !_WIN32 */
 
@@ -2594,7 +2600,6 @@ static CharDriverState *qemu_chr_open_tty(const char *filename)
     int fd;
 
     TFR(fd = open(filename, O_RDWR | O_NONBLOCK));
-    fcntl(fd, F_SETFL, O_NONBLOCK);
     tty_serial_init(fd, 115200, 'N', 8, 1);
     chr = qemu_chr_open_fd(fd, fd);
     if (!chr) {
@@ -3892,6 +3897,19 @@ VLANClientState *qemu_new_vlan_client(VLANState *vlan,
     return vc;
 }
 
+void qemu_del_vlan_client(VLANClientState *vc)
+{
+    VLANClientState **pvc = &vc->vlan->first_client;
+
+    while (*pvc != NULL)
+        if (*pvc == vc) {
+            *pvc = vc->next;
+            free(vc);
+            break;
+        } else
+            pvc = &(*pvc)->next;
+}
+
 int qemu_can_send_packet(VLANClientState *vc1)
 {
     VLANState *vlan = vc1->vlan;
@@ -4538,6 +4556,66 @@ static int net_tap_init(VLANState *vlan, const char *ifname1,
 
 #endif /* !_WIN32 */
 
+#if defined(CONFIG_VDE)
+typedef struct VDEState {
+    VLANClientState *vc;
+    VDECONN *vde;
+} VDEState;
+
+static void vde_to_qemu(void *opaque)
+{
+    VDEState *s = opaque;
+    uint8_t buf[4096];
+    int size;
+
+    size = vde_recv(s->vde, buf, sizeof(buf), 0);
+    if (size > 0) {
+        qemu_send_packet(s->vc, buf, size);
+    }
+}
+
+static void vde_from_qemu(void *opaque, const uint8_t *buf, int size)
+{
+    VDEState *s = opaque;
+    int ret;
+    for(;;) {
+        ret = vde_send(s->vde, buf, size, 0);
+        if (ret < 0 && errno == EINTR) {
+        } else {
+            break;
+        }
+    }
+}
+
+static int net_vde_init(VLANState *vlan, const char *sock, int port,
+                        const char *group, int mode)
+{
+    VDEState *s;
+    char *init_group = strlen(group) ? (char *)group : NULL;
+    char *init_sock = strlen(sock) ? (char *)sock : NULL;
+
+    struct vde_open_args args = {
+        .port = port,
+        .group = init_group,
+        .mode = mode,
+    };
+
+    s = qemu_mallocz(sizeof(VDEState));
+    if (!s)
+        return -1;
+    s->vde = vde_open(init_sock, "QEMU", &args);
+    if (!s->vde){
+        free(s);
+        return -1;
+    }
+    s->vc = qemu_new_vlan_client(vlan, vde_from_qemu, NULL, s);
+    qemu_set_fd_handler(vde_datafd(s->vde), vde_to_qemu, NULL, s);
+    snprintf(s->vc->info_str, sizeof(s->vc->info_str), "vde: sock=%s fd=%d",
+             sock, vde_datafd(s->vde));
+    return 0;
+}
+#endif
+
 /* network connection */
 typedef struct NetSocketState {
     VLANClientState *vc;
@@ -5178,6 +5256,30 @@ int net_client_init(const char *str)
         }
         vlan->nb_host_devs++;
     } else
+#ifdef CONFIG_VDE
+    if (!strcmp(device, "vde")) {
+        char vde_sock[1024], vde_group[512];
+	int vde_port, vde_mode;
+        vlan->nb_host_devs++;
+        if (get_param_value(vde_sock, sizeof(vde_sock), "sock", p) <= 0) {
+	    vde_sock[0] = '\0';
+	}
+	if (get_param_value(buf, sizeof(buf), "port", p) > 0) {
+	    vde_port = strtol(buf, NULL, 10);
+	} else {
+	    vde_port = 0;
+	}
+	if (get_param_value(vde_group, sizeof(vde_group), "group", p) <= 0) {
+	    vde_group[0] = '\0';
+	}
+	if (get_param_value(buf, sizeof(buf), "mode", p) > 0) {
+	    vde_mode = strtol(buf, NULL, 8);
+	} else {
+	    vde_mode = 0700;
+	}
+	ret = net_vde_init(vlan, vde_sock, vde_port, vde_group, vde_mode);
+    } else
+#endif
     {
         fprintf(stderr, "Unknown network device: %s\n", device);
         return -1;
@@ -5697,6 +5799,12 @@ static int usb_device_add(const char *devname)
     } else if (!strcmp(devname, "braille")) {
         dev = usb_baum_init();
 #endif
+    } else if (strstart(devname, "net:", &p)) {
+        int nicidx = strtoul(p, NULL, 0);
+
+        if (nicidx >= nb_nics || strcmp(nd_table[nicidx].model, "usb"))
+            return -1;
+        dev = usb_net_init(&nd_table[nicidx]);
     } else {
         return -1;
     }
@@ -6400,7 +6508,9 @@ typedef struct SaveStateEntry {
 static SaveStateEntry *first_se;
 
 /* TODO: Individual devices generally have very little idea about the rest
-   of the system, so instance_id should be removed/replaced.  */
+   of the system, so instance_id should be removed/replaced.
+   Meanwhile pass -1 as instance_id if you do not already have a clearly
+   distinguishing id for all instances of your device class. */
 int register_savevm(const char *idstr,
                     int instance_id,
                     int version_id,
@@ -7913,6 +8023,13 @@ static void help(int exitcode)
            "                connect the vlan 'n' to another VLAN using a socket connection\n"
            "-net socket[,vlan=n][,fd=h][,mcast=maddr:port]\n"
            "                connect the vlan 'n' to multicast maddr and port\n"
+#ifdef CONFIG_VDE
+           "-net vde[,vlan=n][,sock=socketpath][,port=n][,group=groupname][,mode=octalmode]\n"
+           "                connect the vlan 'n' to port 'n' of a vde switch running\n"
+           "                on host and listening for incoming connections on 'socketpath'.\n"
+           "                Use group 'groupname' and mode 'octalmode' to change default\n"
+           "                ownership and permissions for communication port.\n"
+#endif
            "-net none       use it alone to have zero network devices; if no -net option\n"
            "                is provided, the default is '-net nic -net user'\n"
            "\n"
@@ -9614,6 +9731,12 @@ int main(int argc, char **argv)
                     s->down_script[0])
                     launch_script(s->down_script, ifname, s->fd);
             }
+#if defined(CONFIG_VDE)
+            if (vc->fd_read == vde_from_qemu) {
+                VDEState *s = vc->opaque;
+                vde_close(s->vde);
+            }
+#endif
         }
     }
 #endif
