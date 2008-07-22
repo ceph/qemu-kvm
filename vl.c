@@ -8207,7 +8207,6 @@ enum {
     QEMU_OPTION_startdate,
     QEMU_OPTION_tb_size,
     QEMU_OPTION_icount,
-    QEMU_OPTION_translation,
     QEMU_OPTION_incoming,
     QEMU_OPTION_tdf,
     QEMU_OPTION_kvm_shadow_memory,
