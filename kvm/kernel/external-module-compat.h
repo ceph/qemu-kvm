@@ -746,3 +746,14 @@ static inline void hrtimer_data_pointer(struct hrtimer *timer) {}
 struct timespec kvm_ns_to_timespec(const s64 nsec);
 
 #endif
+
+/* Define DEBUGCTLMSR bits */
+#ifndef DEBUGCTLMSR_LBR
+
+#define _DEBUGCTLMSR_LBR	0 /* last branch recording */
+#define _DEBUGCTLMSR_BTF	1 /* single-step on branches */
+
+#define DEBUGCTLMSR_LBR		(1UL << _DEBUGCTLMSR_LBR)
+#define DEBUGCTLMSR_BTF		(1UL << _DEBUGCTLMSR_BTF)
+
+#endif
