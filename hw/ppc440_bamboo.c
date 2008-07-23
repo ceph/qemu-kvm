@@ -77,10 +77,12 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 		mem_reg_property[2] = ram_size;
 	}
 
-	/* Setup CPU */
-	env = cpu_ppc_init("440");
+	/* Setup CPU.
+	 * XXX Since qemu doesn't implement 440, we just say it's a 405. Since
+	 * we don't use qemu's CPU emulation it seems to be working OK. */
+	env = cpu_ppc_init("405");
 	if (!env) {
-		fprintf(stderr, "Unable to initilize CPU!\n");
+		fprintf(stderr, "Unable to initialize CPU!\n");
 		exit(1);
 	}
 
