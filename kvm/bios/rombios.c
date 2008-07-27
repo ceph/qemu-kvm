@@ -2688,7 +2688,7 @@ void ata_detect( )
           for(i=0;i<20;i++){
             write_byte(get_SS(),model+(i*2),read_byte(get_SS(),buffer+(i*2)+54+1));
             write_byte(get_SS(),model+(i*2)+1,read_byte(get_SS(),buffer+(i*2)+54));
-            }
+          }
 
           // Reformat
           write_byte(get_SS(),model+40,0x00);
@@ -2696,7 +2696,13 @@ void ata_detect( )
             if(read_byte(get_SS(),model+i)==0x20)
               write_byte(get_SS(),model+i,0x00);
             else break;
+          }
+          if (i>36) {
+            write_byte(get_SS(),model+36,0x00);
+            for(i=35;i>32;i--){
+              write_byte(get_SS(),model+i,0x2E);
             }
+          }
           break;
         }
 
