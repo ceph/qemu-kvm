@@ -157,7 +157,7 @@ int kvm_init_anon_inodes(void);
 void kvm_exit_anon_inodes(void);
 int anon_inode_getfd(const char *name,
 		     const struct file_operations *fops,
-		     void *priv);
+		     void *priv, int flags);
 
 #include <linux/smp.h>
 

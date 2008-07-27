@@ -82,7 +82,7 @@ static struct dentry_operations anon_inodefs_dentry_operations = {
  * setup. Returns new descriptor or -error.
  */
 int anon_inode_getfd(const char *name, const struct file_operations *fops,
-		     void *priv)
+		     void *priv, int flags)
 {
 	struct qstr this;
 	struct dentry *dentry;
@@ -232,7 +232,7 @@ void kvm_exit_anon_inodes(void)
 
 int kvm_anon_inode_getfd(const char *name,
 			 const struct file_operations *fops,
-			 void *priv)
+			 void *priv, int flags)
 {
 	int r;
 	int fd;
@@ -249,9 +249,9 @@ int kvm_anon_inode_getfd(const char *name,
 
 int kvm_anon_inode_getfd(const char *name,
 			 const struct file_operations *fops,
-			 void *priv)
+			 void *priv, int flags)
 {
-	return anon_inode_getfd(name, fops, priv);
+	return anon_inode_getfd(name, fops, priv, flags);
 }
 
 #endif
