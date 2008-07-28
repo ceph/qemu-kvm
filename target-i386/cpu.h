@@ -542,8 +542,8 @@ typedef struct CPUX86State {
 
     /* sysenter registers */
     uint32_t sysenter_cs;
-    uint32_t sysenter_esp;
-    uint32_t sysenter_eip;
+    uint64_t sysenter_esp;
+    uint64_t sysenter_eip;
     uint64_t efer;
     uint64_t star;
 
