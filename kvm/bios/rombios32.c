@@ -401,7 +401,7 @@ void uuid_probe(void)
     // check if backdoor port exists
     asm volatile ("outl %%eax, %%dx"
         : "=a" (eax), "=b" (ebx), "=c" (ecx), "=d" (edx)
-        : "a" (0x564d5868), "c" (0xa), "d" (0x5658));
+        : "a" (0x564d5868), "b" (0), "c" (0xa), "d" (0x5658));
     if (ebx == 0x564d5868) {
         uint32_t *uuid_ptr = (uint32_t *)bios_uuid;
         // get uuid
