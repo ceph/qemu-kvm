@@ -245,6 +245,15 @@ int kvm_anon_inode_getfd(const char *name,
 	return fd;
 }
 
+#elif LINUX_VERSION_CODE == KERNEL_VERSION(2,6,26)
+
+int kvm_anon_inode_getfd(const char *name,
+			 const struct file_operations *fops,
+			 void *priv, int flags)
+{
+	return anon_inode_getfd(name, fops, priv);
+}
+
 #else
 
 int kvm_anon_inode_getfd(const char *name,
