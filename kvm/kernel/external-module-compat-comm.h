@@ -520,3 +520,10 @@ static inline int cancel_work_sync(struct work_struct *work)
 
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
+
+struct pci_dev;
+
+struct pci_dev *pci_get_bus_and_slot(unsigned int bus, unsigned int devfn);
+
+#endif
