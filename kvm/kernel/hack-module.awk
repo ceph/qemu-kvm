@@ -1,3 +1,4 @@
+BEGIN { split("INIT_WORK", compat_apis); }
 
 /^int kvm_init\(/ { anon_inodes = 1 }
 
@@ -68,6 +69,13 @@
 { sub(/hrtimer_init/, "hrtimer_init_p") }
 { sub(/hrtimer_start/, "hrtimer_start_p") }
 { sub(/hrtimer_cancel/, "hrtimer_cancel_p") }
+
+{
+    for (i in compat_apis) {
+	ident = compat_apis[i]
+	sub("\\<" ident "\\>", "kvm_" ident)
+    }
+}
 
 { print }
 

@@ -495,3 +495,28 @@ struct timespec kvm_ns_to_timespec(const s64 nsec);
 
 #endif
 
+/* work_struct lost the 'data' field in 2.6.20 */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
+
+#define kvm_INIT_WORK(work, handler) \
+	INIT_WORK(work, (void (*)(void *))handler, work)
+
+#else
+
+#define kvm_INIT_WORK(work, handler) INIT_WORK(work, handler)
+
+#endif
+
+/* cancel_work_sync() was flush_work() in 2.6.21 */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
+
+static inline int cancel_work_sync(struct work_struct *work)
+{
+	/*
+	 * FIXME: actually cancel.  How?  Add own implementation of workqueues?
+	 */
+	return 0;
+}
+
+#endif
+
