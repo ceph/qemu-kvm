@@ -22,12 +22,7 @@ static PCIDevice *qemu_system_hot_add_nic(const char *opts, int bus_nr)
         return NULL;
     }
 
-    memset (buf, 0, sizeof (buf));
-
-    strcpy (buf, "nic,");
-    strncat (buf, opts, sizeof (buf) - strlen (buf) - 1);
-
-    ret = net_client_init (buf);
+    ret = net_client_init ("nic", opts);
     if (ret < 0 || !nd_table[ret].model)
         return NULL;
     return pci_nic_init (pci_bus, &nd_table[ret], -1);

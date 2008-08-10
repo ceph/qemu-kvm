@@ -26,6 +26,7 @@
 #include "qemu-timer.h"
 #include "qemu-char.h"
 #include "flash.h"
+#include "soc_dma.h"
 #include "audio/audio.h"
 
 /* GP timers */
@@ -1446,6 +1447,7 @@ struct omap_eac_s {
 
 #define EAC_BUF_LEN 1024
         uint32_t rxbuf[EAC_BUF_LEN];
+        int rxoff;
         int rxlen;
         int rxavail;
         uint32_t txbuf[EAC_BUF_LEN];
@@ -1477,7 +1479,7 @@ static inline void omap_eac_interrupt_update(struct omap_eac_s *s)
 
 static inline void omap_eac_in_dmarequest_update(struct omap_eac_s *s)
 {
-    qemu_set_irq(s->codec.rxdrq, s->codec.rxavail + s->codec.rxlen &&
+    qemu_set_irq(s->codec.rxdrq, (s->codec.rxavail || s->codec.rxlen) &&
                     ((s->codec.config[1] >> 12) & 1));		/* DMAREN */
 }
 
@@ -1489,26 +1491,61 @@ static inline void omap_eac_out_dmarequest_update(struct omap_eac_s *s)
 
 static inline void omap_eac_in_refill(struct omap_eac_s *s)
 {
-    int left, start = 0;
+    int left = MIN(EAC_BUF_LEN - s->codec.rxlen, s->codec.rxavail) << 2;
+    int start = ((s->codec.rxoff + s->codec.rxlen) & (EAC_BUF_LEN - 1)) << 2;
+    int leftwrap = MIN(left, (EAC_BUF_LEN << 2) - start);
+    int recv = 1;
+    uint8_t *buf = (uint8_t *) s->codec.rxbuf + start;
 
-    s->codec.rxlen = MIN(s->codec.rxavail, EAC_BUF_LEN);
-    s->codec.rxavail -= s->codec.rxlen;
+    left -= leftwrap;
+    start = 0;
+    while (leftwrap && (recv = AUD_read(s->codec.in_voice, buf + start,
+                                    leftwrap)) > 0) {	/* Be defensive */
+        start += recv;
+        leftwrap -= recv;
+    }
+    if (recv <= 0)
+        s->codec.rxavail = 0;
+    else
+        s->codec.rxavail -= start >> 2;
+    s->codec.rxlen += start >> 2;
 
-    for (left = s->codec.rxlen << 2; left; start = (EAC_BUF_LEN << 2) - left)
-        left -= AUD_read(s->codec.in_voice,
-                        (uint8_t *) s->codec.rxbuf + start, left);
+    if (recv > 0 && left > 0) {
+        start = 0;
+        while (left && (recv = AUD_read(s->codec.in_voice,
+                                        (uint8_t *) s->codec.rxbuf + start,
+                                        left)) > 0) {	/* Be defensive */
+            start += recv;
+            left -= recv;
+        }
+        if (recv <= 0)
+            s->codec.rxavail = 0;
+        else
+            s->codec.rxavail -= start >> 2;
+        s->codec.rxlen += start >> 2;
+    }
 }
 
 static inline void omap_eac_out_empty(struct omap_eac_s *s)
 {
-    int left, start = 0;
+    int left = s->codec.txlen << 2;
+    int start = 0;
+    int sent = 1;
 
-    for (left = s->codec.txlen << 2; left; start = (s->codec.txlen << 2) - left)
-        left -= AUD_write(s->codec.out_voice,
-                        (uint8_t *) s->codec.txbuf + start, left);
+    while (left && (sent = AUD_write(s->codec.out_voice,
+                                    (uint8_t *) s->codec.txbuf + start,
+                                    left)) > 0) {	/* Be defensive */
+        start += sent;
+        left -= sent;
+    }
 
-    s->codec.txavail -= s->codec.txlen;
-    s->codec.txlen = 0;
+    if (!sent) {
+        s->codec.txavail = 0;
+        omap_eac_out_dmarequest_update(s);
+    }
+
+    if (start)
+        s->codec.txlen = 0;
 }
 
 static void omap_eac_in_cb(void *opaque, int avail_b)
@@ -1516,8 +1553,9 @@ static void omap_eac_in_cb(void *opaque, int avail_b)
     struct omap_eac_s *s = (struct omap_eac_s *) opaque;
 
     s->codec.rxavail = avail_b >> 2;
-    omap_eac_in_dmarequest_update(s);
+    omap_eac_in_refill(s);
     /* TODO: possibly discard current buffer if overrun */
+    omap_eac_in_dmarequest_update(s);
 }
 
 static void omap_eac_out_cb(void *opaque, int free_b)
@@ -1525,10 +1563,10 @@ static void omap_eac_out_cb(void *opaque, int free_b)
     struct omap_eac_s *s = (struct omap_eac_s *) opaque;
 
     s->codec.txavail = free_b >> 2;
-    if (s->codec.txlen > s->codec.txavail)
-        s->codec.txlen = s->codec.txavail;
-    omap_eac_out_empty(s);
-    omap_eac_out_dmarequest_update(s);
+    if (s->codec.txlen)
+        omap_eac_out_empty(s);
+    else
+        omap_eac_out_dmarequest_update(s);
 }
 
 static void omap_eac_enable_update(struct omap_eac_s *s)
@@ -1590,7 +1628,9 @@ static void omap_eac_format_update(struct omap_eac_s *s)
 {
     audsettings_t fmt;
 
-    omap_eac_out_empty(s);
+    /* The hardware buffers at most one sample */
+    if (s->codec.rxlen)
+        s->codec.rxlen = 1;
 
     if (s->codec.in_voice) {
         AUD_set_active_in(s->codec.in_voice, 0);
@@ -1598,10 +1638,14 @@ static void omap_eac_format_update(struct omap_eac_s *s)
         s->codec.in_voice = 0;
     }
     if (s->codec.out_voice) {
+        omap_eac_out_empty(s);
         AUD_set_active_out(s->codec.out_voice, 0);
         AUD_close_out(&s->codec.card, s->codec.out_voice);
         s->codec.out_voice = 0;
+        s->codec.txavail = 0;
     }
+    /* Discard what couldn't be written */
+    s->codec.txlen = 0;
 
     omap_eac_enable_update(s);
     if (!s->codec.enable)
@@ -1662,6 +1706,7 @@ static void omap_eac_reset(struct omap_eac_s *s)
     s->codec.config[1] = 0x0000;
     s->codec.config[2] = 0x0007;
     s->codec.config[3] = 0x1ffc;
+    s->codec.rxoff = 0;
     s->codec.rxlen = 0;
     s->codec.txlen = 0;
     s->codec.rxavail = 0;
@@ -1675,6 +1720,7 @@ static uint32_t omap_eac_read(void *opaque, target_phys_addr_t addr)
 {
     struct omap_eac_s *s = (struct omap_eac_s *) opaque;
     int offset = addr - s->base;
+    uint32_t ret;
 
     switch (offset) {
     case 0x000:	/* CPCFR1 */
@@ -1738,16 +1784,19 @@ static uint32_t omap_eac_read(void *opaque, target_phys_addr_t addr)
         /* This should be write-only?  Docs list it as read-only.  */
         return 0x0000;
     case 0x0b8:	/* ADRDR */
-        if (likely(s->codec.rxlen > 1))
-            return s->codec.rxbuf[EAC_BUF_LEN - s->codec.rxlen --];
-        else if (s->codec.rxlen) {
+        if (likely(s->codec.rxlen > 1)) {
+            ret = s->codec.rxbuf[s->codec.rxoff ++];
+            s->codec.rxlen --;
+            s->codec.rxoff &= EAC_BUF_LEN - 1;
+            return ret;
+        } else if (s->codec.rxlen) {
+            ret = s->codec.rxbuf[s->codec.rxoff ++];
+            s->codec.rxlen --;
+            s->codec.rxoff &= EAC_BUF_LEN - 1;
             if (s->codec.rxavail)
                 omap_eac_in_refill(s);
-            else {
-                s->codec.rxlen = 0;
-                omap_eac_in_dmarequest_update(s);
-            }
-            return s->codec.rxbuf[EAC_BUF_LEN - 1];
+            omap_eac_in_dmarequest_update(s);
+            return ret;
         }
         return 0x0000;
     case 0x0bc:	/* AGCFR */
@@ -1880,8 +1929,8 @@ static void omap_eac_write(void *opaque, target_phys_addr_t addr,
                                 s->codec.txlen == s->codec.txavail)) {
             if (s->codec.txavail)
                 omap_eac_out_empty(s);
-            else
-                s->codec.txlen = 0;
+            /* Discard what couldn't be written */
+            s->codec.txlen = 0;
         }
         break;
 
@@ -2727,6 +2776,8 @@ struct omap_prcm_s {
 
     uint32_t ev;
     uint32_t evtime[2];
+
+    int dpll_lock, apll_lock[2];
 };
 
 static void omap_prcm_int_update(struct omap_prcm_s *s, int dom)
@@ -2739,6 +2790,7 @@ static uint32_t omap_prcm_read(void *opaque, target_phys_addr_t addr)
 {
     struct omap_prcm_s *s = (struct omap_prcm_s *) opaque;
     int offset = addr - s->base;
+    uint32_t ret;
 
     switch (offset) {
     case 0x000:	/* PRCM_REVISION */
@@ -2922,14 +2974,17 @@ static uint32_t omap_prcm_read(void *opaque, target_phys_addr_t addr)
     case 0x500:	/* CM_CLKEN_PLL */
         return s->clken[9];
     case 0x520:	/* CM_IDLEST_CKGEN */
-        /* Core uses 32-kHz clock */
+        ret = 0x0000070 | (s->apll_lock[0] << 9) | (s->apll_lock[1] << 8);
         if (!(s->clksel[6] & 3))
-            return 0x00000377;
-        /* DPLL not in lock mode, core uses ref_clk */
-        if ((s->clken[9] & 3) != 3)
-            return 0x00000375;
-        /* Core uses DPLL */
-        return 0x00000376;
+            /* Core uses 32-kHz clock */
+            ret |= 3 << 0;
+        else if (!s->dpll_lock)
+            /* DPLL not locked, core uses ref_clk */
+            ret |= 1 << 0;
+        else
+            /* Core uses DPLL */
+            ret |= 2 << 0;
+        return ret;
     case 0x530:	/* CM_AUTOIDLE_PLL */
         return s->clkidle[5];
     case 0x540:	/* CM_CLKSEL1_PLL */
@@ -2974,6 +3029,69 @@ static uint32_t omap_prcm_read(void *opaque, target_phys_addr_t addr)
 
     OMAP_BAD_REG(addr);
     return 0;
+}
+
+static void omap_prcm_apll_update(struct omap_prcm_s *s)
+{
+    int mode[2];
+
+    mode[0] = (s->clken[9] >> 6) & 3;
+    s->apll_lock[0] = (mode[0] == 3);
+    mode[1] = (s->clken[9] >> 2) & 3;
+    s->apll_lock[1] = (mode[1] == 3);
+    /* TODO: update clocks */
+
+    if (mode[0] == 1 || mode[0] == 2 || mode[1] == 1 || mode[2] == 2)
+        fprintf(stderr, "%s: bad EN_54M_PLL or bad EN_96M_PLL\n",
+                        __FUNCTION__);
+}
+
+static void omap_prcm_dpll_update(struct omap_prcm_s *s)
+{
+    omap_clk dpll = omap_findclk(s->mpu, "dpll");
+    omap_clk dpll_x2 = omap_findclk(s->mpu, "dpll");
+    omap_clk core = omap_findclk(s->mpu, "core_clk");
+    int mode = (s->clken[9] >> 0) & 3;
+    int mult, div;
+
+    mult = (s->clksel[5] >> 12) & 0x3ff;
+    div = (s->clksel[5] >> 8) & 0xf;
+    if (mult == 0 || mult == 1)
+        mode = 1;	/* Bypass */
+
+    s->dpll_lock = 0;
+    switch (mode) {
+    case 0:
+        fprintf(stderr, "%s: bad EN_DPLL\n", __FUNCTION__);
+        break;
+    case 1:	/* Low-power bypass mode (Default) */
+    case 2:	/* Fast-relock bypass mode */
+        omap_clk_setrate(dpll, 1, 1);
+        omap_clk_setrate(dpll_x2, 1, 1);
+        break;
+    case 3:	/* Lock mode */
+        s->dpll_lock = 1; /* After 20 FINT cycles (ref_clk / (div + 1)).  */
+
+        omap_clk_setrate(dpll, div + 1, mult);
+        omap_clk_setrate(dpll_x2, div + 1, mult * 2);
+        break;
+    }
+
+    switch ((s->clksel[6] >> 0) & 3) {
+    case 0:
+        omap_clk_reparent(core, omap_findclk(s->mpu, "clk32-kHz"));
+        break;
+    case 1:
+        omap_clk_reparent(core, dpll);
+        break;
+    case 2:
+        /* Default */
+        omap_clk_reparent(core, dpll_x2);
+        break;
+    case 3:
+        fprintf(stderr, "%s: bad CORE_CLK_SRC\n", __FUNCTION__);
+        break;
+    }
 }
 
 static void omap_prcm_write(void *opaque, target_phys_addr_t addr,
@@ -3235,20 +3353,44 @@ static void omap_prcm_write(void *opaque, target_phys_addr_t addr,
         break;
 
     case 0x500:	/* CM_CLKEN_PLL */
-        s->clken[9] = value & 0xcf;
-        /* TODO update clocks */
+        if (value & 0xffffff30)
+            fprintf(stderr, "%s: write 0s in CM_CLKEN_PLL for "
+                            "future compatiblity\n", __FUNCTION__);
+        if ((s->clken[9] ^ value) & 0xcc) {
+            s->clken[9] &= ~0xcc;
+            s->clken[9] |= value & 0xcc;
+            omap_prcm_apll_update(s);
+        }
+        if ((s->clken[9] ^ value) & 3) {
+            s->clken[9] &= ~3;
+            s->clken[9] |= value & 3;
+            omap_prcm_dpll_update(s);
+        }
         break;
     case 0x530:	/* CM_AUTOIDLE_PLL */
         s->clkidle[5] = value & 0x000000cf;
         /* TODO update clocks */
         break;
     case 0x540:	/* CM_CLKSEL1_PLL */
+        if (value & 0xfc4000d7)
+            fprintf(stderr, "%s: write 0s in CM_CLKSEL1_PLL for "
+                            "future compatiblity\n", __FUNCTION__);
+        if ((s->clksel[5] ^ value) & 0x003fff00) {
+            s->clksel[5] = value & 0x03bfff28;
+            omap_prcm_dpll_update(s);
+        }
+        /* TODO update the other clocks */
+
         s->clksel[5] = value & 0x03bfff28;
-        /* TODO update clocks */
         break;
     case 0x544:	/* CM_CLKSEL2_PLL */
-        s->clksel[6] = value & 3;
-        /* TODO update clocks */
+        if (value & ~3)
+            fprintf(stderr, "%s: write 0s in CM_CLKSEL2_PLL[31:2] for "
+                            "future compatiblity\n", __FUNCTION__);
+        if (s->clksel[6] != (value & 3)) {
+            s->clksel[6] = value & 3;
+            omap_prcm_dpll_update(s);
+        }
         break;
 
     case 0x800:	/* CM_FCLKEN_DSP */
@@ -3373,6 +3515,8 @@ static void omap_prcm_reset(struct omap_prcm_s *s)
     s->power[3] = 0x14;
     s->rstctrl[0] = 1;
     s->rst[3] = 1;
+    omap_prcm_apll_update(s);
+    omap_prcm_dpll_update(s);
 }
 
 static void omap_prcm_coldreset(struct omap_prcm_s *s)
@@ -3431,6 +3575,32 @@ struct omap_sysctl_s {
     uint8_t obs;
     uint32_t msuspendmux[5];
 };
+
+static uint32_t omap_sysctl_read8(void *opaque, target_phys_addr_t addr)
+{
+
+    struct omap_sysctl_s *s = (struct omap_sysctl_s *) opaque;
+    int offset = addr - s->base;
+    int pad_offset, byte_offset;
+    int value;
+
+    switch (offset) {
+    case 0x030 ... 0x140:	/* CONTROL_PADCONF - only used in the POP */
+        pad_offset = (offset - 0x30) >> 2;
+        byte_offset = (offset - 0x30) & (4 - 1);
+
+        value = s->padconf[pad_offset];
+        value = (value >> (byte_offset * 8)) & 0xff;
+
+        return value;
+
+    default:
+        break;
+    }
+
+    OMAP_BAD_REG(addr);
+    return 0;
+}
 
 static uint32_t omap_sysctl_read(void *opaque, target_phys_addr_t addr)
 {
@@ -3533,6 +3703,31 @@ static uint32_t omap_sysctl_read(void *opaque, target_phys_addr_t addr)
     return 0;
 }
 
+static void omap_sysctl_write8(void *opaque, target_phys_addr_t addr,
+                uint32_t value)
+{
+    struct omap_sysctl_s *s = (struct omap_sysctl_s *) opaque;
+    int offset = addr - s->base;
+    int pad_offset, byte_offset;
+    int prev_value;
+
+    switch (offset) {
+    case 0x030 ... 0x140:	/* CONTROL_PADCONF - only used in the POP */
+        pad_offset = (offset - 0x30) >> 2;
+        byte_offset = (offset - 0x30) & (4 - 1);
+
+        prev_value = s->padconf[pad_offset];
+        prev_value &= ~(0xff << (byte_offset * 8));
+        prev_value |= ((value & 0x1f1f1f1f) << (byte_offset * 8)) & 0x1f1f1f1f;
+        s->padconf[pad_offset] = prev_value;
+        break;
+
+    default:
+        OMAP_BAD_REG(addr);
+        break;
+    }
+}
+
 static void omap_sysctl_write(void *opaque, target_phys_addr_t addr,
                 uint32_t value)
 {
@@ -3630,13 +3825,13 @@ static void omap_sysctl_write(void *opaque, target_phys_addr_t addr,
 }
 
 static CPUReadMemoryFunc *omap_sysctl_readfn[] = {
-    omap_badwidth_read32,	/* TODO */
+    omap_sysctl_read8,
     omap_badwidth_read32,	/* TODO */
     omap_sysctl_read,
 };
 
 static CPUWriteMemoryFunc *omap_sysctl_writefn[] = {
-    omap_badwidth_write32,	/* TODO */
+    omap_sysctl_write8,
     omap_badwidth_write32,	/* TODO */
     omap_sysctl_write,
 };
@@ -4043,7 +4238,7 @@ static uint32_t omap_gpmc_read(void *opaque, target_phys_addr_t addr)
         cs = (offset - 0x060) / 0x30;
         offset -= cs * 0x30;
         f = s->cs_file + cs;
-        switch (offset - cs * 0x30) {
+        switch (offset) {
             case 0x60:	/* GPMC_CONFIG1 */
                 return f->config[0];
             case 0x64:	/* GPMC_CONFIG2 */
@@ -4397,6 +4592,10 @@ struct omap_mpu_state_s *omap2420_mpu_init(unsigned long sdram_size,
                     omap_findclk(s, "sdma_iclk"),
                     omap_findclk(s, "sdma_fclk"));
     s->port->addr_valid = omap2_validate_addr;
+
+    /* Register SDRAM and SRAM ports for fast DMA transfers.  */
+    soc_dma_port_add_mem_ram(s->dma, q2_base, OMAP2_Q2_BASE, s->sdram_size);
+    soc_dma_port_add_mem_ram(s->dma, sram_base, OMAP2_SRAM_BASE, s->sram_size);
 
     s->uart[0] = omap2_uart_init(omap_l4ta(s->l4, 19),
                     s->irq[0][OMAP_INT_24XX_UART1_IRQ],

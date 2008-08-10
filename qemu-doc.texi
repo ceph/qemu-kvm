@@ -75,7 +75,7 @@ For system emulation, the following hardware targets are supported:
 @item G3 BW PowerMac (PowerPC processor)
 @item Mac99 PowerMac (PowerPC processor, in progress)
 @item Sun4m/Sun4c/Sun4d (32-bit Sparc processor)
-@item Sun4u (64-bit Sparc processor, in progress)
+@item Sun4u/Sun4v (64-bit Sparc processor, in progress)
 @item Malta board (32-bit and 64-bit MIPS processors)
 @item MIPS Magnum (64-bit MIPS processor)
 @item ARM Integrator/CP (ARM)
@@ -575,7 +575,7 @@ available devices.
 Braille device.  This will use BrlAPI to display the braille output on a real
 or fake device.
 
-@item net:nic_num
+@item net:options
 Network adapter that supports CDC ethernet and RNDIS protocols.
 
 @end table
@@ -595,7 +595,7 @@ Qemu can emulate several different models of network card.
 Valid values for @var{type} are
 @code{i82551}, @code{i82557b}, @code{i82559er},
 @code{ne2k_pci}, @code{ne2k_isa}, @code{pcnet}, @code{rtl8139},
-@code{e1000}, @code{smc91c111}, @code{lance}, @code{mcf_fec} and @code{usb}.
+@code{e1000}, @code{smc91c111}, @code{lance} and @code{mcf_fec}.
 Not all devices are supported on all targets.  Use -net nic,model=?
 for a list of available devices for your target.
 
@@ -1733,14 +1733,12 @@ serial converter, faking a Matrix Orbital LCD Display (USB ID 0403:FA00).
 @item braille
 Braille device.  This will use BrlAPI to display the braille output on a real
 or fake device.
-@item net:@var{nic_num}
-Network adapter that supports CDC ethernet and RNDIS protocols.  This must be
-used together with the @code{-net nic,model=usb,...} option (see description),
-where @var{nic_num} specifies the index of the @code{-net nic,...} option
-describing the interface (zero-based).
-For instance, user-mode networking can be used by specifying
+@item net:@var{options}
+Network adapter that supports CDC ethernet and RNDIS protocols.  @var{options}
+specifies NIC options as with @code{-net nic,}@var{options} (see description).
+For instance, user-mode networking can be used with
 @example
-qemu -net user,vlan=1 -net nic,model=usb,vlan=1 -usbdevice net:0 [...OPTIONS...]
+qemu [...OPTIONS...] -net user,vlan=0 -usbdevice net:vlan=0
 @end example
 Currently this cannot be used in machines that support PCI NICs.
 @end table
@@ -2323,10 +2321,10 @@ Set the emulated machine type. Default is SS-5.
 @node Sparc64 System emulator
 @section Sparc64 System emulator
 
-Use the executable @file{qemu-system-sparc64} to simulate a Sun4u machine.
-The emulator is not usable for anything yet.
+Use the executable @file{qemu-system-sparc64} to simulate a Sun4u or
+Sun4v machine. The emulator is not usable for anything yet.
 
-QEMU emulates the following sun4u peripherals:
+QEMU emulates the following peripherals:
 
 @itemize @minus
 @item
@@ -2337,7 +2335,23 @@ PCI VGA compatible card with VESA Bochs Extensions
 Non Volatile RAM M48T59
 @item
 PC-compatible serial ports
+@item
+2 PCI IDE interfaces with hard disk and CD-ROM support
 @end itemize
+
+@c man begin OPTIONS
+
+The following options are specific to the Sparc64 emulation:
+
+@table @option
+
+@item -M [sun4u|sun4v]
+
+Set the emulated machine type. The default is sun4u.
+
+@end table
+
+@c man end
 
 @node MIPS System emulator
 @section MIPS System emulator

@@ -90,6 +90,7 @@ char *urldecode(const char *ptr);
 int fls(int i);
 
 void *qemu_malloc(size_t size);
+void *qemu_realloc(void *ptr, size_t size);
 void *qemu_mallocz(size_t size);
 void qemu_free(void *ptr);
 char *qemu_strdup(const char *str);

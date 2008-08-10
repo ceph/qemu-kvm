@@ -280,6 +280,35 @@ static void main_loop_break(void)
 target_phys_addr_t isa_mem_base = 0;
 PicState2 *isa_pic;
 
+static IOPortReadFunc default_ioport_readb, default_ioport_readw, default_ioport_readl;
+static IOPortWriteFunc default_ioport_writeb, default_ioport_writew, default_ioport_writel;
+
+static uint32_t ioport_read(int index, uint32_t address)
+{
+    static IOPortReadFunc *default_func[3] = {
+        default_ioport_readb,
+        default_ioport_readw,
+        default_ioport_readl
+    };
+    IOPortReadFunc *func = ioport_read_table[index][address];
+    if (!func)
+        func = default_func[index];
+    return func(ioport_opaque[address], address);
+}
+
+static void ioport_write(int index, uint32_t address, uint32_t data)
+{
+    static IOPortWriteFunc *default_func[3] = {
+        default_ioport_writeb,
+        default_ioport_writew,
+        default_ioport_writel
+    };
+    IOPortWriteFunc *func = ioport_write_table[index][address];
+    if (!func)
+        func = default_func[index];
+    func(ioport_opaque[address], address, data);
+}
+
 static uint32_t default_ioport_readb(void *opaque, uint32_t address)
 {
 #ifdef DEBUG_UNUSED_IOPORT
@@ -299,17 +328,17 @@ static void default_ioport_writeb(void *opaque, uint32_t address, uint32_t data)
 static uint32_t default_ioport_readw(void *opaque, uint32_t address)
 {
     uint32_t data;
-    data = ioport_read_table[0][address](ioport_opaque[address], address);
+    data = ioport_read(0, address);
     address = (address + 1) & (MAX_IOPORTS - 1);
-    data |= ioport_read_table[0][address](ioport_opaque[address], address) << 8;
+    data |= ioport_read(0, address) << 8;
     return data;
 }
 
 static void default_ioport_writew(void *opaque, uint32_t address, uint32_t data)
 {
-    ioport_write_table[0][address](ioport_opaque[address], address, data & 0xff);
+    ioport_write(0, address, data & 0xff);
     address = (address + 1) & (MAX_IOPORTS - 1);
-    ioport_write_table[0][address](ioport_opaque[address], address, (data >> 8) & 0xff);
+    ioport_write(0, address, (data >> 8) & 0xff);
 }
 
 static uint32_t default_ioport_readl(void *opaque, uint32_t address)
@@ -325,20 +354,6 @@ static void default_ioport_writel(void *opaque, uint32_t address, uint32_t data)
 #ifdef DEBUG_UNUSED_IOPORT
     fprintf(stderr, "unused outl: port=0x%04x data=0x%02x\n", address, data);
 #endif
-}
-
-static void init_ioports(void)
-{
-    int i;
-
-    for(i = 0; i < MAX_IOPORTS; i++) {
-        ioport_read_table[0][i] = default_ioport_readb;
-        ioport_write_table[0][i] = default_ioport_writeb;
-        ioport_read_table[1][i] = default_ioport_readw;
-        ioport_write_table[1][i] = default_ioport_writew;
-        ioport_read_table[2][i] = default_ioport_readl;
-        ioport_write_table[2][i] = default_ioport_writel;
-    }
 }
 
 /* size is the word size in byte */
@@ -416,7 +431,7 @@ void cpu_outb(CPUState *env, int addr, int val)
     if (loglevel & CPU_LOG_IOPORT)
         fprintf(logfile, "outb: %04x %02x\n", addr, val);
 #endif
-    ioport_write_table[0][addr](ioport_opaque[addr], addr, val);
+    ioport_write(0, addr, val);
 #ifdef USE_KQEMU
     if (env)
         env->last_io_time = cpu_get_time_fast();
@@ -429,7 +444,7 @@ void cpu_outw(CPUState *env, int addr, int val)
     if (loglevel & CPU_LOG_IOPORT)
         fprintf(logfile, "outw: %04x %04x\n", addr, val);
 #endif
-    ioport_write_table[1][addr](ioport_opaque[addr], addr, val);
+    ioport_write(1, addr, val);
 #ifdef USE_KQEMU
     if (env)
         env->last_io_time = cpu_get_time_fast();
@@ -442,7 +457,7 @@ void cpu_outl(CPUState *env, int addr, int val)
     if (loglevel & CPU_LOG_IOPORT)
         fprintf(logfile, "outl: %04x %08x\n", addr, val);
 #endif
-    ioport_write_table[2][addr](ioport_opaque[addr], addr, val);
+    ioport_write(2, addr, val);
 #ifdef USE_KQEMU
     if (env)
         env->last_io_time = cpu_get_time_fast();
@@ -452,7 +467,7 @@ void cpu_outl(CPUState *env, int addr, int val)
 int cpu_inb(CPUState *env, int addr)
 {
     int val;
-    val = ioport_read_table[0][addr](ioport_opaque[addr], addr);
+    val = ioport_read(0, addr);
 #ifdef DEBUG_IOPORT
     if (loglevel & CPU_LOG_IOPORT)
         fprintf(logfile, "inb : %04x %02x\n", addr, val);
@@ -467,7 +482,7 @@ int cpu_inb(CPUState *env, int addr)
 int cpu_inw(CPUState *env, int addr)
 {
     int val;
-    val = ioport_read_table[1][addr](ioport_opaque[addr], addr);
+    val = ioport_read(1, addr);
 #ifdef DEBUG_IOPORT
     if (loglevel & CPU_LOG_IOPORT)
         fprintf(logfile, "inw : %04x %04x\n", addr, val);
@@ -482,7 +497,7 @@ int cpu_inw(CPUState *env, int addr)
 int cpu_inl(CPUState *env, int addr)
 {
     int val;
-    val = ioport_read_table[2][addr](ioport_opaque[addr], addr);
+    val = ioport_read(2, addr);
 #ifdef DEBUG_IOPORT
     if (loglevel & CPU_LOG_IOPORT)
         fprintf(logfile, "inl : %04x %08x\n", addr, val);
@@ -2472,21 +2487,162 @@ void cfmakeraw (struct termios *termios_p)
 #endif
 
 #if defined(__linux__) || defined(__sun__)
+
+typedef struct {
+    int fd;
+    int connected;
+    int polling;
+    int read_bytes;
+    QEMUTimer *timer;
+} PtyCharDriver;
+
+static void pty_chr_update_read_handler(CharDriverState *chr);
+static void pty_chr_state(CharDriverState *chr, int connected);
+
+static int pty_chr_write(CharDriverState *chr, const uint8_t *buf, int len)
+{
+    PtyCharDriver *s = chr->opaque;
+
+    if (!s->connected) {
+        /* guest sends data, check for (re-)connect */
+        pty_chr_update_read_handler(chr);
+        return 0;
+    }
+    return unix_write(s->fd, buf, len);
+}
+
+static int pty_chr_read_poll(void *opaque)
+{
+    CharDriverState *chr = opaque;
+    PtyCharDriver *s = chr->opaque;
+
+    s->read_bytes = qemu_chr_can_read(chr);
+    return s->read_bytes;
+}
+
+static void pty_chr_read(void *opaque)
+{
+    CharDriverState *chr = opaque;
+    PtyCharDriver *s = chr->opaque;
+    int size, len;
+    uint8_t buf[1024];
+
+    len = sizeof(buf);
+    if (len > s->read_bytes)
+        len = s->read_bytes;
+    if (len == 0)
+        return;
+    size = read(s->fd, buf, len);
+    if ((size == -1 && errno == EIO) ||
+        (size == 0)) {
+        pty_chr_state(chr, 0);
+        return;
+    }
+    if (size > 0) {
+        pty_chr_state(chr, 1);
+        qemu_chr_read(chr, buf, size);
+    }
+}
+
+static void pty_chr_update_read_handler(CharDriverState *chr)
+{
+    PtyCharDriver *s = chr->opaque;
+
+    qemu_set_fd_handler2(s->fd, pty_chr_read_poll,
+                         pty_chr_read, NULL, chr);
+    s->polling = 1;
+    /*
+     * Short timeout here: just need wait long enougth that qemu makes
+     * it through the poll loop once.  When reconnected we want a
+     * short timeout so we notice it almost instantly.  Otherwise
+     * read() gives us -EIO instantly, making pty_chr_state() reset the
+     * timeout to the normal (much longer) poll interval before the
+     * timer triggers.
+     */
+    qemu_mod_timer(s->timer, qemu_get_clock(rt_clock) + 10);
+}
+
+static void pty_chr_state(CharDriverState *chr, int connected)
+{
+    PtyCharDriver *s = chr->opaque;
+
+    if (!connected) {
+        qemu_set_fd_handler2(s->fd, NULL, NULL, NULL, NULL);
+        s->connected = 0;
+        s->polling = 0;
+        /* (re-)connect poll interval for idle guests: once per second.
+         * We check more frequently in case the guests sends data to
+         * the virtual device linked to our pty. */
+        qemu_mod_timer(s->timer, qemu_get_clock(rt_clock) + 1000);
+    } else {
+        if (!s->connected)
+            qemu_chr_reset(chr);
+        s->connected = 1;
+    }
+}
+
+void pty_chr_timer(void *opaque)
+{
+    struct CharDriverState *chr = opaque;
+    PtyCharDriver *s = chr->opaque;
+
+    if (s->connected)
+        return;
+    if (s->polling) {
+        /* If we arrive here without polling being cleared due
+         * read returning -EIO, then we are (re-)connected */
+        pty_chr_state(chr, 1);
+        return;
+    }
+
+    /* Next poll ... */
+    pty_chr_update_read_handler(chr);
+}
+
+static void pty_chr_close(struct CharDriverState *chr)
+{
+    PtyCharDriver *s = chr->opaque;
+
+    qemu_set_fd_handler2(s->fd, NULL, NULL, NULL, NULL);
+    close(s->fd);
+    qemu_free(s);
+}
+
 static CharDriverState *qemu_chr_open_pty(void)
 {
+    CharDriverState *chr;
+    PtyCharDriver *s;
     struct termios tty;
-    int master_fd, slave_fd;
+    int slave_fd;
 
-    if (openpty(&master_fd, &slave_fd, NULL, NULL, NULL) < 0) {
+    chr = qemu_mallocz(sizeof(CharDriverState));
+    if (!chr)
+        return NULL;
+    s = qemu_mallocz(sizeof(PtyCharDriver));
+    if (!s) {
+        qemu_free(chr);
+        return NULL;
+    }
+
+    if (openpty(&s->fd, &slave_fd, NULL, NULL, NULL) < 0) {
         return NULL;
     }
 
     /* Set raw attributes on the pty. */
     cfmakeraw(&tty);
     tcsetattr(slave_fd, TCSAFLUSH, &tty);
+    close(slave_fd);
 
-    fprintf(stderr, "char device redirected to %s\n", ptsname(master_fd));
-    return qemu_chr_open_fd(master_fd, master_fd);
+    fprintf(stderr, "char device redirected to %s\n", ptsname(s->fd));
+
+    chr->opaque = s;
+    chr->chr_write = pty_chr_write;
+    chr->chr_update_read_handler = pty_chr_update_read_handler;
+    chr->chr_close = pty_chr_close;
+
+    s->timer = qemu_new_timer(rt_clock, pty_chr_timer, chr);
+
+    return chr;
 }
 
 static void tty_serial_init(int fd, int speed,
@@ -5126,25 +5282,12 @@ static int nic_get_free_idx(void)
     return -1;
 }
 
-int net_client_init(const char *str)
+int net_client_init(const char *device, const char *p)
 {
-    const char *p;
-    char *q;
-    char device[64];
     char buf[1024];
     int vlan_id, ret;
     VLANState *vlan;
 
-    p = str;
-    q = device;
-    while (*p != '\0' && *p != ',') {
-        if ((q - device) < sizeof(device) - 1)
-            *q++ = *p;
-        p++;
-    }
-    *q = '\0';
-    if (*p == ',')
-        p++;
     vlan_id = 0;
     if (get_param_value(buf, sizeof(buf), "vlan", p)) {
         vlan_id = strtol(buf, NULL, 0);
@@ -5297,6 +5440,26 @@ void net_client_uninit(NICInfo *nd)
     nb_nics--;
     nd->used = 0;
     free((void *)nd->model);
+}
+
+static int net_client_parse(const char *str)
+{
+    const char *p;
+    char *q;
+    char device[64];
+
+    p = str;
+    q = device;
+    while (*p != '\0' && *p != ',') {
+        if ((q - device) < sizeof(device) - 1)
+            *q++ = *p;
+        p++;
+    }
+    *q = '\0';
+    if (*p == ',')
+        p++;
+
+    return net_client_init(device, p);
 }
 
 void do_info_network(void)
@@ -5747,7 +5910,7 @@ int drive_init(struct drive_opt *arg, int snapshot,
         bdrv_flags |= BDRV_O_SNAPSHOT;
     if (!cache)
         bdrv_flags |= BDRV_O_DIRECT;
-    if (bdrv_open2(bdrv, file, bdrv_flags, drv) < 0 || qemu_key_check(bdrv, file)) {
+    if (bdrv_open2(bdrv, file, bdrv_flags, drv) < 0) {
         fprintf(stderr, "qemu: could not open disk image %s\n",
                         file);
         return -1;
@@ -5800,11 +5963,12 @@ static int usb_device_add(const char *devname)
         dev = usb_baum_init();
 #endif
     } else if (strstart(devname, "net:", &p)) {
-        int nicidx = strtoul(p, NULL, 0);
+        int nic = nb_nics;
 
-        if (nicidx >= nb_nics || strcmp(nd_table[nicidx].model, "usb"))
+        if (net_client_init("nic", p) < 0)
             return -1;
-        dev = usb_net_init(&nd_table[nicidx]);
+        nd_table[nic].model = "usb";
+        dev = usb_net_init(&nd_table[nic]);
     } else {
         return -1;
     }
@@ -8359,22 +8523,14 @@ int qemu_key_check(BlockDriverState *bs, const char *name)
     return -EPERM;
 }
 
-static BlockDriverState *get_bdrv(int index)
-{
-    if (index > nb_drives)
-        return NULL;
-    return drives_table[index].bdrv;
-}
-
 static void read_passwords(void)
 {
     BlockDriverState *bs;
     int i;
 
-    for(i = 0; i < 6; i++) {
-        bs = get_bdrv(i);
-        if (bs)
-            qemu_key_check(bs, bdrv_get_device_name(bs));
+    for(i = 0; i < nb_drives; i++) {
+        bs = drives_table[i].bdrv;
+        qemu_key_check(bs, bdrv_get_device_name(bs));
     }
 }
 
@@ -8637,6 +8793,7 @@ int main(int argc, char **argv)
     int optind;
     const char *r, *optarg;
     CharDriverState *monitor_hd;
+    int has_monitor;
     const char *monitor_device;
     const char *serial_devices[MAX_SERIAL_PORTS];
     int serial_device_index;
@@ -8869,9 +9026,6 @@ int main(int argc, char **argv)
                 }
                 break;
             case QEMU_OPTION_nographic:
-                serial_devices[0] = "stdio";
-                parallel_devices[0] = "null";
-                monitor_device = "stdio";
                 nographic = 1;
                 break;
 #ifdef CONFIG_CURSES
@@ -9300,6 +9454,15 @@ int main(int argc, char **argv)
         }
     }
 
+    if (nographic) {
+       if (serial_device_index == 0)
+           serial_devices[0] = "stdio";
+       if (parallel_device_index == 0)
+           parallel_devices[0] = "null";
+       if (strncmp(monitor_device, "vc", 2) == 0)
+           monitor_device = "stdio";
+    }
+
 #ifndef _WIN32
     if (daemonize) {
 	pid_t pid;
@@ -9420,16 +9583,14 @@ int main(int argc, char **argv)
     }
 
     for(i = 0;i < nb_net_clients; i++) {
-        if (net_client_init(net_clients[i]) < 0)
+        if (net_client_parse(net_clients[i]) < 0)
             exit(1);
     }
     for(vlan = first_vlan; vlan != NULL; vlan = vlan->next) {
         if (vlan->nb_guest_devs == 0 && vlan->nb_host_devs == 0)
             continue;
-        if (vlan->nb_guest_devs == 0) {
-            fprintf(stderr, "Invalid vlan (%d) with no nics\n", vlan->id);
-            exit(1);
-        }
+        if (vlan->nb_guest_devs == 0)
+            fprintf(stderr, "Warning: vlan %d with no nics\n", vlan->id);
         if (vlan->nb_host_devs == 0)
             fprintf(stderr,
                     "Warning: vlan %d is not connected to host network\n",
@@ -9551,8 +9712,6 @@ int main(int argc, char **argv)
     register_savevm("timer", 0, 2, timer_save, timer_load, NULL);
     register_savevm("ram", 0, 3, ram_save, ram_load, NULL);
 
-    init_ioports();
-
     /* terminal init */
     memset(&display_state, 0, sizeof(display_state));
     if (nographic) {
@@ -9583,6 +9742,8 @@ int main(int argc, char **argv)
     }
 
     /* Maintain compatibility with multiple stdio monitors */
+
+    has_monitor = 0;
     if (!strcmp(monitor_device,"stdio")) {
         for (i = 0; i < MAX_SERIAL_PORTS; i++) {
             const char *devname = serial_devices[i];
@@ -9595,6 +9756,7 @@ int main(int argc, char **argv)
                 break;
             }
         }
+        has_monitor = 1;
     }
     if (monitor_device) {
         monitor_hd = qemu_chr_open(monitor_device);
@@ -9603,6 +9765,7 @@ int main(int argc, char **argv)
             exit(1);
         }
         monitor_init(monitor_hd, !nographic);
+        has_monitor = 1;
     }
 
     for(i = 0; i < MAX_SERIAL_PORTS; i++) {
@@ -9667,6 +9830,12 @@ int main(int argc, char **argv)
         }
     }
 #endif
+
+    read_passwords();
+
+    if (has_monitor)
+        monitor_start_input();
+
     if (loadvm)
         do_loadvm(loadvm);
 
@@ -9682,7 +9851,6 @@ int main(int argc, char **argv)
 
     {
         /* XXX: simplify init */
-        read_passwords();
         if (autostart) {
             vm_start();
         }

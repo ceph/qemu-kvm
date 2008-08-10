@@ -79,8 +79,6 @@ static term_cmd_t info_cmds[];
 static uint8_t term_outbuf[1024];
 static int term_outbuf_index;
 
-static void monitor_start_input(void);
-
 CPUState *mon_cpu = NULL;
 
 void term_flush(void)
@@ -2730,8 +2728,6 @@ void monitor_resume(void)
     monitor_start_input();
 }
 
-static void monitor_start_input(void);
-
 static void monitor_handle_command1(void *opaque, const char *cmdline)
 {
     monitor_handle_command(cmdline);
@@ -2739,7 +2735,7 @@ static void monitor_handle_command1(void *opaque, const char *cmdline)
 	monitor_start_input();
 }
 
-static void monitor_start_input(void)
+void monitor_start_input(void)
 {
     readline_start("(qemu) ", 0, monitor_handle_command1, NULL);
 }
@@ -2780,8 +2776,6 @@ void monitor_init(CharDriverState *hd, int show_banner)
     hide_banner = !show_banner;
 
     qemu_chr_add_handlers(hd, term_can_read, term_read, term_event, NULL);
-
-    readline_start("", 0, monitor_handle_command1, NULL);
 }
 
 /* XXX: use threads ? */
@@ -2800,17 +2794,30 @@ void monitor_readline(const char *prompt, int is_password,
                       char *buf, int buf_size)
 {
     int i;
+    int old_focus[MAX_MON];
 
     if (is_password) {
-        for (i = 0; i < MAX_MON; i++)
-            if (monitor_hd[i] && monitor_hd[i]->focus == 0)
+        for (i = 0; i < MAX_MON; i++) {
+            old_focus[i] = 0;
+            if (monitor_hd[i]) {
+                old_focus[i] = monitor_hd[i]->focus;
+                monitor_hd[i]->focus = 0;
                 qemu_chr_send_event(monitor_hd[i], CHR_EVENT_FOCUS);
+            }
+        }
     }
+
     readline_start(prompt, is_password, monitor_readline_cb, NULL);
     monitor_readline_buf = buf;
     monitor_readline_buf_size = buf_size;
     monitor_readline_started = 1;
     while (monitor_readline_started) {
         main_loop_wait(10);
+    }
+    /* restore original focus */
+    if (is_password) {
+        for (i = 0; i < MAX_MON; i++)
+            if (old_focus[i])
+                monitor_hd[i]->focus = old_focus[i];
     }
 }

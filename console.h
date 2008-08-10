@@ -160,6 +160,7 @@ extern uint8_t _translate_keycode(const int key);
    does not need to include console.h  */
 /* monitor.c */
 void monitor_init(CharDriverState *hd, int show_banner);
+void monitor_start_input(void);
 void monitor_suspend(void);
 void monitor_resume(void);
 void term_puts(const char *str);

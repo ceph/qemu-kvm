@@ -355,6 +355,21 @@ static void onenand_command(struct onenand_s *s, int cmd)
             s->wpstatus = s->blockwp[b] = ONEN_LOCK_UNLOCKED;
         }
         break;
+    case 0x27:	/* Unlock All NAND array blocks */
+        s->intstatus |= ONEN_INT;
+
+        for (b = 0; b < s->blocks; b ++) {
+            if (b >= s->blocks) {
+                s->status |= ONEN_ERR_CMD;
+                break;
+            }
+            if (s->blockwp[b] == ONEN_LOCK_LOCKTIGHTEN)
+                break;
+
+            s->wpstatus = s->blockwp[b] = ONEN_LOCK_UNLOCKED;
+        }
+        break;
+
     case 0x2a:	/* Lock NAND array block(s) */
         s->intstatus |= ONEN_INT;
 
@@ -639,4 +654,11 @@ void *onenand_init(uint32_t id, int regshift, qemu_irq irq)
     onenand_reset(s, 1);
 
     return s;
+}
+
+void *onenand_raw_otp(void *opaque)
+{
+    struct onenand_s *s = (struct onenand_s *) opaque;
+
+    return s->otp;
 }

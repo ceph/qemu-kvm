@@ -24,6 +24,10 @@ endif
 
 LIBS+=$(AIOLIBS)
 
+ifdef CONFIG_SOLARIS
+LIBS+=-lsocket -lnsl -lresolv
+endif
+
 all: $(TOOLS) $(DOCS) recurse-all 
 
 SUBDIR_RULES=$(patsubst %,subdir-%, $(TARGET_DIRS))
@@ -344,6 +348,7 @@ tarbin:
         $(datadir)/pxe-ne2k_pci.bin \
 	$(datadir)/pxe-rtl8139.bin \
         $(datadir)/pxe-pcnet.bin \
+	$(datadir)/pxe-e1000.bin \
 	$(datadir)/extboot.bin \
 	$(docdir)/qemu-doc.html \
 	$(docdir)/qemu-tech.html \

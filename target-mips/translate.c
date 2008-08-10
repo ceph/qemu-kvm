@@ -519,7 +519,6 @@ typedef struct DisasContext {
     struct TranslationBlock *tb;
     target_ulong pc, saved_pc;
     uint32_t opcode;
-    uint32_t fp_status;
     /* Routine used to access memory */
     int mem_idx;
     uint32_t hflags, saved_hflags;
@@ -2808,8 +2807,8 @@ fail:
     tcg_temp_free(t1);
 }
 
-/* CP0 (MMU and control) */
 #ifndef CONFIG_USER_ONLY
+/* CP0 (MMU and control) */
 static inline void gen_mfc0_load32 (TCGv t, target_ulong off)
 {
     TCGv r_tmp = tcg_temp_new(TCG_TYPE_I32);
@@ -8052,12 +8051,13 @@ static void decode_opc (CPUState *env, DisasContext *ctx)
                     tcg_gen_helper_1_0(do_rdhwr_ccres, t0);
                     break;
                 case 29:
-#if defined (CONFIG_USER_ONLY)
-                    tcg_gen_ld_tl(t0, cpu_env, offsetof(CPUState, tls_value));
-                    break;
-#else
-                    /* XXX: Some CPUs implement this in hardware. Not supported yet. */
-#endif
+                    if (env->user_mode_only) {
+                        tcg_gen_ld_tl(t0, cpu_env, offsetof(CPUState, tls_value));
+                        break;
+                    } else {
+                        /* XXX: Some CPUs implement this in hardware.
+                           Not supported yet. */
+                    }
                 default:            /* Invalid */
                     MIPS_INVAL("rdhwr");
                     generate_exception(ctx, EXCP_RI);
@@ -8166,19 +8166,22 @@ static void decode_opc (CPUState *env, DisasContext *ctx)
         case OPC_DMTC0:
 #endif
 #ifndef CONFIG_USER_ONLY
-            gen_cp0(env, ctx, op1, rt, rd);
-#endif
+            if (!env->user_mode_only)
+                gen_cp0(env, ctx, op1, rt, rd);
+#endif /* !CONFIG_USER_ONLY */
             break;
         case OPC_C0_FIRST ... OPC_C0_LAST:
 #ifndef CONFIG_USER_ONLY
-            gen_cp0(env, ctx, MASK_C0(ctx->opcode), rt, rd);
-#endif
+            if (!env->user_mode_only)
+                gen_cp0(env, ctx, MASK_C0(ctx->opcode), rt, rd);
+#endif /* !CONFIG_USER_ONLY */
             break;
         case OPC_MFMC0:
-            op2 = MASK_MFMC0(ctx->opcode);
-            {
+#ifndef CONFIG_USER_ONLY
+            if (!env->user_mode_only) {
                 TCGv t0 = tcg_temp_local_new(TCG_TYPE_TL);
 
+                op2 = MASK_MFMC0(ctx->opcode);
                 switch (op2) {
                 case OPC_DMT:
                     check_insn(env, ctx, ASE_MT);
@@ -8218,6 +8221,7 @@ static void decode_opc (CPUState *env, DisasContext *ctx)
                 gen_store_gpr(t0, rt);
                 tcg_temp_free(t0);
             }
+#endif /* !CONFIG_USER_ONLY */
             break;
         case OPC_RDPGPR:
             check_insn(env, ctx, ISA_MIPS32R2);
@@ -8472,11 +8476,10 @@ gen_intermediate_code_internal (CPUState *env, TranslationBlock *tb,
     /* Restore delay slot state from the tb context.  */
     ctx.hflags = (uint32_t)tb->flags; /* FIXME: maybe use 64 bits here? */
     restore_cpu_state(env, &ctx);
-#if defined(CONFIG_USER_ONLY)
-    ctx.mem_idx = MIPS_HFLAG_UM;
-#else
-    ctx.mem_idx = ctx.hflags & MIPS_HFLAG_KSU;
-#endif
+    if (env->user_mode_only)
+        ctx.mem_idx = MIPS_HFLAG_UM;
+    else
+        ctx.mem_idx = ctx.hflags & MIPS_HFLAG_KSU;
     num_insns = 0;
     max_insns = tb->cflags & CF_COUNT_MASK;
     if (max_insns == 0)
@@ -8605,9 +8608,9 @@ void gen_intermediate_code_pc (CPUState *env, struct TranslationBlock *tb)
     gen_intermediate_code_internal(env, tb, 1);
 }
 
-void fpu_dump_state(CPUState *env, FILE *f,
-                    int (*fpu_fprintf)(FILE *f, const char *fmt, ...),
-                    int flags)
+static void fpu_dump_state(CPUState *env, FILE *f,
+                           int (*fpu_fprintf)(FILE *f, const char *fmt, ...),
+                           int flags)
 {
     int i;
     int is_fpu64 = !!(env->hflags & MIPS_HFLAG_F64);
@@ -8640,29 +8643,16 @@ void fpu_dump_state(CPUState *env, FILE *f,
 #undef printfpr
 }
 
-void dump_fpu (CPUState *env)
-{
-    if (loglevel) {
-        fprintf(logfile,
-                "pc=0x" TARGET_FMT_lx " HI=0x" TARGET_FMT_lx
-                " LO=0x" TARGET_FMT_lx " ds %04x " TARGET_FMT_lx
-                " %04x\n",
-                env->active_tc.PC, env->active_tc.HI[0],
-                env->active_tc.LO[0], env->hflags, env->btarget,
-                env->bcond);
-       fpu_dump_state(env, logfile, fprintf, 0);
-    }
-}
-
 #if defined(TARGET_MIPS64) && defined(MIPS_DEBUG_SIGN_EXTENSIONS)
 /* Debug help: The architecture requires 32bit code to maintain proper
    sign-extended values on 64bit machines.  */
 
 #define SIGN_EXT_P(val) ((((val) & ~0x7fffffff) == 0) || (((val) & ~0x7fffffff) == ~0x7fffffff))
 
-void cpu_mips_check_sign_extensions (CPUState *env, FILE *f,
-                     int (*cpu_fprintf)(FILE *f, const char *fmt, ...),
-                     int flags)
+static void
+cpu_mips_check_sign_extensions (CPUState *env, FILE *f,
+                                int (*cpu_fprintf)(FILE *f, const char *fmt, ...),
+                                int flags)
 {
     int i;
 
@@ -8694,7 +8684,8 @@ void cpu_dump_state (CPUState *env, FILE *f,
     int i;
 
     cpu_fprintf(f, "pc=0x" TARGET_FMT_lx " HI=0x" TARGET_FMT_lx " LO=0x" TARGET_FMT_lx " ds %04x " TARGET_FMT_lx " %d\n",
-                env->active_tc.PC, env->active_tc.HI, env->active_tc.LO, env->hflags, env->btarget, env->bcond);
+                env->active_tc.PC, env->active_tc.HI[0], env->active_tc.LO[0],
+                env->hflags, env->btarget, env->bcond);
     for (i = 0; i < 32; i++) {
         if ((i & 3) == 0)
             cpu_fprintf(f, "GPR%02d:", i);
@@ -8769,42 +8760,42 @@ void cpu_reset (CPUMIPSState *env)
     tlb_flush(env, 1);
 
     /* Minimal init */
-#if !defined(CONFIG_USER_ONLY)
-    if (env->hflags & MIPS_HFLAG_BMASK) {
-        /* If the exception was raised from a delay slot,
-         * come back to the jump.  */
-        env->CP0_ErrorEPC = env->active_tc.PC - 4;
-    } else {
-        env->CP0_ErrorEPC = env->active_tc.PC;
-    }
-    env->active_tc.PC = (int32_t)0xBFC00000;
-    env->CP0_Wired = 0;
-    /* SMP not implemented */
-    env->CP0_EBase = 0x80000000;
-    env->CP0_Status = (1 << CP0St_BEV) | (1 << CP0St_ERL);
-    /* vectored interrupts not implemented, timer on int 7,
-       no performance counters. */
-    env->CP0_IntCtl = 0xe0000000;
-    {
-        int i;
-
-        for (i = 0; i < 7; i++) {
-            env->CP0_WatchLo[i] = 0;
-            env->CP0_WatchHi[i] = 0x80000000;
-        }
-        env->CP0_WatchLo[7] = 0;
-        env->CP0_WatchHi[7] = 0;
-    }
-    /* Count register increments in debug mode, EJTAG version 1 */
-    env->CP0_Debug = (1 << CP0DB_CNT) | (0x1 << CP0DB_VER);
-#endif
-    env->exception_index = EXCP_NONE;
 #if defined(CONFIG_USER_ONLY)
-    env->hflags = MIPS_HFLAG_UM;
     env->user_mode_only = 1;
-#else
-    env->hflags = MIPS_HFLAG_CP0;
 #endif
+    if (env->user_mode_only) {
+        env->hflags = MIPS_HFLAG_UM;
+    } else {
+        if (env->hflags & MIPS_HFLAG_BMASK) {
+            /* If the exception was raised from a delay slot,
+               come back to the jump.  */
+            env->CP0_ErrorEPC = env->active_tc.PC - 4;
+        } else {
+            env->CP0_ErrorEPC = env->active_tc.PC;
+        }
+        env->active_tc.PC = (int32_t)0xBFC00000;
+        env->CP0_Wired = 0;
+        /* SMP not implemented */
+        env->CP0_EBase = 0x80000000;
+        env->CP0_Status = (1 << CP0St_BEV) | (1 << CP0St_ERL);
+        /* vectored interrupts not implemented, timer on int 7,
+           no performance counters. */
+        env->CP0_IntCtl = 0xe0000000;
+        {
+            int i;
+
+            for (i = 0; i < 7; i++) {
+                env->CP0_WatchLo[i] = 0;
+                env->CP0_WatchHi[i] = 0x80000000;
+            }
+            env->CP0_WatchLo[7] = 0;
+            env->CP0_WatchHi[7] = 0;
+        }
+        /* Count register increments in debug mode, EJTAG version 1 */
+        env->CP0_Debug = (1 << CP0DB_CNT) | (0x1 << CP0DB_VER);
+        env->hflags = MIPS_HFLAG_CP0;
+    }
+    env->exception_index = EXCP_NONE;
     cpu_mips_register(env, env->cpu_model);
 }
 

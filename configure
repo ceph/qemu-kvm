@@ -89,7 +89,7 @@ mingw32="no"
 EXESUF=""
 gdbstub="yes"
 slirp="yes"
-vde="no"
+vde="yes"
 fmod_lib=""
 fmod_inc=""
 vnc_tls="yes"
@@ -287,7 +287,7 @@ for opt do
   ;;
   --fmod-inc=*) fmod_inc="$optarg"
   ;;
-  --audio-card-list=*) audio_card_list="$optarg"
+  --audio-card-list=*) audio_card_list=`echo "$optarg" | sed -e 's/,/ /g'`
   ;;
   --audio-drv-list=*) audio_drv_list="$optarg"
   ;;
@@ -297,7 +297,7 @@ for opt do
   ;;
   --disable-slirp) slirp="no"
   ;;
-  --enable-vde) vde="yes"
+  --disable-vde) vde="no"
   ;;
   --disable-kqemu) kqemu="no"
   ;;
@@ -461,7 +461,7 @@ echo "  --fmod-lib               path to FMOD library"
 echo "  --fmod-inc               path to FMOD includes"
 echo "  --enable-uname-release=R Return R for uname -r in usermode emulation"
 echo "  --sparc_cpu=V            Build qemu for Sparc architecture v7, v8, v8plus, v8plusa, v9"
-echo "  --enable-vde             enable support for vde network [$vde]"
+echo "  --disable-vde            disable support for vde network"
 echo "  --disable-cpu-emulation  disables use of qemu cpu emulation code"
 echo "  --disable-libfdt         disables use of libfdt support for device tree"
 echo ""
@@ -665,6 +665,25 @@ if test "$cpu" = "x86_64" \
     hostlongbits="64"
 fi
 
+# ppc specific hostlongbits selection
+if test "$cpu" = "powerpc" ; then
+    cat > $TMPC <<EOF
+int main(void){return sizeof(long);}
+EOF
+
+    if $cc $ARCH_CFLAGS -o $TMPE $TMPC 2> /dev/null; then
+        $TMPE
+        case $? in
+            4) hostlongbits="32";;
+            8) hostlongbits="64";;
+            *) echo "Couldn't determine bits per long value"; exit 1;;
+        esac
+    else
+        echo hostlongbits test failed
+        exit 1
+    fi
+fi
+
 # check gcc options support
 cat > $TMPC <<EOF
 int main(void) {
@@ -762,11 +781,18 @@ fi # -z $sdl
 ##########################################
 # VNC TLS detection
 if test "$vnc_tls" = "yes" ; then
-  `pkg-config gnutls` || vnc_tls="no"
-fi
-if test "$vnc_tls" = "yes" ; then
-  vnc_tls_cflags=`pkg-config --cflags gnutls`
-  vnc_tls_libs=`pkg-config --libs gnutls`
+cat > $TMPC <<EOF
+#include <gnutls/gnutls.h>
+int main(void) { gnutls_session_t s; gnutls_init(&s, GNUTLS_SERVER); return 0; }
+EOF
+    vnc_tls_cflags=`pkg-config --cflags gnutls 2> /dev/null`
+    vnc_tls_libs=`pkg-config --libs gnutls 2> /dev/null`
+    if $cc $ARCH_CFLAGS -o $TMPE ${OS_CFLAGS} $vnc_tls_cflags $TMPC \
+           $vnc_tls_libs 2> /dev/null ; then
+	:
+    else
+	vnc_tls="no"
+    fi
 fi
 
 ##########################################
@@ -779,11 +805,7 @@ EOF
     if $cc $ARCH_CFLAGS -o $TMPE $TMPC 2> /dev/null ; then
         :
     else
-        echo
-        echo "Error: VDE check failed"
-        echo "Make sure to have the VDE libs and headers installed."
-        echo
-        exit 1
+        vde="no"
     fi
 fi
 
@@ -812,6 +834,7 @@ EOF
     fi
 }
 
+audio_drv_list=`echo "$audio_drv_list" | sed -e 's/,/ /g'`
 for drv in $audio_drv_list; do
     case $drv in
     alsa)
@@ -1073,8 +1096,13 @@ case "$cpu" in
     echo "#define HOST_MIPS64 1" >> $config_h
   ;;
   powerpc)
-    echo "ARCH=ppc" >> $config_mak
-    echo "#define HOST_PPC 1" >> $config_h
+  if test "$hostlongbits" = "32"; then
+      echo "ARCH=ppc" >> $config_mak
+      echo "#define HOST_PPC 1" >> $config_h
+  else
+      echo "ARCH=ppc64" >> $config_mak
+      echo "#define HOST_PPC64 1" >> $config_h
+  fi
   ;;
   s390)
     echo "ARCH=s390" >> $config_mak
