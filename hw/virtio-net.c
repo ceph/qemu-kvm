@@ -35,7 +35,7 @@
 #define VIRTIO_NET_F_HOST_ECN	13	/* Host can handle TSO[6] w/ ECN in. */
 #define VIRTIO_NET_F_HOST_UFO	14	/* Host can handle UFO in. */
 
-#define TX_TIMER_INTERVAL 250000 /* 250 us */
+#define TX_TIMER_INTERVAL 150000 /* 150 us */
 
 /* The config defining mac address (6 bytes) */
 struct virtio_net_config
@@ -306,8 +306,8 @@ PCIDevice *virtio_net_init(PCIBus *bus, NICInfo *nd, int devfn)
     n->vdev.update_config = virtio_net_update_config;
     n->vdev.get_features = virtio_net_get_features;
     n->vdev.set_features = virtio_net_set_features;
-    n->rx_vq = virtio_add_queue(&n->vdev, 128, virtio_net_handle_rx);
-    n->tx_vq = virtio_add_queue(&n->vdev, 128, virtio_net_handle_tx);
+    n->rx_vq = virtio_add_queue(&n->vdev, 256, virtio_net_handle_rx);
+    n->tx_vq = virtio_add_queue(&n->vdev, 256, virtio_net_handle_tx);
     memcpy(n->mac, nd->macaddr, 6);
     n->vc = qemu_new_vlan_client(nd->vlan, virtio_net_receive,
                                  virtio_net_can_receive, n);
