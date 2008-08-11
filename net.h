@@ -9,12 +9,15 @@ typedef ssize_t (IOReadvHandler)(void *, const struct iovec *, int);
 
 typedef struct VLANClientState VLANClientState;
 
+typedef void (SetOffload)(VLANClientState *, int, int, int, int);
+
 struct VLANClientState {
     IOReadHandler *fd_read;
     IOReadvHandler *fd_readv;
     /* Packets may still be sent if this returns zero.  It's used to
        rate-limit the slirp code.  */
     IOCanRWHandler *fd_can_read;
+    SetOffload *set_offload;
     void *opaque;
     struct VLANClientState *next;
     struct VLANState *vlan;
@@ -41,6 +44,8 @@ ssize_t qemu_sendv_packet(VLANClientState *vc, const struct iovec *iov,
 void qemu_handler_true(void *opaque);
 
 void do_info_network(void);
+
+int tap_has_vnet_hdr(void *opaque);
 
 int net_client_init(const char *device, const char *opts);
 void net_client_uninit(NICInfo *nd);

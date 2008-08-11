@@ -22,9 +22,18 @@
 #define VIRTIO_ID_NET	1
 
 /* The feature bitmap for virtio net */
-#define VIRTIO_NET_F_NO_CSUM	0
-#define VIRTIO_NET_F_MAC	5
-#define VIRTIO_NET_F_GS0	6
+#define VIRTIO_NET_F_CSUM	0	/* Host handles pkts w/ partial csum */
+#define VIRTIO_NET_F_GUEST_CSUM	1	/* Guest handles pkts w/ partial csum */
+#define VIRTIO_NET_F_MAC	5	/* Host has given MAC address. */
+#define VIRTIO_NET_F_GSO	6	/* Host handles pkts w/ any GSO type */
+#define VIRTIO_NET_F_GUEST_TSO4	7	/* Guest can handle TSOv4 in. */
+#define VIRTIO_NET_F_GUEST_TSO6	8	/* Guest can handle TSOv6 in. */
+#define VIRTIO_NET_F_GUEST_ECN	9	/* Guest can handle TSO[6] w/ ECN in. */
+#define VIRTIO_NET_F_GUEST_UFO	10	/* Guest can handle UFO in. */
+#define VIRTIO_NET_F_HOST_TSO4	11	/* Host can handle TSOv4 in. */
+#define VIRTIO_NET_F_HOST_TSO6	12	/* Host can handle TSOv6 in. */
+#define VIRTIO_NET_F_HOST_ECN	13	/* Host can handle TSO[6] w/ ECN in. */
+#define VIRTIO_NET_F_HOST_UFO	14	/* Host can handle UFO in. */
 
 #define TX_TIMER_INTERVAL 250000 /* 250 us */
 
@@ -42,8 +51,6 @@ struct virtio_net_hdr
     uint8_t flags;
 #define VIRTIO_NET_HDR_GSO_NONE		0	// Not a GSO frame
 #define VIRTIO_NET_HDR_GSO_TCPV4	1	// GSO frame, IPv4 TCP (TSO)
-/* FIXME: Do we need this?  If they said they can handle ECN, do they care? */
-#define VIRTIO_NET_HDR_GSO_TCPV4_ECN	2	// GSO frame, IPv4 TCP w/ ECN
 #define VIRTIO_NET_HDR_GSO_UDP		3	// GSO frame, IPv4 UDP (UFO)
 #define VIRTIO_NET_HDR_GSO_TCPV6	4	// GSO frame, IPv6 TCP
 #define VIRTIO_NET_HDR_GSO_ECN		0x80	// TCP has ECN set
@@ -85,7 +92,38 @@ static void virtio_net_update_config(VirtIODevice *vdev, uint8_t *config)
 
 static uint32_t virtio_net_get_features(VirtIODevice *vdev)
 {
-    return (1 << VIRTIO_NET_F_MAC);
+    VirtIONet *n = to_virtio_net(vdev);
+    VLANClientState *host = n->vc->vlan->first_client;
+    uint32_t features = (1 << VIRTIO_NET_F_MAC);
+
+    if (tap_has_vnet_hdr(host)) {
+	features |= (1 << VIRTIO_NET_F_CSUM);
+	features |= (1 << VIRTIO_NET_F_GUEST_CSUM);
+	features |= (1 << VIRTIO_NET_F_GUEST_TSO4);
+	features |= (1 << VIRTIO_NET_F_GUEST_TSO6);
+	features |= (1 << VIRTIO_NET_F_GUEST_ECN);
+	features |= (1 << VIRTIO_NET_F_HOST_TSO4);
+	features |= (1 << VIRTIO_NET_F_HOST_TSO6);
+	features |= (1 << VIRTIO_NET_F_HOST_ECN);
+	/* Kernel can't actually handle UFO in software currently. */
+    }
+
+    return features;
+}
+
+static void virtio_net_set_features(VirtIODevice *vdev, uint32_t features)
+{
+    VirtIONet *n = to_virtio_net(vdev);
+    VLANClientState *host = n->vc->vlan->first_client;
+
+    if (!tap_has_vnet_hdr(host) || !host->set_offload)
+	return;
+
+    host->set_offload(host,
+		      (features >> VIRTIO_NET_F_GUEST_CSUM) & 1,
+		      (features >> VIRTIO_NET_F_GUEST_TSO4) & 1,
+		      (features >> VIRTIO_NET_F_GUEST_TSO6) & 1,
+		      (features >> VIRTIO_NET_F_GUEST_ECN)  & 1);
 }
 
 /* RX */
@@ -121,6 +159,7 @@ static void virtio_net_receive(void *opaque, const uint8_t *buf, int size)
     VirtQueueElement elem;
     struct virtio_net_hdr *hdr;
     int offset, i;
+    int total;
 
     if (virtqueue_pop(n->rx_vq, &elem) == 0)
 	return;
@@ -134,18 +173,26 @@ static void virtio_net_receive(void *opaque, const uint8_t *buf, int size)
     hdr->flags = 0;
     hdr->gso_type = VIRTIO_NET_HDR_GSO_NONE;
 
-    /* copy in packet.  ugh */
     offset = 0;
+    total = sizeof(*hdr);
+
+    if (tap_has_vnet_hdr(n->vc->vlan->first_client)) {
+	memcpy(hdr, buf, sizeof(*hdr));
+	offset += total;
+    }
+
+    /* copy in packet.  ugh */
     i = 1;
     while (offset < size && i < elem.in_num) {
 	int len = MIN(elem.in_sg[i].iov_len, size - offset);
 	memcpy(elem.in_sg[i].iov_base, buf + offset, len);
 	offset += len;
+	total += len;
 	i++;
     }
 
     /* signal other side */
-    virtqueue_push(n->rx_vq, &elem, sizeof(*hdr) + offset);
+    virtqueue_push(n->rx_vq, &elem, total);
     virtio_notify(&n->vdev, n->rx_vq);
 }
 
@@ -153,23 +200,31 @@ static void virtio_net_receive(void *opaque, const uint8_t *buf, int size)
 static void virtio_net_flush_tx(VirtIONet *n, VirtQueue *vq)
 {
     VirtQueueElement elem;
+    int has_vnet_hdr = tap_has_vnet_hdr(n->vc->vlan->first_client);
 
     if (!(n->vdev.status & VIRTIO_CONFIG_S_DRIVER_OK))
         return;
 
     while (virtqueue_pop(vq, &elem)) {
 	ssize_t len = 0;
+	unsigned int out_num = elem.out_num;
+	struct iovec *out_sg = &elem.out_sg[0];
 
-	if (elem.out_num < 1 ||
-	    elem.out_sg[0].iov_len != sizeof(struct virtio_net_hdr)) {
-		fprintf(stderr, "virtio-net header not in first element\n");
-		exit(1);
+	if (out_num < 1 || out_sg->iov_len != sizeof(struct virtio_net_hdr)) {
+	    fprintf(stderr, "virtio-net header not in first element\n");
+	    exit(1);
 	}
 
-	/* ignore the header for now */
-	len = qemu_sendv_packet(n->vc, &elem.out_sg[1], elem.out_num - 1);
+	/* ignore the header if GSO is not supported */
+	if (!has_vnet_hdr) {
+	    out_num--;
+	    out_sg++;
+	    len += sizeof(struct virtio_net_hdr);
+	}
 
-	virtqueue_push(vq, &elem, sizeof(struct virtio_net_hdr) + len);
+	len += qemu_sendv_packet(n->vc, out_sg, out_num);
+
+	virtqueue_push(vq, &elem, len);
 	virtio_notify(&n->vdev, vq);
     }
 }
@@ -249,6 +304,7 @@ PCIDevice *virtio_net_init(PCIBus *bus, NICInfo *nd, int devfn)
 
     n->vdev.update_config = virtio_net_update_config;
     n->vdev.get_features = virtio_net_get_features;
+    n->vdev.set_features = virtio_net_set_features;
     n->rx_vq = virtio_add_queue(&n->vdev, 128, virtio_net_handle_rx);
     n->tx_vq = virtio_add_queue(&n->vdev, 128, virtio_net_handle_tx);
     memcpy(n->mac, nd->macaddr, 6);

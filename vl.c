@@ -4340,14 +4340,33 @@ void do_info_slirp(void)
 
 #endif /* CONFIG_SLIRP */
 
-#if !defined(_WIN32)
+#ifdef _WIN32
+
+int tap_has_vnet_hdr(void *opaque)
+{
+    return 0;
+}
+
+#else /* !defined(_WIN32) */
+
+#ifndef IFF_VNET_HDR
+#define TAP_BUFSIZE 4096
+#else
+#include <linux/virtio_net.h>
+#define ETH_HLEN 14
+#define ETH_DATA_LEN 1500
+#define MAX_PACKET_LEN (ETH_HLEN + ETH_DATA_LEN)
+#define MAX_SKB_FRAGS ((65536/TARGET_PAGE_SIZE) + 2)
+#define TAP_BUFSIZE (sizeof(struct virtio_net_hdr) + MAX_PACKET_LEN + (MAX_SKB_FRAGS*TARGET_PAGE_SIZE))
+#endif
 
 typedef struct TAPState {
     VLANClientState *vc;
     int fd;
     char down_script[1024];
-    char buf[4096];
+    char buf[TAP_BUFSIZE];
     int size;
+    unsigned int has_vnet_hdr : 1;
 } TAPState;
 
 static void tap_receive(void *opaque, const uint8_t *buf, int size)
@@ -4442,9 +4461,40 @@ static void tap_send(void *opaque)
     } while (s->size > 0);
 }
 
+int tap_has_vnet_hdr(void *opaque)
+{
+    VLANClientState *vc = opaque;
+    TAPState *s = vc->opaque;
+
+    return s ? s->has_vnet_hdr : 0;
+}
+
+#ifdef TUNSETOFFLOAD
+static void tap_set_offload(VLANClientState *vc, int csum, int tso4, int tso6,
+			    int ecn)
+{
+    TAPState *s = vc->opaque;
+    unsigned int offload = 0;
+
+    if (csum) {
+	offload |= TUN_F_CSUM;
+	if (tso4)
+	    offload |= TUN_F_TSO4;
+	if (tso6)
+	    offload |= TUN_F_TSO6;
+	if ((tso4 || tso6) && ecn)
+	    offload |= TUN_F_TSO_ECN;
+    }
+
+    if (ioctl(s->fd, TUNSETOFFLOAD, offload) != 0)
+	fprintf(stderr, "TUNSETOFFLOAD ioctl() failed: %s\n",
+		strerror(errno));
+}
+#endif /* TUNSETOFFLOAD */
+
 /* fd support */
 
-static TAPState *net_tap_fd_init(VLANState *vlan, int fd)
+static TAPState *net_tap_fd_init(VLANState *vlan, int fd, int vnet_hdr)
 {
     TAPState *s;
 
@@ -4452,15 +4502,19 @@ static TAPState *net_tap_fd_init(VLANState *vlan, int fd)
     if (!s)
         return NULL;
     s->fd = fd;
+    s->has_vnet_hdr = vnet_hdr != 0;
     s->vc = qemu_new_vlan_client(vlan, tap_receive, NULL, s);
     s->vc->fd_readv = tap_readv;
+#ifdef TUNSETOFFLOAD
+    s->vc->set_offload = tap_set_offload;
+#endif
     qemu_set_fd_handler2(s->fd, tap_can_send, tap_send, NULL, s);
     snprintf(s->vc->info_str, sizeof(s->vc->info_str), "tap: fd=%d", fd);
     return s;
 }
 
 #if defined (_BSD) || defined (__FreeBSD_kernel__)
-static int tap_open(char *ifname, int ifname_size)
+static int tap_open(char *ifname, int ifname_size, int *vnet_hdr)
 {
     int fd;
     char *dev;
@@ -4602,7 +4656,7 @@ int tap_alloc(char *dev)
     return tap_fd;
 }
 
-static int tap_open(char *ifname, int ifname_size)
+static int tap_open(char *ifname, int ifname_size, int *vnet_hdr)
 {
     char  dev[10]="";
     int fd;
@@ -4615,7 +4669,7 @@ static int tap_open(char *ifname, int ifname_size)
     return fd;
 }
 #else
-static int tap_open(char *ifname, int ifname_size)
+static int tap_open(char *ifname, int ifname_size, int *vnet_hdr)
 {
     struct ifreq ifr;
     int fd, ret;
@@ -4684,13 +4738,15 @@ static int net_tap_init(VLANState *vlan, const char *ifname1,
 {
     TAPState *s;
     int fd;
+    int vnet_hdr;
     char ifname[128];
 
     if (ifname1 != NULL)
         pstrcpy(ifname, sizeof(ifname), ifname1);
     else
         ifname[0] = '\0';
-    TFR(fd = tap_open(ifname, sizeof(ifname)));
+    vnet_hdr = 0;
+    TFR(fd = tap_open(ifname, sizeof(ifname), &vnet_hdr));
     if (fd < 0)
         return -1;
 
@@ -4700,9 +4756,10 @@ static int net_tap_init(VLANState *vlan, const char *ifname1,
 	if (launch_script(setup_script, ifname, fd))
 	    return -1;
     }
-    s = net_tap_fd_init(vlan, fd);
+    s = net_tap_fd_init(vlan, fd, vnet_hdr);
     if (!s)
         return -1;
+
     snprintf(s->vc->info_str, sizeof(s->vc->info_str),
              "tap: ifname=%s setup_script=%s", ifname, setup_script);
     if (down_script && strcmp(down_script, "no"))
@@ -5364,7 +5421,7 @@ int net_client_init(const char *device, const char *p)
             fd = strtol(buf, NULL, 0);
             fcntl(fd, F_SETFL, O_NONBLOCK);
             ret = -1;
-            if (net_tap_fd_init(vlan, fd))
+            if (net_tap_fd_init(vlan, fd, 0))
                 ret = 0;
         } else {
             if (get_param_value(ifname, sizeof(ifname), "ifname", p) <= 0) {
