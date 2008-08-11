@@ -4382,8 +4382,8 @@ static void tap_receive(void *opaque, const uint8_t *buf, int size)
     }
 }
 
-static ssize_t tap_readv(void *opaque, const struct iovec *iov,
-			 int iovcnt)
+static ssize_t tap_receive_iov(void *opaque, const struct iovec *iov,
+			       int iovcnt)
 {
     TAPState *s = opaque;
     ssize_t len;
@@ -4504,7 +4504,7 @@ static TAPState *net_tap_fd_init(VLANState *vlan, int fd, int vnet_hdr)
     s->fd = fd;
     s->has_vnet_hdr = vnet_hdr != 0;
     s->vc = qemu_new_vlan_client(vlan, tap_receive, NULL, s);
-    s->vc->fd_readv = tap_readv;
+    s->vc->fd_readv = tap_receive_iov;
 #ifdef TUNSETOFFLOAD
     s->vc->set_offload = tap_set_offload;
 #endif
