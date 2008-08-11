@@ -1,4 +1,5 @@
-BEGIN { split("INIT_WORK", compat_apis); }
+BEGIN { split("INIT_WORK tsc_khz desc_struct ldttss_desc64 desc_ptr " \
+	      "on_each_cpu" , compat_apis); }
 
 /^int kvm_init\(/ { anon_inodes = 1 }
 
@@ -52,14 +53,7 @@ BEGIN { split("INIT_WORK", compat_apis); }
 
 { sub(/linux\/mm_types\.h/, "linux/mm.h") }
 
-{ sub(/\<tsc_khz\>/, "kvm_tsc_khz") }
-
-{ sub(/\<desc_struct\>/, "kvm_desc_struct") }
-{ sub(/\<ldttss_desc64\>/, "kvm_ldttss_desc64") }
-{ sub(/\<desc_ptr\>/, "kvm_desc_ptr") }
 { sub(/\<__user\>/, " ") }
-
-{ sub(/\<on_each_cpu\>/, "kvm_on_each_cpu") }
 
 /^\t\.name = "kvm"/ { $0 = "\tset_kset_name(\"kvm\")," }
 
