@@ -175,8 +175,7 @@ static void virtio_net_handle_tx(VirtIODevice *vdev, VirtQueue *vq)
 {
     VirtIONet *n = to_virtio_net(vdev);
 
-    if (n->tx_timer_active &&
-	(vq->vring.avail->idx - vq->last_avail_idx) == 64) {
+    if (n->tx_timer_active) {
 	vq->vring.used->flags &= ~VRING_USED_F_NO_NOTIFY;
 	qemu_del_timer(n->tx_timer);
 	n->tx_timer_active = 0;
