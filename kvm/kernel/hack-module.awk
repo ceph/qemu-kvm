@@ -70,6 +70,8 @@ BEGIN { split("INIT_WORK", compat_apis); }
 { sub(/hrtimer_start/, "hrtimer_start_p") }
 { sub(/hrtimer_cancel/, "hrtimer_cancel_p") }
 
+/case KVM_CAP_SYNC_MMU/ { $0 = "#ifdef CONFIG_MMU_NOTIFIER\n" $0 "\n#endif" }
+
 {
     for (i in compat_apis) {
 	ident = compat_apis[i]
