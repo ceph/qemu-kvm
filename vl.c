@@ -4498,7 +4498,9 @@ static void tap_send(void *opaque)
 	sbuf.buf = s->buf;
 	s->size = getmsg(s->fd, NULL, &sbuf, &f) >=0 ? sbuf.len : -1;
 #else
+	kvm_sleep_begin();
 	s->size = read(s->fd, s->buf, sizeof(s->buf));
+	kvm_sleep_end();
 #endif
 
 	if (s->size == -1 && errno == EINTR)
