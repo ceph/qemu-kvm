@@ -4746,6 +4746,19 @@ static int tap_open(char *ifname, int ifname_size, int *vnet_hdr)
     }
     memset(&ifr, 0, sizeof(ifr));
     ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
+
+#if defined(TUNGETFEATURES) && defined(IFF_VNET_HDR)
+    {
+        unsigned int features;
+
+        if (ioctl(fd, TUNGETFEATURES, &features) == 0 &&
+            features & IFF_VNET_HDR) {
+            *vnet_hdr = 1;
+            ifr.ifr_flags |= IFF_VNET_HDR;
+        }
+    }
+#endif
+
     if (ifname[0] != '\0')
         pstrcpy(ifr.ifr_name, IFNAMSIZ, ifname);
     else
