@@ -138,6 +138,7 @@ void virtqueue_push(VirtQueue *vq, const VirtQueueElement *elem,
     /* Make sure buffer is written before we update index. */
     wmb();
     vq->vring.used->idx++;
+    vq->inuse--;
 }
 
 int virtqueue_pop(VirtQueue *vq, VirtQueueElement *elem)
@@ -186,6 +187,8 @@ int virtqueue_pop(VirtQueue *vq, VirtQueueElement *elem)
     } while ((i = virtqueue_next_desc(vq, i)) != vq->vring.num);
 
     elem->index = head;
+
+    vq->inuse++;
 
     return elem->in_num + elem->out_num;
 }
@@ -275,6 +278,7 @@ static uint32_t virtio_ioport_read(void *opaque, uint32_t addr)
     switch (addr) {
     case VIRTIO_PCI_HOST_FEATURES:
 	ret = vdev->get_features(vdev);
+	ret |= (1 << VIRTIO_F_NOTIFY_ON_EMPTY);
 	break;
     case VIRTIO_PCI_GUEST_FEATURES:
 	ret = vdev->features;
@@ -431,7 +435,7 @@ VirtQueue *virtio_add_queue(VirtIODevice *vdev, int queue_size,
 void virtio_notify(VirtIODevice *vdev, VirtQueue *vq)
 {
     /* Always notify when queue is empty */
-    if (vq->vring.avail->idx != vq->last_avail_idx &&
+    if ((vq->inuse || vq->vring.avail->idx != vq->last_avail_idx) &&
 	(vq->vring.avail->flags & VRING_AVAIL_F_NO_INTERRUPT))
 	return;
 

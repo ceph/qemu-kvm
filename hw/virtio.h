@@ -30,6 +30,10 @@
 /* We've given up on this device. */
 #define VIRTIO_CONFIG_S_FAILED		0x80
 
+/* We notify when the ring is completely used, even if the guest is supressing
+ * callbacks */
+#define VIRTIO_F_NOTIFY_ON_EMPTY        24
+
 /* from Linux's linux/virtio_ring.h */
 
 /* This marks a buffer as continuing via the next field. */
@@ -86,6 +90,7 @@ struct VirtQueue
     VRing vring;
     uint32_t pfn;
     uint16_t last_avail_idx;
+    int inuse;
     void (*handle_output)(VirtIODevice *vdev, VirtQueue *vq);
 };
 
