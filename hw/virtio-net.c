@@ -106,9 +106,12 @@ static int virtio_net_can_receive(void *opaque)
 	!(n->vdev.status & VIRTIO_CONFIG_S_DRIVER_OK))
 	return 0;
 
-    if (n->rx_vq->vring.avail->idx == n->rx_vq->last_avail_idx)
+    if (n->rx_vq->vring.avail->idx == n->rx_vq->last_avail_idx) {
+	n->rx_vq->vring.used->flags &= ~VRING_USED_F_NO_NOTIFY;
 	return 0;
+    }
 
+    n->rx_vq->vring.used->flags |= VRING_USED_F_NO_NOTIFY;
     return 1;
 }
 
