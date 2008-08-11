@@ -4369,19 +4369,6 @@ typedef struct TAPState {
     unsigned int has_vnet_hdr : 1;
 } TAPState;
 
-static void tap_receive(void *opaque, const uint8_t *buf, int size)
-{
-    TAPState *s = opaque;
-    int ret;
-    for(;;) {
-        ret = write(s->fd, buf, size);
-        if (ret < 0 && (errno == EINTR || errno == EAGAIN)) {
-        } else {
-            break;
-        }
-    }
-}
-
 static ssize_t tap_receive_iov(void *opaque, const struct iovec *iov,
 			       int iovcnt)
 {
@@ -4393,6 +4380,19 @@ static ssize_t tap_receive_iov(void *opaque, const struct iovec *iov,
     } while (len == -1 && (errno == EINTR || errno == EAGAIN));
 
     return len;
+}
+
+static void tap_receive(void *opaque, const uint8_t *buf, int size)
+{
+    TAPState *s = opaque;
+    int ret;
+    for(;;) {
+        ret = write(s->fd, buf, size);
+        if (ret < 0 && (errno == EINTR || errno == EAGAIN)) {
+        } else {
+            break;
+        }
+    }
 }
 
 static int tap_can_send(void *opaque)
