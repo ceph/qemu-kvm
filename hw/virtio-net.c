@@ -26,7 +26,7 @@
 #define VIRTIO_NET_F_MAC	5
 #define VIRTIO_NET_F_GS0	6
 
-#define TX_TIMER_INTERVAL (1000 / 500)
+#define TX_TIMER_INTERVAL 250000 /* 250 us */
 
 /* The config defining mac address (6 bytes) */
 struct virtio_net_config
