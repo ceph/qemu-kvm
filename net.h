@@ -46,6 +46,7 @@ void qemu_handler_true(void *opaque);
 void do_info_network(void);
 
 int tap_has_vnet_hdr(void *opaque);
+void tap_using_vnet_hdr(void *opaque, int using_vnet_hdr);
 
 int net_client_init(const char *device, const char *opts);
 void net_client_uninit(NICInfo *nd);

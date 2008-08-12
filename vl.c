@@ -4347,6 +4347,10 @@ int tap_has_vnet_hdr(void *opaque)
     return 0;
 }
 
+void tap_using_vnet_hdr(void *opaque, int using_vnet_hdr)
+{
+}
+
 #else /* !defined(_WIN32) */
 
 #ifndef IFF_VNET_HDR
@@ -4367,10 +4371,11 @@ typedef struct TAPState {
     char buf[TAP_BUFSIZE];
     int size;
     unsigned int has_vnet_hdr : 1;
+    unsigned int using_vnet_hdr : 1;
 } TAPState;
 
-static ssize_t tap_receive_iov(void *opaque, const struct iovec *iov,
-			       int iovcnt)
+static ssize_t tap_writev(void *opaque, const struct iovec *iov,
+			  int iovcnt)
 {
     TAPState *s = opaque;
     ssize_t len;
@@ -4382,17 +4387,51 @@ static ssize_t tap_receive_iov(void *opaque, const struct iovec *iov,
     return len;
 }
 
+static ssize_t tap_receive_iov(void *opaque, const struct iovec *iov,
+			       int iovcnt)
+{
+#ifdef IFF_VNET_HDR
+    TAPState *s = opaque;
+
+    if (s->has_vnet_hdr && !s->using_vnet_hdr) {
+	struct iovec *iov_copy;
+	struct virtio_net_hdr hdr = { 0, };
+
+	iov_copy = alloca(sizeof(struct iovec) * (iovcnt + 1));
+
+	iov_copy[0].iov_base = &hdr;
+	iov_copy[0].iov_len  = sizeof(hdr);
+
+	memcpy(&iov_copy[1], iov, sizeof(struct iovec) * iovcnt);
+
+	return tap_writev(opaque, iov_copy, iovcnt + 1);
+    }
+#endif
+
+    return tap_writev(opaque, iov, iovcnt);
+}
+
 static void tap_receive(void *opaque, const uint8_t *buf, int size)
 {
+    struct iovec iov[2];
+    int i = 0;
+
+#ifdef IFF_VNET_HDR
     TAPState *s = opaque;
-    int ret;
-    for(;;) {
-        ret = write(s->fd, buf, size);
-        if (ret < 0 && (errno == EINTR || errno == EAGAIN)) {
-        } else {
-            break;
-        }
+    struct virtio_net_hdr hdr = { 0, };
+
+    if (s->has_vnet_hdr && !s->using_vnet_hdr) {
+	iov[i].iov_base = &hdr;
+	iov[i].iov_len  = sizeof(hdr);
+	i++;
     }
+#endif
+
+    iov[i].iov_base = (char *) buf;
+    iov[i].iov_len  = size;
+    i++;
+
+    tap_writev(opaque, iov, i);
 }
 
 static int tap_can_send(void *opaque)
@@ -4421,6 +4460,21 @@ static int tap_can_send(void *opaque)
     return can_receive;
 }
 
+static int tap_send_packet(TAPState *s)
+{
+    uint8_t *buf = s->buf;
+    int size = s->size;
+
+#ifdef IFF_VNET_HDR
+    if (s->has_vnet_hdr && !s->using_vnet_hdr) {
+	buf += sizeof(struct virtio_net_hdr);
+	size -= sizeof(struct virtio_net_hdr);
+    }
+#endif
+
+    return qemu_send_packet(s->vc, buf, size);
+}
+
 static void tap_send(void *opaque)
 {
     TAPState *s = opaque;
@@ -4430,7 +4484,7 @@ static void tap_send(void *opaque)
 	int err;
 
 	/* If noone can receive the packet, buffer it */
-	err = qemu_send_packet(s->vc, s->buf, s->size);
+	err = tap_send_packet(s);
 	if (err == -EAGAIN)
 	    return;
     }
@@ -4454,7 +4508,7 @@ static void tap_send(void *opaque)
 	    int err;
 
 	    /* If noone can receive the packet, buffer it */
-	    err = qemu_send_packet(s->vc, s->buf, s->size);
+	    err = tap_send_packet(s);
 	    if (err == -EAGAIN)
 		break;
 	}
@@ -4467,6 +4521,17 @@ int tap_has_vnet_hdr(void *opaque)
     TAPState *s = vc->opaque;
 
     return s ? s->has_vnet_hdr : 0;
+}
+
+void tap_using_vnet_hdr(void *opaque, int using_vnet_hdr)
+{
+    VLANClientState *vc = opaque;
+    TAPState *s = vc->opaque;
+
+    if (!s || !s->has_vnet_hdr)
+	return;
+
+    s->using_vnet_hdr = using_vnet_hdr != 0;
 }
 
 #ifdef TUNSETOFFLOAD

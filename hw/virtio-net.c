@@ -97,6 +97,7 @@ static uint32_t virtio_net_get_features(VirtIODevice *vdev)
     uint32_t features = (1 << VIRTIO_NET_F_MAC);
 
     if (tap_has_vnet_hdr(host)) {
+	tap_using_vnet_hdr(host, 1);
 	features |= (1 << VIRTIO_NET_F_CSUM);
 	features |= (1 << VIRTIO_NET_F_GUEST_CSUM);
 	features |= (1 << VIRTIO_NET_F_GUEST_TSO4);
