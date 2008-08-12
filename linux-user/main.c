@@ -33,6 +33,7 @@
 
 static const char *interp_prefix = CONFIG_QEMU_PREFIX;
 const char *qemu_uname_release = CONFIG_UNAME_RELEASE;
+const char *cpu_vendor_string = NULL;
 
 #if defined(__i386__) && !defined(CONFIG_STATIC)
 /* Force usage of an ELF interpreter even if it is an ELF shared
