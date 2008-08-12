@@ -33,7 +33,7 @@ hack-files-ia64 =
 
 hack-files = $(hack-files-$(ARCH_DIR))
 
-all:: header-link
+all:: header-link prerequisite
 #	include header priority 1) $LINUX 2) $KERNELDIR 3) include-compat
 	$(MAKE) -C $(KERNELDIR) M=`pwd` \
 		LINUXINCLUDE="-I`pwd`/include -Iinclude -I`pwd`/include-compat \
@@ -41,7 +41,7 @@ all:: header-link
 		-include `pwd`/$(ARCH_DIR)/external-module-compat.h"
 		"$$@"
 
-sync: header-sync source-sync header-link prerequisite
+sync: header-sync source-sync header-link
 
 header-link:
 	rm -f include/asm

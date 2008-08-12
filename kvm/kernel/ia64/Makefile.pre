@@ -1,6 +1,6 @@
 prerequisite: asm-offsets.h ia64/memset.S ia64/memcpy.S
-	cp -f $(LINUX)/arch/ia64/lib/memcpy.S ia64/memcpy.S
-	cp -f $(LINUX)/arch/ia64/lib/memset.S ia64/memset.S
+	cp -f $(KERNELDIR)/arch/ia64/lib/memcpy.S ia64/memcpy.S
+	cp -f $(KERNELDIR)/arch/ia64/lib/memset.S ia64/memset.S
 	cmp -s asm-offset.h ia64/asm-offset.h || mv -f asm-offsets.* ia64/
 
 asm-offsets.h: asm-offsets.s
@@ -20,4 +20,4 @@ asm-offsets.h: asm-offsets.s
 	  echo "#endif") <$< >$@
 
 asm-offsets.s: ia64/asm-offsets.c
-	gcc -S -D__KERNEL__ -I$(LINUX)/include -I./include ia64/asm-offsets.c
+	gcc -S -D__KERNEL__ -I$(KERNELDIR)/include -I./include ia64/asm-offsets.c
