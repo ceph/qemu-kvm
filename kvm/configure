@@ -8,7 +8,7 @@ objcopy=objcopy
 want_module=1
 qemu_cflags=
 qemu_ldflags=
-qemu_opts=
+qemu_opts=()
 cross_prefix=
 arch=`uname -m`
 target_exec=
@@ -40,9 +40,11 @@ EOF
 while [[ "$1" = -* ]]; do
     opt="$1"; shift
     arg=
+    hasarg=
     if [[ "$opt" = *=* ]]; then
 	arg="${opt#*=}"
 	opt="${opt%%=*}"
+	hasarg=1
     fi
     case "$opt" in
 	--prefix)
@@ -70,7 +72,7 @@ while [[ "$1" = -* ]]; do
 	    usage
 	    ;;
 	*)
-	    qemu_opts="$qemu_opts $opt"
+	    qemu_opts=("${qemu_opts[@]}" "$opt${hasarg:+=$arg}")
 	    ;;
     esac
 done
@@ -114,7 +116,7 @@ fi
     --kernel-path="$libkvm_kerneldir" \
     --prefix="$prefix" \
     ${cross_prefix:+"--cross-prefix=$cross_prefix"} \
-    ${cross_prefix:+"--cpu=$arch"} $qemu_opts
+    ${cross_prefix:+"--cpu=$arch"} "${qemu_opts[@]}"
 ) || usage
 
 
