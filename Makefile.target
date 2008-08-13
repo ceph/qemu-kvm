@@ -747,7 +747,7 @@ firmware.o: firmware.c
 	$(CC) $(HELPER_CFLAGS) $(CPPFLAGS) $(BASE_CFLAGS) -c -o $@ $<
 endif
 
-$(QEMU_PROG): $(OBJS) ../libqemu_common.a libqemu.a
+$(QEMU_PROG): $(OBJS) ../libqemu_common.a libqemu.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS) $(SDL_LIBS) $(COCOA_LIBS) $(CURSES_LIBS) $(BRLAPI_LIBS) $(VDE_LIBS)
 
 endif # !CONFIG_USER_ONLY
