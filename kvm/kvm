@@ -18,6 +18,14 @@ config = ShellConfigParser()
 config.read('config.mak')
 
 external_module = config.get('shell', 'want_module')
+
+arch = config.get('shell', 'arch')
+p = re.compile("^i\d86$")
+if len(p.findall(arch)):
+    arch = 'x86_64'
+if arch != 'x86_64' and arch != 'ia64':
+    raise Exception('unsupported architecture %s' % arch)
+
 privileged = os.getuid() == 0
 
 optparser = optparse.OptionParser()
@@ -153,8 +161,12 @@ def remove_module(module):
                 raise Exception('failed to remove %s module' % (module,))
 
 def insert_module(module):
+    if arch == 'x86_64':
+	archdir = 'x86'
+    elif arch == 'ia64':
+	archdir = 'ia64'
     if os.spawnl(os.P_WAIT, '/sbin/insmod', 'insmod',
-                 'kernel/%s.ko' % (module,)) != 0:
+                 'kernel/' + archdir + '/%s.ko' % (module,)) != 0:
         raise Exception('failed to load kvm module')
 
 def probe_module(module):
@@ -196,8 +208,6 @@ if options.install:
 bootdisk = 'c'
 if options.install:
     bootdisk = 'd'
-
-arch = 'x86_64'
 
 if arch == 'x86_64':
     cmd = 'qemu-system-' + arch
