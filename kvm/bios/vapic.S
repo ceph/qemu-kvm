@@ -11,6 +11,10 @@ vapic_size = 2*4096
 	.popsection
 .endm
 
+.macro reenable_vtpr
+	out %al, $0x7e
+.endm
+
 vapic_base:
 	.ascii "kvm aPiC"
 
@@ -61,6 +65,7 @@ tr_vcpu_signature = 0xdb
 mp_get_tpr_eax:
 	pushf
 	cli
+	reenable_vtpr
 	push %ecx
 
 	str %eax
@@ -135,6 +140,7 @@ mp_set_tpr:
 	push %edx
 	push %ebx
 	cli
+	reenable_vtpr
 
 mp_set_tpr_failed:
 	str %eax
@@ -188,34 +194,42 @@ mp_set_tpr_bad:
 	jmp mp_set_tpr_out
 
 up_get_tpr_eax:
+	reenable_vtpr
 	movzbl vapic, %eax ; fixup
 	ret
 
 up_get_tpr_ebx:
+	reenable_vtpr
 	movzbl vapic, %ebx ; fixup
 	ret
 
 up_get_tpr_ecx:
+	reenable_vtpr
 	movzbl vapic, %ecx ; fixup
 	ret
 
 up_get_tpr_edx:
+	reenable_vtpr
 	movzbl vapic, %edx ; fixup
 	ret
 
 up_get_tpr_esi:
+	reenable_vtpr
 	movzbl vapic, %esi ; fixup
 	ret
 
 up_get_tpr_edi:
+	reenable_vtpr
 	movzbl vapic, %edi ; fixup
 	ret
 
 up_get_tpr_ebp:
+	reenable_vtpr
 	movzbl vapic, %ebp ; fixup
 	ret
 
 up_get_tpr_stack:
+	reenable_vtpr
 	movzbl vapic, %eax ; fixup
 	xchg %eax, 4(%esp)
 	ret
@@ -230,6 +244,7 @@ up_set_tpr:
 	push %eax
 	push %ecx
 	push %ebx
+	reenable_vtpr
 
 up_set_tpr_failed:
 	mov vapic, %eax	; fixup
