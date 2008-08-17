@@ -63,8 +63,11 @@
 #include <arpa/inet.h>
 #ifdef _BSD
 #include <sys/stat.h>
-#ifndef __APPLE__
+#if !defined(__APPLE__) && !defined(__OpenBSD__)
 #include <libutil.h>
+#endif
+#ifdef __OpenBSD__
+#include <net/if.h>
 #endif
 #elif defined (__GLIBC__) && defined (__FreeBSD_kernel__)
 #include <freebsd/stdlib.h>
@@ -2742,6 +2745,37 @@ static int tty_serial_ioctl(CharDriverState *chr, int cmd, void *arg)
             int enable = *(int *)arg;
             if (enable)
                 tcsendbreak(s->fd_in, 1);
+        }
+        break;
+    case CHR_IOCTL_SERIAL_GET_TIOCM:
+        {
+            int sarg = 0;
+            int *targ = (int *)arg;
+            ioctl(s->fd_in, TIOCMGET, &sarg);
+            *targ = 0;
+            if (sarg | TIOCM_CTS)
+                *targ |= CHR_TIOCM_CTS;
+            if (sarg | TIOCM_CAR)
+                *targ |= CHR_TIOCM_CAR;
+            if (sarg | TIOCM_DSR)
+                *targ |= CHR_TIOCM_DSR;
+            if (sarg | TIOCM_RI)
+                *targ |= CHR_TIOCM_RI;
+            if (sarg | TIOCM_DTR)
+                *targ |= CHR_TIOCM_DTR;
+            if (sarg | TIOCM_RTS)
+                *targ |= CHR_TIOCM_RTS;
+        }
+        break;
+    case CHR_IOCTL_SERIAL_SET_TIOCM:
+        {
+            int sarg = *(int *)arg;
+            int targ = 0;
+            if (sarg | CHR_TIOCM_DTR)
+                targ |= TIOCM_DTR;
+            if (sarg | CHR_TIOCM_RTS)
+                targ |= TIOCM_RTS;
+            ioctl(s->fd_in, TIOCMSET, &targ);
         }
         break;
     default:
@@ -9675,9 +9709,8 @@ int main(int argc, char **argv)
     linux_boot = (kernel_filename != NULL);
     net_boot = (boot_devices_bitmap >> ('n' - 'a')) & 0xF;
 
-    /* XXX: this should not be: some embedded targets just have flash */
     if (!linux_boot && net_boot == 0 &&
-        nb_drives_opt == 0)
+        !machine->nodisk_ok && nb_drives_opt == 0)
         help(1);
 
     if (!linux_boot && *kernel_cmdline != '\0') {

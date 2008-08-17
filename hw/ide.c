@@ -1049,7 +1049,7 @@ static void ide_sector_write_dma(IDEState *s)
 static void ide_atapi_cmd_ok(IDEState *s)
 {
     s->error = 0;
-    s->status = READY_STAT;
+    s->status = READY_STAT | SEEK_STAT;
     s->nsector = (s->nsector & ~7) | ATAPI_INT_REASON_IO | ATAPI_INT_REASON_CD;
     ide_set_irq(s);
 }
@@ -1163,7 +1163,7 @@ static void ide_atapi_cmd_reply_end(IDEState *s)
     if (s->packet_transfer_size <= 0) {
         /* end of transfer */
         ide_transfer_stop(s);
-        s->status = READY_STAT;
+        s->status = READY_STAT | SEEK_STAT;
         s->nsector = (s->nsector & ~7) | ATAPI_INT_REASON_IO | ATAPI_INT_REASON_CD;
         ide_set_irq(s);
 #ifdef DEBUG_IDE_ATAPI
@@ -1241,10 +1241,10 @@ static void ide_atapi_cmd_reply(IDEState *s, int size, int max_size)
     s->io_buffer_index = 0;
 
     if (s->atapi_dma) {
-    	s->status = READY_STAT | DRQ_STAT;
+    	s->status = READY_STAT | SEEK_STAT | DRQ_STAT;
 	ide_dma_start(s, ide_atapi_cmd_read_dma_cb);
     } else {
-    	s->status = READY_STAT;
+    	s->status = READY_STAT | SEEK_STAT;
     	ide_atapi_cmd_reply_end(s);
     }
 }
@@ -1259,7 +1259,7 @@ static void ide_atapi_cmd_read_pio(IDEState *s, int lba, int nb_sectors,
     s->io_buffer_index = sector_size;
     s->cd_sector_size = sector_size;
 
-    s->status = READY_STAT;
+    s->status = READY_STAT | SEEK_STAT;
     ide_atapi_cmd_reply_end(s);
 }
 
@@ -1300,7 +1300,7 @@ static void ide_atapi_cmd_read_dma_cb(void *opaque, int ret)
     }
 
     if (s->packet_transfer_size <= 0) {
-        s->status = READY_STAT;
+        s->status = READY_STAT | SEEK_STAT;
         s->nsector = (s->nsector & ~7) | ATAPI_INT_REASON_IO | ATAPI_INT_REASON_CD;
         ide_set_irq(s);
     eot:
@@ -1350,7 +1350,7 @@ static void ide_atapi_cmd_read_dma(IDEState *s, int lba, int nb_sectors,
     s->cd_sector_size = sector_size;
 
     /* XXX: check if BUSY_STAT should be set */
-    s->status = READY_STAT | DRQ_STAT | BUSY_STAT;
+    s->status = READY_STAT | SEEK_STAT | DRQ_STAT | BUSY_STAT;
     ide_dma_start(s, ide_atapi_cmd_read_dma_cb);
 }
 
@@ -2068,14 +2068,14 @@ static void ide_ioport_write(void *opaque, uint32_t addr, uint32_t val)
             if (s->is_cf && s->nsector == 0) {
                 /* Disable Read and Write Multiple */
                 s->mult_sectors = 0;
-                s->status = READY_STAT;
+                s->status = READY_STAT | SEEK_STAT;
             } else if ((s->nsector & 0xff) != 0 &&
                 ((s->nsector & 0xff) > MAX_MULT_SECTORS ||
                  (s->nsector & (s->nsector - 1)) != 0)) {
                 ide_abort_command(s);
             } else {
                 s->mult_sectors = s->nsector & 0xff;
-                s->status = READY_STAT;
+                s->status = READY_STAT | SEEK_STAT;
             }
             ide_set_irq(s);
             break;
@@ -2085,7 +2085,7 @@ static void ide_ioport_write(void *opaque, uint32_t addr, uint32_t val)
         case WIN_VERIFY_ONCE:
             /* do sector number check ? */
 	    ide_cmd_lba48_transform(s, lba48);
-            s->status = READY_STAT;
+            s->status = READY_STAT | SEEK_STAT;
             ide_set_irq(s);
             break;
 	case WIN_READ_EXT:
@@ -2160,13 +2160,13 @@ static void ide_ioport_write(void *opaque, uint32_t addr, uint32_t val)
         case WIN_READ_NATIVE_MAX:
 	    ide_cmd_lba48_transform(s, lba48);
             ide_set_sector(s, s->nb_sectors - 1);
-            s->status = READY_STAT;
+            s->status = READY_STAT | SEEK_STAT;
             ide_set_irq(s);
             break;
         case WIN_CHECKPOWERMODE1:
         case WIN_CHECKPOWERMODE2:
             s->nsector = 0xff; /* device active or idle */
-            s->status = READY_STAT;
+            s->status = READY_STAT | SEEK_STAT;
             ide_set_irq(s);
             break;
         case WIN_SETFEATURES:
@@ -2231,7 +2231,7 @@ static void ide_ioport_write(void *opaque, uint32_t addr, uint32_t val)
         case WIN_FLUSH_CACHE_EXT:
             if (s->bs)
                 bdrv_flush(s->bs);
-	    s->status = READY_STAT;
+	    s->status = READY_STAT | SEEK_STAT;
             ide_set_irq(s);
             break;
         case WIN_STANDBY:
@@ -2260,7 +2260,7 @@ static void ide_ioport_write(void *opaque, uint32_t addr, uint32_t val)
             break;
         case WIN_DIAGNOSE:
             ide_set_signature(s);
-            s->status = READY_STAT;
+            s->status = READY_STAT | SEEK_STAT;
             s->error = 0x01;
             ide_set_irq(s);
             break;
@@ -2277,7 +2277,7 @@ static void ide_ioport_write(void *opaque, uint32_t addr, uint32_t val)
             /* overlapping commands not supported */
             if (s->feature & 0x02)
                 goto abort_cmd;
-            s->status = READY_STAT;
+            s->status = READY_STAT | SEEK_STAT;
             s->atapi_dma = s->feature & 1;
             s->nsector = 1;
             ide_transfer_start(s, s->io_buffer, ATAPI_PACKET_SIZE,
@@ -2288,7 +2288,7 @@ static void ide_ioport_write(void *opaque, uint32_t addr, uint32_t val)
             if (!s->is_cf)
                 goto abort_cmd;
             s->error = 0x09;    /* miscellaneous error */
-            s->status = READY_STAT;
+            s->status = READY_STAT | SEEK_STAT;
             ide_set_irq(s);
             break;
         case CFA_ERASE_SECTORS:
@@ -2300,14 +2300,14 @@ static void ide_ioport_write(void *opaque, uint32_t addr, uint32_t val)
             if (val == CFA_ERASE_SECTORS)
                 s->media_changed = 1;
             s->error = 0x00;
-            s->status = READY_STAT;
+            s->status = READY_STAT | SEEK_STAT;
             ide_set_irq(s);
             break;
         case CFA_TRANSLATE_SECTOR:
             if (!s->is_cf)
                 goto abort_cmd;
             s->error = 0x00;
-            s->status = READY_STAT;
+            s->status = READY_STAT | SEEK_STAT;
             memset(s->io_buffer, 0, 0x200);
             s->io_buffer[0x00] = s->hcyl;			/* Cyl MSB */
             s->io_buffer[0x01] = s->lcyl;			/* Cyl LSB */
@@ -2353,7 +2353,7 @@ static void ide_ioport_write(void *opaque, uint32_t addr, uint32_t val)
             default:
                 goto abort_cmd;
             }
-            s->status = READY_STAT;
+            s->status = READY_STAT | SEEK_STAT;
             ide_set_irq(s);
             break;
         default:
@@ -2567,7 +2567,7 @@ static void ide_reset(IDEState *s)
         s->mult_sectors = MAX_MULT_SECTORS;
     s->cur_drive = s;
     s->select = 0xa0;
-    s->status = READY_STAT;
+    s->status = READY_STAT | SEEK_STAT;
     ide_set_signature(s);
     /* init the transfer handler so that 0xffff is returned on data
        accesses */
@@ -2745,6 +2745,23 @@ static void ide_dma_start(IDEState *s, BlockDriverCompletionFunc *dma_cb)
     }
 }
 
+static void ide_dma_cancel(BMDMAState *bm)
+{
+    if (bm->status & BM_STATUS_DMAING) {
+        bm->status &= ~BM_STATUS_DMAING;
+        /* cancel DMA request */
+        bm->ide_if = NULL;
+        bm->dma_cb = NULL;
+        if (bm->aiocb) {
+#ifdef DEBUG_AIO
+            printf("aio_cancel\n");
+#endif
+            bdrv_aio_cancel(bm->aiocb);
+            bm->aiocb = NULL;
+        }
+    }
+}
+
 static void bmdma_cmd_writeb(void *opaque, uint32_t addr, uint32_t val)
 {
     BMDMAState *bm = opaque;
@@ -2753,19 +2770,7 @@ static void bmdma_cmd_writeb(void *opaque, uint32_t addr, uint32_t val)
 #endif
     if (!(val & BM_CMD_START)) {
         /* XXX: do it better */
-        if (bm->status & BM_STATUS_DMAING) {
-            bm->status &= ~BM_STATUS_DMAING;
-            /* cancel DMA request */
-            bm->ide_if = NULL;
-            bm->dma_cb = NULL;
-            if (bm->aiocb) {
-#ifdef DEBUG_AIO
-                printf("aio_cancel\n");
-#endif
-                bdrv_aio_cancel(bm->aiocb);
-                bm->aiocb = NULL;
-            }
-        }
+        ide_dma_cancel(bm);
         bm->cmd = val & 0x09;
     } else {
         if (!(bm->status & BM_STATUS_DMAING)) {
@@ -3089,9 +3094,14 @@ static int pci_ide_load(QEMUFile* f, void *opaque, int version_id)
     return 0;
 }
 
-static void piix3_reset(PCIIDEState *d)
+static void piix3_reset(void *opaque)
 {
+    PCIIDEState *d = opaque;
     uint8_t *pci_conf = d->dev.config;
+    int i;
+
+    for (i = 0; i < 2; i++)
+        ide_dma_cancel(&d->bmdma[i]);
 
     pci_conf[0x04] = 0x00;
     pci_conf[0x05] = 0x00;
@@ -3126,6 +3136,7 @@ void pci_piix3_ide_init(PCIBus *bus, BlockDriverState **hd_table, int devfn,
     pci_conf[0x0b] = 0x01; // class_base = PCI_mass_storage
     pci_conf[0x0e] = 0x00; // header_type
 
+    qemu_register_reset(piix3_reset, d);
     piix3_reset(d);
 
     pci_register_io_region((PCIDevice *)d, 4, 0x10,
@@ -3168,6 +3179,7 @@ void pci_piix4_ide_init(PCIBus *bus, BlockDriverState **hd_table, int devfn,
     pci_conf[0x0b] = 0x01; // class_base = PCI_mass_storage
     pci_conf[0x0e] = 0x00; // header_type
 
+    qemu_register_reset(piix3_reset, d);
     piix3_reset(d);
 
     pci_register_io_region((PCIDevice *)d, 4, 0x10,
