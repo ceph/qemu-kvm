@@ -289,3 +289,22 @@ struct kvm_desc_ptr {
 #define DEBUGCTLMSR_BTF		(1UL << _DEBUGCTLMSR_BTF)
 
 #endif
+
+#include <asm/asm.h>
+
+#ifndef __ASM_SIZE
+# define ____ASM_FORM(x) " " #x " "
+# ifdef CONFIG_X86_64
+#  define __ASM_SIZE(inst) ____ASM_FORM(inst##q)
+# else
+#  define __ASM_SIZE(inst) ____ASM_FORM(inst##l)
+# endif
+#endif
+
+#ifndef _ASM_PTR
+# ifdef CONFIG_X86_64
+#  define __ASM_PTR ".quad"
+# else
+#  define __ASM_PTR ".long"
+# endif
+#endif
