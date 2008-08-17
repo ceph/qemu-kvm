@@ -40,6 +40,7 @@ _start:
 
   .code16
 smp_ap_boot_code_start:
+  cli
   xor %ax, %ax
   mov %ax, %ds
   xor %eax, %eax
@@ -60,6 +61,7 @@ smp_ap_boot_code_start:
 12:
 
   incw CPU_COUNT_ADDR
+  ljmp $0xe000, $(1f-_start)
 1:
   hlt
   jmp 1b
