@@ -303,8 +303,8 @@ struct kvm_desc_ptr {
 
 #ifndef _ASM_PTR
 # ifdef CONFIG_X86_64
-#  define __ASM_PTR ".quad"
+#  define _ASM_PTR ".quad"
 # else
-#  define __ASM_PTR ".long"
+#  define _ASM_PTR ".long"
 # endif
 #endif
