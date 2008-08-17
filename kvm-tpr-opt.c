@@ -347,8 +347,35 @@ static int tpr_load(QEMUFile *f, void *s, int version_id)
     return 0;
 }
 
+static void vtpr_ioport_write(void *opaque, uint32_t addr, uint32_t val)
+{
+    CPUState *env = cpu_single_env;
+    struct kvm_regs regs;
+    struct kvm_sregs sregs;
+    uint32_t rip, apic;
+
+    kvm_get_regs(kvm_context, env->cpu_index, &regs);
+    rip = regs.rip - 2;
+    write_byte_virt(env, rip, 0x66);
+    write_byte_virt(env, rip + 1, 0x90);
+    if (bios_enabled)
+	return;
+    if (!bios_is_mapped(env, rip))
+	printf("bios not mapped?\n");
+    kvm_get_sregs(kvm_context, env->cpu_index, &sregs);
+    for (addr = 0xfffff000u; addr >= 0x80000000u; addr -= 4096)
+	if (map_addr(&sregs, addr, NULL) == 0xfee00000u) {
+	    real_tpr = addr + 0x80;
+	    break;
+	}
+    bios_enabled = 1;
+    update_vbios_real_tpr();
+    enable_vapic(env);
+}
+
 void kvm_tpr_opt_setup(CPUState *env)
 {
     register_savevm("kvm-tpr-opt", 0, 1, tpr_save, tpr_load, NULL);
+    register_ioport_write(0x7e, 1, 1, vtpr_ioport_write, NULL);
 }
 
