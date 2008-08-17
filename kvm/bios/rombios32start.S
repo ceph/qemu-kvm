@@ -47,6 +47,7 @@ _start:
 
   .code16
 smp_ap_boot_code_start:
+  cli
   xor %ax, %ax
   mov %ax, %ds
   xor %eax, %eax
