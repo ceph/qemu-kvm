@@ -12,6 +12,7 @@
 #include <string.h>
 
 #include "hw/hw.h"
+#include "hw/isa.h"
 #include "sysemu.h"
 #include "qemu-kvm.h"
 #include "cpu.h"
