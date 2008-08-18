@@ -13,7 +13,6 @@
 static PCIDevice *qemu_system_hot_add_nic(const char *opts, int bus_nr)
 {
     int ret;
-    char buf[4096];
     PCIBus *pci_bus;
 
     pci_bus = pci_find_bus (bus_nr);

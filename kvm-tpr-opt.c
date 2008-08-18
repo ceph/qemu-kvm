@@ -353,7 +353,7 @@ static void vtpr_ioport_write(void *opaque, uint32_t addr, uint32_t val)
     CPUState *env = cpu_single_env;
     struct kvm_regs regs;
     struct kvm_sregs sregs;
-    uint32_t rip, apic;
+    uint32_t rip;
 
     kvm_get_regs(kvm_context, env->cpu_index, &regs);
     rip = regs.rip - 2;

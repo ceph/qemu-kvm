@@ -605,8 +605,6 @@ int kvm_main_loop(void)
 
 static int kvm_debug(void *opaque, int vcpu)
 {
-    CPUState *env = cpu_single_env;
-
     kvm_debug_stop_requested = 1;
     vcpu_info[vcpu].stopped = 1;
     return 1;
