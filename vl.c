@@ -4570,6 +4570,22 @@ void tap_using_vnet_hdr(void *opaque, int using_vnet_hdr)
     s->using_vnet_hdr = using_vnet_hdr != 0;
 }
 
+static int tap_probe_vnet_hdr(int fd)
+{
+#if defined(TUNGETIFF) && defined(IFF_VNET_HDR)
+    struct ifreq ifr;
+
+    if (ioctl(fd, TUNGETIFF, &ifr) != 0) {
+	fprintf(stderr, "TUNGETIFF ioctl() failed: %s\n", strerror(errno));
+	return 0;
+    }
+
+    return ifr.ifr_flags & IFF_VNET_HDR;
+#else
+    return 0;
+#endif
+}
+
 #ifdef TUNSETOFFLOAD
 static void tap_set_offload(VLANClientState *vc, int csum, int tso4, int tso6,
 			    int ecn)
@@ -5535,7 +5551,7 @@ int net_client_init(const char *device, const char *p)
             fd = strtol(buf, NULL, 0);
             fcntl(fd, F_SETFL, O_NONBLOCK);
             ret = -1;
-            if (net_tap_fd_init(vlan, fd, 0))
+            if (net_tap_fd_init(vlan, fd, tap_probe_vnet_hdr(fd)))
                 ret = 0;
         } else {
             if (get_param_value(ifname, sizeof(ifname), "ifname", p) <= 0) {
