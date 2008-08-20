@@ -19,7 +19,8 @@ FLATLIBS = test/lib/libcflat.a $(libgcc)
 
 tests-common = $(TEST_DIR)/bootstrap \
 			$(TEST_DIR)/vmexit.flat $(TEST_DIR)/tsc.flat \
-			$(TEST_DIR)/smp.flat  $(TEST_DIR)/port80.flat
+			$(TEST_DIR)/smp.flat  $(TEST_DIR)/port80.flat \
+			$(TEST_DIR)/realmode.flat
 
 test_cases: $(tests-common) $(tests)
 
@@ -48,6 +49,11 @@ $(TEST_DIR)/emulator.flat: $(cstart.o) $(TEST_DIR)/vm.o $(TEST_DIR)/print.o
 $(TEST_DIR)/port80.flat: $(cstart.o) $(TEST_DIR)/port80.o
 
 $(TEST_DIR)/tsc.flat: $(cstart.o) $(TEST_DIR)/tsc.o
+
+$(TEST_DIR)/realmode.flat: $(TEST_DIR)/realmode.o
+	$(CC) -m32 -nostdlib -o $@ -Wl,-T,$(TEST_DIR)/realmode.lds $^
+
+$(TEST_DIR)/realmode.o: CFLAGS += -m32
 
 arch_clean:
 	$(RM) $(TEST_DIR)/bootstrap $(TEST_DIR)/*.o $(TEST_DIR)/*.flat \
