@@ -120,6 +120,17 @@ int regs_equal(const struct regs *r1, const struct regs *r2, int ignore)
 	return 1;
 }
 
+#define MK_INSN(name, str)                         \
+	asm (				           \
+		".pushsection \".text\" \n\t"	   \
+		"insn_" #name ": " str " \n\t"	   \
+		"insn_" #name "_end: \n\t"	   \
+		".popsection \n\t"		   \
+		);				   \
+	extern u8 insn_##name[], insn_##name##_end[]
+
+MK_INSN(mov_r16_imm_1, "mov $1234, %ax");
+
 void start(void)
 {
 	struct regs inregs = { 0 }, outregs;
@@ -128,6 +139,11 @@ void start(void)
 	exec_in_big_real_mode(&inregs, &outregs, 0, 0);
 	if (!regs_equal(&inregs, &outregs, 0))
 		print_serial("null test: FAIL\n");
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_mov_r16_imm_1,
+			      insn_mov_r16_imm_1_end - insn_mov_r16_imm_1);
+	if (!regs_equal(&inregs, &outregs, R_AX) || outregs.eax != 1234)
+		print_serial("mov test: FAIL\n");
 	exit(0);
 }
 
