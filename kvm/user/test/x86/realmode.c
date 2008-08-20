@@ -100,12 +100,34 @@ static void exec_in_big_real_mode(const struct regs *inregs,
 	*outregs = save;
 }
 
+#define R_AX 1
+#define R_BX 2
+#define R_CX 4
+#define R_DX 8
+#define R_SI 16
+#define R_DI 32
+#define R_SP 64
+#define R_BP 128
+
+int regs_equal(const struct regs *r1, const struct regs *r2, int ignore)
+{
+	const u32 *p1 = &r1->eax, *p2 = &r2->eax;  // yuck
+	int i;
+
+	for (i = 0; i < 8; ++i)
+		if (!(ignore & (1 << i)) && p1[i] != p2[i])
+			return 0;
+	return 1;
+}
+
 void start(void)
 {
-	struct regs regs = { 0 };
+	struct regs inregs = { 0 }, outregs;
 
 	print_serial("abc\n");
-	exec_in_big_real_mode(&regs, &regs, 0, 0);
+	exec_in_big_real_mode(&inregs, &outregs, 0, 0);
+	if (!regs_equal(&inregs, &outregs, 0))
+		print_serial("null test: FAIL\n");
 	exit(0);
 }
 
