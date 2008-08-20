@@ -1,6 +1,9 @@
 asm(".code16gcc");
 
+typedef unsigned char u8;
+typedef unsigned short u16;
 typedef unsigned u32;
+typedef unsigned long long u64;
 
 static int strlen(const char *str)
 {
@@ -29,9 +32,46 @@ struct regs {
 	u32 eip, eflags;
 };
 
+static u64 gdt[] = {
+	0,
+	0x00cf9b000000ffffull, // flat 32-bit code segment
+	0x00cf93000000ffffull, // flat 32-bit data segment
+};
+
+static struct {
+	u16 limit;
+	void *base;
+} __attribute__((packed)) gdt_descr = {
+	sizeof(gdt) - 1,
+	gdt,
+};
+
+static void exec_in_big_real_mode(const struct regs *inregs,
+				  struct regs *outregs,
+				  const u8 *insn)
+{
+	unsigned long tmp;
+
+	asm volatile(
+		"lgdtl %[gdt_descr] \n\t"
+		"mov %%cr0, %[tmp] \n\t"
+		"or $1, %[tmp] \n\t"
+		"mov %[tmp], %%cr0 \n\t"
+		"mov %[bigseg], %%gs \n\t"
+		"and $-2, %[tmp] \n\t"
+		"mov %[tmp], %%cr0 \n\t"
+		"xor %[tmp], %[tmp] \n\t"
+		"mov %[tmp], %%gs \n\t"
+		: [tmp]"=&r"(tmp)
+		: [gdt_descr]"m"(gdt_descr), [bigseg]"rm"((short)16)
+		: "cc", "memory"
+		);
+}
+
 void start(void)
 {
 	print_serial("abc\n");
+	exec_in_big_real_mode(0, 0, 0);
 	exit(0);
 }
 
