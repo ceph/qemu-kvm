@@ -48,10 +48,19 @@ static struct {
 
 static void exec_in_big_real_mode(const struct regs *inregs,
 				  struct regs *outregs,
-				  const u8 *insn)
+				  const u8 *insn, int insn_len)
 {
 	unsigned long tmp;
+	static struct regs save;
+	int i;
+	extern u8 test_insn[], test_insn_end[];
 
+	for (i = 0; i < insn_len; ++i)
+		test_insn[i] = insn[i];
+	for (; i < test_insn_end - test_insn; ++i)
+		test_insn[i] = 0x90; // nop
+
+	save = *inregs;
 	asm volatile(
 		"lgdtl %[gdt_descr] \n\t"
 		"mov %%cr0, %[tmp] \n\t"
@@ -60,18 +69,43 @@ static void exec_in_big_real_mode(const struct regs *inregs,
 		"mov %[bigseg], %%gs \n\t"
 		"and $-2, %[tmp] \n\t"
 		"mov %[tmp], %%cr0 \n\t"
+
+		"xchg %%eax, %[save]+0 \n\t"
+		"xchg %%ebx, %[save]+4 \n\t"
+		"xchg %%ecx, %[save]+8 \n\t"
+		"xchg %%edx, %[save]+12 \n\t"
+		"xchg %%esi, %[save]+16 \n\t"
+		"xchg %%edi, %[save]+20 \n\t"
+		"xchg %%esp, %[save]+24 \n\t"
+		"xchg %%ebp, %[save]+28 \n\t"
+
+		"test_insn: . = . + 16\n\t"
+		"test_insn_end: \n\t"
+
+		"xchg %%eax, %[save]+0 \n\t"
+		"xchg %%ebx, %[save]+4 \n\t"
+		"xchg %%ecx, %[save]+8 \n\t"
+		"xchg %%edx, %[save]+12 \n\t"
+		"xchg %%esi, %[save]+16 \n\t"
+		"xchg %%edi, %[save]+20 \n\t"
+		"xchg %%esp, %[save]+24 \n\t"
+		"xchg %%ebp, %[save]+28 \n\t"
+
 		"xor %[tmp], %[tmp] \n\t"
 		"mov %[tmp], %%gs \n\t"
-		: [tmp]"=&r"(tmp)
-		: [gdt_descr]"m"(gdt_descr), [bigseg]"rm"((short)16)
+		: [tmp]"=&r"(tmp), [save]"+m"(save)
+		: [gdt_descr]"m"(gdt_descr), [bigseg]"r"((short)16)
 		: "cc", "memory"
 		);
+	*outregs = save;
 }
 
 void start(void)
 {
+	struct regs regs = { 0 };
+
 	print_serial("abc\n");
-	exec_in_big_real_mode(0, 0, 0);
+	exec_in_big_real_mode(&regs, &regs, 0, 0);
 	exit(0);
 }
 
