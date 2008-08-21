@@ -179,20 +179,6 @@ DefinitionBlock (
 
     Scope (\)
     {
-        /* CMOS memory access */
-        OperationRegion (CMS, SystemIO, 0x70, 0x02)
-        Field (CMS, ByteAcc, NoLock, Preserve)
-        {
-            CMSI,   8,
-            CMSD,   8
-        }
-        Method (CMRD, 1, NotSerialized)
-        {
-            Store (Arg0, CMSI)
-            Store (CMSD, Local0)
-            Return (Local0)
-        }
-
         /* Debug Output */
         OperationRegion (DBG, SystemIO, 0xb044, 0x04)
         Field (DBG, DWordAcc, NoLock, Preserve)
@@ -668,9 +654,7 @@ DefinitionBlock (
                }
             }
 
-            Method (_CRS, 0, NotSerialized)
-            {
-            Name (MEMP, ResourceTemplate ()
+            Name (_CRS, ResourceTemplate ()
             {
                 WordBusNumber (ResourceProducer, MinFixed, MaxFixed, PosDecode,
                     0x0000,             // Address Space Granularity
@@ -708,25 +692,12 @@ DefinitionBlock (
                     ,, , AddressRangeMemory, TypeStatic)
                 DWordMemory (ResourceProducer, PosDecode, MinNotFixed, MaxFixed, NonCacheable, ReadWrite,
                     0x00000000,         // Address Space Granularity
-                    0x00000000,         // Address Range Minimum
+                    0xE0000000,         // Address Range Minimum
                     0xFEBFFFFF,         // Address Range Maximum
                     0x00000000,         // Address Translation Offset
-                    0x00000000,         // Address Length
-                    ,, MEMF, AddressRangeMemory, TypeStatic)
+                    0x1EC00000,         // Address Length
+                    ,, , AddressRangeMemory, TypeStatic)
             })
-                CreateDWordField (MEMP, \_SB.PCI0._CRS.MEMF._MIN, PMIN)
-                CreateDWordField (MEMP, \_SB.PCI0._CRS.MEMF._MAX, PMAX)
-                CreateDWordField (MEMP, \_SB.PCI0._CRS.MEMF._LEN, PLEN)
-                /* compute available RAM */
-                Add(CMRD(0x34), ShiftLeft(CMRD(0x35), 8), Local0)
-                ShiftLeft(Local0, 16, Local0)
-                Add(Local0, 0x1000000, Local0)
-                /* update field of last region */
-                Store(Local0, PMIN)
-                Subtract (PMAX, PMIN, PLEN)
-                Increment (PLEN)
-                Return (MEMP)
-            }
         }
     }
 
