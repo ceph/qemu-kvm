@@ -20,4 +20,4 @@ asm-offsets.h: asm-offsets.s
 	  echo "#endif") <$< >$@
 
 asm-offsets.s: ia64/asm-offsets.c
-	gcc -S -D__KERNEL__ -I$(KERNELDIR)/include -I./include ia64/asm-offsets.c
+	gcc -S -D__KERNEL__ -I$(KERNELDIR)/include -I$(KERNELDIR)/arch/ia64/include -I./include ia64/asm-offsets.c
