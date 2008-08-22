@@ -1053,6 +1053,15 @@ int kvm_pit_in_kernel(kvm_context_t kvm)
 	return kvm->pit_in_kernel;
 }
 
+int kvm_has_sync_mmu(kvm_context_t kvm)
+{
+        int r = 0;
+#ifdef KVM_CAP_SYNC_MMU
+        r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_SYNC_MMU);
+#endif
+        return r;
+}
+
 int kvm_init_coalesced_mmio(kvm_context_t kvm)
 {
 	int r = 0;
