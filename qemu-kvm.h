@@ -45,6 +45,7 @@ void *kvm_cpu_create_phys_mem(target_phys_addr_t start_addr,
 
 void kvm_cpu_destroy_phys_mem(target_phys_addr_t start_addr,
 			      unsigned long size);
+int kvm_setup_guest_memory(void *area, unsigned long size);
 
 int kvm_arch_qemu_create_context(void);
 

@@ -25,6 +25,7 @@ int kvm_pit = 1;
 #include <pthread.h>
 #include <sys/utsname.h>
 #include <sys/syscall.h>
+#include <sys/mman.h>
 
 #define bool _Bool
 #define false 0
@@ -810,6 +811,19 @@ void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
         phys_offset &= ~IO_MEM_ROM;
         memcpy(phys_ram_base + start_addr, phys_ram_base + phys_offset, size);
     }
+}
+
+int kvm_setup_guest_memory(void *area, unsigned long size)
+{
+    int ret = 0;
+
+    if (kvm_enabled() && !kvm_has_sync_mmu(kvm_context))
+        ret = madvise(area, size, MADV_DONTFORK);
+
+    if (ret)
+        perror ("madvise");
+
+    return ret;
 }
 
 int kvm_qemu_check_extension(int ext)

@@ -8932,7 +8932,7 @@ static int gethugepagesize(void)
     return hugepagesize;
 }
 
-void *alloc_mem_area(unsigned long memory, const char *path)
+void *alloc_mem_area(size_t memory, unsigned long *len, const char *path)
 {
     char *filename;
     void *area;
@@ -8971,18 +8971,23 @@ void *alloc_mem_area(unsigned long memory, const char *path)
 	return NULL;
     }
 
+    *len = memory;
     return area;
 }
 
 void *qemu_alloc_physram(unsigned long memory)
 {
     void *area = NULL;
+    unsigned long map_len = memory;
 
     if (mem_path)
-	area = alloc_mem_area(memory, mem_path);
+	area = alloc_mem_area(memory, &map_len, mem_path);
     if (!area)
 	area = qemu_vmalloc(memory);
-
+#ifdef USE_KVM
+    if (kvm_setup_guest_memory(area, map_len))
+        area = NULL;
+#endif
     return area;
 }
 
