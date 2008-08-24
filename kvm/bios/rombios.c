@@ -8079,9 +8079,7 @@ ASM_END
 
     bootdrv = (Bit8u)(status>>8);
     bootseg = read_word(ebda_seg,&EbdaData->cdemu.load_segment);
-    /* Canonicalize bootseg:bootip */
-    bootip = (bootseg & 0x0fff) << 4;
-    bootseg &= 0xf000;
+    bootip = 0;
     break;
 #endif
 
@@ -8099,6 +8097,8 @@ ASM_END
   /* Jump to the boot vector */
 ASM_START
     mov  bp, sp
+    push cs
+    push #int18_handler
     ;; Build an iret stack frame that will take us to the boot vector.
     ;; iret pops ip, then cs, then flags, so push them in the opposite order.
     pushf
