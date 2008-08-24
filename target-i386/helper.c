@@ -1203,6 +1203,8 @@ target_phys_addr_t cpu_get_phys_page_debug(CPUState *env, target_ulong addr)
             page_size = 4096;
             pte = ldq_phys(pte_addr);
         }
+        if (!(pte & PG_PRESENT_MASK))
+            return -1;
     } else {
         uint32_t pde;
 

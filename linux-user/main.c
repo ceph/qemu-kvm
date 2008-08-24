@@ -108,10 +108,12 @@ int cpu_inl(CPUState *env, int addr)
     return 0;
 }
 
+#if defined(TARGET_I386)
 int cpu_get_pic_interrupt(CPUState *env)
 {
     return -1;
 }
+#endif
 
 /* timers for rdtsc */
 
@@ -277,8 +279,8 @@ static void write_dt(void *ptr, unsigned long addr, unsigned long limit,
     e2 = ((addr >> 16) & 0xff) | (addr & 0xff000000) | (limit & 0x000f0000);
     e2 |= flags;
     p = ptr;
-    p[0] = tswapl(e1);
-    p[1] = tswapl(e2);
+    p[0] = tswap32(e1);
+    p[1] = tswap32(e2);
 }
 
 #if TARGET_X86_64
@@ -2152,7 +2154,7 @@ void cpu_loop (CPUState *env)
 }
 #endif /* TARGET_ALPHA */
 
-void usage(void)
+static void usage(void)
 {
     printf("qemu-" TARGET_ARCH " version " QEMU_VERSION ", Copyright (c) 2003-2008 Fabrice Bellard\n"
            "usage: qemu-" TARGET_ARCH " [options] program [arguments...]\n"

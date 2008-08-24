@@ -84,7 +84,7 @@ static int get_dns_addr(struct in_addr *pdns_addr)
 static int get_dns_addr(struct in_addr *pdns_addr)
 {
     char buff[512];
-    char buff2[256];
+    char buff2[257];
     FILE *f;
     int found = 0;
     struct in_addr tmp_addr;
@@ -554,7 +554,7 @@ struct arphdr
 	unsigned char		ar_tip[4];		/* target IP address		*/
 };
 
-void arp_input(const uint8_t *pkt, int pkt_len)
+static void arp_input(const uint8_t *pkt, int pkt_len)
 {
     struct ethhdr *eh = (struct ethhdr *)pkt;
     struct arphdr *ah = (struct arphdr *)(pkt + ETH_HLEN);

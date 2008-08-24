@@ -121,13 +121,17 @@ static void pic_irq_request(void *opaque, int irq, int level)
 {
     CPUState *env = first_cpu;
 
-    if (!level)
-        return;
-
-    while (env) {
-        if (apic_accept_pic_intr(env))
-            apic_local_deliver(env, APIC_LINT0);
-        env = env->next_cpu;
+    if (env->apic_state) {
+        while (env) {
+            if (apic_accept_pic_intr(env))
+                apic_deliver_pic_intr(env, level);
+            env = env->next_cpu;
+        }
+    } else {
+        if (level)
+            cpu_interrupt(env, CPU_INTERRUPT_HARD);
+        else
+            cpu_reset_interrupt(env, CPU_INTERRUPT_HARD);
     }
 }
 
@@ -440,8 +444,8 @@ static void generate_bootsect(uint32_t gpr[8], uint16_t segs[6], uint16_t ip)
     if (hda == -1)
       hda = drive_get_index(IF_IDE, 0, 0);
     if (hda == -1) {
-	fprintf(stderr, "-hda or -drive boot=on must be given when booting "
-		"a Linux kernel\n");
+	fprintf(stderr, "A disk image must be given for 'hda' when booting "
+		"a Linux kernel\n(if you really don't want it, use /dev/zero)\n");
 	exit(1);
     }
 
