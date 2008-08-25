@@ -683,3 +683,32 @@ QEMUMachine ipf_machine = {
     ipf_init_pci,
     VGA_RAM_SIZE + GFW_SIZE,
 };
+
+#define IOAPIC_NUM_PINS 48
+
+static int ioapic_irq_count[IOAPIC_NUM_PINS];
+
+static int ioapic_map_irq(int devfn, int irq_num)
+{
+    int irq, dev;
+    dev = devfn >> 3;
+    irq = ((((dev << 2) + (dev >> 3) + irq_num) & 31) + 16);
+    return irq;
+}
+
+void ioapic_set_irq(void *opaque, int irq_num, int level)
+{
+    int vector;
+
+    PCIDevice *pci_dev = (PCIDevice *)opaque;
+    vector = ioapic_map_irq(pci_dev->devfn, irq_num);
+
+    if (level)
+        ioapic_irq_count[vector] += 1;
+    else
+        ioapic_irq_count[vector] -= 1;
+
+    if (kvm_enabled())
+	if (kvm_set_irq(vector, ioapic_irq_count[vector] == 0))
+	    return;
+}

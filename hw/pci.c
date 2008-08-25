@@ -544,6 +544,11 @@ static void pci_set_irq(void *opaque, int irq_num, int level)
         return;
 
     pci_dev->irq_state[irq_num] = level;
+
+#if defined(TARGET_IA64)
+    ioapic_set_irq(pci_dev, irq_num, level);
+#endif
+
     for (;;) {
         bus = pci_dev->bus;
         irq_num = bus->map_irq(pci_dev, irq_num);
