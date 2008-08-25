@@ -12,6 +12,7 @@ cflatobjs += \
 $(libcflat): LDFLAGS += -nostdlib
 $(libcflat): CFLAGS += -ffreestanding -I test/lib
 
+CFLAGS += -m$(bits)
 
 FLATLIBS = test/lib/libcflat.a $(libgcc)
 %.flat: %.o $(FLATLIBS)
@@ -53,7 +54,7 @@ $(TEST_DIR)/tsc.flat: $(cstart.o) $(TEST_DIR)/tsc.o
 $(TEST_DIR)/realmode.flat: $(TEST_DIR)/realmode.o
 	$(CC) -m32 -nostdlib -o $@ -Wl,-T,$(TEST_DIR)/realmode.lds $^
 
-$(TEST_DIR)/realmode.o: CFLAGS += -m32
+$(TEST_DIR)/realmode.o: bits = 32
 
 arch_clean:
 	$(RM) $(TEST_DIR)/bootstrap $(TEST_DIR)/*.o $(TEST_DIR)/*.flat \
