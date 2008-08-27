@@ -17,7 +17,6 @@
 #include <asm/processor.h>
 #include <linux/hrtimer.h>
 #include <asm/bitops.h>
-#include <asm/msr.h>
 
 /*
  * 2.6.16 does not have GFP_NOWAIT

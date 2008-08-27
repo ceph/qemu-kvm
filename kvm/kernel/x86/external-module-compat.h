@@ -8,6 +8,8 @@
 
 #include "../external-module-compat-comm.h"
 
+#include <asm/msr.h>
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
 
 #ifndef _EFER_SCE

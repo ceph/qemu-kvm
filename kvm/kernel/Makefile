@@ -19,7 +19,7 @@ LINUX = ../linux-2.6
 version = $(shell cd $(LINUX); git describe)
 
 _hack = mv $1 $1.orig && \
-	gawk -v version=$(version) -f hack-module.awk $1.orig \
+	gawk -v version=$(version) -f $(ARCH_DIR)/hack-module.awk $1.orig \
 	    | sed '/\#include/! s/\blapic\b/l_apic/g' > $1 && rm $1.orig
 
 unifdef = mv $1 $1.orig && \
