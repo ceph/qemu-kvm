@@ -38,6 +38,7 @@
 #include "block.h"
 #include "audio/audio.h"
 #include "migration.h"
+#include "balloon.h"
 #include "qemu-kvm.h"
 
 #include <unistd.h>
@@ -534,6 +535,31 @@ void hw_error(const char *fmt, ...)
     }
     va_end(ap);
     abort();
+}
+ 
+/***************/
+/* ballooning */
+
+static QEMUBalloonEvent *qemu_balloon_event;
+void *qemu_balloon_event_opaque;
+
+void qemu_add_balloon_handler(QEMUBalloonEvent *func, void *opaque)
+{
+    qemu_balloon_event = func;
+    qemu_balloon_event_opaque = opaque;
+}
+
+void qemu_balloon(ram_addr_t target)
+{
+    if (qemu_balloon_event)
+	qemu_balloon_event(qemu_balloon_event_opaque, target);
+}
+
+ram_addr_t qemu_balloon_status(void)
+{
+    if (qemu_balloon_event)
+	return qemu_balloon_event(qemu_balloon_event_opaque, 0);
+    return 0;
 }
 
 /***********************************************************/

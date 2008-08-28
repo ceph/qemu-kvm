@@ -35,6 +35,7 @@
 #include "audio/audio.h"
 #include "disas.h"
 #include "migration.h"
+#include "balloon.h"
 #include <dirent.h>
 #include "qemu-timer.h"
 
@@ -1408,6 +1409,23 @@ static void do_inject_nmi(int cpu_index)
 }
 #endif
 
+static void do_balloon(int value)
+{
+    ram_addr_t target = value;
+    qemu_balloon(target << 20);
+}
+
+static void do_info_balloon(void)
+{
+    ram_addr_t actual;
+
+    actual = qemu_balloon_status();
+    if (actual == 0)
+	term_printf("Ballooning not activated in VM\n");
+    else
+	term_printf("balloon: actual=%d\n", (int)(actual >> 20));
+}
+
 static term_cmd_t term_cmds[] = {
     { "help|?", "s?", do_help,
       "[cmd]", "show the help" },
@@ -1503,6 +1521,8 @@ static term_cmd_t term_cmds[] = {
     { "pci_add", "iss", device_hot_add, "bus nic|storage [[vlan=n][,macaddr=addr][,model=type]] [file=file][,if=type][,bus=nr]...", "hot-add PCI device" },
     { "pci_del", "ii", device_hot_remove, "bus slot-number", "hot remove PCI device" },
 #endif
+    { "balloon", "i", do_balloon,
+      "target", "request VM to change it's memory allocation (in MB)" },
     { NULL, NULL, },
 };
 
@@ -1567,6 +1587,8 @@ static term_cmd_t info_cmds[] = {
 #endif
     { "migration", "", do_info_migration,
       "", "show migration information" },
+    { "balloon", "", do_info_balloon,
+      "", "show balloon information" },
     { NULL, NULL, },
 };
 
