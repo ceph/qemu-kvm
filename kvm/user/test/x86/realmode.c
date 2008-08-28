@@ -129,11 +129,44 @@ int regs_equal(const struct regs *r1, const struct regs *r2, int ignore)
 		);				   \
 	extern u8 insn_##name[], insn_##name##_end[]
 
-MK_INSN(mov_r32_imm_1, "mov $1234567890, %eax");
-MK_INSN(mov_r16_imm_1, "mov $1234, %ax");
-MK_INSN(mov_r8_imm_1, "mov $0x12, %ah");
-MK_INSN(mov_r8_imm_2, "mov $0x34, %al");
-MK_INSN(mov_r8_imm_3, "mov $0x12, %ah\n\t" "mov $0x34, %al\n\t");
+void test_mov_imm(const struct regs *inregs, struct regs *outregs)
+{
+	MK_INSN(mov_r32_imm_1, "mov $1234567890, %eax");
+	MK_INSN(mov_r16_imm_1, "mov $1234, %ax");
+	MK_INSN(mov_r8_imm_1, "mov $0x12, %ah");
+	MK_INSN(mov_r8_imm_2, "mov $0x34, %al");
+	MK_INSN(mov_r8_imm_3, "mov $0x12, %ah\n\t" "mov $0x34, %al\n\t");
+
+	exec_in_big_real_mode(inregs, outregs,
+			      insn_mov_r16_imm_1,
+			      insn_mov_r16_imm_1_end - insn_mov_r16_imm_1);
+	if (!regs_equal(inregs, outregs, R_AX) || outregs->eax != 1234)
+		print_serial("mov test 1: FAIL\n");
+
+	/* test mov $imm, %eax */
+	exec_in_big_real_mode(inregs, outregs,
+			      insn_mov_r32_imm_1,
+			      insn_mov_r32_imm_1_end - insn_mov_r32_imm_1);
+	if (!regs_equal(inregs, outregs, R_AX) || outregs->eax != 1234567890)
+		print_serial("mov test 2: FAIL\n");
+
+	/* test mov $imm, %al/%ah */
+	exec_in_big_real_mode(inregs, outregs,
+			      insn_mov_r8_imm_1,
+			      insn_mov_r8_imm_1_end - insn_mov_r8_imm_1);
+	if (!regs_equal(inregs, outregs, R_AX) || outregs->eax != 0x1200)
+		print_serial("mov test 3: FAIL\n");
+	exec_in_big_real_mode(inregs, outregs,
+			      insn_mov_r8_imm_2,
+			      insn_mov_r8_imm_2_end - insn_mov_r8_imm_2);
+	if (!regs_equal(inregs, outregs, R_AX) || outregs->eax != 0x34)
+		print_serial("mov test 4: FAIL\n");
+	exec_in_big_real_mode(inregs, outregs,
+			      insn_mov_r8_imm_3,
+			      insn_mov_r8_imm_3_end - insn_mov_r8_imm_3);
+	if (!regs_equal(inregs, outregs, R_AX) || outregs->eax != 0x1234)
+		print_serial("mov test 5: FAIL\n");
+}
 
 void start(void)
 {
@@ -143,35 +176,7 @@ void start(void)
 	exec_in_big_real_mode(&inregs, &outregs, 0, 0);
 	if (!regs_equal(&inregs, &outregs, 0))
 		print_serial("null test: FAIL\n");
-	exec_in_big_real_mode(&inregs, &outregs,
-			      insn_mov_r16_imm_1,
-			      insn_mov_r16_imm_1_end - insn_mov_r16_imm_1);
-	if (!regs_equal(&inregs, &outregs, R_AX) || outregs.eax != 1234)
-		print_serial("mov test 1: FAIL\n");
-
-	/* test mov $imm, %eax */
-	exec_in_big_real_mode(&inregs, &outregs,
-			      insn_mov_r32_imm_1,
-			      insn_mov_r32_imm_1_end - insn_mov_r32_imm_1);
-	if (!regs_equal(&inregs, &outregs, R_AX) || outregs.eax != 1234567890)
-		print_serial("mov test 2: FAIL\n");
-
-	/* test mov $imm, %al/%ah */
-	exec_in_big_real_mode(&inregs, &outregs,
-			      insn_mov_r8_imm_1,
-			      insn_mov_r8_imm_1_end - insn_mov_r8_imm_1);
-	if (!regs_equal(&inregs, &outregs, R_AX) || outregs.eax != 0x1200)
-		print_serial("mov test 3: FAIL\n");
-	exec_in_big_real_mode(&inregs, &outregs,
-			      insn_mov_r8_imm_2,
-			      insn_mov_r8_imm_2_end - insn_mov_r8_imm_2);
-	if (!regs_equal(&inregs, &outregs, R_AX) || outregs.eax != 0x34)
-		print_serial("mov test 4: FAIL\n");
-	exec_in_big_real_mode(&inregs, &outregs,
-			      insn_mov_r8_imm_3,
-			      insn_mov_r8_imm_3_end - insn_mov_r8_imm_3);
-	if (!regs_equal(&inregs, &outregs, R_AX) || outregs.eax != 0x1234)
-		print_serial("mov test 5: FAIL\n");
+	test_mov_imm(&inregs, &outregs);
 	exit(0);
 }
 
