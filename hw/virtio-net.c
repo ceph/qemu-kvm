@@ -332,7 +332,7 @@ PCIDevice *virtio_net_init(PCIBus *bus, NICInfo *nd, int devfn)
     if (!n)
 	return NULL;
 
-    n->vdev.update_config = virtio_net_update_config;
+    n->vdev.get_config = virtio_net_update_config;
     n->vdev.get_features = virtio_net_get_features;
     n->vdev.set_features = virtio_net_set_features;
     n->rx_vq = virtio_add_queue(&n->vdev, 256, virtio_net_handle_rx);

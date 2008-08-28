@@ -313,6 +313,8 @@ static uint32_t virtio_config_readb(void *opaque, uint32_t addr)
     VirtIODevice *vdev = opaque;
     uint8_t val;
 
+    vdev->get_config(vdev, vdev->config);
+
     addr -= vdev->addr + VIRTIO_PCI_CONFIG;
     if (addr > (vdev->config_len - sizeof(val)))
 	return (uint32_t)-1;
@@ -326,6 +328,8 @@ static uint32_t virtio_config_readw(void *opaque, uint32_t addr)
     VirtIODevice *vdev = opaque;
     uint16_t val;
 
+    vdev->get_config(vdev, vdev->config);
+
     addr -= vdev->addr + VIRTIO_PCI_CONFIG;
     if (addr > (vdev->config_len - sizeof(val)))
 	return (uint32_t)-1;
@@ -338,6 +342,8 @@ static uint32_t virtio_config_readl(void *opaque, uint32_t addr)
 {
     VirtIODevice *vdev = opaque;
     uint32_t val;
+
+    vdev->get_config(vdev, vdev->config);
 
     addr -= vdev->addr + VIRTIO_PCI_CONFIG;
     if (addr > (vdev->config_len - sizeof(val)))
@@ -357,6 +363,9 @@ static void virtio_config_writeb(void *opaque, uint32_t addr, uint32_t data)
 	return;
 
     memcpy(vdev->config + addr, &val, sizeof(val));
+
+    if (vdev->set_config)
+        vdev->set_config(vdev, vdev->config);
 }
 
 static void virtio_config_writew(void *opaque, uint32_t addr, uint32_t data)
@@ -369,6 +378,9 @@ static void virtio_config_writew(void *opaque, uint32_t addr, uint32_t data)
 	return;
 
     memcpy(vdev->config + addr, &val, sizeof(val));
+
+    if (vdev->set_config)
+        vdev->set_config(vdev, vdev->config);
 }
 
 static void virtio_config_writel(void *opaque, uint32_t addr, uint32_t data)
@@ -381,6 +393,9 @@ static void virtio_config_writel(void *opaque, uint32_t addr, uint32_t data)
 	return;
 
     memcpy(vdev->config + addr, &val, sizeof(val));
+
+    if (vdev->set_config)
+        vdev->set_config(vdev, vdev->config);
 }
 
 static void virtio_map(PCIDevice *pci_dev, int region_num,
@@ -409,7 +424,7 @@ static void virtio_map(PCIDevice *pci_dev, int region_num,
 	register_ioport_read(addr + 20, vdev->config_len, 4,
 			     virtio_config_readl, vdev);
 
-	vdev->update_config(vdev, vdev->config);
+	vdev->get_config(vdev, vdev->config);
     }
 }
 
@@ -439,7 +454,13 @@ void virtio_notify(VirtIODevice *vdev, VirtQueue *vq)
 	(vq->vring.avail->flags & VRING_AVAIL_F_NO_INTERRUPT))
 	return;
 
-    vdev->isr = 1;
+    vdev->isr |= 0x01;
+    virtio_update_irq(vdev);
+}
+
+void virtio_notify_config(VirtIODevice *vdev)
+{
+    vdev->isr |= 0x03;
     virtio_update_irq(vdev);
 }
 

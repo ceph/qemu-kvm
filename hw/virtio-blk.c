@@ -286,7 +286,7 @@ void *virtio_blk_init(PCIBus *bus, uint16_t vendor, uint16_t device,
     if (!s)
 	return NULL;
 
-    s->vdev.update_config = virtio_blk_update_config;
+    s->vdev.get_config = virtio_blk_update_config;
     s->vdev.get_features = virtio_blk_get_features;
     s->vdev.reset = virtio_blk_reset;
     s->bs = bs;

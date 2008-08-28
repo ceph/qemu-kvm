@@ -120,7 +120,8 @@ struct VirtIODevice
     void *config;
     uint32_t (*get_features)(VirtIODevice *vdev);
     void (*set_features)(VirtIODevice *vdev, uint32_t val);
-    void (*update_config)(VirtIODevice *vdev, uint8_t *config);
+    void (*get_config)(VirtIODevice *vdev, uint8_t *config);
+    void (*set_config)(VirtIODevice *vdev, const uint8_t *config);
     void (*reset)(VirtIODevice *vdev);
     VirtQueue vq[VIRTIO_PCI_QUEUE_MAX];
 };
@@ -146,5 +147,7 @@ void virtio_notify(VirtIODevice *vdev, VirtQueue *vq);
 void virtio_save(VirtIODevice *vdev, QEMUFile *f);
 
 void virtio_load(VirtIODevice *vdev, QEMUFile *f);
+
+void virtio_notify_config(VirtIODevice *vdev);
 
 #endif
