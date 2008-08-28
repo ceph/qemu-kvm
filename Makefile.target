@@ -601,7 +601,7 @@ OBJS += rtl8139.o
 OBJS += e1000.o
 
 # virtio devices
-OBJS += virtio.o virtio-net.o virtio-blk.o
+OBJS += virtio.o virtio-net.o virtio-blk.o virtio-balloon.o
 
 OBJS += device-hotplug.o
 

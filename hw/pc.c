@@ -1165,6 +1165,9 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
 
 	extboot_init(info->bdrv, 1);
     }
+
+    if (pci_enabled)
+        virtio_balloon_init(pci_bus);
 }
 
 static void pc_init_pci(ram_addr_t ram_size, int vga_ram_size,
