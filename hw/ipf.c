@@ -681,5 +681,5 @@ QEMUMachine ipf_machine = {
     "itanium",
     "Itanium Platform",
     ipf_init_pci,
-    VGA_RAM_SIZE + VGA_RAM_SIZE,
+    VGA_RAM_SIZE + GFW_SIZE,
 };
