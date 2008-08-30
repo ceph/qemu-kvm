@@ -722,6 +722,30 @@ static void pc_init_ne2k_isa(NICInfo *nd, qemu_irq *pic)
     nb_ne2k++;
 }
 
+typedef struct rom_reset_data {
+    uint8_t *data;
+    target_phys_addr_t addr;
+    unsigned size;
+} RomResetData;
+
+static void option_rom_reset(void *_rrd)
+{
+    RomResetData *rrd = _rrd;
+
+    cpu_physical_memory_write_rom(rrd->addr, rrd->data, rrd->size);
+}
+
+static void option_rom_setup_reset(target_phys_addr_t addr, unsigned size)
+{
+    RomResetData *rrd = qemu_malloc(sizeof *rrd);
+
+    rrd->data = qemu_malloc(size);
+    cpu_physical_memory_read(addr, rrd->data, size);
+    rrd->addr = addr;
+    rrd->size = size;
+    qemu_register_reset(option_rom_reset, rrd);
+}
+
 static int load_option_rom(const char *filename, int offset, int type)
 {
     ram_addr_t option_rom_offset;
@@ -744,6 +768,7 @@ static int load_option_rom(const char *filename, int offset, int type)
     size = (size + 4095) & ~4095;
     cpu_register_physical_memory(0xd0000 + offset,
 				 size, option_rom_offset | type);
+    option_rom_setup_reset(0xd0000 + offset, size);
     if (kvm_enabled())
 	    kvm_cpu_register_physical_memory(0xd0000 + offset,
                                              size, option_rom_offset | type);
