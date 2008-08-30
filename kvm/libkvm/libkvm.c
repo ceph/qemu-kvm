@@ -955,6 +955,7 @@ again:
 		case KVM_EXIT_FAIL_ENTRY:
 			fprintf(stderr, "kvm_run: failed entry, reason %u\n", 
 				(unsigned)run->fail_entry.hardware_entry_failure_reason & 0xffff);
+			kvm_show_regs(kvm, vcpu);
 			return -ENOEXEC;
 			break;
 		case KVM_EXIT_EXCEPTION:
