@@ -44,7 +44,7 @@
 typedef struct CPUIA64State {
    CPU_COMMON;
    uint32_t hflags;
-
+   int mp_state;
 } CPUIA64State;
 
 #define CPUState CPUIA64State
