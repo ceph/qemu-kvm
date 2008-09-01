@@ -172,6 +172,45 @@ void test_mov_imm(const struct regs *inregs, struct regs *outregs)
 		print_serial("mov test 5: FAIL\n");
 }
 
+void test_eflags_insn(struct regs *inregs, struct regs *outregs)
+{
+	MK_INSN(clc, "clc");
+	MK_INSN(cli, "cli");
+	MK_INSN(sti, "sti");
+	MK_INSN(cld, "cld");
+	MK_INSN(std, "std");
+
+	exec_in_big_real_mode(inregs, outregs,
+			      insn_clc,
+			      insn_clc_end - insn_clc);
+	if(outregs->eflags & 1)
+		print_serial("clc test: FAIL\n");
+
+	exec_in_big_real_mode(inregs, outregs,
+			      insn_cli,
+			      insn_cli_end - insn_cli);
+	if(outregs->eflags & (1 << 9))
+		print_serial("cli test: FAIL\n");
+
+	exec_in_big_real_mode(inregs, outregs,
+			      insn_sti,
+			      insn_sti_end - insn_sti);
+	if(!(outregs->eflags & (1 << 9)))
+		print_serial("sti test: FAIL\n");
+
+	exec_in_big_real_mode(inregs, outregs,
+			      insn_cld,
+			      insn_cld_end - insn_cld);
+	if(outregs->eflags & (1 << 10))
+		print_serial("cld test: FAIL\n");
+
+	exec_in_big_real_mode(inregs, outregs,
+			      insn_std,
+			      insn_std_end - insn_std);
+	if(!(outregs->eflags & (1 << 10)))
+		print_serial("std test: FAIL\n");
+}
+
 void start(void)
 {
 	struct regs inregs = { 0 }, outregs;
@@ -181,6 +220,7 @@ void start(void)
 	if (!regs_equal(&inregs, &outregs, 0))
 		print_serial("null test: FAIL\n");
 	test_mov_imm(&inregs, &outregs);
+	test_eflags_insn(&inregs, &outregs);
 	exit(0);
 }
 
