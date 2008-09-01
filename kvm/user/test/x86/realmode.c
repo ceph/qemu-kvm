@@ -91,6 +91,10 @@ static void exec_in_big_real_mode(const struct regs *inregs,
 		"xchg %%esp, %[save]+24 \n\t"
 		"xchg %%ebp, %[save]+28 \n\t"
 
+		/* Save EFLAGS in outregs*/
+		"pushfl \n\t"
+		"popl %[save]+36 \n\t"
+
 		"xor %[tmp], %[tmp] \n\t"
 		"mov %[tmp], %%gs \n\t"
 		: [tmp]"=&r"(tmp), [save]"+m"(save)
