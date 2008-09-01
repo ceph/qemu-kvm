@@ -500,6 +500,12 @@ i2c_bus *piix4_pm_init(PCIBus *bus, int devfn, uint32_t smb_io_base,
 
     pci_conf[0x40] = 0x01; /* PM io base read only bit */
 
+#if defined(TARGET_IA64)
+    pci_conf[0x40] = 0x41; /* PM io base read only bit */
+    pci_conf[0x41] = 0x1f;
+    pm_write_config(s, 0x80, 0x01, 1); /*Set default pm_io_base 0x1f40*/
+#endif
+
     register_ioport_write(0xb2, 2, 1, pm_smi_writeb, s);
     register_ioport_read(0xb2, 2, 1, pm_smi_readb, s);
 
