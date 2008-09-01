@@ -817,8 +817,10 @@ int kvm_setup_guest_memory(void *area, unsigned long size)
 {
     int ret = 0;
 
+#ifdef MADV_DONTFORK
     if (kvm_enabled() && !kvm_has_sync_mmu(kvm_context))
         ret = madvise(area, size, MADV_DONTFORK);
+#endif
 
     if (ret)
         perror ("madvise");
