@@ -22,9 +22,6 @@
 
 #include "cpu.h"
 #include "exec-all.h"
-uint32_t T0;
-uint32_t T1;
-uint32_t T2;
 
 #define tcg_qemu_tb_exec(tb_ptr) 0
 
@@ -36,8 +33,7 @@ static inline void regs_to_env(void)
 {
 }
 
-void tcg_dump_info(FILE *f,
-                   int (*cpu_fprintf)(FILE *f, const char *fmt, ...));
+void do_interrupt (CPUState *env);
 
 void cpu_lock(void);
 void cpu_unlock(void);

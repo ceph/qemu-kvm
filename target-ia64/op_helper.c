@@ -27,7 +27,7 @@
 #include "qemu-kvm.h"
 #include "qemu-common.h"
 
-CPUState *cpu_ia64_init(char *cpu_model){
+CPUState *cpu_ia64_init(const char *cpu_model){
     CPUState *env;
     env = qemu_mallocz(sizeof(CPUState));
     if (!env)

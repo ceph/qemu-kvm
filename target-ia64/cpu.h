@@ -42,9 +42,9 @@
 
 #include "softfloat.h"
 typedef struct CPUIA64State {
-   CPU_COMMON;
-   uint32_t hflags;
-   int mp_state;
+    CPU_COMMON;
+    uint32_t hflags;
+    int mp_state;
 } CPUIA64State;
 
 #define CPUState CPUIA64State
@@ -58,13 +58,23 @@ int cpu_exec(CPUState *env1);
 void cpu_dump_state(CPUState *env, FILE *f,
                     int (*cpu_fprintf)(FILE *f, const char *fmt, ...),
                     int flags);
+CPUState *cpu_ia64_init(const char * cpu_model);
 
-CPUState *cpu_ia64_init(char * cpu_model);
 static inline int cpu_mmu_index (CPUState *env)
 {
 	return 0;
 }
 
+#define CPU_PC_FROM_TB(env, tb) do{}while(0)
+
 #include "cpu-all.h"
+
+/*
+ * These ones really should go to the appropriate tcg header file, if/when
+ * tcg support is added for ia64.
+ */
+void flush_icache_range(unsigned long start, unsigned long stop);
+void tcg_dump_info(FILE *f,
+                   int (*cpu_fprintf)(FILE *f, const char *fmt, ...));
 
 #endif
