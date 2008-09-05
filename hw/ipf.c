@@ -1,5 +1,5 @@
 /*
- * Itanium Platforma Emulator derived from QEMU PC System Emulator
+ * Itanium Platform Emulator derived from QEMU PC System Emulator
  *
  * Copyright (c) 2003-2004 Fabrice Bellard
  *
@@ -456,9 +456,9 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
 		int r;
 		unsigned long  image_size;
 		char *image = NULL;
-		char *fw_image_start;
+		uint8_t *fw_image_start;
 		ram_addr_t fw_offset = qemu_ram_alloc(GFW_SIZE);
-		char *fw_start = phys_ram_base + fw_offset;
+		uint8_t *fw_start = phys_ram_base + fw_offset;
 
 		snprintf(buf, sizeof(buf), "%s/%s", bios_dir, FW_FILENAME);
 		image = read_image(buf, &image_size );
