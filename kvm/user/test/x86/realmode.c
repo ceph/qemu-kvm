@@ -183,31 +183,31 @@ void test_eflags_insn(struct regs *inregs, struct regs *outregs)
 	exec_in_big_real_mode(inregs, outregs,
 			      insn_clc,
 			      insn_clc_end - insn_clc);
-	if(outregs->eflags & 1)
+	if (outregs->eflags & 1)
 		print_serial("clc test: FAIL\n");
 
 	exec_in_big_real_mode(inregs, outregs,
 			      insn_cli,
 			      insn_cli_end - insn_cli);
-	if(outregs->eflags & (1 << 9))
+	if (outregs->eflags & (1 << 9))
 		print_serial("cli test: FAIL\n");
 
 	exec_in_big_real_mode(inregs, outregs,
 			      insn_sti,
 			      insn_sti_end - insn_sti);
-	if(!(outregs->eflags & (1 << 9)))
+	if (!(outregs->eflags & (1 << 9)))
 		print_serial("sti test: FAIL\n");
 
 	exec_in_big_real_mode(inregs, outregs,
 			      insn_cld,
 			      insn_cld_end - insn_cld);
-	if(outregs->eflags & (1 << 10))
+	if (outregs->eflags & (1 << 10))
 		print_serial("cld test: FAIL\n");
 
 	exec_in_big_real_mode(inregs, outregs,
 			      insn_std,
 			      insn_std_end - insn_std);
-	if(!(outregs->eflags & (1 << 10)))
+	if (!(outregs->eflags & (1 << 10)))
 		print_serial("std test: FAIL\n");
 }
 
