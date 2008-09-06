@@ -211,6 +211,74 @@ void test_eflags_insn(struct regs *inregs, struct regs *outregs)
 		print_serial("std test: FAIL\n");
 }
 
+void test_io(struct regs *inregs, struct regs *outregs)
+{
+	MK_INSN(io_test1, "mov $0xff, %al \n\t"
+		          "out %al, $0x10 \n\t"
+			  "in $0x10, %al \n\t");
+	MK_INSN(io_test2, "mov $0xffff, %ax \n\t"
+			  "out %ax, $0x10 \n\t"
+			  "in $0x10, %ax \n\t");
+	MK_INSN(io_test3, "mov $0xffffffff, %eax \n\t"
+			  "out %eax, $0x10 \n\t"
+			  "in $0x10, %eax \n\t");
+	MK_INSN(io_test4, "mov $0x10, %dx \n\t"
+			  "mov $0xff, %al \n\t"
+			  "out %al, %dx \n\t"
+			  "in %dx, %al \n\t");
+	MK_INSN(io_test5, "mov $0x10, %dx \n\t"
+			  "mov $0xffff, %ax \n\t"
+			  "out %ax, %dx \n\t"
+			  "in %dx, %ax \n\t");
+	MK_INSN(io_test6, "mov $0x10, %dx \n\t"
+			  "mov $0xffffffff, %eax \n\t"
+			  "out %eax, %dx \n\t"
+			  "in %dx, %eax \n\t");
+
+	exec_in_big_real_mode(inregs, outregs,
+			      insn_io_test1,
+			      insn_io_test1_end - insn_io_test1);
+
+	if (!regs_equal(inregs, outregs, R_AX) || outregs->eax != 0xff)
+		print_serial("I/O test 1: FAIL\n");
+
+	exec_in_big_real_mode(inregs, outregs,
+			      insn_io_test2,
+			      insn_io_test2_end - insn_io_test2);
+
+	if (!regs_equal(inregs, outregs, R_AX) || outregs->eax != 0xffff)
+		print_serial("I/O test 2: FAIL\n");
+
+	exec_in_big_real_mode(inregs, outregs,
+			      insn_io_test3,
+			      insn_io_test3_end - insn_io_test3);
+
+	if (!regs_equal(inregs, outregs, R_AX) || outregs->eax != 0xffffffff)
+		print_serial("I/O test 3: FAIL\n");
+
+	exec_in_big_real_mode(inregs, outregs,
+			      insn_io_test4,
+			      insn_io_test4_end - insn_io_test4);
+
+	if (!regs_equal(inregs, outregs, R_AX|R_DX) || outregs->eax != 0xff)
+		print_serial("I/O test 4: FAIL\n");
+
+	exec_in_big_real_mode(inregs, outregs,
+			      insn_io_test5,
+			      insn_io_test5_end - insn_io_test5);
+
+	if (!regs_equal(inregs, outregs, R_AX|R_DX) || outregs->eax != 0xffff)
+		print_serial("I/O test 5: FAIL\n");
+
+	exec_in_big_real_mode(inregs, outregs,
+			      insn_io_test6,
+			      insn_io_test6_end - insn_io_test6);
+
+	if (!regs_equal(inregs, outregs, R_AX|R_DX) || outregs->eax != 0xffffffff)
+		print_serial("I/O test 6: FAIL\n");
+
+}
+
 void start(void)
 {
 	struct regs inregs = { 0 }, outregs;
@@ -220,6 +288,7 @@ void start(void)
 	if (!regs_equal(&inregs, &outregs, 0))
 		print_serial("null test: FAIL\n");
 	test_mov_imm(&inregs, &outregs);
+	test_io(&inregs, &outregs);
 	test_eflags_insn(&inregs, &outregs);
 	exit(0);
 }
