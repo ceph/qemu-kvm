@@ -225,15 +225,11 @@ static int bios_is_mapped(CPUState *env, uint64_t rip)
 static int enable_vapic(CPUState *env)
 {
     struct kvm_sregs sregs;
-
-    if (smp_cpus > 1) {/* uniprocessor doesn't need cpu id */
-	kvm_get_sregs(kvm_context, env->cpu_index, &sregs);
-	sregs.tr.selector = 0xdb + (env->cpu_index << 8);
-	kvm_set_sregs(kvm_context, env->cpu_index, &sregs);
-    }
+    static uint8_t one = 1;
 
     kvm_enable_vapic(kvm_context, env->cpu_index,
 		     vapic_phys + (env->cpu_index << 7));
+    cpu_physical_memory_rw(vapic_phys + (env->cpu_index << 7) + 4, &one, 1, 1);
     bios_enabled = 1;
 
     return 1;
