@@ -58,7 +58,7 @@ real_tpr:
 
 kvm_hypercall_vapic_poll_irq = 1
 
-tr_vcpu_signature = 0xdb
+pcr_cpu = 0x51
 
 .align 64
 
@@ -68,13 +68,12 @@ mp_get_tpr_eax:
 	reenable_vtpr
 	push %ecx
 
-	str %eax
-	cmp $tr_vcpu_signature, %al
-	jne mp_get_tpr_bad
-	movzbl %ah, %eax
+	fs/movzbl pcr_cpu, %eax
 
 	mov vcpu_shift, %ecx	; fixup
 	shl %cl, %eax
+	testb $1, vapic+4(%eax)	; fixup delta=-5
+	jz mp_get_tpr_bad
 	movzbl vapic(%eax), %eax ; fixup
 
 mp_get_tpr_out:
@@ -143,13 +142,13 @@ mp_set_tpr:
 	reenable_vtpr
 
 mp_set_tpr_failed:
-	str %eax
-	cmp $tr_vcpu_signature, %al
-	jne mp_set_tpr_bad
-	movzbl %ah, %edx
+	fs/movzbl pcr_cpu, %edx
 
 	mov vcpu_shift, %ecx	; fixup
 	shl %cl, %edx
+
+	testb $1, vapic+4(%edx)	; fixup delta=-5
+	jz mp_set_tpr_bad
 
 	mov vapic(%edx), %eax	; fixup
 
