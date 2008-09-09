@@ -5,6 +5,14 @@ typedef unsigned short u16;
 typedef unsigned u32;
 typedef unsigned long long u64;
 
+void test_function(void);
+
+asm(
+	"test_function: \n\t"
+	"mov $0x1234, %eax \n\t"
+	"ret"
+   );
+
 static int strlen(const char *str)
 {
 	int n;
@@ -279,6 +287,18 @@ void test_io(struct regs *inregs, struct regs *outregs)
 
 }
 
+void test_call(struct regs *inregs, struct regs *outregs)
+{
+	MK_INSN(call1, "mov $test_function, %eax \n\t"
+		       "call *%eax\n\t");
+
+	exec_in_big_real_mode(inregs, outregs,
+			      insn_call1,
+			      insn_call1_end - insn_call1);
+	if(!regs_equal(inregs, outregs, R_AX) || outregs->eax != 0x1234)
+		print_serial("Call Test 1: FAIL\n");
+}
+
 void start(void)
 {
 	struct regs inregs = { 0 }, outregs;
@@ -287,6 +307,7 @@ void start(void)
 	exec_in_big_real_mode(&inregs, &outregs, 0, 0);
 	if (!regs_equal(&inregs, &outregs, 0))
 		print_serial("null test: FAIL\n");
+	test_call(&inregs, &outregs);
 	test_mov_imm(&inregs, &outregs);
 	test_io(&inregs, &outregs);
 	test_eflags_insn(&inregs, &outregs);
