@@ -241,9 +241,9 @@ static void virtio_blk_update_config(VirtIODevice *vdev, uint8_t *config)
 
     bdrv_get_geometry(s->bs, &capacity);
     bdrv_get_geometry_hint(s->bs, &cylinders, &heads, &secs);
-    blkcfg.capacity = cpu_to_le64(capacity);
-    blkcfg.seg_max = cpu_to_le32(128 - 2);
-    blkcfg.cylinders = cpu_to_le16(cylinders);
+    stq_raw(&blkcfg.capacity, capacity);
+    stl_raw(&blkcfg.seg_max, 128 - 2);
+    stw_raw(&blkcfg.cylinders, cylinders);
     blkcfg.heads = heads;
     blkcfg.sectors = secs;
     memcpy(config, &blkcfg, sizeof(blkcfg));
