@@ -43,13 +43,6 @@ int handle_dcr(struct kvm_run *run,  kvm_context_t kvm, int vcpu)
 	return ret;
 }
 
-int kvm_alloc_kernel_memory(kvm_context_t kvm, unsigned long memory,
-				void **vm_mem)
-{
-	fprintf(stderr, "%s: Operation not supported\n", __FUNCTION__);
-	return -1;
-}
-
 void *kvm_create_kernel_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 				 unsigned long len, int log, int writable)
 {
@@ -99,13 +92,6 @@ int kvm_arch_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
 	if (r < 0)
 		return r;
 
-	return 0;
-}
-
-int kvm_arch_create_default_phys_mem(kvm_context_t kvm,
-					unsigned long phys_mem_bytes,
-					void **vm_mem)
-{
 	return 0;
 }
 

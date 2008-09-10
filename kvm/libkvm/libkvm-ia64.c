@@ -33,31 +33,6 @@
 #include <fcntl.h>
 #include <stdlib.h>
 
-int kvm_arch_create_default_phys_mem(kvm_context_t kvm,
-				       unsigned long phys_mem_bytes,
-				       void **vm_mem)
-{
-	int zfd;
-
-	zfd = open("/dev/zero", O_RDONLY);
-	if (zfd == -1) {
-		perror("open /dev/zero");
-		return -1;
-	}
-        mmap(*vm_mem + 0xa8000, 0x8000, PROT_READ|PROT_WRITE,
-             MAP_PRIVATE|MAP_FIXED, zfd, 0);
-        close(zfd);
-
-	return 0;
-}
-
-
-int kvm_alloc_kernel_memory(kvm_context_t kvm, unsigned long memory,
-				void **vm_mem)
-{
-	return 0;
-}
-
 void *kvm_create_kernel_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 			unsigned long len, int log, int writable)
 {

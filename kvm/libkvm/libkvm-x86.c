@@ -13,79 +13,6 @@
 #include <fcntl.h>
 #include <stdlib.h>
 
-int kvm_alloc_kernel_memory(kvm_context_t kvm, unsigned long memory,
-								void **vm_mem)
-{
-	unsigned long dosmem = 0xa0000;
-	unsigned long exmem = 0xc0000;
-	unsigned long pcimem = 0xe0000000;
-	int r;
-	int tss_ext;
-	struct kvm_memory_region low_memory = {
-		.memory_size = memory  < dosmem ? memory : dosmem,
-		.guest_phys_addr = 0,
-	};
-	struct kvm_memory_region extended_memory = {
-		.memory_size = memory < exmem ? 0 : memory - exmem,
-		.guest_phys_addr = exmem,
-	};
-	struct kvm_memory_region above_4g_memory = {
-		.memory_size = memory < pcimem ? 0 : memory - pcimem,
-		.guest_phys_addr = 0x100000000ULL,
-	};
-
-#ifdef KVM_CAP_SET_TSS_ADDR
-	tss_ext = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_SET_TSS_ADDR);
-#else
-	tss_ext = 0;
-#endif
-
-	if (memory >= pcimem)
-		extended_memory.memory_size = pcimem - exmem;
-
-	/* 640K should be enough. */
-	low_memory.slot = get_free_slot(kvm);
-	r = ioctl(kvm->vm_fd, KVM_SET_MEMORY_REGION, &low_memory);
-	if (r == -1) {
-		fprintf(stderr, "kvm_create_memory_region: %m\n");
-		return -1;
-	}
-	register_slot(low_memory.slot, low_memory.guest_phys_addr,
-		      low_memory.memory_size, 0, 0, 0);
-
-
-	if (extended_memory.memory_size) {
-		if (tss_ext > 0)
-			extended_memory.slot = get_free_slot(kvm);
-		else
-			extended_memory.slot = 0;
-		r = ioctl(kvm->vm_fd, KVM_SET_MEMORY_REGION, &extended_memory);
-		if (r == -1) {
-			fprintf(stderr, "kvm_create_memory_region: %m\n");
-			return -1;
-		}
- 		register_slot(extended_memory.slot,
-			      extended_memory.guest_phys_addr,
-			      extended_memory.memory_size, 0, 0, 0);
-	}
-
-	if (above_4g_memory.memory_size) {
-		above_4g_memory.slot = get_free_slot(kvm);
-		r = ioctl(kvm->vm_fd, KVM_SET_MEMORY_REGION, &above_4g_memory);
-		if (r == -1) {
-			fprintf(stderr, "kvm_create_memory_region: %m\n");
-			return -1;
-		}
- 		register_slot(above_4g_memory.slot,
-			      above_4g_memory.guest_phys_addr,
-			      above_4g_memory.memory_size, 0, 0, 0);
-	}
-
-	*vm_mem = mmap(NULL, memory, PROT_READ|PROT_WRITE, MAP_SHARED, kvm->vm_fd, 0);
-
-	return 0;
-}
-
 int kvm_set_tss_addr(kvm_context_t kvm, unsigned long addr)
 {
 #ifdef KVM_CAP_SET_TSS_ADDR
@@ -123,24 +50,6 @@ static int kvm_init_tss(kvm_context_t kvm)
 
 	}
 #endif
-	return 0;
-}
-
-int kvm_arch_create_default_phys_mem(kvm_context_t kvm,
-				       unsigned long phys_mem_bytes,
-				       void **vm_mem)
-{
-	int zfd;
-
-	zfd = open("/dev/zero", O_RDONLY);
-	if (zfd == -1) {
-		perror("open /dev/zero");
-		return -1;
-	}
-        mmap(*vm_mem + 0xa8000, 0x8000, PROT_READ|PROT_WRITE,
-             MAP_PRIVATE|MAP_FIXED, zfd, 0);
-        close(zfd);
-
 	return 0;
 }
 

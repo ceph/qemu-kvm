@@ -328,24 +328,15 @@ static int kvm_create_default_phys_mem(kvm_context_t kvm,
 				       unsigned long phys_mem_bytes,
 				       void **vm_mem)
 {
-	unsigned long memory = (phys_mem_bytes + PAGE_SIZE - 1) & PAGE_MASK;
-	int r;
-
 #ifdef KVM_CAP_USER_MEMORY
-	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_USER_MEMORY);
+	int r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_USER_MEMORY);
 	if (r > 0)
 		return 0;
-	else
+	fprintf(stderr, "Hypervisor too old: KVM_CAP_USER_MEMORY extension not supported\n");
+#else
+#error Hypervisor too old: KVM_CAP_USER_MEMORY extension not supported
 #endif
-		r = kvm_alloc_kernel_memory(kvm, memory, vm_mem);
-	if (r < 0)
-		return r;
-
-	r = kvm_arch_create_default_phys_mem(kvm, phys_mem_bytes, vm_mem);
-	if (r < 0)
-		return r;
-
-	return 0;
+	return -1;
 }
 
 int kvm_check_extension(kvm_context_t kvm, int ext)

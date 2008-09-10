@@ -78,9 +78,6 @@ void *kvm_create_kernel_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 
 int kvm_arch_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
                         void **vm_mem);
-int kvm_arch_create_default_phys_mem(kvm_context_t kvm,
-                                       unsigned long phys_mem_bytes,
-                                       void **vm_mem);
 int kvm_arch_run(struct kvm_run *run, kvm_context_t kvm, int vcpu);
 
 
