@@ -418,32 +418,6 @@ void *kvm_create_phys_mem(kvm_context_t kvm, unsigned long phys_start,
         return ptr;
 }
 
-void kvm_destroy_userspace_phys_mem(kvm_context_t kvm,
-				    unsigned long phys_start)
-{
-	int r;
-	struct kvm_userspace_memory_region memory = {
-		.memory_size = 0,
-		.guest_phys_addr = phys_start,
-		.flags = 0,
-	};
-
-	memory.userspace_addr = 0;
-	memory.slot = get_slot(phys_start);
-
-	if (memory.slot == -1)
-		return;
-
-	r = ioctl(kvm->vm_fd, KVM_SET_USER_MEMORY_REGION, &memory);
-	if (r == -1) {
-		fprintf(stderr, "destroy_userspace_phys_mem: %s",
-			strerror(errno));
-		return;
-	}
-
-	free_slot(memory.slot);
-}
-
 int kvm_is_intersecting_mem(kvm_context_t kvm, unsigned long phys_start)
 {
 	return get_intersecting_slot(phys_start) != -1;
@@ -559,10 +533,17 @@ void kvm_destroy_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 			  unsigned long len)
 {
 	int slot;
+	int r;
+	struct kvm_userspace_memory_region memory = {
+		.memory_size = 0,
+		.guest_phys_addr = phys_start,
+		.userspace_addr = 0,
+		.flags = 0,
+	};
 
 	slot = get_slot(phys_start);
 
-	if (slot >= KVM_MAX_NUM_MEM_REGIONS) {
+	if ((slot >= KVM_MAX_NUM_MEM_REGIONS) || (slot == -1)) {
 		fprintf(stderr, "BUG: %s: invalid parameters (slot=%d)\n",
 			__FUNCTION__, slot);
 		return;
@@ -574,7 +555,15 @@ void kvm_destroy_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 		phys_start = slots[slot].phys_addr;
 	}
 
-	kvm_destroy_userspace_phys_mem(kvm, phys_start);
+	memory.slot = slot;
+	r = ioctl(kvm->vm_fd, KVM_SET_USER_MEMORY_REGION, &memory);
+	if (r == -1) {
+		fprintf(stderr, "destroy_userspace_phys_mem: %s",
+			strerror(errno));
+		return;
+	}
+
+	free_slot(memory.slot);
 }
 
 static int kvm_get_map(kvm_context_t kvm, int ioctl_num, int slot, void *buf)
