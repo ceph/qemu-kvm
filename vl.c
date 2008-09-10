@@ -9019,8 +9019,10 @@ void *qemu_alloc_physram(unsigned long memory)
     void *area = NULL;
     unsigned long map_len = memory;
 
+#ifdef USE_KVM
     if (mem_path)
 	area = alloc_mem_area(memory, &map_len, mem_path);
+#endif
     if (!area)
 	area = qemu_vmalloc(memory);
 #ifdef USE_KVM
@@ -9934,17 +9936,12 @@ int main(int argc, char **argv)
 		    fprintf(stderr, "Could not create KVM context\n");
 		    exit(1);
 	    }
-        phys_ram_base = qemu_alloc_physram(phys_ram_size);
-        if (!phys_ram_base) {
-            fprintf(stderr, "Could not allocate physical memory\n");
-            exit(1);
-        }
-    } else {
-	    phys_ram_base = qemu_vmalloc(phys_ram_size);
-	    if (!phys_ram_base) {
-		    fprintf(stderr, "Could not allocate physical memory\n");
-		    exit(1);
-	    }
+    }
+
+    phys_ram_base = qemu_alloc_physram(phys_ram_size);
+    if (!phys_ram_base) {
+        fprintf(stderr, "Could not allocate physical memory\n");
+        exit(1);
     }
 
     /* init the dynamic translator */
