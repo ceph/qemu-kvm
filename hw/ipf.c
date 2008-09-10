@@ -416,9 +416,8 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
         qemu_register_reset(main_cpu_reset, env);
     }
 
-	/* allocate RAM */
-#ifdef KVM_CAP_USER_MEMORY
-	if (kvm_enabled() && kvm_qemu_check_extension(KVM_CAP_USER_MEMORY)) {
+    /* allocate RAM */
+    if (kvm_enabled()) {
 		ram_addr = qemu_ram_alloc(0xa0000);
 		cpu_register_physical_memory(0, 0xa0000, ram_addr);
 		kvm_cpu_register_physical_memory(0, 0xa0000, ram_addr);
@@ -434,7 +433,6 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
 		kvm_cpu_register_physical_memory(0x100000, ram_size - 0x100000,
 				ram_addr);
 	} else
-#endif
     {
         ram_addr = qemu_ram_alloc(ram_size);
         cpu_register_physical_memory(0, ram_size, ram_addr);
@@ -469,23 +467,10 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
 		}
 		fw_image_start = fw_start + GFW_SIZE - image_size;
 
-#ifdef KVM_CAP_USER_MEMORY
-		r = kvm_qemu_check_extension(KVM_CAP_USER_MEMORY);
-		if (r) {
-			cpu_register_physical_memory(GFW_START, GFW_SIZE, fw_offset);
-			kvm_cpu_register_physical_memory(GFW_START,GFW_SIZE, fw_offset);
-			memcpy(fw_image_start, image, image_size);
-		}
-		else
-#endif
-		{
-			fw_start = kvm_create_phys_mem(kvm_context, (uint32_t)(-image_size),
-					image_size, 0, 1);
-			if (!fw_start)
-				exit(1);
-			fw_image_start = fw_start + GFW_SIZE - image_size;
-			memcpy(fw_image_start, image, image_size);
-		}
+        cpu_register_physical_memory(GFW_START, GFW_SIZE, fw_offset);
+        kvm_cpu_register_physical_memory(GFW_START,GFW_SIZE, fw_offset);
+        memcpy(fw_image_start, image, image_size);
+
 		free(image);
 		flush_icache_range((unsigned long)fw_image_start,
 			(unsigned long)fw_image_start + image_size);
