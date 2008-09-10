@@ -775,42 +775,32 @@ void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
                                       unsigned long size,
                                       unsigned long phys_offset)
 {
-#ifdef KVM_CAP_USER_MEMORY
     int r = 0;
-
-    r = kvm_check_extension(kvm_context, KVM_CAP_USER_MEMORY);
-    if (r) {
-        if (!(phys_offset & ~TARGET_PAGE_MASK)) {
-                r = kvm_is_allocated_mem(kvm_context, start_addr, size);
-            if (r)
-                return;
-            r = kvm_is_intersecting_mem(kvm_context, start_addr);
-            if (r)
-                kvm_create_mem_hole(kvm_context, start_addr, size);
-            r = kvm_register_userspace_phys_mem(kvm_context, start_addr,
-                                                phys_ram_base + phys_offset,
-                                                size, 0);
-        }
-        if (phys_offset & IO_MEM_ROM) {
-            phys_offset &= ~IO_MEM_ROM;
-            r = kvm_is_intersecting_mem(kvm_context, start_addr);
-            if (r)
-                kvm_create_mem_hole(kvm_context, start_addr, size);
-            r = kvm_register_userspace_phys_mem(kvm_context, start_addr,
-                                                phys_ram_base + phys_offset,
-                                                size, 0);
-        }
-        if (r < 0) {
-            printf("kvm_cpu_register_physical_memory: failed\n");
-            exit(1);
-        }
-        return;
+    if (!(phys_offset & ~TARGET_PAGE_MASK)) {
+        r = kvm_is_allocated_mem(kvm_context, start_addr, size);
+        if (r)
+            return;
+        r = kvm_is_intersecting_mem(kvm_context, start_addr);
+        if (r)
+            kvm_create_mem_hole(kvm_context, start_addr, size);
+        r = kvm_register_userspace_phys_mem(kvm_context, start_addr,
+                                            phys_ram_base + phys_offset,
+                                            size, 0);
     }
-#endif
     if (phys_offset & IO_MEM_ROM) {
         phys_offset &= ~IO_MEM_ROM;
-        memcpy(phys_ram_base + start_addr, phys_ram_base + phys_offset, size);
+        r = kvm_is_intersecting_mem(kvm_context, start_addr);
+        if (r)
+            kvm_create_mem_hole(kvm_context, start_addr, size);
+        r = kvm_register_userspace_phys_mem(kvm_context, start_addr,
+                                            phys_ram_base + phys_offset,
+                                            size, 0);
     }
+    if (r < 0) {
+        printf("kvm_cpu_register_physical_memory: failed\n");
+        exit(1);
+    }
+    return;
 }
 
 int kvm_setup_guest_memory(void *area, unsigned long size)
