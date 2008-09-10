@@ -386,8 +386,8 @@ int kvm_create(kvm_context_t kvm, unsigned long phys_mem_bytes, void **vm_mem)
 }
 
 
-void *kvm_create_userspace_phys_mem(kvm_context_t kvm, unsigned long phys_start,
-			unsigned long len, int log, int writable)
+void *kvm_create_phys_mem(kvm_context_t kvm, unsigned long phys_start,
+			  unsigned long len, int log, int writable)
 {
 	int r;
 	int prot = PROT_READ;
@@ -408,7 +408,7 @@ void *kvm_create_userspace_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 		MAP_FIXED | MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 #endif
 	if (ptr == MAP_FAILED) {
-		fprintf(stderr, "create_userspace_phys_mem: %s", strerror(errno));
+		fprintf(stderr, "%s: %s", __func__, strerror(errno));
 		return 0;
 	}
 
@@ -418,7 +418,7 @@ void *kvm_create_userspace_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 	memory.slot = get_free_slot(kvm);
 	r = ioctl(kvm->vm_fd, KVM_SET_USER_MEMORY_REGION, &memory);
 	if (r == -1) {
-		fprintf(stderr, "create_userspace_phys_mem: %s", strerror(errno));
+		fprintf(stderr, "%s: %s", __func__, strerror(errno));
 		return 0;
 	}
 	register_slot(memory.slot, memory.guest_phys_addr, memory.memory_size,
@@ -451,13 +451,6 @@ void kvm_destroy_userspace_phys_mem(kvm_context_t kvm,
 	}
 
 	free_slot(memory.slot);
-}
-
-void *kvm_create_phys_mem(kvm_context_t kvm, unsigned long phys_start,
-			  unsigned long len, int log, int writable)
-{
-	return kvm_create_userspace_phys_mem(kvm, phys_start, len,
-							log, writable);
 }
 
 int kvm_is_intersecting_mem(kvm_context_t kvm, unsigned long phys_start)
