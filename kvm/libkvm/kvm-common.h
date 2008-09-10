@@ -72,9 +72,6 @@ int kvm_alloc_kernel_memory(kvm_context_t kvm, unsigned long memory,
 								void **vm_mem);
 int kvm_alloc_userspace_memory(kvm_context_t kvm, unsigned long memory,
 								void **vm_mem);
-void *kvm_create_kernel_phys_mem(kvm_context_t kvm, unsigned long phys_start,
-			unsigned long len, int log, int writable);
-
 
 int kvm_arch_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
                         void **vm_mem);

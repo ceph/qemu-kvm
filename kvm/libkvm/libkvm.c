@@ -456,13 +456,8 @@ void kvm_destroy_userspace_phys_mem(kvm_context_t kvm,
 void *kvm_create_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 			  unsigned long len, int log, int writable)
 {
-	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_USER_MEMORY);
-	if (r > 0)
-		return kvm_create_userspace_phys_mem(kvm, phys_start, len,
-								log, writable);
-	else
-		return kvm_create_kernel_phys_mem(kvm, phys_start, len,
-								log, writable);
+	return kvm_create_userspace_phys_mem(kvm, phys_start, len,
+							log, writable);
 }
 
 int kvm_is_intersecting_mem(kvm_context_t kvm, unsigned long phys_start)
@@ -595,10 +590,7 @@ void kvm_destroy_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 		phys_start = slots[slot].phys_addr;
 	}
 
-	if (ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_USER_MEMORY) > 0)
-		kvm_destroy_userspace_phys_mem(kvm, phys_start);
-	else
-		kvm_create_kernel_phys_mem(kvm, phys_start, 0, 0, 0);
+	kvm_destroy_userspace_phys_mem(kvm, phys_start);
 }
 
 static int kvm_get_map(kvm_context_t kvm, int ioctl_num, int slot, void *buf)

@@ -43,13 +43,6 @@ int handle_dcr(struct kvm_run *run,  kvm_context_t kvm, int vcpu)
 	return ret;
 }
 
-void *kvm_create_kernel_phys_mem(kvm_context_t kvm, unsigned long phys_start,
-				 unsigned long len, int log, int writable)
-{
-	fprintf(stderr, "%s: Operation not supported\n", __FUNCTION__);
-	return NULL;
-}
-
 void kvm_show_code(kvm_context_t kvm, int vcpu)
 {
 	fprintf(stderr, "%s: Operation not supported\n", __FUNCTION__);
