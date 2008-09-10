@@ -26,6 +26,8 @@
 #include "pc.h"
 #include "pci.h"
 
+#include "qemu-kvm.h"
+
 typedef uint32_t pci_addr_t;
 #include "pci_host.h"
 
@@ -91,6 +93,10 @@ static void i440fx_update_memory_mappings(PCIDevice *d)
     int i, r;
     uint32_t smram, addr;
 
+    if (kvm_enabled()) {
+        /* FIXME: Support remappings and protection changes. */
+        return;
+    }
     update_pam(d, 0xf0000, 0x100000, (d->config[0x59] >> 4) & 3);
     for(i = 0; i < 12; i++) {
         r = (d->config[(i >> 1) + 0x5a] >> ((i & 1) * 4)) & 3;
