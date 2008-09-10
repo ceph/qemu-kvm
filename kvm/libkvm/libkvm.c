@@ -501,7 +501,7 @@ int kvm_create_mem_hole(kvm_context_t kvm, unsigned long phys_start,
 	return 0;
 }
 
-int kvm_register_userspace_phys_mem(kvm_context_t kvm,
+int kvm_register_phys_mem(kvm_context_t kvm,
 			unsigned long phys_start, void *userspace_addr,
 			unsigned long len, int log)
 {

@@ -783,7 +783,7 @@ void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
         r = kvm_is_intersecting_mem(kvm_context, start_addr);
         if (r)
             kvm_create_mem_hole(kvm_context, start_addr, size);
-        r = kvm_register_userspace_phys_mem(kvm_context, start_addr,
+        r = kvm_register_phys_mem(kvm_context, start_addr,
                                             phys_ram_base + phys_offset,
                                             size, 0);
     }
@@ -792,7 +792,7 @@ void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
         r = kvm_is_intersecting_mem(kvm_context, start_addr);
         if (r)
             kvm_create_mem_hole(kvm_context, start_addr, size);
-        r = kvm_register_userspace_phys_mem(kvm_context, start_addr,
+        r = kvm_register_phys_mem(kvm_context, start_addr,
                                             phys_ram_base + phys_offset,
                                             size, 0);
     }
