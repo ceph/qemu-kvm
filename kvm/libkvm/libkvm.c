@@ -58,7 +58,6 @@ int kvm_page_size;
 struct slot_info {
 	unsigned long phys_addr;
 	unsigned long len;
-	int user_alloc;
 	unsigned long userspace_addr;
 	unsigned flags;
 };
@@ -101,11 +100,10 @@ int get_free_slot(kvm_context_t kvm)
 }
 
 void register_slot(int slot, unsigned long phys_addr, unsigned long len,
-		   int user_alloc, unsigned long userspace_addr, unsigned flags)
+		   unsigned long userspace_addr, unsigned flags)
 {
 	slots[slot].phys_addr = phys_addr;
 	slots[slot].len = len;
-	slots[slot].user_alloc = user_alloc;
 	slots[slot].userspace_addr = userspace_addr;
         slots[slot].flags = flags;
 }
@@ -144,36 +142,29 @@ int get_intersecting_slot(unsigned long phys_addr)
 static int kvm_dirty_pages_log_change(kvm_context_t kvm, unsigned long phys_addr
 				      , __u32 flag)
 {
-	int r;
-	int slot;
-
-	slot = get_slot(phys_addr);
+	int r = -1;
+	int slot = get_slot(phys_addr);
 	if (slot == -1) {
 		fprintf(stderr, "BUG: %s: invalid parameters\n", __FUNCTION__);
 		return 1;
 	}
+
 	flag |= slots[slot].flags;
-	if (slots[slot].user_alloc) {
+
+	{
 		struct kvm_userspace_memory_region mem = {
-			.slot = slot,
 			.memory_size = slots[slot].len,
 			.guest_phys_addr = slots[slot].phys_addr,
 			.userspace_addr = slots[slot].userspace_addr,
 			.flags = flag,
 		};
+
+
+
 		r = ioctl(kvm->vm_fd, KVM_SET_USER_MEMORY_REGION, &mem);
+		if (r == -1)
+			fprintf(stderr, "%s: %m\n", __FUNCTION__);
 	}
-	if (!slots[slot].user_alloc) {
-		struct kvm_memory_region mem = {
-			.slot = slot,
-			.memory_size = slots[slot].len,
-			.guest_phys_addr = slots[slot].phys_addr,
-			.flags = flag,
-		};
-		r = ioctl(kvm->vm_fd, KVM_SET_MEMORY_REGION, &mem);
-	}
-	if (r == -1)
-		fprintf(stderr, "%s: %m\n", __FUNCTION__);
 	return r;
 }
 
@@ -422,7 +413,7 @@ void *kvm_create_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 		return 0;
 	}
 	register_slot(memory.slot, memory.guest_phys_addr, memory.memory_size,
-		      1, memory.userspace_addr, memory.flags);
+		      memory.userspace_addr, memory.flags);
 
         return ptr;
 }
@@ -522,7 +513,7 @@ int kvm_create_mem_hole(kvm_context_t kvm, unsigned long phys_start,
 		return -1;
 	}
 	register_slot(newslot1.slot, newslot1.guest_phys_addr,
-		      newslot1.memory_size, 1, newslot1.userspace_addr,
+		      newslot1.memory_size, newslot1.userspace_addr,
 		      newslot1.flags);
 
 	r = ioctl(kvm->vm_fd, KVM_SET_USER_MEMORY_REGION, &newslot2);
@@ -531,7 +522,7 @@ int kvm_create_mem_hole(kvm_context_t kvm, unsigned long phys_start,
 		return -1;
 	}
 	register_slot(newslot2.slot, newslot2.guest_phys_addr,
-		      newslot2.memory_size, 1, newslot2.userspace_addr,
+		      newslot2.memory_size, newslot2.userspace_addr,
 		      newslot2.flags);
 	return 0;
 }
@@ -556,7 +547,7 @@ int kvm_register_userspace_phys_mem(kvm_context_t kvm,
 		return -1;
 	}
 	register_slot(memory.slot, memory.guest_phys_addr, memory.memory_size,
-		      1, memory.userspace_addr, memory.flags);
+		      memory.userspace_addr, memory.flags);
         return 0;
 }
 
