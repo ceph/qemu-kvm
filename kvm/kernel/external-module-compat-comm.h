@@ -517,6 +517,11 @@ static inline int cancel_work_sync(struct work_struct *work)
 	return 0;
 }
 
+/* ... and it returned void before 2.6.23 */
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
+
+#define cancel_work_sync(work) ({ cancel_work_sync(work); 0; })
+
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
