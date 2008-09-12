@@ -180,6 +180,38 @@ void test_mov_imm(const struct regs *inregs, struct regs *outregs)
 		print_serial("mov test 5: FAIL\n");
 }
 
+void test_cmp_imm(const struct regs *inregs, struct regs *outregs)
+{
+	MK_INSN(cmp_test1, "mov $0x34, %al\n\t"
+			   "cmp $0x34, %al\n\t");
+	MK_INSN(cmp_test2, "mov $0x34, %al\n\t"
+			   "cmp $0x39, %al\n\t");
+	MK_INSN(cmp_test3, "mov $0x34, %al\n\t"
+			   "cmp $0x24, %al\n\t");
+
+	/* test cmp imm8 with AL */
+	/* ZF: (bit 6) Zero Flag becomes 1 if an operation results
+	 * in a 0 writeback, or 0 register
+	 */
+	exec_in_big_real_mode(inregs, outregs,
+			      insn_cmp_test1,
+			      insn_cmp_test1_end - insn_cmp_test1);
+	if ((outregs->eflags & (1<<6)) != (1<<6))
+		print_serial("cmp test 1: FAIL\n");
+
+	exec_in_big_real_mode(inregs, outregs,
+			      insn_cmp_test2,
+			      insn_cmp_test2_end - insn_cmp_test2);
+	if ((outregs->eflags & (1<<6)) != 0)
+		print_serial("cmp test 2: FAIL\n");
+
+	exec_in_big_real_mode(inregs, outregs,
+			      insn_cmp_test3,
+			      insn_cmp_test3_end - insn_cmp_test3);
+	if ((outregs->eflags & (1<<6)) != 0)
+		print_serial("cmp test 3: FAIL\n");
+}
+
 void test_eflags_insn(struct regs *inregs, struct regs *outregs)
 {
 	MK_INSN(clc, "clc");
@@ -309,6 +341,7 @@ void start(void)
 		print_serial("null test: FAIL\n");
 	test_call(&inregs, &outregs);
 	test_mov_imm(&inregs, &outregs);
+	test_cmp_imm(&inregs, &outregs);
 	test_io(&inregs, &outregs);
 	test_eflags_insn(&inregs, &outregs);
 	exit(0);
