@@ -55,6 +55,10 @@ extboot:
 libfdt:
 	$(MAKE) -C $@
 
+LINUX=linux-2.6
+
+sync:
+	make -C kernel sync LINUX=$(shell readlink -f "$(LINUX)")
 
 bindir = /usr/bin
 bin = $(bindir)/kvm
