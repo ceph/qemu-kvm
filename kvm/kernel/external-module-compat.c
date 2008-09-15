@@ -265,3 +265,14 @@ struct pci_dev *pci_get_bus_and_slot(unsigned int bus, unsigned int devfn)
 }
 
 #endif
+
+#include <linux/intel-iommu.h>
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28)
+
+int intel_iommu_found()
+{
+	return 0;
+}
+
+#endif
