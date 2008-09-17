@@ -973,6 +973,10 @@ static int apic_load(QEMUFile *f, void *opaque, int version_id)
 static void apic_reset(void *opaque)
 {
     APICState *s = opaque;
+
+    s->apicbase = 0xfee00000 |
+        (s->id ? 0 : MSR_IA32_APICBASE_BSP) | MSR_IA32_APICBASE_ENABLE;
+
     apic_init_ipi(s);
 
     if (s->id == 0) {
@@ -1015,8 +1019,6 @@ int apic_init(CPUState *env)
     s->id = last_apic_id++;
     env->cpuid_apic_id = s->id;
     s->cpu_env = env;
-    s->apicbase = 0xfee00000 |
-        (s->id ? 0 : MSR_IA32_APICBASE_BSP) | MSR_IA32_APICBASE_ENABLE;
 
     apic_reset(s);
 

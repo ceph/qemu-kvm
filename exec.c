@@ -187,7 +187,7 @@ static int io_mem_watch;
 #endif
 
 /* log support */
-char *logfilename = "/tmp/qemu.log";
+const char *logfilename = "/tmp/qemu.log";
 FILE *logfile;
 int loglevel;
 static int log_append = 0;
@@ -286,17 +286,24 @@ static void page_init(void)
 #endif
 }
 
-static inline PageDesc *page_find_alloc(target_ulong index)
+static inline PageDesc **page_l1_map(target_ulong index)
 {
-    PageDesc **lp, *p;
-
 #if TARGET_LONG_BITS > 32
     /* Host memory outside guest VM.  For 32-bit targets we have already
        excluded high addresses.  */
-    if (index > ((target_ulong)L2_SIZE * L1_SIZE * TARGET_PAGE_SIZE))
+    if (index > ((target_ulong)L2_SIZE * L1_SIZE))
         return NULL;
 #endif
-    lp = &l1_map[index >> L2_BITS];
+    return &l1_map[index >> L2_BITS];
+}
+
+static inline PageDesc *page_find_alloc(target_ulong index)
+{
+    PageDesc **lp, *p;
+    lp = page_l1_map(index);
+    if (!lp)
+        return NULL;
+
     p = *lp;
     if (!p) {
         /* allocate if not found */
@@ -323,9 +330,12 @@ static inline PageDesc *page_find_alloc(target_ulong index)
 
 static inline PageDesc *page_find(target_ulong index)
 {
-    PageDesc *p;
+    PageDesc **lp, *p;
+    lp = page_l1_map(index);
+    if (!lp)
+        return NULL;
 
-    p = l1_map[index >> L2_BITS];
+    p = *lp;
     if (!p)
         return 0;
     return p + (index & (L2_SIZE - 1));
@@ -2296,7 +2306,7 @@ static uint32_t unassigned_mem_readb(void *opaque, target_phys_addr_t addr)
 #endif
 #ifdef TARGET_SPARC
     do_unassigned_access(addr, 0, 0, 0);
-#elif TARGET_CRIS
+#elif defined(TARGET_CRIS)
     do_unassigned_access(addr, 0, 0, 0);
 #endif
     return 0;
@@ -2309,7 +2319,7 @@ static void unassigned_mem_writeb(void *opaque, target_phys_addr_t addr, uint32_
 #endif
 #ifdef TARGET_SPARC
     do_unassigned_access(addr, 1, 0, 0);
-#elif TARGET_CRIS
+#elif defined(TARGET_CRIS)
     do_unassigned_access(addr, 1, 0, 0);
 #endif
 }

@@ -123,7 +123,7 @@ typedef struct DisasContext {
 	int singlestep_enabled;
 } DisasContext;
 
-static void gen_BUG(DisasContext *dc, char *file, int line)
+static void gen_BUG(DisasContext *dc, const char *file, int line)
 {
 	printf ("BUG: pc=%x %s %d\n", dc->pc, file, line);
 	fprintf (logfile, "BUG: pc=%x %s %d\n", dc->pc, file, line);
@@ -1268,7 +1268,7 @@ static inline void t_gen_sext(TCGv d, TCGv s, int size)
 		tcg_gen_ext8s_i32(d, s);
 	else if (size == 2)
 		tcg_gen_ext16s_i32(d, s);
-	else if(d != s)
+	else if(GET_TCGV(d) != GET_TCGV(s))
 		tcg_gen_mov_tl(d, s);
 }
 
@@ -1278,7 +1278,7 @@ static inline void t_gen_zext(TCGv d, TCGv s, int size)
 		tcg_gen_ext8u_i32(d, s);
 	else if (size == 2)
 		tcg_gen_ext16u_i32(d, s);
-	else if (d != s)
+	else if (GET_TCGV(d) != GET_TCGV(s))
 		tcg_gen_mov_tl(d, s);
 }
 

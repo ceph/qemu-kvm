@@ -22,18 +22,10 @@
  * THE SOFTWARE.
  */
 #include "qemu-common.h"
-#if !defined(QEMU_IMG) && !defined(QEMU_NBD)
-#include "qemu-kvm.h"
 #include "qemu-timer.h"
-#include "exec-all.h"
-#else
-#define kvm_enabled() 0
-#define qemu_kvm_aio_start() ((void)0)
-#define qemu_kvm_aio_end() ((void)0)
-#define qemu_kvm_aio_wait() ((void)0)
-#define qemu_kvm_aio_poll() ((void)0)
-#endif
+#include "qemu-char.h"
 #include "block_int.h"
+#include "compatfd.h"
 #include <assert.h>
 #ifdef CONFIG_AIO
 #include <aio.h>
@@ -75,7 +67,7 @@
 //#define DEBUG_FLOPPY
 
 //#define DEBUG_BLOCK
-#if defined(DEBUG_BLOCK) && !defined(QEMU_IMG) && !defined(QEMU_NBD)
+#if defined(DEBUG_BLOCK)
 #define DEBUG_BLOCK_PRINT(formatCstr, args...) do { if (loglevel != 0)	\
     { fprintf(logfile, formatCstr, ##args); fflush(logfile); } } while (0)
 #else
@@ -104,7 +96,7 @@ typedef struct BDRVRawState {
     int fd_got_error;
     int fd_media_changed;
 #endif
-#if defined(O_DIRECT) && !defined(QEMU_IMG)
+#if defined(O_DIRECT)
     uint8_t* aligned_buf;
 #endif
 } BDRVRawState;
@@ -142,7 +134,7 @@ static int raw_open(BlockDriverState *bs, const char *filename, int flags)
         return ret;
     }
     s->fd = fd;
-#if defined(O_DIRECT) && !defined(QEMU_IMG)
+#if defined(O_DIRECT)
     s->aligned_buf = NULL;
     if (flags & BDRV_O_DIRECT) {
         s->aligned_buf = qemu_memalign(512, ALIGNED_BUFFER_SIZE);
@@ -277,7 +269,7 @@ label__raw_write__success:
 }
 
 
-#if defined(O_DIRECT) && !defined(QEMU_IMG)
+#if defined(O_DIRECT)
 /*
  * offset and count are in bytes and possibly not aligned. For files opened
  * with O_DIRECT, necessary alignments are ensured before calling
@@ -445,55 +437,39 @@ typedef struct RawAIOCB {
     int ret;
 } RawAIOCB;
 
+static int aio_sig_fd = -1;
 static int aio_sig_num = SIGUSR2;
 static RawAIOCB *first_aio; /* AIO issued */
 static int aio_initialized = 0;
 
-static void aio_signal_handler(int signum)
-{
-#if !defined(QEMU_IMG) && !defined(QEMU_NBD)
-    CPUState *env = cpu_single_env;
-    if (env) {
-        /* stop the currently executing cpu because a timer occured */
-        cpu_interrupt(env, CPU_INTERRUPT_EXIT);
-#ifdef USE_KQEMU
-        if (env->kqemu_enabled) {
-            kqemu_cpu_interrupt(env);
-        }
-#endif
-    }
-#endif
-}
-
-void qemu_aio_init(void)
-{
-    struct sigaction act;
-
-    aio_initialized = 1;
-
-    sigfillset(&act.sa_mask);
-    act.sa_flags = 0; /* do not restart syscalls to interrupt select() */
-    act.sa_handler = aio_signal_handler;
-    sigaction(aio_sig_num, &act, NULL);
-
-#if defined(__GLIBC__) && defined(__linux__)
-    {
-        /* XXX: aio thread exit seems to hang on RedHat 9 and this init
-           seems to fix the problem. */
-        struct aioinit ai;
-        memset(&ai, 0, sizeof(ai));
-        ai.aio_threads = 1;
-        ai.aio_num = 1;
-        ai.aio_idle_time = 365 * 100000;
-        aio_init(&ai);
-    }
-#endif
-}
-
-void qemu_aio_poll(void)
+void qemu_aio_poll(void *opaque)
 {
     RawAIOCB *acb, **pacb;
     int ret;
+    size_t offset;
+    union {
+        struct qemu_signalfd_siginfo siginfo;
+        char buf[128];
+    } sig;
+
+    /* try to read from signalfd, don't freak out if we can't read anything */
+    offset = 0;
+    while (offset < 128) {
+        ssize_t len;
+
+        len = read(aio_sig_fd, sig.buf + offset, 128 - offset);
+        if (len == -1 && errno == EINTR)
+            continue;
+        if (len == -1 && errno == EAGAIN) {
+            /* there is no natural reason for this to happen,
+             * so we'll spin hard until we get everything just
+             * to be on the safe side. */
+            if (offset > 0)
+                continue;
+        }
+
+        offset += len;
+    }
 
     for(;;) {
         pacb = &first_aio;
@@ -531,66 +507,68 @@ void qemu_aio_poll(void)
  the_end: ;
 }
 
+void qemu_aio_init(void)
+{
+    sigset_t mask;
+
+    aio_initialized = 1;
+
+    /* Make sure to block AIO signal */
+    sigemptyset(&mask);
+    sigaddset(&mask, aio_sig_num);
+    sigprocmask(SIG_BLOCK, &mask, NULL);
+    
+    aio_sig_fd = qemu_signalfd(&mask);
+
+    fcntl(aio_sig_fd, F_SETFL, O_NONBLOCK);
+
+    qemu_set_fd_handler2(aio_sig_fd, NULL, qemu_aio_poll, NULL, NULL);
+
+#if defined(__GLIBC__) && defined(__linux__)
+    {
+        /* XXX: aio thread exit seems to hang on RedHat 9 and this init
+           seems to fix the problem. */
+        struct aioinit ai;
+        memset(&ai, 0, sizeof(ai));
+        ai.aio_threads = 1;
+        ai.aio_num = 1;
+        ai.aio_idle_time = 365 * 100000;
+        aio_init(&ai);
+    }
+#endif
+}
+
 /* Wait for all IO requests to complete.  */
 void qemu_aio_flush(void)
 {
-    qemu_aio_wait_start();
-    qemu_aio_poll();
+    qemu_aio_poll(NULL);
     while (first_aio) {
         qemu_aio_wait();
     }
-    qemu_aio_wait_end();
-}
-
-/* wait until at least one AIO was handled */
-static sigset_t wait_oset;
-
-void qemu_aio_wait_start(void)
-{
-    sigset_t set;
-
-    if (!aio_initialized)
-        qemu_aio_init();
-#ifndef QEMU_IMG
-    if (kvm_enabled()) {
-        qemu_kvm_aio_wait_start();
-        return;
-    }
-#endif
-    sigemptyset(&set);
-    sigaddset(&set, aio_sig_num);
-    sigprocmask(SIG_BLOCK, &set, &wait_oset);
 }
 
 void qemu_aio_wait(void)
 {
-    sigset_t set;
-    int nb_sigs;
+    int ret;
 
-#if !defined(QEMU_IMG) && !defined(QEMU_NBD)
     if (qemu_bh_poll())
         return;
-    if (kvm_enabled()) {
-        qemu_kvm_aio_wait();
-        qemu_aio_poll();
-        return;
-    }
-#endif
-    sigemptyset(&set);
-    sigaddset(&set, aio_sig_num);
-    sigwait(&set, &nb_sigs);
-    qemu_aio_poll();
-}
 
-void qemu_aio_wait_end(void)
-{
-#ifndef QEMU_IMG
-    if (kvm_enabled()) {
-        qemu_kvm_aio_wait_end();
+    if (!first_aio)
         return;
-    }
-#endif
-    sigprocmask(SIG_SETMASK, &wait_oset, NULL);
+
+    do {
+        fd_set rdfds;
+
+        FD_ZERO(&rdfds);
+        FD_SET(aio_sig_fd, &rdfds);
+
+        ret = select(aio_sig_fd + 1, &rdfds, NULL, NULL, NULL);
+        if (ret == -1 && errno == EINTR)
+            continue;
+    } while (ret == 0);
+
+    qemu_aio_poll(NULL);
 }
 
 static RawAIOCB *raw_aio_setup(BlockDriverState *bs,
@@ -620,14 +598,12 @@ static RawAIOCB *raw_aio_setup(BlockDriverState *bs,
     return acb;
 }
 
-#if !defined(QEMU_IMG) && !defined(QEMU_NBD)
 static void raw_aio_em_cb(void* opaque)
 {
     RawAIOCB *acb = opaque;
     acb->common.cb(acb->common.opaque, acb->ret);
     qemu_aio_release(acb);
 }
-#endif
 
 static BlockDriverAIOCB *raw_aio_read(BlockDriverState *bs,
         int64_t sector_num, uint8_t *buf, int nb_sectors,
@@ -639,7 +615,7 @@ static BlockDriverAIOCB *raw_aio_read(BlockDriverState *bs,
      * If O_DIRECT is used and the buffer is not aligned fall back
      * to synchronous IO.
      */
-#if defined(O_DIRECT) && !defined(QEMU_IMG) && !defined(QEMU_NBD)
+#if defined(O_DIRECT)
     BDRVRawState *s = bs->opaque;
 
     if (unlikely(s->aligned_buf != NULL && ((uintptr_t) buf % 512))) {
@@ -672,7 +648,7 @@ static BlockDriverAIOCB *raw_aio_write(BlockDriverState *bs,
      * If O_DIRECT is used and the buffer is not aligned fall back
      * to synchronous IO.
      */
-#if defined(O_DIRECT) && !defined(QEMU_IMG) && !defined(QEMU_NBD)
+#if defined(O_DIRECT)
     BDRVRawState *s = bs->opaque;
 
     if (unlikely(s->aligned_buf != NULL && ((uintptr_t) buf % 512))) {
@@ -728,27 +704,13 @@ void qemu_aio_init(void)
 {
 }
 
-void qemu_aio_poll(void)
-{
-}
-
 void qemu_aio_flush(void)
-{
-}
-
-void qemu_aio_wait_start(void)
 {
 }
 
 void qemu_aio_wait(void)
 {
-#if !defined(QEMU_IMG) && !defined(QEMU_NBD)
     qemu_bh_poll();
-#endif
-}
-
-void qemu_aio_wait_end(void)
-{
 }
 
 #endif /* CONFIG_AIO */
@@ -759,7 +721,7 @@ static void raw_close(BlockDriverState *bs)
     if (s->fd >= 0) {
         close(s->fd);
         s->fd = -1;
-#if defined(O_DIRECT) && !defined(QEMU_IMG)
+#if defined(O_DIRECT)
         if (s->aligned_buf != NULL)
             qemu_free(s->aligned_buf);
 #endif
@@ -884,7 +846,6 @@ BlockDriver bdrv_raw = {
     .bdrv_aio_cancel = raw_aio_cancel,
     .aiocb_size = sizeof(RawAIOCB),
 #endif
-    .protocol_name = "file",
     .bdrv_pread = raw_pread,
     .bdrv_pwrite = raw_pwrite,
     .bdrv_truncate = raw_truncate,
@@ -1029,7 +990,7 @@ static int hdev_open(BlockDriverState *bs, const char *filename, int flags)
     return 0;
 }
 
-#if defined(__linux__) && !defined(QEMU_IMG) && !defined(QEMU_NBD)
+#if defined(__linux__)
 
 /* Note: we do not have a reliable method to detect if the floppy is
    present. The current method is to try to open the floppy at every
@@ -1079,14 +1040,6 @@ static int fd_open(BlockDriverState *bs)
     s->fd_got_error = 0;
     return 0;
 }
-#else
-static int fd_open(BlockDriverState *bs)
-{
-    return 0;
-}
-#endif
-
-#if defined(__linux__)
 
 static int raw_is_inserted(BlockDriverState *bs)
 {
@@ -1194,6 +1147,11 @@ static int raw_ioctl(BlockDriverState *bs, unsigned long int req, void *buf)
     return ioctl(s->fd, req, buf);
 }
 #else
+
+static int fd_open(BlockDriverState *bs)
+{
+    return 0;
+}
 
 static int raw_is_inserted(BlockDriverState *bs)
 {

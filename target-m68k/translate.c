@@ -30,6 +30,7 @@
 #include "exec-all.h"
 #include "disas.h"
 #include "tcg-op.h"
+#include "qemu-log.h"
 
 #define GEN_HELPER 1
 #include "helpers.h"
@@ -156,9 +157,6 @@ typedef struct DisasContext {
 /* ??? Fix exceptions.  */
 static void *gen_throws_exception;
 #define gen_last_qop NULL
-
-extern FILE *logfile;
-extern int loglevel;
 
 #define OS_BYTE 0
 #define OS_WORD 1
@@ -1719,7 +1717,7 @@ DISAS_INSN(mvzs)
         opsize = OS_WORD;
     else
         opsize = OS_BYTE;
-    SRC_EA(src, opsize, (insn & 0x80) != 0, NULL);
+    SRC_EA(src, opsize, (insn & 0x80) == 0, NULL);
     reg = DREG(insn, 9);
     tcg_gen_mov_i32(reg, src);
     gen_logic_cc(s, src);

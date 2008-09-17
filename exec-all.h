@@ -57,8 +57,7 @@ typedef void (GenOpFunc1)(long);
 typedef void (GenOpFunc2)(long, long);
 typedef void (GenOpFunc3)(long, long, long);
 
-extern FILE *logfile;
-extern int loglevel;
+#include "qemu-log.h"
 
 void gen_intermediate_code(CPUState *env, struct TranslationBlock *tb);
 void gen_intermediate_code_pc(CPUState *env, struct TranslationBlock *tb);
@@ -257,10 +256,6 @@ static inline void tb_add_jump(TranslationBlock *tb, int n,
 
 TranslationBlock *tb_find_pc(unsigned long pc_ptr);
 
-#ifndef offsetof
-#define offsetof(type, field) ((size_t) &((type *)0)->field)
-#endif
-
 #if defined(_WIN32)
 #define ASM_DATA_SECTION ".section \".data\"\n"
 #define ASM_PREVIOUS_SECTION ".section .text\n"
@@ -289,6 +284,8 @@ extern int tb_invalidated_flag;
 
 void tlb_fill(target_ulong addr, int is_write, int mmu_idx,
               void *retaddr);
+
+#include "softmmu_defs.h"
 
 #define ACCESS_TYPE (NB_MMU_MODES + 1)
 #define MEMSUFFIX _code

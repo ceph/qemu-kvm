@@ -54,7 +54,7 @@ int qemu_live_loadvm_state(QEMUFile *f);
 
 void main_loop_wait(int timeout);
 
-int check_params(char *buf, int buf_size, char **params, const char *str);
+int check_params(char *buf, int buf_size, const char * const *params, const char *str);
 int get_param_value(char *buf, int buf_size, const char *tag,
                     const char *str);
 

@@ -38,7 +38,6 @@ kvm_context_t kvm_context;
 extern int smp_cpus;
 
 pthread_mutex_t qemu_mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t qemu_aio_cond = PTHREAD_COND_INITIALIZER;
 pthread_cond_t qemu_vcpu_cond = PTHREAD_COND_INITIALIZER;
 pthread_cond_t qemu_system_cond = PTHREAD_COND_INITIALIZER;
 pthread_cond_t qemu_pause_cond = PTHREAD_COND_INITIALIZER;
@@ -91,7 +90,7 @@ static void qemu_cond_wait(pthread_cond_t *cond)
     /* If we're the I/O thread, some other thread may be waiting for aio
      * completion */
     if (!vcpu)
-        qemu_aio_poll();
+        qemu_aio_poll(NULL);
     cpu_single_env = env;
 }
 
@@ -516,9 +515,6 @@ static void sigfd_handler(void *opaque)
 	if (action.sa_handler)
 	    action.sa_handler(info.ssi_signo);
 
-	if (info.ssi_signo == SIGUSR2) {
-	    pthread_cond_signal(&qemu_aio_cond);
-	}
     }
 }
 
@@ -565,7 +561,6 @@ int kvm_main_loop(void)
     sigemptyset(&mask);
     sigaddset(&mask, SIGIO);
     sigaddset(&mask, SIGALRM);
-    sigaddset(&mask, SIGUSR2);
     sigprocmask(SIG_BLOCK, &mask, NULL);
 
     sigfd = kvm_signalfd(&mask);
@@ -971,36 +966,6 @@ int kvm_set_irq(int irq, int level)
 }
 
 #endif
-
-void qemu_kvm_aio_wait_start(void)
-{
-}
-
-void qemu_kvm_aio_wait(void)
-{
-    if (!cpu_single_env) {
-	if (io_thread_sigfd != -1) {
-	    fd_set rfds;
-	    int ret;
-
-	    FD_ZERO(&rfds);
-	    FD_SET(io_thread_sigfd, &rfds);
-
-	    /* this is a rare case where we do want to hold qemu_mutex
-	     * while sleeping.  We cannot allow anything else to run
-	     * right now. */
-	    ret = select(io_thread_sigfd + 1, &rfds, NULL, NULL, NULL);
-	    if (ret > 0 && FD_ISSET(io_thread_sigfd, &rfds))
-		sigfd_handler((void *)(unsigned long)io_thread_sigfd);
-	}
-	qemu_aio_poll();
-    } else
-        qemu_cond_wait(&qemu_aio_cond);
-}
-
-void qemu_kvm_aio_wait_end(void)
-{
-}
 
 int qemu_kvm_get_dirty_pages(unsigned long phys_addr, void *buf)
 {

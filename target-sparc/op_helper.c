@@ -68,6 +68,11 @@ void helper_trapcc(target_ulong nb_trap, target_ulong do_trap)
     }
 }
 
+static inline void set_cwp(int new_cwp)
+{
+    cpu_set_cwp(env, new_cwp);
+}
+
 void helper_check_align(target_ulong addr, uint32_t align)
 {
     if (addr & align) {
@@ -82,9 +87,9 @@ void helper_check_align(target_ulong addr, uint32_t align)
 #define F_HELPER(name, p) void helper_f##name##p(void)
 
 #define F_BINOP(name)                                           \
-    F_HELPER(name, s)                                           \
+    float32 helper_f ## name ## s (float32 src1, float32 src2)  \
     {                                                           \
-        FT0 = float32_ ## name (FT0, FT1, &env->fp_status);     \
+        return float32_ ## name (src1, src2, &env->fp_status);  \
     }                                                           \
     F_HELPER(name, d)                                           \
     {                                                           \
@@ -101,10 +106,10 @@ F_BINOP(mul);
 F_BINOP(div);
 #undef F_BINOP
 
-void helper_fsmuld(void)
+void helper_fsmuld(float32 src1, float32 src2)
 {
-    DT0 = float64_mul(float32_to_float64(FT0, &env->fp_status),
-                      float32_to_float64(FT1, &env->fp_status),
+    DT0 = float64_mul(float32_to_float64(src1, &env->fp_status),
+                      float32_to_float64(src2, &env->fp_status),
                       &env->fp_status);
 }
 
@@ -115,9 +120,9 @@ void helper_fdmulq(void)
                        &env->fp_status);
 }
 
-F_HELPER(neg, s)
+float32 helper_fnegs(float32 src)
 {
-    FT0 = float32_chs(FT1);
+    return float32_chs(src);
 }
 
 #ifdef TARGET_SPARC64
@@ -133,25 +138,25 @@ F_HELPER(neg, q)
 #endif
 
 /* Integer to float conversion.  */
-F_HELPER(ito, s)
+float32 helper_fitos(int32_t src)
 {
-    FT0 = int32_to_float32(*((int32_t *)&FT1), &env->fp_status);
+    return int32_to_float32(src, &env->fp_status);
 }
 
-F_HELPER(ito, d)
+void helper_fitod(int32_t src)
 {
-    DT0 = int32_to_float64(*((int32_t *)&FT1), &env->fp_status);
+    DT0 = int32_to_float64(src, &env->fp_status);
 }
 
-F_HELPER(ito, q)
+void helper_fitoq(int32_t src)
 {
-    QT0 = int32_to_float128(*((int32_t *)&FT1), &env->fp_status);
+    QT0 = int32_to_float128(src, &env->fp_status);
 }
 
 #ifdef TARGET_SPARC64
-F_HELPER(xto, s)
+float32 helper_fxtos(void)
 {
-    FT0 = int64_to_float32(*((int64_t *)&DT1), &env->fp_status);
+    return int64_to_float32(*((int64_t *)&DT1), &env->fp_status);
 }
 
 F_HELPER(xto, d)
@@ -167,24 +172,24 @@ F_HELPER(xto, q)
 #undef F_HELPER
 
 /* floating point conversion */
-void helper_fdtos(void)
+float32 helper_fdtos(void)
 {
-    FT0 = float64_to_float32(DT1, &env->fp_status);
+    return float64_to_float32(DT1, &env->fp_status);
 }
 
-void helper_fstod(void)
+void helper_fstod(float32 src)
 {
-    DT0 = float32_to_float64(FT1, &env->fp_status);
+    DT0 = float32_to_float64(src, &env->fp_status);
 }
 
-void helper_fqtos(void)
+float32 helper_fqtos(void)
 {
-    FT0 = float128_to_float32(QT1, &env->fp_status);
+    return float128_to_float32(QT1, &env->fp_status);
 }
 
-void helper_fstoq(void)
+void helper_fstoq(float32 src)
 {
-    QT0 = float32_to_float128(FT1, &env->fp_status);
+    QT0 = float32_to_float128(src, &env->fp_status);
 }
 
 void helper_fqtod(void)
@@ -198,25 +203,25 @@ void helper_fdtoq(void)
 }
 
 /* Float to integer conversion.  */
-void helper_fstoi(void)
+int32_t helper_fstoi(float32 src)
 {
-    *((int32_t *)&FT0) = float32_to_int32_round_to_zero(FT1, &env->fp_status);
+    return float32_to_int32_round_to_zero(src, &env->fp_status);
 }
 
-void helper_fdtoi(void)
+int32_t helper_fdtoi(void)
 {
-    *((int32_t *)&FT0) = float64_to_int32_round_to_zero(DT1, &env->fp_status);
+    return float64_to_int32_round_to_zero(DT1, &env->fp_status);
 }
 
-void helper_fqtoi(void)
+int32_t helper_fqtoi(void)
 {
-    *((int32_t *)&FT0) = float128_to_int32_round_to_zero(QT1, &env->fp_status);
+    return float128_to_int32_round_to_zero(QT1, &env->fp_status);
 }
 
 #ifdef TARGET_SPARC64
-void helper_fstox(void)
+void helper_fstox(float32 src)
 {
-    *((int64_t *)&DT0) = float32_to_int64_round_to_zero(FT1, &env->fp_status);
+    *((int64_t *)&DT0) = float32_to_int64_round_to_zero(src, &env->fp_status);
 }
 
 void helper_fdtox(void)
@@ -239,116 +244,6 @@ void helper_faligndata(void)
         tmp |= (*((uint64_t *)&DT1)) >> (64 - (env->gsr & 7) * 8);
     }
     *((uint64_t *)&DT0) = tmp;
-}
-
-void helper_movl_FT0_0(void)
-{
-    *((uint32_t *)&FT0) = 0;
-}
-
-void helper_movl_DT0_0(void)
-{
-    *((uint64_t *)&DT0) = 0;
-}
-
-void helper_movl_FT0_1(void)
-{
-    *((uint32_t *)&FT0) = 0xffffffff;
-}
-
-void helper_movl_DT0_1(void)
-{
-    *((uint64_t *)&DT0) = 0xffffffffffffffffULL;
-}
-
-void helper_fnot(void)
-{
-    *(uint64_t *)&DT0 = ~*(uint64_t *)&DT1;
-}
-
-void helper_fnots(void)
-{
-    *(uint32_t *)&FT0 = ~*(uint32_t *)&FT1;
-}
-
-void helper_fnor(void)
-{
-    *(uint64_t *)&DT0 = ~(*(uint64_t *)&DT0 | *(uint64_t *)&DT1);
-}
-
-void helper_fnors(void)
-{
-    *(uint32_t *)&FT0 = ~(*(uint32_t *)&FT0 | *(uint32_t *)&FT1);
-}
-
-void helper_for(void)
-{
-    *(uint64_t *)&DT0 |= *(uint64_t *)&DT1;
-}
-
-void helper_fors(void)
-{
-    *(uint32_t *)&FT0 |= *(uint32_t *)&FT1;
-}
-
-void helper_fxor(void)
-{
-    *(uint64_t *)&DT0 ^= *(uint64_t *)&DT1;
-}
-
-void helper_fxors(void)
-{
-    *(uint32_t *)&FT0 ^= *(uint32_t *)&FT1;
-}
-
-void helper_fand(void)
-{
-    *(uint64_t *)&DT0 &= *(uint64_t *)&DT1;
-}
-
-void helper_fands(void)
-{
-    *(uint32_t *)&FT0 &= *(uint32_t *)&FT1;
-}
-
-void helper_fornot(void)
-{
-    *(uint64_t *)&DT0 = *(uint64_t *)&DT0 | ~*(uint64_t *)&DT1;
-}
-
-void helper_fornots(void)
-{
-    *(uint32_t *)&FT0 = *(uint32_t *)&FT0 | ~*(uint32_t *)&FT1;
-}
-
-void helper_fandnot(void)
-{
-    *(uint64_t *)&DT0 = *(uint64_t *)&DT0 & ~*(uint64_t *)&DT1;
-}
-
-void helper_fandnots(void)
-{
-    *(uint32_t *)&FT0 = *(uint32_t *)&FT0 & ~*(uint32_t *)&FT1;
-}
-
-void helper_fnand(void)
-{
-    *(uint64_t *)&DT0 = ~(*(uint64_t *)&DT0 & *(uint64_t *)&DT1);
-}
-
-void helper_fnands(void)
-{
-    *(uint32_t *)&FT0 = ~(*(uint32_t *)&FT0 & *(uint32_t *)&FT1);
-}
-
-void helper_fxnor(void)
-{
-    *(uint64_t *)&DT0 ^= ~*(uint64_t *)&DT1;
-}
-
-void helper_fxnors(void)
-{
-    *(uint32_t *)&FT0 ^= ~*(uint32_t *)&FT1;
 }
 
 #ifdef WORDS_BIGENDIAN
@@ -592,17 +487,17 @@ void helper_fexpand(void)
         DT0 = d.d;                                      \
     }                                                   \
                                                         \
-    void name##16s(void)                                \
+    uint32_t name##16s(uint32_t src1, uint32_t src2)    \
     {                                                   \
         vis32 s, d;                                     \
                                                         \
-        s.f = FT0;                                      \
-        d.f = FT1;                                      \
+        s.l = src1;                                     \
+        d.l = src2;                                     \
                                                         \
         d.VIS_W32(0) = F(d.VIS_W32(0), s.VIS_W32(0));   \
         d.VIS_W32(1) = F(d.VIS_W32(1), s.VIS_W32(1));   \
                                                         \
-        FT0 = d.f;                                      \
+        return d.l;                                     \
     }                                                   \
                                                         \
     void name##32(void)                                 \
@@ -618,16 +513,16 @@ void helper_fexpand(void)
         DT0 = d.d;                                      \
     }                                                   \
                                                         \
-    void name##32s(void)                                \
+    uint32_t name##32s(uint32_t src1, uint32_t src2)    \
     {                                                   \
         vis32 s, d;                                     \
                                                         \
-        s.f = FT0;                                      \
-        d.f = FT1;                                      \
+        s.l = src1;                                     \
+        d.l = src2;                                     \
                                                         \
         d.l = F(d.l, s.l);                              \
                                                         \
-        FT0 = d.f;                                      \
+        return d.l;                                     \
     }
 
 #define FADD(a, b) ((a) + (b))
@@ -709,9 +604,9 @@ void helper_clear_float_exceptions(void)
     set_float_exception_flags(0, &env->fp_status);
 }
 
-void helper_fabss(void)
+float32 helper_fabss(float32 src)
 {
-    FT0 = float32_abs(FT1);
+    return float32_abs(src);
 }
 
 #ifdef TARGET_SPARC64
@@ -726,9 +621,9 @@ void helper_fabsq(void)
 }
 #endif
 
-void helper_fsqrts(void)
+float32 helper_fsqrts(float32 src)
 {
-    FT0 = float32_sqrt(FT1, &env->fp_status);
+    return float32_sqrt(src, &env->fp_status);
 }
 
 void helper_fsqrtd(void)
@@ -771,41 +666,72 @@ void helper_fsqrtq(void)
         }                                                               \
         env->fsr |= new_fsr;                                            \
     }
+#define GEN_FCMPS(name, size, FS, TRAP)                                 \
+    void glue(helper_, name)(float32 src1, float32 src2)                \
+    {                                                                   \
+        target_ulong new_fsr;                                           \
+                                                                        \
+        env->fsr &= ~((FSR_FCC1 | FSR_FCC0) << FS);                     \
+        switch (glue(size, _compare) (src1, src2, &env->fp_status)) {   \
+        case float_relation_unordered:                                  \
+            new_fsr = (FSR_FCC1 | FSR_FCC0) << FS;                      \
+            if ((env->fsr & FSR_NVM) || TRAP) {                         \
+                env->fsr |= new_fsr;                                    \
+                env->fsr |= FSR_NVC;                                    \
+                env->fsr |= FSR_FTT_IEEE_EXCP;                          \
+                raise_exception(TT_FP_EXCP);                            \
+            } else {                                                    \
+                env->fsr |= FSR_NVA;                                    \
+            }                                                           \
+            break;                                                      \
+        case float_relation_less:                                       \
+            new_fsr = FSR_FCC0 << FS;                                   \
+            break;                                                      \
+        case float_relation_greater:                                    \
+            new_fsr = FSR_FCC1 << FS;                                   \
+            break;                                                      \
+        default:                                                        \
+            new_fsr = 0;                                                \
+            break;                                                      \
+        }                                                               \
+        env->fsr |= new_fsr;                                            \
+    }
 
-GEN_FCMP(fcmps, float32, FT0, FT1, 0, 0);
+GEN_FCMPS(fcmps, float32, 0, 0);
 GEN_FCMP(fcmpd, float64, DT0, DT1, 0, 0);
 
-GEN_FCMP(fcmpes, float32, FT0, FT1, 0, 1);
+GEN_FCMPS(fcmpes, float32, 0, 1);
 GEN_FCMP(fcmped, float64, DT0, DT1, 0, 1);
 
 GEN_FCMP(fcmpq, float128, QT0, QT1, 0, 0);
 GEN_FCMP(fcmpeq, float128, QT0, QT1, 0, 1);
 
 #ifdef TARGET_SPARC64
-GEN_FCMP(fcmps_fcc1, float32, FT0, FT1, 22, 0);
+GEN_FCMPS(fcmps_fcc1, float32, 22, 0);
 GEN_FCMP(fcmpd_fcc1, float64, DT0, DT1, 22, 0);
 GEN_FCMP(fcmpq_fcc1, float128, QT0, QT1, 22, 0);
 
-GEN_FCMP(fcmps_fcc2, float32, FT0, FT1, 24, 0);
+GEN_FCMPS(fcmps_fcc2, float32, 24, 0);
 GEN_FCMP(fcmpd_fcc2, float64, DT0, DT1, 24, 0);
 GEN_FCMP(fcmpq_fcc2, float128, QT0, QT1, 24, 0);
 
-GEN_FCMP(fcmps_fcc3, float32, FT0, FT1, 26, 0);
+GEN_FCMPS(fcmps_fcc3, float32, 26, 0);
 GEN_FCMP(fcmpd_fcc3, float64, DT0, DT1, 26, 0);
 GEN_FCMP(fcmpq_fcc3, float128, QT0, QT1, 26, 0);
 
-GEN_FCMP(fcmpes_fcc1, float32, FT0, FT1, 22, 1);
+GEN_FCMPS(fcmpes_fcc1, float32, 22, 1);
 GEN_FCMP(fcmped_fcc1, float64, DT0, DT1, 22, 1);
 GEN_FCMP(fcmpeq_fcc1, float128, QT0, QT1, 22, 1);
 
-GEN_FCMP(fcmpes_fcc2, float32, FT0, FT1, 24, 1);
+GEN_FCMPS(fcmpes_fcc2, float32, 24, 1);
 GEN_FCMP(fcmped_fcc2, float64, DT0, DT1, 24, 1);
 GEN_FCMP(fcmpeq_fcc2, float128, QT0, QT1, 24, 1);
 
-GEN_FCMP(fcmpes_fcc3, float32, FT0, FT1, 26, 1);
+GEN_FCMPS(fcmpes_fcc3, float32, 26, 1);
 GEN_FCMP(fcmped_fcc3, float64, DT0, DT1, 26, 1);
 GEN_FCMP(fcmpeq_fcc3, float128, QT0, QT1, 26, 1);
 #endif
+#undef GEN_FCMPS
 
 #if !defined(TARGET_SPARC64) && !defined(CONFIG_USER_ONLY) && \
     defined(DEBUG_MXCC)
@@ -1135,7 +1061,7 @@ void helper_st_asi(target_ulong addr, uint64_t val, int asi, int size)
             break;
         case 0x01c00a04: /* MXCC control register */
             if (size == 4)
-                env->mxccregs[3] = (env->mxccregs[0xa] & 0xffffffff00000000ULL)
+                env->mxccregs[3] = (env->mxccregs[3] & 0xffffffff00000000ULL)
                     | val;
             else
                 DPRINTF_MXCC("%08x: unimplemented access size: %d\n", addr,
@@ -1397,10 +1323,17 @@ uint64_t helper_ld_asi(target_ulong addr, int asi, int size, int sign)
     address_mask(env, &addr);
 
     switch (asi) {
-    case 0x80: // Primary
     case 0x82: // Primary no-fault
-    case 0x88: // Primary LE
     case 0x8a: // Primary no-fault LE
+        if (page_check_range(addr, size, PAGE_READ) == -1) {
+#ifdef DEBUG_ASI
+            dump_asi("read ", last_addr, asi, size, ret);
+#endif
+            return 0;
+        }
+        // Fall through
+    case 0x80: // Primary
+    case 0x88: // Primary LE
         {
             switch(size) {
             case 1:
@@ -1419,10 +1352,17 @@ uint64_t helper_ld_asi(target_ulong addr, int asi, int size, int sign)
             }
         }
         break;
-    case 0x81: // Secondary
     case 0x83: // Secondary no-fault
-    case 0x89: // Secondary LE
     case 0x8b: // Secondary no-fault LE
+        if (page_check_range(addr, size, PAGE_READ) == -1) {
+#ifdef DEBUG_ASI
+            dump_asi("read ", last_addr, asi, size, ret);
+#endif
+            return 0;
+        }
+        // Fall through
+    case 0x81: // Secondary
+    case 0x89: // Secondary LE
         // XXX
         break;
     default:
@@ -1559,12 +1499,19 @@ uint64_t helper_ld_asi(target_ulong addr, int asi, int size, int sign)
 
     helper_check_align(addr, size - 1);
     switch (asi) {
+    case 0x82: // Primary no-fault
+    case 0x8a: // Primary no-fault LE
+        if (cpu_get_phys_page_debug(env, addr) == -1ULL) {
+#ifdef DEBUG_ASI
+            dump_asi("read ", last_addr, asi, size, ret);
+#endif
+            return 0;
+        }
+        // Fall through
     case 0x10: // As if user primary
     case 0x18: // As if user primary LE
     case 0x80: // Primary
-    case 0x82: // Primary no-fault
     case 0x88: // Primary LE
-    case 0x8a: // Primary no-fault LE
         if ((asi & 0x80) && (env->pstate & PS_PRIV)) {
             if ((env->def->features & CPU_FEATURE_HYPV)
                 && env->hpstate & HS_PRIV) {
@@ -1645,15 +1592,22 @@ uint64_t helper_ld_asi(target_ulong addr, int asi, int size, int sign)
         //  Only ldda allowed
         raise_exception(TT_ILL_INSN);
         return 0;
+    case 0x83: // Secondary no-fault
+    case 0x8b: // Secondary no-fault LE
+        if (cpu_get_phys_page_debug(env, addr) == -1ULL) {
+#ifdef DEBUG_ASI
+            dump_asi("read ", last_addr, asi, size, ret);
+#endif
+            return 0;
+        }
+        // Fall through
     case 0x04: // Nucleus
     case 0x0c: // Nucleus Little Endian (LE)
     case 0x11: // As if user secondary
     case 0x19: // As if user secondary LE
     case 0x4a: // UPA config
     case 0x81: // Secondary
-    case 0x83: // Secondary no-fault
     case 0x89: // Secondary LE
-    case 0x8b: // Secondary no-fault LE
         // XXX
         break;
     case 0x45: // LSU
@@ -2187,7 +2141,7 @@ void helper_ldf_asi(target_ulong addr, int asi, int size, int rd)
     switch(size) {
     default:
     case 4:
-        *((uint32_t *)&FT0) = val;
+        *((uint32_t *)&env->fpr[rd]) = val;
         break;
     case 8:
         *((int64_t *)&DT0) = val;
@@ -2228,7 +2182,7 @@ void helper_stf_asi(target_ulong addr, int asi, int size, int rd)
     switch(size) {
     default:
     case 4:
-        val = *((uint32_t *)&FT0);
+        val = *((uint32_t *)&env->fpr[rd]);
         break;
     case 8:
         val = *((int64_t *)&DT0);
@@ -2454,11 +2408,10 @@ void helper_stqf(target_ulong addr, int mem_idx)
 #endif
 }
 
-void helper_ldfsr(void)
+static inline void set_fsr(void)
 {
     int rnd_mode;
 
-    PUT_FSR32(env, *((uint32_t *) &FT0));
     switch (env->fsr & FSR_RD_MASK) {
     case FSR_RD_NEAREST:
         rnd_mode = float_round_nearest_even;
@@ -2477,10 +2430,19 @@ void helper_ldfsr(void)
     set_float_rounding_mode(rnd_mode, &env->fp_status);
 }
 
-void helper_stfsr(void)
+void helper_ldfsr(uint32_t new_fsr)
 {
-    *((uint32_t *) &FT0) = GET_FSR32(env);
+    env->fsr = (new_fsr & FSR_LDFSR_MASK) | (env->fsr & FSR_LDFSR_OLDMASK);
+    set_fsr();
 }
+
+#ifdef TARGET_SPARC64
+void helper_ldxfsr(uint64_t new_fsr)
+{
+    env->fsr = (new_fsr & FSR_LDXFSR_MASK) | (env->fsr & FSR_LDXFSR_OLDMASK);
+    set_fsr();
+}
+#endif
 
 void helper_debug(void)
 {
@@ -2668,7 +2630,7 @@ static inline uint64_t *get_gregset(uint64_t pstate)
     }
 }
 
-void change_pstate(uint64_t new_pstate)
+static inline void change_pstate(uint64_t new_pstate)
 {
     uint64_t pstate_regs, new_pstate_regs;
     uint64_t *src, *dst;
@@ -2716,28 +2678,240 @@ void helper_retry(void)
 }
 #endif
 
-void cpu_set_cwp(CPUState *env1, int new_cwp)
-{
-    /* put the modified wrap registers at their proper location */
-    if (env1->cwp == env1->nwindows - 1)
-        memcpy32(env1->regbase, env1->regbase + env1->nwindows * 16);
-    env1->cwp = new_cwp;
-    /* put the wrap registers at their temporary location */
-    if (new_cwp == env1->nwindows - 1)
-        memcpy32(env1->regbase + env1->nwindows * 16, env1->regbase);
-    env1->regwptr = env1->regbase + (new_cwp * 16);
-}
-
-void set_cwp(int new_cwp)
-{
-    cpu_set_cwp(env, new_cwp);
-}
-
 void helper_flush(target_ulong addr)
 {
     addr &= ~7;
     tb_invalidate_page_range(addr, addr + 8);
 }
+
+#ifdef TARGET_SPARC64
+#ifdef DEBUG_PCALL
+static const char * const excp_names[0x80] = {
+    [TT_TFAULT] = "Instruction Access Fault",
+    [TT_TMISS] = "Instruction Access MMU Miss",
+    [TT_CODE_ACCESS] = "Instruction Access Error",
+    [TT_ILL_INSN] = "Illegal Instruction",
+    [TT_PRIV_INSN] = "Privileged Instruction",
+    [TT_NFPU_INSN] = "FPU Disabled",
+    [TT_FP_EXCP] = "FPU Exception",
+    [TT_TOVF] = "Tag Overflow",
+    [TT_CLRWIN] = "Clean Windows",
+    [TT_DIV_ZERO] = "Division By Zero",
+    [TT_DFAULT] = "Data Access Fault",
+    [TT_DMISS] = "Data Access MMU Miss",
+    [TT_DATA_ACCESS] = "Data Access Error",
+    [TT_DPROT] = "Data Protection Error",
+    [TT_UNALIGNED] = "Unaligned Memory Access",
+    [TT_PRIV_ACT] = "Privileged Action",
+    [TT_EXTINT | 0x1] = "External Interrupt 1",
+    [TT_EXTINT | 0x2] = "External Interrupt 2",
+    [TT_EXTINT | 0x3] = "External Interrupt 3",
+    [TT_EXTINT | 0x4] = "External Interrupt 4",
+    [TT_EXTINT | 0x5] = "External Interrupt 5",
+    [TT_EXTINT | 0x6] = "External Interrupt 6",
+    [TT_EXTINT | 0x7] = "External Interrupt 7",
+    [TT_EXTINT | 0x8] = "External Interrupt 8",
+    [TT_EXTINT | 0x9] = "External Interrupt 9",
+    [TT_EXTINT | 0xa] = "External Interrupt 10",
+    [TT_EXTINT | 0xb] = "External Interrupt 11",
+    [TT_EXTINT | 0xc] = "External Interrupt 12",
+    [TT_EXTINT | 0xd] = "External Interrupt 13",
+    [TT_EXTINT | 0xe] = "External Interrupt 14",
+    [TT_EXTINT | 0xf] = "External Interrupt 15",
+};
+#endif
+
+void do_interrupt(CPUState *env)
+{
+    int intno = env->exception_index;
+
+#ifdef DEBUG_PCALL
+    if (loglevel & CPU_LOG_INT) {
+        static int count;
+        const char *name;
+
+        if (intno < 0 || intno >= 0x180)
+            name = "Unknown";
+        else if (intno >= 0x100)
+            name = "Trap Instruction";
+        else if (intno >= 0xc0)
+            name = "Window Fill";
+        else if (intno >= 0x80)
+            name = "Window Spill";
+        else {
+            name = excp_names[intno];
+            if (!name)
+                name = "Unknown";
+        }
+
+        fprintf(logfile, "%6d: %s (v=%04x) pc=%016" PRIx64 " npc=%016" PRIx64
+                " SP=%016" PRIx64 "\n",
+                count, name, intno,
+                env->pc,
+                env->npc, env->regwptr[6]);
+        cpu_dump_state(env, logfile, fprintf, 0);
+#if 0
+        {
+            int i;
+            uint8_t *ptr;
+
+            fprintf(logfile, "       code=");
+            ptr = (uint8_t *)env->pc;
+            for(i = 0; i < 16; i++) {
+                fprintf(logfile, " %02x", ldub(ptr + i));
+            }
+            fprintf(logfile, "\n");
+        }
+#endif
+        count++;
+    }
+#endif
+#if !defined(CONFIG_USER_ONLY)
+    if (env->tl >= env->maxtl) {
+        cpu_abort(env, "Trap 0x%04x while trap level (%d) >= MAXTL (%d),"
+                  " Error state", env->exception_index, env->tl, env->maxtl);
+        return;
+    }
+#endif
+    if (env->tl < env->maxtl - 1) {
+        env->tl++;
+    } else {
+        env->pstate |= PS_RED;
+        if (env->tl < env->maxtl)
+            env->tl++;
+    }
+    env->tsptr = &env->ts[env->tl & MAXTL_MASK];
+    env->tsptr->tstate = ((uint64_t)GET_CCR(env) << 32) |
+        ((env->asi & 0xff) << 24) | ((env->pstate & 0xf3f) << 8) |
+        GET_CWP64(env);
+    env->tsptr->tpc = env->pc;
+    env->tsptr->tnpc = env->npc;
+    env->tsptr->tt = intno;
+    if (!(env->def->features & CPU_FEATURE_GL)) {
+        switch (intno) {
+        case TT_IVEC:
+            change_pstate(PS_PEF | PS_PRIV | PS_IG);
+            break;
+        case TT_TFAULT:
+        case TT_TMISS:
+        case TT_DFAULT:
+        case TT_DMISS:
+        case TT_DPROT:
+            change_pstate(PS_PEF | PS_PRIV | PS_MG);
+            break;
+        default:
+            change_pstate(PS_PEF | PS_PRIV | PS_AG);
+            break;
+        }
+    }
+    if (intno == TT_CLRWIN)
+        cpu_set_cwp(env, cpu_cwp_dec(env, env->cwp - 1));
+    else if ((intno & 0x1c0) == TT_SPILL)
+        cpu_set_cwp(env, cpu_cwp_dec(env, env->cwp - env->cansave - 2));
+    else if ((intno & 0x1c0) == TT_FILL)
+        cpu_set_cwp(env, cpu_cwp_inc(env, env->cwp + 1));
+    env->tbr &= ~0x7fffULL;
+    env->tbr |= ((env->tl > 1) ? 1 << 14 : 0) | (intno << 5);
+    env->pc = env->tbr;
+    env->npc = env->pc + 4;
+    env->exception_index = 0;
+}
+#else
+#ifdef DEBUG_PCALL
+static const char * const excp_names[0x80] = {
+    [TT_TFAULT] = "Instruction Access Fault",
+    [TT_ILL_INSN] = "Illegal Instruction",
+    [TT_PRIV_INSN] = "Privileged Instruction",
+    [TT_NFPU_INSN] = "FPU Disabled",
+    [TT_WIN_OVF] = "Window Overflow",
+    [TT_WIN_UNF] = "Window Underflow",
+    [TT_UNALIGNED] = "Unaligned Memory Access",
+    [TT_FP_EXCP] = "FPU Exception",
+    [TT_DFAULT] = "Data Access Fault",
+    [TT_TOVF] = "Tag Overflow",
+    [TT_EXTINT | 0x1] = "External Interrupt 1",
+    [TT_EXTINT | 0x2] = "External Interrupt 2",
+    [TT_EXTINT | 0x3] = "External Interrupt 3",
+    [TT_EXTINT | 0x4] = "External Interrupt 4",
+    [TT_EXTINT | 0x5] = "External Interrupt 5",
+    [TT_EXTINT | 0x6] = "External Interrupt 6",
+    [TT_EXTINT | 0x7] = "External Interrupt 7",
+    [TT_EXTINT | 0x8] = "External Interrupt 8",
+    [TT_EXTINT | 0x9] = "External Interrupt 9",
+    [TT_EXTINT | 0xa] = "External Interrupt 10",
+    [TT_EXTINT | 0xb] = "External Interrupt 11",
+    [TT_EXTINT | 0xc] = "External Interrupt 12",
+    [TT_EXTINT | 0xd] = "External Interrupt 13",
+    [TT_EXTINT | 0xe] = "External Interrupt 14",
+    [TT_EXTINT | 0xf] = "External Interrupt 15",
+    [TT_TOVF] = "Tag Overflow",
+    [TT_CODE_ACCESS] = "Instruction Access Error",
+    [TT_DATA_ACCESS] = "Data Access Error",
+    [TT_DIV_ZERO] = "Division By Zero",
+    [TT_NCP_INSN] = "Coprocessor Disabled",
+};
+#endif
+
+void do_interrupt(CPUState *env)
+{
+    int cwp, intno = env->exception_index;
+
+#ifdef DEBUG_PCALL
+    if (loglevel & CPU_LOG_INT) {
+        static int count;
+        const char *name;
+
+        if (intno < 0 || intno >= 0x100)
+            name = "Unknown";
+        else if (intno >= 0x80)
+            name = "Trap Instruction";
+        else {
+            name = excp_names[intno];
+            if (!name)
+                name = "Unknown";
+        }
+
+        fprintf(logfile, "%6d: %s (v=%02x) pc=%08x npc=%08x SP=%08x\n",
+                count, name, intno,
+                env->pc,
+                env->npc, env->regwptr[6]);
+        cpu_dump_state(env, logfile, fprintf, 0);
+#if 0
+        {
+            int i;
+            uint8_t *ptr;
+
+            fprintf(logfile, "       code=");
+            ptr = (uint8_t *)env->pc;
+            for(i = 0; i < 16; i++) {
+                fprintf(logfile, " %02x", ldub(ptr + i));
+            }
+            fprintf(logfile, "\n");
+        }
+#endif
+        count++;
+    }
+#endif
+#if !defined(CONFIG_USER_ONLY)
+    if (env->psret == 0) {
+        cpu_abort(env, "Trap 0x%02x while interrupts disabled, Error state",
+                  env->exception_index);
+        return;
+    }
+#endif
+    env->psret = 0;
+    cwp = cpu_cwp_dec(env, env->cwp - 1);
+    cpu_set_cwp(env, cwp);
+    env->regwptr[9] = env->pc;
+    env->regwptr[10] = env->npc;
+    env->psrps = env->psrs;
+    env->psrs = 1;
+    env->tbr = (env->tbr & TBR_BASE_MASK) | (intno << 4);
+    env->pc = env->tbr;
+    env->npc = env->pc + 4;
+    env->exception_index = 0;
+}
+#endif
 
 #if !defined(CONFIG_USER_ONLY)
 

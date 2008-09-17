@@ -30,33 +30,6 @@
 #include <windows.h>
 #endif
 
-#ifdef _WIN32
-
-void *qemu_memalign(size_t alignment, size_t size)
-{
-    return VirtualAlloc(NULL, size, MEM_COMMIT, PAGE_READWRITE);
-}
-
-#else
-
-void *qemu_memalign(size_t alignment, size_t size)
-{
-#if defined(_POSIX_C_SOURCE)
-    int ret;
-    void *ptr;
-    ret = posix_memalign(&ptr, alignment, size);
-    if (ret != 0)
-        return NULL;
-    return ptr;
-#elif defined(_BSD)
-    return valloc(size);
-#else
-    return memalign(alignment, size);
-#endif
-}
-
-#endif
-
 static void __attribute__((noreturn)) error(const char *fmt, ...)
 {
     va_list ap;

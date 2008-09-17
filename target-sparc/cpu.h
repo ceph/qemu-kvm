@@ -110,48 +110,61 @@
 #endif
 
 /* Fcc */
-#define FSR_RD1        (1<<31)
-#define FSR_RD0        (1<<30)
+#define FSR_RD1        (1ULL << 31)
+#define FSR_RD0        (1ULL << 30)
 #define FSR_RD_MASK    (FSR_RD1 | FSR_RD0)
 #define FSR_RD_NEAREST 0
 #define FSR_RD_ZERO    FSR_RD0
 #define FSR_RD_POS     FSR_RD1
 #define FSR_RD_NEG     (FSR_RD1 | FSR_RD0)
 
-#define FSR_NVM   (1<<27)
-#define FSR_OFM   (1<<26)
-#define FSR_UFM   (1<<25)
-#define FSR_DZM   (1<<24)
-#define FSR_NXM   (1<<23)
+#define FSR_NVM   (1ULL << 27)
+#define FSR_OFM   (1ULL << 26)
+#define FSR_UFM   (1ULL << 25)
+#define FSR_DZM   (1ULL << 24)
+#define FSR_NXM   (1ULL << 23)
 #define FSR_TEM_MASK (FSR_NVM | FSR_OFM | FSR_UFM | FSR_DZM | FSR_NXM)
 
-#define FSR_NVA   (1<<9)
-#define FSR_OFA   (1<<8)
-#define FSR_UFA   (1<<7)
-#define FSR_DZA   (1<<6)
-#define FSR_NXA   (1<<5)
+#define FSR_NVA   (1ULL << 9)
+#define FSR_OFA   (1ULL << 8)
+#define FSR_UFA   (1ULL << 7)
+#define FSR_DZA   (1ULL << 6)
+#define FSR_NXA   (1ULL << 5)
 #define FSR_AEXC_MASK (FSR_NVA | FSR_OFA | FSR_UFA | FSR_DZA | FSR_NXA)
 
-#define FSR_NVC   (1<<4)
-#define FSR_OFC   (1<<3)
-#define FSR_UFC   (1<<2)
-#define FSR_DZC   (1<<1)
-#define FSR_NXC   (1<<0)
+#define FSR_NVC   (1ULL << 4)
+#define FSR_OFC   (1ULL << 3)
+#define FSR_UFC   (1ULL << 2)
+#define FSR_DZC   (1ULL << 1)
+#define FSR_NXC   (1ULL << 0)
 #define FSR_CEXC_MASK (FSR_NVC | FSR_OFC | FSR_UFC | FSR_DZC | FSR_NXC)
 
-#define FSR_FTT2   (1<<16)
-#define FSR_FTT1   (1<<15)
-#define FSR_FTT0   (1<<14)
-#define FSR_FTT_MASK (FSR_FTT2 | FSR_FTT1 | FSR_FTT0)
-#define FSR_FTT_IEEE_EXCP (1 << 14)
-#define FSR_FTT_UNIMPFPOP (3 << 14)
-#define FSR_FTT_SEQ_ERROR (4 << 14)
-#define FSR_FTT_INVAL_FPR (6 << 14)
+#define FSR_FTT2   (1ULL << 16)
+#define FSR_FTT1   (1ULL << 15)
+#define FSR_FTT0   (1ULL << 14)
+//gcc warns about constant overflow for ~FSR_FTT_MASK
+//#define FSR_FTT_MASK (FSR_FTT2 | FSR_FTT1 | FSR_FTT0)
+#ifdef TARGET_SPARC64
+#define FSR_FTT_NMASK      0xfffffffffffe3fffULL
+#define FSR_FTT_CEXC_NMASK 0xfffffffffffe3fe0ULL
+#define FSR_LDFSR_OLDMASK  0x0000003f000fc000ULL
+#define FSR_LDXFSR_MASK    0x0000003fcfc00fffULL
+#define FSR_LDXFSR_OLDMASK 0x00000000000fc000ULL
+#else
+#define FSR_FTT_NMASK      0xfffe3fffULL
+#define FSR_FTT_CEXC_NMASK 0xfffe3fe0ULL
+#define FSR_LDFSR_OLDMASK  0x000fc000ULL
+#endif
+#define FSR_LDFSR_MASK     0xcfc00fffULL
+#define FSR_FTT_IEEE_EXCP (1ULL << 14)
+#define FSR_FTT_UNIMPFPOP (3ULL << 14)
+#define FSR_FTT_SEQ_ERROR (4ULL << 14)
+#define FSR_FTT_INVAL_FPR (6ULL << 14)
 
 #define FSR_FCC1_SHIFT 11
-#define FSR_FCC1  (1 << FSR_FCC1_SHIFT)
+#define FSR_FCC1  (1ULL << FSR_FCC1_SHIFT)
 #define FSR_FCC0_SHIFT 10
-#define FSR_FCC0  (1 << FSR_FCC0_SHIFT)
+#define FSR_FCC0  (1ULL << FSR_FCC0_SHIFT)
 
 /* MMU */
 #define MMU_E     (1<<0)
@@ -290,7 +303,6 @@ typedef struct CPUSPARCState {
     uint64_t prom_addr;
 #endif
     /* temporary float registers */
-    float32 ft0, ft1;
     float64 dt0, dt1;
     float128 qt0, qt1;
     float_status fp_status;
@@ -321,28 +333,17 @@ typedef struct CPUSPARCState {
     sparc_def_t *def;
 } CPUSPARCState;
 
-#if defined(TARGET_SPARC64)
-#define GET_FSR32(env) (env->fsr & 0xcfc1ffff)
-#define PUT_FSR32(env, val) do { uint32_t _tmp = val;                   \
-        env->fsr = (_tmp & 0xcfc1c3ff) | (env->fsr & 0x3f00000000ULL);  \
-    } while (0)
-#define GET_FSR64(env) (env->fsr & 0x3fcfc1ffffULL)
-#define PUT_FSR64(env, val) do { uint64_t _tmp = val;   \
-        env->fsr = _tmp & 0x3fcfc1c3ffULL;              \
-    } while (0)
-#else
-#define GET_FSR32(env) (env->fsr)
-#define PUT_FSR32(env, val) do { uint32_t _tmp = val;                   \
-        env->fsr = (_tmp & 0xcfc1dfff) | (env->fsr & 0x000e0000);       \
-    } while (0)
-#endif
-
+/* helper.c */
 CPUSPARCState *cpu_sparc_init(const char *cpu_model);
-void gen_intermediate_code_init(CPUSPARCState *env);
-int cpu_sparc_exec(CPUSPARCState *s);
+void cpu_sparc_set_id(CPUSPARCState *env, unsigned int cpu);
 void sparc_cpu_list (FILE *f, int (*cpu_fprintf)(FILE *f, const char *fmt,
                                                  ...));
-void cpu_sparc_set_id(CPUSPARCState *env, unsigned int cpu);
+
+/* translate.c */
+void gen_intermediate_code_init(CPUSPARCState *env);
+
+/* cpu-exec.c */
+int cpu_sparc_exec(CPUSPARCState *s);
 
 #define GET_PSR(env) (env->version | (env->psr & PSR_ICC) |             \
                       (env->psref? PSR_EF : 0) |                        \
@@ -352,7 +353,29 @@ void cpu_sparc_set_id(CPUSPARCState *env, unsigned int cpu);
                       (env->psret? PSR_ET : 0) | env->cwp)
 
 #ifndef NO_CPU_IO_DEFS
-void cpu_set_cwp(CPUSPARCState *env1, int new_cwp);
+static inline void memcpy32(target_ulong *dst, const target_ulong *src)
+{
+    dst[0] = src[0];
+    dst[1] = src[1];
+    dst[2] = src[2];
+    dst[3] = src[3];
+    dst[4] = src[4];
+    dst[5] = src[5];
+    dst[6] = src[6];
+    dst[7] = src[7];
+}
+
+static inline void cpu_set_cwp(CPUSPARCState *env1, int new_cwp)
+{
+    /* put the modified wrap registers at their proper location */
+    if (env1->cwp == env1->nwindows - 1)
+        memcpy32(env1->regbase, env1->regbase + env1->nwindows * 16);
+    env1->cwp = new_cwp;
+    /* put the wrap registers at their temporary location */
+    if (new_cwp == env1->nwindows - 1)
+        memcpy32(env1->regbase + env1->nwindows * 16, env1->regbase);
+    env1->regwptr = env1->regbase + (new_cwp * 16);
+}
 
 static inline int cpu_cwp_inc(CPUSPARCState *env1, int cwp)
 {
@@ -397,10 +420,9 @@ static inline void PUT_CWP64(CPUSPARCState *env1, int cwp)
 #endif
 #endif
 
-int cpu_sparc_signal_handler(int host_signum, void *pinfo, void *puc);
+/* cpu-exec.c */
 void do_unassigned_access(target_phys_addr_t addr, int is_write, int is_exec,
                           int is_asi);
-void cpu_check_irqs(CPUSPARCState *env);
 
 #define CPUState CPUSPARCState
 #define cpu_init cpu_sparc_init

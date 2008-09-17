@@ -235,13 +235,12 @@ int usb_generic_handle_packet(USBDevice *s, USBPacket *p);
 int set_usb_string(uint8_t *buf, const char *str);
 void usb_send_msg(USBDevice *dev, int msg);
 
-void usb_packet_complete(USBPacket *p);
-
 /* usb hub */
 USBDevice *usb_hub_init(int nb_ports);
 
 /* usb-linux.c */
 USBDevice *usb_host_device_open(const char *devname);
+int usb_host_device_close(const char *devname);
 void usb_host_info(void);
 
 /* usb-hid.c */

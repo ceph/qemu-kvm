@@ -79,7 +79,7 @@ uint64_t cpu_get_tsc(CPUX86State *env)
     /* Note: when using kqemu, it is more logical to return the host TSC
        because kqemu does not trap the RDTSC instruction for
        performance reasons */
-#if USE_KQEMU
+#ifdef USE_KQEMU
     if (env->kqemu_enabled) {
         return cpu_get_real_ticks();
     } else
@@ -842,49 +842,42 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
     vmport_init();
 
     /* allocate RAM */
-    if (kvm_enabled()) {
-        ram_addr = qemu_ram_alloc(0xa0000);
-        cpu_register_physical_memory(0, 0xa0000, ram_addr);
-        kvm_cpu_register_physical_memory(0, 0xa0000, ram_addr);
+    ram_addr = qemu_ram_alloc(0xa0000);
+    cpu_register_physical_memory(0, 0xa0000, ram_addr);
+    kvm_cpu_register_physical_memory(0, 0xa0000, ram_addr);
 
-        ram_addr = qemu_ram_alloc(0x100000 - 0xa0000);   // hole
-        ram_addr = qemu_ram_alloc(below_4g_mem_size - 0x100000);
-        cpu_register_physical_memory(0x100000,
-				     below_4g_mem_size - 0x100000,
-				     ram_addr);
-        kvm_cpu_register_physical_memory(0x100000,
-					 below_4g_mem_size - 0x100000,
-                                         ram_addr);
-        /* above 4giga memory allocation */
-        if (above_4g_mem_size > 0) {
-            ram_addr = qemu_ram_alloc(above_4g_mem_size);
-            if (hpagesize) {
-                if (ram_addr & (hpagesize-1)) {
-                        unsigned long aligned_addr;
-                        aligned_addr = (ram_addr + hpagesize - 1) &
-                                         ~(hpagesize-1);
-                        qemu_ram_alloc(aligned_addr - ram_addr);
-                        ram_addr = aligned_addr;
-                }
+    /* Allocate, even though we won't register, so we don't break the
+     * phys_ram_base + PA assumption. This range includes vga (0xa0000 - 0xc0000),
+     * and some bios areas, which will be registered later
+     */
+    ram_addr = qemu_ram_alloc(0x100000 - 0xa0000);
+    ram_addr = qemu_ram_alloc(below_4g_mem_size - 0x100000);
+    cpu_register_physical_memory(0x100000,
+                 below_4g_mem_size - 0x100000,
+                 ram_addr);
+    kvm_cpu_register_physical_memory(0x100000,
+                                     below_4g_mem_size - 0x100000,
+                                     ram_addr);
+
+    /* above 4giga memory allocation */
+    if (above_4g_mem_size > 0) {
+        if (hpagesize) {
+            if (ram_addr & (hpagesize-1)) {
+                unsigned long aligned_addr;
+                aligned_addr = (ram_addr + hpagesize - 1) & ~(hpagesize-1);
+                qemu_ram_alloc(aligned_addr - ram_addr);
+                ram_addr = aligned_addr;
             }
-            cpu_register_physical_memory(0x100000000ULL,
+        }
+        ram_addr = qemu_ram_alloc(above_4g_mem_size);
+        cpu_register_physical_memory(0x100000000ULL,
+                                     above_4g_mem_size,
+                                     ram_addr);
+        kvm_cpu_register_physical_memory(0x100000000ULL,
                                          above_4g_mem_size,
                                          ram_addr);
-            kvm_cpu_register_physical_memory(0x100000000ULL,
-					     above_4g_mem_size,
-                                             ram_addr);
-        }
-    } else
-    {
-        ram_addr = qemu_ram_alloc(ram_size);
-        cpu_register_physical_memory(0, below_4g_mem_size, ram_addr);
-        /* above 4giga memory allocation */
-        if (above_4g_mem_size > 0) {
-            cpu_register_physical_memory((target_phys_addr_t) 0x100000000ULL,
-                                         above_4g_mem_size,
-                                         ram_addr + below_4g_mem_size);
-        }
     }
+
     /* allocate VGA RAM */
     vga_ram_addr = qemu_ram_alloc(vga_ram_size);
 

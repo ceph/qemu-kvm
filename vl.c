@@ -103,10 +103,9 @@
 #include <stropts.h>
 #endif
 #endif
-#else
-#include <winsock2.h>
-int inet_aton(const char *cp, struct in_addr *ia);
 #endif
+
+#include "qemu_socket.h"
 
 #if defined(CONFIG_SLIRP)
 #include "libslirp.h"
@@ -127,8 +126,6 @@ int inet_aton(const char *cp, struct in_addr *ia);
 #define getopt_long_only getopt_long
 #define memalign(align, size) malloc(size)
 #endif
-
-#include "qemu_socket.h"
 
 #ifdef CONFIG_SDL
 #ifdef __APPLE__
@@ -1399,6 +1396,7 @@ static int64_t qemu_next_deadline(void)
     return delta;
 }
 
+#if defined(__linux__) || defined(_WIN32)
 static uint64_t qemu_next_deadline_dyntick(void)
 {
     int64_t delta;
@@ -1421,6 +1419,7 @@ static uint64_t qemu_next_deadline_dyntick(void)
 
     return delta;
 }
+#endif
 
 #ifndef _WIN32
 
@@ -1947,7 +1946,7 @@ static int mux_chr_write(CharDriverState *chr, const uint8_t *buf, int len)
     return ret;
 }
 
-static char *mux_help[] = {
+static const char * const mux_help[] = {
     "% h    print this help\n\r",
     "% x    exit emulator\n\r",
     "% s    save disk data back to file (if -snapshot)\n\r",
@@ -1997,7 +1996,7 @@ static int mux_proc_byte(CharDriverState *chr, MuxDriver *d, int ch)
             break;
         case 'x':
             {
-                 char *term =  "QEMU: Terminated\n\r";
+                 const char *term =  "QEMU: Terminated\n\r";
                  chr->chr_write(chr,(uint8_t *)term,strlen(term));
                  exit(0);
                  break;
@@ -2180,12 +2179,6 @@ static int send_all(int fd, const uint8_t *buf, int len1)
     return len1 - len;
 }
 
-void socket_set_nonblock(int fd)
-{
-    unsigned long opt = 1;
-    ioctlsocket(fd, FIONBIO, &opt);
-}
-
 #else
 
 static int unix_write(int fd, const uint8_t *buf, int len1)
@@ -2211,13 +2204,6 @@ static int unix_write(int fd, const uint8_t *buf, int len1)
 static inline int send_all(int fd, const uint8_t *buf, int len1)
 {
     return unix_write(fd, buf, len1);
-}
-
-void socket_set_nonblock(int fd)
-{
-    int f;
-    f = fcntl(fd, F_GETFL);
-    fcntl(fd, F_SETFL, f | O_NONBLOCK);
 }
 #endif /* !_WIN32 */
 
@@ -4005,6 +3991,7 @@ int parse_host_src_port(struct sockaddr_in *haddr,
     char *str = strdup(input_str);
     char *host_str = str;
     char *src_str;
+    const char *src_str2;
     char *ptr;
 
     /*
@@ -4023,10 +4010,11 @@ int parse_host_src_port(struct sockaddr_in *haddr,
     if (parse_host_port(haddr, host_str) < 0)
         goto fail;
 
+    src_str2 = src_str;
     if (!src_str || *src_str == '\0')
-        src_str = ":0";
+        src_str2 = ":0";
 
-    if (parse_host_port(saddr, src_str) < 0)
+    if (parse_host_port(saddr, src_str2) < 0)
         goto fail;
 
     free(str);
@@ -5477,7 +5465,7 @@ int get_param_value(char *buf, int buf_size,
 }
 
 int check_params(char *buf, int buf_size,
-                 char **params, const char *str)
+                        const char * const *params, const char *str)
 {
     const char *p;
     int i;
@@ -5834,9 +5822,10 @@ int drive_init(struct drive_opt *arg, int snapshot,
     int bdrv_flags;
     int drives_table_idx;
     char *str = arg->opt;
-    char *params[] = { "bus", "unit", "if", "index", "cyls", "heads",
-                       "secs", "trans", "media", "snapshot", "file",
-                       "cache", "format", "boot", NULL };
+    static const char * const params[] = { "bus", "unit", "if", "index",
+                                           "cyls", "heads", "secs", "trans",
+                                           "media", "snapshot", "file",
+                                           "cache", "format", "boot", NULL };
 
     if (check_params(buf, sizeof(buf), params, str) < 0) {
          fprintf(stderr, "qemu: unknown parameter '%s' in '%s'\n",
@@ -6194,7 +6183,6 @@ static int usb_device_add(const char *devname)
 {
     const char *p;
     USBDevice *dev;
-    USBPort *port;
 
     if (!free_usb_ports)
         return -1;
@@ -6268,6 +6256,9 @@ static int usb_device_del(const char *devname)
 {
     int bus_num, addr;
     const char *p;
+
+    if (strstart(devname, "host:", &p))
+        return usb_host_device_close(p);
 
     if (!used_usb_ports)
         return -1;
@@ -8171,7 +8162,7 @@ void main_loop_wait(int timeout)
         slirp_select_poll(&rfds, &wfds, &xfds);
     }
 #endif
-    qemu_aio_poll();
+
     if (vm_running) {
         if (likely(!cur_cpu || !(cur_cpu->singlestep_enabled & SSTEP_NOTIMER)))
         qemu_run_timers(&active_timers[QEMU_TIMER_VIRTUAL],
@@ -9039,7 +9030,7 @@ static void termsig_handler(int signal)
     qemu_system_shutdown_request();
 }
 
-void termsig_setup(void)
+static void termsig_setup(void)
 {
     struct sigaction act;
 
@@ -9854,9 +9845,10 @@ int main(int argc, char **argv)
     /* init network clients */
     if (nb_net_clients == 0) {
         /* if no clients, we use a default config */
-        net_clients[0] = "nic";
-        net_clients[1] = "user";
-        nb_net_clients = 2;
+        net_clients[nb_net_clients++] = "nic";
+#ifdef CONFIG_SLIRP
+        net_clients[nb_net_clients++] = "user";
+#endif
     }
 
     for(i = 0;i < nb_net_clients; i++) {

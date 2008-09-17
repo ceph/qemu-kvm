@@ -44,10 +44,6 @@
 //#define DEBUG
 //#define DEBUG_COMPLETION
 
-#ifndef offsetof
-#define offsetof(type, field) ((size_t) &((type *)0)->field)
-#endif
-
 /*
  * Supported types:
  *

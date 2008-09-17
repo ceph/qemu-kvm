@@ -53,6 +53,7 @@
 //#include <sys/user.h>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
+#include <qemu-common.h>
 
 #define termios host_termios
 #define winsize host_winsize
@@ -269,10 +270,6 @@ extern int personality(int);
 extern int flock(int, int);
 extern int setfsuid(int);
 extern int setfsgid(int);
-extern int setresuid(uid_t, uid_t, uid_t);
-extern int getresuid(uid_t *, uid_t *, uid_t *);
-extern int setresgid(gid_t, gid_t, gid_t);
-extern int getresgid(gid_t *, gid_t *, gid_t *);
 extern int setgroups(int, gid_t *);
 
 #define ERRNO_TABLE_SIZE 1200
@@ -4666,7 +4663,11 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
         ret = get_errno(fsync(arg1));
         break;
     case TARGET_NR_clone:
+#if defined(TARGET_SH4)
+        ret = get_errno(do_fork(cpu_env, arg1, arg2, arg3, arg5, arg4));
+#else
         ret = get_errno(do_fork(cpu_env, arg1, arg2, arg3, arg4, arg5));
+#endif
         break;
 #ifdef __NR_exit_group
         /* new thread calls */
