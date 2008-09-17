@@ -430,6 +430,7 @@ uint32_t cpuid_signature;
 uint32_t cpuid_features;
 uint32_t cpuid_ext_features;
 unsigned long ram_size;
+uint64_t above4g_ram_size;
 uint8_t bios_uuid[16];
 #ifdef BX_USE_EBDA_TABLES
 unsigned long ebda_cur_addr;
@@ -564,6 +565,14 @@ void setup_mtrr(void)
         wrmsr_smp(MTRRphysMask_MSR(i), (~vmask & 0xfffffff000ull) | 0x800);
         vbase += vmask + 1;
     }
+    for (vbase = 1ull << 32; i < vcnt && vbase < above4g_ram_size; ++i) {
+        vmask = (1ull << 40) - 1;
+        while (vbase + vmask + 1 > above4g_ram_size)
+            vmask >>= 1;
+        wrmsr_smp(MTRRphysBase_MSR(i), vbase | 6);
+        wrmsr_smp(MTRRphysMask_MSR(i), (~vmask & 0xfffffff000ull) | 0x800);
+        vbase += vmask + 1;
+    }
     wrmsr_smp(MSR_MTRRdefType, 0xc00);
 }
 
@@ -573,13 +582,21 @@ void ram_probe(void)
     ram_size = (cmos_readb(0x34) | (cmos_readb(0x35) << 8)) * 65536 +
         16 * 1024 * 1024;
   else
-    ram_size = (cmos_readb(0x30) | (cmos_readb(0x31) << 8)) * 1024 +
-        1 * 1024 * 1024;
-  BX_INFO("ram_size=0x%08lx\n", ram_size);
+    ram_size = (cmos_readb(0x17) | (cmos_readb(0x18) << 8)) * 1024;
+
+  if (cmos_readb(0x5b) | cmos_readb(0x5c) | cmos_readb(0x5d))
+    above4g_ram_size = ((uint64_t)cmos_readb(0x5b) << 16) |
+        ((uint64_t)cmos_readb(0x5c) << 24) | ((uint64_t)cmos_readb(0x5d) << 32);
+
+  if (above4g_ram_size)
+    above4g_ram_size += 1ull << 32;
+
 #ifdef BX_USE_EBDA_TABLES
   ebda_cur_addr = ((*(uint16_t *)(0x40e)) << 4) + 0x380;
   BX_INFO("ebda_cur_addr: 0x%08lx\n", ebda_cur_addr);
 #endif
+    BX_INFO("ram_size=0x%08lx\n", ram_size);
+    BX_INFO("top of ram %ldMB\n", above4g_ram_size >> 20);
   setup_mtrr();
 }
 
