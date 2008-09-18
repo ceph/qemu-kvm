@@ -531,3 +531,20 @@ struct pci_dev;
 struct pci_dev *pci_get_bus_and_slot(unsigned int bus, unsigned int devfn);
 
 #endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
+
+static inline int get_user_pages_fast(unsigned long start, int nr_pages,
+				      int write, struct page **pages)
+{
+	int npages;
+
+	down_read(&current->mm->mmap_sem);
+	npages = get_user_pages(current, current->mm, start, nr_pages, write,
+				0, pages, NULL);
+	up_read(&current->mm->mmap_sem);
+
+	return npages;
+}
+
+#endif
