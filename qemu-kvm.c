@@ -19,6 +19,7 @@ int kvm_pit = 1;
 #include "qemu-common.h"
 #include "console.h"
 #include "block.h"
+#include "compatfd.h"
 
 #include "qemu-kvm.h"
 #include <libkvm.h>
@@ -494,7 +495,7 @@ void qemu_kvm_notify_work(void)
 static void sigfd_handler(void *opaque)
 {
     int fd = (unsigned long)opaque;
-    struct signalfd_siginfo info;
+    struct qemu_signalfd_siginfo info;
     struct sigaction action;
     ssize_t len;
 
@@ -563,7 +564,7 @@ int kvm_main_loop(void)
     sigaddset(&mask, SIGALRM);
     sigprocmask(SIG_BLOCK, &mask, NULL);
 
-    sigfd = kvm_signalfd(&mask);
+    sigfd = qemu_signalfd(&mask);
     if (sigfd == -1) {
 	fprintf(stderr, "failed to create signalfd\n");
 	return -errno;
