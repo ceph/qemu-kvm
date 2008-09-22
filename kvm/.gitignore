@@ -24,6 +24,7 @@ vgabios/*.txt
 extboot/extboot.bin
 extboot/extboot.img
 extboot/signrom
+kernel/config.kbuild
 kernel/modules.order
 kernel/Module.symvers
 kernel/Modules.symvers

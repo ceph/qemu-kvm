@@ -1,4 +1,5 @@
 include ../config.mak
+include config.kbuild
 
 ARCH_DIR = $(if $(filter $(ARCH),x86_64 i386),x86,$(ARCH))
 ARCH_CONFIG := $(shell echo $(ARCH_DIR) | tr '[:lower:]' '[:upper:]')
@@ -33,12 +34,16 @@ hack-files-ia64 = kvm_main.c kvm_fw.c
 
 hack-files = $(hack-files-$(ARCH_DIR))
 
+ifeq ($(CONFIG_KVM_TRACE),y)
+module_defines += -DCONFIG_KVM_TRACE=y
+endif
+
 all:: header-link prerequisite
 #	include header priority 1) $LINUX 2) $KERNELDIR 3) include-compat
 	$(MAKE) -C $(KERNELDIR) M=`pwd` \
 		LINUXINCLUDE="-I`pwd`/include -Iinclude -Iarch/${ARCH_DIR}/include -I`pwd`/include-compat \
 		-include include/linux/autoconf.h \
-		-include `pwd`/$(ARCH_DIR)/external-module-compat.h"
+		-include `pwd`/$(ARCH_DIR)/external-module-compat.h $(module_defines)"
 		"$$@"
 
 sync: header-sync source-sync header-link

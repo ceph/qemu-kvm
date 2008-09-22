@@ -8,6 +8,7 @@ objcopy=objcopy
 want_module=1
 qemu_cflags=
 qemu_ldflags=
+kvm_trace=
 qemu_opts=()
 cross_prefix=
 arch=`uname -m`
@@ -22,6 +23,7 @@ usage() {
 	    --cross-prefix=PREFIX  prefix for cross compile
 	    --prefix=PREFIX        where to install things ($prefix)
 	    --with-patched-kernel  don't use external module
+	    --with-kvm-trace       Enable kvm_trace
 	    --kerneldir=DIR        kernel build directory ($kerneldir)
 	    --qemu-cflags=CFLAGS   CFLAGS to add to qemu configuration
 	    --qemu-ldflags=LDFLAGS LDFLAGS to add to qemu configuration
@@ -55,6 +57,9 @@ while [[ "$1" = -* ]]; do
 	    ;;
 	--with-patched-kernel)
 	    want_module=
+	    ;;
+	--with-kvm-trace)
+	    kvm_trace=y
 	    ;;
 	--qemu-cflags)
 	    qemu_cflags="$arg"
@@ -131,3 +136,9 @@ CC=$cross_prefix$cc
 LD=$cross_prefix$ld
 OBJCOPY=$cross_prefix$objcopy
 EOF
+
+if [ -n "$want_module" ];then
+cat <<EOF > kernel/config.kbuild
+CONFIG_KVM_TRACE=$kvm_trace
+EOF
+fi
