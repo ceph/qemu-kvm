@@ -532,6 +532,25 @@ struct pci_dev *pci_get_bus_and_slot(unsigned int bus, unsigned int devfn);
 
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,21)
+
+#include <linux/relay.h>
+
+/* relay_open() interface has changed on 2.6.21 */
+
+struct rchan *kvm_relay_open(const char *base_filename,
+			 struct dentry *parent,
+			 size_t subbuf_size,
+			 size_t n_subbufs,
+			 struct rchan_callbacks *cb,
+			 void *private_data);
+
+#else
+
+#define kvm_relay_open relay_open
+
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
 
 static inline int get_user_pages_fast(unsigned long start, int nr_pages,

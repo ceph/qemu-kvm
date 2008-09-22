@@ -276,3 +276,25 @@ int intel_iommu_found()
 }
 
 #endif
+
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,21)
+
+/* relay_open() interface has changed on 2.6.21 */
+
+struct rchan *kvm_relay_open(const char *base_filename,
+			 struct dentry *parent,
+			 size_t subbuf_size,
+			 size_t n_subbufs,
+			 struct rchan_callbacks *cb,
+			 void *private_data)
+{
+	struct rchan *chan = relay_open(base_filename, parent,
+					subbuf_size, n_subbufs,
+					cb);
+	if (chan)
+		chan->private_data = private_data;
+	return chan;
+}
+
+#endif
