@@ -42,11 +42,11 @@ BEGIN { split("INIT_WORK tsc_khz desc_struct ldttss_desc64 desc_ptr " \
     $0 = "\t.VMA_OPS_FAULT(fault) = VMA_OPS_FAULT_FUNC(" fcn "),"
 }
 
-/^static int .*_stat_get/ {
+/^static int (.*_stat_get|lost_records_get)/ {
     $3 = "__" $3
 }
 
-/DEFINE_SIMPLE_ATTRIBUTE.*_stat_get/ {
+/DEFINE_SIMPLE_ATTRIBUTE.*(_stat_get|lost_records_get)/ {
     name = gensub(/,/, "", "g", $2);
     print "MAKE_SIMPLE_ATTRIBUTE_GETTER(" name ")"
 }
