@@ -773,12 +773,13 @@ void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
     r = kvm_is_allocated_mem(kvm_context, start_addr, size);
     if (r)
         return;
-    r = kvm_is_intersecting_mem(kvm_context, start_addr);
-    if (r)
-        kvm_create_mem_hole(kvm_context, start_addr, size);
-    r = kvm_register_phys_mem(kvm_context, start_addr,
-                              phys_ram_base + phys_offset,
-                              size, 0);
+        r = kvm_is_intersecting_mem(kvm_context, start_addr);
+    if (r) {
+        printf("Ignoring intersecting memory %llx (%lx)\n", start_addr, size);
+    } else
+        r = kvm_register_phys_mem(kvm_context, start_addr,
+                                  phys_ram_base + phys_offset,
+                                  size, 0);
     if (r < 0) {
         printf("kvm_cpu_register_physical_memory: failed\n");
         exit(1);
