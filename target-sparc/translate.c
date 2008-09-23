@@ -49,7 +49,7 @@ static TCGv cpu_cond, cpu_src1, cpu_src2, cpu_dst, cpu_addr, cpu_val;
 #ifdef TARGET_SPARC64
 static TCGv cpu_xcc, cpu_asi, cpu_fprs, cpu_gsr;
 static TCGv cpu_tick_cmpr, cpu_stick_cmpr, cpu_hstick_cmpr;
-static TCGv cpu_hintp, cpu_htba, cpu_hver, cpu_ssr, cpu_ver;
+static TCGv cpu_hintp, cpu_htba, cpu_hver, cpu_ssr, cpu_ver, cpu_softint;
 #else
 static TCGv cpu_wim;
 #endif
@@ -1715,13 +1715,10 @@ static inline void gen_ldda_asi(TCGv hi, TCGv addr, int insn, int rd)
 
 static inline void gen_stda_asi(TCGv hi, TCGv addr, int insn, int rd)
 {
-    TCGv r_temp, r_asi, r_size;
+    TCGv r_asi, r_size;
 
-    r_temp = tcg_temp_new(TCG_TYPE_TL);
-    gen_movl_reg_TN(rd + 1, r_temp);
-    tcg_gen_helper_1_2(helper_pack64, cpu_tmp64, hi,
-                       r_temp);
-    tcg_temp_free(r_temp);
+    gen_movl_reg_TN(rd + 1, cpu_tmp0);
+    tcg_gen_concat_tl_i64(cpu_tmp64, cpu_tmp0, hi);
     r_asi = gen_get_asi(insn, addr);
     r_size = tcg_const_i32(8);
     tcg_gen_helper_0_4(helper_st_asi, addr, cpu_tmp64, r_asi, r_size);
@@ -1817,12 +1814,10 @@ static inline void gen_ldda_asi(TCGv hi, TCGv addr, int insn, int rd)
 
 static inline void gen_stda_asi(TCGv hi, TCGv addr, int insn, int rd)
 {
-    TCGv r_temp, r_asi, r_size;
+    TCGv r_asi, r_size;
 
-    r_temp = tcg_temp_new(TCG_TYPE_TL);
-    gen_movl_reg_TN(rd + 1, r_temp);
-    tcg_gen_helper_1_2(helper_pack64, cpu_tmp64, hi, r_temp);
-    tcg_temp_free(r_temp);
+    gen_movl_reg_TN(rd + 1, cpu_tmp0);
+    tcg_gen_concat_tl_i64(cpu_tmp64, cpu_tmp0, hi);
     r_asi = tcg_const_i32(GET_FIELD(insn, 19, 26));
     r_size = tcg_const_i32(8);
     tcg_gen_helper_0_4(helper_st_asi, addr, cpu_tmp64, r_asi, r_size);
@@ -2107,6 +2102,10 @@ static void disas_sparc_insn(DisasContext * dc)
                         goto jmp_insn;
                     gen_movl_TN_reg(rd, cpu_gsr);
                     break;
+                case 0x16: /* Softint */
+                    tcg_gen_ext_i32_tl(cpu_dst, cpu_softint);
+                    gen_movl_TN_reg(rd, cpu_dst);
+                    break;
                 case 0x17: /* Tick compare */
                     gen_movl_TN_reg(rd, cpu_tick_cmpr);
                     break;
@@ -2131,7 +2130,6 @@ static void disas_sparc_insn(DisasContext * dc)
                 case 0x12: /* Dispatch Control */
                 case 0x14: /* Softint set, WO */
                 case 0x15: /* Softint clear, WO */
-                case 0x16: /* Softint write */
 #endif
                 default:
                     goto illegal_insn;
@@ -3238,6 +3236,27 @@ static void disas_sparc_insn(DisasContext * dc)
                                     goto jmp_insn;
                                 tcg_gen_xor_tl(cpu_gsr, cpu_src1, cpu_src2);
                                 break;
+                            case 0x14: /* Softint set */
+                                if (!supervisor(dc))
+                                    goto illegal_insn;
+                                tcg_gen_xor_tl(cpu_tmp64, cpu_src1, cpu_src2);
+                                tcg_gen_helper_0_1(helper_set_softint,
+                                                   cpu_tmp64);
+                                break;
+                            case 0x15: /* Softint clear */
+                                if (!supervisor(dc))
+                                    goto illegal_insn;
+                                tcg_gen_xor_tl(cpu_tmp64, cpu_src1, cpu_src2);
+                                tcg_gen_helper_0_1(helper_clear_softint,
+                                                   cpu_tmp64);
+                                break;
+                            case 0x16: /* Softint write */
+                                if (!supervisor(dc))
+                                    goto illegal_insn;
+                                tcg_gen_xor_tl(cpu_tmp64, cpu_src1, cpu_src2);
+                                tcg_gen_helper_0_1(helper_write_softint,
+                                                   cpu_tmp64);
+                                break;
                             case 0x17: /* Tick compare */
 #if !defined(CONFIG_USER_ONLY)
                                 if (!supervisor(dc))
@@ -3297,9 +3316,6 @@ static void disas_sparc_insn(DisasContext * dc)
                             case 0x11: /* Performance Instrumentation
                                           Counter */
                             case 0x12: /* Dispatch Control */
-                            case 0x14: /* Softint set */
-                            case 0x15: /* Softint clear */
-                            case 0x16: /* Softint write */
 #endif
                             default:
                                 goto illegal_insn;
@@ -4474,7 +4490,7 @@ static void disas_sparc_insn(DisasContext * dc)
                     if (rd & 1)
                         goto illegal_insn;
                     else {
-                        TCGv r_low, r_const;
+                        TCGv r_const;
 
                         save_state(dc, cpu_cond);
                         gen_address_mask(dc, cpu_addr);
@@ -4482,11 +4498,8 @@ static void disas_sparc_insn(DisasContext * dc)
                         tcg_gen_helper_0_2(helper_check_align, cpu_addr,
                                            r_const); // XXX remove
                         tcg_temp_free(r_const);
-                        r_low = tcg_temp_new(TCG_TYPE_TL);
-                        gen_movl_reg_TN(rd + 1, r_low);
-                        tcg_gen_helper_1_2(helper_pack64, cpu_tmp64, cpu_val,
-                                           r_low);
-                        tcg_temp_free(r_low);
+                        gen_movl_reg_TN(rd + 1, cpu_tmp0);
+                        tcg_gen_concat_tl_i64(cpu_tmp64, cpu_tmp0, cpu_val);
                         tcg_gen_qemu_st64(cpu_tmp64, cpu_addr, dc->mem_idx);
                     }
                     break;
@@ -4960,6 +4973,9 @@ void gen_intermediate_code_init(CPUSPARCState *env)
                                      offsetof(CPUState, ssr), "ssr");
         cpu_ver = tcg_global_mem_new(TCG_TYPE_TL, TCG_AREG0,
                                      offsetof(CPUState, version), "ver");
+        cpu_softint = tcg_global_mem_new(TCG_TYPE_I32, TCG_AREG0,
+                                         offsetof(CPUState, softint),
+                                         "softint");
 #else
         cpu_wim = tcg_global_mem_new(TCG_TYPE_I32,
                                      TCG_AREG0, offsetof(CPUState, wim),

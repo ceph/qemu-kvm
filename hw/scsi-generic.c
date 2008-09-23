@@ -352,6 +352,9 @@ static int scsi_length(uint8_t *cmd, int blocksize, int *cmdlen, uint32_t *len)
     case 0:
         *len = cmd[4];
         *cmdlen = 6;
+        /* length 0 means 256 blocks */
+        if (*len == 0)
+            *len = 256;
         break;
     case 1:
     case 2:
@@ -548,8 +551,8 @@ static int get_blocksize(BlockDriverState *bdrv)
     sg_io_hdr_t io_header;
     int ret;
 
-    memset(cmd, sizeof(cmd), 0);
-    memset(buf, sizeof(buf), 0);
+    memset(cmd, 0, sizeof(cmd));
+    memset(buf, 0, sizeof(buf));
     cmd[0] = READ_CAPACITY;
 
     memset(&io_header, 0, sizeof(io_header));

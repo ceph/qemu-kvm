@@ -88,10 +88,6 @@ static void qemu_cond_wait(pthread_cond_t *cond)
     };
 
     pthread_cond_timedwait(cond, &qemu_mutex, &ts);
-    /* If we're the I/O thread, some other thread may be waiting for aio
-     * completion */
-    if (!vcpu)
-        qemu_aio_poll(NULL);
     cpu_single_env = env;
 }
 

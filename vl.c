@@ -265,6 +265,8 @@ static int64_t qemu_icount_bias;
 QEMUTimer *icount_rt_timer;
 QEMUTimer *icount_vm_timer;
 
+uint8_t qemu_uuid[16];
+
 #define TFR(expr) do { if ((expr) != -1) break; } while (errno == EINTR)
 
 /* KVM runs the main loop in a separate thread.  If we update one of the lists
@@ -6764,9 +6766,9 @@ void qemu_fclose(QEMUFile *f)
     qemu_free(f);
 }
 
-void qemu_put_buffer(QEMUFile *f, const uint8_t *buf, int size)
+void qemu_put_buffer(QEMUFile *f, const uint8_t *buf, size_t size)
 {
-    int l;
+    size_t l;
     while (size > 0) {
         l = IO_BUF_SIZE - f->buf_index;
         if (l > size)
@@ -6780,16 +6782,16 @@ void qemu_put_buffer(QEMUFile *f, const uint8_t *buf, int size)
     }
 }
 
-void qemu_put_byte(QEMUFile *f, int v)
+void qemu_put_byte(QEMUFile *f, int8_t v)
 {
     f->buf[f->buf_index++] = v;
     if (f->buf_index >= IO_BUF_SIZE)
         qemu_fflush(f);
 }
 
-int qemu_get_buffer(QEMUFile *f, uint8_t *buf, int size1)
+size_t qemu_get_buffer(QEMUFile *f, uint8_t *buf, size_t size1)
 {
-    int size, l;
+    size_t size, l;
 
     size = size1;
     while (size > 0) {
@@ -6810,7 +6812,7 @@ int qemu_get_buffer(QEMUFile *f, uint8_t *buf, int size1)
     return size1 - size;
 }
 
-int qemu_get_byte(QEMUFile *f)
+int8_t qemu_get_byte(QEMUFile *f)
 {
     if (f->buf_index >= f->buf_size) {
         qemu_fill_buffer(f);
@@ -6846,13 +6848,13 @@ int64_t qemu_fseek(QEMUFile *f, int64_t pos, int whence)
     return pos;
 }
 
-void qemu_put_be16(QEMUFile *f, unsigned int v)
+void qemu_put_be16(QEMUFile *f, uint16_t v)
 {
     qemu_put_byte(f, v >> 8);
     qemu_put_byte(f, v);
 }
 
-void qemu_put_be32(QEMUFile *f, unsigned int v)
+void qemu_put_be32(QEMUFile *f, uint32_t v)
 {
     qemu_put_byte(f, v >> 24);
     qemu_put_byte(f, v >> 16);
@@ -6866,17 +6868,17 @@ void qemu_put_be64(QEMUFile *f, uint64_t v)
     qemu_put_be32(f, v);
 }
 
-unsigned int qemu_get_be16(QEMUFile *f)
+uint16_t qemu_get_be16(QEMUFile *f)
 {
-    unsigned int v;
+    uint16_t v;
     v = qemu_get_byte(f) << 8;
     v |= qemu_get_byte(f);
     return v;
 }
 
-unsigned int qemu_get_be32(QEMUFile *f)
+uint32_t qemu_get_be32(QEMUFile *f)
 {
-    unsigned int v;
+    uint32_t v;
     v = qemu_get_byte(f) << 24;
     v |= qemu_get_byte(f) << 16;
     v |= qemu_get_byte(f) << 8;
@@ -8398,6 +8400,7 @@ static void help(int exitcode)
            "-g WxH[xDEPTH]  Set the initial graphical resolution and depth\n"
 #endif
            "-name string    set the name of the guest\n"
+           "-uuid %%08x-%%04x-%%04x-%%04x-%%012x specify machine UUID\n"
            "\n"
            "Network options:\n"
            "-net nic[,vlan=n][,macaddr=addr][,model=type]\n"
@@ -8606,6 +8609,7 @@ enum {
     QEMU_OPTION_startdate,
     QEMU_OPTION_tb_size,
     QEMU_OPTION_icount,
+    QEMU_OPTION_uuid,
     QEMU_OPTION_incoming,
     QEMU_OPTION_tdf,
     QEMU_OPTION_kvm_shadow_memory,
@@ -8706,6 +8710,7 @@ const QEMUOption qemu_options[] = {
 #ifdef CONFIG_CURSES
     { "curses", 0, QEMU_OPTION_curses },
 #endif
+    { "uuid", HAS_ARG, QEMU_OPTION_uuid },
 
     /* temporary options */
     { "usb", 0, QEMU_OPTION_usb },
@@ -8919,6 +8924,23 @@ static BOOL WINAPI qemu_ctrl_handler(DWORD type)
     return TRUE;
 }
 #endif
+
+static int qemu_uuid_parse(const char *str, uint8_t *uuid)
+{
+    int ret;
+
+    if(strlen(str) != 36)
+        return -1;
+
+    ret = sscanf(str, UUID_FMT, &uuid[0], &uuid[1], &uuid[2], &uuid[3],
+            &uuid[4], &uuid[5], &uuid[6], &uuid[7], &uuid[8], &uuid[9],
+            &uuid[10], &uuid[11], &uuid[12], &uuid[13], &uuid[14], &uuid[15]);
+
+    if(ret != 16)
+        return -1;
+
+    return 0;
+}
 
 #define MAX_NET_CLIENTS 32
 
@@ -9621,6 +9643,13 @@ int main(int argc, char **argv)
             case QEMU_OPTION_show_cursor:
                 cursor_hide = 0;
                 break;
+            case QEMU_OPTION_uuid:
+                if(qemu_uuid_parse(optarg, qemu_uuid) < 0) {
+                    fprintf(stderr, "Fail to parse UUID string."
+                            " Wrong format.\n");
+                    exit(1);
+                }
+                break;
 	    case QEMU_OPTION_daemonize:
 		daemonize = 1;
 		break;
@@ -9829,7 +9858,6 @@ int main(int argc, char **argv)
 
     init_timers();
     init_timer_alarm();
-    qemu_aio_init();
     if (use_icount && icount_time_shift < 0) {
         use_icount = 2;
         /* 125MIPS seems a reasonable initial guess at the guest speed.

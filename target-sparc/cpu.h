@@ -329,6 +329,8 @@ typedef struct CPUSPARCState {
     /* UA 2005 hyperprivileged registers */
     uint64_t hpstate, htstate[MAXTL_MAX], hintp, htba, hver, hstick_cmpr, ssr;
     void *hstick; // UA 2005
+    uint32_t softint;
+#define SOFTINT_TIMER 1
 #endif
     sparc_def_t *def;
 } CPUSPARCState;
@@ -423,6 +425,7 @@ static inline void PUT_CWP64(CPUSPARCState *env1, int cwp)
 /* cpu-exec.c */
 void do_unassigned_access(target_phys_addr_t addr, int is_write, int is_exec,
                           int is_asi);
+int cpu_sparc_signal_handler(int host_signum, void *pinfo, void *puc);
 
 #define CPUState CPUSPARCState
 #define cpu_init cpu_sparc_init

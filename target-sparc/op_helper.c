@@ -2199,11 +2199,11 @@ target_ulong helper_cas_asi(target_ulong addr, target_ulong val1,
 {
     target_ulong ret;
 
-    val1 &= 0xffffffffUL;
+    val2 &= 0xffffffffUL;
     ret = helper_ld_asi(addr, asi, 4, 0);
     ret &= 0xffffffffUL;
-    if (val1 == ret)
-        helper_st_asi(addr, val2 & 0xffffffffUL, asi, 4);
+    if (val2 == ret)
+        helper_st_asi(addr, val1 & 0xffffffffUL, asi, 4);
     return ret;
 }
 
@@ -2213,8 +2213,8 @@ target_ulong helper_casx_asi(target_ulong addr, target_ulong val1,
     target_ulong ret;
 
     ret = helper_ld_asi(addr, asi, 8, 0);
-    if (val1 == ret)
-        helper_st_asi(addr, val2, asi, 8);
+    if (val2 == ret)
+        helper_st_asi(addr, val1, asi, 8);
     return ret;
 }
 #endif /* TARGET_SPARC64 */
@@ -2279,11 +2279,6 @@ target_ulong helper_sdiv(target_ulong a, target_ulong b)
         env->cc_src2 = 0;
         return x0;
     }
-}
-
-uint64_t helper_pack64(target_ulong high, target_ulong low)
-{
-    return ((uint64_t)high << 32) | (uint64_t)(low & 0xffffffff);
 }
 
 void helper_stdf(target_ulong addr, int mem_idx)
@@ -2675,6 +2670,21 @@ void helper_retry(void)
     PUT_CWP64(env, env->tsptr->tstate & 0xff);
     env->tl--;
     env->tsptr = &env->ts[env->tl & MAXTL_MASK];
+}
+
+void helper_set_softint(uint64_t value)
+{
+    env->softint |= (uint32_t)value;
+}
+
+void helper_clear_softint(uint64_t value)
+{
+    env->softint &= (uint32_t)~value;
+}
+
+void helper_write_softint(uint64_t value)
+{
+    env->softint = (uint32_t)value;
 }
 #endif
 

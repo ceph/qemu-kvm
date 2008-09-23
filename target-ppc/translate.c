@@ -220,7 +220,7 @@ struct opc_handler_t {
     /* handler */
     void (*handler)(DisasContext *ctx);
 #if defined(DO_PPC_STATISTICS) || defined(PPC_DUMP_CPU)
-    const unsigned char *oname;
+    const char *oname;
 #endif
 #if defined(DO_PPC_STATISTICS)
     uint64_t count;
@@ -347,7 +347,7 @@ typedef struct opcode_t {
     unsigned char pad[1];
 #endif
     opc_handler_t handler;
-    const unsigned char *oname;
+    const char *oname;
 } opcode_t;
 
 /*****************************************************************************/
@@ -5300,12 +5300,7 @@ static always_inline void gen_load_gpr64(TCGv t, int reg) {
 #if defined(TARGET_PPC64)
     tcg_gen_mov_i64(t, cpu_gpr[reg]);
 #else
-    tcg_gen_extu_i32_i64(t, cpu_gprh[reg]);
-    tcg_gen_shli_i64(t, t, 32);
-    TCGv tmp = tcg_temp_local_new(TCG_TYPE_I64);
-    tcg_gen_extu_i32_i64(tmp, cpu_gpr[reg]);
-    tcg_gen_or_i64(t, t, tmp);
-    tcg_temp_free(tmp);
+    tcg_gen_concat_i32_i64(t, cpu_gpr[reg], cpu_gprh[reg]);
 #endif
 }
 

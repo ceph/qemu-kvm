@@ -55,6 +55,8 @@ static int bdrv_read_em(BlockDriverState *bs, int64_t sector_num,
 static int bdrv_write_em(BlockDriverState *bs, int64_t sector_num,
                          const uint8_t *buf, int nb_sectors);
 
+BlockDriverState *bdrv_first;
+
 static BlockDriver *first_drv;
 
 int path_is_absolute(const char *path)
@@ -1448,8 +1450,6 @@ void bdrv_init(void)
     bdrv_register(&bdrv_qcow2);
     bdrv_register(&bdrv_parallels);
     bdrv_register(&bdrv_nbd);
-
-    qemu_aio_init();
 }
 
 void *qemu_aio_get(BlockDriverState *bs, BlockDriverCompletionFunc *cb,
