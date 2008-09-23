@@ -52,6 +52,15 @@
 #include "kvm-s390.h"
 #endif
 
+//#define DEBUG_MEMREG
+#ifdef	DEBUG_MEMREG
+#define DPRINTF(fmt, args...) \
+	do { fprintf(stderr, "%s:%d " fmt , __func__, __LINE__, ##args); } while (0)
+#else
+#define DPRINTF(fmt, args...) do {} while (0)
+#endif
+
+
 int kvm_abi = EXPECTED_KVM_API_VERSION;
 int kvm_page_size;
 
@@ -445,6 +454,9 @@ int kvm_register_phys_mem(kvm_context_t kvm,
 	int r;
 
 	memory.slot = get_free_slot(kvm);
+	DPRINTF("memory: gpa: %llx, size: %llx, uaddr: %llx, slot: %x, flags: %lx\n",
+		memory.guest_phys_addr, memory.memory_size,
+		memory.userspace_addr, memory.slot, memory.flags);
 	r = ioctl(kvm->vm_fd, KVM_SET_USER_MEMORY_REGION, &memory);
 	if (r == -1) {
 		fprintf(stderr, "create_userspace_phys_mem: %s\n", strerror(errno));
@@ -983,6 +995,7 @@ int kvm_unregister_coalesced_mmio(kvm_context_t kvm, uint64_t addr, uint32_t siz
 			perror("kvm_unregister_coalesced_mmio_zone");
 			return -errno;
 		}
+		DPRINTF("Unregistered coalesced mmio region for %llx (%lx)\n", addr, size);
 		return 0;
 	}
 #endif
