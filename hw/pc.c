@@ -777,9 +777,7 @@ static int load_option_rom(const char *filename, int offset, int type)
     cpu_register_physical_memory(0xd0000 + offset,
 				 size, option_rom_offset | type);
     option_rom_setup_reset(0xd0000 + offset, size);
-    if (kvm_enabled())
-	    kvm_cpu_register_physical_memory(0xd0000 + offset,
-                                             size, option_rom_offset | type);
+
     return size;
 }
 
@@ -852,7 +850,6 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
     /* allocate RAM */
     ram_addr = qemu_ram_alloc(0xa0000);
     cpu_register_physical_memory(0, 0xa0000, ram_addr);
-    kvm_cpu_register_physical_memory(0, 0xa0000, ram_addr);
 
     /* Allocate, even though we won't register, so we don't break the
      * phys_ram_base + PA assumption. This range includes vga (0xa0000 - 0xc0000),
@@ -863,9 +860,6 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
     cpu_register_physical_memory(0x100000,
                  below_4g_mem_size - 0x100000,
                  ram_addr);
-    kvm_cpu_register_physical_memory(0x100000,
-                                     below_4g_mem_size - 0x100000,
-                                     ram_addr);
 
     /* above 4giga memory allocation */
     if (above_4g_mem_size > 0) {
@@ -881,9 +875,6 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
         cpu_register_physical_memory(0x100000000ULL,
                                      above_4g_mem_size,
                                      ram_addr);
-        kvm_cpu_register_physical_memory(0x100000000ULL,
-                                         above_4g_mem_size,
-                                         ram_addr);
     }
 
     /* allocate VGA RAM */
@@ -927,9 +918,6 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
     /* setup basic memory access */
     cpu_register_physical_memory(0xc0000, 0x10000,
                                  vga_bios_offset | IO_MEM_ROM);
-    if (kvm_enabled())
-        kvm_cpu_register_physical_memory(0xc0000, 0x10000,
-                                         vga_bios_offset | IO_MEM_ROM);
 
     /* map the last 128KB of the BIOS in ISA space */
     isa_bios_size = bios_size;
@@ -941,10 +929,6 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
     cpu_register_physical_memory(0x100000 - isa_bios_size,
                                  isa_bios_size,
                                  (bios_offset + bios_size - isa_bios_size) /* | IO_MEM_ROM */);
-    if (kvm_enabled())
-        kvm_cpu_register_physical_memory(0x100000 - isa_bios_size,
-                                         isa_bios_size,
-                                         (bios_offset + bios_size - isa_bios_size) | IO_MEM_ROM);
 
     /* XXX: for DDIM support, "ROM space" should be writable during
        initialization, and (optionally) marked readonly by the BIOS
@@ -963,10 +947,6 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
     /* map all the bios at the top of memory */
     cpu_register_physical_memory((uint32_t)(-bios_size),
                                  bios_size, bios_offset | IO_MEM_ROM);
-    if (kvm_enabled()) {
-        kvm_cpu_register_physical_memory((uint32_t)(-bios_size),
-                                           bios_size, bios_offset | IO_MEM_ROM);
-    }
 
     bochs_bios_init();
 

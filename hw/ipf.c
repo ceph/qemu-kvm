@@ -420,18 +420,14 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
     if (kvm_enabled()) {
 		ram_addr = qemu_ram_alloc(0xa0000);
 		cpu_register_physical_memory(0, 0xa0000, ram_addr);
-		kvm_cpu_register_physical_memory(0, 0xa0000, ram_addr);
 
 		ram_addr = qemu_ram_alloc(0x20000); // Workaround 0xa0000-0xc0000
 
 		ram_addr = qemu_ram_alloc(0x40000);
 		cpu_register_physical_memory(0xc0000, 0x40000, ram_addr);
-		kvm_cpu_register_physical_memory(0xc0000, 0x40000, ram_addr);
 
 		ram_addr = qemu_ram_alloc(ram_size - 0x100000);
 		cpu_register_physical_memory(0x100000, ram_size - 0x100000, ram_addr);
-		kvm_cpu_register_physical_memory(0x100000, ram_size - 0x100000,
-				ram_addr);
 	} else
     {
         ram_addr = qemu_ram_alloc(ram_size);
@@ -444,9 +440,6 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
 	if (above_4g_mem_size > 0) {
 		ram_addr = qemu_ram_alloc(above_4g_mem_size);
 		cpu_register_physical_memory(0x100000000, above_4g_mem_size, ram_addr);
-	if (kvm_enabled())
-		kvm_cpu_register_physical_memory(0x100000000, above_4g_mem_size,
-					ram_addr);
 	}
 
 	/*Load firware to its proper position.*/
@@ -468,7 +461,6 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
 		fw_image_start = fw_start + GFW_SIZE - image_size;
 
         cpu_register_physical_memory(GFW_START, GFW_SIZE, fw_offset);
-        kvm_cpu_register_physical_memory(GFW_START,GFW_SIZE, fw_offset);
         memcpy(fw_image_start, image, image_size);
 
 		free(image);

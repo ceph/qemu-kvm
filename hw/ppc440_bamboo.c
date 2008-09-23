@@ -93,8 +93,6 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 
 	/* Register mem */
 	cpu_register_physical_memory(0, ram_size, 0);
-	if (kvm_enabled())
-	  kvm_cpu_register_physical_memory(0, ram_size, 0);
 
 	/* load kernel with uboot loader */
 	printf("%s: load kernel\n", __func__);
