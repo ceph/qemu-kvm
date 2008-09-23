@@ -780,6 +780,10 @@ void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
     r = kvm_is_containing_region(kvm_context, start_addr, size);
     if (r)
         return;
+
+    if (area_flags >= TLB_MMIO)
+        return;
+
     r = kvm_register_phys_mem(kvm_context, start_addr,
                               phys_ram_base + phys_offset,
                               size, 0);
