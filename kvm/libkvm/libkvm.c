@@ -125,15 +125,25 @@ int get_slot(unsigned long phys_addr)
 	return -1;
 }
 
-int get_intersecting_slot(unsigned long phys_addr)
+/* Returns -1 if this slot is not totally contained on any other,
+ * and the number of the slot otherwise */
+int get_container_slot(uint64_t phys_addr, unsigned long size)
 {
 	int i;
 
 	for (i = 0; i < KVM_MAX_NUM_MEM_REGIONS ; ++i)
-		if (slots[i].len && slots[i].phys_addr < phys_addr &&
-		    (slots[i].phys_addr + slots[i].len) > phys_addr)
+		if (slots[i].len && slots[i].phys_addr <= phys_addr &&
+		    (slots[i].phys_addr + slots[i].len) >= phys_addr + size)
 			return i;
 	return -1;
+}
+
+int kvm_is_containing_region(kvm_context_t kvm, unsigned long phys_addr, unsigned long size)
+{
+	int slot = get_container_slot(phys_addr, size);
+	if (slot == -1)
+		return 0;
+	return 1;
 }
 
 /* 
@@ -419,24 +429,6 @@ void *kvm_create_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 		      memory.userspace_addr, memory.flags);
 
         return ptr;
-}
-
-int kvm_is_intersecting_mem(kvm_context_t kvm, unsigned long phys_start)
-{
-	return get_intersecting_slot(phys_start) != -1;
-}
-
-int kvm_is_allocated_mem(kvm_context_t kvm, unsigned long phys_start,
-			 unsigned long len)
-{
-	int slot;
-
-	slot = get_slot(phys_start);
-	if (slot == -1)
-		return 0;
-	if (slots[slot].len == len)
-		return 1;
-	return 0;
 }
 
 int kvm_register_phys_mem(kvm_context_t kvm,
