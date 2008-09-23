@@ -508,6 +508,18 @@ void kvm_destroy_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 	free_slot(memory.slot);
 }
 
+void kvm_unregister_memory_area(kvm_context_t kvm, uint64_t phys_addr, unsigned long size)
+{
+
+	int slot = get_container_slot(phys_addr, size);
+
+	if (slot != -1) {
+		DPRINTF("Unregistering memory region %llx (%lx)\n", phys_addr, size);
+		kvm_destroy_phys_mem(kvm, phys_addr, size);
+		return;
+	}
+}
+
 static int kvm_get_map(kvm_context_t kvm, int ioctl_num, int slot, void *buf)
 {
 	int r;

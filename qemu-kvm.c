@@ -768,8 +768,15 @@ void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
                                       unsigned long phys_offset)
 {
     int r = 0;
+    unsigned long area_flags = phys_offset & ~TARGET_PAGE_MASK;
 
     phys_offset &= ~IO_MEM_ROM;
+
+    if (area_flags == IO_MEM_UNASSIGNED) {
+        kvm_unregister_memory_area(kvm_context, start_addr, size);
+        return;
+    }
+
     r = kvm_is_containing_region(kvm_context, start_addr, size);
     if (r)
         return;
