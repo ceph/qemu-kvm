@@ -407,6 +407,10 @@ static uint8_t static_code_gen_buffer[DEFAULT_CODE_GEN_BUFFER_SIZE];
 
 static void code_gen_alloc(unsigned long tb_size)
 {
+#ifdef TARGET_IA64
+    return;
+#endif
+
 #ifdef USE_STATIC_CODE_GEN_BUFFER
     code_gen_buffer = static_code_gen_buffer;
     code_gen_buffer_size = DEFAULT_CODE_GEN_BUFFER_SIZE;
