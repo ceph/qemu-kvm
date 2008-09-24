@@ -137,8 +137,6 @@ LD=$cross_prefix$ld
 OBJCOPY=$cross_prefix$objcopy
 EOF
 
-if [ -n "$want_module" ];then
 cat <<EOF > kernel/config.kbuild
 CONFIG_KVM_TRACE=$kvm_trace
 EOF
-fi
