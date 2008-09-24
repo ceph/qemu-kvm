@@ -567,3 +567,11 @@ static inline int get_user_pages_fast(unsigned long start, int nr_pages,
 }
 
 #endif
+
+/* spin_needbreak() was called something else in 2.6.24 */
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,24)
+
+#define spin_needbreak need_lockbreak
+
+#endif
+
