@@ -2092,7 +2092,8 @@ void smbios_init(void)
 {
     unsigned cpu_num, nr_structs = 0, max_struct_size = 0;
     char *start, *p, *q;
-    int memsize = ram_size / (1024 * 1024);
+    int memsize = (ram_end == ram_size) ? ram_size / (1024 * 1024) :
+                  (ram_end - (1ull << 32) + ram_size) / (1024 * 1024);
 
 #ifdef BX_USE_EBDA_TABLES
     ebda_cur_addr = align(ebda_cur_addr, 16);
@@ -2119,8 +2120,8 @@ void smbios_init(void)
         add_struct(smbios_type_4_init(p, cpu_num));
     add_struct(smbios_type_16_init(p, memsize));
     add_struct(smbios_type_17_init(p, memsize));
-    add_struct(smbios_type_19_init(p, memsize));
-    add_struct(smbios_type_20_init(p, memsize));
+    add_struct(smbios_type_19_init(p, ram_end / (1024 * 1024)));
+    add_struct(smbios_type_20_init(p, ram_end / (1024 * 1024)));
     add_struct(smbios_type_32_init(p));
     add_struct(smbios_type_127_init(p));
 
