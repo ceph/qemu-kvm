@@ -494,7 +494,6 @@ void setup_mtrr(void)
         uint8_t valb[8];
         uint64_t val;
     } u;
-    uint64_t vbase, vmask;
 
     mtrr_cap = rdmsr(MSR_MTRRcap);
     vcnt = mtrr_cap & 0xff;
@@ -521,25 +520,10 @@ void setup_mtrr(void)
     wrmsr_smp(MSR_MTRRfix4K_E8000, 0);
     wrmsr_smp(MSR_MTRRfix4K_F0000, 0);
     wrmsr_smp(MSR_MTRRfix4K_F8000, 0);
-    vbase = 0;
-    --vcnt; /* leave one mtrr for VRAM */
-    for (i = 0; i < vcnt && vbase < ram_size; ++i) {
-        vmask = (1ull << 40) - 1;
-        while (vbase + vmask + 1 > ram_size)
-            vmask >>= 1;
-        wrmsr_smp(MTRRphysBase_MSR(i), vbase | 6);
-        wrmsr_smp(MTRRphysMask_MSR(i), (~vmask & 0xfffffff000ull) | 0x800);
-        vbase += vmask + 1;
-    }
-    for (vbase = 1ull << 32; i < vcnt && vbase < ram_end; ++i) {
-        vmask = (1ull << 40) - 1;
-        while (vbase + vmask + 1 > ram_end)
-            vmask >>= 1;
-        wrmsr_smp(MTRRphysBase_MSR(i), vbase | 6);
-        wrmsr_smp(MTRRphysMask_MSR(i), (~vmask & 0xfffffff000ull) | 0x800);
-        vbase += vmask + 1;
-    }
-    wrmsr_smp(MSR_MTRRdefType, 0xc00);
+    /* Mark 3.5-4GB as UC, anything not specified defaults to WB */
+    wrmsr_smp(MTRRphysBase_MSR(0), 0xe0000000ull | 0);
+    wrmsr_smp(MTRRphysMask_MSR(0), ~(0x20000000ull - 1) | 0x800);
+    wrmsr_smp(MSR_MTRRdefType, 0xc06);
 }
 
 void ram_probe(void)
