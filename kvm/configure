@@ -138,5 +138,5 @@ OBJCOPY=$cross_prefix$objcopy
 EOF
 
 cat <<EOF > kernel/config.kbuild
-CONFIG_KVM_TRACE=$kvm_trace
+EXT_CONFIG_KVM_TRACE=$kvm_trace
 EOF

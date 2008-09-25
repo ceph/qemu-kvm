@@ -35,7 +35,7 @@ hack-files-ia64 = kvm_main.c kvm_fw.c
 hack-files = $(hack-files-$(ARCH_DIR))
 
 ifeq ($(CONFIG_KVM_TRACE),y)
-module_defines += -DCONFIG_KVM_TRACE=y
+module_defines += -DEXT_CONFIG_KVM_TRACE=y
 endif
 
 all:: header-link prerequisite
