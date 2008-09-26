@@ -179,8 +179,7 @@ static int boot_device2nibble(char boot_device)
 
 /* hd_table must contain 4 block drivers */
 static void cmos_init(ram_addr_t ram_size, ram_addr_t above_4g_mem_size,
-                      const char *boot_device, BlockDriverState **hd_table,
-                      int smp_cpus)
+                      const char *boot_device, BlockDriverState **hd_table)
 {
     RTCState *s = rtc_state;
     int nbds, bds[3] = { 0, };
@@ -591,7 +590,7 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
     }
     floppy_controller = fdctrl_init(i8259[6], 2, 0, 0x3f0, fd);
 
-    cmos_init(ram_size, above_4g_mem_size, boot_device, hd, smp_cpus);
+    cmos_init(ram_size, above_4g_mem_size, boot_device, hd);
 
     if (pci_enabled && usb_enabled) {
         usb_uhci_piix3_init(pci_bus, piix3_devfn + 2);
