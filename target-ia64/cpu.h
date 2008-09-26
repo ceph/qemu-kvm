@@ -62,7 +62,7 @@ CPUState *cpu_ia64_init(const char * cpu_model);
 
 static inline int cpu_mmu_index (CPUState *env)
 {
-	return 0;
+    return 0;
 }
 
 #define CPU_PC_FROM_TB(env, tb) do{}while(0)

@@ -1,4 +1,3 @@
-
 #include "config.h"
 #include "config-host.h"
 
@@ -15,7 +14,7 @@ extern kvm_context_t kvm_context;
 
 int kvm_arch_qemu_create_context(void)
 {
-	return 0;
+    return 0;
 }
 
 void kvm_arch_load_regs(CPUState *env)
@@ -50,12 +49,12 @@ void kvm_arch_post_kvm_run(void *opaque, int vcpu)
 
 int kvm_arch_has_work(CPUState *env)
 {
-	return 1;
+    return 1;
 }
 
 int kvm_arch_try_push_interrupts(void *opaque)
 {
-	return 1;
+    return 1;
 }
 
 void kvm_arch_update_regs_for_sipi(CPUState *env)

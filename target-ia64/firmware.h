@@ -28,19 +28,17 @@
 #include <zlib.h>
 
 #define GFW_SIZE                (16UL<<20)
-#define GFW_START           	((4UL<<30) - GFW_SIZE)
+#define GFW_START               ((4UL<<30) - GFW_SIZE)
 
 #define HOB_SIGNATURE           0x3436474953424f48        // "HOBSIG64"
 #define GFW_HOB_START           ((4UL<<30) - (14UL<<20))    // 4G - 14M
 #define GFW_HOB_SIZE            (1UL<<20)                 // 1M
 #define HOB_OFFSET              (GFW_HOB_START-GFW_START)
 
-#define Hob_Output(s) \
-    fprintf(stderr, s)
+#define Hob_Output(s)           fprintf(stderr, s)
 
 extern int kvm_ia64_build_hob(unsigned long memsize,
-            unsigned long vcpus, uint8_t* fw_start);
+                              unsigned long vcpus, uint8_t* fw_start);
 extern char *read_image(const char *filename, unsigned long *size);
 
 #endif //__FIRM_WARE_
-

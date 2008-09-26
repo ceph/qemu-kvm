@@ -91,7 +91,7 @@ static int load_hob(void *hob_buf,
 
 int
 kvm_ia64_build_hob(unsigned long memsize,
-            unsigned long vcpus, uint8_t* fw_start)
+                   unsigned long vcpus, uint8_t* fw_start)
 {
     char   *hob_buf;
 
@@ -112,8 +112,8 @@ kvm_ia64_build_hob(unsigned long memsize,
         return -1;
     }
     free(hob_buf);
-    return 0;
 
+    return 0;
 }
 
 static int
@@ -223,7 +223,7 @@ build_hob(void* hob_buf, unsigned long hob_buf_size,
         goto err_out;
     }
 
-    if (add_pal_hob( hob_buf ) < 0) {
+    if (add_pal_hob(hob_buf) < 0) {
         Hob_Output("Add PAL hob failed, buffer too small");
         goto err_out;
     }
@@ -238,8 +238,7 @@ err_out:
     return -1;
 }
 static int
-load_hob(void *hob_buf,
-         unsigned long dom_mem_size, void* hob_start)
+load_hob(void *hob_buf, unsigned long dom_mem_size, void* hob_start)
 {
     int hob_size;
 
@@ -508,6 +507,7 @@ add_pal_hob(void* hob_buf)
     }
     return 0;
 }
+
 char *read_image(const char *filename, unsigned long *size)
 {
     int kernel_fd = -1;
@@ -515,18 +515,16 @@ char *read_image(const char *filename, unsigned long *size)
     char *image = NULL, *tmp;
     unsigned int bytes;
 
-    if ( (filename == NULL) || (size == NULL) )
+    if ((filename == NULL) || (size == NULL))
         return NULL;
 
     kernel_fd = open(filename, O_RDONLY);
-    if (kernel_fd < 0)
-    {
+    if (kernel_fd < 0) {
         Hob_Output("Could not open kernel image\n");
         goto out_1;
     }
 
-    if ( (kernel_gfd = gzdopen(kernel_fd, "rb")) == NULL )
-    {
+    if ((kernel_gfd = gzdopen(kernel_fd, "rb")) == NULL) {
         Hob_Output("Could not allocate decompression state for state file\n");
         goto out_1;
     }
@@ -536,8 +534,7 @@ char *read_image(const char *filename, unsigned long *size)
 #define CHUNK 1*1024*1024
     while(1)
     {
-        if ( (tmp = realloc(image, *size + CHUNK)) == NULL )
-        {
+        if ((tmp = realloc(image, *size + CHUNK)) == NULL) {
             Hob_Output("Could not allocate memory for kernel image");
             free(image);
             image = NULL;
@@ -546,8 +543,7 @@ char *read_image(const char *filename, unsigned long *size)
         image = tmp;
 
         bytes = gzread(kernel_gfd, image + *size, CHUNK);
-        switch (bytes)
-        {
+        switch (bytes) {
         case -1:
             Hob_Output("Error reading kernel image");
             free(image);
@@ -562,24 +558,21 @@ char *read_image(const char *filename, unsigned long *size)
     }
 #undef CHUNK
 
- out:
-    if ( *size == 0 )
-    {
+out:
+    if (*size == 0) {
         Hob_Output("Could not read kernel image");
         free(image);
         image = NULL;
-    }
-    else if ( image )
-    {
+    } else if (image) {
         /* Shrink allocation to fit image. */
         tmp = realloc(image, *size);
-        if ( tmp )
+        if (tmp)
             image = tmp;
     }
 
-    if ( kernel_gfd != NULL )
+    if (kernel_gfd != NULL)
         gzclose(kernel_gfd);
-    else if ( kernel_fd >= 0 )
+    else if (kernel_fd >= 0)
         close(kernel_fd);
     return image;
 

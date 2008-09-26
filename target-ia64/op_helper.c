@@ -27,7 +27,8 @@
 #include "qemu-kvm.h"
 #include "qemu-common.h"
 
-CPUState *cpu_ia64_init(const char *cpu_model){
+CPUState *cpu_ia64_init(const char *cpu_model)
+{
     CPUState *env;
     env = qemu_mallocz(sizeof(CPUState));
     if (!env)
@@ -35,8 +36,8 @@ CPUState *cpu_ia64_init(const char *cpu_model){
     cpu_exec_init(env);
     cpu_reset(env);
     if (kvm_enabled()) {
-	kvm_qemu_init_env(env);
-	kvm_init_new_ap(env->cpu_index, env);
+        kvm_qemu_init_env(env);
+        kvm_init_new_ap(env->cpu_index, env);
     }
     return env;
 }
@@ -45,10 +46,8 @@ void cpu_reset(CPUIA64State *env)
 {
 }
 
-
 static inline void set_feature(CPUIA64State *env, int feature)
 {
-
 }
 
 void cpu_ia64_set_model(CPUIA64State *env, uint32_t id)
@@ -60,9 +59,7 @@ void cpu_ia64_close(CPUIA64State *env)
     free(env);
 }
 
-
 extern int semihosting_enabled;
-
 
 void switch_mode(CPUState *env, int mode)
 {
@@ -72,15 +69,13 @@ void switch_mode(CPUState *env, int mode)
 void do_interrupt(CPUIA64State *env)
 {
     if (kvm_enabled()) {
-	printf("%s: unexpect\n", __FUNCTION__);
-	exit(-1);
+        printf("%s: unexpect\n", __FUNCTION__);
+        exit(-1);
     }
 }
 
-
-
 int cpu_ia64_handle_mmu_fault (CPUState *env, target_ulong address,
-                              int access_type, int is_user, int is_softmmu)
+                               int access_type, int is_user, int is_softmmu)
 {
     return 1;
 }
@@ -90,15 +85,14 @@ target_ulong cpu_get_phys_page_debug(CPUState *env, target_ulong addr)
     return -1;
 }
 
-
 void cpu_dump_state(CPUState *env, FILE *f,
                     int (*cpu_fprintf)(FILE *f, const char *fmt, ...),
                     int flags)
 {
-       return;
-}
-void tlb_fill (target_ulong addr, int is_write, int is_user, void *retaddr)
-{
-    return ;
+    return;
 }
 
+void tlb_fill (target_ulong addr, int is_write, int is_user, void *retaddr)
+{
+    return;
+}

@@ -54,48 +54,49 @@ static PCIDevice *i440fx_state;
 
 static uint32_t ipf_to_legacy_io(target_phys_addr_t addr)
 {
-	return (uint32_t)(((addr&0x3ffffff) >> 12 << 2)|((addr) & 0x3));
+    return (uint32_t)(((addr&0x3ffffff) >> 12 << 2)|((addr) & 0x3));
 }
 
 static void ipf_legacy_io_writeb(void *opaque, target_phys_addr_t addr,
 				 uint32_t val) {
-	uint32_t port = ipf_to_legacy_io(addr);
-	cpu_outb(0, port, val);
+    uint32_t port = ipf_to_legacy_io(addr);
+
+    cpu_outb(0, port, val);
 }
 
 static void ipf_legacy_io_writew(void *opaque, target_phys_addr_t addr,
 				 uint32_t val) {
-	uint32_t port = ipf_to_legacy_io(addr);
+    uint32_t port = ipf_to_legacy_io(addr);
 
-	cpu_outw(0, port, val);
+    cpu_outw(0, port, val);
 }
 
 static void ipf_legacy_io_writel(void *opaque, target_phys_addr_t addr,
 				 uint32_t val) {
-	uint32_t port = ipf_to_legacy_io(addr);
+    uint32_t port = ipf_to_legacy_io(addr);
 
-	cpu_outl(0, port, val);
+    cpu_outl(0, port, val);
 }
 
 static uint32_t ipf_legacy_io_readb(void *opaque, target_phys_addr_t addr)
 {
-	uint32_t port = ipf_to_legacy_io(addr);
+    uint32_t port = ipf_to_legacy_io(addr);
 
-	return cpu_inb(0, port);
+    return cpu_inb(0, port);
 }
 
 static uint32_t ipf_legacy_io_readw(void *opaque, target_phys_addr_t addr)
 {
-	uint32_t port = ipf_to_legacy_io(addr);
+    uint32_t port = ipf_to_legacy_io(addr);
 
-	return cpu_inw(0, port);
+    return cpu_inw(0, port);
 }
 
 static uint32_t ipf_legacy_io_readl(void *opaque, target_phys_addr_t addr)
 {
-	uint32_t port = ipf_to_legacy_io(addr);
+    uint32_t port = ipf_to_legacy_io(addr);
 
-	return cpu_inl(0, port);
+    return cpu_inl(0, port);
 }
 
 static CPUReadMemoryFunc *ipf_legacy_io_read[3] = {
@@ -112,7 +113,7 @@ static CPUWriteMemoryFunc *ipf_legacy_io_write[3] = {
 
 static void pic_irq_request(void *opaque, int irq, int level)
 {
-	fprintf(stderr,"pic_irq_request called!\n");
+    fprintf(stderr,"pic_irq_request called!\n");
 }
 
 /* PC cmos mappings */
@@ -147,6 +148,7 @@ static void cmos_init_hd(int type_ofs, int info_ofs, BlockDriverState *hd)
 {
     RTCState *s = rtc_state;
     int cylinders, heads, sectors;
+
     bdrv_get_geometry_hint(hd, &cylinders, &heads, &sectors);
     rtc_set_memory(s, type_ofs, 47);
     rtc_set_memory(s, info_ofs, cylinders);
@@ -221,10 +223,12 @@ static void cmos_init(ram_addr_t ram_size, ram_addr_t above_4g_mem_size,
     /* set boot devices, and disable floppy signature check if requested */
 #define PC_MAX_BOOT_DEVICES 3
     nbds = strlen(boot_device);
+
     if (nbds > PC_MAX_BOOT_DEVICES) {
         fprintf(stderr, "Too many boot devices for PC\n");
         exit(1);
     }
+
     for (i = 0; i < nbds; i++) {
         bds[i] = boot_device2nibble(boot_device[i]);
         if (bds[i] == 0) {
@@ -233,6 +237,7 @@ static void cmos_init(ram_addr_t ram_size, ram_addr_t above_4g_mem_size,
             exit(1);
         }
     }
+
     rtc_set_memory(s, 0x3d, (bds[1] << 4) | bds[0]);
     rtc_set_memory(s, 0x38, (bds[2] << 4) | (fd_bootchk ?  0x0 : 0x1));
 
@@ -250,6 +255,7 @@ static void cmos_init(ram_addr_t ram_size, ram_addr_t above_4g_mem_size,
         nb++;
     if (fd1 < 3)
         nb++;
+
     switch (nb) {
     case 0:
         break;
@@ -260,6 +266,7 @@ static void cmos_init(ram_addr_t ram_size, ram_addr_t above_4g_mem_size,
         val |= 0x41; /* 2 drives, ready for boot */
         break;
     }
+
     val |= 0x02; /* FPU is there */
     val |= 0x04; /* PS/2 mouse installed */
     rtc_set_memory(s, REG_EQUIPMENT_BYTE, val);
@@ -277,12 +284,13 @@ static void cmos_init(ram_addr_t ram_size, ram_addr_t above_4g_mem_size,
         if (hd_table[i]) {
             int cylinders, heads, sectors, translation;
             /* NOTE: bdrv_get_geometry_hint() returns the physical
-                geometry.  It is always such that: 1 <= sects <= 63, 1
-                <= heads <= 16, 1 <= cylinders <= 16383. The BIOS
-                geometry can be different if a translation is done. */
+               geometry.  It is always such that: 1 <= sects <= 63, 1
+               <= heads <= 16, 1 <= cylinders <= 16383. The BIOS
+               geometry can be different if a translation is done. */
             translation = bdrv_get_translation_hint(hd_table[i]);
             if (translation == BIOS_ATA_TRANSLATION_AUTO) {
-                bdrv_get_geometry_hint(hd_table[i], &cylinders, &heads, &sectors);
+                bdrv_get_geometry_hint(hd_table[i], &cylinders,
+                                       &heads, &sectors);
                 if (cylinders <= 1024 && heads <= 16 && sectors <= 63) {
                     /* No translation. */
                     translation = 0;
@@ -311,7 +319,8 @@ static const int ide_irq[2] = { 14, 15 };
 
 #define NE2000_NB_MAX 6
 
-static int ne2000_io[NE2000_NB_MAX] = { 0x300, 0x320, 0x340, 0x360, 0x280, 0x380 };
+static int ne2000_io[NE2000_NB_MAX] = { 0x300, 0x320, 0x340,
+                                        0x360, 0x280, 0x380 };
 static int ne2000_irq[NE2000_NB_MAX] = { 9, 10, 11, 3, 4, 5 };
 
 static int serial_io[MAX_SERIAL_PORTS] = { 0x3f8, 0x2f8, 0x3e8, 0x2e8 };
@@ -339,8 +348,7 @@ static void audio_init (PCIBus *pci_bus, qemu_irq *pic)
                 if (c->enabled) {
                     if (c->isa) {
                         c->init.init_isa (s, pic);
-                    }
-                    else {
+                    } else {
                         if (pci_bus) {
                             c->init.init_pci (pci_bus, s);
                         }
@@ -364,10 +372,10 @@ static void pc_init_ne2k_isa(NICInfo *nd, qemu_irq *pic)
 
 /* Itanium hardware initialisation */
 static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
-                     const char *boot_device, DisplayState *ds,
-                     const char *kernel_filename, const char *kernel_cmdline,
-                     const char *initrd_filename,
-                     int pci_enabled, const char *cpu_model)
+                      const char *boot_device, DisplayState *ds,
+                      const char *kernel_filename, const char *kernel_cmdline,
+                      const char *initrd_filename,
+                      int pci_enabled, const char *cpu_model)
 {
     char buf[1024];
     int i;
@@ -388,9 +396,9 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
     page_size = getpagesize();
     if (page_size != TARGET_PAGE_SIZE) {
 	fprintf(stderr,"Error! Host page size != qemu target page size,"
-			" you may need to change TARGET_PAGE_BITS in qemu!"
-			"host page size:0x%x\n", page_size);
-		exit(-1);
+                " you may need to change TARGET_PAGE_BITS in qemu!"
+                "host page size:0x%x\n", page_size);
+        exit(-1);
     };
 
     if (ram_size >= 0xc0000000 ) {
@@ -417,62 +425,62 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
 
     /* allocate RAM */
     if (kvm_enabled()) {
-		ram_addr = qemu_ram_alloc(0xa0000);
-		cpu_register_physical_memory(0, 0xa0000, ram_addr);
+        ram_addr = qemu_ram_alloc(0xa0000);
+        cpu_register_physical_memory(0, 0xa0000, ram_addr);
 
-		ram_addr = qemu_ram_alloc(0x20000); // Workaround 0xa0000-0xc0000
+        ram_addr = qemu_ram_alloc(0x20000); // Workaround 0xa0000-0xc0000
 
-		ram_addr = qemu_ram_alloc(0x40000);
-		cpu_register_physical_memory(0xc0000, 0x40000, ram_addr);
+        ram_addr = qemu_ram_alloc(0x40000);
+        cpu_register_physical_memory(0xc0000, 0x40000, ram_addr);
 
-		ram_addr = qemu_ram_alloc(ram_size - 0x100000);
-		cpu_register_physical_memory(0x100000, ram_size - 0x100000, ram_addr);
-	} else
-    {
+        ram_addr = qemu_ram_alloc(ram_size - 0x100000);
+        cpu_register_physical_memory(0x100000, ram_size - 0x100000, ram_addr);
+    } else {
         ram_addr = qemu_ram_alloc(ram_size);
         cpu_register_physical_memory(0, ram_size, ram_addr);
     }
     /* allocate VGA RAM */
     vga_ram_addr = qemu_ram_alloc(vga_ram_size);
 
-	/* above 4giga memory allocation */
-	if (above_4g_mem_size > 0) {
-		ram_addr = qemu_ram_alloc(above_4g_mem_size);
-		cpu_register_physical_memory(0x100000000, above_4g_mem_size, ram_addr);
-	}
+    /* above 4giga memory allocation */
+    if (above_4g_mem_size > 0) {
+        ram_addr = qemu_ram_alloc(above_4g_mem_size);
+        cpu_register_physical_memory(0x100000000, above_4g_mem_size, ram_addr);
+    }
 
-	/*Load firware to its proper position.*/
-	if (kvm_enabled()) {
-		int r;
-		unsigned long  image_size;
-		char *image = NULL;
-		uint8_t *fw_image_start;
-		ram_addr_t fw_offset = qemu_ram_alloc(GFW_SIZE);
-		uint8_t *fw_start = phys_ram_base + fw_offset;
+    /*Load firware to its proper position.*/
+    if (kvm_enabled()) {
+        int r;
+        unsigned long  image_size;
+        char *image = NULL;
+        uint8_t *fw_image_start;
+        ram_addr_t fw_offset = qemu_ram_alloc(GFW_SIZE);
+        uint8_t *fw_start = phys_ram_base + fw_offset;
 
-		snprintf(buf, sizeof(buf), "%s/%s", bios_dir, FW_FILENAME);
-		image = read_image(buf, &image_size );
-		if (NULL == image || !image_size) {
-			fprintf(stderr, "Error when reading Guest Firmware!\n");
-			fprintf(stderr, "Please check Guest firmware at %s\n", buf);
-			exit(1);
-		}
-		fw_image_start = fw_start + GFW_SIZE - image_size;
+        snprintf(buf, sizeof(buf), "%s/%s", bios_dir, FW_FILENAME);
+        image = read_image(buf, &image_size );
+        if (NULL == image || !image_size) {
+            fprintf(stderr, "Error when reading Guest Firmware!\n");
+            fprintf(stderr, "Please check Guest firmware at %s\n", buf);
+            exit(1);
+        }
+        fw_image_start = fw_start + GFW_SIZE - image_size;
 
         cpu_register_physical_memory(GFW_START, GFW_SIZE, fw_offset);
         memcpy(fw_image_start, image, image_size);
 
-		free(image);
-		flush_icache_range((unsigned long)fw_image_start,
-			(unsigned long)fw_image_start + image_size);
-		kvm_ia64_build_hob(ram_size + above_4g_mem_size, smp_cpus, fw_start);
-	}
+        free(image);
+        flush_icache_range((unsigned long)fw_image_start,
+                           (unsigned long)fw_image_start + image_size);
+        kvm_ia64_build_hob(ram_size + above_4g_mem_size, smp_cpus, fw_start);
+    }
 
     /*Register legacy io address space, size:64M*/
     ipf_legacy_io_base = 0xE0000000;
     ipf_legacy_io_mem = cpu_register_io_memory(0, ipf_legacy_io_read,
-						ipf_legacy_io_write, NULL);
-    cpu_register_physical_memory(ipf_legacy_io_base, 64*1024*1024, ipf_legacy_io_mem);
+                                               ipf_legacy_io_write, NULL);
+    cpu_register_physical_memory(ipf_legacy_io_base, 64*1024*1024,
+                                 ipf_legacy_io_mem);
 
     cpu_irq = qemu_allocate_irqs(pic_irq_request, first_cpu, 1);
     i8259 = i8259_init(cpu_irq[0]);
@@ -486,8 +494,7 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
 
     if (cirrus_vga_enabled) {
         if (pci_enabled) {
-            pci_cirrus_vga_init(pci_bus,
-                                ds, phys_ram_base + vga_ram_addr,
+            pci_cirrus_vga_init(pci_bus, ds, phys_ram_base + vga_ram_addr,
                                 vga_ram_addr, vga_ram_size);
         } else {
             isa_cirrus_vga_init(ds, phys_ram_base + vga_ram_addr,
@@ -512,7 +519,7 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
     for(i = 0; i < MAX_SERIAL_PORTS; i++) {
         if (serial_hds[i]) {
             serial_init(serial_io[i], i8259[serial_irq[i]], 115200,
-					serial_hds[i]);
+                        serial_hds[i]);
         }
     }
 
@@ -634,23 +641,21 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
 	int unit_id = 0;
 
 	while ((index = drive_get_index(IF_VIRTIO, 0, unit_id)) != -1) {
-	    virtio_blk_init(pci_bus, 0x1AF4, 0x1001,
-			    drives_table[index].bdrv);
+	    virtio_blk_init(pci_bus, 0x1AF4, 0x1001, drives_table[index].bdrv);
 	    unit_id++;
 	}
     }
 }
 
 static void ipf_init_pci(ram_addr_t ram_size, int vga_ram_size,
-                        const char *boot_device, DisplayState *ds,
-                        const char *kernel_filename,
-                        const char *kernel_cmdline,
-                        const char *initrd_filename,
-                        const char *cpu_model)
+                         const char *boot_device, DisplayState *ds,
+                         const char *kernel_filename,
+                         const char *kernel_cmdline,
+                         const char *initrd_filename,
+                         const char *cpu_model)
 {
-    ipf_init1(ram_size, vga_ram_size, boot_device, ds,
-             kernel_filename, kernel_cmdline,
-             initrd_filename, 1, cpu_model);
+    ipf_init1(ram_size, vga_ram_size, boot_device, ds, kernel_filename,
+              kernel_cmdline, initrd_filename, 1, cpu_model);
 }
 
 QEMUMachine ipf_machine = {
@@ -684,7 +689,8 @@ void ioapic_set_irq(void *opaque, int irq_num, int level)
     else
         ioapic_irq_count[vector] -= 1;
 
-    if (kvm_enabled())
+    if (kvm_enabled()) {
 	if (kvm_set_irq(vector, ioapic_irq_count[vector] == 0))
 	    return;
+    }
 }
