@@ -766,6 +766,11 @@ int try_push_interrupts(kvm_context_t kvm)
 	return kvm->callbacks->try_push_interrupts(kvm->opaque);
 }
 
+int try_push_nmi(kvm_context_t kvm)
+{
+	return kvm->callbacks->try_push_nmi(kvm->opaque);
+}
+
 void post_kvm_run(kvm_context_t kvm, int vcpu)
 {
 	kvm->callbacks->post_kvm_run(kvm->opaque, vcpu);
@@ -790,6 +795,17 @@ int kvm_is_ready_for_interrupt_injection(kvm_context_t kvm, int vcpu)
 	return run->ready_for_interrupt_injection;
 }
 
+int kvm_is_ready_for_nmi_injection(kvm_context_t kvm, int vcpu)
+{
+#ifdef KVM_CAP_NMI
+	struct kvm_run *run = kvm->run[vcpu];
+
+	return run->ready_for_nmi_injection;
+#else
+	return 0;
+#endif
+}
+
 int kvm_run(kvm_context_t kvm, int vcpu)
 {
 	int r;
@@ -797,6 +813,9 @@ int kvm_run(kvm_context_t kvm, int vcpu)
 	struct kvm_run *run = kvm->run[vcpu];
 
 again:
+#ifdef KVM_CAP_NMI
+	run->request_nmi_window = try_push_nmi(kvm);
+#endif
 #if !defined(__s390__)
 	if (!kvm->irqchip_in_kernel)
 		run->request_interrupt_window = try_push_interrupts(kvm);
@@ -872,6 +891,9 @@ again:
 			r = handle_halt(kvm, vcpu);
 			break;
 		case KVM_EXIT_IRQ_WINDOW_OPEN:
+#ifdef KVM_CAP_NMI
+		case KVM_EXIT_NMI_WINDOW_OPEN:
+#endif
 			break;
 		case KVM_EXIT_SHUTDOWN:
 			r = handle_shutdown(kvm, vcpu);
@@ -954,6 +976,15 @@ int kvm_has_sync_mmu(kvm_context_t kvm)
         r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_SYNC_MMU);
 #endif
         return r;
+}
+
+int kvm_inject_nmi(kvm_context_t kvm, int vcpu)
+{
+#ifdef KVM_CAP_NMI
+	return ioctl(kvm->vcpu_fd[vcpu], KVM_NMI);
+#else
+	return -ENOSYS;
+#endif
 }
 
 int kvm_init_coalesced_mmio(kvm_context_t kvm)

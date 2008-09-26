@@ -35,6 +35,7 @@ int kvm_get_phys_ram_page_bitmap(unsigned char *bitmap);
 
 void qemu_kvm_call_with_env(void (*func)(void *), void *data, CPUState *env);
 void qemu_kvm_cpuid_on_env(CPUState *env);
+void kvm_inject_interrupt(CPUState *env, int mask);
 void kvm_update_after_sipi(CPUState *env);
 void kvm_update_interrupt_request(CPUState *env);
 void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
@@ -57,6 +58,7 @@ void kvm_arch_pre_kvm_run(void *opaque, int vcpu);
 void kvm_arch_post_kvm_run(void *opaque, int vcpu);
 int kvm_arch_has_work(CPUState *env);
 int kvm_arch_try_push_interrupts(void *opaque);
+int kvm_arch_try_push_nmi(void *opaque);
 void kvm_arch_update_regs_for_sipi(CPUState *env);
 void kvm_arch_cpu_reset(CPUState *env);
 

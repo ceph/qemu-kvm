@@ -598,7 +598,8 @@ int kvm_arch_halt(void *opaque, int vcpu)
     CPUState *env = cpu_single_env;
 
     if (!((env->interrupt_request & CPU_INTERRUPT_HARD) &&
-	  (env->eflags & IF_MASK))) {
+	  (env->eflags & IF_MASK)) &&
+	!(env->interrupt_request & CPU_INTERRUPT_NMI)) {
             env->halted = 1;
 	    env->exception_index = EXCP_HLT;
     }
@@ -627,8 +628,9 @@ void kvm_arch_post_kvm_run(void *opaque, int vcpu)
 
 int kvm_arch_has_work(CPUState *env)
 {
-    if ((env->interrupt_request & (CPU_INTERRUPT_HARD | CPU_INTERRUPT_EXIT)) &&
-	(env->eflags & IF_MASK))
+    if (((env->interrupt_request & (CPU_INTERRUPT_HARD | CPU_INTERRUPT_EXIT)) &&
+	 (env->eflags & IF_MASK)) ||
+	(env->interrupt_request & CPU_INTERRUPT_NMI))
 	return 1;
     return 0;
 }
@@ -651,6 +653,24 @@ int kvm_arch_try_push_interrupts(void *opaque)
     }
 
     return (env->interrupt_request & CPU_INTERRUPT_HARD) != 0;
+}
+
+int kvm_arch_try_push_nmi(void *opaque)
+{
+    CPUState *env = cpu_single_env;
+    int r;
+
+    if (likely(!(env->interrupt_request & CPU_INTERRUPT_NMI)))
+        return 0;
+
+    if (kvm_is_ready_for_nmi_injection(kvm_context, env->cpu_index)) {
+        env->interrupt_request &= ~CPU_INTERRUPT_NMI;
+        r = kvm_inject_nmi(kvm_context, env->cpu_index);
+        if (r < 0)
+            printf("cpu %d fail inject NMI\n", env->cpu_index);
+    }
+
+    return (env->interrupt_request & CPU_INTERRUPT_NMI) != 0;
 }
 
 void kvm_arch_update_regs_for_sipi(CPUState *env)

@@ -1408,7 +1408,10 @@ static void do_inject_nmi(int cpu_index)
 
     for (env = first_cpu; env != NULL; env = env->next_cpu)
         if (env->cpu_index == cpu_index) {
-            cpu_interrupt(env, CPU_INTERRUPT_NMI);
+            if (kvm_enabled())
+                kvm_inject_interrupt(env, CPU_INTERRUPT_NMI);
+            else
+                cpu_interrupt(env, CPU_INTERRUPT_NMI);
             break;
         }
 }

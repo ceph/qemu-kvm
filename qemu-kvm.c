@@ -125,6 +125,16 @@ static void on_vcpu(CPUState *env, void (*func)(void *data), void *data)
         qemu_cond_wait(&qemu_work_cond);
 }
 
+static void inject_interrupt(void *data)
+{
+    cpu_interrupt(vcpu->env, (int)data);
+}
+
+void kvm_inject_interrupt(CPUState *env, int mask)
+{
+    on_vcpu(env, inject_interrupt, (void *)mask);
+}
+
 void kvm_update_interrupt_request(CPUState *env)
 {
     int signal = 0;
@@ -161,6 +171,11 @@ void kvm_apic_init(CPUState *env)
 static int try_push_interrupts(void *opaque)
 {
     return kvm_arch_try_push_interrupts(opaque);
+}
+
+static int try_push_nmi(void *opaque)
+{
+    return kvm_arch_try_push_nmi(opaque);
 }
 
 static void post_kvm_run(void *opaque, int vcpu)
@@ -394,7 +409,7 @@ static int kvm_main_loop_cpu(CPUState *env)
     while (1) {
 	while (!has_work(env))
 	    kvm_main_loop_wait(env, 1000);
-	if (env->interrupt_request & CPU_INTERRUPT_HARD)
+	if (env->interrupt_request & (CPU_INTERRUPT_HARD | CPU_INTERRUPT_NMI))
 	    env->halted = 0;
 	if (!kvm_irqchip_in_kernel(kvm_context) && info->sipi_needed)
 	    update_regs_for_sipi(env);
@@ -716,6 +731,7 @@ static struct kvm_callbacks qemu_kvm_ops = {
     .shutdown = kvm_shutdown,
     .io_window = kvm_io_window,
     .try_push_interrupts = try_push_interrupts,
+    .try_push_nmi = try_push_nmi,
     .post_kvm_run = post_kvm_run,
     .pre_kvm_run = pre_kvm_run,
 #ifdef TARGET_I386

@@ -66,6 +66,7 @@ struct kvm_callbacks {
     int (*shutdown)(void *opaque, int vcpu);
     int (*io_window)(void *opaque);
     int (*try_push_interrupts)(void *opaque);
+    int (*try_push_nmi)(void *opaque);
     void (*post_kvm_run)(void *opaque, int vcpu);
     int (*pre_kvm_run)(void *opaque, int vcpu);
     int (*tpr_access)(void *opaque, int vcpu, uint64_t rip, int is_write);
@@ -214,6 +215,17 @@ uint64_t kvm_get_apic_base(kvm_context_t kvm, int vcpu);
  * \return boolean indicating interrupt injection readiness
  */
 int kvm_is_ready_for_interrupt_injection(kvm_context_t kvm, int vcpu);
+
+/*!
+ * \brief Check if a vcpu is ready for NMI injection
+ *
+ * This checks if vcpu is not already running in NMI context.
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param vcpu Which virtual CPU should get dumped
+ * \return boolean indicating NMI injection readiness
+ */
+int kvm_is_ready_for_nmi_injection(kvm_context_t kvm, int vcpu);
 
 /*!
  * \brief Read VCPU registers
@@ -577,6 +589,17 @@ int kvm_get_lapic(kvm_context_t kvm, int vcpu, struct kvm_lapic_state *s);
 int kvm_set_lapic(kvm_context_t kvm, int vcpu, struct kvm_lapic_state *s);
 
 #endif
+
+/*!
+ * \brief Simulate an NMI
+ *
+ * This allows you to simulate a non-maskable interrupt.
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param vcpu Which virtual CPU should get dumped
+ * \return 0 on success
+ */
+int kvm_inject_nmi(kvm_context_t kvm, int vcpu);
 
 #endif
 
