@@ -28,4 +28,12 @@
 
 #endif
 
+/*There is no struct fdesc definition <2.6.27*/
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
+struct fdesc {
+	uint64_t ip;
+	uint64_t gp;
+};
+#endif
+
 #endif
