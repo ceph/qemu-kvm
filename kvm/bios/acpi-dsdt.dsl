@@ -224,7 +224,7 @@ DefinitionBlock (
                     0x00000000,         // Address Translation Offset
                     0x00020000,         // Address Length
                     ,, , AddressRangeMemory, TypeStatic)
-                DWordMemory (ResourceProducer, PosDecode, MinNotFixed, MaxFixed, NonCacheable, ReadWrite,
+                DWordMemory (ResourceProducer, PosDecode, MinFixed, MaxFixed, NonCacheable, ReadWrite,
                     0x00000000,         // Address Space Granularity
                     0xE0000000,         // Address Range Minimum
                     0xFEBFFFFF,         // Address Range Maximum
