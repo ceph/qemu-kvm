@@ -49,7 +49,7 @@ all:: header-link prerequisite
 sync: header-sync source-sync header-link
 
 header-link:
-	rm -f include/asm
+	rm -f include/asm include-compat/asm
 	ln -sf asm-$(ARCH_DIR) include/asm
 	ln -sf asm-$(ARCH_DIR) include-compat/asm
 
