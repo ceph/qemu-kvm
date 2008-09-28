@@ -7110,6 +7110,8 @@ int qemu_live_loadvm_state(QEMUFile *f)
         if (!se) {
             fprintf(stderr, "qemu: warning: instance 0x%x of device '%s' not present in current VM\n", 
                     instance_id, idstr);
+            ret = -1;
+            goto the_end;
         } else {
             if (version_id > se->version_id) { /* src version > dst version */
                 fprintf(stderr, "migration:version mismatch:%s:%d(s)>%d(d)\n",
