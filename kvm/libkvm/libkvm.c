@@ -172,6 +172,7 @@ static int kvm_dirty_pages_log_change(kvm_context_t kvm, unsigned long phys_addr
 
 	{
 		struct kvm_userspace_memory_region mem = {
+			.slot = slot,
 			.memory_size = slots[slot].len,
 			.guest_phys_addr = slots[slot].phys_addr,
 			.userspace_addr = slots[slot].userspace_addr,
