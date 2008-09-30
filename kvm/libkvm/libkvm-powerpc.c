@@ -1,10 +1,7 @@
 /*
- * This header is for functions & variables that will ONLY be
- * used inside libkvm for x86.
- * THESE ARE NOT EXPOSED TO THE USER AND ARE ONLY FOR USE
- * WITHIN LIBKVM.
- *
- * derived from libkvm.c
+ * This file contains the powerpc specific implementation for the
+ * architecture dependent functions defined in kvm-common.h and
+ * libkvm.h
  *
  * Copyright (C) 2006 Qumranet, Inc.
  *
@@ -12,11 +9,10 @@
  *      Avi Kivity   <avi@qumranet.com>
  *      Yaniv Kamay  <yaniv@qumranet.com>
  *
- * Copyright 2007 IBM Corporation.
- * Added by & Authors:
+ * Copyright IBM Corp. 2007,2008
+ * Authors:
  * 	Jerone Young <jyoung5@us.ibm.com>
  * 	Christian Ehrhardt <ehrhardt@linux.vnet.ibm.com>
- *
  *
  * This work is licensed under the GNU LGPL license, version 2.
  */
