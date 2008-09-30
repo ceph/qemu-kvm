@@ -452,7 +452,7 @@ void uuid_probe(void)
     // check if backdoor port exists
     asm volatile ("outl %%eax, %%dx"
         : "=a" (eax), "=b" (ebx), "=c" (ecx), "=d" (edx)
-        : "a" (0x564d5868), "c" (0xa), "d" (0x5658));
+        : "a" (0x564d5868), "b" (0), "c" (0xa), "d" (0x5658));
     if (ebx == 0x564d5868) {
         uint32_t *uuid_ptr = (uint32_t *)bios_uuid;
         // get uuid
@@ -557,11 +557,12 @@ void ram_probe(void)
   if (above4g_ram_size)
     above4g_ram_size += 1ull << 32;
 
+  BX_INFO("ram_size=0x%08lx\n", ram_size);
 #ifdef BX_USE_EBDA_TABLES
-    ebda_cur_addr = ((*(uint16_t *)(0x40e)) << 4) + 0x380;
+  ebda_cur_addr = ((*(uint16_t *)(0x40e)) << 4) + 0x380;
+  BX_INFO("ebda_cur_addr: 0x%08lx\n", ebda_cur_addr);
 #endif
-    BX_INFO("ram_size=0x%08lx\n", ram_size);
-    BX_INFO("top of ram %ldMB\n", above4g_ram_size >> 20);
+  BX_INFO("top of ram %ldMB\n", above4g_ram_size >> 20);
   setup_mtrr();
 }
 
@@ -634,6 +635,17 @@ void smp_probe(void)
 #define PCI_INTERRUPT_PIN	0x3d	/* 8 bits */
 #define PCI_MIN_GNT		0x3e	/* 8 bits */
 #define PCI_MAX_LAT		0x3f	/* 8 bits */
+
+#define PCI_VENDOR_ID_INTEL             0x8086
+#define PCI_DEVICE_ID_INTEL_82441       0x1237
+#define PCI_DEVICE_ID_INTEL_82371SB_0   0x7000
+#define PCI_DEVICE_ID_INTEL_82371SB_1   0x7010
+#define PCI_DEVICE_ID_INTEL_82371AB_0   0x7110
+#define PCI_DEVICE_ID_INTEL_82371AB     0x7111
+#define PCI_DEVICE_ID_INTEL_82371AB_3   0x7113
+
+#define PCI_VENDOR_ID_IBM               0x1014
+#define PCI_VENDOR_ID_APPLE             0x106b
 
 typedef struct PCIDevice {
     int bus;
@@ -773,11 +785,13 @@ static void pci_bios_init_bridges(PCIDevice *d)
     vendor_id = pci_config_readw(d, PCI_VENDOR_ID);
     device_id = pci_config_readw(d, PCI_DEVICE_ID);
 
-    if (vendor_id == 0x8086 && device_id == 0x7000) {
+    if (vendor_id == PCI_VENDOR_ID_INTEL &&
+       (device_id == PCI_DEVICE_ID_INTEL_82371SB_0 ||
+        device_id == PCI_DEVICE_ID_INTEL_82371AB_0)) {
         int i, irq;
         uint8_t elcr[2];
 
-        /* PIIX3 bridge */
+        /* PIIX3/PIIX4 PCI to ISA bridge */
 
         elcr[0] = 0x00;
         elcr[1] = 0x00;
@@ -790,9 +804,9 @@ static void pci_bios_init_bridges(PCIDevice *d)
         }
         outb(0x4d0, elcr[0]);
         outb(0x4d1, elcr[1]);
-        BX_INFO("PIIX3 init: elcr=%02x %02x\n",
+        BX_INFO("PIIX3/PIIX4 init: elcr=%02x %02x\n",
                 elcr[0], elcr[1]);
-    } else if (vendor_id == 0x8086 && device_id == 0x1237) {
+    } else if (vendor_id == PCI_VENDOR_ID_INTEL && device_id == PCI_DEVICE_ID_INTEL_82441) {
         /* i440 PCI bridge */
         bios_shadow_init(d);
     }
@@ -853,8 +867,10 @@ static void pci_bios_init_device(PCIDevice *d)
             d->bus, d->devfn, vendor_id, device_id);
     switch(class) {
     case 0x0101:
-        if (vendor_id == 0x8086 && device_id == 0x7010) {
-            /* PIIX3 IDE */
+        if (vendor_id == PCI_VENDOR_ID_INTEL &&
+           (device_id == PCI_DEVICE_ID_INTEL_82371SB_1 ||
+            device_id == PCI_DEVICE_ID_INTEL_82371AB)) {
+            /* PIIX3/PIIX4 IDE */
             pci_config_writew(d, 0x40, 0x8000); // enable IDE0
             pci_config_writew(d, 0x42, 0x8000); // enable IDE1
             goto default_map;
@@ -874,7 +890,7 @@ static void pci_bios_init_device(PCIDevice *d)
         break;
     case 0x0800:
         /* PIC */
-        if (vendor_id == 0x1014) {
+        if (vendor_id == PCI_VENDOR_ID_IBM) {
             /* IBM */
             if (device_id == 0x0046 || device_id == 0xFFFF) {
                 /* MPIC & MPIC2 */
@@ -883,7 +899,7 @@ static void pci_bios_init_device(PCIDevice *d)
         }
         break;
     case 0xff00:
-        if (vendor_id == 0x0106b &&
+        if (vendor_id == PCI_VENDOR_ID_APPLE &&
             (device_id == 0x0017 || device_id == 0x0022)) {
             /* macio bridge */
             pci_set_io_region_addr(d, 0, 0x80800000);
@@ -926,7 +942,7 @@ static void pci_bios_init_device(PCIDevice *d)
         pci_config_writeb(d, PCI_INTERRUPT_LINE, pic_irq);
     }
 
-    if (vendor_id == 0x8086 && device_id == 0x7113) {
+    if (vendor_id == PCI_VENDOR_ID_INTEL && device_id == PCI_DEVICE_ID_INTEL_82371AB_3) {
         /* PIIX4 Power Management device (for ACPI) */
 
         // acpi sci is hardwired to 9
@@ -1494,8 +1510,8 @@ void acpi_bios_init(void)
     fadt->pm1_evt_len = 4;
     fadt->pm1_cnt_len = 2;
     fadt->pm_tmr_len = 4;
-    fadt->plvl2_lat = cpu_to_le16(0x0fff); // C2 state not supported
-    fadt->plvl3_lat = cpu_to_le16(0x0fff); // C3 state not supported
+    fadt->plvl2_lat = cpu_to_le16(0xfff); // C2 state not supported
+    fadt->plvl3_lat = cpu_to_le16(0xfff); // C3 state not supported
     fadt->gpe0_blk = cpu_to_le32(0xafe0);
     fadt->gpe0_blk_len = 4;
     /* WBINVD + PROC_C1 + SLP_BUTTON + FIX_RTC */
@@ -1650,6 +1666,9 @@ struct smbios_type_4 {
 	uint16_t current_speed;
 	uint8_t status;
 	uint8_t processor_upgrade;
+        uint16_t l1_cache_handle;
+        uint16_t l2_cache_handle;
+        uint16_t l3_cache_handle;
 } __attribute__((__packed__));
 
 /* SMBIOS type 16 - Physical Memory Array
@@ -1772,8 +1791,8 @@ smbios_type_0_init(void *start)
     p->bios_release_date_str = 2;
     p->bios_rom_size = 0; /* FIXME */
 
-    memset(p->bios_characteristics, 0, 7);
-    p->bios_characteristics[7] = 0x08; /* BIOS characteristics not supported */
+    memset(p->bios_characteristics, 0, 8);
+    p->bios_characteristics[0] = 0x08; /* BIOS characteristics not supported */
     p->bios_characteristics_extension_bytes[0] = 0;
     p->bios_characteristics_extension_bytes[1] = 0;
 
@@ -1875,6 +1894,10 @@ smbios_type_4_init(void *start, unsigned int cpu_number)
 
     p->status = 0x41; /* socket populated, CPU enabled */
     p->processor_upgrade = 0x01; /* other */
+
+    p->l1_cache_handle = 0xffff; /* cache information structure not provided */
+    p->l2_cache_handle = 0xffff;
+    p->l3_cache_handle = 0xffff;
 
     start += sizeof(struct smbios_type_4);
 
@@ -2082,13 +2105,13 @@ void rombios32_init(void)
 
     smp_probe();
 
-    uuid_probe();
-
     pci_bios_init();
 
     if (bios_table_cur_addr != 0) {
 
         mptable_init();
+
+        uuid_probe();
 
         smbios_init();
 

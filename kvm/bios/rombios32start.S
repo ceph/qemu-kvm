@@ -60,7 +60,7 @@ smp_ap_boot_code_start:
   jmp 11b
 12:
 
-  incw CPU_COUNT_ADDR
+  lock incw CPU_COUNT_ADDR
   ljmp $0xe000, $(1f-_start)
 1:
   hlt
