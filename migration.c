@@ -178,7 +178,7 @@ static void migrate_finish(MigrationState *s)
 
     if (! *has_error) {
         vm_stop(0);
-        f = qemu_fopen(s, migrate_put_buffer, NULL, migrate_close);
+        f = qemu_fopen_ops(s, migrate_put_buffer, NULL, migrate_close, NULL);
         do {
             qemu_aio_flush();
         } while (qemu_bh_poll());

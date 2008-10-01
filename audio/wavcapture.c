@@ -134,7 +134,7 @@ int wav_start_capture (CaptureState *s, const char *path, int freq,
     le_store (hdr + 28, freq << shift, 4);
     le_store (hdr + 32, 1 << shift, 2);
 
-    wav->f = qemu_fopen_file (path, "wb");
+    wav->f = qemu_fopen (path, "wb");
     if (!wav->f) {
         term_printf ("Failed to open wave file `%s'\nReason: %s\n",
                      path, strerror (errno));

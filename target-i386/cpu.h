@@ -248,6 +248,8 @@
 #define MSR_MCG_STATUS                  0x17a
 #define MSR_MCG_CTL                     0x17b
 
+#define MSR_IA32_PERF_STATUS            0x198
+
 #define MSR_PAT                         0x277
 
 #define MSR_EFER                        0xc0000080
@@ -302,6 +304,7 @@
 #define CPUID_PBE (1 << 31)
 
 #define CPUID_EXT_SSE3     (1 << 0)
+#define CPUID_EXT_DTES64   (1 << 2)
 #define CPUID_EXT_MONITOR  (1 << 3)
 #define CPUID_EXT_DSCPL    (1 << 4)
 #define CPUID_EXT_VMX      (1 << 5)
@@ -312,8 +315,15 @@
 #define CPUID_EXT_CID      (1 << 10)
 #define CPUID_EXT_CX16     (1 << 13)
 #define CPUID_EXT_XTPR     (1 << 14)
-#define CPUID_EXT_DCA      (1 << 17)
-#define CPUID_EXT_POPCNT   (1 << 22)
+#define CPUID_EXT_PDCM     (1 << 15)
+#define CPUID_EXT_DCA      (1 << 18)
+#define CPUID_EXT_SSE41    (1 << 19)
+#define CPUID_EXT_SSE42    (1 << 20)
+#define CPUID_EXT_X2APIC   (1 << 21)
+#define CPUID_EXT_MOVBE    (1 << 22)
+#define CPUID_EXT_POPCNT   (1 << 23)
+#define CPUID_EXT_XSAVE    (1 << 26)
+#define CPUID_EXT_OSXSAVE  (1 << 27)
 
 #define CPUID_EXT2_SYSCALL (1 << 11)
 #define CPUID_EXT2_MP      (1 << 19)
@@ -338,6 +348,17 @@
 #define CPUID_EXT3_OSVW    (1 << 9)
 #define CPUID_EXT3_IBS     (1 << 10)
 #define CPUID_EXT3_SKINIT  (1 << 12)
+
+#define CPUID_VENDOR_INTEL_1 0x756e6547 /* "Genu" */
+#define CPUID_VENDOR_INTEL_2 0x49656e69 /* "ineI" */
+#define CPUID_VENDOR_INTEL_3 0x6c65746e /* "ntel" */
+
+#define CPUID_VENDOR_AMD_1   0x68747541 /* "Auth" */
+#define CPUID_VENDOR_AMD_2   0x69746e65 /* "enti" */ 
+#define CPUID_VENDOR_AMD_3   0x444d4163 /* "cAMD" */
+
+#define CPUID_MWAIT_IBE     (1 << 1) /* Interrupts can exit capability */
+#define CPUID_MWAIT_EMX     (1 << 0) /* enumeration supported */
 
 #define EXCP00_DIVZ	0
 #define EXCP01_SSTP	1
@@ -542,8 +563,8 @@ typedef struct CPUX86State {
 
     /* sysenter registers */
     uint32_t sysenter_cs;
-    uint64_t sysenter_esp;
-    uint64_t sysenter_eip;
+    target_ulong sysenter_esp;
+    target_ulong sysenter_eip;
     uint64_t efer;
     uint64_t star;
 
@@ -737,7 +758,7 @@ static inline int cpu_get_time_fast(void)
 #define cpu_signal_handler cpu_x86_signal_handler
 #define cpu_list x86_cpu_list
 
-#define CPU_SAVE_VERSION 6
+#define CPU_SAVE_VERSION 7
 
 /* MMU modes definitions */
 #define MMU_MODE0_SUFFIX _kernel

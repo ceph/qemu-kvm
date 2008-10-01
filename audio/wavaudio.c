@@ -159,7 +159,7 @@ static int wav_init_out (HWVoiceOut *hw, audsettings_t *as)
     le_store (hdr + 28, hw->info.freq << (bits16 + stereo), 4);
     le_store (hdr + 32, 1 << (bits16 + stereo), 2);
 
-    wav->f = qemu_fopen_file (conf.wav_path, "wb");
+    wav->f = qemu_fopen (conf.wav_path, "wb");
     if (!wav->f) {
         dolog ("Failed to open wave file `%s'\nReason: %s\n",
                conf.wav_path, strerror (errno));

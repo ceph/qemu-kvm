@@ -2868,8 +2868,7 @@ static uint32_t vga_ioport_read(void *opaque, uint32_t addr)
 	case 0x3ba:
 	case 0x3da:
 	    /* just toggle to fool polling */
-	    s->st01 ^= ST01_V_RETRACE | ST01_DISP_ENABLE;
-	    val = s->st01;
+	    val = s->st01 = s->retrace((VGAState *) s);
 	    s->ar_flip_flop = 0;
 	    break;
 	default:
@@ -2932,6 +2931,7 @@ static void vga_ioport_write(void *opaque, uint32_t addr, uint32_t val)
 	break;
     case 0x3c2:
 	s->msr = val & ~0x10;
+	s->update_retrace_info((VGAState *) s);
 	break;
     case 0x3c4:
 	s->sr_index = val;
@@ -2943,6 +2943,7 @@ static void vga_ioport_write(void *opaque, uint32_t addr, uint32_t val)
 	printf("vga: write SR%x = 0x%02x\n", s->sr_index, val);
 #endif
 	s->sr[s->sr_index] = val & sr_mask[s->sr_index];
+	if (s->sr_index == 1) s->update_retrace_info((VGAState *) s);
 	break;
     case 0x3c6:
 	cirrus_write_hidden_dac(s, val);
@@ -3008,6 +3009,18 @@ static void vga_ioport_write(void *opaque, uint32_t addr, uint32_t val)
 
 	default:
 	    s->cr[s->cr_index] = val;
+	    break;
+	}
+
+	switch(s->cr_index) {
+	case 0x00:
+	case 0x04:
+	case 0x05:
+	case 0x06:
+	case 0x07:
+	case 0x11:
+	case 0x17:
+	    s->update_retrace_info((VGAState *) s);
 	    break;
 	}
 	break;
