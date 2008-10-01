@@ -1118,8 +1118,8 @@ static struct {
       {   none,   none,   none,   none, none },
       {   none,   none,   none,   none, none },
       { 0x565c, 0x567c,   none,   none, none }, /* \| */
-      { 0x5700, 0x5700,   none,   none, none }, /* F11 */
-      { 0x5800, 0x5800,   none,   none, none }  /* F12 */
+      { 0x8500, 0x8700, 0x8900, 0x8b00, none }, /* F11 */
+      { 0x8600, 0x8800, 0x8a00, 0x8c00, none }, /* F12 */
       };
 
   Bit8u
@@ -2030,7 +2030,7 @@ interactive_bootkey()
   if (check_for_keystroke())
   {
     scan_code = get_keystroke();
-    if (scan_code == 0x58) /* F12 */
+    if (scan_code == 0x86) /* F12 */
     {
       while (check_for_keystroke())
         get_keystroke();
