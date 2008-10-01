@@ -560,7 +560,7 @@ int kvm_main_loop(void)
     io_thread = pthread_self();
     qemu_system_ready = 1;
 
-    if (kvm_eventfd(fds) == -1) {
+    if (qemu_eventfd(fds) == -1) {
 	fprintf(stderr, "failed to create eventfd\n");
 	return -errno;
     }
