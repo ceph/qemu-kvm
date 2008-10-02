@@ -107,6 +107,8 @@ extern kvm_context_t kvm_context;
 #define qemu_kvm_irqchip_in_kernel() (0)
 #define qemu_kvm_pit_in_kernel() (0)
 #define qemu_kvm_has_sync_mmu() (0)
+#define kvm_load_registers(env) do {} while(0)
+#define kvm_save_registers(env) do {} while(0)
 #endif
 
 void kvm_mutex_unlock(void);

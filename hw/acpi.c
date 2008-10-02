@@ -726,7 +726,11 @@ void qemu_system_cpu_hot_add(int cpu, int state)
 {
     CPUState *env;
 
-    if ((state) && (!qemu_kvm_cpu_env(cpu))) {
+    if (state
+#ifdef USE_KVM
+        && (!qemu_kvm_cpu_env(cpu))
+#endif
+    ) {
         env = pc_new_cpu(cpu, model, 1);
         if (!env) {
             fprintf(stderr, "cpu %d creation failed\n", cpu);

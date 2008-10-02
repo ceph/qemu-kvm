@@ -2677,14 +2677,13 @@ static void kvm_update_vga_alias(CirrusVGAState *s, int ok, int bank)
 	if (!s->aliases_enabled
 	    || base != s->aliased_bank_base[bank]
 	    || limit != s->aliased_bank_limit[bank]) {
-	    kvm_create_memory_alias(kvm_context,
-				    0xa0000 + bank * 0x8000,
-				    limit, base);
+	    kvm_qemu_create_memory_alias(0xa0000 + bank * 0x8000,
+                                     limit, base);
 	    s->aliased_bank_base[bank] = base;
 	    s->aliased_bank_limit[bank] = limit;
 	}
     } else {
-	kvm_destroy_memory_alias(kvm_context, 0xa0000 + bank * 0x8000);
+	kvm_qemu_destroy_memory_alias(0xa0000 + bank * 0x8000);
     }
 }
 
