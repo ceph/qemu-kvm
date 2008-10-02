@@ -27,6 +27,18 @@ static int kvm_has_msr_star;
 
 static int lm_capable_kernel;
 
+int kvm_qemu_create_memory_alias(uint64_t phys_start,
+                                 uint64_t len,
+                                 uint64_t target_phys)
+{
+    return kvm_create_memory_alias(kvm_context, phys_start, len, target_phys);
+}
+
+int kvm_qemu_destroy_memory_alias(uint64_t phys_start)
+{
+	return kvm_destroy_memory_alias(kvm_context, phys_start);
+}
+
 int kvm_arch_qemu_create_context(void)
 {
     int i;
