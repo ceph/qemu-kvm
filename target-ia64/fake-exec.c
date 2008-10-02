@@ -14,6 +14,8 @@
  * This work is licensed under the GNU GPL licence version 2 or later.
  *
  */
+#include <stdio.h>
+
 #include "cpu.h"
 #include "exec-all.h"
 

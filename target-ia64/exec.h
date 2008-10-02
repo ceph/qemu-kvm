@@ -18,12 +18,20 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
+#ifndef __IA64_H__
+#define __IA64_H__
+
 //#include "dyngen-exec.h"
+#include "config.h"
+
+#include "dyngen-exec.h"
 
 #include "cpu.h"
 #include "exec-all.h"
 
 #define tcg_qemu_tb_exec(tb_ptr) 0
+
+register struct CPUIA64State *env asm(AREG0);
 
 static inline void env_to_regs(void)
 {
@@ -45,3 +53,5 @@ static inline int cpu_halted(CPUState *env) {
         return 0;
     return EXCP_HALTED;
 }
+
+#endif

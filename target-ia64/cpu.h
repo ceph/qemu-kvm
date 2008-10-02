@@ -26,7 +26,6 @@
 #include "ia64intrin.h"
 
 #include<string.h>
-#include<stdio.h>
 
 #define TARGET_LONG_BITS 64
 
@@ -52,12 +51,9 @@ typedef struct CPUIA64State {
 #define cpu_init cpu_ia64_init
 #define cpu_signal_handler cpu_ia64_signal_handler
 
-struct CPUIA64State *env;
+extern struct CPUIA64State *env;
 int cpu_get_pic_interrupt(CPUIA64State *s);
 int cpu_exec(CPUState *env1);
-void cpu_dump_state(CPUState *env, FILE *f,
-                    int (*cpu_fprintf)(FILE *f, const char *fmt, ...),
-                    int flags);
 CPUState *cpu_ia64_init(const char * cpu_model);
 
 static inline int cpu_mmu_index (CPUState *env)
