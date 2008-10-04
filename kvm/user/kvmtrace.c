@@ -454,7 +454,8 @@ static void stop_threads()
 	int i;
 
 	for_each_tip(tip, i) {
-		(void) pthread_join(tip->thread, (void *) &ret);
+		if (tip->thread)
+			(void) pthread_join(tip->thread, (void *) &ret);
 		close_thread(tip);
 	}
 }
