@@ -811,7 +811,7 @@ uint64_t helper_ld_asi(target_ulong addr, int asi, int size, int sign)
             break;
         }
         DPRINTF_MXCC("asi = %d, size = %d, sign = %d, "
-                     "addr = %08x -> ret = %08x,"
+                     "addr = %08x -> ret = %" PRIx64 ","
                      "addr = %08x\n", asi, size, sign, last_addr, ret, addr);
 #ifdef DEBUG_MXCC
         dump_mxcc(env);
@@ -1074,8 +1074,8 @@ void helper_st_asi(target_ulong addr, uint64_t val, int asi, int size)
                          size);
             break;
         }
-        DPRINTF_MXCC("asi = %d, size = %d, addr = %08x, val = %08x\n", asi,
-                     size, addr, val);
+        DPRINTF_MXCC("asi = %d, size = %d, addr = %08x, val = %" PRIx64 "\n",
+                     asi, size, addr, val);
 #ifdef DEBUG_MXCC
         dump_mxcc(env);
 #endif
@@ -3086,3 +3086,27 @@ void do_unassigned_access(target_phys_addr_t addr, int is_write, int is_exec,
 }
 #endif
 
+#ifdef TARGET_SPARC64
+void helper_tick_set_count(void *opaque, uint64_t count)
+{
+#if !defined(CONFIG_USER_ONLY)
+    cpu_tick_set_count(opaque, count);
+#endif
+}
+
+uint64_t helper_tick_get_count(void *opaque)
+{
+#if !defined(CONFIG_USER_ONLY)
+    return cpu_tick_get_count(opaque);
+#else
+    return 0;
+#endif
+}
+
+void helper_tick_set_limit(void *opaque, uint64_t limit)
+{
+#if !defined(CONFIG_USER_ONLY)
+    cpu_tick_set_limit(opaque, limit);
+#endif
+}
+#endif

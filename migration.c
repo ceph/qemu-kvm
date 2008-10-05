@@ -823,6 +823,7 @@ static int migrate_incoming_fd(int fd)
     uint32_t addr, size;
     extern void qemu_announce_self(void);
     unsigned char running;
+    extern int autostart;
 
     running = qemu_get_byte(f);
     if ((running != 1) && (running != 2)) {

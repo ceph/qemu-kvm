@@ -28,11 +28,9 @@
 #include "ppc.h"
 #include "ppc4xx.h"
 #include "sysemu.h"
+#include "qemu-log.h"
 #include "pci.h"
 #include "bswap.h"
-
-extern int loglevel;
-extern FILE *logfile;
 
 //#define DEBUG_MMIO
 //#define DEBUG_UNASSIGNED

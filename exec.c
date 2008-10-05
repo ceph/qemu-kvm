@@ -89,10 +89,10 @@
 #define TARGET_PHYS_ADDR_SPACE_BITS 32
 #endif
 
-TranslationBlock *tbs;
+static TranslationBlock *tbs;
 int code_gen_max_blocks;
 TranslationBlock *tb_phys_hash[CODE_GEN_PHYS_HASH_SIZE];
-int nb_tbs;
+static int nb_tbs;
 /* any access to the tbs or the page table must use this lock */
 spinlock_t tb_lock = SPIN_LOCK_UNLOCKED;
 
@@ -109,10 +109,10 @@ spinlock_t tb_lock = SPIN_LOCK_UNLOCKED;
 #endif
 
 uint8_t code_gen_prologue[1024] code_gen_section;
-uint8_t *code_gen_buffer;
-unsigned long code_gen_buffer_size;
+static uint8_t *code_gen_buffer;
+static unsigned long code_gen_buffer_size;
 /* threshold to flush the translated code buffer */
-unsigned long code_gen_buffer_max_size; 
+static unsigned long code_gen_buffer_max_size;
 uint8_t *code_gen_ptr;
 
 #if !defined(CONFIG_USER_ONLY)
@@ -175,7 +175,7 @@ unsigned long qemu_host_page_mask;
 
 /* XXX: for system emulation, it could just be an array */
 static PageDesc *l1_map[L1_SIZE];
-PhysPageDesc **l1_phys_map;
+static PhysPageDesc **l1_phys_map;
 
 #if !defined(CONFIG_USER_ONLY)
 static void io_mem_init(void);
@@ -189,7 +189,7 @@ static int io_mem_watch;
 #endif
 
 /* log support */
-const char *logfilename = "/tmp/qemu.log";
+static const char *logfilename = "/tmp/qemu.log";
 FILE *logfile;
 int loglevel;
 static int log_append = 0;
@@ -654,7 +654,7 @@ static void tb_page_check(void)
     }
 }
 
-void tb_jmp_check(TranslationBlock *tb)
+static void tb_jmp_check(TranslationBlock *tb)
 {
     TranslationBlock *tb1;
     unsigned int n1;
@@ -1538,7 +1538,7 @@ void cpu_reset_interrupt(CPUState *env, int mask)
     env->interrupt_request &= ~mask;
 }
 
-CPULogItem cpu_log_items[] = {
+const CPULogItem cpu_log_items[] = {
     { CPU_LOG_TB_OUT_ASM, "out_asm",
       "show generated host assembly code for each compiled TB" },
     { CPU_LOG_TB_IN_ASM, "in_asm",
@@ -1578,7 +1578,7 @@ static int cmp1(const char *s1, int n, const char *s2)
 /* takes a comma separated list of log masks. Return 0 if error. */
 int cpu_str_to_log_mask(const char *str)
 {
-    CPULogItem *item;
+    const CPULogItem *item;
     int mask;
     const char *p, *p1;
 
@@ -2318,7 +2318,7 @@ ram_addr_t qemu_ram_alloc(ram_addr_t size)
 {
     ram_addr_t addr;
     if ((phys_ram_alloc_offset + size) > phys_ram_size) {
-        fprintf(stderr, "Not enough memory (requested_size = %" PRIu64 ", max memory = %" PRIu64 "\n",
+        fprintf(stderr, "Not enough memory (requested_size = %" PRIu64 ", max memory = %" PRIu64 ")\n",
                 (uint64_t)size, (uint64_t)phys_ram_size);
         abort();
     }

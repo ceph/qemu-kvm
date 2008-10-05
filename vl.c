@@ -156,6 +156,8 @@
 
 //#define DEBUG_UNUSED_IOPORT
 //#define DEBUG_IOPORT
+//#define DEBUG_NET
+//#define DEBUG_SLIRP
 
 #ifdef TARGET_PPC
 #define DEFAULT_RAM_SIZE 144
@@ -171,25 +173,24 @@
 
 const char *bios_dir = CONFIG_QEMU_SHAREDIR;
 const char *bios_name = NULL;
-void *ioport_opaque[MAX_IOPORTS];
-IOPortReadFunc *ioport_read_table[3][MAX_IOPORTS];
-IOPortWriteFunc *ioport_write_table[3][MAX_IOPORTS];
+static void *ioport_opaque[MAX_IOPORTS];
+static IOPortReadFunc *ioport_read_table[3][MAX_IOPORTS];
+static IOPortWriteFunc *ioport_write_table[3][MAX_IOPORTS];
 /* Note: drives_table[MAX_DRIVES] is a dummy block driver if none available
    to store the VM snapshots */
 DriveInfo drives_table[MAX_DRIVES+1];
 int nb_drives;
 int extboot_drive = -1;
 /* point to the block driver where the snapshots are managed */
-BlockDriverState *bs_snapshots;
-int vga_ram_size;
+static BlockDriverState *bs_snapshots;
+static int vga_ram_size;
 enum vga_retrace_method vga_retrace_method = VGA_RETRACE_DUMB;
 static DisplayState display_state;
 int nographic;
-int curses;
+static int curses;
 const char* keyboard_layout = NULL;
 int64_t ticks_per_sec;
 ram_addr_t ram_size;
-int pit_min_timer_count = 0;
 int nb_nics;
 NICInfo nd_table[MAX_NICS];
 int vm_running;
@@ -206,8 +207,8 @@ int graphic_width = 800;
 int graphic_height = 600;
 int graphic_depth = 15;
 #endif
-int full_screen = 0;
-int no_frame = 0;
+static int full_screen = 0;
+static int no_frame = 0;
 int no_quit = 0;
 CharDriverState *serial_hds[MAX_SERIAL_PORTS];
 CharDriverState *parallel_hds[MAX_PARALLEL_PORTS];
@@ -238,7 +239,7 @@ const char *incoming;
 const char *option_rom[MAX_OPTION_ROMS];
 int nb_option_roms;
 int semihosting_enabled = 0;
-int autostart = 1;
+int autostart;
 int time_drift_fix = 0;
 unsigned int kvm_shadow_memory = 0;
 const char *mem_path = NULL;
@@ -265,8 +266,8 @@ static int icount_time_shift;
 #define MAX_ICOUNT_SHIFT 10
 /* Compensate for varying guest execution speed.  */
 static int64_t qemu_icount_bias;
-QEMUTimer *icount_rt_timer;
-QEMUTimer *icount_vm_timer;
+static QEMUTimer *icount_rt_timer;
+static QEMUTimer *icount_vm_timer;
 
 uint8_t qemu_uuid[16];
 
@@ -3910,7 +3911,7 @@ void qemu_chr_close(CharDriverState *chr)
 /***********************************************************/
 /* network device redirectors */
 
-__attribute__ (( unused ))
+#if defined(DEBUG_NET) || defined(DEBUG_SLIRP)
 static void hex_dump(FILE *f, const uint8_t *buf, int size)
 {
     int len, i, j, c;
@@ -3936,6 +3937,7 @@ static void hex_dump(FILE *f, const uint8_t *buf, int size)
         fprintf(f, "\n");
     }
 }
+#endif
 
 static int parse_macaddr(uint8_t *macaddr, const char *p)
 {
@@ -4155,7 +4157,7 @@ int qemu_send_packet(VLANClientState *vc1, const uint8_t *buf, int size)
     VLANClientState *vc;
     int ret = -EAGAIN;
 
-#if 0
+#ifdef DEBUG_NET
     printf("vlan %d send:\n", vlan->id);
     hex_dump(stdout, buf, size);
 #endif
@@ -4229,7 +4231,7 @@ int slirp_can_output(void)
 
 void slirp_output(const uint8_t *pkt, int pkt_len)
 {
-#if 0
+#ifdef DEBUG_SLIRP
     printf("slirp output:\n");
     hex_dump(stdout, pkt, pkt_len);
 #endif
@@ -4240,7 +4242,7 @@ void slirp_output(const uint8_t *pkt, int pkt_len)
 
 static void slirp_receive(void *opaque, const uint8_t *buf, int size)
 {
-#if 0
+#ifdef DEBUG_SLIRP
     printf("slirp input:\n");
     hex_dump(stdout, buf, size);
 #endif
@@ -4313,7 +4315,7 @@ static void net_slirp_redir(const char *redir_str)
 
 #ifndef _WIN32
 
-char smb_dir[1024];
+static char smb_dir[1024];
 
 static void erase_dir(char *dir_name)
 {
@@ -6669,8 +6671,8 @@ static void fd_put_notify(void *opaque)
     qemu_file_put_notify(s->file);
 }
 
-static int fd_put_buffer(void *opaque, const uint8_t *buf,
-                         int64_t pos, int size)
+static void fd_put_buffer(void *opaque, const uint8_t *buf,
+                          int64_t pos, int size)
 {
     QEMUFileFD *s = opaque;
     ssize_t len;
@@ -6686,8 +6688,6 @@ static int fd_put_buffer(void *opaque, const uint8_t *buf,
      * a put notify */
     if (len == -EAGAIN)
         qemu_set_fd_handler2(s->fd, NULL, NULL, fd_put_notify, s);
-
-    return len;
 }
 
 static int fd_get_buffer(void *opaque, uint8_t *buf, int64_t pos, int size)
@@ -7953,7 +7953,7 @@ void qemu_bh_delete(QEMUBH *bh)
 /***********************************************************/
 /* machine registration */
 
-QEMUMachine *first_machine = NULL;
+static QEMUMachine *first_machine = NULL;
 QEMUMachine *current_machine = NULL;
 
 int qemu_register_machine(QEMUMachine *m)
@@ -8748,7 +8748,7 @@ typedef struct QEMUOption {
     int index;
 } QEMUOption;
 
-const QEMUOption qemu_options[] = {
+static const QEMUOption qemu_options[] = {
     { "h", 0, QEMU_OPTION_h },
     { "help", 0, QEMU_OPTION_h },
 
@@ -9330,7 +9330,8 @@ int main(int argc, char **argv)
     nb_nics = 0;
 
     tb_size = 0;
-    
+    autostart= 1;
+
     optind = 1;
     for(;;) {
         if (optind >= argc)
@@ -9605,7 +9606,7 @@ int main(int argc, char **argv)
             case QEMU_OPTION_d:
                 {
                     int mask;
-                    CPULogItem *item;
+                    const CPULogItem *item;
 
                     mask = cpu_str_to_log_mask(optarg);
                     if (!mask) {
