@@ -1,6 +1,7 @@
 #!/bin/bash
 
 prefix=/usr/local
+kernelsourcedir=
 kerneldir=/lib/modules/$(uname -r)/build
 cc=gcc
 ld=ld
@@ -107,6 +108,11 @@ if [ "$arch" = "powerpc" ]; then
     qemu_ldflags="$qemu_ldflags -L $PWD/libfdt"
 fi
 
+# see if we have split build and source directories
+if [ -d "$kerneldir/include2" ]; then
+    kernelsourcedir=${kerneldir%/*}/source
+fi
+
 #configure user dir
 (cd user; ./configure --prefix="$prefix" --kerneldir="$libkvm_kerneldir" \
           --arch="$arch" \
@@ -129,6 +135,7 @@ cat <<EOF > config.mak
 ARCH=$arch
 PREFIX=$prefix
 KERNELDIR=$kerneldir
+KERNELSOURCEDIR=$kernelsourcedir
 LIBKVM_KERNELDIR=$libkvm_kerneldir
 WANT_MODULE=$want_module
 CROSS_COMPILE=$cross_prefix

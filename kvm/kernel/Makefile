@@ -41,7 +41,9 @@ endif
 all:: header-link prerequisite
 #	include header priority 1) $LINUX 2) $KERNELDIR 3) include-compat
 	$(MAKE) -C $(KERNELDIR) M=`pwd` \
-		LINUXINCLUDE="-I`pwd`/include -Iinclude -Iarch/${ARCH_DIR}/include -I`pwd`/include-compat \
+		LINUXINCLUDE="-I`pwd`/include -Iinclude \
+		$(if $(KERNELSOURCEDIR),-Iinclude2 -I$(KERNELSOURCEDIR)/include) \
+		-Iarch/${ARCH_DIR}/include -I`pwd`/include-compat \
 		-include include/linux/autoconf.h \
 		-include `pwd`/$(ARCH_DIR)/external-module-compat.h $(module_defines)"
 		"$$@"
