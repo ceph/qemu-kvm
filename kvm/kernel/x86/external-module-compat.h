@@ -334,3 +334,30 @@ struct kvm_desc_ptr {
 #define FEATURE_CONTROL_LOCKED		(1<<0)
 #define FEATURE_CONTROL_VMXON_ENABLED	(1<<2)
 #endif
+
+struct mtrr_var_range {
+	u32 base_lo;
+	u32 base_hi;
+	u32 mask_lo;
+	u32 mask_hi;
+};
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,29)
+
+/* In the Intel processor's MTRR interface, the MTRR type is always held in
+   an 8 bit field: */
+typedef u8 mtrr_type;
+
+#define MTRR_NUM_FIXED_RANGES 88
+#define MTRR_MAX_VAR_RANGES 256
+
+struct mtrr_state_type {
+	struct mtrr_var_range var_ranges[MTRR_MAX_VAR_RANGES];
+	mtrr_type fixed_ranges[MTRR_NUM_FIXED_RANGES];
+	unsigned char enabled;
+	unsigned char have_fixed;
+	mtrr_type def_type;
+};
+
+#endif
+
