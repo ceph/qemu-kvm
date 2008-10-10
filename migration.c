@@ -154,7 +154,7 @@ static void migrate_put_buffer(void *opaque, const uint8_t *buf, int64_t pos, in
     }
 }
 
-static void migrate_close(void *opaque)
+static int migrate_close(void *opaque)
 {
     MigrationState *s = opaque;
 
@@ -163,6 +163,7 @@ static void migrate_close(void *opaque)
 
     qemu_free(s);
     current_migration = NULL;
+    return 0;
 }
 
 /* Outgoing migration routines */
