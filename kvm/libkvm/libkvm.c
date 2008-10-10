@@ -180,7 +180,11 @@ static int kvm_dirty_pages_log_change(kvm_context_t kvm, unsigned long phys_addr
 		};
 
 
-
+		DPRINTF("slot %d start %llx len %llx flags %x\n",
+			mem.slot,
+			mem.guest_phys_addr,
+			mem.memory_size,
+			mem.flags);
 		r = ioctl(kvm->vm_fd, KVM_SET_USER_MEMORY_REGION, &mem);
 		if (r == -1)
 			fprintf(stderr, "%s: %m\n", __FUNCTION__);
@@ -430,6 +434,11 @@ void *kvm_create_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 
 	memory.userspace_addr = (unsigned long)ptr;
 	memory.slot = get_free_slot(kvm);
+	DPRINTF("slot %d start %llx len %llx flags %x\n",
+		memory.slot,
+		memory.guest_phys_addr,
+		memory.memory_size,
+		memory.flags);
 	r = ioctl(kvm->vm_fd, KVM_SET_USER_MEMORY_REGION, &memory);
 	if (r == -1) {
 		fprintf(stderr, "%s: %s", __func__, strerror(errno));
@@ -499,6 +508,11 @@ void kvm_destroy_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 	}
 
 	memory.slot = slot;
+	DPRINTF("slot %d start %llx len %llx flags %x\n",
+		memory.slot,
+		memory.guest_phys_addr,
+		memory.memory_size,
+		memory.flags);
 	r = ioctl(kvm->vm_fd, KVM_SET_USER_MEMORY_REGION, &memory);
 	if (r == -1) {
 		fprintf(stderr, "destroy_userspace_phys_mem: %s",
