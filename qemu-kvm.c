@@ -810,6 +810,13 @@ void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
     return;
 }
 
+void kvm_cpu_unregister_physical_memory(target_phys_addr_t start_addr,
+                                        target_phys_addr_t size,
+                                        unsigned long phys_offset)
+{
+    kvm_unregister_memory_area(kvm_context, start_addr, size);
+}
+
 int kvm_setup_guest_memory(void *area, unsigned long size)
 {
     int ret = 0;

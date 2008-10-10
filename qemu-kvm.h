@@ -41,6 +41,9 @@ void kvm_update_interrupt_request(CPUState *env);
 void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
                                       unsigned long size,
                                       unsigned long phys_offset);
+void kvm_cpu_unregister_physical_memory(target_phys_addr_t start_addr,
+                                        target_phys_addr_t size,
+                                        unsigned long phys_offset);
 void *kvm_cpu_create_phys_mem(target_phys_addr_t start_addr,
 			      unsigned long size, int log, int writable);
 
