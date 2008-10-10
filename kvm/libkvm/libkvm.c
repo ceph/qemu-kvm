@@ -158,17 +158,23 @@ int kvm_is_containing_region(kvm_context_t kvm, unsigned long phys_addr, unsigne
 /* 
  * dirty pages logging control 
  */
-static int kvm_dirty_pages_log_change(kvm_context_t kvm, unsigned long phys_addr
-				      , __u32 flag)
+static int kvm_dirty_pages_log_change(kvm_context_t kvm,
+				      unsigned long phys_addr,
+				      unsigned flags,
+				      unsigned mask)
 {
 	int r = -1;
 	int slot = get_slot(phys_addr);
+
 	if (slot == -1) {
 		fprintf(stderr, "BUG: %s: invalid parameters\n", __FUNCTION__);
 		return 1;
 	}
 
-	flag |= slots[slot].flags;
+	flags = (slots[slot].flags & ~mask) | flags;
+	if (flags == slots[slot].flags)
+		return 0;
+	slots[slot].flags = flags;
 
 	{
 		struct kvm_userspace_memory_region mem = {
@@ -176,7 +182,7 @@ static int kvm_dirty_pages_log_change(kvm_context_t kvm, unsigned long phys_addr
 			.memory_size = slots[slot].len,
 			.guest_phys_addr = slots[slot].phys_addr,
 			.userspace_addr = slots[slot].userspace_addr,
-			.flags = flag,
+			.flags = slots[slot].flags,
 		};
 
 
@@ -192,14 +198,16 @@ static int kvm_dirty_pages_log_change(kvm_context_t kvm, unsigned long phys_addr
 	return r;
 }
 
-static int kvm_dirty_pages_log_change_all(kvm_context_t kvm, __u32 flag)
+static int kvm_dirty_pages_log_change_all(kvm_context_t kvm,
+					  unsigned flags,
+					  unsigned mask)
 {
 	int i, r;
 
 	for (i=r=0; i<KVM_MAX_NUM_MEM_REGIONS && r==0; i++) {
 		if (slots[i].len)
 			r = kvm_dirty_pages_log_change(kvm, slots[i].phys_addr,
-						       flag);
+						       flags, mask);
 	}
 	return r;
 }
@@ -212,7 +220,8 @@ int kvm_dirty_pages_log_enable_all(kvm_context_t kvm)
 	if (kvm->dirty_pages_log_all)
 		return 0;
 	kvm->dirty_pages_log_all = 1;
-	return kvm_dirty_pages_log_change_all(kvm, KVM_MEM_LOG_DIRTY_PAGES);
+	return kvm_dirty_pages_log_change_all(kvm, KVM_MEM_LOG_DIRTY_PAGES,
+					      KVM_MEM_LOG_DIRTY_PAGES);
 }
 
 /**
@@ -224,7 +233,7 @@ int kvm_dirty_pages_log_reset(kvm_context_t kvm)
 	if (!kvm->dirty_pages_log_all)
 		return 0;
 	kvm->dirty_pages_log_all = 0;
-	return kvm_dirty_pages_log_change_all(kvm, 0);
+	return kvm_dirty_pages_log_change_all(kvm, 0, KVM_MEM_LOG_DIRTY_PAGES);
 }
 
 
