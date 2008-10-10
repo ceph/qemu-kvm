@@ -49,6 +49,8 @@ void *kvm_cpu_create_phys_mem(target_phys_addr_t start_addr,
 
 void kvm_cpu_destroy_phys_mem(target_phys_addr_t start_addr,
 			      unsigned long size);
+void kvm_qemu_log_memory(target_phys_addr_t start, target_phys_addr_t size,
+                         int log);
 int kvm_setup_guest_memory(void *area, unsigned long size);
 int kvm_qemu_create_memory_alias(uint64_t phys_start,
                                  uint64_t len,

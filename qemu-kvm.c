@@ -961,6 +961,15 @@ int kvm_update_dirty_pages_log(void)
     return r;
 }
 
+void kvm_qemu_log_memory(target_phys_addr_t start, target_phys_addr_t size,
+                         int log)
+{
+    if (log)
+	kvm_dirty_pages_log_enable_slot(kvm_context, start, size);
+    else
+	kvm_dirty_pages_log_disable_slot(kvm_context, start, size);
+}
+
 int kvm_get_phys_ram_page_bitmap(unsigned char *bitmap)
 {
     unsigned int bsize  = BITMAP_SIZE(phys_ram_size);
