@@ -202,15 +202,15 @@ static int kvm_dirty_pages_log_change(kvm_context_t kvm,
 }
 
 static int kvm_dirty_pages_log_change_all(kvm_context_t kvm,
-					  unsigned flags,
-					  unsigned mask)
+					  int (*change)(kvm_context_t kvm,
+							uint64_t start,
+							uint64_t len))
 {
 	int i, r;
 
 	for (i=r=0; i<KVM_MAX_NUM_MEM_REGIONS && r==0; i++) {
 		if (slots[i].len)
-			r = kvm_dirty_pages_log_change(kvm, slots[i].phys_addr,
-						       flags, mask);
+			r = change(kvm, slots[i].phys_addr, slots[i].len);
 	}
 	return r;
 }
@@ -262,8 +262,8 @@ int kvm_dirty_pages_log_enable_all(kvm_context_t kvm)
 	if (kvm->dirty_pages_log_all)
 		return 0;
 	kvm->dirty_pages_log_all = 1;
-	return kvm_dirty_pages_log_change_all(kvm, KVM_MEM_LOG_DIRTY_PAGES,
-					      KVM_MEM_LOG_DIRTY_PAGES);
+	return kvm_dirty_pages_log_change_all(kvm,
+					      kvm_dirty_pages_log_enable_slot);
 }
 
 /**
@@ -275,7 +275,8 @@ int kvm_dirty_pages_log_reset(kvm_context_t kvm)
 	if (!kvm->dirty_pages_log_all)
 		return 0;
 	kvm->dirty_pages_log_all = 0;
-	return kvm_dirty_pages_log_change_all(kvm, 0, KVM_MEM_LOG_DIRTY_PAGES);
+	return kvm_dirty_pages_log_change_all(kvm,
+					      kvm_dirty_pages_log_disable_slot);
 }
 
 
