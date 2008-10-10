@@ -515,6 +515,12 @@ int kvm_get_mem_map_range(kvm_context_t kvm, unsigned long phys_addr,
 				     void* bitmap, void* opaque));
 int kvm_set_irq_level(kvm_context_t kvm, int irq, int level);
 
+int kvm_dirty_pages_log_enable_slot(kvm_context_t kvm,
+				    uint64_t phys_start,
+				    uint64_t len);
+int kvm_dirty_pages_log_disable_slot(kvm_context_t kvm,
+				     uint64_t phys_start,
+				     uint64_t len);
 /*!
  * \brief Enable dirty-pages-logging for all memory regions
  *

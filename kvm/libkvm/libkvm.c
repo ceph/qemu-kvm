@@ -34,6 +34,7 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/ioctl.h>
+#include <inttypes.h>
 #include "libkvm.h"
 
 #if defined(__x86_64__) || defined(__i386__)
@@ -69,6 +70,7 @@ struct slot_info {
 	unsigned long len;
 	unsigned long userspace_addr;
 	unsigned flags;
+	int logging_count;
 };
 
 struct slot_info slots[KVM_MAX_NUM_MEM_REGIONS];
@@ -120,6 +122,7 @@ void register_slot(int slot, unsigned long phys_addr, unsigned long len,
 void free_slot(int slot)
 {
 	slots[slot].len = 0;
+	slots[slot].logging_count = 0;
 }
 
 int get_slot(unsigned long phys_addr)
@@ -210,6 +213,45 @@ static int kvm_dirty_pages_log_change_all(kvm_context_t kvm,
 						       flags, mask);
 	}
 	return r;
+}
+
+int kvm_dirty_pages_log_enable_slot(kvm_context_t kvm,
+				    uint64_t phys_addr,
+				    uint64_t len)
+{
+	int slot = get_slot(phys_addr);
+
+	DPRINTF("start %"PRIx64" len %"PRIx64"\n", phys_addr, len);
+	if (slot == -1) {
+		fprintf(stderr, "BUG: %s: invalid parameters\n", __func__);
+		return -EINVAL;
+	}
+
+	if (slots[slot].logging_count++)
+		return 0;
+
+	return kvm_dirty_pages_log_change(kvm, slots[slot].phys_addr,
+					  KVM_MEM_LOG_DIRTY_PAGES,
+					  KVM_MEM_LOG_DIRTY_PAGES);
+}
+
+int kvm_dirty_pages_log_disable_slot(kvm_context_t kvm,
+				     uint64_t phys_addr,
+				     uint64_t len)
+{
+	int slot = get_slot(phys_addr);
+
+	if (slot == -1) {
+		fprintf(stderr, "BUG: %s: invalid parameters\n", __func__);
+		return -EINVAL;
+	}
+
+	if (--slots[slot].logging_count)
+		return 0;
+
+	return kvm_dirty_pages_log_change(kvm, slots[slot].phys_addr,
+					  0,
+					  KVM_MEM_LOG_DIRTY_PAGES);
 }
 
 /**
