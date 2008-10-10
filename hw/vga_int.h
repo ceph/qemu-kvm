@@ -215,8 +215,8 @@ void vga_draw_cursor_line_32(uint8_t *d1, const uint8_t *src1,
                              unsigned int color_xor);
 
 /* let kvm create vga memory */
-void *set_vram_mapping(unsigned long begin, unsigned long end);
-int unset_vram_mapping(unsigned long begin, unsigned long end);
+void set_vram_mapping(void *mem, unsigned long begin, unsigned long end);
+void unset_vram_mapping(void *mem, unsigned long begin, unsigned long end);
 
 void *vga_update_vram(VGAState *s, void *vga_ram_base, int vga_ram_size);
 void vga_update_vram_mapping(VGAState *s, unsigned long vga_ram_begin,

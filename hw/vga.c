@@ -2129,36 +2129,6 @@ typedef struct PCIVGAState {
     VGAState vga_state;
 } PCIVGAState;
 
-void vga_update_vram_mapping(VGAState *s, unsigned long vga_ram_begin,
-			     unsigned long vga_ram_end)
-{
-    void *vram_pointer, *old_vram;
-
-    if (vga_ram_begin == s->map_addr &&
-	vga_ram_end   == s->map_end) {
-	return;
-    }
-
-    if (s->map_addr && s->map_end)
-	unset_vram_mapping(s->map_addr, s->map_end);
-
-    vram_pointer = set_vram_mapping(vga_ram_begin, vga_ram_end);
-    if (!vram_pointer) {
-	fprintf(stderr, "set_vram_mapping failed\n");
-	s->map_addr = s->map_end = 0;
-    }
-    else {
-	old_vram = vga_update_vram((VGAState *)s, vram_pointer,
-				   VGA_RAM_SIZE);
-	if (s->map_addr && s->map_end)
-	    munmap(old_vram, s->map_end - s->map_addr);
-	else
-	    qemu_free(old_vram);
-	s->map_addr = vga_ram_begin;
-	s->map_end  = vga_ram_end;
-    }
-}
-
 static void vga_map(PCIDevice *pci_dev, int region_num,
                     uint32_t addr, uint32_t size, int type)
 {
@@ -2168,8 +2138,10 @@ static void vga_map(PCIDevice *pci_dev, int region_num,
         cpu_register_physical_memory(addr, s->bios_size, s->bios_offset);
     } else {
         cpu_register_physical_memory(addr, s->vram_size, s->vram_offset);
-	if (kvm_enabled())
-	    vga_update_vram_mapping(s, addr, addr + VGA_RAM_SIZE);
+	if (kvm_enabled()) {
+            kvm_qemu_log_memory(addr, VGA_RAM_SIZE, 1);
+            s->map_addr = addr;
+        }
     }
 }
 
@@ -2336,10 +2308,7 @@ void vga_common_init(VGAState *s, DisplayState *ds, uint8_t *vga_ram_base,
 
     vga_reset(s);
 
-    if (kvm_enabled())
-	s->vram_ptr = qemu_malloc(vga_ram_size);
-    else
-	s->vram_ptr = vga_ram_base;
+    s->vram_ptr = vga_ram_base;
     s->vram_offset = vga_ram_offset;
     s->vram_size = vga_ram_size;
     s->ds = ds;
