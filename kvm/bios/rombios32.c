@@ -444,31 +444,51 @@ void wrmsr_smp(uint32_t index, uint64_t val)
     p->ecx = 0;
 }
 
+#ifdef BX_QEMU
+#define QEMU_CFG_CTL_PORT 0x510
+#define QEMU_CFG_DATA_PORT 0x511
+#define QEMU_CFG_SIGNATURE  0x00
+#define QEMU_CFG_ID         0x01
+#define QEMU_CFG_UUID       0x02
+
+int qemu_cfg_port;
+
+void qemu_cfg_select(int f)
+{
+    outw(QEMU_CFG_CTL_PORT, f);
+}
+
+int qemu_cfg_port_probe()
+{
+    char *sig = "QEMU";
+    int i;
+
+    qemu_cfg_select(QEMU_CFG_SIGNATURE);
+
+    for (i = 0; i < 4; i++)
+        if (inb(QEMU_CFG_DATA_PORT) != sig[i])
+            return 0;
+
+    return 1;
+}
+
+void qemu_cfg_read(uint8_t *buf, int len)
+{
+    while (len--)
+        *(buf++) = inb(QEMU_CFG_DATA_PORT);
+}
+#endif
+
 void uuid_probe(void)
 {
 #ifdef BX_QEMU
-    uint32_t eax, ebx, ecx, edx;
-
-    // check if backdoor port exists
-    asm volatile ("outl %%eax, %%dx"
-        : "=a" (eax), "=b" (ebx), "=c" (ecx), "=d" (edx)
-        : "a" (0x564d5868), "b" (0), "c" (0xa), "d" (0x5658));
-    if (ebx == 0x564d5868) {
-        uint32_t *uuid_ptr = (uint32_t *)bios_uuid;
-        // get uuid
-        asm volatile ("outl %%eax, %%dx"
-            : "=a" (eax), "=b" (ebx), "=c" (ecx), "=d" (edx)
-            : "a" (0x564d5868), "c" (0x13), "d" (0x5658));
-        uuid_ptr[0] = eax;
-        uuid_ptr[1] = ebx;
-        uuid_ptr[2] = ecx;
-        uuid_ptr[3] = edx;
-    } else
-#endif
-    {
-        // UUID not set
-        memset(bios_uuid, 0, 16);
+    if(qemu_cfg_port) {
+        qemu_cfg_select(QEMU_CFG_UUID);
+        qemu_cfg_read(bios_uuid, 16);
+        return;
     }
+#endif
+    memset(bios_uuid, 0, 16);
 }
 
 void cpu_probe(void)
@@ -2084,6 +2104,10 @@ void rombios32_init(void)
     BX_INFO("Starting rombios32\n");
 
     init_smp_msrs();
+
+#ifdef BX_QEMU
+    qemu_cfg_port = qemu_cfg_port_probe();
+#endif
 
     ram_probe();
 
