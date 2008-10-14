@@ -7,7 +7,7 @@ rpmrelease = devel
 
 sane-arch = $(subst i386,x86,$(subst x86_64,x86,$(subst s390x,s390,$(ARCH))))
 
-.PHONY: kernel user libkvm qemu bios vgabios extboot clean libfdt
+.PHONY: kernel user libkvm qemu bios vgabios extboot clean libfdt cscope
 
 all: libkvm qemu
 ifneq '$(filter $(ARCH), x86_64 i386 ia64)' ''
@@ -110,7 +110,13 @@ srpm:
 clean:
 	for i in $(if $(WANT_MODULE), kernel) user libkvm qemu libfdt; do \
 		make -C $$i clean; \
+	rm -f ./cscope.*
 	done
 
 distclean: clean
 	rm -f config.mak user/config.mak
+
+cscope:
+	rm -f ./cscope.*
+	find . -wholename './kernel' -prune -o -name "*.[ch]" -print > ./cscope.files
+	cscope -b
