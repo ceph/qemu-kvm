@@ -20,6 +20,7 @@
 #include "hw.h"
 #include "pc.h"
 #include "qemu-timer.h"
+#include "host-utils.h"
 
 #include "qemu-kvm.h"
 
@@ -109,50 +110,16 @@ static void apic_init_ipi(APICState *s);
 static void apic_set_irq(APICState *s, int vector_num, int trigger_mode);
 static void apic_update_irq(APICState *s);
 
-/* Find first bit starting from msb. Return 0 if value = 0 */
+/* Find first bit starting from msb */
 static int fls_bit(uint32_t value)
 {
-    unsigned int ret = 0;
-
-#if defined(HOST_I386) || defined(HOST_X86_64)
-    __asm__ __volatile__ ("bsr %1, %0\n" : "+r" (ret) : "rm" (value));
-    return ret;
-#else
-    if (value > 0xffff)
-        value >>= 16, ret = 16;
-    if (value > 0xff)
-        value >>= 8, ret += 8;
-    if (value > 0xf)
-        value >>= 4, ret += 4;
-    if (value > 0x3)
-        value >>= 2, ret += 2;
-    return ret + (value >> 1);
-#endif
+    return 31 - clz32(value);
 }
 
-/* Find first bit starting from lsb. Return 0 if value = 0 */
+/* Find first bit starting from lsb */
 static int ffs_bit(uint32_t value)
 {
-    unsigned int ret = 0;
-
-#if defined(HOST_I386) || defined(HOST_X86_64)
-    __asm__ __volatile__ ("bsf %1, %0\n" : "+r" (ret) : "rm" (value));
-    return ret;
-#else
-    if (!value)
-        return 0;
-    if (!(value & 0xffff))
-        value >>= 16, ret = 16;
-    if (!(value & 0xff))
-        value >>= 8, ret += 8;
-    if (!(value & 0xf))
-        value >>= 4, ret += 4;
-    if (!(value & 0x3))
-        value >>= 2, ret += 2;
-    if (!(value & 0x1))
-        ret++;
-    return ret;
-#endif
+    return ctz32(value);
 }
 
 static inline void set_bit(uint32_t *tab, int index)

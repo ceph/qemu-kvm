@@ -38,6 +38,7 @@
 #include "balloon.h"
 #include <dirent.h>
 #include "qemu-timer.h"
+#include "migration.h"
 
 #include "qemu-kvm.h"
 
@@ -1516,7 +1517,7 @@ static const term_cmd_t term_cmds[] = {
       "cpu", "inject an NMI on the given CPU", },
 #endif
     { "migrate", "-ds", do_migrate,
-      "[-d] command", "migrate the VM using command (use -d to not wait for command to complete)" },
+      "[-d] uri", "migrate to URI (using -d to not wait for completion)" },
     { "migrate_cancel", "", do_migrate_cancel,
       "", "cancel the current VM migration" },
     { "migrate_set_speed", "s", do_migrate_set_speed,
@@ -1597,8 +1598,7 @@ static const term_cmd_t info_cmds[] = {
     { "slirp", "", do_info_slirp,
       "", "show SLIRP statistics", },
 #endif
-    { "migration", "", do_info_migration,
-      "", "show migration information" },
+    { "migrate", "", do_info_migrate, "", "show migration status" },
     { "balloon", "", do_info_balloon,
       "", "show balloon information" },
     { NULL, NULL, },
@@ -2779,9 +2779,16 @@ static void term_read(void *opaque, const uint8_t *buf, int size)
         readline_handle_byte(buf[i]);
 }
 
-static void monitor_start_input(void);
-
 static int monitor_suspended;
+
+static void monitor_handle_command1(void *opaque, const char *cmdline)
+{
+    monitor_handle_command(cmdline);
+    if (!monitor_suspended)
+        monitor_start_input();
+    else
+        monitor_suspended = 2;
+}
 
 void monitor_suspend(void)
 {
@@ -2790,15 +2797,9 @@ void monitor_suspend(void)
 
 void monitor_resume(void)
 {
+    if (monitor_suspended == 2)
+        monitor_start_input();
     monitor_suspended = 0;
-    monitor_start_input();
-}
-
-static void monitor_handle_command1(void *opaque, const char *cmdline)
-{
-    monitor_handle_command(cmdline);
-    if (!monitor_suspended)
-	monitor_start_input();
 }
 
 static void monitor_start_input(void)

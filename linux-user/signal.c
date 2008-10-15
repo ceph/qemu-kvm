@@ -31,7 +31,7 @@
 
 //#define DEBUG_SIGNAL
 
-struct target_sigaltstack target_sigaltstack_used = {
+static struct target_sigaltstack target_sigaltstack_used = {
     .ss_sp = 0,
     .ss_size = 0,
     .ss_flags = TARGET_SS_DISABLE,
@@ -3023,9 +3023,6 @@ long do_sigreturn(CPUState *env)
 	sigprocmask(SIG_SETMASK, &set, NULL);
 
 	restore_sigcontext(&frame->sc, env);
-	/* Compensate for the syscall return path advancing brk.  */
-	env->pc -= 2;
-
 	unlock_user_struct(frame, frame_addr, 0);
 	return env->regs[10];
   badframe:

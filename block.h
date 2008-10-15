@@ -47,7 +47,10 @@ typedef struct QEMUSnapshotInfo {
                                      use a disk image format on top of
                                      it (default for
                                      bdrv_file_open()) */
-#define BDRV_O_DIRECT      0x0020
+#define BDRV_O_NOCACHE     0x0020 /* do not use the host page cache */
+#define BDRV_O_CACHE_WB    0x0040 /* use write-back caching */
+
+#define BDRV_O_CACHE_MASK  (BDRV_O_NOCACHE | BDRV_O_CACHE_WB)
 
 void bdrv_info(void);
 void bdrv_info_stats(void);
@@ -94,6 +97,8 @@ int qemu_key_check(BlockDriverState *bs, const char *name);
 
 /* Ensure contents are flushed to disk.  */
 void bdrv_flush(BlockDriverState *bs);
+void bdrv_flush_all(void);
+
 int bdrv_is_allocated(BlockDriverState *bs, int64_t sector_num, int nb_sectors,
 	int *pnum);
 

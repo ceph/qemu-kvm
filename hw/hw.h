@@ -11,8 +11,8 @@
  * The pos argument can be ignored if the file is only being used for
  * streaming.  The handler should try to write all of the data it can.
  */
-typedef void (QEMUFilePutBufferFunc)(void *opaque, const uint8_t *buf,
-                                     int64_t pos, int size);
+typedef int (QEMUFilePutBufferFunc)(void *opaque, const uint8_t *buf,
+                                    int64_t pos, int size);
 
 /* Read a chunk of data from a file at the given position.  The pos argument
  * can be ignored if the file is only be used for streaming.  The number of
@@ -64,6 +64,7 @@ unsigned int qemu_get_be16(QEMUFile *f);
 unsigned int qemu_get_be32(QEMUFile *f);
 uint64_t qemu_get_be64(QEMUFile *f);
 int qemu_file_rate_limit(QEMUFile *f);
+int qemu_file_has_error(QEMUFile *f);
 
 /* Try to send any outstanding data.  This function is useful when output is
  * halted due to rate limiting or EAGAIN errors occur as it can be used to
@@ -217,6 +218,7 @@ int64_t qemu_ftell(QEMUFile *f);
 int64_t qemu_fseek(QEMUFile *f, int64_t pos, int whence);
 
 typedef void SaveStateHandler(QEMUFile *f, void *opaque);
+typedef int SaveLiveStateHandler(QEMUFile *f, int stage, void *opaque);
 typedef int LoadStateHandler(QEMUFile *f, void *opaque, int version_id);
 
 int register_savevm(const char *idstr,
@@ -225,6 +227,14 @@ int register_savevm(const char *idstr,
                     SaveStateHandler *save_state,
                     LoadStateHandler *load_state,
                     void *opaque);
+
+int register_savevm_live(const char *idstr,
+                         int instance_id,
+                         int version_id,
+                         SaveLiveStateHandler *save_live_state,
+                         SaveStateHandler *save_state,
+                         LoadStateHandler *load_state,
+                         void *opaque);
 
 typedef void QEMUResetHandler(void *opaque);
 
