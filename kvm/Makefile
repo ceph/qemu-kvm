@@ -110,8 +110,8 @@ srpm:
 clean:
 	for i in $(if $(WANT_MODULE), kernel) user libkvm qemu libfdt; do \
 		make -C $$i clean; \
-	rm -f ./cscope.*
 	done
+	rm -f ./cscope.*
 
 distclean: clean
 	rm -f config.mak user/config.mak
