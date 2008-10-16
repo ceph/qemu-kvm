@@ -349,13 +349,20 @@ static void update_regs_for_sipi(CPUState *env)
 {
     kvm_arch_update_regs_for_sipi(env);
     vcpu_info[env->cpu_index].sipi_needed = 0;
-    vcpu_info[env->cpu_index].init = 0;
 }
 
 static void update_regs_for_init(CPUState *env)
 {
+    SegmentCache cs = env->segs[R_CS];
+
     cpu_reset(env);
+
+    /* restore SIPI vector */
+    if(vcpu_info[env->cpu_index].sipi_needed)
+        env->segs[R_CS] = cs;
+
     kvm_arch_load_regs(env);
+    vcpu_info[env->cpu_index].init = 0;
 }
 
 static void setup_kernel_sigmask(CPUState *env)
@@ -411,10 +418,12 @@ static int kvm_main_loop_cpu(CPUState *env)
 	    kvm_main_loop_wait(env, 1000);
 	if (env->interrupt_request & (CPU_INTERRUPT_HARD | CPU_INTERRUPT_NMI))
 	    env->halted = 0;
-	if (!kvm_irqchip_in_kernel(kvm_context) && info->sipi_needed)
-	    update_regs_for_sipi(env);
-	if (!kvm_irqchip_in_kernel(kvm_context) && info->init)
-	    update_regs_for_init(env);
+    if (!kvm_irqchip_in_kernel(kvm_context)) {
+	    if (info->init)
+	        update_regs_for_init(env);
+	    if (info->sipi_needed)
+	        update_regs_for_sipi(env);
+    }
 	if (!env->halted && !info->init)
 	    kvm_cpu_exec(env);
 	env->interrupt_request &= ~CPU_INTERRUPT_EXIT;
