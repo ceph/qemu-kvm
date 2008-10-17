@@ -4613,8 +4613,9 @@ ASM_END
                         return;
                         break;
                     case 5:
-                        /* 3 pages before the bios, we map the vmx tss pages */
-                        set_e820_range(ES, regs.u.r16.di, 0xfffbd000L,
+                        /* 4 pages before the bios, 3 pages for vmx tss pages,
+			 * the other page for EPT real mode pagetable */
+                        set_e820_range(ES, regs.u.r16.di, 0xfffbc000L,
                                        0xfffc0000L, 0, 0, 2);
                         regs.u.r32.ebx = 6;
                         regs.u.r32.eax = 0x534D4150;
