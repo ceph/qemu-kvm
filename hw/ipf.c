@@ -659,10 +659,11 @@ static void ipf_init_pci(ram_addr_t ram_size, int vga_ram_size,
 }
 
 QEMUMachine ipf_machine = {
-    "itanium",
-    "Itanium Platform",
-    ipf_init_pci,
-    VGA_RAM_SIZE + GFW_SIZE,
+    .name = "itanium",
+    .desc = "Itanium Platform",
+    .init = ipf_init_pci,
+    .ram_require = VGA_RAM_SIZE + GFW_SIZE,
+    .max_cpus = 255,
 };
 
 #define IOAPIC_NUM_PINS 48
