@@ -212,6 +212,26 @@ void test_cmp_imm(const struct regs *inregs, struct regs *outregs)
 		print_serial("cmp test 3: FAIL\n");
 }
 
+void test_add_imm(const struct regs *inregs, struct regs *outregs)
+{
+	MK_INSN(add_test1, "mov $0x43211234, %eax \n\t"
+			   "add $0x12344321, %eax \n\t");
+	MK_INSN(add_test2, "mov $0x12, %eax \n\t"
+			   "add $0x21, %al\n\t");
+
+	exec_in_big_real_mode(inregs, outregs,
+			      insn_add_test1,
+			      insn_add_test1_end - insn_add_test1);
+	if (outregs->eax != 0x55555555)
+		print_serial("add test 1: FAIL\n");
+
+	exec_in_big_real_mode(inregs, outregs,
+			      insn_add_test2,
+			      insn_add_test2_end - insn_add_test2);
+	if (outregs->eax != 0x33)
+		print_serial("add test 2: FAIL\n");
+}
+
 void test_eflags_insn(struct regs *inregs, struct regs *outregs)
 {
 	MK_INSN(clc, "clc");
@@ -342,6 +362,7 @@ void start(void)
 	test_call(&inregs, &outregs);
 	test_mov_imm(&inregs, &outregs);
 	test_cmp_imm(&inregs, &outregs);
+	test_add_imm(&inregs, &outregs);
 	test_io(&inregs, &outregs);
 	test_eflags_insn(&inregs, &outregs);
 	exit(0);
