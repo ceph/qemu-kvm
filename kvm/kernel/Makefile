@@ -3,6 +3,8 @@ include config.kbuild
 
 ARCH_DIR = $(if $(filter $(ARCH),x86_64 i386),x86,$(ARCH))
 ARCH_CONFIG := $(shell echo $(ARCH_DIR) | tr '[:lower:]' '[:upper:]')
+# NONARCH_CONFIG used for unifdef, and only cover X86 and IA64 now
+NONARCH_CONFIG = $(filter-out $(ARCH_CONFIG),X86 IA64)
 
 KVERREL = $(patsubst /lib/modules/%/build,%,$(KERNELDIR))
 
@@ -24,8 +26,8 @@ _hack = mv $1 $1.orig && \
 	    | sed '/\#include/! s/\blapic\b/l_apic/g' > $1 && rm $1.orig
 
 unifdef = mv $1 $1.orig && \
-	  unifdef -DCONFIG_$(ARCH_CONFIG) $1.orig > $1; \
-          [ $$? -le 1 ] && rm $1.orig
+	  unifdef -DCONFIG_$(ARCH_CONFIG) -UCONFIG_$(NONARCH_CONFIG) $1.orig > $1; \
+          [ $$? -le 2 ] && rm $1.orig
 
 hack = $(call _hack,$T/$(strip $1))
 
@@ -67,7 +69,7 @@ header-sync:
 	     "$(LINUX)"/arch/$(ARCH_DIR)/include/asm/./kvm*.h \
              $T/include/asm-$(ARCH_DIR)/
 
-	set -e && for i in $(find $T -name '*.h'); do \
+	for i in $$(find $T -name '*.h'); do \
 		$(call unifdef,$$i); done
 	$(call hack, include/linux/kvm.h)
 	set -e && for i in $$(find $T -type f -printf '%P '); \
@@ -81,7 +83,7 @@ source-sync:
 	     "$(LINUX)"/virt/kvm/./*.[cSh] \
 	     $T/
 
-	set -e && for i in $(find $T -name '*.c'); do \
+	for i in $$(find $T -name '*.c'); do \
 		$(call unifdef,$$i); done
 
 	for i in $(hack-files); \
