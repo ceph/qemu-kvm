@@ -353,16 +353,20 @@ static void update_regs_for_sipi(CPUState *env)
 
 static void update_regs_for_init(CPUState *env)
 {
+#ifdef TARGET_I386
     SegmentCache cs = env->segs[R_CS];
+#endif
 
     cpu_reset(env);
 
+#ifdef TARGET_I386
     /* restore SIPI vector */
     if(vcpu_info[env->cpu_index].sipi_needed)
         env->segs[R_CS] = cs;
 
-    kvm_arch_load_regs(env);
     vcpu_info[env->cpu_index].init = 0;
+#endif
+    kvm_arch_load_regs(env);
 }
 
 static void setup_kernel_sigmask(CPUState *env)
