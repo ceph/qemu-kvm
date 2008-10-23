@@ -51,6 +51,8 @@ kernel/x86/tss.h
 kernel/x86/x86.[ch]
 kernel/x86/coalesced_mmio.[ch]
 kernel/x86/kvm_cache_regs.h
+kernel/x86/vtd.c
+kernel/x86/irq_comm.c
 qemu/pc-bios/extboot.bin
 qemu/qemu-doc.html
 qemu/*.[18]
