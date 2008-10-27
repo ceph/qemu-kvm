@@ -321,7 +321,7 @@ static void vmdk_parent_close(BlockDriverState *bs)
         bdrv_close(bs->backing_hd);
 }
 
-int parent_open = 0;
+static int parent_open = 0;
 static int vmdk_parent_open(BlockDriverState *bs, const char * filename)
 {
     BDRVVmdkState *s = bs->opaque;
@@ -343,7 +343,7 @@ static int vmdk_parent_open(BlockDriverState *bs, const char * filename)
         if ((end_name - p_name) > sizeof (s->hd->backing_file) - 1)
             return -1;
 
-        strncpy(s->hd->backing_file, p_name, end_name - p_name);
+        pstrcpy(s->hd->backing_file, end_name - p_name, p_name);
         if (stat(s->hd->backing_file, &file_buf) != 0) {
             path_combine(parent_img_name, sizeof(parent_img_name),
                          filename, s->hd->backing_file);

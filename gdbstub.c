@@ -446,7 +446,7 @@ static int cpu_gdb_read_register(CPUState *env, uint8_t *mem_buf, int n)
             }
         case 67: GET_REGL(env->lr);
         case 68: GET_REGL(env->ctr);
-        case 69: GET_REG32(ppc_load_xer(env));
+        case 69: GET_REGL(env->xer);
         case 70: GET_REG32(0); /* fpscr */
         }
     }
@@ -486,8 +486,8 @@ static int cpu_gdb_write_register(CPUState *env, uint8_t *mem_buf, int n)
             env->ctr = ldtul_p(mem_buf);
             return sizeof(target_ulong);
         case 69:
-            ppc_store_xer(env, ldl_p(mem_buf));
-            return 4;
+            env->xer = ldtul_p(mem_buf);
+            return sizeof(target_ulong);
         case 70:
             /* fpscr */
             return 4;
@@ -1051,12 +1051,12 @@ const char *get_feature_xml(CPUState *env, const char *p, const char **newp)
         if (!target_xml[0]) {
             GDBRegisterState *r;
 
-            sprintf(target_xml,
-                    "<?xml version=\"1.0\"?>"
-                    "<!DOCTYPE target SYSTEM \"gdb-target.dtd\">"
-                    "<target>"
-                    "<xi:include href=\"%s\"/>",
-                    GDB_CORE_XML);
+            snprintf(target_xml, sizeof(target_xml),
+                     "<?xml version=\"1.0\"?>"
+                     "<!DOCTYPE target SYSTEM \"gdb-target.dtd\">"
+                     "<target>"
+                     "<xi:include href=\"%s\"/>",
+                     GDB_CORE_XML);
 
             for (r = env->gdb_regs; r; r = r->next) {
                 strcat(target_xml, "<xi:include href=\"");
@@ -1433,7 +1433,7 @@ static int gdb_handle_packet(GDBState *s, CPUState *env, const char *line_buf)
         }
 #endif
         if (strncmp(p, "Supported", 9) == 0) {
-            sprintf(buf, "PacketSize=%x", MAX_PACKET_LENGTH);
+            snprintf(buf, sizeof(buf), "PacketSize=%x", MAX_PACKET_LENGTH);
 #ifdef GDB_CORE_XML
             strcat(buf, ";qXfer:features:read+");
 #endif
@@ -1449,7 +1449,7 @@ static int gdb_handle_packet(GDBState *s, CPUState *env, const char *line_buf)
             p += 19;
             xml = get_feature_xml(env, p, &p);
             if (!xml) {
-                sprintf(buf, "E00");
+                snprintf(buf, sizeof(buf), "E00");
                 put_packet(s, buf);
                 break;
             }
@@ -1463,7 +1463,7 @@ static int gdb_handle_packet(GDBState *s, CPUState *env, const char *line_buf)
 
             total_len = strlen(xml);
             if (addr > total_len) {
-                sprintf(buf, "E00");
+                snprintf(buf, sizeof(buf), "E00");
                 put_packet(s, buf);
                 break;
             }

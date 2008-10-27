@@ -1934,6 +1934,7 @@ static inline abi_long host_to_target_msginfo(abi_ulong target_addr,
     __put_user(host_msginfo->msgtql, &target_msginfo->msgtql);
     __put_user(host_msginfo->msgseg, &target_msginfo->msgseg);
     unlock_user_struct(target_msginfo, target_addr, 1);
+    return 0;
 }
 
 static inline abi_long do_msgctl(int msgid, int cmd, abi_long ptr)
@@ -2499,7 +2500,7 @@ static bitmask_transtbl fcntl_flags_tbl[] = {
 #if defined(TARGET_I386)
 
 /* NOTE: there is really one LDT for all the threads */
-uint8_t *ldt_table;
+static uint8_t *ldt_table;
 
 static abi_long read_ldt(abi_ulong ptr, unsigned long bytecount)
 {
@@ -4992,7 +4993,7 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
 		    if (tnamelen > 256)
                         tnamelen = 256;
                     /* XXX: may not be correct */
-		    strncpy(tde->d_name, de->d_name, tnamelen);
+                    pstrcpy(tde->d_name, tnamelen, de->d_name);
                     de = (struct linux_dirent *)((char *)de + reclen);
                     len -= reclen;
                     tde = (struct target_dirent *)((char *)tde + treclen);

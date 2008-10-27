@@ -63,8 +63,8 @@ TCGOpDef tcg_op_defs[] = {
 #undef DEF2
 };
 
-TCGRegSet tcg_target_available_regs[2];
-TCGRegSet tcg_target_call_clobber_regs;
+static TCGRegSet tcg_target_available_regs[2];
+static TCGRegSet tcg_target_call_clobber_regs;
 
 /* XXX: move that inside the context */
 uint16_t *gen_opc_ptr;
@@ -471,6 +471,22 @@ TCGv tcg_const_i64(int64_t val)
 {
     TCGv t0;
     t0 = tcg_temp_new(TCG_TYPE_I64);
+    tcg_gen_movi_i64(t0, val);
+    return t0;
+}
+
+TCGv tcg_const_local_i32(int32_t val)
+{
+    TCGv t0;
+    t0 = tcg_temp_local_new(TCG_TYPE_I32);
+    tcg_gen_movi_i32(t0, val);
+    return t0;
+}
+
+TCGv tcg_const_local_i64(int64_t val)
+{
+    TCGv t0;
+    t0 = tcg_temp_local_new(TCG_TYPE_I64);
     tcg_gen_movi_i64(t0, val);
     return t0;
 }

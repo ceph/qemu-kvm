@@ -79,7 +79,7 @@ static int term_outbuf_index;
 
 static void monitor_start_input(void);
 
-CPUState *mon_cpu = NULL;
+static CPUState *mon_cpu = NULL;
 
 void term_flush(void)
 {
@@ -1659,7 +1659,7 @@ static target_long monitor_get_xer (const struct MonitorDef *md, int val)
     CPUState *env = mon_get_cpu();
     if (!env)
         return 0;
-    return ppc_load_xer(env);
+    return env->xer;
 }
 
 static target_long monitor_get_decr (const struct MonitorDef *md, int val)
