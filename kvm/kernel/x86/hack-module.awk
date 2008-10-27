@@ -60,9 +60,9 @@ BEGIN { split("INIT_WORK tsc_khz desc_struct ldttss_desc64 desc_ptr " \
 /#include <linux\/compiler.h>/ { $0 = "" }
 /#include <linux\/clocksource.h>/ { $0 = "" }
 
-{ sub(/hrtimer_init/, "hrtimer_init_p") }
-{ sub(/hrtimer_start/, "hrtimer_start_p") }
-{ sub(/hrtimer_cancel/, "hrtimer_cancel_p") }
+{ sub(/\<hrtimer_init\>/, "hrtimer_init_p") }
+{ sub(/\<hrtimer_start\>/, "hrtimer_start_p") }
+{ sub(/\<hrtimer_cancel\>/, "hrtimer_cancel_p") }
 
 /case KVM_CAP_SYNC_MMU/ { $0 = "#ifdef CONFIG_MMU_NOTIFIER\n" $0 "\n#endif" }
 

@@ -582,3 +582,26 @@ static inline int get_user_pages_fast(unsigned long start, int nr_pages,
 
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28)
+
+static inline void hrtimer_add_expires_ns(struct hrtimer *timer, u64 delta)
+{
+	timer->expires = ktime_add_ns(timer->expires, delta);
+}
+
+static inline ktime_t hrtimer_get_expires(struct hrtimer *timer)
+{
+	return timer->expires;
+}
+
+static inline u64 hrtimer_get_expires_ns(struct hrtimer *timer)
+{
+	return ktime_to_ns(timer->expires);
+}
+
+static inline void hrtimer_start_expires(struct hrtimer *timer, int mode)
+{
+	hrtimer_start(timer, timer->expires, mode);
+}
+
+#endif
