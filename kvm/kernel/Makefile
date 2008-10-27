@@ -59,15 +59,19 @@ header-link:
 
 T = $(subst -sync,,$@)-tmp
 
+headers-old = $(LINUX)/./include/asm-$(ARCH_DIR)/kvm*.h
+headers-new = $(LINUX)/arch/$(ARCH_DIR)/include/asm/./kvm*.h
+
 header-sync:
 	rm -rf $T
 	rsync -R \
 	     "$(LINUX)"/./include/linux/kvm*.h \
-	     "$(LINUX)"/./include/asm-*/kvm*.h \
+	     $(if $(wildcard $(headers-old)), $(headers-old)) \
              $T/
-	-rsync -R \
-	     "$(LINUX)"/arch/$(ARCH_DIR)/include/asm/./kvm*.h \
-             $T/include/asm-$(ARCH_DIR)/
+	$(if $(wildcard $(headers-new)), \
+	rsync -R \
+	     $(headers-new) \
+             $T/include/asm-$(ARCH_DIR)/)
 
 	for i in $$(find $T -name '*.h'); do \
 		$(call unifdef,$$i); done
