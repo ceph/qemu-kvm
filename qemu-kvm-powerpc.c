@@ -57,7 +57,7 @@ void kvm_arch_load_regs(CPUState *env)
 
     regs.ctr = env->ctr;
     regs.lr  = env->lr;
-    regs.xer = ppc_load_xer(env);
+    regs.xer = env->xer;
     regs.msr = env->msr;
 
     regs.srr0 = env->spr[SPR_SRR0];
@@ -93,7 +93,7 @@ void kvm_arch_save_regs(CPUState *env)
 
     env->ctr =regs.ctr;
     env->lr = regs.lr;
-    ppc_store_xer(env,regs.xer);
+    env->xer = regs.xer;
     env->msr = regs.msr;
     /* calculate hflags based on the current msr using the ppc qemu helper */
     hreg_compute_hflags(env);
