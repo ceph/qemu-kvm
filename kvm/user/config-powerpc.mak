@@ -1,26 +1,42 @@
+platform := 44x
+
 CFLAGS += -m32
 CFLAGS += -D__powerpc__
 CFLAGS += -I $(KERNELDIR)/include
-# for some reaons binutils hates tlbsx unless we say we're 405  :(
-CFLAGS += -Wa,-mregnames,-m405
+CFLAGS += -Wa,-mregnames -I test/lib
 
-%.bin: %.o
-	$(OBJCOPY) -O binary $^ $@
+cstart := test/powerpc/cstart.o
 
-testobjs := \
-	io.bin \
-	spin.bin \
-	sprg.bin \
-	44x/tlbsx.bin \
-	44x/tlbwe_16KB.bin \
-	44x/tlbwe_hole.bin \
-	44x/tlbwe.bin
+cflatobjs += \
+	test/lib/powerpc/io.o
 
-tests := $(addprefix test/powerpc/, $(testobjs))
+$(libcflat): LDFLAGS += -nostdlib
+$(libcflat): CFLAGS += -ffreestanding
 
-all: kvmtrace kvmctl $(tests)
+# these tests do not use libcflat
+simpletests := \
+	test/powerpc/spin.bin \
+	test/powerpc/io.bin \
+	test/powerpc/sprg.bin
+
+# theses tests use cstart.o, libcflat, and libgcc
+tests := \
+	test/powerpc/exit.bin
+
+include config-powerpc-$(platform).mak
+
+
+all: kvmtrace kvmctl $(libcflat) $(simpletests) $(tests)
+
+$(simpletests): %.bin: %.o
+	$(CC) -nostdlib $^ -Wl,-T,flat.lds -o $@
+
+$(tests): %.bin: $(cstart) %.o $(libcflat)
+	$(CC) -nostdlib $^ $(libgcc) -Wl,-T,flat.lds -o $@
 
 kvmctl_objs = main-ppc.o iotable.o ../libkvm/libkvm.a
 
 arch_clean:
-	rm -f $(tests)
+	$(RM) $(simpletests) $(tests) $(cstart)
+	$(RM) $(patsubst %.bin, %.elf, $(simpletests) $(tests))
+	$(RM) $(patsubst %.bin, %.o, $(simpletests) $(tests))
