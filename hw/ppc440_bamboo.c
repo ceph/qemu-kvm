@@ -202,7 +202,8 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 }
 
 QEMUMachine bamboo_machine = {
-	"bamboo",
-	"bamboo",
-	bamboo_init,
+	.name = "bamboo",
+	.desc = "bamboo",
+	.init = bamboo_init,
+	.max_cpus = 1,
 };
