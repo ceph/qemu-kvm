@@ -2,7 +2,9 @@
  * Qemu PowerPC 440 board emualtion
  *
  * Copyright 2007 IBM Corporation.
- * Authors: Jerone Young <jyoung5@us.ibm.com>
+ * Authors:
+ * 	Jerone Young <jyoung5@us.ibm.com>
+ * 	Christian Ehrhardt <ehrhardt@linux.vnet.ibm.com>
  *
  * This work is licensed under the GNU GPL license version 2 or later.
  *
@@ -30,7 +32,8 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 			const char *cpu_model)
 {
 	char *buf=NULL;
-	target_phys_addr_t ram_bases[4], ram_sizes[4];
+	target_phys_addr_t ram_bases[PPC440_MAX_RAM_SLOTS];
+	target_phys_addr_t ram_sizes[PPC440_MAX_RAM_SLOTS];
 	NICInfo *nd;
 	qemu_irq *pic;
 	ppc4xx_pci_t *pci;
@@ -46,6 +49,8 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 	int ret;
 	int ram_stick_sizes[] = {256<<20, 128<<20, 64<<20,
 				32<<20, 16<<20, 8<<20 }; /* in bytes */
+	int nbanks = 0; /* number of used memory banks */
+	int next_bank_offset = 0;
 	ram_addr_t tmp_ram_size;
 	int i=0, k=0;
 	uint32_t cpu_freq;
@@ -55,15 +60,22 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 	printf("%s: START\n", __func__);
 
 	/* Setup Memory */
-	printf("Ram size passed is: %i MB\n",
-				bytes_to_mb((int)ram_size));
+	if (ram_size < 8<<20) {
+		printf("ERROR: ram size too small (min 8mb)\n");
+		exit(1);
+	} else
+		printf("Ram size passed is: %i MB\n",
+			bytes_to_mb((int)ram_size));
 
 	tmp_ram_size = ram_size;
 
-	for (i=0; i < (sizeof(ram_sizes)/sizeof(ram_sizes[0])); i++) {
-		for (k=0; k < (sizeof(ram_stick_sizes)/sizeof(ram_stick_sizes[0])); k++) {
+	for (i = 0; i < PPC440_MAX_RAM_SLOTS; i++) {
+		for (k = 0; k < (sizeof(ram_stick_sizes)/sizeof(int)); k++) {
 			if ((tmp_ram_size/ram_stick_sizes[k]) > 0) {
 				ram_sizes[i] = ram_stick_sizes[k];
+				ram_bases[i] = next_bank_offset;
+				next_bank_offset += ram_stick_sizes[k];
+				nbanks++;
 				tmp_ram_size -= ram_stick_sizes[k];
 				break;
 			}
@@ -88,11 +100,8 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 
 	/* call init */
 	printf("Calling function ppc440_init\n");
-	ppc440ep_init(env, ram_bases, ram_sizes, &pic, &pci, 1);
+	ppc440ep_init(env, ram_bases, ram_sizes, nbanks, &pic, &pci, 1);
 	printf("Done calling ppc440_init\n");
-
-	/* Register mem */
-	cpu_register_physical_memory(0, ram_size, 0);
 
 	/* load kernel with uboot loader */
 	printf("%s: load kernel\n", __func__);

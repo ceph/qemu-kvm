@@ -3,6 +3,7 @@
  *
  * Copyright 2007 IBM Corporation.
  * Authors: Jerone Young <jyoung5@us.ibm.com>
+ * 	    Christian Ehrhardt <ehrhardt@linux.vnet.ibm.com>
  *
  * This work is licensed under the GNU GPL license version 2 or later.
  *
@@ -24,15 +25,15 @@
 
 
 void ppc440ep_init(CPUState *env,
-		target_phys_addr_t ram_bases[2],
-		target_phys_addr_t ram_sizes[2],
+		target_phys_addr_t ram_bases[PPC440_MAX_RAM_SLOTS],
+		target_phys_addr_t ram_sizes[PPC440_MAX_RAM_SLOTS],
+		int nbanks,
 		qemu_irq **picp,
 		ppc4xx_pci_t **pcip,
 		int do_init)
 {
 	ppc4xx_mmio_t *mmio;
 	qemu_irq *pic, *irqs;
-	ram_addr_t offset;
 	ppc4xx_pci_t *pci;
 	int i;
 
@@ -55,10 +56,7 @@ void ppc440ep_init(CPUState *env,
 	/* SDRAM controller */
 	printf("trying to setup sdram controller\n");
 	/* XXX 440EP's ECC interrupts are on UIC1 */
-	ppc405_sdram_init(env, pic[14], 2, ram_bases, ram_sizes, do_init);
-	offset = 0;
-	for (i = 0; i < 2; i++)
-		offset += ram_sizes[i];
+	ppc405_sdram_init(env, pic[14], nbanks, ram_bases, ram_sizes, do_init);
 
 	/* PCI */
 	pci = ppc4xx_pci_init(env, pic,
