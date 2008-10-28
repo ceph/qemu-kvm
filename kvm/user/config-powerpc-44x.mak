@@ -5,7 +5,8 @@ CFLAGS += -Wa,-m405 -I test/lib/powerpc/44x
 
 cflatobjs += \
 	test/lib/powerpc/44x/map.o \
-	test/lib/powerpc/44x/tlbwe.o
+	test/lib/powerpc/44x/tlbwe.o \
+	test/lib/powerpc/44x/timebase.o
 
 simpletests += \
 	test/powerpc/44x/tlbsx.bin \
