@@ -35,8 +35,8 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 	qemu_irq *pic;
 	ppc4xx_pci_t *pci;
 	CPUState *env;
-	target_ulong ep=0;
-	target_ulong la=0;
+	uint64_t ep=0;
+	uint64_t la=0;
 	int is_linux=1; /* Will assume allways is Linux for now */
 	target_long kernel_size=0;
 	target_ulong initrd_base=0;
@@ -97,6 +97,9 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 	/* load kernel with uboot loader */
 	printf("%s: load kernel\n", __func__);
 	ret = load_uimage(kernel_filename, &ep, &la, &kernel_size, &is_linux);
+	if (ret < 0)
+		ret = load_elf(kernel_filename, 0, &ep, &la, NULL);
+
 	if (ret < 0) {
 		fprintf(stderr, "qemu: could not load kernel '%s'\n",
 			kernel_filename);
