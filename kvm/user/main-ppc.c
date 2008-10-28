@@ -51,7 +51,7 @@ kvm_context_t kvm;
 struct io_table mmio_table;
 
 static int ncpus = 1;
-static sem_t init_sem;
+static sem_t exited_sem;
 static __thread int vcpu;
 static sigset_t kernel_sigmask;
 static sigset_t ipi_sigmask;
@@ -220,16 +220,8 @@ void sync_caches(void *mem, unsigned long len)
 	asm volatile ("sync; isync");
 }
 
-static void init_vcpu(int n, unsigned long entry)
+static void init_vcpu(int n)
 {
-	/* XXX must set initial TLB state and stack
-	struct kvm_regs regs = {
-		.pc = entry,
-	};
-
-	kvm_set_regs(kvm, 0, &regs);
-	*/
-
 	sigemptyset(&ipi_sigmask);
 	sigaddset(&ipi_sigmask, IPI_SIGNAL);
 	sigprocmask(SIG_UNBLOCK, &ipi_sigmask, NULL);
@@ -237,7 +229,6 @@ static void init_vcpu(int n, unsigned long entry)
 	vcpus[n].tid = gettid();
 	vcpu = n;
 	kvm_set_signal_mask(kvm, n, &kernel_sigmask);
-	sem_post(&init_sem);
 }
 
 static void *do_create_vcpu(void *_n)
@@ -245,8 +236,9 @@ static void *do_create_vcpu(void *_n)
 	int n = (long)_n;
 
 	kvm_create_vcpu(kvm, n);
-	init_vcpu(n, 0x0);
+	init_vcpu(n);
 	kvm_run(kvm, n);
+	sem_post(&exited_sem);
 	return NULL;
 }
 
@@ -368,14 +360,14 @@ int main(int argc, char **argv)
 	len = load_file(vm_mem, argv[optind], 1);
 	sync_caches(vm_mem, len);
 
-	sem_init(&init_sem, 0, 0);
-	init_vcpu(0, 0x0);
-	for (i = 1; i < ncpus; ++i)
-		start_vcpu(i);
-	for (i = 0; i < ncpus; ++i)
-		sem_wait(&init_sem);
-
 	io_table_register(&mmio_table, 0xf0000000, 64, mmio_handler, NULL);
 
-	return kvm_run(kvm, 0);
+	sem_init(&exited_sem, 0, 0);
+	for (i = 0; i < ncpus; ++i)
+		start_vcpu(i);
+	/* Wait for all vcpus to exit. */
+	for (i = 0; i < ncpus; ++i)
+		sem_wait(&exited_sem);
+
+	return 0;
 }
