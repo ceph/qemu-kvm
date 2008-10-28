@@ -87,6 +87,11 @@ static int test_try_push_interrupts(void *opaque)
 	return 0;
 }
 
+static int test_try_push_nmi(void *opaque)
+{
+	return 0;
+}
+
 static void test_post_kvm_run(void *opaque, int vcpu)
 {
 }
@@ -175,6 +180,7 @@ static struct kvm_callbacks test_callbacks = {
 	.halt        = test_halt,
 	.io_window = test_io_window,
 	.try_push_interrupts = test_try_push_interrupts,
+	.try_push_nmi = test_try_push_nmi,
 	.post_kvm_run = test_post_kvm_run,
 	.pre_kvm_run = test_pre_kvm_run,
 	.powerpc_dcr_read = test_dcr_read,
