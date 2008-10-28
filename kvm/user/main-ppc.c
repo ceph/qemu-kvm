@@ -183,7 +183,7 @@ static struct kvm_callbacks test_callbacks = {
 
 static unsigned long load_file(void *mem, const char *fname, int inval_icache)
 {
-	int r;
+	ssize_t r;
 	int fd;
 	unsigned long bytes = 0;
 
@@ -200,6 +200,7 @@ static unsigned long load_file(void *mem, const char *fname, int inval_icache)
 
 	if (r == -1) {
 		perror("read");
+		printf("read %d bytes\n", bytes);
 		exit(1);
 	}
 
