@@ -27,6 +27,7 @@ int kvm_pit = 1;
 #include <sys/utsname.h>
 #include <sys/syscall.h>
 #include <sys/mman.h>
+#include <sys/io.h>
 
 #define bool _Bool
 #define false 0
@@ -1046,4 +1047,16 @@ int qemu_kvm_unregister_coalesced_mmio(target_phys_addr_t addr,
 				       unsigned int size)
 {
     return kvm_unregister_coalesced_mmio(kvm_context, addr, size);
+}
+
+static void kvm_do_ioperm(void *_data)
+{
+    struct ioperm_data *data = _data;
+    ioperm(data->start_port, data->num, data->turn_on);
+}
+
+void kvm_ioperm(CPUState *env, void *data)
+{
+    if (kvm_enabled() && qemu_system_ready)
+	on_vcpu(env, kvm_do_ioperm, data);
 }

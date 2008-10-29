@@ -93,6 +93,8 @@ int qemu_kvm_unregister_coalesced_mmio(target_phys_addr_t addr,
 
 void qemu_kvm_system_reset_request(void);
 
+void kvm_ioperm(CPUState *env, void *data);
+
 #ifdef TARGET_PPC
 int handle_powerpc_dcr_read(int vcpu, uint32_t dcrn, uint32_t *data);
 int handle_powerpc_dcr_write(int vcpu,uint32_t dcrn, uint32_t data);
@@ -106,6 +108,12 @@ int handle_powerpc_dcr_write(int vcpu,uint32_t dcrn, uint32_t data);
 
 extern int kvm_allowed;
 extern kvm_context_t kvm_context;
+
+struct ioperm_data {
+    unsigned long start_port;
+    unsigned long num;
+    int turn_on;
+};
 
 #define kvm_enabled() (kvm_allowed)
 #define qemu_kvm_irqchip_in_kernel() kvm_irqchip_in_kernel(kvm_context)

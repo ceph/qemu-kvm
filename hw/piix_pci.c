@@ -246,9 +246,9 @@ static void piix3_set_irq(qemu_irq *pic, int irq_num, int level)
 int piix_get_irq(int pin)
 {
     if (piix3_dev)
-        return piix3_dev->config[PIIX_CONFIG_IRQ_ROUTE + pin];
+        return piix3_dev->config[0x60+pin];
     if (piix4_dev)
-        return piix4_dev->config[PIIX_CONFIG_IRQ_ROUTE + pin];
+        return piix4_dev->config[0x60+pin];
 
     return 0;
 }

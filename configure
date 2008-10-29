@@ -101,6 +101,7 @@ linux="no"
 kqemu="no"
 kvm="no"
 kvm_cap_pit="no"
+kvm_cap_device_assignment="no"
 profiler="no"
 kernel_path=""
 cocoa="no"
@@ -764,6 +765,9 @@ fi
 # KVM probe
 
 if test "$kvm" = "yes" ; then
+
+# test for KVM_CAP_PIT
+
 cat > $TMPC <<EOF
 #include <libkvm.h>
 #ifndef KVM_CAP_PIT
@@ -773,6 +777,19 @@ int main(void) { return 0; }
 EOF
     if $cc $ARCH_CFLAGS $CFLAGS -I"$kernel_path"/include -o $TMPE ${OS_CFLAGS} $TMPC 2> /dev/null ; then
 	kvm_cap_pit="yes"
+    fi
+
+# test for KVM_CAP_DEVICE_ASSIGNMENT
+
+cat > $TMPC <<EOF
+#include <libkvm.h>
+#ifndef KVM_CAP_DEVICE_ASSIGNMENT
+#error "kvm no device assignment capability"
+#endif
+int main(void) { return 0; }
+EOF
+    if $cc $ARCH_CFLAGS $CFLAGS -I"$kernel_path"/include -o $TMPE ${OS_CFLAGS} $TMPC 2> /dev/null ; then
+	kvm_cap_device_assignment="yes"
     fi
 fi
 
@@ -1534,6 +1551,10 @@ configure_kvm() {
     if test $kvm_cap_pit = "yes" ; then
 	echo "USE_KVM_PIT=1" >> $config_mak
 	echo "#define USE_KVM_PIT 1" >> $config_h
+    fi
+    if test $kvm_cap_device_assignment = "yes" ; then
+	echo "USE_KVM_DEVICE_ASSIGNMENT=1" >> $config_mak
+	echo "#define USE_KVM_DEVICE_ASSIGNMENT 1" >> $config_h
     fi
     disable_cpu_emulation
   fi

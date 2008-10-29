@@ -38,6 +38,7 @@
 #include "qemu-char.h"
 #include "block.h"
 #include "audio/audio.h"
+#include "hw/device-assignment.h"
 #include "migration.h"
 #include "balloon.h"
 #include "qemu-kvm.h"
@@ -215,6 +216,8 @@ CharDriverState *parallel_hds[MAX_PARALLEL_PORTS];
 int win2k_install_hack = 0;
 #endif
 int usb_enabled = 0;
+const char *assigned_devices[MAX_DEV_ASSIGN_CMDLINE];
+int assigned_devices_index;
 static VLANState *first_vlan;
 int smp_cpus = 1;
 const char *vnc_display;
@@ -8693,6 +8696,12 @@ static void help(int exitcode)
 #endif
 	   "-no-kvm-irqchip disable KVM kernel mode PIC/IOAPIC/LAPIC\n"
 	   "-no-kvm-pit	    disable KVM kernel mode PIT\n"
+#if defined(TARGET_I386) || defined(TARGET_X86_64) || defined(__linux__)
+           "-pcidevice host=bus:dev.func[,dma=none][,name=string]\n"
+           "                expose a PCI device to the guest OS.\n"
+           "                dma=none: don't perform any dma translations (default is to use an iommu)\n"
+           "                'string' is used in log output.\n"
+#endif
 #endif
 #ifdef TARGET_I386
            "-no-acpi        disable ACPI\n"
@@ -8812,6 +8821,9 @@ enum {
     QEMU_OPTION_no_kvm,
     QEMU_OPTION_no_kvm_irqchip,
     QEMU_OPTION_no_kvm_pit,
+#if defined(TARGET_I386) || defined(TARGET_X86_64) || defined(__linux__)
+    QEMU_OPTION_pcidevice,
+#endif
     QEMU_OPTION_no_reboot,
     QEMU_OPTION_no_shutdown,
     QEMU_OPTION_show_cursor,
@@ -8901,6 +8913,9 @@ static const QEMUOption qemu_options[] = {
 #endif
     { "no-kvm-irqchip", 0, QEMU_OPTION_no_kvm_irqchip },
     { "no-kvm-pit", 0, QEMU_OPTION_no_kvm_pit },
+#if defined(TARGET_I386) || defined(TARGET_X86_64) || defined(__linux__)
+    { "pcidevice", HAS_ARG, QEMU_OPTION_pcidevice },
+#endif
 #endif
 #if defined(TARGET_PPC) || defined(TARGET_SPARC)
     { "g", 1, QEMU_OPTION_g },
@@ -9412,6 +9427,7 @@ int main(int argc, char **argv)
     parallel_device_index = 0;
 
     usb_devices_index = 0;
+    assigned_devices_index = 0;
 
     nb_net_clients = 0;
     nb_drives = 0;
@@ -9845,6 +9861,16 @@ int main(int argc, char **argv)
 		kvm_pit = 0;
 		break;
 	    }
+#if defined(TARGET_I386) || defined(TARGET_X86_64) || defined(__linux__)
+            case QEMU_OPTION_pcidevice:
+		if (assigned_devices_index >= MAX_DEV_ASSIGN_CMDLINE) {
+                    fprintf(stderr, "Too many assigned devices\n");
+                    exit(1);
+		}
+		assigned_devices[assigned_devices_index] = optarg;
+		assigned_devices_index++;
+                break;
+#endif
 #endif
             case QEMU_OPTION_usb:
                 usb_enabled = 1;

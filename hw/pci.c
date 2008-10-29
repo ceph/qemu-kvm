@@ -50,6 +50,7 @@ struct PCIBus {
 
 static void pci_update_mappings(PCIDevice *d);
 static void pci_set_irq(void *opaque, int irq_num, int level);
+void assigned_dev_update_irq(PCIDevice *d);
 
 target_phys_addr_t pci_mem_base;
 static int pci_irq_index;
@@ -452,6 +453,13 @@ void pci_default_write_config(PCIDevice *d,
         	break;
         val >>= 8;
     }
+
+#ifdef USE_KVM_DEVICE_ASSIGNMENT
+    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel() &&
+        address >= PIIX_CONFIG_IRQ_ROUTE &&
+	address < PIIX_CONFIG_IRQ_ROUTE + 4)
+        assigned_dev_update_irq(d);
+#endif /* USE_KVM_DEVICE_ASSIGNMENT */
 
     end = address + len;
     if (end > PCI_COMMAND && address < (PCI_COMMAND + 2)) {

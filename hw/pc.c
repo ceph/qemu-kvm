@@ -33,6 +33,7 @@
 #include "boards.h"
 #include "console.h"
 #include "fw_cfg.h"
+#include "device-assignment.h"
 
 #include "qemu-kvm.h"
 
@@ -1157,6 +1158,23 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
 
     if (pci_enabled)
         virtio_balloon_init(pci_bus);
+
+#ifdef USE_KVM_DEVICE_ASSIGNMENT
+    if (kvm_enabled()) {
+	int i;
+        for (i = 0; i < assigned_devices_index; i++) {
+            if (add_assigned_device(assigned_devices[i]) < 0) {
+                fprintf(stderr, "Warning: could not add assigned device %s\n",
+                        assigned_devices[i]);
+            }
+        }
+
+	if (init_all_assigned_devices(pci_bus)) {
+	    fprintf(stderr, "Failed to initialize assigned devices\n");
+	    exit (1);
+	}
+    }
+#endif /* USE_KVM_DEVICE_ASSIGNMENT */
 }
 
 static void pc_init_pci(ram_addr_t ram_size, int vga_ram_size,
