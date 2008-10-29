@@ -1112,3 +1112,28 @@ int kvm_unregister_coalesced_mmio(kvm_context_t kvm, uint64_t addr, uint32_t siz
 	return -ENOSYS;
 }
 
+#ifdef KVM_CAP_DEVICE_ASSIGNMENT
+int kvm_assign_pci_device(kvm_context_t kvm,
+			  struct kvm_assigned_pci_dev *assigned_dev)
+{
+	int ret;
+
+	ret = ioctl(kvm->vm_fd, KVM_ASSIGN_PCI_DEVICE, assigned_dev);
+	if (ret < 0)
+		return -errno;
+
+	return ret;
+}
+
+int kvm_assign_irq(kvm_context_t kvm,
+		   struct kvm_assigned_irq *assigned_irq)
+{
+	int ret;
+
+	ret = ioctl(kvm->vm_fd, KVM_ASSIGN_IRQ, assigned_irq);
+	if (ret < 0)
+		return -errno;
+
+	return ret;
+}
+#endif

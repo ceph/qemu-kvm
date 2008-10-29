@@ -686,4 +686,31 @@ int kvm_s390_interrupt(kvm_context_t kvm, int slot,
 int kvm_s390_set_initial_psw(kvm_context_t kvm, int slot, psw_t psw);
 int kvm_s390_store_status(kvm_context_t kvm, int slot, unsigned long addr);
 #endif
+
+#ifdef KVM_CAP_DEVICE_ASSIGNMENT
+/*!
+ * \brief Notifies host kernel about a PCI device to be assigned to a guest
+ *
+ * Used for PCI device assignment, this function notifies the host
+ * kernel about the assigning of the physical PCI device to a guest.
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param assigned_dev Parameters, like bus, devfn number, etc
+ */
+int kvm_assign_pci_device(kvm_context_t kvm,
+			  struct kvm_assigned_pci_dev *assigned_dev);
+
+/*!
+ * \brief Notifies host kernel about changes to IRQ for an assigned device
+ *
+ * Used for PCI device assignment, this function notifies the host
+ * kernel about the changes in IRQ number for an assigned physical
+ * PCI device.
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param assigned_irq Parameters, like dev id, host irq, guest irq, etc
+ */
+int kvm_assign_irq(kvm_context_t kvm,
+		   struct kvm_assigned_irq *assigned_irq);
+#endif
 #endif
