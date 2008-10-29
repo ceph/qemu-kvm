@@ -6,6 +6,7 @@ kerneldir=/lib/modules/$(uname -r)/build
 cc=gcc
 ld=ld
 objcopy=objcopy
+ar=ar
 want_module=1
 qemu_cflags=
 qemu_ldflags=
@@ -141,6 +142,7 @@ CROSS_COMPILE=$cross_prefix
 CC=$cross_prefix$cc
 LD=$cross_prefix$ld
 OBJCOPY=$cross_prefix$objcopy
+AR=$cross_prefix$ar
 EOF
 
 cat <<EOF > kernel/config.kbuild

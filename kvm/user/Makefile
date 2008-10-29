@@ -48,7 +48,7 @@ kvmtrace: $(kvmtrace_objs)
 	$(CC) $(LDFLAGS) $^ -o $@
 
 $(libcflat): $(cflatobjs)
-	ar rcs $@ $^
+	$(AR) rcs $@ $^
 
 %.o: %.S
 	$(CC) $(CFLAGS) -c -nostdlib -o $@ $^
