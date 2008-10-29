@@ -6,6 +6,7 @@ cc=gcc
 ld=ld
 objcopy=objcopy
 arch=`uname -m | sed -e s/i.86/i386/`
+processor="$arch"
 cross_prefix=
 
 usage() {
@@ -40,6 +41,9 @@ while [[ "$1" = -* ]]; do
         --arch)
 	    arch="$arg"
 	    ;;
+        --processor)
+	    processor="$arg"
+	    ;;
 	--cross-prefix)
 	    cross_prefix="$arg"
 	    ;;
@@ -62,6 +66,7 @@ cat <<EOF > config.mak
 PREFIX=$prefix
 KERNELDIR=$(readlink -f $kerneldir)
 ARCH=$arch
+PROCESSOR=$processor
 CC=$cross_prefix$cc
 LD=$cross_prefix$ld
 OBJCOPY=$cross_prefix$objcopy
