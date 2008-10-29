@@ -105,6 +105,9 @@ void pcspk_init(PITState *);
 int pcspk_audio_init(AudioState *, qemu_irq *pic);
 
 /* piix_pci.c */
+/* config space register for IRQ routing */
+#define PIIX_CONFIG_IRQ_ROUTE 0x60
+
 PCIBus *i440fx_init(PCIDevice **pi440fx_state, qemu_irq *pic);
 void i440fx_set_smm(PCIDevice *d, int val);
 int piix3_init(PCIBus *bus, int devfn);
@@ -112,6 +115,8 @@ void i440fx_init_memory_mappings(PCIDevice *d);
 
 extern PCIDevice *piix4_dev;
 int piix4_init(PCIBus *bus, int devfn);
+
+int piix_get_irq(int pin);
 
 /* vga.c */
 enum vga_retrace_method {
