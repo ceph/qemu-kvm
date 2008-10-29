@@ -1,5 +1,3 @@
-CFLAGS += -m32
-CFLAGS += -D__powerpc__
 CFLAGS += -I $(KERNELDIR)/include
 CFLAGS += -Wa,-mregnames -I test/lib
 
