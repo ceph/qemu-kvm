@@ -9,6 +9,9 @@ kvm-objs := kvm_main.o x86.o mmu.o x86_emulate.o ../anon_inodes.o irq.o i8259.o 
 ifeq ($(EXT_CONFIG_KVM_TRACE),y)
 kvm-objs += kvm_trace.o
 endif
+ifeq ($(CONFIG_DMAR),y)
+kvm-objs += vtd.o
+endif
 kvm-intel-objs := vmx.o vmx-debug.o ../external-module-compat.o
 kvm-amd-objs := svm.o ../external-module-compat.o
 
