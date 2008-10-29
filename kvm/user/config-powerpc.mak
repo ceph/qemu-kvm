@@ -1,5 +1,3 @@
-platform := 440
-
 CFLAGS += -m32
 CFLAGS += -D__powerpc__
 CFLAGS += -I $(KERNELDIR)/include
@@ -23,7 +21,7 @@ simpletests := \
 tests := \
 	test/powerpc/exit.bin
 
-include config-powerpc-$(platform).mak
+include config-powerpc-$(PROCESSOR).mak
 
 
 all: kvmtrace kvmctl $(libcflat) $(simpletests) $(tests)
