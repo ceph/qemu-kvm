@@ -103,6 +103,9 @@ case $arch in
         ;;
 esac
 
+processor=${arch#*-}
+arch=${arch%%-*}
+
 # see if we have split build and source directories
 if [ -d "$kerneldir/include2" ]; then
     kernelsourcedir=${kerneldir%/*}/source
@@ -110,7 +113,7 @@ fi
 
 #configure user dir
 (cd user; ./configure --prefix="$prefix" --kerneldir="$libkvm_kerneldir" \
-          --arch="$arch" \
+          --arch="$arch" --processor="$processor" \
           ${cross_prefix:+"--cross-prefix=$cross_prefix"})
 
 #configure qemu
@@ -128,6 +131,7 @@ fi
 
 cat <<EOF > config.mak
 ARCH=$arch
+PROCESSOR=$processor
 PREFIX=$prefix
 KERNELDIR=$kerneldir
 KERNELSOURCEDIR=$kernelsourcedir
