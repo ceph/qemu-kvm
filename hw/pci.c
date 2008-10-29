@@ -560,6 +560,11 @@ static void pci_set_irq(void *opaque, int irq_num, int level)
     bus->set_irq(bus->irq_opaque, irq_num, bus->irq_count[irq_num] != 0);
 }
 
+int pci_map_irq(PCIDevice *pci_dev, int pin)
+{
+    return pci_dev->bus->map_irq(pci_dev, pin);
+}
+
 /***********************************************************/
 /* monitor info on PCI */
 
