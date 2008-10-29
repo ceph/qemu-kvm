@@ -6,6 +6,8 @@
 #include "pc.h"
 #include "console.h"
 #include "block_int.h"
+#include "device-assignment.h"
+#include "config.h"
 
 #define PCI_BASE_CLASS_STORAGE          0x01
 #define PCI_BASE_CLASS_NETWORK          0x02
@@ -26,6 +28,37 @@ static PCIDevice *qemu_system_hot_add_nic(const char *opts, int bus_nr)
         return NULL;
     return pci_nic_init (pci_bus, &nd_table[ret], -1);
 }
+
+#ifdef USE_KVM_DEVICE_ASSIGNMENT
+static PCIDevice *qemu_system_hot_assign_device(const char *opts, int bus_nr)
+{
+    PCIBus *pci_bus;
+    AssignedDevInfo *adev;
+    PCIDevice *ret;
+
+    pci_bus = pci_find_bus(bus_nr);
+    if (!pci_bus) {
+        term_printf ("Can't find pci_bus %d\n", bus_nr);
+        return NULL;
+    }
+    adev = add_assigned_device(opts);
+    if (adev == NULL) {
+        term_printf ("Error adding device; check syntax\n");
+        return NULL;
+    }
+ 
+    ret = init_assigned_device(adev, pci_bus);
+
+    term_printf("Registered host PCI device %02x:%02x.%1x "
+		"(\"%s\") as guest device %02x:%02x.%1x\n",
+		adev->bus, adev->dev, adev->func, adev->name,
+		pci_bus_num(pci_bus), (ret->devfn >> 3) & 0x1f,
+		adev->func);
+
+    return ret;
+}
+
+#endif /* USE_KVM_DEVICE_ASSIGNMENT */
 
 static int add_init_drive(const char *opts)
 {
@@ -143,6 +176,10 @@ void device_hot_add(int pcibus, const char *type, const char *opts)
         dev = qemu_system_hot_add_nic(opts, pcibus);
     else if (strcmp(type, "storage") == 0)
         dev = qemu_system_hot_add_storage(opts, pcibus);
+#ifdef USE_KVM_DEVICE_ASSIGNMENT
+    else if (strcmp(type, "host") == 0)
+        dev = qemu_system_hot_assign_device(opts, pcibus);
+#endif /* USE_KVM_DEVICE_ASSIGNMENT */
     else
         term_printf("invalid type: %s\n", type);
 

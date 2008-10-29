@@ -1529,7 +1529,7 @@ static const term_cmd_t term_cmds[] = {
                                         "[,cyls=c,heads=h,secs=s[,trans=t]]\n"
                                         "[snapshot=on|off][,cache=on|off]",
                                         "add drive to PCI storage controller" },
-    { "pci_add", "iss", device_hot_add, "bus nic|storage [[vlan=n][,macaddr=addr][,model=type]] [file=file][,if=type][,bus=nr]...", "hot-add PCI device" },
+    { "pci_add", "iss", device_hot_add, "bus nic|storage|host [[vlan=n][,macaddr=addr][,model=type]] [file=file][,if=type][,bus=nr]... [host=02:00.0[,name=string][,dma=none]" "hot-add PCI device" },
     { "pci_del", "ii", device_hot_remove, "bus slot-number", "hot remove PCI device" },
 #endif
     { "balloon", "i", do_balloon,
