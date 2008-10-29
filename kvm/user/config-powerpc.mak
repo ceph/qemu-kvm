@@ -1,4 +1,4 @@
-platform := 44x
+platform := 440
 
 CFLAGS += -m32
 CFLAGS += -D__powerpc__
