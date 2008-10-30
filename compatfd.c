@@ -118,7 +118,11 @@ int qemu_eventfd(int *fds)
 
     ret = syscall(SYS_eventfd, 0);
     if (ret >= 0) {
-        fds[0] = fds[1] = ret;
+        fds[0] = ret;
+        if ((fds[1] = dup(ret)) == -1) {
+            close(ret);
+            return -1;
+        }
         return 0;
     }
 #endif
