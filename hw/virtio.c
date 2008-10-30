@@ -144,7 +144,6 @@ void virtqueue_push(VirtQueue *vq, const VirtQueueElement *elem,
 int virtqueue_pop(VirtQueue *vq, VirtQueueElement *elem)
 {
     unsigned int i, head;
-    unsigned int position;
 
     /* Check it isn't doing very strange things with descriptor numbers. */
     if ((uint16_t)(vq->vring.avail->idx - vq->last_avail_idx) > vq->vring.num)
@@ -164,7 +163,7 @@ int virtqueue_pop(VirtQueue *vq, VirtQueueElement *elem)
 	errx(1, "Guest says index %u is available", head);
 
     /* When we start there are none of either input nor output. */
-    position = elem->out_num = elem->in_num = 0;
+    elem->out_num = elem->in_num = 0;
 
     i = head;
     do {
