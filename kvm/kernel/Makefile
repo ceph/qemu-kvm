@@ -25,10 +25,7 @@ _hack = mv $1 $1.orig && \
 	gawk -v version=$(version) -f $(ARCH_DIR)/hack-module.awk $1.orig \
 	    | sed '/\#include/! s/\blapic\b/l_apic/g' > $1 && rm $1.orig
 
-unifdef_uflags = $(foreach arch, $(NONARCH_CONFIG), -UCONFIG_$(arch))
-unifdef = mv $1 $1.orig && \
-	  unifdef -DCONFIG_$(ARCH_CONFIG) $(unifdef_uflags) $1.orig > $1; \
-          [ $$? -le 2 ] && rm $1.orig
+unifdef = mv $1 $1.orig && cat unifdef.h $1.orig > $1 && rm $1.orig
 
 hack = $(call _hack,$T/$(strip $1))
 
