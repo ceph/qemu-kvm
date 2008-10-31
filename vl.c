@@ -4416,15 +4416,13 @@ void tap_using_vnet_hdr(void *opaque, int using_vnet_hdr)
 
 #else /* !defined(_WIN32) */
 
-#ifndef IFF_VNET_HDR
-#define TAP_BUFSIZE 4096
-#else
+/* Maximum GSO packet size (64k) plus plenty of room for
+ * the ethernet and virtio_net headers
+ */
+#define TAP_BUFSIZE (4096 + 65536)
+
+#ifdef IFF_VNET_HDR
 #include <linux/virtio_net.h>
-#define ETH_HLEN 14
-#define ETH_DATA_LEN 1500
-#define MAX_PACKET_LEN (ETH_HLEN + ETH_DATA_LEN)
-#define MAX_SKB_FRAGS ((65536/TARGET_PAGE_SIZE) + 2)
-#define TAP_BUFSIZE (sizeof(struct virtio_net_hdr) + MAX_PACKET_LEN + (MAX_SKB_FRAGS*TARGET_PAGE_SIZE))
 #endif
 
 typedef struct TAPState {
