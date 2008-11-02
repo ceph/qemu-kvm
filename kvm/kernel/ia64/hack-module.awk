@@ -1,4 +1,5 @@
-BEGIN { split("INIT_WORK on_each_cpu smp_call_function" , compat_apis); }
+BEGIN { split("INIT_WORK on_each_cpu smp_call_function " \
+	      "request_irq", compat_apis); }
 
 /MODULE_AUTHOR/ {
     printf("MODULE_INFO(version, \"%s\");\n", version)

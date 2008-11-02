@@ -614,3 +614,20 @@ static inline int pci_reset_function(struct pci_dev *dev)
 }
 
 #endif
+
+#include <linux/interrupt.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
+
+typedef irqreturn_t (*kvm_irq_handler_t)(int, void *, struct pt_regs *);
+static inline int kvm_request_irq(unsigned int a, kvm_irq_handler_t handler,
+				  unsigned long c, const char *d, void *e)
+{
+	/* FIXME: allocate thunk, etc. */
+	return -EINVAL;
+}
+
+#else
+
+#define kvm_request_irq request_irq
+
+#endif

@@ -1,5 +1,5 @@
 BEGIN { split("INIT_WORK tsc_khz desc_struct ldttss_desc64 desc_ptr " \
-	      "on_each_cpu relay_open" , compat_apis); }
+	      "on_each_cpu relay_open request_irq" , compat_apis); }
 
 /^int kvm_init\(/ { anon_inodes = 1 }
 
