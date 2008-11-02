@@ -605,3 +605,12 @@ static inline void hrtimer_start_expires(struct hrtimer *timer, int mode)
 }
 
 #endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28)
+
+static inline int pci_reset_function(struct pci_dev *dev)
+{
+	return 0;
+}
+
+#endif
