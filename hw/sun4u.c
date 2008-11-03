@@ -79,7 +79,6 @@ int DMA_write_memory (int nchan, void *buf, int pos, int size)
 void DMA_hold_DREQ (int nchan) {}
 void DMA_release_DREQ (int nchan) {}
 void DMA_schedule(int nchan) {}
-void DMA_run (void) {}
 void DMA_init (int high_page_enable) {}
 void DMA_register_channel (int nchan,
                            DMA_transfer_handler transfer_handler,
@@ -590,7 +589,7 @@ QEMUMachine sun4u_machine = {
     .init = sun4u_init,
     .ram_require = PROM_SIZE_MAX + VGA_RAM_SIZE,
     .nodisk_ok = 1,
-    .max_cpus = 16,
+    .max_cpus = 1, // XXX for now
 };
 
 QEMUMachine sun4v_machine = {
@@ -599,7 +598,7 @@ QEMUMachine sun4v_machine = {
     .init = sun4v_init,
     .ram_require = PROM_SIZE_MAX + VGA_RAM_SIZE,
     .nodisk_ok = 1,
-    .max_cpus = 16,
+    .max_cpus = 1, // XXX for now
 };
 
 QEMUMachine niagara_machine = {
@@ -608,5 +607,5 @@ QEMUMachine niagara_machine = {
     .init = niagara_init,
     .ram_require = PROM_SIZE_MAX + VGA_RAM_SIZE,
     .nodisk_ok = 1,
-    .max_cpus = 16,
+    .max_cpus = 1, // XXX for now
 };
