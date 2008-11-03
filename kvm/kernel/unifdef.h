@@ -25,4 +25,16 @@
 #endif
 #endif
 
+#ifdef __PPC__
+#ifndef CONFIG_PPC
+#define CONFIG_PPC 1
+#endif
+#endif
+
+#ifdef __s390__
+#ifndef CONFIG_S390
+#define CONFIG_S390 1
+#endif
+#endif
+
 #endif
