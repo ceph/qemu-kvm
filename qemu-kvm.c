@@ -1050,14 +1050,11 @@ int qemu_kvm_unregister_coalesced_mmio(target_phys_addr_t addr,
 
 #include <sys/io.h>
 
-static void kvm_do_ioperm(void *_data)
-{
-    struct ioperm_data *data = _data;
-    ioperm(data->start_port, data->num, data->turn_on);
-}
-
+#ifdef USE_KVM_DEVICE_ASSIGNMENT
 void kvm_ioperm(CPUState *env, void *data)
 {
     if (kvm_enabled() && qemu_system_ready)
-	on_vcpu(env, kvm_do_ioperm, data);
+	on_vcpu(env, kvm_arch_do_ioperm, data);
 }
+#endif
+

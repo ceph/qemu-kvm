@@ -93,7 +93,10 @@ int qemu_kvm_unregister_coalesced_mmio(target_phys_addr_t addr,
 
 void qemu_kvm_system_reset_request(void);
 
+#ifdef USE_KVM_DEVICE_ASSIGNMENT
 void kvm_ioperm(CPUState *env, void *data);
+void kvm_arch_do_ioperm(void *_data);
+#endif
 
 #ifdef TARGET_PPC
 int handle_powerpc_dcr_read(int vcpu, uint32_t dcrn, uint32_t *data);
