@@ -27,7 +27,6 @@ int kvm_pit = 1;
 #include <sys/utsname.h>
 #include <sys/syscall.h>
 #include <sys/mman.h>
-#include <sys/io.h>
 
 #define bool _Bool
 #define false 0
@@ -1048,6 +1047,8 @@ int qemu_kvm_unregister_coalesced_mmio(target_phys_addr_t addr,
 {
     return kvm_unregister_coalesced_mmio(kvm_context, addr, size);
 }
+
+#include <sys/io.h>
 
 static void kvm_do_ioperm(void *_data)
 {
