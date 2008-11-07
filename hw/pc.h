@@ -118,6 +118,8 @@ int piix4_init(PCIBus *bus, int devfn);
 
 int piix_get_irq(int pin);
 
+int ipf_map_irq(PCIDevice *pci_dev, int irq_num);
+
 /* vga.c */
 enum vga_retrace_method {
     VGA_RETRACE_DUMB,

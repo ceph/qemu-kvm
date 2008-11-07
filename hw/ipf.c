@@ -38,6 +38,7 @@
 #include "firmware.h"
 #include "ia64intrin.h"
 #include <unistd.h>
+#include "device-assignment.h"
 
 #include "qemu-kvm.h"
 
@@ -450,7 +451,6 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
 
     /*Load firware to its proper position.*/
     if (kvm_enabled()) {
-        int r;
         unsigned long  image_size;
         char *image = NULL;
         uint8_t *fw_image_start;
@@ -645,6 +645,24 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
 	    unit_id++;
 	}
     }
+
+#ifdef USE_KVM_DEVICE_ASSIGNMENT
+    if (kvm_enabled()) {
+	int i;
+        for (i = 0; i < assigned_devices_index; i++) {
+            if (add_assigned_device(assigned_devices[i]) < 0) {
+                fprintf(stderr, "Warning: could not add assigned device %s\n",
+                        assigned_devices[i]);
+            }
+        }
+
+	if (init_all_assigned_devices(pci_bus)) {
+	    fprintf(stderr, "Failed to initialize assigned devices\n");
+	    exit (1);
+	}
+    }
+#endif /* USE_KVM_DEVICE_ASSIGNMENT */
+
 }
 
 static void ipf_init_pci(ram_addr_t ram_size, int vga_ram_size,
@@ -694,4 +712,9 @@ void ioapic_set_irq(void *opaque, int irq_num, int level)
 	if (kvm_set_irq(vector, ioapic_irq_count[vector] == 0))
 	    return;
     }
+}
+
+int ipf_map_irq(PCIDevice *pci_dev, int irq_num)
+{
+	return ioapic_map_irq(pci_dev->devfn, irq_num);
 }

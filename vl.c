@@ -4932,7 +4932,7 @@ static void help(int exitcode)
 #endif
 	   "-no-kvm-irqchip disable KVM kernel mode PIC/IOAPIC/LAPIC\n"
 	   "-no-kvm-pit	    disable KVM kernel mode PIT\n"
-#if defined(TARGET_I386) || defined(TARGET_X86_64) || defined(__linux__)
+#if defined(TARGET_I386) || defined(TARGET_X86_64) || defined(TARGET_IA64) || defined(__linux__)
            "-pcidevice host=bus:dev.func[,dma=none][,name=string]\n"
            "                expose a PCI device to the guest OS.\n"
            "                dma=none: don't perform any dma translations (default is to use an iommu)\n"
@@ -5057,7 +5057,7 @@ enum {
     QEMU_OPTION_no_kvm,
     QEMU_OPTION_no_kvm_irqchip,
     QEMU_OPTION_no_kvm_pit,
-#if defined(TARGET_I386) || defined(TARGET_X86_64) || defined(__linux__)
+#if defined(TARGET_I386) || defined(TARGET_X86_64) || defined(TARGET_IA64) || defined(__linux__)
     QEMU_OPTION_pcidevice,
 #endif
     QEMU_OPTION_no_reboot,
@@ -5149,7 +5149,7 @@ static const QEMUOption qemu_options[] = {
 #endif
     { "no-kvm-irqchip", 0, QEMU_OPTION_no_kvm_irqchip },
     { "no-kvm-pit", 0, QEMU_OPTION_no_kvm_pit },
-#if defined(TARGET_I386) || defined(TARGET_X86_64) || defined(__linux__)
+#if defined(TARGET_I386) || defined(TARGET_X86_64) || defined(TARGET_IA64) || defined(__linux__)
     { "pcidevice", HAS_ARG, QEMU_OPTION_pcidevice },
 #endif
 #endif
@@ -6096,7 +6096,7 @@ int main(int argc, char **argv)
 		kvm_pit = 0;
 		break;
 	    }
-#if defined(TARGET_I386) || defined(TARGET_X86_64) || defined(__linux__)
+#if defined(TARGET_I386) || defined(TARGET_X86_64) || defined(TARGET_IA64) || defined(__linux__)
             case QEMU_OPTION_pcidevice:
 		if (assigned_devices_index >= MAX_DEV_ASSIGN_CMDLINE) {
                     fprintf(stderr, "Too many assigned devices\n");

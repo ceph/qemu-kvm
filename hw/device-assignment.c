@@ -457,6 +457,10 @@ void assigned_dev_update_irq(PCIDevice *d)
         irq = pci_map_irq(&assigned_dev->dev, assigned_dev->intpin);
         irq = piix_get_irq(irq);
 
+#ifdef TARGET_IA64
+	irq = ipf_map_irq(d, irq);
+#endif
+
         if (irq != assigned_dev->girq) {
             struct kvm_assigned_irq assigned_irq_data;
 
