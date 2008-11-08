@@ -251,7 +251,7 @@ void preempt_notifier_sys_exit(void)
 	struct idt_desc idt_desc;
 
 	dprintk("\n");
-	on_each_cpu(do_disable, NULL, 1, 1);
+	kvm_on_each_cpu(do_disable, NULL, 1, 1);
 	asm ("sidt %0" : "=m"(idt_desc));
 	idt_desc.gates[1] = orig_int1_gate;
 }
