@@ -97,7 +97,16 @@ void ppc_translate_init(void)
 #else
     cpu_T[0] = tcg_global_reg_new(TCG_TYPE_TL, TCG_AREG1, "T0");
     cpu_T[1] = tcg_global_reg_new(TCG_TYPE_TL, TCG_AREG2, "T1");
+#ifdef HOST_I386
+    /* XXX: This is a temporary workaround for i386.
+     *      On i386 qemu_st32 runs out of registers.
+     *      The proper fix is to remove cpu_T.
+     */
+    cpu_T[2] = tcg_global_mem_new(TCG_TYPE_TL,
+                                  TCG_AREG0, offsetof(CPUState, t2), "T2");
+#else
     cpu_T[2] = tcg_global_reg_new(TCG_TYPE_TL, TCG_AREG3, "T2");
+#endif
 #endif
 #if !defined(TARGET_PPC64)
     cpu_T64[0] = tcg_global_mem_new(TCG_TYPE_I64,
@@ -2759,7 +2768,7 @@ static always_inline void gen_qemu_ld64(TCGv arg0, TCGv arg1, int flags)
 
 static always_inline void gen_qemu_st8(TCGv arg0, TCGv arg1, int flags)
 {
-    gen_qemu_st8_ppc32(arg0, arg1, flags >> 1);
+    gen_qemu_st8_ppc32(arg0, arg1, flags);
 }
 
 static always_inline void gen_qemu_st16(TCGv arg0, TCGv arg1, int flags)
@@ -2768,10 +2777,10 @@ static always_inline void gen_qemu_st16(TCGv arg0, TCGv arg1, int flags)
         TCGv temp = tcg_temp_new(TCG_TYPE_I32);
         tcg_gen_ext16u_i32(temp, arg0);
         tcg_gen_bswap16_i32(temp, temp);
-        gen_qemu_st16_ppc32(temp, arg1, flags >> 1);
+        gen_qemu_st16_ppc32(temp, arg1, flags);
         tcg_temp_free(temp);
     } else
-        gen_qemu_st16_ppc32(arg0, arg1, flags >> 1);
+        gen_qemu_st16_ppc32(arg0, arg1, flags);
 }
 
 static always_inline void gen_qemu_st32(TCGv arg0, TCGv arg1, int flags)
@@ -2779,10 +2788,10 @@ static always_inline void gen_qemu_st32(TCGv arg0, TCGv arg1, int flags)
     if (unlikely(flags & 1)) {
         TCGv temp = tcg_temp_new(TCG_TYPE_I32);
         tcg_gen_bswap_i32(temp, arg0);
-        gen_qemu_st32_ppc32(temp, arg1, flags >> 1);
+        gen_qemu_st32_ppc32(temp, arg1, flags);
         tcg_temp_free(temp);
     } else
-        gen_qemu_st32_ppc32(arg0, arg1, flags >> 1);
+        gen_qemu_st32_ppc32(arg0, arg1, flags);
 }
 
 static always_inline void gen_qemu_st64(TCGv arg0, TCGv arg1, int flags)
@@ -2790,10 +2799,10 @@ static always_inline void gen_qemu_st64(TCGv arg0, TCGv arg1, int flags)
     if (unlikely(flags & 1)) {
         TCGv temp = tcg_temp_new(TCG_TYPE_I64);
         tcg_gen_bswap_i64(temp, arg0);
-        gen_qemu_st64_ppc32(temp, arg1, flags >> 1);
+        gen_qemu_st64_ppc32(temp, arg1, flags);
         tcg_temp_free(temp);
     } else
-        gen_qemu_st64_ppc32(arg0, arg1, flags >> 1);
+        gen_qemu_st64_ppc32(arg0, arg1, flags);
 }
 
 #endif

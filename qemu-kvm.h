@@ -5,8 +5,8 @@
  *
  * Licensed under the terms of the GNU GPL version 2 or higher.
  */
-#ifndef QEMU_KVM_H
-#define QEMU_KVM_H
+#ifndef THE_ORIGINAL_AND_TRUE_QEMU_KVM_H
+#define THE_ORIGINAL_AND_TRUE_QEMU_KVM_H
 
 #include "cpu.h"
 
@@ -15,7 +15,6 @@
 int kvm_main_loop(void);
 int kvm_qemu_init(void);
 int kvm_qemu_create_context(void);
-void kvm_init_new_ap(int cpu, CPUState *env);
 int kvm_init_ap(void);
 void kvm_qemu_destroy(void);
 void kvm_load_registers(CPUState *env);
@@ -122,6 +121,7 @@ struct ioperm_data {
 #define qemu_kvm_irqchip_in_kernel() kvm_irqchip_in_kernel(kvm_context)
 #define qemu_kvm_pit_in_kernel() kvm_pit_in_kernel(kvm_context)
 #define qemu_kvm_has_sync_mmu() kvm_has_sync_mmu(kvm_context)
+void kvm_init_vcpu(CPUState *env);
 #else
 #define kvm_enabled() (0)
 #define qemu_kvm_irqchip_in_kernel() (0)
@@ -129,6 +129,8 @@ struct ioperm_data {
 #define qemu_kvm_has_sync_mmu() (0)
 #define kvm_load_registers(env) do {} while(0)
 #define kvm_save_registers(env) do {} while(0)
+static inline void kvm_init_vcpu(CPUState *env) { }
+
 #endif
 
 void kvm_mutex_unlock(void);
@@ -145,5 +147,13 @@ static inline void kvm_sleep_end(void)
     if (kvm_enabled())
 	kvm_mutex_lock();
 }
+
+static inline void kvm_set_phys_mem(target_phys_addr_t start_addr,
+                      ram_addr_t size,
+                      ram_addr_t phys_offset)
+{
+    kvm_cpu_register_physical_memory(start_addr, size, phys_offset);
+}
+
 
 #endif

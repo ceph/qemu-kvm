@@ -39,6 +39,7 @@
 #include <dirent.h>
 #include "qemu-timer.h"
 #include "migration.h"
+#include "kvm.h"
 
 #include "qemu-kvm.h"
 
@@ -1291,7 +1292,7 @@ static void do_info_kqemu(void)
 
 static void do_info_kvm(void)
 {
-#ifdef USE_KVM
+#if defined(USE_KVM) || defined(CONFIG_KVM)
     term_printf("kvm support: ");
     if (kvm_enabled())
 	term_printf("enabled\n");

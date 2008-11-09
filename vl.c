@@ -40,6 +40,7 @@
 #include "audio/audio.h"
 #include "hw/device-assignment.h"
 #include "migration.h"
+#include "kvm.h"
 #include "balloon.h"
 #include "qemu-kvm.h"
 
@@ -57,26 +58,31 @@
 #include <termios.h>
 #include <sys/mman.h>
 #include <sys/ioctl.h>
+#include <sys/resource.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <net/if.h>
+#if defined(__NetBSD__)
+#include <net/if_tap.h>
+#endif
+#ifdef __linux__
+#include <linux/if_tun.h>
+#endif
+#include <arpa/inet.h>
 #include <dirent.h>
 #include <netdb.h>
 #include <sys/select.h>
-#include <arpa/inet.h>
 #ifdef _BSD
 #include <sys/stat.h>
-#if !defined(__APPLE__) && !defined(__OpenBSD__)
+#ifdef __FreeBSD__
 #include <libutil.h>
-#endif
-#ifdef __OpenBSD__
-#include <net/if.h>
+#else
+#include <util.h>
 #endif
 #elif defined (__GLIBC__) && defined (__FreeBSD_kernel__)
 #include <freebsd/stdlib.h>
 #else
 #ifdef __linux__
-#include <linux/if.h>
-#include <linux/if_tun.h>
 #include <pty.h>
 #include <malloc.h>
 #include <linux/rtc.h>
@@ -167,6 +173,9 @@
 
 /* Max number of USB devices that can be specified on the commandline.  */
 #define MAX_USB_CMDLINE 8
+
+/* Max number of bluetooth switches on the commandline.  */
+#define MAX_BT_CMDLINE 10
 
 /* XXX: use a two level table to limit memory usage */
 #define MAX_IOPORTS 65536
@@ -932,6 +941,9 @@ static void qemu_rearm_alarm_timer(struct qemu_alarm_timer *t)
 #define MIN_TIMER_REARM_US 250
 
 static struct qemu_alarm_timer *alarm_timer;
+#ifndef _WIN32
+static int alarm_timer_rfd, alarm_timer_wfd;
+#endif
 
 #ifdef _WIN32
 
@@ -1352,12 +1364,15 @@ static void host_alarm_handler(int host_signum)
                                qemu_get_clock(vm_clock))) ||
         qemu_timer_expired(active_timers[QEMU_TIMER_REALTIME],
                            qemu_get_clock(rt_clock))) {
+        CPUState *env = next_cpu;
+
 #ifdef _WIN32
         struct qemu_alarm_win32 *data = ((struct qemu_alarm_timer*)dwUser)->priv;
         SetEvent(data->host_alarm);
+#else
+        static const char byte = 0;
+        write(alarm_timer_wfd, &byte, sizeof(byte));
 #endif
-        CPUState *env = next_cpu;
-
         alarm_timer->flags |= ALARM_FLAG_EXPIRED;
 
         if (env) {
@@ -1418,6 +1433,21 @@ static uint64_t qemu_next_deadline_dyntick(void)
 
 #ifndef _WIN32
 
+/* Sets a specific flag */
+static int fcntl_setfl(int fd, int flag)
+{
+    int flags;
+
+    flags = fcntl(fd, F_GETFL);
+    if (flags == -1)
+        return -errno;
+
+    if (fcntl(fd, F_SETFL, flags | flag) == -1)
+        return -errno;
+
+    return 0;
+}
+
 #if defined(__linux__)
 
 #define RTC_FREQ 1024
@@ -1432,7 +1462,7 @@ static void enable_sigio_timer(int fd)
     act.sa_handler = host_alarm_handler;
 
     sigaction(SIGIO, &act, NULL);
-    fcntl(fd, F_SETFL, O_ASYNC);
+    fcntl_setfl(fd, O_ASYNC);
     fcntl(fd, F_SETOWN, getpid());
 }
 
@@ -1630,6 +1660,34 @@ static void unix_stop_timer(struct qemu_alarm_timer *t)
 
 #endif /* !defined(_WIN32) */
 
+static void try_to_rearm_timer(void *opaque)
+{
+    struct qemu_alarm_timer *t = opaque;
+#ifndef _WIN32
+    ssize_t len;
+
+    /* Drain the notify pipe */
+    do {
+        char buffer[512];
+        len = read(alarm_timer_rfd, buffer, sizeof(buffer));
+    } while ((len == -1 && errno == EINTR) || len > 0);
+#endif
+
+    /* vm time timers */
+    if (vm_running && likely(!(cur_cpu && (cur_cpu->singlestep_enabled & SSTEP_NOTIMER))))
+        qemu_run_timers(&active_timers[QEMU_TIMER_VIRTUAL],
+                        qemu_get_clock(vm_clock));
+
+    /* real time timers */
+    qemu_run_timers(&active_timers[QEMU_TIMER_REALTIME],
+                    qemu_get_clock(rt_clock));
+
+    if (t->flags & ALARM_FLAG_EXPIRED) {
+        alarm_timer->flags &= ~ALARM_FLAG_EXPIRED;
+        qemu_rearm_alarm_timer(alarm_timer);
+    }
+}
+
 #ifdef _WIN32
 
 static int win32_start_timer(struct qemu_alarm_timer *t)
@@ -1672,7 +1730,7 @@ static int win32_start_timer(struct qemu_alarm_timer *t)
         return -1;
     }
 
-    qemu_add_wait_object(data->host_alarm, NULL, NULL);
+    qemu_add_wait_object(data->host_alarm, try_to_rearm_timer, t);
 
     return 0;
 }
@@ -1718,10 +1776,29 @@ static void win32_rearm_timer(struct qemu_alarm_timer *t)
 
 #endif /* _WIN32 */
 
-static void init_timer_alarm(void)
+static int init_timer_alarm(void)
 {
     struct qemu_alarm_timer *t = NULL;
     int i, err = -1;
+
+#ifndef _WIN32
+    int fds[2];
+
+    err = pipe(fds);
+    if (err == -1)
+        return -errno;
+
+    err = fcntl_setfl(fds[0], O_NONBLOCK);
+    if (err < 0)
+        goto fail;
+
+    err = fcntl_setfl(fds[1], O_NONBLOCK);
+    if (err < 0)
+        goto fail;
+
+    alarm_timer_rfd = fds[0];
+    alarm_timer_wfd = fds[1];
+#endif
 
     for (i = 0; alarm_timers[i].name; i++) {
         t = &alarm_timers[i];
@@ -1732,12 +1809,25 @@ static void init_timer_alarm(void)
     }
 
     if (err) {
-        fprintf(stderr, "Unable to find any suitable alarm timer.\n");
-        fprintf(stderr, "Terminating\n");
-        exit(1);
+        err = -ENOENT;
+        goto fail;
     }
 
+#ifndef _WIN32
+    qemu_set_fd_handler2(alarm_timer_rfd, NULL,
+                         try_to_rearm_timer, NULL, t);
+#endif
+
     alarm_timer = t;
+
+    return 0;
+
+fail:
+#ifndef _WIN32
+    close(fds[0]);
+    close(fds[1]);
+#endif
+    return err;
 }
 
 static void quit_timers(void)
@@ -1897,7 +1987,7 @@ int check_params(char *buf, int buf_size,
 static int nb_hcis;
 static int cur_hci;
 static struct HCIInfo *hci_table[MAX_NICS];
-#if 0
+
 static struct bt_vlan_s {
     struct bt_scatternet_s net;
     int id;
@@ -1920,7 +2010,6 @@ static struct bt_scatternet_s *qemu_find_bt_vlan(int id)
     *pvlan = vlan;
     return &vlan->net;
 }
-#endif
 
 static void null_hci_send(struct HCIInfo *hci, const uint8_t *data, int len)
 {
@@ -1944,6 +2033,144 @@ struct HCIInfo *qemu_next_hci(void)
         return &null_hci;
 
     return hci_table[cur_hci++];
+}
+
+static struct HCIInfo *hci_init(const char *str)
+{
+    char *endp;
+    struct bt_scatternet_s *vlan = 0;
+
+    if (!strcmp(str, "null"))
+        /* null */
+        return &null_hci;
+    else if (!strncmp(str, "host", 4) && (str[4] == '\0' || str[4] == ':'))
+        /* host[:hciN] */
+        return bt_host_hci(str[4] ? str + 5 : "hci0");
+    else if (!strncmp(str, "hci", 3)) {
+        /* hci[,vlan=n] */
+        if (str[3]) {
+            if (!strncmp(str + 3, ",vlan=", 6)) {
+                vlan = qemu_find_bt_vlan(strtol(str + 9, &endp, 0));
+                if (*endp)
+                    vlan = 0;
+            }
+        } else
+            vlan = qemu_find_bt_vlan(0);
+        if (vlan)
+           return bt_new_hci(vlan);
+    }
+
+    fprintf(stderr, "qemu: Unknown bluetooth HCI `%s'.\n", str);
+
+    return 0;
+}
+
+static int bt_hci_parse(const char *str)
+{
+    struct HCIInfo *hci;
+    bdaddr_t bdaddr;
+
+    if (nb_hcis >= MAX_NICS) {
+        fprintf(stderr, "qemu: Too many bluetooth HCIs (max %i).\n", MAX_NICS);
+        return -1;
+    }
+
+    hci = hci_init(str);
+    if (!hci)
+        return -1;
+
+    bdaddr.b[0] = 0x52;
+    bdaddr.b[1] = 0x54;
+    bdaddr.b[2] = 0x00;
+    bdaddr.b[3] = 0x12;
+    bdaddr.b[4] = 0x34;
+    bdaddr.b[5] = 0x56 + nb_hcis;
+    hci->bdaddr_set(hci, bdaddr.b);
+
+    hci_table[nb_hcis++] = hci;
+
+    return 0;
+}
+
+static void bt_vhci_add(int vlan_id)
+{
+    struct bt_scatternet_s *vlan = qemu_find_bt_vlan(vlan_id);
+
+    if (!vlan->slave)
+        fprintf(stderr, "qemu: warning: adding a VHCI to "
+                        "an empty scatternet %i\n", vlan_id);
+
+    bt_vhci_init(bt_new_hci(vlan));
+}
+
+static struct bt_device_s *bt_device_add(const char *opt)
+{
+    struct bt_scatternet_s *vlan;
+    int vlan_id = 0;
+    char *endp = strstr(opt, ",vlan=");
+    int len = (endp ? endp - opt : strlen(opt)) + 1;
+    char devname[10];
+
+    pstrcpy(devname, MIN(sizeof(devname), len), opt);
+
+    if (endp) {
+        vlan_id = strtol(endp + 6, &endp, 0);
+        if (*endp) {
+            fprintf(stderr, "qemu: unrecognised bluetooth vlan Id\n");
+            return 0;
+        }
+    }
+
+    vlan = qemu_find_bt_vlan(vlan_id);
+
+    if (!vlan->slave)
+        fprintf(stderr, "qemu: warning: adding a slave device to "
+                        "an empty scatternet %i\n", vlan_id);
+
+    if (!strcmp(devname, "keyboard"))
+        return bt_keyboard_init(vlan);
+
+    fprintf(stderr, "qemu: unsupported bluetooth device `%s'\n", devname);
+    return 0;
+}
+
+static int bt_parse(const char *opt)
+{
+    const char *endp, *p;
+    int vlan;
+
+    if (strstart(opt, "hci", &endp)) {
+        if (!*endp || *endp == ',') {
+            if (*endp)
+                if (!strstart(endp, ",vlan=", 0))
+                    opt = endp + 1;
+
+            return bt_hci_parse(opt);
+       }
+    } else if (strstart(opt, "vhci", &endp)) {
+        if (!*endp || *endp == ',') {
+            if (*endp) {
+                if (strstart(endp, ",vlan=", &p)) {
+                    vlan = strtol(p, (char **) &endp, 0);
+                    if (*endp) {
+                        fprintf(stderr, "qemu: bad scatternet '%s'\n", p);
+                        return 1;
+                    }
+                } else {
+                    fprintf(stderr, "qemu: bad parameter '%s'\n", endp + 1);
+                    return 1;
+                }
+            } else
+                vlan = 0;
+
+            bt_vhci_add(vlan);
+            return 0;
+        }
+    } else if (strstart(opt, "device:", &endp))
+        return !bt_device_add(endp);
+
+    fprintf(stderr, "qemu: bad bluetooth parameter '%s'\n", opt);
+    return 1;
 }
 
 /***********************************************************/
@@ -2471,6 +2698,9 @@ static int usb_device_add(const char *devname)
             return -1;
         nd_table[nic].model = "usb";
         dev = usb_net_init(&nd_table[nic]);
+    } else if (!strcmp(devname, "bt") || strstart(devname, "bt:", &p)) {
+        dev = usb_bt_init(devname[2] ? hci_init(p) :
+                        bt_new_hci(qemu_find_bt_vlan(0)));
     } else {
         return -1;
     }
@@ -4622,21 +4852,6 @@ void main_loop_wait(int timeout)
     }
 #endif
 
-    if (vm_running) {
-        if (likely(!cur_cpu || !(cur_cpu->singlestep_enabled & SSTEP_NOTIMER)))
-        qemu_run_timers(&active_timers[QEMU_TIMER_VIRTUAL],
-                        qemu_get_clock(vm_clock));
-    }
-
-    /* real time timers */
-    qemu_run_timers(&active_timers[QEMU_TIMER_REALTIME],
-                    qemu_get_clock(rt_clock));
-
-    if (alarm_timer->flags & ALARM_FLAG_EXPIRED) {
-        alarm_timer->flags &= ~(ALARM_FLAG_EXPIRED);
-        qemu_rearm_alarm_timer(alarm_timer);
-    }
-
     /* Check bottom-halves last in case any of the earlier events triggered
        them.  */
     qemu_bh_poll();
@@ -4895,6 +5110,16 @@ static void help(int exitcode)
            "-net none       use it alone to have zero network devices; if no -net option\n"
            "                is provided, the default is '-net nic -net user'\n"
            "\n"
+           "-bt hci,null    Dumb bluetooth HCI - doesn't respond to commands\n"
+           "-bt hci,host[:id]\n"
+           "                Use host's HCI with the given name\n"
+           "-bt hci[,vlan=n]\n"
+           "                Emulate a standard HCI in virtual scatternet 'n'\n"
+           "-bt vhci[,vlan=n]\n"
+           "                Add host computer to virtual scatternet 'n' using VHCI\n"
+           "-bt device:dev[,vlan=n]\n"
+           "                Emulate a bluetooth device 'dev' in scatternet 'n'\n"
+           "\n"
 #ifdef CONFIG_SLIRP
            "-tftp dir       allow tftp access to files in dir [-net user]\n"
            "-bootp file     advertise file in BOOTP replies\n"
@@ -4925,6 +5150,9 @@ static void help(int exitcode)
 #ifdef USE_KQEMU
            "-kernel-kqemu   enable KQEMU full virtualization (default is user mode only)\n"
            "-no-kqemu       disable KQEMU kernel module usage\n"
+#endif
+#ifdef CONFIG_KVM
+           "-enable-kvm     enable KVM full virtualization support\n"
 #endif
 #ifdef USE_KVM
 #ifndef NO_CPU_EMULATION
@@ -5019,6 +5247,7 @@ enum {
     QEMU_OPTION_bootp,
     QEMU_OPTION_smb,
     QEMU_OPTION_redir,
+    QEMU_OPTION_bt,
 
     QEMU_OPTION_kernel,
     QEMU_OPTION_append,
@@ -5047,6 +5276,7 @@ enum {
     QEMU_OPTION_pidfile,
     QEMU_OPTION_no_kqemu,
     QEMU_OPTION_kernel_kqemu,
+    QEMU_OPTION_enable_kvm,
     QEMU_OPTION_win2k_hack,
     QEMU_OPTION_usb,
     QEMU_OPTION_usbdevice,
@@ -5127,6 +5357,7 @@ static const QEMUOption qemu_options[] = {
 #endif
     { "redir", HAS_ARG, QEMU_OPTION_redir },
 #endif
+    { "bt", HAS_ARG, QEMU_OPTION_bt },
 
     { "kernel", HAS_ARG, QEMU_OPTION_kernel },
     { "append", HAS_ARG, QEMU_OPTION_append },
@@ -5142,6 +5373,9 @@ static const QEMUOption qemu_options[] = {
 #ifdef USE_KQEMU
     { "no-kqemu", 0, QEMU_OPTION_no_kqemu },
     { "kernel-kqemu", 0, QEMU_OPTION_kernel_kqemu },
+#endif
+#ifdef CONFIG_KVM
+    { "enable-kvm", 0, QEMU_OPTION_enable_kvm },
 #endif
 #ifdef USE_KVM
 #ifndef NO_CPU_EMULATION
@@ -5581,6 +5815,8 @@ int main(int argc, char **argv)
     int cyls, heads, secs, translation;
     const char *net_clients[MAX_NET_CLIENTS];
     int nb_net_clients;
+    const char *bt_opts[MAX_BT_CMDLINE];
+    int nb_bt_opts;
     int hda_index;
     int optind;
     const char *r, *optarg;
@@ -5665,6 +5901,7 @@ int main(int argc, char **argv)
     assigned_devices_index = 0;
 
     nb_net_clients = 0;
+    nb_bt_opts = 0;
     nb_drives = 0;
     nb_drives_opt = 0;
     hda_index = -1;
@@ -5900,6 +6137,13 @@ int main(int argc, char **argv)
                 net_slirp_redir(optarg);
                 break;
 #endif
+            case QEMU_OPTION_bt:
+                if (nb_bt_opts >= MAX_BT_CMDLINE) {
+                    fprintf(stderr, "qemu: too many bluetooth options\n");
+                    exit(1);
+                }
+                bt_opts[nb_bt_opts++] = optarg;
+                break;
 #ifdef HAS_AUDIO
             case QEMU_OPTION_audio_help:
                 AUD_help ();
@@ -6081,6 +6325,14 @@ int main(int argc, char **argv)
                 kqemu_allowed = 2;
                 break;
 #endif
+#ifdef CONFIG_KVM
+            case QEMU_OPTION_enable_kvm:
+                kvm_allowed = 1;
+#ifdef USE_KQEMU
+                kqemu_allowed = 0;
+#endif
+                break;
+#endif
 #ifdef USE_KVM
 	    case QEMU_OPTION_no_kvm:
 		kvm_allowed = 0;
@@ -6253,6 +6505,14 @@ int main(int argc, char **argv)
         }
     }
 
+#if defined(CONFIG_KVM) && defined(USE_KQEMU)
+    if (kvm_allowed && kqemu_allowed) {
+        fprintf(stderr,
+                "You can not enable both KVM and kqemu at the same time\n");
+        exit(1);
+    }
+#endif
+
     machine->max_cpus = machine->max_cpus ?: 1; /* Default to UP */
     if (smp_cpus > machine->max_cpus) {
         fprintf(stderr, "Number of SMP cpus requested (%d), exceeds max cpus "
@@ -6366,7 +6626,10 @@ int main(int argc, char **argv)
     setvbuf(stdout, NULL, _IOLBF, 0);
 
     init_timers();
-    init_timer_alarm();
+    if (init_timer_alarm() < 0) {
+        fprintf(stderr, "could not initialize alarm timer\n");
+        exit(1);
+    }
     if (use_icount && icount_time_shift < 0) {
         use_icount = 2;
         /* 125MIPS seems a reasonable initial guess at the guest speed.
@@ -6422,6 +6685,11 @@ int main(int argc, char **argv)
 	}
     }
 #endif
+
+    /* init the bluetooth world */
+    for (i = 0; i < nb_bt_opts; i++)
+        if (bt_parse(bt_opts[i]))
+            exit(1);
 
     /* init the memory */
     phys_ram_size = machine->ram_require & ~RAMSIZE_FIXED;
@@ -6586,6 +6854,18 @@ int main(int argc, char **argv)
 
     if (kvm_enabled())
 	kvm_init_ap();
+
+#ifdef KVM_UPSTREAM
+    if (kvm_enabled()) {
+        int ret;
+
+        ret = kvm_init(smp_cpus);
+        if (ret < 0) {
+            fprintf(stderr, "failed to initialize KVM\n");
+            exit(1);
+        }
+    }
+#endif
 
     machine->init(ram_size, vga_ram_size, boot_devices, ds,
                   kernel_filename, kernel_cmdline, initrd_filename, cpu_model);

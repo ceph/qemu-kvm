@@ -205,7 +205,7 @@ void kvm_arch_load_regs(CPUState *env)
     fpu.mxcsr = env->mxcsr;
     kvm_set_fpu(kvm_context, env->cpu_index, &fpu);
 
-    memcpy(sregs.interrupt_bitmap, env->kvm_interrupt_bitmap, sizeof(sregs.interrupt_bitmap));
+    memcpy(sregs.interrupt_bitmap, env->interrupt_bitmap, sizeof(sregs.interrupt_bitmap));
 
     if ((env->eflags & VM_MASK)) {
 	    set_v8086_seg(&sregs.cs, &env->segs[R_CS]);
@@ -345,7 +345,7 @@ void kvm_arch_save_regs(CPUState *env)
 
     kvm_get_sregs(kvm_context, env->cpu_index, &sregs);
 
-    memcpy(env->kvm_interrupt_bitmap, sregs.interrupt_bitmap, sizeof(env->kvm_interrupt_bitmap));
+    memcpy(env->interrupt_bitmap, sregs.interrupt_bitmap, sizeof(env->interrupt_bitmap));
 
     get_seg(&env->segs[R_CS], &sregs.cs);
     get_seg(&env->segs[R_DS], &sregs.ds);

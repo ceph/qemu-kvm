@@ -464,8 +464,9 @@ static void *ap_main_loop(void *_env)
     return NULL;
 }
 
-void kvm_init_new_ap(int cpu, CPUState *env)
+void kvm_init_vcpu(CPUState *env)
 {
+    int cpu = env->cpu_index;
     pthread_create(&vcpu_info[cpu].thread, NULL, ap_main_loop, env);
 
     while (vcpu_info[cpu].created == 0)

@@ -235,6 +235,7 @@
 #define PG_ERROR_RSVD_MASK 0x08
 #define PG_ERROR_I_D_MASK  0x10
 
+#define MSR_IA32_TSC                    0x10
 #define MSR_IA32_APICBASE               0x1b
 #define MSR_IA32_APICBASE_BSP           (1<<8)
 #define MSR_IA32_APICBASE_ENABLE        (1<<11)
@@ -586,7 +587,8 @@ typedef struct CPUX86State {
     target_ulong kernelgsbase;
 #endif
 
-    uint64_t tsc; /* time stamp counter */
+    uint64_t tsc;
+
     uint64_t pat;
 
     /* exception/interrupt handling */
@@ -618,9 +620,8 @@ typedef struct CPUX86State {
     int last_io_time;
 #endif
 
-#define BITS_PER_LONG (8 * sizeof (uint32_t))
-#define NR_IRQ_WORDS (256/ BITS_PER_LONG)
-    uint32_t kvm_interrupt_bitmap[NR_IRQ_WORDS];
+    /* For KVM */
+    uint64_t interrupt_bitmap[256 / 64];
 
     /* in order to simplify APIC support, we leave this pointer to the
        user */
@@ -735,6 +736,10 @@ void cpu_smm_update(CPUX86State *env);
 
 /* will be suppressed */
 void cpu_x86_update_cr0(CPUX86State *env, uint32_t new_cr0);
+
+void cpu_x86_cpuid(CPUX86State *env, uint32_t index,
+                   uint32_t *eax, uint32_t *ebx,
+                   uint32_t *ecx, uint32_t *edx);
 
 /* used to debug */
 #define X86_DUMP_FPU  0x0001 /* dump FPU state too */

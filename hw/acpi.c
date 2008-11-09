@@ -23,6 +23,7 @@
 #include "sysemu.h"
 #include "i2c.h"
 #include "smbus.h"
+#include "kvm.h"
 #ifdef USE_KVM
 #include "qemu-kvm.h"
 #endif
@@ -512,6 +513,12 @@ i2c_bus *piix4_pm_init(PCIBus *bus, int devfn, uint32_t smb_io_base,
 
     register_ioport_write(ACPI_DBG_IO_ADDR, 4, 4, acpi_dbg_writel, s);
 
+    if (kvm_enabled()) {
+        /* Mark SMM as already inited to prevent SMM from running.  KVM does not
+         * support SMM mode. */
+        pci_conf[0x5B] = 0x02;
+    }
+
     /* XXX: which specification is used ? The i82731AB has different
        mappings */
     pci_conf[0x5f] = (parallel_hds[0] != NULL ? 0x80 : 0) | 0x10;
@@ -737,7 +744,7 @@ void qemu_system_cpu_hot_add(int cpu, int state)
             return;
         }
 #ifdef USE_KVM
-        kvm_init_new_ap(cpu, env);
+        kvm_init_vcpu(env);
 #endif
     }
 

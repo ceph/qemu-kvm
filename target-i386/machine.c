@@ -141,8 +141,8 @@ void cpu_save(QEMUFile *f, void *opaque)
     qemu_put_8s(f, &env->v_tpr);
 
     if (kvm_enabled()) {
-        for (i = 0; i < NR_IRQ_WORDS ; i++) {
-            qemu_put_be32s(f, &env->kvm_interrupt_bitmap[i]);
+        for (i = 0; i < sizeof(env->interrupt_bitmap)/8 ; i++) {
+            qemu_put_be64s(f, &env->interrupt_bitmap[i]);
         }
         qemu_put_be64s(f, &env->tsc);
         qemu_put_be32s(f, &env->mp_state);
@@ -319,8 +319,8 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
         /* when in-kernel irqchip is used, env->halted causes deadlock
            because no userspace IRQs will ever clear this flag */
         env->halted = 0;
-        for (i = 0; i < NR_IRQ_WORDS ; i++) {
-            qemu_get_be32s(f, &env->kvm_interrupt_bitmap[i]);
+        for (i = 0; i < sizeof(env->interrupt_bitmap)/8; i++) {
+            qemu_get_be64s(f, &env->interrupt_bitmap[i]);
         }
         qemu_get_be64s(f, &env->tsc);
         kvm_load_registers(env);
