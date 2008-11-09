@@ -100,11 +100,7 @@ bsd="no"
 linux="no"
 solaris="no"
 kqemu="no"
-kvm="no"
-kvm_cap_pit="no"
-kvm_cap_device_assignment="no"
 profiler="no"
-kernel_path=""
 cocoa="no"
 check_gfx="yes"
 check_gcc="yes"
@@ -120,6 +116,8 @@ nptl="yes"
 mixemu="no"
 bluez="yes"
 kvm="yes"
+kvm_cap_pit="no"
+kvm_cap_device_assignment="no"
 kerneldir=""
 signalfd="no"
 eventfd="no"
@@ -320,8 +318,6 @@ for opt do
   ;;
   --disable-kqemu) kqemu="no"
   ;;
-  --disable-kvm) kvm="no"
-  ;;
   --disable-brlapi) brlapi="no"
   ;;
   --disable-bluez) bluez="no"
@@ -329,8 +325,6 @@ for opt do
   --disable-kvm) kvm="no"
   ;;
   --enable-profiler) profiler="yes"
-  ;;
-  --kernel-path=*) kernel_path="$optarg"
   ;;
   --enable-cocoa)
       cocoa="yes" ;
@@ -458,8 +452,6 @@ echo "  --target-list=LIST       set target list [$target_list]"
 echo ""
 echo "kqemu kernel acceleration support:"
 echo "  --disable-kqemu          disable kqemu support"
-echo "  --kernel-path=PATH       set the kernel path (configure probes it)"
-echo "  --disable-kvm            disable kernel virtual machine support"
 echo ""
 echo "Advanced options (experts only):"
 echo "  --source-path=PATH       path of source code [$source_path]"
@@ -786,7 +778,7 @@ cat > $TMPC <<EOF
 #endif
 int main(void) { return 0; }
 EOF
-    if $cc $ARCH_CFLAGS $CFLAGS -I"$kernel_path"/include -o $TMPE ${OS_CFLAGS} $TMPC 2> /dev/null ; then
+    if $cc $ARCH_CFLAGS $CFLAGS -I"$kerneldir"/include -o $TMPE ${OS_CFLAGS} $TMPC 2> /dev/null ; then
 	kvm_cap_pit="yes"
     fi
 
@@ -799,7 +791,7 @@ cat > $TMPC <<EOF
 #endif
 int main(void) { return 0; }
 EOF
-    if $cc $ARCH_CFLAGS $CFLAGS -I"$kernel_path"/include -o $TMPE ${OS_CFLAGS} $TMPC 2> /dev/null ; then
+    if $cc $ARCH_CFLAGS $CFLAGS -I"$kerneldir"/include -o $TMPE ${OS_CFLAGS} $TMPC 2> /dev/null ; then
 	kvm_cap_device_assignment="yes"
     fi
 fi
@@ -1586,7 +1578,7 @@ configure_kvm() {
           \( "$cpu" = "i386" -o "$cpu" = "x86_64" -o "$cpu" = "ia64" -o "$cpu" = "powerpc" \); then
     echo "#define USE_KVM 1" >> $config_h
     echo "USE_KVM=1" >> $config_mak
-    echo "CONFIG_KVM_KERNEL_INC=$kernel_path/include" >> $config_mak
+    echo "CONFIG_KVM_KERNEL_INC=$kerneldir/include" >> $config_mak
     if test $kvm_cap_pit = "yes" ; then
 	echo "USE_KVM_PIT=1" >> $config_mak
 	echo "#define USE_KVM_PIT 1" >> $config_h

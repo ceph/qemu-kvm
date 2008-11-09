@@ -123,7 +123,7 @@ fi
     --disable-gcc-check \
     --extra-cflags="-I $PWD/../libkvm $qemu_cflags" \
     --extra-ldflags="-L $PWD/../libkvm $qemu_ldflags" \
-    --kernel-path="$libkvm_kerneldir" \
+    --kerneldir="$libkvm_kerneldir" \
     --prefix="$prefix" \
     ${cross_prefix:+"--cross-prefix=$cross_prefix"} \
     ${cross_prefix:+"--cpu=$arch"} "${qemu_opts[@]}"
