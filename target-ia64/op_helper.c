@@ -37,7 +37,7 @@ CPUState *cpu_ia64_init(const char *cpu_model)
     cpu_reset(env);
     if (kvm_enabled()) {
         kvm_qemu_init_env(env);
-        kvm_init_new_ap(env->cpu_index, env);
+        kvm_init_vcpu(env);
     }
     return env;
 }

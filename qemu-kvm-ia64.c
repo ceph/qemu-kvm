@@ -106,3 +106,9 @@ void kvm_arch_cpu_reset(CPUState *env)
 	env->exception_index = EXCP_HLT;
     }
 }
+
+void kvm_arch_do_ioperm(void *_data)
+{
+    struct ioperm_data *data = _data;
+    ioperm(data->start_port, data->num, data->turn_on);
+}
