@@ -1057,8 +1057,6 @@ int qemu_kvm_unregister_coalesced_mmio(target_phys_addr_t addr,
     return kvm_unregister_coalesced_mmio(kvm_context, addr, size);
 }
 
-#include <sys/io.h>
-
 #ifdef USE_KVM_DEVICE_ASSIGNMENT
 void kvm_add_ioperm_data(struct ioperm_data *data)
 {
