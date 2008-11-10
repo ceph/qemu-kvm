@@ -174,10 +174,7 @@ static void assigned_dev_ioport_map(PCIDevice *pci_dev, int region_num,
 {
     AssignedDevice *r_dev = (AssignedDevice *) pci_dev;
     AssignedDevRegion *region = &r_dev->v_addrs[region_num];
-    uint32_t old_port = region->u.r_baseport;
-    uint32_t old_num = region->e_size;
-    int first_map = (old_num == 0);
-    struct ioperm_data data;
+    int first_map = (region->e_size == 0);
     int i;
 
     region->e_physbase = addr;
@@ -186,24 +183,25 @@ static void assigned_dev_ioport_map(PCIDevice *pci_dev, int region_num,
     DEBUG("e_phys=0x%x r_baseport=%x type=0x%x len=%d region_num=%d \n",
           addr, region->u.r_baseport, type, size, region_num);
 
-    memset(&data, 0, sizeof(data));
+    if (first_map) {
+	struct ioperm_data *data;
 
-    if (!first_map) {
-	data.start_port = old_port;
-	data.num = old_num; 
-	data.turn_on = 0;
+	data = qemu_mallocz(sizeof(struct ioperm_data));
+	if (data == NULL) {
+	    fprintf(stderr, "%s: Out of memory\n", __func__);
+	    exit(1);
+	}
+
+	data->start_port = region->u.r_baseport;
+	data->num = region->r_size;
+	data->turn_on = 1;
+
+	kvm_add_ioperm_data(data);
 
 	for (i = 0; i < smp_cpus; ++i)
-	    kvm_ioperm(qemu_kvm_cpu_env(i), &data);
+	    kvm_ioperm(qemu_kvm_cpu_env(i), data);
     }
 
-    data.start_port = region->u.r_baseport;
-    data.num = size;
-    data.turn_on = 1;
- 
-    for (i = 0; i < smp_cpus; ++i)
-	kvm_ioperm(qemu_kvm_cpu_env(i), &data);
- 
     register_ioport_read(addr, size, 1, assigned_dev_ioport_readb,
                          (r_dev->v_addrs + region_num));
     register_ioport_read(addr, size, 2, assigned_dev_ioport_readw,
@@ -350,12 +348,15 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
             continue;
         }
         /* handle port io regions */
+        pci_dev->v_addrs[i].e_physbase = cur_region->base_addr;
+        pci_dev->v_addrs[i].u.r_baseport = cur_region->base_addr;
+        pci_dev->v_addrs[i].r_size = cur_region->size;
+        pci_dev->v_addrs[i].e_size = 0;
+
         pci_register_io_region((PCIDevice *) pci_dev, i,
                                cur_region->size, PCI_ADDRESS_SPACE_IO,
                                assigned_dev_ioport_map);
 
-        pci_dev->v_addrs[i].e_physbase = cur_region->base_addr;
-        pci_dev->v_addrs[i].u.r_baseport = cur_region->base_addr;
         /* not relevant for port io */
         pci_dev->v_addrs[i].memory_index = 0;
     }

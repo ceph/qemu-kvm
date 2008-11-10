@@ -107,6 +107,7 @@ int handle_powerpc_dcr_write(int vcpu,uint32_t dcrn, uint32_t data);
 
 #ifdef USE_KVM
 #include "libkvm.h"
+#include "sys-queue.h"
 
 extern int kvm_allowed;
 extern kvm_context_t kvm_context;
@@ -115,6 +116,7 @@ struct ioperm_data {
     unsigned long start_port;
     unsigned long num;
     int turn_on;
+    LIST_ENTRY(ioperm_data) entries;
 };
 
 #define kvm_enabled() (kvm_allowed)

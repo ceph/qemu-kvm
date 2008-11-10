@@ -74,6 +74,9 @@ static int io_thread_sigfd = -1;
 
 static int kvm_debug_stop_requested;
 
+/* The list of ioperm_data */
+static LIST_HEAD(, ioperm_data) ioperm_head;
+
 static inline unsigned long kvm_get_thread_id(void)
 {
     return syscall(SYS_gettid);
@@ -441,6 +444,7 @@ static void *ap_main_loop(void *_env)
 {
     CPUState *env = _env;
     sigset_t signals;
+    struct ioperm_data *data;
 
     vcpu = &vcpu_info[env->cpu_index];
     vcpu->env = env;
@@ -449,6 +453,10 @@ static void *ap_main_loop(void *_env)
     sigprocmask(SIG_BLOCK, &signals, NULL);
     kvm_create_vcpu(kvm_context, env->cpu_index);
     kvm_qemu_init_env(env);
+
+    /* do ioperm for io ports of assigned devices */
+    LIST_FOREACH(data, &ioperm_head, entries)
+	on_vcpu(env, kvm_arch_do_ioperm, data);
 
     /* signal VCPU creation */
     pthread_mutex_lock(&qemu_mutex);
@@ -1052,6 +1060,11 @@ int qemu_kvm_unregister_coalesced_mmio(target_phys_addr_t addr,
 #include <sys/io.h>
 
 #ifdef USE_KVM_DEVICE_ASSIGNMENT
+void kvm_add_ioperm_data(struct ioperm_data *data)
+{
+    LIST_INSERT_HEAD(&ioperm_head, data, entries);
+}
+
 void kvm_ioperm(CPUState *env, void *data)
 {
     if (kvm_enabled() && qemu_system_ready)
