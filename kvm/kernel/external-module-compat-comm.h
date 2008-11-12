@@ -601,7 +601,7 @@ static inline u64 hrtimer_get_expires_ns(struct hrtimer *timer)
 
 static inline void hrtimer_start_expires(struct hrtimer *timer, int mode)
 {
-	hrtimer_start(timer, timer->expires, mode);
+	hrtimer_start_p(timer, timer->expires, mode);
 }
 
 #endif
