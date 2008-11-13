@@ -619,17 +619,16 @@ int kvm_arch_halt(void *opaque, int vcpu)
     return 1;
 }
 
-void kvm_arch_pre_kvm_run(void *opaque, int vcpu)
+void kvm_arch_pre_kvm_run(void *opaque, CPUState *env)
 {
-    CPUState *env = cpu_single_env;
-
     if (!kvm_irqchip_in_kernel(kvm_context))
-	kvm_set_cr8(kvm_context, vcpu, cpu_get_apic_tpr(env));
+	kvm_set_cr8(kvm_context, env->cpu_index, cpu_get_apic_tpr(env));
 }
 
-void kvm_arch_post_kvm_run(void *opaque, int vcpu)
+void kvm_arch_post_kvm_run(void *opaque, CPUState *env)
 {
-    CPUState *env = qemu_kvm_cpu_env(vcpu);
+    int vcpu = env->cpu_index;
+
     cpu_single_env = env;
 
     env->eflags = kvm_get_interrupt_flag(kvm_context, vcpu)

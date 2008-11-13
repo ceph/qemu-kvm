@@ -39,11 +39,11 @@ int kvm_arch_halt(void *opaque, int vcpu)
     return 1;
 }
 
-void kvm_arch_pre_kvm_run(void *opaque, int vcpu)
+void kvm_arch_pre_kvm_run(void *opaque, CPUState *env)
 {
 }
 
-void kvm_arch_post_kvm_run(void *opaque, int vcpu)
+void kvm_arch_post_kvm_run(void *opaque, CPUState *env)
 {
 }
 

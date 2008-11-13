@@ -67,6 +67,7 @@ static uint64_t memory_size = 128 * 1024 * 1024;
 static struct io_table pio_table;
 
 struct vcpu_info {
+	int id;
 	pid_t tid;
 	sem_t sipi_sem;
 };
@@ -284,18 +285,19 @@ static int test_outl(void *opaque, uint16_t addr, uint32_t value)
 	return 0;
 }
 
-static int test_debug(void *opaque, int vcpu)
+static int test_debug(void *opaque, void *vcpu)
 {
 	printf("test_debug\n");
 	return 0;
 }
 
-static int test_halt(void *opaque, int vcpu)
+static int test_halt(void *opaque, void *_vcpu)
 {
+	struct vcpu_info *vcpu = _vcpu;
 	int n;
 
 	sigwait(&ipi_sigmask, &n);
-	kvm_inject_irq(kvm, vcpu, apic_ipi_vector);
+	kvm_inject_irq(kvm, vcpu->id, apic_ipi_vector);
 	return 0;
 }
 
@@ -314,11 +316,11 @@ static int test_try_push_nmi(void *opaque)
 	return 0;
 }
 
-static void test_post_kvm_run(void *opaque, int vcpu)
+static void test_post_kvm_run(void *opaque, void *vcpu)
 {
 }
 
-static int test_pre_kvm_run(void *opaque, int vcpu)
+static int test_pre_kvm_run(void *opaque, void *vcpu)
 {
 	return 0;
 }
@@ -412,6 +414,7 @@ static void init_vcpu(int n)
 	sigaddset(&ipi_sigmask, IPI_SIGNAL);
 	sigprocmask(SIG_UNBLOCK, &ipi_sigmask, NULL);
 	sigprocmask(SIG_BLOCK, &ipi_sigmask, &kernel_sigmask);
+	vcpus[n].id = n;
 	vcpus[n].tid = gettid();
 	vcpu = n;
 	kvm_set_signal_mask(kvm, n, &kernel_sigmask);
@@ -429,7 +432,7 @@ static void *do_create_vcpu(void *_n)
 	kvm_get_regs(kvm, n, &regs);
 	regs.rip = apic_sipi_addr;
 	kvm_set_regs(kvm, n, &regs);
-	kvm_run(kvm, n);
+	kvm_run(kvm, n, &vcpus[n]);
 	return NULL;
 }
 
@@ -571,7 +574,7 @@ int main(int argc, char **argv)
 	for (i = 0; i < ncpus; ++i)
 		sem_wait(&init_sem);
 
-	kvm_run(kvm, 0);
+	kvm_run(kvm, 0, &vcpus[0]);
 
 	return 0;
 }

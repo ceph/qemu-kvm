@@ -738,9 +738,9 @@ static int handle_io(kvm_context_t kvm, struct kvm_run *run, int vcpu)
 	return 0;
 }
 
-int handle_debug(kvm_context_t kvm, int vcpu)
+int handle_debug(kvm_context_t kvm, void *env)
 {
-	return kvm->callbacks->debug(kvm->opaque, vcpu);
+	return kvm->callbacks->debug(kvm->opaque, env);
 }
 
 int kvm_get_regs(kvm_context_t kvm, int vcpu, struct kvm_regs *regs)
@@ -822,9 +822,9 @@ int handle_halt(kvm_context_t kvm, int vcpu)
 	return kvm->callbacks->halt(kvm->opaque, vcpu);
 }
 
-int handle_shutdown(kvm_context_t kvm, int vcpu)
+int handle_shutdown(kvm_context_t kvm, void *env)
 {
-	return kvm->callbacks->shutdown(kvm->opaque, vcpu);
+	return kvm->callbacks->shutdown(kvm->opaque, env);
 }
 
 int try_push_interrupts(kvm_context_t kvm)
@@ -837,14 +837,14 @@ int try_push_nmi(kvm_context_t kvm)
 	return kvm->callbacks->try_push_nmi(kvm->opaque);
 }
 
-void post_kvm_run(kvm_context_t kvm, int vcpu)
+void post_kvm_run(kvm_context_t kvm, void *env)
 {
-	kvm->callbacks->post_kvm_run(kvm->opaque, vcpu);
+	kvm->callbacks->post_kvm_run(kvm->opaque, env);
 }
 
-int pre_kvm_run(kvm_context_t kvm, int vcpu)
+int pre_kvm_run(kvm_context_t kvm, void *env)
 {
-	return kvm->callbacks->pre_kvm_run(kvm->opaque, vcpu);
+	return kvm->callbacks->pre_kvm_run(kvm->opaque, env);
 }
 
 int kvm_get_interrupt_flag(kvm_context_t kvm, int vcpu)
@@ -872,7 +872,7 @@ int kvm_is_ready_for_nmi_injection(kvm_context_t kvm, int vcpu)
 #endif
 }
 
-int kvm_run(kvm_context_t kvm, int vcpu)
+int kvm_run(kvm_context_t kvm, int vcpu, void *env)
 {
 	int r;
 	int fd = kvm->vcpu_fd[vcpu];
@@ -886,19 +886,19 @@ again:
 	if (!kvm->irqchip_in_kernel)
 		run->request_interrupt_window = try_push_interrupts(kvm);
 #endif
-	r = pre_kvm_run(kvm, vcpu);
+	r = pre_kvm_run(kvm, env);
 	if (r)
 	    return r;
 	r = ioctl(fd, KVM_RUN, 0);
 
 	if (r == -1 && errno != EINTR && errno != EAGAIN) {
 		r = -errno;
-		post_kvm_run(kvm, vcpu);
+		post_kvm_run(kvm, env);
 		fprintf(stderr, "kvm_run: %s\n", strerror(-r));
 		return r;
 	}
 
-	post_kvm_run(kvm, vcpu);
+	post_kvm_run(kvm, env);
 
 #if defined(KVM_CAP_COALESCED_MMIO)
 	if (kvm->coalesced_mmio) {
@@ -948,7 +948,7 @@ again:
 			r = handle_io(kvm, run, vcpu);
 			break;
 		case KVM_EXIT_DEBUG:
-			r = handle_debug(kvm, vcpu);
+			r = handle_debug(kvm, env);
 			break;
 		case KVM_EXIT_MMIO:
 			r = handle_mmio(kvm, run);
@@ -962,7 +962,7 @@ again:
 #endif
 			break;
 		case KVM_EXIT_SHUTDOWN:
-			r = handle_shutdown(kvm, vcpu);
+			r = handle_shutdown(kvm, env);
 			break;
 #if defined(__s390__)
 		case KVM_EXIT_S390_SIEIC:

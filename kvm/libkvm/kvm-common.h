@@ -84,11 +84,11 @@ int kvm_arch_run(struct kvm_run *run, kvm_context_t kvm, int vcpu);
 void kvm_show_code(kvm_context_t kvm, int vcpu);
 
 int handle_halt(kvm_context_t kvm, int vcpu);
-int handle_shutdown(kvm_context_t kvm, int vcpu);
-void post_kvm_run(kvm_context_t kvm, int vcpu);
-int pre_kvm_run(kvm_context_t kvm, int vcpu);
+int handle_shutdown(kvm_context_t kvm, void *env);
+void post_kvm_run(kvm_context_t kvm, void *env);
+int pre_kvm_run(kvm_context_t kvm, void *env);
 int handle_io_window(kvm_context_t kvm);
-int handle_debug(kvm_context_t kvm, int vcpu);
+int handle_debug(kvm_context_t kvm, void *env);
 int try_push_interrupts(kvm_context_t kvm);
 
 #endif

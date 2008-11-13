@@ -55,7 +55,7 @@ struct kvm_callbacks {
 	/// generic memory writes to unmapped memory (For MMIO devices)
     int (*mmio_write)(void *opaque, uint64_t addr, uint8_t *data,
 					int len);
-    int (*debug)(void *opaque, int vcpu);
+    int (*debug)(void *opaque, void *env);
 	/*!
 	 * \brief Called when the VCPU issues an 'hlt' instruction.
 	 *
@@ -63,12 +63,12 @@ struct kvm_callbacks {
 	 * on the host CPU.
 	 */
     int (*halt)(void *opaque, int vcpu);
-    int (*shutdown)(void *opaque, int vcpu);
+    int (*shutdown)(void *opaque, void *env);
     int (*io_window)(void *opaque);
     int (*try_push_interrupts)(void *opaque);
     int (*try_push_nmi)(void *opaque);
-    void (*post_kvm_run)(void *opaque, int vcpu);
-    int (*pre_kvm_run)(void *opaque, int vcpu);
+    void (*post_kvm_run)(void *opaque, void *env);
+    int (*pre_kvm_run)(void *opaque, void *env);
     int (*tpr_access)(void *opaque, int vcpu, uint64_t rip, int is_write);
 #if defined(__powerpc__)
     int (*powerpc_dcr_read)(int vcpu, uint32_t dcrn, uint32_t *data);
@@ -181,7 +181,7 @@ int kvm_create_vcpu(kvm_context_t kvm, int slot);
  * return except for when an error has occured, or when you have sent it
  * an EINTR signal.
  */
-int kvm_run(kvm_context_t kvm, int vcpu);
+int kvm_run(kvm_context_t kvm, int vcpu, void *env);
 
 /*!
  * \brief Get interrupt flag from on last exit to userspace

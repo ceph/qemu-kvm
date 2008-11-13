@@ -181,18 +181,19 @@ static int try_push_nmi(void *opaque)
     return kvm_arch_try_push_nmi(opaque);
 }
 
-static void post_kvm_run(void *opaque, int vcpu)
+static void post_kvm_run(void *opaque, void *data)
 {
+    CPUState *env = (CPUState *)data;
 
     pthread_mutex_lock(&qemu_mutex);
-    kvm_arch_post_kvm_run(opaque, vcpu);
+    kvm_arch_post_kvm_run(opaque, env);
 }
 
-static int pre_kvm_run(void *opaque, int vcpu)
+static int pre_kvm_run(void *opaque, void *data)
 {
-    CPUState *env = qemu_kvm_cpu_env(vcpu);
+    CPUState *env = (CPUState *)data;
 
-    kvm_arch_pre_kvm_run(opaque, vcpu);
+    kvm_arch_pre_kvm_run(opaque, env);
 
     if (env->interrupt_request & CPU_INTERRUPT_EXIT)
 	return 1;
@@ -230,7 +231,7 @@ int kvm_cpu_exec(CPUState *env)
 {
     int r;
 
-    r = kvm_run(kvm_context, env->cpu_index);
+    r = kvm_run(kvm_context, env->cpu_index, env);
     if (r < 0) {
         printf("kvm_run returned %d\n", r);
         exit(1);
@@ -635,10 +636,12 @@ int kvm_main_loop(void)
     return 0;
 }
 
-static int kvm_debug(void *opaque, int vcpu)
+static int kvm_debug(void *opaque, void *data)
 {
+    struct CPUState *env = (struct CPUState *)data;
+
     kvm_debug_stop_requested = 1;
-    vcpu_info[vcpu].stopped = 1;
+    vcpu_info[env->cpu_index].stopped = 1;
     return 1;
 }
 
@@ -732,7 +735,7 @@ static int kvm_halt(void *opaque, int vcpu)
     return kvm_arch_halt(opaque, vcpu);
 }
 
-static int kvm_shutdown(void *opaque, int vcpu)
+static int kvm_shutdown(void *opaque, void *data)
 {
     /* stop the current vcpu from going back to guest mode */
     vcpu_info[cpu_single_env->cpu_index].stopped = 1;

@@ -63,13 +63,13 @@ struct vcpu_info {
 
 struct vcpu_info *vcpus;
 
-static int test_debug(void *opaque, int vcpu)
+static int test_debug(void *opaque, void *vcpu)
 {
 	printf("test_debug\n");
 	return 0;
 }
 
-static int test_halt(void *opaque, int vcpu)
+static int test_halt(void *opaque, void *vcpu)
 {
 	int n;
 
@@ -92,11 +92,11 @@ static int test_try_push_nmi(void *opaque)
 	return 0;
 }
 
-static void test_post_kvm_run(void *opaque, int vcpu)
+static void test_post_kvm_run(void *opaque, void *vcpu)
 {
 }
 
-static int test_pre_kvm_run(void *opaque, int vcpu)
+static int test_pre_kvm_run(void *opaque, void *vcpu)
 {
 	return 0;
 }
@@ -244,7 +244,7 @@ static void *do_create_vcpu(void *_n)
 
 	kvm_create_vcpu(kvm, n);
 	init_vcpu(n);
-	kvm_run(kvm, n);
+	kvm_run(kvm, n, &vcpus[n]);
 	sem_post(&exited_sem);
 	return NULL;
 }

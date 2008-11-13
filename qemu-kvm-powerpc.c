@@ -142,14 +142,13 @@ int kvm_arch_halt(void *opaque, int vcpu)
     return 1;
 }
 
-void kvm_arch_pre_kvm_run(void *opaque, int vcpu)
+void kvm_arch_pre_kvm_run(void *opaque, CPUState *env)
 {
 	return;
 }
 
-void kvm_arch_post_kvm_run(void *opaque, int vcpu)
+void kvm_arch_post_kvm_run(void *opaque, CPUState *env)
 {
-    CPUState *env = qemu_kvm_cpu_env(vcpu);
     cpu_single_env = env;
 }
 
