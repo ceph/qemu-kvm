@@ -10256,6 +10256,31 @@ rom_scan_increment:
   mov  ds, ax
   ret
 
+post_init_pic:
+  mov al, #0x11 ; send initialisation commands
+  out 0x20, al
+  out 0xa0, al
+  mov al, #0x08
+  out 0x21, al
+  mov al, #0x70
+  out 0xa1, al
+  mov al, #0x04
+  out 0x21, al
+  mov al, #0x02
+  out 0xa1, al
+  mov al, #0x01
+  out 0x21, al
+  out 0xa1, al
+  mov  al, #0xb8
+  out  0x21, AL ;master pic: unmask IRQ 0, 1, 2, 6
+#if BX_USE_PS2_MOUSE
+  mov  al, #0x8f
+#else
+  mov  al, #0x9f
+#endif
+  out  0xa1, AL ;slave  pic: unmask IRQ 12, 13, 14
+  ret
+
 ;; the following area can be used to write dynamically generated tables
   .align 16
 bios_table_area_start:
@@ -10516,28 +10541,7 @@ post_default_ints:
   SET_INT_VECTOR(0x10, #0xF000, #int10_handler)
 
   ;; PIC
-  mov al, #0x11 ; send initialisation commands
-  out 0x20, al
-  out 0xa0, al
-  mov al, #0x08
-  out 0x21, al
-  mov al, #0x70
-  out 0xa1, al
-  mov al, #0x04
-  out 0x21, al
-  mov al, #0x02
-  out 0xa1, al
-  mov al, #0x01
-  out 0x21, al
-  out 0xa1, al
-  mov  al, #0xb8
-  out  0x21, AL ;master pic: unmask IRQ 0, 1, 2, 6
-#if BX_USE_PS2_MOUSE
-  mov  al, #0x8f
-#else
-  mov  al, #0x9f
-#endif
-  out  0xa1, AL ;slave  pic: unmask IRQ 12, 13, 14
+  call post_init_pic
 
   mov  cx, #0xc000  ;; init vga bios
   mov  ax, #0xc780
