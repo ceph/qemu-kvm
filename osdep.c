@@ -201,7 +201,7 @@ void *qemu_vmalloc(size_t size)
     return valloc(size);
 #else
 #ifndef __ia64__
-    return memalign(4096, size);
+    return memalign(getpagesize(), size);
 #else
     return memalign(65536, size);
 #endif
