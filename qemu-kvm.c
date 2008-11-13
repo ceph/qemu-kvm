@@ -444,7 +444,7 @@ static void *ap_main_loop(void *_env)
 {
     CPUState *env = _env;
     sigset_t signals;
-    struct ioperm_data *data;
+    struct ioperm_data *data = NULL;
 
     vcpu = &vcpu_info[env->cpu_index];
     vcpu->env = env;
@@ -454,9 +454,11 @@ static void *ap_main_loop(void *_env)
     kvm_create_vcpu(kvm_context, env->cpu_index);
     kvm_qemu_init_env(env);
 
+#ifdef USE_KVM_DEVICE_ASSIGNMENT
     /* do ioperm for io ports of assigned devices */
     LIST_FOREACH(data, &ioperm_head, entries)
 	on_vcpu(env, kvm_arch_do_ioperm, data);
+#endif
 
     /* signal VCPU creation */
     pthread_mutex_lock(&qemu_mutex);
