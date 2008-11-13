@@ -18,13 +18,16 @@
 
 /* FIXME: share this number with kvm */
 /* FIXME: or dynamically alloc/realloc regions */
-#ifndef __s390__
-#define KVM_MAX_NUM_MEM_REGIONS 32u
-#define MAX_VCPUS 16
-#else
+#ifdef __s390__
 #define KVM_MAX_NUM_MEM_REGIONS 1u
 #define MAX_VCPUS 64
 #define LIBKVM_S390_ORIGIN (0UL)
+#elif __ia64__
+#define KVM_MAX_NUM_MEM_REGIONS 32u
+#define MAX_VCPUS 256
+#else
+#define KVM_MAX_NUM_MEM_REGIONS 32u
+#define MAX_VCPUS 16
 #endif
 
 
