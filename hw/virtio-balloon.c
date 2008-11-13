@@ -87,7 +87,7 @@ static void virtio_balloon_handle_output(VirtIODevice *vdev, VirtQueue *vq)
 	    ram_addr_t pa;
 	    ram_addr_t addr;
 
-	    pa = (ram_addr_t)ldl_p(&pfn) << TARGET_PAGE_BITS;
+	    pa = (ram_addr_t)ldl_p(&pfn) << VIRTIO_BALLOON_PFN_SHIFT;
 	    offset += 4;
 
 	    addr = cpu_get_physical_page_desc(pa);
@@ -135,11 +135,11 @@ static ram_addr_t virtio_balloon_to_target(void *opaque, ram_addr_t target)
 	target = ram_size;
 
     if (target) {
-	dev->num_pages = (ram_size - target) >> TARGET_PAGE_BITS;
+	dev->num_pages = (ram_size - target) >> VIRTIO_BALLOON_PFN_SHIFT;
 	virtio_notify_config(&dev->vdev);
     }
 
-    return ram_size - (dev->actual << TARGET_PAGE_BITS);
+    return ram_size - (dev->actual << VIRTIO_BALLOON_PFN_SHIFT);
 }
 
 static void virtio_balloon_save(QEMUFile *f, void *opaque)
