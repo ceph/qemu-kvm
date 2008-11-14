@@ -28,7 +28,6 @@ int kvm_pit = 1;
 #include <sys/syscall.h>
 #include <sys/mman.h>
 
-#define bool _Bool
 #define false 0
 #define true 1
 
@@ -53,7 +52,7 @@ struct qemu_kvm_work_item {
     struct qemu_kvm_work_item *next;
     void (*func)(void *data);
     void *data;
-    bool done;
+    int done;
 };
 
 struct vcpu_info {
