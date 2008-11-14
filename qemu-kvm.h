@@ -70,8 +70,6 @@ int kvm_arch_try_push_nmi(void *opaque);
 void kvm_arch_update_regs_for_sipi(CPUState *env);
 void kvm_arch_cpu_reset(CPUState *env);
 
-CPUState *qemu_kvm_cpu_env(int index);
-
 void qemu_kvm_aio_wait_start(void);
 void qemu_kvm_aio_wait(void);
 void qemu_kvm_aio_wait_end(void);

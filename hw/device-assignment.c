@@ -175,7 +175,7 @@ static void assigned_dev_ioport_map(PCIDevice *pci_dev, int region_num,
     AssignedDevice *r_dev = (AssignedDevice *) pci_dev;
     AssignedDevRegion *region = &r_dev->v_addrs[region_num];
     int first_map = (region->e_size == 0);
-    int i;
+    CPUState *env;
 
     region->e_physbase = addr;
     region->e_size = size;
@@ -198,8 +198,8 @@ static void assigned_dev_ioport_map(PCIDevice *pci_dev, int region_num,
 
 	kvm_add_ioperm_data(data);
 
-	for (i = 0; i < smp_cpus; ++i)
-	    kvm_ioperm(qemu_kvm_cpu_env(i), data);
+	for (env = first_cpu; env; env = env->next_cpu)
+	    kvm_ioperm(env, data);
     }
 
     register_ioport_read(addr, size, 1, assigned_dev_ioport_readb,

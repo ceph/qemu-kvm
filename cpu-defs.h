@@ -27,6 +27,7 @@
 #include "config.h"
 #include <setjmp.h>
 #include <inttypes.h>
+#include <pthread.h>
 #include "osdep.h"
 
 #ifndef TARGET_LONG_BITS
@@ -145,6 +146,20 @@ typedef struct icount_decr_u16 {
 struct kvm_run;
 struct KVMState;
 
+/* forward decleration */
+struct qemu_work_item;
+
+struct KVMCPUState {
+    int sipi_needed;
+    int init;
+    pthread_t thread;
+    int signalled;
+    int stop;
+    int stopped;
+    int created;
+    struct qemu_work_item *queued_work_first, *queued_work_last;
+};
+
 #define CPU_TEMP_BUF_NLONGS 128
 #define CPU_COMMON                                                      \
     struct TranslationBlock *current_tb; /* currently executing TB  */  \
@@ -206,6 +221,7 @@ struct KVMState;
     const char *cpu_model_str;                                          \
     struct KVMState *kvm_state;                                         \
     struct kvm_run *kvm_run;                                            \
-    int kvm_fd;
+    int kvm_fd;                                                         \
+    struct KVMCPUState kvm_cpu_state;
 
 #endif

@@ -152,4 +152,12 @@ struct pcmcia_card_s;
 void cpu_save(QEMUFile *f, void *opaque);
 int cpu_load(QEMUFile *f, void *opaque, int version_id);
 
+/* work queue */
+struct qemu_work_item {
+    struct qemu_work_item *next;
+    void (*func)(void *data);
+    void *data;
+    int done;
+};
+
 #endif
