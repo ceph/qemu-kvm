@@ -1246,8 +1246,14 @@ static void ioapic_reset(void *opaque)
     int i;
 
     memset(s, 0, sizeof(*s));
+    s->base_address = IOAPIC_DEFAULT_BASE_ADDRESS;
     for(i = 0; i < IOAPIC_NUM_PINS; i++)
         s->ioredtbl[i] = 1 << 16; /* mask LVT */
+#ifdef KVM_CAP_IRQCHIP
+    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
+        kvm_kernel_ioapic_load_from_user(s);
+    }
+#endif
 }
 
 static CPUReadMemoryFunc *ioapic_mem_read[3] = {
