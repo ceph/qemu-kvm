@@ -12,4 +12,6 @@ BEGIN { split("INIT_WORK on_each_cpu smp_call_function " \
     }
 }
 
+/#include <linux\/compiler.h>/ { $0 = "" }
+
 { print }
