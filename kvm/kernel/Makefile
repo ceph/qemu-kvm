@@ -58,7 +58,10 @@ header-link:
 T = $(subst -sync,,$@)-tmp
 
 headers-old = $(LINUX)/./include/asm-$(ARCH_DIR)/kvm*.h
-headers-new = $(LINUX)/arch/$(ARCH_DIR)/include/asm/./kvm*.h
+headers-new = $(LINUX)/arch/$(ARCH_DIR)/include/asm/./kvm*.h \
+	$(LINUX)/arch/$(ARCH_DIR)/include/asm/./vmx*.h \
+	$(LINUX)/arch/$(ARCH_DIR)/include/asm/./svm*.h \
+	$(LINUX)/arch/$(ARCH_DIR)/include/asm/./virtext*.h
 
 header-sync:
 	rm -rf $T
