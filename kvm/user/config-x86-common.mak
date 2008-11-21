@@ -51,6 +51,9 @@ $(TEST_DIR)/port80.flat: $(cstart.o) $(TEST_DIR)/port80.o
 
 $(TEST_DIR)/tsc.flat: $(cstart.o) $(TEST_DIR)/tsc.o
 
+$(TEST_DIR)/apic.flat: $(cstart.o) $(TEST_DIR)/apic.o $(TEST_DIR)/vm.o \
+		       $(TEST_DIR)/print.o 
+
 $(TEST_DIR)/realmode.flat: $(TEST_DIR)/realmode.o
 	$(CC) -m32 -nostdlib -o $@ -Wl,-T,$(TEST_DIR)/realmode.lds $^
 
