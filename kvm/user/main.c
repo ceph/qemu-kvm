@@ -341,6 +341,14 @@ static int test_mem_write(void *opaque, uint64_t addr, uint8_t *data, int len)
 	return 0;
 }
 
+static int test_shutdown(void *opaque, void *env)
+{
+	printf("shutdown\n");
+	kvm_show_regs(kvm, 0);
+	exit(1);
+	return 1;
+}
+
 static struct kvm_callbacks test_callbacks = {
 	.inb         = test_inb,
 	.inw         = test_inw,
@@ -357,6 +365,7 @@ static struct kvm_callbacks test_callbacks = {
 	.try_push_nmi = test_try_push_nmi,
 	.post_kvm_run = test_post_kvm_run,
 	.pre_kvm_run = test_pre_kvm_run,
+	.shutdown = test_shutdown,
 };
 
 static void load_file(void *mem, const char *fname)
