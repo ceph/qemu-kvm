@@ -193,11 +193,17 @@ static void irq_enable(void)
     asm volatile("sti");
 }
 
+static void eoi(void)
+{
+    apic_write(APIC_EOI, 0);
+}
+
 static int ipi_count;
 
 static void self_ipi_isr(isr_regs_t *regs)
 {
     ++ipi_count;
+    eoi();
 }
 
 static void test_self_ipi(void)
