@@ -3,6 +3,7 @@
 #include "vm.h"
 
 static void *g_apic;
+static void *g_ioapic;
 
 typedef unsigned char u8;
 typedef unsigned short u16;
@@ -218,6 +219,71 @@ static void test_self_ipi(void)
     report("self ipi", ipi_count == 1);
 }
 
+static void ioapic_write_reg(unsigned reg, u32 value)
+{
+    *(volatile u32 *)g_ioapic = reg;
+    *(volatile u32 *)(g_ioapic + 0x10) = value;
+}
+
+typedef struct {
+    u8 vector;
+    u8 delivery_mode:3;
+    u8 dest_mode:1;
+    u8 delivery_status:1;
+    u8 polarity:1;
+    u8 remote_irr:1;
+    u8 trig_mode:1;
+    u8 mask:1;
+    u8 reserve:7;
+    u8 reserved[4];
+    u8 dest_id;
+} ioapic_redir_entry_t;
+
+static void ioapic_write_redir(unsigned line, ioapic_redir_entry_t e)
+{
+    ioapic_write_reg(0x10 + line * 2 + 0, ((u32 *)&e)[0]);
+    ioapic_write_reg(0x10 + line * 2 + 1, ((u32 *)&e)[1]);
+}
+
+static void set_ioapic_redir(unsigned line, unsigned vec)
+{
+    ioapic_redir_entry_t e = {
+        .vector = vec,
+        .delivery_mode = 0,
+        .trig_mode = 0,
+    };
+
+    ioapic_write_redir(line, e);
+}
+
+static void set_irq_line(unsigned line, int val)
+{
+    asm volatile("out %0, %1" : : "a"((u8)val), "d"((u16)(0x2000 + line)));
+}
+
+static void toggle_irq_line(unsigned line)
+{
+    set_irq_line(line, 1);
+    set_irq_line(line, 0);
+}
+
+static int g_isr_77;
+
+static void ioapic_isr_77(isr_regs_t *regs)
+{
+    ++g_isr_77;
+    eoi();
+}
+
+static void test_ioapic_intr(void)
+{
+    set_idt_entry(0x77, ioapic_isr_77);
+    set_ioapic_redir(0x10, 0x77);
+    toggle_irq_line(0x10);
+    asm volatile ("nop");
+    report("ioapic interrupt", g_isr_77 == 1);
+}
+
 static void enable_apic(void)
 {
     apic_write(0xf0, 0x1ff); /* spurious vector register */
@@ -228,6 +294,7 @@ int main()
     setup_vm();
 
     g_apic = vmap(0xfee00000, 0x1000);
+    g_ioapic = vmap(0xfec00000, 0x1000);
 
     test_lapic_existence();
 
@@ -235,6 +302,8 @@ int main()
     init_idt();
 
     test_self_ipi();
+
+    test_ioapic_intr();
 
     printf("\nsummary: %d tests, %d failures\n", g_tests, g_fail);
 
