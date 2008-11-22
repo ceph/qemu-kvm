@@ -2,7 +2,7 @@
  * minimal bootstrap to set up flat 32-bit protected mode
  */
 
-#include "apic.h"
+#include "fake-apic.h"
 	
 bstart = 0xf0000
 	

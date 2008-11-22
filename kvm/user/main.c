@@ -17,7 +17,7 @@
 #define _GNU_SOURCE
 
 #include <libkvm.h>
-#include "test/lib/x86/apic.h"
+#include "test/lib/x86/fake-apic.h"
 #include "test/x86/ioram.h"
 
 #include <stdio.h>
