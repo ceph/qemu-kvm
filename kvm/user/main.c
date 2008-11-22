@@ -192,6 +192,19 @@ static int misc_init(void)
 	return io_table_register(&pio_table, 0xd1, 1, misc_io, NULL);
 }
 
+#define IRQCHIP_IO_BASE 0x2000
+
+static int irqchip_io(void *opaque, int size, int is_write,
+		      uint64_t addr, uint64_t *value)
+{
+	addr -= IRQCHIP_IO_BASE;
+
+	if (is_write) {
+		kvm_set_irq_level(kvm, addr, *value);
+	}
+	return 0;
+}
+
 static int test_inb(void *opaque, uint16_t addr, uint8_t *value)
 {
 	struct io_table_entry *entry;
@@ -576,6 +589,8 @@ int main(int argc, char **argv)
 
 	apic_init();
 	misc_init();
+
+	io_table_register(&pio_table, IRQCHIP_IO_BASE, 0x20, irqchip_io, NULL);
 
 	sem_init(&init_sem, 0, 0);
 	for (i = 0; i < ncpus; ++i)
