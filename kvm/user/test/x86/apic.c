@@ -189,6 +189,11 @@ static void set_idt_entry(unsigned vec, void (*func)(isr_regs_t *regs))
     idt[vec] = ent;
 }
 
+static void irq_disable(void)
+{
+    asm volatile("cli");
+}
+
 static void irq_enable(void)
 {
     asm volatile("sti");
@@ -284,6 +289,40 @@ static void test_ioapic_intr(void)
     report("ioapic interrupt", g_isr_77 == 1);
 }
 
+static int g_78, g_66, g_66_after_78;
+static ulong g_66_rip, g_78_rip;
+
+static void ioapic_isr_78(isr_regs_t *regs)
+{
+    ++g_78;
+    g_78_rip = regs->rip;
+    eoi();
+}
+
+static void ioapic_isr_66(isr_regs_t *regs)
+{
+    ++g_66;
+    if (g_78)
+        ++g_66_after_78;
+    g_66_rip = regs->rip;
+    eoi();
+}
+
+static void test_ioapic_simultaneous(void)
+{
+    set_idt_entry(0x78, ioapic_isr_78);
+    set_idt_entry(0x66, ioapic_isr_66);
+    set_ioapic_redir(0x10, 0x78);
+    set_ioapic_redir(0x11, 0x66);
+    irq_disable();
+    toggle_irq_line(0x11);
+    toggle_irq_line(0x10);
+    irq_enable();
+    asm volatile ("nop");
+    report("ioapic simultaneous interrupt",
+           g_66 && g_78 && g_66_after_78 && g_66_rip == g_78_rip);
+}
+
 static void enable_apic(void)
 {
     apic_write(0xf0, 0x1ff); /* spurious vector register */
@@ -304,6 +343,7 @@ int main()
     test_self_ipi();
 
     test_ioapic_intr();
+    test_ioapic_simultaneous();
 
     printf("\nsummary: %d tests, %d failures\n", g_tests, g_fail);
 
