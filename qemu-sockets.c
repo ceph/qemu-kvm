@@ -1,3 +1,17 @@
+/*
+ *  inet and unix socket functions for qemu
+ *
+ *  (c) 2008 Gerd Hoffmann <kraxel@redhat.com>
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; under version 2 of the License.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,6 +20,7 @@
 #include <unistd.h>
 
 #include "qemu_socket.h"
+#include "qemu-common.h" /* for qemu_isdigit */
 
 #ifndef AI_ADDRCONFIG
 # define AI_ADDRCONFIG 0
@@ -106,7 +121,7 @@ int inet_listen(const char *str, char *ostr, int olen,
             return -1;
         }
         ai.ai_family = PF_INET6;
-    } else if (isdigit(str[0])) {
+    } else if (qemu_isdigit(str[0])) {
         /* IPv4 addr */
         if (2 != sscanf(str,"%64[0-9.]:%32[^,]%n",addr,port,&pos)) {
             fprintf(stderr, "%s: ipv4 parse error (%s)\n",
@@ -230,7 +245,7 @@ int inet_connect(const char *str, int socktype)
             return -1;
         }
         ai.ai_family = PF_INET6;
-    } else if (isdigit(str[0])) {
+    } else if (qemu_isdigit(str[0])) {
         /* IPv4 addr */
         if (2 != sscanf(str,"%64[0-9.]:%32[^,]",addr,port)) {
             fprintf(stderr, "%s: ipv4 parse error (%s)\n",

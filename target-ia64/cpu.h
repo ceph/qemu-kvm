@@ -73,4 +73,12 @@ void flush_icache_range(unsigned long start, unsigned long stop);
 void tcg_dump_info(FILE *f,
                    int (*cpu_fprintf)(FILE *f, const char *fmt, ...));
 
+static inline void cpu_get_tb_cpu_state(CPUState *env, target_ulong *pc,
+                                        target_ulong *cs_base, int *flags)
+{
+    *pc = 0;
+    *cs_base = 0;
+    *flags = 0;
+}
+
 #endif

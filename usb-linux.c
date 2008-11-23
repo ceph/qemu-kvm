@@ -36,6 +36,7 @@
 
 #if defined(__linux__)
 #define __user
+#endif
 
 #include <dirent.h>
 #include <sys/ioctl.h>
@@ -1050,7 +1051,7 @@ static int get_tag_value(char *buf, int buf_size,
     if (!p)
         return -1;
     p += strlen(tag);
-    while (isspace(*p))
+    while (qemu_isspace(*p))
         p++;
     q = buf;
     while (*p != '\0' && !strchr(stopchars, *p)) {
@@ -1699,25 +1700,3 @@ void usb_host_info(void)
     	term_printf("    Device %s.%s ID %s:%s\n", bus, addr, vid, pid);
     }
 }
-
-#else
-
-#include "hw/usb.h"
-
-void usb_host_info(void)
-{
-    term_printf("USB host devices not supported\n");
-}
-
-/* XXX: modify configure to compile the right host driver */
-USBDevice *usb_host_device_open(const char *devname)
-{
-    return NULL;
-}
-
-int usb_host_device_close(const char *devname)
-{
-    return 0;
-}
-
-#endif

@@ -869,16 +869,19 @@ void kvm_invoke_guest_debug(void *data)
 int kvm_update_debugger(CPUState *env)
 {
     struct kvm_guest_debug_data data;
+    CPUBreakpoint *bp;
     int i;
 
     memset(data.dbg.breakpoints, 0, sizeof(data.dbg.breakpoints));
 
     data.dbg.enabled = 0;
-    if (env->nb_breakpoints || env->singlestep_enabled) {
+    if (env->breakpoints || env->singlestep_enabled) {
+        bp = env->breakpoints;
 	data.dbg.enabled = 1;
-	for (i = 0; i < 4 && i < env->nb_breakpoints; ++i) {
+	for (i = 0; i < 4 && bp; ++i) {
 	    data.dbg.breakpoints[i].enabled = 1;
-	    data.dbg.breakpoints[i].address = env->breakpoints[i];
+	    data.dbg.breakpoints[i].address = bp->pc;
+            bp = bp->next;
 	}
 	data.dbg.singlestep = env->singlestep_enabled;
     }

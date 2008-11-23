@@ -89,9 +89,12 @@ typedef struct E1000State_st {
     int check_rxov;
     struct e1000_tx {
         unsigned char header[256];
+        unsigned char vlan_header[4];
+        unsigned char vlan[4];
         unsigned char data[0x10000];
         uint16_t size;
         unsigned char sum_needed;
+        unsigned char vlan_needed;
         uint8_t ipcss;
         uint8_t ipcso;
         uint16_t ipcse;
@@ -128,7 +131,8 @@ enum {
     defreg(TDBAL),	defreg(TDH),	defreg(TDLEN),	defreg(TDT),
     defreg(TORH),	defreg(TORL),	defreg(TOTH),	defreg(TOTL),
     defreg(TPR),	defreg(TPT),	defreg(TXDCTL),	defreg(WUFC),
-    defreg(RA),		defreg(MTA),	defreg(CRCERRS),
+    defreg(RA),		defreg(MTA),	defreg(CRCERRS),defreg(VFTA),
+    defreg(VET),
 };
 
 enum { PHY_R = 1, PHY_W = 2, PHY_RW = PHY_R | PHY_W };
@@ -294,6 +298,31 @@ putsum(uint8_t *data, uint32_t n, uint32_t sloc, uint32_t css, uint32_t cse)
     }
 }
 
+static inline int
+vlan_enabled(E1000State *s)
+{
+    return ((s->mac_reg[CTRL] & E1000_CTRL_VME) != 0);
+}
+
+static inline int
+vlan_rx_filter_enabled(E1000State *s)
+{
+    return ((s->mac_reg[RCTL] & E1000_RCTL_VFE) != 0);
+}
+
+static inline int
+is_vlan_packet(E1000State *s, const uint8_t *buf)
+{
+    return (be16_to_cpup((uint16_t *)(buf + 12)) ==
+                le16_to_cpup((uint16_t *)(s->mac_reg + VET)));
+}
+
+static inline int
+is_vlan_txd(uint32_t txd_lower)
+{
+    return ((txd_lower & E1000_TXD_CMD_VLE) != 0);
+}
+
 static void
 xmit_seg(E1000State *s)
 {
@@ -336,7 +365,12 @@ xmit_seg(E1000State *s)
         putsum(tp->data, tp->size, tp->tucso, tp->tucss, tp->tucse);
     if (tp->sum_needed & E1000_TXD_POPTS_IXSM)
         putsum(tp->data, tp->size, tp->ipcso, tp->ipcss, tp->ipcse);
-    qemu_send_packet(s->vc, tp->data, tp->size);
+    if (tp->vlan_needed) {
+        memmove(tp->vlan, tp->data, 12);
+        memcpy(tp->data + 8, tp->vlan_header, 4);
+        qemu_send_packet(s->vc, tp->vlan, tp->size + 4);
+    } else
+        qemu_send_packet(s->vc, tp->data, tp->size);
     s->mac_reg[TPT]++;
     s->mac_reg[GPTC]++;
     n = s->mac_reg[TOTL];
@@ -383,6 +417,15 @@ process_tx_desc(E1000State *s, struct e1000_tx_desc *dp)
         // legacy descriptor
         tp->cptse = 0;
 
+    if (vlan_enabled(s) && is_vlan_txd(txd_lower) &&
+        (tp->cptse || txd_lower & E1000_TXD_CMD_EOP)) {
+        tp->vlan_needed = 1;
+        cpu_to_be16wu((uint16_t *)(tp->vlan_header),
+                      le16_to_cpup((uint16_t *)(s->mac_reg + VET)));
+        cpu_to_be16wu((uint16_t *)(tp->vlan_header + 2),
+                      le16_to_cpu(dp->upper.fields.special));
+    }
+        
     addr = le64_to_cpu(dp->buffer_addr);
     if (tp->tse && tp->cptse) {
         hdr = tp->hdr_len;
@@ -416,6 +459,7 @@ process_tx_desc(E1000State *s, struct e1000_tx_desc *dp)
         xmit_seg(s);
     tp->tso_frames = 0;
     tp->sum_needed = 0;
+    tp->vlan_needed = 0;
     tp->size = 0;
     tp->cptse = 0;
 }
@@ -482,6 +526,14 @@ receive_filter(E1000State *s, const uint8_t *buf, int size)
     static int mta_shift[] = {4, 3, 2, 0};
     uint32_t f, rctl = s->mac_reg[RCTL], ra[2], *rp;
 
+    if (is_vlan_packet(s, buf) && vlan_rx_filter_enabled(s)) {
+        uint16_t vid = be16_to_cpup((uint16_t *)(buf + 14));
+        uint32_t vfta = le32_to_cpup((uint32_t *)(s->mac_reg + VFTA) +
+                                     ((vid >> 5) & 0x7f));
+        if ((vfta & (1 << (vid & 0x1f))) == 0)
+            return 0;
+    }
+
     if (rctl & E1000_RCTL_UPE)			// promiscuous
         return 1;
 
@@ -536,6 +588,8 @@ e1000_receive(void *opaque, const uint8_t *buf, int size)
     target_phys_addr_t base;
     unsigned int n, rdt;
     uint32_t rdh_start;
+    uint16_t vlan_special = 0;
+    uint8_t vlan_status = 0, vlan_offset = 0;
 
     if (!(s->mac_reg[RCTL] & E1000_RCTL_EN))
         return;
@@ -549,6 +603,14 @@ e1000_receive(void *opaque, const uint8_t *buf, int size)
     if (!receive_filter(s, buf, size))
         return;
 
+    if (vlan_enabled(s) && is_vlan_packet(s, buf)) {
+        vlan_special = cpu_to_le16(be16_to_cpup((uint16_t *)(buf + 14)));
+        memmove((void *)(buf + 4), buf, 12);
+        vlan_status = E1000_RXD_STAT_VP;
+        vlan_offset = 4;
+        size -= 4;
+    }
+
     rdh_start = s->mac_reg[RDH];
     size += 4; // for the header
     do {
@@ -559,10 +621,11 @@ e1000_receive(void *opaque, const uint8_t *buf, int size)
         base = ((uint64_t)s->mac_reg[RDBAH] << 32) + s->mac_reg[RDBAL] +
                sizeof(desc) * s->mac_reg[RDH];
         cpu_physical_memory_read(base, (void *)&desc, sizeof(desc));
-        desc.status |= E1000_RXD_STAT_DD;
+        desc.special = vlan_special;
+        desc.status |= (vlan_status | E1000_RXD_STAT_DD);
         if (desc.buffer_addr) {
             cpu_physical_memory_write(le64_to_cpu(desc.buffer_addr),
-                                      (void *)buf, size);
+                                      (void *)(buf + vlan_offset), size);
             desc.length = cpu_to_le16(size);
             desc.status |= E1000_RXD_STAT_EOP|E1000_RXD_STAT_IXSM;
         } else // as per intel docs; skip descriptors with null buf addr
@@ -692,7 +755,7 @@ static uint32_t (*macreg_readops[])(E1000State *, int) = {
     getreg(WUFC),	getreg(TDT),	getreg(CTRL),	getreg(LEDCTL),
     getreg(MANC),	getreg(MDIC),	getreg(SWSM),	getreg(STATUS),
     getreg(TORL),	getreg(TOTL),	getreg(IMS),	getreg(TCTL),
-    getreg(RDH),	getreg(RDT),
+    getreg(RDH),	getreg(RDT),	getreg(VET),
 
     [TOTH] = mac_read_clr8,	[TORH] = mac_read_clr8,	[GPRC] = mac_read_clr4,
     [GPTC] = mac_read_clr4,	[TPR] = mac_read_clr4,	[TPT] = mac_read_clr4,
@@ -700,6 +763,7 @@ static uint32_t (*macreg_readops[])(E1000State *, int) = {
     [CRCERRS ... MPC] = &mac_readreg,
     [RA ... RA+31] = &mac_readreg,
     [MTA ... MTA+127] = &mac_readreg,
+    [VFTA ... VFTA+127] = &mac_readreg,
 };
 enum { NREADOPS = sizeof(macreg_readops) / sizeof(*macreg_readops) };
 
@@ -707,7 +771,7 @@ enum { NREADOPS = sizeof(macreg_readops) / sizeof(*macreg_readops) };
 static void (*macreg_writeops[])(E1000State *, int, uint32_t) = {
     putreg(PBA),	putreg(EERD),	putreg(SWSM),	putreg(WUFC),
     putreg(TDBAL),	putreg(TDBAH),	putreg(TXDCTL),	putreg(RDBAH),
-    putreg(RDBAL),	putreg(LEDCTL),
+    putreg(RDBAL),	putreg(LEDCTL), putreg(CTRL),	putreg(VET),
     [TDLEN] = set_dlen,	[RDLEN] = set_dlen,	[TCTL] = set_tctl,
     [TDT] = set_tctl,	[MDIC] = set_mdic,	[ICS] = set_ics,
     [TDH] = set_16bit,	[RDH] = set_16bit,	[RDT] = set_rdt,
@@ -715,6 +779,7 @@ static void (*macreg_writeops[])(E1000State *, int, uint32_t) = {
     [EECD] = set_eecd,	[RCTL] = set_rx_control,
     [RA ... RA+31] = &mac_writereg,
     [MTA ... MTA+127] = &mac_writereg,
+    [VFTA ... VFTA+127] = &mac_writereg,
 };
 enum { NWRITEOPS = sizeof(macreg_writeops) / sizeof(*macreg_writeops) };
 
@@ -789,13 +854,14 @@ static const int mac_regtosave[] = {
     LEDCTL,	MANC,	MDIC,	MPC,	PBA,	RCTL,	RDBAH,	RDBAL,	RDH,
     RDLEN,	RDT,	STATUS,	SWSM,	TCTL,	TDBAH,	TDBAL,	TDH,	TDLEN,
     TDT,	TORH,	TORL,	TOTH,	TOTL,	TPR,	TPT,	TXDCTL,	WUFC,
+    VET,
 };
 enum { MAC_NSAVE = sizeof mac_regtosave/sizeof *mac_regtosave };
 
 static const struct {
     int size;
     int array0;
-} mac_regarraystosave[] = { {32, RA}, {128, MTA} };
+} mac_regarraystosave[] = { {32, RA}, {128, MTA}, {128, VFTA} };
 enum { MAC_NARRAYS = sizeof mac_regarraystosave/sizeof *mac_regarraystosave };
 
 static void
