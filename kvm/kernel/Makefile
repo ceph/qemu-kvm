@@ -71,7 +71,7 @@ header-sync:
              $T/
 	$(if $(wildcard $(headers-new)), \
 	rsync -R \
-	     $(headers-new) \
+	     $(wildcard $(headers-new)) \
              $T/include/asm-$(ARCH_DIR)/)
 
 	for i in $$(find $T -name '*.h'); do \
