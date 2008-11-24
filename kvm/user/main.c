@@ -304,13 +304,12 @@ static int test_debug(void *opaque, void *vcpu)
 	return 0;
 }
 
-static int test_halt(void *opaque, void *_vcpu)
+static int test_halt(void *opaque, int vcpu)
 {
-	struct vcpu_info *vcpu = _vcpu;
 	int n;
 
 	sigwait(&ipi_sigmask, &n);
-	kvm_inject_irq(kvm, vcpu->id, apic_ipi_vector);
+	kvm_inject_irq(kvm, vcpus[vcpu].id, apic_ipi_vector);
 	return 0;
 }
 
