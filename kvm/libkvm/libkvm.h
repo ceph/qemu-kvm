@@ -66,7 +66,7 @@ struct kvm_callbacks {
     int (*shutdown)(void *opaque, void *env);
     int (*io_window)(void *opaque);
     int (*try_push_interrupts)(void *opaque);
-    int (*try_push_nmi)(void *opaque);
+    void (*push_nmi)(void *opaque);
     void (*post_kvm_run)(void *opaque, void *env);
     int (*pre_kvm_run)(void *opaque, void *env);
     int (*tpr_access)(void *opaque, int vcpu, uint64_t rip, int is_write);
@@ -215,17 +215,6 @@ uint64_t kvm_get_apic_base(kvm_context_t kvm, int vcpu);
  * \return boolean indicating interrupt injection readiness
  */
 int kvm_is_ready_for_interrupt_injection(kvm_context_t kvm, int vcpu);
-
-/*!
- * \brief Check if a vcpu is ready for NMI injection
- *
- * This checks if vcpu is not already running in NMI context.
- *
- * \param kvm Pointer to the current kvm_context
- * \param vcpu Which virtual CPU should get dumped
- * \return boolean indicating NMI injection readiness
- */
-int kvm_is_ready_for_nmi_injection(kvm_context_t kvm, int vcpu);
 
 /*!
  * \brief Read VCPU registers

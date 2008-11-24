@@ -667,22 +667,18 @@ int kvm_arch_try_push_interrupts(void *opaque)
     return (env->interrupt_request & CPU_INTERRUPT_HARD) != 0;
 }
 
-int kvm_arch_try_push_nmi(void *opaque)
+void kvm_arch_push_nmi(void *opaque)
 {
     CPUState *env = cpu_single_env;
     int r;
 
     if (likely(!(env->interrupt_request & CPU_INTERRUPT_NMI)))
-        return 0;
+        return;
 
-    if (kvm_is_ready_for_nmi_injection(kvm_context, env->cpu_index)) {
-        env->interrupt_request &= ~CPU_INTERRUPT_NMI;
-        r = kvm_inject_nmi(kvm_context, env->cpu_index);
-        if (r < 0)
-            printf("cpu %d fail inject NMI\n", env->cpu_index);
-    }
-
-    return (env->interrupt_request & CPU_INTERRUPT_NMI) != 0;
+    env->interrupt_request &= ~CPU_INTERRUPT_NMI;
+    r = kvm_inject_nmi(kvm_context, env->cpu_index);
+    if (r < 0)
+        printf("cpu %d fail inject NMI\n", env->cpu_index);
 }
 
 void kvm_arch_update_regs_for_sipi(CPUState *env)
