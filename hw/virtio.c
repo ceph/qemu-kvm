@@ -107,6 +107,21 @@ static void virtqueue_init(VirtQueue *vq, void *p)
     vq->vring.used = (void *)TARGET_PAGE_ALIGN((unsigned long)&vq->vring.avail->ring[vq->vring.num]);
 }
 
+void virtqueue_push(VirtQueue *vq, const VirtQueueElement *elem,
+		    unsigned int len)
+{
+    VRingUsedElem *used;
+
+    /* Get a pointer to the next entry in the used ring. */
+    used = &vq->vring.used->ring[vq->vring.used->idx % vq->vring.num];
+    used->id = elem->index;
+    used->len = len;
+    /* Make sure buffer is written before we update index. */
+    wmb();
+    vq->vring.used->idx++;
+    vq->inuse--;
+}
+
 static unsigned virtqueue_next_desc(VirtQueue *vq, unsigned int i)
 {
     unsigned int next;
@@ -124,21 +139,6 @@ static unsigned virtqueue_next_desc(VirtQueue *vq, unsigned int i)
 	errx(1, "Desc next is %u", next);
 
     return next;
-}
-
-void virtqueue_push(VirtQueue *vq, const VirtQueueElement *elem,
-		    unsigned int len)
-{
-    VRingUsedElem *used;
-
-    /* Get a pointer to the next entry in the used ring. */
-    used = &vq->vring.used->ring[vq->vring.used->idx % vq->vring.num];
-    used->id = elem->index;
-    used->len = len;
-    /* Make sure buffer is written before we update index. */
-    wmb();
-    vq->vring.used->idx++;
-    vq->inuse--;
 }
 
 int virtqueue_pop(VirtQueue *vq, VirtQueueElement *elem)
