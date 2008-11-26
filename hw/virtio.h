@@ -144,6 +144,7 @@ void virtqueue_fill(VirtQueue *vq, const VirtQueueElement *elem,
 		    unsigned int len, unsigned int idx);
 
 int virtqueue_pop(VirtQueue *vq, VirtQueueElement *elem);
+int virtqueue_avail_bytes(VirtQueue *vq, int in_bytes, int out_bytes);
 
 void virtio_notify(VirtIODevice *vdev, VirtQueue *vq);
 

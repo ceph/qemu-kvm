@@ -181,6 +181,38 @@ static unsigned virtqueue_next_desc(VirtQueue *vq, unsigned int i)
     return next;
 }
 
+int virtqueue_avail_bytes(VirtQueue *vq, int in_bytes, int out_bytes)
+{
+    unsigned int idx;
+    int num_bufs, in_total, out_total;
+
+    idx = vq->last_avail_idx;
+
+    num_bufs = in_total = out_total = 0;
+    while (virtqueue_num_heads(vq, idx)) {
+	int i;
+
+	i = virtqueue_get_head(vq, idx++);
+	do {
+	    /* If we've got too many, that implies a descriptor loop. */
+	    if (++num_bufs > vq->vring.num)
+		errx(1, "Looped descriptor");
+
+	    if (vq->vring.desc[i].flags & VRING_DESC_F_WRITE) {
+		if (in_bytes > 0 &&
+		    (in_total += vq->vring.desc[i].len) >= in_bytes)
+		    return 1;
+	    } else {
+		if (out_bytes > 0 &&
+		    (out_total += vq->vring.desc[i].len) >= out_bytes)
+		    return 1;
+	    }
+	} while ((i = virtqueue_next_desc(vq, i)) != vq->vring.num);
+    }
+
+    return 0;
+}
+
 int virtqueue_pop(VirtQueue *vq, VirtQueueElement *elem)
 {
     unsigned int i, head;
