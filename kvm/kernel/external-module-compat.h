@@ -50,6 +50,15 @@ int kvm_smp_call_function_single(int cpu, void (*func)(void *info),
 
 #define smp_call_function_single kvm_smp_call_function_single
 
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
+
+#define smp_call_function_single smp_call_function_single
+
+#else
+
+#define smp_call_function_single(cpu, func, info, nonatomic, wait) \
+	smp_call_function_single(cpu, func, info, wait)
+
 #endif
 
 /* on_each_cpu() lost an argument in 2.6.27. */
