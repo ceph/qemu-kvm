@@ -135,6 +135,33 @@ void virtqueue_push(VirtQueue *vq, const VirtQueueElement *elem,
     virtqueue_flush(vq, 1);
 }
 
+static int virtqueue_num_heads(VirtQueue *vq, unsigned int idx)
+{
+    uint16_t num_heads = vq->vring.avail->idx - idx;
+
+    /* Check it isn't doing very strange things with descriptor numbers. */
+    if (num_heads > vq->vring.num)
+	errx(1, "Guest moved used index from %u to %u",
+	     idx, vq->vring.avail->idx);
+
+    return num_heads;
+}
+
+static unsigned int virtqueue_get_head(VirtQueue *vq, unsigned int idx)
+{
+    unsigned int head;
+
+    /* Grab the next descriptor number they're advertising, and increment
+     * the index we've seen. */
+    head = vq->vring.avail->ring[idx % vq->vring.num];
+
+    /* If their number is silly, that's a fatal mistake. */
+    if (head >= vq->vring.num)
+	errx(1, "Guest says index %u is available", head);
+
+    return head;
+}
+
 static unsigned virtqueue_next_desc(VirtQueue *vq, unsigned int i)
 {
     unsigned int next;
@@ -158,27 +185,13 @@ int virtqueue_pop(VirtQueue *vq, VirtQueueElement *elem)
 {
     unsigned int i, head;
 
-    /* Check it isn't doing very strange things with descriptor numbers. */
-    if ((uint16_t)(vq->vring.avail->idx - vq->last_avail_idx) > vq->vring.num)
-	errx(1, "Guest moved used index from %u to %u",
-	     vq->last_avail_idx, vq->vring.avail->idx);
-
-    /* If there's nothing new since last we looked, return invalid. */
-    if (vq->vring.avail->idx == vq->last_avail_idx)
+    if (!virtqueue_num_heads(vq, vq->last_avail_idx))
 	return 0;
-
-    /* Grab the next descriptor number they're advertising, and increment
-     * the index we've seen. */
-    head = vq->vring.avail->ring[vq->last_avail_idx++ % vq->vring.num];
-
-    /* If their number is silly, that's a fatal mistake. */
-    if (head >= vq->vring.num)
-	errx(1, "Guest says index %u is available", head);
 
     /* When we start there are none of either input nor output. */
     elem->out_num = elem->in_num = 0;
 
-    i = head;
+    i = head = virtqueue_get_head(vq, vq->last_avail_idx++);
     do {
 	struct iovec *sg;
 
