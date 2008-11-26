@@ -182,12 +182,27 @@ static void work_around_broken_dhclient(struct virtio_net_hdr *hdr,
     }
 }
 
+static int iov_fill(struct iovec *iov, int iovcnt, const void *buf, int count)
+{
+    int offset, i;
+
+    offset = i = 0;
+    while (offset < count && i < iovcnt) {
+	int len = MIN(iov[i].iov_len, count - offset);
+	memcpy(iov[i].iov_base, buf + offset, len);
+	offset += len;
+	i++;
+    }
+
+    return offset;
+}
+
 static void virtio_net_receive(void *opaque, const uint8_t *buf, int size)
 {
     VirtIONet *n = opaque;
     VirtQueueElement elem;
     struct virtio_net_hdr *hdr;
-    int offset, i;
+    int offset;
     int total;
 
     if (virtqueue_pop(n->rx_vq, &elem) == 0)
@@ -212,14 +227,8 @@ static void virtio_net_receive(void *opaque, const uint8_t *buf, int size)
     }
 
     /* copy in packet.  ugh */
-    i = 1;
-    while (offset < size && i < elem.in_num) {
-	int len = MIN(elem.in_sg[i].iov_len, size - offset);
-	memcpy(elem.in_sg[i].iov_base, buf + offset, len);
-	offset += len;
-	total += len;
-	i++;
-    }
+    total += iov_fill(&elem.in_sg[1], elem.in_num - 1,
+                      buf + offset, size - offset);
 
     /* signal other side */
     virtqueue_push(n->rx_vq, &elem, total);
