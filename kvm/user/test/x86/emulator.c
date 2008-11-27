@@ -130,6 +130,21 @@ void test_push(void *mem)
 	report("push $imm", stack_top[-4] == -7070707);
 }
 
+void test_pop(void *mem)
+{
+	unsigned long tmp;
+	unsigned long *stack_top = mem + 4096;
+	unsigned long *new_stack_top;
+	unsigned long memw = 0x123456789abcdeful;
+
+	memset(mem, 0x55, (void *)stack_top - mem);
+
+	asm volatile("pushq %[val] \n\t"
+		     "popq (%[mem])"
+		     : : [val]"m"(memw), [mem]"r"(mem) : "memory");
+	report("pop mem", *(unsigned long *)mem == memw);
+}
+
 unsigned long read_cr0(void)
 {
 	unsigned long cr0;
@@ -199,6 +214,7 @@ int main()
 	test_cmps(mem);
 
 	test_push(mem);
+	test_pop(mem);
 
 	test_cr8();
 
