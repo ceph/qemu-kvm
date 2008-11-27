@@ -167,6 +167,15 @@ void test_pop(void *mem)
 		     : "memory");
 	report("pop reg", tmp2 == memw);
 
+	asm volatile("mov %%rsp, %[tmp] \n\t"
+		     "mov %[stack_top], %%rsp \n\t"
+		     "push $1f \n\t"
+		     "ret \n\t"
+		     "2: jmp 2b \n\t"
+		     "1: mov %[tmp], %%rsp"
+		     : [tmp]"=&r"(tmp) : [stack_top]"r"(stack_top)
+		     : "memory");
+	report("ret", 1);
 }
 
 unsigned long read_cr0(void)
