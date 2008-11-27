@@ -136,6 +136,7 @@ void test_pop(void *mem)
 	unsigned long *stack_top = mem + 4096;
 	unsigned long *new_stack_top;
 	unsigned long memw = 0x123456789abcdeful;
+	static unsigned long tmp2;
 
 	memset(mem, 0x55, (void *)stack_top - mem);
 
@@ -143,6 +144,18 @@ void test_pop(void *mem)
 		     "popq (%[mem])"
 		     : : [val]"m"(memw), [mem]"r"(mem) : "memory");
 	report("pop mem", *(unsigned long *)mem == memw);
+
+	memw = 7 - memw;
+	asm volatile("mov %%rsp, %[tmp] \n\t"
+		     "mov %[stack_top], %%rsp \n\t"
+		     "pushq %[val] \n\t"
+		     "popq %[tmp2] \n\t"
+		     "mov %[tmp], %%rsp"
+		     : [tmp]"=&r"(tmp), [tmp2]"=m"(tmp2)
+		     : [val]"r"(memw), [stack_top]"r"(stack_top)
+		     : "memory");
+	report("pop mem (2)", tmp2 == memw);
+
 }
 
 unsigned long read_cr0(void)
