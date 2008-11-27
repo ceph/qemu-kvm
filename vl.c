@@ -3862,10 +3862,12 @@ static int main_loop(void)
 		qemu_system_powerdown();
                 ret = EXCP_INTERRUPT;
             }
+#ifdef CONFIG_GDBSTUB
             if (unlikely(ret == EXCP_DEBUG)) {
                 gdb_set_stop_cpu(cur_cpu);
                 vm_stop(EXCP_DEBUG);
             }
+#endif
             /* If all cpus are halted then wait until the next IRQ */
             /* XXX: use timeout computed from timers */
             if (ret == EXCP_HALTED) {
