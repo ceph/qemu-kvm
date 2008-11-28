@@ -620,6 +620,7 @@ void add_assigned_devices(PCIBus *bus, const char **devices, int n_devices)
         if (!adev) {
             fprintf(stderr, "Could not add assigned device %s\n", devices[i]);
             continue;
+            exit(1);
         }
 
         if (!init_assigned_device(adev, bus)) {
