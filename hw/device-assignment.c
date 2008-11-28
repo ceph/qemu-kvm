@@ -550,8 +550,11 @@ struct PCIDevice *init_assigned_device(AssignedDevInfo *adev, PCIBus *bus)
     }
 
     adev->assigned_dev = dev;
-  out:
     return &dev->dev;
+
+out:
+    pci_unregister_device(&dev->dev);
+    return NULL;
 }
 
 /*
