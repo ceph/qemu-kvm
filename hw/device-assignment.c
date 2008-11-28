@@ -549,17 +549,19 @@ struct PCIDevice *init_assigned_device(AssignedDevInfo *adev, PCIBus *bus)
         return NULL;
     }
 
+    adev->assigned_dev = dev;
+
     if (get_real_device(dev, adev->bus, adev->dev, adev->func)) {
         fprintf(stderr, "%s: Error: Couldn't get real device (%s)!\n",
                 __func__, adev->name);
-        goto out;
+        return NULL;
     }
 
     /* handle real device's MMIO/PIO BARs */
     if (assigned_dev_register_regions(dev->real_device.regions,
                                       dev->real_device.region_number,
                                       dev))
-        goto out;
+        return NULL;
 
     /* handle interrupt routing */
     e_device = (dev->dev.devfn >> 3) & 0x1f;
@@ -589,15 +591,10 @@ struct PCIDevice *init_assigned_device(AssignedDevInfo *adev, PCIBus *bus)
     if (r < 0) {
 	fprintf(stderr, "Failed to assign device \"%s\" : %s\n",
                 adev->name, strerror(-r));
-	goto out;
+	return NULL;
     }
 
-    adev->assigned_dev = dev;
     return &dev->dev;
-
-out:
-    pci_unregister_device(&dev->dev);
-    return NULL;
 }
 
 /*
