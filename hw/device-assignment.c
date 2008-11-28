@@ -540,12 +540,11 @@ struct PCIDevice *init_assigned_device(AssignedDevInfo *adev, PCIBus *bus)
     if (r && !adev->disable_iommu)
 	assigned_dev_data.flags |= KVM_DEV_ASSIGN_ENABLE_IOMMU;
 #endif
-      
+
     r = kvm_assign_pci_device(kvm_context, &assigned_dev_data);
     if (r < 0) {
-	fprintf(stderr, "Could not notify kernel about "
-                "assigned device \"%s\"\n", adev->name);
-	perror("register_real_device");
+	fprintf(stderr, "Failed to assign device \"%s\" : %s\n",
+                adev->name, strerror(-r));
 	goto out;
     }
 
