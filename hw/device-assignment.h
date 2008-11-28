@@ -94,6 +94,7 @@ struct AssignedDevInfo {
     int disable_iommu;
 };
 
+void free_assigned_device(AssignedDevInfo *adev);
 PCIDevice *init_assigned_device(AssignedDevInfo *adev, PCIBus *bus);
 AssignedDevInfo *add_assigned_device(const char *arg);
 void add_assigned_devices(PCIBus *bus, const char **devices, int n_devices);

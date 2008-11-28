@@ -439,6 +439,19 @@ again:
 
 static LIST_HEAD(, AssignedDevInfo) adev_head;
 
+void free_assigned_device(AssignedDevInfo *adev)
+{
+    AssignedDevice *dev = adev->assigned_dev;
+
+    if (dev) {
+        pci_unregister_device(&dev->dev);
+        adev->assigned_dev = dev = NULL;
+    }
+
+    LIST_REMOVE(adev, next);
+    qemu_free(adev);
+}
+
 static uint32_t calc_assigned_dev_id(uint8_t bus, uint8_t devfn)
 {
     return (uint32_t)bus << 8 | (uint32_t)devfn;
@@ -449,12 +462,14 @@ static uint32_t calc_assigned_dev_id(uint8_t bus, uint8_t devfn)
  */
 void assigned_dev_update_irq(PCIDevice *d)
 {
-    int irq, r;
-    AssignedDevice *assigned_dev;
     AssignedDevInfo *adev;
 
-    LIST_FOREACH(adev, &adev_head, next) {
-        assigned_dev = adev->assigned_dev;
+    adev = LIST_FIRST(&adev_head);
+    while (adev) {
+        AssignedDevInfo *next = LIST_NEXT(adev, next);
+        AssignedDevice *assigned_dev = adev->assigned_dev;
+        int irq, r;
+
         irq = pci_map_irq(&assigned_dev->dev, assigned_dev->intpin);
         irq = piix_get_irq(irq);
 
@@ -473,15 +488,19 @@ void assigned_dev_update_irq(PCIDevice *d)
             assigned_irq_data.host_irq = assigned_dev->real_device.irq;
             r = kvm_assign_irq(kvm_context, &assigned_irq_data);
             if (r < 0) {
-                perror("assigned_dev_update_irq");
-                fprintf(stderr, "Are you assigning a device "
-                        "that shares IRQ with some other device?\n");
-                pci_unregister_device(&assigned_dev->dev);
-                /* FIXME: Delete node from list */
+                fprintf(stderr, "Failed to assign irq for \"%s\": %s\n",
+                        adev->name, strerror(-r));
+                fprintf(stderr, "Perhaps you are assigning a device "
+                        "that shares an IRQ with another device?\n");
+                LIST_REMOVE(adev, next);
+                free_assigned_device(adev);
+                adev = next;
                 continue;
             }
             assigned_dev->girq = irq;
         }
+
+        adev = next;
     }
 }
 
