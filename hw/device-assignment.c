@@ -444,6 +444,11 @@ void free_assigned_device(AssignedDevInfo *adev)
     AssignedDevice *dev = adev->assigned_dev;
 
     if (dev) {
+        if (dev->real_device.config_fd) {
+            close(dev->real_device.config_fd);
+            dev->real_device.config_fd = 0;
+        }
+
         pci_unregister_device(&dev->dev);
         adev->assigned_dev = dev = NULL;
     }
