@@ -554,17 +554,6 @@ struct PCIDevice *init_assigned_device(AssignedDevInfo *adev, PCIBus *bus)
     return &dev->dev;
 }
 
-int init_all_assigned_devices(PCIBus *bus)
-{
-    struct AssignedDevInfo *adev;
-
-    LIST_FOREACH(adev, &adev_head, next)
-        if (init_assigned_device(adev, bus) == NULL)
-            return -1;
-
-    return 0;
-}
-
 /*
  * Syntax to assign device:
  *
@@ -618,4 +607,25 @@ bad:
             "please check the help text for usage\n");
     qemu_free(adev);
     return NULL;
+}
+
+void add_assigned_devices(PCIBus *bus, const char **devices, int n_devices)
+{
+    int i;
+
+    for (i = 0; i < n_devices; i++) {
+        struct AssignedDevInfo *adev;
+
+        adev = add_assigned_device(devices[i]);
+        if (!adev) {
+            fprintf(stderr, "Could not add assigned device %s\n", devices[i]);
+            continue;
+        }
+
+        if (!init_assigned_device(adev, bus)) {
+            fprintf(stderr, "Failed to initialize assigned device %s\n",
+                    devices[i]);
+            exit(1);
+        }
+    }
 }

@@ -647,20 +647,8 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
     }
 
 #ifdef USE_KVM_DEVICE_ASSIGNMENT
-    if (kvm_enabled()) {
-	int i;
-        for (i = 0; i < assigned_devices_index; i++) {
-            if (!add_assigned_device(assigned_devices[i])) {
-                fprintf(stderr, "Warning: could not add assigned device %s\n",
-                        assigned_devices[i]);
-            }
-        }
-
-	if (init_all_assigned_devices(pci_bus)) {
-	    fprintf(stderr, "Failed to initialize assigned devices\n");
-	    exit (1);
-	}
-    }
+    if (kvm_enabled())
+	add_assigned_devices(pci_bus, assigned_devices, assigned_devices_index);
 #endif /* USE_KVM_DEVICE_ASSIGNMENT */
 
 }

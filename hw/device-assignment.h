@@ -96,7 +96,7 @@ struct AssignedDevInfo {
 
 PCIDevice *init_assigned_device(AssignedDevInfo *adev, PCIBus *bus);
 AssignedDevInfo *add_assigned_device(const char *arg);
-int init_all_assigned_devices(PCIBus *bus);
+void add_assigned_devices(PCIBus *bus, const char **devices, int n_devices);
 
 #define MAX_DEV_ASSIGN_CMDLINE 8
 
