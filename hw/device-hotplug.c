@@ -48,6 +48,11 @@ static PCIDevice *qemu_system_hot_assign_device(const char *opts, int bus_nr)
     }
  
     ret = init_assigned_device(adev, pci_bus);
+    if (ret == NULL) {
+        term_printf("Failed to assign device\n");
+        free_assigned_device(adev);
+        return NULL;
+    }
 
     term_printf("Registered host PCI device %02x:%02x.%1x "
 		"(\"%s\") as guest device %02x:%02x.%1x\n",
