@@ -330,6 +330,7 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
                      cur_region->resource_fd, (off_t) 0);
 
             if (pci_dev->v_addrs[i].u.r_virtbase == MAP_FAILED) {
+                pci_dev->v_addrs[i].u.r_virtbase = NULL;
                 fprintf(stderr, "%s: Error: Couldn't mmap 0x%x!"
                         "\n", __func__,
                         (uint32_t) (cur_region->base_addr));
@@ -444,6 +445,25 @@ void free_assigned_device(AssignedDevInfo *adev)
     AssignedDevice *dev = adev->assigned_dev;
 
     if (dev) {
+        int i;
+
+        for (i = 0; i < dev->real_device.region_number; i++) {
+            PCIRegion *pci_region = &dev->real_device.regions[i];
+            AssignedDevRegion *region = &dev->v_addrs[i];
+
+            if (!pci_region->valid || !(pci_region->type & IORESOURCE_MEM))
+                continue;
+
+            if (region->u.r_virtbase) {
+                int ret = munmap(region->u.r_virtbase,
+                                 (pci_region->size + 0xFFF) & 0xFFFFF000);
+                if (ret != 0)
+                    fprintf(stderr,
+                            "Failed to unmap assigned device region: %s\n",
+                            strerror(errno));
+            }
+        }
+
         if (dev->real_device.config_fd) {
             close(dev->real_device.config_fd);
             dev->real_device.config_fd = 0;
