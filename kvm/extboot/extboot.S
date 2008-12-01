@@ -99,24 +99,24 @@ int19_handler:
 
 #define FLAGS_CF	0x01
 
-.macro clc
-	push %ax
-	pushf
-	pop %ax
-	and $(~FLAGS_CF), %ax
-	push %ax
-	popf
-	pop %ax
+/* The two macro below clear/set the carry flag to indicate the status
+ * of the interrupt execution. It is not enough to issue a clc/stc instruction,
+ * since the value of the flags register will be overwritten by whatever is
+ * in the stack frame
+ */
+.macro clc_stack
+	push %bp
+	mov %sp, %bp
+	/* 8 = 2 (bp, just pushed) + 2 (ip) + 3 (real mode interrupt frame) */
+	and $(~FLAGS_CF), 8(%bp)
+	pop %bp
 .endm
 
-.macro stc
-	push %ax
-	pushf
-	pop %ax
-	or $(FLAGS_CF), %ax
-	push %ax
-	popf
-	pop %ax
+.macro stc_stack
+	push %bp
+	/* 8 = 2 (bp, just pushed) + 2 (ip) + 3 (real mode interrupt frame) */
+	or $(FLAGS_CF), 8(%bp)
+	pop %bp
 .endm
 
 /* we clobber %bx */
@@ -292,7 +292,7 @@ mul32:  /* lo,      hi,     lo,     hi */
 
 disk_reset:
 	movb $0, %ah
-	clc
+	clc_stack
 	ret
 
 /* this really should be a function, not a macro but i'm lazy */
@@ -395,7 +395,7 @@ disk_reset:
 	pop %ax
 
 	mov $0, %ah
-	clc
+	clc_stack
 	ret
 .endm
 
@@ -454,12 +454,12 @@ read_disk_drive_parameters:
 	pop %bx
 
 	/* do this last since it's the most sensitive */
-	clc
+	clc_stack
 	ret
 
 alternate_disk_reset:
 	movb $0, %ah
-	clc
+	clc_stack
 	ret
 
 read_disk_drive_size:
@@ -498,21 +498,21 @@ read_disk_drive_size:
 	freea
 	pop %bx
 
-	clc
+	clc_stack
 	ret
 
 check_if_extensions_present:
 	mov $0x30, %ah
 	mov $0xAA55, %bx
 	mov $0x07, %cx
-	clc
+	clc_stack
 	ret
 
 .macro extended_read_write_sectors cmd
 	cmpb $10, 0(%si)
 	jg 1f
 	mov $1, %ah
-	stc
+	stc_stack
 	ret
 1:
 	push %ax
@@ -544,7 +544,7 @@ check_if_extensions_present:
 	pop %ax
 
 	mov $0, %ah
-	clc
+	clc_stack
 	ret
 .endm
 
@@ -612,12 +612,12 @@ get_extended_drive_parameters:
 	pop %ax
 
 	mov $0, %ah
-	clc
+	clc_stack
 	ret
 
 terminate_disk_emulation:
 	mov $1, %ah
-	stc
+	stc_stack
 	ret
 
 int13_handler:
