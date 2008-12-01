@@ -188,12 +188,11 @@ int kvm_arch_try_push_interrupts(void *opaque)
     return 0;
 }
 
-int kvm_arch_try_push_nmi(void *opaque)
+void kvm_arch_push_nmi(void *opaque)
 {
 	/* no nmi irq, so discard that call for now and return success.
 	 * This might later get mapped to something on powerpc too if we want
 	 *  to support the nmi monitor command somwhow */
-	return 0;
 }
 
 void kvm_arch_update_regs_for_sipi(CPUState *env)
