@@ -15,6 +15,12 @@ qemu_opts=()
 cross_prefix=
 arch=`uname -m`
 target_exec=
+# don't use uname if kerneldir is set
+no_uname=
+depmod_version=
+if [ -z "TMPDIR" ] ; then
+    TMPDIR=.
+fi
 
 usage() {
     cat <<-EOF
@@ -56,6 +62,7 @@ while [[ "$1" = -* ]]; do
 	    ;;
 	--kerneldir)
 	    kerneldir="$arg"
+            no_uname=1
 	    ;;
 	--with-patched-kernel)
 	    want_module=
@@ -112,6 +119,21 @@ if [ -d "$kerneldir/include2" ]; then
     kernelsourcedir=${kerneldir%/*}/source
 fi
 
+if [ -n "$no_uname" ]; then
+    if [ -e "$kerneldir/.kernelrelease" ]; then
+        depmod_version=`cat "$kerneldir/.kernelrelease"`
+
+    elif [ -e "$kerneldir/include/config/kernel.release" ]; then
+            depmod_version=`cat "$kerneldir/include/config/kernel.release"`
+    else
+        echo
+        echo "Error: kernelversion not found"
+        echo "Please make sure your kernel is configured"
+        echo
+        exit 1
+    fi
+fi
+
 #configure user dir
 (cd user; ./configure --prefix="$prefix" --kerneldir="$libkvm_kerneldir" \
           --arch="$arch" --processor="$processor" \
@@ -143,6 +165,7 @@ CC=$cross_prefix$cc
 LD=$cross_prefix$ld
 OBJCOPY=$cross_prefix$objcopy
 AR=$cross_prefix$ar
+DEPMOD_VERSION=$depmod_version
 EOF
 
 cat <<EOF > kernel/config.kbuild

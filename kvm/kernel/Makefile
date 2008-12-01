@@ -107,7 +107,7 @@ install:
 		 $(ORIGMODDIR)/arch/$(ARCH_DIR)/kvm/*.ko; do \
 		if [ -f "$$i" ]; then mv "$$i" "$$i.orig"; fi; \
 	done
-	/sbin/depmod -a
+	/sbin/depmod -a $(DEPMOD_VERSION)
 
 tmpspec = .tmp.kvm-kmod.spec
 
