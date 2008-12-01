@@ -24,21 +24,6 @@
 #include "helper_regs.h"
 #include "op_helper.h"
 
-#define MEMSUFFIX _raw
-#include "op_helper.h"
-#include "op_helper_mem.h"
-#if !defined(CONFIG_USER_ONLY)
-#define MEMSUFFIX _user
-#include "op_helper.h"
-#include "op_helper_mem.h"
-#define MEMSUFFIX _kernel
-#include "op_helper.h"
-#include "op_helper_mem.h"
-#define MEMSUFFIX _hypv
-#include "op_helper.h"
-#include "op_helper_mem.h"
-#endif
-
 //#define DEBUG_OP
 //#define DEBUG_EXCEPTIONS
 //#define DEBUG_SOFTWARE_TLB
@@ -55,7 +40,6 @@ void helper_raise_debug (void)
 {
     raise_exception(env, EXCP_DEBUG);
 }
-
 
 /*****************************************************************************/
 /* Registers load and stores */
@@ -106,6 +90,267 @@ void ppc_store_dump_spr (int sprn, target_ulong val)
                 sprn, sprn, env->spr[sprn], val);
     }
     env->spr[sprn] = val;
+}
+
+/*****************************************************************************/
+/* Memory load and stores */
+
+static always_inline target_ulong get_addr(target_ulong addr)
+{
+#if defined(TARGET_PPC64)
+        if (msr_sf)
+            return addr;
+        else
+#endif
+            return (uint32_t)addr;
+}
+
+void helper_lmw (target_ulong addr, uint32_t reg)
+{
+#ifdef CONFIG_USER_ONLY
+#define ldfun ldl_raw
+#else
+    int (*ldfun)(target_ulong);
+
+    switch (env->mmu_idx) {
+    default:
+    case 0: ldfun = ldl_user;
+        break;
+    case 1: ldfun = ldl_kernel;
+        break;
+    case 2: ldfun = ldl_hypv;
+        break;
+    }
+#endif
+    for (; reg < 32; reg++, addr += 4) {
+        if (msr_le)
+            env->gpr[reg] = bswap32(ldfun(get_addr(addr)));
+        else
+            env->gpr[reg] = ldfun(get_addr(addr));
+    }
+}
+
+void helper_stmw (target_ulong addr, uint32_t reg)
+{
+#ifdef CONFIG_USER_ONLY
+#define stfun stl_raw
+#else
+    void (*stfun)(target_ulong, int);
+
+    switch (env->mmu_idx) {
+    default:
+    case 0: stfun = stl_user;
+        break;
+    case 1: stfun = stl_kernel;
+        break;
+    case 2: stfun = stl_hypv;
+        break;
+    }
+#endif
+    for (; reg < 32; reg++, addr += 4) {
+        if (msr_le)
+            stfun(get_addr(addr), bswap32((uint32_t)env->gpr[reg]));
+        else
+            stfun(get_addr(addr), (uint32_t)env->gpr[reg]);
+    }
+}
+
+void helper_lsw(target_ulong addr, uint32_t nb, uint32_t reg)
+{
+    int sh;
+#ifdef CONFIG_USER_ONLY
+#define ldfunl ldl_raw
+#define ldfunb ldub_raw
+#else
+    int (*ldfunl)(target_ulong);
+    int (*ldfunb)(target_ulong);
+
+    switch (env->mmu_idx) {
+    default:
+    case 0:
+        ldfunl = ldl_user;
+        ldfunb = ldub_user;
+        break;
+    case 1:
+        ldfunl = ldl_kernel;
+        ldfunb = ldub_kernel;
+        break;
+    case 2:
+        ldfunl = ldl_hypv;
+        ldfunb = ldub_hypv;
+        break;
+    }
+#endif
+    for (; nb > 3; nb -= 4, addr += 4) {
+        env->gpr[reg] = ldfunl(get_addr(addr));
+        reg = (reg + 1) % 32;
+    }
+    if (unlikely(nb > 0)) {
+        env->gpr[reg] = 0;
+        for (sh = 24; nb > 0; nb--, addr++, sh -= 8) {
+            env->gpr[reg] |= ldfunb(get_addr(addr)) << sh;
+        }
+    }
+}
+/* PPC32 specification says we must generate an exception if
+ * rA is in the range of registers to be loaded.
+ * In an other hand, IBM says this is valid, but rA won't be loaded.
+ * For now, I'll follow the spec...
+ */
+void helper_lswx(target_ulong addr, uint32_t reg, uint32_t ra, uint32_t rb)
+{
+    if (likely(xer_bc != 0)) {
+        if (unlikely((ra != 0 && reg < ra && (reg + xer_bc) > ra) ||
+                     (reg < rb && (reg + xer_bc) > rb))) {
+            raise_exception_err(env, POWERPC_EXCP_PROGRAM,
+                                POWERPC_EXCP_INVAL |
+                                POWERPC_EXCP_INVAL_LSWX);
+        } else {
+            helper_lsw(addr, xer_bc, reg);
+        }
+    }
+}
+
+void helper_stsw(target_ulong addr, uint32_t nb, uint32_t reg)
+{
+    int sh;
+#ifdef CONFIG_USER_ONLY
+#define stfunl stl_raw
+#define stfunb stb_raw
+#else
+    void (*stfunl)(target_ulong, int);
+    void (*stfunb)(target_ulong, int);
+
+    switch (env->mmu_idx) {
+    default:
+    case 0:
+        stfunl = stl_user;
+        stfunb = stb_user;
+        break;
+    case 1:
+        stfunl = stl_kernel;
+        stfunb = stb_kernel;
+        break;
+    case 2:
+        stfunl = stl_hypv;
+        stfunb = stb_hypv;
+        break;
+    }
+#endif
+
+    for (; nb > 3; nb -= 4, addr += 4) {
+        stfunl(get_addr(addr), env->gpr[reg]);
+        reg = (reg + 1) % 32;
+    }
+    if (unlikely(nb > 0)) {
+        for (sh = 24; nb > 0; nb--, addr++, sh -= 8)
+            stfunb(get_addr(addr), (env->gpr[reg] >> sh) & 0xFF);
+    }
+}
+
+static void do_dcbz(target_ulong addr, int dcache_line_size)
+{
+    target_long mask = get_addr(~(dcache_line_size - 1));
+    int i;
+#ifdef CONFIG_USER_ONLY
+#define stfun stl_raw
+#else
+    void (*stfun)(target_ulong, int);
+
+    switch (env->mmu_idx) {
+    default:
+    case 0: stfun = stl_user;
+        break;
+    case 1: stfun = stl_kernel;
+        break;
+    case 2: stfun = stl_hypv;
+        break;
+    }
+#endif
+    addr &= mask;
+    for (i = 0 ; i < dcache_line_size ; i += 4) {
+        stfun(addr + i , 0);
+    }
+    if ((env->reserve & mask) == addr)
+        env->reserve = (target_ulong)-1ULL;
+}
+
+void helper_dcbz(target_ulong addr)
+{
+    do_dcbz(addr, env->dcache_line_size);
+}
+
+void helper_dcbz_970(target_ulong addr)
+{
+    if (((env->spr[SPR_970_HID5] >> 7) & 0x3) == 1)
+        do_dcbz(addr, 32);
+    else
+        do_dcbz(addr, env->dcache_line_size);
+}
+
+void helper_icbi(target_ulong addr)
+{
+    uint32_t tmp;
+
+    addr = get_addr(addr & ~(env->dcache_line_size - 1));
+    /* Invalidate one cache line :
+     * PowerPC specification says this is to be treated like a load
+     * (not a fetch) by the MMU. To be sure it will be so,
+     * do the load "by hand".
+     */
+#ifdef CONFIG_USER_ONLY
+    tmp = ldl_raw(addr);
+#else
+    switch (env->mmu_idx) {
+    default:
+    case 0: tmp = ldl_user(addr);
+        break;
+    case 1: tmp = ldl_kernel(addr);
+        break;
+    case 2: tmp = ldl_hypv(addr);
+        break;
+    }
+#endif
+    tb_invalidate_page_range(addr, addr + env->icache_line_size);
+}
+
+// XXX: to be tested
+target_ulong helper_lscbx (target_ulong addr, uint32_t reg, uint32_t ra, uint32_t rb)
+{
+    int i, c, d;
+#ifdef CONFIG_USER_ONLY
+#define ldfun ldub_raw
+#else
+    int (*ldfun)(target_ulong);
+
+    switch (env->mmu_idx) {
+    default:
+    case 0: ldfun = ldub_user;
+        break;
+    case 1: ldfun = ldub_kernel;
+        break;
+    case 2: ldfun = ldub_hypv;
+        break;
+    }
+#endif
+    d = 24;
+    for (i = 0; i < xer_bc; i++) {
+        c = ldfun((uint32_t)addr++);
+        /* ra (if not 0) and rb are never modified */
+        if (likely(reg != rb && (ra == 0 || reg != ra))) {
+            env->gpr[reg] = (env->gpr[reg] & ~(0xFF << d)) | (c << d);
+        }
+        if (unlikely(c == xer_cmp))
+            break;
+        if (likely(d != 0)) {
+            d -= 8;
+        } else {
+            d = 24;
+            reg++;
+            reg = reg & 0x1F;
+        }
+    }
+    return i;
 }
 
 /*****************************************************************************/
@@ -237,6 +482,24 @@ target_ulong helper_popcntb_64 (target_ulong val)
 
 /*****************************************************************************/
 /* Floating point operations helpers */
+uint64_t helper_float32_to_float64(uint32_t arg)
+{
+    CPU_FloatU f;
+    CPU_DoubleU d;
+    f.l = arg;
+    d.d = float32_to_float64(f.f, &env->fp_status);
+    return d.ll;
+}
+
+uint32_t helper_float64_to_float32(uint64_t arg)
+{
+    CPU_FloatU f;
+    CPU_DoubleU d;
+    d.ll = arg;
+    f.f = float64_to_float32(d.d, &env->fp_status);
+    return f.l;
+}
+
 static always_inline int fpisneg (float64 d)
 {
     CPU_DoubleU u;
@@ -1138,7 +1401,6 @@ uint64_t helper_fnmsub (uint64_t arg1, uint64_t arg2, uint64_t arg3)
     return farg1.ll;
 }
 
-
 /* frsp - frsp. */
 uint64_t helper_frsp (uint64_t arg)
 {
@@ -1356,7 +1618,7 @@ void do_store_msr (void)
     }
 }
 
-static always_inline void __do_rfi (target_ulong nip, target_ulong msr,
+static always_inline void do_rfi (target_ulong nip, target_ulong msr,
                                     target_ulong msrm, int keep_msrh)
 {
 #if defined(TARGET_PPC64)
@@ -1385,46 +1647,46 @@ static always_inline void __do_rfi (target_ulong nip, target_ulong msr,
     env->interrupt_request |= CPU_INTERRUPT_EXITTB;
 }
 
-void do_rfi (void)
+void helper_rfi (void)
 {
-    __do_rfi(env->spr[SPR_SRR0], env->spr[SPR_SRR1],
-             ~((target_ulong)0xFFFF0000), 1);
+    do_rfi(env->spr[SPR_SRR0], env->spr[SPR_SRR1],
+           ~((target_ulong)0xFFFF0000), 1);
 }
 
 #if defined(TARGET_PPC64)
-void do_rfid (void)
+void helper_rfid (void)
 {
-    __do_rfi(env->spr[SPR_SRR0], env->spr[SPR_SRR1],
-             ~((target_ulong)0xFFFF0000), 0);
+    do_rfi(env->spr[SPR_SRR0], env->spr[SPR_SRR1],
+           ~((target_ulong)0xFFFF0000), 0);
 }
 
-void do_hrfid (void)
+void helper_hrfid (void)
 {
-    __do_rfi(env->spr[SPR_HSRR0], env->spr[SPR_HSRR1],
-             ~((target_ulong)0xFFFF0000), 0);
+    do_rfi(env->spr[SPR_HSRR0], env->spr[SPR_HSRR1],
+           ~((target_ulong)0xFFFF0000), 0);
 }
 #endif
 #endif
 
-void do_tw (int flags)
+void helper_tw (target_ulong arg1, target_ulong arg2, uint32_t flags)
 {
-    if (!likely(!(((int32_t)T0 < (int32_t)T1 && (flags & 0x10)) ||
-                  ((int32_t)T0 > (int32_t)T1 && (flags & 0x08)) ||
-                  ((int32_t)T0 == (int32_t)T1 && (flags & 0x04)) ||
-                  ((uint32_t)T0 < (uint32_t)T1 && (flags & 0x02)) ||
-                  ((uint32_t)T0 > (uint32_t)T1 && (flags & 0x01))))) {
+    if (!likely(!(((int32_t)arg1 < (int32_t)arg2 && (flags & 0x10)) ||
+                  ((int32_t)arg1 > (int32_t)arg2 && (flags & 0x08)) ||
+                  ((int32_t)arg1 == (int32_t)arg2 && (flags & 0x04)) ||
+                  ((uint32_t)arg1 < (uint32_t)arg2 && (flags & 0x02)) ||
+                  ((uint32_t)arg1 > (uint32_t)arg2 && (flags & 0x01))))) {
         raise_exception_err(env, POWERPC_EXCP_PROGRAM, POWERPC_EXCP_TRAP);
     }
 }
 
 #if defined(TARGET_PPC64)
-void do_td (int flags)
+void helper_td (target_ulong arg1, target_ulong arg2, uint32_t flags)
 {
-    if (!likely(!(((int64_t)T0 < (int64_t)T1 && (flags & 0x10)) ||
-                  ((int64_t)T0 > (int64_t)T1 && (flags & 0x08)) ||
-                  ((int64_t)T0 == (int64_t)T1 && (flags & 0x04)) ||
-                  ((uint64_t)T0 < (uint64_t)T1 && (flags & 0x02)) ||
-                  ((uint64_t)T0 > (uint64_t)T1 && (flags & 0x01)))))
+    if (!likely(!(((int64_t)arg1 < (int64_t)arg2 && (flags & 0x10)) ||
+                  ((int64_t)arg1 > (int64_t)arg2 && (flags & 0x08)) ||
+                  ((int64_t)arg1 == (int64_t)arg2 && (flags & 0x04)) ||
+                  ((uint64_t)arg1 < (uint64_t)arg2 && (flags & 0x02)) ||
+                  ((uint64_t)arg1 > (uint64_t)arg2 && (flags & 0x01)))))
         raise_exception_err(env, POWERPC_EXCP_PROGRAM, POWERPC_EXCP_TRAP);
 }
 #endif
@@ -1597,9 +1859,9 @@ void do_POWER_rac (void)
     env->nb_BATs = nb_BATs;
 }
 
-void do_POWER_rfsvc (void)
+void helper_rfsvc (void)
 {
-    __do_rfi(env->lr, env->ctr, 0x0000FFFF, 0);
+    do_rfi(env->lr, env->ctr, 0x0000FFFF, 0);
 }
 
 void do_store_hid0_601 (void)
@@ -1627,19 +1889,19 @@ void do_store_hid0_601 (void)
 /* mfrom is the most crazy instruction ever seen, imho ! */
 /* Real implementation uses a ROM table. Do the same */
 #define USE_MFROM_ROM_TABLE
-void do_op_602_mfrom (void)
+target_ulong helper_602_mfrom (target_ulong arg)
 {
-    if (likely(T0 < 602)) {
+    if (likely(arg < 602)) {
 #if defined(USE_MFROM_ROM_TABLE)
 #include "mfrom_table.c"
-        T0 = mfrom_ROM_table[T0];
+        return mfrom_ROM_table[T0];
 #else
         double d;
         /* Extremly decomposed:
-         *                    -T0 / 256
-         * T0 = 256 * log10(10          + 1.0) + 0.5
+         *                      -arg / 256
+         * return 256 * log10(10           + 1.0) + 0.5
          */
-        d = T0;
+        d = arg;
         d = float64_div(d, 256, &env->fp_status);
         d = float64_chs(d);
         d = exp10(d); // XXX: use float emulation function
@@ -1647,10 +1909,10 @@ void do_op_602_mfrom (void)
         d = log10(d); // XXX: use float emulation function
         d = float64_mul(d, 256, &env->fp_status);
         d = float64_add(d, 0.5, &env->fp_status);
-        T0 = float64_round_to_int(d, &env->fp_status);
+        return float64_round_to_int(d, &env->fp_status);
 #endif
     } else {
-        T0 = 0;
+        return 0;
     }
 }
 
@@ -1697,28 +1959,28 @@ void do_store_dcr (void)
 }
 
 #if !defined(CONFIG_USER_ONLY)
-void do_40x_rfci (void)
+void helper_40x_rfci (void)
 {
-    __do_rfi(env->spr[SPR_40x_SRR2], env->spr[SPR_40x_SRR3],
-             ~((target_ulong)0xFFFF0000), 0);
+    do_rfi(env->spr[SPR_40x_SRR2], env->spr[SPR_40x_SRR3],
+           ~((target_ulong)0xFFFF0000), 0);
 }
 
-void do_rfci (void)
+void helper_rfci (void)
 {
-    __do_rfi(env->spr[SPR_BOOKE_CSRR0], SPR_BOOKE_CSRR1,
-             ~((target_ulong)0x3FFF0000), 0);
+    do_rfi(env->spr[SPR_BOOKE_CSRR0], SPR_BOOKE_CSRR1,
+           ~((target_ulong)0x3FFF0000), 0);
 }
 
-void do_rfdi (void)
+void helper_rfdi (void)
 {
-    __do_rfi(env->spr[SPR_BOOKE_DSRR0], SPR_BOOKE_DSRR1,
-             ~((target_ulong)0x3FFF0000), 0);
+    do_rfi(env->spr[SPR_BOOKE_DSRR0], SPR_BOOKE_DSRR1,
+           ~((target_ulong)0x3FFF0000), 0);
 }
 
-void do_rfmci (void)
+void helper_rfmci (void)
 {
-    __do_rfi(env->spr[SPR_BOOKE_MCSRR0], SPR_BOOKE_MCSRR1,
-             ~((target_ulong)0x3FFF0000), 0);
+    do_rfi(env->spr[SPR_BOOKE_MCSRR0], SPR_BOOKE_MCSRR1,
+           ~((target_ulong)0x3FFF0000), 0);
 }
 
 void do_load_403_pb (int num)
@@ -2442,7 +2704,7 @@ void tlb_fill (target_ulong addr, int is_write, int mmu_idx, void *retaddr)
 
 /* Software driven TLBs management */
 /* PowerPC 602/603 software TLB load instructions helpers */
-void do_load_6xx_tlb (int is_code)
+static void helper_load_6xx_tlb (target_ulong new_EPN, int is_code)
 {
     target_ulong RPN, CMP, EPN;
     int way;
@@ -2464,11 +2726,22 @@ void do_load_6xx_tlb (int is_code)
     }
 #endif
     /* Store this TLB */
-    ppc6xx_tlb_store(env, (uint32_t)(T0 & TARGET_PAGE_MASK),
+    ppc6xx_tlb_store(env, (uint32_t)(new_EPN & TARGET_PAGE_MASK),
                      way, is_code, CMP, RPN);
 }
 
-void do_load_74xx_tlb (int is_code)
+void helper_load_6xx_tlbd (target_ulong EPN)
+{
+    helper_load_6xx_tlb(EPN, 0);
+}
+
+void helper_load_6xx_tlbi (target_ulong EPN)
+{
+    helper_load_6xx_tlb(EPN, 1);
+}
+
+/* PowerPC 74xx software TLB load instructions helpers */
+static void helper_load_74xx_tlb (target_ulong new_EPN, int is_code)
 {
     target_ulong RPN, CMP, EPN;
     int way;
@@ -2485,8 +2758,18 @@ void do_load_74xx_tlb (int is_code)
     }
 #endif
     /* Store this TLB */
-    ppc6xx_tlb_store(env, (uint32_t)(T0 & TARGET_PAGE_MASK),
+    ppc6xx_tlb_store(env, (uint32_t)(new_EPN & TARGET_PAGE_MASK),
                      way, is_code, CMP, RPN);
+}
+
+void helper_load_74xx_tlbd (target_ulong EPN)
+{
+    helper_load_74xx_tlb(EPN, 0);
+}
+
+void helper_load_74xx_tlbi (target_ulong EPN)
+{
+    helper_load_74xx_tlb(EPN, 1);
 }
 
 static always_inline target_ulong booke_tlb_to_page_size (int size)

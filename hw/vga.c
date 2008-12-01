@@ -28,9 +28,8 @@
 #include "vga_int.h"
 #include "pixel_ops.h"
 #include "qemu-timer.h"
+#include "kvm.h"
 #include "qemu-kvm.h"
-
-#include <sys/mman.h>
 
 //#define DEBUG_VGA
 //#define DEBUG_VGA_MEM
@@ -1154,7 +1153,7 @@ static int update_basic_params(VGAState *s)
 
 static inline int get_depth_index(DisplayState *s)
 {
-    switch(s->depth) {
+    switch(ds_get_bits_per_pixel(s)) {
     default:
     case 8:
         return 0;
@@ -1246,6 +1245,8 @@ static void vga_draw_text(VGAState *s, int full_update)
     vga_draw_glyph8_func *vga_draw_glyph8;
     vga_draw_glyph9_func *vga_draw_glyph9;
 
+    vga_dirty_log_stop(s);
+
     full_update |= update_palette16(s);
     palette = s->last_palette;
 
@@ -1282,7 +1283,7 @@ static void vga_draw_text(VGAState *s, int full_update)
         cw = 9;
     if (s->sr[1] & 0x08)
         cw = 16; /* NOTE: no 18 pixel wide */
-    x_incr = cw * ((s->ds->depth + 7) >> 3);
+    x_incr = cw * ((ds_get_bits_per_pixel(s->ds) + 7) >> 3);
     width = (s->cr[0x01] + 1);
     if (s->cr[0x06] == 100) {
         /* ugly hack for CGA 160x100x16 - explain me the logic */
@@ -1332,8 +1333,8 @@ static void vga_draw_text(VGAState *s, int full_update)
         vga_draw_glyph8 = vga_draw_glyph8_table[depth_index];
     vga_draw_glyph9 = vga_draw_glyph9_table[depth_index];
 
-    dest = s->ds->data;
-    linesize = s->ds->linesize;
+    dest = ds_get_data(s->ds);
+    linesize = ds_get_linesize(s->ds);
     ch_attr_ptr = s->last_ch_attr;
     for(cy = 0; cy < height; cy++) {
         d1 = dest;
@@ -1559,15 +1560,17 @@ void vga_invalidate_scanlines(VGAState *s, int y1, int y2)
     }
 }
 
-static int bitmap_get_dirty(unsigned long *bitmap, unsigned nr)
+static void vga_sync_dirty_bitmap(VGAState *s)
 {
-    unsigned word = nr / ((sizeof bitmap[0]) * 8);
-    unsigned bit = nr % ((sizeof bitmap[0]) * 8);
+    if (s->map_addr)
+        cpu_physical_sync_dirty_bitmap(s->map_addr, s->map_end);
 
-    //printf("%x -> %ld\n", nr, (bitmap[word] >> bit) & 1);
-    return (bitmap[word] >> bit) & 1;
+    if (s->lfb_vram_mapped) {
+        cpu_physical_sync_dirty_bitmap(isa_mem_base + 0xa0000, 0xa8000);
+        cpu_physical_sync_dirty_bitmap(isa_mem_base + 0xa8000, 0xb0000);
+    }
+    vga_dirty_log_start(s);
 }
-
 
 /*
  * graphic modes
@@ -1581,22 +1584,11 @@ static void vga_draw_graphic(VGAState *s, int full_update)
     uint32_t v, addr1, addr;
     long page0, page1, page_min, page_max;
     vga_draw_line_func *vga_draw_line;
-    /* HACK ALERT */
-#define VGA_BITMAP_SIZE (VGA_RAM_SIZE / 4096 / 8 / sizeof(long))
-    unsigned long bitmap[VGA_BITMAP_SIZE];
-#ifndef TARGET_IA64
-    int r;
-    if (kvm_enabled()) {
-	    r = qemu_kvm_get_dirty_pages(s->map_addr, &bitmap);
-	    if (r < 0)
-		    fprintf(stderr, "kvm: get_dirty_pages returned %d\n", r);
-    }
-#else
-    memset(bitmap, 0xff, VGA_BITMAP_SIZE*sizeof(long));
-   //FIXME:Always flush full screen before log dirty ready!!
-#endif
 
     full_update |= update_basic_params(s);
+
+    if (!full_update)
+        vga_sync_dirty_bitmap(s);
 
     s->get_resolution(s, &width, &height);
     disp_width = width;
@@ -1691,8 +1683,8 @@ static void vga_draw_graphic(VGAState *s, int full_update)
     y_start = -1;
     page_min = 0x7fffffff;
     page_max = -1;
-    d = s->ds->data;
-    linesize = s->ds->linesize;
+    d = ds_get_data(s->ds);
+    linesize = ds_get_linesize(s->ds);
     y1 = 0;
     for(y = 0; y < height; y++) {
         addr = addr1;
@@ -1710,17 +1702,11 @@ static void vga_draw_graphic(VGAState *s, int full_update)
         update = full_update |
             cpu_physical_memory_get_dirty(page0, VGA_DIRTY_FLAG) |
             cpu_physical_memory_get_dirty(page1, VGA_DIRTY_FLAG);
-	if (kvm_enabled()) {
-		update |= bitmap_get_dirty(bitmap, (page0 - s->vram_offset) >> TARGET_PAGE_BITS);
-		update |= bitmap_get_dirty(bitmap, (page1 - s->vram_offset) >> TARGET_PAGE_BITS);
-	}
 
         if ((page1 - page0) > TARGET_PAGE_SIZE) {
             /* if wide line, can use another page */
             update |= cpu_physical_memory_get_dirty(page0 + TARGET_PAGE_SIZE,
                                                     VGA_DIRTY_FLAG);
-	    if (kvm_enabled())
-		update |= bitmap_get_dirty(bitmap, (page0 + TARGET_PAGE_SIZE - s->vram_offset) >> TARGET_PAGE_BITS);
         }
         /* explicit invalidation for the hardware cursor */
         update |= (s->invalidated_y_table[y >> 5] >> (y & 0x1f)) & 1;
@@ -1778,15 +1764,17 @@ static void vga_draw_blank(VGAState *s, int full_update)
         return;
     if (s->last_scr_width <= 0 || s->last_scr_height <= 0)
         return;
-    if (s->ds->depth == 8)
+    vga_dirty_log_stop(s);
+
+    if (ds_get_bits_per_pixel(s->ds) == 8)
         val = s->rgb_to_pixel(0, 0, 0);
     else
         val = 0;
-    w = s->last_scr_width * ((s->ds->depth + 7) >> 3);
-    d = s->ds->data;
+    w = s->last_scr_width * ((ds_get_bits_per_pixel(s->ds) + 7) >> 3);
+    d = ds_get_data(s->ds);
     for(i = 0; i < s->last_scr_height; i++) {
         memset(d, val, w);
-        d += s->ds->linesize;
+        d += ds_get_linesize(s->ds);
     }
     dpy_update(s->ds, 0, 0,
                s->last_scr_width, s->last_scr_height);
@@ -1801,7 +1789,7 @@ static void vga_update_display(void *opaque)
     VGAState *s = (VGAState *)opaque;
     int full_update, graphic_mode;
 
-    if (s->ds->depth == 0) {
+    if (ds_get_bits_per_pixel(s->ds) == 0) {
         /* nothing to do */
     } else {
         s->rgb_to_pixel =
@@ -2127,6 +2115,36 @@ typedef struct PCIVGAState {
     VGAState vga_state;
 } PCIVGAState;
 
+static int s1, s2;
+
+void vga_dirty_log_start(VGAState *s)
+{
+    if (kvm_enabled() && s->map_addr)
+        if (!s1) {
+            kvm_log_start(s->map_addr, s->map_end - s->map_addr);
+            s1 = 1;
+        }
+    if (kvm_enabled() && s->lfb_vram_mapped) {
+        if (!s2) {
+            kvm_log_start(isa_mem_base + 0xa0000, 0x8000);
+            kvm_log_start(isa_mem_base + 0xa8000, 0x8000);
+        }
+        s2 = 1;
+    }
+}
+
+void vga_dirty_log_stop(VGAState *s)
+{
+    if (kvm_enabled() && s->map_addr && s1)
+        kvm_log_stop(s->map_addr, s->map_end - s->map_addr);
+
+    if (kvm_enabled() && s->lfb_vram_mapped && s2) {
+        kvm_log_stop(isa_mem_base + 0xa0000, 0x8000);
+        kvm_log_stop(isa_mem_base + 0xa8000, 0x8000);
+    }
+    s1 = s2 = 0;
+}
+
 static void vga_map(PCIDevice *pci_dev, int region_num,
                     uint32_t addr, uint32_t size, int type)
 {
@@ -2136,11 +2154,12 @@ static void vga_map(PCIDevice *pci_dev, int region_num,
         cpu_register_physical_memory(addr, s->bios_size, s->bios_offset);
     } else {
         cpu_register_physical_memory(addr, s->vram_size, s->vram_offset);
-	if (kvm_enabled()) {
-            kvm_qemu_log_memory(addr, VGA_RAM_SIZE, 1);
-            s->map_addr = addr;
-        }
     }
+
+    s->map_addr = addr;
+    s->map_end = addr + VGA_RAM_SIZE;
+
+    vga_dirty_log_start(s);
 }
 
 #ifdef TARGET_IA64
@@ -2277,7 +2296,7 @@ void vga_bios_init(VGAState *s)
 
 /* when used on xen/kvm environment, the vga_ram_base is not used */
 void vga_common_init(VGAState *s, DisplayState *ds, uint8_t *vga_ram_base,
-                     unsigned long vga_ram_offset, int vga_ram_size)
+                     ram_addr_t vga_ram_offset, int vga_ram_size)
 {
     int i, j, v, b;
 
@@ -2658,10 +2677,10 @@ static void vga_screen_dump(void *opaque, const char *filename)
     s->graphic_mode = -1;
     vga_update_display(s);
 
-    if (ds->data) {
-        ppm_save(filename, ds->data, vga_save_w, vga_save_h,
-                 s->ds->linesize);
-        qemu_free(ds->data);
+    if (ds_get_data(ds)) {
+        ppm_save(filename, ds_get_data(ds), vga_save_w, vga_save_h,
+                 ds_get_linesize(s->ds));
+        qemu_free(ds_get_data(ds));
     }
     *s->ds = saved_ds;
 }

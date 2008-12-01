@@ -399,7 +399,7 @@ time). This option is needed to have correct date in MS-DOS or
 Windows.
 
 @item -startdate @var{date}
-Set the initial date of the real time clock. Valid format for
+Set the initial date of the real time clock. Valid formats for
 @var{date} are: @code{now} or @code{2006-06-17T16:01:21} or
 @code{2006-06-17}. The default value is @code{now}.
 
@@ -424,7 +424,7 @@ This option is useful to load things like EtherBoot.
 
 @item -name @var{name}
 Sets the @var{name} of the guest.
-This name will be display in the SDL window caption.
+This name will be displayed in the SDL window caption.
 The @var{name} will also be used for the VNC server.
 
 @end table
@@ -624,13 +624,15 @@ Use the user mode network stack which requires no administrator
 privilege to run.  @option{hostname=name} can be used to specify the client
 hostname reported by the builtin DHCP server.
 
-@item -net tap[,vlan=@var{n}][,fd=@var{h}][,ifname=@var{name}][,script=@var{file}]
-Connect the host TAP network interface @var{name} to VLAN @var{n} and
-use the network script @var{file} to configure it. The default
-network script is @file{/etc/qemu-ifup}. Use @option{script=no} to
-disable script execution. If @var{name} is not
-provided, the OS automatically provides one. @option{fd}=@var{h} can be
-used to specify the handle of an already opened host TAP interface. Example:
+@item -net tap[,vlan=@var{n}][,fd=@var{h}][,ifname=@var{name}][,script=@var{file}][,downscript=@var{dfile}]
+Connect the host TAP network interface @var{name} to VLAN @var{n}, use
+the network script @var{file} to configure it and the network script 
+@var{dfile} to deconfigure it. If @var{name} is not provided, the OS 
+automatically provides one. @option{fd}=@var{h} can be used to specify
+the handle of an already opened host TAP interface. The default network 
+configure script is @file{/etc/qemu-ifup} and the default network 
+deconfigure script is @file{/etc/qemu-ifdown}. Use @option{script=no} 
+or @option{downscript=no} to disable script execution. Example:
 
 @example
 qemu linux.img -net nic -net tap

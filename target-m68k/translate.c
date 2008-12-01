@@ -503,7 +503,7 @@ static inline TCGv gen_extend(TCGv val, int opsize, int sign)
 }
 
 /* Generate code for an "effective address".  Does not adjust the base
-   register for autoincrememnt addressing modes.  */
+   register for autoincrement addressing modes.  */
 static TCGv gen_lea(DisasContext *s, uint16_t insn, int opsize)
 {
     TCGv reg;
@@ -2999,8 +2999,8 @@ gen_intermediate_code_internal(CPUState *env, TranslationBlock *tb,
     do {
         pc_offset = dc->pc - pc_start;
         gen_throws_exception = NULL;
-        if (unlikely(env->breakpoints)) {
-            for (bp = env->breakpoints; bp != NULL; bp = bp->next) {
+        if (unlikely(!TAILQ_EMPTY(&env->breakpoints))) {
+            TAILQ_FOREACH(bp, &env->breakpoints, entry) {
                 if (bp->pc == dc->pc) {
                     gen_exception(dc, dc->pc, EXCP_DEBUG);
                     dc->is_jmp = DISAS_JUMP;

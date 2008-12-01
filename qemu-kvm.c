@@ -879,13 +879,15 @@ int kvm_update_debugger(CPUState *env)
     memset(data.dbg.breakpoints, 0, sizeof(data.dbg.breakpoints));
 
     data.dbg.enabled = 0;
-    if (env->breakpoints || env->singlestep_enabled) {
-        bp = env->breakpoints;
+    if (!TAILQ_EMPTY(&env->breakpoints) || env->singlestep_enabled) {
+        bp = TAILQ_FIRST(&env->breakpoints);
 	data.dbg.enabled = 1;
-	for (i = 0; i < 4 && bp; ++i) {
-	    data.dbg.breakpoints[i].enabled = 1;
-	    data.dbg.breakpoints[i].address = bp->pc;
-            bp = bp->next;
+	for (i = 0; i < 4; ++i) {
+	    data.dbg.breakpoints[i].enabled = bp != NULL;
+            if (bp) {
+                data.dbg.breakpoints[i].address = bp->pc;
+                bp = TAILQ_NEXT(bp, entry);
+            }
 	}
 	data.dbg.singlestep = env->singlestep_enabled;
     }
@@ -937,7 +939,8 @@ int kvm_get_dirty_pages_log_range(unsigned long start_addr,
 {
     unsigned int i, j, n=0;
     unsigned char c;
-    unsigned page_number, addr, addr1;
+    unsigned long page_number, addr, addr1;
+    ram_addr_t ram_addr;
     unsigned int len = ((mem_size/TARGET_PAGE_SIZE) + 7) / 8;
 
     /* 
@@ -952,7 +955,8 @@ int kvm_get_dirty_pages_log_range(unsigned long start_addr,
             page_number = i * 8 + j;
             addr1 = page_number * TARGET_PAGE_SIZE;
             addr  = offset + addr1;
-            cpu_physical_memory_set_dirty(addr);
+            ram_addr = cpu_get_physical_page_desc(addr);
+            cpu_physical_memory_set_dirty(ram_addr);
             n++;
         }
     }
@@ -1064,5 +1068,32 @@ void kvm_ioperm(CPUState *env, void *data)
     if (kvm_enabled() && qemu_system_ready)
 	on_vcpu(env, kvm_arch_do_ioperm, data);
 }
+
 #endif
+
+void kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr, target_phys_addr_t end_addr)
+{
+    void *buf;
+
+    buf = qemu_malloc((end_addr - start_addr) / 8 + 2);
+    kvm_get_dirty_pages_range(kvm_context, start_addr, end_addr - start_addr,
+			      buf, NULL, kvm_get_dirty_bitmap_cb);
+    qemu_free(buf);
+}
+
+int kvm_log_start(target_phys_addr_t phys_addr, target_phys_addr_t len)
+{
+#ifndef TARGET_IA64
+    kvm_qemu_log_memory(phys_addr, len, 1);
+#endif
+    return 0;
+}
+
+int kvm_log_stop(target_phys_addr_t phys_addr, target_phys_addr_t len)
+{
+#ifndef TARGET_IA64
+    kvm_qemu_log_memory(phys_addr, len, 0);
+#endif
+    return 0;
+}
 

@@ -2695,10 +2695,10 @@ static void ide_init2(IDEState *ide_state,
             s->bs = hd1;
         if (s->bs) {
             bdrv_get_geometry(s->bs, &nb_sectors);
-	    bdrv_guess_geometry(s->bs, &cylinders, &heads, &secs);
-	    s->cylinders = cylinders;
-	    s->heads = heads;
-	    s->sectors = secs;
+            bdrv_guess_geometry(s->bs, &cylinders, &heads, &secs);
+            s->cylinders = cylinders;
+            s->heads = heads;
+            s->sectors = secs;
             s->nb_sectors = nb_sectors;
 
             if (bdrv_get_type_hint(s->bs) == BDRV_TYPE_CDROM) {

@@ -741,16 +741,16 @@ void bdrv_get_geometry(BlockDriverState *bs, uint64_t *nb_sectors_ptr)
 }
 
 struct partition {
-	uint8_t boot_ind;		/* 0x80 - active */
-	uint8_t head;		/* starting head */
-	uint8_t sector;		/* starting sector */
-	uint8_t cyl;		/* starting cylinder */
-	uint8_t sys_ind;		/* What partition type */
-	uint8_t end_head;		/* end head */
-	uint8_t end_sector;	/* end sector */
-	uint8_t end_cyl;		/* end cylinder */
-	uint32_t start_sect;	/* starting sector counting from 0 */
-	uint32_t nr_sects;		/* nr of sectors in partition */
+        uint8_t boot_ind;           /* 0x80 - active */
+        uint8_t head;               /* starting head */
+        uint8_t sector;             /* starting sector */
+        uint8_t cyl;                /* starting cylinder */
+        uint8_t sys_ind;            /* What partition type */
+        uint8_t end_head;           /* end head */
+        uint8_t end_sector;         /* end sector */
+        uint8_t end_cyl;            /* end cylinder */
+        uint32_t start_sect;        /* starting sector counting from 0 */
+        uint32_t nr_sects;          /* nr of sectors in partition */
 } __attribute__((packed));
 
 /* try to guess the disk logical geometry from the MSDOS partition table. Return 0 if OK, -1 if could not guess */
@@ -816,51 +816,51 @@ void bdrv_guess_geometry(BlockDriverState *bs, int *pcyls, int *pheads, int *pse
     bdrv_get_geometry_hint(bs, &cylinders, &heads, &secs);
     translation = bdrv_get_translation_hint(bs);
     if (cylinders != 0) {
-	*pcyls = cylinders;
-	*pheads = heads;
-	*psecs = secs;
+        *pcyls = cylinders;
+        *pheads = heads;
+        *psecs = secs;
     } else {
-	if (guess_disk_lchs(bs, &cylinders, &heads, &secs) == 0) {
-	    if (heads > 16) {
-		/* if heads > 16, it means that a BIOS LBA
-		   translation was active, so the default
-		   hardware geometry is OK */
-		lba_detected = 1;
-		goto default_geometry;
-	    } else {
-		*pcyls = cylinders;
-		*pheads = heads;
-		*psecs = secs;
-		/* disable any translation to be in sync with
-		   the logical geometry */
-		if (translation == BIOS_ATA_TRANSLATION_AUTO) {
-		    bdrv_set_translation_hint(bs,
-					      BIOS_ATA_TRANSLATION_NONE);
-		}
-	    }
-	} else {
-	default_geometry:
-	    /* if no geometry, use a standard physical disk geometry */
-	    cylinders = nb_sectors / (16 * 63);
+        if (guess_disk_lchs(bs, &cylinders, &heads, &secs) == 0) {
+            if (heads > 16) {
+                /* if heads > 16, it means that a BIOS LBA
+                   translation was active, so the default
+                   hardware geometry is OK */
+                lba_detected = 1;
+                goto default_geometry;
+            } else {
+                *pcyls = cylinders;
+                *pheads = heads;
+                *psecs = secs;
+                /* disable any translation to be in sync with
+                   the logical geometry */
+                if (translation == BIOS_ATA_TRANSLATION_AUTO) {
+                    bdrv_set_translation_hint(bs,
+                                              BIOS_ATA_TRANSLATION_NONE);
+                }
+            }
+        } else {
+        default_geometry:
+            /* if no geometry, use a standard physical disk geometry */
+            cylinders = nb_sectors / (16 * 63);
 
-	    if (cylinders > 16383)
-	        cylinders = 16383;
-	    else if (cylinders < 2)
-	        cylinders = 2;
-	    *pcyls = cylinders;
-	    *pheads = 16;
-	    *psecs = 63;
-	    if ((lba_detected == 1) && (translation == BIOS_ATA_TRANSLATION_AUTO)) {
-		if ((*pcyls * *pheads) <= 131072) {
-		    bdrv_set_translation_hint(bs,
-					      BIOS_ATA_TRANSLATION_LARGE);
-		} else {
-		    bdrv_set_translation_hint(bs,
-					      BIOS_ATA_TRANSLATION_LBA);
-		}
-	    }
-	}
-	bdrv_set_geometry_hint(bs, *pcyls, *pheads, *psecs);
+            if (cylinders > 16383)
+                cylinders = 16383;
+            else if (cylinders < 2)
+                cylinders = 2;
+            *pcyls = cylinders;
+            *pheads = 16;
+            *psecs = 63;
+            if ((lba_detected == 1) && (translation == BIOS_ATA_TRANSLATION_AUTO)) {
+                if ((*pcyls * *pheads) <= 131072) {
+                    bdrv_set_translation_hint(bs,
+                                              BIOS_ATA_TRANSLATION_LARGE);
+                } else {
+                    bdrv_set_translation_hint(bs,
+                                              BIOS_ATA_TRANSLATION_LBA);
+                }
+            }
+        }
+        bdrv_set_geometry_hint(bs, *pcyls, *pheads, *psecs);
     }
 }
 
