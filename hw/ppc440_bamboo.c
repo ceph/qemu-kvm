@@ -38,13 +38,14 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 	qemu_irq *pic;
 	ppc4xx_pci_t *pci;
 	CPUState *env;
-	uint64_t ep=0;
-	uint64_t la=0;
-	int is_linux=1; /* Will assume allways is Linux for now */
-	target_long kernel_size=0;
-	target_ulong initrd_base=0;
-	target_long initrd_size=0;
-	target_ulong dt_base=0;
+    uint64_t elf_entry;
+    uint64_t elf_lowaddr;
+	target_ulong entry = 0;
+	target_ulong loadaddr = 0;
+	target_long kernel_size = 0;
+	target_ulong initrd_base = 0;
+	target_long initrd_size = 0;
+	target_ulong dt_base = 0;
 	void *fdt;
 	int ret;
 	int ram_stick_sizes[] = {256<<20, 128<<20, 64<<20,
@@ -105,20 +106,24 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 
 	/* load kernel with uboot loader */
 	printf("%s: load kernel\n", __func__);
-	ret = load_uimage(kernel_filename, &ep, &la, &kernel_size, &is_linux);
-	if (ret < 0)
-		ret = load_elf(kernel_filename, 0, &ep, &la, NULL);
+	kernel_size = load_uimage(kernel_filename, &entry, &loadaddr, NULL);
+	if (kernel_size < 0) {
+		kernel_size = load_elf(kernel_filename, 0, &elf_entry, &elf_lowaddr,
+							   NULL);
+        entry = elf_entry;
+        loadaddr = elf_lowaddr;
+    }
 
-	if (ret < 0) {
+	if (kernel_size < 0) {
 		fprintf(stderr, "qemu: could not load kernel '%s'\n",
 			kernel_filename);
 		exit(1);
 	}
-	printf("kernel is at guest address: 0x%lx\n", (unsigned long)la);
+	printf("kernel is at guest address: 0x%lx\n", (unsigned long)loadaddr);
 
 	/* load initrd */
 	if (initrd_filename) {
-		initrd_base = kernel_size + la;
+		initrd_base = kernel_size + loadaddr;
 		printf("%s: load initrd\n", __func__);
 		initrd_size = load_image(initrd_filename,
 				phys_ram_base + initrd_base);
@@ -156,7 +161,7 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 	if (initrd_base)
 		dt_base = initrd_base + initrd_size;
 	else
-		dt_base = kernel_size + la;
+		dt_base = kernel_size + loadaddr;
 
 	fdt = load_device_tree(buf, (unsigned long)(phys_ram_base + dt_base));
 	if (fdt == NULL) {
@@ -188,7 +193,7 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 		/* location of device tree in register */
 		env->gpr[3] = dt_base;
 #endif
-		env->nip = ep;
+		env->nip = entry;
 	}
 
 	if (pci) {
