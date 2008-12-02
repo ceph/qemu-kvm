@@ -11,16 +11,16 @@
  */
 
 /* device-tree proc support functions */
-uint32_t read_proc_dt_prop_cell(char *path_in_device_tree);
+uint32_t read_proc_dt_prop_cell(const char *path_in_device_tree);
 
 #ifdef CONFIG_LIBFDT
 /* device tree functions */
-void *load_device_tree(char *filename_path, target_ulong load_addr);
-void dump_device_tree_to_file(void *fdt, char *filename);
-void dt_cell(void *fdt, char *node_path, char *property,
+void *load_device_tree(const char *filename_path, target_ulong load_addr);
+void dump_device_tree_to_file(void *fdt, const char *filename);
+void dt_cell(void *fdt, const char *node_path, const char *property,
 		uint32_t val);
-void dt_cell_multi(void *fdt, char *node_path, char *property,
+void dt_cell_multi(void *fdt, const char *node_path, const char *property,
 		uint32_t *val_array, int size);
-void dt_string(void *fdt, char *node_path, char *property,
+void dt_string(void *fdt, const char *node_path, const char *property,
 		char *string);
 #endif

@@ -31,7 +31,7 @@
 /* This function reads device-tree property files that are of
  * a single cell size
  */
-uint32_t read_proc_dt_prop_cell(char *path_in_device_tree)
+uint32_t read_proc_dt_prop_cell(const char *path_in_device_tree)
 {
 	char *buf = NULL;
 	int i;
@@ -65,7 +65,7 @@ uint32_t read_proc_dt_prop_cell(char *path_in_device_tree)
 
 #ifdef CONFIG_LIBFDT
 /* support functions */
-static int get_offset_of_node(void *fdt, char *node_path)
+static int get_offset_of_node(void *fdt, const char *node_path)
 {
 	int node_offset;
 	node_offset = fdt_path_offset(fdt, node_path);
@@ -78,7 +78,7 @@ static int get_offset_of_node(void *fdt, char *node_path)
 }
 
 /* public functions */
-void *load_device_tree(char *filename_path, unsigned long load_addr)
+void *load_device_tree(const char *filename_path, unsigned long load_addr)
 {
 	int dt_file_size;
 	int dt_file_load_size;
@@ -134,7 +134,7 @@ fail:
 	return NULL;
 }
 
-void dump_device_tree_to_file(void *fdt, char *filename)
+void dump_device_tree_to_file(void *fdt, const char *filename)
 {
 	int fd;
 	fd = open(filename, O_RDWR|O_CREAT, O_RDWR);
@@ -148,7 +148,7 @@ void dump_device_tree_to_file(void *fdt, char *filename)
 	close(fd);
 }
 
-void dt_cell(void *fdt, char *node_path, char *property,
+void dt_cell(void *fdt, const char *node_path, const char *property,
 		uint32_t val)
 {
 	int offset;
@@ -163,7 +163,7 @@ void dt_cell(void *fdt, char *node_path, char *property,
 }
 
 /* This function is to manipulate a cell with multiple values */
-void dt_cell_multi(void *fdt, char *node_path, char *property,
+void dt_cell_multi(void *fdt, const char *node_path, const char *property,
 			uint32_t *val_array, int size)
 {
 	int offset;
@@ -177,7 +177,7 @@ void dt_cell_multi(void *fdt, char *node_path, char *property,
 	}
 }
 
-void dt_string(void *fdt, char *node_path, char *property,
+void dt_string(void *fdt, const char *node_path, const char *property,
 		char *string)
 {
 	int offset;
