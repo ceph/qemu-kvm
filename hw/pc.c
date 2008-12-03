@@ -35,6 +35,7 @@
 #include "fw_cfg.h"
 #include "device-assignment.h"
 #include "virtio-blk.h"
+#include "virtio-balloon.h"
 
 #include "qemu-kvm.h"
 

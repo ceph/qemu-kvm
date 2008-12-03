@@ -15,6 +15,9 @@
 #ifndef _QEMU_VIRTIO_BALLOON_H
 #define _QEMU_VIRTIO_BALLOON_H
 
+#include "virtio.h"
+#include "pci.h"
+
 /* from Linux's linux/virtio_balloon.h */
 
 /* The ID for virtio_balloon */
@@ -33,5 +36,7 @@ struct virtio_balloon_config
     /* Number of pages we've actually got in balloon. */
     uint32_t actual;
 };
+
+void *virtio_balloon_init(PCIBus *bus);
 
 #endif

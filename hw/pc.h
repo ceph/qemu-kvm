@@ -168,7 +168,4 @@ void isa_ne2000_init(int base, qemu_irq irq, NICInfo *nd);
 
 void extboot_init(BlockDriverState *bs, int cmd);
 
-/* virtio-balloon.h */
-void *virtio_balloon_init(PCIBus *bus);
-
 #endif
