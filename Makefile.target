@@ -205,6 +205,7 @@ else
 LIBOBJS+= translate-all.o translate.o
 endif
 ifdef CONFIG_DYNGEN_OP
+exec.o: dyngen-opc.h
 LIBOBJS+=op.o
 endif
 # TCG code generator
