@@ -17,7 +17,8 @@ simpletests := \
 
 # theses tests use cstart.o, libcflat, and libgcc
 tests := \
-	test/powerpc/exit.bin
+	test/powerpc/exit.bin \
+	test/powerpc/helloworld.bin
 
 include config-powerpc-$(PROCESSOR).mak
 
