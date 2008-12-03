@@ -157,12 +157,18 @@ static void assigned_dev_iomem_map(PCIDevice *pci_dev, int region_num,
     region->e_physbase = e_phys;
     region->e_size = e_size;
 
-    if (!first_map)
-	kvm_destroy_phys_mem(kvm_context, old_ephys, old_esize);
+    if (!first_map) {
+        int slot = get_slot(old_ephys);
+        if (slot != -1)
+	    kvm_destroy_phys_mem(kvm_context, old_ephys,
+                                 TARGET_PAGE_ALIGN(old_esize));
+    }
 
     if (e_size > 0)
 	ret = kvm_register_phys_mem(kvm_context, e_phys,
-                                        region->u.r_virtbase, e_size, 0);
+                                    region->u.r_virtbase,
+                                    TARGET_PAGE_ALIGN(e_size), 0);
+
     if (ret != 0) {
 	fprintf(stderr, "%s: Error: create new mapping failed\n", __func__);
 	exit(1);
