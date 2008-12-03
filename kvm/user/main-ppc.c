@@ -63,6 +63,9 @@ struct vcpu_info {
 
 struct vcpu_info *vcpus;
 
+/* Must match flat.lds linker script */
+#define VM_TEST_LOAD_ADDRESS 0x100000
+
 static int test_debug(void *opaque, void *vcpu)
 {
 	printf("test_debug\n");
@@ -239,10 +242,16 @@ static void init_vcpu(int n)
 
 static void *do_create_vcpu(void *_n)
 {
+	struct kvm_regs regs;
 	int n = (long)_n;
 
 	kvm_create_vcpu(kvm, n);
 	init_vcpu(n);
+
+	kvm_get_regs(kvm, n, &regs);
+	regs.pc = VM_TEST_LOAD_ADDRESS;
+	kvm_set_regs(kvm, n, &regs);
+
 	kvm_run(kvm, n, &vcpus[n]);
 	sem_post(&exited_sem);
 	return NULL;
@@ -363,8 +372,8 @@ int main(int argc, char **argv)
 
 	vm_mem = kvm_create_phys_mem(kvm, 0, memory_size, 0, 1);
 
-	len = load_file(vm_mem, argv[optind], 1);
-	sync_caches(vm_mem, len);
+	len = load_file(vm_mem + VM_TEST_LOAD_ADDRESS, argv[optind], 1);
+	sync_caches(vm_mem + VM_TEST_LOAD_ADDRESS, len);
 
 	io_table_register(&mmio_table, 0xf0000000, 64, mmio_handler, NULL);
 
