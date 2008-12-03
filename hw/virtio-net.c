@@ -19,27 +19,27 @@
 /* from Linux's virtio_net.h */
 
 /* The ID for virtio_net */
-#define VIRTIO_ID_NET	1
+#define VIRTIO_ID_NET   1
 
 /* The feature bitmap for virtio net */
-#define VIRTIO_NET_F_CSUM	0	/* Host handles pkts w/ partial csum */
-#define VIRTIO_NET_F_GUEST_CSUM	1	/* Guest handles pkts w/ partial csum */
-#define VIRTIO_NET_F_MAC	5	/* Host has given MAC address. */
-#define VIRTIO_NET_F_GSO	6	/* Host handles pkts w/ any GSO type */
-#define VIRTIO_NET_F_GUEST_TSO4	7	/* Guest can handle TSOv4 in. */
-#define VIRTIO_NET_F_GUEST_TSO6	8	/* Guest can handle TSOv6 in. */
-#define VIRTIO_NET_F_GUEST_ECN	9	/* Guest can handle TSO[6] w/ ECN in. */
-#define VIRTIO_NET_F_GUEST_UFO	10	/* Guest can handle UFO in. */
-#define VIRTIO_NET_F_HOST_TSO4	11	/* Host can handle TSOv4 in. */
-#define VIRTIO_NET_F_HOST_TSO6	12	/* Host can handle TSOv6 in. */
-#define VIRTIO_NET_F_HOST_ECN	13	/* Host can handle TSO[6] w/ ECN in. */
-#define VIRTIO_NET_F_HOST_UFO	14	/* Host can handle UFO in. */
-#define VIRTIO_NET_F_MRG_RXBUF	15	/* Host can merge receive buffers. */
+#define VIRTIO_NET_F_CSUM       0       /* Host handles pkts w/ partial csum */
+#define VIRTIO_NET_F_GUEST_CSUM 1       /* Guest handles pkts w/ partial csum */
+#define VIRTIO_NET_F_MAC        5       /* Host has given MAC address. */
+#define VIRTIO_NET_F_GSO        6       /* Host handles pkts w/ any GSO type */
+#define VIRTIO_NET_F_GUEST_TSO4 7       /* Guest can handle TSOv4 in. */
+#define VIRTIO_NET_F_GUEST_TSO6 8       /* Guest can handle TSOv6 in. */
+#define VIRTIO_NET_F_GUEST_ECN  9       /* Guest can handle TSO[6] w/ ECN in. */
+#define VIRTIO_NET_F_GUEST_UFO  10      /* Guest can handle UFO in. */
+#define VIRTIO_NET_F_HOST_TSO4  11      /* Host can handle TSOv4 in. */
+#define VIRTIO_NET_F_HOST_TSO6  12      /* Host can handle TSOv6 in. */
+#define VIRTIO_NET_F_HOST_ECN   13      /* Host can handle TSO[6] w/ ECN in. */
+#define VIRTIO_NET_F_HOST_UFO   14      /* Host can handle UFO in. */
+#define VIRTIO_NET_F_MRG_RXBUF  15      /* Host can merge receive buffers. */
 
 #define TX_TIMER_INTERVAL 150000 /* 150 us */
 
 /* Maximum packet size we can receive from tap device: header + 64k */
-#define VIRTIO_NET_MAX_BUFSIZE	(sizeof(struct virtio_net_hdr) + (64 << 10))
+#define VIRTIO_NET_MAX_BUFSIZE (sizeof(struct virtio_net_hdr) + (64 << 10))
 
 /* The config defining mac address (6 bytes) */
 struct virtio_net_config
@@ -51,13 +51,13 @@ struct virtio_net_config
  * specify GSO or CSUM features, you can simply ignore the header. */
 struct virtio_net_hdr
 {
-#define VIRTIO_NET_HDR_F_NEEDS_CSUM	1	// Use csum_start, csum_offset
+#define VIRTIO_NET_HDR_F_NEEDS_CSUM     1       // Use csum_start, csum_offset
     uint8_t flags;
-#define VIRTIO_NET_HDR_GSO_NONE		0	// Not a GSO frame
-#define VIRTIO_NET_HDR_GSO_TCPV4	1	// GSO frame, IPv4 TCP (TSO)
-#define VIRTIO_NET_HDR_GSO_UDP		3	// GSO frame, IPv4 UDP (UFO)
-#define VIRTIO_NET_HDR_GSO_TCPV6	4	// GSO frame, IPv6 TCP
-#define VIRTIO_NET_HDR_GSO_ECN		0x80	// TCP has ECN set
+#define VIRTIO_NET_HDR_GSO_NONE         0       // Not a GSO frame
+#define VIRTIO_NET_HDR_GSO_TCPV4        1       // GSO frame, IPv4 TCP (TSO)
+#define VIRTIO_NET_HDR_GSO_UDP          3       // GSO frame, IPv4 UDP (UFO)
+#define VIRTIO_NET_HDR_GSO_TCPV6        4       // GSO frame, IPv6 TCP
+#define VIRTIO_NET_HDR_GSO_ECN          0x80    // TCP has ECN set
     uint8_t gso_type;
     uint16_t hdr_len;
     uint16_t gso_size;
@@ -110,17 +110,17 @@ static uint32_t virtio_net_get_features(VirtIODevice *vdev)
     uint32_t features = (1 << VIRTIO_NET_F_MAC);
 
     if (tap_has_vnet_hdr(host)) {
-	tap_using_vnet_hdr(host, 1);
-	features |= (1 << VIRTIO_NET_F_CSUM);
-	features |= (1 << VIRTIO_NET_F_GUEST_CSUM);
-	features |= (1 << VIRTIO_NET_F_GUEST_TSO4);
-	features |= (1 << VIRTIO_NET_F_GUEST_TSO6);
-	features |= (1 << VIRTIO_NET_F_GUEST_ECN);
-	features |= (1 << VIRTIO_NET_F_HOST_TSO4);
-	features |= (1 << VIRTIO_NET_F_HOST_TSO6);
-	features |= (1 << VIRTIO_NET_F_HOST_ECN);
-	features |= (1 << VIRTIO_NET_F_MRG_RXBUF);
-	/* Kernel can't actually handle UFO in software currently. */
+        tap_using_vnet_hdr(host, 1);
+        features |= (1 << VIRTIO_NET_F_CSUM);
+        features |= (1 << VIRTIO_NET_F_GUEST_CSUM);
+        features |= (1 << VIRTIO_NET_F_GUEST_TSO4);
+        features |= (1 << VIRTIO_NET_F_GUEST_TSO6);
+        features |= (1 << VIRTIO_NET_F_GUEST_ECN);
+        features |= (1 << VIRTIO_NET_F_HOST_TSO4);
+        features |= (1 << VIRTIO_NET_F_HOST_TSO6);
+        features |= (1 << VIRTIO_NET_F_HOST_ECN);
+        features |= (1 << VIRTIO_NET_F_MRG_RXBUF);
+        /* Kernel can't actually handle UFO in software currently. */
     }
 
     return features;
@@ -134,13 +134,13 @@ static void virtio_net_set_features(VirtIODevice *vdev, uint32_t features)
     n->mergeable_rx_bufs = !!(features & (1 << VIRTIO_NET_F_MRG_RXBUF));
 
     if (!tap_has_vnet_hdr(host) || !host->set_offload)
-	return;
+        return;
 
     host->set_offload(host,
-		      (features >> VIRTIO_NET_F_GUEST_CSUM) & 1,
-		      (features >> VIRTIO_NET_F_GUEST_TSO4) & 1,
-		      (features >> VIRTIO_NET_F_GUEST_TSO6) & 1,
-		      (features >> VIRTIO_NET_F_GUEST_ECN)  & 1);
+                      (features >> VIRTIO_NET_F_GUEST_CSUM) & 1,
+                      (features >> VIRTIO_NET_F_GUEST_TSO4) & 1,
+                      (features >> VIRTIO_NET_F_GUEST_TSO6) & 1,
+                      (features >> VIRTIO_NET_F_GUEST_ECN)  & 1);
 }
 
 /* RX */
@@ -150,7 +150,7 @@ static void virtio_net_handle_rx(VirtIODevice *vdev, VirtQueue *vq)
     /* We now have RX buffers, signal to the IO thread to break out of the
        select to re-poll the tap file descriptor */
     if (kvm_enabled())
-	qemu_kvm_notify_work();
+        qemu_kvm_notify_work();
 }
 
 static int virtio_net_can_receive(void *opaque)
@@ -158,14 +158,14 @@ static int virtio_net_can_receive(void *opaque)
     VirtIONet *n = opaque;
 
     if (n->rx_vq->vring.avail == NULL ||
-	!(n->vdev.status & VIRTIO_CONFIG_S_DRIVER_OK))
-	return 0;
+        !(n->vdev.status & VIRTIO_CONFIG_S_DRIVER_OK))
+        return 0;
 
     if (n->rx_vq->vring.avail->idx == n->rx_vq->last_avail_idx ||
-	(n->mergeable_rx_bufs &&
-	 !virtqueue_avail_bytes(n->rx_vq, VIRTIO_NET_MAX_BUFSIZE, 0))) {
-	n->rx_vq->vring.used->flags &= ~VRING_USED_F_NO_NOTIFY;
-	return 0;
+        (n->mergeable_rx_bufs &&
+         !virtqueue_avail_bytes(n->rx_vq, VIRTIO_NET_MAX_BUFSIZE, 0))) {
+        n->rx_vq->vring.used->flags &= ~VRING_USED_F_NO_NOTIFY;
+        return 0;
     }
 
     n->rx_vq->vring.used->flags |= VRING_USED_F_NO_NOTIFY;
@@ -206,17 +206,17 @@ static int iov_fill(struct iovec *iov, int iovcnt, const void *buf, int count)
 
     offset = i = 0;
     while (offset < count && i < iovcnt) {
-	int len = MIN(iov[i].iov_len, count - offset);
-	memcpy(iov[i].iov_base, buf + offset, len);
-	offset += len;
-	i++;
+        int len = MIN(iov[i].iov_len, count - offset);
+        memcpy(iov[i].iov_base, buf + offset, len);
+        offset += len;
+        i++;
     }
 
     return offset;
 }
 
 static int receive_header(VirtIONet *n, struct iovec *iov, int iovcnt,
-			  const void *buf, int size, int hdr_len)
+                          const void *buf, int size, int hdr_len)
 {
     struct virtio_net_hdr *hdr = iov[0].iov_base;
     int offset;
@@ -225,9 +225,9 @@ static int receive_header(VirtIONet *n, struct iovec *iov, int iovcnt,
     hdr->gso_type = VIRTIO_NET_HDR_GSO_NONE;
 
     if (tap_has_vnet_hdr(n->vc->vlan->first_client)) {
-	memcpy(hdr, buf, sizeof(*hdr));
-	offset = sizeof(*hdr);
-	work_around_broken_dhclient(hdr, buf + offset, size - offset);
+        memcpy(hdr, buf, sizeof(*hdr));
+        offset = sizeof(*hdr);
+        work_around_broken_dhclient(hdr, buf + offset, size - offset);
     }
 
     /* We only ever receive a struct virtio_net_hdr from the tapfd,
@@ -247,56 +247,56 @@ static void virtio_net_receive(void *opaque, const uint8_t *buf, int size)
 
     /* hdr_len refers to the header we supply to the guest */
     hdr_len = n->mergeable_rx_bufs ?
-	sizeof(struct virtio_net_hdr_mrg_rxbuf) : sizeof(struct virtio_net_hdr);
+        sizeof(struct virtio_net_hdr_mrg_rxbuf) : sizeof(struct virtio_net_hdr);
 
     offset = i = 0;
 
     while (offset < size) {
-	VirtQueueElement elem;
-	int len, total;
+        VirtQueueElement elem;
+        int len, total;
 
-	len = total = 0;
+        len = total = 0;
 
-	if ((i != 0 && !n->mergeable_rx_bufs) ||
-	    virtqueue_pop(n->rx_vq, &elem) == 0) {
-	    if (i == 0)
-		return;
-	    fprintf(stderr, "virtio-net truncating packet\n");
-	    exit(1);
-	}
+        if ((i != 0 && !n->mergeable_rx_bufs) ||
+            virtqueue_pop(n->rx_vq, &elem) == 0) {
+            if (i == 0)
+                return;
+            fprintf(stderr, "virtio-net truncating packet\n");
+            exit(1);
+        }
 
-	if (elem.in_num < 1) {
-	    fprintf(stderr, "virtio-net receive queue contains no in buffers\n");
-	    exit(1);
-	}
+        if (elem.in_num < 1) {
+            fprintf(stderr, "virtio-net receive queue contains no in buffers\n");
+            exit(1);
+        }
 
-	if (!n->mergeable_rx_bufs && elem.in_sg[0].iov_len != hdr_len) {
-	    fprintf(stderr, "virtio-net header not in first element\n");
-	    exit(1);
-	}
+        if (!n->mergeable_rx_bufs && elem.in_sg[0].iov_len != hdr_len) {
+            fprintf(stderr, "virtio-net header not in first element\n");
+            exit(1);
+        }
 
-	if (i == 0) {
-	    if (n->mergeable_rx_bufs)
-		mhdr = (struct virtio_net_hdr_mrg_rxbuf *)elem.in_sg[0].iov_base;
+        if (i == 0) {
+            if (n->mergeable_rx_bufs)
+                mhdr = (struct virtio_net_hdr_mrg_rxbuf *)elem.in_sg[0].iov_base;
 
-	    offset += receive_header(n, &elem.in_sg[0], elem.in_num,
-				     buf + offset, size - offset, hdr_len);
-	    total += hdr_len;
-	}
+            offset += receive_header(n, &elem.in_sg[0], elem.in_num,
+                                     buf + offset, size - offset, hdr_len);
+            total += hdr_len;
+        }
 
-	/* copy in packet.  ugh */
-	len = iov_fill(&elem.in_sg[0], elem.in_num,
-		       buf + offset, size - offset);
-	total += len;
+        /* copy in packet.  ugh */
+        len = iov_fill(&elem.in_sg[0], elem.in_num,
+                       buf + offset, size - offset);
+        total += len;
 
-	/* signal other side */
-	virtqueue_fill(n->rx_vq, &elem, total, i++);
+        /* signal other side */
+        virtqueue_fill(n->rx_vq, &elem, total, i++);
 
-	offset += len;
+        offset += len;
     }
 
     if (mhdr)
-	mhdr->num_buffers = i;
+        mhdr->num_buffers = i;
 
     virtqueue_flush(n->rx_vq, i);
     virtio_notify(&n->vdev, n->rx_vq);
@@ -312,37 +312,37 @@ static void virtio_net_flush_tx(VirtIONet *n, VirtQueue *vq)
         return;
 
     while (virtqueue_pop(vq, &elem)) {
-	ssize_t len = 0;
-	unsigned int out_num = elem.out_num;
-	struct iovec *out_sg = &elem.out_sg[0];
-	unsigned hdr_len;
+        ssize_t len = 0;
+        unsigned int out_num = elem.out_num;
+        struct iovec *out_sg = &elem.out_sg[0];
+        unsigned hdr_len;
 
         /* hdr_len refers to the header received from the guest */
-	hdr_len = n->mergeable_rx_bufs ?
-	    sizeof(struct virtio_net_hdr_mrg_rxbuf) :
-	    sizeof(struct virtio_net_hdr);
+        hdr_len = n->mergeable_rx_bufs ?
+            sizeof(struct virtio_net_hdr_mrg_rxbuf) :
+            sizeof(struct virtio_net_hdr);
 
-	if (out_num < 1 || out_sg->iov_len != hdr_len) {
-	    fprintf(stderr, "virtio-net header not in first element\n");
-	    exit(1);
-	}
+        if (out_num < 1 || out_sg->iov_len != hdr_len) {
+            fprintf(stderr, "virtio-net header not in first element\n");
+            exit(1);
+        }
 
-	/* ignore the header if GSO is not supported */
-	if (!has_vnet_hdr) {
-	    out_num--;
-	    out_sg++;
-	    len += hdr_len;
-	} else if (n->mergeable_rx_bufs) {
-	    /* tapfd expects a struct virtio_net_hdr */
-	    hdr_len -= sizeof(struct virtio_net_hdr);
-	    out_sg->iov_len -= hdr_len;
-	    len += hdr_len;
-	}
+        /* ignore the header if GSO is not supported */
+        if (!has_vnet_hdr) {
+            out_num--;
+            out_sg++;
+            len += hdr_len;
+        } else if (n->mergeable_rx_bufs) {
+            /* tapfd expects a struct virtio_net_hdr */
+            hdr_len -= sizeof(struct virtio_net_hdr);
+            out_sg->iov_len -= hdr_len;
+            len += hdr_len;
+        }
 
-	len += qemu_sendv_packet(n->vc, out_sg, out_num);
+        len += qemu_sendv_packet(n->vc, out_sg, out_num);
 
-	virtqueue_push(vq, &elem, len);
-	virtio_notify(&n->vdev, vq);
+        virtqueue_push(vq, &elem, len);
+        virtio_notify(&n->vdev, vq);
     }
 }
 
@@ -351,15 +351,15 @@ static void virtio_net_handle_tx(VirtIODevice *vdev, VirtQueue *vq)
     VirtIONet *n = to_virtio_net(vdev);
 
     if (n->tx_timer_active) {
-	vq->vring.used->flags &= ~VRING_USED_F_NO_NOTIFY;
-	qemu_del_timer(n->tx_timer);
-	n->tx_timer_active = 0;
-	virtio_net_flush_tx(n, vq);
+        vq->vring.used->flags &= ~VRING_USED_F_NO_NOTIFY;
+        qemu_del_timer(n->tx_timer);
+        n->tx_timer_active = 0;
+        virtio_net_flush_tx(n, vq);
     } else {
-	qemu_mod_timer(n->tx_timer,
-		       qemu_get_clock(vm_clock) + TX_TIMER_INTERVAL);
-	n->tx_timer_active = 1;
-	vq->vring.used->flags |= VRING_USED_F_NO_NOTIFY;
+        qemu_mod_timer(n->tx_timer,
+                       qemu_get_clock(vm_clock) + TX_TIMER_INTERVAL);
+        n->tx_timer_active = 1;
+        vq->vring.used->flags |= VRING_USED_F_NO_NOTIFY;
     }
 }
 
@@ -392,7 +392,7 @@ static int virtio_net_load(QEMUFile *f, void *opaque, int version_id)
     VirtIONet *n = opaque;
 
     if (version_id != 1)
-	return -EINVAL;
+        return -EINVAL;
 
     virtio_load(&n->vdev, f);
 
@@ -400,8 +400,8 @@ static int virtio_net_load(QEMUFile *f, void *opaque, int version_id)
     n->tx_timer_active = qemu_get_be32(f);
 
     if (n->tx_timer_active) {
-	qemu_mod_timer(n->tx_timer,
-		       qemu_get_clock(vm_clock) + TX_TIMER_INTERVAL);
+        qemu_mod_timer(n->tx_timer,
+                       qemu_get_clock(vm_clock) + TX_TIMER_INTERVAL);
     }
 
     return 0;
@@ -413,11 +413,11 @@ PCIDevice *virtio_net_init(PCIBus *bus, NICInfo *nd, int devfn)
     static int virtio_net_id;
 
     n = (VirtIONet *)virtio_init_pci(bus, "virtio-net", 6900, 0x1000,
-				     0, VIRTIO_ID_NET,
-				     0x02, 0x00, 0x00,
-				     6, sizeof(VirtIONet));
+                                     0, VIRTIO_ID_NET,
+                                     0x02, 0x00, 0x00,
+                                     6, sizeof(VirtIONet));
     if (!n)
-	return NULL;
+        return NULL;
 
     n->vdev.get_config = virtio_net_update_config;
     n->vdev.get_features = virtio_net_get_features;
@@ -433,7 +433,7 @@ PCIDevice *virtio_net_init(PCIBus *bus, NICInfo *nd, int devfn)
     n->mergeable_rx_bufs = 0;
 
     register_savevm("virtio-net", virtio_net_id++, 1,
-		    virtio_net_save, virtio_net_load, n);
+                    virtio_net_save, virtio_net_load, n);
 
     return (PCIDevice *)n;
 }

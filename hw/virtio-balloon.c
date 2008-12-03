@@ -79,26 +79,26 @@ static void virtio_balloon_handle_output(VirtIODevice *vdev, VirtQueue *vq)
     VirtQueueElement elem;
 
     while (virtqueue_pop(vq, &elem)) {
-	size_t offset = 0;
-	uint32_t pfn;
+        size_t offset = 0;
+        uint32_t pfn;
 
-	while (memcpy_from_iovector(&pfn, offset, 4,
+        while (memcpy_from_iovector(&pfn, offset, 4,
                                     elem.out_sg, elem.out_num) == 4) {
-	    ram_addr_t pa;
-	    ram_addr_t addr;
+            ram_addr_t pa;
+            ram_addr_t addr;
 
-	    pa = (ram_addr_t)ldl_p(&pfn) << VIRTIO_BALLOON_PFN_SHIFT;
-	    offset += 4;
+            pa = (ram_addr_t)ldl_p(&pfn) << VIRTIO_BALLOON_PFN_SHIFT;
+            offset += 4;
 
-	    addr = cpu_get_physical_page_desc(pa);
-	    if ((addr & ~TARGET_PAGE_MASK) != IO_MEM_RAM)
-		continue;
+            addr = cpu_get_physical_page_desc(pa);
+            if ((addr & ~TARGET_PAGE_MASK) != IO_MEM_RAM)
+                continue;
 
-	    balloon_page(phys_ram_base + addr, !!(vq == s->dvq));
-	}
+            balloon_page(phys_ram_base + addr, !!(vq == s->dvq));
+        }
 
-	virtqueue_push(vq, &elem, offset);
-	virtio_notify(vdev, vq);
+        virtqueue_push(vq, &elem, offset);
+        virtio_notify(vdev, vq);
     }
 }
 
@@ -114,7 +114,7 @@ static void virtio_balloon_get_config(VirtIODevice *vdev, uint8_t *config_data)
 }
 
 static void virtio_balloon_set_config(VirtIODevice *vdev,
-				      const uint8_t *config_data)
+                                      const uint8_t *config_data)
 {
     VirtIOBalloon *dev = to_virtio_balloon(vdev);
     struct virtio_balloon_config config;
@@ -132,11 +132,11 @@ static ram_addr_t virtio_balloon_to_target(void *opaque, ram_addr_t target)
     VirtIOBalloon *dev = opaque;
 
     if (target > ram_size)
-	target = ram_size;
+        target = ram_size;
 
     if (target) {
-	dev->num_pages = (ram_size - target) >> VIRTIO_BALLOON_PFN_SHIFT;
-	virtio_notify_config(&dev->vdev);
+        dev->num_pages = (ram_size - target) >> VIRTIO_BALLOON_PFN_SHIFT;
+        virtio_notify_config(&dev->vdev);
     }
 
     return ram_size - (dev->actual << VIRTIO_BALLOON_PFN_SHIFT);
@@ -172,10 +172,10 @@ void *virtio_balloon_init(PCIBus *bus)
     VirtIOBalloon *s;
 
     s = (VirtIOBalloon *)virtio_init_pci(bus, "virtio-balloon",
-					 6900, 0x1002,
-					 0, VIRTIO_ID_BALLOON,
-					 0x05, 0x00, 0x00,
-					 8, sizeof(VirtIOBalloon));
+                                         6900, 0x1002,
+                                         0, VIRTIO_ID_BALLOON,
+                                         0x05, 0x00, 0x00,
+                                         8, sizeof(VirtIOBalloon));
     if (s == NULL)
         return NULL;
 
