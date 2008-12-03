@@ -1,5 +1,6 @@
 CFLAGS += -I $(KERNELDIR)/include
 CFLAGS += -Wa,-mregnames -I test/lib
+CFLAGS += -ffreestanding
 
 cstart := test/powerpc/cstart.o
 
@@ -7,7 +8,6 @@ cflatobjs += \
 	test/lib/powerpc/io.o
 
 $(libcflat): LDFLAGS += -nostdlib
-$(libcflat): CFLAGS += -ffreestanding
 
 # these tests do not use libcflat
 simpletests := \
