@@ -46,53 +46,10 @@
 /* This means don't interrupt guest when buffer consumed. */
 #define VRING_AVAIL_F_NO_INTERRUPT      1
 
+struct VirtQueue;
+
 typedef struct VirtQueue VirtQueue;
 typedef struct VirtIODevice VirtIODevice;
-
-typedef struct VRingDesc
-{
-    uint64_t addr;
-    uint32_t len;
-    uint16_t flags;
-    uint16_t next;
-} VRingDesc;
-
-typedef struct VRingAvail
-{
-    uint16_t flags;
-    uint16_t idx;
-    uint16_t ring[0];
-} VRingAvail;
-
-typedef struct VRingUsedElem
-{
-    uint32_t id;
-    uint32_t len;
-} VRingUsedElem;
-
-typedef struct VRingUsed
-{
-    uint16_t flags;
-    uint16_t idx;
-    VRingUsedElem ring[0];
-} VRingUsed;
-
-typedef struct VRing
-{
-    unsigned int num;
-    VRingDesc *desc;
-    VRingAvail *avail;
-    VRingUsed *used;
-} VRing;
-
-struct VirtQueue
-{
-    VRing vring;
-    uint32_t pfn;
-    uint16_t last_avail_idx;
-    int inuse;
-    void (*handle_output)(VirtIODevice *vdev, VirtQueue *vq);
-};
 
 #define VIRTQUEUE_MAX_SIZE 1024
 
@@ -123,7 +80,7 @@ struct VirtIODevice
     void (*get_config)(VirtIODevice *vdev, uint8_t *config);
     void (*set_config)(VirtIODevice *vdev, const uint8_t *config);
     void (*reset)(VirtIODevice *vdev);
-    VirtQueue vq[VIRTIO_PCI_QUEUE_MAX];
+    VirtQueue *vq;
 };
 
 VirtIODevice *virtio_init_pci(PCIBus *bus, const char *name,
@@ -153,5 +110,11 @@ void virtio_save(VirtIODevice *vdev, QEMUFile *f);
 void virtio_load(VirtIODevice *vdev, QEMUFile *f);
 
 void virtio_notify_config(VirtIODevice *vdev);
+
+void virtio_queue_set_notification(VirtQueue *vq, int enable);
+
+int virtio_queue_ready(VirtQueue *vq);
+
+int virtio_queue_empty(VirtQueue *vq);
 
 #endif

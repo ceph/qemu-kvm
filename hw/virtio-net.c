@@ -101,18 +101,18 @@ static int virtio_net_can_receive(void *opaque)
 {
     VirtIONet *n = opaque;
 
-    if (n->rx_vq->vring.avail == NULL ||
+    if (!virtio_queue_ready(n->rx_vq) ||
         !(n->vdev.status & VIRTIO_CONFIG_S_DRIVER_OK))
         return 0;
 
-    if (n->rx_vq->vring.avail->idx == n->rx_vq->last_avail_idx ||
+    if (virtio_queue_empty(n->rx_vq) ||
         (n->mergeable_rx_bufs &&
          !virtqueue_avail_bytes(n->rx_vq, VIRTIO_NET_MAX_BUFSIZE, 0))) {
-        n->rx_vq->vring.used->flags &= ~VRING_USED_F_NO_NOTIFY;
+        virtio_queue_set_notification(n->rx_vq, 1);
         return 0;
     }
 
-    n->rx_vq->vring.used->flags |= VRING_USED_F_NO_NOTIFY;
+    virtio_queue_set_notification(n->rx_vq, 0);
     return 1;
 }
 
@@ -295,7 +295,7 @@ static void virtio_net_handle_tx(VirtIODevice *vdev, VirtQueue *vq)
     VirtIONet *n = to_virtio_net(vdev);
 
     if (n->tx_timer_active) {
-        vq->vring.used->flags &= ~VRING_USED_F_NO_NOTIFY;
+        virtio_queue_set_notification(vq, 1);
         qemu_del_timer(n->tx_timer);
         n->tx_timer_active = 0;
         virtio_net_flush_tx(n, vq);
@@ -303,7 +303,7 @@ static void virtio_net_handle_tx(VirtIODevice *vdev, VirtQueue *vq)
         qemu_mod_timer(n->tx_timer,
                        qemu_get_clock(vm_clock) + TX_TIMER_INTERVAL);
         n->tx_timer_active = 1;
-        vq->vring.used->flags |= VRING_USED_F_NO_NOTIFY;
+        virtio_queue_set_notification(vq, 0);
     }
 }
 
@@ -317,7 +317,7 @@ static void virtio_net_tx_timer(void *opaque)
     if (!(n->vdev.status & VIRTIO_CONFIG_S_DRIVER_OK))
         return;
 
-    n->tx_vq->vring.used->flags &= ~VRING_USED_F_NO_NOTIFY;
+    virtio_queue_set_notification(n->tx_vq, 1);
     virtio_net_flush_tx(n, n->tx_vq);
 }
 
