@@ -27,6 +27,7 @@
 #include "net.h"
 #include "pc.h"
 #include "qemu-kvm.h"
+#include "virtio-net.h"
 
 //#define DEBUG_PCI
 
