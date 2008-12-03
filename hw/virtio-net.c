@@ -198,6 +198,7 @@ static void virtio_net_receive(void *opaque, const uint8_t *buf, int size)
     while (offset < size) {
         VirtQueueElement elem;
         int len, total;
+        struct iovec sg[VIRTQUEUE_MAX_SIZE];
 
         len = total = 0;
 
@@ -219,17 +220,19 @@ static void virtio_net_receive(void *opaque, const uint8_t *buf, int size)
             exit(1);
         }
 
+        memcpy(&sg, &elem.in_sg[0], sizeof(sg[0]) * elem.in_num);
+
         if (i == 0) {
             if (n->mergeable_rx_bufs)
-                mhdr = (struct virtio_net_hdr_mrg_rxbuf *)elem.in_sg[0].iov_base;
+                mhdr = (struct virtio_net_hdr_mrg_rxbuf *)sg[0].iov_base;
 
-            offset += receive_header(n, &elem.in_sg[0], elem.in_num,
+            offset += receive_header(n, sg, elem.in_num,
                                      buf + offset, size - offset, hdr_len);
             total += hdr_len;
         }
 
         /* copy in packet.  ugh */
-        len = iov_fill(&elem.in_sg[0], elem.in_num,
+        len = iov_fill(sg, elem.in_num,
                        buf + offset, size - offset);
         total += len;
 
