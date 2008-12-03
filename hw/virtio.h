@@ -58,6 +58,7 @@ typedef struct VirtQueueElement
     unsigned int index;
     unsigned int out_num;
     unsigned int in_num;
+    target_phys_addr_t in_addr[VIRTQUEUE_MAX_SIZE];
     struct iovec in_sg[VIRTQUEUE_MAX_SIZE];
     struct iovec out_sg[VIRTQUEUE_MAX_SIZE];
 } VirtQueueElement;
