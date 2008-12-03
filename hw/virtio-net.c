@@ -163,7 +163,7 @@ static int receive_header(VirtIONet *n, struct iovec *iov, int iovcnt,
                           const void *buf, int size, int hdr_len)
 {
     struct virtio_net_hdr *hdr = iov[0].iov_base;
-    int offset;
+    int offset = 0;
 
     hdr->flags = 0;
     hdr->gso_type = VIRTIO_NET_HDR_GSO_NONE;
