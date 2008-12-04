@@ -30,17 +30,25 @@ srcdir = .
 
 SHELL = /bin/sh
 
-
-
 CXX = g++
 CXXFLAGS = -g -O2 -D_FILE_OFFSET_BITS=64 -D_LARGE_FILES
+
+# cc-option, copied from user/Makefile
+# Usage: OP_CFLAGS+=$(call cc-option, -falign-functions=0, -malign-functions=0)
+
+cc-option = $(shell if $(CC) $(1) -S -o /dev/null -xc /dev/null \
+              > /dev/null 2>&1; then echo "$(1)"; else echo "$(2)"; fi ;)
+
+CFLAGS = -m32
+CFLAGS += $(call cc-option, -fno-stack-protector, "")
+CFLAGS += $(call cc-option, -fno-stack-protector-all, "")
 
 LDFLAGS = 
 LIBS =  -lm
 RANLIB = ranlib
 
 BCC = bcc
-GCC = gcc -m32
+GCC = gcc $(CFLAGS)
 HOST_CC = gcc
 AS86 = as86
 
