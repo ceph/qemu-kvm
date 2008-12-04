@@ -250,8 +250,6 @@ typedef struct CirrusVGAState {
     int cirrus_linear_io_addr;
     int cirrus_linear_bitblt_io_addr;
     int cirrus_mmio_io_addr;
-    unsigned long cirrus_lfb_addr;
-    unsigned long cirrus_lfb_end;
     uint32_t cirrus_addr_mask;
     uint32_t linear_mmio_mask;
     uint8_t cirrus_shadow_gr0;
@@ -3114,11 +3112,6 @@ static void cirrus_vga_save(QEMUFile *f, void *opaque)
     qemu_put_be32s(f, &s->hw_cursor_y);
     /* XXX: we do not save the bitblt state - we assume we do not save
        the state when the blitter is active */
-
-    if (kvm_enabled()) { /* XXX: KVM images ought to be loadable in QEMU */
-	qemu_put_be32s(f, &s->real_vram_size);
-	qemu_put_buffer(f, s->vram_ptr, s->real_vram_size);
-    }
 }
 
 static int cirrus_vga_load(QEMUFile *f, void *opaque, int version_id)
@@ -3329,15 +3322,6 @@ static void cirrus_pci_lfb_map(PCIDevice *d, int region_num,
     /* XXX: add byte swapping apertures */
     cpu_register_physical_memory(addr, s->vram_size,
 				 s->cirrus_linear_io_addr);
-    if (kvm_enabled()) {
-	s->cirrus_lfb_addr = addr;
-	s->cirrus_lfb_end = addr + VGA_RAM_SIZE;
-
-	if (s->map_addr && (s->cirrus_lfb_addr != s->map_addr) &&
-	    (s->cirrus_lfb_end != s->map_end))
-	    printf("cirrus vga map change while on lfb mode\n");
-    }
-
     cpu_register_physical_memory(addr + 0x1000000, 0x400000,
 				 s->cirrus_linear_bitblt_io_addr);
 

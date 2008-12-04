@@ -1702,7 +1702,6 @@ static void vga_draw_graphic(VGAState *s, int full_update)
         update = full_update |
             cpu_physical_memory_get_dirty(page0, VGA_DIRTY_FLAG) |
             cpu_physical_memory_get_dirty(page1, VGA_DIRTY_FLAG);
-
         if ((page1 - page0) > TARGET_PAGE_SIZE) {
             /* if wide line, can use another page */
             update |= cpu_physical_memory_get_dirty(page0 + TARGET_PAGE_SIZE,
@@ -2579,31 +2578,6 @@ int pci_vga_init(PCIBus *bus, DisplayState *ds, uint8_t *vga_ram_base,
                                PCI_ADDRESS_SPACE_MEM_PREFETCH, vga_map);
     }
     return 0;
-}
-
-void *vga_update_vram(VGAState *s, void *vga_ram_base, int vga_ram_size)
-{
-    uint8_t *old_pointer;
-
-    if (s->vram_size != vga_ram_size) {
-        fprintf(stderr, "No support to change vga_ram_size\n");
-        return NULL;
-    }
-
-    if (!vga_ram_base) {
-        vga_ram_base = qemu_malloc(vga_ram_size);
-        if (!vga_ram_base) {
-            fprintf(stderr, "reallocate error\n");
-            return NULL;
-        }
-    }
-
-    /* XXX lock needed? */
-    memcpy(vga_ram_base, s->vram_ptr, vga_ram_size);
-    old_pointer = s->vram_ptr;
-    s->vram_ptr = vga_ram_base;
-
-    return old_pointer;
 }
 
 /********************************************************/

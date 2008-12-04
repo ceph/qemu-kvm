@@ -173,11 +173,6 @@ typedef void (* vga_update_retrace_info_fn)(struct VGAState *s);
     /* tell for each page if it has been updated since the last time */ \
     uint32_t last_palette[256];                                         \
     uint32_t last_ch_attr[CH_ATTR_SIZE]; /* XXX: make it dynamic */     \
-    /* kvm */                                                           \
-    int32_t  aliases_enabled;                                           \
-    int32_t  pad1;                                                      \
-    uint32_t aliased_bank_base[2];                                      \
-    uint32_t aliased_bank_limit[2];                                     \
     /* retrace */                                                       \
     vga_retrace_fn retrace;                                             \
     vga_update_retrace_info_fn update_retrace_info;                     \
@@ -222,12 +217,5 @@ void vga_draw_cursor_line_32(uint8_t *d1, const uint8_t *src1,
                              unsigned int color0, unsigned int color1,
                              unsigned int color_xor);
 
-/* let kvm create vga memory */
-void set_vram_mapping(void *mem, unsigned long begin, unsigned long end);
-void unset_vram_mapping(void *mem, unsigned long begin, unsigned long end);
-
-void *vga_update_vram(VGAState *s, void *vga_ram_base, int vga_ram_size);
-void vga_update_vram_mapping(VGAState *s, unsigned long vga_ram_begin,
-			     unsigned long vga_ram_end);
 extern const uint8_t sr_mask[8];
 extern const uint8_t gr_mask[16];
