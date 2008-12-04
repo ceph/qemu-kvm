@@ -2633,6 +2633,7 @@ static CPUWriteMemoryFunc *cirrus_linear_bitblt_write[3] = {
 static void map_linear_vram(CirrusVGAState *s)
 {
 
+    vga_dirty_log_stop((VGAState *)s);
     if (!s->map_addr && s->lfb_addr && s->lfb_end) {
         s->map_addr = s->lfb_addr;
         s->map_end = s->lfb_end;
@@ -2650,6 +2651,11 @@ static void map_linear_vram(CirrusVGAState *s)
         && !((s->gr[0x0B] & 0x14) == 0x14)
         && !(s->gr[0x0B] & 0x02)) {
 
+        vga_dirty_log_stop((VGAState *)s);
+        cpu_register_physical_memory(isa_mem_base + 0xa0000, 0x8000,
+                                    (s->vram_offset + s->cirrus_bank_base[0]) | IO_MEM_UNASSIGNED);
+        cpu_register_physical_memory(isa_mem_base + 0xa8000, 0x8000,
+                                    (s->vram_offset + s->cirrus_bank_base[1]) | IO_MEM_UNASSIGNED);
         cpu_register_physical_memory(isa_mem_base + 0xa0000, 0x8000,
                                     (s->vram_offset + s->cirrus_bank_base[0]) | IO_MEM_RAM);
         cpu_register_physical_memory(isa_mem_base + 0xa8000, 0x8000,
