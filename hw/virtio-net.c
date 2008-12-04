@@ -15,7 +15,11 @@
 #include "net.h"
 #include "qemu-timer.h"
 #include "virtio-net.h"
+#ifdef USE_KVM
 #include "qemu-kvm.h"
+#endif
+
+#define TAP_VNET_HDR
 
 typedef struct VirtIONet
 {
@@ -49,9 +53,10 @@ static void virtio_net_update_config(VirtIODevice *vdev, uint8_t *config)
 
 static uint32_t virtio_net_get_features(VirtIODevice *vdev)
 {
+    uint32_t features = (1 << VIRTIO_NET_F_MAC);
+#ifdef TAP_VNET_HDR
     VirtIONet *n = to_virtio_net(vdev);
     VLANClientState *host = n->vc->vlan->first_client;
-    uint32_t features = (1 << VIRTIO_NET_F_MAC);
 
     if (tap_has_vnet_hdr(host)) {
         tap_using_vnet_hdr(host, 1);
@@ -66,6 +71,7 @@ static uint32_t virtio_net_get_features(VirtIODevice *vdev)
         features |= (1 << VIRTIO_NET_F_MRG_RXBUF);
         /* Kernel can't actually handle UFO in software currently. */
     }
+#endif
 
     return features;
 }
@@ -73,10 +79,13 @@ static uint32_t virtio_net_get_features(VirtIODevice *vdev)
 static void virtio_net_set_features(VirtIODevice *vdev, uint32_t features)
 {
     VirtIONet *n = to_virtio_net(vdev);
+#ifdef TAP_VNET_HDR
     VLANClientState *host = n->vc->vlan->first_client;
+#endif
 
     n->mergeable_rx_bufs = !!(features & (1 << VIRTIO_NET_F_MRG_RXBUF));
 
+#ifdef TAP_VNET_HDR
     if (!tap_has_vnet_hdr(host) || !host->set_offload)
         return;
 
@@ -85,29 +94,30 @@ static void virtio_net_set_features(VirtIODevice *vdev, uint32_t features)
                       (features >> VIRTIO_NET_F_GUEST_TSO4) & 1,
                       (features >> VIRTIO_NET_F_GUEST_TSO6) & 1,
                       (features >> VIRTIO_NET_F_GUEST_ECN)  & 1);
+#endif
 }
 
 /* RX */
 
 static void virtio_net_handle_rx(VirtIODevice *vdev, VirtQueue *vq)
 {
+#ifdef USE_KVM
     /* We now have RX buffers, signal to the IO thread to break out of the
        select to re-poll the tap file descriptor */
     if (kvm_enabled())
         qemu_kvm_notify_work();
+#endif
 }
 
-static int virtio_net_can_receive(void *opaque)
+static int do_virtio_net_can_receive(VirtIONet *n, int bufsize)
 {
-    VirtIONet *n = opaque;
-
     if (!virtio_queue_ready(n->rx_vq) ||
         !(n->vdev.status & VIRTIO_CONFIG_S_DRIVER_OK))
         return 0;
 
     if (virtio_queue_empty(n->rx_vq) ||
         (n->mergeable_rx_bufs &&
-         !virtqueue_avail_bytes(n->rx_vq, VIRTIO_NET_MAX_BUFSIZE, 0))) {
+         !virtqueue_avail_bytes(n->rx_vq, bufsize, 0))) {
         virtio_queue_set_notification(n->rx_vq, 1);
         return 0;
     }
@@ -116,6 +126,14 @@ static int virtio_net_can_receive(void *opaque)
     return 1;
 }
 
+static int virtio_net_can_receive(void *opaque)
+{
+    VirtIONet *n = opaque;
+
+    return do_virtio_net_can_receive(n, VIRTIO_NET_MAX_BUFSIZE);
+}
+
+#ifdef TAP_VNET_HDR
 /* dhclient uses AF_PACKET but doesn't pass auxdata to the kernel so
  * it never finds out that the packets don't have valid checksums.  This
  * causes dhclient to get upset.  Fedora's carried a patch for ages to
@@ -143,6 +161,7 @@ static void work_around_broken_dhclient(struct virtio_net_hdr *hdr,
         hdr->flags &= ~VIRTIO_NET_HDR_F_NEEDS_CSUM;
     }
 }
+#endif
 
 static int iov_fill(struct iovec *iov, int iovcnt, const void *buf, int count)
 {
@@ -168,11 +187,13 @@ static int receive_header(VirtIONet *n, struct iovec *iov, int iovcnt,
     hdr->flags = 0;
     hdr->gso_type = VIRTIO_NET_HDR_GSO_NONE;
 
+#ifdef TAP_VNET_HDR
     if (tap_has_vnet_hdr(n->vc->vlan->first_client)) {
         memcpy(hdr, buf, sizeof(*hdr));
         offset = sizeof(*hdr);
         work_around_broken_dhclient(hdr, buf + offset, size - offset);
     }
+#endif
 
     /* We only ever receive a struct virtio_net_hdr from the tapfd,
      * but we may be passing along a larger header to the guest.
@@ -188,6 +209,9 @@ static void virtio_net_receive(void *opaque, const uint8_t *buf, int size)
     VirtIONet *n = opaque;
     struct virtio_net_hdr_mrg_rxbuf *mhdr = NULL;
     int hdr_len, offset, i;
+
+    if (!do_virtio_net_can_receive(n, size))
+        return;
 
     /* hdr_len refers to the header we supply to the guest */
     hdr_len = n->mergeable_rx_bufs ?
@@ -253,7 +277,11 @@ static void virtio_net_receive(void *opaque, const uint8_t *buf, int size)
 static void virtio_net_flush_tx(VirtIONet *n, VirtQueue *vq)
 {
     VirtQueueElement elem;
+#ifdef TAP_VNET_HDR
     int has_vnet_hdr = tap_has_vnet_hdr(n->vc->vlan->first_client);
+#else
+    int has_vnet_hdr = 0;
+#endif
 
     if (!(n->vdev.status & VIRTIO_CONFIG_S_DRIVER_OK))
         return;
