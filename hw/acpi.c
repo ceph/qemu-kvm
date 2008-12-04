@@ -24,9 +24,7 @@
 #include "i2c.h"
 #include "smbus.h"
 #include "kvm.h"
-#ifdef USE_KVM
 #include "qemu-kvm.h"
-#endif
 #include "string.h"
 
 //#define DEBUG
