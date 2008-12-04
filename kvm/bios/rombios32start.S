@@ -32,9 +32,16 @@ _start:
   /* clear bss section */
   xor %eax, %eax
   mov $__bss_start, %edi
-  mov $_end, %ecx
+  mov $__bss_end, %ecx
   sub %edi, %ecx
   rep stosb
+
+  /* copy data section */
+  mov $_end, %esi
+  mov $__data_start, %edi
+  mov $__data_end, %ecx
+  sub %edi, %ecx
+  rep movsb
 
   jmp rombios32_init
 
