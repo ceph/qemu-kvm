@@ -2116,17 +2116,29 @@ typedef struct PCIVGAState {
 
 static int s1, s2;
 
+static void mark_dirty(target_phys_addr_t start, target_phys_addr_t len)
+{
+    target_phys_addr_t end = start + len;
+
+    while (start < end) {
+        cpu_physical_memory_set_dirty(cpu_get_physical_page_desc(start));
+        start += TARGET_PAGE_SIZE;
+    }
+}
+
 void vga_dirty_log_start(VGAState *s)
 {
     if (kvm_enabled() && s->map_addr)
         if (!s1) {
             kvm_log_start(s->map_addr, s->map_end - s->map_addr);
+            mark_dirty(s->map_addr, s->map_end - s->map_addr);
             s1 = 1;
         }
     if (kvm_enabled() && s->lfb_vram_mapped) {
         if (!s2) {
             kvm_log_start(isa_mem_base + 0xa0000, 0x8000);
             kvm_log_start(isa_mem_base + 0xa8000, 0x8000);
+            mark_dirty(isa_mem_base + 0xa0000, 0x10000);
         }
         s2 = 1;
     }
