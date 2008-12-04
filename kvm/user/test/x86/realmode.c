@@ -141,6 +141,19 @@ int regs_equal(const struct regs *r1, const struct regs *r2, int ignore)
 		);				   \
 	extern u8 insn_##name[], insn_##name##_end[]
 
+void test_shld(const struct regs *inregs, struct regs *outregs)
+{
+	MK_INSN(shld_test, "shld $8,%edx,%eax\n\t");
+
+	exec_in_big_real_mode(inregs, outregs,
+			      insn_shld_test,
+			      insn_shld_test_end - insn_shld_test);
+	if (outregs->eax != 0xbeef)
+		print_serial("shld: failure\n");
+	else
+		print_serial("shld: success\n");
+}
+
 void test_mov_imm(const struct regs *inregs, struct regs *outregs)
 {
 	MK_INSN(mov_r32_imm_1, "mov $1234567890, %eax");
@@ -360,11 +373,17 @@ void start(void)
 	if (!regs_equal(&inregs, &outregs, 0))
 		print_serial("null test: FAIL\n");
 	test_call(&inregs, &outregs);
+
+	inregs.eax = 0xbe;
+	inregs.edx = 0xef000000;
+	test_shld(&inregs, &outregs);
+
 	test_mov_imm(&inregs, &outregs);
 	test_cmp_imm(&inregs, &outregs);
 	test_add_imm(&inregs, &outregs);
 	test_io(&inregs, &outregs);
 	test_eflags_insn(&inregs, &outregs);
+
 	exit(0);
 }
 
