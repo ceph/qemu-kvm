@@ -117,7 +117,7 @@ void kvm_update_interrupt_request(CPUState *env)
     int signal = 0;
 
     if (env) {
-        if (current_env && !current_env->kvm_cpu_state.created)
+        if (!current_env || !current_env->kvm_cpu_state.created)
             signal = 1;
         /*
          * Testing for created here is really redundant
