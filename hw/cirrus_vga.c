@@ -3366,6 +3366,7 @@ static void pci_cirrus_write_config(PCIDevice *d,
     pci_default_write_config(d, address, val, len);
     if (s->map_addr && pvs->dev.io_regions[0].addr == -1)
         s->map_addr = 0;
+    cirrus_update_memory_access(s);
     vga_dirty_log_start((VGAState *)s);
 }
 
