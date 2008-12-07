@@ -3601,11 +3601,11 @@ cdrom_boot()
     if (atapi_is_cdrom(device)) break;
     }
 
-  if(error = atapi_is_ready(device) != 0)
-    BX_INFO("ata_is_ready returned %d\n",error);
-
   // if not found
   if(device >= BX_MAX_ATA_DEVICES) return 2;
+
+  if(error = atapi_is_ready(device) != 0)
+    BX_INFO("ata_is_ready returned %d\n",error);
 
   // Read the Boot Record Volume Descriptor
   memsetb(get_SS(),atacmd,0,12);
