@@ -117,16 +117,18 @@ struct ioperm_data {
     LIST_ENTRY(ioperm_data) entries;
 };
 
+int qemu_kvm_has_sync_mmu(void);
+
 #define kvm_enabled() (kvm_allowed)
 #define qemu_kvm_irqchip_in_kernel() kvm_irqchip_in_kernel(kvm_context)
 #define qemu_kvm_pit_in_kernel() kvm_pit_in_kernel(kvm_context)
-#define qemu_kvm_has_sync_mmu() kvm_has_sync_mmu(kvm_context)
+#define kvm_has_sync_mmu() qemu_kvm_has_sync_mmu()
 void kvm_init_vcpu(CPUState *env);
 #else
 #define kvm_enabled() (0)
 #define qemu_kvm_irqchip_in_kernel() (0)
 #define qemu_kvm_pit_in_kernel() (0)
-#define qemu_kvm_has_sync_mmu() (0)
+#define kvm_has_sync_mmu() (0)
 #define kvm_load_registers(env) do {} while(0)
 #define kvm_save_registers(env) do {} while(0)
 static inline void kvm_init_vcpu(CPUState *env) { }

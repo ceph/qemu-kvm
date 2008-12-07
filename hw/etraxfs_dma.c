@@ -165,10 +165,8 @@ enum dma_ch_state
 
 struct fs_dma_channel
 {
-	int regmap;
 	qemu_irq *irq;
 	struct etraxfs_dma_client *client;
-
 
 	/* Internal status.  */
 	int stream_cmd_src;
@@ -187,8 +185,8 @@ struct fs_dma_channel
 
 struct fs_dma_ctrl
 {
+	int map;
 	CPUState *env;
-	target_phys_addr_t base;
 
 	int nr_channels;
 	struct fs_dma_channel *channels;
@@ -212,10 +210,10 @@ static inline int channel_en(struct fs_dma_ctrl *ctrl, int c)
 		&& ctrl->channels[c].client;
 }
 
-static inline int fs_channel(target_phys_addr_t base, target_phys_addr_t addr)
+static inline int fs_channel(target_phys_addr_t addr)
 {
 	/* Every channel has a 0x2000 ctrl register map.  */
-	return (addr - base) >> 13;
+	return addr >> 13;
 }
 
 #ifdef USE_THIS_DEAD_CODE
@@ -571,9 +569,9 @@ dma_readl (void *opaque, target_phys_addr_t addr)
 	int c;
 	uint32_t r = 0;
 
-	/* Make addr relative to this instances base.  */
-	c = fs_channel(ctrl->base, addr);
-	addr &= 0x1fff;
+	/* Make addr relative to this channel and bounded to nr regs.  */
+	c = fs_channel(addr);
+	addr &= 0xff;
 	switch (addr)
 	{
 		case RW_STAT:
@@ -617,9 +615,9 @@ dma_writel (void *opaque, target_phys_addr_t addr, uint32_t value)
         struct fs_dma_ctrl *ctrl = opaque;
 	int c;
 
-        /* Make addr relative to this instances base.  */
-	c = fs_channel(ctrl->base, addr);
-        addr &= 0x1fff;
+        /* Make addr relative to this channel and bounded to nr regs.  */
+	c = fs_channel(addr);
+        addr &= 0xff;
         switch (addr)
 	{
 		case RW_DATA:
@@ -745,7 +743,6 @@ void *etraxfs_dmac_init(CPUState *env,
 			target_phys_addr_t base, int nr_channels)
 {
 	struct fs_dma_ctrl *ctrl = NULL;
-	int i;
 
 	ctrl = qemu_mallocz(sizeof *ctrl);
 	if (!ctrl)
@@ -753,24 +750,14 @@ void *etraxfs_dmac_init(CPUState *env,
 
         ctrl->bh = qemu_bh_new(DMA_run, ctrl);
 
-	ctrl->base = base;
 	ctrl->env = env;
 	ctrl->nr_channels = nr_channels;
 	ctrl->channels = qemu_mallocz(sizeof ctrl->channels[0] * nr_channels);
 	if (!ctrl->channels)
 		goto err;
 
-	for (i = 0; i < nr_channels; i++)
-	{
-		ctrl->channels[i].regmap = cpu_register_io_memory(0,
-								  dma_read, 
-								  dma_write, 
-								  ctrl);
-		cpu_register_physical_memory (base + i * 0x2000,
-					      sizeof ctrl->channels[i].regs, 
-					      ctrl->channels[i].regmap);
-	}
-
+	ctrl->map = cpu_register_io_memory(0, dma_read, dma_write, ctrl);
+	cpu_register_physical_memory(base, nr_channels * 0x2000, ctrl->map);
 	return ctrl;
   err:
 	qemu_free(ctrl->channels);

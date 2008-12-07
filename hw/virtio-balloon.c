@@ -18,6 +18,7 @@
 #include "cpu.h"
 #include "balloon.h"
 #include "virtio-balloon.h"
+#include "kvm.h"
 #include "qemu-kvm.h"
 
 #if defined(__linux__)
@@ -40,7 +41,7 @@ static VirtIOBalloon *to_virtio_balloon(VirtIODevice *vdev)
 static void balloon_page(void *addr, int deflate)
 {
 #if defined(__linux__)
-    if (!kvm_enabled() || qemu_kvm_has_sync_mmu())
+    if (!kvm_enabled() || kvm_has_sync_mmu())
         madvise(addr, TARGET_PAGE_SIZE,
                 deflate ? MADV_WILLNEED : MADV_DONTNEED);
 #endif

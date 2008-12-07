@@ -34,7 +34,6 @@
 #include "block.h"
 #include "audio/audio.h"
 #include "disas.h"
-#include "migration.h"
 #include "balloon.h"
 #include <dirent.h>
 #include "qemu-timer.h"
@@ -1430,12 +1429,12 @@ static void do_info_balloon(void)
     ram_addr_t actual;
 
     actual = qemu_balloon_status();
-    if (kvm_enabled() && !qemu_kvm_has_sync_mmu())
+    if (kvm_enabled() && !kvm_has_sync_mmu())
         term_printf("Using KVM without synchronous MMU, ballooning disabled\n");
     else if (actual == 0)
-	term_printf("Ballooning not activated in VM\n");
+        term_printf("Ballooning not activated in VM\n");
     else
-	term_printf("balloon: actual=%d\n", (int)(actual >> 20));
+        term_printf("balloon: actual=%d\n", (int)(actual >> 20));
 }
 
 static const term_cmd_t term_cmds[] = {
@@ -1523,6 +1522,8 @@ static const term_cmd_t term_cmds[] = {
       "", "cancel the current VM migration" },
     { "migrate_set_speed", "s", do_migrate_set_speed,
       "value", "set maximum speed (in bytes) for migrations" },
+    { "balloon", "i", do_balloon,
+      "target", "request VM to change it's memory allocation (in MB)" },
     { "cpu_set", "is", do_cpu_set_nr, "cpu [online|offline]", "change cpu state" },
 #if defined(TARGET_I386) || defined(TARGET_X86_64)
     { "drive_add", "iss", drive_hot_add, "pcibus pcidevfn [file=file][,if=type][,bus=n]\n"
@@ -1533,8 +1534,6 @@ static const term_cmd_t term_cmds[] = {
     { "pci_add", "iss", device_hot_add, "bus nic|storage|host [[vlan=n][,macaddr=addr][,model=type]] [file=file][,if=type][,bus=nr]... [host=02:00.0[,name=string][,dma=none]", "hot-add PCI device" },
     { "pci_del", "ii", device_hot_remove, "bus slot-number", "hot remove PCI device" },
 #endif
-    { "balloon", "i", do_balloon,
-      "target", "request VM to change it's memory allocation (in MB)" },
     { NULL, NULL, },
 };
 

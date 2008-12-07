@@ -833,7 +833,7 @@ int kvm_setup_guest_memory(void *area, unsigned long size)
     int ret = 0;
 
 #ifdef MADV_DONTFORK
-    if (kvm_enabled() && !kvm_has_sync_mmu(kvm_context))
+    if (kvm_enabled() && !kvm_has_sync_mmu())
         ret = madvise(area, size, MADV_DONTFORK);
 #endif
 
@@ -1093,3 +1093,9 @@ int kvm_log_stop(target_phys_addr_t phys_addr, target_phys_addr_t len)
     return 0;
 }
 
+/* hack: both libkvm and upstream qemu define kvm_has_sync_mmu(), differently */
+#undef kvm_has_sync_mmu
+int qemu_kvm_has_sync_mmu(void)
+{
+    return kvm_has_sync_mmu(kvm_context);
+}

@@ -531,11 +531,7 @@ struct CPUPPCState {
      * during translated code execution
      */
 #if TARGET_LONG_BITS > HOST_LONG_BITS
-    target_ulong t0, t1;
-#endif
-     /* XXX: this is a temporary workaround for i386. cf translate.c comment */
-#if (TARGET_LONG_BITS > HOST_LONG_BITS) || defined(HOST_I386)
-    target_ulong t2;
+    target_ulong t0;
 #endif
 
     /* general purpose registers */
@@ -583,7 +579,7 @@ struct CPUPPCState {
 #endif
     /* segment registers */
     target_ulong sdr1;
-    target_ulong sr[16];
+    target_ulong sr[32];
     /* BATs */
     int nb_BATs;
     target_ulong DBAT[2][8];

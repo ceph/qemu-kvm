@@ -12,7 +12,6 @@
  */
 
 #include <inttypes.h>
-#include <err.h>
 
 #include "virtio.h"
 #include "sysemu.h"
@@ -51,6 +50,14 @@
 
 /* Virtio ABI version, if we increment this, we break the guest driver. */
 #define VIRTIO_PCI_ABI_VERSION          0
+
+/* How many bits to shift physical queue address written to QUEUE_PFN.
+ * 12 is historical, and due to x86 page size. */
+#define VIRTIO_PCI_QUEUE_ADDR_SHIFT    12
+
+/* The alignment to use between consumer and producer parts of vring.
+ * x86 pagesize again. */
+#define VIRTIO_PCI_VRING_ALIGN         4096
 
 /* QEMU doesn't strictly need write barriers since everything runs in
  * lock-step.  We'll leave the calls to wmb() in though to make it obvious for
@@ -147,7 +154,9 @@ static void virtqueue_init(VirtQueue *vq, target_phys_addr_t pa)
 {
     vq->vring.desc = pa;
     vq->vring.avail = pa + vq->vring.num * sizeof(VRingDesc);
-    vq->vring.used = TARGET_PAGE_ALIGN(vq->vring.avail + offsetof(VRingAvail, ring[vq->vring.num]));
+    vq->vring.used = vring_align(vq->vring.avail +
+                                 offsetof(VRingAvail, ring[vq->vring.num]),
+                                 VIRTIO_PCI_VRING_ALIGN);
 }
 
 static inline uint64_t vring_desc_addr(VirtQueue *vq, int i)
@@ -321,9 +330,11 @@ static int virtqueue_num_heads(VirtQueue *vq, unsigned int idx)
     uint16_t num_heads = vring_avail_idx(vq) - idx;
 
     /* Check it isn't doing very strange things with descriptor numbers. */
-    if (num_heads > vq->vring.num)
-        errx(1, "Guest moved used index from %u to %u",
-             idx, vring_avail_idx(vq));
+    if (num_heads > vq->vring.num) {
+        fprintf(stderr, "Guest moved used index from %u to %u",
+                idx, vring_avail_idx(vq));
+        exit(1);
+    }
 
     return num_heads;
 }
@@ -337,8 +348,10 @@ static unsigned int virtqueue_get_head(VirtQueue *vq, unsigned int idx)
     head = vring_avail_ring(vq, idx % vq->vring.num);
 
     /* If their number is silly, that's a fatal mistake. */
-    if (head >= vq->vring.num)
-        errx(1, "Guest says index %u is available", head);
+    if (head >= vq->vring.num) {
+        fprintf(stderr, "Guest says index %u is available", head);
+        exit(1);
+    }
 
     return head;
 }
@@ -356,8 +369,10 @@ static unsigned virtqueue_next_desc(VirtQueue *vq, unsigned int i)
     /* Make sure compiler knows to grab that: we don't want it changing! */
     wmb();
 
-    if (next >= vq->vring.num)
-        errx(1, "Desc next is %u", next);
+    if (next >= vq->vring.num) {
+        fprintf(stderr, "Desc next is %u", next);
+        exit(1);
+    }
 
     return next;
 }
@@ -376,8 +391,10 @@ int virtqueue_avail_bytes(VirtQueue *vq, int in_bytes, int out_bytes)
         i = virtqueue_get_head(vq, idx++);
         do {
             /* If we've got too many, that implies a descriptor loop. */
-            if (++num_bufs > vq->vring.num)
-                errx(1, "Looped descriptor");
+            if (++num_bufs > vq->vring.num) {
+                fprintf(stderr, "Looped descriptor");
+                exit(1);
+            }
 
             if (vring_desc_flags(vq, i) & VRING_DESC_F_WRITE) {
                 if (in_bytes > 0 &&
@@ -430,19 +447,23 @@ int virtqueue_pop(VirtQueue *vq, VirtQueueElement *elem)
             sg->iov_len = 2 << 20;
 
         sg->iov_base = qemu_malloc(sg->iov_len);
-        if (sg->iov_base &&
+        if (sg->iov_base && 
             !(vring_desc_flags(vq, i) & VRING_DESC_F_WRITE)) {
             cpu_physical_memory_read(vring_desc_addr(vq, i),
                                      sg->iov_base,
                                      sg->iov_len);
         }
 #endif
-        if (sg->iov_base == NULL)
-            errx(1, "Invalid mapping\n");
+        if (sg->iov_base == NULL) {
+            fprintf(stderr, "Invalid mapping\n");
+            exit(1);
+        }
 
         /* If we've got too many, that implies a descriptor loop. */
-        if ((elem->in_num + elem->out_num) > vq->vring.num)
-            errx(1, "Looped descriptor");
+        if ((elem->in_num + elem->out_num) > vq->vring.num) {
+            fprintf(stderr, "Looped descriptor");
+            exit(1);
+        }
     } while ((i = virtqueue_next_desc(vq, i)) != vq->vring.num);
 
     elem->index = head;
@@ -501,7 +522,7 @@ static void virtio_ioport_write(void *opaque, uint32_t addr, uint32_t val)
         vdev->features = val;
         break;
     case VIRTIO_PCI_QUEUE_PFN:
-        pa = (ram_addr_t)val << TARGET_PAGE_BITS;
+        pa = (ram_addr_t)val << VIRTIO_PCI_QUEUE_ADDR_SHIFT;
         vdev->vq[vdev->queue_sel].pfn = val;
         if (pa == 0) {
             virtio_reset(vdev);
@@ -776,7 +797,7 @@ void virtio_load(VirtIODevice *vdev, QEMUFile *f)
         if (vdev->vq[i].pfn) {
             target_phys_addr_t pa;
 
-            pa = (ram_addr_t)vdev->vq[i].pfn << TARGET_PAGE_BITS;
+            pa = (ram_addr_t)vdev->vq[i].pfn << VIRTIO_PCI_QUEUE_ADDR_SHIFT;
             virtqueue_init(&vdev->vq[i], pa);
         }
     }

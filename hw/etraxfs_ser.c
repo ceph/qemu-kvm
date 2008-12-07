@@ -50,8 +50,6 @@ struct etrax_serial_t
 	CharDriverState *chr;
 	qemu_irq *irq;
 
-	target_phys_addr_t base;
-
 	int pending_tx;
 
 	/* Control registers.  */
@@ -99,7 +97,7 @@ static uint32_t ser_readl (void *opaque, target_phys_addr_t addr)
 	D(CPUState *env = s->env);
 	uint32_t r = 0;
 
-	switch (addr & 0xfff)
+	switch (addr)
 	{
 		case RW_TR_CTRL:
 			r = s->rw_tr_ctrl;
@@ -152,7 +150,7 @@ ser_writel (void *opaque, target_phys_addr_t addr, uint32_t value)
 	unsigned char ch = value;
 	D(CPUState *env = s->env);
 
-	switch (addr & 0xfff)
+	switch (addr)
 	{
 		case RW_TR_CTRL:
 			D(printf("rw_tr_ctrl=%x\n", value));
@@ -240,8 +238,6 @@ void etraxfs_ser_init(CPUState *env, qemu_irq *irq, CharDriverState *chr,
 
 	s->env = env;
 	s->irq = irq;
-	s->base = base;
-
 	s->chr = chr;
 
 	/* transmitter begins ready and idle.  */

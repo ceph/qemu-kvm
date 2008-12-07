@@ -1073,6 +1073,17 @@ EOF
 fi
 
 ##########################################
+# iovec probe
+cat > $TMPC <<EOF
+#include <sys/uio.h>
+int main(void) { struct iovec iov; return 0; }
+EOF
+iovec=no
+if $cc $ARCH_CFLAGS -o $TMPE $TMPC 2> /dev/null ; then
+  iovec=yes
+fi
+
+##########################################
 # signalfd probe
 cat > $TMPC << EOF
 #define _GNU_SOURCE
@@ -1341,6 +1352,15 @@ EOF
   if $cc $ARCH_CFLAGS -o $TMPE $TMPC 2> /dev/null ; then
     echo "#define HAVE_BYTESWAP_H 1" >> $config_h
   fi
+  cat > $TMPC << EOF
+#include <sys/endian.h>
+#include <sys/types.h>
+#include <machine/bswap.h>
+int main(void) { return bswap32(0); }
+EOF
+  if $cc $ARCH_CFLAGS -o $TMPE $TMPC 2> /dev/null ; then
+    echo "#define HAVE_MACHINE_BSWAP_H 1" >> $config_h
+  fi
 fi
 
 if [ "$openbsd" = "yes" ] ; then
@@ -1479,6 +1499,9 @@ if test "$aio" = "yes" ; then
 fi
 if test "$blobs" = "yes" ; then
   echo "INSTALL_BLOBS=yes" >> $config_mak
+fi
+if test "$iovec" = "yes" ; then
+  echo "#define HAVE_IOVEC 1" >> $config_h
 fi
 if test "$signalfd" = "yes" ; then
   echo "#define CONFIG_signalfd 1" >> $config_h

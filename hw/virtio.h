@@ -14,7 +14,6 @@
 #ifndef _QEMU_VIRTIO_H
 #define _QEMU_VIRTIO_H
 
-#include <sys/uio.h>
 #include "hw.h"
 #include "pci.h"
 
@@ -47,6 +46,12 @@
 #define VRING_AVAIL_F_NO_INTERRUPT      1
 
 struct VirtQueue;
+
+static inline target_phys_addr_t vring_align(target_phys_addr_t addr,
+                                             unsigned long align)
+{
+    return (addr + align - 1) & ~(align - 1);
+}
 
 typedef struct VirtQueue VirtQueue;
 typedef struct VirtIODevice VirtIODevice;
