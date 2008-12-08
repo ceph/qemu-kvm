@@ -631,3 +631,54 @@ static inline int kvm_request_irq(unsigned int a, kvm_irq_handler_t handler,
 #define kvm_request_irq request_irq
 
 #endif
+
+/* dynamically allocated cpu masks introduced in 2.6.28 */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28)
+
+typedef cpumask_t cpumask_var_t[1];
+
+static inline bool alloc_cpumask_var(cpumask_var_t *mask, gfp_t flags)
+{
+	return 1;
+}
+
+static inline void free_cpumask_var(cpumask_var_t mask)
+{
+}
+
+static inline void cpumask_clear(cpumask_var_t mask)
+{
+	cpus_clear(*mask);
+}
+
+static inline void cpumask_set_cpu(int cpu, cpumask_var_t mask)
+{
+	cpu_set(cpu, *mask);
+}
+
+static inline int smp_call_function_many(cpumask_var_t cpus,
+					 void (*func)(void *data), void *data,
+					 int sync)
+{
+	return smp_call_function_mask(*cpus, func, data, sync);
+}
+
+static inline int cpumask_empty(cpumask_var_t mask)
+{
+	return cpus_empty(*mask);
+}
+
+static inline int cpumask_test_cpu(int cpu, cpumask_var_t mask)
+{
+	return cpu_isset(cpu, *mask);
+}
+
+static inline void cpumask_clear_cpu(int cpu, cpumask_var_t mask)
+{
+	cpu_clear(cpu, *mask);
+}
+
+#define cpu_online_mask (&cpu_online_map)
+
+#endif
+
