@@ -73,6 +73,8 @@ BEGIN { split("INIT_WORK tsc_khz desc_struct ldttss_desc64 desc_ptr " \
     }
 }
 
+/\kvm_.*_fops\.owner = module;/ { $0 = "IF_ANON_INODES_DOES_REFCOUNTS(" $0 ")" }
+
 { print }
 
 /kvm_x86_ops->run/ {
