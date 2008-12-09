@@ -766,6 +766,8 @@ int kvm_qemu_init()
     return 0;
 }
 
+static int destroy_region_works = 0;
+
 int kvm_qemu_create_context(void)
 {
     int r;
@@ -782,6 +784,7 @@ int kvm_qemu_create_context(void)
     r = kvm_arch_qemu_create_context();
     if(r <0)
 	kvm_qemu_destroy();
+    destroy_region_works = kvm_destroy_memory_region_works(kvm_context);
     return 0;
 }
 
@@ -790,16 +793,80 @@ void kvm_qemu_destroy(void)
     kvm_finalize(kvm_context);
 }
 
+static int must_use_aliases_source(target_phys_addr_t addr)
+{
+    if (destroy_region_works)
+        return false;
+    if (addr == 0xa0000 || addr == 0xa8000)
+        return true;
+    return false;
+}
+
+static int must_use_aliases_target(target_phys_addr_t addr)
+{
+    if (destroy_region_works)
+        return false;
+    if (addr >= 0xe000000 && addr < 0x100000000ull)
+        return true;
+    return false;
+}
+
+static struct mapping {
+    target_phys_addr_t phys;
+    ram_addr_t ram;
+    ram_addr_t len;
+} mappings[50];
+static int nr_mappings;
+
+static struct mapping *find_ram_mapping(ram_addr_t ram_addr)
+{
+    struct mapping *p;
+
+    for (p = mappings; p < mappings + nr_mappings; ++p) {
+        if (p->ram <= ram_addr && ram_addr < p->ram + p->len) {
+            return p;
+        }
+    }
+    return NULL;
+}
+
+static struct mapping *find_mapping(target_phys_addr_t start_addr)
+{
+    struct mapping *p;
+
+    for (p = mappings; p < mappings + nr_mappings; ++p) {
+        if (p->phys <= start_addr && start_addr < p->phys + p->len) {
+            return p;
+        }
+    }
+    return NULL;
+}
+
+static void drop_mapping(target_phys_addr_t start_addr)
+{
+    struct mapping *p = find_mapping(start_addr);
+
+    if (p)
+        *p = mappings[--nr_mappings];
+}
+
 void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
                                       unsigned long size,
                                       unsigned long phys_offset)
 {
     int r = 0;
     unsigned long area_flags = phys_offset & ~TARGET_PAGE_MASK;
+    struct mapping *p;
 
     phys_offset &= ~IO_MEM_ROM;
 
     if (area_flags == IO_MEM_UNASSIGNED) {
+        if (must_use_aliases_source(start_addr)) {
+            kvm_destroy_memory_alias(kvm_context, start_addr);
+            return;
+        }
+        if (must_use_aliases_target(start_addr))
+            return;
         kvm_unregister_memory_area(kvm_context, start_addr, size);
         return;
     }
@@ -811,6 +878,15 @@ void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
     if (area_flags >= TLB_MMIO)
         return;
 
+    if (must_use_aliases_source(start_addr)) {
+        p = find_ram_mapping(phys_offset);
+        if (p) {
+            kvm_create_memory_alias(kvm_context, start_addr, size,
+                                    p->phys + (phys_offset - p->ram));
+        }
+        return;
+    }
+
     r = kvm_register_phys_mem(kvm_context, start_addr,
                               phys_ram_base + phys_offset,
                               size, 0);
@@ -818,6 +894,13 @@ void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
         printf("kvm_cpu_register_physical_memory: failed\n");
         exit(1);
     }
+
+    drop_mapping(start_addr);
+    p = &mappings[nr_mappings++];
+    p->phys = start_addr;
+    p->ram = phys_offset;
+    p->len = size;
+
     return;
 }
 
@@ -984,8 +1067,11 @@ void kvm_qemu_log_memory(target_phys_addr_t start, target_phys_addr_t size,
 {
     if (log)
 	kvm_dirty_pages_log_enable_slot(kvm_context, start, size);
-    else
+    else {
+        if (must_use_aliases_target(start))
+            return;
 	kvm_dirty_pages_log_disable_slot(kvm_context, start, size);
+    }
 }
 
 int kvm_get_phys_ram_page_bitmap(unsigned char *bitmap)
@@ -1071,6 +1157,9 @@ void kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr, target_phys_a
 {
     void *buf;
 
+    if (must_use_aliases_source(start_addr))
+        return;
+
     buf = qemu_malloc((end_addr - start_addr) / 8 + 2);
     kvm_get_dirty_pages_range(kvm_context, start_addr, end_addr - start_addr,
 			      buf, NULL, kvm_get_dirty_bitmap_cb);
@@ -1080,6 +1169,8 @@ void kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr, target_phys_a
 int kvm_log_start(target_phys_addr_t phys_addr, target_phys_addr_t len)
 {
 #ifndef TARGET_IA64
+    if (must_use_aliases_source(phys_addr))
+        return 0;
     kvm_qemu_log_memory(phys_addr, len, 1);
 #endif
     return 0;
@@ -1088,6 +1179,8 @@ int kvm_log_start(target_phys_addr_t phys_addr, target_phys_addr_t len)
 int kvm_log_stop(target_phys_addr_t phys_addr, target_phys_addr_t len)
 {
 #ifndef TARGET_IA64
+    if (must_use_aliases_source(phys_addr))
+        return 0;
     kvm_qemu_log_memory(phys_addr, len, 0);
 #endif
     return 0;
