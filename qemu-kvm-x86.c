@@ -261,7 +261,6 @@ void kvm_arch_load_regs(CPUState *env)
     set_msr_entry(&msrs[n++], MSR_IA32_SYSENTER_EIP, env->sysenter_eip);
     if (kvm_has_msr_star)
 	set_msr_entry(&msrs[n++], MSR_STAR,              env->star);
-    set_msr_entry(&msrs[n++], MSR_IA32_TSC, env->tsc);
     set_msr_entry(&msrs[n++], MSR_VM_HSAVE_PA, env->vm_hsave);
 #ifdef TARGET_X86_64
     if (lm_capable_kernel) {
@@ -275,6 +274,18 @@ void kvm_arch_load_regs(CPUState *env)
     rc = kvm_set_msrs(kvm_context, env->cpu_index, msrs, n);
     if (rc == -1)
         perror("kvm_set_msrs FAILED");
+}
+
+void kvm_load_tsc(CPUState *env)
+{
+    int rc;
+    struct kvm_msr_entry msr;
+
+    set_msr_entry(&msr, MSR_IA32_TSC, env->tsc);
+
+    rc = kvm_set_msrs(kvm_context, env->cpu_index, &msr, 1);
+    if (rc == -1)
+        perror("kvm_set_tsc FAILED.\n");
 }
 
 void kvm_save_mpstate(CPUState *env)

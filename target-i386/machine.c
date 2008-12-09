@@ -328,6 +328,7 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
         }
         qemu_get_be64s(f, &env->tsc);
         kvm_load_registers(env);
+        kvm_load_tsc(env);
         if (version_id >= 5) {
             qemu_get_be32s(f, &env->mp_state);
             kvm_load_mpstate(env);

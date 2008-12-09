@@ -159,6 +159,7 @@ int qemu_kvm_has_sync_mmu(void);
 #define qemu_kvm_pit_in_kernel() kvm_pit_in_kernel(kvm_context)
 #define kvm_has_sync_mmu() qemu_kvm_has_sync_mmu()
 void kvm_init_vcpu(CPUState *env);
+void kvm_load_tsc(CPUState *env);
 #else
 #define kvm_enabled() (0)
 #define kvm_nested 0
@@ -168,6 +169,8 @@ void kvm_init_vcpu(CPUState *env);
 #define kvm_load_registers(env) do {} while(0)
 #define kvm_save_registers(env) do {} while(0)
 static inline void kvm_init_vcpu(CPUState *env) { }
+static inline void void kvm_load_tsc(CPUState *env) {}
+
 
 #endif
 
