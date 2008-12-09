@@ -573,7 +573,7 @@ int kvm_arch_qemu_init_env(CPUState *cenv)
 
 #ifdef KVM_CPUID_SIGNATURE
     /* Paravirtualization CPUIDs */
-    memcpy(signature, "KVMKVMKVM", 12);
+    memcpy(signature, "KVMKVMKVM\0\0\0", 12);
     pv_ent = &cpuid_ent[cpuid_nent++];
     memset(pv_ent, 0, sizeof(*pv_ent));
     pv_ent->function = KVM_CPUID_SIGNATURE;
