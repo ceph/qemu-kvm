@@ -701,5 +701,14 @@ int kvm_assign_pci_device(kvm_context_t kvm,
  */
 int kvm_assign_irq(kvm_context_t kvm,
 		   struct kvm_assigned_irq *assigned_irq);
+
+/*!
+ * \brief Determines whether destroying memory regions is allowed
+ *
+ * KVM before 2.6.29 had a bug when destroying memory regions.
+ *
+ * \param kvm Pointer to the current kvm_context
+ */
+int kvm_destroy_memory_region_works(kvm_context_t kvm);
 #endif
 #endif

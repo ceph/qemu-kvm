@@ -1123,3 +1123,16 @@ int kvm_assign_irq(kvm_context_t kvm,
 	return ret;
 }
 #endif
+
+int kvm_destroy_memory_region_works(kvm_context_t kvm)
+{
+	int ret = 0;
+
+#ifdef KVM_CAP_DESTROY_MEMORY_REGION_WORKS
+	ret = ioctl(kvm->fd, KVM_CHECK_EXTENSION,
+		    KVM_CAP_DESTROY_MEMORY_REGION_WORKS);
+	if (ret <= 0)
+		ret = 0;
+#endif
+	return ret;
+}
