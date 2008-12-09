@@ -50,10 +50,6 @@ smp_ap_boot_code_start:
   cli
   xor %ax, %ax
   mov %ax, %ds
-  xor %eax, %eax
-  xor %edx, %edx
-  mov $0x10, %ecx
-  wrmsr
 
   mov $SMP_MSR_ADDR, %ebx
 11:

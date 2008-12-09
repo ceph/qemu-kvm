@@ -623,12 +623,6 @@ void smp_probe(void)
         writel(APIC_BASE + APIC_ICR_LOW, 0x000C4500);
         sipi_vector = AP_BOOT_ADDR >> 12;
         writel(APIC_BASE + APIC_ICR_LOW, 0x000C4600 | sipi_vector);
-	asm volatile(
-		     "xor %%eax, %%eax \n\t"
-		     "xor %%edx, %%edx \n\t"
-		     "mov $0x10, %%ecx \n\t"
-		     "wrmsr"
-		     : : : "eax", "ecx", "edx");
 
 #ifndef BX_QEMU
         delay_ms(10);
