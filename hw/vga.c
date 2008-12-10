@@ -1809,6 +1809,9 @@ static void vga_update_display(void *opaque)
             vga_draw_text(s, full_update);
             break;
         case GMODE_GRAPH:
+#ifdef TARGET_IA64
+            full_update = 1;
+#endif
             vga_draw_graphic(s, full_update);
             break;
         case GMODE_BLANK:

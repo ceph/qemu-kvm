@@ -2652,6 +2652,7 @@ static void map_linear_vram(CirrusVGAState *s)
     if (!s->map_addr)
         return;
 
+#ifndef TARGET_IA64
     s->lfb_vram_mapped = 0;
 
     cpu_register_physical_memory(isa_mem_base + 0xa0000, 0x8000,
@@ -2674,6 +2675,7 @@ static void map_linear_vram(CirrusVGAState *s)
         cpu_register_physical_memory(isa_mem_base + 0xa0000, 0x8000, s->vga_io_memory);
         cpu_register_physical_memory(isa_mem_base + 0xa8000, 0x8000, s->vga_io_memory);
     }
+#endif
     vga_dirty_log_start((VGAState *)s);
 }
 

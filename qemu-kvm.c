@@ -1155,6 +1155,7 @@ void kvm_ioperm(CPUState *env, void *data)
 
 void kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr, target_phys_addr_t end_addr)
 {
+#ifndef TARGET_IA64
     void *buf;
 
     if (must_use_aliases_source(start_addr))
@@ -1164,6 +1165,7 @@ void kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr, target_phys_a
     kvm_get_dirty_pages_range(kvm_context, start_addr, end_addr - start_addr,
 			      buf, NULL, kvm_get_dirty_bitmap_cb);
     qemu_free(buf);
+#endif
 }
 
 int kvm_log_start(target_phys_addr_t phys_addr, target_phys_addr_t len)
