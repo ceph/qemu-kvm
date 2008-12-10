@@ -1659,6 +1659,7 @@ if [ use_upstream_kvm = yes ]; then
 
 # Make sure the target and host cpus are compatible
 if test "$kvm" = "yes" -a ! \( "$target_cpu" = "$cpu" -o \
+  \( "$target_cpu" = "ppcemb" -a "$cpu" = "powerpc" \) -o \
   \( "$target_cpu" = "x86_64" -a "$cpu" = "i386"   \) -o \
   \( "$target_cpu" = "i386"   -a "$cpu" = "x86_64" \) \) ; then
   kvm="no"
