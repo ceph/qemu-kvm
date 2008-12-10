@@ -67,3 +67,16 @@ void kvm_show_regs(kvm_context_t kvm, int vcpu)
 {
 	fprintf(stderr,"kvm_show_regs not supportted today!\n");
 }
+
+int kvm_create_memory_alias(kvm_context_t kvm,
+			    uint64_t phys_start,
+			    uint64_t len,
+			    uint64_t target_phys)
+{
+    return 0;
+}
+
+int kvm_destroy_memory_alias(kvm_context_t kvm, uint64_t phys_start)
+{
+	return 0;
+}
