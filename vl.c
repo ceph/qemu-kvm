@@ -4611,7 +4611,7 @@ static int gethugepagesize(void)
 {
     int ret, fd;
     char buf[4096];
-    char *needle = "Hugepagesize:";
+    const char *needle = "Hugepagesize:";
     char *size;
     unsigned long hugepagesize;
 
