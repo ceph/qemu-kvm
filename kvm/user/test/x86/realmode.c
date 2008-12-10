@@ -146,8 +146,6 @@ void test_shld(void)
 	struct regs inregs = { .eax = 0xbe, .edx = 0xef000000 }, outregs;
 	MK_INSN(shld_test, "shld $8,%edx,%eax\n\t");
 
-	inregs.eax = 0xbe;
-	inregs.edx = 0xef000000;
 	exec_in_big_real_mode(&inregs, &outregs,
 			      insn_shld_test,
 			      insn_shld_test_end - insn_shld_test);
