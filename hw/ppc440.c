@@ -13,6 +13,7 @@
 #include "hw.h"
 #include "hw/isa.h"
 #include "ppc440.h"
+#include "pci.h"
 
 #define PPC440EP_PCI_CONFIG 0xeec00000
 #define PPC440EP_PCI_INTACK 0xeed00000
@@ -29,12 +30,12 @@ void ppc440ep_init(CPUState *env,
 		target_phys_addr_t ram_sizes[PPC440_MAX_RAM_SLOTS],
 		int nbanks,
 		qemu_irq **picp,
-		ppc4xx_pci_t **pcip,
+		PCIBus **pcibusp,
 		int do_init)
 {
 	ppc4xx_mmio_t *mmio;
 	qemu_irq *pic, *irqs;
-	ppc4xx_pci_t *pci;
+	PCIBus *pcibus;
 	int i;
 
 	ppc_dcr_init(env, NULL, NULL);
@@ -59,14 +60,14 @@ void ppc440ep_init(CPUState *env,
 	ppc405_sdram_init(env, pic[14], nbanks, ram_bases, ram_sizes, do_init);
 
 	/* PCI */
-	pci = ppc4xx_pci_init(env, pic,
+	pcibus = ppc4xx_pci_init(env, pic,
 	                      PPC440EP_PCI_CONFIG,
 	                      PPC440EP_PCI_INTACK,
 	                      PPC440EP_PCI_SPECIAL,
 	                      PPC440EP_PCI_REGS);
-	if (!pci)
+	if (!pcibus)
 		printf("couldn't create PCI controller!\n");
-	*pcip = pci;
+	*pcibusp = pcibus;
 
 	isa_mmio_init(PPC440EP_PCI_IO, PPC440EP_PCI_IOLEN);
 

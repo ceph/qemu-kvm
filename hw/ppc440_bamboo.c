@@ -37,7 +37,7 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 	target_phys_addr_t ram_sizes[PPC440_MAX_RAM_SLOTS];
 	NICInfo *nd;
 	qemu_irq *pic;
-	ppc4xx_pci_t *pci;
+	PCIBus *pcibus;
 	CPUState *env;
     uint64_t elf_entry;
     uint64_t elf_lowaddr;
@@ -102,7 +102,7 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 
 	/* call init */
 	printf("Calling function ppc440_init\n");
-	ppc440ep_init(env, ram_bases, ram_sizes, nbanks, &pic, &pci, 1);
+	ppc440ep_init(env, ram_bases, ram_sizes, nbanks, &pic, &pcibus, 1);
 	printf("Done calling ppc440_init\n");
 
 	/* load kernel with uboot loader */
@@ -197,12 +197,12 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 		env->nip = entry;
 	}
 
-	if (pci) {
+	if (pcibus) {
 		int unit_id = 0;
 
 		/* Add virtio block devices. */
 		while ((i = drive_get_index(IF_VIRTIO, 0, unit_id)) != -1) {
-			virtio_blk_init(pci->bus, 0x1AF4, 0x1001,
+			virtio_blk_init(pcibus, 0x1AF4, 0x1001,
 				drives_table[i].bdrv);
 			unit_id++;
 		}
@@ -212,7 +212,7 @@ void bamboo_init(ram_addr_t ram_size, int vga_ram_size,
 			nd = &nd_table[i];
 			if (!nd->model)
 				nd->model = "virtio";
-			pci_nic_init(pci->bus, nd, -1);
+			pci_nic_init(pcibus, nd, -1);
 		}
 	}
 

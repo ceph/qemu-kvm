@@ -20,6 +20,7 @@
 #include "sysemu.h"
 #include "exec-all.h"
 #include "boards.h"
+#include "pci.h"
 
 #define PPC440_MAX_RAM_SLOTS 4
 
@@ -28,7 +29,7 @@ void ppc440ep_init(CPUState *env,
 		target_phys_addr_t ram_sizes[PPC440_MAX_RAM_SLOTS],
 		int nbanks,
 		qemu_irq **picp,
-		ppc4xx_pci_t **pcip,
+		PCIBus **pcip,
 		int do_init);
 
 #endif
