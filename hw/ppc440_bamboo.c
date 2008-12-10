@@ -19,6 +19,7 @@
 #include "ppc440.h"
 #include "qemu-kvm.h"
 #include "device_tree.h"
+#include "virtio-blk.h"
 
 #define BINARY_DEVICE_TREE_FILE "bamboo.dtb"
 
