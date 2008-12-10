@@ -31,7 +31,7 @@ extern kvm_context_t kvm_context;
 
 void cpu_reset(CPUState *env)
 {
-	memset(env->breakpoints, 0, sizeof(env->breakpoints));
+	memset(env, 0, offsetof(CPUPPCState, breakpoints));
 	cpu_ppc_reset(env);
 }
 
