@@ -682,7 +682,7 @@ static inline void cpumask_clear_cpu(int cpu, cpumask_var_t mask)
 
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,29)
 
 #define IF_ANON_INODES_DOES_REFCOUNTS(x)
 
