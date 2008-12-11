@@ -154,11 +154,6 @@ static int try_push_interrupts(void *opaque)
     return kvm_arch_try_push_interrupts(opaque);
 }
 
-static void push_nmi(void *opaque)
-{
-    kvm_arch_push_nmi(opaque);
-}
-
 static void post_kvm_run(void *opaque, void *data)
 {
     CPUState *env = (CPUState *)data;
@@ -742,7 +737,9 @@ static struct kvm_callbacks qemu_kvm_ops = {
     .shutdown = kvm_shutdown,
     .io_window = kvm_io_window,
     .try_push_interrupts = try_push_interrupts,
-    .push_nmi = push_nmi,
+#ifdef KVM_CAP_USER_NMI
+    .push_nmi = kvm_arch_push_nmi,
+#endif
     .post_kvm_run = post_kvm_run,
     .pre_kvm_run = pre_kvm_run,
 #ifdef TARGET_I386

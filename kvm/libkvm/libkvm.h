@@ -66,7 +66,9 @@ struct kvm_callbacks {
     int (*shutdown)(void *opaque, void *env);
     int (*io_window)(void *opaque);
     int (*try_push_interrupts)(void *opaque);
+#ifdef KVM_CAP_USER_NMI
     void (*push_nmi)(void *opaque);
+#endif
     void (*post_kvm_run)(void *opaque, void *env);
     int (*pre_kvm_run)(void *opaque, void *env);
     int (*tpr_access)(void *opaque, int vcpu, uint64_t rip, int is_write);

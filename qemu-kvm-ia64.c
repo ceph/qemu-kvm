@@ -57,10 +57,6 @@ int kvm_arch_try_push_interrupts(void *opaque)
     return 1;
 }
 
-void kvm_arch_push_nmi(void *opaque)
-{
-}
-
 void kvm_arch_update_regs_for_sipi(CPUState *env)
 {
 }

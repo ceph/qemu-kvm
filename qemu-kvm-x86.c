@@ -667,6 +667,7 @@ int kvm_arch_try_push_interrupts(void *opaque)
     return (env->interrupt_request & CPU_INTERRUPT_HARD) != 0;
 }
 
+#ifdef KVM_CAP_USER_NMI
 void kvm_arch_push_nmi(void *opaque)
 {
     CPUState *env = cpu_single_env;
@@ -680,6 +681,7 @@ void kvm_arch_push_nmi(void *opaque)
     if (r < 0)
         printf("cpu %d fail inject NMI\n", env->cpu_index);
 }
+#endif /* KVM_CAP_USER_NMI */
 
 void kvm_arch_update_regs_for_sipi(CPUState *env)
 {

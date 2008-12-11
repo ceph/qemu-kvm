@@ -832,9 +832,11 @@ int try_push_interrupts(kvm_context_t kvm)
 	return kvm->callbacks->try_push_interrupts(kvm->opaque);
 }
 
-void push_nmi(kvm_context_t kvm)
+static inline void push_nmi(kvm_context_t kvm)
 {
+#ifdef KVM_CAP_USER_NMI
 	kvm->callbacks->push_nmi(kvm->opaque);
+#endif /* KVM_CAP_USER_NMI */
 }
 
 void post_kvm_run(kvm_context_t kvm, void *env)
@@ -868,9 +870,7 @@ int kvm_run(kvm_context_t kvm, int vcpu, void *env)
 	struct kvm_run *run = kvm->run[vcpu];
 
 again:
-#ifdef KVM_CAP_NMI
 	push_nmi(kvm);
-#endif
 #if !defined(__s390__)
 	if (!kvm->irqchip_in_kernel)
 		run->request_interrupt_window = try_push_interrupts(kvm);
@@ -1032,7 +1032,7 @@ int kvm_has_sync_mmu(kvm_context_t kvm)
 
 int kvm_inject_nmi(kvm_context_t kvm, int vcpu)
 {
-#ifdef KVM_CAP_NMI
+#ifdef KVM_CAP_USER_NMI
 	return ioctl(kvm->vcpu_fd[vcpu], KVM_NMI);
 #else
 	return -ENOSYS;

@@ -323,9 +323,11 @@ static int test_try_push_interrupts(void *opaque)
 	return 0;
 }
 
+#ifdef KVM_CAP_USER_NMI
 static void test_push_nmi(void *opaque)
 {
 }
+#endif
 
 static void test_post_kvm_run(void *opaque, void *vcpu)
 {
@@ -373,7 +375,9 @@ static struct kvm_callbacks test_callbacks = {
 	.halt        = test_halt,
 	.io_window = test_io_window,
 	.try_push_interrupts = test_try_push_interrupts,
+#ifdef KVM_CAP_USER_NMI
 	.push_nmi = test_push_nmi,
+#endif
 	.post_kvm_run = test_post_kvm_run,
 	.pre_kvm_run = test_pre_kvm_run,
 	.shutdown = test_shutdown,
