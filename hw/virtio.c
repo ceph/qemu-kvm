@@ -16,7 +16,7 @@
 #include "virtio.h"
 #include "sysemu.h"
 
-//#define VIRTIO_ZERO_COPY
+#define VIRTIO_ZERO_COPY
 
 /* from Linux's linux/virtio_pci.h */
 
