@@ -623,8 +623,8 @@ int kvm_get_dirty_pages_range(kvm_context_t kvm, unsigned long phys_addr,
 	unsigned long end_addr = phys_addr + len;
 
 	for (i = 0; i < KVM_MAX_NUM_MEM_REGIONS; ++i) {
-		if ((slots[i].len && slots[i].phys_addr >= phys_addr) &&
-		    (slots[i].phys_addr + slots[i].len  <= end_addr)) {
+		if ((slots[i].len && (uint64_t)slots[i].phys_addr >= phys_addr)
+		    && ((uint64_t)slots[i].phys_addr + slots[i].len  <= end_addr)) {
 			r = kvm_get_map(kvm, KVM_GET_DIRTY_LOG, i, buf);
 			if (r)
 				return r;
