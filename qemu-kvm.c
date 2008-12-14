@@ -803,7 +803,7 @@ static int must_use_aliases_target(target_phys_addr_t addr)
 {
     if (destroy_region_works)
         return false;
-    if (addr >= 0xe000000 && addr < 0x100000000ull)
+    if (addr >= 0xe0000000 && addr < 0x100000000ull)
         return true;
     return false;
 }
