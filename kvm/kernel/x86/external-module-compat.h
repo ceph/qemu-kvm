@@ -22,6 +22,25 @@
 
 #endif
 
+#ifndef MSR_VM_CR
+#define MSR_VM_CR                       0xc0010114
+#endif
+
+#ifndef MSR_VM_HSAVE_PA
+#define MSR_VM_HSAVE_PA                 0xc0010117
+#endif
+
+#ifndef _EFER_SVME
+#define _EFER_SVME		12
+#define EFER_SVME		(1<<_EFER_SVME)
+#endif
+
+#include <asm/cpufeature.h>
+
+#ifndef X86_FEATURE_SVM
+#define X86_FEATURE_SVM               (6*32+ 2) /* Secure virtual machine */
+#endif
+
 #include <linux/smp.h>
 
 #ifndef X86_CR0_PE
