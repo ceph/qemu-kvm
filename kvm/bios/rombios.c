@@ -9114,6 +9114,7 @@ retf_post_0x467:
   retf
 
 s3_post:
+  mov sp, #0xffe
 #if BX_ROMBIOS32
   call rombios32_init
 #endif
