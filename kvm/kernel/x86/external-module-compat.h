@@ -352,6 +352,16 @@ struct kvm_desc_ptr {
 #define FEATURE_CONTROL_VMXON_ENABLED	(1<<2)
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25) && defined(__x86_64__)
+
+#undef set_debugreg
+#define set_debugreg(value, register) \
+	__asm__("movq %0,%%db" #register \
+		: /* no output */ \
+		:"r" ((unsigned long)value))
+
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,29)
 
 struct mtrr_var_range {
