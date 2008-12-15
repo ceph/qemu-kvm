@@ -40,12 +40,6 @@ static void preempt_enable_sched_in_notifiers(void * addr)
 #endif
 }
 
-void special_reload_dr7(void)
-{
-	asm volatile ("mov %0, %%db7" : : "r"(0x701ul));
-}
-EXPORT_SYMBOL_GPL(special_reload_dr7);
-
 static void __preempt_disable_notifiers(void)
 {
 	asm volatile ("mov %0, %%db7" : : "r"(0ul));

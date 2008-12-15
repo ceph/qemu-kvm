@@ -190,7 +190,6 @@ static inline void preempt_notifier_init(struct preempt_notifier *notifier,
 void start_special_insn(void);
 void end_special_insn(void);
 void in_special_section(void);
-void special_reload_dr7(void);
 
 void preempt_notifier_sys_init(void);
 void preempt_notifier_sys_exit(void);
@@ -200,7 +199,6 @@ void preempt_notifier_sys_exit(void);
 static inline void start_special_insn(void) {}
 static inline void end_special_insn(void) {}
 static inline void in_special_section(void) {}
-static inline void special_reload_dr7(void) {}
 
 static inline void preempt_notifier_sys_init(void) {}
 static inline void preempt_notifier_sys_exit(void) {}

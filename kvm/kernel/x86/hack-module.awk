@@ -77,10 +77,6 @@ BEGIN { split("INIT_WORK tsc_khz desc_struct ldttss_desc64 desc_ptr " \
 
 { print }
 
-/kvm_x86_ops->run/ {
-    print "\tspecial_reload_dr7();"
-}
-
 /unsigned long flags;/ &&  vmx_load_host_state {
     print "\tunsigned long gsbase;"
 }
