@@ -1136,6 +1136,16 @@ int qemu_kvm_unregister_coalesced_mmio(target_phys_addr_t addr,
     return kvm_unregister_coalesced_mmio(kvm_context, addr, size);
 }
 
+int kvm_coalesce_mmio_region(target_phys_addr_t start, ram_addr_t size)
+{
+    return kvm_register_coalesced_mmio(kvm_context, start, size);
+}
+
+int kvm_uncoalesce_mmio_region(target_phys_addr_t start, ram_addr_t size)
+{
+    return kvm_unregister_coalesced_mmio(kvm_context, start, size);
+}
+
 #ifdef USE_KVM_DEVICE_ASSIGNMENT
 void kvm_add_ioperm_data(struct ioperm_data *data)
 {

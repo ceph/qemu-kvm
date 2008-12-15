@@ -313,14 +313,13 @@ static inline PageDesc *page_find_alloc(target_ulong index)
     if (!p) {
         /* allocate if not found */
 #if defined(CONFIG_USER_ONLY)
-        unsigned long addr;
         size_t len = sizeof(PageDesc) * L2_SIZE;
         /* Don't use qemu_malloc because it may recurse.  */
         p = mmap(0, len, PROT_READ | PROT_WRITE,
                  MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         *lp = p;
-        addr = h2g(p);
-        if (addr == (target_ulong)addr) {
+        if (h2g_valid(p)) {
+            unsigned long addr = h2g(p);
             page_set_flags(addr & TARGET_PAGE_MASK,
                            TARGET_PAGE_ALIGN(addr + len),
                            PAGE_RESERVED); 
@@ -2373,6 +2372,18 @@ ram_addr_t cpu_get_physical_page_desc(target_phys_addr_t addr)
     if (!p)
         return IO_MEM_UNASSIGNED;
     return p->phys_offset;
+}
+
+void qemu_register_coalesced_mmio(target_phys_addr_t addr, ram_addr_t size)
+{
+    if (kvm_enabled())
+        kvm_coalesce_mmio_region(addr, size);
+}
+
+void qemu_unregister_coalesced_mmio(target_phys_addr_t addr, ram_addr_t size)
+{
+    if (kvm_enabled())
+        kvm_uncoalesce_mmio_region(addr, size);
 }
 
 /* XXX: better than nothing */

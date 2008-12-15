@@ -200,14 +200,10 @@ void *qemu_vmalloc(size_t size)
     if (kqemu_allowed)
         return kqemu_vmalloc(size);
 #endif
-#ifdef _BSD
-    return valloc(size);
-#else
 #ifndef __ia64__
     return qemu_memalign(getpagesize(), size);
 #else
     return qemu_memalign(65536, size);
-#endif
 #endif
 }
 

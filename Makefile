@@ -36,7 +36,7 @@ all: $(TOOLS) $(DOCS) recurse-all
 
 SUBDIR_RULES=$(patsubst %,subdir-%, $(TARGET_DIRS))
 
-subdir-%: dyngen$(EXESUF)
+subdir-%:
 	$(MAKE) -C $(subst subdir-,,$@) all
 
 $(filter %-softmmu,$(SUBDIR_RULES)): libqemu_common.a
@@ -56,6 +56,9 @@ BLOCK_OBJS+=nbd.o block.o aio.o
 ifdef CONFIG_WIN32
 BLOCK_OBJS += block-raw-win32.o
 else
+ifdef CONFIG_AIO
+BLOCK_OBJS += posix-aio-compat.o
+endif
 BLOCK_OBJS += block-raw-posix.o
 endif
 
@@ -82,8 +85,8 @@ OBJS+=usb.o usb-hub.o usb-$(HOST_USB).o usb-hid.o usb-msd.o usb-wacom.o
 OBJS+=usb-serial.o usb-net.o
 OBJS+=sd.o ssi-sd.o
 OBJS+=bt.o bt-host.o bt-vhci.o bt-l2cap.o bt-sdp.o bt-hci.o bt-hid.o usb-bt.o
-OBJS+=buffered_file.o migration.o migration-tcp.o qemu-sockets.o
-OBJS+=qemu-char.o aio.o net-checksum.o savevm.o
+OBJS+=buffered_file.o migration.o migration-tcp.o net.o qemu-sockets.o
+OBJS+=qemu-char.o aio.o net-checksum.o savevm.o cache-utils.o
 
 ifdef CONFIG_BRLAPI
 OBJS+= baum.o
@@ -182,7 +185,7 @@ libqemu_common.a: $(OBJS)
 
 #######################################################################
 # USER_OBJS is code used by qemu userspace emulation
-USER_OBJS=cutils.o
+USER_OBJS=cutils.o  cache-utils.o
 
 libqemu_user.a: $(USER_OBJS)
 	rm -f $@ 
@@ -199,15 +202,10 @@ qemu-img$(EXESUF): qemu-img.o qemu-tool.o osdep.o $(BLOCK_OBJS)
 qemu-nbd$(EXESUF):  qemu-nbd.o qemu-tool.o osdep.o $(BLOCK_OBJS)
 	$(CC) $(LDFLAGS) -o $@ $^ -lz $(LIBS)
 
-# dyngen host tool
-dyngen$(EXESUF): dyngen.c
-	$(HOST_CC) $(CFLAGS) $(CPPFLAGS) -o $@ $^
-
 clean:
 # avoid old build problems by removing potentially incorrect old files
 	rm -f config.mak config.h op-i386.h opc-i386.h gen-op-i386.h op-arm.h opc-arm.h gen-op-arm.h
-	rm -f *.o *.d *.a $(TOOLS) dyngen$(EXESUF) TAGS cscope.* *.pod *~ */*~
-	rm -rf dyngen.dSYM
+	rm -f *.o *.d *.a $(TOOLS) TAGS cscope.* *.pod *~ */*~
 	rm -f slirp/*.o slirp/*.d audio/*.o audio/*.d
 	$(MAKE) -C tests clean
 	for d in $(TARGET_DIRS); do \

@@ -33,6 +33,7 @@
 #define SH_CPU_SH7750R (1 << 2)
 #define SH_CPU_SH7751  (1 << 3)
 #define SH_CPU_SH7751R (1 << 4)
+#define SH_CPU_SH7785  (1 << 5)
 #define SH_CPU_SH7750_ALL (SH_CPU_SH7750 | SH_CPU_SH7750S | SH_CPU_SH7750R)
 #define SH_CPU_SH7751_ALL (SH_CPU_SH7751 | SH_CPU_SH7751R)
 
@@ -48,6 +49,10 @@
 #define SR_FD (1 << 15)
 #define SR_M  (1 << 9)
 #define SR_Q  (1 << 8)
+#define SR_I3 (1 << 7)
+#define SR_I2 (1 << 6)
+#define SR_I1 (1 << 5)
+#define SR_I0 (1 << 4)
 #define SR_S  (1 << 1)
 #define SR_T  (1 << 0)
 
@@ -88,6 +93,10 @@ typedef struct tlb_t {
 
 #define NB_MMU_MODES 2
 
+enum sh_features {
+    SH_FEATURE_SH4A = 1,
+};
+
 typedef struct CPUSH4State {
     int id;			/* CPU model */
 
@@ -111,6 +120,9 @@ typedef struct CPUSH4State {
 
     /* float point status register */
     float_status fp_status;
+
+    /* The features that we should emulate. See sh_features above.  */
+    uint32_t features;
 
     /* Those belong to the specific unit (SH7750) but are handled here */
     uint32_t mmucr;		/* MMU control register */
@@ -137,6 +149,10 @@ CPUSH4State *cpu_sh4_init(const char *cpu_model);
 int cpu_sh4_exec(CPUSH4State * s);
 int cpu_sh4_signal_handler(int host_signum, void *pinfo,
                            void *puc);
+int cpu_sh4_handle_mmu_fault(CPUSH4State * env, target_ulong address, int rw,
+			     int mmu_idx, int is_softmmu);
+void do_interrupt(CPUSH4State * env);
+
 void sh4_cpu_list(FILE *f, int (*cpu_fprintf)(FILE *f, const char *fmt, ...));
 void cpu_sh4_write_mmaped_utlb_addr(CPUSH4State *s, target_phys_addr_t addr,
 				    uint32_t mem_value);
@@ -279,7 +295,8 @@ static inline void cpu_get_tb_cpu_state(CPUState *env, target_ulong *pc,
     *flags = (env->flags & (DELAY_SLOT | DELAY_SLOT_CONDITIONAL
                     | DELAY_SLOT_TRUE | DELAY_SLOT_CLEARME))   /* Bits  0- 3 */
             | (env->fpscr & (FPSCR_FR | FPSCR_SZ | FPSCR_PR))  /* Bits 19-21 */
-            | (env->sr & (SR_MD | SR_RB));                     /* Bits 29-30 */
+            | (env->sr & (SR_MD | SR_RB))                      /* Bits 29-30 */
+            | (env->sr & SR_FD);                               /* Bit 15 */
 }
 
 #endif				/* _CPU_SH4_H */

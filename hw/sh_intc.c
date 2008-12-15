@@ -73,7 +73,7 @@ void sh_intc_toggle_source(struct intc_source *source,
   }
 }
 
-void sh_intc_set_irq (void *opaque, int n, int level)
+static void sh_intc_set_irq (void *opaque, int n, int level)
 {
   struct intc_desc *desc = opaque;
   struct intc_source *source = &(desc->sources[n]);
@@ -307,9 +307,12 @@ struct intc_source *sh_intc_source(struct intc_desc *desc, intc_enum id)
 static void sh_intc_register(struct intc_desc *desc, 
 			     unsigned long address)
 {
-    if (address)
-        cpu_register_physical_memory_offset(INTC_A7(address), 4,
+    if (address) {
+        cpu_register_physical_memory_offset(P4ADDR(address), 4,
                                             desc->iomemtype, INTC_A7(address));
+        cpu_register_physical_memory_offset(A7ADDR(address), 4,
+                                            desc->iomemtype, INTC_A7(address));
+    }
 }
 
 static void sh_intc_register_source(struct intc_desc *desc,
@@ -464,4 +467,19 @@ int sh_intc_init(struct intc_desc *desc,
     }
 
     return 0;
+}
+
+/* Assert level <n> IRL interrupt. 
+   0:deassert. 1:lowest priority,... 15:highest priority. */
+void sh_intc_set_irl(void *opaque, int n, int level)
+{
+    struct intc_source *s = opaque;
+    int i, irl = level ^ 15;
+    for (i = 0; (s = sh_intc_source(s->parent, s->next_enum_id)); i++) {
+	if (i == irl)
+	    sh_intc_toggle_source(s, s->enable_count?0:1, s->asserted?0:1);
+	else
+	    if (s->asserted)
+	        sh_intc_toggle_source(s, 0, -1);
+    }
 }

@@ -36,6 +36,7 @@
 #include "gdbstub.h"
 #include "qemu-timer.h"
 #include "qemu-char.h"
+#include "cache-utils.h"
 #include "block.h"
 #include "audio/audio.h"
 #include "hw/device-assignment.h"
@@ -3628,7 +3629,7 @@ static int qemu_select(int max_fd, fd_set *rfds, fd_set *wfds, fd_set *xfds,
 }
 
 #ifdef _WIN32
-void host_main_loop_wait(int *timeout)
+static void host_main_loop_wait(int *timeout)
 {
     int ret, ret2, i;
     PollingEntry *pe;
@@ -3672,7 +3673,7 @@ void host_main_loop_wait(int *timeout)
     *timeout = 0;
 }
 #else
-void host_main_loop_wait(int *timeout)
+static void host_main_loop_wait(int *timeout)
 {
 }
 #endif
@@ -4716,7 +4717,7 @@ static void termsig_setup(void)
 
 #endif
 
-int main(int argc, char **argv)
+int main(int argc, char **argv, char **envp)
 {
 #ifdef CONFIG_GDBSTUB
     int use_gdbstub;
@@ -4753,6 +4754,8 @@ int main(int argc, char **argv)
     const char *pid_file = NULL;
     int autostart;
     const char *incoming = NULL;
+
+    qemu_cache_utils_init(envp);
 
     LIST_INIT (&vm_change_state_head);
 #ifndef _WIN32

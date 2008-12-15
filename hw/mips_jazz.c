@@ -102,12 +102,12 @@ static void audio_init(qemu_irq *pic)
 }
 #endif
 
-void espdma_memory_read(void *opaque, uint8_t *buf, int len)
+static void espdma_memory_read(void *opaque, uint8_t *buf, int len)
 {
     printf("espdma_memory_read(buf %p, len %d) not implemented\n", buf, len);
 }
 
-void espdma_memory_write(void *opaque, uint8_t *buf, int len)
+static void espdma_memory_write(void *opaque, uint8_t *buf, int len)
 {
     printf("espdma_memory_write(buf %p, len %d) not implemented\n", buf, len);
 }
@@ -229,7 +229,7 @@ void mips_jazz_init (ram_addr_t ram_size, int vga_ram_size,
     cpu_register_physical_memory(0x80004000, 0x00001000, s_rtc);
 
     /* Keyboard (i8042) */
-    i8042_mm_init(rc4030[6], rc4030[7], 0x80005000, 0);
+    i8042_mm_init(rc4030[6], rc4030[7], 0x80005000, 0x1000, 0x1);
 
     /* Serial ports */
     if (serial_hds[0])

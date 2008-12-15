@@ -1,7 +1,7 @@
 #include "def-helper.h"
 
 DEF_HELPER_2(raise_exception_err, void, i32, i32)
-DEF_HELPER_0(raise_debug, void)
+DEF_HELPER_1(raise_exception, void, i32)
 DEF_HELPER_3(tw, void, tl, tl, i32)
 #if defined(TARGET_PPC64)
 DEF_HELPER_3(td, void, tl, tl, i32)
@@ -58,12 +58,13 @@ DEF_HELPER_0(reset_fpstatus, void)
 #endif
 DEF_HELPER_2(compute_fprf, i32, i64, i32)
 DEF_HELPER_2(store_fpscr, void, i64, i32)
+DEF_HELPER_1(fpscr_clrbit, void, i32)
 DEF_HELPER_1(fpscr_setbit, void, i32)
 DEF_HELPER_1(float64_to_float32, i32, i64)
 DEF_HELPER_1(float32_to_float64, i64, i32)
 
-DEF_HELPER_2(fcmpo, i32, i64, i64)
-DEF_HELPER_2(fcmpu, i32, i64, i64)
+DEF_HELPER_3(fcmpo, void, i64, i64, i32)
+DEF_HELPER_3(fcmpu, void, i64, i64, i32)
 
 DEF_HELPER_1(fctiw, i64, i64)
 DEF_HELPER_1(fctiwz, i64, i64)
@@ -184,7 +185,7 @@ DEF_HELPER_0(slbia, void)
 DEF_HELPER_1(slbie, void, tl)
 #endif
 DEF_HELPER_1(load_sr, tl, tl);
-DEF_HELPER_2(store_sr, void, tl, tl);
+DEF_HELPER_2(store_sr, void, tl, tl)
 
 DEF_HELPER_1(602_mfrom, tl, tl)
 #endif
@@ -200,6 +201,43 @@ DEF_HELPER_2(divs, tl, tl, tl)
 DEF_HELPER_2(divso, tl, tl, tl)
 
 DEF_HELPER_1(load_dcr, tl, tl);
-DEF_HELPER_2(store_dcr, void, tl, tl);
+DEF_HELPER_2(store_dcr, void, tl, tl)
+
+DEF_HELPER_1(load_dump_spr, void, i32)
+DEF_HELPER_1(store_dump_spr, void, i32)
+DEF_HELPER_0(load_tbl, tl)
+DEF_HELPER_0(load_tbu, tl)
+DEF_HELPER_0(load_atbl, tl)
+DEF_HELPER_0(load_atbu, tl)
+DEF_HELPER_0(load_601_rtcl, tl)
+DEF_HELPER_0(load_601_rtcu, tl)
+#if !defined(CONFIG_USER_ONLY)
+#if defined(TARGET_PPC64)
+DEF_HELPER_1(store_asr, void, tl)
+#endif
+DEF_HELPER_1(store_sdr1, void, tl)
+DEF_HELPER_1(store_tbl, void, tl)
+DEF_HELPER_1(store_tbu, void, tl)
+DEF_HELPER_1(store_atbl, void, tl)
+DEF_HELPER_1(store_atbu, void, tl)
+DEF_HELPER_1(store_601_rtcl, void, tl)
+DEF_HELPER_1(store_601_rtcu, void, tl)
+DEF_HELPER_0(load_decr, tl)
+DEF_HELPER_1(store_decr, void, tl)
+DEF_HELPER_1(store_hid0_601, void, tl)
+DEF_HELPER_2(store_403_pbr, void, i32, tl)
+DEF_HELPER_0(load_40x_pit, tl)
+DEF_HELPER_1(store_40x_pit, void, tl)
+DEF_HELPER_1(store_40x_dbcr0, void, tl)
+DEF_HELPER_1(store_40x_sler, void, tl)
+DEF_HELPER_1(store_booke_tcr, void, tl)
+DEF_HELPER_1(store_booke_tsr, void, tl)
+DEF_HELPER_2(store_ibatl, void, i32, tl)
+DEF_HELPER_2(store_ibatu, void, i32, tl)
+DEF_HELPER_2(store_dbatl, void, i32, tl)
+DEF_HELPER_2(store_dbatu, void, i32, tl)
+DEF_HELPER_2(store_601_batl, void, i32, tl)
+DEF_HELPER_2(store_601_batu, void, i32, tl)
+#endif
 
 #include "def-helper.h"

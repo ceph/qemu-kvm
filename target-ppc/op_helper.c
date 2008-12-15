@@ -22,7 +22,6 @@
 #include "helper.h"
 
 #include "helper_regs.h"
-#include "op_helper.h"
 
 //#define DEBUG_OP
 //#define DEBUG_EXCEPTIONS
@@ -33,12 +32,17 @@
 
 void helper_raise_exception_err (uint32_t exception, uint32_t error_code)
 {
-    raise_exception_err(env, exception, error_code);
+#if 0
+    printf("Raise exception %3x code : %d\n", exception, error_code);
+#endif
+    env->exception_index = exception;
+    env->error_code = error_code;
+    cpu_loop_exit();
 }
 
-void helper_raise_debug (void)
+void helper_raise_exception (uint32_t exception)
 {
-    raise_exception(env, EXCP_DEBUG);
+    helper_raise_exception_err(exception, 0);
 }
 
 /*****************************************************************************/
@@ -65,77 +69,244 @@ void helper_store_cr (target_ulong val, uint32_t mask)
     }
 }
 
-#if defined(TARGET_PPC64)
-void do_store_pri (int prio)
-{
-    env->spr[SPR_PPR] &= ~0x001C000000000000ULL;
-    env->spr[SPR_PPR] |= ((uint64_t)prio & 0x7) << 50;
-}
-#endif
-
-target_ulong ppc_load_dump_spr (int sprn)
+/*****************************************************************************/
+/* SPR accesses */
+void helper_load_dump_spr (uint32_t sprn)
 {
     if (loglevel != 0) {
         fprintf(logfile, "Read SPR %d %03x => " ADDRX "\n",
                 sprn, sprn, env->spr[sprn]);
     }
-
-    return env->spr[sprn];
 }
 
-void ppc_store_dump_spr (int sprn, target_ulong val)
+void helper_store_dump_spr (uint32_t sprn)
 {
     if (loglevel != 0) {
-        fprintf(logfile, "Write SPR %d %03x => " ADDRX " <= " ADDRX "\n",
-                sprn, sprn, env->spr[sprn], val);
+        fprintf(logfile, "Write SPR %d %03x <= " ADDRX "\n",
+                sprn, sprn, env->spr[sprn]);
     }
-    env->spr[sprn] = val;
 }
+
+target_ulong helper_load_tbl (void)
+{
+    return cpu_ppc_load_tbl(env);
+}
+
+target_ulong helper_load_tbu (void)
+{
+    return cpu_ppc_load_tbu(env);
+}
+
+target_ulong helper_load_atbl (void)
+{
+    return cpu_ppc_load_atbl(env);
+}
+
+target_ulong helper_load_atbu (void)
+{
+    return cpu_ppc_load_atbu(env);
+}
+
+target_ulong helper_load_601_rtcl (void)
+{
+    return cpu_ppc601_load_rtcl(env);
+}
+
+target_ulong helper_load_601_rtcu (void)
+{
+    return cpu_ppc601_load_rtcu(env);
+}
+
+#if !defined(CONFIG_USER_ONLY)
+#if defined (TARGET_PPC64)
+void helper_store_asr (target_ulong val)
+{
+    ppc_store_asr(env, val);
+}
+#endif
+
+void helper_store_sdr1 (target_ulong val)
+{
+    ppc_store_sdr1(env, val);
+}
+
+void helper_store_tbl (target_ulong val)
+{
+    cpu_ppc_store_tbl(env, val);
+}
+
+void helper_store_tbu (target_ulong val)
+{
+    cpu_ppc_store_tbu(env, val);
+}
+
+void helper_store_atbl (target_ulong val)
+{
+    cpu_ppc_store_atbl(env, val);
+}
+
+void helper_store_atbu (target_ulong val)
+{
+    cpu_ppc_store_atbu(env, val);
+}
+
+void helper_store_601_rtcl (target_ulong val)
+{
+    cpu_ppc601_store_rtcl(env, val);
+}
+
+void helper_store_601_rtcu (target_ulong val)
+{
+    cpu_ppc601_store_rtcu(env, val);
+}
+
+target_ulong helper_load_decr (void)
+{
+    return cpu_ppc_load_decr(env);
+}
+
+void helper_store_decr (target_ulong val)
+{
+    cpu_ppc_store_decr(env, val);
+}
+
+void helper_store_hid0_601 (target_ulong val)
+{
+    target_ulong hid0;
+
+    hid0 = env->spr[SPR_HID0];
+    if ((val ^ hid0) & 0x00000008) {
+        /* Change current endianness */
+        env->hflags &= ~(1 << MSR_LE);
+        env->hflags_nmsr &= ~(1 << MSR_LE);
+        env->hflags_nmsr |= (1 << MSR_LE) & (((val >> 3) & 1) << MSR_LE);
+        env->hflags |= env->hflags_nmsr;
+        if (loglevel != 0) {
+            fprintf(logfile, "%s: set endianness to %c => " ADDRX "\n",
+                    __func__, val & 0x8 ? 'l' : 'b', env->hflags);
+        }
+    }
+    env->spr[SPR_HID0] = (uint32_t)val;
+}
+
+void helper_store_403_pbr (uint32_t num, target_ulong value)
+{
+    if (likely(env->pb[num] != value)) {
+        env->pb[num] = value;
+        /* Should be optimized */
+        tlb_flush(env, 1);
+    }
+}
+
+target_ulong helper_load_40x_pit (void)
+{
+    return load_40x_pit(env);
+}
+
+void helper_store_40x_pit (target_ulong val)
+{
+    store_40x_pit(env, val);
+}
+
+void helper_store_40x_dbcr0 (target_ulong val)
+{
+    store_40x_dbcr0(env, val);
+}
+
+void helper_store_40x_sler (target_ulong val)
+{
+    store_40x_sler(env, val);
+}
+
+void helper_store_booke_tcr (target_ulong val)
+{
+    store_booke_tcr(env, val);
+}
+
+void helper_store_booke_tsr (target_ulong val)
+{
+    store_booke_tsr(env, val);
+}
+
+void helper_store_ibatu (uint32_t nr, target_ulong val)
+{
+    ppc_store_ibatu(env, nr, val);
+}
+
+void helper_store_ibatl (uint32_t nr, target_ulong val)
+{
+    ppc_store_ibatl(env, nr, val);
+}
+
+void helper_store_dbatu (uint32_t nr, target_ulong val)
+{
+    ppc_store_dbatu(env, nr, val);
+}
+
+void helper_store_dbatl (uint32_t nr, target_ulong val)
+{
+    ppc_store_dbatl(env, nr, val);
+}
+
+void helper_store_601_batl (uint32_t nr, target_ulong val)
+{
+    ppc_store_ibatl_601(env, nr, val);
+}
+
+void helper_store_601_batu (uint32_t nr, target_ulong val)
+{
+    ppc_store_ibatu_601(env, nr, val);
+}
+#endif
 
 /*****************************************************************************/
 /* Memory load and stores */
 
-static always_inline target_ulong get_addr(target_ulong addr)
+static always_inline target_ulong addr_add(target_ulong addr, target_long arg)
 {
 #if defined(TARGET_PPC64)
-        if (msr_sf)
-            return addr;
+        if (!msr_sf)
+            return (uint32_t)(addr + arg);
         else
 #endif
-            return (uint32_t)addr;
+            return addr + arg;
 }
 
 void helper_lmw (target_ulong addr, uint32_t reg)
 {
-    for (; reg < 32; reg++, addr += 4) {
+    for (; reg < 32; reg++) {
         if (msr_le)
-            env->gpr[reg] = bswap32(ldl(get_addr(addr)));
+            env->gpr[reg] = bswap32(ldl(addr));
         else
-            env->gpr[reg] = ldl(get_addr(addr));
+            env->gpr[reg] = ldl(addr);
+	addr = addr_add(addr, 4);
     }
 }
 
 void helper_stmw (target_ulong addr, uint32_t reg)
 {
-    for (; reg < 32; reg++, addr += 4) {
+    for (; reg < 32; reg++) {
         if (msr_le)
-            stl(get_addr(addr), bswap32((uint32_t)env->gpr[reg]));
+            stl(addr, bswap32((uint32_t)env->gpr[reg]));
         else
-            stl(get_addr(addr), (uint32_t)env->gpr[reg]);
+            stl(addr, (uint32_t)env->gpr[reg]);
+	addr = addr_add(addr, 4);
     }
 }
 
 void helper_lsw(target_ulong addr, uint32_t nb, uint32_t reg)
 {
     int sh;
-    for (; nb > 3; nb -= 4, addr += 4) {
-        env->gpr[reg] = ldl(get_addr(addr));
+    for (; nb > 3; nb -= 4) {
+        env->gpr[reg] = ldl(addr);
         reg = (reg + 1) % 32;
+	addr = addr_add(addr, 4);
     }
     if (unlikely(nb > 0)) {
         env->gpr[reg] = 0;
-        for (sh = 24; nb > 0; nb--, addr++, sh -= 8) {
-            env->gpr[reg] |= ldub(get_addr(addr)) << sh;
+        for (sh = 24; nb > 0; nb--, sh -= 8) {
+            env->gpr[reg] |= ldub(addr) << sh;
+	    addr = addr_add(addr, 1);
         }
     }
 }
@@ -149,9 +320,9 @@ void helper_lswx(target_ulong addr, uint32_t reg, uint32_t ra, uint32_t rb)
     if (likely(xer_bc != 0)) {
         if (unlikely((ra != 0 && reg < ra && (reg + xer_bc) > ra) ||
                      (reg < rb && (reg + xer_bc) > rb))) {
-            raise_exception_err(env, POWERPC_EXCP_PROGRAM,
-                                POWERPC_EXCP_INVAL |
-                                POWERPC_EXCP_INVAL_LSWX);
+            helper_raise_exception_err(POWERPC_EXCP_PROGRAM,
+                                       POWERPC_EXCP_INVAL |
+                                       POWERPC_EXCP_INVAL_LSWX);
         } else {
             helper_lsw(addr, xer_bc, reg);
         }
@@ -161,25 +332,26 @@ void helper_lswx(target_ulong addr, uint32_t reg, uint32_t ra, uint32_t rb)
 void helper_stsw(target_ulong addr, uint32_t nb, uint32_t reg)
 {
     int sh;
-    for (; nb > 3; nb -= 4, addr += 4) {
-        stl(get_addr(addr), env->gpr[reg]);
+    for (; nb > 3; nb -= 4) {
+        stl(addr, env->gpr[reg]);
         reg = (reg + 1) % 32;
+	addr = addr_add(addr, 4);
     }
     if (unlikely(nb > 0)) {
-        for (sh = 24; nb > 0; nb--, addr++, sh -= 8)
-            stb(get_addr(addr), (env->gpr[reg] >> sh) & 0xFF);
+        for (sh = 24; nb > 0; nb--, sh -= 8)
+            stb(addr, (env->gpr[reg] >> sh) & 0xFF);
+	    addr = addr_add(addr, 1);
     }
 }
 
 static void do_dcbz(target_ulong addr, int dcache_line_size)
 {
-    target_long mask = get_addr(~(dcache_line_size - 1));
+    addr &= ~(dcache_line_size - 1);
     int i;
-    addr &= mask;
     for (i = 0 ; i < dcache_line_size ; i += 4) {
         stl(addr + i , 0);
     }
-    if ((env->reserve & mask) == addr)
+    if (env->reserve == addr)
         env->reserve = (target_ulong)-1ULL;
 }
 
@@ -200,7 +372,7 @@ void helper_icbi(target_ulong addr)
 {
     uint32_t tmp;
 
-    addr = get_addr(addr & ~(env->dcache_line_size - 1));
+    addr &= ~(env->dcache_line_size - 1);
     /* Invalidate one cache line :
      * PowerPC specification says this is to be treated like a load
      * (not a fetch) by the MMU. To be sure it will be so,
@@ -216,7 +388,8 @@ target_ulong helper_lscbx (target_ulong addr, uint32_t reg, uint32_t ra, uint32_
     int i, c, d;
     d = 24;
     for (i = 0; i < xer_bc; i++) {
-        c = ldub((uint32_t)addr++);
+        c = ldub(addr);
+	addr = addr_add(addr, 1);
         /* ra (if not 0) and rb are never modified */
         if (likely(reg != rb && (ra == 0 || reg != ra))) {
             env->gpr[reg] = (env->gpr[reg] & ~(0xFF << d)) | (c << d);
@@ -570,7 +743,7 @@ static always_inline uint64_t fload_invalid_op_excp (int op)
         /* Update the floating-point enabled exception summary */
         env->fpscr |= 1 << FPSCR_FEX;
         if (msr_fe0 != 0 || msr_fe1 != 0)
-            raise_exception_err(env, POWERPC_EXCP_PROGRAM, POWERPC_EXCP_FP | op);
+            helper_raise_exception_err(POWERPC_EXCP_PROGRAM, POWERPC_EXCP_FP | op);
     }
     return ret;
 }
@@ -585,8 +758,8 @@ static always_inline uint64_t float_zero_divide_excp (uint64_t arg1, uint64_t ar
         /* Update the floating-point enabled exception summary */
         env->fpscr |= 1 << FPSCR_FEX;
         if (msr_fe0 != 0 || msr_fe1 != 0) {
-            raise_exception_err(env, POWERPC_EXCP_PROGRAM,
-                                POWERPC_EXCP_FP | POWERPC_EXCP_FP_ZX);
+            helper_raise_exception_err(POWERPC_EXCP_PROGRAM,
+                                       POWERPC_EXCP_FP | POWERPC_EXCP_FP_ZX);
         }
     } else {
         /* Set the result to infinity */
@@ -668,6 +841,24 @@ static always_inline void fpscr_set_rounding_mode (void)
         break;
     }
     set_float_rounding_mode(rnd_type, &env->fp_status);
+}
+
+void helper_fpscr_clrbit (uint32_t bit)
+{
+    int prev;
+
+    prev = (env->fpscr >> bit) & 1;
+    env->fpscr &= ~(1 << bit);
+    if (prev == 1) {
+        switch (bit) {
+        case FPSCR_RN1:
+        case FPSCR_RN:
+            fpscr_set_rounding_mode();
+            break;
+        default:
+            break;
+        }
+    }
 }
 
 void helper_fpscr_setbit (uint32_t bit)
@@ -795,9 +986,9 @@ void helper_store_fpscr (uint64_t arg, uint32_t mask)
 
     prev = env->fpscr;
     new = (uint32_t)arg;
-    new &= ~0x90000000;
-    new |= prev & 0x90000000;
-    for (i = 0; i < 7; i++) {
+    new &= ~0x60000000;
+    new |= prev & 0x60000000;
+    for (i = 0; i < 8; i++) {
         if (mask & (1 << i)) {
             env->fpscr &= ~(0xF << (4 * i));
             env->fpscr |= new & (0xF << (4 * i));
@@ -826,29 +1017,31 @@ void helper_float_check_status (void)
         (env->error_code & POWERPC_EXCP_FP)) {
         /* Differred floating-point exception after target FPR update */
         if (msr_fe0 != 0 || msr_fe1 != 0)
-            raise_exception_err(env, env->exception_index, env->error_code);
-    } else if (env->fp_status.float_exception_flags & float_flag_overflow) {
-        float_overflow_excp();
-    } else if (env->fp_status.float_exception_flags & float_flag_underflow) {
-        float_underflow_excp();
-    } else if (env->fp_status.float_exception_flags & float_flag_inexact) {
-        float_inexact_excp();
+            helper_raise_exception_err(env->exception_index, env->error_code);
+    } else {
+        int status = get_float_exception_flags(&env->fp_status);
+        if (status & float_flag_overflow) {
+            float_overflow_excp();
+        } else if (status & float_flag_underflow) {
+            float_underflow_excp();
+        } else if (status & float_flag_inexact) {
+            float_inexact_excp();
+        }
     }
 #else
     if (env->exception_index == POWERPC_EXCP_PROGRAM &&
         (env->error_code & POWERPC_EXCP_FP)) {
         /* Differred floating-point exception after target FPR update */
         if (msr_fe0 != 0 || msr_fe1 != 0)
-            raise_exception_err(env, env->exception_index, env->error_code);
+            helper_raise_exception_err(env->exception_index, env->error_code);
     }
-    RETURN();
 #endif
 }
 
 #ifdef CONFIG_SOFTFLOAT
 void helper_reset_fpstatus (void)
 {
-    env->fp_status.float_exception_flags = 0;
+    set_float_exception_flags(0, &env->fp_status);
 }
 #endif
 
@@ -869,7 +1062,7 @@ uint64_t helper_fadd (uint64_t arg1, uint64_t arg2)
         farg1.d = float64_add(farg1.d, farg2.d, &env->fp_status);
     } else {
         /* Magnitude subtraction of infinities */
-        farg1.ll == fload_invalid_op_excp(POWERPC_EXCP_FP_VXISI);
+        farg1.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXISI);
     }
 #else
     farg1.d = float64_add(farg1.d, farg2.d, &env->fp_status);
@@ -923,7 +1116,6 @@ uint64_t helper_fmul (uint64_t arg1, uint64_t arg2)
     } else {
         farg1.d = float64_mul(farg1.d, farg2.d, &env->fp_status);
     }
-}
 #else
     farg1.d = float64_mul(farg1.d, farg2.d, &env->fp_status);
 #endif
@@ -948,7 +1140,7 @@ uint64_t helper_fdiv (uint64_t arg1, uint64_t arg2)
     } else if (unlikely(iszero(farg2.d))) {
         if (iszero(farg1.d)) {
             /* Division of zero by zero */
-            farg1.ll fload_invalid_op_excp(POWERPC_EXCP_FP_VXZDZ);
+            farg1.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXZDZ);
         } else {
             /* Division by zero */
             farg1.ll = float_zero_divide_excp(farg1.d, farg2.d);
@@ -1236,7 +1428,7 @@ uint64_t helper_fnmadd (uint64_t arg1, uint64_t arg2, uint64_t arg3)
         farg1.d = float64_mul(farg1.d, farg2.d, &env->fp_status);
         farg1.d = float64_add(farg1.d, farg3.d, &env->fp_status);
 #endif
-        if (likely(!isnan(farg1.d)))
+        if (likely(!float64_is_nan(farg1.d)))
             farg1.d = float64_chs(farg1.d);
     }
     return farg1.ll;
@@ -1276,7 +1468,7 @@ uint64_t helper_fnmsub (uint64_t arg1, uint64_t arg2, uint64_t arg3)
         farg1.d = float64_mul(farg1.d, farg2.d, &env->fp_status);
         farg1.d = float64_sub(farg1.d, farg3.d, &env->fp_status);
 #endif
-        if (likely(!isnan(farg1.d)))
+        if (likely(!float64_is_nan(farg1.d)))
             farg1.d = float64_chs(farg1.d);
     }
     return farg1.ll;
@@ -1286,6 +1478,7 @@ uint64_t helper_fnmsub (uint64_t arg1, uint64_t arg2, uint64_t arg3)
 uint64_t helper_frsp (uint64_t arg)
 {
     CPU_DoubleU farg;
+    float32 f32;
     farg.ll = arg;
 
 #if USE_PRECISE_EMULATION
@@ -1293,10 +1486,12 @@ uint64_t helper_frsp (uint64_t arg)
         /* sNaN square root */
        farg.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXSNAN);
     } else {
-       fard.d = float64_to_float32(farg.d, &env->fp_status);
+       f32 = float64_to_float32(farg.d, &env->fp_status);
+       farg.d = float32_to_float64(f32, &env->fp_status);
     }
 #else
-    farg.d = float64_to_float32(farg.d, &env->fp_status);
+    f32 = float64_to_float32(farg.d, &env->fp_status);
+    farg.d = float32_to_float64(f32, &env->fp_status);
 #endif
     return farg.ll;
 }
@@ -1338,7 +1533,7 @@ uint64_t helper_fre (uint64_t arg)
             farg.ll = 0xFFF0000000000000ULL;
         } else if (farg.ll == 0x0000000000000000ULL) {
             farg.ll = 0x7FF0000000000000ULL;
-        } else if (isnan(farg.d)) {
+        } else if (float64_is_nan(farg.d)) {
             farg.ll = 0x7FF8000000000000ULL;
         } else if (fpisneg(farg.d)) {
             farg.ll = 0x8000000000000000ULL;
@@ -1373,7 +1568,7 @@ uint64_t helper_fres (uint64_t arg)
             farg.ll = 0xFFF0000000000000ULL;
         } else if (farg.ll == 0x0000000000000000ULL) {
             farg.ll = 0x7FF0000000000000ULL;
-        } else if (isnan(farg.d)) {
+        } else if (float64_is_nan(farg.d)) {
             farg.ll = 0x7FF8000000000000ULL;
         } else if (fpisneg(farg.d)) {
             farg.ll = 0x8000000000000000ULL;
@@ -1404,7 +1599,7 @@ uint64_t helper_frsqrte (uint64_t arg)
             farg.ll = 0xFFF0000000000000ULL;
         } else if (farg.ll == 0x0000000000000000ULL) {
             farg.ll = 0x7FF0000000000000ULL;
-        } else if (isnan(farg.d)) {
+        } else if (float64_is_nan(farg.d)) {
             farg.ll |= 0x000FFFFFFFFFFFFFULL;
         } else if (fpisneg(farg.d)) {
             farg.ll = 0x7FF8000000000000ULL;
@@ -1418,44 +1613,17 @@ uint64_t helper_frsqrte (uint64_t arg)
 /* fsel - fsel. */
 uint64_t helper_fsel (uint64_t arg1, uint64_t arg2, uint64_t arg3)
 {
-    CPU_DoubleU farg1, farg2, farg3;
+    CPU_DoubleU farg1;
 
     farg1.ll = arg1;
-    farg2.ll = arg2;
-    farg3.ll = arg3;
 
     if (!fpisneg(farg1.d) || iszero(farg1.d))
-        return farg2.ll;
+        return arg2;
     else
-        return farg2.ll;
+        return arg3;
 }
 
-uint32_t helper_fcmpu (uint64_t arg1, uint64_t arg2)
-{
-    CPU_DoubleU farg1, farg2;
-    uint32_t ret = 0;
-    farg1.ll = arg1;
-    farg2.ll = arg2;
-
-    if (unlikely(float64_is_signaling_nan(farg1.d) ||
-                 float64_is_signaling_nan(farg2.d))) {
-        /* sNaN comparison */
-        fload_invalid_op_excp(POWERPC_EXCP_FP_VXSNAN);
-    } else {
-        if (float64_lt(farg1.d, farg2.d, &env->fp_status)) {
-            ret = 0x08UL;
-        } else if (!float64_le(farg1.d, farg2.d, &env->fp_status)) {
-            ret = 0x04UL;
-        } else {
-            ret = 0x02UL;
-        }
-    }
-    env->fpscr &= ~(0x0F << FPSCR_FPRF);
-    env->fpscr |= ret << FPSCR_FPRF;
-    return ret;
-}
-
-uint32_t helper_fcmpo (uint64_t arg1, uint64_t arg2)
+void helper_fcmpu (uint64_t arg1, uint64_t arg2, uint32_t crfD)
 {
     CPU_DoubleU farg1, farg2;
     uint32_t ret = 0;
@@ -1464,6 +1632,48 @@ uint32_t helper_fcmpo (uint64_t arg1, uint64_t arg2)
 
     if (unlikely(float64_is_nan(farg1.d) ||
                  float64_is_nan(farg2.d))) {
+        ret = 0x01UL;
+    } else if (float64_lt(farg1.d, farg2.d, &env->fp_status)) {
+        ret = 0x08UL;
+    } else if (!float64_le(farg1.d, farg2.d, &env->fp_status)) {
+        ret = 0x04UL;
+    } else {
+        ret = 0x02UL;
+    }
+
+    env->fpscr &= ~(0x0F << FPSCR_FPRF);
+    env->fpscr |= ret << FPSCR_FPRF;
+    env->crf[crfD] = ret;
+    if (unlikely(ret == 0x01UL
+                 && (float64_is_signaling_nan(farg1.d) ||
+                     float64_is_signaling_nan(farg2.d)))) {
+        /* sNaN comparison */
+        fload_invalid_op_excp(POWERPC_EXCP_FP_VXSNAN);
+    }
+}
+
+void helper_fcmpo (uint64_t arg1, uint64_t arg2, uint32_t crfD)
+{
+    CPU_DoubleU farg1, farg2;
+    uint32_t ret = 0;
+    farg1.ll = arg1;
+    farg2.ll = arg2;
+
+    if (unlikely(float64_is_nan(farg1.d) ||
+                 float64_is_nan(farg2.d))) {
+        ret = 0x01UL;
+    } else if (float64_lt(farg1.d, farg2.d, &env->fp_status)) {
+        ret = 0x08UL;
+    } else if (!float64_le(farg1.d, farg2.d, &env->fp_status)) {
+        ret = 0x04UL;
+    } else {
+        ret = 0x02UL;
+    }
+
+    env->fpscr &= ~(0x0F << FPSCR_FPRF);
+    env->fpscr |= ret << FPSCR_FPRF;
+    env->crf[crfD] = ret;
+    if (unlikely (ret == 0x01UL)) {
         if (float64_is_signaling_nan(farg1.d) ||
             float64_is_signaling_nan(farg2.d)) {
             /* sNaN comparison */
@@ -1473,18 +1683,7 @@ uint32_t helper_fcmpo (uint64_t arg1, uint64_t arg2)
             /* qNaN comparison */
             fload_invalid_op_excp(POWERPC_EXCP_FP_VXVC);
         }
-    } else {
-        if (float64_lt(farg1.d, farg2.d, &env->fp_status)) {
-            ret = 0x08UL;
-        } else if (!float64_le(farg1.d, farg2.d, &env->fp_status)) {
-            ret = 0x04UL;
-        } else {
-            ret = 0x02UL;
-        }
     }
-    env->fpscr &= ~(0x0F << FPSCR_FPRF);
-    env->fpscr |= ret << FPSCR_FPRF;
-    return ret;
 }
 
 #if !defined (CONFIG_USER_ONLY)
@@ -1493,11 +1692,9 @@ void helper_store_msr (target_ulong val)
     val = hreg_store_msr(env, val, 0);
     if (val != 0) {
         env->interrupt_request |= CPU_INTERRUPT_EXITTB;
-        raise_exception(env, val);
+        helper_raise_exception(val);
     }
 }
-
-void cpu_dump_rfi (target_ulong RA, target_ulong msr);
 
 static always_inline void do_rfi (target_ulong nip, target_ulong msr,
                                     target_ulong msrm, int keep_msrh)
@@ -1556,7 +1753,7 @@ void helper_tw (target_ulong arg1, target_ulong arg2, uint32_t flags)
                   ((int32_t)arg1 == (int32_t)arg2 && (flags & 0x04)) ||
                   ((uint32_t)arg1 < (uint32_t)arg2 && (flags & 0x02)) ||
                   ((uint32_t)arg1 > (uint32_t)arg2 && (flags & 0x01))))) {
-        raise_exception_err(env, POWERPC_EXCP_PROGRAM, POWERPC_EXCP_TRAP);
+        helper_raise_exception_err(POWERPC_EXCP_PROGRAM, POWERPC_EXCP_TRAP);
     }
 }
 
@@ -1568,24 +1765,12 @@ void helper_td (target_ulong arg1, target_ulong arg2, uint32_t flags)
                   ((int64_t)arg1 == (int64_t)arg2 && (flags & 0x04)) ||
                   ((uint64_t)arg1 < (uint64_t)arg2 && (flags & 0x02)) ||
                   ((uint64_t)arg1 > (uint64_t)arg2 && (flags & 0x01)))))
-        raise_exception_err(env, POWERPC_EXCP_PROGRAM, POWERPC_EXCP_TRAP);
+        helper_raise_exception_err(POWERPC_EXCP_PROGRAM, POWERPC_EXCP_TRAP);
 }
 #endif
 
 /*****************************************************************************/
 /* PowerPC 601 specific instructions (POWER bridge) */
-void do_POWER_abso (void)
-{
-    if ((int32_t)T0 == INT32_MIN) {
-        T0 = INT32_MAX;
-        env->xer |= (1 << XER_OV) | (1 << XER_SO);
-    } else if ((int32_t)T0 < 0) {
-        T0 = -T0;
-        env->xer &= ~(1 << XER_OV);
-    } else {
-        env->xer &= ~(1 << XER_OV);
-    }
-}
 
 target_ulong helper_clcs (uint32_t arg)
 {
@@ -1699,58 +1884,27 @@ void helper_rfsvc (void)
 {
     do_rfi(env->lr, env->ctr, 0x0000FFFF, 0);
 }
-
-void do_store_hid0_601 (void)
-{
-    uint32_t hid0;
-
-    hid0 = env->spr[SPR_HID0];
-    if ((T0 ^ hid0) & 0x00000008) {
-        /* Change current endianness */
-        env->hflags &= ~(1 << MSR_LE);
-        env->hflags_nmsr &= ~(1 << MSR_LE);
-        env->hflags_nmsr |= (1 << MSR_LE) & (((T0 >> 3) & 1) << MSR_LE);
-        env->hflags |= env->hflags_nmsr;
-        if (loglevel != 0) {
-            fprintf(logfile, "%s: set endianness to %c => " ADDRX "\n",
-                    __func__, T0 & 0x8 ? 'l' : 'b', env->hflags);
-        }
-    }
-    env->spr[SPR_HID0] = T0;
-}
 #endif
 
 /*****************************************************************************/
 /* 602 specific instructions */
 /* mfrom is the most crazy instruction ever seen, imho ! */
 /* Real implementation uses a ROM table. Do the same */
-#define USE_MFROM_ROM_TABLE
+/* Extremly decomposed:
+ *                      -arg / 256
+ * return 256 * log10(10           + 1.0) + 0.5
+ */
+#if !defined (CONFIG_USER_ONLY)
 target_ulong helper_602_mfrom (target_ulong arg)
 {
     if (likely(arg < 602)) {
-#if defined(USE_MFROM_ROM_TABLE)
 #include "mfrom_table.c"
-        return mfrom_ROM_table[T0];
-#else
-        double d;
-        /* Extremly decomposed:
-         *                      -arg / 256
-         * return 256 * log10(10           + 1.0) + 0.5
-         */
-        d = arg;
-        d = float64_div(d, 256, &env->fp_status);
-        d = float64_chs(d);
-        d = exp10(d); // XXX: use float emulation function
-        d = float64_add(d, 1.0, &env->fp_status);
-        d = log10(d); // XXX: use float emulation function
-        d = float64_mul(d, 256, &env->fp_status);
-        d = float64_add(d, 0.5, &env->fp_status);
-        return float64_round_to_int(d, &env->fp_status);
-#endif
+        return mfrom_ROM_table[arg];
     } else {
         return 0;
     }
 }
+#endif
 
 /*****************************************************************************/
 /* Embedded PowerPC specific helpers */
@@ -1764,14 +1918,14 @@ target_ulong helper_load_dcr (target_ulong dcrn)
         if (loglevel != 0) {
             fprintf(logfile, "No DCR environment\n");
         }
-        raise_exception_err(env, POWERPC_EXCP_PROGRAM,
-                            POWERPC_EXCP_INVAL | POWERPC_EXCP_INVAL_INVAL);
+        helper_raise_exception_err(POWERPC_EXCP_PROGRAM,
+                                   POWERPC_EXCP_INVAL | POWERPC_EXCP_INVAL_INVAL);
     } else if (unlikely(ppc_dcr_read(env->dcr_env, dcrn, &val) != 0)) {
         if (loglevel != 0) {
-            fprintf(logfile, "DCR read error %d %03x\n", (int)T0, (int)T0);
+            fprintf(logfile, "DCR read error %d %03x\n", (int)dcrn, (int)dcrn);
         }
-        raise_exception_err(env, POWERPC_EXCP_PROGRAM,
-                            POWERPC_EXCP_INVAL | POWERPC_EXCP_PRIV_REG);
+        helper_raise_exception_err(POWERPC_EXCP_PROGRAM,
+                                   POWERPC_EXCP_INVAL | POWERPC_EXCP_PRIV_REG);
     }
     return val;
 }
@@ -1782,14 +1936,14 @@ void helper_store_dcr (target_ulong dcrn, target_ulong val)
         if (loglevel != 0) {
             fprintf(logfile, "No DCR environment\n");
         }
-        raise_exception_err(env, POWERPC_EXCP_PROGRAM,
-                            POWERPC_EXCP_INVAL | POWERPC_EXCP_INVAL_INVAL);
+        helper_raise_exception_err(POWERPC_EXCP_PROGRAM,
+                                   POWERPC_EXCP_INVAL | POWERPC_EXCP_INVAL_INVAL);
     } else if (unlikely(ppc_dcr_write(env->dcr_env, dcrn, val) != 0)) {
         if (loglevel != 0) {
-            fprintf(logfile, "DCR write error %d %03x\n", (int)T0, (int)T0);
+            fprintf(logfile, "DCR write error %d %03x\n", (int)dcrn, (int)dcrn);
         }
-        raise_exception_err(env, POWERPC_EXCP_PROGRAM,
-                            POWERPC_EXCP_INVAL | POWERPC_EXCP_PRIV_REG);
+        helper_raise_exception_err(POWERPC_EXCP_PROGRAM,
+                                   POWERPC_EXCP_INVAL | POWERPC_EXCP_PRIV_REG);
     }
 }
 
@@ -1816,20 +1970,6 @@ void helper_rfmci (void)
 {
     do_rfi(env->spr[SPR_BOOKE_MCSRR0], SPR_BOOKE_MCSRR1,
            ~((target_ulong)0x3FFF0000), 0);
-}
-
-void do_load_403_pb (int num)
-{
-    T0 = env->pb[num];
-}
-
-void do_store_403_pb (int num)
-{
-    if (likely(env->pb[num] != T0)) {
-        env->pb[num] = T0;
-        /* Should be optimized */
-        tlb_flush(env, 1);
-    }
 }
 #endif
 
@@ -1938,7 +2078,7 @@ static always_inline int32_t efsctsi (uint32_t val)
 
     u.l = val;
     /* NaN are not treated the same way IEEE 754 does */
-    if (unlikely(isnan(u.f)))
+    if (unlikely(float32_is_nan(u.f)))
         return 0;
 
     return float32_to_int32(u.f, &env->spe_status);
@@ -1950,7 +2090,7 @@ static always_inline uint32_t efsctui (uint32_t val)
 
     u.l = val;
     /* NaN are not treated the same way IEEE 754 does */
-    if (unlikely(isnan(u.f)))
+    if (unlikely(float32_is_nan(u.f)))
         return 0;
 
     return float32_to_uint32(u.f, &env->spe_status);
@@ -1962,7 +2102,7 @@ static always_inline uint32_t efsctsiz (uint32_t val)
 
     u.l = val;
     /* NaN are not treated the same way IEEE 754 does */
-    if (unlikely(isnan(u.f)))
+    if (unlikely(float32_is_nan(u.f)))
         return 0;
 
     return float32_to_int32_round_to_zero(u.f, &env->spe_status);
@@ -1974,7 +2114,7 @@ static always_inline uint32_t efsctuiz (uint32_t val)
 
     u.l = val;
     /* NaN are not treated the same way IEEE 754 does */
-    if (unlikely(isnan(u.f)))
+    if (unlikely(float32_is_nan(u.f)))
         return 0;
 
     return float32_to_uint32_round_to_zero(u.f, &env->spe_status);
@@ -2011,7 +2151,7 @@ static always_inline uint32_t efsctsf (uint32_t val)
 
     u.l = val;
     /* NaN are not treated the same way IEEE 754 does */
-    if (unlikely(isnan(u.f)))
+    if (unlikely(float32_is_nan(u.f)))
         return 0;
     tmp = uint64_to_float32(1ULL << 32, &env->spe_status);
     u.f = float32_mul(u.f, tmp, &env->spe_status);
@@ -2026,7 +2166,7 @@ static always_inline uint32_t efsctuf (uint32_t val)
 
     u.l = val;
     /* NaN are not treated the same way IEEE 754 does */
-    if (unlikely(isnan(u.f)))
+    if (unlikely(float32_is_nan(u.f)))
         return 0;
     tmp = uint64_to_float32(1ULL << 32, &env->spe_status);
     u.f = float32_mul(u.f, tmp, &env->spe_status);
@@ -2280,7 +2420,7 @@ uint32_t helper_efdctsi (uint64_t val)
 
     u.ll = val;
     /* NaN are not treated the same way IEEE 754 does */
-    if (unlikely(isnan(u.d)))
+    if (unlikely(float64_is_nan(u.d)))
         return 0;
 
     return float64_to_int32(u.d, &env->spe_status);
@@ -2292,7 +2432,7 @@ uint32_t helper_efdctui (uint64_t val)
 
     u.ll = val;
     /* NaN are not treated the same way IEEE 754 does */
-    if (unlikely(isnan(u.d)))
+    if (unlikely(float64_is_nan(u.d)))
         return 0;
 
     return float64_to_uint32(u.d, &env->spe_status);
@@ -2304,7 +2444,7 @@ uint32_t helper_efdctsiz (uint64_t val)
 
     u.ll = val;
     /* NaN are not treated the same way IEEE 754 does */
-    if (unlikely(isnan(u.d)))
+    if (unlikely(float64_is_nan(u.d)))
         return 0;
 
     return float64_to_int32_round_to_zero(u.d, &env->spe_status);
@@ -2316,7 +2456,7 @@ uint64_t helper_efdctsidz (uint64_t val)
 
     u.ll = val;
     /* NaN are not treated the same way IEEE 754 does */
-    if (unlikely(isnan(u.d)))
+    if (unlikely(float64_is_nan(u.d)))
         return 0;
 
     return float64_to_int64_round_to_zero(u.d, &env->spe_status);
@@ -2328,7 +2468,7 @@ uint32_t helper_efdctuiz (uint64_t val)
 
     u.ll = val;
     /* NaN are not treated the same way IEEE 754 does */
-    if (unlikely(isnan(u.d)))
+    if (unlikely(float64_is_nan(u.d)))
         return 0;
 
     return float64_to_uint32_round_to_zero(u.d, &env->spe_status);
@@ -2340,7 +2480,7 @@ uint64_t helper_efdctuidz (uint64_t val)
 
     u.ll = val;
     /* NaN are not treated the same way IEEE 754 does */
-    if (unlikely(isnan(u.d)))
+    if (unlikely(float64_is_nan(u.d)))
         return 0;
 
     return float64_to_uint64_round_to_zero(u.d, &env->spe_status);
@@ -2377,7 +2517,7 @@ uint32_t helper_efdctsf (uint64_t val)
 
     u.ll = val;
     /* NaN are not treated the same way IEEE 754 does */
-    if (unlikely(isnan(u.d)))
+    if (unlikely(float64_is_nan(u.d)))
         return 0;
     tmp = uint64_to_float64(1ULL << 32, &env->spe_status);
     u.d = float64_mul(u.d, tmp, &env->spe_status);
@@ -2392,7 +2532,7 @@ uint32_t helper_efdctuf (uint64_t val)
 
     u.ll = val;
     /* NaN are not treated the same way IEEE 754 does */
-    if (unlikely(isnan(u.d)))
+    if (unlikely(float64_is_nan(u.d)))
         return 0;
     tmp = uint64_to_float64(1ULL << 32, &env->spe_status);
     u.d = float64_mul(u.d, tmp, &env->spe_status);
@@ -2547,7 +2687,7 @@ void tlb_fill (target_ulong addr, int is_write, int mmu_idx, void *retaddr)
                 cpu_restore_state(tb, env, pc, NULL);
             }
         }
-        raise_exception_err(env, env->exception_index, env->error_code);
+        helper_raise_exception_err(env->exception_index, env->error_code);
     }
     env = saved_env;
 }
@@ -2560,7 +2700,7 @@ target_ulong helper_load_sr (target_ulong sr_num)
 
 void helper_store_sr (target_ulong sr_num, target_ulong val)
 {
-    do_store_sr(env, sr_num, val);
+    ppc_store_sr(env, sr_num, val);
 }
 
 /* SLB management */
@@ -2616,9 +2756,9 @@ static void do_6xx_tlb (target_ulong new_EPN, int is_code)
     way = (env->spr[SPR_SRR1] >> 17) & 1;
 #if defined (DEBUG_SOFTWARE_TLB)
     if (loglevel != 0) {
-        fprintf(logfile, "%s: EPN " TDX " " ADDRX " PTE0 " ADDRX
+        fprintf(logfile, "%s: EPN " ADDRX " " ADDRX " PTE0 " ADDRX
                 " PTE1 " ADDRX " way %d\n",
-                __func__, T0, EPN, CMP, RPN, way);
+                __func__, new_EPN, EPN, CMP, RPN, way);
     }
 #endif
     /* Store this TLB */
@@ -2648,9 +2788,9 @@ static void do_74xx_tlb (target_ulong new_EPN, int is_code)
     way = env->spr[SPR_TLBMISS] & 0x3;
 #if defined (DEBUG_SOFTWARE_TLB)
     if (loglevel != 0) {
-        fprintf(logfile, "%s: EPN " TDX " " ADDRX " PTE0 " ADDRX
+        fprintf(logfile, "%s: EPN " ADDRX " " ADDRX " PTE0 " ADDRX
                 " PTE1 " ADDRX " way %d\n",
-                __func__, T0, EPN, CMP, RPN, way);
+                __func__, new_EPN, EPN, CMP, RPN, way);
     }
 #endif
     /* Store this TLB */
@@ -2778,7 +2918,7 @@ void helper_4xx_tlbwe_hi (target_ulong entry, target_ulong val)
 
 #if defined (DEBUG_SOFTWARE_TLB)
     if (loglevel != 0) {
-        fprintf(logfile, "%s entry " TDX " val " TDX "\n", __func__, entry, val);
+        fprintf(logfile, "%s entry %d val " ADDRX "\n", __func__, (int)entry, val);
     }
 #endif
     entry &= 0x3F;
@@ -2820,7 +2960,7 @@ void helper_4xx_tlbwe_hi (target_ulong entry, target_ulong val)
     if (loglevel != 0) {
         fprintf(logfile, "%s: set up TLB %d RPN " PADDRX " EPN " ADDRX
                 " size " ADDRX " prot %c%c%c%c PID %d\n", __func__,
-                (int)T0, tlb->RPN, tlb->EPN, tlb->size,
+                (int)entry, tlb->RPN, tlb->EPN, tlb->size,
                 tlb->prot & PAGE_READ ? 'r' : '-',
                 tlb->prot & PAGE_WRITE ? 'w' : '-',
                 tlb->prot & PAGE_EXEC ? 'x' : '-',
@@ -2833,7 +2973,7 @@ void helper_4xx_tlbwe_hi (target_ulong entry, target_ulong val)
 #if defined (DEBUG_SOFTWARE_TLB)
         if (loglevel != 0) {
             fprintf(logfile, "%s: invalidate TLB %d start " ADDRX
-                    " end " ADDRX "\n", __func__, (int)T0, tlb->EPN, end);
+                    " end " ADDRX "\n", __func__, (int)entry, tlb->EPN, end);
         }
 #endif
         for (page = tlb->EPN; page < end; page += TARGET_PAGE_SIZE)
@@ -2847,7 +2987,7 @@ void helper_4xx_tlbwe_lo (target_ulong entry, target_ulong val)
 
 #if defined (DEBUG_SOFTWARE_TLB)
     if (loglevel != 0) {
-        fprintf(logfile, "%s entry " TDX " val " TDX "\n", __func__, entry, val);
+        fprintf(logfile, "%s entry %i val " ADDRX "\n", __func__, (int)entry, val);
     }
 #endif
     entry &= 0x3F;
@@ -2885,8 +3025,8 @@ void helper_440_tlbwe (uint32_t word, target_ulong entry, target_ulong value)
 
 #if defined (DEBUG_SOFTWARE_TLB)
     if (loglevel != 0) {
-        fprintf(logfile, "%s word %d entry " TDX " value " TDX "\n",
-                __func__, word, entry, value);
+        fprintf(logfile, "%s word %d entry %d value " ADDRX "\n",
+                __func__, word, (int)entry, value);
     }
 #endif
     do_flush_tlbs = 0;

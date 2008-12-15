@@ -120,7 +120,7 @@
 #define memalign(align, size) malloc(size)
 #endif
 
-#include "qemu-kvm.h"
+// FIXME: #include "qemu-kvm.h"
 
 #define DEFAULT_NETWORK_SCRIPT "/etc/qemu-ifup"
 #define DEFAULT_NETWORK_DOWN_SCRIPT "/etc/qemu-ifdown"
@@ -286,8 +286,8 @@ int parse_host_port(struct sockaddr_in *saddr, const char *str)
     return 0;
 }
 
-#ifndef _WIN32
-int parse_unix_path(struct sockaddr_un *uaddr, const char *str)
+#if !defined(_WIN32) && 0
+static int parse_unix_path(struct sockaddr_un *uaddr, const char *str)
 {
     const char *p;
     int len;
@@ -776,9 +776,9 @@ static void tap_send(void *opaque)
 	sbuf.buf = s->buf;
 	s->size = getmsg(s->fd, NULL, &sbuf, &f) >=0 ? sbuf.len : -1;
 #else
-	kvm_sleep_begin();
+	// FIXME: kvm_sleep_begin();
 	s->size = read(s->fd, s->buf, sizeof(s->buf));
-	kvm_sleep_end();
+	// FIXME: kvm_sleep_end();
 #endif
 
 	if (s->size == -1 && errno == EINTR)

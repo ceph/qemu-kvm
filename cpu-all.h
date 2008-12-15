@@ -206,12 +206,12 @@ typedef union {
  *   user   : user mode access using soft MMU
  *   kernel : kernel mode access using soft MMU
  */
-static inline int ldub_p(void *ptr)
+static inline int ldub_p(const void *ptr)
 {
     return *(uint8_t *)ptr;
 }
 
-static inline int ldsb_p(void *ptr)
+static inline int ldsb_p(const void *ptr)
 {
     return *(int8_t *)ptr;
 }
@@ -227,45 +227,45 @@ static inline void stb_p(void *ptr, int v)
 #if defined(WORDS_BIGENDIAN) || defined(WORDS_ALIGNED)
 
 /* conservative code for little endian unaligned accesses */
-static inline int lduw_le_p(void *ptr)
+static inline int lduw_le_p(const void *ptr)
 {
 #ifdef __powerpc__
     int val;
     __asm__ __volatile__ ("lhbrx %0,0,%1" : "=r" (val) : "r" (ptr));
     return val;
 #else
-    uint8_t *p = ptr;
+    const uint8_t *p = ptr;
     return p[0] | (p[1] << 8);
 #endif
 }
 
-static inline int ldsw_le_p(void *ptr)
+static inline int ldsw_le_p(const void *ptr)
 {
 #ifdef __powerpc__
     int val;
     __asm__ __volatile__ ("lhbrx %0,0,%1" : "=r" (val) : "r" (ptr));
     return (int16_t)val;
 #else
-    uint8_t *p = ptr;
+    const uint8_t *p = ptr;
     return (int16_t)(p[0] | (p[1] << 8));
 #endif
 }
 
-static inline int ldl_le_p(void *ptr)
+static inline int ldl_le_p(const void *ptr)
 {
 #ifdef __powerpc__
     int val;
     __asm__ __volatile__ ("lwbrx %0,0,%1" : "=r" (val) : "r" (ptr));
     return val;
 #else
-    uint8_t *p = ptr;
+    const uint8_t *p = ptr;
     return p[0] | (p[1] << 8) | (p[2] << 16) | (p[3] << 24);
 #endif
 }
 
-static inline uint64_t ldq_le_p(void *ptr)
+static inline uint64_t ldq_le_p(const void *ptr)
 {
-    uint8_t *p = ptr;
+    const uint8_t *p = ptr;
     uint32_t v1, v2;
     v1 = ldl_le_p(p);
     v2 = ldl_le_p(p + 4);
@@ -305,7 +305,7 @@ static inline void stq_le_p(void *ptr, uint64_t v)
 
 /* float access */
 
-static inline float32 ldfl_le_p(void *ptr)
+static inline float32 ldfl_le_p(const void *ptr)
 {
     union {
         float32 f;
@@ -325,7 +325,7 @@ static inline void stfl_le_p(void *ptr, float32 v)
     stl_le_p(ptr, u.i);
 }
 
-static inline float64 ldfq_le_p(void *ptr)
+static inline float64 ldfq_le_p(const void *ptr)
 {
     CPU_DoubleU u;
     u.l.lower = ldl_le_p(ptr);
@@ -343,22 +343,22 @@ static inline void stfq_le_p(void *ptr, float64 v)
 
 #else
 
-static inline int lduw_le_p(void *ptr)
+static inline int lduw_le_p(const void *ptr)
 {
     return *(uint16_t *)ptr;
 }
 
-static inline int ldsw_le_p(void *ptr)
+static inline int ldsw_le_p(const void *ptr)
 {
     return *(int16_t *)ptr;
 }
 
-static inline int ldl_le_p(void *ptr)
+static inline int ldl_le_p(const void *ptr)
 {
     return *(uint32_t *)ptr;
 }
 
-static inline uint64_t ldq_le_p(void *ptr)
+static inline uint64_t ldq_le_p(const void *ptr)
 {
     return *(uint64_t *)ptr;
 }
@@ -380,12 +380,12 @@ static inline void stq_le_p(void *ptr, uint64_t v)
 
 /* float access */
 
-static inline float32 ldfl_le_p(void *ptr)
+static inline float32 ldfl_le_p(const void *ptr)
 {
     return *(float32 *)ptr;
 }
 
-static inline float64 ldfq_le_p(void *ptr)
+static inline float64 ldfq_le_p(const void *ptr)
 {
     return *(float64 *)ptr;
 }
@@ -403,7 +403,7 @@ static inline void stfq_le_p(void *ptr, float64 v)
 
 #if !defined(WORDS_BIGENDIAN) || defined(WORDS_ALIGNED)
 
-static inline int lduw_be_p(void *ptr)
+static inline int lduw_be_p(const void *ptr)
 {
 #if defined(__i386__)
     int val;
@@ -413,12 +413,12 @@ static inline int lduw_be_p(void *ptr)
                   : "m" (*(uint16_t *)ptr));
     return val;
 #else
-    uint8_t *b = (uint8_t *) ptr;
+    const uint8_t *b = ptr;
     return ((b[0] << 8) | b[1]);
 #endif
 }
 
-static inline int ldsw_be_p(void *ptr)
+static inline int ldsw_be_p(const void *ptr)
 {
 #if defined(__i386__)
     int val;
@@ -428,12 +428,12 @@ static inline int ldsw_be_p(void *ptr)
                   : "m" (*(uint16_t *)ptr));
     return (int16_t)val;
 #else
-    uint8_t *b = (uint8_t *) ptr;
+    const uint8_t *b = ptr;
     return (int16_t)((b[0] << 8) | b[1]);
 #endif
 }
 
-static inline int ldl_be_p(void *ptr)
+static inline int ldl_be_p(const void *ptr)
 {
 #if defined(__i386__) || defined(__x86_64__)
     int val;
@@ -443,12 +443,12 @@ static inline int ldl_be_p(void *ptr)
                   : "m" (*(uint32_t *)ptr));
     return val;
 #else
-    uint8_t *b = (uint8_t *) ptr;
+    const uint8_t *b = ptr;
     return (b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3];
 #endif
 }
 
-static inline uint64_t ldq_be_p(void *ptr)
+static inline uint64_t ldq_be_p(const void *ptr)
 {
     uint32_t a,b;
     a = ldl_be_p(ptr);
@@ -494,7 +494,7 @@ static inline void stq_be_p(void *ptr, uint64_t v)
 
 /* float access */
 
-static inline float32 ldfl_be_p(void *ptr)
+static inline float32 ldfl_be_p(const void *ptr)
 {
     union {
         float32 f;
@@ -514,7 +514,7 @@ static inline void stfl_be_p(void *ptr, float32 v)
     stl_be_p(ptr, u.i);
 }
 
-static inline float64 ldfq_be_p(void *ptr)
+static inline float64 ldfq_be_p(const void *ptr)
 {
     CPU_DoubleU u;
     u.l.upper = ldl_be_p(ptr);
@@ -532,22 +532,22 @@ static inline void stfq_be_p(void *ptr, float64 v)
 
 #else
 
-static inline int lduw_be_p(void *ptr)
+static inline int lduw_be_p(const void *ptr)
 {
     return *(uint16_t *)ptr;
 }
 
-static inline int ldsw_be_p(void *ptr)
+static inline int ldsw_be_p(const void *ptr)
 {
     return *(int16_t *)ptr;
 }
 
-static inline int ldl_be_p(void *ptr)
+static inline int ldl_be_p(const void *ptr)
 {
     return *(uint32_t *)ptr;
 }
 
-static inline uint64_t ldq_be_p(void *ptr)
+static inline uint64_t ldq_be_p(const void *ptr)
 {
     return *(uint64_t *)ptr;
 }
@@ -569,12 +569,12 @@ static inline void stq_be_p(void *ptr, uint64_t v)
 
 /* float access */
 
-static inline float32 ldfl_be_p(void *ptr)
+static inline float32 ldfl_be_p(const void *ptr)
 {
     return *(float32 *)ptr;
 }
 
-static inline float64 ldfq_be_p(void *ptr)
+static inline float64 ldfq_be_p(const void *ptr)
 {
     return *(float64 *)ptr;
 }
@@ -621,6 +621,9 @@ static inline void stfq_be_p(void *ptr, float64 v)
 /* MMU memory access macros */
 
 #if defined(CONFIG_USER_ONLY)
+#include <assert.h>
+#include "qemu-types.h"
+
 /* On some host systems the guest address space is reserved on the host.
  * This allows the guest address space to be offset to a convenient location.
  */
@@ -629,7 +632,16 @@ static inline void stfq_be_p(void *ptr, float64 v)
 
 /* All direct uses of g2h and h2g need to go away for usermode softmmu.  */
 #define g2h(x) ((void *)((unsigned long)(x) + GUEST_BASE))
-#define h2g(x) ((target_ulong)((unsigned long)(x) - GUEST_BASE))
+#define h2g(x) ({ \
+    unsigned long __ret = (unsigned long)(x) - GUEST_BASE; \
+    /* Check if given address fits target address space */ \
+    assert(__ret == (abi_ulong)__ret); \
+    (abi_ulong)__ret; \
+})
+#define h2g_valid(x) ({ \
+    unsigned long __guest = (unsigned long)(x) - GUEST_BASE; \
+    (__guest == (abi_ulong)__guest); \
+})
 
 #define saddr(x) g2h(x)
 #define laddr(x) g2h(x)
@@ -962,6 +974,15 @@ void cpu_physical_sync_dirty_bitmap(target_phys_addr_t start_addr, target_phys_a
 
 void dump_exec_info(FILE *f,
                     int (*cpu_fprintf)(FILE *f, const char *fmt, ...));
+
+/* Coalesced MMIO regions are areas where write operations can be reordered.
+ * This usually implies that write operations are side-effect free.  This allows
+ * batching which can make a major impact on performance when using
+ * virtualization.
+ */
+void qemu_register_coalesced_mmio(target_phys_addr_t addr, ram_addr_t size);
+
+void qemu_unregister_coalesced_mmio(target_phys_addr_t addr, ram_addr_t size);
 
 /*******************************************/
 /* host CPU ticks (if available) */

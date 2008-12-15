@@ -3467,4 +3467,3 @@ PCIDevice *pci_rtl8139_init(PCIBus *bus, NICInfo *nd, int devfn)
 #endif /* RTL8139_ONBOARD_TIMER */
     return (PCIDevice *)d;
 }
-

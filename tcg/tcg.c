@@ -43,6 +43,7 @@
 
 #include "config.h"
 #include "qemu-common.h"
+#include "cache-utils.h"
 
 /* Note: the long term plan is to reduce the dependancies on the QEMU
    CPU definitions. Currently they are used for qemu_ld/st
@@ -747,7 +748,7 @@ char *tcg_get_arg_str_i32(TCGContext *s, char *buf, int buf_size, TCGv_i32 arg)
 
 char *tcg_get_arg_str_i64(TCGContext *s, char *buf, int buf_size, TCGv_i64 arg)
 {
-    return tcg_get_arg_str_idx(s, buf, buf_size, GET_TCGV_I32(arg));
+    return tcg_get_arg_str_idx(s, buf, buf_size, GET_TCGV_I64(arg));
 }
 
 static int helper_cmp(const void *p1, const void *p2)
@@ -885,7 +886,7 @@ void tcg_dump_ops(TCGContext *s, FILE *outfile)
             val = args[1];
             th = tcg_find_helper(s, val);
             if (th) {
-                fprintf(outfile, th->name);
+                fprintf(outfile, "%s", th->name);
             } else {
                 if (c == INDEX_op_movi_i32)
                     fprintf(outfile, "0x%x", (uint32_t)val);
@@ -1198,57 +1199,50 @@ static void tcg_liveness_analysis(TCGContext *s)
             break;
             /* XXX: optimize by hardcoding common cases (e.g. triadic ops) */
         default:
-            if (op > INDEX_op_end) {
-                args -= def->nb_args;
-                nb_iargs = def->nb_iargs;
-                nb_oargs = def->nb_oargs;
+            args -= def->nb_args;
+            nb_iargs = def->nb_iargs;
+            nb_oargs = def->nb_oargs;
 
-                /* Test if the operation can be removed because all
-                   its outputs are dead. We assume that nb_oargs == 0
-                   implies side effects */
-                if (!(def->flags & TCG_OPF_SIDE_EFFECTS) && nb_oargs != 0) {
-                    for(i = 0; i < nb_oargs; i++) {
-                        arg = args[i];
-                        if (!dead_temps[arg])
-                            goto do_not_remove;
-                    }
-                    tcg_set_nop(s, gen_opc_buf + op_index, args, def->nb_args);
-#ifdef CONFIG_PROFILER
-                    s->del_op_count++;
-#endif
-                } else {
-                do_not_remove:
-
-                    /* output args are dead */
-                    for(i = 0; i < nb_oargs; i++) {
-                        arg = args[i];
-                        dead_temps[arg] = 1;
-                    }
-                    
-                    /* if end of basic block, update */
-                    if (def->flags & TCG_OPF_BB_END) {
-                        tcg_la_bb_end(s, dead_temps);
-                    } else if (def->flags & TCG_OPF_CALL_CLOBBER) {
-                        /* globals are live */
-                        memset(dead_temps, 0, s->nb_globals);
-                    }
-                    
-                    /* input args are live */
-                    dead_iargs = 0;
-                    for(i = 0; i < nb_iargs; i++) {
-                        arg = args[i + nb_oargs];
-                        if (dead_temps[arg]) {
-                            dead_iargs |= (1 << i);
-                        }
-                        dead_temps[arg] = 0;
-                    }
-                    s->op_dead_iargs[op_index] = dead_iargs;
+            /* Test if the operation can be removed because all
+               its outputs are dead. We assume that nb_oargs == 0
+               implies side effects */
+            if (!(def->flags & TCG_OPF_SIDE_EFFECTS) && nb_oargs != 0) {
+                for(i = 0; i < nb_oargs; i++) {
+                    arg = args[i];
+                    if (!dead_temps[arg])
+                        goto do_not_remove;
                 }
+                tcg_set_nop(s, gen_opc_buf + op_index, args, def->nb_args);
+#ifdef CONFIG_PROFILER
+                s->del_op_count++;
+#endif
             } else {
-                /* legacy dyngen operations */
-                args -= def->nb_args;
-                /* mark end of basic block */
-                tcg_la_bb_end(s, dead_temps);
+            do_not_remove:
+
+                /* output args are dead */
+                for(i = 0; i < nb_oargs; i++) {
+                    arg = args[i];
+                    dead_temps[arg] = 1;
+                }
+
+                /* if end of basic block, update */
+                if (def->flags & TCG_OPF_BB_END) {
+                    tcg_la_bb_end(s, dead_temps);
+                } else if (def->flags & TCG_OPF_CALL_CLOBBER) {
+                    /* globals are live */
+                    memset(dead_temps, 0, s->nb_globals);
+                }
+
+                /* input args are live */
+                dead_iargs = 0;
+                for(i = 0; i < nb_iargs; i++) {
+                    arg = args[i + nb_oargs];
+                    if (dead_temps[arg]) {
+                        dead_iargs |= (1 << i);
+                    }
+                    dead_temps[arg] = 0;
+                }
+                s->op_dead_iargs[op_index] = dead_iargs;
             }
             break;
         }
@@ -1897,20 +1891,15 @@ static int tcg_reg_alloc_call(TCGContext *s, const TCGOpDef *def,
 
 #ifdef CONFIG_PROFILER
 
-static int64_t dyngen_table_op_count[NB_OPS];
+static int64_t tcg_table_op_count[NB_OPS];
 
 void dump_op_count(void)
 {
     int i;
     FILE *f;
-    f = fopen("/tmp/op1.log", "w");
-    for(i = 0; i < INDEX_op_end; i++) {
-        fprintf(f, "%s %" PRId64 "\n", tcg_op_defs[i].name, dyngen_table_op_count[i]);
-    }
-    fclose(f);
-    f = fopen("/tmp/op2.log", "w");
+    f = fopen("/tmp/op.log", "w");
     for(i = INDEX_op_end; i < NB_OPS; i++) {
-        fprintf(f, "%s %" PRId64 "\n", tcg_op_defs[i].name, dyngen_table_op_count[i]);
+        fprintf(f, "%s %" PRId64 "\n", tcg_op_defs[i].name, tcg_table_op_count[i]);
     }
     fclose(f);
 }
@@ -1960,7 +1949,7 @@ static inline int tcg_gen_code_common(TCGContext *s, uint8_t *gen_code_buf,
     for(;;) {
         opc = gen_opc_buf[op_index];
 #ifdef CONFIG_PROFILER
-        dyngen_table_op_count[opc]++;
+        tcg_table_op_count[opc]++;
 #endif
         def = &tcg_op_defs[opc];
 #if 0
@@ -2015,22 +2004,6 @@ static inline int tcg_gen_code_common(TCGContext *s, uint8_t *gen_code_buf,
             goto next;
         case INDEX_op_end:
             goto the_end;
-
-#ifdef CONFIG_DYNGEN_OP
-        case 0 ... INDEX_op_end - 1:
-            /* legacy dyngen ops */
-#ifdef CONFIG_PROFILER
-            s->old_op_count++;
-#endif
-            tcg_reg_alloc_bb_end(s, s->reserved_regs);
-            if (search_pc >= 0) {
-                s->code_ptr += def->copy_size;
-                args += def->nb_args;
-            } else {
-                args = dyngen_op(s, opc, args);
-            }
-            goto next;
-#endif
         default:
             /* Note: in order to speed up the code, it would be much
                faster to have specialized register allocator functions for
@@ -2053,7 +2026,7 @@ static inline int tcg_gen_code_common(TCGContext *s, uint8_t *gen_code_buf,
     return -1;
 }
 
-int dyngen_code(TCGContext *s, uint8_t *gen_code_buf)
+int tcg_gen_code(TCGContext *s, uint8_t *gen_code_buf)
 {
 #ifdef CONFIG_PROFILER
     {
@@ -2081,7 +2054,7 @@ int dyngen_code(TCGContext *s, uint8_t *gen_code_buf)
    offset bytes from the start of the TB.  The contents of gen_code_buf must
    not be changed, though writing the same values is ok.
    Return -1 if not found. */
-int dyngen_code_search_pc(TCGContext *s, uint8_t *gen_code_buf, long offset)
+int tcg_gen_code_search_pc(TCGContext *s, uint8_t *gen_code_buf, long offset)
 {
     return tcg_gen_code_common(s, gen_code_buf, offset);
 }

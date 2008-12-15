@@ -90,6 +90,9 @@ int qemu_kvm_unregister_coalesced_mmio(target_phys_addr_t addr,
 
 void qemu_kvm_system_reset_request(void);
 
+int kvm_coalesce_mmio_region(target_phys_addr_t start, ram_addr_t size);
+int kvm_uncoalesce_mmio_region(target_phys_addr_t start, ram_addr_t size);
+
 #ifdef USE_KVM_DEVICE_ASSIGNMENT
 void kvm_ioperm(CPUState *env, void *data);
 void kvm_arch_do_ioperm(void *_data);

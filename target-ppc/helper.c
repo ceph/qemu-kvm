@@ -29,7 +29,6 @@
 #include "exec-all.h"
 #include "helper_regs.h"
 #include "qemu-common.h"
-#include "helper.h"
 #include "qemu-kvm.h"
 
 //#define DEBUG_MMU
@@ -39,24 +38,6 @@
 //#define DUMP_PAGE_TABLES
 //#define DEBUG_EXCEPTIONS
 //#define FLUSH_ALL_TLBS
-
-/*****************************************************************************/
-/* Exceptions processing */
-
-void raise_exception_err (CPUState *env, int exception, int error_code)
-{
-#if 0
-    printf("Raise exception %3x code : %d\n", exception, error_code);
-#endif
-    env->exception_index = exception;
-    env->error_code = error_code;
-    cpu_loop_exit();
-}
-
-void raise_exception (CPUState *env, int exception)
-{
-    helper_raise_exception_err(exception, 0);
-}
 
 /*****************************************************************************/
 /* PowerPC MMU emulation */
@@ -1225,7 +1206,7 @@ static always_inline void ppc4xx_tlb_invalidate_virt (CPUState *env,
 #endif
 }
 
-int mmu40x_get_physical_address (CPUState *env, mmu_ctx_t *ctx,
+static int mmu40x_get_physical_address (CPUState *env, mmu_ctx_t *ctx,
                                  target_ulong address, int rw, int access_type)
 {
     ppcemb_tlb_t *tlb;
@@ -1307,9 +1288,9 @@ void store_40x_sler (CPUPPCState *env, uint32_t val)
     env->spr[SPR_405_SLER] = val;
 }
 
-int mmubooke_get_physical_address (CPUState *env, mmu_ctx_t *ctx,
-                                   target_ulong address, int rw,
-                                   int access_type)
+static int mmubooke_get_physical_address (CPUState *env, mmu_ctx_t *ctx,
+                                          target_ulong address, int rw,
+                                          int access_type)
 {
     ppcemb_tlb_t *tlb;
     target_phys_addr_t raddr;
@@ -1511,10 +1492,7 @@ int cpu_ppc_handle_mmu_fault (CPUState *env, target_ulong address, int rw,
         access_type = ACCESS_CODE;
     } else {
         /* data access */
-        /* XXX: put correct access by using cpu_restore_state()
-           correctly */
-        access_type = ACCESS_INT;
-        //        access_type = env->access_type;
+        access_type = env->access_type;
     }
     ret = get_physical_address(env, &ctx, address, rw, access_type);
     if (ret == 0) {
@@ -1801,17 +1779,7 @@ static always_inline void dump_store_bat (CPUPPCState *env, char ID,
 #endif
 }
 
-target_ulong do_load_ibatu (CPUPPCState *env, int nr)
-{
-    return env->IBAT[0][nr];
-}
-
-target_ulong do_load_ibatl (CPUPPCState *env, int nr)
-{
-    return env->IBAT[1][nr];
-}
-
-void do_store_ibatu (CPUPPCState *env, int nr, target_ulong value)
+void ppc_store_ibatu (CPUPPCState *env, int nr, target_ulong value)
 {
     target_ulong mask;
 
@@ -1837,23 +1805,13 @@ void do_store_ibatu (CPUPPCState *env, int nr, target_ulong value)
     }
 }
 
-void do_store_ibatl (CPUPPCState *env, int nr, target_ulong value)
+void ppc_store_ibatl (CPUPPCState *env, int nr, target_ulong value)
 {
     dump_store_bat(env, 'I', 1, nr, value);
     env->IBAT[1][nr] = value;
 }
 
-target_ulong do_load_dbatu (CPUPPCState *env, int nr)
-{
-    return env->DBAT[0][nr];
-}
-
-target_ulong do_load_dbatl (CPUPPCState *env, int nr)
-{
-    return env->DBAT[1][nr];
-}
-
-void do_store_dbatu (CPUPPCState *env, int nr, target_ulong value)
+void ppc_store_dbatu (CPUPPCState *env, int nr, target_ulong value)
 {
     target_ulong mask;
 
@@ -1879,13 +1837,13 @@ void do_store_dbatu (CPUPPCState *env, int nr, target_ulong value)
     }
 }
 
-void do_store_dbatl (CPUPPCState *env, int nr, target_ulong value)
+void ppc_store_dbatl (CPUPPCState *env, int nr, target_ulong value)
 {
     dump_store_bat(env, 'D', 1, nr, value);
     env->DBAT[1][nr] = value;
 }
 
-void do_store_ibatu_601 (CPUPPCState *env, int nr, target_ulong value)
+void ppc_store_ibatu_601 (CPUPPCState *env, int nr, target_ulong value)
 {
     target_ulong mask;
     int do_inval;
@@ -1922,7 +1880,7 @@ void do_store_ibatu_601 (CPUPPCState *env, int nr, target_ulong value)
     }
 }
 
-void do_store_ibatl_601 (CPUPPCState *env, int nr, target_ulong value)
+void ppc_store_ibatl_601 (CPUPPCState *env, int nr, target_ulong value)
 {
     target_ulong mask;
     int do_inval;
@@ -2076,11 +2034,6 @@ void ppc_tlb_invalidate_one (CPUPPCState *env, target_ulong addr)
 /*****************************************************************************/
 /* Special registers manipulation */
 #if defined(TARGET_PPC64)
-target_ulong ppc_load_asr (CPUPPCState *env)
-{
-    return env->asr;
-}
-
 void ppc_store_asr (CPUPPCState *env, target_ulong value)
 {
     if (env->asr != value) {
@@ -2090,12 +2043,7 @@ void ppc_store_asr (CPUPPCState *env, target_ulong value)
 }
 #endif
 
-target_ulong do_load_sdr1 (CPUPPCState *env)
-{
-    return env->sdr1;
-}
-
-void do_store_sdr1 (CPUPPCState *env, target_ulong value)
+void ppc_store_sdr1 (CPUPPCState *env, target_ulong value)
 {
 #if defined (DEBUG_MMU)
     if (loglevel != 0) {
@@ -2111,7 +2059,7 @@ void do_store_sdr1 (CPUPPCState *env, target_ulong value)
     }
 }
 
-void do_store_sr (CPUPPCState *env, int srnum, target_ulong value)
+void ppc_store_sr (CPUPPCState *env, int srnum, target_ulong value)
 {
 #if defined (DEBUG_MMU)
     if (loglevel != 0) {
@@ -2937,13 +2885,15 @@ void cpu_ppc_reset (void *opaque)
 #endif
 #if defined(CONFIG_USER_ONLY)
     msr |= (target_ulong)1 << MSR_FP; /* Allow floating point usage */
+    msr |= (target_ulong)1 << MSR_VR; /* Allow altivec usage */
+    msr |= (target_ulong)1 << MSR_SPE; /* Allow SPE usage */
     msr |= (target_ulong)1 << MSR_PR;
+    env->msr = msr & env->msr_mask;
 #else
     env->nip = env->hreset_vector | env->excp_prefix;
     if (env->mmu_model != POWERPC_MMU_REAL)
         ppc_tlb_invalidate_all(env);
 #endif
-    env->msr = msr;
     hreg_compute_hflags(env);
     env->reserve = (target_ulong)-1ULL;
     /* Be sure no exception or interrupt is pending */

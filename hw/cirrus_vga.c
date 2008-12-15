@@ -3235,8 +3235,7 @@ static void cirrus_init_common(CirrusVGAState * s, int device_id, int is_pci)
                                            cirrus_vga_mem_write, s);
     cpu_register_physical_memory(isa_mem_base + 0x000a0000, 0x20000,
                                  s->vga_io_memory);
-    if (kvm_enabled())
-        qemu_kvm_register_coalesced_mmio(isa_mem_base + 0x000a0000, 0x20000);
+    qemu_register_coalesced_mmio(isa_mem_base + 0x000a0000, 0x20000);
 
     s->sr[0x06] = 0x0f;
     if (device_id == CIRRUS_ID_CLGD5446) {

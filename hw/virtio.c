@@ -485,7 +485,7 @@ static void virtio_update_irq(VirtIODevice *vdev)
     qemu_set_irq(vdev->pci_dev.irq[0], vdev->isr & 1);
 }
 
-void virtio_reset(void *opaque)
+static void virtio_reset(void *opaque)
 {
     VirtIODevice *vdev = opaque;
     int i;
@@ -858,7 +858,7 @@ VirtIODevice *virtio_init_pci(PCIBus *bus, const char *name,
 
     size = 20 + config_size;
     if (size & (size-1))
-        size = 1 << fls(size);
+        size = 1 << qemu_fls(size);
 
     pci_register_io_region(pci_dev, 0, size, PCI_ADDRESS_SPACE_IO,
                            virtio_map);

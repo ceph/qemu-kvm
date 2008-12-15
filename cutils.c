@@ -136,7 +136,7 @@ char *urldecode(const char *ptr)
     return ret;
 }
 
-int fls(int i)
+int qemu_fls(int i)
 {
     return 32 - clz32(i);
 }
