@@ -55,7 +55,10 @@ struct kvm_callbacks {
 	/// generic memory writes to unmapped memory (For MMIO devices)
     int (*mmio_write)(void *opaque, uint64_t addr, uint8_t *data,
 					int len);
-    int (*debug)(void *opaque, void *env);
+#ifdef KVM_CAP_SET_GUEST_DEBUG
+    int (*debug)(void *opaque, void *env,
+		 struct kvm_debug_exit_arch *arch_info);
+#endif
 	/*!
 	 * \brief Called when the VCPU issues an 'hlt' instruction.
 	 *
@@ -350,7 +353,9 @@ static inline int kvm_reset_mpstate(kvm_context_t kvm, int vcpu)
  */
 int kvm_inject_irq(kvm_context_t kvm, int vcpu, unsigned irq);
 
-int kvm_guest_debug(kvm_context_t, int vcpu, struct kvm_debug_guest *dbg);
+#ifdef KVM_CAP_SET_GUEST_DEBUG
+int kvm_set_guest_debug(kvm_context_t, int vcpu, struct kvm_guest_debug *dbg);
+#endif
 
 #if defined(__i386__) || defined(__x86_64__)
 /*!

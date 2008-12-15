@@ -61,6 +61,43 @@ void kvm_arch_update_regs_for_sipi(CPUState *env)
 {
 }
 
+int kvm_arch_insert_sw_breakpoint(CPUState *current_env,
+                                  struct kvm_sw_breakpoint *bp)
+{
+    return -EINVAL;
+}
+
+int kvm_arch_remove_sw_breakpoint(CPUState *current_env,
+                                  struct kvm_sw_breakpoint *bp)
+{
+    return -EINVAL;
+}
+
+int kvm_arch_insert_hw_breakpoint(target_ulong addr,
+				  target_ulong len, int type)
+{
+    return -ENOSYS;
+}
+
+int kvm_arch_remove_hw_breakpoint(target_ulong addr,
+				  target_ulong len, int type)
+{
+    return -ENOSYS;
+}
+
+void kvm_arch_remove_all_hw_breakpoints(void)
+{
+}
+
+int kvm_arch_debug(struct kvm_debug_exit_arch *arch_info)
+{
+    return 0;
+}
+
+void kvm_arch_update_guest_debug(CPUState *env, struct kvm_guest_debug *dbg)
+{
+}
+
 void kvm_save_mpstate(CPUState *env)
 {
 #ifdef KVM_CAP_MP_STATE

@@ -738,9 +738,15 @@ static int handle_io(kvm_context_t kvm, struct kvm_run *run, int vcpu)
 	return 0;
 }
 
-int handle_debug(kvm_context_t kvm, void *env)
+int handle_debug(kvm_context_t kvm, int vcpu, void *env)
 {
-	return kvm->callbacks->debug(kvm->opaque, env);
+#ifdef KVM_CAP_SET_GUEST_DEBUG
+    struct kvm_run *run = kvm->run[vcpu];
+
+    return kvm->callbacks->debug(kvm->opaque, env, &run->debug.arch);
+#else
+    return 0;
+#endif
 }
 
 int kvm_get_regs(kvm_context_t kvm, int vcpu, struct kvm_regs *regs)
@@ -937,7 +943,7 @@ again:
 			r = handle_io(kvm, run, vcpu);
 			break;
 		case KVM_EXIT_DEBUG:
-			r = handle_debug(kvm, env);
+			r = handle_debug(kvm, vcpu, env);
 			break;
 		case KVM_EXIT_MMIO:
 			r = handle_mmio(kvm, run);
@@ -982,10 +988,12 @@ int kvm_inject_irq(kvm_context_t kvm, int vcpu, unsigned irq)
 	return ioctl(kvm->vcpu_fd[vcpu], KVM_INTERRUPT, &intr);
 }
 
-int kvm_guest_debug(kvm_context_t kvm, int vcpu, struct kvm_debug_guest *dbg)
+#ifdef KVM_CAP_SET_GUEST_DEBUG
+int kvm_set_guest_debug(kvm_context_t kvm, int vcpu, struct kvm_guest_debug *dbg)
 {
-	return ioctl(kvm->vcpu_fd[vcpu], KVM_DEBUG_GUEST, dbg);
+	return ioctl(kvm->vcpu_fd[vcpu], KVM_SET_GUEST_DEBUG, dbg);
 }
+#endif
 
 int kvm_set_signal_mask(kvm_context_t kvm, int vcpu, const sigset_t *sigset)
 {

@@ -298,11 +298,14 @@ static int test_outl(void *opaque, uint16_t addr, uint32_t value)
 	return 0;
 }
 
-static int test_debug(void *opaque, void *vcpu)
+#ifdef KVM_CAP_SET_GUEST_DEBUG
+static int test_debug(void *opaque, void *vcpu,
+		      struct kvm_debug_exit_arch *arch_info)
 {
 	printf("test_debug\n");
 	return 0;
 }
+#endif
 
 static int test_halt(void *opaque, int vcpu)
 {
@@ -371,7 +374,9 @@ static struct kvm_callbacks test_callbacks = {
 	.outl        = test_outl,
 	.mmio_read   = test_mem_read,
 	.mmio_write  = test_mem_write,
+#ifdef KVM_CAP_SET_GUEST_DEBUG
 	.debug       = test_debug,
+#endif
 	.halt        = test_halt,
 	.io_window = test_io_window,
 	.try_push_interrupts = test_try_push_interrupts,

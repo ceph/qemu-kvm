@@ -88,7 +88,7 @@ int handle_shutdown(kvm_context_t kvm, void *env);
 void post_kvm_run(kvm_context_t kvm, void *env);
 int pre_kvm_run(kvm_context_t kvm, void *env);
 int handle_io_window(kvm_context_t kvm);
-int handle_debug(kvm_context_t kvm, void *env);
+int handle_debug(kvm_context_t kvm, int vcpu, void *env);
 int try_push_interrupts(kvm_context_t kvm);
 
 #endif

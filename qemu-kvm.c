@@ -20,6 +20,7 @@ int kvm_pit = 1;
 #include "console.h"
 #include "block.h"
 #include "compatfd.h"
+#include "gdbstub.h"
 
 #include "qemu-kvm.h"
 #include <libkvm.h>
@@ -52,7 +53,7 @@ pthread_t io_thread;
 static int io_thread_fd = -1;
 static int io_thread_sigfd = -1;
 
-static int kvm_debug_stop_requested;
+static CPUState *kvm_debug_cpu_requested;
 
 /* The list of ioperm_data */
 static LIST_HEAD(, ioperm_data) ioperm_head;
@@ -601,9 +602,10 @@ int kvm_main_loop(void)
             qemu_system_powerdown();
         else if (qemu_reset_requested())
 	    qemu_kvm_system_reset();
-	else if (kvm_debug_stop_requested) {
+	else if (kvm_debug_cpu_requested) {
+	    gdb_set_stop_cpu(kvm_debug_cpu_requested);
 	    vm_stop(EXCP_DEBUG);
-	    kvm_debug_stop_requested = 0;
+	    kvm_debug_cpu_requested = NULL;
 	}
     }
 
@@ -613,14 +615,19 @@ int kvm_main_loop(void)
     return 0;
 }
 
-static int kvm_debug(void *opaque, void *data)
+#ifdef KVM_CAP_SET_GUEST_DEBUG
+int kvm_debug(void *opaque, void *data, struct kvm_debug_exit_arch *arch_info)
 {
-    struct CPUState *env = (struct CPUState *)data;
+    int handle = kvm_arch_debug(arch_info);
+    struct CPUState *env = data;
 
-    kvm_debug_stop_requested = 1;
-    env->kvm_cpu_state.stopped = 1;
-    return 1;
+    if (handle) {
+	kvm_debug_cpu_requested = env;
+	env->kvm_cpu_state.stopped = 1;
+    }
+    return handle;
 }
+#endif
 
 static int kvm_inb(void *opaque, uint16_t addr, uint8_t *data)
 {
@@ -724,7 +731,9 @@ static int kvm_shutdown(void *opaque, void *data)
 }
  
 static struct kvm_callbacks qemu_kvm_ops = {
+#ifdef KVM_CAP_SET_GUEST_DEBUG
     .debug = kvm_debug,
+#endif
     .inb   = kvm_inb,
     .inw   = kvm_inw,
     .inl   = kvm_inl,
@@ -933,44 +942,170 @@ int kvm_qemu_init_env(CPUState *cenv)
     return kvm_arch_qemu_init_env(cenv);
 }
 
-struct kvm_guest_debug_data {
-    struct kvm_debug_guest dbg;
+#ifdef KVM_CAP_SET_GUEST_DEBUG
+struct kvm_sw_breakpoint_head kvm_sw_breakpoints =
+    TAILQ_HEAD_INITIALIZER(kvm_sw_breakpoints);
+
+struct kvm_sw_breakpoint *kvm_find_sw_breakpoint(target_ulong pc)
+{
+    struct kvm_sw_breakpoint *bp;
+
+    TAILQ_FOREACH(bp, &kvm_sw_breakpoints, entry) {
+	if (bp->pc == pc)
+	    return bp;
+    }
+    return NULL;
+}
+
+struct kvm_set_guest_debug_data {
+    struct kvm_guest_debug dbg;
     int err;
 };
 
-void kvm_invoke_guest_debug(void *data)
+void kvm_invoke_set_guest_debug(void *data)
 {
-    struct kvm_guest_debug_data *dbg_data = data;
+    struct kvm_set_guest_debug_data *dbg_data = data;
 
-    dbg_data->err = kvm_guest_debug(kvm_context, cpu_single_env->cpu_index,
-                                    &dbg_data->dbg);
+    dbg_data->err = kvm_set_guest_debug(kvm_context, cpu_single_env->cpu_index,
+                                        &dbg_data->dbg);
 }
 
-int kvm_update_debugger(CPUState *env)
+int kvm_update_guest_debug(CPUState *env, unsigned long reinject_trap)
 {
-    struct kvm_guest_debug_data data;
-    CPUBreakpoint *bp;
-    int i;
+    struct kvm_set_guest_debug_data data;
 
-    memset(data.dbg.breakpoints, 0, sizeof(data.dbg.breakpoints));
+    data.dbg.control = 0;
+    if (env->singlestep_enabled)
+	data.dbg.control = KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_SINGLESTEP;
 
-    data.dbg.enabled = 0;
-    if (!TAILQ_EMPTY(&env->breakpoints) || env->singlestep_enabled) {
-        bp = TAILQ_FIRST(&env->breakpoints);
-	data.dbg.enabled = 1;
-	for (i = 0; i < 4; ++i) {
-	    data.dbg.breakpoints[i].enabled = bp != NULL;
-            if (bp) {
-                data.dbg.breakpoints[i].address = bp->pc;
-                bp = TAILQ_NEXT(bp, entry);
-            }
-	}
-	data.dbg.singlestep = env->singlestep_enabled;
-    }
-    on_vcpu(env, kvm_invoke_guest_debug, &data);
+    kvm_arch_update_guest_debug(env, &data.dbg);
+    data.dbg.control |= reinject_trap;
+
+    on_vcpu(env, kvm_invoke_set_guest_debug, &data);
     return data.err;
 }
 
+int kvm_insert_breakpoint(CPUState *current_env, target_ulong addr,
+                          target_ulong len, int type)
+{
+    struct kvm_sw_breakpoint *bp;
+    CPUState *env;
+    int err;
+
+    if (type == GDB_BREAKPOINT_SW) {
+	bp = kvm_find_sw_breakpoint(addr);
+	if (bp) {
+	    bp->use_count++;
+	    return 0;
+	}
+
+	bp = qemu_malloc(sizeof(struct kvm_sw_breakpoint));
+	if (!bp)
+	    return -ENOMEM;
+
+	bp->pc = addr;
+	bp->use_count = 1;
+	err = kvm_arch_insert_sw_breakpoint(current_env, bp);
+	if (err) {
+	    free(bp);
+	    return err;
+	}
+
+	TAILQ_INSERT_HEAD(&kvm_sw_breakpoints, bp, entry);
+    } else {
+	err = kvm_arch_insert_hw_breakpoint(addr, len, type);
+	if (err)
+	    return err;
+    }
+
+    for (env = first_cpu; env != NULL; env = env->next_cpu) {
+	err = kvm_update_guest_debug(env, 0);
+	if (err)
+	    return err;
+    }
+    return 0;
+}
+
+int kvm_remove_breakpoint(CPUState *current_env, target_ulong addr,
+                          target_ulong len, int type)
+{
+    struct kvm_sw_breakpoint *bp;
+    CPUState *env;
+    int err;
+
+    if (type == GDB_BREAKPOINT_SW) {
+	bp = kvm_find_sw_breakpoint(addr);
+	if (!bp)
+	    return -ENOENT;
+
+	if (bp->use_count > 1) {
+	    bp->use_count--;
+	    return 0;
+	}
+
+	err = kvm_arch_remove_sw_breakpoint(current_env, bp);
+	if (err)
+	    return err;
+
+	TAILQ_REMOVE(&kvm_sw_breakpoints, bp, entry);
+	qemu_free(bp);
+    } else {
+	err = kvm_arch_remove_hw_breakpoint(addr, len, type);
+	if (err)
+	    return err;
+    }
+
+    for (env = first_cpu; env != NULL; env = env->next_cpu) {
+	err = kvm_update_guest_debug(env, 0);
+	if (err)
+	    return err;
+    }
+    return 0;
+}
+
+void kvm_remove_all_breakpoints(CPUState *current_env)
+{
+    struct kvm_sw_breakpoint *bp, *next;
+    CPUState *env;
+
+    TAILQ_FOREACH_SAFE(bp, &kvm_sw_breakpoints, entry, next) {
+        if (kvm_arch_remove_sw_breakpoint(current_env, bp) != 0) {
+            /* Try harder to find a CPU that currently sees the breakpoint. */
+            for (env = first_cpu; env != NULL; env = env->next_cpu) {
+                if (kvm_arch_remove_sw_breakpoint(env, bp) == 0)
+                    break;
+            }
+        }
+    }
+    kvm_arch_remove_all_hw_breakpoints();
+
+    for (env = first_cpu; env != NULL; env = env->next_cpu)
+	kvm_update_guest_debug(env, 0);
+}
+
+#else /* !KVM_CAP_SET_GUEST_DEBUG */
+
+int kvm_update_guest_debug(CPUState *env, unsigned long reinject_trap)
+{
+    return -EINVAL;
+}
+
+int kvm_insert_breakpoint(CPUState *current_env, target_ulong addr,
+                          target_ulong len, int type)
+{
+    return -EINVAL;
+}
+
+int kvm_remove_breakpoint(CPUState *current_env, target_ulong addr,
+                          target_ulong len, int type)
+{
+    return -EINVAL;
+}
+
+void kvm_remove_all_breakpoints(CPUState *current_env)
+{
+}
+#endif /* !KVM_CAP_SET_GUEST_DEBUG */
 
 /*
  * dirty pages logging

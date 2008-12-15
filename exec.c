@@ -1414,9 +1414,6 @@ int cpu_breakpoint_insert(CPUState *env, target_ulong pc, int flags,
     else
         TAILQ_INSERT_TAIL(&env->breakpoints, bp, entry);
 
-    if (kvm_enabled())
-	kvm_update_debugger(env);
-
     breakpoint_invalidate(env, pc);
 
     if (breakpoint)
@@ -1451,9 +1448,6 @@ void cpu_breakpoint_remove_by_ref(CPUState *env, CPUBreakpoint *breakpoint)
 #if defined(TARGET_HAS_ICE)
     TAILQ_REMOVE(&env->breakpoints, breakpoint, entry);
 
-    if (kvm_enabled())
-	kvm_update_debugger(env);
-
     breakpoint_invalidate(env, breakpoint->pc);
 
     qemu_free(breakpoint);
@@ -1480,12 +1474,14 @@ void cpu_single_step(CPUState *env, int enabled)
 #if defined(TARGET_HAS_ICE)
     if (env->singlestep_enabled != enabled) {
         env->singlestep_enabled = enabled;
-        /* must flush all the translated code to avoid inconsistancies */
-        /* XXX: only flush what is necessary */
-        tb_flush(env);
+        if (kvm_enabled())
+            kvm_update_guest_debug(env, 0);
+        else {
+            /* must flush all the translated code to avoid inconsistancies */
+            /* XXX: only flush what is necessary */
+            tb_flush(env);
+        }
     }
-    if (kvm_enabled())
-	kvm_update_debugger(env);
 #endif
 }
 

@@ -11,6 +11,7 @@
 
 #include <string.h>
 #include "hw/hw.h"
+#include "gdbstub.h"
 #include <sys/io.h>
 
 #include "qemu-kvm.h"
@@ -715,6 +716,177 @@ void kvm_arch_cpu_reset(CPUState *env)
 	}
     }
 }
+
+int kvm_arch_insert_sw_breakpoint(CPUState *env, struct kvm_sw_breakpoint *bp)
+{
+    uint8_t int3 = 0xcc;
+
+    if (cpu_memory_rw_debug(env, bp->pc, (uint8_t *)&bp->saved_insn, 1, 0) ||
+        cpu_memory_rw_debug(env, bp->pc, &int3, 1, 1))
+        return -EINVAL;
+    return 0;
+}
+
+int kvm_arch_remove_sw_breakpoint(CPUState *env, struct kvm_sw_breakpoint *bp)
+{
+    uint8_t int3;
+
+    if (cpu_memory_rw_debug(env, bp->pc, &int3, 1, 0) || int3 != 0xcc ||
+        cpu_memory_rw_debug(env, bp->pc, (uint8_t *)&bp->saved_insn, 1, 1))
+        return -EINVAL;
+    return 0;
+}
+
+#ifdef KVM_CAP_SET_GUEST_DEBUG
+static struct {
+    target_ulong addr;
+    int len;
+    int type;
+} hw_breakpoint[4];
+
+static int nb_hw_breakpoint;
+
+static int find_hw_breakpoint(target_ulong addr, int len, int type)
+{
+    int n;
+
+    for (n = 0; n < nb_hw_breakpoint; n++)
+	if (hw_breakpoint[n].addr == addr && hw_breakpoint[n].type == type &&
+	    (hw_breakpoint[n].len == len || len == -1))
+	    return n;
+    return -1;
+}
+
+int kvm_arch_insert_hw_breakpoint(target_ulong addr,
+                                  target_ulong len, int type)
+{
+    switch (type) {
+    case GDB_BREAKPOINT_HW:
+	len = 1;
+	break;
+    case GDB_WATCHPOINT_WRITE:
+    case GDB_WATCHPOINT_ACCESS:
+	switch (len) {
+	case 1:
+	    break;
+	case 2:
+	case 4:
+	case 8:
+	    if (addr & (len - 1))
+		return -EINVAL;
+	    break;
+	default:
+	    return -EINVAL;
+	}
+	break;
+    default:
+	return -ENOSYS;
+    }
+
+    if (nb_hw_breakpoint == 4)
+        return -ENOBUFS;
+
+    if (find_hw_breakpoint(addr, len, type) >= 0)
+        return -EEXIST;
+
+    hw_breakpoint[nb_hw_breakpoint].addr = addr;
+    hw_breakpoint[nb_hw_breakpoint].len = len;
+    hw_breakpoint[nb_hw_breakpoint].type = type;
+    nb_hw_breakpoint++;
+
+    return 0;
+}
+
+int kvm_arch_remove_hw_breakpoint(target_ulong addr,
+                                  target_ulong len, int type)
+{
+    int n;
+
+    n = find_hw_breakpoint(addr, (type == GDB_BREAKPOINT_HW) ? 1 : len, type);
+    if (n < 0)
+        return -ENOENT;
+
+    nb_hw_breakpoint--;
+    hw_breakpoint[n] = hw_breakpoint[nb_hw_breakpoint];
+
+    return 0;
+}
+
+void kvm_arch_remove_all_hw_breakpoints(void)
+{
+    nb_hw_breakpoint = 0;
+}
+
+static CPUWatchpoint hw_watchpoint;
+
+int kvm_arch_debug(struct kvm_debug_exit_arch *arch_info)
+{
+    int handle = 0;
+    int n;
+
+    if (arch_info->exception == 1) {
+	if (arch_info->dr6 & (1 << 14)) {
+	    if (cpu_single_env->singlestep_enabled)
+		handle = 1;
+	} else {
+	    for (n = 0; n < 4; n++)
+		if (arch_info->dr6 & (1 << n))
+		    switch ((arch_info->dr7 >> (16 + n*4)) & 0x3) {
+		    case 0x0:
+			handle = 1;
+			break;
+		    case 0x1:
+			handle = 1;
+			cpu_single_env->watchpoint_hit = &hw_watchpoint;
+			hw_watchpoint.vaddr = hw_breakpoint[n].addr;
+			hw_watchpoint.flags = BP_MEM_WRITE;
+			break;
+		    case 0x3:
+			handle = 1;
+			cpu_single_env->watchpoint_hit = &hw_watchpoint;
+			hw_watchpoint.vaddr = hw_breakpoint[n].addr;
+			hw_watchpoint.flags = BP_MEM_ACCESS;
+			break;
+		    }
+	}
+    } else if (kvm_find_sw_breakpoint(arch_info->pc))
+	handle = 1;
+
+    if (!handle)
+	kvm_update_guest_debug(cpu_single_env,
+			(arch_info->exception == 1) ?
+			KVM_GUESTDBG_INJECT_DB : KVM_GUESTDBG_INJECT_BP);
+
+    return handle;
+}
+
+void kvm_arch_update_guest_debug(CPUState *env, struct kvm_guest_debug *dbg)
+{
+    const uint8_t type_code[] = {
+	[GDB_BREAKPOINT_HW] = 0x0,
+	[GDB_WATCHPOINT_WRITE] = 0x1,
+	[GDB_WATCHPOINT_ACCESS] = 0x3
+    };
+    const uint8_t len_code[] = {
+	[1] = 0x0, [2] = 0x1, [4] = 0x3, [8] = 0x2
+    };
+    int n;
+
+    if (!TAILQ_EMPTY(&kvm_sw_breakpoints))
+	dbg->control |= KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_SW_BP;
+
+    if (nb_hw_breakpoint > 0) {
+	dbg->control |= KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_HW_BP;
+	dbg->arch.debugreg[7] = 0x0600;
+	for (n = 0; n < nb_hw_breakpoint; n++) {
+	    dbg->arch.debugreg[n] = hw_breakpoint[n].addr;
+	    dbg->arch.debugreg[7] |= (2 << (n * 2)) |
+		(type_code[hw_breakpoint[n].type] << (16 + n*4)) |
+		(len_code[hw_breakpoint[n].len] << (18 + n*4));
+	}
+    }
+}
+#endif
 
 void kvm_arch_do_ioperm(void *_data)
 {

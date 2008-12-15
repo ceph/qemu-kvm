@@ -1195,13 +1195,6 @@ void gdb_register_coprocessor(CPUState * env,
     }
 }
 
-/* GDB breakpoint/watchpoint types */
-#define GDB_BREAKPOINT_SW        0
-#define GDB_BREAKPOINT_HW        1
-#define GDB_WATCHPOINT_WRITE     2
-#define GDB_WATCHPOINT_READ      3
-#define GDB_WATCHPOINT_ACCESS    4
-
 #ifndef CONFIG_USER_ONLY
 static const int xlat_gdb_type[] = {
     [GDB_WATCHPOINT_WRITE]  = BP_GDB | BP_MEM_WRITE,
@@ -1214,6 +1207,9 @@ static int gdb_breakpoint_insert(target_ulong addr, target_ulong len, int type)
 {
     CPUState *env;
     int err = 0;
+
+    if (kvm_enabled())
+        return kvm_insert_breakpoint(gdbserver_state->c_cpu, addr, len, type);
 
     switch (type) {
     case GDB_BREAKPOINT_SW:
@@ -1246,6 +1242,9 @@ static int gdb_breakpoint_remove(target_ulong addr, target_ulong len, int type)
     CPUState *env;
     int err = 0;
 
+    if (kvm_enabled())
+        return kvm_remove_breakpoint(gdbserver_state->c_cpu, addr, len, type);
+
     switch (type) {
     case GDB_BREAKPOINT_SW:
     case GDB_BREAKPOINT_HW:
@@ -1274,6 +1273,11 @@ static int gdb_breakpoint_remove(target_ulong addr, target_ulong len, int type)
 static void gdb_breakpoint_remove_all(void)
 {
     CPUState *env;
+
+    if (kvm_enabled()) {
+        kvm_remove_all_breakpoints(gdbserver_state->c_cpu);
+        return;
+    }
 
     for (env = first_cpu; env != NULL; env = env->next_cpu) {
         cpu_breakpoint_remove_all(env, BP_GDB);
@@ -1402,7 +1406,7 @@ static int gdb_handle_packet(GDBState *s, const char *line_buf)
         }
         break;
     case 'g':
-        kvm_save_registers(env);
+        kvm_save_registers(s->g_cpu);
         len = 0;
         for (addr = 0; addr < num_g_regs; addr++) {
             reg_size = gdb_read_register(s->g_cpu, mem_buf + len, addr);
@@ -1420,7 +1424,7 @@ static int gdb_handle_packet(GDBState *s, const char *line_buf)
             len -= reg_size;
             registers += reg_size;
         }
-        kvm_load_registers(env);
+        kvm_load_registers(s->g_cpu);
         put_packet(s, "OK");
         break;
     case 'm':
@@ -1579,6 +1583,7 @@ static int gdb_handle_packet(GDBState *s, const char *line_buf)
             thread = strtoull(p+16, (char **)&p, 16);
             for (env = first_cpu; env != NULL; env = env->next_cpu)
                 if (env->cpu_index + 1 == thread) {
+                    kvm_save_registers(env);
                     len = snprintf((char *)mem_buf, sizeof(mem_buf),
                                    "CPU#%d [%s]", env->cpu_index,
                                    env->halted ? "halted " : "running");
