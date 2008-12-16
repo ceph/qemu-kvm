@@ -124,7 +124,6 @@ blobs="yes"
 signalfd="no"
 eventfd="no"
 cpu_emulation="yes"
-device_tree_support=""
 
 # OS specific
 targetos=`uname -s`
@@ -389,8 +388,6 @@ for opt do
   ;;
   --disable-cpu-emulation) cpu_emulation="no"
   ;;
-  --disable-libfdt) device_tree_support="no"
-  ;;
   *) echo "ERROR: unknown option $opt"; exit 1
   ;;
   esac
@@ -503,7 +500,6 @@ echo "  --disable-aio            disable AIO support"
 echo "  --disable-blobs          disable installing provided firmware blobs"
 echo "  --kerneldir=PATH         look for kernel includes in PATH"
 echo "  --disable-cpu-emulation  disables use of qemu cpu emulation code"
-echo "  --disable-libfdt         disables use of libfdt support for device tree"
 echo ""
 echo "NOTE: The object files are built at the place where configure is launched"
 exit 1
@@ -1092,31 +1088,6 @@ else
   binsuffix="/bin"
 fi
 
-######################################
-# libfdt probe
-#
-if test -z "$device_tree_support" -a \
-   "$cpu" = "powerpc"; then
-  device_tree_support="no"
-  cat > $TMPC << EOF
-#include <libfdt.h>
-/* XXX uncomment later when libfdt is built before this test */
-//int main(void) { void *fdt; return fdt_create(fdt, 1024); }
-int main (void) {return 0;}
-EOF
-# XXX for now do not try to link to libfdt and just check for header */
-# if $cc $ARCH_CFLAGS $CFLAGS $LDFLAGS -o $TMPE $TMPC -lfdt 2> /dev/null ; then
-  if $cc $ARCH_CFLAGS $CFLAGS $LDFLAGS -o $TMPE $TMPC 2> /dev/null; then
-   device_tree_support="yes"
-  else
-    echo
-    echo "Error: Could not find libfdt"
-    echo "Make sure to have the libfdt libs and headers installed."
-    echo
-    exit 1
-  fi
-fi
-
 echo "Install prefix    $prefix"
 echo "BIOS directory    $prefix$datasuffix"
 echo "binary directory  $prefix$binsuffix"
@@ -1161,9 +1132,6 @@ fi
 echo "kqemu support     $kqemu"
 echo "kvm support       $kvm"
 echo "CPU emulation     $cpu_emulation"
-if test $cpu = "powerpc"; then
-echo "libfdt support    $device_tree_support"
-fi
 echo "brlapi support    $brlapi"
 echo "Documentation     $build_docs"
 [ ! -z "$uname_release" ] && \
@@ -1726,10 +1694,6 @@ case "$target_cpu" in
     echo "#define TARGET_ARCH \"ppcemb\"" >> $config_h
     echo "#define TARGET_PPC 1" >> $config_h
     echo "#define TARGET_PPCEMB 1" >> $config_h
-    if test "$device_tree_support" = "yes" ; then
-	echo "#define CONFIG_LIBFDT 1" >> $config_h
-	echo "CONFIG_LIBFDT=1" >> $config_mak
-    fi
     configure_kvm
   ;;
   ppc64)

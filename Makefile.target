@@ -231,12 +231,6 @@ LIBOBJS+=qemu-kvm-helper.o
 endif
 endif
 
-ifeq ($(TARGET_BASE_ARCH), ppc)
-ifeq ($(USE_KVM), 1)
-LIBOBJS+= qemu-kvm-powerpc.o
-endif
-endif
-
 LIBOBJS+= op_helper.o
 
 ifneq ($(TARGET_ARCH), ia64)
@@ -679,11 +673,6 @@ ifdef CONFIG_BLUEZ
 LIBS += $(CONFIG_BLUEZ_LIBS)
 endif
 
-ifdef CONFIG_LIBFDT
-LIBS += -lfdt
-DEPLIBS += ../libfdt/libfdt.a
-endif
-
 # SCSI layer
 OBJS+= lsi53c895a.o esp.o
 
@@ -747,7 +736,6 @@ OBJS+= heathrow_pic.o grackle_pci.o ppc_oldworld.o
 OBJS+= unin_pci.o ppc_chrp.o
 # PowerPC 4xx boards
 OBJS+= pflash_cfi02.o ppc4xx_devs.o ppc4xx_pci.o ppc405_uc.o ppc405_boards.o
-OBJS+= ppc440.o ppc440_bamboo.o device_tree.o
 # virtio support
 OBJS+= virtio.o virtio-blk.o virtio-balloon.o
 OBJS+= virtio-net.o

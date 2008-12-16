@@ -8,7 +8,6 @@ void register_machines(void)
     qemu_register_machine(&prep_machine);
     qemu_register_machine(&ref405ep_machine);
     qemu_register_machine(&taihu_machine);
-    qemu_register_machine(&bamboo_machine);
 }
 
 void cpu_save(QEMUFile *f, void *opaque)
