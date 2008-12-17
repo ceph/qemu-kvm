@@ -772,7 +772,9 @@ int kvm_qemu_init()
     return 0;
 }
 
+#ifdef TARGET_I386
 static int destroy_region_works = 0;
+#endif
 
 int kvm_qemu_create_context(void)
 {
@@ -790,7 +792,9 @@ int kvm_qemu_create_context(void)
     r = kvm_arch_qemu_create_context();
     if(r <0)
 	kvm_qemu_destroy();
+#ifdef TARGET_I386
     destroy_region_works = kvm_destroy_memory_region_works(kvm_context);
+#endif
     return 0;
 }
 
@@ -799,6 +803,7 @@ void kvm_qemu_destroy(void)
     kvm_finalize(kvm_context);
 }
 
+#ifdef TARGET_I386
 static int must_use_aliases_source(target_phys_addr_t addr)
 {
     if (destroy_region_works)
@@ -855,6 +860,7 @@ static void drop_mapping(target_phys_addr_t start_addr)
     if (p)
         *p = mappings[--nr_mappings];
 }
+#endif
 
 void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
                                       unsigned long size,
@@ -862,17 +868,21 @@ void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
 {
     int r = 0;
     unsigned long area_flags = phys_offset & ~TARGET_PAGE_MASK;
+#ifdef TARGET_I386
     struct mapping *p;
+#endif
 
     phys_offset &= ~IO_MEM_ROM;
 
     if (area_flags == IO_MEM_UNASSIGNED) {
+#ifdef TARGET_I386
         if (must_use_aliases_source(start_addr)) {
             kvm_destroy_memory_alias(kvm_context, start_addr);
             return;
         }
         if (must_use_aliases_target(start_addr))
             return;
+#endif
         kvm_unregister_memory_area(kvm_context, start_addr, size);
         return;
     }
@@ -884,6 +894,7 @@ void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
     if (area_flags >= TLB_MMIO)
         return;
 
+#ifdef TARGET_I386
     if (must_use_aliases_source(start_addr)) {
         p = find_ram_mapping(phys_offset);
         if (p) {
@@ -892,6 +903,7 @@ void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
         }
         return;
     }
+#endif
 
     r = kvm_register_phys_mem(kvm_context, start_addr,
                               phys_ram_base + phys_offset,
@@ -901,11 +913,13 @@ void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
         exit(1);
     }
 
+#ifdef TARGET_I386
     drop_mapping(start_addr);
     p = &mappings[nr_mappings++];
     p->phys = start_addr;
     p->ram = phys_offset;
     p->len = size;
+#endif
 
     return;
 }
@@ -1200,8 +1214,10 @@ void kvm_qemu_log_memory(target_phys_addr_t start, target_phys_addr_t size,
     if (log)
 	kvm_dirty_pages_log_enable_slot(kvm_context, start, size);
     else {
+#ifdef TARGET_I386
         if (must_use_aliases_target(start))
             return;
+#endif
 	kvm_dirty_pages_log_disable_slot(kvm_context, start, size);
     }
 }
@@ -1300,8 +1316,10 @@ void kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr, target_phys_a
 #ifndef TARGET_IA64
     void *buf;
 
+#ifdef TARGET_I386
     if (must_use_aliases_source(start_addr))
         return;
+#endif
 
     buf = qemu_malloc((end_addr - start_addr) / 8 + 2);
     kvm_get_dirty_pages_range(kvm_context, start_addr, end_addr - start_addr,
@@ -1312,21 +1330,21 @@ void kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr, target_phys_a
 
 int kvm_log_start(target_phys_addr_t phys_addr, target_phys_addr_t len)
 {
-#ifndef TARGET_IA64
+#ifdef TARGET_I386
     if (must_use_aliases_source(phys_addr))
         return 0;
-    kvm_qemu_log_memory(phys_addr, len, 1);
 #endif
+    kvm_qemu_log_memory(phys_addr, len, 1);
     return 0;
 }
 
 int kvm_log_stop(target_phys_addr_t phys_addr, target_phys_addr_t len)
 {
-#ifndef TARGET_IA64
+#ifdef TARGET_I386
     if (must_use_aliases_source(phys_addr))
         return 0;
-    kvm_qemu_log_memory(phys_addr, len, 0);
 #endif
+    kvm_qemu_log_memory(phys_addr, len, 0);
     return 0;
 }
 
