@@ -65,12 +65,12 @@ headers-new = $(LINUX)/arch/$(ARCH_DIR)/include/asm/./kvm*.h \
 
 header-sync:
 	rm -rf $T
-	rsync -R \
+	rsync -R -L \
 	     "$(LINUX)"/./include/linux/kvm*.h \
 	     $(if $(wildcard $(headers-old)), $(headers-old)) \
              $T/
 	$(if $(wildcard $(headers-new)), \
-	rsync -R \
+	rsync -R -L \
 	     $(wildcard $(headers-new)) \
              $T/include/asm-$(ARCH_DIR)/)
 
