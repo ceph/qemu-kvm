@@ -485,7 +485,7 @@ static void usage(const char *progname)
 "                         can be used to change the unit (default: `M')\n"
 "  -h, --help             display this help screen and exit\n"
 "\n"
-"Report bugs to <kvm-devel@lists.sourceforge.net>.\n"
+"Report bugs to <kvm@vger.kernel.org>.\n"
 		, progname);
 }
 
