@@ -33,7 +33,9 @@ user libkvm qemu: header-sync-$(if $(WANT_MODULE),n,y)
 header-sync-n:
 
 header-sync-y:
-	make -C kernel LINUX=$(KERNELDIR) header-sync
+	make -C kernel \
+	LINUX=$(if $(KERNELSOURCEDIR),$(KERNELSOURCEDIR),$(KERNELDIR)) \
+	header-sync
 	rm -f kernel/include/asm
 	ln -sf asm-$(sane-arch) kernel/include/asm
 
