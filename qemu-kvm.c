@@ -602,11 +602,13 @@ int kvm_main_loop(void)
             qemu_system_powerdown();
         else if (qemu_reset_requested())
 	    qemu_kvm_system_reset();
+#ifdef CONFIG_GDBSTUB
 	else if (kvm_debug_cpu_requested) {
 	    gdb_set_stop_cpu(kvm_debug_cpu_requested);
 	    vm_stop(EXCP_DEBUG);
 	    kvm_debug_cpu_requested = NULL;
 	}
+#endif
     }
 
     pause_all_threads();
