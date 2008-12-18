@@ -51,10 +51,6 @@ void do_loadvm(const char *name);
 void do_delvm(const char *name);
 void do_info_snapshots(void);
 
-int check_params(char *buf, int buf_size, const char * const *params, const char *str);
-int get_param_value(char *buf, int buf_size, const char *tag,
-                    const char *str);
-
 void qemu_announce_self(void);
 
 void main_loop_wait(int timeout);

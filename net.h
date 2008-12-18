@@ -48,9 +48,6 @@ void do_info_network(void);
 int tap_has_vnet_hdr(void *opaque);
 void tap_using_vnet_hdr(void *opaque, int using_vnet_hdr);
 
-int net_client_init(const char *device, const char *opts);
-void net_client_uninit(NICInfo *nd);
-
 /* NIC info */
 
 #define MAX_NICS 8
@@ -89,6 +86,7 @@ void net_checksum_calculate(uint8_t *data, int length);
 
 /* from net.c */
 int net_client_init(const char *device, const char *p);
+void net_client_uninit(NICInfo *nd);
 int net_client_parse(const char *str);
 void net_slirp_smb(const char *exported_dir);
 void net_slirp_redir(const char *redir_str);
