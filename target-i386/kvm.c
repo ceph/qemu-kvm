@@ -332,6 +332,7 @@ static int kvm_put_msrs(CPUState *env)
     if (kvm_has_msr_star(env))
 	kvm_msr_entry_set(&msrs[n++], MSR_STAR, env->star);
     kvm_msr_entry_set(&msrs[n++], MSR_IA32_TSC, env->tsc);
+    kvm_msr_entry_set(&msrs[n++], MSR_VM_HSAVE_PA, env->vm_hsave);
 #ifdef TARGET_X86_64
     /* FIXME if lm capable */
     kvm_msr_entry_set(&msrs[n++], MSR_CSTAR, env->cstar);
@@ -469,6 +470,7 @@ static int kvm_get_msrs(CPUState *env)
     if (kvm_has_msr_star(env))
 	msrs[n++].index = MSR_STAR;
     msrs[n++].index = MSR_IA32_TSC;
+    msrs[n++].index = MSR_VM_HSAVE_PA;
 #ifdef TARGET_X86_64
     /* FIXME lm_capable_kernel */
     msrs[n++].index = MSR_CSTAR;
@@ -511,6 +513,9 @@ static int kvm_get_msrs(CPUState *env)
 #endif
         case MSR_IA32_TSC:
             env->tsc = msrs[i].data;
+            break;
+        case MSR_VM_HSAVE_PA:
+            env->vm_hsave = msrs[i].data;
             break;
         }
     }

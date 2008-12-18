@@ -1545,7 +1545,8 @@ void cpu_x86_cpuid(CPUX86State *env, uint32_t index,
             /* disable CPU features that KVM cannot support */
 
             /* svm */
-            *ecx &= ~4UL;
+            if (!kvm_nested)
+                *ecx &= ~4UL;
             /* 3dnow */
             *edx &= ~0xc0000000;
         }

@@ -4078,6 +4078,7 @@ static void help(int exitcode)
 #endif
 	   "-no-kvm-irqchip disable KVM kernel mode PIC/IOAPIC/LAPIC\n"
 	   "-no-kvm-pit	    disable KVM kernel mode PIT\n"
+	   "-enable-nesting enable support for running a VM inside the VM (AMD only)\n"
 #if defined(TARGET_I386) || defined(TARGET_X86_64) || defined(TARGET_IA64) || defined(__linux__)
            "-pcidevice host=bus:dev.func[,dma=none][,name=string]\n"
            "                expose a PCI device to the guest OS.\n"
@@ -4195,6 +4196,7 @@ enum {
     QEMU_OPTION_no_kqemu,
     QEMU_OPTION_kernel_kqemu,
     QEMU_OPTION_enable_kvm,
+    QEMU_OPTION_enable_nesting,
     QEMU_OPTION_win2k_hack,
     QEMU_OPTION_usb,
     QEMU_OPTION_usbdevice,
@@ -4301,6 +4303,7 @@ static const QEMUOption qemu_options[] = {
 #endif
     { "no-kvm-irqchip", 0, QEMU_OPTION_no_kvm_irqchip },
     { "no-kvm-pit", 0, QEMU_OPTION_no_kvm_pit },
+    { "enable-nesting", 0, QEMU_OPTION_enable_nesting },
 #if defined(TARGET_I386) || defined(TARGET_X86_64) || defined(TARGET_IA64) || defined(__linux__)
     { "pcidevice", HAS_ARG, QEMU_OPTION_pcidevice },
 #endif
@@ -5266,6 +5269,10 @@ int main(int argc, char **argv, char **envp)
 	    case QEMU_OPTION_no_kvm_pit: {
 		extern int kvm_pit;
 		kvm_pit = 0;
+		break;
+	    }
+	    case QEMU_OPTION_enable_nesting: {
+		kvm_nested = 1;
 		break;
 	    }
 #if defined(TARGET_I386) || defined(TARGET_X86_64) || defined(TARGET_IA64) || defined(__linux__)

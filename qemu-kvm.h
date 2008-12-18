@@ -142,6 +142,7 @@ int handle_powerpc_dcr_write(int vcpu,uint32_t dcrn, uint32_t data);
 #include "sys-queue.h"
 
 extern int kvm_allowed;
+extern int kvm_nested;
 extern kvm_context_t kvm_context;
 
 struct ioperm_data {

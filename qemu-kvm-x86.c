@@ -101,6 +101,9 @@ static int get_msr_entry(struct kvm_msr_entry *entry, CPUState *env)
         case MSR_IA32_TSC:
             env->tsc          = entry->data;
             break;
+        case MSR_VM_HSAVE_PA:
+            env->vm_hsave     = entry->data;
+            break;
         default:
             printf("Warning unknown msr index 0x%x\n", entry->index);
             return 1;
@@ -259,6 +262,7 @@ void kvm_arch_load_regs(CPUState *env)
     if (kvm_has_msr_star)
 	set_msr_entry(&msrs[n++], MSR_STAR,              env->star);
     set_msr_entry(&msrs[n++], MSR_IA32_TSC, env->tsc);
+    set_msr_entry(&msrs[n++], MSR_VM_HSAVE_PA, env->vm_hsave);
 #ifdef TARGET_X86_64
     if (lm_capable_kernel) {
         set_msr_entry(&msrs[n++], MSR_CSTAR,             env->cstar);
@@ -425,6 +429,7 @@ void kvm_arch_save_regs(CPUState *env)
     if (kvm_has_msr_star)
 	msrs[n++].index = MSR_STAR;
     msrs[n++].index = MSR_IA32_TSC;
+    msrs[n++].index = MSR_VM_HSAVE_PA;
 #ifdef TARGET_X86_64
     if (lm_capable_kernel) {
         msrs[n++].index = MSR_CSTAR;
@@ -504,7 +509,7 @@ static void do_cpuid_ent(struct kvm_cpuid_entry *e, uint32_t function,
 	if ((h_edx & 0x00100000) == 0)
 	    e->edx &= ~0x00100000u;
 	// svm
-	if (e->ecx & 4)
+	if (!kvm_nested && (e->ecx & 4))
 	    e->ecx &= ~4u;
     }
     // sysenter isn't supported on compatibility mode on AMD.  and syscall
