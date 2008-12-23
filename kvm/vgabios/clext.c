@@ -510,7 +510,7 @@ cirrus_vesa:
 #ifdef CIRRUS_DEBUG
   call cirrus_debug_dump
 #endif
-  cmp al, #0x0F
+  cmp al, #0x10
   ja cirrus_vesa_not_handled
   push bx
   xor bx, bx
@@ -1196,6 +1196,37 @@ cirrus_vesa_07h_2:
   mov  ax, #0x004f
   ret
 
+cirrus_vesa_10h:
+  cmp bl, #0x00
+  jne cirrus_vesa_10h_01
+  mov bx, #0x0f30
+  mov ax, #0x004f
+  ret
+cirrus_vesa_10h_01:
+  cmp bl, #0x01
+  jne cirrus_vesa_10h_02
+  push dx
+  push ds
+  mov dx, #0x40
+  mov ds, dx
+  mov [0xb9], bh
+  pop ds
+  pop dx
+  mov ax, #0x004f
+  ret
+cirrus_vesa_10h_02:
+  cmp bl, #0x02
+  jne cirrus_vesa_unimplemented
+  push dx
+  push ds
+  mov dx, #0x40
+  mov ds, dx
+  mov bh, [0xb9]
+  pop ds
+  pop dx
+  mov ax, #0x004f
+  ret
+
 cirrus_vesa_unimplemented:
   mov ax, #0x014F ;; not implemented
   ret
@@ -1612,7 +1643,8 @@ cirrus_vesa_handlers:
   dw cirrus_vesa_unimplemented
   dw cirrus_vesa_unimplemented
   dw cirrus_vesa_unimplemented
-
+  ;; 10h
+  dw cirrus_vesa_10h
 
 
 ASM_END

@@ -1,3 +1,55 @@
+2008-05-11 08:40  vruppert
+
+	* biossums.c (1.6):
+
+	- fixed a warning
+
+2008-03-02 08:47  vruppert
+
+	* vbe.c (1.60):
+
+	- added debug message for unsupported VBE modes
+
+2008-02-24 09:18  vruppert
+
+	* vbe.c (1.59):
+
+	- in LFB modes the number of banks must be set to 1
+
+2008-01-27 10:44  vruppert
+
+	* Makefile (1.21), biossums.c (1.5), vgabios.c (1.67):
+
+	- added PCI data structure for the Cirrus VGABIOS images
+	- added support for the PCI data structure in biossums
+	- updated year in copyright
+
+2008-01-26 11:46  vruppert
+
+	* BUGS (1.4), Makefile (1.20), README (1.14), TODO (1.13), vbe_display_api.txt (1.14):
+
+	- whitespace cleanup
+
+2006-11-26 10:43  vruppert
+
+	* Makefile (1.19):
+
+	- disable the generation of linemarkers by the preprocessor, since the latest
+	  versions of bcc don't like them
+
+2006-09-02 13:15  vruppert
+
+	* biossums.c (1.4):
+
+	- the biossums utility no longer modifies VGABIOS images with proper checksum
+	  and size
+
+2006-08-19 14:28  vruppert
+
+	* Changelog (1.26), README (1.13), TODO (1.12):
+
+	- updates for 0.6a release
+
 2006-08-19 09:39  vruppert
 
 	* vbe.c (1.58):

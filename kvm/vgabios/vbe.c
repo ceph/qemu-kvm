@@ -63,7 +63,7 @@ _vbebios_product_name:
 .byte        0x00
 
 _vbebios_product_revision:
-.ascii       "$Id: vbe.c,v 1.58 2006/08/19 09:39:43 vruppert Exp $"
+.ascii       "$Id$"
 .byte        0x00
 
 _vbebios_info_string:
@@ -80,7 +80,7 @@ _no_vbebios_info_string:
 
 #if defined(USE_BX_INFO) || defined(DEBUG)
 msg_vbe_init:
-.ascii      "VBE Bios $Id: vbe.c,v 1.58 2006/08/19 09:39:43 vruppert Exp $"
+.ascii      "VBE Bios $Id$"
 .byte	0x0a,0x0d, 0x00
 #endif
 
@@ -853,6 +853,10 @@ Bit16u *AX;Bit16u ES;Bit16u DI;
                   write_word(ES, DI + cur_ptr, cur_info->mode);
                   cur_mode++;
                   cur_ptr+=2;
+                } else {
+#ifdef DEBUG
+                  printf("VBE mode %x (xres=%x / bpp=%02x) not supported by display\n", cur_info->mode,cur_info->info.XResolution,cur_info->info.BitsPerPixel);
+#endif
                 }
                 cur_info++;
         } while (cur_info->mode != VBE_VESA_MODE_END_OF_LIST);
@@ -902,6 +906,9 @@ Bit16u *AX;Bit16u CX; Bit16u ES;Bit16u DI;
 #endif        
                 memsetb(ss, &info, 0, sizeof(ModeInfoBlock));
                 memcpyb(ss, &info, 0xc000, &(cur_info->info), sizeof(ModeInfoBlockCompact));
+                if (using_lfb) {
+                  info.NumberOfBanks = 1;
+                }
                 if (info.WinAAttributes & VBE_WINDOW_ATTRIBUTE_RELOCATABLE) {
                   info.WinFuncPtr = 0xC0000000UL;
                   *(Bit16u *)&(info.WinFuncPtr) = (Bit16u)(dispi_set_bank_farcall);
