@@ -554,15 +554,6 @@ uint32_t helper_float64_to_float32(uint64_t arg)
     return f.l;
 }
 
-static always_inline int fpisneg (float64 d)
-{
-    CPU_DoubleU u;
-
-    u.d = d;
-
-    return u.ll >> 63 != 0;
-}
-
 static always_inline int isden (float64 d)
 {
     CPU_DoubleU u;
@@ -572,53 +563,13 @@ static always_inline int isden (float64 d)
     return ((u.ll >> 52) & 0x7FF) == 0;
 }
 
-static always_inline int iszero (float64 d)
-{
-    CPU_DoubleU u;
-
-    u.d = d;
-
-    return (u.ll & ~0x8000000000000000ULL) == 0;
-}
-
-static always_inline int isinfinity (float64 d)
-{
-    CPU_DoubleU u;
-
-    u.d = d;
-
-    return ((u.ll >> 52) & 0x7FF) == 0x7FF &&
-        (u.ll & 0x000FFFFFFFFFFFFFULL) == 0;
-}
-
-#ifdef CONFIG_SOFTFLOAT
-static always_inline int isfinite (float64 d)
-{
-    CPU_DoubleU u;
-
-    u.d = d;
-
-    return (((u.ll >> 52) & 0x7FF) != 0x7FF);
-}
-
-static always_inline int isnormal (float64 d)
-{
-    CPU_DoubleU u;
-
-    u.d = d;
-
-    uint32_t exp = (u.ll >> 52) & 0x7FF;
-    return ((0 < exp) && (exp < 0x7FF));
-}
-#endif
-
 uint32_t helper_compute_fprf (uint64_t arg, uint32_t set_fprf)
 {
     CPU_DoubleU farg;
     int isneg;
     int ret;
     farg.ll = arg;
-    isneg = fpisneg(farg.d);
+    isneg = float64_is_neg(farg.d);
     if (unlikely(float64_is_nan(farg.d))) {
         if (float64_is_signaling_nan(farg.d)) {
             /* Signaling NaN: flags are undefined */
@@ -627,14 +578,14 @@ uint32_t helper_compute_fprf (uint64_t arg, uint32_t set_fprf)
             /* Quiet NaN */
             ret = 0x11;
         }
-    } else if (unlikely(isinfinity(farg.d))) {
+    } else if (unlikely(float64_is_infinity(farg.d))) {
         /* +/- infinity */
         if (isneg)
             ret = 0x09;
         else
             ret = 0x05;
     } else {
-        if (iszero(farg.d)) {
+        if (float64_is_zero(farg.d)) {
             /* +/- zero */
             if (isneg)
                 ret = 0x12;
@@ -671,15 +622,13 @@ static always_inline uint64_t fload_invalid_op_excp (int op)
     int ve;
 
     ve = fpscr_ve;
-    if (op & POWERPC_EXCP_FP_VXSNAN) {
-        /* Operation on signaling NaN */
+    switch (op) {
+    case POWERPC_EXCP_FP_VXSNAN:
         env->fpscr |= 1 << FPSCR_VXSNAN;
-    }
-    if (op & POWERPC_EXCP_FP_VXSOFT) {
-        /* Software-defined condition */
+	break;
+    case POWERPC_EXCP_FP_VXSOFT:
         env->fpscr |= 1 << FPSCR_VXSOFT;
-    }
-    switch (op & ~(POWERPC_EXCP_FP_VXSOFT | POWERPC_EXCP_FP_VXSNAN)) {
+	break;
     case POWERPC_EXCP_FP_VXISI:
         /* Magnitude subtraction of infinities */
         env->fpscr |= 1 << FPSCR_VXISI;
@@ -718,7 +667,7 @@ static always_inline uint64_t fload_invalid_op_excp (int op)
         env->fpscr &= ~((1 << FPSCR_FR) | (1 << FPSCR_FI));
         if (ve == 0) {
             /* Set the result to quiet NaN */
-            ret = UINT64_MAX;
+            ret = 0xFFF8000000000000ULL;
             env->fpscr &= ~(0xF << FPSCR_FPCC);
             env->fpscr |= 0x11 << FPSCR_FPCC;
         }
@@ -729,7 +678,7 @@ static always_inline uint64_t fload_invalid_op_excp (int op)
         env->fpscr &= ~((1 << FPSCR_FR) | (1 << FPSCR_FI));
         if (ve == 0) {
             /* Set the result to quiet NaN */
-            ret = UINT64_MAX;
+            ret = 0xFFF8000000000000ULL;
             env->fpscr &= ~(0xF << FPSCR_FPCC);
             env->fpscr |= 0x11 << FPSCR_FPCC;
         }
@@ -748,7 +697,7 @@ static always_inline uint64_t fload_invalid_op_excp (int op)
     return ret;
 }
 
-static always_inline uint64_t float_zero_divide_excp (uint64_t arg1, uint64_t arg2)
+static always_inline void float_zero_divide_excp (void)
 {
     env->fpscr |= 1 << FPSCR_ZX;
     env->fpscr &= ~((1 << FPSCR_FR) | (1 << FPSCR_FI));
@@ -761,12 +710,7 @@ static always_inline uint64_t float_zero_divide_excp (uint64_t arg1, uint64_t ar
             helper_raise_exception_err(POWERPC_EXCP_PROGRAM,
                                        POWERPC_EXCP_FP | POWERPC_EXCP_FP_ZX);
         }
-    } else {
-        /* Set the result to infinity */
-        arg1 = ((arg1 ^ arg2) & 0x8000000000000000ULL);
-        arg1 |= 0x7FFULL << 52;
     }
-    return arg1;
 }
 
 static always_inline void float_overflow_excp (void)
@@ -1020,7 +964,9 @@ void helper_float_check_status (void)
             helper_raise_exception_err(env->exception_index, env->error_code);
     } else {
         int status = get_float_exception_flags(&env->fp_status);
-        if (status & float_flag_overflow) {
+        if (status & float_flag_divbyzero) {
+            float_zero_divide_excp();
+        } else if (status & float_flag_overflow) {
             float_overflow_excp();
         } else if (status & float_flag_underflow) {
             float_underflow_excp();
@@ -1057,12 +1003,12 @@ uint64_t helper_fadd (uint64_t arg1, uint64_t arg2)
                  float64_is_signaling_nan(farg2.d))) {
         /* sNaN addition */
         farg1.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXSNAN);
-    } else if (likely(isfinite(farg1.d) || isfinite(farg2.d) ||
-                      fpisneg(farg1.d) == fpisneg(farg2.d))) {
-        farg1.d = float64_add(farg1.d, farg2.d, &env->fp_status);
-    } else {
+    } else if (unlikely(float64_is_infinity(farg1.d) && float64_is_infinity(farg2.d) &&
+                      float64_is_neg(farg1.d) != float64_is_neg(farg2.d))) {
         /* Magnitude subtraction of infinities */
         farg1.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXISI);
+    } else {
+        farg1.d = float64_add(farg1.d, farg2.d, &env->fp_status);
     }
 #else
     farg1.d = float64_add(farg1.d, farg2.d, &env->fp_status);
@@ -1083,12 +1029,12 @@ uint64_t helper_fsub (uint64_t arg1, uint64_t arg2)
                  float64_is_signaling_nan(farg2.d))) {
         /* sNaN subtraction */
         farg1.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXSNAN);
-    } else if (likely(isfinite(farg1.d) || isfinite(farg2.d) ||
-                      fpisneg(farg1.d) != fpisneg(farg2.d))) {
-        farg1.d = float64_sub(farg1.d, farg2.d, &env->fp_status);
-    } else {
+    } else if (unlikely(float64_is_infinity(farg1.d) && float64_is_infinity(farg2.d) &&
+                      float64_is_neg(farg1.d) == float64_is_neg(farg2.d))) {
         /* Magnitude subtraction of infinities */
         farg1.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXISI);
+    } else {
+        farg1.d = float64_sub(farg1.d, farg2.d, &env->fp_status);
     }
 }
 #else
@@ -1109,8 +1055,8 @@ uint64_t helper_fmul (uint64_t arg1, uint64_t arg2)
                  float64_is_signaling_nan(farg2.d))) {
         /* sNaN multiplication */
         farg1.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXSNAN);
-    } else if (unlikely((isinfinity(farg1.d) && iszero(farg2.d)) ||
-                        (iszero(farg1.d) && isinfinity(farg2.d)))) {
+    } else if (unlikely((float64_is_infinity(farg1.d) && float64_is_zero(farg2.d)) ||
+                        (float64_is_zero(farg1.d) && float64_is_infinity(farg2.d)))) {
         /* Multiplication of zero by infinity */
         farg1.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXIMZ);
     } else {
@@ -1134,17 +1080,12 @@ uint64_t helper_fdiv (uint64_t arg1, uint64_t arg2)
                  float64_is_signaling_nan(farg2.d))) {
         /* sNaN division */
         farg1.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXSNAN);
-    } else if (unlikely(isinfinity(farg1.d) && isinfinity(farg2.d))) {
+    } else if (unlikely(float64_is_infinity(farg1.d) && float64_is_infinity(farg2.d))) {
         /* Division of infinity by infinity */
         farg1.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXIDI);
-    } else if (unlikely(iszero(farg2.d))) {
-        if (iszero(farg1.d)) {
-            /* Division of zero by zero */
-            farg1.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXZDZ);
-        } else {
-            /* Division by zero */
-            farg1.ll = float_zero_divide_excp(farg1.d, farg2.d);
-        }
+    } else if (unlikely(float64_is_zero(farg1.d) && float64_is_zero(farg2.d))) {
+        /* Division of zero by zero */
+        farg1.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXZDZ);
     } else {
         farg1.d = float64_div(farg1.d, farg2.d, &env->fp_status);
     }
@@ -1194,7 +1135,7 @@ uint64_t helper_fctiw (uint64_t arg)
     if (unlikely(float64_is_signaling_nan(farg.d))) {
         /* sNaN conversion */
         farg.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXSNAN | POWERPC_EXCP_FP_VXCVI);
-    } else if (unlikely(float64_is_nan(farg.d) || isinfinity(farg.d))) {
+    } else if (unlikely(float64_is_nan(farg.d) || float64_is_infinity(farg.d))) {
         /* qNan / infinity conversion */
         farg.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXCVI);
     } else {
@@ -1218,7 +1159,7 @@ uint64_t helper_fctiwz (uint64_t arg)
     if (unlikely(float64_is_signaling_nan(farg.d))) {
         /* sNaN conversion */
         farg.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXSNAN | POWERPC_EXCP_FP_VXCVI);
-    } else if (unlikely(float64_is_nan(farg.d) || isinfinity(farg.d))) {
+    } else if (unlikely(float64_is_nan(farg.d) || float64_is_infinity(farg.d))) {
         /* qNan / infinity conversion */
         farg.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXCVI);
     } else {
@@ -1251,7 +1192,7 @@ uint64_t helper_fctid (uint64_t arg)
     if (unlikely(float64_is_signaling_nan(farg.d))) {
         /* sNaN conversion */
         farg.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXSNAN | POWERPC_EXCP_FP_VXCVI);
-    } else if (unlikely(float64_is_nan(farg.d) || isinfinity(farg.d))) {
+    } else if (unlikely(float64_is_nan(farg.d) || float64_is_infinity(farg.d))) {
         /* qNan / infinity conversion */
         farg.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXCVI);
     } else {
@@ -1269,7 +1210,7 @@ uint64_t helper_fctidz (uint64_t arg)
     if (unlikely(float64_is_signaling_nan(farg.d))) {
         /* sNaN conversion */
         farg.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXSNAN | POWERPC_EXCP_FP_VXCVI);
-    } else if (unlikely(float64_is_nan(farg.d) || isinfinity(farg.d))) {
+    } else if (unlikely(float64_is_nan(farg.d) || float64_is_infinity(farg.d))) {
         /* qNan / infinity conversion */
         farg.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXCVI);
     } else {
@@ -1288,7 +1229,7 @@ static always_inline uint64_t do_fri (uint64_t arg, int rounding_mode)
     if (unlikely(float64_is_signaling_nan(farg.d))) {
         /* sNaN round */
         farg.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXSNAN | POWERPC_EXCP_FP_VXCVI);
-    } else if (unlikely(float64_is_nan(farg.d) || isinfinity(farg.d))) {
+    } else if (unlikely(float64_is_nan(farg.d) || float64_is_infinity(farg.d))) {
         /* qNan / infinity round */
         farg.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXCVI);
     } else {
@@ -1334,6 +1275,10 @@ uint64_t helper_fmadd (uint64_t arg1, uint64_t arg2, uint64_t arg3)
                  float64_is_signaling_nan(farg3.d))) {
         /* sNaN operation */
         farg1.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXSNAN);
+    } else if (unlikely((float64_is_infinity(farg1.d) && float64_is_zero(farg2.d)) ||
+                        (float64_is_zero(farg1.d) && float64_is_infinity(farg2.d)))) {
+        /* Multiplication of zero by infinity */
+        farg1.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXIMZ);
     } else {
 #ifdef FLOAT128
         /* This is the way the PowerPC specification defines it */
@@ -1342,9 +1287,15 @@ uint64_t helper_fmadd (uint64_t arg1, uint64_t arg2, uint64_t arg3)
         ft0_128 = float64_to_float128(farg1.d, &env->fp_status);
         ft1_128 = float64_to_float128(farg2.d, &env->fp_status);
         ft0_128 = float128_mul(ft0_128, ft1_128, &env->fp_status);
-        ft1_128 = float64_to_float128(farg3.d, &env->fp_status);
-        ft0_128 = float128_add(ft0_128, ft1_128, &env->fp_status);
-        farg1.d = float128_to_float64(ft0_128, &env->fp_status);
+        if (unlikely(float128_is_infinity(ft0_128) && float64_is_infinity(farg3.d) &&
+                     float128_is_neg(ft0_128) != float64_is_neg(farg3.d))) {
+            /* Magnitude subtraction of infinities */
+            farg1.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXISI);
+        } else {
+            ft1_128 = float64_to_float128(farg3.d, &env->fp_status);
+            ft0_128 = float128_add(ft0_128, ft1_128, &env->fp_status);
+            farg1.d = float128_to_float64(ft0_128, &env->fp_status);
+        }
 #else
         /* This is OK on x86 hosts */
         farg1.d = (farg1.d * farg2.d) + farg3.d;
@@ -1371,6 +1322,10 @@ uint64_t helper_fmsub (uint64_t arg1, uint64_t arg2, uint64_t arg3)
                  float64_is_signaling_nan(farg3.d))) {
         /* sNaN operation */
         farg1.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXSNAN);
+    } else if (unlikely((float64_is_infinity(farg1.d) && float64_is_zero(farg2.d)) ||
+                        (float64_is_zero(farg1.d) && float64_is_infinity(farg2.d)))) {
+        /* Multiplication of zero by infinity */
+        farg1.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXIMZ);
     } else {
 #ifdef FLOAT128
         /* This is the way the PowerPC specification defines it */
@@ -1379,9 +1334,15 @@ uint64_t helper_fmsub (uint64_t arg1, uint64_t arg2, uint64_t arg3)
         ft0_128 = float64_to_float128(farg1.d, &env->fp_status);
         ft1_128 = float64_to_float128(farg2.d, &env->fp_status);
         ft0_128 = float128_mul(ft0_128, ft1_128, &env->fp_status);
-        ft1_128 = float64_to_float128(farg3.d, &env->fp_status);
-        ft0_128 = float128_sub(ft0_128, ft1_128, &env->fp_status);
-        farg1.d = float128_to_float64(ft0_128, &env->fp_status);
+        if (unlikely(float128_is_infinity(ft0_128) && float64_is_infinity(farg3.d) &&
+                     float128_is_neg(ft0_128) == float64_is_neg(farg3.d))) {
+            /* Magnitude subtraction of infinities */
+            farg1.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXISI);
+        } else {
+            ft1_128 = float64_to_float128(farg3.d, &env->fp_status);
+            ft0_128 = float128_sub(ft0_128, ft1_128, &env->fp_status);
+            farg1.d = float128_to_float64(ft0_128, &env->fp_status);
+        }
 #else
         /* This is OK on x86 hosts */
         farg1.d = (farg1.d * farg2.d) - farg3.d;
@@ -1408,6 +1369,10 @@ uint64_t helper_fnmadd (uint64_t arg1, uint64_t arg2, uint64_t arg3)
                  float64_is_signaling_nan(farg3.d))) {
         /* sNaN operation */
         farg1.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXSNAN);
+    } else if (unlikely((float64_is_infinity(farg1.d) && float64_is_zero(farg2.d)) ||
+                        (float64_is_zero(farg1.d) && float64_is_infinity(farg2.d)))) {
+        /* Multiplication of zero by infinity */
+        farg1.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXIMZ);
     } else {
 #if USE_PRECISE_EMULATION
 #ifdef FLOAT128
@@ -1417,9 +1382,15 @@ uint64_t helper_fnmadd (uint64_t arg1, uint64_t arg2, uint64_t arg3)
         ft0_128 = float64_to_float128(farg1.d, &env->fp_status);
         ft1_128 = float64_to_float128(farg2.d, &env->fp_status);
         ft0_128 = float128_mul(ft0_128, ft1_128, &env->fp_status);
-        ft1_128 = float64_to_float128(farg3.d, &env->fp_status);
-        ft0_128 = float128_add(ft0_128, ft1_128, &env->fp_status);
-        farg1.d= float128_to_float64(ft0_128, &env->fp_status);
+        if (unlikely(float128_is_infinity(ft0_128) && float64_is_infinity(farg3.d) &&
+                     float128_is_neg(ft0_128) != float64_is_neg(farg3.d))) {
+            /* Magnitude subtraction of infinities */
+            farg1.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXISI);
+        } else {
+            ft1_128 = float64_to_float128(farg3.d, &env->fp_status);
+            ft0_128 = float128_add(ft0_128, ft1_128, &env->fp_status);
+            farg1.d = float128_to_float64(ft0_128, &env->fp_status);
+        }
 #else
         /* This is OK on x86 hosts */
         farg1.d = (farg1.d * farg2.d) + farg3.d;
@@ -1448,6 +1419,10 @@ uint64_t helper_fnmsub (uint64_t arg1, uint64_t arg2, uint64_t arg3)
                  float64_is_signaling_nan(farg3.d))) {
         /* sNaN operation */
         farg1.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXSNAN);
+    } else if (unlikely((float64_is_infinity(farg1.d) && float64_is_zero(farg2.d)) ||
+                        (float64_is_zero(farg1.d) && float64_is_infinity(farg2.d)))) {
+        /* Multiplication of zero by infinity */
+        farg1.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXIMZ);
     } else {
 #if USE_PRECISE_EMULATION
 #ifdef FLOAT128
@@ -1457,9 +1432,15 @@ uint64_t helper_fnmsub (uint64_t arg1, uint64_t arg2, uint64_t arg3)
         ft0_128 = float64_to_float128(farg1.d, &env->fp_status);
         ft1_128 = float64_to_float128(farg2.d, &env->fp_status);
         ft0_128 = float128_mul(ft0_128, ft1_128, &env->fp_status);
-        ft1_128 = float64_to_float128(farg3.d, &env->fp_status);
-        ft0_128 = float128_sub(ft0_128, ft1_128, &env->fp_status);
-        farg1.d = float128_to_float64(ft0_128, &env->fp_status);
+        if (unlikely(float128_is_infinity(ft0_128) && float64_is_infinity(farg3.d) &&
+                     float128_is_neg(ft0_128) == float64_is_neg(farg3.d))) {
+            /* Magnitude subtraction of infinities */
+            farg1.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXISI);
+        } else {
+            ft1_128 = float64_to_float128(farg3.d, &env->fp_status);
+            ft0_128 = float128_sub(ft0_128, ft1_128, &env->fp_status);
+            farg1.d = float128_to_float64(ft0_128, &env->fp_status);
+        }
 #else
         /* This is OK on x86 hosts */
         farg1.d = (farg1.d * farg2.d) - farg3.d;
@@ -1505,7 +1486,7 @@ uint64_t helper_fsqrt (uint64_t arg)
     if (unlikely(float64_is_signaling_nan(farg.d))) {
         /* sNaN square root */
         farg.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXSNAN);
-    } else if (unlikely(fpisneg(farg.d) && !iszero(farg.d))) {
+    } else if (unlikely(float64_is_neg(farg.d) && !float64_is_zero(farg.d))) {
         /* Square root of a negative nonzero number */
         farg.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXSQRT);
     } else {
@@ -1517,29 +1498,15 @@ uint64_t helper_fsqrt (uint64_t arg)
 /* fre - fre. */
 uint64_t helper_fre (uint64_t arg)
 {
-    CPU_DoubleU farg;
+    CPU_DoubleU fone, farg;
+    fone.ll = 0x3FF0000000000000ULL; /* 1.0 */
     farg.ll = arg;
 
     if (unlikely(float64_is_signaling_nan(farg.d))) {
         /* sNaN reciprocal */
         farg.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXSNAN);
-    } else if (unlikely(iszero(farg.d))) {
-        /* Zero reciprocal */
-        farg.ll = float_zero_divide_excp(1.0, farg.d);
-    } else if (likely(isnormal(farg.d))) {
-        farg.d = float64_div(1.0, farg.d, &env->fp_status);
     } else {
-        if (farg.ll == 0x8000000000000000ULL) {
-            farg.ll = 0xFFF0000000000000ULL;
-        } else if (farg.ll == 0x0000000000000000ULL) {
-            farg.ll = 0x7FF0000000000000ULL;
-        } else if (float64_is_nan(farg.d)) {
-            farg.ll = 0x7FF8000000000000ULL;
-        } else if (fpisneg(farg.d)) {
-            farg.ll = 0x8000000000000000ULL;
-        } else {
-            farg.ll = 0x0000000000000000ULL;
-        }
+        farg.d = float64_div(fone.d, farg.d, &env->fp_status);
     }
     return farg.d;
 }
@@ -1547,34 +1514,18 @@ uint64_t helper_fre (uint64_t arg)
 /* fres - fres. */
 uint64_t helper_fres (uint64_t arg)
 {
-    CPU_DoubleU farg;
+    CPU_DoubleU fone, farg;
+    float32 f32;
+    fone.ll = 0x3FF0000000000000ULL; /* 1.0 */
     farg.ll = arg;
 
     if (unlikely(float64_is_signaling_nan(farg.d))) {
         /* sNaN reciprocal */
         farg.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXSNAN);
-    } else if (unlikely(iszero(farg.d))) {
-        /* Zero reciprocal */
-        farg.ll = float_zero_divide_excp(1.0, farg.d);
-    } else if (likely(isnormal(farg.d))) {
-#if USE_PRECISE_EMULATION
-        farg.d = float64_div(1.0, farg.d, &env->fp_status);
-        farg.d = float64_to_float32(farg.d, &env->fp_status);
-#else
-        farg.d = float32_div(1.0, farg.d, &env->fp_status);
-#endif
     } else {
-        if (farg.ll == 0x8000000000000000ULL) {
-            farg.ll = 0xFFF0000000000000ULL;
-        } else if (farg.ll == 0x0000000000000000ULL) {
-            farg.ll = 0x7FF0000000000000ULL;
-        } else if (float64_is_nan(farg.d)) {
-            farg.ll = 0x7FF8000000000000ULL;
-        } else if (fpisneg(farg.d)) {
-            farg.ll = 0x8000000000000000ULL;
-        } else {
-            farg.ll = 0x0000000000000000ULL;
-        }
+        farg.d = float64_div(fone.d, farg.d, &env->fp_status);
+        f32 = float64_to_float32(farg.d, &env->fp_status);
+        farg.d = float32_to_float64(f32, &env->fp_status);
     }
     return farg.ll;
 }
@@ -1582,30 +1533,22 @@ uint64_t helper_fres (uint64_t arg)
 /* frsqrte  - frsqrte. */
 uint64_t helper_frsqrte (uint64_t arg)
 {
-    CPU_DoubleU farg;
+    CPU_DoubleU fone, farg;
+    float32 f32;
+    fone.ll = 0x3FF0000000000000ULL; /* 1.0 */
     farg.ll = arg;
 
     if (unlikely(float64_is_signaling_nan(farg.d))) {
         /* sNaN reciprocal square root */
         farg.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXSNAN);
-    } else if (unlikely(fpisneg(farg.d) && !iszero(farg.d))) {
+    } else if (unlikely(float64_is_neg(farg.d) && !float64_is_zero(farg.d))) {
         /* Reciprocal square root of a negative nonzero number */
         farg.ll = fload_invalid_op_excp(POWERPC_EXCP_FP_VXSQRT);
-    } else if (likely(isnormal(farg.d))) {
-        farg.d = float64_sqrt(farg.d, &env->fp_status);
-        farg.d = float32_div(1.0, farg.d, &env->fp_status);
     } else {
-        if (farg.ll == 0x8000000000000000ULL) {
-            farg.ll = 0xFFF0000000000000ULL;
-        } else if (farg.ll == 0x0000000000000000ULL) {
-            farg.ll = 0x7FF0000000000000ULL;
-        } else if (float64_is_nan(farg.d)) {
-            farg.ll |= 0x000FFFFFFFFFFFFFULL;
-        } else if (fpisneg(farg.d)) {
-            farg.ll = 0x7FF8000000000000ULL;
-        } else {
-            farg.ll = 0x0000000000000000ULL;
-        }
+        farg.d = float64_sqrt(farg.d, &env->fp_status);
+        farg.d = float64_div(fone.d, farg.d, &env->fp_status);
+        f32 = float64_to_float32(farg.d, &env->fp_status);
+        farg.d = float32_to_float64(f32, &env->fp_status);
     }
     return farg.ll;
 }
@@ -1617,7 +1560,7 @@ uint64_t helper_fsel (uint64_t arg1, uint64_t arg2, uint64_t arg3)
 
     farg1.ll = arg1;
 
-    if (!fpisneg(farg1.d) || iszero(farg1.d))
+    if (!float64_is_neg(farg1.d) || float64_is_zero(farg1.d))
         return arg2;
     else
         return arg3;

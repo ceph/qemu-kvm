@@ -122,14 +122,6 @@
 
 // FIXME: #include "qemu-kvm.h"
 
-#define DEFAULT_NETWORK_SCRIPT "/etc/qemu-ifup"
-#define DEFAULT_NETWORK_DOWN_SCRIPT "/etc/qemu-ifdown"
-#ifdef __sun__
-#define SMBD_COMMAND "/usr/sfw/sbin/smbd"
-#else
-#define SMBD_COMMAND "/usr/sbin/smbd"
-#endif
-
 static VLANState *first_vlan;
 
 /***********************************************************/
@@ -376,20 +368,19 @@ int qemu_send_packet(VLANClientState *vc1, const uint8_t *buf, int size)
     return ret;
 }
 
-
 static ssize_t vc_sendv_compat(VLANClientState *vc, const struct iovec *iov,
-			       int iovcnt)
+                               int iovcnt)
 {
-    char buffer[4096];
+    uint8_t buffer[4096];
     size_t offset = 0;
     int i;
 
     for (i = 0; i < iovcnt; i++) {
-	size_t len;
+        size_t len;
 
-	len = MIN(sizeof(buffer) - offset, iov[i].iov_len);
-	memcpy(buffer + offset, iov[i].iov_base, len);
-	offset += len;
+        len = MIN(sizeof(buffer) - offset, iov[i].iov_len);
+        memcpy(buffer + offset, iov[i].iov_base, len);
+        offset += len;
     }
 
     vc->fd_read(vc->opaque, buffer, offset);
@@ -398,24 +389,24 @@ static ssize_t vc_sendv_compat(VLANClientState *vc, const struct iovec *iov,
 }
 
 ssize_t qemu_sendv_packet(VLANClientState *vc1, const struct iovec *iov,
-			  int iovcnt)
+                          int iovcnt)
 {
     VLANState *vlan = vc1->vlan;
     VLANClientState *vc;
     ssize_t max_len = 0;
 
     for (vc = vlan->first_client; vc != NULL; vc = vc->next) {
-	ssize_t len = 0;
+        ssize_t len = 0;
 
-	if (vc == vc1)
-	    continue;
+        if (vc == vc1)
+            continue;
 
-	if (vc->fd_readv)
-	    len = vc->fd_readv(vc->opaque, iov, iovcnt);
-	else if (vc->fd_read)
-	    len = vc_sendv_compat(vc, iov, iovcnt);
+        if (vc->fd_readv)
+            len = vc->fd_readv(vc->opaque, iov, iovcnt);
+        else if (vc->fd_read)
+            len = vc_sendv_compat(vc, iov, iovcnt);
 
-	max_len = MAX(max_len, len);
+        max_len = MAX(max_len, len);
     }
 
     return max_len;
@@ -652,8 +643,9 @@ typedef struct TAPState {
     unsigned int using_vnet_hdr : 1;
 } TAPState;
 
-static ssize_t tap_writev(void *opaque, const struct iovec *iov,
-                          int iovcnt)
+#ifdef HAVE_IOVEC
+static ssize_t tap_receive_iov(void *opaque, const struct iovec *iov,
+                               int iovcnt)
 {
     TAPState *s = opaque;
     ssize_t len;
@@ -664,30 +656,7 @@ static ssize_t tap_writev(void *opaque, const struct iovec *iov,
 
     return len;
 }
-
-static ssize_t tap_receive_iov(void *opaque, const struct iovec *iov,
-                               int iovcnt)
-{
-#ifdef IFF_VNET_HDR
-    TAPState *s = opaque;
-
-    if (s->has_vnet_hdr && !s->using_vnet_hdr) {
-        struct iovec *iov_copy;
-        struct virtio_net_hdr hdr = { 0, };
-
-        iov_copy = alloca(sizeof(struct iovec) * (iovcnt + 1));
-
-        iov_copy[0].iov_base = &hdr;
-        iov_copy[0].iov_len  = sizeof(hdr);
-
-        memcpy(&iov_copy[1], iov, sizeof(struct iovec) * iovcnt);
-
-        return tap_writev(opaque, iov_copy, iovcnt + 1);
-    }
 #endif
-
-    return tap_writev(opaque, iov, iovcnt);
-}
 
 static void tap_receive(void *opaque, const uint8_t *buf, int size)
 {
@@ -709,7 +678,7 @@ static void tap_receive(void *opaque, const uint8_t *buf, int size)
     iov[i].iov_len  = size;
     i++;
 
-    tap_writev(opaque, iov, i);
+    tap_receive_iov(opaque, iov, i);
 }
 
 static int tap_can_send(void *opaque)
@@ -865,7 +834,9 @@ static TAPState *net_tap_fd_init(VLANState *vlan, int fd, int vnet_hdr)
     s->fd = fd;
     s->has_vnet_hdr = vnet_hdr != 0;
     s->vc = qemu_new_vlan_client(vlan, tap_receive, NULL, s);
+#ifdef HAVE_IOVEC
     s->vc->fd_readv = tap_receive_iov;
+#endif
 #ifdef TUNSETOFFLOAD
     s->vc->set_offload = tap_set_offload;
 #endif

@@ -55,6 +55,8 @@ typedef struct PIIX4PMState {
     qemu_irq irq;
 } PIIX4PMState;
 
+#define RSM_STS (1 << 15)
+#define PWRBTN_STS (1 << 8)
 #define RTC_EN (1 << 10)
 #define PWRBTN_EN (1 << 8)
 #define GBL_EN (1 << 5)
@@ -153,6 +155,14 @@ static void pm_ioport_writew(void *opaque, uint32_t addr, uint32_t val)
                 case 0: /* soft power off */
                     qemu_system_shutdown_request();
                     break;
+                case 1:
+                    /* RSM_STS should be set on resume. Pretend that resume
+                       was caused by power button */
+                    s->pmsts |= (RSM_STS | PWRBTN_STS);
+                    qemu_system_reset_request();
+#if defined(TARGET_I386)
+                    cmos_set_s3_resume();
+#endif
                 default:
                     break;
                 }
@@ -473,6 +483,17 @@ static int pm_load(QEMUFile* f,void* opaque,int version_id)
     return 0;
 }
 
+static void piix4_reset(void *opaque)
+{
+	PIIX4PMState *s = opaque;
+	uint8_t *pci_conf = s->dev.config;
+
+	pci_conf[0x58] = 0;
+	pci_conf[0x59] = 0;
+	pci_conf[0x5a] = 0;
+	pci_conf[0x5b] = 0;
+}
+
 i2c_bus *piix4_pm_init(PCIBus *bus, int devfn, uint32_t smb_io_base,
                        qemu_irq sci_irq)
 {
@@ -536,6 +557,8 @@ i2c_bus *piix4_pm_init(PCIBus *bus, int devfn, uint32_t smb_io_base,
 
     s->smbus = i2c_init_bus();
     s->irq = sci_irq;
+    qemu_register_reset(piix4_reset, s);
+
     return s->smbus;
 }
 

@@ -153,14 +153,6 @@
 
 #include "qemu-kvm.h"
 
-#define DEFAULT_NETWORK_SCRIPT "/etc/qemu-ifup"
-#define DEFAULT_NETWORK_DOWN_SCRIPT "/etc/qemu-ifdown"
-#ifdef __sun__
-#define SMBD_COMMAND "/usr/sfw/sbin/smbd"
-#else
-#define SMBD_COMMAND "/usr/sbin/smbd"
-#endif
-
 //#define DEBUG_UNUSED_IOPORT
 //#define DEBUG_IOPORT
 //#define DEBUG_NET
@@ -231,6 +223,7 @@ int assigned_devices_index;
 int smp_cpus = 1;
 const char *vnc_display;
 int acpi_enabled = 1;
+int no_hpet = 0;
 int fd_bootchk = 1;
 int no_reboot = 0;
 int no_shutdown = 0;
@@ -1077,7 +1070,7 @@ static void configure_alarms(char const *opt)
 {
     int i;
     int cur = 0;
-    int count = (sizeof(alarm_timers) / sizeof(*alarm_timers)) - 1;
+    int count = ARRAY_SIZE(alarm_timers) - 1;
     char *arg;
     char *name;
     struct qemu_alarm_timer tmp;
@@ -4088,6 +4081,7 @@ static void help(int exitcode)
 #endif
 #ifdef TARGET_I386
            "-no-acpi        disable ACPI\n"
+           "-no-hpet        disable HPET\n"
 #endif
 #ifdef CONFIG_CURSES
            "-curses         use a curses/ncurses interface instead of SDL\n"
@@ -4203,6 +4197,7 @@ enum {
     QEMU_OPTION_smp,
     QEMU_OPTION_vnc,
     QEMU_OPTION_no_acpi,
+    QEMU_OPTION_no_hpet,
     QEMU_OPTION_curses,
     QEMU_OPTION_no_kvm,
     QEMU_OPTION_no_kvm_irqchip,
@@ -4338,6 +4333,7 @@ static const QEMUOption qemu_options[] = {
     /* temporary options */
     { "usb", 0, QEMU_OPTION_usb },
     { "no-acpi", 0, QEMU_OPTION_no_acpi },
+    { "no-hpet", 0, QEMU_OPTION_no_hpet },
     { "no-reboot", 0, QEMU_OPTION_no_reboot },
     { "no-shutdown", 0, QEMU_OPTION_no_shutdown },
     { "show-cursor", 0, QEMU_OPTION_show_cursor },
@@ -5311,6 +5307,9 @@ int main(int argc, char **argv, char **envp)
             case QEMU_OPTION_no_acpi:
                 acpi_enabled = 0;
                 break;
+            case QEMU_OPTION_no_hpet:
+                no_hpet = 1;
+                break;
             case QEMU_OPTION_no_reboot:
                 no_reboot = 1;
                 break;
@@ -5798,6 +5797,17 @@ int main(int argc, char **argv, char **envp)
                   kernel_filename, kernel_cmdline, initrd_filename, cpu_model);
 
     current_machine = machine;
+
+    /* Set KVM's vcpu state to qemu's initial CPUState. */
+    if (kvm_enabled()) {
+        int ret;
+
+        ret = kvm_sync_vcpus();
+        if (ret < 0) {
+            fprintf(stderr, "failed to initialize vcpus\n");
+            exit(1);
+        }
+    }
 
     /* init USB devices */
     if (usb_enabled) {

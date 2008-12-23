@@ -1,7 +1,7 @@
 #ifndef QEMU_NET_H
 #define QEMU_NET_H
 
-#include <sys/uio.h>
+#include "qemu-common.h"
 
 /* VLANs support */
 
@@ -38,9 +38,9 @@ VLANClientState *qemu_new_vlan_client(VLANState *vlan,
                                       void *opaque);
 void qemu_del_vlan_client(VLANClientState *vc);
 int qemu_can_send_packet(VLANClientState *vc);
-int qemu_send_packet(VLANClientState *vc, const uint8_t *buf, int size);
 ssize_t qemu_sendv_packet(VLANClientState *vc, const struct iovec *iov,
-			  int iovcnt);
+                          int iovcnt);
+int qemu_send_packet(VLANClientState *vc, const uint8_t *buf, int size);
 void qemu_handler_true(void *opaque);
 
 void do_info_network(void);
@@ -93,5 +93,13 @@ void net_slirp_redir(const char *redir_str);
 void net_cleanup(void);
 int slirp_is_inited(void);
 void net_client_check(void);
+
+#define DEFAULT_NETWORK_SCRIPT "/etc/qemu-ifup"
+#define DEFAULT_NETWORK_DOWN_SCRIPT "/etc/qemu-ifdown"
+#ifdef __sun__
+#define SMBD_COMMAND "/usr/sfw/sbin/smbd"
+#else
+#define SMBD_COMMAND "/usr/sbin/smbd"
+#endif
 
 #endif
