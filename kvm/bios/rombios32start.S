@@ -32,9 +32,16 @@ _start:
   /* clear bss section */
   xor %eax, %eax
   mov $__bss_start, %edi
-  mov $_end, %ecx
+  mov $__bss_end, %ecx
   sub %edi, %ecx
   rep stosb
+
+  /* copy data section */
+  mov $_end, %esi
+  mov $__data_start, %edi
+  mov $__data_end, %ecx
+  sub %edi, %ecx
+  rep movsb
 
   jmp rombios32_init
 
@@ -60,8 +67,7 @@ smp_ap_boot_code_start:
   jmp 11b
 12:
 
-  lock incw CPU_COUNT_ADDR
-  ljmp $0xe000, $(1f-_start)
+  lock incw smp_cpus
 1:
   hlt
   jmp 1b

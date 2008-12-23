@@ -114,6 +114,7 @@ rombios32.o: rombios32.c acpi-dsdt.hex
 acpi-dsdt.hex: acpi-dsdt.dsl
 	cpp -P $< $<.i
 	iasl -tc -p $@ $<.i
+	sed -i -e's/^unsigned/const unsigned/' $@
 	rm $<.i
 
 rombios32start.o: rombios32start.S

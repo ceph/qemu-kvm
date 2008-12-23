@@ -1118,8 +1118,8 @@ static struct {
       {   none,   none,   none,   none, none },
       {   none,   none,   none,   none, none },
       { 0x565c, 0x567c,   none,   none, none }, /* \| */
-      { 0x5700, 0x5700,   none,   none, none }, /* F11 */
-      { 0x5800, 0x5800,   none,   none, none }  /* F12 */
+      { 0x8500, 0x8700, 0x8900, 0x8b00, none }, /* F11 */
+      { 0x8600, 0x8800, 0x8a00, 0x8c00, none }, /* F12 */
       };
 
   Bit8u
@@ -1917,6 +1917,11 @@ shutdown_status_panic(status)
   BX_PANIC("Unimplemented shutdown status: %02x\n",(Bit8u)status);
 }
 
+void s3_resume_panic()
+{
+  BX_PANIC("Returned from s3_resume.\n");
+}
+
 //--------------------------------------------------------------------------
 // print_bios_banner
 //   displays a the bios version
@@ -2030,7 +2035,7 @@ interactive_bootkey()
   if (check_for_keystroke())
   {
     scan_code = get_keystroke();
-    if (scan_code == 0x58) /* F12 */
+    if (scan_code == 0x86) /* F12 */
     {
       while (check_for_keystroke())
         get_keystroke();
@@ -2196,6 +2201,33 @@ debugger_on()
 debugger_off()
 {
   outb(0xfedc, 0x00);
+}
+
+int
+s3_resume()
+{
+    Bit32u s3_wakeup_vector;
+    Bit8u s3_resume_flag;
+
+    s3_resume_flag = read_byte(0x40, 0xb0);
+    s3_wakeup_vector = read_dword(0x40, 0xb2);
+
+    BX_INFO("S3 resume called %x 0x%lx\n", s3_resume_flag, s3_wakeup_vector);
+    if (s3_resume_flag != 0xFE || !s3_wakeup_vector)
+	    return 0;
+
+    write_byte(0x40, 0xb0, 0);
+
+    /* setup wakeup vector */
+    write_word(0x40, 0xb6, (s3_wakeup_vector & 0xF)); /* IP */
+    write_word(0x40, 0xb8, (s3_wakeup_vector >> 4)); /* CS */
+
+    BX_INFO("S3 resume jump to %x:%x\n", (s3_wakeup_vector >> 4),
+		    (s3_wakeup_vector & 0xF));
+ASM_START
+    jmpf [0x04b6]
+ASM_END
+    return 1;
 }
 
 #if BX_USE_ATADRV
@@ -3572,6 +3604,9 @@ cdrom_boot()
   // if not found
   if(device >= BX_MAX_ATA_DEVICES) return 2;
 
+  if(error = atapi_is_ready(device) != 0)
+    BX_INFO("ata_is_ready returned %d\n",error);
+
   // Read the Boot Record Volume Descriptor
   memsetb(get_SS(),atacmd,0,12);
   atacmd[0]=0x28;                      // READ command
@@ -4525,7 +4560,7 @@ ASM_END
                 {
                     case 0:
                         set_e820_range(ES, regs.u.r16.di,
-                                       0x0000000L, 0x0009fc00L, 0, 0, 1);
+                                       0x0000000L, 0x0009f000L, 0, 0, 1);
                         regs.u.r32.ebx = 1;
                         regs.u.r32.eax = 0x534D4150;
                         regs.u.r32.ecx = 0x14;
@@ -4534,7 +4569,7 @@ ASM_END
                         break;
                     case 1:
                         set_e820_range(ES, regs.u.r16.di,
-                                       0x0009fc00L, 0x000a0000L, 0, 0, 2);
+                                       0x0009f000L, 0x000a0000L, 0, 0, 2);
                         regs.u.r32.ebx = 2;
                         regs.u.r32.eax = 0x534D4150;
                         regs.u.r32.ecx = 0x14;
@@ -9113,6 +9148,16 @@ retf_post_0x467:
   mov ss, [0x469]
   retf
 
+s3_post:
+  mov sp, #0xffe
+#if BX_ROMBIOS32
+  call rombios32_init
+#endif
+  call _s3_resume
+  mov bl, #0x00
+  and ax, ax
+  jz normal_post
+  call _s3_resume_panic
 
 ;--------------------
 eoi_both_pics:
@@ -10027,27 +10072,19 @@ rombios32_05:
   mov gs, ax
   cld
 
-  ;; copy rombios32 code to ram (ram offset = 1MB)
-  mov esi, #0xfffe0000
-  mov edi, #0x00040000
-  mov ecx, #0x10000 / 4
-  rep
-    movsd
+  ;; init the stack pointer to point below EBDA
+  mov ax, [0x040e]
+  shl eax, #4
+  mov esp, #-0x10
+  add esp, eax
 
-  ;; init the stack pointer
-  mov esp, #0x00080000
+  ;; pass pointer to s3_resume_flag and s3_resume_vector to rombios32
+  push #0x04b0
+  push #0x04b2
 
   ;; call rombios32 code
-  mov eax, #0x00040000
+  mov eax, #0x000e0000
   call eax
-
-  ;; reset the memory (some boot loaders such as syslinux suppose
-  ;; that the memory is set to zero)
-  mov edi, #0x00040000
-  mov ecx, #0x40000 / 4
-  xor eax, eax
-  rep
-    stosd
 
   ;; return to 16 bit protected mode first
   db 0xea
@@ -10249,6 +10286,30 @@ block_count_rounded:
   mov  ax, 2[bx]
   cmp  ax, #0x506e
   jne  no_bev
+
+  mov  ax, 0x16[bx] ;; 0x16 is the offset of Boot Connection Vector
+  cmp  ax, #0x0000
+  je   no_bcv
+
+  ;; Option ROM has BCV. Run it now.
+  push cx       ;; Push seg
+  push ax       ;; Push offset
+
+  ;; Point ES:DI at "$PnP", which tells the ROM that we are a PnP BIOS.
+  mov  bx, #0xf000
+  mov  es, bx
+  lea  di, pnp_string
+  /* jump to BCV function entry pointer */
+  mov  bp, sp   ;; Call ROM BCV routine using seg:off on stack
+  db   0xff     ;; call_far ss:[bp+0]
+  db   0x5e
+  db   0
+  cli           ;; In case expansion ROM BIOS turns IF on
+  add  sp, #2   ;; Pop offset value
+  pop  cx       ;; Pop seg value (restore CX)
+  jmp   no_bev
+
+no_bcv:
   mov  ax, 0x1a[bx] ;; 0x1A is also the offset into the expansion header of...
   cmp  ax, #0x0000  ;; the Bootstrap Entry Vector, or zero if there is none.
   je   no_bev
@@ -10294,6 +10355,31 @@ post_enable_cache:
   and eax, #0x9fffffff
   mov cr0, eax
   jmp post_enable_cache_done
+
+post_init_pic:
+  mov al, #0x11 ; send initialisation commands
+  out 0x20, al
+  out 0xa0, al
+  mov al, #0x08
+  out 0x21, al
+  mov al, #0x70
+  out 0xa1, al
+  mov al, #0x04
+  out 0x21, al
+  mov al, #0x02
+  out 0xa1, al
+  mov al, #0x01
+  out 0x21, al
+  out 0xa1, al
+  mov  al, #0xb8
+  out  0x21, AL ;master pic: unmask IRQ 0, 1, 2, 6
+#if BX_USE_PS2_MOUSE
+  mov  al, #0x8f
+#else
+  mov  al, #0x9f
+#endif
+  out  0xa1, AL ;slave  pic: unmask IRQ 12, 13, 14
+  ret
 
 ;; the following area can be used to write dynamically generated tables
   .align 16
@@ -10391,6 +10477,12 @@ normal_post:
   xor  ax, ax
   mov  ds, ax
   mov  ss, ax
+
+  ;; Save shutdown status
+  mov 0x04b0, bl
+
+  cmp bl, #0xfe
+  jz s3_post
 
   ;; zero out BIOS data area (40:00..40:ff)
   mov  es, ax
@@ -10558,28 +10650,7 @@ post_default_ints:
   SET_INT_VECTOR(0x10, #0xF000, #int10_handler)
 
   ;; PIC
-  mov al, #0x11 ; send initialisation commands
-  out 0x20, al
-  out 0xa0, al
-  mov al, #0x08
-  out 0x21, al
-  mov al, #0x70
-  out 0xa1, al
-  mov al, #0x04
-  out 0x21, al
-  mov al, #0x02
-  out 0xa1, al
-  mov al, #0x01
-  out 0x21, al
-  out 0xa1, al
-  mov  al, #0xb8
-  out  0x21, AL ;master pic: unmask IRQ 0, 1, 2, 6
-#if BX_USE_PS2_MOUSE
-  mov  al, #0x8f
-#else
-  mov  al, #0x9f
-#endif
-  out  0xa1, AL ;slave  pic: unmask IRQ 12, 13, 14
+  call post_init_pic
 
   mov  cx, #0xc000  ;; init vga bios
   mov  ax, #0xc780
