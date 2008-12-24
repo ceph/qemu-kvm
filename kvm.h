@@ -14,9 +14,9 @@
 #ifndef QEMU_KVM_H
 #define QEMU_KVM_H
 
-#ifdef KVM_UPSTREAM
-
 #include "config.h"
+
+#ifdef KVM_UPSTREAM
 
 #ifdef CONFIG_KVM
 extern int kvm_allowed;
