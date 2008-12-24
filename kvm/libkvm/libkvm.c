@@ -963,6 +963,7 @@ again:
 			break;
 		case KVM_EXIT_S390_RESET:
 			r = kvm->callbacks->s390_handle_reset(kvm, vcpu, run);
+			break;
 #endif
 		default:
 			if (kvm_arch_run(run, kvm, vcpu)) {
