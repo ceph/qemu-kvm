@@ -18,6 +18,12 @@ static inline unsigned long long rdtsc()
 
 #define N (1 << 22)
 
+#ifdef __x86_64__
+#  define R "r"
+#else
+#  define R "e"
+#endif
+
 int main()
 {
 	int i;
@@ -25,7 +31,8 @@ int main()
 
 	t1 = rdtsc();
 	for (i = 0; i < N; ++i)
-		asm volatile ("cpuid" : : : "eax", "ebx", "ecx", "edx");
+		asm volatile ("push %%"R"bx; cpuid; pop %%"R"bx"
+			      : : : "eax", "ecx", "edx");
 	t2 = rdtsc();
 	printf("vmexit latency: %d\n", (int)((t2 - t1) / N));
 	return 0;
