@@ -633,7 +633,7 @@ void smp_probe(void)
 #ifndef BX_QEMU
         delay_ms(10);
 #else
-	while (cmos_readb(0x5f) + 1 != smp_cpus)
+	while (cmos_readb(0x5f) + 1 != readw(&smp_cpus))
 	    ;
 #endif
     }
