@@ -20,7 +20,7 @@ FLATLIBS = test/lib/libcflat.a $(libgcc)
 
 tests-common = $(TEST_DIR)/bootstrap \
 			$(TEST_DIR)/vmexit.flat $(TEST_DIR)/tsc.flat \
-			$(TEST_DIR)/smp.flat  $(TEST_DIR)/port80.flat \
+			$(TEST_DIR)/smptest.flat  $(TEST_DIR)/port80.flat \
 			$(TEST_DIR)/realmode.flat
 
 test_cases: $(tests-common) $(tests)
@@ -43,7 +43,7 @@ $(TEST_DIR)/vmexit.flat: $(cstart.o) $(TEST_DIR)/vmexit.o
  
 $(TEST_DIR)/test32.flat: $(TEST_DIR)/test32.o
 
-$(TEST_DIR)/smp.flat: $(cstart.o) $(TEST_DIR)/smptest.o
+$(TEST_DIR)/smptest.flat: $(cstart.o) $(TEST_DIR)/smptest.o
  
 $(TEST_DIR)/emulator.flat: $(cstart.o) $(TEST_DIR)/vm.o $(TEST_DIR)/print.o
 
