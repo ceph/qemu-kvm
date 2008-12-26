@@ -462,39 +462,6 @@ void kvm_arch_save_regs(CPUState *env)
     }
 }
 
-static void host_cpuid(uint32_t function, uint32_t *eax, uint32_t *ebx,
-		       uint32_t *ecx, uint32_t *edx)
-{
-    uint32_t vec[4];
-
-#ifdef __x86_64__
-    asm volatile("cpuid"
-		 : "=a"(vec[0]), "=b"(vec[1]),
-		   "=c"(vec[2]), "=d"(vec[3])
-		 : "0"(function) : "cc");
-#else
-    asm volatile("pusha \n\t"
-		 "cpuid \n\t"
-		 "mov %%eax, 0(%1) \n\t"
-		 "mov %%ebx, 4(%1) \n\t"
-		 "mov %%ecx, 8(%1) \n\t"
-		 "mov %%edx, 12(%1) \n\t"
-		 "popa"
-		 : : "a"(function), "S"(vec)
-		 : "memory", "cc");
-#endif
-
-    if (eax)
-	*eax = vec[0];
-    if (ebx)
-	*ebx = vec[1];
-    if (ecx)
-	*ecx = vec[2];
-    if (edx)
-	*edx = vec[3];
-}
-
-
 static void do_cpuid_ent(struct kvm_cpuid_entry *e, uint32_t function,
 			 CPUState *env)
 {
@@ -505,43 +472,6 @@ static void do_cpuid_ent(struct kvm_cpuid_entry *e, uint32_t function,
     e->ebx = env->regs[R_EBX];
     e->ecx = env->regs[R_ECX];
     e->edx = env->regs[R_EDX];
-    if (function == 0x80000001) {
-	uint32_t h_eax, h_edx;
-
-	host_cpuid(function, &h_eax, NULL, NULL, &h_edx);
-
-	// long mode
-	if ((h_edx & 0x20000000) == 0 || !lm_capable_kernel)
-	    e->edx &= ~0x20000000u;
-	// syscall
-	if ((h_edx & 0x00000800) == 0)
-	    e->edx &= ~0x00000800u;
-	// nx
-	if ((h_edx & 0x00100000) == 0)
-	    e->edx &= ~0x00100000u;
-	// svm
-	if (!kvm_nested && (e->ecx & 4))
-	    e->ecx &= ~4u;
-    }
-    // sysenter isn't supported on compatibility mode on AMD.  and syscall
-    // isn't supported in compatibility mode on Intel.  so advertise the
-    // actuall cpu, and say goodbye to migration between different vendors
-    // is you use compatibility mode.
-    if (function == 0) {
-	uint32_t bcd[3];
-
-	host_cpuid(0, NULL, &bcd[0], &bcd[1], &bcd[2]);
-	e->ebx = bcd[0];
-	e->ecx = bcd[1];
-	e->edx = bcd[2];
-    }
-    // "Hypervisor present" bit for Microsoft guests
-    if (function == 1)
-	e->ecx |= (1u << 31);
-
-    // 3dnow isn't properly emulated yet
-    if (function == 0x80000001)
-	e->edx &= ~0xc0000000;
 }
 
 struct kvm_para_features {
