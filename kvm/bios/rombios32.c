@@ -1294,7 +1294,7 @@ struct acpi_20_generic_address {
     uint8_t  register_bit_offset;
     uint8_t  reserved;
     uint64_t address;
-};
+} __attribute__((__packed__));
 
 /*
  *  * HPET Description Table
@@ -1306,7 +1306,7 @@ struct acpi_20_hpet {
     uint8_t            hpet_number;
     uint16_t           min_tick;
     uint8_t            page_protect;
-};
+} __attribute__((__packed__));
 #define ACPI_HPET_ADDRESS 0xFED00000UL
 #endif
 
@@ -1328,7 +1328,7 @@ struct madt_int_override
 	uint8_t                source;  /* Bus-relative interrupt source */
 	uint32_t               gsi;     /* GSI that source will signal */
 	uint16_t               flags;   /* MPS INTI flags */
-};
+} __attribute__((__packed__));
 #endif
 
 #include "acpi-dsdt.hex"
