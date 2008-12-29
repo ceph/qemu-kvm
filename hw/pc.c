@@ -810,6 +810,7 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
     ram_addr_t ram_addr, vga_ram_addr, bios_offset, vga_bios_offset;
     ram_addr_t below_4g_mem_size, above_4g_mem_size = 0;
     int bios_size, isa_bios_size, vga_bios_size, opt_rom_offset;
+    int pci_option_rom_offset;
     PCIBus *pci_bus;
     int piix3_devfn = -1;
     CPUState *env;
@@ -972,6 +973,7 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
             option_rom_setup_reset(0xd0000 + offset, size);
             offset += size;
         }
+        pci_option_rom_offset = offset;
     }
 
     /* map all the bios at the top of memory */
@@ -1190,8 +1192,10 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
         virtio_balloon_init(pci_bus);
 
 #ifdef USE_KVM_DEVICE_ASSIGNMENT
-    if (kvm_enabled())
-	add_assigned_devices(pci_bus, assigned_devices, assigned_devices_index);
+    if (kvm_enabled()) {
+        add_assigned_devices(pci_bus, assigned_devices, assigned_devices_index);
+        assigned_dev_load_option_roms(pci_option_rom_offset);
+    }
 #endif /* USE_KVM_DEVICE_ASSIGNMENT */
 }
 
