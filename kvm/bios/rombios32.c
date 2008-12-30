@@ -38,7 +38,7 @@ typedef unsigned long long uint64_t;
 //#define BX_USE_EBDA_TABLES
 
 /* define it if the (emulated) hardware supports SMM mode */
-#define BX_USE_SMM
+//#define BX_USE_SMM
 
 #define cpuid(index, eax, ebx, ecx, edx) \
   asm volatile ("cpuid" \
