@@ -646,6 +646,8 @@ int kvm_get_pit(kvm_context_t kvm, struct kvm_pit_state *s);
 int kvm_set_pit(kvm_context_t kvm, struct kvm_pit_state *s);
 #endif
 
+int kvm_reinject_control(kvm_context_t kvm, int pit_reinject);
+
 #endif
 
 #ifdef KVM_CAP_VAPIC

@@ -1145,3 +1145,22 @@ int kvm_destroy_memory_region_works(kvm_context_t kvm)
 #endif
 	return ret;
 }
+
+int kvm_reinject_control(kvm_context_t kvm, int pit_reinject)
+{
+#ifdef KVM_CAP_REINJECT_CONTROL
+	int r;
+	struct kvm_reinject_control control;
+
+	control.pit_reinject = pit_reinject;
+
+	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_REINJECT_CONTROL);
+	if (r > 0) {
+		r = ioctl(kvm->vm_fd, KVM_REINJECT_CONTROL, &control);
+		if (r == -1)
+			return -errno;
+		return r;
+	}
+#endif
+	return -ENOSYS;
+}
