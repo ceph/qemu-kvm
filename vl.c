@@ -3585,8 +3585,11 @@ void qemu_system_reset_request(void)
     } else {
         reset_requested = 1;
     }
-    if (cpu_single_env)
+
+    if (cpu_single_env) {
+        qemu_kvm_cpu_stop(cpu_single_env);
         cpu_interrupt(cpu_single_env, CPU_INTERRUPT_EXIT);
+    }
     main_loop_break();
 }
 

@@ -1357,3 +1357,9 @@ int qemu_kvm_has_sync_mmu(void)
 {
     return kvm_has_sync_mmu(kvm_context);
 }
+
+void qemu_kvm_cpu_stop(CPUState *env)
+{
+    if (kvm_enabled())
+        env->kvm_cpu_state.stopped = 1;
+}
