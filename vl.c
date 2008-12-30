@@ -4074,6 +4074,7 @@ static void help(int exitcode)
 #endif
 	   "-no-kvm-irqchip disable KVM kernel mode PIC/IOAPIC/LAPIC\n"
 	   "-no-kvm-pit	    disable KVM kernel mode PIT\n"
+	   "-no-kvm-pit-reinjection disable KVM kernel mode PIT interrupt reinjection\n"
 	   "-enable-nesting enable support for running a VM inside the VM (AMD only)\n"
 #if defined(TARGET_I386) || defined(TARGET_X86_64) || defined(TARGET_IA64) || defined(__linux__)
            "-pcidevice host=bus:dev.func[,dma=none][,name=string]\n"
@@ -4205,6 +4206,7 @@ enum {
     QEMU_OPTION_no_kvm,
     QEMU_OPTION_no_kvm_irqchip,
     QEMU_OPTION_no_kvm_pit,
+    QEMU_OPTION_no_kvm_pit_reinjection,
 #if defined(TARGET_I386) || defined(TARGET_X86_64) || defined(TARGET_IA64) || defined(__linux__)
     QEMU_OPTION_pcidevice,
 #endif
@@ -4301,6 +4303,7 @@ static const QEMUOption qemu_options[] = {
 #endif
     { "no-kvm-irqchip", 0, QEMU_OPTION_no_kvm_irqchip },
     { "no-kvm-pit", 0, QEMU_OPTION_no_kvm_pit },
+    { "no-kvm-pit-reinjection", 0, QEMU_OPTION_no_kvm_pit_reinjection },
     { "enable-nesting", 0, QEMU_OPTION_enable_nesting },
 #if defined(TARGET_I386) || defined(TARGET_X86_64) || defined(TARGET_IA64) || defined(__linux__)
     { "pcidevice", HAS_ARG, QEMU_OPTION_pcidevice },
@@ -5270,6 +5273,11 @@ int main(int argc, char **argv, char **envp)
 		kvm_pit = 0;
 		break;
 	    }
+            case QEMU_OPTION_no_kvm_pit_reinjection: {
+                extern int kvm_pit_reinject;
+                kvm_pit_reinject = 0;
+                break;
+            }
 	    case QEMU_OPTION_enable_nesting: {
 		kvm_nested = 1;
 		break;

@@ -11,6 +11,7 @@
 int kvm_allowed = 1;
 int kvm_irqchip = 1;
 int kvm_pit = 1;
+int kvm_pit_reinject = 1;
 int kvm_nested = 0;
 
 #include <assert.h>
@@ -795,6 +796,12 @@ int kvm_qemu_create_context(void)
     r = kvm_arch_qemu_create_context();
     if(r <0)
 	kvm_qemu_destroy();
+    if (kvm_pit && !kvm_pit_reinject) {
+        if (kvm_reinject_control(kvm_context, 0)) {
+            fprintf(stderr, "failure to disable in-kernel PIT reinjection\n");
+            return -1;
+        }
+    }
 #ifdef TARGET_I386
     destroy_region_works = kvm_destroy_memory_region_works(kvm_context);
 #endif
