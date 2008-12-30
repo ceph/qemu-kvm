@@ -2225,6 +2225,7 @@ s3_resume()
     BX_INFO("S3 resume jump to %x:%x\n", (s3_wakeup_vector >> 4),
 		    (s3_wakeup_vector & 0xF));
 ASM_START
+    mov sp, #0 ;; disable tpr patching on boot CPU
     jmpf [0x04b6]
 ASM_END
     return 1;
