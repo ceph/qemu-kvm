@@ -2201,10 +2201,6 @@ void rombios32_init(uint32_t *s3_resume_vector, uint8_t *shutdown_flag)
 
     init_smp_msrs();
 
-#ifdef BX_QEMU
-    qemu_cfg_port = qemu_cfg_port_probe();
-#endif
-
     ram_probe();
 
     cpu_probe();
