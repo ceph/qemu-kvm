@@ -338,9 +338,10 @@ void helper_stsw(target_ulong addr, uint32_t nb, uint32_t reg)
 	addr = addr_add(addr, 4);
     }
     if (unlikely(nb > 0)) {
-        for (sh = 24; nb > 0; nb--, sh -= 8)
+        for (sh = 24; nb > 0; nb--, sh -= 8) {
             stb(addr, (env->gpr[reg] >> sh) & 0xFF);
-	    addr = addr_add(addr, 1);
+            addr = addr_add(addr, 1);
+        }
     }
 }
 
@@ -1560,7 +1561,7 @@ uint64_t helper_fsel (uint64_t arg1, uint64_t arg2, uint64_t arg3)
 
     farg1.ll = arg1;
 
-    if (!float64_is_neg(farg1.d) || float64_is_zero(farg1.d))
+    if ((!float64_is_neg(farg1.d) || float64_is_zero(farg1.d)) && !float64_is_nan(farg1.d))
         return arg2;
     else
         return arg3;
@@ -1951,6 +1952,88 @@ target_ulong helper_dlmzb (target_ulong high, target_ulong low, uint32_t update_
     }
     return i;
 }
+
+/*****************************************************************************/
+/* Altivec extension helpers */
+#if defined(WORDS_BIGENDIAN)
+#define HI_IDX 0
+#define LO_IDX 1
+#else
+#define HI_IDX 1
+#define LO_IDX 0
+#endif
+
+#if defined(WORDS_BIGENDIAN)
+#define VECTOR_FOR_INORDER_I(index, element)            \
+    for (index = 0; index < ARRAY_SIZE(r->element); index++)
+#else
+#define VECTOR_FOR_INORDER_I(index, element)            \
+  for (index = ARRAY_SIZE(r->element)-1; index >= 0; index--)
+#endif
+
+#define VARITH_DO(name, op, element)        \
+void helper_v##name (ppc_avr_t *r, ppc_avr_t *a, ppc_avr_t *b)          \
+{                                                                       \
+    int i;                                                              \
+    for (i = 0; i < ARRAY_SIZE(r->element); i++) {                      \
+        r->element[i] = a->element[i] op b->element[i];                 \
+    }                                                                   \
+}
+#define VARITH(suffix, element)                  \
+  VARITH_DO(add##suffix, +, element)             \
+  VARITH_DO(sub##suffix, -, element)
+VARITH(ubm, u8)
+VARITH(uhm, u16)
+VARITH(uwm, u32)
+#undef VARITH_DO
+#undef VARITH
+
+#define VAVG_DO(name, element, etype)                                   \
+    void helper_v##name (ppc_avr_t *r, ppc_avr_t *a, ppc_avr_t *b)      \
+    {                                                                   \
+        int i;                                                          \
+        for (i = 0; i < ARRAY_SIZE(r->element); i++) {                  \
+            etype x = (etype)a->element[i] + (etype)b->element[i] + 1;  \
+            r->element[i] = x >> 1;                                     \
+        }                                                               \
+    }
+
+#define VAVG(type, signed_element, signed_type, unsigned_element, unsigned_type) \
+    VAVG_DO(avgs##type, signed_element, signed_type)                    \
+    VAVG_DO(avgu##type, unsigned_element, unsigned_type)
+VAVG(b, s8, int16_t, u8, uint16_t)
+VAVG(h, s16, int32_t, u16, uint32_t)
+VAVG(w, s32, int64_t, u32, uint64_t)
+#undef VAVG_DO
+#undef VAVG
+
+#define VMINMAX_DO(name, compare, element)                              \
+    void helper_v##name (ppc_avr_t *r, ppc_avr_t *a, ppc_avr_t *b)      \
+    {                                                                   \
+        int i;                                                          \
+        for (i = 0; i < ARRAY_SIZE(r->element); i++) {                  \
+            if (a->element[i] compare b->element[i]) {                  \
+                r->element[i] = b->element[i];                          \
+            } else {                                                    \
+                r->element[i] = a->element[i];                          \
+            }                                                           \
+        }                                                               \
+    }
+#define VMINMAX(suffix, element)                \
+  VMINMAX_DO(min##suffix, >, element)           \
+  VMINMAX_DO(max##suffix, <, element)
+VMINMAX(sb, s8)
+VMINMAX(sh, s16)
+VMINMAX(sw, s32)
+VMINMAX(ub, u8)
+VMINMAX(uh, u16)
+VMINMAX(uw, u32)
+#undef VMINMAX_DO
+#undef VMINMAX
+
+#undef VECTOR_FOR_INORDER_I
+#undef HI_IDX
+#undef LO_IDX
 
 /*****************************************************************************/
 /* SPE extension helpers */

@@ -210,6 +210,7 @@ typedef struct sparc_def_t {
     uint32_t mmu_cxr_mask;
     uint32_t mmu_sfsr_mask;
     uint32_t mmu_trcr_mask;
+    uint32_t mxcc_version;
     uint32_t features;
     uint32_t nwindows;
     uint32_t maxtl;
@@ -300,6 +301,7 @@ typedef struct CPUSPARCState {
     uint32_t mmuregs[32];
     uint64_t mxccdata[4];
     uint64_t mxccregs[8];
+    uint64_t mmubpregs[4];
     uint64_t prom_addr;
 #endif
     /* temporary float registers */

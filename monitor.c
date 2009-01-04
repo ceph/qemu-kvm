@@ -1973,10 +1973,9 @@ static const MonitorDef monitor_defs[] = {
     { NULL },
 };
 
-static void expr_error(const char *fmt)
+static void expr_error(const char *msg)
 {
-    term_printf(fmt);
-    term_printf("\n");
+    term_printf("%s\n", msg);
     longjmp(expr_env, 1);
 }
 

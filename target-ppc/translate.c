@@ -6085,7 +6085,7 @@ GEN_HANDLER2(icbt_440, "icbt", 0x1F, 0x16, 0x00, 0x03E00001, PPC_BOOKE)
 
 static always_inline TCGv_ptr gen_avr_ptr(int reg)
 {
-    TCGv_ptr r = tcg_temp_new();
+    TCGv_ptr r = tcg_temp_new_ptr();
     tcg_gen_addi_ptr(r, cpu_env, offsetof(CPUPPCState, avr[reg]));
     return r;
 }
@@ -6163,6 +6163,48 @@ GEN_VX_LOGICAL(vandc, tcg_gen_andc_i64, 2, 17);
 GEN_VX_LOGICAL(vor, tcg_gen_or_i64, 2, 18);
 GEN_VX_LOGICAL(vxor, tcg_gen_xor_i64, 2, 19);
 GEN_VX_LOGICAL(vnor, tcg_gen_nor_i64, 2, 20);
+
+#define GEN_VXFORM(name, opc2, opc3)                                    \
+GEN_HANDLER(name, 0x04, opc2, opc3, 0x00000000, PPC_ALTIVEC)            \
+{                                                                       \
+    TCGv_ptr ra, rb, rd;                                                \
+    if (unlikely(!ctx->altivec_enabled)) {                              \
+        gen_exception(ctx, POWERPC_EXCP_VPU);                           \
+        return;                                                         \
+    }                                                                   \
+    ra = gen_avr_ptr(rA(ctx->opcode));                                  \
+    rb = gen_avr_ptr(rB(ctx->opcode));                                  \
+    rd = gen_avr_ptr(rD(ctx->opcode));                                  \
+    gen_helper_##name (rd, ra, rb);                                     \
+    tcg_temp_free_ptr(ra);                                              \
+    tcg_temp_free_ptr(rb);                                              \
+    tcg_temp_free_ptr(rd);                                              \
+}
+
+GEN_VXFORM(vaddubm, 0, 0);
+GEN_VXFORM(vadduhm, 0, 1);
+GEN_VXFORM(vadduwm, 0, 2);
+GEN_VXFORM(vsububm, 0, 16);
+GEN_VXFORM(vsubuhm, 0, 17);
+GEN_VXFORM(vsubuwm, 0, 18);
+GEN_VXFORM(vmaxub, 1, 0);
+GEN_VXFORM(vmaxuh, 1, 1);
+GEN_VXFORM(vmaxuw, 1, 2);
+GEN_VXFORM(vmaxsb, 1, 4);
+GEN_VXFORM(vmaxsh, 1, 5);
+GEN_VXFORM(vmaxsw, 1, 6);
+GEN_VXFORM(vminub, 1, 8);
+GEN_VXFORM(vminuh, 1, 9);
+GEN_VXFORM(vminuw, 1, 10);
+GEN_VXFORM(vminsb, 1, 12);
+GEN_VXFORM(vminsh, 1, 13);
+GEN_VXFORM(vminsw, 1, 14);
+GEN_VXFORM(vavgub, 1, 16);
+GEN_VXFORM(vavguh, 1, 17);
+GEN_VXFORM(vavguw, 1, 18);
+GEN_VXFORM(vavgsb, 1, 20);
+GEN_VXFORM(vavgsh, 1, 21);
+GEN_VXFORM(vavgsw, 1, 22);
 
 /***                           SPE extension                               ***/
 /* Register moves */
@@ -6350,7 +6392,7 @@ static always_inline void gen_##name (DisasContext *ctx)                      \
     TCGv_i32 t0 = tcg_temp_local_new_i32();                                   \
     TCGv_i32 t1 = tcg_temp_local_new_i32();                                   \
     TCGv_i32 t2 = tcg_temp_local_new_i32();                                   \
-    TCGv_i64 t3 = tcg_temp_local_new(TCG_TYPE_I64);                           \
+    TCGv_i64 t3 = tcg_temp_local_new_i64();                                   \
     tcg_gen_trunc_i64_i32(t0, cpu_gpr[rA(ctx->opcode)]);                      \
     tcg_gen_trunc_i64_i32(t2, cpu_gpr[rB(ctx->opcode)]);                      \
     tcg_op(t0, t0, t2);                                                       \
