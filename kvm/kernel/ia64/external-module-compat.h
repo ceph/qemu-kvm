@@ -43,3 +43,7 @@ typedef u64 phys_addr_t;
 #endif
 
 #endif
+
+#ifndef CONFIG_HAVE_KVM_IRQCHIP
+#define CONFIG_HAVE_KVM_IRQCHIP 1
+#endif

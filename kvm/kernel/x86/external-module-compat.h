@@ -393,3 +393,7 @@ struct mtrr_state_type {
 typedef u64 phys_addr_t;
 
 #endif
+
+#ifndef CONFIG_HAVE_KVM_IRQCHIP
+#define CONFIG_HAVE_KVM_IRQCHIP 1
+#endif
