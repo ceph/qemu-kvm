@@ -1844,7 +1844,7 @@ static void vga_invalidate_display(void *opaque)
     s->last_height = -1;
 }
 
-static void vga_reset(void *opaque)
+void vga_reset(void *opaque)
 {
     VGAState *s = (VGAState *) opaque;
 
@@ -2435,7 +2435,6 @@ void vga_common_init(VGAState *s, DisplayState *ds, uint8_t *vga_ram_base,
         s->update_retrace_info = vga_precise_update_retrace_info;
         break;
     }
-    qemu_register_reset(vga_reset, s);
     vga_reset(s);
 #ifdef TARGET_IA64
     vga_bios_init(s);
@@ -2447,6 +2446,7 @@ void vga_init(VGAState *s)
 {
     int vga_io_memory;
 
+    qemu_register_reset(vga_reset, s);
     register_savevm("vga", 0, 2, vga_save, vga_load, s);
 
     register_ioport_write(0x3c0, 16, 1, vga_ioport_write, s);
