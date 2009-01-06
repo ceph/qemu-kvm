@@ -699,3 +699,8 @@ static inline void cpumask_clear_cpu(int cpu, cpumask_var_t mask)
 
 #endif
 
+
+/* Macro introduced only on newer kernels: */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28)
+#define marker_synchronize_unregister() synchronize_sched()
+#endif
