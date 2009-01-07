@@ -107,7 +107,7 @@ void qemu_kvm_aio_wait_end(void);
 
 void qemu_kvm_notify_work(void);
 
-void kvm_tpr_opt_setup();
+void kvm_tpr_opt_setup(void);
 void kvm_tpr_access_report(CPUState *env, uint64_t rip, int is_write);
 int handle_tpr_access(void *opaque, int vcpu,
 			     uint64_t rip, int is_write);

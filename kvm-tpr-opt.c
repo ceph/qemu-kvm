@@ -370,7 +370,7 @@ static void vtpr_ioport_write(void *opaque, uint32_t addr, uint32_t val)
     enable_vapic(env);
 }
 
-void kvm_tpr_opt_setup(CPUState *env)
+void kvm_tpr_opt_setup(void)
 {
     register_savevm("kvm-tpr-opt", 0, 1, tpr_save, tpr_load, NULL);
     register_ioport_write(0x7e, 1, 1, vtpr_ioport_write, NULL);
