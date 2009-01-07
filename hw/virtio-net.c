@@ -361,6 +361,10 @@ static void virtio_net_save(QEMUFile *f, void *opaque)
     qemu_put_buffer(f, n->mac, 6);
     qemu_put_be32(f, n->tx_timer_active);
     qemu_put_be32(f, n->mergeable_rx_bufs);
+
+#ifdef TAP_VNET_HDR
+    qemu_put_be32(f, tap_has_vnet_hdr(n->vc->vlan->first_client));
+#endif
 }
 
 static int virtio_net_load(QEMUFile *f, void *opaque, int version_id)
@@ -375,6 +379,11 @@ static int virtio_net_load(QEMUFile *f, void *opaque, int version_id)
     qemu_get_buffer(f, n->mac, 6);
     n->tx_timer_active = qemu_get_be32(f);
     n->mergeable_rx_bufs = qemu_get_be32(f);
+
+#ifdef TAP_VNET_HDR
+    if (qemu_get_be32(f))
+        tap_using_vnet_hdr(n->vc->vlan->first_client, 1);
+#endif
 
     if (n->tx_timer_active) {
         qemu_mod_timer(n->tx_timer,
