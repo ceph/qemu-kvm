@@ -29,6 +29,7 @@ extern QEMUMachine *current_machine;
 
 /* Axis ETRAX.  */
 extern QEMUMachine bareetraxfs_machine;
+extern QEMUMachine axisdev88_machine;
 
 /* pc.c */
 extern QEMUMachine pc_machine;

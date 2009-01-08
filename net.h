@@ -21,6 +21,8 @@ struct VLANClientState {
     void *opaque;
     struct VLANClientState *next;
     struct VLANState *vlan;
+    char *model;
+    char *name;
     char info_str[256];
 };
 
@@ -33,6 +35,8 @@ struct VLANState {
 
 VLANState *qemu_find_vlan(int id);
 VLANClientState *qemu_new_vlan_client(VLANState *vlan,
+                                      const char *model,
+                                      const char *name,
                                       IOReadHandler *fd_read,
                                       IOCanRWHandler *fd_can_read,
                                       void *opaque);
@@ -41,6 +45,7 @@ int qemu_can_send_packet(VLANClientState *vc);
 ssize_t qemu_sendv_packet(VLANClientState *vc, const struct iovec *iov,
                           int iovcnt);
 int qemu_send_packet(VLANClientState *vc, const uint8_t *buf, int size);
+void qemu_format_nic_info_str(VLANClientState *vc, uint8_t macaddr[6]);
 void qemu_handler_true(void *opaque);
 
 void do_info_network(void);
@@ -55,6 +60,7 @@ void tap_using_vnet_hdr(void *opaque, int using_vnet_hdr);
 struct NICInfo {
     uint8_t macaddr[6];
     const char *model;
+    const char *name;
     VLANState *vlan;
     int devfn;
     int used;

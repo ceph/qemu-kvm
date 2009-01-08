@@ -654,7 +654,7 @@ sparc32plus-linux-user \
     fi
 # the following are Darwin specific
     if [ "$darwin_user" = "yes" ] ; then
-        target_list="$target_list i386-darwin-user ppc-darwin-user"
+        target_list="$target_list i386-darwin-user ppc-darwin-user "
     fi
 # the following are BSD specific
     if [ "$bsd_user" = "yes" ] ; then
@@ -1708,6 +1708,7 @@ case "$target_cpu" in
     echo "TARGET_ARCH=cris" >> $config_mak
     echo "#define TARGET_ARCH \"cris\"" >> $config_h
     echo "#define TARGET_CRIS 1" >> $config_h
+    target_nptl="yes"
   ;;
   m68k)
     echo "TARGET_ARCH=m68k" >> $config_mak

@@ -78,7 +78,8 @@ void qemu_del_wait_object(HANDLE handle, WaitObjectFunc *func, void *opaque);
 #endif
 
 /* TAP win32 */
-int tap_win32_init(VLANState *vlan, const char *ifname);
+int tap_win32_init(VLANState *vlan, const char *model,
+                   const char *name, const char *ifname);
 
 /* SLIRP */
 void do_info_slirp(void);
@@ -135,6 +136,7 @@ typedef struct DriveInfo {
     BlockInterfaceType type;
     int bus;
     int unit;
+    char serial[21];
     int used;
     int drive_opt_idx;
 } DriveInfo;
@@ -149,6 +151,7 @@ extern int extboot_drive;
 
 extern int drive_get_index(BlockInterfaceType type, int bus, int unit);
 extern int drive_get_max_bus(BlockInterfaceType type);
+extern const char *drive_get_serial(BlockDriverState *bdrv);
 
 extern void drive_uninit(BlockDriverState *bdrv);
 extern void drive_remove(int index);
