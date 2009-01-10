@@ -2114,7 +2114,7 @@ void smbios_init(void)
     for ( i = 0; i < nr_mem_devs; i++ )
     {
         uint32_t dev_memsize = ((i == (nr_mem_devs - 1))
-                                ? (memsize & 0x3fff) : 0x4000);
+                                ? (((memsize-1) & 0x3fff)+1) : 0x4000);
         add_struct(smbios_type_17_init(p, dev_memsize, i));
         add_struct(smbios_type_19_init(p, dev_memsize, i));
         add_struct(smbios_type_20_init(p, dev_memsize, i));
