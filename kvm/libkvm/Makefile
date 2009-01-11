@@ -24,12 +24,17 @@ libkvm.a: libkvm.o $(libkvm-$(ARCH)-objs)
 	$(AR) rcs $@ $^
 
 install:
+	@echo skipping libkvm install
+
+install-libkvm:
 	install -D libkvm.h $(DESTDIR)/$(PREFIX)/include/libkvm.h
+	install -D libkvm.a $(DESTDIR)/$(PREFIX)/$(LIBDIR)/libkvm.a
+
+install-kernel-headers:
 	install -D $(LIBKVM_KERNELDIR)/include/linux/kvm.h \
 		$(DESTDIR)/$(PREFIX)/include/linux/kvm.h
 	install -D $(LIBKVM_KERNELDIR)/include/linux/kvm_para.h \
 		$(DESTDIR)/$(PREFIX)/include/linux/kvm_para.h
-	install -D libkvm.a $(DESTDIR)/$(PREFIX)/$(LIBDIR)/libkvm.a
 
 -include .*.d
 
