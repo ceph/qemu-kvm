@@ -10348,6 +10348,13 @@ rom_scan_increment:
   mov  ds, ax
   ret
 
+post_enable_cache:
+  ;; enable cache
+  mov eax, cr0
+  and eax, #0x9fffffff
+  mov cr0, eax
+  jmp post_enable_cache_done
+
 post_init_pic:
   mov al, #0x11 ; send initialisation commands
   out 0x20, al
@@ -10384,10 +10391,9 @@ bios_table_area_start:
 ;--------
 .org 0xe05b ; POST Entry Point
 post:
-  ;; enable cache
-  mov eax, cr0
-  and eax, #0x9fffffff
-  mov cr0, eax
+  jmp post_enable_cache ; hack: we have limited space before next .org,
+                        ;       so take this bit out-of-line
+post_enable_cache_done:
 
   xor ax, ax
 
