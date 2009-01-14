@@ -475,6 +475,27 @@ int kvm_setup_cpuid(kvm_context_t kvm, int vcpu, int nent,
 	return r;
 }
 
+int kvm_setup_cpuid2(kvm_context_t kvm, int vcpu, int nent,
+		     struct kvm_cpuid_entry2 *entries)
+{
+	struct kvm_cpuid2 *cpuid;
+	int r;
+
+	cpuid = malloc(sizeof(*cpuid) + nent * sizeof(*entries));
+	if (!cpuid)
+		return -ENOMEM;
+
+	cpuid->nent = nent;
+	memcpy(cpuid->entries, entries, nent * sizeof(*entries));
+	r = ioctl(kvm->vcpu_fd[vcpu], KVM_SET_CPUID2, cpuid);
+	if (r == -1) {
+		fprintf(stderr, "kvm_setup_cpuid2: %m\n");
+		return -errno;
+	}
+	free(cpuid);
+	return r;
+}
+
 int kvm_set_shadow_pages(kvm_context_t kvm, unsigned int nrshadow_pages)
 {
 #ifdef KVM_CAP_MMU_SHADOW_CACHE_CONTROL
