@@ -3,6 +3,7 @@
 
 #include <linux/sched.h>
 #include <linux/percpu.h>
+#include <linux/kvm.h>
 
 static DEFINE_SPINLOCK(pn_lock);
 static LIST_HEAD(pn_list);
@@ -39,6 +40,14 @@ static void preempt_enable_sched_in_notifiers(void * addr)
 	set_tsk_thread_flag(current, TIF_DEBUG);
 #endif
 }
+
+void special_reload_dr7(void)
+{
+#ifndef KVM_CAP_SET_GUEST_DEBUG
+	asm volatile ("mov %0, %%db7" : : "r"(0x701ul));
+#endif
+}
+EXPORT_SYMBOL_GPL(special_reload_dr7);
 
 static void __preempt_disable_notifiers(void)
 {
