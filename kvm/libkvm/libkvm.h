@@ -397,7 +397,7 @@ int kvm_setup_cpuid2(kvm_context_t kvm, int vcpu, int nent,
 int kvm_set_shadow_pages(kvm_context_t kvm, unsigned int nrshadow_pages);
 
 /*!
- * \breif Getting the number of shadow pages that are allocated to the vm
+ * \brief Getting the number of shadow pages that are allocated to the vm
  *
  * \param kvm pointer to kvm_context
  * \param nrshadow_pages number of pages to be allocated
