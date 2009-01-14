@@ -381,6 +381,14 @@ int kvm_create_vm(kvm_context_t kvm)
 {
 	int fd = kvm->fd;
 
+#ifdef KVM_CAP_IRQ_ROUTING
+	kvm->irq_routes = malloc(sizeof(*kvm->irq_routes));
+	if (!kvm->irq_routes)
+		return -ENOMEM;
+	memset(kvm->irq_routes, 0, sizeof(*kvm->irq_routes));
+	kvm->nr_allocated_irq_routes = 0;
+#endif
+
 	kvm->vcpu_fd[0] = -1;
 
 	fd = ioctl(fd, KVM_CREATE_VM, 0);
@@ -1163,4 +1171,103 @@ int kvm_reinject_control(kvm_context_t kvm, int pit_reinject)
 	}
 #endif
 	return -ENOSYS;
+}
+
+int kvm_has_gsi_routing(kvm_context_t kvm)
+{
+    int r = 0;
+
+#ifdef KVM_CAP_IRQ_ROUTING
+    r = kvm_check_extension(kvm, KVM_CAP_IRQ_ROUTING);
+#endif
+    return r;
+}
+
+int kvm_get_gsi_count(kvm_context_t kvm)
+{
+#ifdef KVM_CAP_IRQ_ROUTING
+	return kvm_check_extension(kvm, KVM_CAP_IRQ_ROUTING);
+#else
+	return -EINVAL;
+#endif
+}
+
+int kvm_clear_gsi_routes(kvm_context_t kvm)
+{
+#ifdef KVM_CAP_IRQ_ROUTING
+	kvm->irq_routes->nr = 0;
+	return 0;
+#else
+	return -EINVAL;
+#endif
+}
+
+int kvm_add_irq_route(kvm_context_t kvm, int gsi, int irqchip, int pin)
+{
+#ifdef KVM_CAP_IRQ_ROUTING
+	struct kvm_irq_routing *z;
+	struct kvm_irq_routing_entry *e;
+	int n, size;
+
+	if (kvm->irq_routes->nr == kvm->nr_allocated_irq_routes) {
+		n = kvm->nr_allocated_irq_routes * 2;
+		if (n < 64)
+			n = 64;
+		size = sizeof(struct kvm_irq_routing);
+		size += n * sizeof(*e);
+		z = realloc(kvm->irq_routes, size);
+		if (!z)
+			return -ENOMEM;
+		kvm->nr_allocated_irq_routes = n;
+		kvm->irq_routes = z;
+	}
+	n = kvm->irq_routes->nr++;
+	e = &kvm->irq_routes->entries[n];
+	memset(e, 0, sizeof(*e));
+	e->gsi = gsi;
+	e->type = KVM_IRQ_ROUTING_IRQCHIP;
+	e->flags = 0;
+	e->u.irqchip.irqchip = irqchip;
+	e->u.irqchip.pin = pin;
+	return 0;
+#else
+	return -ENOSYS;
+#endif
+}
+
+int kvm_del_irq_route(kvm_context_t kvm, int gsi, int irqchip, int pin)
+{
+#ifdef KVM_CAP_IRQ_ROUTING
+	struct kvm_irq_routing_entry *e, *p;
+	int i;
+
+	for (i = 0; i < kvm->irq_routes->nr; ++i) {
+		e = &kvm->irq_routes->entries[i];
+		if (e->type == KVM_IRQ_ROUTING_IRQCHIP
+		    && e->gsi == gsi
+		    && e->u.irqchip.irqchip == irqchip
+		    && e->u.irqchip.pin == pin) {
+			p = &kvm->irq_routes->entries[--kvm->irq_routes->nr];
+			*e = *p;
+			return 0;
+		}
+	}
+	return -ESRCH;
+#else
+	return -ENOSYS;
+#endif
+}
+
+int kvm_commit_irq_routes(kvm_context_t kvm)
+{
+#ifdef KVM_CAP_IRQ_ROUTING
+	int r;
+
+	kvm->irq_routes->flags = 0;
+	r = ioctl(kvm->vm_fd, KVM_SET_GSI_ROUTING, kvm->irq_routes);
+	if (r == -1)
+		r = -errno;
+#else
+	return -ENOSYS;
+#endif
 }

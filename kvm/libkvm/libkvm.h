@@ -736,4 +736,66 @@ int kvm_assign_irq(kvm_context_t kvm,
  */
 int kvm_destroy_memory_region_works(kvm_context_t kvm);
 #endif
+
+
+/*!
+ * \brief Checks whether the generic irq routing capability is present
+ *
+ * Checks whether kvm can reroute interrupts among the various interrupt
+ * controllers.
+ *
+ * \param kvm Pointer to the current kvm_context
+ */
+int kvm_has_gsi_routing(kvm_context_t kvm);
+
+/*!
+ * \brief Determines the number of gsis that can be routed
+ *
+ * Returns the number of distinct gsis that can be routed by kvm.  This is
+ * also the number of distinct routes (if a gsi has two routes, than another
+ * gsi cannot be used...)
+ *
+ * \param kvm Pointer to the current kvm_context
+ */
+int kvm_get_gsi_count(kvm_context_t kvm);
+
+/*!
+ * \brief Clears the temporary irq routing table
+ *
+ * Clears the temporary irq routing table.  Nothing is committed to the
+ * running VM.
+ *
+ * \param kvm Pointer to the current kvm_context
+ */
+int kvm_clear_gsi_routes(kvm_context_t kvm);
+
+/*!
+ * \brief Adds an irq route to the temporary irq routing table
+ *
+ * Adds an irq route to the temporary irq routing table.  Nothing is
+ * committed to the running VM.
+ *
+ * \param kvm Pointer to the current kvm_context
+ */
+int kvm_add_irq_route(kvm_context_t kvm, int gsi, int irqchip, int pin);
+
+/*!
+ * \brief Removes an irq route from the temporary irq routing table
+ *
+ * Adds an irq route to the temporary irq routing table.  Nothing is
+ * committed to the running VM.
+ *
+ * \param kvm Pointer to the current kvm_context
+ */
+int kvm_del_irq_route(kvm_context_t kvm, int gsi, int irqchip, int pin);
+
+/*!
+ * \brief Commit the temporary irq routing table
+ *
+ * Commit the temporary irq routing table to the running VM.
+ *
+ * \param kvm Pointer to the current kvm_context
+ */
+int kvm_commit_irq_routes(kvm_context_t kvm);
+
 #endif
