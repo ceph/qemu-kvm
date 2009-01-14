@@ -61,6 +61,10 @@ struct kvm_context {
 	int pit_in_kernel;
 	/// in-kernel coalesced mmio
 	int coalesced_mmio;
+#ifdef KVM_CAP_IRQ_ROUTING
+	struct kvm_irq_routing *irq_routes;
+	int nr_allocated_irq_routes;
+#endif
 };
 
 void init_slots(void);
