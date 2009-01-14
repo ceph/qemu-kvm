@@ -462,10 +462,11 @@ void kvm_arch_save_regs(CPUState *env)
     }
 }
 
-static void do_cpuid_ent(struct kvm_cpuid_entry *e, uint32_t function,
-			 CPUState *env)
+static void do_cpuid_ent(struct kvm_cpuid_entry2 *e, uint32_t function,
+                         uint32_t count, CPUState *env)
 {
     env->regs[R_EAX] = function;
+    env->regs[R_ECX] = count;
     qemu_kvm_cpuid_on_env(env);
     e->function = function;
     e->eax = env->regs[R_EAX];
@@ -507,14 +508,14 @@ static int get_para_features(kvm_context_t kvm_context)
 
 int kvm_arch_qemu_init_env(CPUState *cenv)
 {
-    struct kvm_cpuid_entry cpuid_ent[100];
+    struct kvm_cpuid_entry2 cpuid_ent[100];
 #ifdef KVM_CPUID_SIGNATURE
-    struct kvm_cpuid_entry *pv_ent;
+    struct kvm_cpuid_entry2 *pv_ent;
     uint32_t signature[3];
 #endif
     int cpuid_nent = 0;
     CPUState copy;
-    uint32_t i, limit;
+    uint32_t i, j, limit;
 
     copy = *cenv;
 
@@ -539,17 +540,35 @@ int kvm_arch_qemu_init_env(CPUState *cenv)
     qemu_kvm_cpuid_on_env(&copy);
     limit = copy.regs[R_EAX];
 
-    for (i = 0; i <= limit; ++i)
-	do_cpuid_ent(&cpuid_ent[cpuid_nent++], i, &copy);
+    for (i = 0; i <= limit; ++i) {
+        if (i == 4 || i == 0xb || i == 0xd) {
+            for (j = 0; ; ++j) {
+                do_cpuid_ent(&cpuid_ent[cpuid_nent], i, j, &copy);
+
+                cpuid_ent[cpuid_nent].flags = KVM_CPUID_FLAG_SIGNIFCANT_INDEX;
+                cpuid_ent[cpuid_nent].index = j;
+
+                cpuid_nent++;
+
+                if (i == 4 && copy.regs[R_EAX] == 0)
+                    break;
+                if (i == 0xb && !(copy.regs[R_ECX] & 0xff00))
+                    break;
+                if (i == 0xd && copy.regs[R_EAX] == 0)
+                    break;
+            }
+        } else
+            do_cpuid_ent(&cpuid_ent[cpuid_nent++], i, 0, &copy);
+    }
 
     copy.regs[R_EAX] = 0x80000000;
     qemu_kvm_cpuid_on_env(&copy);
     limit = copy.regs[R_EAX];
 
     for (i = 0x80000000; i <= limit; ++i)
-	do_cpuid_ent(&cpuid_ent[cpuid_nent++], i, &copy);
+	do_cpuid_ent(&cpuid_ent[cpuid_nent++], i, 0, &copy);
 
-    kvm_setup_cpuid(kvm_context, cenv->cpu_index, cpuid_nent, cpuid_ent);
+    kvm_setup_cpuid2(kvm_context, cenv->cpu_index, cpuid_nent, cpuid_ent);
     return 0;
 }
 
