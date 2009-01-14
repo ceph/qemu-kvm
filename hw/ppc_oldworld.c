@@ -33,16 +33,11 @@
 #include "pci.h"
 #include "boards.h"
 #include "fw_cfg.h"
+#include "escc.h"
 
 #define MAX_IDE_BUS 2
 #define VGA_BIOS_SIZE 65536
 #define CFG_ADDR 0xf0000510
-
-enum {
-    ARCH_PREP = 0,
-    ARCH_MAC99,
-    ARCH_HEATHROW,
-};
 
 /* temporary frame buffer OSI calls for the video.x driver. The right
    solution is to modify the driver to use VGA PCI I/Os */
@@ -132,7 +127,7 @@ static void ppc_heathrow_init (ram_addr_t ram_size, int vga_ram_size,
     int vga_bios_size, bios_size;
     qemu_irq *dummy_irq;
     int pic_mem_index, nvram_mem_index, dbdma_mem_index, cuda_mem_index;
-    int ide_mem_index[2];
+    int escc_mem_index, ide_mem_index[2];
     int ppc_boot_device;
     BlockDriverState *hd[MAX_IDE_BUS * MAX_IDE_DEVS];
     int index;
@@ -160,10 +155,17 @@ static void ppc_heathrow_init (ram_addr_t ram_size, int vga_ram_size,
          * the boot vector is at 0xFFF00100, then we need a 1MB BIOS.
          * But the NVRAM is located at 0xFFF04000...
          */
-        cpu_abort(env, "G3BW Mac hardware can not handle 1 MB BIOS\n");
+        cpu_abort(env, "G3 Beige Mac hardware can not handle 1 MB BIOS\n");
     }
 
     /* allocate RAM */
+    if (ram_size > (2047 << 20)) {
+        fprintf(stderr,
+                "qemu: Too much memory for this machine: %d MB, maximum 2047 MB\n",
+                ((unsigned int)ram_size / (1 << 20)));
+        exit(1);
+    }
+
     ram_offset = qemu_ram_alloc(ram_size);
     cpu_register_physical_memory(0, ram_size, ram_offset);
 
@@ -260,7 +262,7 @@ static void ppc_heathrow_init (ram_addr_t ram_size, int vga_ram_size,
 #endif
         }
         if (ppc_boot_device == '\0') {
-            fprintf(stderr, "No valid boot device for Mac99 machine\n");
+            fprintf(stderr, "No valid boot device for G3 Beige machine\n");
             exit(1);
         }
     }
@@ -302,14 +304,11 @@ static void ppc_heathrow_init (ram_addr_t ram_size, int vga_ram_size,
     /* XXX: suppress that */
     dummy_irq = i8259_init(NULL);
 
-    /* XXX: use Mac Serial port */
-    serial_init(0x3f8, dummy_irq[4], 115200, serial_hds[0]);
+    escc_mem_index = escc_init(0x80013000, pic[0x10], serial_hds[0],
+                               serial_hds[1], ESCC_CLOCK, 4);
 
-    for(i = 0; i < nb_nics; i++) {
-        if (!nd_table[i].model)
-            nd_table[i].model = "ne2k_pci";
-        pci_nic_init(pci_bus, &nd_table[i], -1);
-    }
+    for(i = 0; i < nb_nics; i++)
+        pci_nic_init(pci_bus, &nd_table[i], -1, "ne2k_pci");
 
     /* First IDE channel is a CMD646 on the PCI bus */
 
@@ -356,7 +355,7 @@ static void ppc_heathrow_init (ram_addr_t ram_size, int vga_ram_size,
     dbdma_init(&dbdma_mem_index);
 
     macio_init(pci_bus, 0x0010, 1, pic_mem_index, dbdma_mem_index,
-               cuda_mem_index, nvr, 2, ide_mem_index);
+               cuda_mem_index, nvr, 2, ide_mem_index, escc_mem_index);
 
     if (usb_enabled) {
         usb_ohci_init_pci(pci_bus, 3, -1);

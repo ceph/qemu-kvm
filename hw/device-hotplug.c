@@ -26,7 +26,7 @@ static PCIDevice *qemu_system_hot_add_nic(const char *opts, int bus_nr)
     ret = net_client_init ("nic", opts);
     if (ret < 0 || !nd_table[ret].model)
         return NULL;
-    return pci_nic_init (pci_bus, &nd_table[ret], -1);
+    return pci_nic_init (pci_bus, &nd_table[ret], -1, "rtl8139");
 }
 
 #ifdef USE_KVM_DEVICE_ASSIGNMENT

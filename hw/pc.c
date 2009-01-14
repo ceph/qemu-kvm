@@ -814,7 +814,6 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
     PCIBus *pci_bus;
     int piix3_devfn = -1;
     CPUState *env;
-    NICInfo *nd;
     qemu_irq *cpu_irq;
     qemu_irq *i8259;
     int index;
@@ -1062,28 +1061,12 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
     }
 
     for(i = 0; i < nb_nics; i++) {
-        nd = &nd_table[i];
-        if (!nd->model) {
-            if (pci_enabled) {
-                nd->model = "rtl8139";
-            } else {
-                nd->model = "ne2k_isa";
-            }
-        }
-        if (strcmp(nd->model, "ne2k_isa") == 0) {
+        NICInfo *nd = &nd_table[i];
+
+        if (!pci_enabled || (nd->model && strcmp(nd->model, "ne2k_isa") == 0))
             pc_init_ne2k_isa(nd, i8259);
-        } else if (pci_enabled) {
-            if (strcmp(nd->model, "?") == 0)
-                fprintf(stderr, "qemu: Supported ISA NICs: ne2k_isa\n");
-            if (!pci_nic_init(pci_bus, nd, -1))
-                exit(1);
-        } else if (strcmp(nd->model, "?") == 0) {
-            fprintf(stderr, "qemu: Supported ISA NICs: ne2k_isa\n");
-            exit(1);
-        } else {
-            fprintf(stderr, "qemu: Unsupported NIC: %s\n", nd->model);
-            exit(1);
-        }
+        else
+            pci_nic_init(pci_bus, nd, -1, "rtl8139");
     }
 
     qemu_system_hot_add_init(cpu_model);

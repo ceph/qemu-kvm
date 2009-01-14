@@ -1543,6 +1543,7 @@ static const term_cmd_t term_cmds[] = {
       "value", "set maximum speed (in bytes) for migrations" },
     { "balloon", "i", do_balloon,
       "target", "request VM to change it's memory allocation (in MB)" },
+    { "set_link", "ss", do_set_link, "name [up|down]" },
     { "cpu_set", "is", do_cpu_set_nr, "cpu [online|offline]", "change cpu state" },
 #if defined(TARGET_I386) || defined(TARGET_X86_64)
     { "drive_add", "iss", drive_hot_add, "pcibus pcidevfn [file=file][,if=type][,bus=n]\n"
