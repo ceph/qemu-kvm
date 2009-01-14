@@ -775,6 +775,8 @@ static int destroy_region_works = 0;
 int kvm_qemu_create_context(void)
 {
     int r;
+    int i;
+
     if (!kvm_irqchip) {
         kvm_disable_irqchip_creation(kvm_context);
     }
@@ -797,6 +799,28 @@ int kvm_qemu_create_context(void)
 #ifdef TARGET_I386
     destroy_region_works = kvm_destroy_memory_region_works(kvm_context);
 #endif
+
+    if (kvm_irqchip && kvm_has_gsi_routing(kvm_context)) {
+        kvm_clear_gsi_routes(kvm_context);
+        for (i = 0; i < 8; ++i) {
+            if (i == 2)
+                continue;
+            r = kvm_add_irq_route(kvm_context, i, KVM_IRQCHIP_PIC_MASTER, i);
+            if (r < 0)
+                return r;
+        }
+        for (i = 8; i < 16; ++i) {
+            r = kvm_add_irq_route(kvm_context, i, KVM_IRQCHIP_PIC_SLAVE, i - 8);
+            if (r < 0)
+                return r;
+        }
+        for (i = 0; i < 24; ++i) {
+            r = kvm_add_irq_route(kvm_context, i, KVM_IRQCHIP_IOAPIC, i);
+            if (r < 0)
+                return r;
+        }
+        kvm_commit_irq_routes(kvm_context);
+    }
     return 0;
 }
 
