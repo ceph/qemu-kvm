@@ -450,7 +450,6 @@ static void *ap_main_loop(void *_env)
 
 void kvm_init_vcpu(CPUState *env)
 {
-    int cpu = env->cpu_index;
     pthread_create(&env->kvm_cpu_state.thread, NULL, ap_main_loop, env);
 
     while (env->kvm_cpu_state.created == 0)
