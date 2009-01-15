@@ -809,7 +809,7 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
     int ret, linux_boot, i;
     ram_addr_t ram_addr, vga_ram_addr, bios_offset, vga_bios_offset;
     ram_addr_t below_4g_mem_size, above_4g_mem_size = 0;
-    int bios_size, isa_bios_size, vga_bios_size, opt_rom_offset;
+    int bios_size, isa_bios_size, vga_bios_size;
     int pci_option_rom_offset;
     PCIBus *pci_bus;
     int piix3_devfn = -1;
