@@ -28,8 +28,6 @@
 #define false 0
 #define true 1
 
-extern void perror(const char *s);
-
 int kvm_allowed = 1;
 int kvm_irqchip = 1;
 int kvm_pit = 1;
