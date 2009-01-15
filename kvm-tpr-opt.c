@@ -222,7 +222,6 @@ static int bios_is_mapped(CPUState *env, uint64_t rip)
 
 static int enable_vapic(CPUState *env)
 {
-    struct kvm_sregs sregs;
     static uint8_t one = 1;
 
     kvm_enable_vapic(kvm_context, env->cpu_index,
