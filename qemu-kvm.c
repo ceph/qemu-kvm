@@ -35,8 +35,6 @@ int kvm_pit_reinject = 1;
 int kvm_nested = 0;
 kvm_context_t kvm_context;
 
-extern int smp_cpus;
-
 pthread_mutex_t qemu_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t qemu_vcpu_cond = PTHREAD_COND_INITIALIZER;
 pthread_cond_t qemu_system_cond = PTHREAD_COND_INITIALIZER;
@@ -212,8 +210,6 @@ int kvm_cpu_exec(CPUState *env)
 
     return 0;
 }
-
-extern int vm_running;
 
 static int has_work(CPUState *env)
 {
