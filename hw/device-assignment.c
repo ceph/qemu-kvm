@@ -760,7 +760,7 @@ static int scan_option_rom(uint8_t devfn, void *roms, ram_addr_t offset)
     cpu_register_physical_memory(0xd0000 + offset, total_size, addr | IO_MEM_ROM);
 
     /* Write ROM data and devfn to phys_addr */
-    cpu_physical_memory_write_rom(0xd0000 + offset, rom, size);
+    cpu_physical_memory_write_rom(0xd0000 + offset, (uint8_t *)rom, size);
     cpu_physical_memory_write_rom(0xd0000 + offset + size, &devfn, 1);
 
     return total_size;
