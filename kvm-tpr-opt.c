@@ -115,7 +115,7 @@ static uint32_t vapic_phys;
 static int bios_enabled;
 static uint32_t vbios_desc_phys;
 
-void update_vbios_real_tpr()
+static void update_vbios_real_tpr(void)
 {
     cpu_physical_memory_rw(vbios_desc_phys, (void *)&vapic_bios, sizeof vapic_bios, 0);
     vapic_bios.real_tpr = real_tpr;
