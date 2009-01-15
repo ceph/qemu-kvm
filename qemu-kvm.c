@@ -363,7 +363,7 @@ static void setup_kernel_sigmask(CPUState *env)
     kvm_set_signal_mask(kvm_context, env->cpu_index, &set);
 }
 
-void qemu_kvm_system_reset(void)
+static void qemu_kvm_system_reset(void)
 {
     CPUState *penv = first_cpu;
 
