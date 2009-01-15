@@ -5292,18 +5292,15 @@ int main(int argc, char **argv, char **envp)
 		kvm_allowed = 0;
 		break;
 	    case QEMU_OPTION_no_kvm_irqchip: {
-		extern int kvm_irqchip, kvm_pit;
 		kvm_irqchip = 0;
 		kvm_pit = 0;
 		break;
 	    }
 	    case QEMU_OPTION_no_kvm_pit: {
-		extern int kvm_pit;
 		kvm_pit = 0;
 		break;
 	    }
             case QEMU_OPTION_no_kvm_pit_reinjection: {
-                extern int kvm_pit_reinject;
                 kvm_pit_reinject = 0;
                 break;
             }
@@ -5547,7 +5544,6 @@ int main(int argc, char **argv, char **envp)
 #if USE_KVM
     if (kvm_enabled()) {
 	if (kvm_qemu_init() < 0) {
-	    extern int kvm_allowed;
 	    fprintf(stderr, "Could not initialize KVM, will disable KVM support\n");
 #ifdef NO_CPU_EMULATION
 	    fprintf(stderr, "Compiled with --disable-cpu-emulation, exiting.\n");

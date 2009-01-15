@@ -142,6 +142,9 @@ int handle_powerpc_dcr_write(int vcpu,uint32_t dcrn, uint32_t data);
 #include "sys-queue.h"
 
 extern int kvm_allowed;
+extern int kvm_irqchip;
+extern int kvm_pit;
+extern int kvm_pit_reinject;
 extern int kvm_nested;
 extern kvm_context_t kvm_context;
 

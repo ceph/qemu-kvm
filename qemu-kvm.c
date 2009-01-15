@@ -8,12 +8,6 @@
 #include "config.h"
 #include "config-host.h"
 
-int kvm_allowed = 1;
-int kvm_irqchip = 1;
-int kvm_pit = 1;
-int kvm_pit_reinject = 1;
-int kvm_nested = 0;
-
 #include <assert.h>
 #include <string.h>
 #include "hw/hw.h"
@@ -36,6 +30,11 @@ int kvm_nested = 0;
 
 extern void perror(const char *s);
 
+int kvm_allowed = 1;
+int kvm_irqchip = 1;
+int kvm_pit = 1;
+int kvm_pit_reinject = 1;
+int kvm_nested = 0;
 kvm_context_t kvm_context;
 
 extern int smp_cpus;

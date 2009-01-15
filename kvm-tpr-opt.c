@@ -19,8 +19,6 @@
 
 #include <stdio.h>
 
-extern kvm_context_t kvm_context;
-
 static uint64_t map_addr(struct kvm_sregs *sregs, target_ulong virt, unsigned *perms)
 {
     uint64_t mask = ((1ull << 48) - 1) & ~4095ull;

@@ -24,7 +24,6 @@
 
 static struct kvm_msr_list *kvm_msr_list;
 extern unsigned int kvm_shadow_memory;
-extern kvm_context_t kvm_context;
 static int kvm_has_msr_star;
 
 static int lm_capable_kernel;
