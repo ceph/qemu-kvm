@@ -289,11 +289,15 @@ static void pause_all_threads(void)
 {
     CPUState *penv = first_cpu;
 
-    assert(!cpu_single_env);
-
     while (penv) {
-        penv->kvm_cpu_state.stop = 1;
-        pthread_kill(penv->kvm_cpu_state.thread, SIG_IPI);
+        if (penv != cpu_single_env) {
+            penv->kvm_cpu_state.stop = 1;
+            pthread_kill(penv->kvm_cpu_state.thread, SIG_IPI);
+        } else {
+            penv->kvm_cpu_state.stop = 0;
+            penv->kvm_cpu_state.stopped = 1;
+            cpu_interrupt(penv, CPU_INTERRUPT_EXIT);
+        }
         penv = (CPUState *)penv->next_cpu;
     }
 
