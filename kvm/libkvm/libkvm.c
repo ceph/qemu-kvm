@@ -75,7 +75,7 @@ struct slot_info {
 
 struct slot_info slots[KVM_MAX_NUM_MEM_REGIONS];
 
-void init_slots(void)
+static void init_slots(void)
 {
 	int i;
 
@@ -83,7 +83,7 @@ void init_slots(void)
 		slots[i].len = 0;
 }
 
-int get_free_slot(kvm_context_t kvm)
+static int get_free_slot(kvm_context_t kvm)
 {
 	int i;
 	int tss_ext;
@@ -110,7 +110,7 @@ int get_free_slot(kvm_context_t kvm)
 	return -1;
 }
 
-void register_slot(int slot, unsigned long phys_addr, unsigned long len,
+static void register_slot(int slot, unsigned long phys_addr, unsigned long len,
 		   unsigned long userspace_addr, unsigned flags)
 {
 	slots[slot].phys_addr = phys_addr;
@@ -119,13 +119,13 @@ void register_slot(int slot, unsigned long phys_addr, unsigned long len,
         slots[slot].flags = flags;
 }
 
-void free_slot(int slot)
+static void free_slot(int slot)
 {
 	slots[slot].len = 0;
 	slots[slot].logging_count = 0;
 }
 
-int get_slot(unsigned long phys_addr)
+static int get_slot(unsigned long phys_addr)
 {
 	int i;
 
@@ -139,7 +139,7 @@ int get_slot(unsigned long phys_addr)
 
 /* Returns -1 if this slot is not totally contained on any other,
  * and the number of the slot otherwise */
-int get_container_slot(uint64_t phys_addr, unsigned long size)
+static int get_container_slot(uint64_t phys_addr, unsigned long size)
 {
 	int i;
 

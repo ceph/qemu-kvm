@@ -63,14 +63,6 @@ struct kvm_context {
 	int coalesced_mmio;
 };
 
-void init_slots(void);
-int get_free_slot(kvm_context_t kvm);
-void register_slot(int slot, unsigned long phys_addr, unsigned long len,
-		   unsigned long userspace_addr, unsigned flags);
-
-void free_slot(int slot);
-int get_slot(unsigned long phys_addr);
-
 int kvm_alloc_kernel_memory(kvm_context_t kvm, unsigned long memory,
 								void **vm_mem);
 int kvm_alloc_userspace_memory(kvm_context_t kvm, unsigned long memory,
