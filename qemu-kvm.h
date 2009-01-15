@@ -125,7 +125,10 @@ int kvm_coalesce_mmio_region(target_phys_addr_t start, ram_addr_t size);
 int kvm_uncoalesce_mmio_region(target_phys_addr_t start, ram_addr_t size);
 
 #ifdef USE_KVM_DEVICE_ASSIGNMENT
+struct ioperm_data;
+
 void kvm_ioperm(CPUState *env, void *data);
+void kvm_add_ioperm_data(struct ioperm_data *data);
 void kvm_arch_do_ioperm(void *_data);
 #endif
 
