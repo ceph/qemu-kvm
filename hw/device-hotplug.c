@@ -8,6 +8,7 @@
 #include "block_int.h"
 #include "device-assignment.h"
 #include "config.h"
+#include "virtio-blk.h"
 
 #define PCI_BASE_CLASS_STORAGE          0x01
 #define PCI_BASE_CLASS_NETWORK          0x02
@@ -162,8 +163,7 @@ static PCIDevice *qemu_system_hot_add_storage(const char *opts, int bus_nr)
                              drives_table[drive_idx].unit);
         break;
     case IF_VIRTIO:
-        opaque = virtio_blk_init (pci_bus, 0x1AF4, 0x1001,
-                                  drives_table[drive_idx].bdrv);
+        opaque = virtio_blk_init(pci_bus, drives_table[drive_idx].bdrv);
         break;
     default:
         term_printf ("type %s not a hotpluggable PCI device.\n", buf);

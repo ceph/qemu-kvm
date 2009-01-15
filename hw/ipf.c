@@ -39,6 +39,7 @@
 #include "ia64intrin.h"
 #include <unistd.h>
 #include "device-assignment.h"
+#include "virtio-blk.h"
 
 #include "qemu-kvm.h"
 
@@ -644,7 +645,7 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
 	int unit_id = 0;
 
 	while ((index = drive_get_index(IF_VIRTIO, 0, unit_id)) != -1) {
-	    virtio_blk_init(pci_bus, 0x1AF4, 0x1001, drives_table[index].bdrv);
+	    virtio_blk_init(pci_bus, drives_table[index].bdrv);
 	    unit_id++;
 	}
     }
