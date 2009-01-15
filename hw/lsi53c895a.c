@@ -1961,7 +1961,7 @@ void lsi_scsi_attach(void *opaque, BlockDriverState *bd, int id)
     bd->devfn = s->pci_dev.devfn;
 }
 
-int lsi_scsi_uninit(PCIDevice *d)
+static int lsi_scsi_uninit(PCIDevice *d)
 {
     LSIState *s = (LSIState *) d;
 
