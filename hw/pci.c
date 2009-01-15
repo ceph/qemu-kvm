@@ -28,6 +28,7 @@
 #include "virtio-net.h"
 #include "pc.h"
 #include "qemu-kvm.h"
+#include "device-assignment.h"
 
 //#define DEBUG_PCI
 
@@ -51,7 +52,6 @@ struct PCIBus {
 
 static void pci_update_mappings(PCIDevice *d);
 static void pci_set_irq(void *opaque, int irq_num, int level);
-void assigned_dev_update_irq(PCIDevice *d);
 
 target_phys_addr_t pci_mem_base;
 static uint16_t pci_default_sub_vendor_id = PCI_SUBVENDOR_ID_REDHAT_QUMRANET;
