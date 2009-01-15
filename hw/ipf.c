@@ -53,6 +53,7 @@ static fdctrl_t *floppy_controller;
 static RTCState *rtc_state;
 static PCIDevice *i440fx_state;
 
+uint8_t *g_fw_start;
 static uint32_t ipf_to_legacy_io(target_phys_addr_t addr)
 {
     return (uint32_t)(((addr&0x3ffffff) >> 12 << 2)|((addr) & 0x3));
@@ -454,9 +455,14 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
         unsigned long  image_size;
         char *image = NULL;
         uint8_t *fw_image_start;
+        unsigned long nvram_addr = 0;
+        unsigned long nvram_fd = 0;
+        unsigned long type = READ_FROM_NVRAM;
+        unsigned long i = 0;
         ram_addr_t fw_offset = qemu_ram_alloc(GFW_SIZE);
         uint8_t *fw_start = phys_ram_base + fw_offset;
 
+        g_fw_start = fw_start;
         snprintf(buf, sizeof(buf), "%s/%s", bios_dir, FW_FILENAME);
         image = read_image(buf, &image_size );
         if (NULL == image || !image_size) {
@@ -472,7 +478,20 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
         free(image);
         flush_icache_range((unsigned long)fw_image_start,
                            (unsigned long)fw_image_start + image_size);
-        kvm_ia64_build_hob(ram_size + above_4g_mem_size, smp_cpus, fw_start);
+
+        nvram_addr = NVRAM_START;
+        if (nvram) {
+            nvram_fd = kvm_ia64_nvram_init(type);
+            if (nvram_fd != -1) {
+                kvm_ia64_copy_from_nvram_to_GFW(nvram_fd, g_fw_start);
+                close(nvram_fd);
+            }
+            i = atexit(kvm_ia64_copy_from_GFW_to_nvram);
+            if (i != 0)
+                fprintf(stderr, "cannot set exit function\n");
+        }
+        kvm_ia64_build_hob(ram_size + above_4g_mem_size, smp_cpus,
+                           fw_start, nvram_addr);
     }
 
     /*Register legacy io address space, size:64M*/

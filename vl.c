@@ -249,6 +249,7 @@ unsigned int nb_prom_envs = 0;
 const char *prom_envs[MAX_PROM_ENVS];
 #endif
 int nb_drives_opt;
+const char *nvram = NULL;
 struct drive_opt drives_opt[MAX_DRIVES];
 
 static CPUState *cur_cpu;
@@ -4005,6 +4006,9 @@ static void help(int exitcode)
 #if defined(TARGET_PPC) || defined(TARGET_SPARC)
            "-g WxH[xDEPTH]  Set the initial graphical resolution and depth\n"
 #endif
+#ifdef TARGET_IA64
+           "-nvram file     use 'file' to save or load nvram image\n"
+#endif
            "-name string    set the name of the guest\n"
            "-uuid %%08x-%%04x-%%04x-%%04x-%%012x specify machine UUID\n"
            "\n"
@@ -4235,6 +4239,7 @@ enum {
     QEMU_OPTION_semihosting,
     QEMU_OPTION_cpu_vendor,
     QEMU_OPTION_name,
+    QEMU_OPTION_nvram,
     QEMU_OPTION_prom_env,
     QEMU_OPTION_old_param,
     QEMU_OPTION_clock,
@@ -4368,6 +4373,7 @@ static const QEMUOption qemu_options[] = {
     { "tdf", 0, QEMU_OPTION_tdf }, /* enable time drift fix */
     { "kvm-shadow-memory", HAS_ARG, QEMU_OPTION_kvm_shadow_memory },
     { "name", HAS_ARG, QEMU_OPTION_name },
+    { "nvram", HAS_ARG, QEMU_OPTION_nvram },
 #if defined(TARGET_SPARC) || defined(TARGET_PPC)
     { "prom-env", HAS_ARG, QEMU_OPTION_prom_env },
 #endif
@@ -5460,6 +5466,9 @@ int main(int argc, char **argv, char **envp)
                 break;
             case QEMU_OPTION_incoming:
                 incoming = optarg;
+                break;
+            case QEMU_OPTION_nvram:
+                nvram = optarg;
                 break;
             }
         }

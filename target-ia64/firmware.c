@@ -31,6 +31,8 @@
 
 #include "firmware.h"
 
+#include "qemu-common.h"
+
 typedef struct {
     unsigned long signature;
     unsigned int  type;
@@ -85,14 +87,16 @@ static int hob_init(void  *buffer ,unsigned long buf_size);
 static int add_pal_hob(void* hob_buf);
 static int add_mem_hob(void* hob_buf, unsigned long dom_mem_size);
 static int add_vcpus_hob(void* hob_buf, unsigned long nr_vcpu);
-static int build_hob(void* hob_buf, unsigned long hob_buf_size,
-                     unsigned long dom_mem_size, unsigned long vcpus);
+static int add_nvram_hob(void *hob_buf, unsigned long nvram_addr);
+static int build_hob(void *hob_buf, unsigned long hob_buf_size,
+                     unsigned long dom_mem_size, unsigned long vcpus,
+                     unsigned long nvram_addr);
 static int load_hob(void *hob_buf,
                     unsigned long dom_mem_size, void* hob_start);
 
 int
-kvm_ia64_build_hob(unsigned long memsize,
-                   unsigned long vcpus, uint8_t* fw_start)
+kvm_ia64_build_hob(unsigned long memsize, unsigned long vcpus,
+                   uint8_t *fw_start, unsigned long nvram_addr)
 {
     char   *hob_buf;
 
@@ -102,7 +106,7 @@ kvm_ia64_build_hob(unsigned long memsize,
         return -1;
     }
 
-    if (build_hob(hob_buf, GFW_HOB_SIZE, memsize, vcpus) < 0) {
+    if (build_hob(hob_buf, GFW_HOB_SIZE, memsize, vcpus, nvram_addr) < 0) {
         free(hob_buf);
         Hob_Output("Could not build hob");
         return -1;
@@ -206,7 +210,8 @@ add_max_hob_entry(void* hob_buf)
 
 static int
 build_hob(void* hob_buf, unsigned long hob_buf_size,
-          unsigned long dom_mem_size, unsigned long vcpus)
+          unsigned long dom_mem_size, unsigned long vcpus,
+          unsigned long nvram_addr)
 {
     //Init HOB List
     if (hob_init(hob_buf, hob_buf_size) < 0) {
@@ -228,6 +233,11 @@ build_hob(void* hob_buf, unsigned long hob_buf_size,
         Hob_Output("Add PAL hob failed, buffer too small");
         goto err_out;
     }
+
+    if (add_nvram_hob(hob_buf, nvram_addr) < 0) {
+	    Hob_Output("Add nvram hob failed, buffer too small");
+	    goto err_out;
+	}
 
     if (add_max_hob_entry(hob_buf) < 0) {
         Hob_Output("Add max hob entry failed, buffer too small");
@@ -283,6 +293,13 @@ static int
 add_vcpus_hob(void* hob_buf, unsigned long vcpus)
 {
     return hob_add(hob_buf, HOB_TYPE_NR_VCPU, &vcpus, sizeof(vcpus));
+}
+
+static int
+add_nvram_hob(void *hob_buf, unsigned long nvram_addr)
+{
+    return hob_add(hob_buf, HOB_TYPE_NR_NVRAM,
+                   &nvram_addr, sizeof(nvram_addr));
 }
 
 static const unsigned char config_pal_bus_get_features_data[24] = {
@@ -579,6 +596,87 @@ out:
 
 out_1:
     return NULL;
+}
+
+int kvm_ia64_nvram_init(unsigned long type)
+{
+    unsigned long nvram_fd;
+    char nvram_path[PATH_MAX];
+    unsigned long i;
+
+    if (nvram) {
+        if (strlen(nvram) > PATH_MAX) {
+            goto out;
+        }
+        if (type == READ_FROM_NVRAM) {
+            if (access(nvram, R_OK | W_OK | X_OK) == -1)
+                goto out;
+            nvram_fd = open(nvram, O_RDONLY);
+            return nvram_fd;
+        }
+        else { /* write from gfw to nvram file */
+            i = access(nvram, R_OK | W_OK | X_OK);
+            if ((i == -1) && (errno != ENOENT))
+               goto out;
+            nvram_fd = open(nvram, O_CREAT|O_RDWR, 0777);
+            return nvram_fd;
+        }
+    }
+    else {
+        strcpy(nvram_path, "nvram.dat");
+        if (type == READ_FROM_NVRAM) {
+            if (access(nvram_path, R_OK | W_OK | X_OK) == -1)
+                goto out;
+            nvram_fd = open(nvram_path, O_RDONLY);
+            return nvram_fd;
+        }
+        else { /* write from gfw to nvram file */
+            i = access(nvram_path, R_OK | W_OK | X_OK);
+            if ((i == -1) && (errno != ENOENT))
+               goto out;
+            nvram_fd = open(nvram_path, O_CREAT|O_RDWR, 0777);
+            return nvram_fd;
+        }
+    }
+out:
+    return -1;
+}
+
+int
+kvm_ia64_copy_from_nvram_to_GFW(unsigned long nvram_fd,
+                                const uint8_t *fw_start)
+{
+    struct stat file_stat;
+    if ((fstat(nvram_fd, &file_stat) < 0) ||
+        (NVRAM_SIZE  != file_stat.st_size) ||
+        (read(nvram_fd, fw_start + NVRAM_OFFSET, NVRAM_SIZE) != NVRAM_SIZE))
+        return -1;
+    return 0;
+}
+
+int
+kvm_ia64_copy_from_GFW_to_nvram()
+{
+    unsigned long nvram_fd;
+    unsigned long type = WRITE_TO_NVRAM;
+    unsigned long *nvram_addr = (unsigned long *)(g_fw_start + NVRAM_OFFSET);
+    nvram_fd = kvm_ia64_nvram_init(type);
+    if (nvram_fd  == -1)
+        goto out;
+    if (((struct nvram_save_addr *)nvram_addr)->signature != NVRAM_VALID_SIG) {
+        close(nvram_fd);
+        goto out;
+    }
+    lseek(nvram_fd, 0, SEEK_SET);
+    if (write(nvram_fd, ((void *)(((struct nvram_save_addr *)nvram_addr)->addr +
+        (char *)phys_ram_base)), NVRAM_SIZE) != NVRAM_SIZE) {
+        close(nvram_fd);
+        goto out;
+    }
+    close(nvram_fd);
+    return 0;
+out:
+    return -1;
 }
 
 /*

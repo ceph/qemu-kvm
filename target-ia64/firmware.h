@@ -37,8 +37,28 @@
 
 #define Hob_Output(s)           fprintf(stderr, s)
 
-extern int kvm_ia64_build_hob(unsigned long memsize,
-                              unsigned long vcpus, uint8_t* fw_start);
+#define NVRAM_START  (GFW_START + NVRAM_OFFSET)
+#define NVRAM_OFFSET (10 * (1UL << 20))
+#define NVRAM_SIZE   (64 * (1UL << 10))
+#define NVRAM_VALID_SIG  0x4650494e45584948 /* "HIXENIPF" */
+#define VALIDATE_NVRAM_FD(x) ((1UL<<(sizeof(x)*8 - 1)) | x)
+#define IS_VALID_NVRAM_FD(x) ((uint64_t)x >> (sizeof(x)*8 - 1))
+#define READ_FROM_NVRAM 0
+#define WRITE_TO_NVRAM 1
+
+struct nvram_save_addr {
+    unsigned long addr;
+    unsigned long signature;
+};
+
+extern const char *nvram;
+extern uint8_t *g_fw_start;
+extern int kvm_ia64_build_hob(unsigned long memsize, unsigned long vcpus,
+                              uint8_t *fw_start, unsigned long nvram_addr);
 extern char *read_image(const char *filename, unsigned long *size);
 
+extern int kvm_ia64_copy_from_GFW_to_nvram();
+extern int kvm_ia64_nvram_init(unsigned long type);
+extern int kvm_ia64_copy_from_nvram_to_GFW(unsigned long nvram_fd,
+                                           const uint8_t *fw_start);
 #endif //__FIRM_WARE_
