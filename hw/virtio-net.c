@@ -616,6 +616,8 @@ static void virtio_net_save(QEMUFile *f, void *opaque)
 
 #ifdef TAP_VNET_HDR
     qemu_put_be32(f, tap_has_vnet_hdr(n->vc->vlan->first_client));
+#else
+    qemu_put_be32(f, 0);
 #endif
 }
 
@@ -660,6 +662,9 @@ static int virtio_net_load(QEMUFile *f, void *opaque, int version_id)
     if (version_id == 7 && qemu_get_be32(f)) {
         tap_using_vnet_hdr(n->vc->vlan->first_client, 1);
     }
+#else
+    /* FIXME: error out if nonzero? */
+    qemu_get_be32(f);
 #endif
 
     if (n->tx_timer_active) {
