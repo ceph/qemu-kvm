@@ -4670,7 +4670,7 @@ static int gethugepagesize(void)
     return hugepagesize;
 }
 
-void *alloc_mem_area(size_t memory, unsigned long *len, const char *path)
+static void *alloc_mem_area(size_t memory, unsigned long *len, const char *path)
 {
     char *filename;
     void *area;
@@ -4713,7 +4713,7 @@ void *alloc_mem_area(size_t memory, unsigned long *len, const char *path)
     return area;
 }
 
-void *qemu_alloc_physram(unsigned long memory)
+static void *qemu_alloc_physram(unsigned long memory)
 {
     void *area = NULL;
     unsigned long map_len = memory;
