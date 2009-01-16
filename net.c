@@ -391,7 +391,7 @@ int qemu_send_packet(VLANClientState *vc1, const uint8_t *buf, int size)
     int ret = -EAGAIN;
 
     if (vc1->link_down)
-        return;
+        return 0;
 
 #ifdef DEBUG_NET
     printf("vlan %d send:\n", vlan->id);
