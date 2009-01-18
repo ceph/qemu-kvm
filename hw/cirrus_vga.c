@@ -775,7 +775,7 @@ static void cirrus_do_copy(CirrusVGAState *s, int dst, int src, int w, int h)
 		      s->cirrus_blt_width, s->cirrus_blt_height);
 
     if (notify)
-	qemu_console_copy(s->console,
+	qemu_console_copy(s->ds,
 			  sx, sy, dx, dy,
 			  s->cirrus_blt_width / depth,
 			  s->cirrus_blt_height);
@@ -794,22 +794,9 @@ static int cirrus_bitblt_videotovideo_copy(CirrusVGAState * s)
     if (BLTUNSAFE(s))
         return 0;
 
-    if (s->ds->dpy_copy) {
-	cirrus_do_copy(s, s->cirrus_blt_dstaddr - s->start_addr,
-		       s->cirrus_blt_srcaddr - s->start_addr,
-		       s->cirrus_blt_width, s->cirrus_blt_height);
-    } else {
-	(*s->cirrus_rop) (s, s->vram_ptr +
-                (s->cirrus_blt_dstaddr & s->cirrus_addr_mask),
-			  s->vram_ptr +
-                (s->cirrus_blt_srcaddr & s->cirrus_addr_mask),
-			  s->cirrus_blt_dstpitch, s->cirrus_blt_srcpitch,
-			  s->cirrus_blt_width, s->cirrus_blt_height);
-
-	cirrus_invalidate_region(s, s->cirrus_blt_dstaddr,
-				 s->cirrus_blt_dstpitch, s->cirrus_blt_width,
-				 s->cirrus_blt_height);
-    }
+    cirrus_do_copy(s, s->cirrus_blt_dstaddr - s->start_addr,
+            s->cirrus_blt_srcaddr - s->start_addr,
+            s->cirrus_blt_width, s->cirrus_blt_height);
 
     return 1;
 }
@@ -3318,7 +3305,7 @@ static void cirrus_init_common(CirrusVGAState * s, int device_id, int is_pci)
  *
  ***************************************/
 
-void isa_cirrus_vga_init(DisplayState *ds, uint8_t *vga_ram_base,
+void isa_cirrus_vga_init(uint8_t *vga_ram_base,
                          ram_addr_t vga_ram_offset, int vga_ram_size)
 {
     CirrusVGAState *s;
@@ -3326,10 +3313,10 @@ void isa_cirrus_vga_init(DisplayState *ds, uint8_t *vga_ram_base,
     s = qemu_mallocz(sizeof(CirrusVGAState));
 
     vga_common_init((VGAState *)s,
-                    ds, vga_ram_base, vga_ram_offset, vga_ram_size);
+                    vga_ram_base, vga_ram_offset, vga_ram_size);
     cirrus_init_common(s, CIRRUS_ID_CLGD5430, 0);
-    s->console = graphic_console_init(s->ds, s->update, s->invalidate,
-                                      s->screen_dump, s->text_update, s);
+    s->ds = graphic_console_init(s->update, s->invalidate,
+                                 s->screen_dump, s->text_update, s);
     /* XXX ISA-LFB support */
 }
 
@@ -3383,7 +3370,7 @@ static void pci_cirrus_write_config(PCIDevice *d,
     vga_dirty_log_start((VGAState *)s);
 }
 
-void pci_cirrus_vga_init(PCIBus *bus, DisplayState *ds, uint8_t *vga_ram_base,
+void pci_cirrus_vga_init(PCIBus *bus, uint8_t *vga_ram_base,
                          ram_addr_t vga_ram_offset, int vga_ram_size)
 {
     PCICirrusVGAState *d;
@@ -3410,11 +3397,11 @@ void pci_cirrus_vga_init(PCIBus *bus, DisplayState *ds, uint8_t *vga_ram_base,
     /* setup VGA */
     s = &d->cirrus_vga;
     vga_common_init((VGAState *)s,
-                    ds, vga_ram_base, vga_ram_offset, vga_ram_size);
+                    vga_ram_base, vga_ram_offset, vga_ram_size);
     cirrus_init_common(s, device_id, 1);
 
-    s->console = graphic_console_init(s->ds, s->update, s->invalidate,
-                                      s->screen_dump, s->text_update, s);
+    s->ds = graphic_console_init(s->update, s->invalidate,
+                                 s->screen_dump, s->text_update, s);
 
     s->pci_dev = (PCIDevice *)d;
 

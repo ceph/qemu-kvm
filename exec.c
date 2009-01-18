@@ -1020,12 +1020,10 @@ static inline void tb_invalidate_phys_page_fast(target_phys_addr_t start, int le
     int offset, b;
 #if 0
     if (1) {
-        if (loglevel) {
-            fprintf(logfile, "modifying code at 0x%x size=%d EIP=%x PC=%08x\n",
-                   cpu_single_env->mem_io_vaddr, len,
-                   cpu_single_env->eip,
-                   cpu_single_env->eip + (long)cpu_single_env->segs[R_CS].base);
-        }
+        qemu_log("modifying code at 0x%x size=%d EIP=%x PC=%08x\n",
+                  cpu_single_env->mem_io_vaddr, len,
+                  cpu_single_env->eip,
+                  cpu_single_env->eip + (long)cpu_single_env->segs[R_CS].base);
     }
 #endif
     p = page_find(start >> TARGET_PAGE_BITS);
@@ -1656,17 +1654,17 @@ void cpu_abort(CPUState *env, const char *fmt, ...)
 #else
     cpu_dump_state(env, stderr, fprintf, 0);
 #endif
-    if (logfile) {
-        fprintf(logfile, "qemu: fatal: ");
-        vfprintf(logfile, fmt, ap2);
-        fprintf(logfile, "\n");
+    if (qemu_log_enabled()) {
+        qemu_log("qemu: fatal: ");
+        qemu_log_vprintf(fmt, ap2);
+        qemu_log("\n");
 #ifdef TARGET_I386
-        cpu_dump_state(env, logfile, fprintf, X86_DUMP_FPU | X86_DUMP_CCOP);
+        log_cpu_state(env, X86_DUMP_FPU | X86_DUMP_CCOP);
 #else
-        cpu_dump_state(env, logfile, fprintf, 0);
+        log_cpu_state(env, 0);
 #endif
-        fflush(logfile);
-        fclose(logfile);
+        qemu_log_flush();
+        qemu_log_close();
     }
     va_end(ap2);
     va_end(ap);
@@ -1676,12 +1674,34 @@ void cpu_abort(CPUState *env, const char *fmt, ...)
 CPUState *cpu_copy(CPUState *env)
 {
     CPUState *new_env = cpu_init(env->cpu_model_str);
-    /* preserve chaining and index */
     CPUState *next_cpu = new_env->next_cpu;
     int cpu_index = new_env->cpu_index;
+#if defined(TARGET_HAS_ICE)
+    CPUBreakpoint *bp;
+    CPUWatchpoint *wp;
+#endif
+
     memcpy(new_env, env, sizeof(CPUState));
+
+    /* Preserve chaining and index. */
     new_env->next_cpu = next_cpu;
     new_env->cpu_index = cpu_index;
+
+    /* Clone all break/watchpoints.
+       Note: Once we support ptrace with hw-debug register access, make sure
+       BP_CPU break/watchpoints are handled correctly on clone. */
+    TAILQ_INIT(&env->breakpoints);
+    TAILQ_INIT(&env->watchpoints);
+#if defined(TARGET_HAS_ICE)
+    TAILQ_FOREACH(bp, &env->breakpoints, entry) {
+        cpu_breakpoint_insert(new_env, bp->pc, bp->flags, NULL);
+    }
+    TAILQ_FOREACH(wp, &env->watchpoints, entry) {
+        cpu_watchpoint_insert(new_env, wp->vaddr, (~wp->len_mask) + 1,
+                              wp->flags, NULL);
+    }
+#endif
+
     return new_env;
 }
 

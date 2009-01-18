@@ -35,9 +35,9 @@
 //#define DEBUG_COMMPAGE
 
 #ifdef DEBUG_COMMPAGE
-# define DPRINTF(...) do { if(loglevel) fprintf(logfile, __VA_ARGS__); printf(__VA_ARGS__); } while(0)
+# define DPRINTF(...) do { qemu_log(__VA_ARGS__); printf(__VA_ARGS__); } while(0)
 #else
-# define DPRINTF(...) do { if(loglevel) fprintf(logfile, __VA_ARGS__); } while(0)
+# define DPRINTF(...) do { qemu_log(__VA_ARGS__); } while(0)
 #endif
 
 /********************************************************************
@@ -181,7 +181,7 @@ static inline void install_commpage_backdoor_for_entry(struct commpage_entry ent
  */
 void commpage_init(void)
 {
-#if (defined(__i386__) ^ defined(TARGET_I386)) || (defined(__powerpc__) ^ defined(TARGET_PPC))
+#if (defined(__i386__) ^ defined(TARGET_I386)) || (defined(_ARCH_PPC) ^ defined(TARGET_PPC))
     int i;
     void * commpage = (void *)target_mmap( COMMPAGE_START, COMMPAGE_SIZE,
                            PROT_WRITE | PROT_READ, MAP_ANONYMOUS | MAP_FIXED, -1, 0);

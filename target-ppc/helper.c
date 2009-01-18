@@ -39,6 +39,40 @@
 //#define DEBUG_EXCEPTIONS
 //#define FLUSH_ALL_TLBS
 
+#ifdef DEBUG_MMU
+#  define LOG_MMU(...) qemu_log(__VA_ARGS__)
+#  define LOG_MMU_STATE(env) log_cpu_state((env), 0)
+#else
+#  define LOG_MMU(...) do { } while (0)
+#  define LOG_MMU_STATE(...) do { } while (0)
+#endif
+
+
+#ifdef DEBUG_SOFTWARE_TLB
+#  define LOG_SWTLB(...) qemu_log(__VA_ARGS__)
+#else
+#  define LOG_SWTLB(...) do { } while (0)
+#endif
+
+#ifdef DEBUG_BATS
+#  define LOG_BATS(...) qemu_log(__VA_ARGS__)
+#else
+#  define LOG_BATS(...) do { } while (0)
+#endif
+
+#ifdef DEBUG_SLB
+#  define LOG_SLB(...) qemu_log(__VA_ARGS__)
+#else
+#  define LOG_SLB(...) do { } while (0)
+#endif
+
+#ifdef DEBUG_EXCEPTIONS
+#  define LOG_EXCP(...) qemu_log(__VA_ARGS__)
+#else
+#  define LOG_EXCP(...) do { } while (0)
+#endif
+
+
 /*****************************************************************************/
 /* PowerPC MMU emulation */
 
@@ -205,8 +239,7 @@ static always_inline int _pte_check (mmu_ctx_t *ctx, int is_64b,
             if (ctx->raddr != (target_phys_addr_t)-1ULL) {
                 /* all matches should have equal RPN, WIMG & PP */
                 if ((ctx->raddr & mmask) != (pte1 & mmask)) {
-                    if (loglevel != 0)
-                        fprintf(logfile, "Bad RPN/WIMG/PP\n");
+                    qemu_log("Bad RPN/WIMG/PP\n");
                     return -3;
                 }
             }
@@ -218,16 +251,10 @@ static always_inline int _pte_check (mmu_ctx_t *ctx, int is_64b,
             ret = check_prot(ctx->prot, rw, type);
             if (ret == 0) {
                 /* Access granted */
-#if defined (DEBUG_MMU)
-                if (loglevel != 0)
-                    fprintf(logfile, "PTE access granted !\n");
-#endif
+                LOG_MMU("PTE access granted !\n");
             } else {
                 /* Access right violation */
-#if defined (DEBUG_MMU)
-                if (loglevel != 0)
-                    fprintf(logfile, "PTE access rejected\n");
-#endif
+                LOG_MMU("PTE access rejected\n");
             }
         }
     }
@@ -298,11 +325,7 @@ static always_inline void ppc6xx_tlb_invalidate_all (CPUState *env)
     ppc6xx_tlb_t *tlb;
     int nr, max;
 
-#if defined (DEBUG_SOFTWARE_TLB) && 0
-    if (loglevel != 0) {
-        fprintf(logfile, "Invalidate all TLBs\n");
-    }
-#endif
+    //LOG_SWTLB("Invalidate all TLBs\n");
     /* Invalidate all defined software TLB */
     max = env->nb_tlb;
     if (env->id_tlbs == 1)
@@ -328,12 +351,8 @@ static always_inline void __ppc6xx_tlb_invalidate_virt (CPUState *env,
         nr = ppc6xx_tlb_getnum(env, eaddr, way, is_code);
         tlb = &env->tlb[nr].tlb6;
         if (pte_is_valid(tlb->pte0) && (match_epn == 0 || eaddr == tlb->EPN)) {
-#if defined (DEBUG_SOFTWARE_TLB)
-            if (loglevel != 0) {
-                fprintf(logfile, "TLB invalidate %d/%d " ADDRX "\n",
+            LOG_SWTLB("TLB invalidate %d/%d " ADDRX "\n",
                         nr, env->nb_tlb, eaddr);
-            }
-#endif
             pte_invalidate(&tlb->pte0);
             tlb_flush_page(env, tlb->EPN);
         }
@@ -359,12 +378,8 @@ void ppc6xx_tlb_store (CPUState *env, target_ulong EPN, int way, int is_code,
 
     nr = ppc6xx_tlb_getnum(env, EPN, way, is_code);
     tlb = &env->tlb[nr].tlb6;
-#if defined (DEBUG_SOFTWARE_TLB)
-    if (loglevel != 0) {
-        fprintf(logfile, "Set TLB %d/%d EPN " ADDRX " PTE0 " ADDRX
+    LOG_SWTLB("Set TLB %d/%d EPN " ADDRX " PTE0 " ADDRX
                 " PTE1 " ADDRX "\n", nr, env->nb_tlb, EPN, pte0, pte1);
-    }
-#endif
     /* Invalidate any pending reference in Qemu for this virtual address */
     __ppc6xx_tlb_invalidate_virt(env, EPN, is_code, 1);
     tlb->pte0 = pte0;
@@ -390,27 +405,19 @@ static always_inline int ppc6xx_tlb_check (CPUState *env, mmu_ctx_t *ctx,
         tlb = &env->tlb[nr].tlb6;
         /* This test "emulates" the PTE index match for hardware TLBs */
         if ((eaddr & TARGET_PAGE_MASK) != tlb->EPN) {
-#if defined (DEBUG_SOFTWARE_TLB)
-            if (loglevel != 0) {
-                fprintf(logfile, "TLB %d/%d %s [" ADDRX " " ADDRX
+            LOG_SWTLB("TLB %d/%d %s [" ADDRX " " ADDRX
                         "] <> " ADDRX "\n",
                         nr, env->nb_tlb,
                         pte_is_valid(tlb->pte0) ? "valid" : "inval",
                         tlb->EPN, tlb->EPN + TARGET_PAGE_SIZE, eaddr);
-            }
-#endif
             continue;
         }
-#if defined (DEBUG_SOFTWARE_TLB)
-        if (loglevel != 0) {
-            fprintf(logfile, "TLB %d/%d %s " ADDRX " <> " ADDRX " " ADDRX
+        LOG_SWTLB("TLB %d/%d %s " ADDRX " <> " ADDRX " " ADDRX
                     " %c %c\n",
                     nr, env->nb_tlb,
                     pte_is_valid(tlb->pte0) ? "valid" : "inval",
                     tlb->EPN, eaddr, tlb->pte1,
                     rw ? 'S' : 'L', access_type == ACCESS_CODE ? 'I' : 'D');
-        }
-#endif
         switch (pte32_check(ctx, tlb->pte0, tlb->pte1, 0, rw, access_type)) {
         case -3:
             /* TLB inconsistency */
@@ -437,12 +444,8 @@ static always_inline int ppc6xx_tlb_check (CPUState *env, mmu_ctx_t *ctx,
     }
     if (best != -1) {
     done:
-#if defined (DEBUG_SOFTWARE_TLB)
-        if (loglevel != 0) {
-            fprintf(logfile, "found TLB at addr " PADDRX " prot=%01x ret=%d\n",
+        LOG_SWTLB("found TLB at addr " PADDRX " prot=%01x ret=%d\n",
                     ctx->raddr & TARGET_PAGE_MASK, ctx->prot, ret);
-        }
-#endif
         /* Update page flags */
         pte_update_flags(ctx, &env->tlb[best].tlb6.pte1, ret, rw);
     }
@@ -485,12 +488,8 @@ static always_inline void bat_601_size_prot (CPUState *env,target_ulong *blp,
     int key, pp, valid, prot;
 
     bl = (*BATl & 0x0000003F) << 17;
-#if defined (DEBUG_BATS)
-    if (loglevel != 0) {
-        fprintf(logfile, "b %02x ==> bl " ADDRX " msk " ADDRX "\n",
+    LOG_BATS("b %02x ==> bl " ADDRX " msk " ADDRX "\n",
                 (uint8_t)(*BATl & 0x0000003F), bl, ~bl);
-    }
-#endif
     prot = 0;
     valid = (*BATl >> 6) & 1;
     if (valid) {
@@ -514,12 +513,8 @@ static always_inline int get_bat (CPUState *env, mmu_ctx_t *ctx,
     int i, valid, prot;
     int ret = -1;
 
-#if defined (DEBUG_BATS)
-    if (loglevel != 0) {
-        fprintf(logfile, "%s: %cBAT v " ADDRX "\n", __func__,
+    LOG_BATS("%s: %cBAT v " ADDRX "\n", __func__,
                 type == ACCESS_CODE ? 'I' : 'D', virtual);
-    }
-#endif
     switch (type) {
     case ACCESS_CODE:
         BATlt = env->IBAT[1];
@@ -541,13 +536,9 @@ static always_inline int get_bat (CPUState *env, mmu_ctx_t *ctx,
         } else {
             bat_size_prot(env, &bl, &valid, &prot, BATu, BATl);
         }
-#if defined (DEBUG_BATS)
-        if (loglevel != 0) {
-            fprintf(logfile, "%s: %cBAT%d v " ADDRX " BATu " ADDRX
+        LOG_BATS("%s: %cBAT%d v " ADDRX " BATu " ADDRX
                     " BATl " ADDRX "\n", __func__,
                     type == ACCESS_CODE ? 'I' : 'D', i, virtual, *BATu, *BATl);
-        }
-#endif
         if ((virtual & 0xF0000000) == BEPIu &&
             ((virtual & 0x0FFE0000) & ~bl) == BEPIl) {
             /* BAT matches */
@@ -559,28 +550,25 @@ static always_inline int get_bat (CPUState *env, mmu_ctx_t *ctx,
                 /* Compute access rights */
                 ctx->prot = prot;
                 ret = check_prot(ctx->prot, rw, type);
-#if defined (DEBUG_BATS)
-                if (ret == 0 && loglevel != 0) {
-                    fprintf(logfile, "BAT %d match: r " PADDRX " prot=%c%c\n",
-                            i, ctx->raddr, ctx->prot & PAGE_READ ? 'R' : '-',
-                            ctx->prot & PAGE_WRITE ? 'W' : '-');
-                }
-#endif
+                if (ret == 0)
+                    LOG_BATS("BAT %d match: r " PADDRX " prot=%c%c\n",
+                             i, ctx->raddr, ctx->prot & PAGE_READ ? 'R' : '-',
+                             ctx->prot & PAGE_WRITE ? 'W' : '-');
                 break;
             }
         }
     }
     if (ret < 0) {
-#if defined (DEBUG_BATS)
-        if (loglevel != 0) {
-            fprintf(logfile, "no BAT match for " ADDRX ":\n", virtual);
+#if defined(DEBUG_BATS)
+        if (IS_LOGGING) {
+            QEMU_LOG0("no BAT match for " ADDRX ":\n", virtual);
             for (i = 0; i < 4; i++) {
                 BATu = &BATut[i];
                 BATl = &BATlt[i];
                 BEPIu = *BATu & 0xF0000000;
                 BEPIl = *BATu & 0x0FFE0000;
                 bl = (*BATu & 0x00001FFC) << 15;
-                fprintf(logfile, "%s: %cBAT%d v " ADDRX " BATu " ADDRX
+                QEMU_LOG0("%s: %cBAT%d v " ADDRX " BATu " ADDRX
                         " BATl " ADDRX " \n\t" ADDRX " " ADDRX " " ADDRX "\n",
                         __func__, type == ACCESS_CODE ? 'I' : 'D', i, virtual,
                         *BATu, *BATl, BEPIu, BEPIl, bl);
@@ -588,7 +576,6 @@ static always_inline int get_bat (CPUState *env, mmu_ctx_t *ctx,
         }
 #endif
     }
-
     /* No hit */
     return ret;
 }
@@ -609,30 +596,22 @@ static always_inline int _find_pte (mmu_ctx_t *ctx, int is_64b, int h,
             pte0 = ldq_phys(base + (i * 16));
             pte1 =  ldq_phys(base + (i * 16) + 8);
             r = pte64_check(ctx, pte0, pte1, h, rw, type);
-#if defined (DEBUG_MMU)
-            if (loglevel != 0) {
-                fprintf(logfile, "Load pte from " ADDRX " => " ADDRX " " ADDRX
+            LOG_MMU("Load pte from " ADDRX " => " ADDRX " " ADDRX
                         " %d %d %d " ADDRX "\n",
                         base + (i * 16), pte0, pte1,
                         (int)(pte0 & 1), h, (int)((pte0 >> 1) & 1),
                         ctx->ptem);
-            }
-#endif
         } else
 #endif
         {
             pte0 = ldl_phys(base + (i * 8));
             pte1 =  ldl_phys(base + (i * 8) + 4);
             r = pte32_check(ctx, pte0, pte1, h, rw, type);
-#if defined (DEBUG_MMU)
-            if (loglevel != 0) {
-                fprintf(logfile, "Load pte from " ADDRX " => " ADDRX " " ADDRX
+            LOG_MMU("Load pte from " ADDRX " => " ADDRX " " ADDRX
                         " %d %d %d " ADDRX "\n",
                         base + (i * 8), pte0, pte1,
                         (int)(pte0 >> 31), h, (int)((pte0 >> 6) & 1),
                         ctx->ptem);
-            }
-#endif
         }
         switch (r) {
         case -3:
@@ -660,12 +639,8 @@ static always_inline int _find_pte (mmu_ctx_t *ctx, int is_64b, int h,
     }
     if (good != -1) {
     done:
-#if defined (DEBUG_MMU)
-        if (loglevel != 0) {
-            fprintf(logfile, "found PTE at addr " PADDRX " prot=%01x ret=%d\n",
+        LOG_MMU("found PTE at addr " PADDRX " prot=%01x ret=%d\n",
                     ctx->raddr, ctx->prot, ret);
-        }
-#endif
         /* Update page flags */
         pte1 = ctx->raddr;
         if (pte_update_flags(ctx, &pte1, ret, rw) == 1) {
@@ -729,22 +704,14 @@ static always_inline int slb_lookup (CPUPPCState *env, target_ulong eaddr,
 
     ret = -5;
     sr_base = env->spr[SPR_ASR];
-#if defined(DEBUG_SLB)
-    if (loglevel != 0) {
-        fprintf(logfile, "%s: eaddr " ADDRX " base " PADDRX "\n",
+    LOG_SLB("%s: eaddr " ADDRX " base " PADDRX "\n",
                 __func__, eaddr, sr_base);
-    }
-#endif
     mask = 0x0000000000000000ULL; /* Avoid gcc warning */
     for (n = 0; n < env->slb_nr; n++) {
         tmp64 = ldq_phys(sr_base);
         tmp = ldl_phys(sr_base + 8);
-#if defined(DEBUG_SLB)
-        if (loglevel != 0) {
-            fprintf(logfile, "%s: seg %d " PADDRX " %016" PRIx64 " %08"
+        LOG_SLB("%s: seg %d " PADDRX " %016" PRIx64 " %08"
                     PRIx32 "\n", __func__, n, sr_base, tmp64, tmp);
-        }
-#endif
         if (slb_is_valid(tmp64)) {
             /* SLB entry is valid */
             switch (tmp64 & 0x0000000006000000ULL) {
@@ -848,12 +815,8 @@ target_ulong ppc_load_slb (CPUPPCState *env, int slb_nr)
     } else {
         rt = 0;
     }
-#if defined(DEBUG_SLB)
-    if (loglevel != 0) {
-        fprintf(logfile, "%s: " PADDRX " %016" PRIx64 " %08" PRIx32 " => %d "
+    LOG_SLB("%s: " PADDRX " %016" PRIx64 " %08" PRIx32 " => %d "
                 ADDRX "\n", __func__, sr_base, tmp64, tmp, slb_nr, rt);
-    }
-#endif
 
     return rt;
 }
@@ -875,13 +838,9 @@ void ppc_store_slb (CPUPPCState *env, int slb_nr, target_ulong rs)
     tmp64 |= 1 << 27;
     /* Set ESID */
     tmp64 |= (uint32_t)slb_nr << 28;
-#if defined(DEBUG_SLB)
-    if (loglevel != 0) {
-        fprintf(logfile, "%s: %d " ADDRX " => " PADDRX " %016" PRIx64
+    LOG_SLB("%s: %d " ADDRX " => " PADDRX " %016" PRIx64
                 " %08" PRIx32 "\n", __func__,
                 slb_nr, rs, sr_base, tmp64, tmp);
-    }
-#endif
     /* Write SLB entry to memory */
     stq_phys(sr_base, tmp64);
     stl_phys(sr_base + 8, tmp);
@@ -911,11 +870,7 @@ static always_inline int get_segment (CPUState *env, mmu_ctx_t *ctx,
     pr = msr_pr;
 #if defined(TARGET_PPC64)
     if (env->mmu_model & POWERPC_MMU_64) {
-#if defined (DEBUG_MMU)
-        if (loglevel != 0) {
-            fprintf(logfile, "Check SLBs\n");
-        }
-#endif
+        LOG_MMU("Check SLBs\n");
         ret = slb_lookup(env, eaddr, &vsid, &page_mask, &attr);
         if (ret < 0)
             return ret;
@@ -941,22 +896,14 @@ static always_inline int get_segment (CPUState *env, mmu_ctx_t *ctx,
         vsid_sh = 6;
         sdr_sh = 16;
         sdr_mask = 0xFFC0;
-#if defined (DEBUG_MMU)
-        if (loglevel != 0) {
-            fprintf(logfile, "Check segment v=" ADDRX " %d " ADDRX
+        LOG_MMU("Check segment v=" ADDRX " %d " ADDRX
                     " nip=" ADDRX " lr=" ADDRX " ir=%d dr=%d pr=%d %d t=%d\n",
                     eaddr, (int)(eaddr >> 28), sr, env->nip,
                     env->lr, (int)msr_ir, (int)msr_dr, pr != 0 ? 1 : 0,
                     rw, type);
-        }
-#endif
     }
-#if defined (DEBUG_MMU)
-    if (loglevel != 0) {
-        fprintf(logfile, "pte segment: key=%d ds %d nx %d vsid " ADDRX "\n",
+    LOG_MMU("pte segment: key=%d ds %d nx %d vsid " ADDRX "\n",
                 ctx->key, ds, ctx->nx, vsid);
-    }
-#endif
     ret = -1;
     if (!ds) {
         /* Check if instruction fetch is allowed, if needed */
@@ -977,23 +924,15 @@ static always_inline int get_segment (CPUState *env, mmu_ctx_t *ctx,
                 hash = ((vsid ^ pgidx) << vsid_sh) & vsid_mask;
             }
             mask = (htab_mask << sdr_sh) | sdr_mask;
-#if defined (DEBUG_MMU)
-            if (loglevel != 0) {
-                fprintf(logfile, "sdr " PADDRX " sh %d hash " PADDRX
+            LOG_MMU("sdr " PADDRX " sh %d hash " PADDRX
                         " mask " PADDRX " " ADDRX "\n",
                         sdr, sdr_sh, hash, mask, page_mask);
-            }
-#endif
             ctx->pg_addr[0] = get_pgaddr(sdr, sdr_sh, hash, mask);
             /* Secondary table address */
             hash = (~hash) & vsid_mask;
-#if defined (DEBUG_MMU)
-            if (loglevel != 0) {
-                fprintf(logfile, "sdr " PADDRX " sh %d hash " PADDRX
+            LOG_MMU("sdr " PADDRX " sh %d hash " PADDRX
                         " mask " PADDRX "\n",
                         sdr, sdr_sh, hash, mask);
-            }
-#endif
             ctx->pg_addr[1] = get_pgaddr(sdr, sdr_sh, hash, mask);
 #if defined(TARGET_PPC64)
             if (env->mmu_model & POWERPC_MMU_64) {
@@ -1011,37 +950,30 @@ static always_inline int get_segment (CPUState *env, mmu_ctx_t *ctx,
                 /* Software TLB search */
                 ret = ppc6xx_tlb_check(env, ctx, eaddr, rw, type);
             } else {
-#if defined (DEBUG_MMU)
-                if (loglevel != 0) {
-                    fprintf(logfile, "0 sdr1=" PADDRX " vsid=" ADDRX " "
+                LOG_MMU("0 sdr1=" PADDRX " vsid=" ADDRX " "
                             "api=" ADDRX " hash=" PADDRX
                             " pg_addr=" PADDRX "\n",
                             sdr, vsid, pgidx, hash, ctx->pg_addr[0]);
-                }
-#endif
                 /* Primary table lookup */
                 ret = find_pte(env, ctx, 0, rw, type);
                 if (ret < 0) {
                     /* Secondary table lookup */
-#if defined (DEBUG_MMU)
-                    if (eaddr != 0xEFFFFFFF && loglevel != 0) {
-                        fprintf(logfile, "1 sdr1=" PADDRX " vsid=" ADDRX " "
+                    if (eaddr != 0xEFFFFFFF)
+                        LOG_MMU("1 sdr1=" PADDRX " vsid=" ADDRX " "
                                 "api=" ADDRX " hash=" PADDRX
                                 " pg_addr=" PADDRX "\n",
                                 sdr, vsid, pgidx, hash, ctx->pg_addr[1]);
-                    }
-#endif
                     ret2 = find_pte(env, ctx, 1, rw, type);
                     if (ret2 != -1)
                         ret = ret2;
                 }
             }
 #if defined (DUMP_PAGE_TABLES)
-            if (loglevel != 0) {
+            if (qemu_log_enabled()) {
                 target_phys_addr_t curaddr;
                 uint32_t a0, a1, a2, a3;
-                fprintf(logfile, "Page table: " PADDRX " len " PADDRX "\n",
-                        sdr, mask + 0x80);
+                qemu_log("Page table: " PADDRX " len " PADDRX "\n",
+                          sdr, mask + 0x80);
                 for (curaddr = sdr; curaddr < (sdr + mask + 0x80);
                      curaddr += 16) {
                     a0 = ldl_phys(curaddr);
@@ -1049,24 +981,18 @@ static always_inline int get_segment (CPUState *env, mmu_ctx_t *ctx,
                     a2 = ldl_phys(curaddr + 8);
                     a3 = ldl_phys(curaddr + 12);
                     if (a0 != 0 || a1 != 0 || a2 != 0 || a3 != 0) {
-                        fprintf(logfile, PADDRX ": %08x %08x %08x %08x\n",
-                                curaddr, a0, a1, a2, a3);
+                        qemu_log(PADDRX ": %08x %08x %08x %08x\n",
+                                  curaddr, a0, a1, a2, a3);
                     }
                 }
             }
 #endif
         } else {
-#if defined (DEBUG_MMU)
-            if (loglevel != 0)
-                fprintf(logfile, "No access allowed\n");
-#endif
+            LOG_MMU("No access allowed\n");
             ret = -3;
         }
     } else {
-#if defined (DEBUG_MMU)
-        if (loglevel != 0)
-            fprintf(logfile, "direct store...\n");
-#endif
+        LOG_MMU("direct store...\n");
         /* Direct-store segment : absolutely *BUGGY* for now */
         switch (type) {
         case ACCESS_INT:
@@ -1092,10 +1018,8 @@ static always_inline int get_segment (CPUState *env, mmu_ctx_t *ctx,
             /* eciwx or ecowx */
             return -4;
         default:
-            if (logfile) {
-                fprintf(logfile, "ERROR: instruction should not need "
+            qemu_log("ERROR: instruction should not need "
                         "address translation\n");
-            }
             return -4;
         }
         if ((rw == 1 || ctx->key != 1) && (rw == 0 || ctx->key != 0)) {
@@ -1119,18 +1043,13 @@ static always_inline int ppcemb_tlb_check (CPUState *env, ppcemb_tlb_t *tlb,
 
     /* Check valid flag */
     if (!(tlb->prot & PAGE_VALID)) {
-        if (loglevel != 0)
-            fprintf(logfile, "%s: TLB %d not valid\n", __func__, i);
+        qemu_log("%s: TLB %d not valid\n", __func__, i);
         return -1;
     }
     mask = ~(tlb->size - 1);
-#if defined (DEBUG_SOFTWARE_TLB)
-    if (loglevel != 0) {
-        fprintf(logfile, "%s: TLB %d address " ADDRX " PID %u <=> " ADDRX
+    LOG_SWTLB("%s: TLB %d address " ADDRX " PID %u <=> " ADDRX
                 " " ADDRX " %u\n",
                 __func__, i, address, pid, tlb->EPN, mask, (uint32_t)tlb->PID);
-    }
-#endif
     /* Check PID */
     if (tlb->PID != 0 && tlb->PID != pid)
         return -1;
@@ -1223,12 +1142,8 @@ static int mmu40x_get_physical_address (CPUState *env, mmu_ctx_t *ctx,
             continue;
         zsel = (tlb->attr >> 4) & 0xF;
         zpr = (env->spr[SPR_40x_ZPR] >> (28 - (2 * zsel))) & 0x3;
-#if defined (DEBUG_SOFTWARE_TLB)
-        if (loglevel != 0) {
-            fprintf(logfile, "%s: TLB %d zsel %d zpr %d rw %d attr %08x\n",
+        LOG_SWTLB("%s: TLB %d zsel %d zpr %d rw %d attr %08x\n",
                     __func__, i, zsel, zpr, rw, tlb->attr);
-        }
-#endif
         /* Check execute enable bit */
         switch (zpr) {
         case 0x2:
@@ -1258,23 +1173,15 @@ static int mmu40x_get_physical_address (CPUState *env, mmu_ctx_t *ctx,
         }
         if (ret >= 0) {
             ctx->raddr = raddr;
-#if defined (DEBUG_SOFTWARE_TLB)
-            if (loglevel != 0) {
-                fprintf(logfile, "%s: access granted " ADDRX " => " PADDRX
+            LOG_SWTLB("%s: access granted " ADDRX " => " PADDRX
                         " %d %d\n", __func__, address, ctx->raddr, ctx->prot,
                         ret);
-            }
-#endif
             return 0;
         }
     }
-#if defined (DEBUG_SOFTWARE_TLB)
-    if (loglevel != 0) {
-        fprintf(logfile, "%s: access refused " ADDRX " => " PADDRX
+    LOG_SWTLB("%s: access refused " ADDRX " => " PADDRX
                 " %d %d\n", __func__, address, raddr, ctx->prot,
                 ret);
-    }
-#endif
 
     return ret;
 }
@@ -1406,9 +1313,7 @@ int get_physical_address (CPUState *env, mmu_ctx_t *ctx, target_ulong eaddr,
     int ret;
 
 #if 0
-    if (loglevel != 0) {
-        fprintf(logfile, "%s\n", __func__);
-    }
+    qemu_log("%s\n", __func__);
 #endif
     if ((access_type == ACCESS_CODE && msr_ir == 0) ||
         (access_type != ACCESS_CODE && msr_dr == 0)) {
@@ -1459,10 +1364,8 @@ int get_physical_address (CPUState *env, mmu_ctx_t *ctx, target_ulong eaddr,
         }
     }
 #if 0
-    if (loglevel != 0) {
-        fprintf(logfile, "%s address " ADDRX " => %d " PADDRX "\n",
+    qemu_log("%s address " ADDRX " => %d " PADDRX "\n",
                 __func__, eaddr, ret, ctx->raddr);
-    }
 #endif
 
     return ret;
@@ -1500,10 +1403,7 @@ int cpu_ppc_handle_mmu_fault (CPUState *env, target_ulong address, int rw,
                                 ctx.raddr & TARGET_PAGE_MASK, ctx.prot,
                                 mmu_idx, is_softmmu);
     } else if (ret < 0) {
-#if defined (DEBUG_MMU)
-        if (loglevel != 0)
-            cpu_dump_state(env, logfile, fprintf, 0);
-#endif
+        LOG_MMU_STATE(env);
         if (access_type == ACCESS_CODE) {
             switch (ret) {
             case -1:
@@ -1753,30 +1653,19 @@ static always_inline void do_invalidate_BAT (CPUPPCState *env,
 
     base = BATu & ~0x0001FFFF;
     end = base + mask + 0x00020000;
-#if defined (DEBUG_BATS)
-    if (loglevel != 0) {
-        fprintf(logfile, "Flush BAT from " ADDRX " to " ADDRX " (" ADDRX ")\n",
+    LOG_BATS("Flush BAT from " ADDRX " to " ADDRX " (" ADDRX ")\n",
                 base, end, mask);
-    }
-#endif
     for (page = base; page != end; page += TARGET_PAGE_SIZE)
         tlb_flush_page(env, page);
-#if defined (DEBUG_BATS)
-    if (loglevel != 0)
-        fprintf(logfile, "Flush done\n");
-#endif
+    LOG_BATS("Flush done\n");
 }
 #endif
 
 static always_inline void dump_store_bat (CPUPPCState *env, char ID,
                                           int ul, int nr, target_ulong value)
 {
-#if defined (DEBUG_BATS)
-    if (loglevel != 0) {
-        fprintf(logfile, "Set %cBAT%d%c to " ADDRX " (" ADDRX ")\n",
+    LOG_BATS("Set %cBAT%d%c to " ADDRX " (" ADDRX ")\n",
                 ID, nr, ul == 0 ? 'u' : 'l', value, env->nip);
-    }
-#endif
 }
 
 void ppc_store_ibatu (CPUPPCState *env, int nr, target_ulong value)
@@ -1939,7 +1828,8 @@ void ppc_tlb_invalidate_all (CPUPPCState *env)
         break;
     case POWERPC_MMU_BOOKE_FSL:
         /* XXX: TODO */
-        cpu_abort(env, "BookE MMU model is not implemented\n");
+        if (!kvm_enabled())
+            cpu_abort(env, "BookE MMU model is not implemented\n");
         break;
     case POWERPC_MMU_32B:
     case POWERPC_MMU_601:
@@ -2045,11 +1935,7 @@ void ppc_store_asr (CPUPPCState *env, target_ulong value)
 
 void ppc_store_sdr1 (CPUPPCState *env, target_ulong value)
 {
-#if defined (DEBUG_MMU)
-    if (loglevel != 0) {
-        fprintf(logfile, "%s: " ADDRX "\n", __func__, value);
-    }
-#endif
+    LOG_MMU("%s: " ADDRX "\n", __func__, value);
     if (env->sdr1 != value) {
         /* XXX: for PowerPC 64, should check that the HTABSIZE value
          *      is <= 28
@@ -2061,12 +1947,8 @@ void ppc_store_sdr1 (CPUPPCState *env, target_ulong value)
 
 void ppc_store_sr (CPUPPCState *env, int srnum, target_ulong value)
 {
-#if defined (DEBUG_MMU)
-    if (loglevel != 0) {
-        fprintf(logfile, "%s: reg=%d " ADDRX " " ADDRX "\n",
+    LOG_MMU("%s: reg=%d " ADDRX " " ADDRX "\n",
                 __func__, srnum, value, env->sr[srnum]);
-    }
-#endif
     if (env->sr[srnum] != value) {
         env->sr[srnum] = value;
 #if !defined(FLUSH_ALL_TLBS) && 0
@@ -2108,7 +1990,7 @@ void ppc_hw_interrupt (CPUState *env)
 #else /* defined (CONFIG_USER_ONLY) */
 static always_inline void dump_syscall (CPUState *env)
 {
-    fprintf(logfile, "syscall r0=" REGX " r3=" REGX " r4=" REGX
+    qemu_log_mask(CPU_LOG_INT, "syscall r0=" REGX " r3=" REGX " r4=" REGX
             " r5=" REGX " r6=" REGX " nip=" ADDRX "\n",
             ppc_dump_gpr(env, 0), ppc_dump_gpr(env, 3), ppc_dump_gpr(env, 4),
             ppc_dump_gpr(env, 5), ppc_dump_gpr(env, 6), env->nip);
@@ -2134,10 +2016,8 @@ static always_inline void powerpc_excp (CPUState *env,
         lpes1 = 1;
     }
 
-    if (loglevel & CPU_LOG_INT) {
-        fprintf(logfile, "Raise exception at " ADDRX " => %08x (%02x)\n",
-                env->nip, excp, env->error_code);
-    }
+    qemu_log_mask(CPU_LOG_INT, "Raise exception at " ADDRX " => %08x (%02x)\n",
+                 env->nip, excp, env->error_code);
     msr = env->msr;
     new_msr = msr;
     srr0 = SPR_SRR0;
@@ -2171,8 +2051,8 @@ static always_inline void powerpc_excp (CPUState *env,
             /* Machine check exception is not enabled.
              * Enter checkstop state.
              */
-            if (loglevel != 0) {
-                fprintf(logfile, "Machine check while not allowed. "
+            if (qemu_log_enabled()) {
+                qemu_log("Machine check while not allowed. "
                         "Entering checkstop state\n");
             } else {
                 fprintf(stderr, "Machine check while not allowed. "
@@ -2204,23 +2084,15 @@ static always_inline void powerpc_excp (CPUState *env,
         }
         goto store_next;
     case POWERPC_EXCP_DSI:       /* Data storage exception                   */
-#if defined (DEBUG_EXCEPTIONS)
-        if (loglevel != 0) {
-            fprintf(logfile, "DSI exception: DSISR=" ADDRX" DAR=" ADDRX "\n",
+        LOG_EXCP("DSI exception: DSISR=" ADDRX" DAR=" ADDRX "\n",
                     env->spr[SPR_DSISR], env->spr[SPR_DAR]);
-        }
-#endif
         new_msr &= ~((target_ulong)1 << MSR_RI);
         if (lpes1 == 0)
             new_msr |= (target_ulong)MSR_HVB;
         goto store_next;
     case POWERPC_EXCP_ISI:       /* Instruction storage exception            */
-#if defined (DEBUG_EXCEPTIONS)
-        if (loglevel != 0) {
-            fprintf(logfile, "ISI exception: msr=" ADDRX ", nip=" ADDRX "\n",
+        LOG_EXCP("ISI exception: msr=" ADDRX ", nip=" ADDRX "\n",
                     msr, env->nip);
-        }
-#endif
         new_msr &= ~((target_ulong)1 << MSR_RI);
         if (lpes1 == 0)
             new_msr |= (target_ulong)MSR_HVB;
@@ -2243,11 +2115,7 @@ static always_inline void powerpc_excp (CPUState *env,
         switch (env->error_code & ~0xF) {
         case POWERPC_EXCP_FP:
             if ((msr_fe0 == 0 && msr_fe1 == 0) || msr_fp == 0) {
-#if defined (DEBUG_EXCEPTIONS)
-                if (loglevel != 0) {
-                    fprintf(logfile, "Ignore floating point exception\n");
-                }
-#endif
+                LOG_EXCP("Ignore floating point exception\n");
                 env->exception_index = POWERPC_EXCP_NONE;
                 env->error_code = 0;
                 return;
@@ -2261,12 +2129,8 @@ static always_inline void powerpc_excp (CPUState *env,
             msr |= 0x00010000;
             break;
         case POWERPC_EXCP_INVAL:
-#if defined (DEBUG_EXCEPTIONS)
-            if (loglevel != 0) {
-                fprintf(logfile, "Invalid instruction at " ADDRX "\n",
+            LOG_EXCP("Invalid instruction at " ADDRX "\n",
                         env->nip);
-            }
-#endif
             new_msr &= ~((target_ulong)1 << MSR_RI);
             if (lpes1 == 0)
                 new_msr |= (target_ulong)MSR_HVB;
@@ -2308,9 +2172,7 @@ static always_inline void powerpc_excp (CPUState *env,
                 return;
             }
         }
-        if (loglevel & CPU_LOG_INT) {
-            dump_syscall(env);
-        }
+        dump_syscall(env);
         new_msr &= ~((target_ulong)1 << MSR_RI);
         lev = env->error_code;
         if (lev == 1 || (lpes0 == 0 && lpes1 == 0))
@@ -2326,17 +2188,11 @@ static always_inline void powerpc_excp (CPUState *env,
         goto store_next;
     case POWERPC_EXCP_FIT:       /* Fixed-interval timer interrupt           */
         /* FIT on 4xx */
-#if defined (DEBUG_EXCEPTIONS)
-        if (loglevel != 0)
-            fprintf(logfile, "FIT exception\n");
-#endif
+        LOG_EXCP("FIT exception\n");
         new_msr &= ~((target_ulong)1 << MSR_RI); /* XXX: check this */
         goto store_next;
     case POWERPC_EXCP_WDT:       /* Watchdog timer interrupt                 */
-#if defined (DEBUG_EXCEPTIONS)
-        if (loglevel != 0)
-            fprintf(logfile, "WDT exception\n");
-#endif
+        LOG_EXCP("WDT exception\n");
         switch (excp_model) {
         case POWERPC_EXCP_BOOKE:
             srr0 = SPR_BOOKE_CSRR0;
@@ -2457,10 +2313,7 @@ static always_inline void powerpc_excp (CPUState *env,
             new_msr |= (target_ulong)MSR_HVB;
         goto store_current;
     case POWERPC_EXCP_PIT:       /* Programmable interval timer interrupt    */
-#if defined (DEBUG_EXCEPTIONS)
-        if (loglevel != 0)
-            fprintf(logfile, "PIT exception\n");
-#endif
+        LOG_EXCP("PIT exception\n");
         new_msr &= ~((target_ulong)1 << MSR_RI); /* XXX: check this */
         goto store_next;
     case POWERPC_EXCP_IO:        /* IO error exception                       */
@@ -2533,7 +2386,7 @@ static always_inline void powerpc_excp (CPUState *env,
         case POWERPC_EXCP_7x5:
         tlb_miss:
 #if defined (DEBUG_SOFTWARE_TLB)
-            if (loglevel != 0) {
+            if (qemu_log_enabled()) {
                 const unsigned char *es;
                 target_ulong *miss, *cmp;
                 int en;
@@ -2551,7 +2404,7 @@ static always_inline void powerpc_excp (CPUState *env,
                     miss = &env->spr[SPR_DMISS];
                     cmp = &env->spr[SPR_DCMP];
                 }
-                fprintf(logfile, "6xx %sTLB miss: %cM " ADDRX " %cC " ADDRX
+                qemu_log("6xx %sTLB miss: %cM " ADDRX " %cC " ADDRX
                         " H1 " ADDRX " H2 " ADDRX " %08x\n",
                         es, en, *miss, en, *cmp,
                         env->spr[SPR_HASH1], env->spr[SPR_HASH2],
@@ -2566,7 +2419,7 @@ static always_inline void powerpc_excp (CPUState *env,
         case POWERPC_EXCP_74xx:
         tlb_miss_74xx:
 #if defined (DEBUG_SOFTWARE_TLB)
-            if (loglevel != 0) {
+            if (qemu_log_enabled()) {
                 const unsigned char *es;
                 target_ulong *miss, *cmp;
                 int en;
@@ -2584,7 +2437,7 @@ static always_inline void powerpc_excp (CPUState *env,
                     miss = &env->spr[SPR_TLBMISS];
                     cmp = &env->spr[SPR_PTEHI];
                 }
-                fprintf(logfile, "74xx %sTLB miss: %cM " ADDRX " %cC " ADDRX
+                qemu_log("74xx %sTLB miss: %cM " ADDRX " %cC " ADDRX
                         " %08x\n",
                         es, en, *miss, en, *cmp, env->error_code);
             }
@@ -2736,11 +2589,9 @@ void ppc_hw_interrupt (CPUPPCState *env)
     int hdice;
 
 #if 0
-    if (loglevel & CPU_LOG_INT) {
-        fprintf(logfile, "%s: %p pending %08x req %08x me %d ee %d\n",
+    qemu_log_mask(CPU_LOG_INT, "%s: %p pending %08x req %08x me %d ee %d\n",
                 __func__, env, env->pending_interrupts,
                 env->interrupt_request, (int)msr_me, (int)msr_ee);
-    }
 #endif
     /* External reset */
     if (env->pending_interrupts & (1 << PPC_INTERRUPT_RESET)) {
@@ -2852,16 +2703,8 @@ void ppc_hw_interrupt (CPUPPCState *env)
 
 void cpu_dump_rfi (target_ulong RA, target_ulong msr)
 {
-    FILE *f;
-
-    if (logfile) {
-        f = logfile;
-    } else {
-        f = stdout;
-        return;
-    }
-    fprintf(f, "Return from exception at " ADDRX " with flags " ADDRX "\n",
-            RA, msr);
+    qemu_log("Return from exception at " ADDRX " with flags " ADDRX "\n",
+             RA, msr);
 }
 
 void cpu_ppc_reset (void *opaque)

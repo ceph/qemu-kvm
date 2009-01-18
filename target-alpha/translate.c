@@ -37,6 +37,13 @@
 #define ALPHA_DEBUG_DISAS
 /* #define DO_TB_FLUSH */
 
+
+#ifdef ALPHA_DEBUG_DISAS
+#  define LOG_DISAS(...) qemu_log(__VA_ARGS__)
+#else
+#  define LOG_DISAS(...) do { } while (0)
+#endif
+
 typedef struct DisasContext DisasContext;
 struct DisasContext {
     uint64_t pc;
@@ -671,12 +678,8 @@ static always_inline int translate_one (DisasContext *ctx, uint32_t insn)
     fn7 = (insn >> 5) & 0x0000007F;
     fn2 = (insn >> 5) & 0x00000003;
     ret = 0;
-#if defined ALPHA_DEBUG_DISAS
-    if (logfile != NULL) {
-        fprintf(logfile, "opc %02x ra %d rb %d rc %d disp16 %04x\n",
-                opc, ra, rb, rc, disp16);
-    }
-#endif
+    LOG_DISAS("opc %02x ra %d rb %d rc %d disp16 %04x\n",
+              opc, ra, rb, rc, disp16);
     switch (opc) {
     case 0x00:
         /* CALL_PAL */
@@ -2386,17 +2389,13 @@ static always_inline void gen_intermediate_code_internal (CPUState *env,
             gen_io_start();
 #if defined ALPHA_DEBUG_DISAS
         insn_count++;
-        if (logfile != NULL) {
-            fprintf(logfile, "pc " TARGET_FMT_lx " mem_idx %d\n",
-                    ctx.pc, ctx.mem_idx);
-        }
+        LOG_DISAS("pc " TARGET_FMT_lx " mem_idx %d\n",
+                  ctx.pc, ctx.mem_idx);
 #endif
         insn = ldl_code(ctx.pc);
 #if defined ALPHA_DEBUG_DISAS
         insn_count++;
-        if (logfile != NULL) {
-            fprintf(logfile, "opcode %08x %d\n", insn, insn_count);
-        }
+        LOG_DISAS("opcode %08x %d\n", insn, insn_count);
 #endif
         num_insns++;
         ctx.pc += 4;
@@ -2442,13 +2441,11 @@ static always_inline void gen_intermediate_code_internal (CPUState *env,
         tb->icount = num_insns;
     }
 #if defined ALPHA_DEBUG_DISAS
-    if (loglevel & CPU_LOG_TB_CPU) {
-        cpu_dump_state(env, logfile, fprintf, 0);
-    }
-    if (loglevel & CPU_LOG_TB_IN_ASM) {
-        fprintf(logfile, "IN: %s\n", lookup_symbol(pc_start));
-        target_disas(logfile, pc_start, ctx.pc - pc_start, 1);
-        fprintf(logfile, "\n");
+    log_cpu_state_mask(CPU_LOG_TB_CPU, env, 0);
+    if (qemu_loglevel_mask(CPU_LOG_TB_IN_ASM)) {
+        qemu_log("IN: %s\n", lookup_symbol(pc_start));
+        log_target_disas(pc_start, ctx.pc - pc_start, 1);
+        qemu_log("\n");
     }
 #endif
 }

@@ -20,6 +20,9 @@
 
 #ifndef _EXEC_ALL_H_
 #define _EXEC_ALL_H_
+
+#include "qemu-common.h"
+
 /* allow to see translation results - the slowdown should be negligible, so we leave it */
 #define DEBUG_DISAS
 
@@ -82,7 +85,7 @@ TranslationBlock *tb_gen_code(CPUState *env,
                               target_ulong pc, target_ulong cs_base, int flags,
                               int cflags);
 void cpu_exec_init(CPUState *env);
-void cpu_loop_exit(void);
+void noreturn cpu_loop_exit(void);
 int page_unprotect(target_ulong address, unsigned long pc, void *puc);
 void tb_invalidate_phys_page_range(target_phys_addr_t start, target_phys_addr_t end,
                                    int is_cpu_write_access);
@@ -117,7 +120,7 @@ static inline int tlb_set_page(CPUState *env1, target_ulong vaddr,
 #define CODE_GEN_AVG_BLOCK_SIZE 64
 #endif
 
-#if defined(__powerpc__) || defined(__x86_64__) || defined(__arm__)
+#if defined(_ARCH_PPC) || defined(__x86_64__) || defined(__arm__)
 #define USE_DIRECT_JUMP
 #endif
 #if defined(__i386__) && !defined(_WIN32)
@@ -192,7 +195,7 @@ extern int code_gen_max_blocks;
 
 #if defined(USE_DIRECT_JUMP)
 
-#if defined(__powerpc__)
+#if defined(_ARCH_PPC)
 extern void ppc_tb_set_jmp_target(unsigned long jmp_addr, unsigned long addr);
 #define tb_set_jmp_target1 ppc_tb_set_jmp_target
 #elif defined(__i386__) || defined(__x86_64__)

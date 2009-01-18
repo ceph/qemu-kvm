@@ -160,10 +160,8 @@ int ppc_dcr_write (ppc_dcr_t *dcr_env, int dcrn, target_ulong val)
 do {                                                                          \
     fprintf(stderr, fmt , ##args);                                            \
     cpu_dump_state(env, stderr, fprintf, 0);                                  \
-    if (loglevel != 0) {                                                      \
-        fprintf(logfile, fmt , ##args);                                       \
-        cpu_dump_state(env, logfile, fprintf, 0);                             \
-    }                                                                         \
+    qemu_log(fmt, ##args);                                                   \
+    log_cpu_state(env, 0);                                                      \
 } while (0)
 
 void cpu_loop(CPUPPCState *env)
@@ -896,7 +894,6 @@ int main(int argc, char **argv)
     memset(ts, 0, sizeof(TaskState));
     env->opaque = ts;
     ts->used = 1;
-    env->user_mode_only = 1;
 
 #if defined(TARGET_I386)
     cpu_x86_set_cpl(env, 3);

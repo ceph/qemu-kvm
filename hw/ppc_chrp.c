@@ -59,7 +59,7 @@ static CPUReadMemoryFunc *unin_read[] = {
 
 /* PowerPC Mac99 hardware initialisation */
 static void ppc_core99_init (ram_addr_t ram_size, int vga_ram_size,
-                             const char *boot_device, DisplayState *ds,
+                             const char *boot_device,
                              const char *kernel_filename,
                              const char *kernel_cmdline,
                              const char *initrd_filename,
@@ -256,15 +256,15 @@ static void ppc_core99_init (ram_addr_t ram_size, int vga_ram_size,
     pic = openpic_init(NULL, &pic_mem_index, smp_cpus, openpic_irqs, NULL);
     pci_bus = pci_pmac_init(pic);
     /* init basic PC hardware */
-    pci_vga_init(pci_bus, ds, phys_ram_base + ram_size,
+    pci_vga_init(pci_bus, phys_ram_base + ram_size,
                  ram_size, vga_ram_size,
                  vga_bios_offset, vga_bios_size);
 
     /* XXX: suppress that */
     dummy_irq = i8259_init(NULL);
 
-    escc_mem_index = escc_init(0x80013000, dummy_irq[4], serial_hds[0],
-                               serial_hds[1], ESCC_CLOCK, 4);
+    escc_mem_index = escc_init(0x80013000, dummy_irq[4], dummy_irq[5],
+                               serial_hds[0], serial_hds[1], ESCC_CLOCK, 4);
 
     for(i = 0; i < nb_nics; i++)
         pci_nic_init(pci_bus, &nd_table[i], -1, "ne2k_pci");

@@ -68,8 +68,8 @@
 
 //#define DEBUG_BLOCK
 #if defined(DEBUG_BLOCK)
-#define DEBUG_BLOCK_PRINT(formatCstr, args...) do { if (loglevel != 0)	\
-    { fprintf(logfile, formatCstr, ##args); fflush(logfile); } } while (0)
+#define DEBUG_BLOCK_PRINT(formatCstr, args...) do { if (qemu_log_enabled())	\
+    { qemu_log(formatCstr, ##args); qemu_log_flush(); } } while (0)
 #else
 #define DEBUG_BLOCK_PRINT(formatCstr, args...)
 #endif
@@ -253,7 +253,7 @@ static int raw_pwrite_aligned(BlockDriverState *bs, int64_t offset,
 
     ret = fd_open(bs);
     if (ret < 0)
-        return ret;
+        return -errno;
 
     if (offset >= 0 && lseek(s->fd, offset, SEEK_SET) == (off_t)-1) {
         ++(s->lseek_err_cnt);
@@ -263,7 +263,7 @@ static int raw_pwrite_aligned(BlockDriverState *bs, int64_t offset,
                               s->fd, bs->filename, offset, buf, count,
                               bs->total_sectors, errno, strerror(errno));
         }
-        return -1;
+        return -EIO;
     }
     s->lseek_err_cnt = 0;
 
@@ -278,7 +278,7 @@ static int raw_pwrite_aligned(BlockDriverState *bs, int64_t offset,
 
 label__raw_write__success:
 
-    return ret;
+    return  (ret < 0) ? -errno : ret;
 }
 
 
@@ -577,8 +577,7 @@ static RawAIOCB *raw_aio_setup(BlockDriverState *bs,
     if (!acb)
         return NULL;
     acb->aiocb.aio_fildes = s->fd;
-    acb->aiocb.aio_sigevent.sigev_signo = SIGUSR2;
-    acb->aiocb.aio_sigevent.sigev_notify = SIGEV_SIGNAL;
+    acb->aiocb.sigev_signo = SIGUSR2;
     acb->aiocb.aio_buf = buf;
     if (nb_sectors < 0)
         acb->aiocb.aio_nbytes = -nb_sectors;

@@ -36,7 +36,6 @@
 typedef struct TCXState {
     target_phys_addr_t addr;
     DisplayState *ds;
-    QEMUConsole *console;
     uint8_t *vram;
     uint32_t *vram24, *cplane;
     ram_addr_t vram_offset, vram24_offset, cplane_offset;
@@ -61,22 +60,13 @@ static void update_palette_entries(TCXState *s, int start, int end)
             s->palette[i] = rgb_to_pixel8(s->r[i], s->g[i], s->b[i]);
             break;
         case 15:
-            if (s->ds->bgr)
-                s->palette[i] = rgb_to_pixel15bgr(s->r[i], s->g[i], s->b[i]);
-            else
-                s->palette[i] = rgb_to_pixel15(s->r[i], s->g[i], s->b[i]);
+            s->palette[i] = rgb_to_pixel15(s->r[i], s->g[i], s->b[i]);
             break;
         case 16:
-            if (s->ds->bgr)
-                s->palette[i] = rgb_to_pixel16bgr(s->r[i], s->g[i], s->b[i]);
-            else
-                s->palette[i] = rgb_to_pixel16(s->r[i], s->g[i], s->b[i]);
+            s->palette[i] = rgb_to_pixel16(s->r[i], s->g[i], s->b[i]);
             break;
         case 32:
-            if (s->ds->bgr)
-                s->palette[i] = rgb_to_pixel32bgr(s->r[i], s->g[i], s->b[i]);
-            else
-                s->palette[i] = rgb_to_pixel32(s->r[i], s->g[i], s->b[i]);
+            s->palette[i] = rgb_to_pixel32(s->r[i], s->g[i], s->b[i]);
             break;
         }
     }
@@ -134,12 +124,11 @@ static inline void tcx24_draw_line32(TCXState *s1, uint8_t *d,
                                      const uint32_t *cplane,
                                      const uint32_t *s24)
 {
-    int x, bgr, r, g, b;
+    int x, r, g, b;
     uint8_t val, *p8;
     uint32_t *p = (uint32_t *)d;
     uint32_t dval;
 
-    bgr = s1->ds->bgr;
     for(x = 0; x < width; x++, s++, s24++) {
         if ((be32_to_cpu(*cplane++) & 0xff000000) == 0x03000000) {
             // 24-bit direct, BGR order
@@ -148,10 +137,7 @@ static inline void tcx24_draw_line32(TCXState *s1, uint8_t *d,
             b = *p8++;
             g = *p8++;
             r = *p8++;
-            if (bgr)
-                dval = rgb_to_pixel32bgr(r, g, b);
-            else
-                dval = rgb_to_pixel32(r, g, b);
+            dval = rgb_to_pixel32(r, g, b);
         } else {
             val = *s;
             dval = s1->palette[val];
@@ -504,7 +490,7 @@ static CPUWriteMemoryFunc *tcx_dummy_write[3] = {
     tcx_dummy_writel,
 };
 
-void tcx_init(DisplayState *ds, target_phys_addr_t addr, uint8_t *vram_base,
+void tcx_init(target_phys_addr_t addr, uint8_t *vram_base,
               unsigned long vram_offset, int vram_size, int width, int height,
               int depth)
 {
@@ -515,7 +501,6 @@ void tcx_init(DisplayState *ds, target_phys_addr_t addr, uint8_t *vram_base,
     s = qemu_mallocz(sizeof(TCXState));
     if (!s)
         return;
-    s->ds = ds;
     s->addr = addr;
     s->vram_offset = vram_offset;
     s->width = width;
@@ -551,15 +536,15 @@ void tcx_init(DisplayState *ds, target_phys_addr_t addr, uint8_t *vram_base,
         s->cplane = (uint32_t *)vram_base;
         s->cplane_offset = vram_offset;
         cpu_register_physical_memory(addr + 0x0a000000ULL, size, vram_offset);
-        s->console = graphic_console_init(s->ds, tcx24_update_display,
-                                          tcx24_invalidate_display,
-                                          tcx24_screen_dump, NULL, s);
+        s->ds = graphic_console_init(tcx24_update_display,
+                                     tcx24_invalidate_display,
+                                     tcx24_screen_dump, NULL, s);
     } else {
         cpu_register_physical_memory(addr + 0x00300000ULL, TCX_THC_NREGS_8,
                                      dummy_memory);
-        s->console = graphic_console_init(s->ds, tcx_update_display,
-                                          tcx_invalidate_display,
-                                          tcx_screen_dump, NULL, s);
+        s->ds = graphic_console_init(tcx_update_display,
+                                     tcx_invalidate_display,
+                                     tcx_screen_dump, NULL, s);
     }
     // NetBSD writes here even with 8-bit display
     cpu_register_physical_memory(addr + 0x00301000ULL, TCX_THC_NREGS_24,
@@ -568,7 +553,7 @@ void tcx_init(DisplayState *ds, target_phys_addr_t addr, uint8_t *vram_base,
     register_savevm("tcx", addr, 4, tcx_save, tcx_load, s);
     qemu_register_reset(tcx_reset, s);
     tcx_reset(s);
-    qemu_console_resize(s->console, width, height);
+    qemu_console_resize(s->ds, width, height);
 }
 
 static void tcx_screen_dump(void *opaque, const char *filename)

@@ -1,6 +1,6 @@
 #include "cache-utils.h"
 
-#ifdef HOST_PPC
+#if defined(_ARCH_PPC)
 struct qemu_cache_conf qemu_cache_conf = {
     .dcache_bsize = 16,
     .icache_bsize = 16
@@ -68,4 +68,4 @@ void qemu_cache_utils_init(char **envp)
 }
 #endif
 
-#endif /* HOST_PPC */
+#endif /* _ARCH_PPC */

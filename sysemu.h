@@ -86,6 +86,7 @@ void do_info_slirp(void);
 
 extern int bios_size;
 extern int cirrus_vga_enabled;
+extern int std_vga_enabled;
 extern int vmsvga_enabled;
 extern int graphic_width;
 extern int graphic_height;
@@ -93,6 +94,7 @@ extern int graphic_depth;
 extern int nographic;
 extern const char *keyboard_layout;
 extern int win2k_install_hack;
+extern int rtc_td_hack;
 extern int alt_grab;
 extern int usb_enabled;
 extern int smp_cpus;
@@ -103,7 +105,6 @@ extern int semihosting_enabled;
 extern int old_param;
 extern int hpagesize;
 extern const char *bootp_filename;
-extern DisplayState display_state;
 
 #ifdef USE_KQEMU
 extern int kqemu_allowed;
@@ -192,6 +193,12 @@ extern CharDriverState *serial_hds[MAX_SERIAL_PORTS];
 #define MAX_PARALLEL_PORTS 3
 
 extern CharDriverState *parallel_hds[MAX_PARALLEL_PORTS];
+
+/* virtio consoles */
+
+#define MAX_VIRTIO_CONSOLES 1
+
+extern CharDriverState *virtcon_hds[MAX_VIRTIO_CONSOLES];
 
 #define TFR(expr) do { if ((expr) != -1) break; } while (errno == EINTR)
 

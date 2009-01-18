@@ -34,7 +34,7 @@
 /* Default to cache=writeback as data integrity is not important for qemu-tcg. */
 #define BRDV_O_FLAGS BDRV_O_CACHE_WB
 
-static void __attribute__((noreturn)) error(const char *fmt, ...)
+static void noreturn error(const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
@@ -751,8 +751,7 @@ static void img_snapshot(int argc, char **argv)
     BlockDriverState *bs;
     QEMUSnapshotInfo sn;
     char *filename, *snapshot_name = NULL;
-    char c;
-    int ret;
+    int c, ret;
     int action = 0;
     qemu_timeval tv;
 
