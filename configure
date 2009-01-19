@@ -1642,7 +1642,7 @@ disable_cpu_emulation() {
 }
 
 configure_kvm() {
-  if test $kvm = "yes" -a "$target_softmmu" = "yes" -a \
+  if test "$kvm" = "yes" -a "$target_softmmu" = "yes" -a \
           \( "$cpu" = "i386" -o "$cpu" = "x86_64" -o "$cpu" = "ia64" -o "$cpu" = "powerpc" \); then
     echo "#define USE_KVM 1" >> $config_h
     echo "USE_KVM=1" >> $config_mak
