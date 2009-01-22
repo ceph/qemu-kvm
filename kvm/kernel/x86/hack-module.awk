@@ -1,6 +1,7 @@
 BEGIN { split("INIT_WORK tsc_khz desc_struct ldttss_desc64 desc_ptr " \
 	      "hrtimer_add_expires_ns hrtimer_get_expires " \
 	      "hrtimer_get_expires_ns hrtimer_start_expires " \
+	      "hrtimer_expires_remaining " \
 	      "on_each_cpu relay_open request_irq" , compat_apis); }
 
 /^int kvm_init\(/ { anon_inodes = 1 }

@@ -1,6 +1,7 @@
 BEGIN { split("INIT_WORK on_each_cpu smp_call_function " \
 	      "hrtimer_add_expires_ns hrtimer_get_expires " \
 	      "hrtimer_get_expires_ns hrtimer_start_expires " \
+	      "hrtimer_expires_remaining " \
 	      "request_irq", compat_apis); }
 
 /MODULE_AUTHOR/ {

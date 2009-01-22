@@ -613,6 +613,20 @@ static inline void kvm_hrtimer_start_expires(struct hrtimer *timer, int mode)
 
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
+
+static inline ktime_t kvm_hrtimer_expires_remaining(const struct hrtimer *timer)
+{
+    return ktime_sub(timer->expires, timer->base->get_time());
+}
+
+#else
+
+#define kvm_hrtimer_expires_remaining hrtimer_expires_remaining
+
+#endif
+
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28)
 
 static inline int pci_reset_function(struct pci_dev *dev)
