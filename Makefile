@@ -1,11 +1,13 @@
 # Makefile for QEMU.
 
 include config-host.mak
+include $(SRC_PATH)/rules.mak
 
 .PHONY: all clean cscope distclean dvi html info install install-doc \
 	recurse-all speed tar tarbin test
 
 VPATH=$(SRC_PATH):$(SRC_PATH)/hw
+
 
 CFLAGS += $(OS_CFLAGS) $(ARCH_CFLAGS)
 LDFLAGS += $(OS_LDFLAGS) $(ARCH_LDFLAGS)
@@ -37,7 +39,7 @@ all: $(TOOLS) $(DOCS) recurse-all
 SUBDIR_RULES=$(patsubst %,subdir-%, $(TARGET_DIRS))
 
 subdir-%:
-	$(MAKE) -C $(subst subdir-,,$@) all
+	$(MAKE) -C $(subst subdir-,,$@) V="$(V)" all
 
 $(filter %-softmmu,$(SUBDIR_RULES)): libqemu_common.a
 $(filter %-user,$(SUBDIR_RULES)): libqemu_user.a
@@ -162,45 +164,34 @@ endif
 LIBS+=$(VDE_LIBS)
 
 cocoa.o: cocoa.m
-	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
 
 sdl.o: sdl.c keymaps.c sdl_keysym.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(SDL_CFLAGS) -c -o $@ $<
+
+sdl.o audio/sdlaudio.o: CFLAGS += $(SDL_CFLAGS)
 
 vnc.o: vnc.c keymaps.c sdl_keysym.h vnchextile.h d3des.c d3des.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(CONFIG_VNC_TLS_CFLAGS) -c -o $@ $<
+
+vnc.o: CFLAGS += $(CONFIG_VNC_TLS_CFLAGS)
 
 curses.o: curses.c keymaps.c curses_keys.h
-	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
 
-bt-host.o: bt-host.c
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(CONFIG_BLUEZ_CFLAGS) -c -o $@ $<
-
-audio/sdlaudio.o: audio/sdlaudio.c
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(SDL_CFLAGS) -c -o $@ $<
+bt-host.o: CFLAGS += $(CONFIG_BLUEZ_CFLAGS)
 
 libqemu_common.a: $(OBJS)
-	rm -f $@ 
-	$(AR) rcs $@ $(OBJS)
 
 #######################################################################
 # USER_OBJS is code used by qemu userspace emulation
 USER_OBJS=cutils.o  cache-utils.o
 
 libqemu_user.a: $(USER_OBJS)
-	rm -f $@ 
-	$(AR) rcs $@ $(USER_OBJS)
 
 ######################################################################
 
 qemu-img$(EXESUF): qemu-img.o qemu-tool.o osdep.o $(BLOCK_OBJS)
-	$(CC) $(LDFLAGS) -o $@ $^ -lz $(LIBS)
-
-%.o: %.c
-	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
 
 qemu-nbd$(EXESUF):  qemu-nbd.o qemu-tool.o osdep.o $(BLOCK_OBJS)
-	$(CC) $(LDFLAGS) -o $@ $^ -lz $(LIBS)
+
+qemu-img$(EXESUF) qemu-nbd$(EXESUF): LIBS += -lz
 
 clean:
 # avoid old build problems by removing potentially incorrect old files

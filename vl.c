@@ -274,6 +274,7 @@ static int icount_time_shift;
 static int64_t qemu_icount_bias;
 static QEMUTimer *icount_rt_timer;
 static QEMUTimer *icount_vm_timer;
+static QEMUTimer *nographic_timer;
 
 uint8_t qemu_uuid[16];
 
@@ -2259,6 +2260,17 @@ const char *drive_get_serial(BlockDriverState *bdrv)
     return "\0";
 }
 
+BlockInterfaceErrorAction drive_get_onerror(BlockDriverState *bdrv)
+{
+    int index;
+
+    for (index = 0; index < nb_drives; index++)
+        if (drives_table[index].bdrv == bdrv)
+            return drives_table[index].onerror;
+
+    return BLOCK_ERR_REPORT;
+}
+
 static void bdrv_format_print(void *opaque, const char *name)
 {
     fprintf(stderr, " %s", name);
@@ -2295,13 +2307,13 @@ int drive_init(struct drive_opt *arg, int snapshot,
     int max_devs;
     int index;
     int cache;
-    int bdrv_flags;
+    int bdrv_flags, onerror;
     int drives_table_idx;
     char *str = arg->opt;
     static const char * const params[] = { "bus", "unit", "if", "index",
                                            "cyls", "heads", "secs", "trans",
                                            "media", "snapshot", "file",
-                                           "cache", "format", "serial",
+                                           "cache", "format", "serial", "werror",
                                            "boot", NULL };
 
     if (check_params(buf, sizeof(buf), params, str) < 0) {
@@ -2505,6 +2517,26 @@ int drive_init(struct drive_opt *arg, int snapshot,
     if (!get_param_value(serial, sizeof(serial), "serial", str))
 	    memset(serial, 0,  sizeof(serial));
 
+    onerror = BLOCK_ERR_REPORT;
+    if (get_param_value(buf, sizeof(serial), "werror", str)) {
+        if (type != IF_IDE) {
+            fprintf(stderr, "werror is supported only by IDE\n");
+            return -1;
+        }
+        if (!strcmp(buf, "ignore"))
+            onerror = BLOCK_ERR_IGNORE;
+        else if (!strcmp(buf, "enospc"))
+            onerror = BLOCK_ERR_STOP_ENOSPC;
+        else if (!strcmp(buf, "stop"))
+            onerror = BLOCK_ERR_STOP_ANY;
+        else if (!strcmp(buf, "report"))
+            onerror = BLOCK_ERR_REPORT;
+        else {
+            fprintf(stderr, "qemu: '%s' invalid write error action\n", buf);
+            return -1;
+        }
+    }
+
     /* compute bus and unit according index */
 
     if (index != -1) {
@@ -2569,6 +2601,7 @@ int drive_init(struct drive_opt *arg, int snapshot,
     drives_table[drives_table_idx].type = type;
     drives_table[drives_table_idx].bus = bus_id;
     drives_table[drives_table_idx].unit = unit_id;
+    drives_table[drives_table_idx].onerror = onerror;
     drives_table[drives_table_idx].drive_opt_idx = arg - drives_opt;
     strncpy(drives_table[drives_table_idx].serial, serial, sizeof(serial));
     nb_drives++;
@@ -2865,25 +2898,15 @@ DisplayState *get_displaystate(void)
 
 /* dumb display */
 
-static void dumb_update(DisplayState *ds, int x, int y, int w, int h)
+static void dumb_display_init(void)
 {
-}
-
-static void dumb_resize(DisplayState *ds)
-{
-}
-
-static void dumb_display_init(DisplayState *ds)
-{
-    DisplayChangeListener *dcl = qemu_mallocz(sizeof(DisplayChangeListener));
-    if (!dcl)
+    DisplayState *ds = qemu_mallocz(sizeof(DisplayState));
+    if (ds == NULL) {
+        fprintf(stderr, "dumb_display_init: DisplayState allocation failed\n");
         exit(1);
-    dcl->dpy_update = dumb_update;
-    dcl->dpy_resize = dumb_resize;
-    dcl->dpy_refresh = NULL;
-    dcl->idle = 1;
-    dcl->gui_timer_interval = 500;
-    register_displaychangelistener(ds, dcl);
+    }
+    ds->surface = qemu_create_displaysurface(640, 480, 32, 640 * 4);
+    register_displaystate(ds);
 }
 
 /***********************************************************/
@@ -3475,6 +3498,13 @@ static void gui_update(void *opaque)
         dcl = dcl->next;
     }
     qemu_mod_timer(ds->gui_timer, interval + qemu_get_clock(rt_clock));
+}
+
+static void nographic_update(void *opaque)
+{
+    uint64_t interval = GUI_REFRESH_INTERVAL;
+
+    qemu_mod_timer(nographic_timer, interval + qemu_get_clock(rt_clock));
 }
 
 struct vm_change_state_entry {
@@ -5822,7 +5852,7 @@ int main(int argc, char **argv, char **envp)
 #endif
 
     if (monitor_device) {
-        monitor_hd = qemu_chr_open("monitor", monitor_device);
+        monitor_hd = qemu_chr_open("monitor", monitor_device, NULL);
         if (!monitor_hd) {
             fprintf(stderr, "qemu: could not open monitor device '%s'\n", monitor_device);
             exit(1);
@@ -5834,7 +5864,7 @@ int main(int argc, char **argv, char **envp)
         if (devname && strcmp(devname, "none")) {
             char label[32];
             snprintf(label, sizeof(label), "serial%d", i);
-            serial_hds[i] = qemu_chr_open(label, devname);
+            serial_hds[i] = qemu_chr_open(label, devname, NULL);
             if (!serial_hds[i]) {
                 fprintf(stderr, "qemu: could not open serial device '%s'\n",
                         devname);
@@ -5848,7 +5878,7 @@ int main(int argc, char **argv, char **envp)
         if (devname && strcmp(devname, "none")) {
             char label[32];
             snprintf(label, sizeof(label), "parallel%d", i);
-            parallel_hds[i] = qemu_chr_open(label, devname);
+            parallel_hds[i] = qemu_chr_open(label, devname, NULL);
             if (!parallel_hds[i]) {
                 fprintf(stderr, "qemu: could not open parallel device '%s'\n",
                         devname);
@@ -5862,7 +5892,7 @@ int main(int argc, char **argv, char **envp)
         if (devname && strcmp(devname, "none")) {
             char label[32];
             snprintf(label, sizeof(label), "virtcon%d", i);
-            virtcon_hds[i] = qemu_chr_open(label, devname);
+            virtcon_hds[i] = qemu_chr_open(label, devname, NULL);
             if (!virtcon_hds[i]) {
                 fprintf(stderr, "qemu: could not open virtio console '%s'\n",
                         devname);
@@ -5900,6 +5930,8 @@ int main(int argc, char **argv, char **envp)
         }
     }
 
+    if (!display_state)
+        dumb_display_init();
     /* just use the first displaystate for the moment */
     ds = display_state;
     /* terminal init */
@@ -5908,8 +5940,6 @@ int main(int argc, char **argv, char **envp)
             fprintf(stderr, "fatal: -nographic can't be used with -curses\n");
             exit(1);
         }
-        /* nearly nothing to do */
-        dumb_display_init(ds);
     } else { 
 #if defined(CONFIG_CURSES)
             if (curses) {
@@ -5928,8 +5958,6 @@ int main(int argc, char **argv, char **envp)
                     sdl_display_init(ds, full_screen, no_frame);
 #elif defined(CONFIG_COCOA)
                     cocoa_display_init(ds, full_screen);
-#else
-                    dumb_display_init(ds);
 #endif
             }
     }
@@ -5942,6 +5970,11 @@ int main(int argc, char **argv, char **envp)
             qemu_mod_timer(ds->gui_timer, qemu_get_clock(rt_clock));
         }
         dcl = dcl->next;
+    }
+
+    if (nographic || (vnc_display && !sdl)) {
+        nographic_timer = qemu_new_timer(rt_clock, nographic_update, NULL);
+        qemu_mod_timer(nographic_timer, qemu_get_clock(rt_clock));
     }
 
     text_consoles_set_display(display_state);
