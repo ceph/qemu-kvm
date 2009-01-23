@@ -86,11 +86,24 @@ int kvm_smp_call_function_single(int cpu, void (*func)(void *info),
 
 #include <linux/smp.h>
 
+#ifdef CONFIG_SMP
 int kvm_smp_call_function_single(int cpu, void (*func)(void *info),
 				 void *info, int wait)
 {
 	return smp_call_function_single(cpu, func, info, 0, wait);
 }
+#else /* !CONFIG_SMP */
+int kvm_smp_call_function_single(int cpu, void (*func)(void *info),
+				 void *info, int wait)
+{
+	WARN_ON(cpu != 0);
+	local_irq_disable();
+	func(info);
+	local_irq_enable();
+	return 0;
+
+}
+#endif /* !CONFIG_SMP */
 
 #define smp_call_function_single kvm_smp_call_function_single
 
@@ -162,6 +175,7 @@ static void kvm_ack_smp_call(void *_data)
 int kvm_smp_call_function_mask(cpumask_t mask,
 			       void (*func) (void *info), void *info, int wait)
 {
+#ifdef CONFIG_SMP
 	struct kvm_call_data_struct data;
 	cpumask_t allbutself;
 	int cpus;
@@ -203,6 +217,7 @@ int kvm_smp_call_function_mask(cpumask_t mask,
 	}
 out:
 	put_cpu();
+#endif /* CONFIG_SMP */
 	return 0;
 }
 

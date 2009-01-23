@@ -54,7 +54,7 @@
 
 int kvm_smp_call_function_single(int cpu, void (*func)(void *info),
 				 void *info, int wait);
-
+#undef smp_call_function_single
 #define smp_call_function_single kvm_smp_call_function_single
 
 #endif
