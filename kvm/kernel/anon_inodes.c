@@ -21,7 +21,14 @@
 
 #include <asm/uaccess.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
+/* anon_inodes on RHEL >= 5.2 is equivalent to 2.6.27 version */
+#ifdef RHEL_RELEASE_CODE
+#  if (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(5,2)) && defined(CONFIG_ANON_INODES)
+#    define RHEL_ANON_INODES
+#  endif
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23) && !defined(RHEL_ANON_INODES)
 
 static struct vfsmount *anon_inode_mnt __read_mostly;
 static struct inode *anon_inode_inode;
@@ -228,7 +235,7 @@ void kvm_exit_anon_inodes(void)
 
 #undef anon_inode_getfd
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26) && !defined(RHEL_ANON_INODES)
 
 int kvm_anon_inode_getfd(const char *name,
 			 const struct file_operations *fops,
@@ -245,7 +252,7 @@ int kvm_anon_inode_getfd(const char *name,
 	return fd;
 }
 
-#elif LINUX_VERSION_CODE == KERNEL_VERSION(2,6,26)
+#elif LINUX_VERSION_CODE == KERNEL_VERSION(2,6,26) && !defined(RHEL_ANON_INODES)
 
 int kvm_anon_inode_getfd(const char *name,
 			 const struct file_operations *fops,
