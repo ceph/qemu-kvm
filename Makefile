@@ -242,8 +242,9 @@ endif
 ifneq ($(BLOBS),)
 	mkdir -p "$(DESTDIR)$(datadir)"
 	set -e; for x in $(BLOBS); do \
-		[ -f $(SRC_PATH)/pc-bios/$$x ] && \
-		$(INSTALL) -m 644 $(SRC_PATH)/pc-bios/$$x "$(DESTDIR)$(datadir)"; \
+		if [ -f $(SRC_PATH)/pc-bios/$$x ];then \
+			$(INSTALL) -m 644 $(SRC_PATH)/pc-bios/$$x "$(DESTDIR)$(datadir)"; \
+		fi \
 	done
 endif
 ifndef CONFIG_WIN32
