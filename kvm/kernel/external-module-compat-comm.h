@@ -250,6 +250,15 @@ static inline void blahblah(void)
 
 /* pagefault_enable(), page_fault_disable() - 2.6.20 */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
+#  define KVM_NEED_PAGEFAULT_DISABLE 1
+#  ifdef RHEL_RELEASE_CODE
+#    if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(5,2)
+#      undef KVM_NEED_PAGEFAULT_DISABLE
+#    endif
+#  endif
+#endif
+
+#ifdef KVM_NEED_PAGEFAULT_DISABLE
 
 static inline void pagefault_disable(void)
 {
@@ -277,6 +286,8 @@ static inline void pagefault_enable(void)
 }
 
 #endif
+
+#include <linux/uaccess.h>
 
 /* vm ops ->fault() was introduced in 2.6.23. */
 #include <linux/mm.h>
@@ -404,7 +415,7 @@ static inline ktime_t ktime_get(void)
 #endif
 
 /* __aligned arrived in 2.6.21 */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,21)
+#ifndef __aligned
 #define __aligned(x) __attribute__((__aligned__(x)))
 #endif
 
