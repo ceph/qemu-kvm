@@ -47,8 +47,22 @@ _start:
 
   .code16
 smp_ap_boot_code_start:
+  cli
   xor %ax, %ax
   mov %ax, %ds
+
+  mov $SMP_MSR_ADDR, %ebx
+11:
+  mov 0(%ebx), %ecx
+  test %ecx, %ecx
+  jz 12f
+  mov 4(%ebx), %eax
+  mov 8(%ebx), %edx
+  wrmsr
+  add $12, %ebx
+  jmp 11b
+12:
+
   lock incw smp_cpus
 1:
   hlt

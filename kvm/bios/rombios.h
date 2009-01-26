@@ -56,6 +56,7 @@
 #define ACPI_DATA_SIZE    0x00010000L
 #define PM_IO_BASE        0xb000
 #define SMB_IO_BASE       0xb100
+#define SMP_MSR_ADDR      0x0510
 
   // Define the application NAME
 #if defined(BX_QEMU)
