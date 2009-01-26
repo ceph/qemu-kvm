@@ -119,7 +119,7 @@ if [ -d "$kerneldir/include2" ]; then
     kernelsourcedir=${kerneldir%/*}/source
 fi
 
-if [ -n "$no_uname" ]; then
+if [ -n "$no_uname" -a "$want_module" ]; then
     if [ -e "$kerneldir/.kernelrelease" ]; then
         depmod_version=`cat "$kerneldir/.kernelrelease"`
 
