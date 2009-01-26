@@ -126,7 +126,7 @@ if [ -n "$no_uname" ]; then
     elif [ -e "$kerneldir/include/config/kernel.release" ]; then
             depmod_version=`cat "$kerneldir/include/config/kernel.release"`
     elif [ -e "$kerneldir/.config" ]; then
-	depmod_version=$(awk '/Linux kernel version:/ { print $NF }'
+	depmod_version=$(awk '/Linux kernel version:/ { print $NF }' \
 			 "$kerneldir/.config")
     else
         echo
