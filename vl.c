@@ -244,6 +244,9 @@ int semihosting_enabled = 0;
 int time_drift_fix = 0;
 unsigned int kvm_shadow_memory = 0;
 const char *mem_path = NULL;
+#ifdef MAP_POPULATE
+int mem_prealloc = 1;	/* force preallocation of physical target memory */
+#endif
 int hpagesize = 0;
 const char *cpu_vendor_string;
 #ifdef TARGET_ARM
@@ -4151,7 +4154,12 @@ static void help(int exitcode)
 #endif
            "-tdf            inject timer interrupts that got lost\n"
            "-kvm-shadow-memory megs set the amount of shadow pages to be allocated\n"
-           "-mem-path       set the path to hugetlbfs/tmpfs mounted directory, also enables allocation of guest memory with huge pages\n"
+           "-mem-path       set the path to hugetlbfs/tmpfs mounted directory, also\n"
+           "                enables allocation of guest memory with huge pages\n"
+#ifdef MAP_POPULATE
+           "-mem-prealloc   toggles preallocation of -mem-path backed physical memory\n"
+           "                at startup.  Default is enabled.\n"
+#endif
 	   "-option-rom rom load a file, rom, into the option ROM space\n"
 #if defined(TARGET_SPARC) || defined(TARGET_PPC)
            "-prom-env variable=value\n"
@@ -4304,6 +4312,9 @@ enum {
     QEMU_OPTION_tdf,
     QEMU_OPTION_kvm_shadow_memory,
     QEMU_OPTION_mempath,
+#ifdef MAP_POPULATE
+    QEMU_OPTION_mem_prealloc,
+#endif
 };
 
 typedef struct QEMUOption {
@@ -4450,6 +4461,9 @@ static const QEMUOption qemu_options[] = {
     { "tb-size", HAS_ARG, QEMU_OPTION_tb_size },
     { "incoming", HAS_ARG, QEMU_OPTION_incoming },
     { "mem-path", HAS_ARG, QEMU_OPTION_mempath },
+#ifdef MAP_POPULATE
+    { "mem-prealloc", 0, QEMU_OPTION_mem_prealloc },
+#endif
     { NULL },
 };
 
@@ -4745,6 +4759,9 @@ static void *alloc_mem_area(size_t memory, unsigned long *len, const char *path)
     char *filename;
     void *area;
     int fd;
+#ifdef MAP_POPULATE
+    int flags;
+#endif
 
     if (!kvm_has_sync_mmu()) {
         fprintf(stderr, "host lacks mmu notifiers, disabling --mem-path\n");
@@ -4777,13 +4794,21 @@ static void *alloc_mem_area(size_t memory, unsigned long *len, const char *path)
      */
     ftruncate(fd, memory);
 
+#ifdef MAP_POPULATE
+    /* NB: MAP_POPULATE won't exhaustively alloc all phys pages in the case
+     * MAP_PRIVATE is requested.  For mem_prealloc we mmap as MAP_SHARED
+     * to sidestep this quirk.
+     */
+    flags = mem_prealloc ? MAP_POPULATE|MAP_SHARED : MAP_PRIVATE;
+    area = mmap(0, memory, PROT_READ|PROT_WRITE, flags, fd, 0);
+#else
     area = mmap(0, memory, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
+#endif
     if (area == MAP_FAILED) {
-	perror("mmap");
+	perror("alloc_mem_area: can't mmap hugetlbfs pages");
 	close(fd);
-	return NULL;
+	return (NULL);
     }
-
     *len = memory;
     return area;
 }
@@ -5483,6 +5508,11 @@ int main(int argc, char **argv, char **envp)
             case QEMU_OPTION_mempath:
 		mem_path = optarg;
 		break;
+#ifdef MAP_POPULATE
+            case QEMU_OPTION_mem_prealloc:
+		mem_prealloc = !mem_prealloc;
+		break;
+#endif
             case QEMU_OPTION_name:
                 qemu_name = optarg;
                 break;
