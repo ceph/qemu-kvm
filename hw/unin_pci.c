@@ -174,13 +174,10 @@ PCIBus *pci_pmac_init(qemu_irq *pic)
     cpu_register_physical_memory(0xf2c00000, 0x1000, pci_mem_data);
     d = pci_register_device(s->bus, "Uni-north main", sizeof(PCIDevice),
                             11 << 3, NULL, NULL);
-    d->config[0x00] = 0x6b; // vendor_id : Apple
-    d->config[0x01] = 0x10;
-    d->config[0x02] = 0x1F; // device_id
-    d->config[0x03] = 0x00;
+    pci_config_set_vendor_id(d->config, PCI_VENDOR_ID_APPLE);
+    pci_config_set_device_id(d->config, PCI_DEVICE_ID_APPLE_UNI_N_PCI);
     d->config[0x08] = 0x00; // revision
-    d->config[0x0A] = 0x00; // class_sub = pci host
-    d->config[0x0B] = 0x06; // class_base = PCI_bridge
+    pci_config_set_class(d->config, PCI_CLASS_BRIDGE_HOST);
     d->config[0x0C] = 0x08; // cache_line_size
     d->config[0x0D] = 0x10; // latency_timer
     d->config[0x0E] = 0x00; // header_type
@@ -190,13 +187,10 @@ PCIBus *pci_pmac_init(qemu_irq *pic)
     /* pci-to-pci bridge */
     d = pci_register_device("Uni-north bridge", sizeof(PCIDevice), 0, 13 << 3,
                             NULL, NULL);
-    d->config[0x00] = 0x11; // vendor_id : TI
-    d->config[0x01] = 0x10;
-    d->config[0x02] = 0x26; // device_id
-    d->config[0x03] = 0x00;
+    pci_config_set_vendor_id(d->config, PCI_VENDOR_ID_DEC);
+    pci_config_set_device_id(d->config, PCI_DEVICE_ID_DEC_21154);
     d->config[0x08] = 0x05; // revision
-    d->config[0x0A] = 0x04; // class_sub = pci2pci
-    d->config[0x0B] = 0x06; // class_base = PCI_bridge
+    pci_config_set_class(d->config, PCI_CLASS_BRIDGE_PCI);
     d->config[0x0C] = 0x08; // cache_line_size
     d->config[0x0D] = 0x20; // latency_timer
     d->config[0x0E] = 0x01; // header_type
@@ -229,13 +223,10 @@ PCIBus *pci_pmac_init(qemu_irq *pic)
 
     d = pci_register_device("Uni-north AGP", sizeof(PCIDevice), 0, 11 << 3,
                             NULL, NULL);
-    d->config[0x00] = 0x6b; // vendor_id : Apple
-    d->config[0x01] = 0x10;
-    d->config[0x02] = 0x20; // device_id
-    d->config[0x03] = 0x00;
+    pci_config_set_vendor_id(d->config, PCI_VENDOR_ID_APPLE);
+    pci_config_set_device_id(d->config, PCI_DEVICE_ID_APPLE_UNI_N_AGP);
     d->config[0x08] = 0x00; // revision
-    d->config[0x0A] = 0x00; // class_sub = pci host
-    d->config[0x0B] = 0x06; // class_base = PCI_bridge
+    pci_config_set_class(d->config, PCI_CLASS_BRIDGE_HOST);
     d->config[0x0C] = 0x08; // cache_line_size
     d->config[0x0D] = 0x10; // latency_timer
     d->config[0x0E] = 0x00; // header_type
@@ -254,13 +245,10 @@ PCIBus *pci_pmac_init(qemu_irq *pic)
 
     d = pci_register_device("Uni-north internal", sizeof(PCIDevice),
                             3, 11 << 3, NULL, NULL);
-    d->config[0x00] = 0x6b; // vendor_id : Apple
-    d->config[0x01] = 0x10;
-    d->config[0x02] = 0x1E; // device_id
-    d->config[0x03] = 0x00;
+    pci_config_set_vendor_id(d->config, PCI_VENDOR_ID_APPLE);
+    pci_config_set_device_id(d->config, PCI_DEVICE_ID_APPLE_UNI_N_I_PCI);
     d->config[0x08] = 0x00; // revision
-    d->config[0x0A] = 0x00; // class_sub = pci host
-    d->config[0x0B] = 0x06; // class_base = PCI_bridge
+    pci_config_set_class(d->config, PCI_CLASS_BRIDGE_HOST);
     d->config[0x0C] = 0x08; // cache_line_size
     d->config[0x0D] = 0x10; // latency_timer
     d->config[0x0E] = 0x00; // header_type

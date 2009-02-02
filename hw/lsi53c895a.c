@@ -1977,6 +1977,7 @@ static int lsi_scsi_uninit(PCIDevice *d)
 void *lsi_scsi_init(PCIBus *bus, int devfn)
 {
     LSIState *s;
+    uint8_t *pci_conf;
 
     s = (LSIState *)pci_register_device(bus, "LSI53C895A SCSI HBA",
                                         sizeof(*s), devfn, NULL, NULL);
@@ -1985,21 +1986,21 @@ void *lsi_scsi_init(PCIBus *bus, int devfn)
         return NULL;
     }
 
+    pci_conf = s->pci_dev.config;
+
     /* PCI Vendor ID (word) */
-    s->pci_dev.config[0x00] = 0x00;
-    s->pci_dev.config[0x01] = 0x10;
+    pci_config_set_vendor_id(pci_conf, PCI_VENDOR_ID_LSI_LOGIC);
     /* PCI device ID (word) */
-    s->pci_dev.config[0x02] = 0x12;
-    s->pci_dev.config[0x03] = 0x00;
+    pci_config_set_device_id(pci_conf, PCI_DEVICE_ID_LSI_53C895A);
     /* PCI base class code */
-    s->pci_dev.config[0x0b] = 0x01;
+    pci_config_set_class(pci_conf, PCI_CLASS_STORAGE_SCSI);
     /* PCI subsystem ID */
-    s->pci_dev.config[0x2e] = 0x00;
-    s->pci_dev.config[0x2f] = 0x10;
+    pci_conf[0x2e] = 0x00;
+    pci_conf[0x2f] = 0x10;
     /* PCI latency timer = 255 */
-    s->pci_dev.config[0x0d] = 0xff;
+    pci_conf[0x0d] = 0xff;
     /* Interrupt pin 1 */
-    s->pci_dev.config[0x3d] = 0x01;
+    pci_conf[0x3d] = 0x01;
 
     s->mmio_io_addr = cpu_register_io_memory(0, lsi_mmio_readfn,
                                              lsi_mmio_writefn, s);

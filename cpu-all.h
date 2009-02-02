@@ -753,7 +753,7 @@ void cpu_dump_statistics (CPUState *env, FILE *f,
                           int (*cpu_fprintf)(FILE *f, const char *fmt, ...),
                           int flags);
 
-void noreturn cpu_abort(CPUState *env, const char *fmt, ...)
+void QEMU_NORETURN cpu_abort(CPUState *env, const char *fmt, ...)
     __attribute__ ((__format__ (__printf__, 2, 3)));
 extern CPUState *first_cpu;
 extern CPUState *cpu_single_env;
@@ -816,6 +816,7 @@ target_phys_addr_t cpu_get_phys_page_debug(CPUState *env, target_ulong addr);
 #define CPU_LOG_PCALL      (1 << 6)
 #define CPU_LOG_IOPORT     (1 << 7)
 #define CPU_LOG_TB_CPU     (1 << 8)
+#define CPU_LOG_RESET      (1 << 9)
 
 /* define log items */
 typedef struct CPULogItem {
@@ -925,6 +926,14 @@ static inline void cpu_physical_memory_write(target_phys_addr_t addr,
 {
     cpu_physical_memory_rw(addr, (uint8_t *)buf, len, 1);
 }
+void *cpu_physical_memory_map(target_phys_addr_t addr,
+                              target_phys_addr_t *plen,
+                              int is_write);
+void cpu_physical_memory_unmap(void *buffer, target_phys_addr_t len,
+                               int is_write, target_phys_addr_t access_len);
+void *cpu_register_map_client(void *opaque, void (*callback)(void *opaque));
+void cpu_unregister_map_client(void *cookie);
+
 uint32_t ldub_phys(target_phys_addr_t addr);
 uint32_t lduw_phys(target_phys_addr_t addr);
 uint32_t ldl_phys(target_phys_addr_t addr);
@@ -990,30 +999,30 @@ void qemu_unregister_coalesced_mmio(target_phys_addr_t addr, ram_addr_t size);
 
 #if defined(_ARCH_PPC)
 
-static inline uint32_t get_tbl(void)
-{
-    uint32_t tbl;
-    asm volatile("mftb %0" : "=r" (tbl));
-    return tbl;
-}
-
-static inline uint32_t get_tbu(void)
-{
-	uint32_t tbl;
-	asm volatile("mftbu %0" : "=r" (tbl));
-	return tbl;
-}
-
 static inline int64_t cpu_get_real_ticks(void)
 {
-    uint32_t l, h, h1;
-    /* NOTE: we test if wrapping has occurred */
-    do {
-        h = get_tbu();
-        l = get_tbl();
-        h1 = get_tbu();
-    } while (h != h1);
-    return ((int64_t)h << 32) | l;
+    int64_t retval;
+#ifdef _ARCH_PPC64
+    /* This reads timebase in one 64bit go and includes Cell workaround from:
+       http://ozlabs.org/pipermail/linuxppc-dev/2006-October/027052.html
+     */
+    __asm__ __volatile__ (
+        "mftb    %0\n\t"
+        "cmpwi   %0,0\n\t"
+        "beq-    $-8"
+        : "=r" (retval));
+#else
+    /* http://ozlabs.org/pipermail/linuxppc-dev/1999-October/003889.html */
+    unsigned long junk;
+    __asm__ __volatile__ (
+        "mftbu   %1\n\t"
+        "mftb    %L0\n\t"
+        "mftbu   %0\n\t"
+        "cmpw    %0,%1\n\t"
+        "bne     $-16"
+        : "=r" (retval), "=r" (junk));
+#endif
+    return retval;
 }
 
 #elif defined(__i386__)

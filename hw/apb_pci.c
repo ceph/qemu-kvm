@@ -252,25 +252,24 @@ PCIBus *pci_apb_init(target_phys_addr_t special_base,
 
     d = pci_register_device(s->bus, "Advanced PCI Bus", sizeof(PCIDevice),
                             0, NULL, NULL);
-    d->config[0x00] = 0x8e; // vendor_id : Sun
-    d->config[0x01] = 0x10;
-    d->config[0x02] = 0x00; // device_id
-    d->config[0x03] = 0xa0;
+    pci_config_set_vendor_id(d->config, PCI_VENDOR_ID_SUN);
+    pci_config_set_device_id(d->config, PCI_DEVICE_ID_SUN_SABRE);
     d->config[0x04] = 0x06; // command = bus master, pci mem
     d->config[0x05] = 0x00;
     d->config[0x06] = 0xa0; // status = fast back-to-back, 66MHz, no error
     d->config[0x07] = 0x03; // status = medium devsel
     d->config[0x08] = 0x00; // revision
     d->config[0x09] = 0x00; // programming i/f
-    d->config[0x0A] = 0x00; // class_sub = pci host
-    d->config[0x0B] = 0x06; // class_base = PCI_bridge
+    pci_config_set_class(d->config, PCI_CLASS_BRIDGE_HOST);
     d->config[0x0D] = 0x10; // latency_timer
     d->config[0x0E] = 0x00; // header_type
 
     /* APB secondary busses */
-    *bus2 = pci_bridge_init(s->bus, 8, 0x108e5000, pci_apb_map_irq,
+    *bus2 = pci_bridge_init(s->bus, 8, PCI_VENDOR_ID_SUN,
+                            PCI_DEVICE_ID_SUN_SIMBA, pci_apb_map_irq,
                             "Advanced PCI Bus secondary bridge 1");
-    *bus3 = pci_bridge_init(s->bus, 9, 0x108e5000, pci_apb_map_irq,
+    *bus3 = pci_bridge_init(s->bus, 9, PCI_VENDOR_ID_SUN,
+                            PCI_DEVICE_ID_SUN_SIMBA, pci_apb_map_irq,
                             "Advanced PCI Bus secondary bridge 2");
     return s->bus;
 }

@@ -1336,11 +1336,8 @@ int ac97_init (PCIBus *bus, AudioState *audio)
     s = &d->ac97;
     s->pci_dev = &d->dev;
     c = d->dev.config;
-    c[0x00] = 0x86;      /* vid vendor id intel ro */
-    c[0x01] = 0x80;      /* intel */
-
-    c[0x02] = 0x15;      /* did device id 82801 ro */
-    c[0x03] = 0x24;      /* 82801aa */
+    pci_config_set_vendor_id(c, PCI_VENDOR_ID_INTEL); /* ro */
+    pci_config_set_device_id(c, PCI_DEVICE_ID_INTEL_82801AA_5); /* ro */
 
     c[0x04] = 0x00;      /* pcicmd pci command rw, ro */
     c[0x05] = 0x00;
@@ -1350,8 +1347,7 @@ int ac97_init (PCIBus *bus, AudioState *audio)
 
     c[0x08] = 0x01;      /* rid revision ro */
     c[0x09] = 0x00;      /* pi programming interface ro */
-    c[0x0a] = 0x01;      /* scc sub class code ro */
-    c[0x0b] = 0x04;      /* bcc base class code ro */
+    pci_config_set_class(c, PCI_CLASS_MULTIMEDIA_AUDIO); /* ro */
     c[0x0e] = 0x00;      /* headtyp header type ro */
 
     c[0x10] = 0x01;      /* nabmar native audio mixer base

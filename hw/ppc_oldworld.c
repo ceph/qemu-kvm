@@ -25,6 +25,7 @@
 #include "hw.h"
 #include "ppc.h"
 #include "ppc_mac.h"
+#include "mac_dbdma.h"
 #include "nvram.h"
 #include "pc.h"
 #include "sysemu.h"
@@ -121,7 +122,8 @@ static void ppc_heathrow_init (ram_addr_t ram_size, int vga_ram_size,
     m48t59_t *m48t59;
     int linux_boot, i;
     ram_addr_t ram_offset, vga_ram_offset, bios_offset, vga_bios_offset;
-    uint32_t kernel_base, kernel_size, initrd_base, initrd_size;
+    uint32_t kernel_base, initrd_base;
+    int32_t kernel_size, initrd_size;
     PCIBus *pci_bus;
     MacIONVRAMState *nvr;
     int vga_bios_size, bios_size;
@@ -131,6 +133,7 @@ static void ppc_heathrow_init (ram_addr_t ram_size, int vga_ram_size,
     BlockDriverState *hd[MAX_IDE_BUS * MAX_IDE_DEVS];
     int index;
     void *fw_cfg;
+    void *dbdma;
 
     linux_boot = (kernel_filename != NULL);
 
@@ -206,10 +209,16 @@ static void ppc_heathrow_init (ram_addr_t ram_size, int vga_ram_size,
     }
 
     if (linux_boot) {
+        uint64_t lowaddr = 0;
         kernel_base = KERNEL_LOAD_ADDR;
-        /* now we can load the kernel */
-        kernel_size = load_elf(kernel_filename, kernel_base - 0xc0000000ULL,
-                               NULL, NULL, NULL);
+        /* Now we can load the kernel. The first step tries to load the kernel
+           supposing PhysAddr = 0x00000000. If that was wrong the kernel is
+           loaded again, the new PhysAddr being computed from lowaddr. */
+        kernel_size = load_elf(kernel_filename, kernel_base, NULL, &lowaddr, NULL);
+        if (kernel_size > 0 && lowaddr != KERNEL_LOAD_ADDR) {
+            kernel_size = load_elf(kernel_filename, (2 * kernel_base) - lowaddr,
+                                   NULL, 0, NULL);
+        }
         if (kernel_size < 0)
             kernel_size = load_aout(kernel_filename, kernel_base,
                                     ram_size - kernel_base);
@@ -336,8 +345,11 @@ static void ppc_heathrow_init (ram_addr_t ram_size, int vga_ram_size,
         hd[1] = NULL;
     else
         hd[1] =  drives_table[index].bdrv;
+
+    dbdma = DBDMA_init(&dbdma_mem_index);
+
     ide_mem_index[0] = -1;
-    ide_mem_index[1] = pmac_ide_init(hd, pic[0x0D]);
+    ide_mem_index[1] = pmac_ide_init(hd, pic[0x0D], dbdma, 0x16, pic[0x02]);
 
     /* cuda also initialize ADB */
     cuda_init(&cuda_mem_index, pic[0x12]);
@@ -348,10 +360,9 @@ static void ppc_heathrow_init (ram_addr_t ram_size, int vga_ram_size,
     nvr = macio_nvram_init(&nvram_mem_index, 0x2000);
     pmac_format_nvram_partition(nvr, 0x2000);
 
-    dbdma_init(&dbdma_mem_index);
-
-    macio_init(pci_bus, 0x0010, 1, pic_mem_index, dbdma_mem_index,
-               cuda_mem_index, nvr, 2, ide_mem_index, escc_mem_index);
+    macio_init(pci_bus, PCI_DEVICE_ID_APPLE_343S1201, 1, pic_mem_index,
+               dbdma_mem_index, cuda_mem_index, nvr, 2, ide_mem_index,
+               escc_mem_index);
 
     if (usb_enabled) {
         usb_ohci_init_pci(pci_bus, 3, -1);

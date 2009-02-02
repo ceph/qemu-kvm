@@ -738,6 +738,9 @@ void virtio_notify(VirtIODevice *vdev, VirtQueue *vq)
 
 void virtio_notify_config(VirtIODevice *vdev)
 {
+    if (!(vdev->status & VIRTIO_CONFIG_S_DRIVER_OK))
+        return;
+
     vdev->isr |= 0x03;
     virtio_update_irq(vdev);
 }
@@ -808,9 +811,8 @@ void virtio_load(VirtIODevice *vdev, QEMUFile *f)
 VirtIODevice *virtio_init_pci(PCIBus *bus, const char *name,
                               uint16_t vendor, uint16_t device,
                               uint16_t subvendor, uint16_t subdevice,
-                              uint8_t class_code, uint8_t subclass_code,
-                              uint8_t pif, size_t config_size,
-                              size_t struct_size)
+                              uint16_t class_code, uint8_t pif,
+                              size_t config_size, size_t struct_size)
 {
     VirtIODevice *vdev;
     PCIDevice *pci_dev;
@@ -830,16 +832,13 @@ VirtIODevice *virtio_init_pci(PCIBus *bus, const char *name,
     vdev->vq = qemu_mallocz(sizeof(VirtQueue) * VIRTIO_PCI_QUEUE_MAX);
 
     config = pci_dev->config;
-    config[0x00] = vendor & 0xFF;
-    config[0x01] = (vendor >> 8) & 0xFF;
-    config[0x02] = device & 0xFF;
-    config[0x03] = (device >> 8) & 0xFF;
+    pci_config_set_vendor_id(config, vendor);
+    pci_config_set_device_id(config, device);
 
     config[0x08] = VIRTIO_PCI_ABI_VERSION;
 
     config[0x09] = pif;
-    config[0x0a] = subclass_code;
-    config[0x0b] = class_code;
+    pci_config_set_class(config, class_code);
     config[0x0e] = 0x00;
 
     config[0x2c] = subvendor & 0xFF;

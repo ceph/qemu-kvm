@@ -57,7 +57,7 @@ static void add_flagname_to_bitmaps(char *flagname, uint32_t *features,
     };
     static const char *ext2_feature_name[] = {
        "fpu", "vme", "de", "pse", "tsc", "msr", "pae", "mce",
-       "cx8" /* AMD CMPXCHG8B */, "apic", NULL, "syscall", "mttr", "pge", "mca", "cmov",
+       "cx8" /* AMD CMPXCHG8B */, "apic", NULL, "syscall", "mtrr", "pge", "mca", "cmov",
        "pat", "pse36", NULL, NULL /* Linux mp */, "nx" /* Intel xd */, NULL, "mmxext", "mmx",
        "fxsr", "fxsr_opt" /* AMD ffxsr */, "pdpe1gb" /* AMD Page1GB */, "rdtscp", NULL, "lm" /* Intel 64 */, "3dnowext", "3dnow",
     };
@@ -424,6 +424,11 @@ static int cpu_x86_register (CPUX86State *env, const char *cpu_model)
 void cpu_reset(CPUX86State *env)
 {
     int i;
+
+    if (qemu_loglevel_mask(CPU_LOG_RESET)) {
+        qemu_log("CPU Reset (CPU %d)\n", env->cpu_index);
+        log_cpu_state(env, X86_DUMP_FPU | X86_DUMP_CCOP);
+    }
 
     memset(env, 0, offsetof(CPUX86State, breakpoints));
 

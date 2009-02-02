@@ -621,7 +621,17 @@ static int cpu_gdb_write_register(CPUState *env, uint8_t *mem_buf, int i)
 
 #elif defined (TARGET_PPC)
 
+/* Old gdb always expects FP registers.  Newer (xml-aware) gdb only
+   expects whatever the target description contains.  Due to a
+   historical mishap the FP registers appear in between core integer
+   regs and PC, MSR, CR, and so forth.  We hack round this by giving the
+   FP regs zero size when talking to a newer gdb.  */
 #define NUM_CORE_REGS 71
+#if defined (TARGET_PPC64)
+#define GDB_CORE_XML "power64-core.xml"
+#else
+#define GDB_CORE_XML "power-core.xml"
+#endif
 
 static int cpu_gdb_read_register(CPUState *env, uint8_t *mem_buf, int n)
 {
@@ -630,6 +640,8 @@ static int cpu_gdb_read_register(CPUState *env, uint8_t *mem_buf, int n)
         GET_REGL(env->gpr[n]);
     } else if (n < 64) {
         /* fprs */
+        if (gdb_has_xml)
+            return 0;
         stfq_p(mem_buf, env->fpr[n-32]);
         return 8;
     } else {
@@ -647,7 +659,12 @@ static int cpu_gdb_read_register(CPUState *env, uint8_t *mem_buf, int n)
         case 67: GET_REGL(env->lr);
         case 68: GET_REGL(env->ctr);
         case 69: GET_REGL(env->xer);
-        case 70: GET_REG32(0); /* fpscr */
+        case 70:
+            {
+                if (gdb_has_xml)
+                    return 0;
+                GET_REG32(0); /* fpscr */
+            }
         }
     }
     return 0;
@@ -661,6 +678,8 @@ static int cpu_gdb_write_register(CPUState *env, uint8_t *mem_buf, int n)
         return sizeof(target_ulong);
     } else if (n < 64) {
         /* fprs */
+        if (gdb_has_xml)
+            return 0;
         env->fpr[n-32] = ldfq_p(mem_buf);
         return 8;
     } else {
@@ -690,6 +709,8 @@ static int cpu_gdb_write_register(CPUState *env, uint8_t *mem_buf, int n)
             return sizeof(target_ulong);
         case 70:
             /* fpscr */
+            if (gdb_has_xml)
+                return 0;
             return 4;
         }
     }
@@ -1879,7 +1900,7 @@ void gdb_set_stop_cpu(CPUState *env)
 }
 
 #ifndef CONFIG_USER_ONLY
-static void gdb_vm_stopped(void *opaque, int reason)
+static void gdb_vm_state_change(void *opaque, int running, int reason)
 {
     GDBState *s = gdbserver_state;
     CPUState *env = s->c_cpu;
@@ -1887,7 +1908,8 @@ static void gdb_vm_stopped(void *opaque, int reason)
     const char *type;
     int ret;
 
-    if (s->state == RS_SYSCALL)
+    if (running || (reason != EXCP_DEBUG && reason != EXCP_INTERRUPT) ||
+        s->state == RS_SYSCALL)
         return;
 
     /* disable single step if it was enable */
@@ -1916,10 +1938,8 @@ static void gdb_vm_stopped(void *opaque, int reason)
         }
 	tb_flush(env);
         ret = GDB_SIGNAL_TRAP;
-    } else if (reason == EXCP_INTERRUPT) {
-        ret = GDB_SIGNAL_INT;
     } else {
-        ret = 0;
+        ret = GDB_SIGNAL_INT;
     }
     snprintf(buf, sizeof(buf), "T%02xthread:%02x;", ret, env->cpu_index+1);
     put_packet(s, buf);
@@ -2312,7 +2332,7 @@ int gdbserver_start(const char *port)
     gdbserver_state = s;
     qemu_chr_add_handlers(chr, gdb_chr_can_receive, gdb_chr_receive,
                           gdb_chr_event, NULL);
-    qemu_add_vm_stop_handler(gdb_vm_stopped, NULL);
+    qemu_add_vm_change_state_handler(gdb_vm_state_change, NULL);
     return 0;
 }
 #endif

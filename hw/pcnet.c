@@ -2002,14 +2002,13 @@ PCIDevice *pci_pcnet_init(PCIBus *bus, NICInfo *nd, int devfn)
 
     pci_conf = d->dev.config;
 
-    *(uint16_t *)&pci_conf[0x00] = cpu_to_le16(0x1022);
-    *(uint16_t *)&pci_conf[0x02] = cpu_to_le16(0x2000);
+    pci_config_set_vendor_id(pci_conf, PCI_VENDOR_ID_AMD);
+    pci_config_set_device_id(pci_conf, PCI_DEVICE_ID_AMD_LANCE);
     *(uint16_t *)&pci_conf[0x04] = cpu_to_le16(0x0007);
     *(uint16_t *)&pci_conf[0x06] = cpu_to_le16(0x0280);
     pci_conf[0x08] = 0x10;
     pci_conf[0x09] = 0x00;
-    pci_conf[0x0a] = 0x00; // ethernet network controller
-    pci_conf[0x0b] = 0x02;
+    pci_config_set_class(pci_conf, PCI_CLASS_NETWORK_ETHERNET);
     pci_conf[0x0e] = 0x00; // header_type
 
     *(uint32_t *)&pci_conf[0x10] = cpu_to_le32(0x00000001);

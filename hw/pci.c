@@ -811,24 +811,23 @@ PCIDevice *pci_find_device(int bus_num, int slot)
     return NULL;
 }
 
-PCIBus *pci_bridge_init(PCIBus *bus, int devfn, uint32_t id,
+PCIBus *pci_bridge_init(PCIBus *bus, int devfn, uint16_t vid, uint16_t did,
                         pci_map_irq_fn map_irq, const char *name)
 {
     PCIBridge *s;
     s = (PCIBridge *)pci_register_device(bus, name, sizeof(PCIBridge),
                                          devfn, NULL, pci_bridge_write_config);
-    s->dev.config[0x00] = id >> 16;
-    s->dev.config[0x01] = id >> 24;
-    s->dev.config[0x02] = id; // device_id
-    s->dev.config[0x03] = id >> 8;
+
+    pci_config_set_vendor_id(s->dev.config, vid);
+    pci_config_set_device_id(s->dev.config, did);
+
     s->dev.config[0x04] = 0x06; // command = bus master, pci mem
     s->dev.config[0x05] = 0x00;
     s->dev.config[0x06] = 0xa0; // status = fast back-to-back, 66MHz, no error
     s->dev.config[0x07] = 0x00; // status = fast devsel
     s->dev.config[0x08] = 0x00; // revision
     s->dev.config[0x09] = 0x00; // programming i/f
-    s->dev.config[0x0A] = 0x04; // class_sub = PCI to PCI bridge
-    s->dev.config[0x0B] = 0x06; // class_base = PCI_bridge
+    pci_config_set_class(s->dev.config, PCI_CLASS_BRIDGE_PCI);
     s->dev.config[0x0D] = 0x10; // latency_timer
     s->dev.config[0x0E] = 0x81; // header_type
     s->dev.config[0x1E] = 0xa0; // secondary status

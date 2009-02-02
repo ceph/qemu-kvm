@@ -140,3 +140,57 @@ int qemu_fls(int i)
 {
     return 32 - clz32(i);
 }
+
+/* io vectors */
+
+void qemu_iovec_init(QEMUIOVector *qiov, int alloc_hint)
+{
+    qiov->iov = qemu_malloc(alloc_hint * sizeof(struct iovec));
+    qiov->niov = 0;
+    qiov->nalloc = alloc_hint;
+    qiov->size = 0;
+}
+
+void qemu_iovec_add(QEMUIOVector *qiov, void *base, size_t len)
+{
+    if (qiov->niov == qiov->nalloc) {
+        qiov->nalloc = 2 * qiov->nalloc + 1;
+        qiov->iov = qemu_realloc(qiov->iov, qiov->nalloc * sizeof(struct iovec));
+    }
+    qiov->iov[qiov->niov].iov_base = base;
+    qiov->iov[qiov->niov].iov_len = len;
+    qiov->size += len;
+    ++qiov->niov;
+}
+
+void qemu_iovec_destroy(QEMUIOVector *qiov)
+{
+    qemu_free(qiov->iov);
+}
+
+void qemu_iovec_to_buffer(QEMUIOVector *qiov, void *buf)
+{
+    uint8_t *p = (uint8_t *)buf;
+    int i;
+
+    for (i = 0; i < qiov->niov; ++i) {
+        memcpy(p, qiov->iov[i].iov_base, qiov->iov[i].iov_len);
+        p += qiov->iov[i].iov_len;
+    }
+}
+
+void qemu_iovec_from_buffer(QEMUIOVector *qiov, const void *buf, size_t count)
+{
+    const uint8_t *p = (const uint8_t *)buf;
+    size_t copy;
+    int i;
+
+    for (i = 0; i < qiov->niov && count; ++i) {
+        copy = count;
+        if (copy > qiov->iov[i].iov_len)
+            copy = qiov->iov[i].iov_len;
+        memcpy(qiov->iov[i].iov_base, p, copy);
+        p     += copy;
+        count -= copy;
+    }
+}
