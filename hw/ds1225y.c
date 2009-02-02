@@ -162,13 +162,13 @@ void *ds1225y_init(target_phys_addr_t mem_base, const char *filename)
     s->protection = 7;
 
     /* Read current file */
-    file = qemu_fopen_file(filename, "rb");
+    file = qemu_fopen(filename, "rb");
     if (file) {
         /* Read nvram contents */
         qemu_get_buffer(file, s->contents, s->chip_size);
         qemu_fclose(file);
     }
-    s->file = qemu_fopen_file(filename, "wb");
+    s->file = qemu_fopen(filename, "wb");
     if (s->file) {
         /* Write back contents, as 'wb' mode cleaned the file */
         qemu_put_buffer(s->file, s->contents, s->chip_size);
