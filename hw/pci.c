@@ -213,7 +213,7 @@ static void pci_unregister_io_regions(PCIDevice *pci_dev)
 
     for(i = 0; i < PCI_NUM_REGIONS; i++) {
         r = &pci_dev->io_regions[i];
-        if (!r->size)
+        if (!r->size || r->addr == -1)
             continue;
         if (r->type == PCI_ADDRESS_SPACE_IO) {
             isa_unassign_ioport(r->addr, r->size);
