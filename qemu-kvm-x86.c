@@ -464,6 +464,8 @@ static void do_cpuid_ent(struct kvm_cpuid_entry2 *e, uint32_t function,
     env->regs[R_ECX] = count;
     qemu_kvm_cpuid_on_env(env);
     e->function = function;
+    e->flags = 0;
+    e->index = 0;
     e->eax = env->regs[R_EAX];
     e->ebx = env->regs[R_EBX];
     e->ecx = env->regs[R_ECX];
