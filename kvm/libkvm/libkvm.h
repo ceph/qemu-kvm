@@ -525,7 +525,7 @@ int kvm_get_mem_map_range(kvm_context_t kvm, unsigned long phys_addr,
 			   unsigned long len, void *buf, void *opaque,
 			   int (*cb)(unsigned long start,unsigned long len,
 				     void* bitmap, void* opaque));
-int kvm_set_irq_level(kvm_context_t kvm, int irq, int level);
+int kvm_set_irq_level(kvm_context_t kvm, int irq, int level, int *status);
 
 int kvm_dirty_pages_log_enable_slot(kvm_context_t kvm,
 				    uint64_t phys_start,

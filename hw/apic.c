@@ -377,6 +377,11 @@ int apic_get_irq_delivered(void)
     return apic_irq_delivered;
 }
 
+void apic_set_irq_delivered(void)
+{
+    apic_irq_delivered = 1;
+}
+
 static void apic_set_irq(APICState *s, int vector_num, int trigger_mode)
 {
     apic_irq_delivered += !get_bit(s->irr, vector_num);

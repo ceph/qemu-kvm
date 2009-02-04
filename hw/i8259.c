@@ -186,9 +186,14 @@ static void i8259_set_irq(void *opaque, int irq, int level)
 {
     PicState2 *s = opaque;
 #ifdef KVM_CAP_IRQCHIP
-    if (kvm_enabled())
-	if (kvm_set_irq(irq, level))
-	    return;
+    if (kvm_enabled()) {
+        int pic_ret;
+        if (kvm_set_irq(irq, level, &pic_ret)) {
+            if (pic_ret != 0)
+                apic_set_irq_delivered();
+            return;
+        }
+    }
 #endif
 #if defined(DEBUG_PIC) || defined(DEBUG_IRQ_COUNT)
     if (level != irq_level[irq]) {

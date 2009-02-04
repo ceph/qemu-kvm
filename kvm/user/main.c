@@ -200,7 +200,7 @@ static int irqchip_io(void *opaque, int size, int is_write,
 	addr -= IRQCHIP_IO_BASE;
 
 	if (is_write) {
-		kvm_set_irq_level(kvm, addr, *value);
+		kvm_set_irq_level(kvm, addr, *value, NULL);
 	}
 	return 0;
 }

@@ -55,6 +55,8 @@ struct kvm_context {
 	int no_irqchip_creation;
 	/// in-kernel irqchip status
 	int irqchip_in_kernel;
+	/// ioctl to use to inject interrupts
+	int irqchip_inject_ioctl;
 	/// do not create in-kernel pit if set
 	int no_pit_creation;
 	/// in-kernel pit status

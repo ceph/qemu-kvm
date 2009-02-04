@@ -435,8 +435,16 @@ void kvm_create_irqchip(kvm_context_t kvm)
 		r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_IRQCHIP);
 		if (r > 0) {	/* kernel irqchip supported */
 			r = ioctl(kvm->vm_fd, KVM_CREATE_IRQCHIP);
-			if (r >= 0)
+			if (r >= 0) {
+				kvm->irqchip_inject_ioctl = KVM_IRQ_LINE;
+#if defined(KVM_CAP_IRQ_INJECT_STATUS) && defined(KVM_IRQ_LINE_STATUS)
+				r = ioctl(kvm->fd, KVM_CHECK_EXTENSION,
+			  KVM_CAP_IRQ_INJECT_STATUS);
+				if (r > 0)
+					kvm->irqchip_inject_ioctl = KVM_IRQ_LINE_STATUS;
+#endif
 				kvm->irqchip_in_kernel = 1;
+			}
 			else
 				fprintf(stderr, "Create kernel PIC irqchip failed\n");
 		}
@@ -646,7 +654,7 @@ int kvm_get_dirty_pages_range(kvm_context_t kvm, unsigned long phys_addr,
 
 #ifdef KVM_CAP_IRQCHIP
 
-int kvm_set_irq_level(kvm_context_t kvm, int irq, int level)
+int kvm_set_irq_level(kvm_context_t kvm, int irq, int level, int *status)
 {
 	struct kvm_irq_level event;
 	int r;
@@ -655,9 +663,14 @@ int kvm_set_irq_level(kvm_context_t kvm, int irq, int level)
 		return 0;
 	event.level = level;
 	event.irq = irq;
-	r = ioctl(kvm->vm_fd, KVM_IRQ_LINE, &event);
+	r = ioctl(kvm->vm_fd, kvm->irqchip_inject_ioctl, &event);
 	if (r == -1)
 		perror("kvm_set_irq_level");
+
+	if (status)
+		*status = (kvm->irqchip_inject_ioctl == KVM_IRQ_LINE) ?
+			1 : event.status;
+
 	return 1;
 }
 

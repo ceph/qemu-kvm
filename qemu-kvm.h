@@ -31,7 +31,7 @@ int kvm_update_guest_debug(CPUState *env, unsigned long reinject_trap);
 int kvm_qemu_init_env(CPUState *env);
 int kvm_qemu_check_extension(int ext);
 void kvm_apic_init(CPUState *env);
-int kvm_set_irq(int irq, int level);
+int kvm_set_irq(int irq, int level, int *status);
 
 int kvm_physical_memory_set_dirty_tracking(int enable);
 int kvm_update_dirty_pages_log(void);

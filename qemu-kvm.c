@@ -1271,9 +1271,9 @@ int kvm_get_phys_ram_page_bitmap(unsigned char *bitmap)
 
 #ifdef KVM_CAP_IRQCHIP
 
-int kvm_set_irq(int irq, int level)
+int kvm_set_irq(int irq, int level, int *status)
 {
-    return kvm_set_irq_level(kvm_context, irq, level);
+    return kvm_set_irq_level(kvm_context, irq, level, status);
 }
 
 #endif
