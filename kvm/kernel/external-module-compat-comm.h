@@ -604,17 +604,6 @@ static inline void kvm_hrtimer_start_expires(struct hrtimer *timer, int mode)
 	hrtimer_start_p(timer, timer->expires, mode);
 }
 
-#else
-
-#define kvm_hrtimer_add_expires_ns hrtimer_add_expires_ns
-#define kvm_hrtimer_get_expires hrtimer_get_expires
-#define kvm_hrtimer_get_expires_ns hrtimer_get_expires_ns
-#define kvm_hrtimer_start_expires hrtimer_start_expires
-
-#endif
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
-
 static inline ktime_t kvm_hrtimer_expires_remaining(const struct hrtimer *timer)
 {
     return ktime_sub(timer->expires, timer->base->get_time());
@@ -622,10 +611,13 @@ static inline ktime_t kvm_hrtimer_expires_remaining(const struct hrtimer *timer)
 
 #else
 
+#define kvm_hrtimer_add_expires_ns hrtimer_add_expires_ns
+#define kvm_hrtimer_get_expires hrtimer_get_expires
+#define kvm_hrtimer_get_expires_ns hrtimer_get_expires_ns
+#define kvm_hrtimer_start_expires hrtimer_start_expires
 #define kvm_hrtimer_expires_remaining hrtimer_expires_remaining
 
 #endif
-
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28)
 
