@@ -29,6 +29,8 @@ BEGIN { split("INIT_WORK tsc_khz desc_struct ldttss_desc64 desc_ptr " \
     printf("MODULE_INFO(version, \"%s\");\n", version)
 }
 
+{ sub(/match->dev->msi_enabled/, "kvm_pcidev_msi_enabled(match->dev)") }
+
 /^static void __vmx_load_host_state/ {
     vmx_load_host_state = 1
 }

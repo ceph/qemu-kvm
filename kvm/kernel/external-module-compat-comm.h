@@ -721,3 +721,16 @@ static inline void cpumask_clear_cpu(int cpu, cpumask_var_t mask)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28)
 #define marker_synchronize_unregister() synchronize_sched()
 #endif
+
+/* pci_dev.msi_enable was introduced in 2.6.18 */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,18)
+
+struct pci_dev;
+
+int kvm_pcidev_msi_enabled(struct pci_dev *dev);
+
+#else
+
+#define kvm_pcidev_msi_enabled(dev)	(dev)->msi_enabled
+
+#endif

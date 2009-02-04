@@ -313,3 +313,24 @@ struct rchan *kvm_relay_open(const char *base_filename,
 }
 
 #endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,18)
+
+#include <linux/pci.h>
+
+int kvm_pcidev_msi_enabled(struct pci_dev *dev)
+{
+	int pos;
+	u16 control;
+
+	if (!(pos = pci_find_capability(dev, PCI_CAP_ID_MSI)))
+		return 0;
+
+	pci_read_config_word(dev, pos + PCI_MSI_FLAGS, &control);
+	if (control & PCI_MSI_FLAGS_ENABLE)
+		return 1;
+
+	return 0;
+}
+
+#endif
