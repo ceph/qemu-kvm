@@ -35,10 +35,19 @@
 #define EFER_SVME		(1<<_EFER_SVME)
 #endif
 
+#ifndef _EFER_FFXSR
+#define _EFER_FFXSR		14 /* Enable Fast FXSAVE/FXRSTOR */
+#define EFER_FFXSR		(1<<_EFER_FFXSR)
+#endif
+
 #include <asm/cpufeature.h>
 
 #ifndef X86_FEATURE_SVM
 #define X86_FEATURE_SVM               (6*32+ 2) /* Secure virtual machine */
+#endif
+
+#ifndef X86_FEATURE_FXSR_OPT
+#define X86_FEATURE_FXSR_OPT  (1*32+25)
 #endif
 
 #include <linux/smp.h>
