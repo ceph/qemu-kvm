@@ -752,13 +752,13 @@ void qemu_system_hot_add_init(const char *cpu_model)
 
 static void enable_processor(struct gpe_regs *g, int cpu)
 {
-    g->sts |= 1;
+    g->sts |= 4;
     g->cpus_sts[cpu/8] |= (1 << (cpu%8));
 }
 
 static void disable_processor(struct gpe_regs *g, int cpu)
 {
-    g->sts |= 1;
+    g->sts |= 4;
     g->cpus_sts[cpu/8] &= ~(1 << (cpu%8));
 }
 
@@ -801,7 +801,7 @@ void qemu_system_cpu_hot_add(int cpu, int state)
         enable_processor(&gpe, cpu);
     else
         disable_processor(&gpe, cpu);
-    if (gpe.en & 1) {
+    if (gpe.en & 4) {
         qemu_set_irq(pm_state->irq, 1);
         qemu_set_irq(pm_state->irq, 0);
     }

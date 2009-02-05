@@ -746,7 +746,7 @@ DefinitionBlock (
 	Name(_HID, "ACPI0006")
 
         Method(_L00) {
-	    Return(\_PR.PRSC())
+            Return(0x01)
         }
 
 #define gen_pci_hotplug(nr)                                       \
@@ -794,7 +794,7 @@ DefinitionBlock (
         }
 
         Method(_L02) {
-            Return(0x01)
+	    Return(\_PR.PRSC())
         }
         Method(_L03) {
             Return(0x01)
