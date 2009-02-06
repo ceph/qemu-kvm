@@ -1267,6 +1267,7 @@ int kvm_commit_irq_routes(kvm_context_t kvm)
 	r = ioctl(kvm->vm_fd, KVM_SET_GSI_ROUTING, kvm->irq_routes);
 	if (r == -1)
 		r = -errno;
+	return r;
 #else
 	return -ENOSYS;
 #endif
