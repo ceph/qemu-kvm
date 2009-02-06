@@ -1334,6 +1334,23 @@ void kvm_add_ioperm_data(struct ioperm_data *data)
     LIST_INSERT_HEAD(&ioperm_head, data, entries);
 }
 
+void kvm_remove_ioperm_data(unsigned long start_port, unsigned long num)
+{
+    struct ioperm_data *data;
+
+    data = LIST_FIRST(&ioperm_head);
+    while (data) {
+        struct ioperm_data *next = LIST_NEXT(data, entries);
+
+        if (data->start_port == start_port && data->num == num) {
+            LIST_REMOVE(data, entries);
+            qemu_free(data);
+        }
+
+        data = next;
+    }
+}
+
 void kvm_ioperm(CPUState *env, void *data)
 {
     if (kvm_enabled() && qemu_system_ready)

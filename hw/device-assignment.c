@@ -457,6 +457,8 @@ void free_assigned_device(AssignedDevInfo *adev)
             if (!pci_region->valid || !(pci_region->type & IORESOURCE_MEM))
                 continue;
 
+            kvm_remove_ioperm_data(region->u.r_baseport, region->r_size);
+
             if (region->u.r_virtbase) {
                 int ret = munmap(region->u.r_virtbase,
                                  (pci_region->size + 0xFFF) & 0xFFFFF000);

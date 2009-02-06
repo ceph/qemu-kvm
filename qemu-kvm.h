@@ -127,6 +127,7 @@ struct ioperm_data;
 
 void kvm_ioperm(CPUState *env, void *data);
 void kvm_add_ioperm_data(struct ioperm_data *data);
+void kvm_remove_ioperm_data(unsigned long start_port, unsigned long num);
 void kvm_arch_do_ioperm(void *_data);
 #endif
 
