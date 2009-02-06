@@ -551,7 +551,7 @@ int ac_test_exec(ac_test_t *at)
     return r;
 }
 
-int ac_test_run()
+int ac_test_run(void)
 {
     static ac_test_t at;
     int tests, successes;
@@ -574,7 +574,7 @@ int main()
     int r;
 
     printf("starting test\n\n");
-    smp_init(ac_test_run);
+    smp_init((void(*)(void))ac_test_run);
     r = ac_test_run();
     return r ? 0 : 1;
 }

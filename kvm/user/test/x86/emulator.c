@@ -134,7 +134,6 @@ void test_pop(void *mem)
 {
 	unsigned long tmp;
 	unsigned long *stack_top = mem + 4096;
-	unsigned long *new_stack_top;
 	unsigned long memw = 0x123456789abcdeful;
 	static unsigned long tmp2;
 

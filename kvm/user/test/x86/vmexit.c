@@ -1,5 +1,5 @@
 
-#include "printf.h"
+#include "libcflat.h"
 
 static inline unsigned long long rdtsc()
 {
