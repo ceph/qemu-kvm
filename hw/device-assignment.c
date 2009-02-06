@@ -488,7 +488,7 @@ static uint32_t calc_assigned_dev_id(uint8_t bus, uint8_t devfn)
 /* The pci config space got updated. Check if irq numbers have changed
  * for our devices
  */
-void assigned_dev_update_irq(PCIDevice *d)
+void assigned_dev_update_irqs()
 {
     AssignedDevInfo *adev;
 
@@ -502,7 +502,7 @@ void assigned_dev_update_irq(PCIDevice *d)
         irq = piix_get_irq(irq);
 
 #ifdef TARGET_IA64
-	irq = ipf_map_irq(d, irq);
+	irq = ipf_map_irq(&assigned_dev->dev, irq);
 #endif
 
         if (irq != assigned_dev->girq) {
