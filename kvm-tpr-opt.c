@@ -112,7 +112,7 @@ static struct vapic_bios vapic_bios;
 static uint32_t real_tpr;
 static uint32_t bios_addr;
 static uint32_t vapic_phys;
-static int bios_enabled;
+static uint32_t bios_enabled;
 static uint32_t vbios_desc_phys;
 
 static void update_vbios_real_tpr(void)

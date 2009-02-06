@@ -76,7 +76,7 @@ static void extboot_write_cmd(void *opaque, uint32_t addr, uint32_t value)
     union extboot_cmd *cmd = (void *)(phys_ram_base + ((value & 0xFFFF) << 4));
     BlockDriverState *bs = opaque;
     int cylinders, heads, sectors, err;
-    int64_t nb_sectors;
+    uint64_t nb_sectors;
 
     get_translated_chs(bs, &cylinders, &heads, &sectors);
 

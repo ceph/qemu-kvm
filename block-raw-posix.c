@@ -527,7 +527,6 @@ static int posix_aio_init(void)
 {
     sigset_t mask;
     PosixAioState *s;
-    int fds[2];
     struct qemu_paioinit ai;
   
     if (posix_aio_state)

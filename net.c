@@ -765,7 +765,7 @@ static int tap_can_send(void *opaque)
 
 static int tap_send_packet(TAPState *s)
 {
-    uint8_t *buf = s->buf;
+    uint8_t *buf = (uint8_t *)s->buf;
     int size = s->size;
 
 #ifdef IFF_VNET_HDR

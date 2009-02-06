@@ -1001,16 +1001,6 @@ void bdrv_flush(BlockDriverState *bs)
         bdrv_flush(bs->backing_hd);
 }
 
-void bdrv_iterate_writeable(void (*it)(BlockDriverState *bs))
-{
-    BlockDriverState *bs;
-
-    for (bs = bdrv_first; bs != NULL; bs = bs->next)
-        if (bs->drv && !bdrv_is_read_only(bs) && 
-            (!bdrv_is_removable(bs) || bdrv_is_inserted(bs)))
-	    it(bs);
-}
-
 void bdrv_flush_all(void)
 {
     BlockDriverState *bs;

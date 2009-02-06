@@ -102,12 +102,12 @@ static void on_vcpu(CPUState *env, void (*func)(void *data), void *data)
 
 static void inject_interrupt(void *data)
 {
-    cpu_interrupt(current_env, (int)data);
+    cpu_interrupt(current_env, (long)data);
 }
 
 void kvm_inject_interrupt(CPUState *env, int mask)
 {
-    on_vcpu(env, inject_interrupt, (void *)mask);
+    on_vcpu(env, inject_interrupt, (void *)(long)mask);
 }
 
 void kvm_update_interrupt_request(CPUState *env)
@@ -319,7 +319,7 @@ static void resume_all_threads(void)
     }
 }
 
-static void kvm_vm_state_change_handler(void *context, int running)
+static void kvm_vm_state_change_handler(void *context, int running, int reason)
 {
     if (running)
 	resume_all_threads();
@@ -616,7 +616,8 @@ int kvm_main_loop(void)
 }
 
 #ifdef KVM_CAP_SET_GUEST_DEBUG
-int kvm_debug(void *opaque, void *data, struct kvm_debug_exit_arch *arch_info)
+static int kvm_debug(void *opaque, void *data,
+                     struct kvm_debug_exit_arch *arch_info)
 {
     int handle = kvm_arch_debug(arch_info);
     struct CPUState *env = data;
@@ -1006,7 +1007,7 @@ struct kvm_set_guest_debug_data {
     int err;
 };
 
-void kvm_invoke_set_guest_debug(void *data)
+static void kvm_invoke_set_guest_debug(void *data)
 {
     struct kvm_set_guest_debug_data *dbg_data = data;
 

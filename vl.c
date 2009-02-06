@@ -4709,7 +4709,7 @@ void qemu_get_launch_info(int *argc, char ***argv, int *opt_daemonize, const cha
     *opt_incoming = incoming;
 }
 
-
+#ifdef USE_KVM
 static int gethugepagesize(void)
 {
     int ret, fd;
@@ -4796,13 +4796,14 @@ static void *alloc_mem_area(size_t memory, unsigned long *len, const char *path)
     *len = memory;
     return area;
 }
+#endif
 
 static void *qemu_alloc_physram(unsigned long memory)
 {
     void *area = NULL;
+#ifdef USE_KVM
     unsigned long map_len = memory;
 
-#ifdef USE_KVM
     if (mem_path)
 	area = alloc_mem_area(memory, &map_len, mem_path);
 #endif
@@ -5654,7 +5655,7 @@ int main(int argc, char **argv, char **envp)
     }
 #endif
 
-#if USE_KVM
+#ifdef USE_KVM
     if (kvm_enabled()) {
 	if (kvm_qemu_init() < 0) {
 	    fprintf(stderr, "Could not initialize KVM, will disable KVM support\n");
