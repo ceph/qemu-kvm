@@ -522,7 +522,6 @@ void assigned_dev_update_irqs()
                         adev->name, strerror(-r));
                 fprintf(stderr, "Perhaps you are assigning a device "
                         "that shares an IRQ with another device?\n");
-                LIST_REMOVE(adev, next);
                 free_assigned_device(adev);
                 adev = next;
                 continue;
