@@ -335,8 +335,6 @@ VLANClientState *qemu_new_vlan_client(VLANState *vlan,
 {
     VLANClientState *vc, **pvc;
     vc = qemu_mallocz(sizeof(VLANClientState));
-    if (!vc)
-        return NULL;
     vc->model = strdup(model);
     if (name)
         vc->name = strdup(name);
@@ -891,8 +889,6 @@ static TAPState *net_tap_fd_init(VLANState *vlan,
     TAPState *s;
 
     s = qemu_mallocz(sizeof(TAPState));
-    if (!s)
-        return NULL;
     s->fd = fd;
     s->has_vnet_hdr = vnet_hdr != 0;
     s->vc = qemu_new_vlan_client(vlan, model, name, tap_receive, NULL, s);
@@ -1232,8 +1228,6 @@ static int net_vde_init(VLANState *vlan, const char *model,
     };
 
     s = qemu_mallocz(sizeof(VDEState));
-    if (!s)
-        return -1;
     s->vde = vde_open(init_sock, "QEMU", &args);
     if (!s->vde){
         free(s);
@@ -1457,8 +1451,6 @@ static NetSocketState *net_socket_fd_init_dgram(VLANState *vlan,
     }
 
     s = qemu_mallocz(sizeof(NetSocketState));
-    if (!s)
-        return NULL;
     s->fd = fd;
 
     s->vc = qemu_new_vlan_client(vlan, model, name, net_socket_receive_dgram, NULL, s);
@@ -1487,8 +1479,6 @@ static NetSocketState *net_socket_fd_init_stream(VLANState *vlan,
 {
     NetSocketState *s;
     s = qemu_mallocz(sizeof(NetSocketState));
-    if (!s)
-        return NULL;
     s->fd = fd;
     s->vc = qemu_new_vlan_client(vlan, model, name,
                                  net_socket_receive, NULL, s);
@@ -1566,8 +1556,6 @@ static int net_socket_listen_init(VLANState *vlan,
         return -1;
 
     s = qemu_mallocz(sizeof(NetSocketListenState));
-    if (!s)
-        return -1;
 
     fd = socket(PF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
@@ -1687,8 +1675,6 @@ VLANState *qemu_find_vlan(int id)
             return vlan;
     }
     vlan = qemu_mallocz(sizeof(VLANState));
-    if (!vlan)
-        return NULL;
     vlan->id = id;
     vlan->next = NULL;
     pvlan = &first_vlan;

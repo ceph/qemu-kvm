@@ -35,15 +35,32 @@
 #include "escc.h"
 
 #define MAX_IDE_BUS 2
+#define VGA_BIOS_SIZE 65536
+
+/* debug UniNorth */
+//#define DEBUG_UNIN
+
+#ifdef DEBUG_UNIN
+#define UNIN_DPRINTF(fmt, args...) \
+do { printf("UNIN: " fmt , ##args); } while (0)
+#else
+#define UNIN_DPRINTF(fmt, args...)
+#endif
 
 /* UniN device */
 static void unin_writel (void *opaque, target_phys_addr_t addr, uint32_t value)
 {
+    UNIN_DPRINTF("writel addr " TARGET_FMT_plx " val %x\n", addr, value);
 }
 
 static uint32_t unin_readl (void *opaque, target_phys_addr_t addr)
 {
-    return 0;
+    uint32_t value;
+
+    value = 0;
+    UNIN_DPRINTF("readl addr " TARGET_FMT_plx " val %x\n", addr, value);
+
+    return value;
 }
 
 static CPUWriteMemoryFunc *unin_write[] = {
@@ -71,7 +88,7 @@ static void ppc_core99_init (ram_addr_t ram_size, int vga_ram_size,
     qemu_irq *pic, **openpic_irqs;
     int unin_memory;
     int linux_boot, i;
-    unsigned long bios_offset, vga_bios_offset;
+    ram_addr_t ram_offset, vga_ram_offset, bios_offset, vga_bios_offset;
     uint32_t kernel_base, kernel_size, initrd_base, initrd_size;
     PCIBus *pci_bus;
     nvram_t nvram;
@@ -117,10 +134,14 @@ static void ppc_core99_init (ram_addr_t ram_size, int vga_ram_size,
     }
 
     /* allocate RAM */
-    cpu_register_physical_memory(0, ram_size, IO_MEM_RAM);
+    ram_offset = qemu_ram_alloc(ram_size);
+    cpu_register_physical_memory(0, ram_size, ram_offset);
+
+    /* allocate VGA RAM */
+    vga_ram_offset = qemu_ram_alloc(vga_ram_size);
 
     /* allocate and load BIOS */
-    bios_offset = ram_size + vga_ram_size;
+    bios_offset = qemu_ram_alloc(BIOS_SIZE);
     if (bios_name == NULL)
         bios_name = BIOS_FILENAME;
     snprintf(buf, sizeof(buf), "%s/%s", bios_dir, bios_name);
@@ -138,7 +159,7 @@ static void ppc_core99_init (ram_addr_t ram_size, int vga_ram_size,
                                  bios_size, bios_offset | IO_MEM_ROM);
 
     /* allocate and load VGA BIOS */
-    vga_bios_offset = bios_offset + bios_size;
+    vga_bios_offset = qemu_ram_alloc(VGA_BIOS_SIZE);
     snprintf(buf, sizeof(buf), "%s/%s", bios_dir, VGABIOS_FILENAME);
     vga_bios_size = load_image(buf, phys_ram_base + vga_bios_offset + 8);
     if (vga_bios_size < 0) {
@@ -156,7 +177,6 @@ static void ppc_core99_init (ram_addr_t ram_size, int vga_ram_size,
                      vga_bios_size);
         vga_bios_size += 8;
     }
-    vga_bios_size = (vga_bios_size + 0xfff) & ~0xfff;
 
     if (linux_boot) {
         kernel_base = KERNEL_LOAD_ADDR;
@@ -258,8 +278,8 @@ static void ppc_core99_init (ram_addr_t ram_size, int vga_ram_size,
     pic = openpic_init(NULL, &pic_mem_index, smp_cpus, openpic_irqs, NULL);
     pci_bus = pci_pmac_init(pic);
     /* init basic PC hardware */
-    pci_vga_init(pci_bus, phys_ram_base + ram_size,
-                 ram_size, vga_ram_size,
+    pci_vga_init(pci_bus, phys_ram_base + vga_ram_offset,
+                 vga_ram_offset, vga_ram_size,
                  vga_bios_offset, vga_bios_size);
 
     /* XXX: suppress that */
@@ -308,7 +328,7 @@ static void ppc_core99_init (ram_addr_t ram_size, int vga_ram_size,
         graphic_depth = 15;
 #if 0 /* XXX: this is ugly but needed for now, or OHW won't boot */
     /* The NewWorld NVRAM is not located in the MacIO device */
-    nvr = macio_nvram_init(&nvram_mem_index, 0x2000);
+    nvr = macio_nvram_init(&nvram_mem_index, 0x2000, 1);
     pmac_format_nvram_partition(nvr, 0x2000);
     macio_nvram_map(nvr, 0xFFF04000);
     nvram.opaque = nvr;
@@ -337,6 +357,6 @@ QEMUMachine core99_machine = {
     .name = "mac99",
     .desc = "Mac99 based PowerMAC",
     .init = ppc_core99_init,
-    .ram_require = BIOS_SIZE + VGA_RAM_SIZE,
+    .ram_require = BIOS_SIZE + VGA_BIOS_SIZE + VGA_RAM_SIZE,
     .max_cpus = MAX_CPUS,
 };

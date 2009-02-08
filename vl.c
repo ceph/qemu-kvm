@@ -572,8 +572,6 @@ QEMUPutMouseEntry *qemu_add_mouse_event_handler(QEMUPutMouseEvent *func,
     QEMUPutMouseEntry *s, *cursor;
 
     s = qemu_mallocz(sizeof(QEMUPutMouseEntry));
-    if (!s)
-        return NULL;
 
     s->qemu_put_mouse_event = func;
     s->qemu_put_mouse_event_opaque = opaque;
@@ -1124,8 +1122,6 @@ static QEMUClock *qemu_new_clock(int type)
 {
     QEMUClock *clock;
     clock = qemu_mallocz(sizeof(QEMUClock));
-    if (!clock)
-        return NULL;
     clock->type = type;
     return clock;
 }
@@ -2900,10 +2896,6 @@ DisplayState *get_displaystate(void)
 static void dumb_display_init(void)
 {
     DisplayState *ds = qemu_mallocz(sizeof(DisplayState));
-    if (ds == NULL) {
-        fprintf(stderr, "dumb_display_init: DisplayState allocation failed\n");
-        exit(1);
-    }
     ds->surface = qemu_create_displaysurface(640, 480, 32, 640 * 4);
     register_displaystate(ds);
 }
@@ -2955,8 +2947,6 @@ int qemu_set_fd_handler2(int fd,
                 goto found;
         }
         ioh = qemu_mallocz(sizeof(IOHandlerRecord));
-        if (!ioh)
-            return -1;
         ioh->next = first_io_handler;
         first_io_handler = ioh;
     found:
@@ -2995,8 +2985,6 @@ int qemu_add_polling_cb(PollingFunc *func, void *opaque)
 {
     PollingEntry **ppe, *pe;
     pe = qemu_mallocz(sizeof(PollingEntry));
-    if (!pe)
-        return -1;
     pe->func = func;
     pe->opaque = opaque;
     for(ppe = &first_polling_entry; *ppe != NULL; ppe = &(*ppe)->next);
@@ -3359,8 +3347,6 @@ QEMUBH *qemu_bh_new(QEMUBHFunc *cb, void *opaque)
 {
     QEMUBH *bh;
     bh = qemu_mallocz(sizeof(QEMUBH));
-    if (!bh)
-        return NULL;
     bh->cb = cb;
     bh->opaque = opaque;
     bh->next = first_bh;
@@ -3520,8 +3506,6 @@ VMChangeStateEntry *qemu_add_vm_change_state_handler(VMChangeStateHandler *cb,
     VMChangeStateEntry *e;
 
     e = qemu_mallocz(sizeof (*e));
-    if (!e)
-        return NULL;
 
     e->cb = cb;
     e->opaque = opaque;

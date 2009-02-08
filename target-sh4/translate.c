@@ -222,12 +222,14 @@ static sh4_def_t sh4_defs[] = {
 	.pvr = 0x00050000,
 	.prr = 0x00000100,
 	.cvr = 0x00110000,
+	.features = SH_FEATURE_BCR3_AND_BCR4,
     }, {
 	.name = "SH7751R",
 	.id = SH_CPU_SH7751R,
 	.pvr = 0x04050005,
 	.prr = 0x00000113,
 	.cvr = 0x00110000,	/* Neutered caches, should be 0x20480000 */
+	.features = SH_FEATURE_BCR3_AND_BCR4,
     }, {
 	.name = "SH7785",
 	.id = SH_CPU_SH7785,
@@ -277,8 +279,6 @@ CPUSH4State *cpu_sh4_init(const char *cpu_model)
     if (!def)
 	return NULL;
     env = qemu_mallocz(sizeof(CPUSH4State));
-    if (!env)
-	return NULL;
     env->features = def->features;
     cpu_exec_init(env);
     sh4_translate_init();

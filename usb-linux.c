@@ -445,10 +445,6 @@ static int usb_host_handle_data(USBHostDevice *s, USBPacket *p)
     int ret;
 
     aurb = async_alloc();
-    if (!aurb) {
-        dprintf("husb: async malloc failed\n");
-        return USB_RET_NAK;
-    }
     aurb->hdev   = s;
     aurb->packet = p;
 
@@ -589,10 +585,6 @@ static int usb_host_handle_control(USBHostDevice *s, USBPacket *p)
     /* The rest are asynchronous */
 
     aurb = async_alloc();
-    if (!aurb) {
-        dprintf("husb: async malloc failed\n");
-        return USB_RET_NAK;
-    }
     aurb->hdev   = s;
     aurb->packet = p;
 
@@ -902,8 +894,6 @@ static USBDevice *usb_host_device_open_addr(int bus_num, int addr, const char *p
     char buf[1024];
 
     dev = qemu_mallocz(sizeof(USBHostDevice));
-    if (!dev)
-        goto fail;
 
     dev->bus_num = bus_num;
     dev->addr = addr;
@@ -1312,14 +1302,8 @@ static int usb_host_scan(void *opaque, USBScanFunc *func)
 
         /* the module setting (used later for opening devices) */
         usb_host_device_path = qemu_mallocz(strlen(devpath)+1);
-        if (usb_host_device_path) {
-            strcpy(usb_host_device_path, devpath);
-            term_printf("husb: using %s file-system with %s\n", fs_type[usb_fs_type], usb_host_device_path);
-        } else {
-            /* out of memory? */
-            perror("husb: unable to allocate memory for device path");
-            return -ENOMEM;
-        }
+        strcpy(usb_host_device_path, devpath);
+        term_printf("husb: using %s file-system with %s\n", fs_type[usb_fs_type], usb_host_device_path);
     }
 
     switch (usb_fs_type) {
@@ -1459,10 +1443,6 @@ static int usb_host_auto_add(const char *spec)
         return -1;
 
     f = qemu_mallocz(sizeof(*f));
-    if (!f) {
-        fprintf(stderr, "husb: failed to allocate auto filter\n");
-        return -1;
-    }
 
     *f = filter; 
 
