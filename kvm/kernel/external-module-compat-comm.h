@@ -252,7 +252,7 @@ static inline void blahblah(void)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
 #  define KVM_NEED_PAGEFAULT_DISABLE 1
 #  ifdef RHEL_RELEASE_CODE
-#    if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(5,2)
+#    if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(5,3)
 #      undef KVM_NEED_PAGEFAULT_DISABLE
 #    endif
 #  endif
