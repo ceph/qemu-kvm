@@ -578,8 +578,7 @@ void qemu_system_powerdown(void)
 struct gpe_regs {
     uint16_t sts; /* status */
     uint16_t en;  /* enabled */
-    uint8_t up;
-    uint8_t down;
+    uint8_t cpus_sts[32];
 };
 
 struct pci_status {
@@ -602,11 +601,8 @@ static uint32_t gpe_readb(void *opaque, uint32_t addr)
     uint32_t val = 0;
     struct gpe_regs *g = opaque;
     switch (addr) {
-        case PROC_BASE:
-            val = g->up;
-            break;
-        case PROC_BASE + 1:
-            val = g->down;
+        case PROC_BASE ... PROC_BASE+31:
+            val = g->cpus_sts[addr - PROC_BASE];
             break;
 
         case GPE_BASE:
@@ -651,11 +647,8 @@ static void gpe_writeb(void *opaque, uint32_t addr, uint32_t val)
 {
     struct gpe_regs *g = opaque;
     switch (addr) {
-        case PROC_BASE:
-            g->up = val;
-            break;
-        case PROC_BASE + 1:
-            g->down = val;
+        case PROC_BASE ... PROC_BASE + 31:
+            /* don't allow to change cpus_sts from inside a guest */
             break;
 
         case GPE_BASE:
@@ -736,11 +729,17 @@ static const char *model;
 
 void qemu_system_hot_add_init(const char *cpu_model)
 {
+    int i = 0, cpus = smp_cpus;
+
+    while (cpus > 0) {
+        gpe.cpus_sts[i++] = (cpus < 8) ? (1 << cpus) - 1 : 0xff;
+        cpus -= 8;
+    }
     register_ioport_write(GPE_BASE, 4, 1, gpe_writeb, &gpe);
     register_ioport_read(GPE_BASE, 4, 1,  gpe_readb, &gpe);
 
-    register_ioport_write(PROC_BASE, 4, 1, gpe_writeb, &gpe);
-    register_ioport_read(PROC_BASE, 4, 1,  gpe_readb, &gpe);
+    register_ioport_write(PROC_BASE, 32, 1, gpe_writeb, &gpe);
+    register_ioport_read(PROC_BASE, 32, 1,  gpe_readb, &gpe);
 
     register_ioport_write(PCI_BASE, 8, 4, pcihotplug_write, &pci0_status);
     register_ioport_read(PCI_BASE, 8, 4,  pcihotplug_read, &pci0_status);
@@ -754,15 +753,13 @@ void qemu_system_hot_add_init(const char *cpu_model)
 static void enable_processor(struct gpe_regs *g, int cpu)
 {
     g->sts |= 1;
-    g->en |= 1;
-    g->up |= (1 << cpu);
+    g->cpus_sts[cpu/8] |= (1 << (cpu%8));
 }
 
 static void disable_processor(struct gpe_regs *g, int cpu)
 {
     g->sts |= 1;
-    g->en |= 1;
-    g->down |= (1 << cpu);
+    g->cpus_sts[cpu/8] &= ~(1 << (cpu%8));
 }
 
 #if defined(TARGET_I386) || defined(TARGET_X86_64)
@@ -800,14 +797,14 @@ void qemu_system_cpu_hot_add(int cpu, int state)
         }
     }
 
-    qemu_set_irq(pm_state->irq, 1);
-    gpe.up = 0;
-    gpe.down = 0;
     if (state)
         enable_processor(&gpe, cpu);
     else
         disable_processor(&gpe, cpu);
-    qemu_set_irq(pm_state->irq, 0);
+    if (gpe.en & 1) {
+        qemu_set_irq(pm_state->irq, 1);
+        qemu_set_irq(pm_state->irq, 0);
+    }
 }
 #endif
 

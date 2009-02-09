@@ -27,28 +27,41 @@ DefinitionBlock (
 {
    Scope (\_PR)
    {
-	OperationRegion( PRST, SystemIO, 0xaf00, 0x02)
-	Field (PRST, ByteAcc, NoLock, WriteAsZeros)
+	OperationRegion(PRST, SystemIO, 0xaf00, 32)
+	Field (PRST, ByteAcc, NoLock, Preserve)
 	{
-		PRU, 8,
-		PRD, 8,
+		PRS, 256
+	}
+
+	Name(PRSS, Buffer(32){}) /* shadow CPU status bitmask */
+	Name(SSVL, 0)
+
+	Method(CRST, 1) {
+		If (LEqual(SSVL, 0)) {
+			Store(PRS, PRSS) /* read CPUs status bitmaks from HW */
+			Store(1, SSVL)
+                }
+		ShiftRight(Arg0, 3, Local1)
+		Store(DerefOf(Index(PRSS, Local1)), Local2)
+	        Return(And(Local2, ShiftLeft(1, And(Arg0, 0x7))))
 	}
 
 #define gen_processor(nr, name) 				            \
 	Processor (CPU##name, nr, 0x0000b010, 0x06) {                       \
-            Name (TMP, Buffer(0x8) {0x0, 0x8, nr, nr, 0x1, 0x0, 0x0, 0x0})  \
+            Name (PREN, Buffer(0x8) {0x0, 0x8, nr, nr, 0x1, 0x0, 0x0, 0x0}) \
+            Name (PRDS, Buffer(0x8) {0x0, 0x8, nr, nr, 0x0, 0x0, 0x0, 0x0}) \
             Method(_MAT, 0) {                                               \
-                If (And(\_PR.PRU, ShiftLeft(1, nr))) { Return(TMP) }        \
-                Else { Return(0x0) }                                        \
+                If (CRST(nr)) { Return(PREN) }                              \
+                Else { Return(PRDS) }                                       \
             }                                                               \
             Method (_STA) {                                                 \
-                Return(0xF)                                                 \
+                If (CRST(nr)) { Return(0xF) }                               \
+                Else { Return(0x9) }                                        \
             }                                                               \
         }                                                                   \
 
 
-
-        Processor (CPU0, 0x00, 0x0000b010, 0x06) {Method (_STA) { Return(0xF)}}
+	gen_processor(0, 0)
 	gen_processor(1, 1)
 	gen_processor(2, 2)
 	gen_processor(3, 3)
@@ -63,6 +76,67 @@ DefinitionBlock (
 	gen_processor(12, C)
 	gen_processor(13, D)
 	gen_processor(14, E)
+
+	Method (NTFY, 2) {
+#define gen_ntfy(nr)                              \
+	If (LEqual(Arg0, 0x##nr)) {               \
+		Notify(CPU##nr, Arg1)             \
+	}
+		gen_ntfy(0)
+		gen_ntfy(1)
+		gen_ntfy(2)
+		gen_ntfy(3)
+		gen_ntfy(4)
+		gen_ntfy(5)
+		gen_ntfy(6)
+		gen_ntfy(7)
+		gen_ntfy(8)
+		gen_ntfy(9)
+		gen_ntfy(A)
+		gen_ntfy(B)
+		gen_ntfy(C)
+		gen_ntfy(D)
+		gen_ntfy(E)
+		Return(One)
+	}
+
+	/* Works on 8 bit quentity.
+         * Arg1 - Shadow status bits
+         * Arg2 - Current status bits
+	 */
+        Method(PR1, 3) {
+	    Xor(Arg1, Arg2, Local0) /* figure out what chaged */
+	    ShiftLeft(Arg0, 3, Local1)
+            While (LNotEqual(Local0, Zero)) {
+		If (And(Local0, 1)) {      /* if staus have changed */
+                    if(And(Arg2, 1)) {     /* check previous status */
+	                Store(3, Local3)
+		    } Else {
+	                Store(1, Local3)
+	            }
+		    NTFY(Local1, Local3)
+                }
+		ShiftRight(Local0, 1, Local0)
+		ShiftRight(Arg2, 1, Arg2)
+		Increment(Local1)
+	    }
+	    Return(One)
+	}
+
+	Method(PRSC, 0) {
+		Store(Buffer(32){}, Local0)
+		Store(PRS, Local0) /* read CPUs status bitmask into Local0 */
+		Store(Zero, Local1)
+		/* loop over bitmask byte by byte to see what have chaged */
+		While(LLess(Local1, 32)) {
+			Store(DerefOf(Index(Local0, Local1)), Local2)
+			Store(DerefOf(Index(PRSS, Local1)), Local3)
+			PR1(Local1, Local2, Local3)
+			Increment(Local1)
+                }
+		Store(Local0, PRSS) /* store curr satust bitmask into shadow */
+		Return(One)
+	}
     }
 
     Scope (\)
@@ -666,34 +740,13 @@ DefinitionBlock (
         Zero,  /* reserved */
         Zero   /* reserved */
     })
+
     Scope (\_GPE)
     {
-
-#define gen_cpu_hotplug(name, nr)                      \
-	If (And(\_PR.PRU, ShiftLeft(1, nr))) {     \
-	    Notify(\_PR.CPU##name, 1)              \
-        }                                          \
-	If (And(\_PR.PRD, ShiftLeft(1, nr))) {     \
-	    Notify(\_PR.CPU##name, 3)              \
-        }
+	Name(_HID, "ACPI0006")
 
         Method(_L00) {
-	    gen_cpu_hotplug(1, 1)
-	    gen_cpu_hotplug(2, 2)
-	    gen_cpu_hotplug(3, 3)
-	    gen_cpu_hotplug(4, 4)
-	    gen_cpu_hotplug(5, 5)
-	    gen_cpu_hotplug(6, 6)
-	    gen_cpu_hotplug(7, 7)
-	    gen_cpu_hotplug(8, 8)
-	    gen_cpu_hotplug(9, 9)
-	    gen_cpu_hotplug(A, 10)
-	    gen_cpu_hotplug(B, 11)
-	    gen_cpu_hotplug(C, 12)
-	    gen_cpu_hotplug(D, 13)
-	    gen_cpu_hotplug(E, 14)
-
-            Return(0x01)
+	    Return(\_PR.PRSC())
         }
 
 #define gen_pci_hotplug(nr)                                       \
@@ -739,6 +792,7 @@ DefinitionBlock (
 
             Return(0x01)
         }
+
         Method(_L02) {
             Return(0x01)
         }
