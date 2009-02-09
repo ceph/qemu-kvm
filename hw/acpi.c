@@ -779,9 +779,6 @@ void qemu_system_cpu_hot_add(int cpu, int state)
             fprintf(stderr, "cpu %d creation failed\n", cpu);
             return;
         }
-#ifdef USE_KVM
-        kvm_init_vcpu(env);
-#endif
     }
 
     qemu_set_irq(pm_state->irq, 1);
