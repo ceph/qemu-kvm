@@ -9910,8 +9910,8 @@ pcibios_init_irqs:
   mov  dl, #0x00
   call pcibios_init_sel_reg
   mov  dx, #0x0cfc
-  in   eax, dx
-  cmp  eax, [si+12] ;; check irq router
+  in   ax, dx
+  cmp  ax, [si+12] ;; check irq router
   jne  pci_init_end
   mov  dl, [si+34]
   call pcibios_init_sel_reg
