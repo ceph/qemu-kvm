@@ -1387,8 +1387,6 @@ cirrus_hook_write_sr(CirrusVGAState * s, unsigned reg_index, int reg_value)
 	printf("cirrus: handled outport sr_index %02x, sr_value %02x\n",
 	       reg_index, reg_value);
 #endif
-	if (reg_index == 0x07)
-	    cirrus_update_memory_access(s);
 	break;
     case 0x17:			// Configuration Readback and Extended Control
 	s->sr[reg_index] = (s->sr[reg_index] & 0x38) | (reg_value & 0xc7);
