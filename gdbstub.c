@@ -33,8 +33,8 @@
 #include "qemu-char.h"
 #include "sysemu.h"
 #include "gdbstub.h"
-#include "qemu-kvm.h"
 #endif
+#include "qemu-kvm.h"
 
 #define MAX_PACKET_LENGTH 4096
 
