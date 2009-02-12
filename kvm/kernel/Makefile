@@ -77,7 +77,7 @@ header-sync:
 	for i in $$(find $T -name '*.h'); do \
 		$(call unifdef,$$i); done
 	$(call hack, include/linux/kvm.h)
-	$(call hack, include/asm-x86/kvm.h)
+	$(call hack, include/asm-$(ARCH_DIR)/kvm.h)
 	set -e && for i in $$(find $T -type f -printf '%P '); \
 		do mkdir -p $$(dirname $$i); cmp -s $$i $T/$$i || cp $T/$$i $$i; done
 	rm -rf $T
