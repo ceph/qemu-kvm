@@ -21,7 +21,7 @@ FLATLIBS = test/lib/libcflat.a $(libgcc)
 tests-common = $(TEST_DIR)/bootstrap \
 			$(TEST_DIR)/vmexit.flat $(TEST_DIR)/tsc.flat \
 			$(TEST_DIR)/smptest.flat  $(TEST_DIR)/port80.flat \
-			$(TEST_DIR)/realmode.flat
+			$(TEST_DIR)/realmode.flat $(TEST_DIR)/msr.flat
 
 test_cases: $(tests-common) $(tests)
 
@@ -58,6 +58,8 @@ $(TEST_DIR)/realmode.flat: $(TEST_DIR)/realmode.o
 	$(CC) -m32 -nostdlib -o $@ -Wl,-T,$(TEST_DIR)/realmode.lds $^
 
 $(TEST_DIR)/realmode.o: bits = 32
+
+$(TEST_DIR)/msr.flat: $(cstart.o) $(TEST_DIR)/msr.o
 
 arch_clean:
 	$(RM) $(TEST_DIR)/bootstrap $(TEST_DIR)/*.o $(TEST_DIR)/*.flat \
