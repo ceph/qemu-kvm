@@ -139,6 +139,13 @@
 #ifdef CONFIG_SDL
 #ifdef __APPLE__
 #include <SDL/SDL.h>
+int qemu_main(int argc, char **argv, char **envp);
+int main(int argc, char **argv)
+{
+    qemu_main(argc, argv, NULL);
+}
+#undef main
+#define main qemu_main
 #endif
 #endif /* CONFIG_SDL */
 
@@ -2285,8 +2292,7 @@ void drive_uninit(BlockDriverState *bdrv)
         }
 }
 
-int drive_init(struct drive_opt *arg, int snapshot,
-               QEMUMachine *machine)
+int drive_init(struct drive_opt *arg, int snapshot, void *opaque)
 {
     char buf[128];
     char file[1024];
@@ -2299,6 +2305,7 @@ int drive_init(struct drive_opt *arg, int snapshot,
     int cyls, heads, secs, translation;
     BlockDriverState *bdrv;
     BlockDriver *drv = NULL;
+    QEMUMachine *machine = opaque;
     int max_devs;
     int index;
     int cache;

@@ -44,6 +44,7 @@ VLANClientState *qemu_new_vlan_client(VLANState *vlan,
                                       IOCanRWHandler *fd_can_read,
                                       void *opaque);
 void qemu_del_vlan_client(VLANClientState *vc);
+VLANClientState *qemu_find_vlan_client(VLANState *vlan, void *opaque);
 int qemu_can_send_packet(VLANClientState *vc);
 ssize_t qemu_sendv_packet(VLANClientState *vc, const struct iovec *iov,
                           int iovcnt);
@@ -69,7 +70,7 @@ struct NICInfo {
     const char *model;
     const char *name;
     VLANState *vlan;
-    int devfn;
+    void *private;
     int used;
 };
 
@@ -106,6 +107,8 @@ void net_slirp_redir(const char *redir_str);
 void net_cleanup(void);
 int slirp_is_inited(void);
 void net_client_check(void);
+void net_host_device_add(const char *device, const char *opts);
+void net_host_device_remove(int vlan_id, const char *device);
 
 #define DEFAULT_NETWORK_SCRIPT "/etc/qemu-ifup"
 #define DEFAULT_NETWORK_DOWN_SCRIPT "/etc/qemu-ifdown"

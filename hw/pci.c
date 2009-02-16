@@ -26,6 +26,7 @@
 #include "console.h"
 #include "net.h"
 #include "virtio-net.h"
+#include "sysemu.h"
 #include "pc.h"
 #include "qemu-kvm.h"
 #include "device-assignment.h"
@@ -161,6 +162,82 @@ static int pci_set_default_subsystem_id(PCIDevice *pci_dev)
     return 0;
 }
 
+/*
+ * Parse [[<domain>:]<bus>:]<slot>, return -1 on error
+ */
+static int pci_parse_devaddr(const char *addr, int *domp, int *busp, unsigned *slotp)
+{
+    const char *p;
+    char *e;
+    unsigned long val;
+    unsigned long dom = 0, bus = 0;
+    unsigned slot = 0;
+
+    p = addr;
+    val = strtoul(p, &e, 16);
+    if (e == p)
+	return -1;
+    if (*e == ':') {
+	bus = val;
+	p = e + 1;
+	val = strtoul(p, &e, 16);
+	if (e == p)
+	    return -1;
+	if (*e == ':') {
+	    dom = bus;
+	    bus = val;
+	    p = e + 1;
+	    val = strtoul(p, &e, 16);
+	    if (e == p)
+		return -1;
+	}
+    }
+
+    if (dom > 0xffff || bus > 0xff || val > 0x1f)
+	return -1;
+
+    slot = val;
+
+    if (*e)
+	return -1;
+
+    /* Note: QEMU doesn't implement domains other than 0 */
+    if (dom != 0 || pci_find_bus(bus) == NULL)
+	return -1;
+
+    *domp = dom;
+    *busp = bus;
+    *slotp = slot;
+    return 0;
+}
+
+int pci_read_devaddr(const char *addr, int *domp, int *busp, unsigned *slotp)
+{
+    char devaddr[32];
+
+    if (!get_param_value(devaddr, sizeof(devaddr), "pci_addr", addr))
+        return -1;
+
+    return pci_parse_devaddr(devaddr, domp, busp, slotp);
+}
+
+int pci_assign_devaddr(const char *addr, int *domp, int *busp, unsigned *slotp)
+{
+    char devaddr[32];
+
+    if (!get_param_value(devaddr, sizeof(devaddr), "pci_addr", addr))
+	return -1;
+
+    if (!strcmp(devaddr, "auto")) {
+        *domp = *busp = 0;
+        *slotp = -1;
+        /* want to support dom/bus auto-assign at some point */
+        return 0;
+    }
+
+    return pci_parse_devaddr(devaddr, domp, busp, slotp);
+}
+
 /* -1 for devfn means auto assign */
 PCIDevice *pci_register_device(PCIBus *bus, const char *name,
                                int instance_size, int devfn,
@@ -251,9 +328,11 @@ void pci_register_io_region(PCIDevice *pci_dev, int region_num,
     if ((unsigned int)region_num >= PCI_NUM_REGIONS)
         return;
 
-    if (size & (size-1))
-        term_printf("WARNING: PCI region size must be pow2 "
+    if (size & (size-1)) {
+        fprintf(stderr, "ERROR: PCI region size must be pow2 "
                     "type=0x%x, size=0x%x\n", type, size);
+        exit(1);
+    }
 
     r = &pci_dev->io_regions[region_num];
     r->addr = -1;
@@ -267,7 +346,6 @@ void pci_register_io_region(PCIDevice *pci_dev, int region_num,
     }
     *(uint32_t *)(pci_dev->config + addr) = cpu_to_le32(type);
 }
-
 
 static void pci_update_mappings(PCIDevice *d)
 {
@@ -751,9 +829,8 @@ PCIDevice *pci_nic_init(PCIBus *bus, NICInfo *nd, int devfn,
     for (i = 0; pci_nic_models[i]; i++)
         if (strcmp(nd->model, pci_nic_models[i]) == 0) {
             pci_dev = pci_nic_init_fns[i](bus, nd, devfn);
-            if (pci_dev) {
-                nd->devfn = pci_dev->devfn;
-            }
+            if (pci_dev)
+                nd->private = pci_dev;
             return pci_dev;
         }
 
@@ -792,21 +869,14 @@ PCIBus *pci_find_bus(int bus_num)
     return bus;
 }
 
-PCIDevice *pci_find_device(int bus_num, int slot)
+PCIDevice *pci_find_device(int bus_num, int slot, int function)
 {
-    int devfn;
-    PCIDevice *d;
     PCIBus *bus = pci_find_bus(bus_num);
 
     if (!bus)
         return NULL;
 
-    for(devfn = 0; devfn < 256; devfn++) {
-        d = bus->devices[devfn];
-            if (d && PCI_SLOT(devfn) == slot)
-                return d;
-    }
-    return NULL;
+    return bus->devices[PCI_DEVFN(slot, function)];
 }
 
 PCIBus *pci_bridge_init(PCIBus *bus, int devfn, uint16_t vid, uint16_t did,

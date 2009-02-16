@@ -570,6 +570,7 @@ void qemu_system_powerdown(void)
     }
 }
 #endif
+
 #define GPE_BASE 0xafe0
 #define PROC_BASE 0xaf00
 #define PCI_BASE 0xae00
@@ -716,9 +717,11 @@ static uint32_t pciej_read(void *opaque, uint32_t addr)
 
 static void pciej_write(void *opaque, uint32_t addr, uint32_t val)
 {
+#if defined (TARGET_I386)
     int slot = ffs(val) - 1;
 
-    device_hot_remove_success(0, slot);
+    pci_device_hot_remove_success(0, slot);
+#endif
 
 #if defined(DEBUG)
     printf("pciej write %x <== %d\n", addr, val);
@@ -820,7 +823,7 @@ static void disable_device(struct pci_status *p, struct gpe_regs *g, int slot)
     p->down |= (1 << slot);
 }
 
-void qemu_system_device_hot_add(int pcibus, int slot, int state)
+void qemu_system_device_hot_add(int bus, int slot, int state)
 {
     pci0_status.up = 0;
     pci0_status.down = 0;
@@ -828,7 +831,6 @@ void qemu_system_device_hot_add(int pcibus, int slot, int state)
         enable_device(&pci0_status, &gpe, slot);
     else
         disable_device(&pci0_status, &gpe, slot);
-
     if (gpe.en & 2) {
         qemu_set_irq(pm_state->irq, 1);
         qemu_set_irq(pm_state->irq, 0);

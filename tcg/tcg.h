@@ -272,7 +272,6 @@ struct TCGContext {
     int op_count_max; /* max insn per TB */
     int64_t temp_count;
     int temp_count_max;
-    int64_t old_op_count;
     int64_t del_op_count;
     int64_t code_in_len;
     int64_t code_out_len;
@@ -389,8 +388,6 @@ typedef struct TCGTargetOpDef {
     int op;
     const char *args_ct_str[TCG_MAX_OP_ARGS];
 } TCGTargetOpDef;
-
-extern TCGOpDef tcg_op_defs[];
 
 void tcg_target_init(TCGContext *s);
 void tcg_target_qemu_prologue(TCGContext *s);

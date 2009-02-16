@@ -138,10 +138,10 @@ typedef struct DriveInfo {
     BlockInterfaceType type;
     int bus;
     int unit;
-    BlockInterfaceErrorAction onerror;
-    char serial[21];
     int used;
     int drive_opt_idx;
+    BlockInterfaceErrorAction onerror;
+    char serial[21];
 } DriveInfo;
 
 #define MAX_IDE_DEVS	2
@@ -154,11 +154,10 @@ extern int extboot_drive;
 
 extern int drive_get_index(BlockInterfaceType type, int bus, int unit);
 extern int drive_get_max_bus(BlockInterfaceType type);
-extern const char *drive_get_serial(BlockDriverState *bdrv);
-extern BlockInterfaceErrorAction drive_get_onerror(BlockDriverState *bdrv);
-
 extern void drive_uninit(BlockDriverState *bdrv);
 extern void drive_remove(int index);
+extern const char *drive_get_serial(BlockDriverState *bdrv);
+extern BlockInterfaceErrorAction drive_get_onerror(BlockDriverState *bdrv);
 
 struct drive_opt {
     const char *file;
@@ -169,21 +168,27 @@ struct drive_opt {
 extern struct drive_opt drives_opt[MAX_DRIVES];
 extern int nb_drives_opt;
 
-struct QEMUMachine;
 extern int drive_add(const char *file, const char *fmt, ...);
-extern int drive_init(struct drive_opt *arg, int snapshot,
-                      struct QEMUMachine *machine);
+extern int drive_init(struct drive_opt *arg, int snapshot, void *machine);
 
 /* acpi */
-void qemu_system_cpu_hot_add(int cpu, int state);
 void qemu_system_hot_add_init(const char *cpu_model);
+void qemu_system_cpu_hot_add(int cpu, int state);
 void qemu_system_device_hot_add(int pcibus, int slot, int state);
 
 /* device-hotplug */
-void device_hot_add(int pcibus, const char *type, const char *opts);
-void drive_hot_add(int pcibus, const char *devfn_string, const char *opts);
-void device_hot_remove(int pcibus, int slot);
-void device_hot_remove_success(int pcibus, int slot);
+
+typedef int (dev_match_fn)(void *dev_private, void *arg);
+
+int add_init_drive(const char *opts);
+void destroy_nic(dev_match_fn *match_fn, void *arg);
+void destroy_bdrvs(dev_match_fn *match_fn, void *arg);
+
+/* pci-hotplug */
+void pci_device_hot_add(const char *pci_addr, const char *type, const char *opts);
+void drive_hot_add(const char *pci_addr, const char *opts);
+void pci_device_hot_remove(const char *pci_addr);
+void pci_device_hot_remove_success(int pcibus, int slot);
 
 /* serial ports */
 

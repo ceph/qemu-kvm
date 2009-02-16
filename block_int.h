@@ -129,6 +129,7 @@ struct BlockDriverState {
     /* PCI devfn of parent */
     int devfn;
     BlockDriverState *next;
+    void *private;
 };
 
 struct BlockDriverAIOCB {

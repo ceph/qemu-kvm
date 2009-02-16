@@ -27,7 +27,6 @@ static inline void qemu_irq_pulse(qemu_irq irq)
 
 /* Returns an array of N IRQs.  */
 qemu_irq *qemu_allocate_irqs(qemu_irq_handler handler, void *opaque, int n);
-
 void qemu_free_irqs(qemu_irq *s);
 
 /* Returns a new IRQ with opposite polarity.  */

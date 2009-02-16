@@ -59,7 +59,7 @@
 static void patch_reloc(uint8_t *code_ptr, int type, 
                         tcg_target_long value, tcg_target_long addend);
 
-TCGOpDef tcg_op_defs[] = {
+static TCGOpDef tcg_op_defs[] = {
 #define DEF(s, n, copy_size) { #s, 0, 0, n, n, 0, copy_size },
 #define DEF2(s, iargs, oargs, cargs, flags) { #s, iargs, oargs, cargs, iargs + oargs + cargs, flags, 0 },
 #include "tcg-opc.h"
@@ -2038,8 +2038,6 @@ void tcg_dump_info(FILE *f,
                 s->tb_count1 ? (double)(s->tb_count1 - s->tb_count) / s->tb_count1 * 100.0 : 0);
     cpu_fprintf(f, "avg ops/TB          %0.1f max=%d\n", 
                 s->tb_count ? (double)s->op_count / s->tb_count : 0, s->op_count_max);
-    cpu_fprintf(f, "old ops/total ops   %0.1f%%\n", 
-                s->op_count ? (double)s->old_op_count / s->op_count * 100.0 : 0);
     cpu_fprintf(f, "deleted ops/TB      %0.2f\n",
                 s->tb_count ? 
                 (double)s->del_op_count / s->tb_count : 0);

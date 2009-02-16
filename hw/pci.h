@@ -11,7 +11,14 @@
 /* PCI bus */
 extern target_phys_addr_t pci_mem_base;
 
+#define PCI_DEVFN(slot, func)   ((((slot) & 0x1f) << 3) | ((func) & 0x07))
+#define PCI_SLOT(devfn)         (((devfn) >> 3) & 0x1f)
+#define PCI_FUNC(devfn)         ((devfn) & 0x07)
+
 /* Device classes and subclasses */
+
+#define PCI_BASE_CLASS_STORAGE           0x01
+#define PCI_BASE_CLASS_NETWORK           0x02
 
 #define PCI_CLASS_STORAGE_SCSI           0x0100
 #define PCI_CLASS_STORAGE_IDE            0x0101
@@ -204,7 +211,6 @@ PCIDevice *pci_register_device(PCIBus *bus, const char *name,
                                int instance_size, int devfn,
                                PCIConfigReadFunc *config_read,
                                PCIConfigWriteFunc *config_write);
-
 int pci_unregister_device(PCIDevice *pci_dev);
 
 void pci_register_io_region(PCIDevice *pci_dev, int region_num,
@@ -231,7 +237,10 @@ uint32_t pci_data_read(void *opaque, uint32_t addr, int len);
 int pci_bus_num(PCIBus *s);
 void pci_for_each_device(int bus_num, void (*fn)(PCIDevice *d));
 PCIBus *pci_find_bus(int bus_num);
-PCIDevice *pci_find_device(int bus_num, int slot);
+PCIDevice *pci_find_device(int bus_num, int slot, int function);
+
+int pci_read_devaddr(const char *addr, int *domp, int *busp, unsigned *slotp);
+int pci_assign_devaddr(const char *addr, int *domp, int *busp, unsigned *slotp);
 
 void pci_info(void);
 PCIBus *pci_bridge_init(PCIBus *bus, int devfn, uint16_t vid, uint16_t did,

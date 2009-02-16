@@ -3382,7 +3382,7 @@ void pci_piix3_ide_init(PCIBus *bus, BlockDriverState **hd_table, int devfn,
 
     for (i = 0; i < 4; i++)
         if (hd_table[i])
-            hd_table[i]->devfn = d->dev.devfn;
+            hd_table[i]->private = &d->dev;
 
     register_savevm("ide", 0, 2, pci_ide_save, pci_ide_load, d);
 }

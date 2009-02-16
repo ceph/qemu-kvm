@@ -314,7 +314,7 @@ void *virtio_blk_init(PCIBus *bus, BlockDriverState *bs)
     s->vdev.reset = virtio_blk_reset;
     s->bs = bs;
     s->rq = NULL;
-    bs->devfn = s->vdev.pci_dev.devfn;
+    bs->private = &s->vdev.pci_dev;
     bdrv_guess_geometry(s->bs, &cylinders, &heads, &secs);
     bdrv_set_geometry_hint(s->bs, cylinders, heads, secs);
 
