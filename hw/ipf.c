@@ -514,23 +514,23 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
 
     if (cirrus_vga_enabled) {
         if (pci_enabled) {
-            pci_cirrus_vga_init(pci_bus, ds, phys_ram_base + vga_ram_addr,
+            pci_cirrus_vga_init(pci_bus, phys_ram_base + vga_ram_addr,
                                 vga_ram_addr, vga_ram_size);
         } else {
-            isa_cirrus_vga_init(ds, phys_ram_base + vga_ram_addr,
+            isa_cirrus_vga_init(phys_ram_base + vga_ram_addr,
                                 vga_ram_addr, vga_ram_size);
         }
     } else {
         if (pci_enabled) {
-            pci_vga_init(pci_bus, ds, phys_ram_base + vga_ram_addr,
+            pci_vga_init(pci_bus, phys_ram_base + vga_ram_addr,
                          vga_ram_addr, vga_ram_size, 0, 0);
         } else {
-            isa_vga_init(ds, phys_ram_base + vga_ram_addr,
+            isa_vga_init(phys_ram_base + vga_ram_addr,
                          vga_ram_addr, vga_ram_size);
         }
     }
 
-    rtc_state = rtc_init(0x70, i8259[8]);
+    rtc_state = rtc_init(0x70, i8259[8], 2000);
 
     if (pci_enabled) {
         pic_set_alt_irq_func(isa_pic, NULL, NULL);
