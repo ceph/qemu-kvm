@@ -571,6 +571,21 @@ void remove_assigned_device(AssignedDevInfo *adev)
     free_assigned_device(adev);
 }
 
+AssignedDevInfo *get_assigned_device(int pcibus, int slot)
+{
+    AssignedDevice *assigned_dev = NULL;
+    AssignedDevInfo *adev = NULL;
+
+    LIST_FOREACH(adev, &adev_head, next) {
+        assigned_dev = adev->assigned_dev;
+        if (pci_bus_num(assigned_dev->dev.bus) == pcibus &&
+            PCI_SLOT(assigned_dev->dev.devfn) == slot)
+            return adev;
+    }
+
+    return NULL;
+}
+
 /* The pci config space got updated. Check if irq numbers have changed
  * for our devices
  */
@@ -636,6 +651,11 @@ struct PCIDevice *init_assigned_device(AssignedDevInfo *adev, PCIBus *bus)
 
     /* assign device to guest */
     r = assign_device(adev);
+    if (r < 0)
+        goto assigned_out;
+
+    /* assign irq for the device */
+    r = assign_irq(adev);
     if (r < 0)
         goto assigned_out;
 

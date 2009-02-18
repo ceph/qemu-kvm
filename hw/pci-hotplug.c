@@ -155,6 +155,14 @@ static PCIDevice *qemu_pci_hot_assign_device(PCIBus *pci_bus, const char *opts)
     return ret;
 }
 
+static void qemu_pci_hot_deassign_device(AssignedDevInfo *adev)
+{
+    remove_assigned_device(adev);
+
+    term_printf("Unregister host PCI device %02x:%02x.%1x "
+		"(\"%s\") from guest\n",
+		adev->bus, adev->dev, adev->func, adev->name);
+}
 #endif /* USE_KVM_DEVICE_ASSIGNMENT */
 
 void pci_device_hot_add(const char *pci_addr, const char *type, const char *opts)
@@ -231,11 +239,20 @@ void pci_device_hot_remove_success(int pcibus, int slot)
 {
     PCIDevice *d = pci_find_device(pcibus, slot, 0);
     int class_code;
+    AssignedDevInfo *adev;
 
     if (!d) {
         term_printf("invalid slot %d\n", slot);
         return;
     }
+
+#ifdef USE_KVM_DEVICE_ASSIGNMENT
+    adev = get_assigned_device(pcibus, slot);
+    if (adev) {
+        qemu_pci_hot_deassign_device(adev);
+        return;
+    }
+#endif /* USE_KVM_DEVICE_ASSIGNMENT */
 
     class_code = d->config_read(d, PCI_CLASS_DEVICE+1, 1);
 
