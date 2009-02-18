@@ -1141,6 +1141,20 @@ int kvm_assign_irq(kvm_context_t kvm,
 }
 #endif
 
+#ifdef KVM_CAP_DEVICE_DEASSIGNMENT
+int kvm_deassign_pci_device(kvm_context_t kvm,
+			    struct kvm_assigned_pci_dev *assigned_dev)
+{
+	int ret;
+
+	ret = ioctl(kvm->vm_fd, KVM_DEASSIGN_PCI_DEVICE, assigned_dev);
+	if (ret < 0)
+		return -errno;
+
+	return ret;
+}
+#endif
+
 int kvm_destroy_memory_region_works(kvm_context_t kvm)
 {
 	int ret = 0;

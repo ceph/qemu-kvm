@@ -737,6 +737,19 @@ int kvm_assign_irq(kvm_context_t kvm,
 int kvm_destroy_memory_region_works(kvm_context_t kvm);
 #endif
 
+#ifdef KVM_CAP_DEVICE_DEASSIGNMENT
+/*!
+ * \brief Notifies host kernel about a PCI device to be deassigned from a guest
+ *
+ * Used for hot remove PCI device, this function notifies the host
+ * kernel about the deassigning of the physical PCI device from a guest.
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param assigned_dev Parameters, like bus, devfn number, etc
+ */
+int kvm_deassign_pci_device(kvm_context_t kvm,
+			    struct kvm_assigned_pci_dev *assigned_dev);
+#endif
 
 /*!
  * \brief Checks whether the generic irq routing capability is present
