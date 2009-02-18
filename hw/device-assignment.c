@@ -549,6 +549,28 @@ static int assign_irq(AssignedDevInfo *adev)
     return r;
 }
 
+static void deassign_device(AssignedDevInfo *adev)
+{
+    struct kvm_assigned_pci_dev assigned_dev_data;
+    AssignedDevice *dev = adev->assigned_dev;
+    int r;
+
+    memset(&assigned_dev_data, 0, sizeof(assigned_dev_data));
+    assigned_dev_data.assigned_dev_id  =
+	calc_assigned_dev_id(dev->h_busnr, dev->h_devfn);
+
+    r = kvm_deassign_pci_device(kvm_context, &assigned_dev_data);
+    if (r < 0)
+	fprintf(stderr, "Failed to deassign device \"%s\" : %s\n",
+                adev->name, strerror(-r));
+}
+
+void remove_assigned_device(AssignedDevInfo *adev)
+{
+    deassign_device(adev);
+    free_assigned_device(adev);
+}
+
 /* The pci config space got updated. Check if irq numbers have changed
  * for our devices
  */
@@ -563,7 +585,7 @@ void assigned_dev_update_irqs()
 
         r = assign_irq(adev);
         if (r < 0)
-            free_assigned_device(adev);
+            remove_assigned_device(adev);
 
         adev = next;
     }
@@ -615,10 +637,12 @@ struct PCIDevice *init_assigned_device(AssignedDevInfo *adev, PCIBus *bus)
     /* assign device to guest */
     r = assign_device(adev);
     if (r < 0)
-        goto out;
+        goto assigned_out;
 
     return &dev->dev;
 
+assigned_out:
+    deassign_device(adev);
 out:
     free_assigned_device(adev);
     return NULL;

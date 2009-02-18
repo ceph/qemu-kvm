@@ -97,6 +97,7 @@ struct AssignedDevInfo {
 PCIDevice *init_assigned_device(AssignedDevInfo *adev, PCIBus *bus);
 AssignedDevInfo *add_assigned_device(const char *arg);
 void add_assigned_devices(PCIBus *bus, const char **devices, int n_devices);
+void remove_assigned_device(AssignedDevInfo *adev);
 ram_addr_t assigned_dev_load_option_roms(ram_addr_t rom_base_offset);
 void assigned_dev_update_irqs(void);
 
