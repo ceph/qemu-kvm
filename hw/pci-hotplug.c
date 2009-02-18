@@ -31,6 +31,7 @@
 #include "console.h"
 #include "block_int.h"
 #include "virtio-blk.h"
+#include "device-assignment.h"
 
 #if defined(TARGET_I386) || defined(TARGET_X86_64)
 static PCIDevice *qemu_pci_hot_add_nic(PCIBus *pci_bus, const char *opts)
@@ -127,6 +128,36 @@ static PCIDevice *qemu_pci_hot_add_storage(PCIBus *pci_bus, const char *opts)
     return opaque;
 }
 
+#ifdef USE_KVM_DEVICE_ASSIGNMENT
+static PCIDevice *qemu_pci_hot_assign_device(PCIBus *pci_bus, const char *opts)
+{
+    AssignedDevInfo *adev;
+    PCIDevice *ret;
+
+    adev = add_assigned_device(opts);
+    if (adev == NULL) {
+        term_printf ("Error adding device; check syntax\n");
+        return NULL;
+    }
+
+    ret = init_assigned_device(adev, pci_bus);
+    if (ret == NULL) {
+        term_printf("Failed to assign device\n");
+        free_assigned_device(adev);
+        return NULL;
+    }
+
+    term_printf("Registered host PCI device %02x:%02x.%1x "
+		"(\"%s\") as guest device %02x:%02x.%1x\n",
+		adev->bus, adev->dev, adev->func, adev->name,
+		pci_bus_num(pci_bus), (ret->devfn >> 3) & 0x1f,
+		adev->func);
+
+    return ret;
+}
+
+#endif /* USE_KVM_DEVICE_ASSIGNMENT */
+
 void pci_device_hot_add(const char *pci_addr, const char *type, const char *opts)
 {
     PCIDevice *dev = NULL;
@@ -149,6 +180,10 @@ void pci_device_hot_add(const char *pci_addr, const char *type, const char *opts
         dev = qemu_pci_hot_add_nic(pci_bus, opts);
     else if (strcmp(type, "storage") == 0)
         dev = qemu_pci_hot_add_storage(pci_bus, opts);
+#ifdef USE_KVM_DEVICE_ASSIGNMENT
+    else if (strcmp(type, "host") == 0)
+        dev = qemu_pci_hot_assign_device(pci_bus, opts);
+#endif /* USE_KVM_DEVICE_ASSIGNMENT */
     else
         term_printf("invalid type: %s\n", type);
 

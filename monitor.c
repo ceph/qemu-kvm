@@ -1545,7 +1545,7 @@ static const term_cmd_t term_cmds[] = {
                                         "[,cyls=c,heads=h,secs=s[,trans=t]]\n"
                                         "[snapshot=on|off][,cache=on|off]",
                                         "add drive to PCI storage controller" },
-    { "pci_add", "sss", pci_device_hot_add, "pci_addr=auto|[[<domain>:]<bus>:]<slot> nic|storage [[vlan=n][,macaddr=addr][,model=type]] [file=file][,if=type][,bus=nr]...", "hot-add PCI device" },
+    { "pci_add", "sss", pci_device_hot_add, "pci_addr=auto|[[<domain>:]<bus>:]<slot> nic|storage|host [[vlan=n][,macaddr=addr][,model=type]] [file=file][,if=type][,bus=nr]... [host=02:00.0[,name=string][,dma=none]", "hot-add PCI device" },
     { "pci_del", "s", pci_device_hot_remove, "pci_addr=[[<domain>:]<bus>:]<slot>", "hot remove PCI device" },
     { "host_net_add", "ss", net_host_device_add,
       "[tap,user,socket,vde] options", "add host VLAN client" },
