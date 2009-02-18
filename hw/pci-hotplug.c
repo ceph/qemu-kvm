@@ -143,7 +143,6 @@ static PCIDevice *qemu_pci_hot_assign_device(PCIBus *pci_bus, const char *opts)
     ret = init_assigned_device(adev, pci_bus);
     if (ret == NULL) {
         term_printf("Failed to assign device\n");
-        free_assigned_device(adev);
         return NULL;
     }
 
