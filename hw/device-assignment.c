@@ -487,6 +487,68 @@ static uint32_t calc_assigned_dev_id(uint8_t bus, uint8_t devfn)
     return (uint32_t)bus << 8 | (uint32_t)devfn;
 }
 
+static int assign_device(AssignedDevInfo *adev)
+{
+    struct kvm_assigned_pci_dev assigned_dev_data;
+    AssignedDevice *dev = adev->assigned_dev;
+    int r;
+
+    memset(&assigned_dev_data, 0, sizeof(assigned_dev_data));
+    assigned_dev_data.assigned_dev_id  =
+	calc_assigned_dev_id(dev->h_busnr, dev->h_devfn);
+    assigned_dev_data.busnr = dev->h_busnr;
+    assigned_dev_data.devfn = dev->h_devfn;
+
+#ifdef KVM_CAP_IOMMU
+    /* We always enable the IOMMU if present
+     * (or when not disabled on the command line)
+     */
+    r = kvm_check_extension(kvm_context, KVM_CAP_IOMMU);
+    if (r && !adev->disable_iommu)
+	assigned_dev_data.flags |= KVM_DEV_ASSIGN_ENABLE_IOMMU;
+#endif
+
+    r = kvm_assign_pci_device(kvm_context, &assigned_dev_data);
+    if (r < 0)
+	fprintf(stderr, "Failed to assign device \"%s\" : %s\n",
+                adev->name, strerror(-r));
+    return r;
+}
+
+static int assign_irq(AssignedDevInfo *adev)
+{
+    struct kvm_assigned_irq assigned_irq_data;
+    AssignedDevice *dev = adev->assigned_dev;
+    int irq, r = 0;
+
+    irq = pci_map_irq(&dev->dev, dev->intpin);
+    irq = piix_get_irq(irq);
+
+#ifdef TARGET_IA64
+    irq = ipf_map_irq(&dev->dev, irq);
+#endif
+
+    if (dev->girq == irq)
+        return r;
+
+    memset(&assigned_irq_data, 0, sizeof(assigned_irq_data));
+    assigned_irq_data.assigned_dev_id =
+        calc_assigned_dev_id(dev->h_busnr, dev->h_devfn);
+    assigned_irq_data.guest_irq = irq;
+    assigned_irq_data.host_irq = dev->real_device.irq;
+    r = kvm_assign_irq(kvm_context, &assigned_irq_data);
+    if (r < 0) {
+        fprintf(stderr, "Failed to assign irq for \"%s\": %s\n",
+                adev->name, strerror(-r));
+        fprintf(stderr, "Perhaps you are assigning a device "
+                "that shares an IRQ with another device?\n");
+        return r;
+    }
+
+    dev->girq = irq;
+    return r;
+}
+
 /* The pci config space got updated. Check if irq numbers have changed
  * for our devices
  */
@@ -497,37 +559,11 @@ void assigned_dev_update_irqs()
     adev = LIST_FIRST(&adev_head);
     while (adev) {
         AssignedDevInfo *next = LIST_NEXT(adev, next);
-        AssignedDevice *assigned_dev = adev->assigned_dev;
-        int irq, r;
+        int r;
 
-        irq = pci_map_irq(&assigned_dev->dev, assigned_dev->intpin);
-        irq = piix_get_irq(irq);
-
-#ifdef TARGET_IA64
-	irq = ipf_map_irq(&assigned_dev->dev, irq);
-#endif
-
-        if (irq != assigned_dev->girq) {
-            struct kvm_assigned_irq assigned_irq_data;
-
-            memset(&assigned_irq_data, 0, sizeof(assigned_irq_data));
-            assigned_irq_data.assigned_dev_id  =
-                calc_assigned_dev_id(assigned_dev->h_busnr,
-                                     (uint8_t) assigned_dev->h_devfn);
-            assigned_irq_data.guest_irq = irq;
-            assigned_irq_data.host_irq = assigned_dev->real_device.irq;
-            r = kvm_assign_irq(kvm_context, &assigned_irq_data);
-            if (r < 0) {
-                fprintf(stderr, "Failed to assign irq for \"%s\": %s\n",
-                        adev->name, strerror(-r));
-                fprintf(stderr, "Perhaps you are assigning a device "
-                        "that shares an IRQ with another device?\n");
-                free_assigned_device(adev);
-                adev = next;
-                continue;
-            }
-            assigned_dev->girq = irq;
-        }
+        r = assign_irq(adev);
+        if (r < 0)
+            free_assigned_device(adev);
 
         adev = next;
     }
@@ -576,27 +612,10 @@ struct PCIDevice *init_assigned_device(AssignedDevInfo *adev, PCIBus *bus)
     dev->h_busnr = adev->bus;
     dev->h_devfn = PCI_DEVFN(adev->dev, adev->func);
 
-    memset(&assigned_dev_data, 0, sizeof(assigned_dev_data));
-    assigned_dev_data.assigned_dev_id  =
-	calc_assigned_dev_id(dev->h_busnr, (uint32_t)dev->h_devfn);
-    assigned_dev_data.busnr = dev->h_busnr;
-    assigned_dev_data.devfn = dev->h_devfn;
-
-#ifdef KVM_CAP_IOMMU
-    /* We always enable the IOMMU if present
-     * (or when not disabled on the command line)
-     */
-    r = kvm_check_extension(kvm_context, KVM_CAP_IOMMU);
-    if (r && !adev->disable_iommu)
-	assigned_dev_data.flags |= KVM_DEV_ASSIGN_ENABLE_IOMMU;
-#endif
-
-    r = kvm_assign_pci_device(kvm_context, &assigned_dev_data);
-    if (r < 0) {
-	fprintf(stderr, "Failed to assign device \"%s\" : %s\n",
-                adev->name, strerror(-r));
-	goto out;
-    }
+    /* assign device to guest */
+    r = assign_device(adev);
+    if (r < 0)
+        goto out;
 
     return &dev->dev;
 
