@@ -967,6 +967,9 @@ static void pci_bios_init_device(PCIDevice *d)
                 *paddr = (*paddr + size - 1) & ~(size - 1);
                 pci_set_io_region_addr(d, i, *paddr);
                 *paddr += size;
+                /* make memory address page aligned */
+                if (!(val & PCI_ADDRESS_SPACE_IO))
+                    *paddr = (*paddr + 0xfff) & 0xfffff000;
             }
         }
         break;
