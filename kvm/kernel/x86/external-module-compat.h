@@ -22,6 +22,10 @@
 
 #endif
 
+#ifndef MSR_KERNEL_GS_BASE
+#define MSR_KERNEL_GS_BASE              0xc0000102
+#endif
+
 #ifndef MSR_VM_CR
 #define MSR_VM_CR                       0xc0010114
 #endif
