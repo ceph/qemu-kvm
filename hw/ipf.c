@@ -387,7 +387,6 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
     PCIBus *pci_bus;
     int piix3_devfn = -1;
     CPUState *env;
-    NICInfo *nd;
     qemu_irq *cpu_irq;
     qemu_irq *i8259;
     int page_size;
@@ -487,7 +486,7 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
                 kvm_ia64_copy_from_nvram_to_GFW(nvram_fd, g_fw_start);
                 close(nvram_fd);
             }
-            i = atexit(kvm_ia64_copy_from_GFW_to_nvram);
+            i = atexit((void *)kvm_ia64_copy_from_GFW_to_nvram);
             if (i != 0)
                 fprintf(stderr, "cannot set exit function\n");
         }
@@ -671,8 +670,8 @@ static void ipf_init_pci(ram_addr_t ram_size, int vga_ram_size,
 QEMUMachine ipf_machine = {
     .name = "itanium",
     .desc = "Itanium Platform",
-    .init = ipf_init_pci,
-    .ram_require = VGA_RAM_SIZE + GFW_SIZE,
+    .init = (QEMUMachineInitFunc *)ipf_init_pci,
+    .ram_require = (ram_addr_t)(VGA_RAM_SIZE + GFW_SIZE),
     .max_cpus = 255,
 };
 

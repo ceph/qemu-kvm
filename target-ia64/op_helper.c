@@ -27,6 +27,12 @@
 #include "qemu-kvm.h"
 #include "qemu-common.h"
 
+void cpu_ia64_set_model(CPUIA64State *env, uint32_t id);
+void cpu_ia64_close(CPUIA64State *env);
+void switch_mode(CPUState *env, int mode);
+void do_interrupt(CPUIA64State *env);
+int cpu_ia64_handle_mmu_fault (CPUState *env, target_ulong address,
+                               int access_type, int is_user, int is_softmmu);
 CPUState *cpu_ia64_init(const char *cpu_model)
 {
     CPUState *env;

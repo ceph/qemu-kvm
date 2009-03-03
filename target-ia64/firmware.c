@@ -649,7 +649,8 @@ kvm_ia64_copy_from_nvram_to_GFW(unsigned long nvram_fd,
     struct stat file_stat;
     if ((fstat(nvram_fd, &file_stat) < 0) ||
         (NVRAM_SIZE  != file_stat.st_size) ||
-        (read(nvram_fd, fw_start + NVRAM_OFFSET, NVRAM_SIZE) != NVRAM_SIZE))
+        (read(nvram_fd, (void *)(fw_start + NVRAM_OFFSET),
+              NVRAM_SIZE) != NVRAM_SIZE))
         return -1;
     return 0;
 }

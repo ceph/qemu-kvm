@@ -45,7 +45,6 @@ void do_interrupt (CPUState *env);
 
 void cpu_lock(void);
 void cpu_unlock(void);
-void cpu_loop_exit(void);
 
 static inline int cpu_halted(CPUState *env) {
     /* handle exit of HALTED state */

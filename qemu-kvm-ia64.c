@@ -8,9 +8,9 @@
 #include <libkvm.h>
 #include <pthread.h>
 #include <sys/utsname.h>
+#include <sys/io.h>
 
 
-extern kvm_context_t kvm_context;
 
 int kvm_arch_qemu_create_context(void)
 {
