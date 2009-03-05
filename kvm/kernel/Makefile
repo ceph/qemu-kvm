@@ -30,7 +30,7 @@ unifdef = mv $1 $1.orig && cat unifdef.h $1.orig > $1 && rm $1.orig
 hack = $(call _hack,$T/$(strip $1))
 
 hack-files-x86 = kvm_main.c mmu.c vmx.c svm.c x86.c irq.h lapic.c i8254.c kvm_trace.c timer.c
-hack-files-ia64 = kvm_main.c kvm_fw.c kvm_lib.c
+hack-files-ia64 = kvm_main.c kvm_fw.c kvm_lib.c kvm-ia64.c
 
 hack-files = $(hack-files-$(ARCH_DIR))
 
