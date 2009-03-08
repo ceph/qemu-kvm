@@ -21,6 +21,10 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
+#include "keymaps.h"
+
+
 #define KEY_RELEASE         0x80
 #define KEY_MASK            0x7f
 #define SHIFT_CODE          0x2a
@@ -202,7 +206,7 @@ static const int curses2keycode[CURSES_KEYS] = {
     [0x006] = 33 | CNTRL, /* Control + f */
     [0x007] = 34 | CNTRL, /* Control + g */
     [0x008] = 35 | CNTRL, /* Control + h */
-    [0x00a] = 36 | CNTRL, /* Control + j */
+    /* Control + j collides with Return */
     [0x00b] = 37 | CNTRL, /* Control + k */
     [0x00c] = 38 | CNTRL, /* Control + l */
 
@@ -238,11 +242,6 @@ static const int curses2keysym[CURSES_KEYS] = {
     [0x168] = QEMU_KEY_END,
 
 };
-
-typedef struct {
-	const char* name;
-	int keysym;
-} name2keysym_t;
 
 static const name2keysym_t name2keysym[] = {
     /* Plain ASCII */

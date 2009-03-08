@@ -690,7 +690,7 @@ static void do_v7m_exception_exit(CPUARMState *env)
        pointer.  */
 }
 
-void do_interrupt_v7m(CPUARMState *env)
+static void do_interrupt_v7m(CPUARMState *env)
 {
     uint32_t xpsr = xpsr_read(env);
     uint32_t lr;
@@ -1694,7 +1694,7 @@ uint32_t HELPER(get_cp15)(CPUState *env, uint32_t insn)
             case ARM_CPUID_ARM11MPCORE:
                 return 1;
             case ARM_CPUID_CORTEXA8:
-                return 0;
+                return 2;
             default:
                 goto bad_reg;
             }

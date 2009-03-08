@@ -1,5 +1,8 @@
 #ifndef HW_PC_H
 #define HW_PC_H
+
+#include "qemu-common.h"
+
 /* PC-style peripherals (also used by other machines).  */
 
 /* serial.c */
@@ -34,8 +37,8 @@ void pic_set_alt_irq_func(PicState2 *s, SetIRQFunc *alt_irq_func,
 int pic_read_irq(PicState2 *s);
 void pic_update_irq(PicState2 *s);
 uint32_t pic_intack_read(PicState2 *s);
-void pic_info(void);
-void irq_info(void);
+void pic_info(Monitor *mon);
+void irq_info(Monitor *mon);
 
 /* APIC */
 typedef struct IOAPICState IOAPICState;
@@ -104,10 +107,14 @@ CPUState *pc_new_cpu(int cpu, const char *cpu_model, int pci_enabled);
 
 /* acpi.c */
 extern int acpi_enabled;
+extern char *acpi_tables;
+extern size_t acpi_tables_len;
+
 i2c_bus *piix4_pm_init(PCIBus *bus, int devfn, uint32_t smb_io_base,
                        qemu_irq sci_irq);
 void piix4_smbus_register_device(SMBusDevice *dev, uint8_t addr);
 void acpi_bios_init(void);
+int acpi_table_add(const char *table_desc);
 
 /* hpet.c */
 extern int no_hpet;

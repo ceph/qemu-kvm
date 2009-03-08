@@ -50,6 +50,43 @@ void gemu_log(const char *fmt, ...)
     vfprintf(stderr, fmt, ap);
     va_end(ap);
 }
+
+/* These are no-ops because we are not threadsafe.  */
+static inline void cpu_exec_start(CPUState *env)
+{
+}
+
+static inline void cpu_exec_end(CPUState *env)
+{
+}
+
+static inline void start_exclusive(void)
+{
+}
+
+static inline void end_exclusive(void)
+{
+}
+
+void fork_start(void)
+{
+}
+
+void fork_end(int child)
+{
+    if (child) {
+        gdbserver_fork(thread_env);
+    }
+}
+
+void cpu_list_lock(void)
+{
+}
+
+void cpu_list_unlock(void)
+{
+}
+
 #ifdef TARGET_SPARC
 #define SPARC64_STACK_BIAS 2047
 
@@ -351,7 +388,7 @@ static void usage(void)
            interp_prefix,
            x86_stack_size,
            DEBUG_LOGFILE);
-    _exit(1);
+    exit(1);
 }
 
 THREAD CPUState *thread_env;
@@ -448,7 +485,7 @@ int main(int argc, char **argv)
 #if defined(cpu_list)
                     cpu_list(stdout, &fprintf);
 #endif
-                _exit(1);
+                exit(1);
             }
         } else if (!strcmp(r, "drop-ld-preload")) {
             drop_ld_preload = 1;

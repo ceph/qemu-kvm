@@ -782,10 +782,9 @@ static void cirrus_do_copy(CirrusVGAState *s, int dst, int src, int w, int h)
     /* we don't have to notify the display that this portion has
        changed since qemu_console_copy implies this */
 
-    if (!notify)
-	cirrus_invalidate_region(s, s->cirrus_blt_dstaddr,
-				 s->cirrus_blt_dstpitch, s->cirrus_blt_width,
-				 s->cirrus_blt_height);
+    cirrus_invalidate_region(s, s->cirrus_blt_dstaddr,
+				s->cirrus_blt_dstpitch, s->cirrus_blt_width,
+				s->cirrus_blt_height);
 }
 
 static int cirrus_bitblt_videotovideo_copy(CirrusVGAState * s)
@@ -2248,7 +2247,7 @@ static void cirrus_cursor_invalidate(VGAState *s1)
     CirrusVGAState *s = (CirrusVGAState *)s1;
     int size;
 
-    if (!s->sr[0x12] & CIRRUS_CURSOR_SHOW) {
+    if (!(s->sr[0x12] & CIRRUS_CURSOR_SHOW)) {
         size = 0;
     } else {
         if (s->sr[0x12] & CIRRUS_CURSOR_LARGE)

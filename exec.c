@@ -187,7 +187,7 @@ static void io_mem_init(void);
 CPUWriteMemoryFunc *io_mem_write[IO_MEM_NB_ENTRIES][4];
 CPUReadMemoryFunc *io_mem_read[IO_MEM_NB_ENTRIES][4];
 void *io_mem_opaque[IO_MEM_NB_ENTRIES];
-char io_mem_used[IO_MEM_NB_ENTRIES];
+static char io_mem_used[IO_MEM_NB_ENTRIES];
 static int io_mem_watch;
 #endif
 
@@ -376,8 +376,10 @@ static PhysPageDesc *phys_page_find_alloc(target_phys_addr_t index, int alloc)
             return NULL;
         pd = qemu_vmalloc(sizeof(PhysPageDesc) * L2_SIZE);
         *lp = pd;
-        for (i = 0; i < L2_SIZE; i++)
+        for (i = 0; i < L2_SIZE; i++) {
           pd[i].phys_offset = IO_MEM_UNASSIGNED;
+          pd[i].region_offset = (index + i) << TARGET_PAGE_BITS;
+        }
     }
     return ((PhysPageDesc *)pd) + (index & (L2_SIZE - 1));
 }
@@ -463,7 +465,7 @@ static void code_gen_alloc(unsigned long tb_size)
             exit(1);
         }
     }
-#elif defined(__FreeBSD__)
+#elif defined(__FreeBSD__) || defined(__DragonFly__)
     {
         int flags;
         void *addr = NULL;
@@ -532,6 +534,9 @@ static int cpu_common_load(QEMUFile *f, void *opaque, int version_id)
 
     qemu_get_be32s(f, &env->halted);
     qemu_get_be32s(f, &env->interrupt_request);
+    /* 0x01 was CPU_INTERRUPT_EXIT. This line can be removed when the
+       version_id is increased. */
+    env->interrupt_request &= ~0x01;
     tlb_flush(env, 1);
 
     return 0;
@@ -543,6 +548,9 @@ void cpu_exec_init(CPUState *env)
     CPUState **penv;
     int cpu_index;
 
+#if defined(CONFIG_USER_ONLY)
+    cpu_list_lock();
+#endif
     env->next_cpu = NULL;
     penv = &first_cpu;
     cpu_index = 0;
@@ -559,6 +567,9 @@ void cpu_exec_init(CPUState *env)
     env->thread_id = getpid();
 #endif
     *penv = env;
+#if defined(CONFIG_USER_ONLY)
+    cpu_list_unlock();
+#endif
 #if defined(CPU_SAVE_VERSION) && !defined(CONFIG_USER_ONLY)
     register_savevm("cpu_common", cpu_index, CPU_COMMON_SAVE_VERSION,
                     cpu_common_save, cpu_common_load, env);
@@ -1510,53 +1521,60 @@ void cpu_set_log_filename(const char *filename)
     cpu_set_log(loglevel);
 }
 
-/* mask must never be zero, except for A20 change call */
-void cpu_interrupt(CPUState *env, int mask)
+static void cpu_unlink_tb(CPUState *env)
 {
-#if !defined(USE_NPTL)
-    TranslationBlock *tb;
-    static spinlock_t interrupt_lock = SPIN_LOCK_UNLOCKED;
-#endif
-    int old_mask;
-
-    old_mask = env->interrupt_request;
-    /* FIXME: This is probably not threadsafe.  A different thread could
-       be in the middle of a read-modify-write operation.  */
-    env->interrupt_request |= mask;
-    if (kvm_enabled() && !qemu_kvm_irqchip_in_kernel())
-	kvm_update_interrupt_request(env);
 #if defined(USE_NPTL)
     /* FIXME: TB unchaining isn't SMP safe.  For now just ignore the
        problem and hope the cpu will stop of its own accord.  For userspace
        emulation this often isn't actually as bad as it sounds.  Often
        signals are used primarily to interrupt blocking syscalls.  */
 #else
+    TranslationBlock *tb;
+    static spinlock_t interrupt_lock = SPIN_LOCK_UNLOCKED;
+
+    tb = env->current_tb;
+    /* if the cpu is currently executing code, we must unlink it and
+       all the potentially executing TB */
+    if (tb && !testandset(&interrupt_lock)) {
+        env->current_tb = NULL;
+        tb_reset_jump_recursive(tb);
+        resetlock(&interrupt_lock);
+    }
+#endif
+}
+
+/* mask must never be zero, except for A20 change call */
+void cpu_interrupt(CPUState *env, int mask)
+{
+    int old_mask;
+
+    old_mask = env->interrupt_request;
+    env->interrupt_request |= mask;
+    if (kvm_enabled() && !qemu_kvm_irqchip_in_kernel())
+	kvm_update_interrupt_request(env);
+
     if (use_icount) {
         env->icount_decr.u16.high = 0xffff;
 #ifndef CONFIG_USER_ONLY
-        /* CPU_INTERRUPT_EXIT isn't a real interrupt.  It just means
-           an async event happened and we need to process it.  */
         if (!can_do_io(env)
-            && (mask & ~(old_mask | CPU_INTERRUPT_EXIT)) != 0) {
+            && (mask & ~old_mask) != 0) {
             cpu_abort(env, "Raised interrupt while not in I/O function");
         }
 #endif
     } else {
-        tb = env->current_tb;
-        /* if the cpu is currently executing code, we must unlink it and
-           all the potentially executing TB */
-        if (tb && !testandset(&interrupt_lock)) {
-            env->current_tb = NULL;
-            tb_reset_jump_recursive(tb);
-            resetlock(&interrupt_lock);
-        }
+        cpu_unlink_tb(env);
     }
-#endif
 }
 
 void cpu_reset_interrupt(CPUState *env, int mask)
 {
     env->interrupt_request &= ~mask;
+}
+
+void cpu_exit(CPUState *env)
+{
+    env->exit_request = 1;
+    cpu_unlink_tb(env);
 }
 
 const CPULogItem cpu_log_items[] = {
@@ -2306,6 +2324,9 @@ void cpu_register_physical_memory_offset(target_phys_addr_t start_addr,
     if (kvm_enabled())
         kvm_set_phys_mem(start_addr, size, phys_offset);
 
+    if (phys_offset == IO_MEM_UNASSIGNED) {
+        region_offset = start_addr;
+    }
     region_offset &= TARGET_PAGE_MASK;
     size = (size + TARGET_PAGE_SIZE - 1) & TARGET_PAGE_MASK;
     end_addr = start_addr + (target_phys_addr_t)size;
@@ -2353,7 +2374,7 @@ void cpu_register_physical_memory_offset(target_phys_addr_t start_addr,
                 if (need_subpage || phys_offset & IO_MEM_SUBWIDTH) {
                     subpage = subpage_init((addr & TARGET_PAGE_MASK),
                                            &p->phys_offset, IO_MEM_UNASSIGNED,
-                                           0);
+                                           addr & TARGET_PAGE_MASK);
                     subpage_register(subpage, start_addr2, end_addr2,
                                      phys_offset, region_offset);
                     p->region_offset = 0;

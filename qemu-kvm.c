@@ -40,7 +40,7 @@ pthread_cond_t qemu_vcpu_cond = PTHREAD_COND_INITIALIZER;
 pthread_cond_t qemu_system_cond = PTHREAD_COND_INITIALIZER;
 pthread_cond_t qemu_pause_cond = PTHREAD_COND_INITIALIZER;
 pthread_cond_t qemu_work_cond = PTHREAD_COND_INITIALIZER;
-__thread struct CPUState *current_env;
+__thread CPUState *current_env;
 
 static int qemu_system_ready;
 
@@ -166,7 +166,7 @@ static int pre_kvm_run(void *opaque, void *data)
 
     kvm_arch_pre_kvm_run(opaque, env);
 
-    if (env->interrupt_request & CPU_INTERRUPT_EXIT)
+    if (env->exit_request)
 	return 1;
     pthread_mutex_unlock(&qemu_mutex);
     return 0;
@@ -296,7 +296,7 @@ static void pause_all_threads(void)
         } else {
             penv->kvm_cpu_state.stop = 0;
             penv->kvm_cpu_state.stopped = 1;
-            cpu_interrupt(penv, CPU_INTERRUPT_EXIT);
+            cpu_exit(penv);
         }
         penv = (CPUState *)penv->next_cpu;
     }
@@ -412,7 +412,8 @@ static int kvm_main_loop_cpu(CPUState *env)
     }
 	if (!env->halted && !env->kvm_cpu_state.init)
 	    kvm_cpu_exec(env);
-	env->interrupt_request &= ~CPU_INTERRUPT_EXIT;
+	env->exit_request = 0;
+        env->exception_index = EXCP_INTERRUPT;
 	kvm_main_loop_wait(env, 0);
     }
     pthread_mutex_unlock(&qemu_mutex);
@@ -620,7 +621,7 @@ static int kvm_debug(void *opaque, void *data,
                      struct kvm_debug_exit_arch *arch_info)
 {
     int handle = kvm_arch_debug(arch_info);
-    struct CPUState *env = data;
+    CPUState *env = data;
 
     if (handle) {
 	kvm_debug_cpu_requested = env;
@@ -722,7 +723,7 @@ static int kvm_halt(void *opaque, int vcpu)
 
 static int kvm_shutdown(void *opaque, void *data)
 {
-    struct CPUState *env = (struct CPUState *)data;
+    CPUState *env = (CPUState *)data;
 
     /* stop the current vcpu from going back to guest mode */
     env->kvm_cpu_state.stopped = 1;

@@ -96,6 +96,7 @@ struct BlockDriverState {
     int removable; /* if true, the media can be removed */
     int locked;    /* if true, the media cannot temporarily be ejected */
     int encrypted; /* if true, the media is encrypted */
+    int valid_key; /* if true, a valid encryption key has been set */
     int sg;        /* if true, the device is a /dev/sg* */
     /* event callback when inserting/removing */
     void (*change_cb)(void *opaque);
@@ -120,6 +121,9 @@ struct BlockDriverState {
     uint64_t wr_bytes;
     uint64_t rd_ops;
     uint64_t wr_ops;
+
+    /* Whether the disk can expand beyond total_sectors */
+    int growable;
 
     /* NOTE: the following infos are only hints for real hardware
        drivers. They are not used by the block driver */

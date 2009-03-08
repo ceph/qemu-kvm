@@ -611,7 +611,6 @@ struct PCIDevice *init_assigned_device(AssignedDevInfo *adev, PCIBus *bus)
     int r;
     AssignedDevice *dev;
     uint8_t e_device, e_intx;
-    struct kvm_assigned_pci_dev assigned_dev_data;
 
     DEBUG("Registering real physical device %s (bus=%x dev=%x func=%x)\n",
           adev->name, adev->bus, adev->dev, adev->func);

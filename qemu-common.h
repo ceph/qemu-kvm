@@ -190,6 +190,9 @@ struct pcmcia_card_s;
 void cpu_save(QEMUFile *f, void *opaque);
 int cpu_load(QEMUFile *f, void *opaque, int version_id);
 
+/* Force QEMU to stop what it's doing and service IO */
+void qemu_service_io(void);
+
 /* work queue */
 struct qemu_work_item {
     struct qemu_work_item *next;
@@ -211,6 +214,9 @@ void qemu_iovec_destroy(QEMUIOVector *qiov);
 void qemu_iovec_reset(QEMUIOVector *qiov);
 void qemu_iovec_to_buffer(QEMUIOVector *qiov, void *buf);
 void qemu_iovec_from_buffer(QEMUIOVector *qiov, const void *buf, size_t count);
+
+struct Monitor;
+typedef struct Monitor Monitor;
 
 #endif /* dyngen-exec.h hack */
 

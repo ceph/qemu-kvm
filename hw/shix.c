@@ -28,6 +28,7 @@
    More information in target-sh4/README.sh4
 */
 #include "hw.h"
+#include "pc.h"
 #include "sh.h"
 #include "sysemu.h"
 #include "boards.h"
@@ -35,27 +36,12 @@
 #define BIOS_FILENAME "shix_bios.bin"
 #define BIOS_ADDRESS 0xA0000000
 
-void irq_info(void)
+void irq_info(Monitor *mon)
 {
     /* XXXXX */
 }
 
-void pic_info(void)
-{
-    /* XXXXX */
-}
-
-void vga_update_display(void)
-{
-    /* XXXXX */
-}
-
-void vga_invalidate_display(void)
-{
-    /* XXXXX */
-}
-
-void vga_screen_dump(const char *filename)
+void pic_info(Monitor *mon)
 {
     /* XXXXX */
 }

@@ -210,4 +210,9 @@ int kvm_log_stop(target_phys_addr_t phys_addr, target_phys_addr_t len);
 
 static inline int kvm_sync_vcpus(void) { return 0; }
 
+static inline void kvm_arch_get_registers(CPUState *env)
+{
+    kvm_load_registers(env);
+}
+
 #endif

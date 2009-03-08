@@ -23,7 +23,7 @@
  */
 #include "hw.h"
 #include "sun4m.h"
-#include "console.h"
+#include "monitor.h"
 
 //#define DEBUG_IRQ_COUNT
 //#define DEBUG_IRQ
@@ -98,7 +98,7 @@ static uint32_t slavio_intctl_mem_readl(void *opaque, target_phys_addr_t addr)
         ret = 0;
         break;
     }
-    DPRINTF("read cpu %d reg 0x" TARGET_FMT_plx " = %x\n", cpu, addr, ret);
+    DPRINTF("read cpu %d reg 0x" TARGET_FMT_plx " = %x\n", s->cpu, addr, ret);
 
     return ret;
 }
@@ -110,7 +110,7 @@ static void slavio_intctl_mem_writel(void *opaque, target_phys_addr_t addr,
     uint32_t saddr;
 
     saddr = addr >> 2;
-    DPRINTF("write cpu %d reg 0x" TARGET_FMT_plx " = %x\n", cpu, addr, val);
+    DPRINTF("write cpu %d reg 0x" TARGET_FMT_plx " = %x\n", s->cpu, addr, val);
     switch (saddr) {
     case 1: // clear pending softints
         if (val & CPU_IRQ_INT15_IN)
@@ -219,33 +219,33 @@ static CPUWriteMemoryFunc *slavio_intctlm_mem_write[3] = {
     slavio_intctlm_mem_writel,
 };
 
-void slavio_pic_info(void *opaque)
+void slavio_pic_info(Monitor *mon, void *opaque)
 {
     SLAVIO_INTCTLState *s = opaque;
     int i;
 
     for (i = 0; i < MAX_CPUS; i++) {
-        term_printf("per-cpu %d: pending 0x%08x\n", i,
-                    s->slaves[i]->intreg_pending);
+        monitor_printf(mon, "per-cpu %d: pending 0x%08x\n", i,
+                       s->slaves[i]->intreg_pending);
     }
-    term_printf("master: pending 0x%08x, disabled 0x%08x\n",
-                s->intregm_pending, s->intregm_disabled);
+    monitor_printf(mon, "master: pending 0x%08x, disabled 0x%08x\n",
+                   s->intregm_pending, s->intregm_disabled);
 }
 
-void slavio_irq_info(void *opaque)
+void slavio_irq_info(Monitor *mon, void *opaque)
 {
 #ifndef DEBUG_IRQ_COUNT
-    term_printf("irq statistic code not compiled.\n");
+    monitor_printf(mon, "irq statistic code not compiled.\n");
 #else
     SLAVIO_INTCTLState *s = opaque;
     int i;
     int64_t count;
 
-    term_printf("IRQ statistics:\n");
+    monitor_printf(mon, "IRQ statistics:\n");
     for (i = 0; i < 32; i++) {
         count = s->irq_count[i];
         if (count > 0)
-            term_printf("%2d: %" PRId64 "\n", i, count);
+            monitor_printf(mon, "%2d: %" PRId64 "\n", i, count);
     }
 #endif
 }

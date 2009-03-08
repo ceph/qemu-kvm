@@ -27,6 +27,7 @@
 #include "config.h"
 #include <setjmp.h>
 #include <inttypes.h>
+#include <signal.h>
 #include <pthread.h>
 #include "osdep.h"
 #include "sys-queue.h"
@@ -185,6 +186,7 @@ struct KVMCPUState {
                                      memory was accessed */             \
     uint32_t halted; /* Nonzero if the CPU is in suspend state */       \
     uint32_t interrupt_request;                                         \
+    volatile sig_atomic_t exit_request;                                 \
     /* The meaning of the MMU modes is defined in the target code. */   \
     CPUTLBEntry tlb_table[NB_MMU_MODES][CPU_TLB_SIZE];                  \
     target_phys_addr_t iotlb[NB_MMU_MODES][CPU_TLB_SIZE];               \
@@ -216,7 +218,7 @@ struct KVMCPUState {
     jmp_buf jmp_env;                                                    \
     int exception_index;                                                \
                                                                         \
-    void *next_cpu; /* next CPU sharing TB cache */                     \
+    CPUState *next_cpu; /* next CPU sharing TB cache */                 \
     int cpu_index; /* CPU index (informative) */                        \
     int running; /* Nonzero if cpu is currently running(usermode).  */  \
     int thread_id;							\

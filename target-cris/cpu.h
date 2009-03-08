@@ -23,6 +23,8 @@
 
 #define TARGET_LONG_BITS 32
 
+#define CPUState struct CPUCRISState
+
 #include "cpu-defs.h"
 
 #define TARGET_HAS_ICE 1
@@ -199,7 +201,6 @@ enum {
 #define TARGET_PAGE_BITS 13
 #define MMAP_SHIFT TARGET_PAGE_BITS
 
-#define CPUState CPUCRISState
 #define cpu_init cpu_cris_init
 #define cpu_exec cpu_cris_exec
 #define cpu_gen_code cpu_cris_gen_code
@@ -215,6 +216,9 @@ static inline int cpu_mmu_index (CPUState *env)
 {
 	return !!(env->pregs[PR_CCS] & U_FLAG);
 }
+
+int cpu_cris_handle_mmu_fault(CPUState *env, target_ulong address, int rw,
+                              int mmu_idx, int is_softmmu);
 
 #if defined(CONFIG_USER_ONLY)
 static inline void cpu_clone_regs(CPUState *env, target_ulong newsp)

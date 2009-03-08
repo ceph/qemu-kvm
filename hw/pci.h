@@ -1,6 +1,8 @@
 #ifndef QEMU_PCI_H
 #define QEMU_PCI_H
 
+#include "qemu-common.h"
+
 /* PCI includes legacy ISA access.  */
 #include "isa.h"
 
@@ -43,6 +45,7 @@ extern target_phys_addr_t pci_mem_base;
 #define PCI_CLASS_BRIDGE_OTHER           0x0680
 
 #define PCI_CLASS_PROCESSOR_CO           0x0b40
+#define PCI_CLASS_PROCESSOR_POWERPC      0x0b20
 
 #define PCI_CLASS_OTHERS                 0xff
 
@@ -114,6 +117,9 @@ extern target_phys_addr_t pci_mem_base;
 #define PCI_DEVICE_ID_INTEL_82371AB      0x7111
 #define PCI_DEVICE_ID_INTEL_82371AB_2    0x7112
 #define PCI_DEVICE_ID_INTEL_82371AB_3    0x7113
+
+#define PCI_VENDOR_ID_FSL                0x1957
+#define PCI_DEVICE_ID_FSL_E500           0x0030
 
 /* Red Hat / Qumranet (for QEMU) -- see pci-ids.txt */
 #define PCI_VENDOR_ID_REDHAT_QUMRANET    0x1af4
@@ -242,7 +248,7 @@ PCIDevice *pci_find_device(int bus_num, int slot, int function);
 int pci_read_devaddr(const char *addr, int *domp, int *busp, unsigned *slotp);
 int pci_assign_devaddr(const char *addr, int *domp, int *busp, unsigned *slotp);
 
-void pci_info(void);
+void pci_info(Monitor *mon);
 PCIBus *pci_bridge_init(PCIBus *bus, int devfn, uint16_t vid, uint16_t did,
                         pci_map_irq_fn map_irq, const char *name);
 

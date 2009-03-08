@@ -13,7 +13,7 @@ all: $(TARGETS)
 	$(CC) $(DEFINES) -c -o $@ $<
 
 %.dtb: %.dts
-	dtc -O dtb -I dts -o $@ $<
+	dtc -I dts -O dtb -o $@ $<
 
 clean:
 	rm -f $(TARGETS) *.o *~ *.dtb

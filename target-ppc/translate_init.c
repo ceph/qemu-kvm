@@ -24,7 +24,6 @@
  */
 
 #include "dis-asm.h"
-#include "host-utils.h"
 #include "gdbstub.h"
 
 //#define PPC_DUMP_CPU
@@ -63,6 +62,7 @@ void glue(glue(ppc, name),_irq_init) (CPUPPCState *env);
 PPC_IRQ_INIT_FN(40x);
 PPC_IRQ_INIT_FN(6xx);
 PPC_IRQ_INIT_FN(970);
+PPC_IRQ_INIT_FN(e500);
 
 /* Generic callbacks:
  * do nothing but store/retrieve spr value
@@ -307,6 +307,19 @@ static void spr_write_sdr1 (void *opaque, int sprn, int gprn)
 /* 64 bits PowerPC specific SPRs */
 /* ASR */
 #if defined(TARGET_PPC64)
+static void spr_read_hior (void *opaque, int gprn, int sprn)
+{
+    tcg_gen_ld_tl(cpu_gpr[gprn], cpu_env, offsetof(CPUState, excp_prefix));
+}
+
+static void spr_write_hior (void *opaque, int sprn, int gprn)
+{
+    TCGv t0 = tcg_temp_new();
+    tcg_gen_andi_tl(t0, cpu_gpr[gprn], 0x3FFFFF00000ULL);
+    tcg_gen_st_tl(t0, cpu_env, offsetof(CPUState, excp_prefix));
+    tcg_temp_free(t0);
+}
+
 static void spr_read_asr (void *opaque, int gprn, int sprn)
 {
     tcg_gen_ld_tl(cpu_gpr[gprn], cpu_env, offsetof(CPUState, asr));
@@ -4185,7 +4198,6 @@ static void init_proc_e300 (CPUPPCState *env)
 #define check_pow_e500v2       check_pow_hid0
 #define init_proc_e500v2       init_proc_e500
 
-__attribute__ (( unused ))
 static void init_proc_e500 (CPUPPCState *env)
 {
     /* Time base */
@@ -4287,7 +4299,8 @@ static void init_proc_e500 (CPUPPCState *env)
     init_excp_e200(env);
     env->dcache_line_size = 32;
     env->icache_line_size = 32;
-    /* XXX: TODO: allocate internal IRQ controller */
+    /* Allocate hardware IRQ controller */
+    ppce500_irq_init(env);
 }
 
 /* Non-embedded PowerPC                                                      */
@@ -5939,8 +5952,8 @@ static void init_proc_970 (CPUPPCState *env)
                  0x00000000); /* TOFIX */
     spr_register(env, SPR_HIOR, "SPR_HIOR",
                  SPR_NOACCESS, SPR_NOACCESS,
-                 &spr_read_generic, &spr_write_generic,
-                 0xFFF00000); /* XXX: This is a hack */
+                 &spr_read_hior, &spr_write_hior,
+                 0x00000000);
 #if !defined(CONFIG_USER_ONLY)
     env->slb_nr = 32;
 #endif
@@ -6028,10 +6041,22 @@ static void init_proc_970FX (CPUPPCState *env)
                  0x00000000); /* TOFIX */
     spr_register(env, SPR_HIOR, "SPR_HIOR",
                  SPR_NOACCESS, SPR_NOACCESS,
+                 &spr_read_hior, &spr_write_hior,
+                 0x00000000);
+    spr_register(env, SPR_CTRL, "SPR_CTRL",
+                 SPR_NOACCESS, SPR_NOACCESS,
                  &spr_read_generic, &spr_write_generic,
-                 0xFFF00000); /* XXX: This is a hack */
+                 0x00000000);
+    spr_register(env, SPR_UCTRL, "SPR_UCTRL",
+                 SPR_NOACCESS, SPR_NOACCESS,
+                 &spr_read_generic, &spr_write_generic,
+                 0x00000000);
+    spr_register(env, SPR_VRSAVE, "SPR_VRSAVE",
+                 &spr_read_generic, &spr_write_generic,
+                 &spr_read_generic, &spr_write_generic,
+                 0x00000000);
 #if !defined(CONFIG_USER_ONLY)
-    env->slb_nr = 32;
+    env->slb_nr = 64;
 #endif
     init_excp_970(env);
     env->dcache_line_size = 128;
@@ -6117,8 +6142,8 @@ static void init_proc_970GX (CPUPPCState *env)
                  0x00000000); /* TOFIX */
     spr_register(env, SPR_HIOR, "SPR_HIOR",
                  SPR_NOACCESS, SPR_NOACCESS,
-                 &spr_read_generic, &spr_write_generic,
-                 0xFFF00000); /* XXX: This is a hack */
+                 &spr_read_hior, &spr_write_hior,
+                 0x00000000);
 #if !defined(CONFIG_USER_ONLY)
     env->slb_nr = 32;
 #endif
@@ -6206,8 +6231,8 @@ static void init_proc_970MP (CPUPPCState *env)
                  0x00000000); /* TOFIX */
     spr_register(env, SPR_HIOR, "SPR_HIOR",
                  SPR_NOACCESS, SPR_NOACCESS,
-                 &spr_read_generic, &spr_write_generic,
-                 0xFFF00000); /* XXX: This is a hack */
+                 &spr_read_hior, &spr_write_hior,
+                 0x00000000);
 #if !defined(CONFIG_USER_ONLY)
     env->slb_nr = 32;
 #endif
@@ -9354,11 +9379,11 @@ static int gdb_get_avr_reg(CPUState *env, uint8_t *mem_buf, int n)
 #endif
         return 16;
     }
-    if (n == 33) {
+    if (n == 32) {
         stl_p(mem_buf, env->vscr);
         return 4;
     }
-    if (n == 34) {
+    if (n == 33) {
         stl_p(mem_buf, (uint32_t)env->spr[SPR_VRSAVE]);
         return 4;
     }
@@ -9377,11 +9402,11 @@ static int gdb_set_avr_reg(CPUState *env, uint8_t *mem_buf, int n)
 #endif
         return 16;
     }
-    if (n == 33) {
+    if (n == 32) {
         env->vscr = ldl_p(mem_buf);
         return 4;
     }
-    if (n == 34) {
+    if (n == 33) {
         env->spr[SPR_VRSAVE] = (target_ulong)ldl_p(mem_buf);
         return 4;
     }
@@ -9398,11 +9423,11 @@ static int gdb_get_spe_reg(CPUState *env, uint8_t *mem_buf, int n)
 #endif
         return 4;
     }
-    if (n == 33) {
+    if (n == 32) {
         stq_p(mem_buf, env->spe_acc);
         return 8;
     }
-    if (n == 34) {
+    if (n == 33) {
         /* SPEFSCR not implemented */
         memset(mem_buf, 0, 4);
         return 4;
@@ -9422,11 +9447,11 @@ static int gdb_set_spe_reg(CPUState *env, uint8_t *mem_buf, int n)
 #endif
         return 4;
     }
-    if (n == 33) {
+    if (n == 32) {
         env->spe_acc = ldq_p(mem_buf);
         return 8;
     }
-    if (n == 34) {
+    if (n == 33) {
         /* SPEFSCR not implemented */
         return 4;
     }

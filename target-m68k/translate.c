@@ -2141,9 +2141,10 @@ DISAS_INSN(fpu)
             break;
         case 5: /* OS_DOUBLE */
             tcg_gen_mov_i32(tmp32, AREG(insn, 0));
-            switch (insn >> 3) {
+            switch ((insn >> 3) & 7) {
             case 2:
             case 3:
+                break;
             case 4:
                 tcg_gen_addi_i32(tmp32, tmp32, -8);
                 break;
@@ -2156,7 +2157,7 @@ DISAS_INSN(fpu)
                 goto undef;
             }
             gen_store64(s, tmp32, src);
-            switch (insn >> 3) {
+            switch ((insn >> 3) & 7) {
             case 3:
                 tcg_gen_addi_i32(tmp32, tmp32, 8);
                 tcg_gen_mov_i32(AREG(insn, 0), tmp32);
@@ -2236,7 +2237,7 @@ DISAS_INSN(fpu)
                 }
                 mask >>= 1;
             }
-            tcg_temp_free_i32(tmp32);
+            tcg_temp_free_i32(addr);
         }
         return;
     }
@@ -2254,9 +2255,10 @@ DISAS_INSN(fpu)
         if (opsize == OS_DOUBLE) {
             tmp32 = tcg_temp_new_i32();
             tcg_gen_mov_i32(tmp32, AREG(insn, 0));
-            switch (insn >> 3) {
+            switch ((insn >> 3) & 7) {
             case 2:
             case 3:
+                break;
             case 4:
                 tcg_gen_addi_i32(tmp32, tmp32, -8);
                 break;
@@ -2275,7 +2277,7 @@ DISAS_INSN(fpu)
                 goto undef;
             }
             src = gen_load64(s, tmp32);
-            switch (insn >> 3) {
+            switch ((insn >> 3) & 7) {
             case 3:
                 tcg_gen_addi_i32(tmp32, tmp32, 8);
                 tcg_gen_mov_i32(AREG(insn, 0), tmp32);
