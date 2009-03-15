@@ -667,9 +667,14 @@ int kvm_set_irq_level(kvm_context_t kvm, int irq, int level, int *status)
 	if (r == -1)
 		perror("kvm_set_irq_level");
 
-	if (status)
+	if (status) {
+#ifdef KVM_CAP_IRQ_INJECT_STATUS
 		*status = (kvm->irqchip_inject_ioctl == KVM_IRQ_LINE) ?
 			1 : event.status;
+#else
+		*status = 1;
+#endif
+	}
 
 	return 1;
 }
