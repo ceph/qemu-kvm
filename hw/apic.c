@@ -25,7 +25,6 @@
 #include "qemu-kvm.h"
 
 //#define DEBUG_APIC
-//#define DEBUG_IOAPIC
 
 /* APIC Local Vector Table */
 #define APIC_LVT_TIMER   0
@@ -59,10 +58,6 @@
 #define	APIC_INPUT_POLARITY		(1<<13)
 #define	APIC_SEND_PENDING		(1<<12)
 
-/* FIXME: it's now hard coded to be equal with KVM_IOAPIC_NUM_PINS */
-#define IOAPIC_NUM_PINS			0x18
-#define IOAPIC_DEFAULT_BASE_ADDRESS  0xfec00000
-
 #define ESR_ILLEGAL_ADDRESS (1 << 7)
 
 #define APIC_SV_ENABLE (1 << 8)
@@ -93,15 +88,6 @@ typedef struct APICState {
     QEMUTimer *timer;
 } APICState;
 
-struct IOAPICState {
-    uint8_t id;
-    uint8_t ioregsel;
-    uint64_t base_address;
-
-    uint32_t irr;
-    uint64_t ioredtbl[IOAPIC_NUM_PINS];
-};
-
 static int apic_io_memory;
 static APICState *local_apics[MAX_APICS + 1];
 static int last_apic_id = 0;
@@ -111,6 +97,8 @@ static int apic_irq_delivered;
 static void apic_init_ipi(APICState *s);
 static void apic_set_irq(APICState *s, int vector_num, int trigger_mode);
 static void apic_update_irq(APICState *s);
+static void apic_get_delivery_bitmask(uint32_t *deliver_bitmask,
+                                      uint8_t dest, uint8_t dest_mode);
 
 /* Find first bit starting from msb */
 static int fls_bit(uint32_t value)
@@ -275,6 +263,17 @@ static void apic_bus_deliver(const uint32_t *deliver_bitmask,
 
     foreach_apic(apic_iter, deliver_bitmask,
                  apic_set_irq(apic_iter, vector_num, trigger_mode) );
+}
+
+void apic_deliver_irq(uint8_t dest, uint8_t dest_mode,
+                      uint8_t delivery_mode, uint8_t vector_num,
+                      uint8_t polarity, uint8_t trigger_mode)
+{
+    uint32_t deliver_bitmask[MAX_APIC_WORDS];
+
+    apic_get_delivery_bitmask(deliver_bitmask, dest, dest_mode);
+    apic_bus_deliver(deliver_bitmask, delivery_mode, vector_num, polarity,
+                     trigger_mode);
 }
 
 void cpu_set_apic_base(CPUState *env, uint64_t val)
@@ -1038,286 +1037,3 @@ int apic_init(CPUState *env)
     return 0;
 }
 
-static void ioapic_service(IOAPICState *s)
-{
-    uint8_t i;
-    uint8_t trig_mode;
-    uint8_t vector;
-    uint8_t delivery_mode;
-    uint32_t mask;
-    uint64_t entry;
-    uint8_t dest;
-    uint8_t dest_mode;
-    uint8_t polarity;
-    uint32_t deliver_bitmask[MAX_APIC_WORDS];
-
-    for (i = 0; i < IOAPIC_NUM_PINS; i++) {
-        mask = 1 << i;
-        if (s->irr & mask) {
-            entry = s->ioredtbl[i];
-            if (!(entry & APIC_LVT_MASKED)) {
-                trig_mode = ((entry >> 15) & 1);
-                dest = entry >> 56;
-                dest_mode = (entry >> 11) & 1;
-                delivery_mode = (entry >> 8) & 7;
-                polarity = (entry >> 13) & 1;
-                if (trig_mode == APIC_TRIGGER_EDGE)
-                    s->irr &= ~mask;
-                if (delivery_mode == APIC_DM_EXTINT)
-                    vector = pic_read_irq(isa_pic);
-                else
-                    vector = entry & 0xff;
-
-                apic_get_delivery_bitmask(deliver_bitmask, dest, dest_mode);
-                apic_bus_deliver(deliver_bitmask, delivery_mode,
-                                 vector, polarity, trig_mode);
-            }
-        }
-    }
-}
-
-void ioapic_set_irq(void *opaque, int vector, int level)
-{
-    IOAPICState *s = opaque;
-
-#if 0
-    /* ISA IRQs map to GSI 1-1 except for IRQ0 which maps
-     * to GSI 2.  GSI maps to ioapic 1-1.  This is not
-     * the cleanest way of doing it but it should work. */
-
-    if (vector == 0)
-        vector = 2;
-#endif
-
-    if (vector >= 0 && vector < IOAPIC_NUM_PINS) {
-        uint32_t mask = 1 << vector;
-        uint64_t entry = s->ioredtbl[vector];
-
-        if ((entry >> 15) & 1) {
-            /* level triggered */
-            if (level) {
-                s->irr |= mask;
-                ioapic_service(s);
-            } else {
-                s->irr &= ~mask;
-            }
-        } else {
-            /* edge triggered */
-            if (level) {
-                s->irr |= mask;
-                ioapic_service(s);
-            }
-        }
-    }
-}
-
-static uint32_t ioapic_mem_readl(void *opaque, target_phys_addr_t addr)
-{
-    IOAPICState *s = opaque;
-    int index;
-    uint32_t val = 0;
-
-    addr &= 0xff;
-    if (addr == 0x00) {
-        val = s->ioregsel;
-    } else if (addr == 0x10) {
-        switch (s->ioregsel) {
-            case 0x00:
-                val = s->id << 24;
-                break;
-            case 0x01:
-                val = 0x11 | ((IOAPIC_NUM_PINS - 1) << 16); /* version 0x11 */
-                break;
-            case 0x02:
-                val = 0;
-                break;
-            default:
-                index = (s->ioregsel - 0x10) >> 1;
-                if (index >= 0 && index < IOAPIC_NUM_PINS) {
-                    if (s->ioregsel & 1)
-                        val = s->ioredtbl[index] >> 32;
-                    else
-                        val = s->ioredtbl[index] & 0xffffffff;
-                }
-        }
-#ifdef DEBUG_IOAPIC
-        printf("I/O APIC read: %08x = %08x\n", s->ioregsel, val);
-#endif
-    }
-    return val;
-}
-
-static void ioapic_mem_writel(void *opaque, target_phys_addr_t addr, uint32_t val)
-{
-    IOAPICState *s = opaque;
-    int index;
-
-    addr &= 0xff;
-    if (addr == 0x00)  {
-        s->ioregsel = val;
-        return;
-    } else if (addr == 0x10) {
-#ifdef DEBUG_IOAPIC
-        printf("I/O APIC write: %08x = %08x\n", s->ioregsel, val);
-#endif
-        switch (s->ioregsel) {
-            case 0x00:
-                s->id = (val >> 24) & 0xff;
-                return;
-            case 0x01:
-            case 0x02:
-                return;
-            default:
-                index = (s->ioregsel - 0x10) >> 1;
-                if (index >= 0 && index < IOAPIC_NUM_PINS) {
-                    if (s->ioregsel & 1) {
-                        s->ioredtbl[index] &= 0xffffffff;
-                        s->ioredtbl[index] |= (uint64_t)val << 32;
-                    } else {
-                        s->ioredtbl[index] &= ~0xffffffffULL;
-                        s->ioredtbl[index] |= val;
-                    }
-                    ioapic_service(s);
-                }
-        }
-    }
-}
-
-static void kvm_kernel_ioapic_save_to_user(IOAPICState *s)
-{
-#if defined(KVM_CAP_IRQCHIP) && defined(TARGET_I386)
-    struct kvm_irqchip chip;
-    struct kvm_ioapic_state *kioapic;
-    int i;
-
-    chip.chip_id = KVM_IRQCHIP_IOAPIC;
-    kvm_get_irqchip(kvm_context, &chip);
-    kioapic = &chip.chip.ioapic;
-
-    s->id = kioapic->id;
-    s->ioregsel = kioapic->ioregsel;
-    s->base_address = kioapic->base_address;
-    s->irr = kioapic->irr;
-    for (i = 0; i < IOAPIC_NUM_PINS; i++) {
-        s->ioredtbl[i] = kioapic->redirtbl[i].bits;
-    }
-#endif
-}
-
-static void kvm_kernel_ioapic_load_from_user(IOAPICState *s)
-{
-#if defined(KVM_CAP_IRQCHIP) && defined(TARGET_I386)
-    struct kvm_irqchip chip;
-    struct kvm_ioapic_state *kioapic;
-    int i;
-
-    chip.chip_id = KVM_IRQCHIP_IOAPIC;
-    kioapic = &chip.chip.ioapic;
-
-    kioapic->id = s->id;
-    kioapic->ioregsel = s->ioregsel;
-    kioapic->base_address = s->base_address;
-    kioapic->irr = s->irr;
-    for (i = 0; i < IOAPIC_NUM_PINS; i++) {
-        kioapic->redirtbl[i].bits = s->ioredtbl[i];
-    }
-
-    kvm_set_irqchip(kvm_context, &chip);
-#endif
-}
-
-static void ioapic_save(QEMUFile *f, void *opaque)
-{
-    IOAPICState *s = opaque;
-    int i;
-
-    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
-        kvm_kernel_ioapic_save_to_user(s);
-    }
-
-    qemu_put_8s(f, &s->id);
-    qemu_put_8s(f, &s->ioregsel);
-    qemu_put_be64s(f, &s->base_address);
-    qemu_put_be32s(f, &s->irr);
-    for (i = 0; i < IOAPIC_NUM_PINS; i++) {
-        qemu_put_be64s(f, &s->ioredtbl[i]);
-    }
-}
-
-static int ioapic_load(QEMUFile *f, void *opaque, int version_id)
-{
-    IOAPICState *s = opaque;
-    int i;
-
-    if (version_id < 1 || version_id > 2)
-        return -EINVAL;
-
-    qemu_get_8s(f, &s->id);
-    qemu_get_8s(f, &s->ioregsel);
-    if (version_id == 2) {
-      /* for version 2, we get this data off of the wire */
-      qemu_get_be64s(f, &s->base_address);
-      qemu_get_be32s(f, &s->irr);
-    }
-    else {
-      /* in case we are doing version 1, we just set these to sane values */
-      s->base_address = IOAPIC_DEFAULT_BASE_ADDRESS;
-      s->irr = 0;
-    }
-    for (i = 0; i < IOAPIC_NUM_PINS; i++) {
-        qemu_get_be64s(f, &s->ioredtbl[i]);
-    }
-
-    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
-        kvm_kernel_ioapic_load_from_user(s);
-    }
-
-    return 0;
-}
-
-static void ioapic_reset(void *opaque)
-{
-    IOAPICState *s = opaque;
-    int i;
-
-    memset(s, 0, sizeof(*s));
-    s->base_address = IOAPIC_DEFAULT_BASE_ADDRESS;
-    for(i = 0; i < IOAPIC_NUM_PINS; i++)
-        s->ioredtbl[i] = 1 << 16; /* mask LVT */
-#ifdef KVM_CAP_IRQCHIP
-    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
-        kvm_kernel_ioapic_load_from_user(s);
-    }
-#endif
-}
-
-static CPUReadMemoryFunc *ioapic_mem_read[3] = {
-    ioapic_mem_readl,
-    ioapic_mem_readl,
-    ioapic_mem_readl,
-};
-
-static CPUWriteMemoryFunc *ioapic_mem_write[3] = {
-    ioapic_mem_writel,
-    ioapic_mem_writel,
-    ioapic_mem_writel,
-};
-
-IOAPICState *ioapic_init(void)
-{
-    IOAPICState *s;
-    int io_memory;
-
-    s = qemu_mallocz(sizeof(IOAPICState));
-    ioapic_reset(s);
-    s->id = last_apic_id++;
-
-    io_memory = cpu_register_io_memory(0, ioapic_mem_read,
-                                       ioapic_mem_write, s);
-    cpu_register_physical_memory(0xfec00000, 0x1000, io_memory);
-
-    register_savevm("ioapic", 0, 2, ioapic_save, ioapic_load, s);
-    qemu_register_reset(ioapic_reset, s);
-
-    return s;
-}

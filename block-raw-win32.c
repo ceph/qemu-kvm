@@ -122,13 +122,15 @@ static int raw_open(BlockDriverState *bs, const char *filename, int flags)
     return 0;
 }
 
-static int raw_pread(BlockDriverState *bs, int64_t offset,
-                     uint8_t *buf, int count)
+static int raw_read(BlockDriverState *bs, int64_t sector_num,
+                    uint8_t *buf, int nb_sectors)
 {
     BDRVRawState *s = bs->opaque;
     OVERLAPPED ov;
     DWORD ret_count;
     int ret;
+    int64_t offset = sector_num * 512;
+    int count = nb_sectors * 512;
 
     memset(&ov, 0, sizeof(ov));
     ov.Offset = offset;
@@ -143,16 +145,20 @@ static int raw_pread(BlockDriverState *bs, int64_t offset,
 #endif
             return ret_count;
     }
+    if (ret_count == count)
+        ret_count = 0;
     return ret_count;
 }
 
-static int raw_pwrite(BlockDriverState *bs, int64_t offset,
-                      const uint8_t *buf, int count)
+static int raw_write(BlockDriverState *bs, int64_t sector_num,
+                     const uint8_t *buf, int nb_sectors)
 {
     BDRVRawState *s = bs->opaque;
     OVERLAPPED ov;
     DWORD ret_count;
     int ret;
+    int64_t offset = sector_num * 512;
+    int count = nb_sectors * 512;
 
     memset(&ov, 0, sizeof(ov));
     ov.Offset = offset;
@@ -167,6 +173,8 @@ static int raw_pwrite(BlockDriverState *bs, int64_t offset,
 #endif
             return ret_count;
     }
+    if (ret_count == count)
+        ret_count = 0;
     return ret_count;
 }
 
@@ -359,8 +367,8 @@ BlockDriver bdrv_raw = {
     .bdrv_aio_cancel = raw_aio_cancel,
     .aiocb_size = sizeof(RawAIOCB);
 #endif
-    .bdrv_pread = raw_pread,
-    .bdrv_pwrite = raw_pwrite,
+    .bdrv_read = raw_read,
+    .bdrv_write = raw_write,
     .bdrv_truncate = raw_truncate,
     .bdrv_getlength = raw_getlength,
 };
@@ -508,7 +516,7 @@ BlockDriver bdrv_host_device = {
     .bdrv_aio_cancel	= raw_aio_cancel,
     .aiocb_size		= sizeof(RawAIOCB);
 #endif
-    .bdrv_pread		= raw_pread,
-    .bdrv_pwrite	= raw_pwrite,
+    .bdrv_read		= raw_read,
+    .bdrv_write	        = raw_write,
     .bdrv_getlength	= raw_getlength,
 };

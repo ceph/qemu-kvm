@@ -40,6 +40,7 @@
 #define MAX_PACKET_LENGTH 4096
 
 #include "qemu_socket.h"
+#include "kvm.h"
 
 
 enum {
@@ -1543,7 +1544,7 @@ static int gdb_handle_packet(GDBState *s, const char *line_buf)
             addr = strtoull(p, (char **)&p, 16);
 #if defined(TARGET_I386)
             s->c_cpu->eip = addr;
-            kvm_load_registers(s->c_cpu);
+            cpu_synchronize_state(s->c_cpu, 1);
 #elif defined (TARGET_PPC)
             s->c_cpu->nip = addr;
             kvm_load_registers(s->c_cpu);
@@ -1586,7 +1587,7 @@ static int gdb_handle_packet(GDBState *s, const char *line_buf)
             addr = strtoull(p, (char **)&p, 16);
 #if defined(TARGET_I386)
             s->c_cpu->eip = addr;
-            kvm_load_registers(s->c_cpu);
+            cpu_synchronize_state(s->c_cpu, 1);
 #elif defined (TARGET_PPC)
             s->c_cpu->nip = addr;
             kvm_load_registers(s->c_cpu);
@@ -1633,7 +1634,7 @@ static int gdb_handle_packet(GDBState *s, const char *line_buf)
         }
         break;
     case 'g':
-        kvm_save_registers(s->g_cpu);
+        cpu_synchronize_state(s->g_cpu, 0);
         len = 0;
         for (addr = 0; addr < num_g_regs; addr++) {
             reg_size = gdb_read_register(s->g_cpu, mem_buf + len, addr);
@@ -1651,7 +1652,7 @@ static int gdb_handle_packet(GDBState *s, const char *line_buf)
             len -= reg_size;
             registers += reg_size;
         }
-        kvm_load_registers(s->g_cpu);
+        cpu_synchronize_state(s->g_cpu, 1);
         put_packet(s, "OK");
         break;
     case 'm':
@@ -1810,7 +1811,7 @@ static int gdb_handle_packet(GDBState *s, const char *line_buf)
             thread = strtoull(p+16, (char **)&p, 16);
             for (env = first_cpu; env != NULL; env = env->next_cpu)
                 if (env->cpu_index + 1 == thread) {
-                    kvm_save_registers(env);
+                    cpu_synchronize_state(env, 0);
                     len = snprintf((char *)mem_buf, sizeof(mem_buf),
                                    "CPU#%d [%s]", env->cpu_index,
                                    env->halted ? "halted " : "running");

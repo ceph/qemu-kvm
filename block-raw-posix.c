@@ -359,6 +359,17 @@ static int raw_pread(BlockDriverState *bs, int64_t offset,
     return raw_pread_aligned(bs, offset, buf, count) + sum;
 }
 
+static int raw_read(BlockDriverState *bs, int64_t sector_num,
+                    uint8_t *buf, int nb_sectors)
+{
+    int ret;
+
+    ret = raw_pread(bs, sector_num * 512, buf, nb_sectors * 512);
+    if (ret == (nb_sectors * 512))
+        ret = 0;
+    return ret;
+}
+
 /*
  * offset and count are in bytes and possibly not aligned. For files opened
  * with O_DIRECT, necessary alignments are ensured before calling
@@ -435,6 +446,16 @@ static int raw_pwrite(BlockDriverState *bs, int64_t offset,
         }
     }
     return raw_pwrite_aligned(bs, offset, buf, count) + sum;
+}
+
+static int raw_write(BlockDriverState *bs, int64_t sector_num,
+                     const uint8_t *buf, int nb_sectors)
+{
+    int ret;
+    ret = raw_pwrite(bs, sector_num * 512, buf, nb_sectors * 512);
+    if (ret == (nb_sectors * 512))
+        ret = 0;
+    return ret;
 }
 
 #ifdef CONFIG_AIO
@@ -840,8 +861,8 @@ BlockDriver bdrv_raw = {
     .aiocb_size = sizeof(RawAIOCB),
 #endif
 
-    .bdrv_pread = raw_pread,
-    .bdrv_pwrite = raw_pwrite,
+    .bdrv_read = raw_read,
+    .bdrv_write = raw_write,
     .bdrv_truncate = raw_truncate,
     .bdrv_getlength = raw_getlength,
 };
@@ -1176,6 +1197,32 @@ static int raw_ioctl(BlockDriverState *bs, unsigned long int req, void *buf)
 }
 #endif /* !linux */
 
+static int raw_sg_send_command(BlockDriverState *bs, void *buf, int count)
+{
+    return raw_pwrite(bs, -1, buf, count);
+}
+
+static int raw_sg_recv_response(BlockDriverState *bs, void *buf, int count)
+{
+    return raw_pread(bs, -1, buf, count);
+}
+
+static BlockDriverAIOCB *raw_sg_aio_read(BlockDriverState *bs,
+                                         void *buf, int count,
+                                         BlockDriverCompletionFunc *cb,
+                                         void *opaque)
+{
+    return raw_aio_read(bs, 0, buf, -(int64_t)count, cb, opaque);
+}
+
+static BlockDriverAIOCB *raw_sg_aio_write(BlockDriverState *bs,
+                                          void *buf, int count,
+                                          BlockDriverCompletionFunc *cb,
+                                          void *opaque)
+{
+    return raw_aio_write(bs, 0, buf, -(int64_t)count, cb, opaque);
+}
+
 BlockDriver bdrv_host_device = {
     .format_name	= "host_device",
     .instance_size	= sizeof(BDRVRawState),
@@ -1190,8 +1237,8 @@ BlockDriver bdrv_host_device = {
     .aiocb_size		= sizeof(RawAIOCB),
 #endif
 
-    .bdrv_pread		= raw_pread,
-    .bdrv_pwrite	= raw_pwrite,
+    .bdrv_read          = raw_read,
+    .bdrv_write         = raw_write,
     .bdrv_getlength	= raw_getlength,
 
     /* removable device support */
@@ -1201,4 +1248,8 @@ BlockDriver bdrv_host_device = {
     .bdrv_set_locked	= raw_set_locked,
     /* generic scsi device */
     .bdrv_ioctl		= raw_ioctl,
+    .bdrv_sg_send_command  = raw_sg_send_command,
+    .bdrv_sg_recv_response = raw_sg_recv_response,
+    .bdrv_sg_aio_read      = raw_sg_aio_read,
+    .bdrv_sg_aio_write     = raw_sg_aio_write,
 };

@@ -320,9 +320,7 @@ static CPUState *mon_get_cpu(void)
     if (!cur_mon->mon_cpu) {
         mon_set_cpu(0);
     }
-
-    kvm_save_registers(cur_mon->mon_cpu);
-
+    cpu_synchronize_state(cur_mon->mon_cpu, 0);
     return cur_mon->mon_cpu;
 }
 
@@ -349,7 +347,7 @@ static void do_info_cpus(Monitor *mon)
     mon_get_cpu();
 
     for(env = first_cpu; env != NULL; env = env->next_cpu) {
-        kvm_save_registers(env);
+        cpu_synchronize_state(env, 0);
         monitor_printf(mon, "%c CPU #%d:",
                        (env == mon->mon_cpu) ? '*' : ' ',
                        env->cpu_index);
