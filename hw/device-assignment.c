@@ -551,6 +551,7 @@ static int assign_irq(AssignedDevInfo *adev)
 
 static void deassign_device(AssignedDevInfo *adev)
 {
+#ifdef KVM_CAP_DEVICE_DEASSIGNMENT
     struct kvm_assigned_pci_dev assigned_dev_data;
     AssignedDevice *dev = adev->assigned_dev;
     int r;
@@ -563,6 +564,7 @@ static void deassign_device(AssignedDevInfo *adev)
     if (r < 0)
 	fprintf(stderr, "Failed to deassign device \"%s\" : %s\n",
                 adev->name, strerror(-r));
+#endif
 }
 
 void remove_assigned_device(AssignedDevInfo *adev)
