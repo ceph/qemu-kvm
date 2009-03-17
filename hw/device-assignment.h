@@ -96,6 +96,7 @@ typedef struct {
     void *msix_table_page;
     target_phys_addr_t msix_table_addr;
     int mmio_index;
+    int need_emulate_cmd;
 } AssignedDevice;
 
 typedef struct AssignedDevInfo AssignedDevInfo;

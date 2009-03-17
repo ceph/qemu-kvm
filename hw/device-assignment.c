@@ -26,8 +26,11 @@
  *  Copyright (C) 2008, IBM, Muli Ben-Yehuda (muli@il.ibm.com)
  */
 #include <stdio.h>
+#include <unistd.h>
 #include <sys/io.h>
 #include <pci/pci.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include "qemu-kvm.h"
 #include "hw.h"
 #include "pc.h"
@@ -318,7 +321,7 @@ static uint32_t assigned_dev_pci_read_config(PCIDevice *d, uint32_t address,
     ssize_t ret;
     AssignedDevice *pci_dev = container_of(d, AssignedDevice, dev);
 
-    if (address < 0x4 ||
+    if (address < 0x4 || (pci_dev->need_emulate_cmd && address == 0x4) ||
 	(address >= 0x10 && address <= 0x24) || address == 0x34 ||
         address == 0x3c || address == 0x3d ||
         pci_access_cap_config(d, address, len)) {
@@ -432,6 +435,7 @@ static int get_real_device(AssignedDevice *pci_dev, uint8_t r_bus,
     FILE *f;
     unsigned long long start, end, size, flags;
     unsigned long id;
+    struct stat statbuf;
     PCIRegion *rp;
     PCIDevRegions *dev = &pci_dev->real_device;
 
@@ -519,6 +523,13 @@ again:
 	pci_dev->dev.config[3] = (id & 0xff00) >> 8;
     }
     fclose(f);
+
+    /* dealing with virtual function device */
+    snprintf(name, sizeof(name), "%sphysfn/", dir);
+    if (!stat(name, &statbuf))
+	    pci_dev->need_emulate_cmd = 1;
+    else
+	    pci_dev->need_emulate_cmd = 0;
 
     dev->region_number = r;
     return 0;
