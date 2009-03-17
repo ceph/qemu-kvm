@@ -807,6 +807,26 @@ EOF
     fi
 fi
 
+# libpci probe for kvm_cap_device_assignment
+if test $kvm_cap_device_assignment = "yes" ; then
+cat > $TMPC << EOF
+#include <pci/pci.h>
+#ifndef PCI_VENDOR_ID
+#error NO LIBPCI
+#endif
+int main(void) { return 0; }
+EOF
+    if $cc $ARCH_CFLAGS -o $TMPE ${OS_CFLAGS} $TMPC 2>/dev/null ; then
+        :
+    else
+        echo
+        echo "Error: libpci check failed"
+        echo "Disable KVM Device Assignment capability."
+        echo
+        kvm_cap_device_assignment="no"
+    fi
+fi
+
 ##########################################
 # zlib check
 
