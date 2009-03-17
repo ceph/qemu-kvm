@@ -715,17 +715,30 @@ int kvm_assign_pci_device(kvm_context_t kvm,
 			  struct kvm_assigned_pci_dev *assigned_dev);
 
 /*!
- * \brief Notifies host kernel about changes to IRQ for an assigned device
+ * \brief Assign IRQ for an assigned device
  *
- * Used for PCI device assignment, this function notifies the host
- * kernel about the changes in IRQ number for an assigned physical
- * PCI device.
+ * Used for PCI device assignment, this function assigns IRQ numbers for
+ * an physical device and guest IRQ handling.
  *
  * \param kvm Pointer to the current kvm_context
  * \param assigned_irq Parameters, like dev id, host irq, guest irq, etc
  */
 int kvm_assign_irq(kvm_context_t kvm,
 		   struct kvm_assigned_irq *assigned_irq);
+
+#ifdef KVM_CAP_ASSIGN_DEV_IRQ
+/*!
+ * \brief Deassign IRQ for an assigned device
+ *
+ * Used for PCI device assignment, this function deassigns IRQ numbers
+ * for an assigned device.
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param assigned_irq Parameters, like dev id, host irq, guest irq, etc
+ */
+int kvm_deassign_irq(kvm_context_t kvm,
+                   struct kvm_assigned_irq *assigned_irq);
+#endif
 
 /*!
  * \brief Determines whether destroying memory regions is allowed

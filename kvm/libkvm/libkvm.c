@@ -1146,7 +1146,7 @@ int kvm_assign_pci_device(kvm_context_t kvm,
 	return ret;
 }
 
-int kvm_assign_irq(kvm_context_t kvm,
+static int kvm_old_assign_irq(kvm_context_t kvm,
 		   struct kvm_assigned_irq *assigned_irq)
 {
 	int ret;
@@ -1157,6 +1157,42 @@ int kvm_assign_irq(kvm_context_t kvm,
 
 	return ret;
 }
+
+#ifdef KVM_CAP_ASSIGN_DEV_IRQ
+int kvm_assign_irq(kvm_context_t kvm,
+		   struct kvm_assigned_irq *assigned_irq)
+{
+	int ret;
+
+	ret = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_ASSIGN_DEV_IRQ);
+	if (ret > 0) {
+		ret = ioctl(kvm->vm_fd, KVM_ASSIGN_DEV_IRQ, assigned_irq);
+		if (ret < 0)
+			return -errno;
+		return ret;
+	}
+
+	return kvm_old_assign_irq(kvm, assigned_irq);
+}
+
+int kvm_deassign_irq(kvm_context_t kvm,
+		     struct kvm_assigned_irq *assigned_irq)
+{
+	int ret;
+
+	ret = ioctl(kvm->vm_fd, KVM_DEASSIGN_DEV_IRQ, assigned_irq);
+	if (ret < 0)
+            return -errno;
+
+	return ret;
+}
+#else
+int kvm_assign_irq(kvm_context_t kvm,
+		   struct kvm_assigned_irq *assigned_irq)
+{
+	return kvm_old_assign_irq(kvm, assigned_irq);
+}
+#endif
 #endif
 
 #ifdef KVM_CAP_DEVICE_DEASSIGNMENT
