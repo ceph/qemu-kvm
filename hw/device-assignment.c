@@ -147,6 +147,7 @@ static void assigned_dev_iomem_map(PCIDevice *pci_dev, int region_num,
 {
     AssignedDevice *r_dev = container_of(pci_dev, AssignedDevice, dev);
     AssignedDevRegion *region = &r_dev->v_addrs[region_num];
+    PCIRegion *real_region = &r_dev->real_device.regions[region_num];
     uint32_t old_ephys = region->e_physbase;
     uint32_t old_esize = region->e_size;
     int first_map = (region->e_size == 0);
@@ -162,10 +163,27 @@ static void assigned_dev_iomem_map(PCIDevice *pci_dev, int region_num,
 	kvm_destroy_phys_mem(kvm_context, old_ephys,
                              TARGET_PAGE_ALIGN(old_esize));
 
-    if (e_size > 0)
+    if (e_size > 0) {
+        /* deal with MSI-X MMIO page */
+        if (real_region->base_addr <= r_dev->msix_table_addr &&
+                real_region->base_addr + real_region->size >=
+                r_dev->msix_table_addr) {
+            int offset = r_dev->msix_table_addr - real_region->base_addr;
+            ret = munmap(region->u.r_virtbase + offset, TARGET_PAGE_SIZE);
+            if (ret == 0)
+                DEBUG("munmap done, virt_base 0x%p\n",
+                        region->u.r_virtbase + offset);
+            else {
+                fprintf(stderr, "%s: fail munmap msix table!\n", __func__);
+                exit(1);
+            }
+            cpu_register_physical_memory(e_phys + offset,
+                    TARGET_PAGE_SIZE, r_dev->mmio_index);
+        }
 	ret = kvm_register_phys_mem(kvm_context, e_phys,
                                     region->u.r_virtbase,
                                     TARGET_PAGE_ALIGN(e_size), 0);
+    }
 
     if (ret != 0) {
 	fprintf(stderr, "%s: Error: create new mapping failed\n", __func__);
@@ -677,7 +695,9 @@ void assigned_dev_update_irqs()
     }
 }
 
-#if defined(KVM_CAP_DEVICE_MSI) && defined (KVM_CAP_IRQ_ROUTING)
+#ifdef KVM_CAP_IRQ_ROUTING
+
+#ifdef KVM_CAP_DEVICE_MSI
 static void assigned_dev_update_msi(PCIDevice *pci_dev, unsigned int ctrl_pos)
 {
     struct kvm_assigned_irq assigned_irq_data;
@@ -736,14 +756,154 @@ static void assigned_dev_update_msi(PCIDevice *pci_dev, unsigned int ctrl_pos)
 }
 #endif
 
+#ifdef KVM_CAP_DEVICE_MSIX
+static int assigned_dev_update_msix_mmio(PCIDevice *pci_dev)
+{
+    AssignedDevice *adev = container_of(pci_dev, AssignedDevice, dev);
+    u16 entries_nr = 0, entries_max_nr;
+    int pos = 0, i, r = 0;
+    u32 msg_addr, msg_upper_addr, msg_data, msg_ctrl;
+    struct kvm_assigned_msix_nr msix_nr;
+    struct kvm_assigned_msix_entry msix_entry;
+    void *va = adev->msix_table_page;
+
+    if (adev->cap.available & ASSIGNED_DEVICE_CAP_MSI)
+        pos = pci_dev->cap.start + PCI_CAPABILITY_CONFIG_MSI_LENGTH;
+    else
+        pos = pci_dev->cap.start;
+
+    entries_max_nr = pci_dev->config[pos + 2];
+    entries_max_nr &= PCI_MSIX_TABSIZE;
+
+    /* Get the usable entry number for allocating */
+    for (i = 0; i < entries_max_nr; i++) {
+        memcpy(&msg_ctrl, va + i * 16 + 12, 4);
+        /* 0x1 is mask bit for per vector */
+        if (msg_ctrl & 0x1)
+            continue;
+        memcpy(&msg_data, va + i * 16 + 8, 4);
+        /* Ignore unused entry even it's unmasked */
+        if (msg_data == 0)
+            continue;
+        entries_nr ++;
+    }
+
+    if (entries_nr == 0) {
+        fprintf(stderr, "MSI-X entry number is zero!\n");
+        return -EINVAL;
+    }
+    msix_nr.assigned_dev_id = calc_assigned_dev_id(adev->h_busnr,
+                                          (uint8_t)adev->h_devfn);
+    msix_nr.entry_nr = entries_nr;
+    r = kvm_assign_set_msix_nr(kvm_context, &msix_nr);
+    if (r != 0) {
+        fprintf(stderr, "fail to set MSI-X entry number for MSIX! %s\n",
+			strerror(-r));
+        return r;
+    }
+
+    free_dev_irq_entries(adev);
+    adev->irq_entries_nr = entries_nr;
+    adev->entry = calloc(entries_nr, sizeof(struct kvm_irq_routing_entry));
+    if (!adev->entry) {
+        perror("assigned_dev_update_msix_mmio: ");
+        return -errno;
+    }
+
+    msix_entry.assigned_dev_id = msix_nr.assigned_dev_id;
+    entries_nr = 0;
+    for (i = 0; i < entries_max_nr; i++) {
+        if (entries_nr >= msix_nr.entry_nr)
+            break;
+        memcpy(&msg_ctrl, va + i * 16 + 12, 4);
+        if (msg_ctrl & 0x1)
+            continue;
+        memcpy(&msg_data, va + i * 16 + 8, 4);
+        if (msg_data == 0)
+            continue;
+
+        memcpy(&msg_addr, va + i * 16, 4);
+        memcpy(&msg_upper_addr, va + i * 16 + 4, 4);
+
+        r = kvm_get_irq_route_gsi(kvm_context);
+        if (r < 0)
+            return r;
+
+        adev->entry[entries_nr].gsi = r;
+        adev->entry[entries_nr].type = KVM_IRQ_ROUTING_MSI;
+        adev->entry[entries_nr].flags = 0;
+        adev->entry[entries_nr].u.msi.address_lo = msg_addr;
+        adev->entry[entries_nr].u.msi.address_hi = msg_upper_addr;
+        adev->entry[entries_nr].u.msi.data = msg_data;
+        DEBUG("MSI-X data 0x%x, MSI-X addr_lo 0x%x\n!", msg_data, msg_addr);
+	kvm_add_routing_entry(kvm_context, &adev->entry[entries_nr]);
+
+        msix_entry.gsi = adev->entry[entries_nr].gsi;
+        msix_entry.entry = i;
+        r = kvm_assign_set_msix_entry(kvm_context, &msix_entry);
+        if (r) {
+            fprintf(stderr, "fail to set MSI-X entry! %s\n", strerror(-r));
+            break;
+        }
+        DEBUG("MSI-X entry gsi 0x%x, entry %d\n!",
+                msix_entry.gsi, msix_entry.entry);
+        entries_nr ++;
+    }
+
+    if (r == 0 && kvm_commit_irq_routes(kvm_context) < 0) {
+	    perror("assigned_dev_update_msix_mmio: kvm_commit_irq_routes");
+	    return -EINVAL;
+    }
+
+    return r;
+}
+
+static void assigned_dev_update_msix(PCIDevice *pci_dev, unsigned int ctrl_pos)
+{
+    struct kvm_assigned_irq assigned_irq_data;
+    AssignedDevice *assigned_dev = container_of(pci_dev, AssignedDevice, dev);
+    uint16_t *ctrl_word = (uint16_t *)(pci_dev->config + ctrl_pos);
+    int r;
+
+    memset(&assigned_irq_data, 0, sizeof assigned_irq_data);
+    assigned_irq_data.assigned_dev_id  =
+            calc_assigned_dev_id(assigned_dev->h_busnr,
+                    (uint8_t)assigned_dev->h_devfn);
+
+    if (assigned_dev->irq_requested_type) {
+        assigned_irq_data.flags = assigned_dev->irq_requested_type;
+        free_dev_irq_entries(assigned_dev);
+        r = kvm_deassign_irq(kvm_context, &assigned_irq_data);
+        /* -ENXIO means no assigned irq */
+        if (r && r != -ENXIO)
+            perror("assigned_dev_update_msix: deassign irq");
+    }
+    assigned_irq_data.flags = KVM_DEV_IRQ_HOST_MSIX | KVM_DEV_IRQ_GUEST_MSIX;
+
+    if (*ctrl_word & PCI_MSIX_ENABLE) {
+        if (assigned_dev_update_msix_mmio(pci_dev) < 0) {
+            perror("assigned_dev_update_msix_mmio");
+            return;
+        }
+        if (kvm_assign_irq(kvm_context, &assigned_irq_data) < 0) {
+            perror("assigned_dev_enable_msix: assign irq");
+            return;
+        }
+        assigned_dev->irq_requested_type = assigned_irq_data.flags;
+    }
+}
+#endif
+#endif
+
 static void assigned_device_pci_cap_write_config(PCIDevice *pci_dev, uint32_t address,
-                                          uint32_t val, int len)
+                                                 uint32_t val, int len)
 {
     AssignedDevice *assigned_dev = container_of(pci_dev, AssignedDevice, dev);
     unsigned int pos = pci_dev->cap.start, ctrl_pos;
 
     pci_default_cap_write_config(pci_dev, address, val, len);
-#if defined(KVM_CAP_DEVICE_MSI) && defined (KVM_CAP_IRQ_ROUTING)
+#ifdef KVM_CAP_IRQ_ROUTING
+#ifdef KVM_CAP_DEVICE_MSI
     if (assigned_dev->cap.available & ASSIGNED_DEVICE_CAP_MSI) {
         ctrl_pos = pos + PCI_MSI_FLAGS;
         if (address <= ctrl_pos && address + len > ctrl_pos)
@@ -751,16 +911,29 @@ static void assigned_device_pci_cap_write_config(PCIDevice *pci_dev, uint32_t ad
         pos += PCI_CAPABILITY_CONFIG_MSI_LENGTH;
     }
 #endif
+#ifdef KVM_CAP_DEVICE_MSIX
+    if (assigned_dev->cap.available & ASSIGNED_DEVICE_CAP_MSIX) {
+        ctrl_pos = pos + 3;
+        if (address <= ctrl_pos && address + len > ctrl_pos) {
+            ctrl_pos--; /* control is word long */
+            assigned_dev_update_msix(pci_dev, ctrl_pos);
+	}
+        pos += PCI_CAPABILITY_CONFIG_MSIX_LENGTH;
+    }
+#endif
+#endif
     return;
 }
 
 static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
 {
     AssignedDevice *dev = container_of(pci_dev, AssignedDevice, dev);
+    PCIRegion *pci_region = dev->real_device.regions;
     int next_cap_pt = 0;
 
     pci_dev->cap.length = 0;
-#if defined(KVM_CAP_DEVICE_MSI) && defined (KVM_CAP_IRQ_ROUTING)
+#ifdef KVM_CAP_IRQ_ROUTING
+#ifdef KVM_CAP_DEVICE_MSI
     /* Expose MSI capability
      * MSI capability is the 1st capability in capability config */
     if (pci_find_cap_offset(dev->pdev, PCI_CAP_ID_MSI)) {
@@ -773,7 +946,113 @@ static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
         next_cap_pt = 1;
     }
 #endif
+#ifdef KVM_CAP_DEVICE_MSIX
+    /* Expose MSI-X capability */
+    if (pci_find_cap_offset(dev->pdev, PCI_CAP_ID_MSIX)) {
+        int pos, entry_nr, bar_nr;
+        u32 msix_table_entry;
+        dev->cap.available |= ASSIGNED_DEVICE_CAP_MSIX;
+        memset(&pci_dev->config[pci_dev->cap.start + pci_dev->cap.length],
+               0, PCI_CAPABILITY_CONFIG_MSIX_LENGTH);
+        pos = pci_find_cap_offset(dev->pdev, PCI_CAP_ID_MSIX);
+        entry_nr = pci_read_word(dev->pdev, pos + 2) & PCI_MSIX_TABSIZE;
+        pci_dev->config[pci_dev->cap.start + pci_dev->cap.length] = 0x11;
+        pci_dev->config[pci_dev->cap.start +
+                        pci_dev->cap.length + 2] = entry_nr;
+        msix_table_entry = pci_read_long(dev->pdev, pos + PCI_MSIX_TABLE);
+        *(uint32_t *)(pci_dev->config + pci_dev->cap.start +
+                      pci_dev->cap.length + PCI_MSIX_TABLE) = msix_table_entry;
+        *(uint32_t *)(pci_dev->config + pci_dev->cap.start +
+                      pci_dev->cap.length + PCI_MSIX_PBA) =
+                    pci_read_long(dev->pdev, pos + PCI_MSIX_PBA);
+        bar_nr = msix_table_entry & PCI_MSIX_BIR;
+        msix_table_entry &= ~PCI_MSIX_BIR;
+        dev->msix_table_addr = pci_region[bar_nr].base_addr + msix_table_entry;
+        if (next_cap_pt != 0) {
+            pci_dev->config[pci_dev->cap.start + next_cap_pt] =
+                pci_dev->cap.start + pci_dev->cap.length;
+            next_cap_pt += PCI_CAPABILITY_CONFIG_MSI_LENGTH;
+        } else
+            next_cap_pt = 1;
+        pci_dev->cap.length += PCI_CAPABILITY_CONFIG_MSIX_LENGTH;
+    }
+#endif
+#endif
 
+    return 0;
+}
+
+static uint32_t msix_mmio_readl(void *opaque, target_phys_addr_t addr)
+{
+    AssignedDevice *adev = opaque;
+    unsigned int offset = addr & 0xfff;
+    void *page = adev->msix_table_page;
+    uint32_t val = 0;
+
+    memcpy(&val, (void *)((char *)page + offset), 4);
+
+    return val;
+}
+
+static uint32_t msix_mmio_readb(void *opaque, target_phys_addr_t addr)
+{
+    return ((msix_mmio_readl(opaque, addr & ~3)) >>
+            (8 * (addr & 3))) & 0xff;
+}
+
+static uint32_t msix_mmio_readw(void *opaque, target_phys_addr_t addr)
+{
+    return ((msix_mmio_readl(opaque, addr & ~3)) >>
+            (8 * (addr & 3))) & 0xffff;
+}
+
+static void msix_mmio_writel(void *opaque,
+                             target_phys_addr_t addr, uint32_t val)
+{
+    AssignedDevice *adev = opaque;
+    unsigned int offset = addr & 0xfff;
+    void *page = adev->msix_table_page;
+
+    DEBUG("write to MSI-X entry table mmio offset 0x%lx, val 0x%lx\n",
+		    addr, val);
+    memcpy((void *)((char *)page + offset), &val, 4);
+}
+
+static void msix_mmio_writew(void *opaque,
+                             target_phys_addr_t addr, uint32_t val)
+{
+    msix_mmio_writel(opaque, addr & ~3,
+                     (val & 0xffff) << (8*(addr & 3)));
+}
+
+static void msix_mmio_writeb(void *opaque,
+                             target_phys_addr_t addr, uint32_t val)
+{
+    msix_mmio_writel(opaque, addr & ~3,
+                     (val & 0xff) << (8*(addr & 3)));
+}
+
+static CPUWriteMemoryFunc *msix_mmio_write[] = {
+    msix_mmio_writeb,	msix_mmio_writew,	msix_mmio_writel
+};
+
+static CPUReadMemoryFunc *msix_mmio_read[] = {
+    msix_mmio_readb,	msix_mmio_readw,	msix_mmio_readl
+};
+
+static int assigned_dev_register_msix_mmio(AssignedDevice *dev)
+{
+    dev->msix_table_page = mmap(NULL, 0x1000,
+                                PROT_READ|PROT_WRITE,
+                                MAP_ANONYMOUS|MAP_PRIVATE, 0, 0);
+    memset(dev->msix_table_page, 0, 0x1000);
+    if (dev->msix_table_page == MAP_FAILED) {
+        fprintf(stderr, "fail allocate msix_table_page! %s\n",
+                strerror(errno));
+        return -EFAULT;
+    }
+    dev->mmio_index = cpu_register_io_memory(0,
+                        msix_mmio_read, msix_mmio_write, dev);
     return 0;
 }
 
@@ -840,6 +1119,11 @@ struct PCIDevice *init_assigned_device(AssignedDevInfo *adev, PCIBus *bus)
                     assigned_device_pci_cap_write_config,
                     assigned_device_pci_cap_init) < 0)
         goto assigned_out;
+
+    /* intercept MSI-X entry page in the MMIO */
+    if (dev->cap.available & ASSIGNED_DEVICE_CAP_MSIX)
+        if (assigned_dev_register_msix_mmio(dev))
+            return NULL;
 
     return &dev->dev;
 

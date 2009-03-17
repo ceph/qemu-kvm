@@ -84,12 +84,18 @@ typedef struct {
     struct pci_dev *pdev;
     struct {
 #define ASSIGNED_DEVICE_CAP_MSI (1 << 0)
+#define ASSIGNED_DEVICE_CAP_MSIX (1 << 1)
         uint32_t available;
 #define ASSIGNED_DEVICE_MSI_ENABLED (1 << 0)
+#define ASSIGNED_DEVICE_MSIX_ENABLED (1 << 1)
+#define ASSIGNED_DEVICE_MSIX_MASKED (1 << 2)
         uint32_t state;
     } cap;
     int irq_entries_nr;
     struct kvm_irq_routing_entry *entry;
+    void *msix_table_page;
+    target_phys_addr_t msix_table_addr;
+    int mmio_index;
 } AssignedDevice;
 
 typedef struct AssignedDevInfo AssignedDevInfo;
