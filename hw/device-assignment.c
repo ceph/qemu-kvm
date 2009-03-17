@@ -144,7 +144,7 @@ static uint32_t assigned_dev_ioport_readl(void *opaque, uint32_t addr)
 static void assigned_dev_iomem_map(PCIDevice *pci_dev, int region_num,
                                    uint32_t e_phys, uint32_t e_size, int type)
 {
-    AssignedDevice *r_dev = (AssignedDevice *) pci_dev;
+    AssignedDevice *r_dev = container_of(pci_dev, AssignedDevice, dev);
     AssignedDevRegion *region = &r_dev->v_addrs[region_num];
     uint32_t old_ephys = region->e_physbase;
     uint32_t old_esize = region->e_size;
@@ -175,7 +175,7 @@ static void assigned_dev_iomem_map(PCIDevice *pci_dev, int region_num,
 static void assigned_dev_ioport_map(PCIDevice *pci_dev, int region_num,
                                     uint32_t addr, uint32_t size, int type)
 {
-    AssignedDevice *r_dev = (AssignedDevice *) pci_dev;
+    AssignedDevice *r_dev = container_of(pci_dev, AssignedDevice, dev);
     AssignedDevRegion *region = &r_dev->v_addrs[region_num];
     int first_map = (region->e_size == 0);
     CPUState *env;
@@ -224,6 +224,7 @@ static void assigned_dev_pci_write_config(PCIDevice *d, uint32_t address,
 {
     int fd;
     ssize_t ret;
+    AssignedDevice *pci_dev = container_of(d, AssignedDevice, dev);
 
     DEBUG("(%x.%x): address=%04x val=0x%08x len=%d\n",
           ((d->devfn >> 3) & 0x1F), (d->devfn & 0x7),
@@ -245,7 +246,7 @@ static void assigned_dev_pci_write_config(PCIDevice *d, uint32_t address,
           ((d->devfn >> 3) & 0x1F), (d->devfn & 0x7),
           (uint16_t) address, val, len);
 
-    fd = ((AssignedDevice *)d)->real_device.config_fd;
+    fd = pci_dev->real_device.config_fd;
 
 again:
     ret = pwrite(fd, &val, len, address);
@@ -266,6 +267,7 @@ static uint32_t assigned_dev_pci_read_config(PCIDevice *d, uint32_t address,
     uint32_t val = 0;
     int fd;
     ssize_t ret;
+    AssignedDevice *pci_dev = container_of(d, AssignedDevice, dev);
 
     if ((address >= 0x10 && address <= 0x24) || address == 0x34 ||
         address == 0x3c || address == 0x3d) {
@@ -279,7 +281,7 @@ static uint32_t assigned_dev_pci_read_config(PCIDevice *d, uint32_t address,
     if (address == 0xFC)
         goto do_log;
 
-    fd = ((AssignedDevice *)d)->real_device.config_fd;
+    fd = pci_dev->real_device.config_fd;
 
 again:
     ret = pread(fd, &val, len, address);
@@ -624,15 +626,17 @@ struct PCIDevice *init_assigned_device(AssignedDevInfo *adev, PCIBus *bus)
 {
     int r;
     AssignedDevice *dev;
+    PCIDevice *pci_dev;
     uint8_t e_device, e_intx;
 
     DEBUG("Registering real physical device %s (bus=%x dev=%x func=%x)\n",
           adev->name, adev->bus, adev->dev, adev->func);
 
-    dev = (AssignedDevice *)
-        pci_register_device(bus, adev->name, sizeof(AssignedDevice),
-                            -1, assigned_dev_pci_read_config,
-                            assigned_dev_pci_write_config);
+    pci_dev = pci_register_device(bus, adev->name,
+              sizeof(AssignedDevice), -1, assigned_dev_pci_read_config,
+              assigned_dev_pci_write_config);
+    dev = container_of(pci_dev, AssignedDevice, dev);
+
     if (NULL == dev) {
         fprintf(stderr, "%s: Error: Couldn't register real device %s\n",
                 __func__, adev->name);
