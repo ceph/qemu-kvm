@@ -79,6 +79,7 @@ typedef struct {
     int girq;
     unsigned char h_busnr;
     unsigned int h_devfn;
+    int irq_requested_type;
     int bound;
 } AssignedDevice;
 

@@ -536,6 +536,17 @@ static int assign_irq(AssignedDevInfo *adev)
         calc_assigned_dev_id(dev->h_busnr, dev->h_devfn);
     assigned_irq_data.guest_irq = irq;
     assigned_irq_data.host_irq = dev->real_device.irq;
+#ifdef KVM_CAP_ASSIGN_DEV_IRQ
+    if (dev->irq_requested_type) {
+        assigned_irq_data.flags = dev->irq_requested_type;
+        r = kvm_deassign_irq(kvm_context, &assigned_irq_data);
+        /* -ENXIO means no assigned irq */
+        if (r && r != -ENXIO)
+            perror("assign_irq: deassign");
+    }
+    assigned_irq_data.flags = KVM_DEV_IRQ_HOST_INTX | KVM_DEV_IRQ_GUEST_INTX;
+#endif
+
     r = kvm_assign_irq(kvm_context, &assigned_irq_data);
     if (r < 0) {
         fprintf(stderr, "Failed to assign irq for \"%s\": %s\n",
@@ -546,6 +557,7 @@ static int assign_irq(AssignedDevInfo *adev)
     }
 
     dev->girq = irq;
+    dev->irq_requested_type = assigned_irq_data.flags;
     return r;
 }
 
