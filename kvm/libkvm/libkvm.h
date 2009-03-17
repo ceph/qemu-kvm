@@ -846,4 +846,12 @@ int kvm_del_routing_entry(kvm_context_t kvm,
  */
 int kvm_commit_irq_routes(kvm_context_t kvm);
 
+/*!
+ * \brief Get unused GSI number for irq routing table
+ *
+ * Get unused GSI number for irq routing table
+ *
+ * \param kvm Pointer to the current kvm_context
+ */
+int kvm_get_irq_route_gsi(kvm_context_t kvm);
 #endif

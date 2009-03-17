@@ -66,6 +66,7 @@ struct kvm_context {
 #ifdef KVM_CAP_IRQ_ROUTING
 	struct kvm_irq_routing *irq_routes;
 	int nr_allocated_irq_routes;
+	int max_used_gsi;
 #endif
 };
 

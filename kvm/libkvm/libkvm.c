@@ -421,7 +421,7 @@ int kvm_check_extension(kvm_context_t kvm, int ext)
 
 	ret = ioctl(kvm->fd, KVM_CHECK_EXTENSION, ext);
 	if (ret > 0)
-		return 1;
+		return ret;
 	return 0;
 }
 
@@ -1297,6 +1297,9 @@ int kvm_add_routing_entry(kvm_context_t kvm,
 	new->type = entry->type;
 	new->flags = entry->flags;
 	new->u = entry->u;
+
+	if (entry->gsi > kvm->max_used_gsi)
+		kvm->max_used_gsi = entry->gsi;
 	return 0;
 #else
 	return -ENOSYS;
@@ -1400,3 +1403,15 @@ int kvm_commit_irq_routes(kvm_context_t kvm)
 	return -ENOSYS;
 #endif
 }
+
+int kvm_get_irq_route_gsi(kvm_context_t kvm)
+{
+	if (kvm->max_used_gsi >= KVM_IOAPIC_NUM_PINS)  {
+	    if (kvm->max_used_gsi <= kvm_get_gsi_count(kvm))
+                return kvm->max_used_gsi + 1;
+            else
+                return -ENOSPC;
+        } else
+            return KVM_IOAPIC_NUM_PINS;
+}
+
