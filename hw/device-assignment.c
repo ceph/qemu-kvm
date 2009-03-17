@@ -596,7 +596,12 @@ static int assign_irq(AssignedDevInfo *adev)
         if (r && r != -ENXIO)
             perror("assign_irq: deassign");
     }
-    assigned_irq_data.flags = KVM_DEV_IRQ_HOST_INTX | KVM_DEV_IRQ_GUEST_INTX;
+
+    assigned_irq_data.flags = KVM_DEV_IRQ_GUEST_INTX;
+    if (dev->cap.available & ASSIGNED_DEVICE_CAP_MSI)
+        assigned_irq_data.flags |= KVM_DEV_IRQ_HOST_MSI;
+    else
+        assigned_irq_data.flags |= KVM_DEV_IRQ_HOST_INTX;
 #endif
 
     r = kvm_assign_irq(kvm_context, &assigned_irq_data);
