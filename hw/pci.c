@@ -427,8 +427,8 @@ static void pci_update_mappings(PCIDevice *d)
     }
 }
 
-uint32_t pci_default_read_config(PCIDevice *d,
-                                 uint32_t address, int len)
+static uint32_t pci_read_config(PCIDevice *d,
+                                uint32_t address, int len)
 {
     uint32_t val;
 
@@ -451,6 +451,45 @@ uint32_t pci_default_read_config(PCIDevice *d,
         break;
     }
     return val;
+}
+
+static void pci_write_config(PCIDevice *pci_dev,
+                             uint32_t address, uint32_t val, int len)
+{
+    int i;
+    for (i = 0; i < len; i++) {
+        pci_dev->config[address + i] = val & 0xff;
+        val >>= 8;
+    }
+}
+
+int pci_access_cap_config(PCIDevice *pci_dev, uint32_t address, int len)
+{
+    if (pci_dev->cap.supported && address >= pci_dev->cap.start &&
+            (address + len) < pci_dev->cap.start + pci_dev->cap.length)
+        return 1;
+    return 0;
+}
+
+uint32_t pci_default_cap_read_config(PCIDevice *pci_dev,
+                                     uint32_t address, int len)
+{
+    return pci_read_config(pci_dev, address, len);
+}
+
+void pci_default_cap_write_config(PCIDevice *pci_dev,
+                                  uint32_t address, uint32_t val, int len)
+{
+    pci_write_config(pci_dev, address, val, len);
+}
+
+uint32_t pci_default_read_config(PCIDevice *d,
+                                 uint32_t address, int len)
+{
+    if (pci_access_cap_config(d, address, len))
+        return d->cap.config_read(d, address, len);
+
+    return pci_read_config(d, address, len);
 }
 
 void pci_default_write_config(PCIDevice *d,
@@ -485,6 +524,11 @@ void pci_default_write_config(PCIDevice *d,
         return;
     }
  default_config:
+    if (pci_access_cap_config(d, address, len)) {
+        d->cap.config_write(d, address, val, len);
+        return;
+    }
+
     /* not efficient, but simple */
     addr = address;
     for(i = 0; i < len; i++) {
@@ -904,4 +948,33 @@ PCIBus *pci_bridge_init(PCIBus *bus, int devfn, uint16_t vid, uint16_t did,
 
     s->bus = pci_register_secondary_bus(&s->dev, map_irq);
     return s->bus;
+}
+
+int pci_enable_capability_support(PCIDevice *pci_dev,
+                                  uint32_t config_start,
+                                  PCICapConfigReadFunc *config_read,
+                                  PCICapConfigWriteFunc *config_write,
+                                  PCICapConfigInitFunc *config_init)
+{
+    if (!pci_dev)
+        return -ENODEV;
+
+    if (config_start == 0)
+	pci_dev->cap.start = PCI_CAPABILITY_CONFIG_DEFAULT_START_ADDR;
+    else if (config_start >= 0x40 && config_start < 0xff)
+        pci_dev->cap.start = config_start;
+    else
+        return -EINVAL;
+
+    if (config_read)
+        pci_dev->cap.config_read = config_read;
+    else
+        pci_dev->cap.config_read = pci_default_cap_read_config;
+    if (config_write)
+        pci_dev->cap.config_write = config_write;
+    else
+        pci_dev->cap.config_write = pci_default_cap_write_config;
+    pci_dev->cap.supported = 1;
+    pci_dev->config[PCI_CAPABILITY_LIST] = pci_dev->cap.start;
+    return config_init(pci_dev);
 }

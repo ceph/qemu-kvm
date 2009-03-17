@@ -79,6 +79,12 @@ typedef void PCIMapIORegionFunc(PCIDevice *pci_dev, int region_num,
                                 uint32_t addr, uint32_t size, int type);
 typedef int PCIUnregisterFunc(PCIDevice *pci_dev);
 
+typedef void PCICapConfigWriteFunc(PCIDevice *pci_dev,
+                                   uint32_t address, uint32_t val, int len);
+typedef uint32_t PCICapConfigReadFunc(PCIDevice *pci_dev,
+                                      uint32_t address, int len);
+typedef int PCICapConfigInitFunc(PCIDevice *pci_dev);
+
 #define PCI_ADDRESS_SPACE_MEM		0x00
 #define PCI_ADDRESS_SPACE_IO		0x01
 #define PCI_ADDRESS_SPACE_MEM_PREFETCH	0x08
@@ -104,6 +110,7 @@ typedef struct PCIIORegion {
 #define PCI_CLASS_DEVICE        0x0a    /* Device class */
 #define PCI_SUBVENDOR_ID	0x2c	/* 16 bits */
 #define PCI_SUBDEVICE_ID	0x2e	/* 16 bits */
+#define PCI_CAPABILITY_LIST     0x34
 #define PCI_INTERRUPT_LINE	0x3c	/* 8 bits */
 #define PCI_INTERRUPT_PIN	0x3d	/* 8 bits */
 #define PCI_MIN_GNT		0x3e	/* 8 bits */
@@ -137,6 +144,10 @@ typedef struct PCIIORegion {
 
 #define PCI_COMMAND_RESERVED_MASK_HI (PCI_COMMAND_RESERVED >> 8)
 
+#define PCI_CAPABILITY_CONFIG_MAX_LENGTH 0x60
+#define PCI_CAPABILITY_CONFIG_DEFAULT_START_ADDR 0x40
+#define PCI_CAPABILITY_CONFIG_MSI_LENGTH 0x10
+
 struct PCIDevice {
     /* PCI config space */
     uint8_t config[256];
@@ -159,6 +170,14 @@ struct PCIDevice {
 
     /* Current IRQ levels.  Used internally by the generic PCI code.  */
     int irq_state[4];
+
+    /* Device capability configuration space */
+    struct {
+        int supported;
+        unsigned int start, length;
+        PCICapConfigReadFunc *config_read;
+        PCICapConfigWriteFunc *config_write;
+    } cap;
 };
 
 PCIDevice *pci_register_device(PCIBus *bus, const char *name,
@@ -171,6 +190,12 @@ void pci_register_io_region(PCIDevice *pci_dev, int region_num,
                             uint32_t size, int type,
                             PCIMapIORegionFunc *map_func);
 
+int pci_enable_capability_support(PCIDevice *pci_dev,
+                                  uint32_t config_start,
+                                  PCICapConfigReadFunc *config_read,
+                                  PCICapConfigWriteFunc *config_write,
+                                  PCICapConfigInitFunc *config_init);
+
 int pci_map_irq(PCIDevice *pci_dev, int pin);
 uint32_t pci_default_read_config(PCIDevice *d,
                                  uint32_t address, int len);
@@ -178,6 +203,11 @@ void pci_default_write_config(PCIDevice *d,
                               uint32_t address, uint32_t val, int len);
 void pci_device_save(PCIDevice *s, QEMUFile *f);
 int pci_device_load(PCIDevice *s, QEMUFile *f);
+uint32_t pci_default_cap_read_config(PCIDevice *pci_dev,
+                                     uint32_t address, int len);
+void pci_default_cap_write_config(PCIDevice *pci_dev,
+                                  uint32_t address, uint32_t val, int len);
+int pci_access_cap_config(PCIDevice *pci_dev, uint32_t address, int len);
 
 typedef void (*pci_set_irq_fn)(qemu_irq *pic, int irq_num, int level);
 typedef int (*pci_map_irq_fn)(PCIDevice *pci_dev, int irq_num);
