@@ -816,6 +816,28 @@ int kvm_add_irq_route(kvm_context_t kvm, int gsi, int irqchip, int pin);
 int kvm_del_irq_route(kvm_context_t kvm, int gsi, int irqchip, int pin);
 
 /*!
+ * \brief Adds a routing entry to the temporary irq routing table
+ *
+ * Adds a filled routing entry to the temporary irq routing table. Nothing is
+ * committed to the running VM.
+ *
+ * \param kvm Pointer to the current kvm_context
+ */
+int kvm_add_routing_entry(kvm_context_t kvm,
+                          struct kvm_irq_routing_entry* entry);
+
+/*!
+ * \brief Removes a routing from the temporary irq routing table
+ *
+ * Remove a routing to the temporary irq routing table.  Nothing is
+ * committed to the running VM.
+ *
+ * \param kvm Pointer to the current kvm_context
+ */
+int kvm_del_routing_entry(kvm_context_t kvm,
+		          struct kvm_irq_routing_entry* entry);
+
+/*!
  * \brief Commit the temporary irq routing table
  *
  * Commit the temporary irq routing table to the running VM.
