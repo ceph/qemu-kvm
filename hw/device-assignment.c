@@ -591,6 +591,10 @@ static int assign_irq(AssignedDevInfo *adev)
     AssignedDevice *dev = adev->assigned_dev;
     int irq, r = 0;
 
+    /* Interrupt PIN 0 means don't use INTx */
+    if (pci_read_byte(dev->pdev, PCI_INTERRUPT_PIN) == 0)
+        return 0;
+
     irq = pci_map_irq(&dev->dev, dev->intpin);
     irq = piix_get_irq(irq);
 
