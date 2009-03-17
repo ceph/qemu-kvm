@@ -81,6 +81,15 @@ typedef struct {
     unsigned int h_devfn;
     int irq_requested_type;
     int bound;
+    struct pci_dev *pdev;
+    struct {
+#define ASSIGNED_DEVICE_CAP_MSI (1 << 0)
+        uint32_t available;
+#define ASSIGNED_DEVICE_MSI_ENABLED (1 << 0)
+        uint32_t state;
+    } cap;
+    int irq_entries_nr;
+    struct kvm_irq_routing_entry *entry;
 } AssignedDevice;
 
 typedef struct AssignedDevInfo AssignedDevInfo;

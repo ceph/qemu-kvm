@@ -266,7 +266,8 @@ static void assigned_dev_pci_write_config(PCIDevice *d, uint32_t address,
     }
 
     if ((address >= 0x10 && address <= 0x24) || address == 0x34 ||
-        address == 0x3c || address == 0x3d) {
+        address == 0x3c || address == 0x3d ||
+        pci_access_cap_config(d, address, len)) {
         /* used for update-mappings (BAR emulation) */
         pci_default_write_config(d, address, val, len);
         return;
@@ -300,7 +301,8 @@ static uint32_t assigned_dev_pci_read_config(PCIDevice *d, uint32_t address,
     AssignedDevice *pci_dev = container_of(d, AssignedDevice, dev);
 
     if ((address >= 0x10 && address <= 0x24) || address == 0x34 ||
-        address == 0x3c || address == 0x3d) {
+        address == 0x3c || address == 0x3d ||
+        pci_access_cap_config(d, address, len)) {
         val = pci_default_read_config(d, address, len);
         DEBUG("(%x.%x): address=%04x val=0x%08x len=%d\n",
               (d->devfn >> 3) & 0x1F, (d->devfn & 0x7), address, val, len);
@@ -329,11 +331,13 @@ do_log:
     DEBUG("(%x.%x): address=%04x val=0x%08x len=%d\n",
           (d->devfn >> 3) & 0x1F, (d->devfn & 0x7), address, val, len);
 
-    /* kill the special capabilities */
-    if (address == 4 && len == 4)
-        val &= ~0x100000;
-    else if (address == 6)
-        val &= ~0x10;
+    if (!pci_dev->cap.available) {
+        /* kill the special capabilities */
+        if (address == 4 && len == 4)
+            val &= ~0x100000;
+        else if (address == 6)
+            val &= ~0x10;
+    }
 
     return val;
 }
@@ -475,6 +479,19 @@ again:
 
 static LIST_HEAD(, AssignedDevInfo) adev_head;
 
+#ifdef KVM_CAP_IRQ_ROUTING
+static void free_dev_irq_entries(AssignedDevice *dev)
+{
+    int i;
+
+    for (i = 0; i < dev->irq_entries_nr; i++)
+        kvm_del_routing_entry(kvm_context, &dev->entry[i]);
+    free(dev->entry);
+    dev->entry = NULL;
+    dev->irq_entries_nr = 0;
+}
+#endif
+
 static void free_assigned_device(AssignedDevInfo *adev)
 {
     AssignedDevice *dev = adev->assigned_dev;
@@ -507,6 +524,9 @@ static void free_assigned_device(AssignedDevInfo *adev)
         }
 
         pci_unregister_device(&dev->dev);
+#ifdef KVM_CAP_IRQ_ROUTING
+        free_dev_irq_entries(dev);
+#endif
         adev->assigned_dev = dev = NULL;
     }
 
@@ -652,11 +672,112 @@ void assigned_dev_update_irqs()
     }
 }
 
+#if defined(KVM_CAP_DEVICE_MSI) && defined (KVM_CAP_IRQ_ROUTING)
+static void assigned_dev_update_msi(PCIDevice *pci_dev, unsigned int ctrl_pos)
+{
+    struct kvm_assigned_irq assigned_irq_data;
+    AssignedDevice *assigned_dev = container_of(pci_dev, AssignedDevice, dev);
+    uint8_t ctrl_byte = pci_dev->config[ctrl_pos];
+    int r;
+
+    memset(&assigned_irq_data, 0, sizeof assigned_irq_data);
+    assigned_irq_data.assigned_dev_id  =
+        calc_assigned_dev_id(assigned_dev->h_busnr,
+                (uint8_t)assigned_dev->h_devfn);
+
+    if (assigned_dev->irq_requested_type) {
+	    assigned_irq_data.flags = assigned_dev->irq_requested_type;
+	    free_dev_irq_entries(assigned_dev);
+	    r = kvm_deassign_irq(kvm_context, &assigned_irq_data);
+	    /* -ENXIO means no assigned irq */
+	    if (r && r != -ENXIO)
+		    perror("assigned_dev_update_msi: deassign irq");
+    }
+
+    if (ctrl_byte & PCI_MSI_FLAGS_ENABLE) {
+        assigned_dev->entry = calloc(1, sizeof(struct kvm_irq_routing_entry));
+        if (!assigned_dev->entry) {
+            perror("assigned_dev_update_msi: ");
+            return;
+        }
+        assigned_dev->entry->u.msi.address_lo =
+                *(uint32_t *)(pci_dev->config + pci_dev->cap.start +
+                              PCI_MSI_ADDRESS_LO);
+        assigned_dev->entry->u.msi.address_hi = 0;
+        assigned_dev->entry->u.msi.data = *(uint16_t *)(pci_dev->config +
+                pci_dev->cap.start + PCI_MSI_DATA_32);
+        assigned_dev->entry->type = KVM_IRQ_ROUTING_MSI;
+        assigned_dev->entry->gsi = kvm_get_irq_route_gsi(kvm_context);
+        if (assigned_dev->entry->gsi < 0) {
+            perror("assigned_dev_update_msi: kvm_get_irq_route_gsi");
+            return;
+        }
+
+        kvm_add_routing_entry(kvm_context, assigned_dev->entry);
+        if (kvm_commit_irq_routes(kvm_context) < 0) {
+            perror("assigned_dev_update_msi: kvm_commit_irq_routes");
+            assigned_dev->cap.state &= ~ASSIGNED_DEVICE_MSI_ENABLED;
+            return;
+        }
+	assigned_dev->irq_entries_nr = 1;
+
+        assigned_irq_data.guest_irq = assigned_dev->entry->gsi;
+	assigned_irq_data.flags = KVM_DEV_IRQ_HOST_MSI | KVM_DEV_IRQ_GUEST_MSI;
+        if (kvm_assign_irq(kvm_context, &assigned_irq_data) < 0)
+            perror("assigned_dev_enable_msi: assign irq");
+
+        assigned_dev->irq_requested_type = assigned_irq_data.flags;
+    }
+}
+#endif
+
+static void assigned_device_pci_cap_write_config(PCIDevice *pci_dev, uint32_t address,
+                                          uint32_t val, int len)
+{
+    AssignedDevice *assigned_dev = container_of(pci_dev, AssignedDevice, dev);
+    unsigned int pos = pci_dev->cap.start, ctrl_pos;
+
+    pci_default_cap_write_config(pci_dev, address, val, len);
+#if defined(KVM_CAP_DEVICE_MSI) && defined (KVM_CAP_IRQ_ROUTING)
+    if (assigned_dev->cap.available & ASSIGNED_DEVICE_CAP_MSI) {
+        ctrl_pos = pos + PCI_MSI_FLAGS;
+        if (address <= ctrl_pos && address + len > ctrl_pos)
+            assigned_dev_update_msi(pci_dev, ctrl_pos);
+        pos += PCI_CAPABILITY_CONFIG_MSI_LENGTH;
+    }
+#endif
+    return;
+}
+
+static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
+{
+    AssignedDevice *dev = container_of(pci_dev, AssignedDevice, dev);
+    int next_cap_pt = 0;
+
+    pci_dev->cap.length = 0;
+#if defined(KVM_CAP_DEVICE_MSI) && defined (KVM_CAP_IRQ_ROUTING)
+    /* Expose MSI capability
+     * MSI capability is the 1st capability in capability config */
+    if (pci_find_cap_offset(dev->pdev, PCI_CAP_ID_MSI)) {
+        dev->cap.available |= ASSIGNED_DEVICE_CAP_MSI;
+        memset(&pci_dev->config[pci_dev->cap.start + pci_dev->cap.length],
+               0, PCI_CAPABILITY_CONFIG_MSI_LENGTH);
+        pci_dev->config[pci_dev->cap.start + pci_dev->cap.length] =
+                        PCI_CAP_ID_MSI;
+        pci_dev->cap.length += PCI_CAPABILITY_CONFIG_MSI_LENGTH;
+        next_cap_pt = 1;
+    }
+#endif
+
+    return 0;
+}
+
 struct PCIDevice *init_assigned_device(AssignedDevInfo *adev, PCIBus *bus)
 {
     int r;
     AssignedDevice *dev;
     PCIDevice *pci_dev;
+    struct pci_access *pacc;
     uint8_t e_device, e_intx;
 
     DEBUG("Registering real physical device %s (bus=%x dev=%x func=%x)\n",
@@ -696,6 +817,10 @@ struct PCIDevice *init_assigned_device(AssignedDevInfo *adev, PCIBus *bus)
     dev->h_busnr = adev->bus;
     dev->h_devfn = PCI_DEVFN(adev->dev, adev->func);
 
+    pacc = pci_alloc();
+    pci_init(pacc);
+    dev->pdev = pci_get_dev(pacc, 0, adev->bus, adev->dev, adev->func);
+
     /* assign device to guest */
     r = assign_device(adev);
     if (r < 0)
@@ -704,6 +829,11 @@ struct PCIDevice *init_assigned_device(AssignedDevInfo *adev, PCIBus *bus)
     /* assign irq for the device */
     r = assign_irq(adev);
     if (r < 0)
+        goto assigned_out;
+
+    if (pci_enable_capability_support(pci_dev, 0, NULL,
+                    assigned_device_pci_cap_write_config,
+                    assigned_device_pci_cap_init) < 0)
         goto assigned_out;
 
     return &dev->dev;
