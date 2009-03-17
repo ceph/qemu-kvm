@@ -1415,3 +1415,28 @@ int kvm_get_irq_route_gsi(kvm_context_t kvm)
             return KVM_IOAPIC_NUM_PINS;
 }
 
+#ifdef KVM_CAP_DEVICE_MSIX
+int kvm_assign_set_msix_nr(kvm_context_t kvm,
+                           struct kvm_assigned_msix_nr *msix_nr)
+{
+        int ret;
+
+        ret = ioctl(kvm->vm_fd, KVM_ASSIGN_SET_MSIX_NR, msix_nr);
+        if (ret < 0)
+                return -errno;
+
+        return ret;
+}
+
+int kvm_assign_set_msix_entry(kvm_context_t kvm,
+                              struct kvm_assigned_msix_entry *entry)
+{
+        int ret;
+
+        ret = ioctl(kvm->vm_fd, KVM_ASSIGN_SET_MSIX_ENTRY, entry);
+        if (ret < 0)
+                return -errno;
+
+        return ret;
+}
+#endif

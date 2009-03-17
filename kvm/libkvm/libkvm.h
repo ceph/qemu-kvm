@@ -854,4 +854,11 @@ int kvm_commit_irq_routes(kvm_context_t kvm);
  * \param kvm Pointer to the current kvm_context
  */
 int kvm_get_irq_route_gsi(kvm_context_t kvm);
+
+#ifdef KVM_CAP_DEVICE_MSIX
+int kvm_assign_set_msix_nr(kvm_context_t kvm,
+			   struct kvm_assigned_msix_nr *msix_nr);
+int kvm_assign_set_msix_entry(kvm_context_t kvm,
+                              struct kvm_assigned_msix_entry *entry);
+#endif
 #endif
