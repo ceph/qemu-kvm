@@ -27,6 +27,7 @@
  */
 #include <stdio.h>
 #include <sys/io.h>
+#include <pci/pci.h>
 #include "qemu-kvm.h"
 #include "hw.h"
 #include "pc.h"
@@ -217,6 +218,35 @@ static void assigned_dev_ioport_map(PCIDevice *pci_dev, int region_num,
                           (r_dev->v_addrs + region_num));
     register_ioport_write(addr, size, 4, assigned_dev_ioport_writel,
                           (r_dev->v_addrs + region_num));
+}
+
+static uint8_t pci_find_cap_offset(struct pci_dev *pci_dev, uint8_t cap)
+{
+    int id;
+    int max_cap = 48;
+    int pos = PCI_CAPABILITY_LIST;
+    int status;
+
+    status = pci_read_byte(pci_dev, PCI_STATUS);
+    if ((status & PCI_STATUS_CAP_LIST) == 0)
+        return 0;
+
+    while (max_cap--) {
+        pos = pci_read_byte(pci_dev, pos);
+        if (pos < 0x40)
+            break;
+
+        pos &= ~3;
+        id = pci_read_byte(pci_dev, pos + PCI_CAP_LIST_ID);
+
+        if (id == 0xff)
+            break;
+        if (id == cap)
+            return pos;
+
+        pos += PCI_CAP_LIST_NEXT;
+    }
+    return 0;
 }
 
 static void assigned_dev_pci_write_config(PCIDevice *d, uint32_t address,
