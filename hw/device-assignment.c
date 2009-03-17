@@ -318,7 +318,8 @@ static uint32_t assigned_dev_pci_read_config(PCIDevice *d, uint32_t address,
     ssize_t ret;
     AssignedDevice *pci_dev = container_of(d, AssignedDevice, dev);
 
-    if ((address >= 0x10 && address <= 0x24) || address == 0x34 ||
+    if (address < 0x4 ||
+	(address >= 0x10 && address <= 0x24) || address == 0x34 ||
         address == 0x3c || address == 0x3d ||
         pci_access_cap_config(d, address, len)) {
         val = pci_default_read_config(d, address, len);
@@ -430,6 +431,7 @@ static int get_real_device(AssignedDevice *pci_dev, uint8_t r_bus,
     int fd, r = 0;
     FILE *f;
     unsigned long long start, end, size, flags;
+    unsigned long id;
     PCIRegion *rp;
     PCIDevRegions *dev = &pci_dev->real_device;
 
@@ -488,6 +490,33 @@ again:
         rp->size = size;
         DEBUG("region %d size %d start 0x%llx type %d resource_fd %d\n",
               r, rp->size, start, rp->type, rp->resource_fd);
+    }
+
+    fclose(f);
+
+    /* read and fill device ID */
+    snprintf(name, sizeof(name), "%svendor", dir);
+    f = fopen(name, "r");
+    if (f == NULL) {
+        fprintf(stderr, "%s: %s: %m\n", __func__, name);
+        return 1;
+    }
+    if (fscanf(f, "%li\n", &id) == 1) {
+	pci_dev->dev.config[0] = id & 0xff;
+	pci_dev->dev.config[1] = (id & 0xff00) >> 8;
+    }
+    fclose(f);
+
+    /* read and fill vendor ID */
+    snprintf(name, sizeof(name), "%sdevice", dir);
+    f = fopen(name, "r");
+    if (f == NULL) {
+        fprintf(stderr, "%s: %s: %m\n", __func__, name);
+        return 1;
+    }
+    if (fscanf(f, "%li\n", &id) == 1) {
+	pci_dev->dev.config[2] = id & 0xff;
+	pci_dev->dev.config[3] = (id & 0xff00) >> 8;
     }
     fclose(f);
 
