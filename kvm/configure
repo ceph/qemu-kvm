@@ -1,7 +1,6 @@
 #!/bin/bash
 
 prefix=/usr/local
-kernelsourcedir=
 kerneldir=/lib/modules/$(uname -r)/build
 cc=gcc
 ld=ld
@@ -114,28 +113,14 @@ esac
 processor=${arch#*-}
 arch=${arch%%-*}
 
-# see if we have split build and source directories
-if [ -d "$kerneldir/include2" ]; then
-    kernelsourcedir=${kerneldir%/*}/source
-fi
-
-if [ -n "$no_uname" -a "$want_module" ]; then
-    if [ -e "$kerneldir/.kernelrelease" ]; then
-        depmod_version=`cat "$kerneldir/.kernelrelease"`
-
-    elif [ -e "$kerneldir/include/config/kernel.release" ]; then
-            depmod_version=`cat "$kerneldir/include/config/kernel.release"`
-    elif [ -e "$kerneldir/.config" ]; then
-	depmod_version=$(awk '/Linux kernel version:/ { print $NF }' \
-			 "$kerneldir/.config")
-    else
-        echo
-        echo "Error: kernelversion not found"
-        echo "Please make sure your kernel is configured"
-        echo
-        exit 1
-    fi
-fi
+#configure kernel module
+(cd kernel;
+    ./configure \
+	--kerneldir="$kerneldir" \
+	--arch="$arch" \
+	${cross_prefix:+"--cross-prefix=$cross_prefix"} \
+	${kvm_trace:+"--with-kvm-trace"}
+)
 
 #configure user dir
 (cd user; ./configure --prefix="$prefix" --kerneldir="$libkvm_kerneldir" \
@@ -167,9 +152,4 @@ CC=$cross_prefix$cc
 LD=$cross_prefix$ld
 OBJCOPY=$cross_prefix$objcopy
 AR=$cross_prefix$ar
-DEPMOD_VERSION=$depmod_version
-EOF
-
-cat <<EOF > kernel/config.kbuild
-EXT_CONFIG_KVM_TRACE=$kvm_trace
 EOF

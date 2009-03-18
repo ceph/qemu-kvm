@@ -1,4 +1,4 @@
-include ../config.mak
+include config.mak
 include config.kbuild
 
 ARCH_DIR = $(if $(filter $(ARCH),x86_64 i386),x86,$(ARCH))
