@@ -1149,6 +1149,11 @@ struct PCIDevice *init_assigned_device(AssignedDevInfo *adev, PCIBus *bus)
     pci_init(pacc);
     dev->pdev = pci_get_dev(pacc, 0, adev->bus, adev->dev, adev->func);
 
+    if (pci_enable_capability_support(pci_dev, 0, NULL,
+                    assigned_device_pci_cap_write_config,
+                    assigned_device_pci_cap_init) < 0)
+        goto assigned_out;
+
     /* assign device to guest */
     r = assign_device(adev);
     if (r < 0)
@@ -1157,11 +1162,6 @@ struct PCIDevice *init_assigned_device(AssignedDevInfo *adev, PCIBus *bus)
     /* assign irq for the device */
     r = assign_irq(adev);
     if (r < 0)
-        goto assigned_out;
-
-    if (pci_enable_capability_support(pci_dev, 0, NULL,
-                    assigned_device_pci_cap_write_config,
-                    assigned_device_pci_cap_init) < 0)
         goto assigned_out;
 
     /* intercept MSI-X entry page in the MMIO */
