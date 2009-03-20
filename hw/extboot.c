@@ -77,19 +77,19 @@ static void extboot_write_cmd(void *opaque, uint32_t addr, uint32_t value)
     BlockDriverState *bs = opaque;
     int cylinders, heads, sectors, err;
     uint64_t nb_sectors;
-
-    get_translated_chs(bs, &cylinders, &heads, &sectors);
+    target_phys_addr_t pa;
+    int blen;
+    void *buf = NULL;
 
     if (cmd->type == 0x01 || cmd->type == 0x02) {
-	target_ulong pa = cmd->xfer.segment * 16 + cmd->xfer.segment;
-
-	/* possible buffer overflow */
-	if ((pa + cmd->xfer.nb_sectors * 512) > phys_ram_size)
-	    return;
+	pa = cmd->xfer.segment * 16 + cmd->xfer.offset;
+        blen = cmd->xfer.nb_sectors * 512;
+        buf = qemu_memalign(512, blen);
     }
 
     switch (cmd->type) {
     case 0x00:
+        get_translated_chs(bs, &cylinders, &heads, &sectors);
 	bdrv_get_geometry(bs, &nb_sectors);
 	cmd->query_geometry.cylinders = cylinders;
 	cmd->query_geometry.heads = heads;
@@ -98,22 +98,25 @@ static void extboot_write_cmd(void *opaque, uint32_t addr, uint32_t value)
 	cpu_physical_memory_set_dirty((value & 0xFFFF) << 4);
 	break;
     case 0x01:
-	err = bdrv_read(bs, cmd->xfer.sector, phys_ram_base +
-			cmd->xfer.segment * 16 + cmd->xfer.offset,
-			cmd->xfer.nb_sectors);
+	err = bdrv_read(bs, cmd->xfer.sector, buf, cmd->xfer.nb_sectors);
 	if (err)
 	    printf("Read failed\n");
+
+        cpu_physical_memory_write(pa, buf, blen);
+
 	break;
     case 0x02:
-	err = bdrv_write(bs, cmd->xfer.sector, phys_ram_base +
-			 cmd->xfer.segment * 16 + cmd->xfer.offset,
-			 cmd->xfer.nb_sectors);
+        cpu_physical_memory_read(pa, buf, blen);
+
+	err = bdrv_write(bs, cmd->xfer.sector, buf, cmd->xfer.nb_sectors);
 	if (err)
 	    printf("Write failed\n");
 
-	cpu_physical_memory_set_dirty(cmd->xfer.segment * 16 + cmd->xfer.offset);
 	break;
     }
+
+    if (buf)
+        qemu_free(buf);
 }
 
 void extboot_init(BlockDriverState *bs, int cmd)
@@ -121,10 +124,6 @@ void extboot_init(BlockDriverState *bs, int cmd)
     int *pcmd;
 
     pcmd = qemu_mallocz(sizeof(int));
-    if (!pcmd) {
-	fprintf(stderr, "Error allocating memory\n");
-	exit(1);
-    }
 
     *pcmd = cmd;
     register_ioport_read(0x404, 1, 1, extboot_read, pcmd);
