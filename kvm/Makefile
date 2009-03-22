@@ -28,7 +28,8 @@ ifneq '$(filter $(ARCH), powerpc ia64)' ''
 endif
 user: libkvm
 
-user libkvm qemu: header-sync-$(if $(WANT_MODULE),n,y)
+# sync if kernel/Makefile exists and if using --with-patched-kernel
+user libkvm qemu: header-sync-$(if $(wildcard kernel/Makefile),$(if $(WANT_MODULE),n,y),n)
 
 header-sync-n:
 
