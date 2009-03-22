@@ -21,6 +21,10 @@ if [ -z "TMPDIR" ] ; then
     TMPDIR=.
 fi
 
+if [ ! -e kernel/Makefile ]; then
+    want_module=
+fi
+
 usage() {
     cat <<-EOF
 	Usage: $0 [options]
