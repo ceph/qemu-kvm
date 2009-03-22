@@ -1,4 +1,4 @@
-#!/bin/sh -e
+#!/bin/bash -e
 
 # usage: make-release commit  (e.g. kvm-44)
 #        make-release snapshot
@@ -32,7 +32,10 @@ fi
 [[ -z "$ucommit" ]] && ucommit="$name"
 
 tarball="$name.tar.gz"
-
+uname="$(echo "$name" | sed s/kvm/qemu-kvm-devel/)"
+kname="$(echo "$name" | sed s/kvm/kvm-kmod-devel/)"
+utarball="$uname.tar.gz"
+ktarball="$kname.tar.gz"
 
 cd "${release_dir}"
 (cd "$udir";  git archive --format=tar --prefix="$name"/ "$ucommit") | tar x
@@ -66,8 +69,22 @@ make -C kernel sync LINUX=../linux version="$name"
 rm -rf kernel/config.mak linux kernel/config.kbuild
 sed -i "s/kvm-devel/$name/" qemu/configure
 
+just_userspace() {
+    find "$name" | awk '
+          { x=0 }
+          /^[^\/]*\/kernel\// { x=1 }
+          /^[^\/]*\/kernel\/include/ { x=0 }
+          /^[^\/]*\/kernel\/include-compat/ { x=1 }
+          x { print } '
+}
+
 cd ..
+
 tar czf "$tarball" "$name"
+tar czf "$utarball" --exclude-from=<(just_userspace) \
+    --transform="s,$name/,$uname/," "$name"
+tar czf "$ktarball" \
+    --transform="s,$name/kernel/,$kname/," "$name/kernel"
 
 if [[ "$name" = kvm-snapshot-* ]]; then
     mv "$tarball" "${snapshot_dir}"
