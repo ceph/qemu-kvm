@@ -1,0 +1,78 @@
+#!/bin/sh -e
+
+# usage: make-release commit  (e.g. kvm-44)
+#        make-release snapshot
+#        make-release name kernel-commit user-commit
+
+name="$1"
+kcommit="$2"
+ucommit="$3"
+formal=""
+archs=(x86 ia64)
+
+# override these in ~/.kvm-release-config
+release_dir=~/sf-release
+udir="$(readlink -f "$(dirname "$0")"/..)"
+kdir="${udir}/linux-2.6"
+upload() { rsync --progress -h "$tarball" avik@frs.sourceforge.net:uploads/; }
+
+[[ -f ~/.kvm-release-config ]] && . ~/.kvm-release-config
+
+[[ "$name" = kvm-* && -z "$kcommit" ]] && formal="1"
+
+[[ -z "$name" ]] && { echo no release name; exit 1; }
+
+if [[ "$name" == "snapshot" ]]; then
+    name="kvm-snapshot-$(TZ=UTC date +%Y%m%d)"
+    kcommit="HEAD"
+    ucommit="HEAD"
+fi
+
+[[ -z "$kcommit" ]] && kcommit="$name"
+[[ -z "$ucommit" ]] && ucommit="$name"
+
+tarball="$name.tar.gz"
+
+
+cd "${release_dir}"
+(cd "$udir";  git archive --format=tar --prefix="$name"/ "$ucommit") | tar x
+cd "$name"
+cat <<EOF > SOURCES
+kernel:    $(cd "$kdir"; git rev-parse "$kcommit")
+userspace: $(cd "$udir"; git rev-parse "$ucommit")
+EOF
+
+paths=(drivers/kvm virt/kvm)
+files=(kvm.h kvm_host.h kvm_para.h kvm_types.h kvm_x86_emulate.h virtext.h svm.h vmx.h)
+for file in "${files[@]}"; do
+    for arch in "${archs[@]}"; do
+	for variant in include/asm-"$arch" arch/"$arch"/include/asm; do
+	    paths+=("$variant"/"$file")
+	done
+    done
+    paths+=(include/linux/"$file")
+done
+for arch in "${archs[@]}"; do
+    paths+=(arch/"$arch"/kvm)
+done
+
+(cd "$kdir"; git archive --format=tar --prefix=linux/ "$kcommit" "${paths[@]}") | tar x
+
+touch kernel/config.kbuild
+echo ARCH=ia64 > kernel/config.mak
+make -C kernel sync LINUX=../linux version="$name"
+echo ARCH=x86_64 > kernel/config.mak
+make -C kernel sync LINUX=../linux version="$name"
+rm -rf kernel/config.mak linux kernel/config.kbuild
+sed -i "s/kvm-devel/$name/" qemu/configure
+
+cd ..
+tar czf "$tarball" "$name"
+
+if [[ "$name" = kvm-snapshot-* ]]; then
+    mv "$tarball" "${snapshot_dir}"
+elif [[ -n "$formal" ]]; then
+    upload
+fi
+
+rm -rf "$name"
