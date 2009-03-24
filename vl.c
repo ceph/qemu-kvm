@@ -3596,6 +3596,8 @@ void vm_start(void)
         cpu_enable_ticks();
         vm_running = 1;
         vm_state_notify(1, 0);
+        if (kvm_enabled())
+            qemu_kvm_resume_all_threads();
         qemu_rearm_alarm_timer(alarm_timer);
     }
 }
@@ -3605,6 +3607,8 @@ void vm_stop(int reason)
     if (vm_running) {
         cpu_disable_ticks();
         vm_running = 0;
+        if (kvm_enabled())
+            qemu_kvm_pause_all_threads();
         vm_state_notify(0, reason);
     }
 }

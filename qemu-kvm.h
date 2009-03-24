@@ -119,6 +119,9 @@ int qemu_kvm_register_coalesced_mmio(target_phys_addr_t addr,
 int qemu_kvm_unregister_coalesced_mmio(target_phys_addr_t addr,
 				       unsigned int size);
 
+void qemu_kvm_pause_all_threads(void);
+void qemu_kvm_resume_all_threads(void);
+
 int kvm_coalesce_mmio_region(target_phys_addr_t start, ram_addr_t size);
 int kvm_uncoalesce_mmio_region(target_phys_addr_t start, ram_addr_t size);
 
