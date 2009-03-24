@@ -32,6 +32,9 @@ _start:
 	xor %ax, %ax
 	mov %ax, %ds
 
+	/* there is one more bootable HD */
+	incb 0x0475
+
 	/* save old int 19 */
 	mov (0x19*4), %eax
 	mov %eax, %cs:old_int19
