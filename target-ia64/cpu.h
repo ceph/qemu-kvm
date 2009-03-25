@@ -40,13 +40,15 @@
 #include "cpu-defs.h"
 
 #include "softfloat.h"
+
+#define CPUState struct CPUIA64State
+
 typedef struct CPUIA64State {
     CPU_COMMON;
     uint32_t hflags;
     int mp_state;
 } CPUIA64State;
 
-#define CPUState CPUIA64State
 #define cpu_gen_code cpu_ia64_gen_code
 #define cpu_init cpu_ia64_init
 #define cpu_signal_handler cpu_ia64_signal_handler
