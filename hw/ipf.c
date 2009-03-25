@@ -687,9 +687,15 @@ static int ioapic_map_irq(int devfn, int irq_num)
     return irq;
 }
 
+/*
+ * Dummy function to provide match for call from hw/apic.c
+ */
+void apic_set_irq_delivered(void) {
+}
+
 void ioapic_set_irq(void *opaque, int irq_num, int level)
 {
-    int vector;
+    int vector, pic_ret;
 
     PCIDevice *pci_dev = (PCIDevice *)opaque;
     vector = ioapic_map_irq(pci_dev->devfn, irq_num);
@@ -700,7 +706,9 @@ void ioapic_set_irq(void *opaque, int irq_num, int level)
         ioapic_irq_count[vector] -= 1;
 
     if (kvm_enabled()) {
-	if (kvm_set_irq(vector, ioapic_irq_count[vector] == 0))
+	if (kvm_set_irq(vector, ioapic_irq_count[vector] == 0, &pic_ret))
+            if (pic_ret != 0)
+                apic_set_irq_delivered();
 	    return;
     }
 }
