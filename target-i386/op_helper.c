@@ -1275,8 +1275,7 @@ static int check_exception(int intno, int *error_code)
         if (env->hflags & HF_SVMI_MASK)
             helper_vmexit(SVM_EXIT_SHUTDOWN, 0); /* does not return */
 
-        if (qemu_loglevel_mask(CPU_LOG_RESET))
-            fprintf(logfile, "Triple fault\n");
+        qemu_log_mask(CPU_LOG_RESET, "Triple fault\n");
 
         qemu_system_reset_request();
         return EXCP_HLT;
@@ -3242,6 +3241,8 @@ target_ulong helper_lsl(target_ulong selector1)
 
     selector = selector1 & 0xffff;
     eflags = helper_cc_compute_all(CC_OP);
+    if ((selector & 0xfffc) == 0)
+        goto fail;
     if (load_segment(&e1, &e2, selector) != 0)
         goto fail;
     rpl = selector & 3;

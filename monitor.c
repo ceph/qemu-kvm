@@ -78,6 +78,8 @@ static uint8_t term_outbuf[1024];
 static int term_outbuf_index;
 
 static void monitor_start_input(void);
+static void monitor_readline(const char *prompt, int is_password,
+                             char *buf, int buf_size);
 
 static CPUState *mon_cpu = NULL;
 
@@ -457,7 +459,7 @@ static void do_change_block(const char *device, const char *filename, const char
     if (eject_device(bs, 0) < 0)
         return;
     bdrv_open2(bs, filename, 0, drv);
-    qemu_key_check(bs, filename);
+    monitor_read_bdrv_key(bs);
 }
 
 static void do_change_vnc(const char *target, const char *arg)
@@ -518,9 +520,24 @@ static void do_stop(void)
     vm_stop(EXCP_INTERRUPT);
 }
 
+static void encrypted_bdrv_it(void *opaque, BlockDriverState *bs)
+{
+    int *err = opaque;
+
+    if (bdrv_key_required(bs))
+        *err = monitor_read_bdrv_key(bs);
+    else
+        *err = 0;
+}
+
 static void do_cont(void)
 {
-    vm_start();
+    int err = 0;
+
+    bdrv_iterate(encrypted_bdrv_it, &err);
+    /* only resume the vm if all keys are set and valid */
+    if (!err)
+        vm_start();
 }
 
 #ifdef CONFIG_GDBSTUB
@@ -1269,6 +1286,35 @@ static void mem_info(void)
 }
 #endif
 
+#if defined(TARGET_SH4)
+
+static void print_tlb(int idx, tlb_t *tlb)
+{
+    term_printf(" tlb%i:\t"
+                "asid=%hhu vpn=%x\tppn=%x\tsz=%hhu size=%u\t"
+                "v=%hhu shared=%hhu cached=%hhu prot=%hhu "
+                "dirty=%hhu writethrough=%hhu\n",
+                idx,
+                tlb->asid, tlb->vpn, tlb->ppn, tlb->sz, tlb->size,
+                tlb->v, tlb->sh, tlb->c, tlb->pr,
+                tlb->d, tlb->wt);
+}
+
+static void tlb_info(void)
+{
+    CPUState *env = mon_get_cpu();
+    int i;
+
+    term_printf ("ITLB:\n");
+    for (i = 0 ; i < ITLB_SIZE ; i++)
+        print_tlb (i, &env->itlb[i]);
+    term_printf ("UTLB:\n");
+    for (i = 0 ; i < UTLB_SIZE ; i++)
+        print_tlb (i, &env->utlb[i]);
+}
+
+#endif
+
 static void do_info_kqemu(void)
 {
 #ifdef USE_KQEMU
@@ -1592,9 +1638,11 @@ static const term_cmd_t info_cmds[] = {
       "", "show i8259 (PIC) state", },
     { "pci", "", pci_info,
       "", "show PCI info", },
-#if defined(TARGET_I386)
+#if defined(TARGET_I386) || defined(TARGET_SH4)
     { "tlb", "", tlb_info,
       "", "show virtual to physical memory mappings", },
+#endif
+#if defined(TARGET_I386)
     { "mem", "", mem_info,
       "", "show the active virtual memory mappings", },
     { "hpet", "", do_info_hpet,
@@ -2684,8 +2732,9 @@ static void file_completion(const char *input)
     closedir(ffs);
 }
 
-static void block_completion_it(void *opaque, const char *name)
+static void block_completion_it(void *opaque, BlockDriverState *bs)
 {
+    const char *name = bdrv_get_device_name(bs);
     const char *input = opaque;
 
     if (input[0] == '\0' ||
@@ -2896,8 +2945,8 @@ static void monitor_readline_cb(void *opaque, const char *input)
     monitor_readline_started = 0;
 }
 
-void monitor_readline(const char *prompt, int is_password,
-                      char *buf, int buf_size)
+static void monitor_readline(const char *prompt, int is_password,
+                             char *buf, int buf_size)
 {
     int i;
     int old_focus[MAX_MON];
@@ -2926,4 +2975,23 @@ void monitor_readline(const char *prompt, int is_password,
             if (old_focus[i])
                 monitor_hd[i]->focus = old_focus[i];
     }
+}
+
+int monitor_read_bdrv_key(BlockDriverState *bs)
+{
+    char password[256];
+    int i;
+
+    if (!bdrv_is_encrypted(bs))
+        return 0;
+
+    term_printf("%s (%s) is encrypted.\n", bdrv_get_device_name(bs),
+                bdrv_get_encrypted_filename(bs));
+    for(i = 0; i < 3; i++) {
+        monitor_readline("Password: ", 1, password, sizeof(password));
+        if (bdrv_set_key(bs, password) == 0)
+            return 0;
+        term_printf("invalid password\n");
+    }
+    return -EPERM;
 }

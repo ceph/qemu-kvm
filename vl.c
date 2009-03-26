@@ -54,6 +54,7 @@
 #include <zlib.h>
 
 #ifndef _WIN32
+#include <pwd.h>
 #include <sys/times.h>
 #include <sys/wait.h>
 #include <termios.h>
@@ -205,6 +206,7 @@ ram_addr_t ram_size;
 int nb_nics;
 NICInfo nd_table[MAX_NICS];
 int vm_running;
+static int autostart;
 static int rtc_utc = 1;
 static int rtc_date_offset = -1; /* -1 means no change */
 int cirrus_vga_enabled = 1;
@@ -2270,7 +2272,7 @@ BlockInterfaceErrorAction drive_get_onerror(BlockDriverState *bdrv)
         if (drives_table[index].bdrv == bdrv)
             return drives_table[index].onerror;
 
-    return BLOCK_ERR_REPORT;
+    return BLOCK_ERR_STOP_ENOSPC;
 }
 
 static void bdrv_format_print(void *opaque, const char *name)
@@ -2519,7 +2521,7 @@ int drive_init(struct drive_opt *arg, int snapshot, void *opaque)
     if (!get_param_value(serial, sizeof(serial), "serial", str))
 	    memset(serial, 0,  sizeof(serial));
 
-    onerror = BLOCK_ERR_REPORT;
+    onerror = BLOCK_ERR_STOP_ENOSPC;
     if (get_param_value(buf, sizeof(serial), "werror", str)) {
         if (type != IF_IDE && type != IF_SCSI && type != IF_VIRTIO) {
             fprintf(stderr, "werror is no supported by this format\n");
@@ -2647,11 +2649,13 @@ int drive_init(struct drive_opt *arg, int snapshot, void *opaque)
         bdrv_flags |= BDRV_O_CACHE_WB;
     else if (cache == 3) /* not specified */
         bdrv_flags |= BDRV_O_CACHE_DEF;
-    if (bdrv_open2(bdrv, file, bdrv_flags, drv) < 0 || qemu_key_check(bdrv, file)) {
+    if (bdrv_open2(bdrv, file, bdrv_flags, drv) < 0) {
         fprintf(stderr, "qemu: could not open disk image %s\n",
                         file);
         return -1;
     }
+    if (bdrv_key_required(bdrv))
+        autostart = 0;
     return drives_table_idx;
 }
 
@@ -2698,7 +2702,7 @@ int usb_device_add_dev(USBDevice *dev)
     return 0;
 }
 
-static int usb_device_add(const char *devname)
+static int usb_device_add(const char *devname, int is_hotplug)
 {
     const char *p;
     USBDevice *dev;
@@ -2715,7 +2719,18 @@ static int usb_device_add(const char *devname)
     } else if (!strcmp(devname, "keyboard")) {
         dev = usb_keyboard_init();
     } else if (strstart(devname, "disk:", &p)) {
-        dev = usb_msd_init(p);
+        BlockDriverState *bs;
+
+        dev = usb_msd_init(p, &bs);
+        if (!dev)
+            return -1;
+        if (bdrv_key_required(bs)) {
+            autostart = 0;
+            if (is_hotplug && monitor_read_bdrv_key(bs) < 0) {
+                dev->handle_destroy(dev);
+                return -1;
+            }
+        }
     } else if (!strcmp(devname, "wacom-tablet")) {
         dev = usb_wacom_init();
     } else if (strstart(devname, "serial:", &p)) {
@@ -2796,7 +2811,7 @@ static int usb_device_del(const char *devname)
 
 void do_usb_add(const char *devname)
 {
-    usb_device_add(devname);
+    usb_device_add(devname, 1);
 }
 
 void do_usb_del(const char *devname)
@@ -4094,6 +4109,8 @@ static void help(int exitcode)
            "-no-fd-bootchk  disable boot signature checking for floppy disks\n"
            "-no-acpi        disable ACPI\n"
            "-no-hpet        disable HPET\n"
+           "-acpitable [sig=str][,rev=n][,oem_id=str][,oem_table_id=str][,oem_rev=n][,asl_compiler_id=str][,asl_compiler_rev=n][,data=file1[:file2]...]\n"
+           "                ACPI table description\n"
 #endif
            "Linux boot specific:\n"
            "-kernel bzImage use 'bzImage' as kernel image\n"
@@ -4174,6 +4191,10 @@ static void help(int exitcode)
 #endif
            "-tb-size n      set TB size\n"
            "-incoming p     prepare for incoming migration, listen on port p\n"
+#ifndef _WIN32
+           "-chroot dir     Chroot to dir just before starting the VM.\n"
+           "-runas user     Change to user id user just before starting the VM.\n"
+#endif
            "\n"
            "During emulation, the following keys are useful:\n"
            "ctrl-alt-f      toggle full screen\n"
@@ -4252,6 +4273,7 @@ enum {
     QEMU_OPTION_no_fd_bootchk,
     QEMU_OPTION_no_acpi,
     QEMU_OPTION_no_hpet,
+    QEMU_OPTION_acpitable,
 
     /* Linux boot specific: */
     QEMU_OPTION_kernel,
@@ -4300,6 +4322,8 @@ enum {
     QEMU_OPTION_old_param,
     QEMU_OPTION_tb_size,
     QEMU_OPTION_incoming,
+    QEMU_OPTION_chroot,
+    QEMU_OPTION_runas,
     QEMU_OPTION_tdf,
     QEMU_OPTION_kvm_shadow_memory,
     QEMU_OPTION_mempath,
@@ -4386,6 +4410,7 @@ static const QEMUOption qemu_options[] = {
     { "no-fd-bootchk", 0, QEMU_OPTION_no_fd_bootchk },
     { "no-acpi", 0, QEMU_OPTION_no_acpi },
     { "no-hpet", 0, QEMU_OPTION_no_hpet },
+    { "acpitable", HAS_ARG, QEMU_OPTION_acpitable },
 #endif
 
     /* Linux boot specific: */
@@ -4451,51 +4476,14 @@ static const QEMUOption qemu_options[] = {
 #endif
     { "tb-size", HAS_ARG, QEMU_OPTION_tb_size },
     { "incoming", HAS_ARG, QEMU_OPTION_incoming },
+    { "chroot", HAS_ARG, QEMU_OPTION_chroot },
+    { "runas", HAS_ARG, QEMU_OPTION_runas },
     { "mem-path", HAS_ARG, QEMU_OPTION_mempath },
 #ifdef MAP_POPULATE
     { "mem-prealloc", 0, QEMU_OPTION_mem_prealloc },
 #endif
     { NULL },
 };
-
-/* password input */
-
-int qemu_key_check(BlockDriverState *bs, const char *name)
-{
-    char password[256];
-    int i;
-
-    if (!bdrv_is_encrypted(bs))
-        return 0;
-
-    term_printf("%s is encrypted.\n", name);
-    for(i = 0; i < 3; i++) {
-        monitor_readline("Password: ", 1, password, sizeof(password));
-        if (bdrv_set_key(bs, password) == 0)
-            return 0;
-        term_printf("invalid password\n");
-    }
-    return -EPERM;
-}
-
-static BlockDriverState *get_bdrv(int index)
-{
-    if (index > nb_drives)
-        return NULL;
-    return drives_table[index].bdrv;
-}
-
-static void read_passwords(void)
-{
-    BlockDriverState *bs;
-    int i;
-
-    for(i = 0; i < 6; i++) {
-        bs = get_bdrv(i);
-        if (bs)
-            qemu_key_check(bs, bdrv_get_device_name(bs));
-    }
-}
 
 #ifdef HAS_AUDIO
 struct soundhw soundhw[] = {
@@ -4881,8 +4869,11 @@ int main(int argc, char **argv, char **envp)
     int fds[2];
     int tb_size;
     const char *pid_file = NULL;
-    int autostart;
     const char *incoming = NULL;
+    int fd = 0;
+    struct passwd *pwd = NULL;
+    const char *chroot_dir = NULL;
+    const char *run_as = NULL;
 
     qemu_cache_utils_init(envp);
 
@@ -4934,20 +4925,19 @@ int main(int argc, char **argv, char **envp)
     kernel_cmdline = "";
     cyls = heads = secs = 0;
     translation = BIOS_ATA_TRANSLATION_AUTO;
-    monitor_device = "vc";
+    monitor_device = "vc:80Cx24C";
 
     serial_devices[0] = "vc:80Cx24C";
     for(i = 1; i < MAX_SERIAL_PORTS; i++)
         serial_devices[i] = NULL;
     serial_device_index = 0;
 
-    parallel_devices[0] = "vc:640x480";
+    parallel_devices[0] = "vc:80Cx24C";
     for(i = 1; i < MAX_PARALLEL_PORTS; i++)
         parallel_devices[i] = NULL;
     parallel_device_index = 0;
 
-    virtio_consoles[0] = "vc:80Cx24C";
-    for(i = 1; i < MAX_VIRTIO_CONSOLES; i++)
+    for(i = 0; i < MAX_VIRTIO_CONSOLES; i++)
         virtio_consoles[i] = NULL;
     virtio_console_index = 0;
 
@@ -5384,6 +5374,12 @@ int main(int argc, char **argv, char **envp)
             case QEMU_OPTION_rtc_td_hack:
                 rtc_td_hack = 1;
                 break;
+            case QEMU_OPTION_acpitable:
+                if(acpi_table_add(optarg) < 0) {
+                    fprintf(stderr, "Wrong acpi table provided\n");
+                    exit(1);
+                }
+                break;
 #endif
 #ifdef USE_KQEMU
             case QEMU_OPTION_no_kqemu:
@@ -5583,6 +5579,11 @@ int main(int argc, char **argv, char **envp)
             case QEMU_OPTION_incoming:
                 incoming = optarg;
                 break;
+            case QEMU_OPTION_chroot:
+                chroot_dir = optarg;
+                break;
+            case QEMU_OPTION_runas:
+                run_as = optarg;
             case QEMU_OPTION_nvram:
                 nvram = optarg;
                 break;
@@ -5613,8 +5614,6 @@ int main(int argc, char **argv, char **envp)
            parallel_devices[0] = "null";
        if (strncmp(monitor_device, "vc", 2) == 0)
            monitor_device = "stdio";
-       if (virtio_console_index == 0)
-           virtio_consoles[0] = "null";
     }
 
 #ifndef _WIN32
@@ -5953,7 +5952,7 @@ int main(int argc, char **argv, char **envp)
     /* init USB devices */
     if (usb_enabled) {
         for(i = 0; i < usb_devices_index; i++) {
-            if (usb_device_add(usb_devices[i]) < 0) {
+            if (usb_device_add(usb_devices[i], 0) < 0) {
                 fprintf(stderr, "Warning: could not add USB device %s\n",
                         usb_devices[i]);
             }
@@ -6009,6 +6008,7 @@ int main(int argc, char **argv, char **envp)
     }
 
     text_consoles_set_display(display_state);
+    qemu_chr_initial_reset();
 
     if (monitor_device && monitor_hd)
         monitor_init(monitor_hd, !nographic);
@@ -6063,18 +6063,12 @@ int main(int argc, char **argv, char **envp)
         qemu_start_incoming_migration(incoming);
     }
 
-    {
-        /* XXX: simplify init */
-        read_passwords();
-        if (autostart) {
-            vm_start();
-        }
-    }
+    if (autostart)
+        vm_start();
 
     if (daemonize) {
 	uint8_t status = 0;
 	ssize_t len;
-	int fd;
 
     again1:
 	len = write(fds[1], &status, 1);
@@ -6088,12 +6082,47 @@ int main(int argc, char **argv, char **envp)
 	TFR(fd = open("/dev/null", O_RDWR));
 	if (fd == -1)
 	    exit(1);
+    }
 
-	dup2(fd, 0);
-	dup2(fd, 1);
-	dup2(fd, 2);
+#ifndef _WIN32
+    if (run_as) {
+        pwd = getpwnam(run_as);
+        if (!pwd) {
+            fprintf(stderr, "User \"%s\" doesn't exist\n", run_as);
+            exit(1);
+        }
+    }
 
-	close(fd);
+    if (chroot_dir) {
+        if (chroot(chroot_dir) < 0) {
+            fprintf(stderr, "chroot failed\n");
+            exit(1);
+        }
+        chdir("/");
+    }
+
+    if (run_as) {
+        if (setgid(pwd->pw_gid) < 0) {
+            fprintf(stderr, "Failed to setgid(%d)\n", pwd->pw_gid);
+            exit(1);
+        }
+        if (setuid(pwd->pw_uid) < 0) {
+            fprintf(stderr, "Failed to setuid(%d)\n", pwd->pw_uid);
+            exit(1);
+        }
+        if (setuid(0) != -1) {
+            fprintf(stderr, "Dropping privileges failed\n");
+            exit(1);
+        }
+    }
+#endif
+
+    if (daemonize) {
+        dup2(fd, 0);
+        dup2(fd, 1);
+        dup2(fd, 2);
+
+        close(fd);
     }
 
     main_loop();

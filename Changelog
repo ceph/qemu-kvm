@@ -1,9 +1,56 @@
+version 0.10.1:
+
+  - virtio-net: allow masking of notifications on empty queue (Alex Williamson)
+  - e1000: fix rx descriptor low threshold logic (Alex Willaimson)
+  - x86 tcg: add NULL checks to lsl instruction (Jan Kiszka)
+  - kvm vga: fix screen corruption with -std-vga and Windows (Avi Kivity)
+  - kvm vga: fix screen corruption with Ubuntu installations (Glauber Costa)
+  - virtio-net: check right return size on sg list (Alex Williamson)
+  - Make qemu_announce_self handle holes (live migration after hotplug)
+    (Marcelo Tosatti)
+  - Revert r6804-r6808 (qcow2 allocation info).  This series of changes added
+    a high cost to startup for large qcow2 images (Anthony Liguori)
+  - qemu-img: fix help message (Aurelien Jarno)
+  - Fix build for non-default installs of SDL (Anthony Liguori)
+  - Fix race condition in env->interrupt_request.  When using TCG and a dynticks
+    host timer, this condition could cause TCG to get stuck in an infinite
+    loop (Aurelien Jarno)
+  - Fix reading encrypted hard disk passwords during early startup (Jan Kiszka)
+  - Fix encrypted disk reporting in 'info block' (Jan Kiszka)
+  - Fix console size with tiny displays (MusicPal) (Jan Kiszka)
+  - Improve error handling in bdrv_open2 (Jan Kiszka)
+  - Avoid leaking data in mux'ed character devices (Jan Kiszka)
+  - Fix initial character device reset (no banner in monitor) (Jan Kiszka)
+  - Fix cpuid KVM crash on i386 host (Lubomir Rintel)
+  - Fix SLES10sp2 installation by adding ISTAT1 register to LSI SCSI emulation
+    (Ryan Harper)
+
+version 0.10.0:
+
+  - TCG support (No longer requires GCC 3.x)
+  - Kernel Virtual Machine acceleration support
+  - BSD userspace emulation
+  - Bluetooth emulation and host passthrough support
+  - GDB XML register description support
+  - Intel e1000 emulation
+  - HPET emulation
+  - VirtIO paravirtual device support
+  - Marvell 88w8618 / MusicPal emulation
+  - Nokia N-series tablet emulation / OMAP2 processor emulation
+  - PCI hotplug support
+  - Live migration and new save/restore formats
+  - Curses display support
+  - qemu-nbd utility to mount supported block formats
+  - Altivec support in PPC emulation and new firmware (OpenBIOS)
+  - Multiple VNC clients are now supported
+  - TLS encryption is now supported in VNC
   - MIPS Magnum R4000 machine (Hervé Poussineau)
   - Braille support (Samuel Thibault)
   - Freecom MusicPal system emulation (Jan Kiszka)
   - OMAP242x and Nokia N800, N810 machines (Andrzej Zaborowski)
   - EsounD audio driver (Frederick Reeve)
   - Gravis Ultrasound GF1 sound card (Tibor "TS" Schütz)
+  - Many, many, bug fixes and new features
 
 version 0.9.1:
 

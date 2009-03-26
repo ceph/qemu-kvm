@@ -59,7 +59,7 @@ void destroy_nic(dev_match_fn *match_fn, void *arg)
     int i;
     NICInfo *nic;
 
-    for (i = 0; i < MAX_NICS; i++)
+    for (i = 0; i < MAX_NICS; i++) {
         nic = &nd_table[i];
         if (nic->used) {
             if (nic->private && match_fn(nic->private, arg)) {
@@ -72,6 +72,7 @@ void destroy_nic(dev_match_fn *match_fn, void *arg)
                 net_client_uninit(nic);
             }
         }
+    }
 }
 
 void destroy_bdrvs(dev_match_fn *match_fn, void *arg)

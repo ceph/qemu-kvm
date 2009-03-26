@@ -2214,7 +2214,7 @@ static void usage(void)
            interp_prefix,
            x86_stack_size,
            DEBUG_LOGFILE);
-    _exit(1);
+    exit(1);
 }
 
 THREAD CPUState *thread_env;
@@ -2336,7 +2336,7 @@ int main(int argc, char **argv, char **envp)
 #if defined(cpu_list)
                     cpu_list(stdout, &fprintf);
 #endif
-                _exit(1);
+                exit(1);
             }
         } else if (!strcmp(r, "drop-ld-preload")) {
             (void) envlist_unsetenv(envlist, "LD_PRELOAD");

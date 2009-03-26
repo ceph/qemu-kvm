@@ -376,8 +376,10 @@ static PhysPageDesc *phys_page_find_alloc(target_phys_addr_t index, int alloc)
             return NULL;
         pd = qemu_vmalloc(sizeof(PhysPageDesc) * L2_SIZE);
         *lp = pd;
-        for (i = 0; i < L2_SIZE; i++)
+        for (i = 0; i < L2_SIZE; i++) {
           pd[i].phys_offset = IO_MEM_UNASSIGNED;
+          pd[i].region_offset = (index + i) << TARGET_PAGE_BITS;
+        }
     }
     return ((PhysPageDesc *)pd) + (index & (L2_SIZE - 1));
 }
@@ -532,6 +534,7 @@ static int cpu_common_load(QEMUFile *f, void *opaque, int version_id)
 
     qemu_get_be32s(f, &env->halted);
     qemu_get_be32s(f, &env->interrupt_request);
+    env->interrupt_request &= ~CPU_INTERRUPT_EXIT;
     tlb_flush(env, 1);
 
     return 0;
@@ -1519,9 +1522,12 @@ void cpu_interrupt(CPUState *env, int mask)
 #endif
     int old_mask;
 
+    if (mask & CPU_INTERRUPT_EXIT) {
+        env->exit_request = 1;
+        mask &= ~CPU_INTERRUPT_EXIT;
+    }
+
     old_mask = env->interrupt_request;
-    /* FIXME: This is probably not threadsafe.  A different thread could
-       be in the middle of a read-modify-write operation.  */
     env->interrupt_request |= mask;
     if (kvm_enabled() && !qemu_kvm_irqchip_in_kernel())
 	kvm_update_interrupt_request(env);
@@ -1534,10 +1540,8 @@ void cpu_interrupt(CPUState *env, int mask)
     if (use_icount) {
         env->icount_decr.u16.high = 0xffff;
 #ifndef CONFIG_USER_ONLY
-        /* CPU_INTERRUPT_EXIT isn't a real interrupt.  It just means
-           an async event happened and we need to process it.  */
         if (!can_do_io(env)
-            && (mask & ~(old_mask | CPU_INTERRUPT_EXIT)) != 0) {
+            && (mask & ~old_mask) != 0) {
             cpu_abort(env, "Raised interrupt while not in I/O function");
         }
 #endif
@@ -2306,6 +2310,9 @@ void cpu_register_physical_memory_offset(target_phys_addr_t start_addr,
     if (kvm_enabled())
         kvm_set_phys_mem(start_addr, size, phys_offset);
 
+    if (phys_offset == IO_MEM_UNASSIGNED) {
+        region_offset = start_addr;
+    }
     region_offset &= TARGET_PAGE_MASK;
     size = (size + TARGET_PAGE_SIZE - 1) & TARGET_PAGE_MASK;
     end_addr = start_addr + (target_phys_addr_t)size;
@@ -2353,7 +2360,7 @@ void cpu_register_physical_memory_offset(target_phys_addr_t start_addr,
                 if (need_subpage || phys_offset & IO_MEM_SUBWIDTH) {
                     subpage = subpage_init((addr & TARGET_PAGE_MASK),
                                            &p->phys_offset, IO_MEM_UNASSIGNED,
-                                           0);
+                                           addr & TARGET_PAGE_MASK);
                     subpage_register(subpage, start_addr2, end_addr2,
                                      phys_offset, region_offset);
                     p->region_offset = 0;

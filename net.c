@@ -1276,8 +1276,8 @@ typedef struct NetSocketState {
     VLANClientState *vc;
     int fd;
     int state; /* 0 = getting length, 1 = getting data */
-    int index;
-    int packet_len;
+    unsigned int index;
+    unsigned int packet_len;
     uint8_t buf[4096];
     struct sockaddr_in dgram_dst; /* contains inet host and port destination iff connectionless (SOCK_DGRAM) */
 } NetSocketState;
@@ -1310,7 +1310,8 @@ static void net_socket_receive_dgram(void *opaque, const uint8_t *buf, int size)
 static void net_socket_send(void *opaque)
 {
     NetSocketState *s = opaque;
-    int l, size, err;
+    int size, err;
+    unsigned l;
     uint8_t buf1[4096];
     const uint8_t *buf;
 
@@ -1349,7 +1350,15 @@ static void net_socket_send(void *opaque)
             l = s->packet_len - s->index;
             if (l > size)
                 l = size;
-            memcpy(s->buf + s->index, buf, l);
+            if (s->index + l <= sizeof(s->buf)) {
+                memcpy(s->buf + s->index, buf, l);
+            } else {
+                fprintf(stderr, "serious error: oversized packet received,"
+                    "connection terminated.\n");
+                s->state = 0;
+                goto eoc;
+            }
+
             s->index += l;
             buf += l;
             size -= l;
