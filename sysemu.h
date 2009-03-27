@@ -105,7 +105,7 @@ extern int graphic_rotate;
 extern int no_quit;
 extern int semihosting_enabled;
 extern int old_param;
-extern int hpagesize;
+extern long hpagesize;
 extern const char *bootp_filename;
 
 #ifdef USE_KQEMU

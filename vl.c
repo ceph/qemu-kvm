@@ -42,6 +42,7 @@
 #include <sys/ioctl.h>
 #include <sys/resource.h>
 #include <sys/socket.h>
+#include <sys/vfs.h>
 #include <netinet/in.h>
 #include <net/if.h>
 #if defined(__NetBSD__)
@@ -262,7 +263,7 @@ const char *mem_path = NULL;
 #ifdef MAP_POPULATE
 int mem_prealloc = 1;	/* force preallocation of physical target memory */
 #endif
-int hpagesize = 0;
+long hpagesize = 0;
 const char *cpu_vendor_string;
 #ifdef TARGET_ARM
 int old_param = 0;
@@ -4305,32 +4306,27 @@ void qemu_get_launch_info(int *argc, char ***argv, int *opt_daemonize, const cha
 }
 
 #ifdef USE_KVM
-static int gethugepagesize(void)
+
+#define HUGETLBFS_MAGIC       0x958458f6
+
+static long gethugepagesize(const char *path)
 {
-    int ret, fd;
-    char buf[4096];
-    const char *needle = "Hugepagesize:";
-    char *size;
-    unsigned long hugepagesize;
+    struct statfs fs;
+    int ret;
 
-    fd = open("/proc/meminfo", O_RDONLY);
-    if (fd < 0) {
-	perror("open");
-	exit(0);
+    do {
+	    ret = statfs(path, &fs);
+    } while (ret != 0 && errno == EINTR);
+
+    if (ret != 0) {
+	    perror("statfs");
+	    return 0;
     }
 
-    ret = read(fd, buf, sizeof(buf));
-    if (ret < 0) {
-	perror("read");
-	exit(0);
-    }
+    if (fs.f_type != HUGETLBFS_MAGIC)
+	    fprintf(stderr, "Warning: path not on HugeTLBFS: %s\n", path);
 
-    size = strstr(buf, needle);
-    if (!size)
-	return 0;
-    size += strlen(needle);
-    hugepagesize = strtol(size, NULL, 0);
-    return hugepagesize;
+    return fs.f_bsize;
 }
 
 static void *alloc_mem_area(size_t memory, unsigned long *len, const char *path)
@@ -4350,7 +4346,7 @@ static void *alloc_mem_area(size_t memory, unsigned long *len, const char *path)
     if (asprintf(&filename, "%s/kvm.XXXXXX", path) == -1)
 	return NULL;
 
-    hpagesize = gethugepagesize() * 1024;
+    hpagesize = gethugepagesize(path);
     if (!hpagesize)
 	return NULL;
 
