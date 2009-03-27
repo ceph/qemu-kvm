@@ -16,7 +16,6 @@ arch=`uname -m`
 target_exec=
 # don't use uname if kerneldir is set
 no_uname=
-depmod_version=
 if [ -z "TMPDIR" ] ; then
     TMPDIR=.
 fi
