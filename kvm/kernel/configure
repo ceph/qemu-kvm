@@ -12,6 +12,7 @@ cross_prefix=
 arch=`uname -m`
 # don't use uname if kerneldir is set
 no_uname=
+# we only need depmod_version for kvm.ko install
 depmod_version=
 if [ -z "TMPDIR" ] ; then
     TMPDIR=.
@@ -80,7 +81,7 @@ if [ -d "$kerneldir/include2" ]; then
     kernelsourcedir=${kerneldir%/*}/source
 fi
 
-if [ -n "$no_uname" ]; then
+if [ -n "$no_uname" -a "$want_module" ]; then
     if [ -e "$kerneldir/.kernelrelease" ]; then
         depmod_version=`cat "$kerneldir/.kernelrelease"`
 
