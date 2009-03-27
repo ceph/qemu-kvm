@@ -121,6 +121,7 @@ arch=${arch%%-*}
     ./configure \
 	--kerneldir="$kerneldir" \
 	--arch="$arch" \
+	$([ -z ${want_module} ] && echo "--with-patched-kernel") \
 	${cross_prefix:+"--cross-prefix=$cross_prefix"} \
 	${kvm_trace:+"--with-kvm-trace"}
 )

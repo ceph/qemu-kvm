@@ -6,6 +6,7 @@ cc=gcc
 ld=ld
 objcopy=objcopy
 ar=ar
+want_module=1
 kvm_trace=
 cross_prefix=
 arch=`uname -m`
@@ -43,6 +44,9 @@ while [[ "$1" = -* ]]; do
 	--kerneldir)
 	    kerneldir="$arg"
             no_uname=1
+	    ;;
+	--with-patched-kernel)
+	    want_module=
 	    ;;
 	--with-kvm-trace)
 	    kvm_trace=y
