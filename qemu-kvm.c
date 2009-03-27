@@ -1374,7 +1374,10 @@ int kvm_log_start(target_phys_addr_t phys_addr, target_phys_addr_t len)
     if (must_use_aliases_source(phys_addr))
         return 0;
 #endif
+
+#ifndef TARGET_IA64
     kvm_qemu_log_memory(phys_addr, len, 1);
+#endif
     return 0;
 }
 
@@ -1384,7 +1387,10 @@ int kvm_log_stop(target_phys_addr_t phys_addr, target_phys_addr_t len)
     if (must_use_aliases_source(phys_addr))
         return 0;
 #endif
+
+#ifndef TARGET_IA64
     kvm_qemu_log_memory(phys_addr, len, 0);
+#endif
     return 0;
 }
 
