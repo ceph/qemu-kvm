@@ -117,7 +117,7 @@ processor=${arch#*-}
 arch=${arch%%-*}
 
 #configure kernel module
-[[ -n "$want_module" ]] && (cd kernel;
+[ -e kernel/Makefile ] && (cd kernel;
     ./configure \
 	--kerneldir="$kerneldir" \
 	--arch="$arch" \
