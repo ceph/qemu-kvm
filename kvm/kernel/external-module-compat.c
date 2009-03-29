@@ -334,3 +334,21 @@ int kvm_pcidev_msi_enabled(struct pci_dev *dev)
 }
 
 #endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
+
+extern unsigned tsc_khz;
+static unsigned tsc_khz_dummy = 2000000;
+static unsigned *tsc_khz_p;
+
+unsigned kvm_get_tsc_khz(void)
+{
+	if (!tsc_khz_p) {
+		tsc_khz_p = symbol_get(tsc_khz);
+		if (!tsc_khz_p)
+			tsc_khz_p = &tsc_khz_dummy;
+	}
+	return *tsc_khz_p;
+}
+
+#endif
