@@ -182,6 +182,20 @@ BlockDriver *bdrv_find_format(const char *format_name)
     return NULL;
 }
 
+int bdrv_create2(BlockDriver *drv,
+                const char *filename, int64_t size_in_sectors,
+                const char *backing_file, const char *backing_format,
+                int flags)
+{
+    if (drv->bdrv_create2)
+        return drv->bdrv_create2(filename, size_in_sectors, backing_file,
+                                 backing_format, flags);
+    if (drv->bdrv_create)
+        return drv->bdrv_create(filename, size_in_sectors, backing_file,
+                                flags);
+    return -ENOTSUP;
+}
+
 int bdrv_create(BlockDriver *drv,
                 const char *filename, int64_t size_in_sectors,
                 const char *backing_file, int flags)
@@ -358,7 +372,7 @@ int bdrv_open2(BlockDriverState *bs, const char *filename, int flags,
 
         /* if there is a backing file, use it */
         bs1 = bdrv_new("");
-        ret = bdrv_open(bs1, filename, 0);
+        ret = bdrv_open2(bs1, filename, 0, drv);
         if (ret < 0) {
             bdrv_delete(bs1);
             return ret;
@@ -379,12 +393,14 @@ int bdrv_open2(BlockDriverState *bs, const char *filename, int flags,
         else
             realpath(filename, backing_filename);
 
-        ret = bdrv_create(&bdrv_qcow2, tmp_filename,
-                          total_size, backing_filename, 0);
+        ret = bdrv_create2(&bdrv_qcow2, tmp_filename,
+                           total_size, backing_filename, 
+                           (drv ? drv->format_name : NULL), 0);
         if (ret < 0) {
             return ret;
         }
         filename = tmp_filename;
+        drv = &bdrv_qcow2;
         bs->is_temporary = 1;
     }
 
@@ -430,10 +446,14 @@ int bdrv_open2(BlockDriverState *bs, const char *filename, int flags,
 #endif
     if (bs->backing_file[0] != '\0') {
         /* if there is a backing file, use it */
+        BlockDriver *back_drv = NULL;
         bs->backing_hd = bdrv_new("");
         path_combine(backing_filename, sizeof(backing_filename),
                      filename, bs->backing_file);
-        ret = bdrv_open(bs->backing_hd, backing_filename, open_flags);
+        if (bs->backing_format[0] != '\0')
+            back_drv = bdrv_find_format(bs->backing_format);
+        ret = bdrv_open2(bs->backing_hd, backing_filename, open_flags,
+                         back_drv);
         if (ret < 0) {
             bdrv_close(bs);
             return ret;
@@ -1315,6 +1335,11 @@ static BlockDriverAIOCB *bdrv_aio_rw_vector(BlockDriverState *bs,
         s->aiocb = bdrv_aio_read(bs, sector_num, s->bounce, nb_sectors,
                                  bdrv_aio_rw_vector_cb, s);
     }
+    if (!s->aiocb) {
+        qemu_vfree(s->bounce);
+        qemu_aio_release(s);
+        return NULL;
+    }
     return &s->common;
 }
 
@@ -1637,24 +1662,13 @@ int bdrv_ioctl(BlockDriverState *bs, unsigned long int req, void *buf)
     return -ENOTSUP;
 }
 
-int bdrv_sg_send_command(BlockDriverState *bs, void *buf, int count)
+BlockDriverAIOCB *bdrv_aio_ioctl(BlockDriverState *bs,
+        unsigned long int req, void *buf,
+        BlockDriverCompletionFunc *cb, void *opaque)
 {
-    return bs->drv->bdrv_sg_send_command(bs, buf, count);
-}
+    BlockDriver *drv = bs->drv;
 
-int bdrv_sg_recv_response(BlockDriverState *bs, void *buf, int count)
-{
-    return bs->drv->bdrv_sg_recv_response(bs, buf, count);
-}
-
-BlockDriverAIOCB *bdrv_sg_aio_read(BlockDriverState *bs, void *buf, int count,
-                                   BlockDriverCompletionFunc *cb, void *opaque)
-{
-    return bs->drv->bdrv_sg_aio_read(bs, buf, count, cb, opaque);
-}
-
-BlockDriverAIOCB *bdrv_sg_aio_write(BlockDriverState *bs, void *buf, int count,
-                                    BlockDriverCompletionFunc *cb, void *opaque)
-{
-    return bs->drv->bdrv_sg_aio_write(bs, buf, count, cb, opaque);
+    if (drv && drv->bdrv_aio_ioctl)
+        return drv->bdrv_aio_ioctl(bs, req, buf, cb, opaque);
+    return NULL;
 }
