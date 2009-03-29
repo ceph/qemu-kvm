@@ -429,10 +429,9 @@ enum {
 static TCGv_ptr cpu_env;
 static TCGv cpu_gpr[32], cpu_PC;
 static TCGv cpu_HI[MIPS_DSP_ACC], cpu_LO[MIPS_DSP_ACC], cpu_ACX[MIPS_DSP_ACC];
-static TCGv cpu_dspctrl, btarget;
-static TCGv_i32 bcond;
+static TCGv cpu_dspctrl, btarget, bcond;
+static TCGv_i32 hflags;
 static TCGv_i32 fpu_fpr32[32], fpu_fpr32h[32];
-static TCGv_i64 fpu_fpr64[32];
 static TCGv_i32 fpu_fcr0, fpu_fcr31;
 
 #include "gen-icount.h"
@@ -500,12 +499,6 @@ static const char *fregnames[] =
       "f8",  "f9",  "f10", "f11", "f12", "f13", "f14", "f15",
       "f16", "f17", "f18", "f19", "f20", "f21", "f22", "f23",
       "f24", "f25", "f26", "f27", "f28", "f29", "f30", "f31", };
-
-static const char *fregnames_64[] =
-    { "F0",  "F1",  "F2",  "F3",  "F4",  "F5",  "F6",  "F7",
-      "F8",  "F9",  "F10", "F11", "F12", "F13", "F14", "F15",
-      "F16", "F17", "F18", "F19", "F20", "F21", "F22", "F23",
-      "F24", "F25", "F26", "F27", "F28", "F29", "F30", "F31", };
 
 static const char *fregnames_h[] =
     { "h0",  "h1",  "h2",  "h3",  "h4",  "h5",  "h6",  "h7",
@@ -617,18 +610,20 @@ static inline void gen_store_fpr32 (TCGv_i32 t, int reg)
 
 static inline void gen_load_fpr64 (DisasContext *ctx, TCGv_i64 t, int reg)
 {
-    if (ctx->hflags & MIPS_HFLAG_F64)
-        tcg_gen_mov_i64(t, fpu_fpr64[reg]);
-    else {
+    if (ctx->hflags & MIPS_HFLAG_F64) {
+        tcg_gen_concat_i32_i64(t, fpu_fpr32[reg], fpu_fpr32h[reg]);
+    } else {
         tcg_gen_concat_i32_i64(t, fpu_fpr32[reg & ~1], fpu_fpr32[reg | 1]);
     }
 }
 
 static inline void gen_store_fpr64 (DisasContext *ctx, TCGv_i64 t, int reg)
 {
-    if (ctx->hflags & MIPS_HFLAG_F64)
-        tcg_gen_mov_i64(fpu_fpr64[reg], t);
-    else {
+    if (ctx->hflags & MIPS_HFLAG_F64) {
+        tcg_gen_trunc_i64_i32(fpu_fpr32[reg], t);
+        tcg_gen_shri_i64(t, t, 32);
+        tcg_gen_trunc_i64_i32(fpu_fpr32h[reg], t);
+    } else {
         tcg_gen_trunc_i64_i32(fpu_fpr32[reg & ~1], t);
         tcg_gen_shri_i64(t, t, 32);
         tcg_gen_trunc_i64_i32(fpu_fpr32[reg | 1], t);
@@ -693,18 +688,18 @@ FOP_CONDS(abs, ps, 64)
 #undef FOP_CONDS
 
 /* Tests */
-#define OP_COND(name, cond)                                   \
-static inline void glue(gen_op_, name) (TCGv t0, TCGv t1)     \
-{                                                             \
-    int l1 = gen_new_label();                                 \
-    int l2 = gen_new_label();                                 \
-                                                              \
-    tcg_gen_brcond_tl(cond, t0, t1, l1);                      \
-    tcg_gen_movi_tl(t0, 0);                                   \
-    tcg_gen_br(l2);                                           \
-    gen_set_label(l1);                                        \
-    tcg_gen_movi_tl(t0, 1);                                   \
-    gen_set_label(l2);                                        \
+#define OP_COND(name, cond)                                         \
+static inline void glue(gen_op_, name) (TCGv ret, TCGv t0, TCGv t1) \
+{                                                                   \
+    int l1 = gen_new_label();                                       \
+    int l2 = gen_new_label();                                       \
+                                                                    \
+    tcg_gen_brcond_tl(cond, t0, t1, l1);                            \
+    tcg_gen_movi_tl(ret, 0);                                        \
+    tcg_gen_br(l2);                                                 \
+    gen_set_label(l1);                                              \
+    tcg_gen_movi_tl(ret, 1);                                        \
+    gen_set_label(l2);                                              \
 }
 OP_COND(eq, TCG_COND_EQ);
 OP_COND(ne, TCG_COND_NE);
@@ -714,34 +709,34 @@ OP_COND(lt, TCG_COND_LT);
 OP_COND(ltu, TCG_COND_LTU);
 #undef OP_COND
 
-#define OP_CONDI(name, cond)                                  \
-static inline void glue(gen_op_, name) (TCGv t, target_ulong val) \
-{                                                             \
-    int l1 = gen_new_label();                                 \
-    int l2 = gen_new_label();                                 \
-                                                              \
-    tcg_gen_brcondi_tl(cond, t, val, l1);                     \
-    tcg_gen_movi_tl(t, 0);                                    \
-    tcg_gen_br(l2);                                           \
-    gen_set_label(l1);                                        \
-    tcg_gen_movi_tl(t, 1);                                    \
-    gen_set_label(l2);                                        \
+#define OP_CONDI(name, cond)                                                 \
+static inline void glue(gen_op_, name) (TCGv ret, TCGv t0, target_ulong val) \
+{                                                                            \
+    int l1 = gen_new_label();                                                \
+    int l2 = gen_new_label();                                                \
+                                                                             \
+    tcg_gen_brcondi_tl(cond, t0, val, l1);                                   \
+    tcg_gen_movi_tl(ret, 0);                                                 \
+    tcg_gen_br(l2);                                                          \
+    gen_set_label(l1);                                                       \
+    tcg_gen_movi_tl(ret, 1);                                                 \
+    gen_set_label(l2);                                                       \
 }
 OP_CONDI(lti, TCG_COND_LT);
 OP_CONDI(ltiu, TCG_COND_LTU);
 #undef OP_CONDI
 
 #define OP_CONDZ(name, cond)                                  \
-static inline void glue(gen_op_, name) (TCGv t)               \
+static inline void glue(gen_op_, name) (TCGv ret, TCGv t0)    \
 {                                                             \
     int l1 = gen_new_label();                                 \
     int l2 = gen_new_label();                                 \
                                                               \
-    tcg_gen_brcondi_tl(cond, t, 0, l1);                       \
-    tcg_gen_movi_tl(t, 0);                                    \
+    tcg_gen_brcondi_tl(cond, t0, 0, l1);                      \
+    tcg_gen_movi_tl(ret, 0);                                  \
     tcg_gen_br(l2);                                           \
     gen_set_label(l1);                                        \
-    tcg_gen_movi_tl(t, 1);                                    \
+    tcg_gen_movi_tl(ret, 1);                                  \
     gen_set_label(l2);                                        \
 }
 OP_CONDZ(gez, TCG_COND_GE);
@@ -763,11 +758,7 @@ static inline void save_cpu_state (DisasContext *ctx, int do_save_pc)
         ctx->saved_pc = ctx->pc;
     }
     if (ctx->hflags != ctx->saved_hflags) {
-        TCGv_i32 r_tmp = tcg_temp_new_i32();
-
-        tcg_gen_movi_i32(r_tmp, ctx->hflags);
-        tcg_gen_st_i32(r_tmp, cpu_env, offsetof(CPUState, hflags));
-        tcg_temp_free_i32(r_tmp);
+        tcg_gen_movi_i32(hflags, ctx->hflags);
         ctx->saved_hflags = ctx->hflags;
         switch (ctx->hflags & MIPS_HFLAG_BMASK) {
         case MIPS_HFLAG_BR:
@@ -1314,11 +1305,11 @@ static void gen_arith_imm (CPUState *env, DisasContext *ctx, uint32_t opc,
         break;
 #endif
     case OPC_SLTI:
-        gen_op_lti(t0, uimm);
+        gen_op_lti(t0, t0, uimm);
         opn = "slti";
         break;
     case OPC_SLTIU:
-        gen_op_ltiu(t0, uimm);
+        gen_op_ltiu(t0, t0, uimm);
         opn = "sltiu";
         break;
     case OPC_ANDI:
@@ -1601,11 +1592,11 @@ static void gen_arith (CPUState *env, DisasContext *ctx, uint32_t opc,
         break;
 #endif
     case OPC_SLT:
-        gen_op_lt(t0, t1);
+        gen_op_lt(t0, t0, t1);
         opn = "slt";
         break;
     case OPC_SLTU:
-        gen_op_ltu(t0, t1);
+        gen_op_ltu(t0, t0, t1);
         opn = "sltu";
         break;
     case OPC_AND:
@@ -1800,10 +1791,6 @@ static void gen_HILO (DisasContext *ctx, uint32_t opc, int reg)
             tcg_gen_movi_tl(cpu_LO[0], 0);
         opn = "mtlo";
         break;
-    default:
-        MIPS_INVAL(opn);
-        generate_exception(ctx, EXCP_RI);
-        return;
     }
     MIPS_DEBUG("%s %s", opn, regnames[reg]);
 }
@@ -1812,8 +1799,23 @@ static void gen_muldiv (DisasContext *ctx, uint32_t opc,
                         int rs, int rt)
 {
     const char *opn = "mul/div";
-    TCGv t0 = tcg_temp_local_new();
-    TCGv t1 = tcg_temp_local_new();
+    TCGv t0, t1;
+
+    switch (opc) {
+    case OPC_DIV:
+    case OPC_DIVU:
+#if defined(TARGET_MIPS64)
+    case OPC_DDIV:
+    case OPC_DDIVU:
+#endif
+        t0 = tcg_temp_local_new();
+        t1 = tcg_temp_local_new();
+        break;
+    default:
+        t0 = tcg_temp_new();
+        t1 = tcg_temp_new();
+        break;
+    }
 
     gen_load_gpr(t0, rs);
     gen_load_gpr(t1, rt);
@@ -1821,30 +1823,22 @@ static void gen_muldiv (DisasContext *ctx, uint32_t opc,
     case OPC_DIV:
         {
             int l1 = gen_new_label();
+            int l2 = gen_new_label();
 
+            tcg_gen_ext32s_tl(t0, t0);
+            tcg_gen_ext32s_tl(t1, t1);
             tcg_gen_brcondi_tl(TCG_COND_EQ, t1, 0, l1);
-            {
-                int l2 = gen_new_label();
-                TCGv_i32 r_tmp1 = tcg_temp_local_new_i32();
-                TCGv_i32 r_tmp2 = tcg_temp_local_new_i32();
-                TCGv_i32 r_tmp3 = tcg_temp_local_new_i32();
+            tcg_gen_brcondi_tl(TCG_COND_NE, t0, INT_MIN, l2);
+            tcg_gen_brcondi_tl(TCG_COND_NE, t1, -1, l2);
 
-                tcg_gen_trunc_tl_i32(r_tmp1, t0);
-                tcg_gen_trunc_tl_i32(r_tmp2, t1);
-                tcg_gen_brcondi_i32(TCG_COND_NE, r_tmp1, -1 << 31, l2);
-                tcg_gen_brcondi_i32(TCG_COND_NE, r_tmp2, -1, l2);
-                tcg_gen_ext32s_tl(cpu_LO[0], t0);
-                tcg_gen_movi_tl(cpu_HI[0], 0);
-                tcg_gen_br(l1);
-                gen_set_label(l2);
-                tcg_gen_div_i32(r_tmp3, r_tmp1, r_tmp2);
-                tcg_gen_rem_i32(r_tmp2, r_tmp1, r_tmp2);
-                tcg_gen_ext_i32_tl(cpu_LO[0], r_tmp3);
-                tcg_gen_ext_i32_tl(cpu_HI[0], r_tmp2);
-                tcg_temp_free_i32(r_tmp1);
-                tcg_temp_free_i32(r_tmp2);
-                tcg_temp_free_i32(r_tmp3);
-            }
+            tcg_gen_mov_tl(cpu_LO[0], t0);
+            tcg_gen_movi_tl(cpu_HI[0], 0);
+            tcg_gen_br(l1);
+            gen_set_label(l2);
+            tcg_gen_div_tl(cpu_LO[0], t0, t1);
+            tcg_gen_rem_tl(cpu_HI[0], t0, t1);
+            tcg_gen_ext32s_tl(cpu_LO[0], cpu_LO[0]);
+            tcg_gen_ext32s_tl(cpu_HI[0], cpu_HI[0]);
             gen_set_label(l1);
         }
         opn = "div";
@@ -1853,40 +1847,28 @@ static void gen_muldiv (DisasContext *ctx, uint32_t opc,
         {
             int l1 = gen_new_label();
 
-            tcg_gen_ext32s_tl(t1, t1);
             tcg_gen_brcondi_tl(TCG_COND_EQ, t1, 0, l1);
-            {
-                TCGv_i32 r_tmp1 = tcg_temp_new_i32();
-                TCGv_i32 r_tmp2 = tcg_temp_new_i32();
-                TCGv_i32 r_tmp3 = tcg_temp_new_i32();
-
-                tcg_gen_trunc_tl_i32(r_tmp1, t0);
-                tcg_gen_trunc_tl_i32(r_tmp2, t1);
-                tcg_gen_divu_i32(r_tmp3, r_tmp1, r_tmp2);
-                tcg_gen_remu_i32(r_tmp1, r_tmp1, r_tmp2);
-                tcg_gen_ext_i32_tl(cpu_LO[0], r_tmp3);
-                tcg_gen_ext_i32_tl(cpu_HI[0], r_tmp1);
-                tcg_temp_free_i32(r_tmp1);
-                tcg_temp_free_i32(r_tmp2);
-                tcg_temp_free_i32(r_tmp3);
-            }
+            tcg_gen_divu_tl(cpu_LO[0], t0, t1);
+            tcg_gen_remu_tl(cpu_HI[0], t0, t1);
+            tcg_gen_ext32s_tl(cpu_LO[0], cpu_LO[0]);
+            tcg_gen_ext32s_tl(cpu_HI[0], cpu_HI[0]);
             gen_set_label(l1);
         }
         opn = "divu";
         break;
     case OPC_MULT:
         {
-            TCGv_i64 r_tmp1 = tcg_temp_new_i64();
-            TCGv_i64 r_tmp2 = tcg_temp_new_i64();
+            TCGv_i64 t2 = tcg_temp_new_i64();
+            TCGv_i64 t3 = tcg_temp_new_i64();
 
-            tcg_gen_ext_tl_i64(r_tmp1, t0);
-            tcg_gen_ext_tl_i64(r_tmp2, t1);
-            tcg_gen_mul_i64(r_tmp1, r_tmp1, r_tmp2);
-            tcg_temp_free_i64(r_tmp2);
-            tcg_gen_trunc_i64_tl(t0, r_tmp1);
-            tcg_gen_shri_i64(r_tmp1, r_tmp1, 32);
-            tcg_gen_trunc_i64_tl(t1, r_tmp1);
-            tcg_temp_free_i64(r_tmp1);
+            tcg_gen_ext_tl_i64(t2, t0);
+            tcg_gen_ext_tl_i64(t3, t1);
+            tcg_gen_mul_i64(t2, t2, t3);
+            tcg_temp_free_i64(t3);
+            tcg_gen_trunc_i64_tl(t0, t2);
+            tcg_gen_shri_i64(t2, t2, 32);
+            tcg_gen_trunc_i64_tl(t1, t2);
+            tcg_temp_free_i64(t2);
             tcg_gen_ext32s_tl(cpu_LO[0], t0);
             tcg_gen_ext32s_tl(cpu_HI[0], t1);
         }
@@ -1894,19 +1876,19 @@ static void gen_muldiv (DisasContext *ctx, uint32_t opc,
         break;
     case OPC_MULTU:
         {
-            TCGv_i64 r_tmp1 = tcg_temp_new_i64();
-            TCGv_i64 r_tmp2 = tcg_temp_new_i64();
+            TCGv_i64 t2 = tcg_temp_new_i64();
+            TCGv_i64 t3 = tcg_temp_new_i64();
 
             tcg_gen_ext32u_tl(t0, t0);
             tcg_gen_ext32u_tl(t1, t1);
-            tcg_gen_extu_tl_i64(r_tmp1, t0);
-            tcg_gen_extu_tl_i64(r_tmp2, t1);
-            tcg_gen_mul_i64(r_tmp1, r_tmp1, r_tmp2);
-            tcg_temp_free_i64(r_tmp2);
-            tcg_gen_trunc_i64_tl(t0, r_tmp1);
-            tcg_gen_shri_i64(r_tmp1, r_tmp1, 32);
-            tcg_gen_trunc_i64_tl(t1, r_tmp1);
-            tcg_temp_free_i64(r_tmp1);
+            tcg_gen_extu_tl_i64(t2, t0);
+            tcg_gen_extu_tl_i64(t3, t1);
+            tcg_gen_mul_i64(t2, t2, t3);
+            tcg_temp_free_i64(t3);
+            tcg_gen_trunc_i64_tl(t0, t2);
+            tcg_gen_shri_i64(t2, t2, 32);
+            tcg_gen_trunc_i64_tl(t1, t2);
+            tcg_temp_free_i64(t2);
             tcg_gen_ext32s_tl(cpu_LO[0], t0);
             tcg_gen_ext32s_tl(cpu_HI[0], t1);
         }
@@ -1916,20 +1898,17 @@ static void gen_muldiv (DisasContext *ctx, uint32_t opc,
     case OPC_DDIV:
         {
             int l1 = gen_new_label();
+            int l2 = gen_new_label();
 
             tcg_gen_brcondi_tl(TCG_COND_EQ, t1, 0, l1);
-            {
-                int l2 = gen_new_label();
-
-                tcg_gen_brcondi_tl(TCG_COND_NE, t0, -1LL << 63, l2);
-                tcg_gen_brcondi_tl(TCG_COND_NE, t1, -1LL, l2);
-                tcg_gen_mov_tl(cpu_LO[0], t0);
-                tcg_gen_movi_tl(cpu_HI[0], 0);
-                tcg_gen_br(l1);
-                gen_set_label(l2);
-                tcg_gen_div_i64(cpu_LO[0], t0, t1);
-                tcg_gen_rem_i64(cpu_HI[0], t0, t1);
-            }
+            tcg_gen_brcondi_tl(TCG_COND_NE, t0, -1LL << 63, l2);
+            tcg_gen_brcondi_tl(TCG_COND_NE, t1, -1LL, l2);
+            tcg_gen_mov_tl(cpu_LO[0], t0);
+            tcg_gen_movi_tl(cpu_HI[0], 0);
+            tcg_gen_br(l1);
+            gen_set_label(l2);
+            tcg_gen_div_i64(cpu_LO[0], t0, t1);
+            tcg_gen_rem_i64(cpu_HI[0], t0, t1);
             gen_set_label(l1);
         }
         opn = "ddiv";
@@ -1956,19 +1935,19 @@ static void gen_muldiv (DisasContext *ctx, uint32_t opc,
 #endif
     case OPC_MADD:
         {
-            TCGv_i64 r_tmp1 = tcg_temp_new_i64();
-            TCGv_i64 r_tmp2 = tcg_temp_new_i64();
+            TCGv_i64 t2 = tcg_temp_new_i64();
+            TCGv_i64 t3 = tcg_temp_new_i64();
 
-            tcg_gen_ext_tl_i64(r_tmp1, t0);
-            tcg_gen_ext_tl_i64(r_tmp2, t1);
-            tcg_gen_mul_i64(r_tmp1, r_tmp1, r_tmp2);
-            tcg_gen_concat_tl_i64(r_tmp2, cpu_LO[0], cpu_HI[0]);
-            tcg_gen_add_i64(r_tmp1, r_tmp1, r_tmp2);
-            tcg_temp_free_i64(r_tmp2);
-            tcg_gen_trunc_i64_tl(t0, r_tmp1);
-            tcg_gen_shri_i64(r_tmp1, r_tmp1, 32);
-            tcg_gen_trunc_i64_tl(t1, r_tmp1);
-            tcg_temp_free_i64(r_tmp1);
+            tcg_gen_ext_tl_i64(t2, t0);
+            tcg_gen_ext_tl_i64(t3, t1);
+            tcg_gen_mul_i64(t2, t2, t3);
+            tcg_gen_concat_tl_i64(t3, cpu_LO[0], cpu_HI[0]);
+            tcg_gen_add_i64(t2, t2, t3);
+            tcg_temp_free_i64(t3);
+            tcg_gen_trunc_i64_tl(t0, t2);
+            tcg_gen_shri_i64(t2, t2, 32);
+            tcg_gen_trunc_i64_tl(t1, t2);
+            tcg_temp_free_i64(t2);
             tcg_gen_ext32s_tl(cpu_LO[0], t0);
             tcg_gen_ext32s_tl(cpu_LO[1], t1);
         }
@@ -1976,21 +1955,21 @@ static void gen_muldiv (DisasContext *ctx, uint32_t opc,
         break;
     case OPC_MADDU:
        {
-            TCGv_i64 r_tmp1 = tcg_temp_new_i64();
-            TCGv_i64 r_tmp2 = tcg_temp_new_i64();
+            TCGv_i64 t2 = tcg_temp_new_i64();
+            TCGv_i64 t3 = tcg_temp_new_i64();
 
             tcg_gen_ext32u_tl(t0, t0);
             tcg_gen_ext32u_tl(t1, t1);
-            tcg_gen_extu_tl_i64(r_tmp1, t0);
-            tcg_gen_extu_tl_i64(r_tmp2, t1);
-            tcg_gen_mul_i64(r_tmp1, r_tmp1, r_tmp2);
-            tcg_gen_concat_tl_i64(r_tmp2, cpu_LO[0], cpu_HI[0]);
-            tcg_gen_add_i64(r_tmp1, r_tmp1, r_tmp2);
-            tcg_temp_free_i64(r_tmp2);
-            tcg_gen_trunc_i64_tl(t0, r_tmp1);
-            tcg_gen_shri_i64(r_tmp1, r_tmp1, 32);
-            tcg_gen_trunc_i64_tl(t1, r_tmp1);
-            tcg_temp_free_i64(r_tmp1);
+            tcg_gen_extu_tl_i64(t2, t0);
+            tcg_gen_extu_tl_i64(t3, t1);
+            tcg_gen_mul_i64(t2, t2, t3);
+            tcg_gen_concat_tl_i64(t3, cpu_LO[0], cpu_HI[0]);
+            tcg_gen_add_i64(t2, t2, t3);
+            tcg_temp_free_i64(t3);
+            tcg_gen_trunc_i64_tl(t0, t2);
+            tcg_gen_shri_i64(t2, t2, 32);
+            tcg_gen_trunc_i64_tl(t1, t2);
+            tcg_temp_free_i64(t2);
             tcg_gen_ext32s_tl(cpu_LO[0], t0);
             tcg_gen_ext32s_tl(cpu_HI[0], t1);
         }
@@ -1998,19 +1977,19 @@ static void gen_muldiv (DisasContext *ctx, uint32_t opc,
         break;
     case OPC_MSUB:
         {
-            TCGv_i64 r_tmp1 = tcg_temp_new_i64();
-            TCGv_i64 r_tmp2 = tcg_temp_new_i64();
+            TCGv_i64 t2 = tcg_temp_new_i64();
+            TCGv_i64 t3 = tcg_temp_new_i64();
 
-            tcg_gen_ext_tl_i64(r_tmp1, t0);
-            tcg_gen_ext_tl_i64(r_tmp2, t1);
-            tcg_gen_mul_i64(r_tmp1, r_tmp1, r_tmp2);
-            tcg_gen_concat_tl_i64(r_tmp2, cpu_LO[0], cpu_HI[0]);
-            tcg_gen_sub_i64(r_tmp1, r_tmp1, r_tmp2);
-            tcg_temp_free_i64(r_tmp2);
-            tcg_gen_trunc_i64_tl(t0, r_tmp1);
-            tcg_gen_shri_i64(r_tmp1, r_tmp1, 32);
-            tcg_gen_trunc_i64_tl(t1, r_tmp1);
-            tcg_temp_free_i64(r_tmp1);
+            tcg_gen_ext_tl_i64(t2, t0);
+            tcg_gen_ext_tl_i64(t3, t1);
+            tcg_gen_mul_i64(t2, t2, t3);
+            tcg_gen_concat_tl_i64(t3, cpu_LO[0], cpu_HI[0]);
+            tcg_gen_sub_i64(t2, t2, t3);
+            tcg_temp_free_i64(t3);
+            tcg_gen_trunc_i64_tl(t0, t2);
+            tcg_gen_shri_i64(t2, t2, 32);
+            tcg_gen_trunc_i64_tl(t1, t2);
+            tcg_temp_free_i64(t2);
             tcg_gen_ext32s_tl(cpu_LO[0], t0);
             tcg_gen_ext32s_tl(cpu_HI[0], t1);
         }
@@ -2018,21 +1997,21 @@ static void gen_muldiv (DisasContext *ctx, uint32_t opc,
         break;
     case OPC_MSUBU:
         {
-            TCGv_i64 r_tmp1 = tcg_temp_new_i64();
-            TCGv_i64 r_tmp2 = tcg_temp_new_i64();
+            TCGv_i64 t2 = tcg_temp_new_i64();
+            TCGv_i64 t3 = tcg_temp_new_i64();
 
             tcg_gen_ext32u_tl(t0, t0);
             tcg_gen_ext32u_tl(t1, t1);
-            tcg_gen_extu_tl_i64(r_tmp1, t0);
-            tcg_gen_extu_tl_i64(r_tmp2, t1);
-            tcg_gen_mul_i64(r_tmp1, r_tmp1, r_tmp2);
-            tcg_gen_concat_tl_i64(r_tmp2, cpu_LO[0], cpu_HI[0]);
-            tcg_gen_sub_i64(r_tmp1, r_tmp1, r_tmp2);
-            tcg_temp_free_i64(r_tmp2);
-            tcg_gen_trunc_i64_tl(t0, r_tmp1);
-            tcg_gen_shri_i64(r_tmp1, r_tmp1, 32);
-            tcg_gen_trunc_i64_tl(t1, r_tmp1);
-            tcg_temp_free_i64(r_tmp1);
+            tcg_gen_extu_tl_i64(t2, t0);
+            tcg_gen_extu_tl_i64(t3, t1);
+            tcg_gen_mul_i64(t2, t2, t3);
+            tcg_gen_concat_tl_i64(t3, cpu_LO[0], cpu_HI[0]);
+            tcg_gen_sub_i64(t2, t2, t3);
+            tcg_temp_free_i64(t3);
+            tcg_gen_trunc_i64_tl(t0, t2);
+            tcg_gen_shri_i64(t2, t2, 32);
+            tcg_gen_trunc_i64_tl(t1, t2);
+            tcg_temp_free_i64(t2);
             tcg_gen_ext32s_tl(cpu_LO[0], t0);
             tcg_gen_ext32s_tl(cpu_HI[0], t1);
         }
@@ -2053,8 +2032,8 @@ static void gen_mul_vr54xx (DisasContext *ctx, uint32_t opc,
                             int rd, int rs, int rt)
 {
     const char *opn = "mul vr54xx";
-    TCGv t0 = tcg_temp_local_new();
-    TCGv t1 = tcg_temp_local_new();
+    TCGv t0 = tcg_temp_new();
+    TCGv t1 = tcg_temp_new();
 
     gen_load_gpr(t0, rs);
     gen_load_gpr(t1, rt);
@@ -2133,42 +2112,36 @@ static void gen_cl (DisasContext *ctx, uint32_t opc,
                     int rd, int rs)
 {
     const char *opn = "CLx";
-    TCGv t0 = tcg_temp_local_new();
+    TCGv t0;
 
     if (rd == 0) {
         /* Treat as NOP. */
         MIPS_DEBUG("NOP");
-        goto out;
+        return;
     }
+    t0 = tcg_temp_new();
     gen_load_gpr(t0, rs);
     switch (opc) {
     case OPC_CLO:
-        gen_helper_clo(t0, t0);
+        gen_helper_clo(cpu_gpr[rd], t0);
         opn = "clo";
         break;
     case OPC_CLZ:
-        gen_helper_clz(t0, t0);
+        gen_helper_clz(cpu_gpr[rd], t0);
         opn = "clz";
         break;
 #if defined(TARGET_MIPS64)
     case OPC_DCLO:
-        gen_helper_dclo(t0, t0);
+        gen_helper_dclo(cpu_gpr[rd], t0);
         opn = "dclo";
         break;
     case OPC_DCLZ:
-        gen_helper_dclz(t0, t0);
+        gen_helper_dclz(cpu_gpr[rd], t0);
         opn = "dclz";
         break;
 #endif
-    default:
-        MIPS_INVAL(opn);
-        generate_exception(ctx, EXCP_RI);
-        goto out;
     }
-    gen_store_gpr(t0, rd);
     MIPS_DEBUG("%s %s, %s", opn, regnames[rd], regnames[rs]);
-
- out:
     tcg_temp_free(t0);
 }
 
@@ -2177,8 +2150,8 @@ static void gen_trap (DisasContext *ctx, uint32_t opc,
                       int rs, int rt, int16_t imm)
 {
     int cond;
-    TCGv t0 = tcg_temp_local_new();
-    TCGv t1 = tcg_temp_local_new();
+    TCGv t0 = tcg_temp_new();
+    TCGv t1 = tcg_temp_new();
 
     cond = 0;
     /* Load needed operands */
@@ -2219,7 +2192,7 @@ static void gen_trap (DisasContext *ctx, uint32_t opc,
         case OPC_TGEU:  /* rs >= rs unsigned */
         case OPC_TGEIU: /* r0 >= 0  unsigned */
             /* Always trap */
-            tcg_gen_movi_tl(t0, 1);
+            generate_exception(ctx, EXCP_TRAP);
             break;
         case OPC_TLT:   /* rs < rs           */
         case OPC_TLTI:  /* r0 < 0            */
@@ -2228,54 +2201,40 @@ static void gen_trap (DisasContext *ctx, uint32_t opc,
         case OPC_TNE:   /* rs != rs          */
         case OPC_TNEI:  /* r0 != 0           */
             /* Never trap: treat as NOP. */
-            goto out;
-        default:
-            MIPS_INVAL("trap");
-            generate_exception(ctx, EXCP_RI);
-            goto out;
+            break;
         }
     } else {
+        int l1 = gen_new_label();
+
         switch (opc) {
         case OPC_TEQ:
         case OPC_TEQI:
-            gen_op_eq(t0, t1);
+            tcg_gen_brcond_tl(TCG_COND_NE, t0, t1, l1);
             break;
         case OPC_TGE:
         case OPC_TGEI:
-            gen_op_ge(t0, t1);
+            tcg_gen_brcond_tl(TCG_COND_LT, t0, t1, l1);
             break;
         case OPC_TGEU:
         case OPC_TGEIU:
-            gen_op_geu(t0, t1);
+            tcg_gen_brcond_tl(TCG_COND_LTU, t0, t1, l1);
             break;
         case OPC_TLT:
         case OPC_TLTI:
-            gen_op_lt(t0, t1);
+            tcg_gen_brcond_tl(TCG_COND_GE, t0, t1, l1);
             break;
         case OPC_TLTU:
         case OPC_TLTIU:
-            gen_op_ltu(t0, t1);
+            tcg_gen_brcond_tl(TCG_COND_GEU, t0, t1, l1);
             break;
         case OPC_TNE:
         case OPC_TNEI:
-            gen_op_ne(t0, t1);
+            tcg_gen_brcond_tl(TCG_COND_EQ, t0, t1, l1);
             break;
-        default:
-            MIPS_INVAL("trap");
-            generate_exception(ctx, EXCP_RI);
-            goto out;
         }
-    }
-    save_cpu_state(ctx, 1);
-    {
-        int l1 = gen_new_label();
-
-        tcg_gen_brcondi_tl(TCG_COND_EQ, t0, 0, l1);
-        gen_helper_0i(raise_exception, EXCP_TRAP);
+        generate_exception(ctx, EXCP_TRAP);
         gen_set_label(l1);
     }
-    ctx->bstate = BS_STOP;
- out:
     tcg_temp_free(t0);
     tcg_temp_free(t1);
 }
@@ -2301,8 +2260,8 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
     target_ulong btgt = -1;
     int blink = 0;
     int bcond_compute = 0;
-    TCGv t0 = tcg_temp_local_new();
-    TCGv t1 = tcg_temp_local_new();
+    TCGv t0 = tcg_temp_new();
+    TCGv t1 = tcg_temp_new();
 
     if (ctx->hflags & MIPS_HFLAG_BMASK) {
 #ifdef MIPS_DEBUG_DISAS
@@ -2394,13 +2353,11 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
             MIPS_DEBUG("bnever (NOP)");
             goto out;
         case OPC_BLTZAL:  /* 0 < 0           */
-            tcg_gen_movi_tl(t0, ctx->pc + 8);
-            gen_store_gpr(t0, 31);
+            tcg_gen_movi_tl(cpu_gpr[31], ctx->pc + 8);
             MIPS_DEBUG("bnever and link");
             goto out;
         case OPC_BLTZALL: /* 0 < 0 likely */
-            tcg_gen_movi_tl(t0, ctx->pc + 8);
-            gen_store_gpr(t0, 31);
+            tcg_gen_movi_tl(cpu_gpr[31], ctx->pc + 8);
             /* Skip the instruction in the delay slot */
             MIPS_DEBUG("bnever, link and skip");
             ctx->pc += 4;
@@ -2438,82 +2395,80 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
     } else {
         switch (opc) {
         case OPC_BEQ:
-            gen_op_eq(t0, t1);
+            gen_op_eq(bcond, t0, t1);
             MIPS_DEBUG("beq %s, %s, " TARGET_FMT_lx,
                        regnames[rs], regnames[rt], btgt);
             goto not_likely;
         case OPC_BEQL:
-            gen_op_eq(t0, t1);
+            gen_op_eq(bcond, t0, t1);
             MIPS_DEBUG("beql %s, %s, " TARGET_FMT_lx,
                        regnames[rs], regnames[rt], btgt);
             goto likely;
         case OPC_BNE:
-            gen_op_ne(t0, t1);
+            gen_op_ne(bcond, t0, t1);
             MIPS_DEBUG("bne %s, %s, " TARGET_FMT_lx,
                        regnames[rs], regnames[rt], btgt);
             goto not_likely;
         case OPC_BNEL:
-            gen_op_ne(t0, t1);
+            gen_op_ne(bcond, t0, t1);
             MIPS_DEBUG("bnel %s, %s, " TARGET_FMT_lx,
                        regnames[rs], regnames[rt], btgt);
             goto likely;
         case OPC_BGEZ:
-            gen_op_gez(t0);
+            gen_op_gez(bcond, t0);
             MIPS_DEBUG("bgez %s, " TARGET_FMT_lx, regnames[rs], btgt);
             goto not_likely;
         case OPC_BGEZL:
-            gen_op_gez(t0);
+            gen_op_gez(bcond, t0);
             MIPS_DEBUG("bgezl %s, " TARGET_FMT_lx, regnames[rs], btgt);
             goto likely;
         case OPC_BGEZAL:
-            gen_op_gez(t0);
+            gen_op_gez(bcond, t0);
             MIPS_DEBUG("bgezal %s, " TARGET_FMT_lx, regnames[rs], btgt);
             blink = 31;
             goto not_likely;
         case OPC_BGEZALL:
-            gen_op_gez(t0);
+            gen_op_gez(bcond, t0);
             blink = 31;
             MIPS_DEBUG("bgezall %s, " TARGET_FMT_lx, regnames[rs], btgt);
             goto likely;
         case OPC_BGTZ:
-            gen_op_gtz(t0);
+            gen_op_gtz(bcond, t0);
             MIPS_DEBUG("bgtz %s, " TARGET_FMT_lx, regnames[rs], btgt);
             goto not_likely;
         case OPC_BGTZL:
-            gen_op_gtz(t0);
+            gen_op_gtz(bcond, t0);
             MIPS_DEBUG("bgtzl %s, " TARGET_FMT_lx, regnames[rs], btgt);
             goto likely;
         case OPC_BLEZ:
-            gen_op_lez(t0);
+            gen_op_lez(bcond, t0);
             MIPS_DEBUG("blez %s, " TARGET_FMT_lx, regnames[rs], btgt);
             goto not_likely;
         case OPC_BLEZL:
-            gen_op_lez(t0);
+            gen_op_lez(bcond, t0);
             MIPS_DEBUG("blezl %s, " TARGET_FMT_lx, regnames[rs], btgt);
             goto likely;
         case OPC_BLTZ:
-            gen_op_ltz(t0);
+            gen_op_ltz(bcond, t0);
             MIPS_DEBUG("bltz %s, " TARGET_FMT_lx, regnames[rs], btgt);
             goto not_likely;
         case OPC_BLTZL:
-            gen_op_ltz(t0);
+            gen_op_ltz(bcond, t0);
             MIPS_DEBUG("bltzl %s, " TARGET_FMT_lx, regnames[rs], btgt);
             goto likely;
         case OPC_BLTZAL:
-            gen_op_ltz(t0);
+            gen_op_ltz(bcond, t0);
             blink = 31;
             MIPS_DEBUG("bltzal %s, " TARGET_FMT_lx, regnames[rs], btgt);
         not_likely:
             ctx->hflags |= MIPS_HFLAG_BC;
-            tcg_gen_trunc_tl_i32(bcond, t0);
             break;
         case OPC_BLTZALL:
-            gen_op_ltz(t0);
+            gen_op_ltz(bcond, t0);
             blink = 31;
             MIPS_DEBUG("bltzall %s, " TARGET_FMT_lx, regnames[rs], btgt);
         likely:
             ctx->hflags |= MIPS_HFLAG_BL;
-            tcg_gen_trunc_tl_i32(bcond, t0);
             break;
         default:
             MIPS_INVAL("conditional branch/jump");
@@ -2526,8 +2481,7 @@ static void gen_compute_branch (DisasContext *ctx, uint32_t opc,
 
     ctx->btarget = btgt;
     if (blink > 0) {
-        tcg_gen_movi_tl(t0, ctx->pc + 8);
-        gen_store_gpr(t0, blink);
+        tcg_gen_movi_tl(cpu_gpr[blink], ctx->pc + 8);
     }
 
  out:
@@ -2630,56 +2584,72 @@ fail:
 
 static void gen_bshfl (DisasContext *ctx, uint32_t op2, int rt, int rd)
 {
-    TCGv t0 = tcg_temp_new();
-    TCGv t1 = tcg_temp_new();
+    TCGv t0;
 
-    gen_load_gpr(t1, rt);
+    if (rd == 0) {
+        /* If no destination, treat it as a NOP. */
+        MIPS_DEBUG("NOP");
+        return;
+    }
+
+    t0 = tcg_temp_new();
+    gen_load_gpr(t0, rt);
     switch (op2) {
     case OPC_WSBH:
-        tcg_gen_shri_tl(t0, t1, 8);
-        tcg_gen_andi_tl(t0, t0, 0x00FF00FF);
-        tcg_gen_shli_tl(t1, t1, 8);
-        tcg_gen_andi_tl(t1, t1, ~0x00FF00FF);
-        tcg_gen_or_tl(t0, t0, t1);
-        tcg_gen_ext32s_tl(t0, t0);
+        {
+            TCGv t1 = tcg_temp_new();
+
+            tcg_gen_shri_tl(t1, t0, 8);
+            tcg_gen_andi_tl(t1, t1, 0x00FF00FF);
+            tcg_gen_shli_tl(t0, t0, 8);
+            tcg_gen_andi_tl(t0, t0, ~0x00FF00FF);
+            tcg_gen_or_tl(t0, t0, t1);
+            tcg_temp_free(t1);
+            tcg_gen_ext32s_tl(cpu_gpr[rd], t0);
+        }
         break;
     case OPC_SEB:
-        tcg_gen_ext8s_tl(t0, t1);
+        tcg_gen_ext8s_tl(cpu_gpr[rd], t0);
         break;
     case OPC_SEH:
-        tcg_gen_ext16s_tl(t0, t1);
+        tcg_gen_ext16s_tl(cpu_gpr[rd], t0);
         break;
 #if defined(TARGET_MIPS64)
     case OPC_DSBH:
-        gen_load_gpr(t1, rt);
-        tcg_gen_shri_tl(t0, t1, 8);
-        tcg_gen_andi_tl(t0, t0, 0x00FF00FF00FF00FFULL);
-        tcg_gen_shli_tl(t1, t1, 8);
-        tcg_gen_andi_tl(t1, t1, ~0x00FF00FF00FF00FFULL);
-        tcg_gen_or_tl(t0, t0, t1);
+        {
+            TCGv t1 = tcg_temp_new();
+
+            tcg_gen_shri_tl(t1, t0, 8);
+            tcg_gen_andi_tl(t1, t1, 0x00FF00FF00FF00FFULL);
+            tcg_gen_shli_tl(t0, t0, 8);
+            tcg_gen_andi_tl(t0, t0, ~0x00FF00FF00FF00FFULL);
+            tcg_gen_or_tl(cpu_gpr[rd], t0, t1);
+            tcg_temp_free(t1);
+        }
         break;
     case OPC_DSHD:
-        gen_load_gpr(t1, rt);
-        tcg_gen_shri_tl(t0, t1, 16);
-        tcg_gen_andi_tl(t0, t0, 0x0000FFFF0000FFFFULL);
-        tcg_gen_shli_tl(t1, t1, 16);
-        tcg_gen_andi_tl(t1, t1, ~0x0000FFFF0000FFFFULL);
-        tcg_gen_or_tl(t1, t0, t1);
-        tcg_gen_shri_tl(t0, t1, 32);
-        tcg_gen_shli_tl(t1, t1, 32);
-        tcg_gen_or_tl(t0, t0, t1);
+        {
+            TCGv t1 = tcg_temp_new();
+
+            tcg_gen_shri_tl(t1, t0, 16);
+            tcg_gen_andi_tl(t1, t1, 0x0000FFFF0000FFFFULL);
+            tcg_gen_shli_tl(t0, t0, 16);
+            tcg_gen_andi_tl(t0, t0, ~0x0000FFFF0000FFFFULL);
+            tcg_gen_or_tl(t0, t0, t1);
+            tcg_gen_shri_tl(t1, t0, 32);
+            tcg_gen_shli_tl(t0, t0, 32);
+            tcg_gen_or_tl(cpu_gpr[rd], t0, t1);
+            tcg_temp_free(t1);
+        }
         break;
 #endif
     default:
         MIPS_INVAL("bsfhl");
         generate_exception(ctx, EXCP_RI);
         tcg_temp_free(t0);
-        tcg_temp_free(t1);
         return;
     }
-    gen_store_gpr(t0, rd);
     tcg_temp_free(t0);
-    tcg_temp_free(t1);
 }
 
 #ifndef CONFIG_USER_ONLY
@@ -5532,10 +5502,10 @@ static void gen_compute_branch1 (CPUState *env, DisasContext *ctx, uint32_t op,
             get_fp_cond(t0);
             tcg_gen_andi_i32(t0, t0, 0x1 << cc);
             tcg_gen_brcondi_i32(TCG_COND_EQ, t0, 0, l1);
-            tcg_gen_movi_i32(bcond, 0);
+            tcg_gen_movi_tl(bcond, 0);
             tcg_gen_br(l2);
             gen_set_label(l1);
-            tcg_gen_movi_i32(bcond, 1);
+            tcg_gen_movi_tl(bcond, 1);
             gen_set_label(l2);
         }
         opn = "bc1f";
@@ -5548,10 +5518,10 @@ static void gen_compute_branch1 (CPUState *env, DisasContext *ctx, uint32_t op,
             get_fp_cond(t0);
             tcg_gen_andi_i32(t0, t0, 0x1 << cc);
             tcg_gen_brcondi_i32(TCG_COND_EQ, t0, 0, l1);
-            tcg_gen_movi_i32(bcond, 0);
+            tcg_gen_movi_tl(bcond, 0);
             tcg_gen_br(l2);
             gen_set_label(l1);
-            tcg_gen_movi_i32(bcond, 1);
+            tcg_gen_movi_tl(bcond, 1);
             gen_set_label(l2);
         }
         opn = "bc1fl";
@@ -5564,10 +5534,10 @@ static void gen_compute_branch1 (CPUState *env, DisasContext *ctx, uint32_t op,
             get_fp_cond(t0);
             tcg_gen_andi_i32(t0, t0, 0x1 << cc);
             tcg_gen_brcondi_i32(TCG_COND_NE, t0, 0, l1);
-            tcg_gen_movi_i32(bcond, 0);
+            tcg_gen_movi_tl(bcond, 0);
             tcg_gen_br(l2);
             gen_set_label(l1);
-            tcg_gen_movi_i32(bcond, 1);
+            tcg_gen_movi_tl(bcond, 1);
             gen_set_label(l2);
         }
         opn = "bc1t";
@@ -5580,10 +5550,10 @@ static void gen_compute_branch1 (CPUState *env, DisasContext *ctx, uint32_t op,
             get_fp_cond(t0);
             tcg_gen_andi_i32(t0, t0, 0x1 << cc);
             tcg_gen_brcondi_i32(TCG_COND_NE, t0, 0, l1);
-            tcg_gen_movi_i32(bcond, 0);
+            tcg_gen_movi_tl(bcond, 0);
             tcg_gen_br(l2);
             gen_set_label(l1);
-            tcg_gen_movi_i32(bcond, 1);
+            tcg_gen_movi_tl(bcond, 1);
             gen_set_label(l2);
         }
         opn = "bc1tl";
@@ -5598,10 +5568,10 @@ static void gen_compute_branch1 (CPUState *env, DisasContext *ctx, uint32_t op,
             get_fp_cond(t0);
             tcg_gen_andi_i32(t0, t0, 0x3 << cc);
             tcg_gen_brcondi_i32(TCG_COND_EQ, t0, 0, l1);
-            tcg_gen_movi_i32(bcond, 0);
+            tcg_gen_movi_tl(bcond, 0);
             tcg_gen_br(l2);
             gen_set_label(l1);
-            tcg_gen_movi_i32(bcond, 1);
+            tcg_gen_movi_tl(bcond, 1);
             gen_set_label(l2);
         }
         opn = "bc1any2f";
@@ -5614,10 +5584,10 @@ static void gen_compute_branch1 (CPUState *env, DisasContext *ctx, uint32_t op,
             get_fp_cond(t0);
             tcg_gen_andi_i32(t0, t0, 0x3 << cc);
             tcg_gen_brcondi_i32(TCG_COND_NE, t0, 0, l1);
-            tcg_gen_movi_i32(bcond, 0);
+            tcg_gen_movi_tl(bcond, 0);
             tcg_gen_br(l2);
             gen_set_label(l1);
-            tcg_gen_movi_i32(bcond, 1);
+            tcg_gen_movi_tl(bcond, 1);
             gen_set_label(l2);
         }
         opn = "bc1any2t";
@@ -5630,10 +5600,10 @@ static void gen_compute_branch1 (CPUState *env, DisasContext *ctx, uint32_t op,
             get_fp_cond(t0);
             tcg_gen_andi_i32(t0, t0, 0xf << cc);
             tcg_gen_brcondi_i32(TCG_COND_EQ, t0, 0, l1);
-            tcg_gen_movi_i32(bcond, 0);
+            tcg_gen_movi_tl(bcond, 0);
             tcg_gen_br(l2);
             gen_set_label(l1);
-            tcg_gen_movi_i32(bcond, 1);
+            tcg_gen_movi_tl(bcond, 1);
             gen_set_label(l2);
         }
         opn = "bc1any4f";
@@ -5646,10 +5616,10 @@ static void gen_compute_branch1 (CPUState *env, DisasContext *ctx, uint32_t op,
             get_fp_cond(t0);
             tcg_gen_andi_i32(t0, t0, 0xf << cc);
             tcg_gen_brcondi_i32(TCG_COND_NE, t0, 0, l1);
-            tcg_gen_movi_i32(bcond, 0);
+            tcg_gen_movi_tl(bcond, 0);
             tcg_gen_br(l2);
             gen_set_label(l1);
-            tcg_gen_movi_i32(bcond, 1);
+            tcg_gen_movi_tl(bcond, 1);
             gen_set_label(l2);
         }
         opn = "bc1any4t";
@@ -7580,14 +7550,8 @@ static void decode_opc (CPUState *env, DisasContext *ctx)
         int l1 = gen_new_label();
 
         MIPS_DEBUG("blikely condition (" TARGET_FMT_lx ")", ctx->pc + 4);
-        tcg_gen_brcondi_i32(TCG_COND_NE, bcond, 0, l1);
-        {
-            TCGv_i32 r_tmp = tcg_temp_new_i32();
-
-            tcg_gen_movi_i32(r_tmp, ctx->hflags & ~MIPS_HFLAG_BMASK);
-            tcg_gen_st_i32(r_tmp, cpu_env, offsetof(CPUState, hflags));
-            tcg_temp_free_i32(r_tmp);
-        }
+        tcg_gen_brcondi_tl(TCG_COND_NE, bcond, 0, l1);
+        tcg_gen_movi_i32(hflags, ctx->hflags & ~MIPS_HFLAG_BMASK);
         gen_goto_tb(ctx, 1, ctx->pc + 4);
         gen_set_label(l1);
     }
@@ -7716,7 +7680,8 @@ static void decode_opc (CPUState *env, DisasContext *ctx)
         case OPC_MUL:
             gen_arith(env, ctx, op1, rd, rs, rt);
             break;
-        case OPC_CLZ ... OPC_CLO:
+        case OPC_CLO:
+        case OPC_CLZ:
             check_insn(env, ctx, ISA_MIPS32);
             gen_cl(ctx, op1, rd, rs);
             break;
@@ -7733,7 +7698,8 @@ static void decode_opc (CPUState *env, DisasContext *ctx)
             /* Treat as NOP. */
             break;
 #if defined(TARGET_MIPS64)
-        case OPC_DCLZ ... OPC_DCLO:
+        case OPC_DCLO:
+        case OPC_DCLZ:
             check_insn(env, ctx, ISA_MIPS64);
             check_mips_64(ctx);
             gen_cl(ctx, op1, rd, rs);
@@ -8140,7 +8106,7 @@ static void decode_opc (CPUState *env, DisasContext *ctx)
             {
                 int l1 = gen_new_label();
 
-                tcg_gen_brcondi_i32(TCG_COND_NE, bcond, 0, l1);
+                tcg_gen_brcondi_tl(TCG_COND_NE, bcond, 0, l1);
                 gen_goto_tb(ctx, 1, ctx->pc + 4);
                 gen_set_label(l1);
                 gen_goto_tb(ctx, 0, ctx->btarget);
@@ -8433,18 +8399,17 @@ static void mips_tcg_init(void)
     cpu_dspctrl = tcg_global_mem_new(TCG_AREG0,
                                      offsetof(CPUState, active_tc.DSPControl),
                                      "DSPControl");
-    bcond = tcg_global_mem_new_i32(TCG_AREG0,
-                                   offsetof(CPUState, bcond), "bcond");
+    bcond = tcg_global_mem_new(TCG_AREG0,
+                               offsetof(CPUState, bcond), "bcond");
     btarget = tcg_global_mem_new(TCG_AREG0,
                                  offsetof(CPUState, btarget), "btarget");
+    hflags = tcg_global_mem_new_i32(TCG_AREG0,
+                                    offsetof(CPUState, hflags), "hflags");
+
     for (i = 0; i < 32; i++)
         fpu_fpr32[i] = tcg_global_mem_new_i32(TCG_AREG0,
             offsetof(CPUState, active_fpu.fpr[i].w[FP_ENDIAN_IDX]),
             fregnames[i]);
-    for (i = 0; i < 32; i++)
-        fpu_fpr64[i] = tcg_global_mem_new_i64(TCG_AREG0,
-            offsetof(CPUState, active_fpu.fpr[i]),
-            fregnames_64[i]);
     for (i = 0; i < 32; i++)
         fpu_fpr32h[i] = tcg_global_mem_new_i32(TCG_AREG0,
             offsetof(CPUState, active_fpu.fpr[i].w[!FP_ENDIAN_IDX]),
