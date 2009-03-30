@@ -43,6 +43,7 @@ enum {
     AC_PTE_ACCESSED,
     AC_PTE_DIRTY,
     AC_PTE_NX,
+    AC_PTE_BIT51,
 
     AC_PDE_PRESENT,
     AC_PDE_WRITABLE,
@@ -51,6 +52,7 @@ enum {
     AC_PDE_DIRTY,
     AC_PDE_PSE,
     AC_PDE_NX,
+    AC_PDE_BIT51,
 
     AC_ACCESS_USER,
     AC_ACCESS_WRITE,
@@ -71,6 +73,7 @@ const char *ac_names[] = {
     [AC_PTE_USER] = "pte.user",
     [AC_PTE_DIRTY] = "pte.d",
     [AC_PTE_NX] = "pte.nx",
+    [AC_PTE_BIT51] = "pte.51",
     [AC_PDE_PRESENT] = "pde.p",
     [AC_PDE_ACCESSED] = "pde.a",
     [AC_PDE_WRITABLE] = "pde.rw",
@@ -78,6 +81,7 @@ const char *ac_names[] = {
     [AC_PDE_DIRTY] = "pde.d",
     [AC_PDE_PSE] = "pde.pse",
     [AC_PDE_NX] = "pde.nx",
+    [AC_PDE_BIT51] = "pde.51",
     [AC_ACCESS_WRITE] = "write",
     [AC_ACCESS_USER] = "user",
     [AC_ACCESS_FETCH] = "fetch",
@@ -293,6 +297,7 @@ void ac_test_reset_pt_pool(ac_test_t *at)
 void ac_test_setup_pte(ac_test_t *at)
 {
     unsigned long root = read_cr3();
+    int pde_valid, pte_valid;
 
     if (!ac_test_enough_room(at))
 	ac_test_reset_pt_pool(at);
@@ -328,6 +333,8 @@ void ac_test_setup_pte(ac_test_t *at)
 		pte |= PT_DIRTY_MASK;
 	    if (at->flags[AC_PDE_NX])
 		pte |= PT_NX_MASK;
+	    if (at->flags[AC_PDE_BIT51])
+		pte |= 1ull << 51;
 	    at->pdep = &vroot[index];
 	    break;
 	case 1:
@@ -344,6 +351,8 @@ void ac_test_setup_pte(ac_test_t *at)
 		pte |= PT_DIRTY_MASK;
 	    if (at->flags[AC_PTE_NX])
 		pte |= PT_NX_MASK;
+	    if (at->flags[AC_PTE_BIT51])
+		pte |= 1ull << 51;
 	    at->ptep = &vroot[index];
 	    break;
 	}
@@ -357,10 +366,15 @@ void ac_test_setup_pte(ac_test_t *at)
     at->expected_fault = 0;
     at->expected_error = PFERR_PRESENT_MASK;
 
+    pde_valid = at->flags[AC_PDE_PRESENT]
+        && !at->flags[AC_PDE_BIT51];
+    pte_valid = pde_valid
+        && at->flags[AC_PTE_PRESENT]
+        && !at->flags[AC_PTE_BIT51];
     if (at->flags[AC_ACCESS_TWICE]) {
-	if (at->flags[AC_PDE_PRESENT]) {
+	if (pde_valid) {
 	    at->expected_pde |= PT_ACCESSED_MASK;
-	    if (at->flags[AC_PTE_PRESENT])
+	    if (pte_valid)
 		at->expected_pte |= PT_ACCESSED_MASK;
 	}
     }
@@ -377,6 +391,9 @@ void ac_test_setup_pte(ac_test_t *at)
     if (!at->flags[AC_PDE_PRESENT]) {
 	at->expected_fault = 1;
 	at->expected_error &= ~PFERR_PRESENT_MASK;
+    } else if (!pde_valid) {
+        at->expected_fault = 1;
+        at->expected_error |= PFERR_RESERVED_MASK;
     }
 
     if (at->flags[AC_ACCESS_USER] && !at->flags[AC_PDE_USER])
@@ -404,6 +421,9 @@ void ac_test_setup_pte(ac_test_t *at)
     if (!at->flags[AC_PTE_PRESENT]) {
 	at->expected_fault = 1;
 	at->expected_error &= ~PFERR_PRESENT_MASK;
+    } else if (!pte_valid) {
+        at->expected_fault = 1;
+        at->expected_error |= PFERR_RESERVED_MASK;
     }
 
     if (at->flags[AC_ACCESS_USER] && !at->flags[AC_PTE_USER])
