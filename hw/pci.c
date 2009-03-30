@@ -163,6 +163,7 @@ static int pci_set_default_subsystem_id(PCIDevice *pci_dev)
 }
 
 /*
+ * Parse pci address in qemu command
  * Parse [[<domain>:]<bus>:]<slot>, return -1 on error
  */
 static int pci_parse_devaddr(const char *addr, int *domp, int *busp, unsigned *slotp)
@@ -208,6 +209,55 @@ static int pci_parse_devaddr(const char *addr, int *domp, int *busp, unsigned *s
     *domp = dom;
     *busp = bus;
     *slotp = slot;
+    return 0;
+}
+
+/*
+ * Parse device bdf in device assignment command:
+ *
+ * -pcidevice host=bus:dev.func
+ *
+ * Parse <bus>:<slot>.<func> return -1 on error
+ */
+int pci_parse_host_devaddr(const char *addr, int *busp,
+                           int *slotp, int *funcp)
+{
+    const char *p;
+    char *e;
+    int val;
+    int bus = 0, slot = 0, func = 0;
+
+    p = addr;
+    val = strtoul(p, &e, 16);
+    if (e == p)
+	return -1;
+    if (*e == ':') {
+	bus = val;
+	p = e + 1;
+	val = strtoul(p, &e, 16);
+	if (e == p)
+	    return -1;
+	if (*e == '.') {
+	    slot = val;
+	    p = e + 1;
+	    val = strtoul(p, &e, 16);
+	    if (e == p)
+		return -1;
+	    func = val;
+	} else
+	    return -1;
+    } else
+	return -1;
+
+    if (bus > 0xff || slot > 0x1f || func > 0x7)
+	return -1;
+
+    if (*e)
+	return -1;
+
+    *busp = bus;
+    *slotp = slot;
+    *funcp = func;
     return 0;
 }
 
