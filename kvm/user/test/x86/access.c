@@ -60,7 +60,7 @@ enum {
     AC_ACCESS_TWICE,
     // AC_ACCESS_PTE,
 
-    // AC_CPU_EFER_NX,
+    AC_CPU_EFER_NX,
     AC_CPU_CR0_WP,
 
     NR_AC_FLAGS
@@ -86,6 +86,7 @@ const char *ac_names[] = {
     [AC_ACCESS_USER] = "user",
     [AC_ACCESS_FETCH] = "fetch",
     [AC_ACCESS_TWICE] = "twice",
+    [AC_CPU_EFER_NX] = "efer.nx",
     [AC_CPU_CR0_WP] = "cr0.wp",
 };
 
@@ -367,10 +368,12 @@ void ac_test_setup_pte(ac_test_t *at)
     at->expected_error = PFERR_PRESENT_MASK;
 
     pde_valid = at->flags[AC_PDE_PRESENT]
-        && !at->flags[AC_PDE_BIT51];
+        && !at->flags[AC_PDE_BIT51]
+        && !(at->flags[AC_PDE_NX] && !at->flags[AC_CPU_EFER_NX]);
     pte_valid = pde_valid
         && at->flags[AC_PTE_PRESENT]
-        && !at->flags[AC_PTE_BIT51];
+        && !at->flags[AC_PTE_BIT51]
+        && !(at->flags[AC_PTE_NX] && !at->flags[AC_CPU_EFER_NX]);
     if (at->flags[AC_ACCESS_TWICE]) {
 	if (pde_valid) {
 	    at->expected_pde |= PT_ACCESSED_MASK;
@@ -463,6 +466,7 @@ int ac_test_do_access(ac_test_t *at)
 
     unsigned r = unique;
     set_cr0_wp(at->flags[AC_CPU_CR0_WP]);
+    set_efer_nx(at->flags[AC_CPU_EFER_NX]);
 
     if (at->flags[AC_ACCESS_TWICE]) {
 	asm volatile (
