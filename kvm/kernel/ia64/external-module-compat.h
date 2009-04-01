@@ -42,6 +42,12 @@ typedef u64 phys_addr_t;
 
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30)
+
+#define PAGE_KERNEL_UC __pgprot(__DIRTY_BITS  | _PAGE_PL_0 | _PAGE_AR_RWX | \
+                                       _PAGE_MA_UC)
+#endif
+
 #endif
 
 #ifndef CONFIG_HAVE_KVM_IRQCHIP
