@@ -77,8 +77,8 @@ static void extboot_write_cmd(void *opaque, uint32_t addr, uint32_t value)
     BlockDriverState *bs = opaque;
     int cylinders, heads, sectors, err;
     uint64_t nb_sectors;
-    target_phys_addr_t pa;
-    int blen;
+    target_phys_addr_t pa = 0;
+    int blen = 0;
     void *buf = NULL;
 
     if (cmd->type == 0x01 || cmd->type == 0x02) {
