@@ -53,10 +53,14 @@ kernel/x86/coalesced_mmio.[ch]
 kernel/x86/kvm_cache_regs.h
 kernel/x86/vtd.c
 kernel/x86/irq_comm.c
+kernel/x86/timer.c
+kernel/x86/kvm_timer.h
+kernel/x86/iommu.c
 qemu/pc-bios/extboot.bin
 qemu/qemu-doc.html
 qemu/*.[18]
 qemu/*.pod
 qemu/qemu-tech.html
+qemu/qemu-options.texi
 user/kvmtrace
 user/test/x86/bootstrap
