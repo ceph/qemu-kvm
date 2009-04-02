@@ -361,14 +361,94 @@ void test_io(void)
 void test_call(void)
 {
 	struct regs inregs = { 0 }, outregs;
+	u32 esp[16];
+
+	inregs.esp = (u32)esp;
+
 	MK_INSN(call1, "mov $test_function, %eax \n\t"
 		       "call *%eax\n\t");
+	MK_INSN(call_near1, "jmp 2f\n\t"
+			    "1: mov $0x1234, %eax\n\t"
+			    "ret\n\t"
+			    "2: call 1b\t");
+	MK_INSN(call_near2, "call 1f\n\t"
+			    "jmp 2f\n\t"
+			    "1: mov $0x1234, %eax\n\t"
+			    "ret\n\t"
+			    "2:\t");
 
 	exec_in_big_real_mode(&inregs, &outregs,
 			      insn_call1,
 			      insn_call1_end - insn_call1);
 	if(!regs_equal(&inregs, &outregs, R_AX) || outregs.eax != 0x1234)
 		print_serial("Call Test 1: FAIL\n");
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			insn_call_near1, insn_call_near1_end - insn_call_near1);
+	if(!regs_equal(&inregs, &outregs, R_AX) || outregs.eax != 0x1234)
+		print_serial("Call near Test 1: FAIL\n");
+	exec_in_big_real_mode(&inregs, &outregs,
+			insn_call_near2, insn_call_near2_end - insn_call_near2);
+	if(!regs_equal(&inregs, &outregs, R_AX) || outregs.eax != 0x1234)
+		print_serial("Call near Test 2: FAIL\n");
+}
+
+void test_jcc_short(void)
+{
+	struct regs inregs = { 0 }, outregs;
+	MK_INSN(jnz_short1, "jnz 1f\n\t"
+			    "mov $0x1234, %eax\n\t"
+		            "1:\n\t");
+	MK_INSN(jnz_short2, "1:\n\t"
+			    "cmp $0x1234, %eax\n\t"
+			    "mov $0x1234, %eax\n\t"
+		            "jnz 1b\n\t");
+	MK_INSN(jmp_short1, "jmp 1f\n\t"
+		      "mov $0x1234, %eax\n\t"
+		      "1:\n\t");
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			insn_jnz_short1, insn_jnz_short1_end - insn_jnz_short1);
+	if(!regs_equal(&inregs, &outregs, 0))
+		print_serial("JNZ sort Test 1: FAIL\n");
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			insn_jnz_short2, insn_jnz_short2_end - insn_jnz_short2);
+	if(!regs_equal(&inregs, &outregs, R_AX) || !(outregs.eflags & (1 << 6)))
+		print_serial("JNZ sort Test 2: FAIL\n");
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			insn_jmp_short1, insn_jmp_short1_end - insn_jmp_short1);
+	if(!regs_equal(&inregs, &outregs, 0))
+		print_serial("JMP sort Test 1: FAIL\n");
+}
+
+void test_jcc_near(void)
+{
+	struct regs inregs = { 0 }, outregs;
+	/* encode near jmp manually. gas will not do it if offsets < 127 byte */
+	MK_INSN(jnz_near1, ".byte 0x0f, 0x85, 0x06, 0x00\n\t"
+		           "mov $0x1234, %eax\n\t");
+	MK_INSN(jnz_near2, "cmp $0x1234, %eax\n\t"
+			   "mov $0x1234, %eax\n\t"
+		           ".byte 0x0f, 0x85, 0xf0, 0xff\n\t");
+	MK_INSN(jmp_near1, ".byte 0xE9, 0x06, 0x00\n\t"
+		           "mov $0x1234, %eax\n\t");
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			insn_jnz_near1, insn_jnz_near1_end - insn_jnz_near1);
+	if(!regs_equal(&inregs, &outregs, 0))
+		print_serial("JNZ near Test 1: FAIL\n");
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			insn_jnz_near2, insn_jnz_near2_end - insn_jnz_near2);
+	if(!regs_equal(&inregs, &outregs, R_AX) || !(outregs.eflags & (1 << 6)))
+		print_serial("JNZ near Test 2: FAIL\n");
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			insn_jmp_near1, insn_jmp_near1_end - insn_jmp_near1);
+	if(!regs_equal(&inregs, &outregs, 0))
+		print_serial("JMP near Test 1: FAIL\n");
 }
 
 void test_null(void)
@@ -389,6 +469,10 @@ void start(void)
 	test_add_imm();
 	test_io();
 	test_eflags_insn();
+	test_jcc_short();
+	test_jcc_near();
+	/* test_call() uses short jump so call it after testing jcc */
+	test_call();
 
 	exit(0);
 }
