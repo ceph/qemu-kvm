@@ -1,4 +1,4 @@
-BEGIN { split("INIT_WORK tsc_khz desc_struct ldttss_desc64 desc_ptr " \
+BEGIN { split("INIT_WORK desc_struct ldttss_desc64 desc_ptr " \
 	      "hrtimer_add_expires_ns hrtimer_get_expires " \
 	      "hrtimer_get_expires_ns hrtimer_start_expires " \
 	      "hrtimer_expires_remaining " \
@@ -24,6 +24,10 @@ BEGIN { split("INIT_WORK tsc_khz desc_struct ldttss_desc64 desc_ptr " \
     print "\tpreempt_notifier_sys_exit();";
     anon_inodes_exit = 0
 }
+
+/^int kvm_arch_init/ { kvm_arch_init = 1 }
+/\<tsc_khz\>/ && kvm_arch_init { sub("\\<tsc_khz\\>", "kvm_tsc_khz") }
+/^}/ { kvm_arch_init = 0 }
 
 /MODULE_AUTHOR/ {
     printf("MODULE_INFO(version, \"%s\");\n", version)
