@@ -451,6 +451,23 @@ void test_jcc_near(void)
 		print_serial("JMP near Test 1: FAIL\n");
 }
 
+void test_long_jmp()
+{
+	struct regs inregs = { 0 }, outregs;
+	u32 esp[16];
+
+	inregs.esp = (u32)esp;
+	MK_INSN(long_jmp, "call 1f\n\t"
+			  "jmp 2f\n\t"
+			  "1: jmp $0, $test_function\n\t"
+		          "2:\n\t");
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_long_jmp,
+			      insn_long_jmp_end - insn_long_jmp);
+	if(!regs_equal(&inregs, &outregs, R_AX) || outregs.eax != 0x1234)
+		print_serial("Long JMP Test: FAIL\n");
+}
+
 void test_null(void)
 {
 	struct regs inregs = { 0 }, outregs;
@@ -473,6 +490,8 @@ void start(void)
 	test_jcc_near();
 	/* test_call() uses short jump so call it after testing jcc */
 	test_call();
+	/* long jmp test uses call near so test it after testing call */
+	test_long_jmp();
 
 	exit(0);
 }
