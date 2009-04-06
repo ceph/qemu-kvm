@@ -1015,8 +1015,10 @@ static int hdev_open(BlockDriverState *bs, const char *filename, int flags)
         s->fd_open_flags = open_flags;
         /* open will not fail even if no floppy is inserted */
         open_flags |= O_NONBLOCK;
+#ifdef CONFIG_AIO
     } else if (strstart(filename, "/dev/sg", NULL)) {
         bs->sg = 1;
+#endif
     }
 #endif
 #if defined(__FreeBSD__)
@@ -1207,6 +1209,7 @@ static int raw_ioctl(BlockDriverState *bs, unsigned long int req, void *buf)
     return ioctl(s->fd, req, buf);
 }
 
+#ifdef CONFIG_AIO
 static BlockDriverAIOCB *raw_aio_ioctl(BlockDriverState *bs,
         unsigned long int req, void *buf,
         BlockDriverCompletionFunc *cb, void *opaque)
@@ -1225,6 +1228,7 @@ static BlockDriverAIOCB *raw_aio_ioctl(BlockDriverState *bs,
 
     return &acb->common;
 }
+#endif
 
 #elif defined(__FreeBSD__)
 
@@ -1375,11 +1379,47 @@ static BlockDriverAIOCB *raw_aio_ioctl(BlockDriverState *bs,
 }
 #endif /* !linux && !FreeBSD */
 
+#if defined(__linux__) || defined(__FreeBSD__)
+static int hdev_create(const char *filename, int64_t total_size,
+                       const char *backing_file, int flags)
+{
+    int fd;
+    int ret = 0;
+    struct stat stat_buf;
+
+    if (flags || backing_file)
+        return -ENOTSUP;
+
+    fd = open(filename, O_WRONLY | O_BINARY);
+    if (fd < 0)
+        return -EIO;
+
+    if (fstat(fd, &stat_buf) < 0)
+        ret = -EIO;
+    else if (!S_ISBLK(stat_buf.st_mode))
+        ret = -EIO;
+    else if (lseek(fd, 0, SEEK_END) < total_size * 512)
+        ret = -ENOSPC;
+
+    close(fd);
+    return ret;
+}
+
+#else  /* !(linux || freebsd) */
+
+static int hdev_create(const char *filename, int64_t total_size,
+                       const char *backing_file, int flags)
+{
+    return -ENOTSUP;
+}
+#endif
+
 BlockDriver bdrv_host_device = {
     .format_name	= "host_device",
     .instance_size	= sizeof(BDRVRawState),
     .bdrv_open		= hdev_open,
     .bdrv_close		= raw_close,
+    .bdrv_create        = hdev_create,
     .bdrv_flush		= raw_flush,
 
 #ifdef CONFIG_AIO
@@ -1400,5 +1440,7 @@ BlockDriver bdrv_host_device = {
     .bdrv_set_locked	= raw_set_locked,
     /* generic scsi device */
     .bdrv_ioctl		= raw_ioctl,
+#ifdef CONFIG_AIO
     .bdrv_aio_ioctl	= raw_aio_ioctl,
+#endif
 };

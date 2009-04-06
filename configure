@@ -154,6 +154,7 @@ case "$cpu" in
 esac
 gprof="no"
 sparse="no"
+strip_opt="yes"
 bigendian="no"
 mingw32="no"
 EXESUF=""
@@ -412,6 +413,8 @@ for opt do
   ;;
   --disable-sparse) sparse="no"
   ;;
+  --disable-strip) strip_opt="no"
+  ;;
   --disable-vnc-tls) vnc_tls="no"
   ;;
   --disable-vnc-sasl) vnc_sasl="no"
@@ -516,6 +519,10 @@ case "$cpu" in
                ARCH_CFLAGS="${SP_CFLAGS}"
                ARCH_LDFLAGS="${SP_LDFLAGS}"
            fi
+           ARCH_CFLAGS="$ARCH_CFLAGS -ffixed-g2 -ffixed-g3"
+           if test "$solaris" = "no" ; then
+               ARCH_CFLAGS="$ARCH_CFLAGS -ffixed-g1 -ffixed-g6"
+           fi
            ;;
     sparc64) if test -z "$sparc_cpu" ; then
                ARCH_CFLAGS="-m64 -mcpu=ultrasparc -D__sparc_v9__"
@@ -523,6 +530,11 @@ case "$cpu" in
            else
                ARCH_CFLAGS="${SP_CFLAGS}"
                ARCH_LDFLAGS="${SP_LDFLAGS}"
+           fi
+           if test "$solaris" = "no" ; then
+               ARCH_CFLAGS="$ARCH_CFLAGS -ffixed-g5 -ffixed-g6 -ffixed-g7"
+           else
+               ARCH_CFLAGS="$ARCH_CFLAGS -ffixed-g1 -ffixed-g5 -ffixed-g6 -ffixed-g7"
            fi
            ;;
     s390)
@@ -565,6 +577,7 @@ echo "  --install=INSTALL        use specified install [$install]"
 echo "  --static                 enable static build [$static]"
 echo "  --enable-sparse          enable sparse checker"
 echo "  --disable-sparse         disable sparse checker (default)"
+echo "  --disable-strip          disable stripping binaries"
 echo "  --disable-werror         disable compilation abort on warning"
 echo "  --disable-sdl            disable SDL"
 echo "  --enable-cocoa           enable COCOA (Mac OS X only)"
@@ -1266,6 +1279,7 @@ echo "host big endian   $bigendian"
 echo "target list       $target_list"
 echo "gprof enabled     $gprof"
 echo "sparse enabled    $sparse"
+echo "strip binaries    $strip_opt"
 echo "profiler          $profiler"
 echo "static build      $static"
 echo "-Werror enabled   $werror"
@@ -1342,7 +1356,6 @@ echo "INSTALL=$install" >> $config_mak
 echo "CC=$cc" >> $config_mak
 echo "HOST_CC=$host_cc" >> $config_mak
 echo "AR=$ar" >> $config_mak
-echo "STRIP=$strip -s -R .comment -R .note" >> $config_mak
 # XXX: only use CFLAGS and LDFLAGS ?  
 # XXX: should export HOST_CFLAGS and HOST_LDFLAGS for cross
 # compilation of dyngen tool (useful for win32 build on Linux host)
@@ -1428,6 +1441,9 @@ if test "$sparse" = "yes" ; then
   echo "CC      := REAL_CC=\"\$(CC)\" cgcc"       >> $config_mak
   echo "HOST_CC := REAL_CC=\"\$(HOST_CC)\" cgcc"  >> $config_mak
   echo "CFLAGS  += -Wbitwise -Wno-transparent-union -Wno-old-initializer -Wno-non-pointer-null" >> $config_mak
+fi
+if test "$strip_opt" = "yes" ; then
+  echo "STRIP_OPT=-s" >> $config_mak
 fi
 if test "$bigendian" = "yes" ; then
   echo "WORDS_BIGENDIAN=yes" >> $config_mak
@@ -1644,7 +1660,7 @@ tools=
 if test `expr "$target_list" : ".*softmmu.*"` != 0 ; then
   tools="qemu-img\$(EXESUF) $tools"
   if [ "$linux" = "yes" ] ; then
-      tools="qemu-nbd\$(EXESUF) $tools"
+      tools="qemu-nbd\$(EXESUF) qemu-io\$(EXESUF) $tools"
   fi
 fi
 echo "TOOLS=$tools" >> $config_mak

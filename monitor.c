@@ -547,6 +547,17 @@ static void do_log(Monitor *mon, const char *items)
     cpu_set_log(mask);
 }
 
+static void do_singlestep(Monitor *mon, const char *option)
+{
+    if (!option || !strcmp(option, "on")) {
+        singlestep = 1;
+    } else if (!strcmp(option, "off")) {
+        singlestep = 0;
+    } else {
+        monitor_printf(mon, "unexpected option %s\n", option);
+    }
+}
+
 static void do_stop(Monitor *mon)
 {
     vm_stop(EXCP_INTERRUPT);
@@ -590,17 +601,18 @@ static void encrypted_bdrv_it(void *opaque, BlockDriverState *bs)
 }
 
 #ifdef CONFIG_GDBSTUB
-static void do_gdbserver(Monitor *mon, const char *port)
+static void do_gdbserver(Monitor *mon, const char *device)
 {
-    if (!port)
-        port = DEFAULT_GDBSTUB_PORT;
-    if (gdbserver_start(port) < 0) {
-        monitor_printf(mon, "Could not open gdbserver socket on port '%s'\n",
-                       port);
-    } else if (strcmp(port, "none") == 0) {
+    if (!device)
+        device = "tcp::" DEFAULT_GDBSTUB_PORT;
+    if (gdbserver_start(device) < 0) {
+        monitor_printf(mon, "Could not open gdbserver on device '%s'\n",
+                       device);
+    } else if (strcmp(device, "none") == 0) {
         monitor_printf(mon, "Disabled gdbserver\n");
     } else {
-        monitor_printf(mon, "Waiting gdb connection on port '%s'\n", port);
+        monitor_printf(mon, "Waiting for gdb connection on device '%s'\n",
+                       device);
     }
 }
 #endif
@@ -1533,9 +1545,13 @@ static void do_inject_nmi(Monitor *mon, int cpu_index)
 
 static void do_info_status(Monitor *mon)
 {
-    if (vm_running)
-       monitor_printf(mon, "VM status: running\n");
-    else
+    if (vm_running) {
+        if (singlestep) {
+            monitor_printf(mon, "VM status: running (single step mode)\n");
+        } else {
+            monitor_printf(mon, "VM status: running\n");
+        }
+    } else
        monitor_printf(mon, "VM status: paused\n");
 }
 
@@ -1666,6 +1682,8 @@ static const mon_cmd_t mon_cmds[] = {
       "tag|id", "restore a VM snapshot from its tag or id" },
     { "delvm", "s", do_delvm,
       "tag|id", "delete a VM snapshot from its tag or id" },
+    { "singlestep", "s?", do_singlestep,
+      "[on|off]", "run emulation in singlestep mode or switch to normal mode", },
     { "stop", "", do_stop,
       "", "stop emulation", },
     { "c|cont", "", do_cont,
