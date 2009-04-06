@@ -985,7 +985,7 @@ vga_bios_error:
        before INT 19h.  See the PNPBIOS specification, appendix B.
        DDIM support is mandatory for proper PCI expansion ROM support. */
             cpu_register_physical_memory(offset, size, option_rom_offset /* | IO_MEM_ROM */);
-            option_rom_setup_reset(0xd0000 + offset, size);
+            option_rom_setup_reset(offset, size);
             offset += size;
         }
         pci_option_rom_offset = offset;
