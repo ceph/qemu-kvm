@@ -6,6 +6,7 @@
 
 int nr_passed, nr_tests;
 
+#ifdef __x86_64__
 static void report(const char *name, int passed)
 {
 	++nr_tests;
@@ -27,6 +28,7 @@ static unsigned long long rdmsr(unsigned index)
 
 	return value;
 }
+#endif
 
 static void test_kernel_gs_base(void)
 {
