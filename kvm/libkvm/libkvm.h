@@ -815,6 +815,7 @@ int kvm_add_irq_route(kvm_context_t kvm, int gsi, int irqchip, int pin);
  */
 int kvm_del_irq_route(kvm_context_t kvm, int gsi, int irqchip, int pin);
 
+struct kvm_irq_routing_entry;
 /*!
  * \brief Adds a routing entry to the temporary irq routing table
  *

@@ -66,8 +66,8 @@ struct kvm_context {
 #ifdef KVM_CAP_IRQ_ROUTING
 	struct kvm_irq_routing *irq_routes;
 	int nr_allocated_irq_routes;
-	int max_used_gsi;
 #endif
+	int max_used_gsi;
 };
 
 int kvm_alloc_kernel_memory(kvm_context_t kvm, unsigned long memory,
