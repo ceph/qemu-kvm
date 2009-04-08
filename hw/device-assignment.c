@@ -818,6 +818,7 @@ static int assigned_dev_update_msix_mmio(PCIDevice *pci_dev)
 
     entries_max_nr = pci_dev->config[pos + 2];
     entries_max_nr &= PCI_MSIX_TABSIZE;
+    entries_max_nr += 1;
 
     /* Get the usable entry number for allocating */
     for (i = 0; i < entries_max_nr; i++) {
