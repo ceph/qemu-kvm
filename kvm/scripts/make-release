@@ -67,6 +67,7 @@ make -C kernel sync LINUX=../linux version="$name"
 echo ARCH=x86_64 > kernel/config.mak
 make -C kernel sync LINUX=../linux version="$name"
 rm -rf kernel/config.mak linux kernel/config.kbuild
+rm -rf kernel/include/asm kernel/include-compat/asm
 sed -i "s/kvm-devel/$name/" qemu/configure
 
 just_userspace() {
