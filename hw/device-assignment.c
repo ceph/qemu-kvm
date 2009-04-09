@@ -822,9 +822,6 @@ static int assigned_dev_update_msix_mmio(PCIDevice *pci_dev)
     /* Get the usable entry number for allocating */
     for (i = 0; i < entries_max_nr; i++) {
         memcpy(&msg_ctrl, va + i * 16 + 12, 4);
-        /* 0x1 is mask bit for per vector */
-        if (msg_ctrl & 0x1)
-            continue;
         memcpy(&msg_data, va + i * 16 + 8, 4);
         /* Ignore unused entry even it's unmasked */
         if (msg_data == 0)
