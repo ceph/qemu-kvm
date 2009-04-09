@@ -3949,8 +3949,6 @@ static int main_loop(void)
             if (reset_requested) {
                 reset_requested = 0;
                 qemu_system_reset();
-		if (kvm_enabled())
-			kvm_load_registers(env);
                 ret = EXCP_INTERRUPT;
             }
             if (powerdown_requested) {
