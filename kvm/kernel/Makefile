@@ -38,7 +38,7 @@ ifeq ($(EXT_CONFIG_KVM_TRACE),y)
 module_defines += -DEXT_CONFIG_KVM_TRACE=y
 endif
 
-all:: header-link prerequisite
+all:: prerequisite
 #	include header priority 1) $LINUX 2) $KERNELDIR 3) include-compat
 	$(MAKE) -C $(KERNELDIR) M=`pwd` \
 		LINUXINCLUDE="-I`pwd`/include -Iinclude \
@@ -48,12 +48,7 @@ all:: header-link prerequisite
 		-include `pwd`/$(ARCH_DIR)/external-module-compat.h $(module_defines)"
 		"$$@"
 
-sync: header-sync source-sync header-link
-
-header-link:
-	rm -f include/asm include-compat/asm
-	ln -sf asm-$(ARCH_DIR) include/asm
-	ln -sf asm-$(ARCH_DIR) include-compat/asm
+sync: header-sync source-sync
 
 T = $(subst -sync,,$@)-tmp
 

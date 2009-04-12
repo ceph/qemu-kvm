@@ -67,9 +67,12 @@ while [[ "$1" = -* ]]; do
     esac
 done
 
+karch="$arch"
+
 case $arch in
     i?86*|x86_64*)
         arch=${arch/#i?86/i386}
+	karch="x86"
         ;;
 esac
 
@@ -98,6 +101,10 @@ if [ -n "$no_uname" -a "$want_module" ]; then
         exit 1
     fi
 fi
+
+rm -f include/asm include-compat/asm
+ln -sf asm-"$karch" include/asm
+ln -sf asm-"$karch" include-compat/asm
 
 cat <<EOF > config.mak
 ARCH=$arch
