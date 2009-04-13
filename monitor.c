@@ -42,6 +42,7 @@
 #include "migration.h"
 #include "kvm.h"
 #include "acl.h"
+#include "exec-all.h"
 
 #include "qemu-kvm.h"
 
