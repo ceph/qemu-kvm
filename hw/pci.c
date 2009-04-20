@@ -1009,6 +1009,8 @@ int pci_enable_capability_support(PCIDevice *pci_dev,
     if (!pci_dev)
         return -ENODEV;
 
+    pci_dev->config[0x06] |= 0x10; // status = capabilities
+
     if (config_start == 0)
 	pci_dev->cap.start = PCI_CAPABILITY_CONFIG_DEFAULT_START_ADDR;
     else if (config_start >= 0x40 && config_start < 0xff)
