@@ -3247,6 +3247,9 @@ void cpu_physical_memory_unmap(void *buffer, target_phys_addr_t len,
                 addr1 += l;
                 access_len -= l;
             }
+            if (kvm_enabled())
+	        flush_icache_range((unsigned long)buffer,
+				(unsigned long)buffer + access_len);
         }
         return;
     }

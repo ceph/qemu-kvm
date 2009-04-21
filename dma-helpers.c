@@ -9,6 +9,7 @@
 
 #include "dma.h"
 #include "block_int.h"
+#include "cache-utils.h"
 
 static AIOPool dma_aio_pool;
 
@@ -137,6 +138,8 @@ static BlockDriverAIOCB *dma_bdrv_io(
     BlockDriverCompletionFunc *cb, void *opaque,
     int is_write)
 {
+    int i;
+    QEMUIOVector *qiov;
     DMAAIOCB *dbs =  qemu_aio_get_pool(&dma_aio_pool, bs, cb, opaque);
 
     dbs->acb = NULL;
@@ -149,6 +152,15 @@ static BlockDriverAIOCB *dma_bdrv_io(
     dbs->bh = NULL;
     qemu_iovec_init(&dbs->iov, sg->nsg);
     dma_bdrv_cb(dbs, 0);
+
+    if (!is_write) {
+        qiov = &dbs->iov;
+        for (i = 0; i < qiov->niov; ++i) {
+           qemu_sync_idcache((unsigned long)qiov->iov[i].iov_base,
+                 (unsigned long)(qiov->iov[i].iov_base + qiov->iov[i].iov_len));
+	}
+    }
+
     if (!dbs->acb) {
         qemu_aio_release(dbs);
         return NULL;
