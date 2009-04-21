@@ -14,7 +14,7 @@ archs=(x86 ia64)
 release_dir=~/sf-release
 udir="$(readlink -f "$(dirname "$0")"/..)"
 kdir="${udir}/linux-2.6"
-upload() { rsync --progress -h "$tarball" avik@frs.sourceforge.net:uploads/; }
+upload() { rsync --progress -h "$tarball" "$ktarball" "$utarball" avik@frs.sourceforge.net:uploads/; }
 
 [[ -f ~/.kvm-release-config ]] && . ~/.kvm-release-config
 
