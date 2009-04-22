@@ -599,7 +599,7 @@ endif
 ifdef CONFIG_KVM_KERNEL_INC
 CFLAGS += -I $(CONFIG_KVM_KERNEL_INC)
 LIBS += -lkvm
-DEPLIBS += ../libkvm/libkvm.a
+DEPLIBS += libkvm.a
 endif
 
 ifdef CONFIG_VNC_TLS
@@ -816,6 +816,14 @@ $(QEMU_PROG): LIBS += $(SDL_LIBS) $(COCOA_LIBS) $(CURSES_LIBS) $(BRLAPI_LIBS) $(
 
 $(QEMU_PROG): $(OBJS) ../libqemu_common.a libqemu.a $(DEPLIBS)
 	$(LINK)
+
+FORCE:
+
+libkvm.a: FORCE
+	$(MAKE) -C ../kvm/libkvm
+	if ! cmp -s libkvm.a ../kvm/libkvm/libkvm.a; then \
+	   cp ../kvm/libkvm/libkvm.a . ; \
+	fi
 
 endif # !CONFIG_USER_ONLY
 
