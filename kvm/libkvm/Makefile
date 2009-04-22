@@ -12,6 +12,7 @@ cc-option = $(shell if $(CC) $(1) -S -o /dev/null -xc /dev/null \
 CFLAGS += $(autodepend-flags) -g -fomit-frame-pointer -Wall
 CFLAGS += $(call cc-option, -fno-stack-protector, "")
 CFLAGS += $(call cc-option, -fno-stack-protector-all, "")
+CFLAGS += -I$(CONFIG_KVM_KERNEL_INC)
 
 LDFLAGS += $(CFLAGS)
 
