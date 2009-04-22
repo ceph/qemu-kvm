@@ -1679,7 +1679,7 @@ configure_kvm() {
           \( "$cpu" = "i386" -o "$cpu" = "x86_64" -o "$cpu" = "ia64" -o "$cpu" = "powerpc" \); then
     echo "#define USE_KVM 1" >> $config_h
     echo "USE_KVM=1" >> $config_mak
-    echo "CONFIG_KVM_KERNEL_INC=$kerneldir/include" >> $config_mak
+    echo "CONFIG_KVM_KERNEL_INC=$kerneldir/include" >> "config-host.mak"
     if test $kvm_cap_pit = "yes" ; then
 	echo "USE_KVM_PIT=1" >> $config_mak
 	echo "#define USE_KVM_PIT 1" >> $config_h
