@@ -489,6 +489,8 @@ if test "$werror" = "yes" ; then
 CFLAGS="$CFLAGS -Werror"
 fi
 
+CFLAGS="$CFLAGS -I$(readlink -f "kvm/libkvm")"
+
 if test "$solaris" = "no" ; then
     if ld --version 2>/dev/null | grep "GNU ld" >/dev/null 2>/dev/null ; then
         LDFLAGS="$LDFLAGS -Wl,--warn-common"
