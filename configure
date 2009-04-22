@@ -1827,9 +1827,9 @@ case "$target_cpu" in
       echo "#define USE_KQEMU 1" >> $config_h
     fi
     if test "$kvm" = "yes" ; then
-      echo "CONFIG_KVM=yes" >> $config_mak
+      echo "USE_KVM=yes" >> $config_mak
       echo "KVM_CFLAGS=$kvm_cflags" >> $config_mak
-      echo "#define CONFIG_KVM 1" >> $config_h
+      echo "#define USE_KVM 1" >> $config_h
     fi
     configure_kvm
   ;;
@@ -1851,9 +1851,9 @@ case "$target_cpu" in
     configure_kvm
     if [ use_upstream_kvm = yes ]; then
     if test "$kvm" = "yes" ; then
-      echo "CONFIG_KVM=yes" >> $config_mak
+      echo "USE_KVM=yes" >> $config_mak
       echo "KVM_CFLAGS=$kvm_cflags" >> $config_mak
-      echo "#define CONFIG_KVM 1" >> $config_h
+      echo "#define USE_KVM 1" >> $config_h
     fi
     fi
   ;;
@@ -1915,9 +1915,9 @@ case "$target_cpu" in
     echo "#define TARGET_PPC 1" >> $config_h
     echo "#define TARGET_PPCEMB 1" >> $config_h
     if test "$kvm" = "yes" ; then
-      echo "CONFIG_KVM=yes" >> $config_mak
+      echo "USE_KVM=yes" >> $config_mak
       echo "KVM_CFLAGS=$kvm_cflags" >> $config_mak
-      echo "#define CONFIG_KVM 1" >> $config_h
+      echo "#define USE_KVM 1" >> $config_h
     fi
     gdb_xml_files="power-core.xml power-fpu.xml power-altivec.xml power-spe.xml"
   ;;
