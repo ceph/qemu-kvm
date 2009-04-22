@@ -196,6 +196,9 @@ signalfd="no"
 eventfd="no"
 cpu_emulation="yes"
 
+# qemu-kvm: use local kerneldir
+kerneldir="$(readlink -f kvm/kernel)"
+
 # OS specific
 if check_define __linux__ ; then
   targetos="Linux"
