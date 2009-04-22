@@ -1,6 +1,9 @@
 include ../../config-host.mak
 include config-$(ARCH).mak
 
+# libkvm is not -Wredundant-decls friendly yet
+CFLAGS += -Wno-redundant-decls
+
 # cc-option
 # Usage: OP_CFLAGS+=$(call cc-option, -falign-functions=0, -malign-functions=0)
 cc-option = $(shell if $(CC) $(1) -S -o /dev/null -xc /dev/null \
