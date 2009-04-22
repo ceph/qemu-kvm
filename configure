@@ -98,7 +98,7 @@ else
   cpu=`uname -m`
 fi
 
-target_list=""
+target_list="x86_64-softmmu"
 case "$cpu" in
   i386|i486|i586|i686|i86pc|BePC)
     cpu="i386"
