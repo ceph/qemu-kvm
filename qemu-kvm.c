@@ -892,7 +892,7 @@ void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
                                       unsigned long phys_offset)
 {
     int r = 0;
-    unsigned long area_flags = phys_offset & ~TARGET_PAGE_MASK;
+    unsigned long area_flags;
 #ifdef TARGET_I386
     struct mapping *p;
 #endif
@@ -902,8 +902,9 @@ void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
     }
 
     phys_offset &= ~IO_MEM_ROM;
+    area_flags = phys_offset & ~TARGET_PAGE_MASK;
 
-    if (area_flags == IO_MEM_UNASSIGNED) {
+    if (area_flags != IO_MEM_RAM) {
 #ifdef TARGET_I386
         if (must_use_aliases_source(start_addr)) {
             kvm_destroy_memory_alias(kvm_context, start_addr);
@@ -912,7 +913,19 @@ void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
         if (must_use_aliases_target(start_addr))
             return;
 #endif
-        kvm_unregister_memory_area(kvm_context, start_addr, size);
+        while (size > 0) {
+            p = find_mapping(start_addr);
+            if (p) {
+                kvm_unregister_memory_area(kvm_context, p->phys, p->len);
+                drop_mapping(p->phys);
+            }
+            start_addr += TARGET_PAGE_SIZE;
+            if (size > TARGET_PAGE_SIZE) {
+                size -= TARGET_PAGE_SIZE;
+            } else {
+                size = 0;
+            }
+        }
         return;
     }
 
