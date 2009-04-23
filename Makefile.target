@@ -604,7 +604,6 @@ endif
 
 ifdef CONFIG_KVM_KERNEL_INC
 CFLAGS += -I $(CONFIG_KVM_KERNEL_INC)
-LIBS += -lkvm
 DEPLIBS += libkvm.a
 endif
 
