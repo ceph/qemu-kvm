@@ -1,7 +1,13 @@
 # Makefile for QEMU.
 
+ifneq ($(wildcard config-host.mak),)
 include config-host.mak
 include $(SRC_PATH)/rules.mak
+else
+config-host.mak:
+	@echo "Please call configure before running make!"
+	@exit 1
+endif
 
 .PHONY: all clean cscope distclean dvi html info install install-doc \
 	recurse-all speed tar tarbin test
@@ -35,6 +41,12 @@ LIBS+=-lwinmm -lws2_32 -liphlpapi
 endif
 
 all: $(TOOLS) $(DOCS) recurse-all
+
+config-host.mak: configure
+ifneq ($(wildcard config-host.mak),)
+	@echo $@ is out-of-date, running configure
+	@sed -n "/.*Configured with/s/[^:]*: //p" $@ | sh
+endif
 
 SUBDIR_RULES=$(patsubst %,subdir-%, $(TARGET_DIRS))
 
@@ -77,18 +89,20 @@ endif
 OBJS=$(BLOCK_OBJS)
 OBJS+=readline.o console.o
 
-OBJS+=irq.o
+OBJS+=irq.o ptimer.o
 OBJS+=i2c.o smbus.o smbus_eeprom.o max7310.o max111x.o wm8750.o
 OBJS+=ssd0303.o ssd0323.o ads7846.o stellaris_input.o twl92230.o
-OBJS+=tmp105.o lm832x.o
+OBJS+=tmp105.o lm832x.o eeprom93xx.o tsc2005.o
 OBJS+=scsi-disk.o cdrom.o
 OBJS+=scsi-generic.o
 OBJS+=usb.o usb-hub.o usb-$(HOST_USB).o usb-hid.o usb-msd.o usb-wacom.o
 OBJS+=usb-serial.o usb-net.o
 OBJS+=sd.o ssi-sd.o
 OBJS+=bt.o bt-host.o bt-vhci.o bt-l2cap.o bt-sdp.o bt-hci.o bt-hid.o usb-bt.o
+OBJS+=bt-hci-csr.o
 OBJS+=buffered_file.o migration.o migration-tcp.o net.o qemu-sockets.o
 OBJS+=qemu-char.o aio.o net-checksum.o savevm.o cache-utils.o
+OBJS+=msmouse.o ps2.o
 
 ifdef CONFIG_BRLAPI
 OBJS+= baum.o
@@ -246,32 +260,32 @@ BLOBS=
 endif
 
 install-doc: $(DOCS)
-	mkdir -p "$(DESTDIR)$(docdir)"
-	$(INSTALL) -m 644 qemu-doc.html  qemu-tech.html "$(DESTDIR)$(docdir)"
+	$(INSTALL_DIR) "$(DESTDIR)$(docdir)"
+	$(INSTALL_DATA) qemu-doc.html  qemu-tech.html "$(DESTDIR)$(docdir)"
 ifndef CONFIG_WIN32
-	mkdir -p "$(DESTDIR)$(mandir)/man1"
-	$(INSTALL) -m 644 qemu.1 qemu-img.1 "$(DESTDIR)$(mandir)/man1"
-	mkdir -p "$(DESTDIR)$(mandir)/man8"
-	$(INSTALL) -m 644 qemu-nbd.8 "$(DESTDIR)$(mandir)/man8"
+	$(INSTALL_DIR) "$(DESTDIR)$(mandir)/man1"
+	$(INSTALL_DATA) qemu.1 qemu-img.1 "$(DESTDIR)$(mandir)/man1"
+	$(INSTALL_DIR) "$(DESTDIR)$(mandir)/man8"
+	$(INSTALL_DATA) qemu-nbd.8 "$(DESTDIR)$(mandir)/man8"
 endif
 
 install: all $(if $(BUILD_DOCS),install-doc)
-	mkdir -p "$(DESTDIR)$(bindir)"
+	$(INSTALL_DIR) "$(DESTDIR)$(bindir)"
 ifneq ($(TOOLS),)
-	$(INSTALL) -m 755 $(STRIP_OPT) $(TOOLS) "$(DESTDIR)$(bindir)"
+	$(INSTALL_PROG) $(STRIP_OPT) $(TOOLS) "$(DESTDIR)$(bindir)"
 endif
 ifneq ($(BLOBS),)
-	mkdir -p "$(DESTDIR)$(datadir)"
+	$(INSTALL_DIR) "$(DESTDIR)$(datadir)"
 	set -e; for x in $(BLOBS); do \
-		if [ -f $(SRC_PATH)/pc-bios/$$x ];then \
-			$(INSTALL) -m 644 $(SRC_PATH)/pc-bios/$$x "$(DESTDIR)$(datadir)"; \
-		fi \
+	    if [ -f $(SRC_PATH)/pc-bios/$$x ];then \
+		$(INSTALL_DATA) $(SRC_PATH)/pc-bios/$$x "$(DESTDIR)$(datadir)"; \
+	    fi \
 	done
 endif
 ifndef CONFIG_WIN32
-	mkdir -p "$(DESTDIR)$(datadir)/keymaps"
+	$(INSTALL_DIR) "$(DESTDIR)$(datadir)/keymaps"
 	set -e; for x in $(KEYMAPS); do \
-		$(INSTALL) -m 644 $(SRC_PATH)/keymaps/$$x "$(DESTDIR)$(datadir)/keymaps"; \
+		$(INSTALL_DATA) $(SRC_PATH)/keymaps/$$x "$(DESTDIR)$(datadir)/keymaps"; \
 	done
 endif
 	for d in $(TARGET_DIRS); do \
@@ -303,7 +317,7 @@ cscope:
 qemu-options.texi: $(SRC_PATH)/qemu-options.hx
 	$(call quiet-command,sh $(SRC_PATH)/hxtool -t < $< > $@,"  GEN   $@")
 
-qemu.1: qemu-doc.texi
+qemu.1: qemu-doc.texi qemu-options.texi
 	$(call quiet-command, \
 	  perl -Ww -- $(SRC_PATH)/texi2pod.pl $< qemu.pod && \
 	  pod2man --section=1 --center=" " --release=" " qemu.pod > $@, \

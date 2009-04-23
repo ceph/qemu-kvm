@@ -321,7 +321,7 @@ int cpu_exec(CPUState *env1)
                 }
                 env->exception_index = -1;
             }
-#ifdef USE_KQEMU
+#ifdef CONFIG_KQEMU
             if (kqemu_is_ok(env) && env->interrupt_request == 0 && env->exit_request == 0) {
                 int ret;
                 env->eflags = env->eflags | helper_cc_compute_all(CC_OP) | (DF & DF_MASK);
@@ -607,7 +607,7 @@ int cpu_exec(CPUState *env1)
                    jump. */
                 {
                     if (next_tb != 0 &&
-#ifdef USE_KQEMU
+#ifdef CONFIG_KQEMU
                         (env->kqemu_enabled != 2) &&
 #endif
                         tb->page_addr[1] == -1) {
@@ -664,7 +664,7 @@ int cpu_exec(CPUState *env1)
                 }
                 /* reset soft MMU for next block (it can currently
                    only be set by a memory fault) */
-#if defined(USE_KQEMU)
+#if defined(CONFIG_KQEMU)
 #define MIN_CYCLE_BEFORE_SWITCH (100 * 1000)
                 if (kqemu_is_ok(env) &&
                     (cpu_get_time_fast() - env->last_io_time) >= MIN_CYCLE_BEFORE_SWITCH) {
@@ -1179,17 +1179,28 @@ static inline int handle_cpu_signal(unsigned long pc, unsigned long address,
 # define EIP_sig(context)  (*((unsigned long*)&(context)->uc_mcontext->ss.eip))
 # define TRAP_sig(context)    ((context)->uc_mcontext->es.trapno)
 # define ERROR_sig(context)   ((context)->uc_mcontext->es.err)
+# define MASK_sig(context)    ((context)->uc_sigmask)
+#elif defined(__OpenBSD__)
+# define EIP_sig(context)     ((context)->sc_eip)
+# define TRAP_sig(context)    ((context)->sc_trapno)
+# define ERROR_sig(context)   ((context)->sc_err)
+# define MASK_sig(context)    ((context)->sc_mask)
 #else
 # define EIP_sig(context)     ((context)->uc_mcontext.gregs[REG_EIP])
 # define TRAP_sig(context)    ((context)->uc_mcontext.gregs[REG_TRAPNO])
 # define ERROR_sig(context)   ((context)->uc_mcontext.gregs[REG_ERR])
+# define MASK_sig(context)    ((context)->uc_sigmask)
 #endif
 
 int cpu_signal_handler(int host_signum, void *pinfo,
                        void *puc)
 {
     siginfo_t *info = pinfo;
+#if defined(__OpenBSD__)
+    struct sigcontext *uc = puc;
+#else
     struct ucontext *uc = puc;
+#endif
     unsigned long pc;
     int trapno;
 
@@ -1204,20 +1215,26 @@ int cpu_signal_handler(int host_signum, void *pinfo,
     return handle_cpu_signal(pc, (unsigned long)info->si_addr,
                              trapno == 0xe ?
                              (ERROR_sig(uc) >> 1) & 1 : 0,
-                             &uc->uc_sigmask, puc);
+                             &MASK_sig(uc), puc);
 }
 
 #elif defined(__x86_64__)
 
 #ifdef __NetBSD__
-#define REG_ERR _REG_ERR
-#define REG_TRAPNO _REG_TRAPNO
-
-#define QEMU_UC_MCONTEXT_GREGS(uc, reg)	(uc)->uc_mcontext.__gregs[(reg)]
-#define QEMU_UC_MACHINE_PC(uc)		_UC_MACHINE_PC(uc)
+#define PC_sig(context)       _UC_MACHINE_PC(context)
+#define TRAP_sig(context)     ((context)->uc_mcontext.__gregs[_REG_TRAPNO])
+#define ERROR_sig(context)    ((context)->uc_mcontext.__gregs[_REG_ERR])
+#define MASK_sig(context)     ((context)->uc_sigmask)
+#elif defined(__OpenBSD__)
+#define PC_sig(context)       ((context)->sc_rip)
+#define TRAP_sig(context)     ((context)->sc_trapno)
+#define ERROR_sig(context)    ((context)->sc_err)
+#define MASK_sig(context)     ((context)->sc_mask)
 #else
-#define QEMU_UC_MCONTEXT_GREGS(uc, reg)	(uc)->uc_mcontext.gregs[(reg)]
-#define QEMU_UC_MACHINE_PC(uc)		QEMU_UC_MCONTEXT_GREGS(uc, REG_RIP)
+#define PC_sig(context)       ((context)->uc_mcontext.gregs[REG_RIP])
+#define TRAP_sig(context)     ((context)->uc_mcontext.gregs[REG_TRAPNO])
+#define ERROR_sig(context)    ((context)->uc_mcontext.gregs[REG_ERR])
+#define MASK_sig(context)     ((context)->uc_sigmask)
 #endif
 
 int cpu_signal_handler(int host_signum, void *pinfo,
@@ -1227,15 +1244,17 @@ int cpu_signal_handler(int host_signum, void *pinfo,
     unsigned long pc;
 #ifdef __NetBSD__
     ucontext_t *uc = puc;
+#elif defined(__OpenBSD__)
+    struct sigcontext *uc = puc;
 #else
     struct ucontext *uc = puc;
 #endif
 
-    pc = QEMU_UC_MACHINE_PC(uc);
+    pc = PC_sig(uc);
     return handle_cpu_signal(pc, (unsigned long)info->si_addr,
-                             QEMU_UC_MCONTEXT_GREGS(uc, REG_TRAPNO) == 0xe ?
-                             (QEMU_UC_MCONTEXT_GREGS(uc, REG_ERR) >> 1) & 1 : 0,
-                             &uc->uc_sigmask, puc);
+                             TRAP_sig(uc) == 0xe ?
+                             (ERROR_sig(uc) >> 1) & 1 : 0,
+                             &MASK_sig(uc), puc);
 }
 
 #elif defined(_ARCH_PPC)

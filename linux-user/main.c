@@ -1859,6 +1859,11 @@ void cpu_loop(CPUMIPSState *env)
                                  env->active_tc.gpr[7],
                                  arg5, arg6/*, arg7, arg8*/);
             }
+            if (ret == -TARGET_QEMU_ESIGRETURN) {
+                /* Returning from a successful sigreturn syscall.
+                   Avoid clobbering register state.  */
+                break;
+            }
             if ((unsigned int)ret >= (unsigned int)(-1133)) {
                 env->active_tc.gpr[7] = 1; /* error flag */
                 ret = -ret;
@@ -1869,6 +1874,13 @@ void cpu_loop(CPUMIPSState *env)
             break;
         case EXCP_TLBL:
         case EXCP_TLBS:
+            info.si_signo = TARGET_SIGSEGV;
+            info.si_errno = 0;
+            /* XXX: check env->error_code */
+            info.si_code = TARGET_SEGV_MAPERR;
+            info._sifields._sigfault._addr = env->CP0_BadVAddr;
+            queue_signal(env, info.si_signo, &info);
+            break;
         case EXCP_CpU:
         case EXCP_RI:
             info.si_signo = TARGET_SIGILL;
@@ -2203,7 +2215,7 @@ void cpu_loop (CPUState *env)
 
 static void usage(void)
 {
-    printf("qemu-" TARGET_ARCH " version " QEMU_VERSION ", Copyright (c) 2003-2008 Fabrice Bellard\n"
+    printf("qemu-" TARGET_ARCH " version " QEMU_VERSION QEMU_PKGVERSION ", Copyright (c) 2003-2008 Fabrice Bellard\n"
            "usage: qemu-" TARGET_ARCH " [options] program [arguments...]\n"
            "Linux CPU emulator (compiled for %s emulation)\n"
            "\n"
@@ -2216,6 +2228,7 @@ static void usage(void)
            "-drop-ld-preload  drop LD_PRELOAD for target process\n"
            "-E var=value      sets/modifies targets environment variable(s)\n"
            "-U var            unsets targets environment variable(s)\n"
+           "-0 argv0          forces target process argv[0] to be argv0\n"
            "\n"
            "Debug options:\n"
            "-d options   activate log (logfile=%s)\n"
@@ -2267,7 +2280,11 @@ int main(int argc, char **argv, char **envp)
     const char *r;
     int gdbstub_port = 0;
     char **target_environ, **wrk;
+    char **target_argv;
+    int target_argc;
     envlist_t *envlist = NULL;
+    const char *argv0 = NULL;
+    int i;
 
     if (argc <= 1)
         usage();
@@ -2324,6 +2341,9 @@ int main(int argc, char **argv, char **envp)
             r = argv[optind++];
             if (envlist_unsetenv(envlist, r) != 0)
                 usage();
+        } else if (!strcmp(r, "0")) {
+            r = argv[optind++];
+            argv0 = r;
         } else if (!strcmp(r, "s")) {
             if (optind >= argc)
                 break;
@@ -2394,7 +2414,7 @@ int main(int argc, char **argv, char **envp)
         cpu_model = "qemu32";
 #endif
 #elif defined(TARGET_ARM)
-        cpu_model = "arm926";
+        cpu_model = "any";
 #elif defined(TARGET_M68K)
         cpu_model = "any";
 #elif defined(TARGET_SPARC)
@@ -2436,10 +2456,38 @@ int main(int argc, char **argv, char **envp)
     target_environ = envlist_to_environ(envlist, NULL);
     envlist_free(envlist);
 
-    if (loader_exec(filename, argv+optind, target_environ, regs, info) != 0) {
+    /*
+     * Prepare copy of argv vector for target.
+     */
+    target_argc = argc - optind;
+    target_argv = calloc(target_argc + 1, sizeof (char *));
+    if (target_argv == NULL) {
+	(void) fprintf(stderr, "Unable to allocate memory for target_argv\n");
+	exit(1);
+    }
+
+    /*
+     * If argv0 is specified (using '-0' switch) we replace
+     * argv[0] pointer with the given one.
+     */
+    i = 0;
+    if (argv0 != NULL) {
+        target_argv[i++] = strdup(argv0);
+    }
+    for (; i < target_argc; i++) {
+        target_argv[i] = strdup(argv[optind + i]);
+    }
+    target_argv[target_argc] = NULL;
+
+    if (loader_exec(filename, target_argv, target_environ, regs, info) != 0) {
         printf("Error loading %s\n", filename);
         _exit(1);
     }
+
+    for (i = 0; i < target_argc; i++) {
+        free(target_argv[i]);
+    }
+    free(target_argv);
 
     for (wrk = target_environ; *wrk; wrk++) {
         free(*wrk);

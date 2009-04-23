@@ -52,6 +52,8 @@ static int io_thread_sigfd = -1;
 
 static CPUState *kvm_debug_cpu_requested;
 
+static uint64_t phys_ram_size;
+
 /* The list of ioperm_data */
 static LIST_HEAD(, ioperm_data) ioperm_head;
 
@@ -780,7 +782,7 @@ int kvm_qemu_create_context(void)
     if (!kvm_pit) {
         kvm_disable_pit_creation(kvm_context);
     }
-    if (kvm_create(kvm_context, phys_ram_size, (void**)&phys_ram_base) < 0) {
+    if (kvm_create(kvm_context, 0, NULL) < 0) {
 	kvm_qemu_destroy();
 	return -1;
     }
@@ -895,6 +897,10 @@ void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
     struct mapping *p;
 #endif
 
+    if (start_addr + size > phys_ram_size) {
+        phys_ram_size = start_addr + size;
+    }
+
     phys_offset &= ~IO_MEM_ROM;
 
     if (area_flags == IO_MEM_UNASSIGNED) {
@@ -929,7 +935,7 @@ void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
 #endif
 
     r = kvm_register_phys_mem(kvm_context, start_addr,
-                              phys_ram_base + phys_offset,
+                              qemu_get_ram_ptr(phys_offset),
                               size, 0);
     if (r < 0) {
         printf("kvm_cpu_register_physical_memory: failed\n");

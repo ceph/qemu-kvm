@@ -846,7 +846,7 @@ int cpu_inl(CPUState *env, int addr);
 #endif
 
 /* address in the RAM (different from a physical address) */
-#ifdef USE_KQEMU
+#ifdef CONFIG_KQEMU
 typedef uint32_t ram_addr_t;
 #else
 typedef unsigned long ram_addr_t;
@@ -854,11 +854,10 @@ typedef unsigned long ram_addr_t;
 
 /* memory API */
 
-extern ram_addr_t phys_ram_size;
 extern int phys_ram_fd;
-extern uint8_t *phys_ram_base;
 extern uint8_t *phys_ram_dirty;
 extern ram_addr_t ram_size;
+extern ram_addr_t last_ram_offset;
 extern uint8_t *bios_mem;
 
 /* physical memory access */
@@ -907,6 +906,11 @@ static inline void cpu_register_physical_memory(target_phys_addr_t start_addr,
 ram_addr_t cpu_get_physical_page_desc(target_phys_addr_t addr);
 ram_addr_t qemu_ram_alloc(ram_addr_t);
 void qemu_ram_free(ram_addr_t addr);
+/* This should only be used for ram local to a device.  */
+void *qemu_get_ram_ptr(ram_addr_t addr);
+/* This should not be used by devices.  */
+ram_addr_t qemu_ram_addr_from_host(void *ptr);
+
 int cpu_register_io_memory(int io_index,
                            CPUReadMemoryFunc **mem_read,
                            CPUWriteMemoryFunc **mem_write,

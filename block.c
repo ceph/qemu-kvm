@@ -507,6 +507,20 @@ void bdrv_delete(BlockDriverState *bs)
     qemu_free(bs);
 }
 
+/*
+ * Run consistency checks on an image
+ *
+ * Returns the number of errors or -errno when an internal error occurs
+ */
+int bdrv_check(BlockDriverState *bs)
+{
+    if (bs->drv->bdrv_check == NULL) {
+        return -ENOTSUP;
+    }
+
+    return bs->drv->bdrv_check(bs);
+}
+
 /* commit COW file into the raw image */
 int bdrv_commit(BlockDriverState *bs)
 {
@@ -1443,7 +1457,7 @@ static int bdrv_read_em(BlockDriverState *bs, int64_t sector_num,
     QEMUIOVector qiov;
 
     async_ret = NOT_DONE;
-    iov.iov_base = buf;
+    iov.iov_base = (void *)buf;
     iov.iov_len = nb_sectors * 512;
     qemu_iovec_init_external(&qiov, &iov, 1);
     acb = bdrv_aio_readv(bs, sector_num, &qiov, nb_sectors,

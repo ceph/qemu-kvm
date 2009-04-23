@@ -205,12 +205,6 @@ static void tosa_init(ram_addr_t ram_size, int vga_ram_size,
     struct tc6393xb_s *tmio;
     struct scoop_info_s *scp0, *scp1;
 
-    if (ram_size < (TOSA_RAM + TOSA_ROM + PXA2XX_INTERNAL_SIZE + TC6393XB_RAM)) {
-        fprintf(stderr, "This platform requires %i bytes of memory\n",
-                TOSA_RAM + TOSA_ROM + PXA2XX_INTERNAL_SIZE);
-        exit(1);
-    }
-
     if (!cpu_model)
         cpu_model = "pxa255";
 
@@ -239,12 +233,11 @@ static void tosa_init(ram_addr_t ram_size, int vga_ram_size,
     tosa_binfo.initrd_filename = initrd_filename;
     tosa_binfo.board_id = 0x208;
     arm_load_kernel(cpu->env, &tosa_binfo);
-    sl_bootparam_write(SL_PXA_PARAM_BASE - PXA2XX_SDRAM_BASE);
+    sl_bootparam_write(SL_PXA_PARAM_BASE);
 }
 
 QEMUMachine tosapda_machine = {
     .name = "tosa",
     .desc = "Tosa PDA (PXA255)",
     .init = tosa_init,
-    .ram_require = TOSA_RAM + TOSA_ROM + PXA2XX_INTERNAL_SIZE + RAMSIZE_FIXED + TC6393XB_RAM,
 };

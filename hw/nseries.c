@@ -1272,14 +1272,7 @@ static void n8x0_init(ram_addr_t ram_size, const char *boot_device,
 {
     struct n800_s *s = (struct n800_s *) qemu_mallocz(sizeof(*s));
     int sdram_size = binfo->ram_size;
-    int onenandram_size = 0x00010000;
     DisplayState *ds;
-
-    if (ram_size < sdram_size + onenandram_size + OMAP242X_SRAM_SIZE) {
-        fprintf(stderr, "This architecture uses %i bytes of memory\n",
-                        sdram_size + onenandram_size + OMAP242X_SRAM_SIZE);
-        exit(1);
-    }
 
     s->cpu = omap2420_mpu_init(sdram_size, cpu_model);
 
@@ -1341,6 +1334,8 @@ static void n8x0_init(ram_addr_t ram_size, const char *boot_device,
     }
 
     if (option_rom[0] && (boot_device[0] == 'n' || !kernel_filename)) {
+        int rom_size;
+        uint8_t nolo_tags[0x10000];
         /* No, wait, better start at the ROM.  */
         s->cpu->env->regs[15] = OMAP2_Q2_BASE + 0x400000;
 
@@ -1353,10 +1348,13 @@ static void n8x0_init(ram_addr_t ram_size, const char *boot_device,
          *
          * The code above is for loading the `zImage' file from Nokia
          * images.  */
-        printf("%i bytes of image loaded\n", load_image(option_rom[0],
-                                phys_ram_base + 0x400000));
+        rom_size = load_image_targphys(option_rom[0],
+                                       OMAP2_Q2_BASE + 0x400000,
+                                       sdram_size - 0x400000);
+        printf("%i bytes of image loaded\n", rom_size);
 
-        n800_setup_nolo_tags(phys_ram_base + sdram_size);
+        n800_setup_nolo_tags(nolo_tags);
+        cpu_physical_memory_write(OMAP2_SRAM_BASE, nolo_tags, 0x10000);
     }
     /* FIXME: We shouldn't really be doing this here.  The LCD controller
        will set the size once configured, so this just sets an initial
@@ -1409,14 +1407,10 @@ QEMUMachine n800_machine = {
     .name = "n800",
     .desc = "Nokia N800 tablet aka. RX-34 (OMAP2420)",
     .init = n800_init,
-    .ram_require = (0x08000000 + 0x00010000 + OMAP242X_SRAM_SIZE) |
-            RAMSIZE_FIXED,
 };
 
 QEMUMachine n810_machine = {
     .name = "n810",
     .desc = "Nokia N810 tablet aka. RX-44 (OMAP2420)",
     .init = n810_init,
-    .ram_require = (0x08000000 + 0x00010000 + OMAP242X_SRAM_SIZE) |
-            RAMSIZE_FIXED,
 };

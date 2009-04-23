@@ -82,9 +82,10 @@
 #define DESC_AVL_MASK   (1 << 20)
 #define DESC_P_MASK     (1 << 15)
 #define DESC_DPL_SHIFT  13
-#define DESC_DPL_MASK   (1 << DESC_DPL_SHIFT)
+#define DESC_DPL_MASK   (3 << DESC_DPL_SHIFT)
 #define DESC_S_MASK     (1 << 12)
 #define DESC_TYPE_SHIFT 8
+#define DESC_TYPE_MASK  (15 << DESC_TYPE_SHIFT)
 #define DESC_A_MASK     (1 << 8)
 
 #define DESC_CS_MASK    (1 << 11) /* 1=code segment 0=data segment */
@@ -661,7 +662,7 @@ typedef struct CPUX86State {
         uint64_t mask;
     } mtrr_var[8];
 
-#ifdef USE_KQEMU
+#ifdef CONFIG_KQEMU
     int kqemu_enabled;
     int last_io_time;
 #endif
@@ -820,7 +821,7 @@ uint64_t cpu_get_tsc(CPUX86State *env);
 #define X86_DUMP_FPU  0x0001 /* dump FPU state too */
 #define X86_DUMP_CCOP 0x0002 /* dump qemu flag cache */
 
-#ifdef USE_KQEMU
+#ifdef CONFIG_KQEMU
 static inline int cpu_get_time_fast(void)
 {
     int low, high;

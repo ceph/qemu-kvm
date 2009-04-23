@@ -72,8 +72,8 @@ static void an5206_init(ram_addr_t ram_size, int vga_ram_size,
         kernel_size = load_uimage(kernel_filename, &entry, NULL, NULL);
     }
     if (kernel_size < 0) {
-        kernel_size = load_image(kernel_filename,
-                                 phys_ram_base + KERNEL_LOAD_ADDR);
+        kernel_size = load_image_targphys(kernel_filename, KERNEL_LOAD_ADDR,
+                                          ram_size - KERNEL_LOAD_ADDR);
         entry = KERNEL_LOAD_ADDR;
     }
     if (kernel_size < 0) {
@@ -88,5 +88,4 @@ QEMUMachine an5206_machine = {
     .name = "an5206",
     .desc = "Arnewsh 5206",
     .init = an5206_init,
-    .ram_require = 512,
 };

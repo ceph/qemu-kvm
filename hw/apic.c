@@ -282,6 +282,8 @@ void cpu_set_apic_base(CPUState *env, uint64_t val)
 #ifdef DEBUG_APIC
     printf("cpu_set_apic_base: %016" PRIx64 "\n", val);
 #endif
+    if (!s)
+        return;
     if (kvm_enabled() && qemu_kvm_irqchip_in_kernel())
         s->apicbase = val;
     else
@@ -299,14 +301,17 @@ uint64_t cpu_get_apic_base(CPUState *env)
 {
     APICState *s = env->apic_state;
 #ifdef DEBUG_APIC
-    printf("cpu_get_apic_base: %016" PRIx64 "\n", (uint64_t)s->apicbase);
+    printf("cpu_get_apic_base: %016" PRIx64 "\n",
+           s ? (uint64_t)s->apicbase: 0);
 #endif
-    return s->apicbase;
+    return s ? s->apicbase : 0;
 }
 
 void cpu_set_apic_tpr(CPUX86State *env, uint8_t val)
 {
     APICState *s = env->apic_state;
+    if (!s)
+        return;
     s->tpr = (val & 0x0f) << 4;
     apic_update_irq(s);
 }
@@ -314,7 +319,7 @@ void cpu_set_apic_tpr(CPUX86State *env, uint8_t val)
 uint8_t cpu_get_apic_tpr(CPUX86State *env)
 {
     APICState *s = env->apic_state;
-    return s->tpr >> 4;
+    return s ? s->tpr >> 4 : 0;
 }
 
 /* return -1 if no bit is set */

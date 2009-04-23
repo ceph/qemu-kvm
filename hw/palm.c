@@ -216,12 +216,6 @@ static void palmte_init(ram_addr_t ram_size, int vga_ram_size,
     int rom_size, rom_loaded = 0;
     DisplayState *ds = get_displaystate();
 
-    if (ram_size < flash_size + sdram_size + OMAP15XX_SRAM_SIZE) {
-        fprintf(stderr, "This architecture uses %i bytes of memory\n",
-                        flash_size + sdram_size + OMAP15XX_SRAM_SIZE);
-        exit(1);
-    }
-
     cpu = omap310_mpu_init(sdram_size, cpu_model);
 
     /* External Flash (EMIFS) */
@@ -247,16 +241,21 @@ static void palmte_init(ram_addr_t ram_size, int vga_ram_size,
     /* Setup initial (reset) machine state */
     if (nb_option_roms) {
         rom_size = get_image_size(option_rom[0]);
-        if (rom_size > flash_size)
+        if (rom_size > flash_size) {
             fprintf(stderr, "%s: ROM image too big (%x > %x)\n",
                             __FUNCTION__, rom_size, flash_size);
-        else if (rom_size > 0 && load_image(option_rom[0],
-                                phys_ram_base + phys_flash) > 0) {
+            rom_size = 0;
+        }
+        if (rom_size > 0) {
+            rom_size = load_image_targphys(option_rom[0], OMAP_CS0_BASE,
+                                           flash_size);
             rom_loaded = 1;
             cpu->env->regs[15] = 0x00000000;
-        } else
+        }
+        if (rom_size < 0) {
             fprintf(stderr, "%s: error loading '%s'\n",
                             __FUNCTION__, option_rom[0]);
+        }
     }
 
     if (!rom_loaded && !kernel_filename) {
@@ -286,6 +285,4 @@ QEMUMachine palmte_machine = {
     .name = "cheetah",
     .desc = "Palm Tungsten|E aka. Cheetah PDA (OMAP310)",
     .init = palmte_init,
-    .ram_require = (0x02000000 + 0x00800000 + OMAP15XX_SRAM_SIZE) |
-            RAMSIZE_FIXED,
 };

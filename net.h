@@ -9,6 +9,7 @@ typedef ssize_t (IOReadvHandler)(void *, const struct iovec *, int);
 
 typedef struct VLANClientState VLANClientState;
 
+typedef void (NetCleanup) (VLANClientState *);
 typedef void (LinkStatusChanged)(VLANClientState *);
 typedef void (SetOffload)(VLANClientState *, int, int, int, int);
 
@@ -18,6 +19,7 @@ struct VLANClientState {
     /* Packets may still be sent if this returns zero.  It's used to
        rate-limit the slirp code.  */
     IOCanRWHandler *fd_can_read;
+    NetCleanup *cleanup;
     LinkStatusChanged *link_status_changed;
     int link_down;
     SetOffload *set_offload;
@@ -29,11 +31,22 @@ struct VLANClientState {
     char info_str[256];
 };
 
+typedef struct VLANPacket VLANPacket;
+
+struct VLANPacket {
+    struct VLANPacket *next;
+    VLANClientState *sender;
+    int size;
+    uint8_t data[0];
+};
+
 struct VLANState {
     int id;
     VLANClientState *first_client;
     struct VLANState *next;
     unsigned int nb_guest_devs, nb_host_devs;
+    VLANPacket *send_queue;
+    int delivering;
 };
 
 VLANState *qemu_find_vlan(int id);
@@ -42,6 +55,7 @@ VLANClientState *qemu_new_vlan_client(VLANState *vlan,
                                       const char *name,
                                       IOReadHandler *fd_read,
                                       IOCanRWHandler *fd_can_read,
+                                      NetCleanup *cleanup,
                                       void *opaque);
 void qemu_del_vlan_client(VLANClientState *vc);
 VLANClientState *qemu_find_vlan_client(VLANState *vlan, void *opaque);
@@ -103,7 +117,7 @@ int net_client_init(const char *device, const char *p);
 void net_client_uninit(NICInfo *nd);
 int net_client_parse(const char *str);
 void net_slirp_smb(const char *exported_dir);
-void net_slirp_redir(const char *redir_str);
+void net_slirp_redir(Monitor *mon, const char *redir_str);
 void net_cleanup(void);
 int slirp_is_inited(void);
 void net_client_check(void);

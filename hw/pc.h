@@ -95,6 +95,7 @@ void i8042_mm_init(qemu_irq kbd_irq, qemu_irq mouse_irq,
 typedef struct RTCState RTCState;
 
 RTCState *rtc_init(int base, qemu_irq irq, int base_year);
+RTCState *rtc_init_sqw(int base, qemu_irq irq, qemu_irq sqw_irq, int base_year);
 RTCState *rtc_mm_init(target_phys_addr_t base, int it_shift, qemu_irq irq,
                       int base_year);
 void rtc_set_memory(RTCState *s, int addr, int val);
@@ -156,21 +157,15 @@ extern enum vga_retrace_method vga_retrace_method;
 #define VGA_RAM_SIZE (17 * 1024 * 1024)
 #endif
 
-int isa_vga_init(uint8_t *vga_ram_base,
-                 unsigned long vga_ram_offset, int vga_ram_size);
-int pci_vga_init(PCIBus *bus, uint8_t *vga_ram_base,
-                 unsigned long vga_ram_offset, int vga_ram_size,
+int isa_vga_init(int vga_ram_size);
+int pci_vga_init(PCIBus *bus, int vga_ram_size,
                  unsigned long vga_bios_offset, int vga_bios_size);
-int isa_vga_mm_init(uint8_t *vga_ram_base,
-                    unsigned long vga_ram_offset, int vga_ram_size,
-                    target_phys_addr_t vram_base, target_phys_addr_t ctrl_base,
-                    int it_shift);
+int isa_vga_mm_init(int vga_ram_size, target_phys_addr_t vram_base,
+                    target_phys_addr_t ctrl_base, int it_shift);
 
 /* cirrus_vga.c */
-void pci_cirrus_vga_init(PCIBus *bus, uint8_t *vga_ram_base,
-                         ram_addr_t vga_ram_offset, int vga_ram_size);
-void isa_cirrus_vga_init(uint8_t *vga_ram_base,
-                         ram_addr_t vga_ram_offset, int vga_ram_size);
+void pci_cirrus_vga_init(PCIBus *bus, int vga_ram_size);
+void isa_cirrus_vga_init(int vga_ram_size);
 
 /* ide.c */
 void isa_ide_init(int iobase, int iobase2, qemu_irq irq,

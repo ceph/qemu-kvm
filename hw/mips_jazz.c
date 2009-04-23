@@ -129,18 +129,20 @@ void mips_jazz_init (ram_addr_t ram_size, int vga_ram_size,
                      enum jazz_model_e jazz_model)
 {
     char buf[1024];
-    unsigned long bios_offset;
     int bios_size, n;
     CPUState *env;
     qemu_irq *rc4030, *i8259;
     rc4030_dma *dmas;
-    rc4030_dma_function dma_read, dma_write;
+    void* rc4030_opaque;
     void *scsi_hba;
     int hd;
     int s_rtc, s_dma_dummy;
+    NICInfo *nd;
     PITState *pit;
     BlockDriverState *fds[MAX_FD];
     qemu_irq esp_reset;
+    ram_addr_t ram_offset;
+    ram_addr_t bios_offset;
 
     /* init CPUs */
     if (cpu_model == NULL) {
@@ -159,32 +161,32 @@ void mips_jazz_init (ram_addr_t ram_size, int vga_ram_size,
     qemu_register_reset(main_cpu_reset, env);
 
     /* allocate RAM */
-    cpu_register_physical_memory(0, ram_size, IO_MEM_RAM);
+    ram_offset = qemu_ram_alloc(ram_size);
+    cpu_register_physical_memory(0, ram_size, ram_offset | IO_MEM_RAM);
+
+    bios_offset = qemu_ram_alloc(MAGNUM_BIOS_SIZE);
+    cpu_register_physical_memory(0x1fc00000LL,
+                                 MAGNUM_BIOS_SIZE, bios_offset | IO_MEM_ROM);
+    cpu_register_physical_memory(0xfff00000LL,
+                                 MAGNUM_BIOS_SIZE, bios_offset | IO_MEM_ROM);
 
     /* load the BIOS image. */
-    bios_offset = ram_size + vga_ram_size;
     if (bios_name == NULL)
         bios_name = BIOS_FILENAME;
     snprintf(buf, sizeof(buf), "%s/%s", bios_dir, bios_name);
-    bios_size = load_image(buf, phys_ram_base + bios_offset);
+    bios_size = load_image_targphys(buf, 0xfff00000LL, MAGNUM_BIOS_SIZE);
     if (bios_size < 0 || bios_size > MAGNUM_BIOS_SIZE) {
         fprintf(stderr, "qemu: Could not load MIPS bios '%s'\n",
                 buf);
         exit(1);
     }
 
-    cpu_register_physical_memory(0x1fc00000LL,
-                                 MAGNUM_BIOS_SIZE, bios_offset | IO_MEM_ROM);
-    cpu_register_physical_memory(0xfff00000LL,
-                                 MAGNUM_BIOS_SIZE, bios_offset | IO_MEM_ROM);
-
     /* Init CPU internal devices */
     cpu_mips_irq_init_cpu(env);
     cpu_mips_clock_init(env);
 
     /* Chipset */
-    rc4030 = rc4030_init(env->irq[6], env->irq[3],
-                         &dmas, &dma_read, &dma_write);
+    rc4030_opaque = rc4030_init(env->irq[6], env->irq[3], &rc4030, &dmas);
     s_dma_dummy = cpu_register_io_memory(0, dma_dummy_read, dma_dummy_write, NULL);
     cpu_register_physical_memory(0x8000d000, 0x00001000, s_dma_dummy);
 
@@ -201,23 +203,36 @@ void mips_jazz_init (ram_addr_t ram_size, int vga_ram_size,
     /* Video card */
     switch (jazz_model) {
     case JAZZ_MAGNUM:
-        g364fb_mm_init(phys_ram_base + ram_size, ram_size, vga_ram_size,
-                        0x40000000, 0x60000000, 0, rc4030[3]);
+        g364fb_mm_init(vga_ram_size, 0x40000000, 0x60000000, 0, rc4030[3]);
         break;
     case JAZZ_PICA61:
-        isa_vga_mm_init(phys_ram_base + ram_size, ram_size, vga_ram_size,
-                        0x40000000, 0x60000000, 0);
+        isa_vga_mm_init(vga_ram_size, 0x40000000, 0x60000000, 0);
         break;
     default:
         break;
     }
 
     /* Network controller */
-    /* FIXME: missing NS SONIC DP83932 */
+    for (n = 0; n < nb_nics; n++) {
+        nd = &nd_table[n];
+        if (!nd->model)
+            nd->model = "dp83932";
+        if (strcmp(nd->model, "dp83932") == 0) {
+            dp83932_init(nd, 0x80001000, 2, rc4030[4],
+                         rc4030_opaque, rc4030_dma_memory_rw);
+            break;
+        } else if (strcmp(nd->model, "?") == 0) {
+            fprintf(stderr, "qemu: Supported NICs: dp83932\n");
+            exit(1);
+        } else {
+            fprintf(stderr, "qemu: Unsupported NIC: %s\n", nd->model);
+            exit(1);
+        }
+    }
 
     /* SCSI adapter */
     scsi_hba = esp_init(0x80002000, 0,
-                        dma_read, dma_write, dmas[0],
+                        rc4030_dma_read, rc4030_dma_write, dmas[0],
                         rc4030[5], &esp_reset);
     for (n = 0; n < ESP_MAX_DEVS; n++) {
         hd = drive_get_index(IF_SCSI, 0, n);
@@ -293,7 +308,6 @@ QEMUMachine mips_magnum_machine = {
     .name = "magnum",
     .desc = "MIPS Magnum",
     .init = mips_magnum_init,
-    .ram_require = MAGNUM_BIOS_SIZE + VGA_RAM_SIZE,
     .use_scsi = 1,
 };
 
@@ -301,6 +315,5 @@ QEMUMachine mips_pica61_machine = {
     .name = "pica61",
     .desc = "Acer Pica 61",
     .init = mips_pica61_init,
-    .ram_require = MAGNUM_BIOS_SIZE + VGA_RAM_SIZE,
     .use_scsi = 1,
 };

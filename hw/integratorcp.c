@@ -457,7 +457,7 @@ static void integratorcp_init(ram_addr_t ram_size, int vga_ram_size,
                      const char *initrd_filename, const char *cpu_model)
 {
     CPUState *env;
-    uint32_t ram_offset;
+    ram_addr_t ram_offset;
     qemu_irq *pic;
     qemu_irq *cpu_pic;
     int sd;
@@ -510,5 +510,4 @@ QEMUMachine integratorcp_machine = {
     .name = "integratorcp",
     .desc = "ARM Integrator/CP (ARM926EJ-S)",
     .init = integratorcp_init,
-    .ram_require = 0x100000,
 };

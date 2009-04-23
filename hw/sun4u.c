@@ -337,7 +337,7 @@ static void sun4uv_init(ram_addr_t RAM_size, int vga_ram_size,
     m48t59_t *nvram;
     int ret, linux_boot;
     unsigned int i;
-    ram_addr_t ram_offset, prom_offset, vga_ram_offset;
+    ram_addr_t ram_offset, prom_offset;
     long initrd_size, kernel_size;
     PCIBus *pci_bus, *pci_bus2, *pci_bus3;
     QEMUBH *bh;
@@ -447,10 +447,7 @@ static void sun4uv_init(ram_addr_t RAM_size, int vga_ram_size,
     pci_bus = pci_apb_init(APB_SPECIAL_BASE, APB_MEM_BASE, NULL, &pci_bus2,
                            &pci_bus3);
     isa_mem_base = VGA_BASE;
-    vga_ram_offset = qemu_ram_alloc(vga_ram_size);
-    pci_vga_init(pci_bus, phys_ram_base + vga_ram_offset,
-                 vga_ram_offset, vga_ram_size,
-                 0, 0);
+    pci_vga_init(pci_bus, vga_ram_size, 0, 0);
 
     // XXX Should be pci_bus3
     pci_ebus_init(pci_bus, -1);
@@ -596,7 +593,6 @@ QEMUMachine sun4u_machine = {
     .name = "sun4u",
     .desc = "Sun4u platform",
     .init = sun4u_init,
-    .ram_require = PROM_SIZE_MAX + VGA_RAM_SIZE,
     .max_cpus = 1, // XXX for now
 };
 
@@ -604,7 +600,6 @@ QEMUMachine sun4v_machine = {
     .name = "sun4v",
     .desc = "Sun4v platform",
     .init = sun4v_init,
-    .ram_require = PROM_SIZE_MAX + VGA_RAM_SIZE,
     .max_cpus = 1, // XXX for now
 };
 
@@ -612,6 +607,5 @@ QEMUMachine niagara_machine = {
     .name = "Niagara",
     .desc = "Sun4v platform, Niagara",
     .init = niagara_init,
-    .ram_require = PROM_SIZE_MAX + VGA_RAM_SIZE,
     .max_cpus = 1, // XXX for now
 };

@@ -543,7 +543,7 @@ static void ppc_prep_init (ram_addr_t ram_size, int vga_ram_size,
     m48t59_t *m48t59;
     int PPC_io_memory;
     int linux_boot, i, nb_nics1, bios_size;
-    ram_addr_t ram_offset, vga_ram_offset, bios_offset;
+    ram_addr_t ram_offset, bios_offset;
     uint32_t kernel_base, kernel_size, initrd_base, initrd_size;
     PCIBus *pci_bus;
     qemu_irq *i8259;
@@ -580,15 +580,20 @@ static void ppc_prep_init (ram_addr_t ram_size, int vga_ram_size,
     ram_offset = qemu_ram_alloc(ram_size);
     cpu_register_physical_memory(0, ram_size, ram_offset);
 
-    /* allocate VGA RAM */
-    vga_ram_offset = qemu_ram_alloc(vga_ram_size);
-
     /* allocate and load BIOS */
     bios_offset = qemu_ram_alloc(BIOS_SIZE);
     if (bios_name == NULL)
         bios_name = BIOS_FILENAME;
     snprintf(buf, sizeof(buf), "%s/%s", bios_dir, bios_name);
-    bios_size = load_image(buf, phys_ram_base + bios_offset);
+    bios_size = get_image_size(buf);
+    if (bios_size > 0 && bios_size <= BIOS_SIZE) {
+        target_phys_addr_t bios_addr;
+        bios_size = (bios_size + 0xfff) & ~0xfff;
+        bios_addr = (uint32_t)(-bios_size);
+        cpu_register_physical_memory(bios_addr, bios_size,
+                                     bios_offset | IO_MEM_ROM);
+        bios_size = load_image_targphys(buf, bios_addr, bios_size);
+    }
     if (bios_size < 0 || bios_size > BIOS_SIZE) {
         cpu_abort(env, "qemu: could not load PPC PREP bios '%s'\n", buf);
         exit(1);
@@ -596,14 +601,12 @@ static void ppc_prep_init (ram_addr_t ram_size, int vga_ram_size,
     if (env->nip < 0xFFF80000 && bios_size < 0x00100000) {
         cpu_abort(env, "PowerPC 601 / 620 / 970 need a 1MB BIOS\n");
     }
-    bios_size = (bios_size + 0xfff) & ~0xfff;
-    cpu_register_physical_memory((uint32_t)(-bios_size),
-                                 bios_size, bios_offset | IO_MEM_ROM);
 
     if (linux_boot) {
         kernel_base = KERNEL_LOAD_ADDR;
         /* now we can load the kernel */
-        kernel_size = load_image(kernel_filename, phys_ram_base + kernel_base);
+        kernel_size = load_image_targphys(kernel_filename, kernel_base,
+                                          ram_size - kernel_base);
         if (kernel_size < 0) {
             cpu_abort(env, "qemu: could not load kernel '%s'\n",
                       kernel_filename);
@@ -612,8 +615,8 @@ static void ppc_prep_init (ram_addr_t ram_size, int vga_ram_size,
         /* load initrd */
         if (initrd_filename) {
             initrd_base = INITRD_LOAD_ADDR;
-            initrd_size = load_image(initrd_filename,
-                                     phys_ram_base + initrd_base);
+            initrd_size = load_image_targphys(initrd_filename, initrd_base,
+                                              ram_size - initrd_base);
             if (initrd_size < 0) {
                 cpu_abort(env, "qemu: could not load initial ram disk '%s'\n",
                           initrd_filename);
@@ -657,8 +660,7 @@ static void ppc_prep_init (ram_addr_t ram_size, int vga_ram_size,
     cpu_register_physical_memory(0x80000000, 0x00800000, PPC_io_memory);
 
     /* init basic PC hardware */
-    pci_vga_init(pci_bus, phys_ram_base + vga_ram_offset,
-                 vga_ram_offset, vga_ram_size, 0, 0);
+    pci_vga_init(pci_bus, vga_ram_size, 0, 0);
     //    openpic = openpic_init(0x00000000, 0xF0000000, 1);
     //    pit = pit_init(0x40, i8259[0]);
     rtc_init(0x70, i8259[8], 2000);
@@ -762,6 +764,5 @@ QEMUMachine prep_machine = {
     .name = "prep",
     .desc = "PowerPC PREP platform",
     .init = ppc_prep_init,
-    .ram_require = BIOS_SIZE + VGA_RAM_SIZE,
     .max_cpus = MAX_CPUS,
 };

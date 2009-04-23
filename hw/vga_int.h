@@ -191,13 +191,11 @@ static inline int c6_to_8(int v)
     return (v << 2) | (b << 1) | b;
 }
 
-void vga_common_init(VGAState *s, uint8_t *vga_ram_base,
-                     ram_addr_t vga_ram_offset, int vga_ram_size);
+void vga_common_init(VGAState *s, int vga_ram_size);
 void vga_init(VGAState *s);
 void vga_reset(void *s);
 
 void vga_dirty_log_start(VGAState *s);
-void vga_dirty_log_stop(VGAState *s);
 
 uint32_t vga_mem_readb(void *opaque, target_phys_addr_t addr);
 void vga_mem_writeb(void *opaque, target_phys_addr_t addr, uint32_t val);

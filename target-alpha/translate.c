@@ -51,6 +51,7 @@ struct DisasContext {
 #if !defined (CONFIG_USER_ONLY)
     int pal_mode;
 #endif
+    CPUAlphaState *env;
     uint32_t amask;
 };
 
@@ -685,7 +686,7 @@ static always_inline int translate_one (DisasContext *ctx, uint32_t insn)
         /* CALL_PAL */
         if (palcode >= 0x80 && palcode < 0xC0) {
             /* Unprivileged PAL call */
-            gen_excp(ctx, EXCP_CALL_PAL + ((palcode & 0x1F) << 6), 0);
+            gen_excp(ctx, EXCP_CALL_PAL + ((palcode & 0x3F) << 6), 0);
 #if !defined (CONFIG_USER_ONLY)
         } else if (palcode < 0x40) {
             /* Privileged PAL code */
@@ -1159,9 +1160,20 @@ static always_inline int translate_one (DisasContext *ctx, uint32_t insn)
             /* AMASK */
             if (likely(rc != 31)) {
                 if (islit)
-                    tcg_gen_movi_i64(cpu_ir[rc], helper_amask(lit));
+                    tcg_gen_movi_i64(cpu_ir[rc], lit);
                 else
-                    gen_helper_amask(cpu_ir[rc], cpu_ir[rb]);
+                    tcg_gen_mov_i64(cpu_ir[rc], cpu_ir[rb]);
+                switch (ctx->env->implver) {
+                case IMPLVER_2106x:
+                    /* EV4, EV45, LCA, LCA45 & EV5 */
+                    break;
+                case IMPLVER_21164:
+                case IMPLVER_21264:
+                case IMPLVER_21364:
+                    tcg_gen_andi_i64(cpu_ir[rc], cpu_ir[rc],
+                                     ~(uint64_t)ctx->amask);
+                    break;
+                }
             }
             break;
         case 0x64:
@@ -1175,7 +1187,7 @@ static always_inline int translate_one (DisasContext *ctx, uint32_t insn)
         case 0x6C:
             /* IMPLVER */
             if (rc != 31)
-                gen_helper_load_implver(cpu_ir[rc]);
+                tcg_gen_movi_i64(cpu_ir[rc], ctx->env->implver);
             break;
         default:
             goto invalid_opc;
@@ -1720,12 +1732,6 @@ static always_inline int translate_one (DisasContext *ctx, uint32_t insn)
             break;
         case 0xE800:
             /* ECB */
-            /* XXX: TODO: evict tb cache at address rb */
-#if 0
-            ret = 2;
-#else
-            goto invalid_opc;
-#endif
             break;
         case 0xF000:
             /* RS */
@@ -2352,6 +2358,7 @@ static always_inline void gen_intermediate_code_internal (CPUState *env,
     gen_opc_end = gen_opc_buf + OPC_MAX_SIZE;
     ctx.pc = pc_start;
     ctx.amask = env->amask;
+    ctx.env = env;
 #if defined (CONFIG_USER_ONLY)
     ctx.mem_idx = 0;
 #else
@@ -2404,15 +2411,19 @@ static always_inline void gen_intermediate_code_internal (CPUState *env,
         /* if we reach a page boundary or are single stepping, stop
          * generation
          */
-        if (((ctx.pc & (TARGET_PAGE_SIZE - 1)) == 0) ||
-            num_insns >= max_insns) {
-            break;
-        }
-
         if (env->singlestep_enabled) {
             gen_excp(&ctx, EXCP_DEBUG, 0);
             break;
         }
+
+        if ((ctx.pc & (TARGET_PAGE_SIZE - 1)) == 0)
+            break;
+
+        if (gen_opc_ptr >= gen_opc_end)
+            break;
+
+        if (num_insns >= max_insns)
+            break;
 
         if (singlestep) {
             break;

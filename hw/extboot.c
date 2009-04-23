@@ -73,7 +73,7 @@ static uint32_t extboot_read(void *opaque, uint32_t addr)
 
 static void extboot_write_cmd(void *opaque, uint32_t addr, uint32_t value)
 {
-    union extboot_cmd *cmd = (void *)(phys_ram_base + ((value & 0xFFFF) << 4));
+    union extboot_cmd cmd;
     BlockDriverState *bs = opaque;
     int cylinders, heads, sectors, err;
     uint64_t nb_sectors;
@@ -81,24 +81,27 @@ static void extboot_write_cmd(void *opaque, uint32_t addr, uint32_t value)
     int blen = 0;
     void *buf = NULL;
 
-    if (cmd->type == 0x01 || cmd->type == 0x02) {
-	pa = cmd->xfer.segment * 16 + cmd->xfer.offset;
-        blen = cmd->xfer.nb_sectors * 512;
+    cpu_physical_memory_read((value & 0xFFFF) << 4, (uint8_t *)&buf,
+                             sizeof(buf));
+
+    if (cmd.type == 0x01 || cmd.type == 0x02) {
+	pa = cmd.xfer.segment * 16 + cmd.xfer.offset;
+        blen = cmd.xfer.nb_sectors * 512;
         buf = qemu_memalign(512, blen);
     }
 
-    switch (cmd->type) {
+    switch (cmd.type) {
     case 0x00:
         get_translated_chs(bs, &cylinders, &heads, &sectors);
 	bdrv_get_geometry(bs, &nb_sectors);
-	cmd->query_geometry.cylinders = cylinders;
-	cmd->query_geometry.heads = heads;
-	cmd->query_geometry.sectors = sectors;
-	cmd->query_geometry.nb_sectors = nb_sectors;
+	cmd.query_geometry.cylinders = cylinders;
+	cmd.query_geometry.heads = heads;
+	cmd.query_geometry.sectors = sectors;
+	cmd.query_geometry.nb_sectors = nb_sectors;
 	cpu_physical_memory_set_dirty((value & 0xFFFF) << 4);
 	break;
     case 0x01:
-	err = bdrv_read(bs, cmd->xfer.sector, buf, cmd->xfer.nb_sectors);
+	err = bdrv_read(bs, cmd.xfer.sector, buf, cmd.xfer.nb_sectors);
 	if (err)
 	    printf("Read failed\n");
 
@@ -108,7 +111,7 @@ static void extboot_write_cmd(void *opaque, uint32_t addr, uint32_t value)
     case 0x02:
         cpu_physical_memory_read(pa, buf, blen);
 
-	err = bdrv_write(bs, cmd->xfer.sector, buf, cmd->xfer.nb_sectors);
+	err = bdrv_write(bs, cmd.xfer.sector, buf, cmd.xfer.nb_sectors);
 	if (err)
 	    printf("Write failed\n");
 

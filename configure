@@ -153,6 +153,7 @@ case "$cpu" in
   ;;
 esac
 gprof="no"
+debug_tcg="no"
 sparse="no"
 strip_opt="yes"
 bigendian="no"
@@ -192,6 +193,8 @@ aix="no"
 blobs="yes"
 fdt="yes"
 sdl_x11="no"
+xen="yes"
+pkgversion=""
 signalfd="no"
 eventfd="no"
 cpu_emulation="yes"
@@ -204,6 +207,10 @@ if check_define __linux__ ; then
   targetos="Linux"
 elif check_define _WIN32 ; then
   targetos='MINGW32'
+elif check_define __OpenBSD__ ; then
+  targetos='OpenBSD'
+elif check_define __sun__ ; then
+  targetos='SunOS'
 else
   targetos=`uname -s`
 fi
@@ -286,6 +293,7 @@ SunOS)
     make="gmake"
     install="ginstall"
     needs_libsunmath="no"
+    kvm="no"
     solarisrev=`uname -r | cut -f2 -d.`
     # have to select again, because `uname -m` returns i86pc
     # even on an x86_64 box.
@@ -313,6 +321,7 @@ SunOS)
         audio_drv_list="oss"
     fi
     audio_possible_drivers="oss sdl"
+    OS_CFLAGS=-std=gnu99
 ;;
 AIX)
 aix="yes"
@@ -412,6 +421,10 @@ for opt do
   ;;
   --audio-drv-list=*) audio_drv_list="$optarg"
   ;;
+  --enable-debug-tcg) debug_tcg="yes"
+  ;;
+  --disable-debug-tcg) debug_tcg="no"
+  ;;
   --enable-sparse) sparse="yes"
   ;;
   --disable-sparse) sparse="no"
@@ -427,6 +440,8 @@ for opt do
   --disable-vde) vde="no"
   ;;
   --disable-kqemu) kqemu="no"
+  ;;
+  --disable-xen) xen="no"
   ;;
   --disable-brlapi) brlapi="no"
   ;;
@@ -488,6 +503,8 @@ for opt do
   --disable-blobs) blobs="no"
   ;;
   --kerneldir=*) kerneldir="$optarg"
+  ;;
+  --with-pkgversion=*) pkgversion=" ($optarg)"
   ;;
   --disable-cpu-emulation) cpu_emulation="no"
   ;;
@@ -582,6 +599,8 @@ echo "  --extra-ldflags=LDFLAGS  add linker flags LDFLAGS"
 echo "  --make=MAKE              use specified make [$make]"
 echo "  --install=INSTALL        use specified install [$install]"
 echo "  --static                 enable static build [$static]"
+echo "  --enable-debug-tcg       enable TCG debugging"
+echo "  --disable-debug-tcg      disable TCG debugging (default)"
 echo "  --enable-sparse          enable sparse checker"
 echo "  --disable-sparse         disable sparse checker (default)"
 echo "  --disable-strip          disable stripping binaries"
@@ -593,6 +612,7 @@ echo "                           Available drivers: $audio_possible_drivers"
 echo "  --audio-card-list=LIST   set list of emulated audio cards [$audio_card_list]"
 echo "                           Available cards: $audio_possible_cards"
 echo "  --enable-mixemu          enable mixer emulation"
+echo "  --disable-xen            disable xen backend driver support"
 echo "  --disable-brlapi         disable BrlAPI"
 echo "  --disable-vnc-tls        disable TLS encryption for VNC server"
 echo "  --disable-vnc-sasl       disable SASL encryption for VNC server"
@@ -714,6 +734,9 @@ sparc32plus-linux-user \
 # the following are BSD specific
     if [ "$bsd_user" = "yes" ] ; then
         target_list="${target_list}\
+i386-bsd-user \
+x86_64-bsd-user \
+sparc-bsd-user \
 sparc64-bsd-user \
 "
     fi
@@ -856,6 +879,22 @@ else
     echo "Make sure to have the zlib libs and headers installed."
     echo
     exit 1
+fi
+
+##########################################
+# xen probe
+
+if test "$xen" = "yes" ; then
+cat > $TMPC <<EOF
+#include <xenctrl.h>
+#include <xs.h>
+int main(void) { xs_daemon_open; xc_interface_open; }
+EOF
+   if $cc $ARCH_CFLAGS -c -o $TMPO $TMPC -lxenstore -lxenctrl 2> /dev/null ; then
+      :
+   else
+      xen="no"
+   fi
 fi
 
 ##########################################
@@ -1080,7 +1119,10 @@ if test "$curses" = "yes" ; then
   curses=no
   cat > $TMPC << EOF
 #include <curses.h>
-int main(void) { return curses_version(); }
+#ifdef __OpenBSD__
+#define resize_term resizeterm
+#endif
+int main(void) { resize_term(0, 0); return curses_version(); }
 EOF
   if $cc $ARCH_CFLAGS -o $TMPE $TMPC -lcurses > /dev/null 2> /dev/null ; then
     curses=yes
@@ -1210,6 +1252,53 @@ EOF
   fi
 fi
 
+#
+# Check for xxxat() functions when we are building linux-user
+# emulator.  This is done because older glibc versions don't
+# have syscall stubs for these implemented.
+#
+atfile=no
+if [ "$linux_user" = "yes" ] ; then
+  cat > $TMPC << EOF
+#define _ATFILE_SOURCE
+#include <sys/types.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+int
+main(void)
+{
+	/* try to unlink nonexisting file */
+	return (unlinkat(AT_FDCWD, "nonexistent_file", 0));
+}
+EOF
+  if $cc $ARCH_CFLAGS -o $TMPE $TMPC 2> /dev/null ; then
+    atfile=yes
+  fi
+fi
+
+# Check for inotify functions when we are building linux-user
+# emulator.  This is done because older glibc versions don't
+# have syscall stubs for these implemented.  In that case we
+# don't provide them even if kernel supports them.
+#
+inotify=no
+if [ "$linux_user" = "yes" ] ; then
+  cat > $TMPC << EOF
+#include <sys/inotify.h>
+
+int
+main(void)
+{
+	/* try to start inotify */
+	return inotify_init();
+}
+EOF
+  if $cc $ARCH_CFLAGS -o $TMPE $TMPC 2> /dev/null ; then
+    inotify=yes
+  fi
+fi
+
 ##########################################
 # signalfd probe
 cat > $TMPC << EOF
@@ -1297,6 +1386,7 @@ echo "install           $install"
 echo "host CPU          $cpu"
 echo "host big endian   $bigendian"
 echo "target list       $target_list"
+echo "tcg debug enabled $debug_tcg"
 echo "gprof enabled     $gprof"
 echo "sparse enabled    $sparse"
 echo "strip binaries    $strip_opt"
@@ -1329,7 +1419,7 @@ if test -n "$sparc_cpu"; then
     echo "Target Sparc Arch $sparc_cpu"
 fi
 echo "kqemu support     $kqemu"
-echo "kvm support       $kvm"
+echo "xen support       $xen"
 echo "CPU emulation     $cpu_emulation"
 echo "brlapi support    $brlapi"
 echo "Documentation     $build_docs"
@@ -1374,6 +1464,9 @@ echo "docdir=\${prefix}$docsuffix" >> $config_mak
 echo "#define CONFIG_QEMU_SHAREDIR \"$prefix$datasuffix\"" >> $config_h
 echo "MAKE=$make" >> $config_mak
 echo "INSTALL=$install" >> $config_mak
+echo "INSTALL_DIR=$install -d -m0755 -p" >> $config_mak
+echo "INSTALL_DATA=$install -m0644 -p" >> $config_mak
+echo "INSTALL_PROG=$install -m0755 -p" >> $config_mak
 echo "CC=$cc" >> $config_mak
 echo "HOST_CC=$host_cc" >> $config_mak
 echo "AR=$ar" >> $config_mak
@@ -1458,6 +1551,9 @@ case "$cpu" in
     exit 1
   ;;
 esac
+if test "$debug_tcg" = "yes" ; then
+  echo "#define DEBUG_TCG 1" >> $config_h
+fi
 if test "$sparse" = "yes" ; then
   echo "CC      := REAL_CC=\"\$(CC)\" cgcc"       >> $config_mak
   echo "HOST_CC := REAL_CC=\"\$(HOST_CC)\" cgcc"  >> $config_mak
@@ -1585,6 +1681,8 @@ echo "VERSION=$qemu_version" >>$config_mak
 echo "#define QEMU_VERSION \"$qemu_version\"" >> $config_h
 echo "#define KVM_VERSION \"kvm-devel\"" >> $config_h
 
+echo "#define QEMU_PKGVERSION \"$pkgversion\"" >> $config_h
+
 echo "SRC_PATH=$source_path" >> $config_mak
 if [ "$source_path_used" = "yes" ]; then
   echo "VPATH=$source_path" >> $config_mak
@@ -1623,6 +1721,12 @@ if test "$curses" = "yes" ; then
   echo "CONFIG_CURSES=yes" >> $config_mak
   echo "CURSES_LIBS=-lcurses" >> $config_mak
 fi
+if test "$atfile" = "yes" ; then
+  echo "#define CONFIG_ATFILE 1" >> $config_h
+fi
+if test "$inotify" = "yes" ; then
+  echo "#define CONFIG_INOTIFY 1" >> $config_h
+fi
 if test "$brlapi" = "yes" ; then
   echo "CONFIG_BRLAPI=yes" >> $config_mak
   echo "#define CONFIG_BRLAPI 1" >> $config_h
@@ -1633,6 +1737,9 @@ if test "$bluez" = "yes" ; then
   echo "CONFIG_BLUEZ_CFLAGS=$bluez_cflags" >> $config_mak
   echo "CONFIG_BLUEZ_LIBS=$bluez_libs" >> $config_mak
   echo "#define CONFIG_BLUEZ 1" >> $config_h
+fi
+if test "$xen" = "yes" ; then
+  echo "XEN_LIBS=-lxenstore -lxenctrl -lxenguest" >> $config_mak
 fi
 if test "$aio" = "yes" ; then
   echo "#define CONFIG_AIO 1" >> $config_h
@@ -1826,12 +1933,18 @@ case "$target_cpu" in
     echo "#define TARGET_I386 1" >> $config_h
     if test $kqemu = "yes" -a "$target_softmmu" = "yes"
     then
-      echo "#define USE_KQEMU 1" >> $config_h
+      echo "CONFIG_KQEMU=yes" >> $config_mak
+      echo "#define CONFIG_KQEMU 1" >> $config_h
     fi
     if test "$kvm" = "yes" ; then
       echo "USE_KVM=yes" >> $config_mak
       echo "KVM_CFLAGS=$kvm_cflags" >> $config_mak
       echo "#define USE_KVM 1" >> $config_h
+    fi
+    if test "$xen" = "yes" -a "$target_softmmu" = "yes";
+    then
+      echo "CONFIG_XEN=yes" >> $config_mak
+      echo "#define CONFIG_XEN 1" >> $config_h
     fi
     configure_kvm
   ;;
@@ -1842,7 +1955,8 @@ case "$target_cpu" in
     echo "#define TARGET_X86_64 1" >> $config_h
     if test $kqemu = "yes" -a "$target_softmmu" = "yes" -a $cpu = "x86_64"
     then
-      echo "#define USE_KQEMU 1" >> $config_h
+      echo "CONFIG_KQEMU=yes" >> $config_mak
+      echo "#define CONFIG_KQEMU 1" >> $config_h
     fi
     configure_kvm
   ;;
@@ -1857,6 +1971,11 @@ case "$target_cpu" in
       echo "KVM_CFLAGS=$kvm_cflags" >> $config_mak
       echo "#define USE_KVM 1" >> $config_h
     fi
+    fi
+    if test "$xen" = "yes" -a "$target_softmmu" = "yes"
+    then
+      echo "CONFIG_XEN=yes" >> $config_mak
+      echo "#define CONFIG_XEN 1" >> $config_h
     fi
   ;;
   alpha)

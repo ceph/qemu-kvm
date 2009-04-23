@@ -140,6 +140,8 @@ int main(int argc, char **argv)
 #include "hw/isa.h"
 #include "hw/baum.h"
 #include "hw/bt.h"
+#include "hw/smbios.h"
+#include "hw/xen.h"
 #include "bt-host.h"
 #include "net.h"
 #include "monitor.h"
@@ -219,6 +221,7 @@ static int rtc_date_offset = -1; /* -1 means no change */
 int cirrus_vga_enabled = 1;
 int std_vga_enabled = 0;
 int vmsvga_enabled = 0;
+int xenfb_enabled = 0;
 #ifdef TARGET_SPARC
 int graphic_width = 1024;
 int graphic_height = 768;
@@ -279,6 +282,10 @@ const char *prom_envs[MAX_PROM_ENVS];
 int nb_drives_opt;
 const char *nvram = NULL;
 struct drive_opt drives_opt[MAX_DRIVES];
+
+int nb_numa_nodes;
+uint64_t node_mem[MAX_NODES];
+uint64_t node_cpumask[MAX_NODES];
 
 static CPUState *cur_cpu;
 static CPUState *next_cpu;
@@ -460,7 +467,7 @@ void cpu_outb(CPUState *env, int addr, int val)
 {
     LOG_IOPORT("outb: %04x %02x\n", addr, val);
     ioport_write(0, addr, val);
-#ifdef USE_KQEMU
+#ifdef CONFIG_KQEMU
     if (env)
         env->last_io_time = cpu_get_time_fast();
 #endif
@@ -470,7 +477,7 @@ void cpu_outw(CPUState *env, int addr, int val)
 {
     LOG_IOPORT("outw: %04x %04x\n", addr, val);
     ioport_write(1, addr, val);
-#ifdef USE_KQEMU
+#ifdef CONFIG_KQEMU
     if (env)
         env->last_io_time = cpu_get_time_fast();
 #endif
@@ -480,7 +487,7 @@ void cpu_outl(CPUState *env, int addr, int val)
 {
     LOG_IOPORT("outl: %04x %08x\n", addr, val);
     ioport_write(2, addr, val);
-#ifdef USE_KQEMU
+#ifdef CONFIG_KQEMU
     if (env)
         env->last_io_time = cpu_get_time_fast();
 #endif
@@ -491,7 +498,7 @@ int cpu_inb(CPUState *env, int addr)
     int val;
     val = ioport_read(0, addr);
     LOG_IOPORT("inb : %04x %02x\n", addr, val);
-#ifdef USE_KQEMU
+#ifdef CONFIG_KQEMU
     if (env)
         env->last_io_time = cpu_get_time_fast();
 #endif
@@ -503,7 +510,7 @@ int cpu_inw(CPUState *env, int addr)
     int val;
     val = ioport_read(1, addr);
     LOG_IOPORT("inw : %04x %04x\n", addr, val);
-#ifdef USE_KQEMU
+#ifdef CONFIG_KQEMU
     if (env)
         env->last_io_time = cpu_get_time_fast();
 #endif
@@ -515,7 +522,7 @@ int cpu_inl(CPUState *env, int addr)
     int val;
     val = ioport_read(2, addr);
     LOG_IOPORT("inl : %04x %08x\n", addr, val);
-#ifdef USE_KQEMU
+#ifdef CONFIG_KQEMU
     if (env)
         env->last_io_time = cpu_get_time_fast();
 #endif
@@ -1383,7 +1390,7 @@ static void host_alarm_handler(int host_signum)
         if (env) {
             /* stop the currently executing cpu because a timer occured */
             cpu_exit(env);
-#ifdef USE_KQEMU
+#ifdef CONFIG_KQEMU
             if (env->kqemu_enabled) {
                 kqemu_cpu_interrupt(env);
             }
@@ -1891,12 +1898,12 @@ static int socket_init(void)
 }
 #endif
 
-const char *get_opt_name(char *buf, int buf_size, const char *p)
+const char *get_opt_name(char *buf, int buf_size, const char *p, char delim)
 {
     char *q;
 
     q = buf;
-    while (*p != '\0' && *p != '=') {
+    while (*p != '\0' && *p != delim) {
         if (q && (q - buf) < buf_size - 1)
             *q++ = *p;
         p++;
@@ -1936,7 +1943,7 @@ int get_param_value(char *buf, int buf_size,
 
     p = str;
     for(;;) {
-        p = get_opt_name(option, sizeof(option), p);
+        p = get_opt_name(option, sizeof(option), p, '=');
         if (*p != '=')
             break;
         p++;
@@ -1960,8 +1967,8 @@ int check_params(char *buf, int buf_size,
     int i;
 
     p = str;
-    for(;;) {
-        p = get_opt_name(buf, buf_size, p);
+    while (*p != '\0') {
+        p = get_opt_name(buf, buf_size, p, '=');
         if (*p != '=')
             return -1;
         p++;
@@ -2394,7 +2401,10 @@ int drive_init(struct drive_opt *arg, int snapshot, void *opaque)
         } else if (!strcmp(buf, "virtio")) {
             type = IF_VIRTIO;
             max_devs = 0;
-        } else {
+	} else if (!strcmp(buf, "xen")) {
+	    type = IF_XEN;
+            max_devs = 0;
+	} else {
             fprintf(stderr, "qemu: '%s' unsupported bus type '%s'\n", str, buf);
             return -1;
 	}
@@ -2621,6 +2631,7 @@ int drive_init(struct drive_opt *arg, int snapshot, void *opaque)
     switch(type) {
     case IF_IDE:
     case IF_SCSI:
+    case IF_XEN:
         switch(media) {
 	case MEDIA_DISK:
             if (cyls != 0) {
@@ -2665,6 +2676,62 @@ int drive_init(struct drive_opt *arg, int snapshot, void *opaque)
     if (bdrv_key_required(bdrv))
         autostart = 0;
     return drives_table_idx;
+}
+
+static void numa_add(const char *optarg)
+{
+    char option[128];
+    char *endptr;
+    unsigned long long value, endvalue;
+    int nodenr;
+
+    optarg = get_opt_name(option, 128, optarg, ',') + 1;
+    if (!strcmp(option, "node")) {
+        if (get_param_value(option, 128, "nodeid", optarg) == 0) {
+            nodenr = nb_numa_nodes;
+        } else {
+            nodenr = strtoull(option, NULL, 10);
+        }
+
+        if (get_param_value(option, 128, "mem", optarg) == 0) {
+            node_mem[nodenr] = 0;
+        } else {
+            value = strtoull(option, &endptr, 0);
+            switch (*endptr) {
+            case 0: case 'M': case 'm':
+                value <<= 20;
+                break;
+            case 'G': case 'g':
+                value <<= 30;
+                break;
+            }
+            node_mem[nodenr] = value;
+        }
+        if (get_param_value(option, 128, "cpus", optarg) == 0) {
+            node_cpumask[nodenr] = 0;
+        } else {
+            value = strtoull(option, &endptr, 10);
+            if (value >= 64) {
+                value = 63;
+                fprintf(stderr, "only 64 CPUs in NUMA mode supported.\n");
+            } else {
+                if (*endptr == '-') {
+                    endvalue = strtoull(endptr+1, &endptr, 10);
+                    if (endvalue >= 63) {
+                        endvalue = 62;
+                        fprintf(stderr,
+                            "only 63 CPUs in NUMA mode supported.\n");
+                    }
+                    value = (1 << (endvalue + 1)) - (1 << value);
+                } else {
+                    value = 1 << value;
+                }
+            }
+            node_cpumask[nodenr] = value;
+        }
+        nb_numa_nodes++;
+    }
+    return;
 }
 
 /***********************************************************/
@@ -3135,12 +3202,12 @@ static int ram_load_v1(QEMUFile *f, void *opaque)
     int ret;
     ram_addr_t i;
 
-    if (qemu_get_be32(f) != phys_ram_size)
+    if (qemu_get_be32(f) != last_ram_offset)
         return -EINVAL;
-    for(i = 0; i < phys_ram_size; i+= TARGET_PAGE_SIZE) {
+    for(i = 0; i < last_ram_offset; i+= TARGET_PAGE_SIZE) {
         if (kvm_enabled() && (i>=0xa0000) && (i<0xc0000)) /* do not access video-addresses */
             continue;
-        ret = ram_get_page(f, phys_ram_base + i, TARGET_PAGE_SIZE);
+        ret = ram_get_page(f, qemu_get_ram_ptr(i), TARGET_PAGE_SIZE);
         if (ret)
             return ret;
     }
@@ -3225,7 +3292,7 @@ static int ram_save_block(QEMUFile *f)
     ram_addr_t addr = 0;
     int found = 0;
 
-    while (addr < phys_ram_size) {
+    while (addr < last_ram_offset) {
         if (kvm_enabled() && current_addr == 0) {
             int r;
             r = kvm_update_dirty_pages_log();
@@ -3236,27 +3303,27 @@ static int ram_save_block(QEMUFile *f)
             }
         }
         if (cpu_physical_memory_get_dirty(current_addr, MIGRATION_DIRTY_FLAG)) {
-            uint8_t ch;
+            uint8_t *p;
 
             cpu_physical_memory_reset_dirty(current_addr,
                                             current_addr + TARGET_PAGE_SIZE,
                                             MIGRATION_DIRTY_FLAG);
 
-            ch = *(phys_ram_base + current_addr);
+            p = qemu_get_ram_ptr(current_addr);
 
-            if (is_dup_page(phys_ram_base + current_addr, ch)) {
+            if (is_dup_page(p, *p)) {
                 qemu_put_be64(f, current_addr | RAM_SAVE_FLAG_COMPRESS);
-                qemu_put_byte(f, ch);
+                qemu_put_byte(f, *p);
             } else {
                 qemu_put_be64(f, current_addr | RAM_SAVE_FLAG_PAGE);
-                qemu_put_buffer(f, phys_ram_base + current_addr, TARGET_PAGE_SIZE);
+                qemu_put_buffer(f, p, TARGET_PAGE_SIZE);
             }
 
             found = 1;
             break;
         }
         addr += TARGET_PAGE_SIZE;
-        current_addr = (saved_addr + addr) % phys_ram_size;
+        current_addr = (saved_addr + addr) % last_ram_offset;
     }
 
     return found;
@@ -3269,7 +3336,7 @@ static ram_addr_t ram_save_remaining(void)
     ram_addr_t addr;
     ram_addr_t count = 0;
 
-    for (addr = 0; addr < phys_ram_size; addr += TARGET_PAGE_SIZE) {
+    for (addr = 0; addr < last_ram_offset; addr += TARGET_PAGE_SIZE) {
         if (cpu_physical_memory_get_dirty(addr, MIGRATION_DIRTY_FLAG))
             count++;
     }
@@ -3283,7 +3350,7 @@ static int ram_save_live(QEMUFile *f, int stage, void *opaque)
 
     if (stage == 1) {
         /* Make sure all dirty bits are set */
-        for (addr = 0; addr < phys_ram_size; addr += TARGET_PAGE_SIZE) {
+        for (addr = 0; addr < last_ram_offset; addr += TARGET_PAGE_SIZE) {
             if (!cpu_physical_memory_get_dirty(addr, MIGRATION_DIRTY_FLAG))
                 cpu_physical_memory_set_dirty(addr);
         }
@@ -3291,7 +3358,7 @@ static int ram_save_live(QEMUFile *f, int stage, void *opaque)
         /* Enable dirty memory tracking */
         cpu_physical_memory_set_dirty_tracking(1);
 
-        qemu_put_be64(f, phys_ram_size | RAM_SAVE_FLAG_MEM_SIZE);
+        qemu_put_be64(f, last_ram_offset | RAM_SAVE_FLAG_MEM_SIZE);
     }
 
     while (!qemu_file_rate_limit(f)) {
@@ -3324,7 +3391,7 @@ static int ram_load_dead(QEMUFile *f, void *opaque)
 
     if (ram_decompress_open(s, f) < 0)
         return -EINVAL;
-    for(i = 0; i < phys_ram_size; i+= BDRV_HASH_BLOCK_SIZE) {
+    for(i = 0; i < last_ram_offset; i+= BDRV_HASH_BLOCK_SIZE) {
         if (kvm_enabled() && (i>=0xa0000) && (i<0xc0000)) /* do not access video-addresses */
             continue;
         if (ram_decompress_buf(s, buf, 1) < 0) {
@@ -3332,7 +3399,8 @@ static int ram_load_dead(QEMUFile *f, void *opaque)
             goto error;
         }
         if (buf[0] == 0) {
-            if (ram_decompress_buf(s, phys_ram_base + i, BDRV_HASH_BLOCK_SIZE) < 0) {
+            if (ram_decompress_buf(s, qemu_get_ram_ptr(i),
+                                   BDRV_HASH_BLOCK_SIZE) < 0) {
                 fprintf(stderr, "Error while reading ram block address=0x%08" PRIx64, (uint64_t)i);
                 goto error;
             }
@@ -3356,7 +3424,7 @@ static int ram_load(QEMUFile *f, void *opaque, int version_id)
         return ram_load_v1(f, opaque);
 
     if (version_id == 2) {
-        if (qemu_get_be32(f) != phys_ram_size)
+        if (qemu_get_be32(f) != last_ram_offset)
             return -EINVAL;
         return ram_load_dead(f, opaque);
     }
@@ -3371,7 +3439,7 @@ static int ram_load(QEMUFile *f, void *opaque, int version_id)
         addr &= TARGET_PAGE_MASK;
 
         if (flags & RAM_SAVE_FLAG_MEM_SIZE) {
-            if (addr != phys_ram_size)
+            if (addr != last_ram_offset)
                 return -EINVAL;
         }
 
@@ -3382,9 +3450,9 @@ static int ram_load(QEMUFile *f, void *opaque, int version_id)
         
         if (flags & RAM_SAVE_FLAG_COMPRESS) {
             uint8_t ch = qemu_get_byte(f);
-            memset(phys_ram_base + addr, ch, TARGET_PAGE_SIZE);
+            memset(qemu_get_ram_ptr(addr), ch, TARGET_PAGE_SIZE);
         } else if (flags & RAM_SAVE_FLAG_PAGE)
-            qemu_get_buffer(f, phys_ram_base + addr, TARGET_PAGE_SIZE);
+            qemu_get_buffer(f, qemu_get_ram_ptr(addr), TARGET_PAGE_SIZE);
     } while (!(flags & RAM_SAVE_FLAG_EOS));
 
     return 0;
@@ -3395,7 +3463,7 @@ void qemu_service_io(void)
     CPUState *env = cpu_single_env;
     if (env) {
         cpu_exit(env);
-#ifdef USE_KQEMU
+#ifdef CONFIG_KQEMU
         if (env->kqemu_enabled) {
             kqemu_cpu_interrupt(env);
         }
@@ -3681,6 +3749,8 @@ void qemu_system_reset(void)
     for(re = first_reset_entry; re != NULL; re = re->next) {
         re->func(re->opaque);
     }
+    if (kvm_enabled())
+        kvm_sync_vcpus();
 }
 
 void qemu_system_reset_request(void)
@@ -4030,11 +4100,15 @@ static int main_loop(void)
     return ret;
 }
 
+static void version(void)
+{
+    printf("QEMU PC emulator version " QEMU_VERSION " (" KVM_VERSION ")" QEMU_PKGVERSION ", Copyright (c) 2003-2008 Fabrice Bellard\n");
+}
+
 static void help(int exitcode)
 {
-    printf("QEMU PC emulator version " QEMU_VERSION " (" KVM_VERSION ")"
-           ", Copyright (c) 2003-2008 Fabrice Bellard\n"
-           "usage: %s [options] [disk_image]\n"
+    version();
+    printf("usage: %s [options] [disk_image]\n"
            "\n"
            "'disk_image' is a raw hard image image for IDE hard disk 0\n"
            "\n"
@@ -4239,23 +4313,19 @@ static void select_vgahw (const char *p)
 {
     const char *opts;
 
+    cirrus_vga_enabled = 0;
+    std_vga_enabled = 0;
+    vmsvga_enabled = 0;
+    xenfb_enabled = 0;
     if (strstart(p, "std", &opts)) {
         std_vga_enabled = 1;
-        cirrus_vga_enabled = 0;
-        vmsvga_enabled = 0;
     } else if (strstart(p, "cirrus", &opts)) {
         cirrus_vga_enabled = 1;
-        std_vga_enabled = 0;
-        vmsvga_enabled = 0;
     } else if (strstart(p, "vmware", &opts)) {
-        cirrus_vga_enabled = 0;
-        std_vga_enabled = 0;
         vmsvga_enabled = 1;
-    } else if (strstart(p, "none", &opts)) {
-        cirrus_vga_enabled = 0;
-        std_vga_enabled = 0;
-        vmsvga_enabled = 0;
-    } else {
+    } else if (strstart(p, "xenfb", &opts)) {
+        xenfb_enabled = 1;
+    } else if (!strstart(p, "none", &opts)) {
     invalid_vga:
         fprintf(stderr, "Unknown vga type: %s\n", p);
         exit(1);
@@ -4283,7 +4353,7 @@ static BOOL WINAPI qemu_ctrl_handler(DWORD type)
 }
 #endif
 
-static int qemu_uuid_parse(const char *str, uint8_t *uuid)
+int qemu_uuid_parse(const char *str, uint8_t *uuid)
 {
     int ret;
 
@@ -4296,6 +4366,10 @@ static int qemu_uuid_parse(const char *str, uint8_t *uuid)
 
     if(ret != 16)
         return -1;
+
+#ifdef TARGET_I386
+    smbios_add_field(1, offsetof(struct smbios_type_1, uuid), 16, uuid);
+#endif
 
     return 0;
 }
@@ -4482,6 +4556,7 @@ int main(int argc, char **argv, char **envp)
     const char *chroot_dir = NULL;
     const char *run_as = NULL;
 #endif
+    CPUState *env;
 
     qemu_cache_utils_init(envp);
 
@@ -4545,6 +4620,11 @@ int main(int argc, char **argv, char **envp)
         virtio_consoles[i] = NULL;
     virtio_console_index = 0;
 
+    for (i = 0; i < MAX_NODES; i++) {
+        node_mem[i] = 0;
+        node_cpumask[i] = 0;
+    }
+
     usb_devices_index = 0;
     assigned_devices_index = 0;
 
@@ -4552,6 +4632,7 @@ int main(int argc, char **argv, char **envp)
     nb_bt_opts = 0;
     nb_drives = 0;
     nb_drives_opt = 0;
+    nb_numa_nodes = 0;
     hda_index = -1;
 
     nb_nics = 0;
@@ -4701,6 +4782,13 @@ int main(int argc, char **argv, char **envp)
 			             ",trans=none" : "");
                 }
                 break;
+            case QEMU_OPTION_numa:
+                if (nb_numa_nodes >= MAX_NODES) {
+                    fprintf(stderr, "qemu: too many NUMA nodes\n");
+                    exit(1);
+                }
+                numa_add(optarg);
+                break;
             case QEMU_OPTION_nographic:
                 nographic = 1;
                 break;
@@ -4782,7 +4870,7 @@ int main(int argc, char **argv, char **envp)
                 break;
 #endif
             case QEMU_OPTION_redir:
-                net_slirp_redir(optarg);
+                net_slirp_redir(NULL, optarg);
                 break;
 #endif
             case QEMU_OPTION_bt:
@@ -4804,6 +4892,10 @@ int main(int argc, char **argv, char **envp)
             case QEMU_OPTION_h:
                 help(0);
                 break;
+            case QEMU_OPTION_version:
+                version();
+                exit(0);
+                break;
             case QEMU_OPTION_m: {
                 uint64_t value;
                 char *ptr;
@@ -4823,7 +4915,7 @@ int main(int argc, char **argv, char **envp)
 
                 /* On 32-bit hosts, QEMU is limited by virtual address space */
                 if (value > (2047 << 20)
-#ifndef USE_KQEMU
+#ifndef CONFIG_KQEMU
                     && HOST_LONG_BITS == 32
 #endif
                     ) {
@@ -4991,8 +5083,14 @@ int main(int argc, char **argv, char **envp)
                     exit(1);
                 }
                 break;
+            case QEMU_OPTION_smbios:
+                if(smbios_entry_add(optarg) < 0) {
+                    fprintf(stderr, "Wrong smbios provided\n");
+                    exit(1);
+                }
+                break;
 #endif
-#ifdef USE_KQEMU
+#ifdef CONFIG_KQEMU
             case QEMU_OPTION_no_kqemu:
                 kqemu_allowed = 0;
                 break;
@@ -5003,7 +5101,7 @@ int main(int argc, char **argv, char **envp)
 #ifdef CONFIG_KVM
             case QEMU_OPTION_enable_kvm:
                 kvm_allowed = 1;
-#ifdef USE_KQEMU
+#ifdef CONFIG_KQEMU
                 kqemu_allowed = 0;
 #endif
                 break;
@@ -5208,11 +5306,22 @@ int main(int argc, char **argv, char **envp)
                 nvram = optarg;
                 break;
 #endif
+#ifdef CONFIG_XEN
+            case QEMU_OPTION_xen_domid:
+                xen_domid = atoi(optarg);
+                break;
+            case QEMU_OPTION_xen_create:
+                xen_mode = XEN_CREATE;
+                break;
+            case QEMU_OPTION_xen_attach:
+                xen_mode = XEN_ATTACH;
+                break;
+#endif
             }
         }
     }
 
-#if defined(CONFIG_KVM) && defined(USE_KQEMU)
+#if defined(CONFIG_KVM) && defined(CONFIG_KQEMU)
     if (kvm_allowed && kqemu_allowed) {
         fprintf(stderr,
                 "You can not enable both KVM and kqemu at the same time\n");
@@ -5304,7 +5413,7 @@ int main(int argc, char **argv, char **envp)
     }
 #endif
 
-#ifdef USE_KQEMU
+#ifdef CONFIG_KQEMU
     if (smp_cpus > 1)
         kqemu_allowed = 0;
 #endif
@@ -5393,46 +5502,29 @@ int main(int argc, char **argv, char **envp)
         if (bt_parse(bt_opts[i]))
             exit(1);
 
+    if (ram_size == 0)
+        ram_size = DEFAULT_RAM_SIZE * 1024 * 1024;
+
     /* init the memory */
-    phys_ram_size = machine->ram_require & ~RAMSIZE_FIXED;
-
-    if (machine->ram_require & RAMSIZE_FIXED) {
-        if (ram_size > 0) {
-            if (ram_size < phys_ram_size) {
-                fprintf(stderr, "Machine `%s' requires %llu bytes of memory\n",
-                                machine->name, (unsigned long long) phys_ram_size);
-                exit(-1);
-            }
-
-            phys_ram_size = ram_size;
-        } else
-            ram_size = phys_ram_size;
-    } else {
-        if (ram_size == 0)
-            ram_size = DEFAULT_RAM_SIZE * 1024 * 1024;
-
-        phys_ram_size += ram_size;
-    }
-
-    /* Initialize kvm */
-#if defined(TARGET_I386) || defined(TARGET_X86_64)
-#define KVM_EXTRA_PAGES 3
-#else
-#define KVM_EXTRA_PAGES 0
-#endif
     if (kvm_enabled()) {
-	    phys_ram_size += KVM_EXTRA_PAGES * TARGET_PAGE_SIZE;
 	    if (kvm_qemu_create_context() < 0) {
 		    fprintf(stderr, "Could not create KVM context\n");
 		    exit(1);
 	    }
     }
 
-    phys_ram_base = qemu_alloc_physram(phys_ram_size);
-    if (!phys_ram_base) {
-        fprintf(stderr, "Could not allocate physical memory\n");
-        exit(1);
+#ifdef CONFIG_KQEMU
+    /* FIXME: This is a nasty hack because kqemu can't cope with dynamic
+       guest ram allocation.  It needs to go away.  */
+    if (kqemu_allowed) {
+        kqemu_phys_ram_size = ram_size + VGA_RAM_SIZE + 4 * 1024 * 1024;
+        kqemu_phys_ram_base = qemu_vmalloc(kqemu_phys_ram_size);
+        if (!kqemu_phys_ram_base) {
+            fprintf(stderr, "Could not allocate physical memory\n");
+            exit(1);
+        }
     }
+#endif
 
     /* init the dynamic translator */
     cpu_exec_init_all(tb_size * 1024 * 1024);
@@ -5482,6 +5574,48 @@ int main(int argc, char **argv, char **envp)
                 monitor_device = NULL;
                 serial_devices[i] = "mon:stdio";
                 break;
+            }
+        }
+    }
+
+    if (nb_numa_nodes > 0) {
+        int i;
+
+        if (nb_numa_nodes > smp_cpus) {
+            nb_numa_nodes = smp_cpus;
+        }
+
+        /* If no memory size if given for any node, assume the default case
+         * and distribute the available memory equally across all nodes
+         */
+        for (i = 0; i < nb_numa_nodes; i++) {
+            if (node_mem[i] != 0)
+                break;
+        }
+        if (i == nb_numa_nodes) {
+            uint64_t usedmem = 0;
+
+            /* On Linux, the each node's border has to be 8MB aligned,
+             * the final node gets the rest.
+             */
+            for (i = 0; i < nb_numa_nodes - 1; i++) {
+                node_mem[i] = (ram_size / nb_numa_nodes) & ~((1 << 23UL) - 1);
+                usedmem += node_mem[i];
+            }
+            node_mem[i] = ram_size - usedmem;
+        }
+
+        for (i = 0; i < nb_numa_nodes; i++) {
+            if (node_cpumask[i] != 0)
+                break;
+        }
+        /* assigning the VCPUs round-robin is easier to implement, guest OSes
+         * must cope with this anyway, because there are BIOSes out there in
+         * real machines which also use this scheme.
+         */
+        if (i == nb_numa_nodes) {
+            for (i = 0; i < smp_cpus; i++) {
+                node_cpumask[i % nb_numa_nodes] |= 1 << i;
             }
         }
     }
@@ -5553,6 +5687,15 @@ int main(int argc, char **argv, char **envp)
 
     machine->init(ram_size, vga_ram_size, boot_devices,
                   kernel_filename, kernel_cmdline, initrd_filename, cpu_model);
+
+
+    for (env = first_cpu; env != NULL; env = env->next_cpu) {
+        for (i = 0; i < nb_numa_nodes; i++) {
+            if (node_cpumask[i] & (1 << env->cpu_index)) {
+                env->numa_node = i;
+            }
+        }
+    }
 
     current_machine = machine;
 

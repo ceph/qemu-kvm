@@ -83,9 +83,6 @@
 #define CFG_ADDR             0xd00000510ULL
 #define FW_CFG_SUN4M_DEPTH   (FW_CFG_ARCH_LOCAL + 0x00)
 
-// Control plane, 8-bit and 24-bit planes
-#define TCX_SIZE             (9 * 1024 * 1024)
-
 #define MAX_CPUS 16
 #define MAX_PILS 16
 
@@ -382,7 +379,7 @@ static void sun4m_hw_init(const struct sun4m_hwdef *hwdef, ram_addr_t RAM_size,
     qemu_irq *esp_reset, *le_reset;
     qemu_irq *fdc_tc;
     qemu_irq *cpu_halt;
-    ram_addr_t ram_offset, prom_offset, tcx_offset, idreg_offset;
+    ram_addr_t ram_offset, prom_offset, idreg_offset;
     unsigned long kernel_size;
     int ret;
     char buf[1024];
@@ -478,9 +475,8 @@ static void sun4m_hw_init(const struct sun4m_hwdef *hwdef, ram_addr_t RAM_size,
         fprintf(stderr, "qemu: Unsupported depth: %d\n", graphic_depth);
         exit (1);
     }
-    tcx_offset = qemu_ram_alloc(hwdef->vram_size);
-    tcx_init(hwdef->tcx_base, phys_ram_base + tcx_offset, tcx_offset,
-             hwdef->vram_size, graphic_width, graphic_height, graphic_depth);
+    tcx_init(hwdef->tcx_base, hwdef->vram_size, graphic_width, graphic_height,
+             graphic_depth);
 
     lance_init(&nd_table[0], hwdef->le_base, ledma, *ledma_irq, le_reset);
 
@@ -1029,7 +1025,6 @@ QEMUMachine ss5_machine = {
     .name = "SS-5",
     .desc = "Sun4m platform, SPARCstation 5",
     .init = ss5_init,
-    .ram_require = PROM_SIZE_MAX + TCX_SIZE,
     .use_scsi = 1,
 };
 
@@ -1037,7 +1032,6 @@ QEMUMachine ss10_machine = {
     .name = "SS-10",
     .desc = "Sun4m platform, SPARCstation 10",
     .init = ss10_init,
-    .ram_require = PROM_SIZE_MAX + TCX_SIZE,
     .use_scsi = 1,
     .max_cpus = 4,
 };
@@ -1046,7 +1040,6 @@ QEMUMachine ss600mp_machine = {
     .name = "SS-600MP",
     .desc = "Sun4m platform, SPARCserver 600MP",
     .init = ss600mp_init,
-    .ram_require = PROM_SIZE_MAX + TCX_SIZE,
     .use_scsi = 1,
     .max_cpus = 4,
 };
@@ -1055,7 +1048,6 @@ QEMUMachine ss20_machine = {
     .name = "SS-20",
     .desc = "Sun4m platform, SPARCstation 20",
     .init = ss20_init,
-    .ram_require = PROM_SIZE_MAX + TCX_SIZE,
     .use_scsi = 1,
     .max_cpus = 4,
 };
@@ -1064,7 +1056,6 @@ QEMUMachine voyager_machine = {
     .name = "Voyager",
     .desc = "Sun4m platform, SPARCstation Voyager",
     .init = vger_init,
-    .ram_require = PROM_SIZE_MAX + TCX_SIZE,
     .use_scsi = 1,
 };
 
@@ -1072,7 +1063,6 @@ QEMUMachine ss_lx_machine = {
     .name = "LX",
     .desc = "Sun4m platform, SPARCstation LX",
     .init = ss_lx_init,
-    .ram_require = PROM_SIZE_MAX + TCX_SIZE,
     .use_scsi = 1,
 };
 
@@ -1080,7 +1070,6 @@ QEMUMachine ss4_machine = {
     .name = "SS-4",
     .desc = "Sun4m platform, SPARCstation 4",
     .init = ss4_init,
-    .ram_require = PROM_SIZE_MAX + TCX_SIZE,
     .use_scsi = 1,
 };
 
@@ -1088,7 +1077,6 @@ QEMUMachine scls_machine = {
     .name = "SPARCClassic",
     .desc = "Sun4m platform, SPARCClassic",
     .init = scls_init,
-    .ram_require = PROM_SIZE_MAX + TCX_SIZE,
     .use_scsi = 1,
 };
 
@@ -1096,7 +1084,6 @@ QEMUMachine sbook_machine = {
     .name = "SPARCbook",
     .desc = "Sun4m platform, SPARCbook",
     .init = sbook_init,
-    .ram_require = PROM_SIZE_MAX + TCX_SIZE,
     .use_scsi = 1,
 };
 
@@ -1183,7 +1170,7 @@ static void sun4d_hw_init(const struct sun4d_hwdef *hwdef, ram_addr_t RAM_size,
     qemu_irq *cpu_irqs[MAX_CPUS], *sbi_irq, *sbi_cpu_irq,
         *espdma_irq, *ledma_irq;
     qemu_irq *esp_reset, *le_reset;
-    ram_addr_t ram_offset, prom_offset, tcx_offset;
+    ram_addr_t ram_offset, prom_offset;
     unsigned long kernel_size;
     int ret;
     char buf[1024];
@@ -1264,9 +1251,8 @@ static void sun4d_hw_init(const struct sun4d_hwdef *hwdef, ram_addr_t RAM_size,
         fprintf(stderr, "qemu: Unsupported depth: %d\n", graphic_depth);
         exit (1);
     }
-    tcx_offset = qemu_ram_alloc(hwdef->vram_size);
-    tcx_init(hwdef->tcx_base, phys_ram_base + tcx_offset, tcx_offset,
-             hwdef->vram_size, graphic_width, graphic_height, graphic_depth);
+    tcx_init(hwdef->tcx_base, hwdef->vram_size, graphic_width, graphic_height,
+             graphic_depth);
 
     lance_init(&nd_table[0], hwdef->le_base, ledma, *ledma_irq, le_reset);
 
@@ -1350,7 +1336,6 @@ QEMUMachine ss1000_machine = {
     .name = "SS-1000",
     .desc = "Sun4d platform, SPARCserver 1000",
     .init = ss1000_init,
-    .ram_require = PROM_SIZE_MAX + TCX_SIZE,
     .use_scsi = 1,
     .max_cpus = 8,
 };
@@ -1359,7 +1344,6 @@ QEMUMachine ss2000_machine = {
     .name = "SS-2000",
     .desc = "Sun4d platform, SPARCcenter 2000",
     .init = ss2000_init,
-    .ram_require = PROM_SIZE_MAX + TCX_SIZE,
     .use_scsi = 1,
     .max_cpus = 20,
 };
@@ -1409,7 +1393,7 @@ static void sun4c_hw_init(const struct sun4c_hwdef *hwdef, ram_addr_t RAM_size,
     qemu_irq *cpu_irqs, *slavio_irq, *espdma_irq, *ledma_irq;
     qemu_irq *esp_reset, *le_reset;
     qemu_irq *fdc_tc;
-    ram_addr_t ram_offset, prom_offset, tcx_offset;
+    ram_addr_t ram_offset, prom_offset;
     unsigned long kernel_size;
     int ret;
     char buf[1024];
@@ -1481,9 +1465,8 @@ static void sun4c_hw_init(const struct sun4c_hwdef *hwdef, ram_addr_t RAM_size,
         fprintf(stderr, "qemu: Unsupported depth: %d\n", graphic_depth);
         exit (1);
     }
-    tcx_offset = qemu_ram_alloc(hwdef->vram_size);
-    tcx_init(hwdef->tcx_base, phys_ram_base + tcx_offset, tcx_offset,
-             hwdef->vram_size, graphic_width, graphic_height, graphic_depth);
+    tcx_init(hwdef->tcx_base, hwdef->vram_size, graphic_width, graphic_height,
+             graphic_depth);
 
     lance_init(&nd_table[0], hwdef->le_base, ledma, *ledma_irq, le_reset);
 
@@ -1569,6 +1552,5 @@ QEMUMachine ss2_machine = {
     .name = "SS-2",
     .desc = "Sun4c platform, SPARCstation 2",
     .init = ss2_init,
-    .ram_require = PROM_SIZE_MAX + TCX_SIZE,
     .use_scsi = 1,
 };

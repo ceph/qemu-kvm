@@ -335,7 +335,7 @@ static int get_char(GDBState *s)
 
 static gdb_syscall_complete_cb gdb_current_syscall_cb;
 
-enum {
+static enum {
     GDB_SYS_UNKNOWN,
     GDB_SYS_ENABLED,
     GDB_SYS_DISABLED,
@@ -1334,11 +1334,11 @@ static const char *get_feature_xml(const char *p, const char **newp)
                      GDB_CORE_XML);
 
             for (r = first_cpu->gdb_regs; r; r = r->next) {
-                strcat(target_xml, "<xi:include href=\"");
-                strcat(target_xml, r->xml);
-                strcat(target_xml, "\"/>");
+                pstrcat(target_xml, sizeof(target_xml), "<xi:include href=\"");
+                pstrcat(target_xml, sizeof(target_xml), r->xml);
+                pstrcat(target_xml, sizeof(target_xml), "\"/>");
             }
-            strcat(target_xml, "</target>");
+            pstrcat(target_xml, sizeof(target_xml), "</target>");
         }
         return target_xml;
     }
@@ -1513,6 +1513,29 @@ static void gdb_breakpoint_remove_all(void)
     }
 }
 
+static void gdb_set_cpu_pc(GDBState *s, target_ulong pc)
+{
+#if defined(TARGET_I386)
+    s->c_cpu->eip = pc;
+    cpu_synchronize_state(s->c_cpu, 1);
+#elif defined (TARGET_PPC)
+    s->c_cpu->nip = pc;
+#elif defined (TARGET_SPARC)
+    s->c_cpu->pc = pc;
+    s->c_cpu->npc = pc + 4;
+#elif defined (TARGET_ARM)
+    s->c_cpu->regs[15] = pc;
+#elif defined (TARGET_SH4)
+    s->c_cpu->pc = pc;
+#elif defined (TARGET_MIPS)
+    s->c_cpu->active_tc.PC = pc;
+#elif defined (TARGET_CRIS)
+    s->c_cpu->pc = pc;
+#elif defined (TARGET_ALPHA)
+    s->c_cpu->pc = pc;
+#endif
+}
+
 static int gdb_handle_packet(GDBState *s, const char *line_buf)
 {
     CPUState *env;
@@ -1543,26 +1566,7 @@ static int gdb_handle_packet(GDBState *s, const char *line_buf)
     case 'c':
         if (*p != '\0') {
             addr = strtoull(p, (char **)&p, 16);
-#if defined(TARGET_I386)
-            s->c_cpu->eip = addr;
-            cpu_synchronize_state(s->c_cpu, 1);
-#elif defined (TARGET_PPC)
-            s->c_cpu->nip = addr;
-            kvm_load_registers(s->c_cpu);
-#elif defined (TARGET_SPARC)
-            s->c_cpu->pc = addr;
-            s->c_cpu->npc = addr + 4;
-#elif defined (TARGET_ARM)
-            s->c_cpu->regs[15] = addr;
-#elif defined (TARGET_SH4)
-            s->c_cpu->pc = addr;
-#elif defined (TARGET_MIPS)
-            s->c_cpu->active_tc.PC = addr;
-#elif defined (TARGET_CRIS)
-            s->c_cpu->pc = addr;
-#elif defined (TARGET_ALPHA)
-            s->c_cpu->pc = addr;
-#endif
+            gdb_set_cpu_pc(s, addr);
         }
         s->signal = 0;
         gdb_continue(s);
@@ -1586,26 +1590,7 @@ static int gdb_handle_packet(GDBState *s, const char *line_buf)
     case 's':
         if (*p != '\0') {
             addr = strtoull(p, (char **)&p, 16);
-#if defined(TARGET_I386)
-            s->c_cpu->eip = addr;
-            cpu_synchronize_state(s->c_cpu, 1);
-#elif defined (TARGET_PPC)
-            s->c_cpu->nip = addr;
-            kvm_load_registers(s->c_cpu);
-#elif defined (TARGET_SPARC)
-            s->c_cpu->pc = addr;
-            s->c_cpu->npc = addr + 4;
-#elif defined (TARGET_ARM)
-            s->c_cpu->regs[15] = addr;
-#elif defined (TARGET_SH4)
-            s->c_cpu->pc = addr;
-#elif defined (TARGET_MIPS)
-            s->c_cpu->active_tc.PC = addr;
-#elif defined (TARGET_CRIS)
-            s->c_cpu->pc = addr;
-#elif defined (TARGET_ALPHA)
-            s->c_cpu->pc = addr;
-#endif
+            gdb_set_cpu_pc(s, addr);
         }
         cpu_single_step(s->c_cpu, sstep_flags);
         gdb_continue(s);
@@ -1854,7 +1839,7 @@ static int gdb_handle_packet(GDBState *s, const char *line_buf)
         if (strncmp(p, "Supported", 9) == 0) {
             snprintf(buf, sizeof(buf), "PacketSize=%x", MAX_PACKET_LENGTH);
 #ifdef GDB_CORE_XML
-            strcat(buf, ";qXfer:features:read+");
+            pstrcat(buf, sizeof(buf), ";qXfer:features:read+");
 #endif
             put_packet(s, buf);
             break;

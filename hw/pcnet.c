@@ -75,6 +75,7 @@ struct PCNetState_st {
     uint8_t buffer[4096];
     int tx_busy;
     qemu_irq irq;
+    qemu_irq *reset_irq;
     void (*phys_mem_read)(void *dma_opaque, target_phys_addr_t addr,
                          uint8_t *buf, int len, int do_bswap);
     void (*phys_mem_write)(void *dma_opaque, target_phys_addr_t addr,
@@ -964,11 +965,11 @@ static void pcnet_rdte_poll(PCNetState *s)
             (BCR_SWSTYLE(s) ? 16 : 8 );
 #endif
 
-        CHECK_RMD(PHYSADDR(s,crda), bad);
+        CHECK_RMD(crda, bad);
         if (!bad) {
-            CHECK_RMD(PHYSADDR(s,nrda), bad);
+            CHECK_RMD(nrda, bad);
             if (bad || (nrda == crda)) nrda = 0;
-            CHECK_RMD(PHYSADDR(s,nnrd), bad);
+            CHECK_RMD(nnrd, bad);
             if (bad || (nnrd == crda)) nnrd = 0;
 
             s->csr[28] = crda & 0xffff;
@@ -980,11 +981,11 @@ static void pcnet_rdte_poll(PCNetState *s)
 #ifdef PCNET_DEBUG
             if (bad) {
                 printf("pcnet: BAD RMD RECORDS AFTER 0x" TARGET_FMT_plx "\n",
-                       PHYSADDR(s,crda));
+                       crda);
             }
         } else {
             printf("pcnet: BAD RMD RDA=0x" TARGET_FMT_plx "\n",
-                   PHYSADDR(s,crda));
+                   crda);
 #endif
         }
     }
@@ -1023,7 +1024,7 @@ static int pcnet_tdte_poll(PCNetState *s)
             (CSR_XMTRL(s) - CSR_XMTRC(s)) *
             (BCR_SWSTYLE(s) ? 16 : 8);
         int bad = 0;
-        CHECK_TMD(PHYSADDR(s, cxda),bad);
+        CHECK_TMD(cxda, bad);
         if (!bad) {
             if (CSR_CXDA(s) != cxda) {
                 s->csr[60] = s->csr[34];
@@ -1034,7 +1035,7 @@ static int pcnet_tdte_poll(PCNetState *s)
             s->csr[34] = cxda & 0xffff;
             s->csr[35] = cxda >> 16;
 #ifdef PCNET_DEBUG_X
-            printf("pcnet: BAD TMD XDA=0x%08x\n", PHYSADDR(s,cxda));
+            printf("pcnet: BAD TMD XDA=0x%08x\n", cxda);
 #endif
         }
     }
@@ -1107,7 +1108,7 @@ static void pcnet_receive(void *opaque, const uint8_t *buf, int size)
                 nrda = s->rdra +
                     (CSR_RCVRL(s) - rcvrc) *
                     (BCR_SWSTYLE(s) ? 16 : 8 );
-                RMDLOAD(&rmd, PHYSADDR(s,nrda));
+                RMDLOAD(&rmd, nrda);
                 if (GET_FIELD(rmd.status, RMDS, OWN)) {
 #ifdef PCNET_DEBUG_RMD
                     printf("pcnet - scan buffer: RCVRC=%d PREV_RCVRC=%d\n",
@@ -1319,12 +1320,12 @@ static void pcnet_transmit(PCNetState *s)
     } else
     if (s->xmit_pos >= 0) {
         struct pcnet_TMD tmd;
-        TMDLOAD(&tmd, PHYSADDR(s,xmit_cxda));
+        TMDLOAD(&tmd, xmit_cxda);
         SET_FIELD(&tmd.misc, TMDM, BUFF, 1);
         SET_FIELD(&tmd.misc, TMDM, UFLO, 1);
         SET_FIELD(&tmd.status, TMDS, ERR, 1);
         SET_FIELD(&tmd.status, TMDS, OWN, 0);
-        TMDSTORE(&tmd, PHYSADDR(s,xmit_cxda));
+        TMDSTORE(&tmd, xmit_cxda);
         s->csr[0] |= 0x0200;    /* set TINT */
         if (!CSR_DXSUFLO(s)) {
             s->csr[0] &= ~0x0010;
@@ -1929,7 +1930,15 @@ static int pcnet_load(QEMUFile *f, void *opaque, int version_id)
     return 0;
 }
 
-static void pcnet_common_init(PCNetState *d, NICInfo *nd)
+static void pcnet_common_cleanup(PCNetState *d)
+{
+    unregister_savevm("pcnet", d);
+
+    qemu_del_timer(d->poll_timer);
+    qemu_free_timer(d->poll_timer);
+}
+
+static void pcnet_common_init(PCNetState *d, NICInfo *nd, NetCleanup *cleanup)
 {
     d->poll_timer = qemu_new_timer(vm_clock, pcnet_poll_timer, d);
 
@@ -1937,7 +1946,8 @@ static void pcnet_common_init(PCNetState *d, NICInfo *nd)
 
     if (nd && nd->vlan) {
         d->vc = qemu_new_vlan_client(nd->vlan, nd->model, nd->name,
-                                     pcnet_receive, pcnet_can_receive, d);
+                                     pcnet_receive, pcnet_can_receive,
+                                     cleanup, d);
 
         qemu_format_nic_info_str(d->vc, d->nd->macaddr);
     } else {
@@ -1985,6 +1995,22 @@ static void pci_physical_memory_read(void *dma_opaque, target_phys_addr_t addr,
     cpu_physical_memory_read(addr, buf, len);
 }
 
+static void pci_pcnet_cleanup(VLANClientState *vc)
+{
+    PCNetState *d = vc->opaque;
+
+    pcnet_common_cleanup(d);
+}
+
+static int pci_pcnet_uninit(PCIDevice *dev)
+{
+    PCNetState *d = (PCNetState *)dev;
+
+    cpu_unregister_io_memory(d->mmio_index);
+
+    return 0;
+}
+
 PCIDevice *pci_pcnet_init(PCIBus *bus, NICInfo *nd, int devfn)
 {
     PCNetState *d;
@@ -1999,6 +2025,8 @@ PCIDevice *pci_pcnet_init(PCIBus *bus, NICInfo *nd, int devfn)
                                           devfn, NULL, NULL);
     if (!d)
 	return NULL;
+
+    d->dev.unregister = pci_pcnet_uninit;
 
     pci_conf = d->dev.config;
 
@@ -2033,7 +2061,8 @@ PCIDevice *pci_pcnet_init(PCIBus *bus, NICInfo *nd, int devfn)
     d->phys_mem_write = pci_physical_memory_write;
     d->pci_dev = &d->dev;
 
-    pcnet_common_init(d, nd);
+    pcnet_common_init(d, nd, pci_pcnet_cleanup);
+
     return (PCIDevice *)d;
 }
 
@@ -2083,29 +2112,42 @@ static CPUWriteMemoryFunc *lance_mem_write[3] = {
     NULL,
 };
 
+static void lance_cleanup(VLANClientState *vc)
+{
+    PCNetState *d = vc->opaque;
+
+    pcnet_common_cleanup(d);
+
+    qemu_free_irqs(d->reset_irq);
+
+    cpu_unregister_io_memory(d->mmio_index);
+
+    qemu_free(d);
+}
+
 void lance_init(NICInfo *nd, target_phys_addr_t leaddr, void *dma_opaque,
                 qemu_irq irq, qemu_irq *reset)
 {
     PCNetState *d;
-    int lance_io_memory;
 
     qemu_check_nic_model(nd, "lance");
 
     d = qemu_mallocz(sizeof(PCNetState));
 
-    lance_io_memory =
+    d->mmio_index =
         cpu_register_io_memory(0, lance_mem_read, lance_mem_write, d);
 
     d->dma_opaque = dma_opaque;
 
-    *reset = *qemu_allocate_irqs(parent_lance_reset, d, 1);
+    d->reset_irq = qemu_allocate_irqs(parent_lance_reset, d, 1);
+    *reset = *d->reset_irq;
 
-    cpu_register_physical_memory(leaddr, 4, lance_io_memory);
+    cpu_register_physical_memory(leaddr, 4, d->mmio_index);
 
     d->irq = irq;
     d->phys_mem_read = ledma_memory_read;
     d->phys_mem_write = ledma_memory_write;
 
-    pcnet_common_init(d, nd);
+    pcnet_common_init(d, nd, lance_cleanup);
 }
 #endif /* TARGET_SPARC */
