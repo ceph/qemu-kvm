@@ -3187,7 +3187,7 @@ void cpu_physical_memory_rw(target_phys_addr_t addr, uint8_t *buf,
                         (0xff & ~CODE_DIRTY_FLAG);
                 }
 		/* qemu doesn't execute guest code directly, but kvm does
-		   therefore fluch instruction caches */
+		   therefore flush instruction caches */
 		if (kvm_enabled())
 		    flush_icache_range((unsigned long)ptr,
 				       ((unsigned long)ptr)+l);
