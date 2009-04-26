@@ -140,6 +140,9 @@ endif
 kvm.o: CFLAGS+=$(KVM_CFLAGS)
 kvm-all.o: CFLAGS+=$(KVM_CFLAGS)
 
+qemu-kvm.o qemu-kvm-x86.o device-assignment.o ioapic.o i8259.o i8254-kvm.o \
+	kvm-tpr-opt.o apic.o:  CFLAGS+=$(KVM_CFLAGS)
+
 all: $(PROGS)
 
 #########################################################
@@ -602,8 +605,7 @@ ifdef CONFIG_CS4231A
 SOUND_HW += cs4231a.o
 endif
 
-ifdef CONFIG_KVM_KERNEL_INC
-CFLAGS += -I $(CONFIG_KVM_KERNEL_INC)
+ifdef USE_KVM
 DEPLIBS += libkvm.a
 endif
 
@@ -816,7 +818,7 @@ $(QEMU_PROG): $(OBJS) ../libqemu_common.a libqemu.a $(DEPLIBS)
 FORCE:
 
 libkvm.a: FORCE
-	$(MAKE) -C ../kvm/libkvm
+	$(MAKE) -C ../kvm/libkvm KVM_CFLAGS="$(KVM_CFLAGS)"
 	if ! cmp -s libkvm.a ../kvm/libkvm/libkvm.a; then \
 	   cp ../kvm/libkvm/libkvm.a . ; \
 	fi

@@ -194,9 +194,6 @@ signalfd="no"
 eventfd="no"
 cpu_emulation="yes"
 
-# qemu-kvm: use local kerneldir
-kerneldir="$(readlink -f kvm/kernel)"
-
 # OS specific
 if check_define __linux__ ; then
   targetos="Linux"
@@ -769,7 +766,21 @@ fi
 ##########################################
 # KVM probe
 
+case "$cpu" in
+    i386 | x86_64)
+	kvm_arch="x86"
+	;;
+    *)
+	kvm_arch="$cpu"
+	;;
+esac
+
+kvm_cflags=""
+
 if test "$kvm" = "yes" ; then
+
+kvm_cflags="-I$source_path/kvm/kernel/include"
+kvm_cflags="$kvm_cflags -I$source_path/kvm/kernel/arch/$kvm_arch/include"
 
 # test for KVM_CAP_PIT
 
@@ -780,7 +791,7 @@ cat > $TMPC <<EOF
 #endif
 int main(void) { return 0; }
 EOF
-    if $cc $ARCH_CFLAGS $CFLAGS -I"$kerneldir"/include -o $TMPE ${OS_CFLAGS} $TMPC 2> /dev/null ; then
+    if $cc $ARCH_CFLAGS $CFLAGS $kvm_cflags -o $TMPE ${OS_CFLAGS} $TMPC 2> /dev/null ; then
 	kvm_cap_pit="yes"
     fi
 
@@ -793,7 +804,7 @@ cat > $TMPC <<EOF
 #endif
 int main(void) { return 0; }
 EOF
-    if $cc $ARCH_CFLAGS $CFLAGS -I"$kerneldir"/include -o $TMPE ${OS_CFLAGS} $TMPC 2> /dev/null ; then
+    if $cc $ARCH_CFLAGS $CFLAGS $kvm_cflags -o $TMPE ${OS_CFLAGS} $TMPC 2> /dev/null ; then
 	kvm_cap_device_assignment="yes"
     fi
 fi
@@ -1049,19 +1060,6 @@ if test "$kvm" = "yes" ; then
 #endif
 int main(void) { return 0; }
 EOF
-  if test "$kerneldir" != "" ; then
-      kvm_cflags=-I"$kerneldir"/include
-      if test \( "$cpu" = "i386" -o "$cpu" = "x86_64" \) \
-         -a -d "$kerneldir/arch/x86/include" ; then
-            kvm_cflags="$kvm_cflags -I$kerneldir/arch/x86/include"
-	elif test "$cpu" = "ppc" -a -d "$kerneldir/arch/powerpc/include" ; then
-	    kvm_cflags="$kvm_cflags -I$kerneldir/arch/powerpc/include"
-        elif test -d "$kerneldir/arch/$cpu/include" ; then
-            kvm_cflags="$kvm_cflags -I$kerneldir/arch/$cpu/include"
-      fi
-  else
-      kvm_cflags=""
-  fi
   if $cc $ARCH_CFLAGS -o $TMPE ${OS_CFLAGS} $kvm_cflags $TMPC \
       > /dev/null 2>/dev/null ; then
     :
@@ -1679,7 +1677,7 @@ configure_kvm() {
           \( "$cpu" = "i386" -o "$cpu" = "x86_64" -o "$cpu" = "ia64" -o "$cpu" = "powerpc" \); then
     echo "#define USE_KVM 1" >> $config_h
     echo "USE_KVM=1" >> $config_mak
-    echo "CONFIG_KVM_KERNEL_INC=$kerneldir/include" >> "config-host.mak"
+    echo "KVM_CFLAGS=$kvm_cflags" >> $config_mak
     if test $kvm_cap_pit = "yes" ; then
 	echo "USE_KVM_PIT=1" >> $config_mak
 	echo "#define USE_KVM_PIT 1" >> $config_h
