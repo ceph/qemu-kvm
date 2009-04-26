@@ -14,7 +14,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 DefinitionBlock (
     "acpi-dsdt.aml",    // Output Filename
@@ -307,6 +307,28 @@ DefinitionBlock (
                     ,, , AddressRangeMemory, TypeStatic)
             })
         }
+#ifdef BX_QEMU
+#ifdef HPET_WORKS_IN_KVM
+        Device(HPET) {
+            Name(_HID,  EISAID("PNP0103"))
+            Name(_UID, 0)
+            Method (_STA, 0, NotSerialized) {
+                    Return(0x0F)
+            }
+            Name(_CRS, ResourceTemplate() {
+                DWordMemory(
+                    ResourceConsumer, PosDecode, MinFixed, MaxFixed,
+                    NonCacheable, ReadWrite,
+                    0x00000000,
+                    0xFED00000,
+                    0xFED003FF,
+                    0x00000000,
+                    0x00000400 /* 1K memory: FED00000 - FED003FF */
+                )
+            })
+        }
+#endif
+#endif
     }
 
     Scope(\_SB.PCI0) {

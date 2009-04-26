@@ -4563,28 +4563,16 @@ ASM_END
                         set_e820_range(ES, regs.u.r16.di,
                                        0x0000000L, 0x0009f000L, 0, 0, 1);
                         regs.u.r32.ebx = 1;
-                        regs.u.r32.eax = 0x534D4150;
-                        regs.u.r32.ecx = 0x14;
-                        CLEAR_CF();
-                        return;
                         break;
                     case 1:
                         set_e820_range(ES, regs.u.r16.di,
                                        0x0009f000L, 0x000a0000L, 0, 0, 2);
                         regs.u.r32.ebx = 2;
-                        regs.u.r32.eax = 0x534D4150;
-                        regs.u.r32.ecx = 0x14;
-                        CLEAR_CF();
-                        return;
                         break;
                     case 2:
                         set_e820_range(ES, regs.u.r16.di,
                                        0x000e8000L, 0x00100000L, 0, 0, 2);
                         regs.u.r32.ebx = 3;
-                        regs.u.r32.eax = 0x534D4150;
-                        regs.u.r32.ecx = 0x14;
-                        CLEAR_CF();
-                        return;
                         break;
                     case 3:
 #if BX_ROMBIOS32
@@ -4598,20 +4586,12 @@ ASM_END
                                        extended_memory_size, 1);
                         regs.u.r32.ebx = 5;
 #endif
-                        regs.u.r32.eax = 0x534D4150;
-                        regs.u.r32.ecx = 0x14;
-                        CLEAR_CF();
-                        return;
                         break;
                     case 4:
                         set_e820_range(ES, regs.u.r16.di,
                                        extended_memory_size - ACPI_DATA_SIZE,
                                        extended_memory_size ,0, 0, 3); // ACPI RAM
                         regs.u.r32.ebx = 5;
-                        regs.u.r32.eax = 0x534D4150;
-                        regs.u.r32.ecx = 0x14;
-                        CLEAR_CF();
-                        return;
                         break;
                     case 5:
                         /* 4 pages before the bios, 3 pages for vmx tss pages,
@@ -4619,10 +4599,7 @@ ASM_END
                         set_e820_range(ES, regs.u.r16.di, 0xfffbc000L,
                                        0xfffc0000L, 0, 0, 2);
                         regs.u.r32.ebx = 6;
-                        regs.u.r32.eax = 0x534D4150;
-                        regs.u.r32.ecx = 0x14;
-                        CLEAR_CF();
-                         return;
+                        break;
                     case 6:
                         /* 256KB BIOS area at the end of 4 GB */
                         set_e820_range(ES, regs.u.r16.di,
@@ -4631,24 +4608,21 @@ ASM_END
                             regs.u.r32.ebx = 7;
                         else
                             regs.u.r32.ebx = 0;
-                        regs.u.r32.eax = 0x534D4150;
-                        regs.u.r32.ecx = 0x14;
-                        CLEAR_CF();
-                        return;
+                        break;
                     case 7:
                         /* Maping of memory above 4 GB */
                         set_e820_range(ES, regs.u.r16.di, 0x00000000L,
                         extra_lowbits_memory_size, 1, extra_highbits_memory_size
                                        + 1, 1);
                         regs.u.r32.ebx = 0;
-                        regs.u.r32.eax = 0x534D4150;
-                        regs.u.r32.ecx = 0x14;
-                        CLEAR_CF();
-                        return;
+                        break;
                     default:  /* AX=E820, DX=534D4150, BX unrecognized */
                         goto int15_unimplemented;
                         break;
                 }
+                regs.u.r32.eax = 0x534D4150;
+                regs.u.r32.ecx = 0x14;
+                CLEAR_CF();
             } else {
               // if DX != 0x534D4150)
               goto int15_unimplemented;
@@ -9944,8 +9918,8 @@ pcibios_init_irqs:
   mov  dl, #0x00
   call pcibios_init_sel_reg
   mov  dx, #0x0cfc
-  in   eax, dx
-  cmp  eax, [si+12] ;; check irq router
+  in   ax, dx
+  cmp  ax, [si+12] ;; check irq router
   jne  pci_init_end
   mov  dl, [si+34]
   call pcibios_init_sel_reg

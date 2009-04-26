@@ -47,7 +47,9 @@ typedef unsigned long long uint64_t;
 
 #define wbinvd() asm volatile("wbinvd")
 
+#define CPUID_MSR (1 << 5)
 #define CPUID_APIC (1 << 9)
+#define CPUID_MTRR (1 << 12)
 
 #define APIC_BASE    ((uint8_t *)0xfee00000)
 #define APIC_ICR_LOW 0x300
@@ -67,19 +69,19 @@ typedef unsigned long long uint64_t;
 
 #define BIOS_TMP_STORAGE  0x00030000 /* 64 KB used to copy the BIOS to shadow RAM */
 
-#define MSR_MTRRcap			0x000000fe
-#define MSR_MTRRfix64K_00000		0x00000250
-#define MSR_MTRRfix16K_80000		0x00000258
-#define MSR_MTRRfix16K_A0000		0x00000259
-#define MSR_MTRRfix4K_C0000		0x00000268
-#define MSR_MTRRfix4K_C8000		0x00000269
-#define MSR_MTRRfix4K_D0000		0x0000026a
-#define MSR_MTRRfix4K_D8000		0x0000026b
-#define MSR_MTRRfix4K_E0000		0x0000026c
-#define MSR_MTRRfix4K_E8000		0x0000026d
-#define MSR_MTRRfix4K_F0000		0x0000026e
-#define MSR_MTRRfix4K_F8000		0x0000026f
-#define MSR_MTRRdefType			0x000002ff
+#define MSR_MTRRcap                     0x000000fe
+#define MSR_MTRRfix64K_00000            0x00000250
+#define MSR_MTRRfix16K_80000            0x00000258
+#define MSR_MTRRfix16K_A0000            0x00000259
+#define MSR_MTRRfix4K_C0000             0x00000268
+#define MSR_MTRRfix4K_C8000             0x00000269
+#define MSR_MTRRfix4K_D0000             0x0000026a
+#define MSR_MTRRfix4K_D8000             0x0000026b
+#define MSR_MTRRfix4K_E0000             0x0000026c
+#define MSR_MTRRfix4K_E8000             0x0000026d
+#define MSR_MTRRfix4K_F0000             0x0000026e
+#define MSR_MTRRfix4K_F8000             0x0000026f
+#define MSR_MTRRdefType                 0x000002ff
 
 #define MTRRphysBase_MSR(reg) (0x200 + 2 * (reg))
 #define MTRRphysMask_MSR(reg) (0x200 + 2 * (reg) + 1)
@@ -540,12 +542,19 @@ void setup_mtrr(void)
         uint64_t val;
     } u;
 
+    if (!(cpuid_features & CPUID_MTRR))
+        return;
+
+    if (!(cpuid_features & CPUID_MSR))
+        return;
+
     mtrr_cap = rdmsr(MSR_MTRRcap);
     vcnt = mtrr_cap & 0xff;
     fix = mtrr_cap & 0x100;
     wc = mtrr_cap & 0x400;
     if (!vcnt || !fix)
-	return;
+        return;
+
     u.val = 0;
     for (i = 0; i < 8; ++i)
         if (ram_size >= 65536 * (i + 1))
@@ -593,7 +602,6 @@ void ram_probe(void)
   ebda_cur_addr = ((*(uint16_t *)(0x40e)) << 4) + 0x380;
   BX_INFO("ebda_cur_addr: 0x%08lx\n", ebda_cur_addr);
 #endif
-  setup_mtrr();
 }
 
 /****************************************************/
@@ -627,8 +635,8 @@ void smp_probe(void)
 #ifndef BX_QEMU
         delay_ms(10);
 #else
-	while (cmos_readb(0x5f) + 1 != readw(&smp_cpus))
-	    ;
+        while (cmos_readb(0x5f) + 1 != readw(&smp_cpus))
+            ;
 #endif
     }
     BX_INFO("Found %d cpu(s)\n", readw(&smp_cpus));
@@ -1256,7 +1264,12 @@ struct rsdp_descriptor         /* Root System Descriptor Pointer */
 struct rsdt_descriptor_rev1
 {
 	ACPI_TABLE_HEADER_DEF                           /* ACPI common table header */
+#ifdef BX_QEMU
 	uint32_t                             table_offset_entry [2]; /* Array of pointers to other */
+//	uint32_t                             table_offset_entry [4]; /* Array of pointers to other */
+#else
+	uint32_t                             table_offset_entry [3]; /* Array of pointers to other */
+#endif
 			 /* ACPI tables */
 } __attribute__((__packed__));
 
@@ -1396,6 +1409,32 @@ struct madt_processor_apic
 #endif
 } __attribute__((__packed__));
 
+#ifdef BX_QEMU
+/*
+ *  * ACPI 2.0 Generic Address Space definition.
+ *   */
+struct acpi_20_generic_address {
+    uint8_t  address_space_id;
+    uint8_t  register_bit_width;
+    uint8_t  register_bit_offset;
+    uint8_t  reserved;
+    uint64_t address;
+} __attribute__((__packed__));
+
+/*
+ *  * HPET Description Table
+ *   */
+struct acpi_20_hpet {
+    ACPI_TABLE_HEADER_DEF                           /* ACPI common table header */
+    uint32_t           timer_block_id;
+    struct acpi_20_generic_address addr;
+    uint8_t            hpet_number;
+    uint16_t           min_tick;
+    uint8_t            page_protect;
+} __attribute__((__packed__));
+#define ACPI_HPET_ADDRESS 0xFED00000UL
+#endif
+
 struct madt_io_apic
 {
 	APIC_HEADER_DEF
@@ -1406,13 +1445,16 @@ struct madt_io_apic
 			  * lines start */
 } __attribute__((__packed__));
 
-struct madt_intsrcovr {
+#ifdef BX_QEMU
+struct madt_int_override
+{
 	APIC_HEADER_DEF
-	uint8_t  bus;
-	uint8_t  source;
-	uint32_t gsi;
-	uint16_t flags;
-} __attribute__((packed));
+	uint8_t                bus;     /* Identifies ISA Bus */
+	uint8_t                source;  /* Bus-relative interrupt source */
+	uint32_t               gsi;     /* GSI that source will signal */
+	uint16_t               flags;   /* MPS INTI flags */
+} __attribute__((__packed__));
+#endif
 
 #include "acpi-dsdt.hex"
 
@@ -1467,8 +1509,12 @@ void acpi_bios_init(void)
     struct fadt_descriptor_rev1 *fadt;
     struct facs_descriptor_rev1 *facs;
     struct multiple_apic_table *madt;
-    uint8_t *dsdt;
-    uint32_t base_addr, rsdt_addr, fadt_addr, addr, facs_addr, dsdt_addr;
+    uint8_t *dsdt, *ssdt;
+#ifdef BX_QEMU
+    struct acpi_20_hpet *hpet;
+    uint32_t hpet_addr;
+#endif
+    uint32_t base_addr, rsdt_addr, fadt_addr, addr, facs_addr, dsdt_addr, ssdt_addr;
     uint32_t acpi_tables_size, madt_addr, madt_size;
     int i;
 
@@ -1506,9 +1552,22 @@ void acpi_bios_init(void)
     madt_addr = addr;
     madt_size = sizeof(*madt) +
         sizeof(struct madt_processor_apic) * MAX_CPUS +
+#ifdef BX_QEMU
+        sizeof(struct madt_io_apic) /* + sizeof(struct madt_int_override) */;
+#else
         sizeof(struct madt_io_apic);
+#endif
     madt = (void *)(addr);
     addr += madt_size;
+
+#ifdef BX_QEMU
+#ifdef HPET_WORKS_IN_KVM
+    addr = (addr + 7) & ~7;
+    hpet_addr = addr;
+    hpet = (void *)(addr);
+    addr += sizeof(*hpet);
+#endif
+#endif
 
     acpi_tables_size = addr - base_addr;
 
@@ -1531,6 +1590,10 @@ void acpi_bios_init(void)
     memset(rsdt, 0, sizeof(*rsdt));
     rsdt->table_offset_entry[0] = cpu_to_le32(fadt_addr);
     rsdt->table_offset_entry[1] = cpu_to_le32(madt_addr);
+    //rsdt->table_offset_entry[2] = cpu_to_le32(ssdt_addr);
+#ifdef BX_QEMU
+    //rsdt->table_offset_entry[3] = cpu_to_le32(hpet_addr);
+#endif
     acpi_build_table_header((struct acpi_table_header *)rsdt,
                             "RSDT", sizeof(*rsdt), 1);
 
@@ -1572,7 +1635,9 @@ void acpi_bios_init(void)
     {
         struct madt_processor_apic *apic;
         struct madt_io_apic *io_apic;
-        struct madt_intsrcovr *intsrcovr;
+#ifdef BX_QEMU
+        struct madt_int_override *int_override;
+#endif
 
         memset(madt, 0, madt_size);
         madt->local_apic_address = cpu_to_le32(0xfee00000);
@@ -1595,26 +1660,54 @@ void acpi_bios_init(void)
         io_apic->io_apic_id = smp_cpus;
         io_apic->address = cpu_to_le32(0xfec00000);
         io_apic->interrupt = cpu_to_le32(0);
+#ifdef BX_QEMU
+#ifdef HPET_WORKS_IN_KVM
+        io_apic++;
 
-        intsrcovr = (struct madt_intsrcovr*)(io_apic + 1);
+        int_override = (void *)io_apic;
+        int_override->type = APIC_XRUPT_OVERRIDE;
+        int_override->length = sizeof(*int_override);
+        int_override->bus = cpu_to_le32(0);
+        int_override->source = cpu_to_le32(0);
+        int_override->gsi = cpu_to_le32(2);
+        int_override->flags = cpu_to_le32(0);
+#endif
+#endif
+
+        int_override = (struct madt_int_override*)(io_apic + 1);
         for ( i = 0; i < 16; i++ ) {
             if ( PCI_ISA_IRQ_MASK & (1U << i) ) {
-                memset(intsrcovr, 0, sizeof(*intsrcovr));
-                intsrcovr->type   = APIC_XRUPT_OVERRIDE;
-                intsrcovr->length = sizeof(*intsrcovr);
-                intsrcovr->source = i;
-                intsrcovr->gsi    = i;
-                intsrcovr->flags  = 0xd; /* active high, level triggered */
+                memset(int_override, 0, sizeof(*int_override));
+                int_override->type   = APIC_XRUPT_OVERRIDE;
+                int_override->length = sizeof(*int_override);
+                int_override->source = i;
+                int_override->gsi    = i;
+                int_override->flags  = 0xd; /* active high, level triggered */
             } else {
                 /* No need for a INT source override structure. */
                 continue;
             }
-            intsrcovr++;
-            madt_size += sizeof(struct madt_intsrcovr);
+            int_override++;
+            madt_size += sizeof(struct madt_int_override);
         }
         acpi_build_table_header((struct acpi_table_header *)madt,
                                 "APIC", madt_size, 1);
     }
+
+#ifdef BX_QEMU
+    /* HPET */
+#ifdef HPET_WORKS_IN_KVM
+    memset(hpet, 0, sizeof(*hpet));
+    /* Note timer_block_id value must be kept in sync with value advertised by
+     * emulated hpet
+     */
+    hpet->timer_block_id = cpu_to_le32(0x8086a201);
+    hpet->addr.address = cpu_to_le32(ACPI_HPET_ADDRESS);
+    acpi_build_table_header((struct  acpi_table_header *)hpet,
+                             "HPET", sizeof(*hpet), 1);
+#endif
+#endif
+
 }
 
 /* SMBIOS entry point -- must be written to a 16-bit aligned address
@@ -2207,6 +2300,8 @@ void rombios32_init(uint32_t *s3_resume_vector, uint8_t *shutdown_flag)
     ram_probe();
 
     cpu_probe();
+
+    setup_mtrr();
 
     smp_probe();
 
