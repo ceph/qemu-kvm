@@ -497,6 +497,8 @@ void pci_default_write_config(PCIDevice *d,
             case 0x01:
             case 0x02:
             case 0x03:
+            case 0x06:
+            case 0x07:
             case 0x08:
             case 0x09:
             case 0x0a:
@@ -520,6 +522,8 @@ void pci_default_write_config(PCIDevice *d,
             case 0x01:
             case 0x02:
             case 0x03:
+            case 0x06:
+            case 0x07:
             case 0x08:
             case 0x09:
             case 0x0a:

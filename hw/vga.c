@@ -2840,4 +2840,5 @@ static void vga_screen_dump(void *opaque, const char *filename)
         vga_screen_dump_graphic(s, filename);
     else
         vga_screen_dump_text(s, filename);
+    vga_invalidate_display(s);
 }
