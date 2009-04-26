@@ -1087,12 +1087,12 @@ static int assigned_dev_register_msix_mmio(AssignedDevice *dev)
     dev->msix_table_page = mmap(NULL, 0x1000,
                                 PROT_READ|PROT_WRITE,
                                 MAP_ANONYMOUS|MAP_PRIVATE, 0, 0);
-    memset(dev->msix_table_page, 0, 0x1000);
     if (dev->msix_table_page == MAP_FAILED) {
         fprintf(stderr, "fail allocate msix_table_page! %s\n",
                 strerror(errno));
         return -EFAULT;
     }
+    memset(dev->msix_table_page, 0, 0x1000);
     dev->mmio_index = cpu_register_io_memory(0,
                         msix_mmio_read, msix_mmio_write, dev);
     return 0;
