@@ -92,6 +92,7 @@ DEF("drive", HAS_ARG, QEMU_OPTION_drive,
     "-drive [file=file][,if=type][,bus=n][,unit=m][,media=d][,index=i]\n"
     "       [,cyls=c,heads=h,secs=s[,trans=t]][,snapshot=on|off]\n"
     "       [,cache=writethrough|writeback|none][,format=f][,serial=s]\n"
+    "       [,boot=on|off]\n"
     "                use 'file' as a drive image\n")
 STEXI
 @item -drive @var{option}[,@var{option}[,@var{option}[,...]]]
