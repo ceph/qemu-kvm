@@ -845,6 +845,9 @@ qemu-options.h: $(SRC_PATH)/qemu-options.hx
 clean:
 	rm -f *.o *.a *~ $(PROGS) nwfpe/*.o fpu/*.o qemu-options.h gdbstub-xml.c
 	rm -f *.d */*.d tcg/*.o
+ifdef USE_KVM
+	$(MAKE) -C ../kvm/libkvm clean
+endif
 
 install: all
 ifneq ($(PROGS),)
