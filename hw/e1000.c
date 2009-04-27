@@ -26,7 +26,6 @@
 #include "hw.h"
 #include "pci.h"
 #include "net.h"
-#include "qemu-kvm.h"
 
 #include "e1000_hw.h"
 
