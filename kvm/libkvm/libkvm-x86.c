@@ -52,7 +52,7 @@ static int kvm_init_tss(kvm_context_t kvm)
 	return 0;
 }
 
-int kvm_create_pit(kvm_context_t kvm)
+static int kvm_create_pit(kvm_context_t kvm)
 {
 #ifdef KVM_CAP_PIT
 	int r;
