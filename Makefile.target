@@ -140,8 +140,7 @@ endif
 kvm.o: CFLAGS+=$(KVM_CFLAGS)
 kvm-all.o: CFLAGS+=$(KVM_CFLAGS)
 
-qemu-kvm.o qemu-kvm-x86.o device-assignment.o ioapic.o i8259.o i8254-kvm.o \
-	kvm-tpr-opt.o apic.o:  CFLAGS+=$(KVM_CFLAGS)
+CFLAGS += $(KVM_CFLAGS)
 
 all: $(PROGS)
 
