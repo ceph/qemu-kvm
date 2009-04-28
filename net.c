@@ -445,9 +445,9 @@ int qemu_send_packet(VLANClientState *vc, const uint8_t *buf, int size)
         vlan->send_queue = packet;
     } else {
         vlan->delivering = 1;
-        qemu_deliver_packet(vc, buf, size);
+        ret = qemu_deliver_packet(vc, buf, size);
         while ((packet = vlan->send_queue) != NULL) {
-            ret = qemu_deliver_packet(packet->sender, packet->data, packet->size);
+            qemu_deliver_packet(packet->sender, packet->data, packet->size);
             vlan->send_queue = packet->next;
             qemu_free(packet);
         }
