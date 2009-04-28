@@ -337,6 +337,8 @@ if [ "$cpu" = "i386" -o "$cpu" = "x86_64" ] ; then
 fi
 if [ "$cpu" = "ia64" ] ; then
      kvm="yes"
+     xen="no"
+     target_list="ia64-softmmu"
      cpu_emulation="no"
      gdbstub="no"
      slirp="no"
