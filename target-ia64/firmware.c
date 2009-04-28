@@ -92,11 +92,11 @@ static int build_hob(void *hob_buf, unsigned long hob_buf_size,
                      unsigned long dom_mem_size, unsigned long vcpus,
                      unsigned long nvram_addr);
 static int load_hob(void *hob_buf,
-                    unsigned long dom_mem_size, void* hob_start);
+                    unsigned long dom_mem_size, void *hob_start);
 
 int
 kvm_ia64_build_hob(unsigned long memsize, unsigned long vcpus,
-                   uint8_t *fw_start, unsigned long nvram_addr)
+                   void* fw_start, unsigned long nvram_addr)
 {
     char   *hob_buf;
 
@@ -249,7 +249,7 @@ err_out:
     return -1;
 }
 static int
-load_hob(void *hob_buf, unsigned long dom_mem_size, void* hob_start)
+load_hob(void *hob_buf, unsigned long dom_mem_size, void *hob_start)
 {
     int hob_size;
 
@@ -263,7 +263,7 @@ load_hob(void *hob_buf, unsigned long dom_mem_size, void* hob_start)
         Hob_Output("No enough memory for hob data");
         return -1;
     }
-    memcpy (hob_start, hob_buf, hob_size);
+    memcpy ((void *)hob_start, hob_buf, hob_size);
     return 0;
 }
 
@@ -526,11 +526,11 @@ add_pal_hob(void* hob_buf)
     return 0;
 }
 
-char *read_image(const char *filename, unsigned long *size)
+uint8_t *read_image(const char *filename, unsigned long *size)
 {
     int kernel_fd = -1;
     gzFile kernel_gfd = NULL;
-    char *image = NULL, *tmp;
+    uint8_t *image = NULL, *tmp;
     unsigned int bytes;
 
     if ((filename == NULL) || (size == NULL))
@@ -644,7 +644,7 @@ out:
 
 int
 kvm_ia64_copy_from_nvram_to_GFW(unsigned long nvram_fd,
-                                const uint8_t *fw_start)
+                                const void* fw_start)
 {
     struct stat file_stat;
     if ((fstat(nvram_fd, &file_stat) < 0) ||
@@ -659,8 +659,13 @@ int
 kvm_ia64_copy_from_GFW_to_nvram()
 {
     unsigned long nvram_fd;
+    void* real_nvram_start;
+    target_phys_addr_t nvram_size = NVRAM_SIZE;
     unsigned long type = WRITE_TO_NVRAM;
-    unsigned long *nvram_addr = (unsigned long *)(g_fw_start + NVRAM_OFFSET);
+    unsigned long *nvram_addr = (unsigned long *)(gfw_start + NVRAM_OFFSET);
+
+
+
     nvram_fd = kvm_ia64_nvram_init(type);
     if (nvram_fd  == -1)
         goto out;
@@ -669,11 +674,15 @@ kvm_ia64_copy_from_GFW_to_nvram()
         goto out;
     }
     lseek(nvram_fd, 0, SEEK_SET);
-    if (write(nvram_fd, ((void *)(((struct nvram_save_addr *)nvram_addr)->addr +
-        (char *)phys_ram_base)), NVRAM_SIZE) != NVRAM_SIZE) {
+
+    real_nvram_start = cpu_physical_memory_map(((struct nvram_save_addr*)nvram_addr)->addr,
+	&nvram_size, 1);
+    if (write(nvram_fd, real_nvram_start, NVRAM_SIZE) != NVRAM_SIZE) {
         close(nvram_fd);
         goto out;
     }
+    cpu_physical_memory_unmap(real_nvram_start, NVRAM_SIZE, 1, NVRAM_SIZE);
+
     close(nvram_fd);
     return 0;
 out:

@@ -52,13 +52,13 @@ struct nvram_save_addr {
 };
 
 extern const char *nvram;
-extern uint8_t *g_fw_start;
+extern void *gfw_start;
 extern int kvm_ia64_build_hob(unsigned long memsize, unsigned long vcpus,
-                              uint8_t *fw_start, unsigned long nvram_addr);
-extern char *read_image(const char *filename, unsigned long *size);
+                              void* fw_start, unsigned long nvram_addr);
+extern uint8_t *read_image(const char *filename, unsigned long *size);
 
 extern int kvm_ia64_copy_from_GFW_to_nvram(void);
 extern int kvm_ia64_nvram_init(unsigned long type);
 extern int kvm_ia64_copy_from_nvram_to_GFW(unsigned long nvram_fd,
-                                           const uint8_t *fw_start);
+                                           const void* fw_start);
 #endif //__FIRM_WARE_

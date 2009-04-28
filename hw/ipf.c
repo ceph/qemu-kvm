@@ -54,7 +54,8 @@ static fdctrl_t *floppy_controller;
 static RTCState *rtc_state;
 static PCIDevice *i440fx_state;
 
-uint8_t *g_fw_start;
+void *gfw_start;
+
 static uint32_t ipf_to_legacy_io(target_phys_addr_t addr)
 {
     return (uint32_t)(((addr&0x3ffffff) >> 12 << 2)|((addr) & 0x3));
@@ -453,16 +454,17 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
     /*Load firware to its proper position.*/
     if (kvm_enabled()) {
         unsigned long  image_size;
-        char *image = NULL;
-        uint8_t *fw_image_start;
+        uint8_t *image = NULL;
+        target_phys_addr_t fw_image_start;
         unsigned long nvram_addr = 0;
         unsigned long nvram_fd = 0;
         unsigned long type = READ_FROM_NVRAM;
         unsigned long i = 0;
-        ram_addr_t fw_offset = qemu_ram_alloc(GFW_SIZE);
-        uint8_t *fw_start = phys_ram_base + fw_offset;
 
-        g_fw_start = fw_start;
+        ram_addr  = qemu_ram_alloc(GFW_SIZE);
+        gfw_start = qemu_get_ram_ptr(ram_addr);
+        cpu_register_physical_memory(GFW_START, GFW_SIZE, ram_addr);
+
         snprintf(buf, sizeof(buf), "%s/%s", bios_dir, FW_FILENAME);
         image = read_image(buf, &image_size );
         if (NULL == image || !image_size) {
@@ -470,20 +472,18 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
             fprintf(stderr, "Please check Guest firmware at %s\n", buf);
             exit(1);
         }
-        fw_image_start = fw_start + GFW_SIZE - image_size;
 
-        cpu_register_physical_memory(GFW_START, GFW_SIZE, fw_offset);
-        memcpy(fw_image_start, image, image_size);
-
+        /* Load Guest Firmware to the proper postion. */
+        fw_image_start = GFW_START + GFW_SIZE - image_size;
+        cpu_physical_memory_write(fw_image_start, image, image_size);
         free(image);
-        flush_icache_range((unsigned long)fw_image_start,
-                           (unsigned long)fw_image_start + image_size);
 
-        nvram_addr = NVRAM_START;
+
         if (nvram) {
+            nvram_addr = NVRAM_START;
             nvram_fd = kvm_ia64_nvram_init(type);
             if (nvram_fd != -1) {
-                kvm_ia64_copy_from_nvram_to_GFW(nvram_fd, g_fw_start);
+                kvm_ia64_copy_from_nvram_to_GFW(nvram_fd, gfw_start);
                 close(nvram_fd);
             }
             i = atexit((void *)kvm_ia64_copy_from_GFW_to_nvram);
@@ -491,7 +491,7 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
                 fprintf(stderr, "cannot set exit function\n");
         }
         kvm_ia64_build_hob(ram_size + above_4g_mem_size, smp_cpus,
-                           fw_start, nvram_addr);
+					gfw_start, nvram_addr);
     }
 
     /*Register legacy io address space, size:64M*/
@@ -513,19 +513,15 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
 
     if (cirrus_vga_enabled) {
         if (pci_enabled) {
-            pci_cirrus_vga_init(pci_bus, phys_ram_base + vga_ram_addr,
-                                vga_ram_addr, vga_ram_size);
+            pci_cirrus_vga_init(pci_bus, vga_ram_size);
         } else {
-            isa_cirrus_vga_init(phys_ram_base + vga_ram_addr,
-                                vga_ram_addr, vga_ram_size);
+            isa_cirrus_vga_init(vga_ram_size);
         }
     } else {
         if (pci_enabled) {
-            pci_vga_init(pci_bus, phys_ram_base + vga_ram_addr,
-                         vga_ram_addr, vga_ram_size, 0, 0);
+            pci_vga_init(pci_bus, vga_ram_size, 0, 0);
         } else {
-            isa_vga_init(phys_ram_base + vga_ram_addr,
-                         vga_ram_addr, vga_ram_size);
+            isa_vga_init(vga_ram_size);
         }
     }
 
@@ -671,7 +667,6 @@ QEMUMachine ipf_machine = {
     .name = "itanium",
     .desc = "Itanium Platform",
     .init = (QEMUMachineInitFunc *)ipf_init_pci,
-    .ram_require = (ram_addr_t)(VGA_RAM_SIZE + GFW_SIZE),
     .max_cpus = 255,
 };
 
