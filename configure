@@ -194,7 +194,7 @@ blobs="yes"
 fdt="yes"
 sdl_x11="no"
 xen="yes"
-pkgversion=""
+pkgversion="kvm-devel"
 signalfd="no"
 eventfd="no"
 cpu_emulation="yes"
@@ -1682,8 +1682,6 @@ fi
 qemu_version=`head $source_path/VERSION`
 echo "VERSION=$qemu_version" >>$config_mak
 echo "#define QEMU_VERSION \"$qemu_version\"" >> $config_h
-echo "#define KVM_VERSION \"kvm-devel\"" >> $config_h
-
 echo "#define QEMU_PKGVERSION \"$pkgversion\"" >> $config_h
 
 echo "SRC_PATH=$source_path" >> $config_mak
