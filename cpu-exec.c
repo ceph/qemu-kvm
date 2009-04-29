@@ -347,12 +347,6 @@ int cpu_exec(CPUState *env1)
             }
 #endif
 
-            /* kvm vcpu threads */
-            if (kvm_enabled()) {
-                kvm_cpu_exec(env);
-                longjmp(env->jmp_env, 1);
-            }
-
             if (kvm_enabled()) {
                 kvm_cpu_exec(env);
                 longjmp(env->jmp_env, 1);
