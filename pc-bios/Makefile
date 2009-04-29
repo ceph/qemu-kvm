@@ -16,4 +16,4 @@ all: $(TARGETS)
 	dtc -I dts -O dtb -o $@ $<
 
 clean:
-	rm -f $(TARGETS) *.o *~ *.dtb
+	rm -f $(TARGETS) *.o *~
