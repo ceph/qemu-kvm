@@ -30,7 +30,6 @@
 #include "qemu-common.h"
 #include "monitor.h"
 #include "block_int.h"
-#include "osdep.h"
 
 #ifdef HOST_BSD
 #include <sys/types.h>
@@ -772,15 +771,11 @@ struct partition {
 static int guess_disk_lchs(BlockDriverState *bs,
                            int *pcylinders, int *pheads, int *psectors)
 {
-    uint8_t *buf;
+    uint8_t buf[512];
     int ret, i, heads, sectors, cylinders;
     struct partition *p;
     uint32_t nr_sects;
     uint64_t nb_sectors;
-
-    buf = qemu_memalign(512, 512);
-    if (buf == NULL)
-        return -1;
 
     bdrv_get_geometry(bs, &nb_sectors);
 
@@ -788,10 +783,8 @@ static int guess_disk_lchs(BlockDriverState *bs,
     if (ret < 0)
         return -1;
     /* test msdos magic */
-    if (buf[510] != 0x55 || buf[511] != 0xaa) {
-        qemu_free(buf);
+    if (buf[510] != 0x55 || buf[511] != 0xaa)
         return -1;
-    }
     for(i = 0; i < 4; i++) {
         p = ((struct partition *)(buf + 0x1be)) + i;
         nr_sects = le32_to_cpu(p->nr_sects);
@@ -812,11 +805,9 @@ static int guess_disk_lchs(BlockDriverState *bs,
             printf("guessed geometry: LCHS=%d %d %d\n",
                    cylinders, heads, sectors);
 #endif
-            qemu_free(buf);
             return 0;
         }
     }
-    qemu_free(buf);
     return -1;
 }
 
