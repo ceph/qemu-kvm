@@ -265,7 +265,6 @@ static void cmos_init(ram_addr_t ram_size, ram_addr_t above_4g_mem_size,
         rtc_set_memory(s, 0x5c, (unsigned int)above_4g_mem_size >> 24);
         rtc_set_memory(s, 0x5d, (uint64_t)above_4g_mem_size >> 32);
     }
-    rtc_set_memory(s, 0x5f, smp_cpus - 1);
 
     if (ram_size > (16 * 1024 * 1024))
         val = (ram_size / 65536) - ((16 * 1024 * 1024) / 65536);
