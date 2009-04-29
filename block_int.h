@@ -150,8 +150,6 @@ struct BlockDriverState {
     int cyls, heads, secs, translation;
     int type;
     char device_name[32];
-    /* PCI devfn of parent */
-    int devfn;
     BlockDriverState *next;
     void *private;
 };
