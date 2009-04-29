@@ -46,9 +46,6 @@ void qemu_system_powerdown(void);
 #endif
 void qemu_system_reset(void);
 
-void qemu_get_launch_info(int *argc, char ***argv,
-                          int *opt_daemonize, const char **opt_incoming);
-
 void do_savevm(Monitor *mon, const char *name);
 void do_loadvm(Monitor *mon, const char *name);
 void do_delvm(Monitor *mon, const char *name);

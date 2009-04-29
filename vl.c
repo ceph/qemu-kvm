@@ -4375,18 +4375,6 @@ int qemu_uuid_parse(const char *str, uint8_t *uuid)
 
 #define MAX_NET_CLIENTS 32
 
-static int saved_argc;
-static char **saved_argv;
-static const char *saved_incoming;
-
-void qemu_get_launch_info(int *argc, char ***argv, int *opt_daemonize, const char **opt_incoming)
-{
-    *argc = saved_argc;
-    *argv = saved_argv;
-    *opt_daemonize = daemonize;
-    *opt_incoming = saved_incoming;
-}
-
 #ifdef USE_KVM
 
 #define HUGETLBFS_MAGIC       0x958458f6
@@ -5292,7 +5280,6 @@ int main(int argc, char **argv, char **envp)
                 break;
             case QEMU_OPTION_incoming:
                 incoming = optarg;
-                saved_incoming = incoming;
                 break;
 #ifndef _WIN32
             case QEMU_OPTION_chroot:
