@@ -1367,8 +1367,7 @@ static void host_alarm_handler(int host_signum)
         last_clock = ti;
     }
 #endif
-    if (1 ||
-        alarm_has_dynticks(alarm_timer) ||
+    if (alarm_has_dynticks(alarm_timer) ||
         (!use_icount &&
             qemu_timer_expired(active_timers[QEMU_TIMER_VIRTUAL],
                                qemu_get_clock(vm_clock))) ||
