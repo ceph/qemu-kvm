@@ -27,14 +27,6 @@
 #include "net.h"
 #include "block_int.h"
 #include "sysemu.h"
-#include "pci.h"
-#include "pc.h"
-#include "console.h"
-#include "config.h"
-#include "virtio-blk.h"
-
-#define PCI_BASE_CLASS_STORAGE          0x01
-#define PCI_BASE_CLASS_NETWORK          0x02
 
 int add_init_drive(const char *opts)
 {
@@ -90,4 +82,5 @@ void destroy_bdrvs(dev_match_fn *match_fn, void *arg)
         }
     }
 }
+
 
