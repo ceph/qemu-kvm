@@ -2,6 +2,7 @@
 #define QEMU_PCI_H
 
 #include "qemu-common.h"
+#include "sys-queue.h"
 
 /* PCI includes legacy ISA access.  */
 #include "isa.h"
@@ -80,11 +81,21 @@ typedef int PCIUnregisterFunc(PCIDevice *pci_dev);
 #define PCI_ADDRESS_SPACE_IO		0x01
 #define PCI_ADDRESS_SPACE_MEM_PREFETCH	0x08
 
+typedef struct PCIIORegionComponent {
+    PhysicalMemoryRegion *pmr;
+    target_phys_addr_t offset;
+    target_phys_addr_t size;
+    ram_addr_t ram_addr;
+    ram_addr_t region_offset;
+    LIST_ENTRY(PCIIORegionComponent) link;
+} PCIIORegionComponent;
+
 typedef struct PCIIORegion {
     uint32_t addr; /* current PCI mapping address. -1 means not mapped */
     uint32_t size;
     uint8_t type;
     PCIMapIORegionFunc *map_func;
+    LIST_HEAD(pci_region_list, PCIIORegionComponent) components;
 } PCIIORegion;
 
 #define PCI_ROM_SLOT 6
@@ -170,6 +181,21 @@ int pci_unregister_device(PCIDevice *pci_dev);
 void pci_register_io_region(PCIDevice *pci_dev, int region_num,
                             uint32_t size, int type,
                             PCIMapIORegionFunc *map_func);
+
+PCIIORegionComponent *pci_register_physical_memory(PCIDevice *pci_dev,
+                                                   int region_num,
+                                                   target_phys_addr_t size,
+                                                   ram_addr_t ram_addr);
+PCIIORegionComponent *pci_register_physical_memory_offset(
+    PCIDevice *pci_dev,
+    int region_num,
+    target_phys_addr_t offset,
+    target_phys_addr_t size,
+    ram_addr_t ram_addr,
+    ram_addr_t region_offset);
+void pci_unregister_physical_memory(PCIDevice *pci_dev,
+                                    int region_num,
+                                    PCIIORegionComponent *pci_mem);
 
 uint32_t pci_default_read_config(PCIDevice *d,
                                  uint32_t address, int len);

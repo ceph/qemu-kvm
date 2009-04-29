@@ -286,6 +286,9 @@ static void pci_unregister_io_regions(PCIDevice *pci_dev)
 
     for(i = 0; i < PCI_NUM_REGIONS; i++) {
         r = &pci_dev->io_regions[i];
+        while (!LIST_EMPTY(&r->components)) {
+            pci_unregister_physical_memory(pci_dev, i, LIST_FIRST(&r->components));
+        }
         if (!r->size || r->addr == -1)
             continue;
         if (r->type == PCI_ADDRESS_SPACE_IO) {
@@ -343,11 +346,77 @@ void pci_register_io_region(PCIDevice *pci_dev, int region_num,
         addr = 0x10 + region_num * 4;
     }
     *(uint32_t *)(pci_dev->config + addr) = cpu_to_le32(type);
+    LIST_INIT(&r->components);
+}
+
+PCIIORegionComponent *pci_register_physical_memory(PCIDevice *pci_dev,
+                                                   int region_num,
+                                                   target_phys_addr_t size,
+                                                   ram_addr_t ram_addr)
+{
+    return pci_register_physical_memory_offset(pci_dev, region_num, 0, size,
+                                               ram_addr, 0);
+}
+
+static void pci_region_instantiate(PCIIORegionComponent *pci_mem,
+                                   uint32_t old_addr, uint32_t new_addr)
+{
+    if (new_addr == old_addr) {
+        return;
+    }
+
+    if (old_addr != -1) {
+        physical_memory_region_unregister(pci_mem->pmr);
+        pci_mem->pmr = NULL;
+    }
+
+    if (new_addr != -1) {
+        pci_mem->pmr = physical_memory_region_register_offset(
+            new_addr + pci_mem->offset,
+            pci_mem->size,
+            pci_mem->ram_addr,
+            pci_mem->region_offset);
+    }
+}
+
+PCIIORegionComponent *pci_register_physical_memory_offset(
+    PCIDevice *pci_dev,
+    int region_num,
+    target_phys_addr_t offset,
+    target_phys_addr_t size,
+    ram_addr_t ram_addr,
+    ram_addr_t region_offset)
+{
+    PCIIORegionComponent *pci_mem = (PCIIORegionComponent *)qemu_malloc(sizeof(*pci_mem));
+    PCIIORegion *r = &pci_dev->io_regions[region_num];
+
+    pci_mem->offset = offset;
+    pci_mem->size = size;
+    pci_mem->ram_addr = ram_addr;
+    pci_mem->region_offset = region_offset;
+    pci_mem->pmr = NULL;
+    LIST_INSERT_HEAD(&r->components, pci_mem, link);
+
+    pci_region_instantiate(pci_mem, -1, r->addr);
+
+    return pci_mem;
+}
+
+void pci_unregister_physical_memory(PCIDevice *pci_dev,
+                                    int region_num,
+                                    PCIIORegionComponent *pci_mem)
+{
+    PCIIORegion *r = &pci_dev->io_regions[region_num];
+
+    pci_region_instantiate(pci_mem, r->addr, -1);
+    LIST_REMOVE(pci_mem, link);
+    qemu_free(pci_mem);
 }
 
 static void pci_update_mappings(PCIDevice *d)
 {
     PCIIORegion *r;
+    PCIIORegionComponent *pci_mem;
     int cmd, i;
     uint32_t last_addr, new_addr, config_ofs;
 
@@ -396,6 +465,11 @@ static void pci_update_mappings(PCIDevice *d)
                     new_addr = -1;
                 }
             }
+
+            LIST_FOREACH(pci_mem, &r->components, link) {
+                pci_region_instantiate(pci_mem, r->addr, new_addr);
+            }
+
             /* now do the real mapping */
             if (new_addr != r->addr) {
                 if (r->addr != -1) {
@@ -418,7 +492,9 @@ static void pci_update_mappings(PCIDevice *d)
                 }
                 r->addr = new_addr;
                 if (r->addr != -1) {
-                    r->map_func(d, i, r->addr, r->size, r->type);
+                    if (r->map_func) {
+                        r->map_func(d, i, r->addr, r->size, r->type);
+                    }
                 }
             }
         }
