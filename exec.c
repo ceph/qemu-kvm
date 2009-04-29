@@ -2418,6 +2418,48 @@ void cpu_register_physical_memory_offset(target_phys_addr_t start_addr,
     }
 }
 
+struct PhysicalMemoryRegion {
+    target_phys_addr_t start_addr;
+    target_phys_addr_t size;
+    ram_addr_t ram_addr;
+    ram_addr_t region_offset;
+};
+
+PhysicalMemoryRegion *physical_memory_region_register(
+    target_phys_addr_t start_addr,
+    target_phys_addr_t size,
+    ram_addr_t ram_addr)
+{
+    return physical_memory_region_register_offset(start_addr, size, ram_addr, 0);
+}
+
+PhysicalMemoryRegion *physical_memory_region_register_offset(
+    target_phys_addr_t start_addr,
+    target_phys_addr_t size,
+    ram_addr_t ram_addr,
+    ram_addr_t region_offset)
+{
+    PhysicalMemoryRegion *pmr = (PhysicalMemoryRegion *)qemu_malloc(sizeof(*pmr));
+
+    pmr->start_addr = start_addr;
+    pmr->size = size;
+    pmr->ram_addr = ram_addr;
+    pmr->region_offset = region_offset;
+
+    cpu_register_physical_memory_offset(start_addr, size, ram_addr, region_offset);
+
+    return pmr;
+}
+
+void physical_memory_region_unregister(PhysicalMemoryRegion *pmr)
+{
+    if (kvm_enabled()) {
+        kvm_uncoalesce_mmio_region(pmr->start_addr, pmr->size);
+    }
+    cpu_register_physical_memory(pmr->start_addr, pmr->size, IO_MEM_UNASSIGNED);
+    qemu_free(pmr);
+}
+
 /* XXX: temporary until new memory mapping API */
 ram_addr_t cpu_get_physical_page_desc(target_phys_addr_t addr)
 {

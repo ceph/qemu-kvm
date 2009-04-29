@@ -893,6 +893,19 @@ extern ram_addr_t last_ram_offset;
 typedef void CPUWriteMemoryFunc(void *opaque, target_phys_addr_t addr, uint32_t value);
 typedef uint32_t CPUReadMemoryFunc(void *opaque, target_phys_addr_t addr);
 
+typedef struct PhysicalMemoryRegion PhysicalMemoryRegion;
+
+PhysicalMemoryRegion *physical_memory_region_register(
+    target_phys_addr_t start_addr,
+    target_phys_addr_t size,
+    ram_addr_t ram_addr);
+PhysicalMemoryRegion *physical_memory_region_register_offset(
+    target_phys_addr_t start_addr,
+    target_phys_addr_t size,
+    ram_addr_t ram_addr,
+    ram_addr_t region_offset);
+void physical_memory_region_unregister(PhysicalMemoryRegion *pmr);
+
 void cpu_register_physical_memory_offset(target_phys_addr_t start_addr,
                                          ram_addr_t size,
                                          ram_addr_t phys_offset,
