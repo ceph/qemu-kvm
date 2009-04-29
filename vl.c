@@ -5488,10 +5488,10 @@ int main(int argc, char **argv, char **envp)
         if (bt_parse(bt_opts[i]))
             exit(1);
 
+    /* init the memory */
     if (ram_size == 0)
         ram_size = DEFAULT_RAM_SIZE * 1024 * 1024;
 
-    /* init the memory */
     if (kvm_enabled()) {
 	    if (kvm_qemu_create_context() < 0) {
 		    fprintf(stderr, "Could not create KVM context\n");
