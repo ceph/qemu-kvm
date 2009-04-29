@@ -196,6 +196,9 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
     if (version_id != 3 && version_id != 4 && version_id != 5
         && version_id != 6 && version_id != 7 && version_id != 8)
         return -EINVAL;
+    /* KVM cannot accept migrations from QEMU today */
+    if (version_id != 9)
+        return -EINVAL;
     for(i = 0; i < CPU_NB_REGS; i++)
         qemu_get_betls(f, &env->regs[i]);
     qemu_get_betls(f, &env->eip);
