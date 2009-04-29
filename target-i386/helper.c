@@ -91,8 +91,6 @@ static void add_flagname_to_bitmaps(char *flagname, uint32_t *features,
     fprintf(stderr, "CPU feature %s not found\n", flagname);
 }
 
-extern const char *cpu_vendor_string;
-
 typedef struct x86_def_t {
     const char *name;
     uint32_t level;
@@ -431,9 +429,6 @@ static int cpu_x86_register (CPUX86State *env, const char *cpu_model)
     {
         const char *model_id = def->model_id;
         int c, len, i;
-
-        if (cpu_vendor_string != NULL)
-            model_id = cpu_vendor_string;
         if (!model_id)
             model_id = "";
         len = strlen(model_id);

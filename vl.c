@@ -268,7 +268,6 @@ const char *mem_path = NULL;
 int mem_prealloc = 1;	/* force preallocation of physical target memory */
 #endif
 long hpagesize = 0;
-const char *cpu_vendor_string;
 #ifdef TARGET_ARM
 int old_param = 0;
 #endif
@@ -5216,9 +5215,6 @@ int main(int argc, char **argv, char **envp)
                 nb_prom_envs++;
                 break;
 #endif
-	    case QEMU_OPTION_cpu_vendor:
-		cpu_vendor_string = optarg;
-		break;
 #ifdef TARGET_ARM
             case QEMU_OPTION_old_param:
                 old_param = 1;
