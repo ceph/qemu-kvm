@@ -835,7 +835,7 @@ static void kvm_kernel_lapic_save_to_user(APICState *s)
 
     kvm_get_lapic(kvm_context, s->cpu_env->cpu_index, kapic);
 
-    s->id = kapic_reg(kapic, 0x2);
+    s->id = kapic_reg(kapic, 0x2) >> 24;
     s->tpr = kapic_reg(kapic, 0x8);
     s->arb_id = kapic_reg(kapic, 0x9);
     s->log_dest = kapic_reg(kapic, 0xd) >> 24;
@@ -868,7 +868,7 @@ static void kvm_kernel_lapic_load_from_user(APICState *s)
     int i;
 
     memset(klapic, 0, sizeof apic);
-    kapic_set_reg(klapic, 0x2, s->id);
+    kapic_set_reg(klapic, 0x2, s->id << 24);
     kapic_set_reg(klapic, 0x8, s->tpr);
     kapic_set_reg(klapic, 0xd, s->log_dest << 24);
     kapic_set_reg(klapic, 0xe, s->dest_mode << 28 | 0x0fffffff);
