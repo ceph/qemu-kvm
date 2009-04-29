@@ -1792,7 +1792,6 @@ static const mon_cmd_t mon_cmds[] = {
                                "acl allow vnc.username fred\n"
                                "acl deny vnc.username bob\n"
                                "acl reset vnc.username\n" },
-    { "set_link", "ss", do_set_link, "name [up|down]" },
     { "cpu_set", "is", do_cpu_set_nr, "cpu [online|offline]", "change cpu state" },
     { NULL, NULL, },
 };
