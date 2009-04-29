@@ -21,7 +21,12 @@
 
 #define TAP_VNET_HDR
 
-#define VIRTIO_NET_VM_VERSION    6
+/* Version 7 has TAP_VNET_HDR support.  This is reserved in upstream QEMU to
+ * avoid future conflict.
+ * We can't assume verisons > 7 have TAP_VNET_HDR support until this is merged
+ * in upstream QEMU.
+ */
+#define VIRTIO_NET_VM_VERSION    7
 
 #define MAC_TABLE_ENTRIES    32
 #define MAX_VLAN    (1 << 12)   /* Per 802.1Q definition */
@@ -652,8 +657,9 @@ static int virtio_net_load(QEMUFile *f, void *opaque, int version_id)
         qemu_get_buffer(f, (uint8_t *)n->vlans, MAX_VLAN >> 3);
 
 #ifdef TAP_VNET_HDR
-    if (qemu_get_be32(f))
+    if (version_id == 7 && qemu_get_be32(f)) {
         tap_using_vnet_hdr(n->vc->vlan->first_client, 1);
+    }
 #endif
 
     if (n->tx_timer_active) {
