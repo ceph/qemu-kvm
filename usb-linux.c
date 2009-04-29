@@ -34,10 +34,6 @@
 #include "qemu-timer.h"
 #include "monitor.h"
 
-#if defined(__linux__)
-#define __user
-#endif
-
 #include <dirent.h>
 #include <sys/ioctl.h>
 #include <signal.h>
