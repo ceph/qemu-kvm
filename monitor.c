@@ -1764,7 +1764,7 @@ static const mon_cmd_t mon_cmds[] = {
       "", "cancel the current VM migration" },
     { "migrate_set_speed", "s", do_migrate_set_speed,
       "value", "set maximum speed (in bytes) for migrations" },
-#if defined(TARGET_I386) || defined(TARGET_X86_64)
+#if defined(TARGET_I386)
     { "drive_add", "ss", drive_hot_add, "pci_addr=[[<domain>:]<bus>:]<slot>\n"
                                          "[file=file][,if=type][,bus=n]\n"
                                         "[,unit=m][,media=d][index=i]\n"
