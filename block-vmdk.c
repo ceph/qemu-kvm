@@ -93,6 +93,7 @@ typedef struct ActiveBDRVState{
 
 static ActiveBDRVState activeBDRV;
 
+
 static int vmdk_probe(const uint8_t *buf, int buf_size, const char *filename)
 {
     uint32_t magic;
