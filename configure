@@ -520,7 +520,7 @@ if test "$werror" = "yes" ; then
 CFLAGS="$CFLAGS -Werror"
 fi
 
-CFLAGS="$CFLAGS -I$(readlink -f "kvm/libkvm")"
+CFLAGS="$CFLAGS -I$(readlink -f "$source_path/kvm/libkvm")"
 
 if test "$solaris" = "no" ; then
     if ld --version 2>/dev/null | grep "GNU ld" >/dev/null 2>/dev/null ; then
@@ -1788,6 +1788,11 @@ bsd)
 ;;
 esac
 
+# this is a temp hack needed for libkvm
+if test "$kvm" = "yes" ; then
+    echo "KVM_CFLAGS=$kvm_cflags" >> $config_mak
+fi
+
 tools=
 if test `expr "$target_list" : ".*softmmu.*"` != 0 ; then
   tools="qemu-img\$(EXESUF) $tools"
@@ -2165,10 +2170,11 @@ done # for target in $targets
 
 # build tree in object directory if source path is different from current one
 if test "$source_path_used" = "yes" ; then
-    DIRS="tests tests/cris slirp audio"
+    DIRS="tests tests/cris slirp audio kvm/libkvm"
     FILES="Makefile tests/Makefile"
     FILES="$FILES tests/cris/Makefile tests/cris/.gdbinit"
     FILES="$FILES tests/test-mmap.c"
+    FILES="$FILES kvm/libkvm/Makefile"
     for dir in $DIRS ; do
             mkdir -p $dir
     done

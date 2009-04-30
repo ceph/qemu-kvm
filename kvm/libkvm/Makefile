@@ -1,5 +1,12 @@
 include ../../config-host.mak
-include config-$(ARCH).mak
+ifneq ($(VPATH),)
+srcdir=$(VPATH)/kvm/libkvm
+else
+srcdir=.
+endif
+
+include $(srcdir)/config-$(ARCH).mak
+
 
 # libkvm is not -Wredundant-decls friendly yet
 CFLAGS += -Wno-redundant-decls
@@ -17,6 +24,8 @@ CFLAGS += $(KVM_CFLAGS)
 LDFLAGS += $(CFLAGS)
 
 CXXFLAGS = $(autodepend-flags)
+
+VPATH:=$(VPATH)/kvm/libkvm
 
 autodepend-flags = -MMD -MF $(dir $*).$(notdir $*).d
 
