@@ -467,6 +467,7 @@ typedef struct RTL8139State {
     VLANClientState *vc;
     uint8_t macaddr[6];
     int rtl8139_mmio_io_addr;
+    PCIIORegionComponent *pci_mem;
 
     /* C ring mode */
     uint32_t   currTxDesc;
@@ -3324,15 +3325,6 @@ typedef struct PCIRTL8139State {
     RTL8139State rtl8139;
 } PCIRTL8139State;
 
-static void rtl8139_mmio_map(PCIDevice *pci_dev, int region_num,
-                       uint32_t addr, uint32_t size, int type)
-{
-    PCIRTL8139State *d = (PCIRTL8139State *)pci_dev;
-    RTL8139State *s = &d->rtl8139;
-
-    cpu_register_physical_memory(addr + 0, 0x100, s->rtl8139_mmio_io_addr);
-}
-
 static void rtl8139_ioport_map(PCIDevice *pci_dev, int region_num,
                        uint32_t addr, uint32_t size, int type)
 {
@@ -3476,7 +3468,10 @@ PCIDevice *pci_rtl8139_init(PCIBus *bus, NICInfo *nd, int devfn)
                            PCI_ADDRESS_SPACE_IO,  rtl8139_ioport_map);
 
     pci_register_io_region(&d->dev, 1, 0x100,
-                           PCI_ADDRESS_SPACE_MEM, rtl8139_mmio_map);
+                           PCI_ADDRESS_SPACE_MEM, NULL);
+
+    s->pci_mem = pci_register_physical_memory(&d->dev, 1, 0x100,
+                                              s->rtl8139_mmio_io_addr);
 
     s->pci_dev = (PCIDevice *)d;
     memcpy(s->macaddr, nd->macaddr, 6);
