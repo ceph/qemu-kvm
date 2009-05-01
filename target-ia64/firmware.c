@@ -91,12 +91,11 @@ static int add_nvram_hob(void *hob_buf, unsigned long nvram_addr);
 static int build_hob(void *hob_buf, unsigned long hob_buf_size,
                      unsigned long dom_mem_size, unsigned long vcpus,
                      unsigned long nvram_addr);
-static int load_hob(void *hob_buf,
-                    unsigned long dom_mem_size, void *hob_start);
+static int load_hob(void *hob_buf, unsigned long dom_mem_size);
 
 int
 kvm_ia64_build_hob(unsigned long memsize, unsigned long vcpus,
-                   void* fw_start, unsigned long nvram_addr)
+                   unsigned long nvram_addr)
 {
     char   *hob_buf;
 
@@ -111,7 +110,8 @@ kvm_ia64_build_hob(unsigned long memsize, unsigned long vcpus,
         Hob_Output("Could not build hob");
         return -1;
     }
-    if (load_hob(hob_buf, memsize, fw_start + HOB_OFFSET) < 0) {
+
+    if (load_hob(hob_buf, memsize) < 0) {
         free(hob_buf);
         Hob_Output("Could not load hob");
         return -1;
@@ -249,7 +249,7 @@ err_out:
     return -1;
 }
 static int
-load_hob(void *hob_buf, unsigned long dom_mem_size, void *hob_start)
+load_hob(void *hob_buf, unsigned long dom_mem_size)
 {
     int hob_size;
 
@@ -263,7 +263,9 @@ load_hob(void *hob_buf, unsigned long dom_mem_size, void *hob_start)
         Hob_Output("No enough memory for hob data");
         return -1;
     }
-    memcpy ((void *)hob_start, hob_buf, hob_size);
+
+    cpu_physical_memory_write(GFW_HOB_START, hob_buf, hob_size);
+
     return 0;
 }
 
@@ -643,50 +645,63 @@ out:
 }
 
 int
-kvm_ia64_copy_from_nvram_to_GFW(unsigned long nvram_fd,
-                                const void* fw_start)
+kvm_ia64_copy_from_nvram_to_GFW(unsigned long nvram_fd)
 {
     struct stat file_stat;
+    uint8_t *nvram_buf;
+    int r = 0;
+
+    nvram_buf = malloc(NVRAM_SIZE);
+
     if ((fstat(nvram_fd, &file_stat) < 0) ||
         (NVRAM_SIZE  != file_stat.st_size) ||
-        (read(nvram_fd, (void *)(fw_start + NVRAM_OFFSET),
-              NVRAM_SIZE) != NVRAM_SIZE))
-        return -1;
-    return 0;
+        (read(nvram_fd, nvram_buf, NVRAM_SIZE) != NVRAM_SIZE)) {
+        r = -1;
+        goto out;
+    }
+
+    cpu_physical_memory_write(NVRAM_START, nvram_buf, NVRAM_SIZE);
+
+ out:
+    free(nvram_buf);
+    return r;
 }
 
 int
 kvm_ia64_copy_from_GFW_to_nvram()
 {
+    struct nvram_save_addr nvram_addr_buf;
+    uint8_t *nvram_buf;
     unsigned long nvram_fd;
-    void* real_nvram_start;
-    target_phys_addr_t nvram_size = NVRAM_SIZE;
     unsigned long type = WRITE_TO_NVRAM;
-    unsigned long *nvram_addr = (unsigned long *)(gfw_start + NVRAM_OFFSET);
+    int ret = -1;
 
+    nvram_buf = malloc(NVRAM_SIZE);
+    if (!nvram_buf)
+        goto out_free;
 
+    cpu_physical_memory_read(NVRAM_START, (uint8_t *)&nvram_addr_buf,
+                             sizeof(struct nvram_save_addr));
+    if (nvram_addr_buf.signature != NVRAM_VALID_SIG) {
+        goto out_free;
+    }
+
+    cpu_physical_memory_read(nvram_addr_buf.addr, nvram_buf, NVRAM_SIZE);
 
     nvram_fd = kvm_ia64_nvram_init(type);
     if (nvram_fd  == -1)
         goto out;
-    if (((struct nvram_save_addr *)nvram_addr)->signature != NVRAM_VALID_SIG) {
-        close(nvram_fd);
-        goto out;
-    }
+
     lseek(nvram_fd, 0, SEEK_SET);
-
-    real_nvram_start = cpu_physical_memory_map(((struct nvram_save_addr*)nvram_addr)->addr,
-	&nvram_size, 1);
-    if (write(nvram_fd, real_nvram_start, NVRAM_SIZE) != NVRAM_SIZE) {
-        close(nvram_fd);
+    if (write(nvram_fd, nvram_buf, NVRAM_SIZE) != NVRAM_SIZE)
         goto out;
-    }
-    cpu_physical_memory_unmap(real_nvram_start, NVRAM_SIZE, 1, NVRAM_SIZE);
 
+    ret = 0;
+ out:
     close(nvram_fd);
-    return 0;
-out:
-    return -1;
+ out_free:
+    free(nvram_buf);
+    return ret;
 }
 
 /*
