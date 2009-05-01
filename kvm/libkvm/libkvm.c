@@ -1406,6 +1406,7 @@ int kvm_commit_irq_routes(kvm_context_t kvm)
 
 int kvm_get_irq_route_gsi(kvm_context_t kvm)
 {
+#ifdef KVM_CAP_IRQ_ROUTING
 	if (kvm->max_used_gsi >= KVM_IOAPIC_NUM_PINS)  {
 	    if (kvm->max_used_gsi <= kvm_get_gsi_count(kvm))
                 return kvm->max_used_gsi + 1;
@@ -1413,6 +1414,9 @@ int kvm_get_irq_route_gsi(kvm_context_t kvm)
                 return -ENOSPC;
         } else
             return KVM_IOAPIC_NUM_PINS;
+#else
+	return -ENOSYS;
+#endif
 }
 
 #ifdef KVM_CAP_DEVICE_MSIX
