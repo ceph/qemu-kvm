@@ -22,7 +22,7 @@
 #define KVM_MAX_NUM_MEM_REGIONS 1u
 #define MAX_VCPUS 64
 #define LIBKVM_S390_ORIGIN (0UL)
-#elif __ia64__
+#elif defined(__ia64__)
 #define KVM_MAX_NUM_MEM_REGIONS 32u
 #define MAX_VCPUS 256
 #else
