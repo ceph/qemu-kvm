@@ -33,22 +33,8 @@ static inline void flush_icache_range(unsigned long start, unsigned long stop)
     asm volatile ("sync" : : : "memory");
     asm volatile ("isync" : : : "memory");
 }
-#define qemu_sync_idcache flush_icache_range
-#else
 
-#ifdef __ia64__
-static inline void qemu_sync_idcache(unsigned long start, unsigned long stop)
-{
-    while (start < stop) {
-	    asm volatile ("fc %0" :: "r"(start));
-	    start += 32;
-    }
-    asm volatile (";;sync.i;;srlz.i;;");
-}
 #else
-static inline void qemu_sync_idcache(unsigned long start, unsigned long stop) {}
-#endif
-
 #define qemu_cache_utils_init(envp) do { (void) (envp); } while (0)
 #endif
 

@@ -23,7 +23,6 @@
  */
 #include "qemu-common.h"
 #include "host-utils.h"
-#include "cache-utils.h"
 #include <assert.h>
 
 void pstrcpy(char *buf, int buf_size, const char *str)
@@ -177,8 +176,6 @@ void qemu_iovec_from_buffer(QEMUIOVector *qiov, const void *buf, size_t count)
         if (copy > qiov->iov[i].iov_len)
             copy = qiov->iov[i].iov_len;
         memcpy(qiov->iov[i].iov_base, p, copy);
-        qemu_sync_idcache((unsigned long)qiov->iov[i].iov_base,
-                  (unsigned long)(qiov->iov[i].iov_base + copy));
         p     += copy;
         count -= copy;
     }
