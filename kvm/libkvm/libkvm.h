@@ -739,6 +739,7 @@ int kvm_assign_irq(kvm_context_t kvm,
 int kvm_deassign_irq(kvm_context_t kvm,
                    struct kvm_assigned_irq *assigned_irq);
 #endif
+#endif
 
 /*!
  * \brief Determines whether destroying memory regions is allowed
@@ -748,7 +749,6 @@ int kvm_deassign_irq(kvm_context_t kvm,
  * \param kvm Pointer to the current kvm_context
  */
 int kvm_destroy_memory_region_works(kvm_context_t kvm);
-#endif
 
 #ifdef KVM_CAP_DEVICE_DEASSIGNMENT
 /*!
