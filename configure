@@ -152,6 +152,17 @@ case "$cpu" in
     cpu="unknown"
   ;;
 esac
+
+kvm_version() {
+    local fname="$(dirname "$0")/KVM_VERSION"
+
+    if test -f "$fname"; then
+        cat "$fname"
+    else
+        echo "kvm-devel"
+    fi
+}
+
 gprof="no"
 sparse="no"
 bigendian="no"
@@ -190,6 +201,7 @@ aix="no"
 blobs="yes"
 fdt="yes"
 sdl_x11="no"
+pkgversion="$(kvm_version)"
 signalfd="no"
 eventfd="no"
 cpu_emulation="yes"
@@ -1474,7 +1486,7 @@ fi
 qemu_version=`head $source_path/VERSION`
 echo "VERSION=$qemu_version" >>$config_mak
 echo "#define QEMU_VERSION \"$qemu_version\"" >> $config_h
-echo "#define KVM_VERSION \"kvm-devel\"" >> $config_h
+echo "#define KVM_VERSION \"${pkgversion}\"" >> $config_h
 
 echo "SRC_PATH=$source_path" >> $config_mak
 if [ "$source_path_used" = "yes" ]; then
