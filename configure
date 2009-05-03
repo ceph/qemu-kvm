@@ -152,6 +152,17 @@ case "$cpu" in
     cpu="unknown"
   ;;
 esac
+
+kvm_version() {
+    local fname="$(dirname "$0")/KVM_VERSION"
+
+    if test -f "$fname"; then
+        cat "$fname"
+    else
+        echo "kvm-devel"
+    fi
+}
+
 gprof="no"
 debug_tcg="no"
 sparse="no"
@@ -194,7 +205,7 @@ blobs="yes"
 fdt="yes"
 sdl_x11="no"
 xen="yes"
-pkgversion=" (kvm-devel)"
+pkgversion=" ($(kvm_version))"
 signalfd="no"
 eventfd="no"
 cpu_emulation="yes"
