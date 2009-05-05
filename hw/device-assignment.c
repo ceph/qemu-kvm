@@ -859,8 +859,6 @@ static int assigned_dev_update_msix_mmio(PCIDevice *pci_dev)
         if (entries_nr >= msix_nr.entry_nr)
             break;
         memcpy(&msg_ctrl, va + i * 16 + 12, 4);
-        if (msg_ctrl & 0x1)
-            continue;
         memcpy(&msg_data, va + i * 16 + 8, 4);
         if (msg_data == 0)
             continue;
