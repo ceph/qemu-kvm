@@ -81,8 +81,8 @@ static void extboot_write_cmd(void *opaque, uint32_t addr, uint32_t value)
     int blen = 0;
     void *buf = NULL;
 
-    cpu_physical_memory_read((value & 0xFFFF) << 4, (uint8_t *)&buf,
-                             sizeof(buf));
+    cpu_physical_memory_read((value & 0xFFFF) << 4, (uint8_t *)&cmd,
+                             sizeof(cmd));
 
     if (cmd.type == 0x01 || cmd.type == 0x02) {
 	pa = cmd.xfer.segment * 16 + cmd.xfer.offset;
@@ -98,7 +98,6 @@ static void extboot_write_cmd(void *opaque, uint32_t addr, uint32_t value)
 	cmd.query_geometry.heads = heads;
 	cmd.query_geometry.sectors = sectors;
 	cmd.query_geometry.nb_sectors = nb_sectors;
-	cpu_physical_memory_set_dirty((value & 0xFFFF) << 4);
 	break;
     case 0x01:
 	err = bdrv_read(bs, cmd.xfer.sector, buf, cmd.xfer.nb_sectors);
@@ -118,6 +117,8 @@ static void extboot_write_cmd(void *opaque, uint32_t addr, uint32_t value)
 	break;
     }
 
+    cpu_physical_memory_write((value & 0xFFFF) << 4, (uint8_t *)&cmd,
+                              sizeof(cmd));
     if (buf)
         qemu_free(buf);
 }
