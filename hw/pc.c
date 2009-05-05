@@ -963,7 +963,7 @@ static void pc_init1(ram_addr_t ram_size, int vga_ram_size,
 
     if (extboot_drive != -1) {
 	snprintf(buf, sizeof(buf), "%s/%s", bios_dir, EXTBOOT_FILENAME);
-        option_rom[nb_option_roms++] = buf;
+        option_rom[nb_option_roms++] = strdup(buf);
     }
 
     option_rom_offset = qemu_ram_alloc(0x20000);
