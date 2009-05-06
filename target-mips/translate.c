@@ -1590,7 +1590,7 @@ static void gen_arith (CPUState *env, DisasContext *ctx, uint32_t opc,
             tcg_temp_free(t2);
             tcg_gen_brcondi_tl(TCG_COND_GE, t1, 0, l1);
             tcg_temp_free(t1);
-            /* operands of same sign, result different sign */
+	    /* operands of different sign, first operand and result different sign */
             generate_exception(ctx, EXCP_OVERFLOW);
             gen_set_label(l1);
             gen_store_gpr(t0, rd);
@@ -1604,6 +1604,7 @@ static void gen_arith (CPUState *env, DisasContext *ctx, uint32_t opc,
             tcg_gen_ext32s_tl(cpu_gpr[rd], cpu_gpr[rd]);
         } else if (rs == 0 && rt != 0) {
             tcg_gen_neg_tl(cpu_gpr[rd], cpu_gpr[rt]);
+            tcg_gen_ext32s_tl(cpu_gpr[rd], cpu_gpr[rd]);
         } else if (rs != 0 && rt == 0) {
             tcg_gen_mov_tl(cpu_gpr[rd], cpu_gpr[rs]);
         } else {
@@ -1665,7 +1666,7 @@ static void gen_arith (CPUState *env, DisasContext *ctx, uint32_t opc,
             tcg_temp_free(t2);
             tcg_gen_brcondi_tl(TCG_COND_GE, t1, 0, l1);
             tcg_temp_free(t1);
-            /* operands of same sign, result different sign */
+	    /* operands of different sign, first operand and result different sign */
             generate_exception(ctx, EXCP_OVERFLOW);
             gen_set_label(l1);
             gen_store_gpr(t0, rd);
@@ -8551,6 +8552,7 @@ CPUMIPSState *cpu_mips_init (const char *cpu_model)
     env->cpu_model_str = cpu_model;
     mips_tcg_init();
     cpu_reset(env);
+    qemu_init_vcpu(env);
     return env;
 }
 

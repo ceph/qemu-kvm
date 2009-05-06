@@ -2796,6 +2796,7 @@ void cpu_ppc_reset (void *opaque)
     msr |= (target_ulong)1 << MSR_SPE; /* Allow SPE usage */
     msr |= (target_ulong)1 << MSR_PR;
 #else
+    env->excp_prefix = env->hreset_excp_prefix;
     env->nip = env->hreset_vector | env->excp_prefix;
     if (env->mmu_model != POWERPC_MMU_REAL)
         ppc_tlb_invalidate_all(env);
@@ -2831,8 +2832,7 @@ CPUPPCState *cpu_ppc_init (const char *cpu_model)
     cpu_ppc_register_internal(env, def);
     cpu_ppc_reset(env);
 
-    if (kvm_enabled())
-        kvm_init_vcpu(env);
+    qemu_init_vcpu(env);
 
     return env;
 }

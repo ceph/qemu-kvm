@@ -1590,10 +1590,10 @@ static void vga_draw_graphic(VGAState *s, int full_update)
 {
     int y1, y, update, linesize, y_start, double_scan, mask, depth;
     int width, height, shift_control, line_offset, bwidth, bits;
+    ram_addr_t page0, page1, page_min, page_max;
     int disp_width, multi_scan, multi_run;
     uint8_t *d;
     uint32_t v, addr1, addr;
-    long page0, page1, page_min, page_max;
     vga_draw_line_func *vga_draw_line;
 
     full_update |= update_basic_params(s);
@@ -1728,8 +1728,8 @@ static void vga_draw_graphic(VGAState *s, int full_update)
     addr1 = (s->start_addr * 4);
     bwidth = (width * bits + 7) / 8;
     y_start = -1;
-    page_min = 0x7fffffff;
-    page_max = -1;
+    page_min = -1;
+    page_max = 0;
     d = ds_get_data(s->ds);
     linesize = ds_get_linesize(s->ds);
     y1 = 0;
@@ -1796,7 +1796,7 @@ static void vga_draw_graphic(VGAState *s, int full_update)
                    disp_width, y - y_start);
     }
     /* reset modified pages */
-    if (page_max != -1) {
+    if (page_max >= page_min) {
         cpu_physical_memory_reset_dirty(page_min, page_max + TARGET_PAGE_SIZE,
                                         VGA_DIRTY_FLAG);
     }
@@ -2550,7 +2550,7 @@ int pci_vga_init(PCIBus *bus, int vga_ram_size,
     pci_config_set_vendor_id(pci_conf, PCI_VENDOR_ID_QEMU);
     pci_config_set_device_id(pci_conf, PCI_DEVICE_ID_QEMU_VGA);
     pci_config_set_class(pci_conf, PCI_CLASS_DISPLAY_VGA);
-    pci_conf[0x0e] = 0x00; // header_type
+    pci_conf[PCI_HEADER_TYPE] = PCI_HEADER_TYPE_NORMAL; // header_type
 
     /* XXX: vga_ram_size must be a power of two */
     pci_register_io_region(&d->dev, 0, vga_ram_size,

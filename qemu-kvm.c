@@ -287,7 +287,7 @@ static int all_threads_paused(void)
     return 1;
 }
 
-void qemu_kvm_pause_all_threads(void)
+static void pause_all_threads(void)
 {
     CPUState *penv = first_cpu;
 
@@ -307,7 +307,7 @@ void qemu_kvm_pause_all_threads(void)
 	qemu_cond_wait(&qemu_pause_cond);
 }
 
-void qemu_kvm_resume_all_threads(void)
+static void resume_all_threads(void)
 {
     CPUState *penv = first_cpu;
 
@@ -319,6 +319,14 @@ void qemu_kvm_resume_all_threads(void)
         pthread_kill(penv->kvm_cpu_state.thread, SIG_IPI);
         penv = (CPUState *)penv->next_cpu;
     }
+}
+
+static void kvm_vm_state_change_handler(void *context, int running, int reason)
+{
+    if (running)
+	resume_all_threads();
+    else
+	pause_all_threads();
 }
 
 static void update_regs_for_sipi(CPUState *env)
@@ -365,7 +373,7 @@ static void qemu_kvm_system_reset(void)
 {
     CPUState *penv = first_cpu;
 
-    qemu_kvm_pause_all_threads();
+    pause_all_threads();
 
     qemu_system_reset();
 
@@ -374,7 +382,7 @@ static void qemu_kvm_system_reset(void)
         penv = (CPUState *)penv->next_cpu;
     }
 
-    qemu_kvm_resume_all_threads();
+    resume_all_threads();
 }
 
 static int kvm_main_loop_cpu(CPUState *env)
@@ -460,6 +468,7 @@ int kvm_init_ap(void)
 #ifdef TARGET_I386
     kvm_tpr_opt_setup();
 #endif
+    qemu_add_vm_change_state_handler(kvm_vm_state_change_handler, NULL);
 
     signal(SIG_IPI, sig_ipi_handler);
     return 0;
@@ -603,7 +612,7 @@ int kvm_main_loop(void)
 #endif
     }
 
-    qemu_kvm_pause_all_threads();
+    pause_all_threads();
     pthread_mutex_unlock(&qemu_mutex);
 
     return 0;

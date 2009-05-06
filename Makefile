@@ -30,7 +30,8 @@ else
 DOCS=
 endif
 
-LIBS+=$(AIOLIBS)
+LIBS+=$(PTHREADLIBS)
+LIBS+=$(CLOCKLIBS)
 
 ifdef CONFIG_SOLARIS
 LIBS+=-lsocket -lnsl -lresolv
@@ -61,7 +62,7 @@ recurse-all: $(SUBDIR_RULES)
 #######################################################################
 # BLOCK_OBJS is code used by both qemu system emulation and qemu-img
 
-BLOCK_OBJS=cutils.o qemu-malloc.o
+BLOCK_OBJS=cutils.o cache-utils.o qemu-malloc.o
 BLOCK_OBJS+=block-cow.o block-qcow.o aes.o block-vmdk.o block-cloop.o
 BLOCK_OBJS+=block-dmg.o block-bochs.o block-vpc.o block-vvfat.o
 BLOCK_OBJS+=block-qcow2.o block-parallels.o block-nbd.o
@@ -172,6 +173,10 @@ endif
 
 ifdef CONFIG_COCOA
 OBJS+=cocoa.o
+endif
+
+ifdef CONFIG_IOTHREAD
+OBJS+=qemu-thread.o
 endif
 
 ifdef CONFIG_SLIRP

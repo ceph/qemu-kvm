@@ -371,7 +371,8 @@ endif
 
 OBJS= main.o syscall.o strace.o mmap.o signal.o path.o thunk.o \
       elfload.o linuxload.o uaccess.o envlist.o
-LIBS+= $(AIOLIBS)
+LIBS+= $(PTHREADLIBS)
+LIBS+= $(CLOCKLIBS)
 ifdef TARGET_HAS_BFLT
 OBJS+= flatload.o
 endif
@@ -642,8 +643,9 @@ OBJS += pcnet.o
 OBJS += rtl8139.o
 OBJS += e1000.o
 
-# Serial mouse
-OBJS += msmouse.o
+# Generic watchdog support and some watchdog devices
+OBJS += watchdog.o
+OBJS += wdt_ib700.o wdt_i6300esb.o
 
 ifeq ($(USE_KVM_DEVICE_ASSIGNMENT), 1)
 OBJS+= device-assignment.o
@@ -778,7 +780,8 @@ ifdef CONFIG_SLIRP
 CPPFLAGS+=-I$(SRC_PATH)/slirp
 endif
 
-LIBS+=$(AIOLIBS)
+LIBS+=$(PTHREADLIBS)
+LIBS+=$(CLOCKLIBS)
 # specific flags are needed for non soft mmu emulator
 ifdef CONFIG_STATIC
 LDFLAGS+=-static

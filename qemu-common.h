@@ -194,6 +194,19 @@ struct qemu_work_item {
     int done;
 };
 
+/* Force QEMU to process pending events */
+void qemu_notify_event(void);
+
+/* Unblock cpu */
+void qemu_cpu_kick(void *env);
+int qemu_cpu_self(void *env);
+
+#ifdef CONFIG_USER_ONLY
+#define qemu_init_vcpu(env) do { } while (0)
+#else
+void qemu_init_vcpu(void *env);
+#endif
+
 typedef struct QEMUIOVector {
     struct iovec *iov;
     int niov;

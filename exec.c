@@ -128,7 +128,7 @@ typedef struct RAMBlock {
 
 static RAMBlock *ram_blocks;
 /* TODO: When we implement (and use) ram deallocation (e.g. for hotplug)
-   then we can no longet assume contiguous ram offsets, and external uses
+   then we can no longer assume contiguous ram offsets, and external uses
    of this variable will break.  */
 ram_addr_t last_ram_offset;
 #endif
@@ -406,7 +406,7 @@ static void tlb_unprotect_code_phys(CPUState *env, ram_addr_t ram_addr,
 #define DEFAULT_CODE_GEN_BUFFER_SIZE (32 * 1024 * 1024)
 
 #if defined(CONFIG_USER_ONLY)
-/* Currently it is not recommanded to allocate big chunks of data in
+/* Currently it is not recommended to allocate big chunks of data in
    user mode. It will change when a dedicated libc will be used */
 #define USE_STATIC_CODE_GEN_BUFFER
 #endif
@@ -431,7 +431,7 @@ static void code_gen_alloc(unsigned long tb_size)
         /* in user mode, phys_ram_size is not meaningful */
         code_gen_buffer_size = DEFAULT_CODE_GEN_BUFFER_SIZE;
 #else
-        /* XXX: needs ajustments */
+        /* XXX: needs adjustments */
         code_gen_buffer_size = (unsigned long)(ram_size / 4);
 #endif
     }
@@ -1483,7 +1483,7 @@ void cpu_single_step(CPUState *env, int enabled)
         if (kvm_enabled())
             kvm_update_guest_debug(env, 0);
         else {
-            /* must flush all the translated code to avoid inconsistancies */
+            /* must flush all the translated code to avoid inconsistencies */
             /* XXX: only flush what is necessary */
             tb_flush(env);
         }
@@ -1559,6 +1559,17 @@ void cpu_interrupt(CPUState *env, int mask)
     env->interrupt_request |= mask;
     if (kvm_enabled() && !qemu_kvm_irqchip_in_kernel())
 	kvm_update_interrupt_request(env);
+
+#ifndef CONFIG_USER_ONLY
+    /*
+     * If called from iothread context, wake the target cpu in
+     * case its halted.
+     */
+    if (!qemu_cpu_self(env)) {
+        qemu_cpu_kick(env);
+        return;
+    }
+#endif
 
     if (use_icount) {
         env->icount_decr.u16.high = 0xffff;
@@ -2057,7 +2068,7 @@ int tlb_set_page_exec(CPUState *env, target_ulong vaddr,
         else
             iotlb |= IO_MEM_ROM;
     } else {
-        /* IO handlers are currently passed a phsical address.
+        /* IO handlers are currently passed a physical address.
            It would be nice to pass an offset from the base address
            of that region.  This would avoid having to special case RAM,
            and avoid full address decoding in every device.
@@ -2186,7 +2197,7 @@ int page_get_flags(target_ulong address)
 }
 
 /* modify the flags of a page and invalidate the code if
-   necessary. The flag PAGE_WRITE_ORG is positionned automatically
+   necessary. The flag PAGE_WRITE_ORG is positioned automatically
    depending on PAGE_WRITE */
 void page_set_flags(target_ulong start, target_ulong end, int flags)
 {
@@ -2253,7 +2264,7 @@ int page_check_range(target_ulong start, target_ulong len, int flags)
 }
 
 /* called from signal handler: invalidate the code and unprotect the
-   page. Return TRUE if the fault was succesfully handled. */
+   page. Return TRUE if the fault was successfully handled. */
 int page_unprotect(target_ulong address, unsigned long pc, void *puc)
 {
     unsigned int page_index, prot, pindex;
@@ -2337,7 +2348,7 @@ static void *subpage_init (target_phys_addr_t base, ram_addr_t *phys,
    page size. If (phys_offset & ~TARGET_PAGE_MASK) != 0, then it is an
    io memory page.  The address used when calling the IO function is
    the offset from the start of the region, plus region_offset.  Both
-   start_region and regon_offset are rounded down to a page boundary
+   start_addr and region_offset are rounded down to a page boundary
    before calculating this offset.  This should not be a problem unless
    the low bits of start_addr and region_offset differ.  */
 void cpu_register_physical_memory_offset(target_phys_addr_t start_addr,
@@ -2494,6 +2505,9 @@ ram_addr_t qemu_ram_alloc(ram_addr_t size)
            0xff, size >> TARGET_PAGE_BITS);
 
     last_ram_offset += size;
+
+    if (kvm_enabled())
+        kvm_setup_guest_memory(new_block->host, size);
 
     return new_block->offset;
 }
@@ -3027,8 +3041,7 @@ static void io_mem_init(void)
 
 /* mem_read and mem_write are arrays of functions containing the
    function to access byte (index 0), word (index 1) and dword (index
-   2). Functions can be omitted with a NULL function pointer. The
-   registered functions may be modified dynamically later.
+   2). Functions can be omitted with a NULL function pointer.
    If io_index is non zero, the corresponding io zone is
    modified. If it is zero, a new io zone is allocated. The return
    value can be used with cpu_register_physical_memory(). (-1) is
@@ -3070,16 +3083,6 @@ void cpu_unregister_io_memory(int io_table_address)
     }
     io_mem_opaque[io_index] = NULL;
     io_mem_used[io_index] = 0;
-}
-
-CPUWriteMemoryFunc **cpu_get_io_memory_write(int io_index)
-{
-    return io_mem_write[io_index >> IO_MEM_SHIFT];
-}
-
-CPUReadMemoryFunc **cpu_get_io_memory_read(int io_index)
-{
-    return io_mem_read[io_index >> IO_MEM_SHIFT];
 }
 
 #endif /* !defined(CONFIG_USER_ONLY) */
