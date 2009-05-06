@@ -53,4 +53,9 @@ static inline int cpu_halted(CPUState *env) {
     return EXCP_HALTED;
 }
 
+static inline int cpu_has_work(CPUState *env)
+{
+    return (env->interrupt_request & (CPU_INTERRUPT_HARD));
+}
+
 #endif
