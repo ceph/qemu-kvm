@@ -4930,24 +4930,6 @@ static void *alloc_mem_area(size_t memory, unsigned long *len, const char *path)
 }
 #endif
 
-static void *qemu_alloc_physram(unsigned long memory)
-{
-    void *area = NULL;
-#ifdef USE_KVM
-    unsigned long map_len = memory;
-
-    if (mem_path)
-	area = alloc_mem_area(memory, &map_len, mem_path);
-#endif
-    if (!area)
-	area = qemu_vmalloc(memory);
-#ifdef USE_KVM
-    if (kvm_setup_guest_memory(area, map_len))
-        area = NULL;
-#endif
-    return area;
-}
-
 #ifndef _WIN32
 
 static void termsig_handler(int signal)
