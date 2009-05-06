@@ -122,6 +122,8 @@ int qemu_kvm_unregister_coalesced_mmio(target_phys_addr_t addr,
 int kvm_coalesce_mmio_region(target_phys_addr_t start, ram_addr_t size);
 int kvm_uncoalesce_mmio_region(target_phys_addr_t start, ram_addr_t size);
 
+int kvm_arch_init_irq_routing(void);
+
 #ifdef USE_KVM_DEVICE_ASSIGNMENT
 struct ioperm_data;
 
