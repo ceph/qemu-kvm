@@ -25,6 +25,7 @@
 static struct kvm_msr_list *kvm_msr_list;
 extern unsigned int kvm_shadow_memory;
 static int kvm_has_msr_star;
+static int kvm_has_vm_hsave_pa;
 
 static int lm_capable_kernel;
 
@@ -54,10 +55,14 @@ int kvm_arch_qemu_create_context(void)
     kvm_msr_list = kvm_get_msr_list(kvm_context);
     if (!kvm_msr_list)
 		return -1;
-    for (i = 0; i < kvm_msr_list->nmsrs; ++i)
+    for (i = 0; i < kvm_msr_list->nmsrs; ++i) {
 	if (kvm_msr_list->indices[i] == MSR_STAR)
 	    kvm_has_msr_star = 1;
-	return 0;
+        if (kvm_msr_list->indices[i] == MSR_VM_HSAVE_PA)
+            kvm_has_vm_hsave_pa = 1;
+    }
+
+    return 0;
 }
 
 static void set_msr_entry(struct kvm_msr_entry *entry, uint32_t index,
@@ -260,7 +265,8 @@ void kvm_arch_load_regs(CPUState *env)
     set_msr_entry(&msrs[n++], MSR_IA32_SYSENTER_EIP, env->sysenter_eip);
     if (kvm_has_msr_star)
 	set_msr_entry(&msrs[n++], MSR_STAR,              env->star);
-    set_msr_entry(&msrs[n++], MSR_VM_HSAVE_PA, env->vm_hsave);
+    if (kvm_has_vm_hsave_pa)
+        set_msr_entry(&msrs[n++], MSR_VM_HSAVE_PA, env->vm_hsave);
 #ifdef TARGET_X86_64
     if (lm_capable_kernel) {
         set_msr_entry(&msrs[n++], MSR_CSTAR,             env->cstar);
@@ -435,7 +441,8 @@ void kvm_arch_save_regs(CPUState *env)
     if (kvm_has_msr_star)
 	msrs[n++].index = MSR_STAR;
     msrs[n++].index = MSR_IA32_TSC;
-    msrs[n++].index = MSR_VM_HSAVE_PA;
+    if (kvm_has_vm_hsave_pa)
+        msrs[n++].index = MSR_VM_HSAVE_PA;
 #ifdef TARGET_X86_64
     if (lm_capable_kernel) {
         msrs[n++].index = MSR_CSTAR;
