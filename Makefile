@@ -370,7 +370,12 @@ tarbin:
 
 .PHONY: kvm/extboot
 
-all: kvm/extboot
+build-targets-i386 = $(build-targets-x86)
+build-targets-x86_64 = $(build-targets-x86)
+build-targets-x86  = kvm/extboot
+build-targets-ia64 =
+
+all: $(build-targets-$(ARCH))
 
 kvm/extboot:
 	$(MAKE) -C $@
