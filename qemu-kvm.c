@@ -1425,3 +1425,9 @@ void qemu_kvm_cpu_stop(CPUState *env)
     if (kvm_enabled())
         env->kvm_cpu_state.stopped = 1;
 }
+
+uint32_t kvm_arch_get_supported_cpuid(CPUState *env, uint32_t function,
+                                      int reg)
+{
+    return kvm_get_supported_cpuid(kvm_context, function, reg);
+}
