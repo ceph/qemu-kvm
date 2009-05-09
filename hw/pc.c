@@ -67,6 +67,30 @@ static PITState *pit;
 static IOAPICState *ioapic;
 static PCIDevice *i440fx_state;
 
+typedef struct rom_reset_data {
+    uint8_t *data;
+    target_phys_addr_t addr;
+    unsigned size;
+} RomResetData;
+
+static void option_rom_reset(void *_rrd)
+{
+    RomResetData *rrd = _rrd;
+
+    cpu_physical_memory_write_rom(rrd->addr, rrd->data, rrd->size);
+}
+
+static void option_rom_setup_reset(target_phys_addr_t addr, unsigned size)
+{
+    RomResetData *rrd = qemu_malloc(sizeof *rrd);
+
+    rrd->data = qemu_malloc(size);
+    cpu_physical_memory_read(addr, rrd->data, size);
+    rrd->addr = addr;
+    rrd->size = size;
+    qemu_register_reset(option_rom_reset, rrd);
+}
+
 static void ioport80_write(void *opaque, uint32_t addr, uint32_t data)
 {
 }
@@ -452,7 +476,7 @@ static void bochs_bios_init(void)
 
 /* Generate an initial boot sector which sets state and jump to
    a specified vector */
-static void generate_bootsect(uint8_t *option_rom,
+static void generate_bootsect(target_phys_addr_t option_rom,
                               uint32_t gpr[8], uint16_t segs[6], uint16_t ip)
 {
     uint8_t rom[512], *p, *reloc;
@@ -526,7 +550,8 @@ static void generate_bootsect(uint8_t *option_rom,
         sum += rom[i];
     rom[sizeof(rom) - 1] = -sum;
 
-    memcpy(option_rom, rom, sizeof(rom));
+    cpu_physical_memory_write_rom(option_rom, rom, sizeof(rom));
+    option_rom_setup_reset(option_rom, sizeof (rom));
 }
 
 static long get_file_size(FILE *f)
@@ -543,7 +568,7 @@ static long get_file_size(FILE *f)
     return size;
 }
 
-static void load_linux(uint8_t *option_rom,
+static void load_linux(target_phys_addr_t option_rom,
                        const char *kernel_filename,
 		       const char *initrd_filename,
 		       const char *kernel_cmdline)
@@ -694,6 +719,12 @@ static void load_linux(uint8_t *option_rom,
     memset(gpr, 0, sizeof gpr);
     gpr[4] = cmdline_addr-real_addr-16;	/* SP (-16 is paranoia) */
 
+    option_rom_setup_reset(real_addr, setup_size);
+    option_rom_setup_reset(prot_addr, kernel_size);
+    option_rom_setup_reset(cmdline_addr, cmdline_size);
+    if (initrd_filename)
+        option_rom_setup_reset(initrd_addr, initrd_size);
+
     generate_bootsect(option_rom, gpr, seg, 0);
 }
 
@@ -758,30 +789,6 @@ static void pc_init_ne2k_isa(NICInfo *nd, qemu_irq *pic)
         return;
     isa_ne2000_init(ne2000_io[nb_ne2k], pic[ne2000_irq[nb_ne2k]], nd);
     nb_ne2k++;
-}
-
-typedef struct rom_reset_data {
-    uint8_t *data;
-    target_phys_addr_t addr;
-    unsigned size;
-} RomResetData;
-
-static void option_rom_reset(void *_rrd)
-{
-    RomResetData *rrd = _rrd;
-
-    cpu_physical_memory_write_rom(rrd->addr, rrd->data, rrd->size);
-}
-
-static void option_rom_setup_reset(target_phys_addr_t addr, unsigned size)
-{
-    RomResetData *rrd = qemu_malloc(sizeof *rrd);
-
-    rrd->data = qemu_malloc(size);
-    cpu_physical_memory_read(addr, rrd->data, size);
-    rrd->addr = addr;
-    rrd->size = size;
-    qemu_register_reset(option_rom_reset, rrd);
 }
 
 CPUState *pc_new_cpu(int cpu, const char *cpu_model, int pci_enabled)
@@ -947,7 +954,7 @@ vga_bios_error:
         offset = 0;
         if (linux_boot) {
             option_rom_offset = qemu_ram_alloc(TARGET_PAGE_SIZE);
-            load_linux(phys_ram_base + option_rom_offset,
+            load_linux(option_rom_offset,
                        kernel_filename, initrd_filename, kernel_cmdline);
             cpu_register_physical_memory(0xd0000, TARGET_PAGE_SIZE,
                                          option_rom_offset);
