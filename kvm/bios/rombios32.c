@@ -1293,18 +1293,15 @@ struct rsdp_descriptor         /* Root System Descriptor Pointer */
 	uint8_t                            reserved [3];           /* Reserved field must be 0 */
 } __attribute__((__packed__));
 
+#define MAX_RSDT_ENTRIES 100
+
 /*
  * ACPI 1.0 Root System Description Table (RSDT)
  */
 struct rsdt_descriptor_rev1
 {
 	ACPI_TABLE_HEADER_DEF                           /* ACPI common table header */
-#ifdef BX_QEMU
-	uint32_t                             table_offset_entry [3]; /* Array of pointers to other */
-//	uint32_t                             table_offset_entry [5]; /* Array of pointers to other */
-#else
-	uint32_t                             table_offset_entry [3]; /* Array of pointers to other */
-#endif
+	uint32_t                             table_offset_entry [MAX_RSDT_ENTRIES]; /* Array of pointers to other */
 			 /* ACPI tables */
 } __attribute__((__packed__));
 
@@ -1607,6 +1604,7 @@ void acpi_bios_init(void)
     uint32_t srat_addr,srat_size;
     uint16_t i, external_tables;
     int nb_numa_nodes;
+    int nb_rsdt_entries = 0;
 
     /* reserve memory space for tables */
 #ifdef BX_USE_EBDA_TABLES
@@ -1876,7 +1874,7 @@ void acpi_bios_init(void)
         uint16_t len;
         if(acpi_load_table(i, addr, &len) < 0)
             BX_PANIC("Failed to load ACPI table from QEMU\n");
-        rsdt->table_offset_entry[i+2] = cpu_to_le32(addr);
+        rsdt->table_offset_entry[nb_rsdt_entries++] = cpu_to_le32(addr);
         addr += len;
         if(addr >= ram_size)
             BX_PANIC("ACPI table overflow\n");
@@ -1884,18 +1882,20 @@ void acpi_bios_init(void)
 #endif
 
     /* RSDT */
-    rsdt->table_offset_entry[0] = cpu_to_le32(fadt_addr);
-    rsdt->table_offset_entry[1] = cpu_to_le32(madt_addr);
+    rsdt->table_offset_entry[nb_rsdt_entries++] = cpu_to_le32(fadt_addr);
+    rsdt->table_offset_entry[nb_rsdt_entries++] = cpu_to_le32(madt_addr);
     /* kvm has no ssdt (processors are in dsdt) */
-//  rsdt->table_offset_entry[2] = cpu_to_le32(ssdt_addr);
+//  rsdt->table_offset_entry[nb_rsdt_entries++] = cpu_to_le32(ssdt_addr);
 #ifdef BX_QEMU
     /* No HPET (yet) */
-//  rsdt->table_offset_entry[3] = cpu_to_le32(hpet_addr);
+//  rsdt->table_offset_entry[nb_rsdt_entries++] = cpu_to_le32(hpet_addr);
     if (nb_numa_nodes > 0)
-        rsdt->table_offset_entry[3] = cpu_to_le32(srat_addr);
+        rsdt->table_offset_entry[nb_rsdt_entries++] = cpu_to_le32(srat_addr);
 #endif
+    rsdt_size -= MAX_RSDT_ENTRIES * 4;
+    rsdt_size += nb_rsdt_entries * 4;
     acpi_build_table_header((struct acpi_table_header *)rsdt, "RSDT",
-        rsdt_size - (nb_numa_nodes > 0? 0: sizeof(uint32_t)), 1);
+                            rsdt_size, 1);
 
     acpi_tables_size = addr - base_addr;
 
