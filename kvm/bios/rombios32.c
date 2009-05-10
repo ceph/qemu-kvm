@@ -477,6 +477,8 @@ void wrmsr_smp(uint32_t index, uint64_t val)
 #define QEMU_CFG_SIGNATURE  0x00
 #define QEMU_CFG_ID         0x01
 #define QEMU_CFG_UUID       0x02
+#define QEMU_CFG_ARCH_LOCAL     0x8000
+#define QEMU_CFG_ACPI_TABLES  (QEMU_CFG_ARCH_LOCAL + 0)
 
 int qemu_cfg_port;
 
@@ -503,6 +505,27 @@ void qemu_cfg_read(uint8_t *buf, int len)
 {
     while (len--)
         *(buf++) = inb(QEMU_CFG_DATA_PORT);
+}
+
+static uint16_t acpi_additional_tables(void)
+{
+    uint16_t cnt;
+
+    qemu_cfg_select(QEMU_CFG_ACPI_TABLES);
+    qemu_cfg_read((uint8_t*)&cnt, sizeof(cnt));
+
+    return cnt;
+}
+
+static int acpi_load_table(int i, uint32_t addr, uint16_t *len)
+{
+    qemu_cfg_read((uint8_t*)len, sizeof(*len));
+
+    if (!*len)
+        return -1;
+
+    qemu_cfg_read((uint8_t*)addr, *len);
+    return 0;
 }
 #endif
 
@@ -1515,8 +1538,8 @@ void acpi_bios_init(void)
     uint32_t hpet_addr;
 #endif
     uint32_t base_addr, rsdt_addr, fadt_addr, addr, facs_addr, dsdt_addr, ssdt_addr;
-    uint32_t acpi_tables_size, madt_addr, madt_size;
-    int i;
+    uint32_t acpi_tables_size, madt_addr, madt_size, rsdt_size;
+    uint16_t i, external_tables;
 
     /* reserve memory space for tables */
 #ifdef BX_USE_EBDA_TABLES
@@ -1529,10 +1552,17 @@ void acpi_bios_init(void)
     bios_table_cur_addr += sizeof(*rsdp);
 #endif
 
+#ifdef BX_QEMU
+    external_tables = acpi_additional_tables();
+#else
+    external_tables = 0;
+#endif
+
     addr = base_addr = ram_size - ACPI_DATA_SIZE;
     rsdt_addr = addr;
     rsdt = (void *)(addr);
-    addr += sizeof(*rsdt);
+    rsdt_size = sizeof(*rsdt) + external_tables * 4;
+    addr += rsdt_size;
 
     fadt_addr = addr;
     fadt = (void *)(addr);
@@ -1569,12 +1599,6 @@ void acpi_bios_init(void)
 #endif
 #endif
 
-    acpi_tables_size = addr - base_addr;
-
-    BX_INFO("ACPI tables: RSDP addr=0x%08lx ACPI DATA addr=0x%08lx size=0x%x\n",
-            (unsigned long)rsdp,
-            (unsigned long)rsdt, acpi_tables_size);
-
     /* RSDP */
     memset(rsdp, 0, sizeof(*rsdp));
     memcpy(rsdp->signature, "RSD PTR ", 8);
@@ -1585,17 +1609,6 @@ void acpi_bios_init(void)
 #endif
     rsdp->rsdt_physical_address = cpu_to_le32(rsdt_addr);
     rsdp->checksum = acpi_checksum((void *)rsdp, 20);
-
-    /* RSDT */
-    memset(rsdt, 0, sizeof(*rsdt));
-    rsdt->table_offset_entry[0] = cpu_to_le32(fadt_addr);
-    rsdt->table_offset_entry[1] = cpu_to_le32(madt_addr);
-    //rsdt->table_offset_entry[2] = cpu_to_le32(ssdt_addr);
-#ifdef BX_QEMU
-    //rsdt->table_offset_entry[3] = cpu_to_le32(hpet_addr);
-#endif
-    acpi_build_table_header((struct acpi_table_header *)rsdt,
-                            "RSDT", sizeof(*rsdt), 1);
 
     /* FADT */
     memset(fadt, 0, sizeof(*fadt));
@@ -1694,6 +1707,7 @@ void acpi_bios_init(void)
                                 "APIC", madt_size, 1);
     }
 
+    memset(rsdt, 0, rsdt_size);
 #ifdef BX_QEMU
     /* HPET */
 #ifdef HPET_WORKS_IN_KVM
@@ -1706,7 +1720,36 @@ void acpi_bios_init(void)
     acpi_build_table_header((struct  acpi_table_header *)hpet,
                              "HPET", sizeof(*hpet), 1);
 #endif
+
+    acpi_additional_tables(); /* resets cfg to required entry */
+    for(i = 0; i < external_tables; i++) {
+        uint16_t len;
+        if(acpi_load_table(i, addr, &len) < 0)
+            BX_PANIC("Failed to load ACPI table from QEMU\n");
+        rsdt->table_offset_entry[i+2] = cpu_to_le32(addr);
+        addr += len;
+        if(addr >= ram_size)
+            BX_PANIC("ACPI table overflow\n");
+    }
 #endif
+
+    /* RSDT */
+    rsdt->table_offset_entry[0] = cpu_to_le32(fadt_addr);
+    rsdt->table_offset_entry[1] = cpu_to_le32(madt_addr);
+    /* kvm has no ssdt (processors are in dsdt) */
+//  rsdt->table_offset_entry[2] = cpu_to_le32(ssdt_addr);
+#ifdef BX_QEMU
+    /* No HPET (yet) */
+//  rsdt->table_offset_entry[3] = cpu_to_le32(hpet_addr);
+#endif
+    acpi_build_table_header((struct acpi_table_header *)rsdt,
+                            "RSDT", rsdt_size, 1);
+
+    acpi_tables_size = addr - base_addr;
+
+    BX_INFO("ACPI tables: RSDP addr=0x%08lx ACPI DATA addr=0x%08lx size=0x%x\n",
+            (unsigned long)rsdp,
+            (unsigned long)rsdt, acpi_tables_size);
 
 }
 
