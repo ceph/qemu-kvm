@@ -458,6 +458,11 @@ void init_smp_msrs(void)
     *(uint32_t *)SMP_MSR_ADDR = 0;
 }
 
+static inline uint64_t le64_to_cpu(uint64_t x)
+{
+    return x;
+}
+
 void wrmsr_smp(uint32_t index, uint64_t val)
 {
     static struct { uint32_t ecx, eax, edx; } *p = (void *)SMP_MSR_ADDR;
@@ -476,6 +481,7 @@ void wrmsr_smp(uint32_t index, uint64_t val)
 #define QEMU_CFG_SIGNATURE  0x00
 #define QEMU_CFG_ID         0x01
 #define QEMU_CFG_UUID       0x02
+#define QEMU_CFG_NUMA       0x0D
 #define QEMU_CFG_ARCH_LOCAL     0x8000
 #define QEMU_CFG_ACPI_TABLES  (QEMU_CFG_ARCH_LOCAL + 0)
 #define QEMU_CFG_SMBIOS_ENTRIES  (QEMU_CFG_ARCH_LOCAL + 1)
@@ -536,6 +542,14 @@ static uint16_t smbios_entries(void)
     qemu_cfg_read((uint8_t*)&cnt, sizeof(cnt));
 
     return cnt;
+}
+
+uint64_t qemu_cfg_get64 (void)
+{
+    uint64_t ret;
+
+    qemu_cfg_read((uint8_t*)&ret, 8);
+    return le64_to_cpu(ret);
 }
 #endif
 
@@ -1286,8 +1300,8 @@ struct rsdt_descriptor_rev1
 {
 	ACPI_TABLE_HEADER_DEF                           /* ACPI common table header */
 #ifdef BX_QEMU
-	uint32_t                             table_offset_entry [2]; /* Array of pointers to other */
-//	uint32_t                             table_offset_entry [4]; /* Array of pointers to other */
+	uint32_t                             table_offset_entry [3]; /* Array of pointers to other */
+//	uint32_t                             table_offset_entry [5]; /* Array of pointers to other */
 #else
 	uint32_t                             table_offset_entry [3]; /* Array of pointers to other */
 #endif
@@ -1395,7 +1409,7 @@ struct multiple_apic_table
 } __attribute__((__packed__));
 
 
-/* Values for Type in APIC_HEADER_DEF */
+/* Values for Type in APIC sub-headers */
 
 #define APIC_PROCESSOR          0
 #define APIC_IO                 1
@@ -1408,18 +1422,18 @@ struct multiple_apic_table
 #define APIC_XRUPT_SOURCE       8
 #define APIC_RESERVED           9           /* 9 and greater are reserved */
 
-/*
- * MADT sub-structures (Follow MULTIPLE_APIC_DESCRIPTION_TABLE)
- */
-#define APIC_HEADER_DEF                     /* Common APIC sub-structure header */\
+#define ACPI_SUB_HEADER_DEF                 /* Common ACPI sub-structure header */\
 	uint8_t                              type; \
 	uint8_t                              length;
 
+/*
+ * MADT sub-structures (Follow MULTIPLE_APIC_DESCRIPTION_TABLE)
+ */
 /* Sub-structures for MADT */
 
 struct madt_processor_apic
 {
-	APIC_HEADER_DEF
+	ACPI_SUB_HEADER_DEF
 	uint8_t                              processor_id;           /* ACPI processor id */
 	uint8_t                              local_apic_id;          /* Processor's local APIC id */
 #if 0
@@ -1429,6 +1443,43 @@ struct madt_processor_apic
         uint32_t flags;
 #endif
 } __attribute__((__packed__));
+
+/*
+ * SRAT (NUMA topology description) table
+ */
+
+#define SRAT_PROCESSOR          0
+#define SRAT_MEMORY             1
+
+struct system_resource_affinity_table
+{
+    ACPI_TABLE_HEADER_DEF
+    uint32_t    reserved1;
+    uint32_t    reserved2[2];
+};
+
+struct srat_processor_affinity
+{
+    ACPI_SUB_HEADER_DEF
+    uint8_t     proximity_lo;
+    uint8_t     local_apic_id;
+    uint32_t    flags;
+    uint8_t     local_sapic_eid;
+    uint8_t     proximity_hi[3];
+    uint32_t    reserved;
+};
+
+struct srat_memory_affinity
+{
+    ACPI_SUB_HEADER_DEF
+    uint8_t     proximity[4];
+    uint16_t    reserved1;
+    uint32_t    base_addr_low,base_addr_high;
+    uint32_t    length_low,length_high;
+    uint32_t    reserved2;
+    uint32_t    flags;
+    uint32_t    reserved3[2];
+};
 
 #ifdef BX_QEMU
 /*
@@ -1458,7 +1509,7 @@ struct acpi_20_hpet {
 
 struct madt_io_apic
 {
-	APIC_HEADER_DEF
+	ACPI_SUB_HEADER_DEF
 	uint8_t                              io_apic_id;             /* I/O APIC ID */
 	uint8_t                              reserved;               /* Reserved - must be zero */
 	uint32_t                             address;                /* APIC physical address */
@@ -1469,7 +1520,7 @@ struct madt_io_apic
 #ifdef BX_QEMU
 struct madt_int_override
 {
-	APIC_HEADER_DEF
+	ACPI_SUB_HEADER_DEF
 	uint8_t                bus;     /* Identifies ISA Bus */
 	uint8_t                source;  /* Bus-relative interrupt source */
 	uint32_t               gsi;     /* GSI that source will signal */
@@ -1522,6 +1573,21 @@ static void acpi_build_table_header(struct acpi_table_header *h,
     h->checksum = acpi_checksum((void *)h, len);
 }
 
+static void acpi_build_srat_memory(struct srat_memory_affinity *numamem,
+    uint64_t base, uint64_t len, int node, int enabled)
+{
+     numamem->type = SRAT_MEMORY;
+     numamem->length = sizeof(*numamem);
+     memset (numamem->proximity, 0 ,4);
+     numamem->proximity[0] = node;
+     numamem->flags = cpu_to_le32(!!enabled);
+     numamem->base_addr_low = base & 0xFFFFFFFF;
+     numamem->base_addr_high = base >> 32;
+     numamem->length_low = len & 0xFFFFFFFF;
+     numamem->length_high = len >> 32;
+     return;
+}
+
 /* base_addr must be a multiple of 4KB */
 void acpi_bios_init(void)
 {
@@ -1532,12 +1598,15 @@ void acpi_bios_init(void)
     struct multiple_apic_table *madt;
     uint8_t *dsdt, *ssdt;
 #ifdef BX_QEMU
+    struct system_resource_affinity_table *srat;
     struct acpi_20_hpet *hpet;
     uint32_t hpet_addr;
 #endif
     uint32_t base_addr, rsdt_addr, fadt_addr, addr, facs_addr, dsdt_addr, ssdt_addr;
     uint32_t acpi_tables_size, madt_addr, madt_size, rsdt_size;
+    uint32_t srat_addr,srat_size;
     uint16_t i, external_tables;
+    int nb_numa_nodes;
 
     /* reserve memory space for tables */
 #ifdef BX_USE_EBDA_TABLES
@@ -1575,6 +1644,26 @@ void acpi_bios_init(void)
     dsdt_addr = addr;
     dsdt = (void *)(addr);
     addr += sizeof(AmlCode);
+
+#ifdef BX_QEMU
+    qemu_cfg_select(QEMU_CFG_NUMA);
+    nb_numa_nodes = qemu_cfg_get64();
+#else
+    nb_numa_nodes = 0;
+#endif
+    if (nb_numa_nodes > 0) {
+        addr = (addr + 7) & ~7;
+        srat_addr = addr;
+        srat_size = sizeof(*srat) +
+            sizeof(struct srat_processor_affinity) * smp_cpus +
+            sizeof(struct srat_memory_affinity) * (nb_numa_nodes + 2);
+        srat = (void *)(addr);
+        addr += srat_size;
+    } else {
+        srat_addr = addr;
+        srat = (void*)(addr);
+        srat_size = 0;
+    }
 
     addr = (addr + 7) & ~7;
     madt_addr = addr;
@@ -1707,6 +1796,69 @@ void acpi_bios_init(void)
 
     memset(rsdt, 0, rsdt_size);
 #ifdef BX_QEMU
+    /* SRAT */
+    if (nb_numa_nodes > 0) {
+        struct srat_processor_affinity *core;
+        struct srat_memory_affinity *numamem;
+        int slots;
+        uint64_t mem_len, mem_base, next_base = 0, curnode;
+
+        qemu_cfg_select(QEMU_CFG_NUMA);
+        qemu_cfg_get64();
+        memset (srat, 0 , srat_size);
+        srat->reserved1=1;
+ 
+        core = (void*)(srat + 1);
+        for (i = 0; i < smp_cpus; ++i) {
+             core->type = SRAT_PROCESSOR;
+             core->length = sizeof(*core);
+             core->local_apic_id = i;
+             curnode = qemu_cfg_get64();
+             core->proximity_lo = curnode;
+             memset (core->proximity_hi, 0, 3);
+             core->local_sapic_eid = 0;
+             if (i < smp_cpus)
+                 core->flags = cpu_to_le32(1);
+             else
+                 core->flags = 0;
+             core++;
+        }
+
+        /* the memory map is a bit tricky, it contains at least one hole
+         * from 640k-1M and possibly another one from 3.5G-4G.
+         */
+        numamem = (void*)core; slots = 0;
+        acpi_build_srat_memory(numamem, 0, 640*1024, 0, 1);
+        next_base = 1024 * 1024; numamem++;slots++;
+        for (i = 1; i < nb_numa_nodes + 1; ++i) {
+            mem_base = next_base;
+            mem_len = qemu_cfg_get64();
+            if (i == 1) mem_len -= 1024 * 1024;
+            next_base = mem_base + mem_len;
+ 
+            /* Cut out the PCI hole */
+            if (mem_base <= ram_size && next_base > ram_size) {
+                mem_len -= next_base - ram_size;
+                if (mem_len > 0) {
+                    acpi_build_srat_memory(numamem, mem_base, mem_len, i-1, 1);
+                    numamem++; slots++;
+                }
+                mem_base = 1ULL << 32;
+                mem_len = next_base - ram_size;
+                next_base += (1ULL << 32) - ram_size;
+            }
+            acpi_build_srat_memory(numamem, mem_base, mem_len, i-1, 1);
+            numamem++; slots++;
+        }
+        for (; slots < nb_numa_nodes + 2; slots++) {
+            acpi_build_srat_memory(numamem, 0, 0, 0, 0);
+            numamem++;
+        }
+
+         acpi_build_table_header((struct acpi_table_header *)srat,
+                                "SRAT", srat_size, 1);
+    }
+
     /* HPET */
 #ifdef HPET_WORKS_IN_KVM
     memset(hpet, 0, sizeof(*hpet));
@@ -1739,9 +1891,11 @@ void acpi_bios_init(void)
 #ifdef BX_QEMU
     /* No HPET (yet) */
 //  rsdt->table_offset_entry[3] = cpu_to_le32(hpet_addr);
+    if (nb_numa_nodes > 0)
+        rsdt->table_offset_entry[3] = cpu_to_le32(srat_addr);
 #endif
-    acpi_build_table_header((struct acpi_table_header *)rsdt,
-                            "RSDT", rsdt_size, 1);
+    acpi_build_table_header((struct acpi_table_header *)rsdt, "RSDT",
+        rsdt_size - (nb_numa_nodes > 0? 0: sizeof(uint32_t)), 1);
 
     acpi_tables_size = addr - base_addr;
 
