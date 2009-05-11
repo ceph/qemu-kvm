@@ -887,3 +887,9 @@ int kvm_arch_init_irq_routing(void)
     }
     return 0;
 }
+
+uint32_t kvm_arch_get_supported_cpuid(CPUState *env, uint32_t function,
+                                      int reg)
+{
+    return kvm_get_supported_cpuid(kvm_context, function, reg);
+}
