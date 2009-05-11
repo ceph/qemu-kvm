@@ -838,9 +838,7 @@ static inline int cpu_get_time_fast(void)
 #define cpu_signal_handler cpu_x86_signal_handler
 #define cpu_list x86_cpu_list
 
-/* CPU_SAVE_VERSION 9 is reserved for KVM.  This is to avoid breakage as KVM
- * merges into upstream QEMU */
-#define CPU_SAVE_VERSION 9
+#define CPU_SAVE_VERSION 8
 
 /* MMU modes definitions */
 #define MMU_MODE0_SUFFIX _kernel
