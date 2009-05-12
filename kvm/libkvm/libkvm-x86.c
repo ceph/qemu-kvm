@@ -575,6 +575,8 @@ static struct kvm_cpuid2 *try_get_cpuid(kvm_context_t kvm, int max)
 	r = ioctl(kvm->fd, KVM_GET_SUPPORTED_CPUID, cpuid);
 	if (r == -1)
 		r = -errno;
+	else if (r == 0 && cpuid->nent >= max)
+		r = -E2BIG;
 	if (r < 0) {
 		if (r == -E2BIG) {
 			free(cpuid);
