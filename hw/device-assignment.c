@@ -776,11 +776,12 @@ static void assigned_dev_update_msi(PCIDevice *pci_dev, unsigned int ctrl_pos)
         assigned_dev->entry->u.msi.data = *(uint16_t *)(pci_dev->config +
                 pci_dev->cap.start + PCI_MSI_DATA_32);
         assigned_dev->entry->type = KVM_IRQ_ROUTING_MSI;
-        assigned_dev->entry->gsi = kvm_get_irq_route_gsi(kvm_context);
-        if (assigned_dev->entry->gsi < 0) {
+        r = kvm_get_irq_route_gsi(kvm_context);
+        if (r < 0) {
             perror("assigned_dev_update_msi: kvm_get_irq_route_gsi");
             return;
         }
+        assigned_dev->entry->gsi = r;
 
         kvm_add_routing_entry(kvm_context, assigned_dev->entry);
         if (kvm_commit_irq_routes(kvm_context) < 0) {
