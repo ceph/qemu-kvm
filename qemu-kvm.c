@@ -1190,7 +1190,7 @@ int kvm_physical_memory_set_dirty_tracking(int enable)
 /* get kvm's dirty pages bitmap and update qemu's */
 static int kvm_get_dirty_pages_log_range(unsigned long start_addr,
                                          unsigned char *bitmap,
-                                         unsigned int offset,
+                                         unsigned long offset,
                                          unsigned long mem_size)
 {
     unsigned int i, j, n=0;
