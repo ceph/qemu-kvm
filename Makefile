@@ -52,6 +52,18 @@ endif
 SUBDIR_MAKEFLAGS=$(if $(V),,--no-print-directory)
 SUBDIR_RULES=$(patsubst %,subdir-%, $(TARGET_DIRS))
 
+ifeq ($(KVM_KMOD),yes)
+
+.PHONEY: kvm-kmod
+
+all: kvm-kmod
+
+kvm-kmod:
+	$(call quiet-command,$(MAKE) $(SUBDIR_MAKEFLAGS) -C kvm/kernel V="$(V)" )
+
+
+endif
+
 subdir-%:
 	$(call quiet-command,$(MAKE) $(SUBDIR_MAKEFLAGS) -C $* V="$(V)" TARGET_DIR="$*/" all,)
 
@@ -297,6 +309,7 @@ endif
 	for d in $(TARGET_DIRS); do \
 	$(MAKE) -C $$d $@ || exit 1 ; \
         done
+	$(MAKE) -C kvm/kernel $@
 
 # various test targets
 test speed: all

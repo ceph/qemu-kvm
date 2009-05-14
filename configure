@@ -210,6 +210,7 @@ pkgversion=" ($(kvm_version))"
 signalfd="no"
 eventfd="no"
 cpu_emulation="yes"
+kvm_kmod="no"
 
 # OS specific
 if check_define __linux__ ; then
@@ -1397,6 +1398,15 @@ else
   binsuffix="/bin"
 fi
 
+if test -f kvm/kernel/configure; then
+    kvm_kmod="yes"
+    kmod_args=()
+    if test -n "$kerneldir"; then
+	kmod_args+=("--kerneldir=$kerneldir")
+    fi
+    (cd kvm/kernel; ./configure "${kmod_args[@]}")
+fi
+
 echo "Install prefix    $prefix"
 echo "BIOS directory    $prefix$datasuffix"
 echo "binary directory  $prefix$binsuffix"
@@ -1818,6 +1828,8 @@ esac
 if test "$kvm" = "yes" ; then
     echo "KVM_CFLAGS=$kvm_cflags" >> $config_mak
 fi
+
+echo "KVM_KMOD=$kvm_kmod" >> $config_mak
 
 tools=
 if test `expr "$target_list" : ".*softmmu.*"` != 0 ; then
