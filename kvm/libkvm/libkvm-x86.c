@@ -59,16 +59,26 @@ static int kvm_create_pit(kvm_context_t kvm)
 
 	kvm->pit_in_kernel = 0;
 	if (!kvm->no_pit_creation) {
-		r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_PIT);
-		if (r > 0) {
+#ifdef KVM_CAP_PIT2
+		struct kvm_pit_config config = { .flags = 0 };
+
+		r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_PIT2);
+		if (r > 0)
+			r = ioctl(kvm->vm_fd, KVM_CREATE_PIT2, &config);
+		else
+#endif
+		{
+			r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_PIT);
+			if (r <= 0)
+				return 0;
+
 			r = ioctl(kvm->vm_fd, KVM_CREATE_PIT);
-			if (r >= 0)
-				kvm->pit_in_kernel = 1;
-			else {
-				fprintf(stderr, "Create kernel PIC irqchip failed\n");
-				return r;
-			}
 		}
+		if (r < 0) {
+			fprintf(stderr, "Create kernel PIC irqchip failed\n");
+			return r;
+		}
+		kvm->pit_in_kernel = 1;
 	}
 #endif
 	return 0;
