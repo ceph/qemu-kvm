@@ -31,7 +31,7 @@ int main()
 
 	t1 = rdtsc();
 	for (i = 0; i < N; ++i)
-		asm volatile ("push %%"R"bx; cpuid; pop %%"R"bx"
+		asm volatile ("push %%"R "bx; cpuid; pop %%"R "bx"
 			      : : : "eax", "ecx", "edx");
 	t2 = rdtsc();
 	printf("vmexit latency: %d\n", (int)((t2 - t1) / N));
