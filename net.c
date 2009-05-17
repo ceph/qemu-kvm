@@ -945,6 +945,7 @@ static TAPState *net_tap_fd_init(VLANState *vlan,
 #endif
 #ifdef TUNSETOFFLOAD
     s->vc->set_offload = tap_set_offload;
+    tap_set_offload(s->vc, 0, 0, 0, 0);
 #endif
     qemu_set_fd_handler2(s->fd, tap_can_send, tap_send, NULL, s);
     snprintf(s->vc->info_str, sizeof(s->vc->info_str), "fd=%d", fd);
