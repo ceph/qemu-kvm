@@ -414,8 +414,10 @@ int qemu_send_packet(VLANClientState *vc1, const uint8_t *buf, int size)
     hex_dump(stdout, buf, size);
 #endif
     for(vc = vlan->first_client; vc != NULL; vc = vc->next) {
-        if (vc != vc1 && !vc->link_down) {
-            if (!vc->fd_can_read || vc->fd_can_read(vc->opaque)) {
+        if (vc != vc1) {
+            if (vc->link_down) {
+                ret = 0;
+            } else  if (!vc->fd_can_read || vc->fd_can_read(vc->opaque)) {
                 vc->fd_read(vc->opaque, buf, size);
                 ret = 0;
             }
