@@ -61,9 +61,31 @@
 #define DPRINTF(fmt, args...) do {} while (0)
 #endif
 
+#define MIN(x,y) ((x) < (y) ? (x) : (y))
+#define ALIGN(x, y) (((x)+(y)-1) & ~((y)-1))
 
 int kvm_abi = EXPECTED_KVM_API_VERSION;
 int kvm_page_size;
+
+static inline void set_gsi(kvm_context_t kvm, unsigned int gsi)
+{
+	uint32_t *bitmap = kvm->used_gsi_bitmap;
+
+	if (gsi < kvm->max_gsi)
+		bitmap[gsi / 32] |= 1U << (gsi % 32);
+	else
+		DPRINTF("Invalid GSI %d\n");
+}
+
+static inline void clear_gsi(kvm_context_t kvm, unsigned int gsi)
+{
+	uint32_t *bitmap = kvm->used_gsi_bitmap;
+
+	if (gsi < kvm->max_gsi)
+		bitmap[gsi / 32] &= ~(1U << (gsi % 32));
+	else
+		DPRINTF("Invalid GSI %d\n");
+}
 
 struct slot_info {
 	unsigned long phys_addr;
@@ -285,7 +307,7 @@ kvm_context_t kvm_init(struct kvm_callbacks *callbacks,
 {
 	int fd;
 	kvm_context_t kvm;
-	int r;
+	int r, gsi_count;
 
 	fd = open("/dev/kvm", O_RDWR);
 	if (fd == -1) {
@@ -322,6 +344,23 @@ kvm_context_t kvm_init(struct kvm_callbacks *callbacks,
 	kvm->dirty_pages_log_all = 0;
 	kvm->no_irqchip_creation = 0;
 	kvm->no_pit_creation = 0;
+
+	gsi_count = kvm_get_gsi_count(kvm);
+	if (gsi_count > 0) {
+		int gsi_bits, i;
+
+		/* Round up so we can search ints using ffs */
+		gsi_bits = ALIGN(gsi_count, 32);
+		kvm->used_gsi_bitmap = malloc(gsi_bits / 8);
+		if (!kvm->used_gsi_bitmap)
+			goto out_close;
+		memset(kvm->used_gsi_bitmap, 0, gsi_bits / 8);
+		kvm->max_gsi = gsi_bits;
+
+		/* Mark any over-allocated bits as already in use */
+		for (i = gsi_count; i < gsi_bits; i++)
+			set_gsi(kvm, i);
+	}
 
 	return kvm;
  out_close:
@@ -625,9 +664,6 @@ int kvm_get_dirty_pages(kvm_context_t kvm, unsigned long phys_addr, void *buf)
 	slot = get_slot(phys_addr);
 	return kvm_get_map(kvm, KVM_GET_DIRTY_LOG, slot, buf);
 }
-
-#define ALIGN(x, y)  (((x)+(y)-1) & ~((y)-1))
-#define BITMAP_SIZE(m) (ALIGN(((m)/PAGE_SIZE), sizeof(long) * 8) / 8)
 
 int kvm_get_dirty_pages_range(kvm_context_t kvm, unsigned long phys_addr,
 			      unsigned long len, void *buf, void *opaque,
@@ -1298,8 +1334,8 @@ int kvm_add_routing_entry(kvm_context_t kvm,
 	new->flags = entry->flags;
 	new->u = entry->u;
 
-	if (entry->gsi > kvm->max_used_gsi)
-		kvm->max_used_gsi = entry->gsi;
+	set_gsi(kvm, entry->gsi);
+
 	return 0;
 #else
 	return -ENOSYS;
@@ -1327,12 +1363,14 @@ int kvm_del_routing_entry(kvm_context_t kvm,
 {
 #ifdef KVM_CAP_IRQ_ROUTING
 	struct kvm_irq_routing_entry *e, *p;
-	int i, found = 0;
+	int i, gsi, found = 0;
+
+	gsi = entry->gsi;
 
 	for (i = 0; i < kvm->irq_routes->nr; ++i) {
 		e = &kvm->irq_routes->entries[i];
 		if (e->type == entry->type
-		    && e->gsi == entry->gsi) {
+		    && e->gsi == gsi) {
 			switch (e->type)
 			{
 			case KVM_IRQ_ROUTING_IRQCHIP: {
@@ -1363,8 +1401,19 @@ int kvm_del_routing_entry(kvm_context_t kvm,
 			default:
 				break;
 			}
-			if (found)
+			if (found) {
+				/* If there are no other users of this GSI
+				 * mark it available in the bitmap */
+				for (i = 0; i < kvm->irq_routes->nr; i++) {
+					e = &kvm->irq_routes->entries[i];
+					if (e->gsi == gsi)
+						break;
+				}
+				if (i == kvm->irq_routes->nr)
+					clear_gsi(kvm, gsi);
+
 				return 0;
+			}
 		}
 	}
 	return -ESRCH;
@@ -1406,17 +1455,19 @@ int kvm_commit_irq_routes(kvm_context_t kvm)
 
 int kvm_get_irq_route_gsi(kvm_context_t kvm)
 {
-#ifdef KVM_CAP_IRQ_ROUTING
-	if (kvm->max_used_gsi >= KVM_IOAPIC_NUM_PINS)  {
-	    if (kvm->max_used_gsi <= kvm_get_gsi_count(kvm))
-                return kvm->max_used_gsi + 1;
-            else
-                return -ENOSPC;
-        } else
-            return KVM_IOAPIC_NUM_PINS;
-#else
-	return -ENOSYS;
-#endif
+	int i, bit;
+	uint32_t *buf = kvm->used_gsi_bitmap;
+
+	/* Return the lowest unused GSI in the bitmap */
+	for (i = 0; i < kvm->max_gsi / 32; i++) {
+		bit = ffs(~buf[i]);
+		if (!bit)
+			continue;
+
+		return bit - 1 + i * 32;
+	}
+
+	return -ENOSPC;
 }
 
 #ifdef KVM_CAP_DEVICE_MSIX
