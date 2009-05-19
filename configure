@@ -1400,11 +1400,13 @@ fi
 
 if test -f kvm/kernel/configure; then
     kvm_kmod="yes"
-    kmod_args=()
+    kmod_args=""
     if test -n "$kerneldir"; then
-	kmod_args+=("--kerneldir=$kerneldir")
+	kmod_args="--kerneldir=$kerneldir"
     fi
-    (cd kvm/kernel; ./configure "${kmod_args[@]}")
+    # hope there are no spaces in kmod_args; can't use arrays because of
+    # dash.
+    (cd kvm/kernel; ./configure $kmod_args)
 fi
 
 echo "Install prefix    $prefix"
