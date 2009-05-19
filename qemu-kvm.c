@@ -594,9 +594,12 @@ int kvm_main_loop(void)
 
     while (1) {
         main_loop_wait(1000);
-        if (qemu_shutdown_requested())
-            break;
-        else if (qemu_powerdown_requested())
+        if (qemu_shutdown_requested()) {
+            if (qemu_no_shutdown()) {
+                vm_stop(0);
+            } else
+                break;
+	} else if (qemu_powerdown_requested())
             qemu_system_powerdown();
         else if (qemu_reset_requested())
 	    qemu_kvm_system_reset();

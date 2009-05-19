@@ -3587,6 +3587,13 @@ static int reset_requested;
 static int shutdown_requested;
 static int powerdown_requested;
 
+int qemu_no_shutdown(void)
+{
+    int r = no_shutdown;
+    no_shutdown = 0;
+    return r;
+}
+
 int qemu_shutdown_requested(void)
 {
     int r = shutdown_requested;
