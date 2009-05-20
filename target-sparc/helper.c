@@ -23,7 +23,6 @@
 #include <string.h>
 #include <inttypes.h>
 #include <signal.h>
-#include <assert.h>
 
 #include "cpu.h"
 #include "exec-all.h"
@@ -660,6 +659,7 @@ void cpu_reset(CPUSPARCState *env)
     env->psret = 0;
     env->psrs = 1;
     env->psrps = 1;
+    CC_OP = CC_OP_FLAGS;
 #ifdef TARGET_SPARC64
     env->pstate = PS_PRIV;
     env->hpstate = HS_PRIV;

@@ -16,12 +16,7 @@
 #include "boards.h"
 #include "flash.h"
 #include "qemu-log.h"
-
-#ifdef TARGET_WORDS_BIGENDIAN
-#define BIOS_FILENAME "mips_bios.bin"
-#else
-#define BIOS_FILENAME "mipsel_bios.bin"
-#endif
+#include "mips-bios.h"
 
 #define PHYS_TO_VIRT(x) ((x) | ~(target_ulong)0x7fffffff)
 
@@ -147,7 +142,7 @@ static void main_cpu_reset(void *opaque)
 
 static const int sector_len = 32 * 1024;
 static
-void mips_r4k_init (ram_addr_t ram_size, int vga_ram_size,
+void mips_r4k_init (ram_addr_t ram_size,
                     const char *boot_device,
                     const char *kernel_filename, const char *kernel_cmdline,
                     const char *initrd_filename, const char *cpu_model)
@@ -254,7 +249,7 @@ void mips_r4k_init (ram_addr_t ram_size, int vga_ram_size,
         }
     }
 
-    isa_vga_init(vga_ram_size);
+    isa_vga_init();
 
     if (nd_table[0].vlan)
         isa_ne2000_init(0x300, i8259[9], &nd_table[0]);

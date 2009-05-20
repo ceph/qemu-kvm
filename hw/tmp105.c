@@ -22,7 +22,7 @@
 #include "hw.h"
 #include "i2c.h"
 
-struct tmp105_s {
+typedef struct {
     i2c_slave i2c;
     int len;
     uint8_t buf[2];
@@ -34,14 +34,14 @@ struct tmp105_s {
     int16_t limit[2];
     int faults;
     int alarm;
-};
+} TMP105State;
 
-static void tmp105_interrupt_update(struct tmp105_s *s)
+static void tmp105_interrupt_update(TMP105State *s)
 {
     qemu_set_irq(s->pin, s->alarm ^ ((~s->config >> 2) & 1));	/* POL */
 }
 
-static void tmp105_alarm_update(struct tmp105_s *s)
+static void tmp105_alarm_update(TMP105State *s)
 {
     if ((s->config >> 0) & 1) {					/* SD */
         if ((s->config >> 7) & 1)				/* OS */
@@ -68,7 +68,7 @@ static void tmp105_alarm_update(struct tmp105_s *s)
 /* Units are 0.001 centigrades relative to 0 C.  */
 void tmp105_set(i2c_slave *i2c, int temp)
 {
-    struct tmp105_s *s = (struct tmp105_s *) i2c;
+    TMP105State *s = (TMP105State *) i2c;
 
     if (temp >= 128000 || temp < -128000) {
         fprintf(stderr, "%s: values is out of range (%i.%03i C)\n",
@@ -83,7 +83,7 @@ void tmp105_set(i2c_slave *i2c, int temp)
 
 static const int tmp105_faultq[4] = { 1, 2, 4, 6 };
 
-static void tmp105_read(struct tmp105_s *s)
+static void tmp105_read(TMP105State *s)
 {
     s->len = 0;
 
@@ -115,7 +115,7 @@ static void tmp105_read(struct tmp105_s *s)
     }
 }
 
-static void tmp105_write(struct tmp105_s *s)
+static void tmp105_write(TMP105State *s)
 {
     switch (s->pointer & 3) {
     case 0:	/* Temperature */
@@ -141,7 +141,7 @@ static void tmp105_write(struct tmp105_s *s)
 
 static int tmp105_rx(i2c_slave *i2c)
 {
-    struct tmp105_s *s = (struct tmp105_s *) i2c;
+    TMP105State *s = (TMP105State *) i2c;
 
     if (s->len < 2)
         return s->buf[s->len ++];
@@ -151,7 +151,7 @@ static int tmp105_rx(i2c_slave *i2c)
 
 static int tmp105_tx(i2c_slave *i2c, uint8_t data)
 {
-    struct tmp105_s *s = (struct tmp105_s *) i2c;
+    TMP105State *s = (TMP105State *) i2c;
 
     if (!s->len ++)
         s->pointer = data;
@@ -166,7 +166,7 @@ static int tmp105_tx(i2c_slave *i2c, uint8_t data)
 
 static void tmp105_event(i2c_slave *i2c, enum i2c_event event)
 {
-    struct tmp105_s *s = (struct tmp105_s *) i2c;
+    TMP105State *s = (TMP105State *) i2c;
 
     if (event == I2C_START_RECV)
         tmp105_read(s);
@@ -176,7 +176,7 @@ static void tmp105_event(i2c_slave *i2c, enum i2c_event event)
 
 static void tmp105_save(QEMUFile *f, void *opaque)
 {
-    struct tmp105_s *s = (struct tmp105_s *) opaque;
+    TMP105State *s = (TMP105State *) opaque;
 
     qemu_put_byte(f, s->len);
     qemu_put_8s(f, &s->buf[0]);
@@ -195,7 +195,7 @@ static void tmp105_save(QEMUFile *f, void *opaque)
 
 static int tmp105_load(QEMUFile *f, void *opaque, int version_id)
 {
-    struct tmp105_s *s = (struct tmp105_s *) opaque;
+    TMP105State *s = (TMP105State *) opaque;
 
     s->len = qemu_get_byte(f);
     qemu_get_8s(f, &s->buf[0]);
@@ -214,9 +214,9 @@ static int tmp105_load(QEMUFile *f, void *opaque, int version_id)
     return 0;
 }
 
-void tmp105_reset(i2c_slave *i2c)
+static void tmp105_reset(i2c_slave *i2c)
 {
-    struct tmp105_s *s = (struct tmp105_s *) i2c;
+    TMP105State *s = (TMP105State *) i2c;
 
     s->temperature = 0;
     s->pointer = 0;
@@ -227,19 +227,27 @@ void tmp105_reset(i2c_slave *i2c)
     tmp105_interrupt_update(s);
 }
 
-struct i2c_slave *tmp105_init(i2c_bus *bus, qemu_irq alarm)
+static void tmp105_init(i2c_slave *i2c)
 {
-    struct tmp105_s *s = (struct tmp105_s *)
-            i2c_slave_init(bus, 0, sizeof(struct tmp105_s));
+    TMP105State *s = FROM_I2C_SLAVE(TMP105State, i2c);
 
-    s->i2c.event = tmp105_event;
-    s->i2c.recv = tmp105_rx;
-    s->i2c.send = tmp105_tx;
-    s->pin = alarm;
+    qdev_init_gpio_out(&i2c->qdev, &s->pin, 1);
 
     tmp105_reset(&s->i2c);
 
     register_savevm("TMP105", -1, 0, tmp105_save, tmp105_load, s);
-
-    return &s->i2c;
 }
+
+static I2CSlaveInfo tmp105_info = {
+    .init = tmp105_init,
+    .event = tmp105_event,
+    .recv = tmp105_rx,
+    .send = tmp105_tx
+};
+
+static void tmp105_register_devices(void)
+{
+    i2c_register_slave("tmp105", sizeof(TMP105State), &tmp105_info);
+}
+
+device_init(tmp105_register_devices)

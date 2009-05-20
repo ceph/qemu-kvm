@@ -29,7 +29,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
-#include <assert.h>
 
 #include "cpu.h"
 #include "exec-all.h"
@@ -957,7 +956,8 @@ static void gen_tst_cc (DisasContext *dc, TCGv cc, int cond)
 				else if (dc->cc_size == 2)
 					bits = 15;	
 
-				tcg_gen_shri_tl(cc, cc_result, 31);
+				tcg_gen_shri_tl(cc, cc_result, bits);
+				tcg_gen_andi_tl(cc, cc, 1);
 			}
 			else {
 				cris_evaluate_flags(dc);

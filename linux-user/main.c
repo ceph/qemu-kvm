@@ -1080,12 +1080,12 @@ int ppc_dcr_write (ppc_dcr_t *dcr_env, int dcrn, target_ulong val)
     return -1;
 }
 
-#define EXCP_DUMP(env, fmt, args...)                                         \
-do {                                                                          \
-    fprintf(stderr, fmt , ##args);                                            \
-    cpu_dump_state(env, stderr, fprintf, 0);                                  \
-    qemu_log(fmt, ##args);                                                   \
-    log_cpu_state(env, 0);                                                      \
+#define EXCP_DUMP(env, fmt, ...)                                        \
+do {                                                                    \
+    fprintf(stderr, fmt , ## __VA_ARGS__);                              \
+    cpu_dump_state(env, stderr, fprintf, 0);                            \
+    qemu_log(fmt, ## __VA_ARGS__);                                      \
+    log_cpu_state(env, 0);                                              \
 } while (0)
 
 void cpu_loop(CPUPPCState *env)
@@ -1461,6 +1461,11 @@ void cpu_loop(CPUPPCState *env)
             ret = do_syscall(env, env->gpr[0], env->gpr[3], env->gpr[4],
                              env->gpr[5], env->gpr[6], env->gpr[7],
                              env->gpr[8]);
+            if (ret == (uint32_t)(-TARGET_QEMU_ESIGRETURN)) {
+                /* Returning from a successful sigreturn syscall.
+                   Avoid corrupting register state.  */
+                break;
+            }
             if (ret > (uint32_t)(-515)) {
                 env->crf[0] |= 0x1;
                 ret = -ret;

@@ -68,14 +68,14 @@ static struct arm_boot_info mainstone_binfo = {
     .ram_size = 0x04000000,
 };
 
-static void mainstone_common_init(ram_addr_t ram_size, int vga_ram_size,
+static void mainstone_common_init(ram_addr_t ram_size,
                 const char *kernel_filename,
                 const char *kernel_cmdline, const char *initrd_filename,
                 const char *cpu_model, enum mainstone_model_e model, int arm_id)
 {
     uint32_t sector_len = 256 * 1024;
     target_phys_addr_t mainstone_flash_base[] = { MST_FLASH_0, MST_FLASH_1 };
-    struct pxa2xx_state_s *cpu;
+    PXA2xxState *cpu;
     qemu_irq *mst_irq;
     int i, index;
 
@@ -126,12 +126,12 @@ static void mainstone_common_init(ram_addr_t ram_size, int vga_ram_size,
     arm_load_kernel(cpu->env, &mainstone_binfo);
 }
 
-static void mainstone_init(ram_addr_t ram_size, int vga_ram_size,
+static void mainstone_init(ram_addr_t ram_size,
                 const char *boot_device,
                 const char *kernel_filename, const char *kernel_cmdline,
                 const char *initrd_filename, const char *cpu_model)
 {
-    mainstone_common_init(ram_size, vga_ram_size, kernel_filename,
+    mainstone_common_init(ram_size, kernel_filename,
                 kernel_cmdline, initrd_filename, cpu_model, mainstone, 0x196);
 }
 

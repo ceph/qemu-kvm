@@ -203,7 +203,6 @@ static IOPortWriteFunc *ioport_write_table[3][MAX_IOPORTS];
 DriveInfo drives_table[MAX_DRIVES+1];
 int nb_drives;
 int extboot_drive = -1;
-static int vga_ram_size;
 enum vga_retrace_method vga_retrace_method = VGA_RETRACE_DUMB;
 static DisplayState *display_state;
 int nographic;
@@ -948,7 +947,7 @@ struct qemu_alarm_timer {
 
 static inline int alarm_has_dynticks(struct qemu_alarm_timer *t)
 {
-    return t->flags & ALARM_FLAG_DYNTICKS;
+    return t && (t->flags & ALARM_FLAG_DYNTICKS);
 }
 
 static void qemu_rearm_alarm_timer(struct qemu_alarm_timer *t)
@@ -1382,7 +1381,7 @@ static void host_alarm_handler(int host_signum)
         qemu_timer_expired(active_timers[QEMU_TIMER_REALTIME],
                            qemu_get_clock(rt_clock))) {
         qemu_event_increment();
-        alarm_timer->flags |= ALARM_FLAG_EXPIRED;
+        if (alarm_timer) alarm_timer->flags |= ALARM_FLAG_EXPIRED;
 
 #ifndef CONFIG_IOTHREAD
         if (next_cpu) {
@@ -1575,6 +1574,11 @@ static int dynticks_start_timer(struct qemu_alarm_timer *t)
 
     sigaction(SIGALRM, &act, NULL);
 
+    /* 
+     * Initialize ev struct to 0 to avoid valgrind complaining
+     * about uninitialized data in timer_create call
+     */
+    memset(&ev, 0, sizeof(ev));
     ev.sigev_value.sival_int = 0;
     ev.sigev_notify = SIGEV_SIGNAL;
     ev.sigev_signo = SIGALRM;
@@ -2611,6 +2615,8 @@ int drive_init(struct drive_opt *arg, int snapshot, void *opaque)
     case IF_MTD:
     case IF_VIRTIO:
         break;
+    case IF_COUNT:
+        abort();
     }
     if (!file[0])
         return -2;
@@ -2901,11 +2907,11 @@ void usb_info(Monitor *mon)
 /* PCMCIA/Cardbus */
 
 static struct pcmcia_socket_entry_s {
-    struct pcmcia_socket_s *socket;
+    PCMCIASocket *socket;
     struct pcmcia_socket_entry_s *next;
 } *pcmcia_sockets = 0;
 
-void pcmcia_socket_register(struct pcmcia_socket_s *socket)
+void pcmcia_socket_register(PCMCIASocket *socket)
 {
     struct pcmcia_socket_entry_s *entry;
 
@@ -2915,7 +2921,7 @@ void pcmcia_socket_register(struct pcmcia_socket_s *socket)
     pcmcia_sockets = entry;
 }
 
-void pcmcia_socket_unregister(struct pcmcia_socket_s *socket)
+void pcmcia_socket_unregister(PCMCIASocket *socket)
 {
     struct pcmcia_socket_entry_s *entry, **ptr;
 
@@ -5039,7 +5045,6 @@ int main(int argc, char **argv, char **envp)
     cpu_model = NULL;
     initrd_filename = NULL;
     ram_size = 0;
-    vga_ram_size = VGA_RAM_SIZE;
     snapshot = 0;
     nographic = 0;
     curses = 0;
@@ -5971,7 +5976,7 @@ int main(int argc, char **argv, char **envp)
     /* FIXME: This is a nasty hack because kqemu can't cope with dynamic
        guest ram allocation.  It needs to go away.  */
     if (kqemu_allowed) {
-        kqemu_phys_ram_size = ram_size + VGA_RAM_SIZE + 4 * 1024 * 1024;
+        kqemu_phys_ram_size = ram_size + 8 * 1024 * 1024 + 4 * 1024 * 1024;
         kqemu_phys_ram_base = qemu_vmalloc(kqemu_phys_ram_size);
         if (!kqemu_phys_ram_base) {
             fprintf(stderr, "Could not allocate physical memory\n");
@@ -6136,10 +6141,12 @@ int main(int argc, char **argv, char **envp)
         }
     }
 
+    module_call_init(MODULE_INIT_DEVICE);
+
     if (kvm_enabled())
 	kvm_init_ap();
 
-    machine->init(ram_size, vga_ram_size, boot_devices,
+    machine->init(ram_size, boot_devices,
                   kernel_filename, kernel_cmdline, initrd_filename, cpu_model);
 
 

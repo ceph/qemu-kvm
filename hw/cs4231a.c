@@ -636,15 +636,10 @@ static int cs_load(QEMUFile *f, void *opaque, int version_id)
     return 0;
 }
 
-int cs4231a_init (AudioState *audio, qemu_irq *pic)
+int cs4231a_init (qemu_irq *pic)
 {
     int i;
     CSState *s;
-
-    if (!audio) {
-        lerr ("No audio state\n");
-        return -1;
-    }
 
     s = qemu_mallocz (sizeof (*s));
 
@@ -664,6 +659,6 @@ int cs4231a_init (AudioState *audio, qemu_irq *pic)
     qemu_register_reset (cs_reset, s);
     cs_reset (s);
 
-    AUD_register_card (audio,"cs4231a", &s->card);
+    AUD_register_card ("cs4231a", &s->card);
     return 0;
 }

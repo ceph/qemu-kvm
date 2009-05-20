@@ -320,7 +320,6 @@ static void mdio_cycle(struct qemu_mdio *bus)
 struct fs_eth
 {
 	CPUState *env;
-	qemu_irq *irq;
 	VLANClientState *vc;
 	int ethregs;
 
@@ -401,8 +400,8 @@ static void eth_update_ma(struct fs_eth *eth, int ma)
 	eth->macaddr[ma][i++] = eth->regs[reg] >> 8;
 	eth->macaddr[ma][i++] = eth->regs[reg] >> 16;
 	eth->macaddr[ma][i++] = eth->regs[reg] >> 24;
-	eth->macaddr[ma][i++] = eth->regs[reg + 4];
-	eth->macaddr[ma][i++] = eth->regs[reg + 4] >> 8;
+	eth->macaddr[ma][i++] = eth->regs[reg + 1];
+	eth->macaddr[ma][i++] = eth->regs[reg + 1] >> 8;
 
 	D(printf("set mac%d=%x.%x.%x.%x.%x.%x\n", ma,
 		 eth->macaddr[ma][0], eth->macaddr[ma][1],
@@ -565,7 +564,7 @@ static void eth_cleanup(VLANClientState *vc)
 }
 
 void *etraxfs_eth_init(NICInfo *nd, CPUState *env, 
-		       qemu_irq *irq, target_phys_addr_t base, int phyaddr)
+		       target_phys_addr_t base, int phyaddr)
 {
 	struct etraxfs_dma_client *dma = NULL;	
 	struct fs_eth *eth = NULL;
@@ -582,7 +581,6 @@ void *etraxfs_eth_init(NICInfo *nd, CPUState *env,
 	dma[1].client.pull = NULL;
 
 	eth->env = env;
-	eth->irq = irq;
 	eth->dma_out = dma;
 	eth->dma_in = dma + 1;
 

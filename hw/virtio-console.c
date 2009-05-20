@@ -123,17 +123,12 @@ static int virtio_console_load(QEMUFile *f, void *opaque, int version_id)
     return 0;
 }
 
-void *virtio_console_init(PCIBus *bus, CharDriverState *chr)
+VirtIODevice *virtio_console_init(DeviceState *dev)
 {
     VirtIOConsole *s;
-
-    s = (VirtIOConsole *)virtio_init_pci(bus, "virtio-console",
-                                         PCI_VENDOR_ID_REDHAT_QUMRANET,
-                                         PCI_DEVICE_ID_VIRTIO_CONSOLE,
-                                         PCI_VENDOR_ID_REDHAT_QUMRANET,
-                                         VIRTIO_ID_CONSOLE,
-                                         PCI_CLASS_OTHERS, 0x00,
-                                         0, sizeof(VirtIOConsole));
+    s = (VirtIOConsole *)virtio_common_init("virtio-console",
+                                            VIRTIO_ID_CONSOLE,
+                                            0, sizeof(VirtIOConsole));
     if (s == NULL)
         return NULL;
 
@@ -142,8 +137,8 @@ void *virtio_console_init(PCIBus *bus, CharDriverState *chr)
     s->ivq = virtio_add_queue(&s->vdev, 128, virtio_console_handle_input);
     s->dvq = virtio_add_queue(&s->vdev, 128, virtio_console_handle_output);
 
-    s->chr = chr;
-    qemu_chr_add_handlers(chr, vcon_can_read, vcon_read, vcon_event, s);
+    s->chr = qdev_init_chardev(dev);
+    qemu_chr_add_handlers(s->chr, vcon_can_read, vcon_read, vcon_event, s);
 
     register_savevm("virtio-console", -1, 1, virtio_console_save, virtio_console_load, s);
 

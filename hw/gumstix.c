@@ -41,12 +41,12 @@
 
 static const int sector_len = 128 * 1024;
 
-static void connex_init(ram_addr_t ram_size, int vga_ram_size,
+static void connex_init(ram_addr_t ram_size,
                 const char *boot_device,
                 const char *kernel_filename, const char *kernel_cmdline,
                 const char *initrd_filename, const char *cpu_model)
 {
-    struct pxa2xx_state_s *cpu;
+    PXA2xxState *cpu;
     int index;
 
     uint32_t connex_rom = 0x01000000;
@@ -75,12 +75,12 @@ static void connex_init(ram_addr_t ram_size, int vga_ram_size,
                     pxa2xx_gpio_in_get(cpu->gpio)[36]);
 }
 
-static void verdex_init(ram_addr_t ram_size, int vga_ram_size,
+static void verdex_init(ram_addr_t ram_size,
                 const char *boot_device,
                 const char *kernel_filename, const char *kernel_cmdline,
                 const char *initrd_filename, const char *cpu_model)
 {
-    struct pxa2xx_state_s *cpu;
+    PXA2xxState *cpu;
     int index;
 
     uint32_t verdex_rom = 0x02000000;

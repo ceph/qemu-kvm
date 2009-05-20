@@ -1,6 +1,8 @@
 # Makefile for QEMU.
 
 ifneq ($(wildcard config-host.mak),)
+# Put the all: rule here so that config-host.mak can contain dependencies.
+all: build-all
 include config-host.mak
 include $(SRC_PATH)/rules.mak
 else
@@ -41,7 +43,7 @@ ifdef CONFIG_WIN32
 LIBS+=-lwinmm -lws2_32 -liphlpapi
 endif
 
-all: $(TOOLS) $(DOCS) recurse-all
+build-all: $(TOOLS) $(DOCS) recurse-all
 
 config-host.mak: configure
 ifneq ($(wildcard config-host.mak),)
@@ -75,19 +77,19 @@ recurse-all: $(SUBDIR_RULES)
 #######################################################################
 # BLOCK_OBJS is code used by both qemu system emulation and qemu-img
 
-BLOCK_OBJS=cutils.o cache-utils.o qemu-malloc.o
-BLOCK_OBJS+=block-cow.o block-qcow.o aes.o block-vmdk.o block-cloop.o
-BLOCK_OBJS+=block-dmg.o block-bochs.o block-vpc.o block-vvfat.o
-BLOCK_OBJS+=block-qcow2.o block-parallels.o block-nbd.o
+BLOCK_OBJS=cutils.o cache-utils.o qemu-malloc.o module.o
+BLOCK_OBJS+=block/cow.o block/qcow.o aes.o block/vmdk.o block/cloop.o
+BLOCK_OBJS+=block/dmg.o block/bochs.o block/vpc.o block/vvfat.o
+BLOCK_OBJS+=block/qcow2.o block/parallels.o block/nbd.o
 BLOCK_OBJS+=nbd.o block.o aio.o
 
 ifdef CONFIG_WIN32
-BLOCK_OBJS += block-raw-win32.o
+BLOCK_OBJS += block/raw-win32.o
 else
 ifdef CONFIG_AIO
 BLOCK_OBJS += posix-aio-compat.o
 endif
-BLOCK_OBJS += block-raw-posix.o
+BLOCK_OBJS += block/raw-posix.o
 endif
 
 ifdef CONFIG_AIO
@@ -117,6 +119,7 @@ OBJS+=bt-hci-csr.o
 OBJS+=buffered_file.o migration.o migration-tcp.o net.o qemu-sockets.o
 OBJS+=qemu-char.o aio.o net-checksum.o savevm.o cache-utils.o
 OBJS+=msmouse.o ps2.o
+OBJS+=qdev.o ssi.o
 
 ifdef CONFIG_BRLAPI
 OBJS+= baum.o
@@ -238,11 +241,11 @@ libqemu_user.a: $(USER_OBJS)
 
 ######################################################################
 
-qemu-img$(EXESUF): qemu-img.o qemu-tool.o osdep.o $(BLOCK_OBJS)
+qemu-img$(EXESUF): qemu-img.o qemu-tool.o tool-osdep.o $(BLOCK_OBJS)
 
-qemu-nbd$(EXESUF):  qemu-nbd.o qemu-tool.o osdep.o $(BLOCK_OBJS)
+qemu-nbd$(EXESUF):  qemu-nbd.o qemu-tool.o tool-osdep.o $(BLOCK_OBJS)
 
-qemu-io$(EXESUF):  qemu-io.o qemu-tool.o osdep.o cmd.o $(BLOCK_OBJS)
+qemu-io$(EXESUF):  qemu-io.o qemu-tool.o tool-osdep.o cmd.o $(BLOCK_OBJS)
 
 qemu-img$(EXESUF) qemu-nbd$(EXESUF) qemu-io$(EXESUF): LIBS += -lz
 
@@ -250,16 +253,16 @@ clean:
 # avoid old build problems by removing potentially incorrect old files
 	rm -f config.mak config.h op-i386.h opc-i386.h gen-op-i386.h op-arm.h opc-arm.h gen-op-arm.h
 	rm -f *.o *.d *.a $(TOOLS) TAGS cscope.* *.pod *~ */*~
-	rm -f slirp/*.o slirp/*.d audio/*.o audio/*.d
+	rm -f slirp/*.o slirp/*.d audio/*.o audio/*.d block/*.o block/*.d
 	$(MAKE) -C tests clean
-	for d in $(TARGET_DIRS); do \
+	for d in $(TARGET_DIRS) libhw32 libhw64; do \
 	$(MAKE) -C $$d $@ || exit 1 ; \
         done
 
 distclean: clean
 	rm -f config-host.mak config-host.h $(DOCS) qemu-options.texi
 	rm -f qemu-{doc,tech}.{info,aux,cp,dvi,fn,info,ky,log,pg,toc,tp,vr}
-	for d in $(TARGET_DIRS); do \
+	for d in $(TARGET_DIRS) libhw32 libhw64; do \
 	rm -rf $$d || exit 1 ; \
         done
 
@@ -431,7 +434,7 @@ tarbin:
 	$(mandir)/man8/qemu-nbd.8
 
 # Include automatically generated dependency files
--include $(wildcard *.d audio/*.d slirp/*.d)
+-include $(wildcard *.d audio/*.d slirp/*.d block/*.d)
 
 .PHONY: kvm/extboot
 

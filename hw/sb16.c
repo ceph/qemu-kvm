@@ -1398,17 +1398,12 @@ static int SB_load (QEMUFile *f, void *opaque, int version_id)
     return 0;
 }
 
-int SB16_init (AudioState *audio, qemu_irq *pic)
+int SB16_init (qemu_irq *pic)
 {
     SB16State *s;
     int i;
     static const uint8_t dsp_write_ports[] = {0x6, 0xc};
     static const uint8_t dsp_read_ports[] = {0x6, 0xa, 0xc, 0xd, 0xe, 0xf};
-
-    if (!audio) {
-        dolog ("No audio state\n");
-        return -1;
-    }
 
     s = qemu_mallocz (sizeof (*s));
 
@@ -1451,6 +1446,6 @@ int SB16_init (AudioState *audio, qemu_irq *pic)
     s->can_write = 1;
 
     register_savevm ("sb16", 0, 1, SB_save, SB_load, s);
-    AUD_register_card (audio, "sb16", &s->card);
+    AUD_register_card ("sb16", &s->card);
     return 0;
 }

@@ -22,151 +22,137 @@
  * THE SOFTWARE.
  */
 
-#include <stdio.h>
+#include "sysbus.h"
 #include "hw.h"
-#include "pc.h"
-#include "etraxfs.h"
+//#include "pc.h"
+//#include "etraxfs.h"
 
 #define D(x)
 
-#define R_RW_MASK	0
-#define R_R_VECT	1
-#define R_R_MASKED_VECT	2
-#define R_R_NMI		3
-#define R_R_GURU	4
-#define R_MAX		5
+#define R_RW_MASK   0
+#define R_R_VECT    1
+#define R_R_MASKED_VECT 2
+#define R_R_NMI     3
+#define R_R_GURU    4
+#define R_MAX       5
 
-struct fs_pic_state
+struct etrax_pic
 {
-	CPUState *env;
-	uint32_t regs[R_MAX];
+    SysBusDevice busdev;
+    uint32_t *interrupt_vector;
+    qemu_irq parent_irq;
+    qemu_irq parent_nmi;
+    uint32_t regs[R_MAX];
 };
 
-static void pic_update(struct fs_pic_state *fs)
-{	
-	CPUState *env = fs->env;
-	uint32_t vector = 0;
-	int i;
+static void pic_update(struct etrax_pic *fs)
+{   
+    uint32_t vector = 0;
+    int i;
 
-	fs->regs[R_R_MASKED_VECT] = fs->regs[R_R_VECT] & fs->regs[R_RW_MASK];
+    fs->regs[R_R_MASKED_VECT] = fs->regs[R_R_VECT] & fs->regs[R_RW_MASK];
 
-	/* The ETRAX interrupt controller signals interrupts to teh core
-	   through an interrupt request wire and an irq vector bus. If 
-	   multiple interrupts are simultaneously active it chooses vector 
-	   0x30 and lets the sw choose the priorities.  */
-	if (fs->regs[R_R_MASKED_VECT]) {
-		uint32_t mv = fs->regs[R_R_MASKED_VECT];
-		for (i = 0; i < 31; i++) {
-			if (mv & 1) {
-				vector = 0x31 + i;
-				/* Check for multiple interrupts.  */
-				if (mv > 1)
-					vector = 0x30;
-				break;
-			}
-			mv >>= 1;
-		}
-		if (vector) {
-			env->interrupt_vector = vector;
-			D(printf("%s vector=%x\n", __func__, vector));
-			cpu_interrupt(env, CPU_INTERRUPT_HARD);
-		}
-	} else {
-		env->interrupt_vector = 0;
-		cpu_reset_interrupt(env, CPU_INTERRUPT_HARD);
-		D(printf("%s reset irqs\n", __func__));
-	}
+    /* The ETRAX interrupt controller signals interrupts to teh core
+       through an interrupt request wire and an irq vector bus. If 
+       multiple interrupts are simultaneously active it chooses vector 
+       0x30 and lets the sw choose the priorities.  */
+    if (fs->regs[R_R_MASKED_VECT]) {
+        uint32_t mv = fs->regs[R_R_MASKED_VECT];
+        for (i = 0; i < 31; i++) {
+            if (mv & 1) {
+                vector = 0x31 + i;
+                /* Check for multiple interrupts.  */
+                if (mv > 1)
+                    vector = 0x30;
+                break;
+            }
+            mv >>= 1;
+        }
+    }
+
+    if (fs->interrupt_vector) {
+        *fs->interrupt_vector = vector;
+    }
+    qemu_set_irq(fs->parent_irq, !!vector);
 }
 
 static uint32_t pic_readl (void *opaque, target_phys_addr_t addr)
 {
-	struct fs_pic_state *fs = opaque;
-	uint32_t rval;
+    struct etrax_pic *fs = opaque;
+    uint32_t rval;
 
-	rval = fs->regs[addr >> 2];
-	D(printf("%s %x=%x\n", __func__, addr, rval));
-	return rval;
+    rval = fs->regs[addr >> 2];
+    D(printf("%s %x=%x\n", __func__, addr, rval));
+    return rval;
 }
 
 static void
 pic_writel (void *opaque, target_phys_addr_t addr, uint32_t value)
 {
-	struct fs_pic_state *fs = opaque;
-	D(printf("%s addr=%x val=%x\n", __func__, addr, value));
+    struct etrax_pic *fs = opaque;
+    D(printf("%s addr=%x val=%x\n", __func__, addr, value));
 
-	if (addr == R_RW_MASK) {
-		fs->regs[R_RW_MASK] = value;
-		pic_update(fs);
-	}
+    if (addr == R_RW_MASK) {
+        fs->regs[R_RW_MASK] = value;
+        pic_update(fs);
+    }
 }
 
 static CPUReadMemoryFunc *pic_read[] = {
-	NULL, NULL,
-	&pic_readl,
+    NULL, NULL,
+    &pic_readl,
 };
 
 static CPUWriteMemoryFunc *pic_write[] = {
-	NULL, NULL,
-	&pic_writel,
+    NULL, NULL,
+    &pic_writel,
 };
 
-void pic_info(Monitor *mon)
-{
-}
+static void nmi_handler(void *opaque, int irq, int level)
+{   
+    struct etrax_pic *fs = (void *)opaque;
+    uint32_t mask;
 
-void irq_info(Monitor *mon)
-{
+    mask = 1 << irq;
+    if (level)
+        fs->regs[R_R_NMI] |= mask;
+    else
+        fs->regs[R_R_NMI] &= ~mask;
+
+    qemu_set_irq(fs->parent_nmi, !!fs->regs[R_R_NMI]);
 }
 
 static void irq_handler(void *opaque, int irq, int level)
-{	
-	struct fs_pic_state *fs = (void *)opaque;
-	irq -= 1;
-	fs->regs[R_R_VECT] &= ~(1 << irq);
-	fs->regs[R_R_VECT] |= (!!level << irq);
+{   
+    struct etrax_pic *fs = (void *)opaque;
 
-	pic_update(fs);
+    if (irq >= 30)
+        return nmi_handler(opaque, irq, level);
+
+    irq -= 1;
+    fs->regs[R_R_VECT] &= ~(1 << irq);
+    fs->regs[R_R_VECT] |= (!!level << irq);
+    pic_update(fs);
 }
 
-static void nmi_handler(void *opaque, int irq, int level)
-{	
-	struct fs_pic_state *fs = (void *)opaque;
-	CPUState *env = fs->env;
-	uint32_t mask;
-
-	mask = 1 << irq;
-	if (level)
-		fs->regs[R_R_NMI] |= mask;
-	else
-		fs->regs[R_R_NMI] &= ~mask;
-
-	if (fs->regs[R_R_NMI])
-		cpu_interrupt(env, CPU_INTERRUPT_NMI);
-	else
-		cpu_reset_interrupt(env, CPU_INTERRUPT_NMI);
-}
-
-static void guru_handler(void *opaque, int irq, int level)
-{	
-	hw_error("%s unsupported exception\n", __func__);
-}
-
-struct etraxfs_pic *etraxfs_pic_init(CPUState *env, target_phys_addr_t base)
+static void etraxfs_pic_init(SysBusDevice *dev)
 {
-	struct fs_pic_state *fs = NULL;
-	struct etraxfs_pic *pic = NULL;
-	int intr_vect_regs;
+    struct etrax_pic *s = FROM_SYSBUS(typeof (*s), dev);
+    int intr_vect_regs;
 
-	pic = qemu_mallocz(sizeof *pic);
-	pic->internal = fs = qemu_mallocz(sizeof *fs);
+    s->interrupt_vector = qdev_get_prop_ptr(&dev->qdev, "interrupt_vector");
+    qdev_init_irq_sink(&dev->qdev, irq_handler, 32);
+    sysbus_init_irq(dev, &s->parent_irq);
+    sysbus_init_irq(dev, &s->parent_nmi);
 
-	fs->env = env;
-	pic->irq = qemu_allocate_irqs(irq_handler, fs, 30);
-	pic->nmi = qemu_allocate_irqs(nmi_handler, fs, 2);
-	pic->guru = qemu_allocate_irqs(guru_handler, fs, 1);
-
-	intr_vect_regs = cpu_register_io_memory(0, pic_read, pic_write, fs);
-	cpu_register_physical_memory(base, R_MAX * 4, intr_vect_regs);
-
-	return pic;
+    intr_vect_regs = cpu_register_io_memory(0, pic_read, pic_write, s);
+    sysbus_init_mmio(dev, R_MAX * 4, intr_vect_regs);
 }
+
+static void etraxfs_pic_register(void)
+{
+    sysbus_register_dev("etraxfs,pic", sizeof (struct etrax_pic),
+                        etraxfs_pic_init);
+}
+
+device_init(etraxfs_pic_register)

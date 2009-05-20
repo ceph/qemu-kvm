@@ -125,7 +125,7 @@ extern int no_hpet;
 
 /* pcspk.c */
 void pcspk_init(PITState *);
-int pcspk_audio_init(AudioState *, qemu_irq *pic);
+int pcspk_audio_init(qemu_irq *pic);
 
 /* piix_pci.c */
 /* config space register for IRQ routing */
@@ -151,21 +151,15 @@ enum vga_retrace_method {
 
 extern enum vga_retrace_method vga_retrace_method;
 
-#if !defined(TARGET_SPARC) || defined(TARGET_SPARC64)
-#define VGA_RAM_SIZE (16 * 1024 * 1024)
-#else
-#define VGA_RAM_SIZE (17 * 1024 * 1024)
-#endif
-
-int isa_vga_init(int vga_ram_size);
-int pci_vga_init(PCIBus *bus, int vga_ram_size,
+int isa_vga_init(void);
+int pci_vga_init(PCIBus *bus,
                  unsigned long vga_bios_offset, int vga_bios_size);
-int isa_vga_mm_init(int vga_ram_size, target_phys_addr_t vram_base,
+int isa_vga_mm_init(target_phys_addr_t vram_base,
                     target_phys_addr_t ctrl_base, int it_shift);
 
 /* cirrus_vga.c */
-void pci_cirrus_vga_init(PCIBus *bus, int vga_ram_size);
-void isa_cirrus_vga_init(int vga_ram_size);
+void pci_cirrus_vga_init(PCIBus *bus);
+void isa_cirrus_vga_init(void);
 
 /* ide.c */
 void isa_ide_init(int iobase, int iobase2, qemu_irq irq,

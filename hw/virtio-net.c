@@ -696,21 +696,14 @@ static void virtio_net_cleanup(VLANClientState *vc)
     virtio_cleanup(&n->vdev);
 }
 
-PCIDevice *virtio_net_init(PCIBus *bus, NICInfo *nd, int devfn)
+VirtIODevice *virtio_net_init(DeviceState *dev)
 {
     VirtIONet *n;
     static int virtio_net_id;
 
-    n = (VirtIONet *)virtio_init_pci(bus, "virtio-net",
-                                     PCI_VENDOR_ID_REDHAT_QUMRANET,
-                                     PCI_DEVICE_ID_VIRTIO_NET,
-                                     PCI_VENDOR_ID_REDHAT_QUMRANET,
-                                     VIRTIO_ID_NET,
-                                     PCI_CLASS_NETWORK_ETHERNET, 0x00,
-                                     sizeof(struct virtio_net_config),
-                                     sizeof(VirtIONet));
-    if (!n)
-        return NULL;
+    n = (VirtIONet *)virtio_common_init("virtio-net", VIRTIO_ID_NET,
+                                        sizeof(struct virtio_net_config),
+                                        sizeof(VirtIONet));
 
     n->vdev.get_config = virtio_net_get_config;
     n->vdev.set_config = virtio_net_set_config;
@@ -721,9 +714,9 @@ PCIDevice *virtio_net_init(PCIBus *bus, NICInfo *nd, int devfn)
     n->rx_vq = virtio_add_queue(&n->vdev, 256, virtio_net_handle_rx);
     n->tx_vq = virtio_add_queue(&n->vdev, 256, virtio_net_handle_tx);
     n->ctrl_vq = virtio_add_queue(&n->vdev, 16, virtio_net_handle_ctrl);
-    memcpy(n->mac, nd->macaddr, ETH_ALEN);
+    qdev_get_macaddr(dev, n->mac);
     n->status = VIRTIO_NET_S_LINK_UP;
-    n->vc = qemu_new_vlan_client(nd->vlan, nd->model, nd->name,
+    n->vc = qdev_get_vlan_client(dev,
                                  virtio_net_receive,
                                  virtio_net_can_receive,
                                  virtio_net_cleanup, n);
@@ -742,5 +735,6 @@ PCIDevice *virtio_net_init(PCIBus *bus, NICInfo *nd, int devfn)
 
     register_savevm("virtio-net", virtio_net_id++, VIRTIO_NET_VM_VERSION,
                     virtio_net_save, virtio_net_load, n);
-    return (PCIDevice *)n;
+
+    return &n->vdev;
 }

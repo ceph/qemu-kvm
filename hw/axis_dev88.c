@@ -21,15 +21,12 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#include <time.h>
-#include <sys/time.h>
-#include "hw.h"
+
+#include "sysbus.h"
 #include "net.h"
 #include "flash.h"
-#include "sysemu.h"
-#include "devices.h"
 #include "boards.h"
-
+#include "sysemu.h"
 #include "etraxfs.h"
 
 #define D(x)
@@ -37,7 +34,7 @@
 
 struct nand_state_t
 {
-    struct nand_flash_s *nand;
+    NANDFlashState *nand;
     unsigned int rdy:1;
     unsigned int ale:1;
     unsigned int cle:1;
@@ -251,13 +248,15 @@ static void main_cpu_reset(void *opaque)
 }
 
 static
-void axisdev88_init (ram_addr_t ram_size, int vga_ram_size,
+void axisdev88_init (ram_addr_t ram_size,
                      const char *boot_device,
                      const char *kernel_filename, const char *kernel_cmdline,
                      const char *initrd_filename, const char *cpu_model)
 {
     CPUState *env;
-    struct etraxfs_pic *pic;
+    DeviceState *dev;
+    SysBusDevice *s;
+    qemu_irq irq[30], nmi[2], *cpu_irq;
     void *etraxfs_dmac;
     struct etraxfs_dma_client *eth[2] = {NULL, NULL};
     int kernel_size;
@@ -295,18 +294,31 @@ void axisdev88_init (ram_addr_t ram_size, int vga_ram_size,
     cpu_register_physical_memory(0x3001a000, 0x5c, gpio_regs);
 
 
-    pic = etraxfs_pic_init(env, 0x3001c000);
+    cpu_irq = cris_pic_init_cpu(env);
+    dev = qdev_create(NULL, "etraxfs,pic");
+    /* FIXME: Is there a proper way to signal vectors to the CPU core?  */
+    qdev_set_prop_ptr(dev, "interrupt_vector", &env->interrupt_vector);
+    qdev_init(dev);
+    s = sysbus_from_qdev(dev);
+    sysbus_mmio_map(s, 0, 0x3001c000);
+    sysbus_connect_irq(s, 0, cpu_irq[0]);
+    sysbus_connect_irq(s, 1, cpu_irq[1]);
+    for (i = 0; i < 30; i++) {
+        irq[i] = qdev_get_irq_sink(dev, i);
+    }
+    nmi[0] = qdev_get_irq_sink(dev, 30);
+    nmi[1] = qdev_get_irq_sink(dev, 31);
+
     etraxfs_dmac = etraxfs_dmac_init(env, 0x30000000, 10);
     for (i = 0; i < 10; i++) {
         /* On ETRAX, odd numbered channels are inputs.  */
-        etraxfs_dmac_connect(etraxfs_dmac, i, pic->irq + 7 + i, i & 1);
+        etraxfs_dmac_connect(etraxfs_dmac, i, irq + 7 + i, i & 1);
     }
 
     /* Add the two ethernet blocks.  */
-    eth[0] = etraxfs_eth_init(&nd_table[0], env, pic->irq + 25, 0x30034000, 1);
+    eth[0] = etraxfs_eth_init(&nd_table[0], env, 0x30034000, 1);
     if (nb_nics > 1)
-        eth[1] = etraxfs_eth_init(&nd_table[1], env,
-                                  pic->irq + 26, 0x30036000, 2);
+        eth[1] = etraxfs_eth_init(&nd_table[1], env, 0x30036000, 2);
 
     /* The DMA Connector block is missing, hardwire things for now.  */
     etraxfs_dmac_connect_client(etraxfs_dmac, 0, eth[0]);
@@ -317,14 +329,12 @@ void axisdev88_init (ram_addr_t ram_size, int vga_ram_size,
     }
 
     /* 2 timers.  */
-    etraxfs_timer_init(env, pic->irq + 0x1b, pic->nmi + 1, 0x3001e000);
-    etraxfs_timer_init(env, pic->irq + 0x1b, pic->nmi + 1, 0x3005e000);
+    sysbus_create_varargs("etraxfs,timer", 0x3001e000, irq[0x1b], nmi[1], NULL);
+    sysbus_create_varargs("etraxfs,timer", 0x3005e000, irq[0x1b], nmi[1], NULL);
 
     for (i = 0; i < 4; i++) {
-        if (serial_hds[i]) {
-            etraxfs_ser_init(env, pic->irq + 0x14 + i,
-                             serial_hds[i], 0x30026000 + i * 0x2000);
-        }
+        sysbus_create_simple("etraxfs,serial", 0x30026000 + i * 0x2000,
+                             irq[0x14 + i]);
     }
 
     if (kernel_filename) {
@@ -350,10 +360,10 @@ void axisdev88_init (ram_addr_t ram_size, int vga_ram_size,
                 fprintf(stderr, "Too long CRIS kernel cmdline (max 256)\n");
                 exit(1);
             }
-            pstrcpy_targphys(high, 256, kernel_cmdline);
             /* Let the kernel know we are modifying the cmdline.  */
             env->regs[10] = 0x87109563;
-            env->regs[11] = high;
+            env->regs[11] = 0x40000000;
+            pstrcpy_targphys(env->regs[11], 256, kernel_cmdline);
         }
     }
     env->pc = bootstrap_pc;

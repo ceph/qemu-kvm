@@ -39,11 +39,13 @@ int qemu_no_shutdown(void);
 int qemu_shutdown_requested(void);
 int qemu_reset_requested(void);
 int qemu_powerdown_requested(void);
+#ifdef NEED_CPU_H
 #if !defined(TARGET_SPARC) && !defined(TARGET_I386)
 // Please implement a power failure function to signal the OS
 #define qemu_system_powerdown() do{}while(0)
 #else
 void qemu_system_powerdown(void);
+#endif
 #endif
 void qemu_system_reset(void);
 
@@ -119,22 +121,17 @@ extern uint64_t node_mem[MAX_NODES];
 extern const char *option_rom[MAX_OPTION_ROMS];
 extern int nb_option_roms;
 
+#ifdef NEED_CPU_H
 #if defined(TARGET_SPARC) || defined(TARGET_PPC)
 #define MAX_PROM_ENVS 128
 extern const char *prom_envs[MAX_PROM_ENVS];
 extern unsigned int nb_prom_envs;
 #endif
-
-#if defined (TARGET_PPC)
-#define BIOS_SIZE (1024 * 1024)
-#elif defined (TARGET_SPARC64)
-#define BIOS_SIZE ((512 + 32) * 1024)
-#elif defined(TARGET_MIPS)
-#define BIOS_SIZE (4 * 1024 * 1024)
 #endif
 
 typedef enum {
-    IF_IDE, IF_SCSI, IF_FLOPPY, IF_PFLASH, IF_MTD, IF_SD, IF_VIRTIO, IF_XEN
+    IF_IDE, IF_SCSI, IF_FLOPPY, IF_PFLASH, IF_MTD, IF_SD, IF_VIRTIO, IF_XEN,
+    IF_COUNT
 } BlockInterfaceType;
 
 typedef enum {
@@ -167,6 +164,8 @@ extern void drive_uninit(BlockDriverState *bdrv);
 extern void drive_remove(int index);
 extern const char *drive_get_serial(BlockDriverState *bdrv);
 extern BlockInterfaceErrorAction drive_get_onerror(BlockDriverState *bdrv);
+
+BlockDriverState *qdev_init_bdrv(DeviceState *dev, BlockInterfaceType type);
 
 struct drive_opt {
     const char *file;
@@ -245,8 +244,8 @@ struct soundhw {
     int enabled;
     int isa;
     union {
-        int (*init_isa) (AudioState *s, qemu_irq *pic);
-        int (*init_pci) (PCIBus *bus, AudioState *s);
+        int (*init_isa) (qemu_irq *pic);
+        int (*init_pci) (PCIBus *bus);
     } init;
 };
 
@@ -262,5 +261,7 @@ const char *get_opt_value(char *buf, int buf_size, const char *p);
 int get_param_value(char *buf, int buf_size,
                     const char *tag, const char *str);
 int check_params(const char * const *params, const char *str);
+
+void register_devices(void);
 
 #endif

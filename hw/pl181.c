@@ -7,22 +7,23 @@
  * This code is licenced under the GPL.
  */
 
-#include "hw.h"
-#include "primecell.h"
+#include "sysbus.h"
 #include "sd.h"
+#include "sysemu.h"
 
 //#define DEBUG_PL181 1
 
 #ifdef DEBUG_PL181
-#define DPRINTF(fmt, args...) \
-do { printf("pl181: " fmt , ##args); } while (0)
+#define DPRINTF(fmt, ...) \
+do { printf("pl181: " fmt , ## __VA_ARGS__); } while (0)
 #else
-#define DPRINTF(fmt, args...) do {} while(0)
+#define DPRINTF(fmt, ...) do {} while(0)
 #endif
 
 #define PL181_FIFO_LEN 16
 
 typedef struct {
+    SysBusDevice busdev;
     SDState *card;
     uint32_t clock;
     uint32_t power;
@@ -135,7 +136,7 @@ static uint32_t pl181_fifo_pop(pl181_state *s)
 
 static void pl181_send_command(pl181_state *s)
 {
-    struct sd_request_s request;
+    SDRequest request;
     uint8_t response[16];
     int rlen;
 
@@ -444,20 +445,27 @@ static void pl181_reset(void *opaque)
     s->mask[1] = 0;
 }
 
-void pl181_init(uint32_t base, BlockDriverState *bd,
-                qemu_irq irq0, qemu_irq irq1)
+static void pl181_init(SysBusDevice *dev)
 {
     int iomemtype;
-    pl181_state *s;
+    pl181_state *s = FROM_SYSBUS(pl181_state, dev);
+    BlockDriverState *bd;
 
-    s = (pl181_state *)qemu_mallocz(sizeof(pl181_state));
     iomemtype = cpu_register_io_memory(0, pl181_readfn,
                                        pl181_writefn, s);
-    cpu_register_physical_memory(base, 0x00001000, iomemtype);
+    sysbus_init_mmio(dev, 0x1000, iomemtype);
+    sysbus_init_irq(dev, &s->irq[0]);
+    sysbus_init_irq(dev, &s->irq[1]);
+    bd = qdev_init_bdrv(&dev->qdev, IF_SD);
     s->card = sd_init(bd, 0);
-    s->irq[0] = irq0;
-    s->irq[1] = irq1;
     qemu_register_reset(pl181_reset, s);
     pl181_reset(s);
     /* ??? Save/restore.  */
 }
+
+static void pl181_register_devices(void)
+{
+    sysbus_register_dev("pl181", sizeof(pl181_state), pl181_init);
+}
+
+device_init(pl181_register_devices)

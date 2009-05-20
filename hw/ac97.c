@@ -1308,7 +1308,7 @@ static void ac97_on_reset (void *opaque)
     mixer_reset (s);
 }
 
-int ac97_init (PCIBus *bus, AudioState *audio)
+int ac97_init (PCIBus *bus)
 {
     PCIAC97LinkState *d;
     AC97LinkState *s;
@@ -1316,11 +1316,6 @@ int ac97_init (PCIBus *bus, AudioState *audio)
 
     if (!bus) {
         AUD_log ("ac97", "No PCI bus\n");
-        return -1;
-    }
-
-    if (!audio) {
-        AUD_log ("ac97", "No audio state\n");
         return -1;
     }
 
@@ -1375,7 +1370,7 @@ int ac97_init (PCIBus *bus, AudioState *audio)
     pci_register_io_region (&d->dev, 1, 64 * 4, PCI_ADDRESS_SPACE_IO, ac97_map);
     register_savevm ("ac97", 0, 2, ac97_save, ac97_load, s);
     qemu_register_reset (ac97_on_reset, s);
-    AUD_register_card (audio, "ac97", &s->card);
+    AUD_register_card ("ac97", &s->card);
     ac97_on_reset (s);
     return 0;
 }

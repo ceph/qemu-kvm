@@ -84,7 +84,7 @@ static CPUWriteMemoryFunc *static_writefn[] = {
 #define PALMTE_MMC2_GPIO	7
 #define PALMTE_MMC3_GPIO	11
 
-static struct mouse_transform_info_s palmte_pointercal = {
+static MouseTransformInfo palmte_pointercal = {
     .x = 320,
     .y = 320,
     .a = { -5909, 8, 22465308, 104, 7644, -1219972, 65536 },
@@ -92,15 +92,9 @@ static struct mouse_transform_info_s palmte_pointercal = {
 
 static void palmte_microwire_setup(struct omap_mpu_state_s *cpu)
 {
-    struct uwire_slave_s *tsc;
-    AudioState *audio = 0;
+    uWireSlave *tsc;
 
-#ifdef HAS_AUDIO
-    audio = AUD_init();
-#endif
-
-    tsc = tsc2102_init(omap_gpio_in_get(cpu->gpio)[PALMTE_PINTDAV_GPIO],
-                    audio);
+    tsc = tsc2102_init(omap_gpio_in_get(cpu->gpio)[PALMTE_PINTDAV_GPIO]);
 
     omap_uwire_attach(cpu->microwire, tsc, 0);
     omap_mcbsp_i2s_attach(cpu->mcbsp1, tsc210x_codec(tsc));
@@ -199,7 +193,7 @@ static struct arm_boot_info palmte_binfo = {
     .board_id = 0x331,
 };
 
-static void palmte_init(ram_addr_t ram_size, int vga_ram_size,
+static void palmte_init(ram_addr_t ram_size,
                 const char *boot_device,
                 const char *kernel_filename, const char *kernel_cmdline,
                 const char *initrd_filename, const char *cpu_model)

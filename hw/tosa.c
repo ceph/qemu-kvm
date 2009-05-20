@@ -18,6 +18,7 @@
 #include "block.h"
 #include "boards.h"
 #include "i2c.h"
+#include "ssi.h"
 
 #define TOSA_RAM    0x04000000
 #define TOSA_ROM	0x00800000
@@ -45,9 +46,9 @@
 #define DAC_CH1		0
 #define DAC_CH2		1
 
-static void tosa_microdrive_attach(struct pxa2xx_state_s *cpu)
+static void tosa_microdrive_attach(PXA2xxState *cpu)
 {
-    struct pcmcia_card_s *md;
+    PCMCIACardState *md;
     int index;
     BlockDriverState *bs;
 
@@ -83,10 +84,10 @@ static void tosa_out_switch(void *opaque, int line, int level)
 }
 
 
-static void tosa_gpio_setup(struct pxa2xx_state_s *cpu,
-                struct scoop_info_s *scp0,
-                struct scoop_info_s *scp1,
-                struct tc6393xb_s *tmio)
+static void tosa_gpio_setup(PXA2xxState *cpu,
+                ScoopInfo *scp0,
+                ScoopInfo *scp1,
+                TC6393xbState *tmio)
 {
     qemu_irq *outsignals = qemu_allocate_irqs(tosa_out_switch, cpu, 4);
     /* MMC/SD host */
@@ -114,25 +115,26 @@ static void tosa_gpio_setup(struct pxa2xx_state_s *cpu,
     scoop_gpio_out_set(scp1, TOSA_GPIO_TC6393XB_L3V_ON, tc6393xb_l3v_get(tmio));
 }
 
-static uint32_t tosa_ssp_read(void *opaque)
+static uint32_t tosa_ssp_tansfer(SSISlave *dev, uint32_t value)
 {
+    fprintf(stderr, "TG: %d %02x\n", value >> 5, value & 0x1f);
     return 0;
 }
 
-static void tosa_ssp_write(void *opaque, uint32_t value)
+static void tosa_ssp_init(SSISlave *dev)
 {
-    fprintf(stderr, "TG: %d %02x\n", value >> 5, value & 0x1f);
+    /* Nothing to do.  */
 }
 
-struct tosa_dac_i2c {
+typedef struct {
     i2c_slave i2c;
     int len;
     char buf[3];
-};
+} TosaDACState;
 
 static int tosa_dac_send(i2c_slave *i2c, uint8_t data)
 {
-    struct tosa_dac_i2c *s = (struct tosa_dac_i2c *)i2c;
+    TosaDACState *s = FROM_I2C_SLAVE(TosaDACState, i2c);
     s->buf[s->len] = data;
     if (s->len ++ > 2) {
 #ifdef VERBOSE
@@ -151,7 +153,7 @@ static int tosa_dac_send(i2c_slave *i2c, uint8_t data)
 
 static void tosa_dac_event(i2c_slave *i2c, enum i2c_event event)
 {
-    struct tosa_dac_i2c *s = (struct tosa_dac_i2c *)i2c;
+    TosaDACState *s = FROM_I2C_SLAVE(TosaDACState, i2c);
     s->len = 0;
     switch (event) {
     case I2C_START_SEND:
@@ -178,16 +180,16 @@ static int tosa_dac_recv(i2c_slave *s)
     return -1;
 }
 
-static void tosa_tg_init(struct pxa2xx_state_s *cpu)
+static void tosa_dac_init(i2c_slave *i2c)
 {
-    struct i2c_bus *bus = pxa2xx_i2c_bus(cpu->i2c[0]);
-    struct i2c_slave *dac = i2c_slave_init(bus, 0, sizeof(struct tosa_dac_i2c));
-    dac->send = tosa_dac_send;
-    dac->event = tosa_dac_event;
-    dac->recv = tosa_dac_recv;
-    i2c_set_slave_address(dac, DAC_BASE);
-    pxa2xx_ssp_attach(cpu->ssp[1], tosa_ssp_read,
-                    tosa_ssp_write, cpu);
+    /* Nothing to do.  */
+}
+
+static void tosa_tg_init(PXA2xxState *cpu)
+{
+    i2c_bus *bus = pxa2xx_i2c_bus(cpu->i2c[0]);
+    i2c_create_slave(bus, "tosa_dac", DAC_BASE);
+    ssi_create_slave(cpu->ssp[1], "tosa-ssp");
 }
 
 
@@ -196,14 +198,14 @@ static struct arm_boot_info tosa_binfo = {
     .ram_size = 0x04000000,
 };
 
-static void tosa_init(ram_addr_t ram_size, int vga_ram_size,
+static void tosa_init(ram_addr_t ram_size,
                 const char *boot_device,
                 const char *kernel_filename, const char *kernel_cmdline,
                 const char *initrd_filename, const char *cpu_model)
 {
-    struct pxa2xx_state_s *cpu;
-    struct tc6393xb_s *tmio;
-    struct scoop_info_s *scp0, *scp1;
+    PXA2xxState *cpu;
+    TC6393xbState *tmio;
+    ScoopInfo *scp0, *scp1;
 
     if (!cpu_model)
         cpu_model = "pxa255";
@@ -241,3 +243,23 @@ QEMUMachine tosapda_machine = {
     .desc = "Tosa PDA (PXA255)",
     .init = tosa_init,
 };
+
+static I2CSlaveInfo tosa_dac_info = {
+    .init = tosa_dac_init,
+    .event = tosa_dac_event,
+    .recv = tosa_dac_recv,
+    .send = tosa_dac_send
+};
+
+static SSISlaveInfo tosa_ssp_info = {
+    .init = tosa_ssp_init,
+    .transfer = tosa_ssp_tansfer
+};
+
+static void tosa_register_devices(void)
+{
+    i2c_register_slave("tosa_dac", sizeof(TosaDACState), &tosa_dac_info);
+    ssi_register_slave("tosa-ssp", sizeof(SSISlave), &tosa_ssp_info);
+}
+
+device_init(tosa_register_devices)

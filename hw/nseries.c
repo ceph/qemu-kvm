@@ -40,14 +40,14 @@ struct n800_s {
     struct {
         void *opaque;
         uint32_t (*txrx)(void *opaque, uint32_t value, int len);
-        struct uwire_slave_s *chip;
+        uWireSlave *chip;
     } ts;
     i2c_bus *i2c;
 
     int keymap[0x80];
     i2c_slave *kbd;
 
-    struct tusb_s *usb;
+    TUSBState *usb;
     void *retu;
     void *tahvo;
     void *nand;
@@ -179,29 +179,29 @@ static void n8x0_nand_setup(struct n800_s *s)
 
 static void n8x0_i2c_setup(struct n800_s *s)
 {
+    DeviceState *dev;
     qemu_irq tmp_irq = omap2_gpio_in_get(s->cpu->gpif, N8X0_TMP105_GPIO)[0];
 
     /* Attach the CPU on one end of our I2C bus.  */
     s->i2c = omap_i2c_bus(s->cpu->i2c[0]);
 
     /* Attach a menelaus PM chip */
-    i2c_set_slave_address(
-                    twl92230_init(s->i2c,
-                            s->cpu->irq[0][OMAP_INT_24XX_SYS_NIRQ]),
-                    N8X0_MENELAUS_ADDR);
+    dev = i2c_create_slave(s->i2c, "twl92230", N8X0_MENELAUS_ADDR);
+    qdev_connect_gpio_out(dev, 3, s->cpu->irq[0][OMAP_INT_24XX_SYS_NIRQ]);
 
     /* Attach a TMP105 PM chip (A0 wired to ground) */
-    i2c_set_slave_address(tmp105_init(s->i2c, tmp_irq), N8X0_TMP105_ADDR);
+    dev = i2c_create_slave(s->i2c, "tmp105", N8X0_TMP105_ADDR);
+    qdev_connect_gpio_out(dev, 0, tmp_irq);
 }
 
 /* Touchscreen and keypad controller */
-static struct mouse_transform_info_s n800_pointercal = {
+static MouseTransformInfo n800_pointercal = {
     .x = 800,
     .y = 480,
     .a = { 14560, -68, -3455208, -39, -9621, 35152972, 65536 },
 };
 
-static struct mouse_transform_info_s n810_pointercal = {
+static MouseTransformInfo n810_pointercal = {
     .x = 800,
     .y = 480,
     .a = { 15041, 148, -4731056, 171, -10238, 35933380, 65536 },
@@ -252,7 +252,7 @@ static void n800_tsc_kbd_setup(struct n800_s *s)
     qemu_irq kbirq = omap2_gpio_in_get(s->cpu->gpif, N800_TSC_KP_IRQ_GPIO)[0];
     qemu_irq dav = omap2_gpio_in_get(s->cpu->gpif, N800_TSC_TS_GPIO)[0];
 
-    s->ts.chip = tsc2301_init(penirq, kbirq, dav, 0);
+    s->ts.chip = tsc2301_init(penirq, kbirq, dav);
     s->ts.opaque = s->ts.chip->opaque;
     s->ts.txrx = tsc210x_txrx;
 
@@ -362,6 +362,7 @@ static int n810_keys[0x80] = {
 static void n810_kbd_setup(struct n800_s *s)
 {
     qemu_irq kbd_irq = omap2_gpio_in_get(s->cpu->gpif, N810_KEYBOARD_GPIO)[0];
+    DeviceState *dev;
     int i;
 
     for (i = 0; i < 0x80; i ++)
@@ -374,8 +375,8 @@ static void n810_kbd_setup(struct n800_s *s)
 
     /* Attach the LM8322 keyboard to the I2C bus,
      * should happen in n8x0_i2c_setup and s->kbd be initialised here.  */
-    s->kbd = lm8323_init(s->i2c, kbd_irq);
-    i2c_set_slave_address(s->kbd, N810_LM8323_ADDR);
+    dev = i2c_create_slave(s->i2c, "lm8323", N810_LM8323_ADDR);
+    qdev_connect_gpio_out(dev, 0, kbd_irq);
 }
 
 /* LCD MIPI DBI-C controller (URAL) */
@@ -729,7 +730,7 @@ static void n8x0_cbus_setup(struct n800_s *s)
     qemu_irq retu_irq = omap2_gpio_in_get(s->cpu->gpif, N8X0_RETU_GPIO)[0];
     qemu_irq tahvo_irq = omap2_gpio_in_get(s->cpu->gpif, N8X0_TAHVO_GPIO)[0];
 
-    struct cbus_s *cbus = cbus_init(dat_out);
+    CBus *cbus = cbus_init(dat_out);
 
     omap2_gpio_out_set(s->cpu->gpif, N8X0_CBUS_CLK_GPIO, cbus->clk);
     omap2_gpio_out_set(s->cpu->gpif, N8X0_CBUS_DAT_GPIO, cbus->dat);
@@ -764,7 +765,7 @@ static void n8x0_usb_setup(struct n800_s *s)
 {
     qemu_irq tusb_irq = omap2_gpio_in_get(s->cpu->gpif, N8X0_TUSB_INT_GPIO)[0];
     qemu_irq tusb_pwr = qemu_allocate_irqs(n8x0_usb_power_cb, s, 1)[0];
-    struct tusb_s *tusb = tusb6010_init(tusb_irq);
+    TUSBState *tusb = tusb6010_init(tusb_irq);
 
     /* Using the NOR interface */
     omap_gpmc_attach(s->cpu->gpmc, N8X0_USB_ASYNC_CS,
@@ -1382,7 +1383,7 @@ static struct arm_boot_info n810_binfo = {
     .atag_board = n810_atag_setup,
 };
 
-static void n800_init(ram_addr_t ram_size, int vga_ram_size,
+static void n800_init(ram_addr_t ram_size,
                 const char *boot_device,
                 const char *kernel_filename, const char *kernel_cmdline,
                 const char *initrd_filename, const char *cpu_model)
@@ -1392,7 +1393,7 @@ static void n800_init(ram_addr_t ram_size, int vga_ram_size,
                     cpu_model, &n800_binfo, 800);
 }
 
-static void n810_init(ram_addr_t ram_size, int vga_ram_size,
+static void n810_init(ram_addr_t ram_size,
                 const char *boot_device,
                 const char *kernel_filename, const char *kernel_cmdline,
                 const char *initrd_filename, const char *cpu_model)

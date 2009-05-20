@@ -16,7 +16,6 @@
 
 #include "virtio.h"
 #include "block.h"
-#include "pci.h"
 
 /* from Linux's linux/virtio_blk.h */
 
@@ -81,7 +80,5 @@ struct virtio_scsi_inhdr
     uint32_t sense_len;
     uint32_t residual;
 };
-
-void *virtio_blk_init(PCIBus *bus, BlockDriverState *bs);
 
 #endif

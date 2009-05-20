@@ -21,7 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#include "hw.h"
+#include "sysbus.h"
 #include "qemu-timer.h"
 #include "sun4m.h"
 #include "nvram.h"
@@ -68,10 +68,10 @@
  */
 
 #ifdef DEBUG_IRQ
-#define DPRINTF(fmt, args...)                           \
-    do { printf("CPUIRQ: " fmt , ##args); } while (0)
+#define DPRINTF(fmt, ...)                                       \
+    do { printf("CPUIRQ: " fmt , ## __VA_ARGS__); } while (0)
 #else
-#define DPRINTF(fmt, args...)
+#define DPRINTF(fmt, ...)
 #endif
 
 #define KERNEL_LOAD_ADDR     0x00004000
@@ -364,6 +364,24 @@ static unsigned long sun4m_load_kernel(const char *kernel_filename,
     return kernel_size;
 }
 
+static void lance_init(NICInfo *nd, target_phys_addr_t leaddr,
+                       void *dma_opaque, qemu_irq irq, qemu_irq *reset)
+{
+    DeviceState *dev;
+    SysBusDevice *s;
+
+    qemu_check_nic_model(&nd_table[0], "lance");
+
+    dev = qdev_create(NULL, "lance");
+    qdev_set_netdev(dev, nd);
+    qdev_set_prop_ptr(dev, "dma", dma_opaque);
+    qdev_init(dev);
+    s = sysbus_from_qdev(dev);
+    sysbus_mmio_map(s, 0, leaddr);
+    sysbus_connect_irq(s, 0, irq);
+    *reset = qdev_get_irq_sink(dev, 0);
+}
+
 static void sun4m_hw_init(const struct sun4m_hwdef *hwdef, ram_addr_t RAM_size,
                           const char *boot_device,
                           const char *kernel_filename,
@@ -373,7 +391,7 @@ static void sun4m_hw_init(const struct sun4m_hwdef *hwdef, ram_addr_t RAM_size,
 {
     CPUState *env, *envs[MAX_CPUS];
     unsigned int i;
-    void *iommu, *espdma, *ledma, *main_esp, *nvram;
+    void *iommu, *espdma, *ledma, *nvram;
     qemu_irq *cpu_irqs[MAX_CPUS], *slavio_irq, *slavio_cpu_irq,
         *espdma_irq, *ledma_irq;
     qemu_irq *esp_reset, *le_reset;
@@ -515,16 +533,9 @@ static void sun4m_hw_init(const struct sun4m_hwdef *hwdef, ram_addr_t RAM_size,
         exit(1);
     }
 
-    main_esp = esp_init(hwdef->esp_base, 2,
-                        espdma_memory_read, espdma_memory_write,
-                        espdma, *espdma_irq, esp_reset);
-
-    for (i = 0; i < ESP_MAX_DEVS; i++) {
-        drive_index = drive_get_index(IF_SCSI, 0, i);
-        if (drive_index == -1)
-            continue;
-        esp_scsi_attach(main_esp, drives_table[drive_index].bdrv, i);
-    }
+    esp_init(hwdef->esp_base, 2,
+             espdma_memory_read, espdma_memory_write,
+             espdma, *espdma_irq, esp_reset);
 
     if (hwdef->cs_base)
         cs_init(hwdef->cs_base, hwdef->cs_irq, slavio_intctl);
@@ -931,7 +942,7 @@ static const struct sun4m_hwdef sun4m_hwdefs[] = {
 };
 
 /* SPARCstation 5 hardware initialisation */
-static void ss5_init(ram_addr_t RAM_size, int vga_ram_size,
+static void ss5_init(ram_addr_t RAM_size,
                      const char *boot_device,
                      const char *kernel_filename, const char *kernel_cmdline,
                      const char *initrd_filename, const char *cpu_model)
@@ -941,7 +952,7 @@ static void ss5_init(ram_addr_t RAM_size, int vga_ram_size,
 }
 
 /* SPARCstation 10 hardware initialisation */
-static void ss10_init(ram_addr_t RAM_size, int vga_ram_size,
+static void ss10_init(ram_addr_t RAM_size,
                       const char *boot_device,
                       const char *kernel_filename, const char *kernel_cmdline,
                       const char *initrd_filename, const char *cpu_model)
@@ -951,7 +962,7 @@ static void ss10_init(ram_addr_t RAM_size, int vga_ram_size,
 }
 
 /* SPARCserver 600MP hardware initialisation */
-static void ss600mp_init(ram_addr_t RAM_size, int vga_ram_size,
+static void ss600mp_init(ram_addr_t RAM_size,
                          const char *boot_device,
                          const char *kernel_filename,
                          const char *kernel_cmdline,
@@ -962,7 +973,7 @@ static void ss600mp_init(ram_addr_t RAM_size, int vga_ram_size,
 }
 
 /* SPARCstation 20 hardware initialisation */
-static void ss20_init(ram_addr_t RAM_size, int vga_ram_size,
+static void ss20_init(ram_addr_t RAM_size,
                       const char *boot_device,
                       const char *kernel_filename, const char *kernel_cmdline,
                       const char *initrd_filename, const char *cpu_model)
@@ -972,7 +983,7 @@ static void ss20_init(ram_addr_t RAM_size, int vga_ram_size,
 }
 
 /* SPARCstation Voyager hardware initialisation */
-static void vger_init(ram_addr_t RAM_size, int vga_ram_size,
+static void vger_init(ram_addr_t RAM_size,
                       const char *boot_device,
                       const char *kernel_filename, const char *kernel_cmdline,
                       const char *initrd_filename, const char *cpu_model)
@@ -982,7 +993,7 @@ static void vger_init(ram_addr_t RAM_size, int vga_ram_size,
 }
 
 /* SPARCstation LX hardware initialisation */
-static void ss_lx_init(ram_addr_t RAM_size, int vga_ram_size,
+static void ss_lx_init(ram_addr_t RAM_size,
                        const char *boot_device,
                        const char *kernel_filename, const char *kernel_cmdline,
                        const char *initrd_filename, const char *cpu_model)
@@ -992,7 +1003,7 @@ static void ss_lx_init(ram_addr_t RAM_size, int vga_ram_size,
 }
 
 /* SPARCstation 4 hardware initialisation */
-static void ss4_init(ram_addr_t RAM_size, int vga_ram_size,
+static void ss4_init(ram_addr_t RAM_size,
                      const char *boot_device,
                      const char *kernel_filename, const char *kernel_cmdline,
                      const char *initrd_filename, const char *cpu_model)
@@ -1002,7 +1013,7 @@ static void ss4_init(ram_addr_t RAM_size, int vga_ram_size,
 }
 
 /* SPARCClassic hardware initialisation */
-static void scls_init(ram_addr_t RAM_size, int vga_ram_size,
+static void scls_init(ram_addr_t RAM_size,
                       const char *boot_device,
                       const char *kernel_filename, const char *kernel_cmdline,
                       const char *initrd_filename, const char *cpu_model)
@@ -1012,7 +1023,7 @@ static void scls_init(ram_addr_t RAM_size, int vga_ram_size,
 }
 
 /* SPARCbook hardware initialisation */
-static void sbook_init(ram_addr_t RAM_size, int vga_ram_size,
+static void sbook_init(ram_addr_t RAM_size,
                        const char *boot_device,
                        const char *kernel_filename, const char *kernel_cmdline,
                        const char *initrd_filename, const char *cpu_model)
@@ -1166,7 +1177,7 @@ static void sun4d_hw_init(const struct sun4d_hwdef *hwdef, ram_addr_t RAM_size,
 {
     CPUState *env, *envs[MAX_CPUS];
     unsigned int i;
-    void *iounits[MAX_IOUNITS], *espdma, *ledma, *main_esp, *nvram, *sbi;
+    void *iounits[MAX_IOUNITS], *espdma, *ledma, *nvram, *sbi;
     qemu_irq *cpu_irqs[MAX_CPUS], *sbi_irq, *sbi_cpu_irq,
         *espdma_irq, *ledma_irq;
     qemu_irq *esp_reset, *le_reset;
@@ -1174,7 +1185,6 @@ static void sun4d_hw_init(const struct sun4d_hwdef *hwdef, ram_addr_t RAM_size,
     unsigned long kernel_size;
     int ret;
     char buf[1024];
-    int drive_index;
     void *fw_cfg;
 
     /* init CPUs */
@@ -1274,16 +1284,9 @@ static void sun4d_hw_init(const struct sun4d_hwdef *hwdef, ram_addr_t RAM_size,
         exit(1);
     }
 
-    main_esp = esp_init(hwdef->esp_base, 2,
-                        espdma_memory_read, espdma_memory_write,
-                        espdma, *espdma_irq, esp_reset);
-
-    for (i = 0; i < ESP_MAX_DEVS; i++) {
-        drive_index = drive_get_index(IF_SCSI, 0, i);
-        if (drive_index == -1)
-            continue;
-        esp_scsi_attach(main_esp, drives_table[drive_index].bdrv, i);
-    }
+    esp_init(hwdef->esp_base, 2,
+             espdma_memory_read, espdma_memory_write,
+             espdma, *espdma_irq, esp_reset);
 
     kernel_size = sun4m_load_kernel(kernel_filename, initrd_filename,
                                     RAM_size);
@@ -1313,7 +1316,7 @@ static void sun4d_hw_init(const struct sun4d_hwdef *hwdef, ram_addr_t RAM_size,
 }
 
 /* SPARCserver 1000 hardware initialisation */
-static void ss1000_init(ram_addr_t RAM_size, int vga_ram_size,
+static void ss1000_init(ram_addr_t RAM_size,
                         const char *boot_device,
                         const char *kernel_filename, const char *kernel_cmdline,
                         const char *initrd_filename, const char *cpu_model)
@@ -1323,7 +1326,7 @@ static void ss1000_init(ram_addr_t RAM_size, int vga_ram_size,
 }
 
 /* SPARCcenter 2000 hardware initialisation */
-static void ss2000_init(ram_addr_t RAM_size, int vga_ram_size,
+static void ss2000_init(ram_addr_t RAM_size,
                         const char *boot_device,
                         const char *kernel_filename, const char *kernel_cmdline,
                         const char *initrd_filename, const char *cpu_model)
@@ -1388,8 +1391,7 @@ static void sun4c_hw_init(const struct sun4c_hwdef *hwdef, ram_addr_t RAM_size,
                           const char *initrd_filename, const char *cpu_model)
 {
     CPUState *env;
-    unsigned int i;
-    void *iommu, *espdma, *ledma, *main_esp, *nvram;
+    void *iommu, *espdma, *ledma, *nvram;
     qemu_irq *cpu_irqs, *slavio_irq, *espdma_irq, *ledma_irq;
     qemu_irq *esp_reset, *le_reset;
     qemu_irq *fdc_tc;
@@ -1500,16 +1502,9 @@ static void sun4c_hw_init(const struct sun4c_hwdef *hwdef, ram_addr_t RAM_size,
         exit(1);
     }
 
-    main_esp = esp_init(hwdef->esp_base, 2,
-                        espdma_memory_read, espdma_memory_write,
-                        espdma, *espdma_irq, esp_reset);
-
-    for (i = 0; i < ESP_MAX_DEVS; i++) {
-        drive_index = drive_get_index(IF_SCSI, 0, i);
-        if (drive_index == -1)
-            continue;
-        esp_scsi_attach(main_esp, drives_table[drive_index].bdrv, i);
-    }
+    esp_init(hwdef->esp_base, 2,
+             espdma_memory_read, espdma_memory_write,
+             espdma, *espdma_irq, esp_reset);
 
     kernel_size = sun4m_load_kernel(kernel_filename, initrd_filename,
                                     RAM_size);
@@ -1539,7 +1534,7 @@ static void sun4c_hw_init(const struct sun4c_hwdef *hwdef, ram_addr_t RAM_size,
 }
 
 /* SPARCstation 2 hardware initialisation */
-static void ss2_init(ram_addr_t RAM_size, int vga_ram_size,
+static void ss2_init(ram_addr_t RAM_size,
                      const char *boot_device,
                      const char *kernel_filename, const char *kernel_cmdline,
                      const char *initrd_filename, const char *cpu_model)

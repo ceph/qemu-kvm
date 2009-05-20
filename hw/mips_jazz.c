@@ -32,12 +32,7 @@
 #include "boards.h"
 #include "net.h"
 #include "scsi.h"
-
-#ifdef TARGET_WORDS_BIGENDIAN
-#define BIOS_FILENAME "mips_bios.bin"
-#else
-#define BIOS_FILENAME "mipsel_bios.bin"
-#endif
+#include "mips-bios.h"
 
 enum jazz_model_e
 {
@@ -104,15 +99,10 @@ static void audio_init(qemu_irq *pic)
     }
 
     if (audio_enabled) {
-        AudioState *s;
-
-        s = AUD_init();
-        if (s) {
-            for (c = soundhw; c->name; ++c) {
-                if (c->enabled) {
-                    if (c->isa) {
-                        c->init.init_isa(s, pic);
-                    }
+        for (c = soundhw; c->name; ++c) {
+            if (c->enabled) {
+                if (c->isa) {
+                    c->init.init_isa(pic);
                 }
             }
         }
@@ -124,7 +114,7 @@ static void audio_init(qemu_irq *pic)
 #define MAGNUM_BIOS_SIZE (BIOS_SIZE < MAGNUM_BIOS_SIZE_MAX ? BIOS_SIZE : MAGNUM_BIOS_SIZE_MAX)
 
 static
-void mips_jazz_init (ram_addr_t ram_size, int vga_ram_size,
+void mips_jazz_init (ram_addr_t ram_size,
                      const char *cpu_model,
                      enum jazz_model_e jazz_model)
 {
@@ -134,8 +124,6 @@ void mips_jazz_init (ram_addr_t ram_size, int vga_ram_size,
     qemu_irq *rc4030, *i8259;
     rc4030_dma *dmas;
     void* rc4030_opaque;
-    void *scsi_hba;
-    int hd;
     int s_rtc, s_dma_dummy;
     NICInfo *nd;
     PITState *pit;
@@ -203,10 +191,10 @@ void mips_jazz_init (ram_addr_t ram_size, int vga_ram_size,
     /* Video card */
     switch (jazz_model) {
     case JAZZ_MAGNUM:
-        g364fb_mm_init(vga_ram_size, 0x40000000, 0x60000000, 0, rc4030[3]);
+        g364fb_mm_init(0x40000000, 0x60000000, 0, rc4030[3]);
         break;
     case JAZZ_PICA61:
-        isa_vga_mm_init(vga_ram_size, 0x40000000, 0x60000000, 0);
+        isa_vga_mm_init(0x40000000, 0x60000000, 0);
         break;
     default:
         break;
@@ -231,15 +219,9 @@ void mips_jazz_init (ram_addr_t ram_size, int vga_ram_size,
     }
 
     /* SCSI adapter */
-    scsi_hba = esp_init(0x80002000, 0,
-                        rc4030_dma_read, rc4030_dma_write, dmas[0],
-                        rc4030[5], &esp_reset);
-    for (n = 0; n < ESP_MAX_DEVS; n++) {
-        hd = drive_get_index(IF_SCSI, 0, n);
-        if (hd != -1) {
-            esp_scsi_attach(scsi_hba, drives_table[hd].bdrv, n);
-        }
-    }
+    esp_init(0x80002000, 0,
+             rc4030_dma_read, rc4030_dma_write, dmas[0],
+             rc4030[5], &esp_reset);
 
     /* Floppy */
     if (drive_get_max_bus(IF_FLOPPY) >= MAX_FD) {
@@ -287,21 +269,21 @@ void mips_jazz_init (ram_addr_t ram_size, int vga_ram_size,
 }
 
 static
-void mips_magnum_init (ram_addr_t ram_size, int vga_ram_size,
+void mips_magnum_init (ram_addr_t ram_size,
                        const char *boot_device,
                        const char *kernel_filename, const char *kernel_cmdline,
                        const char *initrd_filename, const char *cpu_model)
 {
-    mips_jazz_init(ram_size, vga_ram_size, cpu_model, JAZZ_MAGNUM);
+    mips_jazz_init(ram_size, cpu_model, JAZZ_MAGNUM);
 }
 
 static
-void mips_pica61_init (ram_addr_t ram_size, int vga_ram_size,
+void mips_pica61_init (ram_addr_t ram_size,
                        const char *boot_device,
                        const char *kernel_filename, const char *kernel_cmdline,
                        const char *initrd_filename, const char *cpu_model)
 {
-    mips_jazz_init(ram_size, vga_ram_size, cpu_model, JAZZ_PICA61);
+    mips_jazz_init(ram_size, cpu_model, JAZZ_PICA61);
 }
 
 QEMUMachine mips_magnum_machine = {

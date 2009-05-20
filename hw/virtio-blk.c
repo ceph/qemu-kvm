@@ -348,28 +348,24 @@ static int virtio_blk_load(QEMUFile *f, void *opaque, int version_id)
     return 0;
 }
 
-void *virtio_blk_init(PCIBus *bus, BlockDriverState *bs)
+VirtIODevice *virtio_blk_init(DeviceState *dev)
 {
     VirtIOBlock *s;
     int cylinders, heads, secs;
     static int virtio_blk_id;
+    BlockDriverState *bs;
 
-    s = (VirtIOBlock *)virtio_init_pci(bus, "virtio-blk",
-                                       PCI_VENDOR_ID_REDHAT_QUMRANET,
-                                       PCI_DEVICE_ID_VIRTIO_BLOCK,
-                                       PCI_VENDOR_ID_REDHAT_QUMRANET,
-                                       VIRTIO_ID_BLOCK,
-                                       PCI_CLASS_STORAGE_OTHER, 0x00,
-                                       sizeof(struct virtio_blk_config), sizeof(VirtIOBlock));
-    if (!s)
-        return NULL;
+    s = (VirtIOBlock *)virtio_common_init("virtio-blk", VIRTIO_ID_BLOCK,
+                                          sizeof(struct virtio_blk_config),
+                                          sizeof(VirtIOBlock));
 
+    bs = qdev_init_bdrv(dev, IF_VIRTIO);
     s->vdev.get_config = virtio_blk_update_config;
     s->vdev.get_features = virtio_blk_get_features;
     s->vdev.reset = virtio_blk_reset;
     s->bs = bs;
     s->rq = NULL;
-    bs->private = &s->vdev.pci_dev;
+    bs->private = dev;
     bdrv_guess_geometry(s->bs, &cylinders, &heads, &secs);
     bdrv_set_geometry_hint(s->bs, cylinders, heads, secs);
 
@@ -379,5 +375,5 @@ void *virtio_blk_init(PCIBus *bus, BlockDriverState *bs)
     register_savevm("virtio-blk", virtio_blk_id++, 2,
                     virtio_blk_save, virtio_blk_load, s);
 
-    return s;
+    return &s->vdev;
 }

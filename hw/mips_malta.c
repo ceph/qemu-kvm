@@ -37,14 +37,9 @@
 #include "audio/audio.h"
 #include "boards.h"
 #include "qemu-log.h"
+#include "mips-bios.h"
 
 //#define DEBUG_BOARD_INIT
-
-#ifdef TARGET_WORDS_BIGENDIAN
-#define BIOS_FILENAME "mips_bios.bin"
-#else
-#define BIOS_FILENAME "mipsel_bios.bin"
-#endif
 
 #ifdef TARGET_MIPS64
 #define PHYS_TO_VIRT(x) ((x) | ~0x7fffffffULL)
@@ -114,9 +109,9 @@ static void malta_fpga_update_display(void *opaque)
 //~ #define DEBUG
 
 #if defined(DEBUG)
-#  define logout(fmt, args...) fprintf(stderr, "MALTA\t%-24s" fmt, __func__, ##args)
+#  define logout(fmt, ...) fprintf(stderr, "MALTA\t%-24s" fmt, __func__, ## __VA_ARGS__)
 #else
-#  define logout(fmt, args...) ((void)0)
+#  define logout(fmt, ...) ((void)0)
 #endif
 
 struct _eeprom24c0x_t {
@@ -469,13 +464,9 @@ static void audio_init (PCIBus *pci_bus)
     }
 
     if (audio_enabled) {
-        AudioState *s;
-
-        s = AUD_init ();
-        if (s) {
-            for (c = soundhw; c->name; ++c) {
-                if (c->enabled)
-                    c->init.init_pci (pci_bus, s);
+        for (c = soundhw; c->name; ++c) {
+            if (c->enabled) {
+                c->init.init_pci(pci_bus);
             }
         }
     }
@@ -762,7 +753,7 @@ static void main_cpu_reset(void *opaque)
 }
 
 static
-void mips_malta_init (ram_addr_t ram_size, int vga_ram_size,
+void mips_malta_init (ram_addr_t ram_size,
                       const char *boot_device,
                       const char *kernel_filename, const char *kernel_cmdline,
                       const char *initrd_filename, const char *cpu_model)
@@ -915,7 +906,11 @@ void mips_malta_init (ram_addr_t ram_size, int vga_ram_size,
     eeprom_buf = qemu_mallocz(8 * 256); /* XXX: make this persistent */
     for (i = 0; i < 8; i++) {
         /* TODO: Populate SPD eeprom data.  */
-        smbus_eeprom_device_init(smbus, 0x50 + i, eeprom_buf + (i * 256));
+        DeviceState *eeprom;
+        eeprom = qdev_create(smbus, "smbus-eeprom");
+        qdev_set_prop_int(eeprom, "address", 0x50 + i);
+        qdev_set_prop_ptr(eeprom, "data", eeprom_buf + (i * 256));
+        qdev_init(eeprom);
     }
     pit = pit_init(0x40, i8259[0]);
     DMA_init(0);
@@ -946,11 +941,11 @@ void mips_malta_init (ram_addr_t ram_size, int vga_ram_size,
 
     /* Optional PCI video card */
     if (cirrus_vga_enabled) {
-        pci_cirrus_vga_init(pci_bus, vga_ram_size);
+        pci_cirrus_vga_init(pci_bus);
     } else if (vmsvga_enabled) {
-        pci_vmsvga_init(pci_bus, vga_ram_size);
+        pci_vmsvga_init(pci_bus);
     } else if (std_vga_enabled) {
-        pci_vga_init(pci_bus, vga_ram_size, 0, 0);
+        pci_vga_init(pci_bus, 0, 0);
     }
 }
 
