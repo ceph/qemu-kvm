@@ -523,7 +523,7 @@ static void sigfd_handler(void *opaque)
 	    break;
 
 	if (len != sizeof(info)) {
-	    printf("read from sigfd returned %ld: %m\n", len);
+	    printf("read from sigfd returned %zd: %m\n", len);
 	    return;
 	}
 
@@ -1247,7 +1247,7 @@ int kvm_update_dirty_pages_log(void)
     int r = 0;
 
 
-    r = kvm_get_dirty_pages_range(kvm_context, 0, -1ULL,
+    r = kvm_get_dirty_pages_range(kvm_context, 0, -1UL,
                                   kvm_dirty_bitmap, NULL,
                                   kvm_get_dirty_bitmap_cb);
     return r;
