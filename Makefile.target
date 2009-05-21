@@ -800,6 +800,7 @@ $(QEMU_PROG): $(OBJS) ../libqemu_common.a libqemu.a $(HWLIB)
 	$(call LINK,$(OBJS))
 
 $(QEMU_PROG): ARLIBS += $(DEPLIBS)
+$(QEMU_PROG): $(DEPLIBS)
 
 FORCE:
 
