@@ -4,11 +4,6 @@
 #include "exec-all.h"
 #include "qemu-kvm.h"
 
-void register_machines(void)
-{
-    qemu_register_machine(&ipf_machine);
-}
-
 void cpu_save(QEMUFile *f, void *opaque)
 {
     CPUState *env = opaque;
@@ -29,3 +24,12 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
     }
     return 0;
 }
+
+extern QEMUMachine ipf_machine;
+
+static void ipf_machine_init(void)
+{
+    qemu_register_machine(&ipf_machine);
+}
+
+machine_init(ipf_machine_init);
