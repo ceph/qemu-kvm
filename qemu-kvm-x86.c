@@ -855,3 +855,9 @@ void kvm_arch_do_ioperm(void *_data)
     struct ioperm_data *data = _data;
     ioperm(data->start_port, data->num, data->turn_on);
 }
+
+uint32_t kvm_arch_get_supported_cpuid(CPUState *env, uint32_t function,
+                                      int reg)
+{
+    return kvm_get_supported_cpuid(kvm_context, function, reg);
+}

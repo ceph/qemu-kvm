@@ -811,4 +811,6 @@ int kvm_del_irq_route(kvm_context_t kvm, int gsi, int irqchip, int pin);
  */
 int kvm_commit_irq_routes(kvm_context_t kvm);
 
+uint32_t kvm_get_supported_cpuid(kvm_context_t kvm, uint32_t function, int reg);
+
 #endif

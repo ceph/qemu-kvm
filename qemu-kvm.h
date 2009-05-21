@@ -220,4 +220,7 @@ static inline void kvm_arch_put_registers(CPUState *env)
     kvm_load_registers(env);
 }
 
+uint32_t kvm_arch_get_supported_cpuid(CPUState *env, uint32_t function,
+                                      int reg);
+
 #endif
