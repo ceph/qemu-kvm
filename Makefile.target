@@ -160,7 +160,7 @@ CPPFLAGS+=-I$(SRC_PATH)/tcg/sparc
 endif
 
 ifeq ($(USE_KVM), 1)
-LIBOBJS+=qemu-kvm.o
+LIBOBJS+=qemu-kvm.o libkvm.o libkvm-all.o
 endif
 ifdef CONFIG_SOFTFLOAT
 LIBOBJS+=fpu/softfloat.o
@@ -579,10 +579,6 @@ ifdef CONFIG_CS4231A
 SOUND_HW += cs4231a.o
 endif
 
-ifdef USE_KVM
-DEPLIBS += libkvm.a
-endif
-
 ifdef CONFIG_VNC_TLS
 CPPFLAGS += $(CONFIG_VNC_TLS_CFLAGS)
 LIBS += $(CONFIG_VNC_TLS_LIBS)
@@ -802,14 +798,6 @@ $(QEMU_PROG): $(OBJS) ../libqemu_common.a libqemu.a $(HWLIB)
 $(QEMU_PROG): ARLIBS += $(DEPLIBS)
 $(QEMU_PROG): $(DEPLIBS)
 
-FORCE:
-
-libkvm.a: FORCE
-	$(MAKE) -C ../kvm/libkvm KVM_CFLAGS="$(KVM_CFLAGS)"
-	if ! cmp -s libkvm.a ../kvm/libkvm/libkvm.a; then \
-	   cp ../kvm/libkvm/libkvm.a . ; \
-	fi
-
 endif # !CONFIG_USER_ONLY
 
 gdbstub-xml.c: $(TARGET_XML_FILES) feature_to_c.sh
@@ -825,9 +813,6 @@ qemu-options.h: $(SRC_PATH)/qemu-options.hx
 clean:
 	rm -f *.o *.a *~ $(PROGS) nwfpe/*.o fpu/*.o qemu-options.h gdbstub-xml.c
 	rm -f *.d */*.d tcg/*.o
-ifdef USE_KVM
-	$(MAKE) -C ../kvm/libkvm clean
-endif
 
 install: all
 ifneq ($(PROGS),)

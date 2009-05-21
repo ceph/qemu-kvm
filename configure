@@ -538,8 +538,6 @@ if test "$werror" = "yes" ; then
 CFLAGS="$CFLAGS -Werror"
 fi
 
-CFLAGS="$CFLAGS -I$(readlink -f "$source_path/kvm/libkvm")"
-
 if test "$solaris" = "no" ; then
     if ld --version 2>/dev/null | grep "GNU ld" >/dev/null 2>/dev/null ; then
         LDFLAGS="$LDFLAGS -Wl,--warn-common"
@@ -856,7 +854,7 @@ kvm_cflags="$kvm_cflags -I$source_path/kvm/include/$kvm_arch"
 # test for KVM_CAP_PIT
 
 cat > $TMPC <<EOF
-#include <libkvm.h>
+#include <linux/kvm.h>
 #ifndef KVM_CAP_PIT
 #error "kvm no pit capability"
 #endif
@@ -869,7 +867,7 @@ EOF
 # test for KVM_CAP_DEVICE_ASSIGNMENT
 
 cat > $TMPC <<EOF
-#include <libkvm.h>
+#include <linux/kvm.h>
 #ifndef KVM_CAP_DEVICE_ASSIGNMENT
 #error "kvm no device assignment capability"
 #endif
@@ -1844,7 +1842,7 @@ else
     exit 1
 fi
 
-# this is a temp hack needed for libkvm
+# this is a temp hack needed for kvm
 if test "$kvm" = "yes" ; then
     echo "KVM_CFLAGS=$kvm_cflags" >> $config_mak
 fi
@@ -2245,11 +2243,9 @@ done # for target in $targets
 # build tree in object directory if source path is different from current one
 if test "$source_path_used" = "yes" ; then
     DIRS="tests tests/cris slirp audio block"
-    DIRS="$DIRS kvm/libkvm"
     FILES="Makefile tests/Makefile"
     FILES="$FILES tests/cris/Makefile tests/cris/.gdbinit"
     FILES="$FILES tests/test-mmap.c"
-    FILES="$FILES kvm/libkvm/Makefile"
     for dir in $DIRS ; do
             mkdir -p $dir
     done

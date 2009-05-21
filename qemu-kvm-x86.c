@@ -15,7 +15,7 @@
 #include <sys/io.h>
 
 #include "qemu-kvm.h"
-#include <libkvm.h>
+#include "libkvm-all.h"
 #include <pthread.h>
 #include <sys/utsname.h>
 #include <linux/kvm_para.h>

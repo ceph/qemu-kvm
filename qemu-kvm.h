@@ -142,7 +142,7 @@ int handle_powerpc_dcr_write(int vcpu,uint32_t dcrn, uint32_t data);
 #define BITMAP_SIZE(m) (ALIGN(((m)>>TARGET_PAGE_BITS), HOST_LONG_BITS) / 8)
 
 #ifdef USE_KVM
-#include "libkvm.h"
+#include "libkvm-all.h"
 #include "sys-queue.h"
 
 extern int kvm_allowed;
