@@ -859,7 +859,7 @@ static void pc_init1(ram_addr_t ram_size,
     ram_addr_t ram_addr, bios_offset, option_rom_offset;
     ram_addr_t below_4g_mem_size, above_4g_mem_size = 0;
     int bios_size, isa_bios_size, oprom_area_size;
-    int pci_option_rom_offset;
+    int pci_option_rom_offset = 0;
     PCIBus *pci_bus;
     int piix3_devfn = -1;
     CPUState *env;
