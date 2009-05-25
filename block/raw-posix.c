@@ -821,13 +821,18 @@ again:
 }
 #endif
 
-static int raw_create(const char *filename, int64_t total_size,
-                      const char *backing_file, int flags)
+static int raw_create(const char *filename, QEMUOptionParameter *options)
 {
     int fd;
+    int64_t total_size = 0;
 
-    if (flags || backing_file)
-        return -ENOTSUP;
+    /* Read out options */
+    while (options && options->name) {
+        if (!strcmp(options->name, BLOCK_OPT_SIZE)) {
+            total_size = options->value.n / 512;
+        }
+        options++;
+    }
 
     fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY,
               0644);
@@ -843,6 +848,12 @@ static void raw_flush(BlockDriverState *bs)
     BDRVRawState *s = bs->opaque;
     fsync(s->fd);
 }
+
+
+static QEMUOptionParameter raw_create_options[] = {
+    { BLOCK_OPT_SIZE,           OPT_SIZE },
+    { NULL }
+};
 
 static BlockDriver bdrv_raw = {
     .format_name = "raw",
@@ -864,6 +875,8 @@ static BlockDriver bdrv_raw = {
 
     .bdrv_truncate = raw_truncate,
     .bdrv_getlength = raw_getlength,
+
+    .create_options = raw_create_options,
 };
 
 /***********************************************/
@@ -1362,15 +1375,20 @@ static BlockDriverAIOCB *raw_aio_ioctl(BlockDriverState *bs,
 #endif /* !linux && !FreeBSD */
 
 #if defined(__linux__) || defined(__FreeBSD__)
-static int hdev_create(const char *filename, int64_t total_size,
-                       const char *backing_file, int flags)
+static int hdev_create(const char *filename, QEMUOptionParameter *options)
 {
     int fd;
     int ret = 0;
     struct stat stat_buf;
+    int64_t total_size = 0;
 
-    if (flags || backing_file)
-        return -ENOTSUP;
+    /* Read out options */
+    while (options && options->name) {
+        if (!strcmp(options->name, "size")) {
+            total_size = options->value.n / 512;
+        }
+        options++;
+    }
 
     fd = open(filename, O_WRONLY | O_BINARY);
     if (fd < 0)
@@ -1389,8 +1407,7 @@ static int hdev_create(const char *filename, int64_t total_size,
 
 #else  /* !(linux || freebsd) */
 
-static int hdev_create(const char *filename, int64_t total_size,
-                       const char *backing_file, int flags)
+static int hdev_create(const char *filename, QEMUOptionParameter *options)
 {
     return -ENOTSUP;
 }

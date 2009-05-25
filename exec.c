@@ -527,6 +527,8 @@ static void cpu_common_save(QEMUFile *f, void *opaque)
 {
     CPUState *env = opaque;
 
+    cpu_synchronize_state(env, 0);
+
     qemu_put_be32s(f, &env->halted);
     qemu_put_be32s(f, &env->interrupt_request);
 }
@@ -544,6 +546,7 @@ static int cpu_common_load(QEMUFile *f, void *opaque, int version_id)
        version_id is increased. */
     env->interrupt_request &= ~0x01;
     tlb_flush(env, 1);
+    cpu_synchronize_state(env, 1);
 
     return 0;
 }
@@ -1940,12 +1943,10 @@ void cpu_physical_memory_reset_dirty(ram_addr_t start, ram_addr_t end,
 
 int cpu_physical_memory_set_dirty_tracking(int enable)
 {
-    int r=0;
-
-    if (kvm_enabled())
-        r = kvm_physical_memory_set_dirty_tracking(enable);
-    in_migration = enable;
-    return r;
+    if (kvm_enabled()) {
+        return kvm_set_migration_log(enable);
+    }
+    return 0;
 }
 
 int cpu_physical_memory_get_dirty_tracking(void)
@@ -1953,10 +1954,14 @@ int cpu_physical_memory_get_dirty_tracking(void)
     return in_migration;
 }
 
-void cpu_physical_sync_dirty_bitmap(target_phys_addr_t start_addr, target_phys_addr_t end_addr)
+int cpu_physical_sync_dirty_bitmap(target_phys_addr_t start_addr,
+                                   target_phys_addr_t end_addr)
 {
+    int ret = 0;
+
     if (kvm_enabled())
-        kvm_physical_sync_dirty_bitmap(start_addr, end_addr);
+        ret = kvm_physical_sync_dirty_bitmap(start_addr, end_addr);
+    return ret;
 }
 
 static inline void tlb_update_dirty(CPUTLBEntry *tlb_entry)

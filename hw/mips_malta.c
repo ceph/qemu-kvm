@@ -447,7 +447,7 @@ static MaltaFPGAState *malta_fpga_init(target_phys_addr_t base, qemu_irq uart_ir
     s->uart = serial_mm_init(base + 0x900, 3, uart_irq, 230400, uart_chr, 1);
 
     malta_fpga_reset(s);
-    qemu_register_reset(malta_fpga_reset, s);
+    qemu_register_reset(malta_fpga_reset, 0, s);
 
     return s;
 }
@@ -792,7 +792,7 @@ void mips_malta_init (ram_addr_t ram_size,
         fprintf(stderr, "Unable to find CPU definition\n");
         exit(1);
     }
-    qemu_register_reset(main_cpu_reset, env);
+    qemu_register_reset(main_cpu_reset, 0, env);
 
     /* allocate RAM */
     if (ram_size > (256 << 20)) {
@@ -907,7 +907,7 @@ void mips_malta_init (ram_addr_t ram_size,
     for (i = 0; i < 8; i++) {
         /* TODO: Populate SPD eeprom data.  */
         DeviceState *eeprom;
-        eeprom = qdev_create(smbus, "smbus-eeprom");
+        eeprom = qdev_create((BusState *)smbus, "smbus-eeprom");
         qdev_set_prop_int(eeprom, "address", 0x50 + i);
         qdev_set_prop_ptr(eeprom, "data", eeprom_buf + (i * 256));
         qdev_init(eeprom);
@@ -953,6 +953,7 @@ static QEMUMachine mips_malta_machine = {
     .name = "malta",
     .desc = "MIPS Malta Core LV",
     .init = mips_malta_init,
+    .is_default = 1,
 };
 
 static void mips_malta_machine_init(void)

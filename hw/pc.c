@@ -85,7 +85,7 @@ static void option_rom_setup_reset(target_phys_addr_t addr, unsigned size)
     cpu_physical_memory_read(addr, rrd->data, size);
     rrd->addr = addr;
     rrd->size = size;
-    qemu_register_reset(option_rom_reset, rrd);
+    qemu_register_reset(option_rom_reset, 0, rrd);
 }
 
 static void ioport80_write(void *opaque, uint32_t addr, uint32_t data)
@@ -840,7 +840,7 @@ CPUState *pc_new_cpu(int cpu, const char *cpu_model, int pci_enabled)
             /* XXX: enable it in all cases */
             env->cpuid_features |= CPUID_APIC;
         }
-        qemu_register_reset(main_cpu_reset, env);
+        qemu_register_reset(main_cpu_reset, 0, env);
         if (pci_enabled) {
             apic_init(env);
         }
@@ -1136,7 +1136,7 @@ static void pc_init1(ram_addr_t ram_size,
         smbus = piix4_pm_init(pci_bus, piix3_devfn + 3, 0xb100, i8259[9]);
         for (i = 0; i < 8; i++) {
             DeviceState *eeprom;
-            eeprom = qdev_create(smbus, "smbus-eeprom");
+            eeprom = qdev_create((BusState *)smbus, "smbus-eeprom");
             qdev_set_prop_int(eeprom, "address", 0x50 + i);
             qdev_set_prop_ptr(eeprom, "data", eeprom_buf + (i * 256));
             qdev_init(eeprom);
@@ -1239,6 +1239,7 @@ static QEMUMachine pc_machine = {
     .desc = "Standard PC",
     .init = pc_init_pci,
     .max_cpus = 255,
+    .is_default = 1,
 };
 
 static QEMUMachine isapc_machine = {

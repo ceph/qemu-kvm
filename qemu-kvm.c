@@ -1371,14 +1371,14 @@ void kvm_ioperm(CPUState *env, void *data)
 
 #endif
 
-void kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr, target_phys_addr_t end_addr)
+int kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr, target_phys_addr_t end_addr)
 {
 #ifndef TARGET_IA64
     void *buf;
 
 #ifdef TARGET_I386
     if (must_use_aliases_source(start_addr))
-        return;
+        return 0;
 #endif
 
     buf = qemu_malloc((end_addr - start_addr) / 8 + 2);
@@ -1386,6 +1386,7 @@ void kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr, target_phys_a
 			      buf, NULL, kvm_get_dirty_bitmap_cb);
     qemu_free(buf);
 #endif
+    return 0;
 }
 
 int kvm_log_start(target_phys_addr_t phys_addr, target_phys_addr_t len)
@@ -1425,4 +1426,27 @@ void qemu_kvm_cpu_stop(CPUState *env)
 {
     if (kvm_enabled())
         env->kvm_cpu_state.stopped = 1;
+}
+
+void kvm_arch_get_registers(CPUState *env)
+{
+    kvm_save_registers(env);
+    kvm_save_mpstate(env);
+}
+
+void kvm_arch_put_registers(CPUState *env)
+{
+    kvm_load_registers(env);
+    kvm_load_mpstate(env);
+}
+
+
+void cpu_synchronize_state(CPUState *env, int modified)
+{
+    if (kvm_enabled()) {
+        if (modified)
+            kvm_arch_put_registers(env);
+        else
+            kvm_arch_get_registers(env);
+    }
 }

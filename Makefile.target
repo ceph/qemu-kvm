@@ -594,15 +594,11 @@ LIBS += $(CONFIG_BLUEZ_LIBS)
 endif
 
 # xen backend driver support
-XEN_OBJS := xen_machine_pv.o xen_backend.o xen_devconfig.o xen_domainbuild.o
-XEN_OBJS += xen_console.o xenfb.o xen_disk.o xen_nic.o
+XEN_OBJS := xen_machine_pv.o xen_domainbuild.o
 ifeq ($(CONFIG_XEN), yes)
   OBJS += $(XEN_OBJS)
   LIBS += $(XEN_LIBS)
 endif
-
-# SCSI layer
-OBJS+= lsi53c895a.o esp.o
 
 # USB layer
 OBJS+= usb-ohci.o
@@ -654,7 +650,7 @@ OBJS+= cirrus_vga.o
 OBJS+= pckbd.o serial.o i8259.o i8254.o fdc.o mc146818rtc.o
 OBJS+= prep_pci.o ppc_prep.o
 # Mac shared devices
-OBJS+= macio.o cuda.o adb.o mac_nvram.o mac_dbdma.o escc.o
+OBJS+= macio.o cuda.o adb.o mac_nvram.o mac_dbdma.o
 # OldWorld PowerMac
 OBJS+= heathrow_pic.o grackle_pci.o ppc_oldworld.o
 # NewWorld PowerMac
@@ -703,7 +699,7 @@ OBJS+= fdc.o mc146818rtc.o serial.o
 OBJS+= cirrus_vga.o parallel.o
 else
 OBJS+= sun4m.o tcx.o iommu.o slavio_intctl.o
-OBJS+= slavio_timer.o escc.o slavio_misc.o fdc.o sparc32_dma.o
+OBJS+= slavio_timer.o slavio_misc.o fdc.o sparc32_dma.o
 OBJS+= cs4231.o eccmemctl.o sbi.o sun4c_intctl.o
 endif
 endif
@@ -790,7 +786,7 @@ endif
 
 vl.o: qemu-options.h
 
-$(QEMU_PROG): LIBS += $(SDL_LIBS) $(COCOA_LIBS) $(CURSES_LIBS) $(BRLAPI_LIBS) $(VDE_LIBS)
+$(QEMU_PROG): LIBS += $(SDL_LIBS) $(COCOA_LIBS) $(CURSES_LIBS) $(BRLAPI_LIBS) $(VDE_LIBS) $(CURL_LIBS)
 $(QEMU_PROG): ARLIBS=../libqemu_common.a libqemu.a $(HWLIB)
 $(QEMU_PROG): $(OBJS) ../libqemu_common.a libqemu.a $(HWLIB)
 	$(call LINK,$(OBJS))

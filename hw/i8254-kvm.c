@@ -101,7 +101,7 @@ PITState *kvm_pit_init(int base, qemu_irq irq)
     register_savevm(PIT_SAVEVM_NAME, base, PIT_SAVEVM_VERSION,
 		    kvm_pit_save, kvm_pit_load, pit);
 
-    qemu_register_reset(pit_reset, pit);
+    qemu_register_reset(pit_reset, 0, pit);
     pit_reset(pit);
 
     return pit;

@@ -175,7 +175,8 @@ PCIBus *pci_pmac_init(qemu_irq *pic)
     /* Use values found on a real PowerMac */
     /* Uninorth main bus */
     s = qemu_mallocz(sizeof(UNINState));
-    s->bus = pci_register_bus(pci_unin_set_irq, pci_unin_map_irq,
+    s->bus = pci_register_bus(NULL, "pci",
+                              pci_unin_set_irq, pci_unin_map_irq,
                               pic, 11 << 3, 4);
 
     pci_mem_config = cpu_register_io_memory(0, pci_unin_main_config_read,
@@ -265,7 +266,7 @@ PCIBus *pci_pmac_init(qemu_irq *pic)
     d->config[0x34] = 0x00; // capabilities_pointer
 #endif
     register_savevm("uninorth", 0, 1, pci_unin_save, pci_unin_load, d);
-    qemu_register_reset(pci_unin_reset, d);
+    qemu_register_reset(pci_unin_reset, 0, d);
     pci_unin_reset(d);
 
     return s->bus;

@@ -4,6 +4,7 @@
 #include "hw/isa.h"
 
 #include "exec-all.h"
+#include "kvm.h"
 #include "qemu-kvm.h"
 
 static void cpu_put_seg(QEMUFile *f, SegmentCache *dt)
@@ -30,10 +31,7 @@ void cpu_save(QEMUFile *f, void *opaque)
     int32_t a20_mask;
     int i;
 
-    if (kvm_enabled()) {
-        kvm_save_registers(env);
-        kvm_save_mpstate(env);
-    }
+    cpu_synchronize_state(env, 0);
 
     for(i = 0; i < CPU_NB_REGS; i++)
         qemu_put_betls(f, &env->regs[i]);
@@ -143,13 +141,11 @@ void cpu_save(QEMUFile *f, void *opaque)
         qemu_put_be64s(f, &env->mtrr_var[i].mask);
     }
 
-    if (kvm_enabled()) {
-        for (i = 0; i < sizeof(env->interrupt_bitmap)/8 ; i++) {
-            qemu_put_be64s(f, &env->interrupt_bitmap[i]);
-        }
-        qemu_put_be64s(f, &env->tsc);
-        qemu_put_be32s(f, &env->mp_state);
+    for (i = 0; i < sizeof(env->interrupt_bitmap)/8; i++) {
+        qemu_put_be64s(f, &env->interrupt_bitmap[i]);
     }
+    qemu_put_be64s(f, &env->tsc);
+    qemu_put_be32s(f, &env->mp_state);
 }
 
 #ifdef USE_X86LDOUBLE
@@ -184,8 +180,7 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
     uint16_t fpus, fpuc, fptag, fpregs_format;
     int32_t a20_mask;
 
-    if (version_id != 3 && version_id != 4 && version_id != 5
-        && version_id != 6 && version_id != 7 && version_id != 8)
+    if (version_id < 3 || version_id > CPU_SAVE_VERSION)
         return -EINVAL;
     for(i = 0; i < CPU_NB_REGS; i++)
         qemu_get_betls(f, &env->regs[i]);
@@ -329,25 +324,18 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
             qemu_get_be64s(f, &env->mtrr_var[i].mask);
         }
     }
+    if (version_id >= 9) {
+        for (i = 0; i < sizeof(env->interrupt_bitmap)/8; i++) {
+            qemu_get_be64s(f, &env->interrupt_bitmap[i]);
+        }
+        qemu_get_be64s(f, &env->tsc);
+        qemu_get_be32s(f, &env->mp_state);
+    }
 
     /* XXX: ensure compatiblity for halted bit ? */
     /* XXX: compute redundant hflags bits */
     env->hflags = hflags;
     tlb_flush(env, 1);
-    if (kvm_enabled()) {
-        /* when in-kernel irqchip is used, env->halted causes deadlock
-           because no userspace IRQs will ever clear this flag */
-        env->halted = 0;
-        for (i = 0; i < sizeof(env->interrupt_bitmap)/8; i++) {
-            qemu_get_be64s(f, &env->interrupt_bitmap[i]);
-        }
-        qemu_get_be64s(f, &env->tsc);
-        kvm_load_registers(env);
-        kvm_load_tsc(env);
-        if (version_id >= 5) {
-            qemu_get_be32s(f, &env->mp_state);
-            kvm_load_mpstate(env);
-        }
-    }
+    cpu_synchronize_state(env, 1);
     return 0;
 }

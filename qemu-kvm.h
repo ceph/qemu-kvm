@@ -204,7 +204,7 @@ static inline void kvm_set_phys_mem(target_phys_addr_t start_addr,
 }
 
 
-void kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr, target_phys_addr_t end_addr);
+int kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr, target_phys_addr_t end_addr);
 
 int kvm_log_start(target_phys_addr_t phys_addr, target_phys_addr_t len);
 int kvm_log_stop(target_phys_addr_t phys_addr, target_phys_addr_t len);
@@ -212,28 +212,18 @@ int kvm_log_stop(target_phys_addr_t phys_addr, target_phys_addr_t len);
 
 static inline int kvm_sync_vcpus(void) { return 0; }
 
-static inline void kvm_arch_get_registers(CPUState *env)
-{
-    kvm_save_registers(env);
-}
+void kvm_arch_get_registers(CPUState *env);
+void kvm_arch_put_registers(CPUState *env);
 
-static inline void kvm_arch_put_registers(CPUState *env)
-{
-    kvm_load_registers(env);
-}
-
-static inline void cpu_synchronize_state(CPUState *env, int modified)
-{
-    if (kvm_enabled()) {
-        if (modified)
-            kvm_arch_put_registers(env);
-        else
-            kvm_arch_get_registers(env);
-    }
-}
+void cpu_synchronize_state(CPUState *env, int modified);
 
 uint32_t kvm_arch_get_supported_cpuid(CPUState *env, uint32_t function,
                                       int reg);
 
+
+static inline int kvm_set_migration_log(int enable)
+{
+    return kvm_physical_memory_set_dirty_tracking(enable);
+}
 
 #endif
