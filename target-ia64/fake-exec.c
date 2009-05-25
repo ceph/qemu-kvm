@@ -41,15 +41,6 @@ void tcg_dump_info(FILE *f,
     return;
 }
 
-void flush_icache_range(unsigned long start, unsigned long stop)
-{
-    while (start < stop) {
-	asm volatile ("fc %0" :: "r"(start));
-	start += 32;
-    }
-    asm volatile (";;sync.i;;srlz.i;;");
-}
-
 int cpu_restore_state(TranslationBlock *tb,
                       CPUState *env, unsigned long searched_pc,
                       void *puc)

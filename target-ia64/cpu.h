@@ -71,7 +71,6 @@ static inline int cpu_mmu_index (CPUState *env)
  * These ones really should go to the appropriate tcg header file, if/when
  * tcg support is added for ia64.
  */
-void flush_icache_range(unsigned long start, unsigned long stop);
 void tcg_dump_info(FILE *f,
                    int (*cpu_fprintf)(FILE *f, const char *fmt, ...));
 

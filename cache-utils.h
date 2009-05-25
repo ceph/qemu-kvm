@@ -34,7 +34,28 @@ static inline void flush_icache_range(unsigned long start, unsigned long stop)
     asm volatile ("isync" : : : "memory");
 }
 
+/*
+ * Is this correct for PPC?
+ */
+static inline void dma_flush_range(unsigned long start, unsigned long stop)
+{
+}
+
+#elif defined(__ia64__)
+static inline void flush_icache_range(unsigned long start, unsigned long stop)
+{
+    while (start < stop) {
+	asm volatile ("fc %0" :: "r"(start));
+	start += 32;
+    }
+    asm volatile (";;sync.i;;srlz.i;;");
+}
+#define dma_flush_range(start, end) flush_icache_range(start, end)
+#define qemu_cache_utils_init(envp) do { (void) (envp); } while (0)
 #else
+static inline void dma_flush_range(unsigned long start, unsigned long stop)
+{
+}
 #define qemu_cache_utils_init(envp) do { (void) (envp); } while (0)
 #endif
 
