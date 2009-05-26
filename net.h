@@ -15,6 +15,7 @@ typedef void (SetOffload)(VLANClientState *, int, int, int, int);
 
 struct VLANClientState {
     IOReadHandler *fd_read;
+    IOReadHandler *fd_read_raw;
     IOReadvHandler *fd_readv;
     /* Packets may still be sent if this returns zero.  It's used to
        rate-limit the slirp code.  */
@@ -63,6 +64,7 @@ int qemu_can_send_packet(VLANClientState *vc);
 ssize_t qemu_sendv_packet(VLANClientState *vc, const struct iovec *iov,
                           int iovcnt);
 int qemu_send_packet(VLANClientState *vc, const uint8_t *buf, int size);
+void qemu_send_packet_raw(VLANClientState *vc, const uint8_t *buf, int size);
 void qemu_format_nic_info_str(VLANClientState *vc, uint8_t macaddr[6]);
 void qemu_check_nic_model(NICInfo *nd, const char *model);
 void qemu_check_nic_model_list(NICInfo *nd, const char * const *models,

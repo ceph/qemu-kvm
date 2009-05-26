@@ -456,6 +456,31 @@ int qemu_send_packet(VLANClientState *vc, const uint8_t *buf, int size)
     return ret;
 }
 
+void qemu_send_packet_raw(VLANClientState *sender, const uint8_t *buf, int size)
+{
+    VLANState *vlan = sender->vlan;
+    VLANClientState *vc;
+
+    if (sender->link_down)
+        return;
+
+#ifdef DEBUG_NET
+    printf("vlan %d send raw:\n", vlan->id);
+    hex_dump(stdout, buf, size);
+#endif
+    for(vc = vlan->first_client; vc != NULL; vc = vc->next) {
+        if (vc == sender || vc->link_down) {
+            continue;
+        }
+        if (vc->fd_read_raw) {
+            vc->fd_read_raw(vc->opaque, buf, size);
+        } else {
+            vc->fd_read(vc->opaque, buf, size);
+        }
+    }
+    return;
+}
+
 static ssize_t vc_sendv_compat(VLANClientState *vc, const struct iovec *iov,
                                int iovcnt)
 {
@@ -823,6 +848,29 @@ static void tap_receive(void *opaque, const uint8_t *buf, int size)
     tap_receive_iov(opaque, iov, i);
 }
 
+static void tap_receive_raw(void *opaque, const uint8_t *buf, int size)
+{
+    struct iovec iov[2];
+    int i = 0;
+
+#ifdef IFF_VNET_HDR
+    TAPState *s = opaque;
+    struct virtio_net_hdr hdr = { 0, };
+
+    if (s->has_vnet_hdr && s->using_vnet_hdr) {
+        iov[i].iov_base = &hdr;
+        iov[i].iov_len  = sizeof(hdr);
+        i++;
+    }
+#endif
+
+    iov[i].iov_base = (char *) buf;
+    iov[i].iov_len  = size;
+    i++;
+
+    tap_receive_iov(opaque, iov, i);
+}
+
 static int tap_can_send(void *opaque)
 {
     TAPState *s = opaque;
@@ -992,6 +1040,7 @@ static TAPState *net_tap_fd_init(VLANState *vlan,
     s->vc = qemu_new_vlan_client(vlan, model, name, tap_receive,
                                  NULL, tap_cleanup, s);
     s->vc->fd_readv = tap_receive_iov;
+    s->vc->fd_read_raw = tap_receive_raw;
 #ifdef TUNSETOFFLOAD
     s->vc->set_offload = tap_set_offload;
     tap_set_offload(s->vc, 0, 0, 0, 0);
