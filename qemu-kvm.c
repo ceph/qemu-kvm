@@ -433,7 +433,6 @@ static void *ap_main_loop(void *_env)
     sigfillset(&signals);
     sigprocmask(SIG_BLOCK, &signals, NULL);
     kvm_create_vcpu(kvm_context, env->cpu_index);
-    kvm_qemu_init_env(env);
 
 #ifdef USE_KVM_DEVICE_ASSIGNMENT
     /* do ioperm for io ports of assigned devices */
