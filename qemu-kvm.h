@@ -16,6 +16,7 @@ int kvm_main_loop(void);
 int kvm_qemu_init(void);
 int kvm_qemu_create_context(void);
 int kvm_init_ap(void);
+int kvm_vcpu_inited(CPUState *env);
 void kvm_qemu_destroy(void);
 void kvm_load_registers(CPUState *env);
 void kvm_save_registers(CPUState *env);
@@ -31,6 +32,9 @@ int kvm_update_guest_debug(CPUState *env, unsigned long reinject_trap);
 int kvm_qemu_init_env(CPUState *env);
 int kvm_qemu_check_extension(int ext);
 void kvm_apic_init(CPUState *env);
+/* called from vcpu initialization */
+void qemu_kvm_load_lapic(CPUState *env);
+
 int kvm_set_irq(int irq, int level, int *status);
 
 int kvm_physical_memory_set_dirty_tracking(int enable);

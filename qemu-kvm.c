@@ -462,6 +462,11 @@ void kvm_init_vcpu(CPUState *env)
 	qemu_cond_wait(&qemu_vcpu_cond);
 }
 
+int kvm_vcpu_inited(CPUState *env)
+{
+    return env->kvm_cpu_state.created;
+}
+
 int kvm_init_ap(void)
 {
 #ifdef TARGET_I386

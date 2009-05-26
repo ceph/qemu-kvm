@@ -891,6 +891,15 @@ static void kvm_kernel_lapic_load_from_user(APICState *s)
 
 #endif
 
+void qemu_kvm_load_lapic(CPUState *env)
+{
+#ifdef KVM_CAP_IRQCHIP
+    if (kvm_enabled() && kvm_vcpu_inited(env) && qemu_kvm_irqchip_in_kernel()) {
+        kvm_kernel_lapic_load_from_user(env->apic_state);
+    }
+#endif
+}
+
 static void apic_save(QEMUFile *f, void *opaque)
 {
     APICState *s = opaque;
@@ -965,11 +974,7 @@ static int apic_load(QEMUFile *f, void *opaque, int version_id)
     if (version_id >= 2)
         qemu_get_timer(f, s->timer);
 
-#ifdef KVM_CAP_IRQCHIP
-    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
-        kvm_kernel_lapic_load_from_user(s);
-    }
-#endif
+    qemu_kvm_load_lapic(s->cpu_env);
 
     return 0;
 }
@@ -991,11 +996,7 @@ static void apic_reset(void *opaque)
          */
         s->lvt[APIC_LVT_LINT0] = 0x700;
     }
-#ifdef KVM_CAP_IRQCHIP
-    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
-        kvm_kernel_lapic_load_from_user(s);
-    }
-#endif
+    qemu_kvm_load_lapic(s->cpu_env);
 }
 
 static CPUReadMemoryFunc *apic_mem_read[3] = {
