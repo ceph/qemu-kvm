@@ -503,6 +503,19 @@ static int get_para_features(kvm_context_t kvm_context)
 	return features;
 }
 
+static void kvm_trim_features(uint32_t *features, uint32_t supported)
+{
+    int i;
+    uint32_t mask;
+
+    for (i = 0; i < 32; ++i) {
+        mask = 1U << i;
+        if ((*features & mask) && !(supported & mask)) {
+            *features &= ~mask;
+        }
+    }
+}
+
 int kvm_arch_qemu_init_env(CPUState *cenv)
 {
     struct kvm_cpuid_entry2 cpuid_ent[100];
@@ -566,6 +579,16 @@ int kvm_arch_qemu_init_env(CPUState *cenv)
 	do_cpuid_ent(&cpuid_ent[cpuid_nent++], i, 0, &copy);
 
     kvm_setup_cpuid2(kvm_context, cenv->cpu_index, cpuid_nent, cpuid_ent);
+
+    kvm_trim_features(&cenv->cpuid_features,
+                      kvm_arch_get_supported_cpuid(cenv, 1, R_EDX));
+    kvm_trim_features(&cenv->cpuid_ext_features,
+                      kvm_arch_get_supported_cpuid(cenv, 1, R_ECX));
+    kvm_trim_features(&cenv->cpuid_ext2_features,
+                      kvm_arch_get_supported_cpuid(cenv, 0x80000001, R_EDX));
+    kvm_trim_features(&cenv->cpuid_ext3_features,
+                      kvm_arch_get_supported_cpuid(cenv, 0x80000001, R_ECX));
+
     return 0;
 }
 
