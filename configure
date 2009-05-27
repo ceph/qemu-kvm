@@ -198,6 +198,7 @@ nptl="yes"
 mixemu="no"
 bluez="yes"
 kvm="yes"
+kvm_trace="no"
 kvm_cap_pit="no"
 kvm_cap_device_assignment="no"
 kerneldir=""
@@ -522,6 +523,8 @@ for opt do
   ;;
   --kerneldir=*) kerneldir="$optarg"
   ;;
+  --with-kvm-trace) kvm_trace="yes"
+  ;;
   --with-pkgversion=*) pkgversion=" ($optarg)"
   ;;
   --disable-docs) build_docs="no"
@@ -658,6 +661,7 @@ echo "  --disable-aio            disable AIO support"
 echo "  --enable-io-thread       enable IO thread"
 echo "  --disable-blobs          disable installing provided firmware blobs"
 echo "  --kerneldir=PATH         look for kernel includes in PATH"
+echo "  --with-kvm-trace         enable building the KVM module with the kvm trace option"
 echo "  --disable-cpu-emulation  disables use of qemu cpu emulation code"
 echo ""
 echo "NOTE: The object files are built at the place where configure is launched"
@@ -1418,7 +1422,10 @@ if test -f kvm/kernel/configure; then
     kvm_kmod="yes"
     kmod_args=""
     if test -n "$kerneldir"; then
-	kmod_args="--kerneldir=$kerneldir"
+        kmod_args="--kerneldir=$kerneldir"
+    fi
+    if test "$kvm_trace" = "yes"; then
+        kmod_args="$kmod_args --with-kvm-trace"
     fi
     # hope there are no spaces in kmod_args; can't use arrays because of
     # dash.
@@ -1487,6 +1494,7 @@ echo "AIO support       $aio"
 echo "IO thread         $io_thread"
 echo "Install blobs     $blobs"
 echo "KVM support       $kvm"
+echo "KVM trace support $kvm_trace"
 echo "fdt support       $fdt"
 echo "preadv support    $preadv"
 
