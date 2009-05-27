@@ -2484,6 +2484,113 @@ static ram_addr_t kqemu_ram_alloc(ram_addr_t size)
 }
 #endif
 
+#ifdef __linux__
+
+#include <sys/vfs.h>
+
+#define HUGETLBFS_MAGIC       0x958458f6
+
+static long gethugepagesize(const char *path)
+{
+    struct statfs fs;
+    int ret;
+
+    do {
+	    ret = statfs(path, &fs);
+    } while (ret != 0 && errno == EINTR);
+
+    if (ret != 0) {
+	    perror("statfs");
+	    return 0;
+    }
+
+    if (fs.f_type != HUGETLBFS_MAGIC)
+	    fprintf(stderr, "Warning: path not on HugeTLBFS: %s\n", path);
+
+    return fs.f_bsize;
+}
+
+static void *file_ram_alloc(ram_addr_t memory, const char *path)
+{
+    char *filename;
+    void *area;
+    int fd;
+#ifdef MAP_POPULATE
+    int flags;
+#endif
+    unsigned long hpagesize;
+    extern int mem_prealloc;
+
+    if (!path) {
+        return NULL;
+    }
+
+    hpagesize = gethugepagesize(path);
+    if (!hpagesize) {
+	return NULL;
+    }
+
+    if (memory < hpagesize) {
+        return NULL;
+    }
+
+    if (kvm_enabled() && !kvm_has_sync_mmu()) {
+        fprintf(stderr, "host lacks mmu notifiers, disabling --mem-path\n");
+        return NULL;
+    }
+
+    if (asprintf(&filename, "%s/kvm.XXXXXX", path) == -1) {
+	return NULL;
+    }
+
+    fd = mkstemp(filename);
+    if (fd < 0) {
+	perror("mkstemp");
+	free(filename);
+	return NULL;
+    }
+    unlink(filename);
+    free(filename);
+
+    memory = (memory+hpagesize-1) & ~(hpagesize-1);
+
+    /*
+     * ftruncate is not supported by hugetlbfs in older
+     * hosts, so don't bother checking for errors.
+     * If anything goes wrong with it under other filesystems,
+     * mmap will fail.
+     */
+    ftruncate(fd, memory);
+
+#ifdef MAP_POPULATE
+    /* NB: MAP_POPULATE won't exhaustively alloc all phys pages in the case
+     * MAP_PRIVATE is requested.  For mem_prealloc we mmap as MAP_SHARED
+     * to sidestep this quirk.
+     */
+    flags = mem_prealloc ? MAP_POPULATE|MAP_SHARED : MAP_PRIVATE;
+    area = mmap(0, memory, PROT_READ|PROT_WRITE, flags, fd, 0);
+#else
+    area = mmap(0, memory, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
+#endif
+    if (area == MAP_FAILED) {
+	perror("alloc_mem_area: can't mmap hugetlbfs pages");
+	close(fd);
+	return (NULL);
+    }
+    return area;
+}
+
+#else
+
+static void *file_ram_alloc(ram_addr_t memory, const char *path)
+{
+    return NULL;
+}
+
+#endif
+
+extern const char *mem_path;
+
 ram_addr_t qemu_ram_alloc(ram_addr_t size)
 {
     RAMBlock *new_block;
@@ -2497,7 +2604,10 @@ ram_addr_t qemu_ram_alloc(ram_addr_t size)
     size = TARGET_PAGE_ALIGN(size);
     new_block = qemu_malloc(sizeof(*new_block));
 
-    new_block->host = qemu_vmalloc(size);
+    new_block->host = file_ram_alloc(size, mem_path);
+    if (!new_block->host) {
+        new_block->host = qemu_vmalloc(size);
+    }
     new_block->offset = last_ram_offset;
     new_block->length = size;
 

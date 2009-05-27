@@ -41,7 +41,6 @@
 #include <sys/ioctl.h>
 #include <sys/resource.h>
 #include <sys/socket.h>
-#include <sys/vfs.h>
 #include <netinet/in.h>
 #include <net/if.h>
 #if defined(__NetBSD__)
@@ -268,7 +267,6 @@ const char *mem_path = NULL;
 #ifdef MAP_POPULATE
 int mem_prealloc = 1;	/* force preallocation of physical target memory */
 #endif
-long hpagesize = 0;
 #ifdef TARGET_ARM
 int old_param = 0;
 #endif
@@ -4855,90 +4853,6 @@ int qemu_uuid_parse(const char *str, uint8_t *uuid)
 }
 
 #define MAX_NET_CLIENTS 32
-
-#ifdef USE_KVM
-
-#define HUGETLBFS_MAGIC       0x958458f6
-
-static long gethugepagesize(const char *path)
-{
-    struct statfs fs;
-    int ret;
-
-    do {
-	    ret = statfs(path, &fs);
-    } while (ret != 0 && errno == EINTR);
-
-    if (ret != 0) {
-	    perror("statfs");
-	    return 0;
-    }
-
-    if (fs.f_type != HUGETLBFS_MAGIC)
-	    fprintf(stderr, "Warning: path not on HugeTLBFS: %s\n", path);
-
-    return fs.f_bsize;
-}
-
-static void *alloc_mem_area(size_t memory, unsigned long *len, const char *path)
-{
-    char *filename;
-    void *area;
-    int fd;
-#ifdef MAP_POPULATE
-    int flags;
-#endif
-
-    if (!kvm_has_sync_mmu()) {
-        fprintf(stderr, "host lacks mmu notifiers, disabling --mem-path\n");
-        return NULL;
-    }
-
-    if (asprintf(&filename, "%s/kvm.XXXXXX", path) == -1)
-	return NULL;
-
-    hpagesize = gethugepagesize(path);
-    if (!hpagesize)
-	return NULL;
-
-    fd = mkstemp(filename);
-    if (fd < 0) {
-	perror("mkstemp");
-	free(filename);
-	return NULL;
-    }
-    unlink(filename);
-    free(filename);
-
-    memory = (memory+hpagesize-1) & ~(hpagesize-1);
-
-    /*
-     * ftruncate is not supported by hugetlbfs in older
-     * hosts, so don't bother checking for errors.
-     * If anything goes wrong with it under other filesystems,
-     * mmap will fail.
-     */
-    ftruncate(fd, memory);
-
-#ifdef MAP_POPULATE
-    /* NB: MAP_POPULATE won't exhaustively alloc all phys pages in the case
-     * MAP_PRIVATE is requested.  For mem_prealloc we mmap as MAP_SHARED
-     * to sidestep this quirk.
-     */
-    flags = mem_prealloc ? MAP_POPULATE|MAP_SHARED : MAP_PRIVATE;
-    area = mmap(0, memory, PROT_READ|PROT_WRITE, flags, fd, 0);
-#else
-    area = mmap(0, memory, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
-#endif
-    if (area == MAP_FAILED) {
-	perror("alloc_mem_area: can't mmap hugetlbfs pages");
-	close(fd);
-	return (NULL);
-    }
-    *len = memory;
-    return area;
-}
-#endif
 
 #ifndef _WIN32
 
