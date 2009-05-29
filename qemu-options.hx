@@ -1601,8 +1601,8 @@ DEF("tdf", 0, QEMU_OPTION_tdf,
 DEF("kvm-shadow-memory", HAS_ARG, QEMU_OPTION_kvm_shadow_memory,
     "-kvm-shadow-memory MEGABYTES\n"
     "                     allocate MEGABYTES for kvm mmu shadowing\n")
-DEF("mempath", HAS_ARG, QEMU_OPTION_mempath,
-    "-mempath FILE        provide backing storage for guest RAM\n")
+DEF("mem-path", HAS_ARG, QEMU_OPTION_mempath,
+    "-mem-path FILE       provide backing storage for guest RAM\n")
 #ifdef MAP_POPULATE
 DEF("mem-prealloc", 0, QEMU_OPTION_mem_prealloc,
     "-mem-prealloc        preallocate guest memory (use with -mempath)\n")
