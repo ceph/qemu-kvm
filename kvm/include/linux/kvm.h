@@ -463,7 +463,7 @@ struct kvm_trace_rec {
 #define KVM_CAP_ASSIGN_DEV_IRQ 29
 /* Another bug in KVM_SET_USER_MEMORY_REGION fixed: */
 #define KVM_CAP_JOIN_MEMORY_REGIONS_WORKS 30
-#define KVM_CAP_PIT2 31
+#define KVM_CAP_PIT2 33
 
 #ifdef KVM_CAP_IRQ_ROUTING
 
@@ -547,7 +547,7 @@ struct kvm_irq_routing {
 #define KVM_ASSIGN_SET_MSIX_ENTRY \
 			_IOW(KVMIO, 0x74, struct kvm_assigned_msix_entry)
 #define KVM_DEASSIGN_DEV_IRQ       _IOW(KVMIO, 0x75, struct kvm_assigned_irq)
-#define KVM_CREATE_PIT2		   _IOW(KVMIO, 0x76, struct kvm_pit_config)
+#define KVM_CREATE_PIT2		   _IOW(KVMIO, 0x77, struct kvm_pit_config)
 
 /*
  * ioctls for vcpu fds
