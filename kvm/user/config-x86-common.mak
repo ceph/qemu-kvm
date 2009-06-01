@@ -1,5 +1,7 @@
 #This is a make file with common rules for both x86 & x86-64
 
+CFLAGS += -I../include/x86
+
 all: kvmctl kvmtrace test_cases
 
 kvmctl_objs= main.o iotable.o ../libkvm/libkvm.a

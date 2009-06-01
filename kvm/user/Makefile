@@ -29,6 +29,7 @@ CFLAGS += -O1
 CFLAGS += $(autodepend-flags) -g -fomit-frame-pointer -Wall
 CFLAGS += $(call cc-option, -fno-stack-protector, "")
 CFLAGS += $(call cc-option, -fno-stack-protector-all, "")
+CFLAGS += -I../include
 CFLAGS += -I ../libkvm
 
 LDFLAGS += $(CFLAGS) -L ../libkvm

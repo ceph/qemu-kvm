@@ -3,7 +3,6 @@ cstart.o = $(TEST_DIR)/cstart64.o
 bits = 64
 ldarch = elf64-x86-64
 CFLAGS += -D__x86_64__
-CFLAGS += -I $(KERNELDIR)/include
 
 tests = $(TEST_DIR)/access.flat $(TEST_DIR)/irq.flat $(TEST_DIR)/sieve.flat \
       $(TEST_DIR)/simple.flat $(TEST_DIR)/stringio.flat \

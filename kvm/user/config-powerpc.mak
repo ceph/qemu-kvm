@@ -1,4 +1,4 @@
-CFLAGS += -I $(KERNELDIR)/include
+CFLAGS += -I../include/powerpc
 CFLAGS += -Wa,-mregnames -I test/lib
 CFLAGS += -ffreestanding
 
