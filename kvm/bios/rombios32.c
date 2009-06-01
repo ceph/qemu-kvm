@@ -1740,7 +1740,7 @@ void acpi_bios_init(void)
         memset(madt, 0, madt_size);
         madt->local_apic_address = cpu_to_le32(0xfee00000);
         madt->flags = cpu_to_le32(1);
-        apic = (void *)(madt + 1);
+        *(uint32_t*)APIC_MADT_PTR = apic = (void *)(madt + 1);
         for(i=0;i<MAX_CPUS;i++) {
             apic->type = APIC_PROCESSOR;
             apic->length = sizeof(*apic);

@@ -27,36 +27,32 @@ DefinitionBlock (
 {
    Scope (\_PR)
    {
-	OperationRegion(PRST, SystemIO, 0xaf00, 32)
-	Field (PRST, ByteAcc, NoLock, Preserve)
+	/* pointer to first element of MADT APIC structures */
+	OperationRegion(ATPR, SystemMemory, 0x0514, 4)
+	Field (ATPR, DwordAcc, NoLock, Preserve)
 	{
-		PRS, 256
+		ATP, 32
 	}
 
-	Name(PRSS, Buffer(32){}) /* shadow CPU status bitmask */
-	Name(SSVL, 0)
-
-	Method(CRST, 1) {
-		If (LEqual(SSVL, 0)) {
-			Store(PRS, PRSS) /* read CPUs status bitmaks from HW */
-			Store(1, SSVL)
-                }
-		ShiftRight(Arg0, 3, Local1)
-		Store(DerefOf(Index(PRSS, Local1)), Local2)
-	        Return(And(Local2, ShiftLeft(1, And(Arg0, 0x7))))
-	}
+#define madt_addr(nr)  Add (ATP, Multiply(nr, 8))
 
 #define gen_processor(nr, name) 				            \
 	Processor (CPU##name, nr, 0x0000b010, 0x06) {                       \
-            Name (PREN, Buffer(0x8) {0x0, 0x8, nr, nr, 0x1, 0x0, 0x0, 0x0}) \
-            Name (PRDS, Buffer(0x8) {0x0, 0x8, nr, nr, 0x0, 0x0, 0x0, 0x0}) \
+	    OperationRegion (MATR, SystemMemory, madt_addr(nr), 8)          \
+	    Field (MATR, ByteAcc, NoLock, Preserve)                         \
+	    {                                                               \
+	        MAT, 64                                                     \
+	    }                                                               \
+	    Field (MATR, ByteAcc, NoLock, Preserve)                         \
+	    {                                                               \
+	        Offset(4),                                                  \
+	        FLG, 1                                                      \
+	    }                                                               \
             Method(_MAT, 0) {                                               \
-                If (CRST(nr)) { Return(PREN) }                              \
-                Else { Return(PRDS) }                                       \
+		Return(MAT)                                                 \
             }                                                               \
             Method (_STA) {                                                 \
-                If (CRST(nr)) { Return(0xF) }                               \
-                Else { Return(0x9) }                                        \
+                If (FLG) { Return(0xF) } Else { Return(0x9) }               \
             }                                                               \
         }                                                                   \
 
@@ -78,9 +74,16 @@ DefinitionBlock (
 	gen_processor(14, E)
 
 	Method (NTFY, 2) {
-#define gen_ntfy(nr)                              \
-	If (LEqual(Arg0, 0x##nr)) {               \
-		Notify(CPU##nr, Arg1)             \
+#define gen_ntfy(nr)                                        \
+	If (LEqual(Arg0, 0x##nr)) {                         \
+		If (LNotEqual(Arg1, \_PR.CPU##nr.FLG)) {    \
+			Store (Arg1, \_PR.CPU##nr.FLG)      \
+			If (LEqual(Arg1, 1)) {              \
+				Notify(CPU##nr, 1)          \
+			} Else {                            \
+				Notify(CPU##nr, 3)          \
+			}                                   \
+		}                                           \
 	}
 		gen_ntfy(0)
 		gen_ntfy(1)
@@ -100,41 +103,26 @@ DefinitionBlock (
 		Return(One)
 	}
 
-	/* Works on 8 bit quentity.
-         * Arg1 - Shadow status bits
-         * Arg2 - Current status bits
-	 */
-        Method(PR1, 3) {
-	    Xor(Arg1, Arg2, Local0) /* figure out what chaged */
-	    ShiftLeft(Arg0, 3, Local1)
-            While (LNotEqual(Local0, Zero)) {
-		If (And(Local0, 1)) {      /* if staus have changed */
-                    if(And(Arg2, 1)) {     /* check previous status */
-	                Store(3, Local3)
-		    } Else {
-	                Store(1, Local3)
-	            }
-		    NTFY(Local1, Local3)
-                }
-		ShiftRight(Local0, 1, Local0)
-		ShiftRight(Arg2, 1, Arg2)
-		Increment(Local1)
-	    }
-	    Return(One)
+	OperationRegion(PRST, SystemIO, 0xaf00, 32)
+	Field (PRST, ByteAcc, NoLock, Preserve)
+	{
+		PRS, 256
 	}
 
 	Method(PRSC, 0) {
-		Store(Buffer(32){}, Local0)
-		Store(PRS, Local0) /* read CPUs status bitmask into Local0 */
-		Store(Zero, Local1)
-		/* loop over bitmask byte by byte to see what have chaged */
-		While(LLess(Local1, 32)) {
-			Store(DerefOf(Index(Local0, Local1)), Local2)
-			Store(DerefOf(Index(PRSS, Local1)), Local3)
-			PR1(Local1, Local2, Local3)
-			Increment(Local1)
-                }
-		Store(Local0, PRSS) /* store curr satust bitmask into shadow */
+		Store(PRS, Local3)
+		Store(Zero, Local0)
+		While(LLess(Local0, 32)) {
+			Store(Zero, Local1)
+			Store(DerefOf(Index(Local3, Local0)), Local2)
+			While(LLess(Local1, 8)) {
+				NTFY(Add(Multiply(Local0, 8), Local1),
+						And(Local2, 1))
+				ShiftRight(Local2, 1, Local2)
+				Increment(Local1)
+			}
+			Increment(Local0)
+		}
 		Return(One)
 	}
     }

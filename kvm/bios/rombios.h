@@ -57,6 +57,7 @@
 #define PM_IO_BASE        0xb000
 #define SMB_IO_BASE       0xb100
 #define SMP_MSR_ADDR      0x0510
+#define APIC_MADT_PTR     0x0514
 
 #define MAX_CPUS 16
 
