@@ -990,7 +990,12 @@ static void pc_init1(ram_addr_t ram_size,
     bochs_bios_init();
 
     cpu_irq = qemu_allocate_irqs(pic_irq_request, NULL, 1);
-    i8259 = i8259_init(cpu_irq[0]);
+#ifdef KVM_CAP_IRQCHIP
+    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
+        i8259 = kvm_i8259_init(cpu_irq[0]);
+    } else
+#endif
+        i8259 = i8259_init(cpu_irq[0]);
     ferr_irq = i8259[13];
 
     if (pci_enabled) {

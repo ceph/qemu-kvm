@@ -32,6 +32,7 @@ extern PicState2 *isa_pic;
 void pic_set_irq(int irq, int level);
 void pic_set_irq_new(void *opaque, int irq, int level);
 qemu_irq *i8259_init(qemu_irq parent_irq);
+qemu_irq *kvm_i8259_init(qemu_irq parent_irq);
 void pic_set_alt_irq_func(PicState2 *s, SetIRQFunc *alt_irq_func,
                           void *alt_irq_opaque);
 int pic_read_irq(PicState2 *s);
