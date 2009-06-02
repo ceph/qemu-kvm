@@ -204,7 +204,7 @@ int kvm_cpu_exec(CPUState *env)
 {
     int r;
 
-    r = kvm_run(kvm_context, env->cpu_index, env);
+    r = kvm_run(env->kvm_cpu_state.vcpu_ctx, env);
     if (r < 0) {
         printf("kvm_run returned %d\n", r);
         exit(1);
@@ -366,7 +366,7 @@ static void setup_kernel_sigmask(CPUState *env)
     sigprocmask(SIG_BLOCK, NULL, &set);
     sigdelset(&set, SIG_IPI);
     
-    kvm_set_signal_mask(kvm_context, env->cpu_index, &set);
+    kvm_set_signal_mask(env->kvm_cpu_state.vcpu_ctx, &set);
 }
 
 static void qemu_kvm_system_reset(void)
@@ -432,7 +432,7 @@ static void *ap_main_loop(void *_env)
     env->thread_id = kvm_get_thread_id();
     sigfillset(&signals);
     sigprocmask(SIG_BLOCK, &signals, NULL);
-    kvm_create_vcpu(kvm_context, env->cpu_index);
+    env->kvm_cpu_state.vcpu_ctx = kvm_create_vcpu(kvm_context, env->cpu_index);
 
 #ifdef USE_KVM_DEVICE_ASSIGNMENT
     /* do ioperm for io ports of assigned devices */
@@ -723,7 +723,7 @@ static int kvm_io_window(void *opaque)
 }
 
  
-static int kvm_halt(void *opaque, int vcpu)
+static int kvm_halt(void *opaque, kvm_vcpu_context_t vcpu)
 {
     return kvm_arch_halt(opaque, vcpu);
 }
@@ -1027,8 +1027,8 @@ static void kvm_invoke_set_guest_debug(void *data)
 {
     struct kvm_set_guest_debug_data *dbg_data = data;
 
-    dbg_data->err = kvm_set_guest_debug(kvm_context, cpu_single_env->cpu_index,
-                                        &dbg_data->dbg);
+    dbg_data->err = kvm_set_guest_debug(cpu_single_env->kvm_cpu_state.vcpu_ctx,
+		    &dbg_data->dbg);
 }
 
 int kvm_update_guest_debug(CPUState *env, unsigned long reinject_trap)

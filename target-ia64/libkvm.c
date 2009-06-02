@@ -45,11 +45,11 @@ int kvm_arch_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
 	return 0;
 }
 
-int kvm_arch_run(struct kvm_run *run,kvm_context_t kvm, int vcpu)
+int kvm_arch_run(kvm_vcpu_context_t vcpu)
 {
 	int r = 0;
 
-	switch (run->exit_reason) {
+	switch (vcp->run->exit_reason) {
 		default:
 			r = 1;
 			break;
@@ -58,12 +58,12 @@ int kvm_arch_run(struct kvm_run *run,kvm_context_t kvm, int vcpu)
 	return r;
 }
 
-void kvm_show_code(kvm_context_t kvm, int vcpu)
+void kvm_show_code(kvm_vcpu_context_t vcpu)
 {
 	fprintf(stderr, "kvm_show_code not supported yet!\n");
 }
 
-void kvm_show_regs(kvm_context_t kvm, int vcpu)
+void kvm_show_regs(kvm_vcpu_context_t vcpu)
 {
 	fprintf(stderr,"kvm_show_regs not supportted today!\n");
 }

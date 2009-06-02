@@ -70,7 +70,6 @@ int kvm_arch_qemu_create_context(void);
 void kvm_arch_save_regs(CPUState *env);
 void kvm_arch_load_regs(CPUState *env);
 int kvm_arch_qemu_init_env(CPUState *cenv);
-int kvm_arch_halt(void *opaque, int vcpu);
 void kvm_arch_pre_kvm_run(void *opaque, CPUState *env);
 void kvm_arch_post_kvm_run(void *opaque, CPUState *env);
 int kvm_arch_has_work(CPUState *env);
@@ -113,8 +112,6 @@ void qemu_kvm_notify_work(void);
 
 void kvm_tpr_opt_setup(void);
 void kvm_tpr_access_report(CPUState *env, uint64_t rip, int is_write);
-int handle_tpr_access(void *opaque, int vcpu,
-			     uint64_t rip, int is_write);
 void kvm_tpr_vcpu_start(CPUState *env);
 
 int qemu_kvm_get_dirty_pages(unsigned long phys_addr, void *buf);
@@ -138,8 +135,8 @@ void kvm_arch_do_ioperm(void *_data);
 #endif
 
 #ifdef TARGET_PPC
-int handle_powerpc_dcr_read(int vcpu, uint32_t dcrn, uint32_t *data);
-int handle_powerpc_dcr_write(int vcpu,uint32_t dcrn, uint32_t data);
+int handle_powerpc_dcr_read(kvm_vcpu_context_t vcpu, uint32_t dcrn, uint32_t *data);
+int handle_powerpc_dcr_write(kvm_vcpu_context_t vcpu,uint32_t dcrn, uint32_t data);
 #endif
 
 #define ALIGN(x, y)  (((x)+(y)-1) & ~((y)-1))
@@ -165,6 +162,9 @@ struct ioperm_data {
 
 int qemu_kvm_has_sync_mmu(void);
 void qemu_kvm_cpu_stop(CPUState *env);
+int kvm_arch_halt(void *opaque, kvm_vcpu_context_t vcpu);
+int handle_tpr_access(void *opaque, kvm_vcpu_context_t vcpu,
+			     uint64_t rip, int is_write);
 
 #define kvm_enabled() (kvm_allowed)
 #define qemu_kvm_irqchip_in_kernel() kvm_irqchip_in_kernel(kvm_context)

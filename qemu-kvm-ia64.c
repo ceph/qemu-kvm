@@ -31,7 +31,7 @@ int kvm_arch_qemu_init_env(CPUState *cenv)
     return 0;
 }
 
-int kvm_arch_halt(void *opaque, int vcpu)
+int kvm_arch_halt(void *opaque, kvm_vcpu_context_t vcpu)
 {
     CPUState *env = cpu_single_env;
     env->hflags |= HF_HALTED_MASK;
@@ -104,7 +104,7 @@ void kvm_save_mpstate(CPUState *env)
     int r;
     struct kvm_mp_state mp_state;
 
-    r = kvm_get_mpstate(kvm_context, env->cpu_index, &mp_state);
+    r = kvm_get_mpstate(env->kvm_cpu_state.vcpu_ctx, &mp_state);
     if (r < 0)
         env->mp_state = -1;
     else
@@ -122,7 +122,7 @@ void kvm_load_mpstate(CPUState *env)
      *  so don't touch it.
      */
     if (env->mp_state != -1)
-        kvm_set_mpstate(kvm_context, env->cpu_index, &mp_state);
+        kvm_set_mpstate(env->kvm_cpu_state.vcpu_ctx, &mp_state);
 #endif
 }
 
@@ -130,7 +130,7 @@ void kvm_arch_cpu_reset(CPUState *env)
 {
     if (kvm_irqchip_in_kernel(kvm_context)) {
 #ifdef KVM_CAP_MP_STATE
-	kvm_reset_mpstate(kvm_context, env->cpu_index);
+	kvm_reset_mpstate(env->kvm_cpu_state.vcpu_ctx);
 #endif
     } else {
 	env->interrupt_request &= ~CPU_INTERRUPT_HARD;

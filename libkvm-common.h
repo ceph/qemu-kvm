@@ -44,8 +44,6 @@ struct kvm_context {
 	/// Filedescriptor to /dev/kvm
 	int fd;
 	int vm_fd;
-	int vcpu_fd[MAX_VCPUS];
-	struct kvm_run *run[MAX_VCPUS];
 	/// Callbacks that KVM uses to emulate various unvirtualizable functionality
 	struct kvm_callbacks *callbacks;
 	void *opaque;
@@ -71,6 +69,14 @@ struct kvm_context {
 	int max_gsi;
 };
 
+struct kvm_vcpu_context
+{
+	int fd;
+	struct kvm_run *run;
+	struct kvm_context *kvm;
+	uint32_t id;
+};
+
 int kvm_alloc_kernel_memory(kvm_context_t kvm, unsigned long memory,
 								void **vm_mem);
 int kvm_alloc_userspace_memory(kvm_context_t kvm, unsigned long memory,
@@ -78,17 +84,17 @@ int kvm_alloc_userspace_memory(kvm_context_t kvm, unsigned long memory,
 
 int kvm_arch_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
                         void **vm_mem);
-int kvm_arch_run(struct kvm_run *run, kvm_context_t kvm, int vcpu);
+int kvm_arch_run(kvm_vcpu_context_t vcpu);
 
 
-void kvm_show_code(kvm_context_t kvm, int vcpu);
+void kvm_show_code(kvm_vcpu_context_t vcpu);
 
-int handle_halt(kvm_context_t kvm, int vcpu);
+int handle_halt(kvm_vcpu_context_t vcpu);
 int handle_shutdown(kvm_context_t kvm, void *env);
 void post_kvm_run(kvm_context_t kvm, void *env);
 int pre_kvm_run(kvm_context_t kvm, void *env);
 int handle_io_window(kvm_context_t kvm);
-int handle_debug(kvm_context_t kvm, int vcpu, void *env);
+int handle_debug(kvm_vcpu_context_t vcpu, void *env);
 int try_push_interrupts(kvm_context_t kvm);
 
 #endif

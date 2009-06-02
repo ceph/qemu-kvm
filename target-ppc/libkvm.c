@@ -23,9 +23,11 @@
 #include <stdio.h>
 #include <inttypes.h>
 
-int handle_dcr(struct kvm_run *run,  kvm_context_t kvm, int vcpu)
+int handle_dcr(kvm_vcpu_context_t vcpu)
 {
 	int ret = 0;
+	struct kvm_run *run = vcpu->run;
+	kvm_context_t kvm = vcpu->kvm;
 
 	if (run->dcr.is_write)
 		ret = kvm->callbacks->powerpc_dcr_write(vcpu,
@@ -39,17 +41,17 @@ int handle_dcr(struct kvm_run *run,  kvm_context_t kvm, int vcpu)
 	return ret;
 }
 
-void kvm_show_code(kvm_context_t kvm, int vcpu)
+void kvm_show_code(kvm_vcpu_context_t vcpu)
 {
 	fprintf(stderr, "%s: Operation not supported\n", __FUNCTION__);
 }
 
-void kvm_show_regs(kvm_context_t kvm, int vcpu)
+void kvm_show_regs(kvm_vcpu_context_t vcpu)
 {
 	struct kvm_regs regs;
 	int i;
 
-	if (kvm_get_regs(kvm, vcpu, &regs))
+	if (kvm_get_regs(vcpu, &regs))
 		return;
 
 	fprintf(stderr,"guest vcpu #%d\n", vcpu);
@@ -84,13 +86,13 @@ int kvm_arch_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
 	return 0;
 }
 
-int kvm_arch_run(struct kvm_run *run, kvm_context_t kvm, int vcpu)
+int kvm_arch_run(kvm_vcpu_context_t vcpu)
 {
 	int ret = 0;
 
-	switch (run->exit_reason){
+	switch (vcpu->run->exit_reason){
 	case KVM_EXIT_DCR:
-		ret = handle_dcr(run, kvm, vcpu);
+		ret = handle_dcr(vcpu);
 		break;
 	default:
 		ret = 1;

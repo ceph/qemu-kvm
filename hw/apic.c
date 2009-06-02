@@ -833,7 +833,7 @@ static void kvm_kernel_lapic_save_to_user(APICState *s)
     struct kvm_lapic_state *kapic = &apic;
     int i, v;
 
-    kvm_get_lapic(kvm_context, s->cpu_env->cpu_index, kapic);
+    kvm_get_lapic(s->cpu_env->kvm_cpu_state.vcpu_ctx, kapic);
 
     s->id = kapic_reg(kapic, 0x2) >> 24;
     s->tpr = kapic_reg(kapic, 0x8);
@@ -886,7 +886,7 @@ static void kvm_kernel_lapic_load_from_user(APICState *s)
     kapic_set_reg(klapic, 0x38, s->initial_count);
     kapic_set_reg(klapic, 0x3e, s->divide_conf);
 
-    kvm_set_lapic(kvm_context, s->cpu_env->cpu_index, klapic);
+    kvm_set_lapic(s->cpu_env->kvm_cpu_state.vcpu_ctx, klapic);
 }
 
 #endif
