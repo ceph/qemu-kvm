@@ -220,13 +220,28 @@ static int bios_is_mapped(CPUState *env, uint64_t rip)
     return 1;
 }
 
+static int get_pcr_cpu(CPUState *env)
+{
+    uint8_t b;
+
+    kvm_save_registers(env);
+
+    if (cpu_memory_rw_debug(env, env->segs[R_FS].base + 0x51, &b, 1, 0) < 0)
+	    return -1;
+
+    return (int)b;
+}
+
 static int enable_vapic(CPUState *env)
 {
     static uint8_t one = 1;
+    int pcr_cpu = get_pcr_cpu(env);
 
-    kvm_enable_vapic(kvm_context, env->cpu_index,
-		     vapic_phys + (env->cpu_index << 7));
-    cpu_physical_memory_rw(vapic_phys + (env->cpu_index << 7) + 4, &one, 1, 1);
+    if (pcr_cpu < 0)
+	    return 0;
+
+    kvm_enable_vapic(kvm_context, env->cpu_index, vapic_phys + (pcr_cpu << 7));
+    cpu_physical_memory_rw(vapic_phys + (pcr_cpu << 7) + 4, &one, 1, 1);
     bios_enabled = 1;
 
     return 1;
