@@ -856,6 +856,20 @@ int kvm_commit_irq_routes(kvm_context_t kvm);
  */
 int kvm_get_irq_route_gsi(kvm_context_t kvm);
 
+/*!
+ * \brief Create a file descriptor for injecting interrupts
+ *
+ * Creates an eventfd based file-descriptor that maps to a specific GSI
+ * in the guest.  eventfd compliant signaling (write() from userspace, or
+ * eventfd_signal() from kernelspace) will cause the GSI to inject
+ * itself into the guest at the next available window.
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param gsi GSI to assign to this fd
+ * \param flags reserved, must be zero
+ */
+int kvm_irqfd(kvm_context_t kvm, int gsi, int flags);
+
 #ifdef KVM_CAP_DEVICE_MSIX
 int kvm_assign_set_msix_nr(kvm_context_t kvm,
 			   struct kvm_assigned_msix_nr *msix_nr);

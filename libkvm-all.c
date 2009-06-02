@@ -1481,3 +1481,52 @@ int kvm_assign_set_msix_entry(kvm_context_t kvm,
         return ret;
 }
 #endif
+
+#if defined(KVM_CAP_IRQFD) && defined(CONFIG_eventfd)
+
+#include <sys/eventfd.h>
+
+static int _kvm_irqfd(kvm_context_t kvm, int fd, int gsi, int flags)
+{
+	int r;
+	struct kvm_irqfd data = {
+		.fd    = fd,
+		.gsi   = gsi,
+		.flags = flags,
+	};
+
+	r = ioctl(kvm->vm_fd, KVM_IRQFD, &data);
+	if (r == -1)
+		r = -errno;
+	return r;
+}
+
+int kvm_irqfd(kvm_context_t kvm, int gsi, int flags)
+{
+	int r;
+	int fd;
+
+	if (!kvm_check_extension(kvm, KVM_CAP_IRQFD))
+		return -ENOENT;
+
+	fd = eventfd(0, 0);
+	if (fd < 0)
+		return -errno;
+
+	r = _kvm_irqfd(kvm, fd, gsi, 0);
+	if (r < 0) {
+		close(fd);
+		return -errno;
+	}
+
+	return fd;
+}
+
+#else /* KVM_CAP_IRQFD */
+
+int kvm_irqfd(kvm_context_t kvm, int gsi, int flags)
+{
+	return -ENOSYS;
+}
+
+#endif /* KVM_CAP_IRQFD */
