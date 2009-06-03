@@ -216,10 +216,25 @@ int kvm_log_stop(target_phys_addr_t phys_addr, target_phys_addr_t len);
 
 static inline int kvm_sync_vcpus(void) { return 0; }
 
-void kvm_arch_get_registers(CPUState *env);
-void kvm_arch_put_registers(CPUState *env);
+static inline void kvm_arch_get_registers(CPUState *env)
+{
+    kvm_save_registers(env);
+}
 
-void cpu_synchronize_state(CPUState *env, int modified);
+static inline void kvm_arch_put_registers(CPUState *env)
+{
+    kvm_load_registers(env);
+}
+
+static inline void cpu_synchronize_state(CPUState *env, int modified)
+{
+    if (kvm_enabled()) {
+        if (modified)
+            kvm_arch_put_registers(env);
+        else
+            kvm_arch_get_registers(env);
+    }
+}
 
 uint32_t kvm_arch_get_supported_cpuid(CPUState *env, uint32_t function,
                                       int reg);

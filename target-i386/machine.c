@@ -32,7 +32,10 @@ void cpu_save(QEMUFile *f, void *opaque)
     int32_t pending_irq;
     int i, bit;
 
-    cpu_synchronize_state(env, 0);
+    if (kvm_enabled()) {
+        kvm_save_registers(env);
+        kvm_save_mpstate(env);
+    }
 
     for(i = 0; i < CPU_NB_REGS; i++)
         qemu_put_betls(f, &env->regs[i]);

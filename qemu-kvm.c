@@ -1431,26 +1431,3 @@ void qemu_kvm_cpu_stop(CPUState *env)
     if (kvm_enabled())
         env->kvm_cpu_state.stopped = 1;
 }
-
-void kvm_arch_get_registers(CPUState *env)
-{
-    kvm_save_registers(env);
-    kvm_save_mpstate(env);
-}
-
-void kvm_arch_put_registers(CPUState *env)
-{
-    kvm_load_registers(env);
-    kvm_load_mpstate(env);
-}
-
-
-void cpu_synchronize_state(CPUState *env, int modified)
-{
-    if (kvm_enabled()) {
-        if (modified)
-            kvm_arch_put_registers(env);
-        else
-            kvm_arch_get_registers(env);
-    }
-}
