@@ -2257,8 +2257,7 @@ int drive_init(struct drive_opt *arg, int snapshot, void *opaque)
                                            "boot", NULL };
 
     if (check_params(params, str) < 0) {
-         fprintf(stderr, "qemu: unknown parameter '%s' in '%s'\n",
-                         buf, str);
+         fprintf(stderr, "qemu: unknown parameter in '%s'\n", str);
          return -1;
     }
 
@@ -3287,7 +3286,7 @@ static int ram_save_live(QEMUFile *f, int stage, void *opaque)
 {
     ram_addr_t addr;
 
-    if (cpu_physical_sync_dirty_bitmap(0, last_ram_offset) != 0) {
+    if (cpu_physical_sync_dirty_bitmap(0, TARGET_PHYS_ADDR_MAX) != 0) {
         qemu_file_set_error(f);
         return 0;
     }
@@ -5232,7 +5231,7 @@ int main(int argc, char **argv, char **envp)
                 break;
 #endif
             case QEMU_OPTION_redir:
-                net_slirp_redir(NULL, optarg);
+                net_slirp_redir(NULL, optarg, NULL);
                 break;
 #endif
             case QEMU_OPTION_bt:
@@ -5902,7 +5901,6 @@ int main(int argc, char **argv, char **envp)
     cpu_exec_init_all(tb_size * 1024 * 1024);
 
     bdrv_init();
-    dma_helper_init();
 
     /* we always create the cdrom drive, even if no disk is there */
 

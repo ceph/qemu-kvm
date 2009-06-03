@@ -137,6 +137,8 @@ kvm-all.o: CFLAGS+=$(KVM_CFLAGS)
 CFLAGS += $(KVM_CFLAGS)
 
 all: $(PROGS)
+# Dummy command so that make thinks it has done something
+	@true
 
 #########################################################
 # cpu emulator library
@@ -232,6 +234,12 @@ LIBOBJS+=alpha-dis.o
 endif
 ifeq ($(findstring ppc, $(TARGET_BASE_ARCH) $(ARCH)),ppc)
 LIBOBJS+=ppc-dis.o
+endif
+ifeq ($(findstring microblaze, $(TARGET_BASE_ARCH) $(ARCH)),microblaze)
+LIBOBJS+=microblaze-dis.o
+ifndef CONFIG_USER_ONLY
+LIBOBJS+= mmu.o
+endif
 endif
 ifeq ($(findstring mips, $(TARGET_BASE_ARCH) $(ARCH)),mips)
 LIBOBJS+=mips-dis.o
@@ -678,6 +686,21 @@ OBJS+= mipsnet.o
 OBJS+= pflash_cfi01.o
 OBJS+= vmware_vga.o
 CPPFLAGS += -DHAS_AUDIO -DHAS_AUDIO_CHOICE
+endif
+ifeq ($(TARGET_BASE_ARCH), microblaze)
+OBJS+= petalogix_s3adsp1800_mmu.o
+
+OBJS+= microblaze_pic_cpu.o
+OBJS+= xilinx_intc.o
+OBJS+= xilinx_timer.o
+OBJS+= xilinx_uartlite.o
+OBJS+= xilinx_ethlite.o
+
+OBJS+= pflash_cfi02.o
+ifdef FDT_LIBS
+OBJS+= device_tree.o
+LIBS+= $(FDT_LIBS)
+endif
 endif
 ifeq ($(TARGET_BASE_ARCH), cris)
 # Boards
