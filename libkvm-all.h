@@ -87,6 +87,8 @@ struct kvm_callbacks {
     int (*s390_handle_reset)(kvm_context_t context, kvm_vcpu_context_t vcpu,
 	 struct kvm_run *run);
 #endif
+    int (*unhandled)(kvm_context_t context, kvm_vcpu_context_t vcpu,
+                     uint64_t hw_reason);
 };
 
 /*!

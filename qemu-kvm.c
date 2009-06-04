@@ -207,7 +207,7 @@ int kvm_cpu_exec(CPUState *env)
     r = kvm_run(env->kvm_cpu_state.vcpu_ctx, env);
     if (r < 0) {
         printf("kvm_run returned %d\n", r);
-        exit(1);
+        vm_stop(0);
     }
 
     return 0;
@@ -738,7 +738,14 @@ static int kvm_shutdown(void *opaque, void *data)
     qemu_system_reset_request();
     return 1;
 }
- 
+
+static int handle_unhandled(kvm_context_t kvm, kvm_vcpu_context_t vcpu,
+                            uint64_t reason)
+{
+    fprintf(stderr, "kvm: unhandled exit %"PRIx64"\n", reason);
+    return -EINVAL;
+}
+
 static struct kvm_callbacks qemu_kvm_ops = {
 #ifdef KVM_CAP_SET_GUEST_DEBUG
     .debug = kvm_debug,
@@ -767,6 +774,7 @@ static struct kvm_callbacks qemu_kvm_ops = {
     .powerpc_dcr_read = handle_powerpc_dcr_read,
     .powerpc_dcr_write = handle_powerpc_dcr_write,
 #endif
+    .unhandled = handle_unhandled,
 };
 
 int kvm_qemu_init()

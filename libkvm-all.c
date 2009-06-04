@@ -981,16 +981,12 @@ again:
 	if (1) {
 		switch (run->exit_reason) {
 		case KVM_EXIT_UNKNOWN:
-			fprintf(stderr, "unhandled vm exit: 0x%x vcpu_id %d\n",
-				(unsigned)run->hw.hardware_exit_reason,vcpu->id);
-			kvm_show_regs(vcpu);
-			abort();
+			r = kvm->callbacks->unhandled(kvm, vcpu,
+				run->hw.hardware_exit_reason);
 			break;
 		case KVM_EXIT_FAIL_ENTRY:
-			fprintf(stderr, "kvm_run: failed entry, reason %u\n", 
-				(unsigned)run->fail_entry.hardware_entry_failure_reason & 0xffff);
-			kvm_show_regs(vcpu);
-			return -ENOEXEC;
+			r = kvm->callbacks->unhandled(kvm, vcpu,
+				run->fail_entry.hardware_entry_failure_reason);
 			break;
 		case KVM_EXIT_EXCEPTION:
 			fprintf(stderr, "exception %d (%x)\n", 
