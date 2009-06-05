@@ -373,7 +373,7 @@ static void pc_init_ne2k_isa(NICInfo *nd, qemu_irq *pic)
 }
 
 /* Itanium hardware initialisation */
-static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
+static void ipf_init1(ram_addr_t ram_size,
                       const char *boot_device, DisplayState *ds,
                       const char *kernel_filename, const char *kernel_cmdline,
                       const char *initrd_filename,
@@ -381,7 +381,7 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
 {
     char buf[1024];
     int i;
-    ram_addr_t ram_addr, vga_ram_addr;
+    ram_addr_t ram_addr;
     ram_addr_t above_4g_mem_size = 0;
     PCIBus *pci_bus;
     int piix3_devfn = -1;
@@ -421,7 +421,7 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
         if (i != 0)
             env->hflags |= HF_HALTED_MASK;
         register_savevm("cpu", i, 4, cpu_save, cpu_load, env);
-        qemu_register_reset(main_cpu_reset, env);
+        qemu_register_reset(main_cpu_reset, 0, env);
     }
 
     /* allocate RAM */
@@ -440,8 +440,6 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
         ram_addr = qemu_ram_alloc(ram_size);
         cpu_register_physical_memory(0, ram_size, ram_addr);
     }
-    /* allocate VGA RAM */
-    vga_ram_addr = qemu_ram_alloc(vga_ram_size);
 
     /* above 4giga memory allocation */
     if (above_4g_mem_size > 0) {
@@ -498,7 +496,7 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
                                  ipf_legacy_io_mem);
 
     cpu_irq = qemu_allocate_irqs(pic_irq_request, first_cpu, 1);
-    i8259 = i8259_init(cpu_irq[0]);
+    i8259 = kvm_i8259_init(cpu_irq[0]);
 
     if (pci_enabled) {
         pci_bus = i440fx_init(&i440fx_state, i8259);
@@ -509,14 +507,14 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
 
     if (cirrus_vga_enabled) {
         if (pci_enabled)
-            pci_cirrus_vga_init(pci_bus, vga_ram_size);
+            pci_cirrus_vga_init(pci_bus);
         else
-            isa_cirrus_vga_init(vga_ram_size);
+            isa_cirrus_vga_init();
     } else {
         if (pci_enabled)
-            pci_vga_init(pci_bus, vga_ram_size, 0, 0);
+            pci_vga_init(pci_bus, 0, 0);
         else
-            isa_vga_init(vga_ram_size);
+            isa_vga_init();
     }
 
     rtc_state = rtc_init(0x70, i8259[8], 2000);
@@ -603,7 +601,11 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
         /* TODO: Populate SPD eeprom data.  */
         smbus = piix4_pm_init(pci_bus, piix3_devfn + 3, 0xb100, i8259[9]);
         for (i = 0; i < 8; i++) {
-            smbus_eeprom_device_init(smbus, 0x50 + i, eeprom_buf + (i * 256));
+            DeviceState *eeprom;
+            eeprom = qdev_create((BusState *)smbus, "smbus-eeprom");
+            qdev_set_prop_int(eeprom, "address", 0x50 + i);
+            qdev_set_prop_ptr(eeprom, "data", eeprom_buf + (i * 256));
+            qdev_init(eeprom);
         }
     }
 
@@ -613,19 +615,11 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
 
     if (pci_enabled) {
 	int max_bus;
-        int bus, unit;
-        void *scsi;
+        int bus;
 
         max_bus = drive_get_max_bus(IF_SCSI);
-
 	for (bus = 0; bus <= max_bus; bus++) {
-            scsi = lsi_scsi_init(pci_bus, -1);
-            for (unit = 0; unit < LSI_MAX_DEVS; unit++) {
-	        index = drive_get_index(IF_SCSI, bus, unit);
-		if (index == -1)
-		    continue;
-		lsi_scsi_attach(scsi, drives_table[index].bdrv, unit);
-	    }
+            pci_create_simple(pci_bus, -1, "lsi53c895a");
         }
     }
     /* Add virtio block devices */
@@ -634,7 +628,7 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
 	int unit_id = 0;
 
 	while ((index = drive_get_index(IF_VIRTIO, 0, unit_id)) != -1) {
-	    virtio_blk_init(pci_bus, drives_table[index].bdrv);
+            pci_create_simple(pci_bus, -1, "virtio-blk-pci");
 	    unit_id++;
 	}
     }
@@ -646,14 +640,14 @@ static void ipf_init1(ram_addr_t ram_size, int vga_ram_size,
 
 }
 
-static void ipf_init_pci(ram_addr_t ram_size, int vga_ram_size,
+static void ipf_init_pci(ram_addr_t ram_size,
                          const char *boot_device, DisplayState *ds,
                          const char *kernel_filename,
                          const char *kernel_cmdline,
                          const char *initrd_filename,
                          const char *cpu_model)
 {
-    ipf_init1(ram_size, vga_ram_size, boot_device, ds, kernel_filename,
+    ipf_init1(ram_size, boot_device, ds, kernel_filename,
               kernel_cmdline, initrd_filename, 1, cpu_model);
 }
 
@@ -662,7 +656,15 @@ QEMUMachine ipf_machine = {
     .desc = "Itanium Platform",
     .init = (QEMUMachineInitFunc *)ipf_init_pci,
     .max_cpus = 255,
+    .is_default = 1,
 };
+
+static void ipf_machine_init(void)
+{
+    qemu_register_machine(&ipf_machine);
+}
+
+machine_init(ipf_machine_init);
 
 #define IOAPIC_NUM_PINS 48
 
