@@ -49,7 +49,7 @@ int kvm_arch_run(kvm_vcpu_context_t vcpu)
 {
 	int r = 0;
 
-	switch (vcp->run->exit_reason) {
+	switch (vcpu->run->exit_reason) {
 		default:
 			r = 1;
 			break;
