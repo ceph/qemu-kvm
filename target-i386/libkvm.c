@@ -1,3 +1,5 @@
+#include "sysemu.h"
+
 #include "libkvm-all.h"
 #include "libkvm.h"
 #include <errno.h>

@@ -82,6 +82,7 @@ struct kvm_vcpu_context
 typedef struct kvm_context *kvm_context_t;
 typedef struct kvm_vcpu_context *kvm_vcpu_context_t;
 
+#include "kvm.h"
 int kvm_alloc_kernel_memory(kvm_context_t kvm, unsigned long memory,
 								void **vm_mem);
 int kvm_alloc_userspace_memory(kvm_context_t kvm, unsigned long memory,

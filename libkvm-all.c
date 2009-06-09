@@ -26,6 +26,7 @@
 #error libkvm: userspace and kernel version mismatch
 #endif
 
+#include "sysemu.h"
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -47,7 +48,6 @@
 #define DPRINTF(fmt, args...) do {} while (0)
 #endif
 
-#define MIN(x,y) ((x) < (y) ? (x) : (y))
 #define ALIGN(x, y) (((x)+(y)-1) & ~((y)-1))
 
 int kvm_abi = EXPECTED_KVM_API_VERSION;
