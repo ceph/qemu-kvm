@@ -1602,7 +1602,7 @@ void acpi_bios_init(void)
     uint32_t hpet_addr;
 #endif
     uint32_t base_addr, rsdt_addr, fadt_addr, addr, facs_addr, dsdt_addr, ssdt_addr;
-    uint32_t acpi_tables_size, madt_addr, madt_size, rsdt_size, madt_end;
+    uint32_t acpi_tables_size, madt_addr, madt_size, rsdt_size, madt_end, rsdt_end;
     uint32_t srat_addr,srat_size;
     uint16_t i, external_tables;
     int nb_numa_nodes;
@@ -1628,7 +1628,7 @@ void acpi_bios_init(void)
     addr = base_addr = ram_size - ACPI_DATA_SIZE;
     rsdt_addr = addr;
     rsdt = (void *)(addr);
-    rsdt_size = sizeof(*rsdt) + external_tables * 4;
+    rsdt_size = sizeof(*rsdt);
     addr += rsdt_size;
 
     fadt_addr = addr;
@@ -1872,16 +1872,6 @@ void acpi_bios_init(void)
                              "HPET", sizeof(*hpet), 1);
 #endif
 
-    acpi_additional_tables(); /* resets cfg to required entry */
-    for(i = 0; i < external_tables; i++) {
-        uint16_t len;
-        if(acpi_load_table(i, addr, &len) < 0)
-            BX_PANIC("Failed to load ACPI table from QEMU\n");
-        rsdt->table_offset_entry[nb_rsdt_entries++] = cpu_to_le32(addr);
-        addr += len;
-        if(addr >= ram_size)
-            BX_PANIC("ACPI table overflow\n");
-    }
 #endif
 
     /* RSDT */
@@ -1894,9 +1884,19 @@ void acpi_bios_init(void)
 //  rsdt->table_offset_entry[nb_rsdt_entries++] = cpu_to_le32(hpet_addr);
     if (nb_numa_nodes > 0)
         rsdt->table_offset_entry[nb_rsdt_entries++] = cpu_to_le32(srat_addr);
+    acpi_additional_tables(); /* resets cfg to required entry */
+    for(i = 0; i < external_tables; i++) {
+        uint16_t len;
+        if(acpi_load_table(i, addr, &len) < 0)
+            BX_PANIC("Failed to load ACPI table from QEMU\n");
+        rsdt->table_offset_entry[nb_rsdt_entries++] = cpu_to_le32(addr);
+        addr += len;
+        if ((addr >= ram_size) || (nb_rsdt_entries > MAX_RSDT_ENTRIES))
+            BX_PANIC("ACPI table overflow\n");
+    }
 #endif
-    rsdt_size -= MAX_RSDT_ENTRIES * 4;
-    rsdt_size += nb_rsdt_entries * 4;
+    rsdt_end = (uint32_t)(&rsdt->table_offset_entry[nb_rsdt_entries]);
+    rsdt_size = rsdt_end - rsdt_addr;
     acpi_build_table_header((struct acpi_table_header *)rsdt, "RSDT",
                             rsdt_size, 1);
 
