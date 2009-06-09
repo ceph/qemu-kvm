@@ -18,7 +18,7 @@
 #ifndef KVM_IA64_H
 #define KVM_IA64_H
 
-#include "libkvm-common.h"
+#include "libkvm-all.h"
 
 extern int kvm_page_size;
 

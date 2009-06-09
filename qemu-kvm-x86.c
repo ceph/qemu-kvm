@@ -20,6 +20,8 @@
 #include <sys/utsname.h>
 #include <linux/kvm_para.h>
 
+#include "kvm.h"
+
 #define MSR_IA32_TSC		0x10
 
 static struct kvm_msr_list *kvm_msr_list;

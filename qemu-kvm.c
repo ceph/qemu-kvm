@@ -149,12 +149,12 @@ void kvm_apic_init(CPUState *env)
 
 #include <signal.h>
 
-static int try_push_interrupts(void *opaque)
+static int kvm_try_push_interrupts(void *opaque)
 {
     return kvm_arch_try_push_interrupts(opaque);
 }
 
-static void post_kvm_run(void *opaque, void *data)
+static void kvm_post_run(void *opaque, void *data)
 {
     CPUState *env = (CPUState *)data;
 
@@ -162,7 +162,7 @@ static void post_kvm_run(void *opaque, void *data)
     kvm_arch_post_kvm_run(opaque, env);
 }
 
-static int pre_kvm_run(void *opaque, void *data)
+static int kvm_pre_run(void *opaque, void *data)
 {
     CPUState *env = (CPUState *)data;
 
@@ -761,12 +761,12 @@ static struct kvm_callbacks qemu_kvm_ops = {
     .halt  = kvm_halt,
     .shutdown = kvm_shutdown,
     .io_window = kvm_io_window,
-    .try_push_interrupts = try_push_interrupts,
+    .try_push_interrupts = kvm_try_push_interrupts,
 #ifdef KVM_CAP_USER_NMI
     .push_nmi = kvm_arch_push_nmi,
 #endif
-    .post_kvm_run = post_kvm_run,
-    .pre_kvm_run = pre_kvm_run,
+    .post_kvm_run = kvm_post_run,
+    .pre_kvm_run = kvm_pre_run,
 #ifdef TARGET_I386
     .tpr_access = handle_tpr_access,
 #endif

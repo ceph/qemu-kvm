@@ -19,7 +19,7 @@
 #ifndef KVM_POWERPC_H
 #define KVM_POWERPC_H
 
-#include "libkvm-common.h"
+#include "libkvm-all.h"
 
 extern int kvm_page_size;
 
