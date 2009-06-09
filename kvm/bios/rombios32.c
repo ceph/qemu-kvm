@@ -86,6 +86,8 @@ typedef unsigned long long uint64_t;
 #define MTRRphysBase_MSR(reg) (0x200 + 2 * (reg))
 #define MTRRphysMask_MSR(reg) (0x200 + 2 * (reg) + 1)
 
+#define MAX_INT_OVERRIDES 16
+
 static inline void outl(int addr, int val)
 {
     asm volatile ("outl %1, %w0" : : "d" (addr), "a" (val));
@@ -1600,7 +1602,7 @@ void acpi_bios_init(void)
     uint32_t hpet_addr;
 #endif
     uint32_t base_addr, rsdt_addr, fadt_addr, addr, facs_addr, dsdt_addr, ssdt_addr;
-    uint32_t acpi_tables_size, madt_addr, madt_size, rsdt_size;
+    uint32_t acpi_tables_size, madt_addr, madt_size, rsdt_size, madt_end;
     uint32_t srat_addr,srat_size;
     uint16_t i, external_tables;
     int nb_numa_nodes;
@@ -1668,7 +1670,7 @@ void acpi_bios_init(void)
     madt_size = sizeof(*madt) +
         sizeof(struct madt_processor_apic) * MAX_CPUS +
 #ifdef BX_QEMU
-        sizeof(struct madt_io_apic) /* + sizeof(struct madt_int_override) */;
+        sizeof(struct madt_io_apic)  + sizeof(struct madt_int_override) * MAX_INT_OVERRIDES;
 #else
         sizeof(struct madt_io_apic);
 #endif
@@ -1786,8 +1788,9 @@ void acpi_bios_init(void)
                 continue;
             }
             int_override++;
-            madt_size += sizeof(struct madt_int_override);
         }
+        madt_end = (uint32_t)int_override;
+        madt_size = madt_end - madt_addr;
         acpi_build_table_header((struct acpi_table_header *)madt,
                                 "APIC", madt_size, 1);
     }
