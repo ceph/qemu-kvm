@@ -199,7 +199,7 @@ PCIDevice *pci_register_device(PCIBus *bus, const char *name,
                                int instance_size, int devfn,
                                PCIConfigReadFunc *config_read,
                                PCIConfigWriteFunc *config_write);
-int pci_unregister_device(PCIDevice *pci_dev);
+int pci_unregister_device(PCIDevice *pci_dev, int assigned);
 
 void pci_register_io_region(PCIDevice *pci_dev, int region_num,
                             uint32_t size, int type,
