@@ -31,6 +31,11 @@
 #include <windows.h>
 #endif
 
+typedef struct img_cmd_t {
+    const char *name;
+    int (*handler)(int argc, char **argv);
+} img_cmd_t;
+
 /* Default to cache=writeback as data integrity is not important for qemu-tcg. */
 #define BRDV_O_FLAGS BDRV_O_CACHE_WB
 
@@ -58,12 +63,11 @@ static void help(void)
            "QEMU disk image utility\n"
            "\n"
            "Command syntax:\n"
-           "  check [-f fmt] filename\n"
-           "  create [-e] [-6] [-F fmt] [-b base_image] [-f fmt] filename [size]\n"
-           "  commit [-f fmt] filename\n"
-           "  convert [-c] [-e] [-6] [-f fmt] [-O output_fmt] [-B output_base_image] filename [filename2 [...]] output_filename\n"
-           "  info [-f fmt] filename\n"
-           "  snapshot [-l | -a snapshot | -c snapshot | -d snapshot] filename\n"
+#define DEF(option, callback, arg_string)        \
+           "  " arg_string "\n"
+#include "qemu-img-cmds.h"
+#undef DEF
+#undef GEN_DOCS
            "\n"
            "Command parameters:\n"
            "  'filename' is a disk image filename\n"
@@ -79,9 +83,10 @@ static void help(void)
            "    supported any 'k' or 'K' is ignored\n"
            "  'output_filename' is the destination disk image filename\n"
            "  'output_fmt' is the destination format\n"
+           "  'options' is a comma separated list of format specific options in a\n"
+           "    name=value format. Use -o ? for an overview of the options supported by the\n"
+           "    used format\n"
            "  '-c' indicates that target image must be compressed (qcow format only)\n"
-           "  '-e' indicates that the target image must be encrypted (qcow format only)\n"
-           "  '-6' indicates that the target image must use compatibility level 6 (vmdk format only)\n"
            "  '-h' with or without a command shows this help and lists the supported formats\n"
            "\n"
            "Parameters to snapshot subcommand:\n"
@@ -281,14 +286,16 @@ static int img_create(int argc, char **argv)
             break;
         }
     }
-    if (optind >= argc)
-        help();
-    filename = argv[optind++];
 
     /* Find driver and parse its options */
     drv = bdrv_find_format(fmt);
     if (!drv)
         error("Unknown file format '%s'", fmt);
+
+    if (options && !strcmp(options, "?")) {
+        print_option_help(drv->create_options);
+        return 0;
+    }
 
     if (options) {
         param = parse_option_parameters(options, drv->create_options, param);
@@ -298,6 +305,11 @@ static int img_create(int argc, char **argv)
     } else {
         param = parse_option_parameters("", drv->create_options, param);
     }
+
+    /* Get the filename */
+    if (optind >= argc)
+        help();
+    filename = argv[optind++];
 
     /* Add size to parameters */
     if (optind < argc) {
@@ -595,6 +607,11 @@ static int img_convert(int argc, char **argv)
     drv = bdrv_find_format(out_fmt);
     if (!drv)
         error("Unknown file format '%s'", out_fmt);
+
+    if (options && !strcmp(options, "?")) {
+        print_option_help(drv->create_options);
+        return 0;
+    }
 
     if (options) {
         param = parse_option_parameters(options, drv->create_options, param);
@@ -906,7 +923,7 @@ static int img_info(int argc, char **argv)
 #define SNAPSHOT_APPLY  3
 #define SNAPSHOT_DELETE 4
 
-static void img_snapshot(int argc, char **argv)
+static int img_snapshot(int argc, char **argv)
 {
     BlockDriverState *bs;
     QEMUSnapshotInfo sn;
@@ -923,18 +940,18 @@ static void img_snapshot(int argc, char **argv)
         switch(c) {
         case 'h':
             help();
-            return;
+            return 0;
         case 'l':
             if (action) {
                 help();
-                return;
+                return 0;
             }
             action = SNAPSHOT_LIST;
             break;
         case 'a':
             if (action) {
                 help();
-                return;
+                return 0;
             }
             action = SNAPSHOT_APPLY;
             snapshot_name = optarg;
@@ -942,7 +959,7 @@ static void img_snapshot(int argc, char **argv)
         case 'c':
             if (action) {
                 help();
-                return;
+                return 0;
             }
             action = SNAPSHOT_CREATE;
             snapshot_name = optarg;
@@ -950,7 +967,7 @@ static void img_snapshot(int argc, char **argv)
         case 'd':
             if (action) {
                 help();
-                return;
+                return 0;
             }
             action = SNAPSHOT_DELETE;
             snapshot_name = optarg;
@@ -1008,31 +1025,38 @@ static void img_snapshot(int argc, char **argv)
 
     /* Cleanup */
     bdrv_delete(bs);
+
+    return 0;
 }
+
+static const img_cmd_t img_cmds[] = {
+#define DEF(option, callback, arg_string)        \
+    { option, callback },
+#include "qemu-img-cmds.h"
+#undef DEF
+#undef GEN_DOCS
+    { NULL, NULL, },
+};
 
 int main(int argc, char **argv)
 {
-    const char *cmd;
+    const img_cmd_t *cmd;
+    const char *cmdname;
 
     bdrv_init();
     if (argc < 2)
         help();
-    cmd = argv[1];
+    cmdname = argv[1];
     argc--; argv++;
-    if (!strcmp(cmd, "create")) {
-        img_create(argc, argv);
-    } else if (!strcmp(cmd, "check")) {
-        img_check(argc, argv);
-    } else if (!strcmp(cmd, "commit")) {
-        img_commit(argc, argv);
-    } else if (!strcmp(cmd, "convert")) {
-        img_convert(argc, argv);
-    } else if (!strcmp(cmd, "info")) {
-        img_info(argc, argv);
-    } else if (!strcmp(cmd, "snapshot")) {
-        img_snapshot(argc, argv);
-    } else {
-        help();
+
+    /* find the command */
+    for(cmd = img_cmds; cmd->name != NULL; cmd++) {
+        if (!strcmp(cmdname, cmd->name)) {
+            return cmd->handler(argc, argv);
+        }
     }
+
+    /* not found */
+    help();
     return 0;
 }

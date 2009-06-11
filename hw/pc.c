@@ -607,10 +607,10 @@ static void load_linux(target_phys_addr_t option_rom,
     uint32_t gpr[8];
     uint16_t seg[6];
     uint16_t real_seg;
-    int setup_size, kernel_size, initrd_size, cmdline_size;
+    int setup_size, kernel_size, initrd_size = 0, cmdline_size;
     uint32_t initrd_max;
     uint8_t header[1024];
-    target_phys_addr_t real_addr, prot_addr, cmdline_addr, initrd_addr;
+    target_phys_addr_t real_addr, prot_addr, cmdline_addr, initrd_addr = 0;
     FILE *f, *fi;
 
     /* Align to 16 bytes as a paranoia measure */
@@ -809,14 +809,21 @@ static int load_option_rom(const char *oprom, target_phys_addr_t start,
                            target_phys_addr_t end)
 {
         int size;
+        char *filename;
 
-        size = get_image_size(oprom);
-        if (size > 0 && start + size > end) {
-            fprintf(stderr, "Not enough space to load option rom '%s'\n",
-                    oprom);
-            exit(1);
+        filename = qemu_find_file(QEMU_FILE_TYPE_BIOS, oprom);
+        if (filename) {
+            size = get_image_size(filename);
+            if (size > 0 && start + size > end) {
+                fprintf(stderr, "Not enough space to load option rom '%s'\n",
+                        oprom);
+                exit(1);
+            }
+            size = load_image_targphys(filename, start, end - start);
+            qemu_free(filename);
+        } else {
+            size = -1;
         }
-        size = load_image_targphys(oprom, start, end - start);
         if (size < 0) {
             fprintf(stderr, "Could not load option rom '%s'\n", oprom);
             exit(1);
@@ -859,7 +866,7 @@ static void pc_init1(ram_addr_t ram_size,
                      const char *initrd_filename,
                      int pci_enabled, const char *cpu_model)
 {
-    char buf[1024];
+    char *filename;
     int ret, linux_boot, i;
     ram_addr_t ram_addr, bios_offset, option_rom_offset;
     ram_addr_t below_4g_mem_size, above_4g_mem_size = 0;
@@ -922,18 +929,25 @@ static void pc_init1(ram_addr_t ram_size,
     /* BIOS load */
     if (bios_name == NULL)
         bios_name = BIOS_FILENAME;
-    snprintf(buf, sizeof(buf), "%s/%s", bios_dir, bios_name);
-    bios_size = get_image_size(buf);
+    filename = qemu_find_file(QEMU_FILE_TYPE_BIOS, bios_name);
+    if (filename) {
+        bios_size = get_image_size(filename);
+    } else {
+        bios_size = -1;
+    }
     if (bios_size <= 0 ||
         (bios_size % 65536) != 0) {
         goto bios_error;
     }
     bios_offset = qemu_ram_alloc(bios_size);
-    ret = load_image(buf, qemu_get_ram_ptr(bios_offset));
+    ret = load_image(filename, qemu_get_ram_ptr(bios_offset));
     if (ret != bios_size) {
     bios_error:
-        fprintf(stderr, "qemu: could not load PC BIOS '%s'\n", buf);
+        fprintf(stderr, "qemu: could not load PC BIOS '%s'\n", bios_name);
         exit(1);
+    }
+    if (filename) {
+        qemu_free(filename);
     }
     /* map the last 128KB of the BIOS in ISA space */
     isa_bios_size = bios_size;
@@ -947,8 +961,7 @@ static void pc_init1(ram_addr_t ram_size,
                                  (bios_offset + bios_size - isa_bios_size) /* | IO_MEM_ROM */);
 
     if (extboot_drive != -1) {
-	snprintf(buf, sizeof(buf), "%s/%s", bios_dir, EXTBOOT_FILENAME);
-        option_rom[nb_option_roms++] = strdup(buf);
+        option_rom[nb_option_roms++] = qemu_strdup(EXTBOOT_FILENAME);
     }
 
     option_rom_offset = qemu_ram_alloc(0x20000);
@@ -956,14 +969,14 @@ static void pc_init1(ram_addr_t ram_size,
     cpu_register_physical_memory(0xc0000, 0x20000, option_rom_offset);
 
     if (using_vga) {
+        const char *vgabios_filename;
         /* VGA BIOS load */
         if (cirrus_vga_enabled) {
-            snprintf(buf, sizeof(buf), "%s/%s", bios_dir,
-                     VGABIOS_CIRRUS_FILENAME);
+            vgabios_filename = VGABIOS_CIRRUS_FILENAME;
         } else {
-            snprintf(buf, sizeof(buf), "%s/%s", bios_dir, VGABIOS_FILENAME);
+            vgabios_filename = VGABIOS_FILENAME;
         }
-        oprom_area_size = load_option_rom(buf, 0xc0000, 0xe0000);
+        oprom_area_size = load_option_rom(vgabios_filename, 0xc0000, 0xe0000);
         pci_option_rom_offset = oprom_area_size;
     }
     /* Although video roms can grow larger than 0x8000, the area between
