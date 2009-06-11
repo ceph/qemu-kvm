@@ -49,7 +49,7 @@ struct DeviceType {
 };
 
 /* This is a nasty hack to allow passing a NULL bus to qdev_create.  */
-BusState *main_system_bus;
+static BusState *main_system_bus;
 
 static DeviceType *device_type_list;
 
@@ -340,11 +340,11 @@ BusState *qbus_create(BusType type, size_t size,
 }
 
 static const char *bus_type_names[] = {
-    "System",
-    "PCI",
-    "SCSI",
-    "I2C",
-    "SSI"
+    [ BUS_TYPE_SYSTEM ] = "System",
+    [ BUS_TYPE_PCI ]    = "PCI",
+    [ BUS_TYPE_SCSI ]   = "SCSI",
+    [ BUS_TYPE_I2C ]    = "I2C",
+    [ BUS_TYPE_SSI ]    = "SSI",
 };
 
 #define qdev_printf(fmt, ...) monitor_printf(mon, "%*s" fmt, indent, "", ## __VA_ARGS__)
