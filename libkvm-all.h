@@ -622,8 +622,6 @@ int kvm_dirty_pages_log_reset(kvm_context_t kvm);
  */
 int kvm_irqchip_in_kernel(kvm_context_t kvm);
 
-int kvm_has_sync_mmu(kvm_context_t kvm);
-
 #ifdef KVM_CAP_IRQCHIP
 /*!
  * \brief Dump in kernel IRQCHIP contents

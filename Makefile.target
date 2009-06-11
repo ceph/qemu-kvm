@@ -162,7 +162,7 @@ CPPFLAGS+=-I$(SRC_PATH)/tcg/sparc
 endif
 
 ifeq ($(USE_KVM), 1)
-LIBOBJS+=qemu-kvm.o libkvm.o libkvm-all.o
+LIBOBJS+=qemu-kvm.o libkvm.o
 endif
 ifdef CONFIG_SOFTFLOAT
 LIBOBJS+=fpu/softfloat.o
