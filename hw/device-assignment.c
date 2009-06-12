@@ -561,19 +561,26 @@ static void free_assigned_device(AssignedDevInfo *adev)
             PCIRegion *pci_region = &dev->real_device.regions[i];
             AssignedDevRegion *region = &dev->v_addrs[i];
 
-            if (!pci_region->valid || !(pci_region->type & IORESOURCE_MEM))
+            if (!pci_region->valid)
                 continue;
 
-            kvm_remove_ioperm_data(region->u.r_baseport, region->r_size);
+            if (pci_region->type & IORESOURCE_IO) {
+                kvm_remove_ioperm_data(region->u.r_baseport, region->r_size);
+                continue;
+            } else if (pci_region->type & IORESOURCE_MEM) {
+                if (region->e_size > 0)
+                    kvm_destroy_phys_mem(kvm_context, region->e_physbase,
+                                         TARGET_PAGE_ALIGN(region->e_size));
 
-            if (region->u.r_virtbase) {
-                int ret = munmap(region->u.r_virtbase,
-                                 (pci_region->size + 0xFFF) & 0xFFFFF000);
-                if (ret != 0)
-                    fprintf(stderr,
-                            "Failed to unmap assigned device region: %s\n",
-                            strerror(errno));
-            }
+                if (region->u.r_virtbase) {
+                    int ret = munmap(region->u.r_virtbase,
+                                     (pci_region->size + 0xFFF) & 0xFFFFF000);
+                    if (ret != 0)
+                        fprintf(stderr,
+				"Failed to unmap assigned device region: %s\n",
+				strerror(errno));
+                }
+	    }
         }
 
         if (dev->real_device.config_fd) {
