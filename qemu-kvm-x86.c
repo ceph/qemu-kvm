@@ -634,8 +634,7 @@ void kvm_arch_post_kvm_run(void *opaque, CPUState *env)
 
 int kvm_arch_has_work(CPUState *env)
 {
-    if (env->exit_request ||
-        ((env->interrupt_request & CPU_INTERRUPT_HARD) &&
+    if (((env->interrupt_request & CPU_INTERRUPT_HARD) &&
 	 (env->eflags & IF_MASK)) ||
 	(env->interrupt_request & CPU_INTERRUPT_NMI))
 	return 1;

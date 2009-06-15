@@ -1676,8 +1676,6 @@ static int kvm_pre_run(void *opaque, void *data)
 
     kvm_arch_pre_kvm_run(opaque, env);
 
-    if (env->exit_request)
-	return 1;
     pthread_mutex_unlock(&qemu_mutex);
     return 0;
 }
@@ -1949,7 +1947,6 @@ static int kvm_main_loop_cpu(CPUState *env)
         }
 	if (!env->halted || kvm_irqchip_in_kernel(kvm_context))
 	    kvm_cpu_exec(env);
-	env->exit_request = 0;
 	kvm_main_loop_wait(env, 0);
     }
     pthread_mutex_unlock(&qemu_mutex);
