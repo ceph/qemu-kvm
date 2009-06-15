@@ -1907,7 +1907,7 @@ static int kvm_main_loop_cpu(CPUState *env)
 #endif
 
     cpu_single_env = env;
-    kvm_load_registers(env);
+    kvm_arch_load_regs(env);
 
     while (1) {
 	while (!has_work(env))
