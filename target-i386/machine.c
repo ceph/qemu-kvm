@@ -34,7 +34,7 @@ void cpu_save(QEMUFile *f, void *opaque)
 
     if (kvm_enabled()) {
         kvm_save_registers(env);
-        kvm_save_mpstate(env);
+        kvm_arch_save_mpstate(env);
     }
 
     for(i = 0; i < CPU_NB_REGS; i++)
@@ -369,12 +369,12 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
             kvm_load_tsc(env);
             if (version_id >= 5) {
                 qemu_get_be32s(f, &env->mp_state);
-                kvm_load_mpstate(env);
+                kvm_arch_load_mpstate(env);
             }
         } else {
             kvm_load_registers(env);
             kvm_load_tsc(env);
-            kvm_load_mpstate(env);
+            kvm_arch_load_mpstate(env);
         }
     }
     return 0;

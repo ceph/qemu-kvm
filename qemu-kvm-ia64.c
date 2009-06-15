@@ -98,7 +98,7 @@ void kvm_arch_update_guest_debug(CPUState *env, struct kvm_guest_debug *dbg)
 {
 }
 
-void kvm_save_mpstate(CPUState *env)
+void kvm_arch_save_mpstate(CPUState *env)
 {
 #ifdef KVM_CAP_MP_STATE
     int r;
@@ -112,7 +112,7 @@ void kvm_save_mpstate(CPUState *env)
 #endif
 }
 
-void kvm_load_mpstate(CPUState *env)
+void kvm_arch_load_mpstate(CPUState *env)
 {
 #ifdef KVM_CAP_MP_STATE
     struct kvm_mp_state mp_state = { .mp_state = env->mp_state };

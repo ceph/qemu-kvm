@@ -69,6 +69,8 @@ int kvm_arch_qemu_create_context(void);
 
 void kvm_arch_save_regs(CPUState *env);
 void kvm_arch_load_regs(CPUState *env);
+void kvm_arch_load_mpstate(CPUState *env);
+void kvm_arch_save_mpstate(CPUState *env);
 int kvm_arch_qemu_init_env(CPUState *cenv);
 void kvm_arch_pre_kvm_run(void *opaque, CPUState *env);
 void kvm_arch_post_kvm_run(void *opaque, CPUState *env);

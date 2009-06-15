@@ -10,7 +10,7 @@ void cpu_save(QEMUFile *f, void *opaque)
 
     if (kvm_enabled()) {
         kvm_save_registers(env);
-        kvm_save_mpstate(env);
+        kvm_arch_save_mpstate(env);
     }
 }
 
@@ -20,7 +20,7 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
 
     if (kvm_enabled()) {
         kvm_load_registers(env);
-        kvm_load_mpstate(env);
+        kvm_arch_load_mpstate(env);
     }
     return 0;
 }

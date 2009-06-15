@@ -295,7 +295,7 @@ void kvm_load_tsc(CPUState *env)
         perror("kvm_set_tsc FAILED.\n");
 }
 
-void kvm_save_mpstate(CPUState *env)
+void kvm_arch_save_mpstate(CPUState *env)
 {
 #ifdef KVM_CAP_MP_STATE
     int r;
@@ -309,7 +309,7 @@ void kvm_save_mpstate(CPUState *env)
 #endif
 }
 
-void kvm_load_mpstate(CPUState *env)
+void kvm_arch_load_mpstate(CPUState *env)
 {
 #ifdef KVM_CAP_MP_STATE
     struct kvm_mp_state mp_state = { .mp_state = env->mp_state };
