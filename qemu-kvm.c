@@ -1950,7 +1950,6 @@ static int kvm_main_loop_cpu(CPUState *env)
 	if (!env->halted || kvm_irqchip_in_kernel(kvm_context))
 	    kvm_cpu_exec(env);
 	env->exit_request = 0;
-        env->exception_index = EXCP_INTERRUPT;
 	kvm_main_loop_wait(env, 0);
     }
     pthread_mutex_unlock(&qemu_mutex);
