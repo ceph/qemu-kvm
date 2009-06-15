@@ -471,8 +471,7 @@ static void apic_init_ipi(APICState *s)
         s->cpu_env->halted = 1;
 
     if (kvm_enabled() && !qemu_kvm_irqchip_in_kernel())
-	if (s->cpu_env)
-	    kvm_apic_init(s->cpu_env);
+        kvm_apic_init(s->cpu_env);
 }
 
 /* send a SIPI message to the CPU to start it */
