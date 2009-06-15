@@ -1920,7 +1920,7 @@ static int kvm_main_loop_cpu(CPUState *env)
 	    if (env->kvm_cpu_state.sipi_needed)
 	        update_regs_for_sipi(env);
         }
-	if (!env->halted && !env->kvm_cpu_state.init)
+	if (!env->halted)
 	    kvm_cpu_exec(env);
 	env->exit_request = 0;
         env->exception_index = EXCP_INTERRUPT;
