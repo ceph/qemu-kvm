@@ -1914,12 +1914,12 @@ static int kvm_main_loop_cpu(CPUState *env)
 	    kvm_main_loop_wait(env, 1000);
 	if (env->interrupt_request & (CPU_INTERRUPT_HARD | CPU_INTERRUPT_NMI))
 	    env->halted = 0;
-    if (!kvm_irqchip_in_kernel(kvm_context)) {
+        if (!kvm_irqchip_in_kernel(kvm_context)) {
 	    if (env->kvm_cpu_state.init)
 	        update_regs_for_init(env);
 	    if (env->kvm_cpu_state.sipi_needed)
 	        update_regs_for_sipi(env);
-    }
+        }
 	if (!env->halted && !env->kvm_cpu_state.init)
 	    kvm_cpu_exec(env);
 	env->exit_request = 0;
