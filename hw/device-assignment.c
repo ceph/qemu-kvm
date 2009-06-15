@@ -286,8 +286,8 @@ static void assigned_dev_pci_write_config(PCIDevice *d, uint32_t address,
         /* Continue to program the card */
     }
 
-    if ((address >= 0x10 && address <= 0x24) || address == 0x34 ||
-        address == 0x3c || address == 0x3d ||
+    if ((address >= 0x10 && address <= 0x24) || address == 0x30 ||
+        address == 0x34 || address == 0x3c || address == 0x3d ||
         pci_access_cap_config(d, address, len)) {
         /* used for update-mappings (BAR emulation) */
         pci_default_write_config(d, address, val, len);
@@ -322,8 +322,8 @@ static uint32_t assigned_dev_pci_read_config(PCIDevice *d, uint32_t address,
     AssignedDevice *pci_dev = container_of(d, AssignedDevice, dev);
 
     if (address < 0x4 || (pci_dev->need_emulate_cmd && address == 0x4) ||
-	(address >= 0x10 && address <= 0x24) || address == 0x34 ||
-        address == 0x3c || address == 0x3d ||
+	(address >= 0x10 && address <= 0x24) || address == 0x30 ||
+        address == 0x34 || address == 0x3c || address == 0x3d ||
         pci_access_cap_config(d, address, len)) {
         val = pci_default_read_config(d, address, len);
         DEBUG("(%x.%x): address=%04x val=0x%08x len=%d\n",
@@ -384,11 +384,20 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
 
             /* map physical memory */
             pci_dev->v_addrs[i].e_physbase = cur_region->base_addr;
-            pci_dev->v_addrs[i].u.r_virtbase =
-                mmap(NULL,
-                     (cur_region->size + 0xFFF) & 0xFFFFF000,
-                     PROT_WRITE | PROT_READ, MAP_SHARED,
-                     cur_region->resource_fd, (off_t) 0);
+            if (i == PCI_ROM_SLOT) {
+                pci_dev->v_addrs[i].u.r_virtbase =
+                    mmap(NULL,
+                         (cur_region->size + 0xFFF) & 0xFFFFF000,
+                         PROT_WRITE | PROT_READ, MAP_ANONYMOUS | MAP_PRIVATE,
+                         0, (off_t) 0);
+
+            } else {
+                pci_dev->v_addrs[i].u.r_virtbase =
+                    mmap(NULL,
+                         (cur_region->size + 0xFFF) & 0xFFFFF000,
+                         PROT_WRITE | PROT_READ, MAP_SHARED,
+                         cur_region->resource_fd, (off_t) 0);
+            }
 
             if (pci_dev->v_addrs[i].u.r_virtbase == MAP_FAILED) {
                 pci_dev->v_addrs[i].u.r_virtbase = NULL;
@@ -397,6 +406,14 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
                         (uint32_t) (cur_region->base_addr));
                 return -1;
             }
+
+            if (i == PCI_ROM_SLOT) {
+                memset(pci_dev->v_addrs[i].u.r_virtbase, 0,
+                       (cur_region->size + 0xFFF) & 0xFFFFF000);
+                mprotect(pci_dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase,
+                         (cur_region->size + 0xFFF) & 0xFFFFF000, PROT_READ);
+            }
+
             pci_dev->v_addrs[i].r_size = cur_region->size;
             pci_dev->v_addrs[i].e_size = 0;
 
@@ -468,9 +485,9 @@ again:
         return 1;
     }
 
-    for (r = 0; r < MAX_IO_REGIONS; r++) {
+    for (r = 0; r < PCI_NUM_REGIONS; r++) {
 	if (fscanf(f, "%lli %lli %lli\n", &start, &end, &flags) != 3)
-	    break; 
+	    break;
 
         rp = dev->regions + r;
         rp->valid = 0;
@@ -480,11 +497,13 @@ again:
             continue;
         if (flags & IORESOURCE_MEM) {
             flags &= ~IORESOURCE_IO;
-	    snprintf(name, sizeof(name), "%sresource%d", dir, r);
-            fd = open(name, O_RDWR);
-            if (fd == -1)
-                continue;       /* probably ROM */
-            rp->resource_fd = fd;
+            if (r != PCI_ROM_SLOT) {
+                snprintf(name, sizeof(name), "%sresource%d", dir, r);
+                fd = open(name, O_RDWR);
+                if (fd == -1)
+                    continue;
+                rp->resource_fd = fd;
+            }
         } else
             flags &= ~IORESOURCE_PREFETCH;
 
@@ -1395,6 +1414,17 @@ ram_addr_t assigned_dev_load_option_roms(ram_addr_t rom_base_offset)
             free(buf);
             fclose(fp);
             continue;
+        }
+
+        /* Copy ROM contents into the space backing the ROM BAR */
+        if (adev->assigned_dev->v_addrs[PCI_ROM_SLOT].r_size >= size &&
+            adev->assigned_dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase) {
+            mprotect(adev->assigned_dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase,
+                     size, PROT_READ | PROT_WRITE);
+            memcpy(adev->assigned_dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase,
+                   buf, size);
+            mprotect(adev->assigned_dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase,
+                     size, PROT_READ);
         }
 
         /* Scan the buffer for suitable ROMs and increase the offset */

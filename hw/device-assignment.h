@@ -36,9 +36,6 @@
 /* From include/linux/pci.h in the kernel sources */
 #define PCI_DEVFN(slot, func)   ((((slot) & 0x1f) << 3) | ((func) & 0x07))
 
-/* The number of BARs in the config space header */
-#define MAX_IO_REGIONS (6)
-
 typedef struct {
     int type;           /* Memory or port I/O */
     int valid;
@@ -53,7 +50,7 @@ typedef struct {
     uint16_t region_number; /* number of active regions */
 
     /* Port I/O or MMIO Regions */
-    PCIRegion regions[MAX_IO_REGIONS];
+    PCIRegion regions[PCI_NUM_REGIONS];
     int config_fd;
 } PCIDevRegions;
 
