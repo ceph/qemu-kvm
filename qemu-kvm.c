@@ -1725,6 +1725,8 @@ static int has_work(CPUState *env)
 {
     if (!vm_running || (env && env->kvm_cpu_state.stopped))
 	return 0;
+    if (kvm_irqchip_in_kernel(kvm_context))
+        return 1;
     if (!env->halted)
 	return 1;
     return kvm_arch_has_work(env);
@@ -1898,8 +1900,6 @@ static int kvm_main_loop_cpu(CPUState *env)
     setup_kernel_sigmask(env);
 
     pthread_mutex_lock(&qemu_mutex);
-    if (kvm_irqchip_in_kernel(kvm_context))
-	env->halted = 0;
 
     kvm_qemu_init_env(env);
 #ifdef TARGET_I386
@@ -1920,7 +1920,7 @@ static int kvm_main_loop_cpu(CPUState *env)
 	    if (env->kvm_cpu_state.sipi_needed)
 	        update_regs_for_sipi(env);
         }
-	if (!env->halted)
+	if (!env->halted || kvm_irqchip_in_kernel(kvm_context))
 	    kvm_cpu_exec(env);
 	env->exit_request = 0;
         env->exception_index = EXCP_INTERRUPT;

@@ -467,8 +467,7 @@ static void apic_init_ipi(APICState *s)
 
     cpu_reset(s->cpu_env);
 
-    if (!(s->apicbase & MSR_IA32_APICBASE_BSP) &&
-        (!kvm_enabled() || !qemu_kvm_irqchip_in_kernel()))
+    if (!(s->apicbase & MSR_IA32_APICBASE_BSP))
         s->cpu_env->halted = 1;
 
     if (kvm_enabled() && !qemu_kvm_irqchip_in_kernel())
