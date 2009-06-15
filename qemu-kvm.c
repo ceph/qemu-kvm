@@ -1708,6 +1708,33 @@ void kvm_save_registers(CPUState *env)
         on_vcpu(env, kvm_do_save_registers, env);
 }
 
+static void kvm_do_load_mpstate(void *_env)
+{
+    CPUState *env = _env;
+
+    kvm_arch_load_mpstate(env);
+}
+
+void kvm_load_mpstate(CPUState *env)
+{
+    if (kvm_enabled() && qemu_system_ready)
+        on_vcpu(env, kvm_do_load_mpstate, env);
+}
+
+static void kvm_do_save_mpstate(void *_env)
+{
+    CPUState *env = _env;
+
+    kvm_arch_save_mpstate(env);
+    env->halted = (env->mp_state == KVM_MP_STATE_HALTED);
+}
+
+void kvm_save_mpstate(CPUState *env)
+{
+    if (kvm_enabled())
+        on_vcpu(env, kvm_do_save_mpstate, env);
+}
+
 int kvm_cpu_exec(CPUState *env)
 {
     int r;
