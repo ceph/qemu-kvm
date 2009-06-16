@@ -71,7 +71,7 @@ bios: biossums BIOS-bochs-latest BIOS-bochs-legacy
 clean:
 	rm -f  *.o *.a *.s _rombios*_.c rombios*.txt rombios*.sym
 	rm -f  usage biossums rombios16.bin
-	rm -f  rombios32.bin rombios32.out acpi-dsdt.hex
+	rm -f  rombios32.bin rombios32.out acpi-dsdt.hex acpi-ssdt.hex
 
 dist-clean: clean
 	rm -f  Makefile
@@ -108,13 +108,19 @@ rombios32.bin: rombios32.out rombios.h
 rombios32.out: rombios32start.o rombios32.o vapic.o rombios32.ld
 	ld -o $@ -T rombios32.ld rombios32start.o vapic.o rombios32.o
 
-rombios32.o: rombios32.c acpi-dsdt.hex
+rombios32.o: rombios32.c acpi-dsdt.hex acpi-ssdt.hex
 	$(GCC) -m32 -O2 -Wall -c -o $@ $<
 
 acpi-dsdt.hex: acpi-dsdt.dsl
 	cpp -P $< $<.i
 	iasl -tc -p $@ $<.i
-	sed -i -e's/^unsigned/const unsigned/' $@
+	sed -i -e's/^unsigned char AmlCode/const unsigned char DSDTCode/' $@
+	rm $<.i
+
+acpi-ssdt.hex: acpi-ssdt.dsl
+	cpp -P $< $<.i
+	iasl -tc -p $@ $<.i
+	sed -i -e's/^unsigned char AmlCode/const unsigned char SSDTCode/' $@
 	rm $<.i
 
 rombios32start.o: rombios32start.S

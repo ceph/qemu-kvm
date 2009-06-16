@@ -1528,6 +1528,7 @@ struct madt_int_override
 #endif
 
 #include "acpi-dsdt.hex"
+#include "acpi-ssdt.hex"
 
 static inline uint16_t cpu_to_le16(uint16_t x)
 {
@@ -1643,7 +1644,11 @@ void acpi_bios_init(void)
 
     dsdt_addr = addr;
     dsdt = (void *)(addr);
-    addr += sizeof(AmlCode);
+    addr += sizeof(DSDTCode);
+
+    ssdt_addr = addr;
+    ssdt = (void *)(addr);
+    addr += sizeof(SSDTCode);
 
 #ifdef BX_QEMU
     qemu_cfg_select(QEMU_CFG_NUMA);
@@ -1729,7 +1734,10 @@ void acpi_bios_init(void)
     BX_INFO("Firmware waking vector %p\n", &facs->firmware_waking_vector);
 
     /* DSDT */
-    memcpy(dsdt, AmlCode, sizeof(AmlCode));
+    memcpy(dsdt, DSDTCode, sizeof(DSDTCode));
+
+    /* SSDT */
+    memcpy(ssdt, SSDTCode, sizeof(SSDTCode));
 
     /* MADT */
     {
@@ -1876,9 +1884,9 @@ void acpi_bios_init(void)
 
     /* RSDT */
     rsdt->table_offset_entry[nb_rsdt_entries++] = cpu_to_le32(fadt_addr);
+    /* On real hardware the SSDT seems to come before the MADT (APIC) */
+    rsdt->table_offset_entry[nb_rsdt_entries++] = cpu_to_le32(ssdt_addr);
     rsdt->table_offset_entry[nb_rsdt_entries++] = cpu_to_le32(madt_addr);
-    /* kvm has no ssdt (processors are in dsdt) */
-//  rsdt->table_offset_entry[nb_rsdt_entries++] = cpu_to_le32(ssdt_addr);
 #ifdef BX_QEMU
     /* No HPET (yet) */
 //  rsdt->table_offset_entry[nb_rsdt_entries++] = cpu_to_le32(hpet_addr);

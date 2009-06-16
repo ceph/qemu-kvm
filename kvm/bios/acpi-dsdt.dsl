@@ -25,108 +25,6 @@ DefinitionBlock (
     0x1                 // OEM Revision
     )
 {
-   Scope (\_PR)
-   {
-	/* pointer to first element of MADT APIC structures */
-	OperationRegion(ATPR, SystemMemory, 0x0514, 4)
-	Field (ATPR, DwordAcc, NoLock, Preserve)
-	{
-		ATP, 32
-	}
-
-#define madt_addr(nr)  Add (ATP, Multiply(nr, 8))
-
-#define gen_processor(nr, name) 				            \
-	Processor (CPU##name, nr, 0x0000b010, 0x06) {                       \
-	    OperationRegion (MATR, SystemMemory, madt_addr(nr), 8)          \
-	    Field (MATR, ByteAcc, NoLock, Preserve)                         \
-	    {                                                               \
-	        MAT, 64                                                     \
-	    }                                                               \
-	    Field (MATR, ByteAcc, NoLock, Preserve)                         \
-	    {                                                               \
-	        Offset(4),                                                  \
-	        FLG, 1                                                      \
-	    }                                                               \
-            Method(_MAT, 0) {                                               \
-		Return(MAT)                                                 \
-            }                                                               \
-            Method (_STA) {                                                 \
-                If (FLG) { Return(0xF) } Else { Return(0x9) }               \
-            }                                                               \
-        }                                                                   \
-
-
-	gen_processor(0, 0)
-	gen_processor(1, 1)
-	gen_processor(2, 2)
-	gen_processor(3, 3)
-	gen_processor(4, 4)
-	gen_processor(5, 5)
-	gen_processor(6, 6)
-	gen_processor(7, 7)
-	gen_processor(8, 8)
-	gen_processor(9, 9)
-	gen_processor(10, A)
-	gen_processor(11, B)
-	gen_processor(12, C)
-	gen_processor(13, D)
-	gen_processor(14, E)
-
-	Method (NTFY, 2) {
-#define gen_ntfy(nr)                                        \
-	If (LEqual(Arg0, 0x##nr)) {                         \
-		If (LNotEqual(Arg1, \_PR.CPU##nr.FLG)) {    \
-			Store (Arg1, \_PR.CPU##nr.FLG)      \
-			If (LEqual(Arg1, 1)) {              \
-				Notify(CPU##nr, 1)          \
-			} Else {                            \
-				Notify(CPU##nr, 3)          \
-			}                                   \
-		}                                           \
-	}
-		gen_ntfy(0)
-		gen_ntfy(1)
-		gen_ntfy(2)
-		gen_ntfy(3)
-		gen_ntfy(4)
-		gen_ntfy(5)
-		gen_ntfy(6)
-		gen_ntfy(7)
-		gen_ntfy(8)
-		gen_ntfy(9)
-		gen_ntfy(A)
-		gen_ntfy(B)
-		gen_ntfy(C)
-		gen_ntfy(D)
-		gen_ntfy(E)
-		Return(One)
-	}
-
-	OperationRegion(PRST, SystemIO, 0xaf00, 32)
-	Field (PRST, ByteAcc, NoLock, Preserve)
-	{
-		PRS, 256
-	}
-
-	Method(PRSC, 0) {
-		Store(PRS, Local3)
-		Store(Zero, Local0)
-		While(LLess(Local0, 32)) {
-			Store(Zero, Local1)
-			Store(DerefOf(Index(Local3, Local0)), Local2)
-			While(LLess(Local1, 8)) {
-				NTFY(Add(Multiply(Local0, 8), Local1),
-						And(Local2, 1))
-				ShiftRight(Local2, 1, Local2)
-				Increment(Local1)
-			}
-			Increment(Local0)
-		}
-		Return(One)
-	}
-    }
-
     Scope (\)
     {
         /* Debug Output */
@@ -803,9 +701,11 @@ DefinitionBlock (
             Return(0x01)
         }
 
-        Method(_L02) {
-	    Return(\_PR.PRSC())
-        }
+	/*
+         * Method _02 will be provided by the SSDT as it needs to call
+         * into the Processor methods (_PR.PRSC()).
+         */
+
         Method(_L03) {
             Return(0x01)
         }
