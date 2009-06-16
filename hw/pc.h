@@ -180,4 +180,6 @@ void isa_ne2000_init(int base, qemu_irq irq, NICInfo *nd);
 
 void extboot_init(BlockDriverState *bs, int cmd);
 
+int cpu_is_bsp(CPUState *env);
+
 #endif

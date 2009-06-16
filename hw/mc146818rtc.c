@@ -57,6 +57,11 @@
 #define REG_B_SQWE 0x08
 #define REG_B_DM   0x04
 
+#define REG_C_UF   0x10
+#define REG_C_IRQF 0x80
+#define REG_C_PF   0x40
+#define REG_C_AF   0x20
+
 struct RTCState {
     uint8_t cmos_data[128];
     uint8_t cmos_index;
@@ -568,6 +573,21 @@ static int rtc_load_td(QEMUFile *f, void *opaque, int version_id)
 }
 #endif
 
+static void rtc_reset(void *opaque)
+{
+    RTCState *s = opaque;
+
+    s->cmos_data[RTC_REG_B] &= ~(REG_B_PIE | REG_B_AIE | REG_B_SQWE);
+    s->cmos_data[RTC_REG_C] &= ~(REG_C_UF | REG_C_IRQF | REG_C_PF | REG_C_AF);
+
+    qemu_irq_lower(s->irq);
+
+#ifdef TARGET_I386
+    if (rtc_td_hack)
+	    s->irq_coalesced = 0;
+#endif
+}
+
 RTCState *rtc_init_sqw(int base, qemu_irq irq, qemu_irq sqw_irq, int base_year)
 {
     RTCState *s;
@@ -606,6 +626,8 @@ RTCState *rtc_init_sqw(int base, qemu_irq irq, qemu_irq sqw_irq, int base_year)
     if (rtc_td_hack)
         register_savevm("mc146818rtc-td", base, 1, rtc_save_td, rtc_load_td, s);
 #endif
+    qemu_register_reset(rtc_reset, 0, s);
+
     return s;
 }
 
@@ -721,5 +743,6 @@ RTCState *rtc_mm_init(target_phys_addr_t base, int it_shift, qemu_irq irq,
     if (rtc_td_hack)
         register_savevm("mc146818rtc-td", base, 1, rtc_save_td, rtc_load_td, s);
 #endif
+    qemu_register_reset(rtc_reset, 0, s);
     return s;
 }
