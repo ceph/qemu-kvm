@@ -136,11 +136,6 @@ void kvm_remove_ioperm_data(unsigned long start_port, unsigned long num);
 void kvm_arch_do_ioperm(void *_data);
 #endif
 
-#ifdef TARGET_PPC
-int handle_powerpc_dcr_read(kvm_vcpu_context_t vcpu, uint32_t dcrn, uint32_t *data);
-int handle_powerpc_dcr_write(kvm_vcpu_context_t vcpu,uint32_t dcrn, uint32_t data);
-#endif
-
 #define ALIGN(x, y)  (((x)+(y)-1) & ~((y)-1))
 #define BITMAP_SIZE(m) (ALIGN(((m)>>TARGET_PAGE_BITS), HOST_LONG_BITS) / 8)
 

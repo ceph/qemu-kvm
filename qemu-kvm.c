@@ -2301,10 +2301,6 @@ static struct kvm_callbacks qemu_kvm_ops = {
 #ifdef TARGET_I386
     .tpr_access = handle_tpr_access,
 #endif
-#ifdef TARGET_PPC
-    .powerpc_dcr_read = handle_powerpc_dcr_read,
-    .powerpc_dcr_write = handle_powerpc_dcr_write,
-#endif
     .unhandled = handle_unhandled,
 };
 

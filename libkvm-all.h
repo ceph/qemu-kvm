@@ -156,10 +156,6 @@ struct kvm_callbacks {
     void (*post_kvm_run)(void *opaque, void *env);
     int (*pre_kvm_run)(void *opaque, void *env);
     int (*tpr_access)(void *opaque, kvm_vcpu_context_t vcpu, uint64_t rip, int is_write);
-#if defined(__powerpc__)
-    int (*powerpc_dcr_read)(kvm_vcpu_context_t vcpu, uint32_t dcrn, uint32_t *data);
-    int (*powerpc_dcr_write)(kvm_vcpu_context_t vcpu, uint32_t dcrn, uint32_t data);
-#endif
 #if defined(__s390__)
     int (*s390_handle_intercept)(kvm_context_t context, kvm_vcpu_context_t vcpu,
 	struct kvm_run *run);
