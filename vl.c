@@ -5672,6 +5672,10 @@ int main(int argc, char **argv, char **envp)
 		kvm_nested = 1;
 		break;
 	    }
+	    case QEMU_OPTION_enable_gbpages: {
+		kvm_gbpages = 1;
+		break;
+	    }
 #if defined(TARGET_I386) || defined(TARGET_X86_64) || defined(TARGET_IA64) || defined(__linux__)
             case QEMU_OPTION_pcidevice:
 		if (assigned_devices_index >= MAX_DEV_ASSIGN_CMDLINE) {

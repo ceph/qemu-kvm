@@ -43,6 +43,7 @@ int kvm_irqchip = 1;
 int kvm_pit = 1;
 int kvm_pit_reinject = 1;
 int kvm_nested = 0;
+int kvm_gbpages = 0;
 kvm_context_t kvm_context;
 
 pthread_mutex_t qemu_mutex = PTHREAD_MUTEX_INITIALIZER;

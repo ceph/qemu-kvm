@@ -144,6 +144,7 @@ extern int kvm_irqchip;
 extern int kvm_pit;
 extern int kvm_pit_reinject;
 extern int kvm_nested;
+extern int kvm_gbpages;
 extern kvm_context_t kvm_context;
 
 struct ioperm_data {

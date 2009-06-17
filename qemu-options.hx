@@ -1660,6 +1660,8 @@ DEF("pcidevice", HAS_ARG, QEMU_OPTION_pcidevice,
 #endif
 DEF("enable-nesting", 0, QEMU_OPTION_enable_nesting,
     "-enable-nesting enable support for running a VM inside the VM (AMD only)\n")
+DEF("enable-gbpages", 0, QEMU_OPTION_enable_gbpages,
+    "-enable-gbpages enable support for 1GB pages in the guest (if supported)\n")
 DEF("nvram", HAS_ARG, QEMU_OPTION_nvram,
     "-nvram FILE          provide ia64 nvram contents\n")
 DEF("tdf", 0, QEMU_OPTION_tdf,

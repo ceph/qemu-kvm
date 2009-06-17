@@ -1601,6 +1601,9 @@ void cpu_x86_cpuid(CPUX86State *env, uint32_t index, uint32_t count,
                 *ebx = 0;
                 *ecx = 0;
                 *edx = 0;
+	    /* enable gbpages and let kvm disable it if unsupported */
+	    if (kvm_gbpages)
+		    *edx |= (1UL << 26UL);
                 break;
         }
         break;
