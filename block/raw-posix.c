@@ -135,7 +135,8 @@ static int raw_open_common(BlockDriverState *bs, const char *filename,
     s->lseek_err_cnt = 0;
 
     s->open_flags |= O_BINARY;
-    if ((flags & BDRV_O_ACCESS) == O_RDWR) {
+    s->open_flags &= ~O_ACCMODE;
+    if ((flags & BDRV_O_ACCESS) == BDRV_O_RDWR) {
         s->open_flags |= O_RDWR;
     } else {
         s->open_flags |= O_RDONLY;

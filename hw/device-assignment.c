@@ -404,9 +404,9 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
             pci_dev->v_addrs[i].u.r_virtbase +=
                 (cur_region->base_addr & 0xFFF);
 
-            pci_register_io_region((PCIDevice *) pci_dev, i,
-                                   cur_region->size, t,
-                                   assigned_dev_iomem_map);
+            pci_register_bar((PCIDevice *) pci_dev, i,
+                             cur_region->size, t,
+                             assigned_dev_iomem_map);
             continue;
         }
         /* handle port io regions */
@@ -415,9 +415,9 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
         pci_dev->v_addrs[i].r_size = cur_region->size;
         pci_dev->v_addrs[i].e_size = 0;
 
-        pci_register_io_region((PCIDevice *) pci_dev, i,
-                               cur_region->size, PCI_ADDRESS_SPACE_IO,
-                               assigned_dev_ioport_map);
+        pci_register_bar((PCIDevice *) pci_dev, i,
+                         cur_region->size, PCI_ADDRESS_SPACE_IO,
+                         assigned_dev_ioport_map);
 
         /* not relevant for port io */
         pci_dev->v_addrs[i].memory_index = 0;
@@ -1099,7 +1099,7 @@ static int assigned_dev_register_msix_mmio(AssignedDevice *dev)
         return -EFAULT;
     }
     memset(dev->msix_table_page, 0, 0x1000);
-    dev->mmio_index = cpu_register_io_memory(0,
+    dev->mmio_index = cpu_register_io_memory(
                         msix_mmio_read, msix_mmio_write, dev);
     return 0;
 }
