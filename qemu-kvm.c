@@ -689,21 +689,26 @@ int kvm_get_dirty_pages(kvm_context_t kvm, unsigned long phys_addr, void *buf)
 }
 
 int kvm_get_dirty_pages_range(kvm_context_t kvm, unsigned long phys_addr,
-			      unsigned long len, void *buf, void *opaque,
+			      unsigned long len, void *opaque,
 			      int (*cb)(unsigned long start, unsigned long len,
 					void*bitmap, void *opaque))
 {
 	int i;
 	int r;
 	unsigned long end_addr = phys_addr + len;
+        void *buf;
 
 	for (i = 0; i < KVM_MAX_NUM_MEM_REGIONS; ++i) {
 		if ((slots[i].len && (uint64_t)slots[i].phys_addr >= phys_addr)
 		    && ((uint64_t)slots[i].phys_addr + slots[i].len  <= end_addr)) {
+			buf = qemu_malloc((slots[i].len / 4096 + 7) / 8 + 2);
 			r = kvm_get_map(kvm, KVM_GET_DIRTY_LOG, i, buf);
-			if (r)
+			if (r) {
+				qemu_free(buf);
 				return r;
+			}
 			r = cb(slots[i].phys_addr, slots[i].len, buf, opaque);
+			qemu_free(buf);
 			if (r)
 				return r;
 		}
@@ -2785,7 +2790,7 @@ int kvm_update_dirty_pages_log(void)
 
 
     r = kvm_get_dirty_pages_range(kvm_context, 0, -1UL,
-                                  kvm_dirty_bitmap, NULL,
+                                  NULL,
                                   kvm_get_dirty_bitmap_cb);
     return r;
 }
@@ -2913,17 +2918,14 @@ void kvm_ioperm(CPUState *env, void *data)
 int kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr, target_phys_addr_t end_addr)
 {
 #ifndef TARGET_IA64
-    void *buf;
 
 #ifdef TARGET_I386
     if (must_use_aliases_source(start_addr))
         return 0;
 #endif
 
-    buf = qemu_malloc((end_addr - start_addr) / 8 + 2);
     kvm_get_dirty_pages_range(kvm_context, start_addr, end_addr - start_addr,
-			      buf, NULL, kvm_get_dirty_bitmap_cb);
-    qemu_free(buf);
+			      NULL, kvm_get_dirty_bitmap_cb);
 #endif
     return 0;
 }

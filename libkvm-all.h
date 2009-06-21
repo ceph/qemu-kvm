@@ -548,7 +548,7 @@ int kvm_register_phys_mem(kvm_context_t kvm,
 			unsigned long len, int log);
 int kvm_get_dirty_pages(kvm_context_t, unsigned long phys_addr, void *buf);
 int kvm_get_dirty_pages_range(kvm_context_t kvm, unsigned long phys_addr,
-			      unsigned long end_addr, void *buf, void*opaque,
+			      unsigned long end_addr, void*opaque,
 			      int (*cb)(unsigned long start, unsigned long len,
 					void*bitmap, void *opaque));
 int kvm_register_coalesced_mmio(kvm_context_t kvm,
