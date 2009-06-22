@@ -1751,15 +1751,9 @@ int kvm_cpu_exec(CPUState *env)
     return 0;
 }
 
-static int has_work(CPUState *env)
+static int is_cpu_stopped(CPUState *env)
 {
-    if (!vm_running || (env && env->kvm_cpu_state.stopped))
-	return 0;
-    if (kvm_irqchip_in_kernel(kvm_context))
-        return 1;
-    if (!env->halted)
-	return 1;
-    return kvm_arch_has_work(env);
+    return !vm_running || env->kvm_cpu_state.stopped;
 }
 
 static void flush_queued_work(CPUState *env)
@@ -1882,6 +1876,8 @@ static void update_regs_for_init(CPUState *env)
 #endif
 
     cpu_reset(env);
+    /* cpu_reset() clears env->halted, cpu should be halted after init */
+    env->halted = 1;
 
 #ifdef TARGET_I386
     /* restore SIPI vector */
@@ -1925,6 +1921,16 @@ static void qemu_kvm_system_reset(void)
     resume_all_threads();
 }
 
+static void process_irqchip_events(CPUState *env)
+{
+    if (env->kvm_cpu_state.init)
+        update_regs_for_init(env);
+    if (env->kvm_cpu_state.sipi_needed)
+        update_regs_for_sipi(env);
+    if (kvm_arch_has_work(env))
+        env->halted = 0;
+}
+
 static int kvm_main_loop_cpu(CPUState *env)
 {
     setup_kernel_sigmask(env);
@@ -1940,19 +1946,17 @@ static int kvm_main_loop_cpu(CPUState *env)
     kvm_arch_load_regs(env);
 
     while (1) {
-	while (!has_work(env))
-	    kvm_main_loop_wait(env, 1000);
-	if (env->interrupt_request & (CPU_INTERRUPT_HARD | CPU_INTERRUPT_NMI))
-	    env->halted = 0;
-        if (!kvm_irqchip_in_kernel(kvm_context)) {
-	    if (env->kvm_cpu_state.init)
-	        update_regs_for_init(env);
-	    if (env->kvm_cpu_state.sipi_needed)
-	        update_regs_for_sipi(env);
+        int run_cpu = !is_cpu_stopped(env);
+        if (run_cpu && !kvm_irqchip_in_kernel(kvm_context)) {
+            process_irqchip_events(env);
+            run_cpu = !env->halted;
         }
-	if (!env->halted || kvm_irqchip_in_kernel(kvm_context))
-	    kvm_cpu_exec(env);
-	kvm_main_loop_wait(env, 0);
+        if (run_cpu) {
+            kvm_main_loop_wait(env, 0);
+            kvm_cpu_exec(env);
+	} else {
+            kvm_main_loop_wait(env, 1000);
+	}
     }
     pthread_mutex_unlock(&qemu_mutex);
     return 0;
