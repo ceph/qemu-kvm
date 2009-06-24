@@ -19,6 +19,7 @@
 #include "ppc405.h"
 #include "sysemu.h"
 #include "kvm.h"
+#include "qemu-kvm.h"
 
 #define PPC440EP_PCI_CONFIG     0xeec00000
 #define PPC440EP_PCI_INTACK     0xeed00000

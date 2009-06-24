@@ -1,6 +1,7 @@
 #include "hw/hw.h"
 #include "hw/boards.h"
 #include "kvm.h"
+#include "qemu-kvm.h"
 
 void cpu_save(QEMUFile *f, void *opaque)
 {

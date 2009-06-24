@@ -29,6 +29,7 @@
 #include "device_tree.h"
 #include "openpic.h"
 #include "ppce500.h"
+#include "qemu-kvm.h"
 
 #define BINARY_DEVICE_TREE_FILE    "mpc8544ds.dtb"
 #define UIMAGE_LOAD_BASE           0

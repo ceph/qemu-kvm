@@ -169,6 +169,7 @@ int kvm_has_sync_mmu(void);
 void kvm_init_vcpu(CPUState *env);
 void kvm_load_tsc(CPUState *env);
 #else
+#define kvm_has_sync_mmu() (0)
 #define kvm_enabled() (0)
 #define kvm_nested 0
 #define qemu_kvm_irqchip_in_kernel() (0)

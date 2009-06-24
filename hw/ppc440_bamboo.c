@@ -22,6 +22,7 @@
 #include "kvm.h"
 #include "kvm_ppc.h"
 #include "device_tree.h"
+#include "qemu-kvm.h"
 
 #define BINARY_DEVICE_TREE_FILE "bamboo.dtb"
 
