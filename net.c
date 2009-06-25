@@ -1238,6 +1238,18 @@ static void tap_send(void *opaque)
     } while (size > 0);
 }
 
+static void tap_set_sndbuf(TAPState *s, int sndbuf, Monitor *mon)
+{
+#ifdef TUNSETSNDBUF
+    if (ioctl(s->fd, TUNSETSNDBUF, &sndbuf) == -1) {
+        config_error(mon, "TUNSETSNDBUF ioctl failed: %s\n",
+                     strerror(errno));
+    }
+#else
+    config_error(mon, "No '-net tap,sndbuf=<nbytes>' support available\n");
+#endif
+}
+
 int tap_has_vnet_hdr(void *opaque)
 {
     VLANClientState *vc = opaque;
@@ -2297,9 +2309,6 @@ void qemu_check_nic_model_list(NICInfo *nd, const char * const *models,
 
 int net_client_init(Monitor *mon, const char *device, const char *p)
 {
-    static const char * const fd_params[] = {
-        "vlan", "name", "fd", NULL
-    };
     char buf[1024];
     int vlan_id, ret;
     VLANState *vlan;
@@ -2454,6 +2463,9 @@ int net_client_init(Monitor *mon, const char *device, const char *p)
         int fd;
         vlan->nb_host_devs++;
         if (get_param_value(buf, sizeof(buf), "fd", p) > 0) {
+            static const char * const fd_params[] = {
+                "vlan", "name", "fd", "sndbuf", NULL
+            };
             if (check_params(chkbuf, sizeof(chkbuf), fd_params, p) < 0) {
                 config_error(mon, "invalid parameter '%s' in '%s'\n", chkbuf, p);
                 ret = -1;
@@ -2464,7 +2476,7 @@ int net_client_init(Monitor *mon, const char *device, const char *p)
             s = net_tap_fd_init(vlan, device, name, fd, tap_probe_vnet_hdr(fd));
         } else {
             static const char * const tap_params[] = {
-                "vlan", "name", "ifname", "script", "downscript", NULL
+                "vlan", "name", "ifname", "script", "downscript", "sndbuf", NULL
             };
             if (check_params(chkbuf, sizeof(chkbuf), tap_params, p) < 0) {
                 config_error(mon, "invalid parameter '%s' in '%s'\n", chkbuf, p);
@@ -2483,6 +2495,9 @@ int net_client_init(Monitor *mon, const char *device, const char *p)
             s = net_tap_init(vlan, device, name, ifname, setup_script, down_script);
         }
         if (s != NULL) {
+            if (get_param_value(buf, sizeof(buf), "sndbuf", p)) {
+                tap_set_sndbuf(s, atoi(buf), mon);
+            }
             ret = 0;
         } else {
             ret = -1;
@@ -2492,6 +2507,9 @@ int net_client_init(Monitor *mon, const char *device, const char *p)
     if (!strcmp(device, "socket")) {
         char chkbuf[64];
         if (get_param_value(buf, sizeof(buf), "fd", p) > 0) {
+            static const char * const fd_params[] = {
+                "vlan", "name", "fd", NULL
+            };
             int fd;
             if (check_params(chkbuf, sizeof(chkbuf), fd_params, p) < 0) {
                 config_error(mon, "invalid parameter '%s' in '%s'\n", chkbuf, p);
