@@ -1583,9 +1583,9 @@ static int launch_script(const char *setup_script, const char *ifname, int fd)
     return -1;
 }
 
-static int net_tap_init(VLANState *vlan, const char *model,
-                        const char *name, const char *ifname1,
-                        const char *setup_script, const char *down_script)
+static TAPState *net_tap_init(VLANState *vlan, const char *model,
+                              const char *name, const char *ifname1,
+                              const char *setup_script, const char *down_script)
 {
     TAPState *s;
     int fd;
@@ -1599,13 +1599,13 @@ static int net_tap_init(VLANState *vlan, const char *model,
     vnet_hdr = 0;
     TFR(fd = tap_open(ifname, sizeof(ifname), &vnet_hdr));
     if (fd < 0)
-        return -1;
+        return NULL;
 
     if (!setup_script || !strcmp(setup_script, "no"))
         setup_script = "";
-    if (setup_script[0] != '\0') {
-	if (launch_script(setup_script, ifname, fd))
-	    return -1;
+    if (setup_script[0] != '\0' &&
+        launch_script(setup_script, ifname, fd)) {
+        return NULL;
     }
     s = net_tap_fd_init(vlan, model, name, fd, vnet_hdr);
     snprintf(s->vc->info_str, sizeof(s->vc->info_str),
@@ -1615,7 +1615,7 @@ static int net_tap_init(VLANState *vlan, const char *model,
         snprintf(s->down_script, sizeof(s->down_script), "%s", down_script);
         snprintf(s->down_script_arg, sizeof(s->down_script_arg), "%s", ifname);
     }
-    return 0;
+    return s;
 }
 
 #endif /* !_WIN32 */
@@ -2450,6 +2450,7 @@ int net_client_init(Monitor *mon, const char *device, const char *p)
     if (!strcmp(device, "tap")) {
         char ifname[64], chkbuf[64];
         char setup_script[1024], down_script[1024];
+        TAPState *s;
         int fd;
         vlan->nb_host_devs++;
         if (get_param_value(buf, sizeof(buf), "fd", p) > 0) {
@@ -2460,8 +2461,7 @@ int net_client_init(Monitor *mon, const char *device, const char *p)
             }
             fd = strtol(buf, NULL, 0);
             fcntl(fd, F_SETFL, O_NONBLOCK);
-            net_tap_fd_init(vlan, device, name, fd, tap_probe_vnet_hdr(fd));
-            ret = 0;
+            s = net_tap_fd_init(vlan, device, name, fd, tap_probe_vnet_hdr(fd));
         } else {
             static const char * const tap_params[] = {
                 "vlan", "name", "ifname", "script", "downscript", NULL
@@ -2480,7 +2480,12 @@ int net_client_init(Monitor *mon, const char *device, const char *p)
             if (get_param_value(down_script, sizeof(down_script), "downscript", p) == 0) {
                 pstrcpy(down_script, sizeof(down_script), DEFAULT_NETWORK_DOWN_SCRIPT);
             }
-            ret = net_tap_init(vlan, device, name, ifname, setup_script, down_script);
+            s = net_tap_init(vlan, device, name, ifname, setup_script, down_script);
+        }
+        if (s != NULL) {
+            ret = 0;
+        } else {
+            ret = -1;
         }
     } else
 #endif
