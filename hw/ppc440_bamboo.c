@@ -90,6 +90,7 @@ static void bamboo_init(ram_addr_t ram_size,
 {
     unsigned int pci_irq_nrs[4] = { 28, 27, 26, 25 };
     PCIBus *pcibus;
+    PCIDevice *pci_dev;
     CPUState *env;
     uint64_t elf_entry;
     uint64_t elf_lowaddr;
@@ -103,14 +104,15 @@ static void bamboo_init(ram_addr_t ram_size,
     int i;
 
     /* Setup CPU. */
-    env = ppc440ep_init(&ram_size, &pcibus, pci_irq_nrs, 1);
+    env = ppc440ep_init(&ram_size, &pcibus, pci_irq_nrs, 1, cpu_model);
 
     if (pcibus) {
         int unit_id = 0;
 
         /* Add virtio block devices. */
         while ((i = drive_get_index(IF_VIRTIO, 0, unit_id)) != -1) {
-            pci_create_simple(pcibus, -1, "virtio-blk-pci");
+            pci_dev = pci_create("virtio-blk-pci", drives_table[i].devaddr);
+            qdev_init(&pci_dev->qdev);
             unit_id++;
         }
 
@@ -125,7 +127,7 @@ static void bamboo_init(ram_addr_t ram_size,
         for (i = 0; i < nb_nics; i++) {
             /* There are no PCI NICs on the Bamboo board, but there are
              * PCI slots, so we can pick whatever default model we want. */
-            pci_nic_init(pcibus, &nd_table[i], -1, "e1000");
+            pci_nic_init(&nd_table[i], "e1000", NULL);
         }
     }
 

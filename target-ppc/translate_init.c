@@ -8903,7 +8903,13 @@ static void init_ppc_proc (CPUPPCState *env, const ppc_def_t *def)
     /* Register SPR common to all PowerPC implementations */
     gen_spr_generic(env);
     spr_register(env, SPR_PVR, "PVR",
-                 SPR_NOACCESS, SPR_NOACCESS,
+                 /* Linux permits userspace to read PVR */
+#if defined(CONFIG_LINUX_USER)
+                 &spr_read_generic,
+#else
+                 SPR_NOACCESS,
+#endif
+                 SPR_NOACCESS,
                  &spr_read_generic, SPR_NOACCESS,
                  def->pvr);
     /* Register SVR if it's defined to anything else than POWERPC_SVR_NONE */
@@ -9260,17 +9266,10 @@ static void fix_opcode_tables (opc_handler_t **ppc_opcodes)
 /*****************************************************************************/
 static int create_ppc_opcodes (CPUPPCState *env, const ppc_def_t *def)
 {
-    opcode_t *opc, *start, *end;
+    opcode_t *opc;
 
     fill_new_table(env->opcodes, 0x40);
-    if (&opc_start < &opc_end) {
-        start = &opc_start;
-        end = &opc_end;
-    } else {
-        start = &opc_end;
-        end = &opc_start;
-    }
-    for (opc = start + 1; opc != end; opc++) {
+    for (opc = opcodes; opc < &opcodes[ARRAY_SIZE(opcodes)]; opc++) {
         if ((opc->handler.type & def->insns_flags) != 0) {
             if (register_insn(env->opcodes, opc) < 0) {
                 printf("*** ERROR initializing PowerPC instruction "

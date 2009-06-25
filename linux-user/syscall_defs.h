@@ -1231,10 +1231,11 @@ struct __attribute__((__packed__)) target_stat64 {
 	uint32_t st_uid;
 	uint32_t st_gid;
 	uint64_t st_rdev;
-	uint32_t __pad2;
+	uint64_t __pad1;
 
 	int64_t  st_size;
-	int32_t st_blksize;
+	int32_t  st_blksize;
+	uint32_t __pad2;
 	int64_t st_blocks;	/* Number 512-byte blocks allocated. */
 
 	int	       target_st_atime;
@@ -2120,3 +2121,20 @@ struct target_mq_attr {
 #include "socket.h"
 
 #include "errno_defs.h"
+
+#define FUTEX_WAIT              0
+#define FUTEX_WAKE              1
+#define FUTEX_FD                2
+#define FUTEX_REQUEUE           3
+#define FUTEX_CMP_REQUEUE       4
+#define FUTEX_WAKE_OP           5
+#define FUTEX_LOCK_PI           6
+#define FUTEX_UNLOCK_PI         7
+#define FUTEX_TRYLOCK_PI        8
+#define FUTEX_WAIT_BITSET       9
+#define FUTEX_WAKE_BITSET       10
+
+#define FUTEX_PRIVATE_FLAG      128
+#define FUTEX_CLOCK_REALTIME    256
+#define FUTEX_CMD_MASK          ~(FUTEX_PRIVATE_FLAG | FUTEX_CLOCK_REALTIME)
+

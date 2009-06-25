@@ -108,7 +108,7 @@ struct AssignedDevInfo {
     int disable_iommu;
 };
 
-PCIDevice *init_assigned_device(AssignedDevInfo *adev, PCIBus *bus);
+PCIDevice *init_assigned_device(AssignedDevInfo *adev, const char *devaddr);
 AssignedDevInfo *add_assigned_device(const char *arg);
 void add_assigned_devices(PCIBus *bus, const char **devices, int n_devices);
 void remove_assigned_device(AssignedDevInfo *adev);
