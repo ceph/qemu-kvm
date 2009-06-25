@@ -35,7 +35,7 @@ struct VLANClientState {
 
 typedef struct VLANPacket VLANPacket;
 
-typedef void (NetPacketSent) (VLANClientState *);
+typedef void (NetPacketSent) (VLANClientState *, ssize_t);
 
 struct VLANPacket {
     struct VLANPacket *next;

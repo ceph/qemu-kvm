@@ -37,6 +37,10 @@ typedef struct VirtIONet
     VLANClientState *vc;
     QEMUTimer *tx_timer;
     int tx_timer_active;
+    struct {
+        VirtQueueElement elem;
+        ssize_t len;
+    } async_tx;
     int mergeable_rx_bufs;
     uint8_t promisc;
     uint8_t allmulti;
@@ -575,6 +579,21 @@ static ssize_t virtio_net_receive2(VLANClientState *vc, const uint8_t *buf, size
     return size;
 }
 
+static void virtio_net_flush_tx(VirtIONet *n, VirtQueue *vq);
+
+static void virtio_net_tx_complete(VLANClientState *vc, ssize_t len)
+{
+    VirtIONet *n = vc->opaque;
+
+    virtqueue_push(n->tx_vq, &n->async_tx.elem, n->async_tx.len);
+    virtio_notify(&n->vdev, n->tx_vq);
+
+    n->async_tx.elem.out_num = n->async_tx.len = 0;
+
+    virtio_queue_set_notification(n->tx_vq, 1);
+    virtio_net_flush_tx(n, n->tx_vq);
+}
+
 static ssize_t virtio_net_receive(VLANClientState *vc, const uint8_t *buf, size_t size)
 {
     return virtio_net_receive2(vc, buf, size, 0);
@@ -598,8 +617,13 @@ static void virtio_net_flush_tx(VirtIONet *n, VirtQueue *vq)
     if (!(n->vdev.status & VIRTIO_CONFIG_S_DRIVER_OK))
         return;
 
+    if (n->async_tx.elem.out_num) {
+        virtio_queue_set_notification(n->tx_vq, 0);
+        return;
+    }
+
     while (virtqueue_pop(vq, &elem)) {
-        ssize_t len = 0;
+        ssize_t ret, len = 0;
         unsigned int out_num = elem.out_num;
         struct iovec *out_sg = &elem.out_sg[0];
         unsigned hdr_len;
@@ -626,7 +650,16 @@ static void virtio_net_flush_tx(VirtIONet *n, VirtQueue *vq)
             len += hdr_len;
         }
 
-        len += qemu_sendv_packet(n->vc, out_sg, out_num);
+        ret = qemu_sendv_packet_async(n->vc, out_sg, out_num,
+                                      virtio_net_tx_complete);
+        if (ret == 0) {
+            virtio_queue_set_notification(n->tx_vq, 0);
+            n->async_tx.elem = elem;
+            n->async_tx.len  = len;
+            return;
+        }
+
+        len += ret;
 
         virtqueue_push(vq, &elem, len);
         virtio_notify(&n->vdev, vq);
@@ -778,6 +811,8 @@ static int virtio_net_load(QEMUFile *f, void *opaque, int version_id)
 static void virtio_net_cleanup(VLANClientState *vc)
 {
     VirtIONet *n = vc->opaque;
+
+    qemu_purge_queued_packets(vc);
 
     unregister_savevm("virtio-net", n);
 
