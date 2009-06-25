@@ -125,7 +125,7 @@ static int cdrom_reopen(BlockDriverState *bs);
 #endif
 
 static int raw_open_common(BlockDriverState *bs, const char *filename,
-        int flags)
+                           int bdrv_flags, int open_flags)
 {
     BDRVRawState *s = bs->opaque;
     int fd, ret;
@@ -134,9 +134,9 @@ static int raw_open_common(BlockDriverState *bs, const char *filename,
 
     s->lseek_err_cnt = 0;
 
-    s->open_flags |= O_BINARY;
+    s->open_flags = open_flags | O_BINARY;
     s->open_flags &= ~O_ACCMODE;
-    if ((flags & BDRV_O_ACCESS) == BDRV_O_RDWR) {
+    if ((bdrv_flags & BDRV_O_ACCESS) == BDRV_O_RDWR) {
         s->open_flags |= O_RDWR;
     } else {
         s->open_flags |= O_RDONLY;
@@ -145,9 +145,9 @@ static int raw_open_common(BlockDriverState *bs, const char *filename,
 
     /* Use O_DSYNC for write-through caching, no flags for write-back caching,
      * and O_DIRECT for no caching. */
-    if ((flags & BDRV_O_NOCACHE))
+    if ((bdrv_flags & BDRV_O_NOCACHE))
         s->open_flags |= O_DIRECT;
-    else if (!(flags & BDRV_O_CACHE_WB))
+    else if (!(bdrv_flags & BDRV_O_CACHE_WB))
         s->open_flags |= O_DSYNC;
 
     s->fd = -1;
@@ -160,7 +160,7 @@ static int raw_open_common(BlockDriverState *bs, const char *filename,
     }
     s->fd = fd;
     s->aligned_buf = NULL;
-    if ((flags & BDRV_O_NOCACHE)) {
+    if ((bdrv_flags & BDRV_O_NOCACHE)) {
         s->aligned_buf = qemu_blockalign(bs, ALIGNED_BUFFER_SIZE);
         if (s->aligned_buf == NULL) {
             ret = -errno;
@@ -174,12 +174,13 @@ static int raw_open_common(BlockDriverState *bs, const char *filename,
 static int raw_open(BlockDriverState *bs, const char *filename, int flags)
 {
     BDRVRawState *s = bs->opaque;
+    int open_flags = 0;
 
     s->type = FTYPE_FILE;
     if (flags & BDRV_O_CREAT)
-        s->open_flags |= O_CREAT | O_TRUNC;
+        open_flags = O_CREAT | O_TRUNC;
 
-    return raw_open_common(bs, filename, flags);
+    return raw_open_common(bs, filename, flags, open_flags);
 }
 
 /* XXX: use host sector size if necessary with:
@@ -1006,7 +1007,7 @@ static int hdev_open(BlockDriverState *bs, const char *filename, int flags)
     }
 #endif
 
-    return raw_open_common(bs, filename, flags);
+    return raw_open_common(bs, filename, flags, 0);
 }
 
 #if defined(__linux__)
@@ -1184,10 +1185,9 @@ static int floppy_open(BlockDriverState *bs, const char *filename, int flags)
     posix_aio_init();
 
     s->type = FTYPE_FD;
-    /* open will not fail even if no floppy is inserted */
-    s->open_flags |= O_NONBLOCK;
 
-    ret = raw_open_common(bs, filename, flags);
+    /* open will not fail even if no floppy is inserted, so add O_NONBLOCK */
+    ret = raw_open_common(bs, filename, flags, O_NONBLOCK);
     if (ret)
         return ret;
 
@@ -1277,11 +1277,10 @@ static int cdrom_open(BlockDriverState *bs, const char *filename, int flags)
 {
     BDRVRawState *s = bs->opaque;
 
-    /* open will not fail even if no CD is inserted */
-    s->open_flags |= O_NONBLOCK;
     s->type = FTYPE_CD;
 
-    return raw_open_common(bs, filename, flags);
+    /* open will not fail even if no CD is inserted, so add O_NONBLOCK */
+    return raw_open_common(bs, filename, flags, O_NONBLOCK);
 }
 
 static int cdrom_probe_device(const char *filename)
@@ -1371,7 +1370,7 @@ static int cdrom_open(BlockDriverState *bs, const char *filename, int flags)
 
     s->type = FTYPE_CD;
 
-    ret = raw_open_common(bs, filename, flags);
+    ret = raw_open_common(bs, filename, flags, 0);
     if (ret)
         return ret;
 
