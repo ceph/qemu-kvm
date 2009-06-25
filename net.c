@@ -444,6 +444,22 @@ qemu_deliver_packet(VLANClientState *sender, const uint8_t *buf, int size, int r
     return ret;
 }
 
+void qemu_purge_queued_packets(VLANClientState *vc)
+{
+    VLANPacket **pp = &vc->vlan->send_queue;
+
+    while (*pp != NULL) {
+        VLANPacket *packet = *pp;
+
+        if (packet->sender == vc) {
+            *pp = packet->next;
+            qemu_free(packet);
+        } else {
+            pp = &packet->next;
+        }
+    }
+}
+
 void qemu_flush_queued_packets(VLANClientState *vc)
 {
     VLANPacket *packet;
@@ -1067,11 +1083,30 @@ typedef struct TAPState {
     char down_script[1024];
     char down_script_arg[128];
     uint8_t buf[TAP_BUFSIZE];
+    unsigned int read_poll : 1;
     unsigned int has_vnet_hdr : 1;
     unsigned int using_vnet_hdr : 1;
 } TAPState;
 
 static int launch_script(const char *setup_script, const char *ifname, int fd);
+
+static int tap_can_send(void *opaque);
+static void tap_send(void *opaque);
+
+static void tap_update_fd_handler(TAPState *s)
+{
+    qemu_set_fd_handler2(s->fd,
+                         s->read_poll  ? tap_can_send : NULL,
+                         s->read_poll  ? tap_send     : NULL,
+                         NULL,
+                         s);
+}
+
+static void tap_read_poll(TAPState *s, int enable)
+{
+    s->read_poll = !!enable;
+    tap_update_fd_handler(s);
+}
 
 static ssize_t tap_receive_iov(VLANClientState *vc, const struct iovec *iov,
                                int iovcnt)
@@ -1157,13 +1192,10 @@ static ssize_t tap_read_packet(int tapfd, uint8_t *buf, int maxlen)
 }
 #endif
 
-static void tap_send(void *opaque);
-
 static void tap_send_completed(VLANClientState *vc)
 {
     TAPState *s = vc->opaque;
-
-    qemu_set_fd_handler2(s->fd, tap_can_send, tap_send, NULL, s);
+    tap_read_poll(s, 1);
 }
 
 static void tap_send(void *opaque)
@@ -1179,7 +1211,7 @@ static void tap_send(void *opaque)
 
         size = qemu_send_packet_async(s->vc, s->buf, size, tap_send_completed);
         if (size == 0) {
-            qemu_set_fd_handler2(s->fd, NULL, NULL, NULL, NULL);
+            tap_read_poll(s, 0);
         }
     } while (size > 0);
 }
@@ -1246,10 +1278,12 @@ static void tap_cleanup(VLANClientState *vc)
 {
     TAPState *s = vc->opaque;
 
+    qemu_purge_queued_packets(vc);
+
     if (s->down_script[0])
         launch_script(s->down_script, s->down_script_arg, s->fd);
 
-    qemu_set_fd_handler(s->fd, NULL, NULL, NULL);
+    tap_read_poll(s, 0);
     close(s->fd);
     qemu_free(s);
 }
@@ -1274,7 +1308,7 @@ static TAPState *net_tap_fd_init(VLANState *vlan,
     s->vc->set_offload = tap_set_offload;
     tap_set_offload(s->vc, 0, 0, 0, 0);
 #endif
-    qemu_set_fd_handler2(s->fd, tap_can_send, tap_send, NULL, s);
+    tap_read_poll(s, 1);
     snprintf(s->vc->info_str, sizeof(s->vc->info_str), "fd=%d", fd);
     return s;
 }
