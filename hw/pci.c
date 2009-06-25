@@ -307,6 +307,24 @@ int pci_assign_devaddr(const char *addr, int *domp, int *busp, unsigned *slotp)
     return pci_parse_devaddr(devaddr, domp, busp, slotp);
 }
 
+static PCIBus *pci_get_bus_devfn(int *devfnp, const char *devaddr)
+{
+    int dom, bus;
+    unsigned slot;
+
+    if (!devaddr) {
+        *devfnp = -1;
+        return pci_find_bus(0);
+    }
+
+    if (pci_parse_devaddr(devaddr, &dom, &bus, &slot) < 0) {
+        return NULL;
+    }
+
+    *devfnp = slot << 3;
+    return pci_find_bus(bus);
+}
+
 /* -1 for devfn means auto assign */
 static PCIDevice *do_pci_register_device(PCIDevice *pci_dev, PCIBus *bus,
                                          const char *name, int devfn,
@@ -320,6 +338,8 @@ static PCIDevice *do_pci_register_device(PCIDevice *pci_dev, PCIBus *bus,
         }
         return NULL;
     found: ;
+    } else if (bus->devices[devfn]) {
+        return NULL;
     }
     pci_dev->bus = bus;
     pci_dev->devfn = devfn;
@@ -918,6 +938,24 @@ void pci_info(Monitor *mon)
     pci_for_each_device(0, pci_info_device);
 }
 
+static PCIDevice *pci_create(const char *name, const char *devaddr)
+{
+    PCIBus *bus;
+    int devfn;
+    DeviceState *dev;
+
+    bus = pci_get_bus_devfn(&devfn, devaddr);
+    if (!bus) {
+        fprintf(stderr, "Invalid PCI device address %s for device %s\n",
+                devaddr, name);
+        exit(1);
+    }
+
+    dev = qdev_create(&bus->qbus, name);
+    qdev_set_prop_int(dev, "devfn", devfn);
+    return (PCIDevice *)dev;
+}
+
 static const char * const pci_nic_models[] = {
     "ne2k_pci",
     "i82551",
@@ -943,9 +981,11 @@ static const char * const pci_nic_names[] = {
 };
 
 /* Initialize a PCI NIC.  */
-PCIDevice *pci_nic_init(PCIBus *bus, NICInfo *nd, int devfn,
-                  const char *default_model)
+PCIDevice *pci_nic_init(NICInfo *nd, const char *default_model,
+                        const char *default_devaddr)
 {
+    const char *devaddr = nd->devaddr ? nd->devaddr : default_devaddr;
+    PCIDevice *pci_dev;
     DeviceState *dev;
     int i;
 
@@ -953,12 +993,12 @@ PCIDevice *pci_nic_init(PCIBus *bus, NICInfo *nd, int devfn,
 
     for (i = 0; pci_nic_models[i]; i++) {
         if (strcmp(nd->model, pci_nic_models[i]) == 0) {
-            dev = qdev_create(&bus->qbus, pci_nic_names[i]);
-            qdev_set_prop_int(dev, "devfn", devfn);
+            pci_dev = pci_create(pci_nic_names[i], devaddr);
+            dev = &pci_dev->qdev;
             qdev_set_netdev(dev, nd);
             qdev_init(dev);
             nd->private = dev;
-            return (PCIDevice *)dev;
+            return pci_dev;
         }
     }
 

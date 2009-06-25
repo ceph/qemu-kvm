@@ -96,6 +96,7 @@ struct NICInfo {
     uint8_t macaddr[6];
     const char *model;
     const char *name;
+    const char *devaddr;
     VLANState *vlan;
     void *private;
     int used;

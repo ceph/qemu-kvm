@@ -1105,7 +1105,7 @@ static void pc_init1(ram_addr_t ram_size,
         if (!pci_enabled || (nd->model && strcmp(nd->model, "ne2k_isa") == 0))
             pc_init_ne2k_isa(nd, i8259);
         else
-            pci_nic_init(pci_bus, nd, -1, "rtl8139");
+            pci_nic_init(nd, "rtl8139", NULL);
     }
 
     piix4_acpi_system_hot_add_init(cpu_model);
