@@ -142,3 +142,7 @@ void kvm_arch_do_ioperm(void *_data)
     struct ioperm_data *data = _data;
     ioperm(data->start_port, data->num, data->turn_on);
 }
+
+void kvm_arch_process_irqchip_events(CPUState *env)
+{
+}

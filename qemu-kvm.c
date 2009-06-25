@@ -1647,19 +1647,6 @@ void kvm_update_interrupt_request(CPUState *env)
     }
 }
 
-void kvm_update_after_sipi(CPUState *env)
-{
-    env->kvm_cpu_state.sipi_needed = 1;
-    kvm_update_interrupt_request(env);
-}
-
-void kvm_apic_init(CPUState *env)
-{
-    if (env->cpu_index != 0)
-	env->kvm_cpu_state.init = 1;
-    kvm_update_interrupt_request(env);
-}
-
 #include <signal.h>
 
 static int kvm_try_push_interrupts(void *opaque)
@@ -1863,32 +1850,6 @@ static void kvm_vm_state_change_handler(void *context, int running, int reason)
 	pause_all_threads();
 }
 
-static void update_regs_for_sipi(CPUState *env)
-{
-    kvm_arch_update_regs_for_sipi(env);
-    env->kvm_cpu_state.sipi_needed = 0;
-}
-
-static void update_regs_for_init(CPUState *env)
-{
-#ifdef TARGET_I386
-    SegmentCache cs = env->segs[R_CS];
-#endif
-
-    cpu_reset(env);
-    /* cpu_reset() clears env->halted, cpu should be halted after init */
-    env->halted = 1;
-
-#ifdef TARGET_I386
-    /* restore SIPI vector */
-    if(env->kvm_cpu_state.sipi_needed)
-        env->segs[R_CS] = cs;
-#endif
-
-    env->kvm_cpu_state.init = 0;
-    kvm_arch_load_regs(env);
-}
-
 static void setup_kernel_sigmask(CPUState *env)
 {
     sigset_t set;
@@ -1923,10 +1884,7 @@ static void qemu_kvm_system_reset(void)
 
 static void process_irqchip_events(CPUState *env)
 {
-    if (env->kvm_cpu_state.init)
-        update_regs_for_init(env);
-    if (env->kvm_cpu_state.sipi_needed)
-        update_regs_for_sipi(env);
+    kvm_arch_process_irqchip_events(env);
     if (kvm_arch_has_work(env))
         env->halted = 0;
 }

@@ -75,6 +75,7 @@ int kvm_arch_qemu_init_env(CPUState *cenv);
 void kvm_arch_pre_kvm_run(void *opaque, CPUState *env);
 void kvm_arch_post_kvm_run(void *opaque, CPUState *env);
 int kvm_arch_has_work(CPUState *env);
+void kvm_arch_process_irqchip_events(CPUState *env);
 int kvm_arch_try_push_interrupts(void *opaque);
 void kvm_arch_push_nmi(void *opaque);
 void kvm_arch_update_regs_for_sipi(CPUState *env);
