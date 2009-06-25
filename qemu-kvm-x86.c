@@ -23,6 +23,7 @@
 #include <sys/ioctl.h>
 
 #include "kvm.h"
+#include "hw/pc.h"
 
 #define MSR_IA32_TSC		0x10
 
@@ -1349,7 +1350,7 @@ int handle_tpr_access(void *opaque, kvm_vcpu_context_t vcpu,
 void kvm_arch_cpu_reset(CPUState *env)
 {
     kvm_arch_load_regs(env);
-    if (env->cpu_index != 0) {
+    if (!cpu_is_bsp(env)) {
 	if (kvm_irqchip_in_kernel(kvm_context)) {
 #ifdef KVM_CAP_MP_STATE
 	    kvm_reset_mpstate(env->kvm_cpu_state.vcpu_ctx);
@@ -1583,7 +1584,7 @@ void kvm_update_after_sipi(CPUState *env)
 
 void kvm_apic_init(CPUState *env)
 {
-    if (env->cpu_index != 0)
+    if (!cpu_is_bsp(env))
 	env->kvm_cpu_state.init = 1;
     kvm_update_interrupt_request(env);
 }
