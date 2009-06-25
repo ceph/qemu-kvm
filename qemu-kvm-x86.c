@@ -1191,7 +1191,6 @@ int kvm_arch_qemu_init_env(CPUState *cenv)
 
     qemu_kvm_load_lapic(cenv);
 
-    copy = *cenv;
 
 #ifdef KVM_CPUID_SIGNATURE
     /* Paravirtualization CPUIDs */
@@ -1209,6 +1208,17 @@ int kvm_arch_qemu_init_env(CPUState *cenv)
     pv_ent->function = KVM_CPUID_FEATURES;
     pv_ent->eax = get_para_features(kvm_context);
 #endif
+
+    kvm_trim_features(&cenv->cpuid_features,
+                      kvm_arch_get_supported_cpuid(cenv, 1, R_EDX));
+    kvm_trim_features(&cenv->cpuid_ext_features,
+                      kvm_arch_get_supported_cpuid(cenv, 1, R_ECX));
+    kvm_trim_features(&cenv->cpuid_ext2_features,
+                      kvm_arch_get_supported_cpuid(cenv, 0x80000001, R_EDX));
+    kvm_trim_features(&cenv->cpuid_ext3_features,
+                      kvm_arch_get_supported_cpuid(cenv, 0x80000001, R_ECX));
+
+    copy = *cenv;
 
     copy.regs[R_EAX] = 0;
     qemu_kvm_cpuid_on_env(&copy);
@@ -1243,15 +1253,6 @@ int kvm_arch_qemu_init_env(CPUState *cenv)
 	do_cpuid_ent(&cpuid_ent[cpuid_nent++], i, 0, &copy);
 
     kvm_setup_cpuid2(cenv->kvm_cpu_state.vcpu_ctx, cpuid_nent, cpuid_ent);
-
-    kvm_trim_features(&cenv->cpuid_features,
-                      kvm_arch_get_supported_cpuid(cenv, 1, R_EDX));
-    kvm_trim_features(&cenv->cpuid_ext_features,
-                      kvm_arch_get_supported_cpuid(cenv, 1, R_ECX));
-    kvm_trim_features(&cenv->cpuid_ext2_features,
-                      kvm_arch_get_supported_cpuid(cenv, 0x80000001, R_EDX));
-    kvm_trim_features(&cenv->cpuid_ext3_features,
-                      kvm_arch_get_supported_cpuid(cenv, 0x80000001, R_ECX));
 
     return 0;
 }
