@@ -875,6 +875,7 @@ static void pc_init1(ram_addr_t ram_size,
     int bios_size, isa_bios_size, oprom_area_size;
     int pci_option_rom_offset = 0;
     PCIBus *pci_bus;
+    PCIDevice *pci_dev;
     int piix3_devfn = -1;
     CPUState *env;
     qemu_irq *cpu_irq;
@@ -1188,7 +1189,9 @@ static void pc_init1(ram_addr_t ram_size,
         int unit_id = 0;
 
         while ((index = drive_get_index(IF_VIRTIO, 0, unit_id)) != -1) {
-            pci_create_simple(pci_bus, -1, "virtio-blk-pci");
+            pci_dev = pci_create("virtio-blk-pci",
+                                 drives_table[index].devaddr);
+            qdev_init(&pci_dev->qdev);
             unit_id++;
         }
     }
