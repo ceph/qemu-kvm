@@ -236,7 +236,6 @@ PCIBus *pci_find_bus(int bus_num);
 PCIDevice *pci_find_device(int bus_num, int slot, int function);
 
 int pci_read_devaddr(const char *addr, int *domp, int *busp, unsigned *slotp);
-int pci_assign_devaddr(const char *addr, int *domp, int *busp, unsigned *slotp);
 
 int pci_parse_host_devaddr(const char *addr, int *busp,
                            int *slotp, int *funcp);
@@ -266,6 +265,7 @@ pci_config_set_class(uint8_t *pci_config, uint16_t val)
 typedef void (*pci_qdev_initfn)(PCIDevice *dev);
 void pci_qdev_register(const char *name, int size, pci_qdev_initfn init);
 
+PCIDevice *pci_create(const char *name, const char *devaddr);
 PCIDevice *pci_create_simple(PCIBus *bus, int devfn, const char *name);
 
 /* lsi53c895a.c */

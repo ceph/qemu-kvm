@@ -1123,8 +1123,12 @@ static int assigned_dev_register_msix_mmio(AssignedDevice *dev)
     return 0;
 }
 
-struct PCIDevice *init_assigned_device(AssignedDevInfo *adev, PCIBus *bus)
+struct PCIDevice *init_assigned_device(AssignedDevInfo *adev,
+                                       const char *devaddr)
 {
+    printf("init_assigned_device: fix me please\n");
+    return NULL;
+#if 0
     int r;
     AssignedDevice *dev;
     PCIDevice *pci_dev;
@@ -1199,6 +1203,7 @@ assigned_out:
 out:
     free_assigned_device(adev);
     return NULL;
+#endif
 }
 
 /*
