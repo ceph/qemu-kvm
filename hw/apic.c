@@ -492,9 +492,6 @@ void apic_init_reset(CPUState *env)
     s->wait_for_sipi = 1;
 
     env->halted = !(s->apicbase & MSR_IA32_APICBASE_BSP);
-
-    if (kvm_enabled() && !qemu_kvm_irqchip_in_kernel())
-        kvm_apic_init(s->cpu_env);
 }
 
 static void apic_startup(APICState *s, int vector_num)
@@ -517,8 +514,6 @@ void apic_sipi(CPUState *env)
                            0xffff, 0);
     env->halted = 0;
     s->wait_for_sipi = 0;
-    if (kvm_enabled() && !qemu_kvm_irqchip_in_kernel())
-	kvm_update_after_sipi(env);
 }
 
 static void apic_deliver(APICState *s, uint8_t dest, uint8_t dest_mode,

@@ -1576,45 +1576,10 @@ uint32_t kvm_arch_get_supported_cpuid(CPUState *env, uint32_t function,
     return kvm_get_supported_cpuid(kvm_context, function, reg);
 }
 
-void kvm_update_after_sipi(CPUState *env)
-{
-    env->kvm_cpu_state.sipi_needed = 1;
-    kvm_update_interrupt_request(env);
-}
-
-void kvm_apic_init(CPUState *env)
-{
-    if (!cpu_is_bsp(env))
-	env->kvm_cpu_state.init = 1;
-    kvm_update_interrupt_request(env);
-}
-
-static void update_regs_for_sipi(CPUState *env)
-{
-    kvm_arch_update_regs_for_sipi(env);
-    env->kvm_cpu_state.sipi_needed = 0;
-}
-
-static void update_regs_for_init(CPUState *env)
-{
-    SegmentCache cs = env->segs[R_CS];
-
-    cpu_reset(env);
-    /* cpu_reset() clears env->halted, cpu should be halted after init */
-    env->halted = 1;
-
-    /* restore SIPI vector */
-    if(env->kvm_cpu_state.sipi_needed)
-        env->segs[R_CS] = cs;
-
-    env->kvm_cpu_state.init = 0;
-    kvm_arch_load_regs(env);
-}
-
 void kvm_arch_process_irqchip_events(CPUState *env)
 {
-    if (env->kvm_cpu_state.init)
-        update_regs_for_init(env);
-    if (env->kvm_cpu_state.sipi_needed)
-        update_regs_for_sipi(env);
+    if (env->interrupt_request & CPU_INTERRUPT_INIT)
+        do_cpu_init(env);
+    if (env->interrupt_request & CPU_INTERRUPT_SIPI)
+        do_cpu_sipi(env);
 }

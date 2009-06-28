@@ -140,8 +140,6 @@ typedef struct CPUWatchpoint {
 struct qemu_work_item;
 
 struct KVMCPUState {
-    int sipi_needed;
-    int init;
     pthread_t thread;
     int signalled;
     int stop;
