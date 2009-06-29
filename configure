@@ -2144,7 +2144,7 @@ configure_kvm() {
 if test ! \( "$target_cpu" = "$cpu" -o \
   \( "$target_cpu" = "ppcemb" -a "$cpu" = "ppc" \) -o \
   \( "$target_cpu" = "x86_64" -a "$cpu" = "i386"   \) -o \
-  \( "$target_cpu" = "i386"   -a "$cpu" = "x86_64" \) \) -o \
+  \( "$target_cpu" = "i386"   -a "$cpu" = "x86_64" \) -o \
   \( "$target_cpu" = "ia64"   -a "$cpu" = "ia64" \) \) ; then
   target_kvm="no"
 fi
