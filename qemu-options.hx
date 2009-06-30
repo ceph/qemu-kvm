@@ -1101,10 +1101,11 @@ ETEXI
 
 DEFHEADING()
 
-DEFHEADING(Linux boot specific:)
+DEFHEADING(Linux/Multiboot boot specific:)
 STEXI
-When using these options, you can use a given
-Linux kernel without installing it in the disk image. It can be useful
+
+When using these options, you can use a given Linux or Multiboot
+kernel without installing it in the disk image. It can be useful
 for easier testing of various kernels.
 
 @table @option
@@ -1114,7 +1115,8 @@ DEF("kernel", HAS_ARG, QEMU_OPTION_kernel, \
     "-kernel bzImage use 'bzImage' as kernel image\n")
 STEXI
 @item -kernel @var{bzImage}
-Use @var{bzImage} as kernel image.
+Use @var{bzImage} as kernel image. The kernel can be either a Linux kernel
+or in multiboot format.
 ETEXI
 
 DEF("append", HAS_ARG, QEMU_OPTION_append, \
@@ -1129,6 +1131,13 @@ DEF("initrd", HAS_ARG, QEMU_OPTION_initrd, \
 STEXI
 @item -initrd @var{file}
 Use @var{file} as initial ram disk.
+
+@item -initrd "@var{file1} arg=foo,@var{file2}"
+
+This syntax is only available with multiboot.
+
+Use @var{file1} and @var{file2} as modules and pass arg=foo as parameter to the
+first module.
 ETEXI
 
 STEXI
