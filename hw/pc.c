@@ -1066,15 +1066,13 @@ int cpu_is_bsp(CPUState *env)
 	return env->cpuid_apic_id == 0;
 }
 
-CPUState *pc_new_cpu(int cpu, const char *cpu_model, int pci_enabled)
+CPUState *pc_new_cpu(const char *cpu_model)
 {
         CPUState *env = cpu_init(cpu_model);
         if (!env) {
             fprintf(stderr, "Unable to find x86 CPU definition\n");
             exit(1);
         }
-        if (cpu != 0)
-            env->halted = 1;
         if ((env->cpuid_features & CPUID_APIC) || smp_cpus > 1) {
             env->cpuid_apic_id = env->cpu_index;
             /* APIC reset callback resets cpu */
@@ -1087,7 +1085,7 @@ CPUState *pc_new_cpu(int cpu, const char *cpu_model, int pci_enabled)
      * it can access invalid state and crash.
      */
     qemu_init_vcpu(env);
-	return env;
+    return env;
 }
 
 /* PC hardware initialisation */
@@ -1132,9 +1130,9 @@ static void pc_init1(ram_addr_t ram_size,
         cpu_model = "qemu32";
 #endif
     }
-    
-    for(i = 0; i < smp_cpus; i++) {
-	env = pc_new_cpu(i, cpu_model, pci_enabled);
+
+    for (i = 0; i < smp_cpus; i++) {
+        env = pc_new_cpu(cpu_model);
     }
 
     vmport_init();

@@ -802,11 +802,12 @@ void qemu_system_cpu_hot_add(int cpu, int state)
         && (!qemu_kvm_cpu_env(cpu))
 #endif
     ) {
-        env = pc_new_cpu(cpu, model, 1);
+        env = pc_new_cpu(model);
         if (!env) {
             fprintf(stderr, "cpu %d creation failed\n", cpu);
             return;
         }
+        env->cpuid_apic_id = cpu;
     }
 
     if (state)
