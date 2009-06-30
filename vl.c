@@ -3668,7 +3668,6 @@ void vm_start(void)
 typedef struct QEMUResetEntry {
     QEMUResetHandler *func;
     void *opaque;
-    int order;
     struct QEMUResetEntry *next;
 } QEMUResetEntry;
 
@@ -3731,18 +3730,16 @@ static void do_vm_stop(int reason)
     }
 }
 
-void qemu_register_reset(QEMUResetHandler *func, int order, void *opaque)
+void qemu_register_reset(QEMUResetHandler *func, void *opaque)
 {
     QEMUResetEntry **pre, *re;
 
     pre = &first_reset_entry;
-    while (*pre != NULL && (*pre)->order >= order) {
+    while (*pre != NULL)
         pre = &(*pre)->next;
-    }
     re = qemu_mallocz(sizeof(QEMUResetEntry));
     re->func = func;
     re->opaque = opaque;
-    re->order = order;
     re->next = NULL;
     *pre = re;
 }
