@@ -17,10 +17,9 @@
 
 #include <slirp.h>
 
-int mbuf_alloced = 0;
+static int mbuf_alloced;
 struct mbuf m_freelist, m_usedlist;
 #define MBUF_THRESH 30
-int mbuf_max = 0;
 
 /*
  * Find a nice value for msize
@@ -57,8 +56,6 @@ m_get(void)
 		mbuf_alloced++;
 		if (mbuf_alloced > MBUF_THRESH)
 			flags = M_DOFREE;
-		if (mbuf_alloced > mbuf_max)
-			mbuf_max = mbuf_alloced;
 	} else {
 		m = m_freelist.m_next;
 		remque(m);
@@ -141,17 +138,11 @@ m_inc(struct mbuf *m, int size)
         if (m->m_flags & M_EXT) {
 	  datasize = m->m_data - m->m_ext;
 	  m->m_ext = (char *)realloc(m->m_ext,size);
-/*		if (m->m_ext == NULL)
- *			return (struct mbuf *)NULL;
- */
 	  m->m_data = m->m_ext + datasize;
         } else {
 	  char *dat;
 	  datasize = m->m_data - m->m_dat;
 	  dat = (char *)malloc(size);
-/*		if (dat == NULL)
- *			return (struct mbuf *)NULL;
- */
 	  memcpy(dat, m->m_dat, m->m_size);
 
 	  m->m_ext = dat;

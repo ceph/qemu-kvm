@@ -41,10 +41,8 @@
 /*
  * Macros for type conversion
  * mtod(m,t) -	convert mbuf pointer to data pointer of correct type
- * dtom(x) -	convert data pointer within mbuf to mbuf pointer (XXX)
  */
 #define mtod(m,t)	((t)(m)->m_data)
-/* #define	dtom(x)		((struct mbuf *)((int)(x) & ~(M_SIZE-1))) */
 
 /* XXX About mbufs for slirp:
  * Only one mbuf is ever used in a chain, for each "cell" of data.
@@ -116,19 +114,7 @@ struct mbuf {
 #define M_DOFREE		0x08	/* when m_free is called on the mbuf, free()
 					 * it rather than putting it on the free list */
 
-/*
- * Mbuf statistics. XXX
- */
-
-struct mbstat {
-	int mbs_alloced;		/* Number of mbufs allocated */
-
-};
-
-extern struct	mbstat mbstat;
-extern int mbuf_alloced;
 extern struct mbuf m_freelist, m_usedlist;
-extern int mbuf_max;
 
 void m_init _P((void));
 struct mbuf * m_get _P((void));

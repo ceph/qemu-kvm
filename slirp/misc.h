@@ -19,10 +19,6 @@ struct ex_list {
 extern struct ex_list *exec_list;
 extern u_int time_fasttimo, last_slowtimo;
 
-extern int (*lprint_print) _P((void *, const char *, va_list));
-extern char *lprint_ptr, *lprint_ptr2, **lprint_arg;
-extern struct sbuf *lprint_sb;
-
 #ifndef HAVE_STRDUP
 char *strdup _P((const char *));
 #endif
@@ -63,15 +59,10 @@ struct emu_t {
 	struct emu_t *next;
 };
 
-#ifndef CONFIG_QEMU
-extern struct emu_t *tcpemu;
-#endif
-
 extern int x_port, x_server, x_display;
 
 int show_x _P((char *, struct socket *));
 void redir_x _P((u_int32_t, int, int, int));
-void getouraddr _P((void));
 void slirp_insque _P((void *, void *));
 void slirp_remque _P((void *));
 int add_exec _P((struct ex_list **, int, char *, struct in_addr, int));

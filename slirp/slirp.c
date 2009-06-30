@@ -54,8 +54,6 @@ static const uint8_t zero_ethaddr[6] = { 0, 0, 0, 0, 0, 0 };
 int slirp_restrict;
 static int do_slowtimo;
 int link_up;
-struct timeval tt;
-FILE *lfd;
 struct ex_list *exec_list;
 
 /* XXX: suppress those select globals */
@@ -96,21 +94,16 @@ static int get_dns_addr(struct in_addr *pdns_addr)
     pIPAddr = &(FixedInfo->DnsServerList);
     inet_aton(pIPAddr->IpAddress.String, &tmp_addr);
     *pdns_addr = tmp_addr;
-#if 0
-    printf( "DNS Servers:\n" );
-    printf( "DNS Addr:%s\n", pIPAddr->IpAddress.String );
-
-    pIPAddr = FixedInfo -> DnsServerList.Next;
-    while ( pIPAddr ) {
-            printf( "DNS Addr:%s\n", pIPAddr ->IpAddress.String );
-            pIPAddr = pIPAddr ->Next;
-    }
-#endif
     if (FixedInfo) {
         GlobalFree(FixedInfo);
         FixedInfo = NULL;
     }
     return 0;
+}
+
+static void winsock_cleanup(void)
+{
+    WSACleanup();
 }
 
 #else
@@ -163,12 +156,43 @@ static int get_dns_addr(struct in_addr *pdns_addr)
 
 #endif
 
-#ifdef _WIN32
-static void slirp_cleanup(void)
+static void slirp_init_once(void)
 {
-    WSACleanup();
-}
+    static int initialized;
+    struct hostent *he;
+    char our_name[256];
+#ifdef _WIN32
+    WSADATA Data;
 #endif
+
+    if (initialized) {
+        return;
+    }
+    initialized = 1;
+
+#ifdef _WIN32
+    WSAStartup(MAKEWORD(2,0), &Data);
+    atexit(winsock_cleanup);
+#endif
+
+    loopback_addr.s_addr = htonl(INADDR_LOOPBACK);
+
+    /* FIXME: This address may change during runtime */
+    if (gethostname(our_name, sizeof(our_name)) == 0) {
+        he = gethostbyname(our_name);
+        if (he) {
+            our_addr = *(struct in_addr *)he->h_addr;
+        }
+    }
+    if (our_addr.s_addr == 0) {
+        our_addr = loopback_addr;
+    }
+
+    /* FIXME: This address may change during runtime */
+    if (get_dns_addr(&dns_addr) < 0) {
+        dns_addr = loopback_addr;
+    }
+}
 
 static void slirp_state_save(QEMUFile *f, void *opaque);
 static int slirp_state_load(QEMUFile *f, void *opaque, int version_id);
@@ -179,14 +203,7 @@ void slirp_init(int restricted, struct in_addr vnetwork,
                 const char *bootfile, struct in_addr vdhcp_start,
                 struct in_addr vnameserver)
 {
-    //    debug_init("/tmp/slirp.log", DEBUG_DEFAULT);
-
-#ifdef _WIN32
-    WSADATA Data;
-
-    WSAStartup(MAKEWORD(2,0), &Data);
-    atexit(slirp_cleanup);
-#endif
+    slirp_init_once();
 
     link_up = 1;
     slirp_restrict = restricted;
@@ -196,14 +213,6 @@ void slirp_init(int restricted, struct in_addr vnetwork,
 
     /* Initialise mbufs *after* setting the MTU */
     m_init();
-
-    /* set default addresses */
-    inet_aton("127.0.0.1", &loopback_addr);
-
-    if (get_dns_addr(&dns_addr) < 0) {
-        dns_addr = loopback_addr;
-        fprintf (stderr, "Warning: No DNS servers found\n");
-    }
 
     vnetwork_addr = vnetwork;
     vnetwork_mask = vnetmask;
@@ -224,8 +233,7 @@ void slirp_init(int restricted, struct in_addr vnetwork,
     vdhcp_startaddr = vdhcp_start;
     vnameserver_addr = vnameserver;
 
-    getouraddr();
-    register_savevm("slirp", 0, 1, slirp_state_save, slirp_state_load, NULL);
+    register_savevm("slirp", 0, 2, slirp_state_save, slirp_state_load, NULL);
 }
 
 #define CONN_CANFSEND(so) (((so)->so_state & (SS_FCANTSENDMORE|SS_ISFCONNECTED)) == SS_ISFCONNECTED)
@@ -241,19 +249,17 @@ static void updtime(void)
     struct _timeb tb;
 
     _ftime(&tb);
-    curtime = (u_int)tb.time * (u_int)1000;
-    curtime += (u_int)tb.millitm;
+
+    curtime = tb.time * 1000 + tb.millitm;
 }
 #else
 static void updtime(void)
 {
-        gettimeofday(&tt, NULL);
+    struct timeval tv;
 
-	curtime = (u_int)tt.tv_sec * (u_int)1000;
-	curtime += (u_int)tt.tv_usec / (u_int)1000;
+    gettimeofday(&tv, NULL);
 
-	if ((tt.tv_usec % 1000) >= 500)
-	   curtime++;
+    curtime = tv.tv_sec * 1000 + tv.tv_usec / 1000;
 }
 #endif
 
@@ -265,6 +271,10 @@ void slirp_select_fill(int *pnfds,
     int nfds;
     int tmp_time;
 
+    if (!link_up) {
+        return;
+    }
+
     /* fail safe */
     global_readfds = NULL;
     global_writefds = NULL;
@@ -275,7 +285,7 @@ void slirp_select_fill(int *pnfds,
 	 * First, TCP sockets
 	 */
 	do_slowtimo = 0;
-	if (link_up) {
+
 		/*
 		 * *_slowtimo needs calling if there are IP fragments
 		 * in the fragment queue, or there are TCP connections active
@@ -369,7 +379,6 @@ void slirp_select_fill(int *pnfds,
 				UPD_NFDS(so->s);
 			}
 		}
-	}
 
 	/*
 	 * Setup timeout to use minimum CPU usage, especially when idle
@@ -407,10 +416,15 @@ void slirp_select_fill(int *pnfds,
         *pnfds = nfds;
 }
 
-void slirp_select_poll(fd_set *readfds, fd_set *writefds, fd_set *xfds)
+void slirp_select_poll(fd_set *readfds, fd_set *writefds, fd_set *xfds,
+                       int select_error)
 {
     struct socket *so, *so_next;
     int ret;
+
+    if (!link_up) {
+        return;
+    }
 
     global_readfds = readfds;
     global_writefds = writefds;
@@ -422,7 +436,6 @@ void slirp_select_poll(fd_set *readfds, fd_set *writefds, fd_set *xfds)
 	/*
 	 * See if anything has timed out
 	 */
-	if (link_up) {
 		if (time_fasttimo && ((curtime - time_fasttimo) >= 2)) {
 			tcp_fasttimo();
 			time_fasttimo = 0;
@@ -432,12 +445,11 @@ void slirp_select_poll(fd_set *readfds, fd_set *writefds, fd_set *xfds)
 			tcp_slowtimo();
 			last_slowtimo = curtime;
 		}
-	}
 
 	/*
 	 * Check sockets
 	 */
-	if (link_up) {
+	if (!select_error) {
 		/*
 		 * Check TCP sockets
 		 */
@@ -570,7 +582,7 @@ void slirp_select_poll(fd_set *readfds, fd_set *writefds, fd_set *xfds)
 	/*
 	 * See if we can start outputting
 	 */
-	if (if_queued && link_up)
+	if (if_queued)
 	   if_start();
 
 	/* clear global file descriptor sets.
@@ -964,6 +976,8 @@ static void slirp_state_save(QEMUFile *f, void *opaque)
             slirp_socket_save(f, so);
         }
     qemu_put_byte(f, 0);
+
+    qemu_put_be16(f, ip_id);
 }
 
 static void slirp_tcp_load(QEMUFile *f, struct tcpcb *tp)
@@ -1092,6 +1106,10 @@ static int slirp_state_load(QEMUFile *f, void *opaque, int version_id)
             return -EINVAL;
 
         so->extra = (void *)ex_ptr->ex_exec;
+    }
+
+    if (version_id >= 2) {
+        ip_id = qemu_get_be16(f);
     }
 
     return 0;

@@ -121,9 +121,7 @@
 #include "qemu_socket.h"
 #include "qemu-log.h"
 
-#if defined(CONFIG_SLIRP)
-#include "libslirp.h"
-#endif
+#include "slirp/libslirp.h"
 
 
 static VLANState *first_vlan;
@@ -732,11 +730,6 @@ void slirp_output(const uint8_t *pkt, int pkt_len)
     qemu_send_packet(slirp_vc, pkt, pkt_len);
 }
 
-int slirp_is_inited(void)
-{
-    return slirp_inited;
-}
-
 static ssize_t slirp_receive(VLANClientState *vc, const uint8_t *buf, size_t size)
 {
 #ifdef DEBUG_SLIRP
@@ -1131,11 +1124,6 @@ void net_slirp_smb(const char *exported_dir)
 }
 
 #endif /* !defined(_WIN32) */
-
-void do_info_slirp(Monitor *mon)
-{
-    slirp_stats();
-}
 
 struct GuestFwd {
     CharDriverState *hd;

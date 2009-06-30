@@ -23,11 +23,11 @@
  */
 
 #include <slirp.h>
-#include "qemu-common.h" // for pstrcpy
+#include "qemu-common.h"
 
 struct tftp_session {
     int in_use;
-    unsigned char filename[TFTP_FILENAME_MAX];
+    char *filename;
 
     struct in_addr client_ip;
     u_int16_t client_port;
@@ -47,6 +47,7 @@ static void tftp_session_update(struct tftp_session *spt)
 
 static void tftp_session_terminate(struct tftp_session *spt)
 {
+  qemu_free(spt->filename);
   spt->in_use = 0;
 }
 
@@ -62,8 +63,10 @@ static int tftp_session_allocate(struct tftp_t *tp)
         goto found;
 
     /* sessions time out after 5 inactive seconds */
-    if ((int)(curtime - spt->timestamp) > 5000)
+    if ((int)(curtime - spt->timestamp) > 5000) {
+        qemu_free(spt->filename);
         goto found;
+    }
   }
 
   return -1;
@@ -103,15 +106,8 @@ static int tftp_read_data(struct tftp_session *spt, u_int16_t block_nr,
 {
   int fd;
   int bytes_read = 0;
-  char buffer[1024];
-  int n;
 
-  n = snprintf(buffer, sizeof(buffer), "%s/%s",
-	       tftp_prefix, spt->filename);
-  if (n >= sizeof(buffer))
-    return -1;
-
-  fd = open(buffer, O_RDONLY | O_BINARY);
+  fd = open(spt->filename, O_RDONLY | O_BINARY);
 
   if (fd < 0) {
     return -1;
@@ -167,11 +163,9 @@ static int tftp_send_oack(struct tftp_session *spt,
     return 0;
 }
 
-
-
-static int tftp_send_error(struct tftp_session *spt,
-			   u_int16_t errorcode, const char *msg,
-			   struct tftp_t *recv_tp)
+static void tftp_send_error(struct tftp_session *spt,
+                            u_int16_t errorcode, const char *msg,
+                            struct tftp_t *recv_tp)
 {
   struct sockaddr_in saddr, daddr;
   struct mbuf *m;
@@ -181,7 +175,7 @@ static int tftp_send_error(struct tftp_session *spt,
   m = m_get();
 
   if (!m) {
-    return -1;
+    goto out;
   }
 
   memset(m->m_data, 0, m->m_size);
@@ -207,9 +201,8 @@ static int tftp_send_error(struct tftp_session *spt,
 
   udp_output2(NULL, m, &saddr, &daddr, IPTOS_LOWDELAY);
 
+out:
   tftp_session_terminate(spt);
-
-  return 0;
 }
 
 static int tftp_send_data(struct tftp_session *spt,
@@ -276,8 +269,9 @@ static int tftp_send_data(struct tftp_session *spt,
 static void tftp_handle_rrq(struct tftp_t *tp, int pktlen)
 {
   struct tftp_session *spt;
-  int s, k, n;
-  u_int8_t *src, *dst;
+  int s, k;
+  size_t prefix_len;
+  char *req_fname;
 
   s = tftp_session_allocate(tp);
 
@@ -287,37 +281,42 @@ static void tftp_handle_rrq(struct tftp_t *tp, int pktlen)
 
   spt = &tftp_sessions[s];
 
-  src = tp->x.tp_buf;
-  dst = spt->filename;
-  n = pktlen - ((uint8_t *)&tp->x.tp_buf[0] - (uint8_t *)tp);
+  /* unspecifed prefix means service disabled */
+  if (!tftp_prefix) {
+      tftp_send_error(spt, 2, "Access violation", tp);
+      return;
+  }
+
+  /* skip header fields */
+  k = 0;
+  pktlen -= ((uint8_t *)&tp->x.tp_buf[0] - (uint8_t *)tp);
+
+  /* prepend tftp_prefix */
+  prefix_len = strlen(tftp_prefix);
+  spt->filename = qemu_malloc(prefix_len + TFTP_FILENAME_MAX + 1);
+  memcpy(spt->filename, tftp_prefix, prefix_len);
 
   /* get name */
+  req_fname = spt->filename + prefix_len;
 
-  for (k = 0; k < n; k++) {
-    if (k < TFTP_FILENAME_MAX) {
-      dst[k] = src[k];
-    }
-    else {
+  while (1) {
+    if (k >= TFTP_FILENAME_MAX || k >= pktlen) {
+      tftp_send_error(spt, 2, "Access violation", tp);
       return;
     }
-
-    if (src[k] == '\0') {
+    req_fname[k] = (char)tp->x.tp_buf[k];
+    if (req_fname[k++] == '\0') {
       break;
     }
   }
 
-  if (k >= n) {
-    return;
-  }
-
-  k++;
-
   /* check mode */
-  if ((n - k) < 6) {
+  if ((pktlen - k) < 6) {
+    tftp_send_error(spt, 2, "Access violation", tp);
     return;
   }
 
-  if (memcmp(&src[k], "octet\0", 6) != 0) {
+  if (memcmp(&tp->x.tp_buf[k], "octet\0", 6) != 0) {
       tftp_send_error(spt, 4, "Unsupported transfer mode", tp);
       return;
   }
@@ -325,59 +324,43 @@ static void tftp_handle_rrq(struct tftp_t *tp, int pktlen)
   k += 6; /* skipping octet */
 
   /* do sanity checks on the filename */
-
-  if ((spt->filename[0] != '/')
-      || (spt->filename[strlen((char *)spt->filename) - 1] == '/')
-      ||  strstr((char *)spt->filename, "/../")) {
-      tftp_send_error(spt, 2, "Access violation", tp);
-      return;
-  }
-
-  /* only allow exported prefixes */
-
-  if (!tftp_prefix) {
+  if (req_fname[0] != '/' || req_fname[strlen(req_fname) - 1] == '/' ||
+      strstr(req_fname, "/../")) {
       tftp_send_error(spt, 2, "Access violation", tp);
       return;
   }
 
   /* check if the file exists */
-
-  if (tftp_read_data(spt, 0, spt->filename, 0) < 0) {
+  if (tftp_read_data(spt, 0, NULL, 0) < 0) {
       tftp_send_error(spt, 1, "File not found", tp);
       return;
   }
 
-  if (src[n - 1] != 0) {
+  if (tp->x.tp_buf[pktlen - 1] != 0) {
       tftp_send_error(spt, 2, "Access violation", tp);
       return;
   }
 
-  while (k < n) {
+  while (k < pktlen) {
       const char *key, *value;
 
-      key = (char *)src + k;
+      key = (const char *)&tp->x.tp_buf[k];
       k += strlen(key) + 1;
 
-      if (k >= n) {
+      if (k >= pktlen) {
 	  tftp_send_error(spt, 2, "Access violation", tp);
 	  return;
       }
 
-      value = (char *)src + k;
+      value = (const char *)&tp->x.tp_buf[k];
       k += strlen(value) + 1;
 
       if (strcmp(key, "tsize") == 0) {
 	  int tsize = atoi(value);
 	  struct stat stat_p;
 
-	  if (tsize == 0 && tftp_prefix) {
-	      char buffer[1024];
-	      int len;
-
-	      len = snprintf(buffer, sizeof(buffer), "%s/%s",
-			     tftp_prefix, spt->filename);
-
-	      if (stat(buffer, &stat_p) == 0)
+	  if (tsize == 0) {
+	      if (stat(spt->filename, &stat_p) == 0)
 		  tsize = stat_p.st_size;
 	      else {
 		  tftp_send_error(spt, 1, "File not found", tp);
