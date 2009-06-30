@@ -359,11 +359,12 @@ tcp_input(struct mbuf *m, int iphlen, struct socket *inso)
 	m->m_len  -= sizeof(struct tcpiphdr)+off-sizeof(struct tcphdr);
 
     if (slirp_restrict) {
-        for (ex_ptr = exec_list; ex_ptr; ex_ptr = ex_ptr->ex_next)
+        for (ex_ptr = exec_list; ex_ptr; ex_ptr = ex_ptr->ex_next) {
             if (ex_ptr->ex_fport == ti->ti_dport &&
-                    (ntohl(ti->ti_dst.s_addr) & 0xff) == ex_ptr->ex_addr)
+                ti->ti_dst.s_addr == ex_ptr->ex_addr.s_addr) {
                 break;
-
+            }
+        }
         if (!ex_ptr)
             goto drop;
     }
@@ -639,9 +640,10 @@ findso:
 	   * If this is destined for the control address, then flag to
 	   * tcp_ctl once connected, otherwise connect
 	   */
-	  if ((so->so_faddr.s_addr&htonl(0xffffff00)) == special_addr.s_addr) {
-	    int lastbyte=ntohl(so->so_faddr.s_addr) & 0xff;
-	    if (lastbyte!=CTL_ALIAS && lastbyte!=CTL_DNS) {
+	  if ((so->so_faddr.s_addr & vnetwork_mask.s_addr) ==
+	      vnetwork_addr.s_addr) {
+	    if (so->so_faddr.s_addr != vhost_addr.s_addr &&
+		so->so_faddr.s_addr != vnameserver_addr.s_addr) {
 #if 0
 	      if(lastbyte==CTL_CMD || lastbyte==CTL_EXEC) {
 		/* Command or exec adress */
@@ -652,7 +654,7 @@ findso:
 		/* May be an add exec */
 		for(ex_ptr = exec_list; ex_ptr; ex_ptr = ex_ptr->ex_next) {
 		  if(ex_ptr->ex_fport == so->so_fport &&
-		     lastbyte == ex_ptr->ex_addr) {
+		     so->so_faddr.s_addr == ex_ptr->ex_addr.s_addr) {
 		    so->so_state |= SS_CTL;
 		    break;
 		  }
@@ -1036,7 +1038,8 @@ trimthenstep6:
 		    soisfconnected(so);
 		    so->so_state &= ~SS_CTL;   /* success XXX */
 		  } else if (ret == 2) {
-		    so->so_state = SS_NOFDREF; /* CTL_CMD */
+		    so->so_state &= SS_PERSISTENT_MASK;
+		    so->so_state |= SS_NOFDREF; /* CTL_CMD */
 		  } else {
 		    needoutput = 1;
 		    tp->t_state = TCPS_FIN_WAIT_1;

@@ -1842,20 +1842,23 @@ static int socket_init(void)
 }
 #endif
 
-int get_param_value(char *buf, int buf_size,
-                    const char *tag, const char *str)
+int get_next_param_value(char *buf, int buf_size,
+                         const char *tag, const char **pstr)
 {
     const char *p;
     char option[128];
 
-    p = str;
+    p = *pstr;
     for(;;) {
         p = get_opt_name(option, sizeof(option), p, '=');
         if (*p != '=')
             break;
         p++;
         if (!strcmp(tag, option)) {
-            (void)get_opt_value(buf, buf_size, p);
+            *pstr = get_opt_value(buf, buf_size, p);
+            if (**pstr == ',') {
+                (*pstr)++;
+            }
             return strlen(buf);
         } else {
             p = get_opt_value(NULL, 0, p);
@@ -1865,6 +1868,12 @@ int get_param_value(char *buf, int buf_size,
         p++;
     }
     return 0;
+}
+
+int get_param_value(char *buf, int buf_size,
+                    const char *tag, const char *str)
+{
+    return get_next_param_value(buf, buf_size, tag, &str);
 }
 
 int check_params(char *buf, int buf_size,
@@ -3416,13 +3425,13 @@ static int ram_load(QEMUFile *f, void *opaque, int version_id)
         
         if (flags & RAM_SAVE_FLAG_COMPRESS) {
             uint8_t ch = qemu_get_byte(f);
-#if defined(__linux__)
+            memset(qemu_get_ram_ptr(addr), ch, TARGET_PAGE_SIZE);
+#ifndef _WIN32
             if (ch == 0 &&
                 (!kvm_enabled() || kvm_has_sync_mmu())) {
                 madvise(qemu_get_ram_ptr(addr), TARGET_PAGE_SIZE, MADV_DONTNEED);
-            } else
+            }
 #endif
-            memset(qemu_get_ram_ptr(addr), ch, TARGET_PAGE_SIZE);
         } else if (flags & RAM_SAVE_FLAG_PAGE)
             qemu_get_buffer(f, qemu_get_ram_ptr(addr), TARGET_PAGE_SIZE);
     } while (!(flags & RAM_SAVE_FLAG_EOS));
@@ -5378,18 +5387,18 @@ int main(int argc, char **argv, char **envp)
                 break;
 #ifdef CONFIG_SLIRP
             case QEMU_OPTION_tftp:
-		tftp_prefix = optarg;
+                legacy_tftp_prefix = optarg;
                 break;
             case QEMU_OPTION_bootp:
-                bootp_filename = optarg;
+                legacy_bootp_filename = optarg;
                 break;
 #ifndef _WIN32
             case QEMU_OPTION_smb:
-		net_slirp_smb(optarg);
+                net_slirp_smb(optarg);
                 break;
 #endif
             case QEMU_OPTION_redir:
-                net_slirp_redir(NULL, optarg, NULL);
+                net_slirp_redir(optarg);
                 break;
 #endif
             case QEMU_OPTION_bt:

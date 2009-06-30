@@ -87,6 +87,8 @@ show the current VM UUID
 show CPU statistics
 @item info slirp
 show SLIRP statistics (if available)
+@item info usernet
+show user network stack connection states
 @item info migrate
 show migration status
 @item info balloon
@@ -536,10 +538,12 @@ Remove host VLAN client.
 ETEXI
 
 #ifdef CONFIG_SLIRP
-    { "host_net_redir", "ss?", net_slirp_redir,
-      "[tcp|udp]:host-port:[guest-host]:guest-port", "redirect TCP or UDP connections from host to guest (requires -net user)\n"
-      "host_net_redir remove [tcp:|udp:]host-port -- remove redirection\n"
-      "host_net_redir list -- show all redirections" },
+    { "hostfwd_add", "s", net_slirp_hostfwd_add,
+      "[tcp|udp]:[hostaddr]:hostport-[guestaddr]:guestport",
+      "redirect TCP or UDP connections from host to guest (requires -net user)" },
+    { "hostfwd_remove", "s", net_slirp_hostfwd_remove,
+      "[tcp|udp]:[hostaddr]:hostport",
+      "remove host-to-guest TCP or UDP redirection" },
 #endif
 STEXI
 @item host_net_redir

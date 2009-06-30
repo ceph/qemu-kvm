@@ -384,16 +384,12 @@ int tcp_fconnect(struct socket *so)
     setsockopt(s,SOL_SOCKET,SO_OOBINLINE,(char *)&opt,sizeof(opt ));
 
     addr.sin_family = AF_INET;
-    if ((so->so_faddr.s_addr & htonl(0xffffff00)) == special_addr.s_addr) {
+    if ((so->so_faddr.s_addr & vnetwork_mask.s_addr) == vnetwork_addr.s_addr) {
       /* It's an alias */
-      switch(ntohl(so->so_faddr.s_addr) & 0xff) {
-      case CTL_DNS:
+      if (so->so_faddr.s_addr == vnameserver_addr.s_addr) {
 	addr.sin_addr = dns_addr;
-	break;
-      case CTL_ALIAS:
-      default:
+      } else {
 	addr.sin_addr = loopback_addr;
-	break;
       }
     } else
       addr.sin_addr = so->so_faddr;
@@ -478,7 +474,7 @@ tcp_connect(struct socket *inso)
 	so->so_faddr = addr.sin_addr;
 	/* Translate connections from localhost to the real hostname */
 	if (so->so_faddr.s_addr == 0 || so->so_faddr.s_addr == loopback_addr.s_addr)
-	   so->so_faddr = alias_addr;
+	   so->so_faddr = vhost_addr;
 
 	/* Close the accept() socket, set right state */
 	if (inso->so_state & SS_FACCEPTONCE) {
@@ -487,6 +483,7 @@ tcp_connect(struct socket *inso)
 					   /* if it's not FACCEPTONCE, it's already NOFDREF */
 	}
 	so->s = s;
+	so->so_state |= SS_INCOMING;
 
 	so->so_iptos = tcp_tos(so);
 	tp = sototcpcb(so);
@@ -974,7 +971,7 @@ do_prompt:
 			laddr = htonl((n1 << 24) | (n2 << 16) | (n3 << 8) | (n4));
 			lport = htons((n5 << 8) | (n6));
 
-			if ((so = solisten(0, laddr, lport, SS_FACCEPTONCE)) == NULL)
+			if ((so = tcp_listen(INADDR_ANY, 0, laddr, lport, SS_FACCEPTONCE)) == NULL)
 			   return 1;
 
 			n6 = ntohs(so->so_fport);
@@ -1006,7 +1003,7 @@ do_prompt:
 			laddr = htonl((n1 << 24) | (n2 << 16) | (n3 << 8) | (n4));
 			lport = htons((n5 << 8) | (n6));
 
-			if ((so = solisten(0, laddr, lport, SS_FACCEPTONCE)) == NULL)
+			if ((so = tcp_listen(INADDR_ANY, 0, laddr, lport, SS_FACCEPTONCE)) == NULL)
 			   return 1;
 
 			n6 = ntohs(so->so_fport);
@@ -1046,7 +1043,7 @@ do_prompt:
 			lport += m->m_data[i] - '0';
 		}
 		if (m->m_data[m->m_len-1] == '\0' && lport != 0 &&
-		    (so = solisten(0, so->so_laddr.s_addr, htons(lport), SS_FACCEPTONCE)) != NULL)
+		    (so = tcp_listen(INADDR_ANY, 0, so->so_laddr.s_addr, htons(lport), SS_FACCEPTONCE)) != NULL)
                     m->m_len = snprintf(m->m_data, m->m_hdr.mh_size, "%d",
                                         ntohs(so->so_fport)) + 1;
 		return 1;
@@ -1061,7 +1058,7 @@ do_prompt:
 
 		/* The %256s is for the broken mIRC */
 		if (sscanf(bptr, "DCC CHAT %256s %u %u", buff, &laddr, &lport) == 3) {
-			if ((so = solisten(0, htonl(laddr), htons(lport), SS_FACCEPTONCE)) == NULL)
+			if ((so = tcp_listen(INADDR_ANY, 0, htonl(laddr), htons(lport), SS_FACCEPTONCE)) == NULL)
 				return 1;
 
 			m->m_len = bptr - m->m_data; /* Adjust length */
@@ -1070,7 +1067,7 @@ do_prompt:
                                              (unsigned long)ntohl(so->so_faddr.s_addr),
                                              ntohs(so->so_fport), 1);
 		} else if (sscanf(bptr, "DCC SEND %256s %u %u %u", buff, &laddr, &lport, &n1) == 4) {
-			if ((so = solisten(0, htonl(laddr), htons(lport), SS_FACCEPTONCE)) == NULL)
+			if ((so = tcp_listen(INADDR_ANY, 0, htonl(laddr), htons(lport), SS_FACCEPTONCE)) == NULL)
 				return 1;
 
 			m->m_len = bptr - m->m_data; /* Adjust length */
@@ -1079,7 +1076,7 @@ do_prompt:
                                              (unsigned long)ntohl(so->so_faddr.s_addr),
                                              ntohs(so->so_fport), n1, 1);
 		} else if (sscanf(bptr, "DCC MOVE %256s %u %u %u", buff, &laddr, &lport, &n1) == 4) {
-			if ((so = solisten(0, htonl(laddr), htons(lport), SS_FACCEPTONCE)) == NULL)
+			if ((so = tcp_listen(INADDR_ANY, 0, htonl(laddr), htons(lport), SS_FACCEPTONCE)) == NULL)
 				return 1;
 
 			m->m_len = bptr - m->m_data; /* Adjust length */
@@ -1194,7 +1191,8 @@ do_prompt:
 
 				/* try to get udp port between 6970 - 7170 */
 				for (p = 6970; p < 7071; p++) {
-					if (udp_listen( htons(p),
+					if (udp_listen(INADDR_ANY,
+						       htons(p),
 						       so->so_laddr.s_addr,
 						       htons(lport),
 						       SS_FACCEPTONCE)) {
@@ -1228,84 +1226,34 @@ do_prompt:
  * Return 0 if this connections is to be closed, 1 otherwise,
  * return 2 if this is a command-line connection
  */
-int
-tcp_ctl(struct socket *so)
+int tcp_ctl(struct socket *so)
 {
-	struct sbuf *sb = &so->so_snd;
-	int command;
- 	struct ex_list *ex_ptr;
-	int do_pty;
-        //	struct socket *tmpso;
+    struct sbuf *sb = &so->so_snd;
+    struct ex_list *ex_ptr;
+    int do_pty;
 
-	DEBUG_CALL("tcp_ctl");
-	DEBUG_ARG("so = %lx", (long )so);
+    DEBUG_CALL("tcp_ctl");
+    DEBUG_ARG("so = %lx", (long )so);
 
-#if 0
-	/*
-	 * Check if they're authorised
-	 */
-	if (ctl_addr.s_addr && (ctl_addr.s_addr == -1 || (so->so_laddr.s_addr != ctl_addr.s_addr))) {
-		sb->sb_cc = sprintf(sb->sb_wptr,"Error: Permission denied.\r\n");
-		sb->sb_wptr += sb->sb_cc;
-		return 0;
-	}
-#endif
-	command = (ntohl(so->so_faddr.s_addr) & 0xff);
-
-	switch(command) {
-	default: /* Check for exec's */
-
-		/*
-		 * Check if it's pty_exec
-		 */
-		for (ex_ptr = exec_list; ex_ptr; ex_ptr = ex_ptr->ex_next) {
-			if (ex_ptr->ex_fport == so->so_fport &&
-			    command == ex_ptr->ex_addr) {
-				if (ex_ptr->ex_pty == 3) {
-					so->s = -1;
-					so->extra = (void *)ex_ptr->ex_exec;
-					return 1;
-				}
-				do_pty = ex_ptr->ex_pty;
-				goto do_exec;
-			}
-		}
-
-		/*
-		 * Nothing bound..
-		 */
-		/* tcp_fconnect(so); */
-
-		/* FALLTHROUGH */
-	case CTL_ALIAS:
-          sb->sb_cc = snprintf(sb->sb_wptr, sb->sb_datalen - (sb->sb_wptr - sb->sb_data),
-                               "Error: No application configured.\r\n");
-	  sb->sb_wptr += sb->sb_cc;
-	  return(0);
-
-	do_exec:
-		DEBUG_MISC((dfd, " executing %s \n",ex_ptr->ex_exec));
-		return(fork_exec(so, ex_ptr->ex_exec, do_pty));
-
-#if 0
-	case CTL_CMD:
-	   for (tmpso = tcb.so_next; tmpso != &tcb; tmpso = tmpso->so_next) {
-	     if (tmpso->so_emu == EMU_CTL &&
-		 !(tmpso->so_tcpcb?
-		   (tmpso->so_tcpcb->t_state & (TCPS_TIME_WAIT|TCPS_LAST_ACK))
-		   :0)) {
-	       /* Ooops, control connection already active */
-	       sb->sb_cc = sprintf(sb->sb_wptr,"Sorry, already connected.\r\n");
-	       sb->sb_wptr += sb->sb_cc;
-	       return 0;
-	     }
-	   }
-	   so->so_emu = EMU_CTL;
-	   ctl_password_ok = 0;
-	   sb->sb_cc = sprintf(sb->sb_wptr, "Slirp command-line ready (type \"help\" for help).\r\nSlirp> ");
-	   sb->sb_wptr += sb->sb_cc;
-	   do_echo=-1;
-	   return(2);
-#endif
-	}
+    if (so->so_faddr.s_addr != vhost_addr.s_addr) {
+        /* Check if it's pty_exec */
+        for (ex_ptr = exec_list; ex_ptr; ex_ptr = ex_ptr->ex_next) {
+            if (ex_ptr->ex_fport == so->so_fport &&
+                so->so_faddr.s_addr == ex_ptr->ex_addr.s_addr) {
+                if (ex_ptr->ex_pty == 3) {
+                    so->s = -1;
+                    so->extra = (void *)ex_ptr->ex_exec;
+                    return 1;
+                }
+                do_pty = ex_ptr->ex_pty;
+                DEBUG_MISC((dfd, " executing %s \n",ex_ptr->ex_exec));
+                return fork_exec(so, ex_ptr->ex_exec, do_pty);
+            }
+        }
+    }
+    sb->sb_cc =
+        snprintf(sb->sb_wptr, sb->sb_datalen - (sb->sb_wptr - sb->sb_data),
+                 "Error: No application configured.\r\n");
+    sb->sb_wptr += sb->sb_cc;
+    return 0;
 }

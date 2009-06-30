@@ -71,6 +71,10 @@ struct socket {
 #define SS_FACCEPTCONN		0x100	/* Socket is accepting connections from a host on the internet */
 #define SS_FACCEPTONCE		0x200	/* If set, the SS_FACCEPTCONN socket will die after one accept */
 
+#define SS_PERSISTENT_MASK	0xf000	/* Unremovable state bits */
+#define SS_HOSTFWD		0x1000	/* Socket describes host->guest forwarding */
+#define SS_INCOMING		0x2000	/* Connection was initiated by a host on the internet */
+
 extern struct socket tcb;
 
 struct socket * solookup _P((struct socket *, struct in_addr, u_int, struct in_addr, u_int));
@@ -82,7 +86,7 @@ int sosendoob _P((struct socket *));
 int sowrite _P((struct socket *));
 void sorecvfrom _P((struct socket *));
 int sosendto _P((struct socket *, struct mbuf *));
-struct socket * solisten _P((u_int, u_int32_t, u_int, int));
+struct socket * tcp_listen _P((u_int32_t, u_int, u_int32_t, u_int, int));
 void soisfconnecting _P((register struct socket *));
 void soisfconnected _P((register struct socket *));
 void soisfdisconnected _P((struct socket *));

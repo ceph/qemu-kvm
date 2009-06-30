@@ -555,16 +555,13 @@ sosendto(struct socket *so, struct mbuf *m)
 	DEBUG_ARG("m = %lx", (long)m);
 
         addr.sin_family = AF_INET;
-	if ((so->so_faddr.s_addr & htonl(0xffffff00)) == special_addr.s_addr) {
+	if ((so->so_faddr.s_addr & vnetwork_mask.s_addr) ==
+	    vnetwork_addr.s_addr) {
 	  /* It's an alias */
-	  switch(ntohl(so->so_faddr.s_addr) & 0xff) {
-	  case CTL_DNS:
+	  if (so->so_faddr.s_addr == vnameserver_addr.s_addr) {
 	    addr.sin_addr = dns_addr;
-	    break;
-	  case CTL_ALIAS:
-	  default:
+	  } else {
 	    addr.sin_addr = loopback_addr;
-	    break;
 	  }
 	} else
 	  addr.sin_addr = so->so_faddr;
@@ -584,22 +581,23 @@ sosendto(struct socket *so, struct mbuf *m)
 	 */
 	if (so->so_expire)
 		so->so_expire = curtime + SO_EXPIRE;
-	so->so_state = SS_ISFCONNECTED; /* So that it gets select()ed */
+	so->so_state &= SS_PERSISTENT_MASK;
+	so->so_state |= SS_ISFCONNECTED; /* So that it gets select()ed */
 	return 0;
 }
 
 /*
- * XXX This should really be tcp_listen
+ * Listen for incoming TCP connections
  */
 struct socket *
-solisten(u_int port, u_int32_t laddr, u_int lport, int flags)
+tcp_listen(u_int32_t haddr, u_int hport, u_int32_t laddr, u_int lport, int flags)
 {
 	struct sockaddr_in addr;
 	struct socket *so;
 	int s, opt = 1;
 	socklen_t addrlen = sizeof(addr);
 
-	DEBUG_CALL("solisten");
+	DEBUG_CALL("tcp_listen");
 	DEBUG_ARG("port = %d", port);
 	DEBUG_ARG("laddr = %x", laddr);
 	DEBUG_ARG("lport = %d", lport);
@@ -623,13 +621,14 @@ solisten(u_int port, u_int32_t laddr, u_int lport, int flags)
 	if (flags & SS_FACCEPTONCE)
 	   so->so_tcpcb->t_timer[TCPT_KEEP] = TCPTV_KEEP_INIT*2;
 
-	so->so_state = (SS_FACCEPTCONN|flags);
+	so->so_state &= SS_PERSISTENT_MASK;
+	so->so_state |= (SS_FACCEPTCONN | flags);
 	so->so_lport = lport; /* Kept in network format */
 	so->so_laddr.s_addr = laddr; /* Ditto */
 
 	addr.sin_family = AF_INET;
-	addr.sin_addr.s_addr = INADDR_ANY;
-	addr.sin_port = port;
+	addr.sin_addr.s_addr = haddr;
+	addr.sin_port = hport;
 
 	if (((s = socket(AF_INET,SOCK_STREAM,0)) < 0) ||
 	    (setsockopt(s,SOL_SOCKET,SO_REUSEADDR,(char *)&opt,sizeof(int)) < 0) ||
@@ -652,7 +651,7 @@ solisten(u_int port, u_int32_t laddr, u_int lport, int flags)
 	getsockname(s,(struct sockaddr *)&addr,&addrlen);
 	so->so_fport = addr.sin_port;
 	if (addr.sin_addr.s_addr == 0 || addr.sin_addr.s_addr == loopback_addr.s_addr)
-	   so->so_faddr = alias_addr;
+	   so->so_faddr = vhost_addr;
 	else
 	   so->so_faddr = addr.sin_addr;
 
@@ -718,10 +717,12 @@ sofcantrcvmore(struct socket *so)
 		}
 	}
 	so->so_state &= ~(SS_ISFCONNECTING);
-	if (so->so_state & SS_FCANTSENDMORE)
-	   so->so_state = SS_NOFDREF; /* Don't select it */ /* XXX close() here as well? */
-	else
+	if (so->so_state & SS_FCANTSENDMORE) {
+	   so->so_state &= SS_PERSISTENT_MASK;
+	   so->so_state |= SS_NOFDREF; /* Don't select it */
+	} else {
 	   so->so_state |= SS_FCANTRCVMORE;
+	}
 }
 
 static void
@@ -737,10 +738,12 @@ sofcantsendmore(struct socket *so)
             }
 	}
 	so->so_state &= ~(SS_ISFCONNECTING);
-	if (so->so_state & SS_FCANTRCVMORE)
-	   so->so_state = SS_NOFDREF; /* as above */
-	else
+	if (so->so_state & SS_FCANTRCVMORE) {
+	   so->so_state &= SS_PERSISTENT_MASK;
+	   so->so_state |= SS_NOFDREF; /* as above */
+	} else {
 	   so->so_state |= SS_FCANTSENDMORE;
+	}
 }
 
 void

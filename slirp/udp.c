@@ -173,8 +173,6 @@ udp_input(register struct mbuf *m, int iphlen)
 		for (tmp = udb.so_next; tmp != &udb; tmp = tmp->so_next) {
 			if (tmp->so_lport == uh->uh_sport &&
 			    tmp->so_laddr.s_addr == ip->ip_src.s_addr) {
-				tmp->so_faddr.s_addr = ip->ip_dst.s_addr;
-				tmp->so_fport = uh->uh_dport;
 				so = tmp;
 				break;
 			}
@@ -314,12 +312,14 @@ int udp_output(struct socket *so, struct mbuf *m,
     struct sockaddr_in saddr, daddr;
 
     saddr = *addr;
-    if ((so->so_faddr.s_addr & htonl(0xffffff00)) == special_addr.s_addr) {
-        if ((so->so_faddr.s_addr & htonl(0x000000ff)) == htonl(0xff))
-            saddr.sin_addr.s_addr = alias_addr.s_addr;
-        else if (addr->sin_addr.s_addr == loopback_addr.s_addr ||
-                 (ntohl(so->so_faddr.s_addr) & 0xff) != CTL_ALIAS)
-            saddr.sin_addr.s_addr = so->so_faddr.s_addr;
+    if ((so->so_faddr.s_addr & vnetwork_mask.s_addr) == vnetwork_addr.s_addr) {
+        if ((so->so_faddr.s_addr & ~vnetwork_mask.s_addr) ==
+            ~vnetwork_mask.s_addr) {
+            saddr.sin_addr = vhost_addr;
+        } else if (addr->sin_addr.s_addr == loopback_addr.s_addr ||
+                   so->so_faddr.s_addr != vhost_addr.s_addr) {
+            saddr.sin_addr = so->so_faddr;
+        }
     }
     daddr.sin_addr = so->so_laddr;
     daddr.sin_port = so->so_lport;
@@ -627,7 +627,8 @@ struct cu_header {
 }
 
 struct socket *
-udp_listen(u_int port, u_int32_t laddr, u_int lport, int flags)
+udp_listen(u_int32_t haddr, u_int hport, u_int32_t laddr, u_int lport,
+           int flags)
 {
 	struct sockaddr_in addr;
 	struct socket *so;
@@ -642,8 +643,8 @@ udp_listen(u_int port, u_int32_t laddr, u_int lport, int flags)
 	insque(so,&udb);
 
 	addr.sin_family = AF_INET;
-	addr.sin_addr.s_addr = INADDR_ANY;
-	addr.sin_port = port;
+	addr.sin_addr.s_addr = haddr;
+	addr.sin_port = hport;
 
 	if (bind(so->s,(struct sockaddr *)&addr, addrlen) < 0) {
 		udp_detach(so);
@@ -654,17 +655,19 @@ udp_listen(u_int port, u_int32_t laddr, u_int lport, int flags)
 
 	getsockname(so->s,(struct sockaddr *)&addr,&addrlen);
 	so->so_fport = addr.sin_port;
-	if (addr.sin_addr.s_addr == 0 || addr.sin_addr.s_addr == loopback_addr.s_addr)
-	   so->so_faddr = alias_addr;
-	else
+	if (addr.sin_addr.s_addr == 0 ||
+	    addr.sin_addr.s_addr == loopback_addr.s_addr) {
+	   so->so_faddr = vhost_addr;
+	} else {
 	   so->so_faddr = addr.sin_addr;
-
+	}
 	so->so_lport = lport;
 	so->so_laddr.s_addr = laddr;
 	if (flags != SS_FACCEPTONCE)
 	   so->so_expire = 0;
 
-	so->so_state = SS_ISFCONNECTED;
+	so->so_state &= SS_PERSISTENT_MASK;
+	so->so_state |= SS_ISFCONNECTED | flags;
 
 	return so;
 }

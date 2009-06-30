@@ -86,12 +86,17 @@ void qemu_handler_true(void *opaque);
 void do_info_network(Monitor *mon);
 int do_set_link(Monitor *mon, const char *name, const char *up_or_down);
 
+void do_info_usernet(Monitor *mon);
+
 int tap_has_vnet_hdr(void *opaque);
 void tap_using_vnet_hdr(void *opaque, int using_vnet_hdr);
 
 /* NIC info */
 
 #define MAX_NICS 8
+enum {
+	NIC_NVECTORS_UNSPECIFIED = -1
+};
 
 struct NICInfo {
     uint8_t macaddr[6];
@@ -102,6 +107,7 @@ struct NICInfo {
     void *private;
     int used;
     int bootable;
+    int nvectors;
 };
 
 extern int nb_nics;
@@ -129,11 +135,16 @@ uint16_t net_checksum_tcpudp(uint16_t length, uint16_t proto,
 void net_checksum_calculate(uint8_t *data, int length);
 
 /* from net.c */
+extern const char *legacy_tftp_prefix;
+extern const char *legacy_bootp_filename;
+
 int net_client_init(Monitor *mon, const char *device, const char *p);
 void net_client_uninit(NICInfo *nd);
 int net_client_parse(const char *str);
 void net_slirp_smb(const char *exported_dir);
-void net_slirp_redir(Monitor *mon, const char *redir_str, const char *redir_opt2);
+void net_slirp_hostfwd_add(Monitor *mon, const char *redir_str);
+void net_slirp_hostfwd_remove(Monitor *mon, const char *src_str);
+void net_slirp_redir(const char *redir_str);
 void net_cleanup(void);
 int slirp_is_inited(void);
 void net_client_check(void);

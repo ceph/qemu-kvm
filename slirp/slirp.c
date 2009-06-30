@@ -33,13 +33,16 @@ struct in_addr dns_addr;
 /* host loopback address */
 struct in_addr loopback_addr;
 
-/* address for slirp virtual addresses */
-struct in_addr special_addr;
-/* virtual address alias for host */
-struct in_addr alias_addr;
+/* virtual network configuration */
+struct in_addr vnetwork_addr;
+struct in_addr vnetwork_mask;
+struct in_addr vhost_addr;
+struct in_addr vdhcp_startaddr;
+struct in_addr vnameserver_addr;
 
+/* emulated hosts use the MAC addr 52:55:IP:IP:IP:IP */
 static const uint8_t special_ethaddr[6] = {
-    0x52, 0x54, 0x00, 0x12, 0x35, 0x00
+    0x52, 0x55, 0x00, 0x00, 0x00, 0x00
 };
 
 /* ARP cache for the guest IP addresses (XXX: allow many entries) */
@@ -48,7 +51,6 @@ static struct in_addr client_ipaddr;
 
 static const uint8_t zero_ethaddr[6] = { 0, 0, 0, 0, 0, 0 };
 
-const char *slirp_special_ip = CTL_SPECIAL;
 int slirp_restrict;
 static int do_slowtimo;
 int link_up;
@@ -171,16 +173,19 @@ static void slirp_cleanup(void)
 static void slirp_state_save(QEMUFile *f, void *opaque);
 static int slirp_state_load(QEMUFile *f, void *opaque, int version_id);
 
-void slirp_init(int restricted, const char *special_ip)
+void slirp_init(int restricted, struct in_addr vnetwork,
+                struct in_addr vnetmask, struct in_addr vhost,
+                const char *vhostname, const char *tftp_path,
+                const char *bootfile, struct in_addr vdhcp_start,
+                struct in_addr vnameserver)
 {
     //    debug_init("/tmp/slirp.log", DEBUG_DEFAULT);
 
 #ifdef _WIN32
-    {
-        WSADATA Data;
-        WSAStartup(MAKEWORD(2,0), &Data);
-	atexit(slirp_cleanup);
-    }
+    WSADATA Data;
+
+    WSAStartup(MAKEWORD(2,0), &Data);
+    atexit(slirp_cleanup);
 #endif
 
     link_up = 1;
@@ -200,11 +205,25 @@ void slirp_init(int restricted, const char *special_ip)
         fprintf (stderr, "Warning: No DNS servers found\n");
     }
 
-    if (special_ip)
-        slirp_special_ip = special_ip;
+    vnetwork_addr = vnetwork;
+    vnetwork_mask = vnetmask;
+    vhost_addr = vhost;
+    if (vhostname) {
+        pstrcpy(slirp_hostname, sizeof(slirp_hostname), vhostname);
+    }
+    qemu_free(tftp_prefix);
+    tftp_prefix = NULL;
+    if (tftp_path) {
+        tftp_prefix = qemu_strdup(tftp_path);
+    }
+    qemu_free(bootp_filename);
+    bootp_filename = NULL;
+    if (bootfile) {
+        bootp_filename = qemu_strdup(bootfile);
+    }
+    vdhcp_startaddr = vdhcp_start;
+    vnameserver_addr = vnameserver;
 
-    inet_aton(slirp_special_ip, &special_addr);
-    alias_addr.s_addr = special_addr.s_addr | htonl(CTL_ALIAS);
     getouraddr();
     register_savevm("slirp", 0, 1, slirp_state_save, slirp_state_load, NULL);
 }
@@ -476,7 +495,8 @@ void slirp_select_poll(fd_set *readfds, fd_set *writefds, fd_set *xfds)
 				continue;
 
 			      /* else failed */
-			      so->so_state = SS_NOFDREF;
+			      so->so_state &= SS_PERSISTENT_MASK;
+			      so->so_state |= SS_NOFDREF;
 			    }
 			    /* else so->so_state &= ~SS_ISFCONNECTING; */
 
@@ -510,7 +530,8 @@ void slirp_select_poll(fd_set *readfds, fd_set *writefds, fd_set *xfds)
 			      continue; /* Still connecting, continue */
 
 			    /* else failed */
-			    so->so_state = SS_NOFDREF;
+			    so->so_state &= SS_PERSISTENT_MASK;
+			    so->so_state |= SS_NOFDREF;
 
 			    /* tcp_input will take care of it */
 			  } else {
@@ -521,7 +542,8 @@ void slirp_select_poll(fd_set *readfds, fd_set *writefds, fd_set *xfds)
 				  errno == EINPROGRESS || errno == ENOTCONN)
 				continue;
 			      /* else failed */
-			      so->so_state = SS_NOFDREF;
+			      so->so_state &= SS_PERSISTENT_MASK;
+			      so->so_state |= SS_NOFDREF;
 			    } else
 			      so->so_state &= ~SS_ISFCONNECTING;
 
@@ -589,10 +611,10 @@ struct arphdr
 	  *	 Ethernet looks like this : This bit is variable sized however...
 	  */
 	unsigned char		ar_sha[ETH_ALEN];	/* sender hardware address	*/
-	unsigned char		ar_sip[4];		/* sender IP address		*/
+	uint32_t		ar_sip;			/* sender IP address		*/
 	unsigned char		ar_tha[ETH_ALEN];	/* target hardware address	*/
-	unsigned char		ar_tip[4];		/* target IP address		*/
-};
+	uint32_t		ar_tip	;		/* target IP address		*/
+} __attribute__((packed));
 
 static void arp_input(const uint8_t *pkt, int pkt_len)
 {
@@ -607,11 +629,12 @@ static void arp_input(const uint8_t *pkt, int pkt_len)
     ar_op = ntohs(ah->ar_op);
     switch(ar_op) {
     case ARPOP_REQUEST:
-        if (!memcmp(ah->ar_tip, &special_addr, 3)) {
-            if (ah->ar_tip[3] == CTL_DNS || ah->ar_tip[3] == CTL_ALIAS)
+        if ((ah->ar_tip & vnetwork_mask.s_addr) == vnetwork_addr.s_addr) {
+            if (ah->ar_tip == vnameserver_addr.s_addr ||
+                ah->ar_tip == vhost_addr.s_addr)
                 goto arp_ok;
             for (ex_ptr = exec_list; ex_ptr; ex_ptr = ex_ptr->ex_next) {
-                if (ex_ptr->ex_addr == ah->ar_tip[3])
+                if (ex_ptr->ex_addr.s_addr == ah->ar_tip)
                     goto arp_ok;
             }
             return;
@@ -621,8 +644,8 @@ static void arp_input(const uint8_t *pkt, int pkt_len)
 
             /* ARP request for alias/dns mac address */
             memcpy(reh->h_dest, pkt + ETH_ALEN, ETH_ALEN);
-            memcpy(reh->h_source, special_ethaddr, ETH_ALEN - 1);
-            reh->h_source[5] = ah->ar_tip[3];
+            memcpy(reh->h_source, special_ethaddr, ETH_ALEN - 4);
+            memcpy(&reh->h_source[2], &ah->ar_tip, 4);
             reh->h_proto = htons(ETH_P_ARP);
 
             rah->ar_hrd = htons(1);
@@ -631,16 +654,16 @@ static void arp_input(const uint8_t *pkt, int pkt_len)
             rah->ar_pln = 4;
             rah->ar_op = htons(ARPOP_REPLY);
             memcpy(rah->ar_sha, reh->h_source, ETH_ALEN);
-            memcpy(rah->ar_sip, ah->ar_tip, 4);
+            rah->ar_sip = ah->ar_tip;
             memcpy(rah->ar_tha, ah->ar_sha, ETH_ALEN);
-            memcpy(rah->ar_tip, ah->ar_sip, 4);
+            rah->ar_tip = ah->ar_sip;
             slirp_output(arp_reply, sizeof(arp_reply));
         }
         break;
     case ARPOP_REPLY:
         /* reply to request of client mac address ? */
         if (!memcmp(client_ethaddr, zero_ethaddr, ETH_ALEN) &&
-            !memcmp(ah->ar_sip, &client_ipaddr.s_addr, 4)) {
+            ah->ar_sip == client_ipaddr.s_addr) {
             memcpy(client_ethaddr, ah->ar_sha, ETH_ALEN);
         }
         break;
@@ -704,8 +727,8 @@ void if_encap(const uint8_t *ip_data, int ip_data_len)
            in place of sending the packet and we hope that the sender
            will retry sending its packet. */
         memset(reh->h_dest, 0xff, ETH_ALEN);
-        memcpy(reh->h_source, special_ethaddr, ETH_ALEN - 1);
-        reh->h_source[5] = CTL_ALIAS;
+        memcpy(reh->h_source, special_ethaddr, ETH_ALEN - 4);
+        memcpy(&reh->h_source[2], &vhost_addr, 4);
         reh->h_proto = htons(ETH_P_ARP);
         rah->ar_hrd = htons(1);
         rah->ar_pro = htons(ETH_P_IP);
@@ -713,94 +736,83 @@ void if_encap(const uint8_t *ip_data, int ip_data_len)
         rah->ar_pln = 4;
         rah->ar_op = htons(ARPOP_REQUEST);
         /* source hw addr */
-        memcpy(rah->ar_sha, special_ethaddr, ETH_ALEN - 1);
-        rah->ar_sha[5] = CTL_ALIAS;
+        memcpy(rah->ar_sha, special_ethaddr, ETH_ALEN - 4);
+        memcpy(&rah->ar_sha[2], &vhost_addr, 4);
         /* source IP */
-        memcpy(rah->ar_sip, &alias_addr, 4);
+        rah->ar_sip = vhost_addr.s_addr;
         /* target hw addr (none) */
         memset(rah->ar_tha, 0, ETH_ALEN);
         /* target IP */
-        memcpy(rah->ar_tip, &iph->ip_dst, 4);
+        rah->ar_tip = iph->ip_dst.s_addr;
         client_ipaddr = iph->ip_dst;
         slirp_output(arp_req, sizeof(arp_req));
     } else {
         memcpy(eh->h_dest, client_ethaddr, ETH_ALEN);
-        memcpy(eh->h_source, special_ethaddr, ETH_ALEN - 1);
+        memcpy(eh->h_source, special_ethaddr, ETH_ALEN - 4);
         /* XXX: not correct */
-        eh->h_source[5] = CTL_ALIAS;
+        memcpy(&eh->h_source[2], &vhost_addr, 4);
         eh->h_proto = htons(ETH_P_IP);
         memcpy(buf + sizeof(struct ethhdr), ip_data, ip_data_len);
         slirp_output(buf, ip_data_len + ETH_HLEN);
     }
 }
 
-static void _slirp_redir_loop(void (*func)(void *opaque, int is_udp,
-                                           struct in_addr *laddr, u_int lport,
-                                           struct in_addr *faddr, u_int fport),
-                              void *opaque, int is_udp)
-{
-    struct socket *head = (is_udp ? &udb : &tcb);
-    struct socket *so;
-
-    for (so = head->so_next; so != head; so = so->so_next) {
-        func(opaque, is_udp,
-             &so->so_laddr, ntohs(so->so_lport),
-             &so->so_faddr, ntohs(so->so_fport));
-    }
-}
-
-void slirp_redir_loop(void (*func)(void *opaque, int is_udp,
-                                  struct in_addr *laddr, u_int lport,
-                                  struct in_addr *faddr, u_int fport),
-                     void *opaque)
-{
-    _slirp_redir_loop(func, opaque, 0);
-    _slirp_redir_loop(func, opaque, 1);
-}
-
-/* Unlistens a redirection
- *
- * Return value: number of redirs removed */
-int slirp_redir_rm(int is_udp, int host_port)
+/* Drop host forwarding rule, return 0 if found. */
+int slirp_remove_hostfwd(int is_udp, struct in_addr host_addr, int host_port)
 {
     struct socket *so;
     struct socket *head = (is_udp ? &udb : &tcb);
-    int fport = htons(host_port);
-    int n = 0;
+    struct sockaddr_in addr;
+    int port = htons(host_port);
+    socklen_t addr_len;
 
- loop_again:
     for (so = head->so_next; so != head; so = so->so_next) {
-        if (so->so_fport == fport) {
+        addr_len = sizeof(addr);
+        if ((so->so_state & SS_HOSTFWD) &&
+            getsockname(so->s, (struct sockaddr *)&addr, &addr_len) == 0 &&
+            addr.sin_addr.s_addr == host_addr.s_addr &&
+            addr.sin_port == port) {
             close(so->s);
             sofree(so);
-            n++;
-            goto loop_again;
+            return 0;
         }
     }
 
-    return n;
+    return -1;
 }
 
-int slirp_redir(int is_udp, int host_port,
-                struct in_addr guest_addr, int guest_port)
+int slirp_add_hostfwd(int is_udp, struct in_addr host_addr, int host_port,
+                      struct in_addr guest_addr, int guest_port)
 {
+    if (!guest_addr.s_addr) {
+        guest_addr = vdhcp_startaddr;
+    }
     if (is_udp) {
-        if (!udp_listen(htons(host_port), guest_addr.s_addr,
-                        htons(guest_port), 0))
+        if (!udp_listen(host_addr.s_addr, htons(host_port), guest_addr.s_addr,
+                        htons(guest_port), SS_HOSTFWD))
             return -1;
     } else {
-        if (!solisten(htons(host_port), guest_addr.s_addr,
-                      htons(guest_port), 0))
+        if (!tcp_listen(host_addr.s_addr, htons(host_port), guest_addr.s_addr,
+                        htons(guest_port), SS_HOSTFWD))
             return -1;
     }
     return 0;
 }
 
-int slirp_add_exec(int do_pty, const void *args, int addr_low_byte,
-                  int guest_port)
+int slirp_add_exec(int do_pty, const void *args, struct in_addr guest_addr,
+                   int guest_port)
 {
-    return add_exec(&exec_list, do_pty, (char *)args,
-                    addr_low_byte, htons(guest_port));
+    if (!guest_addr.s_addr) {
+        guest_addr.s_addr =
+            vnetwork_addr.s_addr | (htonl(0x0204) & ~vnetwork_mask.s_addr);
+    }
+    if ((guest_addr.s_addr & vnetwork_mask.s_addr) != vnetwork_addr.s_addr ||
+        guest_addr.s_addr == vhost_addr.s_addr ||
+        guest_addr.s_addr == vnameserver_addr.s_addr) {
+        return -1;
+    }
+    return add_exec(&exec_list, do_pty, (char *)args, guest_addr,
+                    htons(guest_port));
 }
 
 ssize_t slirp_send(struct socket *so, const void *buf, size_t len, int flags)
@@ -813,23 +825,21 @@ ssize_t slirp_send(struct socket *so, const void *buf, size_t len, int flags)
 	return send(so->s, buf, len, flags);
 }
 
-static struct socket *slirp_find_ctl_socket(int addr_low_byte, int guest_port)
+static struct socket *
+slirp_find_ctl_socket(struct in_addr guest_addr, int guest_port)
 {
-	struct socket *so;
+    struct socket *so;
 
-	for (so = tcb.so_next; so != &tcb; so = so->so_next) {
-		if ((so->so_faddr.s_addr & htonl(0xffffff00)) ==
-				special_addr.s_addr
-				&& (ntohl(so->so_faddr.s_addr) & 0xff) ==
-				addr_low_byte
-				&& htons(so->so_fport) == guest_port)
-			return so;
-	}
-
-	return NULL;
+    for (so = tcb.so_next; so != &tcb; so = so->so_next) {
+        if (so->so_faddr.s_addr == guest_addr.s_addr &&
+            htons(so->so_fport) == guest_port) {
+            return so;
+        }
+    }
+    return NULL;
 }
 
-size_t slirp_socket_can_recv(int addr_low_byte, int guest_port)
+size_t slirp_socket_can_recv(struct in_addr guest_addr, int guest_port)
 {
 	struct iovec iov[2];
 	struct socket *so;
@@ -837,7 +847,7 @@ size_t slirp_socket_can_recv(int addr_low_byte, int guest_port)
     if (!link_up)
         return 0;
 
-	so = slirp_find_ctl_socket(addr_low_byte, guest_port);
+	so = slirp_find_ctl_socket(guest_addr, guest_port);
 
 	if (!so || so->so_state & SS_NOFDREF)
 		return 0;
@@ -848,12 +858,12 @@ size_t slirp_socket_can_recv(int addr_low_byte, int guest_port)
 	return sopreprbuf(so, iov, NULL);
 }
 
-void slirp_socket_recv(int addr_low_byte, int guest_port, const uint8_t *buf,
-        int size)
+void slirp_socket_recv(struct in_addr guest_addr, int guest_port,
+                       const uint8_t *buf, int size)
 {
     int ret;
-    struct socket *so = slirp_find_ctl_socket(addr_low_byte, guest_port);
-   
+    struct socket *so = slirp_find_ctl_socket(guest_addr, guest_port);
+
     if (!so)
         return;
 
@@ -1067,15 +1077,17 @@ static int slirp_state_load(QEMUFile *f, void *opaque, int version_id)
         if (ret < 0)
             return ret;
 
-        if ((so->so_faddr.s_addr & htonl(0xffffff00)) != special_addr.s_addr)
+        if ((so->so_faddr.s_addr & vnetwork_mask.s_addr) !=
+            vnetwork_addr.s_addr) {
             return -EINVAL;
-
-        for (ex_ptr = exec_list; ex_ptr; ex_ptr = ex_ptr->ex_next)
+        }
+        for (ex_ptr = exec_list; ex_ptr; ex_ptr = ex_ptr->ex_next) {
             if (ex_ptr->ex_pty == 3 &&
-                    (ntohl(so->so_faddr.s_addr) & 0xff) == ex_ptr->ex_addr &&
-                    so->so_fport == ex_ptr->ex_fport)
+                so->so_faddr.s_addr == ex_ptr->ex_addr.s_addr &&
+                so->so_fport == ex_ptr->ex_fport) {
                 break;
-
+            }
+        }
         if (!ex_ptr)
             return -EINVAL;
 

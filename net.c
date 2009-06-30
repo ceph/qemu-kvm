@@ -689,22 +689,32 @@ static void config_error(Monitor *mon, const char *fmt, ...)
 
 /* slirp network adapter */
 
+#define SLIRP_CFG_HOSTFWD 1
+#define SLIRP_CFG_LEGACY  2
+
 struct slirp_config_str {
     struct slirp_config_str *next;
-    const char *str;
+    int flags;
+    char str[1024];
+    int legacy_format;
 };
 
 static int slirp_inited;
-static struct slirp_config_str *slirp_redirs;
-#ifndef _WIN32
-static const char *slirp_smb_export;
-#endif
+static struct slirp_config_str *slirp_configs;
+const char *legacy_tftp_prefix;
+const char *legacy_bootp_filename;
 static VLANClientState *slirp_vc;
 
+static void slirp_hostfwd(Monitor *mon, const char *redir_str,
+                          int legacy_format);
+static void slirp_guestfwd(Monitor *mon, const char *config_str,
+                           int legacy_format);
+
 #ifndef _WIN32
-static void slirp_smb(const char *exported_dir);
+static const char *legacy_smb_export;
+
+static void slirp_smb(const char *exported_dir, struct in_addr vserver_addr);
 #endif
-static void slirp_redirection(Monitor *mon, const char *redir_str);
 
 int slirp_can_output(void)
 {
@@ -744,27 +754,134 @@ static void net_slirp_cleanup(VLANClientState *vc)
     slirp_in_use = 0;
 }
 
-static int net_slirp_init(VLANState *vlan, const char *model, const char *name,
-                          int restricted, const char *ip)
+static int net_slirp_init(Monitor *mon, VLANState *vlan, const char *model,
+                          const char *name, int restricted,
+                          const char *vnetwork, const char *vhost,
+                          const char *vhostname, const char *tftp_export,
+                          const char *bootfile, const char *vdhcp_start,
+                          const char *vnameserver, const char *smb_export,
+                          const char *vsmbserver)
 {
     if (slirp_in_use) {
         /* slirp only supports a single instance so far */
         return -1;
     }
     if (!slirp_inited) {
+        /* default settings according to historic slirp */
+        struct in_addr net  = { .s_addr = htonl(0x0a000000) }; /* 10.0.0.0 */
+        struct in_addr mask = { .s_addr = htonl(0xff000000) }; /* 255.0.0.0 */
+        struct in_addr host = { .s_addr = htonl(0x0a000202) }; /* 10.0.2.2 */
+        struct in_addr dhcp = { .s_addr = htonl(0x0a00020f) }; /* 10.0.2.15 */
+        struct in_addr dns  = { .s_addr = htonl(0x0a000203) }; /* 10.0.2.3 */
+#ifndef _WIN32
+        struct in_addr smbsrv = { .s_addr = 0 };
+#endif
+        char buf[20];
+        uint32_t addr;
+        int shift;
+        char *end;
+
+        if (!tftp_export) {
+            tftp_export = legacy_tftp_prefix;
+        }
+        if (!bootfile) {
+            bootfile = legacy_bootp_filename;
+        }
+
+        if (vnetwork) {
+            if (get_str_sep(buf, sizeof(buf), &vnetwork, '/') < 0) {
+                if (!inet_aton(vnetwork, &net)) {
+                    return -1;
+                }
+                addr = ntohl(net.s_addr);
+                if (!(addr & 0x80000000)) {
+                    mask.s_addr = htonl(0xff000000); /* class A */
+                } else if ((addr & 0xfff00000) == 0xac100000) {
+                    mask.s_addr = htonl(0xfff00000); /* priv. 172.16.0.0/12 */
+                } else if ((addr & 0xc0000000) == 0x80000000) {
+                    mask.s_addr = htonl(0xffff0000); /* class B */
+                } else if ((addr & 0xffff0000) == 0xc0a80000) {
+                    mask.s_addr = htonl(0xffff0000); /* priv. 192.168.0.0/16 */
+                } else if ((addr & 0xffff0000) == 0xc6120000) {
+                    mask.s_addr = htonl(0xfffe0000); /* tests 198.18.0.0/15 */
+                } else if ((addr & 0xe0000000) == 0xe0000000) {
+                    mask.s_addr = htonl(0xffffff00); /* class C */
+                } else {
+                    mask.s_addr = htonl(0xfffffff0); /* multicast/reserved */
+                }
+            } else {
+                if (!inet_aton(buf, &net)) {
+                    return -1;
+                }
+                shift = strtol(vnetwork, &end, 10);
+                if (*end != '\0') {
+                    if (!inet_aton(vnetwork, &mask)) {
+                        return -1;
+                    }
+                } else if (shift < 4 || shift > 32) {
+                    return -1;
+                } else {
+                    mask.s_addr = htonl(0xffffffff << (32 - shift));
+                }
+            }
+            net.s_addr &= mask.s_addr;
+            host.s_addr = net.s_addr | (htonl(0x0202) & ~mask.s_addr);
+            dhcp.s_addr = net.s_addr | (htonl(0x020f) & ~mask.s_addr);
+            dns.s_addr  = net.s_addr | (htonl(0x0203) & ~mask.s_addr);
+        }
+
+        if (vhost && !inet_aton(vhost, &host)) {
+            return -1;
+        }
+        if ((host.s_addr & mask.s_addr) != net.s_addr) {
+            return -1;
+        }
+
+        if (vdhcp_start && !inet_aton(vdhcp_start, &dhcp)) {
+            return -1;
+        }
+        if ((dhcp.s_addr & mask.s_addr) != net.s_addr ||
+            dhcp.s_addr == host.s_addr || dhcp.s_addr == dns.s_addr) {
+            return -1;
+        }
+
+        if (vnameserver && !inet_aton(vnameserver, &dns)) {
+            return -1;
+        }
+        if ((dns.s_addr & mask.s_addr) != net.s_addr ||
+            dns.s_addr == host.s_addr) {
+            return -1;
+        }
+
+#ifndef _WIN32
+        if (vsmbserver && !inet_aton(vsmbserver, &smbsrv)) {
+            return -1;
+        }
+#endif
+
+        slirp_init(restricted, net, mask, host, vhostname, tftp_export,
+                   bootfile, dhcp, dns);
         slirp_inited = 1;
-        slirp_init(restricted, ip);
 
-        while (slirp_redirs) {
-            struct slirp_config_str *config = slirp_redirs;
+        while (slirp_configs) {
+            struct slirp_config_str *config = slirp_configs;
 
-            slirp_redirection(NULL, config->str);
-            slirp_redirs = config->next;
+            if (config->flags & SLIRP_CFG_HOSTFWD) {
+                slirp_hostfwd(mon, config->str,
+                              config->flags & SLIRP_CFG_LEGACY);
+            } else {
+                slirp_guestfwd(mon, config->str,
+                               config->flags & SLIRP_CFG_LEGACY);
+            }
+            slirp_configs = config->next;
             qemu_free(config);
         }
 #ifndef _WIN32
-        if (slirp_smb_export) {
-            slirp_smb(slirp_smb_export);
+        if (!smb_export) {
+            smb_export = legacy_smb_export;
+        }
+        if (smb_export) {
+            slirp_smb(smb_export, smbsrv);
         }
 #endif
     }
@@ -776,57 +893,21 @@ static int net_slirp_init(VLANState *vlan, const char *model, const char *name,
     return 0;
 }
 
-static void net_slirp_redir_print(void *opaque, int is_udp,
-                                  struct in_addr *laddr, u_int lport,
-                                  struct in_addr *faddr, u_int fport)
+void net_slirp_hostfwd_remove(Monitor *mon, const char *src_str)
 {
-    Monitor *mon = (Monitor *)opaque;
-    uint32_t h_addr;
-    uint32_t g_addr;
-    char buf[16];
-
-    h_addr = ntohl(faddr->s_addr);
-    g_addr = ntohl(laddr->s_addr);
-
-    monitor_printf(mon, "  %s |", is_udp ? "udp" : "tcp" );
-    snprintf(buf, 15, "%d.%d.%d.%d", (h_addr >> 24) & 0xff,
-                                     (h_addr >> 16) & 0xff,
-                                     (h_addr >> 8) & 0xff,
-                                     (h_addr) & 0xff);
-    monitor_printf(mon, " %15s |", buf);
-    monitor_printf(mon, " %5d |", fport);
-
-    snprintf(buf, 15, "%d.%d.%d.%d", (g_addr >> 24) & 0xff,
-                                     (g_addr >> 16) & 0xff,
-                                     (g_addr >> 8) & 0xff,
-                                     (g_addr) & 0xff);
-    monitor_printf(mon, " %15s |", buf);
-    monitor_printf(mon, " %5d\n", lport);
-
-}
-
-static void net_slirp_redir_list(Monitor *mon)
-{
-    if (!mon)
-        return;
-
-    monitor_printf(mon, " Prot |    Host Addr    | HPort |    Guest Addr   | GPort\n");
-    monitor_printf(mon, "      |                 |       |                 |      \n");
-    slirp_redir_loop(net_slirp_redir_print, mon);
-}
-
-static void net_slirp_redir_rm(Monitor *mon, const char *port_str)
-{
+    struct in_addr host_addr = { .s_addr = INADDR_ANY };
     int host_port;
     char buf[256] = "";
-    const char *p = port_str;
+    const char *p = src_str;
     int is_udp = 0;
-    int n;
+    int err;
 
-    if (!mon)
+    if (!slirp_inited) {
+        monitor_printf(mon, "user mode network stack not in use\n");
         return;
+    }
 
-    if (!port_str || !port_str[0])
+    if (!src_str || !src_str[0])
         goto fail_syntax;
 
     get_str_sep(buf, sizeof(buf), &p, ':');
@@ -839,25 +920,35 @@ static void net_slirp_redir_rm(Monitor *mon, const char *port_str)
         goto fail_syntax;
     }
 
+    if (get_str_sep(buf, sizeof(buf), &p, ':') < 0) {
+        goto fail_syntax;
+    }
+    if (buf[0] != '\0' && !inet_aton(buf, &host_addr)) {
+        goto fail_syntax;
+    }
+
     host_port = atoi(p);
 
-    n = slirp_redir_rm(is_udp, host_port);
+    err = slirp_remove_hostfwd(is_udp, host_addr, host_port);
 
-    monitor_printf(mon, "removed %d redirections to %s port %d\n", n,
-                        is_udp ? "udp" : "tcp", host_port);
+    monitor_printf(mon, "host forwarding rule for %s %s\n", src_str,
+                   err ? "removed" : "not found");
     return;
 
  fail_syntax:
     monitor_printf(mon, "invalid format\n");
 }
 
-static void slirp_redirection(Monitor *mon, const char *redir_str)
+static void slirp_hostfwd(Monitor *mon, const char *redir_str,
+                          int legacy_format)
 {
-    struct in_addr guest_addr;
+    struct in_addr host_addr = { .s_addr = INADDR_ANY };
+    struct in_addr guest_addr = { .s_addr = 0 };
     int host_port, guest_port;
     const char *p;
-    char buf[256], *r;
+    char buf[256];
     int is_udp;
+    char *end;
 
     p = redir_str;
     if (get_str_sep(buf, sizeof(buf), &p, ':') < 0) {
@@ -871,65 +962,70 @@ static void slirp_redirection(Monitor *mon, const char *redir_str)
         goto fail_syntax;
     }
 
-    if (get_str_sep(buf, sizeof(buf), &p, ':') < 0) {
+    if (!legacy_format) {
+        if (get_str_sep(buf, sizeof(buf), &p, ':') < 0) {
+            goto fail_syntax;
+        }
+        if (buf[0] != '\0' && !inet_aton(buf, &host_addr)) {
+            goto fail_syntax;
+        }
+    }
+
+    if (get_str_sep(buf, sizeof(buf), &p, legacy_format ? ':' : '-') < 0) {
         goto fail_syntax;
     }
-    host_port = strtol(buf, &r, 0);
-    if (r == buf) {
+    host_port = strtol(buf, &end, 0);
+    if (*end != '\0' || host_port < 1 || host_port > 65535) {
         goto fail_syntax;
     }
 
     if (get_str_sep(buf, sizeof(buf), &p, ':') < 0) {
         goto fail_syntax;
     }
-    if (buf[0] == '\0') {
-        pstrcpy(buf, sizeof(buf), "10.0.2.15");
-    }
-    if (!inet_aton(buf, &guest_addr)) {
+    if (buf[0] != '\0' && !inet_aton(buf, &guest_addr)) {
         goto fail_syntax;
     }
 
-    guest_port = strtol(p, &r, 0);
-    if (r == p) {
+    guest_port = strtol(p, &end, 0);
+    if (*end != '\0' || guest_port < 1 || guest_port > 65535) {
         goto fail_syntax;
     }
 
-    if (slirp_redir(is_udp, host_port, guest_addr, guest_port) < 0) {
-        config_error(mon, "could not set up redirection '%s'\n", redir_str);
+    if (slirp_add_hostfwd(is_udp, host_addr, host_port,
+                          guest_addr, guest_port) < 0) {
+        config_error(mon, "could not set up host forwarding rule '%s'\n",
+                     redir_str);
     }
     return;
 
  fail_syntax:
-    config_error(mon, "invalid redirection format '%s'\n", redir_str);
+    config_error(mon, "invalid host forwarding rule '%s'\n", redir_str);
 }
 
-void net_slirp_redir(Monitor *mon, const char *redir_str, const char *redir_opt2)
+void net_slirp_hostfwd_add(Monitor *mon, const char *redir_str)
+{
+    if (!slirp_inited) {
+        monitor_printf(mon, "user mode network stack not in use\n");
+        return;
+    }
+
+    slirp_hostfwd(mon, redir_str, 0);
+}
+
+void net_slirp_redir(const char *redir_str)
 {
     struct slirp_config_str *config;
 
     if (!slirp_inited) {
-        if (mon) {
-            monitor_printf(mon, "user mode network stack not in use\n");
-        } else {
-            config = qemu_malloc(sizeof(*config));
-            config->str = redir_str;
-            config->next = slirp_redirs;
-            slirp_redirs = config;
-        }
+        config = qemu_malloc(sizeof(*config));
+        pstrcpy(config->str, sizeof(config->str), redir_str);
+        config->flags = SLIRP_CFG_HOSTFWD | SLIRP_CFG_LEGACY;
+        config->next = slirp_configs;
+        slirp_configs = config;
         return;
     }
 
-    if (!strcmp(redir_str, "remove")) {
-        net_slirp_redir_rm(mon, redir_opt2);
-        return;
-    }
-
-    if (!strcmp(redir_str, "list")) {
-        net_slirp_redir_list(mon);
-        return;
-    }
-
-    slirp_redirection(mon, redir_str);
+    slirp_hostfwd(NULL, redir_str, 1);
 }
 
 #ifndef _WIN32
@@ -967,7 +1063,7 @@ static void smb_exit(void)
     erase_dir(smb_dir);
 }
 
-static void slirp_smb(const char *exported_dir)
+static void slirp_smb(const char *exported_dir, struct in_addr vserver_addr)
 {
     char smb_conf[1024];
     char smb_cmdline[1024];
@@ -1013,19 +1109,24 @@ static void slirp_smb(const char *exported_dir)
     snprintf(smb_cmdline, sizeof(smb_cmdline), "%s -s %s",
              SMBD_COMMAND, smb_conf);
 
-    slirp_add_exec(0, smb_cmdline, 4, 139);
+    if (slirp_add_exec(0, smb_cmdline, vserver_addr, 139) < 0) {
+        fprintf(stderr, "conflicting/invalid smbserver address\n");
+        exit(1);
+    }
 }
 
-/* automatic user mode samba server configuration */
+/* automatic user mode samba server configuration (legacy interface) */
 void net_slirp_smb(const char *exported_dir)
 {
-    if (slirp_smb_export) {
+    struct in_addr vserver_addr = { .s_addr = 0 };
+
+    if (legacy_smb_export) {
         fprintf(stderr, "-smb given twice\n");
         exit(1);
     }
-    slirp_smb_export = exported_dir;
+    legacy_smb_export = exported_dir;
     if (slirp_inited) {
-        slirp_smb(exported_dir);
+        slirp_smb(exported_dir, vserver_addr);
     }
 }
 
@@ -1036,21 +1137,91 @@ void do_info_slirp(Monitor *mon)
     slirp_stats();
 }
 
-struct VMChannel {
+struct GuestFwd {
     CharDriverState *hd;
+    struct in_addr server;
     int port;
 };
 
-static int vmchannel_can_read(void *opaque)
+static int guestfwd_can_read(void *opaque)
 {
-    struct VMChannel *vmc = (struct VMChannel*)opaque;
-    return slirp_socket_can_recv(4, vmc->port);
+    struct GuestFwd *fwd = opaque;
+    return slirp_socket_can_recv(fwd->server, fwd->port);
 }
 
-static void vmchannel_read(void *opaque, const uint8_t *buf, int size)
+static void guestfwd_read(void *opaque, const uint8_t *buf, int size)
 {
-    struct VMChannel *vmc = (struct VMChannel*)opaque;
-    slirp_socket_recv(4, vmc->port, buf, size);
+    struct GuestFwd *fwd = opaque;
+    slirp_socket_recv(fwd->server, fwd->port, buf, size);
+}
+
+static void slirp_guestfwd(Monitor *mon, const char *config_str,
+                           int legacy_format)
+{
+    struct in_addr server = { .s_addr = 0 };
+    struct GuestFwd *fwd;
+    const char *p;
+    char buf[128];
+    char *end;
+    int port;
+
+    p = config_str;
+    if (legacy_format) {
+        if (get_str_sep(buf, sizeof(buf), &p, ':') < 0) {
+            goto fail_syntax;
+        }
+    } else {
+        if (get_str_sep(buf, sizeof(buf), &p, ':') < 0) {
+            goto fail_syntax;
+        }
+        if (strcmp(buf, "tcp") && buf[0] != '\0') {
+            goto fail_syntax;
+        }
+        if (get_str_sep(buf, sizeof(buf), &p, ':') < 0) {
+            goto fail_syntax;
+        }
+        if (buf[0] != '\0' && !inet_aton(buf, &server)) {
+            goto fail_syntax;
+        }
+        if (get_str_sep(buf, sizeof(buf), &p, '-') < 0) {
+            goto fail_syntax;
+        }
+    }
+    port = strtol(buf, &end, 10);
+    if (*end != '\0' || port < 1 || port > 65535) {
+        goto fail_syntax;
+    }
+
+    fwd = qemu_malloc(sizeof(struct GuestFwd));
+    snprintf(buf, sizeof(buf), "guestfwd.tcp:%d", port);
+    fwd->hd = qemu_chr_open(buf, p, NULL);
+    if (!fwd->hd) {
+        config_error(mon, "could not open guest forwarding device '%s'\n",
+                     buf);
+        qemu_free(fwd);
+        return;
+    }
+    fwd->server = server;
+    fwd->port = port;
+
+    if (slirp_add_exec(3, fwd->hd, server, port) < 0) {
+        config_error(mon, "conflicting/invalid host:port in guest forwarding "
+                     "rule '%s'\n", config_str);
+        qemu_free(fwd);
+        return;
+    }
+    qemu_chr_add_handlers(fwd->hd, guestfwd_can_read, guestfwd_read,
+                          NULL, fwd);
+    return;
+
+ fail_syntax:
+    config_error(mon, "invalid guest forwarding rule '%s'\n", config_str);
+}
+
+void do_info_usernet(Monitor *mon)
+{
+    monitor_printf(mon, "VLAN %d (%s):\n", slirp_vc->vlan->id, slirp_vc->name);
+    slirp_connection_info(mon);
 }
 
 #endif /* CONFIG_SLIRP */
@@ -2325,7 +2496,7 @@ int net_client_init(Monitor *mon, const char *device, const char *p)
     }
     if (!strcmp(device, "nic")) {
         static const char * const nic_params[] = {
-            "vlan", "name", "macaddr", "model", "addr", NULL
+            "vlan", "name", "macaddr", "model", "addr", "vectors", NULL
         };
         NICInfo *nd;
         uint8_t *macaddr;
@@ -2363,6 +2534,22 @@ int net_client_init(Monitor *mon, const char *device, const char *p)
         if (get_param_value(buf, sizeof(buf), "addr", p)) {
             nd->devaddr = strdup(buf);
         }
+        nd->nvectors = NIC_NVECTORS_UNSPECIFIED;
+        if (get_param_value(buf, sizeof(buf), "vectors", p)) {
+            char *endptr;
+            long vectors = strtol(buf, &endptr, 0);
+            if (*endptr) {
+                config_error(mon, "invalid syntax for # of vectors\n");
+                ret = -1;
+                goto out;
+            }
+            if (vectors < 0 || vectors > 0x7ffffff) {
+                config_error(mon, "invalid # of vectors\n");
+                ret = -1;
+                goto out;
+            }
+            nd->nvectors = vectors;
+        }
         nd->vlan = vlan;
         nd->name = name;
         nd->used = 1;
@@ -2384,53 +2571,114 @@ int net_client_init(Monitor *mon, const char *device, const char *p)
 #ifdef CONFIG_SLIRP
     if (!strcmp(device, "user")) {
         static const char * const slirp_params[] = {
-            "vlan", "name", "hostname", "restrict", "ip", NULL
+            "vlan", "name", "hostname", "restrict", "ip", "net", "host",
+            "tftp", "bootfile", "dhcpstart", "dns", "smb", "smbserver",
+            "hostfwd", "guestfwd", NULL
         };
+        struct slirp_config_str *config;
         int restricted = 0;
-        char *ip = NULL;
+        char *vnet = NULL;
+        char *vhost = NULL;
+        char *vhostname = NULL;
+        char *tftp_export = NULL;
+        char *bootfile = NULL;
+        char *vdhcp_start = NULL;
+        char *vnamesrv = NULL;
+        char *smb_export = NULL;
+        char *vsmbsrv = NULL;
+        const char *q;
 
         if (check_params(buf, sizeof(buf), slirp_params, p) < 0) {
             config_error(mon, "invalid parameter '%s' in '%s'\n", buf, p);
             ret = -1;
             goto out;
         }
+        if (get_param_value(buf, sizeof(buf), "ip", p)) {
+            /* emulate legacy parameter */
+            vnet = qemu_malloc(strlen(buf) + strlen("/24") + 1);
+            strcpy(vnet, buf);
+            strcat(vnet, "/24");
+        }
+        if (get_param_value(buf, sizeof(buf), "net", p)) {
+            vnet = qemu_strdup(buf);
+        }
+        if (get_param_value(buf, sizeof(buf), "host", p)) {
+            vhost = qemu_strdup(buf);
+        }
         if (get_param_value(buf, sizeof(buf), "hostname", p)) {
-            pstrcpy(slirp_hostname, sizeof(slirp_hostname), buf);
+            vhostname = qemu_strdup(buf);
         }
         if (get_param_value(buf, sizeof(buf), "restrict", p)) {
             restricted = (buf[0] == 'y') ? 1 : 0;
         }
-        if (get_param_value(buf, sizeof(buf), "ip", p)) {
-            ip = qemu_strdup(buf);
+        if (get_param_value(buf, sizeof(buf), "dhcpstart", p)) {
+            vdhcp_start = qemu_strdup(buf);
         }
+        if (get_param_value(buf, sizeof(buf), "dns", p)) {
+            vnamesrv = qemu_strdup(buf);
+        }
+        if (get_param_value(buf, sizeof(buf), "tftp", p)) {
+            tftp_export = qemu_strdup(buf);
+        }
+        if (get_param_value(buf, sizeof(buf), "bootfile", p)) {
+            bootfile = qemu_strdup(buf);
+        }
+        if (get_param_value(buf, sizeof(buf), "smb", p)) {
+            smb_export = qemu_strdup(buf);
+            if (get_param_value(buf, sizeof(buf), "smbserver", p)) {
+                vsmbsrv = qemu_strdup(buf);
+            }
+        }
+        q = p;
+        while (1) {
+            config = qemu_malloc(sizeof(*config));
+            if (!get_next_param_value(config->str, sizeof(config->str),
+                                      "hostfwd", &q)) {
+                break;
+            }
+            config->flags = SLIRP_CFG_HOSTFWD;
+            config->next = slirp_configs;
+            slirp_configs = config;
+            config = NULL;
+        }
+        q = p;
+        while (1) {
+            config = qemu_malloc(sizeof(*config));
+            if (!get_next_param_value(config->str, sizeof(config->str),
+                                      "guestfwd", &q)) {
+                break;
+            }
+            config->flags = 0;
+            config->next = slirp_configs;
+            slirp_configs = config;
+            config = NULL;
+        }
+        qemu_free(config);
         vlan->nb_host_devs++;
-        ret = net_slirp_init(vlan, device, name, restricted, ip);
-        qemu_free(ip);
+        ret = net_slirp_init(mon, vlan, device, name, restricted, vnet, vhost,
+                             vhostname, tftp_export, bootfile, vdhcp_start,
+                             vnamesrv, smb_export, vsmbsrv);
+        qemu_free(vnet);
+        qemu_free(vhost);
+        qemu_free(vhostname);
+        qemu_free(tftp_export);
+        qemu_free(bootfile);
+        qemu_free(vdhcp_start);
+        qemu_free(vnamesrv);
+        qemu_free(smb_export);
+        qemu_free(vsmbsrv);
     } else if (!strcmp(device, "channel")) {
-        long port;
-        char name[20], *devname;
-        struct VMChannel *vmc;
+        if (!slirp_inited) {
+            struct slirp_config_str *config;
 
-        port = strtol(p, &devname, 10);
-        devname++;
-        if (port < 1 || port > 65535) {
-            config_error(mon, "vmchannel wrong port number\n");
-            ret = -1;
-            goto out;
+            config = qemu_malloc(sizeof(*config));
+            pstrcpy(config->str, sizeof(config->str), p);
+            config->flags = SLIRP_CFG_LEGACY;
+            config->next = slirp_configs;
+            slirp_configs = config;
+        } else {
+            slirp_guestfwd(mon, p, 1);
         }
-        vmc = malloc(sizeof(struct VMChannel));
-        snprintf(name, 20, "vmchannel%ld", port);
-        vmc->hd = qemu_chr_open(name, devname, NULL);
-        if (!vmc->hd) {
-            config_error(mon, "could not open vmchannel device '%s'\n",
-                         devname);
-            ret = -1;
-            goto out;
-        }
-        vmc->port = port;
-        slirp_add_exec(3, vmc->hd, 4, port);
-        qemu_chr_add_handlers(vmc->hd, vmchannel_can_read, vmchannel_read,
-                NULL, vmc);
         ret = 0;
     } else
 #endif
