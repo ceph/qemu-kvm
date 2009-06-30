@@ -23,6 +23,7 @@
 #include "msix.h"
 #include "qemu-timer.h"
 #include "host-utils.h"
+#include "kvm.h"
 
 #include "qemu-kvm.h"
 
@@ -1058,6 +1059,7 @@ static void apic_reset(void *opaque)
          */
         s->lvt[APIC_LVT_LINT0] = 0x700;
     }
+    cpu_synchronize_state(s->cpu_env, 1);
     qemu_kvm_load_lapic(s->cpu_env);
 }
 
