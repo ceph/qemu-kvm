@@ -130,6 +130,10 @@ typedef struct PCIIORegion {
 #define PCI_MIN_GNT		0x3e	/* 8 bits */
 #define PCI_MAX_LAT		0x3f	/* 8 bits */
 
+/* Capability lists */
+#define PCI_CAP_LIST_ID		0	/* Capability ID */
+#define PCI_CAP_LIST_NEXT	1	/* Next capability in the list */
+
 #define PCI_REVISION            0x08    /* obsolete, use PCI_REVISION_ID */
 #define PCI_SUBVENDOR_ID        0x2c    /* obsolete, use PCI_SUBSYSTEM_VENDOR_ID */
 #define PCI_SUBDEVICE_ID        0x2e    /* obsolete, use PCI_SUBSYSTEM_ID */
@@ -137,8 +141,9 @@ typedef struct PCIIORegion {
 /* Bits in the PCI Status Register (PCI 2.3 spec) */
 #define PCI_STATUS_RESERVED1	0x007
 #define PCI_STATUS_INT_STATUS	0x008
-#define PCI_STATUS_CAPABILITIES	0x010
-
+#ifndef PCI_STATUS_CAP_LIST
+#define PCI_STATUS_CAP_LIST	0x010
+#endif
 #ifndef PCI_STATUS_66MHZ
 #define PCI_STATUS_66MHZ	0x020
 #endif
@@ -179,6 +184,9 @@ struct PCIDevice {
 
     /* Used to implement R/W bytes */
     uint8_t wmask[PCI_CONFIG_SPACE_SIZE];
+
+    /* Used to allocate config space for capabilities. */
+    uint8_t used[PCI_CONFIG_SPACE_SIZE];
 
     /* the following fields are read only */
     PCIBus *bus;
@@ -223,6 +231,15 @@ int pci_enable_capability_support(PCIDevice *pci_dev,
                                   PCICapConfigInitFunc *config_init);
 
 int pci_map_irq(PCIDevice *pci_dev, int pin);
+
+int pci_add_capability(PCIDevice *pci_dev, uint8_t cap_id, uint8_t cap_size);
+
+void pci_del_capability(PCIDevice *pci_dev, uint8_t cap_id, uint8_t cap_size);
+
+void pci_reserve_capability(PCIDevice *pci_dev, uint8_t offset, uint8_t size);
+
+uint8_t pci_find_capability(PCIDevice *pci_dev, uint8_t cap_id);
+
 uint32_t pci_default_read_config(PCIDevice *d,
                                  uint32_t address, int len);
 void pci_default_write_config(PCIDevice *d,
@@ -260,21 +277,45 @@ PCIBus *pci_bridge_init(PCIBus *bus, int devfn, uint16_t vid, uint16_t did,
                         pci_map_irq_fn map_irq, const char *name);
 
 static inline void
+pci_set_word(uint8_t *config, uint16_t val)
+{
+    cpu_to_le16wu((uint16_t *)config, val);
+}
+
+static inline uint16_t
+pci_get_word(uint8_t *config)
+{
+    return le16_to_cpupu((uint16_t *)config);
+}
+
+static inline void
+pci_set_long(uint8_t *config, uint32_t val)
+{
+    cpu_to_le32wu((uint32_t *)config, val);
+}
+
+static inline uint32_t
+pci_get_long(uint8_t *config)
+{
+    return le32_to_cpupu((uint32_t *)config);
+}
+
+static inline void
 pci_config_set_vendor_id(uint8_t *pci_config, uint16_t val)
 {
-    cpu_to_le16wu((uint16_t *)&pci_config[PCI_VENDOR_ID], val);
+    pci_set_word(&pci_config[PCI_VENDOR_ID], val);
 }
 
 static inline void
 pci_config_set_device_id(uint8_t *pci_config, uint16_t val)
 {
-    cpu_to_le16wu((uint16_t *)&pci_config[PCI_DEVICE_ID], val);
+    pci_set_word(&pci_config[PCI_DEVICE_ID], val);
 }
 
 static inline void
 pci_config_set_class(uint8_t *pci_config, uint16_t val)
 {
-    cpu_to_le16wu((uint16_t *)&pci_config[PCI_CLASS_DEVICE], val);
+    pci_set_word(&pci_config[PCI_CLASS_DEVICE], val);
 }
 
 typedef void (*pci_qdev_initfn)(PCIDevice *dev);
