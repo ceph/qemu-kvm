@@ -14,8 +14,6 @@
 int slirp_debug = DBG_CALL|DBG_MISC|DBG_ERROR;
 #endif
 
-u_int curtime, time_fasttimo, last_slowtimo;
-
 struct quehead {
 	struct quehead *qh_link;
 	struct quehead *qh_rlink;
@@ -372,7 +370,7 @@ fd_block(int fd)
 #endif
 }
 
-void slirp_connection_info(Monitor *mon)
+void slirp_connection_info(Slirp *slirp, Monitor *mon)
 {
     const char * const tcpstates[] = {
         [TCPS_CLOSED]       = "CLOSED",
@@ -399,7 +397,7 @@ void slirp_connection_info(Monitor *mon)
     monitor_printf(mon, "  Protocol[State]    FD  Source Address  Port   "
                         "Dest. Address  Port RecvQ SendQ\n");
 
-    for (so = tcb.so_next; so != &tcb; so = so->so_next) {
+    for (so = slirp->tcb.so_next; so != &slirp->tcb; so = so->so_next) {
         if (so->so_state & SS_HOSTFWD) {
             state = "HOST_FORWARD";
         } else if (so->so_tcpcb) {
@@ -429,7 +427,7 @@ void slirp_connection_info(Monitor *mon)
                        so->so_rcv.sb_cc, so->so_snd.sb_cc);
     }
 
-    for (so = udb.so_next; so != &udb; so = so->so_next) {
+    for (so = slirp->udb.so_next; so != &slirp->udb; so = so->so_next) {
         if (so->so_state & SS_HOSTFWD) {
             n = snprintf(buf, sizeof(buf), "  UDP[HOST_FORWARD]");
             src_len = sizeof(src);

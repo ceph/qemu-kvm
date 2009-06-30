@@ -46,7 +46,7 @@ static const char *ext_feature_name[] = {
     "pni" /* Intel,AMD sse3 */, NULL, NULL, "monitor", "ds_cpl", "vmx", NULL /* Linux smx */, "est",
     "tm2", "ssse3", "cid", NULL, NULL, "cx16", "xtpr", NULL,
     NULL, NULL, "dca", NULL, NULL, NULL, NULL, "popcnt",
-       NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, "hypervisor",
 };
 static const char *ext2_feature_name[] = {
     "fpu", "vme", "de", "pse", "tsc", "msr", "pae", "mce",
@@ -61,30 +61,30 @@ static const char *ext3_feature_name[] = {
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
 };
 
-static void add_flagname_to_bitmaps(char *flagname, uint32_t *features, 
-                                    uint32_t *ext_features, 
-                                    uint32_t *ext2_features, 
+static void add_flagname_to_bitmaps(const char *flagname, uint32_t *features,
+                                    uint32_t *ext_features,
+                                    uint32_t *ext2_features,
                                     uint32_t *ext3_features)
 {
     int i;
     int found = 0;
 
-    for ( i = 0 ; i < 32 ; i++ ) 
+    for ( i = 0 ; i < 32 ; i++ )
         if (feature_name[i] && !strcmp (flagname, feature_name[i])) {
             *features |= 1 << i;
             found = 1;
         }
-    for ( i = 0 ; i < 32 ; i++ ) 
+    for ( i = 0 ; i < 32 ; i++ )
         if (ext_feature_name[i] && !strcmp (flagname, ext_feature_name[i])) {
             *ext_features |= 1 << i;
             found = 1;
         }
-    for ( i = 0 ; i < 32 ; i++ ) 
+    for ( i = 0 ; i < 32 ; i++ )
         if (ext2_feature_name[i] && !strcmp (flagname, ext2_feature_name[i])) {
             *ext2_features |= 1 << i;
             found = 1;
         }
-    for ( i = 0 ; i < 32 ; i++ ) 
+    for ( i = 0 ; i < 32 ; i++ )
         if (ext3_feature_name[i] && !strcmp (flagname, ext3_feature_name[i])) {
             *ext3_features |= 1 << i;
             found = 1;
@@ -261,9 +261,9 @@ static x86_def_t x86_defs[] = {
     {
         .name = "athlon",
         .level = 2,
-        .vendor1 = 0x68747541, /* "Auth" */
-        .vendor2 = 0x69746e65, /* "enti" */
-        .vendor3 = 0x444d4163, /* "cAMD" */
+        .vendor1 = CPUID_VENDOR_AMD_1,
+        .vendor2 = CPUID_VENDOR_AMD_2,
+        .vendor3 = CPUID_VENDOR_AMD_3,
         .family = 6,
         .model = 2,
         .stepping = 3,
@@ -296,6 +296,54 @@ static x86_def_t x86_defs[] = {
     },
 };
 
+static void host_cpuid(uint32_t function, uint32_t count, uint32_t *eax,
+                               uint32_t *ebx, uint32_t *ecx, uint32_t *edx);
+
+static int cpu_x86_fill_model_id(char *str)
+{
+    uint32_t eax, ebx, ecx, edx;
+    int i;
+
+    for (i = 0; i < 3; i++) {
+        host_cpuid(0x80000002 + i, 0, &eax, &ebx, &ecx, &edx);
+        memcpy(str + i * 16 +  0, &eax, 4);
+        memcpy(str + i * 16 +  4, &ebx, 4);
+        memcpy(str + i * 16 +  8, &ecx, 4);
+        memcpy(str + i * 16 + 12, &edx, 4);
+    }
+    return 0;
+}
+
+static int cpu_x86_fill_host(x86_def_t *x86_cpu_def)
+{
+    uint32_t eax, ebx, ecx, edx;
+
+    x86_cpu_def->name = "host";
+    host_cpuid(0x0, 0, &eax, &ebx, &ecx, &edx);
+    x86_cpu_def->level = eax;
+    x86_cpu_def->vendor1 = ebx;
+    x86_cpu_def->vendor2 = edx;
+    x86_cpu_def->vendor3 = ecx;
+
+    host_cpuid(0x1, 0, &eax, &ebx, &ecx, &edx);
+    x86_cpu_def->family = ((eax >> 8) & 0x0F) + ((eax >> 20) & 0xFF);
+    x86_cpu_def->model = ((eax >> 4) & 0x0F) | ((eax & 0xF0000) >> 12);
+    x86_cpu_def->stepping = eax & 0x0F;
+    x86_cpu_def->ext_features = ecx;
+    x86_cpu_def->features = edx;
+
+    host_cpuid(0x80000000, 0, &eax, &ebx, &ecx, &edx);
+    x86_cpu_def->xlevel = eax;
+
+    host_cpuid(0x80000001, 0, &eax, &ebx, &ecx, &edx);
+    x86_cpu_def->ext2_features = edx;
+    x86_cpu_def->ext3_features = ecx;
+    cpu_x86_fill_model_id(x86_cpu_def->model_id);
+    x86_cpu_def->vendor_override = 0;
+
+    return 0;
+}
+
 static int cpu_x86_find_by_name(x86_def_t *x86_cpu_def, const char *cpu_model)
 {
     unsigned int i;
@@ -314,9 +362,17 @@ static int cpu_x86_find_by_name(x86_def_t *x86_cpu_def, const char *cpu_model)
             break;
         }
     }
-    if (!def)
-        goto error;
-    memcpy(x86_cpu_def, def, sizeof(*def));
+    if (!def) {
+        if (strcmp(name, "host") != 0) {
+            goto error;
+        }
+        cpu_x86_fill_host(x86_cpu_def);
+    } else {
+        memcpy(x86_cpu_def, def, sizeof(*def));
+    }
+
+    add_flagname_to_bitmaps("hypervisor", &plus_features,
+        &plus_ext_features, &plus_ext2_features, &plus_ext3_features);
 
     featurestr = strtok(NULL, ",");
 
@@ -1511,10 +1567,6 @@ void cpu_x86_cpuid(CPUX86State *env, uint32_t index, uint32_t count,
         *ebx = (env->cpuid_apic_id << 24) | 8 << 8; /* CLFLUSH size in quad words, Linux wants it. */
         *ecx = env->cpuid_ext_features;
         *edx = env->cpuid_features;
-
-        /* "Hypervisor present" bit required for Microsoft SVVP */
-        if (kvm_enabled())
-            *ecx |= (1 << 31);
         break;
     case 2:
         /* cache info: needed for Pentium Pro compatibility */
@@ -1587,7 +1639,7 @@ void cpu_x86_cpuid(CPUX86State *env, uint32_t index, uint32_t count,
         *ecx = env->cpuid_vendor3;
         break;
     case 0x80000001:
-        *eax = env->cpuid_features;
+        *eax = env->cpuid_version;
         *ebx = 0;
         *ecx = env->cpuid_ext3_features;
         *edx = env->cpuid_ext2_features;
