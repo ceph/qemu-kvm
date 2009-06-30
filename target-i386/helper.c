@@ -1665,9 +1665,12 @@ void cpu_x86_cpuid(CPUX86State *env, uint32_t index, uint32_t count,
 
             /* svm */
             if (!kvm_nested)
-                *ecx &= ~4UL;
+                *ecx &= ~CPUID_EXT3_SVM;
             /* 3dnow */
             *edx &= ~0xc0000000;
+        } else {
+            /* AMD 3DNow! is not supported in QEMU */
+            *edx &= ~(CPUID_EXT2_3DNOW | CPUID_EXT2_3DNOWEXT);
         }
         break;
     case 0x80000002:
