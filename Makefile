@@ -323,7 +323,7 @@ test speed: all
 	$(MAKE) -C tests $@
 
 TAGS:
-	etags *.[ch] tests/*.[ch]
+	etags *.[ch] tests/*.[ch] block/*.[ch] hw/*.[ch]
 
 cscope:
 	rm -f ./cscope.*

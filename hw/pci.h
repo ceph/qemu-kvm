@@ -295,7 +295,8 @@ void pci_for_each_device(int bus_num, void (*fn)(PCIDevice *d));
 PCIBus *pci_find_bus(int bus_num);
 PCIDevice *pci_find_device(int bus_num, int slot, int function);
 
-int pci_read_devaddr(const char *addr, int *domp, int *busp, unsigned *slotp);
+int pci_read_devaddr(Monitor *mon, const char *addr, int *domp, int *busp,
+                     unsigned *slotp);
 
 int pci_parse_host_devaddr(const char *addr, int *busp,
                            int *slotp, int *funcp);
