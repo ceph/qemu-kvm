@@ -537,7 +537,7 @@ static void pic_init1(int io_addr, int elcr_addr, PicState *s)
         register_ioport_read(elcr_addr, 1, 1, elcr_ioport_read, s);
     }
     register_savevm("i8259", io_addr, 1, pic_save, pic_load, s);
-    qemu_register_reset(pic_reset, 0, s);
+    qemu_register_reset(pic_reset, s);
 }
 
 void pic_info(Monitor *mon)
@@ -692,7 +692,7 @@ static int kvm_pic_load(QEMUFile *f, void *opaque, int version_id)
 static void kvm_pic_init1(int io_addr, PicState *s)
 {
     register_savevm("i8259", io_addr, 1, kvm_pic_save, kvm_pic_load, s);
-    qemu_register_reset(pic_reset, 0, s);
+    qemu_register_reset(pic_reset, s);
 }
 
 qemu_irq *kvm_i8259_init(qemu_irq parent_irq)

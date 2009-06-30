@@ -559,7 +559,7 @@ i2c_bus *piix4_pm_init(PCIBus *bus, int devfn, uint32_t smb_io_base,
 
     s->smbus = i2c_init_bus(NULL, "i2c");
     s->irq = sci_irq;
-    qemu_register_reset(piix4_reset, 0, s);
+    qemu_register_reset(piix4_reset, s);
 
     return s->smbus;
 }
@@ -802,11 +802,12 @@ void qemu_system_cpu_hot_add(int cpu, int state)
         && (!qemu_kvm_cpu_env(cpu))
 #endif
     ) {
-        env = pc_new_cpu(cpu, model, 1);
+        env = pc_new_cpu(model);
         if (!env) {
             fprintf(stderr, "cpu %d creation failed\n", cpu);
             return;
         }
+        env->cpuid_apic_id = cpu;
     }
 
     if (state)
