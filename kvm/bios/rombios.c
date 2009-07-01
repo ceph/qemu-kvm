@@ -2015,6 +2015,21 @@ Bit16u i; ipl_entry_t *e;
 }
 
 #if BX_ELTORITO_BOOT
+#ifdef BX_QEMU
+int
+qemu_cfg_probe_bootkey()
+{
+  outw(QEMU_CFG_CTL_PORT, QEMU_CFG_SIGNATURE);
+  if (inb(QEMU_CFG_DATA_PORT) != 'Q' ||
+      inb(QEMU_CFG_DATA_PORT) != 'E' ||
+      inb(QEMU_CFG_DATA_PORT) != 'M' ||
+      inb(QEMU_CFG_DATA_PORT) != 'U') return 1;
+
+  outw(QEMU_CFG_CTL_PORT, QEMU_CFG_BOOT_MENU);
+  return inb(QEMU_CFG_DATA_PORT);
+}
+#endif // BX_QEMU
+
   void
 interactive_bootkey()
 {
@@ -2025,6 +2040,10 @@ interactive_bootkey()
   Bit8u i;
   Bit16u ss = get_SS();
   Bit16u valid_choice = 0;
+
+#ifdef BX_QEMU
+  if (!qemu_cfg_probe_bootkey()) return;
+#endif
 
   while (check_for_keystroke())
     get_keystroke();

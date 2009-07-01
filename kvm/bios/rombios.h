@@ -67,6 +67,7 @@
 #define QEMU_CFG_ID               0x01
 #define QEMU_CFG_UUID             0x02
 #define QEMU_CFG_NUMA             0x0d
+#define QEMU_CFG_BOOT_MENU        0x0e
 #define QEMU_CFG_ARCH_LOCAL       0x8000
 #define QEMU_CFG_ACPI_TABLES      (QEMU_CFG_ARCH_LOCAL + 0)
 #define QEMU_CFG_SMBIOS_ENTRIES   (QEMU_CFG_ARCH_LOCAL + 1)
