@@ -384,6 +384,7 @@ static void ipf_init1(ram_addr_t ram_size,
     ram_addr_t ram_addr;
     ram_addr_t above_4g_mem_size = 0;
     PCIBus *pci_bus;
+    PCIDevice *pci_dev;
     int piix3_devfn = -1;
     CPUState *env;
     qemu_irq *cpu_irq;
@@ -543,7 +544,7 @@ static void ipf_init1(ram_addr_t ram_size,
         if (!pci_enabled || (nd->model && strcmp(nd->model, "ne2k_isa") == 0))
             pc_init_ne2k_isa(nd, i8259);
         else
-            pci_nic_init(pci_bus, nd, -1, "e1000");
+            pci_nic_init(nd, "e1000", NULL);
     }
 
 #undef USE_HYPERCALL  //Disable it now, need to implement later!
@@ -628,7 +629,9 @@ static void ipf_init1(ram_addr_t ram_size,
 	int unit_id = 0;
 
 	while ((index = drive_get_index(IF_VIRTIO, 0, unit_id)) != -1) {
-            pci_create_simple(pci_bus, -1, "virtio-blk-pci");
+            pci_dev = pci_create("virtio-blk-pci",
+                                 drives_table[index].devaddr);
+            qdev_init(&pci_dev->qdev);
 	    unit_id++;
 	}
     }
