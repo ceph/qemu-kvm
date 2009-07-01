@@ -286,6 +286,10 @@ void msix_save(PCIDevice *dev, QEMUFile *f)
 {
     unsigned nentries = (pci_get_word(dev->config + PCI_MSIX_FLAGS) &
                          PCI_MSIX_FLAGS_QSIZE) + 1;
+
+    if (!msix_supported)
+        return;
+
     qemu_put_buffer(f, dev->msix_table_page, nentries * MSIX_ENTRY_SIZE);
     qemu_put_buffer(f, dev->msix_table_page + MSIX_PAGE_PENDING,
                     (nentries + 7) / 8);
@@ -295,6 +299,9 @@ void msix_save(PCIDevice *dev, QEMUFile *f)
 void msix_load(PCIDevice *dev, QEMUFile *f)
 {
     unsigned n = dev->msix_entries_nr;
+
+    if (!msix_supported)
+        return;
 
     if (!dev->cap_present & QEMU_PCI_CAP_MSIX)
         return;
