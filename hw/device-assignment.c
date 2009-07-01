@@ -1126,9 +1126,8 @@ static int assigned_dev_register_msix_mmio(AssignedDevice *dev)
 struct PCIDevice *init_assigned_device(AssignedDevInfo *adev,
                                        const char *devaddr)
 {
-    printf("init_assigned_device: fix me please\n");
-    return NULL;
-#if 0
+    PCIBus *bus;
+    int devfn;
     int r;
     AssignedDevice *dev;
     PCIDevice *pci_dev;
@@ -1138,8 +1137,9 @@ struct PCIDevice *init_assigned_device(AssignedDevInfo *adev,
     DEBUG("Registering real physical device %s (bus=%x dev=%x func=%x)\n",
           adev->name, adev->bus, adev->dev, adev->func);
 
+    bus = pci_get_bus_devfn(&devfn, devaddr);
     pci_dev = pci_register_device(bus, adev->name,
-              sizeof(AssignedDevice), -1, assigned_dev_pci_read_config,
+              sizeof(AssignedDevice), devfn, assigned_dev_pci_read_config,
               assigned_dev_pci_write_config);
     dev = container_of(pci_dev, AssignedDevice, dev);
 
@@ -1203,7 +1203,6 @@ assigned_out:
 out:
     free_assigned_device(adev);
     return NULL;
-#endif
 }
 
 /*
@@ -1268,7 +1267,7 @@ void add_assigned_devices(PCIBus *bus, const char **devices, int n_devices)
             exit(1);
         }
 
-        if (!init_assigned_device(adev, bus)) {
+        if (!init_assigned_device(adev, NULL)) {
             fprintf(stderr, "Failed to initialize assigned device %s\n",
                     devices[i]);
             exit(1);
