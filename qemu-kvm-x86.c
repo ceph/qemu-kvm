@@ -1215,8 +1215,13 @@ int kvm_arch_qemu_init_env(CPUState *cenv)
 
     kvm_trim_features(&cenv->cpuid_features,
                       kvm_arch_get_supported_cpuid(cenv, 1, R_EDX));
+
+    /* prevent the hypervisor bit from being cleared by the kernel */
+    i = cenv->cpuid_ext_features & CPUID_EXT_HYPERVISOR;
     kvm_trim_features(&cenv->cpuid_ext_features,
                       kvm_arch_get_supported_cpuid(cenv, 1, R_ECX));
+    cenv->cpuid_ext_features |= i;
+
     kvm_trim_features(&cenv->cpuid_ext2_features,
                       kvm_arch_get_supported_cpuid(cenv, 0x80000001, R_EDX));
     kvm_trim_features(&cenv->cpuid_ext3_features,
