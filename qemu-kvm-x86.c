@@ -349,7 +349,10 @@ struct kvm_msr_list *kvm_get_msr_list(kvm_context_t kvm)
 	r = ioctl(kvm->fd, KVM_GET_MSR_INDEX_LIST, &sizer);
 	if (r == -1 && errno != E2BIG)
 		return NULL;
-	msrs = malloc(sizeof *msrs + sizer.nmsrs * sizeof *msrs->indices);
+	/* Old kernel modules had a bug and could write beyond the provided
+	   memory. Allocate at least a safe amount of 1K. */
+	msrs = malloc(MAX(1024, sizeof(*msrs) +
+				sizer.nmsrs * sizeof(*msrs->indices)));
 	if (!msrs) {
 		errno = ENOMEM;
 		return NULL;
