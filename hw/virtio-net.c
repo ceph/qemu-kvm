@@ -770,7 +770,7 @@ static int virtio_net_load(QEMUFile *f, void *opaque, int version_id)
     if (version_id >= 6)
         qemu_get_buffer(f, (uint8_t *)n->vlans, MAX_VLAN >> 3);
 
-    if (version_id == 7 && qemu_get_be32(f)) {
+    if (version_id >= 7 && qemu_get_be32(f)) {
 #ifdef TAP_VNET_HDR
         tap_using_vnet_hdr(n->vc->vlan->first_client, 1);
 #else
