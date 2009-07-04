@@ -12,6 +12,8 @@
 
 #include <signal.h>
 
+#include "libkvm-all.h"
+
 int kvm_main_loop(void);
 int kvm_qemu_init(void);
 int kvm_qemu_create_context(void);
@@ -141,7 +143,6 @@ void kvm_arch_do_ioperm(void *_data);
 #define BITMAP_SIZE(m) (ALIGN(((m)>>TARGET_PAGE_BITS), HOST_LONG_BITS) / 8)
 
 #ifdef USE_KVM
-#include "libkvm-all.h"
 #include "sys-queue.h"
 
 extern int kvm_allowed;

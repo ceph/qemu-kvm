@@ -82,9 +82,9 @@ static void kvm_set_pit_ch2(PITState *pit,
 }
 #else
 static inline void kvm_get_pit_ch2(PITState *pit,
-                                   kvm_pit_state *inkernel_state) { }
+                                   struct kvm_pit_state *inkernel_state) { }
 static inline void kvm_set_pit_ch2(PITState *pit,
-                                   kvm_pit_state *inkernel_state) { }
+                                   struct kvm_pit_state *inkernel_state) { }
 #endif
 
 static inline void generate_samples(PCSpkState *s)
