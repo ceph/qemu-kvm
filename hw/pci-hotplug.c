@@ -256,7 +256,9 @@ void pci_device_hot_remove_success(int pcibus, int slot)
 {
     PCIDevice *d = pci_find_device(pcibus, slot, 0);
     int class_code;
+#ifdef USE_KVM_DEVICE_ASSIGNMENT
     AssignedDevInfo *adev;
+#endif
 
     if (!d) {
         monitor_printf(cur_mon, "invalid slot %d\n", slot);
