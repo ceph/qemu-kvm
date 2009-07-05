@@ -45,7 +45,7 @@ static const char *feature_name[] = {
 static const char *ext_feature_name[] = {
     "pni" /* Intel,AMD sse3 */, NULL, NULL, "monitor", "ds_cpl", "vmx", NULL /* Linux smx */, "est",
     "tm2", "ssse3", "cid", NULL, NULL, "cx16", "xtpr", NULL,
-    NULL, NULL, "dca", NULL, NULL, NULL, NULL, "popcnt",
+    NULL, NULL, "dca", NULL, NULL, "x2apic", NULL, "popcnt",
     NULL, NULL, NULL, NULL, NULL, NULL, NULL, "hypervisor",
 };
 static const char *ext2_feature_name[] = {
