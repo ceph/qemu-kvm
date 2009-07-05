@@ -1088,9 +1088,7 @@ int apic_init(CPUState *env)
     s->cpu_env = env;
 
     apic_reset(s);
-    if (!kvm_enabled() || !qemu_kvm_irqchip_in_kernel()) {
-        msix_supported = 1;
-    }
+    msix_supported = 1;
 
     /* XXX: mapping more APICs at the same memory location */
     if (apic_io_memory == 0) {

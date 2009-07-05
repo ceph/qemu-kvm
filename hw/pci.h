@@ -5,6 +5,8 @@
 
 #include "qdev.h"
 
+struct kvm_irq_routing_entry;
+
 /* PCI includes legacy ISA access.  */
 #include "isa.h"
 
@@ -232,6 +234,7 @@ struct PCIDevice {
     unsigned *msix_entry_used;
     /* Region including the MSI-X table */
     uint32_t msix_bar_size;
+    struct kvm_irq_routing_entry *msix_irq_entries;
 
     /* Device capability configuration space */
     struct {

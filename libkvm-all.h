@@ -898,6 +898,20 @@ int kvm_del_routing_entry(kvm_context_t kvm,
 		          struct kvm_irq_routing_entry* entry);
 
 /*!
+ * \brief Updates a routing in the temporary irq routing table
+ *
+ * Update a routing in the temporary irq routing table
+ * with a new value. entry type and GSI can not be changed.
+ * Nothing is committed to the running VM.
+ *
+ * \param kvm Pointer to the current kvm_context
+ */
+int kvm_update_routing_entry(kvm_context_t kvm,
+                             struct kvm_irq_routing_entry* entry,
+                             struct kvm_irq_routing_entry* newentry
+);
+
+/*!
  * \brief Commit the temporary irq routing table
  *
  * Commit the temporary irq routing table to the running VM.
