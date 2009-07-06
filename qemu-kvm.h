@@ -116,11 +116,6 @@ void kvm_tpr_access_report(CPUState *env, uint64_t rip, int is_write);
 void kvm_tpr_vcpu_start(CPUState *env);
 
 int qemu_kvm_get_dirty_pages(unsigned long phys_addr, void *buf);
-int qemu_kvm_register_coalesced_mmio(target_phys_addr_t addr,
-				     unsigned int size);
-int qemu_kvm_unregister_coalesced_mmio(target_phys_addr_t addr,
-				       unsigned int size);
-
 int kvm_coalesce_mmio_region(target_phys_addr_t start, ram_addr_t size);
 int kvm_uncoalesce_mmio_region(target_phys_addr_t start, ram_addr_t size);
 

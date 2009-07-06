@@ -1104,9 +1104,10 @@ int kvm_init_coalesced_mmio(kvm_context_t kvm)
 	return r;
 }
 
-int kvm_register_coalesced_mmio(kvm_context_t kvm, uint64_t addr, uint32_t size)
+int kvm_coalesce_mmio_region(target_phys_addr_t addr, ram_addr_t size)
 {
 #ifdef KVM_CAP_COALESCED_MMIO
+	kvm_context_t kvm = kvm_context;
 	struct kvm_coalesced_mmio_zone zone;
 	int r;
 
@@ -1126,9 +1127,10 @@ int kvm_register_coalesced_mmio(kvm_context_t kvm, uint64_t addr, uint32_t size)
 	return -ENOSYS;
 }
 
-int kvm_unregister_coalesced_mmio(kvm_context_t kvm, uint64_t addr, uint32_t size)
+int kvm_uncoalesce_mmio_region(target_phys_addr_t addr, ram_addr_t size)
 {
 #ifdef KVM_CAP_COALESCED_MMIO
+	kvm_context_t kvm = kvm_context;
 	struct kvm_coalesced_mmio_zone zone;
 	int r;
 
@@ -2757,27 +2759,6 @@ void kvm_mutex_lock(void)
 {
     pthread_mutex_lock(&qemu_mutex);
     cpu_single_env = NULL;
-}
-
-int qemu_kvm_register_coalesced_mmio(target_phys_addr_t addr, unsigned int size)
-{
-    return kvm_register_coalesced_mmio(kvm_context, addr, size);
-}
-
-int qemu_kvm_unregister_coalesced_mmio(target_phys_addr_t addr,
-				       unsigned int size)
-{
-    return kvm_unregister_coalesced_mmio(kvm_context, addr, size);
-}
-
-int kvm_coalesce_mmio_region(target_phys_addr_t start, ram_addr_t size)
-{
-    return kvm_register_coalesced_mmio(kvm_context, start, size);
-}
-
-int kvm_uncoalesce_mmio_region(target_phys_addr_t start, ram_addr_t size)
-{
-    return kvm_unregister_coalesced_mmio(kvm_context, start, size);
 }
 
 #ifdef USE_KVM_DEVICE_ASSIGNMENT
