@@ -77,6 +77,7 @@ int kvm_arch_try_push_interrupts(void *opaque);
 void kvm_arch_push_nmi(void *opaque);
 void kvm_arch_update_regs_for_sipi(CPUState *env);
 void kvm_arch_cpu_reset(CPUState *env);
+int kvm_set_boot_cpu_id(uint32_t id);
 
 struct kvm_guest_debug;
 struct kvm_debug_exit_arch;

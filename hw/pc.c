@@ -1131,6 +1131,7 @@ static void pc_init1(ram_addr_t ram_size,
 #endif
     }
 
+    kvm_set_boot_cpu_id(0);
     for (i = 0; i < smp_cpus; i++) {
         env = pc_new_cpu(cpu_model);
     }

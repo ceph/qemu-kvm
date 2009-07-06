@@ -542,6 +542,18 @@ err:
 	return NULL;
 }
 
+static int kvm_set_boot_vcpu_id(kvm_context_t kvm, uint32_t id)
+{
+#ifdef KVM_CAP_SET_BOOT_CPU_ID
+    int r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_SET_BOOT_CPU_ID);
+    if (r > 0)
+        return ioctl(kvm->vm_fd, KVM_SET_BOOT_CPU_ID, id);
+    return -ENOSYS;
+#else
+    return -ENOSYS;
+#endif
+}
+
 int kvm_create_vm(kvm_context_t kvm)
 {
 	int fd = kvm->fd;
@@ -2763,4 +2775,9 @@ void qemu_kvm_cpu_stop(CPUState *env)
 {
     if (kvm_enabled())
         env->kvm_cpu_state.stopped = 1;
+}
+
+int kvm_set_boot_cpu_id(uint32_t id)
+{
+	return kvm_set_boot_vcpu_id(kvm_context, id);
 }
