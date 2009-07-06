@@ -48,12 +48,8 @@ void qemu_kvm_cpuid_on_env(CPUState *env);
 void kvm_inject_interrupt(CPUState *env, int mask);
 void kvm_update_after_sipi(CPUState *env);
 void kvm_update_interrupt_request(CPUState *env);
-void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
-                                      unsigned long size,
-                                      unsigned long phys_offset);
-void kvm_cpu_unregister_physical_memory(target_phys_addr_t start_addr,
-                                        target_phys_addr_t size,
-                                        unsigned long phys_offset);
+void kvm_set_phys_mem(target_phys_addr_t start_addr, ram_addr_t size,
+                      ram_addr_t phys_offset);
 void *kvm_cpu_create_phys_mem(target_phys_addr_t start_addr,
 			      unsigned long size, int log, int writable);
 
@@ -197,14 +193,6 @@ static inline void kvm_sleep_end(void)
     if (kvm_enabled())
 	kvm_mutex_lock();
 }
-
-static inline void kvm_set_phys_mem(target_phys_addr_t start_addr,
-                      ram_addr_t size,
-                      ram_addr_t phys_offset)
-{
-    kvm_cpu_register_physical_memory(start_addr, size, phys_offset);
-}
-
 
 int kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr, target_phys_addr_t end_addr);
 

@@ -534,52 +534,6 @@ int kvm_create(kvm_context_t kvm, unsigned long phys_mem_bytes, void **vm_mem)
 }
 
 
-void *kvm_create_phys_mem(kvm_context_t kvm, unsigned long phys_start,
-			  unsigned long len, int log, int writable)
-{
-	int r;
-	int prot = PROT_READ;
-	void *ptr;
-	struct kvm_userspace_memory_region memory = {
-		.memory_size = len,
-		.guest_phys_addr = phys_start,
-		.flags = log ? KVM_MEM_LOG_DIRTY_PAGES : 0,
-	};
-
-	if (writable)
-		prot |= PROT_WRITE;
-
-#if !defined(__s390__)
-	ptr = mmap(NULL, len, prot, MAP_ANONYMOUS | MAP_SHARED, -1, 0);
-#else
-	ptr = mmap(LIBKVM_S390_ORIGIN, len, prot | PROT_EXEC,
-		MAP_FIXED | MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-#endif
-	if (ptr == MAP_FAILED) {
-		fprintf(stderr, "%s: %s", __func__, strerror(errno));
-		return 0;
-	}
-
-	memset(ptr, 0, len);
-
-	memory.userspace_addr = (unsigned long)ptr;
-	memory.slot = get_free_slot(kvm);
-	DPRINTF("slot %d start %llx len %llx flags %x\n",
-		memory.slot,
-		memory.guest_phys_addr,
-		memory.memory_size,
-		memory.flags);
-	r = ioctl(kvm->vm_fd, KVM_SET_USER_MEMORY_REGION, &memory);
-	if (r == -1) {
-		fprintf(stderr, "%s: %s", __func__, strerror(errno));
-		return 0;
-	}
-	register_slot(memory.slot, memory.guest_phys_addr, memory.memory_size,
-		      memory.userspace_addr, memory.flags);
-
-        return ptr;
-}
-
 int kvm_register_phys_mem(kvm_context_t kvm,
 			  unsigned long phys_start, void *userspace_addr,
 			  unsigned long len, int log)
@@ -2394,9 +2348,8 @@ static void drop_mapping(target_phys_addr_t start_addr)
 }
 #endif
 
-void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
-                                      unsigned long size,
-                                      unsigned long phys_offset)
+void kvm_set_phys_mem(target_phys_addr_t start_addr, ram_addr_t size,
+                      ram_addr_t phys_offset)
 {
     int r = 0;
     unsigned long area_flags;
@@ -2471,13 +2424,6 @@ void kvm_cpu_register_physical_memory(target_phys_addr_t start_addr,
 #endif
 
     return;
-}
-
-void kvm_cpu_unregister_physical_memory(target_phys_addr_t start_addr,
-                                        target_phys_addr_t size,
-                                        unsigned long phys_offset)
-{
-    kvm_unregister_memory_area(kvm_context, start_addr, size);
 }
 
 int kvm_setup_guest_memory(void *area, unsigned long size)
@@ -2799,18 +2745,6 @@ int kvm_set_irq(int irq, int level, int *status)
 int qemu_kvm_get_dirty_pages(unsigned long phys_addr, void *buf)
 {
     return kvm_get_dirty_pages(kvm_context, phys_addr, buf);
-}
-
-void *kvm_cpu_create_phys_mem(target_phys_addr_t start_addr,
-			      unsigned long size, int log, int writable)
-{
-    return kvm_create_phys_mem(kvm_context, start_addr, size, log, writable);
-}
-
-void kvm_cpu_destroy_phys_mem(target_phys_addr_t start_addr,
-			      unsigned long size)
-{
-    kvm_destroy_phys_mem(kvm_context, start_addr, size);
 }
 
 void kvm_mutex_unlock(void)
