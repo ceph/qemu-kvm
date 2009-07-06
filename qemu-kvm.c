@@ -174,27 +174,6 @@ int kvm_mmio_write(void *opaque, uint64_t addr, uint8_t *data, int len)
 	return 0;
 }
 
-static int kvm_io_window(void *opaque)
-{
-    return 1;
-}
-
-static int kvm_halt(void *opaque, kvm_vcpu_context_t vcpu)
-{
-    return kvm_arch_halt(opaque, vcpu);
-}
-
-static int kvm_shutdown(void *opaque, void *data)
-{
-    CPUState *env = (CPUState *)data;
-
-    /* stop the current vcpu from going back to guest mode */
-    env->kvm_cpu_state.stopped = 1;
-
-    qemu_system_reset_request();
-    return 1;
-}
-
 static int handle_unhandled(kvm_context_t kvm, kvm_vcpu_context_t vcpu,
                             uint64_t reason)
 {
@@ -991,45 +970,21 @@ static int handle_mmio(kvm_vcpu_context_t vcpu)
 
 int handle_io_window(kvm_context_t kvm)
 {
-	return kvm_io_window(kvm->opaque);
+    return 1;
 }
 
 int handle_halt(kvm_vcpu_context_t vcpu)
 {
-	return kvm_halt(vcpu->kvm->opaque, vcpu);
+	return kvm_arch_halt(vcpu->kvm->opaque, vcpu);
 }
 
-int handle_shutdown(kvm_context_t kvm, void *env)
+int handle_shutdown(kvm_context_t kvm, CPUState *env)
 {
-	return kvm_shutdown(kvm->opaque, env);
-}
+    /* stop the current vcpu from going back to guest mode */
+    env->kvm_cpu_state.stopped = 1;
 
-static int kvm_try_push_interrupts(void *opaque)
-{
-    return kvm_arch_try_push_interrupts(opaque);
-}
-
-static void kvm_post_run(void *opaque, void *data)
-{
-    CPUState *env = (CPUState *)data;
-
-    pthread_mutex_lock(&qemu_mutex);
-    kvm_arch_post_kvm_run(opaque, env);
-}
-
-static int kvm_pre_run(void *opaque, void *data)
-{
-    CPUState *env = (CPUState *)data;
-
-    kvm_arch_pre_kvm_run(opaque, env);
-
-    pthread_mutex_unlock(&qemu_mutex);
-    return 0;
-}
-
-int try_push_interrupts(kvm_context_t kvm)
-{
-	return kvm_try_push_interrupts(kvm->opaque);
+    qemu_system_reset_request();
+    return 1;
 }
 
 static inline void push_nmi(kvm_context_t kvm)
@@ -1039,14 +994,20 @@ static inline void push_nmi(kvm_context_t kvm)
 #endif /* KVM_CAP_USER_NMI */
 }
 
-void post_kvm_run(kvm_context_t kvm, void *env)
+void post_kvm_run(kvm_context_t kvm, CPUState *env)
 {
-	kvm_post_run(kvm->opaque, env);
+    pthread_mutex_lock(&qemu_mutex);
+    kvm_arch_post_kvm_run(kvm->opaque, env);
 }
 
-int pre_kvm_run(kvm_context_t kvm, void *env)
+int pre_kvm_run(kvm_context_t kvm, CPUState *env)
 {
-	return kvm_pre_run(kvm->opaque, env);
+    kvm_arch_pre_kvm_run(kvm->opaque, env);
+
+    if (env->exit_request)
+        return 1;
+    pthread_mutex_unlock(&qemu_mutex);
+    return 0;
 }
 
 int kvm_get_interrupt_flag(kvm_vcpu_context_t vcpu)
@@ -1070,7 +1031,7 @@ again:
 	push_nmi(kvm);
 #if !defined(__s390__)
 	if (!kvm->irqchip_in_kernel)
-		run->request_interrupt_window = try_push_interrupts(kvm);
+		run->request_interrupt_window = kvm_arch_try_push_interrupts(env);
 #endif
 	r = pre_kvm_run(kvm, env);
 	if (r)

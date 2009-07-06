@@ -98,9 +98,9 @@ int kvm_arch_run(kvm_vcpu_context_t vcpu);
 void kvm_show_code(kvm_vcpu_context_t vcpu);
 
 int handle_halt(kvm_vcpu_context_t vcpu);
-int handle_shutdown(kvm_context_t kvm, void *env);
-void post_kvm_run(kvm_context_t kvm, void *env);
-int pre_kvm_run(kvm_context_t kvm, void *env);
+int handle_shutdown(kvm_context_t kvm, CPUState *env);
+void post_kvm_run(kvm_context_t kvm, CPUState *env);
+int pre_kvm_run(kvm_context_t kvm, CPUState *env);
 int handle_io_window(kvm_context_t kvm);
 int handle_debug(kvm_vcpu_context_t vcpu, void *env);
 int try_push_interrupts(kvm_context_t kvm);
