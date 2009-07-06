@@ -19,7 +19,6 @@ int kvm_qemu_init(void);
 int kvm_qemu_create_context(void);
 int kvm_init_ap(void);
 int kvm_vcpu_inited(CPUState *env);
-void kvm_qemu_destroy(void);
 void kvm_load_registers(CPUState *env);
 void kvm_save_registers(CPUState *env);
 void kvm_load_mpstate(CPUState *env);

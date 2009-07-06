@@ -2262,12 +2262,12 @@ int kvm_qemu_create_context(void)
         kvm_disable_pit_creation(kvm_context);
     }
     if (kvm_create(kvm_context, 0, NULL) < 0) {
-	kvm_qemu_destroy();
-	return -1;
+       kvm_finalize(kvm_context);
+       return -1;
     }
     r = kvm_arch_qemu_create_context();
     if(r <0)
-	kvm_qemu_destroy();
+       kvm_finalize(kvm_context);
     if (kvm_pit && !kvm_pit_reinject) {
         if (kvm_reinject_control(kvm_context, 0)) {
             fprintf(stderr, "failure to disable in-kernel PIT reinjection\n");
@@ -2284,11 +2284,6 @@ int kvm_qemu_create_context(void)
     }
 
     return 0;
-}
-
-void kvm_qemu_destroy(void)
-{
-    kvm_finalize(kvm_context);
 }
 
 #ifdef TARGET_I386
