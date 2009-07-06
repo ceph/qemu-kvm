@@ -120,6 +120,9 @@ int kvm_uncoalesce_mmio_region(target_phys_addr_t start, ram_addr_t size);
 
 int kvm_arch_init_irq_routing(void);
 
+int kvm_mmio_read(void *opaque, uint64_t addr, uint8_t *data, int len);
+int kvm_mmio_write(void *opaque, uint64_t addr, uint8_t *data, int len);
+
 #ifdef USE_KVM_DEVICE_ASSIGNMENT
 struct ioperm_data;
 

@@ -27,6 +27,7 @@
 #include <sys/syscall.h>
 #include <sys/mman.h>
 #include <sys/ioctl.h>
+#include <signal.h>
 
 #define false 0
 #define true 1
@@ -78,6 +79,129 @@ static LIST_HEAD(, ioperm_data) ioperm_head;
 
 int kvm_abi = EXPECTED_KVM_API_VERSION;
 int kvm_page_size;
+
+#ifdef KVM_CAP_SET_GUEST_DEBUG
+static int kvm_debug(void *opaque, void *data,
+                     struct kvm_debug_exit_arch *arch_info)
+{
+    int handle = kvm_arch_debug(arch_info);
+    CPUState *env = data;
+
+    if (handle) {
+	kvm_debug_cpu_requested = env;
+	env->kvm_cpu_state.stopped = 1;
+    }
+    return handle;
+}
+#endif
+
+static int kvm_inb(void *opaque, uint16_t addr, uint8_t *data)
+{
+    *data = cpu_inb(0, addr);
+    return 0;
+}
+
+static int kvm_inw(void *opaque, uint16_t addr, uint16_t *data)
+{
+    *data = cpu_inw(0, addr);
+    return 0;
+}
+
+static int kvm_inl(void *opaque, uint16_t addr, uint32_t *data)
+{
+    *data = cpu_inl(0, addr);
+    return 0;
+}
+
+#define PM_IO_BASE 0xb000
+
+static int kvm_outb(void *opaque, uint16_t addr, uint8_t data)
+{
+    if (addr == 0xb2) {
+	switch (data) {
+	case 0: {
+	    cpu_outb(0, 0xb3, 0);
+	    break;
+	}
+	case 0xf0: {
+	    unsigned x;
+
+	    /* enable acpi */
+	    x = cpu_inw(0, PM_IO_BASE + 4);
+	    x &= ~1;
+	    cpu_outw(0, PM_IO_BASE + 4, x);
+	    break;
+	}
+	case 0xf1: {
+	    unsigned x;
+
+	    /* enable acpi */
+	    x = cpu_inw(0, PM_IO_BASE + 4);
+	    x |= 1;
+	    cpu_outw(0, PM_IO_BASE + 4, x);
+	    break;
+	}
+	default:
+	    break;
+	}
+	return 0;
+    }
+    cpu_outb(0, addr, data);
+    return 0;
+}
+
+static int kvm_outw(void *opaque, uint16_t addr, uint16_t data)
+{
+    cpu_outw(0, addr, data);
+    return 0;
+}
+
+static int kvm_outl(void *opaque, uint16_t addr, uint32_t data)
+{
+    cpu_outl(0, addr, data);
+    return 0;
+}
+
+int kvm_mmio_read(void *opaque, uint64_t addr, uint8_t *data, int len)
+{
+	cpu_physical_memory_rw(addr, data, len, 0);
+	return 0;
+}
+
+int kvm_mmio_write(void *opaque, uint64_t addr, uint8_t *data, int len)
+{
+	cpu_physical_memory_rw(addr, data, len, 1);
+	return 0;
+}
+
+static int kvm_io_window(void *opaque)
+{
+    return 1;
+}
+
+static int kvm_halt(void *opaque, kvm_vcpu_context_t vcpu)
+{
+    return kvm_arch_halt(opaque, vcpu);
+}
+
+static int kvm_shutdown(void *opaque, void *data)
+{
+    CPUState *env = (CPUState *)data;
+
+    /* stop the current vcpu from going back to guest mode */
+    env->kvm_cpu_state.stopped = 1;
+
+    qemu_system_reset_request();
+    return 1;
+}
+
+static int handle_unhandled(kvm_context_t kvm, kvm_vcpu_context_t vcpu,
+                            uint64_t reason)
+{
+    fprintf(stderr, "kvm: unhandled exit %"PRIx64"\n", reason);
+    return -EINVAL;
+}
+
 
 static inline void set_gsi(kvm_context_t kvm, unsigned int gsi)
 {
@@ -314,8 +438,7 @@ int kvm_dirty_pages_log_reset(kvm_context_t kvm)
 }
 
 
-kvm_context_t kvm_init(struct kvm_callbacks *callbacks,
-		       void *opaque)
+kvm_context_t kvm_init(void *opaque)
 {
 	int fd;
 	kvm_context_t kvm;
@@ -351,7 +474,6 @@ kvm_context_t kvm_init(struct kvm_callbacks *callbacks,
 	memset(kvm, 0, sizeof(*kvm));
 	kvm->fd = fd;
 	kvm->vm_fd = -1;
-	kvm->callbacks = callbacks;
 	kvm->opaque = opaque;
 	kvm->dirty_pages_log_all = 0;
 	kvm->no_irqchip_creation = 0;
@@ -741,13 +863,13 @@ static int handle_io(kvm_vcpu_context_t vcpu)
 		case KVM_EXIT_IO_IN:
 			switch (run->io.size) {
 			case 1:
-				r = kvm->callbacks->inb(kvm->opaque, addr, p);
+				r = kvm_inb(kvm->opaque, addr, p);
 				break;
 			case 2:
-				r = kvm->callbacks->inw(kvm->opaque, addr, p);
+				r = kvm_inw(kvm->opaque, addr, p);
 				break;
 			case 4:
-				r = kvm->callbacks->inl(kvm->opaque, addr, p);
+				r = kvm_inl(kvm->opaque, addr, p);
 				break;
 			default:
 				fprintf(stderr, "bad I/O size %d\n", run->io.size);
@@ -757,15 +879,15 @@ static int handle_io(kvm_vcpu_context_t vcpu)
 		case KVM_EXIT_IO_OUT:
 			switch (run->io.size) {
 			case 1:
-				r = kvm->callbacks->outb(kvm->opaque, addr,
+				r = kvm_outb(kvm->opaque, addr,
 						     *(uint8_t *)p);
 				break;
 			case 2:
-				r = kvm->callbacks->outw(kvm->opaque, addr,
+				r = kvm_outw(kvm->opaque, addr,
 						     *(uint16_t *)p);
 				break;
 			case 4:
-				r = kvm->callbacks->outl(kvm->opaque, addr,
+				r = kvm_outl(kvm->opaque, addr,
 						     *(uint32_t *)p);
 				break;
 			default:
@@ -790,7 +912,7 @@ int handle_debug(kvm_vcpu_context_t vcpu, void *env)
     struct kvm_run *run = vcpu->run;
     kvm_context_t kvm = vcpu->kvm;
 
-    return kvm->callbacks->debug(kvm->opaque, env, &run->debug.arch);
+    return kvm_debug(kvm->opaque, env, &run->debug.arch);
 #else
     return 0;
 #endif
@@ -860,48 +982,71 @@ static int handle_mmio(kvm_vcpu_context_t vcpu)
 	    return 0;
 
 	if (kvm_run->mmio.is_write)
-		return kvm->callbacks->mmio_write(kvm->opaque, addr, data,
+		return kvm_mmio_write(kvm->opaque, addr, data,
 					kvm_run->mmio.len);
 	else
-		return kvm->callbacks->mmio_read(kvm->opaque, addr, data,
+		return kvm_mmio_read(kvm->opaque, addr, data,
 					kvm_run->mmio.len);
 }
 
 int handle_io_window(kvm_context_t kvm)
 {
-	return kvm->callbacks->io_window(kvm->opaque);
+	return kvm_io_window(kvm->opaque);
 }
 
 int handle_halt(kvm_vcpu_context_t vcpu)
 {
-	return vcpu->kvm->callbacks->halt(vcpu->kvm->opaque, vcpu);
+	return kvm_halt(vcpu->kvm->opaque, vcpu);
 }
 
 int handle_shutdown(kvm_context_t kvm, void *env)
 {
-	return kvm->callbacks->shutdown(kvm->opaque, env);
+	return kvm_shutdown(kvm->opaque, env);
+}
+
+static int kvm_try_push_interrupts(void *opaque)
+{
+    return kvm_arch_try_push_interrupts(opaque);
+}
+
+static void kvm_post_run(void *opaque, void *data)
+{
+    CPUState *env = (CPUState *)data;
+
+    pthread_mutex_lock(&qemu_mutex);
+    kvm_arch_post_kvm_run(opaque, env);
+}
+
+static int kvm_pre_run(void *opaque, void *data)
+{
+    CPUState *env = (CPUState *)data;
+
+    kvm_arch_pre_kvm_run(opaque, env);
+
+    pthread_mutex_unlock(&qemu_mutex);
+    return 0;
 }
 
 int try_push_interrupts(kvm_context_t kvm)
 {
-	return kvm->callbacks->try_push_interrupts(kvm->opaque);
+	return kvm_try_push_interrupts(kvm->opaque);
 }
 
 static inline void push_nmi(kvm_context_t kvm)
 {
 #ifdef KVM_CAP_USER_NMI
-	kvm->callbacks->push_nmi(kvm->opaque);
+	kvm_arch_push_nmi(kvm->opaque);
 #endif /* KVM_CAP_USER_NMI */
 }
 
 void post_kvm_run(kvm_context_t kvm, void *env)
 {
-	kvm->callbacks->post_kvm_run(kvm->opaque, env);
+	kvm_post_run(kvm->opaque, env);
 }
 
 int pre_kvm_run(kvm_context_t kvm, void *env)
 {
-	return kvm->callbacks->pre_kvm_run(kvm->opaque, env);
+	return kvm_pre_run(kvm->opaque, env);
 }
 
 int kvm_get_interrupt_flag(kvm_vcpu_context_t vcpu)
@@ -946,7 +1091,7 @@ again:
 	        struct kvm_coalesced_mmio_ring *ring = (void *)run +
 						kvm->coalesced_mmio * PAGE_SIZE;
 		while (ring->first != ring->last) {
-			kvm->callbacks->mmio_write(kvm->opaque,
+			kvm_mmio_write(kvm->opaque,
 				 ring->coalesced_mmio[ring->first].phys_addr,
 				&ring->coalesced_mmio[ring->first].data[0],
 				 ring->coalesced_mmio[ring->first].len);
@@ -966,11 +1111,11 @@ again:
 	if (1) {
 		switch (run->exit_reason) {
 		case KVM_EXIT_UNKNOWN:
-			r = kvm->callbacks->unhandled(kvm, vcpu,
+			r = handle_unhandled(kvm, vcpu,
 				run->hw.hardware_exit_reason);
 			break;
 		case KVM_EXIT_FAIL_ENTRY:
-			r = kvm->callbacks->unhandled(kvm, vcpu,
+			r = handle_unhandled(kvm, vcpu,
 				run->fail_entry.hardware_entry_failure_reason);
 			break;
 		case KVM_EXIT_EXCEPTION:
@@ -1000,11 +1145,11 @@ again:
 			break;
 #if defined(__s390__)
 		case KVM_EXIT_S390_SIEIC:
-			r = kvm->callbacks->s390_handle_intercept(kvm, vcpu,
+			r = kvm_s390_handle_intercept(kvm, vcpu,
 				run);
 			break;
 		case KVM_EXIT_S390_RESET:
-			r = kvm->callbacks->s390_handle_reset(kvm, vcpu, run);
+			r = kvm_s390_handle_reset(kvm, vcpu, run);
 			break;
 #endif
 		default:
@@ -1603,31 +1748,6 @@ void kvm_update_interrupt_request(CPUState *env)
     }
 }
 
-#include <signal.h>
-
-static int kvm_try_push_interrupts(void *opaque)
-{
-    return kvm_arch_try_push_interrupts(opaque);
-}
-
-static void kvm_post_run(void *opaque, void *data)
-{
-    CPUState *env = (CPUState *)data;
-
-    pthread_mutex_lock(&qemu_mutex);
-    kvm_arch_post_kvm_run(opaque, env);
-}
-
-static int kvm_pre_run(void *opaque, void *data)
-{
-    CPUState *env = (CPUState *)data;
-
-    kvm_arch_pre_kvm_run(opaque, env);
-
-    pthread_mutex_unlock(&qemu_mutex);
-    return 0;
-}
-
 static void kvm_do_load_registers(void *_env)
 {
     CPUState *env = _env;
@@ -2077,160 +2197,10 @@ int kvm_main_loop(void)
     return 0;
 }
 
-#ifdef KVM_CAP_SET_GUEST_DEBUG
-static int kvm_debug(void *opaque, void *data,
-                     struct kvm_debug_exit_arch *arch_info)
-{
-    int handle = kvm_arch_debug(arch_info);
-    CPUState *env = data;
-
-    if (handle) {
-	kvm_debug_cpu_requested = env;
-	env->kvm_cpu_state.stopped = 1;
-    }
-    return handle;
-}
-#endif
-
-static int kvm_inb(void *opaque, uint16_t addr, uint8_t *data)
-{
-    *data = cpu_inb(0, addr);
-    return 0;
-}
-
-static int kvm_inw(void *opaque, uint16_t addr, uint16_t *data)
-{
-    *data = cpu_inw(0, addr);
-    return 0;
-}
-
-static int kvm_inl(void *opaque, uint16_t addr, uint32_t *data)
-{
-    *data = cpu_inl(0, addr);
-    return 0;
-}
-
-#define PM_IO_BASE 0xb000
-
-static int kvm_outb(void *opaque, uint16_t addr, uint8_t data)
-{
-    if (addr == 0xb2) {
-	switch (data) {
-	case 0: {
-	    cpu_outb(0, 0xb3, 0);
-	    break;
-	}
-	case 0xf0: {
-	    unsigned x;
-
-	    /* enable acpi */
-	    x = cpu_inw(0, PM_IO_BASE + 4);
-	    x &= ~1;
-	    cpu_outw(0, PM_IO_BASE + 4, x);
-	    break;
-	}
-	case 0xf1: {
-	    unsigned x;
-
-	    /* enable acpi */
-	    x = cpu_inw(0, PM_IO_BASE + 4);
-	    x |= 1;
-	    cpu_outw(0, PM_IO_BASE + 4, x);
-	    break;
-	}
-	default:
-	    break;
-	}
-	return 0;
-    }
-    cpu_outb(0, addr, data);
-    return 0;
-}
-
-static int kvm_outw(void *opaque, uint16_t addr, uint16_t data)
-{
-    cpu_outw(0, addr, data);
-    return 0;
-}
-
-static int kvm_outl(void *opaque, uint16_t addr, uint32_t data)
-{
-    cpu_outl(0, addr, data);
-    return 0;
-}
-
-static int kvm_mmio_read(void *opaque, uint64_t addr, uint8_t *data, int len)
-{
-	cpu_physical_memory_rw(addr, data, len, 0);
-	return 0;
-}
-
-static int kvm_mmio_write(void *opaque, uint64_t addr, uint8_t *data, int len)
-{
-	cpu_physical_memory_rw(addr, data, len, 1);
-	return 0;
-}
-
-static int kvm_io_window(void *opaque)
-{
-    return 1;
-}
-
- 
-static int kvm_halt(void *opaque, kvm_vcpu_context_t vcpu)
-{
-    return kvm_arch_halt(opaque, vcpu);
-}
-
-static int kvm_shutdown(void *opaque, void *data)
-{
-    CPUState *env = (CPUState *)data;
-
-    /* stop the current vcpu from going back to guest mode */
-    env->kvm_cpu_state.stopped = 1;
-
-    qemu_system_reset_request();
-    return 1;
-}
-
-static int handle_unhandled(kvm_context_t kvm, kvm_vcpu_context_t vcpu,
-                            uint64_t reason)
-{
-    fprintf(stderr, "kvm: unhandled exit %"PRIx64"\n", reason);
-    return -EINVAL;
-}
-
-static struct kvm_callbacks qemu_kvm_ops = {
-#ifdef KVM_CAP_SET_GUEST_DEBUG
-    .debug = kvm_debug,
-#endif
-    .inb   = kvm_inb,
-    .inw   = kvm_inw,
-    .inl   = kvm_inl,
-    .outb  = kvm_outb,
-    .outw  = kvm_outw,
-    .outl  = kvm_outl,
-    .mmio_read = kvm_mmio_read,
-    .mmio_write = kvm_mmio_write,
-    .halt  = kvm_halt,
-    .shutdown = kvm_shutdown,
-    .io_window = kvm_io_window,
-    .try_push_interrupts = kvm_try_push_interrupts,
-#ifdef KVM_CAP_USER_NMI
-    .push_nmi = kvm_arch_push_nmi,
-#endif
-    .post_kvm_run = kvm_post_run,
-    .pre_kvm_run = kvm_pre_run,
-#ifdef TARGET_I386
-    .tpr_access = handle_tpr_access,
-#endif
-    .unhandled = handle_unhandled,
-};
-
 int kvm_qemu_init()
 {
     /* Try to initialize kvm */
-    kvm_context = kvm_init(&qemu_kvm_ops, cpu_single_env);
+    kvm_context = kvm_init(cpu_single_env);
     if (!kvm_context) {
       	return -1;
     }

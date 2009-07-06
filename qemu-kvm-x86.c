@@ -121,9 +121,10 @@ int kvm_arch_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
 static int kvm_handle_tpr_access(kvm_vcpu_context_t vcpu)
 {
 	struct kvm_run *run = vcpu->run;
-	return vcpu->kvm->callbacks->tpr_access(vcpu->kvm->opaque, vcpu,
-					  run->tpr_access.rip,
-					  run->tpr_access.is_write);
+	kvm_tpr_access_report(cpu_single_env,
+                         run->tpr_access.rip,
+                         run->tpr_access.is_write);
+    return 0;
 }
 
 
@@ -326,7 +327,7 @@ void kvm_show_code(kvm_vcpu_context_t vcpu)
 	for (n = -back_offset; n < SHOW_CODE_LEN-back_offset; ++n) {
 		if (n == 0)
 			strcat(code_str, " -->");
-		r = kvm->callbacks->mmio_read(kvm->opaque, rip + n, &code, 1);
+		r = kvm_mmio_read(kvm->opaque, rip + n, &code, 1);
 		if (r < 0) {
 			strcat(code_str, " xx");
 			continue;
@@ -1342,13 +1343,6 @@ void kvm_arch_update_regs_for_sipi(CPUState *env)
     env->segs[R_CS] = cs;
     env->eip = 0;
     kvm_arch_load_regs(env);
-}
-
-int handle_tpr_access(void *opaque, kvm_vcpu_context_t vcpu,
-			     uint64_t rip, int is_write)
-{
-    kvm_tpr_access_report(cpu_single_env, rip, is_write);
-    return 0;
 }
 
 void kvm_arch_cpu_reset(CPUState *env)

@@ -175,12 +175,10 @@ struct kvm_callbacks {
  * holds information about the KVM instance that gets created by this call.\n
  * This should always be your first call to KVM.
  *
- * \param callbacks Pointer to a valid kvm_callbacks structure
  * \param opaque Not used
  * \return NULL on failure
  */
-kvm_context_t kvm_init(struct kvm_callbacks *callbacks,
-		       void *opaque);
+kvm_context_t kvm_init(void *opaque);
 
 /*!
  * \brief Cleanup the KVM context
