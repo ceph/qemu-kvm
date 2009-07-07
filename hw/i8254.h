@@ -26,12 +26,14 @@
 #define QEMU_I8254_H
 
 #define PIT_SAVEVM_NAME "i8254"
-#define PIT_SAVEVM_VERSION 1
+#define PIT_SAVEVM_VERSION 2
 
 #define RW_STATE_LSB 1
 #define RW_STATE_MSB 2
 #define RW_STATE_WORD0 3
 #define RW_STATE_WORD1 4
+
+#define PIT_FLAGS_HPET_LEGACY  1
 
 typedef struct PITChannelState {
     int count; /* can be 65536 */
@@ -55,6 +57,7 @@ typedef struct PITChannelState {
 
 struct PITState {
     PITChannelState channels[3];
+    uint32_t flags;
 };
 
 void pit_save(QEMUFile *f, void *opaque);

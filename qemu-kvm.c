@@ -2058,6 +2058,26 @@ int kvm_vcpu_inited(CPUState *env)
     return env->kvm_cpu_state.created;
 }
 
+#ifdef TARGET_I386
+void kvm_hpet_disable_kpit(void)
+{
+    struct kvm_pit_state2 ps2;
+
+    kvm_get_pit2(kvm_context, &ps2);
+    ps2.flags |= KPIT_FLAGS_HPET_LEGACY;
+    kvm_set_pit2(kvm_context, &ps2);
+}
+
+void kvm_hpet_enable_kpit(void)
+{
+    struct kvm_pit_state2 ps2;
+
+    kvm_get_pit2(kvm_context, &ps2);
+    ps2.flags &= ~KPIT_FLAGS_HPET_LEGACY;
+    kvm_set_pit2(kvm_context, &ps2);
+}
+#endif
+
 int kvm_init_ap(void)
 {
 #ifdef TARGET_I386

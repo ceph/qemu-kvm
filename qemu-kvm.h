@@ -36,6 +36,8 @@ void kvm_apic_init(CPUState *env);
 /* called from vcpu initialization */
 void qemu_kvm_load_lapic(CPUState *env);
 
+void kvm_hpet_enable_kpit(void);
+void kvm_hpet_disable_kpit(void);
 int kvm_set_irq(int irq, int level, int *status);
 
 int kvm_physical_memory_set_dirty_tracking(int enable);
@@ -163,6 +165,9 @@ int kvm_has_sync_mmu(void);
 #define qemu_kvm_irqchip_in_kernel() kvm_irqchip_in_kernel(kvm_context)
 #define qemu_kvm_pit_in_kernel() kvm_pit_in_kernel(kvm_context)
 #define qemu_kvm_has_gsi_routing() kvm_has_gsi_routing(kvm_context)
+#ifdef TARGET_I386
+#define qemu_kvm_has_pit_state2() kvm_has_pit_state2(kvm_context)
+#endif
 void kvm_init_vcpu(CPUState *env);
 void kvm_load_tsc(CPUState *env);
 #else
@@ -172,6 +177,9 @@ void kvm_load_tsc(CPUState *env);
 #define qemu_kvm_irqchip_in_kernel() (0)
 #define qemu_kvm_pit_in_kernel() (0)
 #define qemu_kvm_has_gsi_routing() (0)
+#ifdef TARGET_I386
+#define qemu_kvm_has_pit_state2() (0)
+#endif
 #define kvm_load_registers(env) do {} while(0)
 #define kvm_save_registers(env) do {} while(0)
 #define qemu_kvm_cpu_stop(env) do {} while(0)
