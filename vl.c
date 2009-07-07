@@ -254,6 +254,7 @@ int no_reboot = 0;
 int no_shutdown = 0;
 int cursor_hide = 1;
 int graphic_rotate = 0;
+uint8_t irq0override = 1;
 #ifndef _WIN32
 int daemonize = 0;
 #endif
@@ -6219,8 +6220,14 @@ int main(int argc, char **argv, char **envp)
 
     module_call_init(MODULE_INIT_DEVICE);
 
-    if (kvm_enabled())
-	kvm_init_ap();
+    if (kvm_enabled()) {
+       kvm_init_ap();
+#ifdef USE_KVM
+        if (kvm_irqchip && !qemu_kvm_has_gsi_routing()) {
+            irq0override = 0;
+        }
+#endif
+    }
 
     machine->init(ram_size, boot_devices,
                   kernel_filename, kernel_cmdline, initrd_filename, cpu_model);

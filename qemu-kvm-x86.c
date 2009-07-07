@@ -1564,7 +1564,11 @@ int kvm_arch_init_irq_routing(void)
                 return r;
         }
         for (i = 0; i < 24; ++i) {
-            r = kvm_add_irq_route(kvm_context, i, KVM_IRQCHIP_IOAPIC, i);
+            if (i == 0) {
+                r = kvm_add_irq_route(kvm_context, i, KVM_IRQCHIP_IOAPIC, 2);
+            } else if (i != 2) {
+                r = kvm_add_irq_route(kvm_context, i, KVM_IRQCHIP_IOAPIC, i);
+            }
             if (r < 0)
                 return r;
         }
