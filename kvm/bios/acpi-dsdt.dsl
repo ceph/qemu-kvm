@@ -194,7 +194,6 @@ DefinitionBlock (
             })
         }
 #ifdef BX_QEMU
-#ifdef HPET_WORKS_IN_KVM
         Device(HPET) {
             Name(_HID,  EISAID("PNP0103"))
             Name(_UID, 0)
@@ -213,7 +212,6 @@ DefinitionBlock (
                 )
             })
         }
-#endif
 #endif
     }
 
