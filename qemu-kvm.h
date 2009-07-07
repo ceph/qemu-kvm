@@ -162,6 +162,7 @@ int kvm_has_sync_mmu(void);
 #define kvm_enabled() (kvm_allowed)
 #define qemu_kvm_irqchip_in_kernel() kvm_irqchip_in_kernel(kvm_context)
 #define qemu_kvm_pit_in_kernel() kvm_pit_in_kernel(kvm_context)
+#define qemu_kvm_has_gsi_routing() kvm_has_gsi_routing(kvm_context)
 void kvm_init_vcpu(CPUState *env);
 void kvm_load_tsc(CPUState *env);
 #else
@@ -170,6 +171,7 @@ void kvm_load_tsc(CPUState *env);
 #define kvm_nested 0
 #define qemu_kvm_irqchip_in_kernel() (0)
 #define qemu_kvm_pit_in_kernel() (0)
+#define qemu_kvm_has_gsi_routing() (0)
 #define kvm_load_registers(env) do {} while(0)
 #define kvm_save_registers(env) do {} while(0)
 #define qemu_kvm_cpu_stop(env) do {} while(0)
