@@ -294,7 +294,45 @@ int kvm_set_pit(kvm_context_t kvm, struct kvm_pit_state *s)
 	return r;
 }
 
+#ifdef KVM_CAP_PIT_STATE2
+int kvm_get_pit2(kvm_context_t kvm, struct kvm_pit_state2 *ps2)
+{
+	int r;
+	if (!kvm->pit_in_kernel)
+		return 0;
+	r = ioctl(kvm->vm_fd, KVM_GET_PIT2, ps2);
+	if (r == -1) {
+		r = -errno;
+		perror("kvm_get_pit2");
+	}
+	return r;
+}
+
+int kvm_set_pit2(kvm_context_t kvm, struct kvm_pit_state2 *ps2)
+{
+	int r;
+	if (!kvm->pit_in_kernel)
+		return 0;
+	r = ioctl(kvm->vm_fd, KVM_SET_PIT2, ps2);
+	if (r == -1) {
+		r = -errno;
+		perror("kvm_set_pit2");
+	}
+	return r;
+}
+
 #endif
+#endif
+
+int kvm_has_pit_state2(kvm_context_t kvm)
+{
+	int r = 0;
+
+#ifdef KVM_CAP_PIT_STATE2
+	r = kvm_check_extension(kvm, KVM_CAP_PIT_STATE2);
+#endif
+	return r;
+}
 
 void kvm_show_code(kvm_vcpu_context_t vcpu)
 {

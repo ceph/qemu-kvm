@@ -25,6 +25,7 @@
 #include "pc.h"
 #include "isa.h"
 #include "qemu-timer.h"
+#include "qemu-kvm.h"
 #include "i8254.h"
 
 //#define DEBUG_PIT
@@ -196,13 +197,18 @@ int pit_get_mode(PITState *pit, int channel)
     return s->mode;
 }
 
-static inline void pit_load_count(PITChannelState *s, int val)
+static inline void pit_load_count(PITState *s, int val, int chan)
 {
     if (val == 0)
         val = 0x10000;
-    s->count_load_time = qemu_get_clock(vm_clock);
-    s->count = val;
-    pit_irq_timer_update(s, s->count_load_time);
+    s->channels[chan].count_load_time = qemu_get_clock(vm_clock);
+    s->channels[chan].count = val;
+#ifdef TARGET_I386
+    if (chan == 0 && pit_state.flags & PIT_FLAGS_HPET_LEGACY) {
+        return;
+    }
+#endif
+    pit_irq_timer_update(&s->channels[chan], s->channels[chan].count_load_time);
 }
 
 /* if already latched, do not latch again */
@@ -262,17 +268,17 @@ static void pit_ioport_write(void *opaque, uint32_t addr, uint32_t val)
         switch(s->write_state) {
         default:
         case RW_STATE_LSB:
-            pit_load_count(s, val);
+            pit_load_count(pit, val, addr);
             break;
         case RW_STATE_MSB:
-            pit_load_count(s, val << 8);
+            pit_load_count(pit, val << 8, addr);
             break;
         case RW_STATE_WORD0:
             s->write_latch = val;
             s->write_state = RW_STATE_WORD1;
             break;
         case RW_STATE_WORD1:
-            pit_load_count(s, s->write_latch | (val << 8));
+            pit_load_count(pit, s->write_latch | (val << 8), addr);
             s->write_state = RW_STATE_WORD0;
             break;
         }
@@ -371,10 +377,11 @@ static void pit_irq_timer_update(PITChannelState *s, int64_t current_time)
            (double)(expire_time - current_time) / ticks_per_sec);
 #endif
     s->next_transition_time = expire_time;
-    if (expire_time != -1)
+    if (expire_time != -1) {
         qemu_mod_timer(s->irq_timer, expire_time);
-    else
+    } else {
         qemu_del_timer(s->irq_timer);
+    }
 }
 
 static void pit_irq_timer(void *opaque)
@@ -390,6 +397,7 @@ void pit_save(QEMUFile *f, void *opaque)
     PITChannelState *s;
     int i;
 
+    qemu_put_be32(f, pit->flags);
     for(i = 0; i < 3; i++) {
         s = &pit->channels[i];
         qemu_put_be32(f, s->count);
@@ -418,9 +426,10 @@ int pit_load(QEMUFile *f, void *opaque, int version_id)
     PITChannelState *s;
     int i;
 
-    if (version_id != 1)
+    if (version_id != PIT_SAVEVM_VERSION)
         return -EINVAL;
 
+    pit->flags = qemu_get_be32(f);
     for(i = 0; i < 3; i++) {
         s = &pit->channels[i];
         s->count=qemu_get_be32(f);
@@ -451,35 +460,61 @@ void pit_reset(void *opaque)
     PITChannelState *s;
     int i;
 
+#ifdef TARGET_I386
+    pit->flags &= ~PIT_FLAGS_HPET_LEGACY;
+#endif
     for(i = 0;i < 3; i++) {
         s = &pit->channels[i];
         s->mode = 3;
         s->gate = (i != 2);
-        pit_load_count(s, 0);
+        pit_load_count(pit, 0, i);
     }
 }
 
+#ifdef TARGET_I386
 /* When HPET is operating in legacy mode, i8254 timer0 is disabled */
-void hpet_pit_disable(void) {
-    PITChannelState *s;
-    s = &pit_state.channels[0];
-    if (s->irq_timer)
-        qemu_del_timer(s->irq_timer);
+
+void hpet_disable_pit(void)
+{
+    PITChannelState *s = &pit_state.channels[0];
+
+    if (qemu_kvm_pit_in_kernel()) {
+        if (qemu_kvm_has_pit_state2()) {
+            kvm_hpet_disable_kpit();
+        } else {
+             fprintf(stderr, "%s: kvm does not support pit_state2!\n", __FUNCTION__);
+             exit(1);
+        }
+    } else {
+        pit_state.flags |= PIT_FLAGS_HPET_LEGACY;
+        if (s->irq_timer) {
+            qemu_del_timer(s->irq_timer);
+        }
+    }
 }
 
 /* When HPET is reset or leaving legacy mode, it must reenable i8254
  * timer 0
  */
 
-void hpet_pit_enable(void)
+void hpet_enable_pit(void)
 {
     PITState *pit = &pit_state;
-    PITChannelState *s;
-    s = &pit->channels[0];
-    s->mode = 3;
-    s->gate = 1;
-    pit_load_count(s, 0);
+    PITChannelState *s = &pit->channels[0];
+
+    if (qemu_kvm_pit_in_kernel()) {
+        if (qemu_kvm_has_pit_state2()) {
+            kvm_hpet_enable_kpit();
+        } else {
+             fprintf(stderr, "%s: kvm does not support pit_state2!\n", __FUNCTION__);
+             exit(1);
+        }
+    } else {
+        pit_state.flags &= ~PIT_FLAGS_HPET_LEGACY;
+        pit_load_count(pit, s->count, 0);
+    }
 }
+#endif
 
 PITState *pit_init(int base, qemu_irq irq)
 {

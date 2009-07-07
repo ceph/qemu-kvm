@@ -206,6 +206,9 @@ static int hpet_load(QEMUFile *f, void *opaque, int version_id)
             qemu_get_timer(f, s->timer[i].qemu_timer);
         }
     }
+    if (hpet_in_legacy_mode()) {
+        hpet_disable_pit();
+    }
     return 0;
 }
 
@@ -475,9 +478,11 @@ static void hpet_ram_writel(void *opaque, target_phys_addr_t addr,
                 }
                 /* i8254 and RTC are disabled when HPET is in legacy mode */
                 if (activating_bit(old_val, new_val, HPET_CFG_LEGACY)) {
-                    hpet_pit_disable();
+                    hpet_disable_pit();
+                    dprintf("qemu: hpet disabled pit\n");
                 } else if (deactivating_bit(old_val, new_val, HPET_CFG_LEGACY)) {
-                    hpet_pit_enable();
+                    hpet_enable_pit();
+                    dprintf("qemu: hpet enabled pit\n");
                 }
                 break;
             case HPET_CFG + 4:
@@ -554,13 +559,16 @@ static void hpet_reset(void *opaque) {
     /* 64-bit main counter; 3 timers supported; LegacyReplacementRoute. */
     s->capability = 0x8086a201ULL;
     s->capability |= ((HPET_CLK_PERIOD) << 32);
-    if (count > 0)
+    s->config = 0ULL;
+    if (count > 0) {
         /* we don't enable pit when hpet_reset is first called (by hpet_init)
          * because hpet is taking over for pit here. On subsequent invocations,
          * hpet_reset is called due to system reset. At this point control must
          * be returned to pit until SW reenables hpet.
          */
-        hpet_pit_enable();
+        hpet_enable_pit();
+        dprintf("qemu: hpet enabled pit\n");
+    }
     count = 1;
 }
 

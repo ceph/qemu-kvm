@@ -719,10 +719,40 @@ int kvm_get_pit(kvm_context_t kvm, struct kvm_pit_state *s);
  * \param s PIT state of the virtual domain
  */
 int kvm_set_pit(kvm_context_t kvm, struct kvm_pit_state *s);
-#endif
 
 int kvm_reinject_control(kvm_context_t kvm, int pit_reinject);
 
+#ifdef KVM_CAP_PIT_STATE2
+/*!
+ * \brief Check for kvm support of kvm_pit_state2
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \return 0 on success
+ */
+int kvm_has_pit_state2(kvm_context_t kvm);
+
+/*!
+ * \brief Set in kernel PIT state2 of the virtual domain
+ *
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param ps2 PIT state2 of the virtual domain
+ * \return 0 on success
+ */
+int kvm_set_pit2(kvm_context_t kvm, struct kvm_pit_state2 *ps2);
+
+/*!
+ * \brief Get in kernel PIT state2 of the virtual domain
+ *
+ *
+ * \param kvm Pointer to the current kvm_context
+ * \param ps2 PIT state2 of the virtual domain
+ * \return 0 on success
+ */
+int kvm_get_pit2(kvm_context_t kvm, struct kvm_pit_state2 *ps2);
+
+#endif
+#endif
 #endif
 
 #ifdef KVM_CAP_VAPIC
