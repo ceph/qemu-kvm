@@ -446,6 +446,9 @@ uint32_t cpuid_features;
 uint32_t cpuid_ext_features;
 unsigned long ram_size;
 uint64_t ram_end;
+#ifdef BX_QEMU
+uint8_t irq0_override;
+#endif
 #ifdef BX_USE_EBDA_TABLES
 unsigned long ebda_cur_addr;
 #endif
@@ -487,6 +490,7 @@ void wrmsr_smp(uint32_t index, uint64_t val)
 #define QEMU_CFG_ARCH_LOCAL     0x8000
 #define QEMU_CFG_ACPI_TABLES  (QEMU_CFG_ARCH_LOCAL + 0)
 #define QEMU_CFG_SMBIOS_ENTRIES  (QEMU_CFG_ARCH_LOCAL + 1)
+#define QEMU_CFG_IRQ0_OVERRIDE   (QEMU_CFG_ARCH_LOCAL + 2)
 
 int qemu_cfg_port;
 
@@ -552,6 +556,16 @@ uint64_t qemu_cfg_get64 (void)
 
     qemu_cfg_read((uint8_t*)&ret, 8);
     return le64_to_cpu(ret);
+}
+#endif
+
+#ifdef BX_QEMU
+void irq0_override_probe(void)
+{
+    if(qemu_cfg_port) {
+        qemu_cfg_select(QEMU_CFG_IRQ0_OVERRIDE);
+        qemu_cfg_read(&irq0_override, 1);
+    }
 }
 #endif
 
@@ -1153,7 +1167,14 @@ static void mptable_init(void)
     putstr(&q, "0.1         "); /* vendor id */
     putle32(&q, 0); /* OEM table ptr */
     putle16(&q, 0); /* OEM table size */
+#ifdef BX_QEMU
+    if (irq0_override)
+        putle16(&q, MAX_CPUS + 17); /* entry count */
+    else
+        putle16(&q, MAX_CPUS + 18); /* entry count */
+#else
     putle16(&q, MAX_CPUS + 18); /* entry count */
+#endif
     putle32(&q, 0xfee00000); /* local APIC addr */
     putle16(&q, 0); /* ext table length */
     putb(&q, 0); /* ext table checksum */
@@ -1197,6 +1218,13 @@ static void mptable_init(void)
 
     /* irqs */
     for(i = 0; i < 16; i++) {
+#ifdef BX_QEMU
+        /* One entry per ioapic interrupt destination. Destination 2 is covered
+         * by irq0->inti2 override (i == 0). Source IRQ 2 is unused
+         */
+        if (irq0_override && i == 2)
+            continue;
+#endif
         putb(&q, 3); /* entry type = I/O interrupt */
         putb(&q, 0); /* interrupt type = vectored interrupt */
         putb(&q, 0); /* flags: po=0, el=0 */
@@ -1204,7 +1232,12 @@ static void mptable_init(void)
         putb(&q, 0); /* source bus ID = ISA */
         putb(&q, i); /* source bus IRQ */
         putb(&q, ioapic_id); /* dest I/O APIC ID */
-        putb(&q, i); /* dest I/O APIC interrupt in */
+#ifdef BX_QEMU
+        if (irq0_override && i == 0)
+            putb(&q, 2); /* dest I/O APIC interrupt in */
+        else
+#endif
+            putb(&q, i); /* dest I/O APIC interrupt in */
     }
     /* patch length */
     len = q - mp_config_table;
@@ -1768,23 +1801,21 @@ void acpi_bios_init(void)
         io_apic->io_apic_id = smp_cpus;
         io_apic->address = cpu_to_le32(0xfec00000);
         io_apic->interrupt = cpu_to_le32(0);
-#ifdef BX_QEMU
-#ifdef HPET_WORKS_IN_KVM
         io_apic++;
-
-        int_override = (void *)io_apic;
-        int_override->type = APIC_XRUPT_OVERRIDE;
-        int_override->length = sizeof(*int_override);
-        int_override->bus = cpu_to_le32(0);
-        int_override->source = cpu_to_le32(0);
-        int_override->gsi = cpu_to_le32(2);
-        int_override->flags = cpu_to_le32(0);
+        int_override = (struct madt_int_override*)(io_apic);
+#ifdef BX_QEMU
+        if (irq0_override) {
+            memset(int_override, 0, sizeof(*int_override));
+            int_override->type = APIC_XRUPT_OVERRIDE;
+            int_override->length = sizeof(*int_override);
+            int_override->source = 0;
+            int_override->gsi = 2;
+            int_override->flags = 0; /* conforms to bus specifications */
+            int_override++;
+        }
 #endif
-#endif
-
-        int_override = (struct madt_int_override*)(io_apic + 1);
-        for ( i = 0; i < 16; i++ ) {
-            if ( PCI_ISA_IRQ_MASK & (1U << i) ) {
+        for (i = 0; i < 16; i++) {
+            if (PCI_ISA_IRQ_MASK & (1U << i)) {
                 memset(int_override, 0, sizeof(*int_override));
                 int_override->type   = APIC_XRUPT_OVERRIDE;
                 int_override->length = sizeof(*int_override);
@@ -2708,6 +2739,9 @@ void rombios32_init(uint32_t *s3_resume_vector, uint8_t *shutdown_flag)
 
     if (bios_table_cur_addr != 0) {
 
+#ifdef BX_QEMU
+        irq0_override_probe();
+#endif
         mptable_init();
 
         smbios_init();
