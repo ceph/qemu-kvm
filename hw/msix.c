@@ -63,6 +63,7 @@
 /* Flag for interrupt controller to declare MSI-X support */
 int msix_supported;
 
+#ifdef USE_KVM
 /* KVM specific MSIX helpers */
 static void kvm_msix_free(PCIDevice *dev)
 {
@@ -157,6 +158,14 @@ static void kvm_msix_del(PCIDevice *dev, unsigned vector)
     kvm_del_routing_entry(kvm_context, &dev->msix_irq_entries[vector]);
     kvm_commit_irq_routes(kvm_context);
 }
+#else
+
+static void kvm_msix_free(PCIDevice *dev) {}
+static void kvm_msix_update(PCIDevice *dev, int vector,
+                            int was_masked, int is_masked) {}
+static int kvm_msix_add(PCIDevice *dev, unsigned vector) { return -1; }
+static void kvm_msix_del(PCIDevice *dev, unsigned vector) {}
+#endif
 
 /* Add MSI-X capability to the config space for the device. */
 /* Given a bar and its size, add MSI-X table on top of it
@@ -337,10 +346,12 @@ int msix_init(struct PCIDevice *dev, unsigned short nentries,
     if (nentries > MSIX_MAX_ENTRIES)
         return -EINVAL;
 
+#ifdef KVM_CAP_IRQCHIP
     if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
         dev->msix_irq_entries = qemu_malloc(nentries *
                                             sizeof *dev->msix_irq_entries);
     }
+#endif
     dev->msix_entry_used = qemu_mallocz(MSIX_MAX_ENTRIES *
                                         sizeof *dev->msix_entry_used);
 
@@ -454,10 +465,13 @@ void msix_notify(PCIDevice *dev, unsigned vector)
         msix_set_pending(dev, vector);
         return;
     }
+
+#ifdef KVM_CAP_IRQCHIP
     if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
         kvm_set_irq(dev->msix_irq_entries[vector].gsi, 1, NULL);
         return;
     }
+#endif
 
     address = pci_get_long(table_entry + MSIX_MSG_UPPER_ADDR);
     address = (address << 32) | pci_get_long(table_entry + MSIX_MSG_ADDR);
