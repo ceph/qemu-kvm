@@ -1526,8 +1526,8 @@ struct acpi_20_generic_address {
 } __attribute__((__packed__));
 
 /*
- *  * HPET Description Table
- *   */
+ *  HPET Description Table
+ */
 struct acpi_20_hpet {
     ACPI_TABLE_HEADER_DEF                           /* ACPI common table header */
     uint32_t           timer_block_id;
@@ -1716,12 +1716,10 @@ void acpi_bios_init(void)
     addr += madt_size;
 
 #ifdef BX_QEMU
-#ifdef HPET_WORKS_IN_KVM
     addr = (addr + 7) & ~7;
     hpet_addr = addr;
     hpet = (void *)(addr);
     addr += sizeof(*hpet);
-#endif
 #endif
 
     /* RSDP */
@@ -1900,7 +1898,6 @@ void acpi_bios_init(void)
     }
 
     /* HPET */
-#ifdef HPET_WORKS_IN_KVM
     memset(hpet, 0, sizeof(*hpet));
     /* Note timer_block_id value must be kept in sync with value advertised by
      * emulated hpet
@@ -1909,7 +1906,6 @@ void acpi_bios_init(void)
     hpet->addr.address = cpu_to_le32(ACPI_HPET_ADDRESS);
     acpi_build_table_header((struct  acpi_table_header *)hpet,
                              "HPET", sizeof(*hpet), 1);
-#endif
 
 #endif
 
@@ -1919,8 +1915,7 @@ void acpi_bios_init(void)
     rsdt->table_offset_entry[nb_rsdt_entries++] = cpu_to_le32(ssdt_addr);
     rsdt->table_offset_entry[nb_rsdt_entries++] = cpu_to_le32(madt_addr);
 #ifdef BX_QEMU
-    /* No HPET (yet) */
-//  rsdt->table_offset_entry[nb_rsdt_entries++] = cpu_to_le32(hpet_addr);
+    rsdt->table_offset_entry[nb_rsdt_entries++] = cpu_to_le32(hpet_addr);
     if (nb_numa_nodes > 0)
         rsdt->table_offset_entry[nb_rsdt_entries++] = cpu_to_le32(srat_addr);
     acpi_additional_tables(); /* resets cfg to required entry */
