@@ -444,18 +444,9 @@ tarbin:
 # Include automatically generated dependency files
 -include $(wildcard *.d audio/*.d slirp/*.d block/*.d)
 
-.PHONY: kvm/extboot
-
 build-targets-i386 = $(build-targets-x86)
 build-targets-x86_64 = $(build-targets-x86)
-build-targets-x86  = kvm/extboot
+build-targets-x86  =
 build-targets-ia64 =
 
 all: $(build-targets-$(ARCH))
-
-kvm/extboot:
-	$(MAKE) -C $@
-	if ! [ -f pc-bios/extboot.bin ] \
-           || ! cmp -s pc-bios/extboot.bin $@/extboot.bin; then \
-		cp $@/extboot.bin pc-bios/extboot.bin; \
-	fi

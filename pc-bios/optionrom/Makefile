@@ -29,7 +29,7 @@ ifeq ($(call cc-option-yn,-fno-stack-protector),y)
 CFLAGS += -fno-stack-protector
 endif
 
-build-all: multiboot.bin
+build-all: multiboot.bin extboot.bin
 
 %.o: %.S
 	$(CC) $(CFLAGS) -o $@ -c $<
