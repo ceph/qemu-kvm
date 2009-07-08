@@ -1460,12 +1460,21 @@ static void tap_send(void *opaque)
     int size;
 
     do {
+        uint8_t *buf = s->buf;
+
         size = tap_read_packet(s->fd, s->buf, sizeof(s->buf));
         if (size <= 0) {
             break;
         }
 
-        size = qemu_send_packet_async(s->vc, s->buf, size, tap_send_completed);
+#ifdef IFF_VNET_HDR
+        if (s->has_vnet_hdr && !s->using_vnet_hdr) {
+            buf += sizeof(struct virtio_net_hdr);
+            size -= sizeof(struct virtio_net_hdr);
+        }
+#endif
+
+        size = qemu_send_packet_async(s->vc, buf, size, tap_send_completed);
         if (size == 0) {
             tap_read_poll(s, 0);
         }
