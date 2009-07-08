@@ -105,68 +105,11 @@ int handle_io_window(kvm_context_t kvm);
 int handle_debug(kvm_vcpu_context_t vcpu, void *env);
 int try_push_interrupts(kvm_context_t kvm);
 
-
 #if defined(__x86_64__) || defined(__i386__)
 struct kvm_msr_list *kvm_get_msr_list(kvm_context_t);
 int kvm_get_msrs(kvm_vcpu_context_t, struct kvm_msr_entry *msrs, int n);
 int kvm_set_msrs(kvm_vcpu_context_t, struct kvm_msr_entry *msrs, int n);
 #endif
-
-/*!
- * \brief KVM callbacks structure
- *
- * This structure holds pointers to various functions that KVM will call
- * when it encounters something that cannot be virtualized, such as
- * accessing hardware devices via MMIO or regular IO.
- */
-struct kvm_callbacks {
-	/// For 8bit IO reads from the guest (Usually when executing 'inb')
-    int (*inb)(void *opaque, uint16_t addr, uint8_t *data);
-	/// For 16bit IO reads from the guest (Usually when executing 'inw')
-    int (*inw)(void *opaque, uint16_t addr, uint16_t *data);
-	/// For 32bit IO reads from the guest (Usually when executing 'inl')
-    int (*inl)(void *opaque, uint16_t addr, uint32_t *data);
-	/// For 8bit IO writes from the guest (Usually when executing 'outb')
-    int (*outb)(void *opaque, uint16_t addr, uint8_t data);
-	/// For 16bit IO writes from the guest (Usually when executing 'outw')
-    int (*outw)(void *opaque, uint16_t addr, uint16_t data);
-	/// For 32bit IO writes from the guest (Usually when executing 'outl')
-    int (*outl)(void *opaque, uint16_t addr, uint32_t data);
-	/// generic memory reads to unmapped memory (For MMIO devices)
-    int (*mmio_read)(void *opaque, uint64_t addr, uint8_t *data,
-					int len);
-	/// generic memory writes to unmapped memory (For MMIO devices)
-    int (*mmio_write)(void *opaque, uint64_t addr, uint8_t *data,
-					int len);
-#ifdef KVM_CAP_SET_GUEST_DEBUG
-    int (*debug)(void *opaque, void *env,
-		 struct kvm_debug_exit_arch *arch_info);
-#endif
-	/*!
-	 * \brief Called when the VCPU issues an 'hlt' instruction.
-	 *
-	 * Typically, you should yeild here to prevent 100% CPU utilization
-	 * on the host CPU.
-	 */
-    int (*halt)(void *opaque, kvm_vcpu_context_t vcpu);
-    int (*shutdown)(void *opaque, void *env);
-    int (*io_window)(void *opaque);
-    int (*try_push_interrupts)(void *opaque);
-#ifdef KVM_CAP_USER_NMI
-    void (*push_nmi)(void *opaque);
-#endif
-    void (*post_kvm_run)(void *opaque, void *env);
-    int (*pre_kvm_run)(void *opaque, void *env);
-    int (*tpr_access)(void *opaque, kvm_vcpu_context_t vcpu, uint64_t rip, int is_write);
-#if defined(__s390__)
-    int (*s390_handle_intercept)(kvm_context_t context, kvm_vcpu_context_t vcpu,
-	struct kvm_run *run);
-    int (*s390_handle_reset)(kvm_context_t context, kvm_vcpu_context_t vcpu,
-	 struct kvm_run *run);
-#endif
-    int (*unhandled)(kvm_context_t context, kvm_vcpu_context_t vcpu,
-                     uint64_t hw_reason);
-};
 
 /*!
  * \brief Create new KVM context
