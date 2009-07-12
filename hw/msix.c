@@ -406,8 +406,9 @@ void msix_save(PCIDevice *dev, QEMUFile *f)
 {
     unsigned n = dev->msix_entries_nr;
 
-    if (!msix_supported)
+    if (!msix_supported) {
         return;
+    }
 
     if (!(dev->cap_present & QEMU_PCI_CAP_MSIX)) {
         return;
