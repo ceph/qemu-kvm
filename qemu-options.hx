@@ -149,9 +149,7 @@ an internal copy of the data.
 
 Some block drivers perform badly with @option{cache=writethrough}, most notably,
 qcow2.  If performance is more important than correctness,
-@option{cache=writeback} should be used with qcow2.  By default, if no explicit
-caching is specified for a qcow2 disk image, @option{cache=writeback} will be
-used.  For all other disk types, @option{cache=writethrough} is the default.
+@option{cache=writeback} should be used with qcow2.
 
 Instead of @option{-cdrom} you can use:
 @example
@@ -779,7 +777,8 @@ DEF("net", HAS_ARG, QEMU_OPTION_net,
     "                use '[down]script=no' to disable script execution;\n"
     "                use 'fd=h' to connect to an already opened TAP interface\n"
 #ifdef TUNSETSNDBUF
-    "                use 'sndbuf=nbytes' to limit the size of the send buffer\n"
+    "                use 'sndbuf=nbytes' to limit the size of the send buffer; the\n"
+    "                default of 'sndbuf=1048576' can be disabled using 'sndbuf=0'\n"
 #endif
 #endif
     "-net socket[,vlan=n][,name=str][,fd=h][,listen=[host]:port][,connect=host:port]\n"

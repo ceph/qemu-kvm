@@ -104,6 +104,7 @@ struct NICInfo {
     const char *name;
     const char *devaddr;
     VLANState *vlan;
+    VLANClientState *vc;
     void *private;
     int used;
     int bootable;
