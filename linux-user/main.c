@@ -85,39 +85,6 @@ void gemu_log(const char *fmt, ...)
     va_end(ap);
 }
 
-void cpu_outb(CPUState *env, int addr, int val)
-{
-    fprintf(stderr, "outb: port=0x%04x, data=%02x\n", addr, val);
-}
-
-void cpu_outw(CPUState *env, int addr, int val)
-{
-    fprintf(stderr, "outw: port=0x%04x, data=%04x\n", addr, val);
-}
-
-void cpu_outl(CPUState *env, int addr, int val)
-{
-    fprintf(stderr, "outl: port=0x%04x, data=%08x\n", addr, val);
-}
-
-int cpu_inb(CPUState *env, int addr)
-{
-    fprintf(stderr, "inb: port=0x%04x\n", addr);
-    return 0;
-}
-
-int cpu_inw(CPUState *env, int addr)
-{
-    fprintf(stderr, "inw: port=0x%04x\n", addr);
-    return 0;
-}
-
-int cpu_inl(CPUState *env, int addr)
-{
-    fprintf(stderr, "inl: port=0x%04x\n", addr);
-    return 0;
-}
-
 #if defined(TARGET_I386)
 int cpu_get_pic_interrupt(CPUState *env)
 {
@@ -1626,7 +1593,7 @@ static const uint8_t mips_syscall_args[] = {
 	MIPS_SYS(sys_ipc		, 6)
 	MIPS_SYS(sys_fsync	, 1)
 	MIPS_SYS(sys_sigreturn	, 0)
-	MIPS_SYS(sys_clone	, 0)	/* 4120 */
+	MIPS_SYS(sys_clone	, 6)	/* 4120 */
 	MIPS_SYS(sys_setdomainname, 2)
 	MIPS_SYS(sys_newuname	, 1)
 	MIPS_SYS(sys_ni_syscall	, 0)	/* sys_modify_ldt */
@@ -1826,6 +1793,55 @@ static const uint8_t mips_syscall_args[] = {
 
 #undef MIPS_SYS
 
+static int do_store_exclusive(CPUMIPSState *env)
+{
+    target_ulong addr;
+    target_ulong page_addr;
+    target_ulong val;
+    int flags;
+    int segv = 0;
+    int reg;
+    int d;
+
+    addr = env->CP0_LLAddr;
+    page_addr = addr & TARGET_PAGE_MASK;
+    start_exclusive();
+    mmap_lock();
+    flags = page_get_flags(page_addr);
+    if ((flags & PAGE_READ) == 0) {
+        segv = 1;
+    } else {
+        reg = env->llreg & 0x1f;
+        d = (env->llreg & 0x20) != 0;
+        if (d) {
+            segv = get_user_s64(val, addr);
+        } else {
+            segv = get_user_s32(val, addr);
+        }
+        if (!segv) {
+            if (val != env->llval) {
+                env->active_tc.gpr[reg] = 0;
+            } else {
+                if (d) {
+                    segv = put_user_u64(env->llnewval, addr);
+                } else {
+                    segv = put_user_u32(env->llnewval, addr);
+                }
+                if (!segv) {
+                    env->active_tc.gpr[reg] = 1;
+                }
+            }
+        }
+    }
+    env->CP0_LLAddr = -1;
+    if (!segv) {
+        env->active_tc.PC += 4;
+    }
+    mmap_unlock();
+    end_exclusive();
+    return segv;
+}
+
 void cpu_loop(CPUMIPSState *env)
 {
     target_siginfo_t info;
@@ -1833,7 +1849,9 @@ void cpu_loop(CPUMIPSState *env)
     unsigned int syscall_num;
 
     for(;;) {
+        cpu_exec_start(env);
         trapnr = cpu_mips_exec(env);
+        cpu_exec_end(env);
         switch(trapnr) {
         case EXCP_SYSCALL:
             syscall_num = env->active_tc.gpr[2] - 4000;
@@ -1908,6 +1926,15 @@ void cpu_loop(CPUMIPSState *env)
                     info.si_code = TARGET_TRAP_BRKPT;
                     queue_signal(env, info.si_signo, &info);
                   }
+            }
+            break;
+        case EXCP_SC:
+            if (do_store_exclusive(env)) {
+                info.si_signo = TARGET_SIGSEGV;
+                info.si_errno = 0;
+                info.si_code = TARGET_SEGV_MAPERR;
+                info._sifields._sigfault._addr = env->active_tc.PC;
+                queue_signal(env, info.si_signo, &info);
             }
             break;
         default:
@@ -2372,6 +2399,7 @@ int main(int argc, char **argv, char **envp)
     envlist_t *envlist = NULL;
     const char *argv0 = NULL;
     int i;
+    int ret;
 
     if (argc <= 1)
         usage();
@@ -2576,9 +2604,10 @@ int main(int argc, char **argv, char **envp)
     env->opaque = ts;
     task_settid(ts);
 
-    if (loader_exec(filename, target_argv, target_environ, regs,
-        info, &bprm) != 0) {
-        printf("Error loading %s\n", filename);
+    ret = loader_exec(filename, target_argv, target_environ, regs,
+        info, &bprm);
+    if (ret != 0) {
+        printf("Error %d while loading %s\n", ret, filename);
         _exit(1);
     }
 

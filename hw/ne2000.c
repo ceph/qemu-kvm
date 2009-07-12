@@ -759,9 +759,9 @@ void isa_ne2000_init(int base, qemu_irq irq, NICInfo *nd)
 
     ne2000_reset(s);
 
-    s->vc = qemu_new_vlan_client(nd->vlan, nd->model, nd->name,
-                                 ne2000_can_receive, ne2000_receive, NULL,
-                                 isa_ne2000_cleanup, s);
+    s->vc = nd->vc = qemu_new_vlan_client(nd->vlan, nd->model, nd->name,
+                                          ne2000_can_receive, ne2000_receive,
+                                          NULL, isa_ne2000_cleanup, s);
 
     qemu_format_nic_info_str(s->vc, s->macaddr);
 
@@ -832,9 +832,15 @@ static void pci_ne2000_init(PCIDevice *pci_dev)
     register_savevm("ne2000", -1, 3, ne2000_save, ne2000_load, s);
 }
 
+static PCIDeviceInfo ne2000_info = {
+    .qdev.name = "ne2k_pci",
+    .qdev.size = sizeof(PCINE2000State),
+    .init      = pci_ne2000_init,
+};
+
 static void ne2000_register_devices(void)
 {
-    pci_qdev_register("ne2k_pci", sizeof(PCINE2000State), pci_ne2000_init);
+    pci_qdev_register(&ne2000_info);
 }
 
 device_init(ne2000_register_devices)

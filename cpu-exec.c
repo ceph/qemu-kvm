@@ -407,6 +407,10 @@ int cpu_exec(CPUState *env1)
                             env->hflags2 |= HF2_NMI_MASK;
                             do_interrupt(EXCP02_NMI, 0, 0, 0, 1);
                             next_tb = 0;
+			} else if (interrupt_request & CPU_INTERRUPT_MCE) {
+                            env->interrupt_request &= ~CPU_INTERRUPT_MCE;
+                            do_interrupt(EXCP12_MCHK, 0, 0, 0, 0);
+                            next_tb = 0;
                         } else if ((interrupt_request & CPU_INTERRUPT_HARD) &&
                                    (((env->hflags2 & HF2_VINTR_MASK) && 
                                      (env->hflags2 & HF2_HIF_MASK)) ||
@@ -478,7 +482,7 @@ int cpu_exec(CPUState *env1)
                     }
 #elif defined(TARGET_SPARC)
                     if ((interrupt_request & CPU_INTERRUPT_HARD) &&
-			(env->psret != 0)) {
+			cpu_interrupts_enabled(env)) {
 			int pil = env->interrupt_index & 15;
 			int type = env->interrupt_index & 0xf0;
 
@@ -489,7 +493,7 @@ int cpu_exec(CPUState *env1)
                             env->exception_index = env->interrupt_index;
                             do_interrupt(env);
 			    env->interrupt_index = 0;
-#if !defined(TARGET_SPARC64) && !defined(CONFIG_USER_ONLY)
+#if !defined(CONFIG_USER_ONLY)
                             cpu_check_irqs(env);
 #endif
                         next_tb = 0;

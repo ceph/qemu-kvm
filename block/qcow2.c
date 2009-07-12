@@ -145,14 +145,6 @@ static int qcow_open(BlockDriverState *bs, const char *filename, int flags)
     QCowHeader header;
     uint64_t ext_end;
 
-    /* Performance is terrible right now with cache=writethrough due mainly
-     * to reference count updates.  If the user does not explicitly specify
-     * a caching type, force to writeback caching.
-     */
-    if ((flags & BDRV_O_CACHE_DEF)) {
-        flags |= BDRV_O_CACHE_WB;
-        flags &= ~BDRV_O_CACHE_DEF;
-    }
     ret = bdrv_file_open(&s->hd, filename, flags);
     if (ret < 0)
         return ret;
@@ -208,7 +200,8 @@ static int qcow_open(BlockDriverState *bs, const char *filename, int flags)
     if (s->l1_size < s->l1_vm_state_index)
         goto fail;
     s->l1_table_offset = header.l1_table_offset;
-    s->l1_table = qemu_malloc(s->l1_size * sizeof(uint64_t));
+    s->l1_table = qemu_mallocz(
+        align_offset(s->l1_size * sizeof(uint64_t), 512));
     if (bdrv_pread(s->hd, s->l1_table_offset, s->l1_table, s->l1_size * sizeof(uint64_t)) !=
         s->l1_size * sizeof(uint64_t))
         goto fail;
