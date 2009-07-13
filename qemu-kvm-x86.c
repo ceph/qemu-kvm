@@ -535,7 +535,7 @@ int kvm_setup_cpuid2(kvm_vcpu_context_t vcpu, int nent,
 	r = ioctl(vcpu->fd, KVM_SET_CPUID2, cpuid);
 	if (r == -1) {
 		fprintf(stderr, "kvm_setup_cpuid2: %m\n");
-		return -errno;
+		r = -errno;
 	}
 	free(cpuid);
 	return r;
