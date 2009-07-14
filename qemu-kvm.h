@@ -181,7 +181,7 @@ void kvm_create_irqchip(kvm_context_t kvm);
  * \param slot vcpu number (> 0)
  * \return 0 on success, -errno on failure
  */
-kvm_vcpu_context_t kvm_create_vcpu(kvm_context_t kvm, int id);
+kvm_vcpu_context_t kvm_create_vcpu(CPUState *env, int id);
 
 /*!
  * \brief Start the VCPU

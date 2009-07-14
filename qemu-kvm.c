@@ -503,11 +503,12 @@ void kvm_disable_pit_creation(kvm_context_t kvm)
 	kvm->no_pit_creation = 1;
 }
 
-kvm_vcpu_context_t kvm_create_vcpu(kvm_context_t kvm, int id)
+kvm_vcpu_context_t kvm_create_vcpu(CPUState *env, int id)
 {
 	long mmap_size;
 	int r;
 	kvm_vcpu_context_t vcpu_ctx = qemu_malloc(sizeof(struct kvm_vcpu_context));
+    kvm_context_t kvm = kvm_context;
 
 	vcpu_ctx->kvm = kvm;
 	vcpu_ctx->id = id;
@@ -518,6 +519,10 @@ kvm_vcpu_context_t kvm_create_vcpu(kvm_context_t kvm, int id)
 		goto err;
 	}
 	vcpu_ctx->fd = r;
+
+    env->kvm_fd = r;
+    env->kvm_state = kvm_state;
+
 	mmap_size = ioctl(kvm->fd, KVM_GET_VCPU_MMAP_SIZE, 0);
 	if (mmap_size == -1) {
 		fprintf(stderr, "get vcpu mmap size: %m\n");
@@ -2013,7 +2018,7 @@ static void *ap_main_loop(void *_env)
     env->thread_id = kvm_get_thread_id();
     sigfillset(&signals);
     sigprocmask(SIG_BLOCK, &signals, NULL);
-    env->kvm_cpu_state.vcpu_ctx = kvm_create_vcpu(kvm_context, env->cpu_index);
+    env->kvm_cpu_state.vcpu_ctx = kvm_create_vcpu(env, env->cpu_index);
 
 #ifdef USE_KVM_DEVICE_ASSIGNMENT
     /* do ioperm for io ports of assigned devices */
