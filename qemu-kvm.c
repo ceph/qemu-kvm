@@ -19,7 +19,6 @@
 #include "gdbstub.h"
 
 #include "qemu-kvm.h"
-#include "libkvm-all.h"
 #include "libkvm.h"
 
 #include <pthread.h>

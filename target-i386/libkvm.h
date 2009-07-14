@@ -18,8 +18,6 @@
 #ifndef KVM_X86_H
 #define KVM_X86_H
 
-#include "libkvm-all.h"
-
 #define PAGE_SIZE 4096ul
 #define PAGE_MASK (~(PAGE_SIZE - 1))
 

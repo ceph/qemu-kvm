@@ -5,7 +5,6 @@
 
 #include "hw/hw.h"
 #include "qemu-kvm.h"
-#include "libkvm-all.h"
 #include <pthread.h>
 #include <sys/utsname.h>
 #include <sys/io.h>
