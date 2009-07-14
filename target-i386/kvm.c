@@ -964,3 +964,5 @@ void kvm_arch_update_guest_debug(CPUState *env, struct kvm_guest_debug *dbg)
 }
 #endif /* KVM_CAP_SET_GUEST_DEBUG */
 #endif
+
+#include "qemu-kvm-x86.c"

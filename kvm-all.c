@@ -1029,3 +1029,5 @@ void kvm_remove_all_breakpoints(CPUState *current_env)
 }
 #endif /* !KVM_CAP_SET_GUEST_DEBUG */
 #endif
+
+#include "qemu-kvm.c"
