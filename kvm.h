@@ -16,6 +16,7 @@
 
 #include "config.h"
 #include "sys-queue.h"
+#include "qemu-kvm.h"
 
 #ifdef KVM_UPSTREAM
 
