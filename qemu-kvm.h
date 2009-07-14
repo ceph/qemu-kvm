@@ -128,18 +128,7 @@ int kvm_set_msrs(kvm_vcpu_context_t, struct kvm_msr_entry *msrs, int n);
  * \param opaque Not used
  * \return NULL on failure
  */
-kvm_context_t kvm_init(void *opaque);
-
-/*!
- * \brief Cleanup the KVM context
- *
- * Should always be called when closing down KVM.\n
- * Exception: If kvm_init() fails, this function should not be called, as the
- * context would be invalid
- *
- * \param kvm Pointer to the kvm_context that is to be freed
- */
-void kvm_finalize(kvm_context_t kvm);
+int kvm_init(int smp_cpus);
 
 /*!
  * \brief Disable the in-kernel IRQCHIP creation
@@ -1165,5 +1154,28 @@ static inline int kvm_set_migration_log(int enable)
 {
     return kvm_physical_memory_set_dirty_tracking(enable);
 }
+
+typedef struct KVMSlot
+{
+    target_phys_addr_t start_addr;
+    ram_addr_t memory_size;
+    ram_addr_t phys_offset;
+    int slot;
+    int flags;
+} KVMSlot;
+
+typedef struct kvm_dirty_log KVMDirtyLog;
+
+typedef struct KVMState
+{
+    KVMSlot slots[32];
+    int fd;
+    int vmfd;
+    int coalesced_mmio;
+    int broken_set_mem_region;
+    int migration_log;
+    struct kvm_context kvm_context;
+} KVMState;
+
 
 #endif

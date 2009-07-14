@@ -5752,7 +5752,7 @@ int main(int argc, char **argv, char **envp)
 
 #ifdef CONFIG_KVM
     if (kvm_enabled()) {
-	if (kvm_qemu_init() < 0) {
+	if (kvm_init(smp_cpus) < 0) {
 	    fprintf(stderr, "Could not initialize KVM, will disable KVM support\n");
 #ifdef NO_CPU_EMULATION
 	    fprintf(stderr, "Compiled with --disable-cpu-emulation, exiting.\n");

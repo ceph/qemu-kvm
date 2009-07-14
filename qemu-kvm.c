@@ -42,6 +42,9 @@ int kvm_irqchip = 1;
 int kvm_pit = 1;
 int kvm_pit_reinject = 1;
 int kvm_nested = 0;
+
+
+static KVMState *kvm_state;
 kvm_context_t kvm_context;
 
 pthread_mutex_t qemu_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -416,16 +419,16 @@ int kvm_dirty_pages_log_reset(kvm_context_t kvm)
 }
 
 
-kvm_context_t kvm_init(void *opaque)
+int kvm_init(int smp_cpus)
 {
 	int fd;
-	kvm_context_t kvm;
 	int r, gsi_count;
+
 
 	fd = open("/dev/kvm", O_RDWR);
 	if (fd == -1) {
 		perror("open /dev/kvm");
-		return NULL;
+		return -1;
 	}
 	r = ioctl(fd, KVM_GET_API_VERSION, 0);
 	if (r == -1) {
@@ -446,35 +449,39 @@ kvm_context_t kvm_init(void *opaque)
 	}
 	kvm_abi = r;
 	kvm_page_size = getpagesize();
-	kvm = qemu_mallocz(sizeof(*kvm));
-	kvm->fd = fd;
-	kvm->vm_fd = -1;
-	kvm->opaque = opaque;
-	kvm->dirty_pages_log_all = 0;
-	kvm->no_irqchip_creation = 0;
-	kvm->no_pit_creation = 0;
+	kvm_state = qemu_mallocz(sizeof(*kvm_state));
+    kvm_context = &kvm_state->kvm_context;
 
-	gsi_count = kvm_get_gsi_count(kvm);
+	kvm_context->fd = fd;
+	kvm_context->vm_fd = -1;
+	kvm_context->opaque = cpu_single_env;
+	kvm_context->dirty_pages_log_all = 0;
+	kvm_context->no_irqchip_creation = 0;
+	kvm_context->no_pit_creation = 0;
+
+	gsi_count = kvm_get_gsi_count(kvm_context);
 	if (gsi_count > 0) {
 		int gsi_bits, i;
 
 		/* Round up so we can search ints using ffs */
 		gsi_bits = ALIGN(gsi_count, 32);
-		kvm->used_gsi_bitmap = qemu_mallocz(gsi_bits / 8);
-		kvm->max_gsi = gsi_bits;
+		kvm_context->used_gsi_bitmap = qemu_mallocz(gsi_bits / 8);
+		kvm_context->max_gsi = gsi_bits;
 
 		/* Mark any over-allocated bits as already in use */
 		for (i = gsi_count; i < gsi_bits; i++)
-			set_gsi(kvm, i);
+			set_gsi(kvm_context, i);
 	}
 
-	return kvm;
+    pthread_mutex_lock(&qemu_mutex);
+	return 0;
+
  out_close:
 	close(fd);
-	return NULL;
+	return -1;
 }
 
-void kvm_finalize(kvm_context_t kvm)
+static void kvm_finalize(KVMState *s)
 {
 	/* FIXME
 	if (kvm->vcpu_fd[0] != -1)
@@ -482,8 +489,8 @@ void kvm_finalize(kvm_context_t kvm)
 	if (kvm->vm_fd != -1)
 		close(kvm->vm_fd);
 	*/
-	close(kvm->fd);
-	free(kvm);
+	close(s->kvm_context.fd);
+	free(s);
 }
 
 void kvm_disable_irqchip_creation(kvm_context_t kvm)
@@ -2217,18 +2224,6 @@ int kvm_main_loop(void)
     return 0;
 }
 
-int kvm_qemu_init()
-{
-    /* Try to initialize kvm */
-    kvm_context = kvm_init(cpu_single_env);
-    if (!kvm_context) {
-      	return -1;
-    }
-    pthread_mutex_lock(&qemu_mutex);
-
-    return 0;
-}
-
 #ifdef TARGET_I386
 static int destroy_region_works = 0;
 #endif
@@ -2252,12 +2247,12 @@ int kvm_qemu_create_context(void)
         kvm_disable_pit_creation(kvm_context);
     }
     if (kvm_create(kvm_context, 0, NULL) < 0) {
-       kvm_finalize(kvm_context);
+       kvm_finalize(kvm_state);
        return -1;
     }
     r = kvm_arch_qemu_create_context();
     if(r <0)
-       kvm_finalize(kvm_context);
+       kvm_finalize(kvm_state);
     if (kvm_pit && !kvm_pit_reinject) {
         if (kvm_reinject_control(kvm_context, 0)) {
             fprintf(stderr, "failure to disable in-kernel PIT reinjection\n");
