@@ -459,6 +459,10 @@ int kvm_init(int smp_cpus)
 	kvm_context->no_irqchip_creation = 0;
 	kvm_context->no_pit_creation = 0;
 
+#ifdef KVM_CAP_SET_GUEST_DEBUG
+    TAILQ_INIT(&kvm_state->kvm_sw_breakpoints);
+#endif
+
 	gsi_count = kvm_get_gsi_count(kvm_context);
 	if (gsi_count > 0) {
 		int gsi_bits, i;
@@ -2439,14 +2443,13 @@ int kvm_qemu_init_env(CPUState *cenv)
 }
 
 #ifdef KVM_CAP_SET_GUEST_DEBUG
-struct kvm_sw_breakpoint_head kvm_sw_breakpoints =
-    TAILQ_HEAD_INITIALIZER(kvm_sw_breakpoints);
 
-struct kvm_sw_breakpoint *kvm_find_sw_breakpoint(target_ulong pc)
+struct kvm_sw_breakpoint *kvm_find_sw_breakpoint(CPUState *env,
+                                                 target_ulong pc)
 {
     struct kvm_sw_breakpoint *bp;
 
-    TAILQ_FOREACH(bp, &kvm_sw_breakpoints, entry) {
+    TAILQ_FOREACH(bp, &env->kvm_state->kvm_sw_breakpoints, entry) {
 	if (bp->pc == pc)
 	    return bp;
     }
@@ -2481,6 +2484,11 @@ int kvm_update_guest_debug(CPUState *env, unsigned long reinject_trap)
     return data.err;
 }
 
+int kvm_sw_breakpoints_active(CPUState *env)
+{
+    return !TAILQ_EMPTY(&env->kvm_state->kvm_sw_breakpoints);
+}
+
 int kvm_insert_breakpoint(CPUState *current_env, target_ulong addr,
                           target_ulong len, int type)
 {
@@ -2489,7 +2497,7 @@ int kvm_insert_breakpoint(CPUState *current_env, target_ulong addr,
     int err;
 
     if (type == GDB_BREAKPOINT_SW) {
-	bp = kvm_find_sw_breakpoint(addr);
+	bp = kvm_find_sw_breakpoint(current_env, addr);
 	if (bp) {
 	    bp->use_count++;
 	    return 0;
@@ -2507,7 +2515,8 @@ int kvm_insert_breakpoint(CPUState *current_env, target_ulong addr,
 	    return err;
 	}
 
-	TAILQ_INSERT_HEAD(&kvm_sw_breakpoints, bp, entry);
+    TAILQ_INSERT_HEAD(&current_env->kvm_state->kvm_sw_breakpoints,
+                      bp, entry);
     } else {
 	err = kvm_arch_insert_hw_breakpoint(addr, len, type);
 	if (err)
@@ -2530,7 +2539,7 @@ int kvm_remove_breakpoint(CPUState *current_env, target_ulong addr,
     int err;
 
     if (type == GDB_BREAKPOINT_SW) {
-	bp = kvm_find_sw_breakpoint(addr);
+	bp = kvm_find_sw_breakpoint(current_env, addr);
 	if (!bp)
 	    return -ENOENT;
 
@@ -2543,7 +2552,7 @@ int kvm_remove_breakpoint(CPUState *current_env, target_ulong addr,
 	if (err)
 	    return err;
 
-	TAILQ_REMOVE(&kvm_sw_breakpoints, bp, entry);
+	TAILQ_REMOVE(&current_env->kvm_state->kvm_sw_breakpoints, bp, entry);
 	qemu_free(bp);
     } else {
 	err = kvm_arch_remove_hw_breakpoint(addr, len, type);
@@ -2564,7 +2573,7 @@ void kvm_remove_all_breakpoints(CPUState *current_env)
     struct kvm_sw_breakpoint *bp, *next;
     CPUState *env;
 
-    TAILQ_FOREACH_SAFE(bp, &kvm_sw_breakpoints, entry, next) {
+    TAILQ_FOREACH_SAFE(bp, &current_env->kvm_state->kvm_sw_breakpoints, entry, next) {
         if (kvm_arch_remove_sw_breakpoint(current_env, bp) != 0) {
             /* Try harder to find a CPU that currently sees the breakpoint. */
             for (env = first_cpu; env != NULL; env = env->next_cpu) {

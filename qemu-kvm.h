@@ -1004,12 +1004,12 @@ struct kvm_sw_breakpoint {
     int use_count;
     TAILQ_ENTRY(kvm_sw_breakpoint) entry;
 };
+
 TAILQ_HEAD(kvm_sw_breakpoint_head, kvm_sw_breakpoint);
 
-extern struct kvm_sw_breakpoint_head kvm_sw_breakpoints;
-
 int kvm_arch_debug(struct kvm_debug_exit_arch *arch_info);
-struct kvm_sw_breakpoint *kvm_find_sw_breakpoint(target_ulong pc);
+int kvm_sw_breakpoints_active(CPUState *env);
+struct kvm_sw_breakpoint *kvm_find_sw_breakpoint(CPUState *env, target_ulong pc);
 int kvm_arch_insert_sw_breakpoint(CPUState *current_env,
                                   struct kvm_sw_breakpoint *bp);
 int kvm_arch_remove_sw_breakpoint(CPUState *current_env,
@@ -1174,6 +1174,9 @@ typedef struct KVMState
     int coalesced_mmio;
     int broken_set_mem_region;
     int migration_log;
+#ifdef KVM_CAP_SET_GUEST_DEBUG
+    struct kvm_sw_breakpoint_head kvm_sw_breakpoints;
+#endif
     struct kvm_context kvm_context;
 } KVMState;
 

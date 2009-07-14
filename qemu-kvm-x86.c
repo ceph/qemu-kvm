@@ -1519,7 +1519,7 @@ int kvm_arch_debug(struct kvm_debug_exit_arch *arch_info)
 			break;
 		    }
 	}
-    } else if (kvm_find_sw_breakpoint(arch_info->pc))
+    } else if (kvm_find_sw_breakpoint(cpu_single_env, arch_info->pc))
 	handle = 1;
 
     if (!handle)
@@ -1542,7 +1542,7 @@ void kvm_arch_update_guest_debug(CPUState *env, struct kvm_guest_debug *dbg)
     };
     int n;
 
-    if (!TAILQ_EMPTY(&kvm_sw_breakpoints))
+    if (kvm_sw_breakpoints_active(env))
 	dbg->control |= KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_USE_SW_BP;
 
     if (nb_hw_breakpoint > 0) {
