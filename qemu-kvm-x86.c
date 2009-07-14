@@ -390,12 +390,9 @@ struct kvm_msr_list *kvm_get_msr_list(kvm_context_t kvm)
 		return NULL;
 	/* Old kernel modules had a bug and could write beyond the provided
 	   memory. Allocate at least a safe amount of 1K. */
-	msrs = malloc(MAX(1024, sizeof(*msrs) +
-				sizer.nmsrs * sizeof(*msrs->indices)));
-	if (!msrs) {
-		errno = ENOMEM;
-		return NULL;
-	}
+	msrs = qemu_malloc(MAX(1024, sizeof(*msrs) +
+				       sizer.nmsrs * sizeof(*msrs->indices)));
+
 	msrs->nmsrs = sizer.nmsrs;
 	r = ioctl(kvm->fd, KVM_GET_MSR_INDEX_LIST, msrs);
 	if (r == -1) {
@@ -409,13 +406,9 @@ struct kvm_msr_list *kvm_get_msr_list(kvm_context_t kvm)
 
 int kvm_get_msrs(kvm_vcpu_context_t vcpu, struct kvm_msr_entry *msrs, int n)
 {
-    struct kvm_msrs *kmsrs = malloc(sizeof *kmsrs + n * sizeof *msrs);
+    struct kvm_msrs *kmsrs = qemu_malloc(sizeof *kmsrs + n * sizeof *msrs);
     int r, e;
 
-    if (!kmsrs) {
-	errno = ENOMEM;
-	return -1;
-    }
     kmsrs->nmsrs = n;
     memcpy(kmsrs->entries, msrs, n * sizeof *msrs);
     r = ioctl(vcpu->fd, KVM_GET_MSRS, kmsrs);
@@ -428,13 +421,9 @@ int kvm_get_msrs(kvm_vcpu_context_t vcpu, struct kvm_msr_entry *msrs, int n)
 
 int kvm_set_msrs(kvm_vcpu_context_t vcpu, struct kvm_msr_entry *msrs, int n)
 {
-    struct kvm_msrs *kmsrs = malloc(sizeof *kmsrs + n * sizeof *msrs);
+    struct kvm_msrs *kmsrs = qemu_malloc(sizeof *kmsrs + n * sizeof *msrs);
     int r, e;
 
-    if (!kmsrs) {
-	errno = ENOMEM;
-	return -1;
-    }
     kmsrs->nmsrs = n;
     memcpy(kmsrs->entries, msrs, n * sizeof *msrs);
     r = ioctl(vcpu->fd, KVM_SET_MSRS, kmsrs);
@@ -524,9 +513,7 @@ int kvm_setup_cpuid(kvm_vcpu_context_t vcpu, int nent,
 	struct kvm_cpuid *cpuid;
 	int r;
 
-	cpuid = malloc(sizeof(*cpuid) + nent * sizeof(*entries));
-	if (!cpuid)
-		return -ENOMEM;
+	cpuid = qemu_malloc(sizeof(*cpuid) + nent * sizeof(*entries));
 
 	cpuid->nent = nent;
 	memcpy(cpuid->entries, entries, nent * sizeof(*entries));
@@ -542,9 +529,7 @@ int kvm_setup_cpuid2(kvm_vcpu_context_t vcpu, int nent,
 	struct kvm_cpuid2 *cpuid;
 	int r;
 
-	cpuid = malloc(sizeof(*cpuid) + nent * sizeof(*entries));
-	if (!cpuid)
-		return -ENOMEM;
+	cpuid = qemu_malloc(sizeof(*cpuid) + nent * sizeof(*entries));
 
 	cpuid->nent = nent;
 	memcpy(cpuid->entries, entries, nent * sizeof(*entries));
@@ -632,7 +617,7 @@ static struct kvm_cpuid2 *try_get_cpuid(kvm_context_t kvm, int max)
 	int r, size;
 
 	size = sizeof(*cpuid) + max * sizeof(*cpuid->entries);
-	cpuid = (struct kvm_cpuid2 *)malloc(size);
+	cpuid = qemu_malloc(size);
 	cpuid->nent = max;
 	r = ioctl(kvm->fd, KVM_GET_SUPPORTED_CPUID, cpuid);
 	if (r == -1)

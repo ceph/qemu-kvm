@@ -447,10 +447,7 @@ kvm_context_t kvm_init(void *opaque)
 	}
 	kvm_abi = r;
 	kvm_page_size = getpagesize();
-	kvm = malloc(sizeof(*kvm));
-	if (kvm == NULL)
-		goto out_close;
-	memset(kvm, 0, sizeof(*kvm));
+	kvm = qemu_mallocz(sizeof(*kvm));
 	kvm->fd = fd;
 	kvm->vm_fd = -1;
 	kvm->opaque = opaque;
@@ -464,10 +461,7 @@ kvm_context_t kvm_init(void *opaque)
 
 		/* Round up so we can search ints using ffs */
 		gsi_bits = ALIGN(gsi_count, 32);
-		kvm->used_gsi_bitmap = malloc(gsi_bits / 8);
-		if (!kvm->used_gsi_bitmap)
-			goto out_close;
-		memset(kvm->used_gsi_bitmap, 0, gsi_bits / 8);
+		kvm->used_gsi_bitmap = qemu_mallocz(gsi_bits / 8);
 		kvm->max_gsi = gsi_bits;
 
 		/* Mark any over-allocated bits as already in use */
@@ -507,12 +501,7 @@ kvm_vcpu_context_t kvm_create_vcpu(kvm_context_t kvm, int id)
 {
 	long mmap_size;
 	int r;
-	kvm_vcpu_context_t vcpu_ctx = malloc(sizeof(struct kvm_vcpu_context));
-
-	if (!vcpu_ctx) {
-		errno = ENOMEM;
-		return NULL;
-	}
+	kvm_vcpu_context_t vcpu_ctx = qemu_malloc(sizeof(struct kvm_vcpu_context));
 
 	vcpu_ctx->kvm = kvm;
 	vcpu_ctx->id = id;
@@ -559,10 +548,7 @@ int kvm_create_vm(kvm_context_t kvm)
 	int fd = kvm->fd;
 
 #ifdef KVM_CAP_IRQ_ROUTING
-	kvm->irq_routes = malloc(sizeof(*kvm->irq_routes));
-	if (!kvm->irq_routes)
-		return -ENOMEM;
-	memset(kvm->irq_routes, 0, sizeof(*kvm->irq_routes));
+	kvm->irq_routes = qemu_mallocz(sizeof(*kvm->irq_routes));
 	kvm->nr_allocated_irq_routes = 0;
 #endif
 
@@ -1167,9 +1153,7 @@ int kvm_set_signal_mask(kvm_vcpu_context_t vcpu, const sigset_t *sigset)
 			r = -errno;
 		return r;
 	}
-	sigmask = malloc(sizeof(*sigmask) + sizeof(*sigset));
-	if (!sigmask)
-		return -ENOMEM;
+	sigmask = qemu_malloc(sizeof(*sigmask) + sizeof(*sigset));
 
 	sigmask->len = 8;
 	memcpy(sigmask->sigset, sigset, sizeof(*sigset));
