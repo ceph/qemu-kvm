@@ -24,6 +24,7 @@
 #include "cpu.h"
 #include "gdbstub.h"
 
+#ifdef KVM_UPSTREAM
 //#define DEBUG_KVM
 
 #ifdef DEBUG_KVM
@@ -962,3 +963,4 @@ void kvm_arch_update_guest_debug(CPUState *env, struct kvm_guest_debug *dbg)
     }
 }
 #endif /* KVM_CAP_SET_GUEST_DEBUG */
+#endif

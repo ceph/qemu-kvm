@@ -15,7 +15,7 @@
 #include "net.h"
 #include "qemu-timer.h"
 #include "virtio-net.h"
-#ifdef USE_KVM
+#ifdef CONFIG_KVM
 #include "qemu-kvm.h"
 #endif
 
@@ -344,7 +344,7 @@ static void virtio_net_handle_rx(VirtIODevice *vdev, VirtQueue *vq)
 
     qemu_flush_queued_packets(n->vc);
 
-#ifdef USE_KVM
+#ifdef CONFIG_KVM
     /* We now have RX buffers, signal to the IO thread to break out of the
        select to re-poll the tap file descriptor */
     if (kvm_enabled())

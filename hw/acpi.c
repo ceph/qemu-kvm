@@ -775,7 +775,7 @@ static void disable_processor(struct gpe_regs *g, int cpu)
 }
 
 #if defined(TARGET_I386) || defined(TARGET_X86_64)
-#ifdef USE_KVM
+#ifdef CONFIG_KVM
 static CPUState *qemu_kvm_cpu_env(int index)
 {
     CPUState *penv;
@@ -798,7 +798,7 @@ void qemu_system_cpu_hot_add(int cpu, int state)
     CPUState *env;
 
     if (state
-#ifdef USE_KVM
+#ifdef CONFIG_KVM
         && (!qemu_kvm_cpu_env(cpu))
 #endif
     ) {

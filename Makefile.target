@@ -160,9 +160,7 @@ ifeq ($(ARCH),sparc64)
 CPPFLAGS+=-I$(SRC_PATH)/tcg/sparc
 endif
 
-ifeq ($(USE_KVM), 1)
-libobj-y += qemu-kvm.o
-endif
+libobj-$(CONFIG_KVM) += qemu-kvm.o
 ifdef CONFIG_SOFTFLOAT
 libobj-y += fpu/softfloat.o
 else
@@ -173,18 +171,14 @@ libobj-y += op_helper.o helper.o
 
 ifeq ($(TARGET_ARCH), i386)
 libobj-y += helper.o
-ifeq ($(USE_KVM), 1)
-libobj-y += qemu-kvm-x86.o kvm-tpr-opt.o
-libobj-y += qemu-kvm-helper.o
-endif
+libobj-$(CONFIG_KVM) += qemu-kvm-x86.o kvm-tpr-opt.o
+libobj-$(CONFIG_KVM) += qemu-kvm-helper.o
 endif
 
 ifeq ($(TARGET_ARCH), x86_64)
 libobj-y += helper.o
-ifeq ($(USE_KVM), 1)
-libobj-y += qemu-kvm-x86.o kvm-tpr-opt.o
-libobj-y += qemu-kvm-helper.o
-endif
+libobj-$(CONFIG_KVM) += qemu-kvm-x86.o kvm-tpr-opt.o
+libobj-$(CONFIG_KVM) += qemu-kvm-helper.o
 endif
 
 libobj-y += op_helper.o
@@ -203,9 +197,7 @@ endif
 
 ifeq ($(TARGET_BASE_ARCH), ia64)
 libobj-y += op_helper.o firmware.o
-ifeq ($(USE_KVM), 1)
-libobj-y += qemu-kvm-ia64.o
-endif
+libobj-$(CONFIG_KVM) += qemu-kvm-ia64.o
 endif
 
 ifeq ($(TARGET_BASE_ARCH), cris)

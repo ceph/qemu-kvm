@@ -26,6 +26,7 @@
 #include "gdbstub.h"
 #include "kvm.h"
 
+#ifdef KVM_UPSTREAM
 /* KVM uses PAGE_SIZE in it's definition of COALESCED_MMIO_MAX */
 #define PAGE_SIZE TARGET_PAGE_SIZE
 
@@ -1027,3 +1028,4 @@ void kvm_remove_all_breakpoints(CPUState *current_env)
 {
 }
 #endif /* !KVM_CAP_SET_GUEST_DEBUG */
+#endif

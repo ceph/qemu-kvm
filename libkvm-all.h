@@ -5,7 +5,7 @@
 #ifndef LIBKVM_H
 #define LIBKVM_H
 
-#ifdef USE_KVM
+#ifdef CONFIG_KVM
 
 #if defined(__s390__)
 #include <asm/ptrace.h>
@@ -925,10 +925,10 @@ int kvm_assign_set_msix_entry(kvm_context_t kvm,
 
 uint32_t kvm_get_supported_cpuid(kvm_context_t kvm, uint32_t function, int reg);
 
-#else /* !USE_KVM */
+#else /* !CONFIG_KVM */
 
 struct kvm_pit_state { };
 
-#endif /* !USE_KVM */
+#endif /* !CONFIG_KVM */
 
 #endif

@@ -63,7 +63,7 @@
 /* Flag for interrupt controller to declare MSI-X support */
 int msix_supported;
 
-#ifdef USE_KVM
+#ifdef CONFIG_KVM
 /* KVM specific MSIX helpers */
 static void kvm_msix_free(PCIDevice *dev)
 {

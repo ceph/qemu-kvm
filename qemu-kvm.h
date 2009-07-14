@@ -138,7 +138,7 @@ void kvm_arch_do_ioperm(void *_data);
 #define ALIGN(x, y)  (((x)+(y)-1) & ~((y)-1))
 #define BITMAP_SIZE(m) (ALIGN(((m)>>TARGET_PAGE_BITS), HOST_LONG_BITS) / 8)
 
-#ifdef USE_KVM
+#ifdef CONFIG_KVM
 #include "sys-queue.h"
 
 extern int kvm_allowed;

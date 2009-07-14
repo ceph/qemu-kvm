@@ -2121,8 +2121,8 @@ disable_cpu_emulation() {
 configure_kvm() {
   if test "$kvm" = "yes" -a "$target_softmmu" = "yes" -a \
           \( "$cpu" = "i386" -o "$cpu" = "x86_64" -o "$cpu" = "ia64" -o "$cpu" = "powerpc" \); then
-    echo "#define USE_KVM 1" >> $config_h
-    echo "USE_KVM=1" >> $config_mak
+    echo "#define CONFIG_KVM 1" >> $config_h
+    echo "CONFIG_KVM=y" >> $config_mak
     echo "KVM_CFLAGS=$kvm_cflags" >> $config_mak
     if test $kvm_cap_pit = "yes" ; then
 	echo "USE_KVM_PIT=1" >> $config_mak
@@ -2159,9 +2159,9 @@ case "$target_arch2" in
       echo "#define CONFIG_KQEMU 1" >> $config_h
     fi
     if test "$target_kvm" = "yes" ; then
-      echo "USE_KVM=yes" >> $config_mak
+      echo "CONFIG_KVM=y" >> $config_mak
       echo "KVM_CFLAGS=$kvm_cflags" >> $config_mak
-      echo "#define USE_KVM 1" >> $config_h
+      echo "#define CONFIG_KVM 1" >> $config_h
     fi
     if test "$xen" = "yes" -a "$target_softmmu" = "yes";
     then
@@ -2183,9 +2183,9 @@ case "$target_arch2" in
     fi
     if [ use_upstream_kvm = yes ]; then
     if test "$target_kvm" = "yes" ; then
-      echo "USE_KVM=yes" >> $config_mak
+      echo "CONFIG_KVM=y" >> $config_mak
       echo "KVM_CFLAGS=$kvm_cflags" >> $config_mak
-      echo "#define USE_KVM 1" >> $config_h
+      echo "#define CONFIG_KVM 1" >> $config_h
     fi
     fi
     if test "$xen" = "yes" -a "$target_softmmu" = "yes"
@@ -2281,7 +2281,7 @@ case "$target_arch2" in
     if test "$target_kvm" = "yes" ; then
       echo "CONFIG_KVM=y" >> $config_mak
       echo "KVM_CFLAGS=$kvm_cflags" >> $config_mak
-      echo "#define USE_KVM 1" >> $config_h
+      echo "#define CONFIG_KVM 1" >> $config_h
     fi
     fi
     gdb_xml_files="power-core.xml power-fpu.xml power-altivec.xml power-spe.xml"

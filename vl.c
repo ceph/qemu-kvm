@@ -5434,14 +5434,14 @@ int main(int argc, char **argv, char **envp)
                 break;
 #endif
 #ifdef CONFIG_KVM
+#ifdef KVM_UPSTREAM
             case QEMU_OPTION_enable_kvm:
                 kvm_allowed = 1;
 #ifdef CONFIG_KQEMU
                 kqemu_allowed = 0;
 #endif
-                break;
 #endif
-#ifdef USE_KVM
+                break;
 	    case QEMU_OPTION_no_kvm:
 		kvm_allowed = 0;
 		break;
@@ -5750,7 +5750,7 @@ int main(int argc, char **argv, char **envp)
         signal(SIGTTIN, SIG_IGN);
     }
 
-#ifdef USE_KVM
+#ifdef CONFIG_KVM
     if (kvm_enabled()) {
 	if (kvm_qemu_init() < 0) {
 	    fprintf(stderr, "Could not initialize KVM, will disable KVM support\n");
@@ -6023,7 +6023,7 @@ int main(int argc, char **argv, char **envp)
 
     if (kvm_enabled()) {
         kvm_init_ap();
-#ifdef USE_KVM
+#ifdef CONFIG_KVM
         if (kvm_irqchip) {
             if (!qemu_kvm_has_gsi_routing()) {
                 irq0override = 0;
