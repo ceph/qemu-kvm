@@ -44,7 +44,7 @@ int kvm_pit_reinject = 1;
 int kvm_nested = 0;
 
 
-static KVMState *kvm_state;
+KVMState *kvm_state;
 kvm_context_t kvm_context;
 
 pthread_mutex_t qemu_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -332,8 +332,8 @@ static int kvm_dirty_pages_log_change(kvm_context_t kvm,
 			mem.guest_phys_addr,
 			mem.memory_size,
 			mem.flags);
-		r = ioctl(kvm->vm_fd, KVM_SET_USER_MEMORY_REGION, &mem);
-		if (r == -1)
+		r = kvm_vm_ioctl(kvm_state, KVM_SET_USER_MEMORY_REGION, &mem);
+		if (r < 0)
 			fprintf(stderr, "%s: %m\n", __FUNCTION__);
 	}
 	return r;
@@ -452,7 +452,7 @@ int kvm_init(int smp_cpus)
     kvm_context = &kvm_state->kvm_context;
 
 	kvm_context->fd = fd;
-	kvm_context->vm_fd = -1;
+	kvm_state->vmfd = -1;
 	kvm_context->opaque = cpu_single_env;
 	kvm_context->dirty_pages_log_all = 0;
 	kvm_context->no_irqchip_creation = 0;
@@ -516,8 +516,8 @@ kvm_vcpu_context_t kvm_create_vcpu(CPUState *env, int id)
 	vcpu_ctx->kvm = kvm;
 	vcpu_ctx->id = id;
 
-	r = ioctl(kvm->vm_fd, KVM_CREATE_VCPU, id);
-	if (r == -1) {
+	r = kvm_vm_ioctl(kvm_state, KVM_CREATE_VCPU, id);
+	if (r < 0) {
 		fprintf(stderr, "kvm_create_vcpu: %m\n");
 		goto err;
 	}
@@ -550,7 +550,7 @@ static int kvm_set_boot_vcpu_id(kvm_context_t kvm, uint32_t id)
 #ifdef KVM_CAP_SET_BOOT_CPU_ID
     int r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_SET_BOOT_CPU_ID);
     if (r > 0)
-        return ioctl(kvm->vm_fd, KVM_SET_BOOT_CPU_ID, id);
+        return kvm_vm_ioctl(kvm_state, KVM_SET_BOOT_CPU_ID, id);
     return -ENOSYS;
 #else
     return -ENOSYS;
@@ -571,7 +571,7 @@ int kvm_create_vm(kvm_context_t kvm)
 		fprintf(stderr, "kvm_create_vm: %m\n");
 		return -1;
 	}
-	kvm->vm_fd = fd;
+	kvm_state->vmfd = fd;
 	return 0;
 }
 
@@ -609,7 +609,7 @@ void kvm_create_irqchip(kvm_context_t kvm)
 	if (!kvm->no_irqchip_creation) {
 		r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_IRQCHIP);
 		if (r > 0) {	/* kernel irqchip supported */
-			r = ioctl(kvm->vm_fd, KVM_CREATE_IRQCHIP);
+			r = kvm_vm_ioctl(kvm_state, KVM_CREATE_IRQCHIP);
 			if (r >= 0) {
 				kvm->irqchip_inject_ioctl = KVM_IRQ_LINE;
 #if defined(KVM_CAP_IRQ_INJECT_STATUS) && defined(KVM_IRQ_LINE_STATUS)
@@ -664,9 +664,9 @@ int kvm_register_phys_mem(kvm_context_t kvm,
 	DPRINTF("memory: gpa: %llx, size: %llx, uaddr: %llx, slot: %x, flags: %lx\n",
 		memory.guest_phys_addr, memory.memory_size,
 		memory.userspace_addr, memory.slot, memory.flags);
-	r = ioctl(kvm->vm_fd, KVM_SET_USER_MEMORY_REGION, &memory);
-	if (r == -1) {
-		fprintf(stderr, "create_userspace_phys_mem: %s\n", strerror(errno));
+	r = kvm_vm_ioctl(kvm_state, KVM_SET_USER_MEMORY_REGION, &memory);
+	if (r < 0) {
+		fprintf(stderr, "create_userspace_phys_mem: %s\n", strerror(-r));
 		return -1;
 	}
 	register_slot(memory.slot, memory.guest_phys_addr, memory.memory_size,
@@ -710,10 +710,10 @@ void kvm_destroy_phys_mem(kvm_context_t kvm, unsigned long phys_start,
 		memory.guest_phys_addr,
 		memory.memory_size,
 		memory.flags);
-	r = ioctl(kvm->vm_fd, KVM_SET_USER_MEMORY_REGION, &memory);
-	if (r == -1) {
+	r = kvm_vm_ioctl(kvm_state, KVM_SET_USER_MEMORY_REGION, &memory);
+	if (r < 0) {
 		fprintf(stderr, "destroy_userspace_phys_mem: %s",
-			strerror(errno));
+			strerror(-r));
 		return;
 	}
 
@@ -741,9 +741,9 @@ static int kvm_get_map(kvm_context_t kvm, int ioctl_num, int slot, void *buf)
 
 	log.dirty_bitmap = buf;
 
-	r = ioctl(kvm->vm_fd, ioctl_num, &log);
-	if (r == -1)
-		return -errno;
+	r = kvm_vm_ioctl(kvm_state, ioctl_num, &log);
+	if (r < 0)
+		return r;
 	return 0;
 }
 
@@ -794,8 +794,8 @@ int kvm_set_irq_level(kvm_context_t kvm, int irq, int level, int *status)
 		return 0;
 	event.level = level;
 	event.irq = irq;
-	r = ioctl(kvm->vm_fd, kvm->irqchip_inject_ioctl, &event);
-	if (r == -1)
+	r = kvm_vm_ioctl(kvm_state, kvm->irqchip_inject_ioctl, &event);
+	if (r < 0)
 		perror("kvm_set_irq_level");
 
 	if (status) {
@@ -816,9 +816,8 @@ int kvm_get_irqchip(kvm_context_t kvm, struct kvm_irqchip *chip)
 
 	if (!kvm->irqchip_in_kernel)
 		return 0;
-	r = ioctl(kvm->vm_fd, KVM_GET_IRQCHIP, chip);
-	if (r == -1) {
-		r = -errno;
+	r = kvm_vm_ioctl(kvm_state, KVM_GET_IRQCHIP, chip);
+	if (r < 0) {
 		perror("kvm_get_irqchip\n");
 	}
 	return r;
@@ -830,9 +829,8 @@ int kvm_set_irqchip(kvm_context_t kvm, struct kvm_irqchip *chip)
 
 	if (!kvm->irqchip_in_kernel)
 		return 0;
-	r = ioctl(kvm->vm_fd, KVM_SET_IRQCHIP, chip);
-	if (r == -1) {
-		r = -errno;
+	r = kvm_vm_ioctl(kvm_state, KVM_SET_IRQCHIP, chip);
+	if (r < 0) {
 		perror("kvm_set_irqchip\n");
 	}
 	return r;
@@ -1230,10 +1228,10 @@ int kvm_coalesce_mmio_region(target_phys_addr_t addr, ram_addr_t size)
 		zone.addr = addr;
 		zone.size = size;
 
-		r = ioctl(kvm->vm_fd, KVM_REGISTER_COALESCED_MMIO, &zone);
-		if (r == -1) {
+		r = kvm_vm_ioctl(kvm_state, KVM_REGISTER_COALESCED_MMIO, &zone);
+		if (r < 0) {
 			perror("kvm_register_coalesced_mmio_zone");
-			return -errno;
+			return r;
 		}
 		return 0;
 	}
@@ -1253,10 +1251,10 @@ int kvm_uncoalesce_mmio_region(target_phys_addr_t addr, ram_addr_t size)
 		zone.addr = addr;
 		zone.size = size;
 
-		r = ioctl(kvm->vm_fd, KVM_UNREGISTER_COALESCED_MMIO, &zone);
-		if (r == -1) {
+		r = kvm_vm_ioctl(kvm_state, KVM_UNREGISTER_COALESCED_MMIO, &zone);
+		if (r < 0) {
 			perror("kvm_unregister_coalesced_mmio_zone");
-			return -errno;
+			return r;
 		}
 		DPRINTF("Unregistered coalesced mmio region for %llx (%lx)\n", addr, size);
 		return 0;
@@ -1269,25 +1267,13 @@ int kvm_uncoalesce_mmio_region(target_phys_addr_t addr, ram_addr_t size)
 int kvm_assign_pci_device(kvm_context_t kvm,
 			  struct kvm_assigned_pci_dev *assigned_dev)
 {
-	int ret;
-
-	ret = ioctl(kvm->vm_fd, KVM_ASSIGN_PCI_DEVICE, assigned_dev);
-	if (ret < 0)
-		return -errno;
-
-	return ret;
+	return kvm_vm_ioctl(kvm_state, KVM_ASSIGN_PCI_DEVICE, assigned_dev);
 }
 
 static int kvm_old_assign_irq(kvm_context_t kvm,
 		   struct kvm_assigned_irq *assigned_irq)
 {
-	int ret;
-
-	ret = ioctl(kvm->vm_fd, KVM_ASSIGN_IRQ, assigned_irq);
-	if (ret < 0)
-		return -errno;
-
-	return ret;
+	return kvm_vm_ioctl(kvm_state, KVM_ASSIGN_IRQ, assigned_irq);
 }
 
 #ifdef KVM_CAP_ASSIGN_DEV_IRQ
@@ -1298,10 +1284,7 @@ int kvm_assign_irq(kvm_context_t kvm,
 
 	ret = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_ASSIGN_DEV_IRQ);
 	if (ret > 0) {
-		ret = ioctl(kvm->vm_fd, KVM_ASSIGN_DEV_IRQ, assigned_irq);
-		if (ret < 0)
-			return -errno;
-		return ret;
+		return kvm_vm_ioctl(kvm_state, KVM_ASSIGN_DEV_IRQ, assigned_irq);
 	}
 
 	return kvm_old_assign_irq(kvm, assigned_irq);
@@ -1310,13 +1293,7 @@ int kvm_assign_irq(kvm_context_t kvm,
 int kvm_deassign_irq(kvm_context_t kvm,
 		     struct kvm_assigned_irq *assigned_irq)
 {
-	int ret;
-
-	ret = ioctl(kvm->vm_fd, KVM_DEASSIGN_DEV_IRQ, assigned_irq);
-	if (ret < 0)
-            return -errno;
-
-	return ret;
+	return kvm_vm_ioctl(kvm_state, KVM_DEASSIGN_DEV_IRQ, assigned_irq);
 }
 #else
 int kvm_assign_irq(kvm_context_t kvm,
@@ -1331,13 +1308,7 @@ int kvm_assign_irq(kvm_context_t kvm,
 int kvm_deassign_pci_device(kvm_context_t kvm,
 			    struct kvm_assigned_pci_dev *assigned_dev)
 {
-	int ret;
-
-	ret = ioctl(kvm->vm_fd, KVM_DEASSIGN_PCI_DEVICE, assigned_dev);
-	if (ret < 0)
-		return -errno;
-
-	return ret;
+	return kvm_vm_ioctl(kvm_state, KVM_DEASSIGN_PCI_DEVICE, assigned_dev);
 }
 #endif
 
@@ -1364,10 +1335,7 @@ int kvm_reinject_control(kvm_context_t kvm, int pit_reinject)
 
 	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_REINJECT_CONTROL);
 	if (r > 0) {
-		r = ioctl(kvm->vm_fd, KVM_REINJECT_CONTROL, &control);
-		if (r == -1)
-			return -errno;
-		return r;
+		return  kvm_vm_ioctl(kvm_state, KVM_REINJECT_CONTROL, &control);
 	}
 #endif
 	return -ENOSYS;
@@ -1581,13 +1549,8 @@ int kvm_del_irq_route(kvm_context_t kvm, int gsi, int irqchip, int pin)
 int kvm_commit_irq_routes(kvm_context_t kvm)
 {
 #ifdef KVM_CAP_IRQ_ROUTING
-	int r;
-
 	kvm->irq_routes->flags = 0;
-	r = ioctl(kvm->vm_fd, KVM_SET_GSI_ROUTING, kvm->irq_routes);
-	if (r == -1)
-		r = -errno;
-	return r;
+	return kvm_vm_ioctl(kvm_state, KVM_SET_GSI_ROUTING, kvm->irq_routes);
 #else
 	return -ENOSYS;
 #endif
@@ -1614,25 +1577,13 @@ int kvm_get_irq_route_gsi(kvm_context_t kvm)
 int kvm_assign_set_msix_nr(kvm_context_t kvm,
                            struct kvm_assigned_msix_nr *msix_nr)
 {
-        int ret;
-
-        ret = ioctl(kvm->vm_fd, KVM_ASSIGN_SET_MSIX_NR, msix_nr);
-        if (ret < 0)
-                return -errno;
-
-        return ret;
+    return kvm_vm_ioctl(kvm_state, KVM_ASSIGN_SET_MSIX_NR, msix_nr);
 }
 
 int kvm_assign_set_msix_entry(kvm_context_t kvm,
                               struct kvm_assigned_msix_entry *entry)
 {
-        int ret;
-
-        ret = ioctl(kvm->vm_fd, KVM_ASSIGN_SET_MSIX_ENTRY, entry);
-        if (ret < 0)
-                return -errno;
-
-        return ret;
+    return kvm_vm_ioctl(kvm_state, KVM_ASSIGN_SET_MSIX_ENTRY, entry);
 }
 #endif
 
@@ -1642,17 +1593,13 @@ int kvm_assign_set_msix_entry(kvm_context_t kvm,
 
 static int _kvm_irqfd(kvm_context_t kvm, int fd, int gsi, int flags)
 {
-	int r;
 	struct kvm_irqfd data = {
 		.fd    = fd,
 		.gsi   = gsi,
 		.flags = flags,
 	};
 
-	r = ioctl(kvm->vm_fd, KVM_IRQFD, &data);
-	if (r == -1)
-		r = -errno;
-	return r;
+	return kvm_vm_ioctl(kvm_state, KVM_IRQFD, &data);
 }
 
 int kvm_irqfd(kvm_context_t kvm, int gsi, int flags)

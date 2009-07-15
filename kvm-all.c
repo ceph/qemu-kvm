@@ -809,6 +809,7 @@ int kvm_ioctl(KVMState *s, int type, ...)
 
     return ret;
 }
+#endif
 
 int kvm_vm_ioctl(KVMState *s, int type, ...)
 {
@@ -827,6 +828,7 @@ int kvm_vm_ioctl(KVMState *s, int type, ...)
     return ret;
 }
 
+#ifdef KVM_UPSTREAM
 int kvm_vcpu_ioctl(CPUState *env, int type, ...)
 {
     int ret;

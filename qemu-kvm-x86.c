@@ -40,10 +40,10 @@ int kvm_set_tss_addr(kvm_context_t kvm, unsigned long addr)
 
 	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_SET_TSS_ADDR);
 	if (r > 0) {
-		r = ioctl(kvm->vm_fd, KVM_SET_TSS_ADDR, addr);
-		if (r == -1) {
+		r = kvm_vm_ioctl(kvm_state, KVM_SET_TSS_ADDR, addr);
+		if (r < 0) {
 			fprintf(stderr, "kvm_set_tss_addr: %m\n");
-			return -errno;
+			return r;
 		}
 		return 0;
 	}
@@ -80,7 +80,7 @@ static int kvm_set_identity_map_addr(kvm_context_t kvm, unsigned long addr)
 
 	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_SET_IDENTITY_MAP_ADDR);
 	if (r > 0) {
-		r = ioctl(kvm->vm_fd, KVM_SET_IDENTITY_MAP_ADDR, &addr);
+		r = kvm_vm_ioctl(kvm_state, KVM_SET_IDENTITY_MAP_ADDR, &addr);
 		if (r == -1) {
 			fprintf(stderr, "kvm_set_identity_map_addr: %m\n");
 			return -errno;
@@ -123,7 +123,7 @@ static int kvm_create_pit(kvm_context_t kvm)
 	if (!kvm->no_pit_creation) {
 		r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_PIT);
 		if (r > 0) {
-			r = ioctl(kvm->vm_fd, KVM_CREATE_PIT);
+			r = kvm_vm_ioctl(kvm_state, KVM_CREATE_PIT);
 			if (r >= 0)
 				kvm->pit_in_kernel = 1;
 			else {
@@ -256,7 +256,6 @@ int kvm_create_memory_alias(kvm_context_t kvm,
 		.memory_size = len,
 		.target_phys_addr = target_phys,
 	};
-	int fd = kvm->vm_fd;
 	int r;
 	int slot;
 
@@ -267,7 +266,7 @@ int kvm_create_memory_alias(kvm_context_t kvm,
 		return -EBUSY;
 	alias.slot = slot;
 
-	r = ioctl(fd, KVM_SET_MEMORY_ALIAS, &alias);
+	r = kvm_vm_ioctl(kvm_state, KVM_SET_MEMORY_ALIAS, &alias);
 	if (r == -1)
 	    return -errno;
 
@@ -314,55 +313,31 @@ int kvm_set_lapic(kvm_vcpu_context_t vcpu, struct kvm_lapic_state *s)
 
 int kvm_get_pit(kvm_context_t kvm, struct kvm_pit_state *s)
 {
-	int r;
 	if (!kvm->pit_in_kernel)
 		return 0;
-	r = ioctl(kvm->vm_fd, KVM_GET_PIT, s);
-	if (r == -1) {
-		r = -errno;
-		perror("kvm_get_pit");
-	}
-	return r;
+	return kvm_vm_ioctl(kvm_state, KVM_GET_PIT, s);
 }
 
 int kvm_set_pit(kvm_context_t kvm, struct kvm_pit_state *s)
 {
-	int r;
 	if (!kvm->pit_in_kernel)
 		return 0;
-	r = ioctl(kvm->vm_fd, KVM_SET_PIT, s);
-	if (r == -1) {
-		r = -errno;
-		perror("kvm_set_pit");
-	}
-	return r;
+	return kvm_vm_ioctl(kvm_state, KVM_SET_PIT, s);
 }
 
 #ifdef KVM_CAP_PIT_STATE2
 int kvm_get_pit2(kvm_context_t kvm, struct kvm_pit_state2 *ps2)
 {
-	int r;
 	if (!kvm->pit_in_kernel)
 		return 0;
-	r = ioctl(kvm->vm_fd, KVM_GET_PIT2, ps2);
-	if (r == -1) {
-		r = -errno;
-		perror("kvm_get_pit2");
-	}
-	return r;
+	return kvm_vm_ioctl(kvm_state, KVM_GET_PIT2, ps2);
 }
 
 int kvm_set_pit2(kvm_context_t kvm, struct kvm_pit_state2 *ps2)
 {
-	int r;
 	if (!kvm->pit_in_kernel)
 		return 0;
-	r = ioctl(kvm->vm_fd, KVM_SET_PIT2, ps2);
-	if (r == -1) {
-		r = -errno;
-		perror("kvm_set_pit2");
-	}
-	return r;
+	return kvm_vm_ioctl(kvm_state, KVM_SET_PIT2, ps2);
 }
 
 #endif
@@ -627,10 +602,10 @@ int kvm_set_shadow_pages(kvm_context_t kvm, unsigned int nrshadow_pages)
 	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION,
 		  KVM_CAP_MMU_SHADOW_CACHE_CONTROL);
 	if (r > 0) {
-		r = ioctl(kvm->vm_fd, KVM_SET_NR_MMU_PAGES, nrshadow_pages);
-		if (r == -1) {
+		r = kvm_vm_ioctl(kvm_state, KVM_SET_NR_MMU_PAGES, nrshadow_pages);
+		if (r < 0) {
 			fprintf(stderr, "kvm_set_shadow_pages: %m\n");
-			return -errno;
+			return r;
 		}
 		return 0;
 	}
@@ -646,7 +621,7 @@ int kvm_get_shadow_pages(kvm_context_t kvm, unsigned int *nrshadow_pages)
 	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION,
 		  KVM_CAP_MMU_SHADOW_CACHE_CONTROL);
 	if (r > 0) {
-		*nrshadow_pages = ioctl(kvm->vm_fd, KVM_GET_NR_MMU_PAGES);
+		*nrshadow_pages = kvm_vm_ioctl(kvm_state, KVM_GET_NR_MMU_PAGES);
 		return 0;
 	}
 #endif

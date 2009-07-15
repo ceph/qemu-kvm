@@ -54,9 +54,6 @@ extern int kvm_abi;
 struct kvm_context {
 	/// Filedescriptor to /dev/kvm
 	int fd;
-	int vm_fd;
-	/// Callbacks that KVM uses to emulate various unvirtualizable functionality
-	struct kvm_callbacks *callbacks;
 	void *opaque;
 	/// is dirty pages logging enabled for all regions or not
 	int dirty_pages_log_all;
@@ -1199,5 +1196,8 @@ typedef struct KVMState
     struct kvm_context kvm_context;
 } KVMState;
 
+extern KVMState *kvm_state;
+
+int kvm_vm_ioctl(KVMState *s, int type, ...);
 
 #endif
