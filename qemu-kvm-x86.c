@@ -348,7 +348,7 @@ int kvm_has_pit_state2(kvm_context_t kvm)
 	int r = 0;
 
 #ifdef KVM_CAP_PIT_STATE2
-	r = kvm_check_extension(kvm, KVM_CAP_PIT_STATE2);
+	r = kvm_check_extension(kvm_state, KVM_CAP_PIT_STATE2);
 #endif
 	return r;
 }
@@ -702,7 +702,7 @@ uint32_t kvm_get_supported_cpuid(kvm_context_t kvm, uint32_t function, int reg)
 	uint32_t ret = 0;
 	uint32_t cpuid_1_edx;
 
-	if (!kvm_check_extension(kvm, KVM_CAP_EXT_CPUID)) {
+	if (!kvm_check_extension(kvm_state, KVM_CAP_EXT_CPUID)) {
 		return -1U;
 	}
 
@@ -1234,7 +1234,7 @@ static int get_para_features(kvm_context_t kvm_context)
 	int i, features = 0;
 
 	for (i = 0; i < ARRAY_SIZE(para_features)-1; i++) {
-		if (kvm_check_extension(kvm_context, para_features[i].cap))
+		if (kvm_check_extension(kvm_state, para_features[i].cap))
 			features |= (1 << para_features[i].feature);
 	}
 

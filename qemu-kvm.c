@@ -589,16 +589,6 @@ static int kvm_create_default_phys_mem(kvm_context_t kvm,
 	return -1;
 }
 
-int kvm_check_extension(kvm_context_t kvm, int ext)
-{
-	int ret;
-
-	ret = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, ext);
-	if (ret > 0)
-		return ret;
-	return 0;
-}
-
 void kvm_create_irqchip(kvm_context_t kvm)
 {
 	int r;
@@ -1345,7 +1335,7 @@ int kvm_has_gsi_routing(kvm_context_t kvm)
     int r = 0;
 
 #ifdef KVM_CAP_IRQ_ROUTING
-    r = kvm_check_extension(kvm, KVM_CAP_IRQ_ROUTING);
+    r = kvm_check_extension(kvm_state, KVM_CAP_IRQ_ROUTING);
 #endif
     return r;
 }
@@ -1353,7 +1343,7 @@ int kvm_has_gsi_routing(kvm_context_t kvm)
 int kvm_get_gsi_count(kvm_context_t kvm)
 {
 #ifdef KVM_CAP_IRQ_ROUTING
-	return kvm_check_extension(kvm, KVM_CAP_IRQ_ROUTING);
+	return kvm_check_extension(kvm_state, KVM_CAP_IRQ_ROUTING);
 #else
 	return -EINVAL;
 #endif
@@ -1606,7 +1596,7 @@ int kvm_irqfd(kvm_context_t kvm, int gsi, int flags)
 	int r;
 	int fd;
 
-	if (!kvm_check_extension(kvm, KVM_CAP_IRQFD))
+	if (!kvm_check_extension(kvm_state, KVM_CAP_IRQFD))
 		return -ENOENT;
 
 	fd = eventfd(0, 0);
@@ -2381,7 +2371,7 @@ int kvm_setup_guest_memory(void *area, unsigned long size)
 
 int kvm_qemu_check_extension(int ext)
 {
-    return kvm_check_extension(kvm_context, ext);
+    return kvm_check_extension(kvm_state, ext);
 }
 
 int kvm_qemu_init_env(CPUState *cenv)

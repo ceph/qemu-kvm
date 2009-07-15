@@ -639,7 +639,7 @@ static int assign_device(AssignedDevInfo *adev)
     /* We always enable the IOMMU if present
      * (or when not disabled on the command line)
      */
-    r = kvm_check_extension(kvm_context, KVM_CAP_IOMMU);
+    r = kvm_check_extension(kvm_state, KVM_CAP_IOMMU);
     if (r && !adev->disable_iommu)
 	assigned_dev_data.flags |= KVM_DEV_ASSIGN_ENABLE_IOMMU;
 #endif

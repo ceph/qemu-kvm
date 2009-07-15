@@ -383,6 +383,7 @@ int kvm_uncoalesce_mmio_region(target_phys_addr_t start, ram_addr_t size)
     return ret;
 }
 
+#endif
 int kvm_check_extension(KVMState *s, unsigned int extension)
 {
     int ret;
@@ -394,6 +395,7 @@ int kvm_check_extension(KVMState *s, unsigned int extension)
 
     return ret;
 }
+#ifdef KVM_UPSTREAM
 
 int kvm_init(int smp_cpus)
 {
