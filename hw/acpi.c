@@ -775,33 +775,11 @@ static void disable_processor(struct gpe_regs *g, int cpu)
 }
 
 #if defined(TARGET_I386) || defined(TARGET_X86_64)
-#ifdef CONFIG_KVM
-static CPUState *qemu_kvm_cpu_env(int index)
-{
-    CPUState *penv;
-
-    penv = first_cpu;
-
-    while (penv) {
-        if (penv->cpu_index == index)
-            return penv;
-        penv = (CPUState *)penv->next_cpu;
-    }
-
-    return NULL;
-}
-#endif
-
-
 void qemu_system_cpu_hot_add(int cpu, int state)
 {
     CPUState *env;
 
-    if (state
-#ifdef CONFIG_KVM
-        && (!qemu_kvm_cpu_env(cpu))
-#endif
-    ) {
+    if (state && !qemu_get_cpu(cpu)) {
         env = pc_new_cpu(model);
         if (!env) {
             fprintf(stderr, "cpu %d creation failed\n", cpu);
