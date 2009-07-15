@@ -176,8 +176,7 @@ int kvm_mmio_write(void *opaque, uint64_t addr, uint8_t *data, int len)
 	return 0;
 }
 
-static int handle_unhandled(kvm_context_t kvm, kvm_vcpu_context_t vcpu,
-                            uint64_t reason)
+static int handle_unhandled(uint64_t reason)
 {
     fprintf(stderr, "kvm: unhandled exit %"PRIx64"\n", reason);
     return -EINVAL;
@@ -1085,12 +1084,10 @@ again:
 	if (1) {
 		switch (run->exit_reason) {
 		case KVM_EXIT_UNKNOWN:
-			r = handle_unhandled(kvm, vcpu,
-				run->hw.hardware_exit_reason);
+			r = handle_unhandled(run->hw.hardware_exit_reason);
 			break;
 		case KVM_EXIT_FAIL_ENTRY:
-			r = handle_unhandled(kvm, vcpu,
-				run->fail_entry.hardware_entry_failure_reason);
+			r = handle_unhandled(run->fail_entry.hardware_entry_failure_reason);
 			break;
 		case KVM_EXIT_EXCEPTION:
 			fprintf(stderr, "exception %d (%x)\n",
