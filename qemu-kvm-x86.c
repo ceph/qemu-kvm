@@ -38,7 +38,7 @@ int kvm_set_tss_addr(kvm_context_t kvm, unsigned long addr)
 #ifdef KVM_CAP_SET_TSS_ADDR
 	int r;
 
-	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_SET_TSS_ADDR);
+	r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_SET_TSS_ADDR);
 	if (r > 0) {
 		r = kvm_vm_ioctl(kvm_state, KVM_SET_TSS_ADDR, addr);
 		if (r < 0) {
@@ -56,7 +56,7 @@ static int kvm_init_tss(kvm_context_t kvm)
 #ifdef KVM_CAP_SET_TSS_ADDR
 	int r;
 
-	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_SET_TSS_ADDR);
+	r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_SET_TSS_ADDR);
 	if (r > 0) {
 		/*
 		 * this address is 3 pages before the bios, and the bios should present
@@ -78,7 +78,7 @@ static int kvm_set_identity_map_addr(kvm_context_t kvm, unsigned long addr)
 #ifdef KVM_CAP_SET_IDENTITY_MAP_ADDR
 	int r;
 
-	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_SET_IDENTITY_MAP_ADDR);
+	r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_SET_IDENTITY_MAP_ADDR);
 	if (r > 0) {
 		r = kvm_vm_ioctl(kvm_state, KVM_SET_IDENTITY_MAP_ADDR, &addr);
 		if (r == -1) {
@@ -96,7 +96,7 @@ static int kvm_init_identity_map_page(kvm_context_t kvm)
 #ifdef KVM_CAP_SET_IDENTITY_MAP_ADDR
 	int r;
 
-	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_SET_IDENTITY_MAP_ADDR);
+	r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_SET_IDENTITY_MAP_ADDR);
 	if (r > 0) {
 		/*
 		 * this address is 4 pages before the bios, and the bios should present
@@ -121,7 +121,7 @@ static int kvm_create_pit(kvm_context_t kvm)
 
 	kvm->pit_in_kernel = 0;
 	if (!kvm->no_pit_creation) {
-		r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_PIT);
+		r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_PIT);
 		if (r > 0) {
 			r = kvm_vm_ioctl(kvm_state, KVM_CREATE_PIT);
 			if (r >= 0)
@@ -401,11 +401,11 @@ void kvm_show_code(kvm_vcpu_context_t vcpu)
 struct kvm_msr_list *kvm_get_msr_list(kvm_context_t kvm)
 {
 	struct kvm_msr_list sizer, *msrs;
-	int r, e;
+	int r;
 
 	sizer.nmsrs = 0;
-	r = ioctl(kvm->fd, KVM_GET_MSR_INDEX_LIST, &sizer);
-	if (r == -1 && errno != E2BIG)
+	r = kvm_ioctl(kvm_state, KVM_GET_MSR_INDEX_LIST, &sizer);
+	if (r < 0 && r != -E2BIG)
 		return NULL;
 	/* Old kernel modules had a bug and could write beyond the provided
 	   memory. Allocate at least a safe amount of 1K. */
@@ -413,11 +413,10 @@ struct kvm_msr_list *kvm_get_msr_list(kvm_context_t kvm)
 				       sizer.nmsrs * sizeof(*msrs->indices)));
 
 	msrs->nmsrs = sizer.nmsrs;
-	r = ioctl(kvm->fd, KVM_GET_MSR_INDEX_LIST, msrs);
-	if (r == -1) {
-		e = errno;
+	r = kvm_ioctl(kvm_state, KVM_GET_MSR_INDEX_LIST, msrs);
+	if (r < 0) {
 		free(msrs);
-		errno = e;
+		errno = r;
 		return NULL;
 	}
 	return msrs;
@@ -458,10 +457,10 @@ int kvm_get_mce_cap_supported(kvm_context_t kvm, uint64_t *mce_cap,
 #ifdef KVM_CAP_MCE
     int r;
 
-    r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_MCE);
+    r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_MCE);
     if (r > 0) {
         *max_banks = r;
-        return ioctl(kvm->fd, KVM_X86_GET_MCE_CAP_SUPPORTED, mce_cap);
+        return kvm_ioctl(kvm_state, KVM_X86_GET_MCE_CAP_SUPPORTED, mce_cap);
     }
 #endif
     return -ENOSYS;
@@ -599,7 +598,7 @@ int kvm_set_shadow_pages(kvm_context_t kvm, unsigned int nrshadow_pages)
 #ifdef KVM_CAP_MMU_SHADOW_CACHE_CONTROL
 	int r;
 
-	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION,
+	r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION,
 		  KVM_CAP_MMU_SHADOW_CACHE_CONTROL);
 	if (r > 0) {
 		r = kvm_vm_ioctl(kvm_state, KVM_SET_NR_MMU_PAGES, nrshadow_pages);
@@ -618,7 +617,7 @@ int kvm_get_shadow_pages(kvm_context_t kvm, unsigned int *nrshadow_pages)
 #ifdef KVM_CAP_MMU_SHADOW_CACHE_CONTROL
 	int r;
 
-	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION,
+	r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION,
 		  KVM_CAP_MMU_SHADOW_CACHE_CONTROL);
 	if (r > 0) {
 		*nrshadow_pages = kvm_vm_ioctl(kvm_state, KVM_GET_NR_MMU_PAGES);
@@ -637,8 +636,8 @@ static int tpr_access_reporting(kvm_vcpu_context_t vcpu, int enabled)
 		.enabled = enabled,
 	};
 
-	r = ioctl(vcpu->kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_VAPIC);
-	if (r == -1 || r == 0)
+	r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_VAPIC);
+	if (r <= 0)
 		return -ENOSYS;
 	r = ioctl(vcpu->fd, KVM_TPR_ACCESS_REPORTING, &tac);
 	if (r == -1) {
@@ -671,10 +670,8 @@ static struct kvm_cpuid2 *try_get_cpuid(kvm_context_t kvm, int max)
 	size = sizeof(*cpuid) + max * sizeof(*cpuid->entries);
 	cpuid = qemu_malloc(size);
 	cpuid->nent = max;
-	r = ioctl(kvm->fd, KVM_GET_SUPPORTED_CPUID, cpuid);
-	if (r == -1)
-		r = -errno;
-	else if (r == 0 && cpuid->nent >= max)
+	r = kvm_ioctl(kvm_state, KVM_GET_SUPPORTED_CPUID, cpuid);
+	if (r == 0 && cpuid->nent >= max)
 		r = -E2BIG;
 	if (r < 0) {
 		if (r == -E2BIG) {

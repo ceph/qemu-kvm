@@ -52,8 +52,6 @@ extern int kvm_abi;
  */
 
 struct kvm_context {
-	/// Filedescriptor to /dev/kvm
-	int fd;
 	void *opaque;
 	/// is dirty pages logging enabled for all regions or not
 	int dirty_pages_log_all;
@@ -1198,6 +1196,7 @@ typedef struct KVMState
 
 extern KVMState *kvm_state;
 
+int kvm_ioctl(KVMState *s, int type, ...);
 int kvm_vm_ioctl(KVMState *s, int type, ...);
 
 #endif

@@ -227,7 +227,7 @@ static int get_free_slot(kvm_context_t kvm)
 	int tss_ext;
 
 #if defined(KVM_CAP_SET_TSS_ADDR) && !defined(__s390__)
-	tss_ext = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_SET_TSS_ADDR);
+	tss_ext = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_SET_TSS_ADDR);
 #else
 	tss_ext = 0;
 #endif
@@ -451,7 +451,7 @@ int kvm_init(int smp_cpus)
 	kvm_state = qemu_mallocz(sizeof(*kvm_state));
     kvm_context = &kvm_state->kvm_context;
 
-	kvm_context->fd = fd;
+	kvm_state->fd = fd;
 	kvm_state->vmfd = -1;
 	kvm_context->opaque = cpu_single_env;
 	kvm_context->dirty_pages_log_all = 0;
@@ -492,7 +492,7 @@ static void kvm_finalize(KVMState *s)
 	if (kvm->vm_fd != -1)
 		close(kvm->vm_fd);
 	*/
-	close(s->kvm_context.fd);
+	close(s->fd);
 	free(s);
 }
 
@@ -526,8 +526,8 @@ kvm_vcpu_context_t kvm_create_vcpu(CPUState *env, int id)
     env->kvm_fd = r;
     env->kvm_state = kvm_state;
 
-	mmap_size = ioctl(kvm->fd, KVM_GET_VCPU_MMAP_SIZE, 0);
-	if (mmap_size == -1) {
+	mmap_size = kvm_ioctl(kvm_state, KVM_GET_VCPU_MMAP_SIZE, 0);
+	if (mmap_size < 0) {
 		fprintf(stderr, "get vcpu mmap size: %m\n");
 		goto err_fd;
 	}
@@ -548,7 +548,7 @@ err:
 static int kvm_set_boot_vcpu_id(kvm_context_t kvm, uint32_t id)
 {
 #ifdef KVM_CAP_SET_BOOT_CPU_ID
-    int r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_SET_BOOT_CPU_ID);
+    int r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_SET_BOOT_CPU_ID);
     if (r > 0)
         return kvm_vm_ioctl(kvm_state, KVM_SET_BOOT_CPU_ID, id);
     return -ENOSYS;
@@ -559,15 +559,14 @@ static int kvm_set_boot_vcpu_id(kvm_context_t kvm, uint32_t id)
 
 int kvm_create_vm(kvm_context_t kvm)
 {
-	int fd = kvm->fd;
-
+    int fd;
 #ifdef KVM_CAP_IRQ_ROUTING
 	kvm->irq_routes = qemu_mallocz(sizeof(*kvm->irq_routes));
 	kvm->nr_allocated_irq_routes = 0;
 #endif
 
-	fd = ioctl(fd, KVM_CREATE_VM, 0);
-	if (fd == -1) {
+	fd = kvm_ioctl(kvm_state, KVM_CREATE_VM, 0);
+	if (fd < 0) {
 		fprintf(stderr, "kvm_create_vm: %m\n");
 		return -1;
 	}
@@ -580,7 +579,7 @@ static int kvm_create_default_phys_mem(kvm_context_t kvm,
 				       void **vm_mem)
 {
 #ifdef KVM_CAP_USER_MEMORY
-	int r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_USER_MEMORY);
+	int r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_USER_MEMORY);
 	if (r > 0)
 		return 0;
 	fprintf(stderr, "Hypervisor too old: KVM_CAP_USER_MEMORY extension not supported\n");
@@ -594,7 +593,7 @@ int kvm_check_extension(kvm_context_t kvm, int ext)
 {
 	int ret;
 
-	ret = ioctl(kvm->fd, KVM_CHECK_EXTENSION, ext);
+	ret = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, ext);
 	if (ret > 0)
 		return ret;
 	return 0;
@@ -607,13 +606,13 @@ void kvm_create_irqchip(kvm_context_t kvm)
 	kvm->irqchip_in_kernel = 0;
 #ifdef KVM_CAP_IRQCHIP
 	if (!kvm->no_irqchip_creation) {
-		r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_IRQCHIP);
+		r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_IRQCHIP);
 		if (r > 0) {	/* kernel irqchip supported */
 			r = kvm_vm_ioctl(kvm_state, KVM_CREATE_IRQCHIP);
 			if (r >= 0) {
 				kvm->irqchip_inject_ioctl = KVM_IRQ_LINE;
 #if defined(KVM_CAP_IRQ_INJECT_STATUS) && defined(KVM_IRQ_LINE_STATUS)
-				r = ioctl(kvm->fd, KVM_CHECK_EXTENSION,
+				r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION,
 			  KVM_CAP_IRQ_INJECT_STATUS);
 				if (r > 0)
 					kvm->irqchip_inject_ioctl = KVM_IRQ_LINE_STATUS;
@@ -942,7 +941,7 @@ int kvm_get_mpstate(kvm_vcpu_context_t vcpu, struct kvm_mp_state *mp_state)
 {
     int r;
 
-    r = ioctl(vcpu->kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_MP_STATE);
+    r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_MP_STATE);
     if (r > 0)
         return ioctl(vcpu->fd, KVM_GET_MP_STATE, mp_state);
     return -ENOSYS;
@@ -952,7 +951,7 @@ int kvm_set_mpstate(kvm_vcpu_context_t vcpu, struct kvm_mp_state *mp_state)
 {
     int r;
 
-    r = ioctl(vcpu->kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_MP_STATE);
+    r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_MP_STATE);
     if (r > 0)
         return ioctl(vcpu->fd, KVM_SET_MP_STATE, mp_state);
     return -ENOSYS;
@@ -1188,7 +1187,7 @@ int kvm_has_sync_mmu(void)
 {
         int r = 0;
 #ifdef KVM_CAP_SYNC_MMU
-        r = ioctl(kvm_context->fd, KVM_CHECK_EXTENSION, KVM_CAP_SYNC_MMU);
+        r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_SYNC_MMU);
 #endif
         return r;
 }
@@ -1207,7 +1206,7 @@ int kvm_init_coalesced_mmio(kvm_context_t kvm)
 	int r = 0;
 	kvm->coalesced_mmio = 0;
 #ifdef KVM_CAP_COALESCED_MMIO
-	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_COALESCED_MMIO);
+	r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_COALESCED_MMIO);
 	if (r > 0) {
 		kvm->coalesced_mmio = r;
 		return 0;
@@ -1282,7 +1281,7 @@ int kvm_assign_irq(kvm_context_t kvm,
 {
 	int ret;
 
-	ret = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_ASSIGN_DEV_IRQ);
+	ret = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_ASSIGN_DEV_IRQ);
 	if (ret > 0) {
 		return kvm_vm_ioctl(kvm_state, KVM_ASSIGN_DEV_IRQ, assigned_irq);
 	}
@@ -1317,7 +1316,7 @@ int kvm_destroy_memory_region_works(kvm_context_t kvm)
 	int ret = 0;
 
 #ifdef KVM_CAP_DESTROY_MEMORY_REGION_WORKS
-	ret = ioctl(kvm->fd, KVM_CHECK_EXTENSION,
+	ret = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION,
 		    KVM_CAP_DESTROY_MEMORY_REGION_WORKS);
 	if (ret <= 0)
 		ret = 0;
@@ -1333,7 +1332,7 @@ int kvm_reinject_control(kvm_context_t kvm, int pit_reinject)
 
 	control.pit_reinject = pit_reinject;
 
-	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_REINJECT_CONTROL);
+	r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_REINJECT_CONTROL);
 	if (r > 0) {
 		return  kvm_vm_ioctl(kvm_state, KVM_REINJECT_CONTROL, &control);
 	}

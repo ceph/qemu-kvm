@@ -793,6 +793,7 @@ void kvm_set_phys_mem(target_phys_addr_t start_addr,
     }
 }
 
+#endif
 int kvm_ioctl(KVMState *s, int type, ...)
 {
     int ret;
@@ -809,7 +810,6 @@ int kvm_ioctl(KVMState *s, int type, ...)
 
     return ret;
 }
-#endif
 
 int kvm_vm_ioctl(KVMState *s, int type, ...)
 {
