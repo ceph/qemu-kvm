@@ -2106,14 +2106,17 @@ void qemu_kvm_notify_work(void)
 	if (len == -1 && errno == EINTR)
 	    continue;
 
-	if (len <= 0)
+        /* In case we have a pipe, there is not reason to insist writing
+         * 8 bytes
+         */
+	if (len == -1 && errno == EAGAIN)
 	    break;
+
+        if (len <= 0)
+            break;
 
 	offset += len;
     }
-
-    if (offset != 8)
-	fprintf(stderr, "failed to notify io thread\n");
 }
 
 /* If we have signalfd, we mask out the signals we want to handle and then
@@ -2152,20 +2155,18 @@ static void sigfd_handler(void *opaque)
 static void io_thread_wakeup(void *opaque)
 {
     int fd = (unsigned long)opaque;
-    char buffer[8];
-    size_t offset = 0;
+    char buffer[4096];
 
-    while (offset < 8) {
+    /* Drain the pipe/(eventfd) */
+    while (1) {
 	ssize_t len;
 
-	len = read(fd, buffer + offset, 8 - offset);
+	len = read(fd, buffer, sizeof(buffer));
 	if (len == -1 && errno == EINTR)
 	    continue;
 
 	if (len <= 0)
 	    break;
-
-	offset += len;
     }
 }
 
@@ -2182,6 +2183,9 @@ int kvm_main_loop(void)
 	fprintf(stderr, "failed to create eventfd\n");
 	return -errno;
     }
+
+    fcntl(fds[0], F_SETFL, O_NONBLOCK);
+    fcntl(fds[1], F_SETFL, O_NONBLOCK);
 
     qemu_set_fd_handler2(fds[0], NULL, io_thread_wakeup, NULL,
 			 (void *)(unsigned long)fds[0]);
