@@ -478,7 +478,7 @@ void hpet_disable_pit(void)
 {
     PITChannelState *s = &pit_state.channels[0];
 
-    if (qemu_kvm_pit_in_kernel()) {
+    if (kvm_enabled() && qemu_kvm_pit_in_kernel()) {
         if (qemu_kvm_has_pit_state2()) {
             kvm_hpet_disable_kpit();
         } else {
@@ -502,7 +502,7 @@ void hpet_enable_pit(void)
     PITState *pit = &pit_state;
     PITChannelState *s = &pit->channels[0];
 
-    if (qemu_kvm_pit_in_kernel()) {
+    if (kvm_enabled() && qemu_kvm_pit_in_kernel()) {
         if (qemu_kvm_has_pit_state2()) {
             kvm_hpet_enable_kpit();
         } else {
