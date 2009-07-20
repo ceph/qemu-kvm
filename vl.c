@@ -5921,30 +5921,19 @@ int main(int argc, char **argv, char **envp)
         }
     }
 
-#ifdef KVM_UPSTREAM
     if (kvm_enabled()) {
         int ret;
 
         ret = kvm_init(smp_cpus);
         if (ret < 0) {
+#if defined(KVM_UPSTREAM) || defined(NO_CPU_EMULATION)
             fprintf(stderr, "failed to initialize KVM\n");
             exit(1);
+#endif
+            fprintf(stderr, "Could not initialize KVM, will disable KVM support\n");
+	     kvm_allowed = 0;
         }
     }
-#endif
-
-#ifdef CONFIG_KVM
-    if (kvm_enabled()) {
-	if (kvm_init(smp_cpus) < 0) {
-	    fprintf(stderr, "Could not initialize KVM, will disable KVM support\n");
-#ifdef NO_CPU_EMULATION
-	    fprintf(stderr, "Compiled with --disable-cpu-emulation, exiting.\n");
-	    exit(1);
-#endif
-	    kvm_allowed = 0;
-	}
-    }
-#endif
 
     if (monitor_device) {
         monitor_hd = qemu_chr_open("monitor", monitor_device, NULL);
