@@ -5998,28 +5998,6 @@ int main(int argc, char **argv, char **envp)
 
     module_call_init(MODULE_INIT_DEVICE);
 
-    if (kvm_enabled()) {
-        kvm_init_ap();
-#ifdef CONFIG_KVM
-        if (kvm_irqchip) {
-            if (!qemu_kvm_has_gsi_routing()) {
-                irq0override = 0;
-#ifdef TARGET_I386
-                /* if kernel can't do irq routing, interrupt source
-                 * override 0->2 can not be set up as required by hpet,
-                 * so disable hpet.
-                 */
-                no_hpet=1;
-            } else  if (!qemu_kvm_has_pit_state2()) {
-                no_hpet=1;
-            }
-#else
-            }
-#endif
-        }
-#endif
-    }
-
     machine->init(ram_size, boot_devices,
                   kernel_filename, kernel_cmdline, initrd_filename, cpu_model);
 

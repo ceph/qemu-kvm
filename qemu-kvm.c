@@ -2111,6 +2111,8 @@ int kvm_arch_init_irq_routing(void)
 }
 #endif
 
+extern int no_hpet;
+
 static int kvm_create_context()
 {
     int r;
@@ -2141,6 +2143,24 @@ static int kvm_create_context()
     r = kvm_arch_init_irq_routing();
     if (r < 0) {
         return r;
+    }
+
+    kvm_init_ap();
+    if (kvm_irqchip) {
+        if (!qemu_kvm_has_gsi_routing()) {
+            irq0override = 0;
+#ifdef TARGET_I386
+            /* if kernel can't do irq routing, interrupt source
+             * override 0->2 can not be set up as required by hpet,
+             * so disable hpet.
+             */
+            no_hpet=1;
+        } else  if (!qemu_kvm_has_pit_state2()) {
+            no_hpet=1;
+        }
+#else
+        }
+#endif
     }
 
     return 0;
