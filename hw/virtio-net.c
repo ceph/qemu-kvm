@@ -344,12 +344,9 @@ static void virtio_net_handle_rx(VirtIODevice *vdev, VirtQueue *vq)
 
     qemu_flush_queued_packets(n->vc);
 
-#ifdef CONFIG_KVM
     /* We now have RX buffers, signal to the IO thread to break out of the
        select to re-poll the tap file descriptor */
-    if (kvm_enabled())
-        qemu_kvm_notify_work();
-#endif
+    qemu_notify_event();
 }
 
 static int do_virtio_net_can_receive(VirtIONet *n, int bufsize)
