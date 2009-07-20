@@ -400,6 +400,8 @@ int kvm_dirty_pages_log_reset(kvm_context_t kvm)
 }
 
 
+static int kvm_create_context(void);
+
 int kvm_init(int smp_cpus)
 {
 	int fd;
@@ -459,7 +461,7 @@ int kvm_init(int smp_cpus)
 	}
 
     pthread_mutex_lock(&qemu_mutex);
-	return 0;
+    return kvm_create_context();
 
  out_close:
 	close(fd);
@@ -2163,7 +2165,7 @@ int kvm_arch_init_irq_routing(void)
 }
 #endif
 
-int kvm_qemu_create_context(void)
+static int kvm_create_context()
 {
     int r;
 

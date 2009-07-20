@@ -5830,13 +5830,6 @@ int main(int argc, char **argv, char **envp)
     if (ram_size == 0)
         ram_size = DEFAULT_RAM_SIZE * 1024 * 1024;
 
-    if (kvm_enabled()) {
-	    if (kvm_qemu_create_context() < 0) {
-		    fprintf(stderr, "Could not create KVM context\n");
-		    exit(1);
-	    }
-    }
-
 #ifdef CONFIG_KQEMU
     /* FIXME: This is a nasty hack because kqemu can't cope with dynamic
        guest ram allocation.  It needs to go away.  */
