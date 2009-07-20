@@ -5736,19 +5736,6 @@ int main(int argc, char **argv, char **envp)
         signal(SIGTTIN, SIG_IGN);
     }
 
-#ifdef CONFIG_KVM
-    if (kvm_enabled()) {
-	if (kvm_init(smp_cpus) < 0) {
-	    fprintf(stderr, "Could not initialize KVM, will disable KVM support\n");
-#ifdef NO_CPU_EMULATION
-	    fprintf(stderr, "Compiled with --disable-cpu-emulation, exiting.\n");
-	    exit(1);
-#endif
-	    kvm_allowed = 0;
-	}
-    }
-#endif
-
     if (pid_file && qemu_create_pidfile(pid_file) != 0) {
         if (daemonize) {
             uint8_t status = 1;
@@ -5943,6 +5930,19 @@ int main(int argc, char **argv, char **envp)
             fprintf(stderr, "failed to initialize KVM\n");
             exit(1);
         }
+    }
+#endif
+
+#ifdef CONFIG_KVM
+    if (kvm_enabled()) {
+	if (kvm_init(smp_cpus) < 0) {
+	    fprintf(stderr, "Could not initialize KVM, will disable KVM support\n");
+#ifdef NO_CPU_EMULATION
+	    fprintf(stderr, "Compiled with --disable-cpu-emulation, exiting.\n");
+	    exit(1);
+#endif
+	    kvm_allowed = 0;
+	}
     }
 #endif
 
