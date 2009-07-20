@@ -2703,3 +2703,43 @@ int kvm_set_boot_cpu_id(uint32_t id)
 {
 	return kvm_set_boot_vcpu_id(kvm_context, id);
 }
+
+#ifdef TARGET_I386
+#ifdef KVM_CAP_MCE
+struct kvm_x86_mce_data
+{
+    CPUState *env;
+    struct kvm_x86_mce *mce;
+};
+
+static void kvm_do_inject_x86_mce(void *_data)
+{
+    struct kvm_x86_mce_data *data = _data;
+    int r;
+
+    r = kvm_set_mce(data->env->kvm_cpu_state.vcpu_ctx, data->mce);
+    if (r < 0)
+        perror("kvm_set_mce FAILED");
+}
+#endif
+
+void kvm_inject_x86_mce(CPUState *cenv, int bank, uint64_t status,
+                        uint64_t mcg_status, uint64_t addr, uint64_t misc)
+{
+#ifdef KVM_CAP_MCE
+    struct kvm_x86_mce mce = {
+        .bank = bank,
+        .status = status,
+        .mcg_status = mcg_status,
+        .addr = addr,
+        .misc = misc,
+    };
+    struct kvm_x86_mce_data data = {
+            .env = cenv,
+            .mce = &mce,
+    };
+
+    on_vcpu(cenv, kvm_do_inject_x86_mce, &data);
+#endif
+}
+#endif

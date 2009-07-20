@@ -1509,6 +1509,11 @@ void cpu_inject_x86_mce(CPUState *cenv, int bank, uint64_t status,
     unsigned bank_num = mcg_cap & 0xff;
     uint64_t *banks = cenv->mce_banks;
 
+    if (kvm_enabled()) {
+        kvm_inject_x86_mce(cenv, bank, status, mcg_status, addr, misc);
+        return;
+    }
+
     if (bank >= bank_num || !(status & MCI_STATUS_VAL))
         return;
 

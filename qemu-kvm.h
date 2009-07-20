@@ -116,6 +116,10 @@ int try_push_interrupts(kvm_context_t kvm);
 struct kvm_msr_list *kvm_get_msr_list(kvm_context_t);
 int kvm_get_msrs(kvm_vcpu_context_t, struct kvm_msr_entry *msrs, int n);
 int kvm_set_msrs(kvm_vcpu_context_t, struct kvm_msr_entry *msrs, int n);
+int kvm_get_mce_cap_supported(kvm_context_t, uint64_t *mce_cap, int *max_banks);
+int kvm_setup_mce(kvm_vcpu_context_t vcpu, uint64_t *mcg_cap);
+struct kvm_x86_mce;
+int kvm_set_mce(kvm_vcpu_context_t vcpu, struct kvm_x86_mce *mce);
 #endif
 
 /*!
@@ -618,6 +622,21 @@ int kvm_set_lapic(kvm_vcpu_context_t vcpu, struct kvm_lapic_state *s);
 int kvm_inject_nmi(kvm_vcpu_context_t vcpu);
 
 #endif
+
+/*!
+ * \brief Simulate an x86 MCE
+ *
+ * This allows you to simulate a x86 MCE.
+ *
+ * \param cenv Which virtual CPU should get MCE injected
+ * \param bank Bank number
+ * \param status MSR_MCI_STATUS
+ * \param mcg_status MSR_MCG_STATUS
+ * \param addr MSR_MCI_ADDR
+ * \param misc MSR_MCI_MISC
+ */
+void kvm_inject_x86_mce(CPUState *cenv, int bank, uint64_t status,
+                        uint64_t mcg_status, uint64_t addr, uint64_t misc);
 
 /*!
  * \brief Query wheather in kernel pit is used

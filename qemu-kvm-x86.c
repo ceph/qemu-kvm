@@ -432,6 +432,39 @@ int kvm_set_msrs(kvm_vcpu_context_t vcpu, struct kvm_msr_entry *msrs, int n)
     return r;
 }
 
+int kvm_get_mce_cap_supported(kvm_context_t kvm, uint64_t *mce_cap,
+                              int *max_banks)
+{
+#ifdef KVM_CAP_MCE
+    int r;
+
+    r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_MCE);
+    if (r > 0) {
+        *max_banks = r;
+        return ioctl(kvm->fd, KVM_X86_GET_MCE_CAP_SUPPORTED, mce_cap);
+    }
+#endif
+    return -ENOSYS;
+}
+
+int kvm_setup_mce(kvm_vcpu_context_t vcpu, uint64_t *mcg_cap)
+{
+#ifdef KVM_CAP_MCE
+    return ioctl(vcpu->fd, KVM_X86_SETUP_MCE, mcg_cap);
+#else
+    return -ENOSYS;
+#endif
+}
+
+int kvm_set_mce(kvm_vcpu_context_t vcpu, struct kvm_x86_mce *m)
+{
+#ifdef KVM_CAP_MCE
+    return ioctl(vcpu->fd, KVM_X86_SET_MCE, m);
+#else
+    return -ENOSYS;
+#endif
+}
+
 static void print_seg(FILE *file, const char *name, struct kvm_segment *seg)
 {
 	fprintf(stderr,
@@ -1284,6 +1317,28 @@ int kvm_arch_qemu_init_env(CPUState *cenv)
 	do_cpuid_ent(&cpuid_ent[cpuid_nent++], i, 0, &copy);
 
     kvm_setup_cpuid2(cenv->kvm_cpu_state.vcpu_ctx, cpuid_nent, cpuid_ent);
+
+#ifdef KVM_CAP_MCE
+    if (((cenv->cpuid_version >> 8)&0xF) >= 6
+        && (cenv->cpuid_features&(CPUID_MCE|CPUID_MCA)) == (CPUID_MCE|CPUID_MCA)
+        && kvm_check_extension(kvm_context, KVM_CAP_MCE) > 0) {
+        uint64_t mcg_cap;
+        int banks;
+
+        if (kvm_get_mce_cap_supported(kvm_context, &mcg_cap, &banks))
+            perror("kvm_get_mce_cap_supported FAILED");
+        else {
+            if (banks > MCE_BANKS_DEF)
+                banks = MCE_BANKS_DEF;
+            mcg_cap &= MCE_CAP_DEF;
+            mcg_cap |= banks;
+            if (kvm_setup_mce(cenv->kvm_cpu_state.vcpu_ctx, &mcg_cap))
+                perror("kvm_setup_mce FAILED");
+            else
+                cenv->mcg_cap = mcg_cap;
+        }
+    }
+#endif
 
     return 0;
 }
