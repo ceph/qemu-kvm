@@ -142,7 +142,6 @@ struct qemu_work_item;
 struct KVMCPUState {
     pthread_t thread;
     int signalled;
-    int created;
     void *vcpu_ctx;
     struct qemu_work_item *queued_work_first, *queued_work_last;
 };

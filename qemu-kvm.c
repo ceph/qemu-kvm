@@ -1663,12 +1663,12 @@ void kvm_update_interrupt_request(CPUState *env)
     int signal = 0;
 
     if (env) {
-        if (!current_env || !current_env->kvm_cpu_state.created)
+        if (!current_env || !current_env->created)
             signal = 1;
         /*
          * Testing for created here is really redundant
          */
-        if (current_env && current_env->kvm_cpu_state.created &&
+        if (current_env && current_env->created &&
             env != current_env && !env->kvm_cpu_state.signalled)
             signal = 1;
 
@@ -1948,7 +1948,7 @@ static void *ap_main_loop(void *_env)
 
     /* signal VCPU creation */
     pthread_mutex_lock(&qemu_mutex);
-    current_env->kvm_cpu_state.created = 1;
+    current_env->created = 1;
     pthread_cond_signal(&qemu_vcpu_cond);
 
     /* and wait for machine initialization */
@@ -1964,13 +1964,13 @@ void kvm_init_vcpu(CPUState *env)
 {
     pthread_create(&env->kvm_cpu_state.thread, NULL, ap_main_loop, env);
 
-    while (env->kvm_cpu_state.created == 0)
+    while (env->created == 0)
 	qemu_cond_wait(&qemu_vcpu_cond);
 }
 
 int kvm_vcpu_inited(CPUState *env)
 {
-    return env->kvm_cpu_state.created;
+    return env->created;
 }
 
 #ifdef TARGET_I386
