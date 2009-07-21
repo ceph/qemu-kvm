@@ -986,8 +986,6 @@ int pre_kvm_run(kvm_context_t kvm, CPUState *env)
 {
     kvm_arch_pre_kvm_run(kvm->opaque, env);
 
-    if (env->exit_request)
-        return 1;
     pthread_mutex_unlock(&qemu_mutex);
     return 0;
 }
