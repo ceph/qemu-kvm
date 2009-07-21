@@ -91,7 +91,7 @@ static int kvm_debug(void *opaque, void *data,
 
     if (handle) {
 	kvm_debug_cpu_requested = env;
-	env->kvm_cpu_state.stopped = 1;
+	env->stopped = 1;
     }
     return handle;
 }
@@ -963,7 +963,7 @@ int handle_halt(kvm_vcpu_context_t vcpu)
 int handle_shutdown(kvm_context_t kvm, CPUState *env)
 {
     /* stop the current vcpu from going back to guest mode */
-    env->kvm_cpu_state.stopped = 1;
+    env->stopped = 1;
 
     qemu_system_reset_request();
     return 1;
@@ -1748,7 +1748,7 @@ int kvm_cpu_exec(CPUState *env)
 
 static int is_cpu_stopped(CPUState *env)
 {
-    return !vm_running || env->kvm_cpu_state.stopped;
+    return !vm_running || env->stopped;
 }
 
 static void flush_queued_work(CPUState *env)
@@ -1794,9 +1794,9 @@ static void kvm_main_loop_wait(CPUState *env, int timeout)
     cpu_single_env = env;
     flush_queued_work(env);
 
-    if (env->kvm_cpu_state.stop) {
-	env->kvm_cpu_state.stop = 0;
-	env->kvm_cpu_state.stopped = 1;
+    if (env->stop) {
+	env->stop = 0;
+	env->stopped = 1;
 	pthread_cond_signal(&qemu_pause_cond);
     }
 
@@ -1808,7 +1808,7 @@ static int all_threads_paused(void)
     CPUState *penv = first_cpu;
 
     while (penv) {
-        if (penv->kvm_cpu_state.stop)
+        if (penv->stop)
             return 0;
         penv = (CPUState *)penv->next_cpu;
     }
@@ -1822,11 +1822,11 @@ static void pause_all_threads(void)
 
     while (penv) {
         if (penv != cpu_single_env) {
-            penv->kvm_cpu_state.stop = 1;
+            penv->stop = 1;
             pthread_kill(penv->kvm_cpu_state.thread, SIG_IPI);
         } else {
-            penv->kvm_cpu_state.stop = 0;
-            penv->kvm_cpu_state.stopped = 1;
+            penv->stop = 0;
+            penv->stopped = 1;
             cpu_exit(penv);
         }
         penv = (CPUState *)penv->next_cpu;
@@ -1843,8 +1843,8 @@ static void resume_all_threads(void)
     assert(!cpu_single_env);
 
     while (penv) {
-        penv->kvm_cpu_state.stop = 0;
-        penv->kvm_cpu_state.stopped = 0;
+        penv->stop = 0;
+        penv->stopped = 0;
         pthread_kill(penv->kvm_cpu_state.thread, SIG_IPI);
         penv = (CPUState *)penv->next_cpu;
     }
@@ -2607,12 +2607,6 @@ int kvm_log_stop(target_phys_addr_t phys_addr, target_phys_addr_t len)
     kvm_qemu_log_memory(phys_addr, len, 0);
 #endif
     return 0;
-}
-
-void qemu_kvm_cpu_stop(CPUState *env)
-{
-    if (kvm_enabled())
-        env->kvm_cpu_state.stopped = 1;
 }
 
 int kvm_set_boot_cpu_id(uint32_t id)
