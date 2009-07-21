@@ -97,55 +97,6 @@ static int kvm_debug(void *opaque, void *data,
 }
 #endif
 
-#define PM_IO_BASE 0xb000
-
-static int kvm_outb(void *opaque, uint16_t addr, uint8_t data)
-{
-    if (addr == 0xb2) {
-	switch (data) {
-	case 0: {
-	    cpu_outb(0, 0xb3, 0);
-	    break;
-	}
-	case 0xf0: {
-	    unsigned x;
-
-	    /* enable acpi */
-	    x = cpu_inw(0, PM_IO_BASE + 4);
-	    x &= ~1;
-	    cpu_outw(0, PM_IO_BASE + 4, x);
-	    break;
-	}
-	case 0xf1: {
-	    unsigned x;
-
-	    /* enable acpi */
-	    x = cpu_inw(0, PM_IO_BASE + 4);
-	    x |= 1;
-	    cpu_outw(0, PM_IO_BASE + 4, x);
-	    break;
-	}
-	default:
-	    break;
-	}
-	return 0;
-    }
-    cpu_outb(0, addr, data);
-    return 0;
-}
-
-static int kvm_outw(void *opaque, uint16_t addr, uint16_t data)
-{
-    cpu_outw(0, addr, data);
-    return 0;
-}
-
-static int kvm_outl(void *opaque, uint16_t addr, uint32_t data)
-{
-    cpu_outl(0, addr, data);
-    return 0;
-}
-
 int kvm_mmio_read(void *opaque, uint64_t addr, uint8_t *data, int len)
 {
 	cpu_physical_memory_rw(addr, data, len, 0);
@@ -816,14 +767,12 @@ static int handle_io(kvm_vcpu_context_t vcpu)
 	struct kvm_run *run = vcpu->run;
 	kvm_context_t kvm = vcpu->kvm;
 	uint16_t addr = run->io.port;
-	int r;
 	int i;
 	void *p = (void *)run + run->io.data_offset;
 
 	for (i = 0; i < run->io.count; ++i) {
 		switch (run->io.direction) {
 		case KVM_EXIT_IO_IN:
-			r = 0;
 			switch (run->io.size) {
 			case 1:
 				*(uint8_t *)p = cpu_inb(kvm->opaque, addr);
@@ -842,16 +791,13 @@ static int handle_io(kvm_vcpu_context_t vcpu)
 		case KVM_EXIT_IO_OUT:
 			switch (run->io.size) {
 			case 1:
-				r = kvm_outb(kvm->opaque, addr,
-						     *(uint8_t *)p);
+				 cpu_outb(kvm->opaque, addr, *(uint8_t *)p);
 				break;
 			case 2:
-				r = kvm_outw(kvm->opaque, addr,
-						     *(uint16_t *)p);
+				cpu_outw(kvm->opaque, addr, *(uint16_t *)p);
 				break;
 			case 4:
-				r = kvm_outl(kvm->opaque, addr,
-						     *(uint32_t *)p);
+				cpu_outl(kvm->opaque, addr, *(uint32_t *)p);
 				break;
 			default:
 				fprintf(stderr, "bad I/O size %d\n", run->io.size);
