@@ -97,24 +97,6 @@ static int kvm_debug(void *opaque, void *data,
 }
 #endif
 
-static int kvm_inb(void *opaque, uint16_t addr, uint8_t *data)
-{
-    *data = cpu_inb(0, addr);
-    return 0;
-}
-
-static int kvm_inw(void *opaque, uint16_t addr, uint16_t *data)
-{
-    *data = cpu_inw(0, addr);
-    return 0;
-}
-
-static int kvm_inl(void *opaque, uint16_t addr, uint32_t *data)
-{
-    *data = cpu_inl(0, addr);
-    return 0;
-}
-
 #define PM_IO_BASE 0xb000
 
 static int kvm_outb(void *opaque, uint16_t addr, uint8_t data)
@@ -839,15 +821,16 @@ static int handle_io(kvm_vcpu_context_t vcpu)
 	for (i = 0; i < run->io.count; ++i) {
 		switch (run->io.direction) {
 		case KVM_EXIT_IO_IN:
+			r = 0;
 			switch (run->io.size) {
 			case 1:
-				r = kvm_inb(kvm->opaque, addr, p);
+				*(uint8_t *)p = cpu_inb(kvm->opaque, addr);
 				break;
 			case 2:
-				r = kvm_inw(kvm->opaque, addr, p);
+				*(uint16_t *)p = cpu_inw(kvm->opaque, addr);
 				break;
 			case 4:
-				r = kvm_inl(kvm->opaque, addr, p);
+				*(uint32_t *)p = cpu_inl(kvm->opaque, addr);
 				break;
 			default:
 				fprintf(stderr, "bad I/O size %d\n", run->io.size);
