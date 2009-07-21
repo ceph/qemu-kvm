@@ -73,6 +73,47 @@ static int kvm_init_tss(kvm_context_t kvm)
 	return 0;
 }
 
+static int kvm_set_identity_map_addr(kvm_context_t kvm, unsigned long addr)
+{
+#ifdef KVM_CAP_SET_IDENTITY_MAP_ADDR
+	int r;
+
+	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_SET_IDENTITY_MAP_ADDR);
+	if (r > 0) {
+		r = ioctl(kvm->vm_fd, KVM_SET_IDENTITY_MAP_ADDR, &addr);
+		if (r == -1) {
+			fprintf(stderr, "kvm_set_identity_map_addr: %m\n");
+			return -errno;
+		}
+		return 0;
+	}
+#endif
+	return -ENOSYS;
+}
+
+static int kvm_init_identity_map_page(kvm_context_t kvm)
+{
+#ifdef KVM_CAP_SET_IDENTITY_MAP_ADDR
+	int r;
+
+	r = ioctl(kvm->fd, KVM_CHECK_EXTENSION, KVM_CAP_SET_IDENTITY_MAP_ADDR);
+	if (r > 0) {
+		/*
+		 * this address is 4 pages before the bios, and the bios should present
+		 * as unavaible memory
+		 */
+		r = kvm_set_identity_map_addr(kvm, 0xfffbc000);
+		if (r < 0) {
+			fprintf(stderr, "kvm_init_identity_map_page: "
+				"unable to set identity mapping addr\n");
+			return r;
+		}
+
+	}
+#endif
+	return 0;
+}
+
 static int kvm_create_pit(kvm_context_t kvm)
 {
 #ifdef KVM_CAP_PIT
@@ -101,6 +142,10 @@ int kvm_arch_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
 	int r = 0;
 
 	r = kvm_init_tss(kvm);
+	if (r < 0)
+		return r;
+
+	r = kvm_init_identity_map_page(kvm);
 	if (r < 0)
 		return r;
 
