@@ -1338,7 +1338,7 @@ int kvm_arch_qemu_init_env(CPUState *cenv)
 #ifdef KVM_CAP_MCE
     if (((cenv->cpuid_version >> 8)&0xF) >= 6
         && (cenv->cpuid_features&(CPUID_MCE|CPUID_MCA)) == (CPUID_MCE|CPUID_MCA)
-        && kvm_check_extension(kvm_context, KVM_CAP_MCE) > 0) {
+        && kvm_check_extension(kvm_state, KVM_CAP_MCE) > 0) {
         uint64_t mcg_cap;
         int banks;
 
