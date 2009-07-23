@@ -5870,10 +5870,8 @@ int main(int argc, char **argv, char **envp)
     if (nb_drives_opt < MAX_DRIVES)
         drive_add(NULL, SD_ALIAS);
 
-    /* open the virtual block devices
-     * note that migration with device
-     * hot add/remove is broken.
-     */
+    /* open the virtual block devices */
+
     for(i = 0; i < nb_drives_opt; i++)
         if (drive_init(&drives_opt[i], snapshot, machine) == -1)
 	    exit(1);
