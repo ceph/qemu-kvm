@@ -345,7 +345,7 @@ static void virtio_net_handle_rx(VirtIODevice *vdev, VirtQueue *vq)
     qemu_flush_queued_packets(n->vc);
 
     /* We now have RX buffers, signal to the IO thread to break out of the
-       select to re-poll the tap file descriptor */
+     * select to re-poll the tap file descriptor */
     qemu_notify_event();
 }
 
