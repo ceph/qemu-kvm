@@ -503,13 +503,19 @@ void msix_reset(PCIDevice *dev)
 /* Mark vector as used. */
 int msix_vector_use(PCIDevice *dev, unsigned vector)
 {
+    int ret;
     if (vector >= dev->msix_entries_nr)
         return -EINVAL;
-    if (dev->msix_entry_used[vector]++)
+    if (dev->msix_entry_used[vector]) {
         return 0;
-    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
-        return kvm_msix_add(dev, vector);
     }
+    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
+        ret = kvm_msix_add(dev, vector);
+        if (ret) {
+            return ret;
+        }
+    }
+    ++dev->msix_entry_used[vector];
     return 0;
 }
 
