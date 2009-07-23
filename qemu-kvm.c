@@ -1480,7 +1480,7 @@ int kvm_update_routing_entry(kvm_context_t kvm,
         case KVM_IRQ_ROUTING_IRQCHIP:
             if (e->u.irqchip.irqchip == entry->u.irqchip.irqchip &&
                 e->u.irqchip.pin == entry->u.irqchip.pin) {
-                memcpy(&e->u.irqchip, &entry->u.irqchip, sizeof e->u.irqchip);
+                memcpy(&e->u.irqchip, &newentry->u.irqchip, sizeof e->u.irqchip);
                 return 0;
             }
             break;
@@ -1488,7 +1488,7 @@ int kvm_update_routing_entry(kvm_context_t kvm,
             if (e->u.msi.address_lo == entry->u.msi.address_lo &&
                 e->u.msi.address_hi == entry->u.msi.address_hi &&
                 e->u.msi.data == entry->u.msi.data) {
-                memcpy(&e->u.msi, &entry->u.msi, sizeof e->u.msi);
+                memcpy(&e->u.msi, &newentry->u.msi, sizeof e->u.msi);
                 return 0;
             }
             break;
