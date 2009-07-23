@@ -1117,13 +1117,13 @@ static inline void kvm_load_tsc(CPUState *env) {}
 void kvm_mutex_unlock(void);
 void kvm_mutex_lock(void);
 
-static inline void kvm_sleep_begin(void)
+static inline void qemu_mutex_unlock_iothread(void)
 {
     if (kvm_enabled())
 	kvm_mutex_unlock();
 }
 
-static inline void kvm_sleep_end(void)
+static inline void qemu_mutex_lock_iothread(void)
 {
     if (kvm_enabled())
 	kvm_mutex_lock();

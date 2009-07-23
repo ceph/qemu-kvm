@@ -289,24 +289,6 @@ static QEMUTimer *nographic_timer;
 
 uint8_t qemu_uuid[16];
 
-static int qemu_select(int max_fd, fd_set *rfds, fd_set *wfds, fd_set *xfds,
-		       struct timeval *tv)
-{
-    int ret;
-
-    /* KVM holds a mutex while QEMU code is running, we need hooks to
-       release the mutex whenever QEMU code sleeps. */
-
-    kvm_sleep_begin();
-
-    ret = select(max_fd, rfds, wfds, xfds, tv);
-
-    kvm_sleep_end();
-
-    return ret;
-}
-
-
 /***********************************************************/
 /* x86 ISA bus support */
 
@@ -3714,8 +3696,10 @@ void qemu_notify_event(void)
      }
 }
 
+#ifdef KVM_UPSTREAM
 #define qemu_mutex_lock_iothread() do { } while (0)
 #define qemu_mutex_unlock_iothread() do { } while (0)
+#endif
 
 void vm_stop(int reason)
 {
@@ -4126,7 +4110,9 @@ void main_loop_wait(int timeout)
 
     slirp_select_fill(&nfds, &rfds, &wfds, &xfds);
 
-    ret = qemu_select(nfds + 1, &rfds, &wfds, &xfds, &tv);
+    qemu_mutex_unlock_iothread();
+    ret = select(nfds + 1, &rfds, &wfds, &xfds, &tv);
+    qemu_mutex_lock_iothread();
     if (ret > 0) {
         IOHandlerRecord **pioh;
 
