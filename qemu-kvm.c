@@ -1123,52 +1123,6 @@ int kvm_init_coalesced_mmio(kvm_context_t kvm)
     return r;
 }
 
-int kvm_coalesce_mmio_region(target_phys_addr_t addr, ram_addr_t size)
-{
-#ifdef KVM_CAP_COALESCED_MMIO
-    struct kvm_coalesced_mmio_zone zone;
-    int r;
-
-    if (kvm_state->coalesced_mmio) {
-
-        zone.addr = addr;
-        zone.size = size;
-
-        r = kvm_vm_ioctl(kvm_state, KVM_REGISTER_COALESCED_MMIO, &zone);
-        if (r < 0) {
-            perror("kvm_register_coalesced_mmio_zone");
-            return r;
-        }
-        return 0;
-    }
-#endif
-    return -ENOSYS;
-}
-
-int kvm_uncoalesce_mmio_region(target_phys_addr_t addr, ram_addr_t size)
-{
-#ifdef KVM_CAP_COALESCED_MMIO
-    struct kvm_coalesced_mmio_zone zone;
-    int r;
-
-    if (kvm_state->coalesced_mmio) {
-
-        zone.addr = addr;
-        zone.size = size;
-
-        r = kvm_vm_ioctl(kvm_state, KVM_UNREGISTER_COALESCED_MMIO, &zone);
-        if (r < 0) {
-            perror("kvm_unregister_coalesced_mmio_zone");
-            return r;
-        }
-        DPRINTF("Unregistered coalesced mmio region for %llx (%lx)\n", addr,
-                size);
-        return 0;
-    }
-#endif
-    return -ENOSYS;
-}
-
 #ifdef KVM_CAP_DEVICE_ASSIGNMENT
 int kvm_assign_pci_device(kvm_context_t kvm,
                           struct kvm_assigned_pci_dev *assigned_dev)

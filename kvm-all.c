@@ -360,6 +360,7 @@ int kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr,
 
     return ret;
 }
+#endif
 
 int kvm_coalesce_mmio_region(target_phys_addr_t start, ram_addr_t size)
 {
@@ -399,7 +400,6 @@ int kvm_uncoalesce_mmio_region(target_phys_addr_t start, ram_addr_t size)
     return ret;
 }
 
-#endif
 int kvm_check_extension(KVMState *s, unsigned int extension)
 {
     int ret;
