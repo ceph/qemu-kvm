@@ -864,6 +864,8 @@ int kvm_vcpu_ioctl(CPUState *env, int type, ...)
     return ret;
 }
 
+#endif
+
 int kvm_has_sync_mmu(void)
 {
 #ifdef KVM_CAP_SYNC_MMU
@@ -875,6 +877,7 @@ int kvm_has_sync_mmu(void)
 #endif
 }
 
+#ifdef KVM_UPSTREAM
 void kvm_setup_guest_memory(void *start, size_t size)
 {
     if (!kvm_has_sync_mmu()) {

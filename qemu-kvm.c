@@ -1091,15 +1091,6 @@ int kvm_pit_in_kernel(kvm_context_t kvm)
     return kvm->pit_in_kernel;
 }
 
-int kvm_has_sync_mmu(void)
-{
-    int r = 0;
-#ifdef KVM_CAP_SYNC_MMU
-    r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_SYNC_MMU);
-#endif
-    return r;
-}
-
 int kvm_inject_nmi(kvm_vcpu_context_t vcpu)
 {
 #ifdef KVM_CAP_USER_NMI
