@@ -969,9 +969,9 @@ int kvm_run(kvm_vcpu_context_t vcpu, void *env)
     post_kvm_run(kvm, env);
 
 #if defined(KVM_CAP_COALESCED_MMIO)
-    if (kvm->coalesced_mmio) {
+    if (kvm_state->coalesced_mmio) {
         struct kvm_coalesced_mmio_ring *ring =
-            (void *) run + kvm->coalesced_mmio * PAGE_SIZE;
+            (void *) run + kvm_state->coalesced_mmio * PAGE_SIZE;
         while (ring->first != ring->last) {
             kvm_mmio_write(kvm->opaque,
                            ring->coalesced_mmio[ring->first].phys_addr,
@@ -1112,11 +1112,11 @@ int kvm_inject_nmi(kvm_vcpu_context_t vcpu)
 int kvm_init_coalesced_mmio(kvm_context_t kvm)
 {
     int r = 0;
-    kvm->coalesced_mmio = 0;
+    kvm_state->coalesced_mmio = 0;
 #ifdef KVM_CAP_COALESCED_MMIO
     r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_COALESCED_MMIO);
     if (r > 0) {
-        kvm->coalesced_mmio = r;
+        kvm_state->coalesced_mmio = r;
         return 0;
     }
 #endif
@@ -1126,11 +1126,10 @@ int kvm_init_coalesced_mmio(kvm_context_t kvm)
 int kvm_coalesce_mmio_region(target_phys_addr_t addr, ram_addr_t size)
 {
 #ifdef KVM_CAP_COALESCED_MMIO
-    kvm_context_t kvm = kvm_context;
     struct kvm_coalesced_mmio_zone zone;
     int r;
 
-    if (kvm->coalesced_mmio) {
+    if (kvm_state->coalesced_mmio) {
 
         zone.addr = addr;
         zone.size = size;
@@ -1149,11 +1148,10 @@ int kvm_coalesce_mmio_region(target_phys_addr_t addr, ram_addr_t size)
 int kvm_uncoalesce_mmio_region(target_phys_addr_t addr, ram_addr_t size)
 {
 #ifdef KVM_CAP_COALESCED_MMIO
-    kvm_context_t kvm = kvm_context;
     struct kvm_coalesced_mmio_zone zone;
     int r;
 
-    if (kvm->coalesced_mmio) {
+    if (kvm_state->coalesced_mmio) {
 
         zone.addr = addr;
         zone.size = size;
