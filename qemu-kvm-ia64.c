@@ -25,7 +25,7 @@ void kvm_arch_save_regs(CPUState *env)
 {
 }
 
-int kvm_arch_qemu_init_env(CPUState *cenv)
+int kvm_arch_init_vcpu(CPUState *cenv)
 {
     return 0;
 }

@@ -1771,7 +1771,7 @@ static int kvm_main_loop_cpu(CPUState *env)
 
     pthread_mutex_lock(&qemu_mutex);
 
-    kvm_qemu_init_env(env);
+    kvm_arch_init_vcpu(env);
 #ifdef TARGET_I386
     kvm_tpr_vcpu_start(env);
 #endif
@@ -2236,16 +2236,6 @@ int kvm_setup_guest_memory(void *area, unsigned long size)
         perror("madvise");
 
     return ret;
-}
-
-int kvm_qemu_check_extension(int ext)
-{
-    return kvm_check_extension(kvm_state, ext);
-}
-
-int kvm_qemu_init_env(CPUState *cenv)
-{
-    return kvm_arch_qemu_init_env(cenv);
 }
 
 #ifdef KVM_CAP_SET_GUEST_DEBUG

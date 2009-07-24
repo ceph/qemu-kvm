@@ -954,7 +954,6 @@ extern int kvm_allowed;
 
 
 int kvm_main_loop(void);
-int kvm_qemu_init(void);
 int kvm_init_ap(void);
 int kvm_vcpu_inited(CPUState *env);
 void kvm_load_registers(CPUState *env);
@@ -968,8 +967,6 @@ int kvm_remove_breakpoint(CPUState * current_env, target_ulong addr,
                           target_ulong len, int type);
 void kvm_remove_all_breakpoints(CPUState * current_env);
 int kvm_update_guest_debug(CPUState *env, unsigned long reinject_trap);
-int kvm_qemu_init_env(CPUState *env);
-int kvm_qemu_check_extension(int ext);
 void kvm_apic_init(CPUState *env);
 /* called from vcpu initialization */
 void qemu_kvm_load_lapic(CPUState *env);
@@ -1006,7 +1003,7 @@ void kvm_arch_save_regs(CPUState *env);
 void kvm_arch_load_regs(CPUState *env);
 void kvm_arch_load_mpstate(CPUState *env);
 void kvm_arch_save_mpstate(CPUState *env);
-int kvm_arch_qemu_init_env(CPUState *cenv);
+int kvm_arch_init_vcpu(CPUState *cenv);
 void kvm_arch_pre_kvm_run(void *opaque, CPUState *env);
 void kvm_arch_post_kvm_run(void *opaque, CPUState *env);
 int kvm_arch_has_work(CPUState *env);
