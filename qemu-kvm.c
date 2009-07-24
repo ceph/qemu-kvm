@@ -2354,12 +2354,7 @@ int kvm_physical_memory_set_dirty_tracking(int enable)
         if (!kvm_dirty_bitmap) {
             unsigned bitmap_size = BITMAP_SIZE(phys_ram_size);
             kvm_dirty_bitmap = qemu_malloc(bitmap_size);
-            if (kvm_dirty_bitmap == NULL) {
-                perror("Failed to allocate dirty pages bitmap");
-                r = -1;
-            } else {
-                r = kvm_dirty_pages_log_enable_all(kvm_context);
-            }
+            r = kvm_dirty_pages_log_enable_all(kvm_context);
         }
     } else {
         if (kvm_dirty_bitmap) {
