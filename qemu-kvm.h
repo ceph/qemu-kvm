@@ -936,7 +936,18 @@ uint32_t kvm_get_supported_cpuid(kvm_context_t kvm, uint32_t function, int reg);
 
 #else /* !CONFIG_KVM */
 
+typedef struct kvm_context *kvm_context_t;
+typedef struct kvm_vcpu_context *kvm_vcpu_context_t;
+
 struct kvm_pit_state { };
+
+static inline int kvm_init(int smp_cpus) { return 0; }
+static inline void kvm_inject_x86_mce(
+    CPUState *cenv, int bank,uint64_t status,
+    uint64_t mcg_status, uint64_t addr, uint64_t misc) { }
+
+
+extern int kvm_allowed;
 
 #endif /* !CONFIG_KVM */
 
@@ -1167,6 +1178,8 @@ static inline int kvm_set_migration_log(int enable)
     return kvm_physical_memory_set_dirty_tracking(enable);
 }
 
+#ifdef CONFIG_KVM
+
 typedef struct KVMSlot
 {
     target_phys_addr_t start_addr;
@@ -1197,5 +1210,7 @@ extern KVMState *kvm_state;
 int kvm_ioctl(KVMState *s, int type, ...);
 int kvm_vm_ioctl(KVMState *s, int type, ...);
 int kvm_check_extension(KVMState *s, unsigned int ext);
+
+#endif
 
 #endif
