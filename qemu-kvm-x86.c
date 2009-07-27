@@ -102,7 +102,7 @@ static int kvm_init_identity_map_page(kvm_context_t kvm)
 		 * this address is 4 pages before the bios, and the bios should present
 		 * as unavaible memory
 		 */
-		r = kvm_set_identity_map_addr(kvm, 0xfffbc000);
+		r = kvm_set_identity_map_addr(kvm, 0xfeffc000);
 		if (r < 0) {
 			fprintf(stderr, "kvm_init_identity_map_page: "
 				"unable to set identity mapping addr\n");
