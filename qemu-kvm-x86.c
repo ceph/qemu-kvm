@@ -62,7 +62,7 @@ static int kvm_init_tss(kvm_context_t kvm)
 		 * this address is 3 pages before the bios, and the bios should present
 		 * as unavaible memory
 		 */
-		r = kvm_set_tss_addr(kvm, 0xfffbd000);
+		r = kvm_set_tss_addr(kvm, 0xfeffd000);
 		if (r < 0) {
 			fprintf(stderr, "kvm_init_tss: unable to set tss addr\n");
 			return r;
