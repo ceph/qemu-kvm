@@ -4615,14 +4615,14 @@ ASM_END
                     case 5:
                         /* 4 pages before the bios, 3 pages for vmx tss pages,
 			 * the other page for EPT real mode pagetable */
-                        set_e820_range(ES, regs.u.r16.di, 0xfffbc000L,
-                                       0xfffc0000L, 0, 0, 2);
+                        set_e820_range(ES, regs.u.r16.di, 0xfeffc000L,
+                                       0xff000000L, 0, 0, 2);
                         regs.u.r32.ebx = 6;
                         break;
                     case 6:
-                        /* 256KB BIOS area at the end of 4 GB */
+                        /* 16MB BIOS area at the end of 4 GB */
                         set_e820_range(ES, regs.u.r16.di,
-                                       0xfffc0000L, 0x00000000L ,0, 0, 2);
+                                       0xff000000L, 0x00000000L ,0, 0, 2);
                         if (extra_highbits_memory_size || extra_lowbits_memory_size)
                             regs.u.r32.ebx = 7;
                         else
