@@ -64,6 +64,8 @@ struct KVMState
 #ifdef KVM_CAP_SET_GUEST_DEBUG
     struct kvm_sw_breakpoint_head kvm_sw_breakpoints;
 #endif
+    int irqchip_in_kernel;
+    int pit_in_kernel;
 };
 
 static KVMState *kvm_state;
@@ -162,6 +164,17 @@ static void on_vcpu(CPUState *env, void (*func)(void *data), void *data)
     }
     abort();
 }
+
+int kvm_irqchip_in_kernel(void)
+{
+    return kvm_state->irqchip_in_kernel;
+}
+
+int kvm_pit_in_kernel(void)
+{
+    return kvm_state->pit_in_kernel;
+}
+
 
 int kvm_init_vcpu(CPUState *env)
 {
