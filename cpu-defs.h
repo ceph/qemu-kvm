@@ -158,8 +158,6 @@ struct KVMCPUState {
     target_ulong mem_io_vaddr; /* target virtual addr at which the      \
                                      memory was accessed */             \
     uint32_t halted; /* Nonzero if the CPU is in suspend state */       \
-    uint32_t stop;   /* Stop request */                                 \
-    uint32_t stopped; /* Artificially stopped */                        \
     uint32_t interrupt_request;                                         \
     volatile sig_atomic_t exit_request;                                 \
     /* The meaning of the MMU modes is defined in the target code. */   \
@@ -209,6 +207,8 @@ struct KVMCPUState {
     struct KVMState *kvm_state;                                         \
     struct kvm_run *kvm_run;                                            \
     int kvm_fd;                                                         \
+    uint32_t stop;   /* Stop request */                                 \
+    uint32_t stopped; /* Artificially stopped */                        \
     struct KVMCPUState kvm_cpu_state;
 
 #endif
