@@ -1557,12 +1557,8 @@ static inline unsigned long kvm_get_thread_id(void)
 static void qemu_cond_wait(pthread_cond_t *cond)
 {
     CPUState *env = cpu_single_env;
-    static const struct timespec ts = {
-        .tv_sec = 0,
-        .tv_nsec = 100000,
-    };
 
-    pthread_cond_timedwait(cond, &qemu_mutex, &ts);
+    pthread_cond_wait(cond, &qemu_mutex);
     cpu_single_env = env;
 }
 
