@@ -2558,13 +2558,14 @@ smbios_load_external(int type, char **p, unsigned *nr_structs,
             *max_struct_size = *p - (char *)header;
     }
 
-    /* Mark that we've reported on this type */
-    used_bitmap[(type >> 6) & 0x3] |= (1ULL << (type & 0x3f));
+    if (start != *p) {
+        /* Mark that we've reported on this type */
+        used_bitmap[(type >> 6) & 0x3] |= (1ULL << (type & 0x3f));
+        return 1;
+    }
 
-    return (start != *p);
-#else /* !BX_QEMU */
+#endif /* !BX_QEMU */
     return 0;
-#endif
 }
 
 void smbios_init(void)
