@@ -126,6 +126,7 @@ extern int graphic_rotate;
 extern int no_quit;
 extern int semihosting_enabled;
 extern int old_param;
+extern int boot_menu;
 extern long hpagesize;
 
 #ifdef CONFIG_KQEMU
