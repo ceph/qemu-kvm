@@ -154,6 +154,15 @@ static void kvm_reset_vcpu(void *opaque)
     }
 }
 
+static void on_vcpu(CPUState *env, void (*func)(void *data), void *data)
+{
+    if (env == cpu_single_env) {
+        func(data);
+        return;
+    }
+    abort();
+}
+
 int kvm_init_vcpu(CPUState *env)
 {
     KVMState *s = kvm_state;
@@ -227,7 +236,7 @@ static int kvm_dirty_pages_log_change(target_phys_addr_t phys_addr,
     if (mem == NULL)  {
             fprintf(stderr, "BUG: %s: invalid parameters " TARGET_FMT_plx "-"
                     TARGET_FMT_plx "\n", __func__, phys_addr,
-                    phys_addr + size - 1);
+                    (target_phys_addr_t)(phys_addr + size - 1));
             return -EINVAL;
     }
 
@@ -301,12 +310,18 @@ int kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr,
     KVMDirtyLog d;
     KVMSlot *mem;
     int ret = 0;
+    int r;
 
     d.dirty_bitmap = NULL;
     while (start_addr < end_addr) {
         mem = kvm_lookup_overlapping_slot(s, start_addr, end_addr);
         if (mem == NULL) {
             break;
+        }
+
+        /* We didn't activate dirty logging? Don't care then. */
+        if(!(mem->flags & KVM_MEM_LOG_DIRTY_PAGES)) {
+            continue;
         }
 
         size = ((mem->memory_size >> TARGET_PAGE_BITS) + 7) / 8;
@@ -320,7 +335,8 @@ int kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr,
 
         d.slot = mem->slot;
 
-        if (kvm_vm_ioctl(s, KVM_GET_DIRTY_LOG, &d) == -1) {
+        r = kvm_vm_ioctl(s, KVM_GET_DIRTY_LOG, &d);
+        if (r == -EINVAL) {
             dprintf("ioctl failed %d\n", errno);
             ret = -1;
             break;
@@ -335,6 +351,10 @@ int kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr,
             unsigned bit = nr % (sizeof(*bitmap) * 8);
 
             if ((bitmap[word] >> bit) & 1) {
+                cpu_physical_memory_set_dirty(addr);
+            } else if (r < 0) {
+                /* When our KVM implementation doesn't know about dirty logging
+                 * we can just assume it's always dirty and be fine. */
                 cpu_physical_memory_set_dirty(addr);
             }
         }
@@ -898,18 +918,33 @@ int kvm_sw_breakpoints_active(CPUState *env)
 }
 
 #ifdef KVM_UPSTREAM
+
+struct kvm_set_guest_debug_data {
+    struct kvm_guest_debug dbg;
+    CPUState *env;
+    int err;
+};
+
+static void kvm_invoke_set_guest_debug(void *data)
+{
+    struct kvm_set_guest_debug_data *dbg_data = data;
+    dbg_data->err = kvm_vcpu_ioctl(dbg_data->env, KVM_SET_GUEST_DEBUG, &dbg_data->dbg);
+}
+
 int kvm_update_guest_debug(CPUState *env, unsigned long reinject_trap)
 {
-    struct kvm_guest_debug dbg;
+    struct kvm_set_guest_debug_data data;
 
-    dbg.control = 0;
+    data.dbg.control = 0;
     if (env->singlestep_enabled)
-        dbg.control = KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_SINGLESTEP;
+        data.dbg.control = KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_SINGLESTEP;
 
-    kvm_arch_update_guest_debug(env, &dbg);
-    dbg.control |= reinject_trap;
+    kvm_arch_update_guest_debug(env, &data.dbg);
+    data.dbg.control |= reinject_trap;
+    data.env = env;
 
-    return kvm_vcpu_ioctl(env, KVM_SET_GUEST_DEBUG, &dbg);
+    on_vcpu(env, kvm_invoke_set_guest_debug, &data);
+    return data.err;
 }
 #endif
 
