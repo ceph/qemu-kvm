@@ -481,16 +481,6 @@ void wrmsr_smp(uint32_t index, uint64_t val)
 }
 
 #ifdef BX_QEMU
-#define QEMU_CFG_CTL_PORT 0x510
-#define QEMU_CFG_DATA_PORT 0x511
-#define QEMU_CFG_SIGNATURE  0x00
-#define QEMU_CFG_ID         0x01
-#define QEMU_CFG_UUID       0x02
-#define QEMU_CFG_NUMA       0x0D
-#define QEMU_CFG_ARCH_LOCAL     0x8000
-#define QEMU_CFG_ACPI_TABLES  (QEMU_CFG_ARCH_LOCAL + 0)
-#define QEMU_CFG_SMBIOS_ENTRIES  (QEMU_CFG_ARCH_LOCAL + 1)
-#define QEMU_CFG_IRQ0_OVERRIDE   (QEMU_CFG_ARCH_LOCAL + 2)
 
 int qemu_cfg_port;
 
