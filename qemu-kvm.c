@@ -2457,22 +2457,6 @@ void kvm_qemu_log_memory(target_phys_addr_t start, target_phys_addr_t size,
     }
 }
 
-int kvm_get_phys_ram_page_bitmap(unsigned char *bitmap)
-{
-    unsigned int bsize  = BITMAP_SIZE(phys_ram_size);
-    unsigned int brsize = BITMAP_SIZE(ram_size);
-    unsigned int extra_pages = (phys_ram_size - ram_size) / TARGET_PAGE_SIZE;
-    unsigned int extra_bytes = (extra_pages +7)/8;
-    unsigned int hole_start = BITMAP_SIZE(0xa0000);
-    unsigned int hole_end   = BITMAP_SIZE(0xc0000);
-
-    memset(bitmap, 0xFF, brsize + extra_bytes);
-    memset(bitmap + hole_start, 0, hole_end - hole_start);
-    memset(bitmap + brsize + extra_bytes, 0, bsize - brsize - extra_bytes);
-
-    return 0;
-}
-
 #ifdef KVM_CAP_IRQCHIP
 
 int kvm_set_irq(int irq, int level, int *status)
