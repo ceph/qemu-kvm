@@ -26,6 +26,7 @@
 #include "console.h"
 #include "pixel_ops.h"
 #include "sysbus.h"
+#include "qdev-addr.h"
 
 #define MAXX 1024
 #define MAXY 768
@@ -41,6 +42,7 @@ typedef struct TCXState {
     uint8_t *vram;
     uint32_t *vram24, *cplane;
     ram_addr_t vram_offset, vram24_offset, cplane_offset;
+    uint32_t vram_size;
     uint16_t width, height, depth;
     uint8_t r[256], g[256], b[256];
     uint32_t palette[256];
@@ -49,8 +51,25 @@ typedef struct TCXState {
 
 static void tcx_screen_dump(void *opaque, const char *filename);
 static void tcx24_screen_dump(void *opaque, const char *filename);
-static void tcx_invalidate_display(void *opaque);
-static void tcx24_invalidate_display(void *opaque);
+
+static void tcx_set_dirty(TCXState *s)
+{
+    unsigned int i;
+
+    for (i = 0; i < MAXX * MAXY; i += TARGET_PAGE_SIZE) {
+        cpu_physical_memory_set_dirty(s->vram_offset + i);
+    }
+}
+
+static void tcx24_set_dirty(TCXState *s)
+{
+    unsigned int i;
+
+    for (i = 0; i < MAXX * MAXY * 4; i += TARGET_PAGE_SIZE) {
+        cpu_physical_memory_set_dirty(s->vram24_offset + i);
+        cpu_physical_memory_set_dirty(s->cplane_offset + i);
+    }
+}
 
 static void update_palette_entries(TCXState *s, int start, int end)
 {
@@ -75,10 +94,11 @@ static void update_palette_entries(TCXState *s, int start, int end)
             break;
         }
     }
-    if (s->depth == 24)
-        tcx24_invalidate_display(s);
-    else
-        tcx_invalidate_display(s);
+    if (s->depth == 24) {
+        tcx24_set_dirty(s);
+    } else {
+        tcx_set_dirty(s);
+    }
 }
 
 static void tcx_draw_line32(TCXState *s1, uint8_t *d,
@@ -344,23 +364,18 @@ static void tcx24_update_display(void *opaque)
 static void tcx_invalidate_display(void *opaque)
 {
     TCXState *s = opaque;
-    int i;
 
-    for (i = 0; i < MAXX*MAXY; i += TARGET_PAGE_SIZE) {
-        cpu_physical_memory_set_dirty(s->vram_offset + i);
-    }
+    tcx_set_dirty(s);
+    qemu_console_resize(s->ds, s->width, s->height);
 }
 
 static void tcx24_invalidate_display(void *opaque)
 {
     TCXState *s = opaque;
-    int i;
 
-    tcx_invalidate_display(s);
-    for (i = 0; i < MAXX*MAXY * 4; i += TARGET_PAGE_SIZE) {
-        cpu_physical_memory_set_dirty(s->vram24_offset + i);
-        cpu_physical_memory_set_dirty(s->cplane_offset + i);
-    }
+    tcx_set_dirty(s);
+    tcx24_set_dirty(s);
+    qemu_console_resize(s->ds, s->width, s->height);
 }
 
 static void tcx_save(QEMUFile *f, void *opaque)
@@ -399,10 +414,11 @@ static int tcx_load(QEMUFile *f, void *opaque, int version_id)
     qemu_get_8s(f, &s->dac_index);
     qemu_get_8s(f, &s->dac_state);
     update_palette_entries(s, 0, 256);
-    if (s->depth == 24)
-        tcx24_invalidate_display(s);
-    else
-        tcx_invalidate_display(s);
+    if (s->depth == 24) {
+        tcx24_set_dirty(s);
+    } else {
+        tcx_set_dirty(s);
+    }
 
     return 0;
 }
@@ -506,11 +522,11 @@ void tcx_init(target_phys_addr_t addr, int vram_size, int width, int height,
     SysBusDevice *s;
 
     dev = qdev_create(NULL, "SUNW,tcx");
-    qdev_set_prop_int(dev, "addr", addr);
-    qdev_set_prop_int(dev, "vram_size", vram_size);
-    qdev_set_prop_int(dev, "width", width);
-    qdev_set_prop_int(dev, "height", height);
-    qdev_set_prop_int(dev, "depth", depth);
+    qdev_prop_set_taddr(dev, "addr", addr);
+    qdev_prop_set_uint32(dev, "vram_size", vram_size);
+    qdev_prop_set_uint16(dev, "width", width);
+    qdev_prop_set_uint16(dev, "height", height);
+    qdev_prop_set_uint16(dev, "depth", depth);
     qdev_init(dev);
     s = sysbus_from_qdev(dev);
     /* 8-bit plane */
@@ -537,22 +553,16 @@ static void tcx_init1(SysBusDevice *dev)
     TCXState *s = FROM_SYSBUS(TCXState, dev);
     int io_memory, dummy_memory;
     ram_addr_t vram_offset;
-    int size, vram_size;
+    int size;
     uint8_t *vram_base;
 
-    vram_size = qdev_get_prop_int(&dev->qdev, "vram_size", -1);
-
-    vram_offset = qemu_ram_alloc(vram_size * (1 + 4 + 4));
+    vram_offset = qemu_ram_alloc(s->vram_size * (1 + 4 + 4));
     vram_base = qemu_get_ram_ptr(vram_offset);
-    s->addr = qdev_get_prop_int(&dev->qdev, "addr", -1);
     s->vram_offset = vram_offset;
-    s->width = qdev_get_prop_int(&dev->qdev, "width", -1);
-    s->height = qdev_get_prop_int(&dev->qdev, "height", -1);
-    s->depth = qdev_get_prop_int(&dev->qdev, "depth", -1);
 
     /* 8-bit plane */
     s->vram = vram_base;
-    size = vram_size;
+    size = s->vram_size;
     sysbus_init_mmio(dev, size, s->vram_offset);
     vram_offset += size;
     vram_base += size;
@@ -570,7 +580,7 @@ static void tcx_init1(SysBusDevice *dev)
 
     if (s->depth == 24) {
         /* 24-bit plane */
-        size = vram_size * 4;
+        size = s->vram_size * 4;
         s->vram24 = (uint32_t *)vram_base;
         s->vram24_offset = vram_offset;
         sysbus_init_mmio(dev, size, vram_offset);
@@ -578,7 +588,7 @@ static void tcx_init1(SysBusDevice *dev)
         vram_base += size;
 
         /* Control plane */
-        size = vram_size * 4;
+        size = s->vram_size * 4;
         s->cplane = (uint32_t *)vram_base;
         s->cplane_offset = vram_offset;
         sysbus_init_mmio(dev, size, vram_offset);
@@ -664,9 +674,44 @@ static void tcx24_screen_dump(void *opaque, const char *filename)
     return;
 }
 
+static SysBusDeviceInfo tcx_info = {
+    .init = tcx_init1,
+    .qdev.name  = "SUNW,tcx",
+    .qdev.size  = sizeof(TCXState),
+    .qdev.props = (Property[]) {
+        {
+            .name   = "addr",
+            .info   = &qdev_prop_taddr,
+            .offset = offsetof(TCXState, addr),
+            .defval = (target_phys_addr_t[]) { -1 },
+        },{
+            .name   = "vram_size",
+            .info   = &qdev_prop_hex32,
+            .offset = offsetof(TCXState, vram_size),
+            .defval = (uint32_t[]) { -1 },
+        },{
+            .name   = "width",
+            .info   = &qdev_prop_uint16,
+            .offset = offsetof(TCXState, width),
+            .defval = (uint16_t[]) { -1 },
+        },{
+            .name   = "height",
+            .info   = &qdev_prop_uint16,
+            .offset = offsetof(TCXState, height),
+            .defval = (uint16_t[]) { -1 },
+        },{
+            .name   = "depth",
+            .info   = &qdev_prop_uint16,
+            .offset = offsetof(TCXState, depth),
+            .defval = (uint16_t[]) { -1 },
+        },
+        {/* end of list */}
+    }
+};
+
 static void tcx_register_devices(void)
 {
-    sysbus_register_dev("SUNW,tcx", sizeof(TCXState), tcx_init1);
+    sysbus_register_withprop(&tcx_info);
 }
 
 device_init(tcx_register_devices)

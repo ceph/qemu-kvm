@@ -831,6 +831,7 @@ static void load_linux(void *fw_cfg,
     uint8_t header[8192];
     target_phys_addr_t real_addr, prot_addr, cmdline_addr, initrd_addr = 0;
     FILE *f, *fi;
+    char *vmode;
 
     /* Align to 16 bytes as a paranoia measure */
     cmdline_size = (strlen(kernel_cmdline)+16) & ~15;
@@ -904,6 +905,24 @@ static void load_linux(void *fw_cfg,
     } else {
 	stw_p(header+0x20, 0xA33F);
 	stw_p(header+0x22, cmdline_addr-real_addr);
+    }
+
+    /* handle vga= parameter */
+    vmode = strstr(kernel_cmdline, "vga=");
+    if (vmode) {
+        unsigned int video_mode;
+        /* skip "vga=" */
+        vmode += 4;
+        if (!strncmp(vmode, "normal", 6)) {
+            video_mode = 0xffff;
+        } else if (!strncmp(vmode, "ext", 3)) {
+            video_mode = 0xfffe;
+        } else if (!strncmp(vmode, "ask", 3)) {
+            video_mode = 0xfffd;
+        } else {
+            video_mode = strtol(vmode, NULL, 0);
+        }
+        stw_p(header+0x1fa, video_mode);
     }
 
     /* loader type */
@@ -1405,8 +1424,8 @@ static void pc_init1(ram_addr_t ram_size,
         for (i = 0; i < 8; i++) {
             DeviceState *eeprom;
             eeprom = qdev_create((BusState *)smbus, "smbus-eeprom");
-            qdev_set_prop_int(eeprom, "address", 0x50 + i);
-            qdev_set_prop_ptr(eeprom, "data", eeprom_buf + (i * 256));
+            qdev_prop_set_uint32(eeprom, "address", 0x50 + i);
+            qdev_prop_set_ptr(eeprom, "data", eeprom_buf + (i * 256));
             qdev_init(eeprom);
         }
     }
@@ -1541,6 +1560,29 @@ static QEMUMachine pc_machine = {
     .is_default = 1,
 };
 
+static QEMUMachine pc_machine_v0_10 = {
+    .name = "pc-0.10",
+    .desc = "Standard PC, qemu 0.10",
+    .init = pc_init_pci,
+    .max_cpus = 255,
+    .compat_props = (CompatProperty[]) {
+        {
+            .driver   = "virtio-blk-pci",
+            .property = "class",
+            .value    = stringify(PCI_CLASS_STORAGE_OTHER),
+        },{
+            .driver   = "virtio-console-pci",
+            .property = "class",
+            .value    = stringify(PCI_CLASS_DISPLAY_OTHER),
+        },{
+            .driver   = "virtio-net-pci",
+            .property = "vectors",
+            .value    = stringify(0),
+        },
+        { /* end of list */ }
+    },
+};
+
 static QEMUMachine isapc_machine = {
     .name = "isapc",
     .desc = "ISA-only PC",
@@ -1558,6 +1600,7 @@ static QEMUMachine pc_0_10_machine = {
 static void pc_machine_init(void)
 {
     qemu_register_machine(&pc_machine);
+    qemu_register_machine(&pc_machine_v0_10);
     qemu_register_machine(&isapc_machine);
 
     /* For compatibility with 0.10.x */

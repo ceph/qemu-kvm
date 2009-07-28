@@ -62,6 +62,15 @@ static struct BusInfo pci_bus_info = {
     .name       = "PCI",
     .size       = sizeof(PCIBus),
     .print_dev  = pcibus_dev_print,
+    .props      = (Property[]) {
+        {
+            .name   = "devfn",
+            .info   = &qdev_prop_uint32,
+            .offset = offsetof(PCIDevice, devfn),
+            .defval = (uint32_t[]) { -1 },
+        },
+        {/* end of list */}
+    }
 };
 
 static void pci_update_mappings(PCIDevice *d);
@@ -849,6 +858,7 @@ static void pci_info_device(PCIDevice *d)
             }
         }
     }
+    monitor_printf(mon, "      id \"%s\"\n", d->qdev.id ? d->qdev.id : "");
     if (class == 0x0604 && d->config[0x19] != 0) {
         pci_for_each_device(d->config[0x19], pci_info_device);
     }
@@ -890,7 +900,7 @@ PCIDevice *pci_create(const char *name, const char *devaddr)
     }
 
     dev = qdev_create(&bus->qbus, name);
-    qdev_set_prop_int(dev, "devfn", devfn);
+    qdev_prop_set_uint32(dev, "devfn", devfn);
     return (PCIDevice *)dev;
 }
 
@@ -933,7 +943,9 @@ PCIDevice *pci_nic_init(NICInfo *nd, const char *default_model,
         if (strcmp(nd->model, pci_nic_models[i]) == 0) {
             pci_dev = pci_create(pci_nic_names[i], devaddr);
             dev = &pci_dev->qdev;
-            qdev_set_netdev(dev, nd);
+            if (nd->id)
+                dev->id = qemu_strdup(nd->id);
+            dev->nd = nd;
             qdev_init(dev);
             nd->private = dev;
             return pci_dev;
@@ -1011,7 +1023,7 @@ static void pci_qdev_init(DeviceState *qdev, DeviceInfo *base)
     int devfn;
 
     bus = FROM_QBUS(PCIBus, qdev_get_parent_bus(qdev));
-    devfn = qdev_get_prop_int(qdev, "devfn", -1);
+    devfn = pci_dev->devfn;
     pci_dev = do_pci_register_device(pci_dev, bus, base->name, devfn,
                                      info->config_read, info->config_write);
     assert(pci_dev);
@@ -1038,7 +1050,7 @@ PCIDevice *pci_create_simple(PCIBus *bus, int devfn, const char *name)
     DeviceState *dev;
 
     dev = qdev_create(&bus->qbus, name);
-    qdev_set_prop_int(dev, "devfn", devfn);
+    qdev_prop_set_uint32(dev, "devfn", devfn);
     qdev_init(dev);
 
     return (PCIDevice *)dev;

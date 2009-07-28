@@ -5,31 +5,11 @@ include config.mak
 include $(SRC_PATH)/rules.mak
 
 LDFLAGS_BASE:=$(LDFLAGS)
+
+ifndef TARGET_BASE_ARCH
 TARGET_BASE_ARCH:=$(TARGET_ARCH)
-ifeq ($(TARGET_ARCH), x86_64)
-TARGET_BASE_ARCH:=i386
 endif
-ifeq ($(TARGET_ARCH), mipsn32)
-TARGET_BASE_ARCH:=mips
-endif
-ifeq ($(TARGET_ARCH), mips64)
-TARGET_BASE_ARCH:=mips
-endif
-ifeq ($(TARGET_ARCH), ppc64)
-TARGET_BASE_ARCH:=ppc
-endif
-ifeq ($(TARGET_ARCH), ppc64h)
-TARGET_BASE_ARCH:=ppc
-endif
-ifeq ($(TARGET_ARCH), ppcemb)
-TARGET_BASE_ARCH:=ppc
-endif
-ifeq ($(TARGET_ARCH), sparc64)
-TARGET_BASE_ARCH:=sparc
-endif
-ifeq ($(TARGET_ARCH), ia64)
-TARGET_BASE_ARCH:=ia64
-endif
+
 TARGET_PATH=$(SRC_PATH)/target-$(TARGET_BASE_ARCH)
 VPATH=$(SRC_PATH):$(TARGET_PATH):$(SRC_PATH)/hw
 CPPFLAGS=-I. -I.. -I$(TARGET_PATH) -I$(SRC_PATH) -MMD -MT $@ -MP -DNEED_CPU_H
@@ -96,7 +76,7 @@ translate.o: CFLAGS := $(CFLAGS) $(call cc-option, $(CFLAGS), -fno-unit-at-a-tim
 endif
 
 ifeq ($(ARCH),sparc)
-  ifneq ($(CONFIG_SOLARIS),yes)
+  ifneq ($(CONFIG_SOLARIS),y)
     HELPER_CFLAGS+=-ffixed-i0
   endif
 endif
@@ -263,7 +243,7 @@ tcg/tcg.o: cpu.h
 
 # HELPER_CFLAGS is used for all the code compiled with static register
 # variables
-op_helper.o: CFLAGS += $(HELPER_CFLAGS) $(I386_CFLAGS)
+op_helper.o: CFLAGS += $(HELPER_CFLAGS)
 
 cpu-exec.o: CFLAGS += $(HELPER_CFLAGS)
 
@@ -381,9 +361,10 @@ ifeq ($(TARGET_ARCH), i386)
 obj-y += vm86.o
 endif
 ifeq ($(TARGET_ARCH), arm)
-obj-y += nwfpe/fpa11.o nwfpe/fpa11_cpdo.o \
-nwfpe/fpa11_cpdt.o nwfpe/fpa11_cprt.o nwfpe/fpopcode.o nwfpe/single_cpdo.o \
- nwfpe/double_cpdo.o nwfpe/extended_cpdo.o arm-semi.o
+nwfpe-obj-y := fpa11.o fpa11_cpdo.o fpa11_cpdt.o fpa11_cprt.o fpopcode.o
+nwfpe-obj-y += single_cpdo.o double_cpdo.o extended_cpdo.o
+obj-y +=  $(addprefix nwfpe/, $(nwfpe-obj-y))
+obj-y += arm-semi.o
 endif
 ifeq ($(TARGET_ARCH), m68k)
 obj-y += m68k-sim.o m68k-semi.o
@@ -589,7 +570,7 @@ endif
 
 # xen backend driver support
 obj-$(CONFIG_XEN) += xen_machine_pv.o xen_domainbuild.o
-ifeq ($(CONFIG_XEN), yes)
+ifeq ($(CONFIG_XEN), y)
   LIBS += $(XEN_LIBS)
 endif
 
@@ -749,8 +730,6 @@ ifdef CONFIG_SLIRP
 CPPFLAGS+=-I$(SRC_PATH)/slirp
 endif
 
-LIBS+=$(PTHREADLIBS)
-LIBS+=$(CLOCKLIBS)
 # specific flags are needed for non soft mmu emulator
 ifdef CONFIG_STATIC
 LDFLAGS+=-static
