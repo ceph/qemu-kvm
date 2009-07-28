@@ -145,6 +145,7 @@ int main(int argc, char **argv)
 #include "hw/watchdog.h"
 #include "hw/smbios.h"
 #include "hw/xen.h"
+#include "hw/qdev.h"
 #include "bt-host.h"
 #include "net.h"
 #include "monitor.h"
@@ -176,12 +177,6 @@ int main(int argc, char **argv)
 //#define DEBUG_SLIRP
 
 #define DEFAULT_RAM_SIZE 128
-
-/* Max number of USB devices that can be specified on the commandline.  */
-#define MAX_USB_CMDLINE 8
-
-/* Max number of bluetooth switches on the commandline.  */
-#define MAX_BT_CMDLINE 10
 
 static const char *data_dir;
 const char *bios_name = NULL;
@@ -2662,6 +2657,11 @@ static int usb_device_del(const char *devname)
     return usb_device_del_addr(bus_num, addr);
 }
 
+static int usb_parse(const char *cmdline)
+{
+    return usb_device_add(cmdline, 0);
+}
+
 void do_usb_add(Monitor *mon, const char *devname)
 {
     usb_device_add(devname, 1);
@@ -3401,6 +3401,8 @@ static QEMUMachine *find_machine(const char *name)
 
     for(m = first_machine; m != NULL; m = m->next) {
         if (!strcmp(m->name, name))
+            return m;
+        if (m->alias && !strcmp(m->alias, name))
             return m;
     }
     return NULL;
@@ -4892,6 +4894,52 @@ char *qemu_find_file(int type, const char *name)
     return buf;
 }
 
+struct device_config {
+    enum {
+        DEV_GENERIC,   /* -device      */
+        DEV_USB,       /* -usbdevice   */
+        DEV_BT,        /* -bt          */
+    } type;
+    const char *cmdline;
+    TAILQ_ENTRY(device_config) next;
+};
+TAILQ_HEAD(, device_config) device_configs = TAILQ_HEAD_INITIALIZER(device_configs);
+
+static void add_device_config(int type, const char *cmdline)
+{
+    struct device_config *conf;
+
+    conf = qemu_mallocz(sizeof(*conf));
+    conf->type = type;
+    conf->cmdline = cmdline;
+    TAILQ_INSERT_TAIL(&device_configs, conf, next);
+}
+
+static int foreach_device_config(int type, int (*func)(const char *cmdline))
+{
+    struct device_config *conf;
+    int rc;
+
+    TAILQ_FOREACH(conf, &device_configs, next) {
+        if (conf->type != type)
+            continue;
+        rc = func(conf->cmdline);
+        if (0 != rc)
+            return rc;
+    }
+    return 0;
+}
+
+static int generic_parse(const char *cmdline)
+{
+    DeviceState *dev;
+
+    dev = qdev_device_add(cmdline);
+    if (!dev)
+        return -1;
+    return 0;
+}
+
 int main(int argc, char **argv, char **envp)
 {
     const char *gdbstub_dev = NULL;
@@ -4906,8 +4954,6 @@ int main(int argc, char **argv, char **envp)
     int cyls, heads, secs, translation;
     const char *net_clients[MAX_NET_CLIENTS];
     int nb_net_clients;
-    const char *bt_opts[MAX_BT_CMDLINE];
-    int nb_bt_opts;
     int hda_index;
     int optind;
     const char *r, *optarg;
@@ -4922,8 +4968,6 @@ int main(int argc, char **argv, char **envp)
     const char *loadvm = NULL;
     QEMUMachine *machine;
     const char *cpu_model;
-    const char *usb_devices[MAX_USB_CMDLINE];
-    int usb_devices_index;
 #ifndef _WIN32
     int fds[2];
 #endif
@@ -5003,11 +5047,9 @@ int main(int argc, char **argv, char **envp)
         node_cpumask[i] = 0;
     }
 
-    usb_devices_index = 0;
     assigned_devices_index = 0;
 
     nb_net_clients = 0;
-    nb_bt_opts = 0;
     nb_drives = 0;
     nb_drives_opt = 0;
     nb_numa_nodes = 0;
@@ -5063,6 +5105,9 @@ int main(int argc, char **argv, char **envp)
                     QEMUMachine *m;
                     printf("Supported machines are:\n");
                     for(m = first_machine; m != NULL; m = m->next) {
+                        if (m->alias)
+                            printf("%-10s %s (alias of %s)\n",
+                                   m->alias, m->desc, m->name);
                         printf("%-10s %s%s\n",
                                m->name, m->desc,
                                m->is_default ? " (default)" : "");
@@ -5272,11 +5317,7 @@ int main(int argc, char **argv, char **envp)
                 break;
 #endif
             case QEMU_OPTION_bt:
-                if (nb_bt_opts >= MAX_BT_CMDLINE) {
-                    fprintf(stderr, "qemu: too many bluetooth options\n");
-                    exit(1);
-                }
-                bt_opts[nb_bt_opts++] = optarg;
+                add_device_config(DEV_BT, optarg);
                 break;
 #ifdef HAS_AUDIO
             case QEMU_OPTION_audio_help:
@@ -5550,12 +5591,10 @@ int main(int argc, char **argv, char **envp)
                 break;
             case QEMU_OPTION_usbdevice:
                 usb_enabled = 1;
-                if (usb_devices_index >= MAX_USB_CMDLINE) {
-                    fprintf(stderr, "Too many USB devices\n");
-                    exit(1);
-                }
-                usb_devices[usb_devices_index] = optarg;
-                usb_devices_index++;
+                add_device_config(DEV_USB, optarg);
+                break;
+            case QEMU_OPTION_device:
+                add_device_config(DEV_GENERIC, optarg);
                 break;
             case QEMU_OPTION_smp:
                 smp_cpus = atoi(optarg);
@@ -5891,9 +5930,8 @@ int main(int argc, char **argv, char **envp)
     net_client_check();
 
     /* init the bluetooth world */
-    for (i = 0; i < nb_bt_opts; i++)
-        if (bt_parse(bt_opts[i]))
-            exit(1);
+    if (foreach_device_config(DEV_BT, bt_parse))
+        exit(1);
 
     /* init the memory */
     if (ram_size == 0)
@@ -6088,13 +6126,12 @@ int main(int argc, char **argv, char **envp)
 
     /* init USB devices */
     if (usb_enabled) {
-        for(i = 0; i < usb_devices_index; i++) {
-            if (usb_device_add(usb_devices[i], 0) < 0) {
-                fprintf(stderr, "Warning: could not add USB device %s\n",
-                        usb_devices[i]);
-            }
-        }
+        foreach_device_config(DEV_USB, usb_parse);
     }
+
+    /* init generic devices */
+    if (foreach_device_config(DEV_GENERIC, generic_parse))
+        exit(1);
 
     if (!display_state)
         dumb_display_init();
