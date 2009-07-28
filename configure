@@ -1628,92 +1628,27 @@ echo "HOST_CC=$host_cc" >> $config_mak
 echo "AR=$ar" >> $config_mak
 echo "OBJCOPY=$objcopy" >> $config_mak
 echo "LD=$ld" >> $config_mak
-# XXX: only use CFLAGS and LDFLAGS ?  
-# XXX: should export HOST_CFLAGS and HOST_LDFLAGS for cross
-# compilation of dyngen tool (useful for win32 build on Linux host)
-echo "OS_CFLAGS=$OS_CFLAGS" >> $config_mak
-echo "OS_LDFLAGS=$OS_LDFLAGS" >> $config_mak
-echo "ARCH_CFLAGS=$ARCH_CFLAGS" >> $config_mak
-echo "ARCH_LDFLAGS=$ARCH_LDFLAGS" >> $config_mak
-echo "CFLAGS=$CFLAGS $EXTRA_CFLAGS" >> $config_mak
-echo "LDFLAGS=$LDFLAGS $EXTRA_LDFLAGS" >> $config_mak
+echo "CFLAGS=$CFLAGS $OS_CFLAGS $ARCH_CFLAGS $EXTRA_CFLAGS" >> $config_mak
+echo "LDFLAGS=$LDFLAGS $OS_LDFLAGS $ARCH_LDFLAGS $EXTRA_LDFLAGS" >> $config_mak
 echo "EXESUF=$EXESUF" >> $config_mak
 echo "PTHREADLIBS=$PTHREADLIBS" >> $config_mak
 echo "CLOCKLIBS=$CLOCKLIBS" >> $config_mak
 case "$cpu" in
-  i386)
-    echo "ARCH=i386" >> $config_mak
-    echo "#define HOST_I386 1" >> $config_h
+  i386|x86_64|alpha|cris|hppa|ia64|m68k|microbaze|mips|mips64|ppc|ppc64|s390|sparc|sparc64)
+    ARCH=$cpu
   ;;
-  x86_64)
-    echo "ARCH=x86_64" >> $config_mak
-    echo "#define HOST_X86_64 1" >> $config_h
-  ;;
-  alpha)
-    echo "ARCH=alpha" >> $config_mak
-    echo "#define HOST_ALPHA 1" >> $config_h
-  ;;
-  armv4b)
-    echo "ARCH=arm" >> $config_mak
-    echo "#define HOST_ARM 1" >> $config_h
-  ;;
-  armv4l)
-    echo "ARCH=arm" >> $config_mak
-    echo "#define HOST_ARM 1" >> $config_h
-  ;;
-  cris)
-    echo "ARCH=cris" >> $config_mak
-    echo "#define HOST_CRIS 1" >> $config_h
-  ;;
-  hppa)
-    echo "ARCH=hppa" >> $config_mak
-    echo "#define HOST_HPPA 1" >> $config_h
-  ;;
-  ia64)
-    echo "ARCH=ia64" >> $config_mak
-    echo "#define HOST_IA64 1" >> $config_h
-  ;;
-  m68k)
-    echo "ARCH=m68k" >> $config_mak
-    echo "#define HOST_M68K 1" >> $config_h
-  ;;
-  microblaze)
-    echo "ARCH=microblaze" >> $config_mak
-    echo "#define HOST_MICROBLAZE 1" >> $config_h
-  ;;
-  mips)
-    echo "ARCH=mips" >> $config_mak
-    echo "#define HOST_MIPS 1" >> $config_h
-  ;;
-  mips64)
-    echo "ARCH=mips64" >> $config_mak
-    echo "#define HOST_MIPS64 1" >> $config_h
-  ;;
-  ppc)
-    echo "ARCH=ppc" >> $config_mak
-    echo "#define HOST_PPC 1" >> $config_h
-  ;;
-  ppc64)
-    echo "ARCH=ppc64" >> $config_mak
-    echo "#define HOST_PPC64 1" >> $config_h
-  ;;
-  s390)
-    echo "ARCH=s390" >> $config_mak
-    echo "#define HOST_S390 1" >> $config_h
-  ;;
-  sparc)
-    echo "ARCH=sparc" >> $config_mak
-    echo "#define HOST_SPARC 1" >> $config_h
-  ;;
-  sparc64)
-    echo "ARCH=sparc64" >> $config_mak
-    echo "#define HOST_SPARC64 1" >> $config_h
+  armv4b|arm4l)
+    ARCH=arm
   ;;
   *)
     echo "Unsupported CPU = $cpu"
     exit 1
   ;;
 esac
+echo "ARCH=$ARCH" >> $config_mak
+arch_name=`echo $ARCH | tr '[:lower:]' '[:upper:]'`
+echo "#define HOST_$arch_name 1" >> $config_h
+
 if test "$debug_tcg" = "yes" ; then
   echo "#define DEBUG_TCG 1" >> $config_h
 fi
@@ -2043,20 +1978,11 @@ config_mak=$target_dir/config.mak
 config_h=$target_dir/config.h
 target_arch2=`echo $target | cut -d '-' -f 1`
 target_bigendian="no"
-[ "$target_arch2" = "armeb" ] && target_bigendian=yes
-[ "$target_arch2" = "m68k" ] && target_bigendian=yes
-[ "$target_arch2" = "microblaze" ] && target_bigendian=yes
-[ "$target_arch2" = "mips" ] && target_bigendian=yes
-[ "$target_arch2" = "mipsn32" ] && target_bigendian=yes
-[ "$target_arch2" = "mips64" ] && target_bigendian=yes
-[ "$target_arch2" = "ppc" ] && target_bigendian=yes
-[ "$target_arch2" = "ppcemb" ] && target_bigendian=yes
-[ "$target_arch2" = "ppc64" ] && target_bigendian=yes
-[ "$target_arch2" = "ppc64abi32" ] && target_bigendian=yes
-[ "$target_arch2" = "sh4eb" ] && target_bigendian=yes
-[ "$target_arch2" = "sparc" ] && target_bigendian=yes
-[ "$target_arch2" = "sparc64" ] && target_bigendian=yes
-[ "$target_arch2" = "sparc32plus" ] && target_bigendian=yes
+case "$target_arch2" in
+  armeb|m68k|microblaze|mips|mipsn32|mips64|ppc|ppcemb|ppc64|ppc64abi32|sh4eb|sparc|sparc64|sparc32plus)
+  target_bigendian=yes
+  ;;
+esac
 target_softmmu="no"
 target_user_only="no"
 target_linux_user="no"
@@ -2143,27 +2069,15 @@ configure_kvm() {
 
 case "$target_arch2" in
   i386)
-    echo "TARGET_ARCH=i386" >> $config_mak
     echo "#define TARGET_ARCH \"i386\"" >> $config_h
     echo "#define TARGET_I386 1" >> $config_h
-    if test $kqemu = "yes" -a "$target_softmmu" = "yes"
-    then
-      echo "CONFIG_KQEMU=y" >> $config_mak
-      echo "#define CONFIG_KQEMU 1" >> $config_h
-    fi
     target_phys_bits=32
   ;;
   x86_64)
-    echo "TARGET_ARCH=x86_64" >> $config_mak
     echo "TARGET_BASE_ARCH=i386" >> $config_mak
     echo "#define TARGET_ARCH \"x86_64\"" >> $config_h
     echo "#define TARGET_I386 1" >> $config_h
     echo "#define TARGET_X86_64 1" >> $config_h
-    if test $kqemu = "yes" -a "$target_softmmu" = "yes" -a $cpu = "x86_64"
-    then
-      echo "CONFIG_KQEMU=y" >> $config_mak
-      echo "#define CONFIG_KQEMU 1" >> $config_h
-    fi
     target_phys_bits=64
   ;;
   ia64)
@@ -2173,13 +2087,12 @@ case "$target_arch2" in
     target_phys_bits=64
   ;;
   alpha)
-    echo "TARGET_ARCH=alpha" >> $config_mak
     echo "#define TARGET_ARCH \"alpha\"" >> $config_h
     echo "#define TARGET_ALPHA 1" >> $config_h
     target_phys_bits=64
   ;;
   arm|armeb)
-    echo "TARGET_ARCH=arm" >> $config_mak
+    TARGET_ARCH=arm
     echo "TARGET_ARCH2=$target_arch2" >> $config_mak
     echo "#define TARGET_ARCH \"arm\"" >> $config_h
     echo "#define TARGET_ARM 1" >> $config_h
@@ -2189,14 +2102,12 @@ case "$target_arch2" in
     target_phys_bits=32
   ;;
   cris)
-    echo "TARGET_ARCH=cris" >> $config_mak
     echo "#define TARGET_ARCH \"cris\"" >> $config_h
     echo "#define TARGET_CRIS 1" >> $config_h
     target_nptl="yes"
     target_phys_bits=32
   ;;
   m68k)
-    echo "TARGET_ARCH=m68k" >> $config_mak
     echo "#define TARGET_ARCH \"m68k\"" >> $config_h
     echo "#define TARGET_M68K 1" >> $config_h
     bflt="yes"
@@ -2204,7 +2115,6 @@ case "$target_arch2" in
     target_phys_bits=32
   ;;
   microblaze)
-    echo "TARGET_ARCH=microblaze" >> $config_mak
     echo "#define TARGET_ARCH \"microblaze\"" >> $config_h
     echo "#define TARGET_MICROBLAZE 1" >> $config_h
     bflt="yes"
@@ -2212,7 +2122,7 @@ case "$target_arch2" in
     target_phys_bits=32
   ;;
  mips|mipsel)
-    echo "TARGET_ARCH=mips" >> $config_mak
+    TARGET_ARCH=mips
     echo "TARGET_ARCH2=$target_arch2" >> $config_mak
     echo "#define TARGET_ARCH \"mips\"" >> $config_h
     echo "#define TARGET_MIPS 1" >> $config_h
@@ -2221,7 +2131,7 @@ case "$target_arch2" in
     target_phys_bits=64
   ;;
   mipsn32|mipsn32el)
-    echo "TARGET_ARCH=mipsn32" >> $config_mak
+    TARGET_ARCH=mipsn32
     echo "TARGET_ARCH2=$target_arch2" >> $config_mak
     echo "TARGET_BASE_ARCH=mips" >> $config_mak
     echo "#define TARGET_ARCH \"mipsn32\"" >> $config_h
@@ -2230,7 +2140,7 @@ case "$target_arch2" in
     target_phys_bits=64
   ;;
   mips64|mips64el)
-    echo "TARGET_ARCH=mips64" >> $config_mak
+    TARGET_ARCH=mips64
     echo "TARGET_ARCH2=$target_arch2" >> $config_mak
     echo "TARGET_BASE_ARCH=mips" >> $config_mak
     echo "#define TARGET_ARCH \"mips64\"" >> $config_h
@@ -2240,14 +2150,12 @@ case "$target_arch2" in
     target_phys_bits=64
   ;;
   ppc)
-    echo "TARGET_ARCH=ppc" >> $config_mak
     echo "#define TARGET_ARCH \"ppc\"" >> $config_h
     echo "#define TARGET_PPC 1" >> $config_h
     gdb_xml_files="power-core.xml power-fpu.xml power-altivec.xml power-spe.xml"
     target_phys_bits=32
   ;;
   ppcemb)
-    echo "TARGET_ARCH=ppcemb" >> $config_mak
     echo "TARGET_BASE_ARCH=ppc" >> $config_mak
     echo "TARGET_ABI_DIR=ppc" >> $config_mak
     echo "#define TARGET_ARCH \"ppcemb\"" >> $config_h
@@ -2257,7 +2165,6 @@ case "$target_arch2" in
     target_phys_bits=64
   ;;
   ppc64)
-    echo "TARGET_ARCH=ppc64" >> $config_mak
     echo "TARGET_BASE_ARCH=ppc" >> $config_mak
     echo "TARGET_ABI_DIR=ppc" >> $config_mak
     echo "#define TARGET_ARCH \"ppc64\"" >> $config_h
@@ -2267,7 +2174,7 @@ case "$target_arch2" in
     target_phys_bits=64
   ;;
   ppc64abi32)
-    echo "TARGET_ARCH=ppc64" >> $config_mak
+    TARGET_ARCH=ppc64
     echo "TARGET_BASE_ARCH=ppc" >> $config_mak
     echo "TARGET_ABI_DIR=ppc" >> $config_mak
     echo "TARGET_ARCH2=ppc64abi32" >> $config_mak
@@ -2279,7 +2186,7 @@ case "$target_arch2" in
     target_phys_bits=64
   ;;
   sh4|sh4eb)
-    echo "TARGET_ARCH=sh4" >> $config_mak
+    TARGET_ARCH=sh4
     echo "TARGET_ARCH2=$target_arch2" >> $config_mak
     echo "#define TARGET_ARCH \"sh4\"" >> $config_h
     echo "#define TARGET_SH4 1" >> $config_h
@@ -2288,13 +2195,11 @@ case "$target_arch2" in
     target_phys_bits=32
   ;;
   sparc)
-    echo "TARGET_ARCH=sparc" >> $config_mak
     echo "#define TARGET_ARCH \"sparc\"" >> $config_h
     echo "#define TARGET_SPARC 1" >> $config_h
     target_phys_bits=64
   ;;
   sparc64)
-    echo "TARGET_ARCH=sparc64" >> $config_mak
     echo "TARGET_BASE_ARCH=sparc" >> $config_mak
     echo "#define TARGET_ARCH \"sparc64\"" >> $config_h
     echo "#define TARGET_SPARC 1" >> $config_h
@@ -2303,7 +2208,7 @@ case "$target_arch2" in
     target_phys_bits=64
   ;;
   sparc32plus)
-    echo "TARGET_ARCH=sparc64" >> $config_mak
+    TARGET_ARCH=sparc64
     echo "TARGET_BASE_ARCH=sparc" >> $config_mak
     echo "TARGET_ABI_DIR=sparc" >> $config_mak
     echo "TARGET_ARCH2=$target_arch2" >> $config_mak
@@ -2318,6 +2223,7 @@ case "$target_arch2" in
     exit 1
   ;;
 esac
+echo "TARGET_ARCH=$TARGET_ARCH" >> $config_mak
 if [ $target_phys_bits -lt $hostlongbits ] ; then
   target_phys_bits=$hostlongbits
 fi
@@ -2326,6 +2232,11 @@ case "$target_arch2" in
     if test "$xen" = "yes" -a "$target_softmmu" = "yes" ; then
       echo "CONFIG_XEN=y" >> $config_mak
       echo "#define CONFIG_XEN 1" >> $config_h
+    fi
+    if test $kqemu = "yes" -a "$target_softmmu" = "yes"
+    then
+      echo "CONFIG_KQEMU=y" >> $config_mak
+      echo "#define CONFIG_KQEMU 1" >> $config_h
     fi
 esac
 case "$target_arch2" in

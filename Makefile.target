@@ -61,16 +61,9 @@ ifeq ($(ARCH),alpha)
 CFLAGS+=-msmall-data
 endif
 
-ifeq ($(ARCH),hppa)
-BASE_LDFLAGS+=-Wl,-T,$(SRC_PATH)/$(ARCH).ld
-endif
-
 ifeq ($(ARCH),ia64)
 CFLAGS+=-mno-sdata
 endif
-
-CFLAGS+=$(OS_CFLAGS) $(ARCH_CFLAGS)
-LDFLAGS+=$(OS_LDFLAGS) $(ARCH_LDFLAGS)
 
 CPPFLAGS+=-D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE
 CPPFLAGS+=-U_FORTIFY_SOURCE
@@ -123,13 +116,7 @@ endif
 CPPFLAGS+=-I$(SRC_PATH)/fpu
 libobj-y += op_helper.o helper.o
 
-ifeq ($(TARGET_ARCH), i386)
-libobj-y += helper.o
-libobj-$(CONFIG_KVM) += kvm-tpr-opt.o
-libobj-$(CONFIG_KVM) += qemu-kvm-helper.o
-endif
-
-ifeq ($(TARGET_ARCH), x86_64)
+ifeq ($(TARGET_BASE_ARCH), i386)
 libobj-y += helper.o
 libobj-$(CONFIG_KVM) += kvm-tpr-opt.o
 libobj-$(CONFIG_KVM) += qemu-kvm-helper.o
@@ -335,29 +322,19 @@ obj-$(TARGET_HAS_ELFLOAD32) += elfload32.o
 ifeq ($(TARGET_ARCH), i386)
 obj-y += vm86.o
 endif
-ifeq ($(TARGET_ARCH), arm)
+
 nwfpe-obj-y := fpa11.o fpa11_cpdo.o fpa11_cpdt.o fpa11_cprt.o fpopcode.o
 nwfpe-obj-y += single_cpdo.o double_cpdo.o extended_cpdo.o
-obj-y +=  $(addprefix nwfpe/, $(nwfpe-obj-y))
-obj-y += arm-semi.o
-endif
-ifeq ($(TARGET_ARCH), m68k)
-obj-y += m68k-sim.o m68k-semi.o
-endif
+obj-arm-y +=  $(addprefix nwfpe/, $(nwfpe-obj-y))
+obj-arm-y += arm-semi.o
+
+obj-m68k-y += m68k-sim.o m68k-semi.o
 
 # Note: this is a workaround. The real fix is to avoid compiling
 # cpu_signal_handler() in cpu-exec.c.
 signal.o: CFLAGS += $(HELPER_CFLAGS)
 
-$(QEMU_PROG): ARLIBS=../libqemu_user.a libqemu.a
-$(QEMU_PROG): $(obj-y) ../libqemu_user.a libqemu.a
-	$(call LINK,$(obj-y))
-ifeq ($(ARCH),alpha)
-# Mark as 32 bit binary, i. e. it will be mapped into the low 31 bit of
-# the address space (31 bit so sign extending doesn't matter)
-	echo -ne '\001\000\000\000' | dd of=qemu bs=1 seek=48 count=4 conv=notrunc
-endif
-
+ARLIBS=../libqemu_user.a libqemu.a
 endif #CONFIG_LINUX_USER
 
 #########################################################
@@ -380,9 +357,7 @@ obj-y = main.o commpage.o machload.o mmap.o signal.o syscall.o thunk.o \
 # cpu_signal_handler() in cpu-exec.c.
 signal.o: CFLAGS += $(HELPER_CFLAGS)
 
-$(QEMU_PROG): ARLIBS=libqemu.a
-$(QEMU_PROG): $(obj-y) libqemu.a
-	$(call LINK,$(obj-y))
+ARLIBS=libqemu.a
 
 endif #CONFIG_DARWIN_USER
 
@@ -480,9 +455,7 @@ obj-y += uaccess.o
 # cpu_signal_handler() in cpu-exec.c.
 signal.o: CFLAGS += $(HELPER_CFLAGS)
 
-$(QEMU_PROG): ARLIBS=libqemu.a ../libqemu_user.a
-$(QEMU_PROG): $(obj-y) libqemu.a ../libqemu_user.a
-	$(call LINK,$(obj-y))
+ARLIBS=libqemu.a ../libqemu_user.a
 
 endif #CONFIG_BSD_USER
 
@@ -755,15 +728,17 @@ vl.o: qemu-options.h
 
 monitor.o: qemu-monitor.h
 
-$(QEMU_PROG): LIBS += $(SDL_LIBS) $(COCOA_LIBS) $(CURSES_LIBS) $(BRLAPI_LIBS) $(VDE_LIBS) $(CURL_LIBS)
-$(QEMU_PROG): ARLIBS=../libqemu_common.a libqemu.a $(HWLIB)
-$(QEMU_PROG): $(obj-y) $(obj-$(TARGET_BASE_ARCH)-y) ../libqemu_common.a libqemu.a $(HWLIB)
-	$(call LINK,$(obj-y) $(obj-$(TARGET_BASE_ARCH)-y))
+LIBS += $(SDL_LIBS) $(COCOA_LIBS) $(CURSES_LIBS) $(BRLAPI_LIBS) $(VDE_LIBS) $(CURL_LIBS)
+ARLIBS=../libqemu_common.a libqemu.a $(HWLIB)
 
 $(QEMU_PROG): ARLIBS += $(DEPLIBS)
 $(QEMU_PROG): $(DEPLIBS)
 
 endif # !CONFIG_USER_ONLY
+
+$(QEMU_PROG): $(obj-y) $(obj-$(TARGET_BASE_ARCH)-y) $(ARLIBS)
+	$(call LINK,$(obj-y) $(obj-$(TARGET_BASE_ARCH)-y))
+
 
 gdbstub-xml.c: $(TARGET_XML_FILES) feature_to_c.sh
 ifeq ($(TARGET_XML_FILES),)
