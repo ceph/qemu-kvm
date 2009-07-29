@@ -156,15 +156,6 @@ static void kvm_reset_vcpu(void *opaque)
     }
 }
 
-static void on_vcpu(CPUState *env, void (*func)(void *data), void *data)
-{
-    if (env == cpu_single_env) {
-        func(data);
-        return;
-    }
-    abort();
-}
-
 int kvm_irqchip_in_kernel(void)
 {
     return kvm_state->irqchip_in_kernel;
@@ -916,6 +907,18 @@ void kvm_setup_guest_memory(void *start, size_t size)
 #endif /* KVM_UPSTREAM */
 
 #ifdef KVM_CAP_SET_GUEST_DEBUG
+
+#ifdef KVM_UPSTREAM
+static void on_vcpu(CPUState *env, void (*func)(void *data), void *data)
+{
+    if (env == cpu_single_env) {
+        func(data);
+        return;
+    }
+    abort();
+}
+#endif /* KVM_UPSTREAM */
+
 struct kvm_sw_breakpoint *kvm_find_sw_breakpoint(CPUState *env,
                                                  target_ulong pc)
 {

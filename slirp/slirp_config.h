@@ -2,9 +2,6 @@
  * User definable configuration options
  */
 
-/* Undefine if you don't want talk emulation */
-#undef EMULATE_TALK
-
 /* Define if you want the connection to be probed */
 /* XXX Not working yet, so ignore this for now */
 #undef PROBE_CONN
@@ -189,9 +186,6 @@
 #ifdef _WIN32
 #define NO_UNIX_SOCKETS
 #endif
-
-/* Define if gettimeofday only takes one argument */
-#undef GETTIMEOFDAY_ONE_ARG
 
 /* Define if you have revoke() */
 #undef HAVE_REVOKE
