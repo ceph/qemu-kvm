@@ -831,6 +831,7 @@ static void load_linux(void *fw_cfg,
     uint8_t header[8192];
     target_phys_addr_t real_addr, prot_addr, cmdline_addr, initrd_addr = 0;
     FILE *f, *fi;
+    char *vmode;
 
     /* Align to 16 bytes as a paranoia measure */
     cmdline_size = (strlen(kernel_cmdline)+16) & ~15;
@@ -904,6 +905,24 @@ static void load_linux(void *fw_cfg,
     } else {
 	stw_p(header+0x20, 0xA33F);
 	stw_p(header+0x22, cmdline_addr-real_addr);
+    }
+
+    /* handle vga= parameter */
+    vmode = strstr(kernel_cmdline, "vga=");
+    if (vmode) {
+        unsigned int video_mode;
+        /* skip "vga=" */
+        vmode += 4;
+        if (!strncmp(vmode, "normal", 6)) {
+            video_mode = 0xffff;
+        } else if (!strncmp(vmode, "ext", 3)) {
+            video_mode = 0xfffe;
+        } else if (!strncmp(vmode, "ask", 3)) {
+            video_mode = 0xfffd;
+        } else {
+            video_mode = strtol(vmode, NULL, 0);
+        }
+        stw_p(header+0x1fa, video_mode);
     }
 
     /* loader type */
@@ -1090,12 +1109,20 @@ CPUState *pc_new_cpu(const char *cpu_model)
     return env;
 }
 
+enum {
+    COMPAT_DEFAULT = 0,
+    COMPAT_0_10, /* compatible with qemu 0.10.x */
+};
+
 /* PC hardware initialisation */
 static void pc_init1(ram_addr_t ram_size,
                      const char *boot_device,
-                     const char *kernel_filename, const char *kernel_cmdline,
+                     const char *kernel_filename,
+                     const char *kernel_cmdline,
                      const char *initrd_filename,
-                     int pci_enabled, const char *cpu_model)
+                     const char *cpu_model,
+                     int pci_enabled,
+                     int compat_level)
 {
     char *filename;
     int ret, linux_boot, i;
@@ -1109,11 +1136,12 @@ static void pc_init1(ram_addr_t ram_size,
     CPUState *env;
     qemu_irq *cpu_irq;
     qemu_irq *i8259;
-    int index;
+    DriveInfo *dinfo;
     BlockDriverState *hd[MAX_IDE_BUS * MAX_IDE_DEVS];
     BlockDriverState *fd[MAX_FD];
     int using_vga = cirrus_vga_enabled || std_vga_enabled || vmsvga_enabled;
     void *fw_cfg;
+    const char *virtio_blk_name, *virtio_console_name;
 
     if (ram_size >= 0xe0000000 ) {
         above_4g_mem_size = ram_size - 0xe0000000;
@@ -1196,7 +1224,7 @@ static void pc_init1(ram_addr_t ram_size,
                                  isa_bios_size,
                                  (bios_offset + bios_size - isa_bios_size) /* | IO_MEM_ROM */);
 
-    if (extboot_drive != -1) {
+    if (extboot_drive) {
         option_rom[nb_option_roms++] = qemu_strdup(EXTBOOT_FILENAME);
     }
 
@@ -1350,11 +1378,8 @@ static void pc_init1(ram_addr_t ram_size,
     }
 
     for(i = 0; i < MAX_IDE_BUS * MAX_IDE_DEVS; i++) {
-        index = drive_get_index(IF_IDE, i / MAX_IDE_DEVS, i % MAX_IDE_DEVS);
-	if (index != -1)
-	    hd[i] = drives_table[index].bdrv;
-	else
-	    hd[i] = NULL;
+        dinfo = drive_get(IF_IDE, i / MAX_IDE_DEVS, i % MAX_IDE_DEVS);
+        hd[i] = dinfo ? dinfo->bdrv : NULL;
     }
 
     if (pci_enabled) {
@@ -1373,11 +1398,8 @@ static void pc_init1(ram_addr_t ram_size,
 #endif
 
     for(i = 0; i < MAX_FD; i++) {
-        index = drive_get_index(IF_FLOPPY, 0, i);
-	if (index != -1)
-	    fd[i] = drives_table[index].bdrv;
-	else
-	    fd[i] = NULL;
+        dinfo = drive_get(IF_FLOPPY, 0, i);
+        fd[i] = dinfo ? dinfo->bdrv : NULL;
     }
     floppy_controller = fdctrl_init(i8259[6], 2, 0, 0x3f0, fd);
 
@@ -1396,8 +1418,8 @@ static void pc_init1(ram_addr_t ram_size,
         for (i = 0; i < 8; i++) {
             DeviceState *eeprom;
             eeprom = qdev_create((BusState *)smbus, "smbus-eeprom");
-            qdev_set_prop_int(eeprom, "address", 0x50 + i);
-            qdev_set_prop_ptr(eeprom, "data", eeprom_buf + (i * 256));
+            qdev_prop_set_uint32(eeprom, "address", 0x50 + i);
+            qdev_prop_set_ptr(eeprom, "data", eeprom_buf + (i * 256));
             qdev_init(eeprom);
         }
     }
@@ -1416,21 +1438,33 @@ static void pc_init1(ram_addr_t ram_size,
         }
     }
 
+    switch (compat_level) {
+    case COMPAT_DEFAULT:
+    default:
+        virtio_blk_name = "virtio-blk-pci";
+        virtio_console_name = "virtio-console-pci";
+        break;
+
+    case COMPAT_0_10:
+        virtio_blk_name = "virtio-blk-pci-0-10";
+        virtio_console_name = "virtio-console-pci-0-10";
+        break;
+    }
+
     /* Add virtio block devices */
     if (pci_enabled) {
-        int index;
         int unit_id = 0;
 
-        while ((index = drive_get_index(IF_VIRTIO, 0, unit_id)) != -1) {
-            pci_dev = pci_create("virtio-blk-pci",
-                                 drives_table[index].devaddr);
+        while ((dinfo = drive_get(IF_VIRTIO, 0, unit_id)) != NULL) {
+            pci_dev = pci_create(virtio_blk_name,
+                                 dinfo->devaddr);
             qdev_init(&pci_dev->qdev);
             unit_id++;
         }
     }
 
-    if (extboot_drive != -1) {
-	DriveInfo *info = &drives_table[extboot_drive];
+    if (extboot_drive) {
+	DriveInfo *info = extboot_drive;
 	int cyls, heads, secs;
 
 	if (info->type != IF_IDE && info->type != IF_VIRTIO) {
@@ -1451,7 +1485,7 @@ static void pc_init1(ram_addr_t ram_size,
     if (pci_enabled) {
         for(i = 0; i < MAX_VIRTIO_CONSOLES; i++) {
             if (virtcon_hds[i]) {
-                pci_create_simple(pci_bus, -1, "virtio-console-pci");
+                pci_create_simple(pci_bus, -1, virtio_console_name);
             }
         }
     }
@@ -1473,7 +1507,8 @@ static void pc_init_pci(ram_addr_t ram_size,
 {
     pc_init1(ram_size, boot_device,
              kernel_filename, kernel_cmdline,
-             initrd_filename, 1, cpu_model);
+             initrd_filename, cpu_model,
+             1, COMPAT_DEFAULT);
 }
 
 static void pc_init_isa(ram_addr_t ram_size,
@@ -1485,7 +1520,21 @@ static void pc_init_isa(ram_addr_t ram_size,
 {
     pc_init1(ram_size, boot_device,
              kernel_filename, kernel_cmdline,
-             initrd_filename, 0, cpu_model);
+             initrd_filename, cpu_model,
+             0, COMPAT_DEFAULT);
+}
+
+static void pc_init_pci_0_10(ram_addr_t ram_size,
+                             const char *boot_device,
+                             const char *kernel_filename,
+                             const char *kernel_cmdline,
+                             const char *initrd_filename,
+                             const char *cpu_model)
+{
+    pc_init1(ram_size, boot_device,
+             kernel_filename, kernel_cmdline,
+             initrd_filename, cpu_model,
+             1, COMPAT_0_10);
 }
 
 /* set CMOS shutdown status register (index 0xF) as S3_resume(0xFE)
@@ -1497,11 +1546,35 @@ void cmos_set_s3_resume(void)
 }
 
 static QEMUMachine pc_machine = {
-    .name = "pc",
+    .name = "pc-0.11",
+    .alias = "pc",
     .desc = "Standard PC",
     .init = pc_init_pci,
     .max_cpus = 255,
     .is_default = 1,
+};
+
+static QEMUMachine pc_machine_v0_10 = {
+    .name = "pc-0.10",
+    .desc = "Standard PC, qemu 0.10",
+    .init = pc_init_pci,
+    .max_cpus = 255,
+    .compat_props = (CompatProperty[]) {
+        {
+            .driver   = "virtio-blk-pci",
+            .property = "class",
+            .value    = stringify(PCI_CLASS_STORAGE_OTHER),
+        },{
+            .driver   = "virtio-console-pci",
+            .property = "class",
+            .value    = stringify(PCI_CLASS_DISPLAY_OTHER),
+        },{
+            .driver   = "virtio-net-pci",
+            .property = "vectors",
+            .value    = stringify(0),
+        },
+        { /* end of list */ }
+    },
 };
 
 static QEMUMachine isapc_machine = {
@@ -1511,10 +1584,21 @@ static QEMUMachine isapc_machine = {
     .max_cpus = 1,
 };
 
+static QEMUMachine pc_0_10_machine = {
+    .name = "pc-0-10",
+    .desc = "Standard PC compatible with qemu 0.10.x",
+    .init = pc_init_pci_0_10,
+    .max_cpus = 255,
+};
+
 static void pc_machine_init(void)
 {
     qemu_register_machine(&pc_machine);
+    qemu_register_machine(&pc_machine_v0_10);
     qemu_register_machine(&isapc_machine);
+
+    /* For compatibility with 0.10.x */
+    qemu_register_machine(&pc_0_10_machine);
 }
 
 machine_init(pc_machine_init);

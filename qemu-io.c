@@ -26,6 +26,26 @@ static BlockDriverState *bs;
 static int misalign;
 
 /*
+ * Parse the pattern argument to various sub-commands.
+ *
+ * Because the pattern is used as an argument to memset it must evaluate
+ * to an unsigned integer that fits into a single byte.
+ */
+static int parse_pattern(const char *arg)
+{
+	char *endptr = NULL;
+	long pattern;
+
+	pattern = strtol(arg, &endptr, 0);
+	if (pattern < 0 || pattern > UCHAR_MAX || *endptr != '\0') {
+		printf("%s is not a valid pattern byte\n", arg);
+		return -1;
+	}
+
+	return pattern;
+}
+
+/*
  * Memory allocation helpers.
  *
  * Make sure memory is aligned by default, or purposefully misaligned if
@@ -187,6 +207,22 @@ static int do_pwrite(char *buf, int64_t offset, int count, int *total)
 	return 1;
 }
 
+static int do_load_vmstate(char *buf, int64_t offset, int count, int *total)
+{
+	*total = bdrv_load_vmstate(bs, (uint8_t *)buf, offset, count);
+	if (*total < 0)
+		return *total;
+	return 1;
+}
+
+static int do_save_vmstate(char *buf, int64_t offset, int count, int *total)
+{
+	*total = bdrv_save_vmstate(bs, (uint8_t *)buf, offset, count);
+	if (*total < 0)
+		return *total;
+	return 1;
+}
+
 #define NOT_DONE 0x7fffffff
 static void aio_rw_done(void *opaque, int ret)
 {
@@ -242,6 +278,7 @@ read_help(void)
 "\n"
 " Reads a segment of the currently open file, optionally dumping it to the\n"
 " standard output stream (with -v option) for subsequent inspection.\n"
+" -b, -- read from the VM state rather than the virtual disk\n"
 " -C, -- report statistics in a machine parsable format\n"
 " -l, -- length for pattern verification (only with -P)\n"
 " -p, -- use bdrv_pread to read the file\n"
@@ -257,7 +294,7 @@ read_f(int argc, char **argv)
 {
 	struct timeval t1, t2;
 	int Cflag = 0, pflag = 0, qflag = 0, vflag = 0;
-	int Pflag = 0, sflag = 0, lflag = 0;
+	int Pflag = 0, sflag = 0, lflag = 0, bflag = 0;
 	int c, cnt;
 	char *buf;
 	int64_t offset;
@@ -266,8 +303,11 @@ read_f(int argc, char **argv)
         int total = 0;
 	int pattern = 0, pattern_offset = 0, pattern_count = 0;
 
-	while ((c = getopt(argc, argv, "Cl:pP:qs:v")) != EOF) {
+	while ((c = getopt(argc, argv, "bCl:pP:qs:v")) != EOF) {
 		switch (c) {
+		case 'b':
+			bflag = 1;
+			break;
 		case 'C':
 			Cflag = 1;
 			break;
@@ -284,7 +324,9 @@ read_f(int argc, char **argv)
 			break;
 		case 'P':
 			Pflag = 1;
-			pattern = atoi(optarg);
+			pattern = parse_pattern(optarg);
+			if (pattern < 0)
+				return 0;
 			break;
 		case 'q':
 			qflag = 1;
@@ -307,6 +349,11 @@ read_f(int argc, char **argv)
 
 	if (optind != argc - 2)
 		return command_usage(&read_cmd);
+
+	if (bflag && pflag) {
+		printf("-b and -p cannot be specified at the same time\n");
+		return 0;
+	}
 
 	offset = cvtnum(argv[optind]);
 	if (offset < 0) {
@@ -352,6 +399,8 @@ read_f(int argc, char **argv)
 	gettimeofday(&t1, NULL);
 	if (pflag)
 		cnt = do_pread(buf, offset, count, &total);
+	else if (bflag)
+		cnt = do_load_vmstate(buf, offset, count, &total);
 	else
 		cnt = do_read(buf, offset, count, &total);
 	gettimeofday(&t2, NULL);
@@ -394,7 +443,7 @@ static const cmdinfo_t read_cmd = {
 	.cfunc		= read_f,
 	.argmin		= 2,
 	.argmax		= -1,
-	.args		= "[-aCpqv] [-P pattern [-s off] [-l len]] off len",
+	.args		= "[-abCpqv] [-P pattern [-s off] [-l len]] off len",
 	.oneline	= "reads a number of bytes at a specified offset",
 	.help		= read_help,
 };
@@ -442,7 +491,9 @@ readv_f(int argc, char **argv)
 			break;
 		case 'P':
 			Pflag = 1;
-			pattern = atoi(optarg);
+			pattern = parse_pattern(optarg);
+			if (pattern < 0)
+				return 0;
 			break;
 		case 'q':
 			qflag = 1;
@@ -534,6 +585,7 @@ write_help(void)
 "\n"
 " Writes into a segment of the currently open file, using a buffer\n"
 " filled with a set pattern (0xcdcdcdcd).\n"
+" -b, -- write to the VM state rather than the virtual disk\n"
 " -p, -- use bdrv_pwrite to write the file\n"
 " -P, -- use different pattern to fill file\n"
 " -C, -- report statistics in a machine parsable format\n"
@@ -545,7 +597,7 @@ static int
 write_f(int argc, char **argv)
 {
 	struct timeval t1, t2;
-	int Cflag = 0, pflag = 0, qflag = 0;
+	int Cflag = 0, pflag = 0, qflag = 0, bflag = 0;
 	int c, cnt;
 	char *buf;
 	int64_t offset;
@@ -554,8 +606,11 @@ write_f(int argc, char **argv)
         int total = 0;
 	int pattern = 0xcd;
 
-	while ((c = getopt(argc, argv, "CpP:q")) != EOF) {
+	while ((c = getopt(argc, argv, "bCpP:q")) != EOF) {
 		switch (c) {
+		case 'b':
+			bflag = 1;
+			break;
 		case 'C':
 			Cflag = 1;
 			break;
@@ -563,7 +618,9 @@ write_f(int argc, char **argv)
 			pflag = 1;
 			break;
 		case 'P':
-			pattern = atoi(optarg);
+			pattern = parse_pattern(optarg);
+			if (pattern < 0)
+				return 0;
 			break;
 		case 'q':
 			qflag = 1;
@@ -575,6 +632,11 @@ write_f(int argc, char **argv)
 
 	if (optind != argc - 2)
 		return command_usage(&write_cmd);
+
+	if (bflag && pflag) {
+		printf("-b and -p cannot be specified at the same time\n");
+		return 0;
+	}
 
 	offset = cvtnum(argv[optind]);
 	if (offset < 0) {
@@ -608,6 +670,8 @@ write_f(int argc, char **argv)
 	gettimeofday(&t1, NULL);
 	if (pflag)
 		cnt = do_pwrite(buf, offset, count, &total);
+	else if (bflag)
+		cnt = do_save_vmstate(buf, offset, count, &total);
 	else
 		cnt = do_write(buf, offset, count, &total);
 	gettimeofday(&t2, NULL);
@@ -636,7 +700,7 @@ static const cmdinfo_t write_cmd = {
 	.cfunc		= write_f,
 	.argmin		= 2,
 	.argmax		= -1,
-	.args		= "[-aCpq] [-P pattern ] off len",
+	.args		= "[-abCpq] [-P pattern ] off len",
 	.oneline	= "writes a number of bytes at a specified offset",
 	.help		= write_help,
 };
@@ -683,7 +747,9 @@ writev_f(int argc, char **argv)
 			qflag = 1;
 			break;
 		case 'P':
-			pattern = atoi(optarg);
+			pattern = parse_pattern(optarg);
+			if (pattern < 0)
+				return 0;
 			break;
 		default:
 			return command_usage(&writev_cmd);
@@ -857,7 +923,9 @@ aio_read_f(int argc, char **argv)
 			break;
 		case 'P':
 			ctx->Pflag = 1;
-			ctx->pattern = atoi(optarg);
+			ctx->pattern = parse_pattern(optarg);
+			if (ctx->pattern < 0)
+				return 0;
 			break;
 		case 'q':
 			ctx->qflag = 1;
@@ -957,7 +1025,9 @@ aio_write_f(int argc, char **argv)
 			ctx->qflag = 1;
 			break;
 		case 'P':
-			pattern = atoi(optarg);
+			pattern = parse_pattern(optarg);
+			if (pattern < 0)
+				return 0;
 			break;
 		default:
 			free(ctx);
@@ -1132,11 +1202,10 @@ static int
 alloc_f(int argc, char **argv)
 {
 	int64_t offset;
-	int nb_sectors;
+	int nb_sectors, remaining;
 	char s1[64];
-	int num;
+	int num, sum_alloc;
 	int ret;
-	const char *retstr;
 
 	offset = cvtnum(argv[1]);
 	if (offset & 0x1ff) {
@@ -1150,16 +1219,23 @@ alloc_f(int argc, char **argv)
 	else
 		nb_sectors = 1;
 
-	ret = bdrv_is_allocated(bs, offset >> 9, nb_sectors, &num);
+	remaining = nb_sectors;
+	sum_alloc = 0;
+	while (remaining) {
+		ret = bdrv_is_allocated(bs, offset >> 9, nb_sectors, &num);
+		remaining -= num;
+		if (ret) {
+			sum_alloc += num;
+		}
+	}
 
 	cvtstr(offset, s1, sizeof(s1));
 
-	retstr = ret ? "allocated" : "not allocated";
 	if (nb_sectors == 1)
-		printf("sector %s at offset %s\n", retstr, s1);
+		printf("sector allocated at offset %s\n", s1);
 	else
-		printf("%d/%d sectors %s at offset %s\n",
-			num, nb_sectors, retstr, s1);
+		printf("%d/%d sectors allocated at offset %s\n",
+			sum_alloc, nb_sectors, s1);
 	return 0;
 }
 
@@ -1199,23 +1275,19 @@ static int openfile(char *name, int flags, int growable)
 	if (!bs)
 		return 1;
 
+	if (growable) {
+		flags |= BDRV_O_FILE;
+	}
+
 	if (bdrv_open(bs, name, flags) == -1) {
 		fprintf(stderr, "%s: can't open device %s\n", progname, name);
 		bs = NULL;
 		return 1;
 	}
 
-
 	if (growable) {
-		if (!bs->drv || !bs->drv->protocol_name) {
-			fprintf(stderr,
-				"%s: only protocols can be opened growable\n",
-				progname);
-			return 1;
-		}
 		bs->growable = 1;
 	}
-
 	return 0;
 }
 
@@ -1327,6 +1399,7 @@ static void usage(const char *name)
 "  -r, --read-only      export read-only\n"
 "  -s, --snapshot       use snapshot file\n"
 "  -n, --nocache        disable host cache\n"
+"  -g, --growable       allow file to grow (only applies to protocols)\n"
 "  -m, --misalign       misalign allocations for O_DIRECT\n"
 "  -h, --help           display this help and exit\n"
 "  -V, --version        output version information and exit\n"

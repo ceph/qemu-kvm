@@ -22,7 +22,7 @@
  * THE SOFTWARE.
  */
 #include "config-host.h"
-#ifdef HOST_BSD
+#ifdef CONFIG_BSD
 /* include native header before sys-queue.h */
 #include <sys/queue.h>
 #endif
@@ -32,7 +32,7 @@
 #include "block_int.h"
 #include "module.h"
 
-#ifdef HOST_BSD
+#ifdef CONFIG_BSD
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
@@ -1158,24 +1158,26 @@ int bdrv_get_info(BlockDriverState *bs, BlockDriverInfo *bdi)
     return drv->bdrv_get_info(bs, bdi);
 }
 
-int bdrv_put_buffer(BlockDriverState *bs, const uint8_t *buf, int64_t pos, int size)
+int bdrv_save_vmstate(BlockDriverState *bs, const uint8_t *buf,
+                      int64_t pos, int size)
 {
     BlockDriver *drv = bs->drv;
     if (!drv)
         return -ENOMEDIUM;
-    if (!drv->bdrv_put_buffer)
+    if (!drv->bdrv_save_vmstate)
         return -ENOTSUP;
-    return drv->bdrv_put_buffer(bs, buf, pos, size);
+    return drv->bdrv_save_vmstate(bs, buf, pos, size);
 }
 
-int bdrv_get_buffer(BlockDriverState *bs, uint8_t *buf, int64_t pos, int size)
+int bdrv_load_vmstate(BlockDriverState *bs, uint8_t *buf,
+                      int64_t pos, int size)
 {
     BlockDriver *drv = bs->drv;
     if (!drv)
         return -ENOMEDIUM;
-    if (!drv->bdrv_get_buffer)
+    if (!drv->bdrv_load_vmstate)
         return -ENOTSUP;
-    return drv->bdrv_get_buffer(bs, buf, pos, size);
+    return drv->bdrv_load_vmstate(bs, buf, pos, size);
 }
 
 /**************************************************************/

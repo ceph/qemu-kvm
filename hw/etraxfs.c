@@ -55,6 +55,7 @@ void bareetraxfs_init (ram_addr_t ram_size,
     void *etraxfs_dmac;
     struct etraxfs_dma_client *eth[2] = {NULL, NULL};
     int kernel_size;
+    DriveInfo *dinfo;
     int i;
     ram_addr_t phys_ram;
     ram_addr_t phys_flash;
@@ -79,16 +80,16 @@ void bareetraxfs_init (ram_addr_t ram_size,
 
 
     phys_flash = qemu_ram_alloc(FLASH_SIZE);
-    i = drive_get_index(IF_PFLASH, 0, 0);
+    dinfo = drive_get(IF_PFLASH, 0, 0);
     pflash_cfi02_register(0x0, phys_flash,
-                          i != -1 ? drives_table[i].bdrv : NULL, (64 * 1024),
+                          dinfo ? dinfo->bdrv : NULL, (64 * 1024),
                           FLASH_SIZE >> 16,
                           1, 2, 0x0000, 0x0000, 0x0000, 0x0000,
                           0x555, 0x2aa);
     cpu_irq = cris_pic_init_cpu(env);
     dev = qdev_create(NULL, "etraxfs,pic");
     /* FIXME: Is there a proper way to signal vectors to the CPU core?  */
-    qdev_set_prop_ptr(dev, "interrupt_vector", &env->interrupt_vector);
+    qdev_prop_set_ptr(dev, "interrupt_vector", &env->interrupt_vector);
     qdev_init(dev);
     s = sysbus_from_qdev(dev);
     sysbus_mmio_map(s, 0, 0x3001c000);

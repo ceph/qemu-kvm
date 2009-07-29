@@ -14,8 +14,7 @@
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston MA  02110-1301 USA
+ * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
 #include <stdarg.h>
 #include <stdlib.h>
@@ -256,7 +255,7 @@ static inline void gen_op_andl_A0_ffff(void)
 
 #endif /* !TARGET_X86_64 */
 
-#if defined(WORDS_BIGENDIAN)
+#if defined(HOST_WORDS_BIGENDIAN)
 #define REG_B_OFFSET (sizeof(target_ulong) - 1)
 #define REG_H_OFFSET (sizeof(target_ulong) - 2)
 #define REG_W_OFFSET (sizeof(target_ulong) - 2)
@@ -7152,7 +7151,7 @@ static target_ulong disas_insn(DisasContext *s, target_ulong pc_start)
             break;
         case 4: /* smsw */
             gen_svm_check_intercept(s, pc_start, SVM_EXIT_READ_CR0);
-#if defined TARGET_X86_64 && defined WORDS_BIGENDIAN
+#if defined TARGET_X86_64 && defined HOST_WORDS_BIGENDIAN
             tcg_gen_ld32u_tl(cpu_T[0], cpu_env, offsetof(CPUX86State,cr[0]) + 4);
 #else
             tcg_gen_ld32u_tl(cpu_T[0], cpu_env, offsetof(CPUX86State,cr[0]));

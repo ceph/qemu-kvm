@@ -39,7 +39,10 @@ Select CPU model (-cpu ? for list and additional feature selection)
 ETEXI
 
 DEF("smp", HAS_ARG, QEMU_OPTION_smp,
-    "-smp n          set the number of CPUs to 'n' [default=1]\n")
+    "-smp n[,maxcpus=cpus]\n"
+    "                set the number of CPUs to 'n' [default=1]\n"
+    "                maxcpus= maximum number of total cpus, including\n"
+    "                offline CPUs for hotplug etc.\n")
 STEXI
 @item -smp @var{n}
 Simulate an SMP system with @var{n} CPUs. On the PC target, up to 255
@@ -220,11 +223,30 @@ Use 'file' as a parallel flash image.
 ETEXI
 
 DEF("boot", HAS_ARG, QEMU_OPTION_boot,
-    "-boot [a|c|d|n] boot on floppy (a), hard disk (c), CD-ROM (d), or network (n)\n")
+    "-boot [order=drives][,once=drives][,menu=on|off]\n"
+    "                'drives': floppy (a), hard disk (c), CD-ROM (d), network (n)\n")
 STEXI
-@item -boot [a|c|d|n]
-Boot on floppy (a), hard disk (c), CD-ROM (d), or Etherboot (n). Hard disk boot
-is the default.
+@item -boot [order=@var{drives}][,once=@var{drives}][,menu=on|off]
+
+Specify boot order @var{drives} as a string of drive letters. Valid
+drive letters depend on the target achitecture. The x86 PC uses: a, b
+(floppy 1 and 2), c (first hard disk), d (first CD-ROM), n-p (Etherboot
+from network adapter 1-4), hard disk boot is the default. To apply a
+particular boot order only on the first startup, specify it via
+@option{once}.
+
+Interactive boot menus/prompts can be enabled via @option{menu=on} as far
+as firmware/BIOS supports them. The default is non-interactive boot.
+
+@example
+# try to boot from network first, then from hard disk
+qemu -boot order=nc
+# boot from CD-ROM first, switch back to default order after reboot
+qemu -boot once=d
+@end example
+
+Note: The legacy format '-boot @var{drives}' is still supported but its
+use is discouraged as it may be removed from future versions.
 ETEXI
 
 DEF("snapshot", 0, QEMU_OPTION_snapshot,
@@ -363,6 +385,8 @@ Network adapter that supports CDC ethernet and RNDIS protocols.
 @end table
 ETEXI
 
+DEF("device", HAS_ARG, QEMU_OPTION_device,
+    "-device driver[,options]  add device\n")
 DEF("name", HAS_ARG, QEMU_OPTION_name,
     "-name string1[,process=string2]    set the name of the guest\n"
     "            string1 sets the window title and string2 the process name (on Linux)\n")

@@ -14,8 +14,7 @@
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston MA  02110-1301 USA
+ * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
 
 /* A lot of PowerPC definition have been included here.
@@ -3381,7 +3380,7 @@ static void init_proc_405 (CPUPPCState *env)
                               PPC_DCR | PPC_WRTEE | PPC_RFMCI |               \
                               PPC_CACHE | PPC_CACHE_ICBI |                    \
                               PPC_CACHE_DCBZ | PPC_CACHE_DCBA |               \
-                              PPC_MEM_TLBSYNC |                               \
+                              PPC_MEM_TLBSYNC | PPC_MFTB |                    \
                               PPC_BOOKE | PPC_4xx_COMMON | PPC_405_MAC |      \
                               PPC_440_SPEC)
 #define POWERPC_MSRM_440EP   (0x000000000006D630ULL)
@@ -3461,7 +3460,7 @@ static void init_proc_440EP (CPUPPCState *env)
                               PPC_DCR | PPC_DCRX | PPC_WRTEE | PPC_MFAPIDI |  \
                               PPC_CACHE | PPC_CACHE_ICBI |                    \
                               PPC_CACHE_DCBZ | PPC_CACHE_DCBA |               \
-                              PPC_MEM_TLBSYNC | PPC_TLBIVA |                  \
+                              PPC_MEM_TLBSYNC | PPC_TLBIVA | PPC_MFTB |       \
                               PPC_BOOKE | PPC_4xx_COMMON | PPC_405_MAC |      \
                               PPC_440_SPEC)
 #define POWERPC_MSRM_440GP   (0x000000000006FF30ULL)
@@ -3523,7 +3522,7 @@ static void init_proc_440GP (CPUPPCState *env)
                               PPC_DCR | PPC_WRTEE |                           \
                               PPC_CACHE | PPC_CACHE_ICBI |                    \
                               PPC_CACHE_DCBZ | PPC_CACHE_DCBA |               \
-                              PPC_MEM_TLBSYNC |                               \
+                              PPC_MEM_TLBSYNC | PPC_MFTB |                    \
                               PPC_BOOKE | PPC_4xx_COMMON | PPC_405_MAC |      \
                               PPC_440_SPEC)
 #define POWERPC_MSRM_440x4   (0x000000000006FF30ULL)
@@ -3585,7 +3584,7 @@ static void init_proc_440x4 (CPUPPCState *env)
                               PPC_DCR | PPC_WRTEE | PPC_RFMCI |               \
                               PPC_CACHE | PPC_CACHE_ICBI |                    \
                               PPC_CACHE_DCBZ | PPC_CACHE_DCBA |               \
-                              PPC_MEM_TLBSYNC |                               \
+                              PPC_MEM_TLBSYNC | PPC_MFTB |                    \
                               PPC_BOOKE | PPC_4xx_COMMON | PPC_405_MAC |      \
                               PPC_440_SPEC)
 #define POWERPC_MSRM_440x5   (0x000000000006FF30ULL)
@@ -3663,7 +3662,7 @@ static void init_proc_440x5 (CPUPPCState *env)
 /* PowerPC 460 (guessed)                                                     */
 #define POWERPC_INSNS_460    (PPC_INSNS_BASE | PPC_STRING |                   \
                               PPC_DCR | PPC_DCRX  | PPC_DCRUX |               \
-                              PPC_WRTEE | PPC_MFAPIDI |                       \
+                              PPC_WRTEE | PPC_MFAPIDI | PPC_MFTB |            \
                               PPC_CACHE | PPC_CACHE_ICBI |                    \
                               PPC_CACHE_DCBZ | PPC_CACHE_DCBA |               \
                               PPC_MEM_TLBSYNC | PPC_TLBIVA |                  \
@@ -3750,7 +3749,7 @@ static void init_proc_460 (CPUPPCState *env)
 #define POWERPC_INSNS_460F   (PPC_INSNS_BASE | PPC_STRING |                   \
                               PPC_FLOAT | PPC_FLOAT_FRES | PPC_FLOAT_FSEL |   \
                               PPC_FLOAT_FSQRT | PPC_FLOAT_FRSQRTE |           \
-                              PPC_FLOAT_STFIWX |                              \
+                              PPC_FLOAT_STFIWX | PPC_MFTB |                   \
                               PPC_DCR | PPC_DCRX | PPC_DCRUX |                \
                               PPC_WRTEE | PPC_MFAPIDI |                       \
                               PPC_CACHE | PPC_CACHE_ICBI |                    \
@@ -9389,7 +9388,7 @@ static int gdb_set_float_reg(CPUState *env, uint8_t *mem_buf, int n)
 static int gdb_get_avr_reg(CPUState *env, uint8_t *mem_buf, int n)
 {
     if (n < 32) {
-#ifdef WORDS_BIGENDIAN
+#ifdef HOST_WORDS_BIGENDIAN
         stq_p(mem_buf, env->avr[n].u64[0]);
         stq_p(mem_buf+8, env->avr[n].u64[1]);
 #else
@@ -9412,7 +9411,7 @@ static int gdb_get_avr_reg(CPUState *env, uint8_t *mem_buf, int n)
 static int gdb_set_avr_reg(CPUState *env, uint8_t *mem_buf, int n)
 {
     if (n < 32) {
-#ifdef WORDS_BIGENDIAN
+#ifdef HOST_WORDS_BIGENDIAN
         env->avr[n].u64[0] = ldq_p(mem_buf);
         env->avr[n].u64[1] = ldq_p(mem_buf+8);
 #else

@@ -306,6 +306,11 @@ STEXI
 Read I/O port.
 ETEXI
 
+    { "o", "/ii", do_ioport_write,
+      "/fmt addr value", "I/O port write" },
+STEXI
+Write to I/O port.
+ETEXI
 
     { "sendkey", "si?", do_sendkey,
       "keys [hold_ms]", "send keys to the VM (e.g. 'sendkey ctrl-alt-f1', default hold time=100 ms)" },
@@ -621,6 +626,24 @@ ETEXI
 STEXI
 @item mce @var{cpu} @var{bank} @var{status} @var{mcgstatus} @var{addr} @var{misc}
 Inject an MCE on the given CPU (x86 only).
+ETEXI
+
+    { "getfd", "s", do_getfd, "getfd name",
+      "receive a file descriptor via SCM rights and assign it a name" },
+STEXI
+@item getfd @var{fdname}
+If a file descriptor is passed alongside this command using the SCM_RIGHTS
+mechanism on unix sockets, it is stored using the name @var{fdname} for
+later use by other monitor commands.
+ETEXI
+
+    { "closefd", "s", do_closefd, "closefd name",
+      "close a file descriptor previously passed via SCM rights" },
+STEXI
+@item closefd @var{fdname}
+Close the file descriptor previously assigned to @var{fdname} using the
+@code{getfd} command. This is only needed if the file descriptor was never
+used by another monitor command.
 ETEXI
 
     { "cpu_set", "is", do_cpu_set_nr,

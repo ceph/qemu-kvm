@@ -14,9 +14,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
- *  MA 02110-1301, USA.
+ *  along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 #include <stdlib.h>
 #include <stdio.h>
@@ -68,7 +66,7 @@ abi_long do_freebsd_syscall(void *cpu_env, int num, abi_long arg1,
 
     switch(num) {
     case TARGET_FREEBSD_NR_exit:
-#ifdef HAVE_GPROF
+#ifdef TARGET_GPROF
         _mcleanup();
 #endif
         gdb_exit(cpu_env, arg1);
@@ -140,7 +138,7 @@ abi_long do_netbsd_syscall(void *cpu_env, int num, abi_long arg1,
 
     switch(num) {
     case TARGET_NETBSD_NR_exit:
-#ifdef HAVE_GPROF
+#ifdef TARGET_GPROF
         _mcleanup();
 #endif
         gdb_exit(cpu_env, arg1);
@@ -212,7 +210,7 @@ abi_long do_openbsd_syscall(void *cpu_env, int num, abi_long arg1,
 
     switch(num) {
     case TARGET_OPENBSD_NR_exit:
-#ifdef HAVE_GPROF
+#ifdef TARGET_GPROF
         _mcleanup();
 #endif
         gdb_exit(cpu_env, arg1);

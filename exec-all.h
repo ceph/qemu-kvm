@@ -14,8 +14,7 @@
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston MA  02110-1301 USA
+ * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifndef _EXEC_ALL_H_
@@ -115,10 +114,7 @@ static inline int tlb_set_page(CPUState *env1, target_ulong vaddr,
 #define CODE_GEN_AVG_BLOCK_SIZE 64
 #endif
 
-#if defined(_ARCH_PPC) || defined(__x86_64__) || defined(__arm__)
-#define USE_DIRECT_JUMP
-#endif
-#if defined(__i386__) && !defined(_WIN32)
+#if defined(_ARCH_PPC) || defined(__x86_64__) || defined(__arm__) || defined(__i386__)
 #define USE_DIRECT_JUMP
 #endif
 

@@ -481,16 +481,6 @@ void wrmsr_smp(uint32_t index, uint64_t val)
 }
 
 #ifdef BX_QEMU
-#define QEMU_CFG_CTL_PORT 0x510
-#define QEMU_CFG_DATA_PORT 0x511
-#define QEMU_CFG_SIGNATURE  0x00
-#define QEMU_CFG_ID         0x01
-#define QEMU_CFG_UUID       0x02
-#define QEMU_CFG_NUMA       0x0D
-#define QEMU_CFG_ARCH_LOCAL     0x8000
-#define QEMU_CFG_ACPI_TABLES  (QEMU_CFG_ARCH_LOCAL + 0)
-#define QEMU_CFG_SMBIOS_ENTRIES  (QEMU_CFG_ARCH_LOCAL + 1)
-#define QEMU_CFG_IRQ0_OVERRIDE   (QEMU_CFG_ARCH_LOCAL + 2)
 
 int qemu_cfg_port;
 
@@ -2568,13 +2558,14 @@ smbios_load_external(int type, char **p, unsigned *nr_structs,
             *max_struct_size = *p - (char *)header;
     }
 
-    /* Mark that we've reported on this type */
-    used_bitmap[(type >> 6) & 0x3] |= (1ULL << (type & 0x3f));
+    if (start != *p) {
+        /* Mark that we've reported on this type */
+        used_bitmap[(type >> 6) & 0x3] |= (1ULL << (type & 0x3f));
+        return 1;
+    }
 
-    return (start != *p);
-#else /* !BX_QEMU */
+#endif /* !BX_QEMU */
     return 0;
-#endif
 }
 
 void smbios_init(void)

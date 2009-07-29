@@ -13,8 +13,7 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+# along with this program; if not, see <http://www.gnu.org/licenses/>.
 #
 # Copyright Novell Inc, 2009
 #   Authors: Alexander Graf <agraf@suse.de>
@@ -32,9 +31,10 @@ x=`dd if="$1" bs=1 count=1 skip=2 2>/dev/null | od -t u1 -A n`
 size=$(( $x * 512 - 1 ))
 
 # now get the checksum
-for i in `od -A n -t u1 -v "$1"`; do
+nums=`od -A n -t u1 -v "$1"`
+for i in ${nums}; do
     # add each byte's value to sum
-    sum=$(( $sum + $i ))
+    sum=`expr $sum + $i`
 done
 
 sum=$(( $sum % 256 ))

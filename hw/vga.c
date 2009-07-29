@@ -75,19 +75,19 @@ const uint8_t gr_mask[16] = {
 		(((uint32_t)(__x) & (uint32_t)0x00ff0000UL) >>  8) | \
 		(((uint32_t)(__x) & (uint32_t)0xff000000UL) >> 24) ))
 
-#ifdef WORDS_BIGENDIAN
+#ifdef HOST_WORDS_BIGENDIAN
 #define PAT(x) cbswap_32(x)
 #else
 #define PAT(x) (x)
 #endif
 
-#ifdef WORDS_BIGENDIAN
+#ifdef HOST_WORDS_BIGENDIAN
 #define BIG 1
 #else
 #define BIG 0
 #endif
 
-#ifdef WORDS_BIGENDIAN
+#ifdef HOST_WORDS_BIGENDIAN
 #define GET_PLANE(data, p) (((data) >> (24 - (p) * 8)) & 0xff)
 #else
 #define GET_PLANE(data, p) (((data) >> ((p) * 8)) & 0xff)
@@ -114,7 +114,7 @@ static const uint32_t mask16[16] = {
 
 #undef PAT
 
-#ifdef WORDS_BIGENDIAN
+#ifdef HOST_WORDS_BIGENDIAN
 #define PAT(x) (x)
 #else
 #define PAT(x) cbswap_32(x)
@@ -800,7 +800,7 @@ void vga_mem_writeb(void *opaque, target_phys_addr_t addr, uint32_t val)
     uint32_t write_mask, bit_mask, set_mask;
 
 #ifdef DEBUG_VGA_MEM
-    printf("vga: [0x%x] = 0x%02x\n", addr, val);
+    printf("vga: [0x" TARGET_FMT_plx "] = 0x%02x\n", addr, val);
 #endif
     /* convert to VGA memory offset */
     memory_map_mode = (s->gr[6] >> 2) & 3;
@@ -833,7 +833,7 @@ void vga_mem_writeb(void *opaque, target_phys_addr_t addr, uint32_t val)
         if (s->sr[2] & mask) {
             s->vram_ptr[addr] = val;
 #ifdef DEBUG_VGA_MEM
-            printf("vga: chain4: [0x%x]\n", addr);
+            printf("vga: chain4: [0x" TARGET_FMT_plx "]\n", addr);
 #endif
             s->plane_updated |= mask; /* only used to detect font change */
             cpu_physical_memory_set_dirty(s->vram_offset + addr);
@@ -846,7 +846,7 @@ void vga_mem_writeb(void *opaque, target_phys_addr_t addr, uint32_t val)
             addr = ((addr & ~1) << 1) | plane;
             s->vram_ptr[addr] = val;
 #ifdef DEBUG_VGA_MEM
-            printf("vga: odd/even: [0x%x]\n", addr);
+            printf("vga: odd/even: [0x" TARGET_FMT_plx "]\n", addr);
 #endif
             s->plane_updated |= mask; /* only used to detect font change */
             cpu_physical_memory_set_dirty(s->vram_offset + addr);
@@ -920,10 +920,10 @@ void vga_mem_writeb(void *opaque, target_phys_addr_t addr, uint32_t val)
             (((uint32_t *)s->vram_ptr)[addr] & ~write_mask) |
             (val & write_mask);
 #ifdef DEBUG_VGA_MEM
-            printf("vga: latch: [0x%x] mask=0x%08x val=0x%08x\n",
-                   addr * 4, write_mask, val);
+        printf("vga: latch: [0x" TARGET_FMT_plx "] mask=0x%08x val=0x%08x\n",
+               addr * 4, write_mask, val);
 #endif
-            cpu_physical_memory_set_dirty(s->vram_offset + (addr << 2));
+        cpu_physical_memory_set_dirty(s->vram_offset + (addr << 2));
     }
 }
 
@@ -1372,7 +1372,7 @@ static void vga_draw_text(VGAState *s, int full_update)
                 if (cx > cx_max)
                     cx_max = cx;
                 *ch_attr_ptr = ch_attr;
-#ifdef WORDS_BIGENDIAN
+#ifdef HOST_WORDS_BIGENDIAN
                 ch = ch_attr >> 8;
                 cattr = ch_attr & 0xff;
 #else
@@ -1636,7 +1636,7 @@ static void vga_draw_graphic(VGAState *s, int full_update)
         disp_width != s->last_width ||
         height != s->last_height ||
         s->last_depth != depth) {
-#if defined(WORDS_BIGENDIAN) == defined(TARGET_WORDS_BIGENDIAN)
+#if defined(HOST_WORDS_BIGENDIAN) == defined(TARGET_WORDS_BIGENDIAN)
         if (depth == 16 || depth == 32) {
 #else
         if (depth == 32) {
@@ -1645,7 +1645,7 @@ static void vga_draw_graphic(VGAState *s, int full_update)
             s->ds->surface = qemu_create_displaysurface_from(disp_width, height, depth,
                     s->line_offset,
                     s->vram_ptr + (s->start_addr * 4));
-#if defined(WORDS_BIGENDIAN) != defined(TARGET_WORDS_BIGENDIAN)
+#if defined(HOST_WORDS_BIGENDIAN) != defined(TARGET_WORDS_BIGENDIAN)
             s->ds->surface->pf = qemu_different_endianness_pixelformat(depth);
 #endif
             dpy_resize(s->ds);

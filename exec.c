@@ -14,8 +14,7 @@
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston MA  02110-1301 USA
+ * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
 #include "config.h"
 #ifdef _WIN32
@@ -673,7 +672,8 @@ static void tb_invalidate_check(target_ulong address)
         for(tb = tb_phys_hash[i]; tb != NULL; tb = tb->phys_hash_next) {
             if (!(address + TARGET_PAGE_SIZE <= tb->pc ||
                   address >= tb->pc + tb->size)) {
-                printf("ERROR invalidate: address=%08lx PC=%08lx size=%04x\n",
+                printf("ERROR invalidate: address=" TARGET_FMT_lx
+                       " PC=%08lx size=%04x\n",
                        address, (long)tb->pc, tb->size);
             }
         }
@@ -695,26 +695,6 @@ static void tb_page_check(void)
                        (long)tb->pc, tb->size, flags1, flags2);
             }
         }
-    }
-}
-
-static void tb_jmp_check(TranslationBlock *tb)
-{
-    TranslationBlock *tb1;
-    unsigned int n1;
-
-    /* suppress any remaining jumps to this TB */
-    tb1 = tb->jmp_first;
-    for(;;) {
-        n1 = (long)tb1 & 3;
-        tb1 = (TranslationBlock *)((long)tb1 & ~3);
-        if (n1 == 2)
-            break;
-        tb1 = tb1->jmp_next[n1];
-    }
-    /* check end of list */
-    if (tb1 != tb) {
-        printf("ERROR: jmp_list from 0x%08lx\n", (long)tb);
     }
 }
 
@@ -1528,7 +1508,8 @@ void cpu_set_log(int log_flags)
             static char logfile_buf[4096];
             setvbuf(logfile, logfile_buf, _IOLBF, sizeof(logfile_buf));
         }
-#else
+#elif !defined(_WIN32)
+        /* Win32 doesn't support line-buffering and requires size >= 2 */
         setvbuf(logfile, NULL, _IOLBF, 0);
 #endif
         log_append = 1;
@@ -1551,7 +1532,7 @@ void cpu_set_log_filename(const char *filename)
 
 static void cpu_unlink_tb(CPUState *env)
 {
-#if defined(USE_NPTL)
+#if defined(CONFIG_USE_NPTL)
     /* FIXME: TB unchaining isn't SMP safe.  For now just ignore the
        problem and hope the cpu will stop of its own accord.  For userspace
        emulation this often isn't actually as bad as it sounds.  Often
@@ -1771,6 +1752,13 @@ static inline void tlb_flush_jmp_cache(CPUState *env, target_ulong addr)
 	    TB_JMP_PAGE_SIZE * sizeof(TranslationBlock *));
 }
 
+static CPUTLBEntry s_cputlb_empty_entry = {
+    .addr_read  = -1,
+    .addr_write = -1,
+    .addr_code  = -1,
+    .addend     = -1,
+};
+
 /* NOTE: if flush_global is true, also flush global entries (not
    implemented yet) */
 void tlb_flush(CPUState *env, int flush_global)
@@ -1787,9 +1775,7 @@ void tlb_flush(CPUState *env, int flush_global)
     for(i = 0; i < CPU_TLB_SIZE; i++) {
         int mmu_idx;
         for (mmu_idx = 0; mmu_idx < NB_MMU_MODES; mmu_idx++) {
-            env->tlb_table[mmu_idx][i].addr_read = -1;
-            env->tlb_table[mmu_idx][i].addr_write = -1;
-            env->tlb_table[mmu_idx][i].addr_code = -1;
+            env->tlb_table[mmu_idx][i] = s_cputlb_empty_entry;
         }
     }
 
@@ -1811,9 +1797,7 @@ static inline void tlb_flush_entry(CPUTLBEntry *tlb_entry, target_ulong addr)
                  (TARGET_PAGE_MASK | TLB_INVALID_MASK)) ||
         addr == (tlb_entry->addr_code &
                  (TARGET_PAGE_MASK | TLB_INVALID_MASK))) {
-        tlb_entry->addr_read = -1;
-        tlb_entry->addr_write = -1;
-        tlb_entry->addr_code = -1;
+        *tlb_entry = s_cputlb_empty_entry;
     }
 }
 
@@ -3065,7 +3049,7 @@ static int subpage_register (subpage_t *mmio, uint32_t start, uint32_t end,
     idx = SUBPAGE_IDX(start);
     eidx = SUBPAGE_IDX(end);
 #if defined(DEBUG_SUBPAGE)
-    printf("%s: %p start %08x end %08x idx %08x eidx %08x mem %d\n", __func__,
+    printf("%s: %p start %08x end %08x idx %08x eidx %08x mem %ld\n", __func__,
            mmio, start, end, idx, eidx, memory);
 #endif
     memory >>= IO_MEM_SHIFT;

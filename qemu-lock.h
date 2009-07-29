@@ -12,8 +12,7 @@
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston MA  02110-1301 USA
+ * License along with this library; if not, see <http://www.gnu.org/licenses/>
  */
 
 /* Locking primitives.  Most of this code should be redundant -
@@ -24,7 +23,7 @@
    likely to release it soon.  In environments where you have more threads
    than physical CPUs (the extreme case being a single CPU host) a spinlock
    simply wastes CPU until the OS decides to preempt it.  */
-#if defined(USE_NPTL)
+#if defined(CONFIG_USE_NPTL)
 
 #include <pthread.h>
 #define spin_lock pthread_mutex_lock

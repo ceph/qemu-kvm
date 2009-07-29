@@ -39,8 +39,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License along
- * with this program; if not, write to the Free Software Foundation, Inc.,
- * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ * with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 
 #include "qemu-common.h"
@@ -273,6 +272,9 @@ static void *load_at(int fd, int offset, int size)
     return ptr;
 }
 
+#ifdef ELF_CLASS
+#undef ELF_CLASS
+#endif
 
 #define ELF_CLASS   ELFCLASS32
 #include "elf.h"
@@ -322,7 +324,7 @@ int load_elf(const char *filename, int64_t address_offset,
         e_ident[2] != ELFMAG2 ||
         e_ident[3] != ELFMAG3)
         goto fail;
-#ifdef WORDS_BIGENDIAN
+#ifdef HOST_WORDS_BIGENDIAN
     data_order = ELFDATA2MSB;
 #else
     data_order = ELFDATA2LSB;
@@ -356,7 +358,7 @@ int load_elf(const char *filename, int64_t address_offset,
 
 static void bswap_uboot_header(uboot_image_header_t *hdr)
 {
-#ifndef WORDS_BIGENDIAN
+#ifndef HOST_WORDS_BIGENDIAN
     bswap32s(&hdr->ih_magic);
     bswap32s(&hdr->ih_hcrc);
     bswap32s(&hdr->ih_time);

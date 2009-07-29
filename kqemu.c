@@ -14,8 +14,7 @@
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston MA  02110-1301 USA
+ * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
 #include "config.h"
 #ifdef _WIN32
@@ -26,7 +25,7 @@
 #include <sys/mman.h>
 #include <sys/ioctl.h>
 #endif
-#ifdef HOST_SOLARIS
+#ifdef CONFIG_SOLARIS
 #include <sys/ioccom.h>
 #endif
 #include <stdlib.h>

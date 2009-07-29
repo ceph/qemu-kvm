@@ -3,6 +3,8 @@
 #ifndef HW_BOARDS_H
 #define HW_BOARDS_H
 
+#include "qdev.h"
+
 typedef void QEMUMachineInitFunc(ram_addr_t ram_size,
                                  const char *boot_device,
                                  const char *kernel_filename,
@@ -12,11 +14,13 @@ typedef void QEMUMachineInitFunc(ram_addr_t ram_size,
 
 typedef struct QEMUMachine {
     const char *name;
+    const char *alias;
     const char *desc;
     QEMUMachineInitFunc *init;
     int use_scsi;
     int max_cpus;
     int is_default;
+    CompatProperty *compat_props;
     struct QEMUMachine *next;
 } QEMUMachine;
 
