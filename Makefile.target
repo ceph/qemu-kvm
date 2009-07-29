@@ -212,10 +212,6 @@ ifdef CONFIG_LINUX_USER
 VPATH+=:$(SRC_PATH)/linux-user:$(SRC_PATH)/linux-user/$(TARGET_ABI_DIR)
 CPPFLAGS+=-I$(SRC_PATH)/linux-user -I$(SRC_PATH)/linux-user/$(TARGET_ABI_DIR)
 
-ifdef CONFIG_STATIC
-LDFLAGS+=-static
-endif
-
 ifeq ($(ARCH),i386)
 ifdef TARGET_GPROF
 USE_I386_LD=y
@@ -275,7 +271,7 @@ LDFLAGS+=-Wl,-T,$(SRC_PATH)/$(ARCH).ld
 endif
 
 ifeq ($(ARCH),mips)
-ifeq ($(WORDS_BIGENDIAN),yes)
+ifeq ($(HOST_WORDS_BIGENDIAN),y)
 LDFLAGS+=-Wl,-T,$(SRC_PATH)/$(ARCH).ld
 else
 LDFLAGS+=-Wl,-T,$(SRC_PATH)/$(ARCH)el.ld
@@ -283,7 +279,7 @@ endif
 endif
 
 ifeq ($(ARCH),mips64)
-ifeq ($(WORDS_BIGENDIAN),yes)
+ifeq ($(HOST_WORDS_BIGENDIAN),y)
 LDFLAGS+=-Wl,-T,$(SRC_PATH)/$(ARCH).ld
 else
 LDFLAGS+=-Wl,-T,$(SRC_PATH)/$(ARCH)el.ld
@@ -359,10 +355,6 @@ ifdef CONFIG_BSD_USER
 VPATH+=:$(SRC_PATH)/bsd-user
 CPPFLAGS+=-I$(SRC_PATH)/bsd-user -I$(SRC_PATH)/bsd-user/$(TARGET_ARCH)
 
-ifdef CONFIG_STATIC
-LDFLAGS+=-static
-endif
-
 ifeq ($(ARCH),i386)
 ifdef TARGET_GPROF
 USE_I386_LD=y
@@ -422,7 +414,7 @@ LDFLAGS+=-Wl,-T,$(SRC_PATH)/$(ARCH).ld
 endif
 
 ifeq ($(ARCH),mips)
-ifeq ($(WORDS_BIGENDIAN),yes)
+ifeq ($(HOST_WORDS_BIGENDIAN),y)
 LDFLAGS+=-Wl,-T,$(SRC_PATH)/$(ARCH).ld
 else
 LDFLAGS+=-Wl,-T,$(SRC_PATH)/$(ARCH)el.ld
@@ -430,7 +422,7 @@ endif
 endif
 
 ifeq ($(ARCH),mips64)
-ifeq ($(WORDS_BIGENDIAN),yes)
+ifeq ($(HOST_WORDS_BIGENDIAN),y)
 LDFLAGS+=-Wl,-T,$(SRC_PATH)/$(ARCH).ld
 else
 LDFLAGS+=-Wl,-T,$(SRC_PATH)/$(ARCH)el.ld
@@ -474,10 +466,10 @@ ifdef CONFIG_DSOUND
 LIBS += -lole32 -ldxguid
 endif
 ifdef CONFIG_FMOD
-LIBS += $(CONFIG_FMOD_LIB)
+LIBS += $(FMOD_LIBS)
 endif
 ifdef CONFIG_OSS
-LIBS += $(CONFIG_OSS_LIB)
+LIBS += $(OSS_LIBS)
 endif
 
 sound-obj-y =
@@ -493,17 +485,17 @@ adlib.o fmopl.o: CFLAGS := ${CFLAGS} -DBUILD_Y8950=0
 endif
 
 ifdef CONFIG_VNC_TLS
-CPPFLAGS += $(CONFIG_VNC_TLS_CFLAGS)
-LIBS += $(CONFIG_VNC_TLS_LIBS)
+CPPFLAGS += $(VNC_TLS_CFLAGS)
+LIBS += $(VNC_TLS_LIBS)
 endif
 
 ifdef CONFIG_VNC_SASL
-CPPFLAGS += $(CONFIG_VNC_SASL_CFLAGS)
-LIBS += $(CONFIG_VNC_SASL_LIBS)
+CPPFLAGS += $(VNC_SASL_CFLAGS)
+LIBS += $(VNC_SASL_LIBS)
 endif
 
 ifdef CONFIG_BLUEZ
-LIBS += $(CONFIG_BLUEZ_LIBS)
+LIBS += $(BLUEZ_LIBS)
 endif
 
 # xen backend driver support
@@ -578,8 +570,8 @@ ifeq ($(TARGET_BASE_ARCH), ppc)
 CPPFLAGS += -DHAS_AUDIO -DHAS_AUDIO_CHOICE
 endif
 
+obj-ppc-$(CONFIG_FDT) += device_tree.o
 ifdef FDT_LIBS
-obj-ppc-y += device_tree.o
 LIBS+= $(FDT_LIBS)
 endif
 
@@ -606,8 +598,8 @@ obj-microblaze-y += xilinx_ethlite.o
 
 obj-microblaze-y += pflash_cfi02.o
 
+obj-microblaze-$(CONFIG_FDT) += device_tree.o
 ifdef FDT_LIBS
-obj-microblaze-y += device_tree.o
 LIBS+= $(FDT_LIBS)
 endif
 
@@ -677,9 +669,6 @@ CPPFLAGS+=-I$(SRC_PATH)/slirp
 endif
 
 # specific flags are needed for non soft mmu emulator
-ifdef CONFIG_STATIC
-LDFLAGS+=-static
-endif
 ifndef CONFIG_DARWIN
 ifndef CONFIG_WIN32
 ifndef CONFIG_SOLARIS

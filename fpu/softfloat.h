@@ -90,7 +90,7 @@ typedef int64_t sbits64;
 #define FLOAT128
 #else
 /* native float support */
-#if (defined(__i386__) || defined(__x86_64__)) && !defined(HOST_BSD)
+#if (defined(__i386__) || defined(__x86_64__)) && !defined(CONFIG_BSD)
 #define FLOATX80
 #endif
 #endif /* !CONFIG_SOFTFLOAT */
@@ -146,7 +146,7 @@ typedef struct {
 #endif
 #ifdef FLOAT128
 typedef struct {
-#ifdef WORDS_BIGENDIAN
+#ifdef HOST_WORDS_BIGENDIAN
     uint64_t high, low;
 #else
     uint64_t low, high;

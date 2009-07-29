@@ -170,6 +170,7 @@ kvm_version() {
     fi
 }
 
+brlapi="yes"
 gprof="no"
 debug_tcg="no"
 debug="no"
@@ -215,7 +216,6 @@ aix="no"
 blobs="yes"
 fdt="yes"
 sdl="yes"
-sdl_x11="no"
 xen="yes"
 pkgversion=" ($(kvm_version))"
 signalfd="no"
@@ -507,13 +507,25 @@ for opt do
   --sparc_cpu=*)
       sparc_cpu="$optarg"
       case $sparc_cpu in
-        v7|v8) SP_CFLAGS="-m32 -mcpu=${sparc_cpu} -D__sparc_${sparc_cpu}__"; SP_LDFLAGS="-m32"
-                 target_arch2="sparc"; cpu="sparc" ;;
-        v8plus|v8plusa) SP_CFLAGS="-m32 -mcpu=ultrasparc -D__sparc_${sparc_cpu}__"; SP_LDFLAGS="-m32"
-                 target_arch2="sparc"; cpu="sparc" ;;
-        v9)    SP_CFLAGS="-m64 -mcpu=ultrasparc -D__sparc_${sparc_cpu}__"; SP_LDFLAGS="-m64"
-                 target_arch2="sparc64"; cpu="sparc64" ;;
-        *)     echo "undefined SPARC architecture. Exiting";exit 1;;
+        v7|v8)
+          ARCH_CFLAGS="-m32 -mcpu=${sparc_cpu} -D__sparc_${sparc_cpu}__"
+          ARCH_LDFLAGS="-m32"
+          cpu="sparc"
+        ;;
+        v8plus|v8plusa)
+          ARCH_CFLAGS="-m32 -mcpu=ultrasparc -D__sparc_${sparc_cpu}__"
+          ARCH_LDFLAGS="-m32"
+          cpu="sparc"
+        ;;
+        v9)
+          ARCH_CFLAGS="-m64 -mcpu=ultrasparc -D__sparc_${sparc_cpu}__"
+          ARCH_LDFLAGS="-m64"
+          cpu="sparc64"
+        ;;
+        *)
+          echo "undefined SPARC architecture. Exiting";
+          exit 1
+        ;;
       esac
   ;;
   --enable-werror) werror="yes"
@@ -592,9 +604,6 @@ case "$cpu" in
     sparc) if test -z "$sparc_cpu" ; then
                ARCH_CFLAGS="-m32 -mcpu=ultrasparc -D__sparc_v8plus__"
                ARCH_LDFLAGS="-m32"
-           else
-               ARCH_CFLAGS="${SP_CFLAGS}"
-               ARCH_LDFLAGS="${SP_LDFLAGS}"
            fi
            ARCH_CFLAGS="$ARCH_CFLAGS -ffixed-g2 -ffixed-g3"
            if test "$solaris" = "no" ; then
@@ -604,9 +613,6 @@ case "$cpu" in
     sparc64) if test -z "$sparc_cpu" ; then
                ARCH_CFLAGS="-m64 -mcpu=ultrasparc -D__sparc_v9__"
                ARCH_LDFLAGS="-m64"
-           else
-               ARCH_CFLAGS="${SP_CFLAGS}"
-               ARCH_LDFLAGS="${SP_LDFLAGS}"
            fi
            if test "$solaris" = "no" ; then
                ARCH_CFLAGS="$ARCH_CFLAGS -ffixed-g5 -ffixed-g6 -ffixed-g7"
@@ -978,16 +984,17 @@ fi
 # xen probe
 
 if test "$xen" = "yes" ; then
-cat > $TMPC <<EOF
+  xen_libs="-lxenstore -lxenctrl -lxenguest"
+  cat > $TMPC <<EOF
 #include <xenctrl.h>
 #include <xs.h>
 int main(void) { xs_daemon_open(); xc_interface_open(); return 0; }
 EOF
-   if $cc $CFLAGS $ARCH_CFLAGS -c -o $TMPO $TMPC $LDFLAGS -lxenstore -lxenctrl 2> /dev/null > /dev/null ; then
-      :
-   else
-      xen="no"
-   fi
+  if $cc $CFLAGS $ARCH_CFLAGS -c -o $TMPO $TMPC $LDFLAGS $xen_libs 2> /dev/null > /dev/null ; then
+    :
+  else
+    xen="no"
+  fi
 fi
 
 ##########################################
@@ -996,49 +1003,42 @@ fi
 sdl_too_old=no
 
 if test "$sdl" = "yes" ; then
-    sdl_config="sdl-config"
-    sdl=no
-    sdl_static=no
-
-cat > $TMPC << EOF
+  sdl=no
+  cat > $TMPC << EOF
 #include <SDL.h>
 #undef main /* We don't want SDL to override our main() */
 int main( void ) { return SDL_Init (SDL_INIT_VIDEO); }
 EOF
-    if $cc $ARCH_CFLAGS -o $TMPE ${OS_CFLAGS} `$sdl_config --cflags 2> /dev/null` $TMPC `$sdl_config --libs 2> /dev/null` > $TMPSDLLOG 2>&1 ; then
-        _sdlversion=`$sdl_config --version | sed 's/[^0-9]//g'`
-        if test "$_sdlversion" -lt 121 ; then
-            sdl_too_old=yes
-        else
-            if test "$cocoa" = "no" ; then
-                sdl=yes
-            fi
-        fi
-
-        # static link with sdl ?
-        if test "$sdl" = "yes" ; then
-            aa="no"
-            `$sdl_config --static-libs 2>/dev/null | grep \\\-laa > /dev/null` && aa="yes"
-            sdl_static_libs=`$sdl_config --static-libs 2>/dev/null`
-            if [ "$aa" = "yes" ] ; then
-                sdl_static_libs="$sdl_static_libs `aalib-config --static-libs`"
-            fi
-
-            if $cc -o $TMPE ${OS_CFLAGS} `$sdl_config --cflags 2> /dev/null` $TMPC $sdl_static_libs > /dev/null 2> /dev/null; then
-                sdl_static=yes
-            fi
-        fi # static link
-    fi # sdl compile test
-else
-    # Make sure to disable cocoa if sdl was set
-    if test "$sdl" = "yes" ; then
-       cocoa="no"
-       audio_drv_list="`echo $audio_drv_list | sed s,coreaudio,,g`"
+  sdl_cflags=`sdl-config --cflags 2> /dev/null`
+  sdl_libs=`sdl-config --libs 2> /dev/null`
+  if $cc $ARCH_CFLAGS -o $TMPE ${OS_CFLAGS} $sdl_cflags $TMPC $sdl_libs > $TMPSDLLOG 2>&1 ; then
+    _sdlversion=`sdl-config --version | sed 's/[^0-9]//g'`
+    if test "$_sdlversion" -lt 121 ; then
+      sdl_too_old=yes
+    else
+      if test "$cocoa" = "no" ; then
+        sdl=yes
+      fi
     fi
-fi # -z $sdl
+
+    # static link with sdl ?
+    if test "$sdl" = "yes" -a "$static" = "yes" ; then
+      sdl_libs=`sdl-config --static-libs 2>/dev/null`
+      if test `sdl-config --static-libs 2>/dev/null | grep \\\-laa > /dev/null` ; then
+         sdl_libs="$sdl_libs `aalib-config --static-libs >2 /dev/null`"
+         sdl_cflags="$sd_cflags `aalib-config --cflags >2 /dev/null`"
+      fi
+      if $cc -o $TMPE ${OS_CFLAGS} $sdl_cflags $TMPC $sdl_libs > /dev/null 2> /dev/null; then
+	:
+      else
+        sdl=no
+      fi
+    fi # static link
+  fi # sdl compile test
+fi
 
 if test "$sdl" = "yes" ; then
-cat > $TMPC <<EOF
+  cat > $TMPC <<EOF
 #include <SDL.h>
 #if defined(SDL_VIDEO_DRIVER_X11)
 #include <X11/XKBlib.h>
@@ -1047,9 +1047,9 @@ cat > $TMPC <<EOF
 #endif
 int main(void) { return 0; }
 EOF
-    if $cc $ARCH_CFLAGS -o $TMPE ${OS_CFLAGS} `$sdl_config --cflags 2> /dev/null` $TMPC `$sdl_config --libs 2> /dev/null` > /dev/null 2>&1 ; then
-	sdl_x11="yes"
-    fi
+  if $cc $ARCH_CFLAGS -o $TMPE ${OS_CFLAGS} $sdl_cflags $TMPC $sdl_libs > /dev/null 2>&1 ; then
+    sdl_libs="$sdl_libs -lX11"
+  fi
 fi
 
 ##########################################
@@ -1194,23 +1194,22 @@ done
 ##########################################
 # BrlAPI probe
 
-if test -z "$brlapi" ; then
-    brlapi=no
-cat > $TMPC << EOF
+if test "$brlapi" = "yes" ; then
+  brlapi=no
+  brlapi_libs="-lbrlapi"
+  cat > $TMPC << EOF
 #include <brlapi.h>
 int main( void ) { return brlapi__openConnection (NULL, NULL, NULL); }
 EOF
-    if $cc ${ARCH_CFLAGS} -o $TMPE ${OS_CFLAGS} $TMPC -lbrlapi > /dev/null 2> /dev/null ; then
-	    brlapi=yes
-    fi # brlapi compile test
-fi # -z $brlapi
+  if $cc ${ARCH_CFLAGS} -o $TMPE ${OS_CFLAGS} $TMPC $brlapi_libs > /dev/null 2> /dev/null ; then
+    brlapi=yes
+  fi
+fi
 
 ##########################################
 # curses probe
 
 if test "$curses" = "yes" ; then
-  curses=no
-  ncurses=no
   cat > $TMPC << EOF
 #include <curses.h>
 #ifdef __OpenBSD__
@@ -1219,10 +1218,11 @@ if test "$curses" = "yes" ; then
 int main(void) { resize_term(0, 0); return curses_version(); }
 EOF
   if $cc $ARCH_CFLAGS -o $TMPE $TMPC -lncurses > /dev/null 2> /dev/null ; then
-    curses=yes
-    ncurses=yes
+    curses_libs="-lncurses"
   elif $cc $ARCH_CFLAGS -o $TMPE $TMPC -lcurses > /dev/null 2> /dev/null ; then
-    curses=yes
+    curses_libs="-lcurses"
+  else
+    curses=no
   fi
 fi # test "$curses"
 
@@ -1573,9 +1573,6 @@ if test "$darwin" = "yes" ; then
     echo "Cocoa support     $cocoa"
 fi
 echo "SDL support       $sdl"
-if test "$sdl" != "no" ; then
-    echo "SDL static link   $sdl_static"
-fi
 echo "curses support    $curses"
 echo "curl support      $curl"
 echo "mingw32 support   $mingw32"
@@ -1616,9 +1613,6 @@ echo "preadv support    $preadv"
 if test $sdl_too_old = "yes"; then
 echo "-> Your SDL version is too old - please upgrade to have SDL support"
 fi
-#if test "$sdl_static" = "no"; then
-#  echo "WARNING: cannot compile statically with SDL - qemu-fast won't have a graphical output"
-#fi
 
 config_host_mak="config-host.mak"
 config_host_h="config-host.h"
@@ -1633,27 +1627,8 @@ printf " '%s'" "$0" "$@" >> $config_host_mak
 echo >> $config_host_mak
 echo "/* Automatically generated by configure - do not modify */" > $config_host_h
 
-echo "prefix=$prefix" >> $config_host_mak
-echo "bindir=\${prefix}$binsuffix" >> $config_host_mak
-echo "mandir=\${prefix}$mansuffix" >> $config_host_mak
-echo "datadir=\${prefix}$datasuffix" >> $config_host_mak
-echo "docdir=\${prefix}$docsuffix" >> $config_host_mak
 echo "#define CONFIG_QEMU_SHAREDIR \"$prefix$datasuffix\"" >> $config_host_h
-echo "MAKE=$make" >> $config_host_mak
-echo "INSTALL=$install" >> $config_host_mak
-echo "INSTALL_DIR=$install -d -m0755 -p" >> $config_host_mak
-echo "INSTALL_DATA=$install -m0644 -p" >> $config_host_mak
-echo "INSTALL_PROG=$install -m0755 -p" >> $config_host_mak
-echo "CC=$cc" >> $config_host_mak
-echo "HOST_CC=$host_cc" >> $config_host_mak
-echo "AR=$ar" >> $config_host_mak
-echo "OBJCOPY=$objcopy" >> $config_host_mak
-echo "LD=$ld" >> $config_host_mak
-echo "CFLAGS=$CFLAGS $OS_CFLAGS $ARCH_CFLAGS $EXTRA_CFLAGS" >> $config_host_mak
-echo "LDFLAGS=$LDFLAGS $OS_LDFLAGS $ARCH_LDFLAGS $EXTRA_LDFLAGS" >> $config_host_mak
-echo "EXESUF=$EXESUF" >> $config_host_mak
-echo "PTHREADLIBS=$PTHREADLIBS" >> $config_host_mak
-echo "CLOCKLIBS=$CLOCKLIBS" >> $config_host_mak
+
 case "$cpu" in
   i386|x86_64|alpha|cris|hppa|ia64|m68k|microblaze|mips|mips64|ppc|ppc64|s390|sparc|sparc64)
     ARCH=$cpu
@@ -1671,34 +1646,30 @@ arch_name=`echo $ARCH | tr '[:lower:]' '[:upper:]'`
 echo "#define HOST_$arch_name 1" >> $config_host_h
 
 if test "$debug_tcg" = "yes" ; then
-  echo "#define DEBUG_TCG 1" >> $config_host_h
+  echo "#define CONFIG_DEBUG_TCG 1" >> $config_host_h
 fi
 if test "$debug" = "yes" ; then
-  echo "#define DEBUG_EXEC 1" >> $config_host_h
-fi
-if test "$sparse" = "yes" ; then
-  echo "CC      := REAL_CC=\"\$(CC)\" cgcc"       >> $config_host_mak
-  echo "HOST_CC := REAL_CC=\"\$(HOST_CC)\" cgcc"  >> $config_host_mak
-  echo "CFLAGS  += -Wbitwise -Wno-transparent-union -Wno-old-initializer -Wno-non-pointer-null" >> $config_host_mak
+  echo "#define CONFIG_DEBUG_EXEC 1" >> $config_host_h
 fi
 if test "$strip_opt" = "yes" ; then
   echo "STRIP_OPT=-s" >> $config_host_mak
 fi
 if test "$bigendian" = "yes" ; then
-  echo "WORDS_BIGENDIAN=yes" >> $config_host_mak
-  echo "#define WORDS_BIGENDIAN 1" >> $config_host_h
+  echo "HOST_WORDS_BIGENDIAN=y" >> $config_host_mak
+  echo "#define HOST_WORDS_BIGENDIAN 1" >> $config_host_h
 fi
 echo "#define HOST_LONG_BITS $hostlongbits" >> $config_host_h
 if test "$mingw32" = "yes" ; then
   echo "CONFIG_WIN32=y" >> $config_host_mak
   echo "#define CONFIG_WIN32 1" >> $config_host_h
 else
+  echo "CONFIG_POSIX=y" >> $config_host_mak
   cat > $TMPC << EOF
 #include <byteswap.h>
 int main(void) { return bswap_32(0); }
 EOF
   if $cc $ARCH_CFLAGS -o $TMPE $TMPC >/dev/null 2> /dev/null ; then
-    echo "#define HAVE_BYTESWAP_H 1" >> $config_host_h
+    echo "#define CONFIG_BYTESWAP_H 1" >> $config_host_h
   fi
   cat > $TMPC << EOF
 #include <sys/endian.h>
@@ -1707,7 +1678,7 @@ EOF
 int main(void) { return bswap32(0); }
 EOF
   if $cc $ARCH_CFLAGS -o $TMPE $TMPC >/dev/null 2> /dev/null ; then
-    echo "#define HAVE_MACHINE_BSWAP_H 1" >> $config_host_h
+    echo "#define CONFIG_MACHINE_BSWAP_H 1" >> $config_host_h
   fi
 fi
 
@@ -1740,11 +1711,12 @@ if test -n "$sparc_cpu"; then
 fi
 if test "$gprof" = "yes" ; then
   echo "TARGET_GPROF=yes" >> $config_host_mak
-  echo "#define HAVE_GPROF 1" >> $config_host_h
+  echo "#define TARGET_GPROF 1" >> $config_host_h
 fi
 if test "$static" = "yes" ; then
   echo "CONFIG_STATIC=y" >> $config_host_mak
   echo "#define CONFIG_STATIC 1" >> $config_host_h
+  LDFLAGS="$LDFLAGS -static"
 fi
 if test $profiler = "yes" ; then
   echo "#define CONFIG_PROFILER 1" >> $config_host_h
@@ -1769,10 +1741,10 @@ for drv in $audio_drv_list; do
     def=CONFIG_`echo $drv | tr '[:lower:]' '[:upper:]'`
     echo "$def=y" >> $config_host_mak
     if test "$drv" = "fmod"; then
-        echo "CONFIG_FMOD_LIB=$fmod_lib" >> $config_host_mak
-        echo "CONFIG_FMOD_INC=$fmod_inc" >> $config_host_mak
+        echo "FMOD_LIBS=$fmod_lib" >> $config_host_mak
+        echo "FMOD_CFLAGS=-I$fmod_inc" >> $config_host_mak
     elif test "$drv" = "oss"; then
-        echo "CONFIG_OSS_LIB=$oss_lib" >> $config_host_mak
+        echo "OSS_LIBS=$oss_lib" >> $config_host_mak
     fi
 done
 echo "" >>$config_host_h
@@ -1782,18 +1754,18 @@ if test "$mixemu" = "yes" ; then
 fi
 if test "$vnc_tls" = "yes" ; then
   echo "CONFIG_VNC_TLS=y" >> $config_host_mak
-  echo "CONFIG_VNC_TLS_CFLAGS=$vnc_tls_cflags" >> $config_host_mak
-  echo "CONFIG_VNC_TLS_LIBS=$vnc_tls_libs" >> $config_host_mak
+  echo "VNC_TLS_CFLAGS=$vnc_tls_cflags" >> $config_host_mak
+  echo "VNC_TLS_LIBS=$vnc_tls_libs" >> $config_host_mak
   echo "#define CONFIG_VNC_TLS 1" >> $config_host_h
 fi
 if test "$vnc_sasl" = "yes" ; then
   echo "CONFIG_VNC_SASL=y" >> $config_host_mak
-  echo "CONFIG_VNC_SASL_CFLAGS=$vnc_sasl_cflags" >> $config_host_mak
-  echo "CONFIG_VNC_SASL_LIBS=$vnc_sasl_libs" >> $config_host_mak
+  echo "VNC_SASL_CFLAGS=$vnc_sasl_cflags" >> $config_host_mak
+  echo "VNC_SASL_LIBS=$vnc_sasl_libs" >> $config_host_mak
   echo "#define CONFIG_VNC_SASL 1" >> $config_host_h
 fi
 if test "$fnmatch" = "yes" ; then
-  echo "#define HAVE_FNMATCH_H 1" >> $config_host_h
+  echo "#define CONFIG_FNMATCH 1" >> $config_host_h
 fi
 qemu_version=`head $source_path/VERSION`
 echo "VERSION=$qemu_version" >>$config_host_mak
@@ -1809,26 +1781,11 @@ echo "TARGET_DIRS=$target_list" >> $config_host_mak
 if [ "$build_docs" = "yes" ] ; then
   echo "BUILD_DOCS=yes" >> $config_host_mak
 fi
-if test "$static" = "yes"; then
-  sdl1=$sdl_static
-else
-  sdl1=$sdl
-fi
-if test "$sdl1" = "yes" ; then
+if test "$sdl" = "yes" ; then
   echo "#define CONFIG_SDL 1" >> $config_host_h
   echo "CONFIG_SDL=y" >> $config_host_mak
-  if test "$target_softmmu" = "no" -o "$static" = "yes"; then
-    echo "SDL_LIBS=$sdl_static_libs" >> $config_host_mak
-  elif test "$sdl_x11" = "yes" ; then
-    echo "SDL_LIBS=`$sdl_config --libs` -lX11" >> $config_host_mak
-  else
-    echo "SDL_LIBS=`$sdl_config --libs`" >> $config_host_mak
-  fi
-  if [ "${aa}" = "yes" ] ; then
-    echo "SDL_CFLAGS=`$sdl_config --cflags` `aalib-config --cflags`" >> $config_host_mak
-  else
-    echo "SDL_CFLAGS=`$sdl_config --cflags`" >> $config_host_mak
-  fi
+  echo "SDL_LIBS=$sdl_libs" >> $config_host_mak
+  echo "SDL_CFLAGS=$sdl_cflags" >> $config_host_mak
 fi
 if test "$cocoa" = "yes" ; then
   echo "#define CONFIG_COCOA 1" >> $config_host_h
@@ -1837,11 +1794,7 @@ fi
 if test "$curses" = "yes" ; then
   echo "#define CONFIG_CURSES 1" >> $config_host_h
   echo "CONFIG_CURSES=y" >> $config_host_mak
-  if test "$ncurses" = "yes" ; then
-    echo "CURSES_LIBS=-lncurses" >> $config_host_mak
-  else
-    echo "CURSES_LIBS=-lcurses" >> $config_host_mak
-  fi
+  echo "CURSES_LIBS=$curses_libs" >> $config_host_mak
 fi
 if test "$atfile" = "yes" ; then
   echo "#define CONFIG_ATFILE 1" >> $config_host_h
@@ -1866,16 +1819,16 @@ fi
 if test "$brlapi" = "yes" ; then
   echo "CONFIG_BRLAPI=y" >> $config_host_mak
   echo "#define CONFIG_BRLAPI 1" >> $config_host_h
-  echo "BRLAPI_LIBS=-lbrlapi" >> $config_host_mak
+  echo "BRLAPI_LIBS=$brlapi_libs" >> $config_host_mak
 fi
 if test "$bluez" = "yes" ; then
   echo "CONFIG_BLUEZ=y" >> $config_host_mak
-  echo "CONFIG_BLUEZ_CFLAGS=$bluez_cflags" >> $config_host_mak
-  echo "CONFIG_BLUEZ_LIBS=$bluez_libs" >> $config_host_mak
+  echo "BLUEZ_CFLAGS=$bluez_cflags" >> $config_host_mak
+  echo "BLUEZ_LIBS=$bluez_libs" >> $config_host_mak
   echo "#define CONFIG_BLUEZ 1" >> $config_host_h
 fi
 if test "$xen" = "yes" ; then
-  echo "XEN_LIBS=-lxenstore -lxenctrl -lxenguest" >> $config_host_mak
+  echo "XEN_LIBS=$xen_libs" >> $config_host_mak
 fi
 if test "$aio" = "yes" ; then
   echo "#define CONFIG_AIO 1" >> $config_host_h
@@ -1889,13 +1842,14 @@ if test "$blobs" = "yes" ; then
   echo "INSTALL_BLOBS=yes" >> $config_host_mak
 fi
 if test "$iovec" = "yes" ; then
-  echo "#define HAVE_IOVEC 1" >> $config_host_h
+  echo "#define CONFIG_IOVEC 1" >> $config_host_h
 fi
 if test "$preadv" = "yes" ; then
-  echo "#define HAVE_PREADV 1" >> $config_host_h
+  echo "#define CONFIG_PREADV 1" >> $config_host_h
 fi
 if test "$fdt" = "yes" ; then
-  echo "#define HAVE_FDT 1" >> $config_host_h
+  echo "CONFIG_FDT=y" >> $config_host_mak
+  echo "#define CONFIG_FDT 1" >> $config_host_h
   echo "FDT_LIBS=-lfdt" >> $config_host_mak
 fi
 if test "$signalfd" = "yes" ; then
@@ -1907,9 +1861,7 @@ fi
 
 # XXX: suppress that
 if [ "$bsd" = "yes" ] ; then
-  echo "#define O_LARGEFILE 0" >> $config_host_h
-  echo "#define MAP_ANONYMOUS MAP_ANON" >> $config_host_h
-  echo "#define HOST_BSD 1" >> $config_host_h
+  echo "#define CONFIG_BSD 1" >> $config_host_h
 fi
 
 echo "#define CONFIG_UNAME_RELEASE \"$uname_release\"" >> $config_host_h
@@ -1958,9 +1910,8 @@ else
     exit 1
 fi
 
-if test "$xen" = "yes" ;
-    then
-    echo "CONFIG_XEN=y" >> $config_host_mak
+if test "$xen" = "yes" ; then
+  echo "CONFIG_XEN=y" >> $config_host_mak
 fi
 
 # this is a temp hack needed for kvm
@@ -1984,6 +1935,32 @@ if test "$cpu" = "i386" -o "$cpu" = "x86_64" ; then
   roms="pc-bios/optionrom"
 fi
 echo "ROMS=$roms" >> $config_host_mak
+
+echo "prefix=$prefix" >> $config_host_mak
+echo "bindir=\${prefix}$binsuffix" >> $config_host_mak
+echo "mandir=\${prefix}$mansuffix" >> $config_host_mak
+echo "datadir=\${prefix}$datasuffix" >> $config_host_mak
+echo "docdir=\${prefix}$docsuffix" >> $config_host_mak
+echo "MAKE=$make" >> $config_host_mak
+echo "INSTALL=$install" >> $config_host_mak
+echo "INSTALL_DIR=$install -d -m0755 -p" >> $config_host_mak
+echo "INSTALL_DATA=$install -m0644 -p" >> $config_host_mak
+echo "INSTALL_PROG=$install -m0755 -p" >> $config_host_mak
+echo "CC=$cc" >> $config_host_mak
+echo "HOST_CC=$host_cc" >> $config_host_mak
+if test "$sparse" = "yes" ; then
+  echo "CC      := REAL_CC=\"\$(CC)\" cgcc"       >> $config_host_mak
+  echo "HOST_CC := REAL_CC=\"\$(HOST_CC)\" cgcc"  >> $config_host_mak
+  echo "CFLAGS  += -Wbitwise -Wno-transparent-union -Wno-old-initializer -Wno-non-pointer-null" >> $config_host_mak
+fi
+echo "AR=$ar" >> $config_host_mak
+echo "OBJCOPY=$objcopy" >> $config_host_mak
+echo "LD=$ld" >> $config_host_mak
+echo "CFLAGS=$CFLAGS $OS_CFLAGS $ARCH_CFLAGS $EXTRA_CFLAGS" >> $config_host_mak
+echo "LDFLAGS=$LDFLAGS $OS_LDFLAGS $ARCH_LDFLAGS $EXTRA_LDFLAGS" >> $config_host_mak
+echo "EXESUF=$EXESUF" >> $config_host_mak
+echo "PTHREADLIBS=$PTHREADLIBS" >> $config_host_mak
+echo "CLOCKLIBS=$CLOCKLIBS" >> $config_host_mak
 
 if test -f ${config_host_h}~ ; then
   if cmp -s $config_host_h ${config_host_h}~ ; then
@@ -2282,7 +2259,13 @@ fi
 
 $source_path/create_config < $config_mak > $config_h
 
-test -f ${config_h}~ && cmp -s $config_h ${config_h}~ && mv ${config_h}~ $config_h
+if test -f ${config_h}~ ; then
+  if cmp -s $config_h ${config_h}~ ; then
+    mv ${config_h}~ $config_h
+  else
+    rm ${config_h}~
+  fi
+fi
 
 done # for target in $targets
 

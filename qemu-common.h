@@ -32,13 +32,15 @@
 #ifndef O_BINARY
 #define O_BINARY 0
 #endif
-
+#ifndef MAP_ANONYMOUS
+#define MAP_ANONYMOUS MAP_ANON
+#endif
 #ifndef ENOMEDIUM
 #define ENOMEDIUM ENODEV
 #endif
 
-#ifndef HAVE_IOVEC
-#define HAVE_IOVEC
+#ifndef CONFIG_IOVEC
+#define CONFIG_IOVEC
 struct iovec {
     void *iov_base;
     size_t iov_len;

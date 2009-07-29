@@ -29,7 +29,7 @@
 #include <sys/time.h>
 #include <zlib.h>
 
-/* Needed early for HOST_BSD etc. */
+/* Needed early for CONFIG_BSD etc. */
 #include "config-host.h"
 /* Needed early to override system queue definitions on BSD */
 #include "sys-queue.h"
@@ -56,7 +56,7 @@
 #include <dirent.h>
 #include <netdb.h>
 #include <sys/select.h>
-#ifdef HOST_BSD
+#ifdef CONFIG_BSD
 #include <sys/stat.h>
 #if defined(__FreeBSD__) || defined(__DragonFly__)
 #include <libutil.h>
@@ -521,7 +521,7 @@ uint64_t muldiv64(uint64_t a, uint32_t b, uint32_t c)
     union {
         uint64_t ll;
         struct {
-#ifdef WORDS_BIGENDIAN
+#ifdef HOST_WORDS_BIGENDIAN
             uint32_t high, low;
 #else
             uint32_t low, high;
