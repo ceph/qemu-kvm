@@ -284,7 +284,6 @@ oss_lib="-lossaudio"
 ;;
 OpenBSD)
 bsd="yes"
-openbsd="yes"
 audio_drv_list="oss"
 audio_possible_drivers="oss sdl esd"
 oss_lib="-lossaudio"
@@ -1683,10 +1682,6 @@ EOF
   fi
 fi
 
-if [ "$openbsd" = "yes" ] ; then
-  echo "#define ENOTSUP 4096" >> $config_host_h
-fi
-
 if test "$darwin" = "yes" ; then
   echo "CONFIG_DARWIN=y" >> $config_host_mak
   echo "#define CONFIG_DARWIN 1" >> $config_host_h
@@ -1702,8 +1697,8 @@ if test "$solaris" = "yes" ; then
   echo "#define CONFIG_SOLARIS 1" >> $config_host_h
   echo "#define CONFIG_SOLARIS_VERSION $solarisrev" >> $config_host_h
   if test "$needs_libsunmath" = "yes" ; then
-    echo "NEEDS_LIBSUNMATH=yes" >> $config_host_mak
-    echo "#define NEEDS_LIBSUNMATH 1" >> $config_host_h
+    echo "CONFIG_NEEDS_LIBSUNMATH=y" >> $config_host_mak
+    echo "#define CONFIG_NEEDS_LIBSUNMATH 1" >> $config_host_h
   fi
 fi
 if test -n "$sparc_cpu"; then
@@ -2242,7 +2237,7 @@ if test "$target_user_only" = "yes" -a "$bflt" = "yes"; then
 fi
 if test "$target_user_only" = "yes" \
         -a "$nptl" = "yes" -a "$target_nptl" = "yes"; then
-  echo "USE_NPTL=y" >> $config_mak
+  echo "CONFIG_USE_NPTL=y" >> $config_mak
 fi
 # 32 bit ELF loader in addition to native 64 bit loader?
 if test "$target_user_only" = "yes" -a "$elfload32" = "yes"; then
