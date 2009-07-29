@@ -1106,6 +1106,8 @@ fi
 ##########################################
 # vde libraries probe
 if test "$vde" = "yes" ; then
+  vde=no
+  vde_libs="-lvdeplug"
   cat > $TMPC << EOF
 #include <libvdeplug.h>
 int main(void)
@@ -1115,11 +1117,9 @@ int main(void)
     return 0;
 }
 EOF
-    if $cc $ARCH_CFLAGS -o $TMPE $TMPC -lvdeplug > /dev/null 2> /dev/null ; then
-        :
-    else
-        vde="no"
-    fi
+  if $cc $ARCH_CFLAGS -o $TMPE $TMPC $vde_libs > /dev/null 2> /dev/null ; then
+    vde=yes
+  fi
 fi
 
 ##########################################
@@ -1353,11 +1353,12 @@ fi
 ##########################################
 # fdt probe
 if test "$fdt" = "yes" ; then
-    fdt=no
-    cat > $TMPC << EOF
+  fdt=no
+  fdt_libs="-lfdt"
+  cat > $TMPC << EOF
 int main(void) { return 0; }
 EOF
-  if $cc $ARCH_CFLAGS -o $TMPE ${OS_CFLAGS} $TMPC -lfdt 2> /dev/null > /dev/null ; then
+  if $cc $ARCH_CFLAGS -o $TMPE ${OS_CFLAGS} $TMPC $fdt_libs 2> /dev/null > /dev/null ; then
     fdt=yes
   fi
 fi
@@ -1728,7 +1729,7 @@ fi
 if test "$vde" = "yes" ; then
   echo "CONFIG_VDE=y" >> $config_host_mak
   echo "#define CONFIG_VDE 1" >> $config_host_h
-  echo "VDE_LIBS=-lvdeplug" >> $config_host_mak
+  echo "VDE_LIBS=$vde_libs" >> $config_host_mak
 fi
 for card in $audio_card_list; do
     def=CONFIG_`echo $card | tr '[:lower:]' '[:upper:]'`
@@ -1828,6 +1829,7 @@ if test "$bluez" = "yes" ; then
   echo "#define CONFIG_BLUEZ 1" >> $config_host_h
 fi
 if test "$xen" = "yes" ; then
+  echo "CONFIG_XEN=y" >> $config_host_mak
   echo "XEN_LIBS=$xen_libs" >> $config_host_mak
 fi
 if test "$aio" = "yes" ; then
@@ -1850,7 +1852,7 @@ fi
 if test "$fdt" = "yes" ; then
   echo "CONFIG_FDT=y" >> $config_host_mak
   echo "#define CONFIG_FDT 1" >> $config_host_h
-  echo "FDT_LIBS=-lfdt" >> $config_host_mak
+  echo "FDT_LIBS=$fdt_libs" >> $config_host_mak
 fi
 if test "$signalfd" = "yes" ; then
   echo "#define CONFIG_signalfd 1" >> $config_host_h
@@ -1908,10 +1910,6 @@ else
     echo "Error: your linker does not support --whole-archive or -z."
     echo "Please report to qemu-devel@nongnu.org"
     exit 1
-fi
-
-if test "$xen" = "yes" ; then
-  echo "CONFIG_XEN=y" >> $config_host_mak
 fi
 
 # this is a temp hack needed for kvm
