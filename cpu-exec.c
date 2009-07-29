@@ -42,7 +42,7 @@
 
 #include "qemu-kvm.h"
 
-#if defined(__sparc__) && !defined(HOST_SOLARIS)
+#if defined(__sparc__) && !defined(CONFIG_SOLARIS)
 // Work around ugly bugs in glibc that mangle global register contents
 #undef env
 #define env cpu_single_env
@@ -263,7 +263,7 @@ int cpu_exec(CPUState *env1)
     /* prepare setjmp context for exception handling */
     for(;;) {
         if (setjmp(env->jmp_env) == 0) {
-#if defined(__sparc__) && !defined(HOST_SOLARIS)
+#if defined(__sparc__) && !defined(CONFIG_SOLARIS)
 #undef env
                     env = cpu_single_env;
 #define env cpu_single_env
@@ -421,7 +421,7 @@ int cpu_exec(CPUState *env1)
                             env->interrupt_request &= ~(CPU_INTERRUPT_HARD | CPU_INTERRUPT_VIRQ);
                             intno = cpu_get_pic_interrupt(env);
                             qemu_log_mask(CPU_LOG_TB_IN_ASM, "Servicing hardware INT=0x%02x\n", intno);
-#if defined(__sparc__) && !defined(HOST_SOLARIS)
+#if defined(__sparc__) && !defined(CONFIG_SOLARIS)
 #undef env
                     env = cpu_single_env;
 #define env cpu_single_env
@@ -651,7 +651,7 @@ int cpu_exec(CPUState *env1)
                 while (env->current_tb) {
                     tc_ptr = tb->tc_ptr;
                 /* execute the generated code */
-#if defined(__sparc__) && !defined(HOST_SOLARIS)
+#if defined(__sparc__) && !defined(CONFIG_SOLARIS)
 #undef env
                     env = cpu_single_env;
 #define env cpu_single_env
@@ -1443,7 +1443,7 @@ int cpu_signal_handler(int host_signum, void *pinfo,
     siginfo_t *info = pinfo;
     int is_write;
     uint32_t insn;
-#if !defined(__arch64__) || defined(HOST_SOLARIS)
+#if !defined(__arch64__) || defined(CONFIG_SOLARIS)
     uint32_t *regs = (uint32_t *)(info + 1);
     void *sigmask = (regs + 20);
     /* XXX: is there a standard glibc define ? */
