@@ -31,6 +31,8 @@
 
 /* Needed early for HOST_BSD etc. */
 #include "config-host.h"
+/* Needed early to override system queue definitions on BSD */
+#include "sys-queue.h"
 
 #ifndef _WIN32
 #include <libgen.h>
@@ -6194,8 +6196,10 @@ int main(int argc, char **argv, char **envp)
     if (loadvm)
         do_loadvm(cur_mon, loadvm);
 
-    if (incoming)
+    if (incoming) {
+        autostart = 0;
         qemu_start_incoming_migration(incoming);
+    }
 
     if (autostart)
         vm_start();
