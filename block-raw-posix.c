@@ -76,7 +76,11 @@
 
 /* OS X does not have O_DSYNC */
 #ifndef O_DSYNC
+#ifdef O_SYNC
 #define O_DSYNC O_SYNC
+#elif defined(O_FSYNC)
+#define O_DSYNC O_FSYNC
+#endif
 #endif
 
 /* Approximate O_DIRECT with O_DSYNC if O_DIRECT isn't available */
@@ -235,7 +239,7 @@ static int raw_pread_aligned(BlockDriverState *bs, int64_t offset,
 
 label__raw_read__success:
 
-    return ret;
+    return  (ret < 0) ? -errno : ret;
 }
 
 /*

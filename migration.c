@@ -213,12 +213,17 @@ void migrate_fd_put_ready(void *opaque)
     dprintf("iterate\n");
     if (qemu_savevm_state_iterate(s->file) == 1) {
         int state;
+        int old_vm_running = vm_running;
+
         dprintf("done iterating\n");
         vm_stop(0);
 
+        qemu_aio_flush();
         bdrv_flush_all();
         if ((qemu_savevm_state_complete(s->file)) < 0) {
-            vm_start();
+            if (old_vm_running) {
+                vm_start();
+            }
             state = MIG_STATE_ERROR;
         } else {
             state = MIG_STATE_COMPLETED;
@@ -283,5 +288,7 @@ void migrate_fd_wait_for_unfreeze(void *opaque)
 int migrate_fd_close(void *opaque)
 {
     FdMigrationState *s = opaque;
+
+    qemu_set_fd_handler2(s->fd, NULL, NULL, NULL, NULL);
     return s->close(s);
 }

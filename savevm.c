@@ -103,31 +103,46 @@ static int announce_self_create(uint8_t *buf,
 
     /* FIXME: should we send a different packet (arp/rarp/ping)? */
 
+    memset(buf, 0, 64);
     memset(buf, 0xff, 6);         /* h_dst */
     memcpy(buf + 6, mac_addr, 6); /* h_src */
     memcpy(buf + 12, &proto, 2);  /* h_proto */
     memcpy(buf + 14, &magic, 4);  /* magic */
 
-    return 18; /* len */
+    return 64; /* len */
 }
 
-void qemu_announce_self(void)
+static void qemu_announce_self_once(void *opaque)
 {
-    int i, j, len;
+    int i, len;
     VLANState *vlan;
     VLANClientState *vc;
     uint8_t buf[256];
+    static int count = SELF_ANNOUNCE_ROUNDS;
+    QEMUTimer *timer = *(QEMUTimer **)opaque;
 
     for (i = 0; i < MAX_NICS; i++) {
         if (!nd_table[i].used)
             continue;
         len = announce_self_create(buf, nd_table[i].macaddr);
         vlan = nd_table[i].vlan;
-        for(vc = vlan->first_client; vc != NULL; vc = vc->next) {
-            for (j=0; j < SELF_ANNOUNCE_ROUNDS; j++)
-                vc->fd_read(vc->opaque, buf, len);
+	for(vc = vlan->first_client; vc != NULL; vc = vc->next) {
+            vc->fd_read(vc->opaque, buf, len);
         }
     }
+    if (count--) {
+	    qemu_mod_timer(timer, qemu_get_clock(rt_clock) + 100);
+    } else {
+	    qemu_del_timer(timer);
+	    qemu_free_timer(timer);
+    }
+}
+
+void qemu_announce_self(void)
+{
+	static QEMUTimer *timer;
+	timer = qemu_new_timer(rt_clock, qemu_announce_self_once, &timer);
+	qemu_announce_self_once(&timer);
 }
 
 /***********************************************************/
@@ -195,7 +210,14 @@ static int popen_put_buffer(void *opaque, const uint8_t *buf, int64_t pos, int s
 static int popen_get_buffer(void *opaque, uint8_t *buf, int64_t pos, int size)
 {
     QEMUFilePopen *s = opaque;
-    return fread(buf, 1, size, s->popen_file);
+    FILE *fp = s->popen_file;
+    int bytes;
+
+    do {
+        clearerr(fp);
+        bytes = fread(buf, 1, size, fp);
+    } while ((bytes == 0) && ferror(fp) && (errno == EINTR));
+    return bytes;
 }
 
 static int popen_close(void *opaque)
@@ -224,7 +246,6 @@ QEMUFile *qemu_popen(FILE *popen_file, const char *mode)
     } else {
         s->file = qemu_fopen_ops(s, popen_put_buffer, NULL, popen_close, NULL);
     }
-    fprintf(stderr, "qemu_popen: returning result of qemu_fopen_ops\n");
     return s->file;
 }
 
@@ -238,6 +259,17 @@ QEMUFile *qemu_popen_cmd(const char *command, const char *mode)
     }
 
     return qemu_popen(popen_file, mode);
+}
+
+int qemu_popen_fd(QEMUFile *f)
+{
+    QEMUFilePopen *p;
+    int fd;
+
+    p = (QEMUFilePopen *)f->opaque;
+    fd = fileno(p->popen_file);
+
+    return fd;
 }
 
 QEMUFile *qemu_fopen_socket(int fd)
