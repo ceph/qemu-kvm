@@ -299,7 +299,7 @@ static void host_cpuid(uint32_t function, uint32_t count, uint32_t *eax,
 
 static int cpu_x86_fill_model_id(char *str)
 {
-    uint32_t eax, ebx, ecx, edx;
+    uint32_t eax = 0, ebx = 0, ecx = 0, edx = 0;
     int i;
 
     for (i = 0; i < 3; i++) {
@@ -360,11 +360,10 @@ static int cpu_x86_find_by_name(x86_def_t *x86_cpu_def, const char *cpu_model)
             break;
         }
     }
-    if (!def) {
-        if (strcmp(name, "host") != 0) {
-            goto error;
-        }
+    if (kvm_enabled() && strcmp(name, "host") == 0) {
         cpu_x86_fill_host(x86_cpu_def);
+    } else if (!def) {
+        goto error;
     } else {
         memcpy(x86_cpu_def, def, sizeof(*def));
     }

@@ -1553,7 +1553,8 @@ void cmos_set_s3_resume(void)
 }
 
 static QEMUMachine pc_machine = {
-    .name = "pc",
+    .name = "pc-0.11",
+    .alias = "pc",
     .desc = "Standard PC",
     .init = pc_init_pci,
     .max_cpus = 255,
