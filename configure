@@ -1818,10 +1818,10 @@ if test "$fdt" = "yes" ; then
   echo "FDT_LIBS=$fdt_libs" >> $config_host_mak
 fi
 if test "$signalfd" = "yes" ; then
-  echo "#define CONFIG_signalfd 1" >> $config_host_h
+  echo "CONFIG_signalfd=y" >> $config_host_mak
 fi
 if test "$eventfd" = "yes" ; then
-  echo "#define CONFIG_eventfd 1" >> $config_host_h
+  echo "CONFIG_eventfd=y" >> $config_host_mak
 fi
 
 # XXX: suppress that
