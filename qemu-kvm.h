@@ -21,7 +21,7 @@
 #include <stdint.h>
 
 #ifndef __user
-#define __user /* temporary, until installed via make headers_install */
+#define __user       /* temporary, until installed via make headers_install */
 #endif
 
 #include <linux/kvm.h>
@@ -52,35 +52,34 @@ extern int kvm_abi;
  */
 
 struct kvm_context {
-	void *opaque;
-	/// is dirty pages logging enabled for all regions or not
-	int dirty_pages_log_all;
-	/// do not create in-kernel irqchip if set
-	int no_irqchip_creation;
-	/// in-kernel irqchip status
-	int irqchip_in_kernel;
-	/// ioctl to use to inject interrupts
-	int irqchip_inject_ioctl;
-	/// do not create in-kernel pit if set
-	int no_pit_creation;
-	/// in-kernel pit status
-	int pit_in_kernel;
-	/// in-kernel coalesced mmio
-	int coalesced_mmio;
+    void *opaque;
+    /// is dirty pages logging enabled for all regions or not
+    int dirty_pages_log_all;
+    /// do not create in-kernel irqchip if set
+    int no_irqchip_creation;
+    /// in-kernel irqchip status
+    int irqchip_in_kernel;
+    /// ioctl to use to inject interrupts
+    int irqchip_inject_ioctl;
+    /// do not create in-kernel pit if set
+    int no_pit_creation;
+    /// in-kernel pit status
+    int pit_in_kernel;
+    /// in-kernel coalesced mmio
+    int coalesced_mmio;
 #ifdef KVM_CAP_IRQ_ROUTING
-	struct kvm_irq_routing *irq_routes;
-	int nr_allocated_irq_routes;
+    struct kvm_irq_routing *irq_routes;
+    int nr_allocated_irq_routes;
 #endif
-	void *used_gsi_bitmap;
-	int max_gsi;
+    void *used_gsi_bitmap;
+    int max_gsi;
 };
 
-struct kvm_vcpu_context
-{
-	int fd;
-	struct kvm_run *run;
-	struct kvm_context *kvm;
-	uint32_t id;
+struct kvm_vcpu_context {
+    int fd;
+    struct kvm_run *run;
+    struct kvm_context *kvm;
+    uint32_t id;
 };
 
 typedef struct kvm_context *kvm_context_t;
@@ -88,12 +87,12 @@ typedef struct kvm_vcpu_context *kvm_vcpu_context_t;
 
 #include "kvm.h"
 int kvm_alloc_kernel_memory(kvm_context_t kvm, unsigned long memory,
-								void **vm_mem);
+                            void **vm_mem);
 int kvm_alloc_userspace_memory(kvm_context_t kvm, unsigned long memory,
-								void **vm_mem);
+                               void **vm_mem);
 
 int kvm_arch_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
-                        void **vm_mem);
+                    void **vm_mem);
 int kvm_arch_run(kvm_vcpu_context_t vcpu);
 
 
@@ -111,7 +110,8 @@ int try_push_interrupts(kvm_context_t kvm);
 struct kvm_msr_list *kvm_get_msr_list(kvm_context_t);
 int kvm_get_msrs(kvm_vcpu_context_t, struct kvm_msr_entry *msrs, int n);
 int kvm_set_msrs(kvm_vcpu_context_t, struct kvm_msr_entry *msrs, int n);
-int kvm_get_mce_cap_supported(kvm_context_t, uint64_t *mce_cap, int *max_banks);
+int kvm_get_mce_cap_supported(kvm_context_t, uint64_t *mce_cap,
+                              int *max_banks);
 int kvm_setup_mce(kvm_vcpu_context_t vcpu, uint64_t *mcg_cap);
 struct kvm_x86_mce;
 int kvm_set_mce(kvm_vcpu_context_t vcpu, struct kvm_x86_mce *mce);
@@ -163,9 +163,8 @@ void kvm_disable_pit_creation(kvm_context_t kvm);
  * kvm_create allocates for physical RAM
  * \return 0 on success
  */
-int kvm_create(kvm_context_t kvm,
-	       unsigned long phys_mem_bytes,
-	       void **phys_mem);
+int kvm_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
+               void **phys_mem);
 int kvm_create_vm(kvm_context_t kvm);
 void kvm_create_irqchip(kvm_context_t kvm);
 
@@ -350,7 +349,8 @@ int kvm_set_mpstate(kvm_vcpu_context_t vcpu, struct kvm_mp_state *mp_state);
  */
 static inline int kvm_reset_mpstate(kvm_vcpu_context_t vcpu)
 {
-    struct kvm_mp_state mp_state = {.mp_state = KVM_MP_STATE_UNINITIALIZED};
+    struct kvm_mp_state mp_state = {.mp_state = KVM_MP_STATE_UNINITIALIZED
+    };
     return kvm_set_mpstate(vcpu, &mp_state);
 }
 #endif
@@ -384,7 +384,7 @@ int kvm_set_guest_debug(kvm_vcpu_context_t, struct kvm_guest_debug *dbg);
  * \return 0 on success, or -errno on error
  */
 int kvm_setup_cpuid(kvm_vcpu_context_t vcpu, int nent,
-		    struct kvm_cpuid_entry *entries);
+                    struct kvm_cpuid_entry *entries);
 
 /*!
  * \brief Setup a vcpu's cpuid instruction emulation
@@ -400,7 +400,7 @@ int kvm_setup_cpuid(kvm_vcpu_context_t vcpu, int nent,
  * \return 0 on success, or -errno on error
  */
 int kvm_setup_cpuid2(kvm_vcpu_context_t vcpu, int nent,
-		     struct kvm_cpuid_entry2 *entries);
+                     struct kvm_cpuid_entry2 *entries);
 
 /*!
  * \brief Setting the number of shadow pages to be allocated to the vm
@@ -416,7 +416,7 @@ int kvm_set_shadow_pages(kvm_context_t kvm, unsigned int nrshadow_pages);
  * \param kvm pointer to kvm_context
  * \param nrshadow_pages number of pages to be allocated
  */
-int kvm_get_shadow_pages(kvm_context_t kvm , unsigned int *nrshadow_pages);
+int kvm_get_shadow_pages(kvm_context_t kvm, unsigned int *nrshadow_pages);
 
 /*!
  * \brief Set up cr8 for next time the vcpu is executed
@@ -473,25 +473,26 @@ void kvm_show_regs(kvm_vcpu_context_t vcpu);
 
 
 void *kvm_create_phys_mem(kvm_context_t, unsigned long phys_start,
-			  unsigned long len, int log, int writable);
+                          unsigned long len, int log, int writable);
 void kvm_destroy_phys_mem(kvm_context_t, unsigned long phys_start,
-			  unsigned long len);
+                          unsigned long len);
 void kvm_unregister_memory_area(kvm_context_t, uint64_t phys_start,
                                 unsigned long len);
 
-int kvm_is_containing_region(kvm_context_t kvm, unsigned long phys_start, unsigned long size);
-int kvm_register_phys_mem(kvm_context_t kvm,
-			unsigned long phys_start, void *userspace_addr,
-			unsigned long len, int log);
+int kvm_is_containing_region(kvm_context_t kvm, unsigned long phys_start,
+                             unsigned long size);
+int kvm_register_phys_mem(kvm_context_t kvm, unsigned long phys_start,
+                          void *userspace_addr, unsigned long len, int log);
 int kvm_get_dirty_pages(kvm_context_t, unsigned long phys_addr, void *buf);
 int kvm_get_dirty_pages_range(kvm_context_t kvm, unsigned long phys_addr,
-			      unsigned long end_addr, void*opaque,
-			      int (*cb)(unsigned long start, unsigned long len,
-					void*bitmap, void *opaque));
-int kvm_register_coalesced_mmio(kvm_context_t kvm,
-				uint64_t addr, uint32_t size);
-int kvm_unregister_coalesced_mmio(kvm_context_t kvm,
-				  uint64_t addr, uint32_t size);
+                              unsigned long end_addr, void *opaque,
+                              int (*cb)(unsigned long start,
+                                        unsigned long len, void *bitmap,
+                                        void *opaque));
+int kvm_register_coalesced_mmio(kvm_context_t kvm, uint64_t addr,
+                                uint32_t size);
+int kvm_unregister_coalesced_mmio(kvm_context_t kvm, uint64_t addr,
+                                  uint32_t size);
 
 /*!
  * \brief Create a memory alias
@@ -500,9 +501,8 @@ int kvm_unregister_coalesced_mmio(kvm_context_t kvm,
  * accesses the alias region, it will behave exactly as if it accessed
  * the target memory.
  */
-int kvm_create_memory_alias(kvm_context_t,
-			    uint64_t phys_start, uint64_t len,
-			    uint64_t target_phys);
+int kvm_create_memory_alias(kvm_context_t, uint64_t phys_start, uint64_t len,
+                            uint64_t target_phys);
 
 /*!
  * \brief Destroy a memory alias
@@ -520,17 +520,16 @@ int kvm_destroy_memory_alias(kvm_context_t, uint64_t phys_start);
  */
 int kvm_get_mem_map(kvm_context_t kvm, unsigned long phys_addr, void *bitmap);
 int kvm_get_mem_map_range(kvm_context_t kvm, unsigned long phys_addr,
-			   unsigned long len, void *buf, void *opaque,
-			   int (*cb)(unsigned long start,unsigned long len,
-				     void* bitmap, void* opaque));
+                          unsigned long len, void *buf, void *opaque,
+                          int (*cb)(unsigned long start,
+                                    unsigned long len, void *bitmap,
+                                    void *opaque));
 int kvm_set_irq_level(kvm_context_t kvm, int irq, int level, int *status);
 
-int kvm_dirty_pages_log_enable_slot(kvm_context_t kvm,
-				    uint64_t phys_start,
-				    uint64_t len);
-int kvm_dirty_pages_log_disable_slot(kvm_context_t kvm,
-				     uint64_t phys_start,
-				     uint64_t len);
+int kvm_dirty_pages_log_enable_slot(kvm_context_t kvm, uint64_t phys_start,
+                                    uint64_t len);
+int kvm_dirty_pages_log_disable_slot(kvm_context_t kvm, uint64_t phys_start,
+                                     uint64_t len);
 /*!
  * \brief Enable dirty-pages-logging for all memory regions
  *
@@ -737,7 +736,7 @@ int kvm_enable_vapic(kvm_vcpu_context_t vcpu, uint64_t vapic);
 #if defined(__s390__)
 int kvm_s390_initial_reset(kvm_context_t kvm, int slot);
 int kvm_s390_interrupt(kvm_context_t kvm, int slot,
-	struct kvm_s390_interrupt *kvmint);
+                       struct kvm_s390_interrupt *kvmint);
 int kvm_s390_set_initial_psw(kvm_context_t kvm, int slot, psw_t psw);
 int kvm_s390_store_status(kvm_context_t kvm, int slot, unsigned long addr);
 #endif
@@ -753,7 +752,7 @@ int kvm_s390_store_status(kvm_context_t kvm, int slot, unsigned long addr);
  * \param assigned_dev Parameters, like bus, devfn number, etc
  */
 int kvm_assign_pci_device(kvm_context_t kvm,
-			  struct kvm_assigned_pci_dev *assigned_dev);
+                          struct kvm_assigned_pci_dev *assigned_dev);
 
 /*!
  * \brief Assign IRQ for an assigned device
@@ -764,8 +763,7 @@ int kvm_assign_pci_device(kvm_context_t kvm,
  * \param kvm Pointer to the current kvm_context
  * \param assigned_irq Parameters, like dev id, host irq, guest irq, etc
  */
-int kvm_assign_irq(kvm_context_t kvm,
-		   struct kvm_assigned_irq *assigned_irq);
+int kvm_assign_irq(kvm_context_t kvm, struct kvm_assigned_irq *assigned_irq);
 
 #ifdef KVM_CAP_ASSIGN_DEV_IRQ
 /*!
@@ -777,8 +775,7 @@ int kvm_assign_irq(kvm_context_t kvm,
  * \param kvm Pointer to the current kvm_context
  * \param assigned_irq Parameters, like dev id, host irq, guest irq, etc
  */
-int kvm_deassign_irq(kvm_context_t kvm,
-                   struct kvm_assigned_irq *assigned_irq);
+int kvm_deassign_irq(kvm_context_t kvm, struct kvm_assigned_irq *assigned_irq);
 #endif
 #endif
 
@@ -802,7 +799,7 @@ int kvm_destroy_memory_region_works(kvm_context_t kvm);
  * \param assigned_dev Parameters, like bus, devfn number, etc
  */
 int kvm_deassign_pci_device(kvm_context_t kvm,
-			    struct kvm_assigned_pci_dev *assigned_dev);
+                            struct kvm_assigned_pci_dev *assigned_dev);
 #endif
 
 /*!
@@ -866,7 +863,7 @@ struct kvm_irq_routing_entry;
  * \param kvm Pointer to the current kvm_context
  */
 int kvm_add_routing_entry(kvm_context_t kvm,
-                          struct kvm_irq_routing_entry* entry);
+                          struct kvm_irq_routing_entry *entry);
 
 /*!
  * \brief Removes a routing from the temporary irq routing table
@@ -877,7 +874,7 @@ int kvm_add_routing_entry(kvm_context_t kvm,
  * \param kvm Pointer to the current kvm_context
  */
 int kvm_del_routing_entry(kvm_context_t kvm,
-		          struct kvm_irq_routing_entry* entry);
+                          struct kvm_irq_routing_entry *entry);
 
 /*!
  * \brief Updates a routing in the temporary irq routing table
@@ -889,9 +886,8 @@ int kvm_del_routing_entry(kvm_context_t kvm,
  * \param kvm Pointer to the current kvm_context
  */
 int kvm_update_routing_entry(kvm_context_t kvm,
-                             struct kvm_irq_routing_entry* entry,
-                             struct kvm_irq_routing_entry* newentry
-);
+                             struct kvm_irq_routing_entry *entry,
+                             struct kvm_irq_routing_entry *newentry);
 
 /*!
  * \brief Commit the temporary irq routing table
@@ -927,29 +923,36 @@ int kvm_irqfd(kvm_context_t kvm, int gsi, int flags);
 
 #ifdef KVM_CAP_DEVICE_MSIX
 int kvm_assign_set_msix_nr(kvm_context_t kvm,
-			   struct kvm_assigned_msix_nr *msix_nr);
+                           struct kvm_assigned_msix_nr *msix_nr);
 int kvm_assign_set_msix_entry(kvm_context_t kvm,
                               struct kvm_assigned_msix_entry *entry);
 #endif
 
 uint32_t kvm_get_supported_cpuid(kvm_context_t kvm, uint32_t function, int reg);
 
-#else /* !CONFIG_KVM */
+#else                           /* !CONFIG_KVM */
 
 typedef struct kvm_context *kvm_context_t;
 typedef struct kvm_vcpu_context *kvm_vcpu_context_t;
 
-struct kvm_pit_state { };
+struct kvm_pit_state {
+};
 
-static inline int kvm_init(int smp_cpus) { return 0; }
-static inline void kvm_inject_x86_mce(
-    CPUState *cenv, int bank,uint64_t status,
-    uint64_t mcg_status, uint64_t addr, uint64_t misc) { }
+static inline int kvm_init(int smp_cpus)
+{
+    return 0;
+}
+
+static inline void kvm_inject_x86_mce(CPUState *cenv, int bank,
+                                      uint64_t status, uint64_t mcg_status,
+                                      uint64_t addr, uint64_t misc)
+{
+}
 
 
 extern int kvm_allowed;
 
-#endif /* !CONFIG_KVM */
+#endif                          /* !CONFIG_KVM */
 
 
 int kvm_main_loop(void);
@@ -961,11 +964,11 @@ void kvm_save_registers(CPUState *env);
 void kvm_load_mpstate(CPUState *env);
 void kvm_save_mpstate(CPUState *env);
 int kvm_cpu_exec(CPUState *env);
-int kvm_insert_breakpoint(CPUState *current_env, target_ulong addr,
+int kvm_insert_breakpoint(CPUState * current_env, target_ulong addr,
                           target_ulong len, int type);
-int kvm_remove_breakpoint(CPUState *current_env, target_ulong addr,
+int kvm_remove_breakpoint(CPUState * current_env, target_ulong addr,
                           target_ulong len, int type);
-void kvm_remove_all_breakpoints(CPUState *current_env);
+void kvm_remove_all_breakpoints(CPUState * current_env);
 int kvm_update_guest_debug(CPUState *env, unsigned long reinject_trap);
 int kvm_qemu_init_env(CPUState *env);
 int kvm_qemu_check_extension(int ext);
@@ -987,16 +990,15 @@ void kvm_update_after_sipi(CPUState *env);
 void kvm_update_interrupt_request(CPUState *env);
 void kvm_set_phys_mem(target_phys_addr_t start_addr, ram_addr_t size,
                       ram_addr_t phys_offset);
-void *kvm_cpu_create_phys_mem(target_phys_addr_t start_addr,
-			      unsigned long size, int log, int writable);
+void *kvm_cpu_create_phys_mem(target_phys_addr_t start_addr, unsigned long size,
+                              int log, int writable);
 
 void kvm_cpu_destroy_phys_mem(target_phys_addr_t start_addr,
-			      unsigned long size);
+                              unsigned long size);
 void kvm_qemu_log_memory(target_phys_addr_t start, target_phys_addr_t size,
                          int log);
 int kvm_setup_guest_memory(void *area, unsigned long size);
-int kvm_qemu_create_memory_alias(uint64_t phys_start,
-                                 uint64_t len,
+int kvm_qemu_create_memory_alias(uint64_t phys_start, uint64_t len,
                                  uint64_t target_phys);
 int kvm_qemu_destroy_memory_alias(uint64_t phys_start);
 
@@ -1031,15 +1033,16 @@ TAILQ_HEAD(kvm_sw_breakpoint_head, kvm_sw_breakpoint);
 
 int kvm_arch_debug(struct kvm_debug_exit_arch *arch_info);
 int kvm_sw_breakpoints_active(CPUState *env);
-struct kvm_sw_breakpoint *kvm_find_sw_breakpoint(CPUState *env, target_ulong pc);
-int kvm_arch_insert_sw_breakpoint(CPUState *current_env,
+struct kvm_sw_breakpoint *kvm_find_sw_breakpoint(CPUState *env,
+                                                 target_ulong pc);
+int kvm_arch_insert_sw_breakpoint(CPUState * current_env,
                                   struct kvm_sw_breakpoint *bp);
-int kvm_arch_remove_sw_breakpoint(CPUState *current_env,
+int kvm_arch_remove_sw_breakpoint(CPUState * current_env,
                                   struct kvm_sw_breakpoint *bp);
-int kvm_arch_insert_hw_breakpoint(target_ulong addr,
-				  target_ulong len, int type);
-int kvm_arch_remove_hw_breakpoint(target_ulong addr,
-				  target_ulong len, int type);
+int kvm_arch_insert_hw_breakpoint(target_ulong addr, target_ulong len,
+                                  int type);
+int kvm_arch_remove_hw_breakpoint(target_ulong addr, target_ulong len,
+                                  int type);
 void kvm_arch_remove_all_hw_breakpoints(void);
 void kvm_arch_update_guest_debug(CPUState *env, struct kvm_guest_debug *dbg);
 
@@ -1059,8 +1062,8 @@ int kvm_uncoalesce_mmio_region(target_phys_addr_t start, ram_addr_t size);
 
 int kvm_arch_init_irq_routing(void);
 
-int kvm_mmio_read(void *opaque, uint64_t addr, uint8_t *data, int len);
-int kvm_mmio_write(void *opaque, uint64_t addr, uint8_t *data, int len);
+int kvm_mmio_read(void *opaque, uint64_t addr, uint8_t * data, int len);
+int kvm_mmio_write(void *opaque, uint64_t addr, uint8_t * data, int len);
 
 #ifdef USE_KVM_DEVICE_ASSIGNMENT
 struct ioperm_data;
@@ -1093,8 +1096,8 @@ struct ioperm_data {
 
 void qemu_kvm_cpu_stop(CPUState *env);
 int kvm_arch_halt(void *opaque, kvm_vcpu_context_t vcpu);
-int handle_tpr_access(void *opaque, kvm_vcpu_context_t vcpu,
-			     uint64_t rip, int is_write);
+int handle_tpr_access(void *opaque, kvm_vcpu_context_t vcpu, uint64_t rip,
+                      int is_write);
 int kvm_has_sync_mmu(void);
 
 #define kvm_enabled() (kvm_allowed)
@@ -1119,8 +1122,13 @@ void kvm_load_tsc(CPUState *env);
 #define kvm_load_registers(env) do {} while(0)
 #define kvm_save_registers(env) do {} while(0)
 #define qemu_kvm_cpu_stop(env) do {} while(0)
-static inline void kvm_init_vcpu(CPUState *env) { }
-static inline void kvm_load_tsc(CPUState *env) {}
+static inline void kvm_init_vcpu(CPUState *env)
+{
+}
+
+static inline void kvm_load_tsc(CPUState *env)
+{
+}
 #endif
 
 void kvm_mutex_unlock(void);
@@ -1129,22 +1137,26 @@ void kvm_mutex_lock(void);
 static inline void qemu_mutex_unlock_iothread(void)
 {
     if (kvm_enabled())
-	kvm_mutex_unlock();
+        kvm_mutex_unlock();
 }
 
 static inline void qemu_mutex_lock_iothread(void)
 {
     if (kvm_enabled())
-	kvm_mutex_lock();
+        kvm_mutex_lock();
 }
 
-int kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr, target_phys_addr_t end_addr);
+int kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr,
+                                   target_phys_addr_t end_addr);
 
 int kvm_log_start(target_phys_addr_t phys_addr, target_phys_addr_t len);
 int kvm_log_stop(target_phys_addr_t phys_addr, target_phys_addr_t len);
 
 
-static inline int kvm_sync_vcpus(void) { return 0; }
+static inline int kvm_sync_vcpus(void)
+{
+    return 0;
+}
 
 static inline void kvm_arch_get_registers(CPUState *env)
 {
@@ -1179,8 +1191,7 @@ static inline int kvm_set_migration_log(int enable)
 
 #ifdef CONFIG_KVM
 
-typedef struct KVMSlot
-{
+typedef struct KVMSlot {
     target_phys_addr_t start_addr;
     ram_addr_t memory_size;
     ram_addr_t phys_offset;
@@ -1190,8 +1201,7 @@ typedef struct KVMSlot
 
 typedef struct kvm_dirty_log KVMDirtyLog;
 
-typedef struct KVMState
-{
+typedef struct KVMState {
     KVMSlot slots[32];
     int fd;
     int vmfd;
