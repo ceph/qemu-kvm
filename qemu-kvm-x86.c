@@ -73,7 +73,7 @@ static int kvm_init_tss(kvm_context_t kvm)
 	return 0;
 }
 
-static int kvm_set_identity_map_addr(kvm_context_t kvm, unsigned long addr)
+static int kvm_set_identity_map_addr(kvm_context_t kvm, uint64_t addr)
 {
 #ifdef KVM_CAP_SET_IDENTITY_MAP_ADDR
 	int r;
