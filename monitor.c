@@ -1906,6 +1906,8 @@ static const mon_cmd_t info_cmds[] = {
       "", "show balloon information" },
     { "qtree", "", do_info_qtree,
       "", "show device tree" },
+    { "qdrv", "", do_info_qdrv,
+      "", "show qdev driver list" },
     { NULL, NULL, },
 };
 
@@ -2294,7 +2296,7 @@ static int get_monitor_def(target_long *pval, const char *name)
 
 static void next(void)
 {
-    if (pch != '\0') {
+    if (*pch != '\0') {
         pch++;
         while (qemu_isspace(*pch))
             pch++;
