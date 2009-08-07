@@ -1521,6 +1521,9 @@ int tap_has_vnet_hdr(void *opaque)
     VLANClientState *vc = opaque;
     TAPState *s = vc->opaque;
 
+    if (vc->receive != tap_receive)
+        return 0;
+
     return s ? s->has_vnet_hdr : 0;
 }
 
@@ -1528,6 +1531,9 @@ void tap_using_vnet_hdr(void *opaque, int using_vnet_hdr)
 {
     VLANClientState *vc = opaque;
     TAPState *s = vc->opaque;
+
+    if (vc->receive != tap_receive)
+        return;
 
     if (!s || !s->has_vnet_hdr)
         return;
