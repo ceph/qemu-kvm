@@ -2005,7 +2005,7 @@ int kvm_main_loop(void)
             } else
                 break;
         } else if (qemu_powerdown_requested())
-            qemu_system_powerdown();
+            qemu_irq_raise(qemu_system_powerdown);
         else if (qemu_reset_requested())
             qemu_kvm_system_reset();
         else if (kvm_debug_cpu_requested) {
