@@ -166,7 +166,7 @@ kvm_version() {
     if test -f "$fname"; then
         cat "$fname"
     else
-        echo "kvm-devel"
+        echo "qemu-kvm-devel"
     fi
 }
 
