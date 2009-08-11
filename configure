@@ -566,38 +566,6 @@ for opt do
   esac
 done
 
-# default flags for all hosts
-CFLAGS="$CFLAGS -g -fno-strict-aliasing"
-if test "$debug" = "no" ; then
-  CFLAGS="$CFLAGS -O2"
-fi
-CFLAGS="$CFLAGS -Wall -Wundef -Wendif-labels -Wwrite-strings -Wmissing-prototypes -Wstrict-prototypes -Wredundant-decls"
-LDFLAGS="$LDFLAGS -g"
-
-# Consult white-list to determine whether to enable werror
-# by default.  Only enable by default for git builds
-if test -z "$werror" ; then
-    z_version=`cut -f3 -d. $source_path/VERSION`
-    if test "$z_version" = "50" -a \
-        "$linux" = "yes" ; then
-        werror="yes"
-    else
-        werror="no"
-    fi
-    # disable default werror for kvm
-    werror="no"
-fi
-
-if test "$werror" = "yes" ; then
-    CFLAGS="$CFLAGS -Werror"
-fi
-
-if test "$solaris" = "no" ; then
-    if ld --version 2>/dev/null | grep "GNU ld" >/dev/null 2>/dev/null ; then
-        LDFLAGS="$LDFLAGS -Wl,--warn-common"
-    fi
-fi
-
 #
 # If cpu ~= sparc and  sparc_cpu hasn't been defined, plug in the right
 # ARCH_CFLAGS/ARCH_LDFLAGS (assume sparc_v8plus for 32-bit and sparc_v9 for 64-bit)
@@ -1497,23 +1465,39 @@ if test "$build_docs" = "yes" -a \( ! -x "`which texi2html 2>/dev/null`" -o ! -x
   build_docs="no"
 fi
 
+# Search for bsawp_32 function
+byteswap_h=no
+cat > $TMPC << EOF
+#include <byteswap.h>
+int main(void) { return bswap_32(0); }
+EOF
+if $cc $ARCH_CFLAGS -o $TMPE $TMPC >/dev/null 2> /dev/null ; then
+  byteswap_h=yes
+fi
+
+# Search for bsawp_32 function
+bswap_h=no
+cat > $TMPC << EOF
+#include <sys/endian.h>
+#include <sys/types.h>
+#include <machine/bswap.h>
+int main(void) { return bswap32(0); }
+EOF
+if $cc $ARCH_CFLAGS -o $TMPE $TMPC >/dev/null 2> /dev/null ; then
+  bswap_h=yes
+fi
+
 ##########################################
 # Do we need librt
-CLOCKLIBS=""
 cat > $TMPC <<EOF
 #include <signal.h>
 #include <time.h>
 int main(void) { clockid_t id; return clock_gettime(id, NULL); }
 EOF
 
-rt=no
 if $cc $ARCH_CFLAGS -o $TMPE $TMPC > /dev/null 2> /dev/null ; then
-  :
+  CLOCKLIBS=""
 elif $cc $ARCH_CFLAGS -o $TMPE $TMPC -lrt > /dev/null 2> /dev/null ; then
-  rt=yes
-fi
-
-if test "$rt" = "yes" ; then
   CLOCKLIBS="-lrt"
 fi
 
@@ -1546,6 +1530,41 @@ else
     echo "Error: your linker does not support --whole-archive or -z."
     echo "Please report to qemu-devel@nongnu.org"
     exit 1
+fi
+
+# End of CC checks
+# After here, no more $cc or $ld runs
+
+# default flags for all hosts
+CFLAGS="$CFLAGS -g -fno-strict-aliasing"
+if test "$debug" = "no" ; then
+  CFLAGS="$CFLAGS -O2"
+fi
+CFLAGS="$CFLAGS -Wall -Wundef -Wendif-labels -Wwrite-strings -Wmissing-prototypes -Wstrict-prototypes -Wredundant-decls"
+LDFLAGS="$LDFLAGS -g"
+
+# Consult white-list to determine whether to enable werror
+# by default.  Only enable by default for git builds
+if test -z "$werror" ; then
+    z_version=`cut -f3 -d. $source_path/VERSION`
+    if test "$z_version" = "50" -a \
+        "$linux" = "yes" ; then
+        werror="yes"
+    else
+        werror="no"
+    fi
+    # disable default werror for kvm
+    werror="no"
+fi
+
+if test "$werror" = "yes" ; then
+    CFLAGS="$CFLAGS -Werror"
+fi
+
+if test "$solaris" = "no" ; then
+    if $ld --version 2>/dev/null | grep "GNU ld" >/dev/null 2>/dev/null ; then
+        LDFLAGS="$LDFLAGS -Wl,--warn-common"
+    fi
 fi
 
 if test "$mingw32" = "yes" ; then
@@ -1693,22 +1712,6 @@ if test "$mingw32" = "yes" ; then
   echo "CONFIG_WIN32=y" >> $config_host_mak
 else
   echo "CONFIG_POSIX=y" >> $config_host_mak
-  cat > $TMPC << EOF
-#include <byteswap.h>
-int main(void) { return bswap_32(0); }
-EOF
-  if $cc $ARCH_CFLAGS -o $TMPE $TMPC >/dev/null 2> /dev/null ; then
-    echo "CONFIG_BYTESWAP_H=y" >> $config_host_mak
-  fi
-  cat > $TMPC << EOF
-#include <sys/endian.h>
-#include <sys/types.h>
-#include <machine/bswap.h>
-int main(void) { return bswap32(0); }
-EOF
-  if $cc $ARCH_CFLAGS -o $TMPE $TMPC >/dev/null 2> /dev/null ; then
-    echo "CONFIG_MACHINE_BSWAP_H=y" >> $config_host_mak
-  fi
 fi
 
 if test "$darwin" = "yes" ; then
@@ -1814,6 +1817,12 @@ if test "$splice" = "yes" ; then
 fi
 if test "$inotify" = "yes" ; then
   echo "CONFIG_INOTIFY=y" >> $config_host_mak
+fi
+if test "$byteswap_h" = "yes" ; then
+  echo "CONFIG_BYTESWAP_H=y" >> $config_host_mak
+fi
+if test "$bswap_h" = "yes" ; then
+  echo "CONFIG_MACHINE_BSWAP_H=y" >> $config_host_mak
 fi
 if test "$curl" = "yes" ; then
   echo "CONFIG_CURL=y" >> $config_host_mak
