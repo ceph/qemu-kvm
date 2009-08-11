@@ -1842,7 +1842,8 @@ static void vga_update_display(void *opaque)
     if (ds_get_bits_per_pixel(s->ds) == 0) {
         /* nothing to do */
     } else {
-        full_update = 0;
+        full_update = s->full_update;
+        s->full_update = 0;
         if (!(s->ar_index & 0x20)) {
             graphic_mode = GMODE_BLANK;
         } else {
@@ -1875,8 +1876,7 @@ static void vga_invalidate_display(void *opaque)
 {
     VGAState *s = (VGAState *)opaque;
 
-    s->last_width = -1;
-    s->last_height = -1;
+    s->full_update = 1;
 }
 
 void vga_reset(void *opaque)
@@ -2576,16 +2576,9 @@ static PCIDeviceInfo vga_info = {
     .init         = pci_vga_initfn,
     .config_write = pci_vga_write_config,
     .qdev.props   = (Property[]) {
-        {
-            .name   = "bios-offset",
-            .info   = &qdev_prop_hex32,
-            .offset = offsetof(PCIVGAState, vga_state.bios_offset),
-        },{
-            .name   = "bios-size",
-            .info   = &qdev_prop_hex32,
-            .offset = offsetof(PCIVGAState, vga_state.bios_size),
-        },
-        {/* end of list */}
+        DEFINE_PROP_HEX32("bios-offset", PCIVGAState, vga_state.bios_offset, 0),
+        DEFINE_PROP_HEX32("bios-size",   PCIVGAState, vga_state.bios_size,   0),
+        DEFINE_PROP_END_OF_LIST(),
     }
 };
 
