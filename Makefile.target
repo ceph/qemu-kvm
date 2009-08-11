@@ -28,15 +28,6 @@ ifeq ($(subst ppc64,ppc,$(ARCH))$(TARGET_BASE_ARCH),ppcppc)
 translate.o: QEMU_CFLAGS := $(QEMU_CFLAGS) $(call cc-option, $(QEMU_CFLAGS), -fno-unit-at-a-time,)
 endif
 
-ifeq ($(ARCH),alpha)
-# Ensure there's only a single GP
-QEMU_CFLAGS+=-msmall-data
-endif
-
-ifeq ($(ARCH),ia64)
-QEMU_CFLAGS+=-mno-sdata
-endif
-
 LIBS+=-lm
 ifdef CONFIG_SOLARIS
 ifdef CONFIG_NEEDS_LIBSUNMATH
@@ -64,17 +55,9 @@ else
 libobj-y += translate-all.o translate.o 
 endif
 libobj-$(CONFIG_KQEMU) += kqemu.o
-# TCG code generator
 ifneq ($(NO_CPU_EMULATION), 1)
 libobj-y += tcg/tcg.o tcg/tcg-runtime.o
-QEMU_CFLAGS+=-I$(SRC_PATH)/tcg -I$(SRC_PATH)/tcg/$(ARCH)
 endif
-ifeq ($(ARCH),sparc64)
-QEMU_CFLAGS+=-I$(SRC_PATH)/tcg/sparc
-endif
-
-QEMU_CFLAGS+=-I$(SRC_PATH)/fpu
-
 libobj-$(CONFIG_SOFTFLOAT) += fpu/softfloat.o
 libobj-$(CONFIG_NOSOFTFLOAT) += fpu/softfloat-native.o
 libobj-y += op_helper.o helper.o
@@ -183,12 +166,6 @@ ifdef CONFIG_LINUX_USER
 
 VPATH+=:$(SRC_PATH)/linux-user:$(SRC_PATH)/linux-user/$(TARGET_ABI_DIR)
 QEMU_CFLAGS+=-I$(SRC_PATH)/linux-user -I$(SRC_PATH)/linux-user/$(TARGET_ABI_DIR)
-
-# profiling code
-ifdef TARGET_GPROF
-LDFLAGS+=-p
-QEMU_CFLAGS+=-p
-endif
 
 obj-y = main.o syscall.o strace.o mmap.o signal.o path.o thunk.o \
       elfload.o linuxload.o uaccess.o envlist.o gdbstub.o gdbstub-xml.o \
@@ -430,13 +407,8 @@ ifdef CONFIG_SLIRP
 QEMU_CFLAGS+=-I$(SRC_PATH)/slirp
 endif
 
-ifeq ($(ARCH),ia64)
-LDFLAGS+=-Wl,-G0 -Wl,-T,$(SRC_PATH)/ia64.ld
-endif
-
 # profiling code
 ifdef TARGET_GPROF
-LDFLAGS+=-p
 main.o vl.o: QEMU_CFLAGS+=-p
 endif
 ifeq ($(TARGET_ARCH), ia64)
