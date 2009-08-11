@@ -109,9 +109,7 @@ endif
 ifeq ($(TARGET_BASE_ARCH), cris)
 libobj-y += cris-dis.o
 
-ifndef CONFIG_USER_ONLY
-libobj-y += mmu.o
-endif
+libobj-$(CONFIG_SOFTMMU) += mmu.o
 endif
 
 
@@ -132,9 +130,7 @@ libobj-y += ppc-dis.o
 endif
 ifeq ($(findstring microblaze, $(TARGET_BASE_ARCH) $(ARCH)),microblaze)
 libobj-y += microblaze-dis.o
-ifndef CONFIG_USER_ONLY
-libobj-y += mmu.o
-endif
+libobj-$(CONFIG_SOFTMMU) += mmu.o
 endif
 ifeq ($(findstring mips, $(TARGET_BASE_ARCH) $(ARCH)),mips)
 libobj-y += mips-dis.o
@@ -200,10 +196,6 @@ obj-y = main.o syscall.o strace.o mmap.o signal.o path.o thunk.o \
       elfload.o linuxload.o uaccess.o envlist.o gdbstub.o gdbstub-xml.o \
       ioport-user.o
 obj-$(TARGET_HAS_BFLT) += flatload.o
-
-ifdef TARGET_HAS_ELFLOAD32
-elfload32.o: elfload.c
-endif
 obj-$(TARGET_HAS_ELFLOAD32) += elfload32.o
 
 ifeq ($(TARGET_ARCH), i386)
@@ -258,7 +250,7 @@ endif #CONFIG_BSD_USER
 
 #########################################################
 # System emulator target
-ifndef CONFIG_USER_ONLY
+ifdef CONFIG_SOFTMMU
 
 obj-y = vl.o osdep.o monitor.o pci.o loader.o isa_mmio.o machine.o \
         gdbstub.o gdbstub-xml.o msix.o ioport.o qemu-config.o
@@ -268,24 +260,6 @@ obj-y += virtio-blk.o virtio-balloon.o virtio-net.o virtio-console.o
 obj-$(CONFIG_KVM) += kvm.o kvm-all.o
 
 LIBS+=-lz
-ifdef CONFIG_ALSA
-LIBS += -lasound
-endif
-ifdef CONFIG_ESD
-LIBS += -lesd
-endif
-ifdef CONFIG_PA
-LIBS += -lpulse-simple
-endif
-ifdef CONFIG_DSOUND
-LIBS += -lole32 -ldxguid
-endif
-ifdef CONFIG_FMOD
-LIBS += $(FMOD_LIBS)
-endif
-ifdef CONFIG_OSS
-LIBS += $(OSS_LIBS)
-endif
 
 sound-obj-y =
 sound-obj-$(CONFIG_SB16) += sb16.o
@@ -295,29 +269,13 @@ sound-obj-$(CONFIG_ADLIB) += fmopl.o adlib.o
 sound-obj-$(CONFIG_GUS) += gus.o gusemu_hal.o gusemu_mixer.o
 sound-obj-$(CONFIG_CS4231A) += cs4231a.o
 
-ifdef CONFIG_ADLIB
 adlib.o fmopl.o: QEMU_CFLAGS := ${QEMU_CFLAGS} -DBUILD_Y8950=0
-endif
 
-ifdef CONFIG_VNC_TLS
 QEMU_CFLAGS += $(VNC_TLS_CFLAGS)
-LIBS += $(VNC_TLS_LIBS)
-endif
-
-ifdef CONFIG_VNC_SASL
 QEMU_CFLAGS += $(VNC_SASL_CFLAGS)
-LIBS += $(VNC_SASL_LIBS)
-endif
-
-ifdef CONFIG_BLUEZ
-LIBS += $(BLUEZ_LIBS)
-endif
 
 # xen backend driver support
 obj-$(CONFIG_XEN) += xen_machine_pv.o xen_domainbuild.o
-ifeq ($(CONFIG_XEN), y)
-  LIBS += $(XEN_LIBS)
-endif
 
 # USB layer
 obj-y += usb-ohci.o
@@ -386,7 +344,6 @@ QEMU_CFLAGS += -DHAS_AUDIO -DHAS_AUDIO_CHOICE
 endif
 
 obj-ppc-$(CONFIG_FDT) += device_tree.o
-LIBS+= $(FDT_LIBS)
 
 obj-mips-y = mips_r4k.o mips_jazz.o mips_malta.o mips_mipssim.o
 obj-mips-y += mips_timer.o mips_int.o dma.o vga.o serial.o i8254.o i8259.o rc4030.o
@@ -412,7 +369,6 @@ obj-microblaze-y += xilinx_ethlite.o
 obj-microblaze-y += pflash_cfi02.o
 
 obj-microblaze-$(CONFIG_FDT) += device_tree.o
-LIBS+= $(FDT_LIBS)
 
 # Boards
 obj-cris-y = cris_pic_cpu.o etraxfs.o axis_dev88.o
@@ -471,41 +427,19 @@ obj-m68k-y += m68k-semi.o dummy_m68k.o
 
 ifdef CONFIG_COCOA
 COCOA_LIBS=-F/System/Library/Frameworks -framework Cocoa -framework IOKit
-ifdef CONFIG_COREAUDIO
-COCOA_LIBS+=-framework CoreAudio
-endif
 endif
 ifdef CONFIG_SLIRP
 QEMU_CFLAGS+=-I$(SRC_PATH)/slirp
-endif
-
-# specific flags are needed for non soft mmu emulator
-ifndef CONFIG_DARWIN
-ifndef CONFIG_WIN32
-ifndef CONFIG_SOLARIS
-ifndef CONFIG_AIX
-LIBS+=-lutil
-endif
-endif
-endif
-endif
-ifdef TARGET_GPROF
-vl.o: QEMU_CFLAGS+=-p
-LDFLAGS+=-p
 endif
 
 ifeq ($(ARCH),ia64)
 LDFLAGS+=-Wl,-G0 -Wl,-T,$(SRC_PATH)/ia64.ld
 endif
 
-ifdef CONFIG_WIN32
-SDL_LIBS := $(filter-out -mwindows, $(SDL_LIBS)) -mconsole
-endif
-
 # profiling code
 ifdef TARGET_GPROF
 LDFLAGS+=-p
-main.o: QEMU_CFLAGS+=-p
+main.o vl.o: QEMU_CFLAGS+=-p
 endif
 ifeq ($(TARGET_ARCH), ia64)
 firmware.o: firmware.c
@@ -518,13 +452,13 @@ vl.o: qemu-options.h
 
 monitor.o: qemu-monitor.h
 
-LIBS += $(SDL_LIBS) $(COCOA_LIBS) $(CURSES_LIBS) $(BRLAPI_LIBS) $(VDE_LIBS) $(CURL_LIBS)
+LIBS += $(COCOA_LIBS) $(VDE_LIBS) $(CURL_LIBS)
 ARLIBS=../libqemu_common.a libqemu.a $(HWLIB)
 
 $(QEMU_PROG): ARLIBS += $(DEPLIBS)
 $(QEMU_PROG): $(DEPLIBS)
 
-endif # !CONFIG_USER_ONLY
+endif # CONFIG_SOFTMMU
 
 $(QEMU_PROG): $(obj-y) $(obj-$(TARGET_BASE_ARCH)-y) $(ARLIBS)
 	$(call LINK,$(obj-y) $(obj-$(TARGET_BASE_ARCH)-y))

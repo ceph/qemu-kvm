@@ -45,6 +45,7 @@ install="install"
 objcopy="objcopy"
 ld="ld"
 helper_cflags=""
+libs_softmmu=""
 
 # parse CC options first
 for opt do
@@ -934,7 +935,7 @@ if test "$xen" = "yes" ; then
 int main(void) { xs_daemon_open(); xc_interface_open(); return 0; }
 EOF
   if compile_prog "" "$xen_libs" ; then
-    :
+    libs_softmmu="$xen_libs $libs_softmmu"
   else
     xen="no"
   fi
@@ -993,6 +994,10 @@ EOF
   if compile_prog "$sdl_cflags" "$sdl_libs" ; then
     sdl_libs="$sdl_libs -lX11"
   fi
+  if test "$mingw32" = "yes" ; then
+    sdl_libs="`echo $sdl_libs | sed s/-mwindows//g` -mconsole"
+  fi
+  libs_softmmu="$sdl_libs $libs_softmmu"
 fi
 
 ##########################################
@@ -1005,7 +1010,7 @@ EOF
     vnc_tls_cflags=`pkg-config --cflags gnutls 2> /dev/null`
     vnc_tls_libs=`pkg-config --libs gnutls 2> /dev/null`
     if compile_prog "$vnc_tls_cflags" "$vnc_tls_libs" ; then
-	:
+	libs_softmmu="$vnc_tls_libs $libs_softmmu"
     else
 	vnc_tls="no"
     fi
@@ -1023,7 +1028,7 @@ EOF
     vnc_sasl_cflags=""
     vnc_sasl_libs="-lsasl2"
     if compile_prog "$vnc_sasl_cflags" "$vnc_sasl_libs" ; then
-	:
+	libs_softmmu="$vnc_sasl_libs $libs_softmmu"
     else
 	vnc_sasl="no"
     fi
@@ -1094,6 +1099,7 @@ for drv in $audio_drv_list; do
     alsa)
     audio_drv_probe $drv alsa/asoundlib.h -lasound \
         "snd_pcm_t **handle; return snd_pcm_close(*handle);"
+    libs_softmmu="-lasound $libs_softmmu"
     ;;
 
     fmod)
@@ -1105,18 +1111,33 @@ for drv in $audio_drv_list; do
         exit 1
     fi
     audio_drv_probe $drv fmod.h $fmod_lib "return FSOUND_GetVersion();" "-I $fmod_inc"
+    libs_softmmu="$fmod_lib $libs_softmmu"
     ;;
 
     esd)
     audio_drv_probe $drv esd.h -lesd 'return esd_play_stream(0, 0, "", 0);'
+    libs_softmmu="-lesd $libs_softmmu"
     ;;
 
     pa)
     audio_drv_probe $drv pulse/simple.h -lpulse-simple \
         "pa_simple *s = NULL; pa_simple_free(s); return 0;"
+    libs_softmmu="-lpulse-simple $libs_softmmu"
     ;;
 
-    oss|sdl|core|wav|dsound)
+    coreaudio)
+      libs_softmmu="-framework CoreAudio $libs_softmmu"
+    ;;
+
+    dsound)
+      libs_softmmu="-lole32 -ldxguid $libs_softmmu"
+    ;;
+
+    oss)
+      libs_softmmu="$oss_lib $libs_softmmu"
+    ;;
+
+    sdl|wav)
     # XXX: Probes for CoreAudio, DirectSound, SDL(?)
     ;;
 
@@ -1144,6 +1165,7 @@ int main( void ) { return brlapi__openConnection (NULL, NULL, NULL); }
 EOF
   if compile_prog "" "$brlapi_libs" ; then
     brlapi=yes
+    libs_softmmu="$brlapi_libs $libs_softmmu"
   fi
 fi
 
@@ -1159,9 +1181,9 @@ if test "$curses" = "yes" ; then
 int main(void) { resize_term(0, 0); return curses_version(); }
 EOF
   if compile_prog "" "-lncurses" ; then
-    curses_libs="-lncurses"
+    libs_softmmu="-lncurses $libs_softmmu"
   elif compile_prog "" "-lcurses" ; then
-    curses_libs="-lcurses"
+    libs_softmmu="-lcurses $libs_softmmu"
   else
     curses=no
   fi
@@ -1196,7 +1218,7 @@ EOF
   bluez_cflags=`pkg-config --cflags bluez 2> /dev/null`
   bluez_libs=`pkg-config --libs bluez 2> /dev/null`
   if compile_prog "$bluez_cflags" "$bluez_libs" ; then
-    :
+    libs_softmmu="$bluez_libs $libs_softmmu"
   else
     bluez="no"
   fi
@@ -1299,6 +1321,7 @@ int main(void) { return 0; }
 EOF
   if compile_prog "" "$fdt_libs" ; then
     fdt=yes
+    libs_softmmu="$fdt_libs $libs_softmmu"
   fi
 fi
 
@@ -1499,6 +1522,11 @@ else
     echo "Error: your linker does not support --whole-archive or -z."
     echo "Please report to qemu-devel@nongnu.org"
     exit 1
+fi
+
+if test "$darwin" != "yes" -a "$mingw32" != "yes" -a "$solaries" != yes -a \
+        "$aix" != "yes" ; then
+    libs_softmmu="-lutil $libs_softmmu"
 fi
 
 # End of CC checks
@@ -1733,10 +1761,7 @@ for drv in $audio_drv_list; do
     def=CONFIG_`echo $drv | tr '[:lower:]' '[:upper:]'`
     echo "$def=y" >> $config_host_mak
     if test "$drv" = "fmod"; then
-        echo "FMOD_LIBS=$fmod_lib" >> $config_host_mak
         echo "FMOD_CFLAGS=-I$fmod_inc" >> $config_host_mak
-    elif test "$drv" = "oss"; then
-        echo "OSS_LIBS=$oss_lib" >> $config_host_mak
     fi
 done
 if test "$mixemu" = "yes" ; then
@@ -1745,12 +1770,10 @@ fi
 if test "$vnc_tls" = "yes" ; then
   echo "CONFIG_VNC_TLS=y" >> $config_host_mak
   echo "VNC_TLS_CFLAGS=$vnc_tls_cflags" >> $config_host_mak
-  echo "VNC_TLS_LIBS=$vnc_tls_libs" >> $config_host_mak
 fi
 if test "$vnc_sasl" = "yes" ; then
   echo "CONFIG_VNC_SASL=y" >> $config_host_mak
   echo "VNC_SASL_CFLAGS=$vnc_sasl_cflags" >> $config_host_mak
-  echo "VNC_SASL_LIBS=$vnc_sasl_libs" >> $config_host_mak
 fi
 if test "$fnmatch" = "yes" ; then
   echo "CONFIG_FNMATCH=y" >> $config_host_mak
@@ -1768,7 +1791,6 @@ if [ "$build_docs" = "yes" ] ; then
 fi
 if test "$sdl" = "yes" ; then
   echo "CONFIG_SDL=y" >> $config_host_mak
-  echo "SDL_LIBS=$sdl_libs" >> $config_host_mak
   echo "SDL_CFLAGS=$sdl_cflags" >> $config_host_mak
 fi
 if test "$cocoa" = "yes" ; then
@@ -1776,7 +1798,6 @@ if test "$cocoa" = "yes" ; then
 fi
 if test "$curses" = "yes" ; then
   echo "CONFIG_CURSES=y" >> $config_host_mak
-  echo "CURSES_LIBS=$curses_libs" >> $config_host_mak
 fi
 if test "$atfile" = "yes" ; then
   echo "CONFIG_ATFILE=y" >> $config_host_mak
@@ -1806,16 +1827,13 @@ if test "$curl" = "yes" ; then
 fi
 if test "$brlapi" = "yes" ; then
   echo "CONFIG_BRLAPI=y" >> $config_host_mak
-  echo "BRLAPI_LIBS=$brlapi_libs" >> $config_host_mak
 fi
 if test "$bluez" = "yes" ; then
   echo "CONFIG_BLUEZ=y" >> $config_host_mak
   echo "BLUEZ_CFLAGS=$bluez_cflags" >> $config_host_mak
-  echo "BLUEZ_LIBS=$bluez_libs" >> $config_host_mak
 fi
 if test "$xen" = "yes" ; then
   echo "CONFIG_XEN=y" >> $config_host_mak
-  echo "XEN_LIBS=$xen_libs" >> $config_host_mak
 fi
 if test "$aio" = "yes" ; then
   echo "CONFIG_AIO=y" >> $config_host_mak
@@ -1834,7 +1852,6 @@ if test "$preadv" = "yes" ; then
 fi
 if test "$fdt" = "yes" ; then
   echo "CONFIG_FDT=y" >> $config_host_mak
-  echo "FDT_LIBS=$fdt_libs" >> $config_host_mak
 fi
 if test "$signalfd" = "yes" ; then
   echo "CONFIG_signalfd=y" >> $config_host_mak
@@ -1913,7 +1930,7 @@ echo "HELPER_CFLAGS=$helper_cflags" >> $config_host_mak
 echo "LDFLAGS=$LDFLAGS" >> $config_host_mak
 echo "ARLIBS_BEGIN=$arlibs_begin" >> $config_host_mak
 echo "ARLIBS_END=$arlibs_end" >> $config_host_mak
-echo "LIBS=$LIBS" >> $config_host_mak
+echo "LIBS+=$LIBS" >> $config_host_mak
 echo "EXESUF=$EXESUF" >> $config_host_mak
 
 echo "/* Automatically generated by configure - do not modify */" > $config_host_h
@@ -2187,6 +2204,7 @@ if test "$target_bigendian" = "yes" ; then
 fi
 if test "$target_softmmu" = "yes" ; then
   echo "CONFIG_SOFTMMU=y" >> $config_mak
+  echo "LIBS+=$libs_softmmu" >> $config_mak
 fi
 if test "$target_user_only" = "yes" ; then
   echo "CONFIG_USER_ONLY=y" >> $config_mak
