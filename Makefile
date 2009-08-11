@@ -16,26 +16,15 @@ endif
 
 VPATH=$(SRC_PATH):$(SRC_PATH)/hw
 
-CPPFLAGS += -I. -I$(SRC_PATH) -MMD -MP -MT $@
-CPPFLAGS += -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE
-CPPFLAGS += -U_FORTIFY_SOURCE
-LIBS=
+QEMU_CFLAGS += -I. -I$(SRC_PATH) -MMD -MP -MT $@
+QEMU_CFLAGS += -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE
+QEMU_CFLAGS += -U_FORTIFY_SOURCE
+LIBS+=-lz
 
 ifdef BUILD_DOCS
 DOCS=qemu-doc.html qemu-tech.html qemu.1 qemu-img.1 qemu-nbd.8
 else
 DOCS=
-endif
-
-LIBS+=$(PTHREADLIBS)
-LIBS+=$(CLOCKLIBS)
-
-ifdef CONFIG_SOLARIS
-LIBS+=-lsocket -lnsl -lresolv
-endif
-
-ifdef CONFIG_WIN32
-LIBS+=-lwinmm -lws2_32 -liphlpapi
 endif
 
 build-all: $(TOOLS) $(DOCS) recurse-all
@@ -132,7 +121,7 @@ ifdef CONFIG_COREAUDIO
 AUDIO_PT = y
 endif
 ifdef CONFIG_FMOD
-audio/audio.o audio/fmodaudio.o: CPPFLAGS := $(FMOD_CFLAGS) $(CPPFLAGS)
+audio/audio.o audio/fmodaudio.o: QEMU_CFLAGS := $(FMOD_CFLAGS) $(QEMU_CFLAGS)
 endif
 ifdef CONFIG_ESD
 AUDIO_PT = y
@@ -169,7 +158,7 @@ obj-$(CONFIG_COCOA) += cocoa.o
 obj-$(CONFIG_IOTHREAD) += qemu-thread.o
 
 ifdef CONFIG_SLIRP
-CPPFLAGS+=-I$(SRC_PATH)/slirp
+QEMU_CFLAGS+=-I$(SRC_PATH)/slirp
 endif
 
 slirp-obj-y = cksum.o if.o ip_icmp.o ip_input.o ip_output.o
@@ -183,7 +172,7 @@ LIBS+=$(VDE_LIBS)
 obj-$(CONFIG_XEN) += xen_backend.o xen_devconfig.o
 obj-$(CONFIG_XEN) += xen_console.o xenfb.o xen_disk.o xen_nic.o
 
-CPPFLAGS+=$(CURL_CFLAGS)
+QEMU_CFLAGS+=$(CURL_CFLAGS)
 LIBS+=$(CURL_LIBS)
 
 cocoa.o: cocoa.m
@@ -194,7 +183,7 @@ sdl_zoom.o: sdl_zoom.c sdl_zoom.h sdl_zoom_template.h
 
 sdl.o: sdl.c keymaps.h sdl_keysym.h sdl_zoom.h
 
-sdl.o audio/sdlaudio.o sdl_zoom.o baum.o: CFLAGS += $(SDL_CFLAGS)
+sdl.o audio/sdlaudio.o sdl_zoom.o baum.o: QEMU_CFLAGS += $(SDL_CFLAGS)
 
 acl.o: acl.h acl.c
 
@@ -202,7 +191,7 @@ vnc.h: vnc-tls.h vnc-auth-vencrypt.h vnc-auth-sasl.h keymaps.h
 
 vnc.o: vnc.c vnc.h vnc_keysym.h vnchextile.h d3des.c d3des.h acl.h
 
-vnc.o: CFLAGS += $(VNC_TLS_CFLAGS)
+vnc.o: QEMU_CFLAGS += $(VNC_TLS_CFLAGS)
 
 vnc-tls.o: vnc-tls.c vnc.h
 
@@ -212,7 +201,7 @@ vnc-auth-sasl.o: vnc-auth-sasl.c vnc.h
 
 curses.o: curses.c keymaps.h curses_keys.h
 
-bt-host.o: CFLAGS += $(BLUEZ_CFLAGS)
+bt-host.o: QEMU_CFLAGS += $(BLUEZ_CFLAGS)
 
 libqemu_common.a: $(obj-y)
 
@@ -231,8 +220,6 @@ qemu-img$(EXESUF): qemu-img.o qemu-tool.o tool-osdep.o $(block-obj-y)
 qemu-nbd$(EXESUF):  qemu-nbd.o qemu-tool.o tool-osdep.o $(block-obj-y)
 
 qemu-io$(EXESUF):  qemu-io.o qemu-tool.o tool-osdep.o cmd.o $(block-obj-y)
-
-qemu-img$(EXESUF) qemu-nbd$(EXESUF) qemu-io$(EXESUF): LIBS += -lz
 
 qemu-img-cmds.h: $(SRC_PATH)/qemu-img-cmds.hx
 	$(call quiet-command,sh $(SRC_PATH)/hxtool -h < $< > $@,"  GEN   $@")
