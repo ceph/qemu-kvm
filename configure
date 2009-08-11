@@ -21,6 +21,7 @@ TMPSDLLOG="${TMPDIR1}/qemu-conf-sdl-$$-${RANDOM}.log"
 trap "rm -f $TMPC $TMPO $TMPE $TMPS $TMPI $TMPSDLLOG; exit" 0 2 3 15
 
 # default parameters
+cpu=""
 prefix=""
 interp_prefix="/usr/gnemul/qemu-%M"
 static="no"
@@ -33,7 +34,6 @@ host_cc="gcc"
 ar="ar"
 make="make"
 install="install"
-strip="strip"
 objcopy="objcopy"
 ld="ld"
 
@@ -45,6 +45,8 @@ for opt do
   ;;
   --cc=*) cc="$optarg"
   ;;
+  --cpu=*) cpu="$optarg"
+  ;;
   esac
 done
 
@@ -54,7 +56,6 @@ done
 
 cc="${cross_prefix}${cc}"
 ar="${cross_prefix}${ar}"
-strip="${cross_prefix}${strip}"
 objcopy="${cross_prefix}${objcopy}"
 ld="${cross_prefix}${ld}"
 
@@ -63,7 +64,7 @@ cat > $TMPC <<EOF
 int main(void) {}
 EOF
 
-if $cc $ARCH_CFLAGS -c -o $TMPO $TMPC > /dev/null 2> /dev/null ; then
+if $cc $CFLAGS -c -o $TMPO $TMPC > /dev/null 2> /dev/null ; then
   : C compiler works ok
 else
     echo "ERROR: \"$cc\" either does not exist or does not work"
@@ -77,10 +78,13 @@ cat > $TMPC <<EOF
 #endif
 int main(void) { return 0; }
 EOF
-  $cc $ARCH_CFLAGS -c -o $TMPO $TMPC > /dev/null 2> /dev/null
+  $cc $CFLAGS -c -o $TMPO $TMPC > /dev/null 2> /dev/null
 }
 
-if check_define __i386__ ; then
+if test ! -z "$cpu" ; then
+  # command line argument
+  :
+elif check_define __i386__ ; then
   cpu="i386"
 elif check_define __x86_64__ ; then
   cpu="x86_64"
@@ -420,7 +424,7 @@ for opt do
   ;;
   --extra-ldflags=*) EXTRA_LDFLAGS="$optarg"
   ;;
-  --cpu=*) cpu="$optarg"
+  --cpu=*)
   ;;
   --target-list=*) target_list="$optarg"
   ;;
@@ -724,7 +728,6 @@ fi
 if test "$mingw32" = "yes" ; then
     linux="no"
     EXESUF=".exe"
-    oss="no"
     linux_user="no"
     bsd_user="no"
     OS_CFLAGS="$OS_CFLAGS -DWIN32_LEAN_AND_MEAN -DWINVER=0x501"
@@ -1514,9 +1517,40 @@ if test "$rt" = "yes" ; then
   CLOCKLIBS="-lrt"
 fi
 
+# Determine what linker flags to use to force archive inclusion
+check_linker_flags()
+{
+    w2=
+    if test "$2" ; then
+	w2=-Wl,$2
+    fi
+    $cc $ARCH_CFLAGS -o $TMPE $OS_CFLAGS $TMPC -Wl,$1 ${w2} >/dev/null 2>/dev/null
+}
+
+cat > $TMPC << EOF
+int main(void) { }
+EOF
+if check_linker_flags --whole-archive --no-whole-archive ; then
+    # GNU ld
+    arlibs_begin="-Wl,--whole-archive"
+    arlibs_end="-Wl,--no-whole-archive"
+elif check_linker_flags -z,allextract -z,defaultextract ; then
+    # Solaris ld
+    arlibs_begin"=-Wl,-z,allextract"
+    arlibs_end="-Wl,-z,defaultextract"
+elif check_linker_flags -all_load ; then
+    # Mac OS X
+    arlibs_begin="-all_load"
+    arlibs_end=""
+else
+    echo "Error: your linker does not support --whole-archive or -z."
+    echo "Please report to qemu-devel@nongnu.org"
+    exit 1
+fi
+
 if test "$mingw32" = "yes" ; then
   if test -z "$prefix" ; then
-      prefix="c:\\\\Program Files\\\\Qemu"
+      prefix="c:/Program Files/Qemu"
   fi
   mansuffix=""
   datasuffix=""
@@ -1844,37 +1878,6 @@ bsd)
 ;;
 esac
 
-# Determine what linker flags to use to force archive inclusion
-check_linker_flags()
-{
-    w2=
-    if test "$2" ; then
-	w2=-Wl,$2
-    fi
-    $cc $ARCH_CFLAGS -o $TMPE $OS_CFLAGS $TMPC -Wl,$1 ${w2} >/dev/null 2>/dev/null
-}
-
-cat > $TMPC << EOF
-int main(void) { }
-EOF
-if check_linker_flags --whole-archive --no-whole-archive ; then
-    # GNU ld
-    echo "ARLIBS_BEGIN=-Wl,--whole-archive" >> $config_host_mak
-    echo "ARLIBS_END=-Wl,--no-whole-archive" >> $config_host_mak
-elif check_linker_flags -z,allextract -z,defaultextract ; then
-    # Solaris ld
-    echo "ARLIBS_BEGIN=-Wl,-z,allextract" >> $config_host_mak
-    echo "ARLIBS_END=-Wl,-z,defaultextract" >> $config_host_mak
-elif check_linker_flags -all_load ; then
-    # Mac OS X
-    echo "ARLIBS_BEGIN=-all_load" >> $config_host_mak
-    echo "ARLIBS_END=" >> $config_host_mak
-else
-    echo "Error: your linker does not support --whole-archive or -z."
-    echo "Please report to qemu-devel@nongnu.org"
-    exit 1
-fi
-
 # this is a temp hack needed for kvm
 if test "$kvm" = "yes" ; then
     echo "KVM_CFLAGS=$kvm_cflags" >> $config_host_mak
@@ -1921,6 +1924,8 @@ echo "OBJCOPY=$objcopy" >> $config_host_mak
 echo "LD=$ld" >> $config_host_mak
 echo "CFLAGS=$CFLAGS $OS_CFLAGS $ARCH_CFLAGS $EXTRA_CFLAGS" >> $config_host_mak
 echo "LDFLAGS=$LDFLAGS $OS_LDFLAGS $ARCH_LDFLAGS $EXTRA_LDFLAGS" >> $config_host_mak
+echo "ARLIBS_BEGIN=$arlibs_begin" >> $config_host_mak
+echo "ARLIBS_END=$arlibs_end" >> $config_host_mak
 echo "EXESUF=$EXESUF" >> $config_host_mak
 echo "PTHREADLIBS=$PTHREADLIBS" >> $config_host_mak
 echo "CLOCKLIBS=$CLOCKLIBS" >> $config_host_mak
