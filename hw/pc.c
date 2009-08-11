@@ -1431,18 +1431,6 @@ static void pc_init1(ram_addr_t ram_size,
         }
     }
 
-    /* Add virtio block devices */
-    if (pci_enabled) {
-        int unit_id = 0;
-
-        while ((dinfo = drive_get(IF_VIRTIO, 0, unit_id)) != NULL) {
-            pci_dev = pci_create("virtio-blk-pci",
-                                 dinfo->devaddr);
-            qdev_init(&pci_dev->qdev);
-            unit_id++;
-        }
-    }
-
     if (extboot_drive) {
 	DriveInfo *info = extboot_drive;
 	int cyls, heads, secs;

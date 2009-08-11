@@ -147,6 +147,7 @@ extern unsigned int nb_prom_envs;
 #endif
 
 typedef enum {
+    IF_NONE,
     IF_IDE, IF_SCSI, IF_FLOPPY, IF_PFLASH, IF_MTD, IF_SD, IF_VIRTIO, IF_XEN,
     IF_COUNT
 } BlockInterfaceType;
@@ -180,7 +181,7 @@ extern TAILQ_HEAD(driveoptlist, DriveOpt) driveopts;
 extern DriveInfo *extboot_drive;
 
 extern DriveInfo *drive_get(BlockInterfaceType type, int bus, int unit);
-extern DriveInfo *drive_get_by_id(char *id);
+extern DriveInfo *drive_get_by_id(const char *id);
 extern int drive_get_max_bus(BlockInterfaceType type);
 extern void drive_uninit(BlockDriverState *bdrv);
 extern const char *drive_get_serial(BlockDriverState *bdrv);

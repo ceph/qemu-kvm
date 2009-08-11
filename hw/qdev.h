@@ -2,7 +2,9 @@
 #define QDEV_H
 
 #include "hw.h"
+#include "sysemu.h"
 #include "sys-queue.h"
+#include "qemu-option.h"
 
 typedef struct Property Property;
 
@@ -19,7 +21,7 @@ typedef struct BusInfo BusInfo;
 /* This structure should not be accessed directly.  We declare it here
    so that it can be embedded in individual device state structures.  */
 struct DeviceState {
-    char *id;
+    const char *id;
     DeviceInfo *info;
     BusState *parent_bus;
     int num_gpio_out;
@@ -62,6 +64,7 @@ enum PropertyType {
     PROP_TYPE_UINT64,
     PROP_TYPE_TADDR,
     PROP_TYPE_MACADDR,
+    PROP_TYPE_DRIVE,
     PROP_TYPE_PTR,
 };
 
@@ -82,7 +85,7 @@ struct CompatProperty {
 /*** Board API.  This should go away once we have a machine config file.  ***/
 
 DeviceState *qdev_create(BusState *bus, const char *name);
-DeviceState *qdev_device_add(const char *cmdline);
+DeviceState *qdev_device_add(QemuOpts *opts);
 void qdev_init(DeviceState *dev);
 void qdev_free(DeviceState *dev);
 
@@ -154,6 +157,7 @@ extern PropertyInfo qdev_prop_hex32;
 extern PropertyInfo qdev_prop_hex64;
 extern PropertyInfo qdev_prop_ptr;
 extern PropertyInfo qdev_prop_macaddr;
+extern PropertyInfo qdev_prop_drive;
 extern PropertyInfo qdev_prop_pci_devfn;
 
 /* Set properties between creation and init.  */
@@ -163,6 +167,7 @@ void qdev_prop_set(DeviceState *dev, const char *name, void *src, enum PropertyT
 void qdev_prop_set_uint16(DeviceState *dev, const char *name, uint16_t value);
 void qdev_prop_set_uint32(DeviceState *dev, const char *name, uint32_t value);
 void qdev_prop_set_uint64(DeviceState *dev, const char *name, uint64_t value);
+void qdev_prop_set_drive(DeviceState *dev, const char *name, DriveInfo *value);
 /* FIXME: Remove opaque pointer properties.  */
 void qdev_prop_set_ptr(DeviceState *dev, const char *name, void *value);
 void qdev_prop_set_defaults(DeviceState *dev, Property *props);
