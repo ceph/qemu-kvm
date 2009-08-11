@@ -95,9 +95,13 @@ DEF("drive", HAS_ARG, QEMU_OPTION_drive,
     "-drive [file=file][,if=type][,bus=n][,unit=m][,media=d][,index=i]\n"
     "       [,cyls=c,heads=h,secs=s[,trans=t]][,snapshot=on|off]\n"
     "       [,cache=writethrough|writeback|none][,format=f][,serial=s]\n"
-    "       [,addr=A]\n"
+    "       [,addr=A][,id=name]\n"
     "       [,boot=on|off]\n"
     "                use 'file' as a drive image\n")
+DEF("set", HAS_ARG, QEMU_OPTION_set,
+    "-set group.id.arg=value\n"
+    "                set <arg> parameter for item <id> of type <group>\n"
+    "                i.e. -set drive.$id.file=/path/to/image\n")
 STEXI
 @item -drive @var{option}[,@var{option}[,@var{option}[,...]]]
 
