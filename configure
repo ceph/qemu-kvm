@@ -46,6 +46,7 @@ objcopy="objcopy"
 ld="ld"
 helper_cflags=""
 libs_softmmu=""
+audio_pt_int=""
 
 # parse CC options first
 for opt do
@@ -1117,12 +1118,14 @@ for drv in $audio_drv_list; do
     esd)
     audio_drv_probe $drv esd.h -lesd 'return esd_play_stream(0, 0, "", 0);'
     libs_softmmu="-lesd $libs_softmmu"
+    audio_pt_int="yes"
     ;;
 
     pa)
     audio_drv_probe $drv pulse/simple.h -lpulse-simple \
         "pa_simple *s = NULL; pa_simple_free(s); return 0;"
     libs_softmmu="-lpulse-simple $libs_softmmu"
+    audio_pt_int="yes"
     ;;
 
     coreaudio)
@@ -1744,6 +1747,7 @@ if test $profiler = "yes" ; then
 fi
 if test "$slirp" = "yes" ; then
   echo "CONFIG_SLIRP=y" >> $config_host_mak
+  CFLAGS="-I\$(SRC_PATH)/slirp $CFLAGS"
 fi
 if test "$vde" = "yes" ; then
   echo "CONFIG_VDE=y" >> $config_host_mak
@@ -1761,6 +1765,9 @@ for drv in $audio_drv_list; do
         echo "FMOD_CFLAGS=-I$fmod_inc" >> $config_host_mak
     fi
 done
+if test "$audio_pt_int" = "yes" ; then
+  echo "CONFIG_AUDIO_PT_INT=y" >> $config_host_mak
+fi
 if test "$mixemu" = "yes" ; then
   echo "CONFIG_MIXEMU=y" >> $config_host_mak
 fi
@@ -2310,6 +2317,17 @@ ia64)
   cflags="-mno-sdata $cflags"
 ;;
 esac
+
+if test "$target_softmmu" = "yes" ; then
+  case "$TARGET_BASE_ARCH" in
+  arm)
+    cflags="-DHAS_AUDIO $cflags"
+  ;;
+  i386|mips|ppc)
+    cflags="-DHAS_AUDIO -DHAS_AUDIO_CHOICE $cflags"
+  ;;
+  esac
+fi
 
 if test "$target_softmmu" = "yes" -a \( \
         "$TARGET_ARCH" = "microblaze" -o \

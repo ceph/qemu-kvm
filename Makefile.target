@@ -25,7 +25,7 @@ endif
 PROGS=$(QEMU_PROG)
 
 ifeq ($(subst ppc64,ppc,$(ARCH))$(TARGET_BASE_ARCH),ppcppc)
-translate.o: QEMU_CFLAGS := $(QEMU_CFLAGS) $(call cc-option, $(QEMU_CFLAGS), -fno-unit-at-a-time,)
+translate.o: QEMU_CFLAGS += $(call cc-option, $(QEMU_CFLAGS), -fno-unit-at-a-time,)
 endif
 
 LIBS+=-lm
@@ -37,8 +37,7 @@ QEMU_CFLAGS+=-I/opt/SUNWspro/prod/include/cc
 endif
 endif
 
-kvm.o: QEMU_CFLAGS+=$(KVM_CFLAGS)
-kvm-all.o: QEMU_CFLAGS+=$(KVM_CFLAGS)
+kvm.o kvm-all.o: QEMU_CFLAGS+=$(KVM_CFLAGS)
 
 CFLAGS += $(KVM_CFLAGS)
 
@@ -110,9 +109,7 @@ tcg/tcg.o: cpu.h
 
 # HELPER_CFLAGS is used for all the code compiled with static register
 # variables
-op_helper.o: QEMU_CFLAGS += $(HELPER_CFLAGS)
-
-cpu-exec.o: QEMU_CFLAGS += $(HELPER_CFLAGS)
+op_helper.o cpu-exec.o: QEMU_CFLAGS += $(HELPER_CFLAGS)
 
 # Note: this is a workaround. The real fix is to avoid compiling
 # cpu_signal_handler() in cpu-exec.c.
@@ -140,7 +137,7 @@ ifeq ($(TARGET_ARCH), i386)
 obj-y += vm86.o
 endif
 
-nwfpe-obj-y := fpa11.o fpa11_cpdo.o fpa11_cpdt.o fpa11_cprt.o fpopcode.o
+nwfpe-obj-y = fpa11.o fpa11_cpdo.o fpa11_cpdt.o fpa11_cprt.o fpopcode.o
 nwfpe-obj-y += single_cpdo.o double_cpdo.o extended_cpdo.o
 obj-arm-y +=  $(addprefix nwfpe/, $(nwfpe-obj-y))
 obj-arm-y += arm-semi.o
@@ -207,7 +204,7 @@ sound-obj-$(CONFIG_ADLIB) += fmopl.o adlib.o
 sound-obj-$(CONFIG_GUS) += gus.o gusemu_hal.o gusemu_mixer.o
 sound-obj-$(CONFIG_CS4231A) += cs4231a.o
 
-adlib.o fmopl.o: QEMU_CFLAGS := ${QEMU_CFLAGS} -DBUILD_Y8950=0
+adlib.o fmopl.o: QEMU_CFLAGS += -DBUILD_Y8950=0
 
 QEMU_CFLAGS += $(VNC_TLS_CFLAGS)
 QEMU_CFLAGS += $(VNC_SASL_CFLAGS)
@@ -243,10 +240,6 @@ obj-i386-y += device-assignment.o
 LIBS+=-lpci
 endif
 
-ifeq ($(TARGET_BASE_ARCH), i386)
-QEMU_CFLAGS += -DHAS_AUDIO -DHAS_AUDIO_CHOICE
-endif
-
 # Hardware support
 obj-ia64-y += ide.o pckbd.o vga.o $(SOUND_HW) dma.o $(AUDIODRV)
 obj-ia64-y += fdc.o mc146818rtc.o serial.o i8259.o ipf.o
@@ -276,11 +269,6 @@ obj-ppc-y += ppc440.o ppc440_bamboo.o
 # PowerPC E500 boards
 obj-ppc-y += ppce500_pci.o ppce500_mpc8544ds.o
 obj-ppc-$(CONFIG_KVM) += kvm_ppc.o
-
-ifeq ($(TARGET_BASE_ARCH), ppc)
-QEMU_CFLAGS += -DHAS_AUDIO -DHAS_AUDIO_CHOICE
-endif
-
 obj-ppc-$(CONFIG_FDT) += device_tree.o
 
 obj-mips-y = mips_r4k.o mips_jazz.o mips_malta.o mips_mipssim.o
@@ -291,10 +279,6 @@ obj-mips-y += piix_pci.o parallel.o cirrus_vga.o isa-bus.o pcspk.o $(sound-obj-y
 obj-mips-y += mipsnet.o
 obj-mips-y += pflash_cfi01.o
 obj-mips-y += vmware_vga.o
-
-ifeq ($(TARGET_BASE_ARCH), mips)
-QEMU_CFLAGS += -DHAS_AUDIO -DHAS_AUDIO_CHOICE
-endif
 
 obj-microblaze-y = petalogix_s3adsp1800_mmu.o
 
@@ -352,10 +336,6 @@ obj-arm-y += syborg.o syborg_fb.o syborg_interrupt.o syborg_keyboard.o
 obj-arm-y += syborg_serial.o syborg_timer.o syborg_pointer.o syborg_rtc.o
 obj-arm-y += syborg_virtio.o
 
-ifeq ($(TARGET_BASE_ARCH), arm)
-QEMU_CFLAGS += -DHAS_AUDIO
-endif
-
 obj-sh4-y = shix.o r2d.o sh7750.o sh7750_regnames.o tc58128.o
 obj-sh4-y += sh_timer.o sh_serial.o sh_intc.o sh_pci.o sm501.o serial.o
 obj-sh4-y += ide.o
@@ -365,9 +345,6 @@ obj-m68k-y += m68k-semi.o dummy_m68k.o
 
 ifdef CONFIG_COCOA
 COCOA_LIBS=-F/System/Library/Frameworks -framework Cocoa -framework IOKit
-endif
-ifdef CONFIG_SLIRP
-QEMU_CFLAGS+=-I$(SRC_PATH)/slirp
 endif
 
 # profiling code

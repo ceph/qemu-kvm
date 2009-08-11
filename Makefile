@@ -111,23 +111,7 @@ obj-$(CONFIG_BRLAPI) += baum.o
 obj-$(CONFIG_WIN32) += tap-win32.o
 obj-$(CONFIG_POSIX) += migration-exec.o
 
-ifdef CONFIG_COREAUDIO
-AUDIO_PT = y
-endif
-ifdef CONFIG_FMOD
-audio/audio.o audio/fmodaudio.o: QEMU_CFLAGS := $(FMOD_CFLAGS) $(QEMU_CFLAGS)
-endif
-ifdef CONFIG_ESD
-AUDIO_PT = y
-AUDIO_PT_INT = y
-endif
-ifdef CONFIG_PA
-AUDIO_PT = y
-AUDIO_PT_INT = y
-endif
-ifdef AUDIO_PT
-LDFLAGS += -pthread
-endif
+audio/audio.o audio/fmodaudio.o: QEMU_CFLAGS += $(FMOD_CFLAGS)
 
 audio-obj-y = audio.o noaudio.o wavaudio.o mixeng.o
 audio-obj-$(CONFIG_SDL) += sdlaudio.o
@@ -138,7 +122,7 @@ audio-obj-$(CONFIG_DSOUND) += dsoundaudio.o
 audio-obj-$(CONFIG_FMOD) += fmodaudio.o
 audio-obj-$(CONFIG_ESD) += esdaudio.o
 audio-obj-$(CONFIG_PA) += paaudio.o
-audio-obj-$(AUDIO_PT_INT) += audio_pt_int.o
+audio-obj-$(CONFIG_AUDIO_PT_INT) += audio_pt_int.o
 audio-obj-y += wavcapture.o
 obj-y += $(addprefix audio/, $(audio-obj-y))
 
@@ -150,10 +134,6 @@ obj-$(CONFIG_VNC_TLS) += vnc-tls.o vnc-auth-vencrypt.o
 obj-$(CONFIG_VNC_SASL) += vnc-auth-sasl.o
 obj-$(CONFIG_COCOA) += cocoa.o
 obj-$(CONFIG_IOTHREAD) += qemu-thread.o
-
-ifdef CONFIG_SLIRP
-QEMU_CFLAGS+=-I$(SRC_PATH)/slirp
-endif
 
 slirp-obj-y = cksum.o if.o ip_icmp.o ip_input.o ip_output.o
 slirp-obj-y += slirp.o mbuf.o misc.o sbuf.o socket.o tcp_input.o tcp_output.o
@@ -254,7 +234,7 @@ endif
 install-doc: $(DOCS)
 	$(INSTALL_DIR) "$(DESTDIR)$(docdir)"
 	$(INSTALL_DATA) qemu-doc.html  qemu-tech.html "$(DESTDIR)$(docdir)"
-ifndef CONFIG_WIN32
+ifdef CONFIG_POSIX
 	$(INSTALL_DIR) "$(DESTDIR)$(mandir)/man1"
 	$(INSTALL_DATA) qemu.1 qemu-img.1 "$(DESTDIR)$(mandir)/man1"
 	$(INSTALL_DIR) "$(DESTDIR)$(mandir)/man8"
