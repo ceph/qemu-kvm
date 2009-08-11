@@ -2260,6 +2260,47 @@ fi
 cflags="-I\$(SRC_PATH)/tcg $cflags"
 cflags="-I\$(SRC_PATH)/fpu $cflags"
 
+for i in $ARCH $TARGET_BASE_ARCH ; do
+  case "$i" in
+  alpha)
+    echo "CONFIG_ALPHA_DIS=y"  >> $config_mak
+  ;;
+  arm)
+    echo "CONFIG_ARM_DIS=y"  >> $config_mak
+  ;;
+  cris)
+    echo "CONFIG_CRIS_DIS=y"  >> $config_mak
+  ;;
+  hppa)
+    echo "CONFIG_HPPA_DIS=y"  >> $config_mak
+  ;;
+  i386|x86_64)
+    echo "CONFIG_I386_DIS=y"  >> $config_mak
+  ;;
+  m68k)
+    echo "CONFIG_M68K_DIS=y"  >> $config_mak
+  ;;
+  microblaze)
+    echo "CONFIG_MICROBLAZE_DIS=y"  >> $config_mak
+  ;;
+  mips*)
+    echo "CONFIG_MIPS_DIS=y"  >> $config_mak
+  ;;
+  ppc*)
+    echo "CONFIG_PPC_DIS=y"  >> $config_mak
+  ;;
+  s390)
+    echo "CONFIG_S390_DIS=y"  >> $config_mak
+  ;;
+  sh4)
+    echo "CONFIG_SH4_DIS=y"  >> $config_mak
+  ;;
+  sparc*)
+    echo "CONFIG_SPARC_DIS=y"  >> $config_mak
+  ;;
+  esac
+done
+
 case "$ARCH" in
 alpha)
   # Ensure there's only a single GP
@@ -2269,6 +2310,12 @@ ia64)
   cflags="-mno-sdata $cflags"
 ;;
 esac
+
+if test "$target_softmmu" = "yes" -a \( \
+        "$TARGET_ARCH" = "microblaze" -o \
+        "$TARGET_ARCH" = "cris" \) ; then
+  echo "CONFIG_NEED_MMU=y" >> $config_mak
+fi
 
 if test "$gprof" = "yes" ; then
   echo "TARGET_GPROF=yes" >> $config_mak
