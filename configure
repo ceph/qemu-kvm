@@ -14,11 +14,8 @@ fi
 TMPC="${TMPDIR1}/qemu-conf-${RANDOM}-$$-${RANDOM}.c"
 TMPO="${TMPDIR1}/qemu-conf-${RANDOM}-$$-${RANDOM}.o"
 TMPE="${TMPDIR1}/qemu-conf-${RANDOM}-$$-${RANDOM}"
-TMPS="${TMPDIR1}/qemu-conf-${RANDOM}-$$-${RANDOM}.S"
-TMPI="${TMPDIR1}/qemu-conf-${RANDOM}-$$-${RANDOM}.i"
-TMPSDLLOG="${TMPDIR1}/qemu-conf-sdl-$$-${RANDOM}.log"
 
-trap "rm -f $TMPC $TMPO $TMPE $TMPS $TMPI $TMPSDLLOG; exit" 0 2 3 15
+trap "rm -f $TMPC $TMPO $TMPE ; exit" 0 2 3 15
 
 compile_object() {
   $cc $CFLAGS -c -o $TMPO $TMPC > /dev/null 2> /dev/null
@@ -35,6 +32,7 @@ cpu=""
 prefix=""
 interp_prefix="/usr/gnemul/qemu-%M"
 static="no"
+sparc_cpu=""
 cross_prefix=""
 cc="gcc"
 audio_drv_list=""
@@ -61,9 +59,23 @@ for opt do
   ;;
   --extra-ldflags=*) LDFLAGS="$optarg $LDFLAGS"
   ;;
+  --sparc_cpu=*)
+    sparc_cpu="$optarg"
+    case $sparc_cpu in
+    v7|v8|v8plus|v8plusa)
+      cpu="sparc"
+    ;;
+    v9)
+      cpu="sparc64"
+    ;;
+    *)
+      echo "undefined SPARC architecture. Exiting";
+      exit 1
+    ;;
+    esac
+  ;;
   esac
 done
-
 # OS specific
 # Using uname is really, really broken.  Once we have the right set of checks
 # we can eliminate it's usage altogether
@@ -122,14 +134,14 @@ fi
 
 target_list="x86_64-softmmu"
 case "$cpu" in
+  alpha|cris|ia64|m68k|microblaze|mips|mips64|ppc|ppc64|sparc64)
+    cpu="$cpu"
+  ;;
   i386|i486|i586|i686|i86pc|BePC)
     cpu="i386"
   ;;
   x86_64|amd64)
     cpu="x86_64"
-  ;;
-  alpha)
-    cpu="alpha"
   ;;
   armv*b)
     cpu="armv4b"
@@ -137,41 +149,14 @@ case "$cpu" in
   armv*l)
     cpu="armv4l"
   ;;
-  cris)
-    cpu="cris"
-  ;;
   parisc|parisc64)
     cpu="hppa"
-  ;;
-  ia64)
-    cpu="ia64"
-  ;;
-  m68k)
-    cpu="m68k"
-  ;;
-  microblaze)
-    cpu="microblaze"
-  ;;
-  mips)
-    cpu="mips"
-  ;;
-  mips64)
-    cpu="mips64"
-  ;;
-  ppc)
-    cpu="ppc"
-  ;;
-  ppc64)
-    cpu="ppc64"
   ;;
   s390*)
     cpu="s390"
   ;;
   sparc|sun4[cdmuv])
     cpu="sparc"
-  ;;
-  sparc64)
-    cpu="sparc64"
   ;;
   *)
     cpu="unknown"
@@ -253,141 +238,136 @@ elif check_define __sun__ ; then
 else
   targetos=`uname -s`
 fi
+
 case $targetos in
 CYGWIN*)
-mingw32="yes"
-CFLAGS="-mno-cygwin $CFLAGS"
-if [ "$cpu" = "i386" ] ; then
-    kqemu="yes"
-fi
-audio_possible_drivers="sdl"
+  mingw32="yes"
+  CFLAGS="-mno-cygwin $CFLAGS"
+  audio_possible_drivers="sdl"
 ;;
 MINGW32*)
-mingw32="yes"
-if [ "$cpu" = "i386" ] ; then
-    kqemu="yes"
-fi
-audio_possible_drivers="dsound sdl fmod"
+  mingw32="yes"
+  audio_possible_drivers="dsound sdl fmod"
 ;;
 GNU/kFreeBSD)
-audio_drv_list="oss"
-audio_possible_drivers="oss sdl esd pa"
-if [ "$cpu" = "i386" -o "$cpu" = "x86_64" ] ; then
+  audio_drv_list="oss"
+  audio_possible_drivers="oss sdl esd pa"
+  if [ "$cpu" = "i386" -o "$cpu" = "x86_64" ] ; then
     kqemu="yes"
-fi
+  fi
 ;;
 FreeBSD)
-bsd="yes"
-audio_drv_list="oss"
-audio_possible_drivers="oss sdl esd pa"
-if [ "$cpu" = "i386" -o "$cpu" = "x86_64" ] ; then
+  bsd="yes"
+  audio_drv_list="oss"
+  audio_possible_drivers="oss sdl esd pa"
+  if [ "$cpu" = "i386" -o "$cpu" = "x86_64" ] ; then
     kqemu="yes"
-    kvm="yes"
-fi
+  fi
 ;;
 DragonFly)
-bsd="yes"
-audio_drv_list="oss"
-audio_possible_drivers="oss sdl esd pa"
-if [ "$cpu" = "i386" -o "$cpu" = "x86_64" ] ; then
+  bsd="yes"
+  audio_drv_list="oss"
+  audio_possible_drivers="oss sdl esd pa"
+  if [ "$cpu" = "i386" -o "$cpu" = "x86_64" ] ; then
     kqemu="yes"
-fi
-aio="no"
+  fi
+  aio="no"
 ;;
 NetBSD)
-bsd="yes"
-audio_drv_list="oss"
-audio_possible_drivers="oss sdl esd"
-oss_lib="-lossaudio"
+  bsd="yes"
+  audio_drv_list="oss"
+  audio_possible_drivers="oss sdl esd"
+  oss_lib="-lossaudio"
 ;;
 OpenBSD)
-bsd="yes"
-audio_drv_list="oss"
-audio_possible_drivers="oss sdl esd"
-oss_lib="-lossaudio"
+  bsd="yes"
+  audio_drv_list="oss"
+  audio_possible_drivers="oss sdl esd"
+  oss_lib="-lossaudio"
 ;;
 Darwin)
-bsd="yes"
-darwin="yes"
-# on Leopard most of the system is 32-bit, so we have to ask the kernel it if we can run 64-bit userspace code
-if [ "$cpu" = "i386" ] ; then
+  bsd="yes"
+  darwin="yes"
+  # on Leopard most of the system is 32-bit, so we have to ask the kernel it if we can
+  # run 64-bit userspace code
+  if [ "$cpu" = "i386" ] ; then
     is_x86_64=`sysctl -n hw.optional.x86_64`
     [ "$is_x86_64" = "1" ] && cpu=x86_64
-fi
-if [ "$cpu" = "x86_64" ] ; then
+  fi
+  if [ "$cpu" = "x86_64" ] ; then
     CFLAGS="-arch x86_64 $CFLAGS"
     LDFLAGS="-arch x86_64 $LDFLAGS"
-else
+  else
     CFLAGS="-mdynamic-no-pic $CFLAGS"
-fi
-darwin_user="yes"
-cocoa="yes"
-audio_drv_list="coreaudio"
-audio_possible_drivers="coreaudio sdl fmod"
-LDFLAGS="-framework CoreFoundation -framework IOKit $LDFLAGS"
+  fi
+  darwin_user="yes"
+  cocoa="yes"
+  audio_drv_list="coreaudio"
+  audio_possible_drivers="coreaudio sdl fmod"
+  LDFLAGS="-framework CoreFoundation -framework IOKit $LDFLAGS"
 ;;
 SunOS)
-    solaris="yes"
-    make="gmake"
-    install="ginstall"
-    needs_libsunmath="no"
-    solarisrev=`uname -r | cut -f2 -d.`
-    # have to select again, because `uname -m` returns i86pc
-    # even on an x86_64 box.
-    solariscpu=`isainfo -k`
-    if test "${solariscpu}" = "amd64" ; then
-        cpu="x86_64"
+  solaris="yes"
+  make="gmake"
+  install="ginstall"
+  needs_libsunmath="no"
+  solarisrev=`uname -r | cut -f2 -d.`
+  # have to select again, because `uname -m` returns i86pc
+  # even on an x86_64 box.
+  solariscpu=`isainfo -k`
+  if test "${solariscpu}" = "amd64" ; then
+    cpu="x86_64"
+  fi
+  if [ "$cpu" = "i386" -o "$cpu" = "x86_64" ] ; then
+    if test "$solarisrev" -le 9 ; then
+      if test -f /opt/SUNWspro/prod/lib/libsunmath.so.1; then
+        needs_libsunmath="yes"
+      else
+        echo "QEMU will not link correctly on Solaris 8/X86 or 9/x86 without"
+        echo "libsunmath from the Sun Studio compilers tools, due to a lack of"
+        echo "C99 math features in libm.so in Solaris 8/x86 and Solaris 9/x86"
+        echo "Studio 11 can be downloaded from www.sun.com."
+        exit 1
+      fi
     fi
-    if [ "$cpu" = "i386" -o "$cpu" = "x86_64" ] ; then
-        if test "$solarisrev" -le 9 ; then
-            if test -f /opt/SUNWspro/prod/lib/libsunmath.so.1; then
-                needs_libsunmath="yes"
-            else
-                echo "QEMU will not link correctly on Solaris 8/X86 or 9/x86 without"
-                echo "libsunmath from the Sun Studio compilers tools, due to a lack of"
-                echo "C99 math features in libm.so in Solaris 8/x86 and Solaris 9/x86"
-                echo "Studio 11 can be downloaded from www.sun.com."
-                exit 1
-            fi
-        fi
-        if test "$solarisrev" -ge 9 ; then
-            kqemu="yes"
-        fi
+    if test "$solarisrev" -ge 9 ; then
+      kqemu="yes"
     fi
-    if test -f /usr/include/sys/soundcard.h ; then
-        audio_drv_list="oss"
-    fi
-    audio_possible_drivers="oss sdl"
-    CFLAGS="-std=gnu99 $CFLAGS"
+  fi
+  if test -f /usr/include/sys/soundcard.h ; then
+    audio_drv_list="oss"
+  fi
+  audio_possible_drivers="oss sdl"
+  CFLAGS="-std=gnu99 $CFLAGS"
 ;;
 AIX)
-aix="yes"
-make="gmake"
+  aix="yes"
+  make="gmake"
 ;;
 *)
-audio_drv_list="oss"
-audio_possible_drivers="oss alsa sdl esd pa"
-linux="yes"
-linux_user="yes"
-usb="linux"
-kvm="yes"
-if [ "$cpu" = "i386" -o "$cpu" = "x86_64" ] ; then
+  audio_drv_list="oss"
+  audio_possible_drivers="oss alsa sdl esd pa"
+  linux="yes"
+  linux_user="yes"
+  usb="linux"
+  kvm="yes"
+  if [ "$cpu" = "i386" -o "$cpu" = "x86_64" ] ; then
     kqemu="yes"
     audio_possible_drivers="$audio_possible_drivers fmod"
     kvm="yes"
     kqemu="no"
-fi
-if [ "$cpu" = "ia64" ] ; then
+  fi
+  if [ "$cpu" = "ia64" ] ; then
      kvm="yes"
      xen="no"
      target_list="ia64-softmmu"
      cpu_emulation="no"
      gdbstub="no"
      slirp="no"
-fi
-if [ "$cpu" = "powerpc" ]; then
-     kvm="yes"
-fi
+  fi
+  if [ "$cpu" = "powerpc" ]; then
+      kvm="yes"
+  fi
 ;;
 esac
 
@@ -397,6 +377,14 @@ if [ "$bsd" = "yes" ] ; then
     usb="bsd"
   fi
   bsd_user="yes"
+fi
+
+if test "$mingw32" = "yes" ; then
+  if [ "$cpu" = "i386" ] ; then
+    kqemu="yes"
+  fi
+  EXESUF=".exe"
+  CFLAGS="-DWIN32_LEAN_AND_MEAN -DWINVER=0x501 $CFLAGS"
 fi
 
 # find source path
@@ -522,28 +510,6 @@ for opt do
   --enable-uname-release=*) uname_release="$optarg"
   ;;
   --sparc_cpu=*)
-      sparc_cpu="$optarg"
-      case $sparc_cpu in
-        v7|v8)
-          CFLAGS="-m32 -mcpu=${sparc_cpu} -D__sparc_${sparc_cpu}__ $CFLAGS"
-          LDFLAGS="-m32 $LDFLAGS"
-          cpu="sparc"
-        ;;
-        v8plus|v8plusa)
-          CFLAGS="-m32 -mcpu=ultrasparc -D__sparc_${sparc_cpu}__ $CFLAGS"
-          LDFLAGS="-m32 $LDFLAGS"
-          cpu="sparc"
-        ;;
-        v9)
-          CFLAGS="-m64 -mcpu=ultrasparc -D__sparc_${sparc_cpu}__ $CFLAGS"
-          LDFLAGS="-m64 $LDFLAGS"
-          cpu="sparc64"
-        ;;
-        *)
-          echo "undefined SPARC architecture. Exiting";
-          exit 1
-        ;;
-      esac
   ;;
   --enable-werror) werror="yes"
   ;;
@@ -586,23 +552,28 @@ done
 #
 host_guest_base="no"
 case "$cpu" in
-    sparc) if test -z "$sparc_cpu" ; then
-               CFLAGS="-m32 -mcpu=ultrasparc -D__sparc_v8plus__ $CFLAGS"
-               LDFLAGS="-m32 $LDFLAGS"
-           fi
-           CFLAGS="-ffixed-g2 -ffixed-g3 $CFLAGS"
+    sparc) case $sparc_cpu in
+           v7|v8)
+             CFLAGS="-mcpu=${sparc_cpu} -D__sparc_${sparc_cpu}__ $CFLAGS"
+           ;;
+           v8plus|v8plusa)
+             CFLAGS="-mcpu=ultrasparc -D__sparc_${sparc_cpu}__ $CFLAGS"
+           ;;
+           *) # sparc_cpu not defined in the command line
+             CFLAGS="-mcpu=ultrasparc -D__sparc_v8plus__ $CFLAGS"
+           esac
+           LDFLAGS="-m32 $LDFLAGS"
+           CFLAGS="-m32 -ffixed-g2 -ffixed-g3 $CFLAGS"
            if test "$solaris" = "no" ; then
-               CFLAGS="-ffixed-g1 -ffixed-g6 $CFLAGS"
+             CFLAGS="-ffixed-g1 -ffixed-g6 $CFLAGS"
            fi
            ;;
-    sparc64) if test -z "$sparc_cpu" ; then
-               CFLAGS="-m64 -mcpu=ultrasparc -D__sparc_v9__ $CFLAGS"
-               LDFLAGS="-m64 $LDFLAGS"
-           fi
-           if test "$solaris" = "no" ; then
-               CFLAGS="-ffixed-g5 -ffixed-g6 -ffixed-g7 $CFLAGS"
-           else
-               CFLAGS="-ffixed-g1 -ffixed-g5 -ffixed-g6 -ffixed-g7 $CFLAGS"
+    sparc64)
+           CFLAGS="-m64 -mcpu=ultrasparc -D__sparc_v9__ $CFLAGS"
+           LDFLAGS="-m64 $LDFLAGS"
+           CFLAGS="-ffixed-g5 -ffixed-g6 -ffixed-g7 $CFLAGS"
+           if test "$solaris" != "no" ; then
+             CFLAGS="-ffixed-g1 $CFLAGS"
            fi
            ;;
     s390)
@@ -705,14 +676,6 @@ echo "  --disable-cpu-emulation  disables use of qemu cpu emulation code"
 echo ""
 echo "NOTE: The object files are built at the place where configure is launched"
 exit 1
-fi
-
-if test "$mingw32" = "yes" ; then
-    linux="no"
-    EXESUF=".exe"
-    linux_user="no"
-    bsd_user="no"
-    CFLAGS="-DWIN32_LEAN_AND_MEAN -DWINVER=0x501 $CFLAGS"
 fi
 
 if test ! -x "$(which cgcc 2>/dev/null)"; then
@@ -835,30 +798,21 @@ fi
 else
 
 # if cross compiling, cannot launch a program, so make a static guess
-if test "$cpu" = "armv4b" \
-     -o "$cpu" = "hppa" \
-     -o "$cpu" = "m68k" \
-     -o "$cpu" = "mips" \
-     -o "$cpu" = "mips64" \
-     -o "$cpu" = "ppc" \
-     -o "$cpu" = "ppc64" \
-     -o "$cpu" = "s390" \
-     -o "$cpu" = "sparc" \
-     -o "$cpu" = "sparc64"; then
-    bigendian="yes"
-fi
+case "$cpu" in
+  armv4b|hppa|m68k|mips|mips64|ppc|ppc64|s390|sparc|sparc64)
+    bigendian=yes
+  ;;
+esac
 
 fi
 
 # host long bits test
 hostlongbits="32"
-if test "$cpu" = "x86_64" \
-     -o "$cpu" = "alpha" \
-     -o "$cpu" = "ia64" \
-     -o "$cpu" = "sparc64" \
-     -o "$cpu" = "ppc64"; then
-    hostlongbits="64"
-fi
+case "$cpu" in
+  x86_64|alpha|ia64|sparc64|ppc64)
+    hostlongbits=64
+  ;;
+esac
 
 # Check host NPTL support
 cat > $TMPC <<EOF
@@ -1217,8 +1171,9 @@ if test "$curl" = "yes" ; then
 #include <curl/curl.h>
 int main(void) { return curl_easy_init(); }
 EOF
+  curl_cflags=`curl-config --cflags 2>/dev/null`
   curl_libs=`curl-config --libs 2>/dev/null`
- if compile_prog "" "$curl_libs" ; then
+  if compile_prog "$curl_cflags" "$curl_libs" ; then
     curl=yes
   fi
 fi # test "$curl"
@@ -1740,9 +1695,6 @@ if test "$solaris" = "yes" ; then
     echo "CONFIG_NEEDS_LIBSUNMATH=y" >> $config_host_mak
   fi
 fi
-if test -n "$sparc_cpu"; then
-  echo "CONFIG__sparc_${sparc_cpu}__=y" >> $config_host_mak
-fi
 if test "$gprof" = "yes" ; then
   echo "TARGET_GPROF=yes" >> $config_host_mak
 fi
@@ -1837,6 +1789,7 @@ if test "$bswap_h" = "yes" ; then
 fi
 if test "$curl" = "yes" ; then
   echo "CONFIG_CURL=y" >> $config_host_mak
+  echo "CURL_CFLAGS=$curl_cflags" >> $config_host_mak
   echo "CURL_LIBS=$curl_libs" >> $config_host_mak
 fi
 if test "$brlapi" = "yes" ; then
