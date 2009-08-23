@@ -467,6 +467,79 @@ void test_long_jmp()
 	if(!regs_equal(&inregs, &outregs, R_AX) || outregs.eax != 0x1234)
 		print_serial("Long JMP Test: FAIL\n");
 }
+void test_push_pop()
+{
+	struct regs inregs = { 0 }, outregs;
+	MK_INSN(push32, "mov $0x12345678, %eax\n\t"
+			"push %eax\n\t"
+			"pop %ebx\n\t");
+	MK_INSN(push16, "mov $0x1234, %ax\n\t"
+			"push %ax\n\t"
+			"pop %bx\n\t");
+
+	MK_INSN(push_es, "mov $0x231, %bx\n\t" //Just write a dummy value to see if it gets overwritten
+			 "mov $0x123, %ax\n\t"
+			 "mov %ax, %es\n\t"
+			 "push %es\n\t"
+			 "pop %bx \n\t"
+			 );
+	MK_INSN(pop_es, "push %ax\n\t"
+			"pop %es\n\t"
+			"mov %es, %bx\n\t"
+			);
+	MK_INSN(push_pop_ss, "push %ss\n\t"
+			     "pushw %ax\n\t"
+			     "popw %ss\n\t"
+			     "mov %ss, %bx\n\t"
+			     "pop %ss\n\t"
+			);
+	MK_INSN(push_pop_fs, "push %fs\n\t"
+			     "pushl %eax\n\t"
+			     "popl %fs\n\t"
+			     "mov %fs, %ebx\n\t"
+			     "pop %fs\n\t"
+			);
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_push32,
+			      insn_push32_end - insn_push32);
+	if (!regs_equal(&inregs, &outregs, R_AX|R_BX) || outregs.eax != outregs.ebx || outregs.eax != 0x12345678)
+		print_serial("Push/Pop Test 1: FAIL\n");
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_push16,
+			      insn_push16_end - insn_push16);
+
+	if (!regs_equal(&inregs, &outregs, R_AX|R_BX) || outregs.eax != outregs.ebx || outregs.eax != 0x1234)
+		print_serial("Push/Pop Test 2: FAIL\n");
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_push_es,
+			      insn_push_es_end - insn_push_es);
+	if (!regs_equal(&inregs, &outregs, R_AX|R_BX) ||  outregs.ebx != outregs.eax || outregs.eax != 0x123)
+		print_serial("Push/Pop Test 3: FAIL\n");
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_pop_es,
+			      insn_pop_es_end - insn_pop_es);
+
+	if (!regs_equal(&inregs, &outregs, R_AX|R_BX) || outregs.ebx != outregs.eax)
+		print_serial("Push/Pop Test 4: FAIL\n");
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_push_pop_ss,
+			      insn_push_pop_ss_end - insn_push_pop_ss);
+
+	if (!regs_equal(&inregs, &outregs, R_AX|R_BX) || outregs.ebx != outregs.eax)
+		print_serial("Push/Pop Test 5: FAIL\n");
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_push_pop_fs,
+			      insn_push_pop_fs_end - insn_push_pop_fs);
+
+	if (!regs_equal(&inregs, &outregs, R_AX|R_BX) || outregs.ebx != outregs.eax)
+		print_serial("Push/Pop Test 6: FAIL\n");
+}
 
 void test_null(void)
 {
@@ -481,6 +554,7 @@ void start(void)
 	test_null();
 
 	test_shld();
+	test_push_pop();
 	test_mov_imm();
 	test_cmp_imm();
 	test_add_imm();
