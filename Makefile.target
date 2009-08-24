@@ -48,7 +48,6 @@ libobj-y += fack-exec.o
 else
 libobj-y += translate-all.o translate.o 
 endif
-libobj-$(CONFIG_KQEMU) += kqemu.o
 ifneq ($(NO_CPU_EMULATION), 1)
 libobj-y += tcg/tcg.o tcg/tcg-runtime.o
 endif
