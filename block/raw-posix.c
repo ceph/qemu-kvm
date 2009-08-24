@@ -29,9 +29,7 @@
 #include "module.h"
 #include "compatfd.h"
 #include <assert.h>
-#ifdef CONFIG_AIO
 #include "posix-aio-compat.h"
-#endif
 
 #ifdef CONFIG_COCOA
 #include <paths.h>
@@ -491,7 +489,6 @@ static int raw_write(BlockDriverState *bs, int64_t sector_num,
     return ret;
 }
 
-#ifdef CONFIG_AIO
 /***********************************************************/
 /* Unix AIO using POSIX AIO */
 
@@ -723,13 +720,6 @@ static BlockDriverAIOCB *raw_aio_writev(BlockDriverState *bs,
     }
     return &acb->common;
 }
-#else /* CONFIG_AIO */
-static int posix_aio_init(void)
-{
-    return 0;
-}
-#endif /* CONFIG_AIO */
-
 
 static void raw_close(BlockDriverState *bs)
 {
@@ -904,10 +894,8 @@ static BlockDriver bdrv_raw = {
     .bdrv_create = raw_create,
     .bdrv_flush = raw_flush,
 
-#ifdef CONFIG_AIO
     .bdrv_aio_readv = raw_aio_readv,
     .bdrv_aio_writev = raw_aio_writev,
-#endif
 
     .bdrv_truncate = raw_truncate,
     .bdrv_getlength = raw_getlength,
@@ -1024,7 +1012,7 @@ static int hdev_open(BlockDriverState *bs, const char *filename, int flags)
 #endif
 
     s->type = FTYPE_FILE;
-#if defined(__linux__) && defined(CONFIG_AIO)
+#if defined(__linux__)
     if (strstart(filename, "/dev/sg", NULL)) {
         bs->sg = 1;
     }
@@ -1090,7 +1078,6 @@ static int hdev_ioctl(BlockDriverState *bs, unsigned long int req, void *buf)
     return ioctl(s->fd, req, buf);
 }
 
-#ifdef CONFIG_AIO
 static BlockDriverAIOCB *hdev_aio_ioctl(BlockDriverState *bs,
         unsigned long int req, void *buf,
         BlockDriverCompletionFunc *cb, void *opaque)
@@ -1121,7 +1108,6 @@ static BlockDriverAIOCB *hdev_aio_ioctl(BlockDriverState *bs,
 
     return &acb->common;
 }
-#endif
 
 #elif defined(__FreeBSD__)
 static int fd_open(BlockDriverState *bs)
@@ -1181,10 +1167,8 @@ static BlockDriver bdrv_host_device = {
     .bdrv_create        = hdev_create,
     .bdrv_flush		= raw_flush,
 
-#ifdef CONFIG_AIO
     .bdrv_aio_readv	= raw_aio_readv,
     .bdrv_aio_writev	= raw_aio_writev,
-#endif
 
     .bdrv_read          = raw_read,
     .bdrv_write         = raw_write,
@@ -1193,9 +1177,7 @@ static BlockDriver bdrv_host_device = {
     /* generic scsi device */
 #ifdef __linux__
     .bdrv_ioctl         = hdev_ioctl,
-#ifdef CONFIG_AIO
     .bdrv_aio_ioctl     = hdev_aio_ioctl,
-#endif
 #endif
 };
 
@@ -1281,10 +1263,8 @@ static BlockDriver bdrv_host_floppy = {
     .bdrv_create        = hdev_create,
     .bdrv_flush         = raw_flush,
 
-#ifdef CONFIG_AIO
     .bdrv_aio_readv     = raw_aio_readv,
     .bdrv_aio_writev    = raw_aio_writev,
-#endif
 
     .bdrv_read          = raw_read,
     .bdrv_write         = raw_write,
@@ -1363,10 +1343,8 @@ static BlockDriver bdrv_host_cdrom = {
     .bdrv_create        = hdev_create,
     .bdrv_flush         = raw_flush,
 
-#ifdef CONFIG_AIO
     .bdrv_aio_readv     = raw_aio_readv,
     .bdrv_aio_writev    = raw_aio_writev,
-#endif
 
     .bdrv_read          = raw_read,
     .bdrv_write         = raw_write,
@@ -1379,9 +1357,7 @@ static BlockDriver bdrv_host_cdrom = {
 
     /* generic scsi device */
     .bdrv_ioctl         = hdev_ioctl,
-#ifdef CONFIG_AIO
     .bdrv_aio_ioctl     = hdev_aio_ioctl,
-#endif
 };
 #endif /* __linux__ */
 
@@ -1486,10 +1462,8 @@ static BlockDriver bdrv_host_cdrom = {
     .bdrv_create        = hdev_create,
     .bdrv_flush         = raw_flush,
 
-#ifdef CONFIG_AIO
     .bdrv_aio_readv     = raw_aio_readv,
     .bdrv_aio_writev    = raw_aio_writev,
-#endif
 
     .bdrv_read          = raw_read,
     .bdrv_write         = raw_write,
