@@ -65,7 +65,6 @@
 static fdctrl_t *floppy_controller;
 static RTCState *rtc_state;
 static PITState *pit;
-static IOAPICState *ioapic;
 static PCIDevice *i440fx_state;
 
 typedef struct rom_reset_data {
@@ -94,14 +93,18 @@ static void option_rom_setup_reset(target_phys_addr_t addr, unsigned size)
 
 typedef struct isa_irq_state {
     qemu_irq *i8259;
+    qemu_irq *ioapic;
 } IsaIrqState;
 
 static void isa_irq_handler(void *opaque, int n, int level)
 {
     IsaIrqState *isa = (IsaIrqState *)opaque;
 
-    qemu_set_irq(isa->i8259[n], level);
-}
+    if (n < 16) {
+        qemu_set_irq(isa->i8259[n], level);
+    }
+    qemu_set_irq(isa->ioapic[n], level);
+};
 
 static void ioport80_write(void *opaque, uint32_t addr, uint32_t data)
 {
@@ -1291,13 +1294,16 @@ static void pc_init1(ram_addr_t ram_size,
     cpu_irq = qemu_allocate_irqs(pic_irq_request, NULL, 1);
 #ifdef KVM_CAP_IRQCHIP
     if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
-        i8259 = kvm_i8259_init(cpu_irq[0]);
+        isa_irq_state = qemu_mallocz(sizeof(*isa_irq_state));
+        isa_irq = i8259 = kvm_i8259_init(cpu_irq[0]);
     } else
 #endif
+    {
         i8259 = i8259_init(cpu_irq[0]);
-    isa_irq_state = qemu_mallocz(sizeof(*isa_irq_state));
-    isa_irq_state->i8259 = i8259;
-    isa_irq = qemu_allocate_irqs(isa_irq_handler, isa_irq_state, 16);
+        isa_irq_state = qemu_mallocz(sizeof(*isa_irq_state));
+        isa_irq_state->i8259 = i8259;
+        isa_irq = qemu_allocate_irqs(isa_irq_handler, isa_irq_state, 24);
+    }
     ferr_irq = isa_irq[13];
 
     if (pci_enabled) {
@@ -1339,7 +1345,7 @@ static void pc_init1(ram_addr_t ram_size,
     register_ioport_write(0x92, 1, 1, ioport92_write, NULL);
 
     if (pci_enabled) {
-        ioapic = ioapic_init();
+        isa_irq_state->ioapic = ioapic_init();
     }
 #ifdef USE_KVM_PIT
     if (kvm_enabled() && qemu_kvm_pit_in_kernel())
@@ -1350,9 +1356,6 @@ static void pc_init1(ram_addr_t ram_size,
     pcspk_init(pit);
     if (!no_hpet) {
         hpet_init(isa_irq);
-    }
-    if (pci_enabled) {
-        pic_set_alt_irq_func(isa_pic, ioapic_set_irq, ioapic);
     }
 
     for(i = 0; i < MAX_SERIAL_PORTS; i++) {
