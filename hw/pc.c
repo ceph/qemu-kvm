@@ -1274,7 +1274,7 @@ static void pc_init1(ram_addr_t ram_size,
             continue;
 
         if (model == NULL)
-            model = "rtl8139";
+            model = "e1000";
         snprintf(nic_oprom, sizeof(nic_oprom), "pxe-%s.bin", model);
 
         oprom_area_size += load_option_rom(nic_oprom, 0xc0000 + oprom_area_size,
@@ -1370,7 +1370,7 @@ static void pc_init1(ram_addr_t ram_size,
         if (!pci_enabled || (nd->model && strcmp(nd->model, "ne2k_isa") == 0))
             pc_init_ne2k_isa(nd, isa_irq);
         else
-            pci_nic_init(nd, "rtl8139", NULL);
+            pci_nic_init(nd, "e1000", NULL);
     }
 
     piix4_acpi_system_hot_add_init(cpu_model);
@@ -1535,6 +1535,10 @@ static QEMUMachine pc_machine_v0_10 = {
             .value    = stringify(PCI_CLASS_DISPLAY_OTHER),
         },{
             .driver   = "virtio-net-pci",
+            .property = "vectors",
+            .value    = stringify(0),
+        },{
+            .driver   = "virtio-blk-pci",
             .property = "vectors",
             .value    = stringify(0),
         },
