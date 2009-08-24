@@ -89,7 +89,7 @@ endif
 # CPUs and machines.
 
 obj-y = $(block-obj-y)
-obj-y += readline.o console.o
+obj-y += readline.o console.o host-utils.o
 
 obj-y += irq.o ptimer.o
 obj-y += i2c.o smbus.o smbus_eeprom.o max7310.o max111x.o wm8750.o
@@ -266,8 +266,9 @@ endif
 test speed: all
 	$(MAKE) -C tests $@
 
+.PHONY: TAGS
 TAGS:
-	etags *.[ch] tests/*.[ch] block/*.[ch] hw/*.[ch]
+	find "$(SRC_PATH)" -name '*.[hc]' -print0 | xargs -0 etags
 
 cscope:
 	rm -f ./cscope.*

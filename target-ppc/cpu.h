@@ -57,10 +57,6 @@
 
 #include "cpu-defs.h"
 
-#define REGX "%016" PRIx64
-#define ADDRX TARGET_FMT_lx
-#define PADDRX TARGET_FMT_plx
-
 #include <setjmp.h>
 
 #include "softfloat.h"
@@ -782,7 +778,7 @@ int ppcemb_tlb_search (CPUPPCState *env, target_ulong address, uint32_t pid);
 #endif
 #endif
 
-static always_inline uint64_t ppc_dump_gpr (CPUPPCState *env, int gprn)
+static inline uint64_t ppc_dump_gpr(CPUPPCState *env, int gprn)
 {
     uint64_t gprv;
 
