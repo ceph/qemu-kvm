@@ -6147,8 +6147,11 @@ int main(int argc, char **argv, char **envp)
         exit(1);
     }
 
-    if (loadvm)
-        do_loadvm(cur_mon, loadvm);
+    if (loadvm) {
+        if (load_vmstate(cur_mon, loadvm) < 0) {
+            autostart = 0;
+        }
+    }
 
     if (incoming) {
         qemu_start_incoming_migration(incoming);

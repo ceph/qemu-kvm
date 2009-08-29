@@ -1745,6 +1745,16 @@ static void do_closefd(Monitor *mon, const char *fdname)
                    fdname);
 }
 
+static void do_loadvm(Monitor *mon, const char *name)
+{
+    int saved_vm_running  = vm_running;
+
+    vm_stop(0);
+
+    if (load_vmstate(mon, name) >= 0 && saved_vm_running)
+        vm_start();
+}
+
 int monitor_get_fd(Monitor *mon, const char *fdname)
 {
     mon_fd_t *monfd;
