@@ -177,6 +177,16 @@ kvm_version() {
     fi
 }
 
+# Default value for a variable defining feature "foo"
+#  * foo="no", feature will only be used if --enable-foo arg is given
+#  * foo="", feature will be searched for, and if found, will be used
+#  * foo="yes", this value vill only be set by --enable-foo flag.
+#                   feature will searched for, if not found, configure exits with error
+#
+# Always add --enable-foo and --disable-foo command line args.  Distributions want
+# to ensure that several features are compiled in, and it is impossible without a
+# --enable-foo that exits if feature is not found
+
 brlapi="yes"
 gprof="no"
 debug_tcg="no"
@@ -1159,8 +1169,10 @@ fi
 
 ##########################################
 # curses probe
+curses_list="-lncurses -lcurses"
 
 if test "$curses" = "yes" ; then
+  curses=no
   cat > $TMPC << EOF
 #include <curses.h>
 #ifdef __OpenBSD__
@@ -1168,14 +1180,14 @@ if test "$curses" = "yes" ; then
 #endif
 int main(void) { resize_term(0, 0); return curses_version(); }
 EOF
-  if compile_prog "" "-lncurses" ; then
-    libs_softmmu="-lncurses $libs_softmmu"
-  elif compile_prog "" "-lcurses" ; then
-    libs_softmmu="-lcurses $libs_softmmu"
-  else
-    curses=no
-  fi
-fi # test "$curses"
+  for curses_lib in $curses_list; do
+    if compile_prog "" "$curses_lib" ; then
+      curses=yes
+      libs_softmmu="$curses_lib $libs_softmmu"
+      break
+    fi
+  done
+fi
 
 ##########################################
 # curl probe
@@ -1630,15 +1642,7 @@ echo "Audio drivers     $audio_drv_list"
 echo "Extra audio cards $audio_card_list"
 echo "Mixer emulation   $mixemu"
 echo "VNC TLS support   $vnc_tls"
-if test "$vnc_tls" = "yes" ; then
-    echo "    TLS CFLAGS    $vnc_tls_cflags"
-    echo "    TLS LIBS      $vnc_tls_libs"
-fi
 echo "VNC SASL support  $vnc_sasl"
-if test "$vnc_sasl" = "yes" ; then
-    echo "    SASL CFLAGS    $vnc_sasl_cflags"
-    echo "    SASL LIBS      $vnc_sasl_libs"
-fi
 if test -n "$sparc_cpu"; then
     echo "Target Sparc Arch $sparc_cpu"
 fi
