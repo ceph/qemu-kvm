@@ -100,7 +100,7 @@ static PCIDevice *qemu_pci_hot_add_storage(Monitor *mon,
                                            const char *opts)
 {
     PCIDevice *dev;
-    DriveInfo *dinfo;
+    DriveInfo *dinfo = NULL;
     int type = -1;
     char buf[128];
 
