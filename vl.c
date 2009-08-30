@@ -240,8 +240,7 @@ uint8_t irq0override = 1;
 #ifndef _WIN32
 int daemonize = 0;
 #endif
-WatchdogTimerModel *watchdog = NULL;
-int watchdog_action = WDT_RESET;
+const char *watchdog;
 const char *option_rom[MAX_OPTION_ROMS];
 int nb_option_roms;
 int semihosting_enabled = 0;
@@ -5014,8 +5013,6 @@ int main(int argc, char **argv, char **envp)
     tb_size = 0;
     autostart= 1;
 
-    register_watchdogs();
-
     optind = 1;
     for(;;) {
         if (optind >= argc)
@@ -5427,9 +5424,12 @@ int main(int argc, char **argv, char **envp)
                 serial_device_index++;
                 break;
             case QEMU_OPTION_watchdog:
-                i = select_watchdog(optarg);
-                if (i > 0)
-                    exit (i == 1 ? 1 : 0);
+                if (watchdog) {
+                    fprintf(stderr,
+                            "qemu: only one watchdog option may be given\n");
+                    return 1;
+                }
+                watchdog = optarg;
                 break;
             case QEMU_OPTION_watchdog_action:
                 if (select_watchdog_action(optarg) == -1) {
@@ -6045,6 +6045,12 @@ int main(int argc, char **argv, char **envp)
     }
 
     module_call_init(MODULE_INIT_DEVICE);
+
+    if (watchdog) {
+        i = select_watchdog(watchdog);
+        if (i > 0)
+            exit (i == 1 ? 1 : 0);
+    }
 
     if (machine->compat_props) {
         qdev_prop_register_compat(machine->compat_props);
