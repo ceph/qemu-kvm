@@ -306,6 +306,7 @@ struct VMStateDescription {
     int minimum_version_id;
     int minimum_version_id_old;
     LoadStateHandler *load_state_old;
+    int (*run_after_load)(void *opaque);
     VMStateField *fields;
     void (*pre_save)(const void *opaque);
     void (*post_load)(void *opaque);
@@ -402,6 +403,18 @@ extern const VMStateInfo vmstate_info_buffer;
     .flags      = VMS_BUFFER,                                        \
     .offset     = offsetof(_state, _field)                           \
         + type_check_array(uint8_t,typeof_field(_state, _field),sizeof(typeof_field(_state,_field))) \
+}
+
+extern const VMStateDescription vmstate_pci_device;
+
+#define VMSTATE_PCI_DEVICE(_field, _state) {                         \
+    .name       = (stringify(_field)),                               \
+    .version_id = 2,                                                 \
+    .size       = sizeof(PCIDevice),                                 \
+    .vmsd       = &vmstate_pci_device,                               \
+    .flags      = VMS_STRUCT,                                        \
+    .offset     = offsetof(_state, _field)                           \
+            + type_check(PCIDevice,typeof_field(_state, _field))     \
 }
 
 /* _f : field name
