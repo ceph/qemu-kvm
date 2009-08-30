@@ -143,6 +143,7 @@ struct KVMCPUState {
     int signalled;
     void *vcpu_ctx;
     struct qemu_work_item *queued_work_first, *queued_work_last;
+    int regs_modified;
 };
 
 #define CPU_TEMP_BUF_NLONGS 128

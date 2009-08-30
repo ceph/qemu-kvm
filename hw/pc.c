@@ -1099,6 +1099,7 @@ CPUState *pc_new_cpu(const char *cpu_model)
             fprintf(stderr, "Unable to find x86 CPU definition\n");
             exit(1);
         }
+        env->kvm_cpu_state.regs_modified = 1;
         if ((env->cpuid_features & CPUID_APIC) || smp_cpus > 1) {
             env->cpuid_apic_id = env->cpu_index;
             /* APIC reset callback resets cpu */

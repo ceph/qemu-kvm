@@ -33,10 +33,7 @@ void cpu_save(QEMUFile *f, void *opaque)
     int32_t pending_irq;
     int i, bit;
 
-    if (kvm_enabled()) {
-        kvm_save_registers(env);
-        kvm_arch_save_mpstate(env);
-    }
+    cpu_synchronize_state(env);
 
     for(i = 0; i < CPU_NB_REGS; i++)
         qemu_put_betls(f, &env->regs[i]);
@@ -209,6 +206,7 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
     int32_t a20_mask;
     int32_t pending_irq;
 
+    cpu_synchronize_state(env);
     if (version_id < 3 || version_id > CPU_SAVE_VERSION)
         return -EINVAL;
     for(i = 0; i < CPU_NB_REGS; i++)
@@ -383,7 +381,6 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
     /* XXX: compute redundant hflags bits */
     env->hflags = hflags;
     tlb_flush(env, 1);
-    cpu_synchronize_state(env, 1);
     if (kvm_enabled()) {
         /* when in-kernel irqchip is used, env->halted causes deadlock
            because no userspace IRQs will ever clear this flag */
