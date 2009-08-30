@@ -229,8 +229,6 @@ int acpi_enabled = 1;
 #ifdef TARGET_I386
 int no_hpet = 0;
 #endif
-int virtio_balloon = 1;
-const char *virtio_balloon_devaddr;
 int fd_bootchk = 1;
 int no_reboot = 0;
 int no_shutdown = 0;
@@ -4648,23 +4646,27 @@ static void select_vgahw (const char *p)
 #ifdef TARGET_I386
 static int balloon_parse(const char *arg)
 {
-    char buf[128];
-    const char *p;
+    QemuOpts *opts;
 
-    if (!strcmp(arg, "none")) {
-        virtio_balloon = 0;
-    } else if (!strncmp(arg, "virtio", 6)) {
-        virtio_balloon = 1;
-        if (arg[6] == ',')  {
-            p = arg + 7;
-            if (get_param_value(buf, sizeof(buf), "addr", p)) {
-                virtio_balloon_devaddr = strdup(buf);
-            }
-        }
-    } else {
-        return -1;
+    if (strcmp(arg, "none") == 0) {
+        return 0;
     }
-    return 0;
+
+    if (!strncmp(arg, "virtio", 6)) {
+        if (arg[6] == ',') {
+            /* have params -> parse them */
+            opts = qemu_opts_parse(&qemu_device_opts, arg+7, NULL);
+            if (!opts)
+                return  -1;
+        } else {
+            /* create empty opts */
+            opts = qemu_opts_create(&qemu_device_opts, NULL, 0);
+        }
+        qemu_opt_set(opts, "driver", "virtio-balloon-pci");
+        return 0;
+    }
+
+    return -1;
 }
 #endif
 

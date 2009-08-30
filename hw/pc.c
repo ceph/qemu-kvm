@@ -1132,7 +1132,6 @@ static void pc_init1(ram_addr_t ram_size,
     int bios_size, isa_bios_size, oprom_area_size;
     int pci_option_rom_offset = 0;
     PCIBus *pci_bus;
-    PCIDevice *pci_dev;
     ISADevice *isa_dev;
     int piix3_devfn = -1;
     CPUState *env;
@@ -1457,12 +1456,6 @@ static void pc_init1(ram_addr_t ram_size,
 	}
 
 	extboot_init(info->bdrv, 1);
-    }
-
-    /* Add virtio balloon device */
-    if (pci_enabled && virtio_balloon) {
-        pci_dev = pci_create("virtio-balloon-pci", virtio_balloon_devaddr);
-        qdev_init(&pci_dev->qdev);
     }
 
     /* Add virtio console devices */
