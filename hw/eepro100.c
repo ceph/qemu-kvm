@@ -694,7 +694,8 @@ static void eepro100_cu_command(EEPRO100State * s, uint8_t val)
                 logout
                     ("illegal values of TBD array address and TCB byte count!\n");
             }
-            uint8_t buf[MAX_ETH_FRAME_SIZE + 4];
+            // sends larger than MAX_ETH_FRAME_SIZE are allowed, up to 2600 bytes
+            uint8_t buf[2600];
             uint16_t size = 0;
             uint32_t tbd_address = cb_address + 0x10;
             assert(tcb_bytes <= sizeof(buf));
@@ -706,6 +707,7 @@ static void eepro100_cu_command(EEPRO100State * s, uint8_t val)
                 logout
                     ("TBD (simplified mode): buffer address 0x%08x, size 0x%04x\n",
                      tx_buffer_address, tx_buffer_size);
+                tx_buffer_size = MIN(tx_buffer_size, sizeof(buf) - size);
                 cpu_physical_memory_read(tx_buffer_address, &buf[size],
                                          tx_buffer_size);
                 size += tx_buffer_size;
@@ -726,6 +728,7 @@ static void eepro100_cu_command(EEPRO100State * s, uint8_t val)
                         logout
                             ("TBD (extended flexible mode): buffer address 0x%08x, size 0x%04x\n",
                              tx_buffer_address, tx_buffer_size);
+                        tx_buffer_size = MIN(tx_buffer_size, sizeof(buf) - size);
                         cpu_physical_memory_read(tx_buffer_address, &buf[size],
                                                  tx_buffer_size);
                         size += tx_buffer_size;
@@ -743,6 +746,7 @@ static void eepro100_cu_command(EEPRO100State * s, uint8_t val)
                     logout
                         ("TBD (flexible mode): buffer address 0x%08x, size 0x%04x\n",
                          tx_buffer_address, tx_buffer_size);
+                    tx_buffer_size = MIN(tx_buffer_size, sizeof(buf) - size);
                     cpu_physical_memory_read(tx_buffer_address, &buf[size],
                                              tx_buffer_size);
                     size += tx_buffer_size;
@@ -1728,7 +1732,7 @@ static int pci_nic_uninit(PCIDevice *dev)
     return 0;
 }
 
-static void nic_init(PCIDevice *pci_dev, uint32_t device)
+static int nic_init(PCIDevice *pci_dev, uint32_t device)
 {
     PCIEEPRO100State *d = (PCIEEPRO100State *)pci_dev;
     EEPRO100State *s;
@@ -1774,21 +1778,22 @@ static void nic_init(PCIDevice *pci_dev, uint32_t device)
     qemu_register_reset(nic_reset, s);
 
     register_savevm(s->vc->model, -1, 3, nic_save, nic_load, s);
+    return 0;
 }
 
-static void pci_i82551_init(PCIDevice *dev)
+static int pci_i82551_init(PCIDevice *dev)
 {
-    nic_init(dev, i82551);
+    return nic_init(dev, i82551);
 }
 
-static void pci_i82557b_init(PCIDevice *dev)
+static int pci_i82557b_init(PCIDevice *dev)
 {
-    nic_init(dev, i82557B);
+    return nic_init(dev, i82557B);
 }
 
-static void pci_i82559er_init(PCIDevice *dev)
+static int pci_i82559er_init(PCIDevice *dev)
 {
-    nic_init(dev, i82559ER);
+    return nic_init(dev, i82559ER);
 }
 
 static PCIDeviceInfo eepro100_info[] = {
