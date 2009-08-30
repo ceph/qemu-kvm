@@ -177,19 +177,19 @@ static void arm_sysctl_write(void *opaque, target_phys_addr_t offset,
     }
 }
 
-static CPUReadMemoryFunc *arm_sysctl_readfn[] = {
+static CPUReadMemoryFunc * const arm_sysctl_readfn[] = {
    arm_sysctl_read,
    arm_sysctl_read,
    arm_sysctl_read
 };
 
-static CPUWriteMemoryFunc *arm_sysctl_writefn[] = {
+static CPUWriteMemoryFunc * const arm_sysctl_writefn[] = {
    arm_sysctl_write,
    arm_sysctl_write,
    arm_sysctl_write
 };
 
-static void arm_sysctl_init1(SysBusDevice *dev)
+static int arm_sysctl_init1(SysBusDevice *dev)
 {
     arm_sysctl_state *s = FROM_SYSBUS(arm_sysctl_state, dev);
     int iomemtype;
@@ -201,6 +201,7 @@ static void arm_sysctl_init1(SysBusDevice *dev)
                                        arm_sysctl_writefn, s);
     sysbus_init_mmio(dev, 0x1000, iomemtype);
     /* ??? Save/restore.  */
+    return 0;
 }
 
 /* Legacy helper function.  */

@@ -17,6 +17,7 @@
 #include "flash.h"
 #include "qemu-log.h"
 #include "mips-bios.h"
+#include "ide.h"
 
 #define PHYS_TO_VIRT(x) ((x) | ~(target_ulong)0x7fffffff)
 
@@ -56,13 +57,13 @@ static uint32_t mips_qemu_readl (void *opaque, target_phys_addr_t addr)
     return 0;
 }
 
-static CPUWriteMemoryFunc *mips_qemu_write[] = {
+static CPUWriteMemoryFunc * const mips_qemu_write[] = {
     &mips_qemu_writel,
     &mips_qemu_writel,
     &mips_qemu_writel,
 };
 
-static CPUReadMemoryFunc *mips_qemu_read[] = {
+static CPUReadMemoryFunc * const mips_qemu_read[] = {
     &mips_qemu_readl,
     &mips_qemu_readl,
     &mips_qemu_readl,

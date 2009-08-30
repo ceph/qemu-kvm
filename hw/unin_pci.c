@@ -71,25 +71,25 @@ static uint32_t pci_unin_main_config_readl (void *opaque,
     return val;
 }
 
-static CPUWriteMemoryFunc *pci_unin_main_config_write[] = {
+static CPUWriteMemoryFunc * const pci_unin_main_config_write[] = {
     &pci_unin_main_config_writel,
     &pci_unin_main_config_writel,
     &pci_unin_main_config_writel,
 };
 
-static CPUReadMemoryFunc *pci_unin_main_config_read[] = {
+static CPUReadMemoryFunc * const pci_unin_main_config_read[] = {
     &pci_unin_main_config_readl,
     &pci_unin_main_config_readl,
     &pci_unin_main_config_readl,
 };
 
-static CPUWriteMemoryFunc *pci_unin_main_write[] = {
+static CPUWriteMemoryFunc * const pci_unin_main_write[] = {
     &pci_host_data_writeb,
     &pci_host_data_writew,
     &pci_host_data_writel,
 };
 
-static CPUReadMemoryFunc *pci_unin_main_read[] = {
+static CPUReadMemoryFunc * const pci_unin_main_read[] = {
     &pci_host_data_readb,
     &pci_host_data_readw,
     &pci_host_data_readl,
@@ -111,25 +111,25 @@ static uint32_t pci_unin_config_readl (void *opaque,
     return s->host_state.config_reg;
 }
 
-static CPUWriteMemoryFunc *pci_unin_config_write[] = {
+static CPUWriteMemoryFunc * const pci_unin_config_write[] = {
     &pci_unin_config_writel,
     &pci_unin_config_writel,
     &pci_unin_config_writel,
 };
 
-static CPUReadMemoryFunc *pci_unin_config_read[] = {
+static CPUReadMemoryFunc * const pci_unin_config_read[] = {
     &pci_unin_config_readl,
     &pci_unin_config_readl,
     &pci_unin_config_readl,
 };
 
-static CPUWriteMemoryFunc *pci_unin_write[] = {
+static CPUWriteMemoryFunc * const pci_unin_write[] = {
     &pci_host_data_writeb,
     &pci_host_data_writew,
     &pci_host_data_writel,
 };
 
-static CPUReadMemoryFunc *pci_unin_read[] = {
+static CPUReadMemoryFunc * const pci_unin_read[] = {
     &pci_host_data_readb,
     &pci_host_data_readw,
     &pci_host_data_readl,
@@ -167,7 +167,7 @@ static void pci_unin_reset(void *opaque)
 {
 }
 
-static void pci_unin_main_init_device(SysBusDevice *dev)
+static int pci_unin_main_init_device(SysBusDevice *dev)
 {
     UNINState *s;
     int pci_mem_config, pci_mem_data;
@@ -187,9 +187,10 @@ static void pci_unin_main_init_device(SysBusDevice *dev)
     register_savevm("uninorth", 0, 1, pci_unin_save, pci_unin_load, &s->host_state);
     qemu_register_reset(pci_unin_reset, &s->host_state);
     pci_unin_reset(&s->host_state);
+    return 0;
 }
 
-static void pci_dec_21154_init_device(SysBusDevice *dev)
+static int pci_dec_21154_init_device(SysBusDevice *dev)
 {
     UNINState *s;
     int pci_mem_config, pci_mem_data;
@@ -204,9 +205,10 @@ static void pci_dec_21154_init_device(SysBusDevice *dev)
                                           pci_unin_main_write, &s->host_state);
     sysbus_init_mmio(dev, 0x1000, pci_mem_config);
     sysbus_init_mmio(dev, 0x1000, pci_mem_data);
+    return 0;
 }
 
-static void pci_unin_agp_init_device(SysBusDevice *dev)
+static int pci_unin_agp_init_device(SysBusDevice *dev)
 {
     UNINState *s;
     int pci_mem_config, pci_mem_data;
@@ -220,9 +222,10 @@ static void pci_unin_agp_init_device(SysBusDevice *dev)
                                           pci_unin_main_write, &s->host_state);
     sysbus_init_mmio(dev, 0x1000, pci_mem_config);
     sysbus_init_mmio(dev, 0x1000, pci_mem_data);
+    return 0;
 }
 
-static void pci_unin_internal_init_device(SysBusDevice *dev)
+static int pci_unin_internal_init_device(SysBusDevice *dev)
 {
     UNINState *s;
     int pci_mem_config, pci_mem_data;
@@ -236,6 +239,7 @@ static void pci_unin_internal_init_device(SysBusDevice *dev)
                                           pci_unin_write, s);
     sysbus_init_mmio(dev, 0x1000, pci_mem_config);
     sysbus_init_mmio(dev, 0x1000, pci_mem_data);
+    return 0;
 }
 
 PCIBus *pci_pmac_init(qemu_irq *pic)
@@ -277,7 +281,7 @@ PCIBus *pci_pmac_init(qemu_irq *pic)
     return d->host_state.bus;
 }
 
-static void unin_main_pci_host_init(PCIDevice *d)
+static int unin_main_pci_host_init(PCIDevice *d)
 {
     pci_config_set_vendor_id(d->config, PCI_VENDOR_ID_APPLE);
     pci_config_set_device_id(d->config, PCI_DEVICE_ID_APPLE_UNI_N_PCI);
@@ -287,9 +291,10 @@ static void unin_main_pci_host_init(PCIDevice *d)
     d->config[0x0D] = 0x10; // latency_timer
     d->config[PCI_HEADER_TYPE] = PCI_HEADER_TYPE_NORMAL; // header_type
     d->config[0x34] = 0x00; // capabilities_pointer
+    return 0;
 }
 
-static void dec_21154_pci_host_init(PCIDevice *d)
+static int dec_21154_pci_host_init(PCIDevice *d)
 {
     /* pci-to-pci bridge */
     pci_config_set_vendor_id(d->config, PCI_VENDOR_ID_DEC);
@@ -315,9 +320,10 @@ static void dec_21154_pci_host_init(PCIDevice *d)
     d->config[0x26] = 0xF1; // prefectchable_memory_limit
     d->config[0x27] = 0x7F;
     // d->config[0x34] = 0xdc // capabilities_pointer
+    return 0;
 }
 
-static void unin_agp_pci_host_init(PCIDevice *d)
+static int unin_agp_pci_host_init(PCIDevice *d)
 {
     pci_config_set_vendor_id(d->config, PCI_VENDOR_ID_APPLE);
     pci_config_set_device_id(d->config, PCI_DEVICE_ID_APPLE_UNI_N_AGP);
@@ -327,9 +333,10 @@ static void unin_agp_pci_host_init(PCIDevice *d)
     d->config[0x0D] = 0x10; // latency_timer
     d->config[PCI_HEADER_TYPE] = PCI_HEADER_TYPE_NORMAL; // header_type
     //    d->config[0x34] = 0x80; // capabilities_pointer
+    return 0;
 }
 
-static void unin_internal_pci_host_init(PCIDevice *d)
+static int unin_internal_pci_host_init(PCIDevice *d)
 {
     pci_config_set_vendor_id(d->config, PCI_VENDOR_ID_APPLE);
     pci_config_set_device_id(d->config, PCI_DEVICE_ID_APPLE_UNI_N_I_PCI);
@@ -339,6 +346,7 @@ static void unin_internal_pci_host_init(PCIDevice *d)
     d->config[0x0D] = 0x10; // latency_timer
     d->config[PCI_HEADER_TYPE] = PCI_HEADER_TYPE_NORMAL; // header_type
     d->config[0x34] = 0x00; // capabilities_pointer
+    return 0;
 }
 
 static PCIDeviceInfo unin_main_pci_host_info = {

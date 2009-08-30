@@ -285,12 +285,12 @@ timer_writel (void *opaque, target_phys_addr_t addr, uint32_t value)
     }
 }
 
-static CPUReadMemoryFunc *timer_read[] = {
+static CPUReadMemoryFunc * const timer_read[] = {
     NULL, NULL,
     &timer_readl,
 };
 
-static CPUWriteMemoryFunc *timer_write[] = {
+static CPUWriteMemoryFunc * const timer_write[] = {
     NULL, NULL,
     &timer_writel,
 };
@@ -308,7 +308,7 @@ static void etraxfs_timer_reset(void *opaque)
     qemu_irq_lower(t->irq);
 }
 
-static void etraxfs_timer_init(SysBusDevice *dev)
+static int etraxfs_timer_init(SysBusDevice *dev)
 {
     struct etrax_timer *t = FROM_SYSBUS(typeof (*t), dev);
     int timer_regs;
@@ -327,6 +327,7 @@ static void etraxfs_timer_init(SysBusDevice *dev)
     sysbus_init_mmio(dev, 0x5c, timer_regs);
 
     qemu_register_reset(etraxfs_timer_reset, t);
+    return 0;
 }
 
 static void etraxfs_timer_register(void)

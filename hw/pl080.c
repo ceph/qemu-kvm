@@ -307,19 +307,19 @@ static void pl080_write(void *opaque, target_phys_addr_t offset,
     pl080_update(s);
 }
 
-static CPUReadMemoryFunc *pl080_readfn[] = {
+static CPUReadMemoryFunc * const pl080_readfn[] = {
    pl080_read,
    pl080_read,
    pl080_read
 };
 
-static CPUWriteMemoryFunc *pl080_writefn[] = {
+static CPUWriteMemoryFunc * const pl080_writefn[] = {
    pl080_write,
    pl080_write,
    pl080_write
 };
 
-static void pl08x_init(SysBusDevice *dev, int nchannels)
+static int pl08x_init(SysBusDevice *dev, int nchannels)
 {
     int iomemtype;
     pl080_state *s = FROM_SYSBUS(pl080_state, dev);
@@ -330,16 +330,17 @@ static void pl08x_init(SysBusDevice *dev, int nchannels)
     sysbus_init_irq(dev, &s->irq);
     s->nchannels = nchannels;
     /* ??? Save/restore.  */
+    return 0;
 }
 
-static void pl080_init(SysBusDevice *dev)
+static int pl080_init(SysBusDevice *dev)
 {
-    pl08x_init(dev, 8);
+    return pl08x_init(dev, 8);
 }
 
-static void pl081_init(SysBusDevice *dev)
+static int pl081_init(SysBusDevice *dev)
 {
-    pl08x_init(dev, 2);
+    return pl08x_init(dev, 2);
 }
 
 /* The PL080 and PL081 are the same except for the number of channels

@@ -117,19 +117,19 @@ static void vpb_sic_write(void *opaque, target_phys_addr_t offset,
     vpb_sic_update(s);
 }
 
-static CPUReadMemoryFunc *vpb_sic_readfn[] = {
+static CPUReadMemoryFunc * const vpb_sic_readfn[] = {
    vpb_sic_read,
    vpb_sic_read,
    vpb_sic_read
 };
 
-static CPUWriteMemoryFunc *vpb_sic_writefn[] = {
+static CPUWriteMemoryFunc * const vpb_sic_writefn[] = {
    vpb_sic_write,
    vpb_sic_write,
    vpb_sic_write
 };
 
-static void vpb_sic_init(SysBusDevice *dev)
+static int vpb_sic_init(SysBusDevice *dev)
 {
     vpb_sic_state *s = FROM_SYSBUS(vpb_sic_state, dev);
     int iomemtype;
@@ -144,6 +144,7 @@ static void vpb_sic_init(SysBusDevice *dev)
                                        vpb_sic_writefn, s);
     sysbus_init_mmio(dev, 0x1000, iomemtype);
     /* ??? Save/restore.  */
+    return 0;
 }
 
 /* Board init.  */

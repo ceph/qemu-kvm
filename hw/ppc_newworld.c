@@ -35,6 +35,7 @@
 #include "fw_cfg.h"
 #include "escc.h"
 #include "openpic.h"
+#include "ide.h"
 
 #define MAX_IDE_BUS 2
 #define VGA_BIOS_SIZE 65536
@@ -66,13 +67,13 @@ static uint32_t unin_readl (void *opaque, target_phys_addr_t addr)
     return value;
 }
 
-static CPUWriteMemoryFunc *unin_write[] = {
+static CPUWriteMemoryFunc * const unin_write[] = {
     &unin_writel,
     &unin_writel,
     &unin_writel,
 };
 
-static CPUReadMemoryFunc *unin_read[] = {
+static CPUReadMemoryFunc * const unin_read[] = {
     &unin_readl,
     &unin_readl,
     &unin_readl,

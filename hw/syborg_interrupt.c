@@ -156,13 +156,13 @@ static void syborg_int_write(void *opaque, target_phys_addr_t offset, uint32_t v
     syborg_int_update(s);
 }
 
-static CPUReadMemoryFunc *syborg_int_readfn[] = {
+static CPUReadMemoryFunc * const syborg_int_readfn[] = {
     syborg_int_read,
     syborg_int_read,
     syborg_int_read
 };
 
-static CPUWriteMemoryFunc *syborg_int_writefn[] = {
+static CPUWriteMemoryFunc * const syborg_int_writefn[] = {
     syborg_int_write,
     syborg_int_write,
     syborg_int_write
@@ -202,7 +202,7 @@ static int syborg_int_load(QEMUFile *f, void *opaque, int version_id)
     return 0;
 }
 
-static void syborg_int_init(SysBusDevice *dev)
+static int syborg_int_init(SysBusDevice *dev)
 {
     SyborgIntState *s = FROM_SYSBUS(SyborgIntState, dev);
     int iomemtype;
@@ -215,6 +215,7 @@ static void syborg_int_init(SysBusDevice *dev)
     s->flags = qemu_mallocz(s->num_irqs * sizeof(syborg_int_flags));
 
     register_savevm("syborg_int", -1, 1, syborg_int_save, syborg_int_load, s);
+    return 0;
 }
 
 static SysBusDeviceInfo syborg_int_info = {

@@ -200,13 +200,13 @@ static void pl190_write(void *opaque, target_phys_addr_t offset, uint32_t val)
     pl190_update(s);
 }
 
-static CPUReadMemoryFunc *pl190_readfn[] = {
+static CPUReadMemoryFunc * const pl190_readfn[] = {
    pl190_read,
    pl190_read,
    pl190_read
 };
 
-static CPUWriteMemoryFunc *pl190_writefn[] = {
+static CPUWriteMemoryFunc * const pl190_writefn[] = {
    pl190_write,
    pl190_write,
    pl190_write
@@ -227,7 +227,7 @@ static void pl190_reset(pl190_state *s)
   pl190_update_vectors(s);
 }
 
-static void pl190_init(SysBusDevice *dev)
+static int pl190_init(SysBusDevice *dev)
 {
     pl190_state *s = FROM_SYSBUS(pl190_state, dev);
     int iomemtype;
@@ -240,6 +240,7 @@ static void pl190_init(SysBusDevice *dev)
     sysbus_init_irq(dev, &s->fiq);
     pl190_reset(s);
     /* ??? Save/restore.  */
+    return 0;
 }
 
 static void pl190_register_devices(void)

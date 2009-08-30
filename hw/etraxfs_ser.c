@@ -122,12 +122,12 @@ ser_writel (void *opaque, target_phys_addr_t addr, uint32_t value)
     ser_update_irq(s);
 }
 
-static CPUReadMemoryFunc *ser_read[] = {
+static CPUReadMemoryFunc * const ser_read[] = {
     NULL, NULL,
     &ser_readl,
 };
 
-static CPUWriteMemoryFunc *ser_write[] = {
+static CPUWriteMemoryFunc * const ser_write[] = {
     NULL, NULL,
     &ser_writel,
 };
@@ -161,7 +161,7 @@ static void serial_event(void *opaque, int event)
 
 }
 
-static void etraxfs_ser_init(SysBusDevice *dev)
+static int etraxfs_ser_init(SysBusDevice *dev)
 {
     struct etrax_serial *s = FROM_SYSBUS(typeof (*s), dev);
     int ser_regs;
@@ -178,6 +178,7 @@ static void etraxfs_ser_init(SysBusDevice *dev)
         qemu_chr_add_handlers(s->chr,
                       serial_can_receive, serial_receive,
                       serial_event, s);
+    return 0;
 }
 
 static void etraxfs_serial_register(void)

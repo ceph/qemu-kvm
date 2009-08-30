@@ -38,6 +38,7 @@
 #include "boards.h"
 #include "qemu-log.h"
 #include "mips-bios.h"
+#include "ide.h"
 
 //#define DEBUG_BOARD_INIT
 
@@ -387,13 +388,13 @@ static void malta_fpga_writel(void *opaque, target_phys_addr_t addr,
     }
 }
 
-static CPUReadMemoryFunc *malta_fpga_read[] = {
+static CPUReadMemoryFunc * const malta_fpga_read[] = {
    malta_fpga_readl,
    malta_fpga_readl,
    malta_fpga_readl
 };
 
-static CPUWriteMemoryFunc *malta_fpga_write[] = {
+static CPUWriteMemoryFunc * const malta_fpga_write[] = {
    malta_fpga_writel,
    malta_fpga_writel,
    malta_fpga_writel
@@ -929,7 +930,7 @@ void mips_malta_init (ram_addr_t ram_size,
         dinfo = drive_get(IF_FLOPPY, 0, i);
         fd[i] = dinfo ? dinfo->bdrv : NULL;
     }
-    floppy_controller = fdctrl_init(i8259[6], 2, 0, 0x3f0, fd);
+    floppy_controller = fdctrl_init_isa(6, 2, 0x3f0, fd);
 
     /* Sound card */
 #ifdef HAS_AUDIO

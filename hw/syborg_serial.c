@@ -261,13 +261,13 @@ static void syborg_serial_event(void *opaque, int event)
     /* TODO: Report BREAK events?  */
 }
 
-static CPUReadMemoryFunc *syborg_serial_readfn[] = {
+static CPUReadMemoryFunc * const syborg_serial_readfn[] = {
      syborg_serial_read,
      syborg_serial_read,
      syborg_serial_read
 };
 
-static CPUWriteMemoryFunc *syborg_serial_writefn[] = {
+static CPUWriteMemoryFunc * const syborg_serial_writefn[] = {
      syborg_serial_write,
      syborg_serial_write,
      syborg_serial_write
@@ -315,7 +315,7 @@ static int syborg_serial_load(QEMUFile *f, void *opaque, int version_id)
     return 0;
 }
 
-static void syborg_serial_init(SysBusDevice *dev)
+static int syborg_serial_init(SysBusDevice *dev)
 {
     SyborgSerialState *s = FROM_SYSBUS(SyborgSerialState, dev);
     int iomemtype;
@@ -337,6 +337,7 @@ static void syborg_serial_init(SysBusDevice *dev)
 
     register_savevm("syborg_serial", -1, 1,
                     syborg_serial_save, syborg_serial_load, s);
+    return 0;
 }
 
 static SysBusDeviceInfo syborg_serial_info = {

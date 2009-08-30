@@ -8,7 +8,7 @@ void cpu_save(QEMUFile *f, void *opaque)
     CPUState *env = (CPUState *)opaque;
     unsigned int i, j;
 
-    cpu_synchronize_state(env, 0);
+    cpu_synchronize_state(env);
 
     for (i = 0; i < 32; i++)
         qemu_put_betls(f, &env->gpr[i]);
@@ -97,6 +97,8 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
     CPUState *env = (CPUState *)opaque;
     unsigned int i, j;
 
+    cpu_synchronize_state(env);
+
     for (i = 0; i < 32; i++)
         qemu_get_betls(f, &env->gpr[i]);
 #if !defined(TARGET_PPC64)
@@ -177,8 +179,6 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
     qemu_get_betls(f, &env->hflags_nmsr);
     qemu_get_sbe32s(f, &env->mmu_idx);
     qemu_get_sbe32s(f, &env->power_mode);
-
-    cpu_synchronize_state(env, 1);
 
     return 0;
 }

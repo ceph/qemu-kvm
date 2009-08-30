@@ -84,13 +84,13 @@ static void sbi_mem_writel(void *opaque, target_phys_addr_t addr, uint32_t val)
     }
 }
 
-static CPUReadMemoryFunc *sbi_mem_read[3] = {
+static CPUReadMemoryFunc * const sbi_mem_read[3] = {
     NULL,
     NULL,
     sbi_mem_readl,
 };
 
-static CPUWriteMemoryFunc *sbi_mem_write[3] = {
+static CPUWriteMemoryFunc * const sbi_mem_write[3] = {
     NULL,
     NULL,
     sbi_mem_writel,
@@ -131,7 +131,7 @@ static void sbi_reset(void *opaque)
     }
 }
 
-static void sbi_init1(SysBusDevice *dev)
+static int sbi_init1(SysBusDevice *dev)
 {
     SBIState *s = FROM_SYSBUS(SBIState, dev);
     int sbi_io_memory;
@@ -148,6 +148,7 @@ static void sbi_init1(SysBusDevice *dev)
     register_savevm("sbi", -1, 1, sbi_save, sbi_load, s);
     qemu_register_reset(sbi_reset, s);
     sbi_reset(s);
+    return 0;
 }
 
 static SysBusDeviceInfo sbi_info = {

@@ -874,6 +874,15 @@ int kvm_set_mpstate(kvm_vcpu_context_t vcpu, struct kvm_mp_state *mp_state)
 }
 #endif
 
+void kvm_cpu_synchronize_state(CPUState *env)
+{
+    if (!env->kvm_cpu_state.regs_modified) {
+        kvm_arch_get_registers(env);
+        kvm_arch_save_mpstate(env);
+        env->kvm_cpu_state.regs_modified = 1;
+    }
+}
+
 static int handle_mmio(kvm_vcpu_context_t vcpu)
 {
     unsigned long addr = vcpu->run->mmio.phys_addr;
@@ -947,6 +956,7 @@ int kvm_run(kvm_vcpu_context_t vcpu, void *env)
     int fd = vcpu->fd;
     struct kvm_run *run = vcpu->run;
     kvm_context_t kvm = vcpu->kvm;
+    CPUState *_env = env;
 
   again:
     push_nmi(kvm);
@@ -954,6 +964,13 @@ int kvm_run(kvm_vcpu_context_t vcpu, void *env)
     if (!kvm->irqchip_in_kernel)
         run->request_interrupt_window = kvm_arch_try_push_interrupts(env);
 #endif
+
+    if (_env->kvm_cpu_state.regs_modified) {
+        kvm_arch_put_registers(_env);
+        kvm_arch_load_mpstate(_env);
+        _env->kvm_cpu_state.regs_modified = 0;
+    }
+
     r = pre_kvm_run(kvm, env);
     if (r)
         return r;

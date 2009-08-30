@@ -162,13 +162,13 @@ static void syborg_timer_write(void *opaque, target_phys_addr_t offset,
     }
 }
 
-static CPUReadMemoryFunc *syborg_timer_readfn[] = {
+static CPUReadMemoryFunc * const syborg_timer_readfn[] = {
     syborg_timer_read,
     syborg_timer_read,
     syborg_timer_read
 };
 
-static CPUWriteMemoryFunc *syborg_timer_writefn[] = {
+static CPUWriteMemoryFunc * const syborg_timer_writefn[] = {
     syborg_timer_write,
     syborg_timer_write,
     syborg_timer_write
@@ -203,7 +203,7 @@ static int syborg_timer_load(QEMUFile *f, void *opaque, int version_id)
     return 0;
 }
 
-static void syborg_timer_init(SysBusDevice *dev)
+static int syborg_timer_init(SysBusDevice *dev)
 {
     SyborgTimerState *s = FROM_SYSBUS(SyborgTimerState, dev);
     QEMUBH *bh;
@@ -223,6 +223,7 @@ static void syborg_timer_init(SysBusDevice *dev)
     ptimer_set_freq(s->timer, s->freq);
     register_savevm("syborg_timer", -1, 1,
                     syborg_timer_save, syborg_timer_load, s);
+    return 0;
 }
 
 static SysBusDeviceInfo syborg_timer_info = {

@@ -227,13 +227,13 @@ static void pl022_reset(pl022_state *s)
     s->sr = PL022_SR_TFE | PL022_SR_TNF;
 }
 
-static CPUReadMemoryFunc *pl022_readfn[] = {
+static CPUReadMemoryFunc * const pl022_readfn[] = {
    pl022_read,
    pl022_read,
    pl022_read
 };
 
-static CPUWriteMemoryFunc *pl022_writefn[] = {
+static CPUWriteMemoryFunc * const pl022_writefn[] = {
    pl022_write,
    pl022_write,
    pl022_write
@@ -288,7 +288,7 @@ static int pl022_load(QEMUFile *f, void *opaque, int version_id)
     return 0;
 }
 
-static void pl022_init(SysBusDevice *dev)
+static int pl022_init(SysBusDevice *dev)
 {
     pl022_state *s = FROM_SYSBUS(pl022_state, dev);
     int iomemtype;
@@ -300,6 +300,7 @@ static void pl022_init(SysBusDevice *dev)
     s->ssi = ssi_create_bus(&dev->qdev, "ssi");
     pl022_reset(s);
     register_savevm("pl022_ssp", -1, 1, pl022_save, pl022_load, s);
+    return 0;
 }
 
 static void pl022_register_devices(void)

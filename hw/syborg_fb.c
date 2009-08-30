@@ -445,13 +445,13 @@ static void syborg_fb_write(void *opaque, target_phys_addr_t offset,
     }
 }
 
-static CPUReadMemoryFunc *syborg_fb_readfn[] = {
+static CPUReadMemoryFunc * const syborg_fb_readfn[] = {
     syborg_fb_read,
     syborg_fb_read,
     syborg_fb_read
 };
 
-static CPUWriteMemoryFunc *syborg_fb_writefn[] = {
+static CPUWriteMemoryFunc * const syborg_fb_writefn[] = {
     syborg_fb_write,
     syborg_fb_write,
     syborg_fb_write
@@ -503,7 +503,7 @@ static int syborg_fb_load(QEMUFile *f, void *opaque, int version_id)
     return 0;
 }
 
-static void syborg_fb_init(SysBusDevice *dev)
+static int syborg_fb_init(SysBusDevice *dev)
 {
     SyborgFBState *s = FROM_SYSBUS(SyborgFBState, dev);
     int iomemtype;
@@ -528,6 +528,7 @@ static void syborg_fb_init(SysBusDevice *dev)
 
     register_savevm("syborg_framebuffer", -1, 1,
                     syborg_fb_save, syborg_fb_load, s);
+    return 0;
 }
 
 static SysBusDeviceInfo syborg_fb_info = {

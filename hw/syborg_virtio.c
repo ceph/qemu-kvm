@@ -219,13 +219,13 @@ static void syborg_virtio_writeb(void *opaque, target_phys_addr_t offset,
     BADF("Bad byte write offset 0x%x\n", (int)offset);
 }
 
-static CPUReadMemoryFunc *syborg_virtio_readfn[] = {
+static CPUReadMemoryFunc * const syborg_virtio_readfn[] = {
      syborg_virtio_readb,
      syborg_virtio_readw,
      syborg_virtio_readl
 };
 
-static CPUWriteMemoryFunc *syborg_virtio_writefn[] = {
+static CPUWriteMemoryFunc * const syborg_virtio_writefn[] = {
      syborg_virtio_writeb,
      syborg_virtio_writew,
      syborg_virtio_writel
@@ -245,7 +245,7 @@ static VirtIOBindings syborg_virtio_bindings = {
     .notify = syborg_virtio_update_irq
 };
 
-static void syborg_virtio_init(SyborgVirtIOProxy *proxy, VirtIODevice *vdev)
+static int syborg_virtio_init(SyborgVirtIOProxy *proxy, VirtIODevice *vdev)
 {
     int iomemtype;
 
@@ -263,17 +263,18 @@ static void syborg_virtio_init(SyborgVirtIOProxy *proxy, VirtIODevice *vdev)
     qemu_register_reset(virtio_reset, vdev);
 
     virtio_bind_device(vdev, &syborg_virtio_bindings, proxy);
+    return 0;
 }
 
 /* Device specific bindings.  */
 
-static void syborg_virtio_net_init(SysBusDevice *dev)
+static int syborg_virtio_net_init(SysBusDevice *dev)
 {
     VirtIODevice *vdev;
     SyborgVirtIOProxy *proxy = FROM_SYSBUS(SyborgVirtIOProxy, dev);
 
     vdev = virtio_net_init(&dev->qdev);
-    syborg_virtio_init(proxy, vdev);
+    return syborg_virtio_init(proxy, vdev);
 }
 
 static void syborg_virtio_register_devices(void)

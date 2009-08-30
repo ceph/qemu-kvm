@@ -36,6 +36,7 @@
 #include "hpet_emul.h"
 #include "watchdog.h"
 #include "smbios.h"
+#include "ide.h"
 #include "device-assignment.h"
 
 #include "qemu-kvm.h"
@@ -1047,13 +1048,14 @@ static void audio_init (PCIBus *pci_bus, qemu_irq *pic)
 }
 #endif
 
-static void pc_init_ne2k_isa(NICInfo *nd, qemu_irq *pic)
+static void pc_init_ne2k_isa(NICInfo *nd)
 {
     static int nb_ne2k = 0;
 
     if (nb_ne2k == NE2000_NB_MAX)
         return;
-    isa_ne2000_init(ne2000_io[nb_ne2k], pic[ne2000_irq[nb_ne2k]], nd);
+    isa_ne2000_init(ne2000_io[nb_ne2k],
+                    isa_reserve_irq(ne2000_irq[nb_ne2k]), nd);
     nb_ne2k++;
 }
 
@@ -1098,6 +1100,7 @@ CPUState *pc_new_cpu(const char *cpu_model)
             fprintf(stderr, "Unable to find x86 CPU definition\n");
             exit(1);
         }
+        env->kvm_cpu_state.regs_modified = 1;
         if ((env->cpuid_features & CPUID_APIC) || smp_cpus > 1) {
             env->cpuid_apic_id = env->cpu_index;
             /* APIC reset callback resets cpu */
@@ -1129,7 +1132,6 @@ static void pc_init1(ram_addr_t ram_size,
     int bios_size, isa_bios_size, oprom_area_size;
     int pci_option_rom_offset = 0;
     PCIBus *pci_bus;
-    PCIDevice *pci_dev;
     ISADevice *isa_dev;
     int piix3_devfn = -1;
     CPUState *env;
@@ -1294,14 +1296,17 @@ static void pc_init1(ram_addr_t ram_size,
         isa_irq_state->i8259 = i8259;
         isa_irq = qemu_allocate_irqs(isa_irq_handler, isa_irq_state, 24);
     }
-    ferr_irq = isa_irq[13];
 
     if (pci_enabled) {
         pci_bus = i440fx_init(&i440fx_state, isa_irq);
         piix3_devfn = piix3_init(pci_bus, -1);
     } else {
         pci_bus = NULL;
+        isa_bus_new(NULL);
     }
+    isa_bus_irqs(isa_irq);
+
+    ferr_irq = isa_reserve_irq(13);
 
     /* init basic PC hardware */
     register_ioport_write(0x80, 1, 1, ioport80_write, NULL);
@@ -1327,7 +1332,7 @@ static void pc_init1(ram_addr_t ram_size,
         }
     }
 
-    rtc_state = rtc_init(0x70, isa_irq[8], 2000);
+    rtc_state = rtc_init(0x70, isa_reserve_irq(8), 2000);
 
     qemu_register_boot_set(pc_boot_set, rtc_state);
 
@@ -1339,10 +1344,10 @@ static void pc_init1(ram_addr_t ram_size,
     }
 #ifdef USE_KVM_PIT
     if (kvm_enabled() && qemu_kvm_pit_in_kernel())
-	pit = kvm_pit_init(0x40, isa_irq[0]);
+	pit = kvm_pit_init(0x40, isa_reserve_irq(0));
     else
 #endif
-	pit = pit_init(0x40, isa_irq[0]);
+	pit = pit_init(0x40, isa_reserve_irq(0));
     pcspk_init(pit);
     if (!no_hpet) {
         hpet_init(isa_irq);
@@ -1350,25 +1355,23 @@ static void pc_init1(ram_addr_t ram_size,
 
     for(i = 0; i < MAX_SERIAL_PORTS; i++) {
         if (serial_hds[i]) {
-            serial_init(serial_io[i], isa_irq[serial_irq[i]], 115200,
+            serial_init(serial_io[i], isa_reserve_irq(serial_irq[i]), 115200,
                         serial_hds[i]);
         }
     }
 
     for(i = 0; i < MAX_PARALLEL_PORTS; i++) {
         if (parallel_hds[i]) {
-            parallel_init(parallel_io[i], isa_irq[parallel_irq[i]],
+            parallel_init(parallel_io[i], isa_reserve_irq(parallel_irq[i]),
                           parallel_hds[i]);
         }
     }
-
-    watchdog_pc_init(pci_bus);
 
     for(i = 0; i < nb_nics; i++) {
         NICInfo *nd = &nd_table[i];
 
         if (!pci_enabled || (nd->model && strcmp(nd->model, "ne2k_isa") == 0))
-            pc_init_ne2k_isa(nd, isa_irq);
+            pc_init_ne2k_isa(nd);
         else
             pci_nic_init(nd, "e1000", NULL);
     }
@@ -1389,14 +1392,13 @@ static void pc_init1(ram_addr_t ram_size,
         pci_piix3_ide_init(pci_bus, hd, piix3_devfn + 1, isa_irq);
     } else {
         for(i = 0; i < MAX_IDE_BUS; i++) {
-            isa_ide_init(ide_iobase[i], ide_iobase2[i], isa_irq[ide_irq[i]],
+            isa_ide_init(ide_iobase[i], ide_iobase2[i],
+                         isa_reserve_irq(ide_irq[i]),
 	                 hd[MAX_IDE_DEVS * i], hd[MAX_IDE_DEVS * i + 1]);
         }
     }
 
-    isa_dev = isa_create_simple("i8042", 0x60, 0x64);
-    isa_connect_irq(isa_dev, 0, isa_irq[1]);
-    isa_connect_irq(isa_dev, 1, isa_irq[12]);
+    isa_dev = isa_create_simple("i8042", 0x60, 0x64, 1, 12);
     DMA_init(0);
 #ifdef HAS_AUDIO
     audio_init(pci_enabled ? pci_bus : NULL, isa_irq);
@@ -1406,7 +1408,7 @@ static void pc_init1(ram_addr_t ram_size,
         dinfo = drive_get(IF_FLOPPY, 0, i);
         fd[i] = dinfo ? dinfo->bdrv : NULL;
     }
-    floppy_controller = fdctrl_init(isa_irq[6], 2, 0, 0x3f0, fd);
+    floppy_controller = fdctrl_init_isa(6, 2, 0x3f0, fd);
 
     cmos_init(below_4g_mem_size, above_4g_mem_size, boot_device, hd);
 
@@ -1419,7 +1421,8 @@ static void pc_init1(ram_addr_t ram_size,
         i2c_bus *smbus;
 
         /* TODO: Populate SPD eeprom data.  */
-        smbus = piix4_pm_init(pci_bus, piix3_devfn + 3, 0xb100, isa_irq[9]);
+        smbus = piix4_pm_init(pci_bus, piix3_devfn + 3, 0xb100,
+                              isa_reserve_irq(9));
         for (i = 0; i < 8; i++) {
             DeviceState *eeprom;
             eeprom = qdev_create((BusState *)smbus, "smbus-eeprom");
@@ -1453,12 +1456,6 @@ static void pc_init1(ram_addr_t ram_size,
 	}
 
 	extboot_init(info->bdrv, 1);
-    }
-
-    /* Add virtio balloon device */
-    if (pci_enabled && virtio_balloon) {
-        pci_dev = pci_create("virtio-balloon-pci", virtio_balloon_devaddr);
-        qdev_init(&pci_dev->qdev);
     }
 
     /* Add virtio console devices */

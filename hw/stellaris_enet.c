@@ -303,13 +303,13 @@ static void stellaris_enet_write(void *opaque, target_phys_addr_t offset,
     }
 }
 
-static CPUReadMemoryFunc *stellaris_enet_readfn[] = {
+static CPUReadMemoryFunc * const stellaris_enet_readfn[] = {
    stellaris_enet_read,
    stellaris_enet_read,
    stellaris_enet_read
 };
 
-static CPUWriteMemoryFunc *stellaris_enet_writefn[] = {
+static CPUWriteMemoryFunc * const stellaris_enet_writefn[] = {
    stellaris_enet_write,
    stellaris_enet_write,
    stellaris_enet_write
@@ -396,7 +396,7 @@ static void stellaris_enet_cleanup(VLANClientState *vc)
     qemu_free(s);
 }
 
-static void stellaris_enet_init(SysBusDevice *dev)
+static int stellaris_enet_init(SysBusDevice *dev)
 {
     stellaris_enet_state *s = FROM_SYSBUS(stellaris_enet_state, dev);
 
@@ -415,6 +415,7 @@ static void stellaris_enet_init(SysBusDevice *dev)
     stellaris_enet_reset(s);
     register_savevm("stellaris_enet", -1, 1,
                     stellaris_enet_save, stellaris_enet_load, s);
+    return 0;
 }
 
 static void stellaris_enet_register_devices(void)

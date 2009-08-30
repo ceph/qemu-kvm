@@ -579,13 +579,13 @@ static void esp_mem_writeb(void *opaque, target_phys_addr_t addr, uint32_t val)
     s->wregs[saddr] = val;
 }
 
-static CPUReadMemoryFunc *esp_mem_read[3] = {
+static CPUReadMemoryFunc * const esp_mem_read[3] = {
     esp_mem_readb,
     NULL,
     NULL,
 };
 
-static CPUWriteMemoryFunc *esp_mem_write[3] = {
+static CPUWriteMemoryFunc * const esp_mem_write[3] = {
     esp_mem_writeb,
     NULL,
     esp_mem_writeb,
@@ -682,7 +682,7 @@ void esp_init(target_phys_addr_t espaddr, int it_shift,
     *reset = qdev_get_gpio_in(dev, 0);
 }
 
-static void esp_init1(SysBusDevice *dev)
+static int esp_init1(SysBusDevice *dev)
 {
     ESPState *s = FROM_SYSBUS(ESPState, dev);
     int esp_io_memory;
@@ -701,6 +701,7 @@ static void esp_init1(SysBusDevice *dev)
     qdev_init_gpio_in(&dev->qdev, parent_esp_reset, 1);
 
     scsi_bus_new(&dev->qdev, esp_scsi_attach);
+    return 0;
 }
 
 static void esp_register_devices(void)

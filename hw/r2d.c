@@ -31,6 +31,7 @@
 #include "pci.h"
 #include "net.h"
 #include "sh7750_regs.h"
+#include "ide.h"
 
 #define SDRAM_BASE 0x0c000000 /* Physical location of SDRAM: Area 3 */
 #define SDRAM_SIZE 0x04000000
@@ -155,13 +156,13 @@ r2d_fpga_write(void *opaque, target_phys_addr_t addr, uint32_t value)
     }
 }
 
-static CPUReadMemoryFunc *r2d_fpga_readfn[] = {
+static CPUReadMemoryFunc * const r2d_fpga_readfn[] = {
     r2d_fpga_read,
     r2d_fpga_read,
     NULL,
 };
 
-static CPUWriteMemoryFunc *r2d_fpga_writefn[] = {
+static CPUWriteMemoryFunc * const r2d_fpga_writefn[] = {
     r2d_fpga_write,
     r2d_fpga_write,
     NULL,

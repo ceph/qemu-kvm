@@ -336,13 +336,13 @@ static void slavio_timer_mem_writel(void *opaque, target_phys_addr_t addr,
     }
 }
 
-static CPUReadMemoryFunc *slavio_timer_mem_read[3] = {
+static CPUReadMemoryFunc * const slavio_timer_mem_read[3] = {
     NULL,
     NULL,
     slavio_timer_mem_readl,
 };
 
-static CPUWriteMemoryFunc *slavio_timer_mem_write[3] = {
+static CPUWriteMemoryFunc * const slavio_timer_mem_write[3] = {
     NULL,
     NULL,
     slavio_timer_mem_writel,
@@ -412,7 +412,7 @@ static void slavio_timer_reset(void *opaque)
     s->cputimer_mode = 0;
 }
 
-static void slavio_timer_init1(SysBusDevice *dev)
+static int slavio_timer_init1(SysBusDevice *dev)
 {
     int io;
     SLAVIO_TIMERState *s = FROM_SYSBUS(SLAVIO_TIMERState, dev);
@@ -444,6 +444,7 @@ static void slavio_timer_init1(SysBusDevice *dev)
                     slavio_timer_load, s);
     qemu_register_reset(slavio_timer_reset, s);
     slavio_timer_reset(s);
+    return 0;
 }
 
 static SysBusDeviceInfo slavio_timer_info = {

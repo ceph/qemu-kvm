@@ -152,11 +152,11 @@ eth_writel (void *opaque, target_phys_addr_t addr, uint32_t value)
     }
 }
 
-static CPUReadMemoryFunc *eth_read[] = {
+static CPUReadMemoryFunc * const eth_read[] = {
     NULL, NULL, &eth_readl,
 };
 
-static CPUWriteMemoryFunc *eth_write[] = {
+static CPUWriteMemoryFunc * const eth_write[] = {
     NULL, NULL, &eth_writel,
 };
 
@@ -207,7 +207,7 @@ static void eth_cleanup(VLANClientState *vc)
     qemu_free(s);
 }
 
-static void xilinx_ethlite_init(SysBusDevice *dev)
+static int xilinx_ethlite_init(SysBusDevice *dev)
 {
     struct xlx_ethlite *s = FROM_SYSBUS(typeof (*s), dev);
     int regs;
@@ -221,6 +221,7 @@ static void xilinx_ethlite_init(SysBusDevice *dev)
     qdev_get_macaddr(&dev->qdev, s->macaddr);
     s->vc = qdev_get_vlan_client(&dev->qdev,
                                  eth_can_rx, eth_rx, NULL, eth_cleanup, s);
+    return 0;
 }
 
 static SysBusDeviceInfo xilinx_ethlite_info = {

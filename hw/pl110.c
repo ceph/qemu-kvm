@@ -340,19 +340,19 @@ static void pl110_write(void *opaque, target_phys_addr_t offset,
     }
 }
 
-static CPUReadMemoryFunc *pl110_readfn[] = {
+static CPUReadMemoryFunc * const pl110_readfn[] = {
    pl110_read,
    pl110_read,
    pl110_read
 };
 
-static CPUWriteMemoryFunc *pl110_writefn[] = {
+static CPUWriteMemoryFunc * const pl110_writefn[] = {
    pl110_write,
    pl110_write,
    pl110_write
 };
 
-static void pl110_init(SysBusDevice *dev)
+static int pl110_init(SysBusDevice *dev)
 {
     pl110_state *s = FROM_SYSBUS(pl110_state, dev);
     int iomemtype;
@@ -365,13 +365,14 @@ static void pl110_init(SysBusDevice *dev)
                                  pl110_invalidate_display,
                                  NULL, NULL, s);
     /* ??? Save/restore.  */
+    return 0;
 }
 
-static void pl110_versatile_init(SysBusDevice *dev)
+static int pl110_versatile_init(SysBusDevice *dev)
 {
     pl110_state *s = FROM_SYSBUS(pl110_state, dev);
     s->versatile = 1;
-    pl110_init(dev);
+    return pl110_init(dev);
 }
 
 static void pl110_register_devices(void)

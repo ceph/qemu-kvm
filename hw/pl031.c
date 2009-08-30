@@ -171,19 +171,19 @@ static void pl031_write(void * opaque, target_phys_addr_t offset,
     }
 }
 
-static CPUWriteMemoryFunc * pl031_writefn[] = {
+static CPUWriteMemoryFunc * const  pl031_writefn[] = {
     pl031_write,
     pl031_write,
     pl031_write
 };
 
-static CPUReadMemoryFunc * pl031_readfn[] = {
+static CPUReadMemoryFunc * const  pl031_readfn[] = {
     pl031_read,
     pl031_read,
     pl031_read
 };
 
-static void pl031_init(SysBusDevice *dev)
+static int pl031_init(SysBusDevice *dev)
 {
     int iomemtype;
     pl031_state *s = FROM_SYSBUS(pl031_state, dev);
@@ -202,6 +202,7 @@ static void pl031_init(SysBusDevice *dev)
     s->tick_offset = mktimegm(&tm);
 
     s->timer = qemu_new_timer(vm_clock, pl031_interrupt, s);
+    return 0;
 }
 
 static void pl031_register_devices(void)

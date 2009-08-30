@@ -234,6 +234,8 @@ struct PCIDevice {
     unsigned *msix_entry_used;
     /* Region including the MSI-X table */
     uint32_t msix_bar_size;
+    /* Version id needed for VMState */
+    int32_t version_id;
     struct kvm_irq_routing_entry *msix_irq_entries;
 
     /* Device capability configuration space */
@@ -363,7 +365,7 @@ pci_config_set_class(uint8_t *pci_config, uint16_t val)
     pci_set_word(&pci_config[PCI_CLASS_DEVICE], val);
 }
 
-typedef void (*pci_qdev_initfn)(PCIDevice *dev);
+typedef int (*pci_qdev_initfn)(PCIDevice *dev);
 typedef struct {
     DeviceInfo qdev;
     pci_qdev_initfn init;

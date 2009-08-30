@@ -39,13 +39,13 @@ static void realview_gic_cpu_write(void *opaque, target_phys_addr_t offset,
     gic_cpu_write(s, gic_get_current_cpu(), offset, value);
 }
 
-static CPUReadMemoryFunc *realview_gic_cpu_readfn[] = {
+static CPUReadMemoryFunc * const realview_gic_cpu_readfn[] = {
    realview_gic_cpu_read,
    realview_gic_cpu_read,
    realview_gic_cpu_read
 };
 
-static CPUWriteMemoryFunc *realview_gic_cpu_writefn[] = {
+static CPUWriteMemoryFunc * const realview_gic_cpu_writefn[] = {
    realview_gic_cpu_write,
    realview_gic_cpu_write,
    realview_gic_cpu_write
@@ -58,7 +58,7 @@ static void realview_gic_map(SysBusDevice *dev, target_phys_addr_t base)
     cpu_register_physical_memory(base + 0x1000, 0x1000, s->gic.iomemtype);
 }
 
-static void realview_gic_init(SysBusDevice *dev)
+static int realview_gic_init(SysBusDevice *dev)
 {
     RealViewGICState *s = FROM_SYSBUSGIC(RealViewGICState, dev);
 
@@ -66,6 +66,7 @@ static void realview_gic_init(SysBusDevice *dev)
     s->iomemtype = cpu_register_io_memory(realview_gic_cpu_readfn,
                                           realview_gic_cpu_writefn, s);
     sysbus_init_mmio_cb(dev, 0x2000, realview_gic_map);
+    return 0;
 }
 
 static void realview_gic_register_devices(void)

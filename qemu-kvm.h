@@ -1165,13 +1165,12 @@ static inline void kvm_arch_put_registers(CPUState *env)
     kvm_load_mpstate(env);
 }
 
-static inline void cpu_synchronize_state(CPUState *env, int modified)
+void kvm_cpu_synchronize_state(CPUState *env);
+
+static inline void cpu_synchronize_state(CPUState *env)
 {
     if (kvm_enabled()) {
-        if (modified)
-            kvm_arch_put_registers(env);
-        else
-            kvm_arch_get_registers(env);
+        kvm_cpu_synchronize_state(env);
     }
 }
 

@@ -223,13 +223,13 @@ static void pl011_event(void *opaque, int event)
         pl011_put_fifo(opaque, 0x400);
 }
 
-static CPUReadMemoryFunc *pl011_readfn[] = {
+static CPUReadMemoryFunc * const pl011_readfn[] = {
    pl011_read,
    pl011_read,
    pl011_read
 };
 
-static CPUWriteMemoryFunc *pl011_writefn[] = {
+static CPUWriteMemoryFunc * const pl011_writefn[] = {
    pl011_write,
    pl011_write,
    pl011_write
@@ -286,7 +286,7 @@ static int pl011_load(QEMUFile *f, void *opaque, int version_id)
     return 0;
 }
 
-static void pl011_init(SysBusDevice *dev, const unsigned char *id)
+static int pl011_init(SysBusDevice *dev, const unsigned char *id)
 {
     int iomemtype;
     pl011_state *s = FROM_SYSBUS(pl011_state, dev);
@@ -307,16 +307,17 @@ static void pl011_init(SysBusDevice *dev, const unsigned char *id)
                               pl011_event, s);
     }
     register_savevm("pl011_uart", -1, 1, pl011_save, pl011_load, s);
+    return 0;
 }
 
-static void pl011_init_arm(SysBusDevice *dev)
+static int pl011_init_arm(SysBusDevice *dev)
 {
-    pl011_init(dev, pl011_id_arm);
+    return pl011_init(dev, pl011_id_arm);
 }
 
-static void pl011_init_luminary(SysBusDevice *dev)
+static int pl011_init_luminary(SysBusDevice *dev)
 {
-    pl011_init(dev, pl011_id_luminary);
+    return pl011_init(dev, pl011_id_luminary);
 }
 
 static void pl011_register_devices(void)
