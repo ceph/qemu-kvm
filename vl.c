@@ -199,13 +199,10 @@ ram_addr_t ram_size;
 int nb_nics;
 NICInfo nd_table[MAX_NICS];
 int vm_running;
-static int autostart;
+int autostart;
 static int rtc_utc = 1;
 static int rtc_date_offset = -1; /* -1 means no change */
-int cirrus_vga_enabled = 1;
-int std_vga_enabled = 0;
-int vmsvga_enabled = 0;
-int xenfb_enabled = 0;
+int vga_interface_type = VGA_CIRRUS;
 #ifdef TARGET_SPARC
 int graphic_width = 1024;
 int graphic_height = 768;
@@ -325,7 +322,7 @@ void hw_error(const char *fmt, ...)
 
 static void set_proc_name(const char *s)
 {
-#ifdef __linux__
+#if defined(__linux__) && defined(PR_SET_NAME)
     char name[16];
     if (!s)
         return;
@@ -4655,18 +4652,15 @@ static void select_vgahw (const char *p)
 {
     const char *opts;
 
-    cirrus_vga_enabled = 0;
-    std_vga_enabled = 0;
-    vmsvga_enabled = 0;
-    xenfb_enabled = 0;
+    vga_interface_type = VGA_NONE;
     if (strstart(p, "std", &opts)) {
-        std_vga_enabled = 1;
+        vga_interface_type = VGA_STD;
     } else if (strstart(p, "cirrus", &opts)) {
-        cirrus_vga_enabled = 1;
+        vga_interface_type = VGA_CIRRUS;
     } else if (strstart(p, "vmware", &opts)) {
-        vmsvga_enabled = 1;
+        vga_interface_type = VGA_VMWARE;
     } else if (strstart(p, "xenfb", &opts)) {
-        xenfb_enabled = 1;
+        vga_interface_type = VGA_XENFB;
     } else if (!strstart(p, "none", &opts)) {
     invalid_vga:
         fprintf(stderr, "Unknown vga type: %s\n", p);
@@ -6202,12 +6196,10 @@ int main(int argc, char **argv, char **envp)
         do_loadvm(cur_mon, loadvm);
 
     if (incoming) {
-        autostart = 0;
         qemu_start_incoming_migration(incoming);
-    }
-
-    if (autostart)
+    } else if (autostart) {
         vm_start();
+    }
 
 #ifndef _WIN32
     if (daemonize) {

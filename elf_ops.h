@@ -67,7 +67,7 @@ static int glue(symfind, SZ)(const void *s0, const void *s1)
     int result = 0;
     if (key->st_value < sym->st_value) {
         result = -1;
-    } else if (key->st_value > sym->st_value + sym->st_size) {
+    } else if (key->st_value >= sym->st_value + sym->st_size) {
         result = 1;
     }
     return result;
@@ -82,7 +82,7 @@ static const char *glue(lookup_symbol, SZ)(struct syminfo *s, target_ulong orig_
     key.st_value = orig_addr;
 
     sym = bsearch(&key, syms, s->disas_num_syms, sizeof(*syms), glue(symfind, SZ));
-    if (sym != 0) {
+    if (sym != NULL) {
         return s->disas_strtab + sym->st_name;
     }
 

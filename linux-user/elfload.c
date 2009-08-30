@@ -1199,7 +1199,7 @@ static int symfind(const void *s0, const void *s1)
     int result = 0;
     if (key->st_value < sym->st_value) {
         result = -1;
-    } else if (key->st_value > sym->st_value + sym->st_size) {
+    } else if (key->st_value >= sym->st_value + sym->st_size) {
         result = 1;
     }
     return result;
@@ -1220,7 +1220,7 @@ static const char *lookup_symbolxx(struct syminfo *s, target_ulong orig_addr)
     key.st_value = orig_addr;
 
     sym = bsearch(&key, syms, s->disas_num_syms, sizeof(*syms), symfind);
-    if (sym != 0) {
+    if (sym != NULL) {
         return s->disas_strtab + sym->st_name;
     }
 

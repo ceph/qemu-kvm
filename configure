@@ -1497,7 +1497,7 @@ fi
 
 if test "$mingw32" = "yes" ; then
   if test -z "$prefix" ; then
-      prefix="c:\\\\Program Files\\\\Qemu"
+      prefix="c:/Program Files/Qemu"
   fi
   mansuffix=""
   datasuffix=""
@@ -1959,8 +1959,9 @@ fi
 echo "TOOLS=$tools" >> $config_host_mak
 
 roms=
-if test "$cpu" = "i386" -o "$cpu" = "x86_64" ; then
-  roms="pc-bios/optionrom"
+if test \( "$cpu" = "i386" -o "$cpu" = "x86_64" \) -a \
+        "$targetos" != "Darwin" ; then
+  roms="optionrom"
 fi
 echo "ROMS=$roms" >> $config_host_mak
 

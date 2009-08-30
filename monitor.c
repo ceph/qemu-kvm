@@ -260,9 +260,10 @@ static void do_commit(Monitor *mon, const char *device)
 
     all_devices = !strcmp(device, "all");
     for (i = 0; i < nb_drives; i++) {
-            if (all_devices ||
-                !strcmp(bdrv_get_device_name(drives_table[i].bdrv), device))
-                bdrv_commit(drives_table[i].bdrv);
+        if (!all_devices)
+            if (strcmp(bdrv_get_device_name(drives_table[i].bdrv), device))
+                continue;
+        bdrv_commit(drives_table[i].bdrv);
     }
 }
 
@@ -2292,7 +2293,7 @@ static int get_monitor_def(target_long *pval, const char *name)
 
 static void next(void)
 {
-    if (pch != '\0') {
+    if (*pch != '\0') {
         pch++;
         while (qemu_isspace(*pch))
             pch++;
@@ -3082,6 +3083,9 @@ static void monitor_find_completion(const char *cmdline)
             }
         }
         str = args[nb_args - 1];
+        if (*ptype == '-' && ptype[1] != '\0') {
+            ptype += 2;
+        }
         switch(*ptype) {
         case 'F':
             /* file completion */
