@@ -702,6 +702,46 @@ const VMStateInfo vmstate_info_int32 = {
     .put  = put_int32,
 };
 
+/* 32 bit int. See that the received value is the same than the one
+   in the field */
+
+static int get_int32_equal(QEMUFile *f, void *pv, size_t size)
+{
+    int32_t *v = pv;
+    int32_t v2;
+    qemu_get_sbe32s(f, &v2);
+
+    if (*v == v2)
+        return 0;
+    return -EINVAL;
+}
+
+const VMStateInfo vmstate_info_int32_equal = {
+    .name = "int32 equal",
+    .get  = get_int32_equal,
+    .put  = put_int32,
+};
+
+/* 32 bit int. See that the received value is the less or the same
+   than the one in the field */
+
+static int get_int32_le(QEMUFile *f, void *pv, size_t size)
+{
+    int32_t *old = pv;
+    int32_t new;
+    qemu_get_sbe32s(f, &new);
+
+    if (*old <= new)
+        return 0;
+    return -EINVAL;
+}
+
+const VMStateInfo vmstate_info_int32_le = {
+    .name = "int32 equal",
+    .get  = get_int32_le,
+    .put  = put_int32,
+};
+
 /* 64 bit int */
 
 static int get_int64(QEMUFile *f, void *pv, size_t size)
@@ -826,6 +866,27 @@ const VMStateInfo vmstate_info_timer = {
     .name = "timer",
     .get  = get_timer,
     .put  = put_timer,
+};
+
+/* uint8_t buffers */
+
+static int get_buffer(QEMUFile *f, void *pv, size_t size)
+{
+    uint8_t *v = pv;
+    qemu_get_buffer(f, v, size);
+    return 0;
+}
+
+static void put_buffer(QEMUFile *f, const void *pv, size_t size)
+{
+    uint8_t *v = (void *)pv;
+    qemu_put_buffer(f, v, size);
+}
+
+const VMStateInfo vmstate_info_buffer = {
+    .name = "buffer",
+    .get  = get_buffer,
+    .put  = put_buffer,
 };
 
 typedef struct SaveStateEntry {
@@ -977,6 +1038,8 @@ int vmstate_load_state(QEMUFile *f, const VMStateDescription *vmsd,
 
             if (field->flags & VMS_ARRAY) {
                 n_elems = field->num;
+            } else if (field->flags & VMS_VARRAY) {
+                n_elems = *(size_t *)(opaque+field->num_offset);
             }
             if (field->flags & VMS_POINTER) {
                 base_addr = *(void **)base_addr;
@@ -1017,6 +1080,8 @@ void vmstate_save_state(QEMUFile *f, const VMStateDescription *vmsd,
 
         if (field->flags & VMS_ARRAY) {
             n_elems = field->num;
+        } else if (field->flags & VMS_VARRAY) {
+            n_elems = *(size_t *)(opaque+field->num_offset);
         }
         if (field->flags & VMS_POINTER) {
             base_addr = *(void **)base_addr;
