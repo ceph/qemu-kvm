@@ -1582,16 +1582,18 @@ if $cc $ARCH_CFLAGS -o $TMPE $TMPC 2> /dev/null ; then
   signalfd=yes
 fi
 
-##########################################
-# eventfd probe
+# check if eventfd is supported
+eventfd=no
 cat > $TMPC << EOF
-#define _GNU_SOURCE
-#include <unistd.h>
-#include <sys/syscall.h>
-int main(void) { return syscall(SYS_eventfd, 0); }
-EOF
+#include <sys/eventfd.h>
 
-if $cc $ARCH_CFLAGS -o $TMPE $TMPC 2> /dev/null ; then
+int main(void)
+{
+    int efd = eventfd(0, 0);
+    return 0;
+}
+EOF
+if compile_prog "" "" ; then
   eventfd=yes
 fi
 
@@ -1953,6 +1955,9 @@ if test "$pipe2" = "yes" ; then
 fi
 if test "$splice" = "yes" ; then
   echo "CONFIG_SPLICE=y" >> $config_host_mak
+fi
+if test "$eventfd" = "yes" ; then
+  echo "CONFIG_EVENTFD=y" >> $config_host_mak
 fi
 if test "$inotify" = "yes" ; then
   echo "CONFIG_INOTIFY=y" >> $config_host_mak
