@@ -150,6 +150,8 @@ static uint32_t expand4[256];
 static uint16_t expand2[256];
 static uint8_t expand4to8[16];
 
+typedef VGACommonState VGAState;
+
 static void vga_screen_dump(void *opaque, const char *filename);
 static char *screen_dump_filename;
 static DisplayChangeListener *screen_dump_dcl;
@@ -1881,10 +1883,8 @@ static void vga_invalidate_display(void *opaque)
     s->last_height = -1;
 }
 
-void vga_reset(void *opaque)
+void vga_common_reset(VGACommonState *s)
 {
-    VGAState *s = (VGAState *) opaque;
-
     s->lfb_addr = 0;
     s->lfb_end = 0;
     s->map_addr = 0;
@@ -1948,6 +1948,12 @@ void vga_reset(void *opaque)
         memset(&s->retrace_info, 0, sizeof (s->retrace_info));
         break;
     }
+}
+
+static void vga_reset(void *opaque)
+{
+    VGAState *s = (VGAState *) opaque;
+    vga_common_reset(s);
 }
 
 #define TEXTMODE_X(x)	((x) % width)
@@ -2231,7 +2237,7 @@ static int vga_load(QEMUFile *f, void *opaque, int version_id)
 
 typedef struct PCIVGAState {
     PCIDevice dev;
-    VGAState vga_state;
+    VGAState vga;
 } PCIVGAState;
 
 static int s1, s2;
@@ -2246,7 +2252,7 @@ static void mark_dirty(target_phys_addr_t start, target_phys_addr_t len)
     }
 }
 
-void vga_dirty_log_start(VGAState *s)
+void vga_dirty_log_start(VGACommonState *s)
 {
     if (kvm_enabled() && s->map_addr)
         if (!s1) {
@@ -2280,7 +2286,7 @@ static void vga_map(PCIDevice *pci_dev, int region_num,
                     uint32_t addr, uint32_t size, int type)
 {
     PCIVGAState *d = (PCIVGAState *)pci_dev;
-    VGAState *s = &d->vga_state;
+    VGAState *s = &d->vga;
     if (region_num == PCI_ROM_SLOT) {
         cpu_register_physical_memory(addr, s->bios_size, s->bios_offset);
     } else {
@@ -2293,7 +2299,7 @@ static void vga_map(PCIDevice *pci_dev, int region_num,
     vga_dirty_log_start(s);
 }
 
-void vga_common_init(VGAState *s, int vga_ram_size)
+void vga_common_init(VGACommonState *s, int vga_ram_size)
 {
     int i, j, v, b;
 
@@ -2516,7 +2522,7 @@ static void pci_vga_write_config(PCIDevice *d,
                                  uint32_t address, uint32_t val, int len)
 {
     PCIVGAState *pvs = container_of(d, PCIVGAState, dev);
-    VGAState *s = &pvs->vga_state;
+    VGAState *s = &pvs->vga;
 
     vga_dirty_log_stop(s);
     pci_default_write_config(d, address, val, len);
@@ -2528,7 +2534,7 @@ static void pci_vga_write_config(PCIDevice *d,
 static int pci_vga_initfn(PCIDevice *dev)
 {
      PCIVGAState *d = DO_UPCAST(PCIVGAState, dev, dev);
-     VGAState *s = &d->vga_state;
+     VGAState *s = &d->vga;
      uint8_t *pci_conf = d->dev.config;
 
      // vga + console init
@@ -2579,8 +2585,8 @@ static PCIDeviceInfo vga_info = {
     .init         = pci_vga_initfn,
     .config_write = pci_vga_write_config,
     .qdev.props   = (Property[]) {
-        DEFINE_PROP_HEX32("bios-offset", PCIVGAState, vga_state.bios_offset, 0),
-        DEFINE_PROP_HEX32("bios-size",   PCIVGAState, vga_state.bios_size,   0),
+        DEFINE_PROP_HEX32("bios-offset", PCIVGAState, vga.bios_offset, 0),
+        DEFINE_PROP_HEX32("bios-size",   PCIVGAState, vga.bios_size,   0),
         DEFINE_PROP_END_OF_LIST(),
     }
 };

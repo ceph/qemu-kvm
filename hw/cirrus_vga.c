@@ -1079,7 +1079,7 @@ static void cirrus_write_bitblt(CirrusVGAState * s, unsigned reg_value)
  *
  ***************************************/
 
-static void cirrus_get_offsets(VGAState *s1,
+static void cirrus_get_offsets(VGACommonState *s1,
                                uint32_t *pline_offset,
                                uint32_t *pstart_addr,
                                uint32_t *pline_compare)
@@ -1127,7 +1127,7 @@ static uint32_t cirrus_get_bpp16_depth(CirrusVGAState * s)
     return ret;
 }
 
-static int cirrus_get_bpp(VGAState *s1)
+static int cirrus_get_bpp(VGACommonState *s1)
 {
     CirrusVGAState * s = container_of(s1, CirrusVGAState, vga);
     uint32_t ret = 8;
@@ -1165,7 +1165,7 @@ static int cirrus_get_bpp(VGAState *s1)
     return ret;
 }
 
-static void cirrus_get_resolution(VGAState *s, int *pwidth, int *pheight)
+static void cirrus_get_resolution(VGACommonState *s, int *pwidth, int *pheight)
 {
     int width, height;
 
@@ -2235,7 +2235,7 @@ static inline void cirrus_cursor_compute_yrange(CirrusVGAState *s)
 
 /* NOTE: we do not currently handle the cursor bitmap change, so we
    update the cursor only if it moves. */
-static void cirrus_cursor_invalidate(VGAState *s1)
+static void cirrus_cursor_invalidate(VGACommonState *s1)
 {
     CirrusVGAState *s = container_of(s1, CirrusVGAState, vga);
     int size;
@@ -2264,7 +2264,7 @@ static void cirrus_cursor_invalidate(VGAState *s1)
     }
 }
 
-static void cirrus_cursor_draw_line(VGAState *s1, uint8_t *d1, int scr_y)
+static void cirrus_cursor_draw_line(VGACommonState *s1, uint8_t *d1, int scr_y)
 {
     CirrusVGAState *s = container_of(s1, CirrusVGAState, vga);
     int w, h, bpp, x1, x2, poffset;
@@ -2610,7 +2610,7 @@ static void map_linear_vram(CirrusVGAState *s)
         && !((s->vga.gr[0x0B] & 0x14) == 0x14)
         && !(s->vga.gr[0x0B] & 0x02)) {
 
-        vga_dirty_log_stop((VGAState *)s);
+        vga_dirty_log_stop(&s->vga);
         cpu_register_physical_memory(isa_mem_base + 0xa0000, 0x8000,
                                     (s->vga.vram_offset + s->cirrus_bank_base[0]) | IO_MEM_RAM);
         cpu_register_physical_memory(isa_mem_base + 0xa8000, 0x8000,
@@ -3137,7 +3137,7 @@ static void cirrus_reset(void *opaque)
 {
     CirrusVGAState *s = opaque;
 
-    vga_reset(s);
+    vga_common_reset(&s->vga);
     unmap_linear_vram(s);
     s->vga.sr[0x06] = 0x0f;
     if (s->device_id == CIRRUS_ID_CLGD5446) {
@@ -3277,7 +3277,7 @@ static void cirrus_pci_lfb_map(PCIDevice *d, int region_num,
 {
     CirrusVGAState *s = &((PCICirrusVGAState *)d)->cirrus_vga;
 
-    vga_dirty_log_stop((VGAState *)s);
+    vga_dirty_log_stop(&s->vga);
 
     /* XXX: add byte swapping apertures */
     cpu_register_physical_memory(addr, s->vga.vram_size,
@@ -3310,14 +3310,14 @@ static void pci_cirrus_write_config(PCIDevice *d,
     PCICirrusVGAState *pvs = container_of(d, PCICirrusVGAState, dev);
     CirrusVGAState *s = &pvs->cirrus_vga;
 
-    vga_dirty_log_stop((VGAState *)s);
+    vga_dirty_log_stop(&s->vga);
 
     pci_default_write_config(d, address, val, len);
     if (s->vga.map_addr && pvs->dev.io_regions[0].addr == -1)
         s->vga.map_addr = 0;
     cirrus_update_memory_access(s);
 
-    vga_dirty_log_start((VGAState *)s);
+    vga_dirty_log_start(&s->vga);
 }
 
 static int pci_cirrus_vga_initfn(PCIDevice *dev)
