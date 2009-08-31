@@ -1035,6 +1035,8 @@ void kvm_arch_save_mpstate(CPUState *env)
         env->mp_state = -1;
     else
         env->mp_state = mp_state.mp_state;
+#else
+    env->mp_state = -1;
 #endif
 }
 

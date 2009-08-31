@@ -689,10 +689,6 @@ int kvm_arch_put_registers(CPUState *env)
     if (ret < 0)
         return ret;
 
-    ret = kvm_get_mp_state(env);
-    if (ret < 0)
-        return ret;
-
     return 0;
 }
 

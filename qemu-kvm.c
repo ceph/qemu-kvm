@@ -878,7 +878,6 @@ void kvm_cpu_synchronize_state(CPUState *env)
 {
     if (!env->kvm_cpu_state.regs_modified) {
         kvm_arch_get_registers(env);
-        kvm_arch_save_mpstate(env);
         env->kvm_cpu_state.regs_modified = 1;
     }
 }
@@ -966,8 +965,8 @@ int kvm_run(kvm_vcpu_context_t vcpu, void *env)
 #endif
 
     if (_env->kvm_cpu_state.regs_modified) {
+        printf("%s: cpu %d mp_state %d\n", __func__, _env->cpu_index, _env->mp_state);
         kvm_arch_put_registers(_env);
-        kvm_arch_load_mpstate(_env);
         _env->kvm_cpu_state.regs_modified = 0;
     }
 
@@ -1609,7 +1608,6 @@ static void kvm_do_save_mpstate(void *_env)
     CPUState *env = _env;
 
     kvm_arch_save_mpstate(env);
-    env->halted = (env->mp_state == KVM_MP_STATE_HALTED);
 }
 
 void kvm_save_mpstate(CPUState *env)
