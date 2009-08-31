@@ -1276,7 +1276,7 @@ static void pc_init1(ram_addr_t ram_size,
             continue;
 
         if (model == NULL)
-            model = "e1000";
+            model = "rtl8139";
         snprintf(nic_oprom, sizeof(nic_oprom), "pxe-%s.bin", model);
 
         oprom_area_size += load_option_rom(nic_oprom, 0xc0000 + oprom_area_size,
@@ -1373,7 +1373,7 @@ static void pc_init1(ram_addr_t ram_size,
         if (!pci_enabled || (nd->model && strcmp(nd->model, "ne2k_isa") == 0))
             pc_init_ne2k_isa(nd);
         else
-            pci_nic_init(nd, "e1000", NULL);
+            pci_nic_init(nd, "rtl8139", NULL);
     }
 
     piix4_acpi_system_hot_add_init(cpu_model);
