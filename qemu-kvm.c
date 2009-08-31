@@ -965,7 +965,6 @@ int kvm_run(kvm_vcpu_context_t vcpu, void *env)
 #endif
 
     if (_env->kvm_cpu_state.regs_modified) {
-        printf("%s: cpu %d mp_state %d\n", __func__, _env->cpu_index, _env->mp_state);
         kvm_arch_put_registers(_env);
         _env->kvm_cpu_state.regs_modified = 0;
     }
