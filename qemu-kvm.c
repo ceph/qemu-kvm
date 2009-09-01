@@ -1044,6 +1044,14 @@ int kvm_run(kvm_vcpu_context_t vcpu, void *env)
             r = kvm_s390_handle_reset(kvm, vcpu, run);
             break;
 #endif
+	case KVM_EXIT_INTERNAL_ERROR:
+	    fprintf(stderr, "KVM internal error. Suberror: %d\n",
+		    run->internal.suberror);
+	    kvm_show_regs(vcpu);
+	    if (run->internal.suberror == KVM_INTERNAL_ERROR_EMULATION)
+		fprintf(stderr, "emulation failure, check dmesg for details\n");
+	    abort();
+	    break;
         default:
             if (kvm_arch_run(vcpu)) {
                 fprintf(stderr, "unhandled vm exit: 0x%x\n", run->exit_reason);
