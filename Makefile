@@ -251,6 +251,9 @@ ifneq ($(BLOBS),)
 	    if [ -f $(SRC_PATH)/pc-bios/$$x ];then \
 		$(INSTALL_DATA) $(SRC_PATH)/pc-bios/$$x "$(DESTDIR)$(datadir)"; \
 	    fi \
+	    ; if [ -f pc-bios/optionrom/$$x ];then \
+		$(INSTALL_DATA) pc-bios/optionrom/$$x "$(DESTDIR)$(datadir)"; \
+	    fi \
 	done
 endif
 	$(INSTALL_DIR) "$(DESTDIR)$(datadir)/keymaps"
