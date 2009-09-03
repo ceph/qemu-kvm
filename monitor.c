@@ -3253,7 +3253,7 @@ struct QemuErrorSink {
     QemuErrorSink *previous;
 };
 
-static __thread QemuErrorSink *qemu_error_sink;
+static QemuErrorSink *qemu_error_sink;
 
 void qemu_errors_to_file(FILE *fp)
 {
