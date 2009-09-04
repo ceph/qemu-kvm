@@ -5831,6 +5831,20 @@ int main(int argc, char **argv, char **envp)
     }
 #endif
 
+    if (kvm_enabled()) {
+        int ret;
+
+        ret = kvm_init(smp_cpus);
+        if (ret < 0) {
+#if defined(KVM_UPSTREAM) || defined(NO_CPU_EMULATION)
+            fprintf(stderr, "failed to initialize KVM\n");
+            exit(1);
+#endif
+            fprintf(stderr, "Could not initialize KVM, will disable KVM support\n");
+            kvm_allowed = 0;
+        }
+    }
+
 #ifdef CONFIG_KQEMU
     if (smp_cpus > 1)
         kqemu_allowed = 0;
@@ -5999,20 +6013,6 @@ int main(int argc, char **argv, char **envp)
             for (i = 0; i < smp_cpus; i++) {
                 node_cpumask[i % nb_numa_nodes] |= 1 << i;
             }
-        }
-    }
-
-    if (kvm_enabled()) {
-        int ret;
-
-        ret = kvm_init(smp_cpus);
-        if (ret < 0) {
-#if defined(KVM_UPSTREAM) || defined(NO_CPU_EMULATION)
-            fprintf(stderr, "failed to initialize KVM\n");
-            exit(1);
-#endif
-            fprintf(stderr, "Could not initialize KVM, will disable KVM support\n");
-	     kvm_allowed = 0;
         }
     }
 
