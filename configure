@@ -360,7 +360,6 @@ AIX)
   if [ "$cpu" = "i386" -o "$cpu" = "x86_64" ] ; then
     audio_possible_drivers="$audio_possible_drivers fmod"
     kvm="yes"
-    kqemu="no"
   fi
   if [ "$cpu" = "ia64" ] ; then
      kvm="yes"
