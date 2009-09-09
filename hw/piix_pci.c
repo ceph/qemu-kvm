@@ -37,6 +37,7 @@ typedef PCIHostState I440FXState;
 
 typedef struct PIIX3State {
     PCIDevice dev;
+    int pci_irq_levels[4];
 } PIIX3State;
 
 typedef struct PIIX3IrqState {
@@ -48,6 +49,7 @@ struct PCII440FXState {
     PCIDevice dev;
     target_phys_addr_t isa_page_descs[384 / 4];
     uint8_t smm_enabled;
+    PIIX3IrqState *irq_state;
 };
 
 static void i440fx_addr_writel(void* opaque, uint32_t addr, uint32_t val)
@@ -73,8 +75,6 @@ static int pci_slot_get_pirq(PCIDevice *pci_dev, int irq_num)
     slot_addend = (pci_dev->devfn >> 3) - 1;
     return (irq_num + slot_addend) & 3;
 }
-
-static int pci_irq_levels[4];
 
 static void update_pam(PCII440FXState *d, uint32_t start, uint32_t end, int r)
 {
@@ -160,37 +160,45 @@ static void i440fx_write_config(PCIDevice *dev,
         i440fx_update_memory_mappings(d);
 }
 
-static void i440fx_save(QEMUFile* f, void *opaque)
-{
-    PCII440FXState *d = opaque;
-    int i;
-
-    pci_device_save(&d->dev, f);
-    qemu_put_8s(f, &d->smm_enabled);
-
-    for (i = 0; i < 4; i++)
-        qemu_put_be32(f, pci_irq_levels[i]);
-}
-
-static int i440fx_load(QEMUFile* f, void *opaque, int version_id)
+static int i440fx_load_old(QEMUFile* f, void *opaque, int version_id)
 {
     PCII440FXState *d = opaque;
     int ret, i;
 
-    if (version_id > 2)
-        return -EINVAL;
     ret = pci_device_load(&d->dev, f);
     if (ret < 0)
         return ret;
     i440fx_update_memory_mappings(d);
     qemu_get_8s(f, &d->smm_enabled);
 
-    if (version_id >= 2)
+    if (version_id == 2)
         for (i = 0; i < 4; i++)
-            pci_irq_levels[i] = qemu_get_be32(f);
+            d->irq_state->piix3->pci_irq_levels[i] = qemu_get_be32(f);
 
     return 0;
 }
+
+static int i440fx_after_load(void *opaque)
+{
+    PCII440FXState *d = opaque;
+
+    i440fx_update_memory_mappings(d);
+    return 0;
+}
+
+static const VMStateDescription vmstate_i440fx = {
+    .name = "I440FX",
+    .version_id = 3,
+    .minimum_version_id = 3,
+    .minimum_version_id_old = 1,
+    .load_state_old = i440fx_load_old,
+    .run_after_load = i440fx_after_load,
+    .fields      = (VMStateField []) {
+        VMSTATE_PCI_DEVICE(dev, PCII440FXState),
+        VMSTATE_UINT8(smm_enabled, PCII440FXState),
+        VMSTATE_END_OF_LIST()
+    }
+};
 
 static int i440fx_pcihost_initfn(SysBusDevice *dev)
 {
@@ -220,7 +228,7 @@ static int i440fx_initfn(PCIDevice *dev)
 
     d->dev.config[0x72] = 0x02; /* SMRAM */
 
-    register_savevm("I440FX", 0, 2, i440fx_save, i440fx_load, d);
+    vmstate_register(0, &vmstate_i440fx, d);
     return 0;
 }
 
@@ -244,6 +252,7 @@ PCIBus *i440fx_init(PCII440FXState **pi440fx_state, int *piix3_devfn, qemu_irq *
 
     d = pci_create_simple(b, 0, "i440FX");
     *pi440fx_state = DO_UPCAST(PCII440FXState, dev, d);
+    (*pi440fx_state)->irq_state = irq_state;
 
     irq_state->piix3 = DO_UPCAST(PIIX3State, dev,
                                  pci_create_simple(b, -1, "PIIX3"));
@@ -261,7 +270,7 @@ static void piix3_set_irq(void *opaque, int irq_num, int level)
     int i, pic_irq, pic_level;
     PIIX3IrqState *irq_state = opaque;
 
-    pci_irq_levels[irq_num] = level;
+    irq_state->piix3->pci_irq_levels[irq_num] = level;
 
     /* now we change the pic irq level according to the piix irq mappings */
     /* XXX: optimize */
@@ -272,7 +281,7 @@ static void piix3_set_irq(void *opaque, int irq_num, int level)
         pic_level = 0;
         for (i = 0; i < 4; i++) {
             if (pic_irq == irq_state->piix3->dev.config[0x60 + i])
-                pic_level |= pci_irq_levels[i];
+                pic_level |= irq_state->piix3->pci_irq_levels[i];
         }
         qemu_set_irq(irq_state->pic[pic_irq], pic_level);
     }
@@ -325,22 +334,20 @@ static void piix3_reset(void *opaque)
     pci_conf[0xac] = 0x00;
     pci_conf[0xae] = 0x00;
 
-    memset(pci_irq_levels, 0, sizeof(pci_irq_levels));
+    memset(d->pci_irq_levels, 0, sizeof(d->pci_irq_levels));
 }
 
-static void piix_save(QEMUFile* f, void *opaque)
-{
-    PCIDevice *d = opaque;
-    pci_device_save(d, f);
-}
-
-static int piix_load(QEMUFile* f, void *opaque, int version_id)
-{
-    PCIDevice *d = opaque;
-    if (version_id != 2)
-        return -EINVAL;
-    return pci_device_load(d, f);
-}
+static const VMStateDescription vmstate_piix3 = {
+    .name = "PIIX3",
+    .version_id = 3,
+    .minimum_version_id = 2,
+    .minimum_version_id_old = 2,
+    .fields      = (VMStateField []) {
+        VMSTATE_PCI_DEVICE(dev, PIIX3State),
+        VMSTATE_INT32_ARRAY_V(pci_irq_levels, PIIX3State, 4, 3),
+        VMSTATE_END_OF_LIST()
+    }
+};
 
 static int piix3_initfn(PCIDevice *dev)
 {
@@ -348,7 +355,7 @@ static int piix3_initfn(PCIDevice *dev)
     uint8_t *pci_conf;
 
     isa_bus_new(&d->dev.qdev);
-    register_savevm("PIIX3", 0, 2, piix_save, piix_load, d);
+    vmstate_register(0, &vmstate_piix3, d);
 
     pci_conf = d->dev.config;
     pci_config_set_vendor_id(pci_conf, PCI_VENDOR_ID_INTEL);
