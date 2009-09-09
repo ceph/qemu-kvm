@@ -1155,8 +1155,8 @@ static inline int kvm_sync_vcpus(void)
 
 static inline void kvm_arch_get_registers(CPUState *env)
 {
-    kvm_save_registers(env);
-    kvm_save_mpstate(env);
+    kvm_arch_save_regs(env);
+    kvm_arch_save_mpstate(env);
 }
 
 static inline void kvm_arch_put_registers(CPUState *env)

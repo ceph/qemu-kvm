@@ -874,14 +874,6 @@ int kvm_set_mpstate(kvm_vcpu_context_t vcpu, struct kvm_mp_state *mp_state)
 }
 #endif
 
-void kvm_cpu_synchronize_state(CPUState *env)
-{
-    if (!env->kvm_cpu_state.regs_modified) {
-        kvm_arch_get_registers(env);
-        env->kvm_cpu_state.regs_modified = 1;
-    }
-}
-
 static int handle_mmio(kvm_vcpu_context_t vcpu)
 {
     unsigned long addr = vcpu->run->mmio.phys_addr;
@@ -1537,6 +1529,21 @@ static void on_vcpu(CPUState *env, void (*func)(void *data), void *data)
     pthread_kill(env->kvm_cpu_state.thread, SIG_IPI);
     while (!wi.done)
         qemu_cond_wait(&qemu_work_cond);
+}
+
+static void do_kvm_cpu_synchronize_state(void *_env)
+{
+    CPUState *env = _env;
+    if (!env->kvm_cpu_state.regs_modified) {
+        kvm_arch_get_registers(env);
+        env->kvm_cpu_state.regs_modified = 1;
+    }
+}
+
+void kvm_cpu_synchronize_state(CPUState *env)
+{
+    if (!env->kvm_cpu_state.regs_modified)
+        on_vcpu(env, do_kvm_cpu_synchronize_state, env);
 }
 
 static void inject_interrupt(void *data)
