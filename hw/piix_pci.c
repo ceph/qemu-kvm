@@ -35,8 +35,14 @@ typedef uint32_t pci_addr_t;
 
 typedef PCIHostState I440FXState;
 
+typedef struct PIIX3State {
+    PCIDevice dev;
+} PIIX3State;
+
 struct PCII440FXState {
     PCIDevice dev;
+    target_phys_addr_t isa_page_descs[384 / 4];
+    uint8_t smm_enabled;
 };
 
 static void i440fx_addr_writel(void* opaque, uint32_t addr, uint32_t val)
@@ -51,7 +57,7 @@ static uint32_t i440fx_addr_readl(void* opaque, uint32_t addr)
     return s->config_reg;
 }
 
-static void piix3_set_irq(qemu_irq *pic, int irq_num, int level);
+static void piix3_set_irq(void *opaque, int irq_num, int level);
 
 /* return the global irq number corresponding to a given device irq
    pin. We could also use the bus number to have a more precise
@@ -63,8 +69,6 @@ static int pci_slot_get_pirq(PCIDevice *pci_dev, int irq_num)
     return (irq_num + slot_addend) & 3;
 }
 
-static target_phys_addr_t isa_page_descs[384 / 4];
-static uint8_t smm_enabled;
 static int pci_irq_levels[4];
 
 static void update_pam(PCII440FXState *d, uint32_t start, uint32_t end, int r)
@@ -88,7 +92,7 @@ static void update_pam(PCII440FXState *d, uint32_t start, uint32_t end, int r)
         /* XXX: should distinguish read/write cases */
         for(addr = start; addr < end; addr += 4096) {
             cpu_register_physical_memory(addr, 4096,
-                                         isa_page_descs[(addr - 0xa0000) >> 12]);
+                                         d->isa_page_descs[(addr - 0xa0000) >> 12]);
         }
         break;
     }
@@ -109,12 +113,12 @@ static void i440fx_update_memory_mappings(PCII440FXState *d)
         update_pam(d, 0xc0000 + 0x4000 * i, 0xc0000 + 0x4000 * (i + 1), r);
     }
     smram = d->dev.config[0x72];
-    if ((smm_enabled && (smram & 0x08)) || (smram & 0x40)) {
+    if ((d->smm_enabled && (smram & 0x08)) || (smram & 0x40)) {
         cpu_register_physical_memory(0xa0000, 0x20000, 0xa0000);
     } else {
         for(addr = 0xa0000; addr < 0xc0000; addr += 4096) {
             cpu_register_physical_memory(addr, 4096,
-                                         isa_page_descs[(addr - 0xa0000) >> 12]);
+                                         d->isa_page_descs[(addr - 0xa0000) >> 12]);
         }
     }
 }
@@ -122,8 +126,8 @@ static void i440fx_update_memory_mappings(PCII440FXState *d)
 void i440fx_set_smm(PCII440FXState *d, int val)
 {
     val = (val != 0);
-    if (smm_enabled != val) {
-        smm_enabled = val;
+    if (d->smm_enabled != val) {
+        d->smm_enabled = val;
         i440fx_update_memory_mappings(d);
     }
 }
@@ -136,7 +140,7 @@ void i440fx_init_memory_mappings(PCII440FXState *d)
 {
     int i;
     for(i = 0; i < 96; i++) {
-        isa_page_descs[i] = cpu_get_physical_page_desc(0xa0000 + i * 0x1000);
+        d->isa_page_descs[i] = cpu_get_physical_page_desc(0xa0000 + i * 0x1000);
     }
 }
 
@@ -157,7 +161,7 @@ static void i440fx_save(QEMUFile* f, void *opaque)
     int i;
 
     pci_device_save(&d->dev, f);
-    qemu_put_8s(f, &smm_enabled);
+    qemu_put_8s(f, &d->smm_enabled);
 
     for (i = 0; i < 4; i++)
         qemu_put_be32(f, pci_irq_levels[i]);
@@ -174,7 +178,7 @@ static int i440fx_load(QEMUFile* f, void *opaque, int version_id)
     if (ret < 0)
         return ret;
     i440fx_update_memory_mappings(d);
-    qemu_get_8s(f, &smm_enabled);
+    qemu_get_8s(f, &d->smm_enabled);
 
     if (version_id >= 2)
         for (i = 0; i < 4; i++)
@@ -237,23 +241,24 @@ PCIBus *i440fx_init(PCII440FXState **pi440fx_state, qemu_irq *pic)
 
 /* PIIX3 PCI to ISA bridge */
 
-static PCIDevice *piix3_dev;
+static PIIX3State *piix3_dev;
 
-static void piix3_set_irq(qemu_irq *pic, int irq_num, int level)
+static void piix3_set_irq(void *opaque, int irq_num, int level)
 {
     int i, pic_irq, pic_level;
+    qemu_irq *pic = opaque;
 
     pci_irq_levels[irq_num] = level;
 
     /* now we change the pic irq level according to the piix irq mappings */
     /* XXX: optimize */
-    pic_irq = piix3_dev->config[0x60 + irq_num];
+    pic_irq = piix3_dev->dev.config[0x60 + irq_num];
     if (pic_irq < 16) {
         /* The pic level is the logical OR of all the PCI irqs mapped
            to it */
         pic_level = 0;
         for (i = 0; i < 4; i++) {
-            if (pic_irq == piix3_dev->config[0x60 + i])
+            if (pic_irq == piix3_dev->dev.config[0x60 + i])
                 pic_level |= pci_irq_levels[i];
         }
         qemu_set_irq(pic[pic_irq], pic_level);
@@ -263,7 +268,7 @@ static void piix3_set_irq(qemu_irq *pic, int irq_num, int level)
 int piix_get_irq(int pin)
 {
     if (piix3_dev)
-        return piix3_dev->config[0x60+pin];
+        return piix3_dev->dev.config[0x60+pin];
     if (piix4_dev)
         return piix4_dev->config[0x60+pin];
 
@@ -272,8 +277,8 @@ int piix_get_irq(int pin)
 
 static void piix3_reset(void *opaque)
 {
-    PCIDevice *d = opaque;
-    uint8_t *pci_conf = d->config;
+    PIIX3State *d = opaque;
+    uint8_t *pci_conf = d->dev.config;
 
     pci_conf[0x04] = 0x07; // master, memory and I/O
     pci_conf[0x05] = 0x00;
@@ -324,14 +329,15 @@ static int piix_load(QEMUFile* f, void *opaque, int version_id)
     return pci_device_load(d, f);
 }
 
-static int piix3_initfn(PCIDevice *d)
+static int piix3_initfn(PCIDevice *dev)
 {
+    PIIX3State *d = DO_UPCAST(PIIX3State, dev, dev);
     uint8_t *pci_conf;
 
-    isa_bus_new(&d->qdev);
+    isa_bus_new(&d->dev.qdev);
     register_savevm("PIIX3", 0, 2, piix_save, piix_load, d);
 
-    pci_conf = d->config;
+    pci_conf = d->dev.config;
     pci_config_set_vendor_id(pci_conf, PCI_VENDOR_ID_INTEL);
     pci_config_set_device_id(pci_conf, PCI_DEVICE_ID_INTEL_82371SB_0); // 82371SB PIIX3 PCI-to-ISA bridge (Step A1)
     pci_config_set_class(pci_conf, PCI_CLASS_BRIDGE_ISA);
@@ -363,7 +369,7 @@ static PCIDeviceInfo i440fx_info[] = {
     },{
         .qdev.name    = "PIIX3",
         .qdev.desc    = "ISA bridge",
-        .qdev.size    = sizeof(PCIDevice),
+        .qdev.size    = sizeof(PIIX3State),
         .qdev.no_user = 1,
         .init         = piix3_initfn,
     },{
