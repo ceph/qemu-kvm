@@ -254,6 +254,11 @@ static void help_cmd(Monitor *mon, const char *name)
     }
 }
 
+static void do_help_cmd(Monitor *mon, const char *name)
+{
+    help_cmd(mon, name);
+}
+
 static void do_commit(Monitor *mon, const char *device)
 {
     int all_devices;
@@ -2527,6 +2532,33 @@ static const char *get_command_name(const char *cmdline,
     return p;
 }
 
+/**
+ * Read key of 'type' into 'key' and return the current
+ * 'type' pointer.
+ */
+static char *key_get_info(const char *type, char **key)
+{
+    size_t len;
+    char *p, *str;
+
+    if (*type == ',')
+        type++;
+
+    p = strchr(type, ':');
+    if (!p) {
+        *key = NULL;
+        return NULL;
+    }
+    len = p - type;
+
+    str = qemu_malloc(len + 1);
+    memcpy(str, type, len);
+    str[len] = '\0';
+
+    *key = str;
+    return ++p;
+}
+
 static int default_fmt_format = 'x';
 static int default_fmt_size = 4;
 
@@ -2539,6 +2571,7 @@ static void monitor_handle_command(Monitor *mon, const char *cmdline)
     const mon_cmd_t *cmd;
     char cmdname[256];
     char buf[1024];
+    char *key;
     void *str_allocated[MAX_ARGS];
     void *args[MAX_ARGS];
     void (*handler_0)(Monitor *mon);
@@ -2590,9 +2623,10 @@ static void monitor_handle_command(Monitor *mon, const char *cmdline)
     typestr = cmd->args_type;
     nb_args = 0;
     for(;;) {
-        c = *typestr;
-        if (c == '\0')
+        typestr = key_get_info(typestr, &key);
+        if (!typestr)
             break;
+        c = *typestr;
         typestr++;
         switch(c) {
         case 'F':
@@ -2806,6 +2840,8 @@ static void monitor_handle_command(Monitor *mon, const char *cmdline)
             monitor_printf(mon, "%s: unknown type '%c'\n", cmdname, c);
             goto fail;
         }
+        qemu_free(key);
+        key = NULL;
     }
     /* check that all arguments were parsed */
     while (qemu_isspace(*p))
@@ -2873,6 +2909,7 @@ static void monitor_handle_command(Monitor *mon, const char *cmdline)
     qemu_errors_to_previous();
 
  fail:
+    qemu_free(key);
     for(i = 0; i < MAX_ARGS; i++)
         qemu_free(str_allocated[i]);
 }
@@ -2991,6 +3028,12 @@ static void parse_cmdline(const char *cmdline,
     *pnb_args = nb_args;
 }
 
+static const char *next_arg_type(const char *typestr)
+{
+    const char *p = strchr(typestr, ':');
+    return (p != NULL ? ++p : typestr);
+}
+
 static void monitor_find_completion(const char *cmdline)
 {
     const char *cmdname;
@@ -3033,12 +3076,12 @@ static void monitor_find_completion(const char *cmdline)
         }
         return;
     found:
-        ptype = cmd->args_type;
+        ptype = next_arg_type(cmd->args_type);
         for(i = 0; i < nb_args - 2; i++) {
             if (*ptype != '\0') {
-                ptype++;
+                ptype = next_arg_type(ptype);
                 while (*ptype == '?')
-                    ptype++;
+                    ptype = next_arg_type(ptype);
             }
         }
         str = args[nb_args - 1];
