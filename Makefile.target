@@ -91,9 +91,7 @@ op_helper.o cpu-exec.o: QEMU_CFLAGS += $(HELPER_CFLAGS)
 # cpu_signal_handler() in cpu-exec.c.
 signal.o: QEMU_CFLAGS += $(HELPER_CFLAGS)
 
-qemu-kvm-helper.o: qemu-kvm-helper.c
-	$(CC) $(HELPER_CFLAGS) $(QEMU_CFLAGS) $(CFLAGS) -c -o $@ $<
-
+qemu-kvm-helper.o: QEMU_CFLAGS += $(HELPER_CFLAGS)
 
 #########################################################
 # Linux user emulator target
