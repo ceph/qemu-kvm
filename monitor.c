@@ -64,7 +64,9 @@
  * 'l'          target long (32 or 64 bit)
  * '/'          optional gdb-like print format (like "/10x")
  *
- * '?'          optional type (for 'F', 's' and 'i')
+ * '?'          optional type (for all types, except '/')
+ * '.'          other form of optional type (for 'i' and 'l')
+ * '-'          optional parameter (eg. '-f')
  *
  */
 
@@ -807,37 +809,31 @@ static void memory_dump(Monitor *mon, int count, int format, int wsize,
     }
 }
 
-#if TARGET_LONG_BITS == 64
-#define GET_TLONG(h, l) (((uint64_t)(h) << 32) | (l))
-#else
-#define GET_TLONG(h, l) (l)
-#endif
-
-static void do_memory_dump(Monitor *mon, int count, int format, int size,
-                           uint32_t addrh, uint32_t addrl)
+static void do_memory_dump(Monitor *mon, const QDict *qdict)
 {
-    target_long addr = GET_TLONG(addrh, addrl);
+    int count = qdict_get_int(qdict, "count");
+    int format = qdict_get_int(qdict, "format");
+    int size = qdict_get_int(qdict, "size");
+    target_long addr = qdict_get_int(qdict, "addr");
+
     memory_dump(mon, count, format, size, addr, 0);
 }
 
-#if TARGET_PHYS_ADDR_BITS > 32
-#define GET_TPHYSADDR(h, l) (((uint64_t)(h) << 32) | (l))
-#else
-#define GET_TPHYSADDR(h, l) (l)
-#endif
-
-static void do_physical_memory_dump(Monitor *mon, int count, int format,
-                                    int size, uint32_t addrh, uint32_t addrl)
-
+static void do_physical_memory_dump(Monitor *mon, const QDict *qdict)
 {
-    target_phys_addr_t addr = GET_TPHYSADDR(addrh, addrl);
+    int count = qdict_get_int(qdict, "count");
+    int format = qdict_get_int(qdict, "format");
+    int size = qdict_get_int(qdict, "size");
+    target_phys_addr_t addr = qdict_get_int(qdict, "addr");
+
     memory_dump(mon, count, format, size, addr, 1);
 }
 
-static void do_print(Monitor *mon, int count, int format, int size,
-                     unsigned int valh, unsigned int vall)
+static void do_print(Monitor *mon, const QDict *qdict)
 {
-    target_phys_addr_t val = GET_TPHYSADDR(valh, vall);
+    int format = qdict_get_int(qdict, "format");
+    target_phys_addr_t val = qdict_get_int(qdict, "val");
+
 #if TARGET_PHYS_ADDR_BITS == 32
     switch(format) {
     case 'o':
@@ -880,11 +876,12 @@ static void do_print(Monitor *mon, int count, int format, int size,
     monitor_printf(mon, "\n");
 }
 
-static void do_memory_save(Monitor *mon, unsigned int valh, unsigned int vall,
-                           uint32_t size, const char *filename)
+static void do_memory_save(Monitor *mon, const QDict *qdict)
 {
     FILE *f;
-    target_long addr = GET_TLONG(valh, vall);
+    uint32_t size = qdict_get_int(qdict, "size");
+    const char *filename = qdict_get_str(qdict, "filename");
+    target_long addr = qdict_get_int(qdict, "val");
     uint32_t l;
     CPUState *env;
     uint8_t buf[1024];
@@ -910,14 +907,14 @@ static void do_memory_save(Monitor *mon, unsigned int valh, unsigned int vall,
     fclose(f);
 }
 
-static void do_physical_memory_save(Monitor *mon, unsigned int valh,
-                                    unsigned int vall, uint32_t size,
-                                    const char *filename)
+static void do_physical_memory_save(Monitor *mon, const QDict *qdict)
 {
     FILE *f;
     uint32_t l;
     uint8_t buf[1024];
-    target_phys_addr_t addr = GET_TPHYSADDR(valh, vall); 
+    uint32_t size = qdict_get_int(qdict, "size");
+    const char *filename = qdict_get_str(qdict, "filename");
+    target_phys_addr_t addr = qdict_get_int(qdict, "val");
 
     f = fopen(filename, "wb");
     if (!f) {
@@ -1212,13 +1209,16 @@ static void do_mouse_button(Monitor *mon, const QDict *qdict)
     kbd_mouse_event(0, 0, 0, mouse_button_state);
 }
 
-static void do_ioport_read(Monitor *mon, int count, int format, int size,
-                           int addr, int has_index, int index)
+static void do_ioport_read(Monitor *mon, const QDict *qdict)
 {
+    int size = qdict_get_int(qdict, "size");
+    int addr = qdict_get_int(qdict, "addr");
+    int has_index = qdict_haskey(qdict, "index");
     uint32_t val;
     int suffix;
 
     if (has_index) {
+        int index = qdict_get_int(qdict, "index");
         cpu_outb(NULL, addr & IOPORTS_MASK, index & 0xff);
         addr++;
     }
@@ -1243,9 +1243,12 @@ static void do_ioport_read(Monitor *mon, int count, int format, int size,
                    suffix, addr, size * 2, val);
 }
 
-static void do_ioport_write(Monitor *mon, int count, int format, int size,
-                            int addr, int val)
+static void do_ioport_write(Monitor *mon, const QDict *qdict)
 {
+    int size = qdict_get_int(qdict, "size");
+    int addr = qdict_get_int(qdict, "addr");
+    int val = qdict_get_int(qdict, "val");
+
     addr &= IOPORTS_MASK;
 
     switch (size) {
@@ -1523,11 +1526,15 @@ static void do_stop_capture(Monitor *mon, const QDict *qdict)
     }
 }
 
-static void do_wav_capture(Monitor *mon, const char *path,
-                           int has_freq, int freq,
-                           int has_bits, int bits,
-                           int has_channels, int nchannels)
+static void do_wav_capture(Monitor *mon, const QDict *qdict)
 {
+    const char *path = qdict_get_str(qdict, "path");
+    int has_freq = qdict_haskey(qdict, "freq");
+    int freq = qdict_get_try_int(qdict, "freq", -1);
+    int has_bits = qdict_haskey(qdict, "bits");
+    int bits = qdict_get_try_int(qdict, "bits", -1);
+    int has_channels = qdict_haskey(qdict, "nchannels");
+    int nchannels = qdict_get_try_int(qdict, "nchannels", -1);
     CaptureState *s;
 
     s = qemu_mallocz (sizeof (*s));
@@ -1654,10 +1661,13 @@ static void do_acl_policy(Monitor *mon, const QDict *qdict)
     }
 }
 
-static void do_acl_add(Monitor *mon, const char *aclname,
-                       const char *match, const char *policy,
-                       int has_index, int index)
+static void do_acl_add(Monitor *mon, const QDict *qdict)
 {
+    const char *aclname = qdict_get_str(qdict, "aclname");
+    const char *match = qdict_get_str(qdict, "match");
+    const char *policy = qdict_get_str(qdict, "policy");
+    int has_index = qdict_haskey(qdict, "index");
+    int index = qdict_get_try_int(qdict, "index", -1);
     qemu_acl *acl = find_acl(mon, aclname);
     int deny, ret;
 
@@ -1699,18 +1709,15 @@ static void do_acl_remove(Monitor *mon, const QDict *qdict)
 }
 
 #if defined(TARGET_I386)
-static void do_inject_mce(Monitor *mon,
-                          int cpu_index, int bank,
-                          unsigned status_hi, unsigned status_lo,
-                          unsigned mcg_status_hi, unsigned mcg_status_lo,
-                          unsigned addr_hi, unsigned addr_lo,
-                          unsigned misc_hi, unsigned misc_lo)
+static void do_inject_mce(Monitor *mon, const QDict *qdict)
 {
     CPUState *cenv;
-    uint64_t status = ((uint64_t)status_hi << 32) | status_lo;
-    uint64_t mcg_status = ((uint64_t)mcg_status_hi << 32) | mcg_status_lo;
-    uint64_t addr = ((uint64_t)addr_hi << 32) | addr_lo;
-    uint64_t misc = ((uint64_t)misc_hi << 32) | misc_lo;
+    int cpu_index = qdict_get_int(qdict, "cpu_index");
+    int bank = qdict_get_int(qdict, "bank");
+    uint64_t status = qdict_get_int(qdict, "status");
+    uint64_t mcg_status = qdict_get_int(qdict, "mcg_status");
+    uint64_t addr = qdict_get_int(qdict, "addr");
+    uint64_t misc = qdict_get_int(qdict, "misc");
 
     for (cenv = first_cpu; cenv != NULL; cenv = cenv->next_cpu)
         if (cenv->cpu_index == cpu_index && cenv->mcg_cap) {
@@ -2597,35 +2604,16 @@ static int default_fmt_size = 4;
 
 #define MAX_ARGS 16
 
-static void monitor_handle_command(Monitor *mon, const char *cmdline)
+static const mon_cmd_t *monitor_parse_command(Monitor *mon,
+                                              const char *cmdline,
+                                              QDict *qdict)
 {
     const char *p, *typestr;
-    int c, nb_args, i, has_arg;
+    int c;
     const mon_cmd_t *cmd;
     char cmdname[256];
     char buf[1024];
     char *key;
-    QDict *qdict;
-    void *str_allocated[MAX_ARGS];
-    void *args[MAX_ARGS];
-    void (*handler_d)(Monitor *mon, const QDict *qdict);
-    void (*handler_4)(Monitor *mon, void *arg0, void *arg1, void *arg2,
-                      void *arg3);
-    void (*handler_5)(Monitor *mon, void *arg0, void *arg1, void *arg2,
-                      void *arg3, void *arg4);
-    void (*handler_6)(Monitor *mon, void *arg0, void *arg1, void *arg2,
-                      void *arg3, void *arg4, void *arg5);
-    void (*handler_7)(Monitor *mon, void *arg0, void *arg1, void *arg2,
-                      void *arg3, void *arg4, void *arg5, void *arg6);
-    void (*handler_8)(Monitor *mon, void *arg0, void *arg1, void *arg2,
-                      void *arg3, void *arg4, void *arg5, void *arg6,
-                      void *arg7);
-    void (*handler_9)(Monitor *mon, void *arg0, void *arg1, void *arg2,
-                      void *arg3, void *arg4, void *arg5, void *arg6,
-                      void *arg7, void *arg8);
-    void (*handler_10)(Monitor *mon, void *arg0, void *arg1, void *arg2,
-                       void *arg3, void *arg4, void *arg5, void *arg6,
-                       void *arg7, void *arg8, void *arg9);
 
 #ifdef DEBUG
     monitor_printf(mon, "command='%s'\n", cmdline);
@@ -2634,7 +2622,7 @@ static void monitor_handle_command(Monitor *mon, const char *cmdline)
     /* extract the command name */
     p = get_command_name(cmdline, cmdname, sizeof(cmdname));
     if (!p)
-        return;
+        return NULL;
 
     /* find the command */
     for(cmd = mon_cmds; cmd->name != NULL; cmd++) {
@@ -2644,17 +2632,11 @@ static void monitor_handle_command(Monitor *mon, const char *cmdline)
 
     if (cmd->name == NULL) {
         monitor_printf(mon, "unknown command: '%s'\n", cmdname);
-        return;
+        return NULL;
     }
-
-    qdict = qdict_new();
-
-    for(i = 0; i < MAX_ARGS; i++)
-        str_allocated[i] = NULL;
 
     /* parse the parameters */
     typestr = cmd->args_type;
-    nb_args = 0;
     for(;;) {
         typestr = key_get_info(typestr, &key);
         if (!typestr)
@@ -2667,7 +2649,6 @@ static void monitor_handle_command(Monitor *mon, const char *cmdline)
         case 's':
             {
                 int ret;
-                char *str;
 
                 while (qemu_isspace(*p))
                     p++;
@@ -2675,8 +2656,7 @@ static void monitor_handle_command(Monitor *mon, const char *cmdline)
                     typestr++;
                     if (*p == '\0') {
                         /* no optional string: NULL argument */
-                        str = NULL;
-                        goto add_str;
+                        break;
                     }
                 }
                 ret = get_str(buf, sizeof(buf), &p);
@@ -2696,18 +2676,7 @@ static void monitor_handle_command(Monitor *mon, const char *cmdline)
                     }
                     goto fail;
                 }
-                str = qemu_malloc(strlen(buf) + 1);
-                pstrcpy(str, sizeof(buf), buf);
-                str_allocated[nb_args] = str;
-            add_str:
-                if (nb_args >= MAX_ARGS) {
-                error_args:
-                    monitor_printf(mon, "%s: too many arguments\n", cmdname);
-                    goto fail;
-                }
-                args[nb_args++] = str;
-                if (str)
-                    qdict_put(qdict, key, qstring_from_str(str));
+                qdict_put(qdict, key, qstring_from_str(buf));
             }
             break;
         case '/':
@@ -2784,11 +2753,6 @@ static void monitor_handle_command(Monitor *mon, const char *cmdline)
                         size = -1;
                     }
                 }
-                if (nb_args + 3 > MAX_ARGS)
-                    goto error_args;
-                args[nb_args++] = (void*)(long)count;
-                args[nb_args++] = (void*)(long)format;
-                args[nb_args++] = (void*)(long)size;
                 qdict_put(qdict, "count", qint_from_int(count));
                 qdict_put(qdict, "format", qint_from_int(format));
                 qdict_put(qdict, "size", qint_from_int(size));
@@ -2798,58 +2762,36 @@ static void monitor_handle_command(Monitor *mon, const char *cmdline)
         case 'l':
             {
                 int64_t val;
-                int dict_add = 1;
 
                 while (qemu_isspace(*p))
                     p++;
                 if (*typestr == '?' || *typestr == '.') {
                     if (*typestr == '?') {
-                        if (*p == '\0')
-                            has_arg = 0;
-                        else
-                            has_arg = 1;
+                        if (*p == '\0') {
+                            typestr++;
+                            break;
+                        }
                     } else {
                         if (*p == '.') {
                             p++;
                             while (qemu_isspace(*p))
                                 p++;
-                            has_arg = 1;
                         } else {
-                            has_arg = 0;
+                            typestr++;
+                            break;
                         }
                     }
                     typestr++;
-                    if (nb_args >= MAX_ARGS)
-                        goto error_args;
-                    dict_add = has_arg;
-                    args[nb_args++] = (void *)(long)has_arg;
-                    if (!has_arg) {
-                        if (nb_args >= MAX_ARGS)
-                            goto error_args;
-                        val = -1;
-                        goto add_num;
-                    }
                 }
                 if (get_expr(mon, &val, &p))
                     goto fail;
-            add_num:
-                if (c == 'i') {
-                    if (nb_args >= MAX_ARGS)
-                        goto error_args;
-                    args[nb_args++] = (void *)(long)val;
-                    if (dict_add)
-                        qdict_put(qdict, key, qint_from_int(val));
-                } else {
-                    if ((nb_args + 1) >= MAX_ARGS)
-                        goto error_args;
-#if TARGET_PHYS_ADDR_BITS > 32
-                    args[nb_args++] = (void *)(long)((val >> 32) & 0xffffffff);
-#else
-                    args[nb_args++] = (void *)0;
-#endif
-                    args[nb_args++] = (void *)(long)(val & 0xffffffff);
-                    qdict_put(qdict, key, qint_from_int(val));
+                /* Check if 'i' is greater than 32-bit */
+                if ((c == 'i') && ((val >> 32) & 0xffffffff)) {
+                    monitor_printf(mon, "\'%s\' has failed: ", cmdname);
+                    monitor_printf(mon, "integer is for 32-bit values\n");
+                    goto fail;
                 }
+                qdict_put(qdict, key, qint_from_int(val));
             }
             break;
         case '-':
@@ -2873,9 +2815,6 @@ static void monitor_handle_command(Monitor *mon, const char *cmdline)
                     p++;
                     has_option = 1;
                 }
-                if (nb_args >= MAX_ARGS)
-                    goto error_args;
-                args[nb_args++] = (void *)(long)has_option;
                 qdict_put(qdict, key, qint_from_int(has_option));
             }
             break;
@@ -2896,57 +2835,32 @@ static void monitor_handle_command(Monitor *mon, const char *cmdline)
         goto fail;
     }
 
-    qemu_errors_to_mon(mon);
-    switch(nb_args) {
-    case 0:
-    case 1:
-    case 2:
-    case 3:
-        handler_d = cmd->handler;
-        handler_d(mon, qdict);
-        break;
-    case 4:
-        handler_4 = cmd->handler;
-        handler_4(mon, args[0], args[1], args[2], args[3]);
-        break;
-    case 5:
-        handler_5 = cmd->handler;
-        handler_5(mon, args[0], args[1], args[2], args[3], args[4]);
-        break;
-    case 6:
-        handler_6 = cmd->handler;
-        handler_6(mon, args[0], args[1], args[2], args[3], args[4], args[5]);
-        break;
-    case 7:
-        handler_7 = cmd->handler;
-        handler_7(mon, args[0], args[1], args[2], args[3], args[4], args[5],
-                  args[6]);
-        break;
-    case 8:
-        handler_8 = cmd->handler;
-        handler_8(mon, args[0], args[1], args[2], args[3], args[4], args[5],
-                  args[6], args[7]);
-        break;
-    case 9:
-        handler_9 = cmd->handler;
-        handler_9(mon, args[0], args[1], args[2], args[3], args[4], args[5],
-                  args[6], args[7], args[8]);
-        break;
-    case 10:
-        handler_10 = cmd->handler;
-        handler_10(mon, args[0], args[1], args[2], args[3], args[4], args[5],
-                   args[6], args[7], args[8], args[9]);
-        break;
-    default:
-        monitor_printf(mon, "unsupported number of arguments: %d\n", nb_args);
-        break;
-    }
-    qemu_errors_to_previous();
+    return cmd;
 
- fail:
+fail:
     qemu_free(key);
-    for(i = 0; i < MAX_ARGS; i++)
-        qemu_free(str_allocated[i]);
+    return NULL;
+}
+
+static void monitor_handle_command(Monitor *mon, const char *cmdline)
+{
+    QDict *qdict;
+    const mon_cmd_t *cmd;
+
+    qdict = qdict_new();
+
+    cmd = monitor_parse_command(mon, cmdline, qdict);
+    if (cmd) {
+        void (*handler)(Monitor *mon, const QDict *qdict);
+
+        qemu_errors_to_mon(mon);
+
+        handler = cmd->handler;
+        handler(mon, qdict);
+
+        qemu_errors_to_previous();
+    }
+
     QDECREF(qdict);
 }
 
