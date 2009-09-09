@@ -44,6 +44,9 @@
 #include "migration.h"
 #include "kvm.h"
 #include "acl.h"
+#include "qint.h"
+#include "qdict.h"
+#include "qstring.h"
 #include "exec-all.h"
 
 #include "qemu-kvm.h"
@@ -2572,6 +2575,7 @@ static void monitor_handle_command(Monitor *mon, const char *cmdline)
     char cmdname[256];
     char buf[1024];
     char *key;
+    QDict *qdict;
     void *str_allocated[MAX_ARGS];
     void *args[MAX_ARGS];
     void (*handler_0)(Monitor *mon);
@@ -2615,6 +2619,8 @@ static void monitor_handle_command(Monitor *mon, const char *cmdline)
         monitor_printf(mon, "unknown command: '%s'\n", cmdname);
         return;
     }
+
+    qdict = qdict_new();
 
     for(i = 0; i < MAX_ARGS; i++)
         str_allocated[i] = NULL;
@@ -2673,6 +2679,8 @@ static void monitor_handle_command(Monitor *mon, const char *cmdline)
                     goto fail;
                 }
                 args[nb_args++] = str;
+                if (str)
+                    qdict_put(qdict, key, qstring_from_str(str));
             }
             break;
         case '/':
@@ -2754,12 +2762,16 @@ static void monitor_handle_command(Monitor *mon, const char *cmdline)
                 args[nb_args++] = (void*)(long)count;
                 args[nb_args++] = (void*)(long)format;
                 args[nb_args++] = (void*)(long)size;
+                qdict_put(qdict, "count", qint_from_int(count));
+                qdict_put(qdict, "format", qint_from_int(format));
+                qdict_put(qdict, "size", qint_from_int(size));
             }
             break;
         case 'i':
         case 'l':
             {
                 int64_t val;
+                int dict_add = 1;
 
                 while (qemu_isspace(*p))
                     p++;
@@ -2782,6 +2794,7 @@ static void monitor_handle_command(Monitor *mon, const char *cmdline)
                     typestr++;
                     if (nb_args >= MAX_ARGS)
                         goto error_args;
+                    dict_add = has_arg;
                     args[nb_args++] = (void *)(long)has_arg;
                     if (!has_arg) {
                         if (nb_args >= MAX_ARGS)
@@ -2797,6 +2810,8 @@ static void monitor_handle_command(Monitor *mon, const char *cmdline)
                     if (nb_args >= MAX_ARGS)
                         goto error_args;
                     args[nb_args++] = (void *)(long)val;
+                    if (dict_add)
+                        qdict_put(qdict, key, qint_from_int(val));
                 } else {
                     if ((nb_args + 1) >= MAX_ARGS)
                         goto error_args;
@@ -2806,6 +2821,7 @@ static void monitor_handle_command(Monitor *mon, const char *cmdline)
                     args[nb_args++] = (void *)0;
 #endif
                     args[nb_args++] = (void *)(long)(val & 0xffffffff);
+                    qdict_put(qdict, key, qint_from_int(val));
                 }
             }
             break;
@@ -2833,6 +2849,7 @@ static void monitor_handle_command(Monitor *mon, const char *cmdline)
                 if (nb_args >= MAX_ARGS)
                     goto error_args;
                 args[nb_args++] = (void *)(long)has_option;
+                qdict_put(qdict, key, qint_from_int(has_option));
             }
             break;
         default:
@@ -2912,6 +2929,7 @@ static void monitor_handle_command(Monitor *mon, const char *cmdline)
     qemu_free(key);
     for(i = 0; i < MAX_ARGS; i++)
         qemu_free(str_allocated[i]);
+    QDECREF(qdict);
 }
 
 static void cmd_completion(const char *name, const char *list)
