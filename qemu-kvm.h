@@ -1157,7 +1157,9 @@ static inline void kvm_arch_get_registers(CPUState *env)
 {
     kvm_arch_save_regs(env);
     kvm_arch_save_mpstate(env);
+#ifdef KVM_CAP_MP_STATE
     env->halted = (env->mp_state == KVM_MP_STATE_HALTED);
+#endif
 }
 
 static inline void kvm_arch_put_registers(CPUState *env)
