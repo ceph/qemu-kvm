@@ -109,7 +109,6 @@ typedef struct VGACommonState {
     uint32_t lfb_vram_mapped; /* whether 0xa0000 is mapped as ram */
     uint32_t bios_offset;
     uint32_t bios_size;
-    int it_shift;
     uint32_t latch;
     uint8_t sr_index;
     uint8_t sr[256];
@@ -215,8 +214,12 @@ void vga_draw_cursor_line_32(uint8_t *d1, const uint8_t *src1,
                              unsigned int color0, unsigned int color1,
                              unsigned int color_xor);
 
+int vga_ioport_invalid(VGACommonState *s, uint32_t addr);
+
 extern const uint8_t sr_mask[8];
 extern const uint8_t gr_mask[16];
 
 #define VGA_RAM_SIZE (16 * 1024 * 1024)
 
+extern CPUReadMemoryFunc * const vga_mem_read[3];
+extern CPUWriteMemoryFunc * const vga_mem_write[3];

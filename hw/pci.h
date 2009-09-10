@@ -64,6 +64,7 @@ extern target_phys_addr_t pci_mem_base;
 
 /* Intel (0x8086) */
 #define PCI_DEVICE_ID_INTEL_82551IT      0x1209
+#define PCI_DEVICE_ID_INTEL_82557        0x1229
 
 /* Red Hat / Qumranet (for QEMU) -- see pci-ids.txt */
 #define PCI_VENDOR_ID_REDHAT_QUMRANET    0x1af4
@@ -381,7 +382,6 @@ PCIDevice *pci_create_simple(PCIBus *bus, int devfn, const char *name);
 
 /* lsi53c895a.c */
 #define LSI_MAX_DEVS 7
-void lsi_scsi_attach(DeviceState *host, BlockDriverState *bd, int id);
 
 /* vmware_vga.c */
 void pci_vmsvga_init(PCIBus *bus);
@@ -391,7 +391,7 @@ void usb_uhci_piix3_init(PCIBus *bus, int devfn);
 void usb_uhci_piix4_init(PCIBus *bus, int devfn);
 
 /* usb-ohci.c */
-void usb_ohci_init_pci(struct PCIBus *bus, int num_ports, int devfn);
+void usb_ohci_init_pci(struct PCIBus *bus, int devfn);
 
 /* prep_pci.c */
 PCIBus *pci_prep_init(qemu_irq *pic);
