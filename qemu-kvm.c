@@ -66,8 +66,10 @@ static CPUState *kvm_debug_cpu_requested;
 
 static uint64_t phys_ram_size;
 
+#ifdef USE_KVM_DEVICE_ASSIGNMENT
 /* The list of ioperm_data */
 static LIST_HEAD(, ioperm_data) ioperm_head;
+#endif
 
 //#define DEBUG_MEMREG
 #ifdef	DEBUG_MEMREG
@@ -1829,7 +1831,9 @@ static void *ap_main_loop(void *_env)
 {
     CPUState *env = _env;
     sigset_t signals;
+#ifdef USE_KVM_DEVICE_ASSIGNMENT
     struct ioperm_data *data = NULL;
+#endif
 
     current_env = env;
     env->thread_id = kvm_get_thread_id();
