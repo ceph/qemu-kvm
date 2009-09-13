@@ -1671,10 +1671,9 @@ uint32_t kvm_arch_get_supported_cpuid(CPUState *env, uint32_t function,
 
 void kvm_arch_process_irqchip_events(CPUState *env)
 {
-    kvm_arch_save_regs(env);
+    kvm_cpu_synchronize_state(env);
     if (env->interrupt_request & CPU_INTERRUPT_INIT)
         do_cpu_init(env);
     if (env->interrupt_request & CPU_INTERRUPT_SIPI)
         do_cpu_sipi(env);
-    kvm_arch_load_regs(env);
 }
