@@ -55,10 +55,6 @@ int kvm_arch_try_push_interrupts(void *opaque)
     return 1;
 }
 
-void kvm_arch_update_regs_for_sipi(CPUState *env)
-{
-}
-
 int kvm_arch_insert_sw_breakpoint(CPUState *current_env,
                                   struct kvm_sw_breakpoint *bp)
 {

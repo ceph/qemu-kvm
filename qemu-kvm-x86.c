@@ -1436,16 +1436,6 @@ void kvm_arch_push_nmi(void *opaque)
 }
 #endif /* KVM_CAP_USER_NMI */
 
-void kvm_arch_update_regs_for_sipi(CPUState *env)
-{
-    SegmentCache cs = env->segs[R_CS];
-
-    kvm_arch_save_regs(env);
-    env->segs[R_CS] = cs;
-    env->eip = 0;
-    kvm_arch_load_regs(env);
-}
-
 void kvm_arch_cpu_reset(CPUState *env)
 {
     kvm_arch_load_regs(env);
