@@ -450,15 +450,15 @@ static int i8042_initfn(ISADevice *dev)
 {
     KBDState *s = &(DO_UPCAST(ISAKBDState, dev, dev)->kbd);
 
-    isa_init_irq(dev, &s->irq_kbd);
-    isa_init_irq(dev, &s->irq_mouse);
+    isa_init_irq(dev, &s->irq_kbd, 1);
+    isa_init_irq(dev, &s->irq_mouse, 12);
 
     kbd_reset(s);
     register_savevm("pckbd", 0, 3, kbd_save, kbd_load, s);
-    register_ioport_read(dev->iobase[0], 1, 1, kbd_read_data, s);
-    register_ioport_write(dev->iobase[0], 1, 1, kbd_write_data, s);
-    register_ioport_read(dev->iobase[1], 1, 1, kbd_read_status, s);
-    register_ioport_write(dev->iobase[1], 1, 1, kbd_write_command, s);
+    register_ioport_read(0x60, 1, 1, kbd_read_data, s);
+    register_ioport_write(0x60, 1, 1, kbd_write_data, s);
+    register_ioport_read(0x64, 1, 1, kbd_read_status, s);
+    register_ioport_write(0x64, 1, 1, kbd_write_command, s);
 
     s->kbd = ps2_kbd_init(kbd_update_kbd_irq, s);
     s->mouse = ps2_mouse_init(kbd_update_aux_irq, s);

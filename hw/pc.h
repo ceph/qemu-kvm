@@ -162,7 +162,7 @@ void isa_cirrus_vga_init(void);
 
 /* ne2000.c */
 
-void isa_ne2000_init(int base, qemu_irq irq, NICInfo *nd);
+void isa_ne2000_init(int base, int irq, NICInfo *nd);
 
 /* extboot.c */
 
