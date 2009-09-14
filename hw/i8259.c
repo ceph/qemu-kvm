@@ -464,64 +464,40 @@ static uint32_t elcr_ioport_read(void *opaque, uint32_t addr1)
     return s->elcr;
 }
 
-static void pic_save_common(QEMUFile *f, void *opaque)
-{
-    PicState *s = opaque;
+static void kvm_kernel_pic_save_to_user(const void *opaque);
+static int kvm_kernel_pic_load_from_user(void *opaque);
 
-    qemu_put_8s(f, &s->last_irr);
-    qemu_put_8s(f, &s->irr);
-    qemu_put_8s(f, &s->imr);
-    qemu_put_8s(f, &s->isr);
-    qemu_put_8s(f, &s->priority_add);
-    qemu_put_8s(f, &s->irq_base);
-    qemu_put_8s(f, &s->read_reg_select);
-    qemu_put_8s(f, &s->poll);
-    qemu_put_8s(f, &s->special_mask);
-    qemu_put_8s(f, &s->init_state);
-    qemu_put_8s(f, &s->auto_eoi);
-    qemu_put_8s(f, &s->rotate_on_auto_eoi);
-    qemu_put_8s(f, &s->special_fully_nested_mode);
-    qemu_put_8s(f, &s->init4);
-    qemu_put_8s(f, &s->single_mode);
-    qemu_put_8s(f, &s->elcr);
-}
-
-static void pic_save(QEMUFile *f, void *opaque)
-{
-    pic_save_common(f, opaque);
-}
-
-static int pic_load_common(QEMUFile *f, void *opaque, int version_id)
-{
-    PicState *s = opaque;
-
-    if (version_id != 1)
-        return -EINVAL;
-
-    qemu_get_8s(f, &s->last_irr);
-    qemu_get_8s(f, &s->irr);
-    qemu_get_8s(f, &s->imr);
-    qemu_get_8s(f, &s->isr);
-    qemu_get_8s(f, &s->priority_add);
-    qemu_get_8s(f, &s->irq_base);
-    qemu_get_8s(f, &s->read_reg_select);
-    qemu_get_8s(f, &s->poll);
-    qemu_get_8s(f, &s->special_mask);
-    qemu_get_8s(f, &s->init_state);
-    qemu_get_8s(f, &s->auto_eoi);
-    qemu_get_8s(f, &s->rotate_on_auto_eoi);
-    qemu_get_8s(f, &s->special_fully_nested_mode);
-    qemu_get_8s(f, &s->init4);
-    qemu_get_8s(f, &s->single_mode);
-    qemu_get_8s(f, &s->elcr);
-
-    return 0;
-}
-
-static int pic_load(QEMUFile *f, void *opaque, int version_id)
-{
-    return pic_load_common(f, opaque, version_id);
-}
+static const VMStateDescription vmstate_pic = {
+    .name = "i8259",
+    .version_id = 1,
+#ifdef KVM_CAP_IRQCHIP
+#ifdef TARGET_I386
+    .pre_save = kvm_kernel_pic_save_to_user,
+    .post_load = kvm_kernel_pic_load_from_user,
+#endif
+#endif
+    .minimum_version_id = 1,
+    .minimum_version_id_old = 1,
+    .fields      = (VMStateField []) {
+        VMSTATE_UINT8(last_irr, PicState),
+        VMSTATE_UINT8(irr, PicState),
+        VMSTATE_UINT8(imr, PicState),
+        VMSTATE_UINT8(isr, PicState),
+        VMSTATE_UINT8(priority_add, PicState),
+        VMSTATE_UINT8(irq_base, PicState),
+        VMSTATE_UINT8(read_reg_select, PicState),
+        VMSTATE_UINT8(poll, PicState),
+        VMSTATE_UINT8(special_mask, PicState),
+        VMSTATE_UINT8(init_state, PicState),
+        VMSTATE_UINT8(auto_eoi, PicState),
+        VMSTATE_UINT8(rotate_on_auto_eoi, PicState),
+        VMSTATE_UINT8(special_fully_nested_mode, PicState),
+        VMSTATE_UINT8(init4, PicState),
+        VMSTATE_UINT8(single_mode, PicState),
+        VMSTATE_UINT8(elcr, PicState),
+        VMSTATE_END_OF_LIST()
+    }
+};
 
 /* XXX: add generic master/slave system */
 static void pic_init1(int io_addr, int elcr_addr, PicState *s)
@@ -532,7 +508,7 @@ static void pic_init1(int io_addr, int elcr_addr, PicState *s)
         register_ioport_write(elcr_addr, 1, 1, elcr_ioport_write, s);
         register_ioport_read(elcr_addr, 1, 1, elcr_ioport_read, s);
     }
-    register_savevm("i8259", io_addr, 1, pic_save, pic_load, s);
+    vmstate_register(io_addr, &vmstate_pic, s);
     qemu_register_reset(pic_reset, s);
 }
 
@@ -588,9 +564,10 @@ qemu_irq *i8259_init(qemu_irq parent_irq)
 }
 
 #ifdef KVM_CAP_IRQCHIP
-static void kvm_kernel_pic_save_to_user(PicState *s)
+static void kvm_kernel_pic_save_to_user(const void *opaque)
 {
 #if defined(TARGET_I386)
+    PicState *s = (void *)opaque;
     struct kvm_irqchip chip;
     struct kvm_pic_state *kpic;
 
@@ -619,9 +596,10 @@ static void kvm_kernel_pic_save_to_user(PicState *s)
 #endif
 }
 
-static void kvm_kernel_pic_load_from_user(PicState *s)
+static int kvm_kernel_pic_load_from_user(void *opaque)
 {
 #if defined(TARGET_I386)
+    PicState *s = (void *)opaque;
     struct kvm_irqchip chip;
     struct kvm_pic_state *kpic;
 
@@ -649,6 +627,7 @@ static void kvm_kernel_pic_load_from_user(PicState *s)
 
     kvm_set_irqchip(kvm_context, &chip);
 #endif
+    return 0;
 }
 
 static void kvm_i8259_set_irq(void *opaque, int irq, int level)
@@ -661,26 +640,9 @@ static void kvm_i8259_set_irq(void *opaque, int irq, int level)
     }
 }
 
-static void kvm_pic_save(QEMUFile *f, void *opaque)
-{
-    PicState *s = opaque;
-
-    kvm_kernel_pic_save_to_user(s);
-    pic_save_common(f, opaque);
-}
-
-static int kvm_pic_load(QEMUFile *f, void *opaque, int version_id)
-{
-    PicState *s = opaque;
-    int r = pic_load_common(f, s, version_id);
-    if (r == 0)
-        kvm_kernel_pic_load_from_user(s);
-    return r;
-}
-
 static void kvm_pic_init1(int io_addr, PicState *s)
 {
-    register_savevm("i8259", io_addr, 1, kvm_pic_save, kvm_pic_load, s);
+    vmstate_register(io_addr, &vmstate_pic, s);
     qemu_register_reset(pic_reset, s);
 }
 
@@ -699,5 +661,6 @@ qemu_irq *kvm_i8259_init(qemu_irq parent_irq)
     return qemu_allocate_irqs(kvm_i8259_set_irq, s, 24);
 }
 #endif
+
 
 
