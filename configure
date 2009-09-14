@@ -1709,6 +1709,18 @@ if test "$darwin" != "yes" -a "$mingw32" != "yes" -a "$solaries" != yes -a \
     libs_softmmu="-lutil $libs_softmmu"
 fi
 
+##########################################
+# check if the compiler defines offsetof
+
+need_offsetof=yes
+cat > $TMPC << EOF
+#include <stddef.h>
+int main(void) { struct s { int f; }; return offsetof(struct s, f); }
+EOF
+if compile_prog "" "" ; then
+    need_offsetof=no
+fi
+
 # End of CC checks
 # After here, no more $cc or $ld runs
 
@@ -2033,6 +2045,9 @@ if test "$signalfd" = "yes" ; then
 fi
 if test "$eventfd" = "yes" ; then
   echo "CONFIG_eventfd=y" >> $config_host_mak
+if test "$need_offsetof" = "yes" ; then
+  echo "CONFIG_NEED_OFFSETOF=y" >> $config_host_mak
+fi
 fi
 
 # XXX: suppress that
