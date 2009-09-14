@@ -318,6 +318,7 @@ extern const VMStateInfo vmstate_info_int16;
 extern const VMStateInfo vmstate_info_int32;
 extern const VMStateInfo vmstate_info_int64;
 
+extern const VMStateInfo vmstate_info_uint8_equal;
 extern const VMStateInfo vmstate_info_int32_equal;
 extern const VMStateInfo vmstate_info_int32_le;
 
@@ -461,6 +462,9 @@ extern const VMStateDescription vmstate_pci_device;
 #define VMSTATE_UINT64(_f, _s)                                        \
     VMSTATE_UINT64_V(_f, _s, 0)
 
+#define VMSTATE_UINT8_EQUAL(_f, _s)                                   \
+    VMSTATE_SINGLE(_f, _s, 0, vmstate_info_uint8_equal, uint8_t)
+
 #define VMSTATE_INT32_EQUAL(_f, _s)                                   \
     VMSTATE_SINGLE(_f, _s, 0, vmstate_info_int32_equal, int32_t)
 
@@ -479,11 +483,23 @@ extern const VMStateDescription vmstate_pci_device;
 #define VMSTATE_PTIMER(_f, _s)                                        \
     VMSTATE_PTIMER_V(_f, _s, 0)
 
+#define VMSTATE_UINT16_ARRAY_V(_f, _s, _n, _v)                         \
+    VMSTATE_ARRAY(_f, _s, _n, _v, vmstate_info_uint16, uint16_t)
+
+#define VMSTATE_UINT16_ARRAY(_f, _s, _n)                               \
+    VMSTATE_UINT16_ARRAY_V(_f, _s, _n, 0)
+
 #define VMSTATE_UINT32_ARRAY_V(_f, _s, _n, _v)                        \
     VMSTATE_ARRAY(_f, _s, _n, _v, vmstate_info_uint32, uint32_t)
 
 #define VMSTATE_UINT32_ARRAY(_f, _s, _n)                              \
     VMSTATE_UINT32_ARRAY_V(_f, _s, _n, 0)
+
+#define VMSTATE_UINT64_ARRAY_V(_f, _s, _n, _v)                        \
+    VMSTATE_ARRAY(_f, _s, _n, _v, vmstate_info_uint64, uint64_t)
+
+#define VMSTATE_UINT64_ARRAY(_f, _s, _n)                              \
+    VMSTATE_UINT64_ARRAY_V(_f, _s, _n, 0)
 
 #define VMSTATE_INT32_ARRAY_V(_f, _s, _n, _v)                         \
     VMSTATE_ARRAY(_f, _s, _n, _v, vmstate_info_int32, int32_t)
