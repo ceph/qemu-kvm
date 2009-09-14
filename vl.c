@@ -2817,47 +2817,6 @@ void qemu_del_wait_object(HANDLE handle, WaitObjectFunc *func, void *opaque)
 /***********************************************************/
 /* ram save/restore */
 
-static int ram_get_page(QEMUFile *f, uint8_t *buf, int len)
-{
-    int v;
-
-    v = qemu_get_byte(f);
-    switch(v) {
-    case 0:
-        if (qemu_get_buffer(f, buf, len) != len)
-            return -EIO;
-        break;
-    case 1:
-        v = qemu_get_byte(f);
-        memset(buf, v, len);
-        break;
-    default:
-        return -EINVAL;
-    }
-
-    if (qemu_file_has_error(f))
-        return -EIO;
-
-    return 0;
-}
-
-static int ram_load_v1(QEMUFile *f, void *opaque)
-{
-    int ret;
-    ram_addr_t i;
-
-    if (qemu_get_be32(f) != last_ram_offset)
-        return -EINVAL;
-    for(i = 0; i < last_ram_offset; i+= TARGET_PAGE_SIZE) {
-        if (kvm_enabled() && (i>=0xa0000) && (i<0xc0000)) /* do not access video-addresses */
-            continue;
-        ret = ram_get_page(f, qemu_get_ram_ptr(i), TARGET_PAGE_SIZE);
-        if (ret)
-            return ret;
-    }
-    return 0;
-}
-
 #define BDRV_HASH_BLOCK_SIZE 1024
 #define IOBUF_SIZE 4096
 #define RAM_CBLOCK_MAGIC 0xfabe
@@ -3102,9 +3061,6 @@ static int ram_load(QEMUFile *f, void *opaque, int version_id)
 {
     ram_addr_t addr;
     int flags;
-
-    if (version_id == 1)
-        return ram_load_v1(f, opaque);
 
     if (version_id == 2) {
         if (qemu_get_be32(f) != last_ram_offset)
@@ -5344,6 +5300,16 @@ int main(int argc, char **argv, char **envp)
                 }
                 monitor_devices[monitor_device_index] = optarg;
                 monitor_device_index++;
+                break;
+            case QEMU_OPTION_chardev:
+                opts = qemu_opts_parse(&qemu_chardev_opts, optarg, "backend");
+                if (!opts) {
+                    fprintf(stderr, "parse error: %s\n", optarg);
+                    exit(1);
+                }
+                if (NULL == qemu_chr_open_opts(opts, NULL)) {
+                    exit(1);
+                }
                 break;
             case QEMU_OPTION_serial:
                 if (serial_device_index >= MAX_SERIAL_PORTS) {
