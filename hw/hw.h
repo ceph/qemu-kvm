@@ -306,10 +306,9 @@ struct VMStateDescription {
     int minimum_version_id;
     int minimum_version_id_old;
     LoadStateHandler *load_state_old;
-    int (*run_after_load)(void *opaque);
     VMStateField *fields;
     void (*pre_save)(const void *opaque);
-    void (*post_load)(void *opaque);
+    int (*post_load)(void *opaque);
 };
 
 extern const VMStateInfo vmstate_info_int8;
@@ -511,5 +510,5 @@ extern void vmstate_save_state(QEMUFile *f, const VMStateDescription *vmsd,
                                const void *opaque);
 extern int vmstate_register(int instance_id, const VMStateDescription *vmsd,
                             void *base);
-extern void vmstate_unregister(const char *idstr, void *opaque);
+void vmstate_unregister(const VMStateDescription *vmsd, void *opaque);
 #endif

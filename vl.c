@@ -189,7 +189,6 @@ enum vga_retrace_method vga_retrace_method = VGA_RETRACE_DUMB;
 static DisplayState *display_state;
 DisplayType display_type = DT_DEFAULT;
 const char* keyboard_layout = NULL;
-int64_t ticks_per_sec;
 ram_addr_t ram_size;
 int nb_nics;
 NICInfo nd_table[MAX_NICS];
@@ -543,8 +542,6 @@ uint64_t muldiv64(uint64_t a, uint32_t b, uint32_t c)
 /***********************************************************/
 /* real time host monotonic timer */
 
-#define QEMU_TIMER_BASE 1000000000LL
-
 #ifdef WIN32
 
 static int64_t clock_freq;
@@ -565,7 +562,7 @@ static int64_t get_clock(void)
 {
     LARGE_INTEGER ti;
     QueryPerformanceCounter(&ti);
-    return muldiv64(ti.QuadPart, QEMU_TIMER_BASE, clock_freq);
+    return muldiv64(ti.QuadPart, get_ticks_per_sec(), clock_freq);
 }
 
 #else
@@ -623,10 +620,15 @@ static int64_t cpu_get_icount(void)
 /***********************************************************/
 /* guest cycle counter */
 
-static int64_t cpu_ticks_prev;
-static int64_t cpu_ticks_offset;
-static int64_t cpu_clock_offset;
-static int cpu_ticks_enabled;
+typedef struct TimersState {
+    int64_t cpu_ticks_prev;
+    int64_t cpu_ticks_offset;
+    int64_t cpu_clock_offset;
+    int32_t cpu_ticks_enabled;
+    int64_t dummy;
+} TimersState;
+
+TimersState timers_state;
 
 /* return the host CPU cycle counter and handle stop/restart */
 int64_t cpu_get_ticks(void)
@@ -634,18 +636,18 @@ int64_t cpu_get_ticks(void)
     if (use_icount) {
         return cpu_get_icount();
     }
-    if (!cpu_ticks_enabled) {
-        return cpu_ticks_offset;
+    if (!timers_state.cpu_ticks_enabled) {
+        return timers_state.cpu_ticks_offset;
     } else {
         int64_t ticks;
         ticks = cpu_get_real_ticks();
-        if (cpu_ticks_prev > ticks) {
+        if (timers_state.cpu_ticks_prev > ticks) {
             /* Note: non increasing ticks may happen if the host uses
                software suspend */
-            cpu_ticks_offset += cpu_ticks_prev - ticks;
+            timers_state.cpu_ticks_offset += timers_state.cpu_ticks_prev - ticks;
         }
-        cpu_ticks_prev = ticks;
-        return ticks + cpu_ticks_offset;
+        timers_state.cpu_ticks_prev = ticks;
+        return ticks + timers_state.cpu_ticks_offset;
     }
 }
 
@@ -653,21 +655,21 @@ int64_t cpu_get_ticks(void)
 static int64_t cpu_get_clock(void)
 {
     int64_t ti;
-    if (!cpu_ticks_enabled) {
-        return cpu_clock_offset;
+    if (!timers_state.cpu_ticks_enabled) {
+        return timers_state.cpu_clock_offset;
     } else {
         ti = get_clock();
-        return ti + cpu_clock_offset;
+        return ti + timers_state.cpu_clock_offset;
     }
 }
 
 /* enable cpu_get_ticks() */
 void cpu_enable_ticks(void)
 {
-    if (!cpu_ticks_enabled) {
-        cpu_ticks_offset -= cpu_get_real_ticks();
-        cpu_clock_offset -= get_clock();
-        cpu_ticks_enabled = 1;
+    if (!timers_state.cpu_ticks_enabled) {
+        timers_state.cpu_ticks_offset -= cpu_get_real_ticks();
+        timers_state.cpu_clock_offset -= get_clock();
+        timers_state.cpu_ticks_enabled = 1;
     }
 }
 
@@ -675,10 +677,10 @@ void cpu_enable_ticks(void)
    cpu_get_ticks() after that.  */
 void cpu_disable_ticks(void)
 {
-    if (cpu_ticks_enabled) {
-        cpu_ticks_offset = cpu_get_ticks();
-        cpu_clock_offset = cpu_get_clock();
-        cpu_ticks_enabled = 0;
+    if (timers_state.cpu_ticks_enabled) {
+        timers_state.cpu_ticks_offset = cpu_get_ticks();
+        timers_state.cpu_clock_offset = cpu_get_clock();
+        timers_state.cpu_ticks_enabled = 0;
     }
 }
 
@@ -768,7 +770,7 @@ static void rtc_stop_timer(struct qemu_alarm_timer *t);
    fairly approximate, so ignore small variation.
    When the guest is idle real and virtual time will be aligned in
    the IO wait loop.  */
-#define ICOUNT_WOBBLE (QEMU_TIMER_BASE / 10)
+#define ICOUNT_WOBBLE (get_ticks_per_sec() / 10)
 
 static void icount_adjust(void)
 {
@@ -810,7 +812,7 @@ static void icount_adjust_rt(void * opaque)
 static void icount_adjust_vm(void * opaque)
 {
     qemu_mod_timer(icount_vm_timer,
-                   qemu_get_clock(vm_clock) + QEMU_TIMER_BASE / 10);
+                   qemu_get_clock(vm_clock) + get_ticks_per_sec() / 10);
     icount_adjust();
 }
 
@@ -826,7 +828,7 @@ static void init_icount_adjust(void)
                    qemu_get_clock(rt_clock) + 1000);
     icount_vm_timer = qemu_new_timer(vm_clock, icount_adjust_vm, NULL);
     qemu_mod_timer(icount_vm_timer,
-                   qemu_get_clock(vm_clock) + QEMU_TIMER_BASE / 10);
+                   qemu_get_clock(vm_clock) + get_ticks_per_sec() / 10);
 }
 
 static struct qemu_alarm_timer alarm_timers[] = {
@@ -1049,7 +1051,6 @@ int64_t qemu_get_clock(QEMUClock *clock)
 static void init_timers(void)
 {
     init_get_clock();
-    ticks_per_sec = QEMU_TIMER_BASE;
     rt_clock = qemu_new_clock(QEMU_TIMER_REALTIME);
     vm_clock = qemu_new_clock(QEMU_TIMER_VIRTUAL);
 }
@@ -1079,30 +1080,18 @@ void qemu_get_timer(QEMUFile *f, QEMUTimer *ts)
     }
 }
 
-static void timer_save(QEMUFile *f, void *opaque)
-{
-    if (cpu_ticks_enabled) {
-        hw_error("cannot save state if virtual timers are running");
+static const VMStateDescription vmstate_timers = {
+    .name = "timer",
+    .version_id = 2,
+    .minimum_version_id = 1,
+    .minimum_version_id_old = 1,
+    .fields      = (VMStateField []) {
+        VMSTATE_INT64(cpu_ticks_offset, TimersState),
+        VMSTATE_INT64(dummy, TimersState),
+        VMSTATE_INT64_V(cpu_clock_offset, TimersState, 2),
+        VMSTATE_END_OF_LIST()
     }
-    qemu_put_be64(f, cpu_ticks_offset);
-    qemu_put_be64(f, ticks_per_sec);
-    qemu_put_be64(f, cpu_clock_offset);
-}
-
-static int timer_load(QEMUFile *f, void *opaque, int version_id)
-{
-    if (version_id != 1 && version_id != 2)
-        return -EINVAL;
-    if (cpu_ticks_enabled) {
-        return -EINVAL;
-    }
-    cpu_ticks_offset=qemu_get_be64(f);
-    ticks_per_sec=qemu_get_be64(f);
-    if (version_id == 2) {
-        cpu_clock_offset=qemu_get_be64(f);
-    }
-    return 0;
-}
+};
 
 static void qemu_event_increment(void);
 
@@ -1130,10 +1119,10 @@ static void host_alarm_handler(int host_signum)
             delta_cum += delta;
             if (++count == DISP_FREQ) {
                 printf("timer: min=%" PRId64 " us max=%" PRId64 " us avg=%" PRId64 " us avg_freq=%0.3f Hz\n",
-                       muldiv64(delta_min, 1000000, ticks_per_sec),
-                       muldiv64(delta_max, 1000000, ticks_per_sec),
-                       muldiv64(delta_cum, 1000000 / DISP_FREQ, ticks_per_sec),
-                       (double)ticks_per_sec / ((double)delta_cum / DISP_FREQ));
+                       muldiv64(delta_min, 1000000, get_ticks_per_sec()),
+                       muldiv64(delta_max, 1000000, get_ticks_per_sec()),
+                       muldiv64(delta_cum, 1000000 / DISP_FREQ, get_ticks_per_sec()),
+                       (double)get_ticks_per_sec() / ((double)delta_cum / DISP_FREQ));
                 count = 0;
                 delta_min = INT64_MAX;
                 delta_max = 0;
@@ -5732,7 +5721,7 @@ int main(int argc, char **argv, char **envp)
     if (qemu_opts_foreach(&qemu_drive_opts, drive_init_func, machine, 1) != 0)
         exit(1);
 
-    register_savevm("timer", 0, 2, timer_save, timer_load, NULL);
+    vmstate_register(0, &vmstate_timers ,&timers_state);
     register_savevm_live("ram", 0, 3, ram_save_live, NULL, ram_load, NULL);
 
     /* Maintain compatibility with multiple stdio monitors */
