@@ -140,6 +140,7 @@ extern long hpagesize;
 #define MAX_NODES 64
 extern int nb_numa_nodes;
 extern uint64_t node_mem[MAX_NODES];
+extern uint64_t node_cpumask[MAX_NODES];
 
 #define MAX_OPTION_ROMS 16
 extern const char *option_rom[MAX_OPTION_ROMS];
