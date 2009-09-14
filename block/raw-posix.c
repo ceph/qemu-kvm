@@ -576,6 +576,18 @@ static BlockDriverAIOCB *raw_aio_writev(BlockDriverState *bs,
                           cb, opaque, QEMU_AIO_WRITE);
 }
 
+static BlockDriverAIOCB *raw_aio_flush(BlockDriverState *bs,
+        BlockDriverCompletionFunc *cb, void *opaque)
+{
+    BDRVRawState *s = bs->opaque;
+
+    if (fd_open(bs) < 0)
+        return NULL;
+
+    return paio_submit(bs, s->aio_ctx, s->fd, 0, NULL, 0,
+    		       cb, opaque, QEMU_AIO_FLUSH);
+}
+
 static void raw_close(BlockDriverState *bs)
 {
     BDRVRawState *s = bs->opaque;
@@ -725,7 +737,7 @@ static int raw_create(const char *filename, QEMUOptionParameter *options)
 static void raw_flush(BlockDriverState *bs)
 {
     BDRVRawState *s = bs->opaque;
-    fsync(s->fd);
+    qemu_fdatasync(s->fd);
 }
 
 
@@ -751,6 +763,7 @@ static BlockDriver bdrv_raw = {
 
     .bdrv_aio_readv = raw_aio_readv,
     .bdrv_aio_writev = raw_aio_writev,
+    .bdrv_aio_flush = raw_aio_flush,
 
     .bdrv_truncate = raw_truncate,
     .bdrv_getlength = raw_getlength,
@@ -1004,6 +1017,7 @@ static BlockDriver bdrv_host_device = {
 
     .bdrv_aio_readv	= raw_aio_readv,
     .bdrv_aio_writev	= raw_aio_writev,
+    .bdrv_aio_flush	= raw_aio_flush,
 
     .bdrv_read          = raw_read,
     .bdrv_write         = raw_write,
@@ -1098,6 +1112,7 @@ static BlockDriver bdrv_host_floppy = {
 
     .bdrv_aio_readv     = raw_aio_readv,
     .bdrv_aio_writev    = raw_aio_writev,
+    .bdrv_aio_flush	= raw_aio_flush,
 
     .bdrv_read          = raw_read,
     .bdrv_write         = raw_write,
@@ -1178,6 +1193,7 @@ static BlockDriver bdrv_host_cdrom = {
 
     .bdrv_aio_readv     = raw_aio_readv,
     .bdrv_aio_writev    = raw_aio_writev,
+    .bdrv_aio_flush	= raw_aio_flush,
 
     .bdrv_read          = raw_read,
     .bdrv_write         = raw_write,
@@ -1297,6 +1313,7 @@ static BlockDriver bdrv_host_cdrom = {
 
     .bdrv_aio_readv     = raw_aio_readv,
     .bdrv_aio_writev    = raw_aio_writev,
+    .bdrv_aio_flush	= raw_aio_flush,
 
     .bdrv_read          = raw_read,
     .bdrv_write         = raw_write,

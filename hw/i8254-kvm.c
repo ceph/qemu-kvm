@@ -66,7 +66,7 @@ static void kvm_pit_pre_save(const void *opaque)
     }
 }
 
-static void kvm_pit_post_load(void *opaque)
+static int kvm_pit_post_load(void *opaque)
 {
     PITState *s = opaque;
     struct kvm_pit_state2 pit2;
@@ -98,6 +98,7 @@ static void kvm_pit_post_load(void *opaque)
     } else {
         kvm_set_pit(kvm_context, (struct kvm_pit_state *)&pit2);
     }
+    return 0;
 }
 
 static void dummy_timer(void *opaque)

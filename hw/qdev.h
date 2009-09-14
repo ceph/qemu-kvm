@@ -3,7 +3,7 @@
 
 #include "hw.h"
 #include "sysemu.h"
-#include "sys-queue.h"
+#include "qemu-queue.h"
 #include "qemu-char.h"
 #include "qemu-option.h"
 
@@ -29,10 +29,10 @@ struct DeviceState {
     qemu_irq *gpio_out;
     int num_gpio_in;
     qemu_irq *gpio_in;
-    LIST_HEAD(, BusState) child_bus;
+    QLIST_HEAD(, BusState) child_bus;
     int num_child_bus;
     NICInfo *nd;
-    LIST_ENTRY(DeviceState) sibling;
+    QLIST_ENTRY(DeviceState) sibling;
 };
 
 typedef void (*bus_dev_printfn)(Monitor *mon, DeviceState *dev, int indent);
@@ -47,8 +47,8 @@ struct BusState {
     DeviceState *parent;
     BusInfo *info;
     const char *name;
-    LIST_HEAD(, DeviceState) children;
-    LIST_ENTRY(BusState) sibling;
+    QLIST_HEAD(, DeviceState) children;
+    QLIST_ENTRY(BusState) sibling;
 };
 
 struct Property {
@@ -62,6 +62,7 @@ enum PropertyType {
     PROP_TYPE_UNSPEC = 0,
     PROP_TYPE_UINT16,
     PROP_TYPE_UINT32,
+    PROP_TYPE_INT32,
     PROP_TYPE_UINT64,
     PROP_TYPE_TADDR,
     PROP_TYPE_MACADDR,
@@ -156,6 +157,7 @@ void do_info_qdm(Monitor *mon);
 
 extern PropertyInfo qdev_prop_uint16;
 extern PropertyInfo qdev_prop_uint32;
+extern PropertyInfo qdev_prop_int32;
 extern PropertyInfo qdev_prop_uint64;
 extern PropertyInfo qdev_prop_hex32;
 extern PropertyInfo qdev_prop_hex64;
@@ -183,6 +185,8 @@ extern PropertyInfo qdev_prop_pci_devfn;
     DEFINE_PROP_DEFAULT(_n, _s, _f, _d, qdev_prop_uint16, uint16_t)
 #define DEFINE_PROP_UINT32(_n, _s, _f, _d)                      \
     DEFINE_PROP_DEFAULT(_n, _s, _f, _d, qdev_prop_uint32, uint32_t)
+#define DEFINE_PROP_INT32(_n, _s, _f, _d)                      \
+    DEFINE_PROP_DEFAULT(_n, _s, _f, _d, qdev_prop_int32, int32_t)
 #define DEFINE_PROP_UINT64(_n, _s, _f, _d)                      \
     DEFINE_PROP_DEFAULT(_n, _s, _f, _d, qdev_prop_uint64, uint64_t)
 #define DEFINE_PROP_HEX32(_n, _s, _f, _d)                       \
@@ -210,6 +214,7 @@ int qdev_prop_parse(DeviceState *dev, const char *name, const char *value);
 void qdev_prop_set(DeviceState *dev, const char *name, void *src, enum PropertyType type);
 void qdev_prop_set_uint16(DeviceState *dev, const char *name, uint16_t value);
 void qdev_prop_set_uint32(DeviceState *dev, const char *name, uint32_t value);
+void qdev_prop_set_int32(DeviceState *dev, const char *name, int32_t value);
 void qdev_prop_set_uint64(DeviceState *dev, const char *name, uint64_t value);
 void qdev_prop_set_chr(DeviceState *dev, const char *name, CharDriverState *value);
 void qdev_prop_set_drive(DeviceState *dev, const char *name, DriveInfo *value);

@@ -104,7 +104,8 @@ static void isa_irq_handler(void *opaque, int n, int level)
     if (n < 16) {
         qemu_set_irq(isa->i8259[n], level);
     }
-    qemu_set_irq(isa->ioapic[n], level);
+    if (isa->ioapic)
+        qemu_set_irq(isa->ioapic[n], level);
 };
 
 static void ioport80_write(void *opaque, uint32_t addr, uint32_t data)
@@ -458,8 +459,6 @@ static void bochs_bios_write(void *opaque, uint32_t addr, uint32_t val)
         break;
     }
 }
-
-extern uint64_t node_cpumask[MAX_NODES];
 
 static void *bochs_bios_init(void)
 {
@@ -1020,14 +1019,15 @@ static const int ide_irq[2] = { 14, 15 };
 
 #define NE2000_NB_MAX 6
 
-static int ne2000_io[NE2000_NB_MAX] = { 0x300, 0x320, 0x340, 0x360, 0x280, 0x380 };
-static int ne2000_irq[NE2000_NB_MAX] = { 9, 10, 11, 3, 4, 5 };
+static const int ne2000_io[NE2000_NB_MAX] = { 0x300, 0x320, 0x340, 0x360,
+                                              0x280, 0x380 };
+static const int ne2000_irq[NE2000_NB_MAX] = { 9, 10, 11, 3, 4, 5 };
 
-static int serial_io[MAX_SERIAL_PORTS] = { 0x3f8, 0x2f8, 0x3e8, 0x2e8 };
-static int serial_irq[MAX_SERIAL_PORTS] = { 4, 3, 4, 3 };
+static const int serial_io[MAX_SERIAL_PORTS] = { 0x3f8, 0x2f8, 0x3e8, 0x2e8 };
+static const int serial_irq[MAX_SERIAL_PORTS] = { 4, 3, 4, 3 };
 
-static int parallel_io[MAX_PARALLEL_PORTS] = { 0x378, 0x278, 0x3bc };
-static int parallel_irq[MAX_PARALLEL_PORTS] = { 7, 7, 7 };
+static const int parallel_io[MAX_PARALLEL_PORTS] = { 0x378, 0x278, 0x3bc };
+static const int parallel_irq[MAX_PARALLEL_PORTS] = { 7, 7, 7 };
 
 #ifdef HAS_AUDIO
 static void audio_init (PCIBus *pci_bus, qemu_irq *pic)
@@ -1055,7 +1055,7 @@ static void pc_init_ne2k_isa(NICInfo *nd)
     if (nb_ne2k == NE2000_NB_MAX)
         return;
     isa_ne2000_init(ne2000_io[nb_ne2k],
-                    isa_reserve_irq(ne2000_irq[nb_ne2k]), nd);
+                    ne2000_irq[nb_ne2k], nd);
     nb_ne2k++;
 }
 
@@ -1331,7 +1331,7 @@ static void pc_init1(ram_addr_t ram_size,
         }
     }
 
-    rtc_state = rtc_init(0x70, isa_reserve_irq(8), 2000);
+    rtc_state = rtc_init(2000);
 
     qemu_register_boot_set(pc_boot_set, rtc_state);
 
@@ -1396,7 +1396,7 @@ static void pc_init1(ram_addr_t ram_size,
         }
     }
 
-    isa_dev = isa_create_simple("i8042", 0x60, 0x64, 1, 12);
+    isa_dev = isa_create_simple("i8042");
     DMA_init(0);
 #ifdef HAS_AUDIO
     audio_init(pci_enabled ? pci_bus : NULL, isa_irq);
@@ -1406,7 +1406,7 @@ static void pc_init1(ram_addr_t ram_size,
         dinfo = drive_get(IF_FLOPPY, 0, i);
         fd[i] = dinfo ? dinfo->bdrv : NULL;
     }
-    floppy_controller = fdctrl_init_isa(6, 2, 0x3f0, fd);
+    floppy_controller = fdctrl_init_isa(fd);
 
     cmos_init(below_4g_mem_size, above_4g_mem_size, boot_device, hd);
 
@@ -1492,6 +1492,8 @@ static void pc_init_isa(ram_addr_t ram_size,
                         const char *initrd_filename,
                         const char *cpu_model)
 {
+    if (cpu_model == NULL)
+        cpu_model = "486";
     pc_init1(ram_size, boot_device,
              kernel_filename, kernel_cmdline,
              initrd_filename, cpu_model, 0);

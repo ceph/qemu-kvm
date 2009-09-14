@@ -30,7 +30,7 @@
 
 #include <sys/mman.h>
 #include "qemu-common.h"
-#include "sys-queue.h"
+#include "qemu-queue.h"
 #include "pci.h"
 
 /* From include/linux/pci.h in the kernel sources */
@@ -104,7 +104,7 @@ struct AssignedDevInfo {
     int dev;
     int func;
     AssignedDevice *assigned_dev;
-    LIST_ENTRY(AssignedDevInfo) next;
+    QLIST_ENTRY(AssignedDevInfo) next;
     int disable_iommu;
 };
 

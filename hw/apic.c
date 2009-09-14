@@ -976,7 +976,7 @@ static void apic_pre_save(const void *opaque)
 #endif
 }
 
-static void apic_post_load(void *opaque)
+static int apic_post_load(void *opaque)
 {
     APICState *s = opaque;
 
@@ -985,6 +985,7 @@ static void apic_post_load(void *opaque)
         kvm_kernel_lapic_load_from_user(s);
     }
 #endif
+    return 0;
 }
 
 /* This function is only used for old state version 1 and 2 */

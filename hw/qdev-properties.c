@@ -64,6 +64,29 @@ PropertyInfo qdev_prop_uint32 = {
     .print = print_uint32,
 };
 
+static int parse_int32(DeviceState *dev, Property *prop, const char *str)
+{
+    int32_t *ptr = qdev_get_prop_ptr(dev, prop);
+
+    if (sscanf(str, "%" PRId32, ptr) != 1)
+        return -1;
+    return 0;
+}
+
+static int print_int32(DeviceState *dev, Property *prop, char *dest, size_t len)
+{
+    int32_t *ptr = qdev_get_prop_ptr(dev, prop);
+    return snprintf(dest, len, "%" PRId32, *ptr);
+}
+
+PropertyInfo qdev_prop_int32 = {
+    .name  = "int32",
+    .type  = PROP_TYPE_INT32,
+    .size  = sizeof(int32_t),
+    .parse = parse_int32,
+    .print = print_int32,
+};
+
 /* --- 32bit hex value --- */
 
 static int parse_hex32(DeviceState *dev, Property *prop, const char *str)
@@ -170,6 +193,16 @@ PropertyInfo qdev_prop_drive = {
 
 /* --- character device --- */
 
+static int parse_chr(DeviceState *dev, Property *prop, const char *str)
+{
+    CharDriverState **ptr = qdev_get_prop_ptr(dev, prop);
+
+    *ptr = qemu_chr_find(str);
+    if (*ptr == NULL)
+        return -1;
+    return 0;
+}
+
 static int print_chr(DeviceState *dev, Property *prop, char *dest, size_t len)
 {
     CharDriverState **ptr = qdev_get_prop_ptr(dev, prop);
@@ -185,6 +218,7 @@ PropertyInfo qdev_prop_chr = {
     .name  = "chr",
     .type  = PROP_TYPE_CHR,
     .size  = sizeof(CharDriverState*),
+    .parse = parse_chr,
     .print = print_chr,
 };
 
@@ -365,6 +399,11 @@ void qdev_prop_set_uint16(DeviceState *dev, const char *name, uint16_t value)
 void qdev_prop_set_uint32(DeviceState *dev, const char *name, uint32_t value)
 {
     qdev_prop_set(dev, name, &value, PROP_TYPE_UINT32);
+}
+
+void qdev_prop_set_int32(DeviceState *dev, const char *name, int32_t value)
+{
+    qdev_prop_set(dev, name, &value, PROP_TYPE_INT32);
 }
 
 void qdev_prop_set_uint64(DeviceState *dev, const char *name, uint64_t value)
