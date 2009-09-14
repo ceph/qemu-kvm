@@ -554,7 +554,7 @@ again:
     return 0;
 }
 
-static LIST_HEAD(, AssignedDevInfo) adev_head;
+static QLIST_HEAD(, AssignedDevInfo) adev_head;
 
 #ifdef KVM_CAP_IRQ_ROUTING
 static void free_dev_irq_entries(AssignedDevice *dev)
@@ -614,7 +614,7 @@ static void free_assigned_device(AssignedDevInfo *adev)
         adev->assigned_dev = dev = NULL;
     }
 
-    LIST_REMOVE(adev, next);
+    QLIST_REMOVE(adev, next);
     qemu_free(adev);
 }
 
@@ -735,7 +735,7 @@ AssignedDevInfo *get_assigned_device(int pcibus, int slot)
     AssignedDevice *assigned_dev = NULL;
     AssignedDevInfo *adev = NULL;
 
-    LIST_FOREACH(adev, &adev_head, next) {
+    QLIST_FOREACH(adev, &adev_head, next) {
         assigned_dev = adev->assigned_dev;
         if (pci_bus_num(assigned_dev->dev.bus) == pcibus &&
             PCI_SLOT(assigned_dev->dev.devfn) == slot)
@@ -752,9 +752,9 @@ void assigned_dev_update_irqs()
 {
     AssignedDevInfo *adev;
 
-    adev = LIST_FIRST(&adev_head);
+    adev = QLIST_FIRST(&adev_head);
     while (adev) {
-        AssignedDevInfo *next = LIST_NEXT(adev, next);
+        AssignedDevInfo *next = QLIST_NEXT(adev, next);
         int r;
 
         r = assign_irq(adev);
@@ -1245,7 +1245,7 @@ AssignedDevInfo *add_assigned_device(const char *arg)
         adev->disable_iommu = 1;
 #endif
 
-    LIST_INSERT_HEAD(&adev_head, adev, next);
+    QLIST_INSERT_HEAD(&adev_head, adev, next);
     return adev;
 bad:
     fprintf(stderr, "pcidevice argument parse error; "
@@ -1375,7 +1375,7 @@ ram_addr_t assigned_dev_load_option_roms(ram_addr_t rom_base_offset)
     ram_addr_t offset = rom_base_offset;
     AssignedDevInfo *adev;
 
-    LIST_FOREACH(adev, &adev_head, next) {
+    QLIST_FOREACH(adev, &adev_head, next) {
         int size, len;
         void *buf;
         FILE *fp;

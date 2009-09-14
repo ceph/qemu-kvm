@@ -31,6 +31,8 @@
 #include <sys/soundcard.h>
 #endif
 #include "qemu-common.h"
+#include "host-utils.h"
+#include "qemu-char.h"
 #include "audio.h"
 
 #define AUDIO_CAP "oss"
@@ -114,7 +116,34 @@ static void oss_anal_close (int *fdp)
     if (err) {
         oss_logerr (errno, "Failed to close file(fd=%d)\n", *fdp);
     }
+    qemu_set_fd_handler (*fdp, NULL, NULL, NULL);
     *fdp = -1;
+}
+
+static void oss_helper_poll_out (void *opaque)
+{
+    (void) opaque;
+    audio_run ("oss_poll_out");
+}
+
+static void oss_helper_poll_in (void *opaque)
+{
+    (void) opaque;
+    audio_run ("oss_poll_in");
+}
+
+static int oss_poll_out (HWVoiceOut *hw)
+{
+    OSSVoiceOut *oss = (OSSVoiceOut *) hw;
+
+    return qemu_set_fd_handler (oss->fd, NULL, oss_helper_poll_out, NULL);
+}
+
+static int oss_poll_in (HWVoiceIn *hw)
+{
+    OSSVoiceIn *oss = (OSSVoiceIn *) hw;
+
+    return qemu_set_fd_handler (oss->fd, oss_helper_poll_in, NULL, NULL);
 }
 
 static int oss_write (SWVoiceOut *sw, void *buf, int len)
@@ -205,13 +234,16 @@ static int oss_open (int in, struct oss_params *req,
                      struct oss_params *obt, int *pfd)
 {
     int fd;
+    int oflags;
     int mmmmssss;
     audio_buf_info abinfo;
     int fmt, freq, nchannels;
     const char *dspname = in ? conf.devpath_in : conf.devpath_out;
     const char *typ = in ? "ADC" : "DAC";
 
-    fd = open (dspname, (in ? O_RDONLY : O_WRONLY) | O_NONBLOCK);
+    /* Kludge needed to have working mmap on Linux */
+    oflags = conf.try_mmap ? O_RDWR : (in ? O_RDONLY : O_WRONLY);
+    fd = open (dspname, oflags | O_NONBLOCK);
     if (-1 == fd) {
         oss_logerr2 (errno, typ, "Failed to open `%s'\n", dspname);
         return -1;
@@ -242,7 +274,7 @@ static int oss_open (int in, struct oss_params *req,
         goto err;
     }
 
-    mmmmssss = (req->nfrags << 16) | lsbindex (req->fragsize);
+    mmmmssss = (req->nfrags << 16) | ctz32 (req->fragsize);
     if (ioctl (fd, SNDCTL_DSP_SETFRAGMENT, &mmmmssss)) {
         oss_logerr2 (errno, typ, "Failed to set buffer length (%d, %d)\n",
                      req->nfrags, req->fragsize);
@@ -544,15 +576,26 @@ static int oss_init_out (HWVoiceOut *hw, struct audsettings *as)
 static int oss_ctl_out (HWVoiceOut *hw, int cmd, ...)
 {
     int trig;
+    va_list ap;
+    int poll_mode;
     OSSVoiceOut *oss = (OSSVoiceOut *) hw;
 
-    if (!oss->mmapped) {
-        return 0;
-    }
+    va_start (ap, cmd);
+    poll_mode = va_arg (ap, int);
+    va_end (ap);
 
     switch (cmd) {
     case VOICE_ENABLE:
         ldebug ("enabling voice\n");
+        if (poll_mode && oss_poll_out (hw)) {
+            poll_mode = 0;
+        }
+        hw->poll_mode = poll_mode;
+
+        if (!oss->mmapped) {
+            return 0;
+        }
+
         audio_pcm_info_clear_buf (&hw->info, oss->pcm_buf, hw->samples);
         trig = PCM_ENABLE_OUTPUT;
         if (ioctl (oss->fd, SNDCTL_DSP_SETTRIGGER, &trig) < 0) {
@@ -565,6 +608,15 @@ static int oss_ctl_out (HWVoiceOut *hw, int cmd, ...)
         break;
 
     case VOICE_DISABLE:
+        if (hw->poll_mode) {
+            qemu_set_fd_handler (oss->fd, NULL, NULL, NULL);
+            hw->poll_mode = 0;
+        }
+
+        if (!oss->mmapped) {
+            return 0;
+        }
+
         ldebug ("disabling voice\n");
         trig = 0;
         if (ioctl (oss->fd, SNDCTL_DSP_SETTRIGGER, &trig) < 0) {
@@ -720,8 +772,29 @@ static int oss_read (SWVoiceIn *sw, void *buf, int size)
 
 static int oss_ctl_in (HWVoiceIn *hw, int cmd, ...)
 {
-    (void) hw;
-    (void) cmd;
+    va_list ap;
+    int poll_mode;
+    OSSVoiceIn *oss = (OSSVoiceIn *) hw;
+
+    va_start (ap, cmd);
+    poll_mode = va_arg (ap, int);
+    va_end (ap);
+
+    switch (cmd) {
+    case VOICE_ENABLE:
+        if (poll_mode && oss_poll_in (hw)) {
+            poll_mode = 0;
+        }
+        hw->poll_mode = poll_mode;
+        break;
+
+    case VOICE_DISABLE:
+        if (hw->poll_mode) {
+            hw->poll_mode = 0;
+            qemu_set_fd_handler (oss->fd, NULL, NULL, NULL);
+        }
+        break;
+    }
     return 0;
 }
 

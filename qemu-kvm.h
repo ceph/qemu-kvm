@@ -1021,10 +1021,10 @@ struct kvm_sw_breakpoint {
     target_ulong pc;
     target_ulong saved_insn;
     int use_count;
-    TAILQ_ENTRY(kvm_sw_breakpoint) entry;
+    QTAILQ_ENTRY(kvm_sw_breakpoint) entry;
 };
 
-TAILQ_HEAD(kvm_sw_breakpoint_head, kvm_sw_breakpoint);
+QTAILQ_HEAD(kvm_sw_breakpoint_head, kvm_sw_breakpoint);
 
 int kvm_arch_debug(struct kvm_debug_exit_arch *arch_info);
 int kvm_sw_breakpoints_active(CPUState *env);
@@ -1073,7 +1073,7 @@ void kvm_arch_do_ioperm(void *_data);
 #define BITMAP_SIZE(m) (ALIGN(((m)>>TARGET_PAGE_BITS), HOST_LONG_BITS) / 8)
 
 #ifdef CONFIG_KVM
-#include "sys-queue.h"
+#include "qemu-queue.h"
 
 extern int kvm_allowed;
 extern int kvm_irqchip;
@@ -1086,7 +1086,7 @@ struct ioperm_data {
     unsigned long start_port;
     unsigned long num;
     int turn_on;
-    LIST_ENTRY(ioperm_data) entries;
+    QLIST_ENTRY(ioperm_data) entries;
 };
 
 void qemu_kvm_cpu_stop(CPUState *env);

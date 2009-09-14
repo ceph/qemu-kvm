@@ -4,7 +4,7 @@
 
 QemuOptsList qemu_drive_opts = {
     .name = "drive",
-    .head = TAILQ_HEAD_INITIALIZER(qemu_drive_opts.head),
+    .head = QTAILQ_HEAD_INITIALIZER(qemu_drive_opts.head),
     .desc = {
         {
             .name = "bus",
@@ -81,7 +81,7 @@ QemuOptsList qemu_drive_opts = {
 
 QemuOptsList qemu_chardev_opts = {
     .name = "chardev",
-    .head = TAILQ_HEAD_INITIALIZER(qemu_chardev_opts.head),
+    .head = QTAILQ_HEAD_INITIALIZER(qemu_chardev_opts.head),
     .desc = {
         {
             .name = "backend",
@@ -144,7 +144,7 @@ QemuOptsList qemu_chardev_opts = {
 
 QemuOptsList qemu_device_opts = {
     .name = "device",
-    .head = TAILQ_HEAD_INITIALIZER(qemu_device_opts.head),
+    .head = QTAILQ_HEAD_INITIALIZER(qemu_device_opts.head),
     .desc = {
         /*
          * no elements => accept any

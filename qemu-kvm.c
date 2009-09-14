@@ -68,7 +68,7 @@ static uint64_t phys_ram_size;
 
 #ifdef USE_KVM_DEVICE_ASSIGNMENT
 /* The list of ioperm_data */
-static LIST_HEAD(, ioperm_data) ioperm_head;
+static QLIST_HEAD(, ioperm_data) ioperm_head;
 #endif
 
 //#define DEBUG_MEMREG
@@ -390,7 +390,7 @@ int kvm_init(int smp_cpus)
     kvm_context->no_pit_creation = 0;
 
 #ifdef KVM_CAP_SET_GUEST_DEBUG
-    TAILQ_INIT(&kvm_state->kvm_sw_breakpoints);
+    QTAILQ_INIT(&kvm_state->kvm_sw_breakpoints);
 #endif
 
     gsi_count = kvm_get_gsi_count(kvm_context);
@@ -1843,7 +1843,7 @@ static void *ap_main_loop(void *_env)
 
 #ifdef USE_KVM_DEVICE_ASSIGNMENT
     /* do ioperm for io ports of assigned devices */
-    LIST_FOREACH(data, &ioperm_head, entries)
+    QLIST_FOREACH(data, &ioperm_head, entries)
         on_vcpu(env, kvm_arch_do_ioperm, data);
 #endif
 
@@ -2427,19 +2427,19 @@ void kvm_mutex_lock(void)
 #ifdef USE_KVM_DEVICE_ASSIGNMENT
 void kvm_add_ioperm_data(struct ioperm_data *data)
 {
-    LIST_INSERT_HEAD(&ioperm_head, data, entries);
+    QLIST_INSERT_HEAD(&ioperm_head, data, entries);
 }
 
 void kvm_remove_ioperm_data(unsigned long start_port, unsigned long num)
 {
     struct ioperm_data *data;
 
-    data = LIST_FIRST(&ioperm_head);
+    data = QLIST_FIRST(&ioperm_head);
     while (data) {
-        struct ioperm_data *next = LIST_NEXT(data, entries);
+        struct ioperm_data *next = QLIST_NEXT(data, entries);
 
         if (data->start_port == start_port && data->num == num) {
-            LIST_REMOVE(data, entries);
+            QLIST_REMOVE(data, entries);
             qemu_free(data);
         }
 
