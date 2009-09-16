@@ -102,6 +102,11 @@ static idt_entry_t idt[256];
 static int g_fail;
 static int g_tests;
 
+static void outb(unsigned char data, unsigned short port)
+{
+    asm volatile ("out %0, %1" : : "a"(data), "d"(port));
+}
+
 static void report(const char *msg, int pass)
 {
     ++g_tests;
@@ -325,7 +330,14 @@ static void test_ioapic_simultaneous(void)
 
 static void enable_apic(void)
 {
+    printf("enabling apic\n");
     apic_write(0xf0, 0x1ff); /* spurious vector register */
+}
+
+static void mask_pic_interrupts(void)
+{
+    outb(0xff, 0x21);
+    outb(0xff, 0xa1);
 }
 
 int main()
@@ -337,6 +349,7 @@ int main()
 
     test_lapic_existence();
 
+    mask_pic_interrupts();
     enable_apic();
     init_idt();
 
