@@ -10,19 +10,13 @@ static void ipi_test(void *data)
 	printf("but wrong cpu %d\n", smp_id());
 }
 
-static void smp_main(void)
-{
-    printf("smp main %d\n", smp_id());
-    while (1)
-	asm volatile ("hlt" : : : "memory");
-}
-
 int main()
 {
     int ncpus;
     int i;
 
-    smp_init(smp_main);
+    smp_init();
+
     ncpus = cpu_count();
     printf("found %d cpus\n", ncpus);
     for (i = 0; i < ncpus; ++i)

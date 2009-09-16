@@ -5,7 +5,7 @@ struct spinlock {
     int v;
 };
 
-void smp_init(void (*smp_main)(void));
+void smp_init(void);
 
 int cpu_count(void);
 int smp_id(void);
