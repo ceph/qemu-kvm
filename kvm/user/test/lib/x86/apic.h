@@ -27,6 +27,7 @@ void enable_apic(void);
 uint32_t apic_read(unsigned reg);
 void apic_write(unsigned reg, uint32_t val);
 void apic_icr_write(uint32_t val, uint32_t dest);
+uint32_t apic_id(void);
 
 int enable_x2apic(void);
 

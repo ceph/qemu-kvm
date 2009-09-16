@@ -14,6 +14,7 @@ struct apic_ops {
     u32 (*reg_read)(unsigned reg);
     void (*reg_write)(unsigned reg, u32 val);
     void (*icr_write)(u32 val, u32 dest);
+    u32 (*id)(void);
 };
 
 static void outb(unsigned char data, unsigned short port)
@@ -39,10 +40,16 @@ static void xapic_icr_write(u32 val, u32 dest)
     xapic_write(APIC_ICR, val);
 }
 
+static uint32_t xapic_id(void)
+{
+    return xapic_read(APIC_ID) >> 24;
+}
+
 static const struct apic_ops xapic_ops = {
     .reg_read = xapic_read,
     .reg_write = xapic_write,
     .icr_write = xapic_icr_write,
+    .id = xapic_id,
 };
 
 static const struct apic_ops *apic_ops = &xapic_ops;
@@ -66,10 +73,16 @@ static void x2apic_icr_write(u32 val, u32 dest)
                   "c"(APIC_BASE_MSR + APIC_ICR/16));
 }
 
+static uint32_t x2apic_id(void)
+{
+    return xapic_read(APIC_ID);
+}
+
 static const struct apic_ops x2apic_ops = {
     .reg_read = x2apic_read,
     .reg_write = x2apic_write,
     .icr_write = x2apic_icr_write,
+    .id = x2apic_id,
 };
 
 u32 apic_read(unsigned reg)
@@ -85,6 +98,11 @@ void apic_write(unsigned reg, u32 val)
 void apic_icr_write(u32 val, u32 dest)
 {
     apic_ops->icr_write(val, dest);
+}
+
+uint32_t apic_id(void)
+{
+    return apic_ops->id();
 }
 
 #define MSR_APIC_BASE 0x0000001b
