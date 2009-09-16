@@ -52,7 +52,7 @@ $(libcflat): $(cflatobjs)
 	$(AR) rcs $@ $^
 
 %.o: %.S
-	$(CC) $(CFLAGS) -c -nostdlib -o $@ $^
+	$(CC) $(CFLAGS) -c -nostdlib -o $@ $<
 
 -include .*.d
 
