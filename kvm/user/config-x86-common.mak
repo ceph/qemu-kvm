@@ -48,7 +48,8 @@ $(TEST_DIR)/test32.flat: $(TEST_DIR)/test32.o
 
 $(TEST_DIR)/smptest.flat: $(cstart.o) $(TEST_DIR)/smptest.o
  
-$(TEST_DIR)/emulator.flat: $(cstart.o) $(TEST_DIR)/vm.o $(TEST_DIR)/print.o
+$(TEST_DIR)/emulator.flat: $(cstart.o) $(TEST_DIR)/emulator.o \
+			   $(TEST_DIR)/vm.o $(TEST_DIR)/print.o
 
 $(TEST_DIR)/port80.flat: $(cstart.o) $(TEST_DIR)/port80.o
 
@@ -61,6 +62,12 @@ $(TEST_DIR)/realmode.flat: $(TEST_DIR)/realmode.o
 	$(CC) -m32 -nostdlib -o $@ -Wl,-T,$(TEST_DIR)/realmode.lds $^
 
 $(TEST_DIR)/realmode.o: bits = 32
+
+$(TEST_DIR)/memtest1.flat: $(TEST_DIR)/memtest1.o
+
+$(TEST_DIR)/stringio.flat: $(TEST_DIR)/stringio.o
+
+$(TEST_DIR)/simple.flat: $(TEST_DIR)/simple.o
 
 $(TEST_DIR)/msr.flat: $(cstart.o) $(TEST_DIR)/msr.o
 
