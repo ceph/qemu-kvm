@@ -240,63 +240,48 @@ static void kvm_kernel_ioapic_load_from_user(IOAPICState *s)
 #endif
 }
 
-static void ioapic_save(QEMUFile *f, void *opaque)
+static void ioapic_pre_save(const void *opaque)
 {
-    IOAPICState *s = opaque;
-    int i;
-
+    IOAPICState *s = (void *)opaque;
+ 
     if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
         kvm_kernel_ioapic_save_to_user(s);
     }
-
-    qemu_put_8s(f, &s->id);
-    qemu_put_8s(f, &s->ioregsel);
-    qemu_put_be64s(f, &s->base_address);
-    qemu_put_be32s(f, &s->irr);
-    for (i = 0; i < IOAPIC_NUM_PINS; i++) {
-        qemu_put_be64s(f, &s->ioredtbl[i]);
-    }
 }
 
-static int ioapic_load(QEMUFile *f, void *opaque, int version_id)
+static int ioapic_pre_load(void *opaque)
 {
     IOAPICState *s = opaque;
-    int i;
 
-    if (version_id < 1 || version_id > 2)
-        return -EINVAL;
+    /* in case we are doing version 1, we just set these to sane values */
+    s->base_address = IOAPIC_DEFAULT_BASE_ADDRESS;
+    s->irr = 0;
+    return 0;
+}
 
-    qemu_get_8s(f, &s->id);
-    qemu_get_8s(f, &s->ioregsel);
-    if (version_id == 2) {
-      /* for version 2, we get this data off of the wire */
-      qemu_get_be64s(f, &s->base_address);
-      qemu_get_be32s(f, &s->irr);
-    }
-    else {
-      /* in case we are doing version 1, we just set these to sane values */
-      s->base_address = IOAPIC_DEFAULT_BASE_ADDRESS;
-      s->irr = 0;
-    }
-    for (i = 0; i < IOAPIC_NUM_PINS; i++) {
-        qemu_get_be64s(f, &s->ioredtbl[i]);
-    }
+static int ioapic_post_load(void *opaque)
+{
+    IOAPICState *s = opaque;
 
     if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
         kvm_kernel_ioapic_load_from_user(s);
     }
-
     return 0;
 }
 
 static const VMStateDescription vmstate_ioapic = {
     .name = "ioapic",
-    .version_id = 1,
+    .version_id = 2,
     .minimum_version_id = 1,
     .minimum_version_id_old = 1,
+    .pre_load = ioapic_pre_load,
+    .post_load = ioapic_post_load,
+    .pre_save = ioapic_pre_save,
     .fields      = (VMStateField []) {
         VMSTATE_UINT8(id, IOAPICState),
         VMSTATE_UINT8(ioregsel, IOAPICState),
+        VMSTATE_UINT64_V(base_address, IOAPICState, 2),
+        VMSTATE_UINT32_V(irr, IOAPICState, 2),
         VMSTATE_UINT64_ARRAY(ioredtbl, IOAPICState, IOAPIC_NUM_PINS),
         VMSTATE_END_OF_LIST()
     }
@@ -343,9 +328,7 @@ qemu_irq *ioapic_init(void)
                                        ioapic_mem_write, s);
     cpu_register_physical_memory(0xfec00000, 0x1000, io_memory);
 
-#if 0
     vmstate_register(0, &vmstate_ioapic, s);
-#endif
     qemu_register_reset(ioapic_reset, s);
     irq = qemu_allocate_irqs(ioapic_set_irq, s, IOAPIC_NUM_PINS);
 
