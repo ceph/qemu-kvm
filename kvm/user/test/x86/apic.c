@@ -260,8 +260,8 @@ static void test_self_ipi(void)
 
     set_idt_entry(vec, self_ipi_isr);
     irq_enable();
-    apic_write(APIC_ICR,
-               APIC_DEST_SELF | APIC_DEST_PHYSICAL | APIC_DM_FIXED | vec);
+    apic_icr_write(APIC_DEST_SELF | APIC_DEST_PHYSICAL | APIC_DM_FIXED | vec,
+                   0);
     asm volatile ("nop");
     report("self ipi", ipi_count == 1);
 }
