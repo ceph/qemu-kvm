@@ -102,6 +102,12 @@ static idt_entry_t idt[256];
 static int g_fail;
 static int g_tests;
 
+struct apic_ops {
+    u32 (*reg_read)(unsigned reg);
+    void (*reg_write)(unsigned reg, u32 val);
+    void (*icr_write)(u32 val, u32 dest);
+};
+
 static void outb(unsigned char data, unsigned short port)
 {
     asm volatile ("out %0, %1" : : "a"(data), "d"(port));
@@ -115,14 +121,45 @@ static void report(const char *msg, int pass)
         ++g_fail;
 }
 
-static u32 apic_read(unsigned reg)
+static u32 xapic_read(unsigned reg)
 {
     return *(volatile u32 *)(g_apic + reg);
 }
 
-static void apic_write(unsigned reg, u32 val)
+static void xapic_write(unsigned reg, u32 val)
 {
     *(volatile u32 *)(g_apic + reg) = val;
+}
+
+static void xapic_icr_write(u32 val, u32 dest)
+{
+    while (xapic_read(APIC_ICR) & APIC_ICR_BUSY)
+        ;
+    xapic_write(APIC_ICR2, dest << 24);
+    xapic_write(APIC_ICR, val);
+}
+
+static const struct apic_ops xapic_ops = {
+    .reg_read = xapic_read,
+    .reg_write = xapic_write,
+    .icr_write = xapic_icr_write,
+};
+
+static const struct apic_ops *apic_ops = &xapic_ops;
+
+static u32 apic_read(unsigned reg)
+{
+    return apic_ops->reg_read(reg);
+}
+
+static void apic_write(unsigned reg, u32 val)
+{
+    apic_ops->reg_write(reg, val);
+}
+
+static void apic_icr_write(u32 val, u32 dest)
+{
+    apic_ops->icr_write(val, dest);
 }
 
 static void test_lapic_existence(void)
