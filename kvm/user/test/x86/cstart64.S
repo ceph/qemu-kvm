@@ -1,5 +1,5 @@
 
-#include "fake-apic.h"
+#include "apic.h"
 
 boot_idt = 0
 
@@ -131,8 +131,9 @@ start64:
 load_tss:
 	mov $0, %eax
 	mov %ax, %ss
-	mov $(APIC_BASE + APIC_REG_ID), %dx
-	in %dx, %eax
+	mov $(APIC_DEFAULT_PHYS_BASE + APIC_ID), %eax
+	mov (%rax), %eax
+	shr $24, %eax
 	mov %eax, %ebx
 	shl $4, %ebx
 	mov $((tss_end - tss) / max_cpus), %edx
@@ -150,6 +151,7 @@ load_tss:
 	ret
 
 smp_init:
+#if 0
 	lea boot_idt + ipi_vector * 8, %rdi
 	mov $smp_init_ipi, %eax
 	mov %ax, (%rdi)
@@ -178,4 +180,5 @@ smp_loop:
 	inc %esi
 	jmp smp_loop
 smp_init_done:
+#endif
 	ret
