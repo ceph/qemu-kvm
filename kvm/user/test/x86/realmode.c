@@ -549,7 +549,7 @@ void test_null(void)
 		print_serial("null test: FAIL\n");
 }
 
-void start(void)
+void realmode_start(void)
 {
 	test_null();
 
@@ -570,23 +570,55 @@ void start(void)
 	exit(0);
 }
 
+unsigned long long r_gdt[] = { 0, 0x9b000000ffff, 0x93000000ffff };
+
+struct __attribute__((packed)) {
+	unsigned short limit;
+	void *base;
+} r_gdt_descr = { sizeof(r_gdt) - 1, &r_gdt };
+
 asm(
+	".section .init \n\t"
+
+	".code32 \n\t"
+
+	"mb_magic = 0x1BADB002 \n\t"
+	"mb_flags = 0x0 \n\t"
+
+	"# multiboot header \n\t"
+	".long mb_magic, mb_flags, 0 - (mb_magic + mb_flags) \n\t"
+
+	".globl start \n\t"
 	".data \n\t"
 	". = . + 4096 \n\t"
 	"stacktop: \n\t"
+
 	".text \n\t"
-	"init: \n\t"
+	"start: \n\t"
+	"lgdt r_gdt_descr \n\t"
+	"ljmp $8, $1f; 1: \n\t"
+	".code16gcc \n\t"
+	"mov $16, %eax \n\t"
+	"mov %ax, %ds \n\t"
+	"mov %ax, %es \n\t"
+	"mov %ax, %fs \n\t"
+	"mov %ax, %gs \n\t"
+	"mov %ax, %ss \n\t"
+	"mov %cr0, %eax \n\t"
+	"btc $0, %eax \n\t"
+	"mov %eax, %cr0 \n\t"
+	"ljmp $0, $realmode_entry \n\t"
+
+	"realmode_entry: \n\t"
+
 	"xor %ax, %ax \n\t"
 	"mov %ax, %ds \n\t"
 	"mov %ax, %es \n\t"
 	"mov %ax, %ss \n\t"
-	"mov $0x4000, %cx \n\t"
-	"xor %esi, %esi \n\t"
-	"mov %esi, %edi \n\t"
-	"rep/addr32/cs/movsl \n\t"
+	"mov %ax, %fs \n\t"
+	"mov %ax, %gs \n\t"
 	"mov $stacktop, %sp\n\t"
-	"ljmp $0, $start \n\t"
-	".pushsection .boot, \"ax\" \n\t"
-	"ljmp $0xf000, $init \n\t"
-	".popsection"
+	"ljmp $0, $realmode_start \n\t"
+
+	".code16gcc \n\t"
 	);
