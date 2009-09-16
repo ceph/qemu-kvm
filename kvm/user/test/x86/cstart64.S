@@ -152,6 +152,7 @@ ap_start64:
 	call enable_x2apic
 	sti
 	nop
+	lock incw cpu_online_count
 
 1:	hlt
 	jmp 1b
@@ -203,5 +204,11 @@ smp_init:
 	movl $(APIC_DEST_ALLBUT | APIC_DEST_PHYSICAL | APIC_DM_INIT | APIC_INT_ASSERT), APIC_ICR(%rax)
 	movl $(APIC_DEST_ALLBUT | APIC_DEST_PHYSICAL | APIC_DM_INIT), APIC_ICR(%rax)
 	movl $(APIC_DEST_ALLBUT | APIC_DEST_PHYSICAL | APIC_DM_STARTUP), APIC_ICR(%rax)
+	call fwcfg_get_nb_cpus
+1:	pause
+	cmpw %ax, cpu_online_count
+	jne 1b
 smp_init_done:
 	ret
+
+cpu_online_count:	.word 1
