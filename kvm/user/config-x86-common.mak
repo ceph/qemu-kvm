@@ -11,6 +11,8 @@ cflatobjs += \
 	test/lib/x86/io.o \
 	test/lib/x86/smp.o
 
+cflatobjs += test/lib/x86/fwcfg.o
+
 $(libcflat): LDFLAGS += -nostdlib
 $(libcflat): CFLAGS += -ffreestanding -I test/lib
 
