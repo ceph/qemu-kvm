@@ -26,7 +26,7 @@ static void print_serial(const char *buf)
 {
 	unsigned long len = strlen(buf);
 
-	asm volatile ("addr32/rep/outsb" : "+S"(buf), "+c"(len) : "d"(0xf1));
+	asm volatile ("cld; addr32/rep/outsb" : "+S"(buf), "+c"(len) : "d"(0xf1));
 }
 
 static void exit(int code)
