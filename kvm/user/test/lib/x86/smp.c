@@ -14,6 +14,7 @@ static volatile int ipi_done;
 static __attribute__((used)) void ipi()
 {
     ipi_function(ipi_data);
+    apic_write(APIC_EOI, 0);
     ipi_done = 1;
 }
 
