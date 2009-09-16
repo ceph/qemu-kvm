@@ -139,7 +139,7 @@ void ioapic_write_redir(unsigned line, ioapic_redir_entry_t e)
 void enable_apic(void)
 {
     printf("enabling apic\n");
-    apic_write(0xf0, 0x1ff); /* spurious vector register */
+    xapic_write(0xf0, 0x1ff); /* spurious vector register */
 }
 
 void mask_pic_interrupts(void)
