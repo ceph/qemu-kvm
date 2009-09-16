@@ -189,6 +189,9 @@ static void setup_mmu(unsigned long len)
     unsigned long *cr3 = alloc_page();
     unsigned long phys = 0;
 
+    if (len < (1ul << 32))
+        len = 1ul << 32;  /* map mmio 1:1 */
+
     memset(cr3, 0, PAGE_SIZE);
     while (phys + LARGE_PAGE_SIZE <= len) {
 	install_large_page(cr3, phys, (void *)phys);
