@@ -68,6 +68,8 @@ static RTCState *rtc_state;
 static PITState *pit;
 static PCII440FXState *i440fx_state;
 
+qemu_irq *ioapic_irq_hack;
+
 typedef struct rom_reset_data {
     uint8_t *data;
     target_phys_addr_t addr;
@@ -1340,6 +1342,7 @@ static void pc_init1(ram_addr_t ram_size,
 
     if (pci_enabled) {
         isa_irq_state->ioapic = ioapic_init();
+        ioapic_irq_hack = isa_irq;
     }
 #ifdef USE_KVM_PIT
     if (kvm_enabled() && qemu_kvm_pit_in_kernel())

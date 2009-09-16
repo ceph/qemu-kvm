@@ -27,6 +27,13 @@ static uint32_t test_device_memsize_read(void *opaque, uint32_t addr)
     return ram_size;
 }
 
+static void test_device_irq_line(void *opaque, uint32_t addr, uint32_t data)
+{
+    extern qemu_irq *ioapic_irq_hack;
+
+    qemu_set_irq(ioapic_irq_hack[addr - 0x2000], !!data);
+}
+
 static int init_test_device(ISADevice *isa)
 {
     struct testdev *dev = DO_UPCAST(struct testdev, dev, isa);
@@ -34,6 +41,7 @@ static int init_test_device(ISADevice *isa)
     register_ioport_write(0xf1, 1, 1, test_device_serial_write, dev);
     register_ioport_write(0xf4, 1, 4, test_device_exit, dev);
     register_ioport_read(0xd1, 1, 4, test_device_memsize_read, dev);
+    register_ioport_write(0x2000, 24, 1, test_device_irq_line, NULL);
     return 0;
 }
 
