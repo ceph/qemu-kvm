@@ -54,6 +54,7 @@ static void mov_to_cr8(void)
 static struct test {
 	void (*func)(void);
 	const char *name;
+	int (*valid)(void);
 } tests[] = {
 	{ cpuid, "cpuid", },
 	{ vmcall, "vmcall", },
@@ -66,6 +67,11 @@ static void do_test(struct test *test)
 	int i;
 	unsigned long long t1, t2;
         void (*func)(void) = test->func;
+
+        if (test->valid && !test->valid()) {
+		printf("%s (skipped)\n", test->name);
+		return;
+	}
 
 	t1 = rdtsc();
 	for (i = 0; i < N; ++i)
