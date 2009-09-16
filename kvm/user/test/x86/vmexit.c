@@ -37,12 +37,28 @@ static void vmcall(void)
 	asm volatile ("vmcall" : "+a"(a), "=b"(b), "=c"(c), "=d"(d));
 }
 
+static void mov_from_cr8(void)
+{
+	unsigned long cr8;
+
+	asm volatile ("mov %%cr8, %0" : "=r"(cr8));
+}
+
+static void mov_to_cr8(void)
+{
+	unsigned long cr8 = 0;
+
+	asm volatile ("mov %0, %%cr8" : : "r"(cr8));
+}
+
 static struct test {
 	void (*func)(void);
 	const char *name;
 } tests[] = {
 	{ cpuid, "cpuid", },
 	{ vmcall, "vmcall", },
+	{ mov_from_cr8, "mov_from_cr8" },
+	{ mov_to_cr8, "mov_to_cr8" },
 };
 
 static void do_test(struct test *test)
