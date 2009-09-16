@@ -69,6 +69,7 @@ tss_end:
 .section .init
 
 .code32
+	mov $stacktop, %esp
 	call prepare_64
 	jmpl $8, $start64
 
