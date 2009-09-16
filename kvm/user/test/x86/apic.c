@@ -426,8 +426,8 @@ int main()
 {
     setup_vm();
 
-    g_apic = vmap(0xfee00000, 0x1000);
-    g_ioapic = vmap(0xfec00000, 0x1000);
+    g_apic = (void *)0xfee00000;
+    g_ioapic = (void *)0xfec00000;
 
     test_lapic_existence();
 
