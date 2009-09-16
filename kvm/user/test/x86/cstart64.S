@@ -148,6 +148,8 @@ ap_start32:
 .code64
 ap_start64:
 	call load_tss
+	call enable_apic
+	call enable_x2apic
 	sti
 	nop
 
@@ -156,7 +158,10 @@ ap_start64:
 
 start64:
 	call load_tss
+	call mask_pic_interrupts
+	call enable_apic
 	call smp_init
+	call enable_x2apic
 	call main
 	mov %eax, %edi
 	call exit
