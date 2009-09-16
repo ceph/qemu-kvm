@@ -1,5 +1,3 @@
-OUTPUT_FORMAT(binary)
-
 SECTIONS
 {
     . = 4M + SIZEOF_HEADERS;
