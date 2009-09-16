@@ -33,3 +33,8 @@ uint64_t fwcfg_get_u64(unsigned index)
 {
     return fwcfg_get_u(index, 8);
 }
+
+unsigned fwcfg_get_nb_cpus(void)
+{
+    return fwcfg_get_u16(FW_CFG_NB_CPUS);
+}

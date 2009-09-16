@@ -38,5 +38,7 @@ uint16_t fwcfg_get_u16(unsigned index);
 uint32_t fwcfg_get_u32(unsigned index);
 uint64_t fwcfg_get_u64(unsigned index);
 
+unsigned fwcfg_get_nb_cpus(void);
+
 #endif
 
