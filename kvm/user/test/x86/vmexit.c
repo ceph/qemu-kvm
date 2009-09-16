@@ -30,11 +30,19 @@ static void cpuid(void)
 		      : : : "eax", "ecx", "edx");
 }
 
+static void vmcall(void)
+{
+	unsigned long a = 0, b, c, d;
+
+	asm volatile ("vmcall" : "+a"(a), "=b"(b), "=c"(c), "=d"(d));
+}
+
 static struct test {
 	void (*func)(void);
 	const char *name;
 } tests[] = {
 	{ cpuid, "cpuid", },
+	{ vmcall, "vmcall", },
 };
 
 static void do_test(struct test *test)
