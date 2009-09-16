@@ -2,7 +2,7 @@ OUTPUT_FORMAT(binary)
 
 SECTIONS
 {
-    . = 1M;
+    . = 4M + SIZEOF_HEADERS;
     stext = .;
     .text : { *(.init) *(.text) *(.text.*) }
     . = ALIGN(4K);
