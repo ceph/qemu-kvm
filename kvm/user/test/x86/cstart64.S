@@ -22,14 +22,17 @@ ring0stacktop:
 .align 4096
 ptl2:
 i = 0
-	.rept 512
+	.rept 512 * 4
 	.quad 0x1e7 | (i << 21)
 	i = i + 1
 	.endr
 
 .align 4096
 ptl3:
-	.quad ptl2 + 7
+	.quad ptl2 + 7 + 0 * 4096
+	.quad ptl2 + 7 + 1 * 4096
+	.quad ptl2 + 7 + 2 * 4096
+	.quad ptl2 + 7 + 3 * 4096
 
 .align 4096
 ptl4:
