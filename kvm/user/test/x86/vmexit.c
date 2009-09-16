@@ -1,5 +1,6 @@
 
 #include "libcflat.h"
+#include "smp.h"
 
 static inline unsigned long long rdtsc()
 {
@@ -51,6 +52,20 @@ static void mov_to_cr8(void)
 	asm volatile ("mov %0, %%cr8" : : "r"(cr8));
 }
 
+static int is_smp(void)
+{
+	return cpu_count() > 1;
+}
+
+static void nop(void *junk)
+{
+}
+
+static void ipi(void)
+{
+	on_cpu(1, nop, 0);
+}
+
 static struct test {
 	void (*func)(void);
 	const char *name;
@@ -60,6 +75,7 @@ static struct test {
 	{ vmcall, "vmcall", },
 	{ mov_from_cr8, "mov_from_cr8" },
 	{ mov_to_cr8, "mov_to_cr8" },
+	{ ipi, "ipi", is_smp },
 };
 
 static void do_test(struct test *test)
@@ -85,6 +101,8 @@ static void do_test(struct test *test)
 int main(void)
 {
 	int i;
+
+	smp_init();
 
 	for (i = 0; i < ARRAY_SIZE(tests); ++i)
 		do_test(&tests[i]);
