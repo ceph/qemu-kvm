@@ -67,3 +67,5 @@ $(TEST_DIR)/msr.flat: $(cstart.o) $(TEST_DIR)/msr.o
 arch_clean:
 	$(RM) $(TEST_DIR)/bootstrap $(TEST_DIR)/*.o $(TEST_DIR)/*.flat \
 	$(TEST_DIR)/.*.d $(TEST_DIR)/lib/.*.d $(TEST_DIR)/lib/*.o
+
+-include $(TEST_DIR)/.*.d test/lib/.*.d test/lib/x86/.*.d
