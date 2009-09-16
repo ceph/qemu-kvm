@@ -80,9 +80,19 @@ mb_flags = 0x0
 	# multiboot header
 	.long mb_magic, mb_flags, 0 - (mb_magic + mb_flags)
 
+MSR_GS_BASE = 0xc0000101
+
+.macro setup_percpu_area
+	lea -4096(%esp), %eax
+	mov $0, %edx
+	mov $MSR_GS_BASE, %ecx
+	wrmsr
+.endm
+
 .globl start
 start:
 	mov $stacktop, %esp
+	setup_percpu_area
 	call prepare_64
 	jmpl $8, $start64
 
@@ -142,6 +152,7 @@ ap_start32:
 	mov %ax, %ss
 	mov $-4096, %esp
 	lock/xaddl %esp, smp_stacktop
+	setup_percpu_area
 	call prepare_64
 	ljmpl $8, $ap_start64
 
