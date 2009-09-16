@@ -1,6 +1,7 @@
 
 #include "libcflat.h"
-#include "smp.h"
+
+#define smp_id() 0
 
 #define true 1
 #define false 0
@@ -598,7 +599,6 @@ int main()
     int r;
 
     printf("starting test\n\n");
-    smp_init((void(*)(void))ac_test_run);
     r = ac_test_run();
     return r ? 0 : 1;
 }
