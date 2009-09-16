@@ -71,13 +71,21 @@ int cpu_count(void)
 
 int smp_id(void)
 {
-    return apic_read(APIC_ID);
+    unsigned id;
+
+    asm ("mov %%gs:0, %0" : "=r"(id));
+    return id;
+}
+
+static void setup_smp_id(void *data)
+{
+    asm ("mov %0, %%gs:0" : : "r"(apic_id()) : "memory");
 }
 
 void on_cpu(int cpu, void (*function)(void *data), void *data)
 {
     spin_lock(&ipi_lock);
-    if (cpu == apic_id())
+    if (cpu == smp_id())
 	function(data);
     else {
 	ipi_function = function;
@@ -98,4 +106,9 @@ void smp_init(void)
     void ipi_entry(void);
 
     set_ipi_descriptor(ipi_entry);
+
+    setup_smp_id(0);
+    for (i = 1; i < cpu_count(); ++i)
+        on_cpu(i, setup_smp_id, 0);
+
 }
