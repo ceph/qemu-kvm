@@ -2,9 +2,6 @@
 #include "apic.h"
 #include "vm.h"
 
-static void *g_apic;
-static void *g_ioapic;
-
 typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned u32;
@@ -103,12 +100,6 @@ static idt_entry_t idt[256];
 static int g_fail;
 static int g_tests;
 
-struct apic_ops {
-    u32 (*reg_read)(unsigned reg);
-    void (*reg_write)(unsigned reg, u32 val);
-    void (*icr_write)(u32 val, u32 dest);
-};
-
 static void outb(unsigned char data, unsigned short port)
 {
     asm volatile ("out %0, %1" : : "a"(data), "d"(port));
@@ -122,72 +113,6 @@ static void report(const char *msg, int pass)
         ++g_fail;
 }
 
-static u32 xapic_read(unsigned reg)
-{
-    return *(volatile u32 *)(g_apic + reg);
-}
-
-static void xapic_write(unsigned reg, u32 val)
-{
-    *(volatile u32 *)(g_apic + reg) = val;
-}
-
-static void xapic_icr_write(u32 val, u32 dest)
-{
-    while (xapic_read(APIC_ICR) & APIC_ICR_BUSY)
-        ;
-    xapic_write(APIC_ICR2, dest << 24);
-    xapic_write(APIC_ICR, val);
-}
-
-static const struct apic_ops xapic_ops = {
-    .reg_read = xapic_read,
-    .reg_write = xapic_write,
-    .icr_write = xapic_icr_write,
-};
-
-static const struct apic_ops *apic_ops = &xapic_ops;
-
-static u32 x2apic_read(unsigned reg)
-{
-    unsigned a, d;
-
-    asm volatile ("rdmsr" : "=a"(a), "=d"(d) : "c"(APIC_BASE_MSR + reg/16));
-    return a | (u64)d << 32;
-}
-
-static void x2apic_write(unsigned reg, u32 val)
-{
-    asm volatile ("wrmsr" : : "a"(val), "d"(0), "c"(APIC_BASE_MSR + reg/16));
-}
-
-static void x2apic_icr_write(u32 val, u32 dest)
-{
-    asm volatile ("wrmsr" : : "a"(val), "d"(dest),
-                  "c"(APIC_BASE_MSR + APIC_ICR/16));
-}
-
-static const struct apic_ops x2apic_ops = {
-    .reg_read = x2apic_read,
-    .reg_write = x2apic_write,
-    .icr_write = x2apic_icr_write,
-};
-
-static u32 apic_read(unsigned reg)
-{
-    return apic_ops->reg_read(reg);
-}
-
-static void apic_write(unsigned reg, u32 val)
-{
-    apic_ops->reg_write(reg, val);
-}
-
-static void apic_icr_write(u32 val, u32 dest)
-{
-    apic_ops->icr_write(val, dest);
-}
-
 static void test_lapic_existence(void)
 {
     u32 lvr;
@@ -199,17 +124,9 @@ static void test_lapic_existence(void)
 
 #define MSR_APIC_BASE 0x0000001b
 
-static void enable_x2apic(void)
+void test_enable_x2apic(void)
 {
-    unsigned a, b, c, d;
-
-    asm ("cpuid" : "=a"(a), "=b"(b), "=c"(c), "=d"(d) : "0"(1));
-
-    if (c & (1 << 21)) {
-        asm ("rdmsr" : "=a"(a), "=d"(d) : "c"(MSR_APIC_BASE));
-        a |= 1 << 10;
-        asm ("wrmsr" : : "a"(a), "d"(d), "c"(MSR_APIC_BASE));
-        apic_ops = &x2apic_ops;
+    if (enable_x2apic()) {
         printf("x2apic enabled\n");
     } else {
         printf("x2apic not detected\n");
@@ -311,32 +228,6 @@ static void test_self_ipi(void)
     report("self ipi", ipi_count == 1);
 }
 
-static void ioapic_write_reg(unsigned reg, u32 value)
-{
-    *(volatile u32 *)g_ioapic = reg;
-    *(volatile u32 *)(g_ioapic + 0x10) = value;
-}
-
-typedef struct {
-    u8 vector;
-    u8 delivery_mode:3;
-    u8 dest_mode:1;
-    u8 delivery_status:1;
-    u8 polarity:1;
-    u8 remote_irr:1;
-    u8 trig_mode:1;
-    u8 mask:1;
-    u8 reserve:7;
-    u8 reserved[4];
-    u8 dest_id;
-} ioapic_redir_entry_t;
-
-static void ioapic_write_redir(unsigned line, ioapic_redir_entry_t e)
-{
-    ioapic_write_reg(0x10 + line * 2 + 0, ((u32 *)&e)[0]);
-    ioapic_write_reg(0x10 + line * 2 + 1, ((u32 *)&e)[1]);
-}
-
 static void set_ioapic_redir(unsigned line, unsigned vec)
 {
     ioapic_redir_entry_t e = {
@@ -410,30 +301,15 @@ static void test_ioapic_simultaneous(void)
            g_66 && g_78 && g_66_after_78 && g_66_rip == g_78_rip);
 }
 
-static void enable_apic(void)
-{
-    printf("enabling apic\n");
-    apic_write(0xf0, 0x1ff); /* spurious vector register */
-}
-
-static void mask_pic_interrupts(void)
-{
-    outb(0xff, 0x21);
-    outb(0xff, 0xa1);
-}
-
 int main()
 {
     setup_vm();
-
-    g_apic = (void *)0xfee00000;
-    g_ioapic = (void *)0xfec00000;
 
     test_lapic_existence();
 
     mask_pic_interrupts();
     enable_apic();
-    enable_x2apic();
+    test_enable_x2apic();
     init_idt();
 
     test_self_ipi();

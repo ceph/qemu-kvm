@@ -1,5 +1,5 @@
 
-#include "apic.h"
+#include "apic-defs.h"
 
 boot_idt = 0
 
