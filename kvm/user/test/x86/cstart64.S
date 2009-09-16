@@ -1,6 +1,7 @@
 
 #include "apic-defs.h"
 
+.globl boot_idt
 boot_idt = 0
 
 ipi_vector = 0x20
@@ -160,7 +161,12 @@ start64:
 	mov %eax, %edi
 	call exit
 
+idt_descr:
+	.word 16 * 256 - 1
+	.quad boot_idt
+
 load_tss:
+	lidtq idt_descr
 	mov $0, %eax
 	mov %ax, %ss
 	mov $(APIC_DEFAULT_PHYS_BASE + APIC_ID), %eax
