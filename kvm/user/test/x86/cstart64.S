@@ -107,10 +107,42 @@ efer = 0xc0000080
 	mov %eax, %cr0
 	ret
 
+smp_stacktop:	.long 0xa0000
 
-smp_init_ipi:
+.align 16
+
+gdt32:
+	.quad 0
+	.quad 0x00cf9b000000ffff // flat 32-bit code segment
+	.quad 0x00cf93000000ffff // flat 32-bit data segment
+gdt32_end:
+
+.code16
+sipi_entry:
+	mov %cr0, %eax
+	or $1, %eax
+	mov %eax, %cr0
+	lgdtl gdt32_descr - sipi_entry
+	ljmpl $8, $ap_start32
+
+gdt32_descr:
+	.word gdt32_end - gdt32 - 1
+	.long gdt32
+
+sipi_end:
+
+.code32
+ap_start32:
+	mov $0x10, %ax
+	mov %ax, %ds
+	mov %ax, %es
+	mov %ax, %fs
+	mov %ax, %gs
+	mov %ax, %ss
+	mov $-4096, %esp
+	lock/xaddl %esp, smp_stacktop
 	call prepare_64
-	jmpl $8, $ap_start64
+	ljmpl $8, $ap_start64
 
 .code64
 ap_start64:
@@ -151,34 +183,14 @@ load_tss:
 	ret
 
 smp_init:
-#if 0
-	lea boot_idt + ipi_vector * 8, %rdi
-	mov $smp_init_ipi, %eax
-	mov %ax, (%rdi)
-	mov %cs, %ax
-	mov %ax, 2(%rdi)
-	movw $0x8e00, 4(%rdi)
-	shr $16, %eax
-	mov %ax, 6(%rdi)
-
-	mov $(APIC_BASE + APIC_REG_IPI_VECTOR), %dx
-	mov $ipi_vector, %eax
-	out %eax, %dx
-
-	mov $(APIC_BASE + APIC_REG_NCPU), %dx
-	in %dx, %eax
-	mov %eax, %ecx
-	mov $1, %esi
-smp_loop:
-	cmp %esi, %ecx
-	je smp_init_done
-
-	mov $(APIC_BASE + APIC_REG_SEND_IPI), %dx
-	mov %esi, %eax
-	out %eax, %dx
-
-	inc %esi
-	jmp smp_loop
+	cld
+	lea sipi_entry, %rsi
+	xor %rdi, %rdi
+	mov $(sipi_end - sipi_entry), %rcx
+	rep/movsb
+	mov $APIC_DEFAULT_PHYS_BASE, %eax
+	movl $(APIC_DEST_ALLBUT | APIC_DEST_PHYSICAL | APIC_DM_INIT | APIC_INT_ASSERT), APIC_ICR(%rax)
+	movl $(APIC_DEST_ALLBUT | APIC_DEST_PHYSICAL | APIC_DM_INIT), APIC_ICR(%rax)
+	movl $(APIC_DEST_ALLBUT | APIC_DEST_PHYSICAL | APIC_DM_STARTUP), APIC_ICR(%rax)
 smp_init_done:
-#endif
 	ret
