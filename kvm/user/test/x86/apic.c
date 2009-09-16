@@ -9,6 +9,7 @@ typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned u32;
 typedef unsigned long ulong;
+typedef unsigned long long u64;
 
 typedef struct {
     unsigned short offset0;
@@ -147,6 +148,31 @@ static const struct apic_ops xapic_ops = {
 
 static const struct apic_ops *apic_ops = &xapic_ops;
 
+static u32 x2apic_read(unsigned reg)
+{
+    unsigned a, d;
+
+    asm volatile ("rdmsr" : "=a"(a), "=d"(d) : "c"(APIC_BASE_MSR + reg/16));
+    return a | (u64)d << 32;
+}
+
+static void x2apic_write(unsigned reg, u32 val)
+{
+    asm volatile ("wrmsr" : : "a"(val), "d"(0), "c"(APIC_BASE_MSR + reg/16));
+}
+
+static void x2apic_icr_write(u32 val, u32 dest)
+{
+    asm volatile ("wrmsr" : : "a"(val), "d"(dest),
+                  "c"(APIC_BASE_MSR + APIC_ICR/16));
+}
+
+static const struct apic_ops x2apic_ops = {
+    .reg_read = x2apic_read,
+    .reg_write = x2apic_write,
+    .icr_write = x2apic_icr_write,
+};
+
 static u32 apic_read(unsigned reg)
 {
     return apic_ops->reg_read(reg);
@@ -169,6 +195,25 @@ static void test_lapic_existence(void)
     lvr = apic_read(APIC_LVR);
     printf("apic version: %x\n", lvr);
     report("apic existence", (u16)lvr == 0x14);
+}
+
+#define MSR_APIC_BASE 0x0000001b
+
+static void enable_x2apic(void)
+{
+    unsigned a, b, c, d;
+
+    asm ("cpuid" : "=a"(a), "=b"(b), "=c"(c), "=d"(d) : "0"(1));
+
+    if (c & (1 << 21)) {
+        asm ("rdmsr" : "=a"(a), "=d"(d) : "c"(MSR_APIC_BASE));
+        a |= 1 << 10;
+        asm ("wrmsr" : : "a"(a), "d"(d), "c"(MSR_APIC_BASE));
+        apic_ops = &x2apic_ops;
+        printf("x2apic enabled\n");
+    } else {
+        printf("x2apic not detected\n");
+    }
 }
 
 static u16 read_cs(void)
@@ -388,6 +433,7 @@ int main()
 
     mask_pic_interrupts();
     enable_apic();
+    enable_x2apic();
     init_idt();
 
     test_self_ipi();
