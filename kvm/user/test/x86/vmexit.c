@@ -66,6 +66,16 @@ static void ipi(void)
 	on_cpu(1, nop, 0);
 }
 
+static void ipi_halt(void)
+{
+	unsigned long long t;
+
+	on_cpu(1, nop, 0);
+	t = rdtsc() + 2000;
+	while (rdtsc() < t)
+		;
+}
+
 static struct test {
 	void (*func)(void);
 	const char *name;
@@ -76,6 +86,7 @@ static struct test {
 	{ mov_from_cr8, "mov_from_cr8" },
 	{ mov_to_cr8, "mov_to_cr8" },
 	{ ipi, "ipi", is_smp },
+	{ ipi_halt, "ipi+halt", is_smp },
 };
 
 static void do_test(struct test *test)
