@@ -17,7 +17,7 @@ static inline unsigned long long rdtsc()
 	return r;
 }
 
-#define N (1 << 22)
+#define GOAL (1ull << 30)
 
 #ifdef __x86_64__
 #  define R "r"
@@ -93,6 +93,7 @@ static void do_test(struct test *test)
 {
 	int i;
 	unsigned long long t1, t2;
+	unsigned iterations = 32;
         void (*func)(void) = test->func;
 
         if (test->valid && !test->valid()) {
@@ -100,11 +101,14 @@ static void do_test(struct test *test)
 		return;
 	}
 
-	t1 = rdtsc();
-	for (i = 0; i < N; ++i)
-            func();
-	t2 = rdtsc();
-	printf("%s %d\n", test->name, (int)((t2 - t1) / N));
+	do {
+		iterations *= 2;
+		t1 = rdtsc();
+		for (i = 0; i < iterations; ++i)
+			func();
+		t2 = rdtsc();
+	} while ((t2 - t1) < GOAL);
+	printf("%s %d\n", test->name, (int)((t2 - t1) / iterations));
 }
 
 #define ARRAY_SIZE(_x) (sizeof(_x) / sizeof((_x)[0]))
