@@ -2282,6 +2282,10 @@ static void kvm_invoke_set_guest_debug(void *data)
 {
     struct kvm_set_guest_debug_data *dbg_data = data;
 
+    if (cpu_single_env->kvm_cpu_state.regs_modified) {
+        kvm_arch_put_registers(cpu_single_env);
+        cpu_single_env->kvm_cpu_state.regs_modified = 0;
+    }
     dbg_data->err =
         kvm_set_guest_debug(cpu_single_env->kvm_cpu_state.vcpu_ctx,
                             &dbg_data->dbg);
