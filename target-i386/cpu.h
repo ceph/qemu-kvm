@@ -555,10 +555,13 @@ typedef union {
 #endif
 #define MMX_Q(n) q
 
+#define CPU_NB_REGS64 16
+#define CPU_NB_REGS32 8
+
 #ifdef TARGET_X86_64
-#define CPU_NB_REGS 16
+#define CPU_NB_REGS CPU_NB_REGS64
 #else
-#define CPU_NB_REGS 8
+#define CPU_NB_REGS CPU_NB_REGS32
 #endif
 
 #define NB_MMU_MODES 2
