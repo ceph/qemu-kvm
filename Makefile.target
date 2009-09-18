@@ -211,7 +211,6 @@ obj-i386-y += cirrus_vga.o apic.o ioapic.o parallel.o acpi.o piix_pci.o
 obj-i386-y += usb-uhci.o vmmouse.o vmport.o vmware_vga.o hpet.o
 obj-i386-y += device-hotplug.o pci-hotplug.o smbios.o wdt_ib700.o
 obj-i386-y += extboot.o
-obj-i386-y += piix4.o
 obj-i386-y += ne2000-isa.o
 obj-i386-y += testdev.o
 

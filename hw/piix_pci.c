@@ -291,9 +291,6 @@ int piix_get_irq(int pin)
 {
     if (piix3_dev)
         return piix3_dev->dev.config[0x60+pin];
-    if (piix4_dev)
-        return piix4_dev->config[0x60+pin];
-
     return 0;
 }
 
