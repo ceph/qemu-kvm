@@ -964,7 +964,7 @@ cat > $TMPC << EOF
 int main(void) { return 0; }
 EOF
     if $cc $ARCH_CFLAGS -o $TMPE ${OS_CFLAGS} $TMPC 2>/dev/null ; then
-        :
+        libs_softmmu="-lpci $libs_softmmu"
     else
         echo
         echo "Error: libpci check failed"

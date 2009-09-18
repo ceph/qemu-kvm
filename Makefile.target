@@ -217,7 +217,6 @@ obj-i386-y += i8254-kvm.o
 endif
 ifeq ($(USE_KVM_DEVICE_ASSIGNMENT), 1)
 obj-i386-y += device-assignment.o
-LIBS+=-lpci
 endif
 
 # Hardware support
@@ -228,7 +227,6 @@ obj-ia64-y += usb-uhci.o
 
 ifeq ($(USE_KVM_DEVICE_ASSIGNMENT), 1)
 obj-ia64-y += device-assignment.o
-LIBS+=-lpci
 endif
 
 # shared objects
