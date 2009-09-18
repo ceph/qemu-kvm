@@ -1097,19 +1097,21 @@ int cpu_is_bsp(CPUState *env)
 
 CPUState *pc_new_cpu(const char *cpu_model)
 {
-        CPUState *env = cpu_init(cpu_model);
-        if (!env) {
-            fprintf(stderr, "Unable to find x86 CPU definition\n");
-            exit(1);
-        }
-        env->kvm_cpu_state.regs_modified = 1;
-        if ((env->cpuid_features & CPUID_APIC) || smp_cpus > 1) {
-            env->cpuid_apic_id = env->cpu_index;
-            /* APIC reset callback resets cpu */
-            apic_init(env);
-        } else {
-            qemu_register_reset((QEMUResetHandler*)cpu_reset, env);
-        }
+    CPUState *env;
+
+    env = cpu_init(cpu_model);
+    if (!env) {
+        fprintf(stderr, "Unable to find x86 CPU definition\n");
+        exit(1);
+    }
+    env->kvm_cpu_state.regs_modified = 1;
+    if ((env->cpuid_features & CPUID_APIC) || smp_cpus > 1) {
+        env->cpuid_apic_id = env->cpu_index;
+        /* APIC reset callback resets cpu */
+        apic_init(env);
+    } else {
+        qemu_register_reset((QEMUResetHandler*)cpu_reset, env);
+    }
 
     /* kvm needs this to run after the apic is initialized. Otherwise,
      * it can access invalid state and crash.
