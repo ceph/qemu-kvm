@@ -961,9 +961,9 @@ cat > $TMPC << EOF
 #ifndef PCI_VENDOR_ID
 #error NO LIBPCI
 #endif
-int main(void) { return 0; }
+int main(void) { struct pci_access a; pci_init(&a); return 0; }
 EOF
-    if compile_prog "" "" ; then
+    if compile_prog "" "-lpci" ; then
         libs_softmmu="-lpci $libs_softmmu"
     else
         echo
