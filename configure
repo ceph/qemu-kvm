@@ -936,7 +936,7 @@ cat > $TMPC <<EOF
 #endif
 int main(void) { return 0; }
 EOF
-    if $cc $ARCH_CFLAGS $CFLAGS $kvm_cflags -o $TMPE ${OS_CFLAGS} $TMPC 2> /dev/null ; then
+    if compile_prog $kvm_cflags ""; then
 	kvm_cap_pit="yes"
     fi
 
@@ -949,7 +949,7 @@ cat > $TMPC <<EOF
 #endif
 int main(void) { return 0; }
 EOF
-    if $cc $ARCH_CFLAGS $CFLAGS $kvm_cflags -o $TMPE ${OS_CFLAGS} $TMPC 2> /dev/null ; then
+    if compile_prog $kvm_cflags "" ; then
 	kvm_cap_device_assignment="yes"
     fi
 fi
@@ -963,7 +963,7 @@ cat > $TMPC << EOF
 #endif
 int main(void) { return 0; }
 EOF
-    if $cc $ARCH_CFLAGS -o $TMPE ${OS_CFLAGS} $TMPC 2>/dev/null ; then
+    if compile_prog "" "" ; then
         libs_softmmu="-lpci $libs_softmmu"
     else
         echo
