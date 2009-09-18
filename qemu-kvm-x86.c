@@ -1622,11 +1622,13 @@ void kvm_arch_update_guest_debug(CPUState *env, struct kvm_guest_debug *dbg)
 }
 #endif
 
+#ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
 void kvm_arch_do_ioperm(void *_data)
 {
     struct ioperm_data *data = _data;
     ioperm(data->start_port, data->num, data->turn_on);
 }
+#endif
 
 /*
  * Setup x86 specific IRQ routing
