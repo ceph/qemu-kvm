@@ -1,12 +1,7 @@
 # -*- Mode: makefile -*-
 
-CFLAGS=
-LDFLAGS=
-
 include config.mak
 include $(SRC_PATH)/rules.mak
-
-LDFLAGS_BASE:=$(LDFLAGS)
 
 TARGET_PATH=$(SRC_PATH)/target-$(TARGET_BASE_ARCH)
 VPATH=$(SRC_PATH):$(TARGET_PATH):$(SRC_PATH)/hw
@@ -346,9 +341,6 @@ vl.o: qemu-options.h
 monitor.o: qemu-monitor.h
 
 ARLIBS=../libqemu_common.a libqemu.a $(HWLIB)
-
-$(QEMU_PROG): ARLIBS += $(DEPLIBS)
-$(QEMU_PROG): $(DEPLIBS)
 
 endif # CONFIG_SOFTMMU
 
