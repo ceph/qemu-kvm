@@ -78,10 +78,6 @@ block-nested-$(CONFIG_CURL) += curl.o
 
 block-obj-y +=  $(addprefix block/, $(block-nested-y))
 
-ifdef CONFIG_AIO
-block-obj-y += compatfd.o
-endif
-
 ######################################################################
 # libqemu_common.a: Target independent part of system emulation. The
 # long term path is to suppress *all* target specific code in case of
