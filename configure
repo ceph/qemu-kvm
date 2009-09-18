@@ -362,18 +362,13 @@ AIX)
   usb="linux"
   if [ "$cpu" = "i386" -o "$cpu" = "x86_64" ] ; then
     audio_possible_drivers="$audio_possible_drivers fmod"
-    kvm="yes"
   fi
   if [ "$cpu" = "ia64" ] ; then
-     kvm="yes"
      xen="no"
      target_list="ia64-softmmu"
      cpu_emulation="no"
      gdbstub="no"
      slirp="no"
-  fi
-  if [ "$cpu" = "powerpc" ]; then
-      kvm="yes"
   fi
 ;;
 esac
@@ -926,7 +921,7 @@ esac
 
 kvm_cflags=""
 
-if test "$kvm" = "yes" ; then
+if test "$kvm" != "no" ; then
 
 kvm_cflags="-I$source_path/kvm/include"
 kvm_cflags="$kvm_cflags -I$source_path/kvm/include/$kvm_arch"
