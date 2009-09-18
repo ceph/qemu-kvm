@@ -905,76 +905,6 @@ EOF
 fi
 
 ##########################################
-# KVM probe
-
-case "$cpu" in
-    i386 | x86_64)
-	kvm_arch="x86"
-	;;
-    ppc)
-        kvm_arch="powerpc"
-        ;;
-    *)
-	kvm_arch="$cpu"
-	;;
-esac
-
-kvm_cflags=""
-
-if test "$kvm" != "no" ; then
-
-kvm_cflags="-I$source_path/kvm/include"
-kvm_cflags="$kvm_cflags -I$source_path/kvm/include/$kvm_arch"
-kvm_cflags="$kvm_cflags -idirafter $source_path/compat"
-
-# test for KVM_CAP_PIT
-
-cat > $TMPC <<EOF
-#include <linux/kvm.h>
-#ifndef KVM_CAP_PIT
-#error "kvm no pit capability"
-#endif
-int main(void) { return 0; }
-EOF
-    if compile_prog $kvm_cflags ""; then
-	kvm_cap_pit="yes"
-    fi
-
-# test for KVM_CAP_DEVICE_ASSIGNMENT
-
-cat > $TMPC <<EOF
-#include <linux/kvm.h>
-#ifndef KVM_CAP_DEVICE_ASSIGNMENT
-#error "kvm no device assignment capability"
-#endif
-int main(void) { return 0; }
-EOF
-    if compile_prog $kvm_cflags "" ; then
-	kvm_cap_device_assignment="yes"
-    fi
-fi
-
-# libpci probe for kvm_cap_device_assignment
-if test $kvm_cap_device_assignment = "yes" ; then
-cat > $TMPC << EOF
-#include <pci/pci.h>
-#ifndef PCI_VENDOR_ID
-#error NO LIBPCI
-#endif
-int main(void) { struct pci_access a; pci_init(&a); return 0; }
-EOF
-    if compile_prog "" "-lpci" ; then
-        libs_softmmu="-lpci $libs_softmmu"
-    else
-        echo
-        echo "Error: libpci check failed"
-        echo "Disable KVM Device Assignment capability."
-        echo
-        kvm_cap_device_assignment="no"
-    fi
-fi
-
-##########################################
 # zlib check
 
 cat > $TMPC << EOF
@@ -1372,7 +1302,23 @@ fi
 ##########################################
 # kvm probe
 if test "$kvm" != "no" ; then
-    cat > $TMPC <<EOF
+  case "$cpu" in
+  i386 | x86_64)
+    kvm_arch="x86"
+    ;;
+  ppc)
+    kvm_arch="powerpc"
+    ;;
+  *)
+    kvm_arch="$cpu"
+    ;;
+  esac
+
+  kvm_cflags="-I$source_path/kvm/include"
+  kvm_cflags="$kvm_cflags -I$source_path/kvm/include/$kvm_arch"
+  kvm_cflags="$kvm_cflags -idirafter $source_path/compat"
+
+  cat > $TMPC <<EOF
 #include <linux/kvm.h>
 #if !defined(KVM_API_VERSION) || KVM_API_VERSION < 12 || KVM_API_VERSION > 12
 #error Invalid KVM version
@@ -1406,6 +1352,58 @@ EOF
       feature_not_found "kvm"
     fi
     kvm=no
+  fi
+fi
+
+##########################################
+# test for KVM_CAP_PIT
+
+if test "$kvm" != "no" ; then
+  cat > $TMPC <<EOF
+#include <linux/kvm.h>
+#ifndef KVM_CAP_PIT
+#error "kvm no pit capability"
+#endif
+int main(void) { return 0; }
+EOF
+  if compile_prog $kvm_cflags ""; then
+    kvm_cap_pit=yes
+  fi
+fi
+
+##########################################
+# test for KVM_CAP_DEVICE_ASSIGNMENT
+if test "$kvm" != "no" ; then
+  cat > $TMPC <<EOF
+#include <linux/kvm.h>
+#ifndef KVM_CAP_DEVICE_ASSIGNMENT
+#error "kvm no device assignment capability"
+#endif
+int main(void) { return 0; }
+EOF
+  if compile_prog $kvm_cflags "" ; then
+    kvm_cap_device_assignment=yes
+  fi
+fi
+
+##########################################
+# libpci probe for kvm_cap_device_assignment
+if test $kvm_cap_device_assignment = "yes" ; then
+  cat > $TMPC << EOF
+#include <pci/pci.h>
+#ifndef PCI_VENDOR_ID
+#error NO LIBPCI
+#endif
+int main(void) { struct pci_access a; pci_init(&a); return 0; }
+EOF
+  if compile_prog "" "-lpci" ; then
+    libs_softmmu="-lpci $libs_softmmu"
+  else
+    echo
+    echo "Error: libpci check failed"
+    echo "Disable KVM Device Assignment capability."
+    echo
+    kvm_cap_device_assignment=no
   fi
 fi
 
