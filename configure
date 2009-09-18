@@ -2264,9 +2264,6 @@ case "$target_arch2" in
     target_phys_bits=64
   ;;
   ia64)
-    echo "TARGET_ARCH=ia64" >> $config_host_mak
-    echo "#define TARGET_ARCH \"ia64\"" >> $config_host_h
-    echo "#define TARGET_IA64 1" >> $config_host_h
     target_phys_bits=64
   ;;
   alpha)
