@@ -3795,7 +3795,9 @@ void dump_exec_info(FILE *f,
     cpu_fprintf(f, "TB flush count      %d\n", tb_flush_count);
     cpu_fprintf(f, "TB invalidate count %d\n", tb_phys_invalidate_count);
     cpu_fprintf(f, "TLB flush count     %d\n", tlb_flush_count);
+#ifdef CONFIG_PROFILER
     tcg_dump_info(f, cpu_fprintf);
+#endif
 }
 
 #if !defined(CONFIG_USER_ONLY)

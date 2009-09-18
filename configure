@@ -2078,8 +2078,10 @@ fi
 if test "$need_offsetof" = "yes" ; then
   echo "CONFIG_NEED_OFFSETOF=y" >> $config_host_mak
 fi
-if test $cpu_emulation = "no"; then
-  echo "NO_CPU_EMULATION=1" >> $config_host_mak
+if test $cpu_emulation = "yes"; then
+  echo "CONFIG_CPU_EMULATION=y" >> $config_host_mak
+else
+  echo "CONFIG_NO_CPU_EMULATION=y" >> $config_host_mak
 fi
 
 # XXX: suppress that

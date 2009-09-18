@@ -33,8 +33,10 @@ all: $(PROGS)
 
 #########################################################
 # cpu emulator library
-libobj-y = exec.o translate-all.o cpu-exec.o translate.o host-utils.o
-libobj-y += tcg/tcg.o tcg/tcg-runtime.o
+libobj-y = exec.o cpu-exec.o host-utils.o
+libobj-$(CONFIG_NO_CPU_EMULATION) += fake-exec.o
+libobj-$(CONFIG_CPU_EMULATION) += translate-all.o translate.o
+libobj-$(CONFIG_CPU_EMULATION) += tcg/tcg.o tcg/tcg-runtime.o
 libobj-$(CONFIG_SOFTFLOAT) += fpu/softfloat.o
 libobj-$(CONFIG_NOSOFTFLOAT) += fpu/softfloat-native.o
 libobj-y += op_helper.o helper.o

@@ -5627,7 +5627,7 @@ int main(int argc, char **argv, char **envp)
 
         ret = kvm_init(smp_cpus);
         if (ret < 0) {
-#if defined(KVM_UPSTREAM) || defined(NO_CPU_EMULATION)
+#if defined(KVM_UPSTREAM) || defined(CONFIG_NO_CPU_EMULATION)
             fprintf(stderr, "failed to initialize KVM\n");
             exit(1);
 #endif

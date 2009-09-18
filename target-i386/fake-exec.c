@@ -45,10 +45,6 @@ int cpu_x86_gen_code(CPUState *env, TranslationBlock *tb, int *gen_code_size_ptr
     return 0;
 }
 
-void flush_icache_range(unsigned long start, unsigned long stop)
-{
-}
-
 void optimize_flags_init(void)
 {
 }
