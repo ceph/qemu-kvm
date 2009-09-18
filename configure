@@ -2076,11 +2076,6 @@ bsd)
 ;;
 esac
 
-# this is a temp hack needed for kvm
-if test "$kvm" = "yes" ; then
-    echo "KVM_CFLAGS=$kvm_cflags" >> $config_host_mak
-fi
-
 echo "KVM_KMOD=$kvm_kmod" >> $config_host_mak
 
 tools=
