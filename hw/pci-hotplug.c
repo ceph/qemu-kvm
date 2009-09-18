@@ -155,7 +155,7 @@ static PCIDevice *qemu_pci_hot_add_storage(Monitor *mon,
     return dev;
 }
 
-#ifdef USE_KVM_DEVICE_ASSIGNMENT
+#ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
 static PCIDevice *qemu_pci_hot_assign_device(Monitor *mon,
                                              const char *devaddr,
                                              const char *opts)
@@ -192,7 +192,7 @@ static void qemu_pci_hot_deassign_device(Monitor *mon, AssignedDevInfo *adev)
                    "(\"%s\") from guest\n",
                    adev->bus, adev->dev, adev->func, adev->name);
 }
-#endif /* USE_KVM_DEVICE_ASSIGNMENT */
+#endif /* CONFIG_KVM_DEVICE_ASSIGNMENT */
 
 void pci_device_hot_add(Monitor *mon, const QDict *qdict)
 {
@@ -217,10 +217,10 @@ void pci_device_hot_add(Monitor *mon, const QDict *qdict)
         dev = qemu_pci_hot_add_nic(mon, pci_addr, opts);
     else if (strcmp(type, "storage") == 0)
         dev = qemu_pci_hot_add_storage(mon, pci_addr, opts);
-#ifdef USE_KVM_DEVICE_ASSIGNMENT
+#ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
     else if (strcmp(type, "host") == 0)
         dev = qemu_pci_hot_assign_device(mon, pci_addr, opts);
-#endif /* USE_KVM_DEVICE_ASSIGNMENT */
+#endif /* CONFIG_KVM_DEVICE_ASSIGNMENT */
     else
         monitor_printf(mon, "invalid type: %s\n", type);
 
@@ -274,7 +274,7 @@ void pci_device_hot_remove_success(int pcibus, int slot)
 {
     PCIDevice *d = pci_find_device(pcibus, slot, 0);
     int class_code;
-#ifdef USE_KVM_DEVICE_ASSIGNMENT
+#ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
     AssignedDevInfo *adev;
 #endif
 
@@ -283,13 +283,13 @@ void pci_device_hot_remove_success(int pcibus, int slot)
         return;
     }
 
-#ifdef USE_KVM_DEVICE_ASSIGNMENT
+#ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
     adev = get_assigned_device(pcibus, slot);
     if (adev) {
         qemu_pci_hot_deassign_device(cur_mon, adev);
         return;
     }
-#endif /* USE_KVM_DEVICE_ASSIGNMENT */
+#endif /* CONFIG_KVM_DEVICE_ASSIGNMENT */
 
     class_code = d->config_read(d, PCI_CLASS_DEVICE+1, 1);
 

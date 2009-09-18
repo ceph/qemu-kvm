@@ -2365,10 +2365,10 @@ case "$target_arch2" in
       echo "CONFIG_KVM=y" >> $config_mak
       echo "KVM_CFLAGS=$kvm_cflags" >> $config_mak
       if test $kvm_cap_pit = "yes" ; then
-        echo "USE_KVM_PIT=1" >> $config_mak
+        echo "CONFIG_KVM_PIT=y" >> $config_mak
       fi
       if test $kvm_cap_device_assignment = "yes" ; then
-        echo "USE_KVM_DEVICE_ASSIGNMENT=1" >> $config_mak
+        echo "CONFIG_KVM_DEVICE_ASSIGNMENT=y" >> $config_mak
       fi
     fi
 esac

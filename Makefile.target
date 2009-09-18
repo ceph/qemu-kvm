@@ -212,22 +212,16 @@ obj-i386-y += extboot.o
 obj-i386-y += piix4.o
 obj-i386-y += ne2000-isa.o
 obj-i386-y += testdev.o
-ifeq ($(USE_KVM_PIT), 1)
-obj-i386-y += i8254-kvm.o
-endif
-ifeq ($(USE_KVM_DEVICE_ASSIGNMENT), 1)
-obj-i386-y += device-assignment.o
-endif
+
+obj-i386-$(CONFIG_KVM_PIT) += i8254-kvm.o
+obj-i386-$(CONFIG_KVM_DEVICE_ASSIGNMENT) += device-assignment.o
 
 # Hardware support
 obj-ia64-y += ide.o pckbd.o vga.o $(SOUND_HW) dma.o $(AUDIODRV)
 obj-ia64-y += fdc.o mc146818rtc.o serial.o i8259.o ipf.o
 obj-ia64-y += cirrus_vga.o parallel.o acpi.o piix_pci.o
 obj-ia64-y += usb-uhci.o
-
-ifeq ($(USE_KVM_DEVICE_ASSIGNMENT), 1)
-obj-ia64-y += device-assignment.o
-endif
+obj-ia64-$(CONFIG_KVM_DEVICE_ASSIGNMENT) += device-assignment.o
 
 # shared objects
 obj-ppc-y = ppc.o ide/core.o ide/isa.o ide/pci.o ide/macio.o

@@ -50,7 +50,7 @@ typedef struct {
 static const char *s_spk = "pcspk";
 static PCSpkState pcspk_state;
 
-#ifdef USE_KVM_PIT
+#ifdef CONFIG_KVM_PIT
 static void kvm_get_pit_ch2(PITState *pit,
                             struct kvm_pit_state *inkernel_state)
 {

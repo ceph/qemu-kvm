@@ -650,12 +650,12 @@ void pci_default_write_config(PCIDevice *d, uint32_t addr, uint32_t val, int l)
         d->config[addr] = (d->config[addr] & ~wmask) | (val & wmask);
     }
 
-#ifdef USE_KVM_DEVICE_ASSIGNMENT
+#ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
     if (kvm_enabled() && qemu_kvm_irqchip_in_kernel() &&
         addr >= PIIX_CONFIG_IRQ_ROUTE &&
 	addr < PIIX_CONFIG_IRQ_ROUTE + 4)
         assigned_dev_update_irqs();
-#endif /* USE_KVM_DEVICE_ASSIGNMENT */
+#endif /* CONFIG_KVM_DEVICE_ASSIGNMENT */
 
     if (memcmp(orig + PCI_BASE_ADDRESS_0, d->config + PCI_BASE_ADDRESS_0, 24)
         || ((orig[PCI_COMMAND] ^ d->config[PCI_COMMAND])

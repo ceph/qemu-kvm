@@ -85,9 +85,6 @@ case $line in
     value=${line#*=}
     echo "#define $name $value"
     ;;
- USE_KVM_*)
-    echo "#define $(echo "$line" | sed 's/=/ /')"
-    ;;
 esac
 
 done # read

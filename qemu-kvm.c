@@ -66,7 +66,7 @@ static CPUState *kvm_debug_cpu_requested;
 
 static uint64_t phys_ram_size;
 
-#ifdef USE_KVM_DEVICE_ASSIGNMENT
+#ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
 /* The list of ioperm_data */
 static QLIST_HEAD(, ioperm_data) ioperm_head;
 #endif
@@ -1831,7 +1831,7 @@ static void *ap_main_loop(void *_env)
 {
     CPUState *env = _env;
     sigset_t signals;
-#ifdef USE_KVM_DEVICE_ASSIGNMENT
+#ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
     struct ioperm_data *data = NULL;
 #endif
 
@@ -1841,7 +1841,7 @@ static void *ap_main_loop(void *_env)
     sigprocmask(SIG_BLOCK, &signals, NULL);
     env->kvm_cpu_state.vcpu_ctx = kvm_create_vcpu(env, env->cpu_index);
 
-#ifdef USE_KVM_DEVICE_ASSIGNMENT
+#ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
     /* do ioperm for io ports of assigned devices */
     QLIST_FOREACH(data, &ioperm_head, entries)
         on_vcpu(env, kvm_arch_do_ioperm, data);
@@ -2428,7 +2428,7 @@ void kvm_mutex_lock(void)
     cpu_single_env = NULL;
 }
 
-#ifdef USE_KVM_DEVICE_ASSIGNMENT
+#ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
 void kvm_add_ioperm_data(struct ioperm_data *data)
 {
     QLIST_INSERT_HEAD(&ioperm_head, data, entries);
