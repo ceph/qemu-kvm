@@ -1448,7 +1448,7 @@ int kvm_assign_set_msix_entry(kvm_context_t kvm,
 }
 #endif
 
-#if defined(KVM_CAP_IRQFD) && defined(CONFIG_eventfd)
+#if defined(KVM_CAP_IRQFD) && defined(CONFIG_EVENTFD)
 
 #include <sys/eventfd.h>
 

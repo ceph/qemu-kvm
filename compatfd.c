@@ -113,7 +113,7 @@ int qemu_signalfd(const sigset_t *mask)
 
 int qemu_eventfd(int *fds)
 {
-#if defined(CONFIG_eventfd)
+#if defined(CONFIG_EVENTFD)
     int ret;
 
     ret = syscall(SYS_eventfd, 0);

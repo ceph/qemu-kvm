@@ -234,7 +234,6 @@ kerneldir=""
 aix="no"
 blobs="yes"
 pkgversion=" ($(kvm_version))"
-eventfd="no"
 cpu_emulation="yes"
 kvm_kmod="no"
 pkgversion=""
@@ -2055,11 +2054,8 @@ fi
 if test "$signalfd" = "yes" ; then
   echo "CONFIG_SIGNALFD=y" >> $config_host_mak
 fi
-if test "$eventfd" = "yes" ; then
-  echo "CONFIG_eventfd=y" >> $config_host_mak
 if test "$need_offsetof" = "yes" ; then
   echo "CONFIG_NEED_OFFSETOF=y" >> $config_host_mak
-fi
 fi
 
 # XXX: suppress that
