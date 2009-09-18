@@ -228,7 +228,7 @@ uname_release=""
 io_thread="no"
 mixemu="no"
 kvm_trace="no"
-kvm_cap_pit="no"
+kvm_cap_pit=""
 kvm_cap_device_assignment="no"
 kerneldir=""
 aix="no"
@@ -494,6 +494,10 @@ for opt do
   ;;
   --enable-kvm) kvm="yes"
   ;;
+  --disable-kvm-cap-pit) kvm_cap_pit="no"
+  ;;
+  --enable-kvm-cap-pit) kvm_cap_pit="yes"
+  ;;
   --enable-profiler) profiler="yes"
   ;;
   --enable-cocoa)
@@ -700,6 +704,8 @@ echo "  --disable-bluez          disable bluez stack connectivity"
 echo "  --enable-bluez           enable bluez stack connectivity"
 echo "  --disable-kvm            disable KVM acceleration support"
 echo "  --enable-kvm             enable KVM acceleration support"
+echo "  --disable-cap-kvm-pit    disable KVM pit support"
+echo "  --enable-cap-kvm-pit     enable KVM pit support"
 echo "  --disable-nptl           disable usermode NPTL support"
 echo "  --enable-nptl            disable usermode NPTL support"
 echo "  --enable-system          enable all system emulation targets"
@@ -1358,7 +1364,10 @@ fi
 ##########################################
 # test for KVM_CAP_PIT
 
-if test "$kvm" != "no" ; then
+if test "$kvm_cap_pit" != "no" ; then
+  if test "$kvm" = "no" -a "$kvm_cap_pit" = "yes" ; then
+      feature_not_found "kvm_cap_pit (kvm is not enabled)"
+  fi
   cat > $TMPC <<EOF
 #include <linux/kvm.h>
 #ifndef KVM_CAP_PIT
@@ -1368,6 +1377,11 @@ int main(void) { return 0; }
 EOF
   if compile_prog $kvm_cflags ""; then
     kvm_cap_pit=yes
+  else
+    if test "$kvm_cap_pit" = "yes" ; then
+      feature_not_found "kvm_cap_pit"
+    fi
+    kvm_cap_pit=no
   fi
 fi
 
@@ -1854,6 +1868,7 @@ echo "IO thread         $io_thread"
 echo "Linux AIO support $linux_aio"
 echo "Install blobs     $blobs"
 echo "KVM support       $kvm"
+echo "KVM PIT support   $kvm_cap_pit"
 echo "KVM trace support $kvm_trace"
 echo "fdt support       $fdt"
 echo "preadv support    $preadv"
