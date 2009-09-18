@@ -1787,8 +1787,6 @@ if test "$werror" = "yes" ; then
     QEMU_CFLAGS="-Werror $QEMU_CFLAGS"
 fi
 
-QEMU_CFLAGS="-D__user= $QEMU_CFLAGS"
-
 if test "$solaris" = "no" ; then
     if $ld --version 2>/dev/null | grep "GNU ld" >/dev/null 2>/dev/null ; then
         LDFLAGS="-Wl,--warn-common $LDFLAGS"
