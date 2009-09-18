@@ -386,10 +386,3 @@ tarbin:
 
 # Include automatically generated dependency files
 -include $(wildcard *.d audio/*.d slirp/*.d block/*.d)
-
-build-targets-i386 = $(build-targets-x86)
-build-targets-x86_64 = $(build-targets-x86)
-build-targets-x86  =
-build-targets-ia64 =
-
-all: $(build-targets-$(ARCH))
