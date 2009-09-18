@@ -234,7 +234,6 @@ kerneldir=""
 aix="no"
 blobs="yes"
 pkgversion=" ($(kvm_version))"
-signalfd="no"
 eventfd="no"
 cpu_emulation="yes"
 kvm_kmod="no"
@@ -1608,6 +1607,7 @@ fi
 
 ##########################################
 # signalfd probe
+signalfd="no"
 cat > $TMPC << EOF
 #define _GNU_SOURCE
 #include <unistd.h>
@@ -2053,7 +2053,7 @@ if test "$fdt" = "yes" ; then
   echo "CONFIG_FDT=y" >> $config_host_mak
 fi
 if test "$signalfd" = "yes" ; then
-  echo "CONFIG_signalfd=y" >> $config_host_mak
+  echo "CONFIG_SIGNALFD=y" >> $config_host_mak
 fi
 if test "$eventfd" = "yes" ; then
   echo "CONFIG_eventfd=y" >> $config_host_mak
