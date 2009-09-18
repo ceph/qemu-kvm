@@ -236,7 +236,6 @@ blobs="yes"
 pkgversion=" ($(kvm_version))"
 cpu_emulation="yes"
 kvm_kmod="no"
-pkgversion=""
 check_utests="no"
 user_pie="no"
 
