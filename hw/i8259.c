@@ -464,17 +464,17 @@ static uint32_t elcr_ioport_read(void *opaque, uint32_t addr1)
     return s->elcr;
 }
 
+#ifdef KVM_CAP_IRQCHIP
 static void kvm_kernel_pic_save_to_user(const void *opaque);
 static int kvm_kernel_pic_load_from_user(void *opaque);
+#endif
 
 static const VMStateDescription vmstate_pic = {
     .name = "i8259",
     .version_id = 1,
 #ifdef KVM_CAP_IRQCHIP
-#ifdef TARGET_I386
     .pre_save = kvm_kernel_pic_save_to_user,
     .post_load = kvm_kernel_pic_load_from_user,
-#endif
 #endif
     .minimum_version_id = 1,
     .minimum_version_id_old = 1,
