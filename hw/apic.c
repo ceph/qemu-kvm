@@ -968,9 +968,9 @@ void qemu_kvm_load_lapic(CPUState *env)
 
 static void apic_pre_save(const void *opaque)
 {
+#ifdef KVM_CAP_IRQCHIP
     APICState *s = (void *)opaque;
 
-#ifdef KVM_CAP_IRQCHIP
     if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
         kvm_kernel_lapic_save_to_user(s);
     }
@@ -979,9 +979,9 @@ static void apic_pre_save(const void *opaque)
 
 static int apic_post_load(void *opaque)
 {
+#ifdef KVM_CAP_IRQCHIP
     APICState *s = opaque;
 
-#ifdef KVM_CAP_IRQCHIP
     if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
         kvm_kernel_lapic_load_from_user(s);
     }
