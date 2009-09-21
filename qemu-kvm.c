@@ -775,7 +775,6 @@ int kvm_set_irqchip(kvm_context_t kvm, struct kvm_irqchip *chip)
 static int handle_io(kvm_vcpu_context_t vcpu)
 {
     struct kvm_run *run = vcpu->run;
-    kvm_context_t kvm = vcpu->kvm;
     uint16_t addr = run->io.port;
     int i;
     void *p = (void *) run + run->io.data_offset;
@@ -785,13 +784,13 @@ static int handle_io(kvm_vcpu_context_t vcpu)
         case KVM_EXIT_IO_IN:
             switch (run->io.size) {
             case 1:
-                *(uint8_t *) p = cpu_inb(kvm->opaque, addr);
+                *(uint8_t *) p = cpu_inb(addr);
                 break;
             case 2:
-                *(uint16_t *) p = cpu_inw(kvm->opaque, addr);
+                *(uint16_t *) p = cpu_inw(addr);
                 break;
             case 4:
-                *(uint32_t *) p = cpu_inl(kvm->opaque, addr);
+                *(uint32_t *) p = cpu_inl(addr);
                 break;
             default:
                 fprintf(stderr, "bad I/O size %d\n", run->io.size);
@@ -801,13 +800,13 @@ static int handle_io(kvm_vcpu_context_t vcpu)
         case KVM_EXIT_IO_OUT:
             switch (run->io.size) {
             case 1:
-                cpu_outb(kvm->opaque, addr, *(uint8_t *) p);
+                cpu_outb(addr, *(uint8_t *) p);
                 break;
             case 2:
-                cpu_outw(kvm->opaque, addr, *(uint16_t *) p);
+                cpu_outw(addr, *(uint16_t *) p);
                 break;
             case 4:
-                cpu_outl(kvm->opaque, addr, *(uint32_t *) p);
+                cpu_outl(addr, *(uint32_t *) p);
                 break;
             default:
                 fprintf(stderr, "bad I/O size %d\n", run->io.size);
