@@ -2200,6 +2200,7 @@ DriveInfo *drive_init(QemuOpts *opts, void *opaque,
     case IF_IDE:
     case IF_SCSI:
     case IF_XEN:
+    case IF_NONE:
         switch(media) {
 	case MEDIA_DISK:
             if (cyls != 0) {
@@ -2220,7 +2221,6 @@ DriveInfo *drive_init(QemuOpts *opts, void *opaque,
         break;
     case IF_PFLASH:
     case IF_MTD:
-    case IF_NONE:
         break;
     case IF_VIRTIO:
         /* add virtio block device */
@@ -5801,17 +5801,15 @@ int main(int argc, char **argv, char **envp)
 
     for(i = 0; i < MAX_SERIAL_PORTS; i++) {
         const char *devname = serial_devices[i];
-        char label[32];
-        snprintf(label, sizeof(label), "serial%d", i);
         if (devname && strcmp(devname, "none")) {
+            char label[32];
+            snprintf(label, sizeof(label), "serial%d", i);
             serial_hds[i] = qemu_chr_open(label, devname, NULL);
-        } else {
-            serial_hds[i] = qemu_chr_open(label, "null", NULL);
-        }
-        if (!serial_hds[i]) {
-            fprintf(stderr, "qemu: could not open serial device '%s'\n",
-                    devname);
-            exit(1);
+            if (!serial_hds[i]) {
+                fprintf(stderr, "qemu: could not open serial device '%s'\n",
+                        devname);
+                exit(1);
+            }
         }
     }
 
