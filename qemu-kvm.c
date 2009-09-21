@@ -26,7 +26,7 @@
 #include <sys/syscall.h>
 #include <sys/mman.h>
 #include <sys/ioctl.h>
-#include <signal.h>
+#include "compatfd.h"
 #include <sys/signalfd.h>
 #include <sys/prctl.h>
 
