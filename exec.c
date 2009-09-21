@@ -2600,9 +2600,7 @@ void *qemu_get_ram_ptr(ram_addr_t addr)
     return block->host + (addr - block->offset);
 }
 
-/* Some of the softmmu routines need to translate from a host pointer
-   (typically a TLB entry) back to a ram offset.  */
-ram_addr_t qemu_ram_addr_from_host(void *ptr)
+int do_qemu_ram_addr_from_host(void *ptr, ram_addr_t *ram_addr)
 {
     RAMBlock *prev;
     RAMBlock **prevp;
@@ -2619,11 +2617,23 @@ ram_addr_t qemu_ram_addr_from_host(void *ptr)
         prev = block;
         block = block->next;
     }
-    if (!block) {
+    if (!block)
+        return -1;
+    *ram_addr = block->offset + (host - block->host);
+    return 0;
+}
+
+/* Some of the softmmu routines need to translate from a host pointer
+   (typically a TLB entry) back to a ram offset.  */
+ram_addr_t qemu_ram_addr_from_host(void *ptr)
+{
+    ram_addr_t ram_addr;
+
+    if (do_qemu_ram_addr_from_host(ptr, &ram_addr)) {
         fprintf(stderr, "Bad ram pointer %p\n", ptr);
         abort();
     }
-    return block->offset + (host - block->host);
+    return ram_addr;
 }
 
 static uint32_t unassigned_mem_readb(void *opaque, target_phys_addr_t addr)

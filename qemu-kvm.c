@@ -27,9 +27,22 @@
 #include <sys/mman.h>
 #include <sys/ioctl.h>
 #include <signal.h>
+#include <sys/signalfd.h>
+#include <sys/prctl.h>
 
 #define false 0
 #define true 1
+
+#ifndef PR_MCE_KILL
+#define PR_MCE_KILL 33
+#endif
+
+#ifndef BUS_MCEERR_AR
+#define BUS_MCEERR_AR 4
+#endif
+#ifndef BUS_MCEERR_AO
+#define BUS_MCEERR_AO 5
+#endif
 
 #define EXPECTED_KVM_API_VERSION 12
 
@@ -1509,6 +1522,66 @@ static void sig_ipi_handler(int n)
 {
 }
 
+static void hardware_memory_error(void)
+{
+    fprintf(stderr, "Hardware memory error!\n");
+    exit(1);
+}
+
+static void sigbus_reraise(void)
+{
+    sigset_t set;
+    struct sigaction action;
+
+    memset(&action, 0, sizeof(action));
+    action.sa_handler = SIG_DFL;
+    if (!sigaction(SIGBUS, &action, NULL)) {
+        raise(SIGBUS);
+        sigemptyset(&set);
+        sigaddset(&set, SIGBUS);
+        sigprocmask(SIG_UNBLOCK, &set, NULL);
+    }
+    perror("Failed to re-raise SIGBUS!\n");
+    abort();
+}
+
+static void sigbus_handler(int n, struct signalfd_siginfo *siginfo, void *ctx)
+{
+#if defined(KVM_CAP_MCE) && defined(TARGET_I386)
+    if (first_cpu->mcg_cap && siginfo->ssi_addr
+        && siginfo->ssi_code == BUS_MCEERR_AO) {
+        uint64_t status;
+        unsigned long paddr;
+        CPUState *cenv;
+
+        /* Hope we are lucky for AO MCE */
+        if (do_qemu_ram_addr_from_host((void *)siginfo->ssi_addr, &paddr)) {
+            fprintf(stderr, "Hardware memory error for memory used by "
+                    "QEMU itself instead of guest system!: %llx\n",
+                    (unsigned long long)siginfo->ssi_addr);
+            return;
+        }
+        status = MCI_STATUS_VAL | MCI_STATUS_UC | MCI_STATUS_EN
+            | MCI_STATUS_MISCV | MCI_STATUS_ADDRV | MCI_STATUS_S
+            | 0xc0;
+        kvm_inject_x86_mce(first_cpu, 9, status,
+                           MCG_STATUS_MCIP | MCG_STATUS_RIPV, paddr,
+                           (MCM_ADDR_PHYS << 6) | 0xc, 1);
+        for (cenv = first_cpu->next_cpu; cenv != NULL; cenv = cenv->next_cpu)
+            kvm_inject_x86_mce(cenv, 1, MCI_STATUS_VAL | MCI_STATUS_UC,
+                               MCG_STATUS_MCIP | MCG_STATUS_RIPV, 0, 0, 1);
+    } else
+#endif
+    {
+        if (siginfo->ssi_code == BUS_MCEERR_AO)
+            return;
+        else if (siginfo->ssi_code == BUS_MCEERR_AR)
+            hardware_memory_error();
+        else
+            sigbus_reraise();
+    }
+}
+
 static void on_vcpu(CPUState *env, void (*func)(void *data), void *data)
 {
     struct qemu_work_item wi;
@@ -1666,29 +1739,101 @@ static void flush_queued_work(CPUState *env)
     pthread_cond_broadcast(&qemu_work_cond);
 }
 
+static void kvm_on_sigbus(CPUState *env, siginfo_t *siginfo)
+{
+#if defined(KVM_CAP_MCE) && defined(TARGET_I386)
+    struct kvm_x86_mce mce = {
+            .bank = 9,
+    };
+    unsigned long paddr;
+    int r;
+
+    if (env->mcg_cap && siginfo->si_addr
+        && (siginfo->si_code == BUS_MCEERR_AR
+            || siginfo->si_code == BUS_MCEERR_AO)) {
+        if (siginfo->si_code == BUS_MCEERR_AR) {
+            /* Fake an Intel architectural Data Load SRAR UCR */
+            mce.status = MCI_STATUS_VAL | MCI_STATUS_UC | MCI_STATUS_EN
+                | MCI_STATUS_MISCV | MCI_STATUS_ADDRV | MCI_STATUS_S
+                | MCI_STATUS_AR | 0x134;
+            mce.misc = (MCM_ADDR_PHYS << 6) | 0xc;
+            mce.mcg_status = MCG_STATUS_MCIP | MCG_STATUS_EIPV;
+        } else {
+            /* Fake an Intel architectural Memory scrubbing UCR */
+            mce.status = MCI_STATUS_VAL | MCI_STATUS_UC | MCI_STATUS_EN
+                | MCI_STATUS_MISCV | MCI_STATUS_ADDRV | MCI_STATUS_S
+                | 0xc0;
+            mce.misc = (MCM_ADDR_PHYS << 6) | 0xc;
+            mce.mcg_status = MCG_STATUS_MCIP | MCG_STATUS_RIPV;
+        }
+        if (do_qemu_ram_addr_from_host((void *)siginfo->si_addr, &paddr)) {
+            fprintf(stderr, "Hardware memory error for memory used by "
+                    "QEMU itself instaed of guest system!\n");
+            /* Hope we are lucky for AO MCE */
+            if (siginfo->si_code == BUS_MCEERR_AO)
+                return;
+            else
+                hardware_memory_error();
+        }
+        mce.addr = paddr;
+        r = kvm_set_mce(env->kvm_cpu_state.vcpu_ctx, &mce);
+        if (r < 0) {
+            fprintf(stderr, "kvm_set_mce: %s\n", strerror(errno));
+            abort();
+        }
+    } else
+#endif
+    {
+        if (siginfo->si_code == BUS_MCEERR_AO)
+            return;
+        else if (siginfo->si_code == BUS_MCEERR_AR)
+            hardware_memory_error();
+        else
+            sigbus_reraise();
+    }
+}
+
 static void kvm_main_loop_wait(CPUState *env, int timeout)
 {
     struct timespec ts;
     int r, e;
     siginfo_t siginfo;
     sigset_t waitset;
-
-    pthread_mutex_unlock(&qemu_mutex);
+    sigset_t chkset;
 
     ts.tv_sec = timeout / 1000;
     ts.tv_nsec = (timeout % 1000) * 1000000;
     sigemptyset(&waitset);
     sigaddset(&waitset, SIG_IPI);
+    sigaddset(&waitset, SIGBUS);
 
-    r = sigtimedwait(&waitset, &siginfo, &ts);
-    e = errno;
+    do {
+        pthread_mutex_unlock(&qemu_mutex);
 
-    pthread_mutex_lock(&qemu_mutex);
+        r = sigtimedwait(&waitset, &siginfo, &ts);
+        e = errno;
 
-    if (r == -1 && !(e == EAGAIN || e == EINTR)) {
-        printf("sigtimedwait: %s\n", strerror(e));
-        exit(1);
-    }
+        pthread_mutex_lock(&qemu_mutex);
+
+        if (r == -1 && !(e == EAGAIN || e == EINTR)) {
+            printf("sigtimedwait: %s\n", strerror(e));
+            exit(1);
+        }
+
+        switch (r) {
+        case SIGBUS:
+            kvm_on_sigbus(env, &siginfo);
+            break;
+        default:
+            break;
+        }
+
+        r = sigpending(&chkset);
+        if (r == -1) {
+            printf("sigpending: %s\n", strerror(e));
+            exit(1);
+        }
+    } while (sigismember(&chkset, SIG_IPI) || sigismember(&chkset, SIGBUS));
 
     cpu_single_env = env;
     flush_queued_work(env);
@@ -1769,6 +1914,7 @@ static void setup_kernel_sigmask(CPUState *env)
 
     sigprocmask(SIG_BLOCK, NULL, &set);
     sigdelset(&set, SIG_IPI);
+    sigdelset(&set, SIGBUS);
 
     kvm_set_signal_mask(env->kvm_cpu_state.vcpu_ctx, &set);
 }
@@ -1896,12 +2042,20 @@ void kvm_hpet_enable_kpit(void)
 
 int kvm_init_ap(void)
 {
+    struct sigaction action;
+
 #ifdef TARGET_I386
     kvm_tpr_opt_setup();
 #endif
     qemu_add_vm_change_state_handler(kvm_vm_state_change_handler, NULL);
 
     signal(SIG_IPI, sig_ipi_handler);
+
+    memset(&action, 0, sizeof(action));
+    action.sa_flags = SA_SIGINFO;
+    action.sa_sigaction = (void (*)(int, siginfo_t*, void*))sigbus_handler;
+    sigaction(SIGBUS, &action, NULL);
+    prctl(PR_MCE_KILL, 1, 1);
     return 0;
 }
 
@@ -1962,7 +2116,10 @@ static void sigfd_handler(void *opaque)
         }
 
         sigaction(info.ssi_signo, NULL, &action);
-        if (action.sa_handler)
+        if ((action.sa_flags & SA_SIGINFO) && action.sa_sigaction)
+            action.sa_sigaction(info.ssi_signo,
+                                (siginfo_t *)&info, NULL);
+	else if (action.sa_handler)
             action.sa_handler(info.ssi_signo);
 
     }
@@ -2012,6 +2169,7 @@ int kvm_main_loop(void)
     sigemptyset(&mask);
     sigaddset(&mask, SIGIO);
     sigaddset(&mask, SIGALRM);
+    sigaddset(&mask, SIGBUS);
     sigprocmask(SIG_BLOCK, &mask, NULL);
 
     sigfd = qemu_signalfd(&mask);
@@ -2512,6 +2670,7 @@ int kvm_set_boot_cpu_id(uint32_t id)
 struct kvm_x86_mce_data {
     CPUState *env;
     struct kvm_x86_mce *mce;
+    int abort_on_error;
 };
 
 static void kvm_do_inject_x86_mce(void *_data)
@@ -2520,13 +2679,17 @@ static void kvm_do_inject_x86_mce(void *_data)
     int r;
 
     r = kvm_set_mce(data->env->kvm_cpu_state.vcpu_ctx, data->mce);
-    if (r < 0)
+    if (r < 0) {
         perror("kvm_set_mce FAILED");
+        if (data->abort_on_error)
+            abort();
+    }
 }
 #endif
 
 void kvm_inject_x86_mce(CPUState *cenv, int bank, uint64_t status,
-                        uint64_t mcg_status, uint64_t addr, uint64_t misc)
+                        uint64_t mcg_status, uint64_t addr, uint64_t misc,
+                        int abort_on_error)
 {
 #ifdef KVM_CAP_MCE
     struct kvm_x86_mce mce = {
@@ -2539,9 +2702,17 @@ void kvm_inject_x86_mce(CPUState *cenv, int bank, uint64_t status,
     struct kvm_x86_mce_data data = {
         .env = cenv,
         .mce = &mce,
+        .abort_on_error = abort_on_error,
     };
 
+    if (!cenv->mcg_cap) {
+        fprintf(stderr, "MCE support is not enabled!\n");
+        return;
+    }
     on_vcpu(cenv, kvm_do_inject_x86_mce, &data);
+#else
+    if (abort_on_error)
+        abort();
 #endif
 }
 #endif

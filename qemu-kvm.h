@@ -625,9 +625,11 @@ int kvm_inject_nmi(kvm_vcpu_context_t vcpu);
  * \param mcg_status MSR_MCG_STATUS
  * \param addr MSR_MCI_ADDR
  * \param misc MSR_MCI_MISC
+ * \param abort_on_error abort on error
  */
 void kvm_inject_x86_mce(CPUState *cenv, int bank, uint64_t status,
-                        uint64_t mcg_status, uint64_t addr, uint64_t misc);
+                        uint64_t mcg_status, uint64_t addr, uint64_t misc,
+                        int abort_on_error);
 
 /*!
  * \brief Query wheather in kernel pit is used
@@ -943,8 +945,11 @@ static inline int kvm_init(int smp_cpus)
 
 static inline void kvm_inject_x86_mce(CPUState *cenv, int bank,
                                       uint64_t status, uint64_t mcg_status,
-                                      uint64_t addr, uint64_t misc)
+                                      uint64_t addr, uint64_t misc,
+                                      int abort_on_error)
 {
+    if (abort_on_error)
+        abort();
 }
 
 
