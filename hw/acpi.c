@@ -753,6 +753,7 @@ void piix4_acpi_system_hot_add_init(const char *cpu_model)
     qemu_system_device_hot_add_register(piix4_device_hot_add);
 }
 
+#if defined(TARGET_I386)
 static void enable_processor(struct gpe_regs *g, int cpu)
 {
     g->sts |= 4;
@@ -765,7 +766,6 @@ static void disable_processor(struct gpe_regs *g, int cpu)
     g->cpus_sts[cpu/8] &= ~(1 << (cpu%8));
 }
 
-#if defined(TARGET_I386) || defined(TARGET_X86_64)
 void qemu_system_cpu_hot_add(int cpu, int state)
 {
     CPUState *env;
