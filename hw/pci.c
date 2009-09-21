@@ -1043,15 +1043,20 @@ void pci_qdev_register_many(PCIDeviceInfo *info)
     }
 }
 
-PCIDevice *pci_create_simple(PCIBus *bus, int devfn, const char *name)
+PCIDevice *pci_create_noinit(PCIBus *bus, int devfn, const char *name)
 {
     DeviceState *dev;
 
     dev = qdev_create(&bus->qbus, name);
     qdev_prop_set_uint32(dev, "addr", devfn);
-    qdev_init(dev);
+    return DO_UPCAST(PCIDevice, qdev, dev);
+}
 
-    return (PCIDevice *)dev;
+PCIDevice *pci_create_simple(PCIBus *bus, int devfn, const char *name)
+{
+    PCIDevice *dev = pci_create_noinit(bus, devfn, name);
+    qdev_init(&dev->qdev);
+    return dev;
 }
 
 int pci_enable_capability_support(PCIDevice *pci_dev,

@@ -33,6 +33,7 @@
 #include "boards.h"
 #include "qemu-log.h"
 #include "ide.h"
+#include "loader.h"
 
 //#define HARD_DEBUG_PPC_IO
 //#define DEBUG_PPC_IO
@@ -459,7 +460,7 @@ static void PPC_prep_io_writeb (void *opaque, target_phys_addr_t addr,
     sysctrl_t *sysctrl = opaque;
 
     addr = prep_IO_address(sysctrl, addr);
-    cpu_outb(NULL, addr, value);
+    cpu_outb(addr, value);
 }
 
 static uint32_t PPC_prep_io_readb (void *opaque, target_phys_addr_t addr)
@@ -468,7 +469,7 @@ static uint32_t PPC_prep_io_readb (void *opaque, target_phys_addr_t addr)
     uint32_t ret;
 
     addr = prep_IO_address(sysctrl, addr);
-    ret = cpu_inb(NULL, addr);
+    ret = cpu_inb(addr);
 
     return ret;
 }
@@ -483,7 +484,7 @@ static void PPC_prep_io_writew (void *opaque, target_phys_addr_t addr,
     value = bswap16(value);
 #endif
     PPC_IO_DPRINTF("0x" TARGET_FMT_plx " => 0x%08" PRIx32 "\n", addr, value);
-    cpu_outw(NULL, addr, value);
+    cpu_outw(addr, value);
 }
 
 static uint32_t PPC_prep_io_readw (void *opaque, target_phys_addr_t addr)
@@ -492,7 +493,7 @@ static uint32_t PPC_prep_io_readw (void *opaque, target_phys_addr_t addr)
     uint32_t ret;
 
     addr = prep_IO_address(sysctrl, addr);
-    ret = cpu_inw(NULL, addr);
+    ret = cpu_inw(addr);
 #ifdef TARGET_WORDS_BIGENDIAN
     ret = bswap16(ret);
 #endif
@@ -511,7 +512,7 @@ static void PPC_prep_io_writel (void *opaque, target_phys_addr_t addr,
     value = bswap32(value);
 #endif
     PPC_IO_DPRINTF("0x" TARGET_FMT_plx " => 0x%08" PRIx32 "\n", addr, value);
-    cpu_outl(NULL, addr, value);
+    cpu_outl(addr, value);
 }
 
 static uint32_t PPC_prep_io_readl (void *opaque, target_phys_addr_t addr)
@@ -520,7 +521,7 @@ static uint32_t PPC_prep_io_readl (void *opaque, target_phys_addr_t addr)
     uint32_t ret;
 
     addr = prep_IO_address(sysctrl, addr);
-    ret = cpu_inl(NULL, addr);
+    ret = cpu_inl(addr);
 #ifdef TARGET_WORDS_BIGENDIAN
     ret = bswap32(ret);
 #endif
@@ -572,7 +573,7 @@ static void ppc_prep_init (ram_addr_t ram_size,
 
     /* init CPUs */
     if (cpu_model == NULL)
-        cpu_model = "default";
+        cpu_model = "602";
     for (i = 0; i < smp_cpus; i++) {
         env = cpu_init(cpu_model);
         if (!env) {
@@ -670,6 +671,9 @@ static void ppc_prep_init (ram_addr_t ram_size,
     }
     i8259 = i8259_init(first_cpu->irq_inputs[PPC6xx_INPUT_INT]);
     pci_bus = pci_prep_init(i8259);
+    /* Hmm, prep has no pci-isa bridge ??? */
+    isa_bus_new(NULL);
+    isa_bus_irqs(i8259);
     //    pci_bus = i440fx_init();
     /* Register 8 MB of ISA IO space (needed for non-contiguous map) */
     PPC_io_memory = cpu_register_io_memory(PPC_prep_io_read,
@@ -707,7 +711,7 @@ static void ppc_prep_init (ram_addr_t ram_size,
     }
 
     for(i = 0; i < MAX_IDE_BUS; i++) {
-        isa_ide_init(ide_iobase[i], ide_iobase2[i], i8259[ide_irq[i]],
+        isa_ide_init(ide_iobase[i], ide_iobase2[i], ide_irq[i],
                      hd[2 * i],
 		     hd[2 * i + 1]);
     }

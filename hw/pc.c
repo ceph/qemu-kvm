@@ -37,6 +37,8 @@
 #include "watchdog.h"
 #include "smbios.h"
 #include "ide.h"
+#include "loader.h"
+#include "elf.h"
 #include "device-assignment.h"
 
 #include "qemu-kvm.h"
@@ -663,7 +665,8 @@ static int load_multiboot(void *fw_cfg,
         uint64_t elf_entry;
         int kernel_size;
         fclose(f);
-        kernel_size = load_elf(kernel_filename, 0, &elf_entry, NULL, NULL);
+        kernel_size = load_elf(kernel_filename, 0, &elf_entry, NULL, NULL,
+                               0, ELF_MACHINE, 0);
         if (kernel_size < 0) {
             fprintf(stderr, "Error while loading elf kernel\n");
             exit(1);
@@ -1395,8 +1398,7 @@ static void pc_init1(ram_addr_t ram_size,
         pci_piix3_ide_init(pci_bus, hd, piix3_devfn + 1);
     } else {
         for(i = 0; i < MAX_IDE_BUS; i++) {
-            isa_ide_init(ide_iobase[i], ide_iobase2[i],
-                         isa_reserve_irq(ide_irq[i]),
+            isa_ide_init(ide_iobase[i], ide_iobase2[i], ide_irq[i],
 	                 hd[MAX_IDE_DEVS * i], hd[MAX_IDE_DEVS * i + 1]);
         }
     }
