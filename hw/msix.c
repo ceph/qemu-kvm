@@ -121,6 +121,13 @@ static int kvm_msix_add(PCIDevice *dev, unsigned vector)
     struct kvm_irq_routing_entry *entry = dev->msix_irq_entries + vector;
     int r;
 
+    if (!kvm_has_gsi_routing(kvm_context)) {
+        fprintf(stderr, "Warning: no MSI-X support found. "
+                "At least kernel 2.6.30 is required for MSI-X support.\n"
+               );
+        return -EOPNOTSUPP;
+    }
+
     r = kvm_get_irq_route_gsi(kvm_context);
     if (r < 0) {
         fprintf(stderr, "%s: kvm_get_irq_route_gsi failed: %s\n", __func__, strerror(-r));
