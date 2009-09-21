@@ -165,8 +165,8 @@ endif
 # System emulator target
 ifdef CONFIG_SOFTMMU
 
-obj-y = vl.o monitor.o pci.o loader.o isa_mmio.o machine.o \
-        gdbstub.o gdbstub-xml.o msix.o ioport.o qemu-config.o
+obj-y = vl.o monitor.o pci.o isa_mmio.o machine.o \
+        gdbstub.o gdbstub-xml.o msix.o ioport.o
 # virtio has to be here due to weird dependency between PCI and virtio-net.
 # need to fix this properly
 obj-y += virtio-blk.o virtio-balloon.o virtio-net.o virtio-console.o virtio-pci.o
@@ -199,9 +199,6 @@ obj-y += ne2000.o
 obj-y += pcnet.o
 obj-y += rtl8139.o
 obj-y += e1000.o
-
-# PCI watchdog devices
-obj-y += wdt_i6300esb.o
 
 # Hardware support
 obj-i386-y = ide/core.o ide/qdev.o ide/isa.o ide/pci.o
