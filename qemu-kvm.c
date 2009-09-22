@@ -1605,6 +1605,16 @@ static void on_vcpu(CPUState *env, void (*func)(void *data), void *data)
         qemu_cond_wait(&qemu_work_cond);
 }
 
+void kvm_arch_get_registers(CPUState *env)
+{
+	kvm_arch_save_regs(env);
+	kvm_arch_save_mpstate(env);
+#ifdef KVM_CAP_MP_STATE
+	if (kvm_irqchip_in_kernel(kvm_context))
+		env->halted = (env->mp_state == KVM_MP_STATE_HALTED);
+#endif
+}
+
 static void do_kvm_cpu_synchronize_state(void *_env)
 {
     CPUState *env = _env;
