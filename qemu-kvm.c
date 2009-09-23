@@ -701,7 +701,7 @@ int kvm_get_dirty_pages_range(kvm_context_t kvm, unsigned long phys_addr,
     for (i = 0; i < KVM_MAX_NUM_MEM_REGIONS; ++i) {
         if ((slots[i].len && (uint64_t) slots[i].phys_addr >= phys_addr)
             && ((uint64_t) slots[i].phys_addr + slots[i].len <= end_addr)) {
-            buf = qemu_malloc((slots[i].len / 4096 + 7) / 8 + 2);
+            buf = qemu_malloc(BITMAP_SIZE(slots[i].len));
             r = kvm_get_map(kvm, KVM_GET_DIRTY_LOG, i, buf);
             if (r) {
                 qemu_free(buf);
