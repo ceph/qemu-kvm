@@ -111,6 +111,7 @@ controls = [
             5: 'Enable VPID',
             6: 'WBINVD exiting',
             7: 'Unrestricted guest',
+            10: 'PAUSE-loop exiting',
             },
         cap_msr = MSR_IA32_VMX_PROCBASED_CTLS2,
         ),
