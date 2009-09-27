@@ -27,7 +27,6 @@
 #include <sys/mman.h>
 #include <sys/ioctl.h>
 #include "compatfd.h"
-#include <sys/signalfd.h>
 #include <sys/prctl.h>
 
 #define false 0
@@ -1544,7 +1543,8 @@ static void sigbus_reraise(void)
     abort();
 }
 
-static void sigbus_handler(int n, struct signalfd_siginfo *siginfo, void *ctx)
+static void sigbus_handler(int n, struct qemu_signalfd_siginfo *siginfo,
+                           void *ctx)
 {
 #if defined(KVM_CAP_MCE) && defined(TARGET_I386)
     if (first_cpu->mcg_cap && siginfo->ssi_addr
