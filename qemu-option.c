@@ -267,7 +267,7 @@ int set_option_parameter(QEMUOptionParameter *list, const char *name,
     // Process parameter
     switch (list->type) {
     case OPT_FLAG:
-        if (-1 == parse_option_bool(name, value, &flag))
+        if (parse_option_bool(name, value, &flag) == -1)
             return -1;
         list->value.n = flag;
         break;
@@ -282,7 +282,7 @@ int set_option_parameter(QEMUOptionParameter *list, const char *name,
         break;
 
     case OPT_SIZE:
-        if (-1 == parse_option_size(name, value, &list->value.n))
+        if (parse_option_size(name, value, &list->value.n) == -1)
             return -1;
         break;
 
@@ -472,7 +472,7 @@ struct QemuOpt {
 
     QemuOptDesc  *desc;
     union {
-        int      bool;
+        int      boolean;
         uint64_t uint;
     } value;
 
@@ -512,7 +512,7 @@ int qemu_opt_get_bool(QemuOpts *opts, const char *name, int defval)
     if (opt == NULL)
         return defval;
     assert(opt->desc && opt->desc->type == QEMU_OPT_BOOL);
-    return opt->value.bool;
+    return opt->value.boolean;
 }
 
 uint64_t qemu_opt_get_number(QemuOpts *opts, const char *name, uint64_t defval)
@@ -544,7 +544,7 @@ static int qemu_opt_parse(QemuOpt *opt)
         /* nothing */
         return 0;
     case QEMU_OPT_BOOL:
-        return parse_option_bool(opt->name, opt->str, &opt->value.bool);
+        return parse_option_bool(opt->name, opt->str, &opt->value.boolean);
     case QEMU_OPT_NUMBER:
         return parse_option_number(opt->name, opt->str, &opt->value.uint);
     case QEMU_OPT_SIZE:
@@ -745,7 +745,7 @@ int qemu_opts_do_parse(QemuOpts *opts, const char *params, const char *firstname
         }
         if (strcmp(option, "id") != 0) {
             /* store and parse */
-            if (-1 == qemu_opt_set(opts, option, value)) {
+            if (qemu_opt_set(opts, option, value) == -1) {
                 return -1;
             }
         }

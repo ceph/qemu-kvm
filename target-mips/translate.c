@@ -7660,6 +7660,10 @@ static void decode_opc (CPUState *env, DisasContext *ctx)
         gen_goto_tb(ctx, 1, ctx->pc + 4);
         gen_set_label(l1);
     }
+
+    if (unlikely(qemu_loglevel_mask(CPU_LOG_TB_OP)))
+        tcg_gen_debug_insn_start(ctx->pc);
+
     op = MASK_OP_MAJOR(ctx->opcode);
     rs = (ctx->opcode >> 21) & 0x1f;
     rt = (ctx->opcode >> 16) & 0x1f;
@@ -8298,8 +8302,7 @@ gen_intermediate_code_internal (CPUState *env, TranslationBlock *tb,
         qemu_log("search pc %d\n", search_pc);
 
     pc_start = tb->pc;
-    /* Leave some spare opc slots for branch handling. */
-    gen_opc_end = gen_opc_buf + OPC_MAX_SIZE - 16;
+    gen_opc_end = gen_opc_buf + OPC_MAX_SIZE;
     ctx.pc = pc_start;
     ctx.saved_pc = -1;
     ctx.singlestep_enabled = env->singlestep_enabled;
