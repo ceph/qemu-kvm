@@ -748,7 +748,7 @@ AssignedDevInfo *get_assigned_device(int pcibus, int slot)
 /* The pci config space got updated. Check if irq numbers have changed
  * for our devices
  */
-void assigned_dev_update_irqs()
+void assigned_dev_update_irqs(void)
 {
     AssignedDevInfo *adev;
 
