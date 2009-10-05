@@ -2969,6 +2969,12 @@ void helper_rdtsc(void)
     EDX = (uint32_t)(val >> 32);
 }
 
+void helper_rdtscp(void)
+{
+    helper_rdtsc();
+    ECX = (uint32_t)(env->tsc_aux);
+}
+
 void helper_rdpmc(void)
 {
     if ((env->cr[4] & CR4_PCE_MASK) && ((env->hflags & HF_CPL_MASK) != 0)) {
@@ -3107,6 +3113,9 @@ void helper_wrmsr(void)
             && (val == 0 || val == ~(uint64_t)0))
             env->mcg_ctl = val;
         break;
+    case MSR_TSC_AUX:
+        env->tsc_aux = val;
+        break;
     default:
         if ((uint32_t)ECX >= MSR_MC0_CTL
             && (uint32_t)ECX < MSR_MC0_CTL + (4 * env->mcg_cap & 0xff)) {
@@ -3176,6 +3185,9 @@ void helper_rdmsr(void)
         break;
     case MSR_KERNELGSBASE:
         val = env->kernelgsbase;
+        break;
+    case MSR_TSC_AUX:
+        val = env->tsc_aux;
         break;
 #endif
     case MSR_MTRRphysBase(0):
@@ -4338,6 +4350,11 @@ void helper_fxsave(target_ulong ptr, int data64)
     CPU86_LDouble tmp;
     target_ulong addr;
 
+    /* The operand must be 16 byte aligned */
+    if (ptr & 0xf) {
+        raise_exception(EXCP0D_GPF);
+    }
+
     fpus = (env->fpus & ~0x3800) | (env->fpstt & 0x7) << 11;
     fptag = 0;
     for(i = 0; i < 8; i++) {
@@ -4393,6 +4410,11 @@ void helper_fxrstor(target_ulong ptr, int data64)
     int i, fpus, fptag, nb_xmm_regs;
     CPU86_LDouble tmp;
     target_ulong addr;
+
+    /* The operand must be 16 byte aligned */
+    if (ptr & 0xf) {
+        raise_exception(EXCP0D_GPF);
+    }
 
     env->fpuc = lduw(ptr);
     fpus = lduw(ptr + 2);

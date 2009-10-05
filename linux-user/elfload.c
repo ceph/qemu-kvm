@@ -1454,7 +1454,7 @@ int load_elf_binary(struct linux_binprm * bprm, struct target_pt_regs * regs,
 	    }
 
 #if 0
-	    printf("Using ELF interpreter %s\n", elf_interpreter);
+	    printf("Using ELF interpreter %s\n", path(elf_interpreter));
 #endif
 	    if (retval >= 0) {
 		retval = open(path(elf_interpreter), O_RDONLY);
@@ -1476,7 +1476,7 @@ int load_elf_binary(struct linux_binprm * bprm, struct target_pt_regs * regs,
 	    }
 	    if (retval >= 0) {
 		interp_ex = *((struct exec *) bprm->buf); /* aout exec-header */
-		interp_elf_ex=*((struct elfhdr *) bprm->buf); /* elf exec-header */
+		interp_elf_ex = *((struct elfhdr *) bprm->buf); /* elf exec-header */
 	    }
 	    if (retval < 0) {
 		perror("load_elf_binary3");

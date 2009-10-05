@@ -67,7 +67,7 @@ static void patch_reloc(uint8_t *code_ptr, int type,
 
 static TCGOpDef tcg_op_defs[] = {
 #define DEF(s, n, copy_size) { #s, 0, 0, n, n, 0, copy_size },
-#define DEF2(s, iargs, oargs, cargs, flags) { #s, iargs, oargs, cargs, iargs + oargs + cargs, flags, 0 },
+#define DEF2(s, oargs, iargs, cargs, flags) { #s, oargs, iargs, cargs, iargs + oargs + cargs, flags, 0 },
 #include "tcg-opc.h"
 #undef DEF
 #undef DEF2
@@ -1086,8 +1086,7 @@ static void tcg_liveness_analysis(TCGContext *s)
 
     nb_ops = gen_opc_ptr - gen_opc_buf;
 
-    /* XXX: make it really dynamic */
-    s->op_dead_iargs = tcg_malloc(OPC_BUF_SIZE * sizeof(uint16_t));
+    s->op_dead_iargs = tcg_malloc(nb_ops * sizeof(uint16_t));
     
     dead_temps = tcg_malloc(s->nb_temps);
     memset(dead_temps, 1, s->nb_temps);
