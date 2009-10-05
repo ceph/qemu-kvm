@@ -82,23 +82,37 @@ static void setup_smp_id(void *data)
     asm ("mov %0, %%gs:0" : : "r"(apic_id()) : "memory");
 }
 
-void on_cpu(int cpu, void (*function)(void *data), void *data)
+static void __on_cpu(int cpu, void (*function)(void *data), void *data,
+                     int wait)
 {
     spin_lock(&ipi_lock);
     if (cpu == smp_id())
 	function(data);
     else {
+	ipi_done = 0;
 	ipi_function = function;
 	ipi_data = data;
 	apic_icr_write(APIC_INT_ASSERT | APIC_DEST_PHYSICAL | APIC_DM_FIXED
                        | IPI_VECTOR,
                        cpu);
-	while (!ipi_done)
-	    ;
-	ipi_done = 0;
+	if (wait) {
+		while (!ipi_done)
+		    ;
+	}
     }
     spin_unlock(&ipi_lock);
 }
+
+void on_cpu(int cpu, void (*function)(void *data), void *data)
+{
+    __on_cpu(cpu, function, data, 1);
+}
+
+void on_cpu_async(int cpu, void (*function)(void *data), void *data)
+{
+    __on_cpu(cpu, function, data, 0);
+}
+
 
 void smp_init(void)
 {
