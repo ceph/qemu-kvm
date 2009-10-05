@@ -607,7 +607,8 @@ static void free_assigned_device(AssignedDevInfo *adev)
             dev->real_device.config_fd = 0;
         }
 
-        pci_unregister_device(&dev->dev, 1);
+        printf("warning: assigned device hotunplug is broken\n");
+        //pci_unregister_device(&dev->dev, 1);
 #ifdef KVM_CAP_IRQ_ROUTING
         free_dev_irq_entries(dev);
 #endif
