@@ -210,7 +210,6 @@ struct PCIDevice {
     /* do not access the following fields */
     PCIConfigReadFunc *config_read;
     PCIConfigWriteFunc *config_write;
-    PCIUnregisterFunc *unregister;
 
     /* IRQ objects for the INTA-INTD pins.  */
     qemu_irq *irq;
@@ -259,7 +258,6 @@ PCIDevice *pci_register_device(PCIBus *bus, const char *name,
                                int instance_size, int devfn,
                                PCIConfigReadFunc *config_read,
                                PCIConfigWriteFunc *config_write);
-int pci_unregister_device(PCIDevice *pci_dev, int assigned);
 
 void pci_register_bar(PCIDevice *pci_dev, int region_num,
                             uint32_t size, int type,

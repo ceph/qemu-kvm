@@ -19,10 +19,16 @@ typedef struct BusState BusState;
 
 typedef struct BusInfo BusInfo;
 
+enum DevState {
+    DEV_STATE_CREATED = 1,
+    DEV_STATE_INITIALIZED,
+};
+
 /* This structure should not be accessed directly.  We declare it here
    so that it can be embedded in individual device state structures.  */
 struct DeviceState {
     const char *id;
+    enum DevState state;
     DeviceInfo *info;
     BusState *parent_bus;
     int num_gpio_out;
@@ -102,6 +108,7 @@ BusState *qdev_get_child_bus(DeviceState *dev, const char *name);
 /*** Device API.  ***/
 
 typedef int (*qdev_initfn)(DeviceState *dev, DeviceInfo *info);
+typedef int (*qdev_exitfn)(DeviceState *dev);
 
 struct DeviceInfo {
     const char *name;
@@ -119,6 +126,7 @@ struct DeviceInfo {
 
     /* Private to qdev / bus.  */
     qdev_initfn init;
+    qdev_exitfn exit;
     BusInfo *bus_info;
     struct DeviceInfo *next;
 };
@@ -149,6 +157,7 @@ BusState *qdev_get_parent_bus(DeviceState *dev);
 void qbus_create_inplace(BusState *bus, BusInfo *info,
                          DeviceState *parent, const char *name);
 BusState *qbus_create(BusInfo *info, DeviceState *parent, const char *name);
+void qbus_free(BusState *bus);
 
 #define FROM_QBUS(type, dev) DO_UPCAST(type, qbus, dev)
 
