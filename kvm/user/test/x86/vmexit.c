@@ -80,21 +80,37 @@ static struct test {
 	void (*func)(void);
 	const char *name;
 	int (*valid)(void);
+	int parallel;
 } tests[] = {
-	{ cpuid, "cpuid", },
-	{ vmcall, "vmcall", },
-	{ mov_from_cr8, "mov_from_cr8" },
-	{ mov_to_cr8, "mov_to_cr8" },
-	{ ipi, "ipi", is_smp },
-	{ ipi_halt, "ipi+halt", is_smp },
+	{ cpuid, "cpuid", .parallel = 1,  },
+	{ vmcall, "vmcall", .parallel = 1, },
+	{ mov_from_cr8, "mov_from_cr8", .parallel = 1, },
+	{ mov_to_cr8, "mov_to_cr8" , .parallel = 1, },
+	{ ipi, "ipi", is_smp, .parallel = 0, },
+	{ ipi_halt, "ipi+halt", is_smp, .parallel = 0, },
 };
+
+unsigned iterations;
+volatile int nr_cpus_done;
+
+static void run_test(void *_func)
+{
+    int i;
+    void (*func)(void) = _func;
+
+    for (i = 0; i < iterations; ++i)
+        func();
+
+    nr_cpus_done++;
+}
 
 static void do_test(struct test *test)
 {
 	int i;
 	unsigned long long t1, t2;
-	unsigned iterations = 32;
         void (*func)(void) = test->func;
+
+        iterations = 32;
 
         if (test->valid && !test->valid()) {
 		printf("%s (skipped)\n", test->name);
@@ -104,8 +120,17 @@ static void do_test(struct test *test)
 	do {
 		iterations *= 2;
 		t1 = rdtsc();
-		for (i = 0; i < iterations; ++i)
-			func();
+
+		if (!test->parallel) {
+			for (i = 0; i < iterations; ++i)
+				func();
+		} else {
+			nr_cpus_done = 0;
+			for (i = cpu_count(); i > 0; i--)
+				on_cpu_async(i-1, run_test, func);
+			while (nr_cpus_done < cpu_count())
+				;
+		}
 		t2 = rdtsc();
 	} while ((t2 - t1) < GOAL);
 	printf("%s %d\n", test->name, (int)((t2 - t1) / iterations));
