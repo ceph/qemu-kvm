@@ -27,10 +27,6 @@ static void cpu_get_seg(QEMUFile *f, SegmentCache *dt)
 void cpu_save(QEMUFile *f, void *opaque)
 {
     CPUState *env = opaque;
-    uint16_t fptag, fpus, fpuc, fpregs_format;
-    uint32_t hflags;
-    int32_t a20_mask;
-    int32_t pending_irq;
     int i, bit;
 
     cpu_synchronize_state(env);
@@ -39,27 +35,25 @@ void cpu_save(QEMUFile *f, void *opaque)
         qemu_put_betls(f, &env->regs[i]);
     qemu_put_betls(f, &env->eip);
     qemu_put_betls(f, &env->eflags);
-    hflags = env->hflags; /* XXX: suppress most of the redundant hflags */
-    qemu_put_be32s(f, &hflags);
+    qemu_put_be32s(f, &env->hflags);
 
     /* FPU */
-    fpuc = env->fpuc;
-    fpus = (env->fpus & ~0x3800) | (env->fpstt & 0x7) << 11;
-    fptag = 0;
+    env->fpus_vmstate = (env->fpus & ~0x3800) | (env->fpstt & 0x7) << 11;
+    env->fptag_vmstate = 0;
     for(i = 0; i < 8; i++) {
-        fptag |= ((!env->fptags[i]) << i);
+        env->fptag_vmstate |= ((!env->fptags[i]) << i);
     }
 
-    qemu_put_be16s(f, &fpuc);
-    qemu_put_be16s(f, &fpus);
-    qemu_put_be16s(f, &fptag);
+    qemu_put_be16s(f, &env->fpuc);
+    qemu_put_be16s(f, &env->fpus_vmstate);
+    qemu_put_be16s(f, &env->fptag_vmstate);
 
 #ifdef USE_X86LDOUBLE
-    fpregs_format = 0;
+    env->fpregs_format_vmstate = 0;
 #else
-    fpregs_format = 1;
+    env->fpregs_format_vmstate = 1;
 #endif
-    qemu_put_be16s(f, &fpregs_format);
+    qemu_put_be16s(f, &env->fpregs_format_vmstate);
 
     for(i = 0; i < 8; i++) {
 #ifdef USE_X86LDOUBLE
@@ -101,8 +95,7 @@ void cpu_save(QEMUFile *f, void *opaque)
         qemu_put_betls(f, &env->dr[i]);
 
     /* MMU */
-    a20_mask = (int32_t) env->a20_mask;
-    qemu_put_sbe32s(f, &a20_mask);
+    qemu_put_sbe32s(f, &env->a20_mask);
 
     /* XMM */
     qemu_put_be32s(f, &env->mxcsr);
@@ -147,29 +140,24 @@ void cpu_save(QEMUFile *f, void *opaque)
 
     /* There can only be one pending IRQ set in the bitmap at a time, so try
        to find it and save its number instead (-1 for none). */
-    pending_irq = -1;
+    env->pending_irq_vmstate = -1;
     for (i = 0; i < ARRAY_SIZE(env->interrupt_bitmap); i++) {
         if (env->interrupt_bitmap[i]) {
             bit = ctz64(env->interrupt_bitmap[i]);
-            pending_irq = i * 64 + bit;
+            env->pending_irq_vmstate = i * 64 + bit;
             break;
         }
     }
-    qemu_put_sbe32s(f, &pending_irq);
+    qemu_put_sbe32s(f, &env->pending_irq_vmstate);
     qemu_put_be32s(f, &env->mp_state);
     qemu_put_be64s(f, &env->tsc);
 
     /* MCE */
     qemu_put_be64s(f, &env->mcg_cap);
-    if (env->mcg_cap && !kvm_enabled()) {
-        qemu_put_be64s(f, &env->mcg_status);
-        qemu_put_be64s(f, &env->mcg_ctl);
-        for (i = 0; i < (env->mcg_cap & 0xff); i++) {
-            qemu_put_be64s(f, &env->mce_banks[4*i]);
-            qemu_put_be64s(f, &env->mce_banks[4*i + 1]);
-            qemu_put_be64s(f, &env->mce_banks[4*i + 2]);
-            qemu_put_be64s(f, &env->mce_banks[4*i + 3]);
-        }
+    qemu_put_be64s(f, &env->mcg_status);
+    qemu_put_be64s(f, &env->mcg_ctl);
+    for (i = 0; i < MCE_BANKS_DEF * 4; i++) {
+        qemu_put_be64s(f, &env->mce_banks[i]);
     }
     qemu_put_be64s(f, &env->tsc_aux);
  }
@@ -202,10 +190,6 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
 {
     CPUState *env = opaque;
     int i, guess_mmx;
-    uint32_t hflags;
-    uint16_t fpus, fpuc, fptag, fpregs_format;
-    int32_t a20_mask;
-    int32_t pending_irq;
 
     cpu_synchronize_state(env);
     if (version_id < 3 || version_id > CPU_SAVE_VERSION)
@@ -214,22 +198,22 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
         qemu_get_betls(f, &env->regs[i]);
     qemu_get_betls(f, &env->eip);
     qemu_get_betls(f, &env->eflags);
-    qemu_get_be32s(f, &hflags);
+    qemu_get_be32s(f, &env->hflags);
 
-    qemu_get_be16s(f, &fpuc);
-    qemu_get_be16s(f, &fpus);
-    qemu_get_be16s(f, &fptag);
-    qemu_get_be16s(f, &fpregs_format);
+    qemu_get_be16s(f, &env->fpuc);
+    qemu_get_be16s(f, &env->fpus_vmstate);
+    qemu_get_be16s(f, &env->fptag_vmstate);
+    qemu_get_be16s(f, &env->fpregs_format_vmstate);
 
     /* NOTE: we cannot always restore the FPU state if the image come
        from a host with a different 'USE_X86LDOUBLE' define. We guess
        if we are in an MMX state to restore correctly in that case. */
-    guess_mmx = ((fptag == 0xff) && (fpus & 0x3800) == 0);
+    guess_mmx = ((env->fptag_vmstate == 0xff) && (env->fpus_vmstate & 0x3800) == 0);
     for(i = 0; i < 8; i++) {
         uint64_t mant;
         uint16_t exp;
 
-        switch(fpregs_format) {
+        switch(env->fpregs_format_vmstate) {
         case 0:
             mant = qemu_get_be64(f);
             exp = qemu_get_be16(f);
@@ -266,13 +250,12 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
         }
     }
 
-    env->fpuc = fpuc;
     /* XXX: restore FPU round state */
-    env->fpstt = (fpus >> 11) & 7;
-    env->fpus = fpus & ~0x3800;
-    fptag ^= 0xff;
+    env->fpstt = (env->fpus_vmstate >> 11) & 7;
+    env->fpus = env->fpus_vmstate & ~0x3800;
+    env->fptag_vmstate ^= 0xff;
     for(i = 0; i < 8; i++) {
-        env->fptags[i] = (fptag >> i) & 1;
+        env->fptags[i] = (env->fptag_vmstate >> i) & 1;
     }
 
     for(i = 0; i < 6; i++)
@@ -303,9 +286,7 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
     for (i = 0; i < 4; i++)
         hw_breakpoint_insert(env, i);
 
-    /* MMU */
-    qemu_get_sbe32s(f, &a20_mask);
-    env->a20_mask = a20_mask;
+    qemu_get_sbe32s(f, &env->a20_mask);
 
     qemu_get_be32s(f, &env->mxcsr);
     for(i = 0; i < CPU_NB_REGS; i++) {
@@ -354,11 +335,11 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
     }
 
     if (version_id >= 9) {
-        qemu_get_sbe32s(f, &pending_irq);
+        qemu_get_sbe32s(f, &env->pending_irq_vmstate);
         memset(&env->interrupt_bitmap, 0, sizeof(env->interrupt_bitmap));
-        if (pending_irq >= 0) {
-            env->interrupt_bitmap[pending_irq / 64] |=
-                (uint64_t)1 << (pending_irq % 64);
+        if (env->pending_irq_vmstate >= 0) {
+            env->interrupt_bitmap[env->pending_irq_vmstate / 64] |=
+                (uint64_t)1 << (env->pending_irq_vmstate % 64);
         }
         qemu_get_be32s(f, &env->mp_state);
         qemu_get_be64s(f, &env->tsc);
@@ -366,24 +347,17 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id)
 
     if (version_id >= 10) {
         qemu_get_be64s(f, &env->mcg_cap);
-        if (env->mcg_cap && !kvm_enabled()) {
-            qemu_get_be64s(f, &env->mcg_status);
-            qemu_get_be64s(f, &env->mcg_ctl);
-            for (i = 0; i < (env->mcg_cap & 0xff); i++) {
-                qemu_get_be64s(f, &env->mce_banks[4*i]);
-                qemu_get_be64s(f, &env->mce_banks[4*i + 1]);
-                qemu_get_be64s(f, &env->mce_banks[4*i + 2]);
-                qemu_get_be64s(f, &env->mce_banks[4*i + 3]);
-            }
+        qemu_get_be64s(f, &env->mcg_status);
+        qemu_get_be64s(f, &env->mcg_ctl);
+        for (i = 0; i < MCE_BANKS_DEF * 4; i++) {
+            qemu_get_be64s(f, &env->mce_banks[i]);
         }
     }
 
     if (version_id >= 11) {
         qemu_get_be64s(f, &env->tsc_aux);
     }
-    /* XXX: ensure compatiblity for halted bit ? */
-    /* XXX: compute redundant hflags bits */
-    env->hflags = hflags;
+
     tlb_flush(env, 1);
     if (kvm_enabled()) {
         /* when in-kernel irqchip is used, env->halted causes deadlock

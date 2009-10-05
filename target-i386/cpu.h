@@ -608,12 +608,15 @@ typedef struct CPUX86State {
     SegmentCache idt; /* only base and limit are used */
 
     target_ulong cr[5]; /* NOTE: cr1 is unused */
-    uint64_t a20_mask;
+    int32_t a20_mask;
 
     /* FPU state */
     unsigned int fpstt; /* top of stack index */
-    unsigned int fpus;
-    unsigned int fpuc;
+    uint16_t fpus;
+    uint16_t fpus_vmstate;
+    uint16_t fptag_vmstate;
+    uint16_t fpregs_format_vmstate;
+    uint16_t fpuc;
     uint8_t fptags[8];   /* 0 = valid, 1 = empty */
     union {
 #ifdef USE_X86LDOUBLE
@@ -704,6 +707,7 @@ typedef struct CPUX86State {
 
     /* For KVM */
     uint64_t interrupt_bitmap[256 / 64];
+    int32_t pending_irq_vmstate;
     uint32_t mp_state;
 
     /* in order to simplify APIC support, we leave this pointer to the
@@ -713,7 +717,7 @@ typedef struct CPUX86State {
     uint64 mcg_cap;
     uint64 mcg_status;
     uint64 mcg_ctl;
-    uint64 *mce_banks;
+    uint64 mce_banks[MCE_BANKS_DEF*4];
 
     uint64_t tsc_aux;
 } CPUX86State;

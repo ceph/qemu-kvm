@@ -782,7 +782,7 @@ void cpu_dump_state(CPUState *env, FILE *f,
                     eflags & CC_C ? 'C' : '-',
                     env->hflags & HF_CPL_MASK,
                     (env->hflags >> HF_INHIBIT_IRQ_SHIFT) & 1,
-                    (int)(env->a20_mask >> 20) & 1,
+                    (env->a20_mask >> 20) & 1,
                     (env->hflags >> HF_SMM_SHIFT) & 1,
                     env->halted);
     } else
@@ -809,7 +809,7 @@ void cpu_dump_state(CPUState *env, FILE *f,
                     eflags & CC_C ? 'C' : '-',
                     env->hflags & HF_CPL_MASK,
                     (env->hflags >> HF_INHIBIT_IRQ_SHIFT) & 1,
-                    (int)(env->a20_mask >> 20) & 1,
+                    (env->a20_mask >> 20) & 1,
                     (env->hflags >> HF_SMM_SHIFT) & 1,
                     env->halted);
     }
@@ -940,7 +940,7 @@ void cpu_x86_set_a20(CPUX86State *env, int a20_state)
         /* when a20 is changed, all the MMU mappings are invalid, so
            we must flush everything */
         tlb_flush(env, 1);
-        env->a20_mask = (~0x100000) | (a20_state << 20);
+        env->a20_mask = ~(1 << 20) | (a20_state << 20);
     }
 }
 
@@ -1604,8 +1604,7 @@ static void mce_init(CPUX86State *cenv)
         && (cenv->cpuid_features&(CPUID_MCE|CPUID_MCA)) == (CPUID_MCE|CPUID_MCA)) {
         cenv->mcg_cap = MCE_CAP_DEF | MCE_BANKS_DEF;
         cenv->mcg_ctl = ~(uint64_t)0;
-        bank_num = cenv->mcg_cap & 0xff;
-        cenv->mce_banks = qemu_mallocz(bank_num * sizeof(uint64_t) * 4);
+        bank_num = MCE_BANKS_DEF;
         for (bank = 0; bank < bank_num; bank++)
             cenv->mce_banks[bank*4] = ~(uint64_t)0;
     }
