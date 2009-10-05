@@ -32,7 +32,7 @@ extern VMStateDescription vmstate_pit;
 
 static PITState pit_state;
 
-static void kvm_pit_pre_save(const void *opaque)
+static void kvm_pit_pre_save(void *opaque)
 {
     PITState *s = (void *)opaque;
     struct kvm_pit_state2 pit2;
@@ -66,7 +66,7 @@ static void kvm_pit_pre_save(const void *opaque)
     }
 }
 
-static int kvm_pit_post_load(void *opaque)
+static int kvm_pit_post_load(void *opaque, int version_id)
 {
     PITState *s = opaque;
     struct kvm_pit_state2 pit2;

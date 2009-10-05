@@ -465,8 +465,8 @@ static uint32_t elcr_ioport_read(void *opaque, uint32_t addr1)
 }
 
 #ifdef KVM_CAP_IRQCHIP
-static void kvm_kernel_pic_save_to_user(const void *opaque);
-static int kvm_kernel_pic_load_from_user(void *opaque);
+static void kvm_kernel_pic_save_to_user(void *opaque);
+static int kvm_kernel_pic_load_from_user(void *opaque, int version_id);
 #endif
 
 static const VMStateDescription vmstate_pic = {
@@ -564,7 +564,7 @@ qemu_irq *i8259_init(qemu_irq parent_irq)
 }
 
 #ifdef KVM_CAP_IRQCHIP
-static void kvm_kernel_pic_save_to_user(const void *opaque)
+static void kvm_kernel_pic_save_to_user(void *opaque)
 {
 #if defined(TARGET_I386)
     PicState *s = (void *)opaque;
@@ -596,7 +596,7 @@ static void kvm_kernel_pic_save_to_user(const void *opaque)
 #endif
 }
 
-static int kvm_kernel_pic_load_from_user(void *opaque)
+static int kvm_kernel_pic_load_from_user(void *opaque, int version)
 {
 #if defined(TARGET_I386)
     PicState *s = (void *)opaque;
