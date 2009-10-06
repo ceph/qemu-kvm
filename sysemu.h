@@ -204,9 +204,6 @@ extern DriveInfo *drive_init(QemuOpts *arg, void *machine, int *fatal_error);
 
 /* acpi */
 void qemu_system_cpu_hot_add(int cpu, int state);
-typedef void (*qemu_system_device_hot_add_t)(int pcibus, int slot, int state);
-void qemu_system_device_hot_add_register(qemu_system_device_hot_add_t callback);
-void qemu_system_device_hot_add(int pcibus, int slot, int state);
 
 /* device-hotplug */
 
@@ -221,7 +218,7 @@ void pci_device_hot_add(Monitor *mon, const QDict *qdict);
 void drive_hot_add(Monitor *mon, const QDict *qdict);
 void pci_device_hot_remove(Monitor *mon, const char *pci_addr);
 void do_pci_device_hot_remove(Monitor *mon, const QDict *qdict);
-void pci_device_hot_remove_success(int pcibus, int slot);
+void pci_device_hot_remove_success(PCIDevice *dev);
 
 /* serial ports */
 

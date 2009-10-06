@@ -713,11 +713,21 @@ static uint32_t pciej_read(void *opaque, uint32_t addr)
 
 static void pciej_write(void *opaque, uint32_t addr, uint32_t val)
 {
-#if defined (TARGET_I386)
+    BusState *bus = opaque;
+    DeviceState *qdev;
+    PCIDevice *dev;
     int slot = ffs(val) - 1;
 
-    pci_device_hot_remove_success(0, slot);
+    QLIST_FOREACH(qdev, &bus->children, sibling) {
+        dev = DO_UPCAST(PCIDevice, qdev, qdev);
+        if (PCI_SLOT(dev->devfn) == slot) {
+#if defined (TARGET_I386)
+            pci_device_hot_remove_success(dev);
 #endif
+            qdev_free(qdev);
+        }
+    }
+
 
 #if defined(DEBUG)
     printf("pciej write %x <== %d\n", addr, val);
@@ -726,9 +736,9 @@ static void pciej_write(void *opaque, uint32_t addr, uint32_t val)
 
 static const char *model;
 
-static void piix4_device_hot_add(int bus, int slot, int state);
+static int piix4_device_hotplug(PCIDevice *dev, int state);
 
-void piix4_acpi_system_hot_add_init(const char *cpu_model)
+void piix4_acpi_system_hot_add_init(PCIBus *bus, const char *cpu_model)
 {
     int i = 0, cpus = smp_cpus;
 
@@ -745,12 +755,12 @@ void piix4_acpi_system_hot_add_init(const char *cpu_model)
     register_ioport_write(PCI_BASE, 8, 4, pcihotplug_write, &pci0_status);
     register_ioport_read(PCI_BASE, 8, 4,  pcihotplug_read, &pci0_status);
 
-    register_ioport_write(PCI_EJ_BASE, 4, 4, pciej_write, NULL);
-    register_ioport_read(PCI_EJ_BASE, 4, 4,  pciej_read, NULL);
+    register_ioport_write(PCI_EJ_BASE, 4, 4, pciej_write, bus);
+    register_ioport_read(PCI_EJ_BASE, 4, 4,  pciej_read, bus);
 
     model = cpu_model;
 
-    qemu_system_device_hot_add_register(piix4_device_hot_add);
+    pci_bus_hotplug(bus, piix4_device_hotplug);
 }
 
 #if defined(TARGET_I386)
@@ -802,8 +812,10 @@ static void disable_device(struct pci_status *p, struct gpe_regs *g, int slot)
     p->down |= (1 << slot);
 }
 
-static void piix4_device_hot_add(int bus, int slot, int state)
+static int piix4_device_hotplug(PCIDevice *dev, int state)
 {
+    int slot = PCI_SLOT(dev->devfn);
+
     pci0_status.up = 0;
     pci0_status.down = 0;
     if (state)
@@ -814,18 +826,7 @@ static void piix4_device_hot_add(int bus, int slot, int state)
         qemu_set_irq(pm_state->irq, 1);
         qemu_set_irq(pm_state->irq, 0);
     }
-}
-
-static qemu_system_device_hot_add_t device_hot_add_callback;
-void qemu_system_device_hot_add_register(qemu_system_device_hot_add_t callback)
-{
-    device_hot_add_callback = callback;
-}
-
-void qemu_system_device_hot_add(int pcibus, int slot, int state)
-{
-    if (device_hot_add_callback)
-        device_hot_add_callback(pcibus, slot, state);
+    return 0;
 }
 
 struct acpi_table_header
