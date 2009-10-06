@@ -17,6 +17,13 @@ static inline unsigned long long rdtsc()
 	return r;
 }
 
+static unsigned int inl(unsigned short port)
+{
+    unsigned int val;
+    asm volatile("inl %w1, %0" : "=a"(val) : "Nd"(port));
+    return val;
+}
+
 #define GOAL (1ull << 30)
 
 #ifdef __x86_64__
@@ -76,6 +83,11 @@ static void ipi_halt(void)
 		;
 }
 
+static void inl_pmtimer(void)
+{
+    inl(0xb008);
+}
+
 static struct test {
 	void (*func)(void);
 	const char *name;
@@ -86,6 +98,7 @@ static struct test {
 	{ vmcall, "vmcall", .parallel = 1, },
 	{ mov_from_cr8, "mov_from_cr8", .parallel = 1, },
 	{ mov_to_cr8, "mov_to_cr8" , .parallel = 1, },
+	{ inl_pmtimer, "inl_from_pmtimer", .parallel = 1, },
 	{ ipi, "ipi", is_smp, .parallel = 0, },
 	{ ipi_halt, "ipi+halt", is_smp, .parallel = 0, },
 };
