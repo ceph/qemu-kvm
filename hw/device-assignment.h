@@ -36,6 +36,12 @@
 /* From include/linux/pci.h in the kernel sources */
 #define PCI_DEVFN(slot, func)   ((((slot) & 0x1f) << 3) | ((func) & 0x07))
 
+typedef struct PCIHostDevice {
+    int bus;
+    int dev;
+    int func;
+} PCIHostDevice;
+
 typedef struct {
     int type;           /* Memory or port I/O */
     int valid;
@@ -66,8 +72,10 @@ typedef struct {
     uint32_t r_size;    /* real size of region in bytes */
 } AssignedDevRegion;
 
-typedef struct {
+typedef struct AssignedDevice {
     PCIDevice dev;
+    PCIHostDevice host;
+    uint32_t use_iommu;
     int intpin;
     uint8_t debug_flags;
     AssignedDevRegion v_addrs[PCI_NUM_REGIONS];
@@ -94,25 +102,11 @@ typedef struct {
     target_phys_addr_t msix_table_addr;
     int mmio_index;
     int need_emulate_cmd;
+    QLIST_ENTRY(AssignedDevice) next;
 } AssignedDevice;
 
-typedef struct AssignedDevInfo AssignedDevInfo;
-
-struct AssignedDevInfo {
-    char name[15];
-    int bus;
-    int dev;
-    int func;
-    AssignedDevice *assigned_dev;
-    QLIST_ENTRY(AssignedDevInfo) next;
-    int disable_iommu;
-};
-
-PCIDevice *init_assigned_device(AssignedDevInfo *adev, const char *devaddr);
-AssignedDevInfo *add_assigned_device(const char *arg);
+QemuOpts *add_assigned_device(const char *arg);
 void add_assigned_devices(PCIBus *bus, const char **devices, int n_devices);
-void remove_assigned_device(AssignedDevInfo *adev);
-AssignedDevInfo *get_assigned_device(int pcibus, int slot);
 ram_addr_t assigned_dev_load_option_roms(ram_addr_t rom_base_offset);
 void assigned_dev_update_irqs(void);
 

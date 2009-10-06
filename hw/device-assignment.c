@@ -554,7 +554,7 @@ again:
     return 0;
 }
 
-static QLIST_HEAD(, AssignedDevInfo) adev_head;
+static QLIST_HEAD(, AssignedDevice) devs = QLIST_HEAD_INITIALIZER(devs);
 
 #ifdef KVM_CAP_IRQ_ROUTING
 static void free_dev_irq_entries(AssignedDevice *dev)
@@ -569,10 +569,8 @@ static void free_dev_irq_entries(AssignedDevice *dev)
 }
 #endif
 
-static void free_assigned_device(AssignedDevInfo *adev)
+static void free_assigned_device(AssignedDevice *dev)
 {
-    AssignedDevice *dev = adev->assigned_dev;
-
     if (dev) {
         int i;
 
@@ -607,16 +605,10 @@ static void free_assigned_device(AssignedDevInfo *adev)
             dev->real_device.config_fd = 0;
         }
 
-        printf("warning: assigned device hotunplug is broken\n");
-        //pci_unregister_device(&dev->dev, 1);
 #ifdef KVM_CAP_IRQ_ROUTING
         free_dev_irq_entries(dev);
 #endif
-        adev->assigned_dev = dev = NULL;
     }
-
-    QLIST_REMOVE(adev, next);
-    qemu_free(adev);
 }
 
 static uint32_t calc_assigned_dev_id(uint8_t bus, uint8_t devfn)
@@ -624,10 +616,9 @@ static uint32_t calc_assigned_dev_id(uint8_t bus, uint8_t devfn)
     return (uint32_t)bus << 8 | (uint32_t)devfn;
 }
 
-static int assign_device(AssignedDevInfo *adev)
+static int assign_device(AssignedDevice *dev)
 {
     struct kvm_assigned_pci_dev assigned_dev_data;
-    AssignedDevice *dev = adev->assigned_dev;
     int r;
 
     memset(&assigned_dev_data, 0, sizeof(assigned_dev_data));
@@ -641,21 +632,24 @@ static int assign_device(AssignedDevInfo *adev)
      * (or when not disabled on the command line)
      */
     r = kvm_check_extension(kvm_state, KVM_CAP_IOMMU);
-    if (r && !adev->disable_iommu)
+    if (!r)
+        dev->use_iommu = 0;
+    if (dev->use_iommu)
 	assigned_dev_data.flags |= KVM_DEV_ASSIGN_ENABLE_IOMMU;
+#else
+    dev->use_iommu = 0;
 #endif
 
     r = kvm_assign_pci_device(kvm_context, &assigned_dev_data);
     if (r < 0)
 	fprintf(stderr, "Failed to assign device \"%s\" : %s\n",
-                adev->name, strerror(-r));
+                dev->dev.qdev.id, strerror(-r));
     return r;
 }
 
-static int assign_irq(AssignedDevInfo *adev)
+static int assign_irq(AssignedDevice *dev)
 {
     struct kvm_assigned_irq assigned_irq_data;
-    AssignedDevice *dev = adev->assigned_dev;
     int irq, r = 0;
 
     /* Interrupt PIN 0 means don't use INTx */
@@ -696,7 +690,7 @@ static int assign_irq(AssignedDevInfo *adev)
     r = kvm_assign_irq(kvm_context, &assigned_irq_data);
     if (r < 0) {
         fprintf(stderr, "Failed to assign irq for \"%s\": %s\n",
-                adev->name, strerror(-r));
+                dev->dev.qdev.id, strerror(-r));
         fprintf(stderr, "Perhaps you are assigning a device "
                 "that shares an IRQ with another device?\n");
         return r;
@@ -707,11 +701,10 @@ static int assign_irq(AssignedDevInfo *adev)
     return r;
 }
 
-static void deassign_device(AssignedDevInfo *adev)
+static void deassign_device(AssignedDevice *dev)
 {
 #ifdef KVM_CAP_DEVICE_DEASSIGNMENT
     struct kvm_assigned_pci_dev assigned_dev_data;
-    AssignedDevice *dev = adev->assigned_dev;
     int r;
 
     memset(&assigned_dev_data, 0, sizeof(assigned_dev_data));
@@ -721,16 +714,11 @@ static void deassign_device(AssignedDevInfo *adev)
     r = kvm_deassign_pci_device(kvm_context, &assigned_dev_data);
     if (r < 0)
 	fprintf(stderr, "Failed to deassign device \"%s\" : %s\n",
-                adev->name, strerror(-r));
+                dev->dev.qdev.id, strerror(-r));
 #endif
 }
 
-void remove_assigned_device(AssignedDevInfo *adev)
-{
-    deassign_device(adev);
-    free_assigned_device(adev);
-}
-
+#if 0
 AssignedDevInfo *get_assigned_device(int pcibus, int slot)
 {
     AssignedDevice *assigned_dev = NULL;
@@ -745,24 +733,23 @@ AssignedDevInfo *get_assigned_device(int pcibus, int slot)
 
     return NULL;
 }
+#endif
 
 /* The pci config space got updated. Check if irq numbers have changed
  * for our devices
  */
 void assigned_dev_update_irqs(void)
 {
-    AssignedDevInfo *adev;
+    AssignedDevice *dev, *next;
+    int r;
 
-    adev = QLIST_FIRST(&adev_head);
-    while (adev) {
-        AssignedDevInfo *next = QLIST_NEXT(adev, next);
-        int r;
-
-        r = assign_irq(adev);
+    dev = QLIST_FIRST(&devs);
+    while (dev) {
+        next = QLIST_NEXT(dev, next);
+        r = assign_irq(dev);
         if (r < 0)
-            remove_assigned_device(adev);
-
-        adev = next;
+            qdev_unplug(&dev->dev.qdev);
+        dev = next;
     }
 }
 
@@ -1124,37 +1111,21 @@ static int assigned_dev_register_msix_mmio(AssignedDevice *dev)
     return 0;
 }
 
-struct PCIDevice *init_assigned_device(AssignedDevInfo *adev,
-                                       const char *devaddr)
+static int assigned_initfn(struct PCIDevice *pci_dev)
 {
-    PCIBus *bus;
-    int devfn;
-    int r;
-    AssignedDevice *dev;
-    PCIDevice *pci_dev;
+    AssignedDevice *dev = DO_UPCAST(AssignedDevice, dev, pci_dev);
     struct pci_access *pacc;
     uint8_t e_device, e_intx;
+    int r;
 
-    DEBUG("Registering real physical device %s (bus=%x dev=%x func=%x)\n",
-          adev->name, adev->bus, adev->dev, adev->func);
-
-    bus = pci_get_bus_devfn(&devfn, devaddr);
-    pci_dev = pci_register_device(bus, adev->name,
-              sizeof(AssignedDevice), devfn, assigned_dev_pci_read_config,
-              assigned_dev_pci_write_config);
-    dev = container_of(pci_dev, AssignedDevice, dev);
-
-    if (NULL == dev) {
-        fprintf(stderr, "%s: Error: Couldn't register real device %s\n",
-                __func__, adev->name);
-        return NULL;
+    if (!dev->host.bus && !dev->host.dev && !dev->host.func) {
+        qemu_error("pci-assign: error: no host device specified\n");
+        goto out;
     }
 
-    adev->assigned_dev = dev;
-
-    if (get_real_device(dev, adev->bus, adev->dev, adev->func)) {
-        fprintf(stderr, "%s: Error: Couldn't get real device (%s)!\n",
-                __func__, adev->name);
+    if (get_real_device(dev, dev->host.bus, dev->host.dev, dev->host.func)) {
+        qemu_error("pci-assign: Error: Couldn't get real device (%s)!\n",
+                   dev->dev.qdev.id);
         goto out;
     }
 
@@ -1170,12 +1141,12 @@ struct PCIDevice *init_assigned_device(AssignedDevInfo *adev,
     dev->intpin = e_intx;
     dev->run = 0;
     dev->girq = 0;
-    dev->h_busnr = adev->bus;
-    dev->h_devfn = PCI_DEVFN(adev->dev, adev->func);
+    dev->h_busnr = dev->host.bus;
+    dev->h_devfn = PCI_DEVFN(dev->host.dev, dev->host.func);
 
     pacc = pci_alloc();
     pci_init(pacc);
-    dev->pdev = pci_get_dev(pacc, 0, adev->bus, adev->dev, adev->func);
+    dev->pdev = pci_get_dev(pacc, 0, dev->host.bus, dev->host.dev, dev->host.func);
 
     if (pci_enable_capability_support(pci_dev, 0, NULL,
                     assigned_device_pci_cap_write_config,
@@ -1183,28 +1154,86 @@ struct PCIDevice *init_assigned_device(AssignedDevInfo *adev,
         goto assigned_out;
 
     /* assign device to guest */
-    r = assign_device(adev);
+    r = assign_device(dev);
     if (r < 0)
         goto assigned_out;
 
     /* assign irq for the device */
-    r = assign_irq(adev);
+    r = assign_irq(dev);
     if (r < 0)
         goto assigned_out;
 
     /* intercept MSI-X entry page in the MMIO */
     if (dev->cap.available & ASSIGNED_DEVICE_CAP_MSIX)
         if (assigned_dev_register_msix_mmio(dev))
-            return NULL;
+            goto assigned_out;
 
-    return &dev->dev;
+    return 0;
 
 assigned_out:
-    deassign_device(adev);
+    deassign_device(dev);
 out:
-    free_assigned_device(adev);
-    return NULL;
+    free_assigned_device(dev);
+    return -1;
 }
+
+static int assigned_exitfn(struct PCIDevice *pci_dev)
+{
+    AssignedDevice *dev = DO_UPCAST(AssignedDevice, dev, pci_dev);
+
+    deassign_device(dev);
+    free_assigned_device(dev);
+    return 0;
+}
+
+static int parse_hostaddr(DeviceState *dev, Property *prop, const char *str)
+{
+    PCIHostDevice *ptr = qdev_get_prop_ptr(dev, prop);
+    int rc;
+
+    rc = pci_parse_host_devaddr(str, &ptr->bus, &ptr->dev, &ptr->func);
+    if (rc != 0)
+        return -1;
+    return 0;
+}
+
+static int print_hostaddr(DeviceState *dev, Property *prop, char *dest, size_t len)
+{
+    PCIHostDevice *ptr = qdev_get_prop_ptr(dev, prop);
+
+    return snprintf(dest, len, "%02x:%02x.%x", ptr->bus, ptr->dev, ptr->func);
+}
+
+PropertyInfo qdev_prop_hostaddr = {
+    .name  = "pci-hostaddr",
+    .type  = -1,
+    .size  = sizeof(PCIHostDevice),
+    .parse = parse_hostaddr,
+    .print = print_hostaddr,
+};
+
+static PCIDeviceInfo assign_info = {
+    .qdev.name    = "pci-assign",
+    .qdev.desc    = "pass through host pci devices to the guest",
+    .qdev.size    = sizeof(AssignedDevice),
+    .init         = assigned_initfn,
+    .exit         = assigned_exitfn,
+    .config_read  = assigned_dev_pci_read_config,
+    .config_write = assigned_dev_pci_write_config,
+    .qdev.props   = (Property[]) {
+        DEFINE_PROP("host", AssignedDevice, host, qdev_prop_hostaddr, PCIHostDevice),
+        DEFINE_PROP_UINT32("iommu", AssignedDevice, use_iommu, 1),
+        DEFINE_PROP_END_OF_LIST(),
+    },
+};
+
+static void assign_register_devices(void)
+{
+    pci_qdev_register(&assign_info);
+}
+
+device_init(assign_register_devices)
+
 
 /*
  * Syntax to assign device:
@@ -1216,63 +1245,55 @@ out:
  *
  * dma can currently only be 'none' to disable iommu support.
  */
-AssignedDevInfo *add_assigned_device(const char *arg)
+QemuOpts *add_assigned_device(const char *arg)
 {
-    char device[16];
-    char dma[6];
+    QemuOpts *opts = NULL;
+    char host[64], id[64], dma[8];
     int r;
-    AssignedDevInfo *adev;
 
-    adev = qemu_mallocz(sizeof(AssignedDevInfo));
-    if (adev == NULL) {
-        fprintf(stderr, "%s: Out of memory\n", __func__);
-        return NULL;
-    }
-    r = get_param_value(device, sizeof(device), "host", arg);
+    r = get_param_value(host, sizeof(host), "host", arg);
     if (!r)
          goto bad;
-
-    r = pci_parse_host_devaddr(device, &adev->bus, &adev->dev, &adev->func);
-    if (r)
-        goto bad;
-
-    r = get_param_value(adev->name, sizeof(adev->name), "name", arg);
+    r = get_param_value(id, sizeof(id), "id", arg);
     if (!r)
-	snprintf(adev->name, sizeof(adev->name), "%s", device);
+        r = get_param_value(id, sizeof(id), "name", arg);
+    if (!r)
+        r = get_param_value(id, sizeof(id), "host", arg);
+
+    opts = qemu_opts_create(&qemu_device_opts, id, 0);
+    if (!opts)
+        goto bad;
+    qemu_opt_set(opts, "driver", "pci-assign");
+    qemu_opt_set(opts, "host", host);
 
 #ifdef KVM_CAP_IOMMU
     r = get_param_value(dma, sizeof(dma), "dma", arg);
     if (r && !strncmp(dma, "none", 4))
-        adev->disable_iommu = 1;
+        qemu_opt_set(opts, "iommu", "0");
 #endif
+    qemu_opts_print(opts, NULL);
+    return opts;
 
-    QLIST_INSERT_HEAD(&adev_head, adev, next);
-    return adev;
 bad:
     fprintf(stderr, "pcidevice argument parse error; "
             "please check the help text for usage\n");
-    qemu_free(adev);
+    if (opts)
+        qemu_opts_del(opts);
     return NULL;
 }
 
 void add_assigned_devices(PCIBus *bus, const char **devices, int n_devices)
 {
+    QemuOpts *opts;
     int i;
 
     for (i = 0; i < n_devices; i++) {
-        struct AssignedDevInfo *adev;
-
-        adev = add_assigned_device(devices[i]);
-        if (!adev) {
+        opts = add_assigned_device(devices[i]);
+        if (opts == NULL) {
             fprintf(stderr, "Could not add assigned device %s\n", devices[i]);
             exit(1);
         }
-
-        if (!init_assigned_device(adev, NULL)) {
-            fprintf(stderr, "Failed to initialize assigned device %s\n",
-                    devices[i]);
-            exit(1);
-        }
+        /* generic code will call qdev_device_add() for the device */
     }
 }
 
@@ -1374,9 +1395,9 @@ static int scan_option_rom(uint8_t devfn, void *roms, ram_addr_t offset)
 ram_addr_t assigned_dev_load_option_roms(ram_addr_t rom_base_offset)
 {
     ram_addr_t offset = rom_base_offset;
-    AssignedDevInfo *adev;
+    AssignedDevice *dev;
 
-    QLIST_FOREACH(adev, &adev_head, next) {
+    QLIST_FOREACH(dev, &devs, next) {
         int size, len;
         void *buf;
         FILE *fp;
@@ -1385,7 +1406,7 @@ ram_addr_t assigned_dev_load_option_roms(ram_addr_t rom_base_offset)
 
         snprintf(rom_file, sizeof(rom_file),
                  "/sys/bus/pci/devices/0000:%02x:%02x.%01x/rom",
-                 adev->bus, adev->dev, adev->func);
+                 dev->host.bus, dev->host.dev, dev->host.func);
 
         if (access(rom_file, F_OK))
             continue;
@@ -1422,18 +1443,20 @@ ram_addr_t assigned_dev_load_option_roms(ram_addr_t rom_base_offset)
         }
 
         /* Copy ROM contents into the space backing the ROM BAR */
-        if (adev->assigned_dev->v_addrs[PCI_ROM_SLOT].r_size >= size &&
-            adev->assigned_dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase) {
-            mprotect(adev->assigned_dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase,
+        if (dev->v_addrs[PCI_ROM_SLOT].r_size >= size &&
+            dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase) {
+            mprotect(dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase,
                      size, PROT_READ | PROT_WRITE);
-            memcpy(adev->assigned_dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase,
+            memcpy(dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase,
                    buf, size);
-            mprotect(adev->assigned_dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase,
+            mprotect(dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase,
                      size, PROT_READ);
         }
 
-        /* Scan the buffer for suitable ROMs and increase the offset */
-        offset += scan_option_rom(adev->assigned_dev->dev.devfn, buf, offset);
+        if (!dev->dev.qdev.hotplugged) {
+            /* Scan the buffer for suitable ROMs and increase the offset */
+            offset += scan_option_rom(dev->dev.devfn, buf, offset);
+        }
 
         free(buf);
         fclose(fp);

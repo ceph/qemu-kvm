@@ -173,39 +173,18 @@ static PCIDevice *qemu_pci_hot_add_storage(Monitor *mon,
 #ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
 static PCIDevice *qemu_pci_hot_assign_device(Monitor *mon,
                                              const char *devaddr,
-                                             const char *opts)
+                                             const char *opts_str)
 {
-    AssignedDevInfo *adev;
-    PCIDevice *ret;
+    QemuOpts *opts;
+    DeviceState *dev;
 
-    adev = add_assigned_device(opts);
-    if (adev == NULL) {
+    opts = add_assigned_device(opts_str);
+    if (opts == NULL) {
         monitor_printf(mon, "Error adding device; check syntax\n");
         return NULL;
     }
-
-    ret = init_assigned_device(adev, devaddr);
-    if (ret == NULL) {
-        monitor_printf(mon, "Failed to assign device\n");
-        return NULL;
-    }
-
-    monitor_printf(mon,
-                   "Registered host PCI device %02x:%02x.%1x "
-                   "(\"%s\") as guest device %s\n",
-                   adev->bus, adev->dev, adev->func, adev->name, devaddr);
-
-    return ret;
-}
-
-static void qemu_pci_hot_deassign_device(Monitor *mon, AssignedDevInfo *adev)
-{
-    remove_assigned_device(adev);
-
-    monitor_printf(mon,
-                   "Unregister host PCI device %02x:%02x.%1x "
-                   "(\"%s\") from guest\n",
-                   adev->bus, adev->dev, adev->func, adev->name);
+    dev = qdev_device_add(opts);
+    return DO_UPCAST(PCIDevice, qdev, dev);
 }
 #endif /* CONFIG_KVM_DEVICE_ASSIGNMENT */
 
@@ -285,17 +264,6 @@ static int pci_match_fn(void *dev_private, void *arg)
 void pci_device_hot_remove_success(PCIDevice *d)
 {
     int class_code;
-#ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
-    AssignedDevInfo *adev;
-#endif
-
-#ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
-    adev = get_assigned_device(pci_bus_num(d->bus), d->devfn >> 3);
-    if (adev) {
-        qemu_pci_hot_deassign_device(cur_mon, adev);
-        return;
-    }
-#endif /* CONFIG_KVM_DEVICE_ASSIGNMENT */
 
     class_code = d->config_read(d, PCI_CLASS_DEVICE+1, 1);
 
@@ -305,4 +273,3 @@ void pci_device_hot_remove_success(PCIDevice *d)
         break;
     }
 }
-
