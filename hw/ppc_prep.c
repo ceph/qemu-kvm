@@ -563,9 +563,8 @@ static void ppc_prep_init (ram_addr_t ram_size,
     PCIBus *pci_bus;
     qemu_irq *i8259;
     int ppc_boot_device;
-    DriveInfo *dinfo;
     DriveInfo *hd[MAX_IDE_BUS * MAX_IDE_DEVS];
-    BlockDriverState *fd[MAX_FD];
+    DriveInfo *fd[MAX_FD];
 
     sysctrl = qemu_mallocz(sizeof(sysctrl_t));
 
@@ -686,7 +685,8 @@ static void ppc_prep_init (ram_addr_t ram_size,
     //    pit = pit_init(0x40, i8259[0]);
     rtc_init(2000);
 
-    serial_init(0x3f8, i8259[4], 115200, serial_hds[0]);
+    if (serial_hds[0])
+        serial_isa_init(0, serial_hds[0]);
     nb_nics1 = nb_nics;
     if (nb_nics1 > NE2000_NB_MAX)
         nb_nics1 = NE2000_NB_MAX;
@@ -720,8 +720,7 @@ static void ppc_prep_init (ram_addr_t ram_size,
     //    SB16_init();
 
     for(i = 0; i < MAX_FD; i++) {
-        dinfo = drive_get(IF_FLOPPY, 0, i);
-        fd[i] = dinfo ? dinfo->bdrv : NULL;
+        fd[i] = drive_get(IF_FLOPPY, 0, i);
     }
     fdctrl_init_isa(fd);
 
