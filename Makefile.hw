@@ -22,7 +22,9 @@ obj-y += m48t59.o escc.o
 # PCI watchdog devices
 obj-y += wdt_i6300esb.o
 
-obj-y += msix.o
+# MSI-X depends on kvm for interrupt injection,
+# so moved it from Makefile.hw to Makefile.target for now
+# obj-y += msix.o
 
 # PCI network cards
 obj-y += ne2000.o
