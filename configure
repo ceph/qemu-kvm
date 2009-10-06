@@ -1833,8 +1833,6 @@ if test -z "$werror" ; then
     else
         werror="no"
     fi
-    # disable default werror for kvm
-    werror="no"
 fi
 
 if test "$werror" = "yes" ; then
