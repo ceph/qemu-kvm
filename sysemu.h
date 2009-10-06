@@ -5,6 +5,7 @@
 #include "qemu-common.h"
 #include "qemu-option.h"
 #include "qemu-queue.h"
+#include "qemu-timer.h"
 #include "qdict.h"
 
 #ifdef _WIN32
@@ -135,6 +136,7 @@ extern int no_quit;
 extern int semihosting_enabled;
 extern int old_param;
 extern int boot_menu;
+extern QEMUClock *rtc_clock;
 extern long hpagesize;
 
 #define MAX_NODES 64
@@ -191,7 +193,7 @@ extern DriveInfo *extboot_drive;
 extern DriveInfo *drive_get(BlockInterfaceType type, int bus, int unit);
 extern DriveInfo *drive_get_by_id(const char *id);
 extern int drive_get_max_bus(BlockInterfaceType type);
-extern void drive_uninit(BlockDriverState *bdrv);
+extern void drive_uninit(DriveInfo *dinfo);
 extern const char *drive_get_serial(BlockDriverState *bdrv);
 extern BlockInterfaceErrorAction drive_get_onerror(BlockDriverState *bdrv);
 
@@ -202,9 +204,6 @@ extern DriveInfo *drive_init(QemuOpts *arg, void *machine, int *fatal_error);
 
 /* acpi */
 void qemu_system_cpu_hot_add(int cpu, int state);
-typedef void (*qemu_system_device_hot_add_t)(int pcibus, int slot, int state);
-void qemu_system_device_hot_add_register(qemu_system_device_hot_add_t callback);
-void qemu_system_device_hot_add(int pcibus, int slot, int state);
 
 /* device-hotplug */
 
@@ -212,14 +211,13 @@ typedef int (dev_match_fn)(void *dev_private, void *arg);
 
 DriveInfo *add_init_drive(const char *opts);
 void destroy_nic(dev_match_fn *match_fn, void *arg);
-void destroy_bdrvs(dev_match_fn *match_fn, void *arg);
 
 /* pci-hotplug */
 void pci_device_hot_add(Monitor *mon, const QDict *qdict);
 void drive_hot_add(Monitor *mon, const QDict *qdict);
 void pci_device_hot_remove(Monitor *mon, const char *pci_addr);
 void do_pci_device_hot_remove(Monitor *mon, const QDict *qdict);
-void pci_device_hot_remove_success(int pcibus, int slot);
+void pci_device_hot_remove_success(PCIDevice *dev);
 
 /* serial ports */
 

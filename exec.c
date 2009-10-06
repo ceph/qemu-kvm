@@ -525,9 +525,9 @@ void cpu_exec_init_all(unsigned long tb_size)
 
 #if defined(CPU_SAVE_VERSION) && !defined(CONFIG_USER_ONLY)
 
-static void cpu_common_pre_save(const void *opaque)
+static void cpu_common_pre_save(void *opaque)
 {
-    CPUState *env = (void *)opaque;
+    CPUState *env = opaque;
 
     cpu_synchronize_state(env);
 }
@@ -540,7 +540,7 @@ static int cpu_common_pre_load(void *opaque)
     return 0;
 }
 
-static int cpu_common_post_load(void *opaque)
+static int cpu_common_post_load(void *opaque, int version_id)
 {
     CPUState *env = opaque;
 
@@ -2309,8 +2309,9 @@ static void *subpage_init (target_phys_addr_t base, ram_addr_t *phys,
         }                                                               \
     } while (0)
 
-/* register physical memory. 'size' must be a multiple of the target
-   page size. If (phys_offset & ~TARGET_PAGE_MASK) != 0, then it is an
+/* register physical memory.
+   For RAM, 'size' must be a multiple of the target page size.
+   If (phys_offset & ~TARGET_PAGE_MASK) != 0, then it is an
    io memory page.  The address used when calling the IO function is
    the offset from the start of the region, plus region_offset.  Both
    start_addr and region_offset are rounded down to a page boundary

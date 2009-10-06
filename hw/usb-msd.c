@@ -45,7 +45,7 @@ typedef struct {
     uint32_t data_len;
     uint32_t residue;
     uint32_t tag;
-    SCSIBus *bus;
+    SCSIBus bus;
     DriveInfo *dinfo;
     SCSIDevice *scsi_dev;
     int result;
@@ -508,15 +508,6 @@ static int usb_msd_handle_data(USBDevice *dev, USBPacket *p)
     return ret;
 }
 
-static void usb_msd_handle_destroy(USBDevice *dev)
-{
-    MSDState *s = (MSDState *)dev;
-
-    s->scsi_dev->info->destroy(s->scsi_dev);
-    drive_uninit(s->dinfo->bdrv);
-    qemu_free(s);
-}
-
 static int usb_msd_initfn(USBDevice *dev)
 {
     MSDState *s = DO_UPCAST(MSDState, dev, dev);
@@ -527,8 +518,9 @@ static int usb_msd_initfn(USBDevice *dev)
     }
 
     s->dev.speed = USB_SPEED_FULL;
-    s->bus = scsi_bus_new(&s->dev.qdev, 0, 1, usb_msd_command_complete);
-    s->scsi_dev = scsi_bus_legacy_add_drive(s->bus, s->dinfo, 0);
+    scsi_bus_new(&s->bus, &s->dev.qdev, 0, 1, usb_msd_command_complete);
+    s->scsi_dev = scsi_bus_legacy_add_drive(&s->bus, s->dinfo, 0);
+    s->bus.qbus.allow_hotplug = 0;
     usb_msd_handle_reset(dev);
     return 0;
 }
@@ -600,7 +592,6 @@ static struct USBDeviceInfo msd_info = {
     .handle_reset   = usb_msd_handle_reset,
     .handle_control = usb_msd_handle_control,
     .handle_data    = usb_msd_handle_data,
-    .handle_destroy = usb_msd_handle_destroy,
     .qdev.props     = (Property[]) {
         DEFINE_PROP_DRIVE("drive", MSDState, dinfo),
         DEFINE_PROP_END_OF_LIST(),

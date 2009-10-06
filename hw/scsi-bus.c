@@ -15,17 +15,15 @@ static struct BusInfo scsi_bus_info = {
 static int next_scsi_bus;
 
 /* Create a scsi bus, and attach devices to it.  */
-SCSIBus *scsi_bus_new(DeviceState *host, int tcq, int ndev,
-                      scsi_completionfn complete)
+void scsi_bus_new(SCSIBus *bus, DeviceState *host, int tcq, int ndev,
+                  scsi_completionfn complete)
 {
-    SCSIBus *bus;
-
-    bus = FROM_QBUS(SCSIBus, qbus_create(&scsi_bus_info, host, NULL));
+    qbus_create_inplace(&bus->qbus, &scsi_bus_info, host, NULL);
     bus->busnr = next_scsi_bus++;
     bus->tcq = tcq;
     bus->ndev = ndev;
     bus->complete = complete;
-    return bus;
+    bus->qbus.allow_hotplug = 1;
 }
 
 static int scsi_qdev_init(DeviceState *qdev, DeviceInfo *base)
@@ -33,6 +31,7 @@ static int scsi_qdev_init(DeviceState *qdev, DeviceInfo *base)
     SCSIDevice *dev = DO_UPCAST(SCSIDevice, qdev, qdev);
     SCSIDeviceInfo *info = DO_UPCAST(SCSIDeviceInfo, qdev, base);
     SCSIBus *bus = DO_UPCAST(SCSIBus, qbus, dev->qdev.parent_bus);
+    int rc = -1;
 
     if (dev->id == -1) {
         for (dev->id = 0; dev->id < bus->ndev; dev->id++) {
@@ -46,21 +45,39 @@ static int scsi_qdev_init(DeviceState *qdev, DeviceInfo *base)
     }
 
     if (bus->devs[dev->id]) {
-        bus->devs[dev->id]->info->destroy(bus->devs[dev->id]);
+        qdev_free(&bus->devs[dev->id]->qdev);
     }
     bus->devs[dev->id] = dev;
 
     dev->info = info;
-    return dev->info->init(dev);
+    rc = dev->info->init(dev);
+    if (rc != 0) {
+        bus->devs[dev->id] = NULL;
+    }
 
 err:
-    return -1;
+    return rc;
+}
+
+static int scsi_qdev_exit(DeviceState *qdev)
+{
+    SCSIDevice *dev = DO_UPCAST(SCSIDevice, qdev, qdev);
+    SCSIBus *bus = DO_UPCAST(SCSIBus, qbus, dev->qdev.parent_bus);
+
+    assert(bus->devs[dev->id] != NULL);
+    if (bus->devs[dev->id]->info->destroy) {
+        bus->devs[dev->id]->info->destroy(bus->devs[dev->id]);
+    }
+    bus->devs[dev->id] = NULL;
+    return 0;
 }
 
 void scsi_qdev_register(SCSIDeviceInfo *info)
 {
     info->qdev.bus_info = &scsi_bus_info;
     info->qdev.init     = scsi_qdev_init;
+    info->qdev.unplug   = qdev_simple_unplug_cb;
+    info->qdev.exit     = scsi_qdev_exit;
     qdev_register(&info->qdev);
 }
 

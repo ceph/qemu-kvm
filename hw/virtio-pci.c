@@ -155,9 +155,9 @@ static int virtio_pci_load_queue(void * opaque, int n, QEMUFile *f)
     return 0;
 }
 
-static void virtio_pci_reset(void *opaque)
+static void virtio_pci_reset(DeviceState *d)
 {
-    VirtIOPCIProxy *proxy = opaque;
+    VirtIOPCIProxy *proxy = container_of(d, VirtIOPCIProxy, pci_dev.qdev);
     virtio_reset(proxy->vdev);
     msix_reset(&proxy->pci_dev);
 }
@@ -184,7 +184,7 @@ static void virtio_ioport_write(void *opaque, uint32_t addr, uint32_t val)
     case VIRTIO_PCI_QUEUE_PFN:
         pa = (target_phys_addr_t)val << VIRTIO_PCI_QUEUE_ADDR_SHIFT;
         if (pa == 0)
-            virtio_pci_reset(proxy);
+            virtio_pci_reset(&proxy->pci_dev.qdev);
         else
             virtio_queue_set_addr(vdev, vdev->queue_sel, pa);
         break;
@@ -198,7 +198,7 @@ static void virtio_ioport_write(void *opaque, uint32_t addr, uint32_t val)
     case VIRTIO_PCI_STATUS:
         vdev->status = val & 0xFF;
         if (vdev->status == 0)
-            virtio_pci_reset(proxy);
+            virtio_pci_reset(&proxy->pci_dev.qdev);
         break;
     case VIRTIO_MSI_CONFIG_VECTOR:
         msix_vector_unuse(&proxy->pci_dev, vdev->config_vector);
@@ -373,8 +373,7 @@ static void virtio_write_config(PCIDevice *pci_dev, uint32_t address,
     }
 
     pci_default_write_config(pci_dev, address, val, len);
-    if(proxy->vdev->nvectors)
-        msix_write_config(pci_dev, address, val, len);
+    msix_write_config(pci_dev, address, val, len);
 }
 
 static const VirtIOBindings virtio_pci_bindings = {
@@ -411,13 +410,11 @@ static void virtio_init_pci(VirtIOPCIProxy *proxy, VirtIODevice *vdev,
 
     config[0x3d] = 1;
 
-    if (vdev->nvectors && !msix_init(&proxy->pci_dev, vdev->nvectors, 1, 0,
-                                     TARGET_PAGE_SIZE)) {
+    if (vdev->nvectors && !msix_init(&proxy->pci_dev, vdev->nvectors, 1, 0)) {
         pci_register_bar(&proxy->pci_dev, 1,
                          msix_bar_size(&proxy->pci_dev),
                          PCI_ADDRESS_SPACE_MEM,
                          msix_mmio_map);
-        proxy->pci_dev.unregister = msix_uninit;
     } else
         vdev->nvectors = 0;
 
@@ -429,8 +426,6 @@ static void virtio_init_pci(VirtIOPCIProxy *proxy, VirtIODevice *vdev,
 
     pci_register_bar(&proxy->pci_dev, 0, size, PCI_ADDRESS_SPACE_IO,
                            virtio_map);
-
-    qemu_register_reset(virtio_pci_reset, proxy);
 
     virtio_bind_device(vdev, &virtio_pci_bindings, proxy);
 }
@@ -459,6 +454,14 @@ static int virtio_blk_init_pci(PCIDevice *pci_dev)
     return 0;
 }
 
+static int virtio_blk_exit_pci(PCIDevice *pci_dev)
+{
+    VirtIOPCIProxy *proxy = DO_UPCAST(VirtIOPCIProxy, pci_dev, pci_dev);
+
+    drive_uninit(proxy->dinfo);
+    return 0;
+}
+
 static int virtio_console_init_pci(PCIDevice *pci_dev)
 {
     VirtIOPCIProxy *proxy = DO_UPCAST(VirtIOPCIProxy, pci_dev, pci_dev);
@@ -470,6 +473,9 @@ static int virtio_console_init_pci(PCIDevice *pci_dev)
         proxy->class_code = PCI_CLASS_COMMUNICATION_OTHER;
 
     vdev = virtio_console_init(&pci_dev->qdev);
+    if (!vdev) {
+        return -1;
+    }
     virtio_init_pci(proxy, vdev,
                     PCI_VENDOR_ID_REDHAT_QUMRANET,
                     PCI_DEVICE_ID_VIRTIO_CONSOLE,
@@ -520,12 +526,14 @@ static PCIDeviceInfo virtio_info[] = {
         .qdev.name = "virtio-blk-pci",
         .qdev.size = sizeof(VirtIOPCIProxy),
         .init      = virtio_blk_init_pci,
+        .exit      = virtio_blk_exit_pci,
         .qdev.props = (Property[]) {
             DEFINE_PROP_HEX32("class", VirtIOPCIProxy, class_code, 0),
             DEFINE_PROP_DRIVE("drive", VirtIOPCIProxy, dinfo),
             DEFINE_PROP_UINT32("vectors", VirtIOPCIProxy, nvectors, 2),
             DEFINE_PROP_END_OF_LIST(),
         },
+        .qdev.reset = virtio_pci_reset,
     },{
         .qdev.name  = "virtio-net-pci",
         .qdev.size  = sizeof(VirtIOPCIProxy),
@@ -535,6 +543,7 @@ static PCIDeviceInfo virtio_info[] = {
                                NIC_NVECTORS_UNSPECIFIED),
             DEFINE_PROP_END_OF_LIST(),
         },
+        .qdev.reset = virtio_pci_reset,
     },{
         .qdev.name = "virtio-console-pci",
         .qdev.size = sizeof(VirtIOPCIProxy),
@@ -543,10 +552,12 @@ static PCIDeviceInfo virtio_info[] = {
             DEFINE_PROP_HEX32("class", VirtIOPCIProxy, class_code, 0),
             DEFINE_PROP_END_OF_LIST(),
         },
+        .qdev.reset = virtio_pci_reset,
     },{
         .qdev.name = "virtio-balloon-pci",
         .qdev.size = sizeof(VirtIOPCIProxy),
         .init      = virtio_balloon_init_pci,
+        .qdev.reset = virtio_pci_reset,
     },{
         /* end of list */
     }

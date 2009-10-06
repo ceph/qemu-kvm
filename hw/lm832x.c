@@ -25,9 +25,9 @@
 
 typedef struct {
     i2c_slave i2c;
-    int i2c_dir;
-    int i2c_cycle;
-    int reg;
+    uint8_t i2c_dir;
+    uint8_t i2c_cycle;
+    uint8_t reg;
 
     qemu_irq nirq;
     uint16_t model;
@@ -54,8 +54,8 @@ typedef struct {
     struct {
         uint8_t dbnctime;
         uint8_t size;
-        int start;
-        int len;
+        uint8_t start;
+        uint8_t len;
         uint8_t fifo[16];
     } kbd;
 
@@ -152,6 +152,9 @@ enum {
     LM832x_CMD_PWM_WRITE	= 0x95, /* Write PWM script. */
     LM832x_CMD_PWM_START	= 0x96, /* Start PWM engine. */
     LM832x_CMD_PWM_STOP		= 0x97, /* Stop PWM engine. */
+    LM832x_GENERAL_ERROR	= 0xff, /* There was one error.
+                                           Previously was represented by -1
+                                           This is not a command */
 };
 
 #define LM832x_MAX_KPX		8
@@ -257,7 +260,7 @@ static void lm_kbd_write(LM823KbdState *s, int reg, int byte, uint8_t value)
         lm_kbd_irq_update(s);
         s->kbd.len = 0;
         s->kbd.start = 0;
-        s->reg = -1;
+        s->reg = LM832x_GENERAL_ERROR;
         break;
 
     case LM832x_CMD_RESET:
@@ -265,7 +268,7 @@ static void lm_kbd_write(LM823KbdState *s, int reg, int byte, uint8_t value)
             lm_kbd_reset(s);
         else
             lm_kbd_error(s, ERR_BADPAR);
-        s->reg = -1;
+        s->reg = LM832x_GENERAL_ERROR;
         break;
 
     case LM823x_CMD_WRITE_PULL_DOWN:
@@ -274,7 +277,7 @@ static void lm_kbd_write(LM823KbdState *s, int reg, int byte, uint8_t value)
         else {
             s->gpio.pull |= value << 8;
             lm_kbd_gpio_update(s);
-            s->reg = -1;
+            s->reg = LM832x_GENERAL_ERROR;
         }
         break;
     case LM832x_CMD_WRITE_PORT_SEL:
@@ -283,7 +286,7 @@ static void lm_kbd_write(LM823KbdState *s, int reg, int byte, uint8_t value)
         else {
             s->gpio.dir |= value << 8;
             lm_kbd_gpio_update(s);
-            s->reg = -1;
+            s->reg = LM832x_GENERAL_ERROR;
         }
         break;
     case LM832x_CMD_WRITE_PORT_STATE:
@@ -292,25 +295,25 @@ static void lm_kbd_write(LM823KbdState *s, int reg, int byte, uint8_t value)
         else {
             s->gpio.mask |= value << 8;
             lm_kbd_gpio_update(s);
-            s->reg = -1;
+            s->reg = LM832x_GENERAL_ERROR;
         }
         break;
 
     case LM832x_CMD_SET_ACTIVE:
         s->acttime = value;
-        s->reg = -1;
+        s->reg = LM832x_GENERAL_ERROR;
         break;
 
     case LM832x_CMD_SET_DEBOUNCE:
         s->kbd.dbnctime = value;
-        s->reg = -1;
+        s->reg = LM832x_GENERAL_ERROR;
         if (!value)
             lm_kbd_error(s, ERR_BADPAR);
         break;
 
     case LM832x_CMD_SET_KEY_SIZE:
         s->kbd.size = value;
-        s->reg = -1;
+        s->reg = LM832x_GENERAL_ERROR;
         if (
                         (value & 0xf) < 3 || (value & 0xf) > LM832x_MAX_KPY ||
                         (value >> 4) < 3 || (value >> 4) > LM832x_MAX_KPX)
@@ -319,7 +322,7 @@ static void lm_kbd_write(LM823KbdState *s, int reg, int byte, uint8_t value)
 
     case LM832x_CMD_WRITE_CLOCK:
         s->clock = value;
-        s->reg = -1;
+        s->reg = LM832x_GENERAL_ERROR;
         if ((value & 3) && (value & 3) != 3) {
             lm_kbd_error(s, ERR_BADPAR);
             fprintf(stderr, "%s: invalid clock setting in RCPWM\n",
@@ -332,7 +335,7 @@ static void lm_kbd_write(LM823KbdState *s, int reg, int byte, uint8_t value)
         if (byte == 0) {
             if (!(value & 3) || (value >> 2) > 59) {
                 lm_kbd_error(s, ERR_BADPAR);
-                s->reg = -1;
+                s->reg = LM832x_GENERAL_ERROR;
                 break;
             }
 
@@ -342,11 +345,11 @@ static void lm_kbd_write(LM823KbdState *s, int reg, int byte, uint8_t value)
             s->pwm.file[s->pwm.faddr] |= value << 8;
         } else if (byte == 2) {
             s->pwm.file[s->pwm.faddr] |= value << 0;
-            s->reg = -1;
+            s->reg = LM832x_GENERAL_ERROR;
         }
         break;
     case LM832x_CMD_PWM_START:
-        s->reg = -1;
+        s->reg = LM832x_GENERAL_ERROR;
         if (!(value & 3) || (value >> 2) > 59) {
             lm_kbd_error(s, ERR_BADPAR);
             break;
@@ -356,7 +359,7 @@ static void lm_kbd_write(LM823KbdState *s, int reg, int byte, uint8_t value)
         lm_kbd_pwm_start(s, (value & 3) - 1);
         break;
     case LM832x_CMD_PWM_STOP:
-        s->reg = -1;
+        s->reg = LM832x_GENERAL_ERROR;
         if (!(value & 3)) {
             lm_kbd_error(s, ERR_BADPAR);
             break;
@@ -365,7 +368,7 @@ static void lm_kbd_write(LM823KbdState *s, int reg, int byte, uint8_t value)
         qemu_del_timer(s->pwm.tm[(value & 3) - 1]);
         break;
 
-    case -1:
+    case LM832x_GENERAL_ERROR:
         lm_kbd_error(s, ERR_BADPAR);
         break;
     default:
@@ -411,82 +414,49 @@ static int lm_i2c_tx(i2c_slave *i2c, uint8_t data)
     return 0;
 }
 
-static void lm_kbd_save(QEMUFile *f, void *opaque)
+static int lm_kbd_post_load(void *opaque, int version_id)
 {
-    LM823KbdState *s = (LM823KbdState *) opaque;
-    int i;
-
-    i2c_slave_save(f, &s->i2c);
-    qemu_put_byte(f, s->i2c_dir);
-    qemu_put_byte(f, s->i2c_cycle);
-    qemu_put_byte(f, (uint8_t) s->reg);
-
-    qemu_put_8s(f, &s->config);
-    qemu_put_8s(f, &s->status);
-    qemu_put_8s(f, &s->acttime);
-    qemu_put_8s(f, &s->error);
-    qemu_put_8s(f, &s->clock);
-
-    qemu_put_be16s(f, &s->gpio.pull);
-    qemu_put_be16s(f, &s->gpio.mask);
-    qemu_put_be16s(f, &s->gpio.dir);
-    qemu_put_be16s(f, &s->gpio.level);
-
-    qemu_put_byte(f, s->kbd.dbnctime);
-    qemu_put_byte(f, s->kbd.size);
-    qemu_put_byte(f, s->kbd.start);
-    qemu_put_byte(f, s->kbd.len);
-    qemu_put_buffer(f, s->kbd.fifo, sizeof(s->kbd.fifo));
-
-    for (i = 0; i < sizeof(s->pwm.file); i ++)
-        qemu_put_be16s(f, &s->pwm.file[i]);
-    qemu_put_8s(f, &s->pwm.faddr);
-    qemu_put_buffer(f, s->pwm.addr, sizeof(s->pwm.addr));
-    qemu_put_timer(f, s->pwm.tm[0]);
-    qemu_put_timer(f, s->pwm.tm[1]);
-    qemu_put_timer(f, s->pwm.tm[2]);
-}
-
-static int lm_kbd_load(QEMUFile *f, void *opaque, int version_id)
-{
-    LM823KbdState *s = (LM823KbdState *) opaque;
-    int i;
-
-    i2c_slave_load(f, &s->i2c);
-    s->i2c_dir = qemu_get_byte(f);
-    s->i2c_cycle = qemu_get_byte(f);
-    s->reg = (int8_t) qemu_get_byte(f);
-
-    qemu_get_8s(f, &s->config);
-    qemu_get_8s(f, &s->status);
-    qemu_get_8s(f, &s->acttime);
-    qemu_get_8s(f, &s->error);
-    qemu_get_8s(f, &s->clock);
-
-    qemu_get_be16s(f, &s->gpio.pull);
-    qemu_get_be16s(f, &s->gpio.mask);
-    qemu_get_be16s(f, &s->gpio.dir);
-    qemu_get_be16s(f, &s->gpio.level);
-
-    s->kbd.dbnctime = qemu_get_byte(f);
-    s->kbd.size = qemu_get_byte(f);
-    s->kbd.start = qemu_get_byte(f);
-    s->kbd.len = qemu_get_byte(f);
-    qemu_get_buffer(f, s->kbd.fifo, sizeof(s->kbd.fifo));
-
-    for (i = 0; i < sizeof(s->pwm.file); i ++)
-        qemu_get_be16s(f, &s->pwm.file[i]);
-    qemu_get_8s(f, &s->pwm.faddr);
-    qemu_get_buffer(f, s->pwm.addr, sizeof(s->pwm.addr));
-    qemu_get_timer(f, s->pwm.tm[0]);
-    qemu_get_timer(f, s->pwm.tm[1]);
-    qemu_get_timer(f, s->pwm.tm[2]);
+    LM823KbdState *s = opaque;
 
     lm_kbd_irq_update(s);
     lm_kbd_gpio_update(s);
 
     return 0;
 }
+
+static const VMStateDescription vmstate_lm_kbd = {
+    .name = "LM8323",
+    .version_id = 0,
+    .minimum_version_id = 0,
+    .minimum_version_id_old = 0,
+    .post_load = lm_kbd_post_load,
+    .fields      = (VMStateField []) {
+        VMSTATE_I2C_SLAVE(i2c, LM823KbdState),
+        VMSTATE_UINT8(i2c_dir, LM823KbdState),
+        VMSTATE_UINT8(i2c_cycle, LM823KbdState),
+        VMSTATE_UINT8(reg, LM823KbdState),
+        VMSTATE_UINT8(config, LM823KbdState),
+        VMSTATE_UINT8(status, LM823KbdState),
+        VMSTATE_UINT8(acttime, LM823KbdState),
+        VMSTATE_UINT8(error, LM823KbdState),
+        VMSTATE_UINT8(clock, LM823KbdState),
+        VMSTATE_UINT16(gpio.pull, LM823KbdState),
+        VMSTATE_UINT16(gpio.mask, LM823KbdState),
+        VMSTATE_UINT16(gpio.dir, LM823KbdState),
+        VMSTATE_UINT16(gpio.level, LM823KbdState),
+        VMSTATE_UINT8(kbd.dbnctime, LM823KbdState),
+        VMSTATE_UINT8(kbd.size, LM823KbdState),
+        VMSTATE_UINT8(kbd.start, LM823KbdState),
+        VMSTATE_UINT8(kbd.len, LM823KbdState),
+        VMSTATE_BUFFER(kbd.fifo, LM823KbdState),
+        VMSTATE_UINT16_ARRAY(pwm.file, LM823KbdState, 256),
+        VMSTATE_UINT8(pwm.faddr, LM823KbdState),
+        VMSTATE_BUFFER(pwm.addr, LM823KbdState),
+        VMSTATE_TIMER_ARRAY(pwm.tm, LM823KbdState, 3),
+        VMSTATE_END_OF_LIST()
+    }
+};
+
 
 static int lm8323_init(i2c_slave *i2c)
 {
@@ -501,7 +471,7 @@ static int lm8323_init(i2c_slave *i2c)
     lm_kbd_reset(s);
 
     qemu_register_reset((void *) lm_kbd_reset, s);
-    register_savevm("LM8323", -1, 0, lm_kbd_save, lm_kbd_load, s);
+    vmstate_register(-1, &vmstate_lm_kbd, s);
     return 0;
 }
 

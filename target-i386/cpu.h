@@ -338,6 +338,7 @@
 #define MSR_FSBASE                      0xc0000100
 #define MSR_GSBASE                      0xc0000101
 #define MSR_KERNELGSBASE                0xc0000102
+#define MSR_TSC_AUX                     0xc0000103
 
 #define MSR_VM_HSAVE_PA                 0xc0010117
 
@@ -571,6 +572,20 @@ typedef union {
 #endif
 #define MMX_Q(n) q
 
+typedef union {
+#ifdef USE_X86LDOUBLE
+    CPU86_LDouble d __attribute__((aligned(16)));
+#else
+    CPU86_LDouble d;
+#endif
+    MMXReg mmx;
+} FPReg;
+
+typedef struct {
+    uint64_t base;
+    uint64_t mask;
+} MTRRVar;
+
 #define CPU_NB_REGS64 16
 #define CPU_NB_REGS32 8
 
@@ -607,21 +622,17 @@ typedef struct CPUX86State {
     SegmentCache idt; /* only base and limit are used */
 
     target_ulong cr[5]; /* NOTE: cr1 is unused */
-    uint64_t a20_mask;
+    int32_t a20_mask;
 
     /* FPU state */
     unsigned int fpstt; /* top of stack index */
-    unsigned int fpus;
-    unsigned int fpuc;
+    uint16_t fpus;
+    uint16_t fpus_vmstate;
+    uint16_t fptag_vmstate;
+    uint16_t fpregs_format_vmstate;
+    uint16_t fpuc;
     uint8_t fptags[8];   /* 0 = valid, 1 = empty */
-    union {
-#ifdef USE_X86LDOUBLE
-        CPU86_LDouble d __attribute__((aligned(16)));
-#else
-        CPU86_LDouble d;
-#endif
-        MMXReg mmx;
-    } fpregs[8];
+    FPReg fpregs[8];
 
     /* emulator internal variables */
     float_status fp_status;
@@ -696,13 +707,11 @@ typedef struct CPUX86State {
     /* MTRRs */
     uint64_t mtrr_fixed[11];
     uint64_t mtrr_deftype;
-    struct {
-        uint64_t base;
-        uint64_t mask;
-    } mtrr_var[8];
+    MTRRVar mtrr_var[8];
 
     /* For KVM */
     uint64_t interrupt_bitmap[256 / 64];
+    int32_t pending_irq_vmstate;
     uint32_t mp_state;
 
     /* in order to simplify APIC support, we leave this pointer to the
@@ -712,7 +721,9 @@ typedef struct CPUX86State {
     uint64 mcg_cap;
     uint64 mcg_status;
     uint64 mcg_ctl;
-    uint64 *mce_banks;
+    uint64 mce_banks[MCE_BANKS_DEF*4];
+
+    uint64_t tsc_aux;
 } CPUX86State;
 
 CPUX86State *cpu_x86_init(const char *cpu_model);
@@ -873,7 +884,7 @@ uint64_t cpu_get_tsc(CPUX86State *env);
 #define cpu_signal_handler cpu_x86_signal_handler
 #define cpu_list x86_cpu_list
 
-#define CPU_SAVE_VERSION 10
+#define CPU_SAVE_VERSION 11
 
 /* MMU modes definitions */
 #define MMU_MODE0_SUFFIX _kernel

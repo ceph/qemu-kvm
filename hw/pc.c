@@ -1028,9 +1028,6 @@ static const int ne2000_io[NE2000_NB_MAX] = { 0x300, 0x320, 0x340, 0x360,
                                               0x280, 0x380 };
 static const int ne2000_irq[NE2000_NB_MAX] = { 9, 10, 11, 3, 4, 5 };
 
-static const int serial_io[MAX_SERIAL_PORTS] = { 0x3f8, 0x2f8, 0x3e8, 0x2e8 };
-static const int serial_irq[MAX_SERIAL_PORTS] = { 4, 3, 4, 3 };
-
 static const int parallel_io[MAX_PARALLEL_PORTS] = { 0x378, 0x278, 0x3bc };
 static const int parallel_irq[MAX_PARALLEL_PORTS] = { 7, 7, 7 };
 
@@ -1146,9 +1143,8 @@ static void pc_init1(ram_addr_t ram_size,
     qemu_irq *isa_irq;
     qemu_irq *i8259;
     IsaIrqState *isa_irq_state;
-    DriveInfo *dinfo;
     DriveInfo *hd[MAX_IDE_BUS * MAX_IDE_DEVS];
-    BlockDriverState *fd[MAX_FD];
+    DriveInfo *fd[MAX_FD];
     int using_vga = cirrus_vga_enabled || std_vga_enabled || vmsvga_enabled;
     void *fw_cfg;
 
@@ -1362,15 +1358,13 @@ static void pc_init1(ram_addr_t ram_size,
 
     for(i = 0; i < MAX_SERIAL_PORTS; i++) {
         if (serial_hds[i]) {
-            serial_init(serial_io[i], isa_reserve_irq(serial_irq[i]), 115200,
-                        serial_hds[i]);
+            serial_isa_init(i, serial_hds[i]);
         }
     }
 
     for(i = 0; i < MAX_PARALLEL_PORTS; i++) {
         if (parallel_hds[i]) {
-            parallel_init(parallel_io[i], isa_reserve_irq(parallel_irq[i]),
-                          parallel_hds[i]);
+            parallel_init(i, parallel_hds[i]);
         }
     }
 
@@ -1380,10 +1374,8 @@ static void pc_init1(ram_addr_t ram_size,
         if (!pci_enabled || (nd->model && strcmp(nd->model, "ne2k_isa") == 0))
             pc_init_ne2k_isa(nd);
         else
-            pci_nic_init(nd, "rtl8139", NULL);
+            pci_nic_init_nofail(nd, "rtl8139", NULL);
     }
-
-    piix4_acpi_system_hot_add_init(cpu_model);
 
     if (drive_get_max_bus(IF_IDE) >= MAX_IDE_BUS) {
         fprintf(stderr, "qemu: too many IDE bus\n");
@@ -1410,8 +1402,7 @@ static void pc_init1(ram_addr_t ram_size,
 #endif
 
     for(i = 0; i < MAX_FD; i++) {
-        dinfo = drive_get(IF_FLOPPY, 0, i);
-        fd[i] = dinfo ? dinfo->bdrv : NULL;
+        fd[i] = drive_get(IF_FLOPPY, 0, i);
     }
     floppy_controller = fdctrl_init_isa(fd);
 
@@ -1431,10 +1422,11 @@ static void pc_init1(ram_addr_t ram_size,
         for (i = 0; i < 8; i++) {
             DeviceState *eeprom;
             eeprom = qdev_create((BusState *)smbus, "smbus-eeprom");
-            qdev_prop_set_uint32(eeprom, "address", 0x50 + i);
+            qdev_prop_set_uint8(eeprom, "address", 0x50 + i);
             qdev_prop_set_ptr(eeprom, "data", eeprom_buf + (i * 256));
             qdev_init(eeprom);
         }
+        piix4_acpi_system_hot_add_init(pci_bus, cpu_model);
     }
 
     if (i440fx_state) {

@@ -8,170 +8,67 @@
 #include "kvm.h"
 #include "qemu-kvm.h"
 
-static void cpu_put_seg(QEMUFile *f, SegmentCache *dt)
-{
-    qemu_put_be32(f, dt->selector);
-    qemu_put_betl(f, dt->base);
-    qemu_put_be32(f, dt->limit);
-    qemu_put_be32(f, dt->flags);
+static const VMStateDescription vmstate_segment = {
+    .name = "segment",
+    .version_id = 1,
+    .minimum_version_id = 1,
+    .minimum_version_id_old = 1,
+    .fields      = (VMStateField []) {
+        VMSTATE_UINT32(selector, SegmentCache),
+        VMSTATE_UINTTL(base, SegmentCache),
+        VMSTATE_UINT32(limit, SegmentCache),
+        VMSTATE_UINT32(flags, SegmentCache),
+        VMSTATE_END_OF_LIST()
+    }
+};
+
+#define VMSTATE_SEGMENT(_field, _state) {                            \
+    .name       = (stringify(_field)),                               \
+    .size       = sizeof(SegmentCache),                              \
+    .vmsd       = &vmstate_segment,                                  \
+    .flags      = VMS_STRUCT,                                        \
+    .offset     = offsetof(_state, _field)                           \
+            + type_check(SegmentCache,typeof_field(_state, _field))  \
 }
 
-static void cpu_get_seg(QEMUFile *f, SegmentCache *dt)
+#define VMSTATE_SEGMENT_ARRAY(_field, _state, _n)                    \
+    VMSTATE_STRUCT_ARRAY(_field, _state, _n, 0, vmstate_segment, SegmentCache)
+
+static const VMStateDescription vmstate_xmm_reg = {
+    .name = "xmm_reg",
+    .version_id = 1,
+    .minimum_version_id = 1,
+    .minimum_version_id_old = 1,
+    .fields      = (VMStateField []) {
+        VMSTATE_UINT64(XMM_Q(0), XMMReg),
+        VMSTATE_UINT64(XMM_Q(1), XMMReg),
+        VMSTATE_END_OF_LIST()
+    }
+};
+
+#define VMSTATE_XMM_REGS(_field, _state, _n)                         \
+    VMSTATE_STRUCT_ARRAY(_field, _state, _n, 0, vmstate_xmm_reg, XMMReg)
+
+static const VMStateDescription vmstate_mtrr_var = {
+    .name = "mtrr_var",
+    .version_id = 1,
+    .minimum_version_id = 1,
+    .minimum_version_id_old = 1,
+    .fields      = (VMStateField []) {
+        VMSTATE_UINT64(base, MTRRVar),
+        VMSTATE_UINT64(mask, MTRRVar),
+        VMSTATE_END_OF_LIST()
+    }
+};
+
+#define VMSTATE_MTRR_VARS(_field, _state, _n, _v)                    \
+    VMSTATE_STRUCT_ARRAY(_field, _state, _n, _v, vmstate_mtrr_var, MTRRVar)
+
+static void put_fpreg_error(QEMUFile *f, void *opaque, size_t size)
 {
-    dt->selector = qemu_get_be32(f);
-    dt->base = qemu_get_betl(f);
-    dt->limit = qemu_get_be32(f);
-    dt->flags = qemu_get_be32(f);
+    fprintf(stderr, "call put_fpreg() with invalid arguments\n");
+    exit(0);
 }
-
-void cpu_save(QEMUFile *f, void *opaque)
-{
-    CPUState *env = opaque;
-    uint16_t fptag, fpus, fpuc, fpregs_format;
-    uint32_t hflags;
-    int32_t a20_mask;
-    int32_t pending_irq;
-    int i, bit;
-
-    cpu_synchronize_state(env);
-
-    for(i = 0; i < CPU_NB_REGS; i++)
-        qemu_put_betls(f, &env->regs[i]);
-    qemu_put_betls(f, &env->eip);
-    qemu_put_betls(f, &env->eflags);
-    hflags = env->hflags; /* XXX: suppress most of the redundant hflags */
-    qemu_put_be32s(f, &hflags);
-
-    /* FPU */
-    fpuc = env->fpuc;
-    fpus = (env->fpus & ~0x3800) | (env->fpstt & 0x7) << 11;
-    fptag = 0;
-    for(i = 0; i < 8; i++) {
-        fptag |= ((!env->fptags[i]) << i);
-    }
-
-    qemu_put_be16s(f, &fpuc);
-    qemu_put_be16s(f, &fpus);
-    qemu_put_be16s(f, &fptag);
-
-#ifdef USE_X86LDOUBLE
-    fpregs_format = 0;
-#else
-    fpregs_format = 1;
-#endif
-    qemu_put_be16s(f, &fpregs_format);
-
-    for(i = 0; i < 8; i++) {
-#ifdef USE_X86LDOUBLE
-        {
-            uint64_t mant;
-            uint16_t exp;
-            /* we save the real CPU data (in case of MMX usage only 'mant'
-               contains the MMX register */
-            cpu_get_fp80(&mant, &exp, env->fpregs[i].d);
-            qemu_put_be64(f, mant);
-            qemu_put_be16(f, exp);
-        }
-#else
-        /* if we use doubles for float emulation, we save the doubles to
-           avoid losing information in case of MMX usage. It can give
-           problems if the image is restored on a CPU where long
-           doubles are used instead. */
-        qemu_put_be64(f, env->fpregs[i].mmx.MMX_Q(0));
-#endif
-    }
-
-    for(i = 0; i < 6; i++)
-        cpu_put_seg(f, &env->segs[i]);
-    cpu_put_seg(f, &env->ldt);
-    cpu_put_seg(f, &env->tr);
-    cpu_put_seg(f, &env->gdt);
-    cpu_put_seg(f, &env->idt);
-
-    qemu_put_be32s(f, &env->sysenter_cs);
-    qemu_put_betls(f, &env->sysenter_esp);
-    qemu_put_betls(f, &env->sysenter_eip);
-
-    qemu_put_betls(f, &env->cr[0]);
-    qemu_put_betls(f, &env->cr[2]);
-    qemu_put_betls(f, &env->cr[3]);
-    qemu_put_betls(f, &env->cr[4]);
-
-    for(i = 0; i < 8; i++)
-        qemu_put_betls(f, &env->dr[i]);
-
-    /* MMU */
-    a20_mask = (int32_t) env->a20_mask;
-    qemu_put_sbe32s(f, &a20_mask);
-
-    /* XMM */
-    qemu_put_be32s(f, &env->mxcsr);
-    for(i = 0; i < CPU_NB_REGS; i++) {
-        qemu_put_be64s(f, &env->xmm_regs[i].XMM_Q(0));
-        qemu_put_be64s(f, &env->xmm_regs[i].XMM_Q(1));
-    }
-
-#ifdef TARGET_X86_64
-    qemu_put_be64s(f, &env->efer);
-    qemu_put_be64s(f, &env->star);
-    qemu_put_be64s(f, &env->lstar);
-    qemu_put_be64s(f, &env->cstar);
-    qemu_put_be64s(f, &env->fmask);
-    qemu_put_be64s(f, &env->kernelgsbase);
-#endif
-    qemu_put_be32s(f, &env->smbase);
-    qemu_put_be64s(f, &env->pat);
-    qemu_put_be32s(f, &env->hflags2);
-    
-    qemu_put_be64s(f, &env->vm_hsave);
-    qemu_put_be64s(f, &env->vm_vmcb);
-    qemu_put_be64s(f, &env->tsc_offset);
-    qemu_put_be64s(f, &env->intercept);
-    qemu_put_be16s(f, &env->intercept_cr_read);
-    qemu_put_be16s(f, &env->intercept_cr_write);
-    qemu_put_be16s(f, &env->intercept_dr_read);
-    qemu_put_be16s(f, &env->intercept_dr_write);
-    qemu_put_be32s(f, &env->intercept_exceptions);
-    qemu_put_8s(f, &env->v_tpr);
-
-    /* MTRRs */
-    for(i = 0; i < 11; i++)
-        qemu_put_be64s(f, &env->mtrr_fixed[i]);
-    qemu_put_be64s(f, &env->mtrr_deftype);
-    for(i = 0; i < 8; i++) {
-        qemu_put_be64s(f, &env->mtrr_var[i].base);
-        qemu_put_be64s(f, &env->mtrr_var[i].mask);
-    }
-
-    /* KVM-related states */
-
-    /* There can only be one pending IRQ set in the bitmap at a time, so try
-       to find it and save its number instead (-1 for none). */
-    pending_irq = -1;
-    for (i = 0; i < ARRAY_SIZE(env->interrupt_bitmap); i++) {
-        if (env->interrupt_bitmap[i]) {
-            bit = ctz64(env->interrupt_bitmap[i]);
-            pending_irq = i * 64 + bit;
-            break;
-        }
-    }
-    qemu_put_sbe32s(f, &pending_irq);
-    qemu_put_be32s(f, &env->mp_state);
-    qemu_put_be64s(f, &env->tsc);
-
-    /* MCE */
-    qemu_put_be64s(f, &env->mcg_cap);
-    if (env->mcg_cap && !kvm_enabled()) {
-        qemu_put_be64s(f, &env->mcg_status);
-        qemu_put_be64s(f, &env->mcg_ctl);
-        for (i = 0; i < (env->mcg_cap & 0xff); i++) {
-            qemu_put_be64s(f, &env->mce_banks[4*i]);
-            qemu_put_be64s(f, &env->mce_banks[4*i + 1]);
-            qemu_put_be64s(f, &env->mce_banks[4*i + 2]);
-            qemu_put_be64s(f, &env->mce_banks[4*i + 3]);
-        }
-    }
- }
 
 #ifdef USE_X86LDOUBLE
 /* XXX: add that in a FPU generic layer */
@@ -195,212 +92,399 @@ static void fp64_to_fp80(union x86_longdouble *p, uint64_t temp)
     e |= SIGND1(temp) >> 16;
     p->exp = e;
 }
-#endif
 
-int cpu_load(QEMUFile *f, void *opaque, int version_id)
+static int get_fpreg(QEMUFile *f, void *opaque, size_t size)
+{
+    FPReg *fp_reg = opaque;
+    uint64_t mant;
+    uint16_t exp;
+
+    qemu_get_be64s(f, &mant);
+    qemu_get_be16s(f, &exp);
+    fp_reg->d = cpu_set_fp80(mant, exp);
+    return 0;
+}
+
+static void put_fpreg(QEMUFile *f, void *opaque, size_t size)
+{
+    FPReg *fp_reg = opaque;
+    uint64_t mant;
+    uint16_t exp;
+    /* we save the real CPU data (in case of MMX usage only 'mant'
+       contains the MMX register */
+    cpu_get_fp80(&mant, &exp, fp_reg->d);
+    qemu_put_be64s(f, &mant);
+    qemu_put_be16s(f, &exp);
+}
+
+const VMStateInfo vmstate_fpreg = {
+    .name = "fpreg",
+    .get  = get_fpreg,
+    .put  = put_fpreg,
+};
+
+static int get_fpreg_1_mmx(QEMUFile *f, void *opaque, size_t size)
+{
+    union x86_longdouble *p = opaque;
+    uint64_t mant;
+
+    qemu_get_be64s(f, &mant);
+    p->mant = mant;
+    p->exp = 0xffff;
+    return 0;
+}
+
+const VMStateInfo vmstate_fpreg_1_mmx = {
+    .name = "fpreg_1_mmx",
+    .get  = get_fpreg_1_mmx,
+    .put  = put_fpreg_error,
+};
+
+static int get_fpreg_1_no_mmx(QEMUFile *f, void *opaque, size_t size)
+{
+    union x86_longdouble *p = opaque;
+    uint64_t mant;
+
+    qemu_get_be64s(f, &mant);
+    fp64_to_fp80(p, mant);
+    return 0;
+}
+
+const VMStateInfo vmstate_fpreg_1_no_mmx = {
+    .name = "fpreg_1_no_mmx",
+    .get  = get_fpreg_1_no_mmx,
+    .put  = put_fpreg_error,
+};
+
+static bool fpregs_is_0(void *opaque, int version_id)
 {
     CPUState *env = opaque;
-    int i, guess_mmx;
-    uint32_t hflags;
-    uint16_t fpus, fpuc, fptag, fpregs_format;
-    int32_t a20_mask;
-    int32_t pending_irq;
+
+    return (env->fpregs_format_vmstate == 0);
+}
+
+static bool fpregs_is_1_mmx(void *opaque, int version_id)
+{
+    CPUState *env = opaque;
+    int guess_mmx;
+
+    guess_mmx = ((env->fptag_vmstate == 0xff) &&
+                 (env->fpus_vmstate & 0x3800) == 0);
+    return (guess_mmx && (env->fpregs_format_vmstate == 1));
+}
+
+static bool fpregs_is_1_no_mmx(void *opaque, int version_id)
+{
+    CPUState *env = opaque;
+    int guess_mmx;
+
+    guess_mmx = ((env->fptag_vmstate == 0xff) &&
+                 (env->fpus_vmstate & 0x3800) == 0);
+    return (!guess_mmx && (env->fpregs_format_vmstate == 1));
+}
+
+#define VMSTATE_FP_REGS(_field, _state, _n)                               \
+    VMSTATE_ARRAY_TEST(_field, _state, _n, fpregs_is_0, vmstate_fpreg, FPReg), \
+    VMSTATE_ARRAY_TEST(_field, _state, _n, fpregs_is_1_mmx, vmstate_fpreg_1_mmx, FPReg), \
+    VMSTATE_ARRAY_TEST(_field, _state, _n, fpregs_is_1_no_mmx, vmstate_fpreg_1_no_mmx, FPReg)
+
+#else
+static int get_fpreg(QEMUFile *f, void *opaque, size_t size)
+{
+    FPReg *fp_reg = opaque;
+
+    qemu_get_be64s(f, &fp_reg->mmx.MMX_Q(0));
+    return 0;
+}
+
+static void put_fpreg(QEMUFile *f, void *opaque, size_t size)
+{
+    FPReg *fp_reg = opaque;
+    /* if we use doubles for float emulation, we save the doubles to
+       avoid losing information in case of MMX usage. It can give
+       problems if the image is restored on a CPU where long
+       doubles are used instead. */
+    qemu_put_be64s(f, &fp_reg->mmx.MMX_Q(0));
+}
+
+const VMStateInfo vmstate_fpreg = {
+    .name = "fpreg",
+    .get  = get_fpreg,
+    .put  = put_fpreg,
+};
+
+static int get_fpreg_0_mmx(QEMUFile *f, void *opaque, size_t size)
+{
+    FPReg *fp_reg = opaque;
+    uint64_t mant;
+    uint16_t exp;
+
+    qemu_get_be64s(f, &mant);
+    qemu_get_be16s(f, &exp);
+    fp_reg->mmx.MMX_Q(0) = mant;
+    return 0;
+}
+
+const VMStateInfo vmstate_fpreg_0_mmx = {
+    .name = "fpreg_0_mmx",
+    .get  = get_fpreg_0_mmx,
+    .put  = put_fpreg_error,
+};
+
+static int get_fpreg_0_no_mmx(QEMUFile *f, void *opaque, size_t size)
+{
+    FPReg *fp_reg = opaque;
+    uint64_t mant;
+    uint16_t exp;
+
+    qemu_get_be64s(f, &mant);
+    qemu_get_be16s(f, &exp);
+
+    fp_reg->d = cpu_set_fp80(mant, exp);
+    return 0;
+}
+
+const VMStateInfo vmstate_fpreg_0_no_mmx = {
+    .name = "fpreg_0_no_mmx",
+    .get  = get_fpreg_0_no_mmx,
+    .put  = put_fpreg_error,
+};
+
+static bool fpregs_is_1(void *opaque, int version_id)
+{
+    CPUState *env = opaque;
+
+    return env->fpregs_format_vmstate == 1;
+}
+
+static bool fpregs_is_0_mmx(void *opaque, int version_id)
+{
+    CPUState *env = opaque;
+    int guess_mmx;
+
+    guess_mmx = ((env->fptag_vmstate == 0xff) &&
+                 (env->fpus_vmstate & 0x3800) == 0);
+    return guess_mmx && env->fpregs_format_vmstate == 0;
+}
+
+static bool fpregs_is_0_no_mmx(void *opaque, int version_id)
+{
+    CPUState *env = opaque;
+    int guess_mmx;
+
+    guess_mmx = ((env->fptag_vmstate == 0xff) &&
+                 (env->fpus_vmstate & 0x3800) == 0);
+    return !guess_mmx && env->fpregs_format_vmstate == 0;
+}
+
+#define VMSTATE_FP_REGS(_field, _state, _n)                               \
+    VMSTATE_ARRAY_TEST(_field, _state, _n, fpregs_is_1, vmstate_fpreg, FPReg), \
+    VMSTATE_ARRAY_TEST(_field, _state, _n, fpregs_is_0_mmx, vmstate_fpreg_0_mmx, FPReg), \
+    VMSTATE_ARRAY_TEST(_field, _state, _n, fpregs_is_0_no_mmx, vmstate_fpreg_0_no_mmx, FPReg)
+
+#endif /* USE_X86LDOUBLE */
+
+static bool version_is_5(void *opaque, int version_id)
+{
+    return version_id == 5;
+}
+
+#ifdef TARGET_X86_64
+static bool less_than_7(void *opaque, int version_id)
+{
+    return version_id < 7;
+}
+
+static int get_uint64_as_uint32(QEMUFile *f, void *pv, size_t size)
+{
+    uint64_t *v = pv;
+    *v = qemu_get_be32(f);
+    return 0;
+}
+
+static void put_uint64_as_uint32(QEMUFile *f, void *pv, size_t size)
+{
+    uint64_t *v = pv;
+    qemu_put_be32(f, *v);
+}
+
+const VMStateInfo vmstate_hack_uint64_as_uint32 = {
+    .name = "uint64_as_uint32",
+    .get  = get_uint64_as_uint32,
+    .put  = put_uint64_as_uint32,
+};
+
+#define VMSTATE_HACK_UINT32(_f, _s, _t)                                  \
+    VMSTATE_SINGLE_TEST(_f, _s, _t, vmstate_hack_uint64_as_uint32, uint64_t)
+#endif
+
+static void cpu_pre_save(void *opaque)
+{
+    CPUState *env = opaque;
+    int i, bit;
 
     cpu_synchronize_state(env);
-    if (version_id < 3 || version_id > CPU_SAVE_VERSION)
-        return -EINVAL;
-    for(i = 0; i < CPU_NB_REGS; i++)
-        qemu_get_betls(f, &env->regs[i]);
-    qemu_get_betls(f, &env->eip);
-    qemu_get_betls(f, &env->eflags);
-    qemu_get_be32s(f, &hflags);
 
-    qemu_get_be16s(f, &fpuc);
-    qemu_get_be16s(f, &fpus);
-    qemu_get_be16s(f, &fptag);
-    qemu_get_be16s(f, &fpregs_format);
-
-    /* NOTE: we cannot always restore the FPU state if the image come
-       from a host with a different 'USE_X86LDOUBLE' define. We guess
-       if we are in an MMX state to restore correctly in that case. */
-    guess_mmx = ((fptag == 0xff) && (fpus & 0x3800) == 0);
+    /* FPU */
+    env->fpus_vmstate = (env->fpus & ~0x3800) | (env->fpstt & 0x7) << 11;
+    env->fptag_vmstate = 0;
     for(i = 0; i < 8; i++) {
-        uint64_t mant;
-        uint16_t exp;
+        env->fptag_vmstate |= ((!env->fptags[i]) << i);
+    }
 
-        switch(fpregs_format) {
-        case 0:
-            mant = qemu_get_be64(f);
-            exp = qemu_get_be16(f);
 #ifdef USE_X86LDOUBLE
-            env->fpregs[i].d = cpu_set_fp80(mant, exp);
+    env->fpregs_format_vmstate = 0;
 #else
-            /* difficult case */
-            if (guess_mmx)
-                env->fpregs[i].mmx.MMX_Q(0) = mant;
-            else
-                env->fpregs[i].d = cpu_set_fp80(mant, exp);
+    env->fpregs_format_vmstate = 1;
 #endif
+
+    /* There can only be one pending IRQ set in the bitmap at a time, so try
+       to find it and save its number instead (-1 for none). */
+    env->pending_irq_vmstate = -1;
+    for (i = 0; i < ARRAY_SIZE(env->interrupt_bitmap); i++) {
+        if (env->interrupt_bitmap[i]) {
+            bit = ctz64(env->interrupt_bitmap[i]);
+            env->pending_irq_vmstate = i * 64 + bit;
             break;
-        case 1:
-            mant = qemu_get_be64(f);
-#ifdef USE_X86LDOUBLE
-            {
-                union x86_longdouble *p;
-                /* difficult case */
-                p = (void *)&env->fpregs[i];
-                if (guess_mmx) {
-                    p->mant = mant;
-                    p->exp = 0xffff;
-                } else {
-                    fp64_to_fp80(p, mant);
-                }
-            }
-#else
-            env->fpregs[i].mmx.MMX_Q(0) = mant;
-#endif
-            break;
-        default:
-            return -EINVAL;
         }
     }
+}
 
-    env->fpuc = fpuc;
+static int cpu_pre_load(void *opaque)
+{
+    CPUState *env = opaque;
+
+    cpu_synchronize_state(env);
+    return 0;
+}
+
+static int cpu_post_load(void *opaque, int version_id)
+{
+    CPUState *env = opaque;
+    int i;
+
     /* XXX: restore FPU round state */
-    env->fpstt = (fpus >> 11) & 7;
-    env->fpus = fpus & ~0x3800;
-    fptag ^= 0xff;
+    env->fpstt = (env->fpus_vmstate >> 11) & 7;
+    env->fpus = env->fpus_vmstate & ~0x3800;
+    env->fptag_vmstate ^= 0xff;
     for(i = 0; i < 8; i++) {
-        env->fptags[i] = (fptag >> i) & 1;
+        env->fptags[i] = (env->fptag_vmstate >> i) & 1;
     }
 
-    for(i = 0; i < 6; i++)
-        cpu_get_seg(f, &env->segs[i]);
-    cpu_get_seg(f, &env->ldt);
-    cpu_get_seg(f, &env->tr);
-    cpu_get_seg(f, &env->gdt);
-    cpu_get_seg(f, &env->idt);
-
-    qemu_get_be32s(f, &env->sysenter_cs);
-    if (version_id >= 7) {
-        qemu_get_betls(f, &env->sysenter_esp);
-        qemu_get_betls(f, &env->sysenter_eip);
-    } else {
-        env->sysenter_esp = qemu_get_be32(f);
-        env->sysenter_eip = qemu_get_be32(f);
-    }
-
-    qemu_get_betls(f, &env->cr[0]);
-    qemu_get_betls(f, &env->cr[2]);
-    qemu_get_betls(f, &env->cr[3]);
-    qemu_get_betls(f, &env->cr[4]);
-
-    for(i = 0; i < 8; i++)
-        qemu_get_betls(f, &env->dr[i]);
     cpu_breakpoint_remove_all(env, BP_CPU);
     cpu_watchpoint_remove_all(env, BP_CPU);
     for (i = 0; i < 4; i++)
         hw_breakpoint_insert(env, i);
 
-    /* MMU */
-    qemu_get_sbe32s(f, &a20_mask);
-    env->a20_mask = a20_mask;
-
-    qemu_get_be32s(f, &env->mxcsr);
-    for(i = 0; i < CPU_NB_REGS; i++) {
-        qemu_get_be64s(f, &env->xmm_regs[i].XMM_Q(0));
-        qemu_get_be64s(f, &env->xmm_regs[i].XMM_Q(1));
+    if (version_id >= 9) {
+        memset(&env->interrupt_bitmap, 0, sizeof(env->interrupt_bitmap));
+        if (env->pending_irq_vmstate >= 0) {
+            env->interrupt_bitmap[env->pending_irq_vmstate / 64] |=
+                (uint64_t)1 << (env->pending_irq_vmstate % 64);
+        }
     }
+
+    return cpu_post_load(env, version_id);
+}
+
+const VMStateDescription vmstate_cpu = {
+    .name = "cpu",
+    .version_id = CPU_SAVE_VERSION,
+    .minimum_version_id = 3,
+    .minimum_version_id_old = 3,
+    .pre_save = cpu_pre_save,
+    .pre_load = cpu_pre_load,
+    .post_load = cpu_post_load,
+    .fields      = (VMStateField []) {
+        VMSTATE_UINTTL_ARRAY(regs, CPUState, CPU_NB_REGS),
+        VMSTATE_UINTTL(eip, CPUState),
+        VMSTATE_UINTTL(eflags, CPUState),
+        VMSTATE_UINT32(hflags, CPUState),
+        /* FPU */
+        VMSTATE_UINT16(fpuc, CPUState),
+        VMSTATE_UINT16(fpus_vmstate, CPUState),
+        VMSTATE_UINT16(fptag_vmstate, CPUState),
+        VMSTATE_UINT16(fpregs_format_vmstate, CPUState),
+        VMSTATE_FP_REGS(fpregs, CPUState, 8),
+
+        VMSTATE_SEGMENT_ARRAY(segs, CPUState, 6),
+        VMSTATE_SEGMENT(ldt, CPUState),
+        VMSTATE_SEGMENT(tr, CPUState),
+        VMSTATE_SEGMENT(gdt, CPUState),
+        VMSTATE_SEGMENT(idt, CPUState),
+
+        VMSTATE_UINT32(sysenter_cs, CPUState),
+#ifdef TARGET_X86_64
+        /* Hack: In v7 size changed from 32 to 64 bits on x86_64 */
+        VMSTATE_HACK_UINT32(sysenter_esp, CPUState, less_than_7),
+        VMSTATE_HACK_UINT32(sysenter_eip, CPUState, less_than_7),
+        VMSTATE_UINTTL_V(sysenter_esp, CPUState, 7),
+        VMSTATE_UINTTL_V(sysenter_eip, CPUState, 7),
+#else
+        VMSTATE_UINTTL(sysenter_esp, CPUState),
+        VMSTATE_UINTTL(sysenter_eip, CPUState),
+#endif
+
+        VMSTATE_UINTTL(cr[0], CPUState),
+        VMSTATE_UINTTL(cr[2], CPUState),
+        VMSTATE_UINTTL(cr[3], CPUState),
+        VMSTATE_UINTTL(cr[4], CPUState),
+        VMSTATE_UINTTL_ARRAY(dr, CPUState, 8),
+        /* MMU */
+        VMSTATE_INT32(a20_mask, CPUState),
+        /* XMM */
+        VMSTATE_UINT32(mxcsr, CPUState),
+        VMSTATE_XMM_REGS(xmm_regs, CPUState, CPU_NB_REGS),
 
 #ifdef TARGET_X86_64
-    qemu_get_be64s(f, &env->efer);
-    qemu_get_be64s(f, &env->star);
-    qemu_get_be64s(f, &env->lstar);
-    qemu_get_be64s(f, &env->cstar);
-    qemu_get_be64s(f, &env->fmask);
-    qemu_get_be64s(f, &env->kernelgsbase);
+        VMSTATE_UINT64(efer, CPUState),
+        VMSTATE_UINT64(star, CPUState),
+        VMSTATE_UINT64(lstar, CPUState),
+        VMSTATE_UINT64(cstar, CPUState),
+        VMSTATE_UINT64(fmask, CPUState),
+        VMSTATE_UINT64(kernelgsbase, CPUState),
 #endif
-    if (version_id >= 4) {
-        qemu_get_be32s(f, &env->smbase);
-    }
-    if (version_id >= 5) {
-        qemu_get_be64s(f, &env->pat);
-        qemu_get_be32s(f, &env->hflags2);
-        if (version_id < 6)
-            qemu_get_be32s(f, &env->halted);
+        VMSTATE_UINT32_V(smbase, CPUState, 4),
 
-        qemu_get_be64s(f, &env->vm_hsave);
-        qemu_get_be64s(f, &env->vm_vmcb);
-        qemu_get_be64s(f, &env->tsc_offset);
-        qemu_get_be64s(f, &env->intercept);
-        qemu_get_be16s(f, &env->intercept_cr_read);
-        qemu_get_be16s(f, &env->intercept_cr_write);
-        qemu_get_be16s(f, &env->intercept_dr_read);
-        qemu_get_be16s(f, &env->intercept_dr_write);
-        qemu_get_be32s(f, &env->intercept_exceptions);
-        qemu_get_8s(f, &env->v_tpr);
-    }
+        VMSTATE_UINT64_V(pat, CPUState, 5),
+        VMSTATE_UINT32_V(hflags2, CPUState, 5),
 
-    if (version_id >= 8) {
+        VMSTATE_UINT32_TEST(halted, CPUState, version_is_5),
+        VMSTATE_UINT64_V(vm_hsave, CPUState, 5),
+        VMSTATE_UINT64_V(vm_vmcb, CPUState, 5),
+        VMSTATE_UINT64_V(tsc_offset, CPUState, 5),
+        VMSTATE_UINT64_V(intercept, CPUState, 5),
+        VMSTATE_UINT16_V(intercept_cr_read, CPUState, 5),
+        VMSTATE_UINT16_V(intercept_cr_write, CPUState, 5),
+        VMSTATE_UINT16_V(intercept_dr_read, CPUState, 5),
+        VMSTATE_UINT16_V(intercept_dr_write, CPUState, 5),
+        VMSTATE_UINT32_V(intercept_exceptions, CPUState, 5),
+        VMSTATE_UINT8_V(v_tpr, CPUState, 5),
         /* MTRRs */
-        for(i = 0; i < 11; i++)
-            qemu_get_be64s(f, &env->mtrr_fixed[i]);
-        qemu_get_be64s(f, &env->mtrr_deftype);
-        for(i = 0; i < 8; i++) {
-            qemu_get_be64s(f, &env->mtrr_var[i].base);
-            qemu_get_be64s(f, &env->mtrr_var[i].mask);
-        }
+        VMSTATE_UINT64_ARRAY_V(mtrr_fixed, CPUState, 11, 8),
+        VMSTATE_UINT64_V(mtrr_deftype, CPUState, 8),
+        VMSTATE_MTRR_VARS(mtrr_var, CPUState, 8, 8),
+        /* KVM-related states */
+        VMSTATE_INT32_V(pending_irq_vmstate, CPUState, 9),
+        VMSTATE_UINT32_V(mp_state, CPUState, 9),
+        VMSTATE_UINT64_V(tsc, CPUState, 9),
+        /* MCE */
+        VMSTATE_UINT64_V(mcg_cap, CPUState, 10),
+        VMSTATE_UINT64_V(mcg_status, CPUState, 10),
+        VMSTATE_UINT64_V(mcg_ctl, CPUState, 10),
+        VMSTATE_UINT64_ARRAY_V(mce_banks, CPUState, MCE_BANKS_DEF *4, 10),
+        /* rdtscp */
+        VMSTATE_UINT64_V(tsc_aux, CPUState, 11),
+        VMSTATE_END_OF_LIST()
     }
+};
 
-    if (version_id >= 9) {
-        qemu_get_sbe32s(f, &pending_irq);
-        memset(&env->interrupt_bitmap, 0, sizeof(env->interrupt_bitmap));
-        if (pending_irq >= 0) {
-            env->interrupt_bitmap[pending_irq / 64] |=
-                (uint64_t)1 << (pending_irq % 64);
-        }
-        qemu_get_be32s(f, &env->mp_state);
-        qemu_get_be64s(f, &env->tsc);
-    }
+void cpu_save(QEMUFile *f, void *opaque)
+{
+    vmstate_save_state(f, &vmstate_cpu, opaque);
+}
 
-    if (version_id >= 10) {
-        qemu_get_be64s(f, &env->mcg_cap);
-        if (env->mcg_cap && !kvm_enabled()) {
-            qemu_get_be64s(f, &env->mcg_status);
-            qemu_get_be64s(f, &env->mcg_ctl);
-            for (i = 0; i < (env->mcg_cap & 0xff); i++) {
-                qemu_get_be64s(f, &env->mce_banks[4*i]);
-                qemu_get_be64s(f, &env->mce_banks[4*i + 1]);
-                qemu_get_be64s(f, &env->mce_banks[4*i + 2]);
-                qemu_get_be64s(f, &env->mce_banks[4*i + 3]);
-            }
-        }
-    }
-
-    /* XXX: ensure compatiblity for halted bit ? */
-    /* XXX: compute redundant hflags bits */
-    env->hflags = hflags;
-    tlb_flush(env, 1);
-    if (kvm_enabled()) {
-        /* when in-kernel irqchip is used, env->halted causes deadlock
-           because no userspace IRQs will ever clear this flag */
-        env->halted = 0;
-        if (version_id < 9) {
-            for (i = 0; i < sizeof(env->interrupt_bitmap)/8; i++) {
-                qemu_get_be64s(f, &env->interrupt_bitmap[i]);
-            }
-            qemu_get_be64s(f, &env->tsc);
-            kvm_load_registers(env);
-            kvm_load_tsc(env);
-            if (version_id >= 5) {
-                qemu_get_be32s(f, &env->mp_state);
-                kvm_arch_load_mpstate(env);
-            }
-        } else {
-            kvm_load_registers(env);
-            kvm_load_tsc(env);
-            kvm_arch_load_mpstate(env);
-        }
-    }
-    return 0;
+int cpu_load(QEMUFile *f, void *opaque, int version_id)
+{
+    return vmstate_load_state(f, &vmstate_cpu, opaque, version_id);
 }

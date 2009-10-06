@@ -12,11 +12,12 @@ SerialState *serial_init(int base, qemu_irq irq, int baudbase,
 SerialState *serial_mm_init (target_phys_addr_t base, int it_shift,
                              qemu_irq irq, int baudbase,
                              CharDriverState *chr, int ioregister);
+SerialState *serial_isa_init(int index, CharDriverState *chr);
 
 /* parallel.c */
 
 typedef struct ParallelState ParallelState;
-ParallelState *parallel_init(int base, qemu_irq irq, CharDriverState *chr);
+ParallelState *parallel_init(int index, CharDriverState *chr);
 ParallelState *parallel_mm_init(target_phys_addr_t base, int it_shift, qemu_irq irq, CharDriverState *chr);
 
 /* i8259.c */
@@ -113,7 +114,7 @@ int acpi_table_add(const char *table_desc);
 i2c_bus *piix4_pm_init(PCIBus *bus, int devfn, uint32_t smb_io_base,
                        qemu_irq sci_irq);
 void piix4_smbus_register_device(SMBusDevice *dev, uint8_t addr);
-void piix4_acpi_system_hot_add_init(const char *model);
+void piix4_acpi_system_hot_add_init(PCIBus *bus, const char *model);
 
 /* hpet.c */
 extern int no_hpet;

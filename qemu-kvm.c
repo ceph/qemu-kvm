@@ -2235,7 +2235,7 @@ int kvm_arch_init_irq_routing(void)
 
 extern int no_hpet;
 
-static int kvm_create_context()
+static int kvm_create_context(void)
 {
     int r;
 

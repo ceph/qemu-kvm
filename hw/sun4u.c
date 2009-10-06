@@ -337,9 +337,6 @@ void cpu_tick_set_limit(void *opaque, uint64_t limit)
     ptimer_set_limit(opaque, -limit, 0);
 }
 
-static const int serial_io[MAX_SERIAL_PORTS] = { 0x3f8, 0x2f8, 0x3e8, 0x2e8 };
-static const int serial_irq[MAX_SERIAL_PORTS] = { 4, 3, 4, 3 };
-
 static const int parallel_io[MAX_PARALLEL_PORTS] = { 0x378, 0x278, 0x3bc };
 static const int parallel_irq[MAX_PARALLEL_PORTS] = { 7, 7, 7 };
 
@@ -573,9 +570,8 @@ static void sun4uv_init(ram_addr_t RAM_size,
     PCIBus *pci_bus, *pci_bus2, *pci_bus3;
     qemu_irq *irq;
     DriveInfo *hd[MAX_IDE_BUS * MAX_IDE_DEVS];
-    BlockDriverState *fd[MAX_FD];
+    DriveInfo *fd[MAX_FD];
     void *fw_cfg;
-    DriveInfo *dinfo;
 
     /* init CPUs */
     env = cpu_devinit(cpu_model, hwdef);
@@ -603,20 +599,18 @@ static void sun4uv_init(ram_addr_t RAM_size,
     }
     for(; i < MAX_SERIAL_PORTS; i++) {
         if (serial_hds[i]) {
-            serial_init(serial_io[i], NULL/*serial_irq[i]*/, 115200,
-                        serial_hds[i]);
+            serial_isa_init(i, serial_hds[i]);
         }
     }
 
     for(i = 0; i < MAX_PARALLEL_PORTS; i++) {
         if (parallel_hds[i]) {
-            parallel_init(parallel_io[i], NULL/*parallel_irq[i]*/,
-                          parallel_hds[i]);
+            parallel_init(i, parallel_hds[i]);
         }
     }
 
     for(i = 0; i < nb_nics; i++)
-        pci_nic_init(&nd_table[i], "ne2k_pci", NULL);
+        pci_nic_init_nofail(&nd_table[i], "ne2k_pci", NULL);
 
     if (drive_get_max_bus(IF_IDE) >= MAX_IDE_BUS) {
         fprintf(stderr, "qemu: too many IDE bus\n");
@@ -631,8 +625,7 @@ static void sun4uv_init(ram_addr_t RAM_size,
 
     isa_create_simple("i8042");
     for(i = 0; i < MAX_FD; i++) {
-        dinfo = drive_get(IF_FLOPPY, 0, i);
-        fd[i] = dinfo ? dinfo->bdrv : NULL;
+        fd[i] = drive_get(IF_FLOPPY, 0, i);
     }
     fdctrl_init_isa(fd);
     nvram = m48t59_init_isa(0x0074, NVRAM_SIZE, 59);

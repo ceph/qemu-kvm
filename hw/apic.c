@@ -967,7 +967,7 @@ void qemu_kvm_load_lapic(CPUState *env)
 #endif
 }
 
-static void apic_pre_save(const void *opaque)
+static void apic_pre_save(void *opaque)
 {
 #ifdef KVM_CAP_IRQCHIP
     APICState *s = (void *)opaque;
@@ -978,7 +978,7 @@ static void apic_pre_save(const void *opaque)
 #endif
 }
 
-static int apic_post_load(void *opaque)
+static int apic_post_load(void *opaque, int version_id)
 {
 #ifdef KVM_CAP_IRQCHIP
     APICState *s = opaque;

@@ -73,15 +73,20 @@
 
 #define TRACE(flag, command) ((flag) ? (command) : (void)0)
 
-#define missing(text)       assert(!"feature is missing in this emulation: " text)
+#define missing(text) fprintf(stderr, "eepro100: feature is missing in this emulation: " text "\n")
 
 #define MAX_ETH_FRAME_SIZE 1514
 
 /* This driver supports several different devices which are declared here. */
+#define i82550          0x82550
 #define i82551          0x82551
+#define i82557A         0x82557a
 #define i82557B         0x82557b
 #define i82557C         0x82557c
+#define i82558A         0x82558a
 #define i82558B         0x82558b
+#define i82559A         0x82559a
+#define i82559B         0x82559b
 #define i82559C         0x82559c
 #define i82559ER        0x82559e
 #define i82562          0x82562
@@ -497,6 +502,8 @@ static void nic_selective_reset(EEPRO100State * s)
     //~ eeprom93xx_reset(s->eeprom);
     memcpy(eeprom_contents, s->macaddr, 6);
     eeprom_contents[0xa] = 0x4000;
+    if (s->device == i82557B || s->device == i82557C)
+        eeprom_contents[5] = 0x0100;
     uint16_t sum = 0;
     for (i = 0; i < EEPROM_SIZE - 1; i++) {
         sum += eeprom_contents[i];
@@ -667,6 +674,7 @@ static void eepro100_cu_command(EEPRO100State * s, uint8_t val)
         bool bit_s = ((command & 0x4000) != 0);
         bool bit_i = ((command & 0x2000) != 0);
         bool bit_nc = ((command & 0x0010) != 0);
+        bool success = true;
         //~ bool bit_sf = ((command & 0x0008) != 0);
         uint16_t cmd = command & 0x0007;
         s->cu_offset = le32_to_cpu(tx.link);
@@ -693,9 +701,17 @@ static void eepro100_cu_command(EEPRO100State * s, uint8_t val)
             TRACE(RXTX, logout
                 ("transmit, TBD array address 0x%08x, TCB byte count 0x%04x, TBD count %u\n",
                  tbd_array, tcb_bytes, tx.tbd_count));
-            assert(!bit_nc);
+
+            if (bit_nc) {
+                missing("CmdTx: NC = 0");
+                success = false;
+                break;
+            }
             //~ assert(!bit_sf);
-            assert(tcb_bytes <= 2600);
+            if (tcb_bytes > 2600) {
+                logout("TCB byte count too large, using 2600\n");
+                tcb_bytes = 2600;
+            }
             /* Next assertion fails for local configuration. */
             //~ assert((tcb_bytes > 0) || (tbd_array != 0xffffffff));
             if (!((tcb_bytes > 0) || (tbd_array != 0xffffffff))) {
@@ -727,7 +743,6 @@ static void eepro100_cu_command(EEPRO100State * s, uint8_t val)
                 uint8_t tbd_count = 0;
                 if (device_supports_eTxCB(s) && !(s->configuration[6] & BIT(4))) {
                     /* Extended Flexible TCB. */
-                    assert(tcb_bytes == 0);
                     for (; tbd_count < 2; tbd_count++) {
                         uint32_t tx_buffer_address = ldl_phys(tbd_address);
                         uint16_t tx_buffer_size = lduw_phys(tbd_address + 4);
@@ -777,9 +792,11 @@ static void eepro100_cu_command(EEPRO100State * s, uint8_t val)
             break;
         default:
             missing("undefined command");
+            success = false;
+            break;
         }
-        /* Write new status (success). */
-        stw_phys(cb_address, status | 0x8000 | 0x2000);
+        /* Write new status. */
+        stw_phys(cb_address, status | 0x8000 | (success ? 0x2000 : 0));
         if (bit_i) {
             /* CU completed action. */
             eepro100_cx_interrupt(s);
@@ -1487,7 +1504,10 @@ static ssize_t nic_receive(VLANClientState *vc, const uint8_t * buf, size_t size
         { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
 
     /* TODO: check multiple IA bit. */
-    assert(!(s->configuration[20] & BIT(6)));
+    if (s->configuration[20] & BIT(6)) {
+        missing("Multiple IA bit");
+        return -1;
+    }
 
     if (s->configuration[8] & 0x80) {
         /* CSMA is disabled. */
@@ -1516,7 +1536,9 @@ static ssize_t nic_receive(VLANClientState *vc, const uint8_t * buf, size_t size
         /* Multicast frame. */
         TRACE(RXTX, logout("%p received multicast, len=%zu\n", s, size));
         /* TODO: check multicast all bit. */
-        assert(!(s->configuration[21] & BIT(3)));
+        if (s->configuration[21] & BIT(3)) {
+            missing("Multicast All bit");
+        }
         int mcast_idx = compute_mcast_idx(buf);
         if (!(s->mult[mcast_idx >> 3] & (1 << (mcast_idx & 7)))) {
             return size;
@@ -1546,7 +1568,12 @@ static ssize_t nic_receive(VLANClientState *vc, const uint8_t * buf, size_t size
                              offsetof(eepro100_rx_t, packet));
     uint16_t rfd_command = le16_to_cpu(rx.command);
     uint16_t rfd_size = le16_to_cpu(rx.size);
-    assert(size <= rfd_size);
+
+    if (size > rfd_size) {
+        logout("Receive buffer (%" PRId16 " bytes) too small for data "
+            "(%zu bytes); data truncated\n", rfd_size, size);
+        size = rfd_size;
+    }
     if (size < 64) {
         rfd_status |= 0x0080;
     }
@@ -1558,7 +1585,10 @@ static ssize_t nic_receive(VLANClientState *vc, const uint8_t * buf, size_t size
     /* Early receive interrupt not supported. */
     //~ eepro100_er_interrupt(s);
     /* Receive CRC Transfer not supported. */
-    assert(!(s->configuration[18] & 4));
+    if (s->configuration[18] & 4) {
+        missing("Receive CRC Transfer");
+        return -1;
+    }
     /* TODO: check stripping enable bit. */
     //~ assert(!(s->configuration[17] & 1));
     cpu_physical_memory_write(s->ru_base + s->ru_offset +
@@ -1568,7 +1598,8 @@ static ssize_t nic_receive(VLANClientState *vc, const uint8_t * buf, size_t size
     s->ru_offset = le32_to_cpu(rx.link);
     if (rfd_command & 0x8000) {
         /* EL bit is set, so this was the last frame. */
-        assert(0);
+        logout("receive: Running out of frames\n");
+        set_ru_state(s, ru_suspended);
     }
     if (rfd_command & 0x4000) {
         /* S bit is set. */
@@ -1758,9 +1789,9 @@ static void nic_cleanup(VLANClientState *vc)
     eeprom93xx_free(s->eeprom);
 }
 
-static int pci_nic_uninit(PCIDevice *dev)
+static int pci_nic_uninit(PCIDevice *pci_dev)
 {
-    EEPRO100State *s = DO_UPCAST(EEPRO100State, dev, dev);
+    EEPRO100State *s = DO_UPCAST(EEPRO100State, dev, pci_dev);
 
     cpu_unregister_io_memory(s->mmio_index);
 
@@ -1772,8 +1803,6 @@ static int nic_init(PCIDevice *pci_dev, uint32_t device)
     EEPRO100State *s = DO_UPCAST(EEPRO100State, dev, pci_dev);
 
     TRACE(OTHER, logout("\n"));
-
-    s->dev.unregister = pci_nic_uninit;
 
     s->device = device;
 
@@ -1814,34 +1843,118 @@ static int nic_init(PCIDevice *pci_dev, uint32_t device)
     return 0;
 }
 
-static int pci_i82551_init(PCIDevice *dev)
+static int pci_i82550_init(PCIDevice *pci_dev)
 {
-    return nic_init(dev, i82551);
+    return nic_init(pci_dev, i82550);
 }
 
-static int pci_i82557b_init(PCIDevice *dev)
+static int pci_i82551_init(PCIDevice *pci_dev)
 {
-    return nic_init(dev, i82557B);
+    return nic_init(pci_dev, i82551);
 }
 
-static int pci_i82559er_init(PCIDevice *dev)
+static int pci_i82557a_init(PCIDevice *pci_dev)
 {
-    return nic_init(dev, i82559ER);
+    return nic_init(pci_dev, i82557A);
+}
+
+static int pci_i82557b_init(PCIDevice *pci_dev)
+{
+    return nic_init(pci_dev, i82557B);
+}
+
+static int pci_i82557c_init(PCIDevice *pci_dev)
+{
+    return nic_init(pci_dev, i82557C);
+}
+
+static int pci_i82558a_init(PCIDevice *pci_dev)
+{
+    return nic_init(pci_dev, i82558A);
+}
+
+static int pci_i82558b_init(PCIDevice *pci_dev)
+{
+    return nic_init(pci_dev, i82558B);
+}
+
+static int pci_i82559a_init(PCIDevice *pci_dev)
+{
+    return nic_init(pci_dev, i82559A);
+}
+
+static int pci_i82559b_init(PCIDevice *pci_dev)
+{
+    return nic_init(pci_dev, i82559B);
+}
+
+static int pci_i82559c_init(PCIDevice *pci_dev)
+{
+    return nic_init(pci_dev, i82559C);
+}
+
+static int pci_i82559er_init(PCIDevice *pci_dev)
+{
+    return nic_init(pci_dev, i82559ER);
+}
+
+static int pci_i82562_init(PCIDevice *pci_dev)
+{
+    return nic_init(pci_dev, i82562);
 }
 
 static PCIDeviceInfo eepro100_info[] = {
     {
+        .qdev.name = "i82550",
+        .qdev.size = sizeof(EEPRO100State),
+        .init      = pci_i82550_init,
+    },{
         .qdev.name = "i82551",
         .qdev.size = sizeof(EEPRO100State),
         .init      = pci_i82551_init,
+        .exit      = pci_nic_uninit,
+    },{
+        .qdev.name = "i82557a",
+        .qdev.size = sizeof(EEPRO100State),
+        .init      = pci_i82557a_init,
     },{
         .qdev.name = "i82557b",
         .qdev.size = sizeof(EEPRO100State),
         .init      = pci_i82557b_init,
+        .exit      = pci_nic_uninit,
+    },{
+        .qdev.name = "i82557c",
+        .qdev.size = sizeof(EEPRO100State),
+        .init      = pci_i82557c_init,
+    },{
+        .qdev.name = "i82558a",
+        .qdev.size = sizeof(EEPRO100State),
+        .init      = pci_i82558a_init,
+    },{
+        .qdev.name = "i82558b",
+        .qdev.size = sizeof(EEPRO100State),
+        .init      = pci_i82558b_init,
+    },{
+        .qdev.name = "i82559a",
+        .qdev.size = sizeof(EEPRO100State),
+        .init      = pci_i82559a_init,
+    },{
+        .qdev.name = "i82559b",
+        .qdev.size = sizeof(EEPRO100State),
+        .init      = pci_i82559b_init,
+    },{
+        .qdev.name = "i82559c",
+        .qdev.size = sizeof(EEPRO100State),
+        .init      = pci_i82559c_init,
     },{
         .qdev.name = "i82559er",
         .qdev.size = sizeof(EEPRO100State),
         .init      = pci_i82559er_init,
+        .exit      = pci_nic_uninit,
+    },{
+        .qdev.name = "i82562",
+        .qdev.size = sizeof(EEPRO100State),
+        .init      = pci_i82562_init,
     },{
         /* end of list */
     }

@@ -1491,9 +1491,11 @@ cirrus_vga_write_gr(CirrusVGAState * s, unsigned reg_index, int reg_value)
 #endif
     switch (reg_index) {
     case 0x00:			// Standard VGA, BGCOLOR 0x000000ff
+	s->vga.gr[reg_index] = reg_value & gr_mask[reg_index];
 	s->cirrus_shadow_gr0 = reg_value;
 	break;
     case 0x01:			// Standard VGA, FGCOLOR 0x000000ff
+	s->vga.gr[reg_index] = reg_value & gr_mask[reg_index];
 	s->cirrus_shadow_gr1 = reg_value;
 	break;
     case 0x02:			// Standard VGA
@@ -2967,7 +2969,7 @@ static CPUWriteMemoryFunc * const cirrus_mmio_write[3] = {
 
 /* load/save state */
 
-static int cirrus_post_load(void *opaque)
+static int cirrus_post_load(void *opaque, int version_id)
 {
     CirrusVGAState *s = opaque;
 

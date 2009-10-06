@@ -14,16 +14,14 @@ static struct BusInfo usb_bus_info = {
 static int next_usb_bus = 0;
 static QTAILQ_HEAD(, USBBus) busses = QTAILQ_HEAD_INITIALIZER(busses);
 
-USBBus *usb_bus_new(DeviceState *host)
+void usb_bus_new(USBBus *bus, DeviceState *host)
 {
-    USBBus *bus;
-
-    bus = FROM_QBUS(USBBus, qbus_create(&usb_bus_info, host, NULL));
+    qbus_create_inplace(&bus->qbus, &usb_bus_info, host, NULL);
     bus->busnr = next_usb_bus++;
+    bus->qbus.allow_hotplug = 1; /* Yes, we can */
     QTAILQ_INIT(&bus->free);
     QTAILQ_INIT(&bus->used);
     QTAILQ_INSERT_TAIL(&busses, bus, next);
-    return bus;
 }
 
 USBBus *usb_bus_find(int busnr)
@@ -53,10 +51,23 @@ static int usb_qdev_init(DeviceState *qdev, DeviceInfo *base)
     return rc;
 }
 
+static int usb_qdev_exit(DeviceState *qdev)
+{
+    USBDevice *dev = DO_UPCAST(USBDevice, qdev, qdev);
+
+    usb_device_detach(dev);
+    if (dev->info->handle_destroy) {
+        dev->info->handle_destroy(dev);
+    }
+    return 0;
+}
+
 void usb_qdev_register(USBDeviceInfo *info)
 {
     info->qdev.bus_info = &usb_bus_info;
     info->qdev.init     = usb_qdev_init;
+    info->qdev.unplug   = qdev_simple_unplug_cb;
+    info->qdev.exit     = usb_qdev_exit;
     qdev_register(&info->qdev);
 }
 
@@ -104,6 +115,14 @@ void usb_register_port(USBBus *bus, USBPort *port, void *opaque, int index,
     bus->nfree++;
 }
 
+void usb_unregister_port(USBBus *bus, USBPort *port)
+{
+    if (port->dev)
+        qdev_free(&port->dev->qdev);
+    QTAILQ_REMOVE(&bus->free, port, next);
+    bus->nfree--;
+}
+
 static void do_attach(USBDevice *dev)
 {
     USBBus *bus = usb_bus_from_device(dev);
@@ -139,6 +158,34 @@ int usb_device_attach(USBDevice *dev)
     return 0;
 }
 
+int usb_device_detach(USBDevice *dev)
+{
+    USBBus *bus = usb_bus_from_device(dev);
+    USBPort *port;
+
+    if (!dev->attached) {
+        fprintf(stderr, "Warning: tried to detach unattached usb device %s\n",
+                dev->devname);
+        return -1;
+    }
+    dev->attached--;
+
+    QTAILQ_FOREACH(port, &bus->used, next) {
+        if (port->dev == dev)
+            break;
+    }
+    assert(port != NULL);
+
+    QTAILQ_REMOVE(&bus->used, port, next);
+    bus->nused--;
+
+    usb_attach(port, NULL);
+
+    QTAILQ_INSERT_TAIL(&bus->free, port, next);
+    bus->nfree++;
+    return 0;
+}
+
 int usb_device_delete_addr(int busnr, int addr)
 {
     USBBus *bus;
@@ -155,16 +202,9 @@ int usb_device_delete_addr(int busnr, int addr)
     }
     if (!port)
         return -1;
-
     dev = port->dev;
-    QTAILQ_REMOVE(&bus->used, port, next);
-    bus->nused--;
 
-    usb_attach(port, NULL);
-    dev->info->handle_destroy(dev);
-
-    QTAILQ_INSERT_TAIL(&bus->free, port, next);
-    bus->nfree++;
+    qdev_free(&dev->qdev);
     return 0;
 }
 

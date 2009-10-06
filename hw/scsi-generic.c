@@ -669,7 +669,7 @@ static void scsi_destroy(SCSIDevice *d)
         r = n;
     }
 
-    qemu_free(d);
+    drive_uninit(s->dinfo);
 }
 
 static int scsi_generic_initfn(SCSIDevice *dev)

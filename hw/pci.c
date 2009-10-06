@@ -26,8 +26,9 @@
 #include "monitor.h"
 #include "net.h"
 #include "sysemu.h"
-#include "pc.h"
+#include "msix.h"
 #include "qemu-kvm.h"
+#include "hw/pc.h"
 #include "device-assignment.h"
 
 //#define DEBUG_PCI
@@ -43,6 +44,7 @@ struct PCIBus {
     int devfn_min;
     pci_set_irq_fn set_irq;
     pci_map_irq_fn map_irq;
+    pci_hotplug_fn hotplug;
     uint32_t config_reg; /* XXX: suppress */
     void *irq_opaque;
     PCIDevice *devices[256];
@@ -86,6 +88,29 @@ static const VMStateDescription vmstate_pcibus = {
     }
 };
 
+static inline int pci_bar(int reg)
+{
+    return reg == PCI_ROM_SLOT ? PCI_ROM_ADDRESS : PCI_BASE_ADDRESS_0 + reg * 4;
+}
+
+static void pci_device_reset(PCIDevice *dev)
+{
+    int r;
+
+    memset(dev->irq_state, 0, sizeof dev->irq_state);
+    dev->config[PCI_COMMAND] &= ~(PCI_COMMAND_IO | PCI_COMMAND_MEMORY |
+                                  PCI_COMMAND_MASTER);
+    dev->config[PCI_CACHE_LINE_SIZE] = 0x0;
+    dev->config[PCI_INTERRUPT_LINE] = 0x0;
+    for (r = 0; r < PCI_NUM_REGIONS; ++r) {
+        if (!dev->io_regions[r].size) {
+            continue;
+        }
+        pci_set_long(dev->config + pci_bar(r), dev->io_regions[r].type);
+    }
+    pci_update_mappings(dev);
+}
+
 static void pci_bus_reset(void *opaque)
 {
     PCIBus *bus = opaque;
@@ -94,11 +119,50 @@ static void pci_bus_reset(void *opaque)
     for (i = 0; i < bus->nirq; i++) {
         bus->irq_count[i] = 0;
     }
-    for (i = 0; i < 256; i++) {
-        if (bus->devices[i])
-            memset(bus->devices[i]->irq_state, 0,
-                   sizeof(bus->devices[i]->irq_state));
+    for (i = 0; i < ARRAY_SIZE(bus->devices); ++i) {
+        if (bus->devices[i]) {
+            pci_device_reset(bus->devices[i]);
+        }
     }
+}
+
+void pci_bus_new_inplace(PCIBus *bus, DeviceState *parent,
+                         const char *name, int devfn_min)
+{
+    static int nbus = 0;
+
+    qbus_create_inplace(&bus->qbus, &pci_bus_info, parent, name);
+    bus->devfn_min = devfn_min;
+    bus->next = first_bus;
+    first_bus = bus;
+    vmstate_register(nbus++, &vmstate_pcibus, bus);
+    qemu_register_reset(pci_bus_reset, bus);
+}
+
+PCIBus *pci_bus_new(DeviceState *parent, const char *name, int devfn_min)
+{
+    PCIBus *bus;
+
+    bus = qemu_mallocz(sizeof(*bus));
+    bus->qbus.qdev_allocated = 1;
+    pci_bus_new_inplace(bus, parent, name, devfn_min);
+    return bus;
+}
+
+void pci_bus_irqs(PCIBus *bus, pci_set_irq_fn set_irq, pci_map_irq_fn map_irq,
+                  void *irq_opaque, int nirq)
+{
+    bus->set_irq = set_irq;
+    bus->map_irq = map_irq;
+    bus->irq_opaque = irq_opaque;
+    bus->nirq = nirq;
+    bus->irq_count = qemu_mallocz(nirq * sizeof(bus->irq_count[0]));
+}
+
+void pci_bus_hotplug(PCIBus *bus, pci_hotplug_fn hotplug)
+{
+    bus->qbus.allow_hotplug = 1;
+    bus->hotplug = hotplug;
 }
 
 PCIBus *pci_register_bus(DeviceState *parent, const char *name,
@@ -106,34 +170,22 @@ PCIBus *pci_register_bus(DeviceState *parent, const char *name,
                          void *irq_opaque, int devfn_min, int nirq)
 {
     PCIBus *bus;
-    static int nbus = 0;
 
-    bus = FROM_QBUS(PCIBus, qbus_create(&pci_bus_info, parent, name));
-    bus->set_irq = set_irq;
-    bus->map_irq = map_irq;
-    bus->irq_opaque = irq_opaque;
-    bus->devfn_min = devfn_min;
-    bus->nirq = nirq;
-    bus->irq_count = qemu_mallocz(nirq * sizeof(bus->irq_count[0]));
-    bus->next = first_bus;
-    first_bus = bus;
-    vmstate_register(nbus++, &vmstate_pcibus, bus);
-    qemu_register_reset(pci_bus_reset, bus);
+    bus = pci_bus_new(parent, name, devfn_min);
+    pci_bus_irqs(bus, set_irq, map_irq, irq_opaque, nirq);
     return bus;
 }
 
-static PCIBus *pci_register_secondary_bus(PCIDevice *dev,
-                                          pci_map_irq_fn map_irq,
-                                          const char *name)
+static void pci_register_secondary_bus(PCIBus *bus,
+                                       PCIDevice *dev,
+                                       pci_map_irq_fn map_irq,
+                                       const char *name)
 {
-    PCIBus *bus;
-
-    bus = FROM_QBUS(PCIBus, qbus_create(&pci_bus_info, &dev->qdev, name));
+    qbus_create_inplace(&bus->qbus, &pci_bus_info, &dev->qdev, name);
     bus->map_irq = map_irq;
     bus->parent_dev = dev;
     bus->next = dev->bus->next;
     dev->bus->next = bus;
-    return bus;
 }
 
 int pci_bus_num(PCIBus *s)
@@ -159,7 +211,7 @@ static int get_pci_config_device(QEMUFile *f, void *pv, size_t size)
 }
 
 /* just put buffer */
-static void put_pci_config_device(QEMUFile *f, const void *pv, size_t size)
+static void put_pci_config_device(QEMUFile *f, void *pv, size_t size)
 {
     const uint8_t *v = pv;
     qemu_put_buffer(f, v, size);
@@ -431,24 +483,22 @@ static void pci_unregister_io_regions(PCIDevice *pci_dev)
     }
 }
 
-int pci_unregister_device(PCIDevice *pci_dev, int assigned)
+static int pci_unregister_device(DeviceState *dev)
 {
+    PCIDevice *pci_dev = DO_UPCAST(PCIDevice, qdev, dev);
+    PCIDeviceInfo *info = DO_UPCAST(PCIDeviceInfo, qdev, dev->info);
     int ret = 0;
 
-    if (pci_dev->unregister)
-        ret = pci_dev->unregister(pci_dev);
+    if (info->exit)
+        ret = info->exit(pci_dev);
     if (ret)
         return ret;
 
+    msix_uninit(pci_dev);
     pci_unregister_io_regions(pci_dev);
 
     qemu_free_irqs(pci_dev->irq);
     pci_dev->bus->devices[pci_dev->devfn] = NULL;
-
-    if (assigned)
-        qemu_free(pci_dev);
-    else
-        qdev_free(&pci_dev->qdev);
     return 0;
 }
 
@@ -476,12 +526,10 @@ void pci_register_bar(PCIDevice *pci_dev, int region_num,
     r->map_func = map_func;
 
     wmask = ~(size - 1);
+    addr = pci_bar(region_num);
     if (region_num == PCI_ROM_SLOT) {
-        addr = 0x30;
         /* ROM enable bit is writeable */
-        wmask |= 1;
-    } else {
-        addr = 0x10 + region_num * 4;
+        wmask |= PCI_ROM_ADDRESS_ENABLE;
     }
     *(uint32_t *)(pci_dev->config + addr) = cpu_to_le32(type);
     *(uint32_t *)(pci_dev->wmask + addr) = cpu_to_le32(wmask);
@@ -492,21 +540,15 @@ static void pci_update_mappings(PCIDevice *d)
 {
     PCIIORegion *r;
     int cmd, i;
-    uint32_t last_addr, new_addr, config_ofs;
+    uint32_t last_addr, new_addr;
 
     cmd = le16_to_cpu(*(uint16_t *)(d->config + PCI_COMMAND));
     for(i = 0; i < PCI_NUM_REGIONS; i++) {
         r = &d->io_regions[i];
-        if (i == PCI_ROM_SLOT) {
-            config_ofs = 0x30;
-        } else {
-            config_ofs = 0x10 + i * 4;
-        }
         if (r->size != 0) {
             if (r->type & PCI_ADDRESS_SPACE_IO) {
                 if (cmd & PCI_COMMAND_IO) {
-                    new_addr = le32_to_cpu(*(uint32_t *)(d->config +
-                                                         config_ofs));
+                    new_addr = pci_get_long(d->config + pci_bar(i));
                     new_addr = new_addr & ~(r->size - 1);
                     last_addr = new_addr + r->size - 1;
                     /* NOTE: we have only 64K ioports on PC */
@@ -519,10 +561,9 @@ static void pci_update_mappings(PCIDevice *d)
                 }
             } else {
                 if (cmd & PCI_COMMAND_MEMORY) {
-                    new_addr = le32_to_cpu(*(uint32_t *)(d->config +
-                                                         config_ofs));
+                    new_addr = pci_get_long(d->config + pci_bar(i));
                     /* the ROM slot has a specific enable bit */
-                    if (i == PCI_ROM_SLOT && !(new_addr & 1))
+                    if (i == PCI_ROM_SLOT && !(new_addr & PCI_ROM_ADDRESS_ENABLE))
                         goto no_mem_map;
                     new_addr = new_addr & ~(r->size - 1);
                     last_addr = new_addr + r->size - 1;
@@ -546,7 +587,7 @@ static void pci_update_mappings(PCIDevice *d)
                         int class;
                         /* NOTE: specific hack for IDE in PC case:
                            only one byte must be mapped. */
-                        class = d->config[0x0a] | (d->config[0x0b] << 8);
+                        class = pci_get_word(d->config + PCI_CLASS_DEVICE);
                         if (class == 0x0101 && r->size == 4) {
                             isa_unassign_ioport(r->addr + 2, 1);
                         } else {
@@ -884,24 +925,6 @@ void pci_info(Monitor *mon)
     pci_for_each_device(0, pci_info_device);
 }
 
-PCIDevice *pci_create(const char *name, const char *devaddr)
-{
-    PCIBus *bus;
-    int devfn;
-    DeviceState *dev;
-
-    bus = pci_get_bus_devfn(&devfn, devaddr);
-    if (!bus) {
-        fprintf(stderr, "Invalid PCI device address %s for device %s\n",
-                devaddr, name);
-        exit(1);
-    }
-
-    dev = qdev_create(&bus->qbus, name);
-    qdev_prop_set_uint32(dev, "addr", devfn);
-    return (PCIDevice *)dev;
-}
-
 static const char * const pci_nic_models[] = {
     "ne2k_pci",
     "i82551",
@@ -926,36 +949,69 @@ static const char * const pci_nic_names[] = {
     NULL
 };
 
+int pci_nic_supported(const char *model)
+{
+    int i;
+
+    for (i = 0; pci_nic_names[i]; i++)
+        if (strcmp(model, pci_nic_names[i]) == 0)
+            return 1;
+
+    return 0;
+}
+
 /* Initialize a PCI NIC.  */
 PCIDevice *pci_nic_init(NICInfo *nd, const char *default_model,
                         const char *default_devaddr)
 {
     const char *devaddr = nd->devaddr ? nd->devaddr : default_devaddr;
+    PCIBus *bus;
+    int devfn;
     PCIDevice *pci_dev;
     DeviceState *dev;
     int i;
 
-    qemu_check_nic_model_list(nd, pci_nic_models, default_model);
+    i = qemu_find_nic_model(nd, pci_nic_models, default_model);
+    if (i < 0)
+        return NULL;
 
-    for (i = 0; pci_nic_models[i]; i++) {
-        if (strcmp(nd->model, pci_nic_models[i]) == 0) {
-            pci_dev = pci_create(pci_nic_names[i], devaddr);
-            dev = &pci_dev->qdev;
-            if (nd->id)
-                dev->id = qemu_strdup(nd->id);
-            dev->nd = nd;
-            qdev_init(dev);
-            nd->private = dev;
-            return pci_dev;
-        }
+    bus = pci_get_bus_devfn(&devfn, devaddr);
+    if (!bus) {
+        qemu_error("Invalid PCI device address %s for device %s\n",
+                   devaddr, pci_nic_names[i]);
+        return NULL;
     }
 
-    return NULL;
+    pci_dev = pci_create(bus, devfn, pci_nic_names[i]);
+    dev = &pci_dev->qdev;
+    if (nd->id)
+        dev->id = qemu_strdup(nd->id);
+    dev->nd = nd;
+    if (qdev_init(dev) < 0)
+        return NULL;
+    nd->private = dev;
+    return pci_dev;
+}
+
+PCIDevice *pci_nic_init_nofail(NICInfo *nd, const char *default_model,
+                               const char *default_devaddr)
+{
+    PCIDevice *res;
+
+    if (qemu_show_nic_models(nd->model, pci_nic_models))
+        exit(0);
+
+    res = pci_nic_init(nd, default_model, default_devaddr);
+    if (!res)
+        exit(1);
+    return res;
 }
 
 typedef struct {
     PCIDevice dev;
-    PCIBus *bus;
+    PCIBus bus;
+    uint32_t vid;
+    uint32_t did;
 } PCIBridge;
 
 static void pci_bridge_write_config(PCIDevice *d,
@@ -964,7 +1020,7 @@ static void pci_bridge_write_config(PCIDevice *d,
     PCIBridge *s = (PCIBridge *)d;
 
     pci_default_write_config(d, address, val, len);
-    s->bus->bus_num = d->config[PCI_SECONDARY_BUS];
+    s->bus.bus_num = d->config[PCI_SECONDARY_BUS];
 }
 
 PCIBus *pci_find_bus(int bus_num)
@@ -987,15 +1043,12 @@ PCIDevice *pci_find_device(int bus_num, int slot, int function)
     return bus->devices[PCI_DEVFN(slot, function)];
 }
 
-PCIBus *pci_bridge_init(PCIBus *bus, int devfn, uint16_t vid, uint16_t did,
-                        pci_map_irq_fn map_irq, const char *name)
+static int pci_bridge_initfn(PCIDevice *dev)
 {
-    PCIBridge *s;
-    s = (PCIBridge *)pci_register_device(bus, name, sizeof(PCIBridge),
-                                         devfn, NULL, pci_bridge_write_config);
+    PCIBridge *s = DO_UPCAST(PCIBridge, dev, dev);
 
-    pci_config_set_vendor_id(s->dev.config, vid);
-    pci_config_set_device_id(s->dev.config, did);
+    pci_config_set_vendor_id(s->dev.config, s->vid);
+    pci_config_set_device_id(s->dev.config, s->did);
 
     s->dev.config[0x04] = 0x06; // command = bus master, pci mem
     s->dev.config[0x05] = 0x00;
@@ -1008,9 +1061,23 @@ PCIBus *pci_bridge_init(PCIBus *bus, int devfn, uint16_t vid, uint16_t did,
     s->dev.config[PCI_HEADER_TYPE] =
         PCI_HEADER_TYPE_MULTI_FUNCTION | PCI_HEADER_TYPE_BRIDGE; // header_type
     s->dev.config[0x1E] = 0xa0; // secondary status
+    return 0;
+}
 
-    s->bus = pci_register_secondary_bus(&s->dev, map_irq, name);
-    return s->bus;
+PCIBus *pci_bridge_init(PCIBus *bus, int devfn, uint16_t vid, uint16_t did,
+                        pci_map_irq_fn map_irq, const char *name)
+{
+    PCIDevice *dev;
+    PCIBridge *s;
+
+    dev = pci_create(bus, devfn, "pci-bridge");
+    qdev_prop_set_uint32(&dev->qdev, "vendorid", vid);
+    qdev_prop_set_uint32(&dev->qdev, "deviceid", did);
+    qdev_init(&dev->qdev);
+
+    s = DO_UPCAST(PCIBridge, dev, dev);
+    pci_register_secondary_bus(&s->bus, &s->dev, map_irq, name);
+    return &s->bus;
 }
 
 static int pci_qdev_init(DeviceState *qdev, DeviceInfo *base)
@@ -1018,19 +1085,34 @@ static int pci_qdev_init(DeviceState *qdev, DeviceInfo *base)
     PCIDevice *pci_dev = (PCIDevice *)qdev;
     PCIDeviceInfo *info = container_of(base, PCIDeviceInfo, qdev);
     PCIBus *bus;
-    int devfn;
+    int devfn, rc;
 
     bus = FROM_QBUS(PCIBus, qdev_get_parent_bus(qdev));
     devfn = pci_dev->devfn;
     pci_dev = do_pci_register_device(pci_dev, bus, base->name, devfn,
                                      info->config_read, info->config_write);
     assert(pci_dev);
-    return info->init(pci_dev);
+    rc = info->init(pci_dev);
+    if (rc != 0)
+        return rc;
+    if (qdev->hotplugged)
+        bus->hotplug(pci_dev, 1);
+    return 0;
+}
+
+static int pci_unplug_device(DeviceState *qdev)
+{
+    PCIDevice *dev = DO_UPCAST(PCIDevice, qdev, qdev);
+
+    dev->bus->hotplug(dev, 0);
+    return 0;
 }
 
 void pci_qdev_register(PCIDeviceInfo *info)
 {
     info->qdev.init = pci_qdev_init;
+    info->qdev.unplug = pci_unplug_device;
+    info->qdev.exit = pci_unregister_device;
     info->qdev.bus_info = &pci_bus_info;
     qdev_register(&info->qdev);
 }
@@ -1043,7 +1125,7 @@ void pci_qdev_register_many(PCIDeviceInfo *info)
     }
 }
 
-PCIDevice *pci_create_noinit(PCIBus *bus, int devfn, const char *name)
+PCIDevice *pci_create(PCIBus *bus, int devfn, const char *name)
 {
     DeviceState *dev;
 
@@ -1054,7 +1136,7 @@ PCIDevice *pci_create_noinit(PCIBus *bus, int devfn, const char *name)
 
 PCIDevice *pci_create_simple(PCIBus *bus, int devfn, const char *name)
 {
-    PCIDevice *dev = pci_create_noinit(bus, devfn, name);
+    PCIDevice *dev = pci_create(bus, devfn, name);
     qdev_init(&dev->qdev);
     return dev;
 }
@@ -1202,3 +1284,22 @@ static void pcibus_dev_print(Monitor *mon, DeviceState *dev, int indent)
                        r->addr, r->addr + r->size - 1);
     }
 }
+
+static PCIDeviceInfo bridge_info = {
+    .qdev.name    = "pci-bridge",
+    .qdev.size    = sizeof(PCIBridge),
+    .init         = pci_bridge_initfn,
+    .config_write = pci_bridge_write_config,
+    .qdev.props   = (Property[]) {
+        DEFINE_PROP_HEX32("vendorid", PCIBridge, vid, 0),
+        DEFINE_PROP_HEX32("deviceid", PCIBridge, did, 0),
+        DEFINE_PROP_END_OF_LIST(),
+    }
+};
+
+static void pci_register_devices(void)
+{
+    pci_qdev_register(&bridge_info);
+}
+
+device_init(pci_register_devices)

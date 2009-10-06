@@ -303,7 +303,7 @@ struct USBBus {
     QTAILQ_ENTRY(USBBus) next;
 };
 
-USBBus *usb_bus_new(DeviceState *host);
+void usb_bus_new(USBBus *bus, DeviceState *host);
 USBBus *usb_bus_find(int busnr);
 void usb_qdev_register(USBDeviceInfo *info);
 void usb_qdev_register_many(USBDeviceInfo *info);
@@ -311,7 +311,9 @@ USBDevice *usb_create(USBBus *bus, const char *name);
 USBDevice *usb_create_simple(USBBus *bus, const char *name);
 void usb_register_port(USBBus *bus, USBPort *port, void *opaque, int index,
                        usb_attachfn attach);
+void usb_unregister_port(USBBus *bus, USBPort *port);
 int usb_device_attach(USBDevice *dev);
+int usb_device_detach(USBDevice *dev);
 int usb_device_delete_addr(int busnr, int addr);
 
 static inline USBBus *usb_bus_from_device(USBDevice *d)

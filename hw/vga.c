@@ -1592,6 +1592,18 @@ static void mark_dirty(target_phys_addr_t start, target_phys_addr_t len)
     }
 }
 
+void vga_dirty_log_stop(VGACommonState *s)
+{
+    if (kvm_enabled() && s->map_addr && s1)
+        kvm_log_stop(s->map_addr, s->map_end - s->map_addr);
+
+    if (kvm_enabled() && s->lfb_vram_mapped && s2) {
+        kvm_log_stop(isa_mem_base + 0xa0000, 0x8000);
+        kvm_log_stop(isa_mem_base + 0xa8000, 0x8000);
+    }
+    s1 = s2 = 0;
+}
+
 void vga_dirty_log_start(VGACommonState *s)
 {
     if (kvm_enabled() && s->map_addr)
@@ -1608,18 +1620,6 @@ void vga_dirty_log_start(VGACommonState *s)
         }
         s2 = 1;
     }
-}
-
-void vga_dirty_log_stop(VGACommonState *s)
-{
-    if (kvm_enabled() && s->map_addr && s1)
-        kvm_log_stop(s->map_addr, s->map_end - s->map_addr);
-
-    if (kvm_enabled() && s->lfb_vram_mapped && s2) {
-        kvm_log_stop(isa_mem_base + 0xa0000, 0x8000);
-        kvm_log_stop(isa_mem_base + 0xa8000, 0x8000);
-    }
-    s1 = s2 = 0;
 }
 
 /*

@@ -936,9 +936,11 @@ static int32_t scsi_send_command(SCSIDevice *d, uint32_t tag,
     }
 }
 
-static void scsi_destroy(SCSIDevice *d)
+static void scsi_destroy(SCSIDevice *dev)
 {
-    qemu_free(d);
+    SCSIDiskState *s = DO_UPCAST(SCSIDiskState, qdev, dev);
+
+    drive_uninit(s->dinfo);
 }
 
 static int scsi_disk_initfn(SCSIDevice *dev)

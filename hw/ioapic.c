@@ -240,7 +240,7 @@ static void kvm_kernel_ioapic_load_from_user(IOAPICState *s)
 #endif
 }
 
-static void ioapic_pre_save(const void *opaque)
+static void ioapic_pre_save(void *opaque)
 {
     IOAPICState *s = (void *)opaque;
  
@@ -259,7 +259,7 @@ static int ioapic_pre_load(void *opaque)
     return 0;
 }
 
-static int ioapic_post_load(void *opaque)
+static int ioapic_post_load(void *opaque, int version_id)
 {
     IOAPICState *s = opaque;
 
