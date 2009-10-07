@@ -1229,7 +1229,7 @@ typedef struct KVMState {
     int broken_set_mem_region;
     int migration_log;
 #ifdef KVM_CAP_SET_GUEST_DEBUG
-    struct kvm_sw_breakpoint_head kvm_sw_breakpoints;
+    QTAILQ_HEAD(, kvm_sw_breakpoint) kvm_sw_breakpoints;
 #endif
     struct kvm_context kvm_context;
 } KVMState;
