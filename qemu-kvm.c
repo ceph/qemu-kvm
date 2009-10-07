@@ -588,7 +588,7 @@ int kvm_register_phys_mem(kvm_context_t kvm,
     struct kvm_userspace_memory_region memory = {
         .memory_size = len,
         .guest_phys_addr = phys_start,
-        .userspace_addr = (unsigned long) (intptr_t) userspace_addr,
+        .userspace_addr = (unsigned long) (uintptr_t) userspace_addr,
         .flags = log ? KVM_MEM_LOG_DIRTY_PAGES : 0,
     };
     int r;
@@ -1554,7 +1554,8 @@ static void sigbus_handler(int n, struct qemu_signalfd_siginfo *siginfo,
         CPUState *cenv;
 
         /* Hope we are lucky for AO MCE */
-        if (do_qemu_ram_addr_from_host((void *)siginfo->ssi_addr, &paddr)) {
+        if (do_qemu_ram_addr_from_host((void *)(intptr_t)siginfo->ssi_addr,
+				       &paddr)) {
             fprintf(stderr, "Hardware memory error for memory used by "
                     "QEMU itself instead of guest system!: %llx\n",
                     (unsigned long long)siginfo->ssi_addr);
