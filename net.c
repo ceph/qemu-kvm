@@ -1261,6 +1261,11 @@ void tap_using_vnet_hdr(void *opaque, int using_vnet_hdr)
 {
 }
 
+int tap_has_ufo(void *opaque)
+{
+    return 0;
+}
+
 #else /* !defined(_WIN32) */
 
 /* Maximum GSO packet size (64k) plus plenty of room for
@@ -1282,6 +1287,7 @@ typedef struct TAPState {
     unsigned int write_poll : 1;
     unsigned int has_vnet_hdr : 1;
     unsigned int using_vnet_hdr : 1;
+    unsigned int has_ufo: 1;
 } TAPState;
 
 static int launch_script(const char *setup_script, const char *ifname, int fd);
@@ -1513,9 +1519,22 @@ static int tap_probe_vnet_hdr(int fd)
 #endif
 }
 
+int tap_has_ufo(void *opaque)
+{
+    VLANClientState *vc = opaque;
+    TAPState *s = vc->opaque;
+
+    return s ? s->has_ufo : 0;
+}
+
 #ifdef TUNSETOFFLOAD
+
+#ifndef TUN_F_UFO
+#define TUN_F_UFO	0x10
+#endif
+
 static void tap_set_offload(VLANClientState *vc, int csum, int tso4, int tso6,
-			    int ecn)
+			    int ecn, int ufo)
 {
     TAPState *s = vc->opaque;
     unsigned int offload = 0;
@@ -1528,11 +1547,18 @@ static void tap_set_offload(VLANClientState *vc, int csum, int tso4, int tso6,
 	    offload |= TUN_F_TSO6;
 	if ((tso4 || tso6) && ecn)
 	    offload |= TUN_F_TSO_ECN;
+	if (ufo)
+	    offload |= TUN_F_UFO;
     }
 
-    if (ioctl(s->fd, TUNSETOFFLOAD, offload) != 0)
-	fprintf(stderr, "TUNSETOFFLOAD ioctl() failed: %s\n",
+    if (ioctl(s->fd, TUNSETOFFLOAD, offload) != 0) {
+        /* Try without UFO */
+        offload &= ~TUN_F_UFO;
+        if (ioctl(s->fd, TUNSETOFFLOAD, offload) != 0) {
+	    fprintf(stderr, "TUNSETOFFLOAD ioctl() failed: %s\n",
 		strerror(errno));
+        }
+    }
 }
 #endif /* TUNSETOFFLOAD */
 
@@ -1560,6 +1586,7 @@ static TAPState *net_tap_fd_init(VLANState *vlan,
                                  int vnet_hdr)
 {
     TAPState *s;
+    unsigned int offload;
 
     s = qemu_mallocz(sizeof(TAPState));
     s->fd = fd;
@@ -1569,7 +1596,14 @@ static TAPState *net_tap_fd_init(VLANState *vlan,
     s->vc->receive_raw = tap_receive_raw;
 #ifdef TUNSETOFFLOAD
     s->vc->set_offload = tap_set_offload;
-    tap_set_offload(s->vc, 0, 0, 0, 0);
+
+    s->has_ufo = 0;
+    /* Check if tap supports UFO */
+    offload = TUN_F_CSUM | TUN_F_UFO;
+    if (ioctl(s->fd, TUNSETOFFLOAD, offload) == 0)
+       s->has_ufo = 1;
+
+    tap_set_offload(s->vc, 0, 0, 0, 0, 0);
 #endif
     tap_read_poll(s, 1);
     snprintf(s->vc->info_str, sizeof(s->vc->info_str), "fd=%d", fd);

@@ -15,7 +15,7 @@ typedef ssize_t (NetReceive)(VLANClientState *, const uint8_t *, size_t);
 typedef ssize_t (NetReceiveIOV)(VLANClientState *, const struct iovec *, int);
 typedef void (NetCleanup) (VLANClientState *);
 typedef void (LinkStatusChanged)(VLANClientState *);
-typedef void (SetOffload)(VLANClientState *, int, int, int, int);
+typedef void (SetOffload)(VLANClientState *, int, int, int, int, int);
 
 struct VLANClientState {
     NetReceive *receive;
@@ -94,6 +94,7 @@ void do_info_usernet(Monitor *mon);
 
 int tap_has_vnet_hdr(void *opaque);
 void tap_using_vnet_hdr(void *opaque, int using_vnet_hdr);
+int tap_has_ufo(void *opaque);
 
 /* NIC info */
 

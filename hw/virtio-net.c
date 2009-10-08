@@ -150,7 +150,10 @@ static uint32_t virtio_net_get_features(VirtIODevice *vdev)
         features |= (1 << VIRTIO_NET_F_HOST_TSO6);
         features |= (1 << VIRTIO_NET_F_HOST_ECN);
         features |= (1 << VIRTIO_NET_F_MRG_RXBUF);
-        /* Kernel can't actually handle UFO in software currently. */
+        if (tap_has_ufo(host)) {
+            features |= (1 << VIRTIO_NET_F_GUEST_UFO);
+            features |= (1 << VIRTIO_NET_F_HOST_UFO);
+        }
     }
 #endif
 
@@ -189,7 +192,8 @@ static void virtio_net_set_features(VirtIODevice *vdev, uint32_t features)
                       (features >> VIRTIO_NET_F_GUEST_CSUM) & 1,
                       (features >> VIRTIO_NET_F_GUEST_TSO4) & 1,
                       (features >> VIRTIO_NET_F_GUEST_TSO6) & 1,
-                      (features >> VIRTIO_NET_F_GUEST_ECN)  & 1);
+                      (features >> VIRTIO_NET_F_GUEST_ECN)  & 1,
+                      (features >> VIRTIO_NET_F_GUEST_UFO)  & 1);
 #endif
 }
 
