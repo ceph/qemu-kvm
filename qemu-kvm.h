@@ -13,6 +13,7 @@
 #endif
 
 #include <signal.h>
+#include <stdlib.h>
 
 #ifdef CONFIG_KVM
 
