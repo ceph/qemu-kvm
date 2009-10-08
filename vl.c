@@ -143,6 +143,7 @@ int main(int argc, char **argv)
 #include "hw/smbios.h"
 #include "hw/xen.h"
 #include "hw/qdev.h"
+#include "hw/loader.h"
 #include "bt-host.h"
 #include "net.h"
 #include "monitor.h"
@@ -2352,8 +2353,8 @@ DriveInfo *drive_init(QemuOpts *opts, void *opaque,
     }
 
     if (bdrv_open2(dinfo->bdrv, file, bdrv_flags, drv) < 0) {
-        fprintf(stderr, "qemu: could not open disk image %s\n",
-                        file);
+        fprintf(stderr, "qemu: could not open disk image %s: %s\n",
+                        file, strerror(errno));
         return NULL;
     }
 
@@ -5675,7 +5676,7 @@ int main(int argc, char **argv, char **envp)
             if (len != 1)
                 exit(1);
             else if (status == 1) {
-                fprintf(stderr, "Could not acquire pidfile\n");
+                fprintf(stderr, "Could not acquire pidfile: %s\n", strerror(errno));
                 exit(1);
             } else
                 exit(0);
@@ -5702,7 +5703,7 @@ int main(int argc, char **argv, char **envp)
             uint8_t status = 1;
             write(fds[1], &status, 1);
         } else
-            fprintf(stderr, "Could not acquire pid file\n");
+            fprintf(stderr, "Could not acquire pid file: %s\n", strerror(errno));
         exit(1);
     }
 #endif
@@ -5890,8 +5891,8 @@ int main(int argc, char **argv, char **envp)
             snprintf(label, sizeof(label), "serial%d", i);
             serial_hds[i] = qemu_chr_open(label, devname, NULL);
             if (!serial_hds[i]) {
-                fprintf(stderr, "qemu: could not open serial device '%s'\n",
-                        devname);
+                fprintf(stderr, "qemu: could not open serial device '%s': %s\n",
+                        devname, strerror(errno));
                 exit(1);
             }
         }
@@ -5904,8 +5905,8 @@ int main(int argc, char **argv, char **envp)
             snprintf(label, sizeof(label), "parallel%d", i);
             parallel_hds[i] = qemu_chr_open(label, devname, NULL);
             if (!parallel_hds[i]) {
-                fprintf(stderr, "qemu: could not open parallel device '%s'\n",
-                        devname);
+                fprintf(stderr, "qemu: could not open parallel device '%s': %s\n",
+                        devname, strerror(errno));
                 exit(1);
             }
         }
@@ -5918,8 +5919,8 @@ int main(int argc, char **argv, char **envp)
             snprintf(label, sizeof(label), "virtcon%d", i);
             virtcon_hds[i] = qemu_chr_open(label, devname, NULL);
             if (!virtcon_hds[i]) {
-                fprintf(stderr, "qemu: could not open virtio console '%s'\n",
-                        devname);
+                fprintf(stderr, "qemu: could not open virtio console '%s': %s\n",
+                        devname, strerror(errno));
                 exit(1);
             }
         }
@@ -6067,6 +6068,8 @@ int main(int argc, char **argv, char **envp)
     }
 
     qdev_machine_creation_done();
+
+    rom_load_all();
 
     if (loadvm) {
         if (load_vmstate(cur_mon, loadvm) < 0) {
