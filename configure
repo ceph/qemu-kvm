@@ -1359,6 +1359,7 @@ if test "$kvm" != "no" ; then
   esac
 
   kvm_cflags="-I$source_path/kvm/include"
+  kvm_cflags="$kvm_cflags -include $source_path/kvm/include/linux/config.h"
   kvm_cflags="$kvm_cflags -I$source_path/kvm/include/$kvm_arch"
   kvm_cflags="$kvm_cflags -idirafter $source_path/compat"
 
