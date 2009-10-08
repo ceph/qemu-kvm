@@ -32,25 +32,33 @@
 #include "block_int.h"
 #include "scsi-disk.h"
 #include "virtio-blk.h"
+#include "qemu-config.h"
 #include "device-assignment.h"
 
 #if defined(TARGET_I386) || defined(TARGET_X86_64)
 static PCIDevice *qemu_pci_hot_add_nic(Monitor *mon,
-                                       const char *devaddr, const char *opts)
+                                       const char *devaddr,
+                                       const char *opts_str)
 {
+    QemuOpts *opts;
     int ret;
 
-    ret = net_client_init(mon, "nic", opts);
+    opts = qemu_opts_parse(&qemu_net_opts, opts_str ? opts_str : "", NULL);
+    if (!opts) {
+        monitor_printf(mon, "parsing network options '%s' failed\n",
+                       opts_str ? opts_str : "");
+        return NULL;
+    }
+
+    qemu_opt_set(opts, "type", "nic");
+
+    ret = net_client_init(mon, opts);
     if (ret < 0)
         return NULL;
     if (nd_table[ret].devaddr) {
         monitor_printf(mon, "Parameter addr not supported\n");
         return NULL;
     }
-
-    if (nd_table[ret].model && !pci_nic_supported(nd_table[ret].model))
-        return NULL;
-
     return pci_nic_init(&nd_table[ret], "rtl8139", devaddr);
 }
 
