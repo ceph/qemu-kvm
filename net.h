@@ -103,10 +103,10 @@ enum {
 
 struct NICInfo {
     uint8_t macaddr[6];
-    const char *model;
-    const char *name;
-    const char *devaddr;
-    const char *id;
+    char *model;
+    char *name;
+    char *devaddr;
+    char *id;
     VLANState *vlan;
     VLANClientState *vc;
     void *private;
@@ -146,10 +146,10 @@ extern const char *legacy_bootp_filename;
 int net_client_init(Monitor *mon, const char *device, const char *p);
 void net_client_uninit(NICInfo *nd);
 int net_client_parse(const char *str);
-void net_slirp_smb(const char *exported_dir);
+int net_slirp_smb(const char *exported_dir);
 void net_slirp_hostfwd_add(Monitor *mon, const QDict *qdict);
 void net_slirp_hostfwd_remove(Monitor *mon, const QDict *qdict);
-void net_slirp_redir(const char *redir_str);
+int net_slirp_redir(const char *redir_str);
 void net_cleanup(void);
 void net_client_check(void);
 void net_set_boot_mask(int boot_mask);
