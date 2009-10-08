@@ -21,7 +21,7 @@
  *
  */
 
-#include <asm/types.h>
+#include <linux/types.h>
 #include <linux/ioctl.h>
 
 /* Select x86 specific features in <linux/kvm.h> */
@@ -60,6 +60,7 @@ struct kvm_ioapic_state {
 #define KVM_IRQCHIP_PIC_MASTER   0
 #define KVM_IRQCHIP_PIC_SLAVE    1
 #define KVM_IRQCHIP_IOAPIC       2
+#define KVM_NR_IRQCHIPS          3
 
 #define KVM_CONTEXT_SIZE	8*1024
 

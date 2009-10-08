@@ -6,7 +6,7 @@
  *
  */
 
-#include <asm/types.h>
+#include <linux/types.h>
 #include <linux/ioctl.h>
 
 /* Select x86 specific features in <linux/kvm.h> */
@@ -18,6 +18,7 @@
 #define __KVM_HAVE_GUEST_DEBUG
 #define __KVM_HAVE_MSIX
 #define __KVM_HAVE_MCE
+#define __KVM_HAVE_PIT_STATE2
 
 /* Architectural interrupt line count. */
 #define KVM_NR_INTERRUPTS 256
@@ -78,6 +79,7 @@ struct kvm_ioapic_state {
 #define KVM_IRQCHIP_PIC_MASTER   0
 #define KVM_IRQCHIP_PIC_SLAVE    1
 #define KVM_IRQCHIP_IOAPIC       2
+#define KVM_NR_IRQCHIPS          3
 
 /* for KVM_GET_REGS and KVM_SET_REGS */
 struct kvm_regs {
@@ -237,7 +239,7 @@ struct kvm_pit_state {
 	struct kvm_pit_channel_state channels[3];
 };
 
-#define KVM_PIT_FLAGS_HPET_LEGACY	0x00000001
+#define KVM_PIT_FLAGS_HPET_LEGACY  0x00000001
 
 struct kvm_pit_state2 {
 	struct kvm_pit_channel_state channels[3];
