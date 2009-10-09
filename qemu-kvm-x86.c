@@ -162,10 +162,10 @@ int kvm_arch_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
 
 #ifdef KVM_EXIT_TPR_ACCESS
 
-static int kvm_handle_tpr_access(kvm_vcpu_context_t vcpu)
+static int kvm_handle_tpr_access(CPUState *env)
 {
-	struct kvm_run *run = vcpu->run;
-	kvm_tpr_access_report(cpu_single_env,
+	struct kvm_run *run = env->kvm_run;
+	kvm_tpr_access_report(env,
                          run->tpr_access.rip,
                          run->tpr_access.is_write);
     return 0;
@@ -190,10 +190,10 @@ int kvm_enable_vapic(kvm_vcpu_context_t vcpu, uint64_t vapic)
 
 #endif
 
-int kvm_arch_run(kvm_vcpu_context_t vcpu)
+int kvm_arch_run(CPUState *env)
 {
 	int r = 0;
-	struct kvm_run *run = vcpu->run;
+	struct kvm_run *run = env->kvm_run;
 
 
 	switch (run->exit_reason) {
@@ -203,7 +203,7 @@ int kvm_arch_run(kvm_vcpu_context_t vcpu)
 #endif
 #ifdef KVM_EXIT_TPR_ACCESS
 		case KVM_EXIT_TPR_ACCESS:
-			r = kvm_handle_tpr_access(vcpu);
+			r = kvm_handle_tpr_access(env);
 			break;
 #endif
 		default:

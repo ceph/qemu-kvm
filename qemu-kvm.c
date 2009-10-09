@@ -1037,7 +1037,7 @@ int kvm_run(kvm_vcpu_context_t vcpu, void *env)
 	    abort();
 	    break;
         default:
-            if (kvm_arch_run(vcpu)) {
+            if (kvm_arch_run(env)) {
                 fprintf(stderr, "unhandled vm exit: 0x%x\n", run->exit_reason);
                 kvm_show_regs(vcpu);
                 abort();

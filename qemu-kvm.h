@@ -93,7 +93,8 @@ int kvm_alloc_userspace_memory(kvm_context_t kvm, unsigned long memory,
 
 int kvm_arch_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
                     void **vm_mem);
-int kvm_arch_run(kvm_vcpu_context_t vcpu);
+
+int kvm_arch_run(CPUState *env);
 
 
 void kvm_show_code(kvm_vcpu_context_t vcpu);
