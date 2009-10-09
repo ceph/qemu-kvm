@@ -97,11 +97,10 @@ int kvm_abi = EXPECTED_KVM_API_VERSION;
 int kvm_page_size;
 
 #ifdef KVM_CAP_SET_GUEST_DEBUG
-static int kvm_debug(void *opaque, void *data,
+static int kvm_debug(CPUState *env,
                      struct kvm_debug_exit_arch *arch_info)
 {
     int handle = kvm_arch_debug(arch_info);
-    CPUState *env = data;
 
     if (handle) {
         kvm_debug_cpu_requested = env;
@@ -816,9 +815,8 @@ int handle_debug(kvm_vcpu_context_t vcpu, void *env)
 {
 #ifdef KVM_CAP_SET_GUEST_DEBUG
     struct kvm_run *run = vcpu->run;
-    kvm_context_t kvm = vcpu->kvm;
 
-    return kvm_debug(kvm->opaque, env, &run->debug.arch);
+    return kvm_debug(env, &run->debug.arch);
 #else
     return 0;
 #endif
@@ -893,11 +891,6 @@ static int handle_mmio(kvm_vcpu_context_t vcpu)
 int handle_io_window(kvm_context_t kvm)
 {
     return 1;
-}
-
-int handle_halt(kvm_vcpu_context_t vcpu)
-{
-    return kvm_arch_halt(vcpu->kvm->opaque, vcpu);
 }
 
 int handle_shutdown(kvm_context_t kvm, CPUState *env)
@@ -1019,7 +1012,7 @@ int kvm_run(kvm_vcpu_context_t vcpu, void *env)
             r = handle_mmio(vcpu);
             break;
         case KVM_EXIT_HLT:
-            r = handle_halt(vcpu);
+            r = kvm_arch_halt(vcpu);
             break;
         case KVM_EXIT_IRQ_WINDOW_OPEN:
             break;

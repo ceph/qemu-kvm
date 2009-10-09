@@ -1109,7 +1109,7 @@ struct ioperm_data {
 };
 
 void qemu_kvm_cpu_stop(CPUState *env);
-int kvm_arch_halt(void *opaque, kvm_vcpu_context_t vcpu);
+int kvm_arch_halt(kvm_vcpu_context_t vcpu);
 int handle_tpr_access(void *opaque, kvm_vcpu_context_t vcpu, uint64_t rip,
                       int is_write);
 int kvm_has_sync_mmu(void);

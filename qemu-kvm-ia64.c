@@ -30,7 +30,7 @@ int kvm_arch_init_vcpu(CPUState *cenv)
     return 0;
 }
 
-int kvm_arch_halt(void *opaque, kvm_vcpu_context_t vcpu)
+int kvm_arch_halt(kvm_vcpu_context_t vcpu)
 {
     CPUState *env = cpu_single_env;
     env->hflags |= HF_HALTED_MASK;
