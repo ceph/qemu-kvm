@@ -219,17 +219,6 @@ int kvm_run(kvm_vcpu_context_t vcpu, void *env);
 int kvm_get_interrupt_flag(kvm_vcpu_context_t vcpu);
 
 /*!
- * \brief Get the value of the APIC_BASE msr as of last exit to userspace
- *
- * This gets the APIC_BASE msr as it was on the last exit to userspace.
- *
- * \param kvm Pointer to the current kvm_context
- * \param vcpu Which virtual CPU should get dumped
- * \return APIC_BASE msr contents
- */
-uint64_t kvm_get_apic_base(kvm_vcpu_context_t vcpu);
-
-/*!
  * \brief Check if a vcpu is ready for interrupt injection
  *
  * This checks if vcpu interrupts are not masked by mov ss or sti.
@@ -422,28 +411,6 @@ int kvm_set_shadow_pages(kvm_context_t kvm, unsigned int nrshadow_pages);
  */
 int kvm_get_shadow_pages(kvm_context_t kvm, unsigned int *nrshadow_pages);
 
-/*!
- * \brief Set up cr8 for next time the vcpu is executed
- *
- * This is a fast setter for cr8, which will be applied when the
- * vcpu next enters guest mode.
- *
- * \param kvm Pointer to the current kvm_context
- * \param vcpu Which virtual CPU should get dumped
- * \param cr8 next cr8 value
- */
-void kvm_set_cr8(kvm_vcpu_context_t vcpu, uint64_t cr8);
-
-/*!
- * \brief Get cr8 for sync tpr in qemu apic emulation
- *
- * This is a getter for cr8, which used to sync with the tpr in qemu
- * apic emualtion.
- *
- * \param kvm Pointer to the current kvm_context
- * \param vcpu Which virtual CPU should get dumped
- */
-__u64 kvm_get_cr8(kvm_vcpu_context_t vcpu);
 #endif
 
 /*!

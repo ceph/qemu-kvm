@@ -538,19 +538,19 @@ void kvm_show_regs(kvm_vcpu_context_t vcpu)
 		sregs.efer);
 }
 
-uint64_t kvm_get_apic_base(kvm_vcpu_context_t vcpu)
+static uint64_t kvm_get_apic_base(CPUState *env)
 {
-	return vcpu->run->apic_base;
+	return env->kvm_run->apic_base;
 }
 
-void kvm_set_cr8(kvm_vcpu_context_t vcpu, uint64_t cr8)
+static void kvm_set_cr8(CPUState *env, uint64_t cr8)
 {
-	vcpu->run->cr8 = cr8;
+	env->kvm_run->cr8 = cr8;
 }
 
-__u64 kvm_get_cr8(kvm_vcpu_context_t vcpu)
+static __u64 kvm_get_cr8(CPUState *env)
 {
-	return vcpu->run->cr8;
+	return env->kvm_run->cr8;
 }
 
 int kvm_setup_cpuid(kvm_vcpu_context_t vcpu, int nent,
@@ -1372,7 +1372,7 @@ int kvm_arch_halt(kvm_vcpu_context_t vcpu)
 void kvm_arch_pre_kvm_run(void *opaque, CPUState *env)
 {
     if (!kvm_irqchip_in_kernel())
-	kvm_set_cr8(env->kvm_cpu_state.vcpu_ctx, cpu_get_apic_tpr(env));
+	kvm_set_cr8(env, cpu_get_apic_tpr(env));
 }
 
 void kvm_arch_post_kvm_run(void *opaque, CPUState *env)
@@ -1382,8 +1382,8 @@ void kvm_arch_post_kvm_run(void *opaque, CPUState *env)
     env->eflags = kvm_get_interrupt_flag(env->kvm_cpu_state.vcpu_ctx)
 	? env->eflags | IF_MASK : env->eflags & ~IF_MASK;
 
-    cpu_set_apic_tpr(env, kvm_get_cr8(env->kvm_cpu_state.vcpu_ctx));
-    cpu_set_apic_base(env, kvm_get_apic_base(env->kvm_cpu_state.vcpu_ctx));
+    cpu_set_apic_tpr(env, kvm_get_cr8(env));
+    cpu_set_apic_base(env, kvm_get_apic_base(env));
 }
 
 int kvm_arch_has_work(CPUState *env)
