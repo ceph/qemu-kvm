@@ -441,9 +441,7 @@ kvm_vcpu_context_t kvm_create_vcpu(CPUState *env, int id)
     long mmap_size;
     int r;
     kvm_vcpu_context_t vcpu_ctx = qemu_malloc(sizeof(struct kvm_vcpu_context));
-    kvm_context_t kvm = kvm_context;
 
-    vcpu_ctx->kvm = kvm;
     vcpu_ctx->id = id;
 
     r = kvm_vm_ioctl(kvm_state, KVM_CREATE_VCPU, id);
@@ -938,8 +936,8 @@ int kvm_run(kvm_vcpu_context_t vcpu, void *env)
     int r;
     int fd = vcpu->fd;
     struct kvm_run *run = vcpu->run;
-    kvm_context_t kvm = vcpu->kvm;
     CPUState *_env = env;
+    kvm_context_t kvm = &_env->kvm_state->kvm_context;
 
   again:
     push_nmi(kvm);
