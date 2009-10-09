@@ -78,7 +78,6 @@ struct kvm_context {
 
 struct kvm_vcpu_context {
     int fd;
-    uint32_t id;
 };
 
 typedef struct kvm_context *kvm_context_t;

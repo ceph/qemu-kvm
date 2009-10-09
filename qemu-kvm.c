@@ -442,8 +442,6 @@ kvm_vcpu_context_t kvm_create_vcpu(CPUState *env, int id)
     int r;
     kvm_vcpu_context_t vcpu_ctx = qemu_malloc(sizeof(struct kvm_vcpu_context));
 
-    vcpu_ctx->id = id;
-
     r = kvm_vm_ioctl(kvm_state, KVM_CREATE_VCPU, id);
     if (r < 0) {
         fprintf(stderr, "kvm_create_vcpu: %m\n");
