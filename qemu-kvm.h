@@ -216,7 +216,7 @@ int kvm_run(kvm_vcpu_context_t vcpu, void *env);
  * \param vcpu Which virtual CPU should get dumped
  * \return interrupt flag value (0 or 1)
  */
-int kvm_get_interrupt_flag(kvm_vcpu_context_t vcpu);
+int kvm_get_interrupt_flag(CPUState *env);
 
 /*!
  * \brief Check if a vcpu is ready for interrupt injection
@@ -227,7 +227,7 @@ int kvm_get_interrupt_flag(kvm_vcpu_context_t vcpu);
  * \param vcpu Which virtual CPU should get dumped
  * \return boolean indicating interrupt injection readiness
  */
-int kvm_is_ready_for_interrupt_injection(kvm_vcpu_context_t vcpu);
+int kvm_is_ready_for_interrupt_injection(CPUState *env);
 
 /*!
  * \brief Read VCPU registers

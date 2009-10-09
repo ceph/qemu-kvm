@@ -1379,7 +1379,7 @@ void kvm_arch_post_kvm_run(void *opaque, CPUState *env)
 {
     cpu_single_env = env;
 
-    env->eflags = kvm_get_interrupt_flag(env->kvm_cpu_state.vcpu_ctx)
+    env->eflags = kvm_get_interrupt_flag(env)
 	? env->eflags | IF_MASK : env->eflags & ~IF_MASK;
 
     cpu_set_apic_tpr(env, kvm_get_cr8(env));
@@ -1400,7 +1400,7 @@ int kvm_arch_try_push_interrupts(void *opaque)
     CPUState *env = cpu_single_env;
     int r, irq;
 
-    if (kvm_is_ready_for_interrupt_injection(env->kvm_cpu_state.vcpu_ctx) &&
+    if (kvm_is_ready_for_interrupt_injection(env) &&
         (env->interrupt_request & CPU_INTERRUPT_HARD) &&
         (env->eflags & IF_MASK)) {
             env->interrupt_request &= ~CPU_INTERRUPT_HARD;
