@@ -459,13 +459,16 @@ kvm_vcpu_context_t kvm_create_vcpu(CPUState *env, int id)
         fprintf(stderr, "get vcpu mmap size: %m\n");
         goto err_fd;
     }
-    vcpu_ctx->run =
+    env->kvm_run =
         mmap(NULL, mmap_size, PROT_READ | PROT_WRITE, MAP_SHARED, vcpu_ctx->fd,
              0);
-    if (vcpu_ctx->run == MAP_FAILED) {
+    if (env->kvm_run == MAP_FAILED) {
         fprintf(stderr, "mmap vcpu area: %m\n");
         goto err_fd;
     }
+
+    vcpu_ctx->run = env->kvm_run;
+
     return vcpu_ctx;
   err_fd:
     close(vcpu_ctx->fd);
@@ -757,9 +760,9 @@ int kvm_set_irqchip(kvm_context_t kvm, struct kvm_irqchip *chip)
 
 #endif
 
-static int handle_io(kvm_vcpu_context_t vcpu)
+static int handle_io(CPUState *env)
 {
-    struct kvm_run *run = vcpu->run;
+    struct kvm_run *run = env->kvm_run;
     uint16_t addr = run->io.port;
     int i;
     void *p = (void *) run + run->io.data_offset;
@@ -809,10 +812,10 @@ static int handle_io(kvm_vcpu_context_t vcpu)
     return 0;
 }
 
-int handle_debug(kvm_vcpu_context_t vcpu, void *env)
+static int handle_debug(CPUState *env)
 {
 #ifdef KVM_CAP_SET_GUEST_DEBUG
-    struct kvm_run *run = vcpu->run;
+    struct kvm_run *run = env->kvm_run;
 
     return kvm_debug(env, &run->debug.arch);
 #else
@@ -872,10 +875,10 @@ int kvm_set_mpstate(kvm_vcpu_context_t vcpu, struct kvm_mp_state *mp_state)
 }
 #endif
 
-static int handle_mmio(kvm_vcpu_context_t vcpu)
+static int handle_mmio(CPUState *env)
 {
-    unsigned long addr = vcpu->run->mmio.phys_addr;
-    struct kvm_run *kvm_run = vcpu->run;
+    unsigned long addr = env->kvm_run->mmio.phys_addr;
+    struct kvm_run *kvm_run = env->kvm_run;
     void *data = kvm_run->mmio.data;
 
     /* hack: Red Hat 7.1 generates these weird accesses. */
@@ -1001,13 +1004,13 @@ int kvm_run(kvm_vcpu_context_t vcpu, void *env)
             abort();
             break;
         case KVM_EXIT_IO:
-            r = handle_io(vcpu);
+            r = handle_io(env);
             break;
         case KVM_EXIT_DEBUG:
-            r = handle_debug(vcpu, env);
+            r = handle_debug(env);
             break;
         case KVM_EXIT_MMIO:
-            r = handle_mmio(vcpu);
+            r = handle_mmio(env);
             break;
         case KVM_EXIT_HLT:
             r = kvm_arch_halt(vcpu);
