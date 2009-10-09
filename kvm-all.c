@@ -155,12 +155,14 @@ static void kvm_reset_vcpu(void *opaque)
         abort();
     }
 }
+#endif
 
 int kvm_irqchip_in_kernel(void)
 {
     return kvm_state->irqchip_in_kernel;
 }
 
+#ifdef KVM_UPSTREAM
 int kvm_pit_in_kernel(void)
 {
     return kvm_state->pit_in_kernel;

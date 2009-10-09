@@ -1570,7 +1570,7 @@ void cpu_interrupt(CPUState *env, int mask)
 
     old_mask = env->interrupt_request;
     env->interrupt_request |= mask;
-    if (kvm_enabled() && !qemu_kvm_irqchip_in_kernel())
+    if (kvm_enabled() && !kvm_irqchip_in_kernel())
 	kvm_update_interrupt_request(env);
 
 #ifndef CONFIG_USER_ONLY

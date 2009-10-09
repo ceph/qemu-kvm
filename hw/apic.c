@@ -301,7 +301,7 @@ void cpu_set_apic_base(CPUState *env, uint64_t val)
 #endif
     if (!s)
         return;
-    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel())
+    if (kvm_enabled() && kvm_irqchip_in_kernel())
         s->apicbase = val;
     else
         s->apicbase = (val & 0xfffff000) |
@@ -509,7 +509,7 @@ void apic_init_reset(CPUState *env)
 
     env->halted = !(s->apicbase & MSR_IA32_APICBASE_BSP);
 #ifdef KVM_CAP_MP_STATE
-    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
+    if (kvm_enabled() && kvm_irqchip_in_kernel()) {
         env->mp_state
             = env->halted ? KVM_MP_STATE_UNINITIALIZED : KVM_MP_STATE_RUNNABLE;
     }
@@ -961,7 +961,7 @@ static void kvm_kernel_lapic_load_from_user(APICState *s)
 void qemu_kvm_load_lapic(CPUState *env)
 {
 #ifdef KVM_CAP_IRQCHIP
-    if (kvm_enabled() && kvm_vcpu_inited(env) && qemu_kvm_irqchip_in_kernel()) {
+    if (kvm_enabled() && kvm_vcpu_inited(env) && kvm_irqchip_in_kernel()) {
         kvm_kernel_lapic_load_from_user(env->apic_state);
     }
 #endif
@@ -972,7 +972,7 @@ static void apic_pre_save(void *opaque)
 #ifdef KVM_CAP_IRQCHIP
     APICState *s = (void *)opaque;
 
-    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
+    if (kvm_enabled() && kvm_irqchip_in_kernel()) {
         kvm_kernel_lapic_save_to_user(s);
     }
 #endif
@@ -983,7 +983,7 @@ static int apic_post_load(void *opaque, int version_id)
 #ifdef KVM_CAP_IRQCHIP
     APICState *s = opaque;
 
-    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
+    if (kvm_enabled() && kvm_irqchip_in_kernel()) {
         kvm_kernel_lapic_load_from_user(s);
     }
 #endif

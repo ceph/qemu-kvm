@@ -679,7 +679,7 @@ void pci_default_write_config(PCIDevice *d, uint32_t addr, uint32_t val, int l)
     }
 
 #ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
-    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel() &&
+    if (kvm_enabled() && kvm_irqchip_in_kernel() &&
         addr >= PIIX_CONFIG_IRQ_ROUTE &&
 	addr < PIIX_CONFIG_IRQ_ROUTE + 4)
         assigned_dev_update_irqs();

@@ -284,7 +284,7 @@ int kvm_destroy_memory_alias(kvm_context_t kvm, uint64_t phys_start)
 int kvm_get_lapic(kvm_vcpu_context_t vcpu, struct kvm_lapic_state *s)
 {
 	int r;
-	if (!kvm_irqchip_in_kernel(vcpu->kvm))
+	if (!kvm_irqchip_in_kernel())
 		return 0;
 	r = ioctl(vcpu->fd, KVM_GET_LAPIC, s);
 	if (r == -1) {
@@ -297,7 +297,7 @@ int kvm_get_lapic(kvm_vcpu_context_t vcpu, struct kvm_lapic_state *s)
 int kvm_set_lapic(kvm_vcpu_context_t vcpu, struct kvm_lapic_state *s)
 {
 	int r;
-	if (!kvm_irqchip_in_kernel(vcpu->kvm))
+	if (!kvm_irqchip_in_kernel())
 		return 0;
 	r = ioctl(vcpu->fd, KVM_SET_LAPIC, s);
 	if (r == -1) {
@@ -1376,7 +1376,7 @@ int kvm_arch_halt(void *opaque, kvm_vcpu_context_t vcpu)
 
 void kvm_arch_pre_kvm_run(void *opaque, CPUState *env)
 {
-    if (!kvm_irqchip_in_kernel(kvm_context))
+    if (!kvm_irqchip_in_kernel())
 	kvm_set_cr8(env->kvm_cpu_state.vcpu_ctx, cpu_get_apic_tpr(env));
 }
 
@@ -1440,7 +1440,7 @@ void kvm_arch_cpu_reset(CPUState *env)
 {
     kvm_arch_load_regs(env);
     if (!cpu_is_bsp(env)) {
-	if (kvm_irqchip_in_kernel(kvm_context)) {
+	if (kvm_irqchip_in_kernel()) {
 #ifdef KVM_CAP_MP_STATE
 	    kvm_reset_mpstate(env->kvm_cpu_state.vcpu_ctx);
 #endif

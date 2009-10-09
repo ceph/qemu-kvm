@@ -558,6 +558,7 @@ void kvm_create_irqchip(kvm_context_t kvm)
         }
     }
 #endif
+    kvm_state->irqchip_in_kernel = kvm->irqchip_in_kernel;
 }
 
 int kvm_create(kvm_context_t kvm, unsigned long phys_mem_bytes, void **vm_mem)
@@ -1109,11 +1110,6 @@ int kvm_set_signal_mask(kvm_vcpu_context_t vcpu, const sigset_t *sigset)
     return r;
 }
 
-int kvm_irqchip_in_kernel(kvm_context_t kvm)
-{
-    return kvm->irqchip_in_kernel;
-}
-
 int kvm_pit_in_kernel(kvm_context_t kvm)
 {
     return kvm->pit_in_kernel;
@@ -1611,7 +1607,7 @@ void kvm_arch_get_registers(CPUState *env)
 	kvm_arch_save_regs(env);
 	kvm_arch_save_mpstate(env);
 #ifdef KVM_CAP_MP_STATE
-	if (kvm_irqchip_in_kernel(kvm_context))
+	if (kvm_irqchip_in_kernel())
 		env->halted = (env->mp_state == KVM_MP_STATE_HALTED);
 #endif
 }
@@ -1968,7 +1964,7 @@ static int kvm_main_loop_cpu(CPUState *env)
 
     while (1) {
         int run_cpu = !is_cpu_stopped(env);
-        if (run_cpu && !kvm_irqchip_in_kernel(kvm_context)) {
+        if (run_cpu && !kvm_irqchip_in_kernel()) {
             process_irqchip_events(env);
             run_cpu = !env->halted;
         }

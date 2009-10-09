@@ -553,13 +553,6 @@ int kvm_dirty_pages_log_enable_all(kvm_context_t kvm);
  */
 int kvm_dirty_pages_log_reset(kvm_context_t kvm);
 
-/*!
- * \brief Query whether in kernel irqchip is used
- *
- * \param kvm Pointer to the current kvm_context
- */
-int kvm_irqchip_in_kernel(kvm_context_t kvm);
-
 #ifdef KVM_CAP_IRQCHIP
 /*!
  * \brief Dump in kernel IRQCHIP contents
@@ -1122,7 +1115,6 @@ int handle_tpr_access(void *opaque, kvm_vcpu_context_t vcpu, uint64_t rip,
 int kvm_has_sync_mmu(void);
 
 #define kvm_enabled() (kvm_allowed)
-#define qemu_kvm_irqchip_in_kernel() kvm_irqchip_in_kernel(kvm_context)
 #define qemu_kvm_pit_in_kernel() kvm_pit_in_kernel(kvm_context)
 #define qemu_kvm_has_gsi_routing() kvm_has_gsi_routing(kvm_context)
 #ifdef TARGET_I386
@@ -1134,7 +1126,6 @@ void kvm_load_tsc(CPUState *env);
 #define kvm_has_sync_mmu() (0)
 #define kvm_enabled() (0)
 #define kvm_nested 0
-#define qemu_kvm_irqchip_in_kernel() (0)
 #define qemu_kvm_pit_in_kernel() (0)
 #define qemu_kvm_has_gsi_routing() (0)
 #ifndef QEMU_KVM_NO_CPU
@@ -1210,6 +1201,8 @@ static inline int kvm_set_migration_log(int enable)
     return kvm_physical_memory_set_dirty_tracking(enable);
 }
 
+
+int kvm_irqchip_in_kernel(void);
 #ifdef CONFIG_KVM
 
 typedef struct KVMSlot {
@@ -1232,6 +1225,8 @@ typedef struct KVMState {
 #ifdef KVM_CAP_SET_GUEST_DEBUG
     QTAILQ_HEAD(, kvm_sw_breakpoint) kvm_sw_breakpoints;
 #endif
+    int irqchip_in_kernel;
+
     struct kvm_context kvm_context;
 } KVMState;
 

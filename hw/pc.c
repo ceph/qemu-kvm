@@ -1185,7 +1185,7 @@ static void pc_init1(ram_addr_t ram_size,
 
     cpu_irq = qemu_allocate_irqs(pic_irq_request, NULL, 1);
 #ifdef KVM_CAP_IRQCHIP
-    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
+    if (kvm_enabled() && kvm_irqchip_in_kernel()) {
         isa_irq_state = qemu_mallocz(sizeof(*isa_irq_state));
         isa_irq = i8259 = kvm_i8259_init(cpu_irq[0]);
     } else

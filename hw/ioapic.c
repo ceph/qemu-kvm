@@ -244,7 +244,7 @@ static void ioapic_pre_save(void *opaque)
 {
     IOAPICState *s = (void *)opaque;
  
-    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
+    if (kvm_enabled() && kvm_irqchip_in_kernel()) {
         kvm_kernel_ioapic_save_to_user(s);
     }
 }
@@ -263,7 +263,7 @@ static int ioapic_post_load(void *opaque, int version_id)
 {
     IOAPICState *s = opaque;
 
-    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
+    if (kvm_enabled() && kvm_irqchip_in_kernel()) {
         kvm_kernel_ioapic_load_from_user(s);
     }
     return 0;
@@ -297,7 +297,7 @@ static void ioapic_reset(void *opaque)
     for(i = 0; i < IOAPIC_NUM_PINS; i++)
         s->ioredtbl[i] = 1 << 16; /* mask LVT */
 #ifdef KVM_CAP_IRQCHIP
-    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
+    if (kvm_enabled() && kvm_irqchip_in_kernel()) {
         kvm_kernel_ioapic_load_from_user(s);
     }
 #endif

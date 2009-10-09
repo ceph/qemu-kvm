@@ -221,7 +221,7 @@ static int msix_add_config(struct PCIDevice *pdev, unsigned short nentries,
 static void msix_free_irq_entries(PCIDevice *dev)
 {
     int vector;
-    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
+    if (kvm_enabled() && kvm_irqchip_in_kernel()) {
         kvm_msix_free(dev);
     }
 
@@ -298,7 +298,7 @@ static void msix_mmio_writel(void *opaque, target_phys_addr_t addr,
     int vector = offset / MSIX_ENTRY_SIZE;
     int was_masked = msix_is_masked(dev, vector);
     memcpy(dev->msix_table_page + offset, &val, 4);
-    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
+    if (kvm_enabled() && kvm_irqchip_in_kernel()) {
         kvm_msix_update(dev, vector, was_masked, msix_is_masked(dev, vector));
     }
     if (!msix_is_masked(dev, vector) && msix_is_pending(dev, vector)) {
@@ -354,7 +354,7 @@ int msix_init(struct PCIDevice *dev, unsigned short nentries,
         return -EINVAL;
 
 #ifdef KVM_CAP_IRQCHIP
-    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
+    if (kvm_enabled() && kvm_irqchip_in_kernel()) {
         dev->msix_irq_entries = qemu_malloc(nentries *
                                             sizeof *dev->msix_irq_entries);
     }
@@ -478,7 +478,7 @@ void msix_notify(PCIDevice *dev, unsigned vector)
     }
 
 #ifdef KVM_CAP_IRQCHIP
-    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
+    if (kvm_enabled() && kvm_irqchip_in_kernel()) {
         kvm_set_irq(dev->msix_irq_entries[vector].gsi, 1, NULL);
         return;
     }
@@ -516,7 +516,7 @@ int msix_vector_use(PCIDevice *dev, unsigned vector)
     if (dev->msix_entry_used[vector]) {
         return 0;
     }
-    if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
+    if (kvm_enabled() && kvm_irqchip_in_kernel()) {
         ret = kvm_msix_add(dev, vector);
         if (ret) {
             return ret;
@@ -531,7 +531,7 @@ void msix_vector_unuse(PCIDevice *dev, unsigned vector)
 {
     if (vector < dev->msix_entries_nr && dev->msix_entry_used[vector]) {
         --dev->msix_entry_used[vector];
-        if (kvm_enabled() && qemu_kvm_irqchip_in_kernel()) {
+        if (kvm_enabled() && kvm_irqchip_in_kernel()) {
             kvm_msix_del(dev, vector);
         }
     }
