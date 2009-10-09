@@ -364,7 +364,6 @@ void kvm_show_code(kvm_vcpu_context_t vcpu)
 	unsigned char code;
 	char code_str[SHOW_CODE_LEN * 3 + 1];
 	unsigned long rip;
-	kvm_context_t kvm = vcpu->kvm;
 
 	r = ioctl(fd, KVM_GET_SREGS, &sregs);
 	if (r == -1) {
@@ -384,11 +383,7 @@ void kvm_show_code(kvm_vcpu_context_t vcpu)
 	for (n = -back_offset; n < SHOW_CODE_LEN-back_offset; ++n) {
 		if (n == 0)
 			strcat(code_str, " -->");
-		r = kvm_mmio_read(kvm->opaque, rip + n, &code, 1);
-		if (r < 0) {
-			strcat(code_str, " xx");
-			continue;
-		}
+		cpu_physical_memory_rw(rip + n, &code, 1, 1);
 		sprintf(code_str + strlen(code_str), " %02x", code);
 	}
 	fprintf(stderr, "code:%s\n", code_str);

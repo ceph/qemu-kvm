@@ -111,18 +111,6 @@ static int kvm_debug(void *opaque, void *data,
 }
 #endif
 
-int kvm_mmio_read(void *opaque, uint64_t addr, uint8_t *data, int len)
-{
-    cpu_physical_memory_rw(addr, data, len, 0);
-    return 0;
-}
-
-int kvm_mmio_write(void *opaque, uint64_t addr, uint8_t *data, int len)
-{
-    cpu_physical_memory_rw(addr, data, len, 1);
-    return 0;
-}
-
 static int handle_unhandled(uint64_t reason)
 {
     fprintf(stderr, "kvm: unhandled exit %" PRIx64 "\n", reason);
@@ -891,7 +879,6 @@ int kvm_set_mpstate(kvm_vcpu_context_t vcpu, struct kvm_mp_state *mp_state)
 static int handle_mmio(kvm_vcpu_context_t vcpu)
 {
     unsigned long addr = vcpu->run->mmio.phys_addr;
-    kvm_context_t kvm = vcpu->kvm;
     struct kvm_run *kvm_run = vcpu->run;
     void *data = kvm_run->mmio.data;
 
@@ -899,10 +886,8 @@ static int handle_mmio(kvm_vcpu_context_t vcpu)
     if ((addr > 0xa0000 - 4 && addr <= 0xa0000) && kvm_run->mmio.len == 3)
         return 0;
 
-    if (kvm_run->mmio.is_write)
-        return kvm_mmio_write(kvm->opaque, addr, data, kvm_run->mmio.len);
-    else
-        return kvm_mmio_read(kvm->opaque, addr, data, kvm_run->mmio.len);
+    cpu_physical_memory_rw(addr, data, kvm_run->mmio.len, kvm_run->mmio.is_write);
+    return 0;
 }
 
 int handle_io_window(kvm_context_t kvm)
@@ -994,10 +979,9 @@ int kvm_run(kvm_vcpu_context_t vcpu, void *env)
         struct kvm_coalesced_mmio_ring *ring =
             (void *) run + kvm_state->coalesced_mmio * PAGE_SIZE;
         while (ring->first != ring->last) {
-            kvm_mmio_write(kvm->opaque,
-                           ring->coalesced_mmio[ring->first].phys_addr,
+            cpu_physical_memory_rw(ring->coalesced_mmio[ring->first].phys_addr,
                            &ring->coalesced_mmio[ring->first].data[0],
-                           ring->coalesced_mmio[ring->first].len);
+                           ring->coalesced_mmio[ring->first].len, 1);
             smp_wmb();
             ring->first = (ring->first + 1) % KVM_COALESCED_MMIO_MAX;
         }
