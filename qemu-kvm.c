@@ -467,8 +467,6 @@ kvm_vcpu_context_t kvm_create_vcpu(CPUState *env, int id)
         goto err_fd;
     }
 
-    vcpu_ctx->run = env->kvm_run;
-
     return vcpu_ctx;
   err_fd:
     close(vcpu_ctx->fd);
@@ -938,9 +936,9 @@ int kvm_run(kvm_vcpu_context_t vcpu, void *env)
 {
     int r;
     int fd = vcpu->fd;
-    struct kvm_run *run = vcpu->run;
     CPUState *_env = env;
     kvm_context_t kvm = &_env->kvm_state->kvm_context;
+    struct kvm_run *run = _env->kvm_run;
 
   again:
     push_nmi(kvm);
