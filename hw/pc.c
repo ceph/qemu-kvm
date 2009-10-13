@@ -1364,9 +1364,6 @@ static void pc_init1(ram_addr_t ram_size,
 #ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
     if (kvm_enabled()) {
         add_assigned_devices(pci_bus, assigned_devices, assigned_devices_index);
-#ifdef FIXME /* pci_option_rom_offset */
-        assigned_dev_load_option_roms(pci_option_rom_offset);
-#endif
     }
 #endif /* CONFIG_KVM_DEVICE_ASSIGNMENT */
 }

@@ -37,6 +37,7 @@
 #include "sysemu.h"
 #include "console.h"
 #include "device-assignment.h"
+#include "loader.h"
 
 /* From linux/ioport.h */
 #define IORESOURCE_IO       0x00000100  /* Resource type */
@@ -55,6 +56,8 @@
 #else
 #define DEBUG(fmt, ...) do { } while(0)
 #endif
+
+static void assigned_dev_load_option_rom(AssignedDevice *dev);
 
 static uint32_t guest_to_host_ioport(AssignedDevRegion *region, uint32_t addr)
 {
@@ -1168,6 +1171,7 @@ static int assigned_initfn(struct PCIDevice *pci_dev)
         if (assigned_dev_register_msix_mmio(dev))
             goto assigned_out;
 
+    assigned_dev_load_option_rom(dev);
     return 0;
 
 assigned_out:
@@ -1329,11 +1333,10 @@ struct option_rom_pci_header {
  * both 2KB and target page size.
  */
 #define OPTION_ROM_ALIGN(x) (((x) + 2047) & ~2047)
-static int scan_option_rom(uint8_t devfn, void *roms, ram_addr_t offset)
+static void scan_option_rom(const char *name, uint8_t devfn, void *roms)
 {
-    int i, size, total_size;
+    int i, size;
     uint8_t csum;
-    ram_addr_t addr;
     struct option_rom_header *rom;
     struct option_rom_pci_header *pcih;
 
@@ -1362,29 +1365,12 @@ static int scan_option_rom(uint8_t devfn, void *roms, ram_addr_t offset)
 
         rom = (struct option_rom_header *)((char *)rom + size);
     }
-
-    return 0;
+    return;
 
  found:
-    /* The size should be both 2K-aligned and page-aligned */
-    total_size = (TARGET_PAGE_SIZE < 2048)
-                  ? OPTION_ROM_ALIGN(size + 1)
-                  : TARGET_PAGE_ALIGN(size + 1);
-
-    /* Size of all available ram space is 0x10000 (0xd0000 to 0xe0000) */
-    if ((offset + total_size) > 0x10000u) {
-        fprintf(stderr, "Option ROM size %x exceeds available space\n", size);
-        return 0;
-    }
-
-    addr = qemu_ram_alloc(total_size);
-    cpu_register_physical_memory(0xd0000 + offset, total_size, addr | IO_MEM_ROM);
-
-    /* Write ROM data and devfn to phys_addr */
-    cpu_physical_memory_write_rom(0xd0000 + offset, (uint8_t *)rom, size);
-    cpu_physical_memory_write_rom(0xd0000 + offset + size, &devfn, 1);
-
-    return total_size;
+    rom_add_blob(name ? name : "assigned device", rom, size,
+                 PC_ROM_MIN_OPTION, PC_ROM_MAX, PC_ROM_ALIGN);
+    return;
 }
 
 /*
@@ -1392,75 +1378,67 @@ static int scan_option_rom(uint8_t devfn, void *roms, ram_addr_t offset)
  * load the corresponding ROM data to RAM. If an error occurs while loading an
  * option ROM, we just ignore that option ROM and continue with the next one.
  */
-ram_addr_t assigned_dev_load_option_roms(ram_addr_t rom_base_offset)
+static void assigned_dev_load_option_rom(AssignedDevice *dev)
 {
-    ram_addr_t offset = rom_base_offset;
-    AssignedDevice *dev;
+    int size, len;
+    void *buf;
+    FILE *fp;
+    uint8_t i = 1;
+    char rom_file[64];
 
-    QLIST_FOREACH(dev, &devs, next) {
-        int size, len;
-        void *buf;
-        FILE *fp;
-        uint8_t i = 1;
-        char rom_file[64];
+    snprintf(rom_file, sizeof(rom_file),
+             "/sys/bus/pci/devices/0000:%02x:%02x.%01x/rom",
+             dev->host.bus, dev->host.dev, dev->host.func);
 
-        snprintf(rom_file, sizeof(rom_file),
-                 "/sys/bus/pci/devices/0000:%02x:%02x.%01x/rom",
-                 dev->host.bus, dev->host.dev, dev->host.func);
+    if (access(rom_file, F_OK))
+        return;
 
-        if (access(rom_file, F_OK))
-            continue;
+    /* Write something to the ROM file to enable it */
+    fp = fopen(rom_file, "wb");
+    if (fp == NULL)
+        return;
+    len = fwrite(&i, 1, 1, fp);
+    fclose(fp);
+    if (len != 1)
+        return;
 
-        /* Write something to the ROM file to enable it */
-        fp = fopen(rom_file, "wb");
-        if (fp == NULL)
-            continue;
-        len = fwrite(&i, 1, 1, fp);
+    /* The file has to be closed and reopened, otherwise it won't work */
+    fp = fopen(rom_file, "rb");
+    if (fp == NULL)
+        return;
+
+    fseek(fp, 0, SEEK_END);
+    size = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+
+    buf = malloc(size);
+    if (buf == NULL) {
         fclose(fp);
-        if (len != 1)
-            continue;
-
-        /* The file has to be closed and reopened, otherwise it won't work */
-        fp = fopen(rom_file, "rb");
-        if (fp == NULL)
-            continue;
-
-        fseek(fp, 0, SEEK_END);
-        size = ftell(fp);
-        fseek(fp, 0, SEEK_SET);
-
-        buf = malloc(size);
-        if (buf == NULL) {
-            fclose(fp);
-            continue;
-        }
-
-        fread(buf, size, 1, fp);
-        if (!feof(fp) || ferror(fp)) {
-            free(buf);
-            fclose(fp);
-            continue;
-        }
-
-        /* Copy ROM contents into the space backing the ROM BAR */
-        if (dev->v_addrs[PCI_ROM_SLOT].r_size >= size &&
-            dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase) {
-            mprotect(dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase,
-                     size, PROT_READ | PROT_WRITE);
-            memcpy(dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase,
-                   buf, size);
-            mprotect(dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase,
-                     size, PROT_READ);
-        }
-
-        if (!dev->dev.qdev.hotplugged) {
-            /* Scan the buffer for suitable ROMs and increase the offset */
-            offset += scan_option_rom(dev->dev.devfn, buf, offset);
-        }
-
-        free(buf);
-        fclose(fp);
+        return;
     }
 
-    return offset;
+    fread(buf, size, 1, fp);
+    if (!feof(fp) || ferror(fp)) {
+        free(buf);
+        fclose(fp);
+        return;
+    }
+    fclose(fp);
+
+    /* Copy ROM contents into the space backing the ROM BAR */
+    if (dev->v_addrs[PCI_ROM_SLOT].r_size >= size &&
+        dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase) {
+        mprotect(dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase,
+                 size, PROT_READ | PROT_WRITE);
+        memcpy(dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase,
+               buf, size);
+        mprotect(dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase,
+                 size, PROT_READ);
+    }
+
+    if (!dev->dev.qdev.hotplugged) {
+        /* Scan the buffer for suitable ROMs and increase the offset */
+        scan_option_rom(dev->dev.qdev.id, dev->dev.devfn, buf);
+    }
+    free(buf);
 }
