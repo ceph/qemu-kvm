@@ -1424,7 +1424,7 @@ if test "$kvm_cap_pit" != "no" ; then
 #endif
 int main(void) { return 0; }
 EOF
-  if compile_prog $kvm_cflags ""; then
+  if compile_prog "$kvm_cflags" ""; then
     kvm_cap_pit=yes
   else
     if test "$kvm_cap_pit" = "yes" ; then
@@ -1448,7 +1448,7 @@ if test "$kvm_cap_device_assignment" != "no" ; then
 #endif
 int main(void) { return 0; }
 EOF
-  if compile_prog $kvm_cflags "" ; then
+  if compile_prog "$kvm_cflags" "" ; then
     kvm_cap_device_assignment=yes
   else
     if test "$kvm_cap_device_assignment" = "yes" ; then
