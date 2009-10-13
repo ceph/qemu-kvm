@@ -1346,24 +1346,7 @@ fi
 ##########################################
 # kvm probe
 if test "$kvm" != "no" ; then
-  case "$cpu" in
-  i386 | x86_64)
-    kvm_arch="x86"
-    ;;
-  ppc)
-    kvm_arch="powerpc"
-    ;;
-  *)
-    kvm_arch="$cpu"
-    ;;
-  esac
-
-  kvm_cflags="-I$source_path/kvm/include"
-  kvm_cflags="$kvm_cflags -include $source_path/kvm/include/linux/config.h"
-  kvm_cflags="$kvm_cflags -I$source_path/kvm/include/$kvm_arch"
-  kvm_cflags="$kvm_cflags -idirafter $source_path/compat"
-
-  cat > $TMPC <<EOF
+    cat > $TMPC <<EOF
 #include <linux/kvm.h>
 #if !defined(KVM_API_VERSION) || KVM_API_VERSION < 12 || KVM_API_VERSION > 12
 #error Invalid KVM version
@@ -1379,6 +1362,33 @@ if test "$kvm" != "no" ; then
 #endif
 int main(void) { return 0; }
 EOF
+  if test "$kerneldir" != "" ; then
+      kvm_cflags=-I"$kerneldir"/include
+      if test \( "$cpu" = "i386" -o "$cpu" = "x86_64" \) \
+         -a -d "$kerneldir/arch/x86/include" ; then
+            kvm_cflags="$kvm_cflags -I$kerneldir/arch/x86/include"
+	elif test "$cpu" = "ppc" -a -d "$kerneldir/arch/powerpc/include" ; then
+	    kvm_cflags="$kvm_cflags -I$kerneldir/arch/powerpc/include"
+        elif test -d "$kerneldir/arch/$cpu/include" ; then
+            kvm_cflags="$kvm_cflags -I$kerneldir/arch/$cpu/include"
+      fi
+  else
+      case "$cpu" in
+      i386 | x86_64)
+        kvm_arch="x86"
+        ;;
+      ppc)
+        kvm_arch="powerpc"
+        ;;
+      *)
+        kvm_arch="$cpu"
+        ;;
+      esac
+      kvm_cflags="-I$source_path/kvm/include"
+      kvm_cflags="$kvm_cflags -include $source_path/kvm/include/linux/config.h"
+      kvm_cflags="$kvm_cflags -I$source_path/kvm/include/$kvm_arch"
+  fi
+  kvm_cflags="$kvm_cflags -idirafter $source_path/compat"
   if compile_prog "$kvm_cflags" "" ; then
     kvm=yes
   else
