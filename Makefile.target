@@ -1,6 +1,7 @@
 # -*- Mode: makefile -*-
 
 include ../config-host.mak
+include config-devices.mak
 include config-target.mak
 include $(SRC_PATH)/rules.mak
 
@@ -31,7 +32,10 @@ CFLAGS += $(KVM_CFLAGS)
 config-target.h: config-target.h-timestamp
 config-target.h-timestamp: config-target.mak
 
-all: config-target.h
+config-devices.h: config-devices.h-timestamp
+config-devices.h-timestamp: config-devices.mak
+
+all: config-target.h config-devices.h
 	$(call quiet-command, $(MAKE) $(PROGS),)
 
 # Dummy command so that make thinks it has done something
