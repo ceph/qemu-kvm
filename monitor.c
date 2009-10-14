@@ -46,6 +46,7 @@
 #include "kvm.h"
 #include "acl.h"
 #include "qint.h"
+#include "qlist.h"
 #include "qdict.h"
 #include "qstring.h"
 #include "exec-all.h"
@@ -76,9 +77,12 @@ typedef struct mon_cmd_t {
     const char *args_type;
     const char *params;
     const char *help;
+    void (*user_print)(Monitor *mon, const QObject *data);
     union {
         void (*info)(Monitor *mon);
+        void (*info_new)(Monitor *mon, QObject **ret_data);
         void (*cmd)(Monitor *mon, const QDict *qdict);
+        void (*cmd_new)(Monitor *mon, const QDict *params, QObject **ret_data);
     } mhandler;
 } mon_cmd_t;
 
@@ -216,6 +220,31 @@ static int monitor_fprintf(FILE *stream, const char *fmt, ...)
     return 0;
 }
 
+static void monitor_user_noop(Monitor *mon, const QObject *data) { }
+
+static inline int monitor_handler_ported(const mon_cmd_t *cmd)
+{
+    return cmd->user_print != NULL;
+}
+
+static void monitor_print_qobject(Monitor *mon, const QObject *data)
+{
+    switch (qobject_type(data)) {
+        case QTYPE_QSTRING:
+            monitor_printf(mon, "%s",qstring_get_str(qobject_to_qstring(data)));
+            break;
+        case QTYPE_QINT:
+            monitor_printf(mon, "%" PRId64,qint_get_int(qobject_to_qint(data)));
+            break;
+        default:
+            monitor_printf(mon, "ERROR: unsupported type: %d",
+                                                        qobject_type(data));
+            break;
+    }
+
+    monitor_puts(mon, "\n");
+}
+
 static int compare_cmd(const char *name, const char *list)
 {
     const char *p, *pstart;
@@ -285,27 +314,42 @@ static void do_commit(Monitor *mon, const QDict *qdict)
     }
 }
 
-static void do_info(Monitor *mon, const QDict *qdict)
+static void do_info(Monitor *mon, const QDict *qdict, QObject **ret_data)
 {
     const mon_cmd_t *cmd;
     const char *item = qdict_get_try_str(qdict, "item");
 
     if (!item)
         goto help;
-    for(cmd = info_cmds; cmd->name != NULL; cmd++) {
+
+    for (cmd = info_cmds; cmd->name != NULL; cmd++) {
         if (compare_cmd(item, cmd->name))
-            goto found;
+            break;
     }
- help:
-    help_cmd(mon, "info");
+
+    if (cmd->name == NULL)
+        goto help;
+
+    if (monitor_handler_ported(cmd)) {
+        cmd->mhandler.info_new(mon, ret_data);
+        if (*ret_data)
+            cmd->user_print(mon, *ret_data);
+    } else {
+        cmd->mhandler.info(mon);
+    }
+
     return;
- found:
-    cmd->mhandler.info(mon);
+
+help:
+    help_cmd(mon, "info");
 }
 
-static void do_info_version(Monitor *mon)
+/**
+ * do_info_version(): Show QEMU version
+ */
+static void do_info_version(Monitor *mon, QObject **ret_data)
 {
-    monitor_printf(mon, "%s\n", QEMU_VERSION QEMU_PKGVERSION);
+    *ret_data = QOBJECT(qstring_from_str(QEMU_VERSION QEMU_PKGVERSION));
 }
 
 static void do_info_name(Monitor *mon)
@@ -370,35 +414,99 @@ static void do_info_registers(Monitor *mon)
 #endif
 }
 
-static void do_info_cpus(Monitor *mon)
+static void print_cpu_iter(QObject *obj, void *opaque)
+{
+    QDict *cpu;
+    int active = ' ';
+    Monitor *mon = opaque;
+
+    assert(qobject_type(obj) == QTYPE_QDICT);
+    cpu = qobject_to_qdict(obj);
+
+    if (strcmp(qdict_get_str(cpu, "current"), "yes") == 0)
+        active = '*';
+
+    monitor_printf(mon, "%c CPU #%d: ", active, (int)qdict_get_int(cpu, "CPU"));
+
+#if defined(TARGET_I386)
+    monitor_printf(mon, "pc=0x" TARGET_FMT_lx,
+                   (target_ulong) qdict_get_int(cpu, "pc"));
+#elif defined(TARGET_PPC)
+    monitor_printf(mon, "nip=0x" TARGET_FMT_lx,
+                   (target_long) qdict_get_int(cpu, "nip"));
+#elif defined(TARGET_SPARC)
+    monitor_printf(mon, "pc=0x " TARGET_FMT_lx,
+                   (target_long) qdict_get_int(cpu, "pc"));
+    monitor_printf(mon, "npc=0x" TARGET_FMT_lx,
+                   (target_long) qdict_get_int(cpu, "npc"));
+#elif defined(TARGET_MIPS)
+    monitor_printf(mon, "PC=0x" TARGET_FMT_lx,
+                   (target_long) qdict_get_int(cpu, "PC"));
+#endif
+
+    if (strcmp(qdict_get_str(cpu, "halted"), "yes") == 0)
+        monitor_printf(mon, " (halted)");
+
+    monitor_printf(mon, "\n");
+}
+
+static void monitor_print_cpus(Monitor *mon, const QObject *data)
+{
+    QList *cpu_list;
+
+    assert(qobject_type(data) == QTYPE_QLIST);
+    cpu_list = qobject_to_qlist(data);
+    qlist_iter(cpu_list, print_cpu_iter, mon);
+}
+
+/**
+ * do_info_cpus(): Show CPU information
+ *
+ * Return a QList with a QDict for each CPU.
+ *
+ * For example:
+ *
+ * [ { "CPU": 0, "current": "yes", "pc": 0x..., "halted": "no" },
+ *   { "CPU": 1, "current": "no",  "pc": 0x..., "halted": "yes" } ]
+ */
+static void do_info_cpus(Monitor *mon, QObject **ret_data)
 {
     CPUState *env;
+    QList *cpu_list;
+
+    cpu_list = qlist_new();
 
     /* just to set the default cpu if not already done */
     mon_get_cpu();
 
     for(env = first_cpu; env != NULL; env = env->next_cpu) {
+        const char *answer;
+        QDict *cpu = qdict_new();
+
         cpu_synchronize_state(env);
         kvm_save_mpstate(env);
-        monitor_printf(mon, "%c CPU #%d:",
-                       (env == mon->mon_cpu) ? '*' : ' ',
-                       env->cpu_index);
+
+        qdict_put(cpu, "CPU", qint_from_int(env->cpu_index));
+        answer = (env == mon->mon_cpu) ? "yes" : "no";
+        qdict_put(cpu, "current", qstring_from_str(answer));
 #if defined(TARGET_I386)
-        monitor_printf(mon, " pc=0x" TARGET_FMT_lx,
-                       env->eip + env->segs[R_CS].base);
+        qdict_put(cpu, "pc", qint_from_int(env->eip + env->segs[R_CS].base));
 #elif defined(TARGET_PPC)
-        monitor_printf(mon, " nip=0x" TARGET_FMT_lx, env->nip);
+        qdict_put(cpu, "nip", qint_from_int(env->nip));
 #elif defined(TARGET_SPARC)
-        monitor_printf(mon, " pc=0x" TARGET_FMT_lx " npc=0x" TARGET_FMT_lx,
-                       env->pc, env->npc);
+        qdict_put(cpu, "pc", qint_from_int(env->pc));
+        qdict_put(cpu, "npc", qint_from_int(env->npc));
 #elif defined(TARGET_MIPS)
-        monitor_printf(mon, " PC=0x" TARGET_FMT_lx, env->active_tc.PC);
+        qdict_put(cpu, "PC", qint_from_int(env->active_tc.PC));
 #endif
-        if (env->halted)
-            monitor_printf(mon, " (halted)");
-        monitor_printf(mon," thread_id=%d", env->thread_id);
-        monitor_printf(mon, "\n");
+        answer = env->halted ? "yes" : "no";
+        qdict_put(cpu, "halted", qstring_from_str(answer));
+        qdict_put(cpu, "thread_id", qint_from_int(env->thread_id));
+
+        qlist_append(cpu_list, cpu);
     }
+
+    *ret_data = QOBJECT(cpu_list);
 }
 
 static void do_cpu_set(Monitor *mon, const QDict *qdict)
@@ -462,7 +570,10 @@ static void do_info_cpu_stats(Monitor *mon)
 }
 #endif
 
-static void do_quit(Monitor *mon, const QDict *qdict)
+/**
+ * do_quit(): Quit QEMU execution
+ */
+static void do_quit(Monitor *mon, const QDict *qdict, QObject **ret_data)
 {
     exit(0);
 }
@@ -601,7 +712,10 @@ static void do_singlestep(Monitor *mon, const QDict *qdict)
     }
 }
 
-static void do_stop(Monitor *mon, const QDict *qdict)
+/**
+ * do_stop(): Stop VM execution
+ */
+static void do_stop(Monitor *mon, const QDict *qdict, QObject **ret_data)
 {
     vm_stop(EXCP_INTERRUPT);
 }
@@ -613,7 +727,10 @@ struct bdrv_iterate_context {
     int err;
 };
 
-static void do_cont(Monitor *mon, const QDict *qdict)
+/**
+ * do_cont(): Resume emulation.
+ */
+static void do_cont(Monitor *mon, const QDict *qdict, QObject **ret_data)
 {
     struct bdrv_iterate_context context = { mon, 0 };
 
@@ -629,7 +746,7 @@ static void bdrv_key_cb(void *opaque, int err)
 
     /* another key was set successfully, retry to continue */
     if (!err)
-        do_cont(mon, NULL);
+        do_cont(mon, NULL, NULL);
 }
 
 static void encrypted_bdrv_it(void *opaque, BlockDriverState *bs)
@@ -1291,12 +1408,20 @@ static void do_boot_set(Monitor *mon, const QDict *qdict)
     }
 }
 
-static void do_system_reset(Monitor *mon, const QDict *qdict)
+/**
+ * do_system_reset(): Issue a machine reset
+ */
+static void do_system_reset(Monitor *mon, const QDict *qdict,
+                            QObject **ret_data)
 {
     qemu_system_reset_request();
 }
 
-static void do_system_powerdown(Monitor *mon, const QDict *qdict)
+/**
+ * do_system_powerdown(): Issue a machine powerdown
+ */
+static void do_system_powerdown(Monitor *mon, const QDict *qdict,
+                                QObject **ret_data)
 {
     qemu_system_powerdown_request();
 }
@@ -1593,15 +1718,26 @@ static void do_info_status(Monitor *mon)
        monitor_printf(mon, "VM status: paused\n");
 }
 
-
-static void do_balloon(Monitor *mon, const QDict *qdict)
+/**
+ * do_balloon(): Request VM to change its memory allocation
+ */
+static void do_balloon(Monitor *mon, const QDict *qdict, QObject **ret_data)
 {
     int value = qdict_get_int(qdict, "value");
     ram_addr_t target = value;
     qemu_balloon(target << 20);
 }
 
-static void do_info_balloon(Monitor *mon)
+static void monitor_print_balloon(Monitor *mon, const QObject *data)
+{
+    monitor_printf(mon, "balloon: actual=%d\n",
+                                     (int)qint_get_int(qobject_to_qint(data)));
+}
+
+/**
+ * do_info_balloon(): Balloon information
+ */
+static void do_info_balloon(Monitor *mon, QObject **ret_data)
 {
     ram_addr_t actual;
 
@@ -1612,7 +1748,7 @@ static void do_info_balloon(Monitor *mon)
     else if (actual == 0)
         monitor_printf(mon, "Ballooning not activated in VM\n");
     else
-        monitor_printf(mon, "balloon: actual=%d\n", (int)(actual >> 20));
+        *ret_data = QOBJECT(qint_from_int((int)(actual >> 20)));
 }
 
 static qemu_acl *find_acl(Monitor *mon, const char *name)
@@ -1849,7 +1985,8 @@ static const mon_cmd_t info_cmds[] = {
         .args_type  = "",
         .params     = "",
         .help       = "show the version of QEMU",
-        .mhandler.info = do_info_version,
+        .user_print = monitor_print_qobject,
+        .mhandler.info_new = do_info_version,
     },
     {
         .name       = "network",
@@ -1891,7 +2028,8 @@ static const mon_cmd_t info_cmds[] = {
         .args_type  = "",
         .params     = "",
         .help       = "show infos for each CPU",
-        .mhandler.info = do_info_cpus,
+        .user_print = monitor_print_cpus,
+        .mhandler.info_new = do_info_cpus,
     },
     {
         .name       = "history",
@@ -2074,7 +2212,8 @@ static const mon_cmd_t info_cmds[] = {
         .args_type  = "",
         .params     = "",
         .help       = "show balloon information",
-        .mhandler.info = do_info_balloon,
+        .user_print = monitor_print_balloon,
+        .mhandler.info_new = do_info_balloon,
     },
     {
         .name       = "qtree",
@@ -3043,12 +3182,26 @@ static void monitor_handle_command(Monitor *mon, const char *cmdline)
     qdict = qdict_new();
 
     cmd = monitor_parse_command(mon, cmdline, qdict);
-    if (cmd) {
-        qemu_errors_to_mon(mon);
+    if (!cmd)
+        goto out;
+
+    qemu_errors_to_mon(mon);
+
+    if (monitor_handler_ported(cmd)) {
+        QObject *data = NULL;
+
+        cmd->mhandler.cmd_new(mon, qdict, &data);
+        if (data)
+            cmd->user_print(mon, data);
+
+        qobject_decref(data);
+    } else {
         cmd->mhandler.cmd(mon, qdict);
-        qemu_errors_to_previous();
     }
 
+   qemu_errors_to_previous();
+
+out:
     QDECREF(qdict);
 }
 

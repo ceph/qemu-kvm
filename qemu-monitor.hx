@@ -40,7 +40,8 @@ ETEXI
         .args_type  = "item:s?",
         .params     = "[subcommand]",
         .help       = "show various information about the system state",
-        .mhandler.cmd = do_info,
+        .user_print = monitor_user_noop,
+        .mhandler.cmd_new = do_info,
     },
 
 STEXI
@@ -118,7 +119,8 @@ ETEXI
         .args_type  = "",
         .params     = "",
         .help       = "quit the emulator",
-        .mhandler.cmd = do_quit,
+        .user_print = monitor_user_noop,
+        .mhandler.cmd_new = do_quit,
     },
 
 STEXI
@@ -285,7 +287,8 @@ ETEXI
         .args_type  = "",
         .params     = "",
         .help       = "stop emulation",
-        .mhandler.cmd = do_stop,
+        .user_print = monitor_user_noop,
+        .mhandler.cmd_new = do_stop,
     },
 
 STEXI
@@ -298,7 +301,8 @@ ETEXI
         .args_type  = "",
         .params     = "",
         .help       = "resume emulation",
-        .mhandler.cmd = do_cont,
+        .user_print = monitor_user_noop,
+        .mhandler.cmd_new = do_cont,
     },
 
 STEXI
@@ -464,7 +468,8 @@ ETEXI
         .args_type  = "",
         .params     = "",
         .help       = "reset the system",
-        .mhandler.cmd = do_system_reset,
+        .user_print = monitor_user_noop,
+        .mhandler.cmd_new = do_system_reset,
     },
 
 STEXI
@@ -478,7 +483,8 @@ ETEXI
         .args_type  = "",
         .params     = "",
         .help       = "send system power down event",
-        .mhandler.cmd = do_system_powerdown,
+        .user_print = monitor_user_noop,
+        .mhandler.cmd_new = do_system_powerdown,
     },
 
 STEXI
@@ -868,7 +874,8 @@ ETEXI
         .args_type  = "value:i",
         .params     = "target",
         .help       = "request VM to change it's memory allocation (in MB)",
-        .mhandler.cmd = do_balloon,
+        .user_print = monitor_user_noop,
+        .mhandler.cmd_new = do_balloon,
     },
 
 STEXI
