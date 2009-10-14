@@ -1112,18 +1112,6 @@ static inline void kvm_load_tsc(CPUState *env)
 void kvm_mutex_unlock(void);
 void kvm_mutex_lock(void);
 
-static inline void qemu_mutex_unlock_iothread(void)
-{
-    if (kvm_enabled())
-        kvm_mutex_unlock();
-}
-
-static inline void qemu_mutex_lock_iothread(void)
-{
-    if (kvm_enabled())
-        kvm_mutex_lock();
-}
-
 int kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr,
                                    target_phys_addr_t end_addr);
 

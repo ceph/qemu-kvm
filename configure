@@ -48,6 +48,7 @@ helper_cflags=""
 libs_softmmu=""
 libs_tools=""
 audio_pt_int=""
+audio_win_int=""
 
 # parse CC options first
 for opt do
@@ -257,11 +258,13 @@ case $targetos in
 CYGWIN*)
   mingw32="yes"
   QEMU_CFLAGS="-mno-cygwin $QEMU_CFLAGS"
-  audio_possible_drivers="sdl"
+  audio_possible_drivers="winwave sdl"
+  audio_drv_list="winwave"
 ;;
 MINGW32*)
   mingw32="yes"
-  audio_possible_drivers="dsound sdl fmod"
+  audio_possible_drivers="winwave dsound sdl fmod"
+  audio_drv_list="winwave"
 ;;
 GNU/kFreeBSD)
   audio_drv_list="oss"
@@ -1209,6 +1212,7 @@ for drv in $audio_drv_list; do
 
     dsound)
       libs_softmmu="-lole32 -ldxguid $libs_softmmu"
+      audio_win_int="yes"
     ;;
 
     oss)
@@ -1217,6 +1221,11 @@ for drv in $audio_drv_list; do
 
     sdl|wav)
     # XXX: Probes for CoreAudio, DirectSound, SDL(?)
+    ;;
+
+    winwave)
+      libs_softmmu="-lwinmm $libs_softmmu"
+      audio_win_int="yes"
     ;;
 
     *)
@@ -1711,7 +1720,7 @@ if test "$docs" != "no" ; then
   fi
 fi
 
-# Search for bsawp_32 function
+# Search for bswap_32 function
 byteswap_h=no
 cat > $TMPC << EOF
 #include <byteswap.h>
@@ -1721,7 +1730,7 @@ if compile_prog "" "" ; then
   byteswap_h=yes
 fi
 
-# Search for bsawp_32 function
+# Search for bswap_32 function
 bswap_h=no
 cat > $TMPC << EOF
 #include <sys/endian.h>
@@ -1820,7 +1829,7 @@ QEMU_CFLAGS="-Wall -Wundef -Wendif-labels -Wwrite-strings -Wmissing-prototypes $
 QEMU_CFLAGS="-Wstrict-prototypes -Wredundant-decls $QEMU_CFLAGS"
 QEMU_CFLAGS="-D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE $QEMU_CFLAGS"
 QEMU_CFLAGS="-U_FORTIFY_SOURCE $QEMU_CFLAGS"
-QEMU_CFLAGS="-I. -I\$(SRC_PATH) -MMD -MP -MT \$@ $QEMU_CFLAGS"
+QEMU_CFLAGS="-I. -I\$(SRC_PATH) $QEMU_CFLAGS"
 LDFLAGS="-g $LDFLAGS"
 
 gcc_flags="-Wold-style-declaration -Wold-style-definition"
@@ -2040,6 +2049,9 @@ for drv in $audio_drv_list; do
 done
 if test "$audio_pt_int" = "yes" ; then
   echo "CONFIG_AUDIO_PT_INT=y" >> $config_host_mak
+fi
+if test "$audio_win_int" = "yes" ; then
+  echo "CONFIG_AUDIO_WIN_INT=y" >> $config_host_mak
 fi
 if test "$mixemu" = "yes" ; then
   echo "CONFIG_MIXEMU=y" >> $config_host_mak

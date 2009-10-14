@@ -2566,6 +2566,18 @@ void kvm_mutex_lock(void)
     cpu_single_env = NULL;
 }
 
+void qemu_mutex_unlock_iothread(void)
+{
+    if (kvm_enabled())
+        kvm_mutex_unlock();
+}
+
+void qemu_mutex_lock_iothread(void)
+{
+    if (kvm_enabled())
+        kvm_mutex_lock();
+}
+
 #ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
 void kvm_add_ioperm_data(struct ioperm_data *data)
 {
