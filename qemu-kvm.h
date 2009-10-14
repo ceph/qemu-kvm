@@ -1142,7 +1142,6 @@ void kvm_arch_get_registers(CPUState *env);
 static inline void kvm_arch_put_registers(CPUState *env)
 {
     kvm_load_registers(env);
-    kvm_load_mpstate(env);
 }
 
 void kvm_cpu_synchronize_state(CPUState *env);

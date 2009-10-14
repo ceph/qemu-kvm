@@ -324,6 +324,7 @@ static void cpu_pre_save(void *opaque)
     int i, bit;
 
     cpu_synchronize_state(env);
+    kvm_save_mpstate(env);
 
     /* FPU */
     env->fpus_vmstate = (env->fpus & ~0x3800) | (env->fpstt & 0x7) << 11;
@@ -385,6 +386,8 @@ static int cpu_post_load(void *opaque, int version_id)
     }
 
     tlb_flush(env, 1);
+    kvm_load_mpstate(env);
+
     return 0;
 }
 

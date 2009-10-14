@@ -512,6 +512,7 @@ void apic_init_reset(CPUState *env)
     if (kvm_enabled() && kvm_irqchip_in_kernel()) {
         env->mp_state
             = env->halted ? KVM_MP_STATE_UNINITIALIZED : KVM_MP_STATE_RUNNABLE;
+        kvm_load_mpstate(env);
     }
 #endif
 }

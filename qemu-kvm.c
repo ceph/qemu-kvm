@@ -1579,11 +1579,6 @@ static void on_vcpu(CPUState *env, void (*func)(void *data), void *data)
 void kvm_arch_get_registers(CPUState *env)
 {
 	kvm_arch_save_regs(env);
-	kvm_arch_save_mpstate(env);
-#ifdef KVM_CAP_MP_STATE
-	if (kvm_irqchip_in_kernel())
-		env->halted = (env->mp_state == KVM_MP_STATE_HALTED);
-#endif
 }
 
 static void do_kvm_cpu_synchronize_state(void *_env)
@@ -1677,6 +1672,10 @@ static void kvm_do_save_mpstate(void *_env)
     CPUState *env = _env;
 
     kvm_arch_save_mpstate(env);
+#ifdef KVM_CAP_MP_STATE
+    if (kvm_irqchip_in_kernel())
+        env->halted = (env->mp_state == KVM_MP_STATE_HALTED);
+#endif
 }
 
 void kvm_save_mpstate(CPUState *env)
