@@ -5,6 +5,9 @@ ifneq ($(wildcard config-host.mak),)
 all: build-all
 include config-host.mak
 include $(SRC_PATH)/rules.mak
+config-host.mak: configure
+	@echo $@ is out-of-date, running configure
+	@sed -n "/.*Configured with/s/[^:]*: //p" $@ | sh
 else
 config-host.mak:
 	@echo "Please call configure before running make!"
@@ -33,12 +36,6 @@ SUBDIR_MAKEFLAGS=$(if $(V),,--no-print-directory)
 
 build-all: config-host.h
 	$(call quiet-command, $(MAKE) $(SUBDIR_MAKEFLAGS) $(TOOLS) $(DOCS) recurse-all,)
-
-config-host.mak: configure
-ifneq ($(wildcard config-host.mak),)
-	@echo $@ is out-of-date, running configure
-	@sed -n "/.*Configured with/s/[^:]*: //p" $@ | sh
-endif
 
 config-host.h: config-host.h-timestamp
 config-host.h-timestamp: config-host.mak
@@ -208,7 +205,7 @@ check-qdict: check-qdict.o qdict.o qint.o qstring.o qemu-malloc.o
 
 clean:
 # avoid old build problems by removing potentially incorrect old files
-	rm -f config.mak config.h op-i386.h opc-i386.h gen-op-i386.h op-arm.h opc-arm.h gen-op-arm.h
+	rm -f config.mak op-i386.h opc-i386.h gen-op-i386.h op-arm.h opc-arm.h gen-op-arm.h
 	rm -f *.o *.d *.a $(TOOLS) TAGS cscope.* *.pod *~ */*~
 	rm -f slirp/*.o slirp/*.d audio/*.o audio/*.d block/*.o block/*.d
 	rm -f qemu-img-cmds.h
