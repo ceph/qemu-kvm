@@ -166,8 +166,7 @@ endif #CONFIG_BSD_USER
 # System emulator target
 ifdef CONFIG_SOFTMMU
 
-obj-y = vl.o monitor.o pci.o isa_mmio.o machine.o \
-        gdbstub.o
+obj-y = vl.o monitor.o pci.o machine.o gdbstub.o
 # virtio has to be here due to weird dependency between PCI and virtio-net.
 # need to fix this properly
 obj-y += virtio-blk.o virtio-balloon.o virtio-net.o virtio-console.o virtio-pci.o
@@ -176,6 +175,7 @@ obj-$(CONFIG_KVM) += kvm.o kvm-all.o
 # so moved it from Makefile.hw to Makefile.target for now
 obj-y += msix.o
 
+obj-$(CONFIG_ISA_MMIO) += isa_mmio.o
 LIBS+=-lz
 
 sound-obj-y =
@@ -195,7 +195,7 @@ QEMU_CFLAGS += $(VNC_SASL_CFLAGS)
 obj-$(CONFIG_XEN) += xen_machine_pv.o xen_domainbuild.o
 
 # USB layer
-obj-y += usb-ohci.o
+obj-$(CONFIG_USB_OHCI) += usb-ohci.o
 
 # PCI network cards
 obj-y += eepro100.o
