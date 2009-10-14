@@ -109,22 +109,35 @@ obj-y = $(block-obj-y)
 obj-y += readline.o console.o
 
 obj-y += tcg-runtime.o host-utils.o
-obj-y += irq.o ptimer.o ioport.o
-obj-y += i2c.o smbus.o smbus_eeprom.o max7310.o max111x.o wm8750.o
-obj-y += ssd0303.o ssd0323.o ads7846.o stellaris_input.o twl92230.o
-obj-y += tmp105.o lm832x.o eeprom93xx.o tsc2005.o
+obj-y += irq.o ioport.o
+obj-$(CONFIG_PTIMER) += ptimer.o
+obj-$(CONFIG_MAX7310) += max7310.o
+obj-$(CONFIG_WM8750) += wm8750.o
+obj-$(CONFIG_TWL92230) += twl92230.o
+obj-$(CONFIG_TSC2005) += tsc2005.o
+obj-$(CONFIG_LM832X) += lm832x.o
+obj-$(CONFIG_TMP105) += tmp105.o
+obj-$(CONFIG_STELLARIS_INPUT) += stellaris_input.o
+obj-$(CONFIG_SSD0303) += ssd0303.o
+obj-$(CONFIG_SSD0323) += ssd0323.o
+obj-$(CONFIG_ADS7846) += ads7846.o
+obj-$(CONFIG_MAX111X) += max111x.o
+obj-y += i2c.o smbus.o smbus_eeprom.o
+obj-y += eeprom93xx.o
 obj-y += scsi-disk.o cdrom.o
 obj-y += scsi-generic.o scsi-bus.o
 obj-y += usb.o usb-hub.o usb-$(HOST_USB).o usb-hid.o usb-msd.o usb-wacom.o
 obj-y += usb-serial.o usb-net.o usb-bus.o
-obj-y += sd.o ssi-sd.o
+obj-$(CONFIG_SSI) += ssi.o
+obj-$(CONFIG_SSI_SD) += ssi-sd.o
+obj-$(CONFIG_SD) += sd.o
 obj-y += bt.o bt-host.o bt-vhci.o bt-l2cap.o bt-sdp.o bt-hci.o bt-hid.o usb-bt.o
 obj-y += bt-hci-csr.o
 obj-y += buffered_file.o migration.o migration-tcp.o net.o qemu-sockets.o
 obj-y += qemu-char.o aio.o net-checksum.o savevm.o
 obj-y += msmouse.o ps2.o
-obj-y += qdev.o qdev-properties.o ssi.o
-obj-y += qint.o qstring.o qdict.o qemu-config.o
+obj-y += qdev.o qdev-properties.o
+obj-y += qint.o qstring.o qdict.o qlist.o qemu-config.o
 
 obj-$(CONFIG_BRLAPI) += baum.o
 obj-$(CONFIG_WIN32) += tap-win32.o
@@ -211,6 +224,7 @@ qemu-img-cmds.h: $(SRC_PATH)/qemu-img-cmds.hx
 check-qint: check-qint.o qint.o qemu-malloc.o
 check-qstring: check-qstring.o qstring.o qemu-malloc.o
 check-qdict: check-qdict.o qdict.o qint.o qstring.o qemu-malloc.o
+check-qlist: check-qlist.o qlist.o qint.o qemu-malloc.o
 
 clean:
 # avoid old build problems by removing potentially incorrect old files
