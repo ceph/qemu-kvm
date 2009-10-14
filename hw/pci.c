@@ -26,7 +26,6 @@
 #include "monitor.h"
 #include "net.h"
 #include "sysemu.h"
-#include "msix.h"
 #include "qemu-kvm.h"
 #include "hw/pc.h"
 #include "device-assignment.h"
@@ -183,14 +182,15 @@ int pci_bus_num(PCIBus *s)
 static int get_pci_config_device(QEMUFile *f, void *pv, size_t size)
 {
     PCIDevice *s = container_of(pv, PCIDevice, config);
-    uint8_t config[size];
+    uint8_t config[PCI_CONFIG_SPACE_SIZE];
     int i;
 
-    qemu_get_buffer(f, config, size);
-    for (i = 0; i < size; ++i)
+    assert(size == sizeof config);
+    qemu_get_buffer(f, config, sizeof config);
+    for (i = 0; i < sizeof config; ++i)
         if ((config[i] ^ s->config[i]) & s->cmask[i] & ~s->wmask[i])
             return -EINVAL;
-    memcpy(s->config, config, size);
+    memcpy(s->config, config, sizeof config);
 
     pci_update_mappings(s);
 
@@ -481,7 +481,6 @@ static int pci_unregister_device(DeviceState *dev)
     if (ret)
         return ret;
 
-    msix_uninit(pci_dev);
     pci_unregister_io_regions(pci_dev);
 
     qemu_free_irqs(pci_dev->irq);
