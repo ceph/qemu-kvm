@@ -1924,18 +1924,6 @@ static void process_irqchip_events(CPUState *env)
 
 static int kvm_main_loop_cpu(CPUState *env)
 {
-    setup_kernel_sigmask(env);
-
-    pthread_mutex_lock(&qemu_mutex);
-
-    kvm_arch_init_vcpu(env);
-#ifdef TARGET_I386
-    kvm_tpr_vcpu_start(env);
-#endif
-
-    cpu_single_env = env;
-    kvm_arch_load_regs(env);
-
     while (1) {
         int run_cpu = !is_cpu_stopped(env);
         if (run_cpu && !kvm_irqchip_in_kernel()) {
@@ -1973,15 +1961,28 @@ static void *ap_main_loop(void *_env)
         on_vcpu(env, kvm_arch_do_ioperm, data);
 #endif
 
-    /* signal VCPU creation */
+    setup_kernel_sigmask(env);
+
     pthread_mutex_lock(&qemu_mutex);
+    cpu_single_env = env;
+
+    kvm_arch_init_vcpu(env);
+#ifdef TARGET_I386
+    kvm_tpr_vcpu_start(env);
+#endif
+
+    kvm_arch_load_regs(env);
+
+    /* signal VCPU creation */
     current_env->created = 1;
     pthread_cond_signal(&qemu_vcpu_cond);
 
     /* and wait for machine initialization */
     while (!qemu_system_ready)
         qemu_cond_wait(&qemu_system_cond);
-    pthread_mutex_unlock(&qemu_mutex);
+
+    /* re-initialize cpu_single_env after re-acquiring qemu_mutex */
+    cpu_single_env = env;
 
     kvm_main_loop_cpu(env);
     return NULL;
