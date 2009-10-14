@@ -111,9 +111,9 @@ static int get_msr_entry(struct kvm_msr_entry *entry, CPUState *env)
 }
 
 #ifdef TARGET_X86_64
-#define MSR_COUNT 9
+#define MSR_COUNT 10
 #else
-#define MSR_COUNT 5
+#define MSR_COUNT 6
 #endif
 
 static void set_v8086_seg(struct kvm_segment *lhs, const SegmentCache *rhs)
@@ -255,6 +255,7 @@ void kvm_arch_load_regs(CPUState *env)
 
     /* msrs */
     n = 0;
+    /* Remember to increase MSR_COUNT if you add new registers below */
     set_msr_entry(&msrs[n++], MSR_IA32_SYSENTER_CS,  env->sysenter_cs);
     set_msr_entry(&msrs[n++], MSR_IA32_SYSENTER_ESP, env->sysenter_esp);
     set_msr_entry(&msrs[n++], MSR_IA32_SYSENTER_EIP, env->sysenter_eip);
@@ -429,6 +430,7 @@ void kvm_arch_save_regs(CPUState *env)
 
     /* msrs */
     n = 0;
+    /* Remember to increase MSR_COUNT if you add new registers below */
     msrs[n++].index = MSR_IA32_SYSENTER_CS;
     msrs[n++].index = MSR_IA32_SYSENTER_ESP;
     msrs[n++].index = MSR_IA32_SYSENTER_EIP;
