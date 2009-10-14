@@ -415,7 +415,7 @@ static void prom_init(target_phys_addr_t addr, const char *bios_name)
     int ret;
 
     dev = qdev_create(NULL, "openprom");
-    qdev_init(dev);
+    qdev_init_nofail(dev);
     s = sysbus_from_qdev(dev);
 
     sysbus_mmio_map(s, 0, addr);
@@ -498,7 +498,7 @@ static void ram_init(target_phys_addr_t addr, ram_addr_t RAM_size)
 
     d = FROM_SYSBUS(RamDevice, s);
     d->size = RAM_size;
-    qdev_init(dev);
+    qdev_init_nofail(dev);
 
     sysbus_mmio_map(s, 0, addr);
 }
@@ -651,7 +651,7 @@ static void sun4uv_init(ram_addr_t RAM_size,
     fw_cfg_add_i32(fw_cfg, FW_CFG_KERNEL_SIZE, kernel_size);
     if (kernel_cmdline) {
         fw_cfg_add_i32(fw_cfg, FW_CFG_KERNEL_CMDLINE, CMDLINE_ADDR);
-        pstrcpy_targphys(CMDLINE_ADDR, TARGET_PAGE_SIZE, kernel_cmdline);
+        pstrcpy_targphys("cmdline", CMDLINE_ADDR, TARGET_PAGE_SIZE, kernel_cmdline);
     } else {
         fw_cfg_add_i32(fw_cfg, FW_CFG_KERNEL_CMDLINE, 0);
     }

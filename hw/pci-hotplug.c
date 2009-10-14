@@ -35,7 +35,7 @@
 #include "qemu-config.h"
 #include "device-assignment.h"
 
-#if defined(TARGET_I386) || defined(TARGET_X86_64)
+#if defined(TARGET_I386)
 static PCIDevice *qemu_pci_hot_add_nic(Monitor *mon,
                                        const char *devaddr,
                                        const char *opts_str)
@@ -173,8 +173,8 @@ static PCIDevice *qemu_pci_hot_add_storage(Monitor *mon,
     default:
         dev = NULL;
     }
-    if (dev)
-        qdev_init(&dev->qdev);
+    if (!dev || qdev_init(&dev->qdev) < 0)
+        return NULL;
     return dev;
 }
 

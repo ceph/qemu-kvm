@@ -1,6 +1,8 @@
 # -*- Mode: makefile -*-
 
-include config.mak
+include ../config-host.mak
+include config-devices.mak
+include config-target.mak
 include $(SRC_PATH)/rules.mak
 
 TARGET_PATH=$(SRC_PATH)/target-$(TARGET_BASE_ARCH)
@@ -27,7 +29,15 @@ kvm.o kvm-all.o: QEMU_CFLAGS+=$(KVM_CFLAGS)
 
 CFLAGS += $(KVM_CFLAGS)
 
-all: $(PROGS)
+config-target.h: config-target.h-timestamp
+config-target.h-timestamp: config-target.mak
+
+config-devices.h: config-devices.h-timestamp
+config-devices.h-timestamp: config-devices.mak
+
+all: config-target.h config-devices.h
+	$(call quiet-command, $(MAKE) $(PROGS),)
+
 # Dummy command so that make thinks it has done something
 	@true
 
@@ -91,7 +101,7 @@ ifdef CONFIG_LINUX_USER
 VPATH+=:$(SRC_PATH)/linux-user:$(SRC_PATH)/linux-user/$(TARGET_ABI_DIR)
 QEMU_CFLAGS+=-I$(SRC_PATH)/linux-user -I$(SRC_PATH)/linux-user/$(TARGET_ABI_DIR)
 obj-y = main.o syscall.o strace.o mmap.o signal.o thunk.o \
-      elfload.o linuxload.o uaccess.o gdbstub.o gdbstub-xml.o
+      elfload.o linuxload.o uaccess.o gdbstub.o
 obj-$(CONFIG_CPU_EMULATION) += tcg-runtime.o
 obj-y += host-utils.o
 
@@ -127,7 +137,7 @@ LDFLAGS+=-Wl,-segaddr,__STD_PROG_ZONE,0x1000 -image_base 0x0e000000
 LIBS+=-lmx
 
 obj-y = main.o commpage.o machload.o mmap.o signal.o syscall.o thunk.o \
-        gdbstub.o gdbstub-xml.o
+        gdbstub.o
 
 obj-i386-y += ioport-user.o
 
@@ -144,7 +154,7 @@ VPATH+=:$(SRC_PATH)/bsd-user
 QEMU_CFLAGS+=-I$(SRC_PATH)/bsd-user -I$(SRC_PATH)/bsd-user/$(TARGET_ARCH)
 
 obj-y = main.o bsdload.o elfload.o mmap.o signal.o strace.o syscall.o \
-        gdbstub.o gdbstub-xml.o uaccess.o
+        gdbstub.o uaccess.o
 
 obj-i386-y += ioport-user.o
 
@@ -156,8 +166,7 @@ endif #CONFIG_BSD_USER
 # System emulator target
 ifdef CONFIG_SOFTMMU
 
-obj-y = vl.o monitor.o pci.o isa_mmio.o machine.o \
-        gdbstub.o gdbstub-xml.o
+obj-y = vl.o monitor.o pci.o machine.o gdbstub.o
 # virtio has to be here due to weird dependency between PCI and virtio-net.
 # need to fix this properly
 obj-y += virtio-blk.o virtio-balloon.o virtio-net.o virtio-console.o virtio-pci.o
@@ -166,6 +175,7 @@ obj-$(CONFIG_KVM) += kvm.o kvm-all.o
 # so moved it from Makefile.hw to Makefile.target for now
 obj-y += msix.o
 
+obj-$(CONFIG_ISA_MMIO) += isa_mmio.o
 LIBS+=-lz
 
 sound-obj-y =
@@ -185,7 +195,7 @@ QEMU_CFLAGS += $(VNC_SASL_CFLAGS)
 obj-$(CONFIG_XEN) += xen_machine_pv.o xen_domainbuild.o
 
 # USB layer
-obj-y += usb-ohci.o
+obj-$(CONFIG_USB_OHCI) += usb-ohci.o
 
 # PCI network cards
 obj-y += eepro100.o
@@ -194,7 +204,7 @@ obj-y += rtl8139.o
 obj-y += e1000.o
 
 # Hardware support
-obj-i386-y = ide/core.o ide/qdev.o ide/isa.o ide/pci.o
+obj-i386-y = ide/core.o ide/qdev.o ide/isa.o ide/pci.o ide/piix.o
 obj-i386-y += pckbd.o $(sound-obj-y) dma.o
 obj-i386-y += vga.o vga-pci.o vga-isa.o
 obj-i386-y += fdc.o mc146818rtc.o serial.o i8259.o i8254.o pcspk.o pc.o
@@ -217,6 +227,7 @@ obj-ia64-$(CONFIG_KVM_DEVICE_ASSIGNMENT) += device-assignment.o
 
 # shared objects
 obj-ppc-y = ppc.o ide/core.o ide/qdev.o ide/isa.o ide/pci.o ide/macio.o
+obj-ppc-y += ide/cmd646.o
 obj-ppc-y += vga.o vga-pci.o $(sound-obj-y) dma.o openpic.o
 obj-ppc-y += cirrus_vga.o
 # PREP target
@@ -240,7 +251,7 @@ obj-mips-y = mips_r4k.o mips_jazz.o mips_malta.o mips_mipssim.o
 obj-mips-y += mips_timer.o mips_int.o dma.o vga.o serial.o i8254.o i8259.o rc4030.o
 obj-mips-y += vga-pci.o vga-isa.o vga-isa-mm.o
 obj-mips-y += g364fb.o jazz_led.o dp8393x.o
-obj-mips-y += ide/core.o ide/qdev.o ide/isa.o ide/pci.o
+obj-mips-y += ide/core.o ide/qdev.o ide/isa.o ide/pci.o ide/piix.o
 obj-mips-y += gt64xxx.o pckbd.o fdc.o mc146818rtc.o usb-uhci.o acpi.o ds1225y.o
 obj-mips-y += piix4.o parallel.o cirrus_vga.o pcspk.o $(sound-obj-y)
 obj-mips-y += mipsnet.o ne2000-isa.o
@@ -273,7 +284,7 @@ obj-cris-y += pflash_cfi02.o
 
 ifeq ($(TARGET_ARCH), sparc64)
 obj-sparc-y = sun4u.o pckbd.o apb_pci.o
-obj-sparc-y += ide/core.o ide/qdev.o ide/pci.o
+obj-sparc-y += ide/core.o ide/qdev.o ide/pci.o ide/cmd646.o
 obj-sparc-y += vga.o vga-pci.o
 obj-sparc-y += fdc.o mc146818rtc.o serial.o
 obj-sparc-y += cirrus_vga.o parallel.o
@@ -329,16 +340,14 @@ ARLIBS=../libqemu_common.a libqemu.a $(HWLIB)
 
 endif # CONFIG_SOFTMMU
 
+obj-$(CONFIG_GDBSTUB_XML) += gdbstub-xml.o
+
 $(QEMU_PROG): $(obj-y) $(obj-$(TARGET_BASE_ARCH)-y) $(ARLIBS)
 	$(call LINK,$(obj-y) $(obj-$(TARGET_BASE_ARCH)-y))
 
 
 gdbstub-xml.c: $(TARGET_XML_FILES) feature_to_c.sh
-ifeq ($(TARGET_XML_FILES),)
-	$(call quiet-command,rm -f $@ && echo > $@,"  GEN   $(TARGET_DIR)$@")
-else
 	$(call quiet-command,rm -f $@ && $(SHELL) $(SRC_PATH)/feature_to_c.sh $@ $(TARGET_XML_FILES),"  GEN   $(TARGET_DIR)$@")
-endif
 
 qemu-options.h: $(SRC_PATH)/qemu-options.hx
 	$(call quiet-command,sh $(SRC_PATH)/hxtool -h < $< > $@,"  GEN   $(TARGET_DIR)$@")

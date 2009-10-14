@@ -871,7 +871,7 @@ static void load_linux(void *fw_cfg,
     	initrd_max = max_ram_size-ACPI_DATA_SIZE-1;
 
     /* kernel command line */
-    rom_add_blob_fixed("linux-cmdline", kernel_cmdline,
+    rom_add_blob_fixed("cmdline", kernel_cmdline,
                        strlen(kernel_cmdline)+1, cmdline_addr);
 
     if (protocol >= 0x202) {
@@ -1321,7 +1321,7 @@ static void pc_init1(ram_addr_t ram_size,
             eeprom = qdev_create((BusState *)smbus, "smbus-eeprom");
             qdev_prop_set_uint8(eeprom, "address", 0x50 + i);
             qdev_prop_set_ptr(eeprom, "data", eeprom_buf + (i * 256));
-            qdev_init(eeprom);
+            qdev_init_nofail(eeprom);
         }
         piix4_acpi_system_hot_add_init(pci_bus, cpu_model);
     }

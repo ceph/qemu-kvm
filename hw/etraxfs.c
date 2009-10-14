@@ -92,7 +92,7 @@ void bareetraxfs_init (ram_addr_t ram_size,
     dev = qdev_create(NULL, "etraxfs,pic");
     /* FIXME: Is there a proper way to signal vectors to the CPU core?  */
     qdev_prop_set_ptr(dev, "interrupt_vector", &env->interrupt_vector);
-    qdev_init(dev);
+    qdev_init_nofail(dev);
     s = sysbus_from_qdev(dev);
     sysbus_mmio_map(s, 0, 0x3001c000);
     sysbus_connect_irq(s, 0, cpu_irq[0]);
@@ -157,7 +157,7 @@ void bareetraxfs_init (ram_addr_t ram_size,
             /* Let the kernel know we are modifying the cmdline.  */
             env->regs[10] = 0x87109563;
             env->regs[11] = 0x40000000;
-            pstrcpy_targphys(env->regs[11], 256, kernel_cmdline);
+            pstrcpy_targphys("cmdline", env->regs[11], 256, kernel_cmdline);
         }
     }
     env->pc = bootstrap_pc;

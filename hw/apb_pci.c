@@ -39,6 +39,15 @@ do { printf("APB: " fmt , ## __VA_ARGS__); } while (0)
 #define APB_DPRINTF(fmt, ...)
 #endif
 
+/*
+ * Chipset docs:
+ * PBM: "UltraSPARC IIi User's Manual",
+ * http://www.sun.com/processors/manuals/805-0087.pdf
+ *
+ * APB: "Advanced PCI Bridge (APB) User's Manual",
+ * http://www.sun.com/processors/manuals/805-1251.pdf
+ */
+
 typedef target_phys_addr_t pci_addr_t;
 #include "pci_host.h"
 
@@ -236,7 +245,7 @@ PCIBus *pci_apb_init(target_phys_addr_t special_base,
 
     /* Ultrasparc PBM main bus */
     dev = qdev_create(NULL, "pbm");
-    qdev_init(dev);
+    qdev_init_nofail(dev);
     s = sysbus_from_qdev(dev);
     /* apb_config */
     sysbus_mmio_map(s, 0, special_base + 0x2000ULL);

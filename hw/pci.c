@@ -26,7 +26,6 @@
 #include "monitor.h"
 #include "net.h"
 #include "sysemu.h"
-#include "msix.h"
 #include "qemu-kvm.h"
 #include "hw/pc.h"
 #include "device-assignment.h"
@@ -183,14 +182,15 @@ int pci_bus_num(PCIBus *s)
 static int get_pci_config_device(QEMUFile *f, void *pv, size_t size)
 {
     PCIDevice *s = container_of(pv, PCIDevice, config);
-    uint8_t config[size];
+    uint8_t config[PCI_CONFIG_SPACE_SIZE];
     int i;
 
-    qemu_get_buffer(f, config, size);
-    for (i = 0; i < size; ++i)
+    assert(size == sizeof config);
+    qemu_get_buffer(f, config, sizeof config);
+    for (i = 0; i < sizeof config; ++i)
         if ((config[i] ^ s->config[i]) & s->cmask[i] & ~s->wmask[i])
             return -EINVAL;
-    memcpy(s->config, config, size);
+    memcpy(s->config, config, sizeof config);
 
     pci_update_mappings(s);
 
@@ -481,7 +481,6 @@ static int pci_unregister_device(DeviceState *dev)
     if (ret)
         return ret;
 
-    msix_uninit(pci_dev);
     pci_unregister_io_regions(pci_dev);
 
     qemu_free_irqs(pci_dev->irq);
@@ -937,6 +936,7 @@ static const char * const pci_nic_names[] = {
 };
 
 /* Initialize a PCI NIC.  */
+/* FIXME callers should check for failure, but don't */
 PCIDevice *pci_nic_init(NICInfo *nd, const char *default_model,
                         const char *default_devaddr)
 {
@@ -1049,7 +1049,7 @@ PCIBus *pci_bridge_init(PCIBus *bus, int devfn, uint16_t vid, uint16_t did,
     dev = pci_create(bus, devfn, "pci-bridge");
     qdev_prop_set_uint32(&dev->qdev, "vendorid", vid);
     qdev_prop_set_uint32(&dev->qdev, "deviceid", did);
-    qdev_init(&dev->qdev);
+    qdev_init_nofail(&dev->qdev);
 
     s = DO_UPCAST(PCIBridge, dev, dev);
     pci_register_secondary_bus(&s->bus, &s->dev, map_irq, name);
@@ -1113,7 +1113,7 @@ PCIDevice *pci_create(PCIBus *bus, int devfn, const char *name)
 PCIDevice *pci_create_simple(PCIBus *bus, int devfn, const char *name)
 {
     PCIDevice *dev = pci_create(bus, devfn, name);
-    qdev_init(&dev->qdev);
+    qdev_init_nofail(&dev->qdev);
     return dev;
 }
 
