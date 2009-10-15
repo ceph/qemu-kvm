@@ -95,9 +95,9 @@ int kvm_arch_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
 int kvm_arch_run(CPUState *env);
 
 
-void kvm_show_code(kvm_vcpu_context_t vcpu);
+void kvm_show_code(CPUState *env);
 
-int handle_halt(kvm_vcpu_context_t vcpu);
+int handle_halt(CPUState *env);
 
 #ifndef QEMU_KVM_NO_CPU
 
@@ -109,13 +109,13 @@ int try_push_interrupts(kvm_context_t kvm);
 
 #if defined(__x86_64__) || defined(__i386__)
 struct kvm_msr_list *kvm_get_msr_list(kvm_context_t);
-int kvm_get_msrs(kvm_vcpu_context_t, struct kvm_msr_entry *msrs, int n);
-int kvm_set_msrs(kvm_vcpu_context_t, struct kvm_msr_entry *msrs, int n);
+int kvm_get_msrs(CPUState *env, struct kvm_msr_entry *msrs, int n);
+int kvm_set_msrs(CPUState *env, struct kvm_msr_entry *msrs, int n);
 int kvm_get_mce_cap_supported(kvm_context_t, uint64_t *mce_cap,
                               int *max_banks);
-int kvm_setup_mce(kvm_vcpu_context_t vcpu, uint64_t *mcg_cap);
+int kvm_setup_mce(CPUState *env, uint64_t *mcg_cap);
 struct kvm_x86_mce;
-int kvm_set_mce(kvm_vcpu_context_t vcpu, struct kvm_x86_mce *mce);
+int kvm_set_mce(CPUState *env, struct kvm_x86_mce *mce);
 #endif
 
 #endif
@@ -172,18 +172,6 @@ int kvm_create_vm(kvm_context_t kvm);
 void kvm_create_irqchip(kvm_context_t kvm);
 
 /*!
- * \brief Create a new virtual cpu
- *
- * This creates a new virtual cpu (the first vcpu is created by kvm_create()).
- * Should be called from a thread dedicated to the vcpu.
- *
- * \param kvm kvm context
- * \param slot vcpu number (> 0)
- * \return 0 on success, -errno on failure
- */
-kvm_vcpu_context_t kvm_create_vcpu(CPUState *env, int id);
-
-/*!
  * \brief Start the VCPU
  *
  * This starts the VCPU and virtualization is started.\n
@@ -204,7 +192,7 @@ kvm_vcpu_context_t kvm_create_vcpu(CPUState *env, int id);
  * return except for when an error has occured, or when you have sent it
  * an EINTR signal.
  */
-int kvm_run(kvm_vcpu_context_t vcpu, void *env);
+int kvm_run(CPUState *env);
 
 /*!
  * \brief Get interrupt flag from on last exit to userspace
@@ -243,7 +231,7 @@ int kvm_is_ready_for_interrupt_injection(CPUState *env);
  * registers values
  * \return 0 on success
  */
-int kvm_get_regs(kvm_vcpu_context_t vcpu, struct kvm_regs *regs);
+int kvm_get_regs(CPUState *env, struct kvm_regs *regs);
 
 /*!
  * \brief Write VCPU registers
@@ -258,7 +246,7 @@ int kvm_get_regs(kvm_vcpu_context_t vcpu, struct kvm_regs *regs);
  * registers values
  * \return 0 on success
  */
-int kvm_set_regs(kvm_vcpu_context_t vcpu, struct kvm_regs *regs);
+int kvm_set_regs(CPUState *env, struct kvm_regs *regs);
 /*!
  * \brief Read VCPU fpu registers
  *
@@ -274,7 +262,7 @@ int kvm_set_regs(kvm_vcpu_context_t vcpu, struct kvm_regs *regs);
  * fpu registers values
  * \return 0 on success
  */
-int kvm_get_fpu(kvm_vcpu_context_t vcpu, struct kvm_fpu *fpu);
+int kvm_get_fpu(CPUState *env, struct kvm_fpu *fpu);
 
 /*!
  * \brief Write VCPU fpu registers
@@ -288,7 +276,7 @@ int kvm_get_fpu(kvm_vcpu_context_t vcpu, struct kvm_fpu *fpu);
  * \param fpu Pointer to a kvm_fpu which holds the new vcpu fpu state
  * \return 0 on success
  */
-int kvm_set_fpu(kvm_vcpu_context_t vcpu, struct kvm_fpu *fpu);
+int kvm_set_fpu(CPUState *env, struct kvm_fpu *fpu);
 
 /*!
  * \brief Read VCPU system registers
@@ -306,7 +294,7 @@ int kvm_set_fpu(kvm_vcpu_context_t vcpu, struct kvm_fpu *fpu);
  * registers values
  * \return 0 on success
  */
-int kvm_get_sregs(kvm_vcpu_context_t vcpu, struct kvm_sregs *regs);
+int kvm_get_sregs(CPUState *env, struct kvm_sregs *regs);
 
 /*!
  * \brief Write VCPU system registers
@@ -321,29 +309,29 @@ int kvm_get_sregs(kvm_vcpu_context_t vcpu, struct kvm_sregs *regs);
  * registers values
  * \return 0 on success
  */
-int kvm_set_sregs(kvm_vcpu_context_t vcpu, struct kvm_sregs *regs);
+int kvm_set_sregs(CPUState *env, struct kvm_sregs *regs);
 
 #ifdef KVM_CAP_MP_STATE
 /*!
  *  * \brief Read VCPU MP state
  *
  */
-int kvm_get_mpstate(kvm_vcpu_context_t vcpu, struct kvm_mp_state *mp_state);
+int kvm_get_mpstate(CPUState *env, struct kvm_mp_state *mp_state);
 
 /*!
  *  * \brief Write VCPU MP state
  *
  */
-int kvm_set_mpstate(kvm_vcpu_context_t vcpu, struct kvm_mp_state *mp_state);
+int kvm_set_mpstate(CPUState *env, struct kvm_mp_state *mp_state);
 /*!
  *  * \brief Reset VCPU MP state
  *
  */
-static inline int kvm_reset_mpstate(kvm_vcpu_context_t vcpu)
+static inline int kvm_reset_mpstate(CPUState *env)
 {
     struct kvm_mp_state mp_state = {.mp_state = KVM_MP_STATE_UNINITIALIZED
     };
-    return kvm_set_mpstate(vcpu, &mp_state);
+    return kvm_set_mpstate(env, &mp_state);
 }
 #endif
 
@@ -357,10 +345,10 @@ static inline int kvm_reset_mpstate(kvm_vcpu_context_t vcpu)
  * \param irq Vector number
  * \return 0 on success
  */
-int kvm_inject_irq(kvm_vcpu_context_t vcpu, unsigned irq);
+int kvm_inject_irq(CPUState *env, unsigned irq);
 
 #ifdef KVM_CAP_SET_GUEST_DEBUG
-int kvm_set_guest_debug(kvm_vcpu_context_t, struct kvm_guest_debug *dbg);
+int kvm_set_guest_debug(CPUState *env, struct kvm_guest_debug *dbg);
 #endif
 
 #if defined(__i386__) || defined(__x86_64__)
@@ -375,7 +363,7 @@ int kvm_set_guest_debug(kvm_vcpu_context_t, struct kvm_guest_debug *dbg);
  * \param entries cpuid function entries table
  * \return 0 on success, or -errno on error
  */
-int kvm_setup_cpuid(kvm_vcpu_context_t vcpu, int nent,
+int kvm_setup_cpuid(CPUState *env, int nent,
                     struct kvm_cpuid_entry *entries);
 
 /*!
@@ -391,7 +379,7 @@ int kvm_setup_cpuid(kvm_vcpu_context_t vcpu, int nent,
  * \param entries cpuid function entries table
  * \return 0 on success, or -errno on error
  */
-int kvm_setup_cpuid2(kvm_vcpu_context_t vcpu, int nent,
+int kvm_setup_cpuid2(CPUState *env, int nent,
                      struct kvm_cpuid_entry2 *entries);
 
 /*!
@@ -425,7 +413,7 @@ int kvm_get_shadow_pages(kvm_context_t kvm, unsigned int *nrshadow_pages);
  * \param sigset signal mask for guest mode
  * \return 0 on success, or -errno on error
  */
-int kvm_set_signal_mask(kvm_vcpu_context_t vcpu, const sigset_t *sigset);
+int kvm_set_signal_mask(CPUState *env, const sigset_t *sigset);
 
 /*!
  * \brief Dump VCPU registers
@@ -439,7 +427,7 @@ int kvm_set_signal_mask(kvm_vcpu_context_t vcpu, const sigset_t *sigset);
  * \param vcpu Which virtual CPU should get dumped
  * \return 0 on success
  */
-void kvm_show_regs(kvm_vcpu_context_t vcpu);
+void kvm_show_regs(CPUState *env);
 
 
 void *kvm_create_phys_mem(kvm_context_t, unsigned long phys_start,
@@ -551,7 +539,7 @@ int kvm_set_irqchip(kvm_context_t kvm, struct kvm_irqchip *chip);
  * \param vcpu Which virtual CPU should be accessed
  * \param s Local apic state of the specific virtual CPU
  */
-int kvm_get_lapic(kvm_vcpu_context_t vcpu, struct kvm_lapic_state *s);
+int kvm_get_lapic(CPUState *env, struct kvm_lapic_state *s);
 
 /*!
  * \brief Set in kernel local APIC for vcpu
@@ -562,7 +550,7 @@ int kvm_get_lapic(kvm_vcpu_context_t vcpu, struct kvm_lapic_state *s);
  * \param vcpu Which virtual CPU should be accessed
  * \param s Local apic state of the specific virtual CPU
  */
-int kvm_set_lapic(kvm_vcpu_context_t vcpu, struct kvm_lapic_state *s);
+int kvm_set_lapic(CPUState *env, struct kvm_lapic_state *s);
 
 #endif
 
@@ -575,7 +563,7 @@ int kvm_set_lapic(kvm_vcpu_context_t vcpu, struct kvm_lapic_state *s);
  * \param vcpu Which virtual CPU should get dumped
  * \return 0 on success
  */
-int kvm_inject_nmi(kvm_vcpu_context_t vcpu);
+int kvm_inject_nmi(CPUState *env);
 
 #endif
 
@@ -682,7 +670,7 @@ int kvm_get_pit2(kvm_context_t kvm, struct kvm_pit_state2 *ps2);
  * \param kvm Pointer to the current kvm_context
  * \param vcpu vcpu to enable tpr access reporting on
  */
-int kvm_enable_tpr_access_reporting(kvm_vcpu_context_t vcpu);
+int kvm_enable_tpr_access_reporting(CPUState *env);
 
 /*!
  * \brief Disable kernel tpr access reporting
@@ -692,9 +680,9 @@ int kvm_enable_tpr_access_reporting(kvm_vcpu_context_t vcpu);
  * \param kvm Pointer to the current kvm_context
  * \param vcpu vcpu to disable tpr access reporting on
  */
-int kvm_disable_tpr_access_reporting(kvm_vcpu_context_t vcpu);
+int kvm_disable_tpr_access_reporting(CPUState *env);
 
-int kvm_enable_vapic(kvm_vcpu_context_t vcpu, uint64_t vapic);
+int kvm_enable_vapic(CPUState *env, uint64_t vapic);
 
 #endif
 
@@ -1073,8 +1061,8 @@ struct ioperm_data {
 };
 
 void qemu_kvm_cpu_stop(CPUState *env);
-int kvm_arch_halt(kvm_vcpu_context_t vcpu);
-int handle_tpr_access(void *opaque, kvm_vcpu_context_t vcpu, uint64_t rip,
+int kvm_arch_halt(CPUState *env);
+int handle_tpr_access(void *opaque, CPUState *env, uint64_t rip,
                       int is_write);
 int kvm_has_sync_mmu(void);
 

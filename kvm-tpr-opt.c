@@ -70,7 +70,7 @@ static uint8_t read_byte_virt(CPUState *env, target_ulong virt)
 {
     struct kvm_sregs sregs;
 
-    kvm_get_sregs(env->kvm_cpu_state.vcpu_ctx, &sregs);
+    kvm_get_sregs(env, &sregs);
     return ldub_phys(map_addr(&sregs, virt, NULL));
 }
 
@@ -78,7 +78,7 @@ static void write_byte_virt(CPUState *env, target_ulong virt, uint8_t b)
 {
     struct kvm_sregs sregs;
 
-    kvm_get_sregs(env->kvm_cpu_state.vcpu_ctx, &sregs);
+    kvm_get_sregs(env, &sregs);
     stb_phys(map_addr(&sregs, virt, NULL), b);
 }
 
@@ -86,7 +86,7 @@ static __u64 kvm_rsp_read(CPUState *env)
 {
     struct kvm_regs regs;
 
-    kvm_get_regs(env->kvm_cpu_state.vcpu_ctx, &regs);
+    kvm_get_regs(env, &regs);
     return regs.rsp;
 }
 
@@ -192,7 +192,7 @@ static int bios_is_mapped(CPUState *env, uint64_t rip)
     if (bios_enabled)
 	return 1;
 
-    kvm_get_sregs(env->kvm_cpu_state.vcpu_ctx, &sregs);
+    kvm_get_sregs(env, &sregs);
 
     probe = (rip & 0xf0000000) + 0xe0000;
     phys = map_addr(&sregs, probe, &perms);
@@ -240,7 +240,7 @@ static int enable_vapic(CPUState *env)
     if (pcr_cpu < 0)
 	    return 0;
 
-    kvm_enable_vapic(env->kvm_cpu_state.vcpu_ctx, vapic_phys + (pcr_cpu << 7));
+    kvm_enable_vapic(env, vapic_phys + (pcr_cpu << 7));
     cpu_physical_memory_rw(vapic_phys + (pcr_cpu << 7) + 4, &one, 1, 1);
     bios_enabled = 1;
 
@@ -313,7 +313,7 @@ void kvm_tpr_access_report(CPUState *env, uint64_t rip, int is_write)
 
 void kvm_tpr_vcpu_start(CPUState *env)
 {
-    kvm_enable_tpr_access_reporting(env->kvm_cpu_state.vcpu_ctx);
+    kvm_enable_tpr_access_reporting(env);
     if (bios_enabled)
 	enable_vapic(env);
 }
@@ -363,7 +363,7 @@ static void vtpr_ioport_write(void *opaque, uint32_t addr, uint32_t val)
     struct kvm_sregs sregs;
     uint32_t rip;
 
-    kvm_get_regs(env->kvm_cpu_state.vcpu_ctx, &regs);
+    kvm_get_regs(env, &regs);
     rip = regs.rip - 2;
     write_byte_virt(env, rip, 0x66);
     write_byte_virt(env, rip + 1, 0x90);
@@ -371,7 +371,7 @@ static void vtpr_ioport_write(void *opaque, uint32_t addr, uint32_t val)
 	return;
     if (!bios_is_mapped(env, rip))
 	printf("bios not mapped?\n");
-    kvm_get_sregs(env->kvm_cpu_state.vcpu_ctx, &sregs);
+    kvm_get_sregs(env, &sregs);
     for (addr = 0xfffff000u; addr >= 0x80000000u; addr -= 4096)
 	if (map_addr(&sregs, addr, NULL) == 0xfee00000u) {
 	    real_tpr = addr + 0x80;

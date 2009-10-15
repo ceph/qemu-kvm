@@ -436,7 +436,7 @@ void kvm_disable_pit_creation(kvm_context_t kvm)
     kvm->no_pit_creation = 1;
 }
 
-kvm_vcpu_context_t kvm_create_vcpu(CPUState *env, int id)
+static void kvm_create_vcpu(CPUState *env, int id)
 {
     long mmap_size;
     int r;
@@ -447,6 +447,7 @@ kvm_vcpu_context_t kvm_create_vcpu(CPUState *env, int id)
         fprintf(stderr, "kvm_create_vcpu: %m\n");
         goto err;
     }
+
     vcpu_ctx->fd = r;
 
     env->kvm_fd = r;
@@ -465,12 +466,11 @@ kvm_vcpu_context_t kvm_create_vcpu(CPUState *env, int id)
         goto err_fd;
     }
 
-    return vcpu_ctx;
+    return;
   err_fd:
     close(vcpu_ctx->fd);
   err:
     free(vcpu_ctx);
-    return NULL;
 }
 
 static int kvm_set_boot_vcpu_id(kvm_context_t kvm, uint32_t id)
@@ -819,54 +819,54 @@ static int handle_debug(CPUState *env)
 #endif
 }
 
-int kvm_get_regs(kvm_vcpu_context_t vcpu, struct kvm_regs *regs)
+int kvm_get_regs(CPUState *env, struct kvm_regs *regs)
 {
-    return ioctl(vcpu->fd, KVM_GET_REGS, regs);
+    return ioctl(env->kvm_fd, KVM_GET_REGS, regs);
 }
 
-int kvm_set_regs(kvm_vcpu_context_t vcpu, struct kvm_regs *regs)
+int kvm_set_regs(CPUState *env, struct kvm_regs *regs)
 {
-    return ioctl(vcpu->fd, KVM_SET_REGS, regs);
+    return ioctl(env->kvm_fd, KVM_SET_REGS, regs);
 }
 
-int kvm_get_fpu(kvm_vcpu_context_t vcpu, struct kvm_fpu *fpu)
+int kvm_get_fpu(CPUState *env, struct kvm_fpu *fpu)
 {
-    return ioctl(vcpu->fd, KVM_GET_FPU, fpu);
+    return ioctl(env->kvm_fd, KVM_GET_FPU, fpu);
 }
 
-int kvm_set_fpu(kvm_vcpu_context_t vcpu, struct kvm_fpu *fpu)
+int kvm_set_fpu(CPUState *env, struct kvm_fpu *fpu)
 {
-    return ioctl(vcpu->fd, KVM_SET_FPU, fpu);
+    return ioctl(env->kvm_fd, KVM_SET_FPU, fpu);
 }
 
-int kvm_get_sregs(kvm_vcpu_context_t vcpu, struct kvm_sregs *sregs)
+int kvm_get_sregs(CPUState *env, struct kvm_sregs *sregs)
 {
-    return ioctl(vcpu->fd, KVM_GET_SREGS, sregs);
+    return ioctl(env->kvm_fd, KVM_GET_SREGS, sregs);
 }
 
-int kvm_set_sregs(kvm_vcpu_context_t vcpu, struct kvm_sregs *sregs)
+int kvm_set_sregs(CPUState *env, struct kvm_sregs *sregs)
 {
-    return ioctl(vcpu->fd, KVM_SET_SREGS, sregs);
+    return ioctl(env->kvm_fd, KVM_SET_SREGS, sregs);
 }
 
 #ifdef KVM_CAP_MP_STATE
-int kvm_get_mpstate(kvm_vcpu_context_t vcpu, struct kvm_mp_state *mp_state)
+int kvm_get_mpstate(CPUState *env, struct kvm_mp_state *mp_state)
 {
     int r;
 
     r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_MP_STATE);
     if (r > 0)
-        return ioctl(vcpu->fd, KVM_GET_MP_STATE, mp_state);
+        return ioctl(env->kvm_fd, KVM_GET_MP_STATE, mp_state);
     return -ENOSYS;
 }
 
-int kvm_set_mpstate(kvm_vcpu_context_t vcpu, struct kvm_mp_state *mp_state)
+int kvm_set_mpstate(CPUState *env, struct kvm_mp_state *mp_state)
 {
     int r;
 
     r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_MP_STATE);
     if (r > 0)
-        return ioctl(vcpu->fd, KVM_SET_MP_STATE, mp_state);
+        return ioctl(env->kvm_fd, KVM_SET_MP_STATE, mp_state);
     return -ENOSYS;
 }
 #endif
@@ -930,13 +930,12 @@ int kvm_is_ready_for_interrupt_injection(CPUState *env)
     return env->kvm_run->ready_for_interrupt_injection;
 }
 
-int kvm_run(kvm_vcpu_context_t vcpu, void *env)
+int kvm_run(CPUState *env)
 {
     int r;
-    int fd = vcpu->fd;
-    CPUState *_env = env;
-    kvm_context_t kvm = &_env->kvm_state->kvm_context;
-    struct kvm_run *run = _env->kvm_run;
+    kvm_context_t kvm = &env->kvm_state->kvm_context;
+    struct kvm_run *run = env->kvm_run;
+    int fd = env->kvm_fd;
 
   again:
     push_nmi(kvm);
@@ -945,9 +944,9 @@ int kvm_run(kvm_vcpu_context_t vcpu, void *env)
         run->request_interrupt_window = kvm_arch_try_push_interrupts(env);
 #endif
 
-    if (_env->kvm_cpu_state.regs_modified) {
-        kvm_arch_put_registers(_env);
-        _env->kvm_cpu_state.regs_modified = 0;
+    if (env->kvm_cpu_state.regs_modified) {
+        kvm_arch_put_registers(env);
+        env->kvm_cpu_state.regs_modified = 0;
     }
 
     r = pre_kvm_run(kvm, env);
@@ -995,8 +994,8 @@ int kvm_run(kvm_vcpu_context_t vcpu, void *env)
         case KVM_EXIT_EXCEPTION:
             fprintf(stderr, "exception %d (%x)\n", run->ex.exception,
                     run->ex.error_code);
-            kvm_show_regs(vcpu);
-            kvm_show_code(vcpu);
+            kvm_show_regs(env);
+            kvm_show_code(env);
             abort();
             break;
         case KVM_EXIT_IO:
@@ -1009,7 +1008,7 @@ int kvm_run(kvm_vcpu_context_t vcpu, void *env)
             r = handle_mmio(env);
             break;
         case KVM_EXIT_HLT:
-            r = kvm_arch_halt(vcpu);
+            r = kvm_arch_halt(env);
             break;
         case KVM_EXIT_IRQ_WINDOW_OPEN:
             break;
@@ -1018,16 +1017,16 @@ int kvm_run(kvm_vcpu_context_t vcpu, void *env)
             break;
 #if defined(__s390__)
         case KVM_EXIT_S390_SIEIC:
-            r = kvm_s390_handle_intercept(kvm, vcpu, run);
+            r = kvm_s390_handle_intercept(kvm, env, run);
             break;
         case KVM_EXIT_S390_RESET:
-            r = kvm_s390_handle_reset(kvm, vcpu, run);
+            r = kvm_s390_handle_reset(kvm, env, run);
             break;
 #endif
 	case KVM_EXIT_INTERNAL_ERROR:
 	    fprintf(stderr, "KVM internal error. Suberror: %d\n",
 		    run->internal.suberror);
-	    kvm_show_regs(vcpu);
+	    kvm_show_regs(env);
 	    if (run->internal.suberror == KVM_INTERNAL_ERROR_EMULATION)
 		fprintf(stderr, "emulation failure, check dmesg for details\n");
 	    abort();
@@ -1035,7 +1034,7 @@ int kvm_run(kvm_vcpu_context_t vcpu, void *env)
         default:
             if (kvm_arch_run(env)) {
                 fprintf(stderr, "unhandled vm exit: 0x%x\n", run->exit_reason);
-                kvm_show_regs(vcpu);
+                kvm_show_regs(env);
                 abort();
             }
             break;
@@ -1047,28 +1046,28 @@ int kvm_run(kvm_vcpu_context_t vcpu, void *env)
     return r;
 }
 
-int kvm_inject_irq(kvm_vcpu_context_t vcpu, unsigned irq)
+int kvm_inject_irq(CPUState *env, unsigned irq)
 {
     struct kvm_interrupt intr;
 
     intr.irq = irq;
-    return ioctl(vcpu->fd, KVM_INTERRUPT, &intr);
+    return ioctl(env->kvm_fd, KVM_INTERRUPT, &intr);
 }
 
 #ifdef KVM_CAP_SET_GUEST_DEBUG
-int kvm_set_guest_debug(kvm_vcpu_context_t vcpu, struct kvm_guest_debug *dbg)
+int kvm_set_guest_debug(CPUState *env, struct kvm_guest_debug *dbg)
 {
-    return ioctl(vcpu->fd, KVM_SET_GUEST_DEBUG, dbg);
+    return ioctl(env->kvm_fd, KVM_SET_GUEST_DEBUG, dbg);
 }
 #endif
 
-int kvm_set_signal_mask(kvm_vcpu_context_t vcpu, const sigset_t *sigset)
+int kvm_set_signal_mask(CPUState *env, const sigset_t *sigset)
 {
     struct kvm_signal_mask *sigmask;
     int r;
 
     if (!sigset) {
-        r = ioctl(vcpu->fd, KVM_SET_SIGNAL_MASK, NULL);
+        r = ioctl(env->kvm_fd, KVM_SET_SIGNAL_MASK, NULL);
         if (r == -1)
             r = -errno;
         return r;
@@ -1077,7 +1076,7 @@ int kvm_set_signal_mask(kvm_vcpu_context_t vcpu, const sigset_t *sigset)
 
     sigmask->len = 8;
     memcpy(sigmask->sigset, sigset, sizeof(*sigset));
-    r = ioctl(vcpu->fd, KVM_SET_SIGNAL_MASK, sigmask);
+    r = ioctl(env->kvm_fd, KVM_SET_SIGNAL_MASK, sigmask);
     if (r == -1)
         r = -errno;
     free(sigmask);
@@ -1089,10 +1088,10 @@ int kvm_pit_in_kernel(kvm_context_t kvm)
     return kvm->pit_in_kernel;
 }
 
-int kvm_inject_nmi(kvm_vcpu_context_t vcpu)
+int kvm_inject_nmi(CPUState *env)
 {
 #ifdef KVM_CAP_USER_NMI
-    return ioctl(vcpu->fd, KVM_NMI);
+    return ioctl(env->kvm_fd, KVM_NMI);
 #else
     return -ENOSYS;
 #endif
@@ -1688,7 +1687,7 @@ int kvm_cpu_exec(CPUState *env)
 {
     int r;
 
-    r = kvm_run(env->kvm_cpu_state.vcpu_ctx, env);
+    r = kvm_run(env);
     if (r < 0) {
         printf("kvm_run returned %d\n", r);
         vm_stop(0);
@@ -1755,7 +1754,7 @@ static void kvm_on_sigbus(CPUState *env, siginfo_t *siginfo)
                 hardware_memory_error();
         }
         mce.addr = paddr;
-        r = kvm_set_mce(env->kvm_cpu_state.vcpu_ctx, &mce);
+        r = kvm_set_mce(env, &mce);
         if (r < 0) {
             fprintf(stderr, "kvm_set_mce: %s\n", strerror(errno));
             abort();
@@ -1895,7 +1894,7 @@ static void setup_kernel_sigmask(CPUState *env)
     sigdelset(&set, SIG_IPI);
     sigdelset(&set, SIGBUS);
 
-    kvm_set_signal_mask(env->kvm_cpu_state.vcpu_ctx, &set);
+    kvm_set_signal_mask(env, &set);
 }
 
 static void qemu_kvm_system_reset(void)
@@ -1952,7 +1951,7 @@ static void *ap_main_loop(void *_env)
     env->thread_id = kvm_get_thread_id();
     sigfillset(&signals);
     sigprocmask(SIG_BLOCK, &signals, NULL);
-    env->kvm_cpu_state.vcpu_ctx = kvm_create_vcpu(env, env->cpu_index);
+    kvm_create_vcpu(env, env->cpu_index);
 
 #ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
     /* do ioperm for io ports of assigned devices */
@@ -2425,7 +2424,7 @@ static void kvm_invoke_set_guest_debug(void *data)
         cpu_single_env->kvm_cpu_state.regs_modified = 0;
     }
     dbg_data->err =
-        kvm_set_guest_debug(cpu_single_env->kvm_cpu_state.vcpu_ctx,
+        kvm_set_guest_debug(cpu_single_env,
                             &dbg_data->dbg);
 }
 
@@ -2670,7 +2669,7 @@ static void kvm_do_inject_x86_mce(void *_data)
     struct kvm_x86_mce_data *data = _data;
     int r;
 
-    r = kvm_set_mce(data->env->kvm_cpu_state.vcpu_ctx, data->mce);
+    r = kvm_set_mce(data->env, data->mce);
     if (r < 0) {
         perror("kvm_set_mce FAILED");
         if (data->abort_on_error)
