@@ -132,7 +132,7 @@ static void qemu_announce_self_once(void *opaque)
         len = announce_self_create(buf, nd_table[i].macaddr);
         vlan = nd_table[i].vlan;
         QTAILQ_FOREACH(vc, &vlan->clients, next) {
-            vc->receive(vc, buf, len);
+            qemu_send_packet_raw(vc, buf, len);
         }
     }
     if (count--) {
