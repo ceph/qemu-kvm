@@ -116,6 +116,7 @@
 #include "slirp/libslirp.h"
 
 static QTAILQ_HEAD(, VLANState) vlans;
+static QTAILQ_HEAD(, VLANClientState) non_vlan_clients;
 
 /***********************************************************/
 /* network device redirectors */
@@ -325,15 +326,23 @@ VLANClientState *qemu_new_vlan_client(VLANState *vlan,
     vc->cleanup = cleanup;
     vc->opaque = opaque;
 
-    vc->vlan = vlan;
-    QTAILQ_INSERT_TAIL(&vc->vlan->clients, vc, next);
+    if (vlan) {
+        vc->vlan = vlan;
+        QTAILQ_INSERT_TAIL(&vc->vlan->clients, vc, next);
+    } else {
+        QTAILQ_INSERT_TAIL(&non_vlan_clients, vc, next);
+    }
 
     return vc;
 }
 
 void qemu_del_vlan_client(VLANClientState *vc)
 {
-    QTAILQ_REMOVE(&vc->vlan->clients, vc, next);
+    if (vc->vlan) {
+        QTAILQ_REMOVE(&vc->vlan->clients, vc, next);
+    } else {
+        QTAILQ_REMOVE(&non_vlan_clients, vc, next);
+    }
 
     if (vc->cleanup) {
         vc->cleanup(vc);
@@ -388,6 +397,10 @@ int qemu_can_send_packet(VLANClientState *sender)
     VLANState *vlan = sender->vlan;
     VLANClientState *vc;
 
+    if (!sender->vlan) {
+        return 1;
+    }
+
     QTAILQ_FOREACH(vc, &vlan->clients, next) {
         if (vc == sender) {
             continue;
@@ -439,6 +452,9 @@ void qemu_purge_queued_packets(VLANClientState *vc)
 {
     VLANPacket *packet, *next;
 
+    if (!vc->vlan)
+        return;
+
     QTAILQ_FOREACH_SAFE(packet, &vc->vlan->send_queue, entry, next) {
         if (packet->sender == vc) {
             QTAILQ_REMOVE(&vc->vlan->send_queue, packet, entry);
@@ -449,6 +465,9 @@ void qemu_purge_queued_packets(VLANClientState *vc)
 
 void qemu_flush_queued_packets(VLANClientState *vc)
 {
+    if (!vc->vlan)
+        return;
+
     while (!QTAILQ_EMPTY(&vc->vlan->send_queue)) {
         VLANPacket *packet;
         int ret;
@@ -492,12 +511,12 @@ static ssize_t qemu_send_packet_async2(VLANClientState *sender,
 {
     int ret;
 
-    if (sender->link_down) {
+    if (sender->link_down || !sender->vlan) {
         return size;
     }
 
 #ifdef DEBUG_NET
-    printf("vlan %d send:\n", sender->vlan->id);
+    printf("qemu_send_packet_async:\n");
     hex_dump(stdout, buf, size);
 #endif
 
@@ -630,7 +649,7 @@ ssize_t qemu_sendv_packet_async(VLANClientState *sender,
 {
     int ret;
 
-    if (sender->link_down) {
+    if (sender->link_down || !sender->vlan) {
         return calc_iov_length(iov, iovcnt);
     }
 
@@ -2526,6 +2545,19 @@ VLANState *qemu_find_vlan(int id, int allocate)
     return vlan;
 }
 
+static VLANClientState *qemu_find_netdev(const char *id)
+{
+    VLANClientState *vc;
+
+    QTAILQ_FOREACH(vc, &non_vlan_clients, next) {
+        if (!strcmp(vc->name, id)) {
+            return vc;
+        }
+    }
+
+    return NULL;
+}
+
 static int nic_get_free_idx(void)
 {
     int index;
@@ -2596,10 +2628,14 @@ static int net_handle_fd_param(Monitor *mon, const char *param)
     }
 }
 
-static int net_init_nic(QemuOpts *opts, Monitor *mon, const char *name)
+static int net_init_nic(QemuOpts *opts,
+                        Monitor *mon,
+                        const char *name,
+                        VLANState *vlan)
 {
     int idx;
     NICInfo *nd;
+    const char *netdev;
 
     idx = nic_get_free_idx();
     if (idx == -1 || nb_nics >= MAX_NICS) {
@@ -2611,8 +2647,16 @@ static int net_init_nic(QemuOpts *opts, Monitor *mon, const char *name)
 
     memset(nd, 0, sizeof(*nd));
 
-    nd->vlan = qemu_find_vlan(qemu_opt_get_number(opts, "vlan", 0), 1);
-
+    if ((netdev = qemu_opt_get(opts, "netdev"))) {
+        nd->netdev = qemu_find_netdev(netdev);
+        if (!nd->netdev) {
+            qemu_error("netdev '%s' not found\n", netdev);
+            return -1;
+        }
+    } else {
+        assert(vlan);
+        nd->vlan = vlan;
+    }
     if (name) {
         nd->name = qemu_strdup(name);
     }
@@ -2644,7 +2688,9 @@ static int net_init_nic(QemuOpts *opts, Monitor *mon, const char *name)
     }
 
     nd->used = 1;
-    nd->vlan->nb_guest_devs++;
+    if (vlan) {
+        nd->vlan->nb_guest_devs++;
+    }
     nb_nics++;
 
     return idx;
@@ -2673,9 +2719,11 @@ static int net_init_slirp_configs(const char *name, const char *value, void *opa
     return 0;
 }
 
-static int net_init_slirp(QemuOpts *opts, Monitor *mon, const char *name)
+static int net_init_slirp(QemuOpts *opts,
+                          Monitor *mon,
+                          const char *name,
+                          VLANState *vlan)
 {
-    VLANState *vlan;
     struct slirp_config_str *config;
     const char *vhost;
     const char *vhostname;
@@ -2688,8 +2736,6 @@ static int net_init_slirp(QemuOpts *opts, Monitor *mon, const char *name)
     char *vnet = NULL;
     int restricted = 0;
     int ret;
-
-    vlan = qemu_find_vlan(qemu_opt_get_number(opts, "vlan", 0), 1);
 
     vhost       = qemu_opt_get(opts, "host");
     vhostname   = qemu_opt_get(opts, "hostname");
@@ -2735,7 +2781,7 @@ static int net_init_slirp(QemuOpts *opts, Monitor *mon, const char *name)
         qemu_free(config);
     }
 
-    if (ret != -1) {
+    if (ret != -1 && vlan) {
         vlan->nb_host_devs++;
     }
 
@@ -2746,12 +2792,12 @@ static int net_init_slirp(QemuOpts *opts, Monitor *mon, const char *name)
 #endif /* CONFIG_SLIRP */
 
 #ifdef _WIN32
-static int net_init_tap_win32(QemuOpts *opts, Monitor *mon, const char *name)
+static int net_init_tap_win32(QemuOpts *opts,
+                              Monitor *mon,
+                              const char *name,
+                              VLANState *vlan)
 {
-    VLANState *vlan;
     const char *ifname;
-
-    vlan = qemu_find_vlan(qemu_opt_get_number(opts, "vlan", 0), 1);
 
     ifname = qemu_opt_get(opts, "ifname");
 
@@ -2764,17 +2810,19 @@ static int net_init_tap_win32(QemuOpts *opts, Monitor *mon, const char *name)
         return -1;
     }
 
-    vlan->nb_host_devs++;
+    if (vlan) {
+        vlan->nb_host_devs++;
+    }
 
     return 0;
 }
 #elif !defined(_AIX)
-static int net_init_tap(QemuOpts *opts, Monitor *mon, const char *name)
+static int net_init_tap(QemuOpts *opts,
+                        Monitor *mon,
+                        const char *name,
+                        VLANState *vlan)
 {
-    VLANState *vlan;
     TAPState *s;
-
-    vlan = qemu_find_vlan(qemu_opt_get_number(opts, "vlan", 0), 1);
 
     if (qemu_opt_get(opts, "fd")) {
         int fd;
@@ -2822,18 +2870,19 @@ static int net_init_tap(QemuOpts *opts, Monitor *mon, const char *name)
         return -1;
     }
 
-    vlan->nb_host_devs++;
+    if (vlan) {
+        vlan->nb_host_devs++;
+    }
 
     return 0;
 }
 #endif
 
-static int net_init_socket(QemuOpts *opts, Monitor *mon, const char *name)
+static int net_init_socket(QemuOpts *opts,
+                           Monitor *mon,
+                           const char *name,
+                           VLANState *vlan)
 {
-    VLANState *vlan;
-
-    vlan = qemu_find_vlan(qemu_opt_get_number(opts, "vlan", 0), 1);
-
     if (qemu_opt_get(opts, "fd")) {
         int fd;
 
@@ -2903,20 +2952,22 @@ static int net_init_socket(QemuOpts *opts, Monitor *mon, const char *name)
         return -1;
     }
 
-    vlan->nb_host_devs++;
+    if (vlan) {
+        vlan->nb_host_devs++;
+    }
 
     return 0;
 }
 
 #ifdef CONFIG_VDE
-static int net_init_vde(QemuOpts *opts, Monitor *mon, const char *name)
+static int net_init_vde(QemuOpts *opts,
+                        Monitor *mon,
+                        const char *name,
+                        VLANState *vlan)
 {
-    VLANState *vlan;
     const char *sock;
     const char *group;
     int port, mode;
-
-    vlan = qemu_find_vlan(qemu_opt_get_number(opts, "vlan", 0), 1);
 
     sock  = qemu_opt_get(opts, "sock");
     group = qemu_opt_get(opts, "group");
@@ -2928,20 +2979,24 @@ static int net_init_vde(QemuOpts *opts, Monitor *mon, const char *name)
         return -1;
     }
 
-    vlan->nb_host_devs++;
+    if (vlan) {
+        vlan->nb_host_devs++;
+    }
 
     return 0;
 }
 #endif
 
-static int net_init_dump(QemuOpts *opts, Monitor *mon, const char *name)
+static int net_init_dump(QemuOpts *opts,
+                         Monitor *mon,
+                         const char *name,
+                         VLANState *vlan)
 {
-    VLANState *vlan;
     int len;
     const char *file;
     char def_file[128];
 
-    vlan = qemu_find_vlan(qemu_opt_get_number(opts, "vlan", 0), 1);
+    assert(vlan);
 
     file = qemu_opt_get(opts, "file");
     if (!file) {
@@ -2971,7 +3026,8 @@ static int net_init_dump(QemuOpts *opts, Monitor *mon, const char *name)
 
 typedef int (*net_client_init_func)(QemuOpts *opts,
                                     Monitor *mon,
-                                    const char *name);
+                                    const char *name,
+                                    VLANState *vlan);
 
 /* magic number, but compiler will warn if too small */
 #define NET_MAX_DESC 20
@@ -2992,6 +3048,11 @@ static struct {
         .init = net_init_nic,
         .desc = {
             NET_COMMON_PARAMS_DESC,
+            {
+                .name = "netdev",
+                .type = QEMU_OPT_STRING,
+                .help = "id of -netdev to connect to",
+            },
             {
                 .name = "macaddr",
                 .type = QEMU_OPT_STRING,
@@ -3188,7 +3249,7 @@ static struct {
     { /* end of list */ }
 };
 
-int net_client_init(Monitor *mon, QemuOpts *opts)
+int net_client_init(Monitor *mon, QemuOpts *opts, int is_netdev)
 {
     const char *name;
     const char *type;
@@ -3200,6 +3261,34 @@ int net_client_init(Monitor *mon, QemuOpts *opts)
         return -1;
     }
 
+    if (is_netdev) {
+        if (strcmp(type, "tap") != 0 &&
+#ifdef CONFIG_SLIRP
+            strcmp(type, "user") != 0 &&
+#endif
+#ifdef CONFIG_VDE
+            strcmp(type, "vde") != 0 &&
+#endif
+            strcmp(type, "socket") != 0) {
+            qemu_error("The '%s' network backend type is not valid with -netdev\n",
+                       type);
+            return -1;
+        }
+
+        if (qemu_opt_get(opts, "vlan")) {
+            qemu_error("The 'vlan' parameter is not valid with -netdev\n");
+            return -1;
+        }
+        if (qemu_opt_get(opts, "name")) {
+            qemu_error("The 'name' parameter is not valid with -netdev\n");
+            return -1;
+        }
+        if (!qemu_opts_id(opts)) {
+            qemu_error("The id= parameter is required with -netdev\n");
+            return -1;
+        }
+    }
+
     name = qemu_opts_id(opts);
     if (!name) {
         name = qemu_opt_get(opts, "name");
@@ -3207,12 +3296,21 @@ int net_client_init(Monitor *mon, QemuOpts *opts)
 
     for (i = 0; net_client_types[i].type != NULL; i++) {
         if (!strcmp(net_client_types[i].type, type)) {
+            VLANState *vlan = NULL;
+
             if (qemu_opts_validate(opts, &net_client_types[i].desc[0]) == -1) {
                 return -1;
             }
 
+            /* Do not add to a vlan if it's a -netdev or a nic with a
+             * netdev= parameter. */
+            if (!(is_netdev ||
+                  (strcmp(type, "nic") == 0 && qemu_opt_get(opts, "netdev")))) {
+                vlan = qemu_find_vlan(qemu_opt_get_number(opts, "vlan", 0), 1);
+            }
+
             if (net_client_types[i].init) {
-                return net_client_types[i].init(opts, mon, name);
+                return net_client_types[i].init(opts, mon, name, vlan);
             } else {
                 return 0;
             }
@@ -3225,7 +3323,9 @@ int net_client_init(Monitor *mon, QemuOpts *opts)
 
 void net_client_uninit(NICInfo *nd)
 {
-    nd->vlan->nb_guest_devs--;
+    if (nd->vlan) {
+        nd->vlan->nb_guest_devs--;
+    }
     nb_nics--;
 
     qemu_free(nd->model);
@@ -3275,7 +3375,7 @@ void net_host_device_add(Monitor *mon, const QDict *qdict)
 
     qemu_opt_set(opts, "type", device);
 
-    if (net_client_init(mon, opts) < 0) {
+    if (net_client_init(mon, opts, 0) < 0) {
         monitor_printf(mon, "adding host network device %s failed\n", device);
     }
 }
@@ -3368,13 +3468,16 @@ done:
 void net_cleanup(void)
 {
     VLANState *vlan;
+    VLANClientState *vc, *next_vc;
 
     QTAILQ_FOREACH(vlan, &vlans, next) {
-        VLANClientState *vc, *next_vc;
-
         QTAILQ_FOREACH_SAFE(vc, &vlan->clients, next, next_vc) {
             qemu_del_vlan_client(vc);
         }
+    }
+
+    QTAILQ_FOREACH_SAFE(vc, &non_vlan_clients, next, next_vc) {
+        qemu_del_vlan_client(vc);
     }
 }
 
@@ -3396,7 +3499,12 @@ static void net_check_clients(void)
 
 static int net_init_client(QemuOpts *opts, void *dummy)
 {
-    return net_client_init(NULL, opts);
+    return net_client_init(NULL, opts, 0);
+}
+
+static int net_init_netdev(QemuOpts *opts, void *dummy)
+{
+    return net_client_init(NULL, opts, 1);
 }
 
 int net_init_clients(void)
@@ -3410,6 +3518,10 @@ int net_init_clients(void)
     }
 
     QTAILQ_INIT(&vlans);
+    QTAILQ_INIT(&non_vlan_clients);
+
+    if (qemu_opts_foreach(&qemu_netdev_opts, net_init_netdev, NULL, 1) == -1)
+        return -1;
 
     if (qemu_opts_foreach(&qemu_net_opts, net_init_client, NULL, 1) == -1) {
         return -1;
@@ -3420,11 +3532,12 @@ int net_init_clients(void)
     return 0;
 }
 
-int net_client_parse(const char *optarg)
+int net_client_parse(QemuOptsList *opts_list, const char *optarg)
 {
 #if defined(CONFIG_SLIRP)
     /* handle legacy -net channel,port:chr */
-    if (!strncmp(optarg, "channel,", strlen("channel,"))) {
+    if (!strcmp(opts_list->name, "net") &&
+        !strncmp(optarg, "channel,", strlen("channel,"))) {
         int ret;
 
         optarg += strlen("channel,");
@@ -3445,7 +3558,7 @@ int net_client_parse(const char *optarg)
         return ret;
     }
 #endif
-    if (!qemu_opts_parse(&qemu_net_opts, optarg, "type")) {
+    if (!qemu_opts_parse(opts_list, optarg, "type")) {
         return -1;
     }
 

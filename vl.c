@@ -2630,7 +2630,7 @@ static int usb_device_add(const char *devname, int is_hotplug)
         qemu_opt_set(opts, "type", "nic");
         qemu_opt_set(opts, "model", "usb");
 
-        idx = net_client_init(NULL, opts);
+        idx = net_client_init(NULL, opts, 0);
         if (idx == -1) {
             return -1;
         }
@@ -5147,8 +5147,13 @@ int main(int argc, char **argv, char **envp)
                 fd_bootchk = 0;
                 break;
 #endif
+            case QEMU_OPTION_netdev:
+                if (net_client_parse(&qemu_netdev_opts, optarg) == -1) {
+                    exit(1);
+                }
+                break;
             case QEMU_OPTION_net:
-                if (net_client_parse(optarg) == -1) {
+                if (net_client_parse(&qemu_net_opts, optarg) == -1) {
                     exit(1);
                 }
                 break;
