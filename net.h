@@ -85,7 +85,6 @@ int qemu_show_nic_models(const char *arg, const char *const *models);
 void qemu_check_nic_model(NICInfo *nd, const char *model);
 int qemu_find_nic_model(NICInfo *nd, const char * const *models,
                         const char *default_model);
-void qemu_handler_true(void *opaque);
 
 void do_info_network(Monitor *mon);
 void do_set_link(Monitor *mon, const QDict *qdict);
@@ -108,7 +107,6 @@ struct NICInfo {
     char *model;
     char *name;
     char *devaddr;
-    char *id;
     VLANState *vlan;
     VLANClientState *vc;
     void *private;

@@ -2599,7 +2599,7 @@ static int net_handle_fd_param(Monitor *mon, const char *param)
     }
 }
 
-static int net_init_nic(QemuOpts *opts, Monitor *mon)
+static int net_init_nic(QemuOpts *opts, Monitor *mon, const char *name)
 {
     int idx;
     NICInfo *nd;
@@ -2616,11 +2616,8 @@ static int net_init_nic(QemuOpts *opts, Monitor *mon)
 
     nd->vlan = qemu_find_vlan(qemu_opt_get_number(opts, "vlan", 0), 1);
 
-    if (qemu_opts_id(opts)) {
-        nd->id = qemu_strdup(qemu_opts_id(opts));
-    }
-    if (qemu_opt_get(opts, "name")) {
-        nd->name = qemu_strdup(qemu_opt_get(opts, "name"));
+    if (name) {
+        nd->name = qemu_strdup(name);
     }
     if (qemu_opt_get(opts, "model")) {
         nd->model = qemu_strdup(qemu_opt_get(opts, "model"));
@@ -2679,11 +2676,10 @@ static int net_init_slirp_configs(const char *name, const char *value, void *opa
     return 0;
 }
 
-static int net_init_slirp(QemuOpts *opts, Monitor *mon)
+static int net_init_slirp(QemuOpts *opts, Monitor *mon, const char *name)
 {
     VLANState *vlan;
     struct slirp_config_str *config;
-    const char *name;
     const char *vhost;
     const char *vhostname;
     const char *vdhcp_start;
@@ -2697,8 +2693,6 @@ static int net_init_slirp(QemuOpts *opts, Monitor *mon)
     int ret;
 
     vlan = qemu_find_vlan(qemu_opt_get_number(opts, "vlan", 0), 1);
-
-    name = qemu_opt_get(opts, "name");
 
     vhost       = qemu_opt_get(opts, "host");
     vhostname   = qemu_opt_get(opts, "hostname");
@@ -2755,15 +2749,13 @@ static int net_init_slirp(QemuOpts *opts, Monitor *mon)
 #endif /* CONFIG_SLIRP */
 
 #ifdef _WIN32
-static int net_init_tap_win32(QemuOpts *opts, Monitor *mon)
+static int net_init_tap_win32(QemuOpts *opts, Monitor *mon, const char *name)
 {
     VLANState *vlan;
-    const char *name;
     const char *ifname;
 
     vlan = qemu_find_vlan(qemu_opt_get_number(opts, "vlan", 0), 1);
 
-    name   = qemu_opt_get(opts, "name");
     ifname = qemu_opt_get(opts, "ifname");
 
     if (!ifname) {
@@ -2780,15 +2772,12 @@ static int net_init_tap_win32(QemuOpts *opts, Monitor *mon)
     return 0;
 }
 #elif !defined(_AIX)
-static int net_init_tap(QemuOpts *opts, Monitor *mon)
+static int net_init_tap(QemuOpts *opts, Monitor *mon, const char *name)
 {
     VLANState *vlan;
-    const char *name;
     TAPState *s;
 
     vlan = qemu_find_vlan(qemu_opt_get_number(opts, "vlan", 0), 1);
-
-    name = qemu_opt_get(opts, "name");
 
     if (qemu_opt_get(opts, "fd")) {
         int fd;
@@ -2842,14 +2831,11 @@ static int net_init_tap(QemuOpts *opts, Monitor *mon)
 }
 #endif
 
-static int net_init_socket(QemuOpts *opts, Monitor *mon)
+static int net_init_socket(QemuOpts *opts, Monitor *mon, const char *name)
 {
     VLANState *vlan;
-    const char *name;
 
     vlan = qemu_find_vlan(qemu_opt_get_number(opts, "vlan", 0), 1);
-
-    name = qemu_opt_get(opts, "name");
 
     if (qemu_opt_get(opts, "fd")) {
         int fd;
@@ -2926,17 +2912,15 @@ static int net_init_socket(QemuOpts *opts, Monitor *mon)
 }
 
 #ifdef CONFIG_VDE
-static int net_init_vde(QemuOpts *opts, Monitor *mon)
+static int net_init_vde(QemuOpts *opts, Monitor *mon, const char *name)
 {
     VLANState *vlan;
-    const char *name;
     const char *sock;
     const char *group;
     int port, mode;
 
     vlan = qemu_find_vlan(qemu_opt_get_number(opts, "vlan", 0), 1);
 
-    name  = qemu_opt_get(opts, "name");
     sock  = qemu_opt_get(opts, "sock");
     group = qemu_opt_get(opts, "group");
 
@@ -2953,17 +2937,14 @@ static int net_init_vde(QemuOpts *opts, Monitor *mon)
 }
 #endif
 
-static int net_init_dump(QemuOpts *opts, Monitor *mon)
+static int net_init_dump(QemuOpts *opts, Monitor *mon, const char *name)
 {
     VLANState *vlan;
     int len;
     const char *file;
-    const char *name;
     char def_file[128];
 
     vlan = qemu_find_vlan(qemu_opt_get_number(opts, "vlan", 0), 1);
-
-    name = qemu_opt_get(opts, "name");
 
     file = qemu_opt_get(opts, "file");
     if (!file) {
@@ -2991,7 +2972,9 @@ static int net_init_dump(QemuOpts *opts, Monitor *mon)
         .help = "identifier for monitor commands", \
      }
 
-typedef int (*net_client_init_func)(QemuOpts *opts, Monitor *mon);
+typedef int (*net_client_init_func)(QemuOpts *opts,
+                                    Monitor *mon,
+                                    const char *name);
 
 /* magic number, but compiler will warn if too small */
 #define NET_MAX_DESC 20
@@ -3210,6 +3193,7 @@ static struct {
 
 int net_client_init(Monitor *mon, QemuOpts *opts)
 {
+    const char *name;
     const char *type;
     int i;
 
@@ -3219,6 +3203,11 @@ int net_client_init(Monitor *mon, QemuOpts *opts)
         return -1;
     }
 
+    name = qemu_opts_id(opts);
+    if (!name) {
+        name = qemu_opt_get(opts, "name");
+    }
+
     for (i = 0; net_client_types[i].type != NULL; i++) {
         if (!strcmp(net_client_types[i].type, type)) {
             if (qemu_opts_validate(opts, &net_client_types[i].desc[0]) == -1) {
@@ -3226,7 +3215,7 @@ int net_client_init(Monitor *mon, QemuOpts *opts)
             }
 
             if (net_client_types[i].init) {
-                return net_client_types[i].init(opts, NULL);
+                return net_client_types[i].init(opts, mon, name);
             } else {
                 return 0;
             }
@@ -3245,7 +3234,6 @@ void net_client_uninit(NICInfo *nd)
     qemu_free(nd->model);
     qemu_free(nd->name);
     qemu_free(nd->devaddr);
-    qemu_free(nd->id);
 
     nd->used = 0;
 }
