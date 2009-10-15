@@ -440,15 +440,12 @@ static void kvm_create_vcpu(CPUState *env, int id)
 {
     long mmap_size;
     int r;
-    kvm_vcpu_context_t vcpu_ctx = qemu_malloc(sizeof(struct kvm_vcpu_context));
 
     r = kvm_vm_ioctl(kvm_state, KVM_CREATE_VCPU, id);
     if (r < 0) {
         fprintf(stderr, "kvm_create_vcpu: %m\n");
-        goto err;
+        return;
     }
-
-    vcpu_ctx->fd = r;
 
     env->kvm_fd = r;
     env->kvm_state = kvm_state;
@@ -459,7 +456,7 @@ static void kvm_create_vcpu(CPUState *env, int id)
         goto err_fd;
     }
     env->kvm_run =
-        mmap(NULL, mmap_size, PROT_READ | PROT_WRITE, MAP_SHARED, vcpu_ctx->fd,
+        mmap(NULL, mmap_size, PROT_READ | PROT_WRITE, MAP_SHARED, env->kvm_fd,
              0);
     if (env->kvm_run == MAP_FAILED) {
         fprintf(stderr, "mmap vcpu area: %m\n");
@@ -468,9 +465,7 @@ static void kvm_create_vcpu(CPUState *env, int id)
 
     return;
   err_fd:
-    close(vcpu_ctx->fd);
-  err:
-    free(vcpu_ctx);
+    close(env->kvm_fd);
 }
 
 static int kvm_set_boot_vcpu_id(kvm_context_t kvm, uint32_t id)

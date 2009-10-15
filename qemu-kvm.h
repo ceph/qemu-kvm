@@ -76,12 +76,7 @@ struct kvm_context {
     int max_gsi;
 };
 
-struct kvm_vcpu_context {
-    int fd;
-};
-
 typedef struct kvm_context *kvm_context_t;
-typedef struct kvm_vcpu_context *kvm_vcpu_context_t;
 
 #include "kvm.h"
 int kvm_alloc_kernel_memory(kvm_context_t kvm, unsigned long memory,
