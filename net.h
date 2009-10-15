@@ -29,7 +29,7 @@ struct VLANClientState {
     int link_down;
     SetOffload *set_offload;
     void *opaque;
-    struct VLANClientState *next;
+    QTAILQ_ENTRY(VLANClientState) next;
     struct VLANState *vlan;
     char *model;
     char *name;
@@ -51,8 +51,8 @@ struct VLANPacket {
 
 struct VLANState {
     int id;
-    VLANClientState *first_client;
-    struct VLANState *next;
+    QTAILQ_HEAD(, VLANClientState) clients;
+    QTAILQ_ENTRY(VLANState) next;
     unsigned int nb_guest_devs, nb_host_devs;
     QTAILQ_HEAD(send_queue, VLANPacket) send_queue;
     int delivering;
