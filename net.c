@@ -303,6 +303,7 @@ static char *assign_name(VLANClientState *vc1, const char *model)
 }
 
 VLANClientState *qemu_new_vlan_client(VLANState *vlan,
+                                      VLANClientState *peer,
                                       const char *model,
                                       const char *name,
                                       NetCanReceive *can_receive,
@@ -327,9 +328,14 @@ VLANClientState *qemu_new_vlan_client(VLANState *vlan,
     vc->opaque = opaque;
 
     if (vlan) {
+        assert(!peer);
         vc->vlan = vlan;
         QTAILQ_INSERT_TAIL(&vc->vlan->clients, vc, next);
     } else {
+        if (peer) {
+            vc->peer = peer;
+            peer->peer = vc;
+        }
         QTAILQ_INSERT_TAIL(&non_vlan_clients, vc, next);
     }
 
@@ -342,6 +348,9 @@ void qemu_del_vlan_client(VLANClientState *vc)
         QTAILQ_REMOVE(&vc->vlan->clients, vc, next);
     } else {
         QTAILQ_REMOVE(&non_vlan_clients, vc, next);
+        if (vc->peer) {
+            vc->peer->peer = NULL;
+        }
     }
 
     if (vc->cleanup) {
@@ -886,7 +895,8 @@ static int net_slirp_init(VLANState *vlan, const char *model,
     }
 #endif
 
-    s->vc = qemu_new_vlan_client(vlan, model, name, NULL, slirp_receive, NULL,
+    s->vc = qemu_new_vlan_client(vlan, NULL, model, name, NULL,
+                                 slirp_receive, NULL,
                                  net_slirp_cleanup, s);
     snprintf(s->vc->info_str, sizeof(s->vc->info_str),
              "net=%s, restricted=%c", inet_ntoa(net), restricted ? 'y' : 'n');
@@ -1604,8 +1614,9 @@ static TAPState *net_tap_fd_init(VLANState *vlan,
     s = qemu_mallocz(sizeof(TAPState));
     s->fd = fd;
     s->has_vnet_hdr = vnet_hdr != 0;
-    s->vc = qemu_new_vlan_client(vlan, model, name, NULL, tap_receive,
-                                 tap_receive_iov, tap_cleanup, s);
+    s->vc = qemu_new_vlan_client(vlan, NULL, model, name, NULL,
+                                 tap_receive, tap_receive_iov,
+                                 tap_cleanup, s);
     s->vc->receive_raw = tap_receive_raw;
 #ifdef TUNSETOFFLOAD
     s->vc->set_offload = tap_set_offload;
@@ -1965,8 +1976,9 @@ static int net_vde_init(VLANState *vlan, const char *model,
         free(s);
         return -1;
     }
-    s->vc = qemu_new_vlan_client(vlan, model, name, NULL, vde_receive,
-                                 NULL, vde_cleanup, s);
+    s->vc = qemu_new_vlan_client(vlan, NULL, model, name, NULL,
+                                 vde_receive, NULL,
+                                 vde_cleanup, s);
     qemu_set_fd_handler(vde_datafd(s->vde), vde_to_qemu, NULL, s);
     snprintf(s->vc->info_str, sizeof(s->vc->info_str), "sock=%s,fd=%d",
              sock, vde_datafd(s->vde));
@@ -2204,8 +2216,9 @@ static NetSocketState *net_socket_fd_init_dgram(VLANState *vlan,
     s = qemu_mallocz(sizeof(NetSocketState));
     s->fd = fd;
 
-    s->vc = qemu_new_vlan_client(vlan, model, name, NULL, net_socket_receive_dgram,
-                                 NULL, net_socket_cleanup, s);
+    s->vc = qemu_new_vlan_client(vlan, NULL, model, name, NULL,
+                                 net_socket_receive_dgram, NULL,
+                                 net_socket_cleanup, s);
     qemu_set_fd_handler(s->fd, net_socket_send_dgram, NULL, s);
 
     /* mcast: save bound address as dst */
@@ -2232,8 +2245,9 @@ static NetSocketState *net_socket_fd_init_stream(VLANState *vlan,
     NetSocketState *s;
     s = qemu_mallocz(sizeof(NetSocketState));
     s->fd = fd;
-    s->vc = qemu_new_vlan_client(vlan, model, name, NULL, net_socket_receive,
-                                 NULL, net_socket_cleanup, s);
+    s->vc = qemu_new_vlan_client(vlan, NULL, model, name, NULL,
+                                 net_socket_receive, NULL,
+                                 net_socket_cleanup, s);
     snprintf(s->vc->info_str, sizeof(s->vc->info_str),
              "socket: fd=%d", fd);
     if (is_connected) {
@@ -2513,7 +2527,8 @@ static int net_dump_init(VLANState *vlan, const char *device,
         return -1;
     }
 
-    s->pcap_vc = qemu_new_vlan_client(vlan, device, name, NULL, dump_receive, NULL,
+    s->pcap_vc = qemu_new_vlan_client(vlan, NULL, device, name, NULL,
+                                      dump_receive, NULL,
                                       net_dump_cleanup, s);
     snprintf(s->pcap_vc->info_str, sizeof(s->pcap_vc->info_str),
              "dump to %s (len=%d)", filename, len);
