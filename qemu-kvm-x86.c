@@ -767,6 +767,37 @@ int kvm_qemu_destroy_memory_alias(uint64_t phys_start)
 	return kvm_destroy_memory_alias(kvm_context, phys_start);
 }
 
+#ifdef KVM_CAP_ADJUST_CLOCK
+static struct kvm_clock_data kvmclock_data;
+
+static void kvmclock_pre_save(void *opaque)
+{
+    struct kvm_clock_data *cl = opaque;
+
+    kvm_vm_ioctl(kvm_state, KVM_GET_CLOCK, cl);
+}
+
+static int kvmclock_post_load(void *opaque, int version_id)
+{
+    struct kvm_clock_data *cl = opaque;
+
+    return kvm_vm_ioctl(kvm_state, KVM_SET_CLOCK, cl);
+}
+
+static const VMStateDescription vmstate_kvmclock= {
+    .name = "kvmclock",
+    .version_id = 1,
+    .minimum_version_id = 1,
+    .minimum_version_id_old = 1,
+    .pre_save = kvmclock_pre_save,
+    .post_load = kvmclock_post_load,
+    .fields      = (VMStateField []) {
+        VMSTATE_U64(clock, struct kvm_clock_data),
+        VMSTATE_END_OF_LIST()
+    }
+};
+#endif
+
 int kvm_arch_qemu_create_context(void)
 {
     int i;
@@ -788,6 +819,10 @@ int kvm_arch_qemu_create_context(void)
             kvm_has_vm_hsave_pa = 1;
     }
 
+#ifdef KVM_CAP_ADJUST_CLOCK
+    if (kvm_check_extension(kvm_state, KVM_CAP_ADJUST_CLOCK))
+        vmstate_register(0, &vmstate_kvmclock, &kvmclock_data);
+#endif
     return 0;
 }
 
