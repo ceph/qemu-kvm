@@ -667,6 +667,8 @@ typedef struct CPUX86State {
     target_ulong fmask;
     target_ulong kernelgsbase;
 #endif
+    uint64_t system_time_msr;
+    uint64_t wall_clock_msr;
 
     uint64_t tsc;
 
@@ -886,7 +888,7 @@ uint64_t cpu_get_tsc(CPUX86State *env);
 #define cpu_signal_handler cpu_x86_signal_handler
 #define cpu_list x86_cpu_list
 
-#define CPU_SAVE_VERSION 11
+#define CPU_SAVE_VERSION 12
 
 /* MMU modes definitions */
 #define MMU_MODE0_SUFFIX _kernel

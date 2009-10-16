@@ -834,6 +834,12 @@ static int get_msr_entry(struct kvm_msr_entry *entry, CPUState *env)
         case MSR_VM_HSAVE_PA:
             env->vm_hsave     = entry->data;
             break;
+        case MSR_KVM_SYSTEM_TIME:
+            env->system_time_msr = entry->data;
+            break;
+        case MSR_KVM_WALL_CLOCK:
+            env->wall_clock_msr = entry->data;
+            break;
         default:
             printf("Warning unknown msr index 0x%x\n", entry->index);
             return 1;
@@ -996,6 +1002,8 @@ void kvm_arch_load_regs(CPUState *env)
         set_msr_entry(&msrs[n++], MSR_LSTAR  ,           env->lstar);
     }
 #endif
+    set_msr_entry(&msrs[n++], MSR_KVM_SYSTEM_TIME,  env->system_time_msr);
+    set_msr_entry(&msrs[n++], MSR_KVM_WALL_CLOCK,  env->wall_clock_msr);
 
     rc = kvm_set_msrs(env, msrs, n);
     if (rc == -1)
@@ -1175,6 +1183,9 @@ void kvm_arch_save_regs(CPUState *env)
         msrs[n++].index = MSR_LSTAR;
     }
 #endif
+    msrs[n++].index = MSR_KVM_SYSTEM_TIME;
+    msrs[n++].index = MSR_KVM_WALL_CLOCK;
+
     rc = kvm_get_msrs(env, msrs, n);
     if (rc == -1) {
         perror("kvm_get_msrs FAILED");

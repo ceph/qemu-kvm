@@ -479,6 +479,9 @@ const VMStateDescription vmstate_cpu = {
         VMSTATE_UINT64_ARRAY_V(mce_banks, CPUState, MCE_BANKS_DEF *4, 10),
         /* rdtscp */
         VMSTATE_UINT64_V(tsc_aux, CPUState, 11),
+        /* KVM pvclock msr */
+        VMSTATE_UINT64_V(system_time_msr, CPUState, 12),
+        VMSTATE_UINT64_V(wall_clock_msr, CPUState, 12),
         VMSTATE_END_OF_LIST()
     }
 };
