@@ -848,6 +848,29 @@ const VMStateInfo vmstate_info_uint64 = {
     .put  = put_uint64,
 };
 
+/* 64 bit linux kernel unsigned int */
+
+#ifdef __linux__
+static int get_u64(QEMUFile *f, void *pv, size_t size)
+{
+    __u64 *v = pv;
+    qemu_get_be64s(f, (uint64_t *)v);
+    return 0;
+}
+
+static void put_u64(QEMUFile *f, void *pv, size_t size)
+{
+    __u64 *v = pv;
+    qemu_put_be64s(f, (uint64_t *)v);
+}
+
+const VMStateInfo vmstate_info_u64 = {
+    .name = "__u64",
+    .get  = get_u64,
+    .put  = put_u64,
+};
+#endif /* __linux__ */
+
 /* 8 bit int. See that the received value is the same than the one
    in the field */
 
