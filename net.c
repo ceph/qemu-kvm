@@ -1603,7 +1603,9 @@ static TAPState *net_tap_fd_init(VLANState *vlan,
                                  int vnet_hdr)
 {
     TAPState *s;
+#ifdef TUNSETOFFLOAD
     unsigned int offload;
+#endif
 
     s = qemu_mallocz(sizeof(TAPState));
     s->fd = fd;
