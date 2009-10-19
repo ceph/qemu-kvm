@@ -447,7 +447,8 @@ static void print_cpu_iter(QObject *obj, void *opaque)
     if (strcmp(qdict_get_str(cpu, "halted"), "yes") == 0)
         monitor_printf(mon, " (halted)");
 
-    monitor_printf(mon, " thread_id=%ld", qdict_get_int(cpu, "thread_id"));
+    monitor_printf(mon, " thread_id=%" PRId64 " ",
+					qdict_get_int(cpu, "thread_id"));
 
     monitor_printf(mon, "\n");
 }
