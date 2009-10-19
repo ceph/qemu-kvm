@@ -1410,13 +1410,14 @@ int kvm_arch_halt(CPUState *env)
     return 1;
 }
 
-void kvm_arch_pre_kvm_run(void *opaque, CPUState *env)
+int kvm_arch_pre_run(CPUState *env, struct kvm_run *run)
 {
     if (!kvm_irqchip_in_kernel())
 	kvm_set_cr8(env, cpu_get_apic_tpr(env));
+    return 0;
 }
 
-void kvm_arch_post_kvm_run(void *opaque, CPUState *env)
+int kvm_arch_post_run(CPUState *env, struct kvm_run *run)
 {
     cpu_single_env = env;
 
@@ -1425,6 +1426,7 @@ void kvm_arch_post_kvm_run(void *opaque, CPUState *env)
 
     cpu_set_apic_tpr(env, kvm_get_cr8(env));
     cpu_set_apic_base(env, kvm_get_apic_base(env));
+    return 0;
 }
 
 int kvm_arch_has_work(CPUState *env)

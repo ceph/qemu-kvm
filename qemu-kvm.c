@@ -852,12 +852,12 @@ static inline void push_nmi(kvm_context_t kvm)
 void post_kvm_run(kvm_context_t kvm, CPUState *env)
 {
     pthread_mutex_lock(&qemu_mutex);
-    kvm_arch_post_kvm_run(kvm->opaque, env);
+    kvm_arch_post_run(env, env->kvm_run);
 }
 
 int pre_kvm_run(kvm_context_t kvm, CPUState *env)
 {
-    kvm_arch_pre_kvm_run(kvm->opaque, env);
+    kvm_arch_pre_run(env, env->kvm_run);
 
     pthread_mutex_unlock(&qemu_mutex);
     return 0;
