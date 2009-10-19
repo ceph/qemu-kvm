@@ -863,11 +863,6 @@ int pre_kvm_run(kvm_context_t kvm, CPUState *env)
     return 0;
 }
 
-int kvm_get_interrupt_flag(CPUState *env)
-{
-    return env->kvm_run->if_flag;
-}
-
 int kvm_is_ready_for_interrupt_injection(CPUState *env)
 {
     return env->kvm_run->ready_for_interrupt_injection;

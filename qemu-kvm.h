@@ -190,17 +190,6 @@ void kvm_create_irqchip(kvm_context_t kvm);
 int kvm_run(CPUState *env);
 
 /*!
- * \brief Get interrupt flag from on last exit to userspace
- *
- * This gets the CPU interrupt flag as it was on the last exit to userspace.
- *
- * \param kvm Pointer to the current kvm_context
- * \param vcpu Which virtual CPU should get dumped
- * \return interrupt flag value (0 or 1)
- */
-int kvm_get_interrupt_flag(CPUState *env);
-
-/*!
  * \brief Check if a vcpu is ready for interrupt injection
  *
  * This checks if vcpu interrupts are not masked by mov ss or sti.

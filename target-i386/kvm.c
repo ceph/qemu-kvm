@@ -748,6 +748,7 @@ int kvm_arch_pre_run(CPUState *env, struct kvm_run *run)
 
     return 0;
 }
+#endif
 
 int kvm_arch_post_run(CPUState *env, struct kvm_run *run)
 {
@@ -762,6 +763,7 @@ int kvm_arch_post_run(CPUState *env, struct kvm_run *run)
     return 0;
 }
 
+#ifdef KVM_UPSTREAM
 static int kvm_handle_halt(CPUState *env)
 {
     if (!((env->interrupt_request & CPU_INTERRUPT_HARD) &&

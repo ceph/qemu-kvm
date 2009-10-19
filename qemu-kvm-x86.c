@@ -538,19 +538,9 @@ void kvm_show_regs(CPUState *env)
 		sregs.efer);
 }
 
-static uint64_t kvm_get_apic_base(CPUState *env)
-{
-	return env->kvm_run->apic_base;
-}
-
 static void kvm_set_cr8(CPUState *env, uint64_t cr8)
 {
 	env->kvm_run->cr8 = cr8;
-}
-
-static __u64 kvm_get_cr8(CPUState *env)
-{
-	return env->kvm_run->cr8;
 }
 
 int kvm_setup_cpuid(CPUState *env, int nent,
@@ -1414,18 +1404,6 @@ int kvm_arch_pre_run(CPUState *env, struct kvm_run *run)
 {
     if (!kvm_irqchip_in_kernel())
 	kvm_set_cr8(env, cpu_get_apic_tpr(env));
-    return 0;
-}
-
-int kvm_arch_post_run(CPUState *env, struct kvm_run *run)
-{
-    cpu_single_env = env;
-
-    env->eflags = kvm_get_interrupt_flag(env)
-	? env->eflags | IF_MASK : env->eflags & ~IF_MASK;
-
-    cpu_set_apic_tpr(env, kvm_get_cr8(env));
-    cpu_set_apic_base(env, kvm_get_apic_base(env));
     return 0;
 }
 
