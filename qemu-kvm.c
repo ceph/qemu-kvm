@@ -1907,9 +1907,6 @@ static void *ap_main_loop(void *_env)
     cpu_single_env = env;
 
     kvm_arch_init_vcpu(env);
-#ifdef TARGET_I386
-    kvm_tpr_vcpu_start(env);
-#endif
 
     kvm_arch_load_regs(env);
 
@@ -1965,9 +1962,6 @@ int kvm_init_ap(void)
 {
     struct sigaction action;
 
-#ifdef TARGET_I386
-    kvm_tpr_opt_setup();
-#endif
     qemu_add_vm_change_state_handler(kvm_vm_state_change_handler, NULL);
 
     signal(SIG_IPI, sig_ipi_handler);

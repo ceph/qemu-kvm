@@ -157,6 +157,10 @@ int kvm_arch_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
 	if (r < 0)
 		return r;
 
+#ifdef KVM_EXIT_TPR_ACCESS
+    kvm_tpr_opt_setup();
+#endif
+
 	return 0;
 }
 
@@ -1386,6 +1390,9 @@ int kvm_arch_init_vcpu(CPUState *cenv)
     }
 #endif
 
+#ifdef KVM_EXIT_TPR_ACCESS
+    kvm_tpr_vcpu_start(cenv);
+#endif
     return 0;
 }
 
