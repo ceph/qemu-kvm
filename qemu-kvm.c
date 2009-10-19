@@ -751,58 +751,6 @@ int kvm_set_irqchip(kvm_context_t kvm, struct kvm_irqchip *chip)
 
 #endif
 
-static int handle_io(CPUState *env)
-{
-    struct kvm_run *run = env->kvm_run;
-    uint16_t addr = run->io.port;
-    int i;
-    void *p = (void *) run + run->io.data_offset;
-
-    for (i = 0; i < run->io.count; ++i) {
-        switch (run->io.direction) {
-        case KVM_EXIT_IO_IN:
-            switch (run->io.size) {
-            case 1:
-                *(uint8_t *) p = cpu_inb(addr);
-                break;
-            case 2:
-                *(uint16_t *) p = cpu_inw(addr);
-                break;
-            case 4:
-                *(uint32_t *) p = cpu_inl(addr);
-                break;
-            default:
-                fprintf(stderr, "bad I/O size %d\n", run->io.size);
-                return -EMSGSIZE;
-            }
-            break;
-        case KVM_EXIT_IO_OUT:
-            switch (run->io.size) {
-            case 1:
-                cpu_outb(addr, *(uint8_t *) p);
-                break;
-            case 2:
-                cpu_outw(addr, *(uint16_t *) p);
-                break;
-            case 4:
-                cpu_outl(addr, *(uint32_t *) p);
-                break;
-            default:
-                fprintf(stderr, "bad I/O size %d\n", run->io.size);
-                return -EMSGSIZE;
-            }
-            break;
-        default:
-            fprintf(stderr, "bad I/O direction %d\n", run->io.direction);
-            return -EPROTO;
-        }
-
-        p += run->io.size;
-    }
-
-    return 0;
-}
-
 static int handle_debug(CPUState *env)
 {
 #ifdef KVM_CAP_SET_GUEST_DEBUG
@@ -994,7 +942,11 @@ int kvm_run(CPUState *env)
             abort();
             break;
         case KVM_EXIT_IO:
-            r = handle_io(env);
+            r = kvm_handle_io(run->io.port,
+                                (uint8_t *)run + run->io.data_offset,
+                                run->io.direction,
+                                run->io.size,
+                                run->io.count);
             break;
         case KVM_EXIT_DEBUG:
             r = handle_debug(env);

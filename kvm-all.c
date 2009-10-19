@@ -520,6 +520,7 @@ err:
 
     return ret;
 }
+#endif
 
 static int kvm_handle_io(uint16_t port, void *data, int direction, int size,
                          uint32_t count)
@@ -560,6 +561,7 @@ static int kvm_handle_io(uint16_t port, void *data, int direction, int size,
     return 1;
 }
 
+#ifdef KVM_UPSTREAM
 static void kvm_run_coalesced_mmio(CPUState *env, struct kvm_run *run)
 {
 #ifdef KVM_CAP_COALESCED_MMIO
