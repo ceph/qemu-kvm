@@ -2,9 +2,8 @@
 
 CFLAGS += -I../include/x86
 
-all: kvmctl kvmtrace test_cases
+all: kvmtrace test_cases
 
-kvmctl_objs= main.o iotable.o ../libkvm/libkvm.a
 balloon_ctl: balloon_ctl.o
 
 cflatobjs += \
