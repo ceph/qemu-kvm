@@ -764,32 +764,32 @@ static int handle_debug(CPUState *env)
 
 int kvm_get_regs(CPUState *env, struct kvm_regs *regs)
 {
-    return ioctl(env->kvm_fd, KVM_GET_REGS, regs);
+    return kvm_vcpu_ioctl(env, KVM_GET_REGS, regs);
 }
 
 int kvm_set_regs(CPUState *env, struct kvm_regs *regs)
 {
-    return ioctl(env->kvm_fd, KVM_SET_REGS, regs);
+    return kvm_vcpu_ioctl(env, KVM_SET_REGS, regs);
 }
 
 int kvm_get_fpu(CPUState *env, struct kvm_fpu *fpu)
 {
-    return ioctl(env->kvm_fd, KVM_GET_FPU, fpu);
+    return kvm_vcpu_ioctl(env, KVM_GET_FPU, fpu);
 }
 
 int kvm_set_fpu(CPUState *env, struct kvm_fpu *fpu)
 {
-    return ioctl(env->kvm_fd, KVM_SET_FPU, fpu);
+    return kvm_vcpu_ioctl(env, KVM_SET_FPU, fpu);
 }
 
 int kvm_get_sregs(CPUState *env, struct kvm_sregs *sregs)
 {
-    return ioctl(env->kvm_fd, KVM_GET_SREGS, sregs);
+    return kvm_vcpu_ioctl(env, KVM_GET_SREGS, sregs);
 }
 
 int kvm_set_sregs(CPUState *env, struct kvm_sregs *sregs)
 {
-    return ioctl(env->kvm_fd, KVM_SET_SREGS, sregs);
+    return kvm_vcpu_ioctl(env, KVM_SET_SREGS, sregs);
 }
 
 #ifdef KVM_CAP_MP_STATE
@@ -799,7 +799,7 @@ int kvm_get_mpstate(CPUState *env, struct kvm_mp_state *mp_state)
 
     r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_MP_STATE);
     if (r > 0)
-        return ioctl(env->kvm_fd, KVM_GET_MP_STATE, mp_state);
+        return kvm_vcpu_ioctl(env, KVM_GET_MP_STATE, mp_state);
     return -ENOSYS;
 }
 
@@ -809,7 +809,7 @@ int kvm_set_mpstate(CPUState *env, struct kvm_mp_state *mp_state)
 
     r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_MP_STATE);
     if (r > 0)
-        return ioctl(env->kvm_fd, KVM_SET_MP_STATE, mp_state);
+        return kvm_vcpu_ioctl(env, KVM_SET_MP_STATE, mp_state);
     return -ENOSYS;
 }
 #endif
@@ -993,13 +993,13 @@ int kvm_inject_irq(CPUState *env, unsigned irq)
     struct kvm_interrupt intr;
 
     intr.irq = irq;
-    return ioctl(env->kvm_fd, KVM_INTERRUPT, &intr);
+    return kvm_vcpu_ioctl(env, KVM_INTERRUPT, &intr);
 }
 
 #ifdef KVM_CAP_SET_GUEST_DEBUG
 int kvm_set_guest_debug(CPUState *env, struct kvm_guest_debug *dbg)
 {
-    return ioctl(env->kvm_fd, KVM_SET_GUEST_DEBUG, dbg);
+    return kvm_vcpu_ioctl(env, KVM_SET_GUEST_DEBUG, dbg);
 }
 #endif
 
@@ -1009,18 +1009,13 @@ int kvm_set_signal_mask(CPUState *env, const sigset_t *sigset)
     int r;
 
     if (!sigset) {
-        r = ioctl(env->kvm_fd, KVM_SET_SIGNAL_MASK, NULL);
-        if (r == -1)
-            r = -errno;
-        return r;
+        return kvm_vcpu_ioctl(env, KVM_SET_SIGNAL_MASK, NULL);
     }
     sigmask = qemu_malloc(sizeof(*sigmask) + sizeof(*sigset));
 
     sigmask->len = 8;
     memcpy(sigmask->sigset, sigset, sizeof(*sigset));
-    r = ioctl(env->kvm_fd, KVM_SET_SIGNAL_MASK, sigmask);
-    if (r == -1)
-        r = -errno;
+    r = kvm_vcpu_ioctl(env, KVM_SET_SIGNAL_MASK, sigmask);
     free(sigmask);
     return r;
 }
@@ -1033,7 +1028,7 @@ int kvm_pit_in_kernel(kvm_context_t kvm)
 int kvm_inject_nmi(CPUState *env)
 {
 #ifdef KVM_CAP_USER_NMI
-    return ioctl(env->kvm_fd, KVM_NMI);
+    return kvm_vcpu_ioctl(env, KVM_NMI);
 #else
     return -ENOSYS;
 #endif

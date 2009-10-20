@@ -865,7 +865,6 @@ int kvm_vm_ioctl(KVMState *s, int type, ...)
     return ret;
 }
 
-#ifdef KVM_UPSTREAM
 int kvm_vcpu_ioctl(CPUState *env, int type, ...)
 {
     int ret;
@@ -882,8 +881,6 @@ int kvm_vcpu_ioctl(CPUState *env, int type, ...)
 
     return ret;
 }
-
-#endif
 
 int kvm_has_sync_mmu(void)
 {

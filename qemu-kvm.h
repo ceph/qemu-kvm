@@ -1157,6 +1157,7 @@ extern KVMState *kvm_state;
 
 int kvm_ioctl(KVMState *s, int type, ...);
 int kvm_vm_ioctl(KVMState *s, int type, ...);
+int kvm_vcpu_ioctl(CPUState *env, int type, ...);
 int kvm_check_extension(KVMState *s, unsigned int ext);
 
 #endif
