@@ -384,6 +384,14 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
             int t = cur_region->type & IORESOURCE_PREFETCH
                 ? PCI_ADDRESS_SPACE_MEM_PREFETCH
                 : PCI_ADDRESS_SPACE_MEM;
+            if (cur_region->size & 0xFFF) {
+                fprintf(stderr, "Unable to assign device: PCI region %d "
+                        "at address 0x%llx has size 0x%x, "
+                        " which is not a multiple of 4K\n",
+                        i, (unsigned long long)cur_region->base_addr,
+                        cur_region->size);
+                return -1;
+            }
 
             /* map physical memory */
             pci_dev->v_addrs[i].e_physbase = cur_region->base_addr;
