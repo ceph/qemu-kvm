@@ -853,6 +853,7 @@ void post_kvm_run(kvm_context_t kvm, CPUState *env)
 {
     pthread_mutex_lock(&qemu_mutex);
     kvm_arch_post_run(env, env->kvm_run);
+    cpu_single_env = env;
 }
 
 int pre_kvm_run(kvm_context_t kvm, CPUState *env)
