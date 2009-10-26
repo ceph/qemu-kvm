@@ -259,6 +259,7 @@ pxe-ne2k_pci.bin pxe-rtl8139.bin pxe-pcnet.bin pxe-e1000.bin \
 bamboo.dtb petalogix-s3adsp1800.dtb \
 multiboot.bin
 BLOBS += extboot.bin
+BLOBS += vapic.bin
 else
 BLOBS=
 endif

@@ -53,6 +53,7 @@
 #define VGABIOS_FILENAME "vgabios.bin"
 #define VGABIOS_CIRRUS_FILENAME "vgabios-cirrus.bin"
 #define EXTBOOT_FILENAME "extboot.bin"
+#define VAPIC_FILENAME "vapic.bin"
 
 #define PC_MAX_BIOS_SIZE (4 * 1024 * 1024)
 
@@ -1149,6 +1150,7 @@ static void pc_init1(ram_addr_t ram_size,
     if (extboot_drive) {
         option_rom[nb_option_roms++] = qemu_strdup(EXTBOOT_FILENAME);
     }
+    option_rom[nb_option_roms++] = qemu_strdup(VAPIC_FILENAME);
 
     option_rom_offset = qemu_ram_alloc(PC_ROM_SIZE);
     cpu_register_physical_memory(PC_ROM_MIN_VGA, PC_ROM_SIZE, option_rom_offset);

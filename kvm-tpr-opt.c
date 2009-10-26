@@ -114,6 +114,7 @@ static uint32_t bios_addr;
 static uint32_t vapic_phys;
 static uint32_t bios_enabled;
 static uint32_t vbios_desc_phys;
+static uint32_t vapic_bios_addr;
 
 static void update_vbios_real_tpr(void)
 {
@@ -187,16 +188,16 @@ static int bios_is_mapped(CPUState *env, uint64_t rip)
     struct kvm_sregs sregs;
     unsigned perms;
     uint32_t i;
-    uint32_t offset, fixup;
+    uint32_t offset, fixup, start = vapic_bios_addr ? : 0xe0000;
 
     if (bios_enabled)
 	return 1;
 
     kvm_get_sregs(env, &sregs);
 
-    probe = (rip & 0xf0000000) + 0xe0000;
+    probe = (rip & 0xf0000000) + start;
     phys = map_addr(&sregs, probe, &perms);
-    if (phys != 0xe0000)
+    if (phys != start)
 	return 0;
     bios_addr = probe;
     for (i = 0; i < 64; ++i) {
@@ -356,6 +357,17 @@ static int tpr_load(QEMUFile *f, void *s, int version_id)
     return 0;
 }
 
+static void vtpr_ioport_write16(void *opaque, uint32_t addr, uint32_t val)
+{
+    struct kvm_regs regs;
+    CPUState *env = cpu_single_env;
+    struct kvm_sregs sregs;
+    kvm_get_regs(env, &regs);
+    kvm_get_sregs(env, &sregs);
+    vapic_bios_addr = ((sregs.cs.base + regs.rip) & ~(512 - 1)) + val;
+    bios_enabled = 0;
+}
+
 static void vtpr_ioport_write(void *opaque, uint32_t addr, uint32_t val)
 {
     CPUState *env = cpu_single_env;
@@ -386,5 +398,6 @@ void kvm_tpr_opt_setup(void)
 {
     register_savevm("kvm-tpr-opt", 0, 1, tpr_save, tpr_load, NULL);
     register_ioport_write(0x7e, 1, 1, vtpr_ioport_write, NULL);
+    register_ioport_write(0x7e, 2, 2, vtpr_ioport_write16, NULL);
 }
 
