@@ -1867,8 +1867,8 @@ static int kvm_main_loop_cpu(CPUState *env)
             run_cpu = !env->halted;
         }
         if (run_cpu) {
-            kvm_main_loop_wait(env, 0);
             kvm_cpu_exec(env);
+            kvm_main_loop_wait(env, 0);
         } else {
             kvm_main_loop_wait(env, 1000);
         }
