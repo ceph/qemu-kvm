@@ -1285,28 +1285,15 @@ void do_info_usernet(Monitor *mon)
 
 #endif /* CONFIG_SLIRP */
 
-#ifdef _WIN32
-
-int tap_has_vnet_hdr(void *opaque)
+#if defined(_WIN32)
+int tap_has_vnet_hdr(VLANClientState *vc)
 {
     return 0;
 }
-
-void tap_using_vnet_hdr(void *opaque, int using_vnet_hdr)
+void tap_using_vnet_hdr(VLANClientState *vc, int using_vnet_hdr)
 {
 }
-
-int tap_has_ufo(void *opaque)
-{
-    return 0;
-}
-
 #else /* !defined(_WIN32) */
-
-/* Maximum GSO packet size (64k) plus plenty of room for
- * the ethernet and virtio_net headers
- */
-#define TAP_BUFSIZE (4096 + 65536)
 
 /* Maximum GSO packet size (64k) plus plenty of room for
  * the ethernet and virtio_net headers
@@ -1386,7 +1373,7 @@ static ssize_t tap_receive_iov(VLANClientState *vc, const struct iovec *iov,
     struct iovec iov_copy[iovcnt + 1];
     struct virtio_net_hdr hdr = { 0, };
 
-    if (s->has_vnet_hdr) {
+    if (s->has_vnet_hdr && !s->using_vnet_hdr) {
         iov_copy[0].iov_base = &hdr;
         iov_copy[0].iov_len =  sizeof(hdr);
         memcpy(&iov_copy[1], iov, iovcnt * sizeof(*iov));
@@ -1484,7 +1471,7 @@ static void tap_send(void *opaque)
             break;
         }
 
-        if (s->has_vnet_hdr) {
+        if (s->has_vnet_hdr && !s->using_vnet_hdr) {
             buf  += sizeof(struct virtio_net_hdr);
             size -= sizeof(struct virtio_net_hdr);
         }
@@ -1519,6 +1506,27 @@ static int tap_set_sndbuf(TAPState *s, QemuOpts *opts)
     return 0;
 }
 
+int tap_has_vnet_hdr(VLANClientState *vc)
+{
+    TAPState *s = vc->opaque;
+
+    assert(vc->type == NET_CLIENT_TYPE_TAP);
+
+    return s->has_vnet_hdr;
+}
+
+void tap_using_vnet_hdr(VLANClientState *vc, int using_vnet_hdr)
+{
+    TAPState *s = vc->opaque;
+
+    using_vnet_hdr = using_vnet_hdr != 0;
+
+    assert(vc->type == NET_CLIENT_TYPE_TAP);
+    assert(s->has_vnet_hdr == using_vnet_hdr);
+
+    s->using_vnet_hdr = using_vnet_hdr;
+}
+
 static int tap_probe_vnet_hdr(int fd)
 {
     struct ifreq ifr;
@@ -1529,31 +1537,6 @@ static int tap_probe_vnet_hdr(int fd)
     }
 
     return ifr.ifr_flags & IFF_VNET_HDR;
-}
-
-int tap_has_vnet_hdr(void *opaque)
-{
-    VLANClientState *vc = opaque;
-    TAPState *s = vc->opaque;
-
-    if (vc->receive != tap_receive)
-        return 0;
-
-    return s ? s->has_vnet_hdr : 0;
-}
-
-void tap_using_vnet_hdr(void *opaque, int using_vnet_hdr)
-{
-    VLANClientState *vc = opaque;
-    TAPState *s = vc->opaque;
-
-    if (vc->receive != tap_receive)
-        return;
-
-    if (!s || !s->has_vnet_hdr)
-        return;
-
-    s->using_vnet_hdr = using_vnet_hdr != 0;
 }
 
 int tap_has_ufo(void *opaque)
@@ -1630,6 +1613,7 @@ static TAPState *net_tap_fd_init(VLANState *vlan,
     s = qemu_mallocz(sizeof(TAPState));
     s->fd = fd;
     s->has_vnet_hdr = vnet_hdr != 0;
+    s->using_vnet_hdr = 0;
     s->vc = qemu_new_vlan_client(NET_CLIENT_TYPE_TAP,
                                  vlan, NULL, model, name, NULL,
                                  tap_receive, tap_receive_iov,
