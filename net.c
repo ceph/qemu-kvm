@@ -1305,9 +1305,10 @@ int tap_has_ufo(void *opaque)
  */
 #define TAP_BUFSIZE (4096 + 65536)
 
-#ifdef IFF_VNET_HDR
-#include <linux/virtio_net.h>
-#endif
+/* Maximum GSO packet size (64k) plus plenty of room for
+ * the ethernet and virtio_net headers
+ */
+#define TAP_BUFSIZE (4096 + 65536)
 
 typedef struct TAPState {
     VLANClientState *vc;
@@ -1378,8 +1379,19 @@ static ssize_t tap_receive_iov(VLANClientState *vc, const struct iovec *iov,
                                int iovcnt)
 {
     TAPState *s = vc->opaque;
+    const struct iovec *iovp = iov;
+    struct iovec iov_copy[iovcnt + 1];
+    struct virtio_net_hdr hdr = { 0, };
 
-    return tap_write_packet(s, iov, iovcnt);
+    if (s->has_vnet_hdr) {
+        iov_copy[0].iov_base = &hdr;
+        iov_copy[0].iov_len =  sizeof(hdr);
+        memcpy(&iov_copy[1], iov, iovcnt * sizeof(*iov));
+        iovp = iov_copy;
+        iovcnt++;
+    }
+
+    return tap_write_packet(s, iovp, iovcnt);
 }
 
 static ssize_t tap_receive(VLANClientState *vc, const uint8_t *buf, size_t size)
@@ -1387,8 +1399,6 @@ static ssize_t tap_receive(VLANClientState *vc, const uint8_t *buf, size_t size)
     TAPState *s = vc->opaque;
     struct iovec iov[2];
     int iovcnt = 0;
-
-#ifdef IFF_VNET_HDR
     struct virtio_net_hdr hdr = { 0, };
 
     if (s->has_vnet_hdr && !s->using_vnet_hdr) {
@@ -1396,7 +1406,6 @@ static ssize_t tap_receive(VLANClientState *vc, const uint8_t *buf, size_t size)
         iov[iovcnt].iov_len  = sizeof(hdr);
         iovcnt++;
     }
-#endif
 
     iov[iovcnt].iov_base = (char *)buf;
     iov[iovcnt].iov_len  = size;
@@ -1472,12 +1481,10 @@ static void tap_send(void *opaque)
             break;
         }
 
-#ifdef IFF_VNET_HDR
-        if (s->has_vnet_hdr && !s->using_vnet_hdr) {
-            buf += sizeof(struct virtio_net_hdr);
+        if (s->has_vnet_hdr) {
+            buf  += sizeof(struct virtio_net_hdr);
             size -= sizeof(struct virtio_net_hdr);
         }
-#endif
 
         size = qemu_send_packet_async(s->vc, buf, size, tap_send_completed);
         if (size == 0) {
@@ -1509,6 +1516,18 @@ static int tap_set_sndbuf(TAPState *s, QemuOpts *opts)
     return 0;
 }
 
+static int tap_probe_vnet_hdr(int fd)
+{
+    struct ifreq ifr;
+
+    if (ioctl(fd, TUNGETIFF, &ifr) != 0) {
+        qemu_error("TUNGETIFF ioctl() failed: %s\n", strerror(errno));
+        return 0;
+    }
+
+    return ifr.ifr_flags & IFF_VNET_HDR;
+}
+
 int tap_has_vnet_hdr(void *opaque)
 {
     VLANClientState *vc = opaque;
@@ -1532,22 +1551,6 @@ void tap_using_vnet_hdr(void *opaque, int using_vnet_hdr)
         return;
 
     s->using_vnet_hdr = using_vnet_hdr != 0;
-}
-
-static int tap_probe_vnet_hdr(int fd)
-{
-#if defined(TUNGETIFF) && defined(IFF_VNET_HDR)
-    struct ifreq ifr;
-
-    if (ioctl(fd, TUNGETIFF, &ifr) != 0) {
-        fprintf(stderr, "TUNGETIFF ioctl() failed: %s\n", strerror(errno));
-        return 0;
-    }
-
-    return ifr.ifr_flags & IFF_VNET_HDR;
-#else
-    return 0;
-#endif
 }
 
 int tap_has_ufo(void *opaque)
@@ -1645,7 +1648,7 @@ static TAPState *net_tap_fd_init(VLANState *vlan,
 }
 
 #if defined (CONFIG_BSD) || defined (__FreeBSD_kernel__)
-static int tap_open(char *ifname, int ifname_size)
+static int tap_open(char *ifname, int ifname_size, int *vnet_hdr)
 {
     int fd;
     char *dev;
@@ -1800,7 +1803,7 @@ static int tap_open(char *ifname, int ifname_size, int *vnet_hdr)
     return fd;
 }
 #elif defined (_AIX)
-static int tap_open(char *ifname, int ifname_size)
+static int tap_open(char *ifname, int ifname_size, int *vnet_hdr)
 {
     fprintf (stderr, "no tap on AIX\n");
     return -1;
@@ -1819,7 +1822,6 @@ static int tap_open(char *ifname, int ifname_size, int *vnet_hdr)
     memset(&ifr, 0, sizeof(ifr));
     ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
 
-#if defined(TUNGETFEATURES) && defined(IFF_VNET_HDR)
     {
         unsigned int features;
 
@@ -1829,7 +1831,6 @@ static int tap_open(char *ifname, int ifname_size, int *vnet_hdr)
             ifr.ifr_flags |= IFF_VNET_HDR;
         }
     }
-#endif
 
     if (ifname[0] != '\0')
         pstrcpy(ifr.ifr_name, IFNAMSIZ, ifname);
@@ -1896,8 +1897,7 @@ static TAPState *net_tap_init(VLANState *vlan, const char *model,
                               const char *setup_script, const char *down_script)
 {
     TAPState *s;
-    int fd;
-    int vnet_hdr;
+    int fd, vnet_hdr;
     char ifname[128];
 
     if (ifname1 != NULL)
