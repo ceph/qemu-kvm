@@ -46,7 +46,7 @@
 #include <net/if_tap.h>
 #endif
 #ifdef __linux__
-#include <linux/if_tun.h>
+#include "tap-linux.h"
 #endif
 #include <arpa/inet.h>
 #include <dirent.h>
@@ -1358,10 +1358,8 @@ static void tap_writable(void *opaque)
     qemu_flush_queued_packets(s->vc);
 }
 
-static ssize_t tap_receive_iov(VLANClientState *vc, const struct iovec *iov,
-                               int iovcnt)
+static ssize_t tap_write_packet(TAPState *s, const struct iovec *iov, int iovcnt)
 {
-    TAPState *s = vc->opaque;
     ssize_t len;
 
     do {
@@ -1376,50 +1374,58 @@ static ssize_t tap_receive_iov(VLANClientState *vc, const struct iovec *iov,
     return len;
 }
 
+static ssize_t tap_receive_iov(VLANClientState *vc, const struct iovec *iov,
+                               int iovcnt)
+{
+    TAPState *s = vc->opaque;
+
+    return tap_write_packet(s, iov, iovcnt);
+}
+
 static ssize_t tap_receive(VLANClientState *vc, const uint8_t *buf, size_t size)
 {
+    TAPState *s = vc->opaque;
     struct iovec iov[2];
-    int i = 0;
+    int iovcnt = 0;
 
 #ifdef IFF_VNET_HDR
-    TAPState *s = vc->opaque;
     struct virtio_net_hdr hdr = { 0, };
 
     if (s->has_vnet_hdr && !s->using_vnet_hdr) {
-        iov[i].iov_base = &hdr;
-        iov[i].iov_len  = sizeof(hdr);
-        i++;
+        iov[iovcnt].iov_base = &hdr;
+        iov[iovcnt].iov_len  = sizeof(hdr);
+        iovcnt++;
     }
 #endif
 
-    iov[i].iov_base = (char *) buf;
-    iov[i].iov_len  = size;
-    i++;
+    iov[iovcnt].iov_base = (char *)buf;
+    iov[iovcnt].iov_len  = size;
+    iovcnt++;
 
-    return tap_receive_iov(vc, iov, i);
+    return tap_write_packet(s, iov, iovcnt);
 }
 
 static ssize_t tap_receive_raw(VLANClientState *vc, const uint8_t *buf, size_t size)
 {
+    TAPState *s = vc->opaque;
     struct iovec iov[2];
-    int i = 0;
+    int iovcnt = 0;
 
 #ifdef IFF_VNET_HDR
-    TAPState *s = vc->opaque;
     struct virtio_net_hdr hdr = { 0, };
 
-    if (s->has_vnet_hdr && s->using_vnet_hdr) {
-        iov[i].iov_base = &hdr;
-        iov[i].iov_len  = sizeof(hdr);
-        i++;
+    if (s->has_vnet_hdr) {
+        iov[iovcnt].iov_base = &hdr;
+        iov[iovcnt].iov_len  = sizeof(hdr);
+        iovcnt++;
     }
 #endif
 
-    iov[i].iov_base = (char *) buf;
-    iov[i].iov_len  = size;
-    i++;
+    iov[iovcnt].iov_base = (char *)buf;
+    iov[iovcnt].iov_len  = size;
+    iovcnt++;
 
-    return tap_receive_iov(vc, iov, i);
+    return tap_write_packet(s, iov, iovcnt);
 }
 
 static int tap_can_send(void *opaque)
@@ -1480,7 +1486,6 @@ static void tap_send(void *opaque)
     } while (size > 0);
 }
 
-#ifdef TUNSETSNDBUF
 /* sndbuf should be set to a value lower than the tx queue
  * capacity of any destination network interface.
  * Ethernet NICs generally have txqueuelen=1000, so 1Mb is
@@ -1503,12 +1508,6 @@ static int tap_set_sndbuf(TAPState *s, QemuOpts *opts)
     }
     return 0;
 }
-#else
-static int tap_set_sndbuf(TAPState *s, QemuOpts *opts)
-{
-    return 0;
-}
-#endif /* TUNSETSNDBUF */
 
 int tap_has_vnet_hdr(void *opaque)
 {
@@ -3198,12 +3197,10 @@ static struct {
                 .name = "downscript",
                 .type = QEMU_OPT_STRING,
                 .help = "script to shut down the interface",
-#ifdef TUNSETSNDBUF
             }, {
                 .name = "sndbuf",
                 .type = QEMU_OPT_SIZE,
                 .help = "send buffer limit"
-#endif
             },
             { /* end of list */ }
         },
