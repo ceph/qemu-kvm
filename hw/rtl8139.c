@@ -3465,11 +3465,10 @@ static int pci_rtl8139_init(PCIDevice *dev)
 
     qemu_macaddr_default_if_unset(&s->conf.macaddr);
     rtl8139_reset(&s->dev.qdev);
-    s->vc = qemu_new_vlan_client(NET_CLIENT_TYPE_NIC,
-                                 s->conf.vlan, s->conf.peer,
+    s->vc = qemu_new_vlan_client(s->conf.vlan, s->conf.peer,
                                  dev->qdev.info->name, dev->qdev.id,
                                  rtl8139_can_receive, rtl8139_receive, NULL,
-                                 NULL, rtl8139_cleanup, s);
+                                 rtl8139_cleanup, s);
     qemu_format_nic_info_str(s->vc, s->conf.macaddr.a);
 
     s->cplus_txbuffer = NULL;
