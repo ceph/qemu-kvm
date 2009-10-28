@@ -836,10 +836,10 @@ VirtIODevice *virtio_net_init(DeviceState *dev, NICConf *conf)
     n->ctrl_vq = virtio_add_queue(&n->vdev, 64, virtio_net_handle_ctrl);
     qemu_macaddr_default_if_unset(&conf->macaddr);
     n->status = VIRTIO_NET_S_LINK_UP;
-    n->vc = qemu_new_vlan_client(NET_CLIENT_TYPE_NIC, conf->vlan, conf->peer,
+    n->vc = qemu_new_vlan_client(conf->vlan, conf->peer,
                                  dev->info->name, dev->id,
                                  virtio_net_can_receive,
-                                 virtio_net_receive, NULL, NULL,
+                                 virtio_net_receive, NULL,
                                  virtio_net_cleanup, n);
     n->vc->link_status_changed = virtio_net_set_link_status;
     n->vc->receive_raw = virtio_net_receive_raw;
