@@ -63,7 +63,7 @@ static int isa_ne2000_initfn(ISADevice *dev)
     qemu_macaddr_default_if_unset(&s->c.macaddr);
     ne2000_reset(s);
 
-    s->vc = qemu_new_vlan_client(s->c.vlan, s->c.peer,
+    s->vc = qemu_new_vlan_client(NET_CLIENT_TYPE_NIC, s->c.vlan, s->c.peer,
                                  dev->qdev.info->name, dev->qdev.id,
                                  ne2000_can_receive, ne2000_receive, NULL,
                                  isa_ne2000_cleanup, s);

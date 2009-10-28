@@ -26,6 +26,16 @@ typedef struct NICConf {
 
 /* VLANs support */
 
+typedef enum {
+    NET_CLIENT_TYPE_NONE,
+    NET_CLIENT_TYPE_NIC,
+    NET_CLIENT_TYPE_SLIRP,
+    NET_CLIENT_TYPE_TAP,
+    NET_CLIENT_TYPE_SOCKET,
+    NET_CLIENT_TYPE_VDE,
+    NET_CLIENT_TYPE_DUMP
+} net_client_type;
+
 typedef int (NetCanReceive)(VLANClientState *);
 typedef ssize_t (NetReceive)(VLANClientState *, const uint8_t *, size_t);
 typedef ssize_t (NetReceiveIOV)(VLANClientState *, const struct iovec *, int);
@@ -34,6 +44,7 @@ typedef void (LinkStatusChanged)(VLANClientState *);
 typedef void (SetOffload)(VLANClientState *, int, int, int, int, int);
 
 struct VLANClientState {
+    net_client_type type;
     NetReceive *receive;
     NetReceive *receive_raw;
     NetReceiveIOV *receive_iov;
@@ -64,7 +75,8 @@ struct VLANState {
 
 VLANState *qemu_find_vlan(int id, int allocate);
 VLANClientState *qemu_find_netdev(const char *id);
-VLANClientState *qemu_new_vlan_client(VLANState *vlan,
+VLANClientState *qemu_new_vlan_client(net_client_type code,
+                                      VLANState *vlan,
                                       VLANClientState *peer,
                                       const char *model,
                                       const char *name,

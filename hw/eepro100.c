@@ -1706,7 +1706,8 @@ static int nic_init(PCIDevice *pci_dev, uint32_t device)
 
     nic_reset(s);
 
-    s->vc = qemu_new_vlan_client(s->conf.vlan, s->conf.peer,
+    s->vc = qemu_new_vlan_client(NET_CLIENT_TYPE_NIC,
+                                 s->conf.vlan, s->conf.peer,
                                  pci_dev->qdev.info->name, pci_dev->qdev.id,
                                  nic_can_receive, nic_receive, NULL,
                                  nic_cleanup, s);

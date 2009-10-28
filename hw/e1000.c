@@ -1102,7 +1102,8 @@ static int pci_e1000_init(PCIDevice *pci_dev)
     checksum = (uint16_t) EEPROM_SUM - checksum;
     d->eeprom_data[EEPROM_CHECKSUM_REG] = checksum;
 
-    d->vc = qemu_new_vlan_client(d->conf.vlan, d->conf.peer,
+    d->vc = qemu_new_vlan_client(NET_CLIENT_TYPE_NIC,
+                                 d->conf.vlan, d->conf.peer,
                                  d->dev.qdev.info->name, d->dev.qdev.id,
                                  e1000_can_receive, e1000_receive, NULL,
                                  e1000_cleanup, d);

@@ -1896,7 +1896,8 @@ int pcnet_common_init(DeviceState *dev, PCNetState *s,
     s->poll_timer = qemu_new_timer(vm_clock, pcnet_poll_timer, s);
 
     qemu_macaddr_default_if_unset(&s->conf.macaddr);
-    s->vc = qemu_new_vlan_client(s->conf.vlan, s->conf.peer,
+    s->vc = qemu_new_vlan_client(NET_CLIENT_TYPE_NIC,
+                                 s->conf.vlan, s->conf.peer,
                                  dev->info->name, dev->id,
                                  pcnet_can_receive, pcnet_receive, NULL,
                                  cleanup, s);

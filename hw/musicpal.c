@@ -377,7 +377,8 @@ static int mv88w8618_eth_init(SysBusDevice *dev)
     mv88w8618_eth_state *s = FROM_SYSBUS(mv88w8618_eth_state, dev);
 
     sysbus_init_irq(dev, &s->irq);
-    s->vc = qemu_new_vlan_client(s->conf.vlan, s->conf.peer,
+    s->vc = qemu_new_vlan_client(NET_CLIENT_TYPE_NIC,
+                                 s->conf.vlan, s->conf.peer,
                                  dev->qdev.info->name, dev->qdev.id,
                                  eth_can_receive, eth_receive, NULL,
                                  eth_cleanup, s);

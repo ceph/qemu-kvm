@@ -711,7 +711,8 @@ static int smc91c111_init1(SysBusDevice *dev)
 
     smc91c111_reset(s);
 
-    s->vc = qemu_new_vlan_client(s->conf.vlan, s->conf.peer,
+    s->vc = qemu_new_vlan_client(NET_CLIENT_TYPE_NIC,
+                                 s->conf.vlan, s->conf.peer,
                                  dev->qdev.info->name, dev->qdev.id,
                                  smc91c111_can_receive, smc91c111_receive, NULL,
                                  smc91c111_cleanup, s);

@@ -327,7 +327,8 @@ static ssize_t qemu_deliver_packet_iov(VLANClientState *sender,
                                        int iovcnt,
                                        void *opaque);
 
-VLANClientState *qemu_new_vlan_client(VLANState *vlan,
+VLANClientState *qemu_new_vlan_client(net_client_type type,
+                                      VLANState *vlan,
                                       VLANClientState *peer,
                                       const char *model,
                                       const char *name,
@@ -341,6 +342,7 @@ VLANClientState *qemu_new_vlan_client(VLANState *vlan,
 
     vc = qemu_mallocz(sizeof(VLANClientState));
 
+    vc->type = type;
     vc->model = qemu_strdup(model);
     if (name)
         vc->name = qemu_strdup(name);
@@ -904,7 +906,8 @@ static int net_slirp_init(VLANState *vlan, const char *model,
     }
 #endif
 
-    s->vc = qemu_new_vlan_client(vlan, NULL, model, name, NULL,
+    s->vc = qemu_new_vlan_client(NET_CLIENT_TYPE_SLIRP,
+                                 vlan, NULL, model, name, NULL,
                                  slirp_receive, NULL,
                                  net_slirp_cleanup, s);
     snprintf(s->vc->info_str, sizeof(s->vc->info_str),
@@ -1627,7 +1630,8 @@ static TAPState *net_tap_fd_init(VLANState *vlan,
     s = qemu_mallocz(sizeof(TAPState));
     s->fd = fd;
     s->has_vnet_hdr = vnet_hdr != 0;
-    s->vc = qemu_new_vlan_client(vlan, NULL, model, name, NULL,
+    s->vc = qemu_new_vlan_client(NET_CLIENT_TYPE_TAP,
+                                 vlan, NULL, model, name, NULL,
                                  tap_receive, tap_receive_iov,
                                  tap_cleanup, s);
     s->vc->receive_raw = tap_receive_raw;
@@ -1643,12 +1647,12 @@ static TAPState *net_tap_fd_init(VLANState *vlan,
     tap_set_offload(s->vc, 0, 0, 0, 0, 0);
 #endif
     tap_read_poll(s, 1);
-    snprintf(s->vc->info_str, sizeof(s->vc->info_str), "fd=%d", fd);
     return s;
 }
 
 #if defined (CONFIG_BSD) || defined (__FreeBSD_kernel__)
-static int tap_open(char *ifname, int ifname_size, int *vnet_hdr)
+static int tap_open(char *ifname, int ifname_size,
+                    int *vnet_hdr, int vnet_hdr_required)
 {
     int fd;
     char *dev;
@@ -1790,7 +1794,8 @@ static int tap_alloc(char *dev, size_t dev_size)
     return tap_fd;
 }
 
-static int tap_open(char *ifname, int ifname_size, int *vnet_hdr)
+static int tap_open(char *ifname, int ifname_size,
+                    int *vnet_hdr, int vnet_hdr_required)
 {
     char  dev[10]="";
     int fd;
@@ -1803,13 +1808,15 @@ static int tap_open(char *ifname, int ifname_size, int *vnet_hdr)
     return fd;
 }
 #elif defined (_AIX)
-static int tap_open(char *ifname, int ifname_size, int *vnet_hdr)
+static int tap_open(char *ifname, int ifname_size,
+                    int *vnet_hdr, int vnet_hdr_required)
 {
     fprintf (stderr, "no tap on AIX\n");
     return -1;
 }
 #else
-static int tap_open(char *ifname, int ifname_size, int *vnet_hdr)
+static int tap_open(char *ifname, int ifname_size,
+                    int *vnet_hdr, int vnet_hdr_required)
 {
     struct ifreq ifr;
     int fd, ret;
@@ -1822,13 +1829,20 @@ static int tap_open(char *ifname, int ifname_size, int *vnet_hdr)
     memset(&ifr, 0, sizeof(ifr));
     ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
 
-    {
+    if (*vnet_hdr) {
         unsigned int features;
 
         if (ioctl(fd, TUNGETFEATURES, &features) == 0 &&
             features & IFF_VNET_HDR) {
             *vnet_hdr = 1;
             ifr.ifr_flags |= IFF_VNET_HDR;
+        }
+
+        if (vnet_hdr_required && !*vnet_hdr) {
+            qemu_error("vnet_hdr=1 requested, but no kernel "
+                       "support for IFF_VNET_HDR available");
+            close(fd);
+            return -1;
         }
     }
 
@@ -1892,38 +1906,40 @@ static int launch_script(const char *setup_script, const char *ifname, int fd)
     return -1;
 }
 
-static TAPState *net_tap_init(VLANState *vlan, const char *model,
-                              const char *name, const char *ifname1,
-                              const char *setup_script, const char *down_script)
+static int net_tap_init(QemuOpts *opts, int *vnet_hdr)
 {
-    TAPState *s;
-    int fd, vnet_hdr;
-    char ifname[128];
+    int fd, vnet_hdr_required;
+    char ifname[128] = {0,};
+    const char *setup_script;
 
-    if (ifname1 != NULL)
-        pstrcpy(ifname, sizeof(ifname), ifname1);
-    else
-        ifname[0] = '\0';
-    vnet_hdr = 0;
-    TFR(fd = tap_open(ifname, sizeof(ifname), &vnet_hdr));
-    if (fd < 0)
-        return NULL;
+    if (qemu_opt_get(opts, "ifname")) {
+        pstrcpy(ifname, sizeof(ifname), qemu_opt_get(opts, "ifname"));
+    }
 
-    if (!setup_script || !strcmp(setup_script, "no"))
-        setup_script = "";
-    if (setup_script[0] != '\0' &&
+    *vnet_hdr = qemu_opt_get_bool(opts, "vnet_hdr", 1);
+    if (qemu_opt_get(opts, "vnet_hdr")) {
+        vnet_hdr_required = *vnet_hdr;
+    } else {
+        vnet_hdr_required = 0;
+    }
+
+    TFR(fd = tap_open(ifname, sizeof(ifname), vnet_hdr, vnet_hdr_required));
+    if (fd < 0) {
+        return -1;
+    }
+
+    setup_script = qemu_opt_get(opts, "script");
+    if (setup_script &&
+        setup_script[0] != '\0' &&
+        strcmp(setup_script, "no") != 0 &&
         launch_script(setup_script, ifname, fd)) {
-        return NULL;
+        close(fd);
+        return -1;
     }
-    s = net_tap_fd_init(vlan, model, name, fd, vnet_hdr);
-    snprintf(s->vc->info_str, sizeof(s->vc->info_str),
-             "ifname=%s,script=%s,downscript=%s",
-             ifname, setup_script, down_script);
-    if (down_script && strcmp(down_script, "no")) {
-        snprintf(s->down_script, sizeof(s->down_script), "%s", down_script);
-        snprintf(s->down_script_arg, sizeof(s->down_script_arg), "%s", ifname);
-    }
-    return s;
+
+    qemu_opt_set(opts, "ifname", ifname);
+
+    return fd;
 }
 
 #endif /* !_WIN32 */
@@ -1986,7 +2002,8 @@ static int net_vde_init(VLANState *vlan, const char *model,
         free(s);
         return -1;
     }
-    s->vc = qemu_new_vlan_client(vlan, NULL, model, name, NULL,
+    s->vc = qemu_new_vlan_client(NET_CLIENT_TYPE_VDE,
+                                 vlan, NULL, model, name, NULL,
                                  vde_receive, NULL,
                                  vde_cleanup, s);
     qemu_set_fd_handler(vde_datafd(s->vde), vde_to_qemu, NULL, s);
@@ -2226,7 +2243,8 @@ static NetSocketState *net_socket_fd_init_dgram(VLANState *vlan,
     s = qemu_mallocz(sizeof(NetSocketState));
     s->fd = fd;
 
-    s->vc = qemu_new_vlan_client(vlan, NULL, model, name, NULL,
+    s->vc = qemu_new_vlan_client(NET_CLIENT_TYPE_SOCKET,
+                                 vlan, NULL, model, name, NULL,
                                  net_socket_receive_dgram, NULL,
                                  net_socket_cleanup, s);
     qemu_set_fd_handler(s->fd, net_socket_send_dgram, NULL, s);
@@ -2255,7 +2273,8 @@ static NetSocketState *net_socket_fd_init_stream(VLANState *vlan,
     NetSocketState *s;
     s = qemu_mallocz(sizeof(NetSocketState));
     s->fd = fd;
-    s->vc = qemu_new_vlan_client(vlan, NULL, model, name, NULL,
+    s->vc = qemu_new_vlan_client(NET_CLIENT_TYPE_SOCKET,
+                                 vlan, NULL, model, name, NULL,
                                  net_socket_receive, NULL,
                                  net_socket_cleanup, s);
     snprintf(s->vc->info_str, sizeof(s->vc->info_str),
@@ -2537,7 +2556,8 @@ static int net_dump_init(VLANState *vlan, const char *device,
         return -1;
     }
 
-    s->pcap_vc = qemu_new_vlan_client(vlan, NULL, device, name, NULL,
+    s->pcap_vc = qemu_new_vlan_client(NET_CLIENT_TYPE_DUMP,
+                                      vlan, NULL, device, name, NULL,
                                       dump_receive, NULL,
                                       net_dump_cleanup, s);
     snprintf(s->pcap_vc->info_str, sizeof(s->pcap_vc->info_str),
@@ -2851,14 +2871,14 @@ static int net_init_tap(QemuOpts *opts,
                         VLANState *vlan)
 {
     TAPState *s;
+    int fd, vnet_hdr;
 
     if (qemu_opt_get(opts, "fd")) {
-        int fd;
-
         if (qemu_opt_get(opts, "ifname") ||
             qemu_opt_get(opts, "script") ||
-            qemu_opt_get(opts, "downscript")) {
-            qemu_error("ifname=, script= and downscript= is invalid with fd=\n");
+            qemu_opt_get(opts, "downscript") ||
+            qemu_opt_get(opts, "vnet_hdr")) {
+            qemu_error("ifname=, script=, downscript= and vnet_hdr= is invalid with fd=\n");
             return -1;
         }
 
@@ -2869,10 +2889,31 @@ static int net_init_tap(QemuOpts *opts,
 
         fcntl(fd, F_SETFL, O_NONBLOCK);
 
-        s = net_tap_fd_init(vlan, "tap", name, fd, tap_probe_vnet_hdr(fd));
-        if (!s) {
-            close(fd);
+        vnet_hdr = tap_probe_vnet_hdr(fd);
+    } else {
+        if (!qemu_opt_get(opts, "script")) {
+            qemu_opt_set(opts, "script", DEFAULT_NETWORK_SCRIPT);
         }
+
+        if (!qemu_opt_get(opts, "downscript")) {
+            qemu_opt_set(opts, "downscript", DEFAULT_NETWORK_DOWN_SCRIPT);
+        }
+
+        fd = net_tap_init(opts, &vnet_hdr);
+    }
+
+    s = net_tap_fd_init(vlan, "tap", name, fd, vnet_hdr);
+    if (!s) {
+        close(fd);
+        return -1;
+    }
+
+    if (tap_set_sndbuf(s, opts) < 0) {
+        return -1;
+    }
+
+    if (qemu_opt_get(opts, "fd")) {
+        snprintf(s->vc->info_str, sizeof(s->vc->info_str), "fd=%d", fd);
     } else {
         const char *ifname, *script, *downscript;
 
@@ -2880,22 +2921,14 @@ static int net_init_tap(QemuOpts *opts,
         script     = qemu_opt_get(opts, "script");
         downscript = qemu_opt_get(opts, "downscript");
 
-        if (!script) {
-            script = DEFAULT_NETWORK_SCRIPT;
+        snprintf(s->vc->info_str, sizeof(s->vc->info_str),
+                 "ifname=%s,script=%s,downscript=%s",
+                 ifname, script, downscript);
+
+        if (strcmp(downscript, "no") != 0) {
+            snprintf(s->down_script, sizeof(s->down_script), "%s", downscript);
+            snprintf(s->down_script_arg, sizeof(s->down_script_arg), "%s", ifname);
         }
-        if (!downscript) {
-            downscript = DEFAULT_NETWORK_DOWN_SCRIPT;
-        }
-
-        s = net_tap_init(vlan, "tap", name, ifname, script, downscript);
-    }
-
-    if (!s) {
-        return -1;
-    }
-
-    if (tap_set_sndbuf(s, opts) < 0) {
-        return -1;
     }
 
     if (vlan) {
@@ -3201,6 +3234,10 @@ static struct {
                 .name = "sndbuf",
                 .type = QEMU_OPT_SIZE,
                 .help = "send buffer limit"
+            }, {
+                .name = "vnet_hdr",
+                .type = QEMU_OPT_BOOL,
+                .help = "enable the IFF_VNET_HDR flag on the tap interface"
             },
             { /* end of list */ }
         },

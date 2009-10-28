@@ -725,7 +725,7 @@ static int pci_ne2000_init(PCIDevice *pci_dev)
 
     qemu_macaddr_default_if_unset(&s->c.macaddr);
     ne2000_reset(s);
-    s->vc = qemu_new_vlan_client(s->c.vlan, s->c.peer,
+    s->vc = qemu_new_vlan_client(NET_CLIENT_TYPE_NIC, s->c.vlan, s->c.peer,
                                  pci_dev->qdev.info->name, pci_dev->qdev.id,
                                  ne2000_can_receive, ne2000_receive, NULL,
                                  ne2000_cleanup, s);
