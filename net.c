@@ -281,6 +281,21 @@ void qemu_format_nic_info_str(VLANClientState *vc, uint8_t macaddr[6])
              macaddr[3], macaddr[4], macaddr[5]);
 }
 
+void qemu_macaddr_default_if_unset(MACAddr *macaddr)
+{
+    static int index = 0;
+    static const MACAddr zero = { .a = { 0,0,0,0,0,0 } };
+
+    if (memcmp(macaddr, &zero, sizeof(zero)) != 0)
+        return;
+    macaddr->a[0] = 0x52;
+    macaddr->a[1] = 0x54;
+    macaddr->a[2] = 0x00;
+    macaddr->a[3] = 0x12;
+    macaddr->a[4] = 0x34;
+    macaddr->a[5] = 0x56 + index++;
+}
+
 static char *assign_name(VLANClientState *vc1, const char *model)
 {
     VLANState *vlan;
@@ -2559,7 +2574,7 @@ VLANState *qemu_find_vlan(int id, int allocate)
     return vlan;
 }
 
-static VLANClientState *qemu_find_netdev(const char *id)
+VLANClientState *qemu_find_netdev(const char *id)
 {
     VLANClientState *vc;
 

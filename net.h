@@ -7,6 +7,23 @@
 #include "qemu-option.h"
 #include "net-queue.h"
 
+struct MACAddr {
+    uint8_t a[6];
+};
+
+/* qdev nic properties */
+
+typedef struct NICConf {
+    MACAddr macaddr;
+    VLANState *vlan;
+    VLANClientState *peer;
+} NICConf;
+
+#define DEFINE_NIC_PROPERTIES(_state, _conf)                            \
+    DEFINE_PROP_MACADDR("mac",   _state, _conf.macaddr),                \
+    DEFINE_PROP_VLAN("vlan",     _state, _conf.vlan),                   \
+    DEFINE_PROP_NETDEV("netdev", _state, _conf.peer)
+
 /* VLANs support */
 
 typedef int (NetCanReceive)(VLANClientState *);
@@ -46,6 +63,7 @@ struct VLANState {
 };
 
 VLANState *qemu_find_vlan(int id, int allocate);
+VLANClientState *qemu_find_netdev(const char *id);
 VLANClientState *qemu_new_vlan_client(VLANState *vlan,
                                       VLANClientState *peer,
                                       const char *model,
@@ -69,6 +87,7 @@ ssize_t qemu_send_packet_async(VLANClientState *vc, const uint8_t *buf,
 void qemu_purge_queued_packets(VLANClientState *vc);
 void qemu_flush_queued_packets(VLANClientState *vc);
 void qemu_format_nic_info_str(VLANClientState *vc, uint8_t macaddr[6]);
+void qemu_macaddr_default_if_unset(MACAddr *macaddr);
 int qemu_show_nic_models(const char *arg, const char *const *models);
 void qemu_check_nic_model(NICInfo *nd, const char *model);
 int qemu_find_nic_model(NICInfo *nd, const char * const *models,
@@ -160,5 +179,6 @@ VLANClientState *qdev_get_vlan_client(DeviceState *dev,
                                       NetReceiveIOV *receive_iov,
                                       NetCleanup *cleanup,
                                       void *opaque);
+void qdev_set_nic_properties(DeviceState *dev, NICInfo *nd);
 
 #endif

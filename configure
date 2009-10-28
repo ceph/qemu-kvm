@@ -1707,6 +1707,36 @@ if compile_prog "" "" ; then
   eventfd=yes
 fi
 
+# check for fallocate
+fallocate=no
+cat > $TMPC << EOF
+#include <fcntl.h>
+
+int main(void)
+{
+    fallocate(0, 0, 0, 0);
+    return 0;
+}
+EOF
+if $cc $ARCH_CFLAGS -o $TMPE $TMPC 2> /dev/null ; then
+  fallocate=yes
+fi
+
+# check for dup3
+dup3=no
+cat > $TMPC << EOF
+#include <unistd.h>
+
+int main(void)
+{
+    dup3(0, 0, 0);
+    return 0;
+}
+EOF
+if $cc $ARCH_CFLAGS -o $TMPE $TMPC 2> /dev/null ; then
+  dup3=yes
+fi
+
 # Check if tools are available to build documentation.
 if test "$docs" != "no" ; then
   if test -x "`which texi2html 2>/dev/null`" -a \
@@ -1802,6 +1832,23 @@ int main(void) { struct s { int f; }; return offsetof(struct s, f); }
 EOF
 if compile_prog "" "" ; then
     need_offsetof=no
+fi
+
+##########################################
+# check if the compiler understands attribute warn_unused_result
+#
+# This could be smarter, but gcc -Werror does not error out even when warning
+# about attribute warn_unused_result
+
+gcc_attribute_warn_unused_result=no
+cat > $TMPC << EOF
+#if defined(__GNUC__) && (__GNUC__ < 4) && defined(__GNUC_MINOR__) && (__GNUC__ < 4)
+#error gcc 3.3 or older
+#endif
+int main(void) { return 0;}
+EOF
+if compile_prog "" ""; then
+    gcc_attribute_warn_unused_result=yes
 fi
 
 ##########################################
@@ -2106,6 +2153,12 @@ fi
 if test "$eventfd" = "yes" ; then
   echo "CONFIG_EVENTFD=y" >> $config_host_mak
 fi
+if test "$fallocate" = "yes" ; then
+  echo "CONFIG_FALLOCATE=y" >> $config_host_mak
+fi
+if test "$dup3" = "yes" ; then
+  echo "CONFIG_DUP3=y" >> $config_host_mak
+fi
 if test "$inotify" = "yes" ; then
   echo "CONFIG_INOTIFY=y" >> $config_host_mak
 fi
@@ -2152,6 +2205,9 @@ if test "$signalfd" = "yes" ; then
 fi
 if test "$need_offsetof" = "yes" ; then
   echo "CONFIG_NEED_OFFSETOF=y" >> $config_host_mak
+fi
+if test "$gcc_attribute_warn_unused_result" = "yes" ; then
+  echo "CONFIG_GCC_ATTRIBUTE_WARN_UNUSED_RESULT=y" >> $config_host_mak
 fi
 if test "$fdatasync" = "yes" ; then
   echo "CONFIG_FDATASYNC=y" >> $config_host_mak
