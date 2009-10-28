@@ -185,19 +185,17 @@ static uint32_t virtio_net_bad_features(VirtIODevice *vdev)
 static void virtio_net_set_features(VirtIODevice *vdev, uint32_t features)
 {
     VirtIONet *n = to_virtio_net(vdev);
-    VLANClientState *host = n->vc->peer;
 
     n->mergeable_rx_bufs = !!(features & (1 << VIRTIO_NET_F_MRG_RXBUF));
 
-    if (!n->has_vnet_hdr || !host->set_offload)
-        return;
-
-    host->set_offload(host,
-                      (features >> VIRTIO_NET_F_GUEST_CSUM) & 1,
-                      (features >> VIRTIO_NET_F_GUEST_TSO4) & 1,
-                      (features >> VIRTIO_NET_F_GUEST_TSO6) & 1,
-                      (features >> VIRTIO_NET_F_GUEST_ECN)  & 1,
-                      (features >> VIRTIO_NET_F_GUEST_UFO)  & 1);
+    if (n->has_vnet_hdr) {
+        tap_set_offload(n->vc->peer,
+                        (features >> VIRTIO_NET_F_GUEST_CSUM) & 1,
+                        (features >> VIRTIO_NET_F_GUEST_TSO4) & 1,
+                        (features >> VIRTIO_NET_F_GUEST_TSO6) & 1,
+                        (features >> VIRTIO_NET_F_GUEST_ECN)  & 1,
+                        (features >> VIRTIO_NET_F_GUEST_UFO)  & 1);
+    }
 }
 
 static int virtio_net_handle_rx_mode(VirtIONet *n, uint8_t cmd,

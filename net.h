@@ -41,7 +41,6 @@ typedef ssize_t (NetReceive)(VLANClientState *, const uint8_t *, size_t);
 typedef ssize_t (NetReceiveIOV)(VLANClientState *, const struct iovec *, int);
 typedef void (NetCleanup) (VLANClientState *);
 typedef void (LinkStatusChanged)(VLANClientState *);
-typedef void (SetOffload)(VLANClientState *, int, int, int, int, int);
 
 struct VLANClientState {
     net_client_type type;
@@ -54,7 +53,6 @@ struct VLANClientState {
     NetCleanup *cleanup;
     LinkStatusChanged *link_status_changed;
     int link_down;
-    SetOffload *set_offload;
     void *opaque;
     QTAILQ_ENTRY(VLANClientState) next;
     struct VLANState *vlan;
@@ -187,5 +185,6 @@ void qdev_set_nic_properties(DeviceState *dev, NICInfo *nd);
 
 int tap_has_vnet_hdr(VLANClientState *vc);
 void tap_using_vnet_hdr(VLANClientState *vc, int using_vnet_hdr);
+void tap_set_offload(VLANClientState *vc, int csum, int tso4, int tso6, int ecn, int ufo);
 
 #endif

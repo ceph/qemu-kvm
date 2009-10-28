@@ -1303,6 +1303,9 @@ int tap_has_vnet_hdr(VLANClientState *vc)
 void tap_using_vnet_hdr(VLANClientState *vc, int using_vnet_hdr)
 {
 }
+void tap_set_offload(VLANClientState *vc, int csum, int tso4, int tso6, int ecn, int ufo)
+{
+}
 #else /* !defined(_WIN32) */
 
 /* Maximum GSO packet size (64k) plus plenty of room for
@@ -1549,40 +1552,31 @@ int tap_has_ufo(void *opaque)
     return s ? s->has_ufo : 0;
 }
 
-#ifdef TUNSETOFFLOAD
-
-#ifndef TUN_F_UFO
-#define TUN_F_UFO	0x10
-#endif
-
-static void tap_set_offload(VLANClientState *vc, int csum, int tso4, int tso6,
-			    int ecn, int ufo)
+void tap_set_offload(VLANClientState *vc, int csum, int tso4, int tso6, int ecn, int ufo)
 {
     TAPState *s = vc->opaque;
     unsigned int offload = 0;
 
     if (csum) {
-	offload |= TUN_F_CSUM;
-	if (tso4)
-	    offload |= TUN_F_TSO4;
-	if (tso6)
-	    offload |= TUN_F_TSO6;
-	if ((tso4 || tso6) && ecn)
-	    offload |= TUN_F_TSO_ECN;
-	if (ufo)
-	    offload |= TUN_F_UFO;
+        offload |= TUN_F_CSUM;
+        if (tso4)
+            offload |= TUN_F_TSO4;
+        if (tso6)
+            offload |= TUN_F_TSO6;
+        if ((tso4 || tso6) && ecn)
+            offload |= TUN_F_TSO_ECN;
+        if (ufo)
+            offload |= TUN_F_UFO;
     }
 
     if (ioctl(s->fd, TUNSETOFFLOAD, offload) != 0) {
-        /* Try without UFO */
         offload &= ~TUN_F_UFO;
         if (ioctl(s->fd, TUNSETOFFLOAD, offload) != 0) {
-	    fprintf(stderr, "TUNSETOFFLOAD ioctl() failed: %s\n",
-		strerror(errno));
+            fprintf(stderr, "TUNSETOFFLOAD ioctl() failed: %s\n",
+                    strerror(errno));
         }
     }
 }
-#endif /* TUNSETOFFLOAD */
 
 static void tap_cleanup(VLANClientState *vc)
 {
@@ -1608,9 +1602,7 @@ static TAPState *net_tap_fd_init(VLANState *vlan,
                                  int vnet_hdr)
 {
     TAPState *s;
-#ifdef TUNSETOFFLOAD
     unsigned int offload;
-#endif
 
     s = qemu_mallocz(sizeof(TAPState));
     s->fd = fd;
@@ -1620,8 +1612,6 @@ static TAPState *net_tap_fd_init(VLANState *vlan,
                                  vlan, NULL, model, name, NULL,
                                  tap_receive, tap_receive_raw,
                                  tap_receive_iov, tap_cleanup, s);
-#ifdef TUNSETOFFLOAD
-    s->vc->set_offload = tap_set_offload;
 
     s->has_ufo = 0;
     /* Check if tap supports UFO */
@@ -1630,7 +1620,7 @@ static TAPState *net_tap_fd_init(VLANState *vlan,
        s->has_ufo = 1;
 
     tap_set_offload(s->vc, 0, 0, 0, 0, 0);
-#endif
+
     tap_read_poll(s, 1);
     return s;
 }
