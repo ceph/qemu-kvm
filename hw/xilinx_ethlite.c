@@ -220,11 +220,10 @@ static int xilinx_ethlite_init(SysBusDevice *dev)
     sysbus_init_mmio(dev, R_MAX * 4, regs);
 
     qemu_macaddr_default_if_unset(&s->conf.macaddr);
-    s->vc = qemu_new_vlan_client(NET_CLIENT_TYPE_NIC,
-                                 s->conf.vlan, s->conf.peer,
+    s->vc = qemu_new_vlan_client(s->conf.vlan, s->conf.peer,
                                  dev->qdev.info->name, dev->qdev.id,
                                  eth_can_rx, eth_rx, NULL,
-                                 NULL, eth_cleanup, s);
+                                 eth_cleanup, s);
     qemu_format_nic_info_str(s->vc, s->conf.macaddr.a);
     return 0;
 }
