@@ -109,8 +109,6 @@ void do_set_link(Monitor *mon, const QDict *qdict);
 
 void do_info_usernet(Monitor *mon);
 
-int tap_has_ufo(void *opaque);
-
 /* NIC info */
 
 #define MAX_NICS 8
@@ -183,6 +181,7 @@ void net_host_device_remove(Monitor *mon, const QDict *qdict);
 
 void qdev_set_nic_properties(DeviceState *dev, NICInfo *nd);
 
+int tap_has_ufo(VLANClientState *vc);
 int tap_has_vnet_hdr(VLANClientState *vc);
 void tap_using_vnet_hdr(VLANClientState *vc, int using_vnet_hdr);
 void tap_set_offload(VLANClientState *vc, int csum, int tso4, int tso6, int ecn, int ufo);

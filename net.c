@@ -101,7 +101,6 @@
 #include <libvdeplug.h>
 #endif
 
-// FIXME: #include "qemu-kvm.h"
 #include "qemu-common.h"
 #include "net.h"
 #include "monitor.h"
@@ -1296,6 +1295,10 @@ void do_info_usernet(Monitor *mon)
 #endif /* CONFIG_SLIRP */
 
 #if defined(_WIN32)
+int tap_has_ufo(VLANClientState *vc)
+{
+    return 0;
+}
 int tap_has_vnet_hdr(VLANClientState *vc)
 {
     return 0;
@@ -1303,7 +1306,8 @@ int tap_has_vnet_hdr(VLANClientState *vc)
 void tap_using_vnet_hdr(VLANClientState *vc, int using_vnet_hdr)
 {
 }
-void tap_set_offload(VLANClientState *vc, int csum, int tso4, int tso6, int ecn, int ufo)
+void tap_set_offload(VLANClientState *vc, int csum, int tso4,
+                     int tso6, int ecn, int ufo)
 {
 }
 #else /* !defined(_WIN32) */
@@ -1511,6 +1515,15 @@ static int tap_set_sndbuf(TAPState *s, QemuOpts *opts)
     return 0;
 }
 
+int tap_has_ufo(VLANClientState *vc)
+{
+    TAPState *s = vc->opaque;
+
+    assert(vc->type == NET_CLIENT_TYPE_TAP);
+
+    return s->has_ufo;
+}
+
 int tap_has_vnet_hdr(VLANClientState *vc)
 {
     TAPState *s = vc->opaque;
@@ -1544,15 +1557,8 @@ static int tap_probe_vnet_hdr(int fd)
     return ifr.ifr_flags & IFF_VNET_HDR;
 }
 
-int tap_has_ufo(void *opaque)
-{
-    VLANClientState *vc = opaque;
-    TAPState *s = vc->opaque;
-
-    return s ? s->has_ufo : 0;
-}
-
-void tap_set_offload(VLANClientState *vc, int csum, int tso4, int tso6, int ecn, int ufo)
+void tap_set_offload(VLANClientState *vc, int csum, int tso4,
+                     int tso6, int ecn, int ufo)
 {
     TAPState *s = vc->opaque;
     unsigned int offload = 0;
@@ -1612,15 +1618,12 @@ static TAPState *net_tap_fd_init(VLANState *vlan,
                                  vlan, NULL, model, name, NULL,
                                  tap_receive, tap_receive_raw,
                                  tap_receive_iov, tap_cleanup, s);
-
     s->has_ufo = 0;
     /* Check if tap supports UFO */
     offload = TUN_F_CSUM | TUN_F_UFO;
     if (ioctl(s->fd, TUNSETOFFLOAD, offload) == 0)
        s->has_ufo = 1;
-
     tap_set_offload(s->vc, 0, 0, 0, 0, 0);
-
     tap_read_poll(s, 1);
     return s;
 }
