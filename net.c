@@ -1394,14 +1394,14 @@ static ssize_t tap_receive_iov(VLANClientState *vc, const struct iovec *iov,
     return tap_write_packet(s, iovp, iovcnt);
 }
 
-static ssize_t tap_receive(VLANClientState *vc, const uint8_t *buf, size_t size)
+static ssize_t tap_receive_raw(VLANClientState *vc, const uint8_t *buf, size_t size)
 {
     TAPState *s = vc->opaque;
     struct iovec iov[2];
     int iovcnt = 0;
     struct virtio_net_hdr hdr = { 0, };
 
-    if (s->has_vnet_hdr && !s->using_vnet_hdr) {
+    if (s->has_vnet_hdr) {
         iov[iovcnt].iov_base = &hdr;
         iov[iovcnt].iov_len  = sizeof(hdr);
         iovcnt++;
@@ -1414,27 +1414,19 @@ static ssize_t tap_receive(VLANClientState *vc, const uint8_t *buf, size_t size)
     return tap_write_packet(s, iov, iovcnt);
 }
 
-static ssize_t tap_receive_raw(VLANClientState *vc, const uint8_t *buf, size_t size)
+static ssize_t tap_receive(VLANClientState *vc, const uint8_t *buf, size_t size)
 {
     TAPState *s = vc->opaque;
-    struct iovec iov[2];
-    int iovcnt = 0;
+    struct iovec iov[1];
 
-#ifdef IFF_VNET_HDR
-    struct virtio_net_hdr hdr = { 0, };
-
-    if (s->has_vnet_hdr) {
-        iov[iovcnt].iov_base = &hdr;
-        iov[iovcnt].iov_len  = sizeof(hdr);
-        iovcnt++;
+    if (s->has_vnet_hdr && !s->using_vnet_hdr) {
+        return tap_receive_raw(vc, buf, size);
     }
-#endif
 
-    iov[iovcnt].iov_base = (char *)buf;
-    iov[iovcnt].iov_len  = size;
-    iovcnt++;
+    iov[0].iov_base = (char *)buf;
+    iov[0].iov_len  = size;
 
-    return tap_write_packet(s, iov, iovcnt);
+    return tap_write_packet(s, iov, 1);
 }
 
 static int tap_can_send(void *opaque)
@@ -1626,9 +1618,8 @@ static TAPState *net_tap_fd_init(VLANState *vlan,
     s->using_vnet_hdr = 0;
     s->vc = qemu_new_vlan_client(NET_CLIENT_TYPE_TAP,
                                  vlan, NULL, model, name, NULL,
-                                 tap_receive, NULL, tap_receive_iov,
-                                 tap_cleanup, s);
-    s->vc->receive_raw = tap_receive_raw;
+                                 tap_receive, tap_receive_raw,
+                                 tap_receive_iov, tap_cleanup, s);
 #ifdef TUNSETOFFLOAD
     s->vc->set_offload = tap_set_offload;
 
