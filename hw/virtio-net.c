@@ -15,11 +15,6 @@
 #include "net.h"
 #include "qemu-timer.h"
 #include "virtio-net.h"
-#ifdef CONFIG_KVM
-#include "qemu-kvm.h"
-#endif
-
-#define TAP_VNET_HDR
 
 #define VIRTIO_NET_VM_VERSION    10
 
@@ -37,6 +32,7 @@ typedef struct VirtIONet
     VLANClientState *vc;
     QEMUTimer *tx_timer;
     int tx_timer_active;
+    uint32_t has_vnet_hdr;
     struct {
         VirtQueueElement elem;
         ssize_t len;
@@ -125,8 +121,22 @@ static void virtio_net_reset(VirtIODevice *vdev)
     memset(n->vlans, 0, MAX_VLAN >> 3);
 }
 
+static int peer_has_vnet_hdr(VirtIONet *n)
+{
+    if (!n->vc->peer)
+        return 0;
+
+    if (n->vc->peer->type != NET_CLIENT_TYPE_TAP)
+        return 0;
+
+    n->has_vnet_hdr = tap_has_vnet_hdr(n->vc->peer);
+
+    return n->has_vnet_hdr;
+}
+
 static uint32_t virtio_net_get_features(VirtIODevice *vdev)
 {
+    VirtIONet *n = to_virtio_net(vdev);
     uint32_t features = (1 << VIRTIO_NET_F_MAC) |
                         (1 << VIRTIO_NET_F_MRG_RXBUF) |
                         (1 << VIRTIO_NET_F_STATUS) |
@@ -135,27 +145,24 @@ static uint32_t virtio_net_get_features(VirtIODevice *vdev)
                         (1 << VIRTIO_NET_F_CTRL_VLAN) |
                         (1 << VIRTIO_NET_F_CTRL_RX_EXTRA);
 
-#ifdef TAP_VNET_HDR
-    VirtIONet *n = to_virtio_net(vdev);
-    VLANClientState *host = QTAILQ_FIRST(&n->vc->vlan->clients);
+    if (peer_has_vnet_hdr(n)) {
+        tap_using_vnet_hdr(n->vc->peer, 1);
 
-    if (tap_has_vnet_hdr(host)) {
-        tap_using_vnet_hdr(host, 1);
         features |= (1 << VIRTIO_NET_F_CSUM);
+        features |= (1 << VIRTIO_NET_F_HOST_TSO4);
+        features |= (1 << VIRTIO_NET_F_HOST_TSO6);
+        features |= (1 << VIRTIO_NET_F_HOST_ECN);
+
         features |= (1 << VIRTIO_NET_F_GUEST_CSUM);
         features |= (1 << VIRTIO_NET_F_GUEST_TSO4);
         features |= (1 << VIRTIO_NET_F_GUEST_TSO6);
         features |= (1 << VIRTIO_NET_F_GUEST_ECN);
-        features |= (1 << VIRTIO_NET_F_HOST_TSO4);
-        features |= (1 << VIRTIO_NET_F_HOST_TSO6);
-        features |= (1 << VIRTIO_NET_F_HOST_ECN);
-        features |= (1 << VIRTIO_NET_F_MRG_RXBUF);
-        if (tap_has_ufo(host)) {
+
+        if (tap_has_ufo(n->vc->peer)) {
             features |= (1 << VIRTIO_NET_F_GUEST_UFO);
             features |= (1 << VIRTIO_NET_F_HOST_UFO);
         }
     }
-#endif
 
     return features;
 }
@@ -178,14 +185,11 @@ static uint32_t virtio_net_bad_features(VirtIODevice *vdev)
 static void virtio_net_set_features(VirtIODevice *vdev, uint32_t features)
 {
     VirtIONet *n = to_virtio_net(vdev);
-#ifdef TAP_VNET_HDR
-    VLANClientState *host = QTAILQ_FIRST(&n->vc->vlan->clients);
-#endif
+    VLANClientState *host = n->vc->peer;
 
     n->mergeable_rx_bufs = !!(features & (1 << VIRTIO_NET_F_MRG_RXBUF));
 
-#ifdef TAP_VNET_HDR
-    if (!tap_has_vnet_hdr(host) || !host->set_offload)
+    if (!n->has_vnet_hdr || !host->set_offload)
         return;
 
     host->set_offload(host,
@@ -194,7 +198,6 @@ static void virtio_net_set_features(VirtIODevice *vdev, uint32_t features)
                       (features >> VIRTIO_NET_F_GUEST_TSO6) & 1,
                       (features >> VIRTIO_NET_F_GUEST_ECN)  & 1,
                       (features >> VIRTIO_NET_F_GUEST_UFO)  & 1);
-#endif
 }
 
 static int virtio_net_handle_rx_mode(VirtIONet *n, uint8_t cmd,
@@ -377,7 +380,6 @@ static int virtio_net_can_receive(VLANClientState *vc)
     return do_virtio_net_can_receive(n, VIRTIO_NET_MAX_BUFSIZE);
 }
 
-#ifdef TAP_VNET_HDR
 /* dhclient uses AF_PACKET but doesn't pass auxdata to the kernel so
  * it never finds out that the packets don't have valid checksums.  This
  * causes dhclient to get upset.  Fedora's carried a patch for ages to
@@ -405,7 +407,6 @@ static void work_around_broken_dhclient(struct virtio_net_hdr *hdr,
         hdr->flags &= ~VIRTIO_NET_HDR_F_NEEDS_CSUM;
     }
 }
-#endif
 
 static int iov_fill(struct iovec *iov, int iovcnt, const void *buf, int count)
 {
@@ -423,7 +424,7 @@ static int iov_fill(struct iovec *iov, int iovcnt, const void *buf, int count)
 }
 
 static int receive_header(VirtIONet *n, struct iovec *iov, int iovcnt,
-                          const void *buf, size_t size, size_t hdr_len, int raw)
+                          const void *buf, size_t size, size_t hdr_len)
 {
     struct virtio_net_hdr *hdr = (struct virtio_net_hdr *)iov[0].iov_base;
     int offset = 0;
@@ -431,17 +432,11 @@ static int receive_header(VirtIONet *n, struct iovec *iov, int iovcnt,
     hdr->flags = 0;
     hdr->gso_type = VIRTIO_NET_HDR_GSO_NONE;
 
-#ifdef TAP_VNET_HDR
-    if (tap_has_vnet_hdr(QTAILQ_FIRST(&n->vc->vlan->clients))) {
-        if (!raw) {
-            memcpy(hdr, buf, sizeof(*hdr));
-        } else {
-            memset(hdr, 0, sizeof(*hdr));
-        }
+    if (n->has_vnet_hdr) {
+        memcpy(hdr, buf, sizeof(*hdr));
         offset = sizeof(*hdr);
         work_around_broken_dhclient(hdr, buf + offset, size - offset);
     }
-#endif
 
     /* We only ever receive a struct virtio_net_hdr from the tapfd,
      * but we may be passing along a larger header to the guest.
@@ -462,10 +457,9 @@ static int receive_filter(VirtIONet *n, const uint8_t *buf, int size)
     if (n->promisc)
         return 1;
 
-#ifdef TAP_VNET_HDR
-    if (tap_has_vnet_hdr(QTAILQ_FIRST(&n->vc->vlan->clients)))
+    if (n->has_vnet_hdr) {
         ptr += sizeof(struct virtio_net_hdr);
-#endif
+    }
 
     if (!memcmp(&ptr[12], vlan, sizeof(vlan))) {
         int vid = be16_to_cpup((uint16_t *)(ptr + 14)) & 0xfff;
@@ -506,7 +500,7 @@ static int receive_filter(VirtIONet *n, const uint8_t *buf, int size)
     return 0;
 }
 
-static ssize_t virtio_net_receive2(VLANClientState *vc, const uint8_t *buf, size_t size, int raw)
+static ssize_t virtio_net_receive(VLANClientState *vc, const uint8_t *buf, size_t size)
 {
     VirtIONet *n = vc->opaque;
     struct virtio_net_hdr_mrg_rxbuf *mhdr = NULL;
@@ -556,7 +550,7 @@ static ssize_t virtio_net_receive2(VLANClientState *vc, const uint8_t *buf, size
                 mhdr = (struct virtio_net_hdr_mrg_rxbuf *)sg[0].iov_base;
 
             offset += receive_header(n, sg, elem.in_num,
-                                     buf + offset, size - offset, hdr_len, raw);
+                                     buf + offset, size - offset, hdr_len);
             total += hdr_len;
         }
 
@@ -595,25 +589,10 @@ static void virtio_net_tx_complete(VLANClientState *vc, ssize_t len)
     virtio_net_flush_tx(n, n->tx_vq);
 }
 
-static ssize_t virtio_net_receive(VLANClientState *vc, const uint8_t *buf, size_t size)
-{
-    return virtio_net_receive2(vc, buf, size, 0);
-}
-
-static ssize_t virtio_net_receive_raw(VLANClientState *vc, const uint8_t *buf, size_t size)
-{
-    return virtio_net_receive2(vc, buf, size, 1);
-}
-
 /* TX */
 static void virtio_net_flush_tx(VirtIONet *n, VirtQueue *vq)
 {
     VirtQueueElement elem;
-#ifdef TAP_VNET_HDR
-    int has_vnet_hdr = tap_has_vnet_hdr(QTAILQ_FIRST(&n->vc->vlan->clients));
-#else
-    int has_vnet_hdr = 0;
-#endif
 
     if (!(n->vdev.status & VIRTIO_CONFIG_S_DRIVER_OK))
         return;
@@ -640,7 +619,7 @@ static void virtio_net_flush_tx(VirtIONet *n, VirtQueue *vq)
         }
 
         /* ignore the header if GSO is not supported */
-        if (!has_vnet_hdr) {
+        if (!n->has_vnet_hdr) {
             out_num--;
             out_sg++;
             len += hdr_len;
@@ -713,13 +692,7 @@ static void virtio_net_save(QEMUFile *f, void *opaque)
     qemu_put_be32(f, n->mac_table.in_use);
     qemu_put_buffer(f, n->mac_table.macs, n->mac_table.in_use * ETH_ALEN);
     qemu_put_buffer(f, (uint8_t *)n->vlans, MAX_VLAN >> 3);
-
-#ifdef TAP_VNET_HDR
-    qemu_put_be32(f, tap_has_vnet_hdr(QTAILQ_FIRST(&n->vc->vlan->clients)));
-#else
-    qemu_put_be32(f, 0);
-#endif
-
+    qemu_put_be32(f, n->has_vnet_hdr);
     qemu_put_byte(f, n->mac_table.multi_overflow);
     qemu_put_byte(f, n->mac_table.uni_overflow);
     qemu_put_byte(f, n->alluni);
@@ -771,14 +744,15 @@ static int virtio_net_load(QEMUFile *f, void *opaque, int version_id)
     if (version_id >= 6)
         qemu_get_buffer(f, (uint8_t *)n->vlans, MAX_VLAN >> 3);
 
-    if (version_id >= 7 && qemu_get_be32(f)) {
-#ifdef TAP_VNET_HDR
-        tap_using_vnet_hdr(QTAILQ_FIRST(&n->vc->vlan->clients), 1);
-#else
-        fprintf(stderr,
-                "virtio-net: saved image requires vnet header support\n");
-        exit(1);
-#endif
+    if (version_id >= 7) {
+        if (qemu_get_be32(f) && !peer_has_vnet_hdr(n)) {
+            qemu_error("virtio-net: saved image requires vnet_hdr=on\n");
+            return -1;
+        }
+
+        if (n->has_vnet_hdr) {
+            tap_using_vnet_hdr(n->vc->peer, 1);
+        }
     }
 
     if (version_id >= 9) {
@@ -839,8 +813,7 @@ VirtIODevice *virtio_net_init(DeviceState *dev, NICConf *conf)
     n->vc = qemu_new_vlan_client(NET_CLIENT_TYPE_NIC, conf->vlan, conf->peer,
                                  dev->info->name, dev->id,
                                  virtio_net_can_receive,
-                                 virtio_net_receive,
-                                 virtio_net_receive_raw, NULL,
+                                 virtio_net_receive, NULL, NULL,
                                  virtio_net_cleanup, n);
     n->vc->link_status_changed = virtio_net_set_link_status;
 
