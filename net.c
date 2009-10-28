@@ -318,11 +318,13 @@ static char *assign_name(VLANClientState *vc1, const char *model)
 }
 
 static ssize_t qemu_deliver_packet(VLANClientState *sender,
+                                   unsigned flags,
                                    const uint8_t *data,
                                    size_t size,
                                    int raw,
                                    void *opaque);
 static ssize_t qemu_deliver_packet_iov(VLANClientState *sender,
+                                       unsigned flags,
                                        const struct iovec *iov,
                                        int iovcnt,
                                        void *opaque);
@@ -467,6 +469,7 @@ int qemu_can_send_packet(VLANClientState *sender)
 }
 
 static ssize_t qemu_deliver_packet(VLANClientState *sender,
+                                   unsigned flags,
                                    const uint8_t *data,
                                    size_t size,
                                    int raw,
@@ -486,6 +489,7 @@ static ssize_t qemu_deliver_packet(VLANClientState *sender,
 }
 
 static ssize_t qemu_vlan_deliver_packet(VLANClientState *sender,
+                                        unsigned flags,
                                         const uint8_t *buf,
                                         size_t size,
                                         int raw,
@@ -570,7 +574,9 @@ static ssize_t qemu_send_packet_async2(VLANClientState *sender,
         queue = sender->vlan->send_queue;
     }
 
-    return qemu_net_queue_send(queue, sender, buf, size, raw, sent_cb);
+    return qemu_net_queue_send(queue, sender,
+                               QEMU_NET_PACKET_FLAG_NONE,
+                               buf, size, raw, sent_cb);
 }
 
 ssize_t qemu_send_packet_async(VLANClientState *sender,
@@ -619,6 +625,7 @@ static ssize_t calc_iov_length(const struct iovec *iov, int iovcnt)
 }
 
 static ssize_t qemu_deliver_packet_iov(VLANClientState *sender,
+                                       unsigned flags,
                                        const struct iovec *iov,
                                        int iovcnt,
                                        void *opaque)
@@ -637,6 +644,7 @@ static ssize_t qemu_deliver_packet_iov(VLANClientState *sender,
 }
 
 static ssize_t qemu_vlan_deliver_packet_iov(VLANClientState *sender,
+                                            unsigned flags,
                                             const struct iovec *iov,
                                             int iovcnt,
                                             void *opaque)
@@ -685,7 +693,9 @@ ssize_t qemu_sendv_packet_async(VLANClientState *sender,
         queue = sender->vlan->send_queue;
     }
 
-    return qemu_net_queue_send_iov(queue, sender, iov, iovcnt, sent_cb);
+    return qemu_net_queue_send_iov(queue, sender,
+                                   QEMU_NET_PACKET_FLAG_NONE,
+                                   iov, iovcnt, sent_cb);
 }
 
 ssize_t

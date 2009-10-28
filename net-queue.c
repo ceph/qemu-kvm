@@ -41,6 +41,7 @@
 struct NetPacket {
     QTAILQ_ENTRY(NetPacket) entry;
     VLANClientState *sender;
+    unsigned flags;
     int size;
     int raw;
     NetPacketSent *sent_cb;
@@ -90,6 +91,7 @@ void qemu_del_net_queue(NetQueue *queue)
 
 static ssize_t qemu_net_queue_append(NetQueue *queue,
                                      VLANClientState *sender,
+                                     unsigned flags,
                                      const uint8_t *buf,
                                      size_t size,
                                      int raw,
@@ -99,6 +101,7 @@ static ssize_t qemu_net_queue_append(NetQueue *queue,
 
     packet = qemu_malloc(sizeof(NetPacket) + size);
     packet->sender = sender;
+    packet->flags = flags;
     packet->size = size;
     packet->raw = raw;
     packet->sent_cb = sent_cb;
@@ -111,6 +114,7 @@ static ssize_t qemu_net_queue_append(NetQueue *queue,
 
 static ssize_t qemu_net_queue_append_iov(NetQueue *queue,
                                          VLANClientState *sender,
+                                         unsigned flags,
                                          const struct iovec *iov,
                                          int iovcnt,
                                          NetPacketSent *sent_cb)
@@ -126,6 +130,7 @@ static ssize_t qemu_net_queue_append_iov(NetQueue *queue,
     packet = qemu_malloc(sizeof(NetPacket) + max_len);
     packet->sender = sender;
     packet->sent_cb = sent_cb;
+    packet->flags = flags;
     packet->size = 0;
     packet->raw = 0;
 
@@ -143,6 +148,7 @@ static ssize_t qemu_net_queue_append_iov(NetQueue *queue,
 
 static ssize_t qemu_net_queue_deliver(NetQueue *queue,
                                       VLANClientState *sender,
+                                      unsigned flags,
                                       const uint8_t *data,
                                       size_t size,
                                       int raw)
@@ -150,7 +156,7 @@ static ssize_t qemu_net_queue_deliver(NetQueue *queue,
     ssize_t ret = -1;
 
     queue->delivering = 1;
-    ret = queue->deliver(sender, data, size, raw, queue->opaque);
+    ret = queue->deliver(sender, flags, data, size, raw, queue->opaque);
     queue->delivering = 0;
 
     return ret;
@@ -158,13 +164,14 @@ static ssize_t qemu_net_queue_deliver(NetQueue *queue,
 
 static ssize_t qemu_net_queue_deliver_iov(NetQueue *queue,
                                           VLANClientState *sender,
+                                          unsigned flags,
                                           const struct iovec *iov,
                                           int iovcnt)
 {
     ssize_t ret = -1;
 
     queue->delivering = 1;
-    ret = queue->deliver_iov(sender, iov, iovcnt, queue->opaque);
+    ret = queue->deliver_iov(sender, flags, iov, iovcnt, queue->opaque);
     queue->delivering = 0;
 
     return ret;
@@ -172,6 +179,7 @@ static ssize_t qemu_net_queue_deliver_iov(NetQueue *queue,
 
 ssize_t qemu_net_queue_send(NetQueue *queue,
                             VLANClientState *sender,
+                            unsigned flags,
                             const uint8_t *data,
                             size_t size,
                             int raw,
@@ -180,12 +188,12 @@ ssize_t qemu_net_queue_send(NetQueue *queue,
     ssize_t ret;
 
     if (queue->delivering) {
-        return qemu_net_queue_append(queue, sender, data, size, raw, NULL);
+        return qemu_net_queue_append(queue, sender, flags, data, size, raw, NULL);
     }
 
-    ret = qemu_net_queue_deliver(queue, sender, data, size, raw);
+    ret = qemu_net_queue_deliver(queue, sender, flags, data, size, raw);
     if (ret == 0 && sent_cb != NULL) {
-        qemu_net_queue_append(queue, sender, data, size, raw, sent_cb);
+        qemu_net_queue_append(queue, sender, flags, data, size, raw, sent_cb);
         return 0;
     }
 
@@ -196,6 +204,7 @@ ssize_t qemu_net_queue_send(NetQueue *queue,
 
 ssize_t qemu_net_queue_send_iov(NetQueue *queue,
                                 VLANClientState *sender,
+                                unsigned flags,
                                 const struct iovec *iov,
                                 int iovcnt,
                                 NetPacketSent *sent_cb)
@@ -203,12 +212,12 @@ ssize_t qemu_net_queue_send_iov(NetQueue *queue,
     ssize_t ret;
 
     if (queue->delivering) {
-        return qemu_net_queue_append_iov(queue, sender, iov, iovcnt, NULL);
+        return qemu_net_queue_append_iov(queue, sender, flags, iov, iovcnt, NULL);
     }
 
-    ret = qemu_net_queue_deliver_iov(queue, sender, iov, iovcnt);
+    ret = qemu_net_queue_deliver_iov(queue, sender, flags, iov, iovcnt);
     if (ret == 0 && sent_cb != NULL) {
-        qemu_net_queue_append_iov(queue, sender, iov, iovcnt, sent_cb);
+        qemu_net_queue_append_iov(queue, sender, flags, iov, iovcnt, sent_cb);
         return 0;
     }
 
@@ -240,6 +249,7 @@ void qemu_net_queue_flush(NetQueue *queue)
 
         ret = qemu_net_queue_deliver(queue,
                                      packet->sender,
+                                     packet->flags,
                                      packet->data,
                                      packet->size,
                                      packet->raw);
