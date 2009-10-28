@@ -51,12 +51,6 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <net/if.h>
-#ifdef __NetBSD__
-#include <net/if_tap.h>
-#endif
-#ifdef __linux__
-#include <linux/if_tun.h>
-#endif
 #include <arpa/inet.h>
 #include <dirent.h>
 #include <netdb.h>
@@ -108,7 +102,6 @@
 
 static QTAILQ_HEAD(CharDriverStateHead, CharDriverState) chardevs =
     QTAILQ_HEAD_INITIALIZER(chardevs);
-static int initial_reset_issued;
 
 static void qemu_chr_event(CharDriverState *s, int event)
 {
@@ -120,14 +113,14 @@ static void qemu_chr_event(CharDriverState *s, int event)
 static void qemu_chr_reset_bh(void *opaque)
 {
     CharDriverState *s = opaque;
-    qemu_chr_event(s, CHR_EVENT_RESET);
+    qemu_chr_event(s, CHR_EVENT_OPENED);
     qemu_bh_delete(s->bh);
     s->bh = NULL;
 }
 
 void qemu_chr_reset(CharDriverState *s)
 {
-    if (s->bh == NULL && initial_reset_issued) {
+    if (s->bh == NULL) {
 	s->bh = qemu_bh_new(qemu_chr_reset_bh, s);
 	qemu_bh_schedule(s->bh);
     }
@@ -136,8 +129,6 @@ void qemu_chr_reset(CharDriverState *s)
 void qemu_chr_initial_reset(void)
 {
     CharDriverState *chr;
-
-    initial_reset_issued = 1;
 
     QTAILQ_FOREACH(chr, &chardevs, next) {
         qemu_chr_reset(chr);
@@ -727,7 +718,7 @@ static void term_exit(void)
     fcntl(0, F_SETFL, old_fd0_flags);
 }
 
-static void term_init(void)
+static void term_init(QemuOpts *opts)
 {
     struct termios tty;
 
@@ -740,7 +731,7 @@ static void term_init(void)
     tty.c_oflag |= OPOST;
     tty.c_lflag &= ~(ECHO|ECHONL|ICANON|IEXTEN);
     /* if graphical mode, we allow Ctrl-C handling */
-    if (display_type == DT_NOGRAPHIC)
+    if (!qemu_opt_get_bool(opts, "signal", display_type != DT_NOGRAPHIC))
         tty.c_lflag &= ~ISIG;
     tty.c_cflag &= ~(CSIZE|PARENB);
     tty.c_cflag |= CS8;
@@ -773,7 +764,7 @@ static CharDriverState *qemu_chr_open_stdio(QemuOpts *opts)
     chr->chr_close = qemu_chr_close_stdio;
     qemu_set_fd_handler2(0, stdio_read_poll, stdio_read, NULL, chr);
     stdio_nb_clients++;
-    term_init();
+    term_init(opts);
 
     return chr;
 }

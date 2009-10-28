@@ -39,7 +39,6 @@ struct DeviceState {
     qemu_irq *gpio_in;
     QLIST_HEAD(, BusState) child_bus;
     int num_child_bus;
-    NICInfo *nd;
     QLIST_ENTRY(DeviceState) sibling;
 };
 
@@ -79,6 +78,9 @@ enum PropertyType {
     PROP_TYPE_MACADDR,
     PROP_TYPE_DRIVE,
     PROP_TYPE_CHR,
+    PROP_TYPE_STRING,
+    PROP_TYPE_NETDEV,
+    PROP_TYPE_VLAN,
     PROP_TYPE_PTR,
 };
 
@@ -100,7 +102,7 @@ struct CompatProperty {
 
 DeviceState *qdev_create(BusState *bus, const char *name);
 DeviceState *qdev_device_add(QemuOpts *opts);
-int qdev_init(DeviceState *dev) __attribute__((warn_unused_result));
+int qdev_init(DeviceState *dev) QEMU_WARN_UNUSED_RESULT;
 void qdev_init_nofail(DeviceState *dev);
 int qdev_unplug(DeviceState *dev);
 void qdev_free(DeviceState *dev);
@@ -186,10 +188,13 @@ extern PropertyInfo qdev_prop_int32;
 extern PropertyInfo qdev_prop_uint64;
 extern PropertyInfo qdev_prop_hex32;
 extern PropertyInfo qdev_prop_hex64;
+extern PropertyInfo qdev_prop_string;
 extern PropertyInfo qdev_prop_chr;
 extern PropertyInfo qdev_prop_ptr;
 extern PropertyInfo qdev_prop_macaddr;
 extern PropertyInfo qdev_prop_drive;
+extern PropertyInfo qdev_prop_netdev;
+extern PropertyInfo qdev_prop_vlan;
 extern PropertyInfo qdev_prop_pci_devfn;
 
 #define DEFINE_PROP(_name, _state, _field, _prop, _type) { \
@@ -227,16 +232,23 @@ extern PropertyInfo qdev_prop_pci_devfn;
     DEFINE_PROP(_n, _s, _f, qdev_prop_ptr, void*)
 #define DEFINE_PROP_CHR(_n, _s, _f)             \
     DEFINE_PROP(_n, _s, _f, qdev_prop_chr, CharDriverState*)
+#define DEFINE_PROP_STRING(_n, _s, _f)             \
+    DEFINE_PROP(_n, _s, _f, qdev_prop_string, char*)
+#define DEFINE_PROP_NETDEV(_n, _s, _f)             \
+    DEFINE_PROP(_n, _s, _f, qdev_prop_netdev, VLANClientState*)
+#define DEFINE_PROP_VLAN(_n, _s, _f)             \
+    DEFINE_PROP(_n, _s, _f, qdev_prop_vlan, VLANState*)
 #define DEFINE_PROP_DRIVE(_n, _s, _f)             \
     DEFINE_PROP(_n, _s, _f, qdev_prop_drive, DriveInfo*)
 #define DEFINE_PROP_MACADDR(_n, _s, _f)         \
-    DEFINE_PROP(_n, _s, _f, qdev_prop_macaddr, uint8_t[6])
+    DEFINE_PROP(_n, _s, _f, qdev_prop_macaddr, MACAddr)
 
 #define DEFINE_PROP_END_OF_LIST()               \
     {}
 
 /* Set properties between creation and init.  */
 void *qdev_get_prop_ptr(DeviceState *dev, Property *prop);
+int qdev_prop_exists(DeviceState *dev, const char *name);
 int qdev_prop_parse(DeviceState *dev, const char *name, const char *value);
 void qdev_prop_set(DeviceState *dev, const char *name, void *src, enum PropertyType type);
 void qdev_prop_set_uint8(DeviceState *dev, const char *name, uint8_t value);
@@ -245,7 +257,10 @@ void qdev_prop_set_uint32(DeviceState *dev, const char *name, uint32_t value);
 void qdev_prop_set_int32(DeviceState *dev, const char *name, int32_t value);
 void qdev_prop_set_uint64(DeviceState *dev, const char *name, uint64_t value);
 void qdev_prop_set_chr(DeviceState *dev, const char *name, CharDriverState *value);
+void qdev_prop_set_netdev(DeviceState *dev, const char *name, VLANClientState *value);
+void qdev_prop_set_vlan(DeviceState *dev, const char *name, VLANState *value);
 void qdev_prop_set_drive(DeviceState *dev, const char *name, DriveInfo *value);
+void qdev_prop_set_macaddr(DeviceState *dev, const char *name, uint8_t *value);
 /* FIXME: Remove opaque pointer properties.  */
 void qdev_prop_set_ptr(DeviceState *dev, const char *name, void *value);
 void qdev_prop_set_defaults(DeviceState *dev, Property *props);
