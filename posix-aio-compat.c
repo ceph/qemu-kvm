@@ -621,7 +621,8 @@ void *paio_init(void)
 
     fcntl(s->fd, F_SETFL, O_NONBLOCK);
 
-    qemu_aio_set_fd_handler(s->fd, posix_aio_read, NULL, posix_aio_flush, s);
+    qemu_aio_set_fd_handler(s->fd, posix_aio_read, NULL, posix_aio_flush,
+        posix_aio_process_queue, s);
 
     ret = pthread_attr_init(&attr);
     if (ret)
