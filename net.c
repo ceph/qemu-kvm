@@ -321,7 +321,6 @@ static ssize_t qemu_deliver_packet(VLANClientState *sender,
                                    unsigned flags,
                                    const uint8_t *data,
                                    size_t size,
-                                   int raw,
                                    void *opaque);
 static ssize_t qemu_deliver_packet_iov(VLANClientState *sender,
                                        unsigned flags,
@@ -472,7 +471,6 @@ static ssize_t qemu_deliver_packet(VLANClientState *sender,
                                    unsigned flags,
                                    const uint8_t *data,
                                    size_t size,
-                                   int raw,
                                    void *opaque)
 {
     VLANClientState *vc = opaque;
@@ -481,18 +479,16 @@ static ssize_t qemu_deliver_packet(VLANClientState *sender,
         return size;
     }
 
-    if (raw && vc->receive_raw) {
+    if (flags & QEMU_NET_PACKET_FLAG_RAW && vc->receive_raw)
         return vc->receive_raw(vc, data, size);
-    } else {
+    else
         return vc->receive(vc, data, size);
-    }
 }
 
 static ssize_t qemu_vlan_deliver_packet(VLANClientState *sender,
                                         unsigned flags,
                                         const uint8_t *buf,
                                         size_t size,
-                                        int raw,
                                         void *opaque)
 {
     VLANState *vlan = opaque;
@@ -511,11 +507,10 @@ static ssize_t qemu_vlan_deliver_packet(VLANClientState *sender,
             continue;
         }
 
-        if (raw && vc->receive_raw) {
+        if (flags & QEMU_NET_PACKET_FLAG_RAW && vc->receive_raw)
             len = vc->receive_raw(vc, buf, size);
-        } else {
+        else
             len = vc->receive(vc, buf, size);
-        }
 
         ret = (ret >= 0) ? ret : len;
     }
@@ -553,9 +548,10 @@ void qemu_flush_queued_packets(VLANClientState *vc)
     qemu_net_queue_flush(queue);
 }
 
-static ssize_t qemu_send_packet_async2(VLANClientState *sender,
-                                       const uint8_t *buf, int size, int raw,
-                                       NetPacketSent *sent_cb)
+static ssize_t qemu_send_packet_async_with_flags(VLANClientState *sender,
+                                                 unsigned flags,
+                                                 const uint8_t *buf, int size,
+                                                 NetPacketSent *sent_cb)
 {
     NetQueue *queue;
 
@@ -574,26 +570,26 @@ static ssize_t qemu_send_packet_async2(VLANClientState *sender,
         queue = sender->vlan->send_queue;
     }
 
-    return qemu_net_queue_send(queue, sender,
-                               QEMU_NET_PACKET_FLAG_NONE,
-                               buf, size, raw, sent_cb);
+    return qemu_net_queue_send(queue, sender, flags, buf, size, sent_cb);
 }
 
 ssize_t qemu_send_packet_async(VLANClientState *sender,
                                const uint8_t *buf, int size,
                                NetPacketSent *sent_cb)
 {
-    return qemu_send_packet_async2(sender, buf, size, 0, sent_cb);
+    return qemu_send_packet_async_with_flags(sender, QEMU_NET_PACKET_FLAG_NONE,
+                                             buf, size, sent_cb);
 }
 
-ssize_t qemu_send_packet(VLANClientState *sender, const uint8_t *buf, int size)
+void qemu_send_packet(VLANClientState *vc, const uint8_t *buf, int size)
 {
-    return qemu_send_packet_async2(sender, buf, size, 0, NULL);
+    qemu_send_packet_async(vc, buf, size, NULL);
 }
 
-ssize_t qemu_send_packet_raw(VLANClientState *sender, const uint8_t *buf, int size)
+ssize_t qemu_send_packet_raw(VLANClientState *vc, const uint8_t *buf, int size)
 {
-    return qemu_send_packet_async2(sender, buf, size, 1, NULL);
+    return qemu_send_packet_async_with_flags(vc, QEMU_NET_PACKET_FLAG_RAW,
+                                             buf, size, NULL);
 }
 
 static ssize_t vc_sendv_compat(VLANClientState *vc, const struct iovec *iov,
@@ -664,6 +660,8 @@ static ssize_t qemu_vlan_deliver_packet_iov(VLANClientState *sender,
             ret = calc_iov_length(iov, iovcnt);
             continue;
         }
+
+        assert(!(flags & QEMU_NET_PACKET_FLAG_RAW));
 
         if (vc->receive_iov) {
             len = vc->receive_iov(vc, iov, iovcnt);

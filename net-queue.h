@@ -35,7 +35,6 @@ typedef ssize_t (NetPacketDeliver) (VLANClientState *sender,
                                     unsigned flags,
                                     const uint8_t *buf,
                                     size_t size,
-                                    int raw,
                                     void *opaque);
 
 typedef ssize_t (NetPacketDeliverIOV) (VLANClientState *sender,
@@ -45,6 +44,7 @@ typedef ssize_t (NetPacketDeliverIOV) (VLANClientState *sender,
                                        void *opaque);
 
 #define QEMU_NET_PACKET_FLAG_NONE  0
+#define QEMU_NET_PACKET_FLAG_RAW  (1<<0)
 
 NetQueue *qemu_new_net_queue(NetPacketDeliver *deliver,
                              NetPacketDeliverIOV *deliver_iov,
@@ -56,7 +56,6 @@ ssize_t qemu_net_queue_send(NetQueue *queue,
                             unsigned flags,
                             const uint8_t *data,
                             size_t size,
-                            int raw,
                             NetPacketSent *sent_cb);
 
 ssize_t qemu_net_queue_send_iov(NetQueue *queue,
