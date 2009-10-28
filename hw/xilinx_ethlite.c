@@ -224,7 +224,7 @@ static int xilinx_ethlite_init(SysBusDevice *dev)
                                  s->conf.vlan, s->conf.peer,
                                  dev->qdev.info->name, dev->qdev.id,
                                  eth_can_rx, eth_rx, NULL,
-                                 eth_cleanup, s);
+                                 NULL, eth_cleanup, s);
     qemu_format_nic_info_str(s->vc, s->conf.macaddr.a);
     return 0;
 }

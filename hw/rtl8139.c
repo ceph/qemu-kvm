@@ -3336,7 +3336,7 @@ static int pci_rtl8139_init(PCIDevice *dev)
                                  s->conf.vlan, s->conf.peer,
                                  dev->qdev.info->name, dev->qdev.id,
                                  rtl8139_can_receive, rtl8139_receive, NULL,
-                                 rtl8139_cleanup, s);
+                                 NULL, rtl8139_cleanup, s);
     qemu_format_nic_info_str(s->vc, s->conf.macaddr.a);
 
     s->cplus_txbuffer = NULL;

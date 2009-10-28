@@ -66,7 +66,7 @@ static int isa_ne2000_initfn(ISADevice *dev)
     s->vc = qemu_new_vlan_client(NET_CLIENT_TYPE_NIC, s->c.vlan, s->c.peer,
                                  dev->qdev.info->name, dev->qdev.id,
                                  ne2000_can_receive, ne2000_receive, NULL,
-                                 isa_ne2000_cleanup, s);
+                                 NULL, isa_ne2000_cleanup, s);
     qemu_format_nic_info_str(s->vc, s->c.macaddr.a);
 
     vmstate_register(-1, &vmstate_ne2000, s);

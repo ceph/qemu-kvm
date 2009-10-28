@@ -1709,7 +1709,7 @@ static int nic_init(PCIDevice *pci_dev, uint32_t device)
     s->vc = qemu_new_vlan_client(NET_CLIENT_TYPE_NIC,
                                  s->conf.vlan, s->conf.peer,
                                  pci_dev->qdev.info->name, pci_dev->qdev.id,
-                                 nic_can_receive, nic_receive, NULL,
+                                 nic_can_receive, nic_receive, NULL, NULL,
                                  nic_cleanup, s);
 
     qemu_format_nic_info_str(s->vc, s->conf.macaddr.a);

@@ -410,7 +410,7 @@ static int stellaris_enet_init(SysBusDevice *dev)
                                  s->conf.vlan, s->conf.peer,
                                  dev->qdev.info->name, dev->qdev.id,
                                  stellaris_enet_can_receive,
-                                 stellaris_enet_receive, NULL,
+                                 stellaris_enet_receive, NULL, NULL,
                                  stellaris_enet_cleanup, s);
     qemu_format_nic_info_str(s->vc, s->conf.macaddr.a);
 
