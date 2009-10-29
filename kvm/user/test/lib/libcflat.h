@@ -22,6 +22,12 @@
 
 #include <stdarg.h>
 
+typedef unsigned char u8;
+typedef unsigned short u16;
+typedef unsigned u32;
+typedef unsigned long ulong;
+typedef unsigned long long u64;
+
 extern void exit(int code);
 extern void panic(char *fmt, ...);
 

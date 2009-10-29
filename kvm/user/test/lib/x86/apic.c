@@ -4,12 +4,6 @@
 static void *g_apic = (void *)0xfee00000;
 static void *g_ioapic = (void *)0xfec00000;
 
-typedef unsigned char u8;
-typedef unsigned short u16;
-typedef unsigned u32;
-typedef unsigned long ulong;
-typedef unsigned long long u64;
-
 struct apic_ops {
     u32 (*reg_read)(unsigned reg);
     void (*reg_write)(unsigned reg, u32 val);

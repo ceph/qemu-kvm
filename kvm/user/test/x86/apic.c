@@ -2,12 +2,6 @@
 #include "apic.h"
 #include "vm.h"
 
-typedef unsigned char u8;
-typedef unsigned short u16;
-typedef unsigned u32;
-typedef unsigned long ulong;
-typedef unsigned long long u64;
-
 typedef struct {
     unsigned short offset0;
     unsigned short selector;

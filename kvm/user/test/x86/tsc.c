@@ -1,7 +1,5 @@
 #include "libcflat.h"
 
-typedef unsigned long long u64;
-
 u64 rdtsc(void)
 {
 	unsigned a, d;
