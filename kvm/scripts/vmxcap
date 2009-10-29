@@ -7,6 +7,7 @@ MSR_IA32_VMX_EXIT_CTLS = 0x483
 MSR_IA32_VMX_ENTRY_CTLS = 0x484
 MSR_IA32_VMX_MISC_CTLS = 0x485
 MSR_IA32_VMX_PROCBASED_CTLS2 = 0x48B
+MSR_IA32_VMX_EPT_VPID_CAP = 0x48C
 MSR_IA32_VMX_TRUE_PINBASED_CTLS = 0x48D
 MSR_IA32_VMX_TRUE_PROCBASED_CTLS = 0x48E
 MSR_IA32_VMX_TRUE_EXIT_CTLS = 0x48F
@@ -169,6 +170,41 @@ controls = [
             },
         cap_msr = MSR_IA32_VMX_ENTRY_CTLS,
         true_cap_msr = MSR_IA32_VMX_TRUE_ENTRY_CTLS,
+        ),
+
+    Misc(
+        name = 'Miscellaneous data',
+        bits = {
+            (0,4): 'VMX-preemption timer scale (log2)',
+            5: 'Store EFER.LMA into IA-32e mode guest control',
+            6: 'HLT activity state',
+            7: 'Shutdown activity state',
+            8: 'Wait-for-SIPI activity state',
+            (16,24): 'Number of CR3-target values',
+            (25,27): 'MSR-load/store count recommenation',
+            (32,62): 'MSEG revision identifier',
+            },
+        msr = MSR_IA32_VMX_MISC_CTLS,
+        ),
+
+    Misc(
+        name = 'VPID and EPT capabilities',
+        bits = {
+            0: 'Execute-only EPT translations',
+            6: 'Page-walk length 4',
+            8: 'Paging-structure memory type UC',
+            14: 'Paging-structure memory type WB',
+            16: '2MB EPT pages',
+            20: 'INVEPT supported',
+            25: 'Single-context INVEPT',
+            26: 'All-context INVEPT',
+            32: 'INVVPID supported',
+            40: 'Individual-address INVVPID',
+            41: 'Single-context INVVPID',
+            42: 'All-context INVVPID',
+            43: 'Single-context-retaining-globals INVVPID',
+            },
+        msr = MSR_IA32_VMX_EPT_VPID_CAP,
         ),
     ]
 
