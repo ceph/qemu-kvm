@@ -59,6 +59,29 @@ class Control(object):
                 s = 'yes'
             print '  %-40s %s' % (self.bits[bit], s)
 
+class Misc(object):
+    def __init__(self, name, bits, msr):
+        self.name = name
+        self.bits = bits
+        self.msr = msr
+    def show(self):
+        print self.name
+        value = msr().read(self.msr, 0)
+        def first_bit(key):
+            if type(key) is tuple:
+                return key[0]
+            else:
+                return key
+        for bits in sorted(self.bits.keys(), key = first_bit):
+            if type(bits) is tuple:
+                lo, hi = bits
+                fmt = int
+            else:
+                lo = hi = bits
+                fmt = bool
+            v = (value >> lo) & ((1 << (hi - lo + 1)) - 1)
+            print '  %-40s %s' % (self.bits[bits], fmt(v))
+
 controls = [
     Control(
         name = 'pin-based controls',
