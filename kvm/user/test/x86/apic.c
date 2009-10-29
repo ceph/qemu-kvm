@@ -19,11 +19,11 @@ typedef struct {
 } idt_entry_t;
 
 typedef struct {
-    ulong rflags;
-    ulong cs;
-    ulong rip;
-    ulong func;
     ulong regs[sizeof(ulong)*2];
+    ulong func;
+    ulong rip;
+    ulong cs;
+    ulong rflags;
 } isr_regs_t;
 
 #ifdef __x86_64__
