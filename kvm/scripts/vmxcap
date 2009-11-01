@@ -79,7 +79,8 @@ class Misc(object):
                 fmt = int
             else:
                 lo = hi = bits
-                fmt = bool
+                def fmt(x):
+                    return { True: 'yes', False: 'no' }[x]
             v = (value >> lo) & ((1 << (hi - lo + 1)) - 1)
             print '  %-40s %s' % (self.bits[bits], fmt(v))
 
