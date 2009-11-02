@@ -5,6 +5,7 @@
 #if defined(CONFIG_SOLARIS)
 #include <fenv.h>
 #endif
+#include "config-host.h"
 
 void set_float_rounding_mode(int val STATUS_PARAM)
 {
