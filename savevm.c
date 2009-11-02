@@ -856,15 +856,15 @@ const VMStateInfo vmstate_info_uint64 = {
 #ifdef __linux__
 static int get_u64(QEMUFile *f, void *pv, size_t size)
 {
-    __u64 *v = pv;
-    qemu_get_be64s(f, (uint64_t *)v);
+    uint64_t *v = pv;
+    qemu_get_be64s(f, v);
     return 0;
 }
 
 static void put_u64(QEMUFile *f, void *pv, size_t size)
 {
-    __u64 *v = pv;
-    qemu_put_be64s(f, (uint64_t *)v);
+    uint64_t *v = pv;
+    qemu_put_be64s(f, v);
 }
 
 const VMStateInfo vmstate_info_u64 = {
