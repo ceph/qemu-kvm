@@ -208,17 +208,14 @@ void qemu_system_cpu_hot_add(int cpu, int state);
 
 /* device-hotplug */
 
-typedef int (dev_match_fn)(void *dev_private, void *arg);
-
 DriveInfo *add_init_drive(const char *opts);
-void destroy_nic(dev_match_fn *match_fn, void *arg);
 
 /* pci-hotplug */
 void pci_device_hot_add(Monitor *mon, const QDict *qdict);
 void drive_hot_add(Monitor *mon, const QDict *qdict);
 void pci_device_hot_remove(Monitor *mon, const char *pci_addr);
-void do_pci_device_hot_remove(Monitor *mon, const QDict *qdict);
-void pci_device_hot_remove_success(PCIDevice *dev);
+void do_pci_device_hot_remove(Monitor *mon, const QDict *qdict,
+                              QObject **ret_data);
 
 /* serial ports */
 

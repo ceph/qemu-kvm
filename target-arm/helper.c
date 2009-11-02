@@ -7,6 +7,7 @@
 #include "gdbstub.h"
 #include "helpers.h"
 #include "qemu-common.h"
+#include "host-utils.h"
 
 static uint32_t cortexa8_cp15_c0_c1[8] =
 { 0x1031, 0x11, 0x400, 0, 0x31100003, 0x20000000, 0x01202000, 0x11 };
@@ -233,7 +234,7 @@ static int vfp_gdb_set_reg(CPUState *env, uint8_t *buf, int reg)
     switch (reg - nregs) {
     case 0: env->vfp.xregs[ARM_VFP_FPSID] = ldl_p(buf); return 4;
     case 1: env->vfp.xregs[ARM_VFP_FPSCR] = ldl_p(buf); return 4;
-    case 2: env->vfp.xregs[ARM_VFP_FPEXC] = ldl_p(buf); return 4;
+    case 2: env->vfp.xregs[ARM_VFP_FPEXC] = ldl_p(buf) & (1 << 30); return 4;
     }
     return 0;
 }
@@ -394,16 +395,15 @@ uint32_t HELPER(uxtb16)(uint32_t x)
 
 uint32_t HELPER(clz)(uint32_t x)
 {
-    int count;
-    for (count = 32; x; count--)
-        x >>= 1;
-    return count;
+    return clz32(x);
 }
 
 int32_t HELPER(sdiv)(int32_t num, int32_t den)
 {
     if (den == 0)
       return 0;
+    if (num == INT_MIN && den == -1)
+      return INT_MIN;
     return num / den;
 }
 

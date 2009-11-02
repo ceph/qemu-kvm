@@ -194,11 +194,11 @@ typedef struct {
     uint8_t mult[8];            /* multicast mask array */
     int mmio_index;
     VLANClientState *vc;
+    NICConf conf;
     uint8_t scb_stat;           /* SCB stat/ack byte */
     uint8_t int_stat;           /* PCI interrupt status */
     /* region must not be saved by nic_save. */
     uint32_t region[3];         /* PCI region addresses */
-    uint8_t macaddr[6];
     uint16_t mdimem[32];
     eeprom_t *eeprom;
     uint32_t device;            /* device variant */
@@ -220,6 +220,8 @@ typedef struct {
 
     /* Data in mem is always in the byte order of the controller (le). */
     uint8_t mem[PCI_MEM_SIZE];
+    /* vmstate for each particular nic */
+    VMStateDescription *vmstate;
 } EEPRO100State;
 
 /* Default values for MDI (PHY) registers */
@@ -482,7 +484,7 @@ static void nic_selective_reset(EEPRO100State * s)
     size_t i;
     uint16_t *eeprom_contents = eeprom93xx_data(s->eeprom);
     //~ eeprom93xx_reset(s->eeprom);
-    memcpy(eeprom_contents, s->macaddr, 6);
+    memcpy(eeprom_contents, s->conf.macaddr.a, 6);
     eeprom_contents[0xa] = 0x4000;
     if (s->device == i82557B || s->device == i82557C)
         eeprom_contents[5] = 0x0100;
@@ -626,26 +628,11 @@ static void dump_statistics(EEPRO100State * s)
     //~ missing("CU dump statistical counters");
 }
 
-static void eepro100_cu_command(EEPRO100State * s, uint8_t val)
+static void action_command(EEPRO100State *s)
 {
-    eepro100_tx_t tx;
-    uint32_t cb_address;
-    switch (val) {
-    case CU_NOP:
-        /* No operation. */
-        break;
-    case CU_START:
-        if (get_cu_state(s) != cu_idle) {
-            /* Intel documentation says that CU must be idle for the CU
-             * start command. Intel driver for Linux also starts the CU
-             * from suspended state. */
-            logout("CU state is %u, should be %u\n", get_cu_state(s), cu_idle);
-            //~ assert(!"wrong CU state");
-        }
-        set_cu_state(s, cu_active);
-        s->cu_offset = s->pointer;
-      next_command:
-        cb_address = s->cu_base + s->cu_offset;
+    for (;;) {
+        uint32_t cb_address = s->cu_base + s->cu_offset;
+        eepro100_tx_t tx;
         cpu_physical_memory_read(cb_address, (uint8_t *) & tx, sizeof(tx));
         uint16_t status = le16_to_cpu(tx.status);
         uint16_t command = le16_to_cpu(tx.command);
@@ -665,7 +652,7 @@ static void eepro100_cu_command(EEPRO100State * s, uint8_t val)
             /* Do nothing. */
             break;
         case CmdIASetup:
-            cpu_physical_memory_read(cb_address + 8, &s->macaddr[0], 6);
+            cpu_physical_memory_read(cb_address + 8, &s->conf.macaddr.a[0], 6);
             TRACE(OTHER, logout("macaddr: %s\n", nic_dump(&s->macaddr[0], 6)));
             break;
         case CmdConfigure:
@@ -787,17 +774,38 @@ static void eepro100_cu_command(EEPRO100State * s, uint8_t val)
             /* CU becomes idle. Terminate command loop. */
             set_cu_state(s, cu_idle);
             eepro100_cna_interrupt(s);
+            break;
         } else if (bit_s) {
-            /* CU becomes suspended. */
+            /* CU becomes suspended. Terminate command loop. */
             set_cu_state(s, cu_suspended);
             eepro100_cna_interrupt(s);
+            break;
         } else {
             /* More entries in list. */
             TRACE(OTHER, logout("CU list with at least one more entry\n"));
-            goto next_command;
         }
-        TRACE(OTHER, logout("CU list empty\n"));
-        /* List is empty. Now CU is idle or suspended. */
+    }
+    TRACE(OTHER, logout("CU list empty\n"));
+    /* List is empty. Now CU is idle or suspended. */
+}
+
+static void eepro100_cu_command(EEPRO100State * s, uint8_t val)
+{
+    switch (val) {
+    case CU_NOP:
+        /* No operation. */
+        break;
+    case CU_START:
+        if (get_cu_state(s) != cu_idle) {
+            /* Intel documentation says that CU must be idle for the CU
+             * start command. Intel driver for Linux also starts the CU
+             * from suspended state. */
+            logout("CU state is %u, should be %u\n", get_cu_state(s), cu_idle);
+            //~ assert(!"wrong CU state");
+        }
+        set_cu_state(s, cu_active);
+        s->cu_offset = s->pointer;
+        action_command(s);
         break;
     case CU_RESUME:
         if (get_cu_state(s) != cu_suspended) {
@@ -810,7 +818,7 @@ static void eepro100_cu_command(EEPRO100State * s, uint8_t val)
         if (get_cu_state(s) == cu_suspended) {
             TRACE(OTHER, logout("CU resuming\n"));
             set_cu_state(s, cu_active);
-            goto next_command;
+            action_command(s);
         }
         break;
     case CU_STATSADDR:
@@ -1507,7 +1515,7 @@ static ssize_t nic_receive(VLANClientState *vc, const uint8_t * buf, size_t size
          * Long frames are discarded. */
         logout("%p received long frame (%zu byte), ignored\n", s, size);
         return -1;
-    } else if (memcmp(buf, s->macaddr, 6) == 0) {       // !!!
+    } else if (memcmp(buf, s->conf.macaddr.a, 6) == 0) {       // !!!
         /* Frame matches individual address. */
         /* TODO: check configuration byte 15/4 (ignore U/L). */
         TRACE(RXTX, logout("%p received frame for me, len=%zu\n", s, size));
@@ -1591,149 +1599,68 @@ static ssize_t nic_receive(VLANClientState *vc, const uint8_t * buf, size_t size
     return size;
 }
 
-static int nic_load(QEMUFile * f, void *opaque, int version_id)
-{
-    EEPRO100State *s = opaque;
-    int i;
-    int ret;
-
-    if (version_id > 3)
-        return -EINVAL;
-
-    ret = pci_device_load(&s->dev, f);
-    if (ret < 0) {
-        return ret;
-    }
-
-    /* Skip unused entries. */
-    qemu_fseek(f, 32, SEEK_CUR);
-
-    qemu_get_buffer(f, s->mult, 8);
-    qemu_get_buffer(f, s->mem, sizeof(s->mem));
-
-    /* Restore all members of struct between scb_stat and mem. */
-    qemu_get_8s(f, &s->scb_stat);
-    qemu_get_8s(f, &s->int_stat);
-    /* Skip unused entries. */
-    qemu_fseek(f, 3 * 4, SEEK_CUR);
-    qemu_get_buffer(f, s->macaddr, 6);
-    /* Skip unused entries. */
-    qemu_fseek(f, 19 * 4, SEEK_CUR);
-    for (i = 0; i < 32; i++) {
-        qemu_get_be16s(f, &s->mdimem[i]);
-    }
-    /* The eeprom should be saved and restored by its own routines. */
-    qemu_get_be32s(f, &s->device);
-    // TODO check device.
-    qemu_get_be32s(f, &s->pointer);
-    qemu_get_be32s(f, &s->cu_base);
-    qemu_get_be32s(f, &s->cu_offset);
-    qemu_get_be32s(f, &s->ru_base);
-    qemu_get_be32s(f, &s->ru_offset);
-    qemu_get_be32s(f, &s->statsaddr);
-    /* Restore epro100_stats_t statistics. */
-    qemu_get_be32s(f, &s->statistics.tx_good_frames);
-    qemu_get_be32s(f, &s->statistics.tx_max_collisions);
-    qemu_get_be32s(f, &s->statistics.tx_late_collisions);
-    qemu_get_be32s(f, &s->statistics.tx_underruns);
-    qemu_get_be32s(f, &s->statistics.tx_lost_crs);
-    qemu_get_be32s(f, &s->statistics.tx_deferred);
-    qemu_get_be32s(f, &s->statistics.tx_single_collisions);
-    qemu_get_be32s(f, &s->statistics.tx_multiple_collisions);
-    qemu_get_be32s(f, &s->statistics.tx_total_collisions);
-    qemu_get_be32s(f, &s->statistics.rx_good_frames);
-    qemu_get_be32s(f, &s->statistics.rx_crc_errors);
-    qemu_get_be32s(f, &s->statistics.rx_alignment_errors);
-    qemu_get_be32s(f, &s->statistics.rx_resource_errors);
-    qemu_get_be32s(f, &s->statistics.rx_overrun_errors);
-    qemu_get_be32s(f, &s->statistics.rx_cdt_errors);
-    qemu_get_be32s(f, &s->statistics.rx_short_frame_errors);
-    qemu_get_be32s(f, &s->statistics.fc_xmt_pause);
-    qemu_get_be32s(f, &s->statistics.fc_rcv_pause);
-    qemu_get_be32s(f, &s->statistics.fc_rcv_unsupported);
-    qemu_get_be16s(f, &s->statistics.xmt_tco_frames);
-    qemu_get_be16s(f, &s->statistics.rcv_tco_frames);
-    qemu_get_be32s(f, &s->statistics.complete);
+static const VMStateDescription vmstate_eepro100 = {
+    .version_id = 3,
+    .minimum_version_id = 2,
+    .minimum_version_id_old = 2,
+    .fields      = (VMStateField []) {
+        VMSTATE_PCI_DEVICE(dev, EEPRO100State),
+        VMSTATE_UNUSED(32),
+        VMSTATE_BUFFER(mult, EEPRO100State),
+        VMSTATE_BUFFER(mem, EEPRO100State),
+        /* Save all members of struct between scb_stat and mem. */
+        VMSTATE_UINT8(scb_stat, EEPRO100State),
+        VMSTATE_UINT8(int_stat, EEPRO100State),
+        VMSTATE_UNUSED(3*4),
+        VMSTATE_MACADDR(conf.macaddr, EEPRO100State),
+        VMSTATE_UNUSED(19*4),
+        VMSTATE_UINT16_ARRAY(mdimem, EEPRO100State, 32),
+        /* The eeprom should be saved and restored by its own routines. */
+        VMSTATE_UINT32(device, EEPRO100State),
+        /* TODO check device. */
+        VMSTATE_UINT32(pointer, EEPRO100State),
+        VMSTATE_UINT32(cu_base, EEPRO100State),
+        VMSTATE_UINT32(cu_offset, EEPRO100State),
+        VMSTATE_UINT32(ru_base, EEPRO100State),
+        VMSTATE_UINT32(ru_offset, EEPRO100State),
+        VMSTATE_UINT32(statsaddr, EEPRO100State),
+        /* Save epro100_stats_t statistics. */
+        VMSTATE_UINT32(statistics.tx_good_frames, EEPRO100State),
+        VMSTATE_UINT32(statistics.tx_max_collisions, EEPRO100State),
+        VMSTATE_UINT32(statistics.tx_late_collisions, EEPRO100State),
+        VMSTATE_UINT32(statistics.tx_underruns, EEPRO100State),
+        VMSTATE_UINT32(statistics.tx_lost_crs, EEPRO100State),
+        VMSTATE_UINT32(statistics.tx_deferred, EEPRO100State),
+        VMSTATE_UINT32(statistics.tx_single_collisions, EEPRO100State),
+        VMSTATE_UINT32(statistics.tx_multiple_collisions, EEPRO100State),
+        VMSTATE_UINT32(statistics.tx_total_collisions, EEPRO100State),
+        VMSTATE_UINT32(statistics.rx_good_frames, EEPRO100State),
+        VMSTATE_UINT32(statistics.rx_crc_errors, EEPRO100State),
+        VMSTATE_UINT32(statistics.rx_alignment_errors, EEPRO100State),
+        VMSTATE_UINT32(statistics.rx_resource_errors, EEPRO100State),
+        VMSTATE_UINT32(statistics.rx_overrun_errors, EEPRO100State),
+        VMSTATE_UINT32(statistics.rx_cdt_errors, EEPRO100State),
+        VMSTATE_UINT32(statistics.rx_short_frame_errors, EEPRO100State),
+        VMSTATE_UINT32(statistics.fc_xmt_pause, EEPRO100State),
+        VMSTATE_UINT32(statistics.fc_rcv_pause, EEPRO100State),
+        VMSTATE_UINT32(statistics.fc_rcv_unsupported, EEPRO100State),
+        VMSTATE_UINT16(statistics.xmt_tco_frames, EEPRO100State),
+        VMSTATE_UINT16(statistics.rcv_tco_frames, EEPRO100State),
+        VMSTATE_UINT32(statistics.complete, EEPRO100State),
 #if 0
-    qemu_get_be16s(f, &s->status);
+        VMSTATE_UINT16(status, EEPRO100State),
 #endif
-
-    /* Configuration bytes. */
-    qemu_get_buffer(f, s->configuration, sizeof(s->configuration));
-
-    return 0;
-}
-
-static void nic_save(QEMUFile * f, void *opaque)
-{
-    EEPRO100State *s = opaque;
-    int i;
-
-    pci_device_save(&s->dev, f);
-
-    /* Skip unused entries. */
-    qemu_fseek(f, 32, SEEK_CUR);
-
-    qemu_put_buffer(f, s->mult, 8);
-    qemu_put_buffer(f, s->mem, sizeof(s->mem));
-
-    /* Save all members of struct between scb_stat and mem. */
-    qemu_put_8s(f, &s->scb_stat);
-    qemu_put_8s(f, &s->int_stat);
-    /* Skip unused entries. */
-    qemu_fseek(f, 3 * 4, SEEK_CUR);
-    qemu_put_buffer(f, s->macaddr, 6);
-    /* Skip unused entries. */
-    qemu_fseek(f, 19 * 4, SEEK_CUR);
-    for (i = 0; i < 32; i++) {
-        qemu_put_be16s(f, &s->mdimem[i]);
+        /* Configuration bytes. */
+        VMSTATE_BUFFER(configuration, EEPRO100State),
+        VMSTATE_END_OF_LIST()
     }
-    /* The eeprom should be saved and restored by its own routines. */
-    qemu_put_be32s(f, &s->device);
-    qemu_put_be32s(f, &s->pointer);
-    qemu_put_be32s(f, &s->cu_base);
-    qemu_put_be32s(f, &s->cu_offset);
-    qemu_put_be32s(f, &s->ru_base);
-    qemu_put_be32s(f, &s->ru_offset);
-    qemu_put_be32s(f, &s->statsaddr);
-    /* Save epro100_stats_t statistics. */
-    qemu_put_be32s(f, &s->statistics.tx_good_frames);
-    qemu_put_be32s(f, &s->statistics.tx_max_collisions);
-    qemu_put_be32s(f, &s->statistics.tx_late_collisions);
-    qemu_put_be32s(f, &s->statistics.tx_underruns);
-    qemu_put_be32s(f, &s->statistics.tx_lost_crs);
-    qemu_put_be32s(f, &s->statistics.tx_deferred);
-    qemu_put_be32s(f, &s->statistics.tx_single_collisions);
-    qemu_put_be32s(f, &s->statistics.tx_multiple_collisions);
-    qemu_put_be32s(f, &s->statistics.tx_total_collisions);
-    qemu_put_be32s(f, &s->statistics.rx_good_frames);
-    qemu_put_be32s(f, &s->statistics.rx_crc_errors);
-    qemu_put_be32s(f, &s->statistics.rx_alignment_errors);
-    qemu_put_be32s(f, &s->statistics.rx_resource_errors);
-    qemu_put_be32s(f, &s->statistics.rx_overrun_errors);
-    qemu_put_be32s(f, &s->statistics.rx_cdt_errors);
-    qemu_put_be32s(f, &s->statistics.rx_short_frame_errors);
-    qemu_put_be32s(f, &s->statistics.fc_xmt_pause);
-    qemu_put_be32s(f, &s->statistics.fc_rcv_pause);
-    qemu_put_be32s(f, &s->statistics.fc_rcv_unsupported);
-    qemu_put_be16s(f, &s->statistics.xmt_tco_frames);
-    qemu_put_be16s(f, &s->statistics.rcv_tco_frames);
-    qemu_put_be32s(f, &s->statistics.complete);
-#if 0
-    qemu_put_be16s(f, &s->status);
-#endif
-
-    /* Configuration bytes. */
-    qemu_put_buffer(f, s->configuration, sizeof(s->configuration));
-}
+};
 
 static void nic_cleanup(VLANClientState *vc)
 {
     EEPRO100State *s = vc->opaque;
 
-    unregister_savevm(vc->model, s);
-
-    eeprom93xx_free(s->eeprom);
+    s->vc = NULL;
 }
 
 static int pci_nic_uninit(PCIDevice *pci_dev)
@@ -1741,7 +1668,9 @@ static int pci_nic_uninit(PCIDevice *pci_dev)
     EEPRO100State *s = DO_UPCAST(EEPRO100State, dev, pci_dev);
 
     cpu_unregister_io_memory(s->mmio_index);
-
+    vmstate_unregister(s->vmstate, s);
+    eeprom93xx_free(s->eeprom);
+    qemu_del_vlan_client(s->vc);
     return 0;
 }
 
@@ -1771,22 +1700,27 @@ static int nic_init(PCIDevice *pci_dev, uint32_t device)
     pci_register_bar(&s->dev, 2, PCI_FLASH_SIZE, PCI_ADDRESS_SPACE_MEM,
                            pci_mmio_map);
 
-    qdev_get_macaddr(&s->dev.qdev, s->macaddr);
+    qemu_macaddr_default_if_unset(&s->conf.macaddr);
     logout("macaddr: %s\n", nic_dump(&s->macaddr[0], 6));
     assert(s->region[1] == 0);
 
     nic_reset(s);
 
-    s->vc = qdev_get_vlan_client(&s->dev.qdev,
-                                 nic_can_receive, nic_receive, NULL,
+    s->vc = qemu_new_vlan_client(NET_CLIENT_TYPE_NIC,
+                                 s->conf.vlan, s->conf.peer,
+                                 pci_dev->qdev.info->name, pci_dev->qdev.id,
+                                 nic_can_receive, nic_receive, NULL, NULL,
                                  nic_cleanup, s);
 
-    qemu_format_nic_info_str(s->vc, s->macaddr);
+    qemu_format_nic_info_str(s->vc, s->conf.macaddr.a);
     TRACE(OTHER, logout("%s\n", s->vc->info_str));
 
     qemu_register_reset(nic_reset, s);
 
-    register_savevm(s->vc->model, -1, 3, nic_save, nic_load, s);
+    s->vmstate = qemu_malloc(sizeof(vmstate_eepro100));
+    memcpy(s->vmstate, &vmstate_eepro100, sizeof(vmstate_eepro100));
+    s->vmstate->name = s->vc->model;
+    vmstate_register(-1, s->vmstate, s);
     return 0;
 }
 
@@ -1855,53 +1789,101 @@ static PCIDeviceInfo eepro100_info[] = {
         .qdev.name = "i82550",
         .qdev.size = sizeof(EEPRO100State),
         .init      = pci_i82550_init,
+        .qdev.props = (Property[]) {
+            DEFINE_NIC_PROPERTIES(EEPRO100State, conf),
+            DEFINE_PROP_END_OF_LIST(),
+        },
     },{
         .qdev.name = "i82551",
         .qdev.size = sizeof(EEPRO100State),
         .init      = pci_i82551_init,
         .exit      = pci_nic_uninit,
+        .qdev.props = (Property[]) {
+            DEFINE_NIC_PROPERTIES(EEPRO100State, conf),
+            DEFINE_PROP_END_OF_LIST(),
+        },
     },{
         .qdev.name = "i82557a",
         .qdev.size = sizeof(EEPRO100State),
         .init      = pci_i82557a_init,
+        .qdev.props = (Property[]) {
+            DEFINE_NIC_PROPERTIES(EEPRO100State, conf),
+            DEFINE_PROP_END_OF_LIST(),
+        },
     },{
         .qdev.name = "i82557b",
         .qdev.size = sizeof(EEPRO100State),
         .init      = pci_i82557b_init,
         .exit      = pci_nic_uninit,
+        .qdev.props = (Property[]) {
+            DEFINE_NIC_PROPERTIES(EEPRO100State, conf),
+            DEFINE_PROP_END_OF_LIST(),
+        },
     },{
         .qdev.name = "i82557c",
         .qdev.size = sizeof(EEPRO100State),
         .init      = pci_i82557c_init,
+        .qdev.props = (Property[]) {
+            DEFINE_NIC_PROPERTIES(EEPRO100State, conf),
+            DEFINE_PROP_END_OF_LIST(),
+        },
     },{
         .qdev.name = "i82558a",
         .qdev.size = sizeof(EEPRO100State),
         .init      = pci_i82558a_init,
+        .qdev.props = (Property[]) {
+            DEFINE_NIC_PROPERTIES(EEPRO100State, conf),
+            DEFINE_PROP_END_OF_LIST(),
+        },
     },{
         .qdev.name = "i82558b",
         .qdev.size = sizeof(EEPRO100State),
         .init      = pci_i82558b_init,
+        .qdev.props = (Property[]) {
+            DEFINE_NIC_PROPERTIES(EEPRO100State, conf),
+            DEFINE_PROP_END_OF_LIST(),
+        },
     },{
         .qdev.name = "i82559a",
         .qdev.size = sizeof(EEPRO100State),
         .init      = pci_i82559a_init,
+        .qdev.props = (Property[]) {
+            DEFINE_NIC_PROPERTIES(EEPRO100State, conf),
+            DEFINE_PROP_END_OF_LIST(),
+        },
     },{
         .qdev.name = "i82559b",
         .qdev.size = sizeof(EEPRO100State),
         .init      = pci_i82559b_init,
+        .qdev.props = (Property[]) {
+            DEFINE_NIC_PROPERTIES(EEPRO100State, conf),
+            DEFINE_PROP_END_OF_LIST(),
+        },
     },{
         .qdev.name = "i82559c",
         .qdev.size = sizeof(EEPRO100State),
         .init      = pci_i82559c_init,
+        .qdev.props = (Property[]) {
+            DEFINE_NIC_PROPERTIES(EEPRO100State, conf),
+            DEFINE_PROP_END_OF_LIST(),
+        },
     },{
         .qdev.name = "i82559er",
         .qdev.size = sizeof(EEPRO100State),
         .init      = pci_i82559er_init,
         .exit      = pci_nic_uninit,
+        .qdev.props = (Property[]) {
+            DEFINE_NIC_PROPERTIES(EEPRO100State, conf),
+            DEFINE_PROP_END_OF_LIST(),
+        },
     },{
         .qdev.name = "i82562",
         .qdev.size = sizeof(EEPRO100State),
         .init      = pci_i82562_init,
+        .qdev.props = (Property[]) {
+            DEFINE_NIC_PROPERTIES(EEPRO100State, conf),
+            DEFINE_PROP_END_OF_LIST(),
+        },
     },{
         /* end of list */
     }

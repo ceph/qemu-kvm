@@ -117,7 +117,7 @@ static void put_fpreg(QEMUFile *f, void *opaque, size_t size)
     qemu_put_be16s(f, &exp);
 }
 
-const VMStateInfo vmstate_fpreg = {
+static const VMStateInfo vmstate_fpreg = {
     .name = "fpreg",
     .get  = get_fpreg,
     .put  = put_fpreg,
@@ -134,7 +134,7 @@ static int get_fpreg_1_mmx(QEMUFile *f, void *opaque, size_t size)
     return 0;
 }
 
-const VMStateInfo vmstate_fpreg_1_mmx = {
+static const VMStateInfo vmstate_fpreg_1_mmx = {
     .name = "fpreg_1_mmx",
     .get  = get_fpreg_1_mmx,
     .put  = put_fpreg_error,
@@ -150,7 +150,7 @@ static int get_fpreg_1_no_mmx(QEMUFile *f, void *opaque, size_t size)
     return 0;
 }
 
-const VMStateInfo vmstate_fpreg_1_no_mmx = {
+static const VMStateInfo vmstate_fpreg_1_no_mmx = {
     .name = "fpreg_1_no_mmx",
     .get  = get_fpreg_1_no_mmx,
     .put  = put_fpreg_error,
@@ -308,14 +308,14 @@ static void put_uint64_as_uint32(QEMUFile *f, void *pv, size_t size)
     qemu_put_be32(f, *v);
 }
 
-const VMStateInfo vmstate_hack_uint64_as_uint32 = {
+static const VMStateInfo vmstate_hack_uint64_as_uint32 = {
     .name = "uint64_as_uint32",
     .get  = get_uint64_as_uint32,
     .put  = put_uint64_as_uint32,
 };
 
 #define VMSTATE_HACK_UINT32(_f, _s, _t)                                  \
-    VMSTATE_SINGLE_TEST(_f, _s, _t, vmstate_hack_uint64_as_uint32, uint64_t)
+    VMSTATE_SINGLE_TEST(_f, _s, _t, 0, vmstate_hack_uint64_as_uint32, uint64_t)
 #endif
 
 static void cpu_pre_save(void *opaque)
@@ -391,7 +391,7 @@ static int cpu_post_load(void *opaque, int version_id)
     return 0;
 }
 
-const VMStateDescription vmstate_cpu = {
+static const VMStateDescription vmstate_cpu = {
     .name = "cpu",
     .version_id = CPU_SAVE_VERSION,
     .minimum_version_id = 3,

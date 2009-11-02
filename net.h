@@ -7,16 +7,43 @@
 #include "qemu-option.h"
 #include "net-queue.h"
 
+struct MACAddr {
+    uint8_t a[6];
+};
+
+/* qdev nic properties */
+
+typedef struct NICConf {
+    MACAddr macaddr;
+    VLANState *vlan;
+    VLANClientState *peer;
+} NICConf;
+
+#define DEFINE_NIC_PROPERTIES(_state, _conf)                            \
+    DEFINE_PROP_MACADDR("mac",   _state, _conf.macaddr),                \
+    DEFINE_PROP_VLAN("vlan",     _state, _conf.vlan),                   \
+    DEFINE_PROP_NETDEV("netdev", _state, _conf.peer)
+
 /* VLANs support */
+
+typedef enum {
+    NET_CLIENT_TYPE_NONE,
+    NET_CLIENT_TYPE_NIC,
+    NET_CLIENT_TYPE_SLIRP,
+    NET_CLIENT_TYPE_TAP,
+    NET_CLIENT_TYPE_SOCKET,
+    NET_CLIENT_TYPE_VDE,
+    NET_CLIENT_TYPE_DUMP
+} net_client_type;
 
 typedef int (NetCanReceive)(VLANClientState *);
 typedef ssize_t (NetReceive)(VLANClientState *, const uint8_t *, size_t);
 typedef ssize_t (NetReceiveIOV)(VLANClientState *, const struct iovec *, int);
 typedef void (NetCleanup) (VLANClientState *);
 typedef void (LinkStatusChanged)(VLANClientState *);
-typedef void (SetOffload)(VLANClientState *, int, int, int, int, int);
 
 struct VLANClientState {
+    net_client_type type;
     NetReceive *receive;
     NetReceive *receive_raw;
     NetReceiveIOV *receive_iov;
@@ -26,7 +53,6 @@ struct VLANClientState {
     NetCleanup *cleanup;
     LinkStatusChanged *link_status_changed;
     int link_down;
-    SetOffload *set_offload;
     void *opaque;
     QTAILQ_ENTRY(VLANClientState) next;
     struct VLANState *vlan;
@@ -46,12 +72,15 @@ struct VLANState {
 };
 
 VLANState *qemu_find_vlan(int id, int allocate);
-VLANClientState *qemu_new_vlan_client(VLANState *vlan,
+VLANClientState *qemu_find_netdev(const char *id);
+VLANClientState *qemu_new_vlan_client(net_client_type type,
+                                      VLANState *vlan,
                                       VLANClientState *peer,
                                       const char *model,
                                       const char *name,
                                       NetCanReceive *can_receive,
                                       NetReceive *receive,
+                                      NetReceive *receive_raw,
                                       NetReceiveIOV *receive_iov,
                                       NetCleanup *cleanup,
                                       void *opaque);
@@ -62,13 +91,14 @@ ssize_t qemu_sendv_packet(VLANClientState *vc, const struct iovec *iov,
                           int iovcnt);
 ssize_t qemu_sendv_packet_async(VLANClientState *vc, const struct iovec *iov,
                                 int iovcnt, NetPacketSent *sent_cb);
-ssize_t qemu_send_packet(VLANClientState *vc, const uint8_t *buf, int size);
+void qemu_send_packet(VLANClientState *vc, const uint8_t *buf, int size);
 ssize_t qemu_send_packet_raw(VLANClientState *vc, const uint8_t *buf, int size);
 ssize_t qemu_send_packet_async(VLANClientState *vc, const uint8_t *buf,
                                int size, NetPacketSent *sent_cb);
 void qemu_purge_queued_packets(VLANClientState *vc);
 void qemu_flush_queued_packets(VLANClientState *vc);
 void qemu_format_nic_info_str(VLANClientState *vc, uint8_t macaddr[6]);
+void qemu_macaddr_default_if_unset(MACAddr *macaddr);
 int qemu_show_nic_models(const char *arg, const char *const *models);
 void qemu_check_nic_model(NICInfo *nd, const char *model);
 int qemu_find_nic_model(NICInfo *nd, const char * const *models,
@@ -78,10 +108,6 @@ void do_info_network(Monitor *mon);
 void do_set_link(Monitor *mon, const QDict *qdict);
 
 void do_info_usernet(Monitor *mon);
-
-int tap_has_vnet_hdr(void *opaque);
-void tap_using_vnet_hdr(void *opaque, int using_vnet_hdr);
-int tap_has_ufo(void *opaque);
 
 /* NIC info */
 
@@ -153,12 +179,11 @@ void net_host_device_remove(Monitor *mon, const QDict *qdict);
 #define SMBD_COMMAND "/usr/sbin/smbd"
 #endif
 
-void qdev_get_macaddr(DeviceState *dev, uint8_t *macaddr);
-VLANClientState *qdev_get_vlan_client(DeviceState *dev,
-                                      NetCanReceive *can_receive,
-                                      NetReceive *receive,
-                                      NetReceiveIOV *receive_iov,
-                                      NetCleanup *cleanup,
-                                      void *opaque);
+void qdev_set_nic_properties(DeviceState *dev, NICInfo *nd);
+
+int tap_has_ufo(VLANClientState *vc);
+int tap_has_vnet_hdr(VLANClientState *vc);
+void tap_using_vnet_hdr(VLANClientState *vc, int using_vnet_hdr);
+void tap_set_offload(VLANClientState *vc, int csum, int tso4, int tso6, int ecn, int ufo);
 
 #endif
