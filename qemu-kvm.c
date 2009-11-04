@@ -875,6 +875,16 @@ static int kvm_handle_internal_error(kvm_context_t kvm,
 {
     fprintf(stderr, "KVM internal error. Suberror: %d\n",
             run->internal.suberror);
+#ifdef KVM_CAP_INTERNAL_ERROR_DATA
+    if (kvm_check_extension(kvm_state, KVM_CAP_INTERNAL_ERROR_DATA)) {
+        int i;
+
+        for (i = 0; i < run->internal.ndata; ++i) {
+            fprintf(stderr, "extra data[%d]: %"PRIx64"\n",
+                    i, (uint64_t)run->internal.data[i]);
+        }
+    }
+#endif
     kvm_show_regs(env);
     if (run->internal.suberror == KVM_INTERNAL_ERROR_EMULATION)
         fprintf(stderr, "emulation failure, check dmesg for details\n");
