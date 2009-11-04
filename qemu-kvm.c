@@ -869,6 +869,18 @@ int kvm_is_ready_for_interrupt_injection(CPUState *env)
     return env->kvm_run->ready_for_interrupt_injection;
 }
 
+static int kvm_handle_internal_error(kvm_context_t kvm,
+                                     CPUState *env,
+                                     struct kvm_run *run)
+{
+    fprintf(stderr, "KVM internal error. Suberror: %d\n",
+            run->internal.suberror);
+    kvm_show_regs(env);
+    if (run->internal.suberror == KVM_INTERNAL_ERROR_EMULATION)
+        fprintf(stderr, "emulation failure, check dmesg for details\n");
+    abort();
+}
+
 int kvm_run(CPUState *env)
 {
     int r;
@@ -967,12 +979,7 @@ int kvm_run(CPUState *env)
             break;
 #endif
 	case KVM_EXIT_INTERNAL_ERROR:
-	    fprintf(stderr, "KVM internal error. Suberror: %d\n",
-		    run->internal.suberror);
-	    kvm_show_regs(env);
-	    if (run->internal.suberror == KVM_INTERNAL_ERROR_EMULATION)
-		fprintf(stderr, "emulation failure, check dmesg for details\n");
-	    abort();
+            r = kvm_handle_internal_error(kvm, env, run);
 	    break;
         default:
             if (kvm_arch_run(env)) {
