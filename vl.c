@@ -3443,7 +3443,7 @@ void qemu_notify_event(void)
     }
 }
 
-#ifdef KVM_UPSTREAM
+#if defined(KVM_UPSTREAM) || !defined(CONFIG_KVM)
 void qemu_mutex_lock_iothread(void) {}
 void qemu_mutex_unlock_iothread(void) {}
 #endif
