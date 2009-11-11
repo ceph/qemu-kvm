@@ -464,18 +464,33 @@ static uint32_t elcr_ioport_read(void *opaque, uint32_t addr1)
     return s->elcr;
 }
 
-#ifdef KVM_CAP_IRQCHIP
-static void kvm_kernel_pic_save_to_user(void *opaque);
-static int kvm_kernel_pic_load_from_user(void *opaque, int version_id);
-#endif
+static void kvm_kernel_pic_save_to_user(PicState *s);
+static int kvm_kernel_pic_load_from_user(PicState *s);
+
+static void pic_pre_save(void *opaque)
+{
+    PicState *s = opaque;
+
+    if (kvm_enabled() && kvm_irqchip_in_kernel()) {
+        kvm_kernel_pic_save_to_user(s);
+    }
+}
+
+static int pic_post_load(void *opaque, int version_id)
+{
+    PicState *s = opaque;
+
+    if (kvm_enabled() && kvm_irqchip_in_kernel()) {
+        kvm_kernel_pic_load_from_user(s);
+    }
+    return 0;
+}
 
 static const VMStateDescription vmstate_pic = {
     .name = "i8259",
     .version_id = 1,
-#ifdef KVM_CAP_IRQCHIP
-    .pre_save = kvm_kernel_pic_save_to_user,
-    .post_load = kvm_kernel_pic_load_from_user,
-#endif
+    .pre_save = pic_pre_save,
+    .post_load = pic_post_load,
     .minimum_version_id = 1,
     .minimum_version_id_old = 1,
     .fields      = (VMStateField []) {
@@ -563,11 +578,9 @@ qemu_irq *i8259_init(qemu_irq parent_irq)
     return qemu_allocate_irqs(i8259_set_irq, s, 16);
 }
 
-#ifdef KVM_CAP_IRQCHIP
-static void kvm_kernel_pic_save_to_user(void *opaque)
+static void kvm_kernel_pic_save_to_user(PicState *s)
 {
-#if defined(TARGET_I386)
-    PicState *s = (void *)opaque;
+#ifdef KVM_CAP_IRQCHIP
     struct kvm_irqchip chip;
     struct kvm_pic_state *kpic;
 
@@ -596,10 +609,9 @@ static void kvm_kernel_pic_save_to_user(void *opaque)
 #endif
 }
 
-static int kvm_kernel_pic_load_from_user(void *opaque, int version)
+static int kvm_kernel_pic_load_from_user(PicState *s)
 {
-#if defined(TARGET_I386)
-    PicState *s = (void *)opaque;
+#ifdef KVM_CAP_IRQCHIP
     struct kvm_irqchip chip;
     struct kvm_pic_state *kpic;
 
@@ -630,6 +642,7 @@ static int kvm_kernel_pic_load_from_user(void *opaque, int version)
     return 0;
 }
 
+#ifdef KVM_CAP_IRQCHIP
 static void kvm_i8259_set_irq(void *opaque, int irq, int level)
 {
     int pic_ret;
