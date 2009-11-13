@@ -1477,8 +1477,8 @@ if test $kvm_cap_device_assignment = "yes" ; then
 #endif
 int main(void) { struct pci_access a; pci_init(&a); return 0; }
 EOF
-  if compile_prog "" "-lpci" ; then
-    libs_softmmu="-lpci $libs_softmmu"
+  if compile_prog "" "-lpci -lz" ; then
+    libs_softmmu="-lpci -lz $libs_softmmu"
   else
     echo
     echo "Error: libpci check failed"
