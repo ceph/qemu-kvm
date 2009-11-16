@@ -622,6 +622,10 @@ int rom_add_vga(const char *file)
 
 int rom_add_option(const char *file)
 {
+    /* temporarily avoid pxe roms */
+    if (strncmp(file, "pxe", 3) == 0)
+        return 0;
+
     if (!rom_enable_driver_roms)
         return 0;
     return rom_add_file(file, PC_ROM_MIN_OPTION, PC_ROM_MAX, PC_ROM_ALIGN);
