@@ -28,7 +28,6 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/io.h>
-#include <pci/pci.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include "qemu-kvm.h"
@@ -38,6 +37,7 @@
 #include "console.h"
 #include "device-assignment.h"
 #include "loader.h"
+#include <pci/pci.h>
 
 /* From linux/ioport.h */
 #define IORESOURCE_IO       0x00000100  /* Resource type */
