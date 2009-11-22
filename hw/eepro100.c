@@ -1384,11 +1384,12 @@ static void ioport_write4(void *opaque, uint32_t addr, uint32_t val)
 /* PCI EEPRO100 definitions */
 
 static void pci_map(PCIDevice * pci_dev, int region_num,
-                    uint32_t addr, uint32_t size, int type)
+                    pcibus_t addr, pcibus_t size, int type)
 {
     EEPRO100State *s = DO_UPCAST(EEPRO100State, dev, pci_dev);
 
-    TRACE(OTHER, logout("region %d, addr=0x%08x, size=0x%08x, type=%d\n",
+    TRACE(OTHER, logout("region %d, addr=0x%08"FMT_PCIBUS", "
+          "size=0x%08"FMT_PCIBUS", type=%d\n",
           region_num, addr, size, type));
 
     assert(region_num == 1);
@@ -1463,11 +1464,12 @@ static CPUReadMemoryFunc * const pci_mmio_read[] = {
 };
 
 static void pci_mmio_map(PCIDevice * pci_dev, int region_num,
-                         uint32_t addr, uint32_t size, int type)
+                         pcibus_t addr, pcibus_t size, int type)
 {
     EEPRO100State *s = DO_UPCAST(EEPRO100State, dev, pci_dev);
 
-    TRACE(OTHER, logout("region %d, addr=0x%08x, size=0x%08x, type=%d\n",
+    TRACE(OTHER, logout("region %d, addr=0x%08"FMT_PCIBUS", "
+          "size=0x%08"FMT_PCIBUS", type=%d\n",
           region_num, addr, size, type));
 
     if (region_num == 0) {

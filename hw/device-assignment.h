@@ -61,15 +61,15 @@ typedef struct {
 } PCIDevRegions;
 
 typedef struct {
-    target_phys_addr_t e_physbase;
+    pcibus_t e_physbase;
     uint32_t memory_index;
     union {
         void *r_virtbase;    /* mmapped access address for memory regions */
         uint32_t r_baseport; /* the base guest port for I/O regions */
     } u;
     int num;            /* our index within v_addrs[] */
-    uint32_t e_size;    /* emulated size of region in bytes */
-    uint32_t r_size;    /* real size of region in bytes */
+    pcibus_t e_size;    /* emulated size of region in bytes */
+    pcibus_t r_size;    /* real size of region in bytes */
 } AssignedDevRegion;
 
 typedef struct AssignedDevice {

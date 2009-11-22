@@ -508,19 +508,19 @@ static int pci_unregister_device(DeviceState *dev)
 }
 
 void pci_register_bar(PCIDevice *pci_dev, int region_num,
-                            uint32_t size, int type,
+                            pcibus_t size, int type,
                             PCIMapIORegionFunc *map_func)
 {
     PCIIORegion *r;
     uint32_t addr;
-    uint32_t wmask;
+    pcibus_t wmask;
 
     if ((unsigned int)region_num >= PCI_NUM_REGIONS)
         return;
 
     if (size & (size-1)) {
         fprintf(stderr, "ERROR: PCI region size must be pow2 "
-                    "type=0x%x, size=0x%x\n", type, size);
+                    "type=0x%x, size=0x%"FMT_PCIBUS"\n", type, size);
         exit(1);
     }
 
@@ -537,7 +537,7 @@ void pci_register_bar(PCIDevice *pci_dev, int region_num,
         wmask |= PCI_ROM_ADDRESS_ENABLE;
     }
     pci_set_long(pci_dev->config + addr, type);
-    pci_set_long(pci_dev->wmask + addr, wmask);
+    pci_set_long(pci_dev->wmask + addr, wmask & 0xffffffff);
     pci_set_long(pci_dev->cmask + addr, 0xffffffff);
 }
 
@@ -545,7 +545,7 @@ static void pci_update_mappings(PCIDevice *d)
 {
     PCIIORegion *r;
     int cmd, i;
-    uint32_t last_addr, new_addr;
+    pcibus_t last_addr, new_addr;
 
     cmd = pci_get_word(d->config + PCI_COMMAND);
     for(i = 0; i < PCI_NUM_REGIONS; i++) {
@@ -577,7 +577,14 @@ static void pci_update_mappings(PCIDevice *d)
                        mappings, we handle specific values as invalid
                        mappings. */
                     if (last_addr <= new_addr || new_addr == 0 ||
-                        last_addr == PCI_BAR_UNMAPPED) {
+                        last_addr == PCI_BAR_UNMAPPED ||
+
+                        /* Now pcibus_t is 64bit.
+                         * Check if 32 bit BAR wrap around explicitly.
+                         * Without this, PC ide doesn't work well.
+                         * TODO: remove this work around.
+                         */
+                        last_addr >= UINT32_MAX) {
                         new_addr = PCI_BAR_UNMAPPED;
                     }
                 } else {
@@ -878,10 +885,12 @@ static void pci_info_device(PCIDevice *d)
         if (r->size != 0) {
             monitor_printf(mon, "      BAR%d: ", i);
             if (r->type & PCI_BASE_ADDRESS_SPACE_IO) {
-                monitor_printf(mon, "I/O at 0x%04x [0x%04x].\n",
+                monitor_printf(mon, "I/O at 0x%04"FMT_PCIBUS
+                               " [0x%04"FMT_PCIBUS"].\n",
                                r->addr, r->addr + r->size - 1);
             } else {
-                monitor_printf(mon, "32 bit memory at 0x%08x [0x%08x].\n",
+                monitor_printf(mon, "32 bit memory at 0x%08"FMT_PCIBUS
+                               " [0x%08"FMT_PCIBUS"].\n",
                                r->addr, r->addr + r->size - 1);
             }
         }
@@ -1271,7 +1280,9 @@ static void pcibus_dev_print(Monitor *mon, DeviceState *dev, int indent)
         r = &d->io_regions[i];
         if (!r->size)
             continue;
-        monitor_printf(mon, "%*sbar %d: %s at 0x%x [0x%x]\n", indent, "",
+        monitor_printf(mon, "%*sbar %d: %s at 0x%"FMT_PCIBUS
+                       " [0x%"FMT_PCIBUS"]\n",
+                       indent, "",
                        i, r->type & PCI_BASE_ADDRESS_SPACE_IO ? "i/o" : "mem",
                        r->addr, r->addr + r->size - 1);
     }

@@ -149,13 +149,13 @@ static uint32_t assigned_dev_ioport_readl(void *opaque, uint32_t addr)
 }
 
 static void assigned_dev_iomem_map(PCIDevice *pci_dev, int region_num,
-                                   uint32_t e_phys, uint32_t e_size, int type)
+                                   pcibus_t e_phys, pcibus_t e_size, int type)
 {
     AssignedDevice *r_dev = container_of(pci_dev, AssignedDevice, dev);
     AssignedDevRegion *region = &r_dev->v_addrs[region_num];
     PCIRegion *real_region = &r_dev->real_device.regions[region_num];
-    uint32_t old_ephys = region->e_physbase;
-    uint32_t old_esize = region->e_size;
+    pcibus_t old_ephys = region->e_physbase;
+    pcibus_t old_esize = region->e_size;
     int first_map = (region->e_size == 0);
     int ret = 0;
 
@@ -198,7 +198,7 @@ static void assigned_dev_iomem_map(PCIDevice *pci_dev, int region_num,
 }
 
 static void assigned_dev_ioport_map(PCIDevice *pci_dev, int region_num,
-                                    uint32_t addr, uint32_t size, int type)
+                                    pcibus_t addr, pcibus_t size, int type)
 {
     AssignedDevice *r_dev = container_of(pci_dev, AssignedDevice, dev);
     AssignedDevRegion *region = &r_dev->v_addrs[region_num];
