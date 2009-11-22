@@ -72,6 +72,9 @@ QemuOptsList qemu_drive_opts = {
             .type = QEMU_OPT_STRING,
             .help = "pci address (virtio only)",
         },{
+            .name = "readonly",
+            .type = QEMU_OPT_BOOL,
+        },{
             .name = "boot",
             .type = QEMU_OPT_BOOL,
             .help = "make this a boot drive",
