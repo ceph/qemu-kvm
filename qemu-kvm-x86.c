@@ -946,7 +946,11 @@ void kvm_arch_load_regs(CPUState *env)
     fpu.mxcsr = env->mxcsr;
     kvm_set_fpu(env, &fpu);
 
-    memcpy(sregs.interrupt_bitmap, env->interrupt_bitmap, sizeof(sregs.interrupt_bitmap));
+    memset(sregs.interrupt_bitmap, 0, sizeof(sregs.interrupt_bitmap));
+    if (env->interrupt_injected >= 0) {
+        sregs.interrupt_bitmap[env->interrupt_injected / 64] |=
+                (uint64_t)1 << (env->interrupt_injected % 64);
+    }
 
     if ((env->eflags & VM_MASK)) {
 	    set_v8086_seg(&sregs.cs, &env->segs[R_CS]);
@@ -1066,7 +1070,7 @@ void kvm_arch_save_regs(CPUState *env)
     struct kvm_sregs sregs;
     struct kvm_msr_entry msrs[100];
     uint32_t hflags;
-    uint32_t i, n, rc;
+    uint32_t i, n, rc, bit;
 
     kvm_get_regs(env, &regs);
 
@@ -1104,7 +1108,16 @@ void kvm_arch_save_regs(CPUState *env)
 
     kvm_get_sregs(env, &sregs);
 
-    memcpy(env->interrupt_bitmap, sregs.interrupt_bitmap, sizeof(env->interrupt_bitmap));
+    /* There can only be one pending IRQ set in the bitmap at a time, so try
+       to find it and save its number instead (-1 for none). */
+    env->interrupt_injected = -1;
+    for (i = 0; i < ARRAY_SIZE(sregs.interrupt_bitmap); i++) {
+        if (sregs.interrupt_bitmap[i]) {
+            bit = ctz64(sregs.interrupt_bitmap[i]);
+            env->interrupt_injected = i * 64 + bit;
+            break;
+        }
+    }
 
     get_seg(&env->segs[R_CS], &sregs.cs);
     get_seg(&env->segs[R_DS], &sregs.ds);

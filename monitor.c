@@ -2940,6 +2940,18 @@ static int default_fmt_size = 4;
 
 #define MAX_ARGS 16
 
+static int is_valid_option(const char *c, const char *typestr)
+{
+    char option[3];
+  
+    option[0] = '-';
+    option[1] = *c;
+    option[2] = '\0';
+  
+    typestr = strstr(typestr, option);
+    return (typestr != NULL);
+}
+
 static const mon_cmd_t *monitor_parse_command(Monitor *mon,
                                               const char *cmdline,
                                               QDict *qdict)
@@ -3132,7 +3144,8 @@ static const mon_cmd_t *monitor_parse_command(Monitor *mon,
             break;
         case '-':
             {
-                int has_option;
+                const char *tmp = p;
+                int has_option, skip_key = 0;
                 /* option */
 
                 c = *typestr++;
@@ -3143,13 +3156,22 @@ static const mon_cmd_t *monitor_parse_command(Monitor *mon,
                 has_option = 0;
                 if (*p == '-') {
                     p++;
-                    if (*p != c) {
-                        monitor_printf(mon, "%s: unsupported option -%c\n",
-                                       cmdname, *p);
-                        goto fail;
+                    if(c != *p) {
+                        if(!is_valid_option(p, typestr)) {
+                  
+                            monitor_printf(mon, "%s: unsupported option -%c\n",
+                                           cmdname, *p);
+                            goto fail;
+                        } else {
+                            skip_key = 1;
+                        }
                     }
-                    p++;
-                    has_option = 1;
+                    if(skip_key) {
+                        p = tmp;
+                    } else {
+                        p++;
+                        has_option = 1;
+                    }
                 }
                 qdict_put(qdict, key, qint_from_int(has_option));
             }
