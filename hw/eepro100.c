@@ -40,6 +40,7 @@
 #include <stddef.h>             /* offsetof */
 #include <stdbool.h>
 #include "hw.h"
+#include "loader.h"             /* rom_add_option */
 #include "pci.h"
 #include "net.h"
 #include "eeprom93xx.h"
@@ -1843,6 +1844,16 @@ static int nic_init(PCIDevice *pci_dev, uint32_t device)
     memcpy(s->vmstate, &vmstate_eepro100, sizeof(vmstate_eepro100));
     s->vmstate->name = s->vc->model;
     vmstate_register(-1, s->vmstate, s);
+
+    if (!pci_dev->qdev.hotplugged) {
+        static int loaded = 0;
+        if (!loaded) {
+            char fname[32];
+            snprintf(fname, sizeof(fname), "pxe-%s.bin", s->vc->model);
+            rom_add_option(fname);
+            loaded = 1;
+        }
+    }
     return 0;
 }
 
@@ -1911,6 +1922,7 @@ static PCIDeviceInfo eepro100_info[] = {
         .qdev.name = "i82550",
         .qdev.size = sizeof(EEPRO100State),
         .init      = pci_i82550_init,
+        .exit      = pci_nic_uninit,
         .qdev.props = (Property[]) {
             DEFINE_NIC_PROPERTIES(EEPRO100State, conf),
             DEFINE_PROP_END_OF_LIST(),
@@ -1928,6 +1940,7 @@ static PCIDeviceInfo eepro100_info[] = {
         .qdev.name = "i82557a",
         .qdev.size = sizeof(EEPRO100State),
         .init      = pci_i82557a_init,
+        .exit      = pci_nic_uninit,
         .qdev.props = (Property[]) {
             DEFINE_NIC_PROPERTIES(EEPRO100State, conf),
             DEFINE_PROP_END_OF_LIST(),
@@ -1945,6 +1958,7 @@ static PCIDeviceInfo eepro100_info[] = {
         .qdev.name = "i82557c",
         .qdev.size = sizeof(EEPRO100State),
         .init      = pci_i82557c_init,
+        .exit      = pci_nic_uninit,
         .qdev.props = (Property[]) {
             DEFINE_NIC_PROPERTIES(EEPRO100State, conf),
             DEFINE_PROP_END_OF_LIST(),
@@ -1953,6 +1967,7 @@ static PCIDeviceInfo eepro100_info[] = {
         .qdev.name = "i82558a",
         .qdev.size = sizeof(EEPRO100State),
         .init      = pci_i82558a_init,
+        .exit      = pci_nic_uninit,
         .qdev.props = (Property[]) {
             DEFINE_NIC_PROPERTIES(EEPRO100State, conf),
             DEFINE_PROP_END_OF_LIST(),
@@ -1961,6 +1976,7 @@ static PCIDeviceInfo eepro100_info[] = {
         .qdev.name = "i82558b",
         .qdev.size = sizeof(EEPRO100State),
         .init      = pci_i82558b_init,
+        .exit      = pci_nic_uninit,
         .qdev.props = (Property[]) {
             DEFINE_NIC_PROPERTIES(EEPRO100State, conf),
             DEFINE_PROP_END_OF_LIST(),
@@ -1969,6 +1985,7 @@ static PCIDeviceInfo eepro100_info[] = {
         .qdev.name = "i82559a",
         .qdev.size = sizeof(EEPRO100State),
         .init      = pci_i82559a_init,
+        .exit      = pci_nic_uninit,
         .qdev.props = (Property[]) {
             DEFINE_NIC_PROPERTIES(EEPRO100State, conf),
             DEFINE_PROP_END_OF_LIST(),
@@ -1977,6 +1994,7 @@ static PCIDeviceInfo eepro100_info[] = {
         .qdev.name = "i82559b",
         .qdev.size = sizeof(EEPRO100State),
         .init      = pci_i82559b_init,
+        .exit      = pci_nic_uninit,
         .qdev.props = (Property[]) {
             DEFINE_NIC_PROPERTIES(EEPRO100State, conf),
             DEFINE_PROP_END_OF_LIST(),
@@ -1985,6 +2003,7 @@ static PCIDeviceInfo eepro100_info[] = {
         .qdev.name = "i82559c",
         .qdev.size = sizeof(EEPRO100State),
         .init      = pci_i82559c_init,
+        .exit      = pci_nic_uninit,
         .qdev.props = (Property[]) {
             DEFINE_NIC_PROPERTIES(EEPRO100State, conf),
             DEFINE_PROP_END_OF_LIST(),
@@ -2002,6 +2021,7 @@ static PCIDeviceInfo eepro100_info[] = {
         .qdev.name = "i82562",
         .qdev.size = sizeof(EEPRO100State),
         .init      = pci_i82562_init,
+        .exit      = pci_nic_uninit,
         .qdev.props = (Property[]) {
             DEFINE_NIC_PROPERTIES(EEPRO100State, conf),
             DEFINE_PROP_END_OF_LIST(),
