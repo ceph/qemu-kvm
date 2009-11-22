@@ -90,12 +90,9 @@ typedef uint32_t PCICapConfigReadFunc(PCIDevice *pci_dev,
                                       uint32_t address, int len);
 typedef int PCICapConfigInitFunc(PCIDevice *pci_dev);
 
-#define PCI_ADDRESS_SPACE_MEM		0x00
-#define PCI_ADDRESS_SPACE_IO		0x01
-#define PCI_ADDRESS_SPACE_MEM_PREFETCH	0x08
-
 typedef struct PCIIORegion {
     uint32_t addr; /* current PCI mapping address. -1 means not mapped */
+#define PCI_BAR_UNMAPPED (~(uint32_t)0)
     uint32_t size;
     uint8_t type;
     PCIMapIORegionFunc *map_func;
@@ -123,6 +120,9 @@ typedef struct PCIIORegion {
 #define  PCI_HEADER_TYPE_CARDBUS	2
 #define  PCI_HEADER_TYPE_MULTI_FUNCTION 0x80
 #define PCI_BASE_ADDRESS_0	0x10	/* 32 bits */
+#define  PCI_BASE_ADDRESS_SPACE_IO	0x01
+#define  PCI_BASE_ADDRESS_SPACE_MEMORY	0x00
+#define  PCI_BASE_ADDRESS_MEM_PREFETCH	0x08	/* prefetchable? */
 #define PCI_PRIMARY_BUS		0x18	/* Primary bus number */
 #define PCI_SECONDARY_BUS	0x19	/* Secondary bus number */
 #define PCI_SEC_STATUS		0x1e	/* Secondary status register, only bit 14 used */
@@ -178,6 +178,8 @@ typedef struct PCIIORegion {
 /* Size of the standard PCI config space */
 #define PCI_CONFIG_SPACE_SIZE 0x100
 
+#define PCI_NUM_PINS 4 /* A-D */
+
 /* Bits in cap_present field. */
 enum {
     QEMU_PCI_CAP_MSIX = 0x1,
@@ -217,7 +219,7 @@ struct PCIDevice {
     qemu_irq *irq;
 
     /* Current IRQ levels.  Used internally by the generic PCI code.  */
-    int irq_state[4];
+    int irq_state[PCI_NUM_PINS];
 
     /* Capability bits */
     uint32_t cap_present;
@@ -362,6 +364,18 @@ static inline uint32_t
 pci_get_long(uint8_t *config)
 {
     return le32_to_cpupu((uint32_t *)config);
+}
+
+static inline void
+pci_set_quad(uint8_t *config, uint64_t val)
+{
+    cpu_to_le64w((uint64_t *)config, val);
+}
+
+static inline uint64_t
+pci_get_quad(uint8_t *config)
+{
+    return le64_to_cpup((uint64_t *)config);
 }
 
 static inline void

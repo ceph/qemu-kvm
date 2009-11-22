@@ -382,8 +382,8 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
         /* handle memory io regions */
         if (cur_region->type & IORESOURCE_MEM) {
             int t = cur_region->type & IORESOURCE_PREFETCH
-                ? PCI_ADDRESS_SPACE_MEM_PREFETCH
-                : PCI_ADDRESS_SPACE_MEM;
+                ? PCI_BASE_ADDRESS_MEM_PREFETCH
+                : PCI_BASE_ADDRESS_SPACE_MEMORY;
             if (cur_region->size & 0xFFF) {
                 fprintf(stderr, "Unable to assign device: PCI region %d "
                         "at address 0x%llx has size 0x%x, "
@@ -444,7 +444,7 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
         pci_dev->v_addrs[i].e_size = 0;
 
         pci_register_bar((PCIDevice *) pci_dev, i,
-                         cur_region->size, PCI_ADDRESS_SPACE_IO,
+                         cur_region->size, PCI_BASE_ADDRESS_SPACE_IO,
                          assigned_dev_ioport_map);
 
         /* not relevant for port io */

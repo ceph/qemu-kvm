@@ -32,7 +32,7 @@
 
 //#define DEBUG_PCI
 #ifdef DEBUG_PCI
-# define PCI_DPRINTF(format, ...)       printf(format, __VA_ARGS__)
+# define PCI_DPRINTF(format, ...)       printf(format, ## __VA_ARGS__)
 #else
 # define PCI_DPRINTF(format, ...)       do { } while (0)
 #endif
@@ -219,7 +219,7 @@ const VMStateDescription vmstate_pci_device = {
         VMSTATE_INT32_LE(version_id, PCIDevice),
         VMSTATE_SINGLE(config, PCIDevice, 0, vmstate_info_pci_config,
                        typeof_field(PCIDevice,config)),
-        VMSTATE_INT32_ARRAY_V(irq_state, PCIDevice, 4, 2),
+        VMSTATE_INT32_ARRAY_V(irq_state, PCIDevice, PCI_NUM_PINS, 2),
         VMSTATE_END_OF_LIST()
     }
 };
@@ -392,8 +392,8 @@ static void pci_init_wmask(PCIDevice *dev)
     int i;
     dev->wmask[PCI_CACHE_LINE_SIZE] = 0xff;
     dev->wmask[PCI_INTERRUPT_LINE] = 0xff;
-    dev->wmask[PCI_COMMAND] = PCI_COMMAND_IO | PCI_COMMAND_MEMORY
-                              | PCI_COMMAND_MASTER;
+    pci_set_word(dev->wmask + PCI_COMMAND,
+                 PCI_COMMAND_IO | PCI_COMMAND_MEMORY | PCI_COMMAND_MASTER);
     for (i = PCI_CONFIG_HEADER_SIZE; i < PCI_CONFIG_SPACE_SIZE; ++i)
         dev->wmask[i] = 0xff;
 }
@@ -429,7 +429,7 @@ static PCIDevice *do_pci_register_device(PCIDevice *pci_dev, PCIBus *bus,
     pci_dev->config_read = config_read;
     pci_dev->config_write = config_write;
     bus->devices[devfn] = pci_dev;
-    pci_dev->irq = qemu_allocate_irqs(pci_set_irq, pci_dev, 4);
+    pci_dev->irq = qemu_allocate_irqs(pci_set_irq, pci_dev, PCI_NUM_PINS);
     pci_dev->version_id = 2; /* Current pci device vmstate version */
     return pci_dev;
 }
@@ -458,9 +458,9 @@ static void pci_unregister_io_regions(PCIDevice *pci_dev)
 
     for(i = 0; i < PCI_NUM_REGIONS; i++) {
         r = &pci_dev->io_regions[i];
-        if (!r->size || r->addr == -1)
+        if (!r->size || r->addr == PCI_BAR_UNMAPPED)
             continue;
-        if (r->type == PCI_ADDRESS_SPACE_IO) {
+        if (r->type == PCI_BASE_ADDRESS_SPACE_IO) {
             isa_unassign_ioport(r->addr, r->size);
         } else {
             cpu_register_physical_memory(pci_to_cpu_addr(r->addr),
@@ -506,7 +506,7 @@ void pci_register_bar(PCIDevice *pci_dev, int region_num,
     }
 
     r = &pci_dev->io_regions[region_num];
-    r->addr = -1;
+    r->addr = PCI_BAR_UNMAPPED;
     r->size = size;
     r->type = type;
     r->map_func = map_func;
@@ -517,9 +517,9 @@ void pci_register_bar(PCIDevice *pci_dev, int region_num,
         /* ROM enable bit is writeable */
         wmask |= PCI_ROM_ADDRESS_ENABLE;
     }
-    *(uint32_t *)(pci_dev->config + addr) = cpu_to_le32(type);
-    *(uint32_t *)(pci_dev->wmask + addr) = cpu_to_le32(wmask);
-    *(uint32_t *)(pci_dev->cmask + addr) = 0xffffffff;
+    pci_set_long(pci_dev->config + addr, type);
+    pci_set_long(pci_dev->wmask + addr, wmask);
+    pci_set_long(pci_dev->cmask + addr, 0xffffffff);
 }
 
 static void pci_update_mappings(PCIDevice *d)
@@ -528,11 +528,11 @@ static void pci_update_mappings(PCIDevice *d)
     int cmd, i;
     uint32_t last_addr, new_addr;
 
-    cmd = le16_to_cpu(*(uint16_t *)(d->config + PCI_COMMAND));
+    cmd = pci_get_word(d->config + PCI_COMMAND);
     for(i = 0; i < PCI_NUM_REGIONS; i++) {
         r = &d->io_regions[i];
         if (r->size != 0) {
-            if (r->type & PCI_ADDRESS_SPACE_IO) {
+            if (r->type & PCI_BASE_ADDRESS_SPACE_IO) {
                 if (cmd & PCI_COMMAND_IO) {
                     new_addr = pci_get_long(d->config + pci_bar(i));
                     new_addr = new_addr & ~(r->size - 1);
@@ -540,10 +540,10 @@ static void pci_update_mappings(PCIDevice *d)
                     /* NOTE: we have only 64K ioports on PC */
                     if (last_addr <= new_addr || new_addr == 0 ||
                         last_addr >= 0x10000) {
-                        new_addr = -1;
+                        new_addr = PCI_BAR_UNMAPPED;
                     }
                 } else {
-                    new_addr = -1;
+                    new_addr = PCI_BAR_UNMAPPED;
                 }
             } else {
                 if (cmd & PCI_COMMAND_MEMORY) {
@@ -558,18 +558,18 @@ static void pci_update_mappings(PCIDevice *d)
                        mappings, we handle specific values as invalid
                        mappings. */
                     if (last_addr <= new_addr || new_addr == 0 ||
-                        last_addr == -1) {
-                        new_addr = -1;
+                        last_addr == PCI_BAR_UNMAPPED) {
+                        new_addr = PCI_BAR_UNMAPPED;
                     }
                 } else {
                 no_mem_map:
-                    new_addr = -1;
+                    new_addr = PCI_BAR_UNMAPPED;
                 }
             }
             /* now do the real mapping */
             if (new_addr != r->addr) {
-                if (r->addr != -1) {
-                    if (r->type & PCI_ADDRESS_SPACE_IO) {
+                if (r->addr != PCI_BAR_UNMAPPED) {
+                    if (r->type & PCI_BASE_ADDRESS_SPACE_IO) {
                         int class;
                         /* NOTE: specific hack for IDE in PC case:
                            only one byte must be mapped. */
@@ -587,7 +587,7 @@ static void pci_update_mappings(PCIDevice *d)
                     }
                 }
                 r->addr = new_addr;
-                if (r->addr != -1) {
+                if (r->addr != PCI_BAR_UNMAPPED) {
                     r->map_func(d, i, r->addr, r->size, r->type);
                 }
             }
@@ -604,18 +604,18 @@ static uint32_t pci_read_config(PCIDevice *d,
     default:
     case 4:
 	if (address <= 0xfc) {
-	    val = le32_to_cpu(*(uint32_t *)(d->config + address));
+            val = pci_get_long(d->config + address);
 	    break;
 	}
 	/* fall through */
     case 2:
         if (address <= 0xfe) {
-	    val = le16_to_cpu(*(uint16_t *)(d->config + address));
+            val = pci_get_word(d->config + address);
 	    break;
 	}
 	/* fall through */
     case 1:
-        val = d->config[address];
+        val = pci_get_byte(d->config + address);
         break;
     }
     return val;
@@ -848,8 +848,8 @@ static void pci_info_device(PCIDevice *d)
     const pci_class_desc *desc;
 
     monitor_printf(mon, "  Bus %2d, device %3d, function %d:\n",
-                   d->bus->bus_num, d->devfn >> 3, d->devfn & 7);
-    class = le16_to_cpu(*((uint16_t *)(d->config + PCI_CLASS_DEVICE)));
+                   d->bus->bus_num, PCI_SLOT(d->devfn), PCI_FUNC(d->devfn));
+    class = pci_get_word(d->config + PCI_CLASS_DEVICE);
     monitor_printf(mon, "    ");
     desc = pci_class_descriptions;
     while (desc->desc && class != desc->class)
@@ -860,8 +860,8 @@ static void pci_info_device(PCIDevice *d)
         monitor_printf(mon, "Class %04x", class);
     }
     monitor_printf(mon, ": PCI device %04x:%04x\n",
-           le16_to_cpu(*((uint16_t *)(d->config + PCI_VENDOR_ID))),
-           le16_to_cpu(*((uint16_t *)(d->config + PCI_DEVICE_ID))));
+           pci_get_word(d->config + PCI_VENDOR_ID),
+           pci_get_word(d->config + PCI_DEVICE_ID));
 
     if (d->config[PCI_INTERRUPT_PIN] != 0) {
         monitor_printf(mon, "      IRQ %d.\n",
@@ -874,7 +874,7 @@ static void pci_info_device(PCIDevice *d)
         r = &d->io_regions[i];
         if (r->size != 0) {
             monitor_printf(mon, "      BAR%d: ", i);
-            if (r->type & PCI_ADDRESS_SPACE_IO) {
+            if (r->type & PCI_BASE_ADDRESS_SPACE_IO) {
                 monitor_printf(mon, "I/O at 0x%04x [0x%04x].\n",
                                r->addr, r->addr + r->size - 1);
             } else {
@@ -1025,17 +1025,31 @@ static int pci_bridge_initfn(PCIDevice *dev)
     pci_config_set_vendor_id(s->dev.config, s->vid);
     pci_config_set_device_id(s->dev.config, s->did);
 
-    s->dev.config[0x04] = 0x06; // command = bus master, pci mem
-    s->dev.config[0x05] = 0x00;
-    s->dev.config[0x06] = 0xa0; // status = fast back-to-back, 66MHz, no error
-    s->dev.config[0x07] = 0x00; // status = fast devsel
-    s->dev.config[0x08] = 0x00; // revision
-    s->dev.config[0x09] = 0x00; // programming i/f
-    pci_config_set_class(s->dev.config, PCI_CLASS_BRIDGE_PCI);
-    s->dev.config[0x0D] = 0x10; // latency_timer
-    s->dev.config[PCI_HEADER_TYPE] =
-        PCI_HEADER_TYPE_MULTI_FUNCTION | PCI_HEADER_TYPE_BRIDGE; // header_type
-    s->dev.config[0x1E] = 0xa0; // secondary status
+    /* TODO: intial value
+     * command register:
+     * According to PCI bridge spec, after reset
+     *   bus master bit is off
+     *   memory space enable bit is off
+     * According to manual (805-1251.pdf).(See abp_pbi.c for its links.)
+     *   the reset value should be zero unless the boot pin is tied high
+     *   (which is tru) and thus it should be PCI_COMMAND_MEMORY.
+     *
+     * For now, don't touch the value.
+     * Later command register will be set to zero and apb_pci.c will
+     * override the value.
+     * Same for latency timer, and multi function bit of header type.
+     */
+    pci_set_word(dev->config + PCI_COMMAND,
+                 PCI_COMMAND_MEMORY | PCI_COMMAND_MASTER);
+
+    pci_set_word(dev->config + PCI_STATUS,
+                 PCI_STATUS_66MHZ | PCI_STATUS_FAST_BACK);
+    pci_config_set_class(dev->config, PCI_CLASS_BRIDGE_PCI);
+    dev->config[PCI_LATENCY_TIMER] = 0x10;
+    dev->config[PCI_HEADER_TYPE] =
+        PCI_HEADER_TYPE_MULTI_FUNCTION | PCI_HEADER_TYPE_BRIDGE;
+    pci_set_word(dev->config + PCI_SEC_STATUS,
+                 PCI_STATUS_66MHZ | PCI_STATUS_FAST_BACK);
     return 0;
 }
 
@@ -1232,7 +1246,7 @@ static void pcibus_dev_print(Monitor *mon, DeviceState *dev, int indent)
     PCIIORegion *r;
     int i, class;
 
-    class = le16_to_cpu(*((uint16_t *)(d->config + PCI_CLASS_DEVICE)));
+    class = pci_get_word(d->config + PCI_CLASS_DEVICE);
     desc = pci_class_descriptions;
     while (desc->desc && class != desc->class)
         desc++;
@@ -1245,17 +1259,17 @@ static void pcibus_dev_print(Monitor *mon, DeviceState *dev, int indent)
     monitor_printf(mon, "%*sclass %s, addr %02x:%02x.%x, "
                    "pci id %04x:%04x (sub %04x:%04x)\n",
                    indent, "", ctxt,
-                   d->bus->bus_num, d->devfn >> 3, d->devfn & 7,
-                   le16_to_cpu(*((uint16_t *)(d->config + PCI_VENDOR_ID))),
-                   le16_to_cpu(*((uint16_t *)(d->config + PCI_DEVICE_ID))),
-                   le16_to_cpu(*((uint16_t *)(d->config + PCI_SUBSYSTEM_VENDOR_ID))),
-                   le16_to_cpu(*((uint16_t *)(d->config + PCI_SUBSYSTEM_ID))));
+                   d->bus->bus_num, PCI_SLOT(d->devfn), PCI_FUNC(d->devfn),
+                   pci_get_word(d->config + PCI_VENDOR_ID),
+                   pci_get_word(d->config + PCI_DEVICE_ID),
+                   pci_get_word(d->config + PCI_SUBSYSTEM_VENDOR_ID),
+                   pci_get_word(d->config + PCI_SUBSYSTEM_ID));
     for (i = 0; i < PCI_NUM_REGIONS; i++) {
         r = &d->io_regions[i];
         if (!r->size)
             continue;
         monitor_printf(mon, "%*sbar %d: %s at 0x%x [0x%x]\n", indent, "",
-                       i, r->type & PCI_ADDRESS_SPACE_IO ? "i/o" : "mem",
+                       i, r->type & PCI_BASE_ADDRESS_SPACE_IO ? "i/o" : "mem",
                        r->addr, r->addr + r->size - 1);
     }
 }

@@ -15,7 +15,6 @@
 #include "hw.h"
 #include "pci.h"
 #include "scsi.h"
-#include "scsi-disk.h"
 #include "block_int.h"
 
 //#define DEBUG_LSI
@@ -2090,11 +2089,11 @@ static int lsi_scsi_init(PCIDevice *dev)
                                             lsi_ram_writefn, s);
 
     pci_register_bar((struct PCIDevice *)s, 0, 256,
-                           PCI_ADDRESS_SPACE_IO, lsi_io_mapfunc);
+                           PCI_BASE_ADDRESS_SPACE_IO, lsi_io_mapfunc);
     pci_register_bar((struct PCIDevice *)s, 1, 0x400,
-                           PCI_ADDRESS_SPACE_MEM, lsi_mmio_mapfunc);
+                           PCI_BASE_ADDRESS_SPACE_MEMORY, lsi_mmio_mapfunc);
     pci_register_bar((struct PCIDevice *)s, 2, 0x2000,
-                           PCI_ADDRESS_SPACE_MEM, lsi_ram_mapfunc);
+                           PCI_BASE_ADDRESS_SPACE_MEMORY, lsi_ram_mapfunc);
     s->queue = qemu_malloc(sizeof(lsi_queue));
     s->queue_len = 1;
     s->active_commands = 0;
