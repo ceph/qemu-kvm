@@ -1291,6 +1291,7 @@ int kvm_arch_init_vcpu(CPUState *cenv)
 
     qemu_kvm_load_lapic(cenv);
 
+    cenv->interrupt_injected = -1;
 
 #ifdef KVM_CPUID_SIGNATURE
     /* Paravirtualization CPUIDs */
@@ -1452,6 +1453,7 @@ void kvm_arch_push_nmi(void *opaque)
 
 void kvm_arch_cpu_reset(CPUState *env)
 {
+    env->interrupt_injected = -1;
     kvm_arch_load_regs(env);
     if (!cpu_is_bsp(env)) {
 	if (kvm_irqchip_in_kernel()) {
