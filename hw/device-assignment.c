@@ -1180,6 +1180,7 @@ static int assigned_initfn(struct PCIDevice *pci_dev)
             goto assigned_out;
 
     assigned_dev_load_option_rom(dev);
+    QLIST_INSERT_HEAD(&devs, dev, next);
     return 0;
 
 assigned_out:
