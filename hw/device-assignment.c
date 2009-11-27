@@ -481,7 +481,7 @@ static int get_real_device(AssignedDevice *pci_dev, uint8_t r_bus,
     }
     dev->config_fd = fd;
 again:
-    r = read(fd, pci_dev->dev.config, sizeof(pci_dev->dev.config));
+    r = read(fd, pci_dev->dev.config, pci_config_size(&pci_dev->dev));
     if (r < 0) {
         if (errno == EINTR || errno == EAGAIN)
             goto again;
