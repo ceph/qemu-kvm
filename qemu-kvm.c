@@ -124,7 +124,7 @@ static inline void set_gsi(kvm_context_t kvm, unsigned int gsi)
     if (gsi < kvm->max_gsi)
         bitmap[gsi / 32] |= 1U << (gsi % 32);
     else
-        DPRINTF("Invalid GSI %d\n");
+        DPRINTF("Invalid GSI %u\n", gsi);
 }
 
 static inline void clear_gsi(kvm_context_t kvm, unsigned int gsi)
@@ -134,7 +134,7 @@ static inline void clear_gsi(kvm_context_t kvm, unsigned int gsi)
     if (gsi < kvm->max_gsi)
         bitmap[gsi / 32] &= ~(1U << (gsi % 32));
     else
-        DPRINTF("Invalid GSI %d\n");
+        DPRINTF("Invalid GSI %u\n", gsi);
 }
 
 struct slot_info {
@@ -575,7 +575,7 @@ int kvm_register_phys_mem(kvm_context_t kvm,
 
     memory.slot = get_free_slot(kvm);
     DPRINTF
-        ("memory: gpa: %llx, size: %llx, uaddr: %llx, slot: %x, flags: %lx\n",
+        ("memory: gpa: %llx, size: %llx, uaddr: %llx, slot: %x, flags: %x\n",
          memory.guest_phys_addr, memory.memory_size, memory.userspace_addr,
          memory.slot, memory.flags);
     r = kvm_vm_ioctl(kvm_state, KVM_SET_USER_MEMORY_REGION, &memory);
@@ -638,7 +638,7 @@ void kvm_unregister_memory_area(kvm_context_t kvm, uint64_t phys_addr,
     int slot = get_container_slot(phys_addr, size);
 
     if (slot != -1) {
-        DPRINTF("Unregistering memory region %llx (%lx)\n", phys_addr, size);
+        DPRINTF("Unregistering memory region %" PRIx64 " (%lx)\n", phys_addr, size);
         kvm_destroy_phys_mem(kvm, phys_addr, size);
         return;
     }
