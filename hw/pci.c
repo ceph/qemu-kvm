@@ -108,12 +108,9 @@ static int pci_bar(PCIDevice *d, int reg)
 
 static void pci_device_reset(PCIDevice *dev)
 {
-#ifdef THIS_BREAKS_WINXP_SUSPEND
     int r;
-#endif
 
     memset(dev->irq_state, 0, sizeof dev->irq_state);
-#ifdef THIS_BREAKS_WINXP_SUSPEND
     dev->config[PCI_COMMAND] &= ~(PCI_COMMAND_IO | PCI_COMMAND_MEMORY |
                                   PCI_COMMAND_MASTER);
     dev->config[PCI_CACHE_LINE_SIZE] = 0x0;
@@ -125,7 +122,6 @@ static void pci_device_reset(PCIDevice *dev)
         pci_set_long(dev->config + pci_bar(dev, r), dev->io_regions[r].type);
     }
     pci_update_mappings(dev);
-#endif
 }
 
 static void pci_bus_reset(void *opaque)
