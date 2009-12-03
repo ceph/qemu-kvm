@@ -34,7 +34,7 @@
 typedef struct TranslationBlock TranslationBlock;
 
 /* XXX: make safe guess about sizes */
-#define MAX_OP_PER_INSTR 64
+#define MAX_OP_PER_INSTR 96
 /* A Call op needs up to 6 + 2N parameters (N = number of arguments).  */
 #define MAX_OPC_PARAM 10
 #define OPC_BUF_SIZE 512
@@ -211,7 +211,9 @@ static inline void tb_set_jmp_target1(unsigned long jmp_addr, unsigned long addr
 #endif
 
     /* we could use a ldr pc, [pc, #-4] kind of branch and avoid the flush */
-    *(uint32_t *)jmp_addr |= ((addr - (jmp_addr + 8)) >> 2) & 0xffffff;
+    *(uint32_t *)jmp_addr =
+        (*(uint32_t *)jmp_addr & ~0xffffff)
+        | (((addr - (jmp_addr + 8)) >> 2) & 0xffffff);
 
 #if QEMU_GNUC_PREREQ(4, 1)
     __clear_cache((char *) jmp_addr, (char *) jmp_addr + 4);
