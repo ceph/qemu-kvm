@@ -366,7 +366,15 @@ static int cpu_post_load(void *opaque, int version_id)
         hw_breakpoint_insert(env, i);
 
     tlb_flush(env, 1);
-    kvm_load_mpstate(env);
+
+    if (kvm_enabled()) {
+        /* when in-kernel irqchip is used, env->halted causes deadlock
+           because no userspace IRQs will ever clear this flag */
+        env->halted = 0;
+
+        kvm_load_tsc(env);
+        kvm_load_mpstate(env);
+    }
 
     return 0;
 }
