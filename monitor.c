@@ -50,6 +50,7 @@
 #include "qdict.h"
 #include "qstring.h"
 #include "qerror.h"
+#include "qjson.h"
 #include "exec-all.h"
 
 #include "qemu-kvm.h"
@@ -121,6 +122,12 @@ Monitor *cur_mon = NULL;
 
 static void monitor_command_cb(Monitor *mon, const char *cmdline,
                                void *opaque);
+
+/* Return true if in control mode, false otherwise */
+static inline int monitor_ctrl_mode(const Monitor *mon)
+{
+    return (mon->flags & MONITOR_USE_CONTROL);
+}
 
 static void monitor_read_command(Monitor *mon, int show_prompt)
 {
@@ -252,6 +259,17 @@ static void monitor_print_qobject(Monitor *mon, const QObject *data)
     monitor_puts(mon, "\n");
 }
 
+static void monitor_json_emitter(Monitor *mon, const QObject *data)
+{
+    QString *json;
+
+    json = qobject_to_json(data);
+    assert(json != NULL);
+
+    monitor_printf(mon, "%s\n", qstring_get_str(json));
+    QDECREF(json);
+}
+
 static int compare_cmd(const char *name, const char *list)
 {
     const char *p, *pstart;
@@ -363,6 +381,35 @@ static void do_info_name(Monitor *mon)
 {
     if (qemu_name)
         monitor_printf(mon, "%s\n", qemu_name);
+}
+
+/**
+ * do_info_commands(): List QMP available commands
+ *
+ * Return a QList of QStrings.
+ */
+static void do_info_commands(Monitor *mon, QObject **ret_data)
+{
+    QList *cmd_list;
+    const mon_cmd_t *cmd;
+
+    cmd_list = qlist_new();
+
+    for (cmd = mon_cmds; cmd->name != NULL; cmd++) {
+        if (monitor_handler_ported(cmd) && !compare_cmd(cmd->name, "info")) {
+            qlist_append(cmd_list, qstring_from_str(cmd->name));
+        }
+    }
+
+    for (cmd = info_cmds; cmd->name != NULL; cmd++) {
+        if (monitor_handler_ported(cmd)) {
+            char buf[128];
+            snprintf(buf, sizeof(buf), "query-%s", cmd->name);
+            qlist_append(cmd_list, qstring_from_str(buf));
+        }
+    }
+
+    *ret_data = QOBJECT(cmd_list);
 }
 
 #if defined(TARGET_I386)
@@ -1754,10 +1801,9 @@ static void do_info_balloon(Monitor *mon, QObject **ret_data)
 
     actual = qemu_balloon_status();
     if (kvm_enabled() && !kvm_has_sync_mmu())
-        monitor_printf(mon, "Using KVM without synchronous MMU, "
-                       "ballooning disabled\n");
+        qemu_error_new(QERR_KVM_MISSING_CAP, "synchronous MMU", "balloon");
     else if (actual == 0)
-        monitor_printf(mon, "Ballooning not activated in VM\n");
+        qemu_error_new(QERR_DEVICE_NOT_ACTIVE, "balloon");
     else
         *ret_data = QOBJECT(qint_from_int((int)(actual >> 20)));
 }
@@ -1998,6 +2044,14 @@ static const mon_cmd_t info_cmds[] = {
         .help       = "show the version of QEMU",
         .user_print = monitor_print_qobject,
         .mhandler.info_new = do_info_version,
+    },
+    {
+        .name       = "commands",
+        .args_type  = "",
+        .params     = "",
+        .help       = "list QMP available commands",
+        .user_print = monitor_user_noop,
+        .mhandler.info_new = do_info_commands,
     },
     {
         .name       = "network",
@@ -2959,6 +3013,19 @@ static int is_valid_option(const char *c, const char *typestr)
     return (typestr != NULL);
 }
 
+static const mon_cmd_t *monitor_find_command(const char *cmdname)
+{
+    const mon_cmd_t *cmd;
+
+    for (cmd = mon_cmds; cmd->name != NULL; cmd++) {
+        if (compare_cmd(cmdname, cmd->name)) {
+            return cmd;
+        }
+    }
+
+    return NULL;
+}
+
 static const mon_cmd_t *monitor_parse_command(Monitor *mon,
                                               const char *cmdline,
                                               QDict *qdict)
@@ -2979,13 +3046,8 @@ static const mon_cmd_t *monitor_parse_command(Monitor *mon,
     if (!p)
         return NULL;
 
-    /* find the command */
-    for(cmd = mon_cmds; cmd->name != NULL; cmd++) {
-        if (compare_cmd(cmdname, cmd->name))
-            break;
-    }
-
-    if (cmd->name == NULL) {
+    cmd = monitor_find_command(cmdname);
+    if (!cmd) {
         monitor_printf(mon, "unknown command: '%s'\n", cmdname);
         return NULL;
     }
@@ -3214,7 +3276,19 @@ static void monitor_print_error(Monitor *mon)
     mon->error = NULL;
 }
 
-static void monitor_handle_command(Monitor *mon, const char *cmdline)
+static void monitor_call_handler(Monitor *mon, const mon_cmd_t *cmd,
+                                 const QDict *params)
+{
+    QObject *data = NULL;
+
+    cmd->mhandler.cmd_new(mon, params, &data);
+    if (data)
+        cmd->user_print(mon, data);
+
+    qobject_decref(data);
+}
+
+static void handle_user_command(Monitor *mon, const char *cmdline)
 {
     QDict *qdict;
     const mon_cmd_t *cmd;
@@ -3228,13 +3302,7 @@ static void monitor_handle_command(Monitor *mon, const char *cmdline)
     qemu_errors_to_mon(mon);
 
     if (monitor_handler_ported(cmd)) {
-        QObject *data = NULL;
-
-        cmd->mhandler.cmd_new(mon, qdict, &data);
-        if (data)
-            cmd->user_print(mon, data);
-
-        qobject_decref(data);
+        monitor_call_handler(mon, cmd, qdict);
     } else {
         cmd->mhandler.cmd(mon, qdict);
     }
@@ -3470,6 +3538,20 @@ static int monitor_can_read(void *opaque)
     return (mon->suspend_cnt == 0) ? 128 : 0;
 }
 
+/**
+ * monitor_control_read(): Read and handle QMP input
+ */
+static void monitor_control_read(void *opaque, const uint8_t *buf, int size)
+{
+    Monitor *old_mon = cur_mon;
+
+    cur_mon = opaque;
+
+    // TODO: read QMP input
+
+    cur_mon = old_mon;
+}
+
 static void monitor_read(void *opaque, const uint8_t *buf, int size)
 {
     Monitor *old_mon = cur_mon;
@@ -3484,7 +3566,7 @@ static void monitor_read(void *opaque, const uint8_t *buf, int size)
         if (size == 0 || buf[size - 1] != 0)
             monitor_printf(cur_mon, "corrupted command\n");
         else
-            monitor_handle_command(cur_mon, (char *)buf);
+            handle_user_command(cur_mon, (char *)buf);
     }
 
     cur_mon = old_mon;
@@ -3493,7 +3575,7 @@ static void monitor_read(void *opaque, const uint8_t *buf, int size)
 static void monitor_command_cb(Monitor *mon, const char *cmdline, void *opaque)
 {
     monitor_suspend(mon);
-    monitor_handle_command(mon, cmdline);
+    handle_user_command(mon, cmdline);
     monitor_resume(mon);
 }
 
@@ -3511,6 +3593,23 @@ void monitor_resume(Monitor *mon)
         return;
     if (--mon->suspend_cnt == 0)
         readline_show_prompt(mon->rs);
+}
+
+/**
+ * monitor_control_event(): Print QMP gretting
+ */
+static void monitor_control_event(void *opaque, int event)
+{
+    if (event == CHR_EVENT_OPENED) {
+        QObject *data;
+        Monitor *mon = opaque;
+
+        data = qobject_from_jsonf("{ 'QMP': { 'capabilities': [] } }");
+        assert(data != NULL);
+
+        monitor_json_emitter(mon, data);
+        qobject_decref(data);
+    }
 }
 
 static void monitor_event(void *opaque, int event)
@@ -3562,6 +3661,24 @@ static void monitor_event(void *opaque, int event)
  * End:
  */
 
+const char *monitor_cmdline_parse(const char *cmdline, int *flags)
+{
+    const char *dev;
+
+    if (strstart(cmdline, "control,", &dev)) {
+        if (strstart(dev, "vc", NULL)) {
+            fprintf(stderr, "qemu: control mode is for low-level interaction ");
+            fprintf(stderr, "cannot be used with device 'vc'\n");
+            exit(1);
+        }
+        *flags &= ~MONITOR_USE_READLINE;
+        *flags |= MONITOR_USE_CONTROL;
+        return dev;
+    }
+
+    return cmdline;
+}
+
 void monitor_init(CharDriverState *chr, int flags)
 {
     static int is_first_init = 1;
@@ -3581,8 +3698,14 @@ void monitor_init(CharDriverState *chr, int flags)
         monitor_read_command(mon, 0);
     }
 
-    qemu_chr_add_handlers(chr, monitor_can_read, monitor_read, monitor_event,
-                          mon);
+    if (monitor_ctrl_mode(mon)) {
+        /* Control mode requires special handlers */
+        qemu_chr_add_handlers(chr, monitor_can_read, monitor_control_read,
+                              monitor_control_event, mon);
+    } else {
+        qemu_chr_add_handlers(chr, monitor_can_read, monitor_read,
+                              monitor_event, mon);
+    }
 
     QLIST_INSERT_HEAD(&mon_list, mon, entry);
     if (!cur_mon || (flags & MONITOR_IS_DEFAULT))
