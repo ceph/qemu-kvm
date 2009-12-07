@@ -49,6 +49,7 @@
 #include "qlist.h"
 #include "qdict.h"
 #include "qstring.h"
+#include "qerror.h"
 #include "exec-all.h"
 
 #include "qemu-kvm.h"
@@ -106,6 +107,7 @@ struct Monitor {
     CPUState *mon_cpu;
     BlockDriverCompletionFunc *password_completion_cb;
     void *password_opaque;
+    QError *error;
     QLIST_HEAD(,mon_fd_t) fds;
     QLIST_ENTRY(Monitor) entry;
 };
@@ -225,6 +227,11 @@ static void monitor_user_noop(Monitor *mon, const QObject *data) { }
 static inline int monitor_handler_ported(const mon_cmd_t *cmd)
 {
     return cmd->user_print != NULL;
+}
+
+static inline int monitor_has_error(const Monitor *mon)
+{
+    return mon->error != NULL;
 }
 
 static void monitor_print_qobject(Monitor *mon, const QObject *data)
@@ -3200,6 +3207,13 @@ fail:
     return NULL;
 }
 
+static void monitor_print_error(Monitor *mon)
+{
+    qerror_print(mon->error);
+    QDECREF(mon->error);
+    mon->error = NULL;
+}
+
 static void monitor_handle_command(Monitor *mon, const char *cmdline)
 {
     QDict *qdict;
@@ -3225,7 +3239,10 @@ static void monitor_handle_command(Monitor *mon, const char *cmdline)
         cmd->mhandler.cmd(mon, qdict);
     }
 
-   qemu_errors_to_previous();
+    if (monitor_has_error(mon))
+        monitor_print_error(mon);
+
+    qemu_errors_to_previous();
 
 out:
     QDECREF(qdict);
@@ -3673,6 +3690,30 @@ void qemu_error(const char *fmt, ...)
         va_start(args, fmt);
         monitor_vprintf(qemu_error_sink->mon, fmt, args);
         va_end(args);
+        break;
+    }
+}
+
+void qemu_error_internal(const char *file, int linenr, const char *func,
+                         const char *fmt, ...)
+{
+    va_list va;
+    QError *qerror;
+
+    assert(qemu_error_sink != NULL);
+
+    va_start(va, fmt);
+    qerror = qerror_from_info(file, linenr, func, fmt, &va);
+    va_end(va);
+
+    switch (qemu_error_sink->dest) {
+    case ERR_SINK_FILE:
+        qerror_print(qerror);
+        QDECREF(qerror);
+        break;
+    case ERR_SINK_MONITOR:
+        assert(qemu_error_sink->mon->error == NULL);
+        qemu_error_sink->mon->error = qerror;
         break;
     }
 }

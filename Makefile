@@ -162,7 +162,7 @@ obj-y += qemu-char.o aio.o savevm.o
 obj-y += msmouse.o ps2.o
 obj-y += qdev.o qdev-properties.o
 obj-y += qint.o qstring.o qdict.o qlist.o qfloat.o qbool.o json-lexer.o
-obj-y += json-streamer.o json-parser.o qjson.o
+obj-y += json-streamer.o json-parser.o qjson.o qerror.o
 obj-y += qemu-config.o block-migration.o
 
 obj-$(CONFIG_BRLAPI) += baum.o
@@ -237,13 +237,11 @@ libqemu_common.a: $(obj-y)
 
 ######################################################################
 
-qemu-img.o: config-host.h qemu-img-cmds.h
+qemu-img.o: qemu-img-cmds.h
 
 qemu-img$(EXESUF): qemu-img.o qemu-tool.o $(block-obj-y)
 
 qemu-nbd$(EXESUF):  qemu-nbd.o qemu-tool.o $(block-obj-y)
-
-qemu-io.o: config-host.h
 
 qemu-io$(EXESUF):  qemu-io.o qemu-tool.o cmd.o $(block-obj-y)
 
