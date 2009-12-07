@@ -55,6 +55,7 @@
 #include "qjson.h"
 #include "json-streamer.h"
 #include "json-parser.h"
+#include "osdep.h"
 #include "exec-all.h"
 
 #include "qemu-kvm.h"
@@ -323,9 +324,9 @@ static void timestamp_put(QDict *qdict)
 {
     int err;
     QObject *obj;
-    struct timeval tv;
+    qemu_timeval tv;
 
-    err = gettimeofday(&tv, NULL);
+    err = qemu_gettimeofday(&tv);
     if (err < 0)
         return;
 
@@ -348,25 +349,25 @@ void monitor_protocol_event(MonitorEvent event, QObject *data)
     const char *event_name;
     Monitor *mon = cur_mon;
 
-    assert(event < EVENT_MAX);
+    assert(event < QEVENT_MAX);
 
     if (!monitor_ctrl_mode(mon))
         return;
 
     switch (event) {
-        case EVENT_DEBUG:
+        case QEVENT_DEBUG:
             event_name = "DEBUG";
             break;
-        case EVENT_SHUTDOWN:
+        case QEVENT_SHUTDOWN:
             event_name = "SHUTDOWN";
             break;
-        case EVENT_RESET:
+        case QEVENT_RESET:
             event_name = "RESET";
             break;
-        case EVENT_POWERDOWN:
+        case QEVENT_POWERDOWN:
             event_name = "POWERDOWN";
             break;
-        case EVENT_STOP:
+        case QEVENT_STOP:
             event_name = "STOP";
             break;
         default:
