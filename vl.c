@@ -1257,7 +1257,7 @@ static int hpet_start_timer(struct qemu_alarm_timer *t)
     struct hpet_info info;
     int r, fd;
 
-    fd = open("/dev/hpet", O_RDONLY);
+    fd = qemu_open("/dev/hpet", O_RDONLY);
     if (fd < 0)
         return -1;
 
@@ -1306,7 +1306,7 @@ static int rtc_start_timer(struct qemu_alarm_timer *t)
     int rtc_fd;
     unsigned long current_rtc_freq = 0;
 
-    TFR(rtc_fd = open("/dev/rtc", O_RDONLY));
+    TFR(rtc_fd = qemu_open("/dev/rtc", O_RDONLY));
     if (rtc_fd < 0)
         return -1;
     ioctl(rtc_fd, RTC_IRQP_READ, &current_rtc_freq);
@@ -2219,7 +2219,7 @@ DriveInfo *drive_init(QemuOpts *opts, void *opaque,
 
     on_read_error = BLOCK_ERR_REPORT;
     if ((buf = qemu_opt_get(opts, "rerror")) != NULL) {
-        if (1) {
+        if (type != IF_IDE && type != IF_VIRTIO) {
             fprintf(stderr, "rerror is no supported by this format\n");
             return NULL;
         }
@@ -3381,7 +3381,7 @@ static int qemu_event_init(void)
     int err;
     int fds[2];
 
-    err = pipe(fds);
+    err = qemu_pipe(fds);
     if (err == -1)
         return -errno;
 
@@ -5616,6 +5616,9 @@ int main(int argc, char **argv, char **envp)
 	} else if (pid < 0)
             exit(1);
 
+	close(fds[0]);
+	qemu_set_cloexec(fds[1]);
+
 	setsid();
 
 	pid = fork();
@@ -6020,7 +6023,7 @@ int main(int argc, char **argv, char **envp)
 	    exit(1);
 
 	chdir("/");
-	TFR(fd = open("/dev/null", O_RDWR));
+	TFR(fd = qemu_open("/dev/null", O_RDWR));
 	if (fd == -1)
 	    exit(1);
     }
