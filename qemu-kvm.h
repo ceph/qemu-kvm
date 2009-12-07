@@ -1145,6 +1145,7 @@ typedef struct KVMState {
     int coalesced_mmio;
     int broken_set_mem_region;
     int migration_log;
+    int vcpu_events;
 #ifdef KVM_CAP_SET_GUEST_DEBUG
     QTAILQ_HEAD(, kvm_sw_breakpoint) kvm_sw_breakpoints;
 #endif
