@@ -32,6 +32,7 @@
 #include "hw/loader.h"
 #include "gdbstub.h"
 #include "net.h"
+#include "net/slirp.h"
 #include "qemu-char.h"
 #include "sysemu.h"
 #include "monitor.h"
@@ -101,6 +102,7 @@ struct mon_fd_t {
 
 typedef struct MonitorControl {
     QObject *id;
+    int print_enabled;
     JSONMessageParser parser;
 } MonitorControl;
 
@@ -189,9 +191,13 @@ static void monitor_puts(Monitor *mon, const char *str)
 
 void monitor_vprintf(Monitor *mon, const char *fmt, va_list ap)
 {
-    char buf[4096];
-    vsnprintf(buf, sizeof(buf), fmt, ap);
-    monitor_puts(mon, buf);
+    if (mon->mc && !mon->mc->print_enabled) {
+        qemu_error_new(QERR_UNDEFINED_ERROR);
+    } else {
+        char buf[4096];
+        vsnprintf(buf, sizeof(buf), fmt, ap);
+        monitor_puts(mon, buf);
+    }
 }
 
 void monitor_printf(Monitor *mon, const char *fmt, ...)
@@ -275,7 +281,10 @@ static void monitor_json_emitter(Monitor *mon, const QObject *data)
     json = qobject_to_json(data);
     assert(json != NULL);
 
+    mon->mc->print_enabled = 1;
     monitor_printf(mon, "%s\n", qstring_get_str(json));
+    mon->mc->print_enabled = 0;
+
     QDECREF(json);
 }
 
@@ -305,6 +314,71 @@ static void monitor_protocol_emitter(Monitor *mon, QObject *data)
         qdict_put_obj(qmp, "id", mon->mc->id);
         mon->mc->id = NULL;
     }
+
+    monitor_json_emitter(mon, QOBJECT(qmp));
+    QDECREF(qmp);
+}
+
+static void timestamp_put(QDict *qdict)
+{
+    int err;
+    QObject *obj;
+    struct timeval tv;
+
+    err = gettimeofday(&tv, NULL);
+    if (err < 0)
+        return;
+
+    obj = qobject_from_jsonf("{ 'seconds': %" PRId64 ", "
+                                "'microseconds': %" PRId64 " }",
+                                (int64_t) tv.tv_sec, (int64_t) tv.tv_usec);
+    assert(obj != NULL);
+
+    qdict_put_obj(qdict, "timestamp", obj);
+}
+
+/**
+ * monitor_protocol_event(): Generate a Monitor event
+ *
+ * Event-specific data can be emitted through the (optional) 'data' parameter.
+ */
+void monitor_protocol_event(MonitorEvent event, QObject *data)
+{
+    QDict *qmp;
+    const char *event_name;
+    Monitor *mon = cur_mon;
+
+    assert(event < EVENT_MAX);
+
+    if (!monitor_ctrl_mode(mon))
+        return;
+
+    switch (event) {
+        case EVENT_DEBUG:
+            event_name = "DEBUG";
+            break;
+        case EVENT_SHUTDOWN:
+            event_name = "SHUTDOWN";
+            break;
+        case EVENT_RESET:
+            event_name = "RESET";
+            break;
+        case EVENT_POWERDOWN:
+            event_name = "POWERDOWN";
+            break;
+        case EVENT_STOP:
+            event_name = "STOP";
+            break;
+        default:
+            abort();
+            break;
+    }
+
+    qmp = qdict_new();
+    timestamp_put(qmp);
+    qdict_put(qmp, "event", qstring_from_str(event_name));
+    if (data)
+        qdict_put_obj(qmp, "data", data);
 
     monitor_json_emitter(mon, QOBJECT(qmp));
     QDECREF(qmp);
@@ -3760,9 +3834,9 @@ static void handle_qmp_command(JSONMessageParser *parser, QList *tokens)
     int err;
     QObject *obj;
     QDict *input, *args;
-    const char *cmd_name;
     const mon_cmd_t *cmd;
     Monitor *mon = cur_mon;
+    const char *cmd_name, *info_item;
 
     args = NULL;
     qemu_errors_to_mon(mon);
@@ -3793,10 +3867,24 @@ static void handle_qmp_command(JSONMessageParser *parser, QList *tokens)
     }
 
     cmd_name = qstring_get_str(qobject_to_qstring(obj));
-    cmd = monitor_find_command(cmd_name);
-    if (!cmd) {
+
+    /*
+     * XXX: We need this special case until we get info handlers
+     * converted into 'query-' commands
+     */
+    if (compare_cmd(cmd_name, "info")) {
         qemu_error_new(QERR_COMMAND_NOT_FOUND, cmd_name);
         goto err_input;
+    } else if (strstart(cmd_name, "query-", &info_item)) {
+        cmd = monitor_find_command("info");
+        qdict_put_obj(input, "arguments",
+                      qobject_from_jsonf("{ 'item': %s }", info_item));
+    } else {
+        cmd = monitor_find_command(cmd_name);
+        if (!cmd) {
+            qemu_error_new(QERR_COMMAND_NOT_FOUND, cmd_name);
+            goto err_input;
+        }
     }
 
     obj = qdict_get(input, "arguments");

@@ -13,6 +13,17 @@ extern Monitor *cur_mon;
 #define MONITOR_USE_READLINE  0x02
 #define MONITOR_USE_CONTROL   0x04
 
+/* QMP events */
+typedef enum MonitorEvent {
+    EVENT_DEBUG,
+    EVENT_SHUTDOWN,
+    EVENT_RESET,
+    EVENT_POWERDOWN,
+    EVENT_STOP,
+    EVENT_MAX,
+} MonitorEvent;
+
+void monitor_protocol_event(MonitorEvent event, QObject *data);
 const char *monitor_cmdline_parse(const char *cmdline, int *flags);
 void monitor_init(CharDriverState *chr, int flags);
 
