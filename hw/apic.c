@@ -1131,6 +1131,11 @@ int apic_init(CPUState *env)
     vmstate_register(s->idx, &vmstate_apic, s);
     qemu_register_reset(apic_reset, s);
 
+    /* apic_reset must be called before the vcpu threads are initialized and load
+     * registers, in qemu-kvm.
+     */
+    apic_reset(s);
+
     local_apics[s->idx] = s;
     return 0;
 }
