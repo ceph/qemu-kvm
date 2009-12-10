@@ -118,7 +118,7 @@ static void thread_create(pthread_t *thread, pthread_attr_t *attr,
     if (ret) die2(ret, "pthread_create");
 }
 
-static size_t handle_aiocb_ioctl(struct qemu_paiocb *aiocb)
+static ssize_t handle_aiocb_ioctl(struct qemu_paiocb *aiocb)
 {
 	int ret;
 
@@ -137,7 +137,7 @@ static size_t handle_aiocb_ioctl(struct qemu_paiocb *aiocb)
 	return aiocb->aio_nbytes;
 }
 
-static size_t handle_aiocb_flush(struct qemu_paiocb *aiocb)
+static ssize_t handle_aiocb_flush(struct qemu_paiocb *aiocb)
 {
     int ret;
 
@@ -177,7 +177,7 @@ qemu_pwritev(int fd, const struct iovec *iov, int nr_iov, off_t offset)
 
 #endif
 
-static size_t handle_aiocb_rw_vector(struct qemu_paiocb *aiocb)
+static ssize_t handle_aiocb_rw_vector(struct qemu_paiocb *aiocb)
 {
     size_t offset = 0;
     ssize_t len;
@@ -200,10 +200,10 @@ static size_t handle_aiocb_rw_vector(struct qemu_paiocb *aiocb)
     return len;
 }
 
-static size_t handle_aiocb_rw_linear(struct qemu_paiocb *aiocb, char *buf)
+static ssize_t handle_aiocb_rw_linear(struct qemu_paiocb *aiocb, char *buf)
 {
-    size_t offset = 0;
-    size_t len;
+    ssize_t offset = 0;
+    ssize_t len;
 
     while (offset < aiocb->aio_nbytes) {
          if (aiocb->aio_type & QEMU_AIO_WRITE)
@@ -231,9 +231,9 @@ static size_t handle_aiocb_rw_linear(struct qemu_paiocb *aiocb, char *buf)
     return offset;
 }
 
-static size_t handle_aiocb_rw(struct qemu_paiocb *aiocb)
+static ssize_t handle_aiocb_rw(struct qemu_paiocb *aiocb)
 {
-    size_t nbytes;
+    ssize_t nbytes;
     char *buf;
 
     if (!(aiocb->aio_type & QEMU_AIO_MISALIGNED)) {
@@ -309,7 +309,7 @@ static void *aio_thread(void *unused)
 
     while (1) {
         struct qemu_paiocb *aiocb;
-        size_t ret = 0;
+        ssize_t ret = 0;
         qemu_timeval tv;
         struct timespec ts;
 

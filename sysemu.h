@@ -7,6 +7,7 @@
 #include "qemu-queue.h"
 #include "qemu-timer.h"
 #include "qdict.h"
+#include "qerror.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -62,16 +63,23 @@ void qemu_announce_self(void);
 
 void main_loop_wait(int timeout);
 
-int qemu_savevm_state_begin(QEMUFile *f, int blk_enable, int shared);
-int qemu_savevm_state_iterate(QEMUFile *f);
-int qemu_savevm_state_complete(QEMUFile *f);
-int qemu_savevm_state(QEMUFile *f);
+int qemu_savevm_state_begin(Monitor *mon, QEMUFile *f, int blk_enable,
+                            int shared);
+int qemu_savevm_state_iterate(Monitor *mon, QEMUFile *f);
+int qemu_savevm_state_complete(Monitor *mon, QEMUFile *f);
+void qemu_savevm_state_cancel(Monitor *mon, QEMUFile *f);
 int qemu_loadvm_state(QEMUFile *f);
 
 void qemu_errors_to_file(FILE *fp);
 void qemu_errors_to_mon(Monitor *mon);
 void qemu_errors_to_previous(void);
 void qemu_error(const char *fmt, ...) __attribute__ ((format(printf, 1, 2)));
+void qemu_error_internal(const char *file, int linenr, const char *func,
+                         const char *fmt, ...)
+                         __attribute__ ((format(printf, 4, 5)));
+
+#define qemu_error_new(fmt, ...) \
+    qemu_error_internal(__FILE__, __LINE__, __func__, fmt, ## __VA_ARGS__)
 
 #ifdef _WIN32
 /* Polling handling */
@@ -174,7 +182,8 @@ typedef struct DriveInfo {
     int bus;
     int unit;
     QemuOpts *opts;
-    BlockInterfaceErrorAction onerror;
+    BlockInterfaceErrorAction on_read_error;
+    BlockInterfaceErrorAction on_write_error;
     char serial[BLOCK_SERIAL_STRLEN + 1];
     QTAILQ_ENTRY(DriveInfo) next;
 } DriveInfo;
@@ -192,7 +201,9 @@ extern DriveInfo *drive_get_by_id(const char *id);
 extern int drive_get_max_bus(BlockInterfaceType type);
 extern void drive_uninit(DriveInfo *dinfo);
 extern const char *drive_get_serial(BlockDriverState *bdrv);
-extern BlockInterfaceErrorAction drive_get_onerror(BlockDriverState *bdrv);
+
+extern BlockInterfaceErrorAction drive_get_on_error(
+    BlockDriverState *bdrv, int is_read);
 
 BlockDriverState *qdev_init_bdrv(DeviceState *dev, BlockInterfaceType type);
 

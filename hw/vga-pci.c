@@ -84,7 +84,6 @@ static int pci_vga_initfn(PCIDevice *dev)
      // vga + console init
      vga_common_init(s, VGA_RAM_SIZE);
      vga_init(s);
-     vmstate_register(0, &vmstate_vga_pci, d);
 
      s->ds = graphic_console_init(s->update, s->invalidate,
                                   s->screen_dump, s->text_update, s);
@@ -109,6 +108,12 @@ static int pci_vga_initfn(PCIDevice *dev)
                          PCI_BASE_ADDRESS_MEM_PREFETCH, vga_map);
      }
 
+#ifdef CONFIG_BOCHS_VBE
+    /* XXX: use optimized standard vga accesses */
+    cpu_register_physical_memory(VBE_DISPI_LFB_PHYSICAL_ADDRESS,
+                                 VGA_RAM_SIZE, s->vram_offset);
+#endif
+
      /* ROM BIOS */
      rom_add_vga(VGABIOS_FILENAME);
      return 0;
@@ -130,6 +135,7 @@ int pci_vga_init(PCIBus *bus,
 static PCIDeviceInfo vga_info = {
     .qdev.name    = "VGA",
     .qdev.size    = sizeof(PCIVGAState),
+    .qdev.vmsd    = &vmstate_vga_pci,
     .init         = pci_vga_initfn,
     .config_write = pci_vga_write_config,
     .qdev.props   = (Property[]) {

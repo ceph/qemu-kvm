@@ -75,7 +75,7 @@ enum {
 
 typedef struct E1000State_st {
     PCIDevice dev;
-    VLANClientState *vc;
+    NICState *nic;
     NICConf conf;
     int mmio_index;
 
@@ -89,6 +89,7 @@ typedef struct E1000State_st {
     struct e1000_tx {
         unsigned char header[256];
         unsigned char vlan_header[4];
+        /* Fields vlan and data must not be reordered or separated. */
         unsigned char vlan[4];
         unsigned char data[0x10000];
         uint16_t size;
@@ -383,11 +384,12 @@ xmit_seg(E1000State *s)
     if (tp->sum_needed & E1000_TXD_POPTS_IXSM)
         putsum(tp->data, tp->size, tp->ipcso, tp->ipcss, tp->ipcse);
     if (tp->vlan_needed) {
-        memmove(tp->vlan, tp->data, 12);
+        memmove(tp->vlan, tp->data, 4);
+        memmove(tp->data, tp->data + 4, 8);
         memcpy(tp->data + 8, tp->vlan_header, 4);
-        qemu_send_packet(s->vc, tp->vlan, tp->size + 4);
+        qemu_send_packet(&s->nic->nc, tp->vlan, tp->size + 4);
     } else
-        qemu_send_packet(s->vc, tp->data, tp->size);
+        qemu_send_packet(&s->nic->nc, tp->data, tp->size);
     s->mac_reg[TPT]++;
     s->mac_reg[GPTC]++;
     n = s->mac_reg[TOTL];
@@ -590,12 +592,12 @@ receive_filter(E1000State *s, const uint8_t *buf, int size)
 }
 
 static void
-e1000_set_link_status(VLANClientState *vc)
+e1000_set_link_status(VLANClientState *nc)
 {
-    E1000State *s = vc->opaque;
+    E1000State *s = DO_UPCAST(NICState, nc, nc)->opaque;
     uint32_t old_status = s->mac_reg[STATUS];
 
-    if (vc->link_down)
+    if (nc->link_down)
         s->mac_reg[STATUS] &= ~E1000_STATUS_LU;
     else
         s->mac_reg[STATUS] |= E1000_STATUS_LU;
@@ -605,17 +607,17 @@ e1000_set_link_status(VLANClientState *vc)
 }
 
 static int
-e1000_can_receive(VLANClientState *vc)
+e1000_can_receive(VLANClientState *nc)
 {
-    E1000State *s = vc->opaque;
+    E1000State *s = DO_UPCAST(NICState, nc, nc)->opaque;
 
     return (s->mac_reg[RCTL] & E1000_RCTL_EN);
 }
 
 static ssize_t
-e1000_receive(VLANClientState *vc, const uint8_t *buf, size_t size)
+e1000_receive(VLANClientState *nc, const uint8_t *buf, size_t size)
 {
-    E1000State *s = vc->opaque;
+    E1000State *s = DO_UPCAST(NICState, nc, nc)->opaque;
     struct e1000_rx_desc desc;
     target_phys_addr_t base;
     unsigned int n, rdt;
@@ -1037,11 +1039,11 @@ e1000_mmio_map(PCIDevice *pci_dev, int region_num,
 }
 
 static void
-e1000_cleanup(VLANClientState *vc)
+e1000_cleanup(VLANClientState *nc)
 {
-    E1000State *d = vc->opaque;
+    E1000State *s = DO_UPCAST(NICState, nc, nc)->opaque;
 
-    d->vc = NULL;
+    s->nic = NULL;
 }
 
 static int
@@ -1050,8 +1052,7 @@ pci_e1000_uninit(PCIDevice *dev)
     E1000State *d = DO_UPCAST(E1000State, dev, dev);
 
     cpu_unregister_io_memory(d->mmio_index);
-    qemu_del_vlan_client(d->vc);
-    vmstate_unregister(&vmstate_e1000, d);
+    qemu_del_vlan_client(&d->nic->nc);
     return 0;
 }
 
@@ -1066,6 +1067,15 @@ static void e1000_reset(void *opaque)
     d->rxbuf_min_shift = 1;
     memset(&d->tx, 0, sizeof d->tx);
 }
+
+static NetClientInfo net_e1000_info = {
+    .type = NET_CLIENT_TYPE_NIC,
+    .size = sizeof(NICState),
+    .can_receive = e1000_can_receive,
+    .receive = e1000_receive,
+    .cleanup = e1000_cleanup,
+    .link_status_changed = e1000_set_link_status,
+};
 
 static int pci_e1000_init(PCIDevice *pci_dev)
 {
@@ -1107,16 +1117,10 @@ static int pci_e1000_init(PCIDevice *pci_dev)
     checksum = (uint16_t) EEPROM_SUM - checksum;
     d->eeprom_data[EEPROM_CHECKSUM_REG] = checksum;
 
-    d->vc = qemu_new_vlan_client(NET_CLIENT_TYPE_NIC,
-                                 d->conf.vlan, d->conf.peer,
-                                 d->dev.qdev.info->name, d->dev.qdev.id,
-                                 e1000_can_receive, e1000_receive, NULL,
-                                 NULL, e1000_cleanup, d);
-    d->vc->link_status_changed = e1000_set_link_status;
+    d->nic = qemu_new_nic(&net_e1000_info, &d->conf,
+                          d->dev.qdev.info->name, d->dev.qdev.id, d);
 
-    qemu_format_nic_info_str(d->vc, macaddr);
-
-    vmstate_register(-1, &vmstate_e1000, d);
+    qemu_format_nic_info_str(&d->nic->nc, macaddr);
 
     if (!pci_dev->qdev.hotplugged) {
         static int loaded = 0;
@@ -1139,6 +1143,7 @@ static PCIDeviceInfo e1000_info = {
     .qdev.desc  = "Intel Gigabit Ethernet",
     .qdev.size  = sizeof(E1000State),
     .qdev.reset = qdev_e1000_reset,
+    .qdev.vmsd  = &vmstate_e1000,
     .init       = pci_e1000_init,
     .exit       = pci_e1000_uninit,
     .qdev.props = (Property[]) {
