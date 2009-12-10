@@ -1161,6 +1161,8 @@ int kvm_vm_ioctl(KVMState *s, int type, ...);
 int kvm_vcpu_ioctl(CPUState *env, int type, ...);
 int kvm_check_extension(KVMState *s, unsigned int ext);
 
+int kvm_tpr_enable_vapic(CPUState *env);
+
 #endif
 
 #endif

@@ -233,7 +233,7 @@ static int get_pcr_cpu(CPUState *env)
     return (int)b;
 }
 
-static int enable_vapic(CPUState *env)
+int kvm_tpr_enable_vapic(CPUState *env)
 {
     static uint8_t one = 1;
     int pcr_cpu = get_pcr_cpu(env);
@@ -243,8 +243,15 @@ static int enable_vapic(CPUState *env)
 
     kvm_enable_vapic(env, vapic_phys + (pcr_cpu << 7));
     cpu_physical_memory_rw(vapic_phys + (pcr_cpu << 7) + 4, &one, 1, 1);
+    env->update_vapic = 0;
     bios_enabled = 1;
+    return 1;
+}
 
+static int enable_vapic(CPUState *env)
+{
+    bios_enabled = 1;
+    env->update_vapic = 1;
     return 1;
 }
 
@@ -307,7 +314,7 @@ void kvm_tpr_access_report(CPUState *env, uint64_t rip, int is_write)
 	return;
     if (!bios_is_mapped(env, rip))
 	return;
-    if (!enable_vapic(env))
+    if (!kvm_tpr_enable_vapic(env))
 	return;
     patch_instruction(env, rip);
 }
@@ -316,7 +323,7 @@ void kvm_tpr_vcpu_start(CPUState *env)
 {
     kvm_enable_tpr_access_reporting(env);
     if (bios_enabled)
-	enable_vapic(env);
+	kvm_tpr_enable_vapic(env);
 }
 
 static void tpr_save(QEMUFile *f, void *s)
@@ -391,7 +398,7 @@ static void vtpr_ioport_write(void *opaque, uint32_t addr, uint32_t val)
 	}
     bios_enabled = 1;
     update_vbios_real_tpr();
-    enable_vapic(env);
+    kvm_tpr_enable_vapic(env);
 }
 
 void kvm_tpr_opt_setup(void)

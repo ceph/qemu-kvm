@@ -1401,6 +1401,9 @@ int kvm_arch_halt(CPUState *env)
 
 int kvm_arch_pre_run(CPUState *env, struct kvm_run *run)
 {
+    if (env->update_vapic) {
+        kvm_tpr_enable_vapic(env);
+    }
     if (!kvm_irqchip_in_kernel())
 	kvm_set_cr8(env, cpu_get_apic_tpr(env));
     return 0;

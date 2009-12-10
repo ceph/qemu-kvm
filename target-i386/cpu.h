@@ -732,6 +732,8 @@ typedef struct CPUX86State {
     uint16_t fpus_vmstate;
     uint16_t fptag_vmstate;
     uint16_t fpregs_format_vmstate;
+
+    int update_vapic;
 } CPUX86State;
 
 CPUX86State *cpu_x86_init(const char *cpu_model);
