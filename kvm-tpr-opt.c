@@ -225,7 +225,7 @@ static int get_pcr_cpu(CPUState *env)
 {
     uint8_t b;
 
-    kvm_save_registers(env);
+    cpu_synchronize_state(env);
 
     if (cpu_memory_rw_debug(env, env->segs[R_FS].base + 0x51, &b, 1, 0) < 0)
 	    return -1;
