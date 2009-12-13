@@ -26,6 +26,8 @@ vapic_size = 2*4096
 	fixup_start = .
 .text 0
 
+.align 16
+
 vapic_base:
 	.ascii "kvm aPiC"
 
@@ -296,7 +298,6 @@ up_set_tpr_poll_irq:
 	fixup_end = .
 .text 0
 
-.align 128
 /*
  * vapic format:
  *  per-vcpu records of size 2^vcpu shift.
@@ -306,6 +307,9 @@ up_set_tpr_poll_irq:
  *     byte 3: highest pending interrupt (irr) (r/o)
  */
 .text 2
+
+.align 128
+
 vapic:
 . = . + vapic_size
 _end:
