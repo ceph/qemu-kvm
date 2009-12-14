@@ -175,39 +175,6 @@ static inline uint64_t byte_zap(uint64_t op, uint8_t mskb)
     return op & ~mask;
 }
 
-uint64_t helper_mskbl(uint64_t val, uint64_t mask)
-{
-    return byte_zap(val, 0x01 << (mask & 7));
-}
-
-uint64_t helper_insbl(uint64_t val, uint64_t mask)
-{
-    val <<= (mask & 7) * 8;
-    return byte_zap(val, ~(0x01 << (mask & 7)));
-}
-
-uint64_t helper_mskwl(uint64_t val, uint64_t mask)
-{
-    return byte_zap(val, 0x03 << (mask & 7));
-}
-
-uint64_t helper_inswl(uint64_t val, uint64_t mask)
-{
-    val <<= (mask & 7) * 8;
-    return byte_zap(val, ~(0x03 << (mask & 7)));
-}
-
-uint64_t helper_mskll(uint64_t val, uint64_t mask)
-{
-    return byte_zap(val, 0x0F << (mask & 7));
-}
-
-uint64_t helper_insll(uint64_t val, uint64_t mask)
-{
-    val <<= (mask & 7) * 8;
-    return byte_zap(val, ~(0x0F << (mask & 7)));
-}
-
 uint64_t helper_zap(uint64_t val, uint64_t mask)
 {
     return byte_zap(val, mask);
@@ -216,50 +183,6 @@ uint64_t helper_zap(uint64_t val, uint64_t mask)
 uint64_t helper_zapnot(uint64_t val, uint64_t mask)
 {
     return byte_zap(val, ~mask);
-}
-
-uint64_t helper_mskql(uint64_t val, uint64_t mask)
-{
-    return byte_zap(val, 0xFF << (mask & 7));
-}
-
-uint64_t helper_insql(uint64_t val, uint64_t mask)
-{
-    val <<= (mask & 7) * 8;
-    return byte_zap(val, ~(0xFF << (mask & 7)));
-}
-
-uint64_t helper_mskwh(uint64_t val, uint64_t mask)
-{
-    return byte_zap(val, (0x03 << (mask & 7)) >> 8);
-}
-
-uint64_t helper_inswh(uint64_t val, uint64_t mask)
-{
-    val >>= 64 - ((mask & 7) * 8);
-    return byte_zap(val, ~((0x03 << (mask & 7)) >> 8));
-}
-
-uint64_t helper_msklh(uint64_t val, uint64_t mask)
-{
-    return byte_zap(val, (0x0F << (mask & 7)) >> 8);
-}
-
-uint64_t helper_inslh(uint64_t val, uint64_t mask)
-{
-    val >>= 64 - ((mask & 7) * 8);
-    return byte_zap(val, ~((0x0F << (mask & 7)) >> 8));
-}
-
-uint64_t helper_mskqh(uint64_t val, uint64_t mask)
-{
-    return byte_zap(val, (0xFF << (mask & 7)) >> 8);
-}
-
-uint64_t helper_insqh(uint64_t val, uint64_t mask)
-{
-    val >>= 64 - ((mask & 7) * 8);
-    return byte_zap(val, ~((0xFF << (mask & 7)) >> 8));
 }
 
 uint64_t helper_cmpbge (uint64_t op1, uint64_t op2)
@@ -275,6 +198,174 @@ uint64_t helper_cmpbge (uint64_t op1, uint64_t op2)
             res |= 1 << i;
     }
     return res;
+}
+
+uint64_t helper_minub8 (uint64_t op1, uint64_t op2)
+{
+    uint64_t res = 0;
+    uint8_t opa, opb, opr;
+    int i;
+
+    for (i = 0; i < 8; ++i) {
+        opa = op1 >> (i * 8);
+        opb = op2 >> (i * 8);
+        opr = opa < opb ? opa : opb;
+        res |= (uint64_t)opr << (i * 8);
+    }
+    return res;
+}
+
+uint64_t helper_minsb8 (uint64_t op1, uint64_t op2)
+{
+    uint64_t res = 0;
+    int8_t opa, opb;
+    uint8_t opr;
+    int i;
+
+    for (i = 0; i < 8; ++i) {
+        opa = op1 >> (i * 8);
+        opb = op2 >> (i * 8);
+        opr = opa < opb ? opa : opb;
+        res |= (uint64_t)opr << (i * 8);
+    }
+    return res;
+}
+
+uint64_t helper_minuw4 (uint64_t op1, uint64_t op2)
+{
+    uint64_t res = 0;
+    uint16_t opa, opb, opr;
+    int i;
+
+    for (i = 0; i < 4; ++i) {
+        opa = op1 >> (i * 16);
+        opb = op2 >> (i * 16);
+        opr = opa < opb ? opa : opb;
+        res |= (uint64_t)opr << (i * 16);
+    }
+    return res;
+}
+
+uint64_t helper_minsw4 (uint64_t op1, uint64_t op2)
+{
+    uint64_t res = 0;
+    int16_t opa, opb;
+    uint16_t opr;
+    int i;
+
+    for (i = 0; i < 4; ++i) {
+        opa = op1 >> (i * 16);
+        opb = op2 >> (i * 16);
+        opr = opa < opb ? opa : opb;
+        res |= (uint64_t)opr << (i * 16);
+    }
+    return res;
+}
+
+uint64_t helper_maxub8 (uint64_t op1, uint64_t op2)
+{
+    uint64_t res = 0;
+    uint8_t opa, opb, opr;
+    int i;
+
+    for (i = 0; i < 8; ++i) {
+        opa = op1 >> (i * 8);
+        opb = op2 >> (i * 8);
+        opr = opa > opb ? opa : opb;
+        res |= (uint64_t)opr << (i * 8);
+    }
+    return res;
+}
+
+uint64_t helper_maxsb8 (uint64_t op1, uint64_t op2)
+{
+    uint64_t res = 0;
+    int8_t opa, opb;
+    uint8_t opr;
+    int i;
+
+    for (i = 0; i < 8; ++i) {
+        opa = op1 >> (i * 8);
+        opb = op2 >> (i * 8);
+        opr = opa > opb ? opa : opb;
+        res |= (uint64_t)opr << (i * 8);
+    }
+    return res;
+}
+
+uint64_t helper_maxuw4 (uint64_t op1, uint64_t op2)
+{
+    uint64_t res = 0;
+    uint16_t opa, opb, opr;
+    int i;
+
+    for (i = 0; i < 4; ++i) {
+        opa = op1 >> (i * 16);
+        opb = op2 >> (i * 16);
+        opr = opa > opb ? opa : opb;
+        res |= (uint64_t)opr << (i * 16);
+    }
+    return res;
+}
+
+uint64_t helper_maxsw4 (uint64_t op1, uint64_t op2)
+{
+    uint64_t res = 0;
+    int16_t opa, opb;
+    uint16_t opr;
+    int i;
+
+    for (i = 0; i < 4; ++i) {
+        opa = op1 >> (i * 16);
+        opb = op2 >> (i * 16);
+        opr = opa > opb ? opa : opb;
+        res |= (uint64_t)opr << (i * 16);
+    }
+    return res;
+}
+
+uint64_t helper_perr (uint64_t op1, uint64_t op2)
+{
+    uint64_t res = 0;
+    uint8_t opa, opb, opr;
+    int i;
+
+    for (i = 0; i < 8; ++i) {
+        opa = op1 >> (i * 8);
+        opb = op2 >> (i * 8);
+        if (opa >= opb)
+            opr = opa - opb;
+        else
+            opr = opb - opa;
+        res += opr;
+    }
+    return res;
+}
+
+uint64_t helper_pklb (uint64_t op1)
+{
+    return (op1 & 0xff) | ((op1 >> 24) & 0xff00);
+}
+
+uint64_t helper_pkwb (uint64_t op1)
+{
+    return ((op1 & 0xff)
+            | ((op1 >> 8) & 0xff00)
+            | ((op1 >> 16) & 0xff0000)
+            | ((op1 >> 24) & 0xff000000));
+}
+
+uint64_t helper_unpkbl (uint64_t op1)
+{
+    return (op1 & 0xff) | ((op1 & 0xff00) << 24);
+}
+
+uint64_t helper_unpkbw (uint64_t op1)
+{
+    return ((op1 & 0xff)
+            | ((op1 & 0xff00) << 8)
+            | ((op1 & 0xff0000) << 16)
+            | ((op1 & 0xff000000) << 24));
 }
 
 /* Floating point helpers */
