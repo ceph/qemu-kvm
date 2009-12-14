@@ -517,10 +517,33 @@ static void do_info_version(Monitor *mon, QObject **ret_data)
                                    QEMU_VERSION, QEMU_PKGVERSION);
 }
 
-static void do_info_name(Monitor *mon)
+static void do_info_name_print(Monitor *mon, const QObject *data)
 {
-    if (qemu_name)
-        monitor_printf(mon, "%s\n", qemu_name);
+    QDict *qdict;
+
+    qdict = qobject_to_qdict(data);
+    if (qdict_size(qdict) == 0) {
+        return;
+    }
+
+    monitor_printf(mon, "%s\n", qdict_get_str(qdict, "name"));
+}
+
+/**
+ * do_info_name(): Show VM name
+ *
+ * Return a QDict with the following information:
+ *
+ * - "name": VM's name (optional)
+ *
+ * Example:
+ *
+ * { "name": "qemu-name" }
+ */
+static void do_info_name(Monitor *mon, QObject **ret_data)
+{
+    *ret_data = qemu_name ? qobject_from_jsonf("{'name': %s }", qemu_name) :
+                            qobject_from_jsonf("{}");
 }
 
 static QObject *get_cmd_dict(const char *name)
@@ -577,20 +600,56 @@ static void do_info_commands(Monitor *mon, QObject **ret_data)
 }
 
 #if defined(TARGET_I386)
-static void do_info_hpet(Monitor *mon)
+static void do_info_hpet_print(Monitor *mon, const QObject *data)
 {
     monitor_printf(mon, "HPET is %s by QEMU\n",
-                   (no_hpet) ? "disabled" : "enabled");
+                   qdict_get_bool(qobject_to_qdict(data), "enabled") ?
+                   "enabled" : "disabled");
+}
+
+/**
+ * do_info_hpet(): Show HPET state
+ *
+ * Return a QDict with the following information:
+ *
+ * - "enabled": true if hpet if enabled, false otherwise
+ *
+ * Example:
+ *
+ * { "enabled": true }
+ */
+static void do_info_hpet(Monitor *mon, QObject **ret_data)
+{
+    *ret_data = qobject_from_jsonf("{ 'enabled': %i }", !no_hpet);
 }
 #endif
 
-static void do_info_uuid(Monitor *mon)
+static void do_info_uuid_print(Monitor *mon, const QObject *data)
 {
-    monitor_printf(mon, UUID_FMT "\n", qemu_uuid[0], qemu_uuid[1],
+    monitor_printf(mon, "%s\n", qdict_get_str(qobject_to_qdict(data), "UUID"));
+}
+
+/**
+ * do_info_uuid(): Show VM UUID
+ *
+ * Return a QDict with the following information:
+ *
+ * - "UUID": Universally Unique Identifier
+ *
+ * Example:
+ *
+ * { "UUID": "550e8400-e29b-41d4-a716-446655440000" }
+ */
+static void do_info_uuid(Monitor *mon, QObject **ret_data)
+{
+    char uuid[64];
+
+    snprintf(uuid, sizeof(uuid), UUID_FMT, qemu_uuid[0], qemu_uuid[1],
                    qemu_uuid[2], qemu_uuid[3], qemu_uuid[4], qemu_uuid[5],
                    qemu_uuid[6], qemu_uuid[7], qemu_uuid[8], qemu_uuid[9],
                    qemu_uuid[10], qemu_uuid[11], qemu_uuid[12], qemu_uuid[13],
                    qemu_uuid[14], qemu_uuid[15]);
+    *ret_data = qobject_from_jsonf("{ 'UUID': %s }", uuid);
 }
 
 /* get the current CPU defined by the user */
@@ -2411,7 +2470,8 @@ static const mon_cmd_t info_cmds[] = {
         .args_type  = "",
         .params     = "",
         .help       = "show state of HPET",
-        .mhandler.info = do_info_hpet,
+        .user_print = do_info_hpet_print,
+        .mhandler.info_new = do_info_hpet,
     },
 #endif
     {
@@ -2491,7 +2551,8 @@ static const mon_cmd_t info_cmds[] = {
         .args_type  = "",
         .params     = "",
         .help       = "show which guest mouse is receiving events",
-        .mhandler.info = do_info_mice,
+        .user_print = do_info_mice_print,
+        .mhandler.info_new = do_info_mice,
     },
     {
         .name       = "vnc",
@@ -2505,14 +2566,16 @@ static const mon_cmd_t info_cmds[] = {
         .args_type  = "",
         .params     = "",
         .help       = "show the current VM name",
-        .mhandler.info = do_info_name,
+        .user_print = do_info_name_print,
+        .mhandler.info_new = do_info_name,
     },
     {
         .name       = "uuid",
         .args_type  = "",
         .params     = "",
         .help       = "show the current VM UUID",
-        .mhandler.info = do_info_uuid,
+        .user_print = do_info_uuid_print,
+        .mhandler.info_new = do_info_uuid,
     },
 #if defined(TARGET_PPC)
     {
