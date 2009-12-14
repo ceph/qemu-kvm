@@ -131,11 +131,23 @@ static void pci_change_irq_level(PCIDevice *pci_dev, int irq_num, int change)
     bus->set_irq(bus->irq_opaque, irq_num, bus->irq_count[irq_num] != 0);
 }
 
+/* Update interrupt status bit in config space on interrupt
+ * state change. */
+static void pci_update_irq_status(PCIDevice *dev)
+{
+    if (dev->irq_state) {
+        dev->config[PCI_STATUS] |= PCI_STATUS_INTERRUPT;
+    } else {
+        dev->config[PCI_STATUS] &= ~PCI_STATUS_INTERRUPT;
+    }
+}
+
 static void pci_device_reset(PCIDevice *dev)
 {
     int r;
 
     dev->irq_state = 0;
+    pci_update_irq_status(dev);
     dev->config[PCI_COMMAND] &= ~(PCI_COMMAND_IO | PCI_COMMAND_MEMORY |
                                   PCI_COMMAND_MASTER);
     dev->config[PCI_CACHE_LINE_SIZE] = 0x0;
@@ -380,12 +392,23 @@ static inline const VMStateDescription *pci_get_vmstate(PCIDevice *s)
 
 void pci_device_save(PCIDevice *s, QEMUFile *f)
 {
+    /* Clear interrupt status bit: it is implicit
+     * in irq_state which we are saving.
+     * This makes us compatible with old devices
+     * which never set or clear this bit. */
+    s->config[PCI_STATUS] &= ~PCI_STATUS_INTERRUPT;
     vmstate_save_state(f, pci_get_vmstate(s), s);
+    /* Restore the interrupt status bit. */
+    pci_update_irq_status(s);
 }
 
 int pci_device_load(PCIDevice *s, QEMUFile *f)
 {
-    return vmstate_load_state(f, pci_get_vmstate(s), s, s->version_id);
+    int ret;
+    ret = vmstate_load_state(f, pci_get_vmstate(s), s, s->version_id);
+    /* Restore the interrupt status bit. */
+    pci_update_irq_status(s);
+    return ret;
 }
 
 static int pci_set_default_subsystem_id(PCIDevice *pci_dev)
@@ -548,7 +571,8 @@ static void pci_init_wmask(PCIDevice *dev)
     dev->wmask[PCI_CACHE_LINE_SIZE] = 0xff;
     dev->wmask[PCI_INTERRUPT_LINE] = 0xff;
     pci_set_word(dev->wmask + PCI_COMMAND,
-                 PCI_COMMAND_IO | PCI_COMMAND_MEMORY | PCI_COMMAND_MASTER);
+                 PCI_COMMAND_IO | PCI_COMMAND_MEMORY | PCI_COMMAND_MASTER |
+                 PCI_COMMAND_INTX_DISABLE);
 
     memset(dev->wmask + PCI_CONFIG_HEADER_SIZE, 0xff,
            config_size - PCI_CONFIG_HEADER_SIZE);
@@ -968,11 +992,35 @@ static void pci_update_mappings(PCIDevice *d)
     }
 }
 
-static uint32_t pci_read_config(PCIDevice *d,
-                                uint32_t address, int len)
+static inline int pci_irq_disabled(PCIDevice *d)
+{
+    return pci_get_word(d->config + PCI_COMMAND) & PCI_COMMAND_INTX_DISABLE;
+}
+
+/* Called after interrupt disabled field update in config space,
+ * assert/deassert interrupts if necessary.
+ * Gets original interrupt disable bit value (before update). */
+static void pci_update_irq_disabled(PCIDevice *d, int was_irq_disabled)
+{
+    int i, disabled = pci_irq_disabled(d);
+    if (disabled == was_irq_disabled)
+        return;
+    for (i = 0; i < PCI_NUM_PINS; ++i) {
+        int state = pci_irq_state(d, i);
+        pci_change_irq_level(d, i, disabled ? -state : state);
+    }
+}
+
+uint32_t pci_default_read_config(PCIDevice *d,
+                                 uint32_t address, int len)
 {
     uint32_t val = 0;
     assert(len == 1 || len == 2 || len == 4);
+
+    if (pci_access_cap_config(d, address, len)) {
+        return d->cap.config_read(d, address, len);
+    }
+
     len = MIN(len, pci_config_size(d) - address);
     memcpy(&val, d->config + address, len);
     return le32_to_cpu(val);
@@ -999,7 +1047,7 @@ int pci_access_cap_config(PCIDevice *pci_dev, uint32_t address, int len)
 uint32_t pci_default_cap_read_config(PCIDevice *pci_dev,
                                      uint32_t address, int len)
 {
-    return pci_read_config(pci_dev, address, len);
+    return pci_default_read_config(pci_dev, address, len);
 }
 
 void pci_default_cap_write_config(PCIDevice *pci_dev,
@@ -1008,18 +1056,9 @@ void pci_default_cap_write_config(PCIDevice *pci_dev,
     pci_write_config(pci_dev, address, val, len);
 }
 
-uint32_t pci_default_read_config(PCIDevice *d,
-                                 uint32_t address, int len)
-{
-    if (pci_access_cap_config(d, address, len))
-        return d->cap.config_read(d, address, len);
-
-    return pci_read_config(d, address, len);
-}
-
 void pci_default_write_config(PCIDevice *d, uint32_t addr, uint32_t val, int l)
 {
-    int i;
+    int i, was_irq_disabled = pci_irq_disabled(d);
     uint32_t config_size = pci_config_size(d);
 
     if (pci_access_cap_config(d, addr, l)) {
@@ -1045,6 +1084,8 @@ void pci_default_write_config(PCIDevice *d, uint32_t addr, uint32_t val, int l)
         range_covers_byte(addr, l, PCI_COMMAND))
         pci_update_mappings(d);
 
+    if (range_covers_byte(addr, l, PCI_COMMAND))
+        pci_update_irq_disabled(d, was_irq_disabled);
 }
 
 /***********************************************************/
@@ -1065,6 +1106,9 @@ static void pci_set_irq(void *opaque, int irq_num, int level)
 #endif
 
     pci_set_irq_state(pci_dev, irq_num, level);
+    pci_update_irq_status(pci_dev);
+    if (pci_irq_disabled(pci_dev))
+        return;
     pci_change_irq_level(pci_dev, irq_num, change);
 }
 
