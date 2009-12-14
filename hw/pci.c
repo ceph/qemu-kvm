@@ -106,11 +106,48 @@ static int pci_bar(PCIDevice *d, int reg)
     return type == PCI_HEADER_TYPE_BRIDGE ? PCI_ROM_ADDRESS1 : PCI_ROM_ADDRESS;
 }
 
+static inline int pci_irq_state(PCIDevice *d, int irq_num)
+{
+	return (d->irq_state >> irq_num) & 0x1;
+}
+
+static inline void pci_set_irq_state(PCIDevice *d, int irq_num, int level)
+{
+	d->irq_state &= ~(0x1 << irq_num);
+	d->irq_state |= level << irq_num;
+}
+
+static void pci_change_irq_level(PCIDevice *pci_dev, int irq_num, int change)
+{
+    PCIBus *bus;
+    for (;;) {
+        bus = pci_dev->bus;
+        irq_num = bus->map_irq(pci_dev, irq_num);
+        if (bus->set_irq)
+            break;
+        pci_dev = bus->parent_dev;
+    }
+    bus->irq_count[irq_num] += change;
+    bus->set_irq(bus->irq_opaque, irq_num, bus->irq_count[irq_num] != 0);
+}
+
+/* Update interrupt status bit in config space on interrupt
+ * state change. */
+static void pci_update_irq_status(PCIDevice *dev)
+{
+    if (dev->irq_state) {
+        dev->config[PCI_STATUS] |= PCI_STATUS_INTERRUPT;
+    } else {
+        dev->config[PCI_STATUS] &= ~PCI_STATUS_INTERRUPT;
+    }
+}
+
 static void pci_device_reset(PCIDevice *dev)
 {
     int r;
 
-    memset(dev->irq_state, 0, sizeof dev->irq_state);
+    dev->irq_state = 0;
+    pci_update_irq_status(dev);
     dev->config[PCI_COMMAND] &= ~(PCI_COMMAND_IO | PCI_COMMAND_MEMORY |
                                   PCI_COMMAND_MASTER);
     dev->config[PCI_CACHE_LINE_SIZE] = 0x0;
@@ -277,6 +314,43 @@ static VMStateInfo vmstate_info_pci_config = {
     .put  = put_pci_config_device,
 };
 
+static int get_pci_irq_state(QEMUFile *f, void *pv, size_t size)
+{
+    PCIDevice *s = container_of(pv, PCIDevice, config);
+    uint32_t irq_state[PCI_NUM_PINS];
+    int i;
+    for (i = 0; i < PCI_NUM_PINS; ++i) {
+        irq_state[i] = qemu_get_be32(f);
+        if (irq_state[i] != 0x1 && irq_state[i] != 0) {
+            fprintf(stderr, "irq state %d: must be 0 or 1.\n",
+                    irq_state[i]);
+            return -EINVAL;
+        }
+    }
+
+    for (i = 0; i < PCI_NUM_PINS; ++i) {
+        pci_set_irq_state(s, i, irq_state[i]);
+    }
+
+    return 0;
+}
+
+static void put_pci_irq_state(QEMUFile *f, void *pv, size_t size)
+{
+    int i;
+    PCIDevice *s = container_of(pv, PCIDevice, config);
+
+    for (i = 0; i < PCI_NUM_PINS; ++i) {
+        qemu_put_be32(f, pci_irq_state(s, i));
+    }
+}
+
+static VMStateInfo vmstate_info_pci_irq_state = {
+    .name = "pci irq state",
+    .get  = get_pci_irq_state,
+    .put  = put_pci_irq_state,
+};
+
 const VMStateDescription vmstate_pci_device = {
     .name = "PCIDevice",
     .version_id = 2,
@@ -287,7 +361,9 @@ const VMStateDescription vmstate_pci_device = {
         VMSTATE_BUFFER_UNSAFE_INFO(config, PCIDevice, 0,
                                    vmstate_info_pci_config,
                                    PCI_CONFIG_SPACE_SIZE),
-        VMSTATE_INT32_ARRAY_V(irq_state, PCIDevice, PCI_NUM_PINS, 2),
+        VMSTATE_BUFFER_UNSAFE_INFO(irq_state, PCIDevice, 2,
+				   vmstate_info_pci_irq_state,
+				   PCI_NUM_PINS * sizeof(int32_t)),
         VMSTATE_END_OF_LIST()
     }
 };
@@ -302,7 +378,9 @@ const VMStateDescription vmstate_pcie_device = {
         VMSTATE_BUFFER_UNSAFE_INFO(config, PCIDevice, 0,
                                    vmstate_info_pci_config,
                                    PCIE_CONFIG_SPACE_SIZE),
-        VMSTATE_INT32_ARRAY_V(irq_state, PCIDevice, PCI_NUM_PINS, 2),
+        VMSTATE_BUFFER_UNSAFE_INFO(irq_state, PCIDevice, 2,
+				   vmstate_info_pci_irq_state,
+				   PCI_NUM_PINS * sizeof(int32_t)),
         VMSTATE_END_OF_LIST()
     }
 };
@@ -314,12 +392,23 @@ static inline const VMStateDescription *pci_get_vmstate(PCIDevice *s)
 
 void pci_device_save(PCIDevice *s, QEMUFile *f)
 {
+    /* Clear interrupt status bit: it is implicit
+     * in irq_state which we are saving.
+     * This makes us compatible with old devices
+     * which never set or clear this bit. */
+    s->config[PCI_STATUS] &= ~PCI_STATUS_INTERRUPT;
     vmstate_save_state(f, pci_get_vmstate(s), s);
+    /* Restore the interrupt status bit. */
+    pci_update_irq_status(s);
 }
 
 int pci_device_load(PCIDevice *s, QEMUFile *f)
 {
-    return vmstate_load_state(f, pci_get_vmstate(s), s, s->version_id);
+    int ret;
+    ret = vmstate_load_state(f, pci_get_vmstate(s), s, s->version_id);
+    /* Restore the interrupt status bit. */
+    pci_update_irq_status(s);
+    return ret;
 }
 
 static int pci_set_default_subsystem_id(PCIDevice *pci_dev)
@@ -482,7 +571,8 @@ static void pci_init_wmask(PCIDevice *dev)
     dev->wmask[PCI_CACHE_LINE_SIZE] = 0xff;
     dev->wmask[PCI_INTERRUPT_LINE] = 0xff;
     pci_set_word(dev->wmask + PCI_COMMAND,
-                 PCI_COMMAND_IO | PCI_COMMAND_MEMORY | PCI_COMMAND_MASTER);
+                 PCI_COMMAND_IO | PCI_COMMAND_MEMORY | PCI_COMMAND_MASTER |
+                 PCI_COMMAND_INTX_DISABLE);
 
     memset(dev->wmask + PCI_CONFIG_HEADER_SIZE, 0xff,
            config_size - PCI_CONFIG_HEADER_SIZE);
@@ -543,16 +633,18 @@ static PCIDevice *do_pci_register_device(PCIDevice *pci_dev, PCIBus *bus,
             if (!bus->devices[devfn])
                 goto found;
         }
-        hw_error("PCI: no devfn available for %s, all in use\n", name);
+        qemu_error("PCI: no devfn available for %s, all in use\n", name);
+        return NULL;
     found: ;
     } else if (bus->devices[devfn]) {
-        hw_error("PCI: devfn %d not available for %s, in use by %s\n", devfn,
+        qemu_error("PCI: devfn %d not available for %s, in use by %s\n", devfn,
                  name, bus->devices[devfn]->name);
+        return NULL;
     }
     pci_dev->bus = bus;
     pci_dev->devfn = devfn;
     pstrcpy(pci_dev->name, sizeof(pci_dev->name), name);
-    memset(pci_dev->irq_state, 0, sizeof(pci_dev->irq_state));
+    pci_dev->irq_state = 0;
     pci_config_alloc(pci_dev);
 
     header_type &= ~PCI_HEADER_TYPE_MULTI_FUNCTION;
@@ -588,6 +680,9 @@ PCIDevice *pci_register_device(PCIBus *bus, const char *name,
     pci_dev = do_pci_register_device(pci_dev, bus, name, devfn,
                                      config_read, config_write,
                                      PCI_HEADER_TYPE_NORMAL);
+    if (pci_dev == NULL) {
+        hw_error("PCI: can't register device\n");
+    }
     return pci_dev;
 }
 static target_phys_addr_t pci_to_cpu_addr(target_phys_addr_t addr)
@@ -902,11 +997,35 @@ static void pci_update_mappings(PCIDevice *d)
     }
 }
 
-static uint32_t pci_read_config(PCIDevice *d,
-                                uint32_t address, int len)
+static inline int pci_irq_disabled(PCIDevice *d)
+{
+    return pci_get_word(d->config + PCI_COMMAND) & PCI_COMMAND_INTX_DISABLE;
+}
+
+/* Called after interrupt disabled field update in config space,
+ * assert/deassert interrupts if necessary.
+ * Gets original interrupt disable bit value (before update). */
+static void pci_update_irq_disabled(PCIDevice *d, int was_irq_disabled)
+{
+    int i, disabled = pci_irq_disabled(d);
+    if (disabled == was_irq_disabled)
+        return;
+    for (i = 0; i < PCI_NUM_PINS; ++i) {
+        int state = pci_irq_state(d, i);
+        pci_change_irq_level(d, i, disabled ? -state : state);
+    }
+}
+
+uint32_t pci_default_read_config(PCIDevice *d,
+                                 uint32_t address, int len)
 {
     uint32_t val = 0;
     assert(len == 1 || len == 2 || len == 4);
+
+    if (pci_access_cap_config(d, address, len)) {
+        return d->cap.config_read(d, address, len);
+    }
+
     len = MIN(len, pci_config_size(d) - address);
     memcpy(&val, d->config + address, len);
     return le32_to_cpu(val);
@@ -933,7 +1052,7 @@ int pci_access_cap_config(PCIDevice *pci_dev, uint32_t address, int len)
 uint32_t pci_default_cap_read_config(PCIDevice *pci_dev,
                                      uint32_t address, int len)
 {
-    return pci_read_config(pci_dev, address, len);
+    return pci_default_read_config(pci_dev, address, len);
 }
 
 void pci_default_cap_write_config(PCIDevice *pci_dev,
@@ -942,18 +1061,9 @@ void pci_default_cap_write_config(PCIDevice *pci_dev,
     pci_write_config(pci_dev, address, val, len);
 }
 
-uint32_t pci_default_read_config(PCIDevice *d,
-                                 uint32_t address, int len)
-{
-    if (pci_access_cap_config(d, address, len))
-        return d->cap.config_read(d, address, len);
-
-    return pci_read_config(d, address, len);
-}
-
 void pci_default_write_config(PCIDevice *d, uint32_t addr, uint32_t val, int l)
 {
-    int i;
+    int i, was_irq_disabled = pci_irq_disabled(d);
     uint32_t config_size = pci_config_size(d);
 
     if (pci_access_cap_config(d, addr, l)) {
@@ -979,6 +1089,8 @@ void pci_default_write_config(PCIDevice *d, uint32_t addr, uint32_t val, int l)
         range_covers_byte(addr, l, PCI_COMMAND))
         pci_update_mappings(d);
 
+    if (range_covers_byte(addr, l, PCI_COMMAND))
+        pci_update_irq_disabled(d, was_irq_disabled);
 }
 
 /***********************************************************/
@@ -988,28 +1100,21 @@ void pci_default_write_config(PCIDevice *d, uint32_t addr, uint32_t val, int l)
 static void pci_set_irq(void *opaque, int irq_num, int level)
 {
     PCIDevice *pci_dev = opaque;
-    PCIBus *bus;
     int change;
 
-    change = level - pci_dev->irq_state[irq_num];
+    change = level - pci_irq_state(pci_dev, irq_num);
     if (!change)
         return;
-
-    pci_dev->irq_state[irq_num] = level;
 
 #if defined(TARGET_IA64)
     ioapic_set_irq(pci_dev, irq_num, level);
 #endif
 
-    for (;;) {
-        bus = pci_dev->bus;
-        irq_num = bus->map_irq(pci_dev, irq_num);
-        if (bus->set_irq)
-            break;
-        pci_dev = bus->parent_dev;
-    }
-    bus->irq_count[irq_num] += change;
-    bus->set_irq(bus->irq_opaque, irq_num, bus->irq_count[irq_num] != 0);
+    pci_set_irq_state(pci_dev, irq_num, level);
+    pci_update_irq_status(pci_dev);
+    if (pci_irq_disabled(pci_dev))
+        return;
+    pci_change_irq_level(pci_dev, irq_num, change);
 }
 
 int pci_map_irq(PCIDevice *pci_dev, int pin)
@@ -1386,6 +1491,8 @@ static int pci_qdev_init(DeviceState *qdev, DeviceInfo *base)
     pci_dev = do_pci_register_device(pci_dev, bus, base->name, devfn,
                                      info->config_read, info->config_write,
                                      info->header_type);
+    if (pci_dev == NULL)
+        return -1;
     rc = info->init(pci_dev);
     if (rc != 0)
         return rc;

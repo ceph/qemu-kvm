@@ -133,10 +133,11 @@ static x86_def_t x86_defs[] = {
             CPUID_MTRR | CPUID_CLFLUSH | CPUID_MCA |
         /* this feature is needed for Solaris and isn't fully implemented */
             CPUID_PSE36,
-        .ext_features = CPUID_EXT_SSE3,
+        .ext_features = CPUID_EXT_SSE3 | CPUID_EXT_CX16 | CPUID_EXT_POPCNT,
         .ext2_features = (PPRO_FEATURES & 0x0183F3FF) | 
             CPUID_EXT2_LM | CPUID_EXT2_SYSCALL | CPUID_EXT2_NX,
-        .ext3_features = CPUID_EXT3_SVM,
+        .ext3_features = CPUID_EXT3_LAHF_LM | CPUID_EXT3_SVM |
+            CPUID_EXT3_ABM | CPUID_EXT3_SSE4A,
         .xlevel = 0x8000000A,
         .model_id = "QEMU Virtual CPU version " QEMU_VERSION,
     },
@@ -153,18 +154,19 @@ static x86_def_t x86_defs[] = {
         .features = PPRO_FEATURES | 
             CPUID_MTRR | CPUID_CLFLUSH | CPUID_MCA |
             CPUID_PSE36,
-        /* Missing: CPUID_EXT_CX16, CPUID_EXT_POPCNT */
-        .ext_features = CPUID_EXT_SSE3 | CPUID_EXT_MONITOR,
+        .ext_features = CPUID_EXT_SSE3 | CPUID_EXT_MONITOR | CPUID_EXT_CX16 |
+            CPUID_EXT_POPCNT,
         /* Missing: CPUID_EXT2_PDPE1GB, CPUID_EXT2_RDTSCP */
         .ext2_features = (PPRO_FEATURES & 0x0183F3FF) | 
             CPUID_EXT2_LM | CPUID_EXT2_SYSCALL | CPUID_EXT2_NX |
             CPUID_EXT2_3DNOW | CPUID_EXT2_3DNOWEXT | CPUID_EXT2_MMXEXT |
             CPUID_EXT2_FFXSR,
-        /* Missing: CPUID_EXT3_LAHF_LM, CPUID_EXT3_CMP_LEG, CPUID_EXT3_EXTAPIC,
-                    CPUID_EXT3_CR8LEG, CPUID_EXT3_ABM, CPUID_EXT3_SSE4A,
+        /* Missing: CPUID_EXT3_CMP_LEG, CPUID_EXT3_EXTAPIC,
+                    CPUID_EXT3_CR8LEG,
                     CPUID_EXT3_MISALIGNSSE, CPUID_EXT3_3DNOWPREFETCH,
                     CPUID_EXT3_OSVW, CPUID_EXT3_IBS */
-        .ext3_features = CPUID_EXT3_SVM,
+        .ext3_features = CPUID_EXT3_LAHF_LM | CPUID_EXT3_SVM |
+            CPUID_EXT3_ABM | CPUID_EXT3_SSE4A,
         .xlevel = 0x8000001A,
         .model_id = "AMD Phenom(tm) 9550 Quad-Core Processor"
     },
@@ -185,7 +187,7 @@ static x86_def_t x86_defs[] = {
                CPUID_EXT_TM2, CPUID_EXT_CX16, CPUID_EXT_XTPR, CPUID_EXT_PDCM */
         .ext_features = CPUID_EXT_SSE3 | CPUID_EXT_MONITOR | CPUID_EXT_SSSE3,
         .ext2_features = CPUID_EXT2_LM | CPUID_EXT2_SYSCALL | CPUID_EXT2_NX,
-        /* Missing: .ext3_features = CPUID_EXT3_LAHF_LM */
+        .ext3_features = CPUID_EXT3_LAHF_LM,
         .xlevel = 0x80000008,
         .model_id = "Intel(R) Core(TM)2 Duo CPU     T7700  @ 2.40GHz",
     },
@@ -223,7 +225,7 @@ static x86_def_t x86_defs[] = {
         .model = 3,
         .stepping = 3,
         .features = PPRO_FEATURES,
-        .ext_features = CPUID_EXT_SSE3,
+        .ext_features = CPUID_EXT_SSE3 | CPUID_EXT_POPCNT,
         .xlevel = 0,
         .model_id = "QEMU Virtual CPU version " QEMU_VERSION,
     },
@@ -1645,6 +1647,24 @@ static void host_cpuid(uint32_t function, uint32_t count,
 #endif
 }
 
+static void get_cpuid_vendor(CPUX86State *env, uint32_t *ebx,
+                             uint32_t *ecx, uint32_t *edx)
+{
+    *ebx = env->cpuid_vendor1;
+    *edx = env->cpuid_vendor2;
+    *ecx = env->cpuid_vendor3;
+
+    /* sysenter isn't supported on compatibility mode on AMD, syscall
+     * isn't supported in compatibility mode on Intel.
+     * Normally we advertise the actual cpu vendor, but you can override
+     * this if you want to use KVM's sysenter/syscall emulation
+     * in compatibility mode and when doing cross vendor migration
+     */
+    if (kvm_enabled() && env->cpuid_vendor_override) {
+        host_cpuid(0, 0, NULL, ebx, ecx, edx);
+    }
+}
+
 void cpu_x86_cpuid(CPUX86State *env, uint32_t index, uint32_t count,
                    uint32_t *eax, uint32_t *ebx,
                    uint32_t *ecx, uint32_t *edx)
@@ -1661,16 +1681,7 @@ void cpu_x86_cpuid(CPUX86State *env, uint32_t index, uint32_t count,
     switch(index) {
     case 0:
         *eax = env->cpuid_level;
-        *ebx = env->cpuid_vendor1;
-        *edx = env->cpuid_vendor2;
-        *ecx = env->cpuid_vendor3;
-
-        /* sysenter isn't supported on compatibility mode on AMD.  and syscall
-         * isn't supported in compatibility mode on Intel.  so advertise the
-         * actuall cpu, and say goodbye to migration between different vendors
-         * is you use compatibility mode. */
-        if (kvm_enabled() && !env->cpuid_vendor_override)
-            host_cpuid(0, 0, NULL, ebx, ecx, edx);
+        get_cpuid_vendor(env, ebx, ecx, edx);
         break;
     case 1:
         *eax = env->cpuid_version;
@@ -1766,11 +1777,18 @@ void cpu_x86_cpuid(CPUX86State *env, uint32_t index, uint32_t count,
         *ecx = env->cpuid_ext3_features;
         *edx = env->cpuid_ext2_features;
 
-        if (env->nr_cores * env->nr_threads > 1 &&
-            env->cpuid_vendor1 == CPUID_VENDOR_AMD_1 &&
-            env->cpuid_vendor2 == CPUID_VENDOR_AMD_2 &&
-            env->cpuid_vendor3 == CPUID_VENDOR_AMD_3) {
-            *ecx |= 1 << 1;    /* CmpLegacy bit */
+        /* The Linux kernel checks for the CMPLegacy bit and
+         * discards multiple thread information if it is set.
+         * So dont set it here for Intel to make Linux guests happy.
+         */
+        if (env->nr_cores * env->nr_threads > 1) {
+            uint32_t tebx, tecx, tedx;
+            get_cpuid_vendor(env, &tebx, &tecx, &tedx);
+            if (tebx != CPUID_VENDOR_INTEL_1 ||
+                tedx != CPUID_VENDOR_INTEL_2 ||
+                tecx != CPUID_VENDOR_INTEL_3) {
+                *ecx |= 1 << 1;    /* CmpLegacy bit */
+            }
         }
 
         if (kvm_enabled()) {

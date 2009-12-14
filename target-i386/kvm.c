@@ -36,6 +36,9 @@
     do { } while (0)
 #endif
 
+#define MSR_KVM_WALL_CLOCK  0x11
+#define MSR_KVM_SYSTEM_TIME 0x12
+
 #ifdef KVM_CAP_EXT_CPUID
 
 static struct kvm_cpuid2 *try_get_cpuid(KVMState *s, int max)
@@ -245,9 +248,9 @@ static int kvm_has_msr_star(CPUState *env)
          * save/restore */
         msr_list.nmsrs = 0;
         ret = kvm_ioctl(env->kvm_state, KVM_GET_MSR_INDEX_LIST, &msr_list);
-        if (ret < 0)
+        if (ret < 0 && ret != -E2BIG) {
             return 0;
-
+        }
         /* Old kernel modules had a bug and could write beyond the provided
            memory. Allocate at least a safe amount of 1K. */
         kvm_msr_list = qemu_mallocz(MAX(1024, sizeof(msr_list) +
@@ -496,6 +499,9 @@ static int kvm_put_msrs(CPUState *env)
     kvm_msr_entry_set(&msrs[n++], MSR_FMASK, env->fmask);
     kvm_msr_entry_set(&msrs[n++], MSR_LSTAR, env->lstar);
 #endif
+    kvm_msr_entry_set(&msrs[n++], MSR_KVM_SYSTEM_TIME,  env->system_time_msr);
+    kvm_msr_entry_set(&msrs[n++], MSR_KVM_WALL_CLOCK,  env->wall_clock_msr);
+
     msr_data.info.nmsrs = n;
 
     return kvm_vcpu_ioctl(env, KVM_SET_MSRS, &msr_data);
@@ -637,6 +643,9 @@ static int kvm_get_msrs(CPUState *env)
     msrs[n++].index = MSR_FMASK;
     msrs[n++].index = MSR_LSTAR;
 #endif
+    msrs[n++].index = MSR_KVM_SYSTEM_TIME;
+    msrs[n++].index = MSR_KVM_WALL_CLOCK;
+
     msr_data.info.nmsrs = n;
     ret = kvm_vcpu_ioctl(env, KVM_GET_MSRS, &msr_data);
     if (ret < 0)
@@ -672,6 +681,12 @@ static int kvm_get_msrs(CPUState *env)
 #endif
         case MSR_IA32_TSC:
             env->tsc = msrs[i].data;
+            break;
+        case MSR_KVM_SYSTEM_TIME:
+            env->system_time_msr = msrs[i].data;
+            break;
+        case MSR_KVM_WALL_CLOCK:
+            env->wall_clock_msr = msrs[i].data;
             break;
         case MSR_VM_HSAVE_PA:
             env->vm_hsave = msrs[i].data;
