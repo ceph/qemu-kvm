@@ -860,6 +860,11 @@ int pre_kvm_run(kvm_context_t kvm, CPUState *env)
 {
     kvm_arch_pre_run(env, env->kvm_run);
 
+    if (env->kvm_cpu_state.regs_modified) {
+        kvm_arch_put_registers(env);
+        env->kvm_cpu_state.regs_modified = 0;
+    }
+
     pthread_mutex_unlock(&qemu_mutex);
     return 0;
 }
@@ -905,11 +910,6 @@ int kvm_run(CPUState *env)
     if (!kvm->irqchip_in_kernel)
         run->request_interrupt_window = kvm_arch_try_push_interrupts(env);
 #endif
-
-    if (env->kvm_cpu_state.regs_modified) {
-        kvm_arch_put_registers(env);
-        env->kvm_cpu_state.regs_modified = 0;
-    }
 
     r = pre_kvm_run(kvm, env);
     if (r)
