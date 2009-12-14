@@ -94,6 +94,12 @@ ALL_SUBDIRS=$(TARGET_DIRS) $(patsubst %,pc-bios/%, $(ROMS))
 recurse-all: $(SUBDIR_RULES) $(ROMSUBDIR_RULES)
 
 #######################################################################
+# QObject
+qobject-obj-y = qint.o qstring.o qdict.o qlist.o qfloat.o qbool.o
+qobject-obj-y += qjson.o json-lexer.o json-streamer.o json-parser.o
+qobject-obj-y += qerror.o
+
+#######################################################################
 # block-obj-y is code used by both qemu system emulation and qemu-img
 
 block-obj-y = cutils.o cache-utils.o qemu-malloc.o qemu-option.o module.o
@@ -133,6 +139,7 @@ net-obj-y += $(addprefix net/, $(net-nested-y))
 
 obj-y = $(block-obj-y)
 obj-y += $(net-obj-y)
+obj-y += $(qobject-obj-y)
 obj-y += readline.o console.o
 
 obj-y += tcg-runtime.o host-utils.o
@@ -165,8 +172,6 @@ obj-y += buffered_file.o migration.o migration-tcp.o qemu-sockets.o
 obj-y += qemu-char.o aio.o savevm.o
 obj-y += msmouse.o ps2.o
 obj-y += qdev.o qdev-properties.o
-obj-y += qint.o qstring.o qdict.o qlist.o qfloat.o qbool.o json-lexer.o
-obj-y += json-streamer.o json-parser.o qjson.o qerror.o
 obj-y += qemu-config.o block-migration.o
 
 obj-$(CONFIG_BRLAPI) += baum.o
@@ -254,7 +259,7 @@ qemu-img-cmds.h: $(SRC_PATH)/qemu-img-cmds.hx
 
 check-qint: check-qint.o qint.o qemu-malloc.o
 check-qstring: check-qstring.o qstring.o qemu-malloc.o
-check-qdict: check-qdict.o qdict.o qint.o qstring.o qemu-malloc.o
+check-qdict: check-qdict.o qdict.o qint.o qstring.o qbool.o qemu-malloc.o qlist.o
 check-qlist: check-qlist.o qlist.o qint.o qemu-malloc.o
 check-qfloat: check-qfloat.o qfloat.o qemu-malloc.o
 check-qjson: check-qjson.o qfloat.o qint.o qdict.o qstring.o qlist.o qbool.o qjson.o json-streamer.o json-lexer.o json-parser.o qemu-malloc.o
