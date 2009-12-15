@@ -1016,19 +1016,26 @@ static void pci_update_irq_disabled(PCIDevice *d, int was_irq_disabled)
     }
 }
 
+static uint32_t pci_read_config(PCIDevice *d,
+                                uint32_t address, int len)
+{
+    uint32_t val = 0;
+
+    len = MIN(len, pci_config_size(d) - address);
+    memcpy(&val, d->config + address, len);
+    return le32_to_cpu(val);
+}
+
 uint32_t pci_default_read_config(PCIDevice *d,
                                  uint32_t address, int len)
 {
-    uint32_t val = 0;
     assert(len == 1 || len == 2 || len == 4);
 
     if (pci_access_cap_config(d, address, len)) {
         return d->cap.config_read(d, address, len);
     }
 
-    len = MIN(len, pci_config_size(d) - address);
-    memcpy(&val, d->config + address, len);
-    return le32_to_cpu(val);
+    return pci_read_config(d, address, len);
 }
 
 static void pci_write_config(PCIDevice *pci_dev,
@@ -1052,7 +1059,7 @@ int pci_access_cap_config(PCIDevice *pci_dev, uint32_t address, int len)
 uint32_t pci_default_cap_read_config(PCIDevice *pci_dev,
                                      uint32_t address, int len)
 {
-    return pci_default_read_config(pci_dev, address, len);
+    return pci_read_config(pci_dev, address, len);
 }
 
 void pci_default_cap_write_config(PCIDevice *pci_dev,
