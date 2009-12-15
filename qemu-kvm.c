@@ -1984,7 +1984,7 @@ int kvm_init_ap(void)
     action.sa_flags = SA_SIGINFO;
     action.sa_sigaction = (void (*)(int, siginfo_t*, void*))sigbus_handler;
     sigaction(SIGBUS, &action, NULL);
-    prctl(PR_MCE_KILL, 1, 1);
+    prctl(PR_MCE_KILL, 1, 1, 0, 0);
     return 0;
 }
 
