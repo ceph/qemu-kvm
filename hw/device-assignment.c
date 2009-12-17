@@ -756,6 +756,54 @@ static uint32_t calc_assigned_dev_id(uint8_t bus, uint8_t devfn)
     return (uint32_t)bus << 8 | (uint32_t)devfn;
 }
 
+static void assign_failed_examine(AssignedDevice *dev)
+{
+    char name[PATH_MAX], dir[PATH_MAX], driver[PATH_MAX] = {}, *ns;
+    uint16_t vendor_id, device_id;
+    int r;
+
+    /* XXX implement multidomain */
+    sprintf(dir, "/sys/bus/pci/devices/0000:%02x:%02x.%01x/",
+             dev->host.bus, dev->host.dev, dev->host.func);
+
+    sprintf(name, "%sdriver", dir);
+
+    r = readlink(name, driver, sizeof(driver));
+    if ((r <= 0) || r >= sizeof(driver) || !(ns = strrchr(driver, '/'))) {
+        goto fail;
+    }
+
+    ns++;
+
+    if (get_real_vendor_id(dir, &vendor_id) ||
+        get_real_device_id(dir, &device_id)) {
+        goto fail;
+    }
+
+    fprintf(stderr, "*** The driver '%s' is occupying your device "
+                    "%02x:%02x.%x.\n",
+            ns, dev->host.bus, dev->host.dev, dev->host.func);
+    fprintf(stderr, "***\n");
+    fprintf(stderr, "*** You can try the following commands to free it:\n");
+    fprintf(stderr, "***\n");
+    fprintf(stderr, "*** $ echo \"%04x %04x\" > /sys/bus/pci/drivers/pci-stub/"
+                    "new_id\n", vendor_id, device_id);
+    fprintf(stderr, "*** $ echo \"0000:%02x:%02x.%x\" > /sys/bus/pci/drivers/"
+                    "%s/unbind\n",
+            dev->host.bus, dev->host.dev, dev->host.func, ns);
+    fprintf(stderr, "*** $ echo \"0000:%02x:%02x.%x\" > /sys/bus/pci/drivers/"
+                    "pci-stub/bind\n",
+            dev->host.bus, dev->host.dev, dev->host.func);
+    fprintf(stderr, "*** $ echo \"%04x %04x\" > /sys/bus/pci/drivers/pci-stub"
+                    "/remove_id\n", vendor_id, device_id);
+    fprintf(stderr, "***\n");
+
+    return;
+
+fail:
+    fprintf(stderr, "Couldn't find out why.\n");
+}
+
 static int assign_device(AssignedDevice *dev)
 {
     struct kvm_assigned_pci_dev assigned_dev_data;
@@ -781,9 +829,18 @@ static int assign_device(AssignedDevice *dev)
 #endif
 
     r = kvm_assign_pci_device(kvm_context, &assigned_dev_data);
-    if (r < 0)
-	fprintf(stderr, "Failed to assign device \"%s\" : %s\n",
+    if (r < 0) {
+        fprintf(stderr, "Failed to assign device \"%s\" : %s\n",
                 dev->dev.qdev.id, strerror(-r));
+
+        switch (r) {
+            case -EBUSY:
+                assign_failed_examine(dev);
+                break;
+            default:
+                break;
+        }
+    }
     return r;
 }
 
