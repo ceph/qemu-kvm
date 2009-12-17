@@ -562,14 +562,46 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
     return 0;
 }
 
+static int get_real_id(const char *devpath, const char *idname, uint16_t *val)
+{
+    FILE *f;
+    char name[128];
+    long id;
+
+    snprintf(name, sizeof(name), "%s%s", devpath, idname);
+    f = fopen(name, "r");
+    if (f == NULL) {
+        fprintf(stderr, "%s: %s: %m\n", __func__, name);
+        return -1;
+    }
+    if (fscanf(f, "%li\n", &id) == 1) {
+        *val = id;
+    } else {
+        return -1;
+    }
+    fclose(f);
+
+    return 0;
+}
+
+static int get_real_vendor_id(const char *devpath, uint16_t *val)
+{
+    return get_real_id(devpath, "vendor", val);
+}
+
+static int get_real_device_id(const char *devpath, uint16_t *val)
+{
+    return get_real_id(devpath, "device", val);
+}
+
 static int get_real_device(AssignedDevice *pci_dev, uint8_t r_bus,
                            uint8_t r_dev, uint8_t r_func)
 {
     char dir[128], name[128];
-    int fd, r = 0;
+    int fd, r = 0, v;
     FILE *f;
     unsigned long long start, end, size, flags;
-    unsigned long id;
+    uint16_t id;
     struct stat statbuf;
     PCIRegion *rp;
     PCIDevRegions *dev = &pci_dev->real_device;
@@ -635,31 +667,21 @@ again:
 
     fclose(f);
 
-    /* read and fill device ID */
-    snprintf(name, sizeof(name), "%svendor", dir);
-    f = fopen(name, "r");
-    if (f == NULL) {
-        fprintf(stderr, "%s: %s: %m\n", __func__, name);
-        return 1;
-    }
-    if (fscanf(f, "%li\n", &id) == 1) {
-	pci_dev->dev.config[0] = id & 0xff;
-	pci_dev->dev.config[1] = (id & 0xff00) >> 8;
-    }
-    fclose(f);
-
     /* read and fill vendor ID */
-    snprintf(name, sizeof(name), "%sdevice", dir);
-    f = fopen(name, "r");
-    if (f == NULL) {
-        fprintf(stderr, "%s: %s: %m\n", __func__, name);
+    v = get_real_vendor_id(dir, &id);
+    if (v) {
         return 1;
     }
-    if (fscanf(f, "%li\n", &id) == 1) {
-	pci_dev->dev.config[2] = id & 0xff;
-	pci_dev->dev.config[3] = (id & 0xff00) >> 8;
+    pci_dev->dev.config[0] = id & 0xff;
+    pci_dev->dev.config[1] = (id & 0xff00) >> 8;
+
+    /* read and fill device ID */
+    v = get_real_device_id(dir, &id);
+    if (v) {
+        return 1;
     }
-    fclose(f);
+    pci_dev->dev.config[2] = id & 0xff;
+    pci_dev->dev.config[3] = (id & 0xff00) >> 8;
 
     /* dealing with virtual function device */
     snprintf(name, sizeof(name), "%sphysfn/", dir);
