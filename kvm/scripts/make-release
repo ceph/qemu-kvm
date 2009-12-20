@@ -45,6 +45,13 @@ tarball="$releasedir/$name.tar"
 cd "$(dirname "$0")"/../..
 git archive --prefix="$name/" --format=tar "$commit" > "$tarball"
 
+mkdir -p "$tmpdir"
+git cat-file -p "${commit}:roms" | awk ' { print $4, $3 } ' \
+    > "$tmpdir/EXTERNAL_DEPENDENCIES"
+tar -rf "$tarball" --transform "s,^,$name/," -C "$tmpdir" \
+    "EXTERNAL_DEPENDENCIES"
+rm -rf "$tmpdir"
+
 if [[ -n "$formal" ]]; then
     mkdir -p "$tmpdir"
     echo "$name" > "$tmpdir/KVM_VERSION"
