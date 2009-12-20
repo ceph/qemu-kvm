@@ -669,7 +669,7 @@ int rom_load_all(void)
                         "addr 0x" TARGET_FMT_plx
                         ", size 0x%zx, max 0x" TARGET_FMT_plx ")\n",
                         rom->name, addr, rom->romsize, rom->max);
-                return -1;
+                continue;
             }
         } else {
             /* fixed address requested */
@@ -717,8 +717,6 @@ int rom_copy(uint8_t *dest, target_phys_addr_t addr, size_t size)
 
     QTAILQ_FOREACH(rom, &roms, next) {
         if (rom->max)
-            continue;
-        if (rom->min > addr)
             continue;
         if (rom->min + rom->romsize < addr)
             continue;
