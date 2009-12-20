@@ -286,10 +286,12 @@ static void monitor_protocol_emitter(Monitor *mon, QObject *data)
     if (!monitor_has_error(mon)) {
         /* success response */
         if (data) {
+            assert(qobject_type(data) == QTYPE_QDICT);
             qobject_incref(data);
             qdict_put_obj(qmp, "return", data);
         } else {
-            qdict_put(qmp, "return", qstring_from_str("OK"));
+            /* return an empty QDict by default */
+            qdict_put(qmp, "return", qdict_new());
         }
     } else {
         /* error response */
@@ -2114,8 +2116,7 @@ static void do_balloon(Monitor *mon, const QDict *qdict, QObject **ret_data)
 {
     if (balloon_get_value()) {
         /* ballooning is active */
-        ram_addr_t value = qdict_get_int(qdict, "value");
-        qemu_balloon(value << 20);
+        qemu_balloon(qdict_get_int(qdict, "value"));
     }
 }
 
@@ -3532,6 +3533,7 @@ static const mon_cmd_t *monitor_parse_command(Monitor *mon,
             break;
         case 'i':
         case 'l':
+        case 'M':
             {
                 int64_t val;
 
@@ -3562,6 +3564,8 @@ static const mon_cmd_t *monitor_parse_command(Monitor *mon,
                     monitor_printf(mon, "\'%s\' has failed: ", cmdname);
                     monitor_printf(mon, "integer is for 32-bit values\n");
                     goto fail;
+                } else if (c == 'M') {
+                    val <<= 20;
                 }
                 qdict_put(qdict, key, qint_from_int(val));
             }
@@ -3966,6 +3970,7 @@ static int check_arg(const CmdArgs *cmd_args, QDict *args)
         }
         case 'i':
         case 'l':
+        case 'M':
             if (qobject_type(value) != QTYPE_QINT) {
                 qemu_error_new(QERR_INVALID_PARAMETER_TYPE, name, "int");
                 return -1;
@@ -4103,7 +4108,7 @@ static void handle_qmp_command(JSONMessageParser *parser, QList *tokens)
                       qobject_from_jsonf("{ 'item': %s }", info_item));
     } else {
         cmd = monitor_find_command(cmd_name);
-        if (!cmd) {
+        if (!cmd || !monitor_handler_ported(cmd)) {
             qemu_error_new(QERR_COMMAND_NOT_FOUND, cmd_name);
             goto err_input;
         }
