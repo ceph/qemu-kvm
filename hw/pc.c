@@ -1292,6 +1292,8 @@ static void pc_init1(ram_addr_t ram_size,
         }
     }
 
+    rom_load_fw(fw_cfg);
+
 #ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
     if (kvm_enabled()) {
         add_assigned_devices(pci_bus, assigned_devices, assigned_devices_index);
