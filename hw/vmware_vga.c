@@ -771,8 +771,12 @@ static void vmsvga_value_write(void *opaque, uint32_t address, uint32_t value)
         s->height = -1;
         s->invalidated = 1;
         s->vga.invalidate(&s->vga);
-        if (s->enable)
-            s->fb_size = ((s->depth + 7) >> 3) * s->new_width * s->new_height;
+        if (s->enable) {
+	  s->fb_size = ((s->depth + 7) >> 3) * s->new_width * s->new_height;
+	  vga_dirty_log_stop(&s->vga);
+	} else {
+	  vga_dirty_log_start(&s->vga);
+	}
         break;
 
     case SVGA_REG_WIDTH:
@@ -915,8 +919,8 @@ static void vmsvga_reset(struct vmsvga_state_s *s)
     s->width = -1;
     s->height = -1;
     s->svgaid = SVGA_ID;
-    s->depth = 24;
-    s->bypp = (s->depth + 7) >> 3;
+    s->depth = ds_get_bits_per_pixel(s->vga.ds);
+    s->bypp = ds_get_bytes_per_pixel(s->vga.ds);
     s->cursor.on = 0;
     s->redraw_fifo_first = 0;
     s->redraw_fifo_last = 0;
@@ -948,6 +952,8 @@ static void vmsvga_reset(struct vmsvga_state_s *s)
         break;
     }
     s->syncing = 0;
+
+    vga_dirty_log_start(&s->vga);
 }
 
 static void vmsvga_invalidate_display(void *opaque)
@@ -1114,7 +1120,11 @@ static void vmsvga_init(struct vmsvga_state_s *s, int vga_ram_size)
     s->scratch_size = SVGA_SCRATCH_SIZE;
     s->scratch = qemu_malloc(s->scratch_size * 4);
 
-    vmsvga_reset(s);
+    s->vga.ds = graphic_console_init(vmsvga_update_display,
+                                     vmsvga_invalidate_display,
+                                     vmsvga_screen_dump,
+                                     vmsvga_text_update, s);
+
 
     s->fifo_size = SVGA_FIFO_SIZE;
     s->fifo_offset = qemu_ram_alloc(s->fifo_size);
@@ -1124,13 +1134,11 @@ static void vmsvga_init(struct vmsvga_state_s *s, int vga_ram_size)
     vga_init(&s->vga);
     vmstate_register(0, &vmstate_vga_common, &s->vga);
 
-    s->vga.ds = graphic_console_init(vmsvga_update_display,
-                                     vmsvga_invalidate_display,
-                                     vmsvga_screen_dump,
-                                     vmsvga_text_update, s);
-
     vga_init_vbe(&s->vga);
+
     rom_add_vga(VGABIOS_FILENAME);
+
+    vmsvga_reset(s);
 }
 
 static void pci_vmsvga_map_ioport(PCIDevice *pci_dev, int region_num,
@@ -1169,6 +1177,10 @@ static void pci_vmsvga_map_mem(PCIDevice *pci_dev, int region_num,
 #endif
     cpu_register_physical_memory(s->vram_base, s->vga.vram_size,
                     iomemtype);
+
+    s->vga.map_addr = addr;
+    s->vga.map_end = addr + s->vga.vram_size;
+    vga_dirty_log_restart(&s->vga);
 }
 
 static void pci_vmsvga_map_fifo(PCIDevice *pci_dev, int region_num,
