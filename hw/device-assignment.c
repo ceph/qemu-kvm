@@ -1377,8 +1377,7 @@ static void scan_option_rom(const char *name, uint8_t devfn, void *roms)
     return;
 
  found:
-    rom_add_blob(name ? name : "assigned device", rom, size,
-                 PC_ROM_MIN_OPTION, PC_ROM_MAX, PC_ROM_ALIGN);
+    rom_add_blob(name ? name : "assigned device", rom, size, 0);
     return;
 }
 
