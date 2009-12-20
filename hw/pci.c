@@ -26,6 +26,7 @@
 #include "monitor.h"
 #include "net.h"
 #include "sysemu.h"
+#include "loader.h"
 #include "qemu-kvm.h"
 #include "hw/pc.h"
 #include "device-assignment.h"
@@ -65,12 +66,14 @@ static struct BusInfo pci_bus_info = {
     .print_dev  = pcibus_dev_print,
     .props      = (Property[]) {
         DEFINE_PROP_PCI_DEVFN("addr", PCIDevice, devfn, -1),
+        DEFINE_PROP_STRING("romfile", PCIDevice, romfile),
         DEFINE_PROP_END_OF_LIST()
     }
 };
 
 static void pci_update_mappings(PCIDevice *d);
 static void pci_set_irq(void *opaque, int irq_num, int level);
+static int pci_add_option_rom(PCIDevice *pdev);
 
 target_phys_addr_t pci_mem_base;
 static uint16_t pci_default_sub_vendor_id = PCI_SUBVENDOR_ID_REDHAT_QUMRANET;
@@ -571,8 +574,7 @@ static void pci_init_wmask(PCIDevice *dev)
     dev->wmask[PCI_CACHE_LINE_SIZE] = 0xff;
     dev->wmask[PCI_INTERRUPT_LINE] = 0xff;
     pci_set_word(dev->wmask + PCI_COMMAND,
-                 PCI_COMMAND_IO | PCI_COMMAND_MEMORY | PCI_COMMAND_MASTER |
-                 PCI_COMMAND_INTX_DISABLE);
+                 PCI_COMMAND_IO | PCI_COMMAND_MEMORY | PCI_COMMAND_MASTER);
 
     memset(dev->wmask + PCI_CONFIG_HEADER_SIZE, 0xff,
            config_size - PCI_CONFIG_HEADER_SIZE);
@@ -997,25 +999,6 @@ static void pci_update_mappings(PCIDevice *d)
     }
 }
 
-static inline int pci_irq_disabled(PCIDevice *d)
-{
-    return pci_get_word(d->config + PCI_COMMAND) & PCI_COMMAND_INTX_DISABLE;
-}
-
-/* Called after interrupt disabled field update in config space,
- * assert/deassert interrupts if necessary.
- * Gets original interrupt disable bit value (before update). */
-static void pci_update_irq_disabled(PCIDevice *d, int was_irq_disabled)
-{
-    int i, disabled = pci_irq_disabled(d);
-    if (disabled == was_irq_disabled)
-        return;
-    for (i = 0; i < PCI_NUM_PINS; ++i) {
-        int state = pci_irq_state(d, i);
-        pci_change_irq_level(d, i, disabled ? -state : state);
-    }
-}
-
 static uint32_t pci_read_config(PCIDevice *d,
                                 uint32_t address, int len)
 {
@@ -1070,7 +1053,7 @@ void pci_default_cap_write_config(PCIDevice *pci_dev,
 
 void pci_default_write_config(PCIDevice *d, uint32_t addr, uint32_t val, int l)
 {
-    int i, was_irq_disabled = pci_irq_disabled(d);
+    int i;
     uint32_t config_size = pci_config_size(d);
 
     if (pci_access_cap_config(d, addr, l)) {
@@ -1095,9 +1078,6 @@ void pci_default_write_config(PCIDevice *d, uint32_t addr, uint32_t val, int l)
         ranges_overlap(addr, l, PCI_ROM_ADDRESS1, 4) ||
         range_covers_byte(addr, l, PCI_COMMAND))
         pci_update_mappings(d);
-
-    if (range_covers_byte(addr, l, PCI_COMMAND))
-        pci_update_irq_disabled(d, was_irq_disabled);
 }
 
 /***********************************************************/
@@ -1119,8 +1099,6 @@ static void pci_set_irq(void *opaque, int irq_num, int level)
 
     pci_set_irq_state(pci_dev, irq_num, level);
     pci_update_irq_status(pci_dev);
-    if (pci_irq_disabled(pci_dev))
-        return;
     pci_change_irq_level(pci_dev, irq_num, change);
 }
 
@@ -1503,6 +1481,12 @@ static int pci_qdev_init(DeviceState *qdev, DeviceInfo *base)
     rc = info->init(pci_dev);
     if (rc != 0)
         return rc;
+
+    /* rom loading */
+    if (pci_dev->romfile == NULL && info->romfile != NULL)
+        pci_dev->romfile = qemu_strdup(info->romfile);
+    pci_add_option_rom(pci_dev);
+
     if (qdev->hotplugged)
         bus->hotplug(pci_dev, 1);
     return 0;
@@ -1609,6 +1593,50 @@ static uint8_t pci_find_capability_list(PCIDevice *pdev, uint8_t cap_id,
     if (prev_p)
         *prev_p = prev;
     return next;
+}
+
+static void pci_map_option_rom(PCIDevice *pdev, int region_num, pcibus_t addr, pcibus_t size, int type)
+{
+    cpu_register_physical_memory(addr, size, pdev->rom_offset);
+}
+
+/* Add an option rom for the device */
+static int pci_add_option_rom(PCIDevice *pdev)
+{
+    int size;
+    char *path;
+    void *ptr;
+
+    if (!pdev->romfile)
+        return 0;
+    if (strlen(pdev->romfile) == 0)
+        return 0;
+
+    path = qemu_find_file(QEMU_FILE_TYPE_BIOS, pdev->romfile);
+    if (path == NULL) {
+        path = qemu_strdup(pdev->romfile);
+    }
+
+    size = get_image_size(path);
+    if (size < 0) {
+        qemu_error("%s: failed to find romfile \"%s\"\n", __FUNCTION__,
+                   pdev->romfile);
+        return -1;
+    }
+    if (size & (size - 1)) {
+        size = 1 << qemu_fls(size);
+    }
+
+    pdev->rom_offset = qemu_ram_alloc(size);
+
+    ptr = qemu_get_ram_ptr(pdev->rom_offset);
+    load_image(path, ptr);
+    qemu_free(path);
+
+    pci_register_bar(pdev, PCI_ROM_SLOT, size,
+                     0, pci_map_option_rom);
+
+    return 0;
 }
 
 /* Reserve space and add capability to the linked list in pci config space */
