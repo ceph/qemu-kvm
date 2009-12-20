@@ -267,6 +267,10 @@ struct PCIDevice {
     uint32_t msix_bar_size;
     /* Version id needed for VMState */
     int32_t version_id;
+
+    /* Location of option rom */
+    ram_addr_t rom_offset;
+
     /* How much space does an MSIX table need. */
     /* The spec requires giving the table structure
      * a 4K aligned region all by itself. Align it to
@@ -293,6 +297,8 @@ PCIDevice *pci_register_device(PCIBus *bus, const char *name,
 void pci_register_bar(PCIDevice *pci_dev, int region_num,
                             pcibus_t size, int type,
                             PCIMapIORegionFunc *map_func);
+
+int pci_add_option_rom(PCIDevice *pdev, const char *name);
 
 int pci_enable_capability_support(PCIDevice *pci_dev,
                                   uint32_t config_start,
