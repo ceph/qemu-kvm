@@ -1217,6 +1217,7 @@ void kvm_arch_save_regs(CPUState *env)
                 return;
         }
     }
+    kvm_arch_save_mpstate(env);
 }
 
 static void do_cpuid_ent(struct kvm_cpuid_entry2 *e, uint32_t function,
