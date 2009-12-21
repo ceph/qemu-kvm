@@ -677,7 +677,6 @@ static CPUState *mon_get_cpu(void)
         mon_set_cpu(0);
     }
     cpu_synchronize_state(cur_mon->mon_cpu);
-    kvm_save_mpstate(cur_mon->mon_cpu);
     return cur_mon->mon_cpu;
 }
 
@@ -780,7 +779,6 @@ static void do_info_cpus(Monitor *mon, QObject **ret_data)
         QObject *obj;
 
         cpu_synchronize_state(env);
-        kvm_save_mpstate(env);
 
         obj = qobject_from_jsonf("{ 'CPU': %d, 'current': %i, 'halted': %i }",
                                  env->cpu_index, env == mon->mon_cpu,
