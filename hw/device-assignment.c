@@ -233,7 +233,10 @@ static void assigned_dev_iomem_map_slow(PCIDevice *pci_dev, int region_num,
     int m;
 
     DEBUG("slow map\n");
-    m = cpu_register_io_memory(slow_bar_read, slow_bar_write, region);
+    if (region_num == PCI_ROM_SLOT)
+        m = cpu_register_io_memory(slow_bar_read, NULL, region);
+    else
+        m = cpu_register_io_memory(slow_bar_read, slow_bar_write, region);
     cpu_register_physical_memory(e_phys, e_size, m);
 
     /* MSI-X MMIO page */
@@ -486,17 +489,15 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
                 : PCI_BASE_ADDRESS_SPACE_MEMORY;
 
             if (cur_region->size & 0xFFF) {
-                fprintf(stderr, "PCI region %d at address 0x%llx "
-                        "has size 0x%x, which is not a multiple of 4K. "
-                        "You might experience some performance hit due to that.\n",
-                        i, (unsigned long long)cur_region->base_addr,
-                        cur_region->size);
+                if (i != PCI_ROM_SLOT) {
+                    fprintf(stderr, "PCI region %d at address 0x%llx "
+                            "has size 0x%x, which is not a multiple of 4K. "
+                            "You might experience some performance hit "
+                            "due to that.\n",
+                            i, (unsigned long long)cur_region->base_addr,
+                            cur_region->size);
+                }
                 slow_map = 1;
-            }
-
-            if (slow_map && (i == PCI_ROM_SLOT)) {
-                fprintf(stderr, "ROM not aligned - can't continue\n");
-                return -1;
             }
 
             /* map physical memory */
@@ -504,7 +505,7 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
             if (i == PCI_ROM_SLOT) {
                 pci_dev->v_addrs[i].u.r_virtbase =
                     mmap(NULL,
-                         (cur_region->size + 0xFFF) & 0xFFFFF000,
+                         cur_region->size,
                          PROT_WRITE | PROT_READ, MAP_ANONYMOUS | MAP_PRIVATE,
                          0, (off_t) 0);
 
