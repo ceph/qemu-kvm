@@ -817,14 +817,15 @@ static int assign_device(AssignedDevice *dev)
     assigned_dev_data.devfn = dev->h_devfn;
 
 #ifdef KVM_CAP_IOMMU
-    /* We always enable the IOMMU if present
-     * (or when not disabled on the command line)
-     */
-    r = kvm_check_extension(kvm_state, KVM_CAP_IOMMU);
-    if (!r)
-        dev->use_iommu = 0;
-    if (dev->use_iommu)
-	assigned_dev_data.flags |= KVM_DEV_ASSIGN_ENABLE_IOMMU;
+    /* We always enable the IOMMU unless disabled on the command line */
+    if (dev->use_iommu) {
+        if (!kvm_check_extension(kvm_state, KVM_CAP_IOMMU)) {
+            fprintf(stderr, "No IOMMU found.  Unable to assign device \"%s\"\n",
+                    dev->dev.qdev.id);
+            return -ENODEV;
+        }
+        assigned_dev_data.flags |= KVM_DEV_ASSIGN_ENABLE_IOMMU;
+    }
 #else
     dev->use_iommu = 0;
 #endif
