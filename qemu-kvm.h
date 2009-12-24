@@ -1070,6 +1070,7 @@ void kvm_load_tsc(CPUState *env);
 #endif
 #define kvm_load_registers(env) do {} while(0)
 #define kvm_save_registers(env) do {} while(0)
+#define kvm_save_mpstate(env)   do {} while(0)
 #define qemu_kvm_cpu_stop(env) do {} while(0)
 static inline void kvm_init_vcpu(CPUState *env)
 {
