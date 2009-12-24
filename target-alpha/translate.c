@@ -2627,6 +2627,11 @@ static inline void gen_intermediate_code_internal(CPUState *env,
             gen_io_start();
         insn = ldl_code(ctx.pc);
         num_insns++;
+
+	if (unlikely(qemu_loglevel_mask(CPU_LOG_TB_OP))) {
+            tcg_gen_debug_insn_start(ctx.pc);
+        }
+
         ctx.pc += 4;
         ret = translate_one(ctxp, insn);
         if (ret != 0)
@@ -2743,6 +2748,8 @@ CPUAlphaState * cpu_alpha_init (const char *cpu_model)
     env->ps = 0x1F00;
 #if defined (CONFIG_USER_ONLY)
     env->ps |= 1 << 3;
+    cpu_alpha_store_fpcr(env, (FPCR_INVD | FPCR_DZED | FPCR_OVFD
+                               | FPCR_UNFD | FPCR_INED | FPCR_DNOD));
 #endif
     pal_init(env);
     /* Initialize IPR */
