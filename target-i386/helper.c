@@ -518,7 +518,7 @@ static int cpu_x86_register (CPUX86State *env, const char *cpu_model)
         env->cpuid_vendor2 = CPUID_VENDOR_INTEL_2;
         env->cpuid_vendor3 = CPUID_VENDOR_INTEL_3;
     }
-    env->cpuid_vendor_override = def->vendor_override;
+    env->cpuid_vendor_override = def->vendor_override || kvm_enabled();
     env->cpuid_level = def->level;
     if (def->family > 0x0f)
         env->cpuid_version = 0xf00 | ((def->family - 0x0f) << 20);
