@@ -232,7 +232,7 @@ static void assigned_dev_iomem_map_slow(PCIDevice *pci_dev, int region_num,
     PCIRegion *real_region = &r_dev->real_device.regions[region_num];
     int m;
 
-    DEBUG("slow map\n");
+    DEBUG("%s", "slow map\n");
     if (region_num == PCI_ROM_SLOT)
         m = cpu_register_io_memory(slow_bar_read, NULL, region);
     else
@@ -261,7 +261,7 @@ static void assigned_dev_iomem_map(PCIDevice *pci_dev, int region_num,
     int first_map = (region->e_size == 0);
     int ret = 0;
 
-    DEBUG("e_phys=%08x r_virt=%p type=%d len=%08x region_num=%d \n",
+    DEBUG("e_phys=%08" FMT_PCIBUS " r_virt=%p type=%d len=%08" FMT_PCIBUS " region_num=%d \n",
           e_phys, region->u.r_virtbase, type, e_size, region_num);
 
     region->e_physbase = e_phys;
@@ -310,7 +310,7 @@ static void assigned_dev_ioport_map(PCIDevice *pci_dev, int region_num,
     region->e_physbase = addr;
     region->e_size = size;
 
-    DEBUG("e_phys=0x%x r_baseport=%x type=0x%x len=%d region_num=%d \n",
+    DEBUG("e_phys=0x%" FMT_PCIBUS " r_baseport=%x type=0x%x len=%" FMT_PCIBUS " region_num=%d \n",
           addr, region->u.r_baseport, type, size, region_num);
 
     if (first_map) {
@@ -1267,7 +1267,7 @@ static void msix_mmio_writel(void *opaque,
     unsigned int offset = addr & 0xfff;
     void *page = adev->msix_table_page;
 
-    DEBUG("write to MSI-X entry table mmio offset 0x%lx, val 0x%lx\n",
+    DEBUG("write to MSI-X entry table mmio offset 0x%lx, val 0x%x\n",
 		    addr, val);
     memcpy((void *)((char *)page + offset), &val, 4);
 }
