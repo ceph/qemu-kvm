@@ -28,8 +28,12 @@
 #include "pci_host.h"
 #include "isa.h"
 #include "sysbus.h"
-
 #include "qemu-kvm.h"
+
+/*
+ * I440FX chipset data sheet.
+ * http://download.intel.com/design/chipsets/datashts/29054901.pdf
+ */
 
 typedef PCIHostState I440FXState;
 
@@ -143,10 +147,10 @@ static void i440fx_write_config(PCIDevice *dev,
 
     /* XXX: implement SMRAM.D_LOCK */
     pci_default_write_config(dev, address, val, len);
-    if ((address >= I440FX_PAM &&
-         address <= I440FX_PAM + I440FX_PAM_SIZE - 1) ||
-        address == I440FX_SMRAM)
+    if (ranges_overlap(address, len, I440FX_PAM, I440FX_PAM_SIZE) ||
+        range_covers_byte(address, len, I440FX_SMRAM)) {
         i440fx_update_memory_mappings(d);
+    }
 }
 
 static int i440fx_load_old(QEMUFile* f, void *opaque, int version_id)
