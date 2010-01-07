@@ -952,7 +952,7 @@ static void pci_update_mappings(PCIDevice *d)
 {
     PCIIORegion *r;
     int i;
-    pcibus_t new_addr, filtered_size, bus_addr;
+    pcibus_t new_addr, filtered_size;
 
     for(i = 0; i < PCI_NUM_REGIONS; i++) {
         r = &d->io_regions[i];
@@ -974,7 +974,6 @@ static void pci_update_mappings(PCIDevice *d)
             continue;
 
         /* now do the real mapping */
-        bus_addr = r->addr;
         if (r->addr != PCI_BAR_UNMAPPED) {
             if (r->type & PCI_BASE_ADDRESS_SPACE_IO) {
                 int class;
@@ -987,8 +986,7 @@ static void pci_update_mappings(PCIDevice *d)
                     isa_unassign_ioport(r->addr, r->filtered_size);
                 }
             } else {
-                bus_addr = pci_to_cpu_addr(d->bus, r->addr);
-                cpu_register_physical_memory(bus_addr,
+                cpu_register_physical_memory(pci_to_cpu_addr(d->bus, r->addr),
                                              r->filtered_size,
                                              IO_MEM_UNASSIGNED);
                 qemu_unregister_coalesced_mmio(r->addr, r->filtered_size);
@@ -1004,7 +1002,12 @@ static void pci_update_mappings(PCIDevice *d)
              * Teach them such cases, such that filtered_size < size and
              * addr & (size - 1) != 0.
              */
-            r->map_func(d, i, bus_addr, r->filtered_size, r->type);
+            if (r->type & PCI_BASE_ADDRESS_SPACE_IO) {
+                r->map_func(d, i, r->addr, r->filtered_size, r->type);
+            } else {
+                r->map_func(d, i, pci_to_cpu_addr(d->bus, r->addr),
+                            r->filtered_size, r->type);
+            }
         }
     }
 }

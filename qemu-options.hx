@@ -1937,7 +1937,7 @@ DEF("readconfig", HAS_ARG, QEMU_OPTION_readconfig,
     "-readconfig <file>\n")
 DEF("writeconfig", HAS_ARG, QEMU_OPTION_writeconfig,
     "-writeconfig <file>\n"
-    "                read/write config file")
+    "                read/write config file\n")
 
 DEF("no-kvm", 0, QEMU_OPTION_no_kvm,
     "-no-kvm         disable KVM hardware virtualization\n")
