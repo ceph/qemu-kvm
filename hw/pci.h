@@ -10,10 +10,6 @@ struct kvm_irq_routing_entry;
 /* PCI includes legacy ISA access.  */
 #include "isa.h"
 
-/* imported from <linux/pci.h> */
-#define PCI_SLOT(devfn)         (((devfn) >> 3) & 0x1f)
-#define PCI_FUNC(devfn)         ((devfn) & 0x07)
-
 /* PCI bus */
 
 #define PCI_DEVFN(slot, func)   ((((slot) & 0x1f) << 3) | ((func) & 0x07))
