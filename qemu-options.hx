@@ -1946,26 +1946,27 @@ DEF("no-kvm-irqchip", 0, QEMU_OPTION_no_kvm_irqchip,
 DEF("no-kvm-pit", 0, QEMU_OPTION_no_kvm_pit,
     "-no-kvm-pit     disable KVM kernel mode PIT\n")
 DEF("no-kvm-pit-reinjection", 0, QEMU_OPTION_no_kvm_pit_reinjection,
-    "-no-kvm-pit-reinjection disable KVM kernel mode PIT interrupt reinjection\n")
+    "-no-kvm-pit-reinjection\n"
+    "                disable KVM kernel mode PIT interrupt reinjection\n")
 #if defined(TARGET_I386) || defined(TARGET_X86_64) || defined(TARGET_IA64) || defined(__linux__)
 DEF("pcidevice", HAS_ARG, QEMU_OPTION_pcidevice,
     "-pcidevice host=bus:dev.func[,dma=none][,name=string]\n"
-    "                expose a PCI device to the guest OS.\n"
+    "                expose a PCI device to the guest OS\n"
     "                dma=none: don't perform any dma translations (default is to use an iommu)\n"
-    "                'string' is used in log output.\n")
+    "                'string' is used in log output\n")
 #endif
 DEF("enable-nesting", 0, QEMU_OPTION_enable_nesting,
     "-enable-nesting enable support for running a VM inside the VM (AMD only)\n")
 DEF("nvram", HAS_ARG, QEMU_OPTION_nvram,
-    "-nvram FILE          provide ia64 nvram contents\n")
+    "-nvram FILE     provide ia64 nvram contents\n")
 DEF("tdf", 0, QEMU_OPTION_tdf,
-    "-tdf                 enable guest time drift compensation\n")
+    "-tdf            enable guest time drift compensation\n")
 DEF("kvm-shadow-memory", HAS_ARG, QEMU_OPTION_kvm_shadow_memory,
     "-kvm-shadow-memory MEGABYTES\n"
-    "                     allocate MEGABYTES for kvm mmu shadowing\n")
+    "                allocate MEGABYTES for kvm mmu shadowing\n")
 DEF("mem-path", HAS_ARG, QEMU_OPTION_mempath,
-    "-mem-path FILE       provide backing storage for guest RAM\n")
+    "-mem-path FILE  provide backing storage for guest RAM\n")
 #ifdef MAP_POPULATE
 DEF("mem-prealloc", 0, QEMU_OPTION_mem_prealloc,
-    "-mem-prealloc        preallocate guest memory (use with -mempath)\n")
+    "-mem-prealloc   preallocate guest memory (use with -mempath)\n")
 #endif
