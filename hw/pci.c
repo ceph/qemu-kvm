@@ -574,7 +574,8 @@ static void pci_init_wmask(PCIDevice *dev)
     dev->wmask[PCI_CACHE_LINE_SIZE] = 0xff;
     dev->wmask[PCI_INTERRUPT_LINE] = 0xff;
     pci_set_word(dev->wmask + PCI_COMMAND,
-                 PCI_COMMAND_IO | PCI_COMMAND_MEMORY | PCI_COMMAND_MASTER);
+                 PCI_COMMAND_IO | PCI_COMMAND_MEMORY | PCI_COMMAND_MASTER |
+                 PCI_COMMAND_INTX_DISABLE);
 
     memset(dev->wmask + PCI_CONFIG_HEADER_SIZE, 0xff,
            config_size - PCI_CONFIG_HEADER_SIZE);
@@ -999,6 +1000,25 @@ static void pci_update_mappings(PCIDevice *d)
     }
 }
 
+static inline int pci_irq_disabled(PCIDevice *d)
+{
+    return pci_get_word(d->config + PCI_COMMAND) & PCI_COMMAND_INTX_DISABLE;
+}
+
+/* Called after interrupt disabled field update in config space,
+ * assert/deassert interrupts if necessary.
+ * Gets original interrupt disable bit value (before update). */
+static void pci_update_irq_disabled(PCIDevice *d, int was_irq_disabled)
+{
+    int i, disabled = pci_irq_disabled(d);
+    if (disabled == was_irq_disabled)
+        return;
+    for (i = 0; i < PCI_NUM_PINS; ++i) {
+        int state = pci_irq_state(d, i);
+        pci_change_irq_level(d, i, disabled ? -state : state);
+    }
+}
+
 static uint32_t pci_read_config(PCIDevice *d,
                                 uint32_t address, int len)
 {
@@ -1053,7 +1073,7 @@ void pci_default_cap_write_config(PCIDevice *pci_dev,
 
 void pci_default_write_config(PCIDevice *d, uint32_t addr, uint32_t val, int l)
 {
-    int i;
+    int i, was_irq_disabled = pci_irq_disabled(d);
     uint32_t config_size = pci_config_size(d);
 
     if (pci_access_cap_config(d, addr, l)) {
@@ -1078,6 +1098,9 @@ void pci_default_write_config(PCIDevice *d, uint32_t addr, uint32_t val, int l)
         ranges_overlap(addr, l, PCI_ROM_ADDRESS1, 4) ||
         range_covers_byte(addr, l, PCI_COMMAND))
         pci_update_mappings(d);
+
+    if (range_covers_byte(addr, l, PCI_COMMAND))
+        pci_update_irq_disabled(d, was_irq_disabled);
 }
 
 /***********************************************************/
@@ -1099,6 +1122,8 @@ static void pci_set_irq(void *opaque, int irq_num, int level)
 
     pci_set_irq_state(pci_dev, irq_num, level);
     pci_update_irq_status(pci_dev);
+    if (pci_irq_disabled(pci_dev))
+        return;
     pci_change_irq_level(pci_dev, irq_num, change);
 }
 
