@@ -540,13 +540,13 @@ for opt do
   ;;
   --enable-kvm) kvm="yes"
   ;;
-  --disable-kvm-cap-pit) kvm_cap_pit="no"
+  --disable-kvm-pit) kvm_cap_pit="no"
   ;;
-  --enable-kvm-cap-pit) kvm_cap_pit="yes"
+  --enable-kvm-pit) kvm_cap_pit="yes"
   ;;
-  --disable-kvm-cap-device-assignment) kvm_cap_device_assignment="no"
+  --disable-kvm-device-assignment) kvm_cap_device_assignment="no"
   ;;
-  --enable-kvm-cap-device-assignment) kvm_cap_device_assignment="yes"
+  --enable-kvm-device-assignment) kvm_cap_device_assignment="yes"
   ;;
   --enable-profiler) profiler="yes"
   ;;
@@ -756,10 +756,10 @@ echo "  --disable-bluez          disable bluez stack connectivity"
 echo "  --enable-bluez           enable bluez stack connectivity"
 echo "  --disable-kvm            disable KVM acceleration support"
 echo "  --enable-kvm             enable KVM acceleration support"
-echo "  --disable-kvm-cap-pit    disable KVM pit support"
-echo "  --enable-kvm-cap-pit     enable KVM pit support"
-echo "  --disable-kvm-cap-device-assignment    disable KVM device assignment support"
-echo "  --enable-kvm-cap-device-assignment     enable KVM device assignment support"
+echo "  --disable-kvm-pit        disable KVM pit support"
+echo "  --enable-kvm-pit         enable KVM pit support"
+echo "  --disable-kvm-device-assignment  disable KVM device assignment support"
+echo "  --enable-kvm-device-assignment   enable KVM device assignment support"
 echo "  --disable-nptl           disable usermode NPTL support"
 echo "  --enable-nptl            enable usermode NPTL support"
 echo "  --enable-system          enable all system emulation targets"
