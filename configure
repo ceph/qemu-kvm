@@ -1424,6 +1424,8 @@ EOF
             kvm_cflags="$kvm_cflags -I$kerneldir/arch/$cpu/include"
       fi
   else
+    kvm_cflags=`pkg-config --cflags kvm-kmod 2> /dev/null`
+    if test "$kvm_cflags" = ""; then
       case "$cpu" in
       i386 | x86_64)
         kvm_arch="x86"
@@ -1438,6 +1440,7 @@ EOF
       kvm_cflags="-I$source_path/kvm/include"
       kvm_cflags="$kvm_cflags -include $source_path/kvm/include/linux/config.h"
       kvm_cflags="$kvm_cflags -I$source_path/kvm/include/$kvm_arch"
+    fi
   fi
   kvm_cflags="$kvm_cflags -idirafter $source_path/compat"
   if compile_prog "$kvm_cflags" "" ; then
