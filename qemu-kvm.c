@@ -892,7 +892,7 @@ static int kvm_handle_internal_error(kvm_context_t kvm,
 #endif
     kvm_show_regs(env);
     if (run->internal.suberror == KVM_INTERNAL_ERROR_EMULATION)
-        fprintf(stderr, "emulation failure, check dmesg for details\n");
+        fprintf(stderr, "emulation failure\n");
     vm_stop(0);
     return 1;
 }
