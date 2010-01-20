@@ -1498,77 +1498,6 @@ void add_assigned_devices(PCIBus *bus, const char **devices, int n_devices)
     }
 }
 
-/* Option ROM header */
-struct option_rom_header {
-    uint8_t signature[2];
-    uint8_t rom_size;
-    uint32_t entry_point;
-    uint8_t reserved[17];
-    uint16_t pci_header_offset;
-    uint16_t expansion_header_offset;
-} __attribute__ ((packed));
-
-/* Option ROM PCI data structure */
-struct option_rom_pci_header {
-    uint8_t signature[4];
-    uint16_t vendor_id;
-    uint16_t device_id;
-    uint16_t vital_product_data_offset;
-    uint16_t structure_length;
-    uint8_t structure_revision;
-    uint8_t class_code[3];
-    uint16_t image_length;
-    uint16_t image_revision;
-    uint8_t code_type;
-    uint8_t indicator;
-    uint16_t reserved;
-} __attribute__ ((packed));
-
-/*
- * Scan the list of Option ROMs at roms. If a suitable Option ROM is found,
- * allocate a ram space and copy it there. Then return its size aligned to
- * both 2KB and target page size.
- */
-#define OPTION_ROM_ALIGN(x) (((x) + 2047) & ~2047)
-static void scan_option_rom(const char *name, uint8_t devfn, void *roms)
-{
-    int i, size;
-    uint8_t csum;
-    struct option_rom_header *rom;
-    struct option_rom_pci_header *pcih;
-
-    rom = roms;
-
-    for ( ; ; ) {
-        /* Invalid signature means we're out of option ROMs. */
-        if (strncmp((char *)rom->signature, "\x55\xaa", 2) ||
-             (rom->rom_size == 0))
-            break;
-
-        size = rom->rom_size * 512;
-        /* Invalid checksum means we're out of option ROMs. */
-        csum = 0;
-        for (i = 0; i < size; i++)
-            csum += ((uint8_t *)rom)[i];
-        if (csum != 0)
-            break;
-
-        /* Check the PCI header (if any) for a match. */
-        pcih = (struct option_rom_pci_header *)
-                ((char *)rom + rom->pci_header_offset);
-        if ((rom->pci_header_offset != 0) &&
-             !strncmp((char *)pcih->signature, "PCIR", 4))
-            goto found;
-
-        rom = (struct option_rom_header *)((char *)rom + size);
-    }
-    return;
-
- found:
-    rom_add_blob(name ? name : "assigned device", rom, size, 0);
-    return;
-}
-
 /*
  * Scan the assigned devices for the devices that have an option ROM, and then
  * load the corresponding ROM data to RAM. If an error occurs while loading an
@@ -1632,9 +1561,5 @@ static void assigned_dev_load_option_rom(AssignedDevice *dev)
                  size, PROT_READ);
     }
 
-    if (!dev->dev.qdev.hotplugged) {
-        /* Scan the buffer for suitable ROMs and increase the offset */
-        scan_option_rom(dev->dev.qdev.id, dev->dev.devfn, buf);
-    }
     free(buf);
 }
