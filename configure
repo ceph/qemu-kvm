@@ -1758,7 +1758,7 @@ cat > $TMPC << EOF
 int main(void) { return syscall(SYS_signalfd, -1, NULL, _NSIG / 8); }
 EOF
 
-if $cc $ARCH_CFLAGS -o $TMPE $TMPC 2> /dev/null ; then
+if compile_prog "" "" ; then
   signalfd=yes
 fi
 
