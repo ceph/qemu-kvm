@@ -13,29 +13,8 @@ register struct CPUSPARCState *env asm(AREG0);
 #include "cpu.h"
 #include "exec-all.h"
 
-static inline void env_to_regs(void)
-{
-}
-
-static inline void regs_to_env(void)
-{
-}
-
 /* op_helper.c */
 void do_interrupt(CPUState *env);
-
-static inline int cpu_interrupts_enabled(CPUState *env1)
-{
-#if !defined (TARGET_SPARC64)
-    if (env1->psret != 0)
-        return 1;
-#else
-    if (env1->pstate & PS_IE)
-        return 1;
-#endif
-
-    return 0;
-}
 
 static inline int cpu_has_work(CPUState *env1)
 {

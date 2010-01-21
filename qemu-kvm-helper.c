@@ -19,9 +19,7 @@ void qemu_kvm_call_with_env(void (*func)(void *), void *data, CPUState *newenv)
 
     env = newenv;
 
-    env_to_regs();
     func(data);
-    regs_to_env();
 
     env = oldenv;
 

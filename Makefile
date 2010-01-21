@@ -7,7 +7,7 @@ ifneq ($(wildcard config-host.mak),)
 all: build-all
 include config-host.mak
 include $(SRC_PATH)/rules.mak
-config-host.mak: configure
+config-host.mak: $(SRC_PATH)/configure
 	@echo $@ is out-of-date, running configure
 	@sed -n "/.*Configured with/s/[^:]*: //p" $@ | sh
 else
@@ -24,7 +24,7 @@ configure: ;
 .PHONY: all clean cscope distclean dvi html info install install-doc \
 	recurse-all speed tar tarbin test build-all
 
-VPATH=$(SRC_PATH):$(SRC_PATH)/hw
+$(call set-vpath, $(SRC_PATH):$(SRC_PATH)/hw)
 
 LIBS+=-lz $(LIBS_TOOLS)
 
@@ -42,12 +42,22 @@ config-all-devices.mak: $(SUBDIR_DEVICES_MAK)
 
 %/config-devices.mak: default-configs/%.mak
 	$(call quiet-command,cat $< > $@.tmp, "  GEN   $@")
-	@if test -f $@ ; then \
-	  echo "WARNING: $@ out of date." ;\
-	  echo "Run \"make defconfig\" to regenerate." ; \
-	  rm $@.tmp ; \
+	@if test -f $@; then \
+	  if cmp -s $@.old $@ || cmp -s $@ $@.tmp; then \
+	    mv $@.tmp $@; \
+	    cp -p $@ $@.old; \
+	  else \
+	    if test -f $@.old; then \
+	      echo "WARNING: $@ (user modified) out of date.";\
+	    else \
+	      echo "WARNING: $@ out of date.";\
+	    fi; \
+	    echo "Run \"make defconfig\" to regenerate."; \
+	    rm $@.tmp; \
+	  fi; \
 	 else \
-	  mv $@.tmp $@ ; \
+	  mv $@.tmp $@; \
+	  cp -p $@ $@.old; \
 	 fi
 
 defconfig:
@@ -77,15 +87,14 @@ endif
 subdir-%: $(GENERATED_HEADERS)
 	$(call quiet-command,$(MAKE) $(SUBDIR_MAKEFLAGS) -C $* V="$(V)" TARGET_DIR="$*/" all,)
 
+ifneq ($(wildcard config-host.mak),)
 include $(SRC_PATH)/Makefile.objs
+endif
 
 $(common-obj-y): $(GENERATED_HEADERS)
 $(filter %-softmmu,$(SUBDIR_RULES)): $(common-obj-y)
 
-$(filter %-user,$(SUBDIR_RULES)): libuser.a
-
-libuser.a: $(GENERATED_HEADERS)
-	$(call quiet-command,$(MAKE) $(SUBDIR_MAKEFLAGS) -C libuser V="$(V)" TARGET_DIR="libuser/" all,)
+$(filter %-user,$(SUBDIR_RULES)): $(GENERATED_HEADERS) subdir-libuser
 
 ROMSUBDIR_RULES=$(patsubst %,romsubdir-%, $(ROMS))
 romsubdir-%:
@@ -129,7 +138,7 @@ bt-host.o: QEMU_CFLAGS += $(BLUEZ_CFLAGS)
 
 ######################################################################
 
-qemu-img.o: qemu-img-cmds.h
+qemu-img.o: qemu-img-cmds.h config-host.h
 
 obj-y = qemu-img.o qemu-tool.o $(block-obj-y) $(qobject-obj-y)
 

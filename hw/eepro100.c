@@ -40,7 +40,6 @@
 #include <stddef.h>             /* offsetof */
 #include <stdbool.h>
 #include "hw.h"
-#include "loader.h"             /* rom_add_option */
 #include "pci.h"
 #include "net.h"
 #include "eeprom93xx.h"
@@ -141,7 +140,7 @@ typedef struct {
     uint16_t status;
     uint16_t command;
     uint32_t link;              /* void * */
-    uint32_t tx_desc_addr;      /* transmit buffer decsriptor array address. */
+    uint32_t tbd_array_addr;    /* transmit buffer descriptor array address. */
     uint16_t tcb_bytes;         /* transmit command block byte count (in lower 14 bits */
     uint8_t tx_threshold;       /* transmit threshold */
     uint8_t tbd_count;          /* TBD number */
@@ -213,6 +212,11 @@ typedef struct {
     uint32_t ru_offset;         /* RU address offset */
     uint32_t statsaddr;         /* pointer to eepro100_stats_t */
 
+    /* Temporary status information (no need to save these values),
+     * used while processing CU commands. */
+    eepro100_tx_t tx;           /* transmit buffer descriptor */
+    uint32_t cb_address;        /* = cu_base + cu_offset */
+
     /* Statistical counters. Also used for wake-up packet (i82559). */
     eepro100_stats_t statistics;
 
@@ -263,7 +267,7 @@ static void stl_le_phys(target_phys_addr_t addr, uint32_t val)
 
 /* From FreeBSD */
 /* XXX: optimize */
-static int compute_mcast_idx(const uint8_t * ep)
+static unsigned compute_mcast_idx(const uint8_t * ep)
 {
     uint32_t crc;
     int carry, i, j;
@@ -281,7 +285,7 @@ static int compute_mcast_idx(const uint8_t * ep)
             }
         }
     }
-    return (crc >> 26);
+    return (crc & BITS(7, 2)) >> 2;
 }
 
 #if defined(DEBUG_EEPRO100)
@@ -415,10 +419,8 @@ static void pci_reset(EEPRO100State * s)
     /* TODO: this is the default, do not override. */
     PCI_CONFIG_16(PCI_COMMAND, 0x0000);
     /* PCI Status */
-    /* TODO: this seems to make no sense. */
     /* TODO: Value at RST# should be 0. */
-    PCI_CONFIG_16(PCI_STATUS,
-                  PCI_STATUS_REC_MASTER_ABORT | PCI_STATUS_SIG_TARGET_ABORT);
+    PCI_CONFIG_16(PCI_STATUS, PCI_STATUS_DEVSEL_MEDIUM | PCI_STATUS_FAST_BACK);
     /* PCI Revision ID */
     PCI_CONFIG_8(PCI_REVISION_ID, 0x08);
     /* TODO: this is the default, do not override. */
@@ -646,6 +648,8 @@ static void nic_reset(void *opaque)
 {
     EEPRO100State *s = opaque;
     TRACE(OTHER, logout("%p\n", s));
+    /* TODO: Clearing of multicast table for selective reset, too? */
+    memset(&s->mult[0], 0, sizeof(s->mult));
     nic_selective_reset(s);
 }
 
@@ -763,17 +767,116 @@ static void dump_statistics(EEPRO100State * s)
     //~ missing("CU dump statistical counters");
 }
 
+static void tx_command(EEPRO100State *s)
+{
+    uint32_t tbd_array = le32_to_cpu(s->tx.tbd_array_addr);
+    uint16_t tcb_bytes = (le16_to_cpu(s->tx.tcb_bytes) & 0x3fff);
+    /* Sends larger than MAX_ETH_FRAME_SIZE are allowed, up to 2600 bytes. */
+    uint8_t buf[2600];
+    uint16_t size = 0;
+    uint32_t tbd_address = s->cb_address + 0x10;
+    TRACE(RXTX, logout
+        ("transmit, TBD array address 0x%08x, TCB byte count 0x%04x, TBD count %u\n",
+         tbd_array, tcb_bytes, s->tx.tbd_count));
+
+    if (tcb_bytes > 2600) {
+        logout("TCB byte count too large, using 2600\n");
+        tcb_bytes = 2600;
+    }
+    if (!((tcb_bytes > 0) || (tbd_array != 0xffffffff))) {
+        logout
+            ("illegal values of TBD array address and TCB byte count!\n");
+    }
+    assert(tcb_bytes <= sizeof(buf));
+    while (size < tcb_bytes) {
+        uint32_t tx_buffer_address = ldl_phys(tbd_address);
+        uint16_t tx_buffer_size = lduw_phys(tbd_address + 4);
+        //~ uint16_t tx_buffer_el = lduw_phys(tbd_address + 6);
+        tbd_address += 8;
+        TRACE(RXTX, logout
+            ("TBD (simplified mode): buffer address 0x%08x, size 0x%04x\n",
+             tx_buffer_address, tx_buffer_size));
+        tx_buffer_size = MIN(tx_buffer_size, sizeof(buf) - size);
+        cpu_physical_memory_read(tx_buffer_address, &buf[size],
+                                 tx_buffer_size);
+        size += tx_buffer_size;
+    }
+    if (tbd_array == 0xffffffff) {
+        /* Simplified mode. Was already handled by code above. */
+    } else {
+        /* Flexible mode. */
+        uint8_t tbd_count = 0;
+        if (s->has_extended_tcb_support && !(s->configuration[6] & BIT(4))) {
+            /* Extended Flexible TCB. */
+            for (; tbd_count < 2; tbd_count++) {
+                uint32_t tx_buffer_address = ldl_phys(tbd_address);
+                uint16_t tx_buffer_size = lduw_phys(tbd_address + 4);
+                uint16_t tx_buffer_el = lduw_phys(tbd_address + 6);
+                tbd_address += 8;
+                TRACE(RXTX, logout
+                    ("TBD (extended flexible mode): buffer address 0x%08x, size 0x%04x\n",
+                     tx_buffer_address, tx_buffer_size));
+                tx_buffer_size = MIN(tx_buffer_size, sizeof(buf) - size);
+                cpu_physical_memory_read(tx_buffer_address, &buf[size],
+                                         tx_buffer_size);
+                size += tx_buffer_size;
+                if (tx_buffer_el & 1) {
+                    break;
+                }
+            }
+        }
+        tbd_address = tbd_array;
+        for (; tbd_count < s->tx.tbd_count; tbd_count++) {
+            uint32_t tx_buffer_address = ldl_phys(tbd_address);
+            uint16_t tx_buffer_size = lduw_phys(tbd_address + 4);
+            uint16_t tx_buffer_el = lduw_phys(tbd_address + 6);
+            tbd_address += 8;
+            TRACE(RXTX, logout
+                ("TBD (flexible mode): buffer address 0x%08x, size 0x%04x\n",
+                 tx_buffer_address, tx_buffer_size));
+            tx_buffer_size = MIN(tx_buffer_size, sizeof(buf) - size);
+            cpu_physical_memory_read(tx_buffer_address, &buf[size],
+                                     tx_buffer_size);
+            size += tx_buffer_size;
+            if (tx_buffer_el & 1) {
+                break;
+            }
+        }
+    }
+    TRACE(RXTX, logout("%p sending frame, len=%d,%s\n", s, size, nic_dump(buf, size)));
+    qemu_send_packet(&s->nic->nc, buf, size);
+    s->statistics.tx_good_frames++;
+    /* Transmit with bad status would raise an CX/TNO interrupt.
+     * (82557 only). Emulation never has bad status. */
+    //~ eepro100_cx_interrupt(s);
+}
+
+static void set_multicast_list(EEPRO100State *s)
+{
+    uint16_t multicast_count = s->tx.tbd_array_addr & BITS(13, 0);
+    uint16_t i;
+    memset(&s->mult[0], 0, sizeof(s->mult));
+    TRACE(OTHER, logout("multicast list, multicast count = %u\n", multicast_count));
+    for (i = 0; i < multicast_count; i += 6) {
+        uint8_t multicast_addr[6];
+        cpu_physical_memory_read(s->cb_address + 10 + i, multicast_addr, 6);
+        TRACE(OTHER, logout("multicast entry %s\n", nic_dump(multicast_addr, 6)));
+        unsigned mcast_idx = compute_mcast_idx(multicast_addr);
+        assert(mcast_idx < 64);
+        s->mult[mcast_idx >> 3] |= (1 << (mcast_idx & 7));
+    }
+}
+
 static void action_command(EEPRO100State *s)
 {
     for (;;) {
-        uint32_t cb_address = s->cu_base + s->cu_offset;
-        eepro100_tx_t tx;
-        cpu_physical_memory_read(cb_address, (uint8_t *) & tx, sizeof(tx));
-        uint16_t status = le16_to_cpu(tx.status);
-        uint16_t command = le16_to_cpu(tx.command);
+        s->cb_address = s->cu_base + s->cu_offset;
+        cpu_physical_memory_read(s->cb_address, (uint8_t *)&s->tx, sizeof(s->tx));
+        uint16_t status = le16_to_cpu(s->tx.status);
+        uint16_t command = le16_to_cpu(s->tx.command);
         logout
             ("val=0x%02x (cu start), status=0x%04x, command=0x%04x, link=0x%08x\n",
-             val, status, command, tx.link);
+             val, status, command, s->tx.link);
         bool bit_el = ((command & 0x8000) != 0);
         bool bit_s = ((command & 0x4000) != 0);
         bool bit_i = ((command & 0x2000) != 0);
@@ -781,113 +884,30 @@ static void action_command(EEPRO100State *s)
         bool success = true;
         //~ bool bit_sf = ((command & 0x0008) != 0);
         uint16_t cmd = command & 0x0007;
-        s->cu_offset = le32_to_cpu(tx.link);
+        s->cu_offset = le32_to_cpu(s->tx.link);
         switch (cmd) {
         case CmdNOp:
             /* Do nothing. */
             break;
         case CmdIASetup:
-            cpu_physical_memory_read(cb_address + 8, &s->conf.macaddr.a[0], 6);
+            cpu_physical_memory_read(s->cb_address + 8, &s->conf.macaddr.a[0], 6);
             TRACE(OTHER, logout("macaddr: %s\n", nic_dump(&s->macaddr[0], 6)));
             break;
         case CmdConfigure:
-            cpu_physical_memory_read(cb_address + 8, &s->configuration[0],
+            cpu_physical_memory_read(s->cb_address + 8, &s->configuration[0],
                                      sizeof(s->configuration));
             TRACE(OTHER, logout("configuration: %s\n", nic_dump(&s->configuration[0], 16)));
             break;
         case CmdMulticastList:
-            //~ missing("multicast list");
+            set_multicast_list(s);
             break;
         case CmdTx:
-            (void)0;
-            uint32_t tbd_array = le32_to_cpu(tx.tx_desc_addr);
-            uint16_t tcb_bytes = (le16_to_cpu(tx.tcb_bytes) & 0x3fff);
-            TRACE(RXTX, logout
-                ("transmit, TBD array address 0x%08x, TCB byte count 0x%04x, TBD count %u\n",
-                 tbd_array, tcb_bytes, tx.tbd_count));
-
             if (bit_nc) {
                 missing("CmdTx: NC = 0");
                 success = false;
                 break;
             }
-            //~ assert(!bit_sf);
-            if (tcb_bytes > 2600) {
-                logout("TCB byte count too large, using 2600\n");
-                tcb_bytes = 2600;
-            }
-            /* Next assertion fails for local configuration. */
-            //~ assert((tcb_bytes > 0) || (tbd_array != 0xffffffff));
-            if (!((tcb_bytes > 0) || (tbd_array != 0xffffffff))) {
-                logout
-                    ("illegal values of TBD array address and TCB byte count!\n");
-            }
-            // sends larger than MAX_ETH_FRAME_SIZE are allowed, up to 2600 bytes
-            uint8_t buf[2600];
-            uint16_t size = 0;
-            uint32_t tbd_address = cb_address + 0x10;
-            assert(tcb_bytes <= sizeof(buf));
-            while (size < tcb_bytes) {
-                uint32_t tx_buffer_address = ldl_phys(tbd_address);
-                uint16_t tx_buffer_size = lduw_phys(tbd_address + 4);
-                //~ uint16_t tx_buffer_el = lduw_phys(tbd_address + 6);
-                tbd_address += 8;
-                TRACE(RXTX, logout
-                    ("TBD (simplified mode): buffer address 0x%08x, size 0x%04x\n",
-                     tx_buffer_address, tx_buffer_size));
-                tx_buffer_size = MIN(tx_buffer_size, sizeof(buf) - size);
-                cpu_physical_memory_read(tx_buffer_address, &buf[size],
-                                         tx_buffer_size);
-                size += tx_buffer_size;
-            }
-            if (tbd_array == 0xffffffff) {
-                /* Simplified mode. Was already handled by code above. */
-            } else {
-                /* Flexible mode. */
-                uint8_t tbd_count = 0;
-                if (s->has_extended_tcb_support && !(s->configuration[6] & BIT(4))) {
-                    /* Extended Flexible TCB. */
-                    for (; tbd_count < 2; tbd_count++) {
-                        uint32_t tx_buffer_address = ldl_phys(tbd_address);
-                        uint16_t tx_buffer_size = lduw_phys(tbd_address + 4);
-                        uint16_t tx_buffer_el = lduw_phys(tbd_address + 6);
-                        tbd_address += 8;
-                        TRACE(RXTX, logout
-                            ("TBD (extended flexible mode): buffer address 0x%08x, size 0x%04x\n",
-                             tx_buffer_address, tx_buffer_size));
-                        tx_buffer_size = MIN(tx_buffer_size, sizeof(buf) - size);
-                        cpu_physical_memory_read(tx_buffer_address, &buf[size],
-                                                 tx_buffer_size);
-                        size += tx_buffer_size;
-                        if (tx_buffer_el & 1) {
-                            break;
-                        }
-                    }
-                }
-                tbd_address = tbd_array;
-                for (; tbd_count < tx.tbd_count; tbd_count++) {
-                    uint32_t tx_buffer_address = ldl_phys(tbd_address);
-                    uint16_t tx_buffer_size = lduw_phys(tbd_address + 4);
-                    uint16_t tx_buffer_el = lduw_phys(tbd_address + 6);
-                    tbd_address += 8;
-                    TRACE(RXTX, logout
-                        ("TBD (flexible mode): buffer address 0x%08x, size 0x%04x\n",
-                         tx_buffer_address, tx_buffer_size));
-                    tx_buffer_size = MIN(tx_buffer_size, sizeof(buf) - size);
-                    cpu_physical_memory_read(tx_buffer_address, &buf[size],
-                                             tx_buffer_size);
-                    size += tx_buffer_size;
-                    if (tx_buffer_el & 1) {
-                        break;
-                    }
-                }
-            }
-            TRACE(RXTX, logout("%p sending frame, len=%d,%s\n", s, size, nic_dump(buf, size)));
-            qemu_send_packet(&s->nic->nc, buf, size);
-            s->statistics.tx_good_frames++;
-            /* Transmit with bad status would raise an CX/TNO interrupt.
-             * (82557 only). Emulation never has bad status. */
-            //~ eepro100_cx_interrupt(s);
+            tx_command(s);
             break;
         case CmdTDR:
             TRACE(OTHER, logout("load microcode\n"));
@@ -900,7 +920,7 @@ static void action_command(EEPRO100State *s)
             break;
         }
         /* Write new status. */
-        stw_phys(cb_address, status | 0x8000 | (success ? 0x2000 : 0));
+        stw_phys(s->cb_address, status | 0x8000 | (success ? 0x2000 : 0));
         if (bit_i) {
             /* CU completed action. */
             eepro100_cx_interrupt(s);
@@ -1662,17 +1682,25 @@ static ssize_t nic_receive(VLANClientState *nc, const uint8_t * buf, size_t size
         /* Broadcast frame. */
         TRACE(RXTX, logout("%p received broadcast, len=%zu\n", s, size));
         rfd_status |= 0x0002;
-    } else if (buf[0] & 0x01) { // !!!
+    } else if (buf[0] & 0x01) {
         /* Multicast frame. */
-        TRACE(RXTX, logout("%p received multicast, len=%zu\n", s, size));
-        /* TODO: check multicast all bit. */
+        TRACE(RXTX, logout("%p received multicast, len=%zu,%s\n", s, size, nic_dump(buf, size)));
         if (s->configuration[21] & BIT(3)) {
-            missing("Multicast All bit");
+          /* Multicast all bit is set, receive all multicast frames. */
+        } else {
+          unsigned mcast_idx = compute_mcast_idx(buf);
+          assert(mcast_idx < 64);
+          if (s->mult[mcast_idx >> 3] & (1 << (mcast_idx & 7))) {
+            /* Multicast frame is allowed in hash table. */
+          } else if (s->configuration[15] & 1) {
+              /* Promiscuous: receive all. */
+              rfd_status |= 0x0004;
+          } else {
+              TRACE(RXTX, logout("%p multicast ignored\n", s));
+              return -1;
+          }
         }
-        int mcast_idx = compute_mcast_idx(buf);
-        if (!(s->mult[mcast_idx >> 3] & (1 << (mcast_idx & 7)))) {
-            return size;
-        }
+        /* TODO: Next not for promiscuous mode? */
         rfd_status |= 0x0002;
     } else if (s->configuration[15] & 1) {
         /* Promiscuous: receive all. */
@@ -1865,15 +1893,6 @@ static int nic_init(PCIDevice *pci_dev, uint32_t device)
     s->vmstate->name = s->nic->nc.model;
     vmstate_register(-1, s->vmstate, s);
 
-    if (!pci_dev->qdev.hotplugged) {
-        static int loaded = 0;
-        if (!loaded) {
-            char fname[32];
-            snprintf(fname, sizeof(fname), "pxe-%s.bin", s->nic->nc.model);
-            rom_add_option(fname);
-            loaded = 1;
-        }
-    }
     return 0;
 }
 
@@ -2033,6 +2052,7 @@ static PCIDeviceInfo eepro100_info[] = {
         .qdev.size = sizeof(EEPRO100State),
         .init      = pci_i82559er_init,
         .exit      = pci_nic_uninit,
+        .romfile   = "pxe-i82559er.bin",
         .qdev.props = (Property[]) {
             DEFINE_NIC_PROPERTIES(EEPRO100State, conf),
             DEFINE_PROP_END_OF_LIST(),

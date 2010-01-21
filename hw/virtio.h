@@ -90,7 +90,7 @@ typedef struct {
     unsigned (*get_features)(void * opaque);
 } VirtIOBindings;
 
-#define VIRTIO_PCI_QUEUE_MAX 16
+#define VIRTIO_PCI_QUEUE_MAX 64
 
 #define VIRTIO_NO_VECTOR 0xffff
 
@@ -100,12 +100,12 @@ struct VirtIODevice
     uint8_t status;
     uint8_t isr;
     uint16_t queue_sel;
-    uint32_t features;
+    uint32_t guest_features;
     size_t config_len;
     void *config;
     uint16_t config_vector;
     int nvectors;
-    uint32_t (*get_features)(VirtIODevice *vdev);
+    uint32_t (*get_features)(VirtIODevice *vdev, uint32_t requested_features);
     uint32_t (*bad_features)(VirtIODevice *vdev);
     void (*set_features)(VirtIODevice *vdev, uint32_t val);
     void (*get_config)(VirtIODevice *vdev, uint8_t *config);
@@ -171,9 +171,14 @@ void virtio_bind_device(VirtIODevice *vdev, const VirtIOBindings *binding,
 /* Base devices.  */
 VirtIODevice *virtio_blk_init(DeviceState *dev, DriveInfo *dinfo);
 VirtIODevice *virtio_net_init(DeviceState *dev, NICConf *conf);
-VirtIODevice *virtio_console_init(DeviceState *dev);
+VirtIODevice *virtio_serial_init(DeviceState *dev, uint32_t max_nr_ports);
 VirtIODevice *virtio_balloon_init(DeviceState *dev);
 
 void virtio_net_exit(VirtIODevice *vdev);
+
+#define DEFINE_VIRTIO_COMMON_FEATURES(_state, _field) \
+	DEFINE_PROP_BIT("indirect_desc", _state, _field, \
+			VIRTIO_RING_F_INDIRECT_DESC, true)
+
 
 #endif

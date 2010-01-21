@@ -175,6 +175,8 @@ int main(int argc, char **argv)
 
 #define DEFAULT_RAM_SIZE 128
 
+#define MAX_VIRTIO_CONSOLES 1
+
 static const char *data_dir;
 const char *bios_name = NULL;
 /* Note: drives_table[MAX_DRIVES] is a dummy block driver if none available
@@ -389,216 +391,9 @@ ram_addr_t qemu_balloon_status(void)
     return 0;
 }
 
+
 /***********************************************************/
-/* keyboard/mouse */
-
-static QEMUPutKBDEvent *qemu_put_kbd_event;
-static void *qemu_put_kbd_event_opaque;
-static QEMUPutMouseEntry *qemu_put_mouse_event_head;
-static QEMUPutMouseEntry *qemu_put_mouse_event_current;
-
-void qemu_add_kbd_event_handler(QEMUPutKBDEvent *func, void *opaque)
-{
-    qemu_put_kbd_event_opaque = opaque;
-    qemu_put_kbd_event = func;
-}
-
-QEMUPutMouseEntry *qemu_add_mouse_event_handler(QEMUPutMouseEvent *func,
-                                                void *opaque, int absolute,
-                                                const char *name)
-{
-    QEMUPutMouseEntry *s, *cursor;
-
-    s = qemu_mallocz(sizeof(QEMUPutMouseEntry));
-
-    s->qemu_put_mouse_event = func;
-    s->qemu_put_mouse_event_opaque = opaque;
-    s->qemu_put_mouse_event_absolute = absolute;
-    s->qemu_put_mouse_event_name = qemu_strdup(name);
-    s->next = NULL;
-
-    if (!qemu_put_mouse_event_head) {
-        qemu_put_mouse_event_head = qemu_put_mouse_event_current = s;
-        return s;
-    }
-
-    cursor = qemu_put_mouse_event_head;
-    while (cursor->next != NULL)
-        cursor = cursor->next;
-
-    cursor->next = s;
-    qemu_put_mouse_event_current = s;
-
-    return s;
-}
-
-void qemu_remove_mouse_event_handler(QEMUPutMouseEntry *entry)
-{
-    QEMUPutMouseEntry *prev = NULL, *cursor;
-
-    if (!qemu_put_mouse_event_head || entry == NULL)
-        return;
-
-    cursor = qemu_put_mouse_event_head;
-    while (cursor != NULL && cursor != entry) {
-        prev = cursor;
-        cursor = cursor->next;
-    }
-
-    if (cursor == NULL) // does not exist or list empty
-        return;
-    else if (prev == NULL) { // entry is head
-        qemu_put_mouse_event_head = cursor->next;
-        if (qemu_put_mouse_event_current == entry)
-            qemu_put_mouse_event_current = cursor->next;
-        qemu_free(entry->qemu_put_mouse_event_name);
-        qemu_free(entry);
-        return;
-    }
-
-    prev->next = entry->next;
-
-    if (qemu_put_mouse_event_current == entry)
-        qemu_put_mouse_event_current = prev;
-
-    qemu_free(entry->qemu_put_mouse_event_name);
-    qemu_free(entry);
-}
-
-void kbd_put_keycode(int keycode)
-{
-    if (qemu_put_kbd_event) {
-        qemu_put_kbd_event(qemu_put_kbd_event_opaque, keycode);
-    }
-}
-
-void kbd_mouse_event(int dx, int dy, int dz, int buttons_state)
-{
-    QEMUPutMouseEvent *mouse_event;
-    void *mouse_event_opaque;
-    int width;
-
-    if (!qemu_put_mouse_event_current) {
-        return;
-    }
-
-    mouse_event =
-        qemu_put_mouse_event_current->qemu_put_mouse_event;
-    mouse_event_opaque =
-        qemu_put_mouse_event_current->qemu_put_mouse_event_opaque;
-
-    if (mouse_event) {
-        if (graphic_rotate) {
-            if (qemu_put_mouse_event_current->qemu_put_mouse_event_absolute)
-                width = 0x7fff;
-            else
-                width = graphic_width - 1;
-            mouse_event(mouse_event_opaque,
-                                 width - dy, dx, dz, buttons_state);
-        } else
-            mouse_event(mouse_event_opaque,
-                                 dx, dy, dz, buttons_state);
-    }
-}
-
-int kbd_mouse_is_absolute(void)
-{
-    if (!qemu_put_mouse_event_current)
-        return 0;
-
-    return qemu_put_mouse_event_current->qemu_put_mouse_event_absolute;
-}
-
-static void info_mice_iter(QObject *data, void *opaque)
-{
-    QDict *mouse;
-    Monitor *mon = opaque;
-
-    mouse = qobject_to_qdict(data);
-    monitor_printf(mon, "%c Mouse #%" PRId64 ": %s\n",
-                  (qdict_get_bool(mouse, "current") ? '*' : ' '),
-                  qdict_get_int(mouse, "index"), qdict_get_str(mouse, "name"));
-}
-
-void do_info_mice_print(Monitor *mon, const QObject *data)
-{
-    QList *mice_list;
-
-    mice_list = qobject_to_qlist(data);
-    if (qlist_empty(mice_list)) {
-        monitor_printf(mon, "No mouse devices connected\n");
-        return;
-    }
-
-    qlist_iter(mice_list, info_mice_iter, mon);
-}
-
-/**
- * do_info_mice(): Show VM mice information
- *
- * Each mouse is represented by a QDict, the returned QObject is a QList of
- * all mice.
- *
- * The mouse QDict contains the following:
- *
- * - "name": mouse's name
- * - "index": mouse's index
- * - "current": true if this mouse is receiving events, false otherwise
- *
- * Example:
- *
- * [ { "name": "QEMU Microsoft Mouse", "index": 0, "current": false },
- *   { "name": "QEMU PS/2 Mouse", "index": 1, "current": true } ]
- */
-void do_info_mice(Monitor *mon, QObject **ret_data)
-{
-    QEMUPutMouseEntry *cursor;
-    QList *mice_list;
-    int index = 0;
-
-    mice_list = qlist_new();
-
-    if (!qemu_put_mouse_event_head) {
-        goto out;
-    }
-
-    cursor = qemu_put_mouse_event_head;
-    while (cursor != NULL) {
-        QObject *obj;
-        obj = qobject_from_jsonf("{ 'name': %s, 'index': %d, 'current': %i }",
-                                 cursor->qemu_put_mouse_event_name,
-                                 index, cursor == qemu_put_mouse_event_current);
-        qlist_append_obj(mice_list, obj);
-        index++;
-        cursor = cursor->next;
-    }
-
-out:
-    *ret_data = QOBJECT(mice_list);
-}
-
-void do_mouse_set(Monitor *mon, const QDict *qdict)
-{
-    QEMUPutMouseEntry *cursor;
-    int i = 0;
-    int index = qdict_get_int(qdict, "index");
-
-    if (!qemu_put_mouse_event_head) {
-        monitor_printf(mon, "No mouse devices connected\n");
-        return;
-    }
-
-    cursor = qemu_put_mouse_event_head;
-    while (cursor != NULL && index != i) {
-        i++;
-        cursor = cursor->next;
-    }
-
-    if (cursor != NULL)
-        qemu_put_mouse_event_current = cursor;
-    else
-        monitor_printf(mon, "Mouse at given index not found\n");
-}
+/* real time host monotonic timer */
 
 /* compute with 96 bit intermediate result: (a*b)/c */
 uint64_t muldiv64(uint64_t a, uint32_t b, uint32_t c)
@@ -623,9 +418,6 @@ uint64_t muldiv64(uint64_t a, uint32_t b, uint32_t c)
     res.l.low = (((rh % c) << 32) + (rl & 0xffffffff)) / c;
     return res.ll;
 }
-
-/***********************************************************/
-/* real time host monotonic timer */
 
 static int64_t get_clock_realtime(void)
 {
@@ -2461,12 +2253,19 @@ DriveInfo *drive_init(QemuOpts *opts, void *opaque,
     }
 
     if (ro == 1) {
-        if (type == IF_IDE) {
-            fprintf(stderr, "qemu: readonly flag not supported for drive with ide interface\n");
+        if (type != IF_SCSI && type != IF_VIRTIO && type != IF_FLOPPY) {
+            fprintf(stderr, "qemu: readonly flag not supported for drive with this interface\n");
             return NULL;
         }
-        (void)bdrv_set_read_only(dinfo->bdrv, 1);
     }
+    /* 
+     * cdrom is read-only. Set it now, after above interface checking
+     * since readonly attribute not explicitly required, so no error.
+     */
+    if (media == MEDIA_CDROM) {
+        ro = 1;
+    }
+    bdrv_flags |= ro ? 0 : BDRV_O_RDWR;
 
     if (bdrv_open2(dinfo->bdrv, file, bdrv_flags, drv) < 0) {
         fprintf(stderr, "qemu: could not open disk image %s: %s\n",
@@ -2637,17 +2436,13 @@ static void smp_parse(const char *optarg)
         threads = threads > 0 ? threads : 1;
         if (smp == 0) {
             smp = cores * threads * sockets;
-        } else {
-            sockets = smp / (cores * threads);
         }
     } else {
         if (cores == 0) {
             threads = threads > 0 ? threads : 1;
             cores = smp / (sockets * threads);
         } else {
-            if (sockets == 0) {
-                sockets = smp / (cores * threads);
-            } else {
+            if (sockets) {
                 threads = smp / (cores * sockets);
             }
         }
@@ -3528,10 +3323,10 @@ void qemu_init_vcpu(void *_env)
 {
     CPUState *env = _env;
 
-    if (kvm_enabled())
-        kvm_init_vcpu(env);
     env->nr_cores = smp_cores;
     env->nr_threads = smp_threads;
+    if (kvm_enabled())
+        kvm_init_vcpu(env);
     return;
 }
 
@@ -3863,12 +3658,12 @@ void qemu_init_vcpu(void *_env)
 {
     CPUState *env = _env;
 
+    env->nr_cores = smp_cores;
+    env->nr_threads = smp_threads;
     if (kvm_enabled())
         kvm_start_vcpu(env);
     else
         tcg_init_vcpu(env);
-    env->nr_cores = smp_cores;
-    env->nr_threads = smp_threads;
 }
 
 void qemu_notify_event(void)
@@ -4806,6 +4601,7 @@ struct device_config {
         DEV_SERIAL,    /* -serial        */
         DEV_PARALLEL,  /* -parallel      */
         DEV_VIRTCON,   /* -virtioconsole */
+        DEV_DEBUGCON,  /* -debugcon */
     } type;
     const char *cmdline;
     QTAILQ_ENTRY(device_config) next;
@@ -4900,6 +4696,23 @@ static int virtcon_parse(const char *devname)
         return -1;
     }
     index++;
+    return 0;
+}
+
+static int debugcon_parse(const char *devname)
+{   
+    QemuOpts *opts;
+
+    if (!qemu_chr_open("debugcon", devname, NULL)) {
+        exit(1);
+    }
+    opts = qemu_opts_create(&qemu_device_opts, "debugcon", 1);
+    if (!opts) {
+        fprintf(stderr, "qemu: already have a debugcon device\n");
+        exit(1);
+    }
+    qemu_opt_set(opts, "driver", "isa-debugcon");
+    qemu_opt_set(opts, "chardev", "debugcon");
     return 0;
 }
 
@@ -5449,6 +5262,9 @@ int main(int argc, char **argv, char **envp)
             case QEMU_OPTION_parallel:
                 add_device_config(DEV_PARALLEL, optarg);
                 default_parallel = 0;
+                break;
+            case QEMU_OPTION_debugcon:
+                add_device_config(DEV_DEBUGCON, optarg);
                 break;
 	    case QEMU_OPTION_loadvm:
 		loadvm = optarg;
@@ -6039,6 +5855,8 @@ int main(int argc, char **argv, char **envp)
     if (foreach_device_config(DEV_PARALLEL, parallel_parse) < 0)
         exit(1);
     if (foreach_device_config(DEV_VIRTCON, virtcon_parse) < 0)
+        exit(1);
+    if (foreach_device_config(DEV_DEBUGCON, debugcon_parse) < 0)
         exit(1);
 
     module_call_init(MODULE_INIT_DEVICE);

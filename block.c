@@ -310,7 +310,7 @@ static BlockDriver *find_image_format(const char *filename)
     if (drv && strcmp(drv->format_name, "vvfat") == 0)
         return drv;
 
-    ret = bdrv_file_open(&bs, filename, BDRV_O_RDONLY);
+    ret = bdrv_file_open(&bs, filename, 0);
     if (ret < 0)
         return NULL;
     ret = bdrv_pread(bs, 0, buf, sizeof(buf));
@@ -356,7 +356,7 @@ int bdrv_open(BlockDriverState *bs, const char *filename, int flags)
 int bdrv_open2(BlockDriverState *bs, const char *filename, int flags,
                BlockDriver *drv)
 {
-    int ret, open_flags, try_rw;
+    int ret, open_flags;
     char tmp_filename[PATH_MAX];
     char backing_filename[PATH_MAX];
 
@@ -444,21 +444,19 @@ int bdrv_open2(BlockDriverState *bs, const char *filename, int flags,
     if (flags & (BDRV_O_CACHE_WB|BDRV_O_NOCACHE))
         bs->enable_write_cache = 1;
 
-    /* Note: for compatibility, we open disk image files as RDWR, and
-       RDONLY as fallback */
-    try_rw = !bs->read_only || bs->is_temporary;
-    if (!(flags & BDRV_O_FILE))
-        open_flags = (try_rw ? BDRV_O_RDWR : 0) |
-            (flags & (BDRV_O_CACHE_MASK|BDRV_O_NATIVE_AIO));
-    else
+    bs->read_only = (flags & BDRV_O_RDWR) == 0;
+    if (!(flags & BDRV_O_FILE)) {
+        open_flags = (flags & (BDRV_O_RDWR | BDRV_O_CACHE_MASK|BDRV_O_NATIVE_AIO));
+        if (bs->is_temporary) { /* snapshot should be writeable */
+            open_flags |= BDRV_O_RDWR;
+        }
+    } else {
         open_flags = flags & ~(BDRV_O_FILE | BDRV_O_SNAPSHOT);
-    if (use_bdrv_whitelist && !bdrv_is_whitelisted(drv))
+    }
+    if (use_bdrv_whitelist && !bdrv_is_whitelisted(drv)) {
         ret = -ENOTSUP;
-    else
+    } else {
         ret = drv->bdrv_open(bs, filename, open_flags);
-    if ((ret == -EACCES || ret == -EPERM) && !(flags & BDRV_O_FILE)) {
-        ret = drv->bdrv_open(bs, filename, open_flags & ~BDRV_O_RDWR);
-        bs->read_only = 1;
     }
     if (ret < 0) {
         qemu_free(bs->opaque);
@@ -477,18 +475,17 @@ int bdrv_open2(BlockDriverState *bs, const char *filename, int flags,
         unlink(filename);
     }
 #endif
-    if (bs->backing_file[0] != '\0') {
+    if ((flags & BDRV_O_NO_BACKING) == 0 && bs->backing_file[0] != '\0') {
         /* if there is a backing file, use it */
         BlockDriver *back_drv = NULL;
         bs->backing_hd = bdrv_new("");
-        /* pass on read_only property to the backing_hd */
-        bs->backing_hd->read_only = bs->read_only;
         path_combine(backing_filename, sizeof(backing_filename),
                      filename, bs->backing_file);
         if (bs->backing_format[0] != '\0')
             back_drv = bdrv_find_format(bs->backing_format);
         ret = bdrv_open2(bs->backing_hd, backing_filename, open_flags,
                          back_drv);
+        bs->backing_hd->read_only =  (open_flags & BDRV_O_RDWR) == 0;
         if (ret < 0) {
             bdrv_close(bs);
             return ret;
@@ -560,6 +557,7 @@ int bdrv_commit(BlockDriverState *bs)
     BlockDriver *drv = bs->drv;
     int64_t i, total_sectors;
     int n, j;
+    int ret = 0;
     unsigned char sector[512];
 
     if (!drv)
@@ -591,10 +589,38 @@ int bdrv_commit(BlockDriverState *bs)
         }
     }
 
-    if (drv->bdrv_make_empty)
-	return drv->bdrv_make_empty(bs);
+    if (drv->bdrv_make_empty) {
+        ret = drv->bdrv_make_empty(bs);
+        bdrv_flush(bs);
+    }
 
-    return 0;
+    /*
+     * Make sure all data we wrote to the backing device is actually
+     * stable on disk.
+     */
+    if (bs->backing_hd)
+        bdrv_flush(bs->backing_hd);
+    return ret;
+}
+
+/*
+ * Return values:
+ * 0        - success
+ * -EINVAL  - backing format specified, but no file
+ * -ENOSPC  - can't update the backing file because no space is left in the
+ *            image file header
+ * -ENOTSUP - format driver doesn't support changing the backing file
+ */
+int bdrv_change_backing_file(BlockDriverState *bs,
+    const char *backing_file, const char *backing_fmt)
+{
+    BlockDriver *drv = bs->drv;
+
+    if (drv->bdrv_change_backing_file != NULL) {
+        return drv->bdrv_change_backing_file(bs, backing_file, backing_fmt);
+    } else {
+        return -ENOTSUP;
+    }
 }
 
 static int bdrv_check_byte_request(BlockDriverState *bs, int64_t offset,
@@ -1095,12 +1121,8 @@ const char *bdrv_get_device_name(BlockDriverState *bs)
 
 void bdrv_flush(BlockDriverState *bs)
 {
-    if (!bs->drv)
-        return;
-    if (bs->drv->bdrv_flush)
+    if (bs->drv && bs->drv->bdrv_flush)
         bs->drv->bdrv_flush(bs);
-    if (bs->backing_hd)
-        bdrv_flush(bs->backing_hd);
 }
 
 void bdrv_flush_all(void)
@@ -1352,7 +1374,7 @@ const char *bdrv_get_encrypted_filename(BlockDriverState *bs)
 void bdrv_get_backing_filename(BlockDriverState *bs,
                                char *filename, int filename_size)
 {
-    if (!bs->backing_hd) {
+    if (!bs->backing_file) {
         pstrcpy(filename, filename_size, "");
     } else {
         pstrcpy(filename, filename_size, bs->backing_file);
@@ -1777,11 +1799,6 @@ BlockDriverAIOCB *bdrv_aio_flush(BlockDriverState *bs,
 
     if (!drv)
         return NULL;
-
-    /*
-     * Note that unlike bdrv_flush the driver is reponsible for flushing a
-     * backing image if it exists.
-     */
     return drv->bdrv_aio_flush(bs, cb, opaque);
 }
 

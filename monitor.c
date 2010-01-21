@@ -286,7 +286,6 @@ static void monitor_protocol_emitter(Monitor *mon, QObject *data)
     if (!monitor_has_error(mon)) {
         /* success response */
         if (data) {
-            assert(qobject_type(data) == QTYPE_QDICT);
             qobject_incref(data);
             qdict_put_obj(qmp, "return", data);
         } else {
@@ -338,12 +337,9 @@ void monitor_protocol_event(MonitorEvent event, QObject *data)
 {
     QDict *qmp;
     const char *event_name;
-    Monitor *mon = cur_mon;
+    Monitor *mon;
 
     assert(event < QEVENT_MAX);
-
-    if (!monitor_ctrl_mode(mon))
-        return;
 
     switch (event) {
         case QEVENT_DEBUG:
@@ -361,6 +357,15 @@ void monitor_protocol_event(MonitorEvent event, QObject *data)
         case QEVENT_STOP:
             event_name = "STOP";
             break;
+        case QEVENT_VNC_CONNECTED:
+            event_name = "VNC_CONNECTED";
+            break;
+        case QEVENT_VNC_INITIALIZED:
+            event_name = "VNC_INITIALIZED";
+            break;
+        case QEVENT_VNC_DISCONNECTED:
+            event_name = "VNC_DISCONNECTED";
+            break;
         default:
             abort();
             break;
@@ -369,10 +374,16 @@ void monitor_protocol_event(MonitorEvent event, QObject *data)
     qmp = qdict_new();
     timestamp_put(qmp);
     qdict_put(qmp, "event", qstring_from_str(event_name));
-    if (data)
+    if (data) {
+        qobject_incref(data);
         qdict_put_obj(qmp, "data", data);
+    }
 
-    monitor_json_emitter(mon, QOBJECT(qmp));
+    QLIST_FOREACH(mon, &mon_list, entry) {
+        if (monitor_ctrl_mode(mon)) {
+            monitor_json_emitter(mon, QOBJECT(qmp));
+        }
+    }
     QDECREF(qmp);
 }
 
@@ -943,7 +954,7 @@ static void do_change_block(Monitor *mon, const char *device,
     }
     if (eject_device(mon, bs, 0) < 0)
         return;
-    bdrv_open2(bs, filename, 0, drv);
+    bdrv_open2(bs, filename, BDRV_O_RDWR, drv);
     monitor_read_bdrv_key_start(mon, bs, NULL, NULL);
 }
 
@@ -1136,7 +1147,7 @@ static void memory_dump(Monitor *mon, int count, int format, int wsize,
                         target_phys_addr_t addr, int is_physical)
 {
     CPUState *env;
-    int nb_per_line, l, line_size, i, max_digits, len;
+    int l, line_size, i, max_digits, len;
     uint8_t buf[16];
     uint64_t v;
 
@@ -1175,7 +1186,6 @@ static void memory_dump(Monitor *mon, int count, int format, int wsize,
         line_size = 8;
     else
         line_size = 16;
-    nb_per_line = line_size / wsize;
     max_digits = 0;
 
     switch(format) {
