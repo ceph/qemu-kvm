@@ -4806,6 +4806,7 @@ struct device_config {
         DEV_SERIAL,    /* -serial        */
         DEV_PARALLEL,  /* -parallel      */
         DEV_VIRTCON,   /* -virtioconsole */
+        DEV_DEBUGCON,  /* -debugcon */
     } type;
     const char *cmdline;
     QTAILQ_ENTRY(device_config) next;
@@ -4900,6 +4901,23 @@ static int virtcon_parse(const char *devname)
         return -1;
     }
     index++;
+    return 0;
+}
+
+static int debugcon_parse(const char *devname)
+{   
+    QemuOpts *opts;
+
+    if (!qemu_chr_open("debugcon", devname, NULL)) {
+        exit(1);
+    }
+    opts = qemu_opts_create(&qemu_device_opts, "debugcon", 1);
+    if (!opts) {
+        fprintf(stderr, "qemu: already have a debugcon device\n");
+        exit(1);
+    }
+    qemu_opt_set(opts, "driver", "isa-debugcon");
+    qemu_opt_set(opts, "chardev", "debugcon");
     return 0;
 }
 
@@ -5449,6 +5467,9 @@ int main(int argc, char **argv, char **envp)
             case QEMU_OPTION_parallel:
                 add_device_config(DEV_PARALLEL, optarg);
                 default_parallel = 0;
+                break;
+            case QEMU_OPTION_debugcon:
+                add_device_config(DEV_DEBUGCON, optarg);
                 break;
 	    case QEMU_OPTION_loadvm:
 		loadvm = optarg;
@@ -6039,6 +6060,8 @@ int main(int argc, char **argv, char **envp)
     if (foreach_device_config(DEV_PARALLEL, parallel_parse) < 0)
         exit(1);
     if (foreach_device_config(DEV_VIRTCON, virtcon_parse) < 0)
+        exit(1);
+    if (foreach_device_config(DEV_DEBUGCON, debugcon_parse) < 0)
         exit(1);
 
     module_call_init(MODULE_INIT_DEVICE);
