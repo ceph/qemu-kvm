@@ -190,6 +190,7 @@ struct PCIDevice {
     /* Location of option rom */
     char *romfile;
     ram_addr_t rom_offset;
+    uint32_t rom_bar;
 
     /* How much space does an MSIX table need. */
     /* The spec requires giving the table structure
