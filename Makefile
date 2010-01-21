@@ -7,7 +7,7 @@ ifneq ($(wildcard config-host.mak),)
 all: build-all
 include config-host.mak
 include $(SRC_PATH)/rules.mak
-config-host.mak: configure
+config-host.mak: $(SRC_PATH)/configure
 	@echo $@ is out-of-date, running configure
 	@sed -n "/.*Configured with/s/[^:]*: //p" $@ | sh
 else
@@ -92,10 +92,7 @@ include $(SRC_PATH)/Makefile.objs
 $(common-obj-y): $(GENERATED_HEADERS)
 $(filter %-softmmu,$(SUBDIR_RULES)): $(common-obj-y)
 
-$(filter %-user,$(SUBDIR_RULES)): libuser.a
-
-libuser.a: $(GENERATED_HEADERS)
-	$(call quiet-command,$(MAKE) $(SUBDIR_MAKEFLAGS) -C libuser V="$(V)" TARGET_DIR="libuser/" all,)
+$(filter %-user,$(SUBDIR_RULES)): $(GENERATED_HEADERS) subdir-libuser
 
 ROMSUBDIR_RULES=$(patsubst %,romsubdir-%, $(ROMS))
 romsubdir-%:
