@@ -151,6 +151,8 @@ static uint32_t virtio_net_get_features(VirtIODevice *vdev, uint32_t features)
 {
     VirtIONet *n = to_virtio_net(vdev);
 
+    features |= (1 << VIRTIO_NET_F_MAC);
+
     if (peer_has_vnet_hdr(n)) {
         tap_using_vnet_hdr(n->nic->nc.peer, 1);
     } else {
@@ -530,7 +532,7 @@ static ssize_t virtio_net_receive(VLANClientState *nc, const uint8_t *buf, size_
         int len, total;
         struct iovec sg[VIRTQUEUE_MAX_SIZE];
 
-        len = total = 0;
+        total = 0;
 
         if ((i != 0 && !n->mergeable_rx_bufs) ||
             virtqueue_pop(n->rx_vq, &elem) == 0) {
