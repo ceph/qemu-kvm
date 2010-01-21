@@ -60,6 +60,7 @@ int qemu_cpu_has_work(CPUState *env)
 
 void cpu_loop_exit(void)
 {
+    env->current_tb = NULL;
     longjmp(env->jmp_env, 1);
 }
 
@@ -111,6 +112,7 @@ static void cpu_exec_nocache(int max_cycles, TranslationBlock *orig_tb)
     env->current_tb = tb;
     /* execute the generated code */
     next_tb = tcg_qemu_tb_exec(tb->tc_ptr);
+    env->current_tb = NULL;
 
     if ((next_tb & 3) == 2) {
         /* Restore PC.  This may happen if async event occurs before
@@ -263,7 +265,6 @@ int cpu_exec(CPUState *env1)
                     env = cpu_single_env;
 #define env cpu_single_env
 #endif
-            env->current_tb = NULL;
             /* if an exception is pending, we execute it here */
             if (env->exception_index >= 0) {
                 if (env->exception_index >= EXCP_INTERRUPT) {
@@ -319,9 +320,9 @@ int cpu_exec(CPUState *env1)
 #elif defined(TARGET_IA64)
 		    do_interrupt(env);
 #endif
+                    env->exception_index = -1;
 #endif
                 }
-                env->exception_index = -1;
             }
 
             if (kvm_enabled()) {
@@ -595,22 +596,17 @@ int cpu_exec(CPUState *env1)
                 /* see if we can patch the calling TB. When the TB
                    spans two pages, we cannot safely do a direct
                    jump. */
-                {
-                    if (next_tb != 0 && tb->page_addr[1] == -1) {
+                if (next_tb != 0 && tb->page_addr[1] == -1) {
                     tb_add_jump((TranslationBlock *)(next_tb & ~3), next_tb & 3, tb);
                 }
-                }
                 spin_unlock(&tb_lock);
-                env->current_tb = tb;
 
                 /* cpu_interrupt might be called while translating the
                    TB, but before it is linked into a potentially
                    infinite loop and becomes env->current_tb. Avoid
                    starting execution if there is a pending interrupt. */
-                if (unlikely (env->exit_request))
-                    env->current_tb = NULL;
-
-                while (env->current_tb) {
+                if (!unlikely (env->exit_request)) {
+                    env->current_tb = tb;
                     tc_ptr = tb->tc_ptr;
                 /* execute the generated code */
 #if defined(__sparc__) && !defined(CONFIG_SOLARIS)
