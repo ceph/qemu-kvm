@@ -1060,15 +1060,6 @@ static void pc_init1(ram_addr_t ram_size,
 	extboot_init(info->bdrv, 1);
     }
 
-    /* Add virtio console devices */
-    if (pci_enabled) {
-        for(i = 0; i < MAX_VIRTIO_CONSOLES; i++) {
-            if (virtcon_hds[i]) {
-                pci_create_simple(pci_bus, -1, "virtio-console-pci");
-            }
-        }
-    }
-
 #ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
     if (kvm_enabled()) {
         add_assigned_devices(pci_bus, assigned_devices, assigned_devices_index);
@@ -1157,7 +1148,7 @@ static QEMUMachine pc_machine_v0_10 = {
             .property = "class",
             .value    = stringify(PCI_CLASS_STORAGE_OTHER),
         },{
-            .driver   = "virtio-console-pci",
+            .driver   = "virtio-serial-pci",
             .property = "class",
             .value    = stringify(PCI_CLASS_DISPLAY_OTHER),
         },{
