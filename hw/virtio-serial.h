@@ -49,6 +49,9 @@ struct virtio_console_control {
 #define VIRTIO_CONSOLE_PORT_READY	0
 #define VIRTIO_CONSOLE_CONSOLE_PORT	1
 #define VIRTIO_CONSOLE_RESIZE		2
+#define VIRTIO_CONSOLE_PORT_OPEN	3
+#define VIRTIO_CONSOLE_PORT_NAME	4
+#define VIRTIO_CONSOLE_PORT_REMOVE	5
 
 /* == In-qemu interface == */
 
@@ -83,6 +86,13 @@ struct VirtIOSerialPort {
     VirtQueue *ivq, *ovq;
 
     /*
+     * This name is sent to the guest and exported via sysfs.
+     * The guest could create symlinks based on this information.
+     * The name is in the reverse fqdn format, like org.qemu.console.0
+     */
+    char *name;
+
+    /*
      * This id helps identify ports between the guest and the host.
      * The guest sends a "header" with this id with each data packet
      * that it sends and the host can then find out which associated
@@ -92,6 +102,11 @@ struct VirtIOSerialPort {
 
     /* Identify if this is a port that binds with hvc in the guest */
     uint8_t is_console;
+
+    /* Is the corresponding guest device open? */
+    bool guest_connected;
+    /* Is this device open for IO on the host? */
+    bool host_connected;
 };
 
 struct VirtIOSerialPortInfo {
