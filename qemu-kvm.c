@@ -1618,7 +1618,7 @@ static void kvm_do_load_mpstate(void *_env)
 
 void kvm_load_mpstate(CPUState *env)
 {
-    if (kvm_enabled() && qemu_system_ready)
+    if (kvm_enabled() && qemu_system_ready && kvm_vcpu_inited(env))
         on_vcpu(env, kvm_do_load_mpstate, env);
 }
 
