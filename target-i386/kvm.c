@@ -285,6 +285,7 @@ int kvm_arch_init_vcpu(CPUState *env)
     return kvm_vcpu_ioctl(env, KVM_SET_CPUID2, &cpuid_data);
 }
 
+#endif
 void kvm_arch_reset_vcpu(CPUState *env)
 {
     env->exception_injected = -1;
@@ -292,6 +293,7 @@ void kvm_arch_reset_vcpu(CPUState *env)
     env->nmi_injected = 0;
     env->nmi_pending = 0;
 }
+#ifdef KVM_UPSTREAM
 
 static int kvm_has_msr_star(CPUState *env)
 {
@@ -776,8 +778,9 @@ static int kvm_get_mp_state(CPUState *env)
     env->mp_state = mp_state.mp_state;
     return 0;
 }
+#endif
 
-static int kvm_put_vcpu_events(CPUState *env)
+int kvm_put_vcpu_events(CPUState *env)
 {
 #ifdef KVM_CAP_VCPU_EVENTS
     struct kvm_vcpu_events events;
@@ -807,7 +810,7 @@ static int kvm_put_vcpu_events(CPUState *env)
 #endif
 }
 
-static int kvm_get_vcpu_events(CPUState *env)
+int kvm_get_vcpu_events(CPUState *env)
 {
 #ifdef KVM_CAP_VCPU_EVENTS
     struct kvm_vcpu_events events;
@@ -844,6 +847,7 @@ static int kvm_get_vcpu_events(CPUState *env)
     return 0;
 }
 
+#ifdef KVM_UPSTREAM
 int kvm_arch_put_registers(CPUState *env)
 {
     int ret;
