@@ -2187,6 +2187,11 @@ static int kvm_create_context(void)
         return r;
     }
 
+    kvm_state->vcpu_events = 0;
+#ifdef KVM_CAP_VCPU_EVENTS
+    kvm_state->vcpu_events = kvm_check_extension(kvm_state, KVM_CAP_VCPU_EVENTS);
+#endif
+
     kvm_init_ap();
     if (kvm_irqchip) {
         if (!qemu_kvm_has_gsi_routing()) {

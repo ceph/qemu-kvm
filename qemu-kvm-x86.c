@@ -1457,8 +1457,9 @@ void kvm_arch_push_nmi(void *opaque)
 
 void kvm_arch_cpu_reset(CPUState *env)
 {
-    env->interrupt_injected = -1;
+    kvm_arch_reset_vcpu(env);
     kvm_arch_load_regs(env);
+    kvm_put_vcpu_events(env);
     if (!cpu_is_bsp(env)) {
 	if (kvm_irqchip_in_kernel()) {
 #ifdef KVM_CAP_MP_STATE
