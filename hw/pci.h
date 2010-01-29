@@ -277,7 +277,7 @@ PCIBus *pci_get_bus_devfn(int *devfnp, const char *devaddr);
 int pci_read_devaddr(Monitor *mon, const char *addr, int *domp, int *busp,
                      unsigned *slotp);
 
-int pci_parse_host_devaddr(const char *addr, int *busp,
+int pci_parse_host_devaddr(const char *addr, int *segp, int *busp,
                            int *slotp, int *funcp);
 
 void do_pci_info_print(Monitor *mon, const QObject *data);

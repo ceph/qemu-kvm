@@ -498,6 +498,8 @@ struct kvm_ioeventfd {
 #define KVM_CAP_S390_PSW 42
 #define KVM_CAP_PPC_SEGSTATE 43
 
+#define KVM_CAP_PCI_SEGMENT 47
+
 #ifdef KVM_CAP_IRQ_ROUTING
 
 struct kvm_irq_routing_irqchip {
@@ -691,8 +693,9 @@ struct kvm_assigned_pci_dev {
 	__u32 busnr;
 	__u32 devfn;
 	__u32 flags;
+	__u32 segnr;
 	union {
-		__u32 reserved[12];
+		__u32 reserved[11];
 	};
 };
 

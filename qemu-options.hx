@@ -2031,7 +2031,7 @@ DEF("no-kvm-pit-reinjection", 0, QEMU_OPTION_no_kvm_pit_reinjection,
     "                disable KVM kernel mode PIT interrupt reinjection\n")
 #if defined(TARGET_I386) || defined(TARGET_X86_64) || defined(TARGET_IA64) || defined(__linux__)
 DEF("pcidevice", HAS_ARG, QEMU_OPTION_pcidevice,
-    "-pcidevice host=bus:dev.func[,dma=none][,name=string]\n"
+    "-pcidevice host=[seg:]bus:dev.func[,dma=none][,name=string]\n"
     "                expose a PCI device to the guest OS\n"
     "                dma=none: don't perform any dma translations (default is to use an iommu)\n"
     "                'string' is used in log output\n")
