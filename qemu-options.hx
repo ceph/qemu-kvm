@@ -1966,6 +1966,16 @@ STEXI
 @item -writeconfig @var{file}
 Write device configuration to @var{file}.
 ETEXI
+DEF("nodefconfig", 0, QEMU_OPTION_nodefconfig,
+    "-nodefconfig\n"
+    "                do not load default config files at startup\n")
+STEXI
+@item -nodefconfig
+Normally QEMU loads a configuration file from @var{sysconfdir}/qemu.conf and
+@var{sysconfdir}/target-@var{ARCH}.conf on startup.  The @code{-nodefconfig}
+option will prevent QEMU from loading these configuration files at startup.
+ETEXI
+
 DEF("no-kvm", 0, QEMU_OPTION_no_kvm,
     "-no-kvm         disable KVM hardware virtualization\n")
 DEF("no-kvm-irqchip", 0, QEMU_OPTION_no_kvm_irqchip,
