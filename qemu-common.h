@@ -54,6 +54,10 @@ struct iovec {
     void *iov_base;
     size_t iov_len;
 };
+/*
+ * Use the same value as Linux for now.
+ */
+#define IOV_MAX		1024
 #else
 #include <sys/uio.h>
 #endif
@@ -161,6 +165,8 @@ void qemu_mutex_lock_iothread(void);
 void qemu_mutex_unlock_iothread(void);
 
 int qemu_open(const char *name, int flags, ...);
+ssize_t qemu_write_full(int fd, const void *buf, size_t count)
+    QEMU_WARN_UNUSED_RESULT;
 void qemu_set_cloexec(int fd);
 
 #ifndef _WIN32

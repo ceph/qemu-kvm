@@ -50,23 +50,74 @@ do { printf("APB: " fmt , ## __VA_ARGS__); } while (0)
  * http://www.sun.com/processors/manuals/805-1251.pdf
  */
 
+#define PBM_PCI_IMR_MASK    0x7fffffff
+#define PBM_PCI_IMR_ENABLED 0x80000000
+
+#define POR          (1 << 31)
+#define SOFT_POR     (1 << 30)
+#define SOFT_XIR     (1 << 29)
+#define BTN_POR      (1 << 28)
+#define BTN_XIR      (1 << 27)
+#define RESET_MASK   0xf8000000
+#define RESET_WCMASK 0x98000000
+#define RESET_WMASK  0x60000000
+
 typedef struct APBState {
     SysBusDevice busdev;
     PCIHostState host_state;
+    uint32_t iommu[4];
+    uint32_t pci_control[16];
+    uint32_t pci_irq_map[8];
+    uint32_t obio_irq_map[32];
+    qemu_irq pci_irqs[32];
+    uint32_t reset_control;
 } APBState;
+
+static unsigned int nr_resets;
 
 static void apb_config_writel (void *opaque, target_phys_addr_t addr,
                                uint32_t val)
 {
-    //PCIBus *s = opaque;
+    APBState *s = opaque;
 
-    switch (addr & 0x3f) {
-    case 0x00: // Control/Status
-    case 0x10: // AFSR
-    case 0x18: // AFAR
-    case 0x20: // Diagnostic
-    case 0x28: // Target address space
-        // XXX
+    APB_DPRINTF("%s: addr " TARGET_FMT_lx " val %x\n", __func__, addr, val);
+
+    switch (addr & 0xffff) {
+    case 0x30 ... 0x4f: /* DMA error registers */
+        /* XXX: not implemented yet */
+        break;
+    case 0x200 ... 0x20b: /* IOMMU */
+        s->iommu[(addr & 0xf) >> 2] = val;
+        break;
+    case 0x20c ... 0x3ff: /* IOMMU flush */
+        break;
+    case 0xc00 ... 0xc3f: /* PCI interrupt control */
+        if (addr & 4) {
+            s->pci_irq_map[(addr & 0x3f) >> 3] &= PBM_PCI_IMR_MASK;
+            s->pci_irq_map[(addr & 0x3f) >> 3] |= val & ~PBM_PCI_IMR_MASK;
+        }
+        break;
+    case 0x2000 ... 0x202f: /* PCI control */
+        s->pci_control[(addr & 0x3f) >> 2] = val;
+        break;
+    case 0xf020 ... 0xf027: /* Reset control */
+        if (addr & 4) {
+            val &= RESET_MASK;
+            s->reset_control &= ~(val & RESET_WCMASK);
+            s->reset_control |= val & RESET_WMASK;
+            if (val & SOFT_POR) {
+                nr_resets = 0;
+                qemu_system_reset_request();
+            } else if (val & SOFT_XIR) {
+                qemu_system_reset_request();
+            }
+        }
+        break;
+    case 0x5000 ... 0x51cf: /* PIO/DMA diagnostics */
+    case 0xa400 ... 0xa67f: /* IOMMU diagnostics */
+    case 0xa800 ... 0xa80f: /* Interrupt diagnostics */
+    case 0xf000 ... 0xf01f: /* FFB config, memory control */
+        /* we don't care */
     default:
         break;
     }
@@ -75,20 +126,48 @@ static void apb_config_writel (void *opaque, target_phys_addr_t addr,
 static uint32_t apb_config_readl (void *opaque,
                                   target_phys_addr_t addr)
 {
-    //PCIBus *s = opaque;
+    APBState *s = opaque;
     uint32_t val;
 
-    switch (addr & 0x3f) {
-    case 0x00: // Control/Status
-    case 0x10: // AFSR
-    case 0x18: // AFAR
-    case 0x20: // Diagnostic
-    case 0x28: // Target address space
-        // XXX
+    switch (addr & 0xffff) {
+    case 0x30 ... 0x4f: /* DMA error registers */
+        val = 0;
+        /* XXX: not implemented yet */
+        break;
+    case 0x200 ... 0x20b: /* IOMMU */
+        val = s->iommu[(addr & 0xf) >> 2];
+        break;
+    case 0x20c ... 0x3ff: /* IOMMU flush */
+        val = 0;
+        break;
+    case 0xc00 ... 0xc3f: /* PCI interrupt control */
+        if (addr & 4) {
+            val = s->pci_irq_map[(addr & 0x3f) >> 3];
+        } else {
+            val = 0;
+        }
+        break;
+    case 0x2000 ... 0x202f: /* PCI control */
+        val = s->pci_control[(addr & 0x3f) >> 2];
+        break;
+    case 0xf020 ... 0xf027: /* Reset control */
+        if (addr & 4) {
+            val = s->reset_control;
+        } else {
+            val = 0;
+        }
+        break;
+    case 0x5000 ... 0x51cf: /* PIO/DMA diagnostics */
+    case 0xa400 ... 0xa67f: /* IOMMU diagnostics */
+    case 0xa800 ... 0xa80f: /* Interrupt diagnostics */
+    case 0xf000 ... 0xf01f: /* FFB config, memory control */
+        /* we don't care */
     default:
         val = 0;
         break;
     }
+    APB_DPRINTF("%s: addr " TARGET_FMT_lx " -> %x\n", __func__, addr, val);
+
     return val;
 }
 
@@ -128,7 +207,7 @@ static void apb_pci_config_writel(void *opaque, target_phys_addr_t addr,
 {
     APBState *s = opaque;
 
-    apb_pci_config_write(s, addr, val, 4);
+    apb_pci_config_write(s, addr, bswap32(val), 4);
 }
 
 static void apb_pci_config_writew(void *opaque, target_phys_addr_t addr,
@@ -136,7 +215,7 @@ static void apb_pci_config_writew(void *opaque, target_phys_addr_t addr,
 {
     APBState *s = opaque;
 
-    apb_pci_config_write(s, addr, val, 2);
+    apb_pci_config_write(s, addr, bswap16(val), 2);
 }
 
 static void apb_pci_config_writeb(void *opaque, target_phys_addr_t addr,
@@ -151,14 +230,14 @@ static uint32_t apb_pci_config_readl(void *opaque, target_phys_addr_t addr)
 {
     APBState *s = opaque;
 
-    return apb_pci_config_read(s, addr, 4);
+    return bswap32(apb_pci_config_read(s, addr, 4));
 }
 
 static uint32_t apb_pci_config_readw(void *opaque, target_phys_addr_t addr)
 {
     APBState *s = opaque;
 
-    return apb_pci_config_read(s, addr, 2);
+    return bswap16(apb_pci_config_read(s, addr, 2));
 }
 
 static uint32_t apb_pci_config_readb(void *opaque, target_phys_addr_t addr)
@@ -189,13 +268,13 @@ static void pci_apb_iowriteb (void *opaque, target_phys_addr_t addr,
 static void pci_apb_iowritew (void *opaque, target_phys_addr_t addr,
                                   uint32_t val)
 {
-    cpu_outw(addr & IOPORTS_MASK, val);
+    cpu_outw(addr & IOPORTS_MASK, bswap16(val));
 }
 
 static void pci_apb_iowritel (void *opaque, target_phys_addr_t addr,
                                 uint32_t val)
 {
-    cpu_outl(addr & IOPORTS_MASK, val);
+    cpu_outl(addr & IOPORTS_MASK, bswap32(val));
 }
 
 static uint32_t pci_apb_ioreadb (void *opaque, target_phys_addr_t addr)
@@ -210,7 +289,7 @@ static uint32_t pci_apb_ioreadw (void *opaque, target_phys_addr_t addr)
 {
     uint32_t val;
 
-    val = cpu_inw(addr & IOPORTS_MASK);
+    val = bswap16(cpu_inw(addr & IOPORTS_MASK));
     return val;
 }
 
@@ -218,7 +297,7 @@ static uint32_t pci_apb_ioreadl (void *opaque, target_phys_addr_t addr)
 {
     uint32_t val;
 
-    val = cpu_inl(addr & IOPORTS_MASK);
+    val = bswap32(cpu_inl(addr & IOPORTS_MASK));
     return val;
 }
 
@@ -252,10 +331,18 @@ static int pci_pbm_map_irq(PCIDevice *pci_dev, int irq_num)
 
 static void pci_apb_set_irq(void *opaque, int irq_num, int level)
 {
-    qemu_irq *pic = opaque;
+    APBState *s = opaque;
 
     /* PCI IRQ map onto the first 32 INO.  */
-    qemu_set_irq(pic[irq_num], level);
+    if (irq_num < 32) {
+        if (s->pci_irq_map[irq_num >> 2] & PBM_PCI_IMR_ENABLED) {
+            APB_DPRINTF("%s: set irq %d level %d\n", __func__, irq_num, level);
+            qemu_set_irq(s->pci_irqs[irq_num], level);
+        } else {
+            APB_DPRINTF("%s: not enabled: lower irq %d\n", __func__, irq_num);
+            qemu_irq_lower(s->pci_irqs[irq_num]);
+        }
+    }
 }
 
 static void apb_pci_bridge_init(PCIBus *b)
@@ -284,6 +371,7 @@ PCIBus *pci_apb_init(target_phys_addr_t special_base,
     DeviceState *dev;
     SysBusDevice *s;
     APBState *d;
+    unsigned int i;
 
     /* Ultrasparc PBM main bus */
     dev = qdev_create(NULL, "pbm");
@@ -293,17 +381,19 @@ PCIBus *pci_apb_init(target_phys_addr_t special_base,
     sysbus_mmio_map(s, 0, special_base);
     /* pci_ioport */
     sysbus_mmio_map(s, 1, special_base + 0x2000000ULL);
-    /* mem_config: XXX should not exist */
+    /* pci_config */
     sysbus_mmio_map(s, 2, special_base + 0x1000000ULL);
-    /* mem_config: XXX size should be 4G-prom */
-    sysbus_mmio_map(s, 3, special_base + 0x1000010ULL);
     /* mem_data */
-    sysbus_mmio_map(s, 4, mem_base);
+    sysbus_mmio_map(s, 3, mem_base);
     d = FROM_SYSBUS(APBState, s);
     d->host_state.bus = pci_register_bus(&d->busdev.qdev, "pci",
-                                         pci_apb_set_irq, pci_pbm_map_irq, pic,
+                                         pci_apb_set_irq, pci_pbm_map_irq, d,
                                          0, 32);
     pci_bus_set_mem_base(d->host_state.bus, mem_base);
+
+    for (i = 0; i < 32; i++) {
+        sysbus_connect_irq(s, i, pic[i]);
+    }
 
     pci_create_simple(d->host_state.bus, 0, "pbm");
     /* APB secondary busses */
@@ -322,13 +412,35 @@ PCIBus *pci_apb_init(target_phys_addr_t special_base,
     return d->host_state.bus;
 }
 
+static void pci_pbm_reset(DeviceState *d)
+{
+    unsigned int i;
+    APBState *s = container_of(d, APBState, busdev.qdev);
+
+    for (i = 0; i < 8; i++) {
+        s->pci_irq_map[i] &= PBM_PCI_IMR_MASK;
+    }
+
+    if (nr_resets++ == 0) {
+        /* Power on reset */
+        s->reset_control = POR;
+    }
+}
+
 static int pci_pbm_init_device(SysBusDevice *dev)
 {
-
     APBState *s;
-    int pci_mem_config, pci_mem_data, apb_config, pci_ioport, pci_config;
+    int pci_mem_data, apb_config, pci_ioport, pci_config;
+    unsigned int i;
 
     s = FROM_SYSBUS(APBState, dev);
+    for (i = 0; i < 8; i++) {
+        s->pci_irq_map[i] = (0x1f << 6) | (i << 2);
+    }
+    for (i = 0; i < 32; i++) {
+        sysbus_init_irq(dev, &s->pci_irqs[i]);
+    }
+
     /* apb_config */
     apb_config = cpu_register_io_memory(apb_config_read,
                                         apb_config_write, s);
@@ -337,9 +449,6 @@ static int pci_pbm_init_device(SysBusDevice *dev)
     pci_ioport = cpu_register_io_memory(pci_apb_ioread,
                                           pci_apb_iowrite, s);
     sysbus_init_mmio(dev, 0x10000ULL, pci_ioport);
-    /* mem_config  */
-    pci_mem_config = pci_host_conf_register_mmio(&s->host_state);
-    sysbus_init_mmio(dev, 0x10ULL, pci_mem_config);
     /* pci_config */
     pci_config = cpu_register_io_memory(apb_pci_config_reads,
                                         apb_pci_config_writes, s);
@@ -370,11 +479,18 @@ static PCIDeviceInfo pbm_pci_host_info = {
     .qdev.name = "pbm",
     .qdev.size = sizeof(PCIDevice),
     .init      = pbm_pci_host_init,
+    .header_type  = PCI_HEADER_TYPE_BRIDGE,
 };
 
+static SysBusDeviceInfo pbm_host_info = {
+    .qdev.name = "pbm",
+    .qdev.size = sizeof(APBState),
+    .qdev.reset = pci_pbm_reset,
+    .init = pci_pbm_init_device,
+};
 static void pbm_register_devices(void)
 {
-    sysbus_register_dev("pbm", sizeof(APBState), pci_pbm_init_device);
+    sysbus_register_withprop(&pbm_host_info);
     pci_qdev_register(&pbm_pci_host_info);
 }
 

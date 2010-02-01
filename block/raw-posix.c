@@ -207,13 +207,9 @@ out_close:
 static int raw_open(BlockDriverState *bs, const char *filename, int flags)
 {
     BDRVRawState *s = bs->opaque;
-    int open_flags = 0;
 
     s->type = FTYPE_FILE;
-    if (flags & BDRV_O_CREAT)
-        open_flags = O_CREAT | O_TRUNC;
-
-    return raw_open_common(bs, filename, flags, open_flags);
+    return raw_open_common(bs, filename, flags, 0);
 }
 
 /* XXX: use host sector size if necessary with:
@@ -397,8 +393,12 @@ static int raw_pread(BlockDriverState *bs, int64_t offset,
                     size = ALIGNED_BUFFER_SIZE;
 
                 ret = raw_pread_aligned(bs, offset, s->aligned_buf, size);
-                if (ret < 0)
+                if (ret < 0) {
                     return ret;
+                } else if (ret == 0) {
+                    fprintf(stderr, "raw_pread: read beyond end of file\n");
+                    abort();
+                }
 
                 size = ret;
                 if (size > count)
@@ -597,7 +597,7 @@ static void raw_close(BlockDriverState *bs)
         close(s->fd);
         s->fd = -1;
         if (s->aligned_buf != NULL)
-            qemu_free(s->aligned_buf);
+            qemu_vfree(s->aligned_buf);
     }
 }
 

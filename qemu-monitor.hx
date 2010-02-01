@@ -573,7 +573,8 @@ ETEXI
         .args_type  = "index:i",
         .params     = "index",
         .help       = "set the default CPU",
-        .mhandler.cmd = do_cpu_set,
+        .user_print = monitor_user_noop,
+        .mhandler.cmd_new = do_cpu_set,
     },
 
 STEXI
@@ -890,7 +891,8 @@ ETEXI
         .params     = "target",
         .help       = "request VM to change it's memory allocation (in MB)",
         .user_print = monitor_user_noop,
-        .mhandler.cmd_new = do_balloon,
+        .mhandler.cmd_async = do_balloon,
+        .async      = 1,
     },
 
 STEXI

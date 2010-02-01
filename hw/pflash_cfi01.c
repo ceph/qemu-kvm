@@ -72,6 +72,7 @@ struct pflash_t {
     uint8_t cfi_len;
     uint8_t cfi_table[0x52];
     target_phys_addr_t counter;
+    unsigned int writeblock_size;
     QEMUTimer *timer;
     ram_addr_t off;
     int fl_mem;
@@ -206,7 +207,6 @@ static inline void pflash_data_write(pflash_t *pfl, target_phys_addr_t offset,
     switch (width) {
     case 1:
         p[offset] = value;
-        pflash_update(pfl, offset, 1);
         break;
     case 2:
 #if defined(TARGET_WORDS_BIGENDIAN)
@@ -216,7 +216,6 @@ static inline void pflash_data_write(pflash_t *pfl, target_phys_addr_t offset,
         p[offset] = value;
         p[offset + 1] = value >> 8;
 #endif
-        pflash_update(pfl, offset, 2);
         break;
     case 4:
 #if defined(TARGET_WORDS_BIGENDIAN)
@@ -230,7 +229,6 @@ static inline void pflash_data_write(pflash_t *pfl, target_phys_addr_t offset,
         p[offset + 2] = value >> 16;
         p[offset + 3] = value >> 24;
 #endif
-        pflash_update(pfl, offset, 4);
         break;
     }
 
@@ -239,7 +237,6 @@ static inline void pflash_data_write(pflash_t *pfl, target_phys_addr_t offset,
 static void pflash_write(pflash_t *pfl, target_phys_addr_t offset,
                          uint32_t value, int width)
 {
-    target_phys_addr_t boff;
     uint8_t *p;
     uint8_t cmd;
 
@@ -248,14 +245,10 @@ static void pflash_write(pflash_t *pfl, target_phys_addr_t offset,
     DPRINTF("%s: writing offset " TARGET_FMT_plx " value %08x width %d wcycle 0x%x\n",
             __func__, offset, value, width, pfl->wcycle);
 
-    /* Set the device in I/O access mode */
-    cpu_register_physical_memory(pfl->base, pfl->total_len, pfl->fl_mem);
-    boff = offset & (pfl->sector_len - 1);
-
-    if (pfl->width == 2)
-        boff = boff >> 1;
-    else if (pfl->width == 4)
-        boff = boff >> 2;
+    if (!pfl->wcycle) {
+        /* Set the device in I/O access mode */
+        cpu_register_physical_memory(pfl->base, pfl->total_len, pfl->fl_mem);
+    }
 
     switch (pfl->wcycle) {
     case 0:
@@ -312,6 +305,7 @@ static void pflash_write(pflash_t *pfl, target_phys_addr_t offset,
         case 0x40: /* Single Byte Program */
             DPRINTF("%s: Single Byte Program\n", __func__);
             pflash_data_write(pfl, offset, value, width);
+            pflash_update(pfl, offset, width);
             pfl->status |= 0x80; /* Ready! */
             pfl->wcycle = 0;
         break;
@@ -364,8 +358,13 @@ static void pflash_write(pflash_t *pfl, target_phys_addr_t offset,
             pfl->status |= 0x80;
 
             if (!pfl->counter) {
+                target_phys_addr_t mask = pfl->writeblock_size - 1;
+                mask = ~mask;
+
                 DPRINTF("%s: block write finished\n", __func__);
                 pfl->wcycle++;
+                /* Flush the entire write buffer onto backing storage.  */
+                pflash_update(pfl, offset & mask, pfl->writeblock_size);
             }
 
             pfl->counter--;
@@ -606,7 +605,13 @@ pflash_t *pflash_cfi01_register(target_phys_addr_t base, ram_addr_t off,
     pfl->cfi_table[0x28] = 0x02;
     pfl->cfi_table[0x29] = 0x00;
     /* Max number of bytes in multi-bytes write */
-    pfl->cfi_table[0x2A] = 0x0B;
+    if (width == 1) {
+        pfl->cfi_table[0x2A] = 0x08;
+    } else {
+        pfl->cfi_table[0x2A] = 0x0B;
+    }
+    pfl->writeblock_size = 1 << pfl->cfi_table[0x2A];
+
     pfl->cfi_table[0x2B] = 0x00;
     /* Number of erase block regions (uniform) */
     pfl->cfi_table[0x2C] = 0x01;

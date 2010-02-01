@@ -302,8 +302,9 @@ static struct {
     { .driver = "isa-parallel",         .flag = &default_parallel  },
     { .driver = "isa-fdc",              .flag = &default_floppy    },
     { .driver = "ide-drive",            .flag = &default_cdrom     },
-    { .driver = "virtio-console-pci",   .flag = &default_virtcon   },
-    { .driver = "virtio-console-s390",  .flag = &default_virtcon   },
+    { .driver = "virtio-serial-pci",    .flag = &default_virtcon   },
+    { .driver = "virtio-serial-s390",   .flag = &default_virtcon   },
+    { .driver = "virtio-serial",        .flag = &default_virtcon   },
     { .driver = "VGA",                  .flag = &default_vga       },
     { .driver = "cirrus-vga",           .flag = &default_vga       },
     { .driver = "vmware-svga",          .flag = &default_vga       },
@@ -378,17 +379,24 @@ void qemu_add_balloon_handler(QEMUBalloonEvent *func, void *opaque)
     qemu_balloon_event_opaque = opaque;
 }
 
-void qemu_balloon(ram_addr_t target)
+int qemu_balloon(ram_addr_t target, MonitorCompletion cb, void *opaque)
 {
-    if (qemu_balloon_event)
-        qemu_balloon_event(qemu_balloon_event_opaque, target);
+    if (qemu_balloon_event) {
+        qemu_balloon_event(qemu_balloon_event_opaque, target, cb, opaque);
+        return 1;
+    } else {
+        return 0;
+    }
 }
 
-ram_addr_t qemu_balloon_status(void)
+int qemu_balloon_status(MonitorCompletion cb, void *opaque)
 {
-    if (qemu_balloon_event)
-        return qemu_balloon_event(qemu_balloon_event_opaque, 0);
-    return 0;
+    if (qemu_balloon_event) {
+        qemu_balloon_event(qemu_balloon_event_opaque, 0, cb, opaque);
+        return 1;
+    } else {
+        return 0;
+    }
 }
 
 
@@ -3229,11 +3237,17 @@ static int io_thread_fd = -1;
 static void qemu_event_increment(void)
 {
     static const char byte = 0;
+    ssize_t ret;
 
     if (io_thread_fd == -1)
         return;
 
-    write(io_thread_fd, &byte, sizeof(byte));
+    ret = write(io_thread_fd, &byte, sizeof(byte));
+    if (ret < 0 && (errno != EINTR && errno != EAGAIN)) {
+        fprintf(stderr, "qemu_event_increment: write() filed: %s\n",
+                strerror(errno));
+        exit (1);
+    }
 }
 
 static void qemu_event_read(void *opaque)
@@ -4681,6 +4695,7 @@ static int virtcon_parse(const char *devname)
 {
     static int index = 0;
     char label[32];
+    QemuOpts *bus_opts, *dev_opts;
 
     if (strcmp(devname, "none") == 0)
         return 0;
@@ -4688,6 +4703,13 @@ static int virtcon_parse(const char *devname)
         fprintf(stderr, "qemu: too many virtio consoles\n");
         exit(1);
     }
+
+    bus_opts = qemu_opts_create(&qemu_device_opts, NULL, 0);
+    qemu_opt_set(bus_opts, "driver", "virtio-serial");
+
+    dev_opts = qemu_opts_create(&qemu_device_opts, NULL, 0);
+    qemu_opt_set(dev_opts, "driver", "virtconsole");
+
     snprintf(label, sizeof(label), "virtcon%d", index);
     virtcon_hds[index] = qemu_chr_open(label, devname, NULL);
     if (!virtcon_hds[index]) {
@@ -4695,6 +4717,8 @@ static int virtcon_parse(const char *devname)
                 devname, strerror(errno));
         return -1;
     }
+    qemu_opt_set(dev_opts, "chardev", label);
+
     index++;
     return 0;
 }
@@ -4716,6 +4740,46 @@ static int debugcon_parse(const char *devname)
     return 0;
 }
 
+static const QEMUOption *lookup_opt(int argc, char **argv,
+                                    const char **poptarg, int *poptind)
+{
+    const QEMUOption *popt;
+    int optind = *poptind;
+    char *r = argv[optind];
+    const char *optarg;
+
+    optind++;
+    /* Treat --foo the same as -foo.  */
+    if (r[1] == '-')
+        r++;
+    popt = qemu_options;
+    for(;;) {
+        if (!popt->name) {
+            fprintf(stderr, "%s: invalid option -- '%s'\n",
+                    argv[0], r);
+            exit(1);
+        }
+        if (!strcmp(popt->name, r + 1))
+            break;
+        popt++;
+    }
+    if (popt->flags & HAS_ARG) {
+        if (optind >= argc) {
+            fprintf(stderr, "%s: option '%s' requires an argument\n",
+                    argv[0], r);
+            exit(1);
+        }
+        optarg = argv[optind++];
+    } else {
+        optarg = NULL;
+    }
+
+    *poptarg = optarg;
+    *poptind = optind;
+
+    return popt;
+}
+
 int main(int argc, char **argv, char **envp)
 {
     const char *gdbstub_dev = NULL;
@@ -4730,7 +4794,7 @@ int main(int argc, char **argv, char **envp)
     int cyls, heads, secs, translation;
     QemuOpts *hda_opts = NULL, *opts;
     int optind;
-    const char *r, *optarg;
+    const char *optarg;
     const char *loadvm = NULL;
     QEMUMachine *machine;
     const char *cpu_model;
@@ -4748,6 +4812,7 @@ int main(int argc, char **argv, char **envp)
 #endif
     CPUState *env;
     int show_vnc_port = 0;
+    int defconfig = 1;
 
     init_clocks();
 
@@ -4809,42 +4874,55 @@ int main(int argc, char **argv, char **envp)
     tb_size = 0;
     autostart= 1;
 
+    /* first pass of option parsing */
+    optind = 1;
+    while (optind < argc) {
+        if (argv[optind][0] != '-') {
+            /* disk image */
+            optind++;
+            continue;
+        } else {
+            const QEMUOption *popt;
+
+            popt = lookup_opt(argc, argv, &optarg, &optind);
+            switch (popt->index) {
+            case QEMU_OPTION_nodefconfig:
+                defconfig=0;
+                break;
+            }
+        }
+    }
+
+    if (defconfig) {
+        FILE *fp;
+        fp = fopen(CONFIG_QEMU_CONFDIR "/qemu.conf", "r");
+        if (fp) {
+            if (qemu_config_parse(fp) != 0) {
+                exit(1);
+            }
+            fclose(fp);
+        }
+
+        fp = fopen(CONFIG_QEMU_CONFDIR "/target-" TARGET_ARCH ".conf", "r");
+        if (fp) {
+            if (qemu_config_parse(fp) != 0) {
+                exit(1);
+            }
+            fclose(fp);
+        }
+    }
+
+    /* second pass of option parsing */
     optind = 1;
     for(;;) {
         if (optind >= argc)
             break;
-        r = argv[optind];
-        if (r[0] != '-') {
+        if (argv[optind][0] != '-') {
 	    hda_opts = drive_add(argv[optind++], HD_ALIAS, 0);
         } else {
             const QEMUOption *popt;
 
-            optind++;
-            /* Treat --foo the same as -foo.  */
-            if (r[1] == '-')
-                r++;
-            popt = qemu_options;
-            for(;;) {
-                if (!popt->name) {
-                    fprintf(stderr, "%s: invalid option -- '%s'\n",
-                            argv[0], r);
-                    exit(1);
-                }
-                if (!strcmp(popt->name, r + 1))
-                    break;
-                popt++;
-            }
-            if (popt->flags & HAS_ARG) {
-                if (optind >= argc) {
-                    fprintf(stderr, "%s: option '%s' requires an argument\n",
-                            argv[0], r);
-                    exit(1);
-                }
-                optarg = argv[optind++];
-            } else {
-                optarg = NULL;
-            }
-
+            popt = lookup_opt(argc, argv, &optarg, &optind);
             switch(popt->index) {
             case QEMU_OPTION_M:
                 machine = find_machine(optarg);
@@ -5703,7 +5781,9 @@ int main(int argc, char **argv, char **envp)
 #ifndef _WIN32
         if (daemonize) {
             uint8_t status = 1;
-            write(fds[1], &status, 1);
+            if (write(fds[1], &status, 1) != 1) {
+                perror("daemonize. Writing to pipe\n");
+            }
         } else
 #endif
             fprintf(stderr, "Could not acquire pid file: %s\n", strerror(errno));
@@ -6006,7 +6086,10 @@ int main(int argc, char **argv, char **envp)
 	if (len != 1)
 	    exit(1);
 
-	chdir("/");
+        if (chdir("/")) {
+            perror("not able to chdir to /");
+            exit(1);
+        }
 	TFR(fd = qemu_open("/dev/null", O_RDWR));
 	if (fd == -1)
 	    exit(1);
@@ -6025,7 +6108,10 @@ int main(int argc, char **argv, char **envp)
             fprintf(stderr, "chroot failed\n");
             exit(1);
         }
-        chdir("/");
+        if (chdir("/")) {
+            perror("not able to chdir to /");
+            exit(1);
+        }
     }
 
     if (run_as) {

@@ -404,11 +404,20 @@ Network adapter that supports CDC ethernet and RNDIS protocols.
 ETEXI
 
 DEF("device", HAS_ARG, QEMU_OPTION_device,
-    "-device driver[,options]  add device\n")
+    "-device driver[,option[=value][,...]]\n"
+    "                add device (based on driver) with default or\n"
+    "                user defined options\n"
+    "                use -device ? to print all possible drivers\n"
+    "                use -device driver,? to print all possible options\n"
+    "                use -device driver,option=? to print a help for value\n")
 STEXI
-@item -device @var{driver}[,@var{option}[,...]]
+@item -device @var{driver}[,@var{option}[=@var{value}][,...]]
 Add device @var{driver}. Depending on the device type,
-@var{option} (typically @var{key}=@var{value}) may be useful.
+@var{option} (with default or given @var{value}) may be useful.
+To get a help on possible @var{driver}s, @var{option}s or @var{value}s, use
+@code{-device ?},
+@code{-device @var{driver},?} or
+@code{-device @var{driver},@var{option}=?}. 
 ETEXI
 
 DEF("name", HAS_ARG, QEMU_OPTION_name,
@@ -565,6 +574,8 @@ DEF("g", 1, QEMU_OPTION_g ,
     "-g WxH[xDEPTH]  Set the initial graphical resolution and depth\n")
 #endif
 STEXI
+@item -g @var{width}x@var{height}[x@var{depth}]
+Set the initial graphical resolution and depth (PPC, SPARC only).
 ETEXI
 
 DEF("vnc", HAS_ARG, QEMU_OPTION_vnc ,
@@ -1598,6 +1609,10 @@ non graphical mode.
 ETEXI
 DEF("qmp", HAS_ARG, QEMU_OPTION_qmp, \
     "-qmp dev        like -monitor but opens in 'control' mode\n")
+STEXI
+@item -qmp @var{dev}
+Like -monitor but opens in 'control' mode.
+ETEXI
 
 DEF("mon", HAS_ARG, QEMU_OPTION_mon, \
     "-mon chardev=[name][,mode=readline|control][,default]\n")
@@ -1714,6 +1729,16 @@ DEF("xen-attach", 0, QEMU_OPTION_xen_attach,
     "-xen-attach     attach to existing xen domain\n"
     "                xend will use this when starting qemu\n")
 #endif
+STEXI
+@item -xen-domid @var{id}
+Specify xen guest domain @var{id} (XEN only).
+@item -xen-create
+Create domain using xen hypercalls, bypassing xend.
+Warning: should not be used when xend is in use (XEN only).
+@item -xen-attach
+Attach to existing xen domain.
+xend will use this when starting qemu (XEN only).
+ETEXI
 
 DEF("no-reboot", 0, QEMU_OPTION_no_reboot, \
     "-no-reboot      exit instead of rebooting\n")
@@ -1901,16 +1926,22 @@ ETEXI
 DEF("show-cursor", 0, QEMU_OPTION_show_cursor, \
     "-show-cursor    show cursor\n")
 STEXI
+@item -show-cursor
+Show cursor.
 ETEXI
 
 DEF("tb-size", HAS_ARG, QEMU_OPTION_tb_size, \
     "-tb-size n      set TB size\n")
 STEXI
+@item -tb-size @var{n}
+Set TB size.
 ETEXI
 
 DEF("incoming", HAS_ARG, QEMU_OPTION_incoming, \
     "-incoming p     prepare for incoming migration, listen on port p\n")
 STEXI
+@item -incoming @var{port}
+Prepare for incoming migration, listen on @var{port}.
 ETEXI
 
 DEF("nodefaults", 0, QEMU_OPTION_nodefaults, \
@@ -1945,14 +1976,27 @@ DEF("prom-env", HAS_ARG, QEMU_OPTION_prom_env,
     "-prom-env variable=value\n"
     "                set OpenBIOS nvram variables\n")
 #endif
+STEXI
+@item -prom-env @var{variable}=@var{value}
+Set OpenBIOS nvram @var{variable} to given @var{value} (PPC, SPARC only).
+ETEXI
 #if defined(TARGET_ARM) || defined(TARGET_M68K)
 DEF("semihosting", 0, QEMU_OPTION_semihosting,
     "-semihosting    semihosting mode\n")
 #endif
+STEXI
+@item -semihosting
+Semihosting mode (ARM, M68K only).
+ETEXI
 #if defined(TARGET_ARM)
 DEF("old-param", 0, QEMU_OPTION_old_param,
     "-old-param      old param mode\n")
 #endif
+STEXI
+@item -old-param
+Old param mode (ARM only).
+ETEXI
+
 DEF("readconfig", HAS_ARG, QEMU_OPTION_readconfig,
     "-readconfig <file>\n")
 STEXI
@@ -1966,6 +2010,16 @@ STEXI
 @item -writeconfig @var{file}
 Write device configuration to @var{file}.
 ETEXI
+DEF("nodefconfig", 0, QEMU_OPTION_nodefconfig,
+    "-nodefconfig\n"
+    "                do not load default config files at startup\n")
+STEXI
+@item -nodefconfig
+Normally QEMU loads a configuration file from @var{sysconfdir}/qemu.conf and
+@var{sysconfdir}/target-@var{ARCH}.conf on startup.  The @code{-nodefconfig}
+option will prevent QEMU from loading these configuration files at startup.
+ETEXI
+
 DEF("no-kvm", 0, QEMU_OPTION_no_kvm,
     "-no-kvm         disable KVM hardware virtualization\n")
 DEF("no-kvm-irqchip", 0, QEMU_OPTION_no_kvm_irqchip,

@@ -2500,7 +2500,8 @@ static void *file_ram_alloc(ram_addr_t memory, const char *path)
      * If anything goes wrong with it under other filesystems,
      * mmap will fail.
      */
-    ftruncate(fd, memory);
+    if (ftruncate(fd, memory))
+	perror("ftruncate");
 
 #ifdef MAP_POPULATE
     /* NB: MAP_POPULATE won't exhaustively alloc all phys pages in the case
@@ -3457,7 +3458,7 @@ void cpu_physical_memory_unmap(void *buffer, target_phys_addr_t len,
     if (is_write) {
         cpu_physical_memory_write(bounce.addr, bounce.buffer, access_len);
     }
-    qemu_free(bounce.buffer);
+    qemu_vfree(bounce.buffer);
     bounce.buffer = NULL;
     cpu_notify_map_clients();
 }
