@@ -239,7 +239,6 @@ static inline void pflash_data_write(pflash_t *pfl, target_phys_addr_t offset,
 static void pflash_write(pflash_t *pfl, target_phys_addr_t offset,
                          uint32_t value, int width)
 {
-    target_phys_addr_t boff;
     uint8_t *p;
     uint8_t cmd;
 
@@ -248,14 +247,10 @@ static void pflash_write(pflash_t *pfl, target_phys_addr_t offset,
     DPRINTF("%s: writing offset " TARGET_FMT_plx " value %08x width %d wcycle 0x%x\n",
             __func__, offset, value, width, pfl->wcycle);
 
-    /* Set the device in I/O access mode */
-    cpu_register_physical_memory(pfl->base, pfl->total_len, pfl->fl_mem);
-    boff = offset & (pfl->sector_len - 1);
-
-    if (pfl->width == 2)
-        boff = boff >> 1;
-    else if (pfl->width == 4)
-        boff = boff >> 2;
+    if (!pfl->wcycle) {
+        /* Set the device in I/O access mode */
+        cpu_register_physical_memory(pfl->base, pfl->total_len, pfl->fl_mem);
+    }
 
     switch (pfl->wcycle) {
     case 0:
@@ -606,7 +601,11 @@ pflash_t *pflash_cfi01_register(target_phys_addr_t base, ram_addr_t off,
     pfl->cfi_table[0x28] = 0x02;
     pfl->cfi_table[0x29] = 0x00;
     /* Max number of bytes in multi-bytes write */
-    pfl->cfi_table[0x2A] = 0x0B;
+    if (width == 1) {
+        pfl->cfi_table[0x2A] = 0x08;
+    } else {
+        pfl->cfi_table[0x2A] = 0x0B;
+    }
     pfl->cfi_table[0x2B] = 0x00;
     /* Number of erase block regions (uniform) */
     pfl->cfi_table[0x2C] = 0x01;

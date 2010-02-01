@@ -695,8 +695,6 @@ static void do_info_registers(Monitor *mon)
 {
     CPUState *env;
     env = mon_get_cpu();
-    if (!env)
-        return;
 #ifdef TARGET_I386
     cpu_dump_state(env, (FILE *)mon, monitor_fprintf,
                    X86_DUMP_FPU);
@@ -816,11 +814,11 @@ static void do_info_cpus(Monitor *mon, QObject **ret_data)
     *ret_data = QOBJECT(cpu_list);
 }
 
-static void do_cpu_set(Monitor *mon, const QDict *qdict)
+static void do_cpu_set(Monitor *mon, const QDict *qdict, QObject **ret_data)
 {
     int index = qdict_get_int(qdict, "index");
     if (mon_set_cpu(index) < 0)
-        monitor_printf(mon, "Invalid CPU index\n");
+        qemu_error_new(QERR_INVALID_CPU_INDEX);
 }
 
 static void do_cpu_set_nr(Monitor *mon, const QDict *qdict)
@@ -1155,7 +1153,7 @@ static void memory_dump(Monitor *mon, int count, int format, int wsize,
         int flags;
         flags = 0;
         env = mon_get_cpu();
-        if (!env && !is_physical)
+        if (!is_physical)
             return;
 #ifdef TARGET_I386
         if (wsize == 2) {
@@ -1217,8 +1215,6 @@ static void memory_dump(Monitor *mon, int count, int format, int wsize,
             cpu_physical_memory_rw(addr, buf, l, 0);
         } else {
             env = mon_get_cpu();
-            if (!env)
-                break;
             if (cpu_memory_rw_debug(env, addr, buf, l, 0) < 0) {
                 monitor_printf(mon, " Cannot access memory\n");
                 break;
@@ -1345,12 +1341,10 @@ static void do_memory_save(Monitor *mon, const QDict *qdict, QObject **ret_data)
     uint8_t buf[1024];
 
     env = mon_get_cpu();
-    if (!env)
-        return;
 
     f = fopen(filename, "wb");
     if (!f) {
-        monitor_printf(mon, "could not open '%s'\n", filename);
+        qemu_error_new(QERR_OPEN_FILE_FAILED, filename);
         return;
     }
     while (size != 0) {
@@ -1377,7 +1371,7 @@ static void do_physical_memory_save(Monitor *mon, const QDict *qdict,
 
     f = fopen(filename, "wb");
     if (!f) {
-        monitor_printf(mon, "could not open '%s'\n", filename);
+        qemu_error_new(QERR_OPEN_FILE_FAILED, filename);
         return;
     }
     while (size != 0) {
@@ -1781,8 +1775,6 @@ static void tlb_info(Monitor *mon)
     uint32_t pgd, pde, pte;
 
     env = mon_get_cpu();
-    if (!env)
-        return;
 
     if (!(env->cr[0] & CR0_PG_MASK)) {
         monitor_printf(mon, "PG disabled\n");
@@ -1839,8 +1831,6 @@ static void mem_info(Monitor *mon)
     uint32_t pgd, pde, pte, start, end;
 
     env = mon_get_cpu();
-    if (!env)
-        return;
 
     if (!(env->cr[0] & CR0_PG_MASK)) {
         monitor_printf(mon, "PG disabled\n");
@@ -2689,8 +2679,6 @@ typedef struct MonitorDef {
 static target_long monitor_get_pc (const struct MonitorDef *md, int val)
 {
     CPUState *env = mon_get_cpu();
-    if (!env)
-        return 0;
     return env->eip + env->segs[R_CS].base;
 }
 #endif
@@ -2702,9 +2690,6 @@ static target_long monitor_get_ccr (const struct MonitorDef *md, int val)
     unsigned int u;
     int i;
 
-    if (!env)
-        return 0;
-
     u = 0;
     for (i = 0; i < 8; i++)
         u |= env->crf[i] << (32 - (4 * i));
@@ -2715,40 +2700,30 @@ static target_long monitor_get_ccr (const struct MonitorDef *md, int val)
 static target_long monitor_get_msr (const struct MonitorDef *md, int val)
 {
     CPUState *env = mon_get_cpu();
-    if (!env)
-        return 0;
     return env->msr;
 }
 
 static target_long monitor_get_xer (const struct MonitorDef *md, int val)
 {
     CPUState *env = mon_get_cpu();
-    if (!env)
-        return 0;
     return env->xer;
 }
 
 static target_long monitor_get_decr (const struct MonitorDef *md, int val)
 {
     CPUState *env = mon_get_cpu();
-    if (!env)
-        return 0;
     return cpu_ppc_load_decr(env);
 }
 
 static target_long monitor_get_tbu (const struct MonitorDef *md, int val)
 {
     CPUState *env = mon_get_cpu();
-    if (!env)
-        return 0;
     return cpu_ppc_load_tbu(env);
 }
 
 static target_long monitor_get_tbl (const struct MonitorDef *md, int val)
 {
     CPUState *env = mon_get_cpu();
-    if (!env)
-        return 0;
     return cpu_ppc_load_tbl(env);
 }
 #endif
@@ -2758,8 +2733,6 @@ static target_long monitor_get_tbl (const struct MonitorDef *md, int val)
 static target_long monitor_get_psr (const struct MonitorDef *md, int val)
 {
     CPUState *env = mon_get_cpu();
-    if (!env)
-        return 0;
     return GET_PSR(env);
 }
 #endif
@@ -2767,8 +2740,6 @@ static target_long monitor_get_psr (const struct MonitorDef *md, int val)
 static target_long monitor_get_reg(const struct MonitorDef *md, int val)
 {
     CPUState *env = mon_get_cpu();
-    if (!env)
-        return 0;
     return env->regwptr[val];
 }
 #endif
@@ -3020,7 +2991,7 @@ static void expr_error(Monitor *mon, const char *msg)
     longjmp(expr_env, 1);
 }
 
-/* return 0 if OK, -1 if not found, -2 if no CPU defined */
+/* return 0 if OK, -1 if not found */
 static int get_monitor_def(target_long *pval, const char *name)
 {
     const MonitorDef *md;
@@ -3032,8 +3003,6 @@ static int get_monitor_def(target_long *pval, const char *name)
                 *pval = md->get_value(md, md->offset);
             } else {
                 CPUState *env = mon_get_cpu();
-                if (!env)
-                    return -2;
                 ptr = (uint8_t *)env + md->offset;
                 switch(md->type) {
                 case MD_I32:
@@ -3120,10 +3089,8 @@ static int64_t expr_unary(Monitor *mon)
                 pch++;
             *q = 0;
             ret = get_monitor_def(&reg, buf);
-            if (ret == -1)
+            if (ret < 0)
                 expr_error(mon, "unknown register");
-            else if (ret == -2)
-                expr_error(mon, "no cpu defined");
             n = reg;
         }
         break;
