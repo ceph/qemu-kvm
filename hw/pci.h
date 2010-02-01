@@ -2,6 +2,7 @@
 #define QEMU_PCI_H
 
 #include "qemu-common.h"
+#include "qobject.h"
 
 #include "qdev.h"
 
@@ -279,7 +280,8 @@ int pci_read_devaddr(Monitor *mon, const char *addr, int *domp, int *busp,
 int pci_parse_host_devaddr(const char *addr, int *busp,
                            int *slotp, int *funcp);
 
-void pci_info(Monitor *mon);
+void do_pci_info_print(Monitor *mon, const QObject *data);
+void do_pci_info(Monitor *mon, QObject **ret_data);
 PCIBus *pci_bridge_init(PCIBus *bus, int devfn, uint16_t vid, uint16_t did,
                         pci_map_irq_fn map_irq, const char *name);
 PCIDevice *pci_bridge_get_device(PCIBus *bus);

@@ -2500,7 +2500,8 @@ static void *file_ram_alloc(ram_addr_t memory, const char *path)
      * If anything goes wrong with it under other filesystems,
      * mmap will fail.
      */
-    ftruncate(fd, memory);
+    if (ftruncate(fd, memory))
+	perror("ftruncate");
 
 #ifdef MAP_POPULATE
     /* NB: MAP_POPULATE won't exhaustively alloc all phys pages in the case
