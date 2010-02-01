@@ -822,7 +822,9 @@ static int assign_device(AssignedDevice *dev)
     memset(&assigned_dev_data, 0, sizeof(assigned_dev_data));
     assigned_dev_data.assigned_dev_id  =
 	calc_assigned_dev_id(dev->h_segnr, dev->h_busnr, dev->h_devfn);
+#ifdef KVM_CAP_PCI_SEGMENT
     assigned_dev_data.segnr = dev->h_segnr;
+#endif
     assigned_dev_data.busnr = dev->h_busnr;
     assigned_dev_data.devfn = dev->h_devfn;
 
