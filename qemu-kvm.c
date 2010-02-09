@@ -976,6 +976,7 @@ int kvm_run(CPUState *env)
                                 run->io.direction,
                                 run->io.size,
                                 run->io.count);
+            r = 0;
             break;
         case KVM_EXIT_DEBUG:
             r = handle_debug(env);
