@@ -40,6 +40,4 @@ struct qemu_signalfd_siginfo {
 
 int qemu_signalfd(const sigset_t *mask);
 
-int qemu_eventfd(int *fds);
-
 #endif

@@ -115,29 +115,3 @@ int qemu_signalfd(const sigset_t *mask)
 
     return qemu_signalfd_compat(mask);
 }
-
-int qemu_eventfd(int *fds)
-{
-    int ret;
-
-#if defined(CONFIG_EVENTFD)
-    ret = syscall(SYS_eventfd, 0);
-    if (ret >= 0) {
-        fds[0] = ret;
-        qemu_set_cloexec(ret);
-        if ((fds[1] = dup(ret)) == -1) {
-            close(ret);
-            return -1;
-        }
-        qemu_set_cloexec(fds[1]);
-        return 0;
-    }
-#endif
-
-    ret = pipe(fds);
-    if (ret != -1) {
-        qemu_set_cloexec(fds[0]);
-        qemu_set_cloexec(fds[1]);
-    }
-    return ret;
-}
