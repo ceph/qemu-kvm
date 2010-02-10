@@ -2000,32 +2000,22 @@ int kvm_init_ap(void)
 
 void qemu_kvm_notify_work(void)
 {
-    uint64_t value = 1;
-    char buffer[8];
-    size_t offset = 0;
+    /* Write 8 bytes to be compatible with eventfd.  */
+    static uint64_t val = 1;
+    ssize_t ret;
 
     if (io_thread_fd == -1)
         return;
 
-    memcpy(buffer, &value, sizeof(value));
+    do {
+        ret = write(io_thread_fd, &val, sizeof(val));
+    } while (ret < 0 && errno == EINTR);
 
-    while (offset < 8) {
-        ssize_t len;
-
-        len = write(io_thread_fd, buffer + offset, 8 - offset);
-        if (len == -1 && errno == EINTR)
-            continue;
-
-        /* In case we have a pipe, there is not reason to insist writing
-         * 8 bytes
-         */
-        if (len == -1 && errno == EAGAIN)
-            break;
-
-        if (len <= 0)
-            break;
-
-        offset += len;
+    /* EAGAIN is fine in case we have a pipe.  */
+    if (ret < 0 && errno != EAGAIN) {
+         fprintf(stderr, "qemu_kvm_notify_work: write() filed: %s\n",
+                 strerror(errno));
+         exit (1);
     }
 }
 
