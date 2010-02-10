@@ -2058,19 +2058,13 @@ static void sigfd_handler(void *opaque)
 static void io_thread_wakeup(void *opaque)
 {
     int fd = (unsigned long) opaque;
-    char buffer[4096];
+    ssize_t len;
+    char buffer[512];
 
-    /* Drain the pipe/(eventfd) */
-    while (1) {
-        ssize_t len;
-
+    /* Drain the notify pipe.  For eventfd, only 8 bytes will be read.  */
+    do {
         len = read(fd, buffer, sizeof(buffer));
-        if (len == -1 && errno == EINTR)
-            continue;
-
-        if (len <= 0)
-            break;
-    }
+    } while ((len == -1 && errno == EINTR) || len == sizeof(buffer));
 }
 
 int kvm_main_loop(void)
