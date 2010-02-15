@@ -2443,31 +2443,32 @@ int kvm_physical_memory_set_dirty_tracking(int enable)
 
 /* get kvm's dirty pages bitmap and update qemu's */
 static int kvm_get_dirty_pages_log_range(unsigned long start_addr,
-                                         unsigned char *bitmap,
+                                         unsigned long *bitmap,
                                          unsigned long offset,
                                          unsigned long mem_size)
 {
-    unsigned int i, j, n = 0;
-    unsigned char c;
-    unsigned long page_number, addr, addr1;
+    unsigned int i, j;
+    unsigned long page_number, addr, addr1, c;
     ram_addr_t ram_addr;
-    unsigned int len = ((mem_size / TARGET_PAGE_SIZE) + 7) / 8;
+    unsigned int len = ((mem_size / TARGET_PAGE_SIZE) + HOST_LONG_BITS - 1) /
+        HOST_LONG_BITS;
 
     /* 
      * bitmap-traveling is faster than memory-traveling (for addr...) 
      * especially when most of the memory is not dirty.
      */
     for (i = 0; i < len; i++) {
-        c = bitmap[i];
-        while (c > 0) {
-            j = ffsl(c) - 1;
-            c &= ~(1u << j);
-            page_number = i * 8 + j;
-            addr1 = page_number * TARGET_PAGE_SIZE;
-            addr = offset + addr1;
-            ram_addr = cpu_get_physical_page_desc(addr);
-            cpu_physical_memory_set_dirty(ram_addr);
-            n++;
+        if (bitmap[i] != 0) {
+            c = leul_to_cpu(bitmap[i]);
+            do {
+                j = ffsl(c) - 1;
+                c &= ~(1ul << j);
+                page_number = i * HOST_LONG_BITS + j;
+                addr1 = page_number * TARGET_PAGE_SIZE;
+                addr = offset + addr1;
+                ram_addr = cpu_get_physical_page_desc(addr);
+                cpu_physical_memory_set_dirty(ram_addr);
+            } while (c != 0);
         }
     }
     return 0;
