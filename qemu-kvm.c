@@ -407,6 +407,8 @@ int kvm_init(int smp_cpus)
             set_gsi(kvm_context, i);
     }
 
+    kvm_cpu_register_phys_memory_client();
+
     pthread_mutex_lock(&qemu_mutex);
     return kvm_create_context();
 
