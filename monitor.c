@@ -125,6 +125,7 @@ typedef struct MonitorControl {
     QObject *id;
     int print_enabled;
     JSONMessageParser parser;
+    int command_mode;
 } MonitorControl;
 
 struct Monitor {
@@ -391,6 +392,9 @@ void monitor_protocol_event(MonitorEvent event, QObject *data)
         case QEVENT_VNC_DISCONNECTED:
             event_name = "VNC_DISCONNECTED";
             break;
+        case QEVENT_BLOCK_IO_ERROR:
+            event_name = "BLOCK_IO_ERROR";
+            break;
         default:
             abort();
             break;
@@ -410,6 +414,15 @@ void monitor_protocol_event(MonitorEvent event, QObject *data)
         }
     }
     QDECREF(qmp);
+}
+
+static void do_qmp_capabilities(Monitor *mon, const QDict *params,
+                                QObject **ret_data)
+{
+    /* Will setup QMP capabilities in the future */
+    if (monitor_ctrl_mode(mon)) {
+        mon->mc->command_mode = 1;
+    }
 }
 
 static int compare_cmd(const char *name, const char *list)
@@ -4396,6 +4409,14 @@ void monitor_resume(Monitor *mon)
         readline_show_prompt(mon->rs);
 }
 
+static QObject *get_qmp_greeting(void)
+{
+    QObject *ver;
+
+    do_info_version(NULL, &ver);
+    return qobject_from_jsonf("{'QMP':{'version': %p,'capabilities': []}}",ver);
+}
+
 /**
  * monitor_control_event(): Print QMP gretting
  */
@@ -4405,9 +4426,10 @@ static void monitor_control_event(void *opaque, int event)
         QObject *data;
         Monitor *mon = opaque;
 
+        mon->mc->command_mode = 0;
         json_message_parser_init(&mon->mc->parser, handle_qmp_command);
 
-        data = qobject_from_jsonf("{ 'QMP': { 'capabilities': [] } }");
+        data = get_qmp_greeting();
         assert(data != NULL);
 
         monitor_json_emitter(mon, data);

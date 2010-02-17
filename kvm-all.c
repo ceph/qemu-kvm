@@ -959,14 +959,11 @@ void kvm_setup_guest_memory(void *start, size_t size)
 static void on_vcpu(CPUState *env, void (*func)(void *data), void *data)
 {
 #ifdef CONFIG_IOTHREAD
-    if (env == cpu_single_env) {
-        func(data);
-        return;
+    if (env != cpu_single_env) {
+        abort();
     }
-    abort();
-#else
-    func(data);
 #endif
+    func(data);
 }
 #endif /* KVM_UPSTREAM */
 
