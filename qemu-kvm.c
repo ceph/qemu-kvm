@@ -868,9 +868,9 @@ int pre_kvm_run(kvm_context_t kvm, CPUState *env)
 {
     kvm_arch_pre_run(env, env->kvm_run);
 
-    if (env->kvm_cpu_state.regs_modified) {
+    if (env->kvm_vcpu_dirty) {
         kvm_arch_put_registers(env);
-        env->kvm_cpu_state.regs_modified = 0;
+        env->kvm_vcpu_dirty = 0;
     }
 
     pthread_mutex_unlock(&qemu_mutex);
@@ -1547,15 +1547,15 @@ void kvm_arch_get_registers(CPUState *env)
 static void do_kvm_cpu_synchronize_state(void *_env)
 {
     CPUState *env = _env;
-    if (!env->kvm_cpu_state.regs_modified) {
+    if (!env->kvm_vcpu_dirty) {
         kvm_arch_get_registers(env);
-        env->kvm_cpu_state.regs_modified = 1;
+        env->kvm_vcpu_dirty = 1;
     }
 }
 
 void kvm_cpu_synchronize_state(CPUState *env)
 {
-    if (!env->kvm_cpu_state.regs_modified)
+    if (!env->kvm_vcpu_dirty)
         on_vcpu(env, do_kvm_cpu_synchronize_state, env);
 }
 
@@ -2385,9 +2385,9 @@ static void kvm_invoke_set_guest_debug(void *data)
 {
     struct kvm_set_guest_debug_data *dbg_data = data;
 
-    if (cpu_single_env->kvm_cpu_state.regs_modified) {
+    if (cpu_single_env->kvm_vcpu_dirty) {
         kvm_arch_put_registers(cpu_single_env);
-        cpu_single_env->kvm_cpu_state.regs_modified = 0;
+        cpu_single_env->kvm_vcpu_dirty = 1;
     }
     dbg_data->err =
         kvm_set_guest_debug(cpu_single_env,
