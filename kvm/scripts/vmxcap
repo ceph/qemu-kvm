@@ -196,6 +196,7 @@ controls = [
             8: 'Paging-structure memory type UC',
             14: 'Paging-structure memory type WB',
             16: '2MB EPT pages',
+            17: '1GB EPT pages',
             20: 'INVEPT supported',
             25: 'Single-context INVEPT',
             26: 'All-context INVEPT',
