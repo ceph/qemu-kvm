@@ -441,6 +441,7 @@ static void kvm_create_vcpu(CPUState *env, int id)
 {
     long mmap_size;
     int r;
+    KVMState *s = kvm_state;
 
     r = kvm_vm_ioctl(kvm_state, KVM_CREATE_VCPU, id);
     if (r < 0) {
@@ -463,6 +464,12 @@ static void kvm_create_vcpu(CPUState *env, int id)
         fprintf(stderr, "mmap vcpu area: %m\n");
         goto err_fd;
     }
+
+#ifdef KVM_CAP_COALESCED_MMIO
+    if (s->coalesced_mmio && !s->coalesced_mmio_ring)
+        s->coalesced_mmio_ring = (void *) env->kvm_run +
+               s->coalesced_mmio * PAGE_SIZE;
+#endif
 
     return;
   err_fd:

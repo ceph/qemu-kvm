@@ -1007,6 +1007,7 @@ void kvm_tpr_vcpu_start(CPUState *env);
 int qemu_kvm_get_dirty_pages(unsigned long phys_addr, void *buf);
 int kvm_coalesce_mmio_region(target_phys_addr_t start, ram_addr_t size);
 int kvm_uncoalesce_mmio_region(target_phys_addr_t start, ram_addr_t size);
+void kvm_flush_coalesced_mmio_buffer(void);
 
 int kvm_arch_init_irq_routing(void);
 
@@ -1144,6 +1145,9 @@ typedef struct KVMState {
     int fd;
     int vmfd;
     int coalesced_mmio;
+#ifdef KVM_CAP_COALESCED_MMIO
+    struct kvm_coalesced_mmio_ring *coalesced_mmio_ring;
+#endif
     int broken_set_mem_region;
     int migration_log;
     int vcpu_events;

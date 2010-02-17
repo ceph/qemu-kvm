@@ -26,9 +26,9 @@
 #include "gdbstub.h"
 #include "kvm.h"
 
-#ifdef KVM_UPSTREAM
 /* KVM uses PAGE_SIZE in it's definition of COALESCED_MMIO_MAX */
 #define PAGE_SIZE TARGET_PAGE_SIZE
+#ifdef KVM_UPSTREAM
 
 //#define DEBUG_KVM
 
@@ -59,6 +59,9 @@ struct KVMState
     int fd;
     int vmfd;
     int coalesced_mmio;
+#ifdef KVM_CAP_COALESCED_MMIO
+    struct kvm_coalesced_mmio_ring *coalesced_mmio_ring;
+#endif
     int broken_set_mem_region;
     int migration_log;
     int vcpu_events;
@@ -201,6 +204,12 @@ int kvm_init_vcpu(CPUState *env)
         dprintf("mmap'ing vcpu state failed\n");
         goto err;
     }
+
+#ifdef KVM_CAP_COALESCED_MMIO
+    if (s->coalesced_mmio && !s->coalesced_mmio_ring)
+        s->coalesced_mmio_ring = (void *) env->kvm_run +
+		s->coalesced_mmio * PAGE_SIZE;
+#endif
 
     ret = kvm_arch_init_vcpu(env);
     if (ret == 0) {
@@ -470,10 +479,10 @@ int kvm_init(int smp_cpus)
         goto err;
     }
 
+    s->coalesced_mmio = 0;
 #ifdef KVM_CAP_COALESCED_MMIO
     s->coalesced_mmio = kvm_check_extension(s, KVM_CAP_COALESCED_MMIO);
-#else
-    s->coalesced_mmio = 0;
+    s->coalesced_mmio_ring = NULL;
 #endif
 
     s->broken_set_mem_region = 1;
@@ -549,15 +558,12 @@ static int kvm_handle_io(uint16_t port, void *data, int direction, int size,
     return 1;
 }
 
-#ifdef KVM_UPSTREAM
-static void kvm_run_coalesced_mmio(CPUState *env, struct kvm_run *run)
+void kvm_flush_coalesced_mmio_buffer(void)
 {
 #ifdef KVM_CAP_COALESCED_MMIO
     KVMState *s = kvm_state;
-    if (s->coalesced_mmio) {
-        struct kvm_coalesced_mmio_ring *ring;
-
-        ring = (void *)run + (s->coalesced_mmio * TARGET_PAGE_SIZE);
+    if (s->coalesced_mmio_ring) {
+        struct kvm_coalesced_mmio_ring *ring = s->coalesced_mmio_ring;
         while (ring->first != ring->last) {
             struct kvm_coalesced_mmio *ent;
 
@@ -570,6 +576,8 @@ static void kvm_run_coalesced_mmio(CPUState *env, struct kvm_run *run)
     }
 #endif
 }
+
+#ifdef KVM_UPSTREAM
 
 void kvm_cpu_synchronize_state(CPUState *env)
 {
@@ -615,7 +623,7 @@ int kvm_cpu_exec(CPUState *env)
             abort();
         }
 
-        kvm_run_coalesced_mmio(env, run);
+        kvm_flush_coalesced_mmio_buffer();
 
         ret = 0; /* exit loop */
         switch (run->exit_reason) {
@@ -1102,4 +1110,5 @@ void kvm_remove_all_breakpoints(CPUState *current_env)
 }
 #endif /* !KVM_CAP_SET_GUEST_DEBUG */
 
+#undef PAGE_SIZE
 #include "qemu-kvm.c"
