@@ -2404,9 +2404,9 @@ static void numa_add(const char *optarg)
                         fprintf(stderr,
                             "only 63 CPUs in NUMA mode supported.\n");
                     }
-                    value = (1 << (endvalue + 1)) - (1 << value);
+                    value = (2ULL << endvalue) - (1ULL << value);
                 } else {
-                    value = 1 << value;
+                    value = 1ULL << value;
                 }
             }
             node_cpumask[nodenr] = value;
@@ -4517,6 +4517,11 @@ char *qemu_find_file(int type, const char *name)
     return buf;
 }
 
+static int device_help_func(QemuOpts *opts, void *opaque)
+{
+    return qdev_device_help(opts);
+}
+
 static int device_init_func(QemuOpts *opts, void *opaque)
 {
     DeviceState *dev;
@@ -5940,6 +5945,9 @@ int main(int argc, char **argv, char **envp)
         exit(1);
 
     module_call_init(MODULE_INIT_DEVICE);
+
+    if (qemu_opts_foreach(&qemu_device_opts, device_help_func, NULL, 0) != 0)
+        exit(0);
 
     if (watchdog) {
         i = select_watchdog(watchdog);
