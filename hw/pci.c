@@ -1418,7 +1418,7 @@ static QObject *pci_get_devices_list(PCIBus *bus, int bus_num);
 
 static QObject *pci_get_dev_dict(PCIDevice *dev, PCIBus *bus, int bus_num)
 {
-    int class;
+    uint8_t type;
     QObject *obj;
 
     obj = qobject_from_jsonf("{ 'bus': %d, 'slot': %d, 'function': %d,"                                       "'class_info': %p, 'id': %p, 'regions': %p,"
@@ -1434,8 +1434,8 @@ static QObject *pci_get_dev_dict(PCIDevice *dev, PCIBus *bus, int bus_num)
         qdict_put(qdict, "irq", qint_from_int(dev->config[PCI_INTERRUPT_LINE]));
     }
 
-    class = pci_get_word(dev->config + PCI_CLASS_DEVICE);
-    if (class == 0x0604) {
+    type = dev->config[PCI_HEADER_TYPE] & ~PCI_HEADER_TYPE_MULTI_FUNCTION;
+    if (type == PCI_HEADER_TYPE_BRIDGE) {
         QDict *qdict;
         QObject *pci_bridge;
 
@@ -1444,7 +1444,7 @@ static QObject *pci_get_dev_dict(PCIDevice *dev, PCIBus *bus, int bus_num)
         "'io_range': { 'base': %" PRId64 ", 'limit': %" PRId64 "}, "
         "'memory_range': { 'base': %" PRId64 ", 'limit': %" PRId64 "}, "
         "'prefetchable_range': { 'base': %" PRId64 ", 'limit': %" PRId64 "} }",
-        dev->config[0x19], dev->config[PCI_SECONDARY_BUS],
+        dev->config[PCI_PRIMARY_BUS], dev->config[PCI_SECONDARY_BUS],
         dev->config[PCI_SUBORDINATE_BUS],
         pci_bridge_get_base(dev, PCI_BASE_ADDRESS_SPACE_IO),
         pci_bridge_get_limit(dev, PCI_BASE_ADDRESS_SPACE_IO),
@@ -1455,12 +1455,16 @@ static QObject *pci_get_dev_dict(PCIDevice *dev, PCIBus *bus, int bus_num)
         pci_bridge_get_limit(dev, PCI_BASE_ADDRESS_SPACE_MEMORY |
                                 PCI_BASE_ADDRESS_MEM_PREFETCH));
 
-        if (dev->config[0x19] != 0) {
-            qdict = qobject_to_qdict(pci_bridge);
-            qdict_put_obj(qdict, "devices",
-                          pci_get_devices_list(bus, dev->config[0x19]));
-        }
+        if (dev->config[PCI_SECONDARY_BUS] != 0) {
+            PCIBus *child_bus = pci_find_bus(bus, dev->config[PCI_SECONDARY_BUS]);
 
+            if (child_bus) {
+                qdict = qobject_to_qdict(pci_bridge);
+                qdict_put_obj(qdict, "devices",
+                              pci_get_devices_list(child_bus,
+                                                   dev->config[PCI_SECONDARY_BUS]));
+            }
+        }
         qdict = qobject_to_qdict(obj);
         qdict_put_obj(qdict, "pci_bridge", pci_bridge);
     }
@@ -1687,7 +1691,7 @@ static void pci_bridge_write_config(PCIDevice *d,
 
 PCIBus *pci_find_bus(PCIBus *bus, int bus_num)
 {
-    PCIBus *sec;
+    PCIBus *sec, *ret;
 
     if (!bus)
         return NULL;
@@ -1698,11 +1702,13 @@ PCIBus *pci_find_bus(PCIBus *bus, int bus_num)
 
     /* try child bus */
     QLIST_FOREACH(sec, &bus->child, sibling) {
-
         if (!bus->parent_dev /* pci host bridge */
             || (pci_bus_num(sec) <= bus_num &&
-                bus->parent_dev->config[PCI_SUBORDINATE_BUS])) {
-            return pci_find_bus(sec, bus_num);
+                bus_num <= bus->parent_dev->config[PCI_SUBORDINATE_BUS]) ) {
+            ret = pci_find_bus(sec, bus_num);
+            if (ret) {
+                return ret;
+            }
         }
     }
 

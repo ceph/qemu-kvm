@@ -46,6 +46,7 @@
 #include "kvm.h"
 #if defined(CONFIG_USER_ONLY)
 #include <qemu.h>
+#include <signal.h>
 #endif
 
 //#define DEBUG_TB_INVALIDATE
@@ -1554,15 +1555,15 @@ static void cpu_unlink_tb(CPUState *env)
     TranslationBlock *tb;
     static spinlock_t interrupt_lock = SPIN_LOCK_UNLOCKED;
 
+    spin_lock(&interrupt_lock);
     tb = env->current_tb;
     /* if the cpu is currently executing code, we must unlink it and
        all the potentially executing TB */
     if (tb) {
-        spin_lock(&interrupt_lock);
         env->current_tb = NULL;
         tb_reset_jump_recursive(tb);
-        spin_unlock(&interrupt_lock);
     }
+    spin_unlock(&interrupt_lock);
 }
 
 /* mask must never be zero, except for A20 change call */
@@ -1642,6 +1643,101 @@ const CPULogItem cpu_log_items[] = {
     { 0, NULL, NULL },
 };
 
+#ifndef CONFIG_USER_ONLY
+static QLIST_HEAD(memory_client_list, CPUPhysMemoryClient) memory_client_list
+    = QLIST_HEAD_INITIALIZER(memory_client_list);
+
+static void cpu_notify_set_memory(target_phys_addr_t start_addr,
+				  ram_addr_t size,
+				  ram_addr_t phys_offset)
+{
+    CPUPhysMemoryClient *client;
+    QLIST_FOREACH(client, &memory_client_list, list) {
+        client->set_memory(client, start_addr, size, phys_offset);
+    }
+}
+
+static int cpu_notify_sync_dirty_bitmap(target_phys_addr_t start,
+					target_phys_addr_t end)
+{
+    CPUPhysMemoryClient *client;
+    QLIST_FOREACH(client, &memory_client_list, list) {
+        int r = client->sync_dirty_bitmap(client, start, end);
+        if (r < 0)
+            return r;
+    }
+    return 0;
+}
+
+static int cpu_notify_migration_log(int enable)
+{
+    CPUPhysMemoryClient *client;
+    QLIST_FOREACH(client, &memory_client_list, list) {
+        int r = client->migration_log(client, enable);
+        if (r < 0)
+            return r;
+    }
+    return 0;
+}
+
+static void phys_page_for_each_in_l1_map(PhysPageDesc **phys_map,
+                                         CPUPhysMemoryClient *client)
+{
+    PhysPageDesc *pd;
+    int l1, l2;
+
+    for (l1 = 0; l1 < L1_SIZE; ++l1) {
+        pd = phys_map[l1];
+        if (!pd) {
+            continue;
+        }
+        for (l2 = 0; l2 < L2_SIZE; ++l2) {
+            if (pd[l2].phys_offset == IO_MEM_UNASSIGNED) {
+                continue;
+            }
+            client->set_memory(client, pd[l2].region_offset,
+                               TARGET_PAGE_SIZE, pd[l2].phys_offset);
+        }
+    }
+}
+
+static void phys_page_for_each(CPUPhysMemoryClient *client)
+{
+#if TARGET_PHYS_ADDR_SPACE_BITS > 32
+
+#if TARGET_PHYS_ADDR_SPACE_BITS > (32 + L1_BITS)
+#error unsupported TARGET_PHYS_ADDR_SPACE_BITS
+#endif
+    void **phys_map = (void **)l1_phys_map;
+    int l1;
+    if (!l1_phys_map) {
+        return;
+    }
+    for (l1 = 0; l1 < L1_SIZE; ++l1) {
+        if (phys_map[l1]) {
+            phys_page_for_each_in_l1_map(phys_map[l1], client);
+        }
+    }
+#else
+    if (!l1_phys_map) {
+        return;
+    }
+    phys_page_for_each_in_l1_map(l1_phys_map, client);
+#endif
+}
+
+void cpu_register_phys_memory_client(CPUPhysMemoryClient *client)
+{
+    QLIST_INSERT_HEAD(&memory_client_list, client, list);
+    phys_page_for_each(client);
+}
+
+void cpu_unregister_phys_memory_client(CPUPhysMemoryClient *client)
+{
+    QLIST_REMOVE(client, list);
+}
+#endif
+
 static int cmp1(const char *s1, int n, const char *s2)
 {
     if (strlen(s2) != n)
@@ -1711,6 +1807,14 @@ void cpu_abort(CPUState *env, const char *fmt, ...)
     }
     va_end(ap2);
     va_end(ap);
+#if defined(CONFIG_USER_ONLY)
+    {
+        struct sigaction act;
+        sigfillset(&act.sa_mask);
+        act.sa_handler = SIG_DFL;
+        sigaction(SIGABRT, &act, NULL);
+    }
+#endif
     abort();
 }
 
@@ -1901,10 +2005,10 @@ void cpu_physical_memory_reset_dirty(ram_addr_t start, ram_addr_t end,
 
 int cpu_physical_memory_set_dirty_tracking(int enable)
 {
-    if (kvm_enabled()) {
-        return kvm_set_migration_log(enable);
-    }
-    return 0;
+    int ret = 0;
+
+    ret = cpu_notify_migration_log(!!enable);
+    return ret;
 }
 
 int cpu_physical_memory_get_dirty_tracking(void)
@@ -1915,10 +2019,9 @@ int cpu_physical_memory_get_dirty_tracking(void)
 int cpu_physical_sync_dirty_bitmap(target_phys_addr_t start_addr,
                                    target_phys_addr_t end_addr)
 {
-    int ret = 0;
+    int ret;
 
-    if (kvm_enabled())
-        ret = kvm_physical_sync_dirty_bitmap(start_addr, end_addr);
+    ret = cpu_notify_sync_dirty_bitmap(start_addr, end_addr);
     return ret;
 }
 
@@ -2330,8 +2433,7 @@ void cpu_register_physical_memory_offset(target_phys_addr_t start_addr,
     ram_addr_t orig_size = size;
     void *subpage;
 
-    if (kvm_enabled())
-        kvm_set_phys_mem(start_addr, size, phys_offset);
+    cpu_notify_set_memory(start_addr, size, phys_offset);
 
     if (phys_offset == IO_MEM_UNASSIGNED) {
         region_offset = start_addr;
@@ -2422,6 +2524,12 @@ void qemu_unregister_coalesced_mmio(target_phys_addr_t addr, ram_addr_t size)
 {
     if (kvm_enabled())
         kvm_uncoalesce_mmio_region(addr, size);
+}
+
+void qemu_flush_coalesced_mmio_buffer(void)
+{
+    if (kvm_enabled())
+        kvm_flush_coalesced_mmio_buffer();
 }
 
 #ifdef __linux__
@@ -2617,17 +2725,13 @@ void *qemu_get_ram_ptr(ram_addr_t addr)
 int do_qemu_ram_addr_from_host(void *ptr, ram_addr_t *ram_addr)
 {
     RAMBlock *prev;
-    RAMBlock **prevp;
     RAMBlock *block;
     uint8_t *host = ptr;
 
     prev = NULL;
-    prevp = &ram_blocks;
     block = ram_blocks;
     while (block && (block->host > host
                      || block->host + block->length <= host)) {
-        if (prev)
-          prevp = &prev->next;
         prev = block;
         block = block->next;
     }

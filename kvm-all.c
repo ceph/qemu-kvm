@@ -26,9 +26,9 @@
 #include "gdbstub.h"
 #include "kvm.h"
 
-#ifdef KVM_UPSTREAM
 /* KVM uses PAGE_SIZE in it's definition of COALESCED_MMIO_MAX */
 #define PAGE_SIZE TARGET_PAGE_SIZE
+#ifdef KVM_UPSTREAM
 
 //#define DEBUG_KVM
 
@@ -59,6 +59,9 @@ struct KVMState
     int fd;
     int vmfd;
     int coalesced_mmio;
+#ifdef KVM_CAP_COALESCED_MMIO
+    struct kvm_coalesced_mmio_ring *coalesced_mmio_ring;
+#endif
     int broken_set_mem_region;
     int migration_log;
     int vcpu_events;
@@ -202,6 +205,12 @@ int kvm_init_vcpu(CPUState *env)
         goto err;
     }
 
+#ifdef KVM_CAP_COALESCED_MMIO
+    if (s->coalesced_mmio && !s->coalesced_mmio_ring)
+        s->coalesced_mmio_ring = (void *) env->kvm_run +
+		s->coalesced_mmio * PAGE_SIZE;
+#endif
+
     ret = kvm_arch_init_vcpu(env);
     if (ret == 0) {
         qemu_register_reset(kvm_reset_vcpu, env);
@@ -259,7 +268,7 @@ int kvm_log_stop(target_phys_addr_t phys_addr, ram_addr_t size)
                                           KVM_MEM_LOG_DIRTY_PAGES);
 }
 
-int kvm_set_migration_log(int enable)
+static int kvm_set_migration_log(int enable)
 {
     KVMState *s = kvm_state;
     KVMSlot *mem;
@@ -294,8 +303,8 @@ static int test_le_bit(unsigned long nr, unsigned char *addr)
  * @start_add: start of logged region.
  * @end_addr: end of logged region.
  */
-int kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr,
-                                   target_phys_addr_t end_addr)
+static int kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr,
+					  target_phys_addr_t end_addr)
 {
     KVMState *s = kvm_state;
     unsigned long size, allocated_size = 0;
@@ -398,291 +407,9 @@ int kvm_check_extension(KVMState *s, unsigned int extension)
 }
 #ifdef KVM_UPSTREAM
 
-int kvm_init(int smp_cpus)
-{
-    static const char upgrade_note[] =
-        "Please upgrade to at least kernel 2.6.29 or recent kvm-kmod\n"
-        "(see http://sourceforge.net/projects/kvm).\n";
-    KVMState *s;
-    int ret;
-    int i;
-
-    if (smp_cpus > 1) {
-        fprintf(stderr, "No SMP KVM support, use '-smp 1'\n");
-        return -EINVAL;
-    }
-
-    s = qemu_mallocz(sizeof(KVMState));
-
-#ifdef KVM_CAP_SET_GUEST_DEBUG
-    QTAILQ_INIT(&s->kvm_sw_breakpoints);
-#endif
-    for (i = 0; i < ARRAY_SIZE(s->slots); i++)
-        s->slots[i].slot = i;
-
-    s->vmfd = -1;
-    s->fd = qemu_open("/dev/kvm", O_RDWR);
-    if (s->fd == -1) {
-        fprintf(stderr, "Could not access KVM kernel module: %m\n");
-        ret = -errno;
-        goto err;
-    }
-
-    ret = kvm_ioctl(s, KVM_GET_API_VERSION, 0);
-    if (ret < KVM_API_VERSION) {
-        if (ret > 0)
-            ret = -EINVAL;
-        fprintf(stderr, "kvm version too old\n");
-        goto err;
-    }
-
-    if (ret > KVM_API_VERSION) {
-        ret = -EINVAL;
-        fprintf(stderr, "kvm version not supported\n");
-        goto err;
-    }
-
-    s->vmfd = kvm_ioctl(s, KVM_CREATE_VM, 0);
-    if (s->vmfd < 0)
-        goto err;
-
-    /* initially, KVM allocated its own memory and we had to jump through
-     * hooks to make phys_ram_base point to this.  Modern versions of KVM
-     * just use a user allocated buffer so we can use regular pages
-     * unmodified.  Make sure we have a sufficiently modern version of KVM.
-     */
-    if (!kvm_check_extension(s, KVM_CAP_USER_MEMORY)) {
-        ret = -EINVAL;
-        fprintf(stderr, "kvm does not support KVM_CAP_USER_MEMORY\n%s",
-                upgrade_note);
-        goto err;
-    }
-
-    /* There was a nasty bug in < kvm-80 that prevents memory slots from being
-     * destroyed properly.  Since we rely on this capability, refuse to work
-     * with any kernel without this capability. */
-    if (!kvm_check_extension(s, KVM_CAP_DESTROY_MEMORY_REGION_WORKS)) {
-        ret = -EINVAL;
-
-        fprintf(stderr,
-                "KVM kernel module broken (DESTROY_MEMORY_REGION).\n%s",
-                upgrade_note);
-        goto err;
-    }
-
-#ifdef KVM_CAP_COALESCED_MMIO
-    s->coalesced_mmio = kvm_check_extension(s, KVM_CAP_COALESCED_MMIO);
-#else
-    s->coalesced_mmio = 0;
-#endif
-
-    s->broken_set_mem_region = 1;
-#ifdef KVM_CAP_JOIN_MEMORY_REGIONS_WORKS
-    ret = kvm_ioctl(s, KVM_CHECK_EXTENSION, KVM_CAP_JOIN_MEMORY_REGIONS_WORKS);
-    if (ret > 0) {
-        s->broken_set_mem_region = 0;
-    }
-#endif
-
-    s->vcpu_events = 0;
-#ifdef KVM_CAP_VCPU_EVENTS
-    s->vcpu_events = kvm_check_extension(s, KVM_CAP_VCPU_EVENTS);
-#endif
-
-    ret = kvm_arch_init(s, smp_cpus);
-    if (ret < 0)
-        goto err;
-
-    kvm_state = s;
-
-    return 0;
-
-err:
-    if (s) {
-        if (s->vmfd != -1)
-            close(s->vmfd);
-        if (s->fd != -1)
-            close(s->fd);
-    }
-    qemu_free(s);
-
-    return ret;
-}
-#endif
-
-static int kvm_handle_io(uint16_t port, void *data, int direction, int size,
-                         uint32_t count)
-{
-    int i;
-    uint8_t *ptr = data;
-
-    for (i = 0; i < count; i++) {
-        if (direction == KVM_EXIT_IO_IN) {
-            switch (size) {
-            case 1:
-                stb_p(ptr, cpu_inb(port));
-                break;
-            case 2:
-                stw_p(ptr, cpu_inw(port));
-                break;
-            case 4:
-                stl_p(ptr, cpu_inl(port));
-                break;
-            }
-        } else {
-            switch (size) {
-            case 1:
-                cpu_outb(port, ldub_p(ptr));
-                break;
-            case 2:
-                cpu_outw(port, lduw_p(ptr));
-                break;
-            case 4:
-                cpu_outl(port, ldl_p(ptr));
-                break;
-            }
-        }
-
-        ptr += size;
-    }
-
-    return 1;
-}
-
-#ifdef KVM_UPSTREAM
-static void kvm_run_coalesced_mmio(CPUState *env, struct kvm_run *run)
-{
-#ifdef KVM_CAP_COALESCED_MMIO
-    KVMState *s = kvm_state;
-    if (s->coalesced_mmio) {
-        struct kvm_coalesced_mmio_ring *ring;
-
-        ring = (void *)run + (s->coalesced_mmio * TARGET_PAGE_SIZE);
-        while (ring->first != ring->last) {
-            struct kvm_coalesced_mmio *ent;
-
-            ent = &ring->coalesced_mmio[ring->first];
-
-            cpu_physical_memory_write(ent->phys_addr, ent->data, ent->len);
-            /* FIXME smp_wmb() */
-            ring->first = (ring->first + 1) % KVM_COALESCED_MMIO_MAX;
-        }
-    }
-#endif
-}
-
-void kvm_cpu_synchronize_state(CPUState *env)
-{
-    if (!env->kvm_state->regs_modified) {
-        kvm_arch_get_registers(env);
-        env->kvm_state->regs_modified = 1;
-    }
-}
-
-int kvm_cpu_exec(CPUState *env)
-{
-    struct kvm_run *run = env->kvm_run;
-    int ret;
-
-    dprintf("kvm_cpu_exec()\n");
-
-    do {
-        if (env->exit_request) {
-            dprintf("interrupt exit requested\n");
-            ret = 0;
-            break;
-        }
-
-        if (env->kvm_state->regs_modified) {
-            kvm_arch_put_registers(env);
-            env->kvm_state->regs_modified = 0;
-        }
-
-        kvm_arch_pre_run(env, run);
-        qemu_mutex_unlock_iothread();
-        ret = kvm_vcpu_ioctl(env, KVM_RUN, 0);
-        qemu_mutex_lock_iothread();
-        kvm_arch_post_run(env, run);
-
-        if (ret == -EINTR || ret == -EAGAIN) {
-            dprintf("io window exit\n");
-            ret = 0;
-            break;
-        }
-
-        if (ret < 0) {
-            dprintf("kvm run failed %s\n", strerror(-ret));
-            abort();
-        }
-
-        kvm_run_coalesced_mmio(env, run);
-
-        ret = 0; /* exit loop */
-        switch (run->exit_reason) {
-        case KVM_EXIT_IO:
-            dprintf("handle_io\n");
-            ret = kvm_handle_io(run->io.port,
-                                (uint8_t *)run + run->io.data_offset,
-                                run->io.direction,
-                                run->io.size,
-                                run->io.count);
-            break;
-        case KVM_EXIT_MMIO:
-            dprintf("handle_mmio\n");
-            cpu_physical_memory_rw(run->mmio.phys_addr,
-                                   run->mmio.data,
-                                   run->mmio.len,
-                                   run->mmio.is_write);
-            ret = 1;
-            break;
-        case KVM_EXIT_IRQ_WINDOW_OPEN:
-            dprintf("irq_window_open\n");
-            break;
-        case KVM_EXIT_SHUTDOWN:
-            dprintf("shutdown\n");
-            qemu_system_reset_request();
-            ret = 1;
-            break;
-        case KVM_EXIT_UNKNOWN:
-            dprintf("kvm_exit_unknown\n");
-            break;
-        case KVM_EXIT_FAIL_ENTRY:
-            dprintf("kvm_exit_fail_entry\n");
-            break;
-        case KVM_EXIT_EXCEPTION:
-            dprintf("kvm_exit_exception\n");
-            break;
-        case KVM_EXIT_DEBUG:
-            dprintf("kvm_exit_debug\n");
-#ifdef KVM_CAP_SET_GUEST_DEBUG
-            if (kvm_arch_debug(&run->debug.arch)) {
-                gdb_set_stop_cpu(env);
-                vm_stop(EXCP_DEBUG);
-                env->exception_index = EXCP_DEBUG;
-                return 0;
-            }
-            /* re-enter, this exception was guest-internal */
-            ret = 1;
-#endif /* KVM_CAP_SET_GUEST_DEBUG */
-            break;
-        default:
-            dprintf("kvm_arch_handle_exit\n");
-            ret = kvm_arch_handle_exit(env, run);
-            break;
-        }
-    } while (ret > 0);
-
-    if (env->exit_request) {
-        env->exit_request = 0;
-        env->exception_index = EXCP_INTERRUPT;
-    }
-
-    return ret;
-}
-
-void kvm_set_phys_mem(target_phys_addr_t start_addr,
-                      ram_addr_t size,
-                      ram_addr_t phys_offset)
+static void kvm_set_phys_mem(target_phys_addr_t start_addr,
+			     ram_addr_t size,
+			     ram_addr_t phys_offset)
 {
     KVMState *s = kvm_state;
     ram_addr_t flags = phys_offset & ~TARGET_PAGE_MASK;
@@ -819,6 +546,325 @@ void kvm_set_phys_mem(target_phys_addr_t start_addr,
 }
 
 #endif
+
+static void kvm_client_set_memory(struct CPUPhysMemoryClient *client,
+				  target_phys_addr_t start_addr,
+				  ram_addr_t size,
+				  ram_addr_t phys_offset)
+{
+	kvm_set_phys_mem(start_addr, size, phys_offset);
+}
+
+static int kvm_client_sync_dirty_bitmap(struct CPUPhysMemoryClient *client,
+					target_phys_addr_t start_addr,
+					target_phys_addr_t end_addr)
+{
+	return kvm_physical_sync_dirty_bitmap(start_addr, end_addr);
+}
+
+static int kvm_client_migration_log(struct CPUPhysMemoryClient *client,
+				    int enable)
+{
+	return kvm_set_migration_log(enable);
+}
+
+static CPUPhysMemoryClient kvm_cpu_phys_memory_client = {
+	.set_memory = kvm_client_set_memory,
+	.sync_dirty_bitmap = kvm_client_sync_dirty_bitmap,
+	.migration_log = kvm_client_migration_log,
+};
+
+
+void kvm_cpu_register_phys_memory_client(void)
+{
+    cpu_register_phys_memory_client(&kvm_cpu_phys_memory_client);
+}
+
+#ifdef KVM_UPSTREAM
+
+int kvm_init(int smp_cpus)
+{
+    static const char upgrade_note[] =
+        "Please upgrade to at least kernel 2.6.29 or recent kvm-kmod\n"
+        "(see http://sourceforge.net/projects/kvm).\n";
+    KVMState *s;
+    int ret;
+    int i;
+
+    if (smp_cpus > 1) {
+        fprintf(stderr, "No SMP KVM support, use '-smp 1'\n");
+        return -EINVAL;
+    }
+
+    s = qemu_mallocz(sizeof(KVMState));
+
+#ifdef KVM_CAP_SET_GUEST_DEBUG
+    QTAILQ_INIT(&s->kvm_sw_breakpoints);
+#endif
+    for (i = 0; i < ARRAY_SIZE(s->slots); i++)
+        s->slots[i].slot = i;
+
+    s->vmfd = -1;
+    s->fd = qemu_open("/dev/kvm", O_RDWR);
+    if (s->fd == -1) {
+        fprintf(stderr, "Could not access KVM kernel module: %m\n");
+        ret = -errno;
+        goto err;
+    }
+
+    ret = kvm_ioctl(s, KVM_GET_API_VERSION, 0);
+    if (ret < KVM_API_VERSION) {
+        if (ret > 0)
+            ret = -EINVAL;
+        fprintf(stderr, "kvm version too old\n");
+        goto err;
+    }
+
+    if (ret > KVM_API_VERSION) {
+        ret = -EINVAL;
+        fprintf(stderr, "kvm version not supported\n");
+        goto err;
+    }
+
+    s->vmfd = kvm_ioctl(s, KVM_CREATE_VM, 0);
+    if (s->vmfd < 0)
+        goto err;
+
+    /* initially, KVM allocated its own memory and we had to jump through
+     * hooks to make phys_ram_base point to this.  Modern versions of KVM
+     * just use a user allocated buffer so we can use regular pages
+     * unmodified.  Make sure we have a sufficiently modern version of KVM.
+     */
+    if (!kvm_check_extension(s, KVM_CAP_USER_MEMORY)) {
+        ret = -EINVAL;
+        fprintf(stderr, "kvm does not support KVM_CAP_USER_MEMORY\n%s",
+                upgrade_note);
+        goto err;
+    }
+
+    /* There was a nasty bug in < kvm-80 that prevents memory slots from being
+     * destroyed properly.  Since we rely on this capability, refuse to work
+     * with any kernel without this capability. */
+    if (!kvm_check_extension(s, KVM_CAP_DESTROY_MEMORY_REGION_WORKS)) {
+        ret = -EINVAL;
+
+        fprintf(stderr,
+                "KVM kernel module broken (DESTROY_MEMORY_REGION).\n%s",
+                upgrade_note);
+        goto err;
+    }
+
+    s->coalesced_mmio = 0;
+#ifdef KVM_CAP_COALESCED_MMIO
+    s->coalesced_mmio = kvm_check_extension(s, KVM_CAP_COALESCED_MMIO);
+    s->coalesced_mmio_ring = NULL;
+#endif
+
+    s->broken_set_mem_region = 1;
+#ifdef KVM_CAP_JOIN_MEMORY_REGIONS_WORKS
+    ret = kvm_ioctl(s, KVM_CHECK_EXTENSION, KVM_CAP_JOIN_MEMORY_REGIONS_WORKS);
+    if (ret > 0) {
+        s->broken_set_mem_region = 0;
+    }
+#endif
+
+    s->vcpu_events = 0;
+#ifdef KVM_CAP_VCPU_EVENTS
+    s->vcpu_events = kvm_check_extension(s, KVM_CAP_VCPU_EVENTS);
+#endif
+
+    ret = kvm_arch_init(s, smp_cpus);
+    if (ret < 0)
+        goto err;
+
+    kvm_state = s;
+    cpu_register_phys_memory_client(&kvm_cpu_phys_memory_client);
+
+    return 0;
+
+err:
+    if (s) {
+        if (s->vmfd != -1)
+            close(s->vmfd);
+        if (s->fd != -1)
+            close(s->fd);
+    }
+    qemu_free(s);
+
+    return ret;
+}
+#endif
+
+static int kvm_handle_io(uint16_t port, void *data, int direction, int size,
+                         uint32_t count)
+{
+    int i;
+    uint8_t *ptr = data;
+
+    for (i = 0; i < count; i++) {
+        if (direction == KVM_EXIT_IO_IN) {
+            switch (size) {
+            case 1:
+                stb_p(ptr, cpu_inb(port));
+                break;
+            case 2:
+                stw_p(ptr, cpu_inw(port));
+                break;
+            case 4:
+                stl_p(ptr, cpu_inl(port));
+                break;
+            }
+        } else {
+            switch (size) {
+            case 1:
+                cpu_outb(port, ldub_p(ptr));
+                break;
+            case 2:
+                cpu_outw(port, lduw_p(ptr));
+                break;
+            case 4:
+                cpu_outl(port, ldl_p(ptr));
+                break;
+            }
+        }
+
+        ptr += size;
+    }
+
+    return 1;
+}
+
+void kvm_flush_coalesced_mmio_buffer(void)
+{
+#ifdef KVM_CAP_COALESCED_MMIO
+    KVMState *s = kvm_state;
+    if (s->coalesced_mmio_ring) {
+        struct kvm_coalesced_mmio_ring *ring = s->coalesced_mmio_ring;
+        while (ring->first != ring->last) {
+            struct kvm_coalesced_mmio *ent;
+
+            ent = &ring->coalesced_mmio[ring->first];
+
+            cpu_physical_memory_write(ent->phys_addr, ent->data, ent->len);
+            /* FIXME smp_wmb() */
+            ring->first = (ring->first + 1) % KVM_COALESCED_MMIO_MAX;
+        }
+    }
+#endif
+}
+
+#ifdef KVM_UPSTREAM
+
+void kvm_cpu_synchronize_state(CPUState *env)
+{
+    if (!env->kvm_vcpu_dirty) {
+        kvm_arch_get_registers(env);
+        env->kvm_vcpu_dirty = 1;
+    }
+}
+
+int kvm_cpu_exec(CPUState *env)
+{
+    struct kvm_run *run = env->kvm_run;
+    int ret;
+
+    dprintf("kvm_cpu_exec()\n");
+
+    do {
+        if (env->exit_request) {
+            dprintf("interrupt exit requested\n");
+            ret = 0;
+            break;
+        }
+
+        if (env->kvm_vcpu_dirty) {
+            kvm_arch_put_registers(env);
+            env->kvm_vcpu_dirty = 0;
+        }
+
+        kvm_arch_pre_run(env, run);
+        qemu_mutex_unlock_iothread();
+        ret = kvm_vcpu_ioctl(env, KVM_RUN, 0);
+        qemu_mutex_lock_iothread();
+        kvm_arch_post_run(env, run);
+
+        if (ret == -EINTR || ret == -EAGAIN) {
+            dprintf("io window exit\n");
+            ret = 0;
+            break;
+        }
+
+        if (ret < 0) {
+            dprintf("kvm run failed %s\n", strerror(-ret));
+            abort();
+        }
+
+        kvm_flush_coalesced_mmio_buffer();
+
+        ret = 0; /* exit loop */
+        switch (run->exit_reason) {
+        case KVM_EXIT_IO:
+            dprintf("handle_io\n");
+            ret = kvm_handle_io(run->io.port,
+                                (uint8_t *)run + run->io.data_offset,
+                                run->io.direction,
+                                run->io.size,
+                                run->io.count);
+            break;
+        case KVM_EXIT_MMIO:
+            dprintf("handle_mmio\n");
+            cpu_physical_memory_rw(run->mmio.phys_addr,
+                                   run->mmio.data,
+                                   run->mmio.len,
+                                   run->mmio.is_write);
+            ret = 1;
+            break;
+        case KVM_EXIT_IRQ_WINDOW_OPEN:
+            dprintf("irq_window_open\n");
+            break;
+        case KVM_EXIT_SHUTDOWN:
+            dprintf("shutdown\n");
+            qemu_system_reset_request();
+            ret = 1;
+            break;
+        case KVM_EXIT_UNKNOWN:
+            dprintf("kvm_exit_unknown\n");
+            break;
+        case KVM_EXIT_FAIL_ENTRY:
+            dprintf("kvm_exit_fail_entry\n");
+            break;
+        case KVM_EXIT_EXCEPTION:
+            dprintf("kvm_exit_exception\n");
+            break;
+        case KVM_EXIT_DEBUG:
+            dprintf("kvm_exit_debug\n");
+#ifdef KVM_CAP_SET_GUEST_DEBUG
+            if (kvm_arch_debug(&run->debug.arch)) {
+                gdb_set_stop_cpu(env);
+                vm_stop(EXCP_DEBUG);
+                env->exception_index = EXCP_DEBUG;
+                return 0;
+            }
+            /* re-enter, this exception was guest-internal */
+            ret = 1;
+#endif /* KVM_CAP_SET_GUEST_DEBUG */
+            break;
+        default:
+            dprintf("kvm_arch_handle_exit\n");
+            ret = kvm_arch_handle_exit(env, run);
+            break;
+        }
+    } while (ret > 0);
+
+    if (env->exit_request) {
+        env->exit_request = 0;
+        env->exception_index = EXCP_INTERRUPT;
+    }
+
+    return ret;
+}
+
+#endif
 int kvm_ioctl(KVMState *s, int type, ...)
 {
     int ret;
@@ -913,14 +959,11 @@ void kvm_setup_guest_memory(void *start, size_t size)
 static void on_vcpu(CPUState *env, void (*func)(void *data), void *data)
 {
 #ifdef CONFIG_IOTHREAD
-    if (env == cpu_single_env) {
-        func(data);
-        return;
+    if (env != cpu_single_env) {
+        abort();
     }
-    abort();
-#else
-    func(data);
 #endif
+    func(data);
 }
 #endif /* KVM_UPSTREAM */
 
@@ -954,9 +997,9 @@ static void kvm_invoke_set_guest_debug(void *data)
     struct kvm_set_guest_debug_data *dbg_data = data;
     CPUState *env = dbg_data->env;
 
-    if (env->kvm_state->regs_modified) {
+    if (env->kvm_vcpu_dirty) {
         kvm_arch_put_registers(env);
-        env->kvm_state->regs_modified = 0;
+        env->kvm_vcpu_dirty = 0;
     }
     dbg_data->err = kvm_vcpu_ioctl(env, KVM_SET_GUEST_DEBUG, &dbg_data->dbg);
 }
@@ -1102,4 +1145,5 @@ void kvm_remove_all_breakpoints(CPUState *current_env)
 }
 #endif /* !KVM_CAP_SET_GUEST_DEBUG */
 
+#undef PAGE_SIZE
 #include "qemu-kvm.c"

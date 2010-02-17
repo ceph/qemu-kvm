@@ -38,16 +38,8 @@ int kvm_init_vcpu(CPUState *env);
 
 int kvm_cpu_exec(CPUState *env);
 
-void kvm_set_phys_mem(target_phys_addr_t start_addr,
-                      ram_addr_t size,
-                      ram_addr_t phys_offset);
-
-int kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr,
-                                   target_phys_addr_t end_addr);
-
 int kvm_log_start(target_phys_addr_t phys_addr, ram_addr_t size);
 int kvm_log_stop(target_phys_addr_t phys_addr, ram_addr_t size);
-int kvm_set_migration_log(int enable);
 
 int kvm_has_sync_mmu(void);
 #endif /* KVM_UPSTREAM */
@@ -55,12 +47,15 @@ int kvm_has_vcpu_events(void);
 int kvm_put_vcpu_events(CPUState *env);
 int kvm_get_vcpu_events(CPUState *env);
 
+void kvm_cpu_register_phys_memory_client(void);
+
 #ifdef KVM_UPSTREAM
 
 void kvm_setup_guest_memory(void *start, size_t size);
 
 int kvm_coalesce_mmio_region(target_phys_addr_t start, ram_addr_t size);
 int kvm_uncoalesce_mmio_region(target_phys_addr_t start, ram_addr_t size);
+void kvm_flush_coalesced_mmio_buffer(void);
 
 int kvm_insert_breakpoint(CPUState *current_env, target_ulong addr,
                           target_ulong len, int type);

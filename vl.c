@@ -945,6 +945,23 @@ int64_t qemu_get_clock(QEMUClock *clock)
     }
 }
 
+int64_t qemu_get_clock_ns(QEMUClock *clock)
+{
+    switch(clock->type) {
+    case QEMU_CLOCK_REALTIME:
+        return get_clock();
+    default:
+    case QEMU_CLOCK_VIRTUAL:
+        if (use_icount) {
+            return cpu_get_icount();
+        } else {
+            return cpu_get_clock();
+        }
+    case QEMU_CLOCK_HOST:
+        return get_clock_realtime();
+    }
+}
+
 static void init_clocks(void)
 {
     init_get_clock();
@@ -2404,9 +2421,9 @@ static void numa_add(const char *optarg)
                         fprintf(stderr,
                             "only 63 CPUs in NUMA mode supported.\n");
                     }
-                    value = (1 << (endvalue + 1)) - (1 << value);
+                    value = (2ULL << endvalue) - (1ULL << value);
                 } else {
-                    value = 1 << value;
+                    value = 1ULL << value;
                 }
             }
             node_cpumask[nodenr] = value;
@@ -2900,7 +2917,7 @@ static int ram_save_live(Monitor *mon, QEMUFile *f, int stage, void *opaque)
     }
 
     bytes_transferred_last = bytes_transferred;
-    bwidth = get_clock();
+    bwidth = qemu_get_clock_ns(rt_clock);
 
     while (!qemu_file_rate_limit(f)) {
         int ret;
@@ -2911,7 +2928,7 @@ static int ram_save_live(Monitor *mon, QEMUFile *f, int stage, void *opaque)
             break;
     }
 
-    bwidth = get_clock() - bwidth;
+    bwidth = qemu_get_clock_ns(rt_clock) - bwidth;
     bwidth = (bytes_transferred - bytes_transferred_last) / bwidth;
 
     /* if we haven't transferred anything this round, force expected_time to a
@@ -3030,6 +3047,7 @@ static void gui_update(void *opaque)
     DisplayState *ds = opaque;
     DisplayChangeListener *dcl = ds->listeners;
 
+    qemu_flush_coalesced_mmio_buffer();
     dpy_refresh(ds);
 
     while (dcl != NULL) {
@@ -3045,6 +3063,7 @@ static void nographic_update(void *opaque)
 {
     uint64_t interval = GUI_REFRESH_INTERVAL;
 
+    qemu_flush_coalesced_mmio_buffer();
     qemu_mod_timer(nographic_timer, interval + qemu_get_clock(rt_clock));
 }
 
@@ -3242,8 +3261,12 @@ static void qemu_event_increment(void)
     if (io_thread_fd == -1)
         return;
 
-    ret = write(io_thread_fd, &byte, sizeof(byte));
-    if (ret < 0 && (errno != EINTR && errno != EAGAIN)) {
+    do {
+        ret = write(io_thread_fd, &byte, sizeof(byte));
+    } while (ret < 0 && errno == EINTR);
+
+    /* EAGAIN is fine, a read must be pending.  */
+    if (ret < 0 && errno != EAGAIN) {
         fprintf(stderr, "qemu_event_increment: write() filed: %s\n",
                 strerror(errno));
         exit (1);
@@ -3254,12 +3277,12 @@ static void qemu_event_read(void *opaque)
 {
     int fd = (unsigned long)opaque;
     ssize_t len;
+    char buffer[512];
 
     /* Drain the notify pipe */
     do {
-        char buffer[512];
         len = read(fd, buffer, sizeof(buffer));
-    } while ((len == -1 && errno == EINTR) || len > 0);
+    } while ((len == -1 && errno == EINTR) || len == sizeof(buffer));
 }
 
 static int qemu_event_init(void)
@@ -3323,6 +3346,8 @@ static int cpu_can_run(CPUState *env)
     if (env->stop)
         return 0;
     if (env->stopped)
+        return 0;
+    if (!vm_running)
         return 0;
     return 1;
 }
@@ -3903,14 +3928,15 @@ static void tcg_cpu_exec(void)
     for (; next_cpu != NULL; next_cpu = next_cpu->next_cpu) {
         CPUState *env = cur_cpu = next_cpu;
 
-        if (!vm_running)
-            break;
         if (timer_alarm_pending) {
             timer_alarm_pending = 0;
             break;
         }
         if (cpu_can_run(env))
             ret = qemu_cpu_exec(env);
+        else if (env->stop)
+            break;
+
         if (ret == EXCP_DEBUG) {
             gdb_set_stop_cpu(env);
             debug_requested = 1;
@@ -4079,11 +4105,7 @@ static void version(void)
 
 static void help(int exitcode)
 {
-    version();
-    printf("usage: %s [options] [disk_image]\n"
-           "\n"
-           "'disk_image' is a raw hard image image for IDE hard disk 0\n"
-           "\n"
+    const char *options_help =
 #define DEF(option, opt_arg, opt_enum, opt_help)        \
            opt_help
 #define DEFHEADING(text) stringify(text) "\n"
@@ -4091,22 +4113,21 @@ static void help(int exitcode)
 #undef DEF
 #undef DEFHEADING
 #undef GEN_DOCS
+        ;
+    version();
+    printf("usage: %s [options] [disk_image]\n"
            "\n"
+           "'disk_image' is a raw hard image image for IDE hard disk 0\n"
+           "\n"
+           "%s\n"
            "During emulation, the following keys are useful:\n"
            "ctrl-alt-f      toggle full screen\n"
            "ctrl-alt-n      switch to virtual console 'n'\n"
            "ctrl-alt        toggle mouse and keyboard grab\n"
            "\n"
-           "When using -nographic, press 'ctrl-a h' to get some help.\n"
-           ,
+           "When using -nographic, press 'ctrl-a h' to get some help.\n",
            "qemu",
-           DEFAULT_RAM_SIZE,
-#ifndef _WIN32
-           DEFAULT_NETWORK_SCRIPT,
-           DEFAULT_NETWORK_DOWN_SCRIPT,
-#endif
-           DEFAULT_GDBSTUB_PORT,
-           "/tmp/qemu.log");
+           options_help);
     exit(exitcode);
 }
 
@@ -4515,6 +4536,11 @@ char *qemu_find_file(int type, const char *name)
         return NULL;
     }
     return buf;
+}
+
+static int device_help_func(QemuOpts *opts, void *opaque)
+{
+    return qdev_device_help(opts);
 }
 
 static int device_init_func(QemuOpts *opts, void *opaque)
@@ -5940,6 +5966,9 @@ int main(int argc, char **argv, char **envp)
         exit(1);
 
     module_call_init(MODULE_INIT_DEVICE);
+
+    if (qemu_opts_foreach(&qemu_device_opts, device_help_func, NULL, 0) != 0)
+        exit(0);
 
     if (watchdog) {
         i = select_watchdog(watchdog);

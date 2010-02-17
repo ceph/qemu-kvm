@@ -58,7 +58,8 @@ static void format_print(void *opaque, const char *name)
 /* Please keep in synch with qemu-img.texi */
 static void help(void)
 {
-    printf("qemu-img version " QEMU_VERSION ", Copyright (c) 2004-2008 Fabrice Bellard\n"
+    const char *help_msg =
+           "qemu-img version " QEMU_VERSION ", Copyright (c) 2004-2008 Fabrice Bellard\n"
            "usage: qemu-img command [command options]\n"
            "QEMU disk image utility\n"
            "\n"
@@ -91,9 +92,9 @@ static void help(void)
            "  '-a' applies a snapshot (revert disk to saved state)\n"
            "  '-c' creates a snapshot\n"
            "  '-d' deletes a snapshot\n"
-           "  '-l' lists all snapshots in the given image\n"
-           );
-    printf("\nSupported formats:");
+           "  '-l' lists all snapshots in the given image\n";
+
+    printf("%s\nSupported formats:", help_msg);
     bdrv_iterate_format(format_print, NULL);
     printf("\n");
     exit(1);
@@ -188,11 +189,13 @@ static int read_password(char *buf, int buf_size)
 #endif
 
 static BlockDriverState *bdrv_new_open(const char *filename,
-                                       const char *fmt)
+                                       const char *fmt,
+                                       int readonly)
 {
     BlockDriverState *bs;
     BlockDriver *drv;
     char password[256];
+    int flags = BRDV_O_FLAGS;
 
     bs = bdrv_new("");
     if (!bs)
@@ -204,7 +207,10 @@ static BlockDriverState *bdrv_new_open(const char *filename,
     } else {
         drv = NULL;
     }
-    if (bdrv_open2(bs, filename, BRDV_O_FLAGS | BDRV_O_RDWR, drv) < 0) {
+    if (!readonly) {
+        flags |= BDRV_O_RDWR;
+    }
+    if (bdrv_open2(bs, filename, flags, drv) < 0) {
         error("Could not open '%s'", filename);
     }
     if (bdrv_is_encrypted(bs)) {
@@ -343,7 +349,7 @@ static int img_create(int argc, char **argv)
                 }
             }
 
-            bs = bdrv_new_open(backing_file->value.s, fmt);
+            bs = bdrv_new_open(backing_file->value.s, fmt, 1);
             bdrv_get_geometry(bs, &size);
             size *= 512;
             bdrv_delete(bs);
@@ -571,7 +577,7 @@ static int img_convert(int argc, char **argv)
     BlockDriverState **bs, *out_bs;
     int64_t total_sectors, nb_sectors, sector_num, bs_offset;
     uint64_t bs_sectors;
-    uint8_t buf[IO_BUF_SIZE];
+    uint8_t * buf;
     const uint8_t *buf1;
     BlockDriverInfo bdi;
     QEMUOptionParameter *param = NULL;
@@ -627,7 +633,7 @@ static int img_convert(int argc, char **argv)
 
     total_sectors = 0;
     for (bs_i = 0; bs_i < bs_n; bs_i++) {
-        bs[bs_i] = bdrv_new_open(argv[optind + bs_i], fmt);
+        bs[bs_i] = bdrv_new_open(argv[optind + bs_i], fmt, 1);
         if (!bs[bs_i])
             error("Could not open '%s'", argv[optind + bs_i]);
         bdrv_get_geometry(bs[bs_i], &bs_sectors);
@@ -685,11 +691,12 @@ static int img_convert(int argc, char **argv)
         }
     }
 
-    out_bs = bdrv_new_open(out_filename, out_fmt);
+    out_bs = bdrv_new_open(out_filename, out_fmt, 0);
 
     bs_i = 0;
     bs_offset = 0;
     bdrv_get_geometry(bs[0], &bs_sectors);
+    buf = qemu_malloc(IO_BUF_SIZE);
 
     if (flags & BLOCK_FLAG_COMPRESS) {
         if (bdrv_get_info(out_bs, &bdi) < 0)
@@ -822,6 +829,7 @@ static int img_convert(int argc, char **argv)
             }
         }
     }
+    qemu_free(buf);
     bdrv_delete(out_bs);
     for (bs_i = 0; bs_i < bs_n; bs_i++)
         bdrv_delete(bs[bs_i]);
@@ -1178,8 +1186,11 @@ static int img_rebase(int argc, char **argv)
         uint64_t num_sectors;
         uint64_t sector;
         int n, n1;
-        uint8_t buf_old[IO_BUF_SIZE];
-        uint8_t buf_new[IO_BUF_SIZE];
+        uint8_t * buf_old;
+        uint8_t * buf_new;
+
+        buf_old = qemu_malloc(IO_BUF_SIZE);
+        buf_new = qemu_malloc(IO_BUF_SIZE);
 
         bdrv_get_geometry(bs, &num_sectors);
 
@@ -1226,6 +1237,9 @@ static int img_rebase(int argc, char **argv)
                 written += pnum;
             }
         }
+
+        qemu_free(buf_old);
+        qemu_free(buf_new);
     }
 
     /*

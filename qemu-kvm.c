@@ -407,6 +407,8 @@ int kvm_init(int smp_cpus)
             set_gsi(kvm_context, i);
     }
 
+    kvm_cpu_register_phys_memory_client();
+
     pthread_mutex_lock(&qemu_mutex);
     return kvm_create_context();
 
@@ -441,6 +443,7 @@ static void kvm_create_vcpu(CPUState *env, int id)
 {
     long mmap_size;
     int r;
+    KVMState *s = kvm_state;
 
     r = kvm_vm_ioctl(kvm_state, KVM_CREATE_VCPU, id);
     if (r < 0) {
@@ -463,6 +466,12 @@ static void kvm_create_vcpu(CPUState *env, int id)
         fprintf(stderr, "mmap vcpu area: %m\n");
         goto err_fd;
     }
+
+#ifdef KVM_CAP_COALESCED_MMIO
+    if (s->coalesced_mmio && !s->coalesced_mmio_ring)
+        s->coalesced_mmio_ring = (void *) env->kvm_run +
+               s->coalesced_mmio * PAGE_SIZE;
+#endif
 
     return;
   err_fd:
@@ -861,9 +870,9 @@ int pre_kvm_run(kvm_context_t kvm, CPUState *env)
 {
     kvm_arch_pre_run(env, env->kvm_run);
 
-    if (env->kvm_cpu_state.regs_modified) {
+    if (env->kvm_vcpu_dirty) {
         kvm_arch_put_registers(env);
-        env->kvm_cpu_state.regs_modified = 0;
+        env->kvm_vcpu_dirty = 0;
     }
 
     pthread_mutex_unlock(&qemu_mutex);
@@ -1540,15 +1549,15 @@ void kvm_arch_get_registers(CPUState *env)
 static void do_kvm_cpu_synchronize_state(void *_env)
 {
     CPUState *env = _env;
-    if (!env->kvm_cpu_state.regs_modified) {
+    if (!env->kvm_vcpu_dirty) {
         kvm_arch_get_registers(env);
-        env->kvm_cpu_state.regs_modified = 1;
+        env->kvm_vcpu_dirty = 1;
     }
 }
 
 void kvm_cpu_synchronize_state(CPUState *env)
 {
-    if (!env->kvm_cpu_state.regs_modified)
+    if (!env->kvm_vcpu_dirty)
         on_vcpu(env, do_kvm_cpu_synchronize_state, env);
 }
 
@@ -2378,9 +2387,9 @@ static void kvm_invoke_set_guest_debug(void *data)
 {
     struct kvm_set_guest_debug_data *dbg_data = data;
 
-    if (cpu_single_env->kvm_cpu_state.regs_modified) {
+    if (cpu_single_env->kvm_vcpu_dirty) {
         kvm_arch_put_registers(cpu_single_env);
-        cpu_single_env->kvm_cpu_state.regs_modified = 0;
+        cpu_single_env->kvm_vcpu_dirty = 1;
     }
     dbg_data->err =
         kvm_set_guest_debug(cpu_single_env,

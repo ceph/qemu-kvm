@@ -67,7 +67,7 @@
 
 #define MAX_IDE_BUS 2
 
-static fdctrl_t *floppy_controller;
+static FDCtrl *floppy_controller;
 static RTCState *rtc_state;
 static PITState *pit;
 static PCII440FXState *i440fx_state;
@@ -744,7 +744,7 @@ CPUState *pc_new_cpu(const char *cpu_model)
         fprintf(stderr, "Unable to find x86 CPU definition\n");
         exit(1);
     }
-    env->kvm_cpu_state.regs_modified = 1;
+    env->kvm_vcpu_dirty = 1;
     if ((env->cpuid_features & CPUID_APIC) || smp_cpus > 1) {
         env->cpuid_apic_id = env->cpu_index;
         /* APIC reset callback resets cpu */
@@ -872,7 +872,6 @@ static void pc_init1(ram_addr_t ram_size,
     }
     option_rom[nb_option_roms++] = qemu_strdup(VAPIC_FILENAME);
 
-    rom_enable_driver_roms = 1;
     option_rom_offset = qemu_ram_alloc(PC_ROM_SIZE);
     cpu_register_physical_memory(PC_ROM_MIN_VGA, PC_ROM_SIZE, option_rom_offset);
 

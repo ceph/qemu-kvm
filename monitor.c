@@ -47,6 +47,7 @@
 #include "kvm.h"
 #include "acl.h"
 #include "qint.h"
+#include "qfloat.h"
 #include "qlist.h"
 #include "qdict.h"
 #include "qbool.h"
@@ -71,6 +72,15 @@
  * 's'          string (accept optional quote)
  * 'i'          32 bit integer
  * 'l'          target long (32 or 64 bit)
+ * 'M'          just like 'l', except in user mode the value is
+ *              multiplied by 2^20 (think Mebibyte)
+ * 'b'          double
+ *              user mode accepts an optional G, g, M, m, K, k suffix,
+ *              which multiplies the value by 2^30 for suffixes G and
+ *              g, 2^20 for M and m, 2^10 for K and k
+ * 'T'          double
+ *              user mode accepts an optional ms, us, ns suffix,
+ *              which divides the value by 1e3, 1e6, 1e9, respectively
  * '/'          optional gdb-like print format (like "/10x")
  *
  * '?'          optional type (for all types, except '/')
@@ -115,6 +125,7 @@ typedef struct MonitorControl {
     QObject *id;
     int print_enabled;
     JSONMessageParser parser;
+    int command_mode;
 } MonitorControl;
 
 struct Monitor {
@@ -144,6 +155,11 @@ Monitor *cur_mon = NULL;
 
 static void monitor_command_cb(Monitor *mon, const char *cmdline,
                                void *opaque);
+
+static inline int qmp_cmd_mode(const Monitor *mon)
+{
+    return (mon->mc ? mon->mc->command_mode : 0);
+}
 
 /* Return true if in control mode, false otherwise */
 static inline int monitor_ctrl_mode(const Monitor *mon)
@@ -338,8 +354,6 @@ static void timestamp_put(QDict *qdict)
     obj = qobject_from_jsonf("{ 'seconds': %" PRId64 ", "
                                 "'microseconds': %" PRId64 " }",
                                 (int64_t) tv.tv_sec, (int64_t) tv.tv_usec);
-    assert(obj != NULL);
-
     qdict_put_obj(qdict, "timestamp", obj);
 }
 
@@ -381,6 +395,9 @@ void monitor_protocol_event(MonitorEvent event, QObject *data)
         case QEVENT_VNC_DISCONNECTED:
             event_name = "VNC_DISCONNECTED";
             break;
+        case QEVENT_BLOCK_IO_ERROR:
+            event_name = "BLOCK_IO_ERROR";
+            break;
         default:
             abort();
             break;
@@ -395,11 +412,20 @@ void monitor_protocol_event(MonitorEvent event, QObject *data)
     }
 
     QLIST_FOREACH(mon, &mon_list, entry) {
-        if (monitor_ctrl_mode(mon)) {
+        if (monitor_ctrl_mode(mon) && qmp_cmd_mode(mon)) {
             monitor_json_emitter(mon, QOBJECT(qmp));
         }
     }
     QDECREF(qmp);
+}
+
+static void do_qmp_capabilities(Monitor *mon, const QDict *params,
+                                QObject **ret_data)
+{
+    /* Will setup QMP capabilities in the future */
+    if (monitor_ctrl_mode(mon)) {
+        mon->mc->command_mode = 1;
+    }
 }
 
 static int compare_cmd(const char *name, const char *list)
@@ -878,7 +904,6 @@ static void do_info_cpus(Monitor *mon, QObject **ret_data)
         obj = qobject_from_jsonf("{ 'CPU': %d, 'current': %i, 'halted': %i }",
                                  env->cpu_index, env == mon->mon_cpu,
                                  env->halted);
-        assert(obj != NULL);
 
         cpu = qobject_to_qdict(obj);
 
@@ -904,7 +929,7 @@ static void do_cpu_set(Monitor *mon, const QDict *qdict, QObject **ret_data)
 {
     int index = qdict_get_int(qdict, "index");
     if (mon_set_cpu(index) < 0)
-        qemu_error_new(QERR_INVALID_CPU_INDEX);
+        qemu_error_new(QERR_INVALID_PARAMETER, "index");
 }
 
 static void do_cpu_set_nr(Monitor *mon, const QDict *qdict)
@@ -3328,6 +3353,27 @@ static int get_expr(Monitor *mon, int64_t *pval, const char **pp)
     return 0;
 }
 
+static int get_double(Monitor *mon, double *pval, const char **pp)
+{
+    const char *p = *pp;
+    char *tailp;
+    double d;
+
+    d = strtod(p, &tailp);
+    if (tailp == p) {
+        monitor_printf(mon, "Number expected\n");
+        return -1;
+    }
+    if (d != d || d - d != 0) {
+        /* NaN or infinity */
+        monitor_printf(mon, "Bad number\n");
+        return -1;
+    }
+    *pval = d;
+    *pp = tailp;
+    return 0;
+}
+
 static int get_str(char *buf, int buf_size, const char **pp)
 {
     const char *p;
@@ -3662,6 +3708,49 @@ static const mon_cmd_t *monitor_parse_command(Monitor *mon,
                     val <<= 20;
                 }
                 qdict_put(qdict, key, qint_from_int(val));
+            }
+            break;
+        case 'b':
+        case 'T':
+            {
+                double val;
+
+                while (qemu_isspace(*p))
+                    p++;
+                if (*typestr == '?') {
+                    typestr++;
+                    if (*p == '\0') {
+                        break;
+                    }
+                }
+                if (get_double(mon, &val, &p) < 0) {
+                    goto fail;
+                }
+                if (c == 'b' && *p) {
+                    switch (*p) {
+                    case 'K': case 'k':
+                        val *= 1 << 10; p++; break;
+                    case 'M': case 'm':
+                        val *= 1 << 20; p++; break;
+                    case 'G': case 'g':
+                        val *= 1 << 30; p++; break;
+                    }
+                }
+                if (c == 'T' && p[0] && p[1] == 's') {
+                    switch (*p) {
+                    case 'm':
+                        val /= 1e3; p += 2; break;
+                    case 'u':
+                        val /= 1e6; p += 2; break;
+                    case 'n':
+                        val /= 1e9; p += 2; break;
+                    }
+                }
+                if (*p && !qemu_isspace(*p)) {
+                    monitor_printf(mon, "Unknown unit suffix\n");
+                    goto fail;
+                }
+                qdict_put(qdict, key, qfloat_from_double(val));
             }
             break;
         case '-':
@@ -4089,6 +4178,13 @@ static int check_arg(const CmdArgs *cmd_args, QDict *args)
                 return -1;
             }
             break;
+        case 'b':
+        case 'T':
+            if (qobject_type(value) != QTYPE_QINT && qobject_type(value) != QTYPE_QFLOAT) {
+                qemu_error_new(QERR_INVALID_PARAMETER_TYPE, name, "number");
+                return -1;
+            }
+            break;
         case '-':
             if (qobject_type(value) != QTYPE_QINT &&
                 qobject_type(value) != QTYPE_QBOOL) {
@@ -4169,6 +4265,12 @@ static int monitor_check_qmp_args(const mon_cmd_t *cmd, QDict *args)
     return err;
 }
 
+static int invalid_qmp_mode(const Monitor *mon, const char *cmd_name)
+{
+    int is_cap = compare_cmd(cmd_name, "qmp_capabilities");
+    return (qmp_cmd_mode(mon) ? is_cap : !is_cap);
+}
+
 static void handle_qmp_command(JSONMessageParser *parser, QList *tokens)
 {
     int err;
@@ -4207,6 +4309,11 @@ static void handle_qmp_command(JSONMessageParser *parser, QList *tokens)
     }
 
     cmd_name = qstring_get_str(qobject_to_qstring(obj));
+
+    if (invalid_qmp_mode(mon, cmd_name)) {
+        qemu_error_new(QERR_COMMAND_NOT_FOUND, cmd_name);
+        goto err_input;
+    }
 
     /*
      * XXX: We need this special case until we get info handlers
@@ -4315,22 +4422,33 @@ void monitor_resume(Monitor *mon)
         readline_show_prompt(mon->rs);
 }
 
+static QObject *get_qmp_greeting(void)
+{
+    QObject *ver;
+
+    do_info_version(NULL, &ver);
+    return qobject_from_jsonf("{'QMP':{'version': %p,'capabilities': []}}",ver);
+}
+
 /**
  * monitor_control_event(): Print QMP gretting
  */
 static void monitor_control_event(void *opaque, int event)
 {
-    if (event == CHR_EVENT_OPENED) {
-        QObject *data;
-        Monitor *mon = opaque;
+    QObject *data;
+    Monitor *mon = opaque;
 
+    switch (event) {
+    case CHR_EVENT_OPENED:
+        mon->mc->command_mode = 0;
         json_message_parser_init(&mon->mc->parser, handle_qmp_command);
-
-        data = qobject_from_jsonf("{ 'QMP': { 'capabilities': [] } }");
-        assert(data != NULL);
-
+        data = get_qmp_greeting();
         monitor_json_emitter(mon, data);
         qobject_decref(data);
+        break;
+    case CHR_EVENT_CLOSED:
+        json_message_parser_destroy(&mon->mc->parser);
+        break;
     }
 }
 
@@ -4545,8 +4663,13 @@ void qemu_error_internal(const char *file, int linenr, const char *func,
         QDECREF(qerror);
         break;
     case ERR_SINK_MONITOR:
-        assert(qemu_error_sink->mon->error == NULL);
-        qemu_error_sink->mon->error = qerror;
+        /* report only the first error */
+        if (!qemu_error_sink->mon->error) {
+            qemu_error_sink->mon->error = qerror;
+        } else {
+            /* XXX: warn the programmer */
+            QDECREF(qerror);
+        }
         break;
     }
 }
