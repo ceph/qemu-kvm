@@ -65,12 +65,6 @@ static void get_translated_chs(BlockDriverState *bs, int *c, int *h, int *s)
     }
 }
 
-static uint32_t extboot_read(void *opaque, uint32_t addr)
-{
-    int *pcmd = opaque;
-    return *pcmd;
-}
-
 static void extboot_write_cmd(void *opaque, uint32_t addr, uint32_t value)
 {
     union extboot_cmd cmd;
@@ -123,13 +117,7 @@ static void extboot_write_cmd(void *opaque, uint32_t addr, uint32_t value)
         qemu_free(buf);
 }
 
-void extboot_init(BlockDriverState *bs, int cmd)
+void extboot_init(BlockDriverState *bs)
 {
-    int *pcmd;
-
-    pcmd = qemu_mallocz(sizeof(int));
-
-    *pcmd = cmd;
-    register_ioport_read(0x404, 1, 1, extboot_read, pcmd);
     register_ioport_write(0x405, 1, 2, extboot_write_cmd, bs);
 }

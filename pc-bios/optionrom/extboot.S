@@ -62,15 +62,6 @@ int19_handler:
 	xor %ax, %ax
 	mov %ax, %ds
 
-	movw $0x404, %dx
-	inb %dx, %al
-	cmp $1, %al
-	je 1f
-	cmp $2, %al
-	je 2f
-	jmp 3f
-
-1: /* hook int13: intb(0x404) == 1 */
 	/* save old int 13 to int 2c */
 	mov (0x13*4), %eax
 	mov %eax, (OLD_INT13)
@@ -78,21 +69,7 @@ int19_handler:
 	/* install our int 13 handler */
 	movw $int13_handler, (0x13*4)
 	mov %cs, (0x13*4+2)
-	jmp 3f
 
-2: /* linux boot: intb(0x404) == 2 */
-	cli
-	cld
-	mov $0x9000, %ax
-	mov %ax, %ds
-	mov %ax, %es
-	mov %ax, %fs
-	mov %ax, %gs
-	mov %ax, %ss
-	mov $0x8ffe, %sp
-	ljmp $0x9000 + 0x20, $0
-
-3: /* fall through: inb(0x404) == 0 */
 	/* restore previous int $0x19 handler */
 	mov (OLD_INT19),%eax
 	mov %eax,(0x19*4)

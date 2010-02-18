@@ -1056,7 +1056,7 @@ static void pc_init1(ram_addr_t ram_size,
 	    bdrv_set_geometry_hint(info->bdrv, cyls, heads, secs);
 	}
 
-	extboot_init(info->bdrv, 1);
+	extboot_init(info->bdrv);
     }
 
 #ifdef CONFIG_KVM_DEVICE_ASSIGNMENT

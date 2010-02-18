@@ -165,7 +165,7 @@ void isa_ne2000_init(int base, int irq, NICInfo *nd);
 
 /* extboot.c */
 
-void extboot_init(BlockDriverState *bs, int cmd);
+void extboot_init(BlockDriverState *bs);
 
 int cpu_is_bsp(CPUState *env);
 
