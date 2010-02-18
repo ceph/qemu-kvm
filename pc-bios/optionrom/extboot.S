@@ -19,6 +19,9 @@
  *   Authors: Anthony Liguori <aliguori@us.ibm.com>
  */
 
+#define OLD_INT19	(0x80 * 4)	/* re-use INT 0x80 BASIC vector */
+#define OLD_INT13	(0x81 * 4)	/* re-use INT 0x81 BASIC vector */
+
 .code16
 .text
 	.global _start
@@ -37,7 +40,7 @@ _start:
 
 	/* save old int 19 */
 	mov (0x19*4), %eax
-	mov %eax, %cs:old_int19
+	mov %eax, (OLD_INT19)
 
 	/* install out int 19 handler */
 	movw $int19_handler, (0x19*4)
@@ -48,6 +51,7 @@ _start:
 	lret
 
 int19_handler:
+	push %eax /* reserve space for lret */
 	push %eax
 	push %bx
 	push %cx
@@ -69,7 +73,7 @@ int19_handler:
 1: /* hook int13: intb(0x404) == 1 */
 	/* save old int 13 to int 2c */
 	mov (0x13*4), %eax
-	mov %eax, %cs:old_int13
+	mov %eax, (OLD_INT13)
 
 	/* install our int 13 handler */
 	movw $int13_handler, (0x13*4)
@@ -90,15 +94,21 @@ int19_handler:
 
 3: /* fall through: inb(0x404) == 0 */
 	/* restore previous int $0x19 handler */
-	mov %cs:old_int19,%eax
+	mov (OLD_INT19),%eax
 	mov %eax,(0x19*4)
-	
+
+	/* write old handler as return address onto stack */
+	push %bp
+	mov %sp, %bp
+	mov %eax, 14(%bp)
+	pop %bp
+
 	pop %ds
 	pop %dx
 	pop %cx
 	pop %bx
 	pop %eax
-	ljmpw *%cs:old_int19
+	lret
 
 #define FLAGS_CF	0x01
 
@@ -626,7 +636,21 @@ terminate_disk_emulation:
 int13_handler:
 	cmp $0x80, %dl
 	je 1f
-	ljmpw *%cs:old_int13
+
+	/* write old handler as return address onto stack */
+	push %eax
+	push %eax
+	push %ds
+	push %bp
+	mov %sp, %bp
+	xor %ax, %ax
+	mov %ax, %ds
+	mov (OLD_INT13), %eax
+	mov %eax, 8(%bp)
+	pop %bp
+	pop %ds
+	pop %eax
+	lret
 1:
 	cmp $0x0, %ah
 	jne 1f
@@ -686,10 +710,5 @@ int13_handler:
 	int $0x18  /* boot failed */
 	iret
 
-/* Variables */
-.align 4, 0
-old_int13:	.long 0
-old_int19:	.long 0
-	
 .align 512, 0
 _end:
