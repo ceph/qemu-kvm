@@ -994,10 +994,6 @@ static void kvm_invoke_set_guest_debug(void *data)
     struct kvm_set_guest_debug_data *dbg_data = data;
     CPUState *env = dbg_data->env;
 
-    if (env->kvm_vcpu_dirty) {
-        kvm_arch_put_registers(env);
-        env->kvm_vcpu_dirty = 0;
-    }
     dbg_data->err = kvm_vcpu_ioctl(env, KVM_SET_GUEST_DEBUG, &dbg_data->dbg);
 }
 
@@ -1005,12 +1001,12 @@ int kvm_update_guest_debug(CPUState *env, unsigned long reinject_trap)
 {
     struct kvm_set_guest_debug_data data;
 
-    data.dbg.control = 0;
-    if (env->singlestep_enabled)
-        data.dbg.control = KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_SINGLESTEP;
+    data.dbg.control = reinject_trap;
 
+    if (env->singlestep_enabled) {
+        data.dbg.control |= KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_SINGLESTEP;
+    }
     kvm_arch_update_guest_debug(env, &data.dbg);
-    data.dbg.control |= reinject_trap;
     data.env = env;
 
     on_vcpu(env, kvm_invoke_set_guest_debug, &data);
