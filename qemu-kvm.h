@@ -891,7 +891,6 @@ int kvm_init_ap(void);
 int kvm_vcpu_inited(CPUState *env);
 void kvm_load_mpstate(CPUState *env);
 void kvm_save_mpstate(CPUState *env);
-int kvm_cpu_exec(CPUState *env);
 int kvm_insert_breakpoint(CPUState * current_env, target_ulong addr,
                           target_ulong len, int type);
 int kvm_remove_breakpoint(CPUState * current_env, target_ulong addr,
@@ -933,9 +932,6 @@ void kvm_arch_save_regs(CPUState *env);
 void kvm_arch_load_regs(CPUState *env);
 void kvm_arch_load_mpstate(CPUState *env);
 void kvm_arch_save_mpstate(CPUState *env);
-int kvm_arch_init_vcpu(CPUState *cenv);
-int kvm_arch_pre_run(CPUState *env, struct kvm_run *run);
-int kvm_arch_post_run(CPUState *env, struct kvm_run *run);
 int kvm_arch_has_work(CPUState *env);
 void kvm_arch_process_irqchip_events(CPUState *env);
 int kvm_arch_try_push_interrupts(void *opaque);
@@ -981,9 +977,6 @@ void kvm_tpr_access_report(CPUState *env, uint64_t rip, int is_write);
 void kvm_tpr_vcpu_start(CPUState *env);
 
 int qemu_kvm_get_dirty_pages(unsigned long phys_addr, void *buf);
-int kvm_coalesce_mmio_region(target_phys_addr_t start, ram_addr_t size);
-int kvm_uncoalesce_mmio_region(target_phys_addr_t start, ram_addr_t size);
-void kvm_flush_coalesced_mmio_buffer(void);
 
 int kvm_arch_init_irq_routing(void);
 
@@ -1022,17 +1015,14 @@ void qemu_kvm_cpu_stop(CPUState *env);
 int kvm_arch_halt(CPUState *env);
 int handle_tpr_access(void *opaque, CPUState *env, uint64_t rip,
                       int is_write);
-int kvm_has_sync_mmu(void);
 
 #define qemu_kvm_pit_in_kernel() kvm_pit_in_kernel(kvm_context)
 #define qemu_kvm_has_gsi_routing() kvm_has_gsi_routing(kvm_context)
 #ifdef TARGET_I386
 #define qemu_kvm_has_pit_state2() kvm_has_pit_state2(kvm_context)
 #endif
-void kvm_init_vcpu(CPUState *env);
 void kvm_load_tsc(CPUState *env);
 #else
-#define kvm_has_sync_mmu() (0)
 #define kvm_nested 0
 #define qemu_kvm_pit_in_kernel() (0)
 #define qemu_kvm_has_gsi_routing() (0)
@@ -1041,10 +1031,6 @@ void kvm_load_tsc(CPUState *env);
 #endif
 #define kvm_save_mpstate(env)   do {} while(0)
 #define qemu_kvm_cpu_stop(env) do {} while(0)
-static inline void kvm_init_vcpu(CPUState *env)
-{
-}
-
 static inline void kvm_load_tsc(CPUState *env)
 {
 }
@@ -1055,9 +1041,6 @@ void kvm_mutex_lock(void);
 
 int kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr,
                                    target_phys_addr_t end_addr);
-
-int kvm_log_start(target_phys_addr_t phys_addr, target_phys_addr_t len);
-int kvm_log_stop(target_phys_addr_t phys_addr, target_phys_addr_t len);
 
 
 static inline int kvm_sync_vcpus(void)
@@ -1087,7 +1070,7 @@ typedef struct KVMSlot {
 
 typedef struct kvm_dirty_log KVMDirtyLog;
 
-typedef struct KVMState {
+struct KVMState {
     KVMSlot slots[32];
     int fd;
     int vmfd;
@@ -1104,14 +1087,9 @@ typedef struct KVMState {
     int irqchip_in_kernel;
 
     struct kvm_context kvm_context;
-} KVMState;
+};
 
-extern KVMState *kvm_state;
-
-int kvm_ioctl(KVMState *s, int type, ...);
-int kvm_vm_ioctl(KVMState *s, int type, ...);
-int kvm_vcpu_ioctl(CPUState *env, int type, ...);
-int kvm_check_extension(KVMState *s, unsigned int ext);
+extern struct KVMState *kvm_state;
 
 int kvm_tpr_enable_vapic(CPUState *env);
 

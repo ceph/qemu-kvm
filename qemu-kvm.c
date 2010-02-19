@@ -1920,12 +1920,14 @@ static void *ap_main_loop(void *_env)
     return NULL;
 }
 
-void kvm_init_vcpu(CPUState *env)
+int kvm_init_vcpu(CPUState *env)
 {
     pthread_create(&env->kvm_cpu_state.thread, NULL, ap_main_loop, env);
 
     while (env->created == 0)
         qemu_cond_wait(&qemu_vcpu_cond);
+
+    return 0;
 }
 
 int kvm_vcpu_inited(CPUState *env)

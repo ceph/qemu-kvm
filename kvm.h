@@ -32,6 +32,7 @@ struct kvm_run;
 /* external API */
 
 int kvm_init(int smp_cpus);
+#endif /* KVM_UPSTREAM */
 
 int kvm_init_vcpu(CPUState *env);
 
@@ -41,7 +42,6 @@ int kvm_log_start(target_phys_addr_t phys_addr, ram_addr_t size);
 int kvm_log_stop(target_phys_addr_t phys_addr, ram_addr_t size);
 
 int kvm_has_sync_mmu(void);
-#endif /* KVM_UPSTREAM */
 int kvm_has_vcpu_events(void);
 int kvm_put_vcpu_events(CPUState *env);
 int kvm_get_vcpu_events(CPUState *env);
@@ -50,11 +50,11 @@ void kvm_cpu_register_phys_memory_client(void);
 
 void kvm_setup_guest_memory(void *start, size_t size);
 
-#ifdef KVM_UPSTREAM
 int kvm_coalesce_mmio_region(target_phys_addr_t start, ram_addr_t size);
 int kvm_uncoalesce_mmio_region(target_phys_addr_t start, ram_addr_t size);
 void kvm_flush_coalesced_mmio_buffer(void);
 
+#ifdef KVM_UPSTREAM
 int kvm_insert_breakpoint(CPUState *current_env, target_ulong addr,
                           target_ulong len, int type);
 int kvm_remove_breakpoint(CPUState *current_env, target_ulong addr,
@@ -64,6 +64,7 @@ int kvm_update_guest_debug(CPUState *env, unsigned long reinject_trap);
 
 int kvm_pit_in_kernel(void);
 int kvm_irqchip_in_kernel(void);
+#endif /* KVM_UPSTREAM */
 
 /* internal API */
 
@@ -92,7 +93,6 @@ int kvm_arch_init(KVMState *s, int smp_cpus);
 
 int kvm_arch_init_vcpu(CPUState *env);
 
-#endif
 void kvm_arch_reset_vcpu(CPUState *env);
 #ifdef KVM_UPSTREAM
 
@@ -126,9 +126,11 @@ int kvm_arch_remove_hw_breakpoint(target_ulong addr,
 void kvm_arch_remove_all_hw_breakpoints(void);
 
 void kvm_arch_update_guest_debug(CPUState *env, struct kvm_guest_debug *dbg);
+#endif
 
 int kvm_check_extension(KVMState *s, unsigned int extension);
 
+#ifdef KVM_UPSTREAM
 uint32_t kvm_arch_get_supported_cpuid(CPUState *env, uint32_t function,
                                       int reg);
 #endif
