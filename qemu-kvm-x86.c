@@ -911,6 +911,8 @@ void kvm_arch_load_regs(CPUState *env)
     struct kvm_msr_entry msrs[100];
     int rc, n, i;
 
+    assert(kvm_cpu_is_stopped(env) || env->thread_id == kvm_get_thread_id());
+
     regs.rax = env->regs[R_EAX];
     regs.rbx = env->regs[R_EBX];
     regs.rcx = env->regs[R_ECX];
@@ -1071,6 +1073,8 @@ void kvm_arch_save_regs(CPUState *env)
     struct kvm_msr_entry msrs[100];
     uint32_t hflags;
     uint32_t i, n, rc, bit;
+
+    assert(kvm_cpu_is_stopped(env) || env->thread_id == kvm_get_thread_id());
 
     kvm_get_regs(env, &regs);
 

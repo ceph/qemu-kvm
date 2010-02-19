@@ -902,8 +902,6 @@ int kvm_main_loop(void);
 int kvm_init_ap(void);
 #ifndef QEMU_KVM_NO_CPU
 int kvm_vcpu_inited(CPUState *env);
-void kvm_load_registers(CPUState *env);
-void kvm_save_registers(CPUState *env);
 void kvm_load_mpstate(CPUState *env);
 void kvm_save_mpstate(CPUState *env);
 int kvm_cpu_exec(CPUState *env);
@@ -1069,8 +1067,6 @@ void kvm_load_tsc(CPUState *env);
 #ifdef TARGET_I386
 #define qemu_kvm_has_pit_state2() (0)
 #endif
-#define kvm_load_registers(env) do {} while(0)
-#define kvm_save_registers(env) do {} while(0)
 #define kvm_save_mpstate(env)   do {} while(0)
 #define qemu_kvm_cpu_stop(env) do {} while(0)
 static inline void kvm_init_vcpu(CPUState *env)
@@ -1099,13 +1095,6 @@ static inline int kvm_sync_vcpus(void)
 }
 
 #ifndef QEMU_KVM_NO_CPU
-void kvm_arch_get_registers(CPUState *env);
-
-static inline void kvm_arch_put_registers(CPUState *env)
-{
-    kvm_load_registers(env);
-}
-
 void kvm_cpu_synchronize_state(CPUState *env);
 
 static inline void cpu_synchronize_state(CPUState *env)
@@ -1167,6 +1156,9 @@ int kvm_vcpu_ioctl(CPUState *env, int type, ...);
 int kvm_check_extension(KVMState *s, unsigned int ext);
 
 int kvm_tpr_enable_vapic(CPUState *env);
+
+unsigned long kvm_get_thread_id(void);
+int kvm_cpu_is_stopped(CPUState *env);
 
 #endif
 

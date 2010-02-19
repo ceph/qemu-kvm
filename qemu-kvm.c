@@ -871,7 +871,7 @@ int pre_kvm_run(kvm_context_t kvm, CPUState *env)
     kvm_arch_pre_run(env, env->kvm_run);
 
     if (env->kvm_vcpu_dirty) {
-        kvm_arch_put_registers(env);
+        kvm_arch_load_regs(env);
         env->kvm_vcpu_dirty = 0;
     }
 
@@ -1439,7 +1439,7 @@ int kvm_irqfd(kvm_context_t kvm, int gsi, int flags)
 }
 
 #endif                          /* KVM_CAP_IRQFD */
-static inline unsigned long kvm_get_thread_id(void)
+unsigned long kvm_get_thread_id(void)
 {
     return syscall(SYS_gettid);
 }
@@ -1542,16 +1542,12 @@ static void on_vcpu(CPUState *env, void (*func)(void *data), void *data)
         qemu_cond_wait(&qemu_work_cond);
 }
 
-void kvm_arch_get_registers(CPUState *env)
-{
-	kvm_arch_save_regs(env);
-}
-
 static void do_kvm_cpu_synchronize_state(void *_env)
 {
     CPUState *env = _env;
+
     if (!env->kvm_vcpu_dirty) {
-        kvm_arch_get_registers(env);
+        kvm_arch_save_regs(env);
         env->kvm_vcpu_dirty = 1;
     }
 }
@@ -1592,32 +1588,6 @@ void kvm_update_interrupt_request(CPUState *env)
                 pthread_kill(env->kvm_cpu_state.thread, SIG_IPI);
         }
     }
-}
-
-static void kvm_do_load_registers(void *_env)
-{
-    CPUState *env = _env;
-
-    kvm_arch_load_regs(env);
-}
-
-void kvm_load_registers(CPUState *env)
-{
-    if (kvm_enabled() && qemu_system_ready)
-        on_vcpu(env, kvm_do_load_registers, env);
-}
-
-static void kvm_do_save_registers(void *_env)
-{
-    CPUState *env = _env;
-
-    kvm_arch_save_regs(env);
-}
-
-void kvm_save_registers(CPUState *env)
-{
-    if (kvm_enabled())
-        on_vcpu(env, kvm_do_save_registers, env);
 }
 
 static void kvm_do_load_mpstate(void *_env)
@@ -1663,7 +1633,7 @@ int kvm_cpu_exec(CPUState *env)
     return 0;
 }
 
-static int is_cpu_stopped(CPUState *env)
+int kvm_cpu_is_stopped(CPUState *env)
 {
     return !vm_running || env->stopped;
 }
@@ -1890,7 +1860,7 @@ static void process_irqchip_events(CPUState *env)
 static int kvm_main_loop_cpu(CPUState *env)
 {
     while (1) {
-        int run_cpu = !is_cpu_stopped(env);
+        int run_cpu = !kvm_cpu_is_stopped(env);
         if (run_cpu && !kvm_irqchip_in_kernel()) {
             process_irqchip_events(env);
             run_cpu = !env->halted;
@@ -2373,8 +2343,8 @@ static void kvm_invoke_set_guest_debug(void *data)
     struct kvm_set_guest_debug_data *dbg_data = data;
 
     if (cpu_single_env->kvm_vcpu_dirty) {
-        kvm_arch_put_registers(cpu_single_env);
-        cpu_single_env->kvm_vcpu_dirty = 1;
+        kvm_arch_save_regs(cpu_single_env);
+        cpu_single_env->kvm_vcpu_dirty = 0;
     }
     dbg_data->err =
         kvm_set_guest_debug(cpu_single_env,
