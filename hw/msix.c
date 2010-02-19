@@ -14,8 +14,7 @@
 #include "hw.h"
 #include "msix.h"
 #include "pci.h"
-#define QEMU_KVM_NO_CPU
-#include "qemu-kvm.h"
+#include "kvm.h"
 
 /* Declaration from linux/pci_regs.h */
 #define  PCI_CAP_ID_MSIX 0x11 /* MSI-X */

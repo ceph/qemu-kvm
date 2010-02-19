@@ -8,9 +8,7 @@
 #ifndef THE_ORIGINAL_AND_TRUE_QEMU_KVM_H
 #define THE_ORIGINAL_AND_TRUE_QEMU_KVM_H
 
-#ifndef QEMU_KVM_NO_CPU
 #include "cpu.h"
-#endif
 
 #include <signal.h>
 #include <stdlib.h>
@@ -94,8 +92,6 @@ void kvm_show_code(CPUState *env);
 
 int handle_halt(CPUState *env);
 
-#ifndef QEMU_KVM_NO_CPU
-
 int handle_shutdown(kvm_context_t kvm, CPUState *env);
 void post_kvm_run(kvm_context_t kvm, CPUState *env);
 int pre_kvm_run(kvm_context_t kvm, CPUState *env);
@@ -111,8 +107,6 @@ int kvm_get_mce_cap_supported(kvm_context_t, uint64_t *mce_cap,
 int kvm_setup_mce(CPUState *env, uint64_t *mcg_cap);
 struct kvm_x86_mce;
 int kvm_set_mce(CPUState *env, struct kvm_x86_mce *mce);
-#endif
-
 #endif
 
 /*!
@@ -880,8 +874,6 @@ static inline int kvm_init(int smp_cpus)
     return 0;
 }
 
-#ifndef QEMU_KVM_NO_CPU
-
 static inline void kvm_inject_x86_mce(CPUState *cenv, int bank,
                                       uint64_t status, uint64_t mcg_status,
                                       uint64_t addr, uint64_t misc,
@@ -891,16 +883,11 @@ static inline void kvm_inject_x86_mce(CPUState *cenv, int bank,
         abort();
 }
 
-#endif
-
-extern int kvm_allowed;
-
 #endif                          /* !CONFIG_KVM */
 
 
 int kvm_main_loop(void);
 int kvm_init_ap(void);
-#ifndef QEMU_KVM_NO_CPU
 int kvm_vcpu_inited(CPUState *env);
 void kvm_load_mpstate(CPUState *env);
 void kvm_save_mpstate(CPUState *env);
@@ -914,7 +901,6 @@ int kvm_update_guest_debug(CPUState *env, unsigned long reinject_trap);
 void kvm_apic_init(CPUState *env);
 /* called from vcpu initialization */
 void qemu_kvm_load_lapic(CPUState *env);
-#endif
 
 void kvm_hpet_enable_kpit(void);
 void kvm_hpet_disable_kpit(void);
@@ -923,13 +909,11 @@ int kvm_set_irq(int irq, int level, int *status);
 int kvm_physical_memory_set_dirty_tracking(int enable);
 int kvm_update_dirty_pages_log(void);
 
-#ifndef QEMU_KVM_NO_CPU
 void qemu_kvm_call_with_env(void (*func)(void *), void *data, CPUState *env);
 void qemu_kvm_cpuid_on_env(CPUState *env);
 void kvm_inject_interrupt(CPUState *env, int mask);
 void kvm_update_after_sipi(CPUState *env);
 void kvm_update_interrupt_request(CPUState *env);
-#endif
 void kvm_set_phys_mem(target_phys_addr_t start_addr, ram_addr_t size,
                       ram_addr_t phys_offset);
 void *kvm_cpu_create_phys_mem(target_phys_addr_t start_addr, unsigned long size,
@@ -946,7 +930,6 @@ int kvm_qemu_destroy_memory_alias(uint64_t phys_start);
 
 int kvm_arch_qemu_create_context(void);
 
-#ifndef QEMU_KVM_NO_CPU
 void kvm_arch_save_regs(CPUState *env);
 void kvm_arch_load_regs(CPUState *env);
 void kvm_arch_load_mpstate(CPUState *env);
@@ -988,19 +971,15 @@ int kvm_arch_remove_hw_breakpoint(target_ulong addr, target_ulong len,
 void kvm_arch_remove_all_hw_breakpoints(void);
 void kvm_arch_update_guest_debug(CPUState *env, struct kvm_guest_debug *dbg);
 
-#endif
-
 void qemu_kvm_aio_wait_start(void);
 void qemu_kvm_aio_wait(void);
 void qemu_kvm_aio_wait_end(void);
 
 void qemu_kvm_notify_work(void);
 
-#ifndef QEMU_KVM_NO_CPU
 void kvm_tpr_opt_setup(void);
 void kvm_tpr_access_report(CPUState *env, uint64_t rip, int is_write);
 void kvm_tpr_vcpu_start(CPUState *env);
-#endif
 
 int qemu_kvm_get_dirty_pages(unsigned long phys_addr, void *buf);
 int kvm_coalesce_mmio_region(target_phys_addr_t start, ram_addr_t size);
@@ -1022,14 +1001,11 @@ void kvm_arch_do_ioperm(void *_data);
 #endif
 
 #define ALIGN(x, y)  (((x)+(y)-1) & ~((y)-1))
-#ifndef QEMU_KVM_NO_CPU
 #define BITMAP_SIZE(m) (ALIGN(((m)>>TARGET_PAGE_BITS), HOST_LONG_BITS) / 8)
-#endif
 
 #ifdef CONFIG_KVM
 #include "qemu-queue.h"
 
-extern int kvm_allowed;
 extern int kvm_irqchip;
 extern int kvm_pit;
 extern int kvm_pit_reinject;
@@ -1049,7 +1025,6 @@ int handle_tpr_access(void *opaque, CPUState *env, uint64_t rip,
                       int is_write);
 int kvm_has_sync_mmu(void);
 
-#define kvm_enabled() (kvm_allowed)
 #define qemu_kvm_pit_in_kernel() kvm_pit_in_kernel(kvm_context)
 #define qemu_kvm_has_gsi_routing() kvm_has_gsi_routing(kvm_context)
 #ifdef TARGET_I386
@@ -1059,11 +1034,9 @@ void kvm_init_vcpu(CPUState *env);
 void kvm_load_tsc(CPUState *env);
 #else
 #define kvm_has_sync_mmu() (0)
-#define kvm_enabled() (0)
 #define kvm_nested 0
 #define qemu_kvm_pit_in_kernel() (0)
 #define qemu_kvm_has_gsi_routing() (0)
-#ifndef QEMU_KVM_NO_CPU
 #ifdef TARGET_I386
 #define qemu_kvm_has_pit_state2() (0)
 #endif
@@ -1076,7 +1049,6 @@ static inline void kvm_init_vcpu(CPUState *env)
 static inline void kvm_load_tsc(CPUState *env)
 {
 }
-#endif
 #endif
 
 void kvm_mutex_unlock(void);
@@ -1094,21 +1066,8 @@ static inline int kvm_sync_vcpus(void)
     return 0;
 }
 
-#ifndef QEMU_KVM_NO_CPU
-void kvm_cpu_synchronize_state(CPUState *env);
-
-static inline void cpu_synchronize_state(CPUState *env)
-{
-    if (kvm_enabled()) {
-        kvm_cpu_synchronize_state(env);
-    }
-}
-
 uint32_t kvm_arch_get_supported_cpuid(CPUState *env, uint32_t function,
                                       int reg);
-
-
-#endif
 
 static inline int kvm_set_migration_log(int enable)
 {

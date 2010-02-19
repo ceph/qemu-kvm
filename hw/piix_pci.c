@@ -28,7 +28,7 @@
 #include "pci_host.h"
 #include "isa.h"
 #include "sysbus.h"
-#include "qemu-kvm.h"
+#include "kvm.h"
 
 /*
  * I440FX chipset data sheet.

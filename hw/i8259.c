@@ -27,7 +27,7 @@
 #include "monitor.h"
 #include "qemu-timer.h"
 
-#include "qemu-kvm.h"
+#include "kvm.h"
 
 /* debug PIC */
 //#define DEBUG_PIC

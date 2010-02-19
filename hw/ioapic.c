@@ -26,7 +26,7 @@
 #include "qemu-timer.h"
 #include "host-utils.h"
 
-#include "qemu-kvm.h"
+#include "kvm.h"
 
 //#define DEBUG_IOAPIC
 

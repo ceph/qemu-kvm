@@ -47,7 +47,7 @@
 #include "multiboot.h"
 #include "device-assignment.h"
 
-#include "qemu-kvm.h"
+#include "kvm.h"
 
 /* output Bochs bios info messages */
 //#define DEBUG_BIOS

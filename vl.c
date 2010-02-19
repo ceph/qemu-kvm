@@ -157,7 +157,6 @@ int main(int argc, char **argv)
 #include "qemu-option.h"
 #include "qemu-config.h"
 #include "qemu-objects.h"
-#include "qemu-kvm.h"
 #include "hw/device-assignment.h"
 
 #include "disas.h"
@@ -5825,8 +5824,10 @@ int main(int argc, char **argv, char **envp)
             fprintf(stderr, "failed to initialize KVM\n");
             exit(1);
 #endif
+#ifdef CONFIG_KVM
             fprintf(stderr, "Could not initialize KVM, will disable KVM support\n");
             kvm_allowed = 0;
+#endif
         }
     }
 

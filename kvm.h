@@ -18,8 +18,6 @@
 #include "qemu-queue.h"
 #include "qemu-kvm.h"
 
-#ifdef KVM_UPSTREAM
-
 #ifdef CONFIG_KVM
 extern int kvm_allowed;
 
@@ -28,6 +26,7 @@ extern int kvm_allowed;
 #define kvm_enabled() (0)
 #endif
 
+#ifdef KVM_UPSTREAM
 struct kvm_run;
 
 /* external API */
@@ -133,6 +132,8 @@ int kvm_check_extension(KVMState *s, unsigned int extension);
 
 uint32_t kvm_arch_get_supported_cpuid(CPUState *env, uint32_t function,
                                       int reg);
+#endif
+
 void kvm_cpu_synchronize_state(CPUState *env);
 
 /* generic hooks - to be moved/refactored once there are more users */
@@ -143,7 +144,5 @@ static inline void cpu_synchronize_state(CPUState *env)
         kvm_cpu_synchronize_state(env);
     }
 }
-
-#endif
 
 #endif
