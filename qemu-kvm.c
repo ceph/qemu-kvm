@@ -2316,21 +2316,6 @@ void kvm_set_phys_mem(target_phys_addr_t start_addr, ram_addr_t size,
     return;
 }
 
-int kvm_setup_guest_memory(void *area, unsigned long size)
-{
-    int ret = 0;
-
-#ifdef MADV_DONTFORK
-    if (kvm_enabled() && !kvm_has_sync_mmu())
-        ret = madvise(area, size, MADV_DONTFORK);
-#endif
-
-    if (ret)
-        perror("madvise");
-
-    return ret;
-}
-
 #ifdef KVM_CAP_SET_GUEST_DEBUG
 
 struct kvm_set_guest_debug_data {

@@ -48,10 +48,9 @@ int kvm_get_vcpu_events(CPUState *env);
 
 void kvm_cpu_register_phys_memory_client(void);
 
-#ifdef KVM_UPSTREAM
-
 void kvm_setup_guest_memory(void *start, size_t size);
 
+#ifdef KVM_UPSTREAM
 int kvm_coalesce_mmio_region(target_phys_addr_t start, ram_addr_t size);
 int kvm_uncoalesce_mmio_region(target_phys_addr_t start, ram_addr_t size);
 void kvm_flush_coalesced_mmio_buffer(void);

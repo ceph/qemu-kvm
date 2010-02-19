@@ -932,7 +932,6 @@ int kvm_has_vcpu_events(void)
     return kvm_state->vcpu_events;
 }
 
-#ifdef KVM_UPSTREAM
 void kvm_setup_guest_memory(void *start, size_t size)
 {
     if (!kvm_has_sync_mmu()) {
@@ -950,8 +949,6 @@ void kvm_setup_guest_memory(void *start, size_t size)
 #endif
     }
 }
-
-#endif /* KVM_UPSTREAM */
 
 #ifdef KVM_CAP_SET_GUEST_DEBUG
 
