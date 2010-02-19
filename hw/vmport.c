@@ -21,12 +21,10 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-
 #include "hw.h"
 #include "isa.h"
 #include "pc.h"
 #include "sysemu.h"
-#include "qemu-kvm.h"
 #include "kvm.h"
 
 //#define VMPORT_DEBUG
@@ -60,10 +58,6 @@ static uint32_t vmport_ioport_read(void *opaque, uint32_t addr)
     CPUState *env = cpu_single_env;
     unsigned char command;
     uint32_t eax;
-    uint32_t ret;
-
-    if (kvm_enabled())
-	kvm_save_registers(env);
 
     cpu_synchronize_state(env);
 
@@ -82,12 +76,7 @@ static uint32_t vmport_ioport_read(void *opaque, uint32_t addr)
         return eax;
     }
 
-    ret = s->func[command](s->opaque[command], addr);
-
-    if (kvm_enabled())
-	kvm_load_registers(env);
-
-    return ret;
+    return s->func[command](s->opaque[command], addr);
 }
 
 static void vmport_ioport_write(void *opaque, uint32_t addr, uint32_t val)
