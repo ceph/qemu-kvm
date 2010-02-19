@@ -1050,11 +1050,6 @@ int kvm_set_signal_mask(CPUState *env, const sigset_t *sigset)
     return r;
 }
 
-int kvm_pit_in_kernel(kvm_context_t kvm)
-{
-    return kvm->pit_in_kernel;
-}
-
 int kvm_inject_nmi(CPUState *env)
 {
 #ifdef KVM_CAP_USER_NMI

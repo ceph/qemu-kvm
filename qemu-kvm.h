@@ -64,8 +64,6 @@ struct kvm_context {
     int irqchip_inject_ioctl;
     /// do not create in-kernel pit if set
     int no_pit_creation;
-    /// in-kernel pit status
-    int pit_in_kernel;
 #ifdef KVM_CAP_IRQ_ROUTING
     struct kvm_irq_routing *irq_routes;
     int nr_allocated_irq_routes;
@@ -563,13 +561,6 @@ void kvm_inject_x86_mce(CPUState *cenv, int bank, uint64_t status,
                         int abort_on_error);
 
 /*!
- * \brief Query wheather in kernel pit is used
- *
- *  \param kvm Pointer to the current kvm_context
- */
-int kvm_pit_in_kernel(kvm_context_t kvm);
-
-/*!
  * \brief Initialize coalesced MMIO
  *
  * Check for coalesced MMIO capability and store in context
@@ -1014,7 +1005,6 @@ int kvm_arch_halt(CPUState *env);
 int handle_tpr_access(void *opaque, CPUState *env, uint64_t rip,
                       int is_write);
 
-#define qemu_kvm_pit_in_kernel() kvm_pit_in_kernel(kvm_context)
 #define qemu_kvm_has_gsi_routing() kvm_has_gsi_routing(kvm_context)
 #ifdef TARGET_I386
 #define qemu_kvm_has_pit_state2() kvm_has_pit_state2(kvm_context)
@@ -1022,7 +1012,6 @@ int handle_tpr_access(void *opaque, CPUState *env, uint64_t rip,
 void kvm_load_tsc(CPUState *env);
 #else
 #define kvm_nested 0
-#define qemu_kvm_pit_in_kernel() (0)
 #define qemu_kvm_has_gsi_routing() (0)
 #ifdef TARGET_I386
 #define qemu_kvm_has_pit_state2() (0)
@@ -1052,7 +1041,6 @@ static inline int kvm_set_migration_log(int enable)
 }
 
 
-int kvm_irqchip_in_kernel(void);
 #ifdef CONFIG_KVM
 
 typedef struct KVMSlot {
@@ -1080,6 +1068,7 @@ struct KVMState {
     QTAILQ_HEAD(, kvm_sw_breakpoint) kvm_sw_breakpoints;
 #endif
     int irqchip_in_kernel;
+    int pit_in_kernel;
 
     struct kvm_context kvm_context;
 };

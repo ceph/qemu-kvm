@@ -61,10 +61,10 @@ int kvm_remove_breakpoint(CPUState *current_env, target_ulong addr,
                           target_ulong len, int type);
 void kvm_remove_all_breakpoints(CPUState *current_env);
 int kvm_update_guest_debug(CPUState *env, unsigned long reinject_trap);
+#endif /* KVM_UPSTREAM */
 
 int kvm_pit_in_kernel(void);
 int kvm_irqchip_in_kernel(void);
-#endif /* KVM_UPSTREAM */
 
 /* internal API */
 

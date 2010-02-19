@@ -950,7 +950,7 @@ static void pc_init1(ram_addr_t ram_size,
         ioapic_irq_hack = isa_irq;
     }
 #ifdef CONFIG_KVM_PIT
-    if (kvm_enabled() && qemu_kvm_pit_in_kernel())
+    if (kvm_enabled() && kvm_pit_in_kernel())
 	pit = kvm_pit_init(0x40, isa_reserve_irq(0));
     else
 #endif
