@@ -627,106 +627,6 @@ int kvm_disable_tpr_access_reporting(CPUState *env)
 
 #endif
 
-#ifdef KVM_CAP_EXT_CPUID
-
-static struct kvm_cpuid2 *try_get_cpuid(kvm_context_t kvm, int max)
-{
-	struct kvm_cpuid2 *cpuid;
-	int r, size;
-
-	size = sizeof(*cpuid) + max * sizeof(*cpuid->entries);
-	cpuid = qemu_malloc(size);
-	cpuid->nent = max;
-	r = kvm_ioctl(kvm_state, KVM_GET_SUPPORTED_CPUID, cpuid);
-	if (r == 0 && cpuid->nent >= max)
-		r = -E2BIG;
-	if (r < 0) {
-		if (r == -E2BIG) {
-			free(cpuid);
-			return NULL;
-		} else {
-			fprintf(stderr, "KVM_GET_SUPPORTED_CPUID failed: %s\n",
-				strerror(-r));
-			exit(1);
-		}
-	}
-	return cpuid;
-}
-
-#define R_EAX 0
-#define R_ECX 1
-#define R_EDX 2
-#define R_EBX 3
-#define R_ESP 4
-#define R_EBP 5
-#define R_ESI 6
-#define R_EDI 7
-
-uint32_t kvm_get_supported_cpuid(kvm_context_t kvm, uint32_t function, int reg)
-{
-	struct kvm_cpuid2 *cpuid;
-	int i, max;
-	uint32_t ret = 0;
-	uint32_t cpuid_1_edx;
-
-	if (!kvm_check_extension(kvm_state, KVM_CAP_EXT_CPUID)) {
-		return -1U;
-	}
-
-	max = 1;
-	while ((cpuid = try_get_cpuid(kvm, max)) == NULL) {
-		max *= 2;
-	}
-
-	for (i = 0; i < cpuid->nent; ++i) {
-		if (cpuid->entries[i].function == function) {
-			switch (reg) {
-			case R_EAX:
-				ret = cpuid->entries[i].eax;
-				break;
-			case R_EBX:
-				ret = cpuid->entries[i].ebx;
-				break;
-			case R_ECX:
-				ret = cpuid->entries[i].ecx;
-				break;
-			case R_EDX:
-				ret = cpuid->entries[i].edx;
-                                if (function == 1) {
-                                    /* kvm misreports the following features
-                                     */
-                                    ret |= 1 << 12; /* MTRR */
-                                    ret |= 1 << 16; /* PAT */
-                                    ret |= 1 << 7;  /* MCE */
-                                    ret |= 1 << 14; /* MCA */
-                                }
-
-				/* On Intel, kvm returns cpuid according to
-				 * the Intel spec, so add missing bits
-				 * according to the AMD spec:
-				 */
-				if (function == 0x80000001) {
-					cpuid_1_edx = kvm_get_supported_cpuid(kvm, 1, R_EDX);
-					ret |= cpuid_1_edx & 0xdfeff7ff;
-				}
-				break;
-			}
-		}
-	}
-
-	free(cpuid);
-
-	return ret;
-}
-
-#else
-
-uint32_t kvm_get_supported_cpuid(kvm_context_t kvm, uint32_t function, int reg)
-{
-	return -1U;
-}
-
-#endif
 int kvm_qemu_create_memory_alias(uint64_t phys_start,
                                  uint64_t len,
                                  uint64_t target_phys)
@@ -1685,12 +1585,6 @@ int kvm_arch_init_irq_routing(void)
         kvm_commit_irq_routes(kvm_context);
     }
     return 0;
-}
-
-uint32_t kvm_arch_get_supported_cpuid(CPUState *env, uint32_t function,
-                                      int reg)
-{
-    return kvm_get_supported_cpuid(kvm_context, function, reg);
 }
 
 void kvm_arch_process_irqchip_events(CPUState *env)

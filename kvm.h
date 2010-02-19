@@ -130,11 +130,8 @@ void kvm_arch_update_guest_debug(CPUState *env, struct kvm_guest_debug *dbg);
 
 int kvm_check_extension(KVMState *s, unsigned int extension);
 
-#ifdef KVM_UPSTREAM
 uint32_t kvm_arch_get_supported_cpuid(CPUState *env, uint32_t function,
                                       int reg);
-#endif
-
 void kvm_cpu_synchronize_state(CPUState *env);
 
 /* generic hooks - to be moved/refactored once there are more users */

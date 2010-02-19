@@ -25,8 +25,6 @@
 #include "gdbstub.h"
 #include "host-utils.h"
 
-#ifdef KVM_UPSTREAM
-
 #ifdef CONFIG_KVM_PARA
 #include <linux/kvm_para.h>
 #endif
@@ -132,6 +130,8 @@ uint32_t kvm_arch_get_supported_cpuid(CPUState *env, uint32_t function, int reg)
 }
 
 #endif
+
+#ifdef KVM_UPSTREAM
 
 static void kvm_trim_features(uint32_t *features, uint32_t supported)
 {
