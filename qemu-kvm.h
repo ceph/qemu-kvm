@@ -323,10 +323,6 @@ static inline int kvm_reset_mpstate(CPUState *env)
  */
 int kvm_inject_irq(CPUState *env, unsigned irq);
 
-#ifdef KVM_CAP_SET_GUEST_DEBUG
-int kvm_set_guest_debug(CPUState *env, struct kvm_guest_debug *dbg);
-#endif
-
 #if defined(__i386__) || defined(__x86_64__)
 /*!
  * \brief Setup a vcpu's cpuid instruction emulation
@@ -880,12 +876,6 @@ int kvm_init_ap(void);
 int kvm_vcpu_inited(CPUState *env);
 void kvm_load_mpstate(CPUState *env);
 void kvm_save_mpstate(CPUState *env);
-int kvm_insert_breakpoint(CPUState * current_env, target_ulong addr,
-                          target_ulong len, int type);
-int kvm_remove_breakpoint(CPUState * current_env, target_ulong addr,
-                          target_ulong len, int type);
-void kvm_remove_all_breakpoints(CPUState * current_env);
-int kvm_update_guest_debug(CPUState *env, unsigned long reinject_trap);
 void kvm_apic_init(CPUState *env);
 /* called from vcpu initialization */
 void qemu_kvm_load_lapic(CPUState *env);
@@ -927,33 +917,6 @@ int kvm_arch_try_push_interrupts(void *opaque);
 void kvm_arch_push_nmi(void *opaque);
 void kvm_arch_cpu_reset(CPUState *env);
 int kvm_set_boot_cpu_id(uint32_t id);
-
-struct kvm_guest_debug;
-struct kvm_debug_exit_arch;
-
-struct kvm_sw_breakpoint {
-    target_ulong pc;
-    target_ulong saved_insn;
-    int use_count;
-    QTAILQ_ENTRY(kvm_sw_breakpoint) entry;
-};
-
-QTAILQ_HEAD(kvm_sw_breakpoint_head, kvm_sw_breakpoint);
-
-int kvm_arch_debug(struct kvm_debug_exit_arch *arch_info);
-int kvm_sw_breakpoints_active(CPUState *env);
-struct kvm_sw_breakpoint *kvm_find_sw_breakpoint(CPUState *env,
-                                                 target_ulong pc);
-int kvm_arch_insert_sw_breakpoint(CPUState * current_env,
-                                  struct kvm_sw_breakpoint *bp);
-int kvm_arch_remove_sw_breakpoint(CPUState * current_env,
-                                  struct kvm_sw_breakpoint *bp);
-int kvm_arch_insert_hw_breakpoint(target_ulong addr, target_ulong len,
-                                  int type);
-int kvm_arch_remove_hw_breakpoint(target_ulong addr, target_ulong len,
-                                  int type);
-void kvm_arch_remove_all_hw_breakpoints(void);
-void kvm_arch_update_guest_debug(CPUState *env, struct kvm_guest_debug *dbg);
 
 void qemu_kvm_aio_wait_start(void);
 void qemu_kvm_aio_wait(void);

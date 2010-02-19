@@ -1017,6 +1017,7 @@ int kvm_arch_handle_exit(CPUState *env, struct kvm_run *run)
 
     return ret;
 }
+#endif
 
 #ifdef KVM_CAP_SET_GUEST_DEBUG
 int kvm_arch_insert_sw_breakpoint(CPUState *env, struct kvm_sw_breakpoint *bp)
@@ -1191,6 +1192,5 @@ void kvm_arch_update_guest_debug(CPUState *env, struct kvm_guest_debug *dbg)
     }
 }
 #endif /* KVM_CAP_SET_GUEST_DEBUG */
-#endif
 
 #include "qemu-kvm-x86.c"

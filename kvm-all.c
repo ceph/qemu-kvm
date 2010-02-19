@@ -962,7 +962,9 @@ static void on_vcpu(CPUState *env, void (*func)(void *data), void *data)
 #endif
     func(data);
 }
-#endif /* KVM_UPSTREAM */
+#else /* !KVM_UPSTREAM */
+static void on_vcpu(CPUState *env, void (*func)(void *data), void *data);
+#endif /* !KVM_UPSTREAM */
 
 struct kvm_sw_breakpoint *kvm_find_sw_breakpoint(CPUState *env,
                                                  target_ulong pc)
@@ -980,8 +982,6 @@ int kvm_sw_breakpoints_active(CPUState *env)
 {
     return !QTAILQ_EMPTY(&env->kvm_state->kvm_sw_breakpoints);
 }
-
-#ifdef KVM_UPSTREAM
 
 struct kvm_set_guest_debug_data {
     struct kvm_guest_debug dbg;
@@ -1012,7 +1012,6 @@ int kvm_update_guest_debug(CPUState *env, unsigned long reinject_trap)
     on_vcpu(env, kvm_invoke_set_guest_debug, &data);
     return data.err;
 }
-#endif
 
 int kvm_insert_breakpoint(CPUState *current_env, target_ulong addr,
                           target_ulong len, int type)

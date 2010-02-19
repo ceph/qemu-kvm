@@ -54,14 +54,12 @@ int kvm_coalesce_mmio_region(target_phys_addr_t start, ram_addr_t size);
 int kvm_uncoalesce_mmio_region(target_phys_addr_t start, ram_addr_t size);
 void kvm_flush_coalesced_mmio_buffer(void);
 
-#ifdef KVM_UPSTREAM
 int kvm_insert_breakpoint(CPUState *current_env, target_ulong addr,
                           target_ulong len, int type);
 int kvm_remove_breakpoint(CPUState *current_env, target_ulong addr,
                           target_ulong len, int type);
 void kvm_remove_all_breakpoints(CPUState *current_env);
 int kvm_update_guest_debug(CPUState *env, unsigned long reinject_trap);
-#endif /* KVM_UPSTREAM */
 
 int kvm_pit_in_kernel(void);
 int kvm_irqchip_in_kernel(void);
@@ -94,7 +92,6 @@ int kvm_arch_init(KVMState *s, int smp_cpus);
 int kvm_arch_init_vcpu(CPUState *env);
 
 void kvm_arch_reset_vcpu(CPUState *env);
-#ifdef KVM_UPSTREAM
 
 struct kvm_guest_debug;
 struct kvm_debug_exit_arch;
@@ -126,7 +123,6 @@ int kvm_arch_remove_hw_breakpoint(target_ulong addr,
 void kvm_arch_remove_all_hw_breakpoints(void);
 
 void kvm_arch_update_guest_debug(CPUState *env, struct kvm_guest_debug *dbg);
-#endif
 
 int kvm_check_extension(KVMState *s, unsigned int extension);
 

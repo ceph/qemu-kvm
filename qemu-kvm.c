@@ -1026,13 +1026,6 @@ int kvm_inject_irq(CPUState *env, unsigned irq)
     return kvm_vcpu_ioctl(env, KVM_INTERRUPT, &intr);
 }
 
-#ifdef KVM_CAP_SET_GUEST_DEBUG
-int kvm_set_guest_debug(CPUState *env, struct kvm_guest_debug *dbg)
-{
-    return kvm_vcpu_ioctl(env, KVM_SET_GUEST_DEBUG, dbg);
-}
-#endif
-
 int kvm_set_signal_mask(CPUState *env, const sigset_t *sigset)
 {
     struct kvm_signal_mask *sigmask;
@@ -2312,43 +2305,6 @@ void kvm_set_phys_mem(target_phys_addr_t start_addr, ram_addr_t size,
 
     return;
 }
-
-#ifdef KVM_CAP_SET_GUEST_DEBUG
-
-struct kvm_set_guest_debug_data {
-    struct kvm_guest_debug dbg;
-    int err;
-};
-
-static void kvm_invoke_set_guest_debug(void *data)
-{
-    struct kvm_set_guest_debug_data *dbg_data = data;
-
-    if (cpu_single_env->kvm_vcpu_dirty) {
-        kvm_arch_save_regs(cpu_single_env);
-        cpu_single_env->kvm_vcpu_dirty = 0;
-    }
-    dbg_data->err =
-        kvm_set_guest_debug(cpu_single_env,
-                            &dbg_data->dbg);
-}
-
-int kvm_update_guest_debug(CPUState *env, unsigned long reinject_trap)
-{
-    struct kvm_set_guest_debug_data data;
-
-    data.dbg.control = 0;
-    if (env->singlestep_enabled)
-        data.dbg.control = KVM_GUESTDBG_ENABLE | KVM_GUESTDBG_SINGLESTEP;
-
-    kvm_arch_update_guest_debug(env, &data.dbg);
-    data.dbg.control |= reinject_trap;
-
-    on_vcpu(env, kvm_invoke_set_guest_debug, &data);
-    return data.err;
-}
-
-#endif
 
 /*
  * dirty pages logging
