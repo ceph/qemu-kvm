@@ -2487,7 +2487,7 @@ int kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr,
     return 0;
 }
 
-int kvm_log_start(target_phys_addr_t phys_addr, target_phys_addr_t len)
+int kvm_log_start(target_phys_addr_t phys_addr, ram_addr_t len)
 {
 #ifdef TARGET_I386
     if (must_use_aliases_source(phys_addr))
@@ -2500,7 +2500,7 @@ int kvm_log_start(target_phys_addr_t phys_addr, target_phys_addr_t len)
     return 0;
 }
 
-int kvm_log_stop(target_phys_addr_t phys_addr, target_phys_addr_t len)
+int kvm_log_stop(target_phys_addr_t phys_addr, ram_addr_t len)
 {
 #ifdef TARGET_I386
     if (must_use_aliases_source(phys_addr))
