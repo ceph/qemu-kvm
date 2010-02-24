@@ -8,22 +8,19 @@
 
 void qemu_kvm_call_with_env(void (*func)(void *), void *data, CPUState *newenv)
 {
+    host_reg_t saved_env_reg;
     CPUState *oldenv;
-#define DECLARE_HOST_REGS
-#include "hostregs_helper.h"
 
     oldenv = newenv;
 
-#define SAVE_HOST_REGS
-#include "hostregs_helper.h"
-
+    saved_env_reg = (host_reg_t) env;
     env = newenv;
 
     func(data);
 
     env = oldenv;
-
-#include "hostregs_helper.h"
+    asm("");
+    env = (void *) saved_env_reg;
 }
 
 static void call_helper_cpuid(void *junk)

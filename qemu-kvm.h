@@ -373,21 +373,6 @@ int kvm_get_shadow_pages(kvm_context_t kvm, unsigned int *nrshadow_pages);
 #endif
 
 /*!
- * \brief Set a vcpu's signal mask for guest mode
- *
- * A vcpu can have different signals blocked in guest mode and user mode.
- * This allows guest execution to be interrupted on a signal, without requiring
- * that the signal be delivered to a signal handler (the signal can be
- * dequeued using sigwait(2).
- *
- * \param kvm Pointer to the current kvm_context
- * \param vcpu Which virtual CPU should be initialized
- * \param sigset signal mask for guest mode
- * \return 0 on success, or -errno on error
- */
-int kvm_set_signal_mask(CPUState *env, const sigset_t *sigset);
-
-/*!
  * \brief Dump VCPU registers
  *
  * This dumps some of the information that KVM has about a virtual CPU, namely:
