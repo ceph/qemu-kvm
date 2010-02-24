@@ -50,6 +50,7 @@ libobj-y = exec.o cpu-exec.o
 libobj-$(CONFIG_NO_CPU_EMULATION) += fake-exec.o
 libobj-$(CONFIG_CPU_EMULATION) += translate-all.o translate.o
 libobj-$(CONFIG_CPU_EMULATION) += tcg/tcg.o
+libobj-y += rwhandler.o
 libobj-$(CONFIG_SOFTFLOAT) += fpu/softfloat.o
 libobj-$(CONFIG_NOSOFTFLOAT) += fpu/softfloat-native.o
 libobj-y += op_helper.o helper.o
