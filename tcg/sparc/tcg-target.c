@@ -224,8 +224,10 @@ static inline int tcg_target_const_match(tcg_target_long val,
 #define ARITH_ADD  (INSN_OP(2) | INSN_OP3(0x00))
 #define ARITH_ADDCC (INSN_OP(2) | INSN_OP3(0x10))
 #define ARITH_AND  (INSN_OP(2) | INSN_OP3(0x01))
+#define ARITH_ANDN (INSN_OP(2) | INSN_OP3(0x05))
 #define ARITH_OR   (INSN_OP(2) | INSN_OP3(0x02))
 #define ARITH_ORCC (INSN_OP(2) | INSN_OP3(0x12))
+#define ARITH_ORN  (INSN_OP(2) | INSN_OP3(0x06))
 #define ARITH_XOR  (INSN_OP(2) | INSN_OP3(0x03))
 #define ARITH_SUB  (INSN_OP(2) | INSN_OP3(0x04))
 #define ARITH_SUBCC (INSN_OP(2) | INSN_OP3(0x14))
@@ -1215,8 +1217,14 @@ static inline void tcg_out_op(TCGContext *s, int opc, const TCGArg *args,
     OP_32_64(and):
         c = ARITH_AND;
         goto gen_arith;
+    OP_32_64(andc):
+        c = ARITH_ANDN;
+        goto gen_arith;
     OP_32_64(or):
         c = ARITH_OR;
+        goto gen_arith;
+    OP_32_64(orc):
+        c = ARITH_ORN;
         goto gen_arith;
     OP_32_64(xor):
         c = ARITH_XOR;
@@ -1233,6 +1241,13 @@ static inline void tcg_out_op(TCGContext *s, int opc, const TCGArg *args,
     case INDEX_op_mul_i32:
         c = ARITH_UMUL;
         goto gen_arith;
+
+    OP_32_64(neg):
+	c = ARITH_SUB;
+	goto gen_arith1;
+    OP_32_64(not):
+	c = ARITH_ORN;
+	goto gen_arith1;
 
     case INDEX_op_div_i32:
         tcg_out_div32(s, args[0], args[1], args[2], const_args[2], 0);
@@ -1392,6 +1407,10 @@ static inline void tcg_out_op(TCGContext *s, int opc, const TCGArg *args,
         tcg_out_arithc(s, args[0], args[1], args[2], const_args[2], c);
         break;
 
+    gen_arith1:
+	tcg_out_arithc(s, args[0], TCG_REG_G0, args[1], const_args[1], c);
+	break;
+
     default:
         fprintf(stderr, "unknown opcode 0x%x\n", opc);
         tcg_abort();
@@ -1424,12 +1443,17 @@ static const TCGTargetOpDef sparc_op_defs[] = {
     { INDEX_op_remu_i32, { "r", "r", "rJ" } },
     { INDEX_op_sub_i32, { "r", "r", "rJ" } },
     { INDEX_op_and_i32, { "r", "r", "rJ" } },
+    { INDEX_op_andc_i32, { "r", "r", "rJ" } },
     { INDEX_op_or_i32, { "r", "r", "rJ" } },
+    { INDEX_op_orc_i32, { "r", "r", "rJ" } },
     { INDEX_op_xor_i32, { "r", "r", "rJ" } },
 
     { INDEX_op_shl_i32, { "r", "r", "rJ" } },
     { INDEX_op_shr_i32, { "r", "r", "rJ" } },
     { INDEX_op_sar_i32, { "r", "r", "rJ" } },
+
+    { INDEX_op_neg_i32, { "r", "rJ" } },
+    { INDEX_op_not_i32, { "r", "rJ" } },
 
     { INDEX_op_brcond_i32, { "r", "rJ" } },
     { INDEX_op_setcond_i32, { "r", "r", "rJ" } },
@@ -1478,12 +1502,18 @@ static const TCGTargetOpDef sparc_op_defs[] = {
     { INDEX_op_remu_i64, { "r", "r", "rJ" } },
     { INDEX_op_sub_i64, { "r", "r", "rJ" } },
     { INDEX_op_and_i64, { "r", "r", "rJ" } },
+    { INDEX_op_andc_i64, { "r", "r", "rJ" } },
     { INDEX_op_or_i64, { "r", "r", "rJ" } },
+    { INDEX_op_orc_i64, { "r", "r", "rJ" } },
     { INDEX_op_xor_i64, { "r", "r", "rJ" } },
 
     { INDEX_op_shl_i64, { "r", "r", "rJ" } },
     { INDEX_op_shr_i64, { "r", "r", "rJ" } },
     { INDEX_op_sar_i64, { "r", "r", "rJ" } },
+
+    { INDEX_op_neg_i64, { "r", "rJ" } },
+    { INDEX_op_not_i64, { "r", "rJ" } },
+
     { INDEX_op_ext32s_i64, { "r", "ri" } },
     { INDEX_op_ext32u_i64, { "r", "ri" } },
 

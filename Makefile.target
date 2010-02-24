@@ -50,7 +50,6 @@ libobj-y = exec.o cpu-exec.o
 libobj-$(CONFIG_NO_CPU_EMULATION) += fake-exec.o
 libobj-$(CONFIG_CPU_EMULATION) += translate-all.o translate.o
 libobj-$(CONFIG_CPU_EMULATION) += tcg/tcg.o
-libobj-y += rwhandler.o
 libobj-$(CONFIG_SOFTFLOAT) += fpu/softfloat.o
 libobj-$(CONFIG_NOSOFTFLOAT) += fpu/softfloat-native.o
 libobj-y += op_helper.o helper.o
@@ -184,6 +183,7 @@ obj-y = vl.o async.o monitor.o pci.o pci_host.o pcie_host.o machine.o gdbstub.o
 # virtio has to be here due to weird dependency between PCI and virtio-net.
 # need to fix this properly
 obj-y += virtio-blk.o virtio-balloon.o virtio-net.o virtio-pci.o virtio-serial-bus.o
+obj-y += rwhandler.o
 obj-$(CONFIG_KVM) += kvm.o kvm-all.o
 # MSI-X depends on kvm for interrupt injection,
 # so moved it from Makefile.objs to Makefile.target for now
