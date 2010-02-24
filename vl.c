@@ -3213,14 +3213,15 @@ static int io_thread_fd = -1;
 
 static void qemu_event_increment(void)
 {
-    static const char byte = 0;
+    /* Write 8 bytes to be compatible with eventfd.  */
+    static uint64_t val = 1;
     ssize_t ret;
 
     if (io_thread_fd == -1)
         return;
 
     do {
-        ret = write(io_thread_fd, &byte, sizeof(byte));
+        ret = write(io_thread_fd, &val, sizeof(val));
     } while (ret < 0 && errno == EINTR);
 
     /* EAGAIN is fine, a read must be pending.  */
@@ -3237,7 +3238,7 @@ static void qemu_event_read(void *opaque)
     ssize_t len;
     char buffer[512];
 
-    /* Drain the notify pipe */
+    /* Drain the notify pipe.  For eventfd, only 8 bytes will be read.  */
     do {
         len = read(fd, buffer, sizeof(buffer));
     } while ((len == -1 && errno == EINTR) || len == sizeof(buffer));
@@ -3248,7 +3249,7 @@ static int qemu_event_init(void)
     int err;
     int fds[2];
 
-    err = qemu_pipe(fds);
+    err = qemu_eventfd(fds);
     if (err == -1)
         return -errno;
 
