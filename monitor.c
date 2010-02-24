@@ -101,6 +101,7 @@ typedef struct mon_cmd_t {
     const char *params;
     const char *help;
     void (*user_print)(Monitor *mon, const QObject *data);
+    int (*cmd_new_ret)(Monitor *mon, const QDict *params, QObject **ret_data);
     union {
         void (*info)(Monitor *mon);
         void (*info_new)(Monitor *mon, QObject **ret_data);
@@ -419,13 +420,15 @@ void monitor_protocol_event(MonitorEvent event, QObject *data)
     QDECREF(qmp);
 }
 
-static void do_qmp_capabilities(Monitor *mon, const QDict *params,
-                                QObject **ret_data)
+static int do_qmp_capabilities(Monitor *mon, const QDict *params,
+                               QObject **ret_data)
 {
     /* Will setup QMP capabilities in the future */
     if (monitor_ctrl_mode(mon)) {
         mon->mc->command_mode = 1;
     }
+
+    return 0;
 }
 
 static int compare_cmd(const char *name, const char *list)
@@ -925,11 +928,14 @@ static void do_info_cpus(Monitor *mon, QObject **ret_data)
     *ret_data = QOBJECT(cpu_list);
 }
 
-static void do_cpu_set(Monitor *mon, const QDict *qdict, QObject **ret_data)
+static int do_cpu_set(Monitor *mon, const QDict *qdict, QObject **ret_data)
 {
     int index = qdict_get_int(qdict, "index");
-    if (mon_set_cpu(index) < 0)
+    if (mon_set_cpu(index) < 0) {
         qemu_error_new(QERR_INVALID_PARAMETER, "index");
+        return -1;
+    }
+    return 0;
 }
 
 static void do_cpu_set_nr(Monitor *mon, const QDict *qdict)
@@ -989,9 +995,10 @@ static void do_info_cpu_stats(Monitor *mon)
 /**
  * do_quit(): Quit QEMU execution
  */
-static void do_quit(Monitor *mon, const QDict *qdict, QObject **ret_data)
+static int do_quit(Monitor *mon, const QDict *qdict, QObject **ret_data)
 {
     exit(0);
+    return 0;
 }
 
 static int eject_device(Monitor *mon, BlockDriverState *bs, int force)
@@ -1013,7 +1020,7 @@ static int eject_device(Monitor *mon, BlockDriverState *bs, int force)
     return 0;
 }
 
-static void do_eject(Monitor *mon, const QDict *qdict, QObject **ret_data)
+static int do_eject(Monitor *mon, const QDict *qdict, QObject **ret_data)
 {
     BlockDriverState *bs;
     int force = qdict_get_int(qdict, "force");
@@ -1022,12 +1029,12 @@ static void do_eject(Monitor *mon, const QDict *qdict, QObject **ret_data)
     bs = bdrv_find(filename);
     if (!bs) {
         qemu_error_new(QERR_DEVICE_NOT_FOUND, filename);
-        return;
+        return -1;
     }
-    eject_device(mon, bs, force);
+    return eject_device(mon, bs, force);
 }
 
-static void do_block_set_passwd(Monitor *mon, const QDict *qdict,
+static int do_block_set_passwd(Monitor *mon, const QDict *qdict,
                                 QObject **ret_data)
 {
     BlockDriverState *bs;
@@ -1035,12 +1042,15 @@ static void do_block_set_passwd(Monitor *mon, const QDict *qdict,
     bs = bdrv_find(qdict_get_str(qdict, "device"));
     if (!bs) {
         qemu_error_new(QERR_DEVICE_NOT_FOUND, qdict_get_str(qdict, "device"));
-        return;
+        return -1;
     }
 
     if (bdrv_set_key(bs, qdict_get_str(qdict, "password")) < 0) {
         qemu_error_new(QERR_INVALID_PASSWORD);
+        return -1;
     }
+
+    return 0;
 }
 
 static void do_change_block(Monitor *mon, const char *device,
@@ -1156,9 +1166,10 @@ static void do_singlestep(Monitor *mon, const QDict *qdict)
 /**
  * do_stop(): Stop VM execution
  */
-static void do_stop(Monitor *mon, const QDict *qdict, QObject **ret_data)
+static int do_stop(Monitor *mon, const QDict *qdict, QObject **ret_data)
 {
     vm_stop(EXCP_INTERRUPT);
+    return 0;
 }
 
 static void encrypted_bdrv_it(void *opaque, BlockDriverState *bs);
@@ -1171,14 +1182,18 @@ struct bdrv_iterate_context {
 /**
  * do_cont(): Resume emulation.
  */
-static void do_cont(Monitor *mon, const QDict *qdict, QObject **ret_data)
+static int do_cont(Monitor *mon, const QDict *qdict, QObject **ret_data)
 {
     struct bdrv_iterate_context context = { mon, 0 };
 
     bdrv_iterate(encrypted_bdrv_it, &context);
     /* only resume the vm if all keys are set and valid */
-    if (!context.err)
+    if (!context.err) {
         vm_start();
+        return 0;
+    } else {
+        return -1;
+    }
 }
 
 static void bdrv_key_cb(void *opaque, int err)
@@ -1856,19 +1871,21 @@ static void do_boot_set(Monitor *mon, const QDict *qdict)
 /**
  * do_system_reset(): Issue a machine reset
  */
-static void do_system_reset(Monitor *mon, const QDict *qdict,
-                            QObject **ret_data)
+static int do_system_reset(Monitor *mon, const QDict *qdict,
+                           QObject **ret_data)
 {
     qemu_system_reset_request();
+    return 0;
 }
 
 /**
  * do_system_powerdown(): Issue a machine powerdown
  */
-static void do_system_powerdown(Monitor *mon, const QDict *qdict,
-                                QObject **ret_data)
+static int do_system_powerdown(Monitor *mon, const QDict *qdict,
+                               QObject **ret_data)
 {
     qemu_system_powerdown_request();
+    return 0;
 }
 
 #if defined(TARGET_I386)
@@ -2417,7 +2434,7 @@ static void do_inject_mce(Monitor *mon, const QDict *qdict)
 }
 #endif
 
-static void do_getfd(Monitor *mon, const QDict *qdict, QObject **ret_data)
+static int do_getfd(Monitor *mon, const QDict *qdict, QObject **ret_data)
 {
     const char *fdname = qdict_get_str(qdict, "fdname");
     mon_fd_t *monfd;
@@ -2426,12 +2443,12 @@ static void do_getfd(Monitor *mon, const QDict *qdict, QObject **ret_data)
     fd = qemu_chr_get_msgfd(mon->chr);
     if (fd == -1) {
         qemu_error_new(QERR_FD_NOT_SUPPLIED);
-        return;
+        return -1;
     }
 
     if (qemu_isdigit(fdname[0])) {
         qemu_error_new(QERR_INVALID_PARAMETER, "fdname");
-        return;
+        return -1;
     }
 
     fd = dup(fd);
@@ -2440,7 +2457,7 @@ static void do_getfd(Monitor *mon, const QDict *qdict, QObject **ret_data)
             qemu_error_new(QERR_TOO_MANY_FILES);
         else
             qemu_error_new(QERR_UNDEFINED_ERROR);
-        return;
+        return -1;
     }
 
     QLIST_FOREACH(monfd, &mon->fds, next) {
@@ -2450,7 +2467,7 @@ static void do_getfd(Monitor *mon, const QDict *qdict, QObject **ret_data)
 
         close(monfd->fd);
         monfd->fd = fd;
-        return;
+        return 0;
     }
 
     monfd = qemu_mallocz(sizeof(mon_fd_t));
@@ -2458,9 +2475,10 @@ static void do_getfd(Monitor *mon, const QDict *qdict, QObject **ret_data)
     monfd->fd = fd;
 
     QLIST_INSERT_HEAD(&mon->fds, monfd, next);
+    return 0;
 }
 
-static void do_closefd(Monitor *mon, const QDict *qdict, QObject **ret_data)
+static int do_closefd(Monitor *mon, const QDict *qdict, QObject **ret_data)
 {
     const char *fdname = qdict_get_str(qdict, "fdname");
     mon_fd_t *monfd;
@@ -2474,10 +2492,11 @@ static void do_closefd(Monitor *mon, const QDict *qdict, QObject **ret_data)
         close(monfd->fd);
         qemu_free(monfd->name);
         qemu_free(monfd);
-        return;
+        return 0;
     }
 
     qemu_error_new(QERR_FD_NOT_FOUND, fdname);
+    return -1;
 }
 
 static void do_loadvm(Monitor *mon, const QDict *qdict)
@@ -3832,7 +3851,11 @@ static void monitor_call_handler(Monitor *mon, const mon_cmd_t *cmd,
 {
     QObject *data = NULL;
 
-    cmd->mhandler.cmd_new(mon, params, &data);
+    if (cmd->cmd_new_ret) {
+        cmd->cmd_new_ret(mon, params, &data);
+    } else {
+        cmd->mhandler.cmd_new(mon, params, &data);
+    }
 
     if (is_async_return(data)) {
         /*
