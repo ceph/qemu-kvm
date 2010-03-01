@@ -787,11 +787,6 @@ CPUState *pc_new_cpu(const char *cpu_model)
     } else {
         qemu_register_reset((QEMUResetHandler*)cpu_reset, env);
     }
-
-    /* kvm needs this to run after the apic is initialized. Otherwise,
-     * it can access invalid state and crash.
-     */
-    qemu_init_vcpu(env);
     return env;
 }
 

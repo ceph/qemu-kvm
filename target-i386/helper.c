@@ -2285,6 +2285,8 @@ CPUX86State *cpu_x86_init(const char *cpu_model)
     }
     mce_init(env);
 
+    qemu_init_vcpu(env);
+
     return env;
 }
 
