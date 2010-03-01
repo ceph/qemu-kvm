@@ -871,7 +871,7 @@ int pre_kvm_run(kvm_context_t kvm, CPUState *env)
     kvm_arch_pre_run(env, env->kvm_run);
 
     if (env->kvm_vcpu_dirty) {
-        kvm_arch_load_regs(env);
+        kvm_arch_load_regs(env, KVM_PUT_RUNTIME_STATE);
         env->kvm_vcpu_dirty = 0;
     }
 
@@ -1529,6 +1529,18 @@ void kvm_cpu_synchronize_state(CPUState *env)
         on_vcpu(env, do_kvm_cpu_synchronize_state, env);
 }
 
+void kvm_cpu_synchronize_post_reset(CPUState *env)
+{
+    kvm_arch_load_regs(env, KVM_PUT_RESET_STATE);
+    env->kvm_vcpu_dirty = 0;
+}
+
+void kvm_cpu_synchronize_post_init(CPUState *env)
+{
+    kvm_arch_load_regs(env, KVM_PUT_FULL_STATE);
+    env->kvm_vcpu_dirty = 0;
+}
+
 static void inject_interrupt(void *data)
 {
     cpu_interrupt(current_env, (long) data);
@@ -1873,8 +1885,6 @@ static void *ap_main_loop(void *_env)
     cpu_single_env = env;
 
     kvm_arch_init_vcpu(env);
-
-    kvm_arch_load_regs(env);
 
     /* signal VCPU creation */
     current_env->created = 1;

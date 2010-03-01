@@ -488,7 +488,6 @@ void apic_init_reset(CPUState *env)
     if (!s)
         return;
 
-    cpu_synchronize_state(env);
     s->tpr = 0;
     s->spurious_vec = 0xff;
     s->log_dest = 0;
@@ -1069,8 +1068,6 @@ static void apic_reset(void *opaque)
 {
     APICState *s = opaque;
     int bsp;
-
-    cpu_synchronize_state(s->cpu_env);
 
     bsp = cpu_is_bsp(s->cpu_env);
     s->apicbase = 0xfee00000 |

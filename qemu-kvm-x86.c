@@ -803,7 +803,7 @@ static void get_seg(SegmentCache *lhs, const struct kvm_segment *rhs)
 	| (rhs->avl * DESC_AVL_MASK);
 }
 
-void kvm_arch_load_regs(CPUState *env)
+void kvm_arch_load_regs(CPUState *env, int level)
 {
     struct kvm_regs regs;
     struct kvm_fpu fpu;
@@ -1362,7 +1362,6 @@ void kvm_arch_push_nmi(void *opaque)
 void kvm_arch_cpu_reset(CPUState *env)
 {
     kvm_arch_reset_vcpu(env);
-    kvm_arch_load_regs(env);
     kvm_put_vcpu_events(env);
     if (!cpu_is_bsp(env)) {
 	if (kvm_irqchip_in_kernel()) {
