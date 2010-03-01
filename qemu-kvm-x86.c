@@ -922,31 +922,8 @@ void kvm_arch_load_regs(CPUState *env)
     if (rc == -1)
         perror("kvm_set_msrs FAILED");
 
-    /*
-     * Kernels before 2.6.33 (which correlates with !kvm_has_vcpu_events())
-     * overwrote flags.TF injected via SET_GUEST_DEBUG while updating GP regs.
-     * Work around this by updating the debug state once again if
-     * single-stepping is on.
-     * Another reason to call kvm_update_guest_debug here is a pending debug
-     * trap raise by the guest. On kernels without SET_VCPU_EVENTS we have to
-     * reinject them via SET_GUEST_DEBUG.
-     */
-    if (!kvm_has_vcpu_events() &&
-        (env->exception_injected != -1 || env->singlestep_enabled)) {
-        unsigned long reinject_trap = 0;
-
-        if (env->exception_injected == 1) {
-            reinject_trap = KVM_GUESTDBG_INJECT_DB;
-        } else if (env->exception_injected == 3) {
-            reinject_trap = KVM_GUESTDBG_INJECT_BP;
-        }
-        env->exception_injected = -1;
-
-        rc = kvm_update_guest_debug(env, reinject_trap);
-        if (rc < 0) {
-            perror("kvm_update_guest_debug FAILED");
-        }
-    }
+    /* must be last */
+    kvm_guest_debug_workarounds(env);
 }
 
 void kvm_load_tsc(CPUState *env)

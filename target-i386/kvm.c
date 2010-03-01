@@ -861,6 +861,37 @@ int kvm_get_vcpu_events(CPUState *env)
     return 0;
 }
 
+static int kvm_guest_debug_workarounds(CPUState *env)
+{
+    int ret = 0;
+#ifdef KVM_CAP_SET_GUEST_DEBUG
+    unsigned long reinject_trap = 0;
+
+    if (!kvm_has_vcpu_events()) {
+        if (env->exception_injected == 1) {
+            reinject_trap = KVM_GUESTDBG_INJECT_DB;
+        } else if (env->exception_injected == 3) {
+            reinject_trap = KVM_GUESTDBG_INJECT_BP;
+        }
+        env->exception_injected = -1;
+    }
+
+    /*
+     * Kernels before KVM_CAP_X86_ROBUST_SINGLESTEP overwrote flags.TF
+     * injected via SET_GUEST_DEBUG while updating GP regs. Work around this
+     * by updating the debug state once again if single-stepping is on.
+     * Another reason to call kvm_update_guest_debug here is a pending debug
+     * trap raise by the guest. On kernels without SET_VCPU_EVENTS we have to
+     * reinject them via SET_GUEST_DEBUG.
+     */
+    if (reinject_trap ||
+        (!kvm_has_robust_singlestep() && env->singlestep_enabled)) {
+        ret = kvm_update_guest_debug(env, reinject_trap);
+    }
+#endif /* KVM_CAP_SET_GUEST_DEBUG */
+    return ret;
+}
+
 #ifdef KVM_UPSTREAM
 int kvm_arch_put_registers(CPUState *env)
 {
@@ -890,31 +921,10 @@ int kvm_arch_put_registers(CPUState *env)
     if (ret < 0)
         return ret;
 
-    /*
-     * Kernels before 2.6.33 (which correlates with !kvm_has_vcpu_events())
-     * overwrote flags.TF injected via SET_GUEST_DEBUG while updating GP regs.
-     * Work around this by updating the debug state once again if
-     * single-stepping is on.
-     * Another reason to call kvm_update_guest_debug here is a pending debug
-     * trap raise by the guest. On kernels without SET_VCPU_EVENTS we have to
-     * reinject them via SET_GUEST_DEBUG.
-     */
-    if (!kvm_has_vcpu_events() &&
-        (env->exception_injected != -1 || env->singlestep_enabled)) {
-        unsigned long reinject_trap = 0;
-
-        if (env->exception_injected == 1) {
-            reinject_trap = KVM_GUESTDBG_INJECT_DB;
-        } else if (env->exception_injected == 3) {
-            reinject_trap = KVM_GUESTDBG_INJECT_BP;
-        }
-        env->exception_injected = -1;
-
-        ret = kvm_update_guest_debug(env, reinject_trap);
-        if (ret < 0) {
-            return ret;
-        }
-    }
+    /* must be last */
+    ret = kvm_guest_debug_workarounds(env);
+    if (ret < 0)
+        return ret;
 
     return 0;
 }

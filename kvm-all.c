@@ -65,6 +65,7 @@ struct KVMState
     int broken_set_mem_region;
     int migration_log;
     int vcpu_events;
+    int robust_singlestep;
 #ifdef KVM_CAP_SET_GUEST_DEBUG
     struct kvm_sw_breakpoint_head kvm_sw_breakpoints;
 #endif
@@ -673,6 +674,12 @@ int kvm_init(int smp_cpus)
     s->vcpu_events = kvm_check_extension(s, KVM_CAP_VCPU_EVENTS);
 #endif
 
+    s->robust_singlestep = 0;
+#ifdef KVM_CAP_X86_ROBUST_SINGLESTEP
+    s->robust_singlestep =
+        kvm_check_extension(s, KVM_CAP_X86_ROBUST_SINGLESTEP);
+#endif
+
     ret = kvm_arch_init(s, smp_cpus);
     if (ret < 0)
         goto err;
@@ -931,6 +938,11 @@ int kvm_has_sync_mmu(void)
 int kvm_has_vcpu_events(void)
 {
     return kvm_state->vcpu_events;
+}
+
+int kvm_has_robust_singlestep(void)
+{
+    return kvm_state->robust_singlestep;
 }
 
 void kvm_setup_guest_memory(void *start, size_t size)
