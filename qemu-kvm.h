@@ -943,7 +943,6 @@ int handle_tpr_access(void *opaque, CPUState *env, uint64_t rip,
 #ifdef TARGET_I386
 #define qemu_kvm_has_pit_state2() kvm_has_pit_state2(kvm_context)
 #endif
-void kvm_load_tsc(CPUState *env);
 #else
 #define kvm_nested 0
 #define qemu_kvm_has_gsi_routing() (0)
@@ -951,9 +950,6 @@ void kvm_load_tsc(CPUState *env);
 #define qemu_kvm_has_pit_state2() (0)
 #endif
 #define qemu_kvm_cpu_stop(env) do {} while(0)
-static inline void kvm_load_tsc(CPUState *env)
-{
-}
 #endif
 
 void kvm_mutex_unlock(void);

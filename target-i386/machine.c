@@ -354,11 +354,6 @@ static int cpu_post_load(void *opaque, int version_id)
         hw_breakpoint_insert(env, i);
 
     tlb_flush(env, 1);
-
-    if (kvm_enabled()) {
-        kvm_load_tsc(env);
-    }
-
     return 0;
 }
 
