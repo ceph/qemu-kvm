@@ -695,7 +695,8 @@ int kvm_arch_qemu_create_context(void)
     if (kvm_check_extension(kvm_state, KVM_CAP_ADJUST_CLOCK))
         vmstate_register(0, &vmstate_kvmclock, &kvmclock_data);
 #endif
-    return 0;
+
+    return kvm_set_boot_cpu_id(0);
 }
 
 static void set_msr_entry(struct kvm_msr_entry *entry, uint32_t index,
