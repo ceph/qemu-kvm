@@ -1391,7 +1391,7 @@ void kvm_arch_push_nmi(void *opaque)
 void kvm_arch_cpu_reset(CPUState *env)
 {
     kvm_arch_reset_vcpu(env);
-    kvm_put_vcpu_events(env);
+    kvm_put_vcpu_events(env, KVM_PUT_RESET_STATE);
     kvm_reset_mpstate(env);
 }
 

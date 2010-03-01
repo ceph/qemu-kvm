@@ -362,7 +362,7 @@ static int cpu_post_load(void *opaque, int version_id)
 
     if (kvm_enabled()) {
         kvm_load_tsc(env);
-        kvm_put_vcpu_events(env);
+        kvm_put_vcpu_events(env, KVM_PUT_FULL_STATE);
     }
 
     return 0;

@@ -549,7 +549,7 @@ static void kvm_msr_entry_set(struct kvm_msr_entry *entry,
     entry->data = value;
 }
 
-static int kvm_put_msrs(CPUState *env)
+static int kvm_put_msrs(CPUState *env, int level)
 {
     struct {
         struct kvm_msrs info;
@@ -563,7 +563,6 @@ static int kvm_put_msrs(CPUState *env)
     kvm_msr_entry_set(&msrs[n++], MSR_IA32_SYSENTER_EIP, env->sysenter_eip);
     if (kvm_has_msr_star(env))
 	kvm_msr_entry_set(&msrs[n++], MSR_STAR, env->star);
-    kvm_msr_entry_set(&msrs[n++], MSR_IA32_TSC, env->tsc);
     kvm_msr_entry_set(&msrs[n++], MSR_VM_HSAVE_PA, env->vm_hsave);
 #ifdef TARGET_X86_64
     /* FIXME if lm capable */
@@ -572,8 +571,12 @@ static int kvm_put_msrs(CPUState *env)
     kvm_msr_entry_set(&msrs[n++], MSR_FMASK, env->fmask);
     kvm_msr_entry_set(&msrs[n++], MSR_LSTAR, env->lstar);
 #endif
-    kvm_msr_entry_set(&msrs[n++], MSR_KVM_SYSTEM_TIME,  env->system_time_msr);
-    kvm_msr_entry_set(&msrs[n++], MSR_KVM_WALL_CLOCK,  env->wall_clock_msr);
+    if (level == KVM_PUT_FULL_STATE) {
+        kvm_msr_entry_set(&msrs[n++], MSR_IA32_TSC, env->tsc);
+        kvm_msr_entry_set(&msrs[n++], MSR_KVM_SYSTEM_TIME,
+                          env->system_time_msr);
+        kvm_msr_entry_set(&msrs[n++], MSR_KVM_WALL_CLOCK, env->wall_clock_msr);
+    }
 
     msr_data.info.nmsrs = n;
 
@@ -791,7 +794,7 @@ static int kvm_get_mp_state(CPUState *env)
 }
 #endif
 
-int kvm_put_vcpu_events(CPUState *env)
+int kvm_put_vcpu_events(CPUState *env, int level)
 {
 #ifdef KVM_CAP_VCPU_EVENTS
     struct kvm_vcpu_events events;
@@ -815,8 +818,11 @@ int kvm_put_vcpu_events(CPUState *env)
 
     events.sipi_vector = env->sipi_vector;
 
-    events.flags =
-        KVM_VCPUEVENT_VALID_NMI_PENDING | KVM_VCPUEVENT_VALID_SIPI_VECTOR;
+    events.flags = 0;
+    if (level >= KVM_PUT_RESET_STATE) {
+        events.flags |=
+            KVM_VCPUEVENT_VALID_NMI_PENDING | KVM_VCPUEVENT_VALID_SIPI_VECTOR;
+    }
 
     return kvm_vcpu_ioctl(env, KVM_SET_VCPU_EVENTS, &events);
 #else
@@ -909,15 +915,17 @@ int kvm_arch_put_registers(CPUState *env, int level)
     if (ret < 0)
         return ret;
 
-    ret = kvm_put_msrs(env);
+    ret = kvm_put_msrs(env, level);
     if (ret < 0)
         return ret;
 
-    ret = kvm_put_mp_state(env);
-    if (ret < 0)
-        return ret;
+    if (level >= KVM_PUT_RESET_STATE) {
+        ret = kvm_put_mp_state(env);
+        if (ret < 0)
+            return ret;
+    }
 
-    ret = kvm_put_vcpu_events(env);
+    ret = kvm_put_vcpu_events(env, level);
     if (ret < 0)
         return ret;
 
