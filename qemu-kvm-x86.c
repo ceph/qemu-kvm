@@ -985,6 +985,7 @@ void kvm_arch_load_regs(CPUState *env, int level)
 
     if (level >= KVM_PUT_RESET_STATE) {
         kvm_arch_load_mpstate(env);
+        kvm_load_lapic(env);
     }
     if (kvm_irqchip_in_kernel()) {
         /* Avoid deadlock: no user space IRQ will ever clear it. */
@@ -1154,6 +1155,7 @@ void kvm_arch_save_regs(CPUState *env)
         }
     }
     kvm_arch_save_mpstate(env);
+    kvm_save_lapic(env);
     kvm_get_vcpu_events(env);
 }
 
@@ -1223,8 +1225,6 @@ int kvm_arch_init_vcpu(CPUState *cenv)
     int cpuid_nent = 0;
     CPUState copy;
     uint32_t i, j, limit;
-
-    qemu_kvm_load_lapic(cenv);
 
     kvm_arch_reset_vcpu(cenv);
 

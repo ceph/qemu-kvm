@@ -24,8 +24,6 @@
 #include "host-utils.h"
 #include "kvm.h"
 
-#include "qemu-kvm.h"
-
 //#define DEBUG_APIC
 
 /* APIC Local Vector Table */
@@ -951,36 +949,22 @@ static void kvm_kernel_lapic_load_from_user(APICState *s)
 
 #endif
 
-void qemu_kvm_load_lapic(CPUState *env)
+void kvm_load_lapic(CPUState *env)
 {
 #ifdef KVM_CAP_IRQCHIP
-    if (kvm_enabled() && kvm_vcpu_inited(env) && kvm_irqchip_in_kernel()) {
+    if (kvm_enabled() && kvm_irqchip_in_kernel()) {
         kvm_kernel_lapic_load_from_user(env->apic_state);
     }
 #endif
 }
 
-static void apic_pre_save(void *opaque)
+void kvm_save_lapic(CPUState *env)
 {
 #ifdef KVM_CAP_IRQCHIP
-    APICState *s = (void *)opaque;
-
     if (kvm_enabled() && kvm_irqchip_in_kernel()) {
-        kvm_kernel_lapic_save_to_user(s);
+        kvm_kernel_lapic_save_to_user(env->apic_state);
     }
 #endif
-}
-
-static int apic_post_load(void *opaque, int version_id)
-{
-#ifdef KVM_CAP_IRQCHIP
-    APICState *s = opaque;
-
-    if (kvm_enabled() && kvm_irqchip_in_kernel()) {
-        kvm_kernel_lapic_load_from_user(s);
-    }
-#endif
-    return 0;
 }
 
 /* This function is only used for old state version 1 and 2 */
@@ -1019,9 +1003,6 @@ static int apic_load_old(QEMUFile *f, void *opaque, int version_id)
 
     if (version_id >= 2)
         qemu_get_timer(f, s->timer);
-
-    qemu_kvm_load_lapic(s->cpu_env);
-
     return 0;
 }
 
@@ -1052,9 +1033,7 @@ static const VMStateDescription vmstate_apic = {
         VMSTATE_INT64(next_time, APICState),
         VMSTATE_TIMER(timer, APICState),
         VMSTATE_END_OF_LIST()
-    },
-    .pre_save = apic_pre_save,
-    .post_load = apic_post_load,
+    }
 };
 
 static void apic_reset(void *opaque)
@@ -1077,7 +1056,6 @@ static void apic_reset(void *opaque)
          */
         s->lvt[APIC_LVT_LINT0] = 0x700;
     }
-    qemu_kvm_load_lapic(s->cpu_env);
 }
 
 static CPUReadMemoryFunc * const apic_mem_read[3] = {
@@ -1120,11 +1098,6 @@ int apic_init(CPUState *env)
 
     vmstate_register(s->idx, &vmstate_apic, s);
     qemu_register_reset(apic_reset, s);
-
-    /* apic_reset must be called before the vcpu threads are initialized and load
-     * registers, in qemu-kvm.
-     */
-    apic_reset(s);
 
     local_apics[s->idx] = s;
     return 0;

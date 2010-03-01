@@ -849,9 +849,8 @@ static inline void kvm_inject_x86_mce(CPUState *cenv, int bank,
 int kvm_main_loop(void);
 int kvm_init_ap(void);
 int kvm_vcpu_inited(CPUState *env);
-void kvm_apic_init(CPUState *env);
-/* called from vcpu initialization */
-void qemu_kvm_load_lapic(CPUState *env);
+void kvm_save_lapic(CPUState *env);
+void kvm_load_lapic(CPUState *env);
 
 void kvm_hpet_enable_kpit(void);
 void kvm_hpet_disable_kpit(void);
