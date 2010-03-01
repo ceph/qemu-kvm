@@ -87,7 +87,7 @@ static void exec_in_big_real_mode(const struct regs *inregs,
 		"xchg %%esp, %[save]+24 \n\t"
 		"xchg %%ebp, %[save]+28 \n\t"
 
-		"test_insn: . = . + 16\n\t"
+		"test_insn: . = . + 32\n\t"
 		"test_insn_end: \n\t"
 
 		"xchg %%eax, %[save]+0 \n\t"
@@ -134,10 +134,10 @@ int regs_equal(const struct regs *r1, const struct regs *r2, int ignore)
 
 #define MK_INSN(name, str)                         \
 	asm (				           \
-		".pushsection \".text\" \n\t"	   \
+		".text 1\n\t"                      \
 		"insn_" #name ": " str " \n\t"	   \
 		"insn_" #name "_end: \n\t"	   \
-		".popsection \n\t"		   \
+		".text\n\t"                        \
 		);				   \
 	extern u8 insn_##name[], insn_##name##_end[]
 
@@ -293,25 +293,31 @@ void test_io(void)
 {
 	struct regs inregs = { 0 }, outregs;
 	MK_INSN(io_test1, "mov $0xff, %al \n\t"
-		          "out %al, $0x10 \n\t"
-			  "in $0x10, %al \n\t");
+		          "out %al, $0xe0 \n\t"
+		          "mov $0x00, %al \n\t"
+			  "in $0xe0, %al \n\t");
 	MK_INSN(io_test2, "mov $0xffff, %ax \n\t"
-			  "out %ax, $0x10 \n\t"
-			  "in $0x10, %ax \n\t");
+			  "out %ax, $0xe0 \n\t"
+			  "mov $0x0000, %ax \n\t"
+			  "in $0xe0, %ax \n\t");
 	MK_INSN(io_test3, "mov $0xffffffff, %eax \n\t"
-			  "out %eax, $0x10 \n\t"
-			  "in $0x10, %eax \n\t");
-	MK_INSN(io_test4, "mov $0x10, %dx \n\t"
+			  "out %eax, $0xe0 \n\t"
+			  "mov $0x000000, %eax \n\t"
+			  "in $0xe0, %eax \n\t");
+	MK_INSN(io_test4, "mov $0xe0, %dx \n\t"
 			  "mov $0xff, %al \n\t"
 			  "out %al, %dx \n\t"
+			  "mov $0x00, %al \n\t"
 			  "in %dx, %al \n\t");
-	MK_INSN(io_test5, "mov $0x10, %dx \n\t"
+	MK_INSN(io_test5, "mov $0xe0, %dx \n\t"
 			  "mov $0xffff, %ax \n\t"
 			  "out %ax, %dx \n\t"
+			  "mov $0x0000, %ax \n\t"
 			  "in %dx, %ax \n\t");
-	MK_INSN(io_test6, "mov $0x10, %dx \n\t"
+	MK_INSN(io_test6, "mov $0xe0, %dx \n\t"
 			  "mov $0xffffffff, %eax \n\t"
 			  "out %eax, %dx \n\t"
+			  "mov $0x00000000, %eax \n\t"
 			  "in %dx, %eax \n\t");
 
 	exec_in_big_real_mode(&inregs, &outregs,
