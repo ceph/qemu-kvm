@@ -507,13 +507,6 @@ void apic_init_reset(CPUState *env)
     s->wait_for_sipi = 1;
 
     env->halted = !(s->apicbase & MSR_IA32_APICBASE_BSP);
-#ifdef KVM_CAP_MP_STATE
-    if (kvm_enabled() && kvm_irqchip_in_kernel()) {
-        env->mp_state
-            = env->halted ? KVM_MP_STATE_UNINITIALIZED : KVM_MP_STATE_RUNNABLE;
-        kvm_load_mpstate(env);
-    }
-#endif
 }
 
 static void apic_startup(APICState *s, int vector_num)

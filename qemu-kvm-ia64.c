@@ -124,7 +124,9 @@ void kvm_arch_cpu_reset(CPUState *env)
 {
     if (kvm_irqchip_in_kernel(kvm_context)) {
 #ifdef KVM_CAP_MP_STATE
-	kvm_reset_mpstate(env->kvm_cpu_state.vcpu_ctx);
+        struct kvm_mp_state mp_state = {.mp_state = KVM_MP_STATE_UNINITIALIZED
+        };
+        kvm_set_mpstate(env, &mp_state);
 #endif
     } else {
 	env->interrupt_request &= ~CPU_INTERRUPT_HARD;

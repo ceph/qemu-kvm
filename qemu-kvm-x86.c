@@ -754,6 +754,56 @@ static int get_msr_entry(struct kvm_msr_entry *entry, CPUState *env)
         return 0;
 }
 
+static void kvm_arch_save_mpstate(CPUState *env)
+{
+#ifdef KVM_CAP_MP_STATE
+    int r;
+    struct kvm_mp_state mp_state;
+
+    r = kvm_get_mpstate(env, &mp_state);
+    if (r < 0) {
+        env->mp_state = -1;
+    } else {
+        env->mp_state = mp_state.mp_state;
+        if (kvm_irqchip_in_kernel()) {
+            env->halted = (env->mp_state == KVM_MP_STATE_HALTED);
+        }
+    }
+#else
+    env->mp_state = -1;
+#endif
+}
+
+static void kvm_arch_load_mpstate(CPUState *env)
+{
+#ifdef KVM_CAP_MP_STATE
+    struct kvm_mp_state mp_state;
+
+    /*
+     * -1 indicates that the host did not support GET_MP_STATE ioctl,
+     *  so don't touch it.
+     */
+    if (env->mp_state != -1) {
+        mp_state.mp_state = env->mp_state;
+        kvm_set_mpstate(env, &mp_state);
+    }
+#endif
+}
+
+static void kvm_reset_mpstate(CPUState *env)
+{
+#ifdef KVM_CAP_MP_STATE
+    if (kvm_check_extension(kvm_state, KVM_CAP_MP_STATE)) {
+        if (kvm_irqchip_in_kernel()) {
+            env->mp_state = cpu_is_bsp(env) ? KVM_MP_STATE_RUNNABLE :
+                                              KVM_MP_STATE_UNINITIALIZED;
+        } else {
+            env->mp_state = KVM_MP_STATE_RUNNABLE;
+        }
+    }
+#endif
+}
+
 static void set_v8086_seg(struct kvm_segment *lhs, const SegmentCache *rhs)
 {
     lhs->selector = rhs->selector;
@@ -922,6 +972,14 @@ void kvm_arch_load_regs(CPUState *env, int level)
     if (rc == -1)
         perror("kvm_set_msrs FAILED");
 
+    if (level >= KVM_PUT_RESET_STATE) {
+        kvm_arch_load_mpstate(env);
+    }
+    if (kvm_irqchip_in_kernel()) {
+        /* Avoid deadlock: no user space IRQ will ever clear it. */
+        env->halted = 0;
+    }
+
     /* must be last */
     kvm_guest_debug_workarounds(env);
 }
@@ -936,36 +994,6 @@ void kvm_load_tsc(CPUState *env)
     rc = kvm_set_msrs(env, &msr, 1);
     if (rc == -1)
         perror("kvm_set_tsc FAILED.\n");
-}
-
-void kvm_arch_save_mpstate(CPUState *env)
-{
-#ifdef KVM_CAP_MP_STATE
-    int r;
-    struct kvm_mp_state mp_state;
-
-    r = kvm_get_mpstate(env, &mp_state);
-    if (r < 0)
-        env->mp_state = -1;
-    else
-        env->mp_state = mp_state.mp_state;
-#else
-    env->mp_state = -1;
-#endif
-}
-
-void kvm_arch_load_mpstate(CPUState *env)
-{
-#ifdef KVM_CAP_MP_STATE
-    struct kvm_mp_state mp_state = { .mp_state = env->mp_state };
-
-    /*
-     * -1 indicates that the host did not support GET_MP_STATE ioctl,
-     *  so don't touch it.
-     */
-    if (env->mp_state != -1)
-        kvm_set_mpstate(env, &mp_state);
-#endif
 }
 
 void kvm_arch_save_regs(CPUState *env)
@@ -1290,6 +1318,7 @@ int kvm_arch_init_vcpu(CPUState *cenv)
 #ifdef KVM_EXIT_TPR_ACCESS
     kvm_tpr_vcpu_start(cenv);
 #endif
+    kvm_reset_mpstate(cenv);
     return 0;
 }
 
@@ -1363,16 +1392,7 @@ void kvm_arch_cpu_reset(CPUState *env)
 {
     kvm_arch_reset_vcpu(env);
     kvm_put_vcpu_events(env);
-    if (!cpu_is_bsp(env)) {
-	if (kvm_irqchip_in_kernel()) {
-#ifdef KVM_CAP_MP_STATE
-	    kvm_reset_mpstate(env);
-#endif
-	} else {
-	    env->interrupt_request &= ~CPU_INTERRUPT_HARD;
-	    env->halted = 1;
-	}
-    }
+    kvm_reset_mpstate(env);
 }
 
 #ifdef CONFIG_KVM_DEVICE_ASSIGNMENT

@@ -4,6 +4,9 @@
 #include "exec-all.h"
 #include "qemu-kvm.h"
 
+void kvm_arch_save_mpstate(CPUState *env);
+void kvm_arch_load_mpstate(CPUState *env);
+
 void cpu_save(QEMUFile *f, void *opaque)
 {
     CPUState *env = opaque;

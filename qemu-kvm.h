@@ -299,16 +299,6 @@ int kvm_get_mpstate(CPUState *env, struct kvm_mp_state *mp_state);
  *
  */
 int kvm_set_mpstate(CPUState *env, struct kvm_mp_state *mp_state);
-/*!
- *  * \brief Reset VCPU MP state
- *
- */
-static inline int kvm_reset_mpstate(CPUState *env)
-{
-    struct kvm_mp_state mp_state = {.mp_state = KVM_MP_STATE_UNINITIALIZED
-    };
-    return kvm_set_mpstate(env, &mp_state);
-}
 #endif
 
 /*!
@@ -859,8 +849,6 @@ static inline void kvm_inject_x86_mce(CPUState *cenv, int bank,
 int kvm_main_loop(void);
 int kvm_init_ap(void);
 int kvm_vcpu_inited(CPUState *env);
-void kvm_load_mpstate(CPUState *env);
-void kvm_save_mpstate(CPUState *env);
 void kvm_apic_init(CPUState *env);
 /* called from vcpu initialization */
 void qemu_kvm_load_lapic(CPUState *env);
@@ -894,8 +882,6 @@ int kvm_arch_qemu_create_context(void);
 
 void kvm_arch_save_regs(CPUState *env);
 void kvm_arch_load_regs(CPUState *env, int level);
-void kvm_arch_load_mpstate(CPUState *env);
-void kvm_arch_save_mpstate(CPUState *env);
 int kvm_arch_has_work(CPUState *env);
 void kvm_arch_process_irqchip_events(CPUState *env);
 int kvm_arch_try_push_interrupts(void *opaque);
@@ -964,7 +950,6 @@ void kvm_load_tsc(CPUState *env);
 #ifdef TARGET_I386
 #define qemu_kvm_has_pit_state2() (0)
 #endif
-#define kvm_save_mpstate(env)   do {} while(0)
 #define qemu_kvm_cpu_stop(env) do {} while(0)
 static inline void kvm_load_tsc(CPUState *env)
 {

@@ -1573,36 +1573,6 @@ void kvm_update_interrupt_request(CPUState *env)
     }
 }
 
-static void kvm_do_load_mpstate(void *_env)
-{
-    CPUState *env = _env;
-
-    kvm_arch_load_mpstate(env);
-}
-
-void kvm_load_mpstate(CPUState *env)
-{
-    if (kvm_enabled() && qemu_system_ready && kvm_vcpu_inited(env))
-        on_vcpu(env, kvm_do_load_mpstate, env);
-}
-
-static void kvm_do_save_mpstate(void *_env)
-{
-    CPUState *env = _env;
-
-    kvm_arch_save_mpstate(env);
-#ifdef KVM_CAP_MP_STATE
-    if (kvm_irqchip_in_kernel())
-        env->halted = (env->mp_state == KVM_MP_STATE_HALTED);
-#endif
-}
-
-void kvm_save_mpstate(CPUState *env)
-{
-    if (kvm_enabled())
-        on_vcpu(env, kvm_do_save_mpstate, env);
-}
-
 int kvm_cpu_exec(CPUState *env)
 {
     int r;
