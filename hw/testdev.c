@@ -34,6 +34,18 @@ static void test_device_irq_line(void *opaque, uint32_t addr, uint32_t data)
     qemu_set_irq(ioapic_irq_hack[addr - 0x2000], !!data);
 }
 
+static uint32 test_device_ioport_data;
+
+static void test_device_ioport_write(void *opaque, uint32_t addr, uint32_t data)
+{
+    test_device_ioport_data = data;
+}
+
+static uint32_t test_device_ioport_read(void *opaque, uint32_t addr)
+{
+    return test_device_ioport_data;
+}
+
 static char *iomem_buf;
 
 static uint32_t test_iomem_readb(void *opaque, target_phys_addr_t addr)
@@ -86,6 +98,12 @@ static int init_test_device(ISADevice *isa)
     register_ioport_write(0xf1, 1, 1, test_device_serial_write, dev);
     register_ioport_write(0xf4, 1, 4, test_device_exit, dev);
     register_ioport_read(0xd1, 1, 4, test_device_memsize_read, dev);
+    register_ioport_read(0xe0, 1, 1, test_device_ioport_read, dev);
+    register_ioport_write(0xe0, 1, 1, test_device_ioport_write, dev);
+    register_ioport_read(0xe0, 1, 2, test_device_ioport_read, dev);
+    register_ioport_write(0xe0, 1, 2, test_device_ioport_write, dev);
+    register_ioport_read(0xe0, 1, 4, test_device_ioport_read, dev);
+    register_ioport_write(0xe0, 1, 4, test_device_ioport_write, dev);
     register_ioport_write(0x2000, 24, 1, test_device_irq_line, NULL);
     iomem_buf = qemu_mallocz(0x10000);
     iomem = cpu_register_io_memory(test_iomem_read, test_iomem_write, NULL);
