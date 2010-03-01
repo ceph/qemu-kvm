@@ -980,6 +980,8 @@ void kvm_arch_load_regs(CPUState *env, int level)
         env->halted = 0;
     }
 
+    kvm_put_vcpu_events(env, level);
+
     /* must be last */
     kvm_guest_debug_workarounds(env);
 }
@@ -1153,6 +1155,7 @@ void kvm_arch_save_regs(CPUState *env)
         }
     }
     kvm_arch_save_mpstate(env);
+    kvm_get_vcpu_events(env);
 }
 
 static void do_cpuid_ent(struct kvm_cpuid_entry2 *e, uint32_t function,
@@ -1224,7 +1227,7 @@ int kvm_arch_init_vcpu(CPUState *cenv)
 
     qemu_kvm_load_lapic(cenv);
 
-    cenv->interrupt_injected = -1;
+    kvm_arch_reset_vcpu(cenv);
 
 #ifdef KVM_CPUID_SIGNATURE
     /* Paravirtualization CPUIDs */
@@ -1391,7 +1394,6 @@ void kvm_arch_push_nmi(void *opaque)
 void kvm_arch_cpu_reset(CPUState *env)
 {
     kvm_arch_reset_vcpu(env);
-    kvm_put_vcpu_events(env, KVM_PUT_RESET_STATE);
     kvm_reset_mpstate(env);
 }
 

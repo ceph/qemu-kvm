@@ -44,8 +44,6 @@ int kvm_log_stop(target_phys_addr_t phys_addr, ram_addr_t size);
 int kvm_has_sync_mmu(void);
 int kvm_has_vcpu_events(void);
 int kvm_has_robust_singlestep(void);
-int kvm_put_vcpu_events(CPUState *env, int level);
-int kvm_get_vcpu_events(CPUState *env);
 
 void kvm_cpu_register_phys_memory_client(void);
 

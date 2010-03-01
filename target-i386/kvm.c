@@ -794,7 +794,7 @@ static int kvm_get_mp_state(CPUState *env)
 }
 #endif
 
-int kvm_put_vcpu_events(CPUState *env, int level)
+static int kvm_put_vcpu_events(CPUState *env, int level)
 {
 #ifdef KVM_CAP_VCPU_EVENTS
     struct kvm_vcpu_events events;
@@ -830,7 +830,7 @@ int kvm_put_vcpu_events(CPUState *env, int level)
 #endif
 }
 
-int kvm_get_vcpu_events(CPUState *env)
+static int kvm_get_vcpu_events(CPUState *env)
 {
 #ifdef KVM_CAP_VCPU_EVENTS
     struct kvm_vcpu_events events;

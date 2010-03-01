@@ -5,7 +5,6 @@
 
 #include "exec-all.h"
 #include "kvm.h"
-#include "qemu-kvm.h"
 
 static const VMStateDescription vmstate_segment = {
     .name = "segment",
@@ -322,10 +321,6 @@ static void cpu_pre_save(void *opaque)
     CPUState *env = opaque;
     int i;
 
-    if (kvm_enabled()) {
-        kvm_get_vcpu_events(env);
-    }
-
     /* FPU */
     env->fpus_vmstate = (env->fpus & ~0x3800) | (env->fpstt & 0x7) << 11;
     env->fptag_vmstate = 0;
@@ -362,7 +357,6 @@ static int cpu_post_load(void *opaque, int version_id)
 
     if (kvm_enabled()) {
         kvm_load_tsc(env);
-        kvm_put_vcpu_events(env, KVM_PUT_FULL_STATE);
     }
 
     return 0;
