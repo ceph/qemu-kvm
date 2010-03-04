@@ -672,7 +672,7 @@ static const VMStateDescription vmstate_kvmclock= {
 
 int kvm_arch_qemu_create_context(void)
 {
-    int i;
+    int i, r;
     struct utsname utsname;
 
     uname(&utsname);
@@ -696,7 +696,12 @@ int kvm_arch_qemu_create_context(void)
         vmstate_register(0, &vmstate_kvmclock, &kvmclock_data);
 #endif
 
-    return kvm_set_boot_cpu_id(0);
+    r = kvm_set_boot_cpu_id(0);
+    if (r < 0 && r != -ENOSYS) {
+        return r;
+    }
+
+    return 0;
 }
 
 static void set_msr_entry(struct kvm_msr_entry *entry, uint32_t index,
