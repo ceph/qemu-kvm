@@ -188,9 +188,10 @@ unsigned long qemu_host_page_mask;
 
 /* XXX: for system emulation, it could just be an array */
 static PageDesc *l1_map[L1_SIZE];
-static PhysPageDesc **l1_phys_map;
 
 #if !defined(CONFIG_USER_ONLY)
+static PhysPageDesc **l1_phys_map;
+
 static void io_mem_init(void);
 
 /* io memory support */
@@ -215,15 +216,6 @@ static int log_append = 0;
 static int tlb_flush_count;
 static int tb_flush_count;
 static int tb_phys_invalidate_count;
-
-#define SUBPAGE_IDX(addr) ((addr) & ~TARGET_PAGE_MASK)
-typedef struct subpage_t {
-    target_phys_addr_t base;
-    CPUReadMemoryFunc * const *mem_read[TARGET_PAGE_SIZE][4];
-    CPUWriteMemoryFunc * const *mem_write[TARGET_PAGE_SIZE][4];
-    void *opaque[TARGET_PAGE_SIZE][2][4];
-    ram_addr_t region_offset[TARGET_PAGE_SIZE][2][4];
-} subpage_t;
 
 #ifdef _WIN32
 static void map_exec(void *addr, long size)
@@ -273,8 +265,10 @@ static void page_init(void)
     while ((1 << qemu_host_page_bits) < qemu_host_page_size)
         qemu_host_page_bits++;
     qemu_host_page_mask = ~(qemu_host_page_size - 1);
+#if !defined(CONFIG_USER_ONLY)
     l1_phys_map = qemu_vmalloc(L1_SIZE * sizeof(void *));
     memset(l1_phys_map, 0, L1_SIZE * sizeof(void *));
+#endif
 
 #if !defined(_WIN32) && defined(CONFIG_USER_ONLY)
     {
@@ -360,6 +354,7 @@ static inline PageDesc *page_find(target_ulong index)
     return p + (index & (L2_SIZE - 1));
 }
 
+#if !defined(CONFIG_USER_ONLY)
 static PhysPageDesc *phys_page_find_alloc(target_phys_addr_t index, int alloc)
 {
     void **lp, **p;
@@ -404,7 +399,6 @@ static inline PhysPageDesc *phys_page_find(target_phys_addr_t index)
     return phys_page_find_alloc(index, 0);
 }
 
-#if !defined(CONFIG_USER_ONLY)
 static void tlb_protect_code(ram_addr_t ram_addr);
 static void tlb_unprotect_code_phys(CPUState *env, ram_addr_t ram_addr,
                                     target_ulong vaddr);
@@ -1313,6 +1307,12 @@ static void tb_reset_jump_recursive(TranslationBlock *tb)
 }
 
 #if defined(TARGET_HAS_ICE)
+#if defined(CONFIG_USER_ONLY)
+static void breakpoint_invalidate(CPUState *env, target_ulong pc)
+{
+    tb_invalidate_phys_page_range(pc, pc + 1, 0);
+}
+#else
 static void breakpoint_invalidate(CPUState *env, target_ulong pc)
 {
     target_phys_addr_t addr;
@@ -1331,7 +1331,20 @@ static void breakpoint_invalidate(CPUState *env, target_ulong pc)
     tb_invalidate_phys_page_range(ram_addr, ram_addr + 1, 0);
 }
 #endif
+#endif /* TARGET_HAS_ICE */
 
+#if defined(CONFIG_USER_ONLY)
+void cpu_watchpoint_remove_all(CPUState *env, int mask)
+
+{
+}
+
+int cpu_watchpoint_insert(CPUState *env, target_ulong addr, target_ulong len,
+                          int flags, CPUWatchpoint **watchpoint)
+{
+    return -ENOSYS;
+}
+#else
 /* Add a watchpoint.  */
 int cpu_watchpoint_insert(CPUState *env, target_ulong addr, target_ulong len,
                           int flags, CPUWatchpoint **watchpoint)
@@ -1401,6 +1414,7 @@ void cpu_watchpoint_remove_all(CPUState *env, int mask)
             cpu_watchpoint_remove_by_ref(env, wp);
     }
 }
+#endif
 
 /* Add a breakpoint.  */
 int cpu_breakpoint_insert(CPUState *env, target_ulong pc, int flags,
@@ -2166,13 +2180,6 @@ void tlb_flush_page(CPUState *env, target_ulong addr)
 {
 }
 
-int tlb_set_page_exec(CPUState *env, target_ulong vaddr,
-                      target_phys_addr_t paddr, int prot,
-                      int mmu_idx, int is_softmmu)
-{
-    return 0;
-}
-
 /*
  * Walks guest process memory "regions" one by one
  * and calls callback function 'fn' for each region.
@@ -2373,6 +2380,15 @@ static inline void tlb_set_dirty(CPUState *env,
 
 #if !defined(CONFIG_USER_ONLY)
 
+#define SUBPAGE_IDX(addr) ((addr) & ~TARGET_PAGE_MASK)
+typedef struct subpage_t {
+    target_phys_addr_t base;
+    CPUReadMemoryFunc * const *mem_read[TARGET_PAGE_SIZE][4];
+    CPUWriteMemoryFunc * const *mem_write[TARGET_PAGE_SIZE][4];
+    void *opaque[TARGET_PAGE_SIZE][2][4];
+    ram_addr_t region_offset[TARGET_PAGE_SIZE][2][4];
+} subpage_t;
+
 static int subpage_register (subpage_t *mmio, uint32_t start, uint32_t end,
                              ram_addr_t memory, ram_addr_t region_offset);
 static void *subpage_init (target_phys_addr_t base, ram_addr_t *phys,
@@ -2515,7 +2531,7 @@ void qemu_flush_coalesced_mmio_buffer(void)
         kvm_flush_coalesced_mmio_buffer();
 }
 
-#ifdef __linux__
+#if defined(__linux__) && !defined(TARGET_S390X)
 
 #include <sys/vfs.h>
 
@@ -2550,11 +2566,6 @@ static void *file_ram_alloc(ram_addr_t memory, const char *path)
     int flags;
 #endif
     unsigned long hpagesize;
-    extern int mem_prealloc;
-
-    if (!path) {
-        return NULL;
-    }
 
     hpagesize = gethugepagesize(path);
     if (!hpagesize) {
@@ -2566,11 +2577,11 @@ static void *file_ram_alloc(ram_addr_t memory, const char *path)
     }
 
     if (kvm_enabled() && !kvm_has_sync_mmu()) {
-        fprintf(stderr, "host lacks mmu notifiers, disabling --mem-path\n");
+        fprintf(stderr, "host lacks kvm mmu notifiers, -mem-path unsupported\n");
         return NULL;
     }
 
-    if (asprintf(&filename, "%s/kvm.XXXXXX", path) == -1) {
+    if (asprintf(&filename, "%s/qemu_back_mem.XXXXXX", path) == -1) {
 	return NULL;
     }
 
@@ -2587,7 +2598,7 @@ static void *file_ram_alloc(ram_addr_t memory, const char *path)
 
     /*
      * ftruncate is not supported by hugetlbfs in older
-     * hosts, so don't bother checking for errors.
+     * hosts, so don't bother bailing out on errors.
      * If anything goes wrong with it under other filesystems,
      * mmap will fail.
      */
@@ -2599,29 +2610,19 @@ static void *file_ram_alloc(ram_addr_t memory, const char *path)
      * MAP_PRIVATE is requested.  For mem_prealloc we mmap as MAP_SHARED
      * to sidestep this quirk.
      */
-    flags = mem_prealloc ? MAP_POPULATE|MAP_SHARED : MAP_PRIVATE;
-    area = mmap(0, memory, PROT_READ|PROT_WRITE, flags, fd, 0);
+    flags = mem_prealloc ? MAP_POPULATE | MAP_SHARED : MAP_PRIVATE;
+    area = mmap(0, memory, PROT_READ | PROT_WRITE, flags, fd, 0);
 #else
-    area = mmap(0, memory, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
+    area = mmap(0, memory, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
 #endif
     if (area == MAP_FAILED) {
-	perror("alloc_mem_area: can't mmap hugetlbfs pages");
+	perror("file_ram_alloc: can't mmap RAM pages");
 	close(fd);
 	return (NULL);
     }
     return area;
 }
-
-#else
-
-static void *file_ram_alloc(ram_addr_t memory, const char *path)
-{
-    return NULL;
-}
-
 #endif
-
-extern const char *mem_path;
 
 ram_addr_t qemu_ram_alloc(ram_addr_t size)
 {
@@ -2630,13 +2631,21 @@ ram_addr_t qemu_ram_alloc(ram_addr_t size)
     size = TARGET_PAGE_ALIGN(size);
     new_block = qemu_malloc(sizeof(*new_block));
 
-    new_block->host = file_ram_alloc(size, mem_path);
-    if (!new_block->host) {
+    if (mem_path) {
+#if defined (__linux__) && !defined(TARGET_S390X)
+        new_block->host = file_ram_alloc(size, mem_path);
+        if (!new_block->host)
+            exit(1);
+#else
+        fprintf(stderr, "-mem-path option unsupported\n");
+        exit(1);
+#endif
+    } else {
 #if defined(TARGET_S390X) && defined(CONFIG_KVM)
-    /* XXX S390 KVM requires the topmost vma of the RAM to be < 256GB */
+        /* XXX S390 KVM requires the topmost vma of the RAM to be < 256GB */
         new_block->host = mmap((void*)0x1000000, size,
-                               PROT_EXEC|PROT_READ|PROT_WRITE,
-                               MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+                                PROT_EXEC|PROT_READ|PROT_WRITE,
+                                MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 #else
         new_block->host = qemu_vmalloc(size);
 #endif
@@ -3220,8 +3229,8 @@ static void io_mem_init(void)
 
 /* physical memory access (slow version, mainly for debug) */
 #if defined(CONFIG_USER_ONLY)
-void cpu_physical_memory_rw(target_phys_addr_t addr, uint8_t *buf,
-                            int len, int is_write)
+int cpu_memory_rw_debug(CPUState *env, target_ulong addr,
+                        uint8_t *buf, int len, int is_write)
 {
     int l, flags;
     target_ulong page;
@@ -3234,23 +3243,21 @@ void cpu_physical_memory_rw(target_phys_addr_t addr, uint8_t *buf,
             l = len;
         flags = page_get_flags(page);
         if (!(flags & PAGE_VALID))
-            return;
+            return -1;
         if (is_write) {
             if (!(flags & PAGE_WRITE))
-                return;
+                return -1;
             /* XXX: this code should not depend on lock_user */
             if (!(p = lock_user(VERIFY_WRITE, addr, l, 0)))
-                /* FIXME - should this return an error rather than just fail? */
-                return;
+                return -1;
             memcpy(p, buf, l);
             unlock_user(p, addr, l);
         } else {
             if (!(flags & PAGE_READ))
-                return;
+                return -1;
             /* XXX: this code should not depend on lock_user */
             if (!(p = lock_user(VERIFY_READ, addr, l, 1)))
-                /* FIXME - should this return an error rather than just fail? */
-                return;
+                return -1;
             memcpy(buf, p, l);
             unlock_user(p, addr, 0);
         }
@@ -3258,6 +3265,7 @@ void cpu_physical_memory_rw(target_phys_addr_t addr, uint8_t *buf,
         buf += l;
         addr += l;
     }
+    return 0;
 }
 
 #else
@@ -3764,8 +3772,6 @@ void stq_phys(target_phys_addr_t addr, uint64_t val)
     cpu_physical_memory_write(addr, (const uint8_t *)&val, 8);
 }
 
-#endif
-
 /* virtual memory access for debug (includes writing to ROM) */
 int cpu_memory_rw_debug(CPUState *env, target_ulong addr,
                         uint8_t *buf, int len, int is_write)
@@ -3784,11 +3790,9 @@ int cpu_memory_rw_debug(CPUState *env, target_ulong addr,
         if (l > len)
             l = len;
         phys_addr += (addr & ~TARGET_PAGE_MASK);
-#if !defined(CONFIG_USER_ONLY)
         if (is_write)
             cpu_physical_memory_write_rom(phys_addr, buf, l);
         else
-#endif
             cpu_physical_memory_rw(phys_addr, buf, l, is_write);
         len -= l;
         buf += l;
@@ -3796,6 +3800,7 @@ int cpu_memory_rw_debug(CPUState *env, target_ulong addr,
     }
     return 0;
 }
+#endif
 
 /* in deterministic execution mode, instructions doing device I/Os
    must be at the end of the TB */

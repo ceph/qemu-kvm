@@ -840,9 +840,6 @@ void cpu_set_log(int log_flags);
 void cpu_set_log_filename(const char *filename);
 int cpu_str_to_log_mask(const char *str);
 
-/* IO ports API */
-#include "ioport.h"
-
 /* memory API */
 
 extern int phys_ram_fd;
@@ -850,6 +847,9 @@ extern uint8_t *phys_ram_dirty;
 extern ram_addr_t ram_size;
 extern ram_addr_t last_ram_offset;
 extern uint8_t *bios_mem;
+
+extern const char *mem_path;
+extern int mem_prealloc;
 
 /* physical memory access */
 

@@ -20,6 +20,7 @@
 #include "exec.h"
 #include "exec-all.h"
 #include "host-utils.h"
+#include "ioport.h"
 
 //#define DEBUG_PCALL
 
@@ -1351,6 +1352,11 @@ void raise_exception(int exception_index)
     raise_interrupt(exception_index, 0, 0, 0);
 }
 
+void raise_exception_env(int exception_index, CPUState *nenv)
+{
+    env = nenv;
+    raise_exception(exception_index);
+}
 /* SMM support */
 
 #if defined(CONFIG_USER_ONLY)

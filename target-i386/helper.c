@@ -1864,7 +1864,7 @@ int check_hw_breakpoints(CPUState *env, int force_dr6_update)
 
 static CPUDebugExcpHandler *prev_debug_excp_handler;
 
-void raise_exception(int exception_index);
+void raise_exception_env(int exception_index, CPUState *env);
 
 static void breakpoint_handler(CPUState *env)
 {
@@ -1874,7 +1874,7 @@ static void breakpoint_handler(CPUState *env)
         if (env->watchpoint_hit->flags & BP_CPU) {
             env->watchpoint_hit = NULL;
             if (check_hw_breakpoints(env, 0))
-                raise_exception(EXCP01_DB);
+                raise_exception_env(EXCP01_DB, env);
             else
                 cpu_resume_from_signal(env, NULL);
         }
@@ -1883,7 +1883,7 @@ static void breakpoint_handler(CPUState *env)
             if (bp->pc == env->eip) {
                 if (bp->flags & BP_CPU) {
                     check_hw_breakpoints(env, 1);
-                    raise_exception(EXCP01_DB);
+                    raise_exception_env(EXCP01_DB, env);
                 }
                 break;
             }
