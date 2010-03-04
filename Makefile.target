@@ -59,7 +59,6 @@ libobj-$(CONFIG_KVM) += kvm-tpr-opt.o
 libobj-$(CONFIG_KVM) += qemu-kvm-helper.o
 
 libobj-$(TARGET_ARM) += neon_helper.o iwmmxt_helper.o
-libobj-$(TARGET_ALPHA) += alpha_palcode.o
 
 # NOTE: the disassembler code is only needed for debugging
 libobj-y += disas.o
@@ -338,6 +337,8 @@ obj-m68k-y = an5206.o mcf5206.o mcf_uart.o mcf_intc.o mcf5208.o mcf_fec.o
 obj-m68k-y += m68k-semi.o dummy_m68k.o
 
 obj-s390x-y = s390-virtio-bus.o s390-virtio.o
+
+obj-alpha-y = alpha_palcode.o
 
 ifeq ($(TARGET_ARCH), ia64)
 firmware.o: firmware.c

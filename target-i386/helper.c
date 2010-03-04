@@ -659,8 +659,9 @@ static void listflags(char *buf, int bufsize, uint32_t fbits,
             else
                 nc = snprintf(q, bufsize, "%s[%d]", q == buf ? "" : " ", bit);
             if (bufsize <= nc) {
-                if (b)
-                    sprintf(b, "...");
+                if (b) {
+                    memcpy(b, "...", sizeof("..."));
+                }
                 return;
             }
             q += nc;
@@ -778,7 +779,7 @@ static int cpu_x86_register (CPUX86State *env, const char *cpu_model)
     return 0;
 }
 
-#if !defined(CONFIG_LINUX_USER)
+#if !defined(CONFIG_USER_ONLY)
 /* copy vendor id string to 32 bit register, nul pad as needed
  */
 static void cpyid(const char *s, uint32_t *id)
@@ -881,7 +882,7 @@ static int cpudef_register(QemuOpts *opts, void *opaque)
     x86_defs = def;
     return (0);
 }
-#endif	/* !CONFIG_LINUX_USER */
+#endif /* !CONFIG_USER_ONLY */
 
 /* register "cpudef" models defined in configuration file.  Here we first
  * preload any built-in definitions
@@ -895,7 +896,7 @@ void x86_cpudef_setup(void)
         builtin_x86_defs[i].flags = 1;
         x86_defs = &builtin_x86_defs[i];
     }
-#if !defined(CONFIG_LINUX_USER)
+#if !defined(CONFIG_USER_ONLY)
     qemu_opts_foreach(&qemu_cpudef_opts, cpudef_register, NULL, 0);
 #endif
 }

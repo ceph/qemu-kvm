@@ -1149,7 +1149,7 @@ static int cpu_gdb_read_register(CPUState *env, uint8_t *mem_buf, int n)
             GET_REGL(env->gregs[n]);
         }
     } else if (n < 16) {
-        GET_REGL(env->gregs[n - 8]);
+        GET_REGL(env->gregs[n]);
     } else if (n >= 25 && n < 41) {
 	GET_REGL(env->fregs[(n - 25) + ((env->fpscr & FPSCR_FR) ? 16 : 0)]);
     } else if (n >= 43 && n < 51) {
@@ -1188,10 +1188,11 @@ static int cpu_gdb_write_register(CPUState *env, uint8_t *mem_buf, int n)
         }
 	return 4;
     } else if (n < 16) {
-        env->gregs[n - 8] = tmp;
+        env->gregs[n] = tmp;
 	return 4;
     } else if (n >= 25 && n < 41) {
 	env->fregs[(n - 25) + ((env->fpscr & FPSCR_FR) ? 16 : 0)] = tmp;
+	return 4;
     } else if (n >= 43 && n < 51) {
 	env->gregs[n - 43] = tmp;
 	return 4;
@@ -1200,17 +1201,17 @@ static int cpu_gdb_write_register(CPUState *env, uint8_t *mem_buf, int n)
 	return 4;
     }
     switch (n) {
-    case 16: env->pc = tmp;
-    case 17: env->pr = tmp;
-    case 18: env->gbr = tmp;
-    case 19: env->vbr = tmp;
-    case 20: env->mach = tmp;
-    case 21: env->macl = tmp;
-    case 22: env->sr = tmp;
-    case 23: env->fpul = tmp;
-    case 24: env->fpscr = tmp;
-    case 41: env->ssr = tmp;
-    case 42: env->spc = tmp;
+    case 16: env->pc = tmp; break;
+    case 17: env->pr = tmp; break;
+    case 18: env->gbr = tmp; break;
+    case 19: env->vbr = tmp; break;
+    case 20: env->mach = tmp; break;
+    case 21: env->macl = tmp; break;
+    case 22: env->sr = tmp; break;
+    case 23: env->fpul = tmp; break;
+    case 24: env->fpscr = tmp; break;
+    case 41: env->ssr = tmp; break;
+    case 42: env->spc = tmp; break;
     default: return 0;
     }
 
@@ -1344,52 +1345,72 @@ static int cpu_gdb_write_register(CPUState *env, uint8_t *mem_buf, int n)
 }
 #elif defined (TARGET_ALPHA)
 
-#define NUM_CORE_REGS 65
+#define NUM_CORE_REGS 67
 
 static int cpu_gdb_read_register(CPUState *env, uint8_t *mem_buf, int n)
 {
-    if (n < 31) {
-       GET_REGL(env->ir[n]);
-    }
-    else if (n == 31) {
-       GET_REGL(0);
-    }
-    else if (n<63) {
-       uint64_t val;
+    uint64_t val;
+    CPU_DoubleU d;
 
-       val = *((uint64_t *)&env->fir[n-32]);
-       GET_REGL(val);
+    switch (n) {
+    case 0 ... 30:
+        val = env->ir[n];
+        break;
+    case 32 ... 62:
+        d.d = env->fir[n - 32];
+        val = d.ll;
+        break;
+    case 63:
+        val = cpu_alpha_load_fpcr(env);
+        break;
+    case 64:
+        val = env->pc;
+        break;
+    case 66:
+        val = env->unique;
+        break;
+    case 31:
+    case 65:
+        /* 31 really is the zero register; 65 is unassigned in the
+           gdb protocol, but is still required to occupy 8 bytes. */
+        val = 0;
+        break;
+    default:
+        return 0;
     }
-    else if (n==63) {
-       GET_REGL(env->fpcr);
-    }
-    else if (n==64) {
-       GET_REGL(env->pc);
-    }
-    else {
-       GET_REGL(0);
-    }
-
-    return 0;
+    GET_REGL(val);
 }
 
 static int cpu_gdb_write_register(CPUState *env, uint8_t *mem_buf, int n)
 {
-    target_ulong tmp;
-    tmp = ldtul_p(mem_buf);
+    target_ulong tmp = ldtul_p(mem_buf);
+    CPU_DoubleU d;
 
-    if (n < 31) {
+    switch (n) {
+    case 0 ... 30:
         env->ir[n] = tmp;
+        break;
+    case 32 ... 62:
+        d.ll = tmp;
+        env->fir[n - 32] = d.d;
+        break;
+    case 63:
+        cpu_alpha_store_fpcr(env, tmp);
+        break;
+    case 64:
+        env->pc = tmp;
+        break;
+    case 66:
+        env->unique = tmp;
+        break;
+    case 31:
+    case 65:
+        /* 31 really is the zero register; 65 is unassigned in the
+           gdb protocol, but is still required to occupy 8 bytes. */
+        break;
+    default:
+        return 0;
     }
-
-    if (n > 31 && n < 63) {
-        env->fir[n - 32] = ldfl_p(mem_buf);
-    }
-
-    if (n == 64 ) {
-       env->pc=tmp;
-    }
-
     return 8;
 }
 #elif defined (TARGET_S390X)
@@ -1849,6 +1870,7 @@ static int gdb_handle_packet(GDBState *s, const char *line_buf)
     case 'D':
         /* Detach packet */
         gdb_breakpoint_remove_all();
+        gdb_syscall_mode = GDB_SYS_DISABLED;
         gdb_continue(s);
         put_packet(s, "OK");
         break;
