@@ -21,6 +21,7 @@
 #include <linux/kvm.h>
 
 #include "qemu-common.h"
+#include "qemu-barrier.h"
 #include "sysemu.h"
 #include "hw/hw.h"
 #include "gdbstub.h"
@@ -748,7 +749,7 @@ void kvm_flush_coalesced_mmio_buffer(void)
             ent = &ring->coalesced_mmio[ring->first];
 
             cpu_physical_memory_write(ent->phys_addr, ent->data, ent->len);
-            /* FIXME smp_wmb() */
+            smp_wmb();
             ring->first = (ring->first + 1) % KVM_COALESCED_MMIO_MAX;
         }
     }
@@ -785,11 +786,13 @@ int kvm_cpu_exec(CPUState *env)
     dprintf("kvm_cpu_exec()\n");
 
     do {
+#ifndef CONFIG_IOTHREAD
         if (env->exit_request) {
             dprintf("interrupt exit requested\n");
             ret = 0;
             break;
         }
+#endif
 
         if (env->kvm_vcpu_dirty) {
             kvm_arch_put_registers(env, KVM_PUT_RUNTIME_STATE);

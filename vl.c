@@ -187,6 +187,10 @@ enum vga_retrace_method vga_retrace_method = VGA_RETRACE_DUMB;
 DisplayType display_type = DT_DEFAULT;
 const char* keyboard_layout = NULL;
 ram_addr_t ram_size;
+const char *mem_path = NULL;
+#ifdef MAP_POPULATE
+int mem_prealloc = 0; /* force preallocation of physical target memory */
+#endif
 int nb_nics;
 NICInfo nd_table[MAX_NICS];
 int vm_running;
@@ -244,10 +248,6 @@ int nb_option_roms;
 int semihosting_enabled = 0;
 int time_drift_fix = 0;
 unsigned int kvm_shadow_memory = 0;
-const char *mem_path = NULL;
-#ifdef MAP_POPULATE
-int mem_prealloc = 1;	/* force preallocation of physical target memory */
-#endif
 #ifdef TARGET_ARM
 int old_param = 0;
 #endif
@@ -5303,6 +5303,14 @@ int main(int argc, char **argv, char **envp)
                 ram_size = value;
                 break;
             }
+            case QEMU_OPTION_mempath:
+                mem_path = optarg;
+                break;
+#ifdef MAP_POPULATE
+            case QEMU_OPTION_mem_prealloc:
+                mem_prealloc = 1;
+                break;
+#endif
             case QEMU_OPTION_d:
                 {
                     int mask;
@@ -5611,14 +5619,6 @@ int main(int argc, char **argv, char **envp)
             case QEMU_OPTION_kvm_shadow_memory:
                 kvm_shadow_memory = (int64_t)atoi(optarg) * 1024 * 1024 / 4096;
                 break;
-            case QEMU_OPTION_mempath:
-		mem_path = optarg;
-		break;
-#ifdef MAP_POPULATE
-            case QEMU_OPTION_mem_prealloc:
-		mem_prealloc = !mem_prealloc;
-		break;
-#endif
             case QEMU_OPTION_name:
                 qemu_name = qemu_strdup(optarg);
 		 {

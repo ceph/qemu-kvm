@@ -7001,7 +7001,7 @@ static inline void gen_evmergelohi(DisasContext *ctx)
 }
 static inline void gen_evsplati(DisasContext *ctx)
 {
-    uint64_t imm = ((int32_t)(rA(ctx->opcode) << 11)) >> 27;
+    uint64_t imm = ((int32_t)(rA(ctx->opcode) << 27)) >> 27;
 
 #if defined(TARGET_PPC64)
     tcg_gen_movi_tl(cpu_gpr[rD(ctx->opcode)], (imm << 32) | imm);
@@ -7012,7 +7012,7 @@ static inline void gen_evsplati(DisasContext *ctx)
 }
 static inline void gen_evsplatfi(DisasContext *ctx)
 {
-    uint64_t imm = rA(ctx->opcode) << 11;
+    uint64_t imm = rA(ctx->opcode) << 27;
 
 #if defined(TARGET_PPC64)
     tcg_gen_movi_tl(cpu_gpr[rD(ctx->opcode)], (imm << 32) | imm);
@@ -9053,11 +9053,6 @@ static inline void gen_intermediate_code_internal(CPUState *env,
                          "%02x - %02x - %02x (%08x) " TARGET_FMT_lx " %d\n",
                          opc1(ctx.opcode), opc2(ctx.opcode),
                          opc3(ctx.opcode), ctx.opcode, ctx.nip - 4, (int)msr_ir);
-            } else {
-                printf("invalid/unsupported opcode: "
-                       "%02x - %02x - %02x (%08x) " TARGET_FMT_lx " %d\n",
-                       opc1(ctx.opcode), opc2(ctx.opcode),
-                       opc3(ctx.opcode), ctx.opcode, ctx.nip - 4, (int)msr_ir);
             }
         } else {
             if (unlikely((ctx.opcode & handler->inval) != 0)) {
@@ -9067,12 +9062,6 @@ static inline void gen_intermediate_code_internal(CPUState *env,
                              ctx.opcode & handler->inval, opc1(ctx.opcode),
                              opc2(ctx.opcode), opc3(ctx.opcode),
                              ctx.opcode, ctx.nip - 4);
-                } else {
-                    printf("invalid bits: %08x for opcode: "
-                           "%02x - %02x - %02x (%08x) " TARGET_FMT_lx "\n",
-                           ctx.opcode & handler->inval, opc1(ctx.opcode),
-                           opc2(ctx.opcode), opc3(ctx.opcode),
-                           ctx.opcode, ctx.nip - 4);
                 }
                 gen_inval_exception(ctxp, POWERPC_EXCP_INVAL_INVAL);
                 break;

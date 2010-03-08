@@ -25,6 +25,7 @@
 #include "gdbstub.h"
 #include "host-utils.h"
 #include "hw/pc.h"
+#include "ioport.h"
 
 #ifdef CONFIG_KVM_PARA
 #include <linux/kvm_para.h>
@@ -563,7 +564,10 @@ static int kvm_put_msrs(CPUState *env, int level)
     kvm_msr_entry_set(&msrs[n++], MSR_IA32_SYSENTER_EIP, env->sysenter_eip);
     if (kvm_has_msr_star(env))
 	kvm_msr_entry_set(&msrs[n++], MSR_STAR, env->star);
+<<<<<<< HEAD
     kvm_msr_entry_set(&msrs[n++], MSR_VM_HSAVE_PA, env->vm_hsave);
+=======
+>>>>>>> 6cb2996cef5e273ef370e690e84b5e1403f5c391
 #ifdef TARGET_X86_64
     /* FIXME if lm capable */
     kvm_msr_entry_set(&msrs[n++], MSR_CSTAR, env->cstar);

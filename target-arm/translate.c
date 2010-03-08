@@ -2469,19 +2469,17 @@ static int cp15_tls_load_store(CPUState *env, DisasContext *s, uint32_t insn, ui
         return 0;
 
     if (insn & ARM_CP_RW_BIT) {
-        tmp = new_tmp();
         switch (op) {
         case 2:
-            tcg_gen_ld_i32(tmp, cpu_env, offsetof(CPUARMState, cp15.c13_tls1));
+            tmp = load_cpu_field(cp15.c13_tls1);
             break;
         case 3:
-            tcg_gen_ld_i32(tmp, cpu_env, offsetof(CPUARMState, cp15.c13_tls2));
+            tmp = load_cpu_field(cp15.c13_tls2);
             break;
         case 4:
-            tcg_gen_ld_i32(tmp, cpu_env, offsetof(CPUARMState, cp15.c13_tls3));
+            tmp = load_cpu_field(cp15.c13_tls3);
             break;
         default:
-            dead_tmp(tmp);
             return 0;
         }
         store_reg(s, rd, tmp);
@@ -2490,18 +2488,18 @@ static int cp15_tls_load_store(CPUState *env, DisasContext *s, uint32_t insn, ui
         tmp = load_reg(s, rd);
         switch (op) {
         case 2:
-            tcg_gen_st_i32(tmp, cpu_env, offsetof(CPUARMState, cp15.c13_tls1));
+            store_cpu_field(tmp, cp15.c13_tls1);
             break;
         case 3:
-            tcg_gen_st_i32(tmp, cpu_env, offsetof(CPUARMState, cp15.c13_tls2));
+            store_cpu_field(tmp, cp15.c13_tls2);
             break;
         case 4:
-            tcg_gen_st_i32(tmp, cpu_env, offsetof(CPUARMState, cp15.c13_tls3));
+            store_cpu_field(tmp, cp15.c13_tls3);
             break;
         default:
+            dead_tmp(tmp);
             return 0;
         }
-        dead_tmp(tmp);
     }
     return 1;
 }
@@ -5012,7 +5010,7 @@ static int disas_neon_data_insn(CPUState * env, DisasContext *s, uint32_t insn)
                     case 0: case 1: case 4: /* VADDL, VADDW, VADDHN, VRADDHN */
                         gen_neon_addl(size);
                         break;
-                    case 2: case 3: case 6: /* VSUBL, VSUBW, VSUBHL, VRSUBHL */
+                    case 2: case 3: case 6: /* VSUBL, VSUBW, VSUBHN, VRSUBHN */
                         gen_neon_subl(size);
                         break;
                     case 5: case 7: /* VABAL, VABDL */
@@ -5081,7 +5079,7 @@ static int disas_neon_data_insn(CPUState * env, DisasContext *s, uint32_t insn)
                     } else if (op == 4 || op == 6) {
                         /* Narrowing operation.  */
                         tmp = new_tmp();
-                        if (u) {
+                        if (!u) {
                             switch (size) {
                             case 0:
                                 gen_helper_neon_narrow_high_u8(tmp, cpu_V0);
@@ -5440,6 +5438,7 @@ static int disas_neon_data_insn(CPUState * env, DisasContext *s, uint32_t insn)
                         if (pass == 1)
                             tmp = tmp2;
                         gen_neon_widen(cpu_V0, tmp, size, 1);
+                        tcg_gen_shli_i64(cpu_V0, cpu_V0, 8 << size);
                         neon_store_reg64(cpu_V0, rd + pass);
                     }
                     break;
@@ -6132,6 +6131,7 @@ static void disas_arm_insn(CPUState * env, DisasContext *s)
             } else {
                 dead_tmp(addr);
             }
+            return;
         } else if ((insn & 0x0e5fffe0) == 0x081d0a00) {
             /* rfe */
             int32_t offset;

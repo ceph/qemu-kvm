@@ -184,7 +184,9 @@ common  de-ch  es     fo  fr-ca  hu     ja  mk  nl-be      pt  sl     tr
 ifdef INSTALL_BLOBS
 BLOBS=bios.bin vgabios.bin vgabios-cirrus.bin ppc_rom.bin \
 video.x openbios-sparc32 openbios-sparc64 openbios-ppc \
-pxe-e1000.bin pxe-i82559er.bin \
+gpxe-eepro100-80861209.rom \
+gpxe-eepro100-80861229.rom \
+pxe-e1000.bin \
 pxe-ne2k_pci.bin pxe-pcnet.bin \
 pxe-rtl8139.bin pxe-virtio.bin \
 bamboo.dtb petalogix-s3adsp1800.dtb \
@@ -207,7 +209,7 @@ endif
 
 install-sysconfig:
 	$(INSTALL_DIR) "$(sysconfdir)/qemu"
-	$(INSTALL_DATA) sysconfigs/target/target-x86_64.conf "$(sysconfdir)/qemu"
+	$(INSTALL_DATA) $(SRC_PATH)/sysconfigs/target/target-x86_64.conf "$(sysconfdir)/qemu"
 
 install: all $(if $(BUILD_DOCS),install-doc) install-sysconfig
 	$(INSTALL_DIR) "$(DESTDIR)$(bindir)"
@@ -250,15 +252,18 @@ cscope:
 	cscope -b
 
 # documentation
+MAKEINFO=makeinfo
+MAKEINFOFLAGS=--no-headers --no-split --number-sections
 TEXIFLAG=$(if $(V),,--quiet)
 %.dvi: %.texi
 	$(call quiet-command,texi2dvi $(TEXIFLAG) -I . $<,"  GEN   $@")
 
 %.html: %.texi
-	$(call quiet-command,texi2html -I=. -monolithic -number $<,"  GEN   $@")
+	$(call quiet-command,$(MAKEINFO) $(MAKEINFOFLAGS) --html $< -o $@, \
+	"  GEN   $@")
 
 %.info: %.texi
-	$(call quiet-command,makeinfo -I . $< -o $@,"  GEN   $@")
+	$(call quiet-command,$(MAKEINFO) $< -o $@,"  GEN   $@")
 
 %.pdf: %.texi
 	$(call quiet-command,texi2pdf $(TEXIFLAG) -I . $<,"  GEN   $@")

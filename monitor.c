@@ -1325,8 +1325,6 @@ static void memory_dump(Monitor *mon, int count, int format, int wsize,
         int flags;
         flags = 0;
         env = mon_get_cpu();
-        if (!is_physical)
-            return;
 #ifdef TARGET_I386
         if (wsize == 2) {
             flags = 1;
@@ -2340,7 +2338,6 @@ static int do_info_balloon(Monitor *mon, MonitorCompletion cb, void *opaque)
         return -1;
     }
 
-    cb(opaque, NULL);
     return 0;
 }
 
@@ -2363,6 +2360,7 @@ static int do_balloon(Monitor *mon, const QDict *params,
         return -1;
     }
 
+    cb(opaque, NULL);
     return 0;
 }
 
