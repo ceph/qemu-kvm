@@ -1020,6 +1020,10 @@ void kvm_arch_load_regs(CPUState *env, int level)
         kvm_arch_load_mpstate(env);
         kvm_load_lapic(env);
     }
+    if (level == KVM_PUT_FULL_STATE) {
+        if (env->update_vapic)
+            kvm_tpr_enable_vapic(env);
+    }
     if (kvm_irqchip_in_kernel()) {
         /* Avoid deadlock: no user space IRQ will ever clear it. */
         env->halted = 0;
@@ -1379,9 +1383,6 @@ int kvm_arch_halt(CPUState *env)
 
 int kvm_arch_pre_run(CPUState *env, struct kvm_run *run)
 {
-    if (env->update_vapic) {
-        kvm_tpr_enable_vapic(env);
-    }
     if (!kvm_irqchip_in_kernel())
 	kvm_set_cr8(env, cpu_get_apic_tpr(env));
     return 0;
