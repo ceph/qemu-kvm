@@ -250,7 +250,6 @@ int kvm_tpr_enable_vapic(CPUState *env)
 
 static int enable_vapic(CPUState *env)
 {
-    bios_enabled = 1;
     env->update_vapic = 1;
     return 1;
 }
@@ -322,8 +321,6 @@ void kvm_tpr_access_report(CPUState *env, uint64_t rip, int is_write)
 void kvm_tpr_vcpu_start(CPUState *env)
 {
     kvm_enable_tpr_access_reporting(env);
-    if (bios_enabled)
-	kvm_tpr_enable_vapic(env);
 }
 
 static void tpr_save(QEMUFile *f, void *s)
