@@ -37,6 +37,13 @@ int kvm_set_tss_addr(kvm_context_t kvm, unsigned long addr)
 {
 #ifdef KVM_CAP_SET_TSS_ADDR
 	int r;
+        /*
+         * Tell fw_cfg to notify the BIOS to reserve the range.
+         */
+        if (e820_add_entry(addr, 0x4000, E820_RESERVED) < 0) {
+            perror("e820_add_entry() table is full");
+            exit(1);
+        }
 
 	r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_SET_TSS_ADDR);
 	if (r > 0) {
