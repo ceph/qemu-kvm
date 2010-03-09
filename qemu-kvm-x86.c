@@ -1003,7 +1003,7 @@ void kvm_arch_load_regs(CPUState *env, int level)
         kvm_load_lapic(env);
     }
     if (level == KVM_PUT_FULL_STATE) {
-        if (env->update_vapic)
+        if (env->kvm_vcpu_update_vapic)
             kvm_tpr_enable_vapic(env);
     }
     if (kvm_irqchip_in_kernel()) {

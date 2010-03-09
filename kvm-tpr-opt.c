@@ -226,14 +226,8 @@ int kvm_tpr_enable_vapic(CPUState *env)
 
     kvm_enable_vapic(env, vapic_phys + (pcr_cpu << 7));
     cpu_physical_memory_rw(vapic_phys + (pcr_cpu << 7) + 4, &one, 1, 1);
-    env->update_vapic = 0;
+    env->kvm_vcpu_update_vapic = 0;
     bios_enabled = 1;
-    return 1;
-}
-
-static int enable_vapic(CPUState *env)
-{
-    env->update_vapic = 1;
     return 1;
 }
 
@@ -334,7 +328,7 @@ static int tpr_load(QEMUFile *f, void *s, int version_id)
         CPUState *env = first_cpu->next_cpu;
 
         for (env = first_cpu; env != NULL; env = env->next_cpu)
-            enable_vapic(env);
+            env->kvm_vcpu_update_vapic = 1;
     }
 
     return 0;
