@@ -14,7 +14,7 @@
 #include "hw/hw.h"
 #include "hw/isa.h"
 #include "sysemu.h"
-#include "qemu-kvm.h"
+#include "kvm.h"
 #include "cpu.h"
 
 #include <stdio.h>
