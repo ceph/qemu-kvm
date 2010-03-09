@@ -601,27 +601,6 @@ int kvm_get_pit2(kvm_context_t kvm, struct kvm_pit_state2 *ps2);
 
 #ifdef KVM_CAP_VAPIC
 
-/*!
- * \brief Enable kernel tpr access reporting
- *
- * When tpr access reporting is enabled, the kernel will call the
- * ->tpr_access() callback every time the guest vcpu accesses the tpr.
- *
- * \param kvm Pointer to the current kvm_context
- * \param vcpu vcpu to enable tpr access reporting on
- */
-int kvm_enable_tpr_access_reporting(CPUState *env);
-
-/*!
- * \brief Disable kernel tpr access reporting
- *
- * Undoes the effect of kvm_enable_tpr_access_reporting().
- *
- * \param kvm Pointer to the current kvm_context
- * \param vcpu vcpu to disable tpr access reporting on
- */
-int kvm_disable_tpr_access_reporting(CPUState *env);
-
 int kvm_enable_vapic(CPUState *env, uint64_t vapic);
 
 #endif
@@ -895,7 +874,6 @@ void qemu_kvm_aio_wait_end(void);
 void qemu_kvm_notify_work(void);
 
 void kvm_tpr_access_report(CPUState *env, uint64_t rip, int is_write);
-void kvm_tpr_vcpu_start(CPUState *env);
 
 int qemu_kvm_get_dirty_pages(unsigned long phys_addr, void *buf);
 

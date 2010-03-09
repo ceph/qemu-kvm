@@ -318,11 +318,6 @@ void kvm_tpr_access_report(CPUState *env, uint64_t rip, int is_write)
     patch_instruction(env, rip);
 }
 
-void kvm_tpr_vcpu_start(CPUState *env)
-{
-    kvm_enable_tpr_access_reporting(env);
-}
-
 static void tpr_save(QEMUFile *f, void *s)
 {
     int i;

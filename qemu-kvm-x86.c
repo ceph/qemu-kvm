@@ -597,30 +597,16 @@ int kvm_get_shadow_pages(kvm_context_t kvm, unsigned int *nrshadow_pages)
 }
 
 #ifdef KVM_CAP_VAPIC
-
-static int tpr_access_reporting(CPUState *env, int enabled)
+static int kvm_enable_tpr_access_reporting(CPUState *env)
 {
-	int r;
-	struct kvm_tpr_access_ctl tac = {
-		.enabled = enabled,
-	};
+    int r;
+    struct kvm_tpr_access_ctl tac = { .enabled = 1 };
 
-	r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_VAPIC);
-	if (r <= 0)
-		return -ENOSYS;
-	return kvm_vcpu_ioctl(env, KVM_TPR_ACCESS_REPORTING, &tac);
+    r = kvm_ioctl(env->kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_VAPIC);
+    if (r <= 0)
+        return -ENOSYS;
+    return kvm_vcpu_ioctl(env, KVM_TPR_ACCESS_REPORTING, &tac);
 }
-
-int kvm_enable_tpr_access_reporting(CPUState *env)
-{
-	return tpr_access_reporting(env, 1);
-}
-
-int kvm_disable_tpr_access_reporting(CPUState *env)
-{
-	return tpr_access_reporting(env, 0);
-}
-
 #endif
 
 int kvm_qemu_create_memory_alias(uint64_t phys_start,
@@ -1360,7 +1346,7 @@ int kvm_arch_init_vcpu(CPUState *cenv)
 #endif
 
 #ifdef KVM_EXIT_TPR_ACCESS
-    kvm_tpr_vcpu_start(cenv);
+    kvm_enable_tpr_access_reporting(cenv);
 #endif
     kvm_reset_mpstate(cenv);
     return 0;
