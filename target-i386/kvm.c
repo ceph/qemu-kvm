@@ -884,7 +884,6 @@ static int kvm_guest_debug_workarounds(CPUState *env)
     return ret;
 }
 
-#ifdef KVM_UPSTREAM
 static int kvm_put_debugregs(CPUState *env)
 {
 #ifdef KVM_CAP_DEBUGREGS
@@ -932,6 +931,7 @@ static int kvm_get_debugregs(CPUState *env)
     return 0;
 }
 
+#ifdef KVM_UPSTREAM
 int kvm_arch_put_registers(CPUState *env, int level)
 {
     int ret;

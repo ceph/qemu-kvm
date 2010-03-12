@@ -970,6 +970,7 @@ struct KVMState {
     int migration_log;
     int vcpu_events;
     int robust_singlestep;
+    int debugregs;
 #ifdef KVM_CAP_SET_GUEST_DEBUG
     QTAILQ_HEAD(, kvm_sw_breakpoint) kvm_sw_breakpoints;
 #endif

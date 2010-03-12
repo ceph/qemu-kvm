@@ -1019,6 +1019,7 @@ void kvm_arch_load_regs(CPUState *env, int level)
     }
 
     kvm_put_vcpu_events(env, level);
+    kvm_put_debugregs(env);
 
     /* must be last */
     kvm_guest_debug_workarounds(env);
@@ -1192,6 +1193,7 @@ void kvm_arch_save_regs(CPUState *env)
     kvm_arch_save_mpstate(env);
     kvm_save_lapic(env);
     kvm_get_vcpu_events(env);
+    kvm_get_debugregs(env);
 }
 
 static void do_cpuid_ent(struct kvm_cpuid_entry2 *e, uint32_t function,
