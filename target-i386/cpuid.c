@@ -42,14 +42,14 @@ static const char *feature_name[] = {
     "ht" /* Intel htt */, "tm", "ia64", "pbe",
 };
 static const char *ext_feature_name[] = {
-    "pni|sse3" /* Intel,AMD sse3 */, NULL, NULL, "monitor",
-    "ds_cpl", "vmx", NULL /* Linux smx */, "est",
+    "pni|sse3" /* Intel,AMD sse3 */, "pclmuldq", "dtes64", "monitor",
+    "ds_cpl", "vmx", "smx", "est",
     "tm2", "ssse3", "cid", NULL,
-    NULL, "cx16", "xtpr", NULL,
+    "fma", "cx16", "xtpr", "pdcm",
     NULL, NULL, "dca", "sse4.1|sse4_1",
-    "sse4.2|sse4_2", "x2apic", NULL, "popcnt",
-    NULL, NULL, NULL, NULL,
-    NULL, NULL, NULL, "hypervisor",
+    "sse4.2|sse4_2", "x2apic", "movbe", "popcnt",
+    NULL, "aes", "xsave", "osxsave",
+    "avx", NULL, NULL, "hypervisor",
 };
 static const char *ext2_feature_name[] = {
     "fpu", "vme", "de", "pse",
@@ -64,9 +64,9 @@ static const char *ext2_feature_name[] = {
 static const char *ext3_feature_name[] = {
     "lahf_lm" /* AMD LahfSahf */, "cmp_legacy", "svm", "extapic" /* AMD ExtApicSpace */,
     "cr8legacy" /* AMD AltMovCr8 */, "abm", "sse4a", "misalignsse",
-    "3dnowprefetch", "osvw", NULL /* Linux ibs */, NULL,
+    "3dnowprefetch", "osvw", "ibs", "xop",
     "skinit", "wdt", NULL, NULL,
-    NULL, NULL, NULL, NULL,
+    "fma4", NULL, "cvt16", "nodeid_msr",
     NULL, NULL, NULL, NULL,
     NULL, NULL, NULL, NULL,
     NULL, NULL, NULL, NULL,
@@ -92,8 +92,40 @@ typedef struct model_features_t {
 int check_cpuid = 0;
 int enforce_cpuid = 0;
 
-static void host_cpuid(uint32_t function, uint32_t count, uint32_t *eax,
-                       uint32_t *ebx, uint32_t *ecx, uint32_t *edx);
+static void host_cpuid(uint32_t function, uint32_t count,
+                       uint32_t *eax, uint32_t *ebx,
+                       uint32_t *ecx, uint32_t *edx)
+{
+#if defined(CONFIG_KVM)
+    uint32_t vec[4];
+
+#ifdef __x86_64__
+    asm volatile("cpuid"
+                 : "=a"(vec[0]), "=b"(vec[1]),
+                   "=c"(vec[2]), "=d"(vec[3])
+                 : "0"(function), "c"(count) : "cc");
+#else
+    asm volatile("pusha \n\t"
+                 "cpuid \n\t"
+                 "mov %%eax, 0(%2) \n\t"
+                 "mov %%ebx, 4(%2) \n\t"
+                 "mov %%ecx, 8(%2) \n\t"
+                 "mov %%edx, 12(%2) \n\t"
+                 "popa"
+                 : : "a"(function), "c"(count), "S"(vec)
+                 : "memory", "cc");
+#endif
+
+    if (eax)
+	*eax = vec[0];
+    if (ebx)
+	*ebx = vec[1];
+    if (ecx)
+	*ecx = vec[2];
+    if (edx)
+	*edx = vec[3];
+#endif
+}
 
 #define iswhite(c) ((c) && ((c) <= ' ' || '~' < (c)))
 
@@ -196,6 +228,7 @@ typedef struct x86_def_t {
           CPUID_MSR | CPUID_MCE | CPUID_CX8 | CPUID_PGE | CPUID_CMOV | \
           CPUID_PAT | CPUID_FXSR | CPUID_MMX | CPUID_SSE | CPUID_SSE2 | \
           CPUID_PAE | CPUID_SEP | CPUID_APIC)
+#define EXT2_FEATURE_MASK 0x0183F3FF
 
 /* maintains list of cpu model definitions
  */
@@ -220,7 +253,7 @@ static x86_def_t builtin_x86_defs[] = {
         /* this feature is needed for Solaris and isn't fully implemented */
             CPUID_PSE36,
         .ext_features = CPUID_EXT_SSE3 | CPUID_EXT_CX16 | CPUID_EXT_POPCNT,
-        .ext2_features = (PPRO_FEATURES & 0x0183F3FF) |
+        .ext2_features = (PPRO_FEATURES & EXT2_FEATURE_MASK) |
             CPUID_EXT2_LM | CPUID_EXT2_SYSCALL | CPUID_EXT2_NX,
         .ext3_features = CPUID_EXT3_LAHF_LM | CPUID_EXT3_SVM |
             CPUID_EXT3_ABM | CPUID_EXT3_SSE4A,
@@ -243,7 +276,7 @@ static x86_def_t builtin_x86_defs[] = {
         .ext_features = CPUID_EXT_SSE3 | CPUID_EXT_MONITOR | CPUID_EXT_CX16 |
             CPUID_EXT_POPCNT,
         /* Missing: CPUID_EXT2_PDPE1GB, CPUID_EXT2_RDTSCP */
-        .ext2_features = (PPRO_FEATURES & 0x0183F3FF) |
+        .ext2_features = (PPRO_FEATURES & EXT2_FEATURE_MASK) |
             CPUID_EXT2_LM | CPUID_EXT2_SYSCALL | CPUID_EXT2_NX |
             CPUID_EXT2_3DNOW | CPUID_EXT2_3DNOWEXT | CPUID_EXT2_MMXEXT |
             CPUID_EXT2_FFXSR,
@@ -293,7 +326,7 @@ static x86_def_t builtin_x86_defs[] = {
         /* Missing: CPUID_EXT_POPCNT, CPUID_EXT_MONITOR */
         .ext_features = CPUID_EXT_SSE3 | CPUID_EXT_CX16,
         /* Missing: CPUID_EXT2_PDPE1GB, CPUID_EXT2_RDTSCP */
-        .ext2_features = (PPRO_FEATURES & 0x0183F3FF) |
+        .ext2_features = (PPRO_FEATURES & EXT2_FEATURE_MASK) |
             CPUID_EXT2_LM | CPUID_EXT2_SYSCALL | CPUID_EXT2_NX,
         /* Missing: CPUID_EXT3_LAHF_LM, CPUID_EXT3_CMP_LEG, CPUID_EXT3_EXTAPIC,
                     CPUID_EXT3_CR8LEG, CPUID_EXT3_ABM, CPUID_EXT3_SSE4A,
@@ -380,7 +413,7 @@ static x86_def_t builtin_x86_defs[] = {
         .model = 2,
         .stepping = 3,
         .features = PPRO_FEATURES | CPUID_PSE36 | CPUID_VME | CPUID_MTRR | CPUID_MCA,
-        .ext2_features = (PPRO_FEATURES & 0x0183F3FF) | CPUID_EXT2_MMXEXT | CPUID_EXT2_3DNOW | CPUID_EXT2_3DNOWEXT,
+        .ext2_features = (PPRO_FEATURES & EXT2_FEATURE_MASK) | CPUID_EXT2_MMXEXT | CPUID_EXT2_3DNOW | CPUID_EXT2_3DNOWEXT,
         .xlevel = 0x80000008,
         /* XXX: put another string ? */
         .model_id = "QEMU Virtual CPU version " QEMU_VERSION,
@@ -401,7 +434,7 @@ static x86_def_t builtin_x86_defs[] = {
             CPUID_EXT_SSE3 /* PNI */ | CPUID_EXT_SSSE3,
             /* Missing: CPUID_EXT_DSCPL | CPUID_EXT_EST |
              * CPUID_EXT_TM2 | CPUID_EXT_XTPR */
-        .ext2_features = (PPRO_FEATURES & 0x0183F3FF) | CPUID_EXT2_NX,
+        .ext2_features = (PPRO_FEATURES & EXT2_FEATURE_MASK) | CPUID_EXT2_NX,
         /* Missing: .ext3_features = CPUID_EXT3_LAHF_LM */
         .xlevel = 0x8000000A,
         .model_id = "Intel(R) Atom(TM) CPU N270   @ 1.60GHz",
@@ -724,6 +757,9 @@ void x86_cpu_list (FILE *f, int (*cpu_fprintf)(FILE *f, const char *fmt, ...),
             (*cpu_fprintf)(f, "\n");
         }
     }
+    if (kvm_enabled()) {
+        (*cpu_fprintf)(f, "x86 %16s\n", "[host]");
+    }
 }
 
 int cpu_x86_register (CPUX86State *env, const char *cpu_model)
@@ -753,6 +789,7 @@ int cpu_x86_register (CPUX86State *env, const char *cpu_model)
     env->pat = 0x0007040600070406ULL;
     env->cpuid_ext_features = def->ext_features;
     env->cpuid_ext2_features = def->ext2_features;
+    env->cpuid_ext3_features = def->ext3_features;
     env->cpuid_xlevel = def->xlevel;
     env->cpuid_kvm_features = def->kvm_features;
     {
@@ -891,41 +928,6 @@ void x86_cpudef_setup(void)
     }
 #if !defined(CONFIG_USER_ONLY)
     qemu_opts_foreach(&qemu_cpudef_opts, cpudef_register, NULL, 0);
-#endif
-}
-
-static void host_cpuid(uint32_t function, uint32_t count,
-                       uint32_t *eax, uint32_t *ebx,
-                       uint32_t *ecx, uint32_t *edx)
-{
-#if defined(CONFIG_KVM)
-    uint32_t vec[4];
-
-#ifdef __x86_64__
-    asm volatile("cpuid"
-                 : "=a"(vec[0]), "=b"(vec[1]),
-                   "=c"(vec[2]), "=d"(vec[3])
-                 : "0"(function), "c"(count) : "cc");
-#else
-    asm volatile("pusha \n\t"
-                 "cpuid \n\t"
-                 "mov %%eax, 0(%2) \n\t"
-                 "mov %%ebx, 4(%2) \n\t"
-                 "mov %%ecx, 8(%2) \n\t"
-                 "mov %%edx, 12(%2) \n\t"
-                 "popa"
-                 : : "a"(function), "c"(count), "S"(vec)
-                 : "memory", "cc");
-#endif
-
-    if (eax)
-	*eax = vec[0];
-    if (ebx)
-	*ebx = vec[1];
-    if (ecx)
-	*ecx = vec[2];
-    if (edx)
-	*edx = vec[3];
 #endif
 }
 
