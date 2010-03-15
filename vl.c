@@ -1501,6 +1501,15 @@ int qemu_timedate_diff(struct tm *tm)
     return seconds - time(NULL);
 }
 
+void rtc_change_mon_event(struct tm *tm)
+{
+    QObject *data;
+
+    data = qobject_from_jsonf("{ 'offset': %d }", qemu_timedate_diff(tm));
+    monitor_protocol_event(QEVENT_RTC_CHANGE, data);
+    qobject_decref(data);
+}
+
 static void configure_rtc_date_offset(const char *startdate, int legacy)
 {
     time_t rtc_start_date;
@@ -3173,6 +3182,7 @@ static void do_vm_stop(int reason)
         vm_running = 0;
         pause_all_vcpus();
         vm_state_notify(0, reason);
+        monitor_protocol_event(QEVENT_STOP, NULL);
     }
 }
 
@@ -3206,6 +3216,7 @@ void qemu_system_reset(void)
     QTAILQ_FOREACH_SAFE(re, &reset_handlers, entry, nre) {
         re->func(re->opaque);
     }
+    monitor_protocol_event(QEVENT_RESET, NULL);
     cpu_synchronize_all_post_reset();
 }
 
@@ -4136,7 +4147,6 @@ static void main_loop(void)
         } while (vm_can_run());
 
         if (qemu_debug_requested()) {
-            monitor_protocol_event(QEVENT_DEBUG, NULL);
             vm_stop(EXCP_DEBUG);
         }
         if (qemu_shutdown_requested()) {
@@ -4148,7 +4158,6 @@ static void main_loop(void)
                 break;
         }
         if (qemu_reset_requested()) {
-            monitor_protocol_event(QEVENT_RESET, NULL);
             pause_all_vcpus();
             qemu_system_reset();
             resume_all_vcpus();
@@ -4158,7 +4167,6 @@ static void main_loop(void)
             qemu_irq_raise(qemu_system_powerdown);
         }
         if ((r = qemu_vmstop_requested())) {
-            monitor_protocol_event(QEVENT_STOP, NULL);
             vm_stop(r);
         }
     }
@@ -5424,6 +5432,9 @@ int main(int argc, char **argv, char **envp)
             case QEMU_OPTION_serial:
                 add_device_config(DEV_SERIAL, optarg);
                 default_serial = 0;
+                if (strncmp(optarg, "mon:", 4) == 0) {
+                    default_monitor = 0;
+                }
                 break;
             case QEMU_OPTION_watchdog:
                 if (watchdog) {
@@ -5442,10 +5453,16 @@ int main(int argc, char **argv, char **envp)
             case QEMU_OPTION_virtiocon:
                 add_device_config(DEV_VIRTCON, optarg);
                 default_virtcon = 0;
+                if (strncmp(optarg, "mon:", 4) == 0) {
+                    default_monitor = 0;
+                }
                 break;
             case QEMU_OPTION_parallel:
                 add_device_config(DEV_PARALLEL, optarg);
                 default_parallel = 0;
+                if (strncmp(optarg, "mon:", 4) == 0) {
+                    default_monitor = 0;
+                }
                 break;
             case QEMU_OPTION_debugcon:
                 add_device_config(DEV_DEBUGCON, optarg);

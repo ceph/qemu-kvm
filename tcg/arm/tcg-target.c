@@ -157,19 +157,6 @@ static int target_parse_constraint(TCGArgConstraint *ct, const char **pct_str)
 # endif
 #endif
 
-    case '1':
-        ct->ct |= TCG_CT_REG;
-        tcg_regset_set32(ct->u.regs, 0, (1 << TCG_TARGET_NB_REGS) - 1);
-        tcg_regset_reset_reg(ct->u.regs, TCG_REG_R0);
-        break;
-
-    case '2':
-        ct->ct |= TCG_CT_REG;
-        tcg_regset_set32(ct->u.regs, 0, (1 << TCG_TARGET_NB_REGS) - 1);
-        tcg_regset_reset_reg(ct->u.regs, TCG_REG_R0);
-        tcg_regset_reset_reg(ct->u.regs, TCG_REG_R1);
-        break;
-
     default:
         return -1;
     }
@@ -819,75 +806,6 @@ static inline void tcg_out_goto_label(TCGContext *s, int cond, int label_index)
     }
 }
 
-static void tcg_out_div_helper(TCGContext *s, int cond, const TCGArg *args,
-                void *helper_div, void *helper_rem, int shift)
-{
-    int div_reg = args[0];
-    int rem_reg = args[1];
-
-    /* stmdb sp!, { r0 - r3, ip, lr } */
-    /* (Note that we need an even number of registers as per EABI) */
-    tcg_out32(s, (cond << 28) | 0x092d500f);
-
-    tcg_out_dat_reg(s, cond, ARITH_MOV, 0, 0, args[2], SHIFT_IMM_LSL(0));
-    tcg_out_dat_reg(s, cond, ARITH_MOV, 1, 0, args[3], SHIFT_IMM_LSL(0));
-    tcg_out_dat_reg(s, cond, ARITH_MOV, 2, 0, args[4], SHIFT_IMM_LSL(0));
-    tcg_out_dat_reg(s, cond, ARITH_MOV, 3, 0, 2, shift);
-
-    tcg_out_call(s, cond, (uint32_t) helper_div);
-    tcg_out_dat_reg(s, cond, ARITH_MOV, 8, 0, 0, SHIFT_IMM_LSL(0));
-
-    /* ldmia sp, { r0 - r3, fp, lr } */
-    tcg_out32(s, (cond << 28) | 0x089d500f);
-
-    tcg_out_dat_reg(s, cond, ARITH_MOV, 0, 0, args[2], SHIFT_IMM_LSL(0));
-    tcg_out_dat_reg(s, cond, ARITH_MOV, 1, 0, args[3], SHIFT_IMM_LSL(0));
-    tcg_out_dat_reg(s, cond, ARITH_MOV, 2, 0, args[4], SHIFT_IMM_LSL(0));
-    tcg_out_dat_reg(s, cond, ARITH_MOV, 3, 0, 2, shift);
-
-    tcg_out_call(s, cond, (uint32_t) helper_rem);
-
-    tcg_out_dat_reg(s, cond, ARITH_MOV, rem_reg, 0, 0, SHIFT_IMM_LSL(0));
-    tcg_out_dat_reg(s, cond, ARITH_MOV, div_reg, 0, 8, SHIFT_IMM_LSL(0));
-
-    /* ldr r0, [sp], #4 */
-    if (rem_reg != 0 && div_reg != 0) {
-        tcg_out32(s, (cond << 28) | 0x04bd0004);
-    } else {
-        tcg_out_dat_imm(s, cond, ARITH_ADD, 13, 13, 4);
-    }
-    /* ldr r1, [sp], #4 */
-    if (rem_reg != 1 && div_reg != 1) {
-        tcg_out32(s, (cond << 28) | 0x04bd1004);
-    } else {
-        tcg_out_dat_imm(s, cond, ARITH_ADD, 13, 13, 4);
-    }
-    /* ldr r2, [sp], #4 */
-    if (rem_reg != 2 && div_reg != 2) {
-        tcg_out32(s, (cond << 28) | 0x04bd2004);
-    } else {
-        tcg_out_dat_imm(s, cond, ARITH_ADD, 13, 13, 4);
-    }
-    /* ldr r3, [sp], #4 */
-    if (rem_reg != 3 && div_reg != 3) {
-        tcg_out32(s, (cond << 28) | 0x04bd3004);
-    } else {
-        tcg_out_dat_imm(s, cond, ARITH_ADD, 13, 13, 4);
-    }
-    /* ldr ip, [sp], #4 */
-    if (rem_reg != 12 && div_reg != 12) {
-        tcg_out32(s, (cond << 28) | 0x04bdc004);
-    } else {
-        tcg_out_dat_imm(s, cond, ARITH_ADD, 13, 13, 4);
-    }
-    /* ldr lr, [sp], #4 */
-    if (rem_reg != 14 && div_reg != 14) {
-        tcg_out32(s, (cond << 28) | 0x04bde004);
-    } else {
-        tcg_out_dat_imm(s, cond, ARITH_ADD, 13, 13, 4);
-    }
-}
-
 #ifdef CONFIG_SOFTMMU
 
 #include "../../softmmu_defs.h"
@@ -1445,6 +1363,9 @@ static inline void tcg_out_op(TCGContext *s, int opc,
     case INDEX_op_and_i32:
         c = ARITH_AND;
         goto gen_arith;
+    case INDEX_op_andc_i32:
+        c = ARITH_BIC;
+        goto gen_arith;
     case INDEX_op_or_i32:
         c = ARITH_ORR;
         goto gen_arith;
@@ -1483,16 +1404,6 @@ static inline void tcg_out_op(TCGContext *s, int opc,
         break;
     case INDEX_op_mulu2_i32:
         tcg_out_umull32(s, COND_AL, args[0], args[1], args[2], args[3]);
-        break;
-    case INDEX_op_div2_i32:
-        tcg_out_div_helper(s, COND_AL, args,
-                        tcg_helper_div_i64, tcg_helper_rem_i64,
-                        SHIFT_IMM_ASR(31));
-        break;
-    case INDEX_op_divu2_i32:
-        tcg_out_div_helper(s, COND_AL, args,
-                        tcg_helper_divu_i64, tcg_helper_remu_i64,
-                        SHIFT_IMM_LSR(31));
         break;
     /* XXX: Perhaps args[2] & 0x1f is wrong */
     case INDEX_op_shl_i32:
@@ -1649,9 +1560,8 @@ static const TCGTargetOpDef arm_op_defs[] = {
     { INDEX_op_sub_i32, { "r", "r", "rI" } },
     { INDEX_op_mul_i32, { "r", "r", "r" } },
     { INDEX_op_mulu2_i32, { "r", "r", "r", "r" } },
-    { INDEX_op_div2_i32, { "r", "r", "r", "1", "2" } },
-    { INDEX_op_divu2_i32, { "r", "r", "r", "1", "2" } },
     { INDEX_op_and_i32, { "r", "r", "rI" } },
+    { INDEX_op_andc_i32, { "r", "r", "rI" } },
     { INDEX_op_or_i32, { "r", "r", "rI" } },
     { INDEX_op_xor_i32, { "r", "r", "rI" } },
     { INDEX_op_neg_i32, { "r", "r" } },
@@ -1690,9 +1600,11 @@ static const TCGTargetOpDef arm_op_defs[] = {
 
 void tcg_target_init(TCGContext *s)
 {
+#if !defined(CONFIG_USER_ONLY)
     /* fail safe */
     if ((1 << CPU_TLB_ENTRY_BITS) != sizeof(CPUTLBEntry))
         tcg_abort();
+#endif
 
     tcg_regset_set32(tcg_target_available_regs[TCG_TYPE_I32], 0,
                     ((2 << TCG_REG_R14) - 1) & ~(1 << TCG_REG_R8));
@@ -1750,12 +1662,15 @@ static inline void tcg_out_movi(TCGContext *s, TCGType type,
 
 void tcg_target_qemu_prologue(TCGContext *s)
 {
-    /* stmdb sp!, { r9 - r11, lr } */
-    tcg_out32(s, (COND_AL << 28) | 0x092d4e00);
+    /* Theoretically there is no need to save r12, but an
+       even number of registers to be saved as per EABI */
+
+    /* stmdb sp!, { r4 - r12, lr } */
+    tcg_out32(s, (COND_AL << 28) | 0x092d5ff0);
 
     tcg_out_bx(s, COND_AL, TCG_REG_R0);
     tb_ret_addr = s->code_ptr;
 
-    /* ldmia sp!, { r9 - r11, pc } */
-    tcg_out32(s, (COND_AL << 28) | 0x08bd8e00);
+    /* ldmia sp!, { r4 - r12, pc } */
+    tcg_out32(s, (COND_AL << 28) | 0x08bd9ff0);
 }
