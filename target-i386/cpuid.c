@@ -117,13 +117,13 @@ static void host_cpuid(uint32_t function, uint32_t count,
 #endif
 
     if (eax)
-	*eax = vec[0];
+        *eax = vec[0];
     if (ebx)
-	*ebx = vec[1];
+        *ebx = vec[1];
     if (ecx)
-	*ecx = vec[2];
+        *ecx = vec[2];
     if (edx)
-	*edx = vec[3];
+        *edx = vec[3];
 #endif
 }
 
@@ -230,6 +230,30 @@ typedef struct x86_def_t {
           CPUID_PAE | CPUID_SEP | CPUID_APIC)
 #define EXT2_FEATURE_MASK 0x0183F3FF
 
+#define TCG_FEATURES (CPUID_FP87 | CPUID_PSE | CPUID_TSC | CPUID_MSR | \
+          CPUID_PAE | CPUID_MCE | CPUID_CX8 | CPUID_APIC | CPUID_SEP | \
+          CPUID_MTRR | CPUID_PGE | CPUID_MCA | CPUID_CMOV | CPUID_PAT | \
+          CPUID_PSE36 | CPUID_CLFLUSH | CPUID_ACPI | CPUID_MMX | \
+          CPUID_FXSR | CPUID_SSE | CPUID_SSE2 | CPUID_SS)
+          /* partly implemented:
+          CPUID_MTRR, CPUID_MCA, CPUID_CLFLUSH (needed for Win64)
+          CPUID_PSE36 (needed for Solaris) */
+          /* missing:
+          CPUID_VME, CPUID_DTS, CPUID_SS, CPUID_HT, CPUID_TM, CPUID_PBE */
+#define TCG_EXT_FEATURES (CPUID_EXT_SSE3 | CPUID_EXT_MONITOR | \
+          CPUID_EXT_CX16 | CPUID_EXT_POPCNT | CPUID_EXT_XSAVE | \
+          CPUID_EXT_HYPERVISOR)
+          /* missing:
+          CPUID_EXT_DTES64, CPUID_EXT_DSCPL, CPUID_EXT_VMX, CPUID_EXT_EST,
+          CPUID_EXT_TM2, CPUID_EXT_XTPR, CPUID_EXT_PDCM */
+#define TCG_EXT2_FEATURES ((TCG_FEATURES & EXT2_FEATURE_MASK) | \
+          CPUID_EXT2_NX | CPUID_EXT2_MMXEXT | CPUID_EXT2_RDTSCP | \
+          CPUID_EXT2_3DNOW | CPUID_EXT2_3DNOWEXT)
+          /* missing:
+          CPUID_EXT2_PDPE1GB */
+#define TCG_EXT3_FEATURES (CPUID_EXT3_LAHF_LM | CPUID_EXT3_SVM | \
+          CPUID_EXT3_CR8LEG | CPUID_EXT3_ABM | CPUID_EXT3_SSE4A)
+
 /* maintains list of cpu model definitions
  */
 static x86_def_t *x86_defs = {NULL};
@@ -237,7 +261,6 @@ static x86_def_t *x86_defs = {NULL};
 /* built-in cpu model definitions (deprecated)
  */
 static x86_def_t builtin_x86_defs[] = {
-#ifdef TARGET_X86_64
     {
         .name = "qemu64",
         .level = 4,
@@ -248,9 +271,7 @@ static x86_def_t builtin_x86_defs[] = {
         .model = 2,
         .stepping = 3,
         .features = PPRO_FEATURES |
-        /* these features are needed for Win64 and aren't fully implemented */
             CPUID_MTRR | CPUID_CLFLUSH | CPUID_MCA |
-        /* this feature is needed for Solaris and isn't fully implemented */
             CPUID_PSE36,
         .ext_features = CPUID_EXT_SSE3 | CPUID_EXT_CX16 | CPUID_EXT_POPCNT,
         .ext2_features = (PPRO_FEATURES & EXT2_FEATURE_MASK) |
@@ -269,17 +290,15 @@ static x86_def_t builtin_x86_defs[] = {
         .family = 16,
         .model = 2,
         .stepping = 3,
-        /* Missing: CPUID_VME, CPUID_HT */
         .features = PPRO_FEATURES |
             CPUID_MTRR | CPUID_CLFLUSH | CPUID_MCA |
-            CPUID_PSE36,
+            CPUID_PSE36 | CPUID_VME | CPUID_HT,
         .ext_features = CPUID_EXT_SSE3 | CPUID_EXT_MONITOR | CPUID_EXT_CX16 |
             CPUID_EXT_POPCNT,
-        /* Missing: CPUID_EXT2_PDPE1GB, CPUID_EXT2_RDTSCP */
         .ext2_features = (PPRO_FEATURES & EXT2_FEATURE_MASK) |
             CPUID_EXT2_LM | CPUID_EXT2_SYSCALL | CPUID_EXT2_NX |
             CPUID_EXT2_3DNOW | CPUID_EXT2_3DNOWEXT | CPUID_EXT2_MMXEXT |
-            CPUID_EXT2_FFXSR,
+            CPUID_EXT2_FFXSR | CPUID_EXT2_PDPE1GB | CPUID_EXT2_RDTSCP,
         /* Missing: CPUID_EXT3_CMP_LEG, CPUID_EXT3_EXTAPIC,
                     CPUID_EXT3_CR8LEG,
                     CPUID_EXT3_MISALIGNSSE, CPUID_EXT3_3DNOWPREFETCH,
@@ -295,16 +314,13 @@ static x86_def_t builtin_x86_defs[] = {
         .family = 6,
         .model = 15,
         .stepping = 11,
-	/* The original CPU also implements these features:
-               CPUID_VME, CPUID_DTS, CPUID_ACPI, CPUID_SS, CPUID_HT,
-               CPUID_TM, CPUID_PBE */
         .features = PPRO_FEATURES |
             CPUID_MTRR | CPUID_CLFLUSH | CPUID_MCA |
-            CPUID_PSE36,
-	/* The original CPU also implements these ext features:
-               CPUID_EXT_DTES64, CPUID_EXT_DSCPL, CPUID_EXT_VMX, CPUID_EXT_EST,
-               CPUID_EXT_TM2, CPUID_EXT_CX16, CPUID_EXT_XTPR, CPUID_EXT_PDCM */
-        .ext_features = CPUID_EXT_SSE3 | CPUID_EXT_MONITOR | CPUID_EXT_SSSE3,
+            CPUID_PSE36 | CPUID_VME | CPUID_DTS | CPUID_ACPI | CPUID_SS |
+            CPUID_HT | CPUID_TM | CPUID_PBE,
+        .ext_features = CPUID_EXT_SSE3 | CPUID_EXT_MONITOR | CPUID_EXT_SSSE3 |
+            CPUID_EXT_DTES64 | CPUID_EXT_DSCPL | CPUID_EXT_VMX | CPUID_EXT_EST |
+            CPUID_EXT_TM2 | CPUID_EXT_CX16 | CPUID_EXT_XTPR | CPUID_EXT_PDCM,
         .ext2_features = CPUID_EXT2_LM | CPUID_EXT2_SYSCALL | CPUID_EXT2_NX,
         .ext3_features = CPUID_EXT3_LAHF_LM,
         .xlevel = 0x80000008,
@@ -336,7 +352,6 @@ static x86_def_t builtin_x86_defs[] = {
         .xlevel = 0x80000008,
         .model_id = "Common KVM processor"
     },
-#endif
     {
         .name = "qemu32",
         .level = 4,
@@ -345,7 +360,7 @@ static x86_def_t builtin_x86_defs[] = {
         .stepping = 3,
         .features = PPRO_FEATURES,
         .ext_features = CPUID_EXT_SSE3 | CPUID_EXT_POPCNT,
-        .xlevel = 0,
+        .xlevel = 0x80000004,
         .model_id = "QEMU Virtual CPU version " QEMU_VERSION,
     },
     {
@@ -354,22 +369,18 @@ static x86_def_t builtin_x86_defs[] = {
         .family = 6,
         .model = 14,
         .stepping = 8,
-        /* The original CPU also implements these features:
-               CPUID_DTS, CPUID_ACPI, CPUID_SS, CPUID_HT,
-               CPUID_TM, CPUID_PBE */
         .features = PPRO_FEATURES | CPUID_VME |
-            CPUID_MTRR | CPUID_CLFLUSH | CPUID_MCA,
-        /* The original CPU also implements these ext features:
-               CPUID_EXT_VMX, CPUID_EXT_EST, CPUID_EXT_TM2, CPUID_EXT_XTPR,
-               CPUID_EXT_PDCM */
-        .ext_features = CPUID_EXT_SSE3 | CPUID_EXT_MONITOR,
+            CPUID_MTRR | CPUID_CLFLUSH | CPUID_MCA | CPUID_DTS | CPUID_ACPI |
+            CPUID_SS | CPUID_HT | CPUID_TM | CPUID_PBE,
+        .ext_features = CPUID_EXT_SSE3 | CPUID_EXT_MONITOR | CPUID_EXT_VMX |
+            CPUID_EXT_EST | CPUID_EXT_TM2 | CPUID_EXT_XTPR | CPUID_EXT_PDCM,
         .ext2_features = CPUID_EXT2_NX,
         .xlevel = 0x80000008,
         .model_id = "Genuine Intel(R) CPU           T2600  @ 2.16GHz",
     },
     {
         .name = "486",
-        .level = 0,
+        .level = 1,
         .family = 4,
         .model = 0,
         .stepping = 0,
@@ -426,16 +437,13 @@ static x86_def_t builtin_x86_defs[] = {
         .model = 28,
         .stepping = 2,
         .features = PPRO_FEATURES |
-            CPUID_MTRR | CPUID_CLFLUSH | CPUID_MCA | CPUID_VME,
-            /* Missing: CPUID_DTS | CPUID_ACPI | CPUID_SS |
-             * CPUID_HT | CPUID_TM | CPUID_PBE */
+            CPUID_MTRR | CPUID_CLFLUSH | CPUID_MCA | CPUID_VME | CPUID_DTS |
+            CPUID_ACPI | CPUID_SS | CPUID_HT | CPUID_TM | CPUID_PBE,
             /* Some CPUs got no CPUID_SEP */
-        .ext_features = CPUID_EXT_MONITOR |
-            CPUID_EXT_SSE3 /* PNI */ | CPUID_EXT_SSSE3,
-            /* Missing: CPUID_EXT_DSCPL | CPUID_EXT_EST |
-             * CPUID_EXT_TM2 | CPUID_EXT_XTPR */
+        .ext_features = CPUID_EXT_SSE3 | CPUID_EXT_MONITOR | CPUID_EXT_SSSE3 |
+            CPUID_EXT_DSCPL | CPUID_EXT_EST | CPUID_EXT_TM2 | CPUID_EXT_XTPR,
         .ext2_features = (PPRO_FEATURES & EXT2_FEATURE_MASK) | CPUID_EXT2_NX,
-        /* Missing: .ext3_features = CPUID_EXT3_LAHF_LM */
+        .ext3_features = CPUID_EXT3_LAHF_LM,
         .xlevel = 0x8000000A,
         .model_id = "Intel(R) Atom(TM) CPU N270   @ 1.60GHz",
     },
@@ -609,7 +617,7 @@ static int cpu_x86_find_by_name(x86_def_t *x86_cpu_def, const char *cpu_model)
                     goto error;
                 }
                 if (numvalue < 0x80000000) {
-			numvalue += 0x80000000;
+                    numvalue += 0x80000000;
                 }
                 x86_cpu_def->xlevel = numvalue;
             } else if (!strcmp(featurestr, "vendor")) {
@@ -792,6 +800,16 @@ int cpu_x86_register (CPUX86State *env, const char *cpu_model)
     env->cpuid_ext3_features = def->ext3_features;
     env->cpuid_xlevel = def->xlevel;
     env->cpuid_kvm_features = def->kvm_features;
+    if (!kvm_enabled()) {
+        env->cpuid_features &= TCG_FEATURES;
+        env->cpuid_ext_features &= TCG_EXT_FEATURES;
+        env->cpuid_ext2_features &= (TCG_EXT2_FEATURES
+#ifdef TARGET_X86_64
+            | CPUID_EXT2_SYSCALL | CPUID_EXT2_LM
+#endif
+            );
+        env->cpuid_ext3_features &= TCG_EXT3_FEATURES;
+    }
     {
         const char *model_id = def->model_id;
         int c, len, i;
@@ -987,9 +1005,9 @@ void cpu_x86_cpuid(CPUX86State *env, uint32_t index, uint32_t count,
     case 4:
         /* cache info: needed for Core compatibility */
         if (env->nr_cores > 1) {
-		*eax = (env->nr_cores - 1) << 26;
+            *eax = (env->nr_cores - 1) << 26;
         } else {
-		*eax = 0;
+            *eax = 0;
         }
         switch (count) {
             case 0: /* L1 dcache info */
