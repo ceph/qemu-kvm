@@ -3173,7 +3173,10 @@ static void do_vm_stop(int reason)
         vm_running = 0;
         pause_all_vcpus();
         vm_state_notify(0, reason);
+        monitor_protocol_event(QEVENT_STOP, NULL);
     }
+
+    monitor_protocol_event(QEVENT_RESET, NULL);
 }
 
 void qemu_register_reset(QEMUResetHandler *func, void *opaque)
@@ -4136,7 +4139,6 @@ static void main_loop(void)
         } while (vm_can_run());
 
         if (qemu_debug_requested()) {
-            monitor_protocol_event(QEVENT_DEBUG, NULL);
             vm_stop(EXCP_DEBUG);
         }
         if (qemu_shutdown_requested()) {
@@ -4148,7 +4150,6 @@ static void main_loop(void)
                 break;
         }
         if (qemu_reset_requested()) {
-            monitor_protocol_event(QEVENT_RESET, NULL);
             pause_all_vcpus();
             qemu_system_reset();
             resume_all_vcpus();
@@ -4158,7 +4159,6 @@ static void main_loop(void)
             qemu_irq_raise(qemu_system_powerdown);
         }
         if ((r = qemu_vmstop_requested())) {
-            monitor_protocol_event(QEVENT_STOP, NULL);
             vm_stop(r);
         }
     }
