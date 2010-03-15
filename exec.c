@@ -142,16 +142,14 @@ typedef struct PageDesc {
 #endif
 } PageDesc;
 
-typedef struct PhysPageDesc {
-    /* offset in host memory of the page + io_index in the low bits */
-    ram_addr_t phys_offset;
-    ram_addr_t region_offset;
-} PhysPageDesc;
-
-/* In system mode we want L1_MAP to be based on physical addresses,
+/* In system mode we want L1_MAP to be based on ram offsets,
    while in user mode we want it to be based on virtual addresses.  */
 #if !defined(CONFIG_USER_ONLY)
+#if HOST_LONG_BITS < TARGET_PHYS_ADDR_SPACE_BITS
+# define L1_MAP_ADDR_SPACE_BITS  HOST_LONG_BITS
+#else
 # define L1_MAP_ADDR_SPACE_BITS  TARGET_PHYS_ADDR_SPACE_BITS
+#endif
 #else
 # define L1_MAP_ADDR_SPACE_BITS  TARGET_VIRT_ADDR_SPACE_BITS
 #endif
@@ -195,6 +193,12 @@ unsigned long qemu_host_page_mask;
 static void *l1_map[V_L1_SIZE];
 
 #if !defined(CONFIG_USER_ONLY)
+typedef struct PhysPageDesc {
+    /* offset in host memory of the page + io_index in the low bits */
+    ram_addr_t phys_offset;
+    ram_addr_t region_offset;
+} PhysPageDesc;
+
 /* This is a multi-level map on the physical address space.
    The bottom level has pointers to PhysPageDesc.  */
 static void *l1_phys_map[P_L1_SIZE];
@@ -220,7 +224,9 @@ int loglevel;
 static int log_append = 0;
 
 /* statistics */
+#if !defined(CONFIG_USER_ONLY)
 static int tlb_flush_count;
+#endif
 static int tb_flush_count;
 static int tb_phys_invalidate_count;
 
@@ -308,8 +314,12 @@ static void page_init(void)
 #endif
 }
 
-static PageDesc *page_find_alloc(target_ulong index, int alloc)
+static PageDesc *page_find_alloc(tb_page_addr_t index, int alloc)
 {
+    PageDesc *pd;
+    void **lp;
+    int i;
+
 #if defined(CONFIG_USER_ONLY)
     /* We can't use qemu_malloc because it may recurse into a locked mutex.
        Neither can we record the new pages we reserve while allocating a
@@ -334,10 +344,6 @@ static PageDesc *page_find_alloc(target_ulong index, int alloc)
 # define ALLOC(P, SIZE) \
     do { P = qemu_mallocz(SIZE); } while (0)
 #endif
-
-    PageDesc *pd;
-    void **lp;
-    int i;
 
     /* Level 1.  Always allocated.  */
     lp = l1_map + ((index >> V_L1_SHIFT) & (V_L1_SIZE - 1));
@@ -381,7 +387,7 @@ static PageDesc *page_find_alloc(target_ulong index, int alloc)
     return pd + (index & (L2_SIZE - 1));
 }
 
-static inline PageDesc *page_find(target_ulong index)
+static inline PageDesc *page_find(tb_page_addr_t index)
 {
     return page_find_alloc(index, 0);
 }
@@ -806,12 +812,12 @@ static inline void tb_reset_jump(TranslationBlock *tb, int n)
     tb_set_jmp_target(tb, n, (unsigned long)(tb->tc_ptr + tb->tb_next_offset[n]));
 }
 
-void tb_phys_invalidate(TranslationBlock *tb, target_ulong page_addr)
+void tb_phys_invalidate(TranslationBlock *tb, tb_page_addr_t page_addr)
 {
     CPUState *env;
     PageDesc *p;
     unsigned int h, n1;
-    target_phys_addr_t phys_pc;
+    tb_page_addr_t phys_pc;
     TranslationBlock *tb1, *tb2;
 
     /* remove the TB from the hash list */
@@ -923,10 +929,11 @@ TranslationBlock *tb_gen_code(CPUState *env,
 {
     TranslationBlock *tb;
     uint8_t *tc_ptr;
-    target_ulong phys_pc, phys_page2, virt_page2;
+    tb_page_addr_t phys_pc, phys_page2;
+    target_ulong virt_page2;
     int code_gen_size;
 
-    phys_pc = get_phys_addr_code(env, pc);
+    phys_pc = get_page_addr_code(env, pc);
     tb = tb_alloc(pc);
     if (!tb) {
         /* flush must be done */
@@ -948,9 +955,9 @@ TranslationBlock *tb_gen_code(CPUState *env,
     virt_page2 = (pc + tb->size - 1) & TARGET_PAGE_MASK;
     phys_page2 = -1;
     if ((pc & TARGET_PAGE_MASK) != virt_page2) {
-        phys_page2 = get_phys_addr_code(env, virt_page2);
+        phys_page2 = get_page_addr_code(env, virt_page2);
     }
-    tb_link_phys(tb, phys_pc, phys_page2);
+    tb_link_page(tb, phys_pc, phys_page2);
     return tb;
 }
 
@@ -959,12 +966,12 @@ TranslationBlock *tb_gen_code(CPUState *env,
    the same physical page. 'is_cpu_write_access' should be true if called
    from a real cpu write access: the virtual CPU will exit the current
    TB if code is modified inside this TB. */
-void tb_invalidate_phys_page_range(target_phys_addr_t start, target_phys_addr_t end,
+void tb_invalidate_phys_page_range(tb_page_addr_t start, tb_page_addr_t end,
                                    int is_cpu_write_access)
 {
     TranslationBlock *tb, *tb_next, *saved_tb;
     CPUState *env = cpu_single_env;
-    target_ulong tb_start, tb_end;
+    tb_page_addr_t tb_start, tb_end;
     PageDesc *p;
     int n;
 #ifdef TARGET_HAS_PRECISE_SMC
@@ -1066,7 +1073,7 @@ void tb_invalidate_phys_page_range(target_phys_addr_t start, target_phys_addr_t 
 }
 
 /* len must be <= 8 and start must be a multiple of len */
-static inline void tb_invalidate_phys_page_fast(target_phys_addr_t start, int len)
+static inline void tb_invalidate_phys_page_fast(tb_page_addr_t start, int len)
 {
     PageDesc *p;
     int offset, b;
@@ -1093,7 +1100,7 @@ static inline void tb_invalidate_phys_page_fast(target_phys_addr_t start, int le
 }
 
 #if !defined(CONFIG_SOFTMMU)
-static void tb_invalidate_phys_page(target_phys_addr_t addr,
+static void tb_invalidate_phys_page(tb_page_addr_t addr,
                                     unsigned long pc, void *puc)
 {
     TranslationBlock *tb;
@@ -1155,7 +1162,7 @@ static void tb_invalidate_phys_page(target_phys_addr_t addr,
 
 /* add the tb in the target page and protect it if necessary */
 static inline void tb_alloc_page(TranslationBlock *tb,
-                                 unsigned int n, target_ulong page_addr)
+                                 unsigned int n, tb_page_addr_t page_addr)
 {
     PageDesc *p;
     TranslationBlock *last_first_tb;
@@ -1236,8 +1243,8 @@ void tb_free(TranslationBlock *tb)
 
 /* add a new TB and link it to the physical page tables. phys_page2 is
    (-1) to indicate that only one page contains the TB. */
-void tb_link_phys(TranslationBlock *tb,
-                  target_ulong phys_pc, target_ulong phys_page2)
+void tb_link_page(TranslationBlock *tb,
+                  tb_page_addr_t phys_pc, tb_page_addr_t phys_page2)
 {
     unsigned int h;
     TranslationBlock **ptb;
@@ -2227,7 +2234,7 @@ struct walk_memory_regions_data
 };
 
 static int walk_memory_regions_end(struct walk_memory_regions_data *data,
-                                   unsigned long end, int new_prot)
+                                   abi_ulong end, int new_prot)
 {
     if (data->start != -1ul) {
         int rc = data->fn(data->priv, data->start, end, data->prot);
@@ -2243,9 +2250,9 @@ static int walk_memory_regions_end(struct walk_memory_regions_data *data,
 }
 
 static int walk_memory_regions_1(struct walk_memory_regions_data *data,
-                                 unsigned long base, int level, void **lp)
+                                 abi_ulong base, int level, void **lp)
 {
-    unsigned long pa;
+    abi_ulong pa;
     int i, rc;
 
     if (*lp == NULL) {
@@ -2268,7 +2275,8 @@ static int walk_memory_regions_1(struct walk_memory_regions_data *data,
     } else {
         void **pp = *lp;
         for (i = 0; i < L2_BITS; ++i) {
-            pa = base | (i << (TARGET_PAGE_BITS + L2_BITS * level));
+            pa = base | ((abi_ulong)i <<
+                (TARGET_PAGE_BITS + L2_BITS * level));
             rc = walk_memory_regions_1(data, pa, level - 1, pp + i);
             if (rc != 0) {
                 return rc;
@@ -2290,7 +2298,7 @@ int walk_memory_regions(void *priv, walk_memory_regions_fn fn)
     data.prot = 0;
 
     for (i = 0; i < V_L1_SIZE; i++) {
-        int rc = walk_memory_regions_1(&data, i << V_L1_SHIFT,
+        int rc = walk_memory_regions_1(&data, (abi_ulong)i << V_L1_SHIFT,
                                        V_L1_SHIFT / L2_BITS - 1, l1_map + i);
         if (rc != 0) {
             return rc;
@@ -2300,12 +2308,13 @@ int walk_memory_regions(void *priv, walk_memory_regions_fn fn)
     return walk_memory_regions_end(&data, 0, 0);
 }
 
-static int dump_region(void *priv, unsigned long start,
-    unsigned long end, unsigned long prot)
+static int dump_region(void *priv, abi_ulong start,
+    abi_ulong end, unsigned long prot)
 {
     FILE *f = (FILE *)priv;
 
-    (void) fprintf(f, "%08lx-%08lx %08lx %c%c%c\n",
+    (void) fprintf(f, TARGET_ABI_FMT_lx"-"TARGET_ABI_FMT_lx
+        " "TARGET_ABI_FMT_lx" %c%c%c\n",
         start, end, end - start,
         ((prot & PAGE_READ) ? 'r' : '-'),
         ((prot & PAGE_WRITE) ? 'w' : '-'),
@@ -2332,27 +2341,35 @@ int page_get_flags(target_ulong address)
     return p->flags;
 }
 
-/* modify the flags of a page and invalidate the code if
-   necessary. The flag PAGE_WRITE_ORG is positioned automatically
-   depending on PAGE_WRITE */
+/* Modify the flags of a page and invalidate the code if necessary.
+   The flag PAGE_WRITE_ORG is positioned automatically depending
+   on PAGE_WRITE.  The mmap_lock should already be held.  */
 void page_set_flags(target_ulong start, target_ulong end, int flags)
 {
-    PageDesc *p;
-    target_ulong addr;
+    target_ulong addr, len;
 
-    /* mmap_lock should already be held.  */
+    /* This function should never be called with addresses outside the
+       guest address space.  If this assert fires, it probably indicates
+       a missing call to h2g_valid.  */
+#if TARGET_ABI_BITS > L1_MAP_ADDR_SPACE_BITS
+    assert(end < ((abi_ulong)1 << L1_MAP_ADDR_SPACE_BITS));
+#endif
+    assert(start < end);
+
     start = start & TARGET_PAGE_MASK;
     end = TARGET_PAGE_ALIGN(end);
-    if (flags & PAGE_WRITE)
+
+    if (flags & PAGE_WRITE) {
         flags |= PAGE_WRITE_ORG;
-    for(addr = start; addr < end; addr += TARGET_PAGE_SIZE) {
-        p = page_find_alloc(addr >> TARGET_PAGE_BITS);
-        /* We may be called for host regions that are outside guest
-           address space.  */
-        if (!p)
-            return;
-        /* if the write protection is set, then we invalidate the code
-           inside */
+    }
+
+    for (addr = start, len = end - start;
+         len != 0;
+         len -= TARGET_PAGE_SIZE, addr += TARGET_PAGE_SIZE) {
+        PageDesc *p = page_find_alloc(addr >> TARGET_PAGE_BITS, 1);
+
+        /* If the write protection bit is set, then we invalidate
+           the code inside.  */
         if (!(p->flags & PAGE_WRITE) &&
             (flags & PAGE_WRITE) &&
             p->first_tb) {
@@ -2368,14 +2385,24 @@ int page_check_range(target_ulong start, target_ulong len, int flags)
     target_ulong end;
     target_ulong addr;
 
-    if (start + len < start)
-        /* we've wrapped around */
+    /* This function should never be called with addresses outside the
+       guest address space.  If this assert fires, it probably indicates
+       a missing call to h2g_valid.  */
+#if TARGET_ABI_BITS > L1_MAP_ADDR_SPACE_BITS
+    assert(start < ((abi_ulong)1 << L1_MAP_ADDR_SPACE_BITS));
+#endif
+
+    if (start + len - 1 < start) {
+        /* We've wrapped around.  */
         return -1;
+    }
 
     end = TARGET_PAGE_ALIGN(start+len); /* must do before we loose bits in the next step */
     start = start & TARGET_PAGE_MASK;
 
-    for(addr = start; addr < end; addr += TARGET_PAGE_SIZE) {
+    for (addr = start, len = end - start;
+         len != 0;
+         len -= TARGET_PAGE_SIZE, addr += TARGET_PAGE_SIZE) {
         p = page_find(addr >> TARGET_PAGE_BITS);
         if( !p )
             return -1;
@@ -3937,6 +3964,8 @@ void cpu_io_recompile(CPUState *env, void *retaddr)
     cpu_resume_from_signal(env, NULL);
 }
 
+#if !defined(CONFIG_USER_ONLY)
+
 void dump_exec_info(FILE *f,
                     int (*cpu_fprintf)(FILE *f, const char *fmt, ...))
 {
@@ -3991,8 +4020,6 @@ void dump_exec_info(FILE *f,
     tcg_dump_info(f, cpu_fprintf);
 #endif
 }
-
-#if !defined(CONFIG_USER_ONLY)
 
 #define MMUSUFFIX _cmmu
 #define GETPC() NULL
