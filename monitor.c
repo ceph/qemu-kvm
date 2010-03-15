@@ -426,6 +426,12 @@ void monitor_protocol_event(MonitorEvent event, QObject *data)
         case QEVENT_BLOCK_IO_ERROR:
             event_name = "BLOCK_IO_ERROR";
             break;
+        case QEVENT_RTC_CHANGE:
+            event_name = "RTC_CHANGE";
+            break;
+        case QEVENT_WATCHDOG:
+            event_name = "WATCHDOG";
+            break;
         default:
             abort();
             break;

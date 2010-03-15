@@ -634,15 +634,21 @@ extern int have_guest_base;
 
 /* All direct uses of g2h and h2g need to go away for usermode softmmu.  */
 #define g2h(x) ((void *)((unsigned long)(x) + GUEST_BASE))
+
+#if HOST_LONG_BITS <= TARGET_VIRT_ADDR_SPACE_BITS
+#define h2g_valid(x) 1
+#else
+#define h2g_valid(x) ({ \
+    unsigned long __guest = (unsigned long)(x) - GUEST_BASE; \
+    __guest < (1ul << TARGET_VIRT_ADDR_SPACE_BITS); \
+})
+#endif
+
 #define h2g(x) ({ \
     unsigned long __ret = (unsigned long)(x) - GUEST_BASE; \
     /* Check if given address fits target address space */ \
-    assert(__ret == (abi_ulong)__ret); \
+    assert(h2g_valid(x)); \
     (abi_ulong)__ret; \
-})
-#define h2g_valid(x) ({ \
-    unsigned long __guest = (unsigned long)(x) - GUEST_BASE; \
-    (__guest == (abi_ulong)__guest); \
 })
 
 #define saddr(x) g2h(x)
@@ -739,8 +745,11 @@ extern unsigned long qemu_host_page_mask;
 #define PAGE_RESERVED  0x0020
 
 void page_dump(FILE *f);
-int walk_memory_regions(void *,
-    int (*fn)(void *, unsigned long, unsigned long, unsigned long));
+
+typedef int (*walk_memory_regions_fn)(void *, unsigned long,
+                                      unsigned long, unsigned long);
+int walk_memory_regions(void *, walk_memory_regions_fn);
+
 int page_get_flags(target_ulong address);
 void page_set_flags(target_ulong start, target_ulong end, int flags);
 int page_check_range(target_ulong start, target_ulong len, int flags);

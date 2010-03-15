@@ -1501,6 +1501,15 @@ int qemu_timedate_diff(struct tm *tm)
     return seconds - time(NULL);
 }
 
+void rtc_change_mon_event(struct tm *tm)
+{
+    QObject *data;
+
+    data = qobject_from_jsonf("{ 'offset': %d }", qemu_timedate_diff(tm));
+    monitor_protocol_event(QEVENT_RTC_CHANGE, data);
+    qobject_decref(data);
+}
+
 static void configure_rtc_date_offset(const char *startdate, int legacy)
 {
     time_t rtc_start_date;
@@ -3175,8 +3184,6 @@ static void do_vm_stop(int reason)
         vm_state_notify(0, reason);
         monitor_protocol_event(QEVENT_STOP, NULL);
     }
-
-    monitor_protocol_event(QEVENT_RESET, NULL);
 }
 
 void qemu_register_reset(QEMUResetHandler *func, void *opaque)
@@ -3209,6 +3216,7 @@ void qemu_system_reset(void)
     QTAILQ_FOREACH_SAFE(re, &reset_handlers, entry, nre) {
         re->func(re->opaque);
     }
+    monitor_protocol_event(QEVENT_RESET, NULL);
     cpu_synchronize_all_post_reset();
 }
 
