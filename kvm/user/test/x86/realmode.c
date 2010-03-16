@@ -141,6 +141,90 @@ int regs_equal(const struct regs *r1, const struct regs *r2, int ignore)
 		);				   \
 	extern u8 insn_##name[], insn_##name##_end[]
 
+void test_xchg(void)
+{
+	struct regs inregs = { .eax = 0, .ebx = 1, .ecx = 2, .edx = 3, .esi = 4, .edi = 5, .ebp = 6, .esp = 7}, outregs;
+
+	MK_INSN(xchg_test1, "xchg %eax,%eax\n\t");
+	MK_INSN(xchg_test2, "xchg %eax,%ebx\n\t");
+	MK_INSN(xchg_test3, "xchg %eax,%ecx\n\t");
+	MK_INSN(xchg_test4, "xchg %eax,%edx\n\t");
+	MK_INSN(xchg_test5, "xchg %eax,%esi\n\t");
+	MK_INSN(xchg_test6, "xchg %eax,%edi\n\t");
+	MK_INSN(xchg_test7, "xchg %eax,%ebp\n\t");
+	MK_INSN(xchg_test8, "xchg %eax,%esp\n\t");
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_xchg_test1,
+                              insn_xchg_test1_end - insn_xchg_test1);
+
+	if (!regs_equal(&inregs, &outregs, 0))
+		print_serial("xchg test 1: FAIL\n");
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_xchg_test2,
+                              insn_xchg_test2_end - insn_xchg_test2);
+
+	if (!regs_equal(&inregs, &outregs, R_AX | R_BX) ||
+            outregs.eax != inregs.ebx ||
+            outregs.ebx != inregs.eax)
+		print_serial("xchg test 2: FAIL\n");
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_xchg_test3,
+                              insn_xchg_test3_end - insn_xchg_test3);
+
+	if (!regs_equal(&inregs, &outregs, R_AX | R_CX) ||
+            outregs.eax != inregs.ecx ||
+            outregs.ecx != inregs.eax)
+		print_serial("xchg test 3: FAIL\n");
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_xchg_test4,
+                              insn_xchg_test4_end - insn_xchg_test4);
+
+	if (!regs_equal(&inregs, &outregs, R_AX | R_DX) ||
+            outregs.eax != inregs.edx ||
+            outregs.edx != inregs.eax)
+		print_serial("xchg test 4: FAIL\n");
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_xchg_test5,
+                              insn_xchg_test5_end - insn_xchg_test5);
+
+	if (!regs_equal(&inregs, &outregs, R_AX | R_SI) ||
+            outregs.eax != inregs.esi ||
+            outregs.esi != inregs.eax)
+		print_serial("xchg test 5: FAIL\n");
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_xchg_test6,
+                              insn_xchg_test6_end - insn_xchg_test6);
+
+	if (!regs_equal(&inregs, &outregs, R_AX | R_DI) ||
+            outregs.eax != inregs.edi ||
+            outregs.edi != inregs.eax)
+		print_serial("xchg test 6: FAIL\n");
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_xchg_test7,
+                              insn_xchg_test7_end - insn_xchg_test7);
+
+	if (!regs_equal(&inregs, &outregs, R_AX | R_BP) ||
+            outregs.eax != inregs.ebp ||
+            outregs.ebp != inregs.eax)
+		print_serial("xchg test 7: FAIL\n");
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_xchg_test8,
+                              insn_xchg_test8_end - insn_xchg_test8);
+
+	if (!regs_equal(&inregs, &outregs, R_AX | R_SP) ||
+            outregs.eax != inregs.esp ||
+            outregs.esp != inregs.eax)
+		print_serial("xchg test 8: FAIL\n");
+}
+
 void test_shld(void)
 {
 	struct regs inregs = { .eax = 0xbe, .edx = 0xef000000 }, outregs;
@@ -572,6 +656,7 @@ void realmode_start(void)
 	test_call();
 	/* long jmp test uses call near so test it after testing call */
 	test_long_jmp();
+	test_xchg();
 
 	exit(0);
 }
