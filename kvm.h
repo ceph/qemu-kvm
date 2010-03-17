@@ -183,5 +183,15 @@ int kvm_set_ioeventfd_pio_word(int fd, uint16_t adr, uint16_t val, bool assign)
 }
 #endif
 
+#if defined(KVM_IRQFD) && defined(CONFIG_KVM)
+int kvm_set_irqfd(int gsi, int fd, bool assigned);
+#else
+static inline
+int kvm_set_irqfd(int gsi, int fd, bool assigned)
+{
+    return -ENOSYS;
+}
+#endif
+
 #endif
 #endif

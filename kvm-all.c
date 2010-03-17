@@ -1214,5 +1214,24 @@ int kvm_set_ioeventfd_pio_word(int fd, uint16_t addr, uint16_t val, bool assign)
 }
 #endif
 
+#if defined(KVM_IRQFD)
+int kvm_set_irqfd(int gsi, int fd, bool assigned)
+{
+    struct kvm_irqfd irqfd = {
+        .fd = fd,
+        .gsi = gsi,
+        .flags = assigned ? 0 : KVM_IRQFD_FLAG_DEASSIGN,
+    };
+    int r;
+    if (!kvm_enabled() || !kvm_irqchip_in_kernel())
+        return -ENOSYS;
+
+    r = kvm_vm_ioctl(kvm_state, KVM_IRQFD, &irqfd);
+    if (r < 0)
+        return r;
+    return 0;
+}
+#endif
+
 #undef PAGE_SIZE
 #include "qemu-kvm.c"
