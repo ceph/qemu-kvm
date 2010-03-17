@@ -136,6 +136,9 @@ enum {
 #define PCI_CAPABILITY_CONFIG_MSI_LENGTH 0x10
 #define PCI_CAPABILITY_CONFIG_MSIX_LENGTH 0x10
 
+typedef int (*msix_mask_notifier_func)(PCIDevice *, unsigned vector,
+				       void *opaque, int masked);
+
 struct PCIDevice {
     DeviceState qdev;
     /* PCI config space */
@@ -200,6 +203,9 @@ struct PCIDevice {
     target_phys_addr_t msix_page_size;
 
     struct kvm_irq_routing_entry *msix_irq_entries;
+
+    void **msix_mask_notifier_opaque;
+    msix_mask_notifier_func msix_mask_notifier;
 
     /* Device capability configuration space */
     struct {
