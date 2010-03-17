@@ -425,6 +425,27 @@ static void virtio_pci_guest_notifier_read(void *opaque)
     }
 }
 
+static int virtio_pci_mask_notifier(PCIDevice *dev, unsigned vector,
+                                    void *opaque, int masked)
+{
+    VirtQueue *vq = opaque;
+    EventNotifier *notifier = virtio_queue_get_guest_notifier(vq);
+    int r = kvm_set_irqfd(dev->msix_irq_entries[vector].gsi,
+                          event_notifier_get_fd(notifier),
+                          !masked);
+    if (r < 0) {
+        return (r == -ENOSYS) ? 0 : r;
+    }
+    if (masked) {
+        qemu_set_fd_handler(event_notifier_get_fd(notifier),
+                            virtio_pci_guest_notifier_read, NULL, vq);
+    } else {
+        qemu_set_fd_handler(event_notifier_get_fd(notifier),
+                            NULL, NULL, NULL);
+    }
+    return 0;
+}
+
 static int virtio_pci_set_guest_notifier(void *opaque, int n, bool assign)
 {
     VirtIOPCIProxy *proxy = opaque;
@@ -438,7 +459,11 @@ static int virtio_pci_set_guest_notifier(void *opaque, int n, bool assign)
         }
         qemu_set_fd_handler(event_notifier_get_fd(notifier),
                             virtio_pci_guest_notifier_read, NULL, vq);
+        msix_set_mask_notifier(&proxy->pci_dev,
+                               virtio_queue_vector(proxy->vdev, n), vq);
     } else {
+        msix_set_mask_notifier(&proxy->pci_dev,
+                               virtio_queue_vector(proxy->vdev, n), NULL);
         qemu_set_fd_handler(event_notifier_get_fd(notifier),
                             NULL, NULL, NULL);
         event_notifier_cleanup(notifier);
@@ -522,6 +547,8 @@ static void virtio_init_pci(VirtIOPCIProxy *proxy, VirtIODevice *vdev,
         vdev->nvectors = 0;
 
     proxy->pci_dev.config_write = virtio_write_config;
+
+    proxy->pci_dev.msix_mask_notifier = virtio_pci_mask_notifier;
 
     size = VIRTIO_PCI_REGION_SIZE(&proxy->pci_dev) + vdev->config_len;
     if (size & (size-1))
