@@ -38,14 +38,7 @@ usage() {
 	    --qemu-cflags=CFLAGS   CFLAGS to add to qemu configuration
 	    --qemu-ldflags=LDFLAGS LDFLAGS to add to qemu configuration
 
-	Any additional option is given to qemu's configure verbatim; including:
-
 EOF
-    cd qemu
-    ./configure --help | egrep "enable-|disable-" \
-	| grep -v user | grep -v system | grep -v kqemu | grep -v kvm \
-	| sed -e "s/^  /    /g" \
-	| sed -e"s/  enable/enable/g" | sed -e "s/  disable/disable/g"
     exit 1
 }
 
@@ -131,16 +124,6 @@ arch=${arch%%-*}
           --arch="$arch" --processor="$processor" \
           ${cross_prefix:+"--cross-prefix=$cross_prefix"})
 
-#configure qemu
-(cd qemu; ./configure --target-list=$target_exec \
-    --disable-kqemu \
-    --extra-cflags="-I $PWD/../libkvm $qemu_cflags" \
-    --extra-ldflags="-L $PWD/../libkvm $qemu_ldflags" \
-    --kerneldir="$libkvm_kerneldir" \
-    --prefix="$prefix" \
-    ${cross_prefix:+"--cross-prefix=$cross_prefix"} \
-    ${cross_prefix:+"--cpu=$arch"} "${qemu_opts[@]}"
-) || usage
 
 
 cat <<EOF > config.mak
