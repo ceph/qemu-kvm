@@ -448,7 +448,8 @@ static void kvm_create_vcpu(CPUState *env, int id)
     r = kvm_vm_ioctl(kvm_state, KVM_CREATE_VCPU, id);
     if (r < 0) {
         fprintf(stderr, "kvm_create_vcpu: %m\n");
-        return;
+        fprintf(stderr, "Failed to create vCPU. Check the -smp parameter.\n");
+        goto err;
     }
 
     env->kvm_fd = r;
@@ -476,6 +477,9 @@ static void kvm_create_vcpu(CPUState *env, int id)
     return;
   err_fd:
     close(env->kvm_fd);
+  err:
+    /* We're no good with semi-broken states. */
+    abort();
 }
 
 static int kvm_set_boot_vcpu_id(kvm_context_t kvm, uint32_t id)
