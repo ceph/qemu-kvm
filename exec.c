@@ -101,7 +101,6 @@ uint8_t *code_gen_ptr;
 #if !defined(CONFIG_USER_ONLY)
 int phys_ram_fd;
 uint8_t *phys_ram_dirty;
-uint8_t *bios_mem;
 static int in_migration;
 
 typedef struct RAMBlock {

@@ -859,7 +859,6 @@ extern int phys_ram_fd;
 extern uint8_t *phys_ram_dirty;
 extern ram_addr_t ram_size;
 extern ram_addr_t last_ram_offset;
-extern uint8_t *bios_mem;
 
 extern const char *mem_path;
 extern int mem_prealloc;
