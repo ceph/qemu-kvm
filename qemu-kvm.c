@@ -439,6 +439,13 @@ void kvm_disable_pit_creation(kvm_context_t kvm)
     kvm->no_pit_creation = 1;
 }
 
+static void kvm_reset_vcpu(void *opaque)
+{
+    CPUState *env = opaque;
+
+    kvm_arch_cpu_reset(env);
+}
+
 static void kvm_create_vcpu(CPUState *env, int id)
 {
     long mmap_size;
@@ -473,6 +480,11 @@ static void kvm_create_vcpu(CPUState *env, int id)
         s->coalesced_mmio_ring = (void *) env->kvm_run +
                s->coalesced_mmio * PAGE_SIZE;
 #endif
+
+    r = kvm_arch_init_vcpu(env);
+    if (r == 0) {
+        qemu_register_reset(kvm_reset_vcpu, env);
+    }
 
     return;
   err_fd:
@@ -1781,16 +1793,9 @@ static void setup_kernel_sigmask(CPUState *env)
 
 static void qemu_kvm_system_reset(void)
 {
-    CPUState *penv = first_cpu;
-
     pause_all_threads();
 
     qemu_system_reset();
-
-    while (penv) {
-        kvm_arch_cpu_reset(penv);
-        penv = (CPUState *) penv->next_cpu;
-    }
 
     resume_all_threads();
 }
@@ -1833,7 +1838,6 @@ static void *ap_main_loop(void *_env)
     env->thread_id = kvm_get_thread_id();
     sigfillset(&signals);
     sigprocmask(SIG_BLOCK, &signals, NULL);
-    kvm_create_vcpu(env, env->cpu_index);
 
 #ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
     /* do ioperm for io ports of assigned devices */
@@ -1841,12 +1845,11 @@ static void *ap_main_loop(void *_env)
         on_vcpu(env, kvm_arch_do_ioperm, data);
 #endif
 
-    setup_kernel_sigmask(env);
-
     pthread_mutex_lock(&qemu_mutex);
     cpu_single_env = env;
 
-    kvm_arch_init_vcpu(env);
+    kvm_create_vcpu(env, env->cpu_index);
+    setup_kernel_sigmask(env);
 
     /* signal VCPU creation */
     current_env->created = 1;
