@@ -210,7 +210,6 @@ int kvm_init_vcpu(CPUState *env)
     ret = kvm_arch_init_vcpu(env);
     if (ret == 0) {
         qemu_register_reset(kvm_reset_vcpu, env);
-        kvm_arch_reset_vcpu(env);
     }
 err:
     return ret;
