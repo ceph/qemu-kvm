@@ -939,19 +939,7 @@ int kvm_run(CPUState *env)
 
     post_kvm_run(kvm, env);
 
-#if defined(KVM_CAP_COALESCED_MMIO)
-    if (kvm_state->coalesced_mmio) {
-        struct kvm_coalesced_mmio_ring *ring =
-            (void *) run + kvm_state->coalesced_mmio * PAGE_SIZE;
-        while (ring->first != ring->last) {
-            cpu_physical_memory_rw(ring->coalesced_mmio[ring->first].phys_addr,
-                           &ring->coalesced_mmio[ring->first].data[0],
-                           ring->coalesced_mmio[ring->first].len, 1);
-            smp_wmb();
-            ring->first = (ring->first + 1) % KVM_COALESCED_MMIO_MAX;
-        }
-    }
-#endif
+    kvm_flush_coalesced_mmio_buffer();
 
 #if !defined(__s390__)
     if (r == -1) {
