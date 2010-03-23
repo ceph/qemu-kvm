@@ -874,8 +874,6 @@ void qemu_kvm_notify_work(void);
 
 void kvm_tpr_access_report(CPUState *env, uint64_t rip, int is_write);
 
-int qemu_kvm_get_dirty_pages(unsigned long phys_addr, void *buf);
-
 int kvm_arch_init_irq_routing(void);
 
 int kvm_mmio_read(void *opaque, uint64_t addr, uint8_t * data, int len);

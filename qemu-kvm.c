@@ -2357,11 +2357,6 @@ int kvm_set_irq(int irq, int level, int *status)
 
 #endif
 
-int qemu_kvm_get_dirty_pages(unsigned long phys_addr, void *buf)
-{
-    return kvm_get_dirty_pages(kvm_context, phys_addr, buf);
-}
-
 void kvm_mutex_unlock(void)
 {
     assert(!cpu_single_env);
