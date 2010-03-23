@@ -2791,15 +2791,6 @@ static int ram_save_block(QEMUFile *f)
     int found = 0;
 
     while (addr < last_ram_offset) {
-        if (kvm_enabled() && current_addr == 0) {
-            int r;
-            r = kvm_update_dirty_pages_log();
-            if (r) {
-                fprintf(stderr, "%s: update dirty pages log failed %d\n", __FUNCTION__, r);
-                qemu_file_set_error(f);
-                return 0;
-            }
-        }
         if (cpu_physical_memory_get_dirty(current_addr, MIGRATION_DIRTY_FLAG)) {
             uint8_t *p;
 

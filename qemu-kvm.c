@@ -2346,20 +2346,6 @@ static int kvm_get_dirty_bitmap_cb(unsigned long start, unsigned long len,
     return kvm_get_dirty_pages_log_range(start, bitmap, start, len);
 }
 
-/* 
- * get kvm's dirty pages bitmap and update qemu's
- * we only care about physical ram, which resides in slots 0 and 3
- */
-int kvm_update_dirty_pages_log(void)
-{
-    int r = 0;
-
-
-    r = kvm_get_dirty_pages_range(kvm_context, 0, -1UL, NULL,
-                                  kvm_get_dirty_bitmap_cb);
-    return r;
-}
-
 void kvm_qemu_log_memory(target_phys_addr_t start, target_phys_addr_t size,
                          int log)
 {

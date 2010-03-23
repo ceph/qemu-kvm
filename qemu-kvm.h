@@ -836,7 +836,6 @@ void kvm_hpet_disable_kpit(void);
 int kvm_set_irq(int irq, int level, int *status);
 
 int kvm_physical_memory_set_dirty_tracking(int enable);
-int kvm_update_dirty_pages_log(void);
 
 void qemu_kvm_call_with_env(void (*func)(void *), void *data, CPUState *env);
 void qemu_kvm_cpuid_on_env(CPUState *env);
