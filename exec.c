@@ -2043,7 +2043,7 @@ void cpu_physical_memory_reset_dirty(ram_addr_t start, ram_addr_t end,
 int cpu_physical_memory_set_dirty_tracking(int enable)
 {
     int ret = 0;
-
+    in_migration = enable;
     ret = cpu_notify_migration_log(!!enable);
     return ret;
 }
