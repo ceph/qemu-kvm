@@ -4908,7 +4908,6 @@ int main(int argc, char **argv, char **envp)
 
     init_clocks();
 
-    qemu_errors_to_file(stderr);
     qemu_cache_utils_init(envp);
 
     QLIST_INIT (&vm_change_state_head);
@@ -6174,7 +6173,7 @@ int main(int argc, char **argv, char **envp)
 
     qemu_system_reset();
     if (loadvm) {
-        if (load_vmstate(cur_mon, loadvm) < 0) {
+        if (load_vmstate(loadvm) < 0) {
             autostart = 0;
         }
     }

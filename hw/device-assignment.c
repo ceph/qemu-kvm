@@ -33,7 +33,7 @@
 #include "qemu-kvm.h"
 #include "hw.h"
 #include "pc.h"
-#include "sysemu.h"
+#include "qemu-error.h"
 #include "console.h"
 #include "device-assignment.h"
 #include "loader.h"

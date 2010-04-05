@@ -180,7 +180,8 @@ static QLIST_HEAD(mon_list, Monitor) mon_list;
 static const mon_cmd_t mon_cmds[];
 static const mon_cmd_t info_cmds[];
 
-Monitor *cur_mon = NULL;
+Monitor *cur_mon;
+Monitor *default_mon;
 
 static void monitor_command_cb(Monitor *mon, const char *cmdline,
                                void *opaque);
@@ -2564,7 +2565,7 @@ static void do_loadvm(Monitor *mon, const QDict *qdict)
 
     vm_stop(0);
 
-    if (load_vmstate(mon, name) >= 0 && saved_vm_running)
+    if (load_vmstate(name) >= 0 && saved_vm_running)
         vm_start();
 }
 
@@ -3888,6 +3889,18 @@ fail:
     return NULL;
 }
 
+void monitor_set_error(Monitor *mon, QError *qerror)
+{
+    /* report only the first error */
+    if (!mon->error) {
+        mon->error = qerror;
+    } else {
+        MON_DEBUG("Additional error report at %s:%d\n",
+                  qerror->file, qerror->linenr);
+        QDECREF(qerror);
+    }
+}
+
 static void monitor_print_error(Monitor *mon)
 {
     qerror_print(mon->error);
@@ -3989,8 +4002,6 @@ static void handle_user_command(Monitor *mon, const char *cmdline)
     if (!cmd)
         goto out;
 
-    qemu_errors_to_mon(mon);
-
     if (monitor_handler_is_async(cmd)) {
         user_async_cmd_handler(mon, cmd, qdict);
     } else if (monitor_handler_ported(cmd)) {
@@ -4001,8 +4012,6 @@ static void handle_user_command(Monitor *mon, const char *cmdline)
 
     if (monitor_has_error(mon))
         monitor_print_error(mon);
-
-    qemu_errors_to_previous();
 
 out:
     QDECREF(qdict);
@@ -4405,7 +4414,6 @@ static void handle_qmp_command(JSONMessageParser *parser, QList *tokens)
     const char *cmd_name, *info_item;
 
     args = NULL;
-    qemu_errors_to_mon(mon);
 
     obj = json_parser_parse(tokens, NULL);
     if (!obj) {
@@ -4486,7 +4494,6 @@ err_out:
     monitor_protocol_emitter(mon, NULL);
 out:
     QDECREF(args);
-    qemu_errors_to_previous();
 }
 
 /**
@@ -4655,8 +4662,8 @@ void monitor_init(CharDriverState *chr, int flags)
     }
 
     QLIST_INSERT_HEAD(&mon_list, mon, entry);
-    if (!cur_mon || (flags & MONITOR_IS_DEFAULT))
-        cur_mon = mon;
+    if (!default_mon || (flags & MONITOR_IS_DEFAULT))
+        default_mon = mon;
 }
 
 static void bdrv_password_cb(Monitor *mon, const char *password, void *opaque)
@@ -4703,100 +4710,4 @@ int monitor_read_bdrv_key_start(Monitor *mon, BlockDriverState *bs,
         completion_cb(opaque, err);
 
     return err;
-}
-
-typedef struct QemuErrorSink QemuErrorSink;
-struct QemuErrorSink {
-    enum {
-        ERR_SINK_FILE,
-        ERR_SINK_MONITOR,
-    } dest;
-    union {
-        FILE    *fp;
-        Monitor *mon;
-    };
-    QemuErrorSink *previous;
-};
-
-static QemuErrorSink *qemu_error_sink;
-
-void qemu_errors_to_file(FILE *fp)
-{
-    QemuErrorSink *sink;
-
-    sink = qemu_mallocz(sizeof(*sink));
-    sink->dest = ERR_SINK_FILE;
-    sink->fp = fp;
-    sink->previous = qemu_error_sink;
-    qemu_error_sink = sink;
-}
-
-void qemu_errors_to_mon(Monitor *mon)
-{
-    QemuErrorSink *sink;
-
-    sink = qemu_mallocz(sizeof(*sink));
-    sink->dest = ERR_SINK_MONITOR;
-    sink->mon = mon;
-    sink->previous = qemu_error_sink;
-    qemu_error_sink = sink;
-}
-
-void qemu_errors_to_previous(void)
-{
-    QemuErrorSink *sink;
-
-    assert(qemu_error_sink != NULL);
-    sink = qemu_error_sink;
-    qemu_error_sink = sink->previous;
-    qemu_free(sink);
-}
-
-void qemu_error(const char *fmt, ...)
-{
-    va_list args;
-
-    assert(qemu_error_sink != NULL);
-    switch (qemu_error_sink->dest) {
-    case ERR_SINK_FILE:
-        va_start(args, fmt);
-        vfprintf(qemu_error_sink->fp, fmt, args);
-        va_end(args);
-        break;
-    case ERR_SINK_MONITOR:
-        va_start(args, fmt);
-        monitor_vprintf(qemu_error_sink->mon, fmt, args);
-        va_end(args);
-        break;
-    }
-}
-
-void qemu_error_internal(const char *file, int linenr, const char *func,
-                         const char *fmt, ...)
-{
-    va_list va;
-    QError *qerror;
-
-    assert(qemu_error_sink != NULL);
-
-    va_start(va, fmt);
-    qerror = qerror_from_info(file, linenr, func, fmt, &va);
-    va_end(va);
-
-    switch (qemu_error_sink->dest) {
-    case ERR_SINK_FILE:
-        qerror_print(qerror);
-        QDECREF(qerror);
-        break;
-    case ERR_SINK_MONITOR:
-        /* report only the first error */
-        if (!qemu_error_sink->mon->error) {
-            qemu_error_sink->mon->error = qerror;
-        } else {
-            MON_DEBUG("Additional error report at %s:%d\n", qerror->file,
-                      qerror->linenr);
-            QDECREF(qerror);
-        }
-        break;
-    }
 }

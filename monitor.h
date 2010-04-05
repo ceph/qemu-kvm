@@ -3,10 +3,13 @@
 
 #include "qemu-common.h"
 #include "qemu-char.h"
+#include "qemu-error.h"
+#include "qerror.h"
 #include "qdict.h"
 #include "block.h"
 
 extern Monitor *cur_mon;
+extern Monitor *default_mon;
 
 /* flags for monitor_init */
 #define MONITOR_IS_DEFAULT    0x01
@@ -47,5 +50,7 @@ void monitor_print_filename(Monitor *mon, const char *filename);
 void monitor_flush(Monitor *mon);
 
 typedef void (MonitorCompletion)(void *opaque, QObject *ret_data);
+
+void monitor_set_error(Monitor *mon, QError *qerror);
 
 #endif /* !MONITOR_H */

@@ -13,9 +13,9 @@
 
 #include "qemu-common.h"
 #include "monitor.h"
-#include "sysemu.h"
 #include "qemu-timer.h"
 #include "qemu-log.h"
+#include "qemu-error.h"
 
 #include <sys/time.h>
 
@@ -32,8 +32,6 @@ struct QEMUBH
 void qemu_service_io(void)
 {
 }
-
-Monitor *cur_mon;
 
 void monitor_printf(Monitor *mon, const char *fmt, ...)
 {
