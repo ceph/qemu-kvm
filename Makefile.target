@@ -63,20 +63,7 @@ libobj-$(CONFIG_KVM) += qemu-kvm-helper.o
 
 libobj-$(TARGET_ARM) += neon_helper.o iwmmxt_helper.o
 
-# NOTE: the disassembler code is only needed for debugging
 libobj-y += disas.o
-libobj-$(CONFIG_ALPHA_DIS) += alpha-dis.o
-libobj-$(CONFIG_ARM_DIS) += arm-dis.o
-libobj-$(CONFIG_CRIS_DIS) += cris-dis.o
-libobj-$(CONFIG_HPPA_DIS) += hppa-dis.o
-libobj-$(CONFIG_I386_DIS) += i386-dis.o
-libobj-$(CONFIG_M68K_DIS) += m68k-dis.o
-libobj-$(CONFIG_MICROBLAZE_DIS) += microblaze-dis.o
-libobj-$(CONFIG_MIPS_DIS) += mips-dis.o
-libobj-$(CONFIG_PPC_DIS) += ppc-dis.o
-libobj-$(CONFIG_S390_DIS) += s390-dis.o
-libobj-$(CONFIG_SH4_DIS) += sh4-dis.o
-libobj-$(CONFIG_SPARC_DIS) += sparc-dis.o
 
 $(libobj-y): $(GENERATED_HEADERS)
 
@@ -126,6 +113,7 @@ obj-m68k-y += m68k-sim.o m68k-semi.o
 $(obj-y) $(obj-$(TARGET_BASE_ARCH)-y): $(GENERATED_HEADERS)
 
 obj-y += $(addprefix ../libuser/, $(user-obj-y))
+obj-y += $(addprefix ../libdis-user/, $(libdis-y))
 obj-y += $(libobj-y)
 
 endif #CONFIG_LINUX_USER
@@ -152,6 +140,7 @@ obj-i386-y += ioport-user.o
 $(obj-y) $(obj-$(TARGET_BASE_ARCH)-y): $(GENERATED_HEADERS)
 
 obj-y += $(addprefix ../libuser/, $(user-obj-y))
+obj-y += $(addprefix ../libdis-user/, $(libdis-y))
 obj-y += $(libobj-y)
 
 endif #CONFIG_DARWIN_USER
@@ -173,6 +162,7 @@ obj-i386-y += ioport-user.o
 $(obj-y) $(obj-$(TARGET_BASE_ARCH)-y): $(GENERATED_HEADERS)
 
 obj-y += $(addprefix ../libuser/, $(user-obj-y))
+obj-y += $(addprefix ../libdis-user/, $(libdis-y))
 obj-y += $(libobj-y)
 
 endif #CONFIG_BSD_USER
@@ -361,6 +351,7 @@ monitor.o: qemu-monitor.h
 $(obj-y) $(obj-$(TARGET_BASE_ARCH)-y): $(GENERATED_HEADERS)
 
 obj-y += $(addprefix ../, $(common-obj-y))
+obj-y += $(addprefix ../libdis/, $(libdis-y))
 obj-y += $(libobj-y)
 obj-y += $(addprefix $(HWDIR)/, $(hw-obj-y))
 
