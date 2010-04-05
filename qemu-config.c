@@ -317,7 +317,7 @@ static QemuOptsList *find_list(const char *group)
             break;
     }
     if (lists[i] == NULL) {
-        qemu_error("there is no option group \"%s\"\n", group);
+        error_report("there is no option group \"%s\"", group);
     }
     return lists[i];
 }
@@ -331,7 +331,7 @@ int qemu_set_option(const char *str)
 
     rc = sscanf(str, "%63[^.].%63[^.].%63[^=]%n", group, id, arg, &offset);
     if (rc < 3 || str[offset] != '=') {
-        qemu_error("can't parse: \"%s\"\n", str);
+        error_report("can't parse: \"%s\"", str);
         return -1;
     }
 
@@ -342,8 +342,8 @@ int qemu_set_option(const char *str)
 
     opts = qemu_opts_find(list, id);
     if (!opts) {
-        qemu_error("there is no %s \"%s\" defined\n",
-                   list->name, id);
+        error_report("there is no %s \"%s\" defined",
+                     list->name, id);
         return -1;
     }
 
@@ -361,7 +361,7 @@ int qemu_global_option(const char *str)
 
     rc = sscanf(str, "%63[^.].%63[^=]%n", driver, property, &offset);
     if (rc < 2 || str[offset] != '=') {
-        qemu_error("can't parse: \"%s\"\n", str);
+        error_report("can't parse: \"%s\"", str);
         return -1;
     }
 
