@@ -132,6 +132,7 @@ int qemu_strnlen(const char *s, int max_len);
 time_t mktimegm(struct tm *tm);
 int qemu_fls(int i);
 int qemu_fdatasync(int fd);
+int fcntl_setfl(int fd, int flag);
 
 /* path.c */
 void init_paths(const char *prefix);
@@ -183,7 +184,7 @@ void QEMU_NORETURN hw_error(const char *fmt, ...)
 
 /* IO callbacks.  */
 typedef void IOReadHandler(void *opaque, const uint8_t *buf, int size);
-typedef int IOCanRWHandler(void *opaque);
+typedef int IOCanReadHandler(void *opaque);
 typedef void IOHandler(void *opaque);
 
 struct ParallelIOArg {
