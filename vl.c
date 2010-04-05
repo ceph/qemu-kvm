@@ -267,7 +267,6 @@ uint64_t node_cpumask[MAX_NODES];
 
 static CPUState *cur_cpu;
 static CPUState *next_cpu;
-static int timer_alarm_pending = 1;
 /* Conversion factor from emulated instructions to virtual clock ticks.  */
 static int icount_time_shift;
 /* Arbitrarily pick 1MIPS as the minimum allowable speed.  */
@@ -601,20 +600,18 @@ struct QEMUTimer {
 
 struct qemu_alarm_timer {
     char const *name;
-    unsigned int flags;
-
     int (*start)(struct qemu_alarm_timer *t);
     void (*stop)(struct qemu_alarm_timer *t);
     void (*rearm)(struct qemu_alarm_timer *t);
     void *priv;
-};
 
-#define ALARM_FLAG_DYNTICKS  0x1
-#define ALARM_FLAG_EXPIRED   0x2
+    char expired;
+    char pending;
+};
 
 static inline int alarm_has_dynticks(struct qemu_alarm_timer *t)
 {
-    return t && (t->flags & ALARM_FLAG_DYNTICKS);
+    return !!t->rearm;
 }
 
 static void qemu_rearm_alarm_timer(struct qemu_alarm_timer *t)
@@ -635,7 +632,7 @@ static struct qemu_alarm_timer *alarm_timer;
 struct qemu_alarm_win32 {
     MMRESULT timerId;
     unsigned int period;
-} alarm_win32_data = {0, -1};
+} alarm_win32_data = {0, 0};
 
 static int win32_start_timer(struct qemu_alarm_timer *t);
 static void win32_stop_timer(struct qemu_alarm_timer *t);
@@ -730,18 +727,18 @@ static void init_icount_adjust(void)
 static struct qemu_alarm_timer alarm_timers[] = {
 #ifndef _WIN32
 #ifdef __linux__
-    {"dynticks", ALARM_FLAG_DYNTICKS, dynticks_start_timer,
+    {"dynticks", dynticks_start_timer,
      dynticks_stop_timer, dynticks_rearm_timer, NULL},
     /* HPET - if available - is preferred */
-    {"hpet", 0, hpet_start_timer, hpet_stop_timer, NULL, NULL},
+    {"hpet", hpet_start_timer, hpet_stop_timer, NULL, NULL},
     /* ...otherwise try RTC */
-    {"rtc", 0, rtc_start_timer, rtc_stop_timer, NULL, NULL},
+    {"rtc", rtc_start_timer, rtc_stop_timer, NULL, NULL},
 #endif
-    {"unix", 0, unix_start_timer, unix_stop_timer, NULL, NULL},
+    {"unix", unix_start_timer, unix_stop_timer, NULL, NULL},
 #else
-    {"dynticks", ALARM_FLAG_DYNTICKS, win32_start_timer,
+    {"dynticks", win32_start_timer,
      win32_stop_timer, win32_rearm_timer, &alarm_win32_data},
-    {"win32", 0, win32_start_timer,
+    {"win32", win32_start_timer,
      win32_stop_timer, NULL, &alarm_win32_data},
 #endif
     {NULL, }
@@ -889,7 +886,7 @@ void qemu_mod_timer(QEMUTimer *ts, int64_t expire_time)
 
     /* Rearm if necessary  */
     if (pt == &active_timers[ts->clock->type]) {
-        if ((alarm_timer->flags & ALARM_FLAG_EXPIRED) == 0) {
+        if (!alarm_timer->pending) {
             qemu_rearm_alarm_timer(alarm_timer);
         }
         /* Interrupt execution to force deadline recalculation.  */
@@ -1024,6 +1021,10 @@ static void CALLBACK host_alarm_handler(UINT uTimerID, UINT uMsg,
 static void host_alarm_handler(int host_signum)
 #endif
 {
+    struct qemu_alarm_timer *t = alarm_timer;
+    if (!t)
+	return;
+
 #if 0
 #define DISP_FREQ 1000
     {
@@ -1053,7 +1054,7 @@ static void host_alarm_handler(int host_signum)
         last_clock = ti;
     }
 #endif
-    if (alarm_has_dynticks(alarm_timer) ||
+    if (alarm_has_dynticks(t) ||
         (!use_icount &&
             qemu_timer_expired(active_timers[QEMU_CLOCK_VIRTUAL],
                                qemu_get_clock(vm_clock))) ||
@@ -1061,8 +1062,8 @@ static void host_alarm_handler(int host_signum)
                            qemu_get_clock(rt_clock)) ||
         qemu_timer_expired(active_timers[QEMU_CLOCK_HOST],
                            qemu_get_clock(host_clock))) {
-        qemu_event_increment();
-        if (alarm_timer) alarm_timer->flags |= ALARM_FLAG_EXPIRED;
+
+        t->expired = alarm_has_dynticks(t);
 
 #ifndef CONFIG_IOTHREAD
         if (next_cpu) {
@@ -1070,7 +1071,7 @@ static void host_alarm_handler(int host_signum)
             cpu_exit(next_cpu);
         }
 #endif
-        timer_alarm_pending = 1;
+        t->pending = 1;
         qemu_notify_event();
     }
 }
@@ -1291,6 +1292,7 @@ static void dynticks_rearm_timer(struct qemu_alarm_timer *t)
     int64_t nearest_delta_us = INT64_MAX;
     int64_t current_us;
 
+    assert(alarm_has_dynticks(t));
     if (!active_timers[QEMU_CLOCK_REALTIME] &&
         !active_timers[QEMU_CLOCK_VIRTUAL] &&
         !active_timers[QEMU_CLOCK_HOST])
@@ -1369,9 +1371,7 @@ static int win32_start_timer(struct qemu_alarm_timer *t)
     memset(&tc, 0, sizeof(tc));
     timeGetDevCaps(&tc, sizeof(tc));
 
-    if (data->period < tc.wPeriodMin)
-        data->period = tc.wPeriodMin;
-
+    data->period = tc.wPeriodMin;
     timeBeginPeriod(data->period);
 
     flags = TIME_CALLBACK_FUNCTION;
@@ -1408,6 +1408,7 @@ static void win32_rearm_timer(struct qemu_alarm_timer *t)
 {
     struct qemu_alarm_win32 *data = t->priv;
 
+    assert(alarm_has_dynticks(t));
     if (!active_timers[QEMU_CLOCK_REALTIME] &&
         !active_timers[QEMU_CLOCK_VIRTUAL] &&
         !active_timers[QEMU_CLOCK_HOST])
@@ -1419,7 +1420,7 @@ static void win32_rearm_timer(struct qemu_alarm_timer *t)
                         data->period,
                         host_alarm_handler,
                         (DWORD)t,
-                        TIME_ONESHOT | TIME_PERIODIC);
+                        TIME_ONESHOT | TIME_CALLBACK_FUNCTION);
 
     if (!data->timerId) {
         fprintf(stderr, "Failed to re-arm win32 alarm timer %ld\n",
@@ -1450,6 +1451,8 @@ static int init_timer_alarm(void)
         goto fail;
     }
 
+    /* first event is at time 0 */
+    t->pending = 1;
     alarm_timer = t;
 
     return 0;
@@ -1460,8 +1463,9 @@ fail:
 
 static void quit_timers(void)
 {
-    alarm_timer->stop(alarm_timer);
+    struct qemu_alarm_timer *t = alarm_timer;
     alarm_timer = NULL;
+    t->stop(t);
 }
 
 /***********************************************************/
@@ -1822,7 +1826,7 @@ QemuOpts *drive_add(const char *file, const char *fmt, ...)
     vsnprintf(optstr, sizeof(optstr), fmt, ap);
     va_end(ap);
 
-    opts = qemu_opts_parse(&qemu_drive_opts, optstr, NULL);
+    opts = qemu_opts_parse(&qemu_drive_opts, optstr, 0);
     if (!opts) {
         fprintf(stderr, "%s: huh? duplicate? (%s)\n",
                 __FUNCTION__, optstr);
@@ -3390,6 +3394,8 @@ void qemu_notify_event(void)
         qemu_kvm_notify_work();
         return;
     }
+
+    qemu_event_increment ();
     if (env) {
         cpu_exit(env);
     }
@@ -3923,10 +3929,12 @@ void main_loop_wait(int timeout)
     slirp_select_poll(&rfds, &wfds, &xfds, (ret < 0));
 
     /* rearm timer, if not periodic */
-    if (alarm_timer->flags & ALARM_FLAG_EXPIRED) {
-        alarm_timer->flags &= ~ALARM_FLAG_EXPIRED;
+    if (alarm_timer->expired) {
+        alarm_timer->expired = 0;
         qemu_rearm_alarm_timer(alarm_timer);
     }
+
+    alarm_timer->pending = 0;
 
     /* vm time timers */
     if (vm_running) {
@@ -3997,10 +4005,8 @@ static void tcg_cpu_exec(void)
     for (; next_cpu != NULL; next_cpu = next_cpu->next_cpu) {
         CPUState *env = cur_cpu = next_cpu;
 
-        if (timer_alarm_pending) {
-            timer_alarm_pending = 0;
+        if (alarm_timer->pending)
             break;
-        }
         if (cpu_can_run(env))
             ret = qemu_cpu_exec(env);
         else if (env->stop)
@@ -4414,7 +4420,7 @@ static int balloon_parse(const char *arg)
     if (!strncmp(arg, "virtio", 6)) {
         if (arg[6] == ',') {
             /* have params -> parse them */
-            opts = qemu_opts_parse(&qemu_device_opts, arg+7, NULL);
+            opts = qemu_opts_parse(&qemu_device_opts, arg+7, 0);
             if (!opts)
                 return  -1;
         } else {
@@ -4840,6 +4846,7 @@ static const QEMUOption *lookup_opt(int argc, char **argv,
     char *r = argv[optind];
     const char *optarg;
 
+    loc_set_cmdline(argv, optind, 1);
     optind++;
     /* Treat --foo the same as -foo.  */
     if (r[1] == '-')
@@ -4847,8 +4854,7 @@ static const QEMUOption *lookup_opt(int argc, char **argv,
     popt = qemu_options;
     for(;;) {
         if (!popt->name) {
-            fprintf(stderr, "%s: invalid option -- '%s'\n",
-                    argv[0], r);
+            error_report("invalid option");
             exit(1);
         }
         if (!strcmp(popt->name, r + 1))
@@ -4857,11 +4863,11 @@ static const QEMUOption *lookup_opt(int argc, char **argv,
     }
     if (popt->flags & HAS_ARG) {
         if (optind >= argc) {
-            fprintf(stderr, "%s: option '%s' requires an argument\n",
-                    argv[0], r);
+            error_report("requires an argument");
             exit(1);
         }
         optarg = argv[optind++];
+        loc_set_cmdline(argv, optind - 2, 2);
     } else {
         optarg = NULL;
     }
@@ -4905,6 +4911,8 @@ int main(int argc, char **argv, char **envp)
     CPUState *env;
     int show_vnc_port = 0;
     int defconfig = 1;
+
+    error_set_progname(argv[0]);
 
     init_clocks();
 
@@ -4985,18 +4993,22 @@ int main(int argc, char **argv, char **envp)
     }
 
     if (defconfig) {
+        const char *fname;
         FILE *fp;
-        fp = fopen(CONFIG_QEMU_CONFDIR "/qemu.conf", "r");
+
+        fname = CONFIG_QEMU_CONFDIR "/qemu.conf";
+        fp = fopen(fname, "r");
         if (fp) {
-            if (qemu_config_parse(fp) != 0) {
+            if (qemu_config_parse(fp, fname) != 0) {
                 exit(1);
             }
             fclose(fp);
         }
 
-        fp = fopen(CONFIG_QEMU_CONFDIR "/target-" TARGET_ARCH ".conf", "r");
+        fname = CONFIG_QEMU_CONFDIR "/target-" TARGET_ARCH ".conf";
+        fp = fopen(fname, "r");
         if (fp) {
-            if (qemu_config_parse(fp) != 0) {
+            if (qemu_config_parse(fp, fname) != 0) {
                 exit(1);
             }
             fclose(fp);
@@ -5405,7 +5417,7 @@ int main(int argc, char **argv, char **envp)
                 default_monitor = 0;
                 break;
             case QEMU_OPTION_mon:
-                opts = qemu_opts_parse(&qemu_mon_opts, optarg, "chardev");
+                opts = qemu_opts_parse(&qemu_mon_opts, optarg, 1);
                 if (!opts) {
                     fprintf(stderr, "parse error: %s\n", optarg);
                     exit(1);
@@ -5413,7 +5425,7 @@ int main(int argc, char **argv, char **envp)
                 default_monitor = 0;
                 break;
             case QEMU_OPTION_chardev:
-                opts = qemu_opts_parse(&qemu_chardev_opts, optarg, "backend");
+                opts = qemu_opts_parse(&qemu_chardev_opts, optarg, 1);
                 if (!opts) {
                     fprintf(stderr, "parse error: %s\n", optarg);
                     exit(1);
@@ -5548,7 +5560,7 @@ int main(int argc, char **argv, char **envp)
                 add_device_config(DEV_USB, optarg);
                 break;
             case QEMU_OPTION_device:
-                if (!qemu_opts_parse(&qemu_device_opts, optarg, "driver")) {
+                if (!qemu_opts_parse(&qemu_device_opts, optarg, 1)) {
                     exit(1);
                 }
                 break;
@@ -5663,7 +5675,7 @@ int main(int argc, char **argv, char **envp)
                 configure_rtc_date_offset(optarg, 1);
                 break;
             case QEMU_OPTION_rtc:
-                opts = qemu_opts_parse(&qemu_rtc_opts, optarg, NULL);
+                opts = qemu_opts_parse(&qemu_rtc_opts, optarg, 0);
                 if (!opts) {
                     fprintf(stderr, "parse error: %s\n", optarg);
                     exit(1);
@@ -5727,7 +5739,7 @@ int main(int argc, char **argv, char **envp)
                         fprintf(stderr, "open %s: %s\n", optarg, strerror(errno));
                         exit(1);
                     }
-                    if (qemu_config_parse(fp) != 0) {
+                    if (qemu_config_parse(fp, optarg) != 0) {
                         exit(1);
                     }
                     fclose(fp);
@@ -5752,6 +5764,7 @@ int main(int argc, char **argv, char **envp)
             }
         }
     }
+    loc_set_none();
 
     /* If no data_dir is specified then try to find it relative to the
        executable path.  */
