@@ -93,6 +93,10 @@ extern int madvise(caddr_t, size_t, int);
 #include <libvdeplug.h>
 #endif
 
+#if defined(CONFIG_UUID)
+#include <uuid/uuid.h>
+#endif
+
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -151,6 +155,7 @@ int main(int argc, char **argv)
 #include "qemu-config.h"
 #include "qemu-objects.h"
 #include "hw/device-assignment.h"
+#include "notify.h"
 
 #include "disas.h"
 
@@ -281,6 +286,7 @@ static int default_vga = 1;
 static int default_floppy = 1;
 static int default_cdrom = 1;
 static int default_sdcard = 1;
+static int default_qmp = 1;
 
 static struct {
     const char *driver;
@@ -541,7 +547,7 @@ static void configure_rtc(QemuOpts *opts)
 }
 
 #ifdef _WIN32
-static void socket_cleanup(void)
+static void socket_cleanup(Notifier *obj)
 {
     WSACleanup();
 }
@@ -550,6 +556,7 @@ static int socket_init(void)
 {
     WSADATA Data;
     int ret, err;
+    static Notifier notifier = { .notify = socket_cleanup };
 
     ret = WSAStartup(MAKEWORD(2,2), &Data);
     if (ret != 0) {
@@ -557,10 +564,36 @@ static int socket_init(void)
         fprintf(stderr, "WSAStartup: %d\n", err);
         return -1;
     }
-    atexit(socket_cleanup);
+    exit_notifier_add(&notifier);
     return 0;
 }
 #endif
+
+/*********************/
+/* Exit notifiers    */
+/*********************/
+
+static NotifierList exit_notifiers = NOTIFIER_LIST_INITIALIZER(exit_notifiers);
+
+void exit_notifier_add(Notifier *notifier)
+{
+    notifier_list_add(&exit_notifiers, notifier);
+}
+
+void exit_notifier_remove(Notifier *notifier)
+{
+    notifier_list_remove(&exit_notifiers, notifier);
+}
+
+static void exit_notifier_notify(void)
+{
+    notifier_list_notify(&exit_notifiers);
+}
+
+static void exit_notifier_init(void)
+{
+    atexit(exit_notifier_notify);
+}
 
 /***********************************************************/
 /* Bluetooth support */
@@ -3749,6 +3782,51 @@ static const QEMUOption *lookup_opt(int argc, char **argv,
     return popt;
 }
 
+static void qmp_add_default(void)
+{
+    char buffer[4096];
+    const char *home;
+    static uint8_t null_uuid[16];
+    uint8_t uuid[16];
+    
+    home = getenv("HOME");
+    if (!home) {
+        return;
+    }
+
+    if (memcmp(qemu_uuid, null_uuid, sizeof(null_uuid)) == 0) {
+#if defined(CONFIG_UUID)
+        uuid_generate(uuid);
+#else
+        return;
+#endif
+    } else {
+        memcpy(uuid, qemu_uuid, sizeof(qemu_uuid));
+    }
+
+    snprintf(buffer, sizeof(buffer), "%s/.qemu", home);
+    if (mkdir(buffer, 0755) == -1 && errno != EEXIST) {
+        fprintf(stderr, "could not open default QMP port\n");
+        return;
+    }
+
+    snprintf(buffer, sizeof(buffer), "%s/.qemu/qmp", home);
+    if (mkdir(buffer, 0755) == -1 && errno != EEXIST) {
+        fprintf(stderr, "could not open default QMP port\n");
+        return;
+    }
+
+    snprintf(buffer, sizeof(buffer),
+             "unix:%s/.qemu/qmp/" UUID_FMT ".sock,server,nowait",
+             home,
+             uuid[0], uuid[1], uuid[2], uuid[3],
+             uuid[4], uuid[5], uuid[6], uuid[7],
+             uuid[8], uuid[9], uuid[10], uuid[11],
+             uuid[12], uuid[13], uuid[14], uuid[15]);
+
+    monitor_parse(buffer, "control");
+}
+
 int main(int argc, char **argv, char **envp)
 {
     const char *gdbstub_dev = NULL;
@@ -3785,6 +3863,8 @@ int main(int argc, char **argv, char **envp)
     int defconfig = 1;
 
     error_set_progname(argv[0]);
+
+    exit_notifier_init();
 
     init_clocks();
 
@@ -4286,15 +4366,22 @@ int main(int argc, char **argv, char **envp)
                 break;
             case QEMU_OPTION_qmp:
                 monitor_parse(optarg, "control");
-                default_monitor = 0;
+                default_qmp = 0;
                 break;
             case QEMU_OPTION_mon:
                 opts = qemu_opts_parse(&qemu_mon_opts, optarg, 1);
                 if (!opts) {
                     fprintf(stderr, "parse error: %s\n", optarg);
                     exit(1);
+                } else {
+                    const char *mode;
+                    mode = qemu_opt_get(opts, "mode");
+                    if (mode == NULL || strcmp(mode, "readline") == 0) {
+                        default_monitor = 0;
+                    } else if (strcmp(mode, "control") == 0) {
+                        default_qmp = 0;
+                    }
                 }
-                default_monitor = 0;
                 break;
             case QEMU_OPTION_chardev:
                 opts = qemu_opts_parse(&qemu_chardev_opts, optarg, 1);
@@ -4570,6 +4657,7 @@ int main(int argc, char **argv, char **envp)
                 default_parallel = 0;
                 default_virtcon = 0;
                 default_monitor = 0;
+                default_qmp = 0;
                 default_vga = 0;
                 default_net = 0;
                 default_floppy = 0;
@@ -4707,6 +4795,9 @@ int main(int argc, char **argv, char **envp)
             monitor_parse("vc:80Cx24C", "readline");
         if (default_virtcon)
             add_device_config(DEV_VIRTCON, "vc:80Cx24C");
+    }
+    if (default_qmp) {
+        qmp_add_default();
     }
     if (default_vga)
         vga_interface_type = VGA_CIRRUS;
