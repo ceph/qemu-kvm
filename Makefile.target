@@ -216,9 +216,8 @@ obj-ia64-y += usb-uhci.o
 obj-ia64-$(CONFIG_KVM_DEVICE_ASSIGNMENT) += device-assignment.o
 
 # shared objects
-obj-ppc-y = ppc.o ide/macio.o
-obj-ppc-y += vga.o dma.o openpic.o
-obj-ppc-y += cirrus_vga.o
+obj-ppc-y = ppc.o
+obj-ppc-y += vga.o dma.o
 # PREP target
 obj-ppc-y += pckbd.o i8259.o i8254.o mc146818rtc.o
 obj-ppc-y += prep_pci.o ppc_prep.o
