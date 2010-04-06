@@ -216,7 +216,7 @@ obj-i386-y += cirrus_vga.o apic.o ioapic.o acpi.o piix_pci.o
 obj-i386-y += vmmouse.o vmport.o vmware_vga.o hpet.o
 obj-i386-y += device-hotplug.o pci-hotplug.o smbios.o wdt_ib700.o
 obj-i386-y += extboot.o
-obj-i386-y += ne2000-isa.o debugcon.o multiboot.o
+obj-i386-y += debugcon.o multiboot.o
 obj-i386-y += testdev.o
 
 obj-i386-$(CONFIG_KVM_PIT) += i8254-kvm.o
@@ -235,7 +235,7 @@ obj-ppc-y += vga.o $(sound-obj-y) dma.o openpic.o
 obj-ppc-y += cirrus_vga.o
 # PREP target
 obj-ppc-y += pckbd.o serial.o i8259.o i8254.o mc146818rtc.o
-obj-ppc-y += prep_pci.o ppc_prep.o ne2000-isa.o
+obj-ppc-y += prep_pci.o ppc_prep.o
 # Mac shared devices
 obj-ppc-y += macio.o cuda.o adb.o mac_nvram.o mac_dbdma.o
 # OldWorld PowerMac
@@ -258,7 +258,7 @@ obj-mips-y += g364fb.o jazz_led.o dp8393x.o
 obj-mips-y += ide/core.o
 obj-mips-y += gt64xxx.o pckbd.o mc146818rtc.o acpi.o ds1225y.o
 obj-mips-y += piix4.o cirrus_vga.o pcspk.o $(sound-obj-y)
-obj-mips-y += mipsnet.o ne2000-isa.o
+obj-mips-y += mipsnet.o
 obj-mips-y += pflash_cfi01.o
 obj-mips-y += vmware_vga.o
 
