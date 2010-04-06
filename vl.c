@@ -267,6 +267,10 @@ uint8_t qemu_uuid[16];
 static QEMUBootSetHandler *boot_set_handler;
 static void *boot_set_opaque;
 
+int kvm_allowed = 1;
+uint32_t xen_domid;
+enum xen_mode xen_mode = XEN_EMULATE;
+
 #ifdef SIGRTMIN
 #define SIG_IPI (SIGRTMIN+4)
 #else
@@ -525,12 +529,12 @@ static void configure_rtc(QemuOpts *opts)
             exit(1);
         }
     }
-#ifdef CONFIG_TARGET_I386
+#ifdef TARGET_I386
     value = qemu_opt_get(opts, "driftfix");
     if (value) {
-        if (!strcmp(buf, "slew")) {
+        if (!strcmp(value, "slew")) {
             rtc_td_hack = 1;
-        } else if (!strcmp(buf, "none")) {
+        } else if (!strcmp(value, "none")) {
             rtc_td_hack = 0;
         } else {
             fprintf(stderr, "qemu: invalid option value '%s'\n", value);
@@ -2959,11 +2963,25 @@ static bool tcg_cpu_exec(void)
 
         if (ret == EXCP_DEBUG) {
             gdb_set_stop_cpu(env);
-            debug_requested = 1;
+            debug_requested = EXCP_DEBUG;
             break;
         }
     }
     return tcg_has_work();
+}
+
+static void set_numa_modes(void)
+{
+    CPUState *env;
+    int i;
+
+    for (env = first_cpu; env != NULL; env = env->next_cpu) {
+        for (i = 0; i < nb_numa_nodes; i++) {
+            if (node_cpumask[i] & (1 << env->cpu_index)) {
+                env->numa_node = i;
+            }
+        }
+    }
 }
 
 static int vm_can_run(void)
@@ -3014,8 +3032,8 @@ static void main_loop(void)
 #endif
         } while (vm_can_run());
 
-        if (qemu_debug_requested()) {
-            vm_stop(EXCP_DEBUG);
+        if ((r = qemu_debug_requested())) {
+            vm_stop(r);
         }
         if (qemu_shutdown_requested()) {
             monitor_protocol_event(QEVENT_SHUTDOWN, NULL);
@@ -3780,7 +3798,6 @@ int main(int argc, char **argv, char **envp)
     const char *chroot_dir = NULL;
     const char *run_as = NULL;
 #endif
-    CPUState *env;
     int show_vnc_port = 0;
     int defconfig = 1;
 
@@ -4945,13 +4962,7 @@ int main(int argc, char **argv, char **envp)
     sighandler_setup();
 #endif
 
-    for (env = first_cpu; env != NULL; env = env->next_cpu) {
-        for (i = 0; i < nb_numa_nodes; i++) {
-            if (node_cpumask[i] & (1 << env->cpu_index)) {
-                env->numa_node = i;
-            }
-        }
-    }
+    set_numa_modes();
 
     current_machine = machine;
 
