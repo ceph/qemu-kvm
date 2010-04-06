@@ -41,6 +41,10 @@
 #include <sys/swap.h>
 #include <signal.h>
 #include <sched.h>
+#ifdef __ia64__
+int __clone2(int (*fn)(void *), void *child_stack_base,
+             size_t stack_size, int flags, void *arg, ...);
+#endif
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/uio.h>
@@ -506,9 +510,18 @@ static int sys_inotify_rm_watch(int fd, int32_t wd)
   return (inotify_rm_watch(fd, wd));
 }
 #endif
+#ifdef CONFIG_INOTIFY1
+#if defined(TARGET_NR_inotify_init1) && defined(__NR_inotify_init1)
+static int sys_inotify_init1(int flags)
+{
+  return (inotify_init1(flags));
+}
+#endif
+#endif
 #else
 /* Userspace can usually survive runtime without inotify */
 #undef TARGET_NR_inotify_init
+#undef TARGET_NR_inotify_init1
 #undef TARGET_NR_inotify_add_watch
 #undef TARGET_NR_inotify_rm_watch
 #endif /* CONFIG_INOTIFY  */
@@ -3619,7 +3632,7 @@ static int do_fork(CPUState *env, unsigned int flags, abi_ulong newsp,
             return -EINVAL;
         /* This is probably going to die very quickly, but do it anyway.  */
 #ifdef __ia64__
-        ret = __clone2(clone_func, new_stack + NEW_STACK_SIZE, flags, new_env);
+        ret = __clone2(clone_func, new_stack, NEW_STACK_SIZE, flags, new_env);
 #else
 	ret = clone(clone_func, new_stack + NEW_STACK_SIZE, flags, new_env);
 #endif
@@ -7054,6 +7067,13 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
     case TARGET_NR_inotify_init:
         ret = get_errno(sys_inotify_init());
         break;
+#endif
+#ifdef CONFIG_INOTIFY1
+#if defined(TARGET_NR_inotify_init1) && defined(__NR_inotify_init1)
+    case TARGET_NR_inotify_init1:
+        ret = get_errno(sys_inotify_init1(arg1));
+        break;
+#endif
 #endif
 #if defined(TARGET_NR_inotify_add_watch) && defined(__NR_inotify_add_watch)
     case TARGET_NR_inotify_add_watch:

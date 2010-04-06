@@ -1,8 +1,9 @@
 HXCOMM Use DEFHEADING() to define headings in both help text and texi
 HXCOMM Text between STEXI and ETEXI are copied to texi version and
 HXCOMM discarded from C version
-HXCOMM DEF(option, HAS_ARG/0, opt_enum, opt_help) is used to construct
-HXCOMM option structures, enums and help message.
+HXCOMM DEF(option, HAS_ARG/0, opt_enum, opt_help, arch_mask) is used to
+HXCOMM construct option structures, enums and help message for specified
+HXCOMM architectures.
 HXCOMM HXCOMM can be used for comments, discarded from both texi and C
 
 DEFHEADING(Standard options:)
@@ -11,7 +12,7 @@ STEXI
 ETEXI
 
 DEF("help", 0, QEMU_OPTION_h,
-    "-h or -help     display this help and exit\n")
+    "-h or -help     display this help and exit\n", QEMU_ARCH_ALL)
 STEXI
 @item -h
 @findex -h
@@ -19,7 +20,7 @@ Display help and exit
 ETEXI
 
 DEF("version", 0, QEMU_OPTION_version,
-    "-version        display version information and exit\n")
+    "-version        display version information and exit\n", QEMU_ARCH_ALL)
 STEXI
 @item -version
 @findex -version
@@ -27,7 +28,7 @@ Display version information and exit
 ETEXI
 
 DEF("M", HAS_ARG, QEMU_OPTION_M,
-    "-M machine      select emulated machine (-M ? for list)\n")
+    "-M machine      select emulated machine (-M ? for list)\n", QEMU_ARCH_ALL)
 STEXI
 @item -M @var{machine}
 @findex -M
@@ -35,7 +36,7 @@ Select the emulated @var{machine} (@code{-M ?} for list)
 ETEXI
 
 DEF("cpu", HAS_ARG, QEMU_OPTION_cpu,
-    "-cpu cpu        select CPU (-cpu ? for list)\n")
+    "-cpu cpu        select CPU (-cpu ? for list)\n", QEMU_ARCH_ALL)
 STEXI
 @item -cpu @var{model}
 @findex -cpu
@@ -49,7 +50,8 @@ DEF("smp", HAS_ARG, QEMU_OPTION_smp,
     "                offline CPUs for hotplug, etc\n"
     "                cores= number of CPU cores on one socket\n"
     "                threads= number of threads on one CPU core\n"
-    "                sockets= number of discrete sockets in the system\n")
+    "                sockets= number of discrete sockets in the system\n",
+        QEMU_ARCH_ALL)
 STEXI
 @item -smp @var{n}[,cores=@var{cores}][,threads=@var{threads}][,sockets=@var{sockets}][,maxcpus=@var{maxcpus}]
 @findex -smp
@@ -64,7 +66,7 @@ specifies the maximum number of hotpluggable CPUs.
 ETEXI
 
 DEF("numa", HAS_ARG, QEMU_OPTION_numa,
-    "-numa node[,mem=size][,cpus=cpu[-cpu]][,nodeid=node]\n")
+    "-numa node[,mem=size][,cpus=cpu[-cpu]][,nodeid=node]\n", QEMU_ARCH_ALL)
 STEXI
 @item -numa @var{opts}
 @findex -numa
@@ -73,8 +75,8 @@ are split equally.
 ETEXI
 
 DEF("fda", HAS_ARG, QEMU_OPTION_fda,
-    "-fda/-fdb file  use 'file' as floppy disk 0/1 image\n")
-DEF("fdb", HAS_ARG, QEMU_OPTION_fdb, "")
+    "-fda/-fdb file  use 'file' as floppy disk 0/1 image\n", QEMU_ARCH_ALL)
+DEF("fdb", HAS_ARG, QEMU_OPTION_fdb, "", QEMU_ARCH_ALL)
 STEXI
 @item -fda @var{file}
 @item -fdb @var{file}
@@ -85,11 +87,11 @@ use the host floppy by using @file{/dev/fd0} as filename (@pxref{host_drives}).
 ETEXI
 
 DEF("hda", HAS_ARG, QEMU_OPTION_hda,
-    "-hda/-hdb file  use 'file' as IDE hard disk 0/1 image\n")
-DEF("hdb", HAS_ARG, QEMU_OPTION_hdb, "")
+    "-hda/-hdb file  use 'file' as IDE hard disk 0/1 image\n", QEMU_ARCH_ALL)
+DEF("hdb", HAS_ARG, QEMU_OPTION_hdb, "", QEMU_ARCH_ALL)
 DEF("hdc", HAS_ARG, QEMU_OPTION_hdc,
-    "-hdc/-hdd file  use 'file' as IDE hard disk 2/3 image\n")
-DEF("hdd", HAS_ARG, QEMU_OPTION_hdd, "")
+    "-hdc/-hdd file  use 'file' as IDE hard disk 2/3 image\n", QEMU_ARCH_ALL)
+DEF("hdd", HAS_ARG, QEMU_OPTION_hdd, "", QEMU_ARCH_ALL)
 STEXI
 @item -hda @var{file}
 @item -hdb @var{file}
@@ -103,7 +105,8 @@ Use @var{file} as hard disk 0, 1, 2 or 3 image (@pxref{disk_images}).
 ETEXI
 
 DEF("cdrom", HAS_ARG, QEMU_OPTION_cdrom,
-    "-cdrom file     use 'file' as IDE cdrom image (cdrom is ide1 master)\n")
+    "-cdrom file     use 'file' as IDE cdrom image (cdrom is ide1 master)\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -cdrom @var{file}
 @findex -cdrom
@@ -118,7 +121,7 @@ DEF("drive", HAS_ARG, QEMU_OPTION_drive,
     "       [,cache=writethrough|writeback|none][,format=f][,serial=s]\n"
     "       [,addr=A][,id=name][,aio=threads|native][,readonly=on|off]\n"
     "       [,boot=on|off]\n"
-    "                use 'file' as a drive image\n")
+    "                use 'file' as a drive image\n", QEMU_ARCH_ALL)
 STEXI
 @item -drive @var{option}[,@var{option}[,@var{option}[,...]]]
 @findex -drive
@@ -227,7 +230,7 @@ ETEXI
 DEF("set", HAS_ARG, QEMU_OPTION_set,
     "-set group.id.arg=value\n"
     "                set <arg> parameter for item <id> of type <group>\n"
-    "                i.e. -set drive.$id.file=/path/to/image\n")
+    "                i.e. -set drive.$id.file=/path/to/image\n", QEMU_ARCH_ALL)
 STEXI
 @item -set
 @findex -set
@@ -236,7 +239,8 @@ ETEXI
 
 DEF("global", HAS_ARG, QEMU_OPTION_global,
     "-global driver.property=value\n"
-    "                set a global default for a driver property\n")
+    "                set a global default for a driver property\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -global
 @findex -global
@@ -244,7 +248,8 @@ TODO
 ETEXI
 
 DEF("mtdblock", HAS_ARG, QEMU_OPTION_mtdblock,
-    "-mtdblock file  use 'file' as on-board Flash memory image\n")
+    "-mtdblock file  use 'file' as on-board Flash memory image\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -mtdblock @var{file}
 @findex -mtdblock
@@ -252,7 +257,7 @@ Use @var{file} as on-board Flash memory image.
 ETEXI
 
 DEF("sd", HAS_ARG, QEMU_OPTION_sd,
-    "-sd file        use 'file' as SecureDigital card image\n")
+    "-sd file        use 'file' as SecureDigital card image\n", QEMU_ARCH_ALL)
 STEXI
 @item -sd @var{file}
 @findex -sd
@@ -260,7 +265,7 @@ Use @var{file} as SecureDigital card image.
 ETEXI
 
 DEF("pflash", HAS_ARG, QEMU_OPTION_pflash,
-    "-pflash file    use 'file' as a parallel flash image\n")
+    "-pflash file    use 'file' as a parallel flash image\n", QEMU_ARCH_ALL)
 STEXI
 @item -pflash @var{file}
 @findex -pflash
@@ -269,7 +274,8 @@ ETEXI
 
 DEF("boot", HAS_ARG, QEMU_OPTION_boot,
     "-boot [order=drives][,once=drives][,menu=on|off]\n"
-    "                'drives': floppy (a), hard disk (c), CD-ROM (d), network (n)\n")
+    "                'drives': floppy (a), hard disk (c), CD-ROM (d), network (n)\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -boot [order=@var{drives}][,once=@var{drives}][,menu=on|off]
 @findex -boot
@@ -295,7 +301,8 @@ use is discouraged as it may be removed from future versions.
 ETEXI
 
 DEF("snapshot", 0, QEMU_OPTION_snapshot,
-    "-snapshot       write to temporary files instead of disk image files\n")
+    "-snapshot       write to temporary files instead of disk image files\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -snapshot
 @findex -snapshot
@@ -306,7 +313,7 @@ ETEXI
 
 DEF("m", HAS_ARG, QEMU_OPTION_m,
     "-m megs         set virtual RAM size to megs MB [default="
-    stringify(DEFAULT_RAM_SIZE) "]\n")
+    stringify(DEFAULT_RAM_SIZE) "]\n", QEMU_ARCH_ALL)
 STEXI
 @item -m @var{megs}
 @findex -m
@@ -316,7 +323,7 @@ gigabytes respectively.
 ETEXI
 
 DEF("mem-path", HAS_ARG, QEMU_OPTION_mempath,
-    "-mem-path FILE  provide backing storage for guest RAM\n")
+    "-mem-path FILE  provide backing storage for guest RAM\n", QEMU_ARCH_ALL)
 STEXI
 @item -mem-path @var{path}
 Allocate guest RAM from a temporarily created file in @var{path}.
@@ -324,7 +331,8 @@ ETEXI
 
 #ifdef MAP_POPULATE
 DEF("mem-prealloc", 0, QEMU_OPTION_mem_prealloc,
-    "-mem-prealloc   preallocate guest memory (use with -mem-path)\n")
+    "-mem-prealloc   preallocate guest memory (use with -mem-path)\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -mem-prealloc
 Preallocate memory when using -mem-path.
@@ -332,7 +340,8 @@ ETEXI
 #endif
 
 DEF("k", HAS_ARG, QEMU_OPTION_k,
-    "-k language     use keyboard layout (for example 'fr' for French)\n")
+    "-k language     use keyboard layout (for example 'fr' for French)\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -k @var{language}
 @findex -k
@@ -353,10 +362,9 @@ The default is @code{en-us}.
 ETEXI
 
 
-#ifdef HAS_AUDIO
 DEF("audio-help", 0, QEMU_OPTION_audio_help,
-    "-audio-help     print list of audio drivers and their options\n")
-#endif
+    "-audio-help     print list of audio drivers and their options\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -audio-help
 @findex -audio-help
@@ -364,13 +372,11 @@ Will show the audio subsystem help: list of drivers, tunable
 parameters.
 ETEXI
 
-#ifdef HAS_AUDIO
 DEF("soundhw", HAS_ARG, QEMU_OPTION_soundhw,
     "-soundhw c1,... enable audio support\n"
     "                and only specified sound cards (comma separated list)\n"
     "                use -soundhw ? to get the list of supported cards\n"
-    "                use -soundhw all to enable all of them\n")
-#endif
+    "                use -soundhw all to enable all of them\n", QEMU_ARCH_ALL)
 STEXI
 @item -soundhw @var{card1}[,@var{card2},...] or -soundhw all
 @findex -soundhw
@@ -398,7 +404,8 @@ STEXI
 ETEXI
 
 DEF("usb", 0, QEMU_OPTION_usb,
-    "-usb            enable the USB driver (will be the default soon)\n")
+    "-usb            enable the USB driver (will be the default soon)\n",
+    QEMU_ARCH_ALL)
 STEXI
 USB options:
 @table @option
@@ -409,7 +416,8 @@ Enable the USB driver (will be the default soon)
 ETEXI
 
 DEF("usbdevice", HAS_ARG, QEMU_OPTION_usbdevice,
-    "-usbdevice name add the host or guest USB device 'name'\n")
+    "-usbdevice name add the host or guest USB device 'name'\n",
+    QEMU_ARCH_ALL)
 STEXI
 
 @item -usbdevice @var{devname}
@@ -458,7 +466,8 @@ DEF("device", HAS_ARG, QEMU_OPTION_device,
     "                prop=value,... sets driver properties\n"
     "                use -device ? to print all possible drivers\n"
     "                use -device driver,? to print all possible options\n"
-    "                use -device driver,option=? to print a help for value\n")
+    "                use -device driver,option=? to print a help for value\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -device @var{driver}[,@var{option}[=@var{value}][,...]]
 @findex -device
@@ -473,7 +482,8 @@ ETEXI
 DEF("name", HAS_ARG, QEMU_OPTION_name,
     "-name string1[,process=string2]\n"
     "                set the name of the guest\n"
-    "                string1 sets the window title and string2 the process name (on Linux)\n")
+    "                string1 sets the window title and string2 the process name (on Linux)\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -name @var{name}
 @findex -name
@@ -485,7 +495,7 @@ ETEXI
 
 DEF("uuid", HAS_ARG, QEMU_OPTION_uuid,
     "-uuid %08x-%04x-%04x-%04x-%012x\n"
-    "                specify machine UUID\n")
+    "                specify machine UUID\n", QEMU_ARCH_ALL)
 STEXI
 @item -uuid @var{uuid}
 @findex -uuid
@@ -505,7 +515,8 @@ STEXI
 ETEXI
 
 DEF("nographic", 0, QEMU_OPTION_nographic,
-    "-nographic      disable graphical output and redirect serial I/Os to console\n")
+    "-nographic      disable graphical output and redirect serial I/Os to console\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -nographic
 @findex -nographic
@@ -518,7 +529,8 @@ ETEXI
 
 #ifdef CONFIG_CURSES
 DEF("curses", 0, QEMU_OPTION_curses,
-    "-curses         use a curses/ncurses interface instead of SDL\n")
+    "-curses         use a curses/ncurses interface instead of SDL\n",
+    QEMU_ARCH_ALL)
 #endif
 STEXI
 @item -curses
@@ -530,7 +542,8 @@ ETEXI
 
 #ifdef CONFIG_SDL
 DEF("no-frame", 0, QEMU_OPTION_no_frame,
-    "-no-frame       open SDL window without a frame and window decorations\n")
+    "-no-frame       open SDL window without a frame and window decorations\n",
+    QEMU_ARCH_ALL)
 #endif
 STEXI
 @item -no-frame
@@ -542,7 +555,8 @@ ETEXI
 
 #ifdef CONFIG_SDL
 DEF("alt-grab", 0, QEMU_OPTION_alt_grab,
-    "-alt-grab       use Ctrl-Alt-Shift to grab mouse (instead of Ctrl-Alt)\n")
+    "-alt-grab       use Ctrl-Alt-Shift to grab mouse (instead of Ctrl-Alt)\n",
+    QEMU_ARCH_ALL)
 #endif
 STEXI
 @item -alt-grab
@@ -552,7 +566,8 @@ ETEXI
 
 #ifdef CONFIG_SDL
 DEF("ctrl-grab", 0, QEMU_OPTION_ctrl_grab,
-    "-ctrl-grab      use Right-Ctrl to grab mouse (instead of Ctrl-Alt)\n")
+    "-ctrl-grab      use Right-Ctrl to grab mouse (instead of Ctrl-Alt)\n",
+    QEMU_ARCH_ALL)
 #endif
 STEXI
 @item -ctrl-grab
@@ -562,7 +577,7 @@ ETEXI
 
 #ifdef CONFIG_SDL
 DEF("no-quit", 0, QEMU_OPTION_no_quit,
-    "-no-quit        disable SDL window close capability\n")
+    "-no-quit        disable SDL window close capability\n", QEMU_ARCH_ALL)
 #endif
 STEXI
 @item -no-quit
@@ -572,7 +587,7 @@ ETEXI
 
 #ifdef CONFIG_SDL
 DEF("sdl", 0, QEMU_OPTION_sdl,
-    "-sdl            enable SDL\n")
+    "-sdl            enable SDL\n", QEMU_ARCH_ALL)
 #endif
 STEXI
 @item -sdl
@@ -581,7 +596,8 @@ Enable SDL.
 ETEXI
 
 DEF("portrait", 0, QEMU_OPTION_portrait,
-    "-portrait       rotate graphical output 90 deg left (only PXA LCD)\n")
+    "-portrait       rotate graphical output 90 deg left (only PXA LCD)\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -portrait
 @findex -portrait
@@ -590,7 +606,7 @@ ETEXI
 
 DEF("vga", HAS_ARG, QEMU_OPTION_vga,
     "-vga [std|cirrus|vmware|xenfb|none]\n"
-    "                select video card type\n")
+    "                select video card type\n", QEMU_ARCH_ALL)
 STEXI
 @item -vga @var{type}
 @findex -vga
@@ -616,17 +632,16 @@ Disable VGA card.
 ETEXI
 
 DEF("full-screen", 0, QEMU_OPTION_full_screen,
-    "-full-screen    start in full screen\n")
+    "-full-screen    start in full screen\n", QEMU_ARCH_ALL)
 STEXI
 @item -full-screen
 @findex -full-screen
 Start in full screen.
 ETEXI
 
-#if defined(TARGET_PPC) || defined(TARGET_SPARC)
 DEF("g", 1, QEMU_OPTION_g ,
-    "-g WxH[xDEPTH]  Set the initial graphical resolution and depth\n")
-#endif
+    "-g WxH[xDEPTH]  Set the initial graphical resolution and depth\n",
+    QEMU_ARCH_PPC | QEMU_ARCH_SPARC)
 STEXI
 @item -g @var{width}x@var{height}[x@var{depth}]
 @findex -g
@@ -634,7 +649,7 @@ Set the initial graphical resolution and depth (PPC, SPARC only).
 ETEXI
 
 DEF("vnc", HAS_ARG, QEMU_OPTION_vnc ,
-    "-vnc display    start a VNC server on display\n")
+    "-vnc display    start a VNC server on display\n", QEMU_ARCH_ALL)
 STEXI
 @item -vnc @var{display}[,@var{option}[,@var{option}[,...]]]
 @findex -vnc
@@ -750,17 +765,14 @@ ETEXI
 
 DEFHEADING()
 
-#ifdef TARGET_I386
 DEFHEADING(i386 target only:)
-#endif
 STEXI
 @table @option
 ETEXI
 
-#ifdef TARGET_I386
 DEF("win2k-hack", 0, QEMU_OPTION_win2k_hack,
-    "-win2k-hack     use it when installing Windows 2000 to avoid a disk full bug\n")
-#endif
+    "-win2k-hack     use it when installing Windows 2000 to avoid a disk full bug\n",
+    QEMU_ARCH_I386)
 STEXI
 @item -win2k-hack
 @findex -win2k-hack
@@ -769,15 +781,12 @@ Windows 2000 is installed, you no longer need this option (this option
 slows down the IDE transfers).
 ETEXI
 
-#ifdef TARGET_I386
 HXCOMM Deprecated by -rtc
-DEF("rtc-td-hack", 0, QEMU_OPTION_rtc_td_hack, "")
-#endif
+DEF("rtc-td-hack", 0, QEMU_OPTION_rtc_td_hack, "", QEMU_ARCH_I386)
 
-#ifdef TARGET_I386
 DEF("no-fd-bootchk", 0, QEMU_OPTION_no_fd_bootchk,
-    "-no-fd-bootchk  disable boot signature checking for floppy disks\n")
-#endif
+    "-no-fd-bootchk  disable boot signature checking for floppy disks\n",
+    QEMU_ARCH_I386)
 STEXI
 @item -no-fd-bootchk
 @findex -no-fd-bootchk
@@ -786,10 +795,8 @@ be needed to boot from old floppy disks.
 TODO: check reference to Bochs BIOS.
 ETEXI
 
-#ifdef TARGET_I386
 DEF("no-acpi", 0, QEMU_OPTION_no_acpi,
-           "-no-acpi        disable ACPI\n")
-#endif
+           "-no-acpi        disable ACPI\n", QEMU_ARCH_I386)
 STEXI
 @item -no-acpi
 @findex -no-acpi
@@ -798,22 +805,18 @@ it if your guest OS complains about ACPI problems (PC target machine
 only).
 ETEXI
 
-#ifdef TARGET_I386
 DEF("no-hpet", 0, QEMU_OPTION_no_hpet,
-    "-no-hpet        disable HPET\n")
-#endif
+    "-no-hpet        disable HPET\n", QEMU_ARCH_I386)
 STEXI
 @item -no-hpet
 @findex -no-hpet
 Disable HPET support.
 ETEXI
 
-#ifdef TARGET_I386
 DEF("balloon", HAS_ARG, QEMU_OPTION_balloon,
     "-balloon none   disable balloon device\n"
     "-balloon virtio[,addr=str]\n"
-    "                enable virtio balloon device (default)\n")
-#endif
+    "                enable virtio balloon device (default)\n", QEMU_ARCH_ALL)
 STEXI
 @item -balloon none
 @findex -balloon
@@ -823,18 +826,15 @@ Enable virtio balloon device (default), optionally with PCI address
 @var{addr}.
 ETEXI
 
-#ifdef TARGET_I386
 DEF("acpitable", HAS_ARG, QEMU_OPTION_acpitable,
     "-acpitable [sig=str][,rev=n][,oem_id=str][,oem_table_id=str][,oem_rev=n][,asl_compiler_id=str][,asl_compiler_rev=n][,data=file1[:file2]...]\n"
-    "                ACPI table description\n")
-#endif
+    "                ACPI table description\n", QEMU_ARCH_I386)
 STEXI
 @item -acpitable [sig=@var{str}][,rev=@var{n}][,oem_id=@var{str}][,oem_table_id=@var{str}][,oem_rev=@var{n}] [,asl_compiler_id=@var{str}][,asl_compiler_rev=@var{n}][,data=@var{file1}[:@var{file2}]...]
 @findex -acpitable
 Add ACPI table with specified header fields and context from specified files.
 ETEXI
 
-#ifdef TARGET_I386
 DEF("smbios", HAS_ARG, QEMU_OPTION_smbios,
     "-smbios file=binary\n"
     "                load SMBIOS entry from binary file\n"
@@ -842,8 +842,7 @@ DEF("smbios", HAS_ARG, QEMU_OPTION_smbios,
     "                specify SMBIOS type 0 fields\n"
     "-smbios type=1[,manufacturer=str][,product=str][,version=str][,serial=str]\n"
     "              [,uuid=uuid][,sku=str][,family=str]\n"
-    "                specify SMBIOS type 1 fields\n")
-#endif
+    "                specify SMBIOS type 1 fields\n", QEMU_ARCH_I386)
 STEXI
 @item -smbios file=@var{binary}
 @findex -smbios
@@ -853,13 +852,11 @@ Load SMBIOS entry from binary file.
 @findex -smbios
 Specify SMBIOS type 0 fields
 
-@item -smbios type=1[,manufacturer=@var{str}][,product=@var{str}][,version=@var{str}][,serial=@var{str}][,uuid=@var{uuid}][,sku=@var{str}][,family=@var{str}]
+@item -smbios type=1[,manufacturer=@var{str}][,product=@var{str}] [,version=@var{str}][,serial=@var{str}][,uuid=@var{uuid}][,sku=@var{str}] [,family=@var{str}]
 Specify SMBIOS type 1 fields
 ETEXI
 
-#ifdef TARGET_I386
 DEFHEADING()
-#endif
 STEXI
 @end table
 ETEXI
@@ -871,11 +868,11 @@ ETEXI
 
 HXCOMM Legacy slirp options (now moved to -net user):
 #ifdef CONFIG_SLIRP
-DEF("tftp", HAS_ARG, QEMU_OPTION_tftp, "")
-DEF("bootp", HAS_ARG, QEMU_OPTION_bootp, "")
-DEF("redir", HAS_ARG, QEMU_OPTION_redir, "")
+DEF("tftp", HAS_ARG, QEMU_OPTION_tftp, "", QEMU_ARCH_ALL)
+DEF("bootp", HAS_ARG, QEMU_OPTION_bootp, "", QEMU_ARCH_ALL)
+DEF("redir", HAS_ARG, QEMU_OPTION_redir, "", QEMU_ARCH_ALL)
 #ifndef _WIN32
-DEF("smb", HAS_ARG, QEMU_OPTION_smb, "")
+DEF("smb", HAS_ARG, QEMU_OPTION_smb, "", QEMU_ARCH_ALL)
 #endif
 #endif
 
@@ -896,7 +893,7 @@ DEF("net", HAS_ARG, QEMU_OPTION_net,
     "-net tap[,vlan=n][,name=str],ifname=name\n"
     "                connect the host TAP network interface to VLAN 'n'\n"
 #else
-    "-net tap[,vlan=n][,name=str][,fd=h][,ifname=name][,script=file][,downscript=dfile][,sndbuf=nbytes][,vnet_hdr=on|off]\n"
+    "-net tap[,vlan=n][,name=str][,fd=h][,ifname=name][,script=file][,downscript=dfile][,sndbuf=nbytes][,vnet_hdr=on|off][,vhost=on|off][,vhostfd=h]\n"
     "                connect the host TAP network interface to VLAN 'n' and use the\n"
     "                network scripts 'file' (default=" DEFAULT_NETWORK_SCRIPT ")\n"
     "                and 'dfile' (default=" DEFAULT_NETWORK_DOWN_SCRIPT ")\n"
@@ -906,6 +903,8 @@ DEF("net", HAS_ARG, QEMU_OPTION_net,
     "                default of 'sndbuf=1048576' can be disabled using 'sndbuf=0')\n"
     "                use vnet_hdr=off to avoid enabling the IFF_VNET_HDR tap flag\n"
     "                use vnet_hdr=on to make the lack of IFF_VNET_HDR support an error condition\n"
+    "                use vhost=on to enable experimental in kernel accelerator\n"
+    "                use 'vhostfd=h' to connect to an already opened vhost net device\n"
 #endif
     "-net socket[,vlan=n][,name=str][,fd=h][,listen=[host]:port][,connect=host:port]\n"
     "                connect the vlan 'n' to another VLAN using a socket connection\n"
@@ -921,7 +920,7 @@ DEF("net", HAS_ARG, QEMU_OPTION_net,
     "-net dump[,vlan=n][,file=f][,len=n]\n"
     "                dump traffic on vlan 'n' to file 'f' (max n bytes per packet)\n"
     "-net none       use it alone to have zero network devices. If no -net option\n"
-    "                is provided, the default is '-net nic -net user'\n")
+    "                is provided, the default is '-net nic -net user'\n", QEMU_ARCH_ALL)
 DEF("netdev", HAS_ARG, QEMU_OPTION_netdev,
     "-netdev ["
 #ifdef CONFIG_SLIRP
@@ -931,9 +930,9 @@ DEF("netdev", HAS_ARG, QEMU_OPTION_netdev,
 #ifdef CONFIG_VDE
     "vde|"
 #endif
-    "socket],id=str[,option][,option][,...]\n")
+    "socket],id=str[,option][,option][,...]\n", QEMU_ARCH_ALL)
 STEXI
-@item -net nic[,vlan=@var{n}][,macaddr=@var{mac}][,model=@var{type}][,name=@var{name}][,addr=@var{addr}][,vectors=@var{v}]
+@item -net nic[,vlan=@var{n}][,macaddr=@var{mac}][,model=@var{type}] [,name=@var{name}][,addr=@var{addr}][,vectors=@var{v}]
 @findex -net
 Create a new Network Interface Card and connect it to VLAN @var{n} (@var{n}
 = 0 is the default). The NIC is an e1000 by default on the PC
@@ -1064,7 +1063,7 @@ processed and applied to -net user. Mixing them with the new configuration
 syntax gives undefined results. Their use for new applications is discouraged
 as they will be removed from future versions.
 
-@item -net tap[,vlan=@var{n}][,name=@var{name}][,fd=@var{h}][,ifname=@var{name}][,script=@var{file}][,downscript=@var{dfile}]
+@item -net tap[,vlan=@var{n}][,name=@var{name}][,fd=@var{h}][,ifname=@var{name}] [,script=@var{file}][,downscript=@var{dfile}]
 Connect the host TAP network interface @var{name} to VLAN @var{n}, use
 the network script @var{file} to configure it and the network script
 @var{dfile} to deconfigure it. If @var{name} is not provided, the OS
@@ -1084,7 +1083,7 @@ qemu linux.img -net nic,vlan=0 -net tap,vlan=0,ifname=tap0 \
                -net nic,vlan=1 -net tap,vlan=1,ifname=tap1
 @end example
 
-@item -net socket[,vlan=@var{n}][,name=@var{name}][,fd=@var{h}][,listen=[@var{host}]:@var{port}][,connect=@var{host}:@var{port}]
+@item -net socket[,vlan=@var{n}][,name=@var{name}][,fd=@var{h}] [,listen=[@var{host}]:@var{port}][,connect=@var{host}:@var{port}]
 
 Connect the VLAN @var{n} to a remote VLAN in another QEMU virtual
 machine using a TCP socket connection. If @option{listen} is
@@ -1104,7 +1103,7 @@ qemu linux.img -net nic,macaddr=52:54:00:12:34:57 \
                -net socket,connect=127.0.0.1:1234
 @end example
 
-@item -net socket[,vlan=@var{n}][,name=@var{name}][,fd=@var{h}][,mcast=@var{maddr}:@var{port}]
+@item -net socket[,vlan=@var{n}][,name=@var{name}][,fd=@var{h}] [,mcast=@var{maddr}:@var{port}]
 
 Create a VLAN @var{n} shared with another QEMU virtual
 machines using a UDP multicast socket, effectively making a bus for
@@ -1144,7 +1143,7 @@ qemu linux.img -net nic,macaddr=52:54:00:12:34:56 \
 /path/to/linux ubd0=/path/to/root_fs eth0=mcast
 @end example
 
-@item -net vde[,vlan=@var{n}][,name=@var{name}][,sock=@var{socketpath}][,port=@var{n}][,group=@var{groupname}][,mode=@var{octalmode}]
+@item -net vde[,vlan=@var{n}][,name=@var{name}][,sock=@var{socketpath}] [,port=@var{n}][,group=@var{groupname}][,mode=@var{octalmode}]
 Connect VLAN @var{n} to PORT @var{n} of a vde switch running on host and
 listening for incoming connections on @var{socketpath}. Use GROUP @var{groupname}
 and MODE @var{octalmode} to change default ownership and permissions for
@@ -1204,6 +1203,7 @@ DEF("chardev", HAS_ARG, QEMU_OPTION_chardev,
 #if defined(__linux__) || defined(__FreeBSD__) || defined(__DragonFly__)
     "-chardev parport,id=id,path=path\n"
 #endif
+    , QEMU_ARCH_ALL
 )
 
 STEXI
@@ -1257,7 +1257,7 @@ TCP and unix socket options are given below:
 
 @table @option
 
-@item TCP options: port=@var{host} [,host=@var{host}] [,to=@var{to}] [,ipv4] [,ipv6] [,nodelay]
+@item TCP options: port=@var{port} [,host=@var{host}] [,to=@var{to}] [,ipv4] [,ipv6] [,nodelay]
 
 @option{host} for a listening socket specifies the local address to be bound.
 For a connecting socket species the remote host to connect to. @option{host} is
@@ -1411,7 +1411,8 @@ DEF("bt", HAS_ARG, QEMU_OPTION_bt, \
     "-bt vhci[,vlan=n]\n" \
     "                add host computer to virtual scatternet 'n' using VHCI\n" \
     "-bt device:dev[,vlan=n]\n" \
-    "                emulate a bluetooth device 'dev' in scatternet 'n'\n")
+    "                emulate a bluetooth device 'dev' in scatternet 'n'\n",
+    QEMU_ARCH_ALL)
 STEXI
 @table @option
 
@@ -1482,7 +1483,7 @@ for easier testing of various kernels.
 ETEXI
 
 DEF("kernel", HAS_ARG, QEMU_OPTION_kernel, \
-    "-kernel bzImage use 'bzImage' as kernel image\n")
+    "-kernel bzImage use 'bzImage' as kernel image\n", QEMU_ARCH_ALL)
 STEXI
 @item -kernel @var{bzImage}
 @findex -kernel
@@ -1491,7 +1492,7 @@ or in multiboot format.
 ETEXI
 
 DEF("append", HAS_ARG, QEMU_OPTION_append, \
-    "-append cmdline use 'cmdline' as kernel command line\n")
+    "-append cmdline use 'cmdline' as kernel command line\n", QEMU_ARCH_ALL)
 STEXI
 @item -append @var{cmdline}
 @findex -append
@@ -1499,7 +1500,7 @@ Use @var{cmdline} as kernel command line
 ETEXI
 
 DEF("initrd", HAS_ARG, QEMU_OPTION_initrd, \
-           "-initrd file    use 'file' as initial ram disk\n")
+           "-initrd file    use 'file' as initial ram disk\n", QEMU_ARCH_ALL)
 STEXI
 @item -initrd @var{file}
 @findex -initrd
@@ -1526,7 +1527,8 @@ STEXI
 ETEXI
 
 DEF("serial", HAS_ARG, QEMU_OPTION_serial, \
-    "-serial dev     redirect the serial port to char device 'dev'\n")
+    "-serial dev     redirect the serial port to char device 'dev'\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -serial @var{dev}
 @findex -serial
@@ -1654,7 +1656,8 @@ Three button serial mouse. Configure the guest to use Microsoft protocol.
 ETEXI
 
 DEF("parallel", HAS_ARG, QEMU_OPTION_parallel, \
-    "-parallel dev   redirect the parallel port to char device 'dev'\n")
+    "-parallel dev   redirect the parallel port to char device 'dev'\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -parallel @var{dev}
 @findex -parallel
@@ -1670,7 +1673,8 @@ Use @code{-parallel none} to disable all parallel ports.
 ETEXI
 
 DEF("monitor", HAS_ARG, QEMU_OPTION_monitor, \
-    "-monitor dev    redirect the monitor to char device 'dev'\n")
+    "-monitor dev    redirect the monitor to char device 'dev'\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -monitor @var{dev}
 @findex -monitor
@@ -1680,7 +1684,8 @@ The default device is @code{vc} in graphical mode and @code{stdio} in
 non graphical mode.
 ETEXI
 DEF("qmp", HAS_ARG, QEMU_OPTION_qmp, \
-    "-qmp dev        like -monitor but opens in 'control' mode\n")
+    "-qmp dev        like -monitor but opens in 'control' mode\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -qmp @var{dev}
 @findex -qmp
@@ -1688,7 +1693,7 @@ Like -monitor but opens in 'control' mode.
 ETEXI
 
 DEF("mon", HAS_ARG, QEMU_OPTION_mon, \
-    "-mon chardev=[name][,mode=readline|control][,default]\n")
+    "-mon chardev=[name][,mode=readline|control][,default]\n", QEMU_ARCH_ALL)
 STEXI
 @item -mon chardev=[name][,mode=readline|control][,default]
 @findex -mon
@@ -1696,7 +1701,8 @@ Setup monitor on chardev @var{name}.
 ETEXI
 
 DEF("debugcon", HAS_ARG, QEMU_OPTION_debugcon, \
-    "-debugcon dev   redirect the debug console to char device 'dev'\n")
+    "-debugcon dev   redirect the debug console to char device 'dev'\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -debugcon @var{dev}
 @findex -debugcon
@@ -1708,7 +1714,7 @@ non graphical mode.
 ETEXI
 
 DEF("pidfile", HAS_ARG, QEMU_OPTION_pidfile, \
-    "-pidfile file   write PID to 'file'\n")
+    "-pidfile file   write PID to 'file'\n", QEMU_ARCH_ALL)
 STEXI
 @item -pidfile @var{file}
 @findex -pidfile
@@ -1717,7 +1723,7 @@ from a script.
 ETEXI
 
 DEF("singlestep", 0, QEMU_OPTION_singlestep, \
-    "-singlestep     always run in singlestep mode\n")
+    "-singlestep     always run in singlestep mode\n", QEMU_ARCH_ALL)
 STEXI
 @item -singlestep
 @findex -singlestep
@@ -1725,7 +1731,8 @@ Run the emulation in single step mode.
 ETEXI
 
 DEF("S", 0, QEMU_OPTION_S, \
-    "-S              freeze CPU at startup (use 'c' to start execution)\n")
+    "-S              freeze CPU at startup (use 'c' to start execution)\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -S
 @findex -S
@@ -1733,7 +1740,7 @@ Do not start CPU at startup (you must type 'c' in the monitor).
 ETEXI
 
 DEF("gdb", HAS_ARG, QEMU_OPTION_gdb, \
-    "-gdb dev        wait for gdb connection on 'dev'\n")
+    "-gdb dev        wait for gdb connection on 'dev'\n", QEMU_ARCH_ALL)
 STEXI
 @item -gdb @var{dev}
 @findex -gdb
@@ -1747,7 +1754,8 @@ within gdb and establish the connection via a pipe:
 ETEXI
 
 DEF("s", 0, QEMU_OPTION_s, \
-    "-s              shorthand for -gdb tcp::" DEFAULT_GDBSTUB_PORT "\n")
+    "-s              shorthand for -gdb tcp::" DEFAULT_GDBSTUB_PORT "\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -s
 @findex -s
@@ -1756,7 +1764,8 @@ Shorthand for -gdb tcp::1234, i.e. open a gdbserver on TCP port 1234
 ETEXI
 
 DEF("d", HAS_ARG, QEMU_OPTION_d, \
-    "-d item1,...    output log to /tmp/qemu.log (use -d ? for a list of log items)\n")
+    "-d item1,...    output log to /tmp/qemu.log (use -d ? for a list of log items)\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -d
 @findex -d
@@ -1766,7 +1775,8 @@ ETEXI
 DEF("hdachs", HAS_ARG, QEMU_OPTION_hdachs, \
     "-hdachs c,h,s[,t]\n" \
     "                force hard disk 0 physical geometry and the optional BIOS\n" \
-    "                translation (t=none or lba) (usually qemu can guess them)\n")
+    "                translation (t=none or lba) (usually qemu can guess them)\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -hdachs @var{c},@var{h},@var{s},[,@var{t}]
 @findex -hdachs
@@ -1778,7 +1788,8 @@ images.
 ETEXI
 
 DEF("L", HAS_ARG, QEMU_OPTION_L, \
-    "-L path         set the directory for the BIOS, VGA BIOS and keymaps\n")
+    "-L path         set the directory for the BIOS, VGA BIOS and keymaps\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -L  @var{path}
 @findex -L
@@ -1786,17 +1797,15 @@ Set the directory for the BIOS, VGA BIOS and keymaps.
 ETEXI
 
 DEF("bios", HAS_ARG, QEMU_OPTION_bios, \
-    "-bios file      set the filename for the BIOS\n")
+    "-bios file      set the filename for the BIOS\n", QEMU_ARCH_ALL)
 STEXI
 @item -bios @var{file}
 @findex -bios
 Set the filename for the BIOS.
 ETEXI
 
-#ifdef CONFIG_KVM
 DEF("enable-kvm", 0, QEMU_OPTION_enable_kvm, \
-    "-enable-kvm     enable KVM full virtualization support\n")
-#endif
+    "-enable-kvm     enable KVM full virtualization support\n", QEMU_ARCH_ALL)
 STEXI
 @item -enable-kvm
 @findex -enable-kvm
@@ -1804,16 +1813,16 @@ Enable KVM full virtualization support. This option is only available
 if KVM support is enabled when compiling.
 ETEXI
 
-#ifdef CONFIG_XEN
 DEF("xen-domid", HAS_ARG, QEMU_OPTION_xen_domid,
-    "-xen-domid id   specify xen guest domain id\n")
+    "-xen-domid id   specify xen guest domain id\n", QEMU_ARCH_ALL)
 DEF("xen-create", 0, QEMU_OPTION_xen_create,
     "-xen-create     create domain using xen hypercalls, bypassing xend\n"
-    "                warning: should not be used when xend is in use\n")
+    "                warning: should not be used when xend is in use\n",
+    QEMU_ARCH_ALL)
 DEF("xen-attach", 0, QEMU_OPTION_xen_attach,
     "-xen-attach     attach to existing xen domain\n"
-    "                xend will use this when starting qemu\n")
-#endif
+    "                xend will use this when starting qemu\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -xen-domid @var{id}
 @findex -xen-domid
@@ -1829,7 +1838,7 @@ xend will use this when starting qemu (XEN only).
 ETEXI
 
 DEF("no-reboot", 0, QEMU_OPTION_no_reboot, \
-    "-no-reboot      exit instead of rebooting\n")
+    "-no-reboot      exit instead of rebooting\n", QEMU_ARCH_ALL)
 STEXI
 @item -no-reboot
 @findex -no-reboot
@@ -1837,7 +1846,7 @@ Exit instead of rebooting.
 ETEXI
 
 DEF("no-shutdown", 0, QEMU_OPTION_no_shutdown, \
-    "-no-shutdown    stop before shutdown\n")
+    "-no-shutdown    stop before shutdown\n", QEMU_ARCH_ALL)
 STEXI
 @item -no-shutdown
 @findex -no-shutdown
@@ -1848,7 +1857,8 @@ ETEXI
 
 DEF("loadvm", HAS_ARG, QEMU_OPTION_loadvm, \
     "-loadvm [tag|id]\n" \
-    "                start right away with a saved state (loadvm in monitor)\n")
+    "                start right away with a saved state (loadvm in monitor)\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -loadvm @var{file}
 @findex -loadvm
@@ -1857,7 +1867,7 @@ ETEXI
 
 #ifndef _WIN32
 DEF("daemonize", 0, QEMU_OPTION_daemonize, \
-    "-daemonize      daemonize QEMU after initializing\n")
+    "-daemonize      daemonize QEMU after initializing\n", QEMU_ARCH_ALL)
 #endif
 STEXI
 @item -daemonize
@@ -1869,7 +1879,8 @@ to cope with initialization race conditions.
 ETEXI
 
 DEF("option-rom", HAS_ARG, QEMU_OPTION_option_rom, \
-    "-option-rom rom load a file, rom, into the option ROM space\n")
+    "-option-rom rom load a file, rom, into the option ROM space\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -option-rom @var{file}
 @findex -option-rom
@@ -1879,7 +1890,8 @@ ETEXI
 
 DEF("clock", HAS_ARG, QEMU_OPTION_clock, \
     "-clock          force the use of the given methods for timer alarm.\n" \
-    "                To see what timers are available use -clock ?\n")
+    "                To see what timers are available use -clock ?\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -clock @var{method}
 @findex -clock
@@ -1888,18 +1900,13 @@ are available use -clock ?.
 ETEXI
 
 HXCOMM Options deprecated by -rtc
-DEF("localtime", 0, QEMU_OPTION_localtime, "")
-DEF("startdate", HAS_ARG, QEMU_OPTION_startdate, "")
+DEF("localtime", 0, QEMU_OPTION_localtime, "", QEMU_ARCH_ALL)
+DEF("startdate", HAS_ARG, QEMU_OPTION_startdate, "", QEMU_ARCH_ALL)
 
-#ifdef TARGET_I386
 DEF("rtc", HAS_ARG, QEMU_OPTION_rtc, \
     "-rtc [base=utc|localtime|date][,clock=host|vm][,driftfix=none|slew]\n" \
-    "                set the RTC base and clock, enable drift fix for clock ticks\n")
-#else
-DEF("rtc", HAS_ARG, QEMU_OPTION_rtc, \
-    "-rtc [base=utc|localtime|date][,clock=host|vm]\n" \
-    "                set the RTC base and clock\n")
-#endif
+    "                set the RTC base and clock, enable drift fix for clock ticks (x86 only)\n",
+    QEMU_ARCH_ALL)
 
 STEXI
 
@@ -1925,7 +1932,7 @@ ETEXI
 DEF("icount", HAS_ARG, QEMU_OPTION_icount, \
     "-icount [N|auto]\n" \
     "                enable virtual instruction counter with 2^N clock ticks per\n" \
-    "                instruction\n")
+    "                instruction\n", QEMU_ARCH_ALL)
 STEXI
 @item -icount [@var{N}|auto]
 @findex -icount
@@ -1942,7 +1949,8 @@ ETEXI
 
 DEF("watchdog", HAS_ARG, QEMU_OPTION_watchdog, \
     "-watchdog i6300esb|ib700\n" \
-    "                enable virtual hardware watchdog [default=none]\n")
+    "                enable virtual hardware watchdog [default=none]\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -watchdog @var{model}
 @findex -watchdog
@@ -1962,7 +1970,8 @@ ETEXI
 
 DEF("watchdog-action", HAS_ARG, QEMU_OPTION_watchdog_action, \
     "-watchdog-action reset|shutdown|poweroff|pause|debug|none\n" \
-    "                action when watchdog fires [default=reset]\n")
+    "                action when watchdog fires [default=reset]\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -watchdog-action @var{action}
 
@@ -1991,7 +2000,8 @@ Examples:
 ETEXI
 
 DEF("echr", HAS_ARG, QEMU_OPTION_echr, \
-    "-echr chr       set terminal escape character instead of ctrl-a\n")
+    "-echr chr       set terminal escape character instead of ctrl-a\n",
+    QEMU_ARCH_ALL)
 STEXI
 
 @item -echr @var{numeric_ascii_value}
@@ -2011,7 +2021,7 @@ ETEXI
 
 DEF("virtioconsole", HAS_ARG, QEMU_OPTION_virtiocon, \
     "-virtioconsole c\n" \
-    "                set virtio console\n")
+    "                set virtio console\n", QEMU_ARCH_ALL)
 STEXI
 @item -virtioconsole @var{c}
 @findex -virtioconsole
@@ -2023,7 +2033,7 @@ Please use @code{-device virtconsole} for the new way of invocation.
 ETEXI
 
 DEF("show-cursor", 0, QEMU_OPTION_show_cursor, \
-    "-show-cursor    show cursor\n")
+    "-show-cursor    show cursor\n", QEMU_ARCH_ALL)
 STEXI
 @item -show-cursor
 @findex -show-cursor
@@ -2031,7 +2041,7 @@ Show cursor.
 ETEXI
 
 DEF("tb-size", HAS_ARG, QEMU_OPTION_tb_size, \
-    "-tb-size n      set TB size\n")
+    "-tb-size n      set TB size\n", QEMU_ARCH_ALL)
 STEXI
 @item -tb-size @var{n}
 @findex -tb-size
@@ -2039,7 +2049,8 @@ Set TB size.
 ETEXI
 
 DEF("incoming", HAS_ARG, QEMU_OPTION_incoming, \
-    "-incoming p     prepare for incoming migration, listen on port p\n")
+    "-incoming p     prepare for incoming migration, listen on port p\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -incoming @var{port}
 @findex -incoming
@@ -2047,7 +2058,7 @@ Prepare for incoming migration, listen on @var{port}.
 ETEXI
 
 DEF("nodefaults", 0, QEMU_OPTION_nodefaults, \
-    "-nodefaults     don't create default devices\n")
+    "-nodefaults     don't create default devices\n", QEMU_ARCH_ALL)
 STEXI
 @item -nodefaults
 @findex -nodefaults
@@ -2056,7 +2067,8 @@ ETEXI
 
 #ifndef _WIN32
 DEF("chroot", HAS_ARG, QEMU_OPTION_chroot, \
-    "-chroot dir     chroot to dir just before starting the VM\n")
+    "-chroot dir     chroot to dir just before starting the VM\n",
+    QEMU_ARCH_ALL)
 #endif
 STEXI
 @item -chroot @var{dir}
@@ -2067,7 +2079,8 @@ ETEXI
 
 #ifndef _WIN32
 DEF("runas", HAS_ARG, QEMU_OPTION_runas, \
-    "-runas user     change to user id user just before starting the VM\n")
+    "-runas user     change to user id user just before starting the VM\n",
+    QEMU_ARCH_ALL)
 #endif
 STEXI
 @item -runas @var{user}
@@ -2076,29 +2089,24 @@ Immediately before starting guest execution, drop root privileges, switching
 to the specified user.
 ETEXI
 
-#if defined(TARGET_SPARC) || defined(TARGET_PPC)
 DEF("prom-env", HAS_ARG, QEMU_OPTION_prom_env,
     "-prom-env variable=value\n"
-    "                set OpenBIOS nvram variables\n")
-#endif
+    "                set OpenBIOS nvram variables\n",
+    QEMU_ARCH_PPC | QEMU_ARCH_SPARC)
 STEXI
 @item -prom-env @var{variable}=@var{value}
 @findex -prom-env
 Set OpenBIOS nvram @var{variable} to given @var{value} (PPC, SPARC only).
 ETEXI
-#if defined(TARGET_ARM) || defined(TARGET_M68K)
 DEF("semihosting", 0, QEMU_OPTION_semihosting,
-    "-semihosting    semihosting mode\n")
-#endif
+    "-semihosting    semihosting mode\n", QEMU_ARCH_ARM | QEMU_ARCH_M68K)
 STEXI
 @item -semihosting
 @findex -semihosting
 Semihosting mode (ARM, M68K only).
 ETEXI
-#if defined(TARGET_ARM)
 DEF("old-param", 0, QEMU_OPTION_old_param,
-    "-old-param      old param mode\n")
-#endif
+    "-old-param      old param mode\n", QEMU_ARCH_ARM)
 STEXI
 @item -old-param
 @findex -old-param (ARM)
@@ -2106,7 +2114,7 @@ Old param mode (ARM only).
 ETEXI
 
 DEF("readconfig", HAS_ARG, QEMU_OPTION_readconfig,
-    "-readconfig <file>\n")
+    "-readconfig <file>\n", QEMU_ARCH_ALL)
 STEXI
 @item -readconfig @var{file}
 @findex -readconfig
@@ -2114,7 +2122,7 @@ Read device configuration from @var{file}.
 ETEXI
 DEF("writeconfig", HAS_ARG, QEMU_OPTION_writeconfig,
     "-writeconfig <file>\n"
-    "                read/write config file\n")
+    "                read/write config file\n", QEMU_ARCH_ALL)
 STEXI
 @item -writeconfig @var{file}
 @findex -writeconfig
@@ -2122,7 +2130,8 @@ Write device configuration to @var{file}.
 ETEXI
 DEF("nodefconfig", 0, QEMU_OPTION_nodefconfig,
     "-nodefconfig\n"
-    "                do not load default config files at startup\n")
+    "                do not load default config files at startup\n",
+    QEMU_ARCH_ALL)
 STEXI
 @item -nodefconfig
 @findex -nodefconfig
@@ -2132,30 +2141,33 @@ option will prevent QEMU from loading these configuration files at startup.
 ETEXI
 
 DEF("no-kvm", 0, QEMU_OPTION_no_kvm,
-    "-no-kvm         disable KVM hardware virtualization\n")
+    "-no-kvm         disable KVM hardware virtualization\n",
+    QEMU_ARCH_ALL)
 DEF("no-kvm-irqchip", 0, QEMU_OPTION_no_kvm_irqchip,
-    "-no-kvm-irqchip disable KVM kernel mode PIC/IOAPIC/LAPIC\n")
+    "-no-kvm-irqchip disable KVM kernel mode PIC/IOAPIC/LAPIC\n",
+    QEMU_ARCH_I386)
 DEF("no-kvm-pit", 0, QEMU_OPTION_no_kvm_pit,
-    "-no-kvm-pit     disable KVM kernel mode PIT\n")
+    "-no-kvm-pit     disable KVM kernel mode PIT\n",
+    QEMU_ARCH_I386)
 DEF("no-kvm-pit-reinjection", 0, QEMU_OPTION_no_kvm_pit_reinjection,
     "-no-kvm-pit-reinjection\n"
-    "                disable KVM kernel mode PIT interrupt reinjection\n")
-#if defined(TARGET_I386) || defined(TARGET_X86_64) || defined(TARGET_IA64) || defined(__linux__)
+    "                disable KVM kernel mode PIT interrupt reinjection\n",
+    QEMU_ARCH_I386)
 DEF("pcidevice", HAS_ARG, QEMU_OPTION_pcidevice,
     "-pcidevice host=[seg:]bus:dev.func[,dma=none][,name=string]\n"
     "                expose a PCI device to the guest OS\n"
     "                dma=none: don't perform any dma translations (default is to use an iommu)\n"
-    "                'string' is used in log output\n")
-#endif
+    "                'string' is used in log output\n", QEMU_ARCH_I386)
 DEF("enable-nesting", 0, QEMU_OPTION_enable_nesting,
-    "-enable-nesting enable support for running a VM inside the VM (AMD only)\n")
+    "-enable-nesting enable support for running a VM inside the VM (AMD only)\n", QEMU_ARCH_I386)
 DEF("nvram", HAS_ARG, QEMU_OPTION_nvram,
-    "-nvram FILE     provide ia64 nvram contents\n")
+    "-nvram FILE     provide ia64 nvram contents\n", QEMU_ARCH_ALL)
 DEF("tdf", 0, QEMU_OPTION_tdf,
-    "-tdf            enable guest time drift compensation\n")
+    "-tdf            enable guest time drift compensation\n", QEMU_ARCH_ALL)
 DEF("kvm-shadow-memory", HAS_ARG, QEMU_OPTION_kvm_shadow_memory,
     "-kvm-shadow-memory MEGABYTES\n"
-    "                allocate MEGABYTES for kvm mmu shadowing\n")
+    "                allocate MEGABYTES for kvm mmu shadowing\n",
+    QEMU_ARCH_I386)
 
 HXCOMM This is the last statement. Insert new options before this line!
 STEXI

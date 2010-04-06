@@ -57,6 +57,7 @@ static SDL_Cursor *guest_sprite = NULL;
 static uint8_t allocator;
 static SDL_PixelFormat host_format;
 static int scaling_active = 0;
+static Notifier mouse_mode_notifier;
 
 static void sdl_update(DisplayState *ds, int x, int y, int w, int h)
 {
@@ -112,7 +113,8 @@ static void do_sdl_resize(int new_width, int new_height, int bpp)
     height = new_height;
     real_screen = SDL_SetVideoMode(width, height, bpp, flags);
     if (!real_screen) {
-        fprintf(stderr, "Could not open SDL display\n");
+	fprintf(stderr, "Could not open SDL display (%dx%dx%d): %s\n", width, 
+		height, bpp, SDL_GetError());
         exit(1);
     }
 }
@@ -485,6 +487,22 @@ static void sdl_grab_end(void)
     sdl_update_caption();
 }
 
+static void sdl_mouse_mode_change(Notifier *notify)
+{
+    if (kbd_mouse_is_absolute()) {
+        if (!absolute_enabled) {
+            sdl_hide_cursor();
+            if (gui_grab) {
+                sdl_grab_end();
+            }
+            absolute_enabled = 1;
+        }
+    } else if (absolute_enabled) {
+	sdl_show_cursor();
+	absolute_enabled = 0;
+    }
+}
+
 static void sdl_send_mouse_event(int dx, int dy, int dz, int x, int y, int state)
 {
     int buttons;
@@ -497,19 +515,8 @@ static void sdl_send_mouse_event(int dx, int dy, int dz, int x, int y, int state
         buttons |= MOUSE_EVENT_MBUTTON;
 
     if (kbd_mouse_is_absolute()) {
-	if (!absolute_enabled) {
-	    sdl_hide_cursor();
-	    if (gui_grab) {
-		sdl_grab_end();
-	    }
-	    absolute_enabled = 1;
-	}
-
        dx = x * 0x7FFF / (width - 1);
        dy = y * 0x7FFF / (height - 1);
-    } else if (absolute_enabled) {
-	sdl_show_cursor();
-	absolute_enabled = 0;
     } else if (guest_cursor) {
         x -= guest_x;
         y -= guest_y;
@@ -874,6 +881,9 @@ void sdl_display_init(DisplayState *ds, int full_screen, int no_frame)
     if (register_displayallocator(ds, da) == da) {
         dpy_resize(ds);
     }
+
+    mouse_mode_notifier.notify = sdl_mouse_mode_change;
+    qemu_add_mouse_mode_change_notifier(&mouse_mode_notifier);
 
     sdl_update_caption();
     SDL_EnableKeyRepeat(250, 50);

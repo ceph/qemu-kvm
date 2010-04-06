@@ -25,6 +25,7 @@
 #include "net/tap.h"
 #include "qemu-common.h"
 #include "sysemu.h"
+#include "qemu-error.h"
 
 #ifdef __NetBSD__
 #include <net/if_tap.h>
@@ -69,7 +70,8 @@ int tap_open(char *ifname, int ifname_size, int *vnet_hdr, int vnet_hdr_required
         }
     }
     if (fd < 0) {
-        qemu_error("warning: could not open %s (%s): no virtual network emulation\n", dname, strerror(errno));
+        error_report("warning: could not open %s (%s): no virtual network emulation",
+                   dname, strerror(errno));
         return -1;
     }
 #else
@@ -89,8 +91,8 @@ int tap_open(char *ifname, int ifname_size, int *vnet_hdr, int vnet_hdr_required
         *vnet_hdr = 0;
 
         if (vnet_hdr_required && !*vnet_hdr) {
-            qemu_error("vnet_hdr=1 requested, but no kernel "
-                       "support for IFF_VNET_HDR available");
+            error_report("vnet_hdr=1 requested, but no kernel "
+                         "support for IFF_VNET_HDR available");
             close(fd);
             return -1;
         }

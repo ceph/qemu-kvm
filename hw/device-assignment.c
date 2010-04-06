@@ -33,7 +33,7 @@
 #include "qemu-kvm.h"
 #include "hw.h"
 #include "pc.h"
-#include "sysemu.h"
+#include "qemu-error.h"
 #include "console.h"
 #include "device-assignment.h"
 #include "loader.h"
@@ -1330,14 +1330,14 @@ static int assigned_initfn(struct PCIDevice *pci_dev)
     int r;
 
     if (!dev->host.seg && !dev->host.bus && !dev->host.dev && !dev->host.func) {
-        qemu_error("pci-assign: error: no host device specified\n");
+        error_report("pci-assign: error: no host device specified");
         goto out;
     }
 
     if (get_real_device(dev, dev->host.seg, dev->host.bus,
                         dev->host.dev, dev->host.func)) {
-        qemu_error("pci-assign: Error: Couldn't get real device (%s)!\n",
-                   dev->dev.qdev.id);
+        error_report("pci-assign: Error: Couldn't get real device (%s)!",
+                     dev->dev.qdev.id);
         goto out;
     }
 

@@ -31,6 +31,7 @@
 #include "qemu-common.h"
 #include "net.h"
 #include "sysemu.h"
+#include "qemu-error.h"
 #include <stdio.h>
 #include <windows.h>
 #include <winioctl.h>
@@ -706,7 +707,7 @@ int net_init_tap(QemuOpts *opts, Monitor *mon, const char *name, VLANState *vlan
     ifname = qemu_opt_get(opts, "ifname");
 
     if (!ifname) {
-        qemu_error("tap: no interface name\n");
+        error_report("tap: no interface name");
         return -1;
     }
 
@@ -734,4 +735,9 @@ void tap_using_vnet_hdr(VLANClientState *vc, int using_vnet_hdr)
 void tap_set_offload(VLANClientState *vc, int csum, int tso4,
                      int tso6, int ecn, int ufo)
 {
+}
+
+struct vhost_net *tap_get_vhost_net(VLANClientState *nc)
+{
+    return NULL;
 }

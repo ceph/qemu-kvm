@@ -321,18 +321,18 @@ static int usb_msd_handle_control(USBDevice *dev, int request, int value,
         ret = 0;
         break;
     case EndpointOutRequest | USB_REQ_CLEAR_FEATURE:
-        if (value == 0 && index != 0x81) { /* clear ep halt */
-            goto fail;
-        }
+        ret = 0;
+        break;
+    case InterfaceOutRequest | USB_REQ_SET_INTERFACE:
         ret = 0;
         break;
         /* Class specific requests.  */
-    case MassStorageReset:
+    case ClassInterfaceOutRequest | MassStorageReset:
         /* Reset state ready for the next CBW.  */
         s->mode = USB_MSDM_CBW;
         ret = 0;
         break;
-    case GetMaxLun:
+    case ClassInterfaceRequest | GetMaxLun:
         data[0] = 0;
         ret = 1;
         break;
@@ -524,7 +524,7 @@ static int usb_msd_initfn(USBDevice *dev)
     MSDState *s = DO_UPCAST(MSDState, dev, dev);
 
     if (!s->conf.dinfo || !s->conf.dinfo->bdrv) {
-        qemu_error("usb-msd: drive property not set\n");
+        error_report("usb-msd: drive property not set");
         return -1;
     }
 
@@ -535,7 +535,7 @@ static int usb_msd_initfn(USBDevice *dev)
     usb_msd_handle_reset(dev);
 
     if (bdrv_key_required(s->conf.dinfo->bdrv)) {
-        if (s->dev.qdev.hotplugged) {
+        if (cur_mon) {
             monitor_read_bdrv_key_start(cur_mon, s->conf.dinfo->bdrv,
                                         usb_msd_password_cb, s);
             s->dev.auto_attach = 0;

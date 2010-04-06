@@ -31,7 +31,7 @@
 /* For tb_lock */
 #include "exec-all.h"
 
-
+#include "qemu-timer.h"
 #include "envlist.h"
 
 #define DEBUG_LOGFILE "/tmp/qemu.log"
@@ -759,6 +759,10 @@ int main(int argc, char **argv)
     }
 
     cpu_model = NULL;
+#if defined(cpudef_setup)
+    cpudef_setup(); /* parse cpu definitions in target config file (TBD) */
+#endif
+
     optind = 1;
     for(;;) {
         if (optind >= argc)

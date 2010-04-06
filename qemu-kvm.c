@@ -50,7 +50,6 @@
 #error libkvm: userspace and kernel version mismatch
 #endif
 
-int kvm_allowed = 1;
 int kvm_irqchip = 1;
 int kvm_pit = 1;
 int kvm_pit_reinject = 1;

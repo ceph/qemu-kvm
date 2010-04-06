@@ -23,6 +23,7 @@
  */
 #include "hw.h"
 #include "pc.h"
+#include "apic.h"
 #include "isa.h"
 #include "monitor.h"
 #include "qemu-timer.h"

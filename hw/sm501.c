@@ -27,6 +27,8 @@
 #include "pc.h"
 #include "console.h"
 #include "devices.h"
+#include "sysbus.h"
+#include "qdev-addr.h"
 
 /*
  * Status: 2008/11/02
@@ -596,7 +598,7 @@ static inline uint16_t get_hwc_color(SM501State *state, int crt, int index)
         break;
     default:
         printf("invalid hw cursor color.\n");
-        assert(0);
+        abort();
     }
 
     switch (index) {
@@ -663,7 +665,7 @@ static uint32_t sm501_system_config_read(void *opaque, target_phys_addr_t addr)
     default:
 	printf("sm501 system config : not implemented register read."
 	       " addr=%x\n", (int)addr);
-	assert(0);
+        abort();
     }
 
     return ret;
@@ -713,7 +715,7 @@ static void sm501_system_config_write(void *opaque,
     default:
 	printf("sm501 system config : not implemented register write."
 	       " addr=%x, val=%x\n", (int)addr, value);
-	assert(0);
+        abort();
     }
 }
 
@@ -843,7 +845,7 @@ static uint32_t sm501_disp_ctrl_read(void *opaque, target_phys_addr_t addr)
     default:
 	printf("sm501 disp ctrl : not implemented register read."
 	       " addr=%x\n", (int)addr);
-	assert(0);
+        abort();
     }
 
     return ret;
@@ -951,7 +953,7 @@ static void sm501_disp_ctrl_write(void *opaque,
     default:
 	printf("sm501 disp ctrl : not implemented register write."
 	       " addr=%x, val=%x\n", (int)addr, value);
-	assert(0);
+        abort();
     }
 }
 
@@ -1097,7 +1099,7 @@ static void sm501_draw_crt(SM501State * s)
     default:
 	printf("sm501 draw crt : invalid DC_CRT_CONTROL=%x.\n",
 	       s->dc_crt_control);
-	assert(0);
+        abort();
 	break;
     }
 
@@ -1190,6 +1192,7 @@ void sm501_init(uint32_t base, uint32_t local_mem_bytes, qemu_irq irq,
                 CharDriverState *chr)
 {
     SM501State * s;
+    DeviceState *dev;
     int sm501_system_config_index;
     int sm501_disp_ctrl_index;
 
@@ -1222,14 +1225,26 @@ void sm501_init(uint32_t base, uint32_t local_mem_bytes, qemu_irq irq,
                                  0x1000, sm501_disp_ctrl_index);
 
     /* bridge to usb host emulation module */
-    usb_ohci_init_sm501(base + MMIO_BASE_OFFSET + SM501_USB_HOST, base,
-                        2, -1, irq);
+    dev = qdev_create(NULL, "sysbus-ohci");
+    qdev_prop_set_uint32(dev, "num-ports", 2);
+    qdev_prop_set_taddr(dev, "dma-offset", base);
+    qdev_init_nofail(dev);
+    sysbus_mmio_map(sysbus_from_qdev(dev), 0,
+                    base + MMIO_BASE_OFFSET + SM501_USB_HOST);
+    sysbus_connect_irq(sysbus_from_qdev(dev), 0, irq);
 
     /* bridge to serial emulation module */
-    if (chr)
-	serial_mm_init(base + MMIO_BASE_OFFSET + SM501_UART0, 2,
-		       NULL, /* TODO : chain irq to IRL */
-		       115200, chr, 1);
+    if (chr) {
+#ifdef TARGET_WORDS_BIGENDIAN
+        serial_mm_init(base + MMIO_BASE_OFFSET + SM501_UART0, 2,
+                       NULL, /* TODO : chain irq to IRL */
+                       115200, chr, 1, 1);
+#else
+        serial_mm_init(base + MMIO_BASE_OFFSET + SM501_UART0, 2,
+                       NULL, /* TODO : chain irq to IRL */
+                       115200, chr, 1, 0);
+#endif
+    }
 
     /* create qemu graphic console */
     s->ds = graphic_console_init(sm501_update_display, NULL,

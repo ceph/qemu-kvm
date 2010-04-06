@@ -100,8 +100,9 @@ int cpu_cris_handle_mmu_fault (CPUState *env, target_ulong address, int rw,
 		 */
 		phy = res.phy & ~0x80000000;
 		prot = res.prot;
-		r = tlb_set_page(env, address & TARGET_PAGE_MASK,
-				 phy, prot, mmu_idx, is_softmmu);
+		tlb_set_page(env, address & TARGET_PAGE_MASK, phy,
+                             prot | PAGE_EXEC, mmu_idx, TARGET_PAGE_SIZE);
+                r = 0;
 	}
 	if (r > 0)
 		D_LOG("%s returns %d irqreq=%x addr=%x"
@@ -137,7 +138,7 @@ static void do_interruptv10(CPUState *env)
 			break;
 
 		case EXCP_BUSFAULT:
-			assert(0);
+                        cpu_abort(env, "Unhandled busfault");
 			break;
 
 		default:

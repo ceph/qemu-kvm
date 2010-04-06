@@ -121,9 +121,7 @@ static void unin_data_write(ReadWriteHandler *handler,
                             pcibus_t addr, uint32_t val, int len)
 {
     UNINState *s = container_of(handler, UNINState, data_handler);
-#ifdef TARGET_WORDS_BIGENDIAN
     val = qemu_bswap_len(val, len);
-#endif
     UNIN_DPRINTF("write addr %" FMT_PCIBUS " len %d val %x\n", addr, len, val);
     pci_data_write(s->host_state.bus,
                    unin_get_config_reg(s->host_state.config_reg, addr),
@@ -140,9 +138,7 @@ static uint32_t unin_data_read(ReadWriteHandler *handler,
                         unin_get_config_reg(s->host_state.config_reg, addr),
                         len);
     UNIN_DPRINTF("read addr %" FMT_PCIBUS " len %d val %x\n", addr, len, val);
-#ifdef TARGET_WORDS_BIGENDIAN
     val = qemu_bswap_len(val, len);
-#endif
     return val;
 }
 
@@ -155,7 +151,7 @@ static int pci_unin_main_init_device(SysBusDevice *dev)
     /* Uninorth main bus */
     s = FROM_SYSBUS(UNINState, dev);
 
-    pci_mem_config = pci_host_conf_register_mmio(&s->host_state);
+    pci_mem_config = pci_host_conf_register_mmio(&s->host_state, 1);
     s->data_handler.read = unin_data_read;
     s->data_handler.write = unin_data_write;
     pci_mem_data = cpu_register_io_memory_simple(&s->data_handler);
@@ -175,7 +171,7 @@ static int pci_u3_agp_init_device(SysBusDevice *dev)
     /* Uninorth U3 AGP bus */
     s = FROM_SYSBUS(UNINState, dev);
 
-    pci_mem_config = pci_host_conf_register_mmio(&s->host_state);
+    pci_mem_config = pci_host_conf_register_mmio(&s->host_state, 1);
     s->data_handler.read = unin_data_read;
     s->data_handler.write = unin_data_write;
     pci_mem_data = cpu_register_io_memory_simple(&s->data_handler);
@@ -196,8 +192,8 @@ static int pci_unin_agp_init_device(SysBusDevice *dev)
     /* Uninorth AGP bus */
     s = FROM_SYSBUS(UNINState, dev);
 
-    pci_mem_config = pci_host_conf_register_mmio_noswap(&s->host_state);
-    pci_mem_data = pci_host_data_register_mmio(&s->host_state);
+    pci_mem_config = pci_host_conf_register_mmio(&s->host_state, 0);
+    pci_mem_data = pci_host_data_register_mmio(&s->host_state, 1);
     sysbus_init_mmio(dev, 0x1000, pci_mem_config);
     sysbus_init_mmio(dev, 0x1000, pci_mem_data);
     return 0;
@@ -211,8 +207,8 @@ static int pci_unin_internal_init_device(SysBusDevice *dev)
     /* Uninorth internal bus */
     s = FROM_SYSBUS(UNINState, dev);
 
-    pci_mem_config = pci_host_conf_register_mmio_noswap(&s->host_state);
-    pci_mem_data = pci_host_data_register_mmio(&s->host_state);
+    pci_mem_config = pci_host_conf_register_mmio(&s->host_state, 0);
+    pci_mem_data = pci_host_data_register_mmio(&s->host_state, 1);
     sysbus_init_mmio(dev, 0x1000, pci_mem_config);
     sysbus_init_mmio(dev, 0x1000, pci_mem_data);
     return 0;

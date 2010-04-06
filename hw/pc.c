@@ -23,6 +23,7 @@
  */
 #include "hw.h"
 #include "pc.h"
+#include "apic.h"
 #include "fdc.h"
 #include "pci.h"
 #include "vmware_vga.h"
@@ -46,7 +47,6 @@
 #include "elf.h"
 #include "multiboot.h"
 #include "device-assignment.h"
-
 #include "kvm.h"
 
 /* output Bochs bios info messages */
@@ -237,32 +237,33 @@ static int boot_device2nibble(char boot_device)
     return 0;
 }
 
-/* copy/pasted from cmos_init, should be made a general function
- and used there as well */
-static int pc_boot_set(void *opaque, const char *boot_device)
+static int set_boot_dev(RTCState *s, const char *boot_device, int fd_bootchk)
 {
-    Monitor *mon = cur_mon;
 #define PC_MAX_BOOT_DEVICES 3
-    RTCState *s = (RTCState *)opaque;
     int nbds, bds[3] = { 0, };
     int i;
 
     nbds = strlen(boot_device);
     if (nbds > PC_MAX_BOOT_DEVICES) {
-        monitor_printf(mon, "Too many boot devices for PC\n");
+        error_report("Too many boot devices for PC");
         return(1);
     }
     for (i = 0; i < nbds; i++) {
         bds[i] = boot_device2nibble(boot_device[i]);
         if (bds[i] == 0) {
-            monitor_printf(mon, "Invalid boot device for PC: '%c'\n",
-                           boot_device[i]);
+            error_report("Invalid boot device for PC: '%c'",
+                         boot_device[i]);
             return(1);
         }
     }
     rtc_set_memory(s, 0x3d, (bds[1] << 4) | bds[0]);
-    rtc_set_memory(s, 0x38, (bds[2] << 4));
+    rtc_set_memory(s, 0x38, (bds[2] << 4) | (fd_bootchk ? 0x0 : 0x1));
     return(0);
+}
+
+static int pc_boot_set(void *opaque, const char *boot_device)
+{
+    return set_boot_dev(opaque, boot_device, 0);
 }
 
 /* hd_table must contain 4 block drivers */
@@ -270,7 +271,6 @@ static void cmos_init(ram_addr_t ram_size, ram_addr_t above_4g_mem_size,
                       const char *boot_device, DriveInfo **hd_table)
 {
     RTCState *s = rtc_state;
-    int nbds, bds[3] = { 0, };
     int val;
     int fd0, fd1, nb;
     int i;
@@ -309,22 +309,9 @@ static void cmos_init(ram_addr_t ram_size, ram_addr_t above_4g_mem_size,
     rtc_set_memory(s, 0x5f, smp_cpus - 1);
 
     /* set boot devices, and disable floppy signature check if requested */
-#define PC_MAX_BOOT_DEVICES 3
-    nbds = strlen(boot_device);
-    if (nbds > PC_MAX_BOOT_DEVICES) {
-        fprintf(stderr, "Too many boot devices for PC\n");
+    if (set_boot_dev(s, boot_device, fd_bootchk)) {
         exit(1);
     }
-    for (i = 0; i < nbds; i++) {
-        bds[i] = boot_device2nibble(boot_device[i]);
-        if (bds[i] == 0) {
-            fprintf(stderr, "Invalid boot device for PC: '%c'\n",
-                    boot_device[i]);
-            exit(1);
-        }
-    }
-    rtc_set_memory(s, 0x3d, (bds[1] << 4) | bds[0]);
-    rtc_set_memory(s, 0x38, (bds[2] << 4) | (fd_bootchk ?  0x0 : 0x1));
 
     /* floppy type */
 
@@ -771,6 +758,26 @@ int cpu_is_bsp(CPUState *env)
     return env->cpu_index == 0;
 }
 
+/* set CMOS shutdown status register (index 0xF) as S3_resume(0xFE)
+   BIOS will read it and start S3 resume at POST Entry */
+static void cmos_set_s3_resume(void *opaque, int irq, int level)
+{
+    RTCState *s = opaque;
+
+    if (level) {
+        rtc_set_memory(s, 0xF, 0xFE);
+    }
+}
+
+static void acpi_smi_interrupt(void *opaque, int irq, int level)
+{
+    CPUState *s = opaque;
+
+    if (level) {
+        cpu_interrupt(s, CPU_INTERRUPT_SMI);
+    }
+}
+
 CPUState *pc_new_cpu(const char *cpu_model)
 {
     CPUState *env;
@@ -811,6 +818,8 @@ static void pc_init1(ram_addr_t ram_size,
     qemu_irq *cpu_irq;
     qemu_irq *isa_irq;
     qemu_irq *i8259;
+    qemu_irq *cmos_s3;
+    qemu_irq *smi_irq;
     IsaIrqState *isa_irq_state;
     DriveInfo *hd[MAX_IDE_BUS * MAX_IDE_DEVS];
     DriveInfo *fd[MAX_FD];
@@ -1047,9 +1056,12 @@ static void pc_init1(ram_addr_t ram_size,
         uint8_t *eeprom_buf = qemu_mallocz(8 * 256); /* XXX: make this persistent */
         i2c_bus *smbus;
 
+        cmos_s3 = qemu_allocate_irqs(cmos_set_s3_resume, rtc_state, 1);
+        smi_irq = qemu_allocate_irqs(acpi_smi_interrupt, first_cpu, 1);
         /* TODO: Populate SPD eeprom data.  */
         smbus = piix4_pm_init(pci_bus, piix3_devfn + 3, 0xb100,
-                              isa_reserve_irq(9));
+                              isa_reserve_irq(9), *cmos_s3, *smi_irq,
+                              kvm_enabled());
         for (i = 0; i < 8; i++) {
             DeviceState *eeprom;
             eeprom = qdev_create((BusState *)smbus, "smbus-eeprom");
@@ -1117,14 +1129,6 @@ static void pc_init_isa(ram_addr_t ram_size,
     pc_init1(ram_size, boot_device,
              kernel_filename, kernel_cmdline,
              initrd_filename, cpu_model, 0);
-}
-
-/* set CMOS shutdown status register (index 0xF) as S3_resume(0xFE)
-   BIOS will read it and start S3 resume at POST Entry */
-void cmos_set_s3_resume(void)
-{
-    if (rtc_state)
-        rtc_set_memory(rtc_state, 0xF, 0xFE);
 }
 
 static QEMUMachine pc_machine = {

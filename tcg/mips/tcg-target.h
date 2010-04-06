@@ -80,13 +80,16 @@ enum {
 /* optional instructions */
 #define TCG_TARGET_HAS_div_i32
 #define TCG_TARGET_HAS_not_i32
+#define TCG_TARGET_HAS_nor_i32
 #undef TCG_TARGET_HAS_rot_i32
-#undef TCG_TARGET_HAS_ext8s_i32
-#undef TCG_TARGET_HAS_ext16s_i32
+#define TCG_TARGET_HAS_ext8s_i32
+#define TCG_TARGET_HAS_ext16s_i32
 #undef TCG_TARGET_HAS_bswap32_i32
 #undef TCG_TARGET_HAS_bswap16_i32
 #undef TCG_TARGET_HAS_andc_i32
 #undef TCG_TARGET_HAS_orc_i32
+#undef TCG_TARGET_HAS_eqv_i32
+#undef TCG_TARGET_HAS_nand_i32
 
 /* optional instructions automatically implemented */
 #undef TCG_TARGET_HAS_neg_i32      /* sub  rd, zero, rt   */
@@ -95,8 +98,9 @@ enum {
 
 /* Note: must be synced with dyngen-exec.h */
 #define TCG_AREG0 TCG_REG_FP
-#define TCG_AREG1 TCG_REG_S0
-#define TCG_AREG2 TCG_REG_S1
+
+/* guest base is supported */
+#define TCG_TARGET_HAS_GUEST_BASE
 
 #include <sys/cachectl.h>
 

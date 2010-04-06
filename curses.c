@@ -294,14 +294,9 @@ static void curses_refresh(DisplayState *ds)
     }
 }
 
-static void curses_cleanup(void *opaque) 
-{
-    endwin();
-}
-
 static void curses_atexit(void)
 {
-    curses_cleanup(NULL);
+    endwin();
 }
 
 static void curses_setup(void)

@@ -99,6 +99,7 @@ struct VncDisplay
     int lsock;
     DisplayState *ds;
     kbd_layout_t *kbd_layout;
+    int lock_key_sync;
 
     struct VncSurface guest;   /* guest visible surface (aka ds->surface) */
     DisplaySurface *server;  /* vnc server surface */
@@ -166,6 +167,8 @@ struct VncState
     Buffer zlib;
     Buffer zlib_tmp;
     z_stream zlib_stream[4];
+
+    Notifier mouse_mode_notifier;
 
     QTAILQ_ENTRY(VncState) next;
 };

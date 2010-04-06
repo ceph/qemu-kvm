@@ -96,17 +96,9 @@ void tb_invalidate_page_range(target_ulong start, target_ulong end);
 void tlb_flush_page(CPUState *env, target_ulong addr);
 void tlb_flush(CPUState *env, int flush_global);
 #if !defined(CONFIG_USER_ONLY)
-int tlb_set_page_exec(CPUState *env, target_ulong vaddr,
-                      target_phys_addr_t paddr, int prot,
-                      int mmu_idx, int is_softmmu);
-static inline int tlb_set_page(CPUState *env1, target_ulong vaddr,
-                               target_phys_addr_t paddr, int prot,
-                               int mmu_idx, int is_softmmu)
-{
-    if (prot & PAGE_READ)
-        prot |= PAGE_EXEC;
-    return tlb_set_page_exec(env1, vaddr, paddr, prot, mmu_idx, is_softmmu);
-}
+void tlb_set_page(CPUState *env, target_ulong vaddr,
+                  target_phys_addr_t paddr, int prot,
+                  int mmu_idx, target_ulong size);
 #endif
 
 #define CODE_GEN_ALIGN           16 /* must be >= of the size of a icache line */
@@ -344,20 +336,6 @@ static inline tb_page_addr_t get_page_addr_code(CPUState *env1, target_ulong add
     p = (void *)(unsigned long)addr
         + env1->tlb_table[mmu_idx][page_index].addend;
     return qemu_ram_addr_from_host(p);
-}
-
-/* Deterministic execution requires that IO only be performed on the last
-   instruction of a TB so that interrupts take effect immediately.  */
-static inline int can_do_io(CPUState *env)
-{
-    if (!use_icount)
-        return 1;
-
-    /* If not executing code then assume we are ok.  */
-    if (!env->current_tb)
-        return 1;
-
-    return env->can_do_io != 0;
 }
 #endif
 

@@ -1,4 +1,5 @@
 #include "qemu-common.h"
+#include "qemu-error.h"
 #include "qemu-option.h"
 #include "qemu-config.h"
 #include "sysemu.h"
@@ -89,6 +90,7 @@ QemuOptsList qemu_drive_opts = {
 
 QemuOptsList qemu_chardev_opts = {
     .name = "chardev",
+    .implied_opt_name = "backend",
     .head = QTAILQ_HEAD_INITIALIZER(qemu_chardev_opts.head),
     .desc = {
         {
@@ -155,6 +157,7 @@ QemuOptsList qemu_chardev_opts = {
 
 QemuOptsList qemu_device_opts = {
     .name = "device",
+    .implied_opt_name = "driver",
     .head = QTAILQ_HEAD_INITIALIZER(qemu_device_opts.head),
     .desc = {
         /*
@@ -168,6 +171,7 @@ QemuOptsList qemu_device_opts = {
 
 QemuOptsList qemu_netdev_opts = {
     .name = "netdev",
+    .implied_opt_name = "type",
     .head = QTAILQ_HEAD_INITIALIZER(qemu_netdev_opts.head),
     .desc = {
         /*
@@ -180,6 +184,7 @@ QemuOptsList qemu_netdev_opts = {
 
 QemuOptsList qemu_net_opts = {
     .name = "net",
+    .implied_opt_name = "type",
     .head = QTAILQ_HEAD_INITIALIZER(qemu_net_opts.head),
     .desc = {
         /*
@@ -230,6 +235,7 @@ QemuOptsList qemu_global_opts = {
 
 QemuOptsList qemu_mon_opts = {
     .name = "mon",
+    .implied_opt_name = "chardev",
     .head = QTAILQ_HEAD_INITIALIZER(qemu_mon_opts.head),
     .desc = {
         {
@@ -307,7 +313,7 @@ static QemuOptsList *lists[] = {
     NULL,
 };
 
-static QemuOptsList *find_list(const char *group)
+QemuOptsList *qemu_find_opts(const char *group)
 {
     int i;
 
@@ -316,7 +322,7 @@ static QemuOptsList *find_list(const char *group)
             break;
     }
     if (lists[i] == NULL) {
-        qemu_error("there is no option group \"%s\"\n", group);
+        error_report("there is no option group \"%s\"", group);
     }
     return lists[i];
 }
@@ -330,19 +336,19 @@ int qemu_set_option(const char *str)
 
     rc = sscanf(str, "%63[^.].%63[^.].%63[^=]%n", group, id, arg, &offset);
     if (rc < 3 || str[offset] != '=') {
-        qemu_error("can't parse: \"%s\"\n", str);
+        error_report("can't parse: \"%s\"", str);
         return -1;
     }
 
-    list = find_list(group);
+    list = qemu_find_opts(group);
     if (list == NULL) {
         return -1;
     }
 
     opts = qemu_opts_find(list, id);
     if (!opts) {
-        qemu_error("there is no %s \"%s\" defined\n",
-                   list->name, id);
+        error_report("there is no %s \"%s\" defined",
+                     list->name, id);
         return -1;
     }
 
@@ -360,7 +366,7 @@ int qemu_global_option(const char *str)
 
     rc = sscanf(str, "%63[^.].%63[^=]%n", driver, property, &offset);
     if (rc < 2 || str[offset] != '=') {
-        qemu_error("can't parse: \"%s\"\n", str);
+        error_report("can't parse: \"%s\"", str);
         return -1;
     }
 
@@ -428,13 +434,17 @@ void qemu_config_write(FILE *fp)
     }
 }
 
-int qemu_config_parse(FILE *fp)
+int qemu_config_parse(FILE *fp, const char *fname)
 {
     char line[1024], group[64], id[64], arg[64], value[1024];
+    Location loc;
     QemuOptsList *list = NULL;
     QemuOpts *opts = NULL;
+    int res = -1, lno = 0;
 
+    loc_push_none(&loc);
     while (fgets(line, sizeof(line), fp) != NULL) {
+        loc_set_file(fname, ++lno);
         if (line[0] == '\n') {
             /* skip empty lines */
             continue;
@@ -445,35 +455,41 @@ int qemu_config_parse(FILE *fp)
         }
         if (sscanf(line, "[%63s \"%63[^\"]\"]", group, id) == 2) {
             /* group with id */
-            list = find_list(group);
+            list = qemu_find_opts(group);
             if (list == NULL)
-                return -1;
+                goto out;
             opts = qemu_opts_create(list, id, 1);
             continue;
         }
         if (sscanf(line, "[%63[^]]]", group) == 1) {
             /* group without id */
-            list = find_list(group);
+            list = qemu_find_opts(group);
             if (list == NULL)
-                return -1;
+                goto out;
             opts = qemu_opts_create(list, NULL, 0);
             continue;
         }
         if (sscanf(line, " %63s = \"%1023[^\"]\"", arg, value) == 2) {
             /* arg = value */
             if (opts == NULL) {
-                fprintf(stderr, "no group defined\n");
-                return -1;
+                error_report("no group defined");
+                goto out;
             }
             if (qemu_opt_set(opts, arg, value) != 0) {
-                fprintf(stderr, "failed to set \"%s\" for %s\n",
-                        arg, group);
-                return -1;
+                error_report("failed to set \"%s\" for %s", arg, group);
+                goto out;
             }
             continue;
         }
-        fprintf(stderr, "parse error: %s\n", line);
-        return -1;
+        error_report("parse error");
+        goto out;
     }
-    return 0;
+    if (ferror(fp)) {
+        error_report("error reading file");
+        goto out;
+    }
+    res = 0;
+out:
+    loc_pop(&loc);
+    return res;
 }

@@ -22,7 +22,7 @@
 #include <sys/ioctl.h>
 
 #include "kvm.h"
-#include "hw/pc.h"
+#include "hw/apic.h"
 
 #define MSR_IA32_TSC		0x10
 

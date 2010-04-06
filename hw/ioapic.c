@@ -22,7 +22,9 @@
 
 #include "hw.h"
 #include "pc.h"
+#include "apic.h"
 #include "sysemu.h"
+#include "apic.h"
 #include "qemu-timer.h"
 #include "host-utils.h"
 

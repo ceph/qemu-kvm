@@ -38,8 +38,11 @@
 #include "sysemu.h"
 #include "qemu-char.h"
 #include "qemu-common.h"
+#include "qemu-error.h"
 
 #include "net/tap-linux.h"
+
+#include "hw/vhost_net.h"
 
 /* Maximum GSO packet size (64k) plus plenty of room for
  * the ethernet and virtio_net headers
@@ -57,6 +60,7 @@ typedef struct TAPState {
     unsigned int has_vnet_hdr : 1;
     unsigned int using_vnet_hdr : 1;
     unsigned int has_ufo: 1;
+    VHostNetState *vhost_net;
 } TAPState;
 
 static int launch_script(const char *setup_script, const char *ifname, int fd);
@@ -252,6 +256,10 @@ static void tap_cleanup(VLANClientState *nc)
 {
     TAPState *s = DO_UPCAST(TAPState, nc, nc);
 
+    if (s->vhost_net) {
+        vhost_net_cleanup(s->vhost_net);
+    }
+
     qemu_purge_queued_packets(nc);
 
     if (s->down_script[0])
@@ -267,6 +275,13 @@ static void tap_poll(VLANClientState *nc, bool enable)
     TAPState *s = DO_UPCAST(TAPState, nc, nc);
     tap_read_poll(s, enable);
     tap_write_poll(s, enable);
+}
+
+int tap_get_fd(VLANClientState *nc)
+{
+    TAPState *s = DO_UPCAST(TAPState, nc, nc);
+    assert(nc->info->type == NET_CLIENT_TYPE_TAP);
+    return s->fd;
 }
 
 /* fd support */
@@ -300,6 +315,7 @@ static TAPState *net_tap_fd_init(VLANState *vlan,
     s->has_ufo = tap_probe_has_ufo(s->fd);
     tap_set_offload(&s->nc, 0, 0, 0, 0, 0);
     tap_read_poll(s, 1);
+    s->vhost_net = NULL;
     return s;
 }
 
@@ -393,7 +409,7 @@ int net_init_tap(QemuOpts *opts, Monitor *mon, const char *name, VLANState *vlan
             qemu_opt_get(opts, "script") ||
             qemu_opt_get(opts, "downscript") ||
             qemu_opt_get(opts, "vnet_hdr")) {
-            qemu_error("ifname=, script=, downscript= and vnet_hdr= is invalid with fd=\n");
+            error_report("ifname=, script=, downscript= and vnet_hdr= is invalid with fd=");
             return -1;
         }
 
@@ -449,5 +465,33 @@ int net_init_tap(QemuOpts *opts, Monitor *mon, const char *name, VLANState *vlan
         }
     }
 
+    if (qemu_opt_get_bool(opts, "vhost", !!qemu_opt_get(opts, "vhostfd"))) {
+        int vhostfd, r;
+        if (qemu_opt_get(opts, "vhostfd")) {
+            r = net_handle_fd_param(mon, qemu_opt_get(opts, "vhostfd"));
+            if (r == -1) {
+                return -1;
+            }
+            vhostfd = r;
+        } else {
+            vhostfd = -1;
+        }
+        s->vhost_net = vhost_net_init(&s->nc, vhostfd);
+        if (!s->vhost_net) {
+            error_report("vhost-net requested but could not be initialized");
+            return -1;
+        }
+    } else if (qemu_opt_get(opts, "vhostfd")) {
+        error_report("vhostfd= is not valid without vhost");
+        return -1;
+    }
+
     return 0;
+}
+
+VHostNetState *tap_get_vhost_net(VLANClientState *nc)
+{
+    TAPState *s = DO_UPCAST(TAPState, nc, nc);
+    assert(nc->info->type == NET_CLIENT_TYPE_TAP);
+    return s->vhost_net;
 }

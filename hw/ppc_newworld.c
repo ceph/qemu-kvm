@@ -115,6 +115,11 @@ static int fw_cfg_boot_set(void *opaque, const char *boot_device)
     return 0;
 }
 
+static uint64_t translate_kernel_address(void *opaque, uint64_t addr)
+{
+    return (addr & 0x0fffffff) + KERNEL_LOAD_ADDR;
+}
+
 /* PowerPC Mac99 hardware initialisation */
 static void ppc_core99_init (ram_addr_t ram_size,
                              const char *boot_device,
@@ -180,7 +185,8 @@ static void ppc_core99_init (ram_addr_t ram_size,
 
     /* Load OpenBIOS (ELF) */
     if (filename) {
-        bios_size = load_elf(filename, 0, NULL, NULL, NULL, 1, ELF_MACHINE, 0);
+        bios_size = load_elf(filename, NULL, NULL, NULL,
+                             NULL, NULL, 1, ELF_MACHINE, 0);
 
         qemu_free(filename);
     } else {
@@ -232,15 +238,8 @@ static void ppc_core99_init (ram_addr_t ram_size,
 #endif
         kernel_base = KERNEL_LOAD_ADDR;
 
-        /* Now we can load the kernel. The first step tries to load the kernel
-           supposing PhysAddr = 0x00000000. If that was wrong the kernel is
-           loaded again, the new PhysAddr being computed from lowaddr. */
-        kernel_size = load_elf(kernel_filename, kernel_base, NULL, &lowaddr, NULL,
-                               1, ELF_MACHINE, 0);
-        if (kernel_size > 0 && lowaddr != KERNEL_LOAD_ADDR) {
-            kernel_size = load_elf(kernel_filename, (2 * kernel_base) - lowaddr,
-                                   NULL, NULL, NULL, 1, ELF_MACHINE, 0);
-        }
+        kernel_size = load_elf(kernel_filename, translate_kernel_address, NULL,
+                               NULL, &lowaddr, NULL, 1, ELF_MACHINE, 0);
         if (kernel_size < 0)
             kernel_size = load_aout(kernel_filename, kernel_base,
                                     ram_size - kernel_base, bswap_needed,
@@ -292,7 +291,7 @@ static void ppc_core99_init (ram_addr_t ram_size,
     isa_mem_base = 0x80000000;
 
     /* Register 8 MB of ISA IO space */
-    isa_mmio_init(0xf2000000, 0x00800000);
+    isa_mmio_init(0xf2000000, 0x00800000, 1);
 
     /* UniN init */
     unin_memory = cpu_register_io_memory(unin_read, unin_write, NULL);

@@ -19,11 +19,12 @@
 #include "virtio-blk.h"
 #include "virtio-net.h"
 #include "pci.h"
-#include "sysemu.h"
+#include "qemu-error.h"
 #include "msix.h"
 #include "net.h"
 #include "block_int.h"
 #include "loader.h"
+#include "kvm.h"
 
 /* from Linux's linux/virtio_pci.h */
 
@@ -79,6 +80,10 @@
  * 12 is historical, and due to x86 page size. */
 #define VIRTIO_PCI_QUEUE_ADDR_SHIFT    12
 
+/* We can catch some guest bugs inside here so we continue supporting older
+   guests. */
+#define VIRTIO_PCI_BUG_BUS_MASTER	(1 << 0)
+
 /* QEMU doesn't strictly need write barriers since everything runs in
  * lock-step.  We'll leave the calls to wmb() in though to make it obvious for
  * KVM or if kqemu gets SMP support.
@@ -90,6 +95,7 @@
 typedef struct {
     PCIDevice pci_dev;
     VirtIODevice *vdev;
+    uint32_t bugs;
     uint32_t addr;
     uint32_t class_code;
     uint32_t nvectors;
@@ -144,6 +150,13 @@ static int virtio_pci_load_config(void * opaque, QEMUFile *f)
     if (proxy->vdev->config_vector != VIRTIO_NO_VECTOR) {
         return msix_vector_use(&proxy->pci_dev, proxy->vdev->config_vector);
     }
+
+    /* Try to find out if the guest has bus master disabled, but is
+       in ready state. Then we have a buggy guest OS. */
+    if (!(proxy->vdev->status & VIRTIO_CONFIG_S_DRIVER_OK) &&
+        !(proxy->pci_dev.config[PCI_COMMAND] & PCI_COMMAND_MASTER)) {
+        proxy->bugs |= VIRTIO_PCI_BUG_BUS_MASTER;
+    }
     return 0;
 }
 
@@ -168,6 +181,7 @@ static void virtio_pci_reset(DeviceState *d)
     VirtIOPCIProxy *proxy = container_of(d, VirtIOPCIProxy, pci_dev.qdev);
     virtio_reset(proxy->vdev);
     msix_reset(&proxy->pci_dev);
+    proxy->bugs = 0;
 }
 
 static void virtio_ioport_write(void *opaque, uint32_t addr, uint32_t val)
@@ -206,10 +220,18 @@ static void virtio_ioport_write(void *opaque, uint32_t addr, uint32_t val)
         virtio_queue_notify(vdev, val);
         break;
     case VIRTIO_PCI_STATUS:
-        vdev->status = val & 0xFF;
+        virtio_set_status(vdev, val & 0xFF);
         if (vdev->status == 0) {
             virtio_reset(proxy->vdev);
             msix_unuse_all_vectors(&proxy->pci_dev);
+        }
+
+        /* Linux before 2.6.34 sets the device as OK without enabling
+           the PCI device bus master bit. In this case we need to disable
+           some safety checks. */
+        if ((val & VIRTIO_CONFIG_S_DRIVER_OK) &&
+            !(proxy->pci_dev.config[PCI_COMMAND] & PCI_COMMAND_MASTER)) {
+            proxy->bugs |= VIRTIO_PCI_BUG_BUS_MASTER;
         }
         break;
     case VIRTIO_MSI_CONFIG_VECTOR:
@@ -377,7 +399,10 @@ static void virtio_write_config(PCIDevice *pci_dev, uint32_t address,
 
     if (PCI_COMMAND == address) {
         if (!(val & PCI_COMMAND_MASTER)) {
-            proxy->vdev->status &= ~VIRTIO_CONFIG_S_DRIVER_OK;
+            if (!(proxy->bugs & VIRTIO_PCI_BUG_BUS_MASTER)) {
+                virtio_set_status(proxy->vdev,
+                                  proxy->vdev->status & ~VIRTIO_CONFIG_S_DRIVER_OK);
+            }
         }
     }
 
@@ -391,6 +416,66 @@ static unsigned virtio_pci_get_features(void *opaque)
     return proxy->host_features;
 }
 
+static void virtio_pci_guest_notifier_read(void *opaque)
+{
+    VirtQueue *vq = opaque;
+    EventNotifier *n = virtio_queue_get_guest_notifier(vq);
+    if (event_notifier_test_and_clear(n)) {
+        virtio_irq(vq);
+    }
+}
+
+static int virtio_pci_set_guest_notifier(void *opaque, int n, bool assign)
+{
+    VirtIOPCIProxy *proxy = opaque;
+    VirtQueue *vq = virtio_get_queue(proxy->vdev, n);
+    EventNotifier *notifier = virtio_queue_get_guest_notifier(vq);
+
+    if (assign) {
+        int r = event_notifier_init(notifier, 0);
+        if (r < 0) {
+            return r;
+        }
+        qemu_set_fd_handler(event_notifier_get_fd(notifier),
+                            virtio_pci_guest_notifier_read, NULL, vq);
+    } else {
+        qemu_set_fd_handler(event_notifier_get_fd(notifier),
+                            NULL, NULL, NULL);
+        event_notifier_cleanup(notifier);
+    }
+
+    return 0;
+}
+
+static int virtio_pci_set_host_notifier(void *opaque, int n, bool assign)
+{
+    VirtIOPCIProxy *proxy = opaque;
+    VirtQueue *vq = virtio_get_queue(proxy->vdev, n);
+    EventNotifier *notifier = virtio_queue_get_host_notifier(vq);
+    int r;
+    if (assign) {
+        r = event_notifier_init(notifier, 1);
+        if (r < 0) {
+            return r;
+        }
+        r = kvm_set_ioeventfd_pio_word(event_notifier_get_fd(notifier),
+                                       proxy->addr + VIRTIO_PCI_QUEUE_NOTIFY,
+                                       n, assign);
+        if (r < 0) {
+            event_notifier_cleanup(notifier);
+        }
+    } else {
+        r = kvm_set_ioeventfd_pio_word(event_notifier_get_fd(notifier),
+                                       proxy->addr + VIRTIO_PCI_QUEUE_NOTIFY,
+                                       n, assign);
+        if (r < 0) {
+            return r;
+        }
+        event_notifier_cleanup(notifier);
+    }
+    return r;
+}
+
 static const VirtIOBindings virtio_pci_bindings = {
     .notify = virtio_pci_notify,
     .save_config = virtio_pci_save_config,
@@ -398,6 +483,8 @@ static const VirtIOBindings virtio_pci_bindings = {
     .save_queue = virtio_pci_save_queue,
     .load_queue = virtio_pci_load_queue,
     .get_features = virtio_pci_get_features,
+    .set_host_notifier = virtio_pci_set_host_notifier,
+    .set_guest_notifier = virtio_pci_set_guest_notifier,
 };
 
 static void virtio_init_pci(VirtIOPCIProxy *proxy, VirtIODevice *vdev,
@@ -459,7 +546,7 @@ static int virtio_blk_init_pci(PCIDevice *pci_dev)
         proxy->class_code = PCI_CLASS_STORAGE_SCSI;
 
     if (!proxy->block.dinfo) {
-        qemu_error("virtio-blk-pci: drive property not set\n");
+        error_report("virtio-blk-pci: drive property not set");
         return -1;
     }
     vdev = virtio_blk_init(&pci_dev->qdev, &proxy->block);

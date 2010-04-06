@@ -182,7 +182,7 @@ void qemu_chr_send_event(CharDriverState *s, int event)
 }
 
 void qemu_chr_add_handlers(CharDriverState *s,
-                           IOCanRWHandler *fd_can_read,
+                           IOCanReadHandler *fd_can_read,
                            IOReadHandler *fd_read,
                            IOEventHandler *fd_event,
                            void *opaque)
@@ -214,7 +214,7 @@ static CharDriverState *qemu_chr_open_null(QemuOpts *opts)
 #define MUX_BUFFER_SIZE 32	/* Must be a power of 2.  */
 #define MUX_BUFFER_MASK (MUX_BUFFER_SIZE - 1)
 typedef struct {
-    IOCanRWHandler *chr_can_read[MAX_MUX];
+    IOCanReadHandler *chr_can_read[MAX_MUX];
     IOReadHandler *chr_read[MAX_MUX];
     IOEventHandler *chr_event[MAX_MUX];
     void *ext_opaque[MAX_MUX];
@@ -1002,7 +1002,9 @@ static void tty_serial_init(int fd, int speed,
            speed, parity, data_bits, stop_bits);
 #endif
     tcgetattr (fd, &tty);
-    oldtty = tty;
+    if (!term_atexit_done) {
+        oldtty = tty;
+    }
 
 #define check_speed(val) if (speed <= val) { spd = B##val; break; }
     speed = speed * 10 / 11;
@@ -1369,7 +1371,7 @@ static CharDriverState *qemu_chr_open_pp(QemuOpts *opts)
 #if defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
 static int pp_ioctl(CharDriverState *chr, int cmd, void *arg)
 {
-    int fd = (int)chr->opaque;
+    int fd = (int)(long)chr->opaque;
     uint8_t b;
 
     switch(cmd) {
@@ -1415,7 +1417,7 @@ static CharDriverState *qemu_chr_open_pp(QemuOpts *opts)
         return NULL;
 
     chr = qemu_mallocz(sizeof(CharDriverState));
-    chr->opaque = (void *)fd;
+    chr->opaque = (void *)(long)fd;
     chr->chr_write = null_chr_write;
     chr->chr_ioctl = pp_ioctl;
     return chr;

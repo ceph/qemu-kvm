@@ -193,6 +193,8 @@ elif check_define _ARCH_PPC ; then
   fi
 elif check_define __mips__ ; then
   cpu="mips"
+elif check_define __ia64__ ; then
+  cpu="ia64"
 else
   cpu=`uname -m`
 fi
@@ -273,6 +275,7 @@ vnc_tls=""
 vnc_sasl=""
 xen=""
 linux_aio=""
+vhost_net=""
 
 gprof="no"
 debug_tcg="no"
@@ -347,6 +350,8 @@ FreeBSD)
   make="gmake"
   audio_drv_list="oss"
   audio_possible_drivers="oss sdl esd pa"
+  # needed for kinfo_getvmmap(3) in libutil.h
+  LIBS="-lutil $LIBS"
 ;;
 DragonFly)
   bsd="yes"
@@ -685,6 +690,10 @@ for opt do
   ;;
   --disable-cpu-emulation) cpu_emulation="no"
   ;;
+  --disable-vhost-net) vhost_net="no"
+  ;;
+  --enable-vhost-net) vhost_net="yes"
+  ;;
   *) echo "ERROR: unknown option $opt"; show_help="yes"
   ;;
   esac
@@ -739,6 +748,12 @@ case "$cpu" in
            host_guest_base="yes"
            ;;
     ppc*)
+           host_guest_base="yes"
+           ;;
+    mips*)
+           host_guest_base="yes"
+           ;;
+    ia64*)
            host_guest_base="yes"
            ;;
 esac
@@ -846,6 +861,8 @@ echo "  --with-kvm-trace         enable building the KVM module with the kvm tra
 echo "  --disable-cpu-emulation  disables use of qemu cpu emulation code"
 echo "  --enable-docs            enable documentation build"
 echo "  --disable-docs           disable documentation build"
+echo "  --disable-vhost-net      disable vhost-net acceleration support"
+echo "  --enable-vhost-net       enable vhost-net acceleration support"
 echo ""
 echo "NOTE: The object files are built at the place where configure is launched"
 exit 1
@@ -1624,6 +1641,32 @@ EOF
 fi
 
 ##########################################
+# test for vhost net
+
+if test "$vhost_net" != "no"; then
+    if test "$kvm" != "no"; then
+            cat > $TMPC <<EOF
+    #include <linux/vhost.h>
+    int main(void) { return 0; }
+EOF
+            if compile_prog "$kvm_cflags" "" ; then
+                vhost_net=yes
+            else
+                if test "$vhost_net" = "yes" ; then
+                    feature_not_found "vhost-net"
+                fi
+                vhost_net=no
+            fi
+    else
+            if test "$vhost_net" = "yes" ; then
+                echo -e "NOTE: vhost-net feature requires KVM (--enable-kvm)."
+                feature_not_found "vhost-net"
+            fi
+            vhost_net=no
+    fi
+fi
+
+##########################################
 # pthread probe
 PTHREADLIBS_LIST="-lpthread -lpthreadGC2"
 
@@ -1753,6 +1796,21 @@ main(void)
 EOF
 if compile_prog "" "" ; then
   inotify=yes
+fi
+
+inotify1=no
+cat > $TMPC << EOF
+#include <sys/inotify.h>
+
+int
+main(void)
+{
+    /* try to start inotify */
+    return inotify_init1(0);
+}
+EOF
+if compile_prog "" "" ; then
+  inotify1=yes
 fi
 
 # check if utimensat and futimens are supported
@@ -2127,6 +2185,7 @@ echo "fdt support       $fdt"
 echo "preadv support    $preadv"
 echo "fdatasync         $fdatasync"
 echo "uuid support      $uuid"
+echo "vhost-net support $vhost_net"
 
 if test $sdl_too_old = "yes"; then
 echo "-> Your SDL version is too old - please upgrade to have SDL support"
@@ -2295,6 +2354,9 @@ fi
 if test "$inotify" = "yes" ; then
   echo "CONFIG_INOTIFY=y" >> $config_host_mak
 fi
+if test "$inotify1" = "yes" ; then
+  echo "CONFIG_INOTIFY1=y" >> $config_host_mak
+fi
 if test "$byteswap_h" = "yes" ; then
   echo "CONFIG_BYTESWAP_H=y" >> $config_host_mak
 fi
@@ -2441,6 +2503,13 @@ if test -f ${config_host_ld}~ ; then
     rm ${config_host_ld}~
   fi
 fi
+
+for d in libdis libdis-user; do
+    mkdir -p $d
+    rm -f $d/Makefile
+    ln -s $source_path/Makefile.dis $d/Makefile
+    echo > $d/config.mak
+done
 
 for target in $target_list; do
 target_dir="$target"
@@ -2641,9 +2710,6 @@ if [ "$TARGET_ABI_DIR" = "" ]; then
   TARGET_ABI_DIR=$TARGET_ARCH
 fi
 echo "TARGET_ABI_DIR=$TARGET_ABI_DIR" >> $config_target_mak
-if [ $target_phys_bits -lt $hostlongbits ] ; then
-  target_phys_bits=$hostlongbits
-fi
 case "$target_arch2" in
   i386|x86_64)
     if test "$xen" = "yes" -a "$target_softmmu" = "yes" ; then
@@ -2669,6 +2735,9 @@ case "$target_arch2" in
       fi
       if test $kvm_cap_device_assignment = "yes" ; then
         echo "CONFIG_KVM_DEVICE_ASSIGNMENT=y" >> $config_target_mak
+      fi
+      if test $vhost_net = "yes" ; then
+        echo "CONFIG_VHOST_NET=y" >> $config_target_mak
       fi
     fi
 esac
@@ -2741,43 +2810,65 @@ fi
 cflags="-I\$(SRC_PATH)/tcg $cflags"
 cflags="-I\$(SRC_PATH)/fpu $cflags"
 
+if test "$target_user_only" = "yes" ; then
+    libdis_config_mak=libdis-user/config.mak
+else
+    libdis_config_mak=libdis/config.mak
+fi
+
 for i in $ARCH $TARGET_BASE_ARCH ; do
   case "$i" in
   alpha)
     echo "CONFIG_ALPHA_DIS=y"  >> $config_target_mak
+    echo "CONFIG_ALPHA_DIS=y"  >> $libdis_config_mak
   ;;
   arm)
     echo "CONFIG_ARM_DIS=y"  >> $config_target_mak
+    echo "CONFIG_ARM_DIS=y"  >> $libdis_config_mak
   ;;
   cris)
     echo "CONFIG_CRIS_DIS=y"  >> $config_target_mak
+    echo "CONFIG_CRIS_DIS=y"  >> $libdis_config_mak
   ;;
   hppa)
     echo "CONFIG_HPPA_DIS=y"  >> $config_target_mak
+    echo "CONFIG_HPPA_DIS=y"  >> $libdis_config_mak
   ;;
   i386|x86_64)
     echo "CONFIG_I386_DIS=y"  >> $config_target_mak
+    echo "CONFIG_I386_DIS=y"  >> $libdis_config_mak
+  ;;
+  ia64*)
+    echo "CONFIG_IA64_DIS=y"  >> $config_target_mak
+    echo "CONFIG_IA64_DIS=y"  >> $libdis_config_mak
   ;;
   m68k)
     echo "CONFIG_M68K_DIS=y"  >> $config_target_mak
+    echo "CONFIG_M68K_DIS=y"  >> $libdis_config_mak
   ;;
   microblaze)
     echo "CONFIG_MICROBLAZE_DIS=y"  >> $config_target_mak
+    echo "CONFIG_MICROBLAZE_DIS=y"  >> $libdis_config_mak
   ;;
   mips*)
     echo "CONFIG_MIPS_DIS=y"  >> $config_target_mak
+    echo "CONFIG_MIPS_DIS=y"  >> $libdis_config_mak
   ;;
   ppc*)
     echo "CONFIG_PPC_DIS=y"  >> $config_target_mak
+    echo "CONFIG_PPC_DIS=y"  >> $libdis_config_mak
   ;;
   s390*)
     echo "CONFIG_S390_DIS=y"  >> $config_target_mak
+    echo "CONFIG_S390_DIS=y"  >> $libdis_config_mak
   ;;
   sh4)
     echo "CONFIG_SH4_DIS=y"  >> $config_target_mak
+    echo "CONFIG_SH4_DIS=y"  >> $libdis_config_mak
   ;;
   sparc*)
     echo "CONFIG_SPARC_DIS=y"  >> $config_target_mak
+    echo "CONFIG_SPARC_DIS=y"  >> $libdis_config_mak
   ;;
   esac
 done
@@ -2786,9 +2877,6 @@ case "$ARCH" in
 alpha)
   # Ensure there's only a single GP
   cflags="-msmall-data $cflags"
-;;
-ia64)
-  cflags="-mno-sdata $cflags"
 ;;
 esac
 
@@ -2834,18 +2922,8 @@ if test "$target_linux_user" = "yes" -o "$target_bsd_user" = "yes" ; then
     # -static is used to avoid g1/g3 usage by the dynamic linker
     ldflags="$linker_script -static $ldflags"
     ;;
-  ia64)
-    ldflags="-Wl,-G0 $linker_script -static $ldflags"
-    ;;
-  i386|x86_64|ppc|ppc64|s390|sparc64|alpha|arm|m68k|mips|mips64)
+  i386|x86_64|ppc|ppc64|s390|sparc64|alpha|arm|m68k|mips|mips64|ia64)
     ldflags="$linker_script $ldflags"
-    ;;
-  esac
-fi
-if test "$target_softmmu" = "yes" ; then
-  case "$ARCH" in
-  ia64)
-    ldflags="-Wl,-G0 $linker_script -static $ldflags"
     ;;
   esac
 fi
@@ -2894,6 +2972,7 @@ done
 for hwlib in 32 64; do
   d=libhw$hwlib
   mkdir -p $d
+  mkdir -p $d/ide
   rm -f $d/Makefile
   ln -s $source_path/Makefile.hw $d/Makefile
   echo "QEMU_CFLAGS+=-DTARGET_PHYS_ADDR_BITS=$hwlib" > $d/config.mak
