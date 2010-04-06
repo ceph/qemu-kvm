@@ -140,6 +140,7 @@ hw-obj-$(CONFIG_ESCC) += escc.o
 
 hw-obj-$(CONFIG_PARALLEL) += parallel.o
 hw-obj-$(CONFIG_USB_UHCI) += usb-uhci.o
+hw-obj-$(CONFIG_FDC) += fdc.o
 
 # PCI watchdog devices
 hw-obj-y += wdt_i6300esb.o
@@ -153,6 +154,13 @@ hw-obj-y += ne2000.o
 
 hw-obj-$(CONFIG_SMC91C111) += smc91c111.o
 hw-obj-$(CONFIG_LAN9118) += lan9118.o
+
+# IDE
+hw-obj-$(CONFIG_IDE_QDEV) += ide/qdev.o
+hw-obj-$(CONFIG_IDE_PCI) += ide/pci.o
+hw-obj-$(CONFIG_IDE_ISA) += ide/isa.o
+hw-obj-$(CONFIG_IDE_PIIX) += ide/piix.o
+hw-obj-$(CONFIG_IDE_CMD646) += ide/cmd646.o
 
 # SCSI layer
 hw-obj-y += lsi53c895a.o
