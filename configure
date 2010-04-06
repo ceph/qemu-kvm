@@ -273,6 +273,7 @@ vnc_tls=""
 vnc_sasl=""
 xen=""
 linux_aio=""
+vhost_net=""
 
 gprof="no"
 debug_tcg="no"
@@ -687,6 +688,10 @@ for opt do
   ;;
   --disable-cpu-emulation) cpu_emulation="no"
   ;;
+  --disable-vhost-net) vhost_net="no"
+  ;;
+  --enable-vhost-net) vhost_net="yes"
+  ;;
   *) echo "ERROR: unknown option $opt"; show_help="yes"
   ;;
   esac
@@ -851,6 +856,8 @@ echo "  --with-kvm-trace         enable building the KVM module with the kvm tra
 echo "  --disable-cpu-emulation  disables use of qemu cpu emulation code"
 echo "  --enable-docs            enable documentation build"
 echo "  --disable-docs           disable documentation build"
+echo "  --disable-vhost-net      disable vhost-net acceleration support"
+echo "  --enable-vhost-net       enable vhost-net acceleration support"
 echo ""
 echo "NOTE: The object files are built at the place where configure is launched"
 exit 1
@@ -1629,6 +1636,32 @@ EOF
 fi
 
 ##########################################
+# test for vhost net
+
+if test "$vhost_net" != "no"; then
+    if test "$kvm" != "no"; then
+            cat > $TMPC <<EOF
+    #include <linux/vhost.h>
+    int main(void) { return 0; }
+EOF
+            if compile_prog "$kvm_cflags" "" ; then
+                vhost_net=yes
+            else
+                if test "$vhost_net" = "yes" ; then
+                    feature_not_found "vhost-net"
+                fi
+                vhost_net=no
+            fi
+    else
+            if test "$vhost_net" = "yes" ; then
+                echo -e "NOTE: vhost-net feature requires KVM (--enable-kvm)."
+                feature_not_found "vhost-net"
+            fi
+            vhost_net=no
+    fi
+fi
+
+##########################################
 # pthread probe
 PTHREADLIBS_LIST="-lpthread -lpthreadGC2"
 
@@ -2147,6 +2180,7 @@ echo "fdt support       $fdt"
 echo "preadv support    $preadv"
 echo "fdatasync         $fdatasync"
 echo "uuid support      $uuid"
+echo "vhost-net support $vhost_net"
 
 if test $sdl_too_old = "yes"; then
 echo "-> Your SDL version is too old - please upgrade to have SDL support"
@@ -2699,6 +2733,9 @@ case "$target_arch2" in
       fi
       if test $kvm_cap_device_assignment = "yes" ; then
         echo "CONFIG_KVM_DEVICE_ASSIGNMENT=y" >> $config_target_mak
+      fi
+      if test $vhost_net = "yes" ; then
+        echo "CONFIG_VHOST_NET=y" >> $config_target_mak
       fi
     fi
 esac
