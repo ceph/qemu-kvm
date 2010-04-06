@@ -193,6 +193,8 @@ elif check_define _ARCH_PPC ; then
   fi
 elif check_define __mips__ ; then
   cpu="mips"
+elif check_define __ia64__ ; then
+  cpu="ia64"
 else
   cpu=`uname -m`
 fi
@@ -749,6 +751,9 @@ case "$cpu" in
            host_guest_base="yes"
            ;;
     mips*)
+           host_guest_base="yes"
+           ;;
+    ia64*)
            host_guest_base="yes"
            ;;
 esac
@@ -2705,9 +2710,6 @@ if [ "$TARGET_ABI_DIR" = "" ]; then
   TARGET_ABI_DIR=$TARGET_ARCH
 fi
 echo "TARGET_ABI_DIR=$TARGET_ABI_DIR" >> $config_target_mak
-if [ $target_phys_bits -lt $hostlongbits ] ; then
-  target_phys_bits=$hostlongbits
-fi
 case "$target_arch2" in
   i386|x86_64)
     if test "$xen" = "yes" -a "$target_softmmu" = "yes" ; then
@@ -2836,6 +2838,10 @@ for i in $ARCH $TARGET_BASE_ARCH ; do
     echo "CONFIG_I386_DIS=y"  >> $config_target_mak
     echo "CONFIG_I386_DIS=y"  >> $libdis_config_mak
   ;;
+  ia64*)
+    echo "CONFIG_IA64_DIS=y"  >> $config_target_mak
+    echo "CONFIG_IA64_DIS=y"  >> $libdis_config_mak
+  ;;
   m68k)
     echo "CONFIG_M68K_DIS=y"  >> $config_target_mak
     echo "CONFIG_M68K_DIS=y"  >> $libdis_config_mak
@@ -2871,9 +2877,6 @@ case "$ARCH" in
 alpha)
   # Ensure there's only a single GP
   cflags="-msmall-data $cflags"
-;;
-ia64)
-  cflags="-mno-sdata $cflags"
 ;;
 esac
 
@@ -2919,18 +2922,8 @@ if test "$target_linux_user" = "yes" -o "$target_bsd_user" = "yes" ; then
     # -static is used to avoid g1/g3 usage by the dynamic linker
     ldflags="$linker_script -static $ldflags"
     ;;
-  ia64)
-    ldflags="-Wl,-G0 $linker_script -static $ldflags"
-    ;;
-  i386|x86_64|ppc|ppc64|s390|sparc64|alpha|arm|m68k|mips|mips64)
+  i386|x86_64|ppc|ppc64|s390|sparc64|alpha|arm|m68k|mips|mips64|ia64)
     ldflags="$linker_script $ldflags"
-    ;;
-  esac
-fi
-if test "$target_softmmu" = "yes" ; then
-  case "$ARCH" in
-  ia64)
-    ldflags="-Wl,-G0 $linker_script -static $ldflags"
     ;;
   esac
 fi
