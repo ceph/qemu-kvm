@@ -1002,7 +1002,9 @@ static void tty_serial_init(int fd, int speed,
            speed, parity, data_bits, stop_bits);
 #endif
     tcgetattr (fd, &tty);
-    oldtty = tty;
+    if (!term_atexit_done) {
+        oldtty = tty;
+    }
 
 #define check_speed(val) if (speed <= val) { spd = B##val; break; }
     speed = speed * 10 / 11;
@@ -1369,7 +1371,7 @@ static CharDriverState *qemu_chr_open_pp(QemuOpts *opts)
 #if defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
 static int pp_ioctl(CharDriverState *chr, int cmd, void *arg)
 {
-    int fd = (int)chr->opaque;
+    int fd = (int)(long)chr->opaque;
     uint8_t b;
 
     switch(cmd) {
@@ -1415,7 +1417,7 @@ static CharDriverState *qemu_chr_open_pp(QemuOpts *opts)
         return NULL;
 
     chr = qemu_mallocz(sizeof(CharDriverState));
-    chr->opaque = (void *)fd;
+    chr->opaque = (void *)(long)fd;
     chr->chr_write = null_chr_write;
     chr->chr_ioctl = pp_ioctl;
     return chr;
