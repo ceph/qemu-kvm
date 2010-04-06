@@ -45,7 +45,7 @@ net-obj-y += $(addprefix net/, $(net-nested-y))
 common-obj-y = $(block-obj-y)
 common-obj-y += $(net-obj-y)
 common-obj-y += $(qobject-obj-y)
-common-obj-y += readline.o console.o
+common-obj-y += readline.o console.o async.o qemu-error.o
 
 common-obj-y += tcg-runtime.o host-utils.o
 common-obj-y += irq.o ioport.o input.o
@@ -132,6 +132,7 @@ hw-obj-y += loader.o
 hw-obj-y += virtio.o virtio-console.o
 hw-obj-y += fw_cfg.o
 hw-obj-y += watchdog.o
+hw-obj-$(CONFIG_ISA_MMIO) += isa_mmio.o
 hw-obj-$(CONFIG_ECC) += ecc.o
 hw-obj-$(CONFIG_NAND) += nand.o
 
@@ -151,6 +152,8 @@ hw-obj-y += wdt_i6300esb.o
 
 # PCI network cards
 hw-obj-y += ne2000.o
+hw-obj-y += eepro100.o
+hw-obj-y += pcnet.o
 
 hw-obj-$(CONFIG_SMC91C111) += smc91c111.o
 hw-obj-$(CONFIG_LAN9118) += lan9118.o
