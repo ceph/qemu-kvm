@@ -35,7 +35,7 @@
  * emulate the raw device.
  *
  * Metadata information (image size, ...) is stored in an 
- * object with the name "devicename.metadata".
+ * object with the name "devicename.rbd".
  *
  * The raw device is split into 4MB sized objects by default.
  * The sequencenumber is encoded in a 12 byte long hex-string,
@@ -44,7 +44,9 @@
  *
  */
 
-#define OBJ_MAX_SIZE (1UL<<22)	// 22 Bit = 4MB (as default)
+#define OBJ_DEFAULT_ORDER 22	// 22 Bit = 4MB (as default)
+#define OBJ_MAX_SIZE (1UL << OBJ_DEFAULT_ORDER)
+
 #define MAX_NAME 128 		// Maximum size of the poolname plus objectname
 #define MAX_SNAPS 4096		// Maximum number of snapshots (unsupported at
 				// the moment)
@@ -69,12 +71,13 @@ typedef struct {
 	char signature[4];
 	char version[8];
 	uint64_t imagesize;
-	uint64_t objsize;
+	uint8_t objorder;
 	uint8_t crypt_type;
 	uint8_t comp_type;			// unsupported at the moment
+	uint64_t snap_seq;			// unsupported at the moment
 	uint16_t snap_count;			// unsupported at the moment
-	uint32_t snap_id[MAX_SNAPS];	// unsupported at the moment
-} RbdHeader1;
+	uint64_t snap_id[MAX_SNAPS];	// unsupported at the moment
+} __attribute__((packed)) RbdHeader1;
 
 static int rbd_parsename(const char *filename, char *pool, char *name) {
 	const char *rbdname;
@@ -111,7 +114,8 @@ static int rbd_parsename(const char *filename, char *pool, char *name) {
 
 static int rbd_create(const char *filename, QEMUOptionParameter *options) {
 	int64_t bytes = 0;
-	int64_t objsize = OBJ_MAX_SIZE;
+	int64_t objsize;
+	uint8_t objorder = OBJ_DEFAULT_ORDER;
 	char pool[MAX_NAME];
 	char n[MAX_NAME];
 	char name[MAX_NAME];
@@ -122,7 +126,8 @@ static int rbd_create(const char *filename, QEMUOptionParameter *options) {
 	if ((name_len = rbd_parsename(filename, pool, name)) < 0) {
 		return -EINVAL;
 	}
-	snprintf(n, MAX_NAME, "%s.metadata", name);
+
+	snprintf(n, MAX_NAME, "%s.rbd", name);
 
 	/* Read out options */
 	while (options && options->name) {
@@ -131,6 +136,20 @@ static int rbd_create(const char *filename, QEMUOptionParameter *options) {
 		} else if (!strcmp(options->name, BLOCK_OPT_CLUSTER_SIZE)) {
 			if (options->value.n) {
 				objsize = options->value.n;
+				if (!objsize || ((objsize - 1) & objsize)) { /* not a power of 2? */
+					fprintf(stderr, "obj size needs to be power of 2\n");
+					return -EINVAL;	
+				}
+				if (objsize < 4096) {
+					fprintf(stderr, "obj size too small\n");
+					return -EINVAL;
+				}
+
+				for (objorder=0; objorder<64; objorder++) {
+					if (objsize == 1)
+						break;
+					objsize >>= 1;
+				}
 			}
 		}
 		options++;
@@ -142,10 +161,10 @@ static int rbd_create(const char *filename, QEMUOptionParameter *options) {
 	pstrcpy(header.version, sizeof(header.version), RBD_VERSION1);
 	header.imagesize = bytes;
 	cpu_to_le64s(&header.imagesize);
-	header.objsize = objsize;
-	cpu_to_le64s(&header.objsize);
+	header.objorder = objorder;
 	header.crypt_type = CRYPT_NONE;
 	header.comp_type = COMP_NONE;
+	header.snap_seq = 0;
 	header.snap_count = 0;
 	cpu_to_le16s(&header.snap_count);
 
@@ -178,7 +197,7 @@ static int rbd_open(BlockDriverState *bs, const char *filename, int flags) {
 	if ((s->name_len = rbd_parsename(filename, pool, s->name)) < 0) {
 		return -EINVAL;
 	}
-	snprintf(n, MAX_NAME, "%s.metadata", s->name);
+	snprintf(n, MAX_NAME, "%s.rbd", s->name);
 	
         if (rados_initialize(0, NULL) < 0) {
                 fprintf(stderr, "error initializing\n");
@@ -201,8 +220,7 @@ static int rbd_open(BlockDriverState *bs, const char *filename, int flags) {
 			header = (RbdHeader1 *) hbuf;
 			le64_to_cpus(&header->imagesize);
 			s->size = header->imagesize;
-			le64_to_cpus(&header->objsize);
-			s->objsize = header->objsize;
+			s->objsize = 1 << header->objorder;
 		} else {
                 	fprintf(stderr, "Unknown image version %s\n", hbuf+68);
 			return -EIO;
