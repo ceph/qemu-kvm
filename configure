@@ -272,6 +272,7 @@ kvm_kmod="no"
 check_utests="no"
 user_pie="no"
 zero_malloc=""
+rbd="no"
 
 # OS specific
 if check_define __linux__ ; then
@@ -635,6 +636,8 @@ for opt do
   ;;
   --disable-cpu-emulation) cpu_emulation="no"
   ;;
+  --enable-rbd) rbd="yes"
+  ;;
   *) echo "ERROR: unknown option $opt"; show_help="yes"
   ;;
   esac
@@ -793,6 +796,7 @@ echo "  --disable-blobs          disable installing provided firmware blobs"
 echo "  --kerneldir=PATH         look for kernel includes in PATH"
 echo "  --with-kvm-trace         enable building the KVM module with the kvm trace option"
 echo "  --disable-cpu-emulation  disables use of qemu cpu emulation code"
+echo "  --enable-rbd		 enable building the rados block device (rbd)"
 echo ""
 echo "NOTE: The object files are built at the place where configure is launched"
 exit 1
@@ -1556,6 +1560,25 @@ if test "$mingw32" != yes -a "$pthread" = no; then
 fi
 
 ##########################################
+# rbd probe
+if test "$rbd" != "no" ; then
+  cat > $TMPC <<EOF
+#include <stdio.h>
+#include <rados/librados.h>
+int main(void) { rados_initialize(0, NULL); return 0; }
+EOF
+  if compile_prog "" "-lrados -lcrypto" ; then
+    rbd=yes
+    LIBS="$LIBS -lrados -lcrypto"
+  else
+    if test "$rbd" = "yes" ; then
+      feature_not_found "rados block device"
+    fi
+    rbd=no
+  fi
+fi
+
+##########################################
 # linux-aio probe
 
 if test "$linux_aio" != "no" ; then
@@ -2058,6 +2081,7 @@ echo "fdt support       $fdt"
 echo "preadv support    $preadv"
 echo "fdatasync         $fdatasync"
 echo "uuid support      $uuid"
+echo "rbd support       $rbd"
 
 if test $sdl_too_old = "yes"; then
 echo "-> Your SDL version is too old - please upgrade to have SDL support"
@@ -2276,6 +2300,9 @@ if test $cpu_emulation = "yes"; then
   echo "CONFIG_CPU_EMULATION=y" >> $config_host_mak
 else
   echo "CONFIG_NO_CPU_EMULATION=y" >> $config_host_mak
+fi
+if test "$rbd" = "yes" ; then
+  echo "CONFIG_RBD=y" >> $config_host_mak
 fi
 
 # XXX: suppress that

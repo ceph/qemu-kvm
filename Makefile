@@ -28,6 +28,7 @@ configure: ;
 VPATH=$(SRC_PATH):$(SRC_PATH)/hw
 
 LIBS+=-lz $(LIBS_TOOLS)
+LIBS+=-lrados
 
 ifdef BUILD_DOCS
 DOCS=qemu-doc.html qemu-tech.html qemu.1 qemu-img.1 qemu-nbd.8
@@ -114,6 +115,7 @@ block-nested-y += parallels.o nbd.o
 block-nested-$(CONFIG_WIN32) += raw-win32.o
 block-nested-$(CONFIG_POSIX) += raw-posix.o
 block-nested-$(CONFIG_CURL) += curl.o
+block-nested-$(CONFIG_RBD) += rbd.o
 
 block-obj-y +=  $(addprefix block/, $(block-nested-y))
 
