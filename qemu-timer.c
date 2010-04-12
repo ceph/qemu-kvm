@@ -182,6 +182,8 @@ static int64_t cpu_get_clock(void)
     }
 }
 
+/* FIXME: qemu-kvm hack */
+#define CONFIG_IOTHREAD 1
 #ifndef CONFIG_IOTHREAD
 static int64_t qemu_icount_delta(void)
 {

@@ -2030,7 +2030,7 @@ int kvm_main_loop(void)
     cpu_single_env = NULL;
 
     while (1) {
-        main_loop_wait(1000);
+        main_loop_wait(0);
         if (qemu_shutdown_requested()) {
             monitor_protocol_event(QEVENT_SHUTDOWN, NULL);
             if (qemu_no_shutdown()) {
