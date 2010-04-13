@@ -17,23 +17,25 @@ static void report(const char *name, int passed)
 
 static void wrmsr(unsigned index, unsigned long long value)
 {
-	asm volatile ("wrmsr" : : "c"(index), "A"(value));
+	unsigned a = value, d = value >> 32;
+
+	asm volatile("wrmsr" : : "a"(a), "d"(d), "c"(index));
 }
 
 static unsigned long long rdmsr(unsigned index)
 {
-	unsigned long long value;
+	unsigned a, d;
 
-	asm volatile ("rdmsr" : "=A"(value) : "c"(index));
-
-	return value;
+	asm volatile("rdmsr" : "=a"(a), "=d"(d) : "c"(index));
+	return ((unsigned long long)d << 32) | a;
 }
+
 #endif
 
 static void test_kernel_gs_base(void)
 {
 #ifdef __x86_64__
-	unsigned long long v1 = 0x123456789abcdef, v2;
+	unsigned long long v1 = 0x0000123456789abc, v2;
 
 	wrmsr(MSR_KERNEL_GS_BASE, v1);
 	v2 = rdmsr(MSR_KERNEL_GS_BASE);
