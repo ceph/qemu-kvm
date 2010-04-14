@@ -5,6 +5,8 @@ ldarch = elf32-i386
 CFLAGS += -D__i386__
 CFLAGS += -I $(KERNELDIR)/include
 
-tests=
+tests = $(TEST_DIR)/taskswitch.flat
 
 include config-x86-common.mak
+
+$(TEST_DIR)/taskswitch.flat: $(cstart.o) $(TEST_DIR)/taskswitch.o
