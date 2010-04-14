@@ -18,6 +18,8 @@ $(libcflat): CFLAGS += -ffreestanding -I test/lib
 
 CFLAGS += -m$(bits)
 
+libgcc := $(shell $(CC) -m$(bits) --print-libgcc-file-name)
+
 FLATLIBS = test/lib/libcflat.a $(libgcc)
 %.flat: %.o $(FLATLIBS)
 	$(CC) $(CFLAGS) -nostdlib -o $@ -Wl,-T,flat.lds $^ $(FLATLIBS)
@@ -32,7 +34,7 @@ test_cases: $(tests-common) $(tests)
 $(TEST_DIR)/%.o: CFLAGS += -std=gnu99 -ffreestanding -I test/lib -I test/lib/x86
  
 $(TEST_DIR)/bootstrap: $(TEST_DIR)/bootstrap.o
-	$(CC) -nostdlib -o $@ -Wl,-T,bootstrap.lds $^
+	$(CC) $(CFLAGS) -nostdlib -o $@ -Wl,-T,bootstrap.lds $^
  
 $(TEST_DIR)/access.flat: $(cstart.o) $(TEST_DIR)/access.o $(TEST_DIR)/print.o
  
