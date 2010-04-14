@@ -51,6 +51,9 @@
 
 #define RBD_SUFFIX ".rbd"
 
+#define RBD_DIRECTORY		"rbd_directory"
+#define CEPH_OSD_TMAP_SET	's'
+
 typedef struct RBDRVRBDState {
 	rados_pool_t pool;
 	char name[RBD_MAX_OBJ_NAME_SIZE];
@@ -112,6 +115,52 @@ static int rbd_parsename(const char *filename, char *pool, char *name) {
 	return l;
 }
 
+static int create_tmap_op(uint8_t op, const char *name, char **tmap_desc)
+{
+	uint32_t len = strlen(name);
+	uint32_t total_len = 1 + (sizeof(uint32_t) + len) + sizeof(uint32_t); /* encoding op + name + empty buffer */
+	char *desc;
+
+	desc = malloc(total_len);
+	if (!desc)
+		return -ENOMEM;
+
+	*tmap_desc = desc;
+
+	*desc = op;
+	desc++;
+	memcpy(desc, &len, sizeof(len));
+	desc += sizeof(len);
+	memcpy(desc, name, len);
+	desc += len;
+	len = 0;
+	memcpy(desc, &len, sizeof(len));
+	desc += sizeof(len);
+
+	return desc - *tmap_desc;
+}
+
+static int free_tmap_op(char *tmap_desc)
+{
+	free(tmap_desc);
+}
+
+static int rbd_register_image(rados_pool_t pool, const char *name)
+{
+	char *tmap_desc;
+	const char *dir = RBD_DIRECTORY;
+	int ret;
+
+	ret = create_tmap_op(CEPH_OSD_TMAP_SET, name, &tmap_desc);
+	if (ret < 0)
+		return ret;
+
+	ret = rados_tmap_update(pool, dir, tmap_desc, ret);
+	free_tmap_op(tmap_desc);
+
+	return ret;
+}
+
 static int rbd_create(const char *filename, QEMUOptionParameter *options) {
 	int64_t bytes = 0;
 	int64_t objsize;
@@ -122,6 +171,7 @@ static int rbd_create(const char *filename, QEMUOptionParameter *options) {
 	RbdHeader1 header;
 	rados_pool_t p;
 	int name_len;
+	int ret;
 
 	if ((name_len = rbd_parsename(filename, pool, name)) < 0) {
 		return -EINVAL;
@@ -178,14 +228,16 @@ static int rbd_create(const char *filename, QEMUOptionParameter *options) {
 		return -EIO;
 	}
 
-	if (rados_write(p, n, 0, (const char *) &header, sizeof(header)) < 0) {
-		return -errno;
-	}
+	ret = rados_write(p, n, 0, (const char *) &header, sizeof(header));
+	if (ret < 0)
+		goto done;
 
+	ret = rbd_register_image(p, name);
+done:
 	rados_close_pool(p);
 	rados_deinitialize();
 
-	return 0;
+	return ret;
 }
 
 static int rbd_open(BlockDriverState *bs, const char *filename, int flags) {
