@@ -14,7 +14,8 @@
 
 #include <qemu-common.h>
 
-//#include "rbd.h"
+#include "rbd_types.h"
+#include "rados.h"
 #include "module.h"
 #include "block_int.h"
 
@@ -44,15 +45,8 @@
  *
  */
 
-#define OBJ_DEFAULT_ORDER 22	// 22 Bit = 4MB (as default)
-#define OBJ_MAX_SIZE (1UL << OBJ_DEFAULT_ORDER)
-#define RBD_MAX_OBJ_NAME_SIZE   96
-#define RBD_MAX_SEG_NAME_SIZE   128
+#define OBJ_MAX_SIZE (1UL << OBJ_DEFAULT_OBJ_ORDER)
 
-#define RBD_SUFFIX ".rbd"
-
-#define RBD_DIRECTORY		"rbd_directory"
-#define CEPH_OSD_TMAP_SET	's'
 
 typedef struct RBDRVRBDState {
 	rados_pool_t pool;
@@ -62,25 +56,7 @@ typedef struct RBDRVRBDState {
 	uint64_t objsize;
 } RBDRVRBDState;
 	
-#define RBD_TEXT "<<< Rados Block Device Image >>>\n"
-#define RBD_SIGNATURE "RBD"
-#define RBD_VERSION1 "001.000"
-
-#define COMP_NONE 0
-#define CRYPT_NONE 0
-
-typedef struct {
-	char text[64];
-	char signature[4];
-	char version[8];
-	uint64_t image_size;
-	uint8_t obj_order;
-	uint8_t crypt_type;
-	uint8_t comp_type;			// unsupported at the moment
-	uint64_t snap_seq;			// unsupported at the moment
-	uint16_t snap_count;			// unsupported at the moment
-	uint64_t snap_id[0];			// unsupported at the moment
-} __attribute__((packed)) RbdHeader1;
+typedef struct rbd_obj_header_ondisk RbdHeader1;
 
 static int rbd_parsename(const char *filename, char *pool, char *name) {
 	const char *rbdname;
@@ -140,7 +116,7 @@ static int create_tmap_op(uint8_t op, const char *name, char **tmap_desc)
 	return desc - *tmap_desc;
 }
 
-static int free_tmap_op(char *tmap_desc)
+static void free_tmap_op(char *tmap_desc)
 {
 	free(tmap_desc);
 }
@@ -164,7 +140,7 @@ static int rbd_register_image(rados_pool_t pool, const char *name)
 static int rbd_create(const char *filename, QEMUOptionParameter *options) {
 	int64_t bytes = 0;
 	int64_t objsize;
-	uint8_t obj_order = OBJ_DEFAULT_ORDER;
+	uint8_t obj_order = RBD_DEFAULT_OBJ_ORDER;
 	char pool[RBD_MAX_SEG_NAME_SIZE];
 	char n[RBD_MAX_SEG_NAME_SIZE];
 	char name[RBD_MAX_SEG_NAME_SIZE];
@@ -206,14 +182,14 @@ static int rbd_create(const char *filename, QEMUOptionParameter *options) {
 	}
 
 	memset(&header, 0, sizeof(header));
-	pstrcpy(header.text, sizeof(header.text), RBD_TEXT);
-	pstrcpy(header.signature, sizeof(header.signature), RBD_SIGNATURE);
-	pstrcpy(header.version, sizeof(header.version), RBD_VERSION1);
+	pstrcpy(header.text, sizeof(header.text), rbd_text);
+	pstrcpy(header.signature, sizeof(header.signature), rbd_signature);
+	pstrcpy(header.version, sizeof(header.version), rbd_version);
 	header.image_size = bytes;
-	cpu_to_le64s(&header.image_size);
+	cpu_to_le64s((uint64_t *)&header.image_size);
 	header.obj_order = obj_order;
-	header.crypt_type = CRYPT_NONE;
-	header.comp_type = COMP_NONE;
+	header.crypt_type = RBD_CRYPT_NONE;
+	header.comp_type = RBD_COMP_NONE;
 	header.snap_seq = 0;
 	header.snap_count = 0;
 	cpu_to_le16s(&header.snap_count);
@@ -265,12 +241,12 @@ static int rbd_open(BlockDriverState *bs, const char *filename, int flags) {
                 fprintf(stderr, "error reading header from %s\n", s->name);
 		return -EIO;
 	}
-	if (!strncmp(hbuf+64, RBD_SIGNATURE, 4)) {
-		if(!strncmp(hbuf+68, RBD_VERSION1, 8)) {
+	if (!strncmp(hbuf+64, rbd_signature, 4)) {
+		if(!strncmp(hbuf+68, rbd_version, 8)) {
 			RbdHeader1 *header;
 
 			header = (RbdHeader1 *) hbuf;
-			le64_to_cpus(&header->image_size);
+			le64_to_cpus((uint64_t *)&header->image_size);
 			s->size = header->image_size;
 			s->objsize = 1 << header->obj_order;
 		} else {
