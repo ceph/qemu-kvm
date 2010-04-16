@@ -160,6 +160,8 @@ an untrusted format header.
 This option specifies the serial number to assign to the device.
 @item addr=@var{addr}
 Specify the controller's PCI address (if=virtio only).
+@item boot=@var{boot}
+@var{boot} is "on" or "off" and allows for booting from non-traditional interfaces, such as virtio.
 @end table
 
 By default, writethrough caching is used for all block device.  This means that
