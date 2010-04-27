@@ -17,17 +17,10 @@ void report(const char *name, int result)
 	}
 }
 
-void test_cmps(void *mem)
+void test_cmps_one(unsigned char *m1, unsigned char *m3)
 {
-	unsigned char *m1 = mem, *m2 = mem + 1024;
-	unsigned char m3[1024];
 	void *rsi, *rdi;
 	long rcx, tmp;
-
-	for (int i = 0; i < 100; ++i)
-		m1[i] = m2[i] = m3[i] = i;
-	for (int i = 100; i < 200; ++i)
-		m1[i] = (m3[i] = m2[i] = i) + 1;
 
 	rsi = m1; rdi = m3; rcx = 30;
 	asm volatile("xor %[tmp], %[tmp] \n\t"
@@ -89,6 +82,19 @@ void test_cmps(void *mem)
 	report("repe/cmpsq (2)",
 	       rcx == 3 && rsi == m1 + 104 && rdi == m3 + 104);
 
+}
+
+void test_cmps(void *mem)
+{
+	unsigned char *m1 = mem, *m2 = mem + 1024;
+	unsigned char m3[1024];
+
+	for (int i = 0; i < 100; ++i)
+		m1[i] = m2[i] = m3[i] = i;
+	for (int i = 100; i < 200; ++i)
+		m1[i] = (m3[i] = m2[i] = i) + 1;
+        test_cmps_one(m1, m3);
+        test_cmps_one(m1, m2);
 }
 
 void test_cr8(void)
