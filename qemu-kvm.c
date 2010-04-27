@@ -1610,6 +1610,19 @@ static void flush_queued_work(CPUState *env)
     pthread_cond_broadcast(&qemu_work_cond);
 }
 
+static int kvm_mce_in_exception(CPUState *env)
+{
+    struct kvm_msr_entry msr_mcg_status = {
+        .index = MSR_MCG_STATUS,
+    };
+    int r;
+
+    r = kvm_get_msrs(env, &msr_mcg_status, 1);
+    if (r == -1 || r == 0)
+        return -1;
+    return !!(msr_mcg_status.data & MCG_STATUS_MCIP);
+}
+
 static void kvm_on_sigbus(CPUState *env, siginfo_t *siginfo)
 {
 #if defined(KVM_CAP_MCE) && defined(TARGET_I386)
@@ -1630,6 +1643,15 @@ static void kvm_on_sigbus(CPUState *env, siginfo_t *siginfo)
             mce.misc = (MCM_ADDR_PHYS << 6) | 0xc;
             mce.mcg_status = MCG_STATUS_MCIP | MCG_STATUS_EIPV;
         } else {
+            /*
+             * If there is an MCE excpetion being processed, ignore
+             * this SRAO MCE
+             */
+            r = kvm_mce_in_exception(env);
+            if (r == -1)
+                fprintf(stderr, "Failed to get MCE status\n");
+            else if (r)
+                return;
             /* Fake an Intel architectural Memory scrubbing UCR */
             mce.status = MCI_STATUS_VAL | MCI_STATUS_UC | MCI_STATUS_EN
                 | MCI_STATUS_MISCV | MCI_STATUS_ADDRV | MCI_STATUS_S
@@ -2475,6 +2497,12 @@ static void kvm_do_inject_x86_mce(void *_data)
     struct kvm_x86_mce_data *data = _data;
     int r;
 
+    /* If there is an MCE excpetion being processed, ignore this SRAO MCE */
+    r = kvm_mce_in_exception(data->env);
+    if (r == -1)
+        fprintf(stderr, "Failed to get MCE status\n");
+    else if (r && !(data->mce->status & MCI_STATUS_AR))
+        return;
     r = kvm_set_mce(data->env, data->mce);
     if (r < 0) {
         perror("kvm_set_mce FAILED");
