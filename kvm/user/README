@@ -1,0 +1,23 @@
+This directory contains sources for a kvm test suite.
+
+Tests for x86 architecture are run as kernel images for qemu that supports multiboot format.
+Tests uses an infrastructure called from the bios code. The infrastructure initialize the system/cpu's,
+switch to long-mode and calls the 'main' function of the individual test.
+Tests uses a qemu's virtual test device, named testdev, for services like printing, exiting, query memory size etc.
+See file testdev.txt for more details.
+
+To create the tests' images just type 'make' in this directory.
+Tests' images created in ./test/<ARCH>/*.flat
+
+An example of a test invocation:
+qemu-system-x86_64 -device testdev,chardev=testlog -chardev file,id=testlog,path=msr.out -kernel ./test/x86/msr.flat
+This invocation runs the msr test case. The test output is in file msr.out.
+
+
+
+Directory structure:
+.:  Makefile and config files for the tests
+./test/lib: general services for the tests
+./test/lib/<ARCH>: architecture dependent services for the tests
+./test/<ARCH>: the sources of the tests and the created objects/images
+

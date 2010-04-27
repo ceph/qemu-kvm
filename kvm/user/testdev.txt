@@ -1,0 +1,14 @@
+This file describes the virtual device of qemu for supporting this test suite.
+
+Services supplied by the testdev device:
+
+serial output: write only, on io port 0xf1
+exit process: write only, on io port 0xf4, value used as exit code
+ram size: read-only, on io port 0xd1, 4 bytes' size
+irq line setting: write only, on io ports 0x2000 - 0x2018, value to set/clear
+simple io: read/write, on io port 0xe0, 1/2/4 bytes
+
+Test device used a char device for actual output
+
+
+

@@ -1,0 +1,15 @@
+Tests in this directory and what they do:
+
+access: lots of page table related access (pte/pde) (read/write)
+apic: enable x2apic, self ipi, ioapic intr, ioapic simultaneous
+emulator: move to/from regs, cmps, push, pop, to/from cr8, smsw and lmsw
+hypercall: intel and amd hypercall insn
+msr: write to msr (only KERNEL_GS_BASE for now)
+port80: lots of out to port 80
+realmode: goes back to realmode, shld, push/pop, mov immediate, cmp immediate, add immediate,
+         io, eflags instructions (clc, cli, etc.), jcc short, jcc near, call, long jmp, xchg
+sieve: heavy memory access with no paging and with paging static and with paging vmalloc'ed
+smptest: run smp_id() on every cpu and compares return value to number
+stringio: outs forward and backward
+tsc: write to tsc(0) and write to tsc(100000000000) and read it back
+vmexit: long loops for each: cpuid, vmcall, mov_from_cr8, mov_to_cr8, inl_pmtimer, ipi, ipi+halt
