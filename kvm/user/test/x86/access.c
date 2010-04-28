@@ -453,6 +453,28 @@ fault:
     ;
 }
 
+static void ac_test_check(ac_test_t *at, _Bool *success_ret, _Bool cond,
+                          const char *fmt, ...)
+{
+    va_list ap;
+    char buf[500];
+
+    if (!*success_ret) {
+        return;
+    }
+
+    if (!cond) {
+        return;
+    }
+
+    *success_ret = false;
+
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    printf("FAIL: %s\n", buf);
+}
+
 int ac_test_do_access(ac_test_t *at)
 {
     static unsigned unique = 42;
@@ -460,6 +482,7 @@ int ac_test_do_access(ac_test_t *at)
     unsigned e;
     static unsigned char user_stack[4096];
     unsigned long rsp;
+    _Bool success = true;
 
     ++unique;
 
@@ -531,30 +554,21 @@ int ac_test_do_access(ac_test_t *at)
 		  "jmp back_to_kernel \n\t"
 		  ".section .text");
 
-    if (fault && !at->expected_fault) {
-	printf("FAIL: unexpected fault\n");
-	return 0;
-    }
-    if (!fault && at->expected_fault) {
-	printf("FAIL: unexpected access\n");
-	return 0;
-    }
-    if (fault && e != at->expected_error) {
-	printf("FAIL: error code %x expected %x\n", e, at->expected_error);
-	return 0;
-    }
-    if (at->ptep && *at->ptep != at->expected_pte) {
-	printf("FAIL: pte %x expected %x\n", *at->ptep, at->expected_pte);
-	return 0;
-    }
+    ac_test_check(at, &success, fault && !at->expected_fault,
+                  "unexpected fault");
+    ac_test_check(at, &success, !fault && at->expected_fault,
+                  "unexpected access");
+    ac_test_check(at, &success, fault && e != at->expected_error,
+                  "error code %x expected %x", e, at->expected_error);
+    ac_test_check(at, &success, at->ptep && *at->ptep != at->expected_pte,
+                  "pte %x expected %x", *at->ptep, at->expected_pte);
+    ac_test_check(at, &success, *at->pdep != at->expected_pde,
+                  "pde %x expected %x", *at->pdep, at->expected_pde);
 
-    if (*at->pdep != at->expected_pde) {
-	printf("FAIL: pde %x expected %x\n", *at->pdep, at->expected_pde);
-	return 0;
+    if (success) {
+        printf("PASS\n");
     }
-
-    printf("PASS\n");
-    return 1;
+    return success;
 }
 
 static void ac_test_show(ac_test_t *at)
