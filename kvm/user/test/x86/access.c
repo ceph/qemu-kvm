@@ -463,6 +463,8 @@ no_pte:
 fault:
     if (!at->expected_fault)
         at->ignore_pde = 0;
+    if (!at->flags[AC_CPU_EFER_NX])
+        at->expected_error &= ~PFERR_FETCH_MASK;
 }
 
 static void ac_test_check(ac_test_t *at, _Bool *success_ret, _Bool cond,
