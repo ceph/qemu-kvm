@@ -6,6 +6,8 @@
 #define true 1
 #define false 0
 
+static _Bool verbose = false;
+
 typedef unsigned long pt_element_t;
 
 #define PAGE_SIZE ((pt_element_t)4096)
@@ -144,6 +146,9 @@ typedef struct {
     unsigned short limit;
     unsigned long linear_addr;
 } __attribute__((packed)) descriptor_table_t;
+
+
+static void ac_test_show(ac_test_t *at);
 
 void lidt(idt_entry_t *idt, int nentries)
 {
@@ -469,6 +474,10 @@ static void ac_test_check(ac_test_t *at, _Bool *success_ret, _Bool cond,
 
     *success_ret = false;
 
+    if (!verbose) {
+        ac_test_show(at);
+    }
+
     va_start(ap, fmt);
     vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
@@ -565,7 +574,7 @@ int ac_test_do_access(ac_test_t *at)
     ac_test_check(at, &success, *at->pdep != at->expected_pde,
                   "pde %x expected %x", *at->pdep, at->expected_pde);
 
-    if (success) {
+    if (success && verbose) {
         printf("PASS\n");
     }
     return success;
@@ -590,7 +599,9 @@ int ac_test_exec(ac_test_t *at)
 {
     int r;
 
-    ac_test_show(at);
+    if (verbose) {
+        ac_test_show(at);
+    }
     ac_test_setup_pte(at);
     r = ac_test_do_access(at);
     return r;
