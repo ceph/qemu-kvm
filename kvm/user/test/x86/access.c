@@ -557,9 +557,8 @@ int ac_test_do_access(ac_test_t *at)
     return 1;
 }
 
-int ac_test_exec(ac_test_t *at)
+static void ac_test_show(ac_test_t *at)
 {
-    int r;
     char line[5000];
 
     *line = 0;
@@ -571,6 +570,13 @@ int ac_test_exec(ac_test_t *at)
 	}
     strcat(line, ": ");
     printf("%s", line);
+}
+
+int ac_test_exec(ac_test_t *at)
+{
+    int r;
+
+    ac_test_show(at);
     ac_test_setup_pte(at);
     r = ac_test_do_access(at);
     return r;
