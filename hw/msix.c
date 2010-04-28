@@ -609,14 +609,44 @@ void msix_unuse_all_vectors(PCIDevice *dev)
 
 int msix_set_mask_notifier(PCIDevice *dev, unsigned vector, void *opaque)
 {
+    int r;
+    if (vector >= dev->msix_entries_nr || !dev->msix_entry_used[vector])
+        return 0;
+
+    assert(dev->msix_mask_notifier);
+    assert(opaque);
+    assert(!dev->msix_mask_notifier_opaque[vector]);
+
+    if (msix_is_masked(dev, vector)) {
+        return 0;
+    }
+    r = dev->msix_mask_notifier(dev, vector, opaque,
+                                msix_is_masked(dev, vector));
+    if (r < 0) {
+        return r;
+    }
+    dev->msix_mask_notifier_opaque[vector] = opaque;
+    return r;
+}
+
+int msix_unset_mask_notifier(PCIDevice *dev, unsigned vector)
+{
     int r = 0;
     if (vector >= dev->msix_entries_nr || !dev->msix_entry_used[vector])
         return 0;
 
-    if (dev->msix_mask_notifier)
-        r = dev->msix_mask_notifier(dev, vector, opaque,
-                                    msix_is_masked(dev, vector));
-    if (r >= 0)
-        dev->msix_mask_notifier_opaque[vector] = opaque;
+    assert(dev->msix_mask_notifier);
+    assert(dev->msix_mask_notifier_opaque[vector]);
+
+    if (msix_is_masked(dev, vector)) {
+        return 0;
+    }
+    r = dev->msix_mask_notifier(dev, vector,
+                                dev->msix_mask_notifier_opaque[vector],
+                                msix_is_masked(dev, vector));
+    if (r < 0) {
+        return r;
+    }
+    dev->msix_mask_notifier_opaque[vector] = NULL;
     return r;
 }

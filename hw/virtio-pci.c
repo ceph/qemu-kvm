@@ -462,10 +462,13 @@ static int virtio_pci_set_guest_notifier(void *opaque, int n, bool assign)
         msix_set_mask_notifier(&proxy->pci_dev,
                                virtio_queue_vector(proxy->vdev, n), vq);
     } else {
-        msix_set_mask_notifier(&proxy->pci_dev,
-                               virtio_queue_vector(proxy->vdev, n), NULL);
+        msix_unset_mask_notifier(&proxy->pci_dev,
+				 virtio_queue_vector(proxy->vdev, n));
         qemu_set_fd_handler(event_notifier_get_fd(notifier),
                             NULL, NULL, NULL);
+        /* Test and clear notifier before closing it,
+         * in case poll callback didn't have time to run. */
+        virtio_pci_guest_notifier_read(vq);
         event_notifier_cleanup(notifier);
     }
 
