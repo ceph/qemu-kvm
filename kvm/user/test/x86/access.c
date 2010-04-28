@@ -137,6 +137,7 @@ typedef struct {
     pt_element_t expected_pte;
     pt_element_t *pdep;
     pt_element_t expected_pde;
+    pt_element_t ignore_pde;
     int expected_fault;
     unsigned expected_error;
     idt_entry_t idt[256];
@@ -370,6 +371,7 @@ void ac_test_setup_pte(ac_test_t *at)
     if (at->ptep)
 	at->expected_pte = *at->ptep;
     at->expected_pde = *at->pdep;
+    at->ignore_pde = 0;
     at->expected_fault = 0;
     at->expected_error = PFERR_PRESENT_MASK;
 
@@ -416,13 +418,17 @@ void ac_test_setup_pte(ac_test_t *at)
     if (at->flags[AC_ACCESS_FETCH] && at->flags[AC_PDE_NX])
 	at->expected_fault = 1;
 
-    if (at->expected_fault)
+    if (!at->flags[AC_PDE_ACCESSED])
+        at->ignore_pde = PT_ACCESSED_MASK;
+
+    if (!pde_valid)
 	goto fault;
 
-    at->expected_pde |= PT_ACCESSED_MASK;
+    if (!at->expected_fault)
+        at->expected_pde |= PT_ACCESSED_MASK;
 
     if (at->flags[AC_PDE_PSE]) {
-	if (at->flags[AC_ACCESS_WRITE])
+	if (at->flags[AC_ACCESS_WRITE] && !at->expected_fault)
 	    at->expected_pde |= PT_DIRTY_MASK;
 	goto no_pte;
     }
@@ -455,7 +461,8 @@ void ac_test_setup_pte(ac_test_t *at)
 
 no_pte:
 fault:
-    ;
+    if (!at->expected_fault)
+        at->ignore_pde = 0;
 }
 
 static void ac_test_check(ac_test_t *at, _Bool *success_ret, _Bool cond,
@@ -482,6 +489,13 @@ static void ac_test_check(ac_test_t *at, _Bool *success_ret, _Bool cond,
     vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
     printf("FAIL: %s\n", buf);
+}
+
+static int pt_match(pt_element_t pte1, pt_element_t pte2, pt_element_t ignore)
+{
+    pte1 &= ~ignore;
+    pte2 &= ~ignore;
+    return pte1 == pte2;
 }
 
 int ac_test_do_access(ac_test_t *at)
@@ -571,7 +585,8 @@ int ac_test_do_access(ac_test_t *at)
                   "error code %x expected %x", e, at->expected_error);
     ac_test_check(at, &success, at->ptep && *at->ptep != at->expected_pte,
                   "pte %x expected %x", *at->ptep, at->expected_pte);
-    ac_test_check(at, &success, *at->pdep != at->expected_pde,
+    ac_test_check(at, &success,
+                  !pt_match(*at->pdep, at->expected_pde, at->ignore_pde),
                   "pde %x expected %x", *at->pdep, at->expected_pde);
 
     if (success && verbose) {
