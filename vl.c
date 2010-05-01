@@ -253,12 +253,6 @@ int kvm_allowed = 1;
 uint32_t xen_domid;
 enum xen_mode xen_mode = XEN_EMULATE;
 
-#ifdef SIGRTMIN
-#define SIG_IPI (SIGRTMIN+4)
-#else
-#define SIG_IPI SIGUSR1
-#endif
-
 static int default_serial = 1;
 static int default_parallel = 1;
 static int default_virtcon = 1;
@@ -1202,7 +1196,7 @@ int qemu_boot_set(const char *boot_devices)
     return boot_set_handler(boot_set_opaque, boot_devices);
 }
 
-static int parse_bootdevices(char *devices)
+static void validate_bootdevices(char *devices)
 {
     /* We just do some generic consistency checks */
     const char *p;
@@ -1228,7 +1222,6 @@ static int parse_bootdevices(char *devices)
         }
         bitmap |= 1 << (*p - 'a');
     }
-    return bitmap;
 }
 
 static void restore_boot_devices(void *opaque)
@@ -1738,7 +1731,7 @@ static int reset_requested;
 static int shutdown_requested;
 static int powerdown_requested;
 int debug_requested;
-static int vmstop_requested;
+int vmstop_requested;
 
 int qemu_no_shutdown(void)
 {
@@ -1994,10 +1987,7 @@ static void main_loop(void)
         return;
     }
 
-#ifdef CONFIG_IOTHREAD
-    qemu_system_ready = 1;
-    qemu_cond_broadcast(&qemu_system_cond);
-#endif
+    qemu_main_loop_start();
 
     for (;;) {
         do {
@@ -2594,9 +2584,8 @@ static const QEMUOption *lookup_opt(int argc, char **argv,
 int main(int argc, char **argv, char **envp)
 {
     const char *gdbstub_dev = NULL;
-    uint32_t boot_devices_bitmap = 0;
     int i;
-    int snapshot, linux_boot, net_boot;
+    int snapshot, linux_boot;
     const char *icount_option = NULL;
     const char *initrd_filename;
     const char *kernel_filename, *kernel_cmdline;
@@ -2915,13 +2904,13 @@ int main(int argc, char **argv, char **envp)
 
                     if (legacy ||
                         get_param_value(buf, sizeof(buf), "order", optarg)) {
-                        boot_devices_bitmap = parse_bootdevices(buf);
+                        validate_bootdevices(buf);
                         pstrcpy(boot_devices, sizeof(boot_devices), buf);
                     }
                     if (!legacy) {
                         if (get_param_value(buf, sizeof(buf),
                                             "once", optarg)) {
-                            boot_devices_bitmap |= parse_bootdevices(buf);
+                            validate_bootdevices(buf);
                             standard_boot_devices = qemu_strdup(boot_devices);
                             pstrcpy(boot_devices, sizeof(boot_devices), buf);
                             qemu_register_reset(restore_boot_devices,
@@ -3651,9 +3640,6 @@ int main(int argc, char **argv, char **envp)
     if (net_init_clients() < 0) {
         exit(1);
     }
-
-    net_boot = (boot_devices_bitmap >> ('n' - 'a')) & 0xF;
-    net_set_boot_mask(net_boot);
 
     /* init the bluetooth world */
     if (foreach_device_config(DEV_BT, bt_parse))

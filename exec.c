@@ -2898,15 +2898,12 @@ void *qemu_get_ram_ptr(ram_addr_t addr)
 
 int do_qemu_ram_addr_from_host(void *ptr, ram_addr_t *ram_addr)
 {
-    RAMBlock *prev;
     RAMBlock *block;
     uint8_t *host = ptr;
 
-    prev = NULL;
     block = ram_blocks;
     while (block && (block->host > host
                      || block->host + block->length <= host)) {
-        prev = block;
         block = block->next;
     }
     if (!block)
