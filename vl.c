@@ -672,8 +672,6 @@ QemuOpts *drive_add(const char *file, const char *fmt, ...)
 
     opts = qemu_opts_parse(&qemu_drive_opts, optstr, 0);
     if (!opts) {
-        fprintf(stderr, "%s: huh? duplicate? (%s)\n",
-                __FUNCTION__, optstr);
         return NULL;
     }
     if (file)
@@ -3112,7 +3110,6 @@ int main(int argc, char **argv, char **envp)
             case QEMU_OPTION_mon:
                 opts = qemu_opts_parse(&qemu_mon_opts, optarg, 1);
                 if (!opts) {
-                    fprintf(stderr, "parse error: %s\n", optarg);
                     exit(1);
                 }
                 default_monitor = 0;
@@ -3120,7 +3117,6 @@ int main(int argc, char **argv, char **envp)
             case QEMU_OPTION_chardev:
                 opts = qemu_opts_parse(&qemu_chardev_opts, optarg, 1);
                 if (!opts) {
-                    fprintf(stderr, "parse error: %s\n", optarg);
                     exit(1);
                 }
                 break;
@@ -3202,10 +3198,6 @@ int main(int argc, char **argv, char **envp)
                 break;
 #ifdef KVM_UPSTREAM
             case QEMU_OPTION_enable_kvm:
-                if (!(kvm_available())) {
-                    printf("Option %s not supported for this target\n", popt->name);
-                    exit(1);
-                }
                 kvm_allowed = 1;
 #endif
                 break;
@@ -3356,7 +3348,6 @@ int main(int argc, char **argv, char **envp)
             case QEMU_OPTION_rtc:
                 opts = qemu_opts_parse(&qemu_rtc_opts, optarg, 0);
                 if (!opts) {
-                    fprintf(stderr, "parse error: %s\n", optarg);
                     exit(1);
                 }
                 configure_rtc(opts);
@@ -3592,13 +3583,15 @@ int main(int argc, char **argv, char **envp)
         exit(1);
     }
 
-    if (kvm_enabled()) {
-        int ret;
-
-        ret = kvm_init(smp_cpus);
+    if (kvm_allowed) {
+        int ret = kvm_init(smp_cpus);
         if (ret < 0) {
 #if defined(KVM_UPSTREAM) || defined(CONFIG_NO_CPU_EMULATION)
-            fprintf(stderr, "failed to initialize KVM\n");
+            if (!kvm_available()) {
+                printf("KVM not supported for this target\n");
+            } else {
+                fprintf(stderr, "failed to initialize KVM: %s\n", strerror(-ret));
+            }
             exit(1);
 #endif
 #ifdef CONFIG_KVM

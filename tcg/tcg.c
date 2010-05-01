@@ -47,6 +47,7 @@
 #include "qemu-common.h"
 #include "cache-utils.h"
 #include "host-utils.h"
+#include "qemu-timer.h"
 
 /* Note: the long term plan is to reduce the dependancies on the QEMU
    CPU definitions. Currently they are used for qemu_ld/st
@@ -1278,7 +1279,7 @@ static void tcg_liveness_analysis(TCGContext *s)
 }
 #else
 /* dummy liveness analysis */
-void tcg_liveness_analysis(TCGContext *s)
+static void tcg_liveness_analysis(TCGContext *s)
 {
     int nb_ops;
     nb_ops = gen_opc_ptr - gen_opc_buf;
