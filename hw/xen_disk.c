@@ -575,7 +575,7 @@ static void blk_alloc(struct XenDevice *xendev)
 static int blk_init(struct XenDevice *xendev)
 {
     struct XenBlkDev *blkdev = container_of(xendev, struct XenBlkDev, xendev);
-    int index, mode, qflags, have_barriers, info = 0;
+    int index, qflags, have_barriers, info = 0;
     char *h;
 
     /* read xenstore entries */
@@ -609,10 +609,8 @@ static int blk_init(struct XenDevice *xendev)
 
     /* read-only ? */
     if (strcmp(blkdev->mode, "w") == 0) {
-	mode   = O_RDWR;
 	qflags = BDRV_O_RDWR;
     } else {
-	mode   = O_RDONLY;
 	qflags = 0;
 	info  |= VDISK_READONLY;
     }
@@ -629,7 +627,7 @@ static int blk_init(struct XenDevice *xendev)
         xen_be_printf(&blkdev->xendev, 2, "create new bdrv (xenbus setup)\n");
 	blkdev->bs = bdrv_new(blkdev->dev);
 	if (blkdev->bs) {
-	    if (bdrv_open2(blkdev->bs, blkdev->filename, qflags,
+	    if (bdrv_open(blkdev->bs, blkdev->filename, qflags,
                            bdrv_find_whitelisted_format(blkdev->fileproto))
                 != 0) {
 		bdrv_delete(blkdev->bs);

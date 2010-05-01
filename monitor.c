@@ -1045,7 +1045,8 @@ static void do_info_cpu_stats(Monitor *mon)
  */
 static int do_quit(Monitor *mon, const QDict *qdict, QObject **ret_data)
 {
-    exit(0);
+    monitor_suspend(mon);
+    qemu_system_exit_request();
     return 0;
 }
 
@@ -1127,7 +1128,7 @@ static int do_change_block(Monitor *mon, const char *device,
     if (eject_device(mon, bs, 0) < 0) {
         return -1;
     }
-    if (bdrv_open2(bs, filename, BDRV_O_RDWR, drv) < 0) {
+    if (bdrv_open(bs, filename, BDRV_O_RDWR, drv) < 0) {
         qerror_report(QERR_OPEN_FILE_FAILED, filename);
         return -1;
     }
@@ -4435,7 +4436,7 @@ static void handle_qmp_command(JSONMessageParser *parser, QList *tokens)
         qerror_report(QERR_QMP_BAD_INPUT_OBJECT, "execute");
         goto err_input;
     } else if (qobject_type(obj) != QTYPE_QSTRING) {
-        qerror_report(QERR_QMP_BAD_INPUT_OBJECT, "string");
+        qerror_report(QERR_QMP_BAD_INPUT_OBJECT_MEMBER, "execute", "string");
         goto err_input;
     }
 
@@ -4468,6 +4469,9 @@ static void handle_qmp_command(JSONMessageParser *parser, QList *tokens)
     obj = qdict_get(input, "arguments");
     if (!obj) {
         args = qdict_new();
+    } else if (qobject_type(obj) != QTYPE_QDICT) {
+        qerror_report(QERR_QMP_BAD_INPUT_OBJECT_MEMBER, "arguments", "object");
+        goto err_input;
     } else {
         args = qobject_to_qdict(obj);
         QINCREF(args);

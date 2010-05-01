@@ -792,10 +792,8 @@ DriveInfo *drive_init(QemuOpts *opts, void *opaque,
     QEMUMachine *machine = opaque;
     int max_devs;
     int index;
-    int cache;
-    int aio = 0;
     int ro = 0;
-    int bdrv_flags;
+    int bdrv_flags = 0;
     int on_read_error, on_write_error;
     const char *devaddr;
     DriveInfo *dinfo;
@@ -805,7 +803,6 @@ DriveInfo *drive_init(QemuOpts *opts, void *opaque,
     *fatal_error = 1;
 
     translation = BIOS_ATA_TRANSLATION_AUTO;
-    cache = 1;
 
     if (machine && machine->use_scsi) {
         type = IF_SCSI;
@@ -919,13 +916,13 @@ DriveInfo *drive_init(QemuOpts *opts, void *opaque,
     }
 
     if ((buf = qemu_opt_get(opts, "cache")) != NULL) {
-        if (!strcmp(buf, "off") || !strcmp(buf, "none"))
-            cache = 0;
-        else if (!strcmp(buf, "writethrough"))
-            cache = 1;
-        else if (!strcmp(buf, "writeback"))
-            cache = 2;
-        else {
+        if (!strcmp(buf, "off") || !strcmp(buf, "none")) {
+            bdrv_flags |= BDRV_O_NOCACHE;
+        } else if (!strcmp(buf, "writeback")) {
+            bdrv_flags |= BDRV_O_CACHE_WB;
+        } else if (!strcmp(buf, "writethrough")) {
+            /* this is the default */
+        } else {
            fprintf(stderr, "qemu: invalid cache option\n");
            return NULL;
         }
@@ -933,11 +930,11 @@ DriveInfo *drive_init(QemuOpts *opts, void *opaque,
 
 #ifdef CONFIG_LINUX_AIO
     if ((buf = qemu_opt_get(opts, "aio")) != NULL) {
-        if (!strcmp(buf, "threads"))
-            aio = 0;
-        else if (!strcmp(buf, "native"))
-            aio = 1;
-        else {
+        if (!strcmp(buf, "native")) {
+            bdrv_flags |= BDRV_O_NATIVE_AIO;
+        } else if (!strcmp(buf, "threads")) {
+            /* this is the default */
+        } else {
            fprintf(stderr, "qemu: invalid aio option\n");
            return NULL;
         }
@@ -1120,20 +1117,10 @@ DriveInfo *drive_init(QemuOpts *opts, void *opaque,
         *fatal_error = 0;
         return NULL;
     }
-    bdrv_flags = 0;
     if (snapshot) {
-        bdrv_flags |= BDRV_O_SNAPSHOT;
-        cache = 2; /* always use write-back with snapshot */
-    }
-    if (cache == 0) /* no caching */
-        bdrv_flags |= BDRV_O_NOCACHE;
-    else if (cache == 2) /* write-back */
-        bdrv_flags |= BDRV_O_CACHE_WB;
-
-    if (aio == 1) {
-        bdrv_flags |= BDRV_O_NATIVE_AIO;
-    } else {
-        bdrv_flags &= ~BDRV_O_NATIVE_AIO;
+        /* always use write-back with snapshot */
+        bdrv_flags &= ~BDRV_O_CACHE_MASK;
+        bdrv_flags |= (BDRV_O_SNAPSHOT|BDRV_O_CACHE_WB);
     }
 
     if (media == MEDIA_CDROM) {
@@ -1148,7 +1135,7 @@ DriveInfo *drive_init(QemuOpts *opts, void *opaque,
 
     bdrv_flags |= ro ? 0 : BDRV_O_RDWR;
 
-    if (bdrv_open2(dinfo->bdrv, file, bdrv_flags, drv) < 0) {
+    if (bdrv_open(dinfo->bdrv, file, bdrv_flags, drv) < 0) {
         fprintf(stderr, "qemu: could not open disk image %s: %s\n",
                         file, strerror(errno));
         return NULL;
@@ -1730,6 +1717,7 @@ static int shutdown_requested;
 static int powerdown_requested;
 int debug_requested;
 int vmstop_requested;
+static int exit_requested;
 
 int qemu_no_shutdown(void)
 {
@@ -1757,6 +1745,12 @@ int qemu_powerdown_requested(void)
     int r = powerdown_requested;
     powerdown_requested = 0;
     return r;
+}
+
+int qemu_exit_requested(void)
+{
+    /* just return it, we'll exit() anyway */
+    return exit_requested;
 }
 
 static int qemu_debug_requested(void)
@@ -1829,6 +1823,12 @@ void qemu_system_shutdown_request(void)
 void qemu_system_powerdown_request(void)
 {
     powerdown_requested = 1;
+    qemu_notify_event();
+}
+
+void qemu_system_exit_request(void)
+{
+    exit_requested = 1;
     qemu_notify_event();
 }
 
@@ -1970,6 +1970,8 @@ static int vm_can_run(void)
         return 0;
     if (debug_requested)
         return 0;
+    if (exit_requested)
+        return 0;
     return 1;
 }
 
@@ -2027,6 +2029,9 @@ static void main_loop(void)
         }
         if ((r = qemu_vmstop_requested())) {
             vm_stop(r);
+        }
+        if (qemu_exit_requested()) {
+            exit(0);
         }
     }
     pause_all_vcpus();
@@ -2693,25 +2698,16 @@ int main(int argc, char **argv, char **envp)
     }
 
     if (defconfig) {
-        const char *fname;
-        FILE *fp;
+        int ret;
 
-        fname = CONFIG_QEMU_CONFDIR "/qemu.conf";
-        fp = fopen(fname, "r");
-        if (fp) {
-            if (qemu_config_parse(fp, fname) != 0) {
-                exit(1);
-            }
-            fclose(fp);
+        ret = qemu_read_config_file(CONFIG_QEMU_CONFDIR "/qemu.conf");
+        if (ret == -EINVAL) {
+            exit(1);
         }
 
-        fname = arch_config_name;
-        fp = fopen(fname, "r");
-        if (fp) {
-            if (qemu_config_parse(fp, fname) != 0) {
-                exit(1);
-            }
-            fclose(fp);
+        ret = qemu_read_config_file(arch_config_name);
+        if (ret == -EINVAL) {
+            exit(1);
         }
     }
     cpudef_init();
@@ -3408,16 +3404,12 @@ int main(int argc, char **argv, char **envp)
                 break;
             case QEMU_OPTION_readconfig:
                 {
-                    FILE *fp;
-                    fp = fopen(optarg, "r");
-                    if (fp == NULL) {
-                        fprintf(stderr, "open %s: %s\n", optarg, strerror(errno));
+                    int ret = qemu_read_config_file(optarg);
+                    if (ret < 0) {
+                        fprintf(stderr, "read config %s: %s\n", optarg,
+                            strerror(-ret));
                         exit(1);
                     }
-                    if (qemu_config_parse(fp, optarg) != 0) {
-                        exit(1);
-                    }
-                    fclose(fp);
                     break;
                 }
             case QEMU_OPTION_writeconfig:

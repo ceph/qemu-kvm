@@ -1099,8 +1099,8 @@ static inline void vvfat_close_current_file(BDRVVVFATState *s)
  */
 static inline int find_mapping_for_cluster_aux(BDRVVVFATState* s,int cluster_num,int index1,int index2)
 {
-    int index3=index1+1;
     while(1) {
+        int index3;
 	mapping_t* mapping;
 	index3=(index1+index2)/2;
 	mapping=array_get(&(s->mapping),index3);
@@ -2795,8 +2795,11 @@ static int enable_write_target(BDRVVVFATState *s)
     if (bdrv_create(bdrv_qcow, s->qcow_filename, options) < 0)
 	return -1;
     s->qcow = bdrv_new("");
-    if (s->qcow == NULL || bdrv_open(s->qcow, s->qcow_filename, BDRV_O_RDWR) < 0)
+    if (s->qcow == NULL ||
+        bdrv_open(s->qcow, s->qcow_filename, BDRV_O_RDWR, bdrv_qcow) < 0)
+    {
 	return -1;
+    }
 
 #ifndef _WIN32
     unlink(s->qcow_filename);
