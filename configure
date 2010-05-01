@@ -1528,7 +1528,7 @@ EOF
             kvm_cflags="$kvm_cflags -I$kerneldir/arch/$cpu/include"
       fi
   else
-    kvm_cflags=`pkg-config --cflags kvm-kmod 2> /dev/null`
+    kvm_cflags=`$pkgconfig --cflags kvm-kmod 2>/dev/null`
     if test "$kvm_cflags" = ""; then
       case "$cpu" in
       i386 | x86_64)
