@@ -301,10 +301,6 @@ static int default_driver_check(QemuOpts *opts, void *opaque)
 }
 
 /***********************************************************/
-/* x86 ISA bus support */
-
-target_phys_addr_t isa_mem_base = 0;
-PicState2 *isa_pic;
 
 static void set_proc_name(const char *s)
 {
@@ -502,28 +498,6 @@ static void configure_rtc(QemuOpts *opts)
         }
     }
 }
-
-#ifdef _WIN32
-static void socket_cleanup(void)
-{
-    WSACleanup();
-}
-
-static int socket_init(void)
-{
-    WSADATA Data;
-    int ret, err;
-
-    ret = WSAStartup(MAKEWORD(2,2), &Data);
-    if (ret != 0) {
-        err = WSAGetLastError();
-        fprintf(stderr, "WSAStartup: %d\n", err);
-        return -1;
-    }
-    atexit(socket_cleanup);
-    return 0;
-}
-#endif
 
 /***********************************************************/
 /* Bluetooth support */
@@ -1204,19 +1178,16 @@ DriveInfo *drive_init(QemuOpts *opts, void *opaque,
         bdrv_flags &= ~BDRV_O_NATIVE_AIO;
     }
 
-    if (ro == 1) {
+    if (media == MEDIA_CDROM) {
+        /* CDROM is fine for any interface, don't check.  */
+        ro = 1;
+    } else if (ro == 1) {
         if (type != IF_SCSI && type != IF_VIRTIO && type != IF_FLOPPY) {
             fprintf(stderr, "qemu: readonly flag not supported for drive with this interface\n");
             return NULL;
         }
     }
-    /* 
-     * cdrom is read-only. Set it now, after above interface checking
-     * since readonly attribute not explicitly required, so no error.
-     */
-    if (media == MEDIA_CDROM) {
-        ro = 1;
-    }
+
     bdrv_flags |= ro ? 0 : BDRV_O_RDWR;
 
     if (bdrv_open2(dinfo->bdrv, file, bdrv_flags, drv) < 0) {
@@ -3709,9 +3680,7 @@ int main(int argc, char **argv, char **envp)
     }
     configure_icount(icount_option);
 
-#ifdef _WIN32
     socket_init();
-#endif
 
     if (net_init_clients() < 0) {
         exit(1);

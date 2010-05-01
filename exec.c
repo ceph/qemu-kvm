@@ -2046,7 +2046,7 @@ static void tlb_protect_code(ram_addr_t ram_addr)
 static void tlb_unprotect_code_phys(CPUState *env, ram_addr_t ram_addr,
                                     target_ulong vaddr)
 {
-    phys_ram_dirty[ram_addr >> TARGET_PAGE_BITS] |= CODE_DIRTY_FLAG;
+    cpu_physical_memory_set_dirty_flags(ram_addr, CODE_DIRTY_FLAG);
 }
 
 static inline void tlb_reset_dirty_range(CPUTLBEntry *tlb_entry,
@@ -2067,8 +2067,7 @@ void cpu_physical_memory_reset_dirty(ram_addr_t start, ram_addr_t end,
 {
     CPUState *env;
     unsigned long length, start1;
-    int i, mask, len;
-    uint8_t *p;
+    int i;
 
     start &= TARGET_PAGE_MASK;
     end = TARGET_PAGE_ALIGN(end);
@@ -2076,11 +2075,7 @@ void cpu_physical_memory_reset_dirty(ram_addr_t start, ram_addr_t end,
     length = end - start;
     if (length == 0)
         return;
-    len = length >> TARGET_PAGE_BITS;
-    mask = ~dirty_flags;
-    p = phys_ram_dirty + (start >> TARGET_PAGE_BITS);
-    for(i = 0; i < len; i++)
-        p[i] &= mask;
+    cpu_physical_memory_mask_dirty_range(start, length, dirty_flags);
 
     /* we modify the TLB cache so that the dirty bit will be set again
        when accessing the range */
@@ -3012,16 +3007,16 @@ static void notdirty_mem_writeb(void *opaque, target_phys_addr_t ram_addr,
                                 uint32_t val)
 {
     int dirty_flags;
-    dirty_flags = phys_ram_dirty[ram_addr >> TARGET_PAGE_BITS];
+    dirty_flags = cpu_physical_memory_get_dirty_flags(ram_addr);
     if (!(dirty_flags & CODE_DIRTY_FLAG)) {
 #if !defined(CONFIG_USER_ONLY)
         tb_invalidate_phys_page_fast(ram_addr, 1);
-        dirty_flags = phys_ram_dirty[ram_addr >> TARGET_PAGE_BITS];
+        dirty_flags = cpu_physical_memory_get_dirty_flags(ram_addr);
 #endif
     }
     stb_p(qemu_get_ram_ptr(ram_addr), val);
     dirty_flags |= (0xff & ~CODE_DIRTY_FLAG);
-    phys_ram_dirty[ram_addr >> TARGET_PAGE_BITS] = dirty_flags;
+    cpu_physical_memory_set_dirty_flags(ram_addr, dirty_flags);
     /* we remove the notdirty callback only if the code has been
        flushed */
     if (dirty_flags == 0xff)
@@ -3032,16 +3027,16 @@ static void notdirty_mem_writew(void *opaque, target_phys_addr_t ram_addr,
                                 uint32_t val)
 {
     int dirty_flags;
-    dirty_flags = phys_ram_dirty[ram_addr >> TARGET_PAGE_BITS];
+    dirty_flags = cpu_physical_memory_get_dirty_flags(ram_addr);
     if (!(dirty_flags & CODE_DIRTY_FLAG)) {
 #if !defined(CONFIG_USER_ONLY)
         tb_invalidate_phys_page_fast(ram_addr, 2);
-        dirty_flags = phys_ram_dirty[ram_addr >> TARGET_PAGE_BITS];
+        dirty_flags = cpu_physical_memory_get_dirty_flags(ram_addr);
 #endif
     }
     stw_p(qemu_get_ram_ptr(ram_addr), val);
     dirty_flags |= (0xff & ~CODE_DIRTY_FLAG);
-    phys_ram_dirty[ram_addr >> TARGET_PAGE_BITS] = dirty_flags;
+    cpu_physical_memory_set_dirty_flags(ram_addr, dirty_flags);
     /* we remove the notdirty callback only if the code has been
        flushed */
     if (dirty_flags == 0xff)
@@ -3052,16 +3047,16 @@ static void notdirty_mem_writel(void *opaque, target_phys_addr_t ram_addr,
                                 uint32_t val)
 {
     int dirty_flags;
-    dirty_flags = phys_ram_dirty[ram_addr >> TARGET_PAGE_BITS];
+    dirty_flags = cpu_physical_memory_get_dirty_flags(ram_addr);
     if (!(dirty_flags & CODE_DIRTY_FLAG)) {
 #if !defined(CONFIG_USER_ONLY)
         tb_invalidate_phys_page_fast(ram_addr, 4);
-        dirty_flags = phys_ram_dirty[ram_addr >> TARGET_PAGE_BITS];
+        dirty_flags = cpu_physical_memory_get_dirty_flags(ram_addr);
 #endif
     }
     stl_p(qemu_get_ram_ptr(ram_addr), val);
     dirty_flags |= (0xff & ~CODE_DIRTY_FLAG);
-    phys_ram_dirty[ram_addr >> TARGET_PAGE_BITS] = dirty_flags;
+    cpu_physical_memory_set_dirty_flags(ram_addr, dirty_flags);
     /* we remove the notdirty callback only if the code has been
        flushed */
     if (dirty_flags == 0xff)
@@ -3512,8 +3507,8 @@ void cpu_physical_memory_rw(target_phys_addr_t addr, uint8_t *buf,
                     /* invalidate code */
                     tb_invalidate_phys_page_range(addr1, addr1 + l, 0);
                     /* set dirty bit */
-                    phys_ram_dirty[addr1 >> TARGET_PAGE_BITS] |=
-                        (0xff & ~CODE_DIRTY_FLAG);
+                    cpu_physical_memory_set_dirty_flags(
+                        addr1, (0xff & ~CODE_DIRTY_FLAG));
                 }
 		/* qemu doesn't execute guest code directly, but kvm does
 		   therefore flush instruction caches */
@@ -3726,8 +3721,8 @@ void cpu_physical_memory_unmap(void *buffer, target_phys_addr_t len,
                     /* invalidate code */
                     tb_invalidate_phys_page_range(addr1, addr1 + l, 0);
                     /* set dirty bit */
-                    phys_ram_dirty[addr1 >> TARGET_PAGE_BITS] |=
-                        (0xff & ~CODE_DIRTY_FLAG);
+                    cpu_physical_memory_set_dirty_flags(
+                        addr1, (0xff & ~CODE_DIRTY_FLAG));
                 }
                 addr1 += l;
                 access_len -= l;
@@ -3863,8 +3858,8 @@ void stl_phys_notdirty(target_phys_addr_t addr, uint32_t val)
                 /* invalidate code */
                 tb_invalidate_phys_page_range(addr1, addr1 + 4, 0);
                 /* set dirty bit */
-                phys_ram_dirty[addr1 >> TARGET_PAGE_BITS] |=
-                    (0xff & ~CODE_DIRTY_FLAG);
+                cpu_physical_memory_set_dirty_flags(
+                    addr1, (0xff & ~CODE_DIRTY_FLAG));
             }
         }
     }
@@ -3932,8 +3927,8 @@ void stl_phys(target_phys_addr_t addr, uint32_t val)
             /* invalidate code */
             tb_invalidate_phys_page_range(addr1, addr1 + 4, 0);
             /* set dirty bit */
-            phys_ram_dirty[addr1 >> TARGET_PAGE_BITS] |=
-                (0xff & ~CODE_DIRTY_FLAG);
+            cpu_physical_memory_set_dirty_flags(addr1,
+                (0xff & ~CODE_DIRTY_FLAG));
         }
     }
 }

@@ -39,6 +39,11 @@ struct kvm_run;
 int kvm_init(int smp_cpus);
 #endif /* KVM_UPSTREAM */
 
+int kvm_has_sync_mmu(void);
+int kvm_has_vcpu_events(void);
+int kvm_has_robust_singlestep(void);
+int kvm_has_debugregs(void);
+
 #ifdef NEED_CPU_H
 int kvm_init_vcpu(CPUState *env);
 
@@ -47,11 +52,6 @@ int kvm_cpu_exec(CPUState *env);
 #if !defined(CONFIG_USER_ONLY)
 int kvm_log_start(target_phys_addr_t phys_addr, ram_addr_t size);
 int kvm_log_stop(target_phys_addr_t phys_addr, ram_addr_t size);
-
-int kvm_has_sync_mmu(void);
-int kvm_has_vcpu_events(void);
-int kvm_has_robust_singlestep(void);
-int kvm_has_debugregs(void);
 
 void kvm_cpu_register_phys_memory_client(void);
 

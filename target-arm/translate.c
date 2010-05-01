@@ -1131,6 +1131,7 @@ static inline TCGv iwmmxt_load_creg(int reg)
 static inline void iwmmxt_store_creg(int reg, TCGv var)
 {
     tcg_gen_st_i32(var, cpu_env, offsetof(CPUState, iwmmxt.cregs[reg]));
+    dead_tmp(var);
 }
 
 static inline void gen_op_iwmmxt_movq_wRn_M0(int rn)
@@ -1415,6 +1416,7 @@ static int disas_iwmmxt_insn(CPUState *env, DisasContext *s, uint32_t insn)
                 }
             }
         }
+        dead_tmp(addr);
         return 0;
     }
 
@@ -4888,7 +4890,7 @@ static int disas_neon_data_insn(CPUState * env, DisasContext *s, uint32_t insn)
                 imm = (imm << 8) | (imm << 24);
                 break;
             case 12:
-                imm = (imm < 8) | 0xff;
+                imm = (imm << 8) | 0xff;
                 break;
             case 13:
                 imm = (imm << 16) | 0xffff;
