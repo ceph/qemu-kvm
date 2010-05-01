@@ -146,7 +146,6 @@ int main(int argc, char **argv)
 #include "audio/audio.h"
 #include "migration.h"
 #include "kvm.h"
-#include "balloon.h"
 #include "qemu-option.h"
 #include "qemu-config.h"
 #include "qemu-objects.h"
@@ -254,12 +253,6 @@ int kvm_allowed = 1;
 uint32_t xen_domid;
 enum xen_mode xen_mode = XEN_EMULATE;
 
-#ifdef SIGRTMIN
-#define SIG_IPI (SIGRTMIN+4)
-#else
-#define SIG_IPI SIGUSR1
-#endif
-
 static int default_serial = 1;
 static int default_parallel = 1;
 static int default_virtcon = 1;
@@ -301,10 +294,6 @@ static int default_driver_check(QemuOpts *opts, void *opaque)
 }
 
 /***********************************************************/
-/* x86 ISA bus support */
-
-target_phys_addr_t isa_mem_base = 0;
-PicState2 *isa_pic;
 
 static void set_proc_name(const char *s)
 {
@@ -320,39 +309,6 @@ static void set_proc_name(const char *s)
 #endif    	
 }
  
-/***************/
-/* ballooning */
-
-static QEMUBalloonEvent *qemu_balloon_event;
-void *qemu_balloon_event_opaque;
-
-void qemu_add_balloon_handler(QEMUBalloonEvent *func, void *opaque)
-{
-    qemu_balloon_event = func;
-    qemu_balloon_event_opaque = opaque;
-}
-
-int qemu_balloon(ram_addr_t target, MonitorCompletion cb, void *opaque)
-{
-    if (qemu_balloon_event) {
-        qemu_balloon_event(qemu_balloon_event_opaque, target, cb, opaque);
-        return 1;
-    } else {
-        return 0;
-    }
-}
-
-int qemu_balloon_status(MonitorCompletion cb, void *opaque)
-{
-    if (qemu_balloon_event) {
-        qemu_balloon_event(qemu_balloon_event_opaque, 0, cb, opaque);
-        return 1;
-    } else {
-        return 0;
-    }
-}
-
-
 /***********************************************************/
 /* real time host monotonic timer */
 
@@ -502,28 +458,6 @@ static void configure_rtc(QemuOpts *opts)
         }
     }
 }
-
-#ifdef _WIN32
-static void socket_cleanup(void)
-{
-    WSACleanup();
-}
-
-static int socket_init(void)
-{
-    WSADATA Data;
-    int ret, err;
-
-    ret = WSAStartup(MAKEWORD(2,2), &Data);
-    if (ret != 0) {
-        err = WSAGetLastError();
-        fprintf(stderr, "WSAStartup: %d\n", err);
-        return -1;
-    }
-    atexit(socket_cleanup);
-    return 0;
-}
-#endif
 
 /***********************************************************/
 /* Bluetooth support */
@@ -738,8 +672,6 @@ QemuOpts *drive_add(const char *file, const char *fmt, ...)
 
     opts = qemu_opts_parse(&qemu_drive_opts, optstr, 0);
     if (!opts) {
-        fprintf(stderr, "%s: huh? duplicate? (%s)\n",
-                __FUNCTION__, optstr);
         return NULL;
     }
     if (file)
@@ -860,10 +792,8 @@ DriveInfo *drive_init(QemuOpts *opts, void *opaque,
     QEMUMachine *machine = opaque;
     int max_devs;
     int index;
-    int cache;
-    int aio = 0;
     int ro = 0;
-    int bdrv_flags;
+    int bdrv_flags = 0;
     int on_read_error, on_write_error;
     const char *devaddr;
     DriveInfo *dinfo;
@@ -873,7 +803,6 @@ DriveInfo *drive_init(QemuOpts *opts, void *opaque,
     *fatal_error = 1;
 
     translation = BIOS_ATA_TRANSLATION_AUTO;
-    cache = 1;
 
     if (machine && machine->use_scsi) {
         type = IF_SCSI;
@@ -987,13 +916,13 @@ DriveInfo *drive_init(QemuOpts *opts, void *opaque,
     }
 
     if ((buf = qemu_opt_get(opts, "cache")) != NULL) {
-        if (!strcmp(buf, "off") || !strcmp(buf, "none"))
-            cache = 0;
-        else if (!strcmp(buf, "writethrough"))
-            cache = 1;
-        else if (!strcmp(buf, "writeback"))
-            cache = 2;
-        else {
+        if (!strcmp(buf, "off") || !strcmp(buf, "none")) {
+            bdrv_flags |= BDRV_O_NOCACHE;
+        } else if (!strcmp(buf, "writeback")) {
+            bdrv_flags |= BDRV_O_CACHE_WB;
+        } else if (!strcmp(buf, "writethrough")) {
+            /* this is the default */
+        } else {
            fprintf(stderr, "qemu: invalid cache option\n");
            return NULL;
         }
@@ -1001,11 +930,11 @@ DriveInfo *drive_init(QemuOpts *opts, void *opaque,
 
 #ifdef CONFIG_LINUX_AIO
     if ((buf = qemu_opt_get(opts, "aio")) != NULL) {
-        if (!strcmp(buf, "threads"))
-            aio = 0;
-        else if (!strcmp(buf, "native"))
-            aio = 1;
-        else {
+        if (!strcmp(buf, "native")) {
+            bdrv_flags |= BDRV_O_NATIVE_AIO;
+        } else if (!strcmp(buf, "threads")) {
+            /* this is the default */
+        } else {
            fprintf(stderr, "qemu: invalid aio option\n");
            return NULL;
         }
@@ -1188,38 +1117,25 @@ DriveInfo *drive_init(QemuOpts *opts, void *opaque,
         *fatal_error = 0;
         return NULL;
     }
-    bdrv_flags = 0;
     if (snapshot) {
-        bdrv_flags |= BDRV_O_SNAPSHOT;
-        cache = 2; /* always use write-back with snapshot */
-    }
-    if (cache == 0) /* no caching */
-        bdrv_flags |= BDRV_O_NOCACHE;
-    else if (cache == 2) /* write-back */
-        bdrv_flags |= BDRV_O_CACHE_WB;
-
-    if (aio == 1) {
-        bdrv_flags |= BDRV_O_NATIVE_AIO;
-    } else {
-        bdrv_flags &= ~BDRV_O_NATIVE_AIO;
+        /* always use write-back with snapshot */
+        bdrv_flags &= ~BDRV_O_CACHE_MASK;
+        bdrv_flags |= (BDRV_O_SNAPSHOT|BDRV_O_CACHE_WB);
     }
 
-    if (ro == 1) {
+    if (media == MEDIA_CDROM) {
+        /* CDROM is fine for any interface, don't check.  */
+        ro = 1;
+    } else if (ro == 1) {
         if (type != IF_SCSI && type != IF_VIRTIO && type != IF_FLOPPY) {
             fprintf(stderr, "qemu: readonly flag not supported for drive with this interface\n");
             return NULL;
         }
     }
-    /* 
-     * cdrom is read-only. Set it now, after above interface checking
-     * since readonly attribute not explicitly required, so no error.
-     */
-    if (media == MEDIA_CDROM) {
-        ro = 1;
-    }
+
     bdrv_flags |= ro ? 0 : BDRV_O_RDWR;
 
-    if (bdrv_open2(dinfo->bdrv, file, bdrv_flags, drv) < 0) {
+    if (bdrv_open(dinfo->bdrv, file, bdrv_flags, drv) < 0) {
         fprintf(stderr, "qemu: could not open disk image %s: %s\n",
                         file, strerror(errno));
         return NULL;
@@ -1265,7 +1181,7 @@ int qemu_boot_set(const char *boot_devices)
     return boot_set_handler(boot_set_opaque, boot_devices);
 }
 
-static int parse_bootdevices(char *devices)
+static void validate_bootdevices(char *devices)
 {
     /* We just do some generic consistency checks */
     const char *p;
@@ -1291,7 +1207,6 @@ static int parse_bootdevices(char *devices)
         }
         bitmap |= 1 << (*p - 'a');
     }
-    return bitmap;
 }
 
 static void restore_boot_devices(void *opaque)
@@ -1801,7 +1716,8 @@ static int reset_requested;
 static int shutdown_requested;
 static int powerdown_requested;
 int debug_requested;
-static int vmstop_requested;
+int vmstop_requested;
+static int exit_requested;
 
 int qemu_no_shutdown(void)
 {
@@ -1829,6 +1745,12 @@ int qemu_powerdown_requested(void)
     int r = powerdown_requested;
     powerdown_requested = 0;
     return r;
+}
+
+int qemu_exit_requested(void)
+{
+    /* just return it, we'll exit() anyway */
+    return exit_requested;
 }
 
 static int qemu_debug_requested(void)
@@ -1901,6 +1823,12 @@ void qemu_system_shutdown_request(void)
 void qemu_system_powerdown_request(void)
 {
     powerdown_requested = 1;
+    qemu_notify_event();
+}
+
+void qemu_system_exit_request(void)
+{
+    exit_requested = 1;
     qemu_notify_event();
 }
 
@@ -2042,6 +1970,8 @@ static int vm_can_run(void)
         return 0;
     if (debug_requested)
         return 0;
+    if (exit_requested)
+        return 0;
     return 1;
 }
 
@@ -2057,10 +1987,7 @@ static void main_loop(void)
         return;
     }
 
-#ifdef CONFIG_IOTHREAD
-    qemu_system_ready = 1;
-    qemu_cond_broadcast(&qemu_system_cond);
-#endif
+    qemu_main_loop_start();
 
     for (;;) {
         do {
@@ -2102,6 +2029,9 @@ static void main_loop(void)
         }
         if ((r = qemu_vmstop_requested())) {
             vm_stop(r);
+        }
+        if (qemu_exit_requested()) {
+            exit(0);
         }
     }
     pause_all_vcpus();
@@ -2456,11 +2386,9 @@ static void monitor_parse(const char *optarg, const char *mode)
     if (strstart(optarg, "chardev:", &p)) {
         snprintf(label, sizeof(label), "%s", p);
     } else {
-        if (monitor_device_index) {
-            snprintf(label, sizeof(label), "monitor%d",
-                     monitor_device_index);
-        } else {
-            snprintf(label, sizeof(label), "monitor");
+        snprintf(label, sizeof(label), "compat_monitor%d",
+                 monitor_device_index);
+        if (monitor_device_index == 0) {
             def = 1;
         }
         opts = qemu_chr_parse_compat(label, optarg);
@@ -2657,9 +2585,8 @@ static const QEMUOption *lookup_opt(int argc, char **argv,
 int main(int argc, char **argv, char **envp)
 {
     const char *gdbstub_dev = NULL;
-    uint32_t boot_devices_bitmap = 0;
     int i;
-    int snapshot, linux_boot, net_boot;
+    int snapshot, linux_boot;
     const char *icount_option = NULL;
     const char *initrd_filename;
     const char *kernel_filename, *kernel_cmdline;
@@ -2769,25 +2696,16 @@ int main(int argc, char **argv, char **envp)
     }
 
     if (defconfig) {
-        const char *fname;
-        FILE *fp;
+        int ret;
 
-        fname = CONFIG_QEMU_CONFDIR "/qemu.conf";
-        fp = fopen(fname, "r");
-        if (fp) {
-            if (qemu_config_parse(fp, fname) != 0) {
-                exit(1);
-            }
-            fclose(fp);
+        ret = qemu_read_config_file(CONFIG_QEMU_CONFDIR "/qemu.conf");
+        if (ret == -EINVAL) {
+            exit(1);
         }
 
-        fname = arch_config_name;
-        fp = fopen(fname, "r");
-        if (fp) {
-            if (qemu_config_parse(fp, fname) != 0) {
-                exit(1);
-            }
-            fclose(fp);
+        ret = qemu_read_config_file(arch_config_name);
+        if (ret == -EINVAL) {
+            exit(1);
         }
     }
     cpudef_init();
@@ -2978,13 +2896,13 @@ int main(int argc, char **argv, char **envp)
 
                     if (legacy ||
                         get_param_value(buf, sizeof(buf), "order", optarg)) {
-                        boot_devices_bitmap = parse_bootdevices(buf);
+                        validate_bootdevices(buf);
                         pstrcpy(boot_devices, sizeof(boot_devices), buf);
                     }
                     if (!legacy) {
                         if (get_param_value(buf, sizeof(buf),
                                             "once", optarg)) {
-                            boot_devices_bitmap |= parse_bootdevices(buf);
+                            validate_bootdevices(buf);
                             standard_boot_devices = qemu_strdup(boot_devices);
                             pstrcpy(boot_devices, sizeof(boot_devices), buf);
                             qemu_register_reset(restore_boot_devices,
@@ -3186,7 +3104,6 @@ int main(int argc, char **argv, char **envp)
             case QEMU_OPTION_mon:
                 opts = qemu_opts_parse(&qemu_mon_opts, optarg, 1);
                 if (!opts) {
-                    fprintf(stderr, "parse error: %s\n", optarg);
                     exit(1);
                 }
                 default_monitor = 0;
@@ -3194,7 +3111,6 @@ int main(int argc, char **argv, char **envp)
             case QEMU_OPTION_chardev:
                 opts = qemu_opts_parse(&qemu_chardev_opts, optarg, 1);
                 if (!opts) {
-                    fprintf(stderr, "parse error: %s\n", optarg);
                     exit(1);
                 }
                 break;
@@ -3276,10 +3192,6 @@ int main(int argc, char **argv, char **envp)
                 break;
 #ifdef KVM_UPSTREAM
             case QEMU_OPTION_enable_kvm:
-                if (!(kvm_available())) {
-                    printf("Option %s not supported for this target\n", popt->name);
-                    exit(1);
-                }
                 kvm_allowed = 1;
 #endif
                 break;
@@ -3430,7 +3342,6 @@ int main(int argc, char **argv, char **envp)
             case QEMU_OPTION_rtc:
                 opts = qemu_opts_parse(&qemu_rtc_opts, optarg, 0);
                 if (!opts) {
-                    fprintf(stderr, "parse error: %s\n", optarg);
                     exit(1);
                 }
                 configure_rtc(opts);
@@ -3491,16 +3402,12 @@ int main(int argc, char **argv, char **envp)
                 break;
             case QEMU_OPTION_readconfig:
                 {
-                    FILE *fp;
-                    fp = fopen(optarg, "r");
-                    if (fp == NULL) {
-                        fprintf(stderr, "open %s: %s\n", optarg, strerror(errno));
+                    int ret = qemu_read_config_file(optarg);
+                    if (ret < 0) {
+                        fprintf(stderr, "read config %s: %s\n", optarg,
+                            strerror(-ret));
                         exit(1);
                     }
-                    if (qemu_config_parse(fp, optarg) != 0) {
-                        exit(1);
-                    }
-                    fclose(fp);
                     break;
                 }
             case QEMU_OPTION_writeconfig:
@@ -3666,13 +3573,15 @@ int main(int argc, char **argv, char **envp)
         exit(1);
     }
 
-    if (kvm_enabled()) {
-        int ret;
-
-        ret = kvm_init(smp_cpus);
+    if (kvm_allowed) {
+        int ret = kvm_init(smp_cpus);
         if (ret < 0) {
 #if defined(KVM_UPSTREAM) || defined(CONFIG_NO_CPU_EMULATION)
-            fprintf(stderr, "failed to initialize KVM\n");
+            if (!kvm_available()) {
+                printf("KVM not supported for this target\n");
+            } else {
+                fprintf(stderr, "failed to initialize KVM: %s\n", strerror(-ret));
+            }
             exit(1);
 #endif
 #ifdef CONFIG_KVM
@@ -3709,16 +3618,11 @@ int main(int argc, char **argv, char **envp)
     }
     configure_icount(icount_option);
 
-#ifdef _WIN32
     socket_init();
-#endif
 
     if (net_init_clients() < 0) {
         exit(1);
     }
-
-    net_boot = (boot_devices_bitmap >> ('n' - 'a')) & 0xF;
-    net_set_boot_mask(net_boot);
 
     /* init the bluetooth world */
     if (foreach_device_config(DEV_BT, bt_parse))
@@ -3799,6 +3703,10 @@ int main(int argc, char **argv, char **envp)
                 node_cpumask[i % nb_numa_nodes] |= 1 << i;
             }
         }
+    }
+
+    if (qemu_opts_foreach(&qemu_mon_opts, mon_init_func, NULL, 1) != 0) {
+        exit(1);
     }
 
     if (foreach_device_config(DEV_SERIAL, serial_parse) < 0)
@@ -3912,9 +3820,6 @@ int main(int argc, char **argv, char **envp)
     }
 
     text_consoles_set_display(ds);
-
-    if (qemu_opts_foreach(&qemu_mon_opts, mon_init_func, NULL, 1) != 0)
-        exit(1);
 
     if (gdbstub_dev && gdbserver_start(gdbstub_dev) < 0) {
         fprintf(stderr, "qemu: could not open gdbserver on device '%s'\n",

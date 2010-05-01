@@ -71,6 +71,7 @@ static int irq_level[16];
 #ifdef DEBUG_IRQ_COUNT
 static uint64_t irq_count[16];
 #endif
+PicState2 *isa_pic;
 
 /* set irq level. If an edge is detected, then the IRR is set to 1 */
 static inline void pic_set_irq1(PicState *s, int irq, int level)
@@ -252,7 +253,9 @@ int pic_read_irq(PicState2 *s)
                 irq2 = 7;
             }
             intno = s->pics[1].irq_base + irq2;
+#if defined(DEBUG_PIC) || defined(DEBUG_IRQ_LATENCY)
             irq = irq2 + 8;
+#endif
         } else {
             intno = s->pics[0].irq_base + irq;
         }

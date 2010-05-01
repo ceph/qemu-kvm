@@ -109,6 +109,16 @@ static QTAILQ_HEAD(CharDriverStateHead, CharDriverState) chardevs =
 
 static void qemu_chr_event(CharDriverState *s, int event)
 {
+    /* Keep track if the char device is open */
+    switch (event) {
+        case CHR_EVENT_OPENED:
+            s->opened = 1;
+            break;
+        case CHR_EVENT_CLOSED:
+            s->opened = 0;
+            break;
+    }
+
     if (!s->chr_event)
         return;
     s->chr_event(s->handler_opaque, event);
@@ -193,6 +203,12 @@ void qemu_chr_add_handlers(CharDriverState *s,
     s->handler_opaque = opaque;
     if (s->chr_update_read_handler)
         s->chr_update_read_handler(s);
+
+    /* We're connecting to an already opened device, so let's make sure we
+       also get the open event */
+    if (s->opened) {
+        qemu_chr_generic_open(s);
+    }
 }
 
 static int null_chr_write(CharDriverState *chr, const uint8_t *buf, int len)
@@ -465,6 +481,10 @@ static CharDriverState *qemu_chr_open_mux(CharDriverState *drv)
     chr->chr_write = mux_chr_write;
     chr->chr_update_read_handler = mux_chr_update_read_handler;
     chr->chr_accept_input = mux_chr_accept_input;
+
+    /* Muxes are always open on creation */
+    qemu_chr_generic_open(chr);
+
     return chr;
 }
 
@@ -1220,7 +1240,7 @@ static CharDriverState *qemu_chr_open_tty(QemuOpts *opts)
     return chr;
 }
 #else  /* ! __linux__ && ! __sun__ */
-static CharDriverState *qemu_chr_open_pty(void)
+static CharDriverState *qemu_chr_open_pty(QemuOpts *opts)
 {
     return NULL;
 }
@@ -1980,8 +2000,9 @@ static void tcp_chr_process_IAC_bytes(CharDriverState *chr,
 static int tcp_get_msgfd(CharDriverState *chr)
 {
     TCPCharDriver *s = chr->opaque;
-
-    return s->msgfd;
+    int fd = s->msgfd;
+    s->msgfd = -1;
+    return fd;
 }
 
 #ifndef _WIN32
@@ -2069,10 +2090,6 @@ static void tcp_chr_read(void *opaque)
             tcp_chr_process_IAC_bytes(chr, s, buf, &size);
         if (size > 0)
             qemu_chr_read(chr, buf, size);
-        if (s->msgfd != -1) {
-            close(s->msgfd);
-            s->msgfd = -1;
-        }
     }
 }
 

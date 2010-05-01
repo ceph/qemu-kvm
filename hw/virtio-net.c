@@ -11,6 +11,7 @@
  *
  */
 
+#include "iov.h"
 #include "virtio.h"
 #include "net.h"
 #include "net/checksum.h"
@@ -219,6 +220,14 @@ static void virtio_net_set_features(VirtIODevice *vdev, uint32_t features)
                         (features >> VIRTIO_NET_F_GUEST_ECN)  & 1,
                         (features >> VIRTIO_NET_F_GUEST_UFO)  & 1);
     }
+    if (!n->nic->nc.peer ||
+        n->nic->nc.peer->info->type != NET_CLIENT_TYPE_TAP) {
+        return;
+    }
+    if (!tap_get_vhost_net(n->nic->nc.peer)) {
+        return;
+    }
+    return vhost_net_ack_features(tap_get_vhost_net(n->nic->nc.peer), features);
 }
 
 static int virtio_net_handle_rx_mode(VirtIONet *n, uint8_t cmd,
@@ -437,21 +446,6 @@ static void work_around_broken_dhclient(struct virtio_net_hdr *hdr,
     }
 }
 
-static int iov_fill(struct iovec *iov, int iovcnt, const void *buf, int count)
-{
-    int offset, i;
-
-    offset = i = 0;
-    while (offset < count && i < iovcnt) {
-        int len = MIN(iov[i].iov_len, count - offset);
-        memcpy(iov[i].iov_base, buf + offset, len);
-        offset += len;
-        i++;
-    }
-
-    return offset;
-}
-
 static int receive_header(VirtIONet *n, struct iovec *iov, int iovcnt,
                           const void *buf, size_t size, size_t hdr_len)
 {
@@ -587,8 +581,8 @@ static ssize_t virtio_net_receive(VLANClientState *nc, const uint8_t *buf, size_
         }
 
         /* copy in packet.  ugh */
-        len = iov_fill(sg, elem.in_num,
-                       buf + offset, size - offset);
+        len = iov_from_buf(sg, elem.in_num,
+                           buf + offset, size - offset);
         total += len;
 
         /* signal other side */

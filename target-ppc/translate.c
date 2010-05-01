@@ -3398,7 +3398,7 @@ static void gen_b(DisasContext *ctx)
 static inline void gen_bcond(DisasContext *ctx, int type)
 {
     uint32_t bo = BO(ctx->opcode);
-    int l1 = gen_new_label();
+    int l1;
     TCGv target;
 
     ctx->exception = POWERPC_EXCP_BRANCH;
@@ -3719,16 +3719,14 @@ static void gen_mfmsr(DisasContext *ctx)
 #endif
 }
 
-#if 1
-#define SPR_NOACCESS ((void *)(-1UL))
-#else
-static void spr_noaccess (void *opaque, int sprn)
+static void spr_noaccess(void *opaque, int gprn, int sprn)
 {
+#if 0
     sprn = ((sprn >> 5) & 0x1F) | ((sprn & 0x1F) << 5);
     printf("ERROR: try to access SPR %d !\n", sprn);
+#endif
 }
 #define SPR_NOACCESS (&spr_noaccess)
-#endif
 
 /* mfspr */
 static inline void gen_op_mfspr(DisasContext *ctx)

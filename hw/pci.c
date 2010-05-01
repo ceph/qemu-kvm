@@ -1691,23 +1691,30 @@ static void pci_bridge_write_config(PCIDevice *d,
 
 PCIBus *pci_find_bus(PCIBus *bus, int bus_num)
 {
-    PCIBus *sec, *ret;
+    PCIBus *sec;
 
-    if (!bus)
+    if (!bus) {
         return NULL;
+    }
 
     if (pci_bus_num(bus) == bus_num) {
         return bus;
     }
 
     /* try child bus */
-    QLIST_FOREACH(sec, &bus->child, sibling) {
-        if (!bus->parent_dev /* pci host bridge */
-            || (pci_bus_num(sec) <= bus_num &&
-                bus_num <= bus->parent_dev->config[PCI_SUBORDINATE_BUS]) ) {
-            ret = pci_find_bus(sec, bus_num);
-            if (ret) {
-                return ret;
+    if (!bus->parent_dev /* host pci bridge */ ||
+        (bus->parent_dev->config[PCI_SECONDARY_BUS] < bus_num &&
+         bus_num <= bus->parent_dev->config[PCI_SUBORDINATE_BUS])) {
+        for (; bus; bus = sec) {
+            QLIST_FOREACH(sec, &bus->child, sibling) {
+                assert(sec->parent_dev);
+                if (sec->parent_dev->config[PCI_SECONDARY_BUS] == bus_num) {
+                    return sec;
+                }
+                if (sec->parent_dev->config[PCI_SECONDARY_BUS] < bus_num &&
+                    bus_num <= sec->parent_dev->config[PCI_SUBORDINATE_BUS]) {
+                    break;
+                }
             }
         }
     }
@@ -1965,12 +1972,10 @@ static int pci_add_option_rom(PCIDevice *pdev)
 }
 
 /* Reserve space and add capability to the linked list in pci config space */
-int pci_add_capability(PCIDevice *pdev, uint8_t cap_id, uint8_t size)
+int pci_add_capability_at_offset(PCIDevice *pdev, uint8_t cap_id,
+                                 uint8_t offset, uint8_t size)
 {
-    uint8_t offset = pci_find_space(pdev, size);
     uint8_t *config = pdev->config + offset;
-    if (!offset)
-        return -ENOSPC;
     config[PCI_CAP_LIST_ID] = cap_id;
     config[PCI_CAP_LIST_NEXT] = pdev->config[PCI_CAPABILITY_LIST];
     pdev->config[PCI_CAPABILITY_LIST] = offset;
@@ -1981,6 +1986,17 @@ int pci_add_capability(PCIDevice *pdev, uint8_t cap_id, uint8_t size)
     /* Check capability by default */
     memset(pdev->cmask + offset, 0xFF, size);
     return offset;
+}
+
+/* Find and reserve space and add capability to the linked list
+ * in pci config space */
+int pci_add_capability(PCIDevice *pdev, uint8_t cap_id, uint8_t size)
+{
+    uint8_t offset = pci_find_space(pdev, size);
+    if (!offset) {
+        return -ENOSPC;
+    }
+    return pci_add_capability_at_offset(pdev, cap_id, offset, size);
 }
 
 /* Unlink capability from the pci config space. */

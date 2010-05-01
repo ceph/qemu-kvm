@@ -57,8 +57,6 @@ static PCIDevice *qemu_pci_hot_add_nic(Monitor *mon,
 
     opts = qemu_opts_parse(&qemu_net_opts, opts_str ? opts_str : "", 0);
     if (!opts) {
-        monitor_printf(mon, "parsing network options '%s' failed\n",
-                       opts_str ? opts_str : "");
         return NULL;
     }
 
@@ -108,7 +106,7 @@ void drive_hot_add(Monitor *mon, const QDict *qdict)
 {
     int dom, pci_bus;
     unsigned slot;
-    int type, bus;
+    int type;
     PCIDevice *dev;
     DriveInfo *dinfo = NULL;
     const char *pci_addr = qdict_get_str(qdict, "pci_addr");
@@ -122,7 +120,6 @@ void drive_hot_add(Monitor *mon, const QDict *qdict)
         goto err;
     }
     type = dinfo->type;
-    bus = drive_get_max_bus (type);
 
     switch (type) {
     case IF_SCSI:

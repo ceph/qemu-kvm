@@ -176,7 +176,7 @@ void qbus_free(BusState *bus);
 void do_info_qtree(Monitor *mon);
 void do_info_qdm(Monitor *mon);
 int do_device_add(Monitor *mon, const QDict *qdict, QObject **ret_data);
-void do_device_del(Monitor *mon, const QDict *qdict);
+int do_device_del(Monitor *mon, const QDict *qdict, QObject **ret_data);
 
 /*** qdev-properties.c ***/
 
@@ -273,7 +273,6 @@ void qdev_prop_set_macaddr(DeviceState *dev, const char *name, uint8_t *value);
 void qdev_prop_set_ptr(DeviceState *dev, const char *name, void *value);
 void qdev_prop_set_defaults(DeviceState *dev, Property *props);
 
-void qdev_prop_register_global(GlobalProperty *prop);
 void qdev_prop_register_global_list(GlobalProperty *props);
 void qdev_prop_set_globals(DeviceState *dev);
 

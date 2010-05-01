@@ -599,7 +599,9 @@ static int ohci_service_iso_td(OHCIState *ohci, struct ohci_ed *ed,
 {
     int dir;
     size_t len = 0;
+#ifdef DEBUG_ISOCH
     const char *str = NULL;
+#endif
     int pid;
     int ret;
     int i;
@@ -663,15 +665,21 @@ static int ohci_service_iso_td(OHCIState *ohci, struct ohci_ed *ed,
     dir = OHCI_BM(ed->flags, ED_D);
     switch (dir) {
     case OHCI_TD_DIR_IN:
+#ifdef DEBUG_ISOCH
         str = "in";
+#endif
         pid = USB_TOKEN_IN;
         break;
     case OHCI_TD_DIR_OUT:
+#ifdef DEBUG_ISOCH
         str = "out";
+#endif
         pid = USB_TOKEN_OUT;
         break;
     case OHCI_TD_DIR_SETUP:
+#ifdef DEBUG_ISOCH
         str = "setup";
+#endif
         pid = USB_TOKEN_SETUP;
         break;
     default:
@@ -834,7 +842,9 @@ static int ohci_service_td(OHCIState *ohci, struct ohci_ed *ed)
 {
     int dir;
     size_t len = 0;
+#ifdef DEBUG_PACKET
     const char *str = NULL;
+#endif
     int pid;
     int ret;
     int i;
@@ -871,15 +881,21 @@ static int ohci_service_td(OHCIState *ohci, struct ohci_ed *ed)
 
     switch (dir) {
     case OHCI_TD_DIR_IN:
+#ifdef DEBUG_PACKET
         str = "in";
+#endif
         pid = USB_TOKEN_IN;
         break;
     case OHCI_TD_DIR_OUT:
+#ifdef DEBUG_PACKET
         str = "out";
+#endif
         pid = USB_TOKEN_OUT;
         break;
     case OHCI_TD_DIR_SETUP:
+#ifdef DEBUG_PACKET
         str = "setup";
+#endif
         pid = USB_TOKEN_SETUP;
         break;
     default:
@@ -1099,9 +1115,10 @@ static void ohci_sof(OHCIState *ohci)
 static void ohci_process_lists(OHCIState *ohci, int completion)
 {
     if ((ohci->ctl & OHCI_CTL_CLE) && (ohci->status & OHCI_STATUS_CLF)) {
-        if (ohci->ctrl_cur && ohci->ctrl_cur != ohci->ctrl_head)
-          DPRINTF("usb-ohci: head %x, cur %x\n",
-                          ohci->ctrl_head, ohci->ctrl_cur);
+        if (ohci->ctrl_cur && ohci->ctrl_cur != ohci->ctrl_head) {
+            DPRINTF("usb-ohci: head %x, cur %x\n",
+                    ohci->ctrl_head, ohci->ctrl_cur);
+        }
         if (!ohci_service_ed_list(ohci, ohci->ctrl_head, completion)) {
             ohci->ctrl_cur = 0;
             ohci->status &= ~OHCI_STATUS_CLF;
@@ -1367,8 +1384,9 @@ static void ohci_port_set_status(OHCIState *ohci, int portnum, uint32_t val)
 
     ohci_port_set_if_connected(ohci, portnum, val & OHCI_PORT_PES);
 
-    if (ohci_port_set_if_connected(ohci, portnum, val & OHCI_PORT_PSS))
+    if (ohci_port_set_if_connected(ohci, portnum, val & OHCI_PORT_PSS)) {
         DPRINTF("usb-ohci: port %d: SUSPEND\n", portnum);
+    }
 
     if (ohci_port_set_if_connected(ohci, portnum, val & OHCI_PORT_PRS)) {
         DPRINTF("usb-ohci: port %d: RESET\n", portnum);

@@ -209,6 +209,19 @@ static inline int64_t cpu_get_real_ticks(void)
     return (int64_t)(count * cyc_per_count);
 }
 
+#elif defined(__alpha__)
+
+static inline int64_t cpu_get_real_ticks(void)
+{
+    uint64_t cc;
+    uint32_t cur, ofs;
+
+    asm volatile("rpcc %0" : "=r"(cc));
+    cur = cc;
+    ofs = cc >> 32;
+    return cur - ofs;
+}
+
 #else
 /* The host CPU doesn't have an easily accessible cycle counter.
    Just return a monotonically increasing value.  This will be
@@ -234,6 +247,17 @@ static inline int can_do_io(CPUState *env)
 
     return env->can_do_io != 0;
 }
+#endif
+
+#ifdef CONFIG_PROFILER
+static inline int64_t profile_getclock(void)
+{
+    return cpu_get_real_ticks();
+}
+
+extern int64_t qemu_time, qemu_time_start;
+extern int64_t tlb_flush_time;
+extern int64_t dev_time;
 #endif
 
 #endif

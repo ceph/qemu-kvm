@@ -169,7 +169,10 @@ static void vga_precise_update_retrace_info(VGACommonState *s)
     int vretr_start_line;
     int vretr_end_line;
 
-    int div2, sldiv2, dots;
+    int dots;
+#if 0
+    int div2, sldiv2;
+#endif
     int clocking_mode;
     int clock_sel;
     const int clk_hz[] = {25175000, 28322000, 25175000, 25175000};
@@ -190,8 +193,6 @@ static void vga_precise_update_retrace_info(VGACommonState *s)
     vretr_end_line = s->cr[0x11] & 0xf;
 
 
-    div2 = (s->cr[0x17] >> 2) & 1;
-    sldiv2 = (s->cr[0x17] >> 3) & 1;
 
     clocking_mode = (s->sr[0x01] >> 3) & 1;
     clock_sel = (s->msr >> 2) & 3;
@@ -216,6 +217,8 @@ static void vga_precise_update_retrace_info(VGACommonState *s)
     r->htotal = htotal_chars;
 
 #if 0
+    div2 = (s->cr[0x17] >> 2) & 1;
+    sldiv2 = (s->cr[0x17] >> 3) & 1;
     printf (
         "hz=%f\n"
         "htotal = %d\n"
@@ -522,7 +525,7 @@ static uint32_t vbe_ioport_read_data(void *opaque, uint32_t addr)
     VGACommonState *s = opaque;
     uint32_t val;
 
-    if (s->vbe_index <= VBE_DISPI_INDEX_NB) {
+    if (s->vbe_index < VBE_DISPI_INDEX_NB) {
         if (s->vbe_regs[VBE_DISPI_INDEX_ENABLE] & VBE_DISPI_GETCAPS) {
             switch(s->vbe_index) {
                 /* XXX: do not hardcode ? */
@@ -542,6 +545,8 @@ static uint32_t vbe_ioport_read_data(void *opaque, uint32_t addr)
         } else {
             val = s->vbe_regs[s->vbe_index];
         }
+    } else if (s->vbe_index == VBE_DISPI_INDEX_VIDEO_MEMORY_64K) {
+        val = s->vram_size / (64 * 1024);
     } else {
         val = 0;
     }
@@ -1986,7 +1991,7 @@ void vga_common_reset(VGACommonState *s)
 #ifdef CONFIG_BOCHS_VBE
     s->vbe_index = 0;
     memset(s->vbe_regs, '\0', sizeof(s->vbe_regs));
-    s->vbe_regs[VBE_DISPI_INDEX_ID] = VBE_DISPI_ID0;
+    s->vbe_regs[VBE_DISPI_INDEX_ID] = VBE_DISPI_ID5;
     s->vbe_start_addr = 0;
     s->vbe_line_offset = 0;
     s->vbe_bank_mask = (s->vram_size >> 16) - 1;

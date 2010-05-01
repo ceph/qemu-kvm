@@ -77,7 +77,7 @@
  * 'l'          target long (32 or 64 bit)
  * 'M'          just like 'l', except in user mode the value is
  *              multiplied by 2^20 (think Mebibyte)
- * 'b'          double
+ * 'f'          double
  *              user mode accepts an optional G, g, M, m, K, k suffix,
  *              which multiplies the value by 2^30 for suffixes G and
  *              g, 2^20 for M and m, 2^10 for K and k
@@ -88,6 +88,8 @@
  *
  * '?'          optional type (for all types, except '/')
  * '.'          other form of optional type (for 'i' and 'l')
+ * 'b'          boolean
+ *              user mode accepts "on" or "off"
  * '-'          optional parameter (eg. '-f')
  *
  */
@@ -977,7 +979,8 @@ static int do_cpu_set(Monitor *mon, const QDict *qdict, QObject **ret_data)
 {
     int index = qdict_get_int(qdict, "index");
     if (mon_set_cpu(index) < 0) {
-        qerror_report(QERR_INVALID_PARAMETER, "index");
+        qerror_report(QERR_INVALID_PARAMETER_VALUE, "index",
+                      "a CPU number");
         return -1;
     }
     return 0;
@@ -1042,7 +1045,8 @@ static void do_info_cpu_stats(Monitor *mon)
  */
 static int do_quit(Monitor *mon, const QDict *qdict, QObject **ret_data)
 {
-    exit(0);
+    monitor_suspend(mon);
+    qemu_system_exit_request();
     return 0;
 }
 
@@ -1124,7 +1128,8 @@ static int do_change_block(Monitor *mon, const char *device,
     if (eject_device(mon, bs, 0) < 0) {
         return -1;
     }
-    if (bdrv_open2(bs, filename, BDRV_O_RDWR, drv) < 0) {
+    if (bdrv_open(bs, filename, BDRV_O_RDWR, drv) < 0) {
+        qerror_report(QERR_OPEN_FILE_FAILED, filename);
         return -1;
     }
     return monitor_read_bdrv_key_start(mon, bs, NULL, NULL);
@@ -1188,9 +1193,10 @@ static int do_change(Monitor *mon, const QDict *qdict, QObject **ret_data)
     return ret;
 }
 
-static void do_screen_dump(Monitor *mon, const QDict *qdict)
+static int do_screen_dump(Monitor *mon, const QDict *qdict, QObject **ret_data)
 {
     vga_hw_screen_dump(qdict_get_str(qdict, "filename"));
+    return 0;
 }
 
 static void do_logfile(Monitor *mon, const QDict *qdict)
@@ -2297,91 +2303,6 @@ static void do_info_status(Monitor *mon, QObject **ret_data)
                                     vm_running, singlestep);
 }
 
-static void print_balloon_stat(const char *key, QObject *obj, void *opaque)
-{
-    Monitor *mon = opaque;
-
-    if (strcmp(key, "actual"))
-        monitor_printf(mon, ",%s=%" PRId64, key,
-                       qint_get_int(qobject_to_qint(obj)));
-}
-
-static void monitor_print_balloon(Monitor *mon, const QObject *data)
-{
-    QDict *qdict;
-
-    qdict = qobject_to_qdict(data);
-    if (!qdict_haskey(qdict, "actual"))
-        return;
-
-    monitor_printf(mon, "balloon: actual=%" PRId64,
-                   qdict_get_int(qdict, "actual") >> 20);
-    qdict_iter(qdict, print_balloon_stat, mon);
-    monitor_printf(mon, "\n");
-}
-
-/**
- * do_info_balloon(): Balloon information
- *
- * Make an asynchronous request for balloon info.  When the request completes
- * a QDict will be returned according to the following specification:
- *
- * - "actual": current balloon value in bytes
- * The following fields may or may not be present:
- * - "mem_swapped_in": Amount of memory swapped in (bytes)
- * - "mem_swapped_out": Amount of memory swapped out (bytes)
- * - "major_page_faults": Number of major faults
- * - "minor_page_faults": Number of minor faults
- * - "free_mem": Total amount of free and unused memory (bytes)
- * - "total_mem": Total amount of available memory (bytes)
- *
- * Example:
- *
- * { "actual": 1073741824, "mem_swapped_in": 0, "mem_swapped_out": 0,
- *   "major_page_faults": 142, "minor_page_faults": 239245,
- *   "free_mem": 1014185984, "total_mem": 1044668416 }
- */
-static int do_info_balloon(Monitor *mon, MonitorCompletion cb, void *opaque)
-{
-    int ret;
-
-    if (kvm_enabled() && !kvm_has_sync_mmu()) {
-        qerror_report(QERR_KVM_MISSING_CAP, "synchronous MMU", "balloon");
-        return -1;
-    }
-
-    ret = qemu_balloon_status(cb, opaque);
-    if (!ret) {
-        qerror_report(QERR_DEVICE_NOT_ACTIVE, "balloon");
-        return -1;
-    }
-
-    return 0;
-}
-
-/**
- * do_balloon(): Request VM to change its memory allocation
- */
-static int do_balloon(Monitor *mon, const QDict *params,
-                       MonitorCompletion cb, void *opaque)
-{
-    int ret;
-
-    if (kvm_enabled() && !kvm_has_sync_mmu()) {
-        qerror_report(QERR_KVM_MISSING_CAP, "synchronous MMU", "balloon");
-        return -1;
-    }
-
-    ret = qemu_balloon(qdict_get_int(params, "value"), cb, opaque);
-    if (ret == 0) {
-        qerror_report(QERR_DEVICE_NOT_ACTIVE, "balloon");
-        return -1;
-    }
-
-    cb(opaque, NULL);
-    return 0;
-}
-
 static qemu_acl *find_acl(Monitor *mon, const char *name)
 {
     qemu_acl *acl = qemu_acl_find(name);
@@ -2520,16 +2441,8 @@ static int do_getfd(Monitor *mon, const QDict *qdict, QObject **ret_data)
     }
 
     if (qemu_isdigit(fdname[0])) {
-        qerror_report(QERR_INVALID_PARAMETER, "fdname");
-        return -1;
-    }
-
-    fd = dup(fd);
-    if (fd == -1) {
-        if (errno == EMFILE)
-            qerror_report(QERR_TOO_MANY_FILES);
-        else
-            qerror_report(QERR_UNDEFINED_ERROR);
+        qerror_report(QERR_INVALID_PARAMETER_VALUE, "fdname",
+                      "a name not starting with a digit");
         return -1;
     }
 
@@ -3827,7 +3740,7 @@ static const mon_cmd_t *monitor_parse_command(Monitor *mon,
                 qdict_put(qdict, key, qint_from_int(val));
             }
             break;
-        case 'b':
+        case 'f':
         case 'T':
             {
                 double val;
@@ -3843,7 +3756,7 @@ static const mon_cmd_t *monitor_parse_command(Monitor *mon,
                 if (get_double(mon, &val, &p) < 0) {
                     goto fail;
                 }
-                if (c == 'b' && *p) {
+                if (c == 'f' && *p) {
                     switch (*p) {
                     case 'K': case 'k':
                         val *= 1 << 10; p++; break;
@@ -3868,6 +3781,29 @@ static const mon_cmd_t *monitor_parse_command(Monitor *mon,
                     goto fail;
                 }
                 qdict_put(qdict, key, qfloat_from_double(val));
+            }
+            break;
+        case 'b':
+            {
+                const char *beg;
+                int val;
+
+                while (qemu_isspace(*p)) {
+                    p++;
+                }
+                beg = p;
+                while (qemu_isgraph(*p)) {
+                    p++;
+                }
+                if (p - beg == 2 && !memcmp(beg, "on", p - beg)) {
+                    val = 1;
+                } else if (p - beg == 3 && !memcmp(beg, "off", p - beg)) {
+                    val = 0;
+                } else {
+                    monitor_printf(mon, "Expected 'on' or 'off'\n");
+                    goto fail;
+                }
+                qdict_put(qdict, key, qbool_from_int(val));
             }
             break;
         case '-':
@@ -4344,10 +4280,16 @@ static int check_arg(const CmdArgs *cmd_args, QDict *args)
                 return -1;
             }
             break;
-        case 'b':
+        case 'f':
         case 'T':
             if (qobject_type(value) != QTYPE_QINT && qobject_type(value) != QTYPE_QFLOAT) {
                 qerror_report(QERR_INVALID_PARAMETER_TYPE, name, "number");
+                return -1;
+            }
+            break;
+        case 'b':
+            if (qobject_type(value) != QTYPE_QBOOL) {
+                qerror_report(QERR_INVALID_PARAMETER_TYPE, name, "bool");
                 return -1;
             }
             break;
@@ -4485,7 +4427,7 @@ static void handle_qmp_command(JSONMessageParser *parser, QList *tokens)
         qerror_report(QERR_QMP_BAD_INPUT_OBJECT, "execute");
         goto err_input;
     } else if (qobject_type(obj) != QTYPE_QSTRING) {
-        qerror_report(QERR_QMP_BAD_INPUT_OBJECT, "string");
+        qerror_report(QERR_QMP_BAD_INPUT_OBJECT_MEMBER, "execute", "string");
         goto err_input;
     }
 
@@ -4518,6 +4460,9 @@ static void handle_qmp_command(JSONMessageParser *parser, QList *tokens)
     obj = qdict_get(input, "arguments");
     if (!obj) {
         args = qdict_new();
+    } else if (qobject_type(obj) != QTYPE_QDICT) {
+        qerror_report(QERR_QMP_BAD_INPUT_OBJECT_MEMBER, "arguments", "object");
+        goto err_input;
     } else {
         args = qobject_to_qdict(obj);
         QINCREF(args);

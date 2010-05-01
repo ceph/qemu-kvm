@@ -2752,7 +2752,7 @@ static inline abi_long do_shmdt(abi_ulong shmaddr)
     for (i = 0; i < N_SHM_REGIONS; ++i) {
         if (shm_regions[i].start == shmaddr) {
             shm_regions[i].start = 0;
-            page_set_flags(shmaddr, shm_regions[i].size, 0);
+            page_set_flags(shmaddr, shmaddr + shm_regions[i].size, 0);
             break;
         }
     }
@@ -4021,7 +4021,7 @@ static inline abi_long host_to_target_stat64(void *cpu_env,
     } else
 #endif
     {
-#if (TARGET_LONG_BITS == 64) && (!defined(TARGET_ALPHA))
+#if TARGET_ABI_BITS == 64 && !defined(TARGET_ALPHA)
         struct target_stat *target_st;
 #else
         struct target_stat64 *target_st;
@@ -5768,7 +5768,7 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
         ret = get_errno(fsync(arg1));
         break;
     case TARGET_NR_clone:
-#if defined(TARGET_SH4)
+#if defined(TARGET_SH4) || defined(TARGET_ALPHA)
         ret = get_errno(do_fork(cpu_env, arg1, arg2, arg3, arg5, arg4));
 #elif defined(TARGET_CRIS)
         ret = get_errno(do_fork(cpu_env, arg2, arg1, arg3, arg4, arg5));

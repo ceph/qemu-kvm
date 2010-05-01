@@ -234,6 +234,8 @@ int pci_enable_capability_support(PCIDevice *pci_dev,
 int pci_map_irq(PCIDevice *pci_dev, int pin);
 
 int pci_add_capability(PCIDevice *pci_dev, uint8_t cap_id, uint8_t cap_size);
+int pci_add_capability_at_offset(PCIDevice *pci_dev, uint8_t cap_id,
+                                 uint8_t cap_offset, uint8_t cap_size);
 
 void pci_del_capability(PCIDevice *pci_dev, uint8_t cap_id, uint8_t cap_size);
 

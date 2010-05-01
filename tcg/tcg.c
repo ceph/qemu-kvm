@@ -47,6 +47,7 @@
 #include "qemu-common.h"
 #include "cache-utils.h"
 #include "host-utils.h"
+#include "qemu-timer.h"
 
 /* Note: the long term plan is to reduce the dependancies on the QEMU
    CPU definitions. Currently they are used for qemu_ld/st
@@ -549,14 +550,18 @@ void tcg_register_helper(void *func, const char *name)
 void tcg_gen_callN(TCGContext *s, TCGv_ptr func, unsigned int flags,
                    int sizemask, TCGArg ret, int nargs, TCGArg *args)
 {
+#ifdef TCG_TARGET_I386
     int call_type;
+#endif
     int i;
     int real_args;
     int nb_rets;
     TCGArg *nparam;
     *gen_opc_ptr++ = INDEX_op_call;
     nparam = gen_opparam_ptr++;
+#ifdef TCG_TARGET_I386
     call_type = (flags & TCG_CALL_TYPE_MASK);
+#endif
     if (ret != TCG_CALL_DUMMY_ARG) {
 #if TCG_TARGET_REG_BITS < 64
         if (sizemask & 1) {
@@ -1278,7 +1283,7 @@ static void tcg_liveness_analysis(TCGContext *s)
 }
 #else
 /* dummy liveness analysis */
-void tcg_liveness_analysis(TCGContext *s)
+static void tcg_liveness_analysis(TCGContext *s)
 {
     int nb_ops;
     nb_ops = gen_opc_ptr - gen_opc_buf;

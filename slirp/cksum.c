@@ -42,7 +42,8 @@
  */
 
 #define ADDCARRY(x)  (x > 65535 ? x -= 65535 : x)
-#define REDUCE {l_util.l = sum; sum = l_util.s[0] + l_util.s[1]; ADDCARRY(sum);}
+#define REDUCE {l_util.l = sum; sum = l_util.s[0] + l_util.s[1];        \
+        (void)ADDCARRY(sum);}
 
 int cksum(struct mbuf *m, int len)
 {
@@ -109,7 +110,6 @@ int cksum(struct mbuf *m, int len)
 	if (byte_swapped) {
 		REDUCE;
 		sum <<= 8;
-		byte_swapped = 0;
 		if (mlen == -1) {
 			s_util.c[1] = *(u_int8_t *)w;
 			sum += s_util.s;

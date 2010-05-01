@@ -7,6 +7,14 @@
 #define WORDS_ALIGNED
 #endif
 
+#ifdef TARGET_PHYS_ADDR_BITS
+#include "targphys.h"
+#endif
+
+#ifndef NEED_CPU_H
+#include "poison.h"
+#endif
+
 #include "bswap.h"
 #include "qemu-queue.h"
 
@@ -118,7 +126,6 @@ void cpu_physical_memory_write_rom(target_phys_addr_t addr,
 /* Acts like a ROM when read and like a device when written.  */
 #define IO_MEM_ROMD        (1)
 #define IO_MEM_SUBPAGE     (2)
-#define IO_MEM_SUBWIDTH    (4)
 
 #endif
 

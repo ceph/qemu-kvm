@@ -940,7 +940,8 @@ static void flush_windows(CPUSPARCState *env)
 
 void cpu_loop (CPUSPARCState *env)
 {
-    int trapnr, ret;
+    int trapnr;
+    abi_long ret;
     target_siginfo_t info;
 
     while (1) {
@@ -958,7 +959,7 @@ void cpu_loop (CPUSPARCState *env)
                               env->regwptr[0], env->regwptr[1],
                               env->regwptr[2], env->regwptr[3],
                               env->regwptr[4], env->regwptr[5]);
-            if ((unsigned int)ret >= (unsigned int)(-515)) {
+            if ((abi_ulong)ret >= (abi_ulong)(-515)) {
 #if defined(TARGET_SPARC64) && !defined(TARGET_ABI32)
                 env->xcc |= PSR_CARRY;
 #else
@@ -2348,6 +2349,51 @@ void cpu_loop(CPUM68KState *env)
 #endif /* TARGET_M68K */
 
 #ifdef TARGET_ALPHA
+static void do_store_exclusive(CPUAlphaState *env, int reg, int quad)
+{
+    target_ulong addr, val, tmp;
+    target_siginfo_t info;
+    int ret = 0;
+
+    addr = env->lock_addr;
+    tmp = env->lock_st_addr;
+    env->lock_addr = -1;
+    env->lock_st_addr = 0;
+
+    start_exclusive();
+    mmap_lock();
+
+    if (addr == tmp) {
+        if (quad ? get_user_s64(val, addr) : get_user_s32(val, addr)) {
+            goto do_sigsegv;
+        }
+
+        if (val == env->lock_value) {
+            tmp = env->ir[reg];
+            if (quad ? put_user_u64(tmp, addr) : put_user_u32(tmp, addr)) {
+                goto do_sigsegv;
+            }
+            ret = 1;
+        }
+    }
+    env->ir[reg] = ret;
+    env->pc += 4;
+
+    mmap_unlock();
+    end_exclusive();
+    return;
+
+ do_sigsegv:
+    mmap_unlock();
+    end_exclusive();
+
+    info.si_signo = TARGET_SIGSEGV;
+    info.si_errno = 0;
+    info.si_code = TARGET_SEGV_MAPERR;
+    info._sifields._sigfault._addr = addr;
+    queue_signal(env, TARGET_SIGSEGV, &info);
+}
+
 void cpu_loop (CPUState *env)
 {
     int trapnr;
@@ -2356,6 +2402,11 @@ void cpu_loop (CPUState *env)
 
     while (1) {
         trapnr = cpu_alpha_exec (env);
+
+        /* All of the traps imply a transition through PALcode, which
+           implies an REI instruction has been executed.  Which means
+           that the intr_flag should be cleared.  */
+        env->intr_flag = 0;
 
         switch (trapnr) {
         case EXCP_RESET:
@@ -2367,6 +2418,7 @@ void cpu_loop (CPUState *env)
             exit(1);
             break;
         case EXCP_ARITH:
+            env->lock_addr = -1;
             info.si_signo = TARGET_SIGFPE;
             info.si_errno = 0;
             info.si_code = TARGET_FPE_FLTINV;
@@ -2378,6 +2430,7 @@ void cpu_loop (CPUState *env)
             exit(1);
             break;
         case EXCP_DFAULT:
+            env->lock_addr = -1;
             info.si_signo = TARGET_SIGSEGV;
             info.si_errno = 0;
             info.si_code = 0;  /* ??? SEGV_MAPERR vs SEGV_ACCERR.  */
@@ -2401,6 +2454,7 @@ void cpu_loop (CPUState *env)
             exit(1);
             break;
         case EXCP_UNALIGN:
+            env->lock_addr = -1;
             info.si_signo = TARGET_SIGBUS;
             info.si_errno = 0;
             info.si_code = TARGET_BUS_ADRALN;
@@ -2409,6 +2463,7 @@ void cpu_loop (CPUState *env)
             break;
         case EXCP_OPCDEC:
         do_sigill:
+            env->lock_addr = -1;
             info.si_signo = TARGET_SIGILL;
             info.si_errno = 0;
             info.si_code = TARGET_ILL_ILLOPC;
@@ -2419,6 +2474,7 @@ void cpu_loop (CPUState *env)
             /* No-op.  Linux simply re-enables the FPU.  */
             break;
         case EXCP_CALL_PAL ... (EXCP_CALL_PALP - 1):
+            env->lock_addr = -1;
             switch ((trapnr >> 6) | 0x80) {
             case 0x80:
                 /* BPT */
@@ -2443,7 +2499,7 @@ void cpu_loop (CPUState *env)
                                     env->ir[IR_A0], env->ir[IR_A1],
                                     env->ir[IR_A2], env->ir[IR_A3],
                                     env->ir[IR_A4], env->ir[IR_A5]);
-		if (trapnr != TARGET_NR_sigreturn
+                if (trapnr != TARGET_NR_sigreturn
                     && trapnr != TARGET_NR_rt_sigreturn) {
                     env->ir[IR_V0] = (sysret < 0 ? -sysret : sysret);
                     env->ir[IR_A3] = (sysret < 0);
@@ -2508,10 +2564,15 @@ void cpu_loop (CPUState *env)
         case EXCP_DEBUG:
             info.si_signo = gdb_handlesig (env, TARGET_SIGTRAP);
             if (info.si_signo) {
+                env->lock_addr = -1;
                 info.si_errno = 0;
                 info.si_code = TARGET_TRAP_BRKPT;
                 queue_signal(env, info.si_signo, &info);
             }
+            break;
+        case EXCP_STL_C:
+        case EXCP_STQ_C:
+            do_store_exclusive(env, env->error_code, trapnr - EXCP_STL_C);
             break;
         default:
             printf ("Unhandled trap: 0x%x\n", trapnr);
@@ -2788,7 +2849,7 @@ int main(int argc, char **argv, char **envp)
 #endif
 #elif defined(TARGET_PPC)
 #ifdef TARGET_PPC64
-        cpu_model = "970";
+        cpu_model = "970fx";
 #else
         cpu_model = "750";
 #endif

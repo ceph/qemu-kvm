@@ -65,7 +65,7 @@ static int virtio_blk_handle_rw_error(VirtIOBlockReq *req, int error,
     VirtIOBlock *s = req->dev;
 
     if (action == BLOCK_ERR_IGNORE) {
-        bdrv_mon_event(req->dev->bs, BDRV_ACTION_IGNORE, is_read);
+        bdrv_mon_event(s->bs, BDRV_ACTION_IGNORE, is_read);
         return 0;
     }
 
@@ -73,11 +73,11 @@ static int virtio_blk_handle_rw_error(VirtIOBlockReq *req, int error,
             || action == BLOCK_ERR_STOP_ANY) {
         req->next = s->rq;
         s->rq = req;
-        bdrv_mon_event(req->dev->bs, BDRV_ACTION_STOP, is_read);
+        bdrv_mon_event(s->bs, BDRV_ACTION_STOP, is_read);
         vm_stop(0);
     } else {
         virtio_blk_req_complete(req, VIRTIO_BLK_S_IOERR);
-        bdrv_mon_event(req->dev->bs, BDRV_ACTION_REPORT, is_read);
+        bdrv_mon_event(s->bs, BDRV_ACTION_REPORT, is_read);
     }
 
     return 1;
@@ -494,7 +494,6 @@ VirtIODevice *virtio_blk_init(DeviceState *dev, BlockConf *conf)
     s->rq = NULL;
     s->sector_mask = (s->conf->logical_block_size / 512) - 1;
     bdrv_guess_geometry(s->bs, &cylinders, &heads, &secs);
-    bdrv_set_geometry_hint(s->bs, cylinders, heads, secs);
 
     s->vq = virtio_add_queue(&s->vdev, 128, virtio_blk_handle_output);
 

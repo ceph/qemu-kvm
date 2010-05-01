@@ -51,7 +51,7 @@ static uint8_t *tb_ret_addr;
 static const char * const tcg_target_reg_names[TCG_TARGET_NB_REGS] = {
     "r0",
     "r1",
-    "rp",
+    "r2",
     "r3",
     "r4",
     "r5",
@@ -328,6 +328,7 @@ static int tcg_target_const_match(tcg_target_long val,
 #define LWZU   OPCD(33)
 #define STWU   OPCD(37)
 
+#define RLWIMI OPCD(20)
 #define RLWINM OPCD(21)
 #define RLWNM  OPCD(23)
 
@@ -1105,9 +1106,9 @@ static void tcg_out_cr7eq_from_cond (TCGContext *s, const TCGArg *args,
     case TCG_COND_GEU:
         op = (b->bit1 != b->bit2) ? CRANDC : CRAND;
         tcg_out_cmp (s, b->cond2, args[1], args[3], const_args[3], 5);
-        tcg_out_cmp (s, TCG_COND_EQ, args[1], args[3], const_args[3], 6);
-        tcg_out_cmp (s, cond, args[0], args[2], const_args[2], 7);
-        tcg_out32 (s, op | BT (7, CR_EQ) | BA (6, CR_EQ) | BB (7, b->bit2));
+        tcg_out_cmp (s, tcg_unsigned_cond (cond), args[0], args[2],
+                     const_args[2], 7);
+        tcg_out32 (s, op | BT (7, CR_EQ) | BA (5, CR_EQ) | BB (7, b->bit2));
         tcg_out32 (s, CROR | BT (7, CR_EQ) | BA (5, b->bit1) | BB (7, CR_EQ));
         break;
     default:
@@ -1715,6 +1716,77 @@ static void tcg_out_op(TCGContext *s, TCGOpcode opc, const TCGArg *args,
         tcg_out_setcond2 (s, args, const_args);
         break;
 
+    case INDEX_op_bswap16_i32:
+        /* Stolen from gcc's builtin_bswap16 */
+
+        /* a1 = abcd */
+
+        /* r0 = (a1 << 8) & 0xff00 # 00d0 */
+        tcg_out32 (s, RLWINM
+                   | RA (0)
+                   | RS (args[1])
+                   | SH (8)
+                   | MB (16)
+                   | ME (23)
+            );
+
+        /* a0 = rotate_left (a1, 24) & 0xff # 000c */
+        tcg_out32 (s, RLWINM
+                   | RA (args[0])
+                   | RS (args[1])
+                   | SH (24)
+                   | MB (24)
+                   | ME (31)
+            );
+
+        /* a0 = a0 | r0 # 00dc */
+        tcg_out32 (s, OR | SAB (0, args[0], args[0]));
+        break;
+
+    case INDEX_op_bswap32_i32:
+        /* Stolen from gcc's builtin_bswap32 */
+        {
+            int a0 = args[0];
+
+            /* a1 = args[1] # abcd */
+
+            if (a0 == args[1]) {
+                a0 = 0;
+            }
+
+            /* a0 = rotate_left (a1, 8) # bcda */
+            tcg_out32 (s, RLWINM
+                       | RA (a0)
+                       | RS (args[1])
+                       | SH (8)
+                       | MB (0)
+                       | ME (31)
+                );
+
+            /* a0 = (a0 & ~0xff000000) | ((a1 << 24) & 0xff000000) # dcda */
+            tcg_out32 (s, RLWIMI
+                       | RA (a0)
+                       | RS (args[1])
+                       | SH (24)
+                       | MB (0)
+                       | ME (7)
+                );
+
+            /* a0 = (a0 & ~0x0000ff00) | ((a1 << 24) & 0x0000ff00) # dcba */
+            tcg_out32 (s, RLWIMI
+                       | RA (a0)
+                       | RS (args[1])
+                       | SH (24)
+                       | MB (16)
+                       | ME (23)
+                );
+
+            if (!a0) {
+                tcg_out_mov (s, args[0], a0);
+            }
+        }
+        break;
+
     default:
         tcg_dump_ops (s, stderr);
         tcg_abort ();
@@ -1775,6 +1847,9 @@ static const TCGTargetOpDef ppc_op_defs[] = {
 
     { INDEX_op_setcond_i32, { "r", "r", "ri" } },
     { INDEX_op_setcond2_i32, { "r", "r", "r", "ri", "ri" } },
+
+    { INDEX_op_bswap16_i32, { "r", "r" } },
+    { INDEX_op_bswap32_i32, { "r", "r" } },
 
 #if TARGET_LONG_BITS == 32
     { INDEX_op_qemu_ld8u, { "r", "L" } },

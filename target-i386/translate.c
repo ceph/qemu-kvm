@@ -72,6 +72,8 @@ static TCGv_i32 cpu_tmp2_i32, cpu_tmp3_i32;
 static TCGv_i64 cpu_tmp1_i64;
 static TCGv cpu_tmp5;
 
+static uint8_t gen_opc_cc_op[OPC_BUF_SIZE];
+
 #include "gen-icount.h"
 
 #ifdef TARGET_X86_64
@@ -761,7 +763,6 @@ static void gen_check_io(DisasContext *s, int ot, target_ulong cur_eip,
             if (s->cc_op != CC_OP_DYNAMIC)
                 gen_op_set_cc_op(s->cc_op);
             gen_jmp_im(cur_eip);
-            state_saved = 1;
         }
         svm_flags |= (1 << (4 + ot));
         next_eip = s->pc - s->cs_base;
@@ -7742,7 +7743,7 @@ static inline void gen_intermediate_code_internal(CPUState *env,
     target_ulong pc_ptr;
     uint16_t *gen_opc_end;
     CPUBreakpoint *bp;
-    int j, lj, cflags;
+    int j, lj;
     uint64_t flags;
     target_ulong pc_start;
     target_ulong cs_base;
@@ -7753,7 +7754,6 @@ static inline void gen_intermediate_code_internal(CPUState *env,
     pc_start = tb->pc;
     cs_base = tb->cs_base;
     flags = tb->flags;
-    cflags = tb->cflags;
 
     dc->pe = (flags >> HF_PE_SHIFT) & 1;
     dc->code32 = (flags >> HF_CS32_SHIFT) & 1;
