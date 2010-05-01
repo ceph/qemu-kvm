@@ -2386,11 +2386,9 @@ static void monitor_parse(const char *optarg, const char *mode)
     if (strstart(optarg, "chardev:", &p)) {
         snprintf(label, sizeof(label), "%s", p);
     } else {
-        if (monitor_device_index) {
-            snprintf(label, sizeof(label), "monitor%d",
-                     monitor_device_index);
-        } else {
-            snprintf(label, sizeof(label), "monitor");
+        snprintf(label, sizeof(label), "compat_monitor%d",
+                 monitor_device_index);
+        if (monitor_device_index == 0) {
             def = 1;
         }
         opts = qemu_chr_parse_compat(label, optarg);
@@ -3707,6 +3705,10 @@ int main(int argc, char **argv, char **envp)
         }
     }
 
+    if (qemu_opts_foreach(&qemu_mon_opts, mon_init_func, NULL, 1) != 0) {
+        exit(1);
+    }
+
     if (foreach_device_config(DEV_SERIAL, serial_parse) < 0)
         exit(1);
     if (foreach_device_config(DEV_PARALLEL, parallel_parse) < 0)
@@ -3818,9 +3820,6 @@ int main(int argc, char **argv, char **envp)
     }
 
     text_consoles_set_display(ds);
-
-    if (qemu_opts_foreach(&qemu_mon_opts, mon_init_func, NULL, 1) != 0)
-        exit(1);
 
     if (gdbstub_dev && gdbserver_start(gdbstub_dev) < 0) {
         fprintf(stderr, "qemu: could not open gdbserver on device '%s'\n",
