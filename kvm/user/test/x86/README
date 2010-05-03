@@ -10,6 +10,5 @@ realmode: goes back to realmode, shld, push/pop, mov immediate, cmp immediate, a
          io, eflags instructions (clc, cli, etc.), jcc short, jcc near, call, long jmp, xchg
 sieve: heavy memory access with no paging and with paging static and with paging vmalloc'ed
 smptest: run smp_id() on every cpu and compares return value to number
-stringio: outs forward and backward
 tsc: write to tsc(0) and write to tsc(100000000000) and read it back
 vmexit: long loops for each: cpuid, vmcall, mov_from_cr8, mov_to_cr8, inl_pmtimer, ipi, ipi+halt

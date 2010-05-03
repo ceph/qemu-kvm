@@ -56,8 +56,6 @@ $(TEST_DIR)/realmode.flat: $(TEST_DIR)/realmode.o
 
 $(TEST_DIR)/realmode.o: bits = 32
 
-$(TEST_DIR)/stringio.flat: $(cstart.o) $(TEST_DIR)/stringio.o
-
 $(TEST_DIR)/msr.flat: $(cstart.o) $(TEST_DIR)/msr.o
 
 arch_clean:

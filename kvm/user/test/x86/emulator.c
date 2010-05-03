@@ -3,6 +3,7 @@
 #include "libcflat.h"
 
 #define memset __builtin_memset
+#define TESTDEV_IO_PORT 0xe0
 
 int fails, tests;
 
@@ -15,6 +16,29 @@ void report(const char *name, int result)
 		printf("FAIL: %s\n", name);
 		++fails;
 	}
+}
+
+static char str[] = "abcdefghijklmnop";
+
+void test_stringio()
+{
+	unsigned char r = 0;
+	asm volatile("cld \n\t"
+		     "movw %0, %%dx \n\t"
+		     "rep outsb \n\t"
+		     : : "i"((short)TESTDEV_IO_PORT),
+		       "S"(str), "c"(sizeof(str) - 1));
+	asm volatile("inb %1, %0\n\t" : "=a"(r) : "i"((short)TESTDEV_IO_PORT));
+	report("outsb up", r == str[sizeof(str) - 2]); /* last char */
+
+	asm volatile("std \n\t"
+		     "movw %0, %%dx \n\t"
+		     "rep outsb \n\t"
+		     : : "i"((short)TESTDEV_IO_PORT),
+		       "S"(str + sizeof(str) - 2), "c"(sizeof(str) - 1));
+	asm volatile("cld \n\t" : : );
+	asm volatile("in %1, %0\n\t" : "=a"(r) : "i"((short)TESTDEV_IO_PORT));
+	report("outsb down", r == str[0]);
 }
 
 void test_cmps_one(unsigned char *m1, unsigned char *m3)
@@ -93,8 +117,8 @@ void test_cmps(void *mem)
 		m1[i] = m2[i] = m3[i] = i;
 	for (int i = 100; i < 200; ++i)
 		m1[i] = (m3[i] = m2[i] = i) + 1;
-        test_cmps_one(m1, m3);
-        test_cmps_one(m1, m2);
+	test_cmps_one(m1, m3);
+	test_cmps_one(m1, m2);
 }
 
 void test_cr8(void)
@@ -271,7 +295,8 @@ int main()
 
 	test_smsw();
 	test_lmsw();
-        test_ljmp(mem);
+	test_ljmp(mem);
+	test_stringio();
 
 	printf("\nSUMMARY: %d tests, %d failures\n", tests, fails);
 	return fails ? 1 : 0;
