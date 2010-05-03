@@ -899,29 +899,6 @@ int kvm_is_ready_for_interrupt_injection(CPUState *env)
     return env->kvm_run->ready_for_interrupt_injection;
 }
 
-static int kvm_handle_internal_error(kvm_context_t kvm,
-                                     CPUState *env,
-                                     struct kvm_run *run)
-{
-    fprintf(stderr, "KVM internal error. Suberror: %d\n",
-            run->internal.suberror);
-#ifdef KVM_CAP_INTERNAL_ERROR_DATA
-    if (kvm_check_extension(kvm_state, KVM_CAP_INTERNAL_ERROR_DATA)) {
-        int i;
-
-        for (i = 0; i < run->internal.ndata; ++i) {
-            fprintf(stderr, "extra data[%d]: %"PRIx64"\n",
-                    i, (uint64_t)run->internal.data[i]);
-        }
-    }
-#endif
-    kvm_show_regs(env);
-    if (run->internal.suberror == KVM_INTERNAL_ERROR_EMULATION)
-        fprintf(stderr, "emulation failure\n");
-    vm_stop(0);
-    return 1;
-}
-
 int kvm_run(CPUState *env)
 {
     int r;
@@ -1004,7 +981,8 @@ int kvm_run(CPUState *env)
             break;
 #endif
 	case KVM_EXIT_INTERNAL_ERROR:
-            r = kvm_handle_internal_error(kvm, env, run);
+            kvm_handle_internal_error(env, run);
+            r = 1;
 	    break;
         default:
             if (kvm_arch_run(env)) {
