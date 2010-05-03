@@ -192,7 +192,7 @@ static int rbd_create(const char *filename, QEMUOptionParameter *options) {
 	header.comp_type = RBD_COMP_NONE;
 	header.snap_seq = 0;
 	header.snap_count = 0;
-	cpu_to_le16s(&header.snap_count);
+	cpu_to_le32s(&header.snap_count);
 
         if (rados_initialize(0, NULL) < 0) {
                 fprintf(stderr, "error initializing\n");
