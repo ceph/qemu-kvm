@@ -2156,7 +2156,6 @@ void kvm_set_phys_mem(target_phys_addr_t start_addr, ram_addr_t size,
  * dirty pages logging
  */
 /* FIXME: use unsigned long pointer instead of unsigned char */
-unsigned char *kvm_dirty_bitmap = NULL;
 int kvm_physical_memory_set_dirty_tracking(int enable)
 {
     int r = 0;
@@ -2165,17 +2164,9 @@ int kvm_physical_memory_set_dirty_tracking(int enable)
         return 0;
 
     if (enable) {
-        if (!kvm_dirty_bitmap) {
-            unsigned bitmap_size = BITMAP_SIZE(phys_ram_size);
-            kvm_dirty_bitmap = qemu_malloc(bitmap_size);
-            r = kvm_dirty_pages_log_enable_all(kvm_context);
-        }
+        r = kvm_dirty_pages_log_enable_all(kvm_context);
     } else {
-        if (kvm_dirty_bitmap) {
-            r = kvm_dirty_pages_log_reset(kvm_context);
-            qemu_free(kvm_dirty_bitmap);
-            kvm_dirty_bitmap = NULL;
-        }
+        r = kvm_dirty_pages_log_reset(kvm_context);
     }
     return r;
 }
