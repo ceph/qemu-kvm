@@ -967,6 +967,10 @@ int kvm_arch_put_registers(CPUState *env, int level)
     if (ret < 0)
         return ret;
 
+    ret = kvm_put_debugregs(env);
+    if (ret < 0)
+        return ret;
+
     return 0;
 }
 
@@ -995,10 +999,6 @@ int kvm_arch_get_registers(CPUState *env)
         return ret;
 
     ret = kvm_get_vcpu_events(env);
-    if (ret < 0)
-        return ret;
-
-    ret = kvm_put_debugregs(env);
     if (ret < 0)
         return ret;
 
