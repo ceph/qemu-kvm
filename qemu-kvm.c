@@ -76,19 +76,9 @@ static int io_thread_sigfd = -1;
 
 static CPUState *kvm_debug_cpu_requested;
 
-static uint64_t phys_ram_size;
-
 #ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
 /* The list of ioperm_data */
 static QLIST_HEAD(, ioperm_data) ioperm_head;
-#endif
-
-//#define DEBUG_MEMREG
-#ifdef	DEBUG_MEMREG
-#define DPRINTF(fmt, args...) \
-	do { fprintf(stderr, "%s:%d " fmt , __func__, __LINE__, ##args); } while (0)
-#else
-#define DPRINTF(fmt, args...) do {} while (0)
 #endif
 
 #define ALIGN(x, y) (((x)+(y)-1) & ~((y)-1))
@@ -136,198 +126,6 @@ static inline void clear_gsi(kvm_context_t kvm, unsigned int gsi)
     else
         DPRINTF("Invalid GSI %u\n", gsi);
 }
-
-struct slot_info {
-    unsigned long phys_addr;
-    unsigned long len;
-    unsigned long userspace_addr;
-    unsigned flags;
-    int logging_count;
-};
-
-struct slot_info slots[KVM_MAX_NUM_MEM_REGIONS];
-
-static void init_slots(void)
-{
-    int i;
-
-    for (i = 0; i < KVM_MAX_NUM_MEM_REGIONS; ++i)
-        slots[i].len = 0;
-}
-
-static int get_free_slot(kvm_context_t kvm)
-{
-    int i = 0;
-
-    for (; i < KVM_MAX_NUM_MEM_REGIONS; ++i)
-        if (!slots[i].len)
-            return i;
-    return -1;
-}
-
-static void register_slot(int slot, unsigned long phys_addr,
-                          unsigned long len, unsigned long userspace_addr,
-                          unsigned flags)
-{
-    slots[slot].phys_addr = phys_addr;
-    slots[slot].len = len;
-    slots[slot].userspace_addr = userspace_addr;
-    slots[slot].flags = flags;
-}
-
-static void free_slot(int slot)
-{
-    slots[slot].len = 0;
-    slots[slot].logging_count = 0;
-}
-
-static int get_slot(unsigned long phys_addr)
-{
-    int i;
-
-    for (i = 0; i < KVM_MAX_NUM_MEM_REGIONS; ++i) {
-        if (slots[i].len && slots[i].phys_addr <= phys_addr &&
-            (slots[i].phys_addr + slots[i].len - 1) >= phys_addr)
-            return i;
-    }
-    return -1;
-}
-
-/* Returns -1 if this slot is not totally contained on any other,
- * and the number of the slot otherwise */
-static int get_container_slot(uint64_t phys_addr, unsigned long size)
-{
-    int i;
-
-    for (i = 0; i < KVM_MAX_NUM_MEM_REGIONS; ++i)
-        if (slots[i].len && slots[i].phys_addr <= phys_addr &&
-            (slots[i].phys_addr + slots[i].len) >= phys_addr + size)
-            return i;
-    return -1;
-}
-
-int kvm_is_containing_region(kvm_context_t kvm, unsigned long phys_addr,
-                             unsigned long size)
-{
-    int slot = get_container_slot(phys_addr, size);
-    if (slot == -1)
-        return 0;
-    return 1;
-}
-
-/*
- * dirty pages logging control
- */
-static int kvm_dirty_pages_log_change(kvm_context_t kvm,
-                                      unsigned long phys_addr, unsigned flags,
-                                      unsigned mask)
-{
-    int r = -1;
-    int slot = get_slot(phys_addr);
-
-    if (slot == -1) {
-        fprintf(stderr, "BUG: %s: invalid parameters\n", __FUNCTION__);
-        return 1;
-    }
-
-    flags = (slots[slot].flags & ~mask) | flags;
-    if (flags == slots[slot].flags)
-        return 0;
-    slots[slot].flags = flags;
-
-    {
-        struct kvm_userspace_memory_region mem = {
-            .slot = slot,
-            .memory_size = slots[slot].len,
-            .guest_phys_addr = slots[slot].phys_addr,
-            .userspace_addr = slots[slot].userspace_addr,
-            .flags = slots[slot].flags,
-        };
-
-
-        DPRINTF("slot %d start %llx len %llx flags %x\n",
-                mem.slot, mem.guest_phys_addr, mem.memory_size, mem.flags);
-        r = kvm_vm_ioctl(kvm_state, KVM_SET_USER_MEMORY_REGION, &mem);
-        if (r < 0)
-            fprintf(stderr, "%s: %m\n", __FUNCTION__);
-    }
-    return r;
-}
-
-static int kvm_dirty_pages_log_change_all(kvm_context_t kvm,
-                                          int (*change)(kvm_context_t kvm,
-                                                        uint64_t start,
-                                                        uint64_t len))
-{
-    int i, r;
-
-    for (i = r = 0; i < KVM_MAX_NUM_MEM_REGIONS && r == 0; i++) {
-        if (slots[i].len)
-            r = change(kvm, slots[i].phys_addr, slots[i].len);
-    }
-    return r;
-}
-
-int kvm_dirty_pages_log_enable_slot(kvm_context_t kvm, uint64_t phys_addr,
-                                    uint64_t len)
-{
-    int slot = get_slot(phys_addr);
-
-    DPRINTF("start %" PRIx64 " len %" PRIx64 "\n", phys_addr, len);
-    if (slot == -1) {
-        fprintf(stderr, "BUG: %s: invalid parameters\n", __func__);
-        return -EINVAL;
-    }
-
-    if (slots[slot].logging_count++)
-        return 0;
-
-    return kvm_dirty_pages_log_change(kvm, slots[slot].phys_addr,
-                                      KVM_MEM_LOG_DIRTY_PAGES,
-                                      KVM_MEM_LOG_DIRTY_PAGES);
-}
-
-int kvm_dirty_pages_log_disable_slot(kvm_context_t kvm, uint64_t phys_addr,
-                                     uint64_t len)
-{
-    int slot = get_slot(phys_addr);
-
-    if (slot == -1) {
-        fprintf(stderr, "BUG: %s: invalid parameters\n", __func__);
-        return -EINVAL;
-    }
-
-    if (--slots[slot].logging_count)
-        return 0;
-
-    return kvm_dirty_pages_log_change(kvm, slots[slot].phys_addr, 0,
-                                      KVM_MEM_LOG_DIRTY_PAGES);
-}
-
-/**
- * Enable dirty page logging for all memory regions
- */
-int kvm_dirty_pages_log_enable_all(kvm_context_t kvm)
-{
-    if (kvm->dirty_pages_log_all)
-        return 0;
-    kvm->dirty_pages_log_all = 1;
-    return kvm_dirty_pages_log_change_all(kvm, kvm_dirty_pages_log_enable_slot);
-}
-
-/**
- * Enable dirty page logging only for memory regions that were created with
- *     dirty logging enabled (disable for all other memory regions).
- */
-int kvm_dirty_pages_log_reset(kvm_context_t kvm)
-{
-    if (!kvm->dirty_pages_log_all)
-        return 0;
-    kvm->dirty_pages_log_all = 0;
-    return kvm_dirty_pages_log_change_all(kvm,
-                                          kvm_dirty_pages_log_disable_slot);
-}
-
 
 static int kvm_create_context(void);
 
@@ -550,7 +348,7 @@ void kvm_create_irqchip(kvm_context_t kvm)
 
 int kvm_create(kvm_context_t kvm, unsigned long phys_mem_bytes, void **vm_mem)
 {
-    int r;
+    int r, i;
 
     r = kvm_create_vm(kvm);
     if (r < 0)
@@ -558,141 +356,14 @@ int kvm_create(kvm_context_t kvm, unsigned long phys_mem_bytes, void **vm_mem)
     r = kvm_arch_create(kvm, phys_mem_bytes, vm_mem);
     if (r < 0)
         return r;
-    init_slots();
+    for (i = 0; i < ARRAY_SIZE(kvm_state->slots); i++)
+        kvm_state->slots[i].slot = i;
+
     r = kvm_create_default_phys_mem(kvm, phys_mem_bytes, vm_mem);
     if (r < 0)
         return r;
     kvm_create_irqchip(kvm);
 
-    return 0;
-}
-
-
-int kvm_register_phys_mem(kvm_context_t kvm,
-                          unsigned long phys_start, void *userspace_addr,
-                          unsigned long len, int log)
-{
-
-    struct kvm_userspace_memory_region memory = {
-        .memory_size = len,
-        .guest_phys_addr = phys_start,
-        .userspace_addr = (unsigned long) (uintptr_t) userspace_addr,
-        .flags = log ? KVM_MEM_LOG_DIRTY_PAGES : 0,
-    };
-    int r;
-
-    memory.slot = get_free_slot(kvm);
-    DPRINTF
-        ("memory: gpa: %llx, size: %llx, uaddr: %llx, slot: %x, flags: %x\n",
-         memory.guest_phys_addr, memory.memory_size, memory.userspace_addr,
-         memory.slot, memory.flags);
-    r = kvm_vm_ioctl(kvm_state, KVM_SET_USER_MEMORY_REGION, &memory);
-    if (r < 0) {
-        fprintf(stderr, "create_userspace_phys_mem: %s\n", strerror(-r));
-        return -1;
-    }
-    register_slot(memory.slot, memory.guest_phys_addr, memory.memory_size,
-                  memory.userspace_addr, memory.flags);
-    return 0;
-}
-
-
-/* destroy/free a whole slot.
- * phys_start, len and slot are the params passed to kvm_create_phys_mem()
- */
-void kvm_destroy_phys_mem(kvm_context_t kvm, unsigned long phys_start,
-                          unsigned long len)
-{
-    int slot;
-    int r;
-    struct kvm_userspace_memory_region memory = {
-        .memory_size = 0,
-        .guest_phys_addr = phys_start,
-        .userspace_addr = 0,
-        .flags = 0,
-    };
-
-    slot = get_slot(phys_start);
-
-    if ((slot >= KVM_MAX_NUM_MEM_REGIONS) || (slot == -1)) {
-        fprintf(stderr, "BUG: %s: invalid parameters (slot=%d)\n", __FUNCTION__,
-                slot);
-        return;
-    }
-    if (phys_start != slots[slot].phys_addr) {
-        fprintf(stderr,
-                "WARNING: %s: phys_start is 0x%lx expecting 0x%lx\n",
-                __FUNCTION__, phys_start, slots[slot].phys_addr);
-        phys_start = slots[slot].phys_addr;
-    }
-
-    memory.slot = slot;
-    DPRINTF("slot %d start %llx len %llx flags %x\n",
-            memory.slot, memory.guest_phys_addr, memory.memory_size,
-            memory.flags);
-    r = kvm_vm_ioctl(kvm_state, KVM_SET_USER_MEMORY_REGION, &memory);
-    if (r < 0) {
-        fprintf(stderr, "destroy_userspace_phys_mem: %s", strerror(-r));
-        return;
-    }
-
-    free_slot(memory.slot);
-}
-
-static void kvm_unregister_memory_area(kvm_context_t kvm, uint64_t phys_addr,
-                                       unsigned long size)
-{
-
-    int slot = get_container_slot(phys_addr, size);
-
-    if (slot != -1) {
-        DPRINTF("Unregistering memory region %" PRIx64 " (%lx)\n", phys_addr, size);
-        kvm_destroy_phys_mem(kvm, phys_addr, size);
-        return;
-    }
-}
-
-static int kvm_get_map(kvm_context_t kvm, int ioctl_num, int slot, void *buf)
-{
-    int r;
-    struct kvm_dirty_log log = {
-        .slot = slot,
-    };
-
-    log.dirty_bitmap = buf;
-
-    r = kvm_vm_ioctl(kvm_state, ioctl_num, &log);
-    if (r < 0)
-        return r;
-    return 0;
-}
-
-int kvm_get_dirty_pages_range(kvm_context_t kvm, unsigned long phys_addr,
-                              unsigned long len, void *opaque,
-                              int (*cb)(unsigned long start,
-                                        unsigned long len, void *bitmap,
-                                        void *opaque))
-{
-    int i;
-    int r;
-    unsigned long end_addr = phys_addr + len;
-    void *buf;
-
-    for (i = 0; i < KVM_MAX_NUM_MEM_REGIONS; ++i) {
-        if ((slots[i].len && (uint64_t) slots[i].phys_addr >= phys_addr)
-            && ((uint64_t) slots[i].phys_addr + slots[i].len <= end_addr)) {
-            buf = qemu_malloc(BITMAP_SIZE(slots[i].len));
-            r = kvm_get_map(kvm, KVM_GET_DIRTY_LOG, i, buf);
-            if (r) {
-                qemu_free(buf);
-                return r;
-            }
-            r = cb(slots[i].phys_addr, slots[i].len, buf, opaque);
-            qemu_free(buf);
-            if (r)
-                return r;
-        }
-    }
     return 0;
 }
 
@@ -2103,123 +1774,6 @@ static int kvm_create_context(void)
     return 0;
 }
 
-void kvm_set_phys_mem(target_phys_addr_t start_addr, ram_addr_t size,
-                      ram_addr_t phys_offset)
-{
-    int r = 0;
-    unsigned long area_flags;
-
-    if (start_addr + size > phys_ram_size) {
-        phys_ram_size = start_addr + size;
-    }
-
-    phys_offset &= ~IO_MEM_ROM;
-    area_flags = phys_offset & ~TARGET_PAGE_MASK;
-
-    if (area_flags != IO_MEM_RAM) {
-        while (size > 0) {
-            int slot;
-
-            slot = get_slot(start_addr);
-            if (slot != -1) {
-                kvm_unregister_memory_area(kvm_context, slots[slot].phys_addr,
-                                           slots[slot].len);
-            }
-            start_addr += TARGET_PAGE_SIZE;
-            if (size > TARGET_PAGE_SIZE) {
-                size -= TARGET_PAGE_SIZE;
-            } else {
-                size = 0;
-            }
-        }
-        return;
-    }
-
-    r = kvm_is_containing_region(kvm_context, start_addr, size);
-    if (r)
-        return;
-
-    if (area_flags >= TLB_MMIO)
-        return;
-
-    r = kvm_register_phys_mem(kvm_context, start_addr,
-                              qemu_get_ram_ptr(phys_offset), size, 0);
-    if (r < 0) {
-        printf("kvm_cpu_register_physical_memory: failed\n");
-        exit(1);
-    }
-
-    return;
-}
-
-/*
- * dirty pages logging
- */
-/* FIXME: use unsigned long pointer instead of unsigned char */
-int kvm_physical_memory_set_dirty_tracking(int enable)
-{
-    int r = 0;
-
-    if (!kvm_enabled())
-        return 0;
-
-    if (enable) {
-        r = kvm_dirty_pages_log_enable_all(kvm_context);
-    } else {
-        r = kvm_dirty_pages_log_reset(kvm_context);
-    }
-    return r;
-}
-
-/* get kvm's dirty pages bitmap and update qemu's */
-static int kvm_get_dirty_pages_log_range(unsigned long start_addr,
-                                         unsigned long *bitmap,
-                                         unsigned long offset,
-                                         unsigned long mem_size)
-{
-    unsigned int i, j;
-    unsigned long page_number, addr, addr1, c;
-    ram_addr_t ram_addr;
-    unsigned int len = ((mem_size / TARGET_PAGE_SIZE) + HOST_LONG_BITS - 1) /
-        HOST_LONG_BITS;
-
-    /* 
-     * bitmap-traveling is faster than memory-traveling (for addr...) 
-     * especially when most of the memory is not dirty.
-     */
-    for (i = 0; i < len; i++) {
-        if (bitmap[i] != 0) {
-            c = leul_to_cpu(bitmap[i]);
-            do {
-                j = ffsl(c) - 1;
-                c &= ~(1ul << j);
-                page_number = i * HOST_LONG_BITS + j;
-                addr1 = page_number * TARGET_PAGE_SIZE;
-                addr = offset + addr1;
-                ram_addr = cpu_get_physical_page_desc(addr);
-                cpu_physical_memory_set_dirty(ram_addr);
-            } while (c != 0);
-        }
-    }
-    return 0;
-}
-
-static int kvm_get_dirty_bitmap_cb(unsigned long start, unsigned long len,
-                                   void *bitmap, void *opaque)
-{
-    return kvm_get_dirty_pages_log_range(start, bitmap, start, len);
-}
-
-void kvm_qemu_log_memory(target_phys_addr_t start, target_phys_addr_t size,
-                         int log)
-{
-    if (log)
-        kvm_dirty_pages_log_enable_slot(kvm_context, start, size);
-    else {
-        kvm_dirty_pages_log_disable_slot(kvm_context, start, size);
-    }
-}
-
 #ifdef KVM_CAP_IRQCHIP
 
 int kvm_set_irq(int irq, int level, int *status)
@@ -2283,33 +1837,6 @@ void kvm_ioperm(CPUState *env, void *data)
 }
 
 #endif
-
-int kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr,
-                                   target_phys_addr_t end_addr)
-{
-#ifndef TARGET_IA64
-    kvm_get_dirty_pages_range(kvm_context, start_addr,
-                              end_addr - start_addr, NULL,
-                              kvm_get_dirty_bitmap_cb);
-#endif
-    return 0;
-}
-
-int kvm_log_start(target_phys_addr_t phys_addr, ram_addr_t len)
-{
-#ifndef TARGET_IA64
-    kvm_qemu_log_memory(phys_addr, len, 1);
-#endif
-    return 0;
-}
-
-int kvm_log_stop(target_phys_addr_t phys_addr, ram_addr_t len)
-{
-#ifndef TARGET_IA64
-    kvm_qemu_log_memory(phys_addr, len, 0);
-#endif
-    return 0;
-}
 
 int kvm_set_boot_cpu_id(uint32_t id)
 {

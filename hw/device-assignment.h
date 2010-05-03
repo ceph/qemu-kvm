@@ -63,7 +63,7 @@ typedef struct {
 
 typedef struct {
     pcibus_t e_physbase;
-    uint32_t memory_index;
+    ram_addr_t memory_index;
     union {
         void *r_virtbase;    /* mmapped access address for memory regions */
         uint32_t r_baseport; /* the base guest port for I/O regions */

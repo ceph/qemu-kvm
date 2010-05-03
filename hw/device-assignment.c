@@ -256,10 +256,7 @@ static void assigned_dev_iomem_map(PCIDevice *pci_dev, int region_num,
     AssignedDevice *r_dev = container_of(pci_dev, AssignedDevice, dev);
     AssignedDevRegion *region = &r_dev->v_addrs[region_num];
     PCIRegion *real_region = &r_dev->real_device.regions[region_num];
-    pcibus_t old_ephys = region->e_physbase;
-    pcibus_t old_esize = region->e_size;
-    int first_map = (region->e_size == 0);
-    int ret = 0;
+    int ret = 0, flags = 0;
 
     DEBUG("e_phys=%08" FMT_PCIBUS " r_virt=%p type=%d len=%08" FMT_PCIBUS " region_num=%d \n",
           e_phys, region->u.r_virtbase, type, e_size, region_num);
@@ -267,30 +264,22 @@ static void assigned_dev_iomem_map(PCIDevice *pci_dev, int region_num,
     region->e_physbase = e_phys;
     region->e_size = e_size;
 
-    if (!first_map)
-	kvm_destroy_phys_mem(kvm_context, old_ephys,
-                             TARGET_PAGE_ALIGN(old_esize));
-
     if (e_size > 0) {
+
+        if (region_num == PCI_ROM_SLOT)
+            flags |= IO_MEM_ROM;
+
+        cpu_register_physical_memory(e_phys, e_size, region->memory_index | flags);
+
         /* deal with MSI-X MMIO page */
         if (real_region->base_addr <= r_dev->msix_table_addr &&
                 real_region->base_addr + real_region->size >=
                 r_dev->msix_table_addr) {
             int offset = r_dev->msix_table_addr - real_region->base_addr;
-            ret = munmap(region->u.r_virtbase + offset, TARGET_PAGE_SIZE);
-            if (ret == 0)
-                DEBUG("munmap done, virt_base 0x%p\n",
-                        region->u.r_virtbase + offset);
-            else {
-                fprintf(stderr, "%s: fail munmap msix table!\n", __func__);
-                exit(1);
-            }
+
             cpu_register_physical_memory(e_phys + offset,
                     TARGET_PAGE_SIZE, r_dev->mmio_index);
         }
-	ret = kvm_register_phys_mem(kvm_context, e_phys,
-                                    region->u.r_virtbase,
-                                    TARGET_PAGE_ALIGN(e_size), 0);
     }
 
     if (ret != 0) {
@@ -539,6 +528,15 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
             pci_dev->v_addrs[i].u.r_virtbase +=
                 (cur_region->base_addr & 0xFFF);
 
+
+            if (!slow_map) {
+                void *virtbase = pci_dev->v_addrs[i].u.r_virtbase;
+
+                pci_dev->v_addrs[i].memory_index = qemu_ram_map(cur_region->size,
+                                                                virtbase);
+            } else
+                pci_dev->v_addrs[i].memory_index = 0;
+
             pci_register_bar((PCIDevice *) pci_dev, i,
                              cur_region->size, t,
                              slow_map ? assigned_dev_iomem_map_slow
@@ -726,10 +724,6 @@ static void free_assigned_device(AssignedDevice *dev)
                 kvm_remove_ioperm_data(region->u.r_baseport, region->r_size);
                 continue;
             } else if (pci_region->type & IORESOURCE_MEM) {
-                if (region->e_size > 0)
-                    kvm_destroy_phys_mem(kvm_context, region->e_physbase,
-                                         TARGET_PAGE_ALIGN(region->e_size));
-
                 if (region->u.r_virtbase) {
                     int ret = munmap(region->u.r_virtbase,
                                      (pci_region->size + 0xFFF) & 0xFFFFF000);

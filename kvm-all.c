@@ -30,7 +30,6 @@
 
 /* KVM uses PAGE_SIZE in it's definition of COALESCED_MMIO_MAX */
 #define PAGE_SIZE TARGET_PAGE_SIZE
-#ifdef KVM_UPSTREAM
 
 //#define DEBUG_KVM
 
@@ -41,6 +40,8 @@
 #define DPRINTF(fmt, ...) \
     do { } while (0)
 #endif
+
+#ifdef KVM_UPSTREAM
 
 typedef struct KVMSlot
 {
@@ -75,6 +76,8 @@ struct KVMState
 };
 
 static KVMState *kvm_state;
+
+#endif
 
 static KVMSlot *kvm_alloc_slot(KVMState *s)
 {
@@ -152,6 +155,7 @@ static int kvm_set_user_memory_region(KVMState *s, KVMSlot *slot)
     return kvm_vm_ioctl(s, KVM_SET_USER_MEMORY_REGION, &mem);
 }
 
+#ifdef KVM_UPSTREAM
 static void kvm_reset_vcpu(void *opaque)
 {
     CPUState *env = opaque;
@@ -217,6 +221,7 @@ int kvm_init_vcpu(CPUState *env)
 err:
     return ret;
 }
+#endif
 
 /*
  * dirty pages logging control
@@ -371,7 +376,6 @@ static int kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr,
 
     return ret;
 }
-#endif
 
 int kvm_coalesce_mmio_region(target_phys_addr_t start, ram_addr_t size)
 {
@@ -422,7 +426,6 @@ int kvm_check_extension(KVMState *s, unsigned int extension)
 
     return ret;
 }
-#ifdef KVM_UPSTREAM
 
 static void kvm_set_phys_mem(target_phys_addr_t start_addr,
 			     ram_addr_t size,
@@ -561,8 +564,6 @@ static void kvm_set_phys_mem(target_phys_addr_t start_addr,
         abort();
     }
 }
-
-#endif
 
 static void kvm_client_set_memory(struct CPUPhysMemoryClient *client,
 				  target_phys_addr_t start_addr,

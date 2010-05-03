@@ -813,8 +813,6 @@ void qemu_kvm_cpuid_on_env(CPUState *env);
 void kvm_inject_interrupt(CPUState *env, int mask);
 void kvm_update_after_sipi(CPUState *env);
 void kvm_update_interrupt_request(CPUState *env);
-void kvm_set_phys_mem(target_phys_addr_t start_addr, ram_addr_t size,
-                      ram_addr_t phys_offset);
 void *kvm_cpu_create_phys_mem(target_phys_addr_t start_addr, unsigned long size,
                               int log, int writable);
 
@@ -899,20 +897,10 @@ int handle_tpr_access(void *opaque, CPUState *env, uint64_t rip,
 void kvm_mutex_unlock(void);
 void kvm_mutex_lock(void);
 
-int kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr,
-                                   target_phys_addr_t end_addr);
-
-
 static inline int kvm_sync_vcpus(void)
 {
     return 0;
 }
-
-static inline int kvm_set_migration_log(int enable)
-{
-    return kvm_physical_memory_set_dirty_tracking(enable);
-}
-
 
 #ifdef CONFIG_KVM
 
