@@ -1075,20 +1075,6 @@ int kvm_deassign_pci_device(kvm_context_t kvm,
 }
 #endif
 
-int kvm_destroy_memory_region_works(kvm_context_t kvm)
-{
-    int ret = 0;
-
-#ifdef KVM_CAP_DESTROY_MEMORY_REGION_WORKS
-    ret =
-        kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION,
-                  KVM_CAP_DESTROY_MEMORY_REGION_WORKS);
-    if (ret <= 0)
-        ret = 0;
-#endif
-    return ret;
-}
-
 int kvm_reinject_control(kvm_context_t kvm, int pit_reinject)
 {
 #ifdef KVM_CAP_REINJECT_CONTROL
@@ -2057,11 +2043,6 @@ int kvm_main_loop(void)
     return 0;
 }
 
-#ifdef TARGET_I386
-static int destroy_region_works = 0;
-#endif
-
-
 #if !defined(TARGET_I386)
 int kvm_arch_init_irq_routing(void)
 {
@@ -2073,6 +2054,10 @@ extern int no_hpet;
 
 static int kvm_create_context(void)
 {
+    static const char upgrade_note[] =
+    "Please upgrade to at least kernel 2.6.29 or recent kvm-kmod\n"
+    "(see http://sourceforge.net/projects/kvm).\n";
+
     int r;
 
     if (!kvm_irqchip) {
@@ -2096,9 +2081,16 @@ static int kvm_create_context(void)
             return -1;
         }
     }
-#ifdef TARGET_I386
-    destroy_region_works = kvm_destroy_memory_region_works(kvm_context);
-#endif
+
+    /* There was a nasty bug in < kvm-80 that prevents memory slots from being
+     * destroyed properly.  Since we rely on this capability, refuse to work
+     * with any kernel without this capability. */
+    if (!kvm_check_extension(kvm_state, KVM_CAP_DESTROY_MEMORY_REGION_WORKS)) {
+        fprintf(stderr,
+                "KVM kernel module broken (DESTROY_MEMORY_REGION).\n%s",
+                upgrade_note);
+        return -EINVAL;
+    }
 
     r = kvm_arch_init_irq_routing();
     if (r < 0) {
@@ -2136,73 +2128,11 @@ static int kvm_create_context(void)
     return 0;
 }
 
-#ifdef TARGET_I386
-static int must_use_aliases_source(target_phys_addr_t addr)
-{
-    if (destroy_region_works)
-        return false;
-    if (addr == 0xa0000 || addr == 0xa8000)
-        return true;
-    return false;
-}
-
-static int must_use_aliases_target(target_phys_addr_t addr)
-{
-    if (destroy_region_works)
-        return false;
-    if (addr >= 0xe0000000 && addr < 0x100000000ull)
-        return true;
-    return false;
-}
-
-static struct mapping {
-    target_phys_addr_t phys;
-    ram_addr_t ram;
-    ram_addr_t len;
-} mappings[50];
-static int nr_mappings;
-
-static struct mapping *find_ram_mapping(ram_addr_t ram_addr)
-{
-    struct mapping *p;
-
-    for (p = mappings; p < mappings + nr_mappings; ++p) {
-        if (p->ram <= ram_addr && ram_addr < p->ram + p->len) {
-            return p;
-        }
-    }
-    return NULL;
-}
-
-static struct mapping *find_mapping(target_phys_addr_t start_addr)
-{
-    struct mapping *p;
-
-    for (p = mappings; p < mappings + nr_mappings; ++p) {
-        if (p->phys <= start_addr && start_addr < p->phys + p->len) {
-            return p;
-        }
-    }
-    return NULL;
-}
-
-static void drop_mapping(target_phys_addr_t start_addr)
-{
-    struct mapping *p = find_mapping(start_addr);
-
-    if (p)
-        *p = mappings[--nr_mappings];
-}
-#endif
-
 void kvm_set_phys_mem(target_phys_addr_t start_addr, ram_addr_t size,
                       ram_addr_t phys_offset)
 {
     int r = 0;
     unsigned long area_flags;
-#ifdef TARGET_I386
-    struct mapping *p;
-#endif
 
     if (start_addr + size > phys_ram_size) {
         phys_ram_size = start_addr + size;
@@ -2212,19 +2142,13 @@ void kvm_set_phys_mem(target_phys_addr_t start_addr, ram_addr_t size,
     area_flags = phys_offset & ~TARGET_PAGE_MASK;
 
     if (area_flags != IO_MEM_RAM) {
-#ifdef TARGET_I386
-        if (must_use_aliases_source(start_addr)) {
-            kvm_destroy_memory_alias(kvm_context, start_addr);
-            return;
-        }
-        if (must_use_aliases_target(start_addr))
-            return;
-#endif
         while (size > 0) {
-            p = find_mapping(start_addr);
-            if (p) {
-                kvm_unregister_memory_area(kvm_context, p->phys, p->len);
-                drop_mapping(p->phys);
+            int slot;
+
+            slot = get_slot(start_addr);
+            if (slot != -1) {
+                kvm_unregister_memory_area(kvm_context, slots[slot].phys_addr,
+                                           slots[slot].len);
             }
             start_addr += TARGET_PAGE_SIZE;
             if (size > TARGET_PAGE_SIZE) {
@@ -2243,30 +2167,12 @@ void kvm_set_phys_mem(target_phys_addr_t start_addr, ram_addr_t size,
     if (area_flags >= TLB_MMIO)
         return;
 
-#ifdef TARGET_I386
-    if (must_use_aliases_source(start_addr)) {
-        p = find_ram_mapping(phys_offset);
-        if (p) {
-            kvm_create_memory_alias(kvm_context, start_addr, size,
-                                    p->phys + (phys_offset - p->ram));
-        }
-        return;
-    }
-#endif
-
     r = kvm_register_phys_mem(kvm_context, start_addr,
                               qemu_get_ram_ptr(phys_offset), size, 0);
     if (r < 0) {
         printf("kvm_cpu_register_physical_memory: failed\n");
         exit(1);
     }
-#ifdef TARGET_I386
-    drop_mapping(start_addr);
-    p = &mappings[nr_mappings++];
-    p->phys = start_addr;
-    p->ram = phys_offset;
-    p->len = size;
-#endif
 
     return;
 }
@@ -2344,10 +2250,6 @@ void kvm_qemu_log_memory(target_phys_addr_t start, target_phys_addr_t size,
     if (log)
         kvm_dirty_pages_log_enable_slot(kvm_context, start, size);
     else {
-#ifdef TARGET_I386
-        if (must_use_aliases_target(start))
-            return;
-#endif
         kvm_dirty_pages_log_disable_slot(kvm_context, start, size);
     }
 }
@@ -2420,12 +2322,6 @@ int kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr,
                                    target_phys_addr_t end_addr)
 {
 #ifndef TARGET_IA64
-
-#ifdef TARGET_I386
-    if (must_use_aliases_source(start_addr))
-        return 0;
-#endif
-
     kvm_get_dirty_pages_range(kvm_context, start_addr,
                               end_addr - start_addr, NULL,
                               kvm_get_dirty_bitmap_cb);
@@ -2435,11 +2331,6 @@ int kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr,
 
 int kvm_log_start(target_phys_addr_t phys_addr, ram_addr_t len)
 {
-#ifdef TARGET_I386
-    if (must_use_aliases_source(phys_addr))
-        return 0;
-#endif
-
 #ifndef TARGET_IA64
     kvm_qemu_log_memory(phys_addr, len, 1);
 #endif
@@ -2448,11 +2339,6 @@ int kvm_log_start(target_phys_addr_t phys_addr, ram_addr_t len)
 
 int kvm_log_stop(target_phys_addr_t phys_addr, ram_addr_t len)
 {
-#ifdef TARGET_I386
-    if (must_use_aliases_source(phys_addr))
-        return 0;
-#endif
-
 #ifndef TARGET_IA64
     kvm_qemu_log_memory(phys_addr, len, 0);
 #endif

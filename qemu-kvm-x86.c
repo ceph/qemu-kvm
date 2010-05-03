@@ -214,71 +214,6 @@ int kvm_arch_run(CPUState *env)
 	return r;
 }
 
-#define MAX_ALIAS_SLOTS 4
-static struct {
-	uint64_t start;
-	uint64_t len;
-} kvm_aliases[MAX_ALIAS_SLOTS];
-
-static int get_alias_slot(uint64_t start)
-{
-	int i;
-
-	for (i=0; i<MAX_ALIAS_SLOTS; i++)
-		if (kvm_aliases[i].start == start)
-			return i;
-	return -1;
-}
-static int get_free_alias_slot(void)
-{
-        int i;
-
-        for (i=0; i<MAX_ALIAS_SLOTS; i++)
-                if (kvm_aliases[i].len == 0)
-                        return i;
-        return -1;
-}
-
-static void register_alias(int slot, uint64_t start, uint64_t len)
-{
-	kvm_aliases[slot].start = start;
-	kvm_aliases[slot].len   = len;
-}
-
-int kvm_create_memory_alias(kvm_context_t kvm,
-			    uint64_t phys_start,
-			    uint64_t len,
-			    uint64_t target_phys)
-{
-	struct kvm_memory_alias alias = {
-		.flags = 0,
-		.guest_phys_addr = phys_start,
-		.memory_size = len,
-		.target_phys_addr = target_phys,
-	};
-	int r;
-	int slot;
-
-	slot = get_alias_slot(phys_start);
-	if (slot < 0)
-		slot = get_free_alias_slot();
-	if (slot < 0)
-		return -EBUSY;
-	alias.slot = slot;
-
-	r = kvm_vm_ioctl(kvm_state, KVM_SET_MEMORY_ALIAS, &alias);
-	if (r == -1)
-	    return -errno;
-
-	register_alias(slot, phys_start, len);
-	return 0;
-}
-
-int kvm_destroy_memory_alias(kvm_context_t kvm, uint64_t phys_start)
-{
-	return kvm_create_memory_alias(kvm, phys_start, 0, 0);
-}
-
 #ifdef KVM_CAP_IRQCHIP
 
 int kvm_get_lapic(CPUState *env, struct kvm_lapic_state *s)
@@ -615,18 +550,6 @@ static int kvm_enable_tpr_access_reporting(CPUState *env)
     return kvm_vcpu_ioctl(env, KVM_TPR_ACCESS_REPORTING, &tac);
 }
 #endif
-
-int kvm_qemu_create_memory_alias(uint64_t phys_start,
-                                 uint64_t len,
-                                 uint64_t target_phys)
-{
-    return kvm_create_memory_alias(kvm_context, phys_start, len, target_phys);
-}
-
-int kvm_qemu_destroy_memory_alias(uint64_t phys_start)
-{
-	return kvm_destroy_memory_alias(kvm_context, phys_start);
-}
 
 #ifdef KVM_CAP_ADJUST_CLOCK
 static struct kvm_clock_data kvmclock_data;

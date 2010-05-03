@@ -400,23 +400,6 @@ int kvm_unregister_coalesced_mmio(kvm_context_t kvm, uint64_t addr,
                                   uint32_t size);
 
 /*!
- * \brief Create a memory alias
- *
- * Aliases a portion of physical memory to another portion.  If the guest
- * accesses the alias region, it will behave exactly as if it accessed
- * the target memory.
- */
-int kvm_create_memory_alias(kvm_context_t, uint64_t phys_start, uint64_t len,
-                            uint64_t target_phys);
-
-/*!
- * \brief Destroy a memory alias
- *
- * Removes an alias created with kvm_create_memory_alias().
- */
-int kvm_destroy_memory_alias(kvm_context_t, uint64_t phys_start);
-
-/*!
  * \brief Get a bitmap of guest ram pages which are allocated to the guest.
  *
  * \param kvm Pointer to the current kvm_context
@@ -650,15 +633,6 @@ int kvm_assign_irq(kvm_context_t kvm, struct kvm_assigned_irq *assigned_irq);
 int kvm_deassign_irq(kvm_context_t kvm, struct kvm_assigned_irq *assigned_irq);
 #endif
 #endif
-
-/*!
- * \brief Determines whether destroying memory regions is allowed
- *
- * KVM before 2.6.29 had a bug when destroying memory regions.
- *
- * \param kvm Pointer to the current kvm_context
- */
-int kvm_destroy_memory_region_works(kvm_context_t kvm);
 
 #ifdef KVM_CAP_DEVICE_DEASSIGNMENT
 /*!
