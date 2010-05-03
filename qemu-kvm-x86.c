@@ -35,7 +35,6 @@ static int lm_capable_kernel;
 
 int kvm_set_tss_addr(kvm_context_t kvm, unsigned long addr)
 {
-#ifdef KVM_CAP_SET_TSS_ADDR
 	int r;
         /*
          * Tell fw_cfg to notify the BIOS to reserve the range.
@@ -45,22 +44,16 @@ int kvm_set_tss_addr(kvm_context_t kvm, unsigned long addr)
             exit(1);
         }
 
-	r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_SET_TSS_ADDR);
-	if (r > 0) {
-		r = kvm_vm_ioctl(kvm_state, KVM_SET_TSS_ADDR, addr);
-		if (r < 0) {
-			fprintf(stderr, "kvm_set_tss_addr: %m\n");
-			return r;
-		}
-		return 0;
+	r = kvm_vm_ioctl(kvm_state, KVM_SET_TSS_ADDR, addr);
+	if (r < 0) {
+		fprintf(stderr, "kvm_set_tss_addr: %m\n");
+		return r;
 	}
-#endif
-	return -ENOSYS;
+	return 0;
 }
 
 static int kvm_init_tss(kvm_context_t kvm)
 {
-#ifdef KVM_CAP_SET_TSS_ADDR
 	int r;
 
 	r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_SET_TSS_ADDR);
@@ -74,9 +67,9 @@ static int kvm_init_tss(kvm_context_t kvm)
 			fprintf(stderr, "kvm_init_tss: unable to set tss addr\n");
 			return r;
 		}
-
+	} else {
+		fprintf(stderr, "kvm does not support KVM_CAP_SET_TSS_ADDR\n");
 	}
-#endif
 	return 0;
 }
 

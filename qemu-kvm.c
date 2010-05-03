@@ -157,24 +157,7 @@ static void init_slots(void)
 
 static int get_free_slot(kvm_context_t kvm)
 {
-    int i;
-    int tss_ext;
-
-#if defined(KVM_CAP_SET_TSS_ADDR) && !defined(__s390__)
-    tss_ext = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_SET_TSS_ADDR);
-#else
-    tss_ext = 0;
-#endif
-
-    /*
-     * on older kernels where the set tss ioctl is not supprted we must save
-     * slot 0 to hold the extended memory, as the vmx will use the last 3
-     * pages of this slot.
-     */
-    if (tss_ext > 0)
-        i = 0;
-    else
-        i = 1;
+    int i = 0;
 
     for (; i < KVM_MAX_NUM_MEM_REGIONS; ++i)
         if (!slots[i].len)
