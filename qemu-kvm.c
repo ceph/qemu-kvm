@@ -639,8 +639,8 @@ void kvm_destroy_phys_mem(kvm_context_t kvm, unsigned long phys_start,
     free_slot(memory.slot);
 }
 
-void kvm_unregister_memory_area(kvm_context_t kvm, uint64_t phys_addr,
-                                unsigned long size)
+static void kvm_unregister_memory_area(kvm_context_t kvm, uint64_t phys_addr,
+                                       unsigned long size)
 {
 
     int slot = get_container_slot(phys_addr, size);
@@ -665,14 +665,6 @@ static int kvm_get_map(kvm_context_t kvm, int ioctl_num, int slot, void *buf)
     if (r < 0)
         return r;
     return 0;
-}
-
-int kvm_get_dirty_pages(kvm_context_t kvm, unsigned long phys_addr, void *buf)
-{
-    int slot;
-
-    slot = get_slot(phys_addr);
-    return kvm_get_map(kvm, KVM_GET_DIRTY_LOG, slot, buf);
 }
 
 int kvm_get_dirty_pages_range(kvm_context_t kvm, unsigned long phys_addr,

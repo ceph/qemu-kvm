@@ -381,14 +381,11 @@ void *kvm_create_phys_mem(kvm_context_t, unsigned long phys_start,
                           unsigned long len, int log, int writable);
 void kvm_destroy_phys_mem(kvm_context_t, unsigned long phys_start,
                           unsigned long len);
-void kvm_unregister_memory_area(kvm_context_t, uint64_t phys_start,
-                                unsigned long len);
 
 int kvm_is_containing_region(kvm_context_t kvm, unsigned long phys_start,
                              unsigned long size);
 int kvm_register_phys_mem(kvm_context_t kvm, unsigned long phys_start,
                           void *userspace_addr, unsigned long len, int log);
-int kvm_get_dirty_pages(kvm_context_t, unsigned long phys_addr, void *buf);
 int kvm_get_dirty_pages_range(kvm_context_t kvm, unsigned long phys_addr,
                               unsigned long end_addr, void *opaque,
                               int (*cb)(unsigned long start,
