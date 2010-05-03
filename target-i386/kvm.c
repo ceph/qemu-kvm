@@ -330,6 +330,25 @@ static int kvm_has_msr_star(CPUState *env)
     return 0;
 }
 
+static int kvm_init_identity_map_page(KVMState *s)
+{
+#ifdef KVM_CAP_SET_IDENTITY_MAP_ADDR
+    int ret;
+    uint64_t addr = 0xfffbc000;
+
+    if (!kvm_check_extension(s, KVM_CAP_SET_IDENTITY_MAP_ADDR)) {
+        return 0;
+    }
+
+    ret = kvm_vm_ioctl(s, KVM_SET_IDENTITY_MAP_ADDR, &addr);
+    if (ret < 0) {
+        fprintf(stderr, "kvm_set_identity_map_addr: %s\n", strerror(ret));
+        return ret;
+    }
+#endif
+    return 0;
+}
+
 int kvm_arch_init(KVMState *s, int smp_cpus)
 {
     int ret;
@@ -357,7 +376,12 @@ int kvm_arch_init(KVMState *s, int smp_cpus)
         perror("e820_add_entry() table is full");
         exit(1);
     }
-    return kvm_vm_ioctl(s, KVM_SET_TSS_ADDR, 0xfffbd000);
+    ret = kvm_vm_ioctl(s, KVM_SET_TSS_ADDR, 0xfffbd000);
+    if (ret < 0) {
+        return ret;
+    }
+
+    return kvm_init_identity_map_page(s);
 }
                     
 static void set_v8086_seg(struct kvm_segment *lhs, const SegmentCache *rhs)
@@ -967,6 +991,10 @@ int kvm_arch_put_registers(CPUState *env, int level)
     if (ret < 0)
         return ret;
 
+    ret = kvm_put_debugregs(env);
+    if (ret < 0)
+        return ret;
+
     return 0;
 }
 
@@ -995,10 +1023,6 @@ int kvm_arch_get_registers(CPUState *env)
         return ret;
 
     ret = kvm_get_vcpu_events(env);
-    if (ret < 0)
-        return ret;
-
-    ret = kvm_put_debugregs(env);
     if (ret < 0)
         return ret;
 
