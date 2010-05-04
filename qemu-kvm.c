@@ -885,11 +885,6 @@ int pre_kvm_run(kvm_context_t kvm, CPUState *env)
 {
     kvm_arch_pre_run(env, env->kvm_run);
 
-    if (env->kvm_vcpu_dirty) {
-        kvm_arch_load_regs(env, KVM_PUT_RUNTIME_STATE);
-        env->kvm_vcpu_dirty = 0;
-    }
-
     pthread_mutex_unlock(&qemu_mutex);
     return 0;
 }
@@ -907,6 +902,10 @@ int kvm_run(CPUState *env)
     int fd = env->kvm_fd;
 
   again:
+    if (env->kvm_vcpu_dirty) {
+        kvm_arch_load_regs(env, KVM_PUT_RUNTIME_STATE);
+        env->kvm_vcpu_dirty = 0;
+    }
     push_nmi(kvm);
 #if !defined(__s390__)
     if (!kvm->irqchip_in_kernel)
