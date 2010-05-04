@@ -552,6 +552,8 @@ static int kvm_put_sregs(CPUState *env)
     return kvm_vcpu_ioctl(env, KVM_SET_SREGS, &sregs);
 }
 
+#endif
+
 static void kvm_msr_entry_set(struct kvm_msr_entry *entry,
                               uint32_t index, uint64_t value)
 {
@@ -559,6 +561,7 @@ static void kvm_msr_entry_set(struct kvm_msr_entry *entry,
     entry->data = value;
 }
 
+#ifdef KVM_UPSTREAM
 static int kvm_put_msrs(CPUState *env, int level)
 {
     struct {

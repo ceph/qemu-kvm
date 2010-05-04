@@ -693,13 +693,6 @@ int kvm_arch_qemu_create_context(void)
     return 0;
 }
 
-static void set_msr_entry(struct kvm_msr_entry *entry, uint32_t index,
-                          uint64_t data)
-{
-    entry->index = index;
-    entry->data  = data;
-}
-
 /* returns 0 on success, non-0 on failure */
 static int get_msr_entry(struct kvm_msr_entry *entry, CPUState *env)
 {
@@ -960,19 +953,19 @@ void kvm_arch_load_regs(CPUState *env, int level)
     /* msrs */
     n = 0;
     /* Remember to increase msrs size if you add new registers below */
-    set_msr_entry(&msrs[n++], MSR_IA32_SYSENTER_CS,  env->sysenter_cs);
-    set_msr_entry(&msrs[n++], MSR_IA32_SYSENTER_ESP, env->sysenter_esp);
-    set_msr_entry(&msrs[n++], MSR_IA32_SYSENTER_EIP, env->sysenter_eip);
+    kvm_msr_entry_set(&msrs[n++], MSR_IA32_SYSENTER_CS,  env->sysenter_cs);
+    kvm_msr_entry_set(&msrs[n++], MSR_IA32_SYSENTER_ESP, env->sysenter_esp);
+    kvm_msr_entry_set(&msrs[n++], MSR_IA32_SYSENTER_EIP, env->sysenter_eip);
     if (kvm_has_msr_star)
-	set_msr_entry(&msrs[n++], MSR_STAR,              env->star);
+	kvm_msr_entry_set(&msrs[n++], MSR_STAR,              env->star);
     if (kvm_has_vm_hsave_pa)
-        set_msr_entry(&msrs[n++], MSR_VM_HSAVE_PA, env->vm_hsave);
+        kvm_msr_entry_set(&msrs[n++], MSR_VM_HSAVE_PA, env->vm_hsave);
 #ifdef TARGET_X86_64
     if (lm_capable_kernel) {
-        set_msr_entry(&msrs[n++], MSR_CSTAR,             env->cstar);
-        set_msr_entry(&msrs[n++], MSR_KERNELGSBASE,      env->kernelgsbase);
-        set_msr_entry(&msrs[n++], MSR_FMASK,             env->fmask);
-        set_msr_entry(&msrs[n++], MSR_LSTAR  ,           env->lstar);
+        kvm_msr_entry_set(&msrs[n++], MSR_CSTAR,             env->cstar);
+        kvm_msr_entry_set(&msrs[n++], MSR_KERNELGSBASE,      env->kernelgsbase);
+        kvm_msr_entry_set(&msrs[n++], MSR_FMASK,             env->fmask);
+        kvm_msr_entry_set(&msrs[n++], MSR_LSTAR  ,           env->lstar);
     }
 #endif
     if (level == KVM_PUT_FULL_STATE) {
@@ -983,20 +976,20 @@ void kvm_arch_load_regs(CPUState *env, int level)
          * huge jump-backs that would occur without any writeback at all.
          */
         if (smp_cpus == 1 || env->tsc != 0) {
-            set_msr_entry(&msrs[n++], MSR_IA32_TSC, env->tsc);
+            kvm_msr_entry_set(&msrs[n++], MSR_IA32_TSC, env->tsc);
         }
-        set_msr_entry(&msrs[n++], MSR_KVM_SYSTEM_TIME, env->system_time_msr);
-        set_msr_entry(&msrs[n++], MSR_KVM_WALL_CLOCK, env->wall_clock_msr);
+        kvm_msr_entry_set(&msrs[n++], MSR_KVM_SYSTEM_TIME, env->system_time_msr);
+        kvm_msr_entry_set(&msrs[n++], MSR_KVM_WALL_CLOCK, env->wall_clock_msr);
     }
 #ifdef KVM_CAP_MCE
     if (env->mcg_cap) {
         if (level == KVM_PUT_RESET_STATE)
-            set_msr_entry(&msrs[n++], MSR_MCG_STATUS, env->mcg_status);
+            kvm_msr_entry_set(&msrs[n++], MSR_MCG_STATUS, env->mcg_status);
         else if (level == KVM_PUT_FULL_STATE) {
-            set_msr_entry(&msrs[n++], MSR_MCG_STATUS, env->mcg_status);
-            set_msr_entry(&msrs[n++], MSR_MCG_CTL, env->mcg_ctl);
+            kvm_msr_entry_set(&msrs[n++], MSR_MCG_STATUS, env->mcg_status);
+            kvm_msr_entry_set(&msrs[n++], MSR_MCG_CTL, env->mcg_ctl);
             for (i = 0; i < (env->mcg_cap & 0xff); i++)
-                set_msr_entry(&msrs[n++], MSR_MC0_CTL + i, env->mce_banks[i]);
+                kvm_msr_entry_set(&msrs[n++], MSR_MC0_CTL + i, env->mce_banks[i]);
         }
     }
 #endif
