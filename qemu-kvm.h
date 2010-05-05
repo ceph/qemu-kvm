@@ -97,7 +97,6 @@ int handle_io_window(kvm_context_t kvm);
 int try_push_interrupts(kvm_context_t kvm);
 
 #if defined(__x86_64__) || defined(__i386__)
-struct kvm_msr_list *kvm_get_msr_list(kvm_context_t);
 int kvm_get_msrs(CPUState *env, struct kvm_msr_entry *msrs, int n);
 int kvm_set_msrs(CPUState *env, struct kvm_msr_entry *msrs, int n);
 int kvm_get_mce_cap_supported(kvm_context_t, uint64_t *mce_cap,

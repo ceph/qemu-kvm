@@ -321,7 +321,7 @@ void kvm_show_code(CPUState *env)
 /*
  * Returns available msr list.  User must free.
  */
-struct kvm_msr_list *kvm_get_msr_list(kvm_context_t kvm)
+static struct kvm_msr_list *kvm_get_msr_list(void)
 {
 	struct kvm_msr_list sizer, *msrs;
 	int r;
@@ -586,7 +586,7 @@ int kvm_arch_qemu_create_context(void)
     if (kvm_shadow_memory)
         kvm_set_shadow_pages(kvm_context, kvm_shadow_memory);
 
-    kvm_msr_list = kvm_get_msr_list(kvm_context);
+    kvm_msr_list = kvm_get_msr_list();
     if (!kvm_msr_list)
 		return -1;
     for (i = 0; i < kvm_msr_list->nmsrs; ++i) {
