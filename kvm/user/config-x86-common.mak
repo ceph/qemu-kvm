@@ -20,7 +20,7 @@ libgcc := $(shell $(CC) -m$(bits) --print-libgcc-file-name)
 
 FLATLIBS = test/lib/libcflat.a $(libgcc)
 %.flat: %.o $(FLATLIBS) flat.lds
-	$(CC) $(CFLAGS) -nostdlib -o $@ -Wl,-T,flat.lds $^ $(FLATLIBS)
+	$(CC) $(CFLAGS) -nostdlib -o $@ -Wl,-T,flat.lds $(filter %.o, $^) $(FLATLIBS)
 
 tests-common = $(TEST_DIR)/vmexit.flat $(TEST_DIR)/tsc.flat \
                $(TEST_DIR)/smptest.flat  $(TEST_DIR)/port80.flat \
