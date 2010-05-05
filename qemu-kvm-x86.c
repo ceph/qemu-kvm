@@ -1333,8 +1333,31 @@ void kvm_arch_push_nmi(void *opaque)
 }
 #endif /* KVM_CAP_USER_NMI */
 
+static int kvm_reset_msrs(CPUState *env)
+{
+    struct {
+        struct kvm_msrs info;
+        struct kvm_msr_entry entries[100];
+    } msr_data;
+    int n;
+    struct kvm_msr_entry *msrs = msr_data.entries;
+
+    if (!kvm_msr_list)
+        return -1;
+
+    for (n = 0; n < kvm_msr_list->nmsrs; n++) {
+        kvm_msr_entry_set(&msrs[n], kvm_msr_list->indices[n], 0);
+    }
+
+    msr_data.info.nmsrs = n;
+
+    return kvm_vcpu_ioctl(env, KVM_SET_MSRS, &msr_data);
+}
+
+
 void kvm_arch_cpu_reset(CPUState *env)
 {
+    kvm_reset_msrs(env);
     kvm_arch_reset_vcpu(env);
     kvm_reset_mpstate(env);
 }
