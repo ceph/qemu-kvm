@@ -393,33 +393,30 @@ static void rbd_finish_aiocb(rados_completion_t c, RADOSCB * rcb)
     int64_t r;
     int i;
 
-    if (rados_aio_is_complete(c)) {
-        acb->aiocnt--;
-        r = rados_aio_get_return_value(c);
-        rados_aio_set_callback(c, NULL, NULL);
-        rados_aio_release(c);
-        if (acb->write) {
-            acb->ret += r;
+    acb->aiocnt--;
+    r = rados_aio_get_return_value(c);
+    rados_aio_release(c);
+    if (acb->write) {
+        acb->ret += r;
+    } else {
+        if (r < 0) {
+            memset(rcb->buf, 0, rcb->segsize);
+            acb->ret += rcb->segsize;
+        } else if (r < rcb->segsize) {
+            memset(rcb->buf + r, 0, rcb->segsize - r);
+            acb->ret += rcb->segsize;
         } else {
-            if (r < 0) {
-                memset(rcb->buf, 0, rcb->segsize);
-                acb->ret += rcb->segsize;
-            } else if (r < rcb->segsize) {
-                memset(rcb->buf + r, 0, rcb->segsize - r);
-                acb->ret += rcb->segsize;
-            } else {
-                acb->ret += r;
-            }
+            acb->ret += r;
         }
-        qemu_free(rcb);
-        i = 0;
-        while ((acb->aiocnt == 0) && !acb->rccomplete && i < 5) {
-            usleep(100);
-            i++;
-        }
-        if ((acb->aiocnt == 0) && acb->rccomplete && acb->bh) {
-            qemu_bh_schedule(acb->bh);
-        }
+    }
+    qemu_free(rcb);
+    i = 0;
+    while ((acb->aiocnt == 0) && !acb->rccomplete && i < 5) {
+        usleep(100);
+        i++;
+    }
+    if ((acb->aiocnt == 0) && acb->rccomplete && acb->bh) {
+        qemu_bh_schedule(acb->bh);
     }
 }
 
@@ -494,8 +491,8 @@ static BlockDriverAIOCB *rbd_aio_rw_vector(BlockDriverState * bs,
 
         acb->aiocnt++;
 
-        rados_aio_create_completion((rados_callback_t) rbd_finish_aiocb,
-                                    rcb, &c);
+        rados_aio_create_completion(rcb, (rados_callback_t) rbd_finish_aiocb,
+                                    NULL, &c);
         if (write) {
             rados_aio_write(s->pool, n, segoffs, buf, segsize, c);
         } else {
