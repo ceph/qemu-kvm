@@ -1390,6 +1390,7 @@ static int assigned_exitfn(struct PCIDevice *pci_dev)
 {
     AssignedDevice *dev = DO_UPCAST(AssignedDevice, dev, pci_dev);
 
+    QLIST_REMOVE(dev, next);
     deassign_device(dev);
     free_assigned_device(dev);
     return 0;
