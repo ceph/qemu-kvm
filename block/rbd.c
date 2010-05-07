@@ -56,7 +56,6 @@ typedef struct RBDAIOCB {
     int write;
     int64_t sector_num;
     int aiocnt;
-    int rccomplete;
 } RBDAIOCB;
 
 typedef struct RADOSCB {
@@ -391,11 +390,7 @@ static void rbd_finish_aiocb(rados_completion_t c, RADOSCB * rcb)
     }
     qemu_free(rcb);
     i = 0;
-    while ((acb->aiocnt == 0) && !acb->rccomplete && i < 5) {
-        usleep(100);
-        i++;
-    }
-    if ((acb->aiocnt == 0) && acb->rccomplete && acb->bh) {
+    if ((acb->aiocnt == 0) && acb->bh) {
         qemu_bh_schedule(acb->bh);
     }
 }
@@ -425,7 +420,7 @@ static BlockDriverAIOCB *rbd_aio_rw_vector(BlockDriverState * bs,
     RADOSCB *rcb;
     rados_completion_t c;
     char n[RBD_MAX_SEG_NAME_SIZE];
-    int64_t segnr, segoffs, segsize;
+    int64_t segnr, segoffs, segsize, last_segnr;
     int64_t off, size;
     char *buf;
 
@@ -437,7 +432,6 @@ static BlockDriverAIOCB *rbd_aio_rw_vector(BlockDriverState * bs,
     acb->bounce = qemu_blockalign(bs, qiov->size);
     acb->aiocnt = 0;
     acb->ret = 0;
-    acb->rccomplete = 0;
 
     if (!acb->bh) {
         acb->bh = qemu_bh_new(rbd_aio_bh_cb, acb);
@@ -455,6 +449,9 @@ static BlockDriverAIOCB *rbd_aio_rw_vector(BlockDriverState * bs,
     segoffs = (int64_t) (off % s->objsize);
     segsize = (int64_t) (s->objsize - segoffs);
 
+    last_segnr = ((off + size - 1) / s->objsize);
+    acb->aiocnt = (last_segnr - segnr) + 1;
+
     while (size > 0) {
         if (size < segsize) {
             segsize = size;
@@ -468,8 +465,6 @@ static BlockDriverAIOCB *rbd_aio_rw_vector(BlockDriverState * bs,
         rcb->acb = acb;
         rcb->segsize = segsize;
         rcb->buf = buf;
-
-        acb->aiocnt++;
 
         rados_aio_create_completion(rcb, (rados_callback_t) rbd_finish_aiocb,
                                     NULL, &c);
@@ -485,8 +480,6 @@ static BlockDriverAIOCB *rbd_aio_rw_vector(BlockDriverState * bs,
         segsize = s->objsize;
         segnr++;
     }
-
-    acb->rccomplete = 1;
 
     return &acb->common;
 }
