@@ -945,7 +945,7 @@ static void pc_init1(ram_addr_t ram_size,
     }
 
     if (pci_enabled) {
-        pci_bus = i440fx_init(&i440fx_state, &piix3_devfn, isa_irq);
+        pci_bus = i440fx_init(&i440fx_state, &piix3_devfn, isa_irq, ram_size);
     } else {
         pci_bus = NULL;
         isa_bus_new(NULL);

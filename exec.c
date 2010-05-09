@@ -294,7 +294,7 @@ static void page_init(void)
         qemu_host_page_bits++;
     qemu_host_page_mask = ~(qemu_host_page_size - 1);
 
-#if !defined(_WIN32) && defined(CONFIG_USER_ONLY)
+#if defined(CONFIG_BSD) && defined(CONFIG_USER_ONLY)
     {
 #ifdef HAVE_KINFO_GETVMMAP
         struct kinfo_vmentry *freep;
@@ -330,11 +330,7 @@ static void page_init(void)
 
         last_brk = (unsigned long)sbrk(0);
 
-#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
         f = fopen("/compat/linux/proc/self/maps", "r");
-#else
-        f = fopen("/proc/self/maps", "r");
-#endif
         if (f) {
             mmap_lock();
 
@@ -371,24 +367,11 @@ static PageDesc *page_find_alloc(tb_page_addr_t index, int alloc)
     int i;
 
 #if defined(CONFIG_USER_ONLY)
-    /* We can't use qemu_malloc because it may recurse into a locked mutex.
-       Neither can we record the new pages we reserve while allocating a
-       given page because that may recurse into an unallocated page table
-       entry.  Stuff the allocations we do make into a queue and process
-       them after having completed one entire page table allocation.  */
-
-    unsigned long reserve[2 * (V_L1_SHIFT / L2_BITS)];
-    int reserve_idx = 0;
-
+    /* We can't use qemu_malloc because it may recurse into a locked mutex. */
 # define ALLOC(P, SIZE)                                 \
     do {                                                \
         P = mmap(NULL, SIZE, PROT_READ | PROT_WRITE,    \
                  MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);   \
-        if (h2g_valid(P)) {                             \
-            reserve[reserve_idx] = h2g(P);              \
-            reserve[reserve_idx + 1] = SIZE;            \
-            reserve_idx += 2;                           \
-        }                                               \
     } while (0)
 #else
 # define ALLOC(P, SIZE) \
@@ -423,16 +406,6 @@ static PageDesc *page_find_alloc(tb_page_addr_t index, int alloc)
     }
 
 #undef ALLOC
-#if defined(CONFIG_USER_ONLY)
-    for (i = 0; i < reserve_idx; i += 2) {
-        unsigned long addr = reserve[i];
-        unsigned long len = reserve[i + 1];
-
-        page_set_flags(addr & TARGET_PAGE_MASK,
-                       TARGET_PAGE_ALIGN(addr + len),
-                       PAGE_RESERVED);
-    }
-#endif
 
     return pd + (index & (L2_SIZE - 1));
 }
@@ -2472,6 +2445,9 @@ int page_check_range(target_ulong start, target_ulong len, int flags)
     assert(start < ((abi_ulong)1 << L1_MAP_ADDR_SPACE_BITS));
 #endif
 
+    if (len == 0) {
+        return 0;
+    }
     if (start + len - 1 < start) {
         /* We've wrapped around.  */
         return -1;
@@ -3344,6 +3320,8 @@ static int cpu_register_io_memory_fixed(int io_index,
                                         CPUWriteMemoryFunc * const *mem_write,
                                         void *opaque)
 {
+    int i;
+
     if (io_index <= 0) {
         io_index = get_free_io_mem_idx();
         if (io_index == -1)
@@ -3354,8 +3332,14 @@ static int cpu_register_io_memory_fixed(int io_index,
             return -1;
     }
 
-    memcpy(io_mem_read[io_index], mem_read, 3 * sizeof(CPUReadMemoryFunc*));
-    memcpy(io_mem_write[io_index], mem_write, 3 * sizeof(CPUWriteMemoryFunc*));
+    for (i = 0; i < 3; ++i) {
+        io_mem_read[io_index][i]
+            = (mem_read[i] ? mem_read[i] : unassigned_mem_read[i]);
+    }
+    for (i = 0; i < 3; ++i) {
+        io_mem_write[io_index][i]
+            = (mem_write[i] ? mem_write[i] : unassigned_mem_write[i]);
+    }
     io_mem_opaque[io_index] = opaque;
 
     return (io_index << IO_MEM_SHIFT);
@@ -3806,12 +3790,36 @@ uint32_t ldub_phys(target_phys_addr_t addr)
     return val;
 }
 
-/* XXX: optimize */
+/* warning: addr must be aligned */
 uint32_t lduw_phys(target_phys_addr_t addr)
 {
-    uint16_t val;
-    cpu_physical_memory_read(addr, (uint8_t *)&val, 2);
-    return tswap16(val);
+    int io_index;
+    uint8_t *ptr;
+    uint64_t val;
+    unsigned long pd;
+    PhysPageDesc *p;
+
+    p = phys_page_find(addr >> TARGET_PAGE_BITS);
+    if (!p) {
+        pd = IO_MEM_UNASSIGNED;
+    } else {
+        pd = p->phys_offset;
+    }
+
+    if ((pd & ~TARGET_PAGE_MASK) > IO_MEM_ROM &&
+        !(pd & IO_MEM_ROMD)) {
+        /* I/O case */
+        io_index = (pd >> IO_MEM_SHIFT) & (IO_MEM_NB_ENTRIES - 1);
+        if (p)
+            addr = (addr & ~TARGET_PAGE_MASK) + p->region_offset;
+        val = io_mem_read[io_index][1](io_mem_opaque[io_index], addr);
+    } else {
+        /* RAM case */
+        ptr = qemu_get_ram_ptr(pd & TARGET_PAGE_MASK) +
+            (addr & ~TARGET_PAGE_MASK);
+        val = lduw_p(ptr);
+    }
+    return val;
 }
 
 /* warning: addr must be aligned. The ram page is not masked as dirty
@@ -3928,11 +3936,40 @@ void stb_phys(target_phys_addr_t addr, uint32_t val)
     cpu_physical_memory_write(addr, &v, 1);
 }
 
-/* XXX: optimize */
+/* warning: addr must be aligned */
 void stw_phys(target_phys_addr_t addr, uint32_t val)
 {
-    uint16_t v = tswap16(val);
-    cpu_physical_memory_write(addr, (const uint8_t *)&v, 2);
+    int io_index;
+    uint8_t *ptr;
+    unsigned long pd;
+    PhysPageDesc *p;
+
+    p = phys_page_find(addr >> TARGET_PAGE_BITS);
+    if (!p) {
+        pd = IO_MEM_UNASSIGNED;
+    } else {
+        pd = p->phys_offset;
+    }
+
+    if ((pd & ~TARGET_PAGE_MASK) != IO_MEM_RAM) {
+        io_index = (pd >> IO_MEM_SHIFT) & (IO_MEM_NB_ENTRIES - 1);
+        if (p)
+            addr = (addr & ~TARGET_PAGE_MASK) + p->region_offset;
+        io_mem_write[io_index][1](io_mem_opaque[io_index], addr, val);
+    } else {
+        unsigned long addr1;
+        addr1 = (pd & TARGET_PAGE_MASK) + (addr & ~TARGET_PAGE_MASK);
+        /* RAM case */
+        ptr = qemu_get_ram_ptr(addr1);
+        stw_p(ptr, val);
+        if (!cpu_physical_memory_is_dirty(addr1)) {
+            /* invalidate code */
+            tb_invalidate_phys_page_range(addr1, addr1 + 2, 0);
+            /* set dirty bit */
+            cpu_physical_memory_set_dirty_flags(addr1,
+                (0xff & ~CODE_DIRTY_FLAG));
+        }
+    }
 }
 
 /* XXX: optimize */
