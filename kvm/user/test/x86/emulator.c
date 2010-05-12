@@ -267,6 +267,15 @@ void test_lmsw(void)
 	asm("lmsw %0" : : "m"(*pmsw));
 	printf("before %lx after %lx\n", cr0, read_cr0());
 	report("lmsw (2)", cr0 == read_cr0());
+
+	/* lmsw can't clear cr0.pe */
+	msw = (cr0 & ~1ul) ^ 4;  /* change EM to force trap */
+	asm("lmsw %0" : : "r"(msw));
+	report("lmsw (3)", (cr0 ^ read_cr0()) == 4 && (cr0 & 1));
+
+	/* back to normal */
+	msw = cr0;
+	asm("lmsw %0" : : "r"(msw));
 }
 
 int main()
