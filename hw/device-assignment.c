@@ -1346,7 +1346,7 @@ static int assigned_initfn(struct PCIDevice *pci_dev)
     e_intx = dev->dev.config[0x3d] - 1;
     dev->intpin = e_intx;
     dev->run = 0;
-    dev->girq = 0;
+    dev->girq = -1;
     dev->h_segnr = dev->host.seg;
     dev->h_busnr = dev->host.bus;
     dev->h_devfn = PCI_DEVFN(dev->host.dev, dev->host.func);
