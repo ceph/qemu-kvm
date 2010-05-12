@@ -350,6 +350,50 @@ void test_sub_imm(void)
 		print_serial("sub test 4: PASS\n");
 }
 
+
+void test_xor_imm(void)
+{
+	struct regs inregs = { 0 }, outregs;
+	MK_INSN(xor_r32_imm_1, "mov $1234567890, %eax\n\t" "xor $1234567890, %eax\n\t");
+	MK_INSN(xor_r16_imm_1, "mov $1234, %ax\n\t" "xor $1234, %ax\n\t");
+	MK_INSN(xor_r8_imm_1, "mov $0x12, %ah\n\t" "xor $0x12, %ah\n\t");
+	MK_INSN(xor_r8_imm_2, "mov $0x34, %al\n\t" "xor $0x34, %al\n\t");
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_xor_r16_imm_1,
+			      insn_xor_r16_imm_1_end - insn_xor_r16_imm_1);
+	if (!regs_equal(&inregs, &outregs, R_AX) || outregs.eax != 0)
+		print_serial("xor test 1: FAIL\n");
+	else
+		print_serial("xor test 1: PASS\n");
+
+	/* test mov $imm, %eax */
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_xor_r32_imm_1,
+			      insn_xor_r32_imm_1_end - insn_xor_r32_imm_1);
+	if (!regs_equal(&inregs, &outregs, R_AX) || outregs.eax != 0)
+		print_serial("xor test 2: FAIL\n");
+	else
+		print_serial("xor test 2: PASS\n");
+
+	/* test mov $imm, %al/%ah */
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_xor_r8_imm_1,
+			      insn_xor_r8_imm_1_end - insn_xor_r8_imm_1);
+	if (!regs_equal(&inregs, &outregs, R_AX) || outregs.eax != 0)
+		print_serial("xor test 3: FAIL\n");
+	else
+		print_serial("xor test 3: PASS\n");
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_xor_r8_imm_2,
+			      insn_xor_r8_imm_2_end - insn_xor_r8_imm_2);
+	if (!regs_equal(&inregs, &outregs, R_AX) || outregs.eax != 0)
+		print_serial("xor test 4: FAIL\n");
+	else
+		print_serial("xor test 4: PASS\n");
+}
+
 void test_cmp_imm(void)
 {
 	struct regs inregs = { 0 }, outregs;
@@ -786,6 +830,7 @@ void realmode_start(void)
 	test_cmp_imm();
 	test_add_imm();
 	test_sub_imm();
+	test_xor_imm();
 	test_io();
 	test_eflags_insn();
 	test_jcc_short();
