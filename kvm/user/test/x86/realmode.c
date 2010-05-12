@@ -307,6 +307,49 @@ void test_mov_imm(void)
 		print_serial("mov test 5: PASS\n");
 }
 
+void test_sub_imm(void)
+{
+	struct regs inregs = { 0 }, outregs;
+	MK_INSN(sub_r32_imm_1, "mov $1234567890, %eax\n\t" "sub $10, %eax\n\t");
+	MK_INSN(sub_r16_imm_1, "mov $1234, %ax\n\t" "sub $10, %ax\n\t");
+	MK_INSN(sub_r8_imm_1, "mov $0x12, %ah\n\t" "sub $0x10, %ah\n\t");
+	MK_INSN(sub_r8_imm_2, "mov $0x34, %al\n\t" "sub $0x10, %al\n\t");
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_sub_r16_imm_1,
+			      insn_sub_r16_imm_1_end - insn_sub_r16_imm_1);
+	if (!regs_equal(&inregs, &outregs, R_AX) || outregs.eax != 1224)
+		print_serial("sub test 1: FAIL\n");
+	else
+		print_serial("sub test 1: PASS\n");
+
+	/* test mov $imm, %eax */
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_sub_r32_imm_1,
+			      insn_sub_r32_imm_1_end - insn_sub_r32_imm_1);
+	if (!regs_equal(&inregs, &outregs, R_AX) || outregs.eax != 1234567880)
+		print_serial("sub test 2: FAIL\n");
+	else
+		print_serial("sub test 2: PASS\n");
+
+	/* test mov $imm, %al/%ah */
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_sub_r8_imm_1,
+			      insn_sub_r8_imm_1_end - insn_sub_r8_imm_1);
+	if (!regs_equal(&inregs, &outregs, R_AX) || outregs.eax != 0x0200)
+		print_serial("sub test 3: FAIL\n");
+	else
+		print_serial("sub test 3: PASS\n");
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_sub_r8_imm_2,
+			      insn_sub_r8_imm_2_end - insn_sub_r8_imm_2);
+	if (!regs_equal(&inregs, &outregs, R_AX) || outregs.eax != 0x24)
+		print_serial("sub test 4: FAIL\n");
+	else
+		print_serial("sub test 4: PASS\n");
+}
+
 void test_cmp_imm(void)
 {
 	struct regs inregs = { 0 }, outregs;
@@ -742,6 +785,7 @@ void realmode_start(void)
 	test_mov_imm();
 	test_cmp_imm();
 	test_add_imm();
+	test_sub_imm();
 	test_io();
 	test_eflags_insn();
 	test_jcc_short();
