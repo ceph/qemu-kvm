@@ -922,10 +922,6 @@ void kvm_arch_load_regs(CPUState *env, int level)
         if (env->kvm_vcpu_update_vapic)
             kvm_tpr_enable_vapic(env);
     }
-    if (kvm_irqchip_in_kernel()) {
-        /* Avoid deadlock: no user space IRQ will ever clear it. */
-        env->halted = 0;
-    }
 
     kvm_put_vcpu_events(env, level);
     kvm_put_debugregs(env);
