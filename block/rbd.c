@@ -56,6 +56,7 @@ typedef struct RBDAIOCB {
     int write;
     int64_t sector_num;
     int aiocnt;
+    int error;
 } RBDAIOCB;
 
 typedef struct RADOSCB {
@@ -317,14 +318,16 @@ static int rbd_rw(BlockDriverState *bs, int64_t sector_num,
                  (long long unsigned int)segnr);
 
         if (write) {
-            if (rados_write(s->pool, n, segoffs, (const char *)buf, 
-                segsize) < 0) {
-                return -errno;
+            if ((r = rados_write(s->pool, n, segoffs, (const char *)buf, 
+                segsize)) < 0) {
+                return r;
             }
         } else {
             r = rados_read(s->pool, n, segoffs, (char *)buf, segsize);
-            if (r < 0) {
+            if (r == -ENOENT) {
                 memset(buf, 0, segsize);
+            } else if (r < 0) {
+                return(r);
             } else if (r < segsize) {
                 memset(buf + r, 0, segsize - r);
             }
@@ -376,15 +379,27 @@ static void rbd_finish_aiocb(rados_completion_t c, RADOSCB * rcb)
     r = rados_aio_get_return_value(c);
     rados_aio_release(c);
     if (acb->write) {
-        acb->ret += r;
-    } else {
         if (r < 0) {
-            memset(rcb->buf, 0, rcb->segsize);
+            acb->ret = r;
+            acb->error = 1;
+        } else if (!acb->error) {
             acb->ret += rcb->segsize;
+        }
+    } else {
+        if (r == -ENOENT) {
+            memset(rcb->buf, 0, rcb->segsize);
+            if (!acb->error) {
+                acb->ret += rcb->segsize;
+            }
+        } else if (r < 0) {
+            acb->ret = r;
+            acb->error = 1;
         } else if (r < rcb->segsize) {
             memset(rcb->buf + r, 0, rcb->segsize - r);
-            acb->ret += rcb->segsize;
-        } else {
+            if (!acb->error) {
+                acb->ret += rcb->segsize;
+            }
+        } else if (!acb->error) {
             acb->ret += r;
         }
     }
@@ -432,6 +447,7 @@ static BlockDriverAIOCB *rbd_aio_rw_vector(BlockDriverState * bs,
     acb->bounce = qemu_blockalign(bs, qiov->size);
     acb->aiocnt = 0;
     acb->ret = 0;
+    acb->error = 0;
 
     if (!acb->bh) {
         acb->bh = qemu_bh_new(rbd_aio_bh_cb, acb);
