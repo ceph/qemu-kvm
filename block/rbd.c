@@ -163,6 +163,8 @@ static int rbd_create(const char *filename, QEMUOptionParameter * options)
 {
     int64_t bytes = 0;
     int64_t objsize;
+    uint64_t size;
+    time_t mtime;
     uint8_t obj_order = RBD_DEFAULT_OBJ_ORDER;
     char pool[RBD_MAX_SEG_NAME_SIZE];
     char n[RBD_MAX_SEG_NAME_SIZE];
@@ -225,6 +227,12 @@ static int rbd_create(const char *filename, QEMUOptionParameter * options)
     if (rados_open_pool(pool, &p)) {
         fprintf(stderr, "error opening pool %s\n", pool);
         return -EIO;
+    }
+
+    ret = rados_stat(p, n, &size, &mtime);
+    if (ret == 0) {
+        ret=-EEXIST;
+        goto done;
     }
 
     ret = rados_write(p, n, 0, (const char *)&header, sizeof(header));
