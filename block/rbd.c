@@ -426,7 +426,7 @@ static void rbd_aio_bh_cb(void *opaque)
         qemu_iovec_from_buffer(acb->qiov, acb->bounce, acb->qiov->size);
     }
     qemu_vfree(acb->bounce);
-    acb->common.cb(acb->common.opaque, acb->ret);
+    acb->common.cb(acb->common.opaque, (acb->ret > 0 ? 0 : acb->ret));
     qemu_bh_delete(acb->bh);
     acb->bh = NULL;
     qemu_aio_release(acb);
