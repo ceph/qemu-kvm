@@ -493,8 +493,12 @@ static BlockDriverAIOCB *rbd_aio_rw_vector(BlockDriverState * bs,
         rados_aio_create_completion(rcb, (rados_callback_t) rbd_finish_aiocb,
                                     NULL, &c);
         if (write) {
+            rados_aio_create_completion(rcb, NULL,
+                                        (rados_callback_t) rbd_finish_aiocb, &c);
             rados_aio_write(s->pool, n, segoffs, buf, segsize, c);
         } else {
+            rados_aio_create_completion(rcb, (rados_callback_t) rbd_finish_aiocb,
+                                        NULL, &c);
             rados_aio_read(s->pool, n, segoffs, buf, segsize, c);
         }
 
