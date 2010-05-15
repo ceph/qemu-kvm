@@ -79,7 +79,6 @@ static int find_msr_info(int msr_index)
 
 int nr_passed, nr_tests;
 
-#ifdef __x86_64__
 static void report(const char *name, int passed)
 {
 	++nr_tests;
@@ -102,10 +101,6 @@ static unsigned long long rdmsr(unsigned index)
 	asm volatile("rdmsr" : "=a"(a), "=d"(d) : "c"(index));
 	return ((unsigned long long)d << 32) | a;
 }
-
-#endif
-
-
 
 static void test_msr_rw(int msr_index, unsigned long long input, unsigned long long expected)
 {
