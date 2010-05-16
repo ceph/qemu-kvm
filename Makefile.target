@@ -178,7 +178,7 @@ obj-y += virtio-blk.o virtio-balloon.o virtio-net.o virtio-serial-bus.o
 obj-$(CONFIG_VIRTIO_PCI) += virtio-pci.o
 obj-y += vhost_net.o
 obj-$(CONFIG_VHOST_NET) += vhost.o
-obj-$(CONFIG_LINUX) += virtio-9p.o virtio-9p-debug.o virtio-9p-local.o
+obj-$(CONFIG_LINUX) += virtio-9p.o
 obj-y += rwhandler.o
 obj-$(CONFIG_KVM) += kvm.o kvm-all.o
 obj-$(CONFIG_NO_KVM) += kvm-stub.o
@@ -211,6 +211,7 @@ obj-i386-y += vmmouse.o vmport.o hpet.o
 obj-i386-y += device-hotplug.o pci-hotplug.o smbios.o wdt_ib700.o
 obj-i386-y += extboot.o
 obj-i386-y += debugcon.o multiboot.o
+obj-i386-y += pm_smbus.o
 obj-i386-y += testdev.o
 
 obj-i386-$(CONFIG_KVM_PIT) += i8254-kvm.o
@@ -245,8 +246,9 @@ obj-mips-y = mips_r4k.o mips_jazz.o mips_malta.o mips_mipssim.o
 obj-mips-y += mips_addr.o mips_timer.o mips_int.o
 obj-mips-y += dma.o vga.o i8254.o i8259.o
 obj-mips-y += g364fb.o jazz_led.o
-obj-mips-y += gt64xxx.o pckbd.o mc146818rtc.o acpi.o
-obj-mips-y += piix4.o cirrus_vga.o pcspk.o
+obj-mips-y += gt64xxx.o pckbd.o mc146818rtc.o
+obj-mips-y += piix4.o cirrus_vga.o
+obj-mips-y += pm_smbus.o
 
 obj-microblaze-y = petalogix_s3adsp1800_mmu.o
 
