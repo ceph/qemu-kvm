@@ -45,6 +45,7 @@ struct PCIBus {
     pci_set_irq_fn set_irq;
     pci_map_irq_fn map_irq;
     pci_hotplug_fn hotplug;
+    DeviceState *hotplug_qdev;
     void *irq_opaque;
     PCIDevice *devices[256];
     PCIDevice *parent_dev;
@@ -236,10 +237,11 @@ void pci_bus_irqs(PCIBus *bus, pci_set_irq_fn set_irq, pci_map_irq_fn map_irq,
     bus->irq_count = qemu_mallocz(nirq * sizeof(bus->irq_count[0]));
 }
 
-void pci_bus_hotplug(PCIBus *bus, pci_hotplug_fn hotplug)
+void pci_bus_hotplug(PCIBus *bus, pci_hotplug_fn hotplug, DeviceState *qdev)
 {
     bus->qbus.allow_hotplug = 1;
     bus->hotplug = hotplug;
+    bus->hotplug_qdev = qdev;
 }
 
 void pci_bus_set_mem_base(PCIBus *bus, target_phys_addr_t base)
@@ -1806,7 +1808,7 @@ static int pci_qdev_init(DeviceState *qdev, DeviceInfo *base)
     pci_add_option_rom(pci_dev);
 
     if (qdev->hotplugged)
-        bus->hotplug(pci_dev, 1);
+        bus->hotplug(bus->hotplug_qdev, pci_dev, 1);
     return 0;
 }
 
@@ -1814,7 +1816,7 @@ static int pci_unplug_device(DeviceState *qdev)
 {
     PCIDevice *dev = DO_UPCAST(PCIDevice, qdev, qdev);
 
-    dev->bus->hotplug(dev, 0);
+    dev->bus->hotplug(dev->bus->hotplug_qdev, dev, 0);
     return 0;
 }
 
