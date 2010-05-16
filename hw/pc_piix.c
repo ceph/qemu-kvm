@@ -41,6 +41,8 @@ static const int ide_iobase[MAX_IDE_BUS] = { 0x1f0, 0x170 };
 static const int ide_iobase2[MAX_IDE_BUS] = { 0x3f6, 0x376 };
 static const int ide_irq[MAX_IDE_BUS] = { 14, 15 };
 
+const char *global_cpu_model; /* cpu hotadd */
+
 /* PC hardware initialisation */
 static void pc_init1(ram_addr_t ram_size,
                      const char *boot_device,
@@ -64,6 +66,8 @@ static void pc_init1(ram_addr_t ram_size,
     DriveInfo *hd[MAX_IDE_BUS * MAX_IDE_DEVS];
     FDCtrl *floppy_controller;
     ISADevice *rtc_state;
+
+    global_cpu_model = cpu_model;
 
     pc_cpus_init(cpu_model);
 
@@ -165,7 +169,6 @@ static void pc_init1(ram_addr_t ram_size,
             qdev_prop_set_ptr(eeprom, "data", eeprom_buf + (i * 256));
             qdev_init_nofail(eeprom);
         }
-        piix4_acpi_system_hot_add_init(pci_bus, cpu_model);
     }
 
     if (i440fx_state) {

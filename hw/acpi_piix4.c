@@ -29,6 +29,22 @@
 
 #define ACPI_DBG_IO_ADDR  0xb044
 
+#define GPE_BASE 0xafe0
+#define PROC_BASE 0xaf00
+#define PCI_BASE 0xae00
+#define PCI_EJ_BASE 0xae08
+
+struct gpe_regs {
+    uint16_t sts; /* status */
+    uint16_t en;  /* enabled */
+    uint8_t cpus_sts[32];
+};
+
+struct pci_status {
+    uint32_t up;
+    uint32_t down;
+};
+
 typedef struct PIIX4PMState {
     PCIDevice dev;
     uint16_t pmsts;
@@ -47,12 +63,16 @@ typedef struct PIIX4PMState {
     qemu_irq cmos_s3;
     qemu_irq smi_irq;
     int kvm_enabled;
+
+    /* for pci hotplug */
+    struct gpe_regs gpe;
+    struct pci_status pci0_status;
 } PIIX4PMState;
+
+static void piix4_acpi_system_hot_add_init(PCIBus *bus, PIIX4PMState *s);
 
 #define ACPI_ENABLE 0xf1
 #define ACPI_DISABLE 0xf0
-
-static PIIX4PMState *pm_state;
 
 static uint32_t get_pmtmr(PIIX4PMState *s)
 {
@@ -320,12 +340,16 @@ static void piix4_powerdown(void *opaque, int irq, int power_failing)
     }
 }
 
+static PIIX4PMState *global_piix4_pm_state; /* cpu hotadd */
+
 static int piix4_pm_initfn(PCIDevice *dev)
 {
     PIIX4PMState *s = DO_UPCAST(PIIX4PMState, dev, dev);
     uint8_t *pci_conf;
 
-    pm_state = s;
+    /* for cpu hotadd */
+    global_piix4_pm_state = s;
+
     pci_conf = s->dev.config;
     pci_config_set_vendor_id(pci_conf, PCI_VENDOR_ID_INTEL);
     pci_config_set_device_id(pci_conf, PCI_DEVICE_ID_INTEL_82371AB_3);
@@ -376,6 +400,7 @@ static int piix4_pm_initfn(PCIDevice *dev)
 
     pm_smbus_init(&s->dev.qdev, &s->smb);
     qemu_register_reset(piix4_reset, s);
+    piix4_acpi_system_hot_add_init(dev->bus, s);
 
     return 0;
 }
@@ -420,25 +445,6 @@ static void piix4_pm_register(void)
 }
 
 device_init(piix4_pm_register);
-
-#define GPE_BASE 0xafe0
-#define PROC_BASE 0xaf00
-#define PCI_BASE 0xae00
-#define PCI_EJ_BASE 0xae08
-
-struct gpe_regs {
-    uint16_t sts; /* status */
-    uint16_t en;  /* enabled */
-    uint8_t cpus_sts[32];
-};
-
-struct pci_status {
-    uint32_t up;
-    uint32_t down;
-};
-
-static struct gpe_regs gpe;
-static struct pci_status pci0_status;
 
 static uint32_t gpe_read_val(uint16_t val, uint32_t addr)
 {
@@ -581,33 +587,34 @@ static void pciej_write(void *opaque, uint32_t addr, uint32_t val)
 #endif
 }
 
-static const char *model;
+extern const char *global_cpu_model;
 
 static int piix4_device_hotplug(DeviceState *qdev, PCIDevice *dev, int state);
 
-void piix4_acpi_system_hot_add_init(PCIBus *bus, const char *cpu_model)
+static void piix4_acpi_system_hot_add_init(PCIBus *bus, PIIX4PMState *s)
 {
+    struct gpe_regs *gpe = &s->gpe;
+    struct pci_status *pci0_status = &s->pci0_status;
     int i = 0, cpus = smp_cpus;
 
     while (cpus > 0) {
-        gpe.cpus_sts[i++] = (cpus < 8) ? (1 << cpus) - 1 : 0xff;
+        gpe->cpus_sts[i++] = (cpus < 8) ? (1 << cpus) - 1 : 0xff;
         cpus -= 8;
     }
-    register_ioport_write(GPE_BASE, 4, 1, gpe_writeb, &gpe);
-    register_ioport_read(GPE_BASE, 4, 1,  gpe_readb, &gpe);
 
-    register_ioport_write(PROC_BASE, 32, 1, gpe_writeb, &gpe);
-    register_ioport_read(PROC_BASE, 32, 1,  gpe_readb, &gpe);
+    register_ioport_write(GPE_BASE, 4, 1, gpe_writeb, gpe);
+    register_ioport_read(GPE_BASE, 4, 1,  gpe_readb, gpe);
 
-    register_ioport_write(PCI_BASE, 8, 4, pcihotplug_write, &pci0_status);
-    register_ioport_read(PCI_BASE, 8, 4,  pcihotplug_read, &pci0_status);
+    register_ioport_write(PROC_BASE, 32, 1, gpe_writeb, gpe);
+    register_ioport_read(PROC_BASE, 32, 1,  gpe_readb, gpe);
+
+    register_ioport_write(PCI_BASE, 8, 4, pcihotplug_write, pci0_status);
+    register_ioport_read(PCI_BASE, 8, 4,  pcihotplug_read, pci0_status);
 
     register_ioport_write(PCI_EJ_BASE, 4, 4, pciej_write, bus);
     register_ioport_read(PCI_EJ_BASE, 4, 4,  pciej_read, bus);
 
-    model = cpu_model;
-
-    pci_bus_hotplug(bus, piix4_device_hotplug, NULL);
+    pci_bus_hotplug(bus, piix4_device_hotplug, &s->dev.qdev);
 }
 
 #if defined(TARGET_I386)
@@ -626,9 +633,10 @@ static void disable_processor(struct gpe_regs *g, int cpu)
 void qemu_system_cpu_hot_add(int cpu, int state)
 {
     CPUState *env;
+    PIIX4PMState *s = global_piix4_pm_state;
 
     if (state && !qemu_get_cpu(cpu)) {
-        env = pc_new_cpu(model);
+        env = pc_new_cpu(global_cpu_model);
         if (!env) {
             fprintf(stderr, "cpu %d creation failed\n", cpu);
             return;
@@ -637,41 +645,44 @@ void qemu_system_cpu_hot_add(int cpu, int state)
     }
 
     if (state)
-        enable_processor(&gpe, cpu);
+        enable_processor(&s->gpe, cpu);
     else
-        disable_processor(&gpe, cpu);
-    if (gpe.en & 4) {
-        qemu_set_irq(pm_state->irq, 1);
-        qemu_set_irq(pm_state->irq, 0);
+        disable_processor(&s->gpe, cpu);
+    if (s->gpe.en & 4) {
+        qemu_set_irq(s->irq, 1);
+        qemu_set_irq(s->irq, 0);
     }
 }
 #endif
 
-static void enable_device(struct pci_status *p, struct gpe_regs *g, int slot)
+static void enable_device(PIIX4PMState *s, int slot)
 {
-    g->sts |= 2;
-    p->up |= (1 << slot);
+    s->gpe.sts |= 2;
+    s->pci0_status.up |= (1 << slot);
 }
 
-static void disable_device(struct pci_status *p, struct gpe_regs *g, int slot)
+static void disable_device(PIIX4PMState *s, int slot)
 {
-    g->sts |= 2;
-    p->down |= (1 << slot);
+    s->gpe.sts |= 2;
+    s->pci0_status.down |= (1 << slot);
 }
 
 static int piix4_device_hotplug(DeviceState *qdev, PCIDevice *dev, int state)
 {
     int slot = PCI_SLOT(dev->devfn);
+    PIIX4PMState *s = DO_UPCAST(PIIX4PMState, dev,
+                                DO_UPCAST(PCIDevice, qdev, qdev));
 
-    pci0_status.up = 0;
-    pci0_status.down = 0;
-    if (state)
-        enable_device(&pci0_status, &gpe, slot);
-    else
-        disable_device(&pci0_status, &gpe, slot);
-    if (gpe.en & 2) {
-        qemu_set_irq(pm_state->irq, 1);
-        qemu_set_irq(pm_state->irq, 0);
+    s->pci0_status.up = 0;
+    s->pci0_status.down = 0;
+    if (state) {
+        enable_device(s, slot);
+    } else {
+        disable_device(s, slot);
+    }
+    if (s->gpe.en & 2) {
+        qemu_set_irq(s->irq, 1);
+        qemu_set_irq(s->irq, 0);
     }
     return 0;
 }
