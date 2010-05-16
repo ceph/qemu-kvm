@@ -107,6 +107,12 @@ static void ioport80_write(void *opaque, uint32_t addr, uint32_t data)
 
 /* MSDOS compatibility mode FPU exception support */
 static qemu_irq ferr_irq;
+
+void pc_register_ferr_irq(qemu_irq irq)
+{
+    ferr_irq = irq;
+}
+
 /* XXX: add IGNNE support */
 void cpu_set_ferr(CPUX86State *s)
 {
@@ -810,49 +816,9 @@ CPUState *pc_new_cpu(const char *cpu_model)
     return env;
 }
 
-static qemu_irq *pc_allocate_cpu_irq(void)
+static void pc_cpus_init(const char *cpu_model)
 {
-    return qemu_allocate_irqs(pic_irq_request, NULL, 1);
-}
-
-/* PC hardware initialisation */
-static void pc_init1(ram_addr_t ram_size,
-                     const char *boot_device,
-                     const char *kernel_filename,
-                     const char *kernel_cmdline,
-                     const char *initrd_filename,
-                     const char *cpu_model,
-                     int pci_enabled)
-{
-    char *filename;
-    int ret, linux_boot, i;
-    ram_addr_t ram_addr, bios_offset, option_rom_offset;
-    ram_addr_t below_4g_mem_size, above_4g_mem_size = 0;
-    int bios_size, isa_bios_size;
-    PCIBus *pci_bus;
-    PCII440FXState *i440fx_state;
-    int piix3_devfn = -1;
-    qemu_irq *cpu_irq;
-    qemu_irq *isa_irq;
-    qemu_irq *i8259;
-    qemu_irq *cmos_s3;
-    qemu_irq *smi_irq;
-    IsaIrqState *isa_irq_state;
-    DriveInfo *hd[MAX_IDE_BUS * MAX_IDE_DEVS];
-    DriveInfo *fd[MAX_FD];
-    void *fw_cfg;
-    FDCtrl *floppy_controller;
-    RTCState *rtc_state;
-    PITState *pit;
-
-    if (ram_size >= 0xe0000000 ) {
-        above_4g_mem_size = ram_size - 0xe0000000;
-        below_4g_mem_size = 0xe0000000;
-    } else {
-        below_4g_mem_size = ram_size;
-    }
-
-    linux_boot = (kernel_filename != NULL);
+    int i;
 
     /* init CPUs */
     if (cpu_model == NULL) {
@@ -863,11 +829,40 @@ static void pc_init1(ram_addr_t ram_size,
 #endif
     }
 
-    for (i = 0; i < smp_cpus; i++) {
+    for(i = 0; i < smp_cpus; i++) {
         pc_new_cpu(cpu_model);
     }
+}
 
-    vmport_init();
+static qemu_irq *pc_allocate_cpu_irq(void)
+{
+    return qemu_allocate_irqs(pic_irq_request, NULL, 1);
+}
+
+static void pc_memory_init(ram_addr_t ram_size,
+                           const char *kernel_filename,
+                           const char *kernel_cmdline,
+                           const char *initrd_filename,
+                           ram_addr_t *below_4g_mem_size_p,
+                           ram_addr_t *above_4g_mem_size_p)
+{
+    char *filename;
+    int ret, linux_boot, i;
+    ram_addr_t ram_addr, bios_offset, option_rom_offset;
+    ram_addr_t below_4g_mem_size, above_4g_mem_size = 0;
+    int bios_size, isa_bios_size;
+    void **fw_cfg;
+
+    if (ram_size >= 0xe0000000 ) {
+        above_4g_mem_size = ram_size - 0xe0000000;
+        below_4g_mem_size = 0xe0000000;
+    } else {
+        below_4g_mem_size = ram_size;
+    }
+    *above_4g_mem_size_p = above_4g_mem_size;
+    *below_4g_mem_size_p = below_4g_mem_size;
+
+    linux_boot = (kernel_filename != NULL);
 
     /* allocate RAM */
     ram_addr = qemu_ram_alloc(below_4g_mem_size);
@@ -939,12 +934,121 @@ static void pc_init1(ram_addr_t ram_size,
     rom_set_fw(fw_cfg);
 
     if (linux_boot) {
-        load_linux(fw_cfg, kernel_filename, initrd_filename, kernel_cmdline, below_4g_mem_size);
+        load_linux(*fw_cfg, kernel_filename, initrd_filename, kernel_cmdline, below_4g_mem_size);
     }
 
     for (i = 0; i < nb_option_roms; i++) {
         rom_add_option(option_rom[i]);
     }
+}
+
+static void pc_vga_init(PCIBus *pci_bus)
+{
+    if (cirrus_vga_enabled) {
+        if (pci_bus) {
+            pci_cirrus_vga_init(pci_bus);
+        } else {
+            isa_cirrus_vga_init();
+        }
+    } else if (vmsvga_enabled) {
+        if (pci_bus)
+            pci_vmsvga_init(pci_bus);
+        else
+            fprintf(stderr, "%s: vmware_vga: no PCI bus\n", __FUNCTION__);
+    } else if (std_vga_enabled) {
+        if (pci_bus) {
+            pci_vga_init(pci_bus, 0, 0);
+        } else {
+            isa_vga_init();
+        }
+    }
+}
+
+static void pc_basic_device_init(qemu_irq *isa_irq,
+                                 FDCtrl **floppy_controller,
+                                 RTCState **rtc_state)
+{
+    int i;
+    DriveInfo *fd[MAX_FD];
+    PITState *pit;
+
+    register_ioport_write(0x80, 1, 1, ioport80_write, NULL);
+
+    register_ioport_write(0xf0, 1, 1, ioportF0_write, NULL);
+
+    *rtc_state = rtc_init(2000);
+
+    qemu_register_boot_set(pc_boot_set, *rtc_state);
+
+    register_ioport_read(0x92, 1, 1, ioport92_read, NULL);
+    register_ioport_write(0x92, 1, 1, ioport92_write, NULL);
+
+#ifdef CONFIG_KVM_PIT
+    if (kvm_enabled() && kvm_pit_in_kernel())
+	pit = kvm_pit_init(0x40, isa_reserve_irq(0));
+    else
+#endif
+
+    pit = pit_init(0x40, isa_reserve_irq(0));
+
+    pcspk_init(pit);
+    if (!no_hpet) {
+        hpet_init(isa_irq);
+    }
+
+    for(i = 0; i < MAX_SERIAL_PORTS; i++) {
+        if (serial_hds[i]) {
+            serial_isa_init(i, serial_hds[i]);
+        }
+    }
+
+    for(i = 0; i < MAX_PARALLEL_PORTS; i++) {
+        if (parallel_hds[i]) {
+            parallel_init(i, parallel_hds[i]);
+        }
+    }
+
+    isa_create_simple("i8042");
+    DMA_init(0);
+
+    for(i = 0; i < MAX_FD; i++) {
+        fd[i] = drive_get(IF_FLOPPY, 0, i);
+    }
+    *floppy_controller = fdctrl_init_isa(fd);
+}
+
+/* PC hardware initialisation */
+static void pc_init1(ram_addr_t ram_size,
+                     const char *boot_device,
+                     const char *kernel_filename,
+                     const char *kernel_cmdline,
+                     const char *initrd_filename,
+                     const char *cpu_model,
+                     int pci_enabled)
+{
+    int i;
+    ram_addr_t below_4g_mem_size, above_4g_mem_size;
+    PCIBus *pci_bus;
+    PCII440FXState *i440fx_state;
+    int piix3_devfn = -1;
+    qemu_irq *cpu_irq;
+    qemu_irq *isa_irq;
+    qemu_irq *i8259;
+    qemu_irq *cmos_s3;
+    qemu_irq *smi_irq;
+    IsaIrqState *isa_irq_state;
+    DriveInfo *hd[MAX_IDE_BUS * MAX_IDE_DEVS];
+    FDCtrl *floppy_controller;
+    RTCState *rtc_state;
+
+    pc_cpus_init(cpu_model);
+
+    vmport_init();
+
+    /* allocate ram and load rom/bios */
+    pc_memory_init(ram_size, kernel_filename, kernel_cmdline, initrd_filename,
+                   &below_4g_mem_size, &above_4g_mem_size);
+
 
     cpu_irq = pc_allocate_cpu_irq();
 #ifdef KVM_CAP_IRQCHIP
@@ -975,63 +1079,12 @@ static void pc_init1(ram_addr_t ram_size,
     }
     isa_bus_irqs(isa_irq);
 
-    ferr_irq = isa_reserve_irq(13);
+    pc_register_ferr_irq(isa_reserve_irq(13));
+
+    pc_vga_init(pci_enabled? pci_bus: NULL);
 
     /* init basic PC hardware */
-    register_ioport_write(0x80, 1, 1, ioport80_write, NULL);
-
-    register_ioport_write(0xf0, 1, 1, ioportF0_write, NULL);
-
-    if (cirrus_vga_enabled) {
-        if (pci_enabled) {
-            pci_cirrus_vga_init(pci_bus);
-        } else {
-            isa_cirrus_vga_init();
-        }
-    } else if (vmsvga_enabled) {
-        if (pci_enabled)
-            pci_vmsvga_init(pci_bus);
-        else
-            fprintf(stderr, "%s: vmware_vga: no PCI bus\n", __FUNCTION__);
-    } else if (std_vga_enabled) {
-        if (pci_enabled) {
-            pci_vga_init(pci_bus, 0, 0);
-        } else {
-            isa_vga_init();
-        }
-    }
-
-    rtc_state = rtc_init(2000);
-
-    qemu_register_boot_set(pc_boot_set, rtc_state);
-
-    register_ioport_read(0x92, 1, 1, ioport92_read, NULL);
-    register_ioport_write(0x92, 1, 1, ioport92_write, NULL);
-
-#ifdef CONFIG_KVM_PIT
-    if (kvm_enabled() && kvm_pit_in_kernel())
-	pit = kvm_pit_init(0x40, isa_reserve_irq(0));
-    else
-#endif
-
-    pit = pit_init(0x40, isa_reserve_irq(0));
-
-    pcspk_init(pit);
-    if (!no_hpet) {
-        hpet_init(isa_irq);
-    }
-
-    for(i = 0; i < MAX_SERIAL_PORTS; i++) {
-        if (serial_hds[i]) {
-            serial_isa_init(i, serial_hds[i]);
-        }
-    }
-
-    for(i = 0; i < MAX_PARALLEL_PORTS; i++) {
-        if (parallel_hds[i]) {
-            parallel_init(i, parallel_hds[i]);
-        }
-    }
+    pc_basic_device_init(isa_irq, &floppy_controller, &rtc_state);
 
     for(i = 0; i < nb_nics; i++) {
         NICInfo *nd = &nd_table[i];
@@ -1060,16 +1113,9 @@ static void pc_init1(ram_addr_t ram_size,
         }
     }
 
-    isa_create_simple("i8042");
-    DMA_init(0);
 #ifdef HAS_AUDIO
     audio_init(pci_enabled ? pci_bus : NULL, isa_irq);
 #endif
-
-    for(i = 0; i < MAX_FD; i++) {
-        fd[i] = drive_get(IF_FLOPPY, 0, i);
-    }
-    floppy_controller = fdctrl_init_isa(fd);
 
     cmos_init(below_4g_mem_size, above_4g_mem_size, boot_device, hd,
               floppy_controller, rtc_state);
