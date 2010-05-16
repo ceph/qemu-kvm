@@ -95,6 +95,10 @@ int kvm_arch_handle_exit(CPUState *env, struct kvm_run *run);
 
 int kvm_arch_pre_run(CPUState *env, struct kvm_run *run);
 
+#ifdef KVM_UPSTREAM
+int kvm_arch_process_irqchip_events(CPUState *env);
+#endif
+
 int kvm_arch_get_registers(CPUState *env);
 
 /* state subset only touched by the VCPU itself during runtime */
