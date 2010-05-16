@@ -81,14 +81,6 @@ void i8042_mm_init(qemu_irq kbd_irq, qemu_irq mouse_irq,
                    target_phys_addr_t base, ram_addr_t size,
                    target_phys_addr_t mask);
 
-/* mc146818rtc.c */
-
-typedef struct RTCState RTCState;
-
-RTCState *rtc_init(int base_year);
-void rtc_set_memory(RTCState *s, int addr, int val);
-void rtc_set_date(RTCState *s, const struct tm *tm);
-
 /* pc.c */
 extern int fd_bootchk;
 
@@ -107,14 +99,14 @@ qemu_irq *pc_allocate_cpu_irq(void);
 void pc_vga_init(PCIBus *pci_bus);
 void pc_basic_device_init(qemu_irq *isa_irq,
                           FDCtrl **floppy_controller,
-                          RTCState **rtc_state);
+                          ISADevice **rtc_state);
 void pc_init_ne2k_isa(NICInfo *nd);
 #ifdef HAS_AUDIO
 void pc_audio_init (PCIBus *pci_bus, qemu_irq *pic);
 #endif
 void pc_cmos_init(ram_addr_t ram_size, ram_addr_t above_4g_mem_size,
                   const char *boot_device, DriveInfo **hd_table,
-                  FDCtrl *floppy_controller, RTCState *s);
+                  FDCtrl *floppy_controller, ISADevice *s);
 void pc_pci_device_init(PCIBus *pci_bus);
 
 void ioport_set_a20(int enable);
