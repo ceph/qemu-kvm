@@ -242,6 +242,13 @@ int cpu_load(QEMUFile *f, void *opaque, int version_id);
 /* Force QEMU to stop what it's doing and service IO */
 void qemu_service_io(void);
 
+/* Force QEMU to process pending events */
+void qemu_notify_event(void);
+
+/* Unblock cpu */
+void qemu_cpu_kick(void *env);
+int qemu_cpu_self(void *env);
+
 /* work queue */
 struct qemu_work_item {
     struct qemu_work_item *next;
@@ -249,13 +256,6 @@ struct qemu_work_item {
     void *data;
     int done;
 };
-
-/* Force QEMU to process pending events */
-void qemu_notify_event(void);
-
-/* Unblock cpu */
-void qemu_cpu_kick(void *env);
-int qemu_cpu_self(void *env);
 
 #ifdef CONFIG_USER_ONLY
 #define qemu_init_vcpu(env) do { } while (0)
