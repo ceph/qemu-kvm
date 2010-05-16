@@ -815,12 +815,20 @@ void kvm_flush_coalesced_mmio_buffer(void)
 
 #ifdef KVM_UPSTREAM
 
-void kvm_cpu_synchronize_state(CPUState *env)
+static void do_kvm_cpu_synchronize_state(void *_env)
 {
+    CPUState *env = _env;
+
     if (!env->kvm_vcpu_dirty) {
         kvm_arch_get_registers(env);
         env->kvm_vcpu_dirty = 1;
     }
+}
+
+void kvm_cpu_synchronize_state(CPUState *env)
+{
+    if (!env->kvm_vcpu_dirty)
+        run_on_cpu(env, do_kvm_cpu_synchronize_state, env);
 }
 
 void kvm_cpu_synchronize_post_reset(CPUState *env)
