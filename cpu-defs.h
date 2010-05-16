@@ -133,6 +133,7 @@ typedef struct icount_decr_u16 {
 
 struct kvm_run;
 struct KVMState;
+struct qemu_work_item;
 
 typedef struct CPUBreakpoint {
     target_ulong pc;
@@ -211,15 +212,16 @@ struct KVMCPUState {
     void *opaque;                                                       \
                                                                         \
     uint32_t created;                                                   \
+    uint32_t stop;   /* Stop request */                                 \
+    uint32_t stopped; /* Artificially stopped */                        \
     struct QemuThread *thread;                                          \
     struct QemuCond *halt_cond;                                         \
+    struct qemu_work_item *queued_work_first, *queued_work_last;        \
     const char *cpu_model_str;                                          \
     struct KVMState *kvm_state;                                         \
     struct kvm_run *kvm_run;                                            \
     int kvm_fd;                                                         \
     int kvm_vcpu_dirty;                                                 \
-    uint32_t stop;   /* Stop request */                                 \
-    uint32_t stopped; /* Artificially stopped */                        \
     struct KVMCPUState kvm_cpu_state;
 
 #endif

@@ -95,6 +95,10 @@ int kvm_arch_handle_exit(CPUState *env, struct kvm_run *run);
 
 int kvm_arch_pre_run(CPUState *env, struct kvm_run *run);
 
+#ifdef KVM_UPSTREAM
+int kvm_arch_process_irqchip_events(CPUState *env);
+#endif
+
 int kvm_arch_get_registers(CPUState *env);
 
 /* state subset only touched by the VCPU itself during runtime */
@@ -142,6 +146,8 @@ int kvm_arch_remove_hw_breakpoint(target_ulong addr,
 void kvm_arch_remove_all_hw_breakpoints(void);
 
 void kvm_arch_update_guest_debug(CPUState *env, struct kvm_guest_debug *dbg);
+
+bool kvm_arch_stop_on_emulation_error(CPUState *env);
 
 int kvm_check_extension(KVMState *s, unsigned int extension);
 
