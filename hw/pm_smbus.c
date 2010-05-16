@@ -14,18 +14,13 @@
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston MA  02110-1301 USA
+ * License along with this library; if not, see
+ * <http://www.gnu.org/licenses/>.
  */
 #include "hw.h"
 #include "pc.h"
 #include "pm_smbus.h"
-#include "pci.h"
-#include "qemu-timer.h"
-#include "sysemu.h"
-#include "i2c.h"
 #include "smbus.h"
-#include "kvm.h"
 
 /* no save/load? */
 
@@ -37,6 +32,15 @@
 #define SMBHSTDAT1      0x06
 #define SMBBLKDAT       0x07
 
+//#define DEBUG
+
+#ifdef DEBUG
+# define SMBUS_DPRINTF(format, ...)     printf(format, ## __VA_ARGS__)
+#else
+# define SMBUS_DPRINTF(format, ...)     do { } while (0)
+#endif
+
+
 static void smb_transaction(PMSMBus *s)
 {
     uint8_t prot = (s->smb_ctl >> 2) & 0x07;
@@ -45,9 +49,7 @@ static void smb_transaction(PMSMBus *s)
     uint8_t addr = s->smb_addr >> 1;
     i2c_bus *bus = s->smbus;
 
-#ifdef DEBUG
-    printf("SMBus trans addr=0x%02x prot=0x%02x\n", addr, prot);
-#endif
+    SMBUS_DPRINTF("SMBus trans addr=0x%02x prot=0x%02x\n", addr, prot);
     switch(prot) {
     case 0x0:
         smbus_quick_command(bus, addr, read);
@@ -96,9 +98,7 @@ void smb_ioport_writeb(void *opaque, uint32_t addr, uint32_t val)
 {
     PMSMBus *s = opaque;
     addr &= 0x3f;
-#ifdef DEBUG
-    printf("SMB writeb port=0x%04x val=0x%02x\n", addr, val);
-#endif
+    SMBUS_DPRINTF("SMB writeb port=0x%04x val=0x%02x\n", addr, val);
     switch(addr) {
     case SMBHSTSTS:
         s->smb_stat = 0;
@@ -166,9 +166,7 @@ uint32_t smb_ioport_readb(void *opaque, uint32_t addr)
         val = 0;
         break;
     }
-#ifdef DEBUG
-    printf("SMB readb port=0x%04x val=0x%02x\n", addr, val);
-#endif
+    SMBUS_DPRINTF("SMB readb port=0x%04x val=0x%02x\n", addr, val);
     return val;
 }
 

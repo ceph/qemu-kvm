@@ -17,8 +17,6 @@
  */
 #include "hw.h"
 #include "pc.h"
-#include "pci.h"
-#include "sysemu.h"
 #include "acpi.h"
 #include "kvm.h"
 #include "qemu-kvm.h"
