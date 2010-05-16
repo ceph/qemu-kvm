@@ -810,6 +810,11 @@ CPUState *pc_new_cpu(const char *cpu_model)
     return env;
 }
 
+static qemu_irq *pc_allocate_cpu_irq(void)
+{
+    return qemu_allocate_irqs(pic_irq_request, NULL, 1);
+}
+
 /* PC hardware initialisation */
 static void pc_init1(ram_addr_t ram_size,
                      const char *boot_device,
@@ -941,7 +946,7 @@ static void pc_init1(ram_addr_t ram_size,
         rom_add_option(option_rom[i]);
     }
 
-    cpu_irq = qemu_allocate_irqs(pic_irq_request, NULL, 1);
+    cpu_irq = pc_allocate_cpu_irq();
 #ifdef KVM_CAP_IRQCHIP
     if (kvm_enabled() && kvm_irqchip_in_kernel()) {
         isa_irq_state = qemu_mallocz(sizeof(*isa_irq_state));
