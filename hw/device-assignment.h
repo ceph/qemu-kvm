@@ -88,7 +88,6 @@ typedef struct AssignedDevice {
     unsigned int h_devfn;
     int irq_requested_type;
     int bound;
-    struct pci_dev *pdev;
     struct {
 #define ASSIGNED_DEVICE_CAP_MSI (1 << 0)
 #define ASSIGNED_DEVICE_CAP_MSIX (1 << 1)

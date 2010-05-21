@@ -1623,20 +1623,20 @@ EOF
 fi
 
 ##########################################
-# libpci probe for kvm_cap_device_assignment
+# libpci header probe for kvm_cap_device_assignment
 if test $kvm_cap_device_assignment = "yes" ; then
   cat > $TMPC << EOF
-#include <pci/pci.h>
+#include <pci/header.h>
 #ifndef PCI_VENDOR_ID
-#error NO LIBPCI
+#error NO LIBPCI HEADER
 #endif
-int main(void) { struct pci_access a; pci_init(&a); return 0; }
+int main(void) { return 0; }
 EOF
-  if compile_prog "" "-lpci -lz" ; then
-    libs_softmmu="-lpci -lz $libs_softmmu"
+  if compile_prog "" "" ; then
+    kvm_cap_device_assignment=yes
   else
     echo
-    echo "Error: libpci check failed"
+    echo "Error: libpci header check failed"
     echo "Disable KVM Device Assignment capability."
     echo
     kvm_cap_device_assignment=no

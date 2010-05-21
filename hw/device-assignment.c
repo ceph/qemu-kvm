@@ -37,7 +37,7 @@
 #include "console.h"
 #include "device-assignment.h"
 #include "loader.h"
-#include <pci/pci.h>
+#include <pci/header.h>
 
 /* From linux/ioport.h */
 #define IORESOURCE_IO       0x00000100  /* Resource type */
@@ -335,24 +335,61 @@ static void assigned_dev_ioport_map(PCIDevice *pci_dev, int region_num,
                           (r_dev->v_addrs + region_num));
 }
 
-static uint8_t pci_find_cap_offset(struct pci_dev *pci_dev, uint8_t cap)
+static uint32_t assigned_dev_pci_read(PCIDevice *d, int pos, int len)
+{
+    AssignedDevice *pci_dev = container_of(d, AssignedDevice, dev);
+    uint32_t val;
+    ssize_t ret;
+    int fd = pci_dev->real_device.config_fd;
+
+again:
+    ret = pread(fd, &val, len, pos);
+    if (ret != len) {
+	if ((ret < 0) && (errno == EINTR || errno == EAGAIN))
+	    goto again;
+
+	fprintf(stderr, "%s: pread failed, ret = %zd errno = %d\n",
+		__func__, ret, errno);
+
+	exit(1);
+    }
+
+    return val;
+}
+
+static uint8_t assigned_dev_pci_read_byte(PCIDevice *d, int pos)
+{
+    return (uint8_t)assigned_dev_pci_read(d, pos, 1);
+}
+
+static uint16_t assigned_dev_pci_read_word(PCIDevice *d, int pos)
+{
+    return (uint16_t)assigned_dev_pci_read(d, pos, 2);
+}
+
+static uint32_t assigned_dev_pci_read_long(PCIDevice *d, int pos)
+{
+    return assigned_dev_pci_read(d, pos, 4);
+}
+
+static uint8_t pci_find_cap_offset(PCIDevice *d, uint8_t cap)
 {
     int id;
     int max_cap = 48;
     int pos = PCI_CAPABILITY_LIST;
     int status;
 
-    status = pci_read_byte(pci_dev, PCI_STATUS);
+    status = assigned_dev_pci_read_byte(d, PCI_STATUS);
     if ((status & PCI_STATUS_CAP_LIST) == 0)
         return 0;
 
     while (max_cap--) {
-        pos = pci_read_byte(pci_dev, pos);
+        pos = assigned_dev_pci_read_byte(d, pos);
         if (pos < 0x40)
             break;
 
         pos &= ~3;
-        id = pci_read_byte(pci_dev, pos + PCI_CAP_LIST_ID);
+        id = assigned_dev_pci_read_byte(d, pos + PCI_CAP_LIST_ID);
 
         if (id == 0xff)
             break;
@@ -858,7 +895,7 @@ static int assign_irq(AssignedDevice *dev)
     int irq, r = 0;
 
     /* Interrupt PIN 0 means don't use INTx */
-    if (pci_read_byte(dev->pdev, PCI_INTERRUPT_PIN) == 0)
+    if (assigned_dev_pci_read_byte(&dev->dev, PCI_INTERRUPT_PIN) == 0)
         return 0;
 
     irq = pci_map_irq(&dev->dev, dev->intpin);
@@ -1196,7 +1233,7 @@ static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
 #ifdef KVM_CAP_DEVICE_MSI
     /* Expose MSI capability
      * MSI capability is the 1st capability in capability config */
-    if (pci_find_cap_offset(dev->pdev, PCI_CAP_ID_MSI)) {
+    if (pci_find_cap_offset(pci_dev, PCI_CAP_ID_MSI)) {
         dev->cap.available |= ASSIGNED_DEVICE_CAP_MSI;
         memset(&pci_dev->config[pci_dev->cap.start + pci_dev->cap.length],
                0, PCI_CAPABILITY_CONFIG_MSI_LENGTH);
@@ -1208,23 +1245,25 @@ static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
 #endif
 #ifdef KVM_CAP_DEVICE_MSIX
     /* Expose MSI-X capability */
-    if (pci_find_cap_offset(dev->pdev, PCI_CAP_ID_MSIX)) {
+    if (pci_find_cap_offset(pci_dev, PCI_CAP_ID_MSIX)) {
         int pos, entry_nr, bar_nr;
         uint32_t msix_table_entry;
         dev->cap.available |= ASSIGNED_DEVICE_CAP_MSIX;
         memset(&pci_dev->config[pci_dev->cap.start + pci_dev->cap.length],
                0, PCI_CAPABILITY_CONFIG_MSIX_LENGTH);
-        pos = pci_find_cap_offset(dev->pdev, PCI_CAP_ID_MSIX);
-        entry_nr = pci_read_word(dev->pdev, pos + 2) & PCI_MSIX_TABSIZE;
+        pos = pci_find_cap_offset(pci_dev, PCI_CAP_ID_MSIX);
+        entry_nr = assigned_dev_pci_read_word(pci_dev, pos + 2) &
+                                                             PCI_MSIX_TABSIZE;
         pci_dev->config[pci_dev->cap.start + pci_dev->cap.length] = 0x11;
         pci_dev->config[pci_dev->cap.start +
                         pci_dev->cap.length + 2] = entry_nr;
-        msix_table_entry = pci_read_long(dev->pdev, pos + PCI_MSIX_TABLE);
+        msix_table_entry = assigned_dev_pci_read_long(pci_dev,
+                                                      pos + PCI_MSIX_TABLE);
         *(uint32_t *)(pci_dev->config + pci_dev->cap.start +
                       pci_dev->cap.length + PCI_MSIX_TABLE) = msix_table_entry;
         *(uint32_t *)(pci_dev->config + pci_dev->cap.start +
                       pci_dev->cap.length + PCI_MSIX_PBA) =
-                    pci_read_long(dev->pdev, pos + PCI_MSIX_PBA);
+                    assigned_dev_pci_read_byte(pci_dev, pos + PCI_MSIX_PBA);
         bar_nr = msix_table_entry & PCI_MSIX_BIR;
         msix_table_entry &= ~PCI_MSIX_BIR;
         dev->msix_table_addr = pci_region[bar_nr].base_addr + msix_table_entry;
@@ -1319,7 +1358,6 @@ static int assigned_dev_register_msix_mmio(AssignedDevice *dev)
 static int assigned_initfn(struct PCIDevice *pci_dev)
 {
     AssignedDevice *dev = DO_UPCAST(AssignedDevice, dev, pci_dev);
-    struct pci_access *pacc;
     uint8_t e_device, e_intx;
     int r;
 
@@ -1350,10 +1388,6 @@ static int assigned_initfn(struct PCIDevice *pci_dev)
     dev->h_segnr = dev->host.seg;
     dev->h_busnr = dev->host.bus;
     dev->h_devfn = PCI_DEVFN(dev->host.dev, dev->host.func);
-
-    pacc = pci_alloc();
-    pci_init(pacc);
-    dev->pdev = pci_get_dev(pacc, dev->host.seg, dev->host.bus, dev->host.dev, dev->host.func);
 
     if (pci_enable_capability_support(pci_dev, 0, NULL,
                     assigned_device_pci_cap_write_config,
