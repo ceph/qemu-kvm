@@ -1024,9 +1024,9 @@ static void assigned_dev_update_msi(PCIDevice *pci_dev, unsigned int ctrl_pos)
 static int assigned_dev_update_msix_mmio(PCIDevice *pci_dev)
 {
     AssignedDevice *adev = container_of(pci_dev, AssignedDevice, dev);
-    u16 entries_nr = 0, entries_max_nr;
+    uint16_t entries_nr = 0, entries_max_nr;
     int pos = 0, i, r = 0;
-    u32 msg_addr, msg_upper_addr, msg_data, msg_ctrl;
+    uint32_t msg_addr, msg_upper_addr, msg_data, msg_ctrl;
     struct kvm_assigned_msix_nr msix_nr;
     struct kvm_assigned_msix_entry msix_entry;
     void *va = adev->msix_table_page;
@@ -1210,7 +1210,7 @@ static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
     /* Expose MSI-X capability */
     if (pci_find_cap_offset(dev->pdev, PCI_CAP_ID_MSIX)) {
         int pos, entry_nr, bar_nr;
-        u32 msix_table_entry;
+        uint32_t msix_table_entry;
         dev->cap.available |= ASSIGNED_DEVICE_CAP_MSIX;
         memset(&pci_dev->config[pci_dev->cap.start + pci_dev->cap.length],
                0, PCI_CAPABILITY_CONFIG_MSIX_LENGTH);
