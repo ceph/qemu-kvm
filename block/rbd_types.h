@@ -21,14 +21,6 @@
 #define RBD_COMP_NONE		0
 #define RBD_CRYPT_NONE		0
 
-#define RBD_FLAGS_ORDER_MASK		0x000000FF
-#define RBD_FLAGS_CRYPT_TYPE_MASK	0x0000FF00
-#define RBD_FLAGS_COMP_TYPE_MASK	0x00FF0000
-
-#define RBD_FLAGS_ORDER_SHIFT		0
-#define RBD_FLAGS_CRYPT_TYPE_SHIFT	1
-#define RBD_FLAGS_COMP_TYPE_SHIFT	2
-
 static const char rbd_text[] = "<<< Rados Block Device Image >>>\n";
 static const char rbd_signature[] = "RBD";
 static const char rbd_version[] = "001.004";
@@ -42,7 +34,12 @@ struct rbd_obj_header_ondisk {
 	char text[64];
 	char signature[4];
 	char version[8];
-	uint32_t flags;
+	struct {
+		uint8_t order;
+		uint8_t crypt_type;
+		uint8_t comp_type;
+		uint8_t unused;
+	} __attribute__((packed)) options;
 	uint64_t image_size;
 	uint64_t snap_seq;
 	uint32_t snap_count;
@@ -51,10 +48,5 @@ struct rbd_obj_header_ondisk {
 	struct rbd_obj_snap_ondisk snaps[0];
 } __attribute__((packed));
 
-
-static inline int rbd_get_obj_order(uint32_t flags)
-{
-	return flags & RBD_FLAGS_ORDER_MASK;
-}
 
 #endif
