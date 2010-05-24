@@ -37,6 +37,7 @@
 #include "console.h"
 #include "device-assignment.h"
 #include "loader.h"
+#include "monitor.h"
 #include <pci/header.h>
 
 /* From linux/ioport.h */
@@ -649,14 +650,28 @@ static int get_real_device(AssignedDevice *pci_dev, uint16_t r_seg,
 
     snprintf(name, sizeof(name), "%sconfig", dir);
 
-    fd = open(name, O_RDWR);
-    if (fd == -1) {
-        fprintf(stderr, "%s: %s: %m\n", __func__, name);
-        return 1;
+    if (pci_dev->configfd_name && *pci_dev->configfd_name) {
+        if (qemu_isdigit(pci_dev->configfd_name[0])) {
+            dev->config_fd = strtol(pci_dev->configfd_name, NULL, 0);
+        } else {
+            dev->config_fd = monitor_get_fd(cur_mon, pci_dev->configfd_name);
+            if (dev->config_fd < 0) {
+                fprintf(stderr, "%s: (%s) unkown\n", __func__,
+                        pci_dev->configfd_name);
+                return 1;
+            }
+        }
+    } else {
+        dev->config_fd = open(name, O_RDWR);
+
+        if (dev->config_fd == -1) {
+            fprintf(stderr, "%s: %s: %m\n", __func__, name);
+            return 1;
+        }
     }
-    dev->config_fd = fd;
 again:
-    r = read(fd, pci_dev->dev.config, pci_config_size(&pci_dev->dev));
+    r = read(dev->config_fd, pci_dev->dev.config,
+             pci_config_size(&pci_dev->dev));
     if (r < 0) {
         if (errno == EINTR || errno == EAGAIN)
             goto again;
@@ -1467,6 +1482,7 @@ static PCIDeviceInfo assign_info = {
     .qdev.props   = (Property[]) {
         DEFINE_PROP("host", AssignedDevice, host, qdev_prop_hostaddr, PCIHostDevice),
         DEFINE_PROP_UINT32("iommu", AssignedDevice, use_iommu, 1),
+        DEFINE_PROP_STRING("configfd", AssignedDevice, configfd_name),
         DEFINE_PROP_END_OF_LIST(),
     },
 };

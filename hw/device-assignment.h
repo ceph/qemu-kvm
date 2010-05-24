@@ -103,6 +103,7 @@ typedef struct AssignedDevice {
     target_phys_addr_t msix_table_addr;
     int mmio_index;
     int need_emulate_cmd;
+    char *configfd_name;
     QLIST_ENTRY(AssignedDevice) next;
 } AssignedDevice;
 
