@@ -15,7 +15,6 @@
 #include <qemu-common.h>
 
 #include "rbd_types.h"
-#include "rados.h"
 #include "module.h"
 #include "block_int.h"
 
@@ -212,9 +211,9 @@ static int rbd_create(const char *filename, QEMUOptionParameter * options)
     pstrcpy(header.version, sizeof(header.version), rbd_version);
     header.image_size = bytes;
     cpu_to_le64s((uint64_t *) & header.image_size);
-    header.obj_order = obj_order;
-    header.crypt_type = RBD_CRYPT_NONE;
-    header.comp_type = RBD_COMP_NONE;
+    header.flags = cpu_to_le32(obj_order << RBD_FLAGS_ORDER_SHIFT |
+                               RBD_CRYPT_NONE << RBD_FLAGS_CRYPT_TYPE_SHIFT |
+                               RBD_COMP_NONE << RBD_FLAGS_COMP_TYPE_SHIFT);
     header.snap_seq = 0;
     header.snap_count = 0;
     cpu_to_le32s(&header.snap_count);
@@ -281,7 +280,7 @@ static int rbd_open(BlockDriverState * bs, const char *filename, int flags)
             header = (RbdHeader1 *) hbuf;
             le64_to_cpus((uint64_t *) & header->image_size);
             s->size = header->image_size;
-            s->objsize = 1 << header->obj_order;
+            s->objsize = 1 << rbd_get_obj_order(header->flags);
         } else {
             fprintf(stderr, "Unknown image version %s\n", hbuf + 68);
             return -EIO;
