@@ -617,6 +617,7 @@ int msix_set_mask_notifier(PCIDevice *dev, unsigned vector, void *opaque)
     assert(opaque);
     assert(!dev->msix_mask_notifier_opaque[vector]);
 
+    /* Unmask the new notifier unless vector is masked. */
     if (msix_is_masked(dev, vector)) {
         return 0;
     }
@@ -638,12 +639,13 @@ int msix_unset_mask_notifier(PCIDevice *dev, unsigned vector)
     assert(dev->msix_mask_notifier);
     assert(dev->msix_mask_notifier_opaque[vector]);
 
+    /* Mask the old notifier unless it is already masked. */
     if (msix_is_masked(dev, vector)) {
         return 0;
     }
     r = dev->msix_mask_notifier(dev, vector,
                                 dev->msix_mask_notifier_opaque[vector],
-                                msix_is_masked(dev, vector));
+                                !msix_is_masked(dev, vector));
     if (r < 0) {
         return r;
     }
