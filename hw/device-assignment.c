@@ -1073,7 +1073,7 @@ static int assigned_dev_update_msix_mmio(PCIDevice *pci_dev)
     else
         pos = pci_dev->cap.start;
 
-    entries_max_nr = pci_dev->config[pos + 2];
+    entries_max_nr = *(uint16_t *)(pci_dev->config + pos + 2);
     entries_max_nr &= PCI_MSIX_TABSIZE;
     entries_max_nr += 1;
 
@@ -1255,8 +1255,8 @@ static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
         entry_nr = assigned_dev_pci_read_word(pci_dev, pos + 2) &
                                                              PCI_MSIX_TABSIZE;
         pci_dev->config[pci_dev->cap.start + pci_dev->cap.length] = 0x11;
-        pci_dev->config[pci_dev->cap.start +
-                        pci_dev->cap.length + 2] = entry_nr;
+        *(uint16_t *)(pci_dev->config + pci_dev->cap.start +
+                      pci_dev->cap.length + 2) = entry_nr;
         msix_table_entry = assigned_dev_pci_read_long(pci_dev,
                                                       pos + PCI_MSIX_TABLE);
         *(uint32_t *)(pci_dev->config + pci_dev->cap.start +
