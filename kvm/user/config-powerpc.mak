@@ -1,24 +1,24 @@
 CFLAGS += -I../include/powerpc
-CFLAGS += -Wa,-mregnames -I test/lib
+CFLAGS += -Wa,-mregnames -I lib
 CFLAGS += -ffreestanding
 
-cstart := test/powerpc/cstart.o
+cstart := powerpc/cstart.o
 
 cflatobjs += \
-	test/lib/powerpc/io.o
+	lib/powerpc/io.o
 
 $(libcflat): LDFLAGS += -nostdlib
 
 # these tests do not use libcflat
 simpletests := \
-	test/powerpc/spin.bin \
-	test/powerpc/io.bin \
-	test/powerpc/sprg.bin
+	powerpc/spin.bin \
+	powerpc/io.bin \
+	powerpc/sprg.bin
 
 # theses tests use cstart.o, libcflat, and libgcc
 tests := \
-	test/powerpc/exit.bin \
-	test/powerpc/helloworld.bin
+	powerpc/exit.bin \
+	powerpc/helloworld.bin
 
 include config-powerpc-$(PROCESSOR).mak
 

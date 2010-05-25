@@ -10,11 +10,11 @@ CFLAGS =
 
 libgcc := $(shell $(CC) --print-libgcc-file-name)
 
-libcflat := test/lib/libcflat.a
+libcflat := lib/libcflat.a
 cflatobjs := \
-	test/lib/panic.o \
-	test/lib/printf.o \
-	test/lib/string.o
+	lib/panic.o \
+	lib/printf.o \
+	lib/string.o
 
 #include architecure specific make rules
 include config-$(ARCH).mak

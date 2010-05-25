@@ -5,20 +5,20 @@ CFLAGS += -I../include/x86
 all: test_cases
 
 cflatobjs += \
-	test/lib/x86/io.o \
-	test/lib/x86/smp.o
+	lib/x86/io.o \
+	lib/x86/smp.o
 
-cflatobjs += test/lib/x86/fwcfg.o
-cflatobjs += test/lib/x86/apic.o
+cflatobjs += lib/x86/fwcfg.o
+cflatobjs += lib/x86/apic.o
 
 $(libcflat): LDFLAGS += -nostdlib
-$(libcflat): CFLAGS += -ffreestanding -I test/lib
+$(libcflat): CFLAGS += -ffreestanding -I lib
 
 CFLAGS += -m$(bits)
 
 libgcc := $(shell $(CC) -m$(bits) --print-libgcc-file-name)
 
-FLATLIBS = test/lib/libcflat.a $(libgcc)
+FLATLIBS = lib/libcflat.a $(libgcc)
 %.flat: %.o $(FLATLIBS) flat.lds
 	$(CC) $(CFLAGS) -nostdlib -o $@ -Wl,-T,flat.lds $(filter %.o, $^) $(FLATLIBS)
 
@@ -28,7 +28,7 @@ tests-common = $(TEST_DIR)/vmexit.flat $(TEST_DIR)/tsc.flat \
 
 test_cases: $(tests-common) $(tests)
 
-$(TEST_DIR)/%.o: CFLAGS += -std=gnu99 -ffreestanding -I test/lib -I test/lib/x86
+$(TEST_DIR)/%.o: CFLAGS += -std=gnu99 -ffreestanding -I lib -I lib/x86
  
 $(TEST_DIR)/access.flat: $(cstart.o) $(TEST_DIR)/access.o $(TEST_DIR)/print.o
  
@@ -62,4 +62,4 @@ arch_clean:
 	$(RM) $(TEST_DIR)/*.o $(TEST_DIR)/*.flat \
 	$(TEST_DIR)/.*.d $(TEST_DIR)/lib/.*.d $(TEST_DIR)/lib/*.o
 
--include $(TEST_DIR)/.*.d test/lib/.*.d test/lib/x86/.*.d
+-include $(TEST_DIR)/.*.d lib/.*.d lib/x86/.*.d

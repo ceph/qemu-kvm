@@ -1,4 +1,4 @@
-TEST_DIR=test/x86
+TEST_DIR=x86
 cstart.o = $(TEST_DIR)/cstart64.o
 bits = 64
 ldarch = elf64-x86-64
