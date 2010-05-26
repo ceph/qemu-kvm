@@ -34,7 +34,7 @@
  * devicename is the basename for all objects used to
  * emulate the raw device.
  *
- * Metadata information (image size, ...) is stored in an 
+ * Metadata information (image size, ...) is stored in an
  * object with the name "devicename.rbd".
  *
  * The raw device is split into 4MB sized objects by default.
@@ -116,7 +116,7 @@ static int create_tmap_op(uint8_t op, const char *name, char **tmap_desc)
     uint32_t total_len = 1 + (sizeof(uint32_t) + len) + sizeof(uint32_t);       /* encoding op + name + empty buffer */
     char *desc;
 
-    desc = malloc(total_len);
+    desc = qemu_malloc(total_len);
     if (!desc) {
         return -ENOMEM;
     }
@@ -138,7 +138,7 @@ static int create_tmap_op(uint8_t op, const char *name, char **tmap_desc)
 
 static void free_tmap_op(char *tmap_desc)
 {
-    free(tmap_desc);
+    qemu_free(tmap_desc);
 }
 
 static int rbd_register_image(rados_pool_t pool, const char *name)
@@ -158,7 +158,7 @@ static int rbd_register_image(rados_pool_t pool, const char *name)
     return ret;
 }
 
-static int rbd_create(const char *filename, QEMUOptionParameter * options)
+static int rbd_create(const char *filename, QEMUOptionParameter *options)
 {
     int64_t bytes = 0;
     int64_t objsize;
@@ -228,12 +228,14 @@ static int rbd_create(const char *filename, QEMUOptionParameter * options)
         return -EIO;
     }
 
+    /* check for existing rbd header file */
     ret = rados_stat(p, n, &size, &mtime);
     if (ret == 0) {
         ret=-EEXIST;
         goto done;
     }
 
+    /* create header file */
     ret = rados_write(p, n, 0, (const char *)&header, sizeof(header));
     if (ret < 0) {
         goto done;
@@ -247,7 +249,7 @@ done:
     return ret;
 }
 
-static int rbd_open(BlockDriverState * bs, const char *filename, int flags)
+static int rbd_open(BlockDriverState *bs, const char *filename, int flags)
 {
     RBDRVRBDState *s = bs->opaque;
     char pool[RBD_MAX_SEG_NAME_SIZE];
@@ -293,7 +295,7 @@ static int rbd_open(BlockDriverState * bs, const char *filename, int flags)
     return 0;
 }
 
-static void rbd_close(BlockDriverState * bs)
+static void rbd_close(BlockDriverState *bs)
 {
     RBDRVRBDState *s = bs->opaque;
 
@@ -325,7 +327,7 @@ static int rbd_rw(BlockDriverState *bs, int64_t sector_num,
                  (long long unsigned int)segnr);
 
         if (write) {
-            if ((r = rados_write(s->pool, n, segoffs, (const char *)buf, 
+            if ((r = rados_write(s->pool, n, segoffs, (const char *)buf,
                 segsize)) < 0) {
                 return r;
             }
@@ -352,7 +354,7 @@ static int rbd_rw(BlockDriverState *bs, int64_t sector_num,
 }
 
 static int rbd_read(BlockDriverState *bs, int64_t sector_num,
-                    uint8_t * buf, int nb_sectors)
+                    uint8_t *buf, int nb_sectors)
 {
     return rbd_rw(bs, sector_num, buf, nb_sectors, 0);
 }
@@ -363,7 +365,7 @@ static int rbd_write(BlockDriverState *bs, int64_t sector_num,
     return rbd_rw(bs, sector_num, (uint8_t *) buf, nb_sectors, 1);
 }
 
-static void rbd_aio_cancel(BlockDriverAIOCB * blockacb)
+static void rbd_aio_cancel(BlockDriverAIOCB *blockacb)
 {
     RBDAIOCB *acb = (RBDAIOCB *) blockacb;
     qemu_bh_delete(acb->bh);
@@ -376,7 +378,8 @@ static AIOPool rbd_aio_pool = {
     .cancel = rbd_aio_cancel,
 };
 
-static void rbd_finish_aiocb(rados_completion_t c, RADOSCB * rcb)
+/* This is the callback function for rados_aio_read and _write */
+static void rbd_finish_aiocb(rados_completion_t c, RADOSCB *rcb)
 {
     RBDAIOCB *acb = rcb->acb;
     int64_t r;
@@ -412,11 +415,12 @@ static void rbd_finish_aiocb(rados_completion_t c, RADOSCB * rcb)
     }
     qemu_free(rcb);
     i = 0;
-    if ((acb->aiocnt == 0) && acb->bh) {
+    if (!acb->aiocnt && acb->bh) {
         qemu_bh_schedule(acb->bh);
     }
 }
 
+/* Callback when all queued rados_aio requests are complete */
 static void rbd_aio_bh_cb(void *opaque)
 {
     RBDAIOCB *acb = opaque;
@@ -431,11 +435,11 @@ static void rbd_aio_bh_cb(void *opaque)
     qemu_aio_release(acb);
 }
 
-static BlockDriverAIOCB *rbd_aio_rw_vector(BlockDriverState * bs,
+static BlockDriverAIOCB *rbd_aio_rw_vector(BlockDriverState *bs,
                                            int64_t sector_num,
-                                           QEMUIOVector * qiov,
+                                           QEMUIOVector *qiov,
                                            int nb_sectors,
-                                           BlockDriverCompletionFunc * cb,
+                                           BlockDriverCompletionFunc *cb,
                                            void *opaque, int write)
 {
     RBDAIOCB *acb;
