@@ -1728,7 +1728,6 @@ static int shutdown_requested;
 static int powerdown_requested;
 int debug_requested;
 int vmstop_requested;
-static int exit_requested;
 
 int qemu_no_shutdown(void)
 {
@@ -1756,12 +1755,6 @@ int qemu_powerdown_requested(void)
     int r = powerdown_requested;
     powerdown_requested = 0;
     return r;
-}
-
-int qemu_exit_requested(void)
-{
-    /* just return it, we'll exit() anyway */
-    return exit_requested;
 }
 
 static int qemu_debug_requested(void)
@@ -1834,12 +1827,6 @@ void qemu_system_shutdown_request(void)
 void qemu_system_powerdown_request(void)
 {
     powerdown_requested = 1;
-    qemu_notify_event();
-}
-
-void qemu_system_exit_request(void)
-{
-    exit_requested = 1;
     qemu_notify_event();
 }
 
@@ -1981,8 +1968,6 @@ static int vm_can_run(void)
         return 0;
     if (debug_requested)
         return 0;
-    if (exit_requested)
-        return 0;
     return 1;
 }
 
@@ -2040,9 +2025,6 @@ static void main_loop(void)
         }
         if ((r = qemu_vmstop_requested())) {
             vm_stop(r);
-        }
-        if (qemu_exit_requested()) {
-            exit(0);
         }
     }
     pause_all_vcpus();
@@ -2720,12 +2702,12 @@ int main(int argc, char **argv, char **envp)
         int ret;
 
         ret = qemu_read_config_file(CONFIG_QEMU_CONFDIR "/qemu.conf");
-        if (ret == -EINVAL) {
+        if (ret < 0 && ret != -ENOENT) {
             exit(1);
         }
 
         ret = qemu_read_config_file(arch_config_name);
-        if (ret == -EINVAL) {
+        if (ret < 0 && ret != -ENOENT) {
             exit(1);
         }
     }
@@ -3590,6 +3572,8 @@ int main(int argc, char **argv, char **envp)
     if (default_vga)
         vga_interface_type = VGA_CIRRUS;
 
+    socket_init();
+
     if (qemu_opts_foreach(&qemu_chardev_opts, chardev_init_func, NULL, 1) != 0)
         exit(1);
 #ifdef CONFIG_LINUX
@@ -3703,8 +3687,6 @@ int main(int argc, char **argv, char **envp)
         exit(1);
     }
     configure_icount(icount_option);
-
-    socket_init();
 
     if (net_init_clients() < 0) {
         exit(1);

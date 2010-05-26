@@ -718,9 +718,17 @@ abi_long do_brk(abi_ulong new_brk)
                                         PROT_READ|PROT_WRITE,
                                         MAP_ANON|MAP_FIXED|MAP_PRIVATE, 0, 0));
 
-    if (!is_error(mapped_addr))
+#if defined(TARGET_ALPHA)
+    /* We (partially) emulate OSF/1 on Alpha, which requires we
+       return a proper errno, not an unchanged brk value.  */
+    if (is_error(mapped_addr)) {
+        return -TARGET_ENOMEM;
+    }
+#endif
+
+    if (!is_error(mapped_addr)) {
 	target_brk = new_brk;
-    
+    }
     return target_brk;
 }
 
@@ -829,6 +837,22 @@ static inline abi_long host_to_target_rusage(abi_ulong target_addr,
     unlock_user_struct(target_rusage, target_addr, 1);
 
     return 0;
+}
+
+static inline rlim_t target_to_host_rlim(target_ulong target_rlim)
+{
+    if (target_rlim == TARGET_RLIM_INFINITY)
+        return RLIM_INFINITY;
+    else
+        return tswapl(target_rlim);
+}
+
+static inline target_ulong host_to_target_rlim(rlim_t rlim)
+{
+    if (rlim == RLIM_INFINITY || rlim != (target_long)rlim)
+        return TARGET_RLIM_INFINITY;
+    else
+        return tswapl(rlim);
 }
 
 static inline abi_long copy_from_user_timeval(struct timeval *tv,
@@ -971,7 +995,8 @@ static abi_long do_pipe2(int host_pipe[], int flags)
 #endif
 }
 
-static abi_long do_pipe(void *cpu_env, abi_ulong pipedes, int flags)
+static abi_long do_pipe(void *cpu_env, abi_ulong pipedes,
+                        int flags, int is_pipe2)
 {
     int host_pipe[2];
     abi_long ret;
@@ -979,20 +1004,25 @@ static abi_long do_pipe(void *cpu_env, abi_ulong pipedes, int flags)
 
     if (is_error(ret))
         return get_errno(ret);
-#if defined(TARGET_MIPS)
-    ((CPUMIPSState*)cpu_env)->active_tc.gpr[3] = host_pipe[1];
-    ret = host_pipe[0];
-#else
-#if defined(TARGET_SH4)
-    if (!flags) {
+
+    /* Several targets have special calling conventions for the original
+       pipe syscall, but didn't replicate this into the pipe2 syscall.  */
+    if (!is_pipe2) {
+#if defined(TARGET_ALPHA)
+        ((CPUAlphaState *)cpu_env)->ir[IR_A4] = host_pipe[1];
+        return host_pipe[0];
+#elif defined(TARGET_MIPS)
+        ((CPUMIPSState*)cpu_env)->active_tc.gpr[3] = host_pipe[1];
+        return host_pipe[0];
+#elif defined(TARGET_SH4)
         ((CPUSH4State*)cpu_env)->gregs[1] = host_pipe[1];
-        ret = host_pipe[0];
-    } else
+        return host_pipe[0];
 #endif
+    }
+
     if (put_user_s32(host_pipe[0], pipedes)
         || put_user_s32(host_pipe[1], pipedes + sizeof(host_pipe[0])))
         return -TARGET_EFAULT;
-#endif
     return get_errno(ret);
 }
 
@@ -4467,13 +4497,18 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
     case TARGET_NR_lseek:
         ret = get_errno(lseek(arg1, arg2, arg3));
         break;
-#ifdef TARGET_NR_getxpid
+#if defined(TARGET_NR_getxpid) && defined(TARGET_ALPHA)
+    /* Alpha specific */
     case TARGET_NR_getxpid:
-#else
-    case TARGET_NR_getpid:
-#endif
+        ((CPUAlphaState *)cpu_env)->ir[IR_A4] = getppid();
         ret = get_errno(getpid());
         break;
+#endif
+#ifdef TARGET_NR_getpid
+    case TARGET_NR_getpid:
+        ret = get_errno(getpid());
+        break;
+#endif
     case TARGET_NR_mount:
 		{
 			/* need to look at the data field */
@@ -4682,11 +4717,11 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
         ret = get_errno(dup(arg1));
         break;
     case TARGET_NR_pipe:
-        ret = do_pipe(cpu_env, arg1, 0);
+        ret = do_pipe(cpu_env, arg1, 0, 0);
         break;
 #ifdef TARGET_NR_pipe2
     case TARGET_NR_pipe2:
-        ret = do_pipe(cpu_env, arg1, arg2);
+        ret = do_pipe(cpu_env, arg1, arg2, 1);
         break;
 #endif
     case TARGET_NR_times:
@@ -4948,11 +4983,41 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
 #ifdef TARGET_NR_sigprocmask
     case TARGET_NR_sigprocmask:
         {
-            int how = arg1;
+#if defined(TARGET_ALPHA)
+            sigset_t set, oldset;
+            abi_ulong mask;
+            int how;
+
+            switch (arg1) {
+            case TARGET_SIG_BLOCK:
+                how = SIG_BLOCK;
+                break;
+            case TARGET_SIG_UNBLOCK:
+                how = SIG_UNBLOCK;
+                break;
+            case TARGET_SIG_SETMASK:
+                how = SIG_SETMASK;
+                break;
+            default:
+                ret = -TARGET_EINVAL;
+                goto fail;
+            }
+            mask = arg2;
+            target_to_host_old_sigset(&set, &mask);
+
+            ret = get_errno(sigprocmask(how, &set, &oldset));
+
+            if (!is_error(ret)) {
+                host_to_target_old_sigset(&mask, &oldset);
+                ret = mask;
+                ((CPUAlphaState *)cpu_env)->[IR_V0] = 0; /* force no error */
+            }
+#else
             sigset_t set, oldset, *set_ptr;
+            int how;
 
             if (arg2) {
-                switch(how) {
+                switch (arg1) {
                 case TARGET_SIG_BLOCK:
                     how = SIG_BLOCK;
                     break;
@@ -4975,13 +5040,14 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
                 how = 0;
                 set_ptr = NULL;
             }
-            ret = get_errno(sigprocmask(arg1, set_ptr, &oldset));
+            ret = get_errno(sigprocmask(how, set_ptr, &oldset));
             if (!is_error(ret) && arg3) {
                 if (!(p = lock_user(VERIFY_WRITE, arg3, sizeof(target_sigset_t), 0)))
                     goto efault;
                 host_to_target_old_sigset(p, &oldset);
                 unlock_user(p, arg3, sizeof(target_sigset_t));
             }
+#endif
         }
         break;
 #endif
@@ -5053,10 +5119,15 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
     case TARGET_NR_sigsuspend:
         {
             sigset_t set;
+#if defined(TARGET_ALPHA)
+            abi_ulong mask = arg1;
+            target_to_host_old_sigset(&set, &mask);
+#else
             if (!(p = lock_user(VERIFY_READ, arg1, sizeof(target_sigset_t), 1)))
                 goto efault;
             target_to_host_old_sigset(&set, p);
             unlock_user(p, arg1, 0);
+#endif
             ret = get_errno(sigsuspend(&set));
         }
         break;
@@ -5124,21 +5195,19 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
         break;
     case TARGET_NR_setrlimit:
         {
-            /* XXX: convert resource ? */
             int resource = arg1;
             struct target_rlimit *target_rlim;
             struct rlimit rlim;
             if (!lock_user_struct(VERIFY_READ, target_rlim, arg2, 1))
                 goto efault;
-            rlim.rlim_cur = tswapl(target_rlim->rlim_cur);
-            rlim.rlim_max = tswapl(target_rlim->rlim_max);
+            rlim.rlim_cur = target_to_host_rlim(target_rlim->rlim_cur);
+            rlim.rlim_max = target_to_host_rlim(target_rlim->rlim_max);
             unlock_user_struct(target_rlim, arg2, 0);
             ret = get_errno(setrlimit(resource, &rlim));
         }
         break;
     case TARGET_NR_getrlimit:
         {
-            /* XXX: convert resource ? */
             int resource = arg1;
             struct target_rlimit *target_rlim;
             struct rlimit rlim;
@@ -5147,8 +5216,8 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
             if (!is_error(ret)) {
                 if (!lock_user_struct(VERIFY_WRITE, target_rlim, arg2, 0))
                     goto efault;
-                target_rlim->rlim_cur = tswapl(rlim.rlim_cur);
-                target_rlim->rlim_max = tswapl(rlim.rlim_max);
+                target_rlim->rlim_cur = host_to_target_rlim(rlim.rlim_cur);
+                target_rlim->rlim_max = host_to_target_rlim(rlim.rlim_max);
                 unlock_user_struct(target_rlim, arg2, 1);
             }
         }
@@ -5198,6 +5267,10 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
             ret = do_select(nsel, inp, outp, exp, tvp);
         }
         break;
+#endif
+#ifdef TARGET_NR_pselect6
+    case TARGET_NR_pselect6:
+	    goto unimplemented_nowarn;
 #endif
     case TARGET_NR_symlink:
         {
@@ -6233,8 +6306,8 @@ abi_long do_syscall(void *cpu_env, int num, abi_long arg1,
 	    struct target_rlimit *target_rlim;
             if (!lock_user_struct(VERIFY_WRITE, target_rlim, arg2, 0))
                 goto efault;
-	    target_rlim->rlim_cur = tswapl(rlim.rlim_cur);
-	    target_rlim->rlim_max = tswapl(rlim.rlim_max);
+	    target_rlim->rlim_cur = host_to_target_rlim(rlim.rlim_cur);
+	    target_rlim->rlim_max = host_to_target_rlim(rlim.rlim_max);
             unlock_user_struct(target_rlim, arg2, 1);
 	}
 	break;

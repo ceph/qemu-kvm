@@ -336,6 +336,14 @@ int do_sigaction(int sig, const struct target_sigaction *act,
 #if !defined(TARGET_ABI_MIPSN32) && !defined(TARGET_ABI_MIPSN64)
 #define TARGET_SA_RESTORER	0x04000000	/* Only for O32 */
 #endif
+#elif defined(TARGET_ALPHA)
+#define TARGET_SA_ONSTACK	0x00000001
+#define TARGET_SA_RESTART	0x00000002
+#define TARGET_SA_NOCLDSTOP	0x00000004
+#define TARGET_SA_NODEFER	0x00000008
+#define TARGET_SA_RESETHAND	0x00000010
+#define TARGET_SA_NOCLDWAIT	0x00000020 /* not supported yet */
+#define TARGET_SA_SIGINFO	0x00000040
 #else
 #define TARGET_SA_NOCLDSTOP	0x00000001
 #define TARGET_SA_NOCLDWAIT	0x00000002 /* not supported yet */
@@ -668,6 +676,14 @@ struct target_rlimit {
         abi_ulong   rlim_cur;
         abi_ulong   rlim_max;
 };
+
+#if defined(TARGET_ALPHA)
+#define TARGET_RLIM_INFINITY	0x7fffffffffffffffull
+#elif defined(TARGET_MIPS) || defined(TARGET_SPARC)
+#define TARGET_RLIM_INFINITY	0x7fffffffUL
+#else
+#define TARGET_RLIM_INFINITY	((target_ulong)~0UL)
+#endif
 
 struct target_pollfd {
     int fd;           /* file descriptor */

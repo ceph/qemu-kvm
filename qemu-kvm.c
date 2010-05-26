@@ -1678,9 +1678,6 @@ int kvm_main_loop(void)
             vm_stop(EXCP_DEBUG);
             kvm_debug_cpu_requested = NULL;
         }
-        if (qemu_exit_requested()) {
-            exit(0);
-        }
     }
 
     pause_all_threads();
