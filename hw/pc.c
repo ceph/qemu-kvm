@@ -369,26 +369,12 @@ void pc_cmos_init(ram_addr_t ram_size, ram_addr_t above_4g_mem_size,
     rtc_set_memory(s, 0x39, val);
 }
 
-void ioport_set_a20(int enable)
+static void handle_a20_line_change(void *opaque, int irq, int level)
 {
+    CPUState *cpu = opaque;
+
     /* XXX: send to all CPUs ? */
-    cpu_x86_set_a20(first_cpu, enable);
-}
-
-int ioport_get_a20(void)
-{
-    return ((first_cpu->a20_mask >> 20) & 1);
-}
-
-static void ioport92_write(void *opaque, uint32_t addr, uint32_t val)
-{
-    ioport_set_a20((val >> 1) & 1);
-    /* XXX: bit 0 is fast reset */
-}
-
-static uint32_t ioport92_read(void *opaque, uint32_t addr)
-{
-    return ioport_get_a20() << 1;
+    cpu_x86_set_a20(cpu, level);
 }
 
 /***********************************************************/
@@ -822,7 +808,7 @@ void pc_memory_init(ram_addr_t ram_size,
     ram_addr_t ram_addr, bios_offset, option_rom_offset;
     ram_addr_t below_4g_mem_size, above_4g_mem_size = 0;
     int bios_size, isa_bios_size;
-    void **fw_cfg;
+    void *fw_cfg;
 
     if (ram_size >= 0xe0000000 ) {
         above_4g_mem_size = ram_size - 0xe0000000;
@@ -905,7 +891,7 @@ void pc_memory_init(ram_addr_t ram_size,
     rom_set_fw(fw_cfg);
 
     if (linux_boot) {
-        load_linux(*fw_cfg, kernel_filename, initrd_filename, kernel_cmdline, below_4g_mem_size);
+        load_linux(fw_cfg, kernel_filename, initrd_filename, kernel_cmdline, below_4g_mem_size);
     }
 
     for (i = 0; i < nb_option_roms; i++) {
@@ -947,6 +933,8 @@ void pc_basic_device_init(qemu_irq *isa_irq,
     int i;
     DriveInfo *fd[MAX_FD];
     PITState *pit;
+    qemu_irq *a20_line;
+    ISADevice *i8042;
 
     register_ioport_write(0x80, 1, 1, ioport80_write, NULL);
 
@@ -955,9 +943,6 @@ void pc_basic_device_init(qemu_irq *isa_irq,
     *rtc_state = rtc_init(2000);
 
     qemu_register_boot_set(pc_boot_set, *rtc_state);
-
-    register_ioport_read(0x92, 1, 1, ioport92_read, NULL);
-    register_ioport_write(0x92, 1, 1, ioport92_write, NULL);
 
 #ifdef CONFIG_KVM_PIT
     if (kvm_enabled() && kvm_pit_in_kernel())
@@ -984,7 +969,11 @@ void pc_basic_device_init(qemu_irq *isa_irq,
         }
     }
 
-    isa_create_simple("i8042");
+    a20_line = qemu_allocate_irqs(handle_a20_line_change, first_cpu, 1);
+    i8042 = isa_create_simple("i8042");
+    i8042_setup_a20_line(i8042, a20_line);
+    vmmouse_init(i8042);
+
     DMA_init(0);
 
     for(i = 0; i < MAX_FD; i++) {

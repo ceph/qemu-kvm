@@ -150,6 +150,10 @@ hw-obj-$(CONFIG_EMPTY_SLOT) += empty_slot.o
 
 hw-obj-$(CONFIG_SERIAL) += serial.o
 hw-obj-$(CONFIG_PARALLEL) += parallel.o
+# Moved back to Makefile.target due to #include qemu-kvm.h:
+#hw-obj-$(CONFIG_I8254) += i8254.o
+#hw-obj-$(CONFIG_PCSPK) += pcspk.o
+hw-obj-$(CONFIG_PCKBD) += pckbd.o
 hw-obj-$(CONFIG_USB_UHCI) += usb-uhci.o
 hw-obj-$(CONFIG_FDC) += fdc.o
 # needs fixes for cpu hotplug, so moved to Makefile.target:
