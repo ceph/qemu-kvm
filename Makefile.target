@@ -206,13 +206,14 @@ obj-y += e1000.o
 obj-i386-y = pckbd.o dma.o
 obj-i386-y += vga.o
 obj-i386-y += mc146818rtc.o i8259.o i8254.o pcspk.o pc.o
-obj-i386-y += cirrus_vga.o apic.o ioapic.o acpi.o piix_pci.o
+obj-i386-y += cirrus_vga.o apic.o ioapic.o piix_pci.o
 obj-i386-y += vmmouse.o vmport.o hpet.o
 obj-i386-y += device-hotplug.o pci-hotplug.o smbios.o wdt_ib700.o
 obj-i386-y += extboot.o
 obj-i386-y += debugcon.o multiboot.o
-obj-i386-y += pm_smbus.o apm.o acpi_piix4.o pc_piix.o
+obj-i386-y += pc_piix.o
 obj-i386-y += testdev.o
+obj-i386-y += acpi.o acpi_piix4.o
 
 obj-i386-$(CONFIG_KVM_PIT) += i8254-kvm.o
 obj-i386-$(CONFIG_KVM_DEVICE_ASSIGNMENT) += device-assignment.o
@@ -248,7 +249,6 @@ obj-mips-y += dma.o vga.o i8254.o i8259.o
 obj-mips-y += g364fb.o jazz_led.o
 obj-mips-y += gt64xxx.o pckbd.o mc146818rtc.o
 obj-mips-y += piix4.o cirrus_vga.o
-obj-mips-y += pm_smbus.o apm.o acpi_piix4.o
 
 obj-microblaze-y = petalogix_s3adsp1800_mmu.o
 
