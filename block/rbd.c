@@ -211,9 +211,9 @@ static int rbd_create(const char *filename, QEMUOptionParameter *options)
     }
 
     memset(&header, 0, sizeof(header));
-    pstrcpy(header.text, sizeof(header.text), rbd_text);
-    pstrcpy(header.signature, sizeof(header.signature), rbd_signature);
-    pstrcpy(header.version, sizeof(header.version), rbd_version);
+    pstrcpy(header.text, sizeof(header.text), RBD_HEADER_TEXT);
+    pstrcpy(header.signature, sizeof(header.signature), RBD_HEADER_SIGNATURE);
+    pstrcpy(header.version, sizeof(header.version), RBD_HEADER_VERSION);
     header.image_size = bytes;
     cpu_to_le64s((uint64_t *) & header.image_size);
     header.options.order = obj_order;
@@ -284,13 +284,13 @@ static int rbd_open(BlockDriverState *bs, const char *filename, int flags)
         goto failed;
     }
 
-    if (strncmp(hbuf + 64, rbd_signature, 4)) {
+    if (strncmp(hbuf + 64, RBD_HEADER_SIGNATURE, 4)) {
         error_report("Invalid header signature %s", hbuf + 64);
         r = -EMEDIUMTYPE;
         goto failed;
     }
 
-    if (strncmp(hbuf + 68, rbd_version, 8)) {
+    if (strncmp(hbuf + 68, RBD_HEADER_VERSION, 8)) {
         error_report("Unknown image version %s", hbuf + 68);
         r = -EMEDIUMTYPE;
         goto failed;
