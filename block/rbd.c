@@ -9,7 +9,6 @@
  */
 
 #include "qemu-common.h"
-#include "qemu-error.h"
 #include <sys/types.h>
 #include <stdbool.h>
 
@@ -24,6 +23,8 @@
 #include <rados/librados.h>
 
 #include <signal.h>
+
+#define error_report(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
 
 /*
  * When specifying the image filename use:
