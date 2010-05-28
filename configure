@@ -272,7 +272,7 @@ kvm_kmod="no"
 check_utests="no"
 user_pie="no"
 zero_malloc=""
-rbd="no"
+rbd=""
 
 # OS specific
 if check_define __linux__ ; then
@@ -635,6 +635,8 @@ for opt do
   --enable-docs) docs="yes"
   ;;
   --disable-cpu-emulation) cpu_emulation="no"
+  ;;
+  --disable-rbd) rbd="no"
   ;;
   --enable-rbd) rbd="yes"
   ;;
@@ -1567,9 +1569,11 @@ if test "$rbd" != "no" ; then
 #include <rados/librados.h>
 int main(void) { rados_initialize(0, NULL); return 0; }
 EOF
-  if compile_prog "" "-lrados -lcrypto" ; then
+  rbd_libs="-lrados -lcrypto"
+  if compile_prog "" "$rbd_libs" ; then
     rbd=yes
-    LIBS="$LIBS -lrados -lcrypto"
+    libs_tools="$rbd_libs $libs_tools"
+    libs_softmmu="$rbd_libs $libs_softmmu"
   else
     if test "$rbd" = "yes" ; then
       feature_not_found "rados block device"
