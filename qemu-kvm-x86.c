@@ -1116,34 +1116,6 @@ static void do_cpuid_ent(struct kvm_cpuid_entry2 *e, uint32_t function,
     e->edx = env->regs[R_EDX];
 }
 
-struct kvm_para_features {
-	int cap;
-	int feature;
-} para_features[] = {
-#ifdef KVM_CAP_CLOCKSOURCE
-	{ KVM_CAP_CLOCKSOURCE, KVM_FEATURE_CLOCKSOURCE },
-#endif
-#ifdef KVM_CAP_NOP_IO_DELAY
-	{ KVM_CAP_NOP_IO_DELAY, KVM_FEATURE_NOP_IO_DELAY },
-#endif
-#ifdef KVM_CAP_PV_MMU
-	{ KVM_CAP_PV_MMU, KVM_FEATURE_MMU_OP },
-#endif
-	{ -1, -1 }
-};
-
-static int get_para_features(CPUState *env)
-{
-	int i, features = 0;
-
-	for (i = 0; i < ARRAY_SIZE(para_features)-1; i++) {
-		if (kvm_check_extension(kvm_state, para_features[i].cap))
-			features |= (1 << para_features[i].feature);
-	}
-
-	return features;
-}
-
 static void kvm_trim_features(uint32_t *features, uint32_t supported)
 {
     int i;

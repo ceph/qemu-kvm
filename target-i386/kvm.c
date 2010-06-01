@@ -133,8 +133,6 @@ uint32_t kvm_arch_get_supported_cpuid(CPUState *env, uint32_t function, int reg)
 
 #endif
 
-#ifdef KVM_UPSTREAM
-
 #ifdef CONFIG_KVM_PARA
 struct kvm_para_features {
         int cap;
@@ -164,6 +162,8 @@ static int get_para_features(CPUState *env)
         return features;
 }
 #endif
+
+#ifdef KVM_UPSTREAM
 
 int kvm_arch_init_vcpu(CPUState *env)
 {
