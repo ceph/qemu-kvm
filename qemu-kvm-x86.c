@@ -1129,7 +1129,7 @@ static void kvm_trim_features(uint32_t *features, uint32_t supported)
     }
 }
 
-int kvm_arch_init_vcpu(CPUState *cenv)
+int kvm_arch_init_vcpu(CPUState *env)
 {
     struct kvm_cpuid_entry2 cpuid_ent[100];
 #ifdef KVM_CPUID_SIGNATURE
@@ -1140,7 +1140,7 @@ int kvm_arch_init_vcpu(CPUState *cenv)
     CPUState copy;
     uint32_t i, j, limit;
 
-    kvm_arch_reset_vcpu(cenv);
+    kvm_arch_reset_vcpu(env);
 
 #ifdef KVM_CPUID_SIGNATURE
     /* Paravirtualization CPUIDs */
@@ -1156,24 +1156,24 @@ int kvm_arch_init_vcpu(CPUState *cenv)
     pv_ent = &cpuid_ent[cpuid_nent++];
     memset(pv_ent, 0, sizeof(*pv_ent));
     pv_ent->function = KVM_CPUID_FEATURES;
-    pv_ent->eax = get_para_features(cenv);
+    pv_ent->eax = get_para_features(env);
 #endif
 
-    kvm_trim_features(&cenv->cpuid_features,
-                      kvm_arch_get_supported_cpuid(cenv, 1, R_EDX));
+    kvm_trim_features(&env->cpuid_features,
+                      kvm_arch_get_supported_cpuid(env, 1, R_EDX));
 
     /* prevent the hypervisor bit from being cleared by the kernel */
-    i = cenv->cpuid_ext_features & CPUID_EXT_HYPERVISOR;
-    kvm_trim_features(&cenv->cpuid_ext_features,
-                      kvm_arch_get_supported_cpuid(cenv, 1, R_ECX));
-    cenv->cpuid_ext_features |= i;
+    i = env->cpuid_ext_features & CPUID_EXT_HYPERVISOR;
+    kvm_trim_features(&env->cpuid_ext_features,
+                      kvm_arch_get_supported_cpuid(env, 1, R_ECX));
+    env->cpuid_ext_features |= i;
 
-    kvm_trim_features(&cenv->cpuid_ext2_features,
-                      kvm_arch_get_supported_cpuid(cenv, 0x80000001, R_EDX));
-    kvm_trim_features(&cenv->cpuid_ext3_features,
-                      kvm_arch_get_supported_cpuid(cenv, 0x80000001, R_ECX));
+    kvm_trim_features(&env->cpuid_ext2_features,
+                      kvm_arch_get_supported_cpuid(env, 0x80000001, R_EDX));
+    kvm_trim_features(&env->cpuid_ext3_features,
+                      kvm_arch_get_supported_cpuid(env, 0x80000001, R_ECX));
 
-    copy = *cenv;
+    copy = *env;
 
     copy.regs[R_EAX] = 0;
     qemu_kvm_cpuid_on_env(&copy);
@@ -1207,11 +1207,11 @@ int kvm_arch_init_vcpu(CPUState *cenv)
     for (i = 0x80000000; i <= limit; ++i)
 	do_cpuid_ent(&cpuid_ent[cpuid_nent++], i, 0, &copy);
 
-    kvm_setup_cpuid2(cenv, cpuid_nent, cpuid_ent);
+    kvm_setup_cpuid2(env, cpuid_nent, cpuid_ent);
 
 #ifdef KVM_CAP_MCE
-    if (((cenv->cpuid_version >> 8)&0xF) >= 6
-        && (cenv->cpuid_features&(CPUID_MCE|CPUID_MCA)) == (CPUID_MCE|CPUID_MCA)
+    if (((env->cpuid_version >> 8)&0xF) >= 6
+        && (env->cpuid_features&(CPUID_MCE|CPUID_MCA)) == (CPUID_MCE|CPUID_MCA)
         && kvm_check_extension(kvm_state, KVM_CAP_MCE) > 0) {
         uint64_t mcg_cap;
         int banks;
@@ -1223,18 +1223,18 @@ int kvm_arch_init_vcpu(CPUState *cenv)
                 banks = MCE_BANKS_DEF;
             mcg_cap &= MCE_CAP_DEF;
             mcg_cap |= banks;
-            if (kvm_setup_mce(cenv, &mcg_cap))
+            if (kvm_setup_mce(env, &mcg_cap))
                 perror("kvm_setup_mce FAILED");
             else
-                cenv->mcg_cap = mcg_cap;
+                env->mcg_cap = mcg_cap;
         }
     }
 #endif
 
 #ifdef KVM_EXIT_TPR_ACCESS
-    kvm_enable_tpr_access_reporting(cenv);
+    kvm_enable_tpr_access_reporting(env);
 #endif
-    kvm_reset_mpstate(cenv);
+    kvm_reset_mpstate(env);
     return 0;
 }
 
