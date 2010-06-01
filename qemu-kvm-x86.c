@@ -1129,7 +1129,7 @@ static void kvm_trim_features(uint32_t *features, uint32_t supported)
     }
 }
 
-int kvm_arch_init_vcpu(CPUState *env)
+static int _kvm_arch_init_vcpu(CPUState *env)
 {
     struct kvm_cpuid_entry2 cpuid_ent[100];
 #ifdef KVM_CPUID_SIGNATURE
