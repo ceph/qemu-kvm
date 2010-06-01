@@ -168,8 +168,6 @@ static int _kvm_arch_init_vcpu(CPUState *env);
 int kvm_arch_init_vcpu(CPUState *env)
 {
     int r;
-#ifdef KVM_UPSTREAM
-
     struct {
         struct kvm_cpuid2 cpuid;
         struct kvm_cpuid_entry2 entries[100];
@@ -181,8 +179,6 @@ int kvm_arch_init_vcpu(CPUState *env)
     uint32_t signature[3];
 #endif
 
-#endif
-
     r = _kvm_arch_init_vcpu(env);
     if (r < 0) {
         return r;
@@ -191,6 +187,8 @@ int kvm_arch_init_vcpu(CPUState *env)
 #ifdef KVM_UPSTREAM
 
     env->mp_state = KVM_MP_STATE_RUNNABLE;
+
+#endif
 
     env->cpuid_features &= kvm_arch_get_supported_cpuid(env, 1, R_EDX);
 
@@ -285,8 +283,6 @@ int kvm_arch_init_vcpu(CPUState *env)
     cpuid_data.cpuid.nent = cpuid_i;
 
     return kvm_vcpu_ioctl(env, KVM_SET_CPUID2, &cpuid_data);
-#endif
-    return 0;
 }
 
 void kvm_arch_reset_vcpu(CPUState *env)
