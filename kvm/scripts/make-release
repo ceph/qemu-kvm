@@ -1,7 +1,7 @@
 #!/bin/bash -e
 
 usage() {
-    echo "usage: $0 [--upload] [--formal] commit [name] [tarball]"
+    echo "usage: $0 [--upload] [--formal] commit [name] [tarball] [user]"
     exit 1
 }
 
@@ -51,17 +51,22 @@ cd "$(dirname "$0")"/../..
 mkdir -p "$(dirname "$tarball")"
 git archive --prefix="$name/" --format=tar "$commit" > "$tarball"
 
+mtime=`git show --format=%ct "$commit" --`
+tarargs="--owner=root --group=root --mtime=@$mtime"
+
 mkdir -p "$tmpdir"
 git cat-file -p "${commit}:roms" | awk ' { print $4, $3 } ' \
     > "$tmpdir/EXTERNAL_DEPENDENCIES"
 tar -rf "$tarball" --transform "s,^,$name/," -C "$tmpdir" \
+    $tarargs \
     "EXTERNAL_DEPENDENCIES"
 rm -rf "$tmpdir"
 
 if [[ -n "$formal" ]]; then
     mkdir -p "$tmpdir"
     echo "$name" > "$tmpdir/KVM_VERSION"
-    tar -rf "$tarball" --transform "s,^,$name/," -C "$tmpdir" "KVM_VERSION"
+    tar -rf "$tarball" --transform "s,^,$name/," -C "$tmpdir" "KVM_VERSION" \
+        $tarargs
     rm -rf "$tmpdir"
 fi
 
