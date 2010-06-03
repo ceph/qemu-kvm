@@ -125,7 +125,7 @@ static int create_tmap_op(uint8_t op, const char *name, char **tmap_desc)
     uint32_t total_len = 1 + (sizeof(uint32_t) + len) + sizeof(uint32_t);
     char *desc = NULL;
 
-    qemu_malloc(total_len);
+    desc = qemu_malloc(total_len);
 
     *tmap_desc = desc;
 
