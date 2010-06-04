@@ -41,6 +41,16 @@
 /* output Bochs bios info messages */
 //#define DEBUG_BIOS
 
+/* debug PC/ISA interrupts */
+//#define DEBUG_IRQ
+
+#ifdef DEBUG_IRQ
+#define DPRINTF(fmt, ...)                                       \
+    do { printf("CPUIRQ: " fmt , ## __VA_ARGS__); } while (0)
+#else
+#define DPRINTF(fmt, ...)
+#endif
+
 #define BIOS_FILENAME "bios.bin"
 #define EXTBOOT_FILENAME "extboot.bin"
 #define VAPIC_FILENAME "vapic.bin"
@@ -74,6 +84,7 @@ void isa_irq_handler(void *opaque, int n, int level)
 {
     IsaIrqState *isa = (IsaIrqState *)opaque;
 
+    DPRINTF("isa_irqs: %s irq %d\n", level? "raise" : "lower", n);
     if (n < 16) {
         qemu_set_irq(isa->i8259[n], level);
     }
@@ -154,6 +165,7 @@ static void pic_irq_request(void *opaque, int irq, int level)
 {
     CPUState *env = first_cpu;
 
+    DPRINTF("pic_irqs: %s irq %d\n", level? "raise" : "lower", irq);
     if (env->apic_state) {
         while (env) {
             if (apic_accept_pic_intr(env))

@@ -50,11 +50,12 @@ static BlockDriverAIOCB *bdrv_aio_writev_em(BlockDriverState *bs,
         BlockDriverCompletionFunc *cb, void *opaque);
 static BlockDriverAIOCB *bdrv_aio_flush_em(BlockDriverState *bs,
         BlockDriverCompletionFunc *cb, void *opaque);
+static BlockDriverAIOCB *bdrv_aio_noop_em(BlockDriverState *bs,
+        BlockDriverCompletionFunc *cb, void *opaque);
 static int bdrv_read_em(BlockDriverState *bs, int64_t sector_num,
                         uint8_t *buf, int nb_sectors);
 static int bdrv_write_em(BlockDriverState *bs, int64_t sector_num,
                          const uint8_t *buf, int nb_sectors);
-static BlockDriver *find_protocol(const char *filename);
 
 static QTAILQ_HEAD(, BlockDriverState) bdrv_states =
     QTAILQ_HEAD_INITIALIZER(bdrv_states);
@@ -208,7 +209,7 @@ int bdrv_create_file(const char* filename, QEMUOptionParameter *options)
 {
     BlockDriver *drv;
 
-    drv = find_protocol(filename);
+    drv = bdrv_find_protocol(filename);
     if (drv == NULL) {
         drv = bdrv_find_format("file");
     }
@@ -281,7 +282,7 @@ static BlockDriver *find_hdev_driver(const char *filename)
     return drv;
 }
 
-static BlockDriver *find_protocol(const char *filename)
+BlockDriver *bdrv_find_protocol(const char *filename)
 {
     BlockDriver *drv1;
     char protocol[128];
@@ -331,8 +332,10 @@ static BlockDriver *find_image_format(const char *filename)
         return NULL;
 
     /* Return the raw BlockDriver * to scsi-generic devices */
-    if (bs->sg)
+    if (bs->sg) {
+        bdrv_delete(bs);
         return bdrv_find_format("raw");
+    }
 
     ret = bdrv_pread(bs, 0, buf, sizeof(buf));
     bdrv_delete(bs);
@@ -476,7 +479,7 @@ int bdrv_file_open(BlockDriverState **pbs, const char *filename, int flags)
     BlockDriver *drv;
     int ret;
 
-    drv = find_protocol(filename);
+    drv = bdrv_find_protocol(filename);
     if (!drv) {
         return -ENOENT;
     }
@@ -1312,6 +1315,10 @@ const char *bdrv_get_device_name(BlockDriverState *bs)
 
 void bdrv_flush(BlockDriverState *bs)
 {
+    if (bs->open_flags & BDRV_O_NO_FLUSH) {
+        return;
+    }
+
     if (bs->drv && bs->drv->bdrv_flush)
         bs->drv->bdrv_flush(bs);
 }
@@ -1438,33 +1445,6 @@ void bdrv_info_print(Monitor *mon, const QObject *data)
     qlist_iter(qobject_to_qlist(data), bdrv_print_dict, mon);
 }
 
-/**
- * bdrv_info(): Block devices information
- *
- * Each block device information is stored in a QDict and the
- * returned QObject is a QList of all devices.
- *
- * The QDict contains the following:
- *
- * - "device": device name
- * - "type": device type
- * - "removable": true if the device is removable, false otherwise
- * - "locked": true if the device is locked, false otherwise
- * - "inserted": only present if the device is inserted, it is a QDict
- *    containing the following:
- *          - "file": device file name
- *          - "ro": true if read-only, false otherwise
- *          - "drv": driver format name
- *          - "backing_file": backing file name if one is used
- *          - "encrypted": true if encrypted, false otherwise
- *
- * Example:
- *
- * [ { "device": "ide0-hd0", "type": "hd", "removable": false, "locked": false,
- *     "inserted": { "file": "/tmp/foobar", "ro": false, "drv": "qcow2" } },
- *   { "device": "floppy0", "type": "floppy", "removable": true,
- *     "locked": false } ]
- */
 void bdrv_info(Monitor *mon, QObject **ret_data)
 {
     QList *bs_list;
@@ -1570,48 +1550,6 @@ static QObject* bdrv_info_stats_bs(BlockDriverState *bs)
     return res;
 }
 
-/**
- * bdrv_info_stats(): show block device statistics
- *
- * Each device statistic information is stored in a QDict and
- * the returned QObject is a QList of all devices.
- *
- * The QDict contains the following:
- *
- * - "device": device name
- * - "stats": A QDict with the statistics information, it contains:
- *     - "rd_bytes": bytes read
- *     - "wr_bytes": bytes written
- *     - "rd_operations": read operations
- *     - "wr_operations": write operations
- *     - "wr_highest_offset": Highest offset of a sector written since the
- *       BlockDriverState has been opened
- * - "parent": A QDict recursively holding the statistics of the underlying
- *    protocol (e.g. the host file for a qcow2 image). If there is no
- *    underlying protocol, this field is omitted.
- *
- * Example:
- *
- * [ { "device": "ide0-hd0",
- *               "stats": { "rd_bytes": 512,
- *                          "wr_bytes": 0,
- *                          "rd_operations": 1,
- *                          "wr_operations": 0,
- *                          "wr_highest_offset": 0 },
- *               "parent": {
- *                      "stats": { "rd_bytes": 1024,
- *                                 "wr_bytes": 0,
- *                                 "rd_operations": 2,
- *                                 "wr_operations": 0,
- *                                 "wr_highest_offset": 0,
- *                      } } },
- *   { "device": "ide1-cd0",
- *               "stats": { "rd_bytes": 0,
- *                          "wr_bytes": 0,
- *                          "rd_operations": 0,
- *                          "wr_operations": 0,
- *                          "wr_highest_offset": 0 } },
- */
 void bdrv_info_stats(Monitor *mon, QObject **ret_data)
 {
     QObject *obj;
@@ -2013,7 +1951,7 @@ static int multiwrite_merge(BlockDriverState *bs, BlockRequest *reqs,
             // Add the second request
             qemu_iovec_concat(qiov, reqs[i].qiov, reqs[i].qiov->size);
 
-            reqs[outidx].nb_sectors += reqs[i].nb_sectors;
+            reqs[outidx].nb_sectors = qiov->size >> 9;
             reqs[outidx].qiov = qiov;
 
             mcb->callbacks[i].free_qiov = reqs[outidx].qiov;
@@ -2098,6 +2036,10 @@ BlockDriverAIOCB *bdrv_aio_flush(BlockDriverState *bs,
         BlockDriverCompletionFunc *cb, void *opaque)
 {
     BlockDriver *drv = bs->drv;
+
+    if (bs->open_flags & BDRV_O_NO_FLUSH) {
+        return bdrv_aio_noop_em(bs, cb, opaque);
+    }
 
     if (!drv)
         return NULL;
@@ -2210,6 +2152,25 @@ static BlockDriverAIOCB *bdrv_aio_flush_em(BlockDriverState *bs,
         acb->bh = qemu_bh_new(bdrv_aio_bh_cb, acb);
 
     bdrv_flush(bs);
+    qemu_bh_schedule(acb->bh);
+    return &acb->common;
+}
+
+static BlockDriverAIOCB *bdrv_aio_noop_em(BlockDriverState *bs,
+        BlockDriverCompletionFunc *cb, void *opaque)
+{
+    BlockDriverAIOCBSync *acb;
+
+    acb = qemu_aio_get(&bdrv_em_aio_pool, bs, cb, opaque);
+    acb->is_write = 1; /* don't bounce in the completion handler */
+    acb->qiov = NULL;
+    acb->bounce = NULL;
+    acb->ret = 0;
+
+    if (!acb->bh) {
+        acb->bh = qemu_bh_new(bdrv_aio_bh_cb, acb);
+    }
+
     qemu_bh_schedule(acb->bh);
     return &acb->common;
 }

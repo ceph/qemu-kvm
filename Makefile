@@ -29,7 +29,7 @@ $(call set-vpath, $(SRC_PATH):$(SRC_PATH)/hw)
 LIBS+=-lz $(LIBS_TOOLS)
 
 ifdef BUILD_DOCS
-DOCS=qemu-doc.html qemu-tech.html qemu.1 qemu-img.1 qemu-nbd.8
+DOCS=qemu-doc.html qemu-tech.html qemu.1 qemu-img.1 qemu-nbd.8 QMP/qmp-commands.txt
 else
 DOCS=
 endif
@@ -132,9 +132,11 @@ vnc-auth-vencrypt.o: vnc-auth-vencrypt.c vnc.h
 
 vnc-auth-sasl.o: vnc-auth-sasl.c vnc.h
 
-vnc-encoding-zlib.o: vnc.h
+vnc-encoding-zlib.o: vnc-encoding-zlib.c vnc.h
 
-vnc-encoding-hextile.o: vnc.h
+vnc-encoding-hextile.o: vnc-encoding-hextile.c vnc.h
+
+vnc-encoding-tight.o: vnc-encoding-tight.c vnc.h vnc-encoding-tight.h
 
 curses.o: curses.c keymaps.h curses_keys.h
 
@@ -155,6 +157,8 @@ qemu-io$(EXESUF): qemu-io.o cmd.o qemu-tool.o qemu-error.o $(block-obj-y) $(qobj
 
 qemu-img-cmds.h: $(SRC_PATH)/qemu-img-cmds.hx
 	$(call quiet-command,sh $(SRC_PATH)/hxtool -h < $< > $@,"  GEN   $@")
+
+check-qint.o check-qstring.o check-qdict.o check-qlist.o check-qfloat.o check-qjson.o: $(GENERATED_HEADERS)
 
 check-qint: check-qint.o qint.o qemu-malloc.o
 check-qstring: check-qstring.o qstring.o qemu-malloc.o
@@ -280,6 +284,9 @@ qemu-options.texi: $(SRC_PATH)/qemu-options.hx
 
 qemu-monitor.texi: $(SRC_PATH)/qemu-monitor.hx
 	$(call quiet-command,sh $(SRC_PATH)/hxtool -t < $< > $@,"  GEN   $@")
+
+QMP/qmp-commands.txt: $(SRC_PATH)/qemu-monitor.hx
+	$(call quiet-command,sh $(SRC_PATH)/hxtool -q < $< > $@,"  GEN   $@")
 
 qemu-img-cmds.texi: $(SRC_PATH)/qemu-img-cmds.hx
 	$(call quiet-command,sh $(SRC_PATH)/hxtool -t < $< > $@,"  GEN   $@")
