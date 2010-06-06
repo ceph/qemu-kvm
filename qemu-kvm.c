@@ -106,6 +106,24 @@ static int handle_unhandled(uint64_t reason)
     return -EINVAL;
 }
 
+#define VMX_INVALID_GUEST_STATE 0x80000021
+
+static int handle_failed_vmentry(uint64_t reason)
+{
+    fprintf(stderr, "kvm: vm entry failed with error 0x%" PRIx64 "\n\n", reason);
+
+    /* Perhaps we will need to check if this machine is intel since exit reason 0x21
+       has a different interpretation on SVM */
+    if (reason == VMX_INVALID_GUEST_STATE) {
+        fprintf(stderr, "If you're runnning a guest on an Intel machine without\n");
+        fprintf(stderr, "unrestricted mode support, the failure can be most likely\n");
+        fprintf(stderr, "due to the guest entering an invalid state for Intel VT.\n");
+        fprintf(stderr, "For example, the guest maybe running in big real mode\n");
+        fprintf(stderr, "which is not supported on less recent Intel processors.\n\n");
+    }
+
+    return -EINVAL;
+}
 
 static inline void set_gsi(kvm_context_t kvm, unsigned int gsi)
 {
@@ -586,7 +604,7 @@ int kvm_run(CPUState *env)
             r = handle_unhandled(run->hw.hardware_exit_reason);
             break;
         case KVM_EXIT_FAIL_ENTRY:
-            r = handle_unhandled(run->fail_entry.hardware_entry_failure_reason);
+            r = handle_failed_vmentry(run->fail_entry.hardware_entry_failure_reason);
             break;
         case KVM_EXIT_EXCEPTION:
             fprintf(stderr, "exception %d (%x)\n", run->ex.exception,
