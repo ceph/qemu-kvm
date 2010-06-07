@@ -1,11 +1,16 @@
-
 #include "vm.h"
-
-void print(const char *s);
+#include "libcflat.h"
 
 #define PAGE_SIZE 4096ul
+#ifdef __x86_64__
 #define LARGE_PAGE_SIZE (512 * PAGE_SIZE)
+#else
+#define LARGE_PAGE_SIZE (1024 * PAGE_SIZE)
+#endif
 
+#define X86_CR0_PE      0x00000001
+#define X86_CR0_PG      0x80000000
+#define X86_CR4_PSE     0x00000010
 static void *free = 0;
 static void *vfree_top = 0;
 
@@ -66,6 +71,16 @@ static unsigned long end_of_memory;
 #define PTE_WRITE   (1ull << 1)
 #define PTE_ADDR    (0xffffffffff000ull)
 
+#ifdef __x86_64__
+#define	PAGE_LEVEL	4
+#define	PGDIR_WIDTH	9
+#define	PGDIR_MASK	511
+#else
+#define	PAGE_LEVEL	2
+#define	PGDIR_WIDTH	10
+#define	PGDIR_MASK	1023
+#endif
+
 static void install_pte(unsigned long *cr3, 
 			int pte_level, 
 			void *virt,
@@ -75,8 +90,8 @@ static void install_pte(unsigned long *cr3,
     unsigned long *pt = cr3;
     unsigned offset;
 
-    for (level = 4; level > pte_level; --level) {
-	offset = ((unsigned long)virt >> ((level-1) * 9 + 12)) & 511;
+    for (level = PAGE_LEVEL; level > pte_level; --level) {
+	offset = ((unsigned long)virt >> ((level-1) * PGDIR_WIDTH + 12)) & PGDIR_MASK;
 	if (!(pt[offset] & PTE_PRESENT)) {
 	    unsigned long *new_pt = alloc_page();
 	    memset(new_pt, 0, PAGE_SIZE);
@@ -84,7 +99,7 @@ static void install_pte(unsigned long *cr3,
 	}
 	pt = phys_to_virt(pt[offset] & 0xffffffffff000ull);
     }
-    offset = ((unsigned long)virt >> (((level-1) * 9) + 12)) & 511;
+    offset = ((unsigned long)virt >> ((level-1) * PGDIR_WIDTH + 12)) & PGDIR_MASK;
     pt[offset] = pte;
 }
 
@@ -94,8 +109,8 @@ static unsigned long get_pte(unsigned long *cr3, void *virt)
     unsigned long *pt = cr3, pte;
     unsigned offset;
 
-    for (level = 4; level > 1; --level) {
-	offset = ((unsigned long)virt >> (((level-1) * 9) + 12)) & 511;
+    for (level = PAGE_LEVEL; level > 1; --level) {
+	offset = ((unsigned long)virt >> (((level-1) * PGDIR_WIDTH) + 12)) & PGDIR_MASK;
 	pte = pt[offset];
 	if (!(pte & PTE_PRESENT))
 	    return 0;
@@ -103,7 +118,7 @@ static unsigned long get_pte(unsigned long *cr3, void *virt)
 	    return pte;
 	pt = phys_to_virt(pte & 0xffffffffff000ull);
     }
-    offset = ((unsigned long)virt >> (((level-1) * 9) + 12)) & 511;
+    offset = ((unsigned long)virt >> (((level-1) * PGDIR_WIDTH) + 12)) & PGDIR_MASK;
     pte = pt[offset];
     return pte;
 }
@@ -189,8 +204,10 @@ static void setup_mmu(unsigned long len)
     unsigned long *cr3 = alloc_page();
     unsigned long phys = 0;
 
+#if 0
     if (len < (1ul << 32))
         len = 1ul << 32;  /* map mmio 1:1 */
+#endif
 
     memset(cr3, 0, PAGE_SIZE);
     while (phys + LARGE_PAGE_SIZE <= len) {
@@ -201,9 +218,16 @@ static void setup_mmu(unsigned long len)
 	install_page(cr3, phys, (void *)phys);
 	phys += PAGE_SIZE;
     }
-    
     load_cr3(virt_to_phys(cr3));
-    print("paging enabled\n");
+#ifndef __x86_64__
+    load_cr4(X86_CR4_PSE);
+#endif
+    load_cr0(X86_CR0_PG |X86_CR0_PE);
+
+    printf("paging enabled\n");
+    printf("cr0 = %x\n", read_cr0());
+    printf("cr3 = %x\n", read_cr3());
+    printf("cr4 = %x\n", read_cr4());
 }
 
 static unsigned int inl(unsigned short port)
