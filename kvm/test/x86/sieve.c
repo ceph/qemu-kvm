@@ -1,40 +1,5 @@
 #include "vm.h"
-
-void print(const char *text);
-
-void printi(int n)
-{
-    char buf[10], *p = buf;
-    int s = 0, i;
-    
-    if (n < 0) {
-	n = -n;
-	s = 1;
-    }
-
-    while (n) {
-	*p++ = '0' + n % 10;
-	n /= 10;
-    }
-    
-    if (s)
-	*p++ = '-';
-
-    if (p == buf)
-	*p++ = '0';
-    
-    for (i = 0; i < (p - buf) / 2; ++i) {
-	char tmp;
-
-	tmp = buf[i];
-	buf[i] = p[-1-i];
-	p[-1-i] = tmp;
-    }
-
-    *p = 0;
-
-    print(buf);
-}
+#include "libcflat.h"
 
 int sieve(char* data, int size)
 {
@@ -58,11 +23,9 @@ void test_sieve(const char *msg, char *data, int size)
 {
     int r;
 
-    print(msg);
-    print(": ");
+    printf("%s:", msg);
     r = sieve(data, size);
-    printi(r);
-    print("\n");
+    printf("%d out of %d\n", r, size);
 }
 
 #define STATIC_SIZE 1000000
@@ -74,12 +37,11 @@ int main()
     void *v;
     int i;
 
-    print("starting sieve\n");
+    printf("starting sieve\n");
     test_sieve("static", static_data, STATIC_SIZE);
     setup_vm();
-    print("mapped: ");
     test_sieve("mapped", static_data, STATIC_SIZE);
-    for (i = 0; i < 30; ++i) {
+    for (i = 0; i < 3; ++i) {
 	v = vmalloc(VSIZE);
 	test_sieve("virtual", v, VSIZE);
 	vfree(v);

@@ -25,7 +25,7 @@ FLATLIBS = lib/libcflat.a $(libgcc)
 tests-common = $(TEST_DIR)/vmexit.flat $(TEST_DIR)/tsc.flat \
                $(TEST_DIR)/smptest.flat  $(TEST_DIR)/port80.flat \
                $(TEST_DIR)/realmode.flat $(TEST_DIR)/msr.flat \
-               $(TEST_DIR)/hypercall.flat
+               $(TEST_DIR)/hypercall.flat $(TEST_DIR)/sieve.flat
 
 test_cases: $(tests-common) $(tests)
 
@@ -36,7 +36,7 @@ $(TEST_DIR)/access.flat: $(cstart.o) $(TEST_DIR)/access.o $(TEST_DIR)/print.o
 $(TEST_DIR)/hypercall.flat: $(cstart.o) $(TEST_DIR)/hypercall.o
  
 $(TEST_DIR)/sieve.flat: $(cstart.o) $(TEST_DIR)/sieve.o \
-		$(TEST_DIR)/print.o $(TEST_DIR)/vm.o
+		$(TEST_DIR)/vm.o
  
 $(TEST_DIR)/vmexit.flat: $(cstart.o) $(TEST_DIR)/vmexit.o
  
