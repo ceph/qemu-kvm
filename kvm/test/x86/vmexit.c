@@ -45,6 +45,24 @@ static void vmcall(void)
 	asm volatile ("vmcall" : "+a"(a), "=b"(b), "=c"(c), "=d"(d));
 }
 
+#define MSR_EFER 0xc0000080
+#define EFER_NX_MASK            (1ull << 11)
+
+unsigned long long rdmsr(unsigned index)
+{
+	unsigned a, d;
+
+	asm volatile("rdmsr" : "=a"(a), "=d"(d) : "c"(index));
+	return ((unsigned long long)d << 32) | a;
+}
+
+void wrmsr(unsigned index, unsigned long long val)
+{
+	unsigned a = val, d = val >> 32;
+
+	asm volatile("wrmsr" : : "a"(a), "d"(d), "c"(index));
+}
+
 static void mov_from_cr8(void)
 {
 	unsigned long cr8;
@@ -151,11 +169,19 @@ static void do_test(struct test *test)
 
 #define ARRAY_SIZE(_x) (sizeof(_x) / sizeof((_x)[0]))
 
+static void enable_nx(void *junk)
+{
+	wrmsr(MSR_EFER, rdmsr(MSR_EFER) | EFER_NX_MASK);
+}
+
 int main(void)
 {
 	int i;
 
 	smp_init();
+
+	for (i = cpu_count(); i > 0; i--)
+		on_cpu(i-1, enable_nx, 0);
 
 	for (i = 0; i < ARRAY_SIZE(tests); ++i)
 		do_test(&tests[i]);
