@@ -63,6 +63,8 @@
 #error GUEST_BASE not supported on this host.
 #endif
 
+static void tcg_target_init(TCGContext *s);
+static void tcg_target_qemu_prologue(TCGContext *s);
 static void patch_reloc(uint8_t *code_ptr, int type, 
                         tcg_target_long value, tcg_target_long addend);
 
@@ -1547,7 +1549,7 @@ static void tcg_reg_alloc_mov(TCGContext *s, const TCGOpDef *def,
                 reg = tcg_reg_alloc(s, arg_ct->u.regs, s->reserved_regs);
             }
             if (ts->reg != reg) {
-                tcg_out_mov(s, reg, ts->reg);
+                tcg_out_mov(s, ots->type, reg, ts->reg);
             }
         }
     } else if (ts->val_type == TEMP_VAL_MEM) {
@@ -1652,7 +1654,7 @@ static void tcg_reg_alloc_op(TCGContext *s,
             /* allocate a new register matching the constraint 
                and move the temporary register into it */
             reg = tcg_reg_alloc(s, arg_ct->u.regs, allocated_regs);
-            tcg_out_mov(s, reg, ts->reg);
+            tcg_out_mov(s, ts->type, reg, ts->reg);
         }
         new_args[i] = reg;
         const_args[i] = 0;
@@ -1734,7 +1736,7 @@ static void tcg_reg_alloc_op(TCGContext *s,
         ts = &s->temps[args[i]];
         reg = new_args[i];
         if (ts->fixed_reg && ts->reg != reg) {
-            tcg_out_mov(s, ts->reg, reg);
+            tcg_out_mov(s, ts->type, ts->reg, reg);
         }
     }
 }
@@ -1820,7 +1822,7 @@ static int tcg_reg_alloc_call(TCGContext *s, const TCGOpDef *def,
             tcg_reg_free(s, reg);
             if (ts->val_type == TEMP_VAL_REG) {
                 if (ts->reg != reg) {
-                    tcg_out_mov(s, reg, ts->reg);
+                    tcg_out_mov(s, ts->type, reg, ts->reg);
                 }
             } else if (ts->val_type == TEMP_VAL_MEM) {
                 tcg_out_ld(s, ts->type, reg, ts->mem_reg, ts->mem_offset);
@@ -1849,7 +1851,7 @@ static int tcg_reg_alloc_call(TCGContext *s, const TCGOpDef *def,
         reg = ts->reg;
         if (!tcg_regset_test_reg(arg_ct->u.regs, reg)) {
             reg = tcg_reg_alloc(s, arg_ct->u.regs, allocated_regs);
-            tcg_out_mov(s, reg, ts->reg);
+            tcg_out_mov(s, ts->type, reg, ts->reg);
         }
         func_arg = reg;
         tcg_regset_set_reg(allocated_regs, reg);
@@ -1908,7 +1910,7 @@ static int tcg_reg_alloc_call(TCGContext *s, const TCGOpDef *def,
         assert(s->reg_to_temp[reg] == -1);
         if (ts->fixed_reg) {
             if (ts->reg != reg) {
-                tcg_out_mov(s, ts->reg, reg);
+                tcg_out_mov(s, ts->type, ts->reg, reg);
             }
         } else {
             if (ts->val_type == TEMP_VAL_REG)
