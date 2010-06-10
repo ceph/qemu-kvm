@@ -1407,12 +1407,12 @@ static int assigned_initfn(struct PCIDevice *pci_dev)
     if (pci_enable_capability_support(pci_dev, 0, NULL,
                     assigned_device_pci_cap_write_config,
                     assigned_device_pci_cap_init) < 0)
-        goto assigned_out;
+        goto out;
 
     /* assign device to guest */
     r = assign_device(dev);
     if (r < 0)
-        goto assigned_out;
+        goto out;
 
     /* assign irq for the device */
     r = assign_irq(dev);
