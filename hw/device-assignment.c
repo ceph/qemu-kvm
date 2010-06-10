@@ -60,6 +60,8 @@
 
 static void assigned_dev_load_option_rom(AssignedDevice *dev);
 
+static void assigned_dev_unregister_msix_mmio(AssignedDevice *dev);
+
 static uint32_t guest_to_host_ioport(AssignedDevRegion *region, uint32_t addr)
 {
     return region->u.r_baseport + (addr - region->e_physbase);
@@ -783,9 +785,13 @@ static void free_assigned_device(AssignedDevice *dev)
                         fprintf(stderr,
 				"Failed to unmap assigned device region: %s\n",
 				strerror(errno));
+                    close(pci_region->resource_fd);
                 }
 	    }
         }
+
+        if (dev->cap.available & ASSIGNED_DEVICE_CAP_MSIX)
+            assigned_dev_unregister_msix_mmio(dev);
 
         if (dev->real_device.config_fd) {
             close(dev->real_device.config_fd);
@@ -1368,6 +1374,21 @@ static int assigned_dev_register_msix_mmio(AssignedDevice *dev)
     dev->mmio_index = cpu_register_io_memory(
                         msix_mmio_read, msix_mmio_write, dev);
     return 0;
+}
+
+static void assigned_dev_unregister_msix_mmio(AssignedDevice *dev)
+{
+    if (!dev->msix_table_page)
+        return;
+
+    cpu_unregister_io_memory(dev->mmio_index);
+    dev->mmio_index = 0;
+
+    if (munmap(dev->msix_table_page, 0x1000) == -1) {
+        fprintf(stderr, "error unmapping msix_table_page! %s\n",
+                strerror(errno));
+    }
+    dev->msix_table_page = NULL;
 }
 
 static int assigned_initfn(struct PCIDevice *pci_dev)
