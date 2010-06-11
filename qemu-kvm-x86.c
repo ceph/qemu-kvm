@@ -772,10 +772,20 @@ static void get_seg(SegmentCache *lhs, const struct kvm_segment *rhs)
 	| (rhs->avl * DESC_AVL_MASK);
 }
 
+#define XSAVE_CWD_RIP     2
+#define XSAVE_CWD_RDP     4
+#define XSAVE_MXCSR       6
+#define XSAVE_ST_SPACE    8
+#define XSAVE_XMM_SPACE   40
+#define XSAVE_XSTATE_BV   128
+#define XSAVE_YMMH_SPACE  144
+
 void kvm_arch_load_regs(CPUState *env, int level)
 {
     struct kvm_regs regs;
     struct kvm_fpu fpu;
+    struct kvm_xsave* xsave;
+    struct kvm_xcrs xcrs;
     struct kvm_sregs sregs;
     struct kvm_msr_entry msrs[100];
     int rc, n, i;
@@ -806,16 +816,47 @@ void kvm_arch_load_regs(CPUState *env, int level)
 
     kvm_set_regs(env, &regs);
 
-    memset(&fpu, 0, sizeof fpu);
-    fpu.fsw = env->fpus & ~(7 << 11);
-    fpu.fsw |= (env->fpstt & 7) << 11;
-    fpu.fcw = env->fpuc;
-    for (i = 0; i < 8; ++i)
-	fpu.ftwx |= (!env->fptags[i]) << i;
-    memcpy(fpu.fpr, env->fpregs, sizeof env->fpregs);
-    memcpy(fpu.xmm, env->xmm_regs, sizeof env->xmm_regs);
-    fpu.mxcsr = env->mxcsr;
-    kvm_set_fpu(env, &fpu);
+    if (kvm_check_extension(kvm_state, KVM_CAP_XSAVE)) {
+        uint16_t cwd, swd, twd, fop;
+
+        xsave = qemu_memalign(4096, sizeof(struct kvm_xsave));
+        memset(xsave, 0, sizeof(struct kvm_xsave));
+        cwd = swd = twd = fop = 0;
+        swd = env->fpus & ~(7 << 11);
+        swd |= (env->fpstt & 7) << 11;
+        cwd = env->fpuc;
+        for (i = 0; i < 8; ++i)
+            twd |= (!env->fptags[i]) << i;
+        xsave->region[0] = (uint32_t)(swd << 16) + cwd;
+        xsave->region[1] = (uint32_t)(fop << 16) + twd;
+        memcpy(&xsave->region[XSAVE_ST_SPACE], env->fpregs,
+                sizeof env->fpregs);
+        memcpy(&xsave->region[XSAVE_XMM_SPACE], env->xmm_regs,
+                sizeof env->xmm_regs);
+        xsave->region[XSAVE_MXCSR] = env->mxcsr;
+        *(uint64_t *)&xsave->region[XSAVE_XSTATE_BV] = env->xstate_bv;
+        memcpy(&xsave->region[XSAVE_YMMH_SPACE], env->ymmh_regs,
+                sizeof env->ymmh_regs);
+        kvm_set_xsave(env, xsave);
+        if (kvm_check_extension(kvm_state, KVM_CAP_XCRS)) {
+            xcrs.nr_xcrs = 1;
+            xcrs.flags = 0;
+            xcrs.xcrs[0].xcr = 0;
+            xcrs.xcrs[0].value = env->xcr0;
+            kvm_set_xcrs(env, &xcrs);
+        }
+    } else {
+        memset(&fpu, 0, sizeof fpu);
+        fpu.fsw = env->fpus & ~(7 << 11);
+        fpu.fsw |= (env->fpstt & 7) << 11;
+        fpu.fcw = env->fpuc;
+        for (i = 0; i < 8; ++i)
+            fpu.ftwx |= (!env->fptags[i]) << i;
+        memcpy(fpu.fpr, env->fpregs, sizeof env->fpregs);
+        memcpy(fpu.xmm, env->xmm_regs, sizeof env->xmm_regs);
+        fpu.mxcsr = env->mxcsr;
+        kvm_set_fpu(env, &fpu);
+    }
 
     memset(sregs.interrupt_bitmap, 0, sizeof(sregs.interrupt_bitmap));
     if (env->interrupt_injected >= 0) {
@@ -934,6 +975,8 @@ void kvm_arch_save_regs(CPUState *env)
 {
     struct kvm_regs regs;
     struct kvm_fpu fpu;
+    struct kvm_xsave* xsave;
+    struct kvm_xcrs xcrs;
     struct kvm_sregs sregs;
     struct kvm_msr_entry msrs[100];
     uint32_t hflags;
@@ -965,15 +1008,43 @@ void kvm_arch_save_regs(CPUState *env)
     env->eflags = regs.rflags;
     env->eip = regs.rip;
 
-    kvm_get_fpu(env, &fpu);
-    env->fpstt = (fpu.fsw >> 11) & 7;
-    env->fpus = fpu.fsw;
-    env->fpuc = fpu.fcw;
-    for (i = 0; i < 8; ++i)
-	env->fptags[i] = !((fpu.ftwx >> i) & 1);
-    memcpy(env->fpregs, fpu.fpr, sizeof env->fpregs);
-    memcpy(env->xmm_regs, fpu.xmm, sizeof env->xmm_regs);
-    env->mxcsr = fpu.mxcsr;
+    if (kvm_check_extension(kvm_state, KVM_CAP_XSAVE)) {
+        uint16_t cwd, swd, twd, fop;
+        xsave = qemu_memalign(4096, sizeof(struct kvm_xsave));
+        kvm_get_xsave(env, xsave);
+        cwd = (uint16_t)xsave->region[0];
+        swd = (uint16_t)(xsave->region[0] >> 16);
+        twd = (uint16_t)xsave->region[1];
+        fop = (uint16_t)(xsave->region[1] >> 16);
+        env->fpstt = (swd >> 11) & 7;
+        env->fpus = swd;
+        env->fpuc = cwd;
+        for (i = 0; i < 8; ++i)
+            env->fptags[i] = !((twd >> i) & 1);
+        env->mxcsr = xsave->region[XSAVE_MXCSR];
+        memcpy(env->fpregs, &xsave->region[XSAVE_ST_SPACE],
+                sizeof env->fpregs);
+        memcpy(env->xmm_regs, &xsave->region[XSAVE_XMM_SPACE],
+                sizeof env->xmm_regs);
+        env->xstate_bv = *(uint64_t *)&xsave->region[XSAVE_XSTATE_BV];
+        memcpy(env->ymmh_regs, &xsave->region[XSAVE_YMMH_SPACE],
+                sizeof env->ymmh_regs);
+        if (kvm_check_extension(kvm_state, KVM_CAP_XCRS)) {
+            kvm_get_xcrs(env, &xcrs);
+            if (xcrs.xcrs[0].xcr == 0)
+                env->xcr0 = xcrs.xcrs[0].value;
+        }
+    } else {
+        kvm_get_fpu(env, &fpu);
+        env->fpstt = (fpu.fsw >> 11) & 7;
+        env->fpus = fpu.fsw;
+        env->fpuc = fpu.fcw;
+        for (i = 0; i < 8; ++i)
+            env->fptags[i] = !((fpu.ftwx >> i) & 1);
+        memcpy(env->fpregs, fpu.fpr, sizeof env->fpregs);
+        memcpy(env->xmm_regs, fpu.xmm, sizeof env->xmm_regs);
+        env->mxcsr = fpu.mxcsr;
+    }
 
     kvm_get_sregs(env, &sregs);
 

@@ -291,6 +291,8 @@ void kvm_arch_reset_vcpu(CPUState *env)
     env->interrupt_injected = -1;
     env->nmi_injected = 0;
     env->nmi_pending = 0;
+    /* Legal xcr0 for loading */
+    env->xcr0 = 1;
 }
 #ifdef KVM_UPSTREAM
 

@@ -503,6 +503,30 @@ int kvm_set_mpstate(CPUState *env, struct kvm_mp_state *mp_state)
 }
 #endif
 
+#ifdef KVM_CAP_XSAVE
+int kvm_get_xsave(CPUState *env, struct kvm_xsave *xsave)
+{
+    return kvm_vcpu_ioctl(env, KVM_GET_XSAVE, xsave);
+}
+
+int kvm_set_xsave(CPUState *env, struct kvm_xsave *xsave)
+{
+    return kvm_vcpu_ioctl(env, KVM_SET_XSAVE, xsave);
+}
+#endif
+
+#ifdef KVM_CAP_XCRS
+int kvm_get_xcrs(CPUState *env, struct kvm_xcrs *xcrs)
+{
+    return kvm_vcpu_ioctl(env, KVM_GET_XCRS, xcrs);
+}
+
+int kvm_set_xcrs(CPUState *env, struct kvm_xcrs *xcrs)
+{
+    return kvm_vcpu_ioctl(env, KVM_SET_XCRS, xcrs);
+}
+#endif
+
 static int handle_mmio(CPUState *env)
 {
     unsigned long addr = env->kvm_run->mmio.phys_addr;
