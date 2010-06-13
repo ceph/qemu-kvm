@@ -4,7 +4,12 @@ SECTIONS
     stext = .;
     .text : { *(.init) *(.text) *(.text.*) }
     . = ALIGN(4K);
-    .data : { *(.data) }
+    .data : {
+          *(.data)
+          exception_table_start = .;
+          *(.data.ex)
+	  exception_table_end = .;
+	  }
     . = ALIGN(16);
     .rodata : { *(.rodata) }
     . = ALIGN(16);
