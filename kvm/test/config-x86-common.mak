@@ -61,6 +61,8 @@ $(TEST_DIR)/msr.flat: $(cstart.o) $(TEST_DIR)/msr.o
 
 $(TEST_DIR)/idt_test.flat: $(cstart.o) $(TEST_DIR)/idt.o $(TEST_DIR)/idt_test.o
 
+$(TEST_DIR)/xsave.flat: $(cstart.o) $(TEST_DIR)/idt.o $(TEST_DIR)/xsave.o
+
 arch_clean:
 	$(RM) $(TEST_DIR)/*.o $(TEST_DIR)/*.flat \
 	$(TEST_DIR)/.*.d $(TEST_DIR)/lib/.*.d $(TEST_DIR)/lib/*.o
