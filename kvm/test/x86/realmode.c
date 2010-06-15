@@ -820,12 +820,58 @@ void test_null(void)
 		print_serial("null test: PASS\n");
 }
 
+void test_pusha_popa()
+{
+	struct regs inregs = { .eax = 0, .ebx = 1, .ecx = 2, .edx = 3, .esi = 4, .edi = 5, .ebp = 6, .esp = 7}, outregs;
+
+	MK_INSN(pusha, "pusha\n\t"
+		       "pop %edi\n\t"
+		       "pop %esi\n\t"
+		       "pop %ebp\n\t"
+		       "pop %eax\n\t"
+		       "pop %ebx\n\t"
+		       "pop %edx\n\t"
+		       "pop %ecx\n\t"
+		       "pop %esp\n\t"
+		       "xchg %esp, %eax\n\t"
+		       );
+
+	MK_INSN(popa, "push %eax\n\t"
+		      "push %ecx\n\t"
+		      "push %edx\n\t"
+		      "push %ebx\n\t"
+		      "push %esp\n\t"
+		      "push %ebp\n\t"
+		      "push %esi\n\t"
+		      "push %edi\n\t"
+		      "popa\n\t"
+		      );
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_pusha,
+			      insn_pusha_end - insn_pusha);
+
+	if (!regs_equal(&inregs, &outregs, 0))
+		print_serial("Pusha/Popa Test1: FAIL\n");
+	else
+		print_serial("Pusha/Popa Test1: PASS\n");
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_popa,
+			      insn_popa_end - insn_popa);
+	if (!regs_equal(&inregs, &outregs, 0))
+		print_serial("Pusha/Popa Test2: FAIL\n");
+	else
+		print_serial("Pusha/Popa Test2: PASS\n");
+}
+
 void realmode_start(void)
 {
 	test_null();
 
 	test_shld();
 	test_push_pop();
+	test_pusha_popa();
 	test_mov_imm();
 	test_cmp_imm();
 	test_add_imm();
