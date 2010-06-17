@@ -1031,13 +1031,20 @@ static void assigned_dev_update_msi(PCIDevice *pci_dev, unsigned int ctrl_pos)
         calc_assigned_dev_id(assigned_dev->h_segnr, assigned_dev->h_busnr,
                 (uint8_t)assigned_dev->h_devfn);
 
-    if (assigned_dev->irq_requested_type) {
-	    assigned_irq_data.flags = assigned_dev->irq_requested_type;
-	    free_dev_irq_entries(assigned_dev);
-	    r = kvm_deassign_irq(kvm_context, &assigned_irq_data);
-	    /* -ENXIO means no assigned irq */
-	    if (r && r != -ENXIO)
-		    perror("assigned_dev_update_msi: deassign irq");
+    /* Some guests gratuitously disable MSI even if they're not using it,
+     * try to catch this by only deassigning irqs if the guest is using
+     * MSI or intends to start. */
+    if ((assigned_dev->irq_requested_type & KVM_DEV_IRQ_GUEST_MSI) ||
+        (ctrl_byte & PCI_MSI_FLAGS_ENABLE)) {
+
+        assigned_irq_data.flags = assigned_dev->irq_requested_type;
+        free_dev_irq_entries(assigned_dev);
+        r = kvm_deassign_irq(kvm_context, &assigned_irq_data);
+        /* -ENXIO means no assigned irq */
+        if (r && r != -ENXIO)
+            perror("assigned_dev_update_msi: deassign irq");
+
+        assigned_irq_data.flags = 0;
     }
 
     if (ctrl_byte & PCI_MSI_FLAGS_ENABLE) {
@@ -1188,17 +1195,26 @@ static void assigned_dev_update_msix(PCIDevice *pci_dev, unsigned int ctrl_pos)
             calc_assigned_dev_id(assigned_dev->h_segnr, assigned_dev->h_busnr,
                     (uint8_t)assigned_dev->h_devfn);
 
-    if (assigned_dev->irq_requested_type) {
+    /* Some guests gratuitously disable MSIX even if they're not using it,
+     * try to catch this by only deassigning irqs if the guest is using
+     * MSIX or intends to start. */
+    if ((assigned_dev->irq_requested_type & KVM_DEV_IRQ_GUEST_MSIX) ||
+        (*ctrl_word & PCI_MSIX_ENABLE)) {
+
         assigned_irq_data.flags = assigned_dev->irq_requested_type;
         free_dev_irq_entries(assigned_dev);
         r = kvm_deassign_irq(kvm_context, &assigned_irq_data);
         /* -ENXIO means no assigned irq */
         if (r && r != -ENXIO)
             perror("assigned_dev_update_msix: deassign irq");
+
+        assigned_irq_data.flags = 0;
     }
-    assigned_irq_data.flags = KVM_DEV_IRQ_HOST_MSIX | KVM_DEV_IRQ_GUEST_MSIX;
 
     if (*ctrl_word & PCI_MSIX_ENABLE) {
+        assigned_irq_data.flags = KVM_DEV_IRQ_HOST_MSIX |
+                                  KVM_DEV_IRQ_GUEST_MSIX;
+
         if (assigned_dev_update_msix_mmio(pci_dev) < 0) {
             perror("assigned_dev_update_msix_mmio");
             return;
