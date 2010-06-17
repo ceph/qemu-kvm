@@ -1284,7 +1284,7 @@ static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
                       pci_dev->cap.length + PCI_MSIX_TABLE) = msix_table_entry;
         *(uint32_t *)(pci_dev->config + pci_dev->cap.start +
                       pci_dev->cap.length + PCI_MSIX_PBA) =
-                    assigned_dev_pci_read_byte(pci_dev, pos + PCI_MSIX_PBA);
+                    assigned_dev_pci_read_long(pci_dev, pos + PCI_MSIX_PBA);
         bar_nr = msix_table_entry & PCI_MSIX_BIR;
         msix_table_entry &= ~PCI_MSIX_BIR;
         dev->msix_table_addr = pci_region[bar_nr].base_addr + msix_table_entry;
