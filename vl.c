@@ -70,7 +70,6 @@
 #include <sys/ethernet.h>
 #include <sys/sockio.h>
 #include <netinet/arp.h>
-#include <netinet/in.h>
 #include <netinet/in_systm.h>
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h> // must come after ip.h
@@ -149,6 +148,7 @@ int main(int argc, char **argv)
 #include "qemu-option.h"
 #include "qemu-config.h"
 #include "qemu-objects.h"
+#include "qemu-options.h"
 #include "hw/device-assignment.h"
 #ifdef CONFIG_LINUX
 #include "fsdev/qemu-fsdev.h"
@@ -1518,86 +1518,6 @@ int qemu_set_fd_handler(int fd,
     return qemu_set_fd_handler2(fd, NULL, fd_read, fd_write, opaque);
 }
 
-#ifdef _WIN32
-/***********************************************************/
-/* Polling handling */
-
-typedef struct PollingEntry {
-    PollingFunc *func;
-    void *opaque;
-    struct PollingEntry *next;
-} PollingEntry;
-
-static PollingEntry *first_polling_entry;
-
-int qemu_add_polling_cb(PollingFunc *func, void *opaque)
-{
-    PollingEntry **ppe, *pe;
-    pe = qemu_mallocz(sizeof(PollingEntry));
-    pe->func = func;
-    pe->opaque = opaque;
-    for(ppe = &first_polling_entry; *ppe != NULL; ppe = &(*ppe)->next);
-    *ppe = pe;
-    return 0;
-}
-
-void qemu_del_polling_cb(PollingFunc *func, void *opaque)
-{
-    PollingEntry **ppe, *pe;
-    for(ppe = &first_polling_entry; *ppe != NULL; ppe = &(*ppe)->next) {
-        pe = *ppe;
-        if (pe->func == func && pe->opaque == opaque) {
-            *ppe = pe->next;
-            qemu_free(pe);
-            break;
-        }
-    }
-}
-
-/***********************************************************/
-/* Wait objects support */
-typedef struct WaitObjects {
-    int num;
-    HANDLE events[MAXIMUM_WAIT_OBJECTS + 1];
-    WaitObjectFunc *func[MAXIMUM_WAIT_OBJECTS + 1];
-    void *opaque[MAXIMUM_WAIT_OBJECTS + 1];
-} WaitObjects;
-
-static WaitObjects wait_objects = {0};
-
-int qemu_add_wait_object(HANDLE handle, WaitObjectFunc *func, void *opaque)
-{
-    WaitObjects *w = &wait_objects;
-
-    if (w->num >= MAXIMUM_WAIT_OBJECTS)
-        return -1;
-    w->events[w->num] = handle;
-    w->func[w->num] = func;
-    w->opaque[w->num] = opaque;
-    w->num++;
-    return 0;
-}
-
-void qemu_del_wait_object(HANDLE handle, WaitObjectFunc *func, void *opaque)
-{
-    int i, found;
-    WaitObjects *w = &wait_objects;
-
-    found = 0;
-    for (i = 0; i < w->num; i++) {
-        if (w->events[i] == handle)
-            found = 1;
-        if (found) {
-            w->events[i] = w->events[i + 1];
-            w->func[i] = w->func[i + 1];
-            w->opaque[i] = w->opaque[i + 1];
-        }
-    }
-    if (found)
-        w->num--;
-}
-#endif
-
 /***********************************************************/
 /* machine registration */
 
@@ -1833,56 +1753,6 @@ void qemu_system_powerdown_request(void)
     qemu_notify_event();
 }
 
-#ifdef _WIN32
-static void host_main_loop_wait(int *timeout)
-{
-    int ret, ret2, i;
-    PollingEntry *pe;
-
-
-    /* XXX: need to suppress polling by better using win32 events */
-    ret = 0;
-    for(pe = first_polling_entry; pe != NULL; pe = pe->next) {
-        ret |= pe->func(pe->opaque);
-    }
-    if (ret == 0) {
-        int err;
-        WaitObjects *w = &wait_objects;
-
-        ret = WaitForMultipleObjects(w->num, w->events, FALSE, *timeout);
-        if (WAIT_OBJECT_0 + 0 <= ret && ret <= WAIT_OBJECT_0 + w->num - 1) {
-            if (w->func[ret - WAIT_OBJECT_0])
-                w->func[ret - WAIT_OBJECT_0](w->opaque[ret - WAIT_OBJECT_0]);
-
-            /* Check for additional signaled events */
-            for(i = (ret - WAIT_OBJECT_0 + 1); i < w->num; i++) {
-
-                /* Check if event is signaled */
-                ret2 = WaitForSingleObject(w->events[i], 0);
-                if(ret2 == WAIT_OBJECT_0) {
-                    if (w->func[i])
-                        w->func[i](w->opaque[i]);
-                } else if (ret2 == WAIT_TIMEOUT) {
-                } else {
-                    err = GetLastError();
-                    fprintf(stderr, "WaitForSingleObject error %d %d\n", i, err);
-                }
-            }
-        } else if (ret == WAIT_TIMEOUT) {
-        } else {
-            err = GetLastError();
-            fprintf(stderr, "WaitForMultipleObjects error %d %d\n", ret, err);
-        }
-    }
-
-    *timeout = 0;
-}
-#else
-static void host_main_loop_wait(int *timeout)
-{
-}
-#endif
-
 void main_loop_wait(int nonblocking)
 {
     IOHandlerRecord *ioh;
@@ -1898,7 +1768,7 @@ void main_loop_wait(int nonblocking)
         qemu_bh_update_timeout(&timeout);
     }
 
-    host_main_loop_wait(&timeout);
+    os_host_main_loop_wait(&timeout);
 
     /* poll any events */
     /* XXX: separate device handlers from system ones */
@@ -2044,7 +1914,7 @@ static void help(int exitcode)
 #define DEF(option, opt_arg, opt_enum, opt_help, arch_mask)     \
         opt_help
 #define DEFHEADING(text) stringify(text) "\n"
-#include "qemu-options.h"
+#include "qemu-options.def"
 #undef DEF
 #undef DEFHEADING
 #undef GEN_DOCS
@@ -2068,16 +1938,6 @@ static void help(int exitcode)
 
 #define HAS_ARG 0x0001
 
-enum {
-#define DEF(option, opt_arg, opt_enum, opt_help, arch_mask)     \
-    opt_enum,
-#define DEFHEADING(text)
-#include "qemu-options.h"
-#undef DEF
-#undef DEFHEADING
-#undef GEN_DOCS
-};
-
 typedef struct QEMUOption {
     const char *name;
     int flags;
@@ -2090,7 +1950,7 @@ static const QEMUOption qemu_options[] = {
 #define DEF(option, opt_arg, opt_enum, opt_help, arch_mask)     \
     { option, opt_arg, opt_enum, arch_mask },
 #define DEFHEADING(text)
-#include "qemu-options.h"
+#include "qemu-options.def"
 #undef DEF
 #undef DEFHEADING
 #undef GEN_DOCS
@@ -2154,132 +2014,6 @@ static int balloon_parse(const char *arg)
 
     return -1;
 }
-
-#ifdef _WIN32
-static BOOL WINAPI qemu_ctrl_handler(DWORD type)
-{
-    exit(STATUS_CONTROL_C_EXIT);
-    return TRUE;
-}
-#endif
-
-#ifndef _WIN32
-
-static void termsig_handler(int signal)
-{
-    qemu_system_shutdown_request();
-}
-
-static void sigchld_handler(int signal)
-{
-    waitpid(-1, NULL, WNOHANG);
-}
-
-static void sighandler_setup(void)
-{
-    struct sigaction act;
-
-    memset(&act, 0, sizeof(act));
-    act.sa_handler = termsig_handler;
-    sigaction(SIGINT,  &act, NULL);
-    sigaction(SIGHUP,  &act, NULL);
-    sigaction(SIGTERM, &act, NULL);
-
-    act.sa_handler = sigchld_handler;
-    act.sa_flags = SA_NOCLDSTOP;
-    sigaction(SIGCHLD, &act, NULL);
-}
-
-#endif
-
-#ifdef _WIN32
-/* Look for support files in the same directory as the executable.  */
-static char *find_datadir(const char *argv0)
-{
-    char *p;
-    char buf[MAX_PATH];
-    DWORD len;
-
-    len = GetModuleFileName(NULL, buf, sizeof(buf) - 1);
-    if (len == 0) {
-        return NULL;
-    }
-
-    buf[len] = 0;
-    p = buf + len - 1;
-    while (p != buf && *p != '\\')
-        p--;
-    *p = 0;
-    if (access(buf, R_OK) == 0) {
-        return qemu_strdup(buf);
-    }
-    return NULL;
-}
-#else /* !_WIN32 */
-
-/* Find a likely location for support files using the location of the binary.
-   For installed binaries this will be "$bindir/../share/qemu".  When
-   running from the build tree this will be "$bindir/../pc-bios".  */
-#define SHARE_SUFFIX "/share/qemu"
-#define BUILD_SUFFIX "/pc-bios"
-static char *find_datadir(const char *argv0)
-{
-    char *dir;
-    char *p = NULL;
-    char *res;
-    char buf[PATH_MAX];
-    size_t max_len;
-
-#if defined(__linux__)
-    {
-        int len;
-        len = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
-        if (len > 0) {
-            buf[len] = 0;
-            p = buf;
-        }
-    }
-#elif defined(__FreeBSD__)
-    {
-        static int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1};
-        size_t len = sizeof(buf) - 1;
-
-        *buf = '\0';
-        if (!sysctl(mib, sizeof(mib)/sizeof(*mib), buf, &len, NULL, 0) &&
-            *buf) {
-            buf[sizeof(buf) - 1] = '\0';
-            p = buf;
-        }
-    }
-#endif
-    /* If we don't have any way of figuring out the actual executable
-       location then try argv[0].  */
-    if (!p) {
-        p = realpath(argv0, buf);
-        if (!p) {
-            return NULL;
-        }
-    }
-    dir = dirname(p);
-    dir = dirname(dir);
-
-    max_len = strlen(dir) +
-        MAX(strlen(SHARE_SUFFIX), strlen(BUILD_SUFFIX)) + 1;
-    res = qemu_mallocz(max_len);
-    snprintf(res, max_len, "%s%s", dir, SHARE_SUFFIX);
-    if (access(res, R_OK)) {
-        snprintf(res, max_len, "%s%s", dir, BUILD_SUFFIX);
-        if (access(res, R_OK)) {
-            qemu_free(res);
-            res = NULL;
-        }
-    }
-
-    return res;
-}
-#undef SHARE_SUFFIX
-#undef BUILD_SUFFIX
-#endif
 
 char *qemu_find_file(int type, const char *name)
 {
@@ -2628,35 +2362,7 @@ int main(int argc, char **argv, char **envp)
     qemu_cache_utils_init(envp);
 
     QLIST_INIT (&vm_change_state_head);
-#ifndef _WIN32
-    {
-        struct sigaction act;
-        sigfillset(&act.sa_mask);
-        act.sa_flags = 0;
-        act.sa_handler = SIG_IGN;
-        sigaction(SIGPIPE, &act, NULL);
-    }
-#else
-    SetConsoleCtrlHandler(qemu_ctrl_handler, TRUE);
-    /* Note: cpu_interrupt() is currently not SMP safe, so we force
-       QEMU to run on a single CPU */
-    {
-        HANDLE h;
-        DWORD mask, smask;
-        int i;
-        h = GetCurrentProcess();
-        if (GetProcessAffinityMask(h, &mask, &smask)) {
-            for(i = 0; i < 32; i++) {
-                if (mask & (1 << i))
-                    break;
-            }
-            if (i != 32) {
-                mask = 1 << i;
-                SetProcessAffinityMask(h, mask);
-            }
-        }
-    }
-#endif
+    os_setup_early_signal_handling();
 
     module_call_init(MODULE_INIT_MACHINE);
     machine = find_default_machine();
@@ -2949,12 +2655,6 @@ int main(int argc, char **argv, char **envp)
             case QEMU_OPTION_bootp:
                 legacy_bootp_filename = optarg;
                 break;
-#ifndef _WIN32
-            case QEMU_OPTION_smb:
-                if (net_slirp_smb(optarg) < 0)
-                    exit(1);
-                break;
-#endif
             case QEMU_OPTION_redir:
                 if (net_slirp_redir(optarg) < 0)
                     exit(1);
@@ -3492,6 +3192,8 @@ int main(int argc, char **argv, char **envp)
                     fclose(fp);
                     break;
                 }
+            default:
+                os_parse_cmd_args(popt->index, optarg);
             }
         }
     }
@@ -3500,7 +3202,7 @@ int main(int argc, char **argv, char **envp)
     /* If no data_dir is specified then try to find it relative to the
        executable path.  */
     if (!data_dir) {
-        data_dir = find_datadir(argv[0]);
+        data_dir = os_find_datadir(argv[0]);
     }
     /* If all else fails use the install patch specified when building.  */
     if (!data_dir) {
@@ -3810,10 +3512,8 @@ int main(int argc, char **argv, char **envp)
 
     cpu_synchronize_all_post_init();
 
-#ifndef _WIN32
     /* must be after terminal init, SDL library changes signal handlers */
-    sighandler_setup();
-#endif
+    os_setup_signal_handling();
 
     set_numa_modes();
 
@@ -3881,6 +3581,7 @@ int main(int argc, char **argv, char **envp)
         if (dcl->dpy_refresh != NULL) {
             ds->gui_timer = qemu_new_timer(rt_clock, gui_update, ds);
             qemu_mod_timer(ds->gui_timer, qemu_get_clock(rt_clock));
+            break;
         }
         dcl = dcl->next;
     }

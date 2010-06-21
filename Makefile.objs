@@ -145,6 +145,8 @@ hw-obj-$(CONFIG_ECC) += ecc.o
 hw-obj-$(CONFIG_NAND) += nand.o
 hw-obj-$(CONFIG_PFLASH_CFI01) += pflash_cfi01.o
 hw-obj-$(CONFIG_PFLASH_CFI02) += pflash_cfi02.o
+hw-obj-$(CONFIG_WIN32) += os-win32.o
+hw-obj-$(CONFIG_POSIX) += os-posix.o
 
 hw-obj-$(CONFIG_M48T59) += m48t59.o
 hw-obj-$(CONFIG_ESCC) += escc.o
@@ -261,8 +263,10 @@ vl.o: QEMU_CFLAGS+=$(GPROF_CFLAGS)
 
 vl.o: QEMU_CFLAGS+=$(SDL_CFLAGS)
 
-vl.o: qemu-options.h
+vl.o: qemu-options.def
+os-posix.o: qemu-options.def
+os-win32.o: qemu-options.def
 
-qemu-options.h: $(SRC_PATH)/qemu-options.hx
+qemu-options.def: $(SRC_PATH)/qemu-options.hx
 	$(call quiet-command,sh $(SRC_PATH)/hxtool -h < $< > $@,"  GEN   $(TARGET_DIR)$@")
 
