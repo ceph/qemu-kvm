@@ -877,11 +877,11 @@ static void virtio_net_set_status(struct VirtIODevice *vdev, uint8_t status)
 static void virtio_net_vmstate_change(void *opaque, int running, int reason)
 {
     VirtIONet *n = opaque;
-    uint8_t status = running ? n->vdev.status : 0;
+    uint8_t status = running ? VIRTIO_CONFIG_S_DRIVER_OK : 0;
     /* This is called when vm is started/stopped,
-     * it will start/stop vhost backend if appropriate
+     * it will start/stop vhost backend if * appropriate
      * e.g. after migration. */
-    virtio_net_set_status(&n->vdev, status);
+    virtio_net_set_status(&n->vdev, n->vdev.status & status);
 }
 
 VirtIODevice *virtio_net_init(DeviceState *dev, NICConf *conf)
