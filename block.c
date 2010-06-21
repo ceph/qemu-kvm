@@ -331,8 +331,8 @@ static BlockDriver *find_image_format(const char *filename)
     if (ret < 0)
         return NULL;
 
-    /* Return the raw BlockDriver * to scsi-generic devices */
-    if (bs->sg) {
+    /* Return the raw BlockDriver * to scsi-generic devices or empty drives */
+    if (bs->sg || !bdrv_is_inserted(bs)) {
         bdrv_delete(bs);
         return bdrv_find_format("raw");
     }
@@ -645,6 +645,15 @@ void bdrv_close(BlockDriverState *bs)
         bs->media_changed = 1;
         if (bs->change_cb)
             bs->change_cb(bs->change_opaque);
+    }
+}
+
+void bdrv_close_all(void)
+{
+    BlockDriverState *bs;
+
+    QTAILQ_FOREACH(bs, &bdrv_states, list) {
+        bdrv_close(bs);
     }
 }
 
@@ -1622,9 +1631,11 @@ int bdrv_save_vmstate(BlockDriverState *bs, const uint8_t *buf,
     BlockDriver *drv = bs->drv;
     if (!drv)
         return -ENOMEDIUM;
-    if (!drv->bdrv_save_vmstate)
-        return -ENOTSUP;
-    return drv->bdrv_save_vmstate(bs, buf, pos, size);
+    if (drv->bdrv_save_vmstate)
+        return drv->bdrv_save_vmstate(bs, buf, pos, size);
+    if (bs->file)
+        return bdrv_save_vmstate(bs->file, buf, pos, size);
+    return -ENOTSUP;
 }
 
 int bdrv_load_vmstate(BlockDriverState *bs, uint8_t *buf,
@@ -1633,9 +1644,11 @@ int bdrv_load_vmstate(BlockDriverState *bs, uint8_t *buf,
     BlockDriver *drv = bs->drv;
     if (!drv)
         return -ENOMEDIUM;
-    if (!drv->bdrv_load_vmstate)
-        return -ENOTSUP;
-    return drv->bdrv_load_vmstate(bs, buf, pos, size);
+    if (drv->bdrv_load_vmstate)
+        return drv->bdrv_load_vmstate(bs, buf, pos, size);
+    if (bs->file)
+        return bdrv_load_vmstate(bs->file, buf, pos, size);
+    return -ENOTSUP;
 }
 
 void bdrv_debug_event(BlockDriverState *bs, BlkDebugEvent event)
@@ -1659,20 +1672,37 @@ int bdrv_snapshot_create(BlockDriverState *bs,
     BlockDriver *drv = bs->drv;
     if (!drv)
         return -ENOMEDIUM;
-    if (!drv->bdrv_snapshot_create)
-        return -ENOTSUP;
-    return drv->bdrv_snapshot_create(bs, sn_info);
+    if (drv->bdrv_snapshot_create)
+        return drv->bdrv_snapshot_create(bs, sn_info);
+    if (bs->file)
+        return bdrv_snapshot_create(bs->file, sn_info);
+    return -ENOTSUP;
 }
 
 int bdrv_snapshot_goto(BlockDriverState *bs,
                        const char *snapshot_id)
 {
     BlockDriver *drv = bs->drv;
+    int ret, open_ret;
+
     if (!drv)
         return -ENOMEDIUM;
-    if (!drv->bdrv_snapshot_goto)
-        return -ENOTSUP;
-    return drv->bdrv_snapshot_goto(bs, snapshot_id);
+    if (drv->bdrv_snapshot_goto)
+        return drv->bdrv_snapshot_goto(bs, snapshot_id);
+
+    if (bs->file) {
+        drv->bdrv_close(bs);
+        ret = bdrv_snapshot_goto(bs->file, snapshot_id);
+        open_ret = drv->bdrv_open(bs, bs->open_flags);
+        if (open_ret < 0) {
+            bdrv_delete(bs->file);
+            bs->drv = NULL;
+            return open_ret;
+        }
+        return ret;
+    }
+
+    return -ENOTSUP;
 }
 
 int bdrv_snapshot_delete(BlockDriverState *bs, const char *snapshot_id)
@@ -1680,9 +1710,11 @@ int bdrv_snapshot_delete(BlockDriverState *bs, const char *snapshot_id)
     BlockDriver *drv = bs->drv;
     if (!drv)
         return -ENOMEDIUM;
-    if (!drv->bdrv_snapshot_delete)
-        return -ENOTSUP;
-    return drv->bdrv_snapshot_delete(bs, snapshot_id);
+    if (drv->bdrv_snapshot_delete)
+        return drv->bdrv_snapshot_delete(bs, snapshot_id);
+    if (bs->file)
+        return bdrv_snapshot_delete(bs->file, snapshot_id);
+    return -ENOTSUP;
 }
 
 int bdrv_snapshot_list(BlockDriverState *bs,
@@ -1691,9 +1723,11 @@ int bdrv_snapshot_list(BlockDriverState *bs,
     BlockDriver *drv = bs->drv;
     if (!drv)
         return -ENOMEDIUM;
-    if (!drv->bdrv_snapshot_list)
-        return -ENOTSUP;
-    return drv->bdrv_snapshot_list(bs, psn_info);
+    if (drv->bdrv_snapshot_list)
+        return drv->bdrv_snapshot_list(bs, psn_info);
+    if (bs->file)
+        return bdrv_snapshot_list(bs->file, psn_info);
+    return -ENOTSUP;
 }
 
 #define NB_SUFFIXES 4

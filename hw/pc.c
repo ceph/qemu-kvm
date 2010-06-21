@@ -35,6 +35,7 @@
 #include "elf.h"
 #include "multiboot.h"
 #include "mc146818rtc.h"
+#include "sysemu.h"
 #include "device-assignment.h"
 #include "kvm.h"
 

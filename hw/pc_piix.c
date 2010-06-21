@@ -32,6 +32,7 @@
 #include "boards.h"
 #include "ide.h"
 #include "kvm.h"
+#include "sysemu.h"
 
 qemu_irq *ioapic_irq_hack;
 
