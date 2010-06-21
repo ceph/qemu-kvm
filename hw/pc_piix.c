@@ -33,6 +33,7 @@
 #include "ide.h"
 #include "kvm.h"
 #include "sysemu.h"
+#include "sysbus.h"
 
 qemu_irq *ioapic_irq_hack;
 
@@ -43,6 +44,22 @@ static const int ide_iobase2[MAX_IDE_BUS] = { 0x3f6, 0x376 };
 static const int ide_irq[MAX_IDE_BUS] = { 14, 15 };
 
 const char *global_cpu_model; /* cpu hotadd */
+
+static void ioapic_init(IsaIrqState *isa_irq_state)
+{
+    DeviceState *dev;
+    SysBusDevice *d;
+    unsigned int i;
+
+    dev = qdev_create(NULL, "ioapic");
+    qdev_init_nofail(dev);
+    d = sysbus_from_qdev(dev);
+    sysbus_mmio_map(d, 0, 0xfec00000);
+
+    for (i = 0; i < IOAPIC_NUM_PINS; i++) {
+        isa_irq_state->ioapic[i] = qdev_get_gpio_in(dev, i);
+    }
+}
 
 /* PC hardware initialisation */
 static void pc_init1(ram_addr_t ram_size,
@@ -83,7 +100,7 @@ static void pc_init1(ram_addr_t ram_size,
     if (kvm_enabled() && kvm_irqchip_in_kernel()) {
         isa_irq_state = qemu_mallocz(sizeof(*isa_irq_state));
         if (pci_enabled) {
-            isa_irq_state->ioapic = ioapic_init();
+            ioapic_init(isa_irq_state);
         }
         isa_irq = i8259 = kvm_i8259_init(cpu_irq[0]);
         ioapic_irq_hack = isa_irq;
@@ -94,7 +111,7 @@ static void pc_init1(ram_addr_t ram_size,
         isa_irq_state = qemu_mallocz(sizeof(*isa_irq_state));
         isa_irq_state->i8259 = i8259;
         if (pci_enabled) {
-            isa_irq_state->ioapic = ioapic_init();
+            ioapic_init(isa_irq_state);
         }
         isa_irq = qemu_allocate_irqs(isa_irq_handler, isa_irq_state, 24);
     }
