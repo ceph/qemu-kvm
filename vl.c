@@ -1222,6 +1222,7 @@ void qemu_system_reset_request(void)
     }
     if (cpu_single_env) {
         cpu_single_env->stopped = 1;
+        cpu_exit(cpu_single_env);
     }
     qemu_notify_event();
 }

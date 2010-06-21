@@ -603,6 +603,10 @@ int kvm_run(CPUState *env)
     r = pre_kvm_run(kvm, env);
     if (r)
         return r;
+    if (env->exit_request) {
+        env->exit_request = 0;
+        pthread_kill(env->kvm_cpu_state.thread, SIG_IPI);
+    }
     r = ioctl(fd, KVM_RUN, 0);
 
     if (r == -1 && errno != EINTR && errno != EAGAIN) {
