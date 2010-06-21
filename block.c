@@ -788,6 +788,15 @@ ro_cleanup:
     return ret;
 }
 
+void bdrv_commit_all(void)
+{
+    BlockDriverState *bs;
+
+    QTAILQ_FOREACH(bs, &bdrv_states, list) {
+        bdrv_commit(bs);
+    }
+}
+
 /*
  * Return values:
  * 0        - success
@@ -1206,6 +1215,18 @@ int bdrv_get_translation_hint(BlockDriverState *bs)
     return bs->translation;
 }
 
+void bdrv_set_on_error(BlockDriverState *bs, BlockErrorAction on_read_error,
+                       BlockErrorAction on_write_error)
+{
+    bs->on_read_error = on_read_error;
+    bs->on_write_error = on_write_error;
+}
+
+BlockErrorAction bdrv_get_on_error(BlockDriverState *bs, int is_read)
+{
+    return is_read ? bs->on_read_error : bs->on_write_error;
+}
+
 int bdrv_is_removable(BlockDriverState *bs)
 {
     return bs->removable;
@@ -1307,6 +1328,14 @@ BlockDriverState *bdrv_find(const char *name)
         }
     }
     return NULL;
+}
+
+BlockDriverState *bdrv_next(BlockDriverState *bs)
+{
+    if (!bs) {
+        return QTAILQ_FIRST(&bdrv_states);
+    }
+    return QTAILQ_NEXT(bs, list);
 }
 
 void bdrv_iterate(void (*it)(void *opaque, BlockDriverState *bs), void *opaque)
@@ -1665,6 +1694,23 @@ void bdrv_debug_event(BlockDriverState *bs, BlkDebugEvent event)
 
 /**************************************************************/
 /* handling of snapshots */
+
+int bdrv_can_snapshot(BlockDriverState *bs)
+{
+    BlockDriver *drv = bs->drv;
+    if (!drv || bdrv_is_removable(bs) || bdrv_is_read_only(bs)) {
+        return 0;
+    }
+
+    if (!drv->bdrv_snapshot_create) {
+        if (bs->file != NULL) {
+            return bdrv_can_snapshot(bs->file);
+        }
+        return 0;
+    }
+
+    return 1;
+}
 
 int bdrv_snapshot_create(BlockDriverState *bs,
                          QEMUSnapshotInfo *sn_info)
