@@ -15,7 +15,7 @@ TMPC="${TMPDIR1}/qemu-conf-${RANDOM}-$$-${RANDOM}.c"
 TMPO="${TMPDIR1}/qemu-conf-${RANDOM}-$$-${RANDOM}.o"
 TMPE="${TMPDIR1}/qemu-conf-${RANDOM}-$$-${RANDOM}.exe"
 
-trap "rm -f $TMPC $TMPO $TMPE ; exit" 0 2 3 15
+trap "rm -f $TMPC $TMPO $TMPE ; exit" EXIT INT QUIT TERM
 
 compile_object() {
   $cc $QEMU_CFLAGS -c -o $TMPO $TMPC > /dev/null 2> /dev/null
@@ -232,7 +232,8 @@ case "$cpu" in
     cpu="sparc"
   ;;
   *)
-    cpu="unknown"
+    echo "Unsupported CPU = $cpu"
+    exit 1
   ;;
 esac
 
@@ -781,7 +782,8 @@ echo "Advanced options (experts only):"
 echo "  --source-path=PATH       path of source code [$source_path]"
 echo "  --cross-prefix=PREFIX    use PREFIX for compile tools [$cross_prefix]"
 echo "  --cc=CC                  use C compiler CC [$cc]"
-echo "  --host-cc=CC             use C compiler CC [$host_cc] for dyngen etc."
+echo "  --host-cc=CC             use C compiler CC [$host_cc] for code run at"
+echo "                           build time"
 echo "  --extra-cflags=CFLAGS    append extra C compiler flags QEMU_CFLAGS"
 echo "  --extra-ldflags=LDFLAGS  append extra linker flags LDFLAGS"
 echo "  --make=MAKE              use specified make [$make]"
@@ -967,6 +969,13 @@ if test -z "$target_list" ; then
     echo "No targets enabled"
     exit 1
 fi
+# see if system emulation was really requested
+case " $target_list " in
+  *"-softmmu "*) softmmu=yes
+  ;;
+  *) softmmu=no
+  ;;
+esac
 
 feature_not_found() {
   feature=$1
@@ -1672,7 +1681,7 @@ EOF
             fi
     else
             if test "$vhost_net" = "yes" ; then
-                echo -e "NOTE: vhost-net feature requires KVM (--enable-kvm)."
+                echo "NOTE: vhost-net feature requires KVM (--enable-kvm)."
                 feature_not_found "vhost-net"
             fi
             vhost_net=no
@@ -2104,9 +2113,7 @@ if test "$mingw32" = "yes" ; then
   confsuffix=""
   docsuffix=""
   binsuffix=""
-  if test -z "$sysconfdir" ; then
-      sysconfdir="${prefix}"
-  fi
+  sysconfsuffix=""
 else
   if test -z "$prefix" ; then
       prefix="/usr/local"
@@ -2115,10 +2122,10 @@ else
   datasuffix="/share/qemu"
   docsuffix="/share/doc/qemu"
   binsuffix="/bin"
-  if test -z "$sysconfdir" ; then
-      sysconfdir="${prefix}/etc"
-  fi
+  sysconfsuffix="/etc"
 fi
+
+: ${sysconfdir:="${prefix}$sysconfsuffix"}
 
 if test -f kvm/kernel/configure; then
     kvm_kmod="yes"
@@ -2226,10 +2233,6 @@ case "$cpu" in
   ;;
   armv4b|armv4l)
     ARCH=arm
-  ;;
-  *)
-    echo "Unsupported CPU = $cpu"
-    exit 1
   ;;
 esac
 echo "ARCH=$ARCH" >> $config_host_mak
@@ -2454,7 +2457,7 @@ esac
 echo "KVM_KMOD=$kvm_kmod" >> $config_host_mak
 
 tools=
-if test `expr "$target_list" : ".*softmmu.*"` != 0 ; then
+if test "$softmmu" = yes ; then
   tools="qemu-img\$(EXESUF) qemu-io\$(EXESUF) $tools"
   if [ "$linux" = "yes" -o "$bsd" = "yes" -o "$solaris" = "yes" ] ; then
       tools="qemu-nbd\$(EXESUF) $tools"
@@ -2470,7 +2473,7 @@ echo "TOOLS=$tools" >> $config_host_mak
 roms=
 if test \( "$cpu" = "i386" -o "$cpu" = "x86_64" \) -a \
         "$targetos" != "Darwin" -a "$targetos" != "SunOS" -a \
-        `expr "$target_list" : ".*softmmu.*"` != 0 ; then
+        "$softmmu" = yes ; then
   roms="optionrom"
 fi
 echo "ROMS=$roms" >> $config_host_mak
