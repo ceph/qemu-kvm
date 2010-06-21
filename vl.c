@@ -59,7 +59,6 @@
 #ifdef __linux__
 #include <pty.h>
 #include <malloc.h>
-#include <sys/prctl.h>
 
 #include <linux/ppdev.h>
 #include <linux/parport.h>
@@ -222,9 +221,6 @@ int no_shutdown = 0;
 int cursor_hide = 1;
 int graphic_rotate = 0;
 uint8_t irq0override = 1;
-#ifndef _WIN32
-int daemonize = 0;
-#endif
 const char *watchdog;
 const char *option_rom[MAX_OPTION_ROMS];
 int nb_option_roms;
@@ -295,22 +291,6 @@ static int default_driver_check(QemuOpts *opts, void *opaque)
     return 0;
 }
 
-/***********************************************************/
-
-static void set_proc_name(const char *s)
-{
-#if defined(__linux__) && defined(PR_SET_NAME)
-    char name[16];
-    if (!s)
-        return;
-    name[sizeof(name) - 1] = 0;
-    strncpy(name, s, sizeof(name));
-    /* Could rewrite argv[0] too, but that's a bit more complicated.
-       This simple way is enough for `top'. */
-    prctl(PR_SET_NAME, name);
-#endif    	
-}
- 
 /***********************************************************/
 /* real time host monotonic timer */
 
@@ -2339,15 +2319,9 @@ int main(int argc, char **argv, char **envp)
     const char *loadvm = NULL;
     QEMUMachine *machine;
     const char *cpu_model;
-#ifndef _WIN32
-    int fds[2];
-#endif
     int tb_size;
     const char *pid_file = NULL;
     const char *incoming = NULL;
-#ifndef _WIN32
-    int fd = 0;
-#endif
     int show_vnc_port = 0;
     int defconfig = 1;
 
@@ -3047,11 +3021,6 @@ int main(int argc, char **argv, char **envp)
                     exit(1);
                 }
                 break;
-#ifndef _WIN32
-	    case QEMU_OPTION_daemonize:
-		daemonize = 1;
-		break;
-#endif
 	    case QEMU_OPTION_option_rom:
 		if (nb_option_roms >= MAX_OPTION_ROMS) {
 		    fprintf(stderr, "Too many option ROMs\n");
@@ -3080,7 +3049,7 @@ int main(int argc, char **argv, char **envp)
 			    exit(1);
 			}
 			p += 8;
-			set_proc_name(p);
+			os_set_proc_name(p);
 		     }	
 		 }	
                 break;
@@ -3277,64 +3246,10 @@ int main(int argc, char **argv, char **envp)
     }
 #endif
 
-#ifndef _WIN32
-    if (daemonize) {
-	pid_t pid;
-
-	if (pipe(fds) == -1)
-	    exit(1);
-
-	pid = fork();
-	if (pid > 0) {
-	    uint8_t status;
-	    ssize_t len;
-
-	    close(fds[1]);
-
-	again:
-            len = read(fds[0], &status, 1);
-            if (len == -1 && (errno == EINTR))
-                goto again;
-
-            if (len != 1)
-                exit(1);
-            else if (status == 1) {
-                fprintf(stderr, "Could not acquire pidfile: %s\n", strerror(errno));
-                exit(1);
-            } else
-                exit(0);
-	} else if (pid < 0)
-            exit(1);
-
-	close(fds[0]);
-	qemu_set_cloexec(fds[1]);
-
-	setsid();
-
-	pid = fork();
-	if (pid > 0)
-	    exit(0);
-	else if (pid < 0)
-	    exit(1);
-
-	umask(027);
-
-        signal(SIGTSTP, SIG_IGN);
-        signal(SIGTTOU, SIG_IGN);
-        signal(SIGTTIN, SIG_IGN);
-    }
-#endif
+    os_daemonize();
 
     if (pid_file && qemu_create_pidfile(pid_file) != 0) {
-#ifndef _WIN32
-        if (daemonize) {
-            uint8_t status = 1;
-            if (write(fds[1], &status, 1) != 1) {
-                perror("daemonize. Writing to pipe\n");
-            }
-        } else
-#endif
-            fprintf(stderr, "Could not acquire pid file: %s\n", strerror(errno));
+        os_pidfile_error();
         exit(1);
     }
 
@@ -3372,10 +3287,7 @@ int main(int argc, char **argv, char **envp)
         exit(1);
     }
 
-#ifndef _WIN32
-    /* Win32 doesn't support line-buffering and requires size >= 2 */
-    setvbuf(stdout, NULL, _IOLBF, 0);
-#endif
+    os_set_line_buffering();
 
     if (init_timer_alarm() < 0) {
         fprintf(stderr, "could not initialize alarm timer\n");
@@ -3609,39 +3521,7 @@ int main(int argc, char **argv, char **envp)
         vm_start();
     }
 
-#ifndef _WIN32
-    if (daemonize) {
-	uint8_t status = 0;
-	ssize_t len;
-
-    again1:
-	len = write(fds[1], &status, 1);
-	if (len == -1 && (errno == EINTR))
-	    goto again1;
-
-	if (len != 1)
-	    exit(1);
-
-        if (chdir("/")) {
-            perror("not able to chdir to /");
-            exit(1);
-        }
-	TFR(fd = qemu_open("/dev/null", O_RDWR));
-	if (fd == -1)
-	    exit(1);
-    }
-
-    os_change_root();
-    os_change_process_uid();
-
-    if (daemonize) {
-        dup2(fd, 0);
-        dup2(fd, 1);
-        dup2(fd, 2);
-
-        close(fd);
-    }
-#endif
+    os_setup_post();
 
     main_loop();
     quit_timers();
