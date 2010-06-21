@@ -487,7 +487,7 @@ void pit_reset(void *opaque)
 #ifdef TARGET_I386
 /* When HPET is operating in legacy mode, i8254 timer0 is disabled */
 
-void hpet_disable_pit(void)
+void hpet_pit_disable(void)
 {
     PITChannelState *s = &pit_state.channels[0];
 
@@ -510,7 +510,7 @@ void hpet_disable_pit(void)
  * timer 0
  */
 
-void hpet_enable_pit(void)
+void hpet_pit_enable(void)
 {
     PITState *pit = &pit_state;
     PITChannelState *s = &pit->channels[0];

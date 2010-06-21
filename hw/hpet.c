@@ -195,7 +195,7 @@ static int hpet_post_load(void *opaque, int version_id)
     s->hpet_offset = ticks_to_ns(s->hpet_counter) - qemu_get_clock(vm_clock);
 
     if (hpet_in_legacy_mode()) {
-        hpet_disable_pit();
+        hpet_pit_disable();
     }
 
     return 0;
@@ -512,9 +512,9 @@ static void hpet_ram_writel(void *opaque, target_phys_addr_t addr,
             }
             /* i8254 and RTC are disabled when HPET is in legacy mode */
             if (activating_bit(old_val, new_val, HPET_CFG_LEGACY)) {
-                hpet_disable_pit();
+                hpet_pit_disable();
             } else if (deactivating_bit(old_val, new_val, HPET_CFG_LEGACY)) {
-                hpet_enable_pit();
+                hpet_pit_enable();
             }
             break;
         case HPET_CFG + 4:
@@ -602,7 +602,7 @@ static void hpet_reset(void *opaque)
          * hpet_reset is called due to system reset. At this point control must
          * be returned to pit until SW reenables hpet.
          */
-        hpet_enable_pit();
+        hpet_pit_enable();
     }
     count = 1;
 }

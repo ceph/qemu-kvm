@@ -64,8 +64,8 @@ int pit_get_out(PITState *pit, int channel, int64_t current_time);
 
 PITState *kvm_pit_init(int base, qemu_irq irq);
 
-void hpet_disable_pit(void);
-void hpet_enable_pit(void);
+void hpet_pit_disable(void);
+void hpet_pit_enable(void);
 
 /* vmport.c */
 void vmport_init(void);
