@@ -35,6 +35,9 @@
 #include "elf.h"
 #include "multiboot.h"
 #include "mc146818rtc.h"
+#include "msix.h"
+#include "sysbus.h"
+#include "sysemu.h"
 #include "device-assignment.h"
 #include "kvm.h"
 
@@ -64,6 +67,9 @@
 #define FW_CFG_SMBIOS_ENTRIES (FW_CFG_ARCH_LOCAL + 1)
 #define FW_CFG_IRQ0_OVERRIDE (FW_CFG_ARCH_LOCAL + 2)
 #define FW_CFG_E820_TABLE (FW_CFG_ARCH_LOCAL + 3)
+#define FW_CFG_HPET (FW_CFG_ARCH_LOCAL + 4)
+
+#define MSI_ADDR_BASE 0xfee00000
 
 #define E820_NR_ENTRIES		16
 
@@ -146,7 +152,7 @@ int cpu_get_pic_interrupt(CPUState *env)
 {
     int intno;
 
-    intno = apic_get_interrupt(env);
+    intno = apic_get_interrupt(env->apic_state);
     if (intno >= 0) {
         /* set irq request if a PIC irq is still pending */
         /* XXX: improve that */
@@ -154,8 +160,9 @@ int cpu_get_pic_interrupt(CPUState *env)
         return intno;
     }
     /* read the irq from the PIC */
-    if (!apic_accept_pic_intr(env))
+    if (!apic_accept_pic_intr(env->apic_state)) {
         return -1;
+    }
 
     intno = pic_read_irq(isa_pic);
     return intno;
@@ -168,8 +175,9 @@ static void pic_irq_request(void *opaque, int irq, int level)
     DPRINTF("pic_irqs: %s irq %d\n", level? "raise" : "lower", irq);
     if (env->apic_state) {
         while (env) {
-            if (apic_accept_pic_intr(env))
-                apic_deliver_pic_intr(env, level);
+            if (apic_accept_pic_intr(env->apic_state)) {
+                apic_deliver_pic_intr(env->apic_state, level);
+            }
             env = env->next_cpu;
         }
     } else {
@@ -487,6 +495,8 @@ static void *bochs_bios_init(void)
     fw_cfg_add_bytes(fw_cfg, FW_CFG_E820_TABLE, (uint8_t *)&e820_table,
                      sizeof(struct e820_table));
 
+    fw_cfg_add_bytes(fw_cfg, FW_CFG_HPET, (uint8_t *)&hpet_cfg,
+                     sizeof(struct hpet_fw_config));
     /* allocate memory for the NUMA channel: one (64bit) word for the number
      * of nodes, one word for each VCPU->node and one word for each node to
      * hold the amount of memory.
@@ -751,6 +761,41 @@ int cpu_is_bsp(CPUState *env)
     return env->cpu_index == 0;
 }
 
+DeviceState *cpu_get_current_apic(void)
+{
+    if (cpu_single_env) {
+        return cpu_single_env->apic_state;
+    } else {
+        return NULL;
+    }
+}
+
+static DeviceState *apic_init(void *env, uint8_t apic_id)
+{
+    DeviceState *dev;
+    SysBusDevice *d;
+    static int apic_mapped;
+
+    dev = qdev_create(NULL, "apic");
+    qdev_prop_set_uint8(dev, "id", apic_id);
+    qdev_prop_set_ptr(dev, "cpu_env", env);
+    qdev_init_nofail(dev);
+    d = sysbus_from_qdev(dev);
+
+    /* XXX: mapping more APICs at the same memory location */
+    if (apic_mapped == 0) {
+        /* NOTE: the APIC is directly connected to the CPU - it is not
+           on the global memory bus. */
+        /* XXX: what if the base changes? */
+        sysbus_mmio_map(d, 0, MSI_ADDR_BASE);
+        apic_mapped = 1;
+    }
+
+    msix_supported = 1;
+
+    return dev;
+}
+
 /* set CMOS shutdown status register (index 0xF) as S3_resume(0xFE)
    BIOS will read it and start S3 resume at POST Entry */
 void pc_cmos_set_s3_resume(void *opaque, int irq, int level)
@@ -769,6 +814,22 @@ void pc_acpi_smi_interrupt(void *opaque, int irq, int level)
     if (level) {
         cpu_interrupt(s, CPU_INTERRUPT_SMI);
     }
+}
+
+static void bsp_cpu_reset(void *opaque)
+{
+    CPUState *env = opaque;
+
+    cpu_reset(env);
+    env->halted = 0;
+}
+
+static void ap_cpu_reset(void *opaque)
+{
+    CPUState *env = opaque;
+
+    cpu_reset(env);
+    env->halted = 1;
 }
 
 CPUState *pc_new_cpu(const char *cpu_model)
@@ -791,9 +852,14 @@ CPUState *pc_new_cpu(const char *cpu_model)
     if ((env->cpuid_features & CPUID_APIC) || smp_cpus > 1) {
         env->cpuid_apic_id = env->cpu_index;
         /* APIC reset callback resets cpu */
-        apic_init(env);
+        env->apic_state = apic_init(env, env->cpuid_apic_id);
+    }
+    if (cpu_is_bsp(env)) {
+        qemu_register_reset(bsp_cpu_reset, env);
+        env->halted = 0;
     } else {
-        qemu_register_reset((QEMUResetHandler*)cpu_reset, env);
+        qemu_register_reset(ap_cpu_reset, env);
+        env->halted = 1;
     }
     return env;
 }
@@ -954,6 +1020,7 @@ void pc_basic_device_init(qemu_irq *isa_irq,
     int i;
     DriveInfo *fd[MAX_FD];
     PITState *pit;
+    qemu_irq rtc_irq = NULL;
     qemu_irq *a20_line;
     ISADevice *i8042;
     qemu_irq *cpu_exit_irq;
@@ -962,7 +1029,15 @@ void pc_basic_device_init(qemu_irq *isa_irq,
 
     register_ioport_write(0xf0, 1, 1, ioportF0_write, NULL);
 
-    *rtc_state = rtc_init(2000);
+    if (!no_hpet) {
+        DeviceState *hpet = sysbus_create_simple("hpet", HPET_BASE, NULL);
+
+        for (i = 0; i < 24; i++) {
+            sysbus_connect_irq(sysbus_from_qdev(hpet), i, isa_irq[i]);
+        }
+        rtc_irq = qdev_get_gpio_in(hpet, 0);
+    }
+    *rtc_state = rtc_init(2000, rtc_irq);
 
     qemu_register_boot_set(pc_boot_set, *rtc_state);
 
@@ -975,9 +1050,6 @@ void pc_basic_device_init(qemu_irq *isa_irq,
     pit = pit_init(0x40, isa_reserve_irq(0));
 
     pcspk_init(pit);
-    if (!no_hpet) {
-        hpet_init(isa_irq);
-    }
 
     for(i = 0; i < MAX_SERIAL_PORTS; i++) {
         if (serial_hds[i]) {

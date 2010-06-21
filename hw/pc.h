@@ -40,9 +40,11 @@ void pic_info(Monitor *mon);
 void irq_info(Monitor *mon);
 
 /* ISA */
+#define IOAPIC_NUM_PINS 0x18
+
 typedef struct isa_irq_state {
     qemu_irq *i8259;
-    qemu_irq *ioapic;
+    qemu_irq ioapic[IOAPIC_NUM_PINS];
 } IsaIrqState;
 
 void isa_irq_handler(void *opaque, int n, int level);
@@ -64,8 +66,8 @@ int pit_get_out(PITState *pit, int channel, int64_t current_time);
 
 PITState *kvm_pit_init(int base, qemu_irq irq);
 
-void hpet_disable_pit(void);
-void hpet_enable_pit(void);
+void hpet_pit_disable(void);
+void hpet_pit_enable(void);
 
 /* vmport.c */
 void vmport_init(void);

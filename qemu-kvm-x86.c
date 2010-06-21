@@ -906,8 +906,8 @@ void kvm_arch_load_regs(CPUState *env, int level)
     sregs.cr3 = env->cr[3];
     sregs.cr4 = env->cr[4];
 
-    sregs.cr8 = cpu_get_apic_tpr(env);
-    sregs.apic_base = cpu_get_apic_base(env);
+    sregs.cr8 = cpu_get_apic_tpr(env->apic_state);
+    sregs.apic_base = cpu_get_apic_base(env->apic_state);
 
     sregs.efer = env->efer;
 
@@ -1090,7 +1090,7 @@ void kvm_arch_save_regs(CPUState *env)
     env->cr[3] = sregs.cr3;
     env->cr[4] = sregs.cr4;
 
-    cpu_set_apic_base(env, sregs.apic_base);
+    cpu_set_apic_base(env->apic_state, sregs.apic_base);
 
     env->efer = sregs.efer;
     //cpu_set_apic_tpr(env, sregs.cr8);
@@ -1230,7 +1230,7 @@ int kvm_arch_halt(CPUState *env)
 int kvm_arch_pre_run(CPUState *env, struct kvm_run *run)
 {
     if (!kvm_irqchip_in_kernel())
-	kvm_set_cr8(env, cpu_get_apic_tpr(env));
+	kvm_set_cr8(env, cpu_get_apic_tpr(env->apic_state));
     return 0;
 }
 

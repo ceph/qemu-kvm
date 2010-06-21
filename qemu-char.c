@@ -28,7 +28,6 @@
 #include "sysemu.h"
 #include "qemu-timer.h"
 #include "qemu-char.h"
-#include "block.h"
 #include "hw/usb.h"
 #include "hw/baum.h"
 #include "hw/msmouse.h"
@@ -352,12 +351,7 @@ static int mux_proc_byte(CharDriverState *chr, MuxDriver *d, int ch)
                  break;
             }
         case 's':
-            {
-                DriveInfo *dinfo;
-                QTAILQ_FOREACH(dinfo, &drives, next) {
-                    bdrv_commit(dinfo->bdrv);
-                }
-            }
+            bdrv_commit_all();
             break;
         case 'b':
             qemu_chr_event(chr, CHR_EVENT_BREAK);
