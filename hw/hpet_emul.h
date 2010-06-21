@@ -17,7 +17,10 @@
 #define HPET_CLK_PERIOD         10000000ULL /* 10000000 femtoseconds == 10ns*/
 
 #define FS_PER_NS 1000000
-#define HPET_NUM_TIMERS 3
+#define HPET_MIN_TIMERS         3
+#define HPET_MAX_TIMERS         32
+
+#define HPET_NUM_IRQ_ROUTES     32
 
 #define HPET_CFG_ENABLE 0x001
 #define HPET_CFG_LEGACY 0x002
@@ -32,6 +35,9 @@
 #define HPET_TN_ROUTE   0x010
 #define HPET_CFG_WRITE_MASK  0x3
 
+#define HPET_ID_NUM_TIM_SHIFT   8
+#define HPET_ID_NUM_TIM_MASK    0x1f00
+
 #define HPET_TN_TYPE_LEVEL       0x002
 #define HPET_TN_ENABLE           0x004
 #define HPET_TN_PERIODIC         0x008
@@ -40,14 +46,11 @@
 #define HPET_TN_SETVAL           0x040
 #define HPET_TN_32BIT            0x100
 #define HPET_TN_INT_ROUTE_MASK  0x3e00
-#define HPET_TN_CFG_WRITE_MASK  0x3f4e
+#define HPET_TN_FSB_ENABLE      0x4000
+#define HPET_TN_FSB_CAP         0x8000
+#define HPET_TN_CFG_WRITE_MASK  0x7f4e
 #define HPET_TN_INT_ROUTE_SHIFT      9
 #define HPET_TN_INT_ROUTE_CAP_SHIFT 32
 #define HPET_TN_CFG_BITS_READONLY_OR_RESERVED 0xffff80b1U
-
-#if defined TARGET_I386
-extern uint32_t hpet_in_legacy_mode(void);
-extern void hpet_init(qemu_irq *irq);
-#endif
 
 #endif
