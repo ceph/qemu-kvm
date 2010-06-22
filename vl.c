@@ -2459,6 +2459,7 @@ int main(int argc, char **argv, char **envp)
 	    case QEMU_OPTION_no_kvm:
 		kvm_allowed = 0;
 		break;
+#ifdef CONFIG_KVM
 	    case QEMU_OPTION_no_kvm_irqchip: {
 		kvm_irqchip = 0;
 		kvm_pit = 0;
@@ -2476,6 +2477,7 @@ int main(int argc, char **argv, char **envp)
 		kvm_nested = 1;
 		break;
 	    }
+#endif
 #if defined(TARGET_I386) || defined(TARGET_X86_64) || defined(TARGET_IA64) || defined(__linux__)
             case QEMU_OPTION_pcidevice:
 		if (assigned_devices_index >= MAX_DEV_ASSIGN_CMDLINE) {
