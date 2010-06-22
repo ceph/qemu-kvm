@@ -207,9 +207,7 @@ int smp_cores = 1;
 int smp_threads = 1;
 const char *vnc_display;
 int acpi_enabled = 1;
-#ifdef TARGET_I386
 int no_hpet = 0;
-#endif
 int fd_bootchk = 1;
 int no_reboot = 0;
 int no_shutdown = 0;
