@@ -835,6 +835,7 @@ void qemu_kvm_cpuid_on_env(CPUState *env);
 void kvm_inject_interrupt(CPUState *env, int mask);
 void kvm_update_after_sipi(CPUState *env);
 void kvm_update_interrupt_request(CPUState *env);
+#ifndef CONFIG_USER_ONLY
 void *kvm_cpu_create_phys_mem(target_phys_addr_t start_addr, unsigned long size,
                               int log, int writable);
 
@@ -842,6 +843,7 @@ void kvm_cpu_destroy_phys_mem(target_phys_addr_t start_addr,
                               unsigned long size);
 void kvm_qemu_log_memory(target_phys_addr_t start, target_phys_addr_t size,
                          int log);
+#endif
 int kvm_qemu_create_memory_alias(uint64_t phys_start, uint64_t len,
                                  uint64_t target_phys);
 int kvm_qemu_destroy_memory_alias(uint64_t phys_start);
