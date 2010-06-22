@@ -237,7 +237,7 @@ int pic_read_irq(PicState2 *s)
     if (irq >= 0) {
 
         pic_intack(&s->pics[0], irq);
-#ifndef TARGET_IA64
+#ifdef TARGET_I386
 	if (time_drift_fix && irq == 0) {
 	    extern int64_t timer_acks, timer_ints_to_push;
 	    timer_acks++;
