@@ -107,18 +107,6 @@ int kvm_set_mce(CPUState *env, struct kvm_x86_mce *mce);
 #endif
 
 /*!
- * \brief Create new KVM context
- *
- * This creates a new kvm_context. A KVM context is a small area of data that
- * holds information about the KVM instance that gets created by this call.\n
- * This should always be your first call to KVM.
- *
- * \param opaque Not used
- * \return NULL on failure
- */
-int kvm_init(int smp_cpus);
-
-/*!
  * \brief Disable the in-kernel IRQCHIP creation
  *
  * In-kernel irqchip is enabled by default. If userspace irqchip is to be used,
@@ -806,11 +794,6 @@ typedef struct kvm_vcpu_context *kvm_vcpu_context_t;
 struct kvm_pit_state {
 };
 
-static inline int kvm_init(int smp_cpus)
-{
-    return 0;
-}
-
 static inline void kvm_inject_x86_mce(CPUState *cenv, int bank,
                                       uint64_t status, uint64_t mcg_status,
                                       uint64_t addr, uint64_t misc,
@@ -822,6 +805,18 @@ static inline void kvm_inject_x86_mce(CPUState *cenv, int bank,
 
 #endif                          /* !CONFIG_KVM */
 
+
+/*!
+ * \brief Create new KVM context
+ *
+ * This creates a new kvm_context. A KVM context is a small area of data that
+ * holds information about the KVM instance that gets created by this call.\n
+ * This should always be your first call to KVM.
+ *
+ * \param opaque Not used
+ * \return NULL on failure
+ */
+int kvm_init(int smp_cpus);
 
 int kvm_main_loop(void);
 int kvm_init_ap(void);
