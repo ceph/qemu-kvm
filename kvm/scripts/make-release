@@ -51,7 +51,7 @@ cd "$(dirname "$0")"/../..
 mkdir -p "$(dirname "$tarball")"
 git archive --prefix="$name/" --format=tar "$commit" > "$tarball"
 
-mtime=`git show --format=%ct "$commit" --`
+mtime=`git show --format=%ct "$commit""^{commit}" --`
 tarargs="--owner=root --group=root --mtime=@$mtime"
 
 mkdir -p "$tmpdir"
