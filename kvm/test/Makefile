@@ -1,7 +1,7 @@
 
 include config.mak
 
-DESTDIR :=
+DESTDIR := $(PREFIX)/share/qemu/tests
 
 .PHONY: arch_clean clean
 
@@ -55,6 +55,10 @@ $(libcflat): $(cflatobjs)
 	$(CC) $(CFLAGS) -c -nostdlib -o $@ $<
 
 -include .*.d
+
+install:
+	mkdir -p $(DESTDIR)
+	install $(tests_and_config) $(DESTDIR)
 
 clean: arch_clean
 	$(RM) kvmctl kvmtrace *.o *.a .*.d $(libcflat) $(cflatobjs)
