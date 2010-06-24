@@ -72,18 +72,6 @@ config-host.h-timestamp: config-host.mak
 
 SUBDIR_RULES=$(patsubst %,subdir-%, $(TARGET_DIRS))
 
-ifeq ($(KVM_KMOD),yes)
-
-.PHONEY: kvm-kmod
-
-all: kvm-kmod
-
-kvm-kmod:
-	$(call quiet-command,$(MAKE) $(SUBDIR_MAKEFLAGS) -C kvm/kernel V="$(V)" )
-
-
-endif
-
 subdir-%: $(GENERATED_HEADERS)
 	$(call quiet-command,$(MAKE) $(SUBDIR_MAKEFLAGS) -C $* V="$(V)" TARGET_DIR="$*/" all,)
 
@@ -245,9 +233,6 @@ endif
 	for d in $(TARGET_DIRS); do \
 	$(MAKE) -C $$d $@ || exit 1 ; \
         done
-ifeq ($(KVM_KMOD),yes)
-	$(MAKE) -C kvm/kernel $@
-endif
 
 # various test targets
 test speed: all
