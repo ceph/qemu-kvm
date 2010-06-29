@@ -1044,7 +1044,7 @@ static void assigned_dev_update_msi(PCIDevice *pci_dev, unsigned int ctrl_pos)
         if (r && r != -ENXIO)
             perror("assigned_dev_update_msi: deassign irq");
 
-        assigned_irq_data.flags = 0;
+        assigned_dev->irq_requested_type = 0;
     }
 
     if (ctrl_byte & PCI_MSI_FLAGS_ENABLE) {
@@ -1208,7 +1208,7 @@ static void assigned_dev_update_msix(PCIDevice *pci_dev, unsigned int ctrl_pos)
         if (r && r != -ENXIO)
             perror("assigned_dev_update_msix: deassign irq");
 
-        assigned_irq_data.flags = 0;
+        assigned_dev->irq_requested_type = 0;
     }
 
     if (*ctrl_word & PCI_MSIX_ENABLE) {
