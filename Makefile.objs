@@ -36,8 +36,8 @@ net-nested-$(CONFIG_SLIRP) += slirp.o
 net-nested-$(CONFIG_VDE) += vde.o
 net-obj-y += $(addprefix net/, $(net-nested-y))
 
-fsdev-nested-$(CONFIG_LINUX) = qemu-fsdev.o
-fsdev-obj-$(CONFIG_LINUX) += $(addprefix fsdev/, $(fsdev-nested-y))
+fsdev-nested-$(CONFIG_VIRTFS) = qemu-fsdev.o
+fsdev-obj-$(CONFIG_VIRTFS) += $(addprefix fsdev/, $(fsdev-nested-y))
 
 ######################################################################
 # libqemu_common.a: Target independent part of system emulation. The
@@ -183,6 +183,9 @@ hw-obj-$(CONFIG_DEC_PCI) += dec_pci.o
 # PowerPC E500 boards
 hw-obj-$(CONFIG_PPCE500_PCI) += ppce500_pci.o
 
+# MIPS devices
+hw-obj-$(CONFIG_PIIX4) += piix4.o
+
 # PCI watchdog devices
 hw-obj-y += wdt_i6300esb.o
 
@@ -207,6 +210,7 @@ hw-obj-$(CONFIG_IDE_ISA) += ide/isa.o
 hw-obj-$(CONFIG_IDE_PIIX) += ide/piix.o
 hw-obj-$(CONFIG_IDE_CMD646) += ide/cmd646.o
 hw-obj-$(CONFIG_IDE_MACIO) += ide/macio.o
+hw-obj-$(CONFIG_IDE_VIA) += ide/via.o
 
 # SCSI layer
 hw-obj-y += lsi53c895a.o
@@ -238,7 +242,7 @@ sound-obj-$(CONFIG_CS4231A) += cs4231a.o
 adlib.o fmopl.o: QEMU_CFLAGS += -DBUILD_Y8950=0
 hw-obj-$(CONFIG_SOUND) += $(sound-obj-y)
 
-hw-obj-$(CONFIG_LINUX) += virtio-9p-debug.o virtio-9p-local.o
+hw-obj-$(CONFIG_VIRTFS) += virtio-9p-debug.o virtio-9p-local.o
 
 ######################################################################
 # libdis

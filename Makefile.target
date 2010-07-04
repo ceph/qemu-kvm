@@ -179,7 +179,7 @@ obj-y += virtio-blk.o virtio-balloon.o virtio-net.o virtio-serial-bus.o
 obj-$(CONFIG_VIRTIO_PCI) += virtio-pci.o
 obj-y += vhost_net.o
 obj-$(CONFIG_VHOST_NET) += vhost.o
-obj-$(CONFIG_LINUX) += virtio-9p.o
+obj-$(CONFIG_VIRTFS) += virtio-9p.o
 obj-y += rwhandler.o
 obj-$(CONFIG_KVM) += kvm.o kvm-all.o
 obj-$(CONFIG_NO_KVM) += kvm-stub.o
@@ -251,7 +251,8 @@ obj-mips-y += mips_addr.o mips_timer.o mips_int.o
 obj-mips-y += vga.o i8259.o
 obj-mips-y += g364fb.o jazz_led.o
 obj-mips-y += gt64xxx.o mc146818rtc.o
-obj-mips-y += piix4.o cirrus_vga.o
+obj-mips-y += cirrus_vga.o
+obj-mips-$(CONFIG_FULONG) += bonito.o vt82c686.o mips_fulong2e.o
 
 obj-microblaze-y = petalogix_s3adsp1800_mmu.o
 
@@ -298,8 +299,10 @@ obj-arm-y += pxa2xx.o pxa2xx_pic.o pxa2xx_gpio.o pxa2xx_timer.o pxa2xx_dma.o
 obj-arm-y += pxa2xx_lcd.o pxa2xx_mmci.o pxa2xx_pcmcia.o pxa2xx_keypad.o
 obj-arm-y += gumstix.o
 obj-arm-y += zaurus.o ide/microdrive.o spitz.o tosa.o tc6393xb.o
-obj-arm-y += omap1.o omap_lcdc.o omap_dma.o omap_clk.o omap_mmc.o omap_i2c.o
-obj-arm-y += omap2.o omap_dss.o soc_dma.o
+obj-arm-y += omap1.o omap_lcdc.o omap_dma.o omap_clk.o omap_mmc.o omap_i2c.o \
+		omap_gpio.o omap_intc.o omap_uart.o
+obj-arm-y += omap2.o omap_dss.o soc_dma.o omap_gptimer.o omap_synctimer.o \
+		omap_gpmc.o omap_sdrc.o omap_spi.o omap_tap.o omap_l4.o
 obj-arm-y += omap_sx1.o palm.o tsc210x.o
 obj-arm-y += nseries.o blizzard.o onenand.o vga.o cbus.o tusb6010.o usb-musb.o
 obj-arm-y += mst_fpga.o mainstone.o

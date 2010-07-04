@@ -73,6 +73,7 @@ struct KVMState
 #endif
     int irqchip_in_kernel;
     int pit_in_kernel;
+    int xsave, xcrs;
 };
 
 static KVMState *kvm_state;
@@ -702,6 +703,16 @@ int kvm_init(int smp_cpus)
     s->debugregs = kvm_check_extension(s, KVM_CAP_DEBUGREGS);
 #endif
 
+    s->xsave = 0;
+#ifdef KVM_CAP_XSAVE
+    s->xsave = kvm_check_extension(s, KVM_CAP_XSAVE);
+#endif
+
+    s->xcrs = 0;
+#ifdef KVM_CAP_XCRS
+    s->xcrs = kvm_check_extension(s, KVM_CAP_XCRS);
+#endif
+
     ret = kvm_arch_init(s, smp_cpus);
     if (ret < 0)
         goto err;
@@ -1034,6 +1045,18 @@ int kvm_has_debugregs(void)
     return kvm_state->debugregs;
 }
 
+#ifdef KVM_UPSTREAM
+int kvm_has_xsave(void)
+{
+    return kvm_state->xsave;
+}
+
+int kvm_has_xcrs(void)
+{
+    return kvm_state->xcrs;
+}
+#endif
+
 void kvm_setup_guest_memory(void *start, size_t size)
 {
     if (!kvm_has_sync_mmu()) {
@@ -1053,18 +1076,8 @@ void kvm_setup_guest_memory(void *start, size_t size)
 }
 
 #ifdef KVM_CAP_SET_GUEST_DEBUG
-
-#ifdef KVM_UPSTREAM
-static void on_vcpu(CPUState *env, void (*func)(void *data), void *data)
-{
-#ifdef CONFIG_IOTHREAD
-    if (env != cpu_single_env) {
-        abort();
-    }
-#endif
-    func(data);
-}
-#else /* !KVM_UPSTREAM */
+#ifndef KVM_UPSTREAM
+#define run_on_cpu on_vcpu
 static void on_vcpu(CPUState *env, void (*func)(void *data), void *data);
 #endif /* !KVM_UPSTREAM */
 
@@ -1111,7 +1124,7 @@ int kvm_update_guest_debug(CPUState *env, unsigned long reinject_trap)
     kvm_arch_update_guest_debug(env, &data.dbg);
     data.env = env;
 
-    on_vcpu(env, kvm_invoke_set_guest_debug, &data);
+    run_on_cpu(env, kvm_invoke_set_guest_debug, &data);
     return data.err;
 }
 

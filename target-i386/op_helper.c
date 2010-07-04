@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, see <http://www.gnu.org/licenses/>.
  */
-#define CPU_NO_GLOBAL_REGS
+
 #include "exec.h"
 #include "exec-all.h"
 #include "host-utils.h"
@@ -5388,6 +5388,7 @@ void helper_vmexit(uint32_t exit_code, uint64_t exit_info_1)
              ldl_phys(env->vm_vmcb + offsetof(struct vmcb, control.event_inj)));
     stl_phys(env->vm_vmcb + offsetof(struct vmcb, control.exit_int_info_err),
              ldl_phys(env->vm_vmcb + offsetof(struct vmcb, control.event_inj_err)));
+    stl_phys(env->vm_vmcb + offsetof(struct vmcb, control.event_inj), 0);
 
     env->hflags2 &= ~HF2_GIF_MASK;
     /* FIXME: Resets the current ASID register to zero (host ASID). */
