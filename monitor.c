@@ -56,7 +56,6 @@
 #include "json-parser.h"
 #include "osdep.h"
 #include "exec-all.h"
-
 #include "qemu-kvm.h"
 
 //#define DEBUG
