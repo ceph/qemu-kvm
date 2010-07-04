@@ -73,6 +73,7 @@ struct KVMState
 #endif
     int irqchip_in_kernel;
     int pit_in_kernel;
+    int xsave, xcrs;
 };
 
 static KVMState *kvm_state;
@@ -702,6 +703,16 @@ int kvm_init(int smp_cpus)
     s->debugregs = kvm_check_extension(s, KVM_CAP_DEBUGREGS);
 #endif
 
+    s->xsave = 0;
+#ifdef KVM_CAP_XSAVE
+    s->xsave = kvm_check_extension(s, KVM_CAP_XSAVE);
+#endif
+
+    s->xcrs = 0;
+#ifdef KVM_CAP_XCRS
+    s->xcrs = kvm_check_extension(s, KVM_CAP_XCRS);
+#endif
+
     ret = kvm_arch_init(s, smp_cpus);
     if (ret < 0)
         goto err;
@@ -1033,6 +1044,18 @@ int kvm_has_debugregs(void)
 {
     return kvm_state->debugregs;
 }
+
+#ifdef KVM_UPSTREAM
+int kvm_has_xsave(void)
+{
+    return kvm_state->xsave;
+}
+
+int kvm_has_xcrs(void)
+{
+    return kvm_state->xcrs;
+}
+#endif
 
 void kvm_setup_guest_memory(void *start, size_t size)
 {

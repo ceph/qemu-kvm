@@ -470,6 +470,7 @@ static const VMStateDescription vmstate_cpu = {
         VMSTATE_UINT64_V(system_time_msr, CPUState, 11),
         VMSTATE_UINT64_V(wall_clock_msr, CPUState, 11),
 
+        /* XSAVE related fields */
         VMSTATE_UINT64_V(xcr0, CPUState, 12),
         VMSTATE_UINT64_V(xstate_bv, CPUState, 12),
         VMSTATE_YMMH_REGS_VARS(ymmh_regs, CPUState, CPU_NB_REGS, 12),
