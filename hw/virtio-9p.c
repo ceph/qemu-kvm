@@ -21,14 +21,63 @@
 int dotu = 1;
 int debug_9p_pdu;
 
+enum {
+    Oread   = 0x00,
+    Owrite  = 0x01,
+    Ordwr   = 0x02,
+    Oexec   = 0x03,
+    Oexcl   = 0x04,
+    Otrunc  = 0x10,
+    Orexec  = 0x20,
+    Orclose = 0x40,
+    Oappend = 0x80,
+};
+
+static int omode_to_uflags(int8_t mode)
+{
+    int ret = 0;
+
+    switch (mode & 3) {
+    case Oread:
+        ret = O_RDONLY;
+        break;
+    case Ordwr:
+        ret = O_RDWR;
+        break;
+    case Owrite:
+        ret = O_WRONLY;
+        break;
+    case Oexec:
+        ret = O_RDONLY;
+        break;
+    }
+
+    if (mode & Otrunc) {
+        ret |= O_TRUNC;
+    }
+
+    if (mode & Oappend) {
+        ret |= O_APPEND;
+    }
+
+    if (mode & Oexcl) {
+        ret |= O_EXCL;
+    }
+
+    return ret;
+}
+
+void cred_init(FsCred *credp)
+{
+    credp->fc_uid = -1;
+    credp->fc_gid = -1;
+    credp->fc_mode = -1;
+    credp->fc_rdev = -1;
+}
+
 static int v9fs_do_lstat(V9fsState *s, V9fsString *path, struct stat *stbuf)
 {
     return s->ops->lstat(&s->ctx, path->data, stbuf);
-}
-
-static int v9fs_do_setuid(V9fsState *s, uid_t uid)
-{
-    return s->ops->setuid(&s->ctx, uid);
 }
 
 static ssize_t v9fs_do_readlink(V9fsState *s, V9fsString *path, V9fsString *buf)
@@ -302,7 +351,6 @@ static V9fsFidState *lookup_fid(V9fsState *s, int32_t fid)
 
     for (f = s->fid_list; f; f = f->next) {
         if (f->fid == fid) {
-            v9fs_do_setuid(s, f->uid);
             return f;
         }
     }
@@ -995,14 +1043,6 @@ out:
     v9fs_string_free(&aname);
 }
 
-typedef struct V9fsStatState {
-    V9fsPDU *pdu;
-    size_t offset;
-    V9fsStat v9stat;
-    V9fsFidState *fidp;
-    struct stat stbuf;
-} V9fsStatState;
-
 static void v9fs_stat_post_lstat(V9fsState *s, V9fsStatState *vs, int err)
 {
     if (err == -1) {
@@ -1052,19 +1092,6 @@ out:
     v9fs_stat_free(&vs->v9stat);
     qemu_free(vs);
 }
-
-typedef struct V9fsWalkState {
-    V9fsPDU *pdu;
-    size_t offset;
-    int16_t nwnames;
-    int name_idx;
-    V9fsQID *qids;
-    V9fsFidState *fidp;
-    V9fsFidState *newfidp;
-    V9fsString path;
-    V9fsString *wnames;
-    struct stat stbuf;
-} V9fsWalkState;
 
 static void v9fs_walk_complete(V9fsState *s, V9fsWalkState *vs, int err)
 {
@@ -1229,62 +1256,6 @@ out:
     v9fs_walk_complete(s, vs, err);
 }
 
-typedef struct V9fsOpenState {
-    V9fsPDU *pdu;
-    size_t offset;
-    int8_t mode;
-    V9fsFidState *fidp;
-    V9fsQID qid;
-    struct stat stbuf;
-
-} V9fsOpenState;
-
-enum {
-    Oread   = 0x00,
-    Owrite  = 0x01,
-    Ordwr   = 0x02,
-    Oexec   = 0x03,
-    Oexcl   = 0x04,
-    Otrunc  = 0x10,
-    Orexec  = 0x20,
-    Orclose = 0x40,
-    Oappend = 0x80,
-};
-
-static int omode_to_uflags(int8_t mode)
-{
-    int ret = 0;
-
-    switch (mode & 3) {
-    case Oread:
-        ret = O_RDONLY;
-        break;
-    case Ordwr:
-        ret = O_RDWR;
-        break;
-    case Owrite:
-        ret = O_WRONLY;
-        break;
-    case Oexec:
-        ret = O_RDONLY;
-        break;
-    }
-
-    if (mode & Otrunc) {
-        ret |= O_TRUNC;
-    }
-
-    if (mode & Oappend) {
-        ret |= O_APPEND;
-    }
-
-    if (mode & Oexcl) {
-        ret |= O_EXCL;
-    }
-
-    return ret;
-}
-
 static void v9fs_open_post_opendir(V9fsState *s, V9fsOpenState *vs, int err)
 {
     if (vs->fidp->dir == NULL) {
@@ -1386,25 +1357,6 @@ static void v9fs_clunk(V9fsState *s, V9fsPDU *pdu)
 out:
     complete_pdu(s, pdu, err);
 }
-
-typedef struct V9fsReadState {
-    V9fsPDU *pdu;
-    size_t offset;
-    int32_t count;
-    int32_t total;
-    int64_t off;
-    V9fsFidState *fidp;
-    struct iovec iov[128]; /* FIXME: bad, bad, bad */
-    struct iovec *sg;
-    off_t dir_pos;
-    struct dirent *dent;
-    struct stat stbuf;
-    V9fsString name;
-    V9fsStat v9stat;
-    int32_t len;
-    int32_t cnt;
-    int32_t max_count;
-} V9fsReadState;
 
 static void v9fs_read_post_readdir(V9fsState *, V9fsReadState *, ssize_t);
 
@@ -1593,19 +1545,6 @@ out:
     qemu_free(vs);
 }
 
-typedef struct V9fsWriteState {
-    V9fsPDU *pdu;
-    size_t offset;
-    int32_t len;
-    int32_t count;
-    int32_t total;
-    int64_t off;
-    V9fsFidState *fidp;
-    struct iovec iov[128]; /* FIXME: bad, bad, bad */
-    struct iovec *sg;
-    int cnt;
-} V9fsWriteState;
-
 static void v9fs_write_post_writev(V9fsState *s, V9fsWriteState *vs,
                                    ssize_t err)
 {
@@ -1701,19 +1640,6 @@ out:
     complete_pdu(s, vs->pdu, err);
     qemu_free(vs);
 }
-
-typedef struct V9fsCreateState {
-    V9fsPDU *pdu;
-    size_t offset;
-    V9fsFidState *fidp;
-    V9fsQID qid;
-    int32_t perm;
-    int8_t mode;
-    struct stat stbuf;
-    V9fsString name;
-    V9fsString extension;
-    V9fsString fullname;
-} V9fsCreateState;
 
 static void v9fs_post_create(V9fsState *s, V9fsCreateState *vs, int err)
 {
@@ -1934,12 +1860,6 @@ static void v9fs_flush(V9fsState *s, V9fsPDU *pdu)
     complete_pdu(s, pdu, 7);
 }
 
-typedef struct V9fsRemoveState {
-    V9fsPDU *pdu;
-    size_t offset;
-    V9fsFidState *fidp;
-} V9fsRemoveState;
-
 static void v9fs_remove_post_remove(V9fsState *s, V9fsRemoveState *vs,
                                                                 int err)
 {
@@ -1981,17 +1901,6 @@ out:
     complete_pdu(s, pdu, err);
     qemu_free(vs);
 }
-
-typedef struct V9fsWstatState
-{
-    V9fsPDU *pdu;
-    size_t offset;
-    int16_t unused;
-    V9fsStat v9stat;
-    V9fsFidState *fidp;
-    struct stat stbuf;
-    V9fsString nname;
-} V9fsWstatState;
 
 static void v9fs_wstat_post_truncate(V9fsState *s, V9fsWstatState *vs, int err)
 {
@@ -2344,6 +2253,22 @@ VirtIODevice *virtio_9p_init(DeviceState *dev, V9fsConf *conf)
                 "and Virtio-9p device needs mount_tag arguments\n",
                 conf->fsdev_id);
         exit(1);
+    }
+
+    if (!strcmp(fse->security_model, "passthrough")) {
+        /* Files on the Fileserver set to client user credentials */
+        s->ctx.fs_sm = SM_PASSTHROUGH;
+    } else if (!strcmp(fse->security_model, "mapped")) {
+        /* Files on the fileserver are set to QEMU credentials.
+         * Client user credentials are saved in extended attributes.
+         */
+        s->ctx.fs_sm = SM_MAPPED;
+    } else {
+        /* user haven't specified a correct security option */
+        fprintf(stderr, "one of the following must be specified as the"
+                "security option:\n\t security_model=passthrough \n\t "
+                "security_model=mapped\n");
+        return NULL;
     }
 
     if (lstat(fse->path, &stat)) {
