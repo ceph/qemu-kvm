@@ -154,22 +154,32 @@ static int v9fs_do_writev(V9fsState *s, int fd, const struct iovec *iov,
 
 static int v9fs_do_chmod(V9fsState *s, V9fsString *path, mode_t mode)
 {
-    return s->ops->chmod(&s->ctx, path->data, mode);
+    FsCred cred;
+    cred_init(&cred);
+    cred.fc_mode = mode;
+    return s->ops->chmod(&s->ctx, path->data, &cred);
 }
 
-static int v9fs_do_mknod(V9fsState *s, V9fsString *path, mode_t mode, dev_t dev)
+static int v9fs_do_mknod(V9fsState *s, V9fsCreateState *vs, mode_t mode,
+        dev_t dev)
 {
-    return s->ops->mknod(&s->ctx, path->data, mode, dev);
+    FsCred cred;
+    cred_init(&cred);
+    cred.fc_uid = vs->fidp->uid;
+    cred.fc_mode = mode;
+    cred.fc_rdev = dev;
+    return s->ops->mknod(&s->ctx, vs->fullname.data, &cred);
 }
 
-static int v9fs_do_mksock(V9fsState *s, V9fsString *path)
+static int v9fs_do_mkdir(V9fsState *s, V9fsCreateState *vs)
 {
-    return s->ops->mksock(&s->ctx, path->data);
-}
+    FsCred cred;
 
-static int v9fs_do_mkdir(V9fsState *s, V9fsString *path, mode_t mode)
-{
-    return s->ops->mkdir(&s->ctx, path->data, mode);
+    cred_init(&cred);
+    cred.fc_uid = vs->fidp->uid;
+    cred.fc_mode = vs->perm & 0777;
+
+    return s->ops->mkdir(&s->ctx, vs->fullname.data, &cred);
 }
 
 static int v9fs_do_fstat(V9fsState *s, int fd, struct stat *stbuf)
@@ -177,15 +187,28 @@ static int v9fs_do_fstat(V9fsState *s, int fd, struct stat *stbuf)
     return s->ops->fstat(&s->ctx, fd, stbuf);
 }
 
-static int v9fs_do_open2(V9fsState *s, V9fsString *path, int flags, mode_t mode)
+static int v9fs_do_open2(V9fsState *s, V9fsCreateState *vs)
 {
-    return s->ops->open2(&s->ctx, path->data, flags, mode);
+    FsCred cred;
+    int flags;
+
+    cred_init(&cred);
+    cred.fc_uid = vs->fidp->uid;
+    cred.fc_mode = vs->perm & 0777;
+    flags = omode_to_uflags(vs->mode) | O_CREAT;
+
+    return s->ops->open2(&s->ctx, vs->fullname.data, flags, &cred);
 }
 
-static int v9fs_do_symlink(V9fsState *s, V9fsString *oldpath,
-                            V9fsString *newpath)
+static int v9fs_do_symlink(V9fsState *s, V9fsCreateState *vs)
 {
-    return s->ops->symlink(&s->ctx, oldpath->data, newpath->data);
+    FsCred cred;
+    cred_init(&cred);
+    cred.fc_uid = vs->fidp->uid;
+    cred.fc_mode = vs->perm | 0777;
+
+    return s->ops->symlink(&s->ctx, vs->extension.data, vs->fullname.data,
+            &cred);
 }
 
 static int v9fs_do_link(V9fsState *s, V9fsString *oldpath, V9fsString *newpath)
@@ -206,7 +229,12 @@ static int v9fs_do_rename(V9fsState *s, V9fsString *oldpath,
 
 static int v9fs_do_chown(V9fsState *s, V9fsString *path, uid_t uid, gid_t gid)
 {
-    return s->ops->chown(&s->ctx, path->data, uid, gid);
+    FsCred cred;
+    cred_init(&cred);
+    cred.fc_uid = uid;
+    cred.fc_gid = gid;
+
+    return s->ops->chown(&s->ctx, path->data, &cred);
 }
 
 static int v9fs_do_utime(V9fsState *s, V9fsString *path,
@@ -1707,22 +1735,6 @@ out:
     v9fs_post_create(s, vs, err);
 }
 
-static void v9fs_create_post_mksock(V9fsState *s, V9fsCreateState *vs,
-                                                                int err)
-{
-    if (err) {
-        err = -errno;
-        goto out;
-    }
-
-    err = v9fs_do_chmod(s, &vs->fullname, vs->perm & 0777);
-    v9fs_create_post_perms(s, vs, err);
-    return;
-
-out:
-    v9fs_post_create(s, vs, err);
-}
-
 static void v9fs_create_post_fstat(V9fsState *s, V9fsCreateState *vs, int err)
 {
     if (err) {
@@ -1760,10 +1772,10 @@ static void v9fs_create_post_lstat(V9fsState *s, V9fsCreateState *vs, int err)
     }
 
     if (vs->perm & P9_STAT_MODE_DIR) {
-        err = v9fs_do_mkdir(s, &vs->fullname, vs->perm & 0777);
+        err = v9fs_do_mkdir(s, vs);
         v9fs_create_post_mkdir(s, vs, err);
     } else if (vs->perm & P9_STAT_MODE_SYMLINK) {
-        err = v9fs_do_symlink(s, &vs->extension, &vs->fullname);
+        err = v9fs_do_symlink(s, vs);
         v9fs_create_post_perms(s, vs, err);
     } else if (vs->perm & P9_STAT_MODE_LINK) {
         int32_t nfid = atoi(vs->extension.data);
@@ -1798,18 +1810,16 @@ static void v9fs_create_post_lstat(V9fsState *s, V9fsCreateState *vs, int err)
         }
 
         nmode |= vs->perm & 0777;
-        err = v9fs_do_mknod(s, &vs->fullname, nmode, makedev(major, minor));
+        err = v9fs_do_mknod(s, vs, nmode, makedev(major, minor));
         v9fs_create_post_perms(s, vs, err);
     } else if (vs->perm & P9_STAT_MODE_NAMED_PIPE) {
-        err = v9fs_do_mknod(s, &vs->fullname, S_IFIFO | (vs->mode & 0777), 0);
+        err = v9fs_do_mknod(s, vs, S_IFIFO | (vs->perm & 0777), 0);
         v9fs_post_create(s, vs, err);
     } else if (vs->perm & P9_STAT_MODE_SOCKET) {
-        err = v9fs_do_mksock(s, &vs->fullname);
-        v9fs_create_post_mksock(s, vs, err);
+        err = v9fs_do_mknod(s, vs, S_IFSOCK | (vs->perm & 0777), 0);
+        v9fs_post_create(s, vs, err);
     } else {
-        vs->fidp->fd = v9fs_do_open2(s, &vs->fullname,
-                                omode_to_uflags(vs->mode) | O_CREAT,
-                                vs->perm & 0777);
+        vs->fidp->fd = v9fs_do_open2(s, vs);
         v9fs_create_post_open2(s, vs, err);
     }
 
@@ -2011,7 +2021,7 @@ static void v9fs_wstat_post_utime(V9fsState *s, V9fsWstatState *vs, int err)
         goto out;
     }
 
-    if (vs->v9stat.n_gid != -1) {
+    if (vs->v9stat.n_gid != -1 || vs->v9stat.n_uid != -1) {
         if (v9fs_do_chown(s, &vs->fidp->path, vs->v9stat.n_uid,
                     vs->v9stat.n_gid)) {
             err = -errno;
