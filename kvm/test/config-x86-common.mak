@@ -65,6 +65,9 @@ $(TEST_DIR)/idt_test.flat: $(cstart.o) $(TEST_DIR)/idt.o $(TEST_DIR)/idt_test.o
 
 $(TEST_DIR)/xsave.flat: $(cstart.o) $(TEST_DIR)/idt.o $(TEST_DIR)/xsave.o
 
+$(TEST_DIR)/rmap_chain.flat: $(cstart.o) $(TEST_DIR)/rmap_chain.o \
+			     $(TEST_DIR)/print.o $(TEST_DIR)/vm.o
+
 arch_clean:
 	$(RM) $(TEST_DIR)/*.o $(TEST_DIR)/*.flat \
 	$(TEST_DIR)/.*.d $(TEST_DIR)/lib/.*.d $(TEST_DIR)/lib/*.o
