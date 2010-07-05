@@ -1,4 +1,7 @@
 #include "fwcfg.h"
+#include "smp.h"
+
+static struct spinlock lock;
 
 uint64_t fwcfg_get_u(uint16_t index, int bytes)
 {
@@ -6,11 +9,13 @@ uint64_t fwcfg_get_u(uint16_t index, int bytes)
     uint8_t b;
     int i;
 
+    spin_lock(&lock);
     asm volatile ("out %0, %1" : : "a"(index), "d"((uint16_t)BIOS_CFG_IOPORT));
     for (i = 0; i < bytes; ++i) {
         asm volatile ("in %1, %0" : "=a"(b) : "d"((uint16_t)(BIOS_CFG_IOPORT + 1)));
         r |= (uint64_t)b << (i * 8);
     }
+    spin_unlock(&lock);
     return r;
 }
 
