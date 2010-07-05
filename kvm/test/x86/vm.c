@@ -14,16 +14,6 @@
 static void *free = 0;
 static void *vfree_top = 0;
 
-static unsigned long virt_to_phys(const void *virt) 
-{ 
-    return (unsigned long)virt;
-}
-
-static void *phys_to_virt(unsigned long phys)
-{
-    return (void *)phys;
-}
-
 void *memset(void *data, int c, unsigned long len)
 {
     char *s = data;
@@ -66,11 +56,6 @@ void free_page(void *page)
 extern char edata;
 static unsigned long end_of_memory;
 
-#define PTE_PRESENT (1ull << 0)
-#define PTE_PSE     (1ull << 7)
-#define PTE_WRITE   (1ull << 1)
-#define PTE_ADDR    (0xffffffffff000ull)
-
 #ifdef __x86_64__
 #define	PAGE_LEVEL	4
 #define	PGDIR_WIDTH	9
@@ -81,10 +66,11 @@ static unsigned long end_of_memory;
 #define	PGDIR_MASK	1023
 #endif
 
-static void install_pte(unsigned long *cr3, 
-			int pte_level, 
-			void *virt,
-			unsigned long pte)
+void install_pte(unsigned long *cr3,
+		 int pte_level,
+		 void *virt,
+		 unsigned long pte,
+		 unsigned long *pt_page)
 {
     int level;
     unsigned long *pt = cr3;
@@ -93,7 +79,11 @@ static void install_pte(unsigned long *cr3,
     for (level = PAGE_LEVEL; level > pte_level; --level) {
 	offset = ((unsigned long)virt >> ((level-1) * PGDIR_WIDTH + 12)) & PGDIR_MASK;
 	if (!(pt[offset] & PTE_PRESENT)) {
-	    unsigned long *new_pt = alloc_page();
+	    unsigned long *new_pt = pt_page;
+            if (!new_pt)
+                new_pt = alloc_page();
+            else
+                pt_page = 0;
 	    memset(new_pt, 0, PAGE_SIZE);
 	    pt[offset] = virt_to_phys(new_pt) | PTE_PRESENT | PTE_WRITE;
 	}
@@ -123,58 +113,20 @@ static unsigned long get_pte(unsigned long *cr3, void *virt)
     return pte;
 }
 
-static void install_large_page(unsigned long *cr3, 
-			       unsigned long phys,
-			       void *virt)
+void install_large_page(unsigned long *cr3,
+                              unsigned long phys,
+                              void *virt)
 {
-    install_pte(cr3, 2, virt, phys | PTE_PRESENT | PTE_WRITE | PTE_PSE);
+    install_pte(cr3, 2, virt, phys | PTE_PRESENT | PTE_WRITE | PTE_PSE, 0);
 }
 
-static void install_page(unsigned long *cr3, 
-			 unsigned long phys,
-			 void *virt)
+void install_page(unsigned long *cr3,
+                  unsigned long phys,
+                  void *virt)
 {
-    install_pte(cr3, 1, virt, phys | PTE_PRESENT | PTE_WRITE);
+    install_pte(cr3, 1, virt, phys | PTE_PRESENT | PTE_WRITE, 0);
 }
 
-static inline void load_cr3(unsigned long cr3)
-{
-    asm ( "mov %0, %%cr3" : : "r"(cr3) );
-}
-
-static inline unsigned long read_cr3()
-{
-    unsigned long cr3;
-
-    asm volatile ( "mov %%cr3, %0" : "=r"(cr3) );
-    return cr3;
-}
-
-static inline void load_cr0(unsigned long cr0)
-{
-    asm volatile ( "mov %0, %%cr0" : : "r"(cr0) );
-}
-
-static inline unsigned long read_cr0()
-{
-    unsigned long cr0;
-
-    asm volatile ( "mov %%cr0, %0" : "=r"(cr0) );
-    return cr0;
-}
-
-static inline void load_cr4(unsigned long cr4)
-{
-    asm volatile ( "mov %0, %%cr4" : : "r"(cr4) );
-}
-
-static inline unsigned long read_cr4()
-{
-    unsigned long cr4;
-
-    asm volatile ( "mov %%cr4, %0" : "=r"(cr4) );
-    return cr4;
-}
 
 struct gdt_table_descr
 {

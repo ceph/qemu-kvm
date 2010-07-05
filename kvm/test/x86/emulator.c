@@ -220,14 +220,6 @@ jmpf:
     report("ljmp", res);
 }
 
-unsigned long read_cr0(void)
-{
-	unsigned long cr0;
-
-	asm volatile ("mov %%cr0, %0" : "=r"(cr0));
-	return cr0;
-}
-
 void test_smsw(void)
 {
 	char mem[16];
