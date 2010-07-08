@@ -694,6 +694,7 @@ again:
 
         rp = dev->regions + r;
         rp->valid = 0;
+        rp->resource_fd = -1;
         size = end - start + 1;
         flags &= IORESOURCE_IO | IORESOURCE_MEM | IORESOURCE_PREFETCH;
         if (size == 0 || (flags & ~IORESOURCE_PREFETCH) == 0)
@@ -785,7 +786,9 @@ static void free_assigned_device(AssignedDevice *dev)
                         fprintf(stderr,
 				"Failed to unmap assigned device region: %s\n",
 				strerror(errno));
-                    close(pci_region->resource_fd);
+                    if (pci_region->resource_fd >= 0) {
+                        close(pci_region->resource_fd);
+                    }
                 }
 	    }
         }
@@ -793,9 +796,8 @@ static void free_assigned_device(AssignedDevice *dev)
         if (dev->cap.available & ASSIGNED_DEVICE_CAP_MSIX)
             assigned_dev_unregister_msix_mmio(dev);
 
-        if (dev->real_device.config_fd) {
+        if (dev->real_device.config_fd >= 0) {
             close(dev->real_device.config_fd);
-            dev->real_device.config_fd = 0;
         }
 
 #ifdef KVM_CAP_IRQ_ROUTING
@@ -1415,7 +1417,7 @@ static int assigned_initfn(struct PCIDevice *pci_dev)
 
     if (!dev->host.seg && !dev->host.bus && !dev->host.dev && !dev->host.func) {
         error_report("pci-assign: error: no host device specified");
-        goto out;
+        return -1;
     }
 
     if (get_real_device(dev, dev->host.seg, dev->host.bus,
