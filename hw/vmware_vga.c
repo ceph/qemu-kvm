@@ -1164,12 +1164,12 @@ static void vmsvga_init(struct vmsvga_state_s *s, int vga_ram_size)
 
 
     s->fifo_size = SVGA_FIFO_SIZE;
-    s->fifo_offset = qemu_ram_alloc(s->fifo_size);
+    s->fifo_offset = qemu_ram_alloc(NULL, "vmsvga.fifo", s->fifo_size);
     s->fifo_ptr = qemu_get_ram_ptr(s->fifo_offset);
 
     vga_common_init(&s->vga, vga_ram_size);
     vga_init(&s->vga);
-    vmstate_register(0, &vmstate_vga_common, &s->vga);
+    vmstate_register(NULL, 0, &vmstate_vga_common, &s->vga);
 
     vga_init_vbe(&s->vga);
 
@@ -1240,13 +1240,9 @@ static int pci_vmsvga_initfn(PCIDevice *dev)
 
     pci_config_set_vendor_id(s->card.config, PCI_VENDOR_ID_VMWARE);
     pci_config_set_device_id(s->card.config, SVGA_PCI_DEVICE_ID);
-    s->card.config[PCI_COMMAND]	= PCI_COMMAND_IO |
-                                  PCI_COMMAND_MEMORY |
-                                  PCI_COMMAND_MASTER; /* I/O + Memory */
     pci_config_set_class(s->card.config, PCI_CLASS_DISPLAY_VGA);
     s->card.config[PCI_CACHE_LINE_SIZE]	= 0x08;		/* Cache line size */
     s->card.config[PCI_LATENCY_TIMER] = 0x40;		/* Latency timer */
-    s->card.config[PCI_HEADER_TYPE] = PCI_HEADER_TYPE_NORMAL;
     s->card.config[PCI_SUBSYSTEM_VENDOR_ID] = PCI_VENDOR_ID_VMWARE & 0xff;
     s->card.config[PCI_SUBSYSTEM_VENDOR_ID + 1]	= PCI_VENDOR_ID_VMWARE >> 8;
     s->card.config[PCI_SUBSYSTEM_ID] = SVGA_PCI_DEVICE_ID & 0xff;

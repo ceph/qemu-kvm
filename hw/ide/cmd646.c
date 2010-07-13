@@ -240,7 +240,6 @@ static int pci_cmd646_ide_initfn(PCIDevice *dev)
     pci_conf[PCI_CLASS_PROG] = 0x8f;
 
     pci_config_set_class(pci_conf, PCI_CLASS_STORAGE_IDE);
-    pci_conf[PCI_HEADER_TYPE] = PCI_HEADER_TYPE_NORMAL; // header_type
 
     pci_conf[0x51] = 0x04; // enable IDE0
     if (d->secondary) {
@@ -263,7 +262,7 @@ static int pci_cmd646_ide_initfn(PCIDevice *dev)
     ide_init2(&d->bus[0], irq[0]);
     ide_init2(&d->bus[1], irq[1]);
 
-    vmstate_register(0, &vmstate_ide_pci, d);
+    vmstate_register(&dev->qdev, 0, &vmstate_ide_pci, d);
     qemu_register_reset(cmd646_reset, d);
     return 0;
 }

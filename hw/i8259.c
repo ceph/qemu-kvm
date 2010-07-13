@@ -526,7 +526,7 @@ static void pic_init1(int io_addr, int elcr_addr, PicState *s)
         register_ioport_write(elcr_addr, 1, 1, elcr_ioport_write, s);
         register_ioport_read(elcr_addr, 1, 1, elcr_ioport_read, s);
     }
-    vmstate_register(io_addr, &vmstate_pic, s);
+    vmstate_register(NULL, io_addr, &vmstate_pic, s);
     qemu_register_reset(pic_reset, s);
 }
 
@@ -658,7 +658,7 @@ static void kvm_i8259_set_irq(void *opaque, int irq, int level)
 
 static void kvm_pic_init1(int io_addr, PicState *s)
 {
-    vmstate_register(io_addr, &vmstate_pic, s);
+    vmstate_register(NULL, io_addr, &vmstate_pic, s);
     qemu_register_reset(pic_reset, s);
 }
 

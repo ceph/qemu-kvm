@@ -40,8 +40,10 @@ static inline void cpu_register_physical_memory(target_phys_addr_t start_addr,
 }
 
 ram_addr_t cpu_get_physical_page_desc(target_phys_addr_t addr);
-ram_addr_t qemu_ram_map(ram_addr_t size, void *host);
-ram_addr_t qemu_ram_alloc(ram_addr_t);
+ram_addr_t qemu_ram_map(DeviceState *dev, const char *name,
+                        ram_addr_t size, void *host);
+ram_addr_t qemu_ram_alloc(DeviceState *dev, const char *name, ram_addr_t size);
+void qemu_ram_unmap(ram_addr_t addr);
 void qemu_ram_free(ram_addr_t addr);
 /* This should only be used for ram local to a device.  */
 void *qemu_get_ram_ptr(ram_addr_t addr);

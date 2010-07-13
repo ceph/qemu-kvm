@@ -114,7 +114,7 @@ PITState *kvm_pit_init(int base, qemu_irq irq)
     s->irq_timer = qemu_new_timer(vm_clock, dummy_timer, s);
     vmstate_pit.pre_save = kvm_pit_pre_save;
     vmstate_pit.post_load = kvm_pit_post_load;
-    vmstate_register(base, &vmstate_pit, pit);
+    vmstate_register(NULL, base, &vmstate_pit, pit);
     qemu_register_reset(pit_reset, pit);
     pit_reset(pit);
 

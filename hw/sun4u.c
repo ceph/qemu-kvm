@@ -562,7 +562,6 @@ pci_ebus_init1(PCIDevice *s)
     s->config[0x09] = 0x00; // programming i/f
     pci_config_set_class(s->config, PCI_CLASS_BRIDGE_OTHER);
     s->config[0x0D] = 0x0a; // latency_timer
-    s->config[PCI_HEADER_TYPE] = PCI_HEADER_TYPE_NORMAL; // header_type
 
     pci_register_bar(s, 0, 0x1000000, PCI_BASE_ADDRESS_SPACE_MEMORY,
                            ebus_mmio_mapfunc);
@@ -629,7 +628,7 @@ static int prom_init1(SysBusDevice *dev)
 {
     ram_addr_t prom_offset;
 
-    prom_offset = qemu_ram_alloc(PROM_SIZE_MAX);
+    prom_offset = qemu_ram_alloc(NULL, "sun4u.prom", PROM_SIZE_MAX);
     sysbus_init_mmio(dev, PROM_SIZE_MAX, prom_offset | IO_MEM_ROM);
     return 0;
 }
@@ -665,7 +664,7 @@ static int ram_init1(SysBusDevice *dev)
 
     RAM_size = d->size;
 
-    ram_offset = qemu_ram_alloc(RAM_size);
+    ram_offset = qemu_ram_alloc(NULL, "sun4u.ram", RAM_size);
     sysbus_init_mmio(dev, RAM_size, ram_offset);
     return 0;
 }

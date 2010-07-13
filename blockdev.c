@@ -19,6 +19,29 @@ DriveInfo *extboot_drive = NULL;
 
 static QTAILQ_HEAD(drivelist, DriveInfo) drives = QTAILQ_HEAD_INITIALIZER(drives);
 
+/*
+ * We automatically delete the drive when a device using it gets
+ * unplugged.  Questionable feature, but we can't just drop it.
+ * Device models call blockdev_mark_auto_del() to schedule the
+ * automatic deletion, and generic qdev code calls blockdev_auto_del()
+ * when deletion is actually safe.
+ */
+void blockdev_mark_auto_del(BlockDriverState *bs)
+{
+    DriveInfo *dinfo = drive_get_by_blockdev(bs);
+
+    dinfo->auto_del = 1;
+}
+
+void blockdev_auto_del(BlockDriverState *bs)
+{
+    DriveInfo *dinfo = drive_get_by_blockdev(bs);
+
+    if (dinfo->auto_del) {
+        drive_uninit(dinfo);
+    }
+}
+
 QemuOpts *drive_add(const char *file, const char *fmt, ...)
 {
     va_list ap;
@@ -54,18 +77,6 @@ DriveInfo *drive_get(BlockInterfaceType type, int bus, int unit)
     return NULL;
 }
 
-DriveInfo *drive_get_by_id(const char *id)
-{
-    DriveInfo *dinfo;
-
-    QTAILQ_FOREACH(dinfo, &drives, next) {
-        if (strcmp(id, dinfo->id))
-            continue;
-        return dinfo;
-    }
-    return NULL;
-}
-
 int drive_get_max_bus(BlockInterfaceType type)
 {
     int max_bus;
@@ -80,16 +91,16 @@ int drive_get_max_bus(BlockInterfaceType type)
     return max_bus;
 }
 
-const char *drive_get_serial(BlockDriverState *bdrv)
+DriveInfo *drive_get_by_blockdev(BlockDriverState *bs)
 {
     DriveInfo *dinfo;
 
     QTAILQ_FOREACH(dinfo, &drives, next) {
-        if (dinfo->bdrv == bdrv)
-            return dinfo->serial;
+        if (dinfo->bdrv == bs) {
+            return dinfo;
+        }
     }
-
-    return "\0";
+    return NULL;
 }
 
 static void bdrv_format_print(void *opaque, const char *name)
@@ -534,7 +545,7 @@ static int eject_device(Monitor *mon, BlockDriverState *bs, int force)
 int do_eject(Monitor *mon, const QDict *qdict, QObject **ret_data)
 {
     BlockDriverState *bs;
-    int force = qdict_get_int(qdict, "force");
+    int force = qdict_get_try_bool(qdict, "force", 0);
     const char *filename = qdict_get_str(qdict, "device");
 
     bs = bdrv_find(filename);
@@ -591,7 +602,7 @@ int do_change_block(Monitor *mon, const char *device,
     if (eject_device(mon, bs, 0) < 0) {
         return -1;
     }
-    bdrv_flags = bdrv_get_type_hint(bs) == BDRV_TYPE_CDROM ? 0 : BDRV_O_RDWR;
+    bdrv_flags = bdrv_is_read_only(bs) ? 0 : BDRV_O_RDWR;
     if (bdrv_open(bs, filename, bdrv_flags, drv) < 0) {
         qerror_report(QERR_OPEN_FILE_FAILED, filename);
         return -1;

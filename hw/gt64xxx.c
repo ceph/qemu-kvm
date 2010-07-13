@@ -1115,7 +1115,7 @@ PCIBus *pci_gt64120_init(qemu_irq *pic)
 
     s->pci->bus = pci_register_bus(NULL, "pci",
                                    pci_gt64120_set_irq, pci_gt64120_map_irq,
-                                   pic, 144, 4);
+                                   pic, PCI_DEVFN(18, 0), 4);
     s->ISD_handle = cpu_register_io_memory(gt64120_read, gt64120_write, s);
     d = pci_register_device(s->pci->bus, "GT64120 PCI Bus", sizeof(PCIDevice),
                             0, NULL, NULL);
@@ -1146,7 +1146,8 @@ PCIBus *pci_gt64120_init(qemu_irq *pic)
 
     gt64120_reset(s);
 
-    register_savevm("GT64120 PCI Bus", 0, 1, gt64120_save, gt64120_load, d);
+    register_savevm(&d->qdev, "GT64120 PCI Bus", 0, 1,
+                    gt64120_save, gt64120_load, d);
 
     return s->pci->bus;
 }

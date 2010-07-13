@@ -598,7 +598,7 @@ int kvm_arch_qemu_create_context(void)
 
 #ifdef KVM_CAP_ADJUST_CLOCK
     if (kvm_check_extension(kvm_state, KVM_CAP_ADJUST_CLOCK))
-        vmstate_register(0, &vmstate_kvmclock, &kvmclock_data);
+        vmstate_register(NULL, 0, &vmstate_kvmclock, &kvmclock_data);
 #endif
 
     r = kvm_set_boot_cpu_id(0);

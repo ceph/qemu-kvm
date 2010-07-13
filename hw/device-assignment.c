@@ -571,9 +571,13 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
 
             if (!slow_map) {
                 void *virtbase = pci_dev->v_addrs[i].u.r_virtbase;
-
-                pci_dev->v_addrs[i].memory_index = qemu_ram_map(cur_region->size,
-                                                                virtbase);
+                char name[32];
+                snprintf(name, sizeof(name), "%s.bar%d",
+                         pci_dev->dev.qdev.info->name, i);
+                pci_dev->v_addrs[i].memory_index =
+                                            qemu_ram_map(&pci_dev->dev.qdev,
+                                                         name, cur_region->size,
+                                                         virtbase);
             } else
                 pci_dev->v_addrs[i].memory_index = 0;
 
@@ -780,9 +784,14 @@ static void free_assigned_device(AssignedDevice *dev)
                 continue;
             } else if (pci_region->type & IORESOURCE_MEM) {
                 if (region->u.r_virtbase) {
-                    int ret = munmap(region->u.r_virtbase,
-                                     (pci_region->size + 0xFFF) & 0xFFFFF000);
-                    if (ret != 0)
+                    if (region->memory_index) {
+                        cpu_register_physical_memory(region->e_physbase,
+                                                     region->e_size,
+                                                     IO_MEM_UNASSIGNED);
+                        qemu_ram_unmap(region->memory_index);
+                    }
+                    if (munmap(region->u.r_virtbase,
+                               (pci_region->size + 0xFFF) & 0xFFFFF000))
                         fprintf(stderr,
 				"Failed to unmap assigned device region: %s\n",
 				strerror(errno));
