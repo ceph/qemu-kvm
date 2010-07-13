@@ -61,11 +61,13 @@ struct PCIBus {
 };
 
 static void pcibus_dev_print(Monitor *mon, DeviceState *dev, int indent);
+static char *pcibus_get_dev_path(DeviceState *dev);
 
 static struct BusInfo pci_bus_info = {
     .name       = "PCI",
     .size       = sizeof(PCIBus),
     .print_dev  = pcibus_dev_print,
+    .get_dev_path = pcibus_get_dev_path,
     .props      = (Property[]) {
         DEFINE_PROP_PCI_DEVFN("addr", PCIDevice, devfn, -1),
         DEFINE_PROP_STRING("romfile", PCIDevice, romfile),
@@ -233,7 +235,7 @@ void pci_bus_new_inplace(PCIBus *bus, DeviceState *parent,
     QLIST_INIT(&bus->child);
     pci_host_bus_register(0, bus); /* for now only pci domain 0 is supported */
 
-    vmstate_register(-1, &vmstate_pcibus, bus);
+    vmstate_register(NULL, -1, &vmstate_pcibus, bus);
     qemu_register_reset(pci_bus_reset, bus);
 }
 
@@ -2027,6 +2029,18 @@ static void pcibus_dev_print(Monitor *mon, DeviceState *dev, int indent)
                        i, r->type & PCI_BASE_ADDRESS_SPACE_IO ? "i/o" : "mem",
                        r->addr, r->addr + r->size - 1);
     }
+}
+
+static char *pcibus_get_dev_path(DeviceState *dev)
+{
+    PCIDevice *d = (PCIDevice *)dev;
+    char path[16];
+
+    snprintf(path, sizeof(path), "%04x:%02x:%02x.%x",
+             pci_find_domain(d->bus), d->config[PCI_SECONDARY_BUS],
+             PCI_SLOT(d->devfn), PCI_FUNC(d->devfn));
+
+    return strdup(path);
 }
 
 static PCIDeviceInfo bridge_info = {
