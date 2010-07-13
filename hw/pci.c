@@ -1889,6 +1889,7 @@ static int pci_add_option_rom(PCIDevice *pdev)
     int size;
     char *path;
     void *ptr;
+    char name[32];
 
     if (!pdev->romfile)
         return 0;
@@ -1924,7 +1925,11 @@ static int pci_add_option_rom(PCIDevice *pdev)
         size = 1 << qemu_fls(size);
     }
 
-    pdev->rom_offset = qemu_ram_alloc(size);
+    if (pdev->qdev.info->vmsd)
+        snprintf(name, sizeof(name), "%s.rom", pdev->qdev.info->vmsd->name);
+    else
+        snprintf(name, sizeof(name), "%s.rom", pdev->qdev.info->name);
+    pdev->rom_offset = qemu_ram_alloc(&pdev->qdev, name, size);
 
     ptr = qemu_get_ram_ptr(pdev->rom_offset);
     load_image(path, ptr);
