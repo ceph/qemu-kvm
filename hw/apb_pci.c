@@ -427,8 +427,6 @@ static int pbm_pci_host_init(PCIDevice *d)
                  PCI_STATUS_FAST_BACK | PCI_STATUS_66MHZ |
                  PCI_STATUS_DEVSEL_MEDIUM);
     pci_config_set_class(d->config, PCI_CLASS_BRIDGE_HOST);
-    pci_set_byte(d->config + PCI_HEADER_TYPE,
-                 PCI_HEADER_TYPE_NORMAL);
     return 0;
 }
 
@@ -436,7 +434,7 @@ static PCIDeviceInfo pbm_pci_host_info = {
     .qdev.name = "pbm",
     .qdev.size = sizeof(PCIDevice),
     .init      = pbm_pci_host_init,
-    .header_type  = PCI_HEADER_TYPE_BRIDGE,
+    .is_bridge = 1,
 };
 
 static SysBusDeviceInfo pbm_host_info = {

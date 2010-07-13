@@ -2790,7 +2790,7 @@ static void *file_ram_alloc(RAMBlock *block,
 static ram_addr_t find_ram_offset(ram_addr_t size)
 {
     RAMBlock *block, *next_block;
-    ram_addr_t offset, mingap = ULONG_MAX;
+    ram_addr_t offset = 0, mingap = ULONG_MAX;
 
     if (QLIST_EMPTY(&ram_list.blocks))
         return 0;
@@ -2885,16 +2885,9 @@ ram_addr_t qemu_ram_alloc(DeviceState *dev, const char *name, ram_addr_t size)
 
     QLIST_FOREACH(block, &ram_list.blocks, next) {
         if (!strcmp(block->idstr, new_block->idstr)) {
-            if (block->length == new_block->length) {
-                fprintf(stderr, "RAMBlock \"%s\" exists, assuming lack of"
-                        "free.\n", new_block->idstr);
-                qemu_free(new_block);
-                return block->offset;
-            } else {
-                fprintf(stderr, "RAMBlock \"%s\" already registered with"
-                        "different size, abort\n", new_block->idstr);
-                abort();
-            }
+            fprintf(stderr, "RAMBlock \"%s\" already registered, abort!\n",
+                    new_block->idstr);
+            abort();
         }
     }
 
