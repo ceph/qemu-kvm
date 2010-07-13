@@ -784,9 +784,14 @@ static void free_assigned_device(AssignedDevice *dev)
                 continue;
             } else if (pci_region->type & IORESOURCE_MEM) {
                 if (region->u.r_virtbase) {
-                    int ret = munmap(region->u.r_virtbase,
-                                     (pci_region->size + 0xFFF) & 0xFFFFF000);
-                    if (ret != 0)
+                    if (region->memory_index) {
+                        cpu_register_physical_memory(region->e_physbase,
+                                                     region->e_size,
+                                                     IO_MEM_UNASSIGNED);
+                        qemu_ram_unmap(region->memory_index);
+                    }
+                    if (munmap(region->u.r_virtbase,
+                               (pci_region->size + 0xFFF) & 0xFFFFF000))
                         fprintf(stderr,
 				"Failed to unmap assigned device region: %s\n",
 				strerror(errno));
