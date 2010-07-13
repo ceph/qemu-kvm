@@ -42,6 +42,7 @@
 #include "qemu-kvm.h"
 
 #include "hw/hw.h"
+#include "hw/qdev.h"
 #include "osdep.h"
 #include "kvm.h"
 #include "qemu-timer.h"
@@ -2797,10 +2798,27 @@ static ram_addr_t find_ram_offset(ram_addr_t size)
 ram_addr_t qemu_ram_map(DeviceState *dev, const char *name,
                         ram_addr_t size, void *host)
 {
-    RAMBlock *new_block;
+    RAMBlock *new_block, *block;
 
     size = TARGET_PAGE_ALIGN(size);
-    new_block = qemu_malloc(sizeof(*new_block));
+    new_block = qemu_mallocz(sizeof(*new_block));
+
+    if (dev && dev->parent_bus && dev->parent_bus->info->get_dev_path) {
+        char *id = dev->parent_bus->info->get_dev_path(dev);
+        if (id) {
+            snprintf(new_block->idstr, sizeof(new_block->idstr), "%s/", id);
+            qemu_free(id);
+        }
+    }
+    pstrcat(new_block->idstr, sizeof(new_block->idstr), name);
+
+    QLIST_FOREACH(block, &ram_list.blocks, next) {
+        if (!strcmp(block->idstr, new_block->idstr)) {
+            fprintf(stderr, "RAMBlock \"%s\" already registered, abort!\n",
+                    new_block->idstr);
+            abort();
+        }
+    }
 
     new_block->host = host;
 
@@ -2822,10 +2840,34 @@ ram_addr_t qemu_ram_map(DeviceState *dev, const char *name,
 
 ram_addr_t qemu_ram_alloc(DeviceState *dev, const char *name, ram_addr_t size)
 {
-    RAMBlock *new_block;
+    RAMBlock *new_block, *block;
 
     size = TARGET_PAGE_ALIGN(size);
-    new_block = qemu_malloc(sizeof(*new_block));
+    new_block = qemu_mallocz(sizeof(*new_block));
+
+    if (dev && dev->parent_bus && dev->parent_bus->info->get_dev_path) {
+        char *id = dev->parent_bus->info->get_dev_path(dev);
+        if (id) {
+            snprintf(new_block->idstr, sizeof(new_block->idstr), "%s/", id);
+            qemu_free(id);
+        }
+    }
+    pstrcat(new_block->idstr, sizeof(new_block->idstr), name);
+
+    QLIST_FOREACH(block, &ram_list.blocks, next) {
+        if (!strcmp(block->idstr, new_block->idstr)) {
+            if (block->length == new_block->length) {
+                fprintf(stderr, "RAMBlock \"%s\" exists, assuming lack of"
+                        "free.\n", new_block->idstr);
+                qemu_free(new_block);
+                return block->offset;
+            } else {
+                fprintf(stderr, "RAMBlock \"%s\" already registered with"
+                        "different size, abort\n", new_block->idstr);
+                abort();
+            }
+        }
+    }
 
     if (mem_path) {
 #if defined (__linux__) && !defined(TARGET_S390X)
