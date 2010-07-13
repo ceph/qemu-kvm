@@ -158,15 +158,24 @@ static void pci_device_reset(PCIDevice *dev)
 
     dev->irq_state = 0;
     pci_update_irq_status(dev);
-    dev->config[PCI_COMMAND] &= ~(PCI_COMMAND_IO | PCI_COMMAND_MEMORY |
-                                  PCI_COMMAND_MASTER);
+    /* Clear all writeable bits */
+    pci_set_word(dev->config + PCI_COMMAND,
+                 pci_get_word(dev->config + PCI_COMMAND) &
+                 ~pci_get_word(dev->wmask + PCI_COMMAND));
     dev->config[PCI_CACHE_LINE_SIZE] = 0x0;
     dev->config[PCI_INTERRUPT_LINE] = 0x0;
     for (r = 0; r < PCI_NUM_REGIONS; ++r) {
-        if (!dev->io_regions[r].size) {
+        PCIIORegion *region = &dev->io_regions[r];
+        if (!region->size) {
             continue;
         }
-        pci_set_long(dev->config + pci_bar(dev, r), dev->io_regions[r].type);
+
+        if (!(region->type & PCI_BASE_ADDRESS_SPACE_IO) &&
+            region->type & PCI_BASE_ADDRESS_MEM_TYPE_64) {
+            pci_set_quad(dev->config + pci_bar(dev, r), region->type);
+        } else {
+            pci_set_long(dev->config + pci_bar(dev, r), region->type);
+        }
     }
     pci_update_mappings(dev);
 }
@@ -665,6 +674,54 @@ static void pci_init_wmask_bridge(PCIDevice *d)
     pci_set_word(d->wmask + PCI_BRIDGE_CONTROL, 0xffff);
 }
 
+static int pci_init_multifunction(PCIBus *bus, PCIDevice *dev)
+{
+    uint8_t slot = PCI_SLOT(dev->devfn);
+    uint8_t func;
+
+    if (dev->cap_present & QEMU_PCI_CAP_MULTIFUNCTION) {
+        dev->config[PCI_HEADER_TYPE] |= PCI_HEADER_TYPE_MULTI_FUNCTION;
+    }
+
+    /*
+     * multifuction bit is interpreted in two ways as follows.
+     *   - all functions must set the bit to 1.
+     *     Example: Intel X53
+     *   - function 0 must set the bit, but the rest function (> 0)
+     *     is allowed to leave the bit to 0.
+     *     Example: PIIX3(also in qemu), PIIX4(also in qemu), ICH10,
+     *
+     * So OS (at least Linux) checks the bit of only function 0,
+     * and doesn't see the bit of function > 0.
+     *
+     * The below check allows both interpretation.
+     */
+    if (PCI_FUNC(dev->devfn)) {
+        PCIDevice *f0 = bus->devices[PCI_DEVFN(slot, 0)];
+        if (f0 && !(f0->cap_present & QEMU_PCI_CAP_MULTIFUNCTION)) {
+            /* function 0 should set multifunction bit */
+            error_report("PCI: single function device can't be populated "
+                         "in function %x.%x", slot, PCI_FUNC(dev->devfn));
+            return -1;
+        }
+        return 0;
+    }
+
+    if (dev->cap_present & QEMU_PCI_CAP_MULTIFUNCTION) {
+        return 0;
+    }
+    /* function 0 indicates single function, so function > 0 must be NULL */
+    for (func = 1; func < PCI_FUNC_MAX; ++func) {
+        if (bus->devices[PCI_DEVFN(slot, func)]) {
+            error_report("PCI: %x.0 indicates single function, "
+                         "but %x.%x is already populated.",
+                         slot, slot, func);
+            return -1;
+        }
+    }
+    return 0;
+}
+
 static void pci_config_alloc(PCIDevice *pci_dev)
 {
     int config_size = pci_config_size(pci_dev);
@@ -717,6 +774,10 @@ static PCIDevice *do_pci_register_device(PCIDevice *pci_dev, PCIBus *bus,
     pci_init_wmask(pci_dev);
     if (is_bridge) {
         pci_init_wmask_bridge(pci_dev);
+    }
+    if (pci_init_multifunction(bus, pci_dev)) {
+        pci_config_free(pci_dev);
+        return NULL;
     }
 
     if (!config_read)
@@ -1652,7 +1713,9 @@ static void pci_bridge_write_config(PCIDevice *d,
         /* memory base/limit, prefetchable base/limit and
            io base/limit upper 16 */
         ranges_overlap(address, len, PCI_MEMORY_BASE, 20)) {
-        pci_bridge_update_mappings(d->bus);
+        PCIBridge *s = container_of(d, PCIBridge, dev);
+        PCIBus *secondary_bus = &s->bus;
+        pci_bridge_update_mappings(secondary_bus);
     }
 }
 
@@ -1725,13 +1788,14 @@ static int pci_bridge_exitfn(PCIDevice *pci_dev)
     return 0;
 }
 
-PCIBus *pci_bridge_init(PCIBus *bus, int devfn, uint16_t vid, uint16_t did,
+PCIBus *pci_bridge_init(PCIBus *bus, int devfn, bool multifunction,
+                        uint16_t vid, uint16_t did,
                         pci_map_irq_fn map_irq, const char *name)
 {
     PCIDevice *dev;
     PCIBridge *s;
 
-    dev = pci_create(bus, devfn, "pci-bridge");
+    dev = pci_create_multifunction(bus, devfn, multifunction, "pci-bridge");
     qdev_prop_set_uint32(&dev->qdev, "vendorid", vid);
     qdev_prop_set_uint32(&dev->qdev, "deviceid", did);
     qdev_init_nofail(&dev->qdev);
@@ -1776,8 +1840,14 @@ static int pci_qdev_init(DeviceState *qdev, DeviceInfo *base)
         pci_dev->romfile = qemu_strdup(info->romfile);
     pci_add_option_rom(pci_dev);
 
-    if (qdev->hotplugged)
-        bus->hotplug(bus->hotplug_qdev, pci_dev, 1);
+    if (qdev->hotplugged) {
+        rc = bus->hotplug(bus->hotplug_qdev, pci_dev, 1);
+        if (rc != 0) {
+            int r = pci_unregister_device(&pci_dev->qdev);
+            assert(!r);
+            return rc;
+        }
+    }
     return 0;
 }
 
@@ -1785,8 +1855,7 @@ static int pci_unplug_device(DeviceState *qdev)
 {
     PCIDevice *dev = DO_UPCAST(PCIDevice, qdev, qdev);
 
-    dev->bus->hotplug(dev->bus->hotplug_qdev, dev, 0);
-    return 0;
+    return dev->bus->hotplug(dev->bus->hotplug_qdev, dev, 0);
 }
 
 void pci_qdev_register(PCIDeviceInfo *info)
