@@ -220,6 +220,31 @@ jmpf:
     report("ljmp", res);
 }
 
+void test_incdec(void *mem)
+{
+    unsigned long *m = mem;
+
+    *m = 0;
+
+    asm volatile ("incl %0":"+m"(*m));
+    report("incl",  *m == 1);
+    asm volatile ("decl %0":"+m"(*m));
+    report("decl",  *m == 0);
+    asm volatile ("incb %0":"+m"(*m));
+    report("incb",  *m == 1);
+    asm volatile ("decb %0":"+m"(*m));
+    report("decb",  *m == 0);
+
+    asm volatile ("lock incl %0":"+m"(*m));
+    report("lock incl",  *m == 1);
+    asm volatile ("lock decl %0":"+m"(*m));
+    report("lock decl",  *m == 0);
+    asm volatile ("lock incb %0":"+m"(*m));
+    report("lock incb",  *m == 1);
+    asm volatile ("lock decb %0":"+m"(*m));
+    report("lock decb",  *m == 0);
+}
+
 void test_smsw(void)
 {
 	char mem[16];
@@ -298,6 +323,7 @@ int main()
 	test_lmsw();
 	test_ljmp(mem);
 	test_stringio();
+	test_incdec(mem);
 
 	printf("\nSUMMARY: %d tests, %d failures\n", tests, fails);
 	return fails ? 1 : 0;
