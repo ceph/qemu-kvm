@@ -295,6 +295,56 @@ void test_lmsw(void)
 	asm("lmsw %0" : : "r"(msw));
 }
 
+void test_xchg(void *mem)
+{
+	unsigned long *memq = mem;
+	unsigned long rax;
+
+	asm volatile("mov $0x123456789abcdef, %%rax\n\t"
+		     "mov %%rax, (%[memq])\n\t"
+		     "mov $0xfedcba9876543210, %%rax\n\t"
+		     "xchg %%al, (%[memq])\n\t"
+		     "mov %%rax, %[rax]\n\t"
+		     : [rax]"=r"(rax)
+		     : [memq]"r"(memq)
+		     : "memory");
+	report("xchg reg, r/m (1)",
+	       rax == 0xfedcba98765432ef && *memq == 0x123456789abcd10);
+
+	asm volatile("mov $0x123456789abcdef, %%rax\n\t"
+		     "mov %%rax, (%[memq])\n\t"
+		     "mov $0xfedcba9876543210, %%rax\n\t"
+		     "xchg %%ax, (%[memq])\n\t"
+		     "mov %%rax, %[rax]\n\t"
+		     : [rax]"=r"(rax)
+		     : [memq]"r"(memq)
+		     : "memory");
+	report("xchg reg, r/m (2)",
+	       rax == 0xfedcba987654cdef && *memq == 0x123456789ab3210);
+
+	asm volatile("mov $0x123456789abcdef, %%rax\n\t"
+		     "mov %%rax, (%[memq])\n\t"
+		     "mov $0xfedcba9876543210, %%rax\n\t"
+		     "xchg %%eax, (%[memq])\n\t"
+		     "mov %%rax, %[rax]\n\t"
+		     : [rax]"=r"(rax)
+		     : [memq]"r"(memq)
+		     : "memory");
+	report("xchg reg, r/m (3)",
+	       rax == 0x89abcdef && *memq == 0x123456776543210);
+
+	asm volatile("mov $0x123456789abcdef, %%rax\n\t"
+		     "mov %%rax, (%[memq])\n\t"
+		     "mov $0xfedcba9876543210, %%rax\n\t"
+		     "xchg %%rax, (%[memq])\n\t"
+		     "mov %%rax, %[rax]\n\t"
+		     : [rax]"=r"(rax)
+		     : [memq]"r"(memq)
+		     : "memory");
+	report("xchg reg, r/m (4)",
+	       rax == 0x123456789abcdef && *memq == 0xfedcba9876543210);
+}
+
 int main()
 {
 	void *mem;
@@ -316,6 +366,8 @@ int main()
 
 	test_push(mem);
 	test_pop(mem);
+
+	test_xchg(mem);
 
 	test_cr8();
 
