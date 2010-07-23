@@ -71,6 +71,7 @@ typedef struct {
     int num;            /* our index within v_addrs[] */
     pcibus_t e_size;    /* emulated size of region in bytes */
     pcibus_t r_size;    /* real size of region in bytes */
+    PCIRegion *region;
 } AssignedDevRegion;
 
 typedef struct AssignedDevice {

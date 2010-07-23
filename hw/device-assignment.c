@@ -62,93 +62,100 @@ static void assigned_dev_load_option_rom(AssignedDevice *dev);
 
 static void assigned_dev_unregister_msix_mmio(AssignedDevice *dev);
 
-static uint32_t guest_to_host_ioport(AssignedDevRegion *region, uint32_t addr)
+static uint32_t assigned_dev_ioport_rw(AssignedDevRegion *dev_region,
+                                       uint32_t addr, int len, uint32_t *val)
 {
-    return region->u.r_baseport + (addr - region->e_physbase);
+    uint32_t ret = 0;
+    uint32_t offset = addr - dev_region->e_physbase;
+    int fd = dev_region->region->resource_fd;
+
+    if (fd >= 0) {
+        if (val) {
+            DEBUG("pwrite val=%x, len=%d, e_phys=%x, offset=%x\n",
+                  *val, len, addr, offset);
+            if (pwrite(fd, val, len, offset) != len) {
+                fprintf(stderr, "%s - pwrite failed %s\n",
+                        __func__, strerror(errno));
+            }
+        } else {
+            if (pread(fd, &ret, len, offset) != len) {
+                fprintf(stderr, "%s - pread failed %s\n",
+                        __func__, strerror(errno));
+                ret = (1UL << (len * 8)) - 1;
+            }
+            DEBUG("pread ret=%x, len=%d, e_phys=%x, offset=%x\n",
+                  ret, len, addr, offset);
+        }
+    } else {
+        uint32_t port = offset + dev_region->u.r_baseport;
+
+        if (val) {
+            DEBUG("out val=%x, len=%d, e_phys=%x, host=%x\n",
+                  *val, len, addr, port);
+            switch (len) {
+                case 1:
+                    outb(*val, port);
+                    break;
+                case 2:
+                    outw(*val, port);
+                    break;
+                case 4:
+                    outl(*val, port);
+                    break;
+            }
+        } else {
+            switch (len) {
+                case 1:
+                    ret = inb(port);
+                    break;
+                case 2:
+                    ret = inw(port);
+                    break;
+                case 4:
+                    ret = inl(port);
+                    break;
+            }
+            DEBUG("in val=%x, len=%d, e_phys=%x, host=%x\n",
+                  ret, len, addr, port);
+        }
+    }
+    return ret;
 }
 
 static void assigned_dev_ioport_writeb(void *opaque, uint32_t addr,
                                        uint32_t value)
 {
-    AssignedDevRegion *r_access = opaque;
-    uint32_t r_pio = guest_to_host_ioport(r_access, addr);
-
-    DEBUG("r_pio=%08x e_physbase=%08x r_baseport=%08lx value=%08x\n",
-	  r_pio, (int)r_access->e_physbase,
-	  (unsigned long)r_access->u.r_baseport, value);
-
-    outb(value, r_pio);
+    assigned_dev_ioport_rw(opaque, addr, 1, &value);
+    return;
 }
 
 static void assigned_dev_ioport_writew(void *opaque, uint32_t addr,
                                        uint32_t value)
 {
-    AssignedDevRegion *r_access = opaque;
-    uint32_t r_pio = guest_to_host_ioport(r_access, addr);
-
-    DEBUG("r_pio=%08x e_physbase=%08x r_baseport=%08lx value=%08x\n",
-          r_pio, (int)r_access->e_physbase,
-	  (unsigned long)r_access->u.r_baseport, value);
-
-    outw(value, r_pio);
+    assigned_dev_ioport_rw(opaque, addr, 2, &value);
+    return;
 }
 
 static void assigned_dev_ioport_writel(void *opaque, uint32_t addr,
                        uint32_t value)
 {
-    AssignedDevRegion *r_access = opaque;
-    uint32_t r_pio = guest_to_host_ioport(r_access, addr);
-
-    DEBUG("r_pio=%08x e_physbase=%08x r_baseport=%08lx value=%08x\n",
-	  r_pio, (int)r_access->e_physbase,
-          (unsigned long)r_access->u.r_baseport, value);
-
-    outl(value, r_pio);
+    assigned_dev_ioport_rw(opaque, addr, 4, &value);
+    return;
 }
 
 static uint32_t assigned_dev_ioport_readb(void *opaque, uint32_t addr)
 {
-    AssignedDevRegion *r_access = opaque;
-    uint32_t r_pio = guest_to_host_ioport(r_access, addr);
-    uint32_t value;
-
-    value = inb(r_pio);
-
-    DEBUG("r_pio=%08x e_physbase=%08x r_=%08lx value=%08x\n",
-          r_pio, (int)r_access->e_physbase,
-          (unsigned long)r_access->u.r_baseport, value);
-
-    return value;
+    return assigned_dev_ioport_rw(opaque, addr, 1, NULL);
 }
 
 static uint32_t assigned_dev_ioport_readw(void *opaque, uint32_t addr)
 {
-    AssignedDevRegion *r_access = opaque;
-    uint32_t r_pio = guest_to_host_ioport(r_access, addr);
-    uint32_t value;
-
-    value = inw(r_pio);
-
-    DEBUG("r_pio=%08x e_physbase=%08x r_baseport=%08lx value=%08x\n",
-          r_pio, (int)r_access->e_physbase,
-	  (unsigned long)r_access->u.r_baseport, value);
-
-    return value;
+    return assigned_dev_ioport_rw(opaque, addr, 2, NULL);
 }
 
 static uint32_t assigned_dev_ioport_readl(void *opaque, uint32_t addr)
 {
-    AssignedDevRegion *r_access = opaque;
-    uint32_t r_pio = guest_to_host_ioport(r_access, addr);
-    uint32_t value;
-
-    value = inl(r_pio);
-
-    DEBUG("r_pio=%08x e_physbase=%08x r_baseport=%08lx value=%08x\n",
-          r_pio, (int)r_access->e_physbase,
-          (unsigned long)r_access->u.r_baseport, value);
-
-    return value;
+    return assigned_dev_ioport_rw(opaque, addr, 4, NULL);
 }
 
 static uint32_t slow_bar_readb(void *opaque, target_phys_addr_t addr)
@@ -305,7 +312,7 @@ static void assigned_dev_ioport_map(PCIDevice *pci_dev, int region_num,
     DEBUG("e_phys=0x%" FMT_PCIBUS " r_baseport=%x type=0x%x len=%" FMT_PCIBUS " region_num=%d \n",
           addr, region->u.r_baseport, type, size, region_num);
 
-    if (first_map) {
+    if (first_map && region->region->resource_fd < 0) {
 	struct ioperm_data *data;
 
 	data = qemu_mallocz(sizeof(struct ioperm_data));
@@ -586,19 +593,37 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
                              slow_map ? assigned_dev_iomem_map_slow
                                       : assigned_dev_iomem_map);
             continue;
+        } else {
+            /* handle port io regions */
+            uint32_t val;
+            int ret;
+
+            /* Test kernel support for ioport resource read/write.  Old
+             * kernels return EIO.  New kernels only allow 1/2/4 byte reads
+             * so should return EINVAL for a 3 byte read */
+            ret = pread(pci_dev->v_addrs[i].region->resource_fd, &val, 3, 0);
+            if (ret == 3) {
+                fprintf(stderr, "I/O port resource supports 3 byte read?!\n");
+                abort();
+            } else if (errno != EINVAL) {
+                fprintf(stderr, "Using raw in/out ioport access (sysfs - %s)\n",
+                        strerror(errno));
+                close(pci_dev->v_addrs[i].region->resource_fd);
+                pci_dev->v_addrs[i].region->resource_fd = -1;
+            }
+
+            pci_dev->v_addrs[i].e_physbase = cur_region->base_addr;
+            pci_dev->v_addrs[i].u.r_baseport = cur_region->base_addr;
+            pci_dev->v_addrs[i].r_size = cur_region->size;
+            pci_dev->v_addrs[i].e_size = 0;
+
+            pci_register_bar((PCIDevice *) pci_dev, i,
+                             cur_region->size, PCI_BASE_ADDRESS_SPACE_IO,
+                             assigned_dev_ioport_map);
+
+            /* not relevant for port io */
+            pci_dev->v_addrs[i].memory_index = 0;
         }
-        /* handle port io regions */
-        pci_dev->v_addrs[i].e_physbase = cur_region->base_addr;
-        pci_dev->v_addrs[i].u.r_baseport = cur_region->base_addr;
-        pci_dev->v_addrs[i].r_size = cur_region->size;
-        pci_dev->v_addrs[i].e_size = 0;
-
-        pci_register_bar((PCIDevice *) pci_dev, i,
-                         cur_region->size, PCI_BASE_ADDRESS_SPACE_IO,
-                         assigned_dev_ioport_map);
-
-        /* not relevant for port io */
-        pci_dev->v_addrs[i].memory_index = 0;
     }
 
     /* success */
@@ -705,20 +730,22 @@ again:
             continue;
         if (flags & IORESOURCE_MEM) {
             flags &= ~IORESOURCE_IO;
-            if (r != PCI_ROM_SLOT) {
-                snprintf(name, sizeof(name), "%sresource%d", dir, r);
-                fd = open(name, O_RDWR);
-                if (fd == -1)
-                    continue;
-                rp->resource_fd = fd;
-            }
-        } else
+        } else {
             flags &= ~IORESOURCE_PREFETCH;
+        }
+        if (r != PCI_ROM_SLOT) {
+            snprintf(name, sizeof(name), "%sresource%d", dir, r);
+            fd = open(name, O_RDWR);
+            if (fd == -1)
+                continue;
+            rp->resource_fd = fd;
+        }
 
         rp->type = flags;
         rp->valid = 1;
         rp->base_addr = start;
         rp->size = size;
+        pci_dev->v_addrs[r].region = rp;
         DEBUG("region %d size %d start 0x%llx type %d resource_fd %d\n",
               r, rp->size, start, rp->type, rp->resource_fd);
     }
@@ -780,8 +807,10 @@ static void free_assigned_device(AssignedDevice *dev)
                 continue;
 
             if (pci_region->type & IORESOURCE_IO) {
-                kvm_remove_ioperm_data(region->u.r_baseport, region->r_size);
-                continue;
+                if (pci_region->resource_fd < 0) {
+                    kvm_remove_ioperm_data(region->u.r_baseport,
+                                           region->r_size);
+                }
             } else if (pci_region->type & IORESOURCE_MEM) {
                 if (region->u.r_virtbase) {
                     if (region->memory_index) {
@@ -795,11 +824,11 @@ static void free_assigned_device(AssignedDevice *dev)
                         fprintf(stderr,
 				"Failed to unmap assigned device region: %s\n",
 				strerror(errno));
-                    if (pci_region->resource_fd >= 0) {
-                        close(pci_region->resource_fd);
-                    }
                 }
-	    }
+            }
+            if (pci_region->resource_fd >= 0) {
+                close(pci_region->resource_fd);
+            }
         }
 
         if (dev->cap.available & ASSIGNED_DEVICE_CAP_MSIX)
