@@ -302,72 +302,12 @@ void ac_test_reset_pt_pool(ac_test_t *at)
     at->pt_pool_current = 0;
 }
 
-void ac_test_setup_pte(ac_test_t *at)
+void ac_set_expected_status(ac_test_t *at)
 {
-    unsigned long root = read_cr3();
     int pde_valid, pte_valid;
 
-    if (!ac_test_enough_room(at))
-	ac_test_reset_pt_pool(at);
-
-    at->ptep = 0;
-    for (int i = 4; i >= 1 && (i >= 2 || !at->flags[AC_PDE_PSE]); --i) {
-	pt_element_t *vroot = va(root & PT_BASE_ADDR_MASK);
-	unsigned index = ((unsigned long)at->virt >> (12 + (i-1) * 9)) & 511;
-	pt_element_t pte = 0;
-	switch (i) {
-	case 4:
-	case 3:
-	    pte = vroot[index];
-	    pte = ac_test_alloc_pt(at) | PT_PRESENT_MASK;
-	    pte |= PT_WRITABLE_MASK | PT_USER_MASK;
-	    break;
-	case 2:
-	    if (!at->flags[AC_PDE_PSE])
-		pte = ac_test_alloc_pt(at);
-	    else {
-		pte = at->phys & PT_PSE_BASE_ADDR_MASK;
-		pte |= PT_PSE_MASK;
-	    }
-	    if (at->flags[AC_PDE_PRESENT])
-		pte |= PT_PRESENT_MASK;
-	    if (at->flags[AC_PDE_WRITABLE])
-		pte |= PT_WRITABLE_MASK;
-	    if (at->flags[AC_PDE_USER])
-		pte |= PT_USER_MASK;
-	    if (at->flags[AC_PDE_ACCESSED])
-		pte |= PT_ACCESSED_MASK;
-	    if (at->flags[AC_PDE_DIRTY])
-		pte |= PT_DIRTY_MASK;
-	    if (at->flags[AC_PDE_NX])
-		pte |= PT_NX_MASK;
-	    if (at->flags[AC_PDE_BIT51])
-		pte |= 1ull << 51;
-	    at->pdep = &vroot[index];
-	    break;
-	case 1:
-	    pte = at->phys & PT_BASE_ADDR_MASK;
-	    if (at->flags[AC_PTE_PRESENT])
-		pte |= PT_PRESENT_MASK;
-	    if (at->flags[AC_PTE_WRITABLE])
-		pte |= PT_WRITABLE_MASK;
-	    if (at->flags[AC_PTE_USER])
-		pte |= PT_USER_MASK;
-	    if (at->flags[AC_PTE_ACCESSED])
-		pte |= PT_ACCESSED_MASK;
-	    if (at->flags[AC_PTE_DIRTY])
-		pte |= PT_DIRTY_MASK;
-	    if (at->flags[AC_PTE_NX])
-		pte |= PT_NX_MASK;
-	    if (at->flags[AC_PTE_BIT51])
-		pte |= 1ull << 51;
-	    at->ptep = &vroot[index];
-	    break;
-	}
-	vroot[index] = pte;
-	root = vroot[index];
-    }
     invlpg(at->virt);
+
     if (at->ptep)
 	at->expected_pte = *at->ptep;
     at->expected_pde = *at->pdep;
@@ -465,6 +405,73 @@ fault:
         at->ignore_pde = 0;
     if (!at->flags[AC_CPU_EFER_NX])
         at->expected_error &= ~PFERR_FETCH_MASK;
+}
+
+void ac_test_setup_pte(ac_test_t *at)
+{
+    unsigned long root = read_cr3();
+
+    if (!ac_test_enough_room(at))
+	ac_test_reset_pt_pool(at);
+
+    at->ptep = 0;
+    for (int i = 4; i >= 1 && (i >= 2 || !at->flags[AC_PDE_PSE]); --i) {
+	pt_element_t *vroot = va(root & PT_BASE_ADDR_MASK);
+	unsigned index = ((unsigned long)at->virt >> (12 + (i-1) * 9)) & 511;
+	pt_element_t pte = 0;
+	switch (i) {
+	case 4:
+	case 3:
+	    pte = vroot[index];
+	    pte = ac_test_alloc_pt(at) | PT_PRESENT_MASK;
+	    pte |= PT_WRITABLE_MASK | PT_USER_MASK;
+	    break;
+	case 2:
+	    if (!at->flags[AC_PDE_PSE])
+		pte = ac_test_alloc_pt(at);
+	    else {
+		pte = at->phys & PT_PSE_BASE_ADDR_MASK;
+		pte |= PT_PSE_MASK;
+	    }
+	    if (at->flags[AC_PDE_PRESENT])
+		pte |= PT_PRESENT_MASK;
+	    if (at->flags[AC_PDE_WRITABLE])
+		pte |= PT_WRITABLE_MASK;
+	    if (at->flags[AC_PDE_USER])
+		pte |= PT_USER_MASK;
+	    if (at->flags[AC_PDE_ACCESSED])
+		pte |= PT_ACCESSED_MASK;
+	    if (at->flags[AC_PDE_DIRTY])
+		pte |= PT_DIRTY_MASK;
+	    if (at->flags[AC_PDE_NX])
+		pte |= PT_NX_MASK;
+	    if (at->flags[AC_PDE_BIT51])
+		pte |= 1ull << 51;
+	    at->pdep = &vroot[index];
+	    break;
+	case 1:
+	    pte = at->phys & PT_BASE_ADDR_MASK;
+	    if (at->flags[AC_PTE_PRESENT])
+		pte |= PT_PRESENT_MASK;
+	    if (at->flags[AC_PTE_WRITABLE])
+		pte |= PT_WRITABLE_MASK;
+	    if (at->flags[AC_PTE_USER])
+		pte |= PT_USER_MASK;
+	    if (at->flags[AC_PTE_ACCESSED])
+		pte |= PT_ACCESSED_MASK;
+	    if (at->flags[AC_PTE_DIRTY])
+		pte |= PT_DIRTY_MASK;
+	    if (at->flags[AC_PTE_NX])
+		pte |= PT_NX_MASK;
+	    if (at->flags[AC_PTE_BIT51])
+		pte |= 1ull << 51;
+	    at->ptep = &vroot[index];
+	    break;
+	}
+	vroot[index] = pte;
+	root = vroot[index];
+    }
+    ac_set_expected_status(at);
 }
 
 static void ac_test_check(ac_test_t *at, _Bool *success_ret, _Bool cond,
