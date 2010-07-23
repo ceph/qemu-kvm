@@ -628,6 +628,49 @@ static void ac_test_show(ac_test_t *at)
     printf("%s", line);
 }
 
+/*
+ * This test case is used to triger the bug which is fixed by
+ * commit e09e90a5 in the kvm tree
+ */
+static int corrupt_hugepage_triger(ac_pool_t *pool)
+{
+    ac_test_t at1, at2;
+
+    ac_test_init(&at1, (void *)(0x123400000000));
+    ac_test_init(&at2, (void *)(0x666600000000));
+
+    at2.flags[AC_CPU_CR0_WP] = 1;
+    at2.flags[AC_PDE_PSE] = 1;
+    at2.flags[AC_PDE_PRESENT] = 1;
+    ac_test_setup_pte(&at2, pool);
+    if (!ac_test_do_access(&at2))
+        goto err;
+
+    at1.flags[AC_CPU_CR0_WP] = 1;
+    at1.flags[AC_PDE_PSE] = 1;
+    at1.flags[AC_PDE_WRITABLE] = 1;
+    at1.flags[AC_PDE_PRESENT] = 1;
+    ac_test_setup_pte(&at1, pool);
+    if (!ac_test_do_access(&at1))
+        goto err;
+
+    at1.flags[AC_ACCESS_WRITE] = 1;
+    ac_set_expected_status(&at1);
+    if (!ac_test_do_access(&at1))
+        goto err;
+
+    at2.flags[AC_ACCESS_WRITE] = 1;
+    ac_set_expected_status(&at2);
+    if (!ac_test_do_access(&at2))
+        goto err;
+
+    return 1;
+
+err:
+    printf("corrupt_hugepage_triger test fail\n");
+    return 0;
+}
+
 int ac_test_exec(ac_test_t *at, ac_pool_t *pool)
 {
     int r;
@@ -654,6 +697,9 @@ int ac_test_run(void)
 	++tests;
 	successes += ac_test_exec(&at, &pool);
     } while (ac_test_bump(&at));
+
+    ++tests;
+    successes += corrupt_hugepage_triger(&pool);
 
     printf("\n%d tests, %d failures\n", tests, tests - successes);
 
