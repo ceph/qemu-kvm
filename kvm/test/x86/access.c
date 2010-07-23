@@ -127,12 +127,15 @@ typedef struct {
 } idt_entry_t;
 
 typedef struct {
-    unsigned flags[NR_AC_FLAGS];
-    void *virt;
-    pt_element_t phys;
     pt_element_t pt_pool;
     unsigned pt_pool_size;
     unsigned pt_pool_current;
+} ac_pool_t;
+
+typedef struct {
+    unsigned flags[NR_AC_FLAGS];
+    void *virt;
+    pt_element_t phys;
     pt_element_t *ptep;
     pt_element_t expected_pte;
     pt_element_t *pdep;
@@ -225,23 +228,29 @@ void set_efer_nx(int nx)
     wrmsr(MSR_EFER, efer);
 }
 
+static void ac_env_int(ac_pool_t *pool)
+{
+    static idt_entry_t idt[256];
 
-void ac_test_init(ac_test_t *at)
+    memset(idt, 0, sizeof(idt));
+    lidt(idt, 256);
+    extern char page_fault, kernel_entry;
+    set_idt_entry(&idt[14], &page_fault, 0);
+    set_idt_entry(&idt[0x20], &kernel_entry, 3);
+
+    pool->pt_pool = 33 * 1024 * 1024;
+    pool->pt_pool_size = 120 * 1024 * 1024 - pool->pt_pool;
+    pool->pt_pool_current = 0;
+}
+
+void ac_test_init(ac_test_t *at, void *virt)
 {
     wrmsr(MSR_EFER, rdmsr(MSR_EFER) | EFER_NX_MASK);
     set_cr0_wp(1);
     for (int i = 0; i < NR_AC_FLAGS; ++i)
 	at->flags[i] = 0;
-    at->virt = (void *)(0x123400000000 + 16 * smp_id());
+    at->virt = virt;
     at->phys = 32 * 1024 * 1024;
-    at->pt_pool = 33 * 1024 * 1024;
-    at->pt_pool_size = 120 * 1024 * 1024 - at->pt_pool;
-    at->pt_pool_current = 0;
-    memset(at->idt, 0, sizeof at->idt);
-    lidt(at->idt, 256);
-    extern char page_fault, kernel_entry;
-    set_idt_entry(&at->idt[14], &page_fault, 0);
-    set_idt_entry(&at->idt[0x20], &kernel_entry, 3);
 }
 
 int ac_test_bump_one(ac_test_t *at)
@@ -285,21 +294,21 @@ void invlpg(void *addr)
     asm volatile ("invlpg (%0)" : : "r"(addr));
 }
 
-pt_element_t ac_test_alloc_pt(ac_test_t *at)
+pt_element_t ac_test_alloc_pt(ac_pool_t *pool)
 {
-    pt_element_t ret = at->pt_pool + at->pt_pool_current;
-    at->pt_pool_current += PAGE_SIZE;
+    pt_element_t ret = pool->pt_pool + pool->pt_pool_current;
+    pool->pt_pool_current += PAGE_SIZE;
     return ret;
 }
 
-_Bool ac_test_enough_room(ac_test_t *at)
+_Bool ac_test_enough_room(ac_pool_t *pool)
 {
-    return at->pt_pool_current + 4 * PAGE_SIZE <= at->pt_pool_size;
+    return pool->pt_pool_current + 4 * PAGE_SIZE <= pool->pt_pool_size;
 }
 
-void ac_test_reset_pt_pool(ac_test_t *at)
+void ac_test_reset_pt_pool(ac_pool_t *pool)
 {
-    at->pt_pool_current = 0;
+    pool->pt_pool_current = 0;
 }
 
 void ac_set_expected_status(ac_test_t *at)
@@ -407,12 +416,12 @@ fault:
         at->expected_error &= ~PFERR_FETCH_MASK;
 }
 
-void ac_test_setup_pte(ac_test_t *at)
+void ac_test_setup_pte(ac_test_t *at, ac_pool_t *pool)
 {
     unsigned long root = read_cr3();
 
-    if (!ac_test_enough_room(at))
-	ac_test_reset_pt_pool(at);
+    if (!ac_test_enough_room(pool))
+	ac_test_reset_pt_pool(pool);
 
     at->ptep = 0;
     for (int i = 4; i >= 1 && (i >= 2 || !at->flags[AC_PDE_PSE]); --i) {
@@ -423,12 +432,12 @@ void ac_test_setup_pte(ac_test_t *at)
 	case 4:
 	case 3:
 	    pte = vroot[index];
-	    pte = ac_test_alloc_pt(at) | PT_PRESENT_MASK;
+	    pte = ac_test_alloc_pt(pool) | PT_PRESENT_MASK;
 	    pte |= PT_WRITABLE_MASK | PT_USER_MASK;
 	    break;
 	case 2:
 	    if (!at->flags[AC_PDE_PSE])
-		pte = ac_test_alloc_pt(at);
+		pte = ac_test_alloc_pt(pool);
 	    else {
 		pte = at->phys & PT_PSE_BASE_ADDR_MASK;
 		pte |= PT_PSE_MASK;
@@ -619,29 +628,31 @@ static void ac_test_show(ac_test_t *at)
     printf("%s", line);
 }
 
-int ac_test_exec(ac_test_t *at)
+int ac_test_exec(ac_test_t *at, ac_pool_t *pool)
 {
     int r;
 
     if (verbose) {
         ac_test_show(at);
     }
-    ac_test_setup_pte(at);
+    ac_test_setup_pte(at, pool);
     r = ac_test_do_access(at);
     return r;
 }
 
 int ac_test_run(void)
 {
-    static ac_test_t at;
+    ac_test_t at;
+    ac_pool_t pool;
     int tests, successes;
 
     printf("run\n");
     tests = successes = 0;
-    ac_test_init(&at);
+    ac_env_int(&pool);
+    ac_test_init(&at, (void *)(0x123400000000 + 16 * smp_id()));
     do {
 	++tests;
-	successes += ac_test_exec(&at);
+	successes += ac_test_exec(&at, &pool);
     } while (ac_test_bump(&at));
 
     printf("\n%d tests, %d failures\n", tests, tests - successes);
