@@ -936,7 +936,7 @@ asm(
 	"mov %ax, %ss \n\t"
 	"mov %ax, %fs \n\t"
 	"mov %ax, %gs \n\t"
-	"mov $stacktop, %sp\n\t"
+	"mov $stacktop, %esp\n\t"
 	"ljmp $0, $realmode_start \n\t"
 
 	".code16gcc \n\t"
