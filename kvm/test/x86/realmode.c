@@ -820,9 +820,14 @@ void test_null(void)
 		print_serial("null test: PASS\n");
 }
 
+struct {
+    char stack[500];
+    char top[];
+} tmp_stack;
+
 void test_pusha_popa()
 {
-	struct regs inregs = { .eax = 0, .ebx = 1, .ecx = 2, .edx = 3, .esi = 4, .edi = 5, .ebp = 6, .esp = 7}, outregs;
+	struct regs inregs = { .eax = 0, .ebx = 1, .ecx = 2, .edx = 3, .esi = 4, .edi = 5, .ebp = 6, .esp = (unsigned long)&tmp_stack.top }, outregs;
 
 	MK_INSN(pusha, "pusha\n\t"
 		       "pop %edi\n\t"
