@@ -828,12 +828,11 @@ void test_pusha_popa()
 		       "pop %edi\n\t"
 		       "pop %esi\n\t"
 		       "pop %ebp\n\t"
-		       "pop %eax\n\t"
+		       "add $4, %esp\n\t"
 		       "pop %ebx\n\t"
 		       "pop %edx\n\t"
 		       "pop %ecx\n\t"
-		       "pop %esp\n\t"
-		       "xchg %esp, %eax\n\t"
+		       "pop %eax\n\t"
 		       );
 
 	MK_INSN(popa, "push %eax\n\t"
