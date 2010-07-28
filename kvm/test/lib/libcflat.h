@@ -39,4 +39,6 @@ extern int vsnprintf(char *buf, int size, const char *fmt, va_list va);
 
 extern void puts(const char *s);
 
+#define ARRAY_SIZE(_a)  (sizeof(_a)/sizeof((_a)[0]))
+
 #endif

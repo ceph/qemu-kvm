@@ -167,8 +167,6 @@ static void do_test(struct test *test)
 	printf("%s %d\n", test->name, (int)((t2 - t1) / iterations));
 }
 
-#define ARRAY_SIZE(_x) (sizeof(_x) / sizeof((_x)[0]))
-
 static void enable_nx(void *junk)
 {
 	wrmsr(MSR_EFER, rdmsr(MSR_EFER) | EFER_NX_MASK);
