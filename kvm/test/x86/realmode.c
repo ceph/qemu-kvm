@@ -869,6 +869,84 @@ void test_pusha_popa()
 		print_serial("Pusha/Popa Test2: PASS\n");
 }
 
+void test_iret()
+{
+	struct regs inregs = { 0 }, outregs;
+
+	MK_INSN(iret32, "pushf\n\t"
+			"pushl %cs\n\t"
+			"call 1f\n\t" /* a near call will push eip onto the stack */
+			"jmp 2f\n\t"
+			"1: iret\n\t"
+			"2:\n\t"
+		     );
+
+	MK_INSN(iret16, "pushfw\n\t"
+			"pushw %cs\n\t"
+			"callw 1f\n\t"
+			"jmp 2f\n\t"
+			"1: iretw\n\t"
+			"2:\n\t");
+
+	MK_INSN(iret_flags32, "pushfl\n\t"
+			      "popl %eax\n\t"
+			      "andl $~0x2, %eax\n\t"
+			      "orl $0xffc08028, %eax\n\t"
+			      "pushl %eax\n\t"
+			      "pushl %cs\n\t"
+			      "call 1f\n\t"
+			      "jmp 2f\n\t"
+			      "1: iret\n\t"
+			      "2:\n\t");
+
+	MK_INSN(iret_flags16, "pushfw\n\t"
+			      "popw %ax\n\t"
+			      "and $~0x2, %ax\n\t"
+			      "or $0x8028, %ax\n\t"
+			      "pushw %ax\n\t"
+			      "pushw %cs\n\t"
+			      "callw 1f\n\t"
+			      "jmp 2f\n\t"
+			      "1: iretw\n\t"
+			      "2:\n\t");
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_iret32,
+			      insn_iret32_end - insn_iret32);
+
+	if (!regs_equal(&inregs, &outregs, 0))
+		print_serial("iret Test 1: FAIL\n");
+	else
+		print_serial("iret Test 1: PASS\n");
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_iret16,
+			      insn_iret16_end - insn_iret16);
+
+	if (!regs_equal(&inregs, &outregs, 0))
+		print_serial("iret Test 2: FAIL\n");
+	else
+		print_serial("iret Test 2: PASS\n");
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_iret_flags32,
+			      insn_iret_flags32_end - insn_iret_flags32);
+
+	if (!regs_equal(&inregs, &outregs, R_AX))
+		print_serial("iret Test 3: FAIL\n");
+	else
+		print_serial("iret Test 3: PASS\n");
+
+	exec_in_big_real_mode(&inregs, &outregs,
+			      insn_iret_flags16,
+			      insn_iret_flags16_end - insn_iret_flags16);
+
+	if (!regs_equal(&inregs, &outregs, R_AX))
+		print_serial("iret Test 4: FAIL\n");
+	else
+		print_serial("iret Test 4: PASS\n");
+}
+
 void realmode_start(void)
 {
 	test_null();
@@ -890,6 +968,7 @@ void realmode_start(void)
 	/* long jmp test uses call near so test it after testing call */
 	test_long_jmp();
 	test_xchg();
+	test_iret();
 
 	exit(0);
 }
