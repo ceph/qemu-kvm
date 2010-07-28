@@ -127,14 +127,6 @@ void test_enable_x2apic(void)
     }
 }
 
-static u16 read_cs(void)
-{
-    u16 v;
-
-    asm("mov %%cs, %0" : "=rm"(v));
-    return v;
-}
-
 static void init_idt(void)
 {
     struct {

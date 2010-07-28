@@ -1,6 +1,8 @@
 #ifndef VM_H
 #define VM_H
 
+#include "processor.h"
+
 #define PAGE_SIZE 4096ul
 #ifdef __x86_64__
 #define LARGE_PAGE_SIZE (512 * PAGE_SIZE)
@@ -39,47 +41,6 @@ static inline unsigned long virt_to_phys(const void *virt)
 static inline void *phys_to_virt(unsigned long phys)
 {
     return (void *)phys;
-}
-
-
-static inline void load_cr3(unsigned long cr3)
-{
-    asm ( "mov %0, %%cr3" : : "r"(cr3) );
-}
-
-static inline unsigned long read_cr3()
-{
-    unsigned long cr3;
-
-    asm volatile ( "mov %%cr3, %0" : "=r"(cr3) );
-    return cr3;
-}
-
-static inline void load_cr0(unsigned long cr0)
-{
-    asm volatile ( "mov %0, %%cr0" : : "r"(cr0) );
-}
-
-static inline unsigned long read_cr0()
-{
-    unsigned long cr0;
-
-    asm volatile ( "mov %%cr0, %0" : "=r"(cr0) );
-    return cr0;
-}
-
-
-static inline void load_cr4(unsigned long cr4)
-{
-    asm volatile ( "mov %0, %%cr4" : : "r"(cr4) );
-}
-
-static inline unsigned long read_cr4()
-{
-    unsigned long cr4;
-
-    asm volatile ( "mov %%cr4, %0" : "=r"(cr4) );
-    return cr4;
 }
 
 #endif

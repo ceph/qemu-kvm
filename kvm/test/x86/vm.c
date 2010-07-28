@@ -118,19 +118,13 @@ void install_page(unsigned long *cr3,
 }
 
 
-struct gdt_table_descr
-{
-    unsigned short len;
-    unsigned long *table;
-} __attribute__((packed));
-
 static inline void load_gdt(unsigned long *table, int nent)
 {
-    struct gdt_table_descr descr;
+    struct descriptor_table_ptr descr;
 
-    descr.len = nent * 8 - 1;
-    descr.table = table;
-    asm volatile ( "lgdt %0" : : "m"(descr) );
+    descr.limit = nent * 8 - 1;
+    descr.base = (ulong)table;
+    lgdt(&descr);
 }
 
 #define SEG_CS_32 8
@@ -158,11 +152,11 @@ static void setup_mmu(unsigned long len)
 	install_page(cr3, phys, (void *)phys);
 	phys += PAGE_SIZE;
     }
-    load_cr3(virt_to_phys(cr3));
+    write_cr3(virt_to_phys(cr3));
 #ifndef __x86_64__
-    load_cr4(X86_CR4_PSE);
+    write_cr4(X86_CR4_PSE);
 #endif
-    load_cr0(X86_CR0_PG |X86_CR0_PE);
+    write_cr0(X86_CR0_PG |X86_CR0_PE);
 
     printf("paging enabled\n");
     printf("cr0 = %x\n", read_cr0());

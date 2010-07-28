@@ -18,7 +18,7 @@ void report(const char *name, int result)
 	}
 }
 
-static char str[] = "abcdefghijklmnop";
+static char st1[] = "abcdefghijklmnop";
 
 void test_stringio()
 {
@@ -27,18 +27,18 @@ void test_stringio()
 		     "movw %0, %%dx \n\t"
 		     "rep outsb \n\t"
 		     : : "i"((short)TESTDEV_IO_PORT),
-		       "S"(str), "c"(sizeof(str) - 1));
+		       "S"(st1), "c"(sizeof(st1) - 1));
 	asm volatile("inb %1, %0\n\t" : "=a"(r) : "i"((short)TESTDEV_IO_PORT));
-	report("outsb up", r == str[sizeof(str) - 2]); /* last char */
+	report("outsb up", r == st1[sizeof(st1) - 2]); /* last char */
 
 	asm volatile("std \n\t"
 		     "movw %0, %%dx \n\t"
 		     "rep outsb \n\t"
 		     : : "i"((short)TESTDEV_IO_PORT),
-		       "S"(str + sizeof(str) - 2), "c"(sizeof(str) - 1));
+		       "S"(st1 + sizeof(st1) - 2), "c"(sizeof(st1) - 1));
 	asm volatile("cld \n\t" : : );
 	asm volatile("in %1, %0\n\t" : "=a"(r) : "i"((short)TESTDEV_IO_PORT));
-	report("outsb down", r == str[0]);
+	report("outsb down", r == st1[0]);
 }
 
 void test_cmps_one(unsigned char *m1, unsigned char *m3)
