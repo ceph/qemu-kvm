@@ -14,16 +14,6 @@
 static void *free = 0;
 static void *vfree_top = 0;
 
-void *memset(void *data, int c, unsigned long len)
-{
-    char *s = data;
-
-    while (len--)
-	*s++ = c;
-
-    return data;
-}
-
 static void free_memory(void *mem, unsigned long size)
 {
     while (size >= PAGE_SIZE) {

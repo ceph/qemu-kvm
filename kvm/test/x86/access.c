@@ -163,14 +163,6 @@ void lidt(idt_entry_t *idt, int nentries)
     asm volatile ("lidt %0" : : "m"(dt));
 }
 
-void memset(void *a, unsigned char v, int n)
-{
-    unsigned char *x = a;
-
-    while (n--)
-	*x++ = v;
-}
-
 unsigned short read_cs()
 {
     unsigned short r;

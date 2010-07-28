@@ -27,6 +27,7 @@ typedef unsigned short u16;
 typedef unsigned u32;
 typedef unsigned long ulong;
 typedef unsigned long long u64;
+typedef unsigned long size_t;
 
 extern void exit(int code);
 extern void panic(char *fmt, ...);
@@ -38,6 +39,8 @@ extern int printf(const char *fmt, ...);
 extern int vsnprintf(char *buf, int size, const char *fmt, va_list va);
 
 extern void puts(const char *s);
+
+extern void *memset(void *s, int c, size_t n);
 
 #define ARRAY_SIZE(_a)  (sizeof(_a)/sizeof((_a)[0]))
 

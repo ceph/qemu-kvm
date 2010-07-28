@@ -39,14 +39,6 @@ unsigned short read_cs()
     return r;
 }
 
-void memset(void *a, unsigned char v, int n)
-{
-    unsigned char *x = a;
-
-    while (n--)
-	*x++ = v;
-}
-
 void set_idt_entry(idt_entry_t *e, void *addr, int dpl)
 {
     memset(e, 0, sizeof *e);
