@@ -243,4 +243,9 @@ static inline struct cpuid cpuid(u32 function)
     return cpuid_indexed(function, 0);
 }
 
+static inline void pause(void)
+{
+    asm volatile ("pause");
+}
+
 #endif
