@@ -63,6 +63,7 @@ struct test {
     bool (*succeeded)(struct test *test);
     struct vmcb *vmcb;
     int exits;
+    ulong scratch;
 };
 
 static void test_thunk(struct test *test)
