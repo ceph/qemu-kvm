@@ -3,6 +3,7 @@
 #include "processor.h"
 #include "msr.h"
 #include "vm.h"
+#include "smp.h"
 
 static void setup_svm(void)
 {
@@ -168,6 +169,39 @@ static bool check_cr3_nointercept(struct test *test)
     return null_check(test) && test->scratch == read_cr3();
 }
 
+static void corrupt_cr3_intercept_bypass(void *_test)
+{
+    struct test *test = _test;
+    extern volatile u32 mmio_insn;
+
+    while (!__sync_bool_compare_and_swap(&test->scratch, 1, 2))
+        pause();
+    pause();
+    pause();
+    pause();
+    mmio_insn = 0x90d8200f;  // mov %cr3, %rax; nop
+}
+
+static void prepare_cr3_intercept_bypass(struct test *test)
+{
+    default_prepare(test);
+    test->vmcb->control.intercept_cr_read |= 1 << 3;
+    on_cpu_async(1, corrupt_cr3_intercept_bypass, test);
+}
+
+static void test_cr3_intercept_bypass(struct test *test)
+{
+    ulong a = 0xa0000;
+
+    test->scratch = 1;
+    while (test->scratch != 2)
+        barrier();
+
+    asm volatile ("mmio_insn: mov %0, (%0); nop"
+                  : "+a"(a) : : "memory");
+    test->scratch = a;
+}
+
 static struct test tests[] = {
     { "null", default_prepare, null_test, default_finished, null_check },
     { "vmrun", default_prepare, test_vmrun, default_finished, check_vmrun },
@@ -177,6 +211,8 @@ static struct test tests[] = {
       default_finished, check_cr3_intercept },
     { "cr3 read nointercept", default_prepare, test_cr3_intercept,
       default_finished, check_cr3_nointercept },
+    { "cr3 read intercept emulate", prepare_cr3_intercept_bypass,
+      test_cr3_intercept_bypass, default_finished, check_cr3_intercept }
 };
 
 int main(int ac, char **av)
@@ -185,6 +221,7 @@ int main(int ac, char **av)
     struct vmcb *vmcb;
 
     setup_vm();
+    smp_init();
 
     if (!(cpuid(0x80000001).c & 4)) {
         printf("SVM not availble\n");
