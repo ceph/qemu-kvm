@@ -146,12 +146,36 @@ static bool check_vmrun(struct test *test)
     return test->vmcb->control.exit_code == SVM_EXIT_VMRUN;
 }
 
+static void prepare_cr3_intercept(struct test *test)
+{
+    default_prepare(test);
+    test->vmcb->control.intercept_cr_read |= 1 << 3;
+}
+
+static void test_cr3_intercept(struct test *test)
+{
+    asm volatile ("mov %%cr3, %0" : "=r"(test->scratch) : : "memory");
+}
+
+static bool check_cr3_intercept(struct test *test)
+{
+    return test->vmcb->control.exit_code == SVM_EXIT_READ_CR3;
+}
+
+static bool check_cr3_nointercept(struct test *test)
+{
+    return null_check(test) && test->scratch == read_cr3();
+}
+
 static struct test tests[] = {
     { "null", default_prepare, null_test, default_finished, null_check },
     { "vmrun", default_prepare, test_vmrun, default_finished, check_vmrun },
     { "vmrun intercept check", prepare_no_vmrun_int, null_test,
       default_finished, check_no_vmrun_int },
-
+    { "cr3 read intercept", prepare_cr3_intercept, test_cr3_intercept,
+      default_finished, check_cr3_intercept },
+    { "cr3 read nointercept", default_prepare, test_cr3_intercept,
+      default_finished, check_cr3_nointercept },
 };
 
 int main(int ac, char **av)
