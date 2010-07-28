@@ -28,6 +28,10 @@ typedef unsigned u32;
 typedef unsigned long ulong;
 typedef unsigned long long u64;
 typedef unsigned long size_t;
+typedef _Bool bool;
+
+#define true 1
+#define false 0
 
 extern void exit(int code);
 extern void panic(char *fmt, ...);
