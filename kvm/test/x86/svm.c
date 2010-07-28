@@ -110,6 +110,7 @@ static bool test_run(struct test *test, struct vmcb *vmcb)
 static void default_prepare(struct test *test)
 {
     vmcb_ident(test->vmcb);
+    cli();
 }
 
 static bool default_finished(struct test *test)
