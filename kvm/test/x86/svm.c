@@ -58,6 +58,7 @@ static void vmcb_ident(struct vmcb *vmcb)
 
 struct test {
     const char *name;
+    bool (*supported)(void);
     void (*prepare)(struct test *test);
     void (*guest_func)(struct test *test);
     bool (*finished)(struct test *test);
@@ -106,6 +107,11 @@ static bool test_run(struct test *test, struct vmcb *vmcb)
     printf("%s: %s\n", test->name, success ? "PASS" : "FAIL");
 
     return success;
+}
+
+static bool default_supported(void)
+{
+    return true;
 }
 
 static void default_prepare(struct test *test)
@@ -203,21 +209,24 @@ static void test_cr3_intercept_bypass(struct test *test)
 }
 
 static struct test tests[] = {
-    { "null", default_prepare, null_test, default_finished, null_check },
-    { "vmrun", default_prepare, test_vmrun, default_finished, check_vmrun },
-    { "vmrun intercept check", prepare_no_vmrun_int, null_test,
-      default_finished, check_no_vmrun_int },
-    { "cr3 read intercept", prepare_cr3_intercept, test_cr3_intercept,
+    { "null", default_supported, default_prepare, null_test,
+      default_finished, null_check },
+    { "vmrun", default_supported, default_prepare, test_vmrun,
+       default_finished, check_vmrun },
+    { "vmrun intercept check", default_supported, prepare_no_vmrun_int,
+      null_test, default_finished, check_no_vmrun_int },
+    { "cr3 read intercept", default_supported, prepare_cr3_intercept,
+      test_cr3_intercept, default_finished, check_cr3_intercept },
+    { "cr3 read nointercept", default_supported, default_prepare,
+      test_cr3_intercept, default_finished, check_cr3_nointercept },
+    { "cr3 read intercept emulate", default_supported,
+      prepare_cr3_intercept_bypass, test_cr3_intercept_bypass,
       default_finished, check_cr3_intercept },
-    { "cr3 read nointercept", default_prepare, test_cr3_intercept,
-      default_finished, check_cr3_nointercept },
-    { "cr3 read intercept emulate", prepare_cr3_intercept_bypass,
-      test_cr3_intercept_bypass, default_finished, check_cr3_intercept }
 };
 
 int main(int ac, char **av)
 {
-    int i, nr, passed;
+    int i, nr, passed, done;
     struct vmcb *vmcb;
 
     setup_vm();
@@ -233,11 +242,14 @@ int main(int ac, char **av)
     vmcb = alloc_page();
 
     nr = ARRAY_SIZE(tests);
-    passed = 0;
+    passed = done = 0;
     for (i = 0; i < nr; ++i) {
+        if (!tests[i].supported())
+            continue;
+        done += 1;
         passed += test_run(&tests[i], vmcb);
     }
 
-    printf("\nSUMMARY: %d TESTS, %d FAILURES\n", nr, (nr - passed));
-    return passed == nr ? 0 : 1;
+    printf("\nSUMMARY: %d TESTS, %d FAILURES\n", done, (done - passed));
+    return passed == done ? 0 : 1;
 }
