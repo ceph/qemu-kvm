@@ -541,6 +541,8 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
             /* map physical memory */
             pci_dev->v_addrs[i].e_physbase = cur_region->base_addr;
             if (i == PCI_ROM_SLOT) {
+                /* KVM doesn't support read-only mappings, use slow map */
+                slow_map = 1;
                 pci_dev->v_addrs[i].u.r_virtbase =
                     mmap(NULL,
                          cur_region->size,
@@ -566,8 +568,6 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
             if (i == PCI_ROM_SLOT) {
                 memset(pci_dev->v_addrs[i].u.r_virtbase, 0,
                        (cur_region->size + 0xFFF) & 0xFFFFF000);
-                mprotect(pci_dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase,
-                         (cur_region->size + 0xFFF) & 0xFFFFF000, PROT_READ);
             }
 
             pci_dev->v_addrs[i].r_size = cur_region->size;
@@ -1691,12 +1691,8 @@ static void assigned_dev_load_option_rom(AssignedDevice *dev)
     /* Copy ROM contents into the space backing the ROM BAR */
     if (dev->v_addrs[PCI_ROM_SLOT].r_size >= size &&
         dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase) {
-        mprotect(dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase,
-                 size, PROT_READ | PROT_WRITE);
         memcpy(dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase,
                buf, size);
-        mprotect(dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase,
-                 size, PROT_READ);
     }
 
     free(buf);
