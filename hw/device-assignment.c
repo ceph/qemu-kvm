@@ -1680,19 +1680,20 @@ static void assigned_dev_load_option_rom(AssignedDevice *dev)
         return;
     }
 
-    ret = fread(buf, size, 1, fp);
-    if (!feof(fp) || ferror(fp) || ret != 1) {
+    if (!(ret = fread(buf, 1, size, fp))) {
         free(buf);
         fclose(fp);
         return;
     }
     fclose(fp);
 
+    /* The number of bytes read is often much smaller than the BAR size */
+    size = ret;
+
     /* Copy ROM contents into the space backing the ROM BAR */
     if (dev->v_addrs[PCI_ROM_SLOT].r_size >= size &&
         dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase) {
-        memcpy(dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase,
-               buf, size);
+        memcpy(dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase, buf, size);
     }
 
     free(buf);
