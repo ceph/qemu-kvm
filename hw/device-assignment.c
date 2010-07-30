@@ -233,6 +233,8 @@ static CPUReadMemoryFunc * const slow_bar_read[] = {
     &slow_bar_readl
 };
 
+static CPUWriteMemoryFunc * const slow_bar_null_write[] = {NULL, NULL, NULL};
+
 static void assigned_dev_iomem_map_slow(PCIDevice *pci_dev, int region_num,
                                         pcibus_t e_phys, pcibus_t e_size,
                                         int type)
@@ -244,7 +246,7 @@ static void assigned_dev_iomem_map_slow(PCIDevice *pci_dev, int region_num,
 
     DEBUG("%s", "slow map\n");
     if (region_num == PCI_ROM_SLOT)
-        m = cpu_register_io_memory(slow_bar_read, NULL, region);
+        m = cpu_register_io_memory(slow_bar_read, slow_bar_null_write, region);
     else
         m = cpu_register_io_memory(slow_bar_read, slow_bar_write, region);
     cpu_register_physical_memory(e_phys, e_size, m);
