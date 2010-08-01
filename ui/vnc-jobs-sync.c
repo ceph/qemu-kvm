@@ -1,5 +1,10 @@
 /*
- * QEMU MIPS interrupt support
+ * QEMU VNC display driver
+ *
+ * Copyright (C) 2006 Anthony Liguori <anthony@codemonkey.ws>
+ * Copyright (C) 2006 Fabrice Bellard
+ * Copyright (C) 2009 Red Hat, Inc
+ * Copyright (C) 2010 Corentin Chary <corentin.chary@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -20,46 +25,49 @@
  * THE SOFTWARE.
  */
 
-#include "hw.h"
-#include "mips_cpudevs.h"
-#include "cpu.h"
+#include "vnc.h"
+#include "vnc-jobs.h"
 
-static void cpu_mips_irq_request(void *opaque, int irq, int level)
+void vnc_jobs_clear(VncState *vs)
 {
-    CPUState *env = (CPUState *)opaque;
-
-    if (irq < 0 || irq > 7)
-        return;
-
-    if (level) {
-        env->CP0_Cause |= 1 << (irq + CP0Ca_IP);
-    } else {
-        env->CP0_Cause &= ~(1 << (irq + CP0Ca_IP));
-    }
-
-    if (env->CP0_Cause & CP0Ca_IP_mask) {
-        cpu_interrupt(env, CPU_INTERRUPT_HARD);
-    } else {
-        cpu_reset_interrupt(env, CPU_INTERRUPT_HARD);
-    }
 }
 
-void cpu_mips_irq_init_cpu(CPUState *env)
+void vnc_jobs_join(VncState *vs)
 {
-    qemu_irq *qi;
-    int i;
-
-    qi = qemu_allocate_irqs(cpu_mips_irq_request, env, 8);
-    for (i = 0; i < 8; i++) {
-        env->irq[i] = qi[i];
-    }
 }
 
-void cpu_mips_soft_irq(CPUState *env, int irq, int level)
+VncJob *vnc_job_new(VncState *vs)
 {
-    if (irq < 0 || irq > 2) {
-        return;
-    }
+    vs->job.vs = vs;
+    vs->job.rectangles = 0;
 
-    qemu_set_irq(env->irq[irq], level);
+    vnc_write_u8(vs, VNC_MSG_SERVER_FRAMEBUFFER_UPDATE);
+    vnc_write_u8(vs, 0);
+    vs->job.saved_offset = vs->output.offset;
+    vnc_write_u16(vs, 0);
+    return &vs->job;
+}
+
+void vnc_job_push(VncJob *job)
+{
+    VncState *vs = job->vs;
+
+    vs->output.buffer[job->saved_offset] = (job->rectangles >> 8) & 0xFF;
+    vs->output.buffer[job->saved_offset + 1] = job->rectangles & 0xFF;
+    vnc_flush(job->vs);
+}
+
+int vnc_job_add_rect(VncJob *job, int x, int y, int w, int h)
+{
+    int n;
+
+    n = vnc_send_framebuffer_update(job->vs, x, y, w, h);
+    if (n >= 0)
+        job->rectangles += n;
+    return n;
+}
+
+bool vnc_has_job(VncState *vs)
+{
+    return false;
 }
