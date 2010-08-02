@@ -342,6 +342,21 @@ static bool check_mode_switch(struct test *test)
 	return test->scratch == 2;
 }
 
+static void prepare_asid_zero(struct test *test)
+{
+    test->vmcb->control.asid = 0;
+}
+
+static void test_asid_zero(struct test *test)
+{
+    asm volatile ("vmmcall\n\t");
+}
+
+static bool check_asid_zero(struct test *test)
+{
+    return test->vmcb->control.exit_code == SVM_EXIT_ERR;
+}
+
 static struct test tests[] = {
     { "null", default_supported, default_prepare, null_test,
       default_finished, null_check },
@@ -360,6 +375,8 @@ static struct test tests[] = {
       default_finished, check_next_rip },
     { "mode_switch", default_supported, prepare_mode_switch, test_mode_switch,
        mode_switch_finished, check_mode_switch },
+    { "asid_zero", default_supported, prepare_asid_zero, test_asid_zero,
+       default_finished, check_asid_zero },
 
 };
 
