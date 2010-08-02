@@ -848,6 +848,7 @@ void kvm_arch_load_regs(CPUState *env, int level)
             xcrs.xcrs[0].value = env->xcr0;
             kvm_set_xcrs(env, &xcrs);
         }
+        qemu_free(xsave);
     } else {
 #endif
         memset(&fpu, 0, sizeof fpu);
@@ -1042,6 +1043,7 @@ void kvm_arch_save_regs(CPUState *env)
             if (xcrs.xcrs[0].xcr == 0)
                 env->xcr0 = xcrs.xcrs[0].value;
         }
+        qemu_free(xsave);
     } else {
 #endif
         kvm_get_fpu(env, &fpu);
