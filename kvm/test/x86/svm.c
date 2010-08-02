@@ -43,6 +43,7 @@ static void vmcb_ident(struct vmcb *vmcb)
     vmcb_set_seg(&save->gdtr, 0, desc_table_ptr.base, desc_table_ptr.limit, 0);
     sidt(&desc_table_ptr);
     vmcb_set_seg(&save->idtr, 0, desc_table_ptr.base, desc_table_ptr.limit, 0);
+    ctrl->asid = 1;
     save->cpl = 0;
     save->efer = rdmsr(MSR_EFER);
     save->cr4 = read_cr4();
