@@ -4,6 +4,7 @@
 #include "msr.h"
 #include "vm.h"
 #include "smp.h"
+#include "types.h"
 
 static void setup_svm(void)
 {
@@ -235,6 +236,112 @@ static bool check_next_rip(struct test *test)
     return address == test->vmcb->control.next_rip;
 }
 
+static void prepare_mode_switch(struct test *test)
+{
+    test->vmcb->control.intercept_exceptions |= (1ULL << GP_VECTOR)
+                                             |  (1ULL << UD_VECTOR)
+                                             |  (1ULL << DF_VECTOR)
+                                             |  (1ULL << PF_VECTOR);
+    test->scratch = 0;
+}
+
+static void test_mode_switch(struct test *test)
+{
+    asm volatile("	cli\n"
+		 "	ljmp *1f\n" /* jump to 32-bit code segment */
+		 "1:\n"
+		 "	.long 2f\n"
+		 "	.long 40\n"
+		 ".code32\n"
+		 "2:\n"
+		 "	movl %%cr0, %%eax\n"
+		 "	btcl  $31, %%eax\n" /* clear PG */
+		 "	movl %%eax, %%cr0\n"
+		 "	movl $0xc0000080, %%ecx\n" /* EFER */
+		 "	rdmsr\n"
+		 "	btcl $8, %%eax\n" /* clear LME */
+		 "	wrmsr\n"
+		 "	movl %%cr4, %%eax\n"
+		 "	btcl $5, %%eax\n" /* clear PAE */
+		 "	movl %%eax, %%cr4\n"
+		 "	movw $64, %%ax\n"
+		 "	movw %%ax, %%ds\n"
+		 "	ljmpl $56, $3f\n" /* jump to 16 bit protected-mode */
+		 ".code16\n"
+		 "3:\n"
+		 "	movl %%cr0, %%eax\n"
+		 "	btcl $0, %%eax\n" /* clear PE  */
+		 "	movl %%eax, %%cr0\n"
+		 "	ljmpl $0, $4f\n"   /* jump to real-mode */
+		 "4:\n"
+		 "	vmmcall\n"
+		 "	movl %%cr0, %%eax\n"
+		 "	btsl $0, %%eax\n" /* set PE  */
+		 "	movl %%eax, %%cr0\n"
+		 "	ljmpl $40, $5f\n" /* back to protected mode */
+		 ".code32\n"
+		 "5:\n"
+		 "	movl %%cr4, %%eax\n"
+		 "	btsl $5, %%eax\n" /* set PAE */
+		 "	movl %%eax, %%cr4\n"
+		 "	movl $0xc0000080, %%ecx\n" /* EFER */
+		 "	rdmsr\n"
+		 "	btsl $8, %%eax\n" /* set LME */
+		 "	wrmsr\n"
+		 "	movl %%cr0, %%eax\n"
+		 "	btsl  $31, %%eax\n" /* set PG */
+		 "	movl %%eax, %%cr0\n"
+		 "	ljmpl $8, $6f\n"    /* back to long mode */
+		 ".code64\n\t"
+		 "6:\n"
+		 "	vmmcall\n"
+		 ::: "rax", "rbx", "rcx", "rdx", "memory");
+}
+
+static bool mode_switch_finished(struct test *test)
+{
+    u64 cr0, cr4, efer;
+
+    cr0  = test->vmcb->save.cr0;
+    cr4  = test->vmcb->save.cr4;
+    efer = test->vmcb->save.efer;
+
+    /* Only expect VMMCALL intercepts */
+    if (test->vmcb->control.exit_code != SVM_EXIT_VMMCALL)
+	    return true;
+
+    /* Jump over VMMCALL instruction */
+    test->vmcb->save.rip += 3;
+
+    /* Do sanity checks */
+    switch (test->scratch) {
+    case 0:
+        /* Test should be in real mode now - check for this */
+        if ((cr0  & 0x80000001) || /* CR0.PG, CR0.PE */
+            (cr4  & 0x00000020) || /* CR4.PAE */
+            (efer & 0x00000500))   /* EFER.LMA, EFER.LME */
+                return true;
+        break;
+    case 2:
+        /* Test should be back in long-mode now - check for this */
+        if (((cr0  & 0x80000001) != 0x80000001) || /* CR0.PG, CR0.PE */
+            ((cr4  & 0x00000020) != 0x00000020) || /* CR4.PAE */
+            ((efer & 0x00000500) != 0x00000500))   /* EFER.LMA, EFER.LME */
+		    return true;
+	break;
+    }
+
+    /* one step forward */
+    test->scratch += 1;
+
+    return test->scratch == 2;
+}
+
+static bool check_mode_switch(struct test *test)
+{
+	return test->scratch == 2;
+}
+
 static struct test tests[] = {
     { "null", default_supported, default_prepare, null_test,
       default_finished, null_check },
@@ -251,6 +358,8 @@ static struct test tests[] = {
       default_finished, check_cr3_intercept },
     { "next_rip", next_rip_supported, prepare_next_rip, test_next_rip,
       default_finished, check_next_rip },
+    { "mode_switch", default_supported, prepare_mode_switch, test_mode_switch,
+       mode_switch_finished, check_mode_switch },
 
 };
 

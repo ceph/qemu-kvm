@@ -51,6 +51,11 @@ gdt64:
 	.quad 0x00cf93000000ffff // 64-bit data segment
 	.quad 0x00affb000000ffff // 64-bit code segment (user)
 	.quad 0x00cff3000000ffff // 64-bit data segment (user)
+	.quad 0x00cf9b000000ffff // 32-bit code segment
+	.quad 0x00cf92000000ffff // 32-bit code segment
+	.quad 0x008F9A000000FFFF // 16-bit code segment
+	.quad 0x008F92000000FFFF // 16-bit data segment
+
 tss_descr:
 	.rept max_cpus
 	.quad 0x000089000000ffff // 64-bit avail tss
