@@ -209,6 +209,32 @@ static void test_cr3_intercept_bypass(struct test *test)
     test->scratch = a;
 }
 
+static bool next_rip_supported(void)
+{
+    return (cpuid(SVM_CPUID_FUNC).d & 8);
+}
+
+static void prepare_next_rip(struct test *test)
+{
+    test->vmcb->control.intercept |= (1ULL << INTERCEPT_RDTSC);
+}
+
+
+static void test_next_rip(struct test *test)
+{
+    asm volatile ("rdtsc\n\t"
+                  ".globl exp_next_rip\n\t"
+                  "exp_next_rip:\n\t" ::: "eax", "edx");
+}
+
+static bool check_next_rip(struct test *test)
+{
+    extern char exp_next_rip;
+    unsigned long address = (unsigned long)&exp_next_rip;
+
+    return address == test->vmcb->control.next_rip;
+}
+
 static struct test tests[] = {
     { "null", default_supported, default_prepare, null_test,
       default_finished, null_check },
@@ -223,6 +249,9 @@ static struct test tests[] = {
     { "cr3 read intercept emulate", default_supported,
       prepare_cr3_intercept_bypass, test_cr3_intercept_bypass,
       default_finished, check_cr3_intercept },
+    { "next_rip", next_rip_supported, prepare_next_rip, test_next_rip,
+      default_finished, check_next_rip },
+
 };
 
 int main(int ac, char **av)
