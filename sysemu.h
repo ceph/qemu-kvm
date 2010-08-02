@@ -100,6 +100,7 @@ typedef enum DisplayType
 } DisplayType;
 
 extern int autostart;
+extern int incoming_expected;
 extern int bios_size;
 
 typedef enum {
