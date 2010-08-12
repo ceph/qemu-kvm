@@ -921,11 +921,6 @@ int handle_tpr_access(void *opaque, CPUState *env, uint64_t rip,
 void kvm_mutex_unlock(void);
 void kvm_mutex_lock(void);
 
-static inline int kvm_sync_vcpus(void)
-{
-    return 0;
-}
-
 #ifdef CONFIG_KVM
 
 typedef struct KVMSlot {
