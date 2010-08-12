@@ -918,9 +918,6 @@ int handle_tpr_access(void *opaque, CPUState *env, uint64_t rip,
 #define qemu_kvm_cpu_stop(env) do {} while(0)
 #endif
 
-void kvm_mutex_unlock(void);
-void kvm_mutex_lock(void);
-
 #ifdef CONFIG_KVM
 
 typedef struct KVMSlot {

@@ -1826,13 +1826,13 @@ int kvm_set_irq(int irq, int level, int *status)
 
 #endif
 
-void kvm_mutex_unlock(void)
+static void kvm_mutex_unlock(void)
 {
     assert(!cpu_single_env);
     pthread_mutex_unlock(&qemu_mutex);
 }
 
-void kvm_mutex_lock(void)
+static void kvm_mutex_lock(void)
 {
     pthread_mutex_lock(&qemu_mutex);
     cpu_single_env = NULL;
