@@ -584,7 +584,8 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
                 snprintf(name, sizeof(name), "%s.bar%d",
                          pci_dev->dev.qdev.info->name, i);
                 pci_dev->v_addrs[i].memory_index =
-                                            qemu_ram_map(&pci_dev->dev.qdev,
+                                            qemu_ram_alloc_from_ptr(
+                                                         &pci_dev->dev.qdev,
                                                          name, cur_region->size,
                                                          virtbase);
             } else

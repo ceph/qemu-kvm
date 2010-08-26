@@ -2824,7 +2824,7 @@ static ram_addr_t last_ram_offset(void)
     return last;
 }
 
-ram_addr_t qemu_ram_map(DeviceState *dev, const char *name,
+ram_addr_t qemu_ram_alloc_from_ptr(DeviceState *dev, const char *name,
                         ram_addr_t size, void *host)
 {
     RAMBlock *new_block, *block;
