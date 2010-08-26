@@ -182,6 +182,7 @@ static inline void cpu_synchronize_post_init(CPUState *env)
 }
 
 #endif
+int kvm_set_ioeventfd_mmio_long(int fd, uint32_t adr, uint32_t val, bool assign);
 
 #if defined(KVM_IRQFD) && defined(CONFIG_KVM)
 int kvm_set_irqfd(int gsi, int fd, bool assigned);
