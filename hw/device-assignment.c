@@ -1600,7 +1600,7 @@ QemuOpts *add_assigned_device(const char *arg)
     if (!r)
         r = get_param_value(id, sizeof(id), "host", arg);
 
-    opts = qemu_opts_create(&qemu_device_opts, id, 0);
+    opts = qemu_opts_create(qemu_find_opts("device"), id, 0);
     if (!opts)
         goto bad;
     qemu_opt_set(opts, "driver", "pci-assign");
