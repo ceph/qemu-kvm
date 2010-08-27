@@ -1837,6 +1837,7 @@ int main(int argc, char **argv, char **envp)
     DisplayChangeListener *dcl;
     int cyls, heads, secs, translation;
     QemuOpts *hda_opts = NULL, *opts;
+    QemuOptsList *olist;
     int optind;
     const char *optarg;
     const char *loadvm = NULL;
@@ -2314,9 +2315,13 @@ int main(int argc, char **argv, char **envp)
                     exit(1);
                 }
                 break;
-#ifdef CONFIG_VIRTFS
             case QEMU_OPTION_fsdev:
-                opts = qemu_opts_parse(qemu_find_opts("fsdev"), optarg, 1);
+                olist = qemu_find_opts("fsdev");
+                if (!olist) {
+                    fprintf(stderr, "fsdev is not supported by this qemu build.\n");
+                    exit(1);
+                }
+                opts = qemu_opts_parse(olist, optarg, 1);
                 if (!opts) {
                     fprintf(stderr, "parse error: %s\n", optarg);
                     exit(1);
@@ -2327,7 +2332,12 @@ int main(int argc, char **argv, char **envp)
                 char *arg_9p = NULL;
                 int len = 0;
 
-                opts = qemu_opts_parse(qemu_find_opts("virtfs"), optarg, 1);
+                olist = qemu_find_opts("virtfs");
+                if (!olist) {
+                    fprintf(stderr, "virtfs is not supported by this qemu build.\n");
+                    exit(1);
+                }
+                opts = qemu_opts_parse(olist, optarg, 1);
                 if (!opts) {
                     fprintf(stderr, "parse error: %s\n", optarg);
                     exit(1);
@@ -2378,7 +2388,6 @@ int main(int argc, char **argv, char **envp)
                 qemu_free(arg_9p);
                 break;
             }
-#endif
             case QEMU_OPTION_serial:
                 add_device_config(DEV_SERIAL, optarg);
                 default_serial = 0;

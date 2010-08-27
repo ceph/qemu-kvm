@@ -34,6 +34,7 @@
 #include "kvm.h"
 #include "sysemu.h"
 #include "sysbus.h"
+#include "blockdev.h"
 
 qemu_irq *ioapic_irq_hack;
 

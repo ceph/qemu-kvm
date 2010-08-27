@@ -41,6 +41,7 @@
 #include "sysemu.h"
 #include "device-assignment.h"
 #include "kvm.h"
+#include "blockdev.h"
 
 /* output Bochs bios info messages */
 //#define DEBUG_BIOS

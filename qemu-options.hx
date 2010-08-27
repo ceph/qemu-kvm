@@ -484,7 +484,6 @@ possible drivers and properties, use @code{-device ?} and
 @code{-device @var{driver},?}.
 ETEXI
 
-#ifdef CONFIG_LINUX
 DEFHEADING(File system options:)
 
 DEF("fsdev", HAS_ARG, QEMU_OPTION_fsdev,
@@ -517,9 +516,7 @@ Create a file-system-"device" for local-filesystem.
 
 @end table
 ETEXI
-#endif
 
-#ifdef CONFIG_LINUX
 DEFHEADING(Virtual File system pass-through options:)
 
 DEF("virtfs", HAS_ARG, QEMU_OPTION_virtfs,
@@ -556,7 +553,6 @@ Create a Virtual file-system-pass through for local-filesystem.
 
 @end table
 ETEXI
-#endif
 
 DEFHEADING()
 
