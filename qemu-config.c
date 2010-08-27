@@ -5,7 +5,7 @@
 #include "sysemu.h"
 #include "hw/qdev.h"
 
-QemuOptsList qemu_drive_opts = {
+static QemuOptsList qemu_drive_opts = {
     .name = "drive",
     .head = QTAILQ_HEAD_INITIALIZER(qemu_drive_opts.head),
     .desc = {
@@ -88,7 +88,7 @@ QemuOptsList qemu_drive_opts = {
     },
 };
 
-QemuOptsList qemu_chardev_opts = {
+static QemuOptsList qemu_chardev_opts = {
     .name = "chardev",
     .implied_opt_name = "backend",
     .head = QTAILQ_HEAD_INITIALIZER(qemu_chardev_opts.head),
@@ -155,7 +155,6 @@ QemuOptsList qemu_chardev_opts = {
     },
 };
 
-#ifdef CONFIG_LINUX
 QemuOptsList qemu_fsdev_opts = {
     .name = "fsdev",
     .implied_opt_name = "fstype",
@@ -174,9 +173,7 @@ QemuOptsList qemu_fsdev_opts = {
         { /*End of list */ }
     },
 };
-#endif
 
-#ifdef CONFIG_LINUX
 QemuOptsList qemu_virtfs_opts = {
     .name = "virtfs",
     .implied_opt_name = "fstype",
@@ -199,9 +196,8 @@ QemuOptsList qemu_virtfs_opts = {
         { /*End of list */ }
     },
 };
-#endif
 
-QemuOptsList qemu_device_opts = {
+static QemuOptsList qemu_device_opts = {
     .name = "device",
     .implied_opt_name = "driver",
     .head = QTAILQ_HEAD_INITIALIZER(qemu_device_opts.head),
@@ -215,7 +211,7 @@ QemuOptsList qemu_device_opts = {
     },
 };
 
-QemuOptsList qemu_netdev_opts = {
+static QemuOptsList qemu_netdev_opts = {
     .name = "netdev",
     .implied_opt_name = "type",
     .head = QTAILQ_HEAD_INITIALIZER(qemu_netdev_opts.head),
@@ -228,7 +224,7 @@ QemuOptsList qemu_netdev_opts = {
     },
 };
 
-QemuOptsList qemu_net_opts = {
+static QemuOptsList qemu_net_opts = {
     .name = "net",
     .implied_opt_name = "type",
     .head = QTAILQ_HEAD_INITIALIZER(qemu_net_opts.head),
@@ -241,7 +237,7 @@ QemuOptsList qemu_net_opts = {
     },
 };
 
-QemuOptsList qemu_rtc_opts = {
+static QemuOptsList qemu_rtc_opts = {
     .name = "rtc",
     .head = QTAILQ_HEAD_INITIALIZER(qemu_rtc_opts.head),
     .desc = {
@@ -251,17 +247,15 @@ QemuOptsList qemu_rtc_opts = {
         },{
             .name = "clock",
             .type = QEMU_OPT_STRING,
-#ifdef TARGET_I386
         },{
             .name = "driftfix",
             .type = QEMU_OPT_STRING,
-#endif
         },
         { /* end if list */ }
     },
 };
 
-QemuOptsList qemu_global_opts = {
+static QemuOptsList qemu_global_opts = {
     .name = "global",
     .head = QTAILQ_HEAD_INITIALIZER(qemu_global_opts.head),
     .desc = {
@@ -279,7 +273,7 @@ QemuOptsList qemu_global_opts = {
     },
 };
 
-QemuOptsList qemu_mon_opts = {
+static QemuOptsList qemu_mon_opts = {
     .name = "mon",
     .implied_opt_name = "chardev",
     .head = QTAILQ_HEAD_INITIALIZER(qemu_mon_opts.head),
@@ -298,7 +292,7 @@ QemuOptsList qemu_mon_opts = {
     },
 };
 
-QemuOptsList qemu_cpudef_opts = {
+static QemuOptsList qemu_cpudef_opts = {
     .name = "cpudef",
     .head = QTAILQ_HEAD_INITIALIZER(qemu_cpudef_opts.head),
     .desc = {
@@ -346,7 +340,7 @@ QemuOptsList qemu_cpudef_opts = {
     },
 };
 
-static QemuOptsList *vm_config_groups[] = {
+static QemuOptsList *vm_config_groups[32] = {
     &qemu_drive_opts,
     &qemu_chardev_opts,
     &qemu_device_opts,
@@ -376,6 +370,22 @@ static QemuOptsList *find_list(QemuOptsList **lists, const char *group)
 QemuOptsList *qemu_find_opts(const char *group)
 {
     return find_list(vm_config_groups, group);
+}
+
+void qemu_add_opts(QemuOptsList *list)
+{
+    int entries, i;
+
+    entries = ARRAY_SIZE(vm_config_groups);
+    entries--; /* keep list NULL terminated */
+    for (i = 0; i < entries; i++) {
+        if (vm_config_groups[i] == NULL) {
+            vm_config_groups[i] = list;
+            return;
+        }
+    }
+    fprintf(stderr, "ran out of space in vm_config_groups");
+    abort();
 }
 
 int qemu_set_option(const char *str)

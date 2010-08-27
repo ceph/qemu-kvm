@@ -584,7 +584,8 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
                 snprintf(name, sizeof(name), "%s.bar%d",
                          pci_dev->dev.qdev.info->name, i);
                 pci_dev->v_addrs[i].memory_index =
-                                            qemu_ram_map(&pci_dev->dev.qdev,
+                                            qemu_ram_alloc_from_ptr(
+                                                         &pci_dev->dev.qdev,
                                                          name, cur_region->size,
                                                          virtbase);
             } else
@@ -1599,7 +1600,7 @@ QemuOpts *add_assigned_device(const char *arg)
     if (!r)
         r = get_param_value(id, sizeof(id), "host", arg);
 
-    opts = qemu_opts_create(&qemu_device_opts, id, 0);
+    opts = qemu_opts_create(qemu_find_opts("device"), id, 0);
     if (!opts)
         goto bad;
     qemu_opt_set(opts, "driver", "pci-assign");
