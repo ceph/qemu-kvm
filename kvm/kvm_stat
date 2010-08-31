@@ -3,21 +3,36 @@
 import curses
 import sys, os, time, optparse
 
+class DebugfsProvider(object):
+    def __init__(self):
+        self.base = '/sys/kernel/debug/kvm'
+        self._fields = os.listdir(self.base)
+    def fields(self):
+        return self._fields
+    def select(self, fields):
+        self._fields = fields
+    def read(self):
+        def val(key):
+            return int(file(self.base + '/' + key).read())
+        return dict([(key, val(key)) for key in self._fields])
+
 class Stats:
-    def __init__(self, fields = None):
+    def __init__(self, provider, fields = None):
         def wanted(key):
             import re
             if not fields:
                 return True
             return re.match(fields, key) != None
-        self.base = '/sys/kernel/debug/kvm'
-        self.values = {}
-        for key in os.listdir(self.base):
-            if wanted(key):
-                self.values[key] = None
+        self.provider = provider
+        self.values = dict([(key, None)
+                            for key in provider.fields()
+                            if wanted(key)])
+        self.provider.select(self.values.keys())
     def get(self):
-        for key, oldval in self.values.iteritems():
-            newval = int(file(self.base + '/' + key).read())
+        new = self.provider.read()
+        for key in self.provider.fields():
+            oldval = self.values[key]
+            newval = new[key]
             newdelta = None
             if oldval is not None:
                 newdelta = newval - oldval[0]
@@ -118,7 +133,7 @@ options.add_option('-f', '--fields',
                    )
 (options, args) = options.parse_args(sys.argv)
 
-stats = Stats(fields = options.fields)
+stats = Stats(provider = DebugfsProvider(), fields = options.fields)
 
 if options.log:
     log(stats)
