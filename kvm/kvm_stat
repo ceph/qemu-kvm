@@ -306,7 +306,12 @@ def tui(screen, stats):
         screen.addstr(0, 0, 'kvm statistics')
         row = 2
         s = stats.get()
-        for key in sorted(s.keys()):
+        def sortkey(x):
+            if s[x][1]:
+                return -s[x][1]
+            else:
+                return x
+        for key in sorted(s.keys(), key = sortkey):
             if row >= screen.getmaxyx()[0]:
                 break
             values = s[key]
