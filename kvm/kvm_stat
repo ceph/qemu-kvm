@@ -295,7 +295,7 @@ if not os.access('/sys/kernel/debug/kvm', os.F_OK):
     print "and ensure the kvm modules are loaded"
     sys.exit(1)
 
-label_width = 20
+label_width = 40
 number_width = 10
 
 def tui(screen, stats):
