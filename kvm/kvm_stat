@@ -327,7 +327,7 @@ def tui(screen, stats):
 
     while True:
         refresh()
-        curses.halfdelay(10)
+        curses.halfdelay(30)
         try:
             c = screen.getkey()
             if c == 'q':
