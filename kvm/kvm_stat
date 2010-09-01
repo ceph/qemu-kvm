@@ -301,7 +301,7 @@ number_width = 10
 def tui(screen, stats):
     curses.use_default_colors()
     curses.noecho()
-    def refresh():
+    def refresh(sleeptime):
         screen.erase()
         screen.addstr(0, 0, 'kvm statistics')
         row = 2
@@ -321,13 +321,13 @@ def tui(screen, stats):
             screen.addstr(row, col, '%10d' % (values[0],))
             col += number_width
             if values[1] is not None:
-                screen.addstr(row, col, '%8d' % (values[1],))
+                screen.addstr(row, col, '%8d' % (values[1] / sleeptime,))
             row += 1
         screen.refresh()
 
     sleeptime = 0.25
     while True:
-        refresh()
+        refresh(sleeptime)
         curses.halfdelay(int(sleeptime * 10))
         sleeptime = 3
         try:
