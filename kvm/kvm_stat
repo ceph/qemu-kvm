@@ -325,9 +325,11 @@ def tui(screen, stats):
             row += 1
         screen.refresh()
 
+    sleeptime = 0.25
     while True:
         refresh()
-        curses.halfdelay(30)
+        curses.halfdelay(int(sleeptime * 10))
+        sleeptime = 3
         try:
             c = screen.getkey()
             if c == 'q':
