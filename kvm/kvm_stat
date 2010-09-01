@@ -315,6 +315,8 @@ def tui(screen, stats):
             if row >= screen.getmaxyx()[0]:
                 break
             values = s[key]
+            if not values[0] and not values[1]:
+                break
             col = 1
             screen.addstr(row, col, key)
             col += label_width
