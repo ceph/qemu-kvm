@@ -219,7 +219,10 @@ class TracepointProvider(object):
         return self._fields
     def select(self, _fields):
         self._fields = _fields
-        self.cpus = [0, 1]
+        cpure = r'cpu([0-9]+)'
+        self.cpus = [int(re.match(cpure, x).group(1))
+                     for x in os.listdir('/sys/devices/system/cpu')
+                     if re.match(cpure, x)]
         fds = []
         self.group_leaders = []
         for cpu in self.cpus:
