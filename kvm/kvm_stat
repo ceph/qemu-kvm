@@ -223,6 +223,9 @@ class TracepointProvider(object):
         self.cpus = [int(re.match(cpure, x).group(1))
                      for x in os.listdir('/sys/devices/system/cpu')
                      if re.match(cpure, x)]
+        import resource
+        nfiles = len(self.cpus) * 1000
+        resource.setrlimit(resource.RLIMIT_NOFILE, (nfiles, nfiles))
         fds = []
         self.group_leaders = []
         for cpu in self.cpus:
