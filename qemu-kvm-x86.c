@@ -659,7 +659,7 @@ static int get_msr_entry(struct kvm_msr_entry *entry, CPUState *env)
 #endif
     default:
 #ifdef KVM_CAP_MCE
-        if (entry->index >= MSR_MC0_CTL &&                              \
+        if (entry->index >= MSR_MC0_CTL &&
             entry->index < MSR_MC0_CTL + (env->mcg_cap & 0xff) * 4) {
             env->mce_banks[entry->index - MSR_MC0_CTL] = entry->data;
             break;
