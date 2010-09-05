@@ -201,8 +201,9 @@ int kvm_init(int smp_cpus)
         kvm_context->max_gsi = gsi_bits;
 
         /* Mark any over-allocated bits as already in use */
-        for (i = gsi_count; i < gsi_bits; i++)
+        for (i = gsi_count; i < gsi_bits; i++) {
             set_gsi(kvm_context, i);
+        }
     }
 
     kvm_cpu_register_phys_memory_client();
@@ -296,8 +297,9 @@ static int kvm_set_boot_vcpu_id(kvm_context_t kvm, uint32_t id)
 {
 #ifdef KVM_CAP_SET_BOOT_CPU_ID
     int r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_SET_BOOT_CPU_ID);
-    if (r > 0)
+    if (r > 0) {
         return kvm_vm_ioctl(kvm_state, KVM_SET_BOOT_CPU_ID, id);
+    }
     return -ENOSYS;
 #else
     return -ENOSYS;
@@ -352,8 +354,9 @@ void kvm_create_irqchip(kvm_context_t kvm)
 #if defined(KVM_CAP_IRQ_INJECT_STATUS) && defined(KVM_IRQ_LINE_STATUS)
                 r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION,
                               KVM_CAP_IRQ_INJECT_STATUS);
-                if (r > 0)
+                if (r > 0) {
                     kvm->irqchip_inject_ioctl = KVM_IRQ_LINE_STATUS;
+                }
 #endif
                 kvm->irqchip_in_kernel = 1;
             } else
@@ -369,17 +372,22 @@ int kvm_create(kvm_context_t kvm, unsigned long phys_mem_bytes, void **vm_mem)
     int r, i;
 
     r = kvm_create_vm(kvm);
-    if (r < 0)
+    if (r < 0) {
         return r;
+    }
     r = kvm_arch_create(kvm, phys_mem_bytes, vm_mem);
-    if (r < 0)
+    if (r < 0) {
         return r;
-    for (i = 0; i < ARRAY_SIZE(kvm_state->slots); i++)
+    }
+    for (i = 0; i < ARRAY_SIZE(kvm_state->slots); i++) {
         kvm_state->slots[i].slot = i;
+    }
 
     r = kvm_create_default_phys_mem(kvm, phys_mem_bytes, vm_mem);
-    if (r < 0)
+    if (r < 0) {
         return r;
+    }
+
     kvm_create_irqchip(kvm);
 
     return 0;
@@ -392,13 +400,15 @@ int kvm_set_irq_level(kvm_context_t kvm, int irq, int level, int *status)
     struct kvm_irq_level event;
     int r;
 
-    if (!kvm->irqchip_in_kernel)
+    if (!kvm->irqchip_in_kernel) {
         return 0;
+    }
     event.level = level;
     event.irq = irq;
     r = kvm_vm_ioctl(kvm_state, kvm->irqchip_inject_ioctl, &event);
-    if (r < 0)
+    if (r < 0) {
         perror("kvm_set_irq_level");
+    }
 
     if (status) {
 #ifdef KVM_CAP_IRQ_INJECT_STATUS
@@ -416,8 +426,9 @@ int kvm_get_irqchip(kvm_context_t kvm, struct kvm_irqchip *chip)
 {
     int r;
 
-    if (!kvm->irqchip_in_kernel)
+    if (!kvm->irqchip_in_kernel) {
         return 0;
+    }
     r = kvm_vm_ioctl(kvm_state, KVM_GET_IRQCHIP, chip);
     if (r < 0) {
         perror("kvm_get_irqchip\n");
@@ -429,8 +440,9 @@ int kvm_set_irqchip(kvm_context_t kvm, struct kvm_irqchip *chip)
 {
     int r;
 
-    if (!kvm->irqchip_in_kernel)
+    if (!kvm->irqchip_in_kernel) {
         return 0;
+    }
     r = kvm_vm_ioctl(kvm_state, KVM_SET_IRQCHIP, chip);
     if (r < 0) {
         perror("kvm_set_irqchip\n");
@@ -487,8 +499,9 @@ int kvm_get_mpstate(CPUState *env, struct kvm_mp_state *mp_state)
     int r;
 
     r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_MP_STATE);
-    if (r > 0)
+    if (r > 0) {
         return kvm_vcpu_ioctl(env, KVM_GET_MP_STATE, mp_state);
+    }
     return -ENOSYS;
 }
 
@@ -497,8 +510,9 @@ int kvm_set_mpstate(CPUState *env, struct kvm_mp_state *mp_state)
     int r;
 
     r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_MP_STATE);
-    if (r > 0)
+    if (r > 0) {
         return kvm_vcpu_ioctl(env, KVM_SET_MP_STATE, mp_state);
+    }
     return -ENOSYS;
 }
 #endif
@@ -534,8 +548,9 @@ static int handle_mmio(CPUState *env)
     void *data = kvm_run->mmio.data;
 
     /* hack: Red Hat 7.1 generates these weird accesses. */
-    if ((addr > 0xa0000 - 4 && addr <= 0xa0000) && kvm_run->mmio.len == 3)
+    if ((addr > 0xa0000 - 4 && addr <= 0xa0000) && kvm_run->mmio.len == 3) {
         return 0;
+    }
 
     cpu_physical_memory_rw(addr, data, kvm_run->mmio.len, kvm_run->mmio.is_write);
     return 0;
@@ -596,13 +611,15 @@ int kvm_run(CPUState *env)
     }
     push_nmi(kvm);
 #if !defined(__s390__)
-    if (!kvm->irqchip_in_kernel)
+    if (!kvm->irqchip_in_kernel) {
         run->request_interrupt_window = kvm_arch_try_push_interrupts(env);
+    }
 #endif
 
     r = pre_kvm_run(kvm, env);
-    if (r)
+    if (r) {
         return r;
+    }
     if (env->exit_request) {
         env->exit_request = 0;
         pthread_kill(env->kvm_cpu_state.thread, SIG_IPI);
@@ -684,9 +701,10 @@ int kvm_run(CPUState *env)
             break;
         }
     }
-  more:
-    if (!r)
+more:
+    if (!r) {
         goto again;
+    }
     return r;
 }
 
@@ -822,13 +840,15 @@ int kvm_add_routing_entry(kvm_context_t kvm,
 
     if (kvm->irq_routes->nr == kvm->nr_allocated_irq_routes) {
         n = kvm->nr_allocated_irq_routes * 2;
-        if (n < 64)
+        if (n < 64) {
             n = 64;
+        }
         size = sizeof(struct kvm_irq_routing);
         size += n * sizeof(*new);
         z = realloc(kvm->irq_routes, size);
-        if (!z)
+        if (!z) {
             return -ENOMEM;
+        }
         kvm->nr_allocated_irq_routes = n;
         kvm->irq_routes = z;
     }
@@ -910,8 +930,9 @@ int kvm_del_routing_entry(kvm_context_t kvm,
                     if (e->gsi == gsi)
                         break;
                 }
-                if (i == kvm->irq_routes->nr)
+                if (i == kvm->irq_routes->nr) {
                     clear_gsi(kvm, gsi);
+                }
 
                 return 0;
             }
@@ -1001,8 +1022,9 @@ int kvm_get_irq_route_gsi(kvm_context_t kvm)
     /* Return the lowest unused GSI in the bitmap */
     for (i = 0; i < kvm->max_gsi / 32; i++) {
         bit = ffs(~buf[i]);
-        if (!bit)
+        if (!bit) {
             continue;
+        }
 
         return bit - 1 + i * 32;
     }
@@ -1048,8 +1070,9 @@ int kvm_irqfd(kvm_context_t kvm, int gsi, int flags)
         return -ENOENT;
 
     fd = eventfd(0, 0);
-    if (fd < 0)
+    if (fd < 0) {
         return -errno;
+    }
 
     r = _kvm_irqfd(kvm, fd, gsi, 0);
     if (r < 0) {
@@ -1132,18 +1155,20 @@ static void sigbus_handler(int n, struct qemu_signalfd_siginfo *siginfo,
         kvm_inject_x86_mce(first_cpu, 9, status,
                            MCG_STATUS_MCIP | MCG_STATUS_RIPV, paddr,
                            (MCM_ADDR_PHYS << 6) | 0xc, 1);
-        for (cenv = first_cpu->next_cpu; cenv != NULL; cenv = cenv->next_cpu)
+        for (cenv = first_cpu->next_cpu; cenv != NULL; cenv = cenv->next_cpu) {
             kvm_inject_x86_mce(cenv, 1, MCI_STATUS_VAL | MCI_STATUS_UC,
                                MCG_STATUS_MCIP | MCG_STATUS_RIPV, 0, 0, 1);
+        }
     } else
 #endif
     {
-        if (siginfo->ssi_code == BUS_MCEERR_AO)
+        if (siginfo->ssi_code == BUS_MCEERR_AO) {
             return;
-        else if (siginfo->ssi_code == BUS_MCEERR_AR)
+        } else if (siginfo->ssi_code == BUS_MCEERR_AR) {
             hardware_memory_error();
-        else
+        } else {
             sigbus_reraise();
+        }
     }
 }
 
@@ -1158,17 +1183,19 @@ static void on_vcpu(CPUState *env, void (*func)(void *data), void *data)
 
     wi.func = func;
     wi.data = data;
-    if (!env->kvm_cpu_state.queued_work_first)
+    if (!env->kvm_cpu_state.queued_work_first) {
         env->kvm_cpu_state.queued_work_first = &wi;
-    else
+    } else {
         env->kvm_cpu_state.queued_work_last->next = &wi;
+    }
     env->kvm_cpu_state.queued_work_last = &wi;
     wi.next = NULL;
     wi.done = false;
 
     pthread_kill(env->kvm_cpu_state.thread, SIG_IPI);
-    while (!wi.done)
+    while (!wi.done) {
         qemu_cond_wait(&qemu_work_cond);
+    }
 }
 
 static void do_kvm_cpu_synchronize_state(void *_env)
@@ -1183,8 +1210,9 @@ static void do_kvm_cpu_synchronize_state(void *_env)
 
 void kvm_cpu_synchronize_state(CPUState *env)
 {
-    if (!env->kvm_vcpu_dirty)
+    if (!env->kvm_vcpu_dirty) {
         on_vcpu(env, do_kvm_cpu_synchronize_state, env);
+    }
 }
 
 void kvm_cpu_synchronize_post_reset(CPUState *env)
@@ -1214,19 +1242,22 @@ void kvm_update_interrupt_request(CPUState *env)
     int signal = 0;
 
     if (env) {
-        if (!current_env || !current_env->created)
+        if (!current_env || !current_env->created) {
             signal = 1;
+        }
         /*
          * Testing for created here is really redundant
          */
         if (current_env && current_env->created &&
-            env != current_env && !env->kvm_cpu_state.signalled)
+            env != current_env && !env->kvm_cpu_state.signalled) {
             signal = 1;
+        }
 
         if (signal) {
             env->kvm_cpu_state.signalled = 1;
-            if (env->kvm_cpu_state.thread)
+            if (env->kvm_cpu_state.thread) {
                 pthread_kill(env->kvm_cpu_state.thread, SIG_IPI);
+            }
         }
     }
 }
@@ -1253,8 +1284,9 @@ static void flush_queued_work(CPUState *env)
 {
     struct qemu_work_item *wi;
 
-    if (!env->kvm_cpu_state.queued_work_first)
+    if (!env->kvm_cpu_state.queued_work_first) {
         return;
+    }
 
     while ((wi = env->kvm_cpu_state.queued_work_first)) {
         env->kvm_cpu_state.queued_work_first = wi->next;
@@ -1273,8 +1305,9 @@ static int kvm_mce_in_exception(CPUState *env)
     int r;
 
     r = kvm_get_msrs(env, &msr_mcg_status, 1);
-    if (r == -1 || r == 0)
+    if (r == -1 || r == 0) {
         return -1;
+    }
     return !!(msr_mcg_status.data & MCG_STATUS_MCIP);
 }
 
@@ -1303,10 +1336,11 @@ static void kvm_on_sigbus(CPUState *env, siginfo_t *siginfo)
              * this SRAO MCE
              */
             r = kvm_mce_in_exception(env);
-            if (r == -1)
+            if (r == -1) {
                 fprintf(stderr, "Failed to get MCE status\n");
-            else if (r)
+            } else if (r) {
                 return;
+            }
             /* Fake an Intel architectural Memory scrubbing UCR */
             mce.status = MCI_STATUS_VAL | MCI_STATUS_UC | MCI_STATUS_EN
                 | MCI_STATUS_MISCV | MCI_STATUS_ADDRV | MCI_STATUS_S
@@ -1318,10 +1352,11 @@ static void kvm_on_sigbus(CPUState *env, siginfo_t *siginfo)
             fprintf(stderr, "Hardware memory error for memory used by "
                     "QEMU itself instaed of guest system!\n");
             /* Hope we are lucky for AO MCE */
-            if (siginfo->si_code == BUS_MCEERR_AO)
+            if (siginfo->si_code == BUS_MCEERR_AO) {
                 return;
-            else
+            } else {
                 hardware_memory_error();
+            }
         }
         mce.addr = paddr;
         r = kvm_set_mce(env, &mce);
@@ -1332,12 +1367,13 @@ static void kvm_on_sigbus(CPUState *env, siginfo_t *siginfo)
     } else
 #endif
     {
-        if (siginfo->si_code == BUS_MCEERR_AO)
+        if (siginfo->si_code == BUS_MCEERR_AO) {
             return;
-        else if (siginfo->si_code == BUS_MCEERR_AR)
+        } else if (siginfo->si_code == BUS_MCEERR_AR) {
             hardware_memory_error();
-        else
+        } else {
             sigbus_reraise();
+        }
     }
 }
 
@@ -1400,8 +1436,9 @@ static int all_threads_paused(void)
     CPUState *penv = first_cpu;
 
     while (penv) {
-        if (penv->stop)
+        if (penv->stop) {
             return 0;
+        }
         penv = (CPUState *) penv->next_cpu;
     }
 
@@ -1424,8 +1461,9 @@ static void pause_all_threads(void)
         penv = (CPUState *) penv->next_cpu;
     }
 
-    while (!all_threads_paused())
+    while (!all_threads_paused()) {
         qemu_cond_wait(&qemu_pause_cond);
+    }
 }
 
 static void resume_all_threads(void)
@@ -1444,10 +1482,11 @@ static void resume_all_threads(void)
 
 static void kvm_vm_state_change_handler(void *context, int running, int reason)
 {
-    if (running)
+    if (running) {
         resume_all_threads();
-    else
+    } else {
         pause_all_threads();
+    }
 }
 
 static void setup_kernel_sigmask(CPUState *env)
@@ -1532,8 +1571,9 @@ static void *ap_main_loop(void *_env)
     pthread_cond_signal(&qemu_vcpu_cond);
 
     /* and wait for machine initialization */
-    while (!qemu_system_ready)
+    while (!qemu_system_ready) {
         qemu_cond_wait(&qemu_system_cond);
+    }
 
     /* re-initialize cpu_single_env after re-acquiring qemu_mutex */
     cpu_single_env = env;
@@ -1546,8 +1586,9 @@ int kvm_init_vcpu(CPUState *env)
 {
     pthread_create(&env->kvm_cpu_state.thread, NULL, ap_main_loop, env);
 
-    while (env->created == 0)
+    while (env->created == 0) {
         qemu_cond_wait(&qemu_vcpu_cond);
+    }
 
     return 0;
 }
@@ -1599,8 +1640,9 @@ void qemu_kvm_notify_work(void)
     static uint64_t val = 1;
     ssize_t ret;
 
-    if (io_thread_fd == -1)
+    if (io_thread_fd == -1) {
         return;
+    }
 
     do {
         ret = write(io_thread_fd, &val, sizeof(val));
@@ -1631,8 +1673,9 @@ static void sigfd_handler(void *opaque)
             len = read(fd, &info, sizeof(info));
         } while (len == -1 && errno == EINTR);
 
-        if (len == -1 && errno == EAGAIN)
+        if (len == -1 && errno == EAGAIN) {
             break;
+        }
 
         if (len != sizeof(info)) {
             printf("read from sigfd returned %zd: %m\n", len);
@@ -1640,12 +1683,12 @@ static void sigfd_handler(void *opaque)
         }
 
         sigaction(info.ssi_signo, NULL, &action);
-        if ((action.sa_flags & SA_SIGINFO) && action.sa_sigaction)
+        if ((action.sa_flags & SA_SIGINFO) && action.sa_sigaction) {
             action.sa_sigaction(info.ssi_signo,
                                 (siginfo_t *)&info, NULL);
-	else if (action.sa_handler)
+        } else if (action.sa_handler) {
             action.sa_handler(info.ssi_signo);
-
+        }
     }
 }
 
@@ -1712,8 +1755,9 @@ int kvm_main_loop(void)
             monitor_protocol_event(QEVENT_SHUTDOWN, NULL);
             if (qemu_no_shutdown()) {
                 vm_stop(0);
-            } else
+            } else {
                 break;
+            }
         } else if (qemu_powerdown_requested()) {
             monitor_protocol_event(QEVENT_POWERDOWN, NULL);
             qemu_irq_raise(qemu_system_powerdown);
@@ -1840,14 +1884,16 @@ static void kvm_mutex_lock(void)
 
 void qemu_mutex_unlock_iothread(void)
 {
-    if (kvm_enabled())
+    if (kvm_enabled()) {
         kvm_mutex_unlock();
+    }
 }
 
 void qemu_mutex_lock_iothread(void)
 {
-    if (kvm_enabled())
+    if (kvm_enabled()) {
         kvm_mutex_lock();
+    }
 }
 
 #ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
@@ -1875,8 +1921,9 @@ void kvm_remove_ioperm_data(unsigned long start_port, unsigned long num)
 
 void kvm_ioperm(CPUState *env, void *data)
 {
-    if (kvm_enabled() && qemu_system_ready)
+    if (kvm_enabled() && qemu_system_ready) {
         on_vcpu(env, kvm_arch_do_ioperm, data);
+    }
 }
 
 #endif
@@ -1901,15 +1948,17 @@ static void kvm_do_inject_x86_mce(void *_data)
 
     /* If there is an MCE excpetion being processed, ignore this SRAO MCE */
     r = kvm_mce_in_exception(data->env);
-    if (r == -1)
+    if (r == -1) {
         fprintf(stderr, "Failed to get MCE status\n");
-    else if (r && !(data->mce->status & MCI_STATUS_AR))
+    } else if (r && !(data->mce->status & MCI_STATUS_AR)) {
         return;
+    }
     r = kvm_set_mce(data->env, data->mce);
     if (r < 0) {
         perror("kvm_set_mce FAILED");
-        if (data->abort_on_error)
+        if (data->abort_on_error) {
             abort();
+        }
     }
 }
 #endif
@@ -1938,8 +1987,9 @@ void kvm_inject_x86_mce(CPUState *cenv, int bank, uint64_t status,
     }
     on_vcpu(cenv, kvm_do_inject_x86_mce, &data);
 #else
-    if (abort_on_error)
+    if (abort_on_error) {
         abort();
+    }
 #endif
 }
 #endif
