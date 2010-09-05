@@ -24,7 +24,7 @@
 #include "kvm.h"
 #include "hw/apic.h"
 
-#define MSR_IA32_TSC		0x10
+#define MSR_IA32_TSC            0x10
 
 static struct kvm_msr_list *kvm_msr_list;
 extern unsigned int kvm_shadow_memory;
@@ -35,205 +35,203 @@ static int lm_capable_kernel;
 
 int kvm_set_tss_addr(kvm_context_t kvm, unsigned long addr)
 {
-	int r;
-        /*
-         * Tell fw_cfg to notify the BIOS to reserve the range.
-         */
-        if (e820_add_entry(addr, 0x4000, E820_RESERVED) < 0) {
-            perror("e820_add_entry() table is full");
-            exit(1);
-        }
+    int r;
+    /*
+     * Tell fw_cfg to notify the BIOS to reserve the range.
+     */
+    if (e820_add_entry(addr, 0x4000, E820_RESERVED) < 0) {
+        perror("e820_add_entry() table is full");
+        exit(1);
+    }
 
-	r = kvm_vm_ioctl(kvm_state, KVM_SET_TSS_ADDR, addr);
-	if (r < 0) {
-		fprintf(stderr, "kvm_set_tss_addr: %m\n");
-		return r;
-	}
-	return 0;
+    r = kvm_vm_ioctl(kvm_state, KVM_SET_TSS_ADDR, addr);
+    if (r < 0) {
+        fprintf(stderr, "kvm_set_tss_addr: %m\n");
+        return r;
+    }
+    return 0;
 }
 
 static int kvm_init_tss(kvm_context_t kvm)
 {
-	int r;
+    int r;
 
-	r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_SET_TSS_ADDR);
-	if (r > 0) {
-		/*
-		 * this address is 3 pages before the bios, and the bios should present
-		 * as unavaible memory
-		 */
-		r = kvm_set_tss_addr(kvm, 0xfeffd000);
-		if (r < 0) {
-			fprintf(stderr, "kvm_init_tss: unable to set tss addr\n");
-			return r;
-		}
-	} else {
-		fprintf(stderr, "kvm does not support KVM_CAP_SET_TSS_ADDR\n");
-	}
-	return 0;
+    r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_SET_TSS_ADDR);
+    if (r > 0) {
+        /*
+         * this address is 3 pages before the bios, and the bios should present
+         * as unavaible memory
+         */
+        r = kvm_set_tss_addr(kvm, 0xfeffd000);
+        if (r < 0) {
+            fprintf(stderr, "kvm_init_tss: unable to set tss addr\n");
+            return r;
+        }
+    } else {
+        fprintf(stderr, "kvm does not support KVM_CAP_SET_TSS_ADDR\n");
+    }
+    return 0;
 }
 
 static int kvm_set_identity_map_addr(kvm_context_t kvm, uint64_t addr)
 {
 #ifdef KVM_CAP_SET_IDENTITY_MAP_ADDR
-	int r;
+    int r;
 
-	r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_SET_IDENTITY_MAP_ADDR);
-	if (r > 0) {
-		r = kvm_vm_ioctl(kvm_state, KVM_SET_IDENTITY_MAP_ADDR, &addr);
-		if (r == -1) {
-			fprintf(stderr, "kvm_set_identity_map_addr: %m\n");
-			return -errno;
-		}
-		return 0;
-	}
+    r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_SET_IDENTITY_MAP_ADDR);
+    if (r > 0) {
+        r = kvm_vm_ioctl(kvm_state, KVM_SET_IDENTITY_MAP_ADDR, &addr);
+        if (r == -1) {
+            fprintf(stderr, "kvm_set_identity_map_addr: %m\n");
+            return -errno;
+        }
+        return 0;
+    }
 #endif
-	return -ENOSYS;
+    return -ENOSYS;
 }
 
 static int kvm_init_identity_map_page(kvm_context_t kvm)
 {
 #ifdef KVM_CAP_SET_IDENTITY_MAP_ADDR
-	int r;
+    int r;
 
-	r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_SET_IDENTITY_MAP_ADDR);
-	if (r > 0) {
-		/*
-		 * this address is 4 pages before the bios, and the bios should present
-		 * as unavaible memory
-		 */
-		r = kvm_set_identity_map_addr(kvm, 0xfeffc000);
-		if (r < 0) {
-			fprintf(stderr, "kvm_init_identity_map_page: "
-				"unable to set identity mapping addr\n");
-			return r;
-		}
-
-	}
+    r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_SET_IDENTITY_MAP_ADDR);
+    if (r > 0) {
+        /*
+         * this address is 4 pages before the bios, and the bios should present
+         * as unavaible memory
+         */
+        r = kvm_set_identity_map_addr(kvm, 0xfeffc000);
+        if (r < 0) {
+            fprintf(stderr, "kvm_init_identity_map_page: "
+                    "unable to set identity mapping addr\n");
+            return r;
+        }
+    }
 #endif
-	return 0;
+    return 0;
 }
 
 static int kvm_create_pit(kvm_context_t kvm)
 {
 #ifdef KVM_CAP_PIT
-	int r;
+    int r;
 
-	kvm_state->pit_in_kernel = 0;
-	if (!kvm->no_pit_creation) {
-		r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_PIT);
-		if (r > 0) {
-			r = kvm_vm_ioctl(kvm_state, KVM_CREATE_PIT);
-			if (r >= 0)
-				kvm_state->pit_in_kernel = 1;
-			else {
-				fprintf(stderr, "Create kernel PIC irqchip failed\n");
-				return r;
-			}
-		}
-	}
+    kvm_state->pit_in_kernel = 0;
+    if (!kvm->no_pit_creation) {
+        r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_PIT);
+        if (r > 0) {
+            r = kvm_vm_ioctl(kvm_state, KVM_CREATE_PIT);
+            if (r >= 0)
+                kvm_state->pit_in_kernel = 1;
+            else {
+                fprintf(stderr, "Create kernel PIC irqchip failed\n");
+                return r;
+            }
+        }
+    }
 #endif
-	return 0;
+    return 0;
 }
 
 int kvm_arch_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
-			void **vm_mem)
+                        void **vm_mem)
 {
-	int r = 0;
+    int r = 0;
 
-	r = kvm_init_tss(kvm);
-	if (r < 0)
-		return r;
+    r = kvm_init_tss(kvm);
+    if (r < 0)
+        return r;
 
-	r = kvm_init_identity_map_page(kvm);
-	if (r < 0)
-		return r;
+    r = kvm_init_identity_map_page(kvm);
+    if (r < 0)
+        return r;
 
-	r = kvm_create_pit(kvm);
-	if (r < 0)
-		return r;
+    r = kvm_create_pit(kvm);
+    if (r < 0)
+        return r;
 
-	r = kvm_init_coalesced_mmio(kvm);
-	if (r < 0)
-		return r;
+    r = kvm_init_coalesced_mmio(kvm);
+    if (r < 0)
+        return r;
 
-	return 0;
+    return 0;
 }
 
 #ifdef KVM_EXIT_TPR_ACCESS
 
 static int kvm_handle_tpr_access(CPUState *env)
 {
-	struct kvm_run *run = env->kvm_run;
-	kvm_tpr_access_report(env,
-                         run->tpr_access.rip,
-                         run->tpr_access.is_write);
+    struct kvm_run *run = env->kvm_run;
+    kvm_tpr_access_report(env,
+                          run->tpr_access.rip,
+                          run->tpr_access.is_write);
     return 0;
 }
 
 
 int kvm_enable_vapic(CPUState *env, uint64_t vapic)
 {
-	struct kvm_vapic_addr va = {
-		.vapic_addr = vapic,
-	};
+    struct kvm_vapic_addr va = {
+        .vapic_addr = vapic,
+    };
 
-	return kvm_vcpu_ioctl(env, KVM_SET_VAPIC_ADDR, &va);
+    return kvm_vcpu_ioctl(env, KVM_SET_VAPIC_ADDR, &va);
 }
 
 #endif
 
 int kvm_arch_run(CPUState *env)
 {
-	int r = 0;
-	struct kvm_run *run = env->kvm_run;
+    int r = 0;
+    struct kvm_run *run = env->kvm_run;
 
-
-	switch (run->exit_reason) {
+    switch (run->exit_reason) {
 #ifdef KVM_EXIT_SET_TPR
-		case KVM_EXIT_SET_TPR:
-			break;
+    case KVM_EXIT_SET_TPR:
+        break;
 #endif
 #ifdef KVM_EXIT_TPR_ACCESS
-		case KVM_EXIT_TPR_ACCESS:
-			r = kvm_handle_tpr_access(env);
-			break;
+    case KVM_EXIT_TPR_ACCESS:
+        r = kvm_handle_tpr_access(env);
+        break;
 #endif
-		default:
-			r = 1;
-			break;
-	}
+    default:
+        r = 1;
+        break;
+    }
 
-	return r;
+    return r;
 }
 
 #ifdef KVM_CAP_IRQCHIP
 
 int kvm_get_lapic(CPUState *env, struct kvm_lapic_state *s)
 {
-	int r = 0;
+    int r = 0;
 
-	if (!kvm_irqchip_in_kernel())
-		return r;
+    if (!kvm_irqchip_in_kernel())
+        return r;
 
-	r = kvm_vcpu_ioctl(env, KVM_GET_LAPIC, s);
-	if (r < 0)
-		fprintf(stderr, "KVM_GET_LAPIC failed\n");
-	return r;
+    r = kvm_vcpu_ioctl(env, KVM_GET_LAPIC, s);
+    if (r < 0)
+        fprintf(stderr, "KVM_GET_LAPIC failed\n");
+    return r;
 }
 
 int kvm_set_lapic(CPUState *env, struct kvm_lapic_state *s)
 {
-	int r = 0;
+    int r = 0;
 
-	if (!kvm_irqchip_in_kernel())
-		return 0;
+    if (!kvm_irqchip_in_kernel())
+        return 0;
 
-	r = kvm_vcpu_ioctl(env, KVM_SET_LAPIC, s);
+    r = kvm_vcpu_ioctl(env, KVM_SET_LAPIC, s);
 
-	if (r < 0)
-		fprintf(stderr, "KVM_SET_LAPIC failed\n");
-	return r;
+    if (r < 0)
+        fprintf(stderr, "KVM_SET_LAPIC failed\n");
+    return r;
 }
 
 #endif
@@ -242,31 +240,31 @@ int kvm_set_lapic(CPUState *env, struct kvm_lapic_state *s)
 
 int kvm_get_pit(kvm_context_t kvm, struct kvm_pit_state *s)
 {
-	if (!kvm_pit_in_kernel())
-		return 0;
-	return kvm_vm_ioctl(kvm_state, KVM_GET_PIT, s);
+    if (!kvm_pit_in_kernel())
+        return 0;
+    return kvm_vm_ioctl(kvm_state, KVM_GET_PIT, s);
 }
 
 int kvm_set_pit(kvm_context_t kvm, struct kvm_pit_state *s)
 {
-	if (!kvm_pit_in_kernel())
-		return 0;
-	return kvm_vm_ioctl(kvm_state, KVM_SET_PIT, s);
+    if (!kvm_pit_in_kernel())
+        return 0;
+    return kvm_vm_ioctl(kvm_state, KVM_SET_PIT, s);
 }
 
 #ifdef KVM_CAP_PIT_STATE2
 int kvm_get_pit2(kvm_context_t kvm, struct kvm_pit_state2 *ps2)
 {
-	if (!kvm_pit_in_kernel())
-		return 0;
-	return kvm_vm_ioctl(kvm_state, KVM_GET_PIT2, ps2);
+    if (!kvm_pit_in_kernel())
+        return 0;
+    return kvm_vm_ioctl(kvm_state, KVM_GET_PIT2, ps2);
 }
 
 int kvm_set_pit2(kvm_context_t kvm, struct kvm_pit_state2 *ps2)
 {
-	if (!kvm_pit_in_kernel())
-		return 0;
-	return kvm_vm_ioctl(kvm_state, KVM_SET_PIT2, ps2);
+    if (!kvm_pit_in_kernel())
+        return 0;
+    return kvm_vm_ioctl(kvm_state, KVM_SET_PIT2, ps2);
 }
 
 #endif
@@ -274,47 +272,47 @@ int kvm_set_pit2(kvm_context_t kvm, struct kvm_pit_state2 *ps2)
 
 int kvm_has_pit_state2(kvm_context_t kvm)
 {
-	int r = 0;
+    int r = 0;
 
 #ifdef KVM_CAP_PIT_STATE2
-	r = kvm_check_extension(kvm_state, KVM_CAP_PIT_STATE2);
+    r = kvm_check_extension(kvm_state, KVM_CAP_PIT_STATE2);
 #endif
-	return r;
+    return r;
 }
 
 void kvm_show_code(CPUState *env)
 {
 #define SHOW_CODE_LEN 50
-	struct kvm_regs regs;
-	struct kvm_sregs sregs;
-	int r, n;
-	int back_offset;
-	unsigned char code;
-	char code_str[SHOW_CODE_LEN * 3 + 1];
-	unsigned long rip;
+    struct kvm_regs regs;
+    struct kvm_sregs sregs;
+    int r, n;
+    int back_offset;
+    unsigned char code;
+    char code_str[SHOW_CODE_LEN * 3 + 1];
+    unsigned long rip;
 
-	r = kvm_vcpu_ioctl(env, KVM_GET_SREGS, &sregs);
-	if (r < 0 ) {
-		perror("KVM_GET_SREGS");
-		return;
-	}
-	r = kvm_vcpu_ioctl(env, KVM_GET_REGS, &regs);
-	if (r < 0) {
-		perror("KVM_GET_REGS");
-		return;
-	}
-	rip = sregs.cs.base + regs.rip;
-	back_offset = regs.rip;
-	if (back_offset > 20)
-	    back_offset = 20;
-	*code_str = 0;
-	for (n = -back_offset; n < SHOW_CODE_LEN-back_offset; ++n) {
-		if (n == 0)
-			strcat(code_str, " -->");
-		cpu_physical_memory_rw(rip + n, &code, 1, 1);
-		sprintf(code_str + strlen(code_str), " %02x", code);
-	}
-	fprintf(stderr, "code:%s\n", code_str);
+    r = kvm_vcpu_ioctl(env, KVM_GET_SREGS, &sregs);
+    if (r < 0 ) {
+        perror("KVM_GET_SREGS");
+        return;
+    }
+    r = kvm_vcpu_ioctl(env, KVM_GET_REGS, &regs);
+    if (r < 0) {
+        perror("KVM_GET_REGS");
+        return;
+    }
+    rip = sregs.cs.base + regs.rip;
+    back_offset = regs.rip;
+    if (back_offset > 20)
+        back_offset = 20;
+    *code_str = 0;
+    for (n = -back_offset; n < SHOW_CODE_LEN-back_offset; ++n) {
+        if (n == 0)
+            strcat(code_str, " -->");
+        cpu_physical_memory_rw(rip + n, &code, 1, 1);
+        sprintf(code_str + strlen(code_str), " %02x", code);
+    }
+    fprintf(stderr, "code:%s\n", code_str);
 }
 
 
@@ -323,26 +321,26 @@ void kvm_show_code(CPUState *env)
  */
 static struct kvm_msr_list *kvm_get_msr_list(void)
 {
-	struct kvm_msr_list sizer, *msrs;
-	int r;
+    struct kvm_msr_list sizer, *msrs;
+    int r;
 
-	sizer.nmsrs = 0;
-	r = kvm_ioctl(kvm_state, KVM_GET_MSR_INDEX_LIST, &sizer);
-	if (r < 0 && r != -E2BIG)
-		return NULL;
-	/* Old kernel modules had a bug and could write beyond the provided
-	   memory. Allocate at least a safe amount of 1K. */
-	msrs = qemu_malloc(MAX(1024, sizeof(*msrs) +
-				       sizer.nmsrs * sizeof(*msrs->indices)));
+    sizer.nmsrs = 0;
+    r = kvm_ioctl(kvm_state, KVM_GET_MSR_INDEX_LIST, &sizer);
+    if (r < 0 && r != -E2BIG)
+        return NULL;
+    /* Old kernel modules had a bug and could write beyond the provided
+       memory. Allocate at least a safe amount of 1K. */
+    msrs = qemu_malloc(MAX(1024, sizeof(*msrs) +
+                           sizer.nmsrs * sizeof(*msrs->indices)));
 
-	msrs->nmsrs = sizer.nmsrs;
-	r = kvm_ioctl(kvm_state, KVM_GET_MSR_INDEX_LIST, msrs);
-	if (r < 0) {
-		free(msrs);
-		errno = r;
-		return NULL;
-	}
-	return msrs;
+    msrs->nmsrs = sizer.nmsrs;
+    r = kvm_ioctl(kvm_state, KVM_GET_MSR_INDEX_LIST, msrs);
+    if (r < 0) {
+        free(msrs);
+        errno = r;
+        return NULL;
+    }
+    return msrs;
 }
 
 int kvm_get_msrs(CPUState *env, struct kvm_msr_entry *msrs, int n)
@@ -405,130 +403,130 @@ int kvm_set_mce(CPUState *env, struct kvm_x86_mce *m)
 
 static void print_seg(FILE *file, const char *name, struct kvm_segment *seg)
 {
-	fprintf(stderr,
-		"%s %04x (%08llx/%08x p %d dpl %d db %d s %d type %x l %d"
-		" g %d avl %d)\n",
-		name, seg->selector, seg->base, seg->limit, seg->present,
-		seg->dpl, seg->db, seg->s, seg->type, seg->l, seg->g,
-		seg->avl);
+    fprintf(stderr,
+            "%s %04x (%08llx/%08x p %d dpl %d db %d s %d type %x l %d"
+            " g %d avl %d)\n",
+            name, seg->selector, seg->base, seg->limit, seg->present,
+            seg->dpl, seg->db, seg->s, seg->type, seg->l, seg->g,
+            seg->avl);
 }
 
 static void print_dt(FILE *file, const char *name, struct kvm_dtable *dt)
 {
-	fprintf(stderr, "%s %llx/%x\n", name, dt->base, dt->limit);
+    fprintf(stderr, "%s %llx/%x\n", name, dt->base, dt->limit);
 }
 
 void kvm_show_regs(CPUState *env)
 {
-	struct kvm_regs regs;
-	struct kvm_sregs sregs;
-	int r;
+    struct kvm_regs regs;
+    struct kvm_sregs sregs;
+    int r;
 
-	r = kvm_vcpu_ioctl(env, KVM_GET_REGS, &regs);
-	if (r < 0) {
-		perror("KVM_GET_REGS");
-		return;
-	}
-	fprintf(stderr,
-		"rax %016llx rbx %016llx rcx %016llx rdx %016llx\n"
-		"rsi %016llx rdi %016llx rsp %016llx rbp %016llx\n"
-		"r8  %016llx r9  %016llx r10 %016llx r11 %016llx\n"
-		"r12 %016llx r13 %016llx r14 %016llx r15 %016llx\n"
-		"rip %016llx rflags %08llx\n",
-		regs.rax, regs.rbx, regs.rcx, regs.rdx,
-		regs.rsi, regs.rdi, regs.rsp, regs.rbp,
-		regs.r8,  regs.r9,  regs.r10, regs.r11,
-		regs.r12, regs.r13, regs.r14, regs.r15,
-		regs.rip, regs.rflags);
-	r = kvm_vcpu_ioctl(env, KVM_GET_SREGS, &sregs);
-	if (r < 0) {
-		perror("KVM_GET_SREGS");
-		return;
-	}
-	print_seg(stderr, "cs", &sregs.cs);
-	print_seg(stderr, "ds", &sregs.ds);
-	print_seg(stderr, "es", &sregs.es);
-	print_seg(stderr, "ss", &sregs.ss);
-	print_seg(stderr, "fs", &sregs.fs);
-	print_seg(stderr, "gs", &sregs.gs);
-	print_seg(stderr, "tr", &sregs.tr);
-	print_seg(stderr, "ldt", &sregs.ldt);
-	print_dt(stderr, "gdt", &sregs.gdt);
-	print_dt(stderr, "idt", &sregs.idt);
-	fprintf(stderr, "cr0 %llx cr2 %llx cr3 %llx cr4 %llx cr8 %llx"
-		" efer %llx\n",
-		sregs.cr0, sregs.cr2, sregs.cr3, sregs.cr4, sregs.cr8,
-		sregs.efer);
+    r = kvm_vcpu_ioctl(env, KVM_GET_REGS, &regs);
+    if (r < 0) {
+        perror("KVM_GET_REGS");
+        return;
+    }
+    fprintf(stderr,
+            "rax %016llx rbx %016llx rcx %016llx rdx %016llx\n"
+            "rsi %016llx rdi %016llx rsp %016llx rbp %016llx\n"
+            "r8  %016llx r9  %016llx r10 %016llx r11 %016llx\n"
+            "r12 %016llx r13 %016llx r14 %016llx r15 %016llx\n"
+            "rip %016llx rflags %08llx\n",
+            regs.rax, regs.rbx, regs.rcx, regs.rdx,
+            regs.rsi, regs.rdi, regs.rsp, regs.rbp,
+            regs.r8,  regs.r9,  regs.r10, regs.r11,
+            regs.r12, regs.r13, regs.r14, regs.r15,
+            regs.rip, regs.rflags);
+    r = kvm_vcpu_ioctl(env, KVM_GET_SREGS, &sregs);
+    if (r < 0) {
+        perror("KVM_GET_SREGS");
+        return;
+    }
+    print_seg(stderr, "cs", &sregs.cs);
+    print_seg(stderr, "ds", &sregs.ds);
+    print_seg(stderr, "es", &sregs.es);
+    print_seg(stderr, "ss", &sregs.ss);
+    print_seg(stderr, "fs", &sregs.fs);
+    print_seg(stderr, "gs", &sregs.gs);
+    print_seg(stderr, "tr", &sregs.tr);
+    print_seg(stderr, "ldt", &sregs.ldt);
+    print_dt(stderr, "gdt", &sregs.gdt);
+    print_dt(stderr, "idt", &sregs.idt);
+    fprintf(stderr, "cr0 %llx cr2 %llx cr3 %llx cr4 %llx cr8 %llx"
+            " efer %llx\n",
+            sregs.cr0, sregs.cr2, sregs.cr3, sregs.cr4, sregs.cr8,
+            sregs.efer);
 }
 
 static void kvm_set_cr8(CPUState *env, uint64_t cr8)
 {
-	env->kvm_run->cr8 = cr8;
+    env->kvm_run->cr8 = cr8;
 }
 
 int kvm_setup_cpuid(CPUState *env, int nent,
-		    struct kvm_cpuid_entry *entries)
+                    struct kvm_cpuid_entry *entries)
 {
-	struct kvm_cpuid *cpuid;
-	int r;
+    struct kvm_cpuid *cpuid;
+    int r;
 
-	cpuid = qemu_malloc(sizeof(*cpuid) + nent * sizeof(*entries));
+    cpuid = qemu_malloc(sizeof(*cpuid) + nent * sizeof(*entries));
 
-	cpuid->nent = nent;
-	memcpy(cpuid->entries, entries, nent * sizeof(*entries));
-	r = kvm_vcpu_ioctl(env, KVM_SET_CPUID, cpuid);
+    cpuid->nent = nent;
+    memcpy(cpuid->entries, entries, nent * sizeof(*entries));
+    r = kvm_vcpu_ioctl(env, KVM_SET_CPUID, cpuid);
 
-	free(cpuid);
-	return r;
+    free(cpuid);
+    return r;
 }
 
 int kvm_setup_cpuid2(CPUState *env, int nent,
-		     struct kvm_cpuid_entry2 *entries)
+                     struct kvm_cpuid_entry2 *entries)
 {
-	struct kvm_cpuid2 *cpuid;
-	int r;
+    struct kvm_cpuid2 *cpuid;
+    int r;
 
-	cpuid = qemu_malloc(sizeof(*cpuid) + nent * sizeof(*entries));
+    cpuid = qemu_malloc(sizeof(*cpuid) + nent * sizeof(*entries));
 
-	cpuid->nent = nent;
-	memcpy(cpuid->entries, entries, nent * sizeof(*entries));
-	r = kvm_vcpu_ioctl(env, KVM_SET_CPUID2, cpuid);
-	free(cpuid);
-	return r;
+    cpuid->nent = nent;
+    memcpy(cpuid->entries, entries, nent * sizeof(*entries));
+    r = kvm_vcpu_ioctl(env, KVM_SET_CPUID2, cpuid);
+    free(cpuid);
+    return r;
 }
 
 int kvm_set_shadow_pages(kvm_context_t kvm, unsigned int nrshadow_pages)
 {
 #ifdef KVM_CAP_MMU_SHADOW_CACHE_CONTROL
-	int r;
+    int r;
 
-	r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION,
-		  KVM_CAP_MMU_SHADOW_CACHE_CONTROL);
-	if (r > 0) {
-		r = kvm_vm_ioctl(kvm_state, KVM_SET_NR_MMU_PAGES, nrshadow_pages);
-		if (r < 0) {
-			fprintf(stderr, "kvm_set_shadow_pages: %m\n");
-			return r;
-		}
-		return 0;
-	}
+    r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION,
+                  KVM_CAP_MMU_SHADOW_CACHE_CONTROL);
+    if (r > 0) {
+        r = kvm_vm_ioctl(kvm_state, KVM_SET_NR_MMU_PAGES, nrshadow_pages);
+        if (r < 0) {
+            fprintf(stderr, "kvm_set_shadow_pages: %m\n");
+            return r;
+        }
+        return 0;
+    }
 #endif
-	return -1;
+    return -1;
 }
 
 int kvm_get_shadow_pages(kvm_context_t kvm, unsigned int *nrshadow_pages)
 {
 #ifdef KVM_CAP_MMU_SHADOW_CACHE_CONTROL
-	int r;
+    int r;
 
-	r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION,
-		  KVM_CAP_MMU_SHADOW_CACHE_CONTROL);
-	if (r > 0) {
-		*nrshadow_pages = kvm_vm_ioctl(kvm_state, KVM_GET_NR_MMU_PAGES);
-		return 0;
-	}
+    r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION,
+                  KVM_CAP_MMU_SHADOW_CACHE_CONTROL);
+    if (r > 0) {
+        *nrshadow_pages = kvm_vm_ioctl(kvm_state, KVM_GET_NR_MMU_PAGES);
+        return 0;
+    }
 #endif
-	return -1;
+    return -1;
 }
 
 #ifdef KVM_CAP_VAPIC
@@ -588,10 +586,10 @@ int kvm_arch_qemu_create_context(void)
 
     kvm_msr_list = kvm_get_msr_list();
     if (!kvm_msr_list)
-		return -1;
+        return -1;
     for (i = 0; i < kvm_msr_list->nmsrs; ++i) {
-	if (kvm_msr_list->indices[i] == MSR_STAR)
-	    kvm_has_msr_star = 1;
+        if (kvm_msr_list->indices[i] == MSR_STAR)
+            kvm_has_msr_star = 1;
         if (kvm_msr_list->indices[i] == MSR_VM_HSAVE_PA)
             kvm_has_vm_hsave_pa = 1;
     }
@@ -612,65 +610,65 @@ int kvm_arch_qemu_create_context(void)
 /* returns 0 on success, non-0 on failure */
 static int get_msr_entry(struct kvm_msr_entry *entry, CPUState *env)
 {
-        switch (entry->index) {
-        case MSR_IA32_SYSENTER_CS:
-            env->sysenter_cs  = entry->data;
-            break;
-        case MSR_IA32_SYSENTER_ESP:
-            env->sysenter_esp = entry->data;
-            break;
-        case MSR_IA32_SYSENTER_EIP:
-            env->sysenter_eip = entry->data;
-            break;
-        case MSR_STAR:
-            env->star         = entry->data;
-            break;
+    switch (entry->index) {
+    case MSR_IA32_SYSENTER_CS:
+        env->sysenter_cs  = entry->data;
+        break;
+    case MSR_IA32_SYSENTER_ESP:
+        env->sysenter_esp = entry->data;
+        break;
+    case MSR_IA32_SYSENTER_EIP:
+        env->sysenter_eip = entry->data;
+        break;
+    case MSR_STAR:
+        env->star         = entry->data;
+        break;
 #ifdef TARGET_X86_64
-        case MSR_CSTAR:
-            env->cstar        = entry->data;
-            break;
-        case MSR_KERNELGSBASE:
-            env->kernelgsbase = entry->data;
-            break;
-        case MSR_FMASK:
-            env->fmask        = entry->data;
-            break;
-        case MSR_LSTAR:
-            env->lstar        = entry->data;
-            break;
+    case MSR_CSTAR:
+        env->cstar        = entry->data;
+        break;
+    case MSR_KERNELGSBASE:
+        env->kernelgsbase = entry->data;
+        break;
+    case MSR_FMASK:
+        env->fmask        = entry->data;
+        break;
+    case MSR_LSTAR:
+        env->lstar        = entry->data;
+        break;
 #endif
-        case MSR_IA32_TSC:
-            env->tsc          = entry->data;
-            break;
-        case MSR_VM_HSAVE_PA:
-            env->vm_hsave     = entry->data;
-            break;
-        case MSR_KVM_SYSTEM_TIME:
-            env->system_time_msr = entry->data;
-            break;
-        case MSR_KVM_WALL_CLOCK:
-            env->wall_clock_msr = entry->data;
-            break;
+    case MSR_IA32_TSC:
+        env->tsc          = entry->data;
+        break;
+    case MSR_VM_HSAVE_PA:
+        env->vm_hsave     = entry->data;
+        break;
+    case MSR_KVM_SYSTEM_TIME:
+        env->system_time_msr = entry->data;
+        break;
+    case MSR_KVM_WALL_CLOCK:
+        env->wall_clock_msr = entry->data;
+        break;
 #ifdef KVM_CAP_MCE
-        case MSR_MCG_STATUS:
-            env->mcg_status = entry->data;
-            break;
-        case MSR_MCG_CTL:
-            env->mcg_ctl = entry->data;
-            break;
+    case MSR_MCG_STATUS:
+        env->mcg_status = entry->data;
+        break;
+    case MSR_MCG_CTL:
+        env->mcg_ctl = entry->data;
+        break;
 #endif
-        default:
+    default:
 #ifdef KVM_CAP_MCE
-            if (entry->index >= MSR_MC0_CTL && \
-                entry->index < MSR_MC0_CTL + (env->mcg_cap & 0xff) * 4) {
-                env->mce_banks[entry->index - MSR_MC0_CTL] = entry->data;
-                break;
-            }
-#endif
-            printf("Warning unknown msr index 0x%x\n", entry->index);
-            return 1;
+        if (entry->index >= MSR_MC0_CTL &&                              \
+            entry->index < MSR_MC0_CTL + (env->mcg_cap & 0xff) * 4) {
+            env->mce_banks[entry->index - MSR_MC0_CTL] = entry->data;
+            break;
         }
-        return 0;
+#endif
+        printf("Warning unknown msr index 0x%x\n", entry->index);
+        return 1;
+    }
+    return 0;
 }
 
 static void kvm_arch_save_mpstate(CPUState *env)
@@ -762,14 +760,14 @@ static void get_seg(SegmentCache *lhs, const struct kvm_segment *rhs)
     lhs->base = rhs->base;
     lhs->limit = rhs->limit;
     lhs->flags =
-	(rhs->type << DESC_TYPE_SHIFT)
-	| (rhs->present * DESC_P_MASK)
-	| (rhs->dpl << DESC_DPL_SHIFT)
-	| (rhs->db << DESC_B_SHIFT)
-	| (rhs->s * DESC_S_MASK)
-	| (rhs->l << DESC_L_SHIFT)
-	| (rhs->g * DESC_G_MASK)
-	| (rhs->avl * DESC_AVL_MASK);
+        (rhs->type << DESC_TYPE_SHIFT)
+        | (rhs->present * DESC_P_MASK)
+        | (rhs->dpl << DESC_DPL_SHIFT)
+        | (rhs->db << DESC_B_SHIFT)
+        | (rhs->s * DESC_S_MASK)
+        | (rhs->l << DESC_L_SHIFT)
+        | (rhs->g * DESC_G_MASK)
+        | (rhs->avl * DESC_AVL_MASK);
 }
 
 #define XSAVE_CWD_RIP     2
@@ -831,13 +829,13 @@ void kvm_arch_load_regs(CPUState *env, int level)
         xsave->region[0] = (uint32_t)(swd << 16) + cwd;
         xsave->region[1] = (uint32_t)(fop << 16) + twd;
         memcpy(&xsave->region[XSAVE_ST_SPACE], env->fpregs,
-                sizeof env->fpregs);
+               sizeof env->fpregs);
         memcpy(&xsave->region[XSAVE_XMM_SPACE], env->xmm_regs,
-                sizeof env->xmm_regs);
+               sizeof env->xmm_regs);
         xsave->region[XSAVE_MXCSR] = env->mxcsr;
         *(uint64_t *)&xsave->region[XSAVE_XSTATE_BV] = env->xstate_bv;
         memcpy(&xsave->region[XSAVE_YMMH_SPACE], env->ymmh_regs,
-                sizeof env->ymmh_regs);
+               sizeof env->ymmh_regs);
         kvm_set_xsave(env, xsave);
         if (kvm_check_extension(kvm_state, KVM_CAP_XCRS)) {
             struct kvm_xcrs xcrs;
@@ -872,26 +870,26 @@ void kvm_arch_load_regs(CPUState *env, int level)
     }
 
     if ((env->eflags & VM_MASK)) {
-	    set_v8086_seg(&sregs.cs, &env->segs[R_CS]);
-	    set_v8086_seg(&sregs.ds, &env->segs[R_DS]);
-	    set_v8086_seg(&sregs.es, &env->segs[R_ES]);
-	    set_v8086_seg(&sregs.fs, &env->segs[R_FS]);
-	    set_v8086_seg(&sregs.gs, &env->segs[R_GS]);
-	    set_v8086_seg(&sregs.ss, &env->segs[R_SS]);
+        set_v8086_seg(&sregs.cs, &env->segs[R_CS]);
+        set_v8086_seg(&sregs.ds, &env->segs[R_DS]);
+        set_v8086_seg(&sregs.es, &env->segs[R_ES]);
+        set_v8086_seg(&sregs.fs, &env->segs[R_FS]);
+        set_v8086_seg(&sregs.gs, &env->segs[R_GS]);
+        set_v8086_seg(&sregs.ss, &env->segs[R_SS]);
     } else {
-	    set_seg(&sregs.cs, &env->segs[R_CS]);
-	    set_seg(&sregs.ds, &env->segs[R_DS]);
-	    set_seg(&sregs.es, &env->segs[R_ES]);
-	    set_seg(&sregs.fs, &env->segs[R_FS]);
-	    set_seg(&sregs.gs, &env->segs[R_GS]);
-	    set_seg(&sregs.ss, &env->segs[R_SS]);
+        set_seg(&sregs.cs, &env->segs[R_CS]);
+        set_seg(&sregs.ds, &env->segs[R_DS]);
+        set_seg(&sregs.es, &env->segs[R_ES]);
+        set_seg(&sregs.fs, &env->segs[R_FS]);
+        set_seg(&sregs.gs, &env->segs[R_GS]);
+        set_seg(&sregs.ss, &env->segs[R_SS]);
 
-	    if (env->cr[0] & CR0_PE_MASK) {
-		/* force ss cpl to cs cpl */
-		sregs.ss.selector = (sregs.ss.selector & ~3) |
-			(sregs.cs.selector & 3);
-		sregs.ss.dpl = sregs.ss.selector & 3;
-	    }
+        if (env->cr[0] & CR0_PE_MASK) {
+            /* force ss cpl to cs cpl */
+            sregs.ss.selector = (sregs.ss.selector & ~3) |
+                (sregs.cs.selector & 3);
+            sregs.ss.dpl = sregs.ss.selector & 3;
+        }
     }
 
     set_seg(&sregs.tr, &env->tr);
@@ -921,7 +919,7 @@ void kvm_arch_load_regs(CPUState *env, int level)
     kvm_msr_entry_set(&msrs[n++], MSR_IA32_SYSENTER_ESP, env->sysenter_esp);
     kvm_msr_entry_set(&msrs[n++], MSR_IA32_SYSENTER_EIP, env->sysenter_eip);
     if (kvm_has_msr_star)
-	kvm_msr_entry_set(&msrs[n++], MSR_STAR,              env->star);
+        kvm_msr_entry_set(&msrs[n++], MSR_STAR,              env->star);
     if (kvm_has_vm_hsave_pa)
         kvm_msr_entry_set(&msrs[n++], MSR_VM_HSAVE_PA, env->vm_hsave);
 #ifdef TARGET_X86_64
@@ -1097,21 +1095,19 @@ void kvm_arch_save_regs(CPUState *env)
     env->efer = sregs.efer;
     //cpu_set_apic_tpr(env, sregs.cr8);
 
-#define HFLAG_COPY_MASK ~( \
-			HF_CPL_MASK | HF_PE_MASK | HF_MP_MASK | HF_EM_MASK | \
-			HF_TS_MASK | HF_TF_MASK | HF_VM_MASK | HF_IOPL_MASK | \
-			HF_OSFXSR_MASK | HF_LMA_MASK | HF_CS32_MASK | \
-			HF_SS32_MASK | HF_CS64_MASK | HF_ADDSEG_MASK)
-
-
+#define HFLAG_COPY_MASK ~(                                              \
+        HF_CPL_MASK | HF_PE_MASK | HF_MP_MASK | HF_EM_MASK |            \
+        HF_TS_MASK | HF_TF_MASK | HF_VM_MASK | HF_IOPL_MASK |           \
+        HF_OSFXSR_MASK | HF_LMA_MASK | HF_CS32_MASK |                   \
+        HF_SS32_MASK | HF_CS64_MASK | HF_ADDSEG_MASK)
 
     hflags = (env->segs[R_CS].flags >> DESC_DPL_SHIFT) & HF_CPL_MASK;
     hflags |= (env->cr[0] & CR0_PE_MASK) << (HF_PE_SHIFT - CR0_PE_SHIFT);
     hflags |= (env->cr[0] << (HF_MP_SHIFT - CR0_MP_SHIFT)) &
-	    (HF_MP_MASK | HF_EM_MASK | HF_TS_MASK);
+            (HF_MP_MASK | HF_EM_MASK | HF_TS_MASK);
     hflags |= (env->eflags & (HF_TF_MASK | HF_VM_MASK | HF_IOPL_MASK));
     hflags |= (env->cr[4] & CR4_OSFXSR_MASK) <<
-	    (HF_OSFXSR_SHIFT - CR4_OSFXSR_SHIFT);
+            (HF_OSFXSR_SHIFT - CR4_OSFXSR_SHIFT);
 
     if (env->efer & MSR_EFER_LMA) {
         hflags |= HF_LMA_MASK;
@@ -1121,19 +1117,19 @@ void kvm_arch_save_regs(CPUState *env)
         hflags |= HF_CS32_MASK | HF_SS32_MASK | HF_CS64_MASK;
     } else {
         hflags |= (env->segs[R_CS].flags & DESC_B_MASK) >>
-		(DESC_B_SHIFT - HF_CS32_SHIFT);
+                (DESC_B_SHIFT - HF_CS32_SHIFT);
         hflags |= (env->segs[R_SS].flags & DESC_B_MASK) >>
-		(DESC_B_SHIFT - HF_SS32_SHIFT);
+                (DESC_B_SHIFT - HF_SS32_SHIFT);
         if (!(env->cr[0] & CR0_PE_MASK) ||
-                   (env->eflags & VM_MASK) ||
-                   !(hflags & HF_CS32_MASK)) {
-                hflags |= HF_ADDSEG_MASK;
-            } else {
-                hflags |= ((env->segs[R_DS].base |
-                                env->segs[R_ES].base |
-                                env->segs[R_SS].base) != 0) <<
-                    HF_ADDSEG_SHIFT;
-            }
+            (env->eflags & VM_MASK) ||
+            !(hflags & HF_CS32_MASK)) {
+            hflags |= HF_ADDSEG_MASK;
+        } else {
+            hflags |= ((env->segs[R_DS].base |
+                        env->segs[R_ES].base |
+                        env->segs[R_SS].base) != 0) <<
+                HF_ADDSEG_SHIFT;
+        }
     }
     env->hflags = (env->hflags & HFLAG_COPY_MASK) | hflags;
 
@@ -1144,7 +1140,7 @@ void kvm_arch_save_regs(CPUState *env)
     msrs[n++].index = MSR_IA32_SYSENTER_ESP;
     msrs[n++].index = MSR_IA32_SYSENTER_EIP;
     if (kvm_has_msr_star)
-	msrs[n++].index = MSR_STAR;
+        msrs[n++].index = MSR_STAR;
     msrs[n++].index = MSR_IA32_TSC;
     if (kvm_has_vm_hsave_pa)
         msrs[n++].index = MSR_VM_HSAVE_PA;
@@ -1222,9 +1218,9 @@ int kvm_arch_halt(CPUState *env)
 {
 
     if (!((env->interrupt_request & CPU_INTERRUPT_HARD) &&
-	  (env->eflags & IF_MASK)) &&
-	!(env->interrupt_request & CPU_INTERRUPT_NMI)) {
-            env->halted = 1;
+          (env->eflags & IF_MASK)) &&
+        !(env->interrupt_request & CPU_INTERRUPT_NMI)) {
+        env->halted = 1;
     }
     return 1;
 }
@@ -1232,16 +1228,16 @@ int kvm_arch_halt(CPUState *env)
 int kvm_arch_pre_run(CPUState *env, struct kvm_run *run)
 {
     if (!kvm_irqchip_in_kernel())
-	kvm_set_cr8(env, cpu_get_apic_tpr(env->apic_state));
+        kvm_set_cr8(env, cpu_get_apic_tpr(env->apic_state));
     return 0;
 }
 
 int kvm_arch_has_work(CPUState *env)
 {
     if (((env->interrupt_request & CPU_INTERRUPT_HARD) &&
-	 (env->eflags & IF_MASK)) ||
-	(env->interrupt_request & CPU_INTERRUPT_NMI))
-	return 1;
+         (env->eflags & IF_MASK)) ||
+        (env->interrupt_request & CPU_INTERRUPT_NMI))
+        return 1;
     return 0;
 }
 
@@ -1253,13 +1249,13 @@ int kvm_arch_try_push_interrupts(void *opaque)
     if (kvm_is_ready_for_interrupt_injection(env) &&
         (env->interrupt_request & CPU_INTERRUPT_HARD) &&
         (env->eflags & IF_MASK)) {
-            env->interrupt_request &= ~CPU_INTERRUPT_HARD;
-	    irq = cpu_get_pic_interrupt(env);
-	    if (irq >= 0) {
-		r = kvm_inject_irq(env, irq);
-		if (r < 0)
-		    printf("cpu %d fail inject %x\n", env->cpu_index, irq);
-	    }
+        env->interrupt_request &= ~CPU_INTERRUPT_HARD;
+        irq = cpu_get_pic_interrupt(env);
+        if (irq >= 0) {
+            r = kvm_inject_irq(env, irq);
+            if (r < 0)
+                printf("cpu %d fail inject %x\n", env->cpu_index, irq);
+        }
     }
 
     return (env->interrupt_request & CPU_INTERRUPT_HARD) != 0;
