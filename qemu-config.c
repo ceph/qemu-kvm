@@ -84,7 +84,7 @@ static QemuOptsList qemu_drive_opts = {
             .type = QEMU_OPT_BOOL,
             .help = "make this a boot drive",
         },
-        { /* end if list */ }
+        { /* end of list */ }
     },
 };
 
@@ -151,7 +151,7 @@ static QemuOptsList qemu_chardev_opts = {
             .name = "signal",
             .type = QEMU_OPT_BOOL,
         },
-        { /* end if list */ }
+        { /* end of list */ }
     },
 };
 
@@ -207,7 +207,7 @@ static QemuOptsList qemu_device_opts = {
          * sanity checking will happen later
          * when setting device properties
          */
-        { /* end if list */ }
+        { /* end of list */ }
     },
 };
 
@@ -251,7 +251,7 @@ static QemuOptsList qemu_rtc_opts = {
             .name = "driftfix",
             .type = QEMU_OPT_STRING,
         },
-        { /* end if list */ }
+        { /* end of list */ }
     },
 };
 
@@ -269,7 +269,7 @@ static QemuOptsList qemu_global_opts = {
             .name = "value",
             .type = QEMU_OPT_STRING,
         },
-        { /* end if list */ }
+        { /* end of list */ }
     },
 };
 
@@ -288,7 +288,7 @@ static QemuOptsList qemu_mon_opts = {
             .name = "default",
             .type = QEMU_OPT_BOOL,
         },
-        { /* end if list */ }
+        { /* end of list */ }
     },
 };
 
