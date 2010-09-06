@@ -1680,6 +1680,7 @@ int kvm_main_loop(void)
     sigemptyset(&mask);
     sigaddset(&mask, SIGIO);
     sigaddset(&mask, SIGALRM);
+    sigaddset(&mask, SIGUSR2);
     sigaddset(&mask, SIGBUS);
     sigprocmask(SIG_BLOCK, &mask, NULL);
 
