@@ -201,12 +201,57 @@ PERF_FORMAT_GROUP			= 1 << 3
 
 import re
 
+sys_tracing = '/sys/kernel/debug/tracing'
+
+class Group(object):
+    def __init__(self, cpu):
+        self.events = []
+        self.group_leader = None
+        self.cpu = cpu
+    def add_event(self, name, event_set, tracepoint, filter = None):
+        self.events.append(Event(group = self,
+                                 name = name, event_set = event_set,
+                                 tracepoint = tracepoint, filter = filter))
+        if len(self.events) == 1:
+            self.file = os.fdopen(self.events[0].fd)
+    def read(self):
+        bytes = 8 * (1 + len(self.events))
+        fmt = 'xxxxxxxx' + 'q' * len(self.events)
+        return dict(zip([event.name for event in self.events],
+                        struct.unpack(fmt, self.file.read(bytes))))
+
+class Event(object):
+    def __init__(self, group, name, event_set, tracepoint, filter = None):
+        self.name = name
+        attr = perf_event_attr()
+        attr.type = PERF_TYPE_TRACEPOINT
+        attr.size = ctypes.sizeof(attr)
+        id_path = os.path.join(sys_tracing, 'events', event_set,
+                               tracepoint, 'id')
+        id = int(file(id_path).read())
+        attr.config = id
+        attr.sample_type = (PERF_SAMPLE_RAW
+                            | PERF_SAMPLE_TIME
+                            | PERF_SAMPLE_CPU)
+        attr.sample_period = 1
+        attr.read_format = PERF_FORMAT_GROUP
+        group_leader = -1
+        if group.events:
+            group_leader = group.events[0].fd
+        fd = _perf_event_open(attr, -1, group.cpu, group_leader, 0)
+        if fd == -1:
+            raise Exception('perf_event_open failed')
+        if filter:
+            import fcntl
+            fcntl.ioctl(fd, 0x40082406, filter)
+        self.fd = fd
+
 class TracepointProvider(object):
     def __init__(self):
-        self.base = '/sys/kernel/debug/tracing/events/kvm/'
+        path = os.path.join(sys_tracing, 'events', 'kvm')
         fields = [f
-                  for f in os.listdir(self.base)
-                  if os.path.isdir(self.base + '/' + f)]
+                  for f in os.listdir(path)
+                  if os.path.isdir(os.path.join(path, f))]
         extra = []
         for f in fields:
             if f in filters:
@@ -226,48 +271,28 @@ class TracepointProvider(object):
         import resource
         nfiles = len(self.cpus) * 1000
         resource.setrlimit(resource.RLIMIT_NOFILE, (nfiles, nfiles))
-        fds = []
+        events = []
         self.group_leaders = []
         for cpu in self.cpus:
-            group_leader = -1
-            for f in _fields:
-                fbase, sub = f, None
-                m = re.match(r'(.*)\((.*)\)', f)
+            group = Group(cpu)
+            for name in _fields:
+                tracepoint = name
+                filter = None
+                m = re.match(r'(.*)\((.*)\)', name)
                 if m:
-                    fbase, sub = m.groups()
-                attr = perf_event_attr()
-                attr.type = PERF_TYPE_TRACEPOINT
-                attr.size = ctypes.sizeof(attr)
-                id = int(file(self.base + fbase + '/id').read())
-                attr.config = id
-                attr.sample_type = (PERF_SAMPLE_RAW
-                                    | PERF_SAMPLE_TIME
-                                    | PERF_SAMPLE_CPU)
-                attr.sample_period = 1
-                attr.read_format = PERF_FORMAT_GROUP
-                fd = _perf_event_open(attr, -1, cpu, group_leader, 0)
-                if fd == -1:
-                    raise Exception('perf_event_open failed')
-                if sub:
-                    import fcntl
-                    filter = '%s==%d\0' % (filters[fbase][0],
-                                         filters[fbase][1][sub])
-                    fcntl.ioctl(fd, 0x40082406, filter)
-                if group_leader == -1:
-                    group_leader = fd
-                    fds.append(fd)
-            self.group_leaders.append(group_leader)
-        self.fds = fds
-        self.files = [os.fdopen(group_leader)
-                      for group_leader in self.group_leaders]
+                    tracepoint, sub = m.groups()
+                    filter = '%s==%d\0' % (filters[tracepoint][0],
+                                           filters[tracepoint][1][sub])
+                event = group.add_event(name, event_set = 'kvm',
+                                        tracepoint = tracepoint,
+                                        filter = filter)
+            self.group_leaders.append(group)
     def read(self):
-        ret = dict([(f, 0) for f in self._fields])
-        bytes = 8 * (1 + len(self._fields))
-        fmt = 'xxxxxxxx' + 'q' * len(self._fields)
-        for file in self.files:
-            a = struct.unpack(fmt, file.read(bytes))
-            for field, val in zip(self._fields, a):
-                ret[field] += val
+        from collections import defaultdict
+        ret = defaultdict(int)
+        for group in self.group_leaders:
+            for name, val in group.read().iteritems():
+                ret[name] += val
         return ret
 
 class Stats:
