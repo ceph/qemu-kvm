@@ -71,7 +71,6 @@ static int qemu_system_ready;
 #define SIG_IPI (SIGRTMIN+4)
 
 pthread_t io_thread;
-static int io_thread_fd = -1;
 static int io_thread_sigfd = -1;
 
 static CPUState *kvm_debug_cpu_requested;
@@ -1634,28 +1633,6 @@ int kvm_init_ap(void)
     return 0;
 }
 
-void qemu_kvm_notify_work(void)
-{
-    /* Write 8 bytes to be compatible with eventfd.  */
-    static uint64_t val = 1;
-    ssize_t ret;
-
-    if (io_thread_fd == -1) {
-        return;
-    }
-
-    do {
-        ret = write(io_thread_fd, &val, sizeof(val));
-    } while (ret < 0 && errno == EINTR);
-
-    /* EAGAIN is fine in case we have a pipe.  */
-    if (ret < 0 && errno != EAGAIN) {
-         fprintf(stderr, "qemu_kvm_notify_work: write() filed: %s\n",
-                 strerror(errno));
-         exit (1);
-    }
-}
-
 /* If we have signalfd, we mask out the signals we want to handle and then
  * use signalfd to listen for them.  We rely on whatever the current signal
  * handler is to dispatch the signals when we receive them.
@@ -1692,40 +1669,13 @@ static void sigfd_handler(void *opaque)
     }
 }
 
-/* Used to break IO thread out of select */
-static void io_thread_wakeup(void *opaque)
-{
-    int fd = (unsigned long) opaque;
-    ssize_t len;
-    char buffer[512];
-
-    /* Drain the notify pipe.  For eventfd, only 8 bytes will be read.  */
-    do {
-        len = read(fd, buffer, sizeof(buffer));
-    } while ((len == -1 && errno == EINTR) || len == sizeof(buffer));
-}
-
 int kvm_main_loop(void)
 {
-    int fds[2];
     sigset_t mask;
     int sigfd;
 
     io_thread = pthread_self();
     qemu_system_ready = 1;
-
-    if (qemu_eventfd(fds) == -1) {
-        fprintf(stderr, "failed to create eventfd\n");
-        return -errno;
-    }
-
-    fcntl(fds[0], F_SETFL, O_NONBLOCK);
-    fcntl(fds[1], F_SETFL, O_NONBLOCK);
-
-    qemu_set_fd_handler2(fds[0], NULL, io_thread_wakeup, NULL,
-                         (void *)(unsigned long) fds[0]);
-
-    io_thread_fd = fds[1];
 
     sigemptyset(&mask);
     sigaddset(&mask, SIGIO);

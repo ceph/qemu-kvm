@@ -290,11 +290,6 @@ void qemu_notify_event(void)
 {
     CPUState *env = cpu_single_env;
 
-    if (kvm_enabled()) {
-        qemu_kvm_notify_work();
-        return;
-    }
-
     qemu_event_increment ();
     if (env) {
         cpu_exit(env);

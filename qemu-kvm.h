@@ -863,8 +863,6 @@ void qemu_kvm_aio_wait_start(void);
 void qemu_kvm_aio_wait(void);
 void qemu_kvm_aio_wait_end(void);
 
-void qemu_kvm_notify_work(void);
-
 void kvm_tpr_access_report(CPUState *env, uint64_t rip, int is_write);
 
 int kvm_arch_init_irq_routing(void);
