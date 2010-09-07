@@ -1323,12 +1323,21 @@ static int kvm_reset_msrs(CPUState *env)
     } msr_data;
     int n;
     struct kvm_msr_entry *msrs = msr_data.entries;
+    uint32_t index;
+    uint64_t data;
 
     if (!kvm_msr_list) {
         return -1;
     }
 
     for (n = 0; n < kvm_msr_list->nmsrs; n++) {
+        index = kvm_msr_list->indices[n];
+        switch (index) {
+        case MSR_PAT:
+            data = 0x0007040600070406ULL;
+        default:
+            data = 0;
+        }
         kvm_msr_entry_set(&msrs[n], kvm_msr_list->indices[n], 0);
     }
 
