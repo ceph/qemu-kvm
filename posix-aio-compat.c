@@ -26,6 +26,7 @@
 #include "osdep.h"
 #include "qemu-common.h"
 #include "block_int.h"
+#include "compatfd.h"
 
 #include "block/raw-posix-aio.h"
 
@@ -53,7 +54,7 @@ struct qemu_paiocb {
 };
 
 typedef struct PosixAioState {
-    int rfd, wfd;
+    int fd;
     struct qemu_paiocb *first_aio;
 } PosixAioState;
 
@@ -472,18 +473,29 @@ static int posix_aio_process_queue(void *opaque)
 static void posix_aio_read(void *opaque)
 {
     PosixAioState *s = opaque;
-    ssize_t len;
+    union {
+        struct qemu_signalfd_siginfo siginfo;
+        char buf[128];
+    } sig;
+    size_t offset;
 
-    /* read all bytes from signal pipe */
-    for (;;) {
-        char bytes[16];
+    /* try to read from signalfd, don't freak out if we can't read anything */
+    offset = 0;
+    while (offset < 128) {
+        ssize_t len;
 
-        len = read(s->rfd, bytes, sizeof(bytes));
+        len = read(s->fd, sig.buf + offset, 128 - offset);
         if (len == -1 && errno == EINTR)
-            continue; /* try again */
-        if (len == sizeof(bytes))
-            continue; /* more to read */
-        break;
+            continue;
+        if (len == -1 && errno == EAGAIN) {
+            /* there is no natural reason for this to happen,
+             * so we'll spin hard until we get everything just
+             * to be on the safe side. */
+            if (offset > 0)
+                continue;
+        }
+
+        offset += len;
     }
 
     posix_aio_process_queue(s);
@@ -496,20 +508,6 @@ static int posix_aio_flush(void *opaque)
 }
 
 static PosixAioState *posix_aio_state;
-
-static void aio_signal_handler(int signum)
-{
-    if (posix_aio_state) {
-        char byte = 0;
-        ssize_t ret;
-
-        ret = write(posix_aio_state->wfd, &byte, sizeof(byte));
-        if (ret < 0 && errno != EAGAIN)
-            die("write()");
-    }
-
-    qemu_service_io();
-}
 
 static void paio_remove(struct qemu_paiocb *acb)
 {
@@ -612,9 +610,8 @@ BlockDriverAIOCB *paio_ioctl(BlockDriverState *bs, int fd,
 
 int paio_init(void)
 {
-    struct sigaction act;
+    sigset_t mask;
     PosixAioState *s;
-    int fds[2];
     int ret;
 
     if (posix_aio_state)
@@ -622,24 +619,21 @@ int paio_init(void)
 
     s = qemu_malloc(sizeof(PosixAioState));
 
-    sigfillset(&act.sa_mask);
-    act.sa_flags = 0; /* do not restart syscalls to interrupt select() */
-    act.sa_handler = aio_signal_handler;
-    sigaction(SIGUSR2, &act, NULL);
+    /* Make sure to block AIO signal */
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGUSR2);
+    sigprocmask(SIG_BLOCK, &mask, NULL);
 
     s->first_aio = NULL;
-    if (qemu_pipe(fds) == -1) {
-        fprintf(stderr, "failed to create pipe\n");
+    s->fd = qemu_signalfd(&mask);
+    if (s->fd == -1) {
+        fprintf(stderr, "failed to create signalfd\n");
         return -1;
     }
 
-    s->rfd = fds[0];
-    s->wfd = fds[1];
+    fcntl(s->fd, F_SETFL, O_NONBLOCK);
 
-    fcntl(s->rfd, F_SETFL, O_NONBLOCK);
-    fcntl(s->wfd, F_SETFL, O_NONBLOCK);
-
-    qemu_aio_set_fd_handler(s->rfd, posix_aio_read, NULL, posix_aio_flush,
+    qemu_aio_set_fd_handler(s->fd, posix_aio_read, NULL, posix_aio_flush,
         posix_aio_process_queue, s);
 
     ret = pthread_attr_init(&attr);
