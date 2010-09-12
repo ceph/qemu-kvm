@@ -2473,6 +2473,10 @@ int main(int argc, char **argv, char **envp)
                 break;
 	    case QEMU_OPTION_no_kvm:
 		kvm_allowed = 0;
+#ifdef CONFIG_NO_CPU_EMULATION
+                fprintf(stderr, "cpu emulation not configured\n");
+                exit(1);
+#endif
 		break;
 #ifdef CONFIG_KVM
 	    case QEMU_OPTION_no_kvm_irqchip: {
