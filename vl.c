@@ -2466,7 +2466,7 @@ int main(int argc, char **argv, char **envp)
             case QEMU_OPTION_smbios:
                 do_smbios_option(optarg);
                 break;
-#ifdef KVM_UPSTREAM
+#ifdef OBSOLETE_KVM_IMPL
             case QEMU_OPTION_enable_kvm:
                 kvm_allowed = 1;
 #endif
@@ -2803,7 +2803,7 @@ int main(int argc, char **argv, char **envp)
     if (kvm_allowed) {
         int ret = kvm_init(smp_cpus);
         if (ret < 0) {
-#if defined(KVM_UPSTREAM) || defined(CONFIG_NO_CPU_EMULATION)
+#if defined(OBSOLETE_KVM_IMPL) || defined(CONFIG_NO_CPU_EMULATION)
             if (!kvm_available()) {
                 printf("KVM not supported for this target\n");
             } else {

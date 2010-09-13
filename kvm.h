@@ -31,13 +31,13 @@ extern int kvm_allowed;
 #define kvm_enabled() (0)
 #endif
 
-#ifdef KVM_UPSTREAM
+#ifdef OBSOLETE_KVM_IMPL
 struct kvm_run;
 
 /* external API */
 
 int kvm_init(int smp_cpus);
-#endif /* KVM_UPSTREAM */
+#endif /* OBSOLETE_KVM_IMPL */
 
 int kvm_has_sync_mmu(void);
 int kvm_has_vcpu_events(void);
@@ -96,7 +96,7 @@ int kvm_arch_handle_exit(CPUState *env, struct kvm_run *run);
 
 int kvm_arch_pre_run(CPUState *env, struct kvm_run *run);
 
-#ifdef KVM_UPSTREAM
+#ifdef OBSOLETE_KVM_IMPL
 int kvm_arch_process_irqchip_events(CPUState *env);
 #endif
 

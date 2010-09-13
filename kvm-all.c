@@ -41,7 +41,7 @@
     do { } while (0)
 #endif
 
-#ifdef KVM_UPSTREAM
+#ifdef OBSOLETE_KVM_IMPL
 
 typedef struct KVMSlot
 {
@@ -156,7 +156,7 @@ static int kvm_set_user_memory_region(KVMState *s, KVMSlot *slot)
     return kvm_vm_ioctl(s, KVM_SET_USER_MEMORY_REGION, &mem);
 }
 
-#ifdef KVM_UPSTREAM
+#ifdef OBSOLETE_KVM_IMPL
 static void kvm_reset_vcpu(void *opaque)
 {
     CPUState *env = opaque;
@@ -176,7 +176,7 @@ int kvm_pit_in_kernel(void)
 }
 
 
-#ifdef KVM_UPSTREAM
+#ifdef OBSOLETE_KVM_IMPL
 int kvm_init_vcpu(CPUState *env)
 {
     KVMState *s = kvm_state;
@@ -594,7 +594,7 @@ void kvm_cpu_register_phys_memory_client(void)
     cpu_register_phys_memory_client(&kvm_cpu_phys_memory_client);
 }
 
-#ifdef KVM_UPSTREAM
+#ifdef OBSOLETE_KVM_IMPL
 
 int kvm_init(int smp_cpus)
 {
@@ -816,7 +816,7 @@ void kvm_flush_coalesced_mmio_buffer(void)
 #endif
 }
 
-#ifdef KVM_UPSTREAM
+#ifdef OBSOLETE_KVM_IMPL
 
 static void do_kvm_cpu_synchronize_state(void *_env)
 {
@@ -1038,7 +1038,7 @@ int kvm_has_debugregs(void)
     return kvm_state->debugregs;
 }
 
-#ifdef KVM_UPSTREAM
+#ifdef OBSOLETE_KVM_IMPL
 int kvm_has_xsave(void)
 {
     return kvm_state->xsave;
@@ -1069,10 +1069,10 @@ void kvm_setup_guest_memory(void *start, size_t size)
 }
 
 #ifdef KVM_CAP_SET_GUEST_DEBUG
-#ifndef KVM_UPSTREAM
+#ifndef OBSOLETE_KVM_IMPL
 #define run_on_cpu on_vcpu
 static void on_vcpu(CPUState *env, void (*func)(void *data), void *data);
-#endif /* !KVM_UPSTREAM */
+#endif /* !OBSOLETE_KVM_IMPL */
 
 struct kvm_sw_breakpoint *kvm_find_sw_breakpoint(CPUState *env,
                                                  target_ulong pc)

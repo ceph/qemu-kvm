@@ -299,7 +299,7 @@ void qemu_notify_event(void)
     }
 }
 
-#if defined(KVM_UPSTREAM) || !defined(CONFIG_KVM)
+#if defined(OBSOLETE_KVM_IMPL) || !defined(CONFIG_KVM)
 void qemu_mutex_lock_iothread(void) {}
 void qemu_mutex_unlock_iothread(void) {}
 #endif

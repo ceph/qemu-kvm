@@ -188,7 +188,7 @@ int kvm_arch_init_vcpu(CPUState *env)
         return r;
     }
 
-#ifdef KVM_UPSTREAM
+#ifdef OBSOLETE_KVM_IMPL
 
     env->mp_state = KVM_MP_STATE_RUNNABLE;
 
@@ -304,7 +304,7 @@ void kvm_arch_reset_vcpu(CPUState *env)
         env->mp_state = KVM_MP_STATE_RUNNABLE;
     }
 }
-#ifdef KVM_UPSTREAM
+#ifdef OBSOLETE_KVM_IMPL
 
 static int kvm_has_msr_star(CPUState *env)
 {
@@ -644,7 +644,7 @@ static void kvm_msr_entry_set(struct kvm_msr_entry *entry,
     entry->data = value;
 }
 
-#ifdef KVM_UPSTREAM
+#ifdef OBSOLETE_KVM_IMPL
 static int kvm_put_msrs(CPUState *env, int level)
 {
     struct {
@@ -1104,7 +1104,7 @@ static int kvm_get_debugregs(CPUState *env)
     return 0;
 }
 
-#ifdef KVM_UPSTREAM
+#ifdef OBSOLETE_KVM_IMPL
 int kvm_arch_put_registers(CPUState *env, int level)
 {
     int ret;
@@ -1242,7 +1242,7 @@ int kvm_arch_post_run(CPUState *env, struct kvm_run *run)
     return 0;
 }
 
-#ifdef KVM_UPSTREAM
+#ifdef OBSOLETE_KVM_IMPL
 
 int kvm_arch_process_irqchip_events(CPUState *env)
 {
