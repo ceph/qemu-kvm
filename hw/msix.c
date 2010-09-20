@@ -374,12 +374,6 @@ int msix_init(struct PCIDevice *dev, unsigned short nentries,
     if (nentries > MSIX_MAX_ENTRIES)
         return -EINVAL;
 
-#ifdef KVM_CAP_IRQCHIP
-    if (kvm_enabled() && kvm_irqchip_in_kernel()) {
-        dev->msix_irq_entries = qemu_malloc(nentries *
-                                            sizeof *dev->msix_irq_entries);
-    }
-#endif
     dev->msix_mask_notifier_opaque =
         qemu_mallocz(nentries * sizeof *dev->msix_mask_notifier_opaque);
     dev->msix_mask_notifier = NULL;
@@ -400,6 +394,13 @@ int msix_init(struct PCIDevice *dev, unsigned short nentries,
     ret = msix_add_config(dev, nentries, bar_nr, bar_size);
     if (ret)
         goto err_config;
+
+#ifdef KVM_CAP_IRQCHIP
+    if (kvm_enabled() && kvm_irqchip_in_kernel()) {
+        dev->msix_irq_entries = qemu_malloc(nentries *
+                                            sizeof *dev->msix_irq_entries);
+    }
+#endif
 
     dev->cap_present |= QEMU_PCI_CAP_MSIX;
     return 0;
