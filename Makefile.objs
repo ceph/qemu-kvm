@@ -196,9 +196,7 @@ hw-obj-$(CONFIG_PIIX4) += piix4.o
 # PCI watchdog devices
 hw-obj-y += wdt_i6300esb.o
 
-# MSI-X depends on kvm for interrupt injection,
-# so moved it from Makefile.objs to Makefile.target for now
-# hw-obj-y += msix.o
+hw-obj-y += msix.o
 
 # PCI network cards
 hw-obj-y += ne2000.o

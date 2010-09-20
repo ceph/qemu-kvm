@@ -183,10 +183,6 @@ obj-y += rwhandler.o
 obj-$(CONFIG_KVM) += kvm.o kvm-all.o
 obj-$(CONFIG_NO_KVM) += kvm-stub.o
 
-# MSI-X depends on kvm for interrupt injection,
-# so moved it from Makefile.objs to Makefile.target for now
-obj-y += msix.o
-
 LIBS+=-lz
 
 QEMU_CFLAGS += $(VNC_TLS_CFLAGS)
