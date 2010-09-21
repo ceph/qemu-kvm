@@ -99,10 +99,6 @@ static void i440fx_update_memory_mappings(PCII440FXState *d)
     int i, r;
     uint32_t smram, addr;
 
-    if (kvm_enabled()) {
-        /* FIXME: Support remappings and protection changes. */
-        return;
-    }
     update_pam(d, 0xf0000, 0x100000, (d->dev.config[I440FX_PAM] >> 4) & 3);
     for(i = 0; i < 12; i++) {
         r = (d->dev.config[(i >> 1) + (I440FX_PAM + 1)] >> ((i & 1) * 4)) & 3;
