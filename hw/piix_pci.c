@@ -28,6 +28,7 @@
 #include "pci_host.h"
 #include "isa.h"
 #include "sysbus.h"
+#include "range.h"
 #include "kvm.h"
 
 /*

@@ -31,6 +31,7 @@
 #include "hw/pc.h"
 #include "device-assignment.h"
 #include "qemu-objects.h"
+#include "range.h"
 
 //#define DEBUG_PCI
 #ifdef DEBUG_PCI
