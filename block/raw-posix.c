@@ -50,6 +50,7 @@
 #endif
 #ifdef __linux__
 #include <sys/ioctl.h>
+#include <sys/param.h>
 #include <linux/cdrom.h>
 #include <linux/fd.h>
 #endif
@@ -870,8 +871,13 @@ static int hdev_open(BlockDriverState *bs, const char *filename, int flags)
 
     s->type = FTYPE_FILE;
 #if defined(__linux__)
-    if (strstart(filename, "/dev/sg", NULL)) {
-        bs->sg = 1;
+    {
+        char resolved_path[ MAXPATHLEN ], *temp;
+
+        temp = realpath(filename, resolved_path);
+        if (temp && strstart(temp, "/dev/sg", NULL)) {
+            bs->sg = 1;
+        }
     }
 #endif
 
@@ -1155,9 +1161,6 @@ static int cdrom_probe_device(const char *filename)
 {
     int fd, ret;
     int prio = 0;
-
-    if (strstart(filename, "/dev/cd", NULL))
-        prio = 50;
 
     fd = open(filename, O_RDONLY | O_NONBLOCK);
     if (fd < 0) {
