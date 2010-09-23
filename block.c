@@ -23,6 +23,7 @@
  */
 #include "config-host.h"
 #include "qemu-common.h"
+#include "trace.h"
 #include "monitor.h"
 #include "block_int.h"
 #include "module.h"
@@ -523,7 +524,6 @@ int bdrv_open(BlockDriverState *bs, const char *filename, int flags,
               BlockDriver *drv)
 {
     int ret;
-    int probed = 0;
 
     if (flags & BDRV_O_SNAPSHOT) {
         BlockDriverState *bs1;
@@ -584,7 +584,6 @@ int bdrv_open(BlockDriverState *bs, const char *filename, int flags,
     /* Find the right image format driver */
     if (!drv) {
         ret = find_image_format(filename, &drv);
-        probed = 1;
     }
 
     if (!drv) {
@@ -596,8 +595,6 @@ int bdrv_open(BlockDriverState *bs, const char *filename, int flags,
     if (ret < 0) {
         goto unlink_and_fail;
     }
-
-    bs->probed = probed;
 
     /* If there is a backing file, use it */
     if ((flags & BDRV_O_NO_BACKING) == 0 && bs->backing_file[0] != '\0') {
@@ -745,6 +742,7 @@ int bdrv_check(BlockDriverState *bs, BdrvCheckResult *res)
 int bdrv_commit(BlockDriverState *bs)
 {
     BlockDriver *drv = bs->drv;
+    BlockDriver *backing_drv;
     int64_t sector, total_sectors;
     int n, ro, open_flags;
     int ret = 0, rw_ret = 0;
@@ -762,7 +760,8 @@ int bdrv_commit(BlockDriverState *bs)
     if (bs->backing_hd->keep_read_only) {
         return -EACCES;
     }
-    
+
+    backing_drv = bs->backing_hd->drv;
     ro = bs->backing_hd->read_only;
     strncpy(filename, bs->backing_hd->filename, sizeof(filename));
     open_flags =  bs->backing_hd->open_flags;
@@ -772,12 +771,14 @@ int bdrv_commit(BlockDriverState *bs)
         bdrv_delete(bs->backing_hd);
         bs->backing_hd = NULL;
         bs_rw = bdrv_new("");
-        rw_ret = bdrv_open(bs_rw, filename, open_flags | BDRV_O_RDWR, drv);
+        rw_ret = bdrv_open(bs_rw, filename, open_flags | BDRV_O_RDWR,
+            backing_drv);
         if (rw_ret < 0) {
             bdrv_delete(bs_rw);
             /* try to re-open read-only */
             bs_ro = bdrv_new("");
-            ret = bdrv_open(bs_ro, filename, open_flags & ~BDRV_O_RDWR, drv);
+            ret = bdrv_open(bs_ro, filename, open_flags & ~BDRV_O_RDWR,
+                backing_drv);
             if (ret < 0) {
                 bdrv_delete(bs_ro);
                 /* drive not functional anymore */
@@ -828,7 +829,8 @@ ro_cleanup:
         bdrv_delete(bs->backing_hd);
         bs->backing_hd = NULL;
         bs_ro = bdrv_new("");
-        ret = bdrv_open(bs_ro, filename, open_flags & ~BDRV_O_RDWR, drv);
+        ret = bdrv_open(bs_ro, filename, open_flags & ~BDRV_O_RDWR,
+            backing_drv);
         if (ret < 0) {
             bdrv_delete(bs_ro);
             /* drive not functional anymore */
@@ -2062,6 +2064,8 @@ static void multiwrite_cb(void *opaque, int ret)
 {
     MultiwriteCB *mcb = opaque;
 
+    trace_multiwrite_cb(mcb, ret);
+
     if (ret < 0 && !mcb->error) {
         mcb->error = ret;
     }
@@ -2202,6 +2206,8 @@ int bdrv_aio_multiwrite(BlockDriverState *bs, BlockRequest *reqs, int num_reqs)
     // Check for mergable requests
     num_reqs = multiwrite_merge(bs, reqs, num_reqs, mcb);
 
+    trace_bdrv_aio_multiwrite(mcb, mcb->num_callbacks, num_reqs);
+
     /*
      * Run the aio requests. As soon as one request can't be submitted
      * successfully, fail all requests that are not yet submitted (we must
@@ -2223,6 +2229,7 @@ int bdrv_aio_multiwrite(BlockDriverState *bs, BlockRequest *reqs, int num_reqs)
      */
     mcb->num_requests = 1;
 
+    // Run the aio requests
     for (i = 0; i < num_reqs; i++) {
         mcb->num_requests++;
         acb = bdrv_aio_writev(bs, reqs[i].sector, reqs[i].qiov,
@@ -2233,8 +2240,10 @@ int bdrv_aio_multiwrite(BlockDriverState *bs, BlockRequest *reqs, int num_reqs)
             // submitted yet. Otherwise we'll wait for the submitted AIOs to
             // complete and report the error in the callback.
             if (i == 0) {
+                trace_bdrv_aio_multiwrite_earlyfail(mcb);
                 goto fail;
             } else {
+                trace_bdrv_aio_multiwrite_latefail(mcb, i);
                 multiwrite_cb(mcb, -EIO);
                 break;
             }

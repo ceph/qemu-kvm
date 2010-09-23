@@ -228,6 +228,7 @@ static inline void pic_intack(PicState *s, int irq)
 }
 
 extern int time_drift_fix;
+extern int64_t timer_acks, timer_ints_to_push;
 
 int pic_read_irq(PicState2 *s)
 {
@@ -239,7 +240,6 @@ int pic_read_irq(PicState2 *s)
         pic_intack(&s->pics[0], irq);
 #ifdef TARGET_I386
 	if (time_drift_fix && irq == 0) {
-	    extern int64_t timer_acks, timer_ints_to_push;
 	    timer_acks++;
 	    if (timer_ints_to_push > 0) {
 		timer_ints_to_push--;

@@ -13,6 +13,7 @@
 
 #include <qemu-common.h>
 #include "qemu-error.h"
+#include "trace.h"
 #include "blockdev.h"
 #include "virtio-blk.h"
 #ifdef __linux__
@@ -52,6 +53,8 @@ static void virtio_blk_req_complete(VirtIOBlockReq *req, int status)
 {
     VirtIOBlock *s = req->dev;
 
+    trace_virtio_blk_req_complete(req, status);
+
     req->in->status = status;
     virtqueue_push(s->vq, &req->elem, req->qiov.size + sizeof(*req->in));
     virtio_notify(&s->vdev, s->vq);
@@ -87,6 +90,8 @@ static int virtio_blk_handle_rw_error(VirtIOBlockReq *req, int error,
 static void virtio_blk_rw_complete(void *opaque, int ret)
 {
     VirtIOBlockReq *req = opaque;
+
+    trace_virtio_blk_rw_complete(req, ret);
 
     if (ret) {
         int is_read = !(req->out->type & VIRTIO_BLK_T_OUT);
@@ -269,6 +274,8 @@ static void virtio_blk_handle_flush(VirtIOBlockReq *req, MultiReqBuffer *mrb)
 static void virtio_blk_handle_write(VirtIOBlockReq *req, MultiReqBuffer *mrb)
 {
     BlockRequest *blkreq;
+
+    trace_virtio_blk_handle_write(req, req->out->sector, req->qiov.size / 512);
 
     if (req->out->sector & req->dev->sector_mask) {
         virtio_blk_rw_complete(req, -EIO);
@@ -481,6 +488,11 @@ static int virtio_blk_load(QEMUFile *f, void *opaque, int version_id)
         qemu_get_buffer(f, (unsigned char*)&req->elem, sizeof(req->elem));
         req->next = s->rq;
         s->rq = req;
+
+        virtqueue_map_sg(req->elem.in_sg, req->elem.in_addr,
+            req->elem.in_num, 1);
+        virtqueue_map_sg(req->elem.out_sg, req->elem.out_addr,
+            req->elem.out_num, 0);
     }
 
     return 0;
@@ -528,6 +540,7 @@ VirtIODevice *virtio_blk_init(DeviceState *dev, BlockConf *conf)
     register_savevm(dev, "virtio-blk", virtio_blk_id++, 2,
                     virtio_blk_save, virtio_blk_load, s);
     bdrv_set_removable(s->bs, 0);
+    s->bs->buffer_alignment = conf->logical_block_size;
 
     return &s->vdev;
 }

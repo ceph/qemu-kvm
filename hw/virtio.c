@@ -13,6 +13,7 @@
 
 #include <inttypes.h>
 
+#include "trace.h"
 #include "virtio.h"
 #include "sysemu.h"
 
@@ -205,6 +206,8 @@ void virtqueue_fill(VirtQueue *vq, const VirtQueueElement *elem,
     unsigned int offset;
     int i;
 
+    trace_virtqueue_fill(vq, elem, len, idx);
+
     offset = 0;
     for (i = 0; i < elem->in_num; i++) {
         size_t size = MIN(len - offset, elem->in_sg[i].iov_len);
@@ -232,6 +235,7 @@ void virtqueue_flush(VirtQueue *vq, unsigned int count)
 {
     /* Make sure buffer is written before we update index. */
     wmb();
+    trace_virtqueue_flush(vq, count);
     vring_used_idx_increment(vq, count);
     vq->inuse -= count;
 }
@@ -360,11 +364,26 @@ int virtqueue_avail_bytes(VirtQueue *vq, int in_bytes, int out_bytes)
     return 0;
 }
 
+void virtqueue_map_sg(struct iovec *sg, target_phys_addr_t *addr,
+    size_t num_sg, int is_write)
+{
+    unsigned int i;
+    target_phys_addr_t len;
+
+    for (i = 0; i < num_sg; i++) {
+        len = sg[i].iov_len;
+        sg[i].iov_base = cpu_physical_memory_map(addr[i], &len, is_write);
+        if (sg[i].iov_base == NULL || len != sg[i].iov_len) {
+            fprintf(stderr, "virtio: trying to map MMIO memory\n");
+            exit(1);
+        }
+    }
+}
+
 int virtqueue_pop(VirtQueue *vq, VirtQueueElement *elem)
 {
     unsigned int i, head, max;
     target_phys_addr_t desc_pa = vq->vring.desc;
-    target_phys_addr_t len;
 
     if (!virtqueue_num_heads(vq, vq->last_avail_idx))
         return 0;
@@ -388,28 +407,19 @@ int virtqueue_pop(VirtQueue *vq, VirtQueueElement *elem)
         i = 0;
     }
 
+    /* Collect all the descriptors */
     do {
         struct iovec *sg;
-        int is_write = 0;
 
         if (vring_desc_flags(desc_pa, i) & VRING_DESC_F_WRITE) {
             elem->in_addr[elem->in_num] = vring_desc_addr(desc_pa, i);
             sg = &elem->in_sg[elem->in_num++];
-            is_write = 1;
-        } else
+        } else {
+            elem->out_addr[elem->out_num] = vring_desc_addr(desc_pa, i);
             sg = &elem->out_sg[elem->out_num++];
-
-        /* Grab the first descriptor, and check it's OK. */
-        sg->iov_len = vring_desc_len(desc_pa, i);
-        len = sg->iov_len;
-
-        sg->iov_base = cpu_physical_memory_map(vring_desc_addr(desc_pa, i),
-                                               &len, is_write);
-
-        if (sg->iov_base == NULL || len != sg->iov_len) {
-            fprintf(stderr, "virtio: trying to map MMIO memory\n");
-            exit(1);
         }
+
+        sg->iov_len = vring_desc_len(desc_pa, i);
 
         /* If we've got too many, that implies a descriptor loop. */
         if ((elem->in_num + elem->out_num) > max) {
@@ -418,10 +428,15 @@ int virtqueue_pop(VirtQueue *vq, VirtQueueElement *elem)
         }
     } while ((i = virtqueue_next_desc(desc_pa, i, max)) != max);
 
+    /* Now map what we have collected */
+    virtqueue_map_sg(elem->in_sg, elem->in_addr, elem->in_num, 1);
+    virtqueue_map_sg(elem->out_sg, elem->out_addr, elem->out_num, 0);
+
     elem->index = head;
 
     vq->inuse++;
 
+    trace_virtqueue_pop(vq, elem, elem->in_num, elem->out_num);
     return elem->in_num + elem->out_num;
 }
 
@@ -560,6 +575,7 @@ int virtio_queue_get_num(VirtIODevice *vdev, int n)
 void virtio_queue_notify(VirtIODevice *vdev, int n)
 {
     if (n < VIRTIO_PCI_QUEUE_MAX && vdev->vq[n].vring.desc) {
+        trace_virtio_queue_notify(vdev, n, &vdev->vq[n]);
         vdev->vq[n].handle_output(vdev, &vdev->vq[n]);
     }
 }
@@ -597,6 +613,7 @@ VirtQueue *virtio_add_queue(VirtIODevice *vdev, int queue_size,
 
 void virtio_irq(VirtQueue *vq)
 {
+    trace_virtio_irq(vq);
     vq->vdev->isr |= 0x01;
     virtio_notify_vector(vq->vdev, vq->vector);
 }
@@ -609,6 +626,7 @@ void virtio_notify(VirtIODevice *vdev, VirtQueue *vq)
          (vq->inuse || vring_avail_idx(vq) != vq->last_avail_idx)))
         return;
 
+    trace_virtio_notify(vdev, vq);
     vdev->isr |= 0x01;
     virtio_notify_vector(vdev, vq->vector);
 }

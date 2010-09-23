@@ -55,6 +55,7 @@ static int debugflags = DBGBIT(TXERR) | DBGBIT(GENERAL);
 
 #define IOPORT_SIZE       0x40
 #define PNPMMIO_SIZE      0x20000
+#define MIN_BUF_SIZE      60 /* Min. octets in an ethernet frame sans FCS */
 
 /*
  * HW models:
@@ -345,7 +346,7 @@ is_vlan_txd(uint32_t txd_lower)
 
 /* FCS aka Ethernet CRC-32. We don't get it from backends and can't
  * fill it in, just pad descriptor length by 4 bytes unless guest
- * told us to trip it off the packet. */
+ * told us to strip it off the packet. */
 static inline int
 fcs_len(E1000State *s)
 {
@@ -635,9 +636,18 @@ e1000_receive(VLANClientState *nc, const uint8_t *buf, size_t size)
     uint32_t rdh_start;
     uint16_t vlan_special = 0;
     uint8_t vlan_status = 0, vlan_offset = 0;
+    uint8_t min_buf[MIN_BUF_SIZE];
 
     if (!(s->mac_reg[RCTL] & E1000_RCTL_EN))
         return -1;
+
+    /* Pad to minimum Ethernet frame length */
+    if (size < sizeof(min_buf)) {
+        memcpy(min_buf, buf, size);
+        memset(&min_buf[size], 0, sizeof(min_buf) - size);
+        buf = min_buf;
+        size = sizeof(min_buf);
+    }
 
     if (size > s->rxbuf_size) {
         DBGOUT(RX, "packet too large for buffers (%lu > %d)\n",
@@ -690,9 +700,14 @@ e1000_receive(VLANClientState *nc, const uint8_t *buf, size_t size)
 
     s->mac_reg[GPRC]++;
     s->mac_reg[TPR]++;
-    n = s->mac_reg[TORL];
-    if ((s->mac_reg[TORL] += size) < n)
+    /* TOR - Total Octets Received:
+     * This register includes bytes received in a packet from the <Destination
+     * Address> field through the <CRC> field, inclusively.
+     */
+    n = s->mac_reg[TORL] + size + /* Always include FCS length. */ 4;
+    if (n < s->mac_reg[TORL])
         s->mac_reg[TORH]++;
+    s->mac_reg[TORL] = n;
 
     n = E1000_ICS_RXT0;
     if ((rdt = s->mac_reg[RDT]) < s->mac_reg[RDH])

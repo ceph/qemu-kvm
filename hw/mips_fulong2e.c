@@ -141,13 +141,13 @@ static int64_t load_kernel (CPUState *env)
     prom_size = ENVP_NB_ENTRIES * (sizeof(int32_t) + ENVP_ENTRY_SIZE);
     prom_buf = qemu_malloc(prom_size);
 
-    prom_set(prom_buf, index++, loaderparams.kernel_filename);
+    prom_set(prom_buf, index++, "%s", loaderparams.kernel_filename);
     if (initrd_size > 0) {
-        prom_set(prom_buf, index++, "rd_start=0x" PRIx64 " rd_size=%li %s",
+        prom_set(prom_buf, index++, "rd_start=0x%" PRIx64 " rd_size=%li %s",
                  cpu_mips_phys_to_kseg0(NULL, initrd_offset), initrd_size,
                  loaderparams.kernel_cmdline);
     } else {
-        prom_set(prom_buf, index++, loaderparams.kernel_cmdline);
+        prom_set(prom_buf, index++, "%s", loaderparams.kernel_cmdline);
     }
 
     /* Setup minimum environment variables */
@@ -258,7 +258,7 @@ static void mips_fulong2e_init(ram_addr_t ram_size, const char *boot_device,
 {
     char *filename;
     unsigned long ram_offset, bios_offset;
-    unsigned long bios_size;
+    long bios_size;
     int64_t kernel_entry;
     qemu_irq *i8259;
     qemu_irq *cpu_exit_irq;

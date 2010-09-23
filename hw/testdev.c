@@ -27,10 +27,10 @@ static uint32_t test_device_memsize_read(void *opaque, uint32_t addr)
     return ram_size;
 }
 
+extern qemu_irq *ioapic_irq_hack;
+
 static void test_device_irq_line(void *opaque, uint32_t addr, uint32_t data)
 {
-    extern qemu_irq *ioapic_irq_hack;
-
     qemu_set_irq(ioapic_irq_hack[addr - 0x2000], !!data);
 }
 
