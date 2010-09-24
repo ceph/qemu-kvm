@@ -12,7 +12,7 @@ formal=
 
 releasedir=~/sf-release
 [[ -z "$TMP" ]] && TMP="/tmp"
-tmpdir=`mktemp -d --tmpdir="$TMP" qemu-kvm-make-release.XXXXXXXXXX`
+tmpdir=`mktemp -d "$TMP/qemu-kvm-make-release.XXXXXXXXXX"`
 while [[ "$1" = -* ]]; do
     opt="$1"
     shift
