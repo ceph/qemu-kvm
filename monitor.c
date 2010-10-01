@@ -2301,6 +2301,18 @@ static void do_inject_mce(Monitor *mon, const QDict *qdict)
 }
 #endif
 
+static void do_p2v(Monitor *mon, const QDict *qdict)
+{
+    target_phys_addr_t size = TARGET_PAGE_SIZE;
+    target_phys_addr_t addr = qdict_get_int(qdict, "addr");
+    void *vaddr;
+
+    vaddr = cpu_physical_memory_map(addr, &size, 0);
+    monitor_printf(mon, "Guest physical address %p is mapped at "
+                   "host virtual address %p\n", (void *)addr, vaddr);
+    cpu_physical_memory_unmap(vaddr, size, 0, 0);
+}
+
 static int do_getfd(Monitor *mon, const QDict *qdict, QObject **ret_data)
 {
     const char *fdname = qdict_get_str(qdict, "fdname");
