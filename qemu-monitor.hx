@@ -459,19 +459,6 @@ Start gdbserver session (default @var{port}=1234)
 ETEXI
 
     {
-        .name       = "p2v",
-        .args_type  = "fmt:/,addr:l",
-        .params     = "/fmt addr",
-        .help       = "translate guest physical 'addr' to host virtual address",
-        .mhandler.cmd = do_p2v,
-    },
-STEXI
-@item p2v @var{addr}
-@findex mce
-Translate guest physical @var{addr} to host virtual address.
-ETEXI
-
-    {
         .name       = "x",
         .args_type  = "fmt:/,addr:l",
         .params     = "/fmt addr",
