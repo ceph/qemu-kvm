@@ -219,6 +219,9 @@ void pci_register_bar(PCIDevice *pci_dev, int region_num,
                             pcibus_t size, int type,
                             PCIMapIORegionFunc *map_func);
 
+void pci_map_option_rom(PCIDevice *pdev, int region_num, pcibus_t addr,
+                        pcibus_t size, int type);
+
 int pci_enable_capability_support(PCIDevice *pci_dev,
                                   uint32_t config_start,
                                   PCICapConfigReadFunc *config_read,
