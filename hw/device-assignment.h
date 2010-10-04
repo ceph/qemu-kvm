@@ -57,7 +57,7 @@ typedef struct {
     uint16_t region_number; /* number of active regions */
 
     /* Port I/O or MMIO Regions */
-    PCIRegion regions[PCI_NUM_REGIONS];
+    PCIRegion regions[PCI_NUM_REGIONS - 1];
     int config_fd;
 } PCIDevRegions;
 
@@ -80,7 +80,7 @@ typedef struct AssignedDevice {
     uint32_t use_iommu;
     int intpin;
     uint8_t debug_flags;
-    AssignedDevRegion v_addrs[PCI_NUM_REGIONS];
+    AssignedDevRegion v_addrs[PCI_NUM_REGIONS - 1];
     PCIDevRegions real_device;
     int run;
     int girq;

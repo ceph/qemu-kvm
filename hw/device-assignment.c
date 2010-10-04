@@ -233,8 +233,6 @@ static CPUReadMemoryFunc * const slow_bar_read[] = {
     &slow_bar_readl
 };
 
-static CPUWriteMemoryFunc * const slow_bar_null_write[] = {NULL, NULL, NULL};
-
 static void assigned_dev_iomem_map_slow(PCIDevice *pci_dev, int region_num,
                                         pcibus_t e_phys, pcibus_t e_size,
                                         int type)
@@ -245,10 +243,7 @@ static void assigned_dev_iomem_map_slow(PCIDevice *pci_dev, int region_num,
     int m;
 
     DEBUG("%s", "slow map\n");
-    if (region_num == PCI_ROM_SLOT)
-        m = cpu_register_io_memory(slow_bar_read, slow_bar_null_write, region);
-    else
-        m = cpu_register_io_memory(slow_bar_read, slow_bar_write, region);
+    m = cpu_register_io_memory(slow_bar_read, slow_bar_write, region);
     cpu_register_physical_memory(e_phys, e_size, m);
 
     /* MSI-X MMIO page */
@@ -268,7 +263,7 @@ static void assigned_dev_iomem_map(PCIDevice *pci_dev, int region_num,
     AssignedDevice *r_dev = container_of(pci_dev, AssignedDevice, dev);
     AssignedDevRegion *region = &r_dev->v_addrs[region_num];
     PCIRegion *real_region = &r_dev->real_device.regions[region_num];
-    int ret = 0, flags = 0;
+    int ret = 0;
 
     DEBUG("e_phys=%08" FMT_PCIBUS " r_virt=%p type=%d len=%08" FMT_PCIBUS " region_num=%d \n",
           e_phys, region->u.r_virtbase, type, e_size, region_num);
@@ -277,11 +272,7 @@ static void assigned_dev_iomem_map(PCIDevice *pci_dev, int region_num,
     region->e_size = e_size;
 
     if (e_size > 0) {
-
-        if (region_num == PCI_ROM_SLOT)
-            flags |= IO_MEM_ROM;
-
-        cpu_register_physical_memory(e_phys, e_size, region->memory_index | flags);
+        cpu_register_physical_memory(e_phys, e_size, region->memory_index);
 
         /* deal with MSI-X MMIO page */
         if (real_region->base_addr <= r_dev->msix_table_addr &&
@@ -527,35 +518,22 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
                 : PCI_BASE_ADDRESS_SPACE_MEMORY;
 
             if (cur_region->size & 0xFFF) {
-                if (i != PCI_ROM_SLOT) {
-                    fprintf(stderr, "PCI region %d at address 0x%llx "
-                            "has size 0x%x, which is not a multiple of 4K. "
-                            "You might experience some performance hit "
-                            "due to that.\n",
-                            i, (unsigned long long)cur_region->base_addr,
-                            cur_region->size);
-                }
+                fprintf(stderr, "PCI region %d at address 0x%llx "
+                        "has size 0x%x, which is not a multiple of 4K. "
+                        "You might experience some performance hit "
+                        "due to that.\n",
+                        i, (unsigned long long)cur_region->base_addr,
+                        cur_region->size);
                 slow_map = 1;
             }
 
             /* map physical memory */
             pci_dev->v_addrs[i].e_physbase = cur_region->base_addr;
-            if (i == PCI_ROM_SLOT) {
-                /* KVM doesn't support read-only mappings, use slow map */
-                slow_map = 1;
-                pci_dev->v_addrs[i].u.r_virtbase =
-                    mmap(NULL,
-                         cur_region->size,
-                         PROT_WRITE | PROT_READ, MAP_ANONYMOUS | MAP_PRIVATE,
-                         0, (off_t) 0);
-
-            } else {
-                pci_dev->v_addrs[i].u.r_virtbase =
-                    mmap(NULL,
-                         cur_region->size,
-                         PROT_WRITE | PROT_READ, MAP_SHARED,
-                         cur_region->resource_fd, (off_t) 0);
-            }
+            pci_dev->v_addrs[i].u.r_virtbase = mmap(NULL, cur_region->size,
+                                                    PROT_WRITE | PROT_READ,
+                                                    MAP_SHARED,
+                                                    cur_region->resource_fd,
+                                                    (off_t)0);
 
             if (pci_dev->v_addrs[i].u.r_virtbase == MAP_FAILED) {
                 pci_dev->v_addrs[i].u.r_virtbase = NULL;
@@ -563,11 +541,6 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
                         "\n", __func__,
                         (uint32_t) (cur_region->base_addr));
                 return -1;
-            }
-
-            if (i == PCI_ROM_SLOT) {
-                memset(pci_dev->v_addrs[i].u.r_virtbase, 0,
-                       (cur_region->size + 0xFFF) & 0xFFFFF000);
             }
 
             pci_dev->v_addrs[i].r_size = cur_region->size;
@@ -712,6 +685,12 @@ again:
         fprintf(stderr, "%s: read failed, errno = %d\n", __func__, errno);
     }
 
+    /* Clear host resource mapping info.  If we choose not to register a
+     * BAR, such as might be the case with the option ROM, we can get
+     * confusing, unwritable, residual addresses from the host here. */
+    memset(&pci_dev->dev.config[PCI_BASE_ADDRESS_0], 0, 24);
+    memset(&pci_dev->dev.config[PCI_ROM_ADDRESS], 0, 4);
+
     snprintf(name, sizeof(name), "%sresource", dir);
 
     f = fopen(name, "r");
@@ -720,7 +699,7 @@ again:
         return 1;
     }
 
-    for (r = 0; r < PCI_NUM_REGIONS; r++) {
+    for (r = 0; r < PCI_ROM_SLOT; r++) {
 	if (fscanf(f, "%lli %lli %lli\n", &start, &end, &flags) != 3)
 	    break;
 
@@ -736,13 +715,11 @@ again:
         } else {
             flags &= ~IORESOURCE_PREFETCH;
         }
-        if (r != PCI_ROM_SLOT) {
-            snprintf(name, sizeof(name), "%sresource%d", dir, r);
-            fd = open(name, O_RDWR);
-            if (fd == -1)
-                continue;
-            rp->resource_fd = fd;
-        }
+        snprintf(name, sizeof(name), "%sresource%d", dir, r);
+        fd = open(name, O_RDWR);
+        if (fd == -1)
+            continue;
+        rp->resource_fd = fd;
 
         rp->type = flags;
         rp->valid = 1;
@@ -1644,58 +1621,64 @@ void add_assigned_devices(PCIBus *bus, const char **devices, int n_devices)
  */
 static void assigned_dev_load_option_rom(AssignedDevice *dev)
 {
-    int size, len, ret;
-    void *buf;
+    char name[32], rom_file[64];
     FILE *fp;
-    uint8_t i = 1;
-    char rom_file[64];
+    uint8_t val;
+    struct stat st;
+    void *ptr;
+
+    /* If loading ROM from file, pci handles it */
+    if (dev->dev.romfile || !dev->dev.rom_bar)
+        return;
 
     snprintf(rom_file, sizeof(rom_file),
              "/sys/bus/pci/devices/%04x:%02x:%02x.%01x/rom",
              dev->host.seg, dev->host.bus, dev->host.dev, dev->host.func);
 
-    if (access(rom_file, F_OK))
+    if (stat(rom_file, &st)) {
         return;
+    }
 
-    /* Write something to the ROM file to enable it */
-    fp = fopen(rom_file, "wb");
-    if (fp == NULL)
+    if (access(rom_file, F_OK)) {
+        fprintf(stderr, "pci-assign: Insufficient privileges for %s\n",
+                rom_file);
         return;
-    len = fwrite(&i, 1, 1, fp);
-    fclose(fp);
-    if (len != 1)
-        return;
+    }
 
-    /* The file has to be closed and reopened, otherwise it won't work */
-    fp = fopen(rom_file, "rb");
-    if (fp == NULL)
+    /* Write "1" to the ROM file to enable it */
+    fp = fopen(rom_file, "r+");
+    if (fp == NULL) {
         return;
-
-    fseek(fp, 0, SEEK_END);
-    size = ftell(fp);
+    }
+    val = 1;
+    if (fwrite(&val, 1, 1, fp) != 1) {
+        goto close_rom;
+    }
     fseek(fp, 0, SEEK_SET);
 
-    buf = malloc(size);
-    if (buf == NULL) {
-        fclose(fp);
-        return;
+    snprintf(name, sizeof(name), "%s.rom", dev->dev.qdev.info->name);
+    dev->dev.rom_offset = qemu_ram_alloc(&dev->dev.qdev, name, st.st_size);
+    ptr = qemu_get_ram_ptr(dev->dev.rom_offset);
+    memset(ptr, 0xff, st.st_size);
+
+    if (!fread(ptr, 1, st.st_size, fp)) {
+        fprintf(stderr, "pci-assign: Cannot read from host %s\n"
+                "\tDevice option ROM contents are probably invalid "
+                "(check dmesg).\n\tSkip option ROM probe with rombar=0, "
+                "or load from file with romfile=\n", rom_file);
+        qemu_ram_free(dev->dev.rom_offset);
+        dev->dev.rom_offset = 0;
+        goto close_rom;
     }
 
-    if (!(ret = fread(buf, 1, size, fp))) {
-        free(buf);
-        fclose(fp);
-        return;
+    pci_register_bar(&dev->dev, PCI_ROM_SLOT,
+                     st.st_size, 0, pci_map_option_rom);
+close_rom:
+    /* Write "0" to disable ROM */
+    fseek(fp, 0, SEEK_SET);
+    val = 0;
+    if (!fwrite(&val, 1, 1, fp)) {
+        DEBUG("%s\n", "Failed to disable pci-sysfs rom file");
     }
     fclose(fp);
-
-    /* The number of bytes read is often much smaller than the BAR size */
-    size = ret;
-
-    /* Copy ROM contents into the space backing the ROM BAR */
-    if (dev->v_addrs[PCI_ROM_SLOT].r_size >= size &&
-        dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase) {
-        memcpy(dev->v_addrs[PCI_ROM_SLOT].u.r_virtbase, buf, size);
-    }
-
-    free(buf);
 }
