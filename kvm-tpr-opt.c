@@ -73,7 +73,7 @@ static uint8_t read_byte_virt(CPUState *env, target_ulong virt)
 
 static void write_byte_virt(CPUState *env, target_ulong virt, uint8_t b)
 {
-    stb_phys(map_addr(env, virt, NULL), b);
+    cpu_physical_memory_write_rom(map_addr(env, virt, NULL), &b, 1);
 }
 
 struct vapic_bios {
@@ -107,7 +107,7 @@ static void update_vbios_real_tpr(void)
     cpu_physical_memory_rw(vbios_desc_phys, (void *)&vapic_bios, sizeof vapic_bios, 0);
     vapic_bios.real_tpr = real_tpr;
     vapic_bios.vcpu_shift = 7;
-    cpu_physical_memory_rw(vbios_desc_phys, (void *)&vapic_bios, sizeof vapic_bios, 1);
+    cpu_physical_memory_write_rom(vbios_desc_phys, (void *)&vapic_bios, sizeof vapic_bios);
 }
 
 static unsigned modrm_reg(uint8_t modrm)
@@ -174,6 +174,7 @@ static int bios_is_mapped(CPUState *env, uint64_t rip)
     unsigned perms;
     uint32_t i;
     uint32_t offset, fixup, start = vapic_bios_addr ? : 0xe0000;
+    uint32_t patch;
 
     if (bios_enabled)
 	return 1;
@@ -198,7 +199,8 @@ static int bios_is_mapped(CPUState *env, uint64_t rip)
     for (i = vapic_bios.fixup_start; i < vapic_bios.fixup_end; i += 4) {
 	offset = ldl_phys(phys + i - vapic_bios.virt_base);
 	fixup = phys + offset;
-	stl_phys(fixup, ldl_phys(fixup) + bios_addr - vapic_bios.virt_base);
+        patch = ldl_phys(fixup) + bios_addr - vapic_bios.virt_base;
+        cpu_physical_memory_write_rom(fixup, (uint8_t *)&patch, 4);
     }
     vapic_phys = vapic_bios.vapic - vapic_bios.virt_base + phys;
     return 1;
@@ -225,7 +227,7 @@ int kvm_tpr_enable_vapic(CPUState *env)
 	    return 0;
 
     kvm_enable_vapic(env, vapic_phys + (pcr_cpu << 7));
-    cpu_physical_memory_rw(vapic_phys + (pcr_cpu << 7) + 4, &one, 1, 1);
+    cpu_physical_memory_write_rom(vapic_phys + (pcr_cpu << 7) + 4, &one, 1);
     env->kvm_vcpu_update_vapic = 0;
     bios_enabled = 1;
     return 1;
