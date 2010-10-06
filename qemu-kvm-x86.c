@@ -975,7 +975,7 @@ void kvm_arch_load_regs(CPUState *env, int level)
         } else if (level == KVM_PUT_FULL_STATE) {
             kvm_msr_entry_set(&msrs[n++], MSR_MCG_STATUS, env->mcg_status);
             kvm_msr_entry_set(&msrs[n++], MSR_MCG_CTL, env->mcg_ctl);
-            for (i = 0; i < (env->mcg_cap & 0xff); i++) {
+            for (i = 0; i < (env->mcg_cap & 0xff) * 4; i++) {
                 kvm_msr_entry_set(&msrs[n++], MSR_MC0_CTL + i, env->mce_banks[i]);
             }
         }
