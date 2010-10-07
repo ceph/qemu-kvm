@@ -584,40 +584,26 @@ void msix_unuse_all_vectors(PCIDevice *dev)
     msix_free_irq_entries(dev);
 }
 
+/* Invoke the notifier if vector entry is used and unmasked. */
+static int msix_notify_if_unmasked(PCIDevice *dev, unsigned vector, int masked)
+{
+    assert(dev->msix_mask_notifier);
+    if (!dev->msix_entry_used[vector] || msix_is_masked(dev, vector)) {
+        return 0;
+    }
+    return dev->msix_mask_notifier(dev, vector, masked);
+}
+
 static int msix_set_mask_notifier_for_vector(PCIDevice *dev, unsigned vector)
 {
-    int r = 0;
-    if (vector >= dev->msix_entries_nr || !dev->msix_entry_used[vector])
-        return 0;
-
-    assert(dev->msix_mask_notifier);
-
-    /* Unmask the new notifier unless vector is masked. */
-    if (!msix_is_masked(dev, vector)) {
-        r = dev->msix_mask_notifier(dev, vector, false);
-        if (r < 0) {
-            return r;
-        }
-    }
-    return r;
+	/* Notifier has been set. Invoke it on unmasked vectors. */
+	return msix_notify_if_unmasked(dev, vector, 0);
 }
 
 static int msix_unset_mask_notifier_for_vector(PCIDevice *dev, unsigned vector)
 {
-    int r = 0;
-    if (vector >= dev->msix_entries_nr || !dev->msix_entry_used[vector])
-        return 0;
-
-    assert(dev->msix_mask_notifier);
-
-    /* Mask the old notifier unless it is already masked. */
-    if (!msix_is_masked(dev, vector)) {
-        r = dev->msix_mask_notifier(dev, vector, true);
-        if (r < 0) {
-            return r;
-        }
-    }
-    return r;
+	/* Notifier will be unset. Invoke it to mask unmasked entries. */
+	return msix_notify_if_unmasked(dev, vector, 1);
 }
 
 int msix_set_mask_notifier(PCIDevice *dev, msix_mask_notifier_func f)
