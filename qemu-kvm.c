@@ -1134,7 +1134,7 @@ static void sigbus_handler(int n, struct qemu_signalfd_siginfo *siginfo,
                            void *ctx)
 {
 #if defined(KVM_CAP_MCE) && defined(TARGET_I386)
-    if (first_cpu->mcg_cap && siginfo->ssi_addr
+    if ((first_cpu->mcg_cap & MCG_SER_P) && siginfo->ssi_addr
         && siginfo->ssi_code == BUS_MCEERR_AO) {
         uint64_t status;
         void *vaddr;
@@ -1324,7 +1324,7 @@ static void kvm_on_sigbus(CPUState *env, siginfo_t *siginfo)
     unsigned long paddr;
     int r;
 
-    if (env->mcg_cap && siginfo->si_addr
+    if ((env->mcg_cap & MCG_SER_P) && siginfo->si_addr
         && (siginfo->si_code == BUS_MCEERR_AR
             || siginfo->si_code == BUS_MCEERR_AO)) {
         if (siginfo->si_code == BUS_MCEERR_AR) {
@@ -1356,7 +1356,7 @@ static void kvm_on_sigbus(CPUState *env, siginfo_t *siginfo)
         if (do_qemu_ram_addr_from_host(vaddr, &ram_addr) ||
             !kvm_physical_memory_addr_from_ram(kvm_state, ram_addr, (target_phys_addr_t *)&paddr)) {
             fprintf(stderr, "Hardware memory error for memory used by "
-                    "QEMU itself instaed of guest system!\n");
+                    "QEMU itself instead of guest system!\n");
             /* Hope we are lucky for AO MCE */
             if (siginfo->si_code == BUS_MCEERR_AO) {
                 return;
