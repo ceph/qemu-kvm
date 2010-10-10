@@ -198,4 +198,17 @@ int kvm_set_ioeventfd_pio_word(int fd, uint16_t adr, uint16_t val, bool assign);
 
 int kvm_physical_memory_addr_from_ram(KVMState *s, ram_addr_t ram_addr,
                                       target_phys_addr_t *phys_addr);
+
+int kvm_has_gsi_routing(void);
+int kvm_get_irq_route_gsi(void);
+int kvm_add_msix(uint32_t gsi, uint32_t addr_lo,
+                 uint32_t addr_hi, uint32_t data);
+int kvm_del_msix(uint32_t gsi, uint32_t addr_lo,
+                 uint32_t addr_hi, uint32_t data);
+int kvm_update_msix(uint32_t old_gsi, uint32_t old_addr_lo,
+                    uint32_t old_addr_hi, uint32_t old_data,
+                    uint32_t new_gsi, uint32_t new_addr_lo,
+                    uint32_t new_addr_hi, uint32_t new_data);
+int kvm_commit_irq_routes(void);
+
 #endif

@@ -141,3 +141,38 @@ int kvm_set_ioeventfd_mmio_long(int fd, uint32_t adr, uint32_t val, bool assign)
 {
     return -ENOSYS;
 }
+
+int kvm_has_gsi_routing(void)
+{
+    return 0;
+}
+
+int kvm_get_irq_route_gsi(void)
+{
+    return -ENOSYS;
+}
+
+int kvm_add_msix(uint32_t gsi, uint32_t addr_lo,
+                 uint32_t addr_hi, uint32_t data)
+{
+    return -ENOSYS;
+}
+
+int kvm_del_msix(uint32_t gsi, uint32_t addr_lo,
+                 uint32_t addr_hi, uint32_t data)
+{
+    return -ENOSYS;
+}
+
+int kvm_update_msix(uint32_t old_gsi, uint32_t old_addr_lo,
+                    uint32_t old_addr_hi, uint32_t old_data,
+                    uint32_t new_gsi, uint32_t new_addr_lo,
+                    uint32_t new_addr_hi, uint32_t new_data)
+{
+    return -ENOSYS;
+}
+
+int kvm_commit_irq_routes(void)
+{
+    return -ENOSYS;
+}

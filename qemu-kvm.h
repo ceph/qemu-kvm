@@ -661,14 +661,6 @@ int kvm_deassign_pci_device(kvm_context_t kvm,
 #endif
 
 /*!
- * \brief Checks whether the generic irq routing capability is present
- *
- * Checks whether kvm can reroute interrupts among the various interrupt
- * controllers.
- */
-int kvm_has_gsi_routing(void);
-
-/*!
  * \brief Determines the number of gsis that can be routed
  *
  * Returns the number of distinct gsis that can be routed by kvm.  This is
@@ -704,15 +696,6 @@ int kvm_add_irq_route(int gsi, int irqchip, int pin);
  */
 int kvm_del_irq_route(int gsi, int irqchip, int pin);
 
-int kvm_add_msix(uint32_t gsi, uint32_t addr_lo,
-                 uint32_t addr_hi, uint32_t data);
-int kvm_del_msix(uint32_t gsi, uint32_t addr_lo,
-                 uint32_t addr_hi, uint32_t data);
-int kvm_update_msix(uint32_t old_gsi, uint32_t old_addr_lo,
-                    uint32_t old_addr_hi, uint32_t old_data,
-                    uint32_t new_gsi, uint32_t new_addr_lo,
-                    uint32_t new_addr_hi, uint32_t new_data);
-
 struct kvm_irq_routing_entry;
 /*!
  * \brief Adds a routing entry to the temporary irq routing table
@@ -740,23 +723,6 @@ int kvm_del_routing_entry(struct kvm_irq_routing_entry *entry);
 int kvm_update_routing_entry(struct kvm_irq_routing_entry *entry,
                              struct kvm_irq_routing_entry *newentry);
 
-/*!
- * \brief Commit the temporary irq routing table
- *
- * Commit the temporary irq routing table to the running VM.
- *
- * \param kvm Pointer to the current kvm_context
- */
-int kvm_commit_irq_routes(void);
-
-/*!
- * \brief Get unused GSI number for irq routing table
- *
- * Get unused GSI number for irq routing table
- *
- * \param kvm Pointer to the current kvm_context
- */
-int kvm_get_irq_route_gsi(void);
 
 /*!
  * \brief Create a file descriptor for injecting interrupts
