@@ -704,6 +704,15 @@ int kvm_add_irq_route(int gsi, int irqchip, int pin);
  */
 int kvm_del_irq_route(int gsi, int irqchip, int pin);
 
+int kvm_add_msix(uint32_t gsi, uint32_t addr_lo,
+                 uint32_t addr_hi, uint32_t data);
+int kvm_del_msix(uint32_t gsi, uint32_t addr_lo,
+                 uint32_t addr_hi, uint32_t data);
+int kvm_update_msix(uint32_t old_gsi, uint32_t old_addr_lo,
+                    uint32_t old_addr_hi, uint32_t old_data,
+                    uint32_t new_gsi, uint32_t new_addr_lo,
+                    uint32_t new_addr_hi, uint32_t new_data);
+
 struct kvm_irq_routing_entry;
 /*!
  * \brief Adds a routing entry to the temporary irq routing table

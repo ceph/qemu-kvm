@@ -1036,6 +1036,50 @@ int kvm_get_irq_route_gsi(void)
     return -ENOSPC;
 }
 
+static void kvm_msix_routing_entry(struct kvm_irq_routing_entry *e,
+                                   uint32_t gsi, uint32_t addr_lo,
+                                   uint32_t addr_hi, uint32_t data)
+
+{
+    e->gsi = gsi;
+    e->type = KVM_IRQ_ROUTING_MSI;
+    e->flags = 0;
+    e->u.msi.address_lo = addr_lo;
+    e->u.msi.address_hi = addr_hi;
+    e->u.msi.data = data;
+}
+
+int kvm_add_msix(uint32_t gsi, uint32_t addr_lo,
+                        uint32_t addr_hi, uint32_t data)
+{
+    struct kvm_irq_routing_entry e;
+
+    kvm_msix_routing_entry(&e, gsi, addr_lo, addr_hi, data);
+    return kvm_add_routing_entry(&e);
+}
+
+int kvm_del_msix(uint32_t gsi, uint32_t addr_lo,
+                        uint32_t addr_hi, uint32_t data)
+{
+    struct kvm_irq_routing_entry e;
+
+    kvm_msix_routing_entry(&e, gsi, addr_lo, addr_hi, data);
+    return kvm_del_routing_entry(&e);
+}
+
+int kvm_update_msix(uint32_t old_gsi, uint32_t old_addr_lo,
+                    uint32_t old_addr_hi, uint32_t old_data,
+                    uint32_t new_gsi, uint32_t new_addr_lo,
+                    uint32_t new_addr_hi, uint32_t new_data)
+{
+    struct kvm_irq_routing_entry e1, e2;
+
+    kvm_msix_routing_entry(&e1, old_gsi, old_addr_lo, old_addr_hi, old_data);
+    kvm_msix_routing_entry(&e2, new_gsi, new_addr_lo, new_addr_hi, new_data);
+    return kvm_update_routing_entry(&e1, &e2);
+}
+
+
 #ifdef KVM_CAP_DEVICE_MSIX
 int kvm_assign_set_msix_nr(kvm_context_t kvm,
                            struct kvm_assigned_msix_nr *msix_nr)
