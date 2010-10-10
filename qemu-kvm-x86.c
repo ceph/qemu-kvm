@@ -1370,34 +1370,34 @@ int kvm_arch_init_irq_routing(void)
 {
     int i, r;
 
-    if (kvm_irqchip && kvm_has_gsi_routing(kvm_context)) {
-        kvm_clear_gsi_routes(kvm_context);
+    if (kvm_irqchip && kvm_has_gsi_routing()) {
+        kvm_clear_gsi_routes();
         for (i = 0; i < 8; ++i) {
             if (i == 2) {
                 continue;
             }
-            r = kvm_add_irq_route(kvm_context, i, KVM_IRQCHIP_PIC_MASTER, i);
+            r = kvm_add_irq_route(i, KVM_IRQCHIP_PIC_MASTER, i);
             if (r < 0) {
                 return r;
             }
         }
         for (i = 8; i < 16; ++i) {
-            r = kvm_add_irq_route(kvm_context, i, KVM_IRQCHIP_PIC_SLAVE, i - 8);
+            r = kvm_add_irq_route(i, KVM_IRQCHIP_PIC_SLAVE, i - 8);
             if (r < 0) {
                 return r;
             }
         }
         for (i = 0; i < 24; ++i) {
             if (i == 0 && irq0override) {
-                r = kvm_add_irq_route(kvm_context, i, KVM_IRQCHIP_IOAPIC, 2);
+                r = kvm_add_irq_route(i, KVM_IRQCHIP_IOAPIC, 2);
             } else if (i != 2 || !irq0override) {
-                r = kvm_add_irq_route(kvm_context, i, KVM_IRQCHIP_IOAPIC, i);
+                r = kvm_add_irq_route(i, KVM_IRQCHIP_IOAPIC, i);
             }
             if (r < 0) {
                 return r;
             }
         }
-        kvm_commit_irq_routes(kvm_context);
+        kvm_commit_irq_routes();
     }
     return 0;
 }

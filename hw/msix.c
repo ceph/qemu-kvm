@@ -54,12 +54,12 @@ static void kvm_msix_free(PCIDevice *dev)
     int vector, changed = 0;
     for (vector = 0; vector < dev->msix_entries_nr; ++vector) {
         if (dev->msix_entry_used[vector]) {
-            kvm_del_routing_entry(kvm_context, &dev->msix_irq_entries[vector]);
+            kvm_del_routing_entry(&dev->msix_irq_entries[vector]);
             changed = 1;
         }
     }
     if (changed) {
-        kvm_commit_irq_routes(kvm_context);
+        kvm_commit_irq_routes();
     }
 }
 
@@ -92,14 +92,14 @@ static void kvm_msix_update(PCIDevice *dev, int vector,
     kvm_msix_routing_entry(dev, vector, &e);
     if (memcmp(&entry->u.msi, &e.u.msi, sizeof entry->u.msi)) {
         int r;
-        r = kvm_update_routing_entry(kvm_context, entry, &e);
+        r = kvm_update_routing_entry(entry, &e);
         if (r) {
             fprintf(stderr, "%s: kvm_update_routing_entry failed: %s\n", __func__,
 		    strerror(-r));
             exit(1);
         }
         memcpy(&entry->u.msi, &e.u.msi, sizeof entry->u.msi);
-        r = kvm_commit_irq_routes(kvm_context);
+        r = kvm_commit_irq_routes();
         if (r) {
             fprintf(stderr, "%s: kvm_commit_irq_routes failed: %s\n", __func__,
 		    strerror(-r));
@@ -113,27 +113,27 @@ static int kvm_msix_add(PCIDevice *dev, unsigned vector)
     struct kvm_irq_routing_entry *entry = dev->msix_irq_entries + vector;
     int r;
 
-    if (!kvm_has_gsi_routing(kvm_context)) {
+    if (!kvm_has_gsi_routing()) {
         fprintf(stderr, "Warning: no MSI-X support found. "
                 "At least kernel 2.6.30 is required for MSI-X support.\n"
                );
         return -EOPNOTSUPP;
     }
 
-    r = kvm_get_irq_route_gsi(kvm_context);
+    r = kvm_get_irq_route_gsi();
     if (r < 0) {
         fprintf(stderr, "%s: kvm_get_irq_route_gsi failed: %s\n", __func__, strerror(-r));
         return r;
     }
     entry->gsi = r;
     kvm_msix_routing_entry(dev, vector, entry);
-    r = kvm_add_routing_entry(kvm_context, entry);
+    r = kvm_add_routing_entry(entry);
     if (r < 0) {
         fprintf(stderr, "%s: kvm_add_routing_entry failed: %s\n", __func__, strerror(-r));
         return r;
     }
 
-    r = kvm_commit_irq_routes(kvm_context);
+    r = kvm_commit_irq_routes();
     if (r < 0) {
         fprintf(stderr, "%s: kvm_commit_irq_routes failed: %s\n", __func__, strerror(-r));
         return r;
@@ -146,8 +146,8 @@ static void kvm_msix_del(PCIDevice *dev, unsigned vector)
     if (dev->msix_entry_used[vector]) {
         return;
     }
-    kvm_del_routing_entry(kvm_context, &dev->msix_irq_entries[vector]);
-    kvm_commit_irq_routes(kvm_context);
+    kvm_del_routing_entry(&dev->msix_irq_entries[vector]);
+    kvm_commit_irq_routes();
 }
 #else
 

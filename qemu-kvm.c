@@ -800,7 +800,7 @@ int kvm_reinject_control(kvm_context_t kvm, int pit_reinject)
     return -ENOSYS;
 }
 
-int kvm_has_gsi_routing(kvm_context_t kvm)
+int kvm_has_gsi_routing(void)
 {
     int r = 0;
 
@@ -819,9 +819,11 @@ int kvm_get_gsi_count(kvm_context_t kvm)
 #endif
 }
 
-int kvm_clear_gsi_routes(kvm_context_t kvm)
+int kvm_clear_gsi_routes(void)
 {
 #ifdef KVM_CAP_IRQ_ROUTING
+    kvm_context_t kvm = kvm_context;
+
     kvm->irq_routes->nr = 0;
     return 0;
 #else
@@ -829,10 +831,10 @@ int kvm_clear_gsi_routes(kvm_context_t kvm)
 #endif
 }
 
-int kvm_add_routing_entry(kvm_context_t kvm,
-                          struct kvm_irq_routing_entry *entry)
+int kvm_add_routing_entry(struct kvm_irq_routing_entry *entry)
 {
 #ifdef KVM_CAP_IRQ_ROUTING
+    kvm_context_t kvm = kvm_context;
     struct kvm_irq_routing *z;
     struct kvm_irq_routing_entry *new;
     int n, size;
@@ -867,7 +869,7 @@ int kvm_add_routing_entry(kvm_context_t kvm,
 #endif
 }
 
-int kvm_add_irq_route(kvm_context_t kvm, int gsi, int irqchip, int pin)
+int kvm_add_irq_route(int gsi, int irqchip, int pin)
 {
 #ifdef KVM_CAP_IRQ_ROUTING
     struct kvm_irq_routing_entry e;
@@ -877,16 +879,16 @@ int kvm_add_irq_route(kvm_context_t kvm, int gsi, int irqchip, int pin)
     e.flags = 0;
     e.u.irqchip.irqchip = irqchip;
     e.u.irqchip.pin = pin;
-    return kvm_add_routing_entry(kvm, &e);
+    return kvm_add_routing_entry(&e);
 #else
     return -ENOSYS;
 #endif
 }
 
-int kvm_del_routing_entry(kvm_context_t kvm,
-                          struct kvm_irq_routing_entry *entry)
+int kvm_del_routing_entry(struct kvm_irq_routing_entry *entry)
 {
 #ifdef KVM_CAP_IRQ_ROUTING
+    kvm_context_t kvm = kvm_context;
     struct kvm_irq_routing_entry *e, *p;
     int i, gsi, found = 0;
 
@@ -943,11 +945,11 @@ int kvm_del_routing_entry(kvm_context_t kvm,
 #endif
 }
 
-int kvm_update_routing_entry(kvm_context_t kvm,
-                             struct kvm_irq_routing_entry *entry,
+int kvm_update_routing_entry(struct kvm_irq_routing_entry *entry,
                              struct kvm_irq_routing_entry *newentry)
 {
 #ifdef KVM_CAP_IRQ_ROUTING
+    kvm_context_t kvm = kvm_context;
     struct kvm_irq_routing_entry *e;
     int i;
 
@@ -987,7 +989,7 @@ int kvm_update_routing_entry(kvm_context_t kvm,
 #endif
 }
 
-int kvm_del_irq_route(kvm_context_t kvm, int gsi, int irqchip, int pin)
+int kvm_del_irq_route(int gsi, int irqchip, int pin)
 {
 #ifdef KVM_CAP_IRQ_ROUTING
     struct kvm_irq_routing_entry e;
@@ -997,15 +999,17 @@ int kvm_del_irq_route(kvm_context_t kvm, int gsi, int irqchip, int pin)
     e.flags = 0;
     e.u.irqchip.irqchip = irqchip;
     e.u.irqchip.pin = pin;
-    return kvm_del_routing_entry(kvm, &e);
+    return kvm_del_routing_entry(&e);
 #else
     return -ENOSYS;
 #endif
 }
 
-int kvm_commit_irq_routes(kvm_context_t kvm)
+int kvm_commit_irq_routes(void)
 {
 #ifdef KVM_CAP_IRQ_ROUTING
+    kvm_context_t kvm = kvm_context;
+
     kvm->irq_routes->flags = 0;
     return kvm_vm_ioctl(kvm_state, KVM_SET_GSI_ROUTING, kvm->irq_routes);
 #else
@@ -1013,8 +1017,9 @@ int kvm_commit_irq_routes(kvm_context_t kvm)
 #endif
 }
 
-int kvm_get_irq_route_gsi(kvm_context_t kvm)
+int kvm_get_irq_route_gsi(void)
 {
+    kvm_context_t kvm = kvm_context;
     int i, bit;
     uint32_t *buf = kvm->used_gsi_bitmap;
 

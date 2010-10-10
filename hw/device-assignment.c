@@ -767,7 +767,7 @@ static void free_dev_irq_entries(AssignedDevice *dev)
     int i;
 
     for (i = 0; i < dev->irq_entries_nr; i++)
-        kvm_del_routing_entry(kvm_context, &dev->entry[i]);
+        kvm_del_routing_entry(&dev->entry[i]);
     free(dev->entry);
     dev->entry = NULL;
     dev->irq_entries_nr = 0;
@@ -1080,15 +1080,15 @@ static void assigned_dev_update_msi(PCIDevice *pci_dev, unsigned int ctrl_pos)
         assigned_dev->entry->u.msi.data = *(uint16_t *)(pci_dev->config +
                 pci_dev->cap.start + PCI_MSI_DATA_32);
         assigned_dev->entry->type = KVM_IRQ_ROUTING_MSI;
-        r = kvm_get_irq_route_gsi(kvm_context);
+        r = kvm_get_irq_route_gsi();
         if (r < 0) {
             perror("assigned_dev_update_msi: kvm_get_irq_route_gsi");
             return;
         }
         assigned_dev->entry->gsi = r;
 
-        kvm_add_routing_entry(kvm_context, assigned_dev->entry);
-        if (kvm_commit_irq_routes(kvm_context) < 0) {
+        kvm_add_routing_entry(assigned_dev->entry);
+        if (kvm_commit_irq_routes() < 0) {
             perror("assigned_dev_update_msi: kvm_commit_irq_routes");
             assigned_dev->cap.state &= ~ASSIGNED_DEVICE_MSI_ENABLED;
             return;
@@ -1170,7 +1170,7 @@ static int assigned_dev_update_msix_mmio(PCIDevice *pci_dev)
         memcpy(&msg_addr, va + i * 16, 4);
         memcpy(&msg_upper_addr, va + i * 16 + 4, 4);
 
-        r = kvm_get_irq_route_gsi(kvm_context);
+        r = kvm_get_irq_route_gsi();
         if (r < 0)
             return r;
 
@@ -1181,7 +1181,7 @@ static int assigned_dev_update_msix_mmio(PCIDevice *pci_dev)
         adev->entry[entries_nr].u.msi.address_hi = msg_upper_addr;
         adev->entry[entries_nr].u.msi.data = msg_data;
         DEBUG("MSI-X data 0x%x, MSI-X addr_lo 0x%x\n!", msg_data, msg_addr);
-	kvm_add_routing_entry(kvm_context, &adev->entry[entries_nr]);
+	kvm_add_routing_entry(&adev->entry[entries_nr]);
 
         msix_entry.gsi = adev->entry[entries_nr].gsi;
         msix_entry.entry = i;
@@ -1195,7 +1195,7 @@ static int assigned_dev_update_msix_mmio(PCIDevice *pci_dev)
         entries_nr ++;
     }
 
-    if (r == 0 && kvm_commit_irq_routes(kvm_context) < 0) {
+    if (r == 0 && kvm_commit_irq_routes() < 0) {
 	    perror("assigned_dev_update_msix_mmio: kvm_commit_irq_routes");
 	    return -EINVAL;
     }
