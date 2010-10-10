@@ -17,7 +17,9 @@
 #include <errno.h>
 #include "config-host.h"
 #include "qemu-queue.h"
+#ifdef NEED_CPU_H
 #include "qemu-kvm.h"
+#endif
 
 #ifdef CONFIG_KVM
 #include <linux/kvm.h>
@@ -75,7 +77,6 @@ int kvm_set_signal_mask(CPUState *env, const sigset_t *sigset);
 #endif
 
 int kvm_pit_in_kernel(void);
-int kvm_irqchip_in_kernel(void);
 
 /* internal API */
 
@@ -181,6 +182,9 @@ static inline void cpu_synchronize_post_init(CPUState *env)
     }
 }
 
+int kvm_physical_memory_addr_from_ram(KVMState *s, ram_addr_t ram_addr,
+                                      target_phys_addr_t *phys_addr);
+
 #endif
 int kvm_set_ioeventfd_mmio_long(int fd, uint32_t adr, uint32_t val, bool assign);
 
@@ -196,9 +200,6 @@ int kvm_set_irqfd(int gsi, int fd, bool assigned)
 
 int kvm_set_ioeventfd_pio_word(int fd, uint16_t adr, uint16_t val, bool assign);
 
-int kvm_physical_memory_addr_from_ram(KVMState *s, ram_addr_t ram_addr,
-                                      target_phys_addr_t *phys_addr);
-
 int kvm_has_gsi_routing(void);
 int kvm_get_irq_route_gsi(void);
 int kvm_add_msix(uint32_t gsi, uint32_t addr_lo,
@@ -210,5 +211,7 @@ int kvm_update_msix(uint32_t old_gsi, uint32_t old_addr_lo,
                     uint32_t new_gsi, uint32_t new_addr_lo,
                     uint32_t new_addr_hi, uint32_t new_data);
 int kvm_commit_irq_routes(void);
+
+int kvm_irqchip_in_kernel(void);
 
 #endif
