@@ -48,13 +48,29 @@
 int msix_supported;
 
 #ifdef CONFIG_KVM
+
+static void kvm_msix_message_to_routing_entry(struct kvm_msix_message *kmm,
+                                              struct kvm_irq_routing_entry *e)
+{
+    e->type = KVM_IRQ_ROUTING_MSI;
+    e->flags = 0;
+    e->u.msi.address_lo = kmm->addr_lo;
+    e->u.msi.address_hi = kmm->addr_hi;
+    e->u.msi.data = kmm->data;
+}
+
 /* KVM specific MSIX helpers */
 static void kvm_msix_free(PCIDevice *dev)
 {
     int vector, changed = 0;
+    struct kvm_msix_message *kmm;
+    struct kvm_irq_routing_entry entry;
+
     for (vector = 0; vector < dev->msix_entries_nr; ++vector) {
         if (dev->msix_entry_used[vector]) {
-            kvm_del_routing_entry(&dev->msix_irq_entries[vector]);
+            kmm = &dev->msix_irq_entries[vector];
+            kvm_msix_message_to_routing_entry(kmm, &entry);
+            kvm_del_routing_entry(&entry);
             changed = 1;
         }
     }
@@ -63,21 +79,20 @@ static void kvm_msix_free(PCIDevice *dev)
     }
 }
 
-static void kvm_msix_routing_entry(PCIDevice *dev, unsigned vector,
-                                   struct kvm_irq_routing_entry *entry)
+static void kvm_msix_message_from_vector(PCIDevice *dev, unsigned vector,
+                                         struct kvm_msix_message *kmm)
 {
     uint8_t *table_entry = dev->msix_table_page + vector * MSIX_ENTRY_SIZE;
-    entry->type = KVM_IRQ_ROUTING_MSI;
-    entry->flags = 0;
-    entry->u.msi.address_lo = pci_get_long(table_entry + MSIX_MSG_ADDR);
-    entry->u.msi.address_hi = pci_get_long(table_entry + MSIX_MSG_UPPER_ADDR);
-    entry->u.msi.data = pci_get_long(table_entry + MSIX_MSG_DATA);
+
+    kmm->addr_lo = pci_get_long(table_entry + MSIX_MSG_ADDR);
+    kmm->addr_hi = pci_get_long(table_entry + MSIX_MSG_UPPER_ADDR);
+    kmm->data = pci_get_long(table_entry + MSIX_MSG_DATA);
 }
 
 static void kvm_msix_update(PCIDevice *dev, int vector,
                             int was_masked, int is_masked)
 {
-    struct kvm_irq_routing_entry e = {}, *entry;
+    struct kvm_msix_message e = {}, *entry;
     int mask_cleared = was_masked && !is_masked;
     /* It is only legal to change an entry when it is masked. Therefore, it is
      * enough to update the routing in kernel when mask is being cleared. */
@@ -89,16 +104,20 @@ static void kvm_msix_update(PCIDevice *dev, int vector,
     }
     entry = dev->msix_irq_entries + vector;
     e.gsi = entry->gsi;
-    kvm_msix_routing_entry(dev, vector, &e);
-    if (memcmp(&entry->u.msi, &e.u.msi, sizeof entry->u.msi)) {
+    kvm_msix_message_from_vector(dev, vector, &e);
+    if (memcmp(entry, &e, sizeof e) != 0) {
+        struct kvm_irq_routing_entry old, new;
         int r;
-        r = kvm_update_routing_entry(entry, &e);
+
+        kvm_msix_message_to_routing_entry(entry, &old);
+        kvm_msix_message_to_routing_entry(&e, &new);
+        r = kvm_update_routing_entry(&old, &new);
         if (r) {
             fprintf(stderr, "%s: kvm_update_routing_entry failed: %s\n", __func__,
 		    strerror(-r));
             exit(1);
         }
-        memcpy(&entry->u.msi, &e.u.msi, sizeof entry->u.msi);
+        *entry = e;
         r = kvm_commit_irq_routes();
         if (r) {
             fprintf(stderr, "%s: kvm_commit_irq_routes failed: %s\n", __func__,
@@ -110,7 +129,8 @@ static void kvm_msix_update(PCIDevice *dev, int vector,
 
 static int kvm_msix_add(PCIDevice *dev, unsigned vector)
 {
-    struct kvm_irq_routing_entry *entry = dev->msix_irq_entries + vector;
+    struct kvm_msix_message *kmm = dev->msix_irq_entries + vector;
+    struct kvm_irq_routing_entry entry;
     int r;
 
     if (!kvm_has_gsi_routing()) {
@@ -125,9 +145,10 @@ static int kvm_msix_add(PCIDevice *dev, unsigned vector)
         fprintf(stderr, "%s: kvm_get_irq_route_gsi failed: %s\n", __func__, strerror(-r));
         return r;
     }
-    entry->gsi = r;
-    kvm_msix_routing_entry(dev, vector, entry);
-    r = kvm_add_routing_entry(entry);
+    kmm->gsi = r;
+    kvm_msix_message_from_vector(dev, vector, kmm);
+    kvm_msix_message_to_routing_entry(kmm, &entry);
+    r = kvm_add_routing_entry(&entry);
     if (r < 0) {
         fprintf(stderr, "%s: kvm_add_routing_entry failed: %s\n", __func__, strerror(-r));
         return r;
@@ -143,10 +164,13 @@ static int kvm_msix_add(PCIDevice *dev, unsigned vector)
 
 static void kvm_msix_del(PCIDevice *dev, unsigned vector)
 {
+    struct kvm_irq_routing_entry entry;
+
     if (dev->msix_entry_used[vector]) {
         return;
     }
-    kvm_del_routing_entry(&dev->msix_irq_entries[vector]);
+    kvm_msix_message_to_routing_entry(&dev->msix_irq_entries[vector], &entry);
+    kvm_del_routing_entry(&entry);
     kvm_commit_irq_routes();
 }
 #else

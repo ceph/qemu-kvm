@@ -133,6 +133,13 @@ enum {
 typedef int (*msix_mask_notifier_func)(PCIDevice *, unsigned vector,
 				       void *opaque, int masked);
 
+struct kvm_msix_message {
+    uint32_t gsi;
+    uint32_t addr_lo;
+    uint32_t addr_hi;
+    uint32_t data;
+};
+
 struct PCIDevice {
     DeviceState qdev;
     /* PCI config space */
@@ -196,7 +203,7 @@ struct PCIDevice {
      * on the rest of the region. */
     target_phys_addr_t msix_page_size;
 
-    struct kvm_irq_routing_entry *msix_irq_entries;
+    struct kvm_msix_message *msix_irq_entries;
 
     void **msix_mask_notifier_opaque;
     msix_mask_notifier_func msix_mask_notifier;
