@@ -47,8 +47,6 @@
 /* Flag for interrupt controller to declare MSI-X support */
 int msix_supported;
 
-#ifdef CONFIG_KVM
-
 /* KVM specific MSIX helpers */
 static void kvm_msix_free(PCIDevice *dev)
 {
@@ -158,14 +156,6 @@ static void kvm_msix_del(PCIDevice *dev, unsigned vector)
     kvm_del_msix(kmm->gsi, kmm->addr_lo, kmm->addr_hi, kmm->data);
     kvm_commit_irq_routes();
 }
-#else
-
-static void kvm_msix_free(PCIDevice *dev) {}
-static void kvm_msix_update(PCIDevice *dev, int vector,
-                            int was_masked, int is_masked) {}
-static int kvm_msix_add(PCIDevice *dev, unsigned vector) { return -1; }
-static void kvm_msix_del(PCIDevice *dev, unsigned vector) {}
-#endif
 
 /* Add MSI-X capability to the config space for the device. */
 /* Given a bar and its size, add MSI-X table on top of it
