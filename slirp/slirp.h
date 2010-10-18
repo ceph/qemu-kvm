@@ -24,7 +24,9 @@ typedef char *caddr_t;
 #else
 # define ioctlsocket ioctl
 # define closesocket(s) close(s)
-# define O_BINARY 0
+# if !defined(__HAIKU__)
+#  define O_BINARY 0
+# endif
 #endif
 
 #include <sys/types.h>
@@ -261,7 +263,7 @@ void if_start(struct ttys *);
  long gethostid(void);
 #endif
 
-void lprint(const char *, ...);
+void lprint(const char *, ...) GCC_FMT_ATTR(1, 2);
 
 #ifndef _WIN32
 #include <netdb.h>
