@@ -153,7 +153,7 @@ clean:
 	rm -f *.o *.d *.a $(TOOLS) TAGS cscope.* *.pod *~ */*~
 	rm -f slirp/*.o slirp/*.d audio/*.o audio/*.d block/*.o block/*.d net/*.o net/*.d fsdev/*.o fsdev/*.d ui/*.o ui/*.d
 	rm -f qemu-img-cmds.h
-	rm -f trace.c trace.h
+	rm -f trace.c trace.h trace.c-timestamp trace.h-timestamp
 	$(MAKE) -C tests clean
 	for d in $(ALL_SUBDIRS) libhw32 libhw64 libuser libdis libdis-user; do \
 	if test -d $$d; then $(MAKE) -C $$d $@ || exit 1; fi; \
@@ -176,7 +176,7 @@ common  de-ch  es     fo  fr-ca  hu     ja  mk  nl-be      pt  sl     tr
 
 ifdef INSTALL_BLOBS
 BLOBS=bios.bin vgabios.bin vgabios-cirrus.bin ppc_rom.bin \
-video.x openbios-sparc32 openbios-sparc64 openbios-ppc \
+openbios-sparc32 openbios-sparc64 openbios-ppc \
 gpxe-eepro100-80861209.rom \
 gpxe-eepro100-80861229.rom \
 pxe-e1000.bin \
@@ -262,7 +262,7 @@ TEXIFLAG=$(if $(V),,--quiet)
 qemu-options.texi: $(SRC_PATH)/qemu-options.hx
 	$(call quiet-command,sh $(SRC_PATH)/hxtool -t < $< > $@,"  GEN   $@")
 
-qemu-monitor.texi: $(SRC_PATH)/qemu-monitor.hx
+qemu-monitor.texi: $(SRC_PATH)/hmp-commands.hx
 	$(call quiet-command,sh $(SRC_PATH)/hxtool -t < $< > $@,"  GEN   $@")
 
 QMP/qmp-commands.txt: $(SRC_PATH)/qmp-commands.hx
@@ -330,7 +330,6 @@ tarbin:
 	$(datadir)/vgabios.bin \
 	$(datadir)/vgabios-cirrus.bin \
 	$(datadir)/ppc_rom.bin \
-	$(datadir)/video.x \
 	$(datadir)/openbios-sparc32 \
 	$(datadir)/openbios-sparc64 \
 	$(datadir)/openbios-ppc \

@@ -163,6 +163,8 @@ int main(int argc, char **argv)
 #include "cpus.h"
 #include "arch_init.h"
 
+#include "ui/qemu-spice.h"
+
 //#define DEBUG_NET
 //#define DEBUG_SLIRP
 
@@ -2693,6 +2695,18 @@ int main(int argc, char **argv, char **envp)
                     }
                     break;
                 }
+            case QEMU_OPTION_spice:
+                olist = qemu_find_opts("spice");
+                if (!olist) {
+                    fprintf(stderr, "spice is not supported by this qemu build.\n");
+                    exit(1);
+                }
+                opts = qemu_opts_parse(olist, optarg, 0);
+                if (!opts) {
+                    fprintf(stderr, "parse error: %s\n", optarg);
+                    exit(1);
+                }
+                break;
             case QEMU_OPTION_writeconfig:
                 {
                     FILE *fp;
@@ -3000,6 +3014,8 @@ int main(int argc, char **argv, char **envp)
     /* just use the first displaystate for the moment */
     ds = get_displaystate();
 
+    if (using_spice)
+        display_remote++;
     if (display_type == DT_DEFAULT && !display_remote) {
 #if defined(CONFIG_SDL) || defined(CONFIG_COCOA)
         display_type = DT_SDL;
@@ -3042,6 +3058,11 @@ int main(int argc, char **argv, char **envp)
             printf("VNC server running on `%s'\n", vnc_display_local_addr(ds));
         }
     }
+#ifdef CONFIG_SPICE
+    if (using_spice) {
+        qemu_spice_display_init(ds);
+    }
+#endif
 
     /* display setup */
     dpy_resize(ds);

@@ -1364,6 +1364,7 @@ if test "$vnc_png" != "no" ; then
 cat > $TMPC <<EOF
 //#include <stdio.h>
 #include <png.h>
+#include <stddef.h>
 int main(void) {
     png_structp png_ptr;
     png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
@@ -1548,6 +1549,7 @@ if test "$brlapi" != "no" ; then
   brlapi_libs="-lbrlapi"
   cat > $TMPC << EOF
 #include <brlapi.h>
+#include <stddef.h>
 int main( void ) { return brlapi__openConnection (NULL, NULL, NULL); }
 EOF
   if compile_prog "" "$brlapi_libs" ; then
@@ -1868,6 +1870,7 @@ if test "$linux_aio" != "no" ; then
   cat > $TMPC <<EOF
 #include <libaio.h>
 #include <sys/eventfd.h>
+#include <stddef.h>
 int main(void) { io_setup(0, NULL); io_set_eventfd(NULL, 0); eventfd(0, 0); return 0; }
 EOF
   if compile_prog "" "-laio" ; then
@@ -2009,7 +2012,6 @@ fi
 utimens=no
 cat > $TMPC << EOF
 #define _ATFILE_SOURCE
-#define _GNU_SOURCE
 #include <stddef.h>
 #include <fcntl.h>
 
@@ -2027,7 +2029,6 @@ fi
 # check if pipe2 is there
 pipe2=no
 cat > $TMPC << EOF
-#define _GNU_SOURCE
 #include <unistd.h>
 #include <fcntl.h>
 
@@ -2045,7 +2046,6 @@ fi
 # check if accept4 is there
 accept4=no
 cat > $TMPC << EOF
-#define _GNU_SOURCE
 #include <sys/socket.h>
 #include <stddef.h>
 
@@ -2062,7 +2062,6 @@ fi
 # check if tee/splice is there. vmsplice was added same time.
 splice=no
 cat > $TMPC << EOF
-#define _GNU_SOURCE
 #include <unistd.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -2229,7 +2228,7 @@ int main(void) { spice_server_new(); return 0; }
 EOF
   spice_cflags=$($pkgconfig --cflags spice-protocol spice-server 2>/dev/null)
   spice_libs=$($pkgconfig --libs spice-protocol spice-server 2>/dev/null)
-  if $pkgconfig --atleast-version=0.5.3 spice-server &&\
+  if $pkgconfig --atleast-version=0.5.3 spice-server >/dev/null 2>&1 && \
      compile_prog "$spice_cflags" "$spice_libs" ; then
     spice="yes"
     libs_softmmu="$libs_softmmu $spice_libs"
@@ -2263,6 +2262,7 @@ madvise=no
 cat > $TMPC << EOF
 #include <sys/types.h>
 #include <sys/mman.h>
+#include <stddef.h>
 int main(void) { return madvise(NULL, 0, MADV_DONTNEED); }
 EOF
 if compile_prog "" "" ; then
@@ -2275,6 +2275,7 @@ fi
 posix_madvise=no
 cat > $TMPC << EOF
 #include <sys/mman.h>
+#include <stddef.h>
 int main(void) { return posix_madvise(NULL, 0, POSIX_MADV_DONTNEED); }
 EOF
 if compile_prog "" "" ; then
@@ -3239,7 +3240,7 @@ if test "$source_path_used" = "yes" ; then
     FILES="Makefile tests/Makefile"
     FILES="$FILES tests/cris/Makefile tests/cris/.gdbinit"
     FILES="$FILES tests/test-mmap.c"
-    FILES="$FILES pc-bios/optionrom/Makefile pc-bios/keymaps pc-bios/video.x"
+    FILES="$FILES pc-bios/optionrom/Makefile pc-bios/keymaps"
     FILES="$FILES roms/seabios/Makefile roms/vgabios/Makefile"
     for bios_file in $source_path/pc-bios/*.bin $source_path/pc-bios/*.dtb $source_path/pc-bios/openbios-*; do
         FILES="$FILES pc-bios/`basename $bios_file`"

@@ -332,19 +332,14 @@ static int GCC_FMT_ATTR(2, 3) monitor_fprintf(FILE *stream,
 
 static void monitor_user_noop(Monitor *mon, const QObject *data) { }
 
-static inline int monitor_handler_ported(const mon_cmd_t *cmd)
+static inline int handler_is_qobject(const mon_cmd_t *cmd)
 {
     return cmd->user_print != NULL;
 }
 
-static inline bool monitor_handler_is_async(const mon_cmd_t *cmd)
+static inline bool handler_is_async(const mon_cmd_t *cmd)
 {
     return cmd->flags & MONITOR_CMD_ASYNC;
-}
-
-static inline bool monitor_cmd_user_only(const mon_cmd_t *cmd)
-{
-    return (cmd->flags & MONITOR_CMD_USER_ONLY);
 }
 
 static inline int monitor_has_error(const Monitor *mon)
@@ -555,7 +550,11 @@ static void do_change_trace_event_state(Monitor *mon, const QDict *qdict)
 {
     const char *tp_name = qdict_get_str(qdict, "name");
     bool new_state = qdict_get_bool(qdict, "option");
-    st_change_trace_event_state(tp_name, new_state);
+    int ret = st_change_trace_event_state(tp_name, new_state);
+
+    if (!ret) {
+        monitor_printf(mon, "unknown event name \"%s\"\n", tp_name);
+    }
 }
 
 static void do_trace_file(Monitor *mon, const QDict *qdict)
@@ -659,9 +658,9 @@ static void do_info(Monitor *mon, const QDict *qdict)
         goto help;
     }
 
-    if (monitor_handler_is_async(cmd)) {
+    if (handler_is_async(cmd)) {
         user_async_info_handler(mon, cmd);
-    } else if (monitor_handler_ported(cmd)) {
+    } else if (handler_is_qobject(cmd)) {
         QObject *info_data = NULL;
 
         cmd->mhandler.info_new(mon, &info_data);
@@ -2367,11 +2366,11 @@ int monitor_get_fd(Monitor *mon, const char *fdname)
 }
 
 static const mon_cmd_t mon_cmds[] = {
-#include "qemu-monitor.h"
+#include "hmp-commands.h"
     { NULL, NULL, },
 };
 
-/* Please update qemu-monitor.hx when adding or changing commands */
+/* Please update hmp-commands.hx when adding or changing commands */
 static const mon_cmd_t info_cmds[] = {
     {
         .name       = "version",
@@ -3915,29 +3914,6 @@ static void handler_audit(Monitor *mon, const mon_cmd_t *cmd, int ret)
     }
 }
 
-static void monitor_call_handler(Monitor *mon, const mon_cmd_t *cmd,
-                                 const QDict *params)
-{
-    int ret;
-    QObject *data = NULL;
-
-    mon_print_count_init(mon);
-
-    ret = cmd->mhandler.cmd_new(mon, params, &data);
-    handler_audit(mon, cmd, ret);
-
-    if (monitor_ctrl_mode(mon)) {
-        /* Monitor Protocol */
-        monitor_protocol_emitter(mon, data);
-    } else {
-        /* User Protocol */
-         if (data)
-            cmd->user_print(mon, data);
-    }
-
-    qobject_decref(data);
-}
-
 static void handle_user_command(Monitor *mon, const char *cmdline)
 {
     QDict *qdict;
@@ -3949,10 +3925,18 @@ static void handle_user_command(Monitor *mon, const char *cmdline)
     if (!cmd)
         goto out;
 
-    if (monitor_handler_is_async(cmd)) {
+    if (handler_is_async(cmd)) {
         user_async_cmd_handler(mon, cmd, qdict);
-    } else if (monitor_handler_ported(cmd)) {
-        monitor_call_handler(mon, cmd, qdict);
+    } else if (handler_is_qobject(cmd)) {
+        QObject *data = NULL;
+
+        /* XXX: ignores the error code */
+        cmd->mhandler.cmd_new(mon, qdict, &data);
+        assert(!monitor_has_error(mon));
+        if (data) {
+            cmd->user_print(mon, data);
+            qobject_decref(data);
+        }
     } else {
         cmd->mhandler.cmd(mon, qdict);
     }
@@ -4446,7 +4430,7 @@ static void qmp_call_query_cmd(Monitor *mon, const mon_cmd_t *cmd)
 {
     QObject *ret_data = NULL;
 
-    if (monitor_handler_is_async(cmd)) {
+    if (handler_is_async(cmd)) {
         qmp_async_info_handler(mon, cmd);
         if (monitor_has_error(mon)) {
             monitor_protocol_emitter(mon, NULL);
@@ -4458,6 +4442,20 @@ static void qmp_call_query_cmd(Monitor *mon, const mon_cmd_t *cmd)
             qobject_decref(ret_data);
         }
     }
+}
+
+static void qmp_call_cmd(Monitor *mon, const mon_cmd_t *cmd,
+                         const QDict *params)
+{
+    int ret;
+    QObject *data = NULL;
+
+    mon_print_count_init(mon);
+
+    ret = cmd->mhandler.cmd_new(mon, params, &data);
+    handler_audit(mon, cmd, ret);
+    monitor_protocol_emitter(mon, data);
+    qobject_decref(data);
 }
 
 static void handle_qmp_command(JSONMessageParser *parser, QList *tokens)
@@ -4520,14 +4518,14 @@ static void handle_qmp_command(JSONMessageParser *parser, QList *tokens)
 
     if (query_cmd) {
         qmp_call_query_cmd(mon, cmd);
-    } else if (monitor_handler_is_async(cmd)) {
+    } else if (handler_is_async(cmd)) {
         err = qmp_async_cmd_handler(mon, cmd, args);
         if (err) {
             /* emit the error response */
             goto err_out;
         }
     } else {
-        monitor_call_handler(mon, cmd, args);
+        qmp_call_cmd(mon, cmd, args);
     }
 
     goto out;
