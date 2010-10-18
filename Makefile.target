@@ -241,8 +241,16 @@ obj-ppc-y += ppc4xx_devs.o ppc4xx_pci.o ppc405_uc.o ppc405_boards.o
 obj-ppc-y += ppc440.o ppc440_bamboo.o
 # PowerPC E500 boards
 obj-ppc-y += ppce500_mpc8544ds.o
+# PowerPC 440 Xilinx ML507 reference board.
+obj-ppc-y += virtex_ml507.o
 obj-ppc-$(CONFIG_KVM) += kvm_ppc.o
 obj-ppc-$(CONFIG_FDT) += device_tree.o
+
+# Xilinx PPC peripherals
+obj-ppc-y += xilinx_intc.o
+obj-ppc-y += xilinx_timer.o
+obj-ppc-y += xilinx_uartlite.o
+obj-ppc-y += xilinx_ethlite.o
 
 obj-mips-y = mips_r4k.o mips_jazz.o mips_malta.o mips_mipssim.o
 obj-mips-y += pcspk.o i8254.o
@@ -330,7 +338,7 @@ endif
 
 main.o: QEMU_CFLAGS+=$(GPROF_CFLAGS)
 
-monitor.o: qemu-monitor.h
+monitor.o: qemu-monitor.h qmp-commands.h
 
 $(obj-y) $(obj-$(TARGET_BASE_ARCH)-y): $(GENERATED_HEADERS)
 
@@ -354,10 +362,13 @@ gdbstub-xml.c: $(TARGET_XML_FILES) $(SRC_PATH)/feature_to_c.sh
 qemu-monitor.h: $(SRC_PATH)/qemu-monitor.hx
 	$(call quiet-command,sh $(SRC_PATH)/hxtool -h < $< > $@,"  GEN   $(TARGET_DIR)$@")
 
+qmp-commands.h: $(SRC_PATH)/qmp-commands.hx
+	$(call quiet-command,sh $(SRC_PATH)/hxtool -h < $< > $@,"  GEN   $(TARGET_DIR)$@")
+
 clean:
 	rm -f *.o *.a *~ $(PROGS) nwfpe/*.o fpu/*.o
 	rm -f *.d */*.d tcg/*.o ide/*.o
-	rm -f qemu-monitor.h gdbstub-xml.c
+	rm -f qemu-monitor.h qmp-commands.h gdbstub-xml.c
 
 install: all
 ifneq ($(PROGS),)

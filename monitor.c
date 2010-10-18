@@ -190,6 +190,9 @@ static QLIST_HEAD(mon_list, Monitor) mon_list;
 static const mon_cmd_t mon_cmds[];
 static const mon_cmd_t info_cmds[];
 
+static const mon_cmd_t qmp_cmds[];
+static const mon_cmd_t qmp_query_cmds[];
+
 Monitor *cur_mon;
 Monitor *default_mon;
 
@@ -352,7 +355,10 @@ static void monitor_json_emitter(Monitor *mon, const QObject *data)
 {
     QString *json;
 
-    json = qobject_to_json(data);
+    if (mon->flags & MONITOR_USE_PRETTY)
+	json = qobject_to_json_pretty(data);
+    else
+	json = qobject_to_json(data);
     assert(json != NULL);
 
     qstring_append_chr(json, '\n');
@@ -634,13 +640,12 @@ static void user_async_info_handler(Monitor *mon, const mon_cmd_t *cmd)
     }
 }
 
-static int do_info(Monitor *mon, const QDict *qdict, QObject **ret_data)
+static void do_info(Monitor *mon, const QDict *qdict)
 {
     const mon_cmd_t *cmd;
     const char *item = qdict_get_try_str(qdict, "item");
 
     if (!item) {
-        assert(monitor_ctrl_mode(mon) == 0);
         goto help;
     }
 
@@ -650,56 +655,27 @@ static int do_info(Monitor *mon, const QDict *qdict, QObject **ret_data)
     }
 
     if (cmd->name == NULL) {
-        if (monitor_ctrl_mode(mon)) {
-            qerror_report(QERR_COMMAND_NOT_FOUND, item);
-            return -1;
-        }
         goto help;
     }
 
-    if (monitor_ctrl_mode(mon) && monitor_cmd_user_only(cmd)) {
-        qerror_report(QERR_COMMAND_NOT_FOUND, item);
-        return -1;
-    }
-
     if (monitor_handler_is_async(cmd)) {
-        if (monitor_ctrl_mode(mon)) {
-            qmp_async_info_handler(mon, cmd);
-        } else {
-            user_async_info_handler(mon, cmd);
-        }
-        /*
-         * Indicate that this command is asynchronous and will not return any
-         * data (not even empty).  Instead, the data will be returned via a
-         * completion callback.
-         */
-        *ret_data = qobject_from_jsonf("{ '__mon_async': 'return' }");
+        user_async_info_handler(mon, cmd);
     } else if (monitor_handler_ported(cmd)) {
-        cmd->mhandler.info_new(mon, ret_data);
+        QObject *info_data = NULL;
 
-        if (!monitor_ctrl_mode(mon)) {
-            /*
-             * User Protocol function is called here, Monitor Protocol is
-             * handled by monitor_call_handler()
-             */
-            if (*ret_data)
-                cmd->user_print(mon, *ret_data);
+        cmd->mhandler.info_new(mon, &info_data);
+        if (info_data) {
+            cmd->user_print(mon, info_data);
+            qobject_decref(info_data);
         }
     } else {
-        if (monitor_ctrl_mode(mon)) {
-            /* handler not converted yet */
-            qerror_report(QERR_COMMAND_NOT_FOUND, item);
-            return -1;
-        } else {
-            cmd->mhandler.info(mon);
-        }
+        cmd->mhandler.info(mon);
     }
 
-    return 0;
+    return;
 
 help:
     help_cmd(mon, "info");
-    return 0;
 }
 
 static void do_info_version_print(Monitor *mon, const QObject *data)
@@ -773,19 +749,14 @@ static void do_info_commands(Monitor *mon, QObject **ret_data)
 
     cmd_list = qlist_new();
 
-    for (cmd = mon_cmds; cmd->name != NULL; cmd++) {
-        if (monitor_handler_ported(cmd) && !monitor_cmd_user_only(cmd) &&
-            !compare_cmd(cmd->name, "info")) {
-            qlist_append_obj(cmd_list, get_cmd_dict(cmd->name));
-        }
+    for (cmd = qmp_cmds; cmd->name != NULL; cmd++) {
+        qlist_append_obj(cmd_list, get_cmd_dict(cmd->name));
     }
 
-    for (cmd = info_cmds; cmd->name != NULL; cmd++) {
-        if (monitor_handler_ported(cmd) && !monitor_cmd_user_only(cmd)) {
-            char buf[128];
-            snprintf(buf, sizeof(buf), "query-%s", cmd->name);
-            qlist_append_obj(cmd_list, get_cmd_dict(buf));
-        }
+    for (cmd = qmp_query_cmds; cmd->name != NULL; cmd++) {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "query-%s", cmd->name);
+        qlist_append_obj(cmd_list, get_cmd_dict(buf));
     }
 
     *ret_data = QOBJECT(cmd_list);
@@ -2410,14 +2381,6 @@ static const mon_cmd_t info_cmds[] = {
         .mhandler.info_new = do_info_version,
     },
     {
-        .name       = "commands",
-        .args_type  = "",
-        .params     = "",
-        .help       = "list QMP available commands",
-        .user_print = monitor_user_noop,
-        .mhandler.info_new = do_info_commands,
-    },
-    {
         .name       = "network",
         .args_type  = "",
         .params     = "",
@@ -2689,6 +2652,136 @@ static const mon_cmd_t info_cmds[] = {
     {
         .name       = NULL,
     },
+};
+
+static const mon_cmd_t qmp_cmds[] = {
+#include "qmp-commands.h"
+    { /* NULL */ },
+};
+
+static const mon_cmd_t qmp_query_cmds[] = {
+    {
+        .name       = "version",
+        .args_type  = "",
+        .params     = "",
+        .help       = "show the version of QEMU",
+        .user_print = do_info_version_print,
+        .mhandler.info_new = do_info_version,
+    },
+    {
+        .name       = "commands",
+        .args_type  = "",
+        .params     = "",
+        .help       = "list QMP available commands",
+        .user_print = monitor_user_noop,
+        .mhandler.info_new = do_info_commands,
+    },
+    {
+        .name       = "chardev",
+        .args_type  = "",
+        .params     = "",
+        .help       = "show the character devices",
+        .user_print = qemu_chr_info_print,
+        .mhandler.info_new = qemu_chr_info,
+    },
+    {
+        .name       = "block",
+        .args_type  = "",
+        .params     = "",
+        .help       = "show the block devices",
+        .user_print = bdrv_info_print,
+        .mhandler.info_new = bdrv_info,
+    },
+    {
+        .name       = "blockstats",
+        .args_type  = "",
+        .params     = "",
+        .help       = "show block device statistics",
+        .user_print = bdrv_stats_print,
+        .mhandler.info_new = bdrv_info_stats,
+    },
+    {
+        .name       = "cpus",
+        .args_type  = "",
+        .params     = "",
+        .help       = "show infos for each CPU",
+        .user_print = monitor_print_cpus,
+        .mhandler.info_new = do_info_cpus,
+    },
+    {
+        .name       = "pci",
+        .args_type  = "",
+        .params     = "",
+        .help       = "show PCI info",
+        .user_print = do_pci_info_print,
+        .mhandler.info_new = do_pci_info,
+    },
+    {
+        .name       = "kvm",
+        .args_type  = "",
+        .params     = "",
+        .help       = "show KVM information",
+        .user_print = do_info_kvm_print,
+        .mhandler.info_new = do_info_kvm,
+    },
+    {
+        .name       = "status",
+        .args_type  = "",
+        .params     = "",
+        .help       = "show the current VM status (running|paused)",
+        .user_print = do_info_status_print,
+        .mhandler.info_new = do_info_status,
+    },
+    {
+        .name       = "mice",
+        .args_type  = "",
+        .params     = "",
+        .help       = "show which guest mouse is receiving events",
+        .user_print = do_info_mice_print,
+        .mhandler.info_new = do_info_mice,
+    },
+    {
+        .name       = "vnc",
+        .args_type  = "",
+        .params     = "",
+        .help       = "show the vnc server status",
+        .user_print = do_info_vnc_print,
+        .mhandler.info_new = do_info_vnc,
+    },
+    {
+        .name       = "name",
+        .args_type  = "",
+        .params     = "",
+        .help       = "show the current VM name",
+        .user_print = do_info_name_print,
+        .mhandler.info_new = do_info_name,
+    },
+    {
+        .name       = "uuid",
+        .args_type  = "",
+        .params     = "",
+        .help       = "show the current VM UUID",
+        .user_print = do_info_uuid_print,
+        .mhandler.info_new = do_info_uuid,
+    },
+    {
+        .name       = "migrate",
+        .args_type  = "",
+        .params     = "",
+        .help       = "show migration status",
+        .user_print = do_info_migrate_print,
+        .mhandler.info_new = do_info_migrate,
+    },
+    {
+        .name       = "balloon",
+        .args_type  = "",
+        .params     = "",
+        .help       = "show balloon information",
+        .user_print = monitor_print_balloon,
+        .mhandler.info_async = do_info_balloon,
+        .flags      = MONITOR_CMD_ASYNC,
+    },
+    { /* NULL */ },
 };
 
 /*******************************************************************/
@@ -3397,17 +3490,33 @@ static int is_valid_option(const char *c, const char *typestr)
     return (typestr != NULL);
 }
 
-static const mon_cmd_t *monitor_find_command(const char *cmdname)
+static const mon_cmd_t *search_dispatch_table(const mon_cmd_t *disp_table,
+                                              const char *cmdname)
 {
     const mon_cmd_t *cmd;
 
-    for (cmd = mon_cmds; cmd->name != NULL; cmd++) {
+    for (cmd = disp_table; cmd->name != NULL; cmd++) {
         if (compare_cmd(cmdname, cmd->name)) {
             return cmd;
         }
     }
 
     return NULL;
+}
+
+static const mon_cmd_t *monitor_find_command(const char *cmdname)
+{
+    return search_dispatch_table(mon_cmds, cmdname);
+}
+
+static const mon_cmd_t *qmp_find_query_cmd(const char *info_item)
+{
+    return search_dispatch_table(qmp_query_cmds, info_item);
+}
+
+static const mon_cmd_t *qmp_find_cmd(const char *cmdname)
+{
+    return search_dispatch_table(qmp_cmds, cmdname);
 }
 
 static const mon_cmd_t *monitor_parse_command(Monitor *mon,
@@ -3758,15 +3867,6 @@ void monitor_set_error(Monitor *mon, QError *qerror)
     }
 }
 
-static int is_async_return(const QObject *data)
-{
-    if (data && qobject_type(data) == QTYPE_QDICT) {
-        return qdict_haskey(qobject_to_qdict(data), "__mon_async");
-    }
-
-    return 0;
-}
-
 static void handler_audit(Monitor *mon, const mon_cmd_t *cmd, int ret)
 {
     if (monitor_ctrl_mode(mon)) {
@@ -3825,15 +3925,7 @@ static void monitor_call_handler(Monitor *mon, const mon_cmd_t *cmd,
     ret = cmd->mhandler.cmd_new(mon, params, &data);
     handler_audit(mon, cmd, ret);
 
-    if (is_async_return(data)) {
-        /*
-         * Asynchronous commands have no initial return data but they can
-         * generate errors.  Data is returned via the async completion handler.
-         */
-        if (monitor_ctrl_mode(mon) && monitor_has_error(mon)) {
-            monitor_protocol_emitter(mon, NULL);
-        }
-    } else if (monitor_ctrl_mode(mon)) {
+    if (monitor_ctrl_mode(mon)) {
         /* Monitor Protocol */
         monitor_protocol_emitter(mon, data);
     } else {
@@ -4349,6 +4441,24 @@ static QDict *qmp_check_input_obj(QObject *input_obj)
     return input_dict;
 }
 
+static void qmp_call_query_cmd(Monitor *mon, const mon_cmd_t *cmd)
+{
+    QObject *ret_data = NULL;
+
+    if (monitor_handler_is_async(cmd)) {
+        qmp_async_info_handler(mon, cmd);
+        if (monitor_has_error(mon)) {
+            monitor_protocol_emitter(mon, NULL);
+        }
+    } else {
+        cmd->mhandler.info_new(mon, &ret_data);
+        if (ret_data) {
+            monitor_protocol_emitter(mon, ret_data);
+            qobject_decref(ret_data);
+        }
+    }
+}
+
 static void handle_qmp_command(JSONMessageParser *parser, QList *tokens)
 {
     int err;
@@ -4356,8 +4466,9 @@ static void handle_qmp_command(JSONMessageParser *parser, QList *tokens)
     QDict *input, *args;
     const mon_cmd_t *cmd;
     Monitor *mon = cur_mon;
-    const char *cmd_name, *info_item;
+    const char *cmd_name, *query_cmd;
 
+    query_cmd = NULL;
     args = input = NULL;
 
     obj = json_parser_parse(tokens, NULL);
@@ -4382,24 +4493,15 @@ static void handle_qmp_command(JSONMessageParser *parser, QList *tokens)
         goto err_out;
     }
 
-    /*
-     * XXX: We need this special case until we get info handlers
-     * converted into 'query-' commands
-     */
-    if (compare_cmd(cmd_name, "info")) {
+    if (strstart(cmd_name, "query-", &query_cmd)) {
+        cmd = qmp_find_query_cmd(query_cmd);
+    } else {
+        cmd = qmp_find_cmd(cmd_name);
+    }
+
+    if (!cmd) {
         qerror_report(QERR_COMMAND_NOT_FOUND, cmd_name);
         goto err_out;
-    } else if (strstart(cmd_name, "query-", &info_item)) {
-        cmd = monitor_find_command("info");
-        qdict_put_obj(input, "arguments",
-                      qobject_from_jsonf("{ 'item': %s }", info_item));
-    } else {
-        cmd = monitor_find_command(cmd_name);
-        if (!cmd || !monitor_handler_ported(cmd)
-            || monitor_cmd_user_only(cmd)) {
-            qerror_report(QERR_COMMAND_NOT_FOUND, cmd_name);
-            goto err_out;
-        }
     }
 
     obj = qdict_get(input, "arguments");
@@ -4415,7 +4517,9 @@ static void handle_qmp_command(JSONMessageParser *parser, QList *tokens)
         goto err_out;
     }
 
-    if (monitor_handler_is_async(cmd)) {
+    if (query_cmd) {
+        qmp_call_query_cmd(mon, cmd);
+    } else if (monitor_handler_is_async(cmd)) {
         err = qmp_async_cmd_handler(mon, cmd, args);
         if (err) {
             /* emit the error response */
