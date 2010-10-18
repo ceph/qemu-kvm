@@ -429,11 +429,10 @@ static void virtio_pci_guest_notifier_read(void *opaque)
     }
 }
 
-static int virtio_pci_mask_notifier(PCIDevice *dev, unsigned vector,
-                                    void *opaque, int masked)
+static int virtio_pci_mask_vq(PCIDevice *dev, unsigned vector,
+                              VirtQueue *vq, int masked)
 {
 #ifdef CONFIG_KVM
-    VirtQueue *vq = opaque;
     EventNotifier *notifier = virtio_queue_get_guest_notifier(vq);
     int r = kvm_set_irqfd(dev->msix_irq_entries[vector].gsi,
                           event_notifier_get_fd(notifier),
@@ -454,6 +453,34 @@ static int virtio_pci_mask_notifier(PCIDevice *dev, unsigned vector,
 #endif
 }
 
+static int virtio_pci_mask_notifier(PCIDevice *dev, unsigned vector,
+                                    int masked)
+{
+    VirtIOPCIProxy *proxy = container_of(dev, VirtIOPCIProxy, pci_dev);
+    VirtIODevice *vdev = proxy->vdev;
+    int r, n;
+
+    for (n = 0; n < VIRTIO_PCI_QUEUE_MAX; n++) {
+        if (!virtio_queue_get_num(vdev, n)) {
+            break;
+        }
+        if (virtio_queue_vector(vdev, n) != vector) {
+            continue;
+        }
+        r = virtio_pci_mask_vq(dev, vector, virtio_get_queue(vdev, n), masked);
+        if (r < 0) {
+            goto undo;
+        }
+    }
+    return 0;
+undo:
+    while (--n >= 0) {
+        virtio_pci_mask_vq(dev, vector, virtio_get_queue(vdev, n), !masked);
+    }
+    return r;
+}
+
+
 static int virtio_pci_set_guest_notifier(void *opaque, int n, bool assign)
 {
     VirtIOPCIProxy *proxy = opaque;
@@ -467,11 +494,7 @@ static int virtio_pci_set_guest_notifier(void *opaque, int n, bool assign)
         }
         qemu_set_fd_handler(event_notifier_get_fd(notifier),
                             virtio_pci_guest_notifier_read, NULL, vq);
-        msix_set_mask_notifier(&proxy->pci_dev,
-                               virtio_queue_vector(proxy->vdev, n), vq);
     } else {
-        msix_unset_mask_notifier(&proxy->pci_dev,
-				 virtio_queue_vector(proxy->vdev, n));
         qemu_set_fd_handler(event_notifier_get_fd(notifier),
                             NULL, NULL, NULL);
         /* Test and clear notifier before closing it,
@@ -481,6 +504,50 @@ static int virtio_pci_set_guest_notifier(void *opaque, int n, bool assign)
     }
 
     return 0;
+}
+
+static int virtio_pci_set_guest_notifiers(void *opaque, bool assign)
+{
+    VirtIOPCIProxy *proxy = opaque;
+    VirtIODevice *vdev = proxy->vdev;
+    int r, n;
+
+    /* Must unset mask notifier while guest notifier
+     * is still assigned */
+    if (!assign) {
+	    r = msix_unset_mask_notifier(&proxy->pci_dev);
+            assert(r >= 0);
+    }
+
+    for (n = 0; n < VIRTIO_PCI_QUEUE_MAX; n++) {
+        if (!virtio_queue_get_num(vdev, n)) {
+            break;
+        }
+
+        r = virtio_pci_set_guest_notifier(opaque, n, assign);
+        if (r < 0) {
+            goto assign_error;
+        }
+    }
+
+    /* Must set mask notifier after guest notifier
+     * has been assigned */
+    if (assign) {
+        r = msix_set_mask_notifier(&proxy->pci_dev,
+                                   virtio_pci_mask_notifier);
+        if (r < 0) {
+            goto assign_error;
+        }
+    }
+
+    return 0;
+
+assign_error:
+    /* We get here on assignment failure. Recover by undoing for VQs 0 .. n. */
+    while (--n >= 0) {
+        virtio_pci_set_guest_notifier(opaque, n, !assign);
+    }
+    return r;
 }
 
 static int virtio_pci_set_host_notifier(void *opaque, int n, bool assign)
@@ -520,7 +587,7 @@ static const VirtIOBindings virtio_pci_bindings = {
     .load_queue = virtio_pci_load_queue,
     .get_features = virtio_pci_get_features,
     .set_host_notifier = virtio_pci_set_host_notifier,
-    .set_guest_notifier = virtio_pci_set_guest_notifier,
+    .set_guest_notifiers = virtio_pci_set_guest_notifiers,
 };
 
 static void virtio_init_pci(VirtIOPCIProxy *proxy, VirtIODevice *vdev,
@@ -557,8 +624,6 @@ static void virtio_init_pci(VirtIOPCIProxy *proxy, VirtIODevice *vdev,
         vdev->nvectors = 0;
 
     proxy->pci_dev.config_write = virtio_write_config;
-
-    proxy->pci_dev.msix_mask_notifier = virtio_pci_mask_notifier;
 
     size = VIRTIO_PCI_REGION_SIZE(&proxy->pci_dev) + vdev->config_len;
     if (size & (size-1))
