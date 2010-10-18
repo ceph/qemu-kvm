@@ -15,16 +15,21 @@ TMPC="${TMPDIR1}/qemu-conf-${RANDOM}-$$-${RANDOM}.c"
 TMPO="${TMPDIR1}/qemu-conf-${RANDOM}-$$-${RANDOM}.o"
 TMPE="${TMPDIR1}/qemu-conf-${RANDOM}-$$-${RANDOM}.exe"
 
-trap "rm -f $TMPC $TMPO $TMPE ; exit" EXIT INT QUIT TERM
+# NB: do not call "exit" in the trap handler; this is buggy with some shells;
+# see <1285349658-3122-1-git-send-email-loic.minier@linaro.org>
+trap "rm -f $TMPC $TMPO $TMPE" EXIT INT QUIT TERM
+rm -f config.log
 
 compile_object() {
-  $cc $QEMU_CFLAGS -c -o $TMPO $TMPC > /dev/null 2> /dev/null
+  echo $cc $QEMU_CFLAGS -c -o $TMPO $TMPC >> config.log
+  $cc $QEMU_CFLAGS -c -o $TMPO $TMPC >> config.log 2>&1
 }
 
 compile_prog() {
   local_cflags="$1"
   local_ldflags="$2"
-  $cc $QEMU_CFLAGS $local_cflags -o $TMPE $TMPC $LDFLAGS $local_ldflags > /dev/null 2> /dev/null
+  echo $cc $QEMU_CFLAGS $local_cflags -o $TMPE $TMPC $LDFLAGS $local_ldflags >> config.log
+  $cc $QEMU_CFLAGS $local_cflags -o $TMPE $TMPC $LDFLAGS $local_ldflags >> config.log 2>&1
 }
 
 # check whether a command is available to this shell (may be either an
@@ -81,6 +86,7 @@ install="install"
 objcopy="objcopy"
 ld="ld"
 strip="strip"
+windres="windres"
 helper_cflags=""
 libs_softmmu=""
 libs_tools=""
@@ -127,6 +133,7 @@ ar="${cross_prefix}${ar}"
 objcopy="${cross_prefix}${objcopy}"
 ld="${cross_prefix}${ld}"
 strip="${cross_prefix}${strip}"
+windres="${cross_prefix}${windres}"
 
 # default flags for all hosts
 QEMU_CFLAGS="-fno-strict-aliasing $QEMU_CFLAGS"
@@ -327,6 +334,7 @@ kvm_cap_pit=""
 kvm_cap_device_assignment=""
 kerneldir=""
 aix="no"
+haiku="no"
 blobs="yes"
 pkgversion=" ($(kvm_version))"
 cpu_emulation="yes"
@@ -335,6 +343,7 @@ user_pie="no"
 zero_malloc=""
 trace_backend="nop"
 trace_file="trace"
+spice=""
 
 # OS specific
 if check_define __linux__ ; then
@@ -345,6 +354,8 @@ elif check_define __OpenBSD__ ; then
   targetos='OpenBSD'
 elif check_define __sun__ ; then
   targetos='SunOS'
+elif check_define __HAIKU__ ; then
+  targetos='Haiku'
 else
   targetos=`uname -s`
 fi
@@ -459,6 +470,11 @@ SunOS)
 AIX)
   aix="yes"
   make="gmake"
+;;
+Haiku)
+  haiku="yes"
+  QEMU_CFLAGS="-DB_USE_POSITIVE_POSIX_ERRORS $QEMU_CFLAGS"
+  LIBS="-lposix_error_mapper -lnetwork $LIBS"
 ;;
 *)
   audio_drv_list="oss"
@@ -654,6 +670,10 @@ for opt do
   --disable-kvm-device-assignment) kvm_cap_device_assignment="no"
   ;;
   --enable-kvm-device-assignment) kvm_cap_device_assignment="yes"
+  ;;
+  --disable-spice) spice="no"
+  ;;
+  --enable-spice) spice="yes"
   ;;
   --enable-profiler) profiler="yes"
   ;;
@@ -944,6 +964,8 @@ echo "  --enable-vhost-net       enable vhost-net acceleration support"
 echo "  --trace-backend=B        Trace backend nop simple ust"
 echo "  --trace-file=NAME        Full PATH,NAME of file to store traces"
 echo "                           Default:trace-<pid>"
+echo "  --disable-spice          disable spice"
+echo "  --enable-spice           enable spice"
 echo ""
 echo "NOTE: The object files are built at the place where configure is launched"
 exit 1
@@ -1342,6 +1364,7 @@ if test "$vnc_png" != "no" ; then
 cat > $TMPC <<EOF
 //#include <stdio.h>
 #include <png.h>
+#include <stddef.h>
 int main(void) {
     png_structp png_ptr;
     png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
@@ -1526,6 +1549,7 @@ if test "$brlapi" != "no" ; then
   brlapi_libs="-lbrlapi"
   cat > $TMPC << EOF
 #include <brlapi.h>
+#include <stddef.h>
 int main( void ) { return brlapi__openConnection (NULL, NULL, NULL); }
 EOF
   if compile_prog "" "$brlapi_libs" ; then
@@ -1819,13 +1843,17 @@ cat > $TMPC << EOF
 #include <pthread.h>
 int main(void) { pthread_create(0,0,0,0); return 0; }
 EOF
-for pthread_lib in $PTHREADLIBS_LIST; do
-  if compile_prog "" "$pthread_lib" ; then
-    pthread=yes
-    LIBS="$pthread_lib $LIBS"
-    break
-  fi
-done
+if compile_prog "" "" ; then
+  pthread=yes
+else
+  for pthread_lib in $PTHREADLIBS_LIST; do
+    if compile_prog "" "$pthread_lib" ; then
+      pthread=yes
+      LIBS="$pthread_lib $LIBS"
+      break
+    fi
+  done
+fi
 
 if test "$mingw32" != yes -a "$pthread" = no; then
   echo
@@ -1842,6 +1870,7 @@ if test "$linux_aio" != "no" ; then
   cat > $TMPC <<EOF
 #include <libaio.h>
 #include <sys/eventfd.h>
+#include <stddef.h>
 int main(void) { io_setup(0, NULL); io_set_eventfd(NULL, 0); eventfd(0, 0); return 0; }
 EOF
   if compile_prog "" "-laio" ; then
@@ -1983,7 +2012,6 @@ fi
 utimens=no
 cat > $TMPC << EOF
 #define _ATFILE_SOURCE
-#define _GNU_SOURCE
 #include <stddef.h>
 #include <fcntl.h>
 
@@ -2001,7 +2029,6 @@ fi
 # check if pipe2 is there
 pipe2=no
 cat > $TMPC << EOF
-#define _GNU_SOURCE
 #include <unistd.h>
 #include <fcntl.h>
 
@@ -2019,7 +2046,6 @@ fi
 # check if accept4 is there
 accept4=no
 cat > $TMPC << EOF
-#define _GNU_SOURCE
 #include <sys/socket.h>
 #include <stddef.h>
 
@@ -2036,7 +2062,6 @@ fi
 # check if tee/splice is there. vmsplice was added same time.
 splice=no
 cat > $TMPC << EOF
-#define _GNU_SOURCE
 #include <unistd.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -2162,7 +2187,7 @@ elif compile_prog "" "-lrt" ; then
 fi
 
 if test "$darwin" != "yes" -a "$mingw32" != "yes" -a "$solaris" != yes -a \
-        "$aix" != "yes" ; then
+        "$aix" != "yes" -a "$haiku" != "yes" ; then
     libs_softmmu="-lutil $libs_softmmu"
 fi
 
@@ -2195,6 +2220,29 @@ if compile_prog "" ""; then
     gcc_attribute_warn_unused_result=yes
 fi
 
+# spice probe
+if test "$spice" != "no" ; then
+  cat > $TMPC << EOF
+#include <spice.h>
+int main(void) { spice_server_new(); return 0; }
+EOF
+  spice_cflags=$($pkgconfig --cflags spice-protocol spice-server 2>/dev/null)
+  spice_libs=$($pkgconfig --libs spice-protocol spice-server 2>/dev/null)
+  if $pkgconfig --atleast-version=0.5.3 spice-server >/dev/null 2>&1 && \
+     compile_prog "$spice_cflags" "$spice_libs" ; then
+    spice="yes"
+    libs_softmmu="$libs_softmmu $spice_libs"
+    QEMU_CFLAGS="$QEMU_CFLAGS $spice_cflags"
+  else
+    if test "$spice" = "yes" ; then
+      feature_not_found "spice"
+    fi
+    spice="no"
+  fi
+fi
+
+##########################################
+
 ##########################################
 # check if we have fdatasync
 
@@ -2205,6 +2253,33 @@ int main(void) { return fdatasync(0); }
 EOF
 if compile_prog "" "" ; then
     fdatasync=yes
+fi
+
+##########################################
+# check if we have madvise
+
+madvise=no
+cat > $TMPC << EOF
+#include <sys/types.h>
+#include <sys/mman.h>
+#include <stddef.h>
+int main(void) { return madvise(NULL, 0, MADV_DONTNEED); }
+EOF
+if compile_prog "" "" ; then
+    madvise=yes
+fi
+
+##########################################
+# check if we have posix_madvise
+
+posix_madvise=no
+cat > $TMPC << EOF
+#include <sys/mman.h>
+#include <stddef.h>
+int main(void) { return posix_madvise(NULL, 0, POSIX_MADV_DONTNEED); }
+EOF
+if compile_prog "" "" ; then
+    posix_madvise=yes
 fi
 
 ##########################################
@@ -2377,10 +2452,13 @@ echo "KVM device assig. $kvm_cap_device_assignment"
 echo "fdt support       $fdt"
 echo "preadv support    $preadv"
 echo "fdatasync         $fdatasync"
+echo "madvise           $madvise"
+echo "posix_madvise     $posix_madvise"
 echo "uuid support      $uuid"
 echo "vhost-net support $vhost_net"
 echo "Trace backend     $trace_backend"
 echo "Trace output file $trace_file-<pid>"
+echo "spice support     $spice"
 
 if test $sdl_too_old = "yes"; then
 echo "-> Your SDL version is too old - please upgrade to have SDL support"
@@ -2429,6 +2507,15 @@ fi
 echo "HOST_LONG_BITS=$hostlongbits" >> $config_host_mak
 if test "$mingw32" = "yes" ; then
   echo "CONFIG_WIN32=y" >> $config_host_mak
+  rc_version=`cat $source_path/VERSION`
+  version_major=${rc_version%%.*}
+  rc_version=${rc_version#*.}
+  version_minor=${rc_version%%.*}
+  rc_version=${rc_version#*.}
+  version_subminor=${rc_version%%.*}
+  version_micro=0
+  echo "CONFIG_FILEVERSION=$version_major,$version_minor,$version_subminor,$version_micro" >> $config_host_mak
+  echo "CONFIG_PRODUCTVERSION=$version_major,$version_minor,$version_subminor,$version_micro" >> $config_host_mak
 else
   echo "CONFIG_POSIX=y" >> $config_host_mak
 fi
@@ -2451,6 +2538,9 @@ if test "$solaris" = "yes" ; then
   if test "$needs_libsunmath" = "yes" ; then
     echo "CONFIG_NEEDS_LIBSUNMATH=y" >> $config_host_mak
   fi
+fi
+if test "$haiku" = "yes" ; then
+  echo "CONFIG_HAIKU=y" >> $config_host_mak
 fi
 if test "$static" = "yes" ; then
   echo "CONFIG_STATIC=y" >> $config_host_mak
@@ -2625,6 +2715,16 @@ if test $cpu_emulation = "yes"; then
 else
   echo "CONFIG_NO_CPU_EMULATION=y" >> $config_host_mak
 fi
+if test "$madvise" = "yes" ; then
+  echo "CONFIG_MADVISE=y" >> $config_host_mak
+fi
+if test "$posix_madvise" = "yes" ; then
+  echo "CONFIG_POSIX_MADVISE=y" >> $config_host_mak
+fi
+
+if test "$spice" = "yes" ; then
+  echo "CONFIG_SPICE=y" >> $config_host_mak
+fi
 
 # XXX: suppress that
 if [ "$bsd" = "yes" ] ; then
@@ -2677,6 +2777,7 @@ fi
 echo "AR=$ar" >> $config_host_mak
 echo "OBJCOPY=$objcopy" >> $config_host_mak
 echo "LD=$ld" >> $config_host_mak
+echo "WINDRES=$windres" >> $config_host_mak
 echo "CFLAGS=$CFLAGS" >> $config_host_mak
 echo "QEMU_CFLAGS=$QEMU_CFLAGS" >> $config_host_mak
 echo "HELPER_CFLAGS=$helper_cflags" >> $config_host_mak
@@ -3139,7 +3240,7 @@ if test "$source_path_used" = "yes" ; then
     FILES="Makefile tests/Makefile"
     FILES="$FILES tests/cris/Makefile tests/cris/.gdbinit"
     FILES="$FILES tests/test-mmap.c"
-    FILES="$FILES pc-bios/optionrom/Makefile pc-bios/keymaps pc-bios/video.x"
+    FILES="$FILES pc-bios/optionrom/Makefile pc-bios/keymaps"
     FILES="$FILES roms/seabios/Makefile roms/vgabios/Makefile"
     for bios_file in $source_path/pc-bios/*.bin $source_path/pc-bios/*.dtb $source_path/pc-bios/openbios-*; do
         FILES="$FILES pc-bios/`basename $bios_file`"

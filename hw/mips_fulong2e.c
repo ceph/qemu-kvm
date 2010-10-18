@@ -76,7 +76,8 @@ static struct _loaderparams {
     const char *initrd_filename;
 } loaderparams;
 
-static void prom_set(uint32_t* prom_buf, int index, const char *string, ...)
+static void GCC_FMT_ATTR(3, 4) prom_set(uint32_t* prom_buf, int index,
+                                        const char *string, ...)
 {
     va_list ap;
     int32_t table_addr;
@@ -264,13 +265,11 @@ static void mips_fulong2e_init(ram_addr_t ram_size, const char *boot_device,
     qemu_irq *cpu_exit_irq;
     int via_devfn;
     PCIBus *pci_bus;
-    ISADevice *isa_dev;
     uint8_t *eeprom_buf;
     i2c_bus *smbus;
     int i;
     DriveInfo *hd[MAX_IDE_BUS * MAX_IDE_DEVS];
     DeviceState *eeprom;
-    ISADevice *rtc_state;
     CPUState *env;
 
     /* init CPUs */
@@ -377,9 +376,9 @@ static void mips_fulong2e_init(ram_addr_t ram_size, const char *boot_device,
     DMA_init(0, cpu_exit_irq);
 
     /* Super I/O */
-    isa_dev = isa_create_simple("i8042");
+    isa_create_simple("i8042");
 
-    rtc_state = rtc_init(2000, NULL);
+    rtc_init(2000, NULL);
 
     for(i = 0; i < MAX_SERIAL_PORTS; i++) {
         if (serial_hds[i]) {

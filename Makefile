@@ -43,9 +43,11 @@ config-all-devices.mak: $(SUBDIR_DEVICES_MAK)
 %/config-devices.mak: default-configs/%.mak
 	$(call quiet-command,cat $< > $@.tmp, "  GEN   $@")
 	@if test -f $@; then \
-	  if cmp -s $@.old $@ || cmp -s $@ $@.tmp; then \
-	    mv $@.tmp $@; \
-	    cp -p $@ $@.old; \
+	  if cmp -s $@.old $@; then \
+	    if ! cmp -s $@ $@.tmp; then \
+	      mv $@.tmp $@; \
+	      cp -p $@ $@.old; \
+	    fi; \
 	  else \
 	    if test -f $@.old; then \
 	      echo "WARNING: $@ (user modified) out of date.";\
@@ -104,26 +106,34 @@ ui/vnc.o: QEMU_CFLAGS += $(VNC_TLS_CFLAGS)
 
 bt-host.o: QEMU_CFLAGS += $(BLUEZ_CFLAGS)
 
-trace.h: $(SRC_PATH)/trace-events config-host.mak
-	$(call quiet-command,sh $(SRC_PATH)/tracetool --$(TRACE_BACKEND) -h < $< > $@,"  GEN   $@")
+trace.h: trace.h-timestamp
+trace.h-timestamp: $(SRC_PATH)/trace-events config-host.mak
+	$(call quiet-command,sh $(SRC_PATH)/tracetool --$(TRACE_BACKEND) -h < $< > $@,"  GEN   trace.h")
+	@cmp -s $@ trace.h || cp $@ trace.h
 
-trace.c: $(SRC_PATH)/trace-events config-host.mak
-	$(call quiet-command,sh $(SRC_PATH)/tracetool --$(TRACE_BACKEND) -c < $< > $@,"  GEN   $@")
+trace.c: trace.c-timestamp
+trace.c-timestamp: $(SRC_PATH)/trace-events config-host.mak
+	$(call quiet-command,sh $(SRC_PATH)/tracetool --$(TRACE_BACKEND) -c < $< > $@,"  GEN   trace.c")
+	@cmp -s $@ trace.c || cp $@ trace.c
 
 trace.o: trace.c $(GENERATED_HEADERS)
 
 simpletrace.o: simpletrace.c $(GENERATED_HEADERS)
 
+version.o: $(SRC_PATH)/version.rc config-host.mak
+	$(call quiet-command,$(WINDRES) -I. -o $@ $<,"  RC    $(TARGET_DIR)$@")
+
+version-obj-$(CONFIG_WIN32) += version.o
 ######################################################################
 
 qemu-img.o: qemu-img-cmds.h
 qemu-img.o qemu-tool.o qemu-nbd.o qemu-io.o: $(GENERATED_HEADERS)
 
-qemu-img$(EXESUF): qemu-img.o qemu-tool.o qemu-error.o $(trace-obj-y) $(block-obj-y) $(qobject-obj-y)
+qemu-img$(EXESUF): qemu-img.o qemu-tool.o qemu-error.o $(trace-obj-y) $(block-obj-y) $(qobject-obj-y) $(version-obj-y)
 
-qemu-nbd$(EXESUF): qemu-nbd.o qemu-tool.o qemu-error.o $(trace-obj-y) $(block-obj-y) $(qobject-obj-y)
+qemu-nbd$(EXESUF): qemu-nbd.o qemu-tool.o qemu-error.o $(trace-obj-y) $(block-obj-y) $(qobject-obj-y) $(version-obj-y)
 
-qemu-io$(EXESUF): qemu-io.o cmd.o qemu-tool.o qemu-error.o $(trace-obj-y) $(block-obj-y) $(qobject-obj-y)
+qemu-io$(EXESUF): qemu-io.o cmd.o qemu-tool.o qemu-error.o $(trace-obj-y) $(block-obj-y) $(qobject-obj-y) $(version-obj-y)
 
 qemu-img-cmds.h: $(SRC_PATH)/qemu-img-cmds.hx
 	$(call quiet-command,sh $(SRC_PATH)/hxtool -h < $< > $@,"  GEN   $@")
@@ -143,7 +153,7 @@ clean:
 	rm -f *.o *.d *.a $(TOOLS) TAGS cscope.* *.pod *~ */*~
 	rm -f slirp/*.o slirp/*.d audio/*.o audio/*.d block/*.o block/*.d net/*.o net/*.d fsdev/*.o fsdev/*.d ui/*.o ui/*.d
 	rm -f qemu-img-cmds.h
-	rm -f trace.c trace.h
+	rm -f trace.c trace.h trace.c-timestamp trace.h-timestamp
 	$(MAKE) -C tests clean
 	for d in $(ALL_SUBDIRS) libhw32 libhw64 libuser libdis libdis-user; do \
 	if test -d $$d; then $(MAKE) -C $$d $@ || exit 1; fi; \
@@ -166,7 +176,7 @@ common  de-ch  es     fo  fr-ca  hu     ja  mk  nl-be      pt  sl     tr
 
 ifdef INSTALL_BLOBS
 BLOBS=bios.bin vgabios.bin vgabios-cirrus.bin ppc_rom.bin \
-video.x openbios-sparc32 openbios-sparc64 openbios-ppc \
+openbios-sparc32 openbios-sparc64 openbios-ppc \
 gpxe-eepro100-80861209.rom \
 gpxe-eepro100-80861229.rom \
 pxe-e1000.bin \
@@ -252,10 +262,10 @@ TEXIFLAG=$(if $(V),,--quiet)
 qemu-options.texi: $(SRC_PATH)/qemu-options.hx
 	$(call quiet-command,sh $(SRC_PATH)/hxtool -t < $< > $@,"  GEN   $@")
 
-qemu-monitor.texi: $(SRC_PATH)/qemu-monitor.hx
+qemu-monitor.texi: $(SRC_PATH)/hmp-commands.hx
 	$(call quiet-command,sh $(SRC_PATH)/hxtool -t < $< > $@,"  GEN   $@")
 
-QMP/qmp-commands.txt: $(SRC_PATH)/qemu-monitor.hx
+QMP/qmp-commands.txt: $(SRC_PATH)/qmp-commands.hx
 	$(call quiet-command,sh $(SRC_PATH)/hxtool -q < $< > $@,"  GEN   $@")
 
 qemu-img-cmds.texi: $(SRC_PATH)/qemu-img-cmds.hx
@@ -320,7 +330,6 @@ tarbin:
 	$(datadir)/vgabios.bin \
 	$(datadir)/vgabios-cirrus.bin \
 	$(datadir)/ppc_rom.bin \
-	$(datadir)/video.x \
 	$(datadir)/openbios-sparc32 \
 	$(datadir)/openbios-sparc64 \
 	$(datadir)/openbios-ppc \

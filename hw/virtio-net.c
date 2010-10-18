@@ -113,8 +113,8 @@ static void virtio_net_set_status(struct VirtIODevice *vdev, uint8_t status)
         return;
     }
     if (!!n->vhost_started == ((status & VIRTIO_CONFIG_S_DRIVER_OK) &&
-			       (n->status & VIRTIO_NET_S_LINK_UP) &&
-			       n->vm_running)) {
+                               (n->status & VIRTIO_NET_S_LINK_UP) &&
+                               n->vm_running)) {
         return;
     }
     if (!n->vhost_started) {

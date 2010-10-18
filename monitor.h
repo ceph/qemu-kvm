@@ -14,10 +14,10 @@ extern Monitor *default_mon;
 #define MONITOR_IS_DEFAULT    0x01
 #define MONITOR_USE_READLINE  0x02
 #define MONITOR_USE_CONTROL   0x04
+#define MONITOR_USE_PRETTY    0x08
 
 /* flags for monitor commands */
 #define MONITOR_CMD_ASYNC       0x0001
-#define MONITOR_CMD_USER_ONLY   0x0002
 
 /* QMP events */
 typedef enum MonitorEvent {
@@ -49,9 +49,9 @@ int monitor_read_bdrv_key_start(Monitor *mon, BlockDriverState *bs,
 
 int monitor_get_fd(Monitor *mon, const char *fdname);
 
-void monitor_vprintf(Monitor *mon, const char *fmt, va_list ap);
-void monitor_printf(Monitor *mon, const char *fmt, ...)
-    __attribute__ ((__format__ (__printf__, 2, 3)));
+void monitor_vprintf(Monitor *mon, const char *fmt, va_list ap)
+    GCC_FMT_ATTR(2, 0);
+void monitor_printf(Monitor *mon, const char *fmt, ...) GCC_FMT_ATTR(2, 3);
 void monitor_print_filename(Monitor *mon, const char *filename);
 void monitor_flush(Monitor *mon);
 

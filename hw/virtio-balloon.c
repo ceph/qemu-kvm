@@ -30,6 +30,10 @@
 #include <sys/mman.h>
 #endif
 
+/* Disable guest-provided stats by now (https://bugzilla.redhat.com/show_bug.cgi?id=623903) */
+#define ENABLE_GUEST_STATS   0
+
+
 typedef struct VirtIOBalloon
 {
     VirtIODevice vdev;
@@ -52,8 +56,8 @@ static void balloon_page(void *addr, int deflate)
 {
 #if defined(__linux__)
     if (!kvm_enabled() || kvm_has_sync_mmu())
-        madvise(addr, TARGET_PAGE_SIZE,
-                deflate ? MADV_WILLNEED : MADV_DONTNEED);
+        qemu_madvise(addr, TARGET_PAGE_SIZE,
+                deflate ? QEMU_MADV_WILLNEED : QEMU_MADV_DONTNEED);
 #endif
 }
 
@@ -84,12 +88,14 @@ static QObject *get_stats_qobject(VirtIOBalloon *dev)
                                   VIRTIO_BALLOON_PFN_SHIFT);
 
     stat_put(dict, "actual", actual);
+#if ENABLE_GUEST_STATS
     stat_put(dict, "mem_swapped_in", dev->stats[VIRTIO_BALLOON_S_SWAP_IN]);
     stat_put(dict, "mem_swapped_out", dev->stats[VIRTIO_BALLOON_S_SWAP_OUT]);
     stat_put(dict, "major_page_faults", dev->stats[VIRTIO_BALLOON_S_MAJFLT]);
     stat_put(dict, "minor_page_faults", dev->stats[VIRTIO_BALLOON_S_MINFLT]);
     stat_put(dict, "free_mem", dev->stats[VIRTIO_BALLOON_S_MEMFREE]);
     stat_put(dict, "total_mem", dev->stats[VIRTIO_BALLOON_S_MEMTOT]);
+#endif
 
     return QOBJECT(dict);
 }
@@ -215,7 +221,7 @@ static void virtio_balloon_to_target(void *opaque, ram_addr_t target,
         }
         dev->stats_callback = cb;
         dev->stats_opaque_callback_data = cb_data; 
-        if (dev->vdev.guest_features & (1 << VIRTIO_BALLOON_F_STATS_VQ)) {
+        if (ENABLE_GUEST_STATS && (dev->vdev.guest_features & (1 << VIRTIO_BALLOON_F_STATS_VQ))) {
             virtqueue_push(dev->svq, &dev->stats_vq_elem, dev->stats_vq_offset);
             virtio_notify(&dev->vdev, dev->svq);
         } else {
