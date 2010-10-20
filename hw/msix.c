@@ -509,12 +509,10 @@ void msix_notify(PCIDevice *dev, unsigned vector)
         return;
     }
 
-#ifdef KVM_CAP_IRQCHIP
     if (kvm_enabled() && kvm_irqchip_in_kernel()) {
         kvm_set_irq(dev->msix_irq_entries[vector].gsi, 1, NULL);
         return;
     }
-#endif
 
     address = pci_get_long(table_entry + MSIX_MSG_UPPER_ADDR);
     address = (address << 32) | pci_get_long(table_entry + MSIX_MSG_ADDR);

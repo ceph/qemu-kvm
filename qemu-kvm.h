@@ -785,7 +785,6 @@ void kvm_load_lapic(CPUState *env);
 
 void kvm_hpet_enable_kpit(void);
 void kvm_hpet_disable_kpit(void);
-int kvm_set_irq(int irq, int level, int *status);
 
 int kvm_physical_memory_set_dirty_tracking(int enable);
 

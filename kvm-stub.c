@@ -176,3 +176,9 @@ int kvm_commit_irq_routes(void)
 {
     return -ENOSYS;
 }
+
+int kvm_set_irq(int irq, int level, int *status)
+{
+    assert(0);
+    return -ENOSYS;
+}

@@ -214,4 +214,6 @@ int kvm_commit_irq_routes(void);
 
 int kvm_irqchip_in_kernel(void);
 
+int kvm_set_irq(int irq, int level, int *status);
+
 #endif
