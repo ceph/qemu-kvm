@@ -389,12 +389,10 @@ int msix_init(struct PCIDevice *dev, unsigned short nentries,
     if (ret)
         goto err_config;
 
-#ifdef KVM_CAP_IRQCHIP
     if (kvm_enabled() && kvm_irqchip_in_kernel()) {
         dev->msix_irq_entries = qemu_malloc(nentries *
                                             sizeof *dev->msix_irq_entries);
     }
-#endif
 
     dev->cap_present |= QEMU_PCI_CAP_MSIX;
     return 0;
