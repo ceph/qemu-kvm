@@ -1189,7 +1189,7 @@ static void sigbus_handler(int n, struct qemu_signalfd_siginfo *siginfo,
         void *vaddr;
         ram_addr_t ram_addr;
         unsigned long paddr;
-        CPUState *cenv;
+        //CPUState *cenv;
 
         /* Hope we are lucky for AO MCE */
         vaddr = (void *)(intptr_t)siginfo->ssi_addr;
@@ -1203,6 +1203,7 @@ static void sigbus_handler(int n, struct qemu_signalfd_siginfo *siginfo,
         status = MCI_STATUS_VAL | MCI_STATUS_UC | MCI_STATUS_EN
             | MCI_STATUS_MISCV | MCI_STATUS_ADDRV | MCI_STATUS_S
             | 0xc0;
+#if 0
         kvm_inject_x86_mce(first_cpu, 9, status,
                            MCG_STATUS_MCIP | MCG_STATUS_RIPV, paddr,
                            (MCM_ADDR_PHYS << 6) | 0xc, 1);
@@ -1210,6 +1211,7 @@ static void sigbus_handler(int n, struct qemu_signalfd_siginfo *siginfo,
             kvm_inject_x86_mce(cenv, 1, MCI_STATUS_VAL | MCI_STATUS_UC,
                                MCG_STATUS_MCIP | MCG_STATUS_RIPV, 0, 0, 1);
         }
+#endif
     } else
 #endif
     {
@@ -1414,7 +1416,8 @@ static void kvm_on_sigbus(CPUState *env, siginfo_t *siginfo)
             }
         }
         mce.addr = paddr;
-        r = kvm_set_mce(env, &mce);
+//      r = kvm_set_mce(env, &mce);
+	r = 0;
         if (r < 0) {
             fprintf(stderr, "kvm_set_mce: %s\n", strerror(errno));
             abort();
@@ -1939,63 +1942,3 @@ int kvm_set_boot_cpu_id(uint32_t id)
     return kvm_set_boot_vcpu_id(kvm_context, id);
 }
 
-#ifdef TARGET_I386
-#ifdef KVM_CAP_MCE
-struct kvm_x86_mce_data {
-    CPUState *env;
-    struct kvm_x86_mce *mce;
-    int abort_on_error;
-};
-
-static void kvm_do_inject_x86_mce(void *_data)
-{
-    struct kvm_x86_mce_data *data = _data;
-    int r;
-
-    /* If there is an MCE excpetion being processed, ignore this SRAO MCE */
-    r = kvm_mce_in_exception(data->env);
-    if (r == -1) {
-        fprintf(stderr, "Failed to get MCE status\n");
-    } else if (r && !(data->mce->status & MCI_STATUS_AR)) {
-        return;
-    }
-    r = kvm_set_mce(data->env, data->mce);
-    if (r < 0) {
-        perror("kvm_set_mce FAILED");
-        if (data->abort_on_error) {
-            abort();
-        }
-    }
-}
-#endif
-
-void kvm_inject_x86_mce(CPUState *cenv, int bank, uint64_t status,
-                        uint64_t mcg_status, uint64_t addr, uint64_t misc,
-                        int abort_on_error)
-{
-#ifdef KVM_CAP_MCE
-    struct kvm_x86_mce mce = {
-        .bank = bank,
-        .status = status,
-        .mcg_status = mcg_status,
-        .addr = addr,
-        .misc = misc,
-    };
-    struct kvm_x86_mce_data data = {
-        .env = cenv,
-        .mce = &mce,
-        .abort_on_error = abort_on_error,
-    };
-
-    if (!cenv->mcg_cap) {
-        fprintf(stderr, "MCE support is not enabled!\n");
-        return;
-    }
-    on_vcpu(cenv, kvm_do_inject_x86_mce, &data);
-#else
-    if (abort_on_error) {
-        abort();
-    }
-#endif
-}
-#endif
