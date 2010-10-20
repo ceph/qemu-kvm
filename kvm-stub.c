@@ -182,3 +182,7 @@ int kvm_set_irq(int irq, int level, int *status)
     assert(0);
     return -ENOSYS;
 }
+int kvm_on_sigbus(int code, void *addr)
+{
+    return 1;
+{
