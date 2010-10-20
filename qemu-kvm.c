@@ -1193,7 +1193,7 @@ static void sigbus_handler(int n, struct qemu_signalfd_siginfo *siginfo,
 
         /* Hope we are lucky for AO MCE */
         vaddr = (void *)(intptr_t)siginfo->ssi_addr;
-        if (do_qemu_ram_addr_from_host(vaddr, &ram_addr) ||
+        if (qemu_ram_addr_from_host(vaddr, &ram_addr) ||
             !kvm_physical_memory_addr_from_ram(kvm_state, ram_addr, (target_phys_addr_t *)&paddr)) {
             fprintf(stderr, "Hardware memory error for memory used by "
                     "QEMU itself instead of guest system!: %llx\n",
@@ -1404,7 +1404,7 @@ static void kvm_on_sigbus(CPUState *env, siginfo_t *siginfo)
             mce.mcg_status = MCG_STATUS_MCIP | MCG_STATUS_RIPV;
         }
         vaddr = (void *)siginfo->si_addr;
-        if (do_qemu_ram_addr_from_host(vaddr, &ram_addr) ||
+        if (qemu_ram_addr_from_host(vaddr, &ram_addr) ||
             !kvm_physical_memory_addr_from_ram(kvm_state, ram_addr, (target_phys_addr_t *)&paddr)) {
             fprintf(stderr, "Hardware memory error for memory used by "
                     "QEMU itself instead of guest system!\n");
