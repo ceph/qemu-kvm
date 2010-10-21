@@ -383,39 +383,6 @@ int kvm_set_msrs(CPUState *env, struct kvm_msr_entry *msrs, int n)
     return r;
 }
 
-int kvm_get_mce_cap_supported(kvm_context_t kvm, uint64_t *mce_cap,
-                              int *max_banks)
-{
-#ifdef KVM_CAP_MCE
-    int r;
-
-    r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_MCE);
-    if (r > 0) {
-        *max_banks = r;
-        return kvm_ioctl(kvm_state, KVM_X86_GET_MCE_CAP_SUPPORTED, mce_cap);
-    }
-#endif
-    return -ENOSYS;
-}
-
-int kvm_setup_mce(CPUState *env, uint64_t *mcg_cap)
-{
-#ifdef KVM_CAP_MCE
-    return kvm_vcpu_ioctl(env, KVM_X86_SETUP_MCE, mcg_cap);
-#else
-    return -ENOSYS;
-#endif
-}
-
-int kvm_set_mce(CPUState *env, struct kvm_x86_mce *m)
-{
-#ifdef KVM_CAP_MCE
-    return kvm_vcpu_ioctl(env, KVM_X86_SET_MCE, m);
-#else
-    return -ENOSYS;
-#endif
-}
-
 static void print_seg(FILE *file, const char *name, struct kvm_segment *seg)
 {
     fprintf(stderr,
@@ -1216,29 +1183,6 @@ void kvm_arch_save_regs(CPUState *env)
 static int _kvm_arch_init_vcpu(CPUState *env)
 {
     kvm_arch_reset_vcpu(env);
-
-#ifdef KVM_CAP_MCE
-    if (((env->cpuid_version >> 8)&0xF) >= 6
-        && (env->cpuid_features&(CPUID_MCE|CPUID_MCA)) == (CPUID_MCE|CPUID_MCA)
-        && kvm_check_extension(kvm_state, KVM_CAP_MCE) > 0) {
-        uint64_t mcg_cap;
-        int banks;
-
-        if (kvm_get_mce_cap_supported(kvm_context, &mcg_cap, &banks)) {
-            perror("kvm_get_mce_cap_supported FAILED");
-        } else {
-            if (banks > MCE_BANKS_DEF)
-                banks = MCE_BANKS_DEF;
-            mcg_cap &= MCE_CAP_DEF;
-            mcg_cap |= banks;
-            if (kvm_setup_mce(env, &mcg_cap)) {
-                perror("kvm_setup_mce FAILED");
-            } else {
-                env->mcg_cap = mcg_cap;
-            }
-        }
-    }
-#endif
 
 #ifdef KVM_EXIT_TPR_ACCESS
     kvm_enable_tpr_access_reporting(env);

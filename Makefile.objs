@@ -126,6 +126,7 @@ common-obj-y += $(addprefix ui/, $(ui-obj-y))
 
 common-obj-y += iov.o acl.o
 common-obj-$(CONFIG_THREAD) += qemu-thread.o
+common-obj-$(CONFIG_IOTHREAD) += compatfd.o
 common-obj-y += notify.o event_notifier.o
 common-obj-y += qemu-timer.o
 
@@ -252,7 +253,8 @@ sound-obj-$(CONFIG_CS4231A) += cs4231a.o
 adlib.o fmopl.o: QEMU_CFLAGS += -DBUILD_Y8950=0
 hw-obj-$(CONFIG_SOUND) += $(sound-obj-y)
 
-hw-obj-$(CONFIG_VIRTFS) += virtio-9p-debug.o virtio-9p-local.o
+hw-obj-$(CONFIG_VIRTFS) += virtio-9p-debug.o virtio-9p-local.o virtio-9p-xattr.o
+hw-obj-$(CONFIG_VIRTFS) += virtio-9p-xattr-user.o virtio-9p-posix-acl.o
 
 ######################################################################
 # libdis

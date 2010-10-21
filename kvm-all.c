@@ -1085,7 +1085,6 @@ void kvm_setup_guest_memory(void *start, size_t size)
 #ifdef KVM_CAP_SET_GUEST_DEBUG
 #ifndef OBSOLETE_KVM_IMPL
 #define run_on_cpu on_vcpu
-static void on_vcpu(CPUState *env, void (*func)(void *data), void *data);
 #endif /* !OBSOLETE_KVM_IMPL */
 
 struct kvm_sw_breakpoint *kvm_find_sw_breakpoint(CPUState *env,

@@ -99,11 +99,7 @@ int try_push_interrupts(kvm_context_t kvm);
 #if defined(__x86_64__) || defined(__i386__)
 int kvm_get_msrs(CPUState *env, struct kvm_msr_entry *msrs, int n);
 int kvm_set_msrs(CPUState *env, struct kvm_msr_entry *msrs, int n);
-int kvm_get_mce_cap_supported(kvm_context_t, uint64_t *mce_cap,
-                              int *max_banks);
-int kvm_setup_mce(CPUState *env, uint64_t *mcg_cap);
 struct kvm_x86_mce;
-int kvm_set_mce(CPUState *env, struct kvm_x86_mce *mce);
 #endif
 
 /*!
@@ -510,23 +506,6 @@ int kvm_inject_nmi(CPUState *env);
 #endif
 
 /*!
- * \brief Simulate an x86 MCE
- *
- * This allows you to simulate a x86 MCE.
- *
- * \param cenv Which virtual CPU should get MCE injected
- * \param bank Bank number
- * \param status MSR_MCI_STATUS
- * \param mcg_status MSR_MCG_STATUS
- * \param addr MSR_MCI_ADDR
- * \param misc MSR_MCI_MISC
- * \param abort_on_error abort on error
- */
-void kvm_inject_x86_mce(CPUState *cenv, int bank, uint64_t status,
-                        uint64_t mcg_status, uint64_t addr, uint64_t misc,
-                        int abort_on_error);
-
-/*!
  * \brief Initialize coalesced MMIO
  *
  * Check for coalesced MMIO capability and store in context
@@ -753,15 +732,6 @@ typedef struct kvm_vcpu_context *kvm_vcpu_context_t;
 struct kvm_pit_state {
 };
 
-static inline void kvm_inject_x86_mce(CPUState *cenv, int bank,
-                                      uint64_t status, uint64_t mcg_status,
-                                      uint64_t addr, uint64_t misc,
-                                      int abort_on_error)
-{
-    if (abort_on_error)
-        abort();
-}
-
 #endif                          /* !CONFIG_KVM */
 
 
@@ -788,6 +758,7 @@ void kvm_hpet_disable_kpit(void);
 
 int kvm_physical_memory_set_dirty_tracking(int enable);
 
+void on_vcpu(CPUState *env, void (*func)(void *data), void *data);
 void qemu_kvm_call_with_env(void (*func)(void *), void *data, CPUState *env);
 void qemu_kvm_cpuid_on_env(CPUState *env);
 void kvm_inject_interrupt(CPUState *env, int mask);
