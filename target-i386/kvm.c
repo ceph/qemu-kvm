@@ -15,6 +15,7 @@
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <sys/utsname.h>
 
 #include <linux/kvm.h>
 
@@ -51,6 +52,10 @@
 #endif
 #ifndef BUS_MCEERR_AO
 #define BUS_MCEERR_AO 5
+#endif
+
+#ifdef OBSOLETE_KVM_IMPL
+static int lm_capable_kernel;
 #endif
 
 #ifdef KVM_CAP_EXT_CPUID
@@ -538,6 +543,11 @@ int kvm_arch_init(KVMState *s, int smp_cpus)
 {
     int ret;
 
+    struct utsname utsname;
+
+    uname(&utsname);
+    lm_capable_kernel = strcmp(utsname.machine, "x86_64") == 0;
+
     /* create vm86 tss.  KVM uses vm86 mode to emulate 16-bit code
      * directly.  In order to use vm86 mode, a TSS is needed.  Since this
      * must be part of guest physical memory, we need to allocate it.  Older
@@ -828,14 +838,23 @@ static int kvm_put_msrs(CPUState *env, int level)
     if (kvm_has_msr_hsave_pa(env))
         kvm_msr_entry_set(&msrs[n++], MSR_VM_HSAVE_PA, env->vm_hsave);
 #ifdef TARGET_X86_64
-    /* FIXME if lm capable */
-    kvm_msr_entry_set(&msrs[n++], MSR_CSTAR, env->cstar);
-    kvm_msr_entry_set(&msrs[n++], MSR_KERNELGSBASE, env->kernelgsbase);
-    kvm_msr_entry_set(&msrs[n++], MSR_FMASK, env->fmask);
-    kvm_msr_entry_set(&msrs[n++], MSR_LSTAR, env->lstar);
+    if (lm_capable_kernel) {
+        kvm_msr_entry_set(&msrs[n++], MSR_CSTAR, env->cstar);
+        kvm_msr_entry_set(&msrs[n++], MSR_KERNELGSBASE, env->kernelgsbase);
+        kvm_msr_entry_set(&msrs[n++], MSR_FMASK, env->fmask);
+        kvm_msr_entry_set(&msrs[n++], MSR_LSTAR, env->lstar);
+    }
 #endif
     if (level == KVM_PUT_FULL_STATE) {
-        kvm_msr_entry_set(&msrs[n++], MSR_IA32_TSC, env->tsc);
+        /*
+         * KVM is yet unable to synchronize TSC values of multiple VCPUs on
+         * writeback. Until this is fixed, we only write the offset to SMP
+         * guests after migration, desynchronizing the VCPUs, but avoiding
+         * huge jump-backs that would occur without any writeback at all.
+         */
+        if (smp_cpus == 1 || env->tsc != 0) {
+            kvm_msr_entry_set(&msrs[n++], MSR_IA32_TSC, env->tsc);
+        }
         kvm_msr_entry_set(&msrs[n++], MSR_KVM_SYSTEM_TIME,
                           env->system_time_msr);
         kvm_msr_entry_set(&msrs[n++], MSR_KVM_WALL_CLOCK, env->wall_clock_msr);
@@ -1057,11 +1076,12 @@ static int kvm_get_msrs(CPUState *env)
     msrs[n++].index = MSR_IA32_TSC;
     msrs[n++].index = MSR_VM_HSAVE_PA;
 #ifdef TARGET_X86_64
-    /* FIXME lm_capable_kernel */
-    msrs[n++].index = MSR_CSTAR;
-    msrs[n++].index = MSR_KERNELGSBASE;
-    msrs[n++].index = MSR_FMASK;
-    msrs[n++].index = MSR_LSTAR;
+    if (lm_capable_kernel) {
+        msrs[n++].index = MSR_CSTAR;
+        msrs[n++].index = MSR_KERNELGSBASE;
+        msrs[n++].index = MSR_FMASK;
+        msrs[n++].index = MSR_LSTAR;
+    }
 #endif
     msrs[n++].index = MSR_KVM_SYSTEM_TIME;
     msrs[n++].index = MSR_KVM_WALL_CLOCK;
