@@ -167,35 +167,43 @@ static int msix_add_config(struct PCIDevice *pdev, unsigned short nentries,
 {
     int config_offset;
     uint8_t *config;
-    uint32_t new_size;
 
-    if (nentries < 1 || nentries > PCI_MSIX_FLAGS_QSIZE + 1)
-        return -EINVAL;
-    if (bar_size > 0x80000000)
-        return -ENOSPC;
+    pdev->msix_bar_size = bar_size;
 
-    /* Add space for MSI-X structures */
-    if (!bar_size) {
-        new_size = MSIX_PAGE_SIZE;
-    } else if (bar_size < MSIX_PAGE_SIZE) {
-        bar_size = MSIX_PAGE_SIZE;
-        new_size = MSIX_PAGE_SIZE * 2;
-    } else {
-        new_size = bar_size * 2;
+    config_offset = pci_find_capability(pdev, PCI_CAP_ID_MSIX);
+
+    if (!config_offset) {
+        uint32_t new_size;
+
+        if (nentries < 1 || nentries > PCI_MSIX_FLAGS_QSIZE + 1)
+            return -EINVAL;
+        if (bar_size > 0x80000000)
+            return -ENOSPC;
+
+        /* Add space for MSI-X structures */
+        if (!bar_size) {
+            new_size = MSIX_PAGE_SIZE;
+        } else if (bar_size < MSIX_PAGE_SIZE) {
+            bar_size = MSIX_PAGE_SIZE;
+            new_size = MSIX_PAGE_SIZE * 2;
+        } else {
+            new_size = bar_size * 2;
+        }
+
+        pdev->msix_bar_size = new_size;
+        config_offset = pci_add_capability(pdev, PCI_CAP_ID_MSIX,
+                                           MSIX_CAP_LENGTH);
+        if (config_offset < 0)
+            return config_offset;
+        config = pdev->config + config_offset;
+
+        pci_set_word(config + PCI_MSIX_FLAGS, nentries - 1);
+        /* Table on top of BAR */
+        pci_set_long(config + MSIX_TABLE_OFFSET, bar_size | bar_nr);
+        /* Pending bits on top of that */
+        pci_set_long(config + MSIX_PBA_OFFSET, (bar_size + MSIX_PAGE_PENDING) |
+                     bar_nr);
     }
-
-    pdev->msix_bar_size = new_size;
-    config_offset = pci_add_capability(pdev, PCI_CAP_ID_MSIX, MSIX_CAP_LENGTH);
-    if (config_offset < 0)
-        return config_offset;
-    config = pdev->config + config_offset;
-
-    pci_set_word(config + PCI_MSIX_FLAGS, nentries - 1);
-    /* Table on top of BAR */
-    pci_set_long(config + MSIX_TABLE_OFFSET, bar_size | bar_nr);
-    /* Pending bits on top of that */
-    pci_set_long(config + MSIX_PBA_OFFSET, (bar_size + MSIX_PAGE_PENDING) |
-                 bar_nr);
     pdev->msix_cap = config_offset;
     /* Make flags bit writeable. */
     pdev->wmask[config_offset + MSIX_CONTROL_OFFSET] |= MSIX_ENABLE_MASK |
@@ -337,7 +345,8 @@ void msix_mmio_map(PCIDevice *d, int region_num,
         return;
     if (size <= offset)
         return;
-    cpu_register_physical_memory(addr + offset, size - offset,
+    cpu_register_physical_memory(addr + offset,
+                                 MIN(size - offset, MSIX_PAGE_SIZE),
                                  d->msix_mmio_index);
 }
 
