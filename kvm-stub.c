@@ -185,4 +185,4 @@ int kvm_set_irq(int irq, int level, int *status)
 int kvm_on_sigbus(int code, void *addr)
 {
     return 1;
-{
+}
