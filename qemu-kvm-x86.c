@@ -31,7 +31,7 @@ extern unsigned int kvm_shadow_memory;
 static int kvm_has_msr_star;
 static int kvm_has_vm_hsave_pa;
 
-static int lm_capable_kernel;
+static int _lm_capable_kernel;
 
 int kvm_set_tss_addr(kvm_context_t kvm, unsigned long addr)
 {
@@ -562,7 +562,7 @@ int kvm_arch_qemu_create_context(void)
     struct utsname utsname;
 
     uname(&utsname);
-    lm_capable_kernel = strcmp(utsname.machine, "x86_64") == 0;
+    _lm_capable_kernel = strcmp(utsname.machine, "x86_64") == 0;
 
     if (kvm_shadow_memory) {
         kvm_set_shadow_pages(kvm_context, kvm_shadow_memory);
@@ -915,7 +915,7 @@ void kvm_arch_load_regs(CPUState *env, int level)
         kvm_msr_entry_set(&msrs[n++], MSR_VM_HSAVE_PA, env->vm_hsave);
     }
 #ifdef TARGET_X86_64
-    if (lm_capable_kernel) {
+    if (_lm_capable_kernel) {
         kvm_msr_entry_set(&msrs[n++], MSR_CSTAR,             env->cstar);
         kvm_msr_entry_set(&msrs[n++], MSR_KERNELGSBASE,      env->kernelgsbase);
         kvm_msr_entry_set(&msrs[n++], MSR_FMASK,             env->fmask);
@@ -1144,7 +1144,7 @@ void kvm_arch_save_regs(CPUState *env)
     if (kvm_has_vm_hsave_pa)
         msrs[n++].index = MSR_VM_HSAVE_PA;
 #ifdef TARGET_X86_64
-    if (lm_capable_kernel) {
+    if (_lm_capable_kernel) {
         msrs[n++].index = MSR_CSTAR;
         msrs[n++].index = MSR_KERNELGSBASE;
         msrs[n++].index = MSR_FMASK;

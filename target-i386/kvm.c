@@ -15,6 +15,7 @@
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <sys/utsname.h>
 
 #include <linux/kvm.h>
 
@@ -51,6 +52,10 @@
 #endif
 #ifndef BUS_MCEERR_AO
 #define BUS_MCEERR_AO 5
+#endif
+
+#ifdef OBSOLETE_KVM_IMPL
+static int lm_capable_kernel;
 #endif
 
 #ifdef KVM_CAP_EXT_CPUID
@@ -239,12 +244,16 @@ static void kvm_do_inject_x86_mce(void *_data)
     struct kvm_x86_mce_data *data = _data;
     int r;
 
-    /* If there is an MCE excpetion being processed, ignore this SRAO MCE */
-    r = kvm_mce_in_exception(data->env);
-    if (r == -1)
-        fprintf(stderr, "Failed to get MCE status\n");
-    else if (r && !(data->mce->status & MCI_STATUS_AR))
-        return;
+    /* If there is an MCE exception being processed, ignore this SRAO MCE */
+    if ((data->env->mcg_cap & MCG_SER_P) &&
+        !(data->mce->status & MCI_STATUS_AR)) {
+        r = kvm_mce_in_exception(data->env);
+        if (r == -1) {
+            fprintf(stderr, "Failed to get MCE status\n");
+        } else if (r) {
+            return;
+        }
+    }
 
     r = kvm_set_mce(data->env, data->mce);
     if (r < 0) {
@@ -449,23 +458,26 @@ void kvm_arch_reset_vcpu(CPUState *env)
 }
 #ifdef OBSOLETE_KVM_IMPL
 
-static int kvm_has_msr_star(CPUState *env)
+int has_msr_star;
+int has_msr_hsave_pa;
+
+static void kvm_supported_msrs(CPUState *env)
 {
-    static int has_msr_star;
+    static int kvm_supported_msrs;
     int ret;
 
     /* first time */
-    if (has_msr_star == 0) {        
+    if (kvm_supported_msrs == 0) {
         struct kvm_msr_list msr_list, *kvm_msr_list;
 
-        has_msr_star = -1;
+        kvm_supported_msrs = -1;
 
         /* Obtain MSR list from KVM.  These are the MSRs that we must
          * save/restore */
         msr_list.nmsrs = 0;
         ret = kvm_ioctl(env->kvm_state, KVM_GET_MSR_INDEX_LIST, &msr_list);
         if (ret < 0 && ret != -E2BIG) {
-            return 0;
+            return;
         }
         /* Old kernel modules had a bug and could write beyond the provided
            memory. Allocate at least a safe amount of 1K. */
@@ -481,7 +493,11 @@ static int kvm_has_msr_star(CPUState *env)
             for (i = 0; i < kvm_msr_list->nmsrs; i++) {
                 if (kvm_msr_list->indices[i] == MSR_STAR) {
                     has_msr_star = 1;
-                    break;
+                    continue;
+                }
+                if (kvm_msr_list->indices[i] == MSR_VM_HSAVE_PA) {
+                    has_msr_hsave_pa = 1;
+                    continue;
                 }
             }
         }
@@ -489,9 +505,19 @@ static int kvm_has_msr_star(CPUState *env)
         free(kvm_msr_list);
     }
 
-    if (has_msr_star == 1)
-        return 1;
-    return 0;
+    return;
+}
+
+static int kvm_has_msr_hsave_pa(CPUState *env)
+{
+    kvm_supported_msrs(env);
+    return has_msr_hsave_pa;
+}
+
+static int kvm_has_msr_star(CPUState *env)
+{
+    kvm_supported_msrs(env);
+    return has_msr_star;
 }
 
 static int kvm_init_identity_map_page(KVMState *s)
@@ -516,6 +542,11 @@ static int kvm_init_identity_map_page(KVMState *s)
 int kvm_arch_init(KVMState *s, int smp_cpus)
 {
     int ret;
+
+    struct utsname utsname;
+
+    uname(&utsname);
+    lm_capable_kernel = strcmp(utsname.machine, "x86_64") == 0;
 
     /* create vm86 tss.  KVM uses vm86 mode to emulate 16-bit code
      * directly.  In order to use vm86 mode, a TSS is needed.  Since this
@@ -797,29 +828,40 @@ static int kvm_put_msrs(CPUState *env, int level)
         struct kvm_msr_entry entries[100];
     } msr_data;
     struct kvm_msr_entry *msrs = msr_data.entries;
-    int i, n = 0;
+    int n = 0;
 
     kvm_msr_entry_set(&msrs[n++], MSR_IA32_SYSENTER_CS, env->sysenter_cs);
     kvm_msr_entry_set(&msrs[n++], MSR_IA32_SYSENTER_ESP, env->sysenter_esp);
     kvm_msr_entry_set(&msrs[n++], MSR_IA32_SYSENTER_EIP, env->sysenter_eip);
     if (kvm_has_msr_star(env))
 	kvm_msr_entry_set(&msrs[n++], MSR_STAR, env->star);
-    kvm_msr_entry_set(&msrs[n++], MSR_VM_HSAVE_PA, env->vm_hsave);
+    if (kvm_has_msr_hsave_pa(env))
+        kvm_msr_entry_set(&msrs[n++], MSR_VM_HSAVE_PA, env->vm_hsave);
 #ifdef TARGET_X86_64
-    /* FIXME if lm capable */
-    kvm_msr_entry_set(&msrs[n++], MSR_CSTAR, env->cstar);
-    kvm_msr_entry_set(&msrs[n++], MSR_KERNELGSBASE, env->kernelgsbase);
-    kvm_msr_entry_set(&msrs[n++], MSR_FMASK, env->fmask);
-    kvm_msr_entry_set(&msrs[n++], MSR_LSTAR, env->lstar);
+    if (lm_capable_kernel) {
+        kvm_msr_entry_set(&msrs[n++], MSR_CSTAR, env->cstar);
+        kvm_msr_entry_set(&msrs[n++], MSR_KERNELGSBASE, env->kernelgsbase);
+        kvm_msr_entry_set(&msrs[n++], MSR_FMASK, env->fmask);
+        kvm_msr_entry_set(&msrs[n++], MSR_LSTAR, env->lstar);
+    }
 #endif
     if (level == KVM_PUT_FULL_STATE) {
-        kvm_msr_entry_set(&msrs[n++], MSR_IA32_TSC, env->tsc);
+        /*
+         * KVM is yet unable to synchronize TSC values of multiple VCPUs on
+         * writeback. Until this is fixed, we only write the offset to SMP
+         * guests after migration, desynchronizing the VCPUs, but avoiding
+         * huge jump-backs that would occur without any writeback at all.
+         */
+        if (smp_cpus == 1 || env->tsc != 0) {
+            kvm_msr_entry_set(&msrs[n++], MSR_IA32_TSC, env->tsc);
+        }
         kvm_msr_entry_set(&msrs[n++], MSR_KVM_SYSTEM_TIME,
                           env->system_time_msr);
         kvm_msr_entry_set(&msrs[n++], MSR_KVM_WALL_CLOCK, env->wall_clock_msr);
     }
 #ifdef KVM_CAP_MCE
     if (env->mcg_cap) {
+        int i;
         if (level == KVM_PUT_RESET_STATE)
             kvm_msr_entry_set(&msrs[n++], MSR_MCG_STATUS, env->mcg_status);
         else if (level == KVM_PUT_FULL_STATE) {
@@ -1029,14 +1071,17 @@ static int kvm_get_msrs(CPUState *env)
     msrs[n++].index = MSR_IA32_SYSENTER_EIP;
     if (kvm_has_msr_star(env))
 	msrs[n++].index = MSR_STAR;
+    if (kvm_has_msr_hsave_pa(env))
+        msrs[n++].index = MSR_VM_HSAVE_PA;
     msrs[n++].index = MSR_IA32_TSC;
     msrs[n++].index = MSR_VM_HSAVE_PA;
 #ifdef TARGET_X86_64
-    /* FIXME lm_capable_kernel */
-    msrs[n++].index = MSR_CSTAR;
-    msrs[n++].index = MSR_KERNELGSBASE;
-    msrs[n++].index = MSR_FMASK;
-    msrs[n++].index = MSR_LSTAR;
+    if (lm_capable_kernel) {
+        msrs[n++].index = MSR_CSTAR;
+        msrs[n++].index = MSR_KERNELGSBASE;
+        msrs[n++].index = MSR_FMASK;
+        msrs[n++].index = MSR_LSTAR;
+    }
 #endif
     msrs[n++].index = MSR_KVM_SYSTEM_TIME;
     msrs[n++].index = MSR_KVM_WALL_CLOCK;
@@ -1086,6 +1131,9 @@ static int kvm_get_msrs(CPUState *env)
         case MSR_IA32_TSC:
             env->tsc = msrs[i].data;
             break;
+        case MSR_VM_HSAVE_PA:
+            env->vm_hsave = msrs[i].data;
+            break;
         case MSR_KVM_SYSTEM_TIME:
             env->system_time_msr = msrs[i].data;
             break;
@@ -1108,9 +1156,9 @@ static int kvm_get_msrs(CPUState *env)
             if (msrs[i].index >= MSR_MC0_CTL &&
                 msrs[i].index < MSR_MC0_CTL + (env->mcg_cap & 0xff) * 4) {
                 env->mce_banks[msrs[i].index - MSR_MC0_CTL] = msrs[i].data;
-                break;
             }
 #endif
+            break;
         }
     }
 
@@ -1661,6 +1709,28 @@ static void hardware_memory_error(void)
     exit(1);
 }
 
+#ifdef KVM_CAP_MCE
+static void kvm_mce_broadcast_rest(CPUState *env)
+{
+    CPUState *cenv;
+    int family, model, cpuver = env->cpuid_version;
+
+    family = (cpuver >> 8) & 0xf;
+    model = ((cpuver >> 12) & 0xf0) + ((cpuver >> 4) & 0xf);
+
+    /* Broadcast MCA signal for processor version 06H_EH and above */
+    if ((family == 6 && model >= 14) || family > 6) {
+        for (cenv = first_cpu; cenv != NULL; cenv = cenv->next_cpu) {
+            if (cenv == env) {
+                continue;
+            }
+            kvm_inject_x86_mce(cenv, 1, MCI_STATUS_VAL | MCI_STATUS_UC,
+                               MCG_STATUS_MCIP | MCG_STATUS_RIPV, 0, 0, 1);
+        }
+    }
+}
+#endif
+
 int kvm_on_sigbus_vcpu(CPUState *env, int code, void *addr)
 {
 #if defined(KVM_CAP_MCE)
@@ -1718,6 +1788,7 @@ int kvm_on_sigbus_vcpu(CPUState *env, int code, void *addr)
             fprintf(stderr, "kvm_set_mce: %s\n", strerror(errno));
             abort();
         }
+        kvm_mce_broadcast_rest(env);
     } else
 #endif
     {
@@ -1740,7 +1811,6 @@ int kvm_on_sigbus(int code, void *addr)
         void *vaddr;
         ram_addr_t ram_addr;
         target_phys_addr_t paddr;
-        CPUState *cenv;
 
         /* Hope we are lucky for AO MCE */
         vaddr = addr;
@@ -1756,10 +1826,7 @@ int kvm_on_sigbus(int code, void *addr)
         kvm_inject_x86_mce(first_cpu, 9, status,
                            MCG_STATUS_MCIP | MCG_STATUS_RIPV, paddr,
                            (MCM_ADDR_PHYS << 6) | 0xc, 1);
-        for (cenv = first_cpu->next_cpu; cenv != NULL; cenv = cenv->next_cpu) {
-            kvm_inject_x86_mce(cenv, 1, MCI_STATUS_VAL | MCI_STATUS_UC,
-                               MCG_STATUS_MCIP | MCG_STATUS_RIPV, 0, 0, 1);
-        }
+        kvm_mce_broadcast_rest(first_cpu);
     } else
 #endif
     {
