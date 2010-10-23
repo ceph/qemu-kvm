@@ -709,55 +709,6 @@ static void kvm_reset_mpstate(CPUState *env)
 #endif
 }
 
-static void set_v8086_seg(struct kvm_segment *lhs, const SegmentCache *rhs)
-{
-    lhs->selector = rhs->selector;
-    lhs->base = rhs->base;
-    lhs->limit = rhs->limit;
-    lhs->type = 3;
-    lhs->present = 1;
-    lhs->dpl = 3;
-    lhs->db = 0;
-    lhs->s = 1;
-    lhs->l = 0;
-    lhs->g = 0;
-    lhs->avl = 0;
-    lhs->unusable = 0;
-}
-
-static void set_seg(struct kvm_segment *lhs, const SegmentCache *rhs)
-{
-    unsigned flags = rhs->flags;
-    lhs->selector = rhs->selector;
-    lhs->base = rhs->base;
-    lhs->limit = rhs->limit;
-    lhs->type = (flags >> DESC_TYPE_SHIFT) & 15;
-    lhs->present = (flags & DESC_P_MASK) != 0;
-    lhs->dpl = rhs->selector & 3;
-    lhs->db = (flags >> DESC_B_SHIFT) & 1;
-    lhs->s = (flags & DESC_S_MASK) != 0;
-    lhs->l = (flags >> DESC_L_SHIFT) & 1;
-    lhs->g = (flags & DESC_G_MASK) != 0;
-    lhs->avl = (flags & DESC_AVL_MASK) != 0;
-    lhs->unusable = 0;
-}
-
-static void get_seg(SegmentCache *lhs, const struct kvm_segment *rhs)
-{
-    lhs->selector = rhs->selector;
-    lhs->base = rhs->base;
-    lhs->limit = rhs->limit;
-    lhs->flags =
-        (rhs->type << DESC_TYPE_SHIFT)
-        | (rhs->present * DESC_P_MASK)
-        | (rhs->dpl << DESC_DPL_SHIFT)
-        | (rhs->db << DESC_B_SHIFT)
-        | (rhs->s * DESC_S_MASK)
-        | (rhs->l << DESC_L_SHIFT)
-        | (rhs->g * DESC_G_MASK)
-        | (rhs->avl * DESC_AVL_MASK);
-}
-
 #define XSAVE_CWD_RIP     2
 #define XSAVE_CWD_RDP     4
 #define XSAVE_MXCSR       6
@@ -769,7 +720,6 @@ static void get_seg(SegmentCache *lhs, const struct kvm_segment *rhs)
 void kvm_arch_load_regs(CPUState *env, int level)
 {
     struct kvm_regs regs;
-    struct kvm_sregs sregs;
     struct kvm_msr_entry msrs[100];
     int rc, n, i;
 
@@ -802,55 +752,7 @@ void kvm_arch_load_regs(CPUState *env, int level)
     kvm_put_xsave(env);
     kvm_put_xcrs(env);
 
-    memset(sregs.interrupt_bitmap, 0, sizeof(sregs.interrupt_bitmap));
-    if (env->interrupt_injected >= 0) {
-        sregs.interrupt_bitmap[env->interrupt_injected / 64] |=
-                (uint64_t)1 << (env->interrupt_injected % 64);
-    }
-
-    if ((env->eflags & VM_MASK)) {
-        set_v8086_seg(&sregs.cs, &env->segs[R_CS]);
-        set_v8086_seg(&sregs.ds, &env->segs[R_DS]);
-        set_v8086_seg(&sregs.es, &env->segs[R_ES]);
-        set_v8086_seg(&sregs.fs, &env->segs[R_FS]);
-        set_v8086_seg(&sregs.gs, &env->segs[R_GS]);
-        set_v8086_seg(&sregs.ss, &env->segs[R_SS]);
-    } else {
-        set_seg(&sregs.cs, &env->segs[R_CS]);
-        set_seg(&sregs.ds, &env->segs[R_DS]);
-        set_seg(&sregs.es, &env->segs[R_ES]);
-        set_seg(&sregs.fs, &env->segs[R_FS]);
-        set_seg(&sregs.gs, &env->segs[R_GS]);
-        set_seg(&sregs.ss, &env->segs[R_SS]);
-
-        if (env->cr[0] & CR0_PE_MASK) {
-            /* force ss cpl to cs cpl */
-            sregs.ss.selector = (sregs.ss.selector & ~3) |
-                (sregs.cs.selector & 3);
-            sregs.ss.dpl = sregs.ss.selector & 3;
-        }
-    }
-
-    set_seg(&sregs.tr, &env->tr);
-    set_seg(&sregs.ldt, &env->ldt);
-
-    sregs.idt.limit = env->idt.limit;
-    sregs.idt.base = env->idt.base;
-    sregs.gdt.limit = env->gdt.limit;
-    sregs.gdt.base = env->gdt.base;
-
-    sregs.cr0 = env->cr[0];
-    sregs.cr2 = env->cr[2];
-    sregs.cr3 = env->cr[3];
-    sregs.cr4 = env->cr[4];
-
-    sregs.cr8 = cpu_get_apic_tpr(env->apic_state);
-    sregs.apic_base = cpu_get_apic_base(env->apic_state);
-
-    sregs.efer = env->efer;
-
-    kvm_set_sregs(env, &sregs);
-
+    kvm_put_sregs(env);
     /* msrs */
     n = 0;
     /* Remember to increase msrs size if you add new registers below */
@@ -923,10 +825,8 @@ void kvm_arch_load_regs(CPUState *env, int level)
 void kvm_arch_save_regs(CPUState *env)
 {
     struct kvm_regs regs;
-    struct kvm_sregs sregs;
     struct kvm_msr_entry msrs[100];
-    uint32_t hflags;
-    uint32_t i, n, rc, bit;
+    uint32_t i, n, rc;
 
     assert(kvm_cpu_is_stopped(env) || env->thread_id == kvm_get_thread_id());
 
@@ -957,81 +857,7 @@ void kvm_arch_save_regs(CPUState *env)
     kvm_get_xsave(env);
     kvm_get_xcrs(env);
 
-    kvm_get_sregs(env, &sregs);
-
-    /* There can only be one pending IRQ set in the bitmap at a time, so try
-       to find it and save its number instead (-1 for none). */
-    env->interrupt_injected = -1;
-    for (i = 0; i < ARRAY_SIZE(sregs.interrupt_bitmap); i++) {
-        if (sregs.interrupt_bitmap[i]) {
-            bit = ctz64(sregs.interrupt_bitmap[i]);
-            env->interrupt_injected = i * 64 + bit;
-            break;
-        }
-    }
-
-    get_seg(&env->segs[R_CS], &sregs.cs);
-    get_seg(&env->segs[R_DS], &sregs.ds);
-    get_seg(&env->segs[R_ES], &sregs.es);
-    get_seg(&env->segs[R_FS], &sregs.fs);
-    get_seg(&env->segs[R_GS], &sregs.gs);
-    get_seg(&env->segs[R_SS], &sregs.ss);
-
-    get_seg(&env->tr, &sregs.tr);
-    get_seg(&env->ldt, &sregs.ldt);
-
-    env->idt.limit = sregs.idt.limit;
-    env->idt.base = sregs.idt.base;
-    env->gdt.limit = sregs.gdt.limit;
-    env->gdt.base = sregs.gdt.base;
-
-    env->cr[0] = sregs.cr0;
-    env->cr[2] = sregs.cr2;
-    env->cr[3] = sregs.cr3;
-    env->cr[4] = sregs.cr4;
-
-    cpu_set_apic_base(env->apic_state, sregs.apic_base);
-
-    env->efer = sregs.efer;
-    //cpu_set_apic_tpr(env, sregs.cr8);
-
-#define HFLAG_COPY_MASK ~(                                              \
-        HF_CPL_MASK | HF_PE_MASK | HF_MP_MASK | HF_EM_MASK |            \
-        HF_TS_MASK | HF_TF_MASK | HF_VM_MASK | HF_IOPL_MASK |           \
-        HF_OSFXSR_MASK | HF_LMA_MASK | HF_CS32_MASK |                   \
-        HF_SS32_MASK | HF_CS64_MASK | HF_ADDSEG_MASK)
-
-    hflags = (env->segs[R_CS].flags >> DESC_DPL_SHIFT) & HF_CPL_MASK;
-    hflags |= (env->cr[0] & CR0_PE_MASK) << (HF_PE_SHIFT - CR0_PE_SHIFT);
-    hflags |= (env->cr[0] << (HF_MP_SHIFT - CR0_MP_SHIFT)) &
-            (HF_MP_MASK | HF_EM_MASK | HF_TS_MASK);
-    hflags |= (env->eflags & (HF_TF_MASK | HF_VM_MASK | HF_IOPL_MASK));
-    hflags |= (env->cr[4] & CR4_OSFXSR_MASK) <<
-            (HF_OSFXSR_SHIFT - CR4_OSFXSR_SHIFT);
-
-    if (env->efer & MSR_EFER_LMA) {
-        hflags |= HF_LMA_MASK;
-    }
-
-    if ((hflags & HF_LMA_MASK) && (env->segs[R_CS].flags & DESC_L_MASK)) {
-        hflags |= HF_CS32_MASK | HF_SS32_MASK | HF_CS64_MASK;
-    } else {
-        hflags |= (env->segs[R_CS].flags & DESC_B_MASK) >>
-                (DESC_B_SHIFT - HF_CS32_SHIFT);
-        hflags |= (env->segs[R_SS].flags & DESC_B_MASK) >>
-                (DESC_B_SHIFT - HF_SS32_SHIFT);
-        if (!(env->cr[0] & CR0_PE_MASK) ||
-            (env->eflags & VM_MASK) ||
-            !(hflags & HF_CS32_MASK)) {
-            hflags |= HF_ADDSEG_MASK;
-        } else {
-            hflags |= ((env->segs[R_DS].base |
-                        env->segs[R_ES].base |
-                        env->segs[R_SS].base) != 0) <<
-                HF_ADDSEG_SHIFT;
-        }
-    }
-    env->hflags = (env->hflags & HFLAG_COPY_MASK) | hflags;
+    kvm_get_sregs(env);
 
     /* msrs */
     n = 0;

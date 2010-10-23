@@ -472,16 +472,6 @@ int kvm_set_regs(CPUState *env, struct kvm_regs *regs)
     return kvm_vcpu_ioctl(env, KVM_SET_REGS, regs);
 }
 
-int kvm_get_sregs(CPUState *env, struct kvm_sregs *sregs)
-{
-    return kvm_vcpu_ioctl(env, KVM_GET_SREGS, sregs);
-}
-
-int kvm_set_sregs(CPUState *env, struct kvm_sregs *sregs)
-{
-    return kvm_vcpu_ioctl(env, KVM_SET_SREGS, sregs);
-}
-
 #ifdef KVM_CAP_MP_STATE
 int kvm_get_mpstate(CPUState *env, struct kvm_mp_state *mp_state)
 {

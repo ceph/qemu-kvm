@@ -207,39 +207,6 @@ int kvm_get_regs(CPUState *env, struct kvm_regs *regs);
  */
 int kvm_set_regs(CPUState *env, struct kvm_regs *regs);
 
-/*!
- * \brief Read VCPU system registers
- *
- * This gets the non-GP registers from the VCPU and outputs them
- * into a kvm_sregs structure
- *
- * \note This function returns a \b copy of the VCPUs registers.\n
- * If you wish to modify the VCPUs non-GP registers, you should call
- * kvm_set_sregs()
- *
- * \param kvm Pointer to the current kvm_context
- * \param vcpu Which virtual CPU should get dumped
- * \param regs Pointer to a kvm_sregs which will be populated with the VCPUs
- * registers values
- * \return 0 on success
- */
-int kvm_get_sregs(CPUState *env, struct kvm_sregs *regs);
-
-/*!
- * \brief Write VCPU system registers
- *
- * This sets the non-GP registers on the VCPU from a kvm_sregs structure
- *
- * \note When this function returns, the regs pointer and the data it points to
- * can be discarded
- * \param kvm Pointer to the current kvm_context
- * \param vcpu Which virtual CPU should get dumped
- * \param regs Pointer to a kvm_sregs which will be populated with the VCPUs
- * registers values
- * \return 0 on success
- */
-int kvm_set_sregs(CPUState *env, struct kvm_sregs *regs);
-
 #ifdef KVM_CAP_MP_STATE
 /*!
  *  * \brief Read VCPU MP state

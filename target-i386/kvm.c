@@ -578,6 +578,8 @@ int kvm_arch_init(KVMState *s, int smp_cpus)
 
     return kvm_init_identity_map_page(s);
 }
+
+#endif
                     
 static void set_v8086_seg(struct kvm_segment *lhs, const SegmentCache *rhs)
 {
@@ -627,6 +629,8 @@ static void get_seg(SegmentCache *lhs, const struct kvm_segment *rhs)
 	| (rhs->g * DESC_G_MASK)
 	| (rhs->avl * DESC_AVL_MASK);
 }
+
+#ifdef OBSOLETE_KVM_IMPL
 
 static void kvm_getput_reg(__u64 *kvm_reg, target_ulong *qemu_reg, int set)
 {
@@ -759,8 +763,6 @@ static int kvm_put_xcrs(CPUState *env)
 #endif
 }
 
-#ifdef OBSOLETE_KVM_IMPL
-
 static int kvm_put_sregs(CPUState *env)
 {
     struct kvm_sregs sregs;
@@ -814,8 +816,6 @@ static int kvm_put_sregs(CPUState *env)
 
     return kvm_vcpu_ioctl(env, KVM_SET_SREGS, &sregs);
 }
-
-#endif
 
 static void kvm_msr_entry_set(struct kvm_msr_entry *entry,
                               uint32_t index, uint64_t value)
@@ -972,8 +972,6 @@ static int kvm_get_xcrs(CPUState *env)
 #endif
 }
 
-#ifdef OBSOLETE_KVM_IMPL
-
 static int kvm_get_sregs(CPUState *env)
 {
     struct kvm_sregs sregs;
@@ -1062,6 +1060,8 @@ static int kvm_get_sregs(CPUState *env)
 
     return 0;
 }
+
+#ifdef OBSOLETE_KVM_IMPL
 
 static int kvm_get_msrs(CPUState *env)
 {
