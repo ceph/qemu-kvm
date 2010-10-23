@@ -719,35 +719,12 @@ static void kvm_reset_mpstate(CPUState *env)
 
 void kvm_arch_load_regs(CPUState *env, int level)
 {
-    struct kvm_regs regs;
     struct kvm_msr_entry msrs[100];
     int rc, n, i;
 
     assert(kvm_cpu_is_stopped(env) || env->thread_id == kvm_get_thread_id());
 
-    regs.rax = env->regs[R_EAX];
-    regs.rbx = env->regs[R_EBX];
-    regs.rcx = env->regs[R_ECX];
-    regs.rdx = env->regs[R_EDX];
-    regs.rsi = env->regs[R_ESI];
-    regs.rdi = env->regs[R_EDI];
-    regs.rsp = env->regs[R_ESP];
-    regs.rbp = env->regs[R_EBP];
-#ifdef TARGET_X86_64
-    regs.r8 = env->regs[8];
-    regs.r9 = env->regs[9];
-    regs.r10 = env->regs[10];
-    regs.r11 = env->regs[11];
-    regs.r12 = env->regs[12];
-    regs.r13 = env->regs[13];
-    regs.r14 = env->regs[14];
-    regs.r15 = env->regs[15];
-#endif
-
-    regs.rflags = env->eflags;
-    regs.rip = env->eip;
-
-    kvm_set_regs(env, &regs);
+    kvm_getput_regs(env, 1);
 
     kvm_put_xsave(env);
     kvm_put_xcrs(env);
@@ -824,35 +801,12 @@ void kvm_arch_load_regs(CPUState *env, int level)
 
 void kvm_arch_save_regs(CPUState *env)
 {
-    struct kvm_regs regs;
     struct kvm_msr_entry msrs[100];
     uint32_t i, n, rc;
 
     assert(kvm_cpu_is_stopped(env) || env->thread_id == kvm_get_thread_id());
 
-    kvm_get_regs(env, &regs);
-
-    env->regs[R_EAX] = regs.rax;
-    env->regs[R_EBX] = regs.rbx;
-    env->regs[R_ECX] = regs.rcx;
-    env->regs[R_EDX] = regs.rdx;
-    env->regs[R_ESI] = regs.rsi;
-    env->regs[R_EDI] = regs.rdi;
-    env->regs[R_ESP] = regs.rsp;
-    env->regs[R_EBP] = regs.rbp;
-#ifdef TARGET_X86_64
-    env->regs[8] = regs.r8;
-    env->regs[9] = regs.r9;
-    env->regs[10] = regs.r10;
-    env->regs[11] = regs.r11;
-    env->regs[12] = regs.r12;
-    env->regs[13] = regs.r13;
-    env->regs[14] = regs.r14;
-    env->regs[15] = regs.r15;
-#endif
-
-    env->eflags = regs.rflags;
-    env->eip = regs.rip;
+    kvm_getput_regs(env, 0);
 
     kvm_get_xsave(env);
     kvm_get_xcrs(env);

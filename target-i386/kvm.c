@@ -630,7 +630,6 @@ static void get_seg(SegmentCache *lhs, const struct kvm_segment *rhs)
 	| (rhs->avl * DESC_AVL_MASK);
 }
 
-#ifdef OBSOLETE_KVM_IMPL
 
 static void kvm_getput_reg(__u64 *kvm_reg, target_ulong *qemu_reg, int set)
 {
@@ -678,8 +677,6 @@ static int kvm_getput_regs(CPUState *env, int set)
 
     return ret;
 }
-
-#endif
 
 static int kvm_put_fpu(CPUState *env)
 {
