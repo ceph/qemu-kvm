@@ -472,16 +472,6 @@ int kvm_set_regs(CPUState *env, struct kvm_regs *regs)
     return kvm_vcpu_ioctl(env, KVM_SET_REGS, regs);
 }
 
-int kvm_get_fpu(CPUState *env, struct kvm_fpu *fpu)
-{
-    return kvm_vcpu_ioctl(env, KVM_GET_FPU, fpu);
-}
-
-int kvm_set_fpu(CPUState *env, struct kvm_fpu *fpu)
-{
-    return kvm_vcpu_ioctl(env, KVM_SET_FPU, fpu);
-}
-
 int kvm_get_sregs(CPUState *env, struct kvm_sregs *sregs)
 {
     return kvm_vcpu_ioctl(env, KVM_GET_SREGS, sregs);
@@ -1694,6 +1684,16 @@ static int kvm_create_context(void)
     kvm_state->debugregs = 0;
 #ifdef KVM_CAP_DEBUGREGS
     kvm_state->debugregs = kvm_check_extension(kvm_state, KVM_CAP_DEBUGREGS);
+#endif
+
+    kvm_state->xsave = 0;
+#ifdef KVM_CAP_XSAVE
+    kvm_state->xsave = kvm_check_extension(kvm_state, KVM_CAP_XSAVE);
+#endif
+
+    kvm_state->xcrs = 0;
+#ifdef KVM_CAP_XCRS
+    kvm_state->xcrs = kvm_check_extension(kvm_state, KVM_CAP_XCRS);
 #endif
 
     kvm_init_ap();

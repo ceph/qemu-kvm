@@ -1056,7 +1056,6 @@ int kvm_has_debugregs(void)
     return kvm_state->debugregs;
 }
 
-#ifdef OBSOLETE_KVM_IMPL
 int kvm_has_xsave(void)
 {
     return kvm_state->xsave;
@@ -1066,7 +1065,6 @@ int kvm_has_xcrs(void)
 {
     return kvm_state->xcrs;
 }
-#endif
 
 void kvm_setup_guest_memory(void *start, size_t size)
 {

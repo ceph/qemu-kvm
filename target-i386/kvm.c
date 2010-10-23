@@ -675,6 +675,8 @@ static int kvm_getput_regs(CPUState *env, int set)
     return ret;
 }
 
+#endif
+
 static int kvm_put_fpu(CPUState *env)
 {
     struct kvm_fpu fpu;
@@ -756,6 +758,8 @@ static int kvm_put_xcrs(CPUState *env)
     return 0;
 #endif
 }
+
+#ifdef OBSOLETE_KVM_IMPL
 
 static int kvm_put_sregs(CPUState *env)
 {
@@ -879,6 +883,7 @@ static int kvm_put_msrs(CPUState *env, int level)
 
 }
 
+#endif
 
 static int kvm_get_fpu(CPUState *env)
 {
@@ -966,6 +971,8 @@ static int kvm_get_xcrs(CPUState *env)
     return 0;
 #endif
 }
+
+#ifdef OBSOLETE_KVM_IMPL
 
 static int kvm_get_sregs(CPUState *env)
 {

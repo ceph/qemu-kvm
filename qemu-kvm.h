@@ -206,36 +206,6 @@ int kvm_get_regs(CPUState *env, struct kvm_regs *regs);
  * \return 0 on success
  */
 int kvm_set_regs(CPUState *env, struct kvm_regs *regs);
-/*!
- * \brief Read VCPU fpu registers
- *
- * This gets the FPU registers from the VCPU and outputs them
- * into a kvm_fpu structure
- *
- * \note This function returns a \b copy of the VCPUs registers.\n
- * If you wish to modify the VCPU FPU registers, you should call kvm_set_fpu()
- *
- * \param kvm Pointer to the current kvm_context
- * \param vcpu Which virtual CPU should get dumped
- * \param fpu Pointer to a kvm_fpu which will be populated with the VCPUs
- * fpu registers values
- * \return 0 on success
- */
-int kvm_get_fpu(CPUState *env, struct kvm_fpu *fpu);
-
-/*!
- * \brief Write VCPU fpu registers
- *
- * This sets the FPU registers on the VCPU from a kvm_fpu structure
- *
- * \note When this function returns, the fpu pointer and the data it points to
- * can be discarded
- * \param kvm Pointer to the current kvm_context
- * \param vcpu Which virtual CPU should get dumped
- * \param fpu Pointer to a kvm_fpu which holds the new vcpu fpu state
- * \return 0 on success
- */
-int kvm_set_fpu(CPUState *env, struct kvm_fpu *fpu);
 
 /*!
  * \brief Read VCPU system registers
@@ -847,6 +817,7 @@ struct KVMState {
 #endif
     int irqchip_in_kernel;
     int pit_in_kernel;
+    int xsave, xcrs;
 
     struct kvm_context kvm_context;
 };
