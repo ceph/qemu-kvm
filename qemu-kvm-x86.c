@@ -825,7 +825,7 @@ void kvm_arch_load_regs(CPUState *env, int level)
         *(uint64_t *)&xsave->region[XSAVE_XSTATE_BV] = env->xstate_bv;
         memcpy(&xsave->region[XSAVE_YMMH_SPACE], env->ymmh_regs,
                sizeof env->ymmh_regs);
-        kvm_set_xsave(env, xsave);
+        kvm_vcpu_ioctl(env, KVM_SET_XSAVE, xsave);
         if (kvm_check_extension(kvm_state, KVM_CAP_XCRS)) {
             struct kvm_xcrs xcrs;
 
@@ -833,7 +833,7 @@ void kvm_arch_load_regs(CPUState *env, int level)
             xcrs.flags = 0;
             xcrs.xcrs[0].xcr = 0;
             xcrs.xcrs[0].value = env->xcr0;
-            kvm_set_xcrs(env, &xcrs);
+            kvm_vcpu_ioctl(env, KVM_SET_XCRS, &xcrs);
         }
         qemu_free(xsave);
     } else {
@@ -1011,7 +1011,7 @@ void kvm_arch_save_regs(CPUState *env)
         struct kvm_xsave* xsave;
         uint16_t cwd, swd, twd, fop;
         xsave = qemu_memalign(4096, sizeof(struct kvm_xsave));
-        kvm_get_xsave(env, xsave);
+        kvm_vcpu_ioctl(env, KVM_GET_XSAVE, xsave);
         cwd = (uint16_t)xsave->region[0];
         swd = (uint16_t)(xsave->region[0] >> 16);
         twd = (uint16_t)xsave->region[1];
@@ -1033,7 +1033,7 @@ void kvm_arch_save_regs(CPUState *env)
         if (kvm_check_extension(kvm_state, KVM_CAP_XCRS)) {
             struct kvm_xcrs xcrs;
 
-            kvm_get_xcrs(env, &xcrs);
+            kvm_vcpu_ioctl(env, KVM_GET_XCRS, &xcrs);
             if (xcrs.xcrs[0].xcr == 0) {
                 env->xcr0 = xcrs.xcrs[0].value;
             }
