@@ -28,10 +28,6 @@
 
 static struct kvm_msr_list *kvm_msr_list;
 extern unsigned int kvm_shadow_memory;
-static int kvm_has_msr_star;
-static int kvm_has_vm_hsave_pa;
-
-static int _lm_capable_kernel;
 
 int kvm_set_tss_addr(kvm_context_t kvm, unsigned long addr)
 {
@@ -358,31 +354,6 @@ static struct kvm_msr_list *kvm_get_msr_list(void)
     return msrs;
 }
 
-int kvm_get_msrs(CPUState *env, struct kvm_msr_entry *msrs, int n)
-{
-    struct kvm_msrs *kmsrs = qemu_malloc(sizeof *kmsrs + n * sizeof *msrs);
-    int r;
-
-    kmsrs->nmsrs = n;
-    memcpy(kmsrs->entries, msrs, n * sizeof *msrs);
-    r = kvm_vcpu_ioctl(env, KVM_GET_MSRS, kmsrs);
-    memcpy(msrs, kmsrs->entries, n * sizeof *msrs);
-    free(kmsrs);
-    return r;
-}
-
-int kvm_set_msrs(CPUState *env, struct kvm_msr_entry *msrs, int n)
-{
-    struct kvm_msrs *kmsrs = qemu_malloc(sizeof *kmsrs + n * sizeof *msrs);
-    int r;
-
-    kmsrs->nmsrs = n;
-    memcpy(kmsrs->entries, msrs, n * sizeof *msrs);
-    r = kvm_vcpu_ioctl(env, KVM_SET_MSRS, kmsrs);
-    free(kmsrs);
-    return r;
-}
-
 static void print_seg(FILE *file, const char *name, struct kvm_segment *seg)
 {
     fprintf(stderr,
@@ -558,11 +529,11 @@ static const VMStateDescription vmstate_kvmclock= {
 
 int kvm_arch_qemu_create_context(void)
 {
-    int i, r;
+    int r;
     struct utsname utsname;
 
     uname(&utsname);
-    _lm_capable_kernel = strcmp(utsname.machine, "x86_64") == 0;
+    lm_capable_kernel = strcmp(utsname.machine, "x86_64") == 0;
 
     if (kvm_shadow_memory) {
         kvm_set_shadow_pages(kvm_context, kvm_shadow_memory);
@@ -571,14 +542,6 @@ int kvm_arch_qemu_create_context(void)
     kvm_msr_list = kvm_get_msr_list();
     if (!kvm_msr_list) {
         return -1;
-    }
-    for (i = 0; i < kvm_msr_list->nmsrs; ++i) {
-        if (kvm_msr_list->indices[i] == MSR_STAR) {
-            kvm_has_msr_star = 1;
-        }
-        if (kvm_msr_list->indices[i] == MSR_VM_HSAVE_PA) {
-            kvm_has_vm_hsave_pa = 1;
-        }
     }
 
 #ifdef KVM_CAP_ADJUST_CLOCK
@@ -592,70 +555,6 @@ int kvm_arch_qemu_create_context(void)
         return r;
     }
 
-    return 0;
-}
-
-/* returns 0 on success, non-0 on failure */
-static int get_msr_entry(struct kvm_msr_entry *entry, CPUState *env)
-{
-    switch (entry->index) {
-    case MSR_IA32_SYSENTER_CS:
-        env->sysenter_cs  = entry->data;
-        break;
-    case MSR_IA32_SYSENTER_ESP:
-        env->sysenter_esp = entry->data;
-        break;
-    case MSR_IA32_SYSENTER_EIP:
-        env->sysenter_eip = entry->data;
-        break;
-    case MSR_STAR:
-        env->star         = entry->data;
-        break;
-#ifdef TARGET_X86_64
-    case MSR_CSTAR:
-        env->cstar        = entry->data;
-        break;
-    case MSR_KERNELGSBASE:
-        env->kernelgsbase = entry->data;
-        break;
-    case MSR_FMASK:
-        env->fmask        = entry->data;
-        break;
-    case MSR_LSTAR:
-        env->lstar        = entry->data;
-        break;
-#endif
-    case MSR_IA32_TSC:
-        env->tsc          = entry->data;
-        break;
-    case MSR_VM_HSAVE_PA:
-        env->vm_hsave     = entry->data;
-        break;
-    case MSR_KVM_SYSTEM_TIME:
-        env->system_time_msr = entry->data;
-        break;
-    case MSR_KVM_WALL_CLOCK:
-        env->wall_clock_msr = entry->data;
-        break;
-#ifdef KVM_CAP_MCE
-    case MSR_MCG_STATUS:
-        env->mcg_status = entry->data;
-        break;
-    case MSR_MCG_CTL:
-        env->mcg_ctl = entry->data;
-        break;
-#endif
-    default:
-#ifdef KVM_CAP_MCE
-        if (entry->index >= MSR_MC0_CTL &&
-            entry->index < MSR_MC0_CTL + (env->mcg_cap & 0xff) * 4) {
-            env->mce_banks[entry->index - MSR_MC0_CTL] = entry->data;
-            break;
-        }
-#endif
-        printf("Warning unknown msr index 0x%x\n", entry->index);
-        return 1;
-    }
     return 0;
 }
 
@@ -719,8 +618,7 @@ static void kvm_reset_mpstate(CPUState *env)
 
 void kvm_arch_load_regs(CPUState *env, int level)
 {
-    struct kvm_msr_entry msrs[100];
-    int rc, n, i;
+    int rc;
 
     assert(kvm_cpu_is_stopped(env) || env->thread_id == kvm_get_thread_id());
 
@@ -730,56 +628,10 @@ void kvm_arch_load_regs(CPUState *env, int level)
     kvm_put_xcrs(env);
 
     kvm_put_sregs(env);
-    /* msrs */
-    n = 0;
-    /* Remember to increase msrs size if you add new registers below */
-    kvm_msr_entry_set(&msrs[n++], MSR_IA32_SYSENTER_CS,  env->sysenter_cs);
-    kvm_msr_entry_set(&msrs[n++], MSR_IA32_SYSENTER_ESP, env->sysenter_esp);
-    kvm_msr_entry_set(&msrs[n++], MSR_IA32_SYSENTER_EIP, env->sysenter_eip);
-    if (kvm_has_msr_star) {
-        kvm_msr_entry_set(&msrs[n++], MSR_STAR,              env->star);
-    }
-    if (kvm_has_vm_hsave_pa) {
-        kvm_msr_entry_set(&msrs[n++], MSR_VM_HSAVE_PA, env->vm_hsave);
-    }
-#ifdef TARGET_X86_64
-    if (_lm_capable_kernel) {
-        kvm_msr_entry_set(&msrs[n++], MSR_CSTAR,             env->cstar);
-        kvm_msr_entry_set(&msrs[n++], MSR_KERNELGSBASE,      env->kernelgsbase);
-        kvm_msr_entry_set(&msrs[n++], MSR_FMASK,             env->fmask);
-        kvm_msr_entry_set(&msrs[n++], MSR_LSTAR  ,           env->lstar);
-    }
-#endif
-    if (level == KVM_PUT_FULL_STATE) {
-        /*
-         * KVM is yet unable to synchronize TSC values of multiple VCPUs on
-         * writeback. Until this is fixed, we only write the offset to SMP
-         * guests after migration, desynchronizing the VCPUs, but avoiding
-         * huge jump-backs that would occur without any writeback at all.
-         */
-        if (smp_cpus == 1 || env->tsc != 0) {
-            kvm_msr_entry_set(&msrs[n++], MSR_IA32_TSC, env->tsc);
-        }
-        kvm_msr_entry_set(&msrs[n++], MSR_KVM_SYSTEM_TIME, env->system_time_msr);
-        kvm_msr_entry_set(&msrs[n++], MSR_KVM_WALL_CLOCK, env->wall_clock_msr);
-    }
-#ifdef KVM_CAP_MCE
-    if (env->mcg_cap) {
-        if (level == KVM_PUT_RESET_STATE) {
-            kvm_msr_entry_set(&msrs[n++], MSR_MCG_STATUS, env->mcg_status);
-        } else if (level == KVM_PUT_FULL_STATE) {
-            kvm_msr_entry_set(&msrs[n++], MSR_MCG_STATUS, env->mcg_status);
-            kvm_msr_entry_set(&msrs[n++], MSR_MCG_CTL, env->mcg_ctl);
-            for (i = 0; i < (env->mcg_cap & 0xff) * 4; i++) {
-                kvm_msr_entry_set(&msrs[n++], MSR_MC0_CTL + i, env->mce_banks[i]);
-            }
-        }
-    }
-#endif
 
-    rc = kvm_set_msrs(env, msrs, n);
-    if (rc == -1) {
-        perror("kvm_set_msrs FAILED");
+    rc = kvm_put_msrs(env, level);
+    if (rc < 0) {
+        perror("kvm__msrs FAILED");
     }
 
     if (level >= KVM_PUT_RESET_STATE) {
@@ -801,8 +653,7 @@ void kvm_arch_load_regs(CPUState *env, int level)
 
 void kvm_arch_save_regs(CPUState *env)
 {
-    struct kvm_msr_entry msrs[100];
-    uint32_t i, n, rc;
+    int rc;
 
     assert(kvm_cpu_is_stopped(env) || env->thread_id == kvm_get_thread_id());
 
@@ -813,49 +664,11 @@ void kvm_arch_save_regs(CPUState *env)
 
     kvm_get_sregs(env);
 
-    /* msrs */
-    n = 0;
-    /* Remember to increase msrs size if you add new registers below */
-    msrs[n++].index = MSR_IA32_SYSENTER_CS;
-    msrs[n++].index = MSR_IA32_SYSENTER_ESP;
-    msrs[n++].index = MSR_IA32_SYSENTER_EIP;
-    if (kvm_has_msr_star) {
-        msrs[n++].index = MSR_STAR;
-    }
-    msrs[n++].index = MSR_IA32_TSC;
-    if (kvm_has_vm_hsave_pa)
-        msrs[n++].index = MSR_VM_HSAVE_PA;
-#ifdef TARGET_X86_64
-    if (_lm_capable_kernel) {
-        msrs[n++].index = MSR_CSTAR;
-        msrs[n++].index = MSR_KERNELGSBASE;
-        msrs[n++].index = MSR_FMASK;
-        msrs[n++].index = MSR_LSTAR;
-    }
-#endif
-    msrs[n++].index = MSR_KVM_SYSTEM_TIME;
-    msrs[n++].index = MSR_KVM_WALL_CLOCK;
-
-#ifdef KVM_CAP_MCE
-    if (env->mcg_cap) {
-        msrs[n++].index = MSR_MCG_STATUS;
-        msrs[n++].index = MSR_MCG_CTL;
-        for (i = 0; i < (env->mcg_cap & 0xff) * 4; i++)
-            msrs[n++].index = MSR_MC0_CTL + i;
-    }
-#endif
-
-    rc = kvm_get_msrs(env, msrs, n);
-    if (rc == -1) {
+    rc = kvm_get_msrs(env);
+    if (rc < 0) {
         perror("kvm_get_msrs FAILED");
-    } else {
-        n = rc; /* actual number of MSRs */
-        for (i=0 ; i<n; i++) {
-            if (get_msr_entry(&msrs[i], env)) {
-                return;
-            }
-        }
     }
+
     kvm_arch_save_mpstate(env);
     kvm_save_lapic(env);
     kvm_get_vcpu_events(env);

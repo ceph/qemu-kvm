@@ -54,9 +54,7 @@
 #define BUS_MCEERR_AO 5
 #endif
 
-#ifdef OBSOLETE_KVM_IMPL
 static int lm_capable_kernel;
-#endif
 
 #ifdef KVM_CAP_EXT_CPUID
 
@@ -456,7 +454,6 @@ void kvm_arch_reset_vcpu(CPUState *env)
         env->mp_state = KVM_MP_STATE_RUNNABLE;
     }
 }
-#ifdef OBSOLETE_KVM_IMPL
 
 int has_msr_star;
 int has_msr_hsave_pa;
@@ -520,6 +517,7 @@ static int kvm_has_msr_star(CPUState *env)
     return has_msr_star;
 }
 
+#ifdef OBSOLETE_KVM_IMPL
 static int kvm_init_identity_map_page(KVMState *s)
 {
 #ifdef KVM_CAP_SET_IDENTITY_MAP_ADDR
@@ -821,7 +819,6 @@ static void kvm_msr_entry_set(struct kvm_msr_entry *entry,
     entry->data = value;
 }
 
-#ifdef OBSOLETE_KVM_IMPL
 static int kvm_put_msrs(CPUState *env, int level)
 {
     struct {
@@ -879,8 +876,6 @@ static int kvm_put_msrs(CPUState *env, int level)
     return kvm_vcpu_ioctl(env, KVM_SET_MSRS, &msr_data);
 
 }
-
-#endif
 
 static int kvm_get_fpu(CPUState *env)
 {
@@ -1058,8 +1053,6 @@ static int kvm_get_sregs(CPUState *env)
     return 0;
 }
 
-#ifdef OBSOLETE_KVM_IMPL
-
 static int kvm_get_msrs(CPUState *env)
 {
     struct {
@@ -1144,9 +1137,6 @@ static int kvm_get_msrs(CPUState *env)
         case MSR_KVM_WALL_CLOCK:
             env->wall_clock_msr = msrs[i].data;
             break;
-        case MSR_VM_HSAVE_PA:
-            env->vm_hsave = msrs[i].data;
-            break;
 #ifdef KVM_CAP_MCE
         case MSR_MCG_STATUS:
             env->mcg_status = msrs[i].data;
@@ -1169,6 +1159,7 @@ static int kvm_get_msrs(CPUState *env)
     return 0;
 }
 
+#ifdef OBSOLETE_KVM_IMPL
 static int kvm_put_mp_state(CPUState *env)
 {
     struct kvm_mp_state mp_state = { .mp_state = env->mp_state };
