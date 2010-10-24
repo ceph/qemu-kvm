@@ -39,6 +39,7 @@
 #define PCI_BASE 0xae00
 #define PCI_EJ_BASE 0xae08
 
+#define PIIX4_CPU_HOTPLUG_STATUS 4
 #define PIIX4_PCI_HOTPLUG_STATUS 2
 
 struct gpe_regs {
@@ -636,13 +637,13 @@ static void piix4_acpi_system_hot_add_init(PCIBus *bus, PIIX4PMState *s)
 #if defined(TARGET_I386)
 static void enable_processor(struct gpe_regs *g, int cpu)
 {
-    g->sts |= 4;
+    g->sts |= PIIX4_CPU_HOTPLUG_STATUS;
     g->cpus_sts[cpu/8] |= (1 << (cpu%8));
 }
 
 static void disable_processor(struct gpe_regs *g, int cpu)
 {
-    g->sts |= 4;
+    g->sts |= PIIX4_CPU_HOTPLUG_STATUS;
     g->cpus_sts[cpu/8] &= ~(1 << (cpu%8));
 }
 
