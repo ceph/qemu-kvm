@@ -111,7 +111,8 @@ static void pm_update_sci(PIIX4PMState *s)
                    ACPI_BITMASK_POWER_BUTTON_ENABLE |
                    ACPI_BITMASK_GLOBAL_LOCK_ENABLE |
                    ACPI_BITMASK_TIMER_ENABLE)) != 0) ||
-        (((s->gpe.sts & s->gpe.en) & PIIX4_PCI_HOTPLUG_STATUS) != 0);
+        (((s->gpe.sts & s->gpe.en) &
+          (PIIX4_CPU_HOTPLUG_STATUS | PIIX4_PCI_HOTPLUG_STATUS)) != 0);
 
     qemu_set_irq(s->irq, sci_level);
     /* schedule a timer interruption if needed */
@@ -610,12 +611,11 @@ static int piix4_device_hotplug(DeviceState *qdev, PCIDevice *dev, int state);
 
 static void piix4_acpi_system_hot_add_init(PCIBus *bus, PIIX4PMState *s)
 {
-    struct gpe_regs *gpe = &s->gpe;
     struct pci_status *pci0_status = &s->pci0_status;
     int i = 0, cpus = smp_cpus;
 
     while (cpus > 0) {
-        gpe->cpus_sts[i++] = (cpus < 8) ? (1 << cpus) - 1 : 0xff;
+        s->gpe.cpus_sts[i++] = (cpus < 8) ? (1 << cpus) - 1 : 0xff;
         cpus -= 8;
     }
 
@@ -665,10 +665,8 @@ void qemu_system_cpu_hot_add(int cpu, int state)
         enable_processor(&s->gpe, cpu);
     else
         disable_processor(&s->gpe, cpu);
-    if (s->gpe.en & 4) {
-        qemu_set_irq(s->irq, 1);
-        qemu_set_irq(s->irq, 0);
-    }
+
+    pm_update_sci(s);
 }
 #endif
 
