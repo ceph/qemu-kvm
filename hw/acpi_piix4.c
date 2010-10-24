@@ -621,8 +621,8 @@ static void piix4_acpi_system_hot_add_init(PCIBus *bus, PIIX4PMState *s)
     register_ioport_write(GPE_BASE, 4, 1, gpe_writeb, s);
     register_ioport_read(GPE_BASE, 4, 1,  gpe_readb, s);
 
-    register_ioport_write(PROC_BASE, 32, 1, gpe_writeb, gpe);
-    register_ioport_read(PROC_BASE, 32, 1,  gpe_readb, gpe);
+    register_ioport_write(PROC_BASE, 32, 1, gpe_writeb, s);
+    register_ioport_read(PROC_BASE, 32, 1,  gpe_readb, s);
 
     register_ioport_write(PCI_BASE, 8, 4, pcihotplug_write, pci0_status);
     register_ioport_read(PCI_BASE, 8, 4,  pcihotplug_read, pci0_status);
