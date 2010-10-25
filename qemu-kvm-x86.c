@@ -32,13 +32,6 @@ extern unsigned int kvm_shadow_memory;
 int kvm_set_tss_addr(kvm_context_t kvm, unsigned long addr)
 {
     int r;
-    /*
-     * Tell fw_cfg to notify the BIOS to reserve the range.
-     */
-    if (e820_add_entry(addr, 0x4000, E820_RESERVED) < 0) {
-        perror("e820_add_entry() table is full");
-        exit(1);
-    }
 
     r = kvm_vm_ioctl(kvm_state, KVM_SET_TSS_ADDR, addr);
     if (r < 0) {
@@ -144,6 +137,14 @@ int kvm_arch_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
     r = kvm_init_identity_map_page(kvm);
     if (r < 0) {
         return r;
+    }
+
+    /*
+     * Tell fw_cfg to notify the BIOS to reserve the range.
+     */
+    if (e820_add_entry(0xfeffc000, 0x4000, E820_RESERVED) < 0) {
+        perror("e820_add_entry() table is full");
+        exit(1);
     }
 
     r = kvm_create_pit(kvm);
