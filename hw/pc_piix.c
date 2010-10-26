@@ -128,7 +128,6 @@ static void pc_init1(ram_addr_t ram_size,
     isa_bus_irqs(isa_irq);
 
     pc_register_ferr_irq(isa_reserve_irq(13));
-    cpu_irq = pc_allocate_cpu_irq();
 
     pc_vga_init(pci_enabled? pci_bus: NULL);
 
