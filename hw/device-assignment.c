@@ -913,6 +913,12 @@ static int assign_device(AssignedDevice *dev)
 #else
     dev->features &= ~ASSIGNED_DEVICE_USE_IOMMU_MASK;
 #endif
+    if (!(dev->features & ASSIGNED_DEVICE_USE_IOMMU_MASK)) {
+        fprintf(stderr,
+                "WARNING: Assigning a device without IOMMU protection can "
+                "cause host memory corruption if the device issues DMA write "
+                "requests!\n");
+    }
 
     r = kvm_assign_pci_device(kvm_context, &assigned_dev_data);
     if (r < 0) {
