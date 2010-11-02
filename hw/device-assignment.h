@@ -75,8 +75,10 @@ typedef struct {
 } AssignedDevRegion;
 
 #define ASSIGNED_DEVICE_USE_IOMMU_BIT	0
+#define ASSIGNED_DEVICE_PREFER_MSI_BIT	1
 
 #define ASSIGNED_DEVICE_USE_IOMMU_MASK	(1 << ASSIGNED_DEVICE_USE_IOMMU_BIT)
+#define ASSIGNED_DEVICE_PREFER_MSI_MASK	(1 << ASSIGNED_DEVICE_PREFER_MSI_BIT)
 
 typedef struct AssignedDevice {
     PCIDevice dev;

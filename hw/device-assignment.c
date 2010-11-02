@@ -964,7 +964,8 @@ static int assign_irq(AssignedDevice *dev)
     }
 
     assigned_irq_data.flags = KVM_DEV_IRQ_GUEST_INTX;
-    if (dev->cap.available & ASSIGNED_DEVICE_CAP_MSI)
+    if (dev->features & ASSIGNED_DEVICE_PREFER_MSI_MASK &&
+        dev->cap.available & ASSIGNED_DEVICE_CAP_MSI)
         assigned_irq_data.flags |= KVM_DEV_IRQ_HOST_MSI;
     else
         assigned_irq_data.flags |= KVM_DEV_IRQ_HOST_INTX;
@@ -1540,6 +1541,8 @@ static PCIDeviceInfo assign_info = {
         DEFINE_PROP("host", AssignedDevice, host, qdev_prop_hostaddr, PCIHostDevice),
         DEFINE_PROP_BIT("iommu", AssignedDevice, features,
                         ASSIGNED_DEVICE_USE_IOMMU_BIT, true),
+        DEFINE_PROP_BIT("prefer_msi", AssignedDevice, features,
+                        ASSIGNED_DEVICE_PREFER_MSI_BIT, true),
         DEFINE_PROP_STRING("configfd", AssignedDevice, configfd_name),
         DEFINE_PROP_END_OF_LIST(),
     },
