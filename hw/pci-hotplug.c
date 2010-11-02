@@ -230,24 +230,6 @@ static PCIDevice *qemu_pci_hot_add_storage(Monitor *mon,
     return dev;
 }
 
-#ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
-static PCIDevice *qemu_pci_hot_assign_device(Monitor *mon,
-                                             const char *devaddr,
-                                             const char *opts_str)
-{
-    QemuOpts *opts;
-    DeviceState *dev;
-
-    opts = add_assigned_device(opts_str);
-    if (opts == NULL) {
-        monitor_printf(mon, "Error adding device; check syntax\n");
-        return NULL;
-    }
-    dev = qdev_device_add(opts);
-    return DO_UPCAST(PCIDevice, qdev, dev);
-}
-#endif /* CONFIG_KVM_DEVICE_ASSIGNMENT */
-
 void pci_device_hot_add(Monitor *mon, const QDict *qdict)
 {
     PCIDevice *dev = NULL;
@@ -271,10 +253,6 @@ void pci_device_hot_add(Monitor *mon, const QDict *qdict)
         dev = qemu_pci_hot_add_nic(mon, pci_addr, opts);
     } else if (strcmp(type, "storage") == 0) {
         dev = qemu_pci_hot_add_storage(mon, pci_addr, opts);
-#ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
-    } else if (strcmp(type, "host") == 0) {
-        dev = qemu_pci_hot_assign_device(mon, pci_addr, opts);
-#endif /* CONFIG_KVM_DEVICE_ASSIGNMENT */
     } else {
         monitor_printf(mon, "invalid type: %s\n", type);
     }

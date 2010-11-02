@@ -114,13 +114,6 @@ typedef struct AssignedDevice {
     QLIST_ENTRY(AssignedDevice) next;
 } AssignedDevice;
 
-QemuOpts *add_assigned_device(const char *arg);
-void add_assigned_devices(PCIBus *bus, const char **devices, int n_devices);
 void assigned_dev_update_irqs(void);
-
-#define MAX_DEV_ASSIGN_CMDLINE 8
-
-extern const char *assigned_devices[MAX_DEV_ASSIGN_CMDLINE];
-extern int assigned_devices_index;
 
 #endif              /* __DEVICE_ASSIGNMENT_H__ */

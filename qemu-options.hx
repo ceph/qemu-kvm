@@ -2278,11 +2278,6 @@ DEF("no-kvm-pit-reinjection", 0, QEMU_OPTION_no_kvm_pit_reinjection,
     "-no-kvm-pit-reinjection\n"
     "                disable KVM kernel mode PIT interrupt reinjection\n",
     QEMU_ARCH_I386)
-DEF("pcidevice", HAS_ARG, QEMU_OPTION_pcidevice,
-    "-pcidevice host=[seg:]bus:dev.func[,dma=none][,name=string]\n"
-    "                expose a PCI device to the guest OS\n"
-    "                dma=none: don't perform any dma translations (default is to use an iommu)\n"
-    "                'string' is used in log output\n", QEMU_ARCH_I386)
 DEF("enable-nesting", 0, QEMU_OPTION_enable_nesting,
     "-enable-nesting enable support for running a VM inside the VM (AMD only)\n", QEMU_ARCH_I386)
 DEF("nvram", HAS_ARG, QEMU_OPTION_nvram,

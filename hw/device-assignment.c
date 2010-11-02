@@ -1561,69 +1561,6 @@ static void assign_register_devices(void)
 
 device_init(assign_register_devices)
 
-
-/*
- * Syntax to assign device:
- *
- * -pcidevice host=bus:dev.func[,dma=none][,name=Foo]
- *
- * Example:
- * -pcidevice host=00:13.0,dma=pvdma
- *
- * dma can currently only be 'none' to disable iommu support.
- */
-QemuOpts *add_assigned_device(const char *arg)
-{
-    QemuOpts *opts = NULL;
-    char host[64], id[64], dma[8];
-    int r;
-
-    r = get_param_value(host, sizeof(host), "host", arg);
-    if (!r)
-         goto bad;
-    r = get_param_value(id, sizeof(id), "id", arg);
-    if (!r)
-        r = get_param_value(id, sizeof(id), "name", arg);
-    if (!r)
-        r = get_param_value(id, sizeof(id), "host", arg);
-
-    opts = qemu_opts_create(qemu_find_opts("device"), id, 0);
-    if (!opts)
-        goto bad;
-    qemu_opt_set(opts, "driver", "pci-assign");
-    qemu_opt_set(opts, "host", host);
-
-#ifdef KVM_CAP_IOMMU
-    r = get_param_value(dma, sizeof(dma), "dma", arg);
-    if (r && !strncmp(dma, "none", 4))
-        qemu_opt_set(opts, "iommu", "0");
-#endif
-    qemu_opts_print(opts, NULL);
-    return opts;
-
-bad:
-    fprintf(stderr, "pcidevice argument parse error; "
-            "please check the help text for usage\n");
-    if (opts)
-        qemu_opts_del(opts);
-    return NULL;
-}
-
-void add_assigned_devices(PCIBus *bus, const char **devices, int n_devices)
-{
-    QemuOpts *opts;
-    int i;
-
-    for (i = 0; i < n_devices; i++) {
-        opts = add_assigned_device(devices[i]);
-        if (opts == NULL) {
-            fprintf(stderr, "Could not add assigned device %s\n", devices[i]);
-            exit(1);
-        }
-        /* generic code will call qdev_device_add() for the device */
-    }
-}
-
 /*
  * Scan the assigned devices for the devices that have an option ROM, and then
  * load the corresponding ROM data to RAM. If an error occurs while loading an

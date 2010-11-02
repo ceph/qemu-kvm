@@ -204,8 +204,6 @@ int win2k_install_hack = 0;
 int rtc_td_hack = 0;
 int usb_enabled = 0;
 int singlestep = 0;
-const char *assigned_devices[MAX_DEV_ASSIGN_CMDLINE];
-int assigned_devices_index;
 int smp_cpus = 1;
 int max_cpus = 0;
 int smp_cores = 1;
@@ -1861,8 +1859,6 @@ int main(int argc, char **argv, char **envp)
         node_cpumask[i] = 0;
     }
 
-    assigned_devices_index = 0;
-
     nb_numa_nodes = 0;
     nb_nics = 0;
 
@@ -2477,16 +2473,6 @@ int main(int argc, char **argv, char **envp)
 		kvm_nested = 1;
 		break;
 	    }
-#endif
-#if defined(TARGET_I386) || defined(TARGET_X86_64) || defined(TARGET_IA64) || defined(__linux__)
-            case QEMU_OPTION_pcidevice:
-		if (assigned_devices_index >= MAX_DEV_ASSIGN_CMDLINE) {
-                    fprintf(stderr, "Too many assigned devices\n");
-                    exit(1);
-		}
-		assigned_devices[assigned_devices_index] = optarg;
-		assigned_devices_index++;
-                break;
 #endif
             case QEMU_OPTION_usb:
                 usb_enabled = 1;

@@ -1105,10 +1105,4 @@ void pc_pci_device_init(PCIBus *pci_bus)
 
         extboot_init(info->bdrv);
     }
-
-#ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
-    if (kvm_enabled()) {
-        add_assigned_devices(pci_bus, assigned_devices, assigned_devices_index);
-    }
-#endif /* CONFIG_KVM_DEVICE_ASSIGNMENT */
 }
