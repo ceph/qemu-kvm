@@ -74,10 +74,14 @@ typedef struct {
     PCIRegion *region;
 } AssignedDevRegion;
 
+#define ASSIGNED_DEVICE_USE_IOMMU_BIT	0
+
+#define ASSIGNED_DEVICE_USE_IOMMU_MASK	(1 << ASSIGNED_DEVICE_USE_IOMMU_BIT)
+
 typedef struct AssignedDevice {
     PCIDevice dev;
     PCIHostDevice host;
-    uint32_t use_iommu;
+    uint32_t features;
     int intpin;
     uint8_t debug_flags;
     AssignedDevRegion v_addrs[PCI_NUM_REGIONS - 1];

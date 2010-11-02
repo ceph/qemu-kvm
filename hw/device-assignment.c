@@ -902,7 +902,7 @@ static int assign_device(AssignedDevice *dev)
 
 #ifdef KVM_CAP_IOMMU
     /* We always enable the IOMMU unless disabled on the command line */
-    if (dev->use_iommu) {
+    if (dev->features & ASSIGNED_DEVICE_USE_IOMMU_MASK) {
         if (!kvm_check_extension(kvm_state, KVM_CAP_IOMMU)) {
             fprintf(stderr, "No IOMMU found.  Unable to assign device \"%s\"\n",
                     dev->dev.qdev.id);
@@ -911,7 +911,7 @@ static int assign_device(AssignedDevice *dev)
         assigned_dev_data.flags |= KVM_DEV_ASSIGN_ENABLE_IOMMU;
     }
 #else
-    dev->use_iommu = 0;
+    dev->features &= ~ASSIGNED_DEVICE_USE_IOMMU_MASK;
 #endif
 
     r = kvm_assign_pci_device(kvm_context, &assigned_dev_data);
@@ -1538,7 +1538,8 @@ static PCIDeviceInfo assign_info = {
     .config_write = assigned_dev_pci_write_config,
     .qdev.props   = (Property[]) {
         DEFINE_PROP("host", AssignedDevice, host, qdev_prop_hostaddr, PCIHostDevice),
-        DEFINE_PROP_UINT32("iommu", AssignedDevice, use_iommu, 1),
+        DEFINE_PROP_BIT("iommu", AssignedDevice, features,
+                        ASSIGNED_DEVICE_USE_IOMMU_BIT, true),
         DEFINE_PROP_STRING("configfd", AssignedDevice, configfd_name),
         DEFINE_PROP_END_OF_LIST(),
     },
