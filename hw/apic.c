@@ -955,6 +955,10 @@ void kvm_load_lapic(CPUState *env)
 #ifdef KVM_CAP_IRQCHIP
     APICState *s = DO_UPCAST(APICState, busdev.qdev, env->apic_state);
 
+    if (!s) {
+        return;
+    }
+
     if (kvm_enabled() && kvm_irqchip_in_kernel()) {
         kvm_kernel_lapic_load_from_user(s);
     }
@@ -965,6 +969,10 @@ void kvm_save_lapic(CPUState *env)
 {
 #ifdef KVM_CAP_IRQCHIP
     APICState *s = DO_UPCAST(APICState, busdev.qdev, env->apic_state);
+
+    if (!s) {
+        return;
+    }
 
     if (kvm_enabled() && kvm_irqchip_in_kernel()) {
         kvm_kernel_lapic_save_to_user(s);
