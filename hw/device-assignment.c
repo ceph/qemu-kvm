@@ -1440,6 +1440,11 @@ static int assigned_initfn(struct PCIDevice *pci_dev)
     uint8_t e_device, e_intx;
     int r;
 
+    if (!kvm_enabled()) {
+        error_report("pci-assign: error: requires KVM support");
+        return -1;
+    }
+
     if (!dev->host.seg && !dev->host.bus && !dev->host.dev && !dev->host.func) {
         error_report("pci-assign: error: no host device specified");
         return -1;
