@@ -708,6 +708,7 @@ static void pci_config_alloc(PCIDevice *pci_dev)
     pci_dev->config = qemu_mallocz(config_size);
     pci_dev->cmask = qemu_mallocz(config_size);
     pci_dev->wmask = qemu_mallocz(config_size);
+    pci_dev->w1cmask = qemu_mallocz(config_size);
     pci_dev->used = qemu_mallocz(config_size);
 }
 
@@ -716,6 +717,7 @@ static void pci_config_free(PCIDevice *pci_dev)
     qemu_free(pci_dev->config);
     qemu_free(pci_dev->cmask);
     qemu_free(pci_dev->wmask);
+    qemu_free(pci_dev->w1cmask);
     qemu_free(pci_dev->used);
 }
 
@@ -839,16 +841,15 @@ static int pci_unregister_device(DeviceState *dev)
 }
 
 void pci_register_bar(PCIDevice *pci_dev, int region_num,
-                            pcibus_t size, int type,
+                            pcibus_t size, uint8_t type,
                             PCIMapIORegionFunc *map_func)
 {
     PCIIORegion *r;
     uint32_t addr;
-    pcibus_t wmask;
+    uint64_t wmask;
 
-    if ((unsigned int)region_num >= PCI_NUM_REGIONS)
-        return;
-
+    assert(region_num >= 0);
+    assert(region_num < PCI_NUM_REGIONS);
     if (size & (size-1)) {
         fprintf(stderr, "ERROR: PCI region size must be pow2 "
                     "type=0x%x, size=0x%"FMT_PCIBUS"\n", type, size);
@@ -1126,7 +1127,10 @@ void pci_default_write_config(PCIDevice *d, uint32_t addr, uint32_t val, int l)
 
     for (i = 0; i < l && addr + i < config_size; val >>= 8, ++i) {
         uint8_t wmask = d->wmask[addr + i];
+        uint8_t w1cmask = d->w1cmask[addr + i];
+        assert(!(wmask & w1cmask));
         d->config[addr + i] = (d->config[addr + i] & ~wmask) | (val & wmask);
+        d->config[addr + i] &= ~(val & w1cmask); /* W1C: Write 1 to Clear */
     }
 
 #ifdef CONFIG_KVM_DEVICE_ASSIGNMENT

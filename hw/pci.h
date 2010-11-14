@@ -152,6 +152,9 @@ struct PCIDevice {
     /* Used to implement R/W bytes */
     uint8_t *wmask;
 
+    /* Used to implement RW1C(Write 1 to Clear) bytes */
+    uint8_t *w1cmask;
+
     /* Used to allocate config space for capabilities. */
     uint8_t *used;
 
@@ -222,7 +225,7 @@ PCIDevice *pci_register_device(PCIBus *bus, const char *name,
                                PCIConfigWriteFunc *config_write);
 
 void pci_register_bar(PCIDevice *pci_dev, int region_num,
-                            pcibus_t size, int type,
+                            pcibus_t size, uint8_t type,
                             PCIMapIORegionFunc *map_func);
 
 void pci_map_option_rom(PCIDevice *pdev, int region_num, pcibus_t addr,
