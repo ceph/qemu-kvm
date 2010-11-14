@@ -29,8 +29,9 @@
 #include "config-host.h"
 #include "sysemu.h"
 #include "trace.h"
+#include "qemu_socket.h"
 
-static void *oom_check(void *ptr)
+void *qemu_oom_check(void *ptr)
 {
     if (ptr == NULL) {
         fprintf(stderr, "Failed to allocate memory: %lu\n", GetLastError());
@@ -46,7 +47,7 @@ void *qemu_memalign(size_t alignment, size_t size)
     if (!size) {
         abort();
     }
-    ptr = oom_check(VirtualAlloc(NULL, size, MEM_COMMIT, PAGE_READWRITE));
+    ptr = qemu_oom_check(VirtualAlloc(NULL, size, MEM_COMMIT, PAGE_READWRITE));
     trace_qemu_memalign(alignment, size, ptr);
     return ptr;
 }
@@ -61,7 +62,7 @@ void *qemu_vmalloc(size_t size)
     if (!size) {
         abort();
     }
-    ptr = oom_check(VirtualAlloc(NULL, size, MEM_COMMIT, PAGE_READWRITE));
+    ptr = qemu_oom_check(VirtualAlloc(NULL, size, MEM_COMMIT, PAGE_READWRITE));
     trace_qemu_vmalloc(size, ptr);
     return ptr;
 }
@@ -70,4 +71,51 @@ void qemu_vfree(void *ptr)
 {
     trace_qemu_vfree(ptr);
     VirtualFree(ptr, 0, MEM_RELEASE);
+}
+
+void socket_set_nonblock(int fd)
+{
+    unsigned long opt = 1;
+    ioctlsocket(fd, FIONBIO, &opt);
+}
+
+int inet_aton(const char *cp, struct in_addr *ia)
+{
+    uint32_t addr = inet_addr(cp);
+    if (addr == 0xffffffff) {
+	return 0;
+    }
+    ia->s_addr = addr;
+    return 1;
+}
+
+void qemu_set_cloexec(int fd)
+{
+}
+
+/* mingw32 needs ffs for compilations without optimization. */
+int ffs(int i)
+{
+    /* Use gcc's builtin ffs. */
+    return __builtin_ffs(i);
+}
+
+/* Offset between 1/1/1601 and 1/1/1970 in 100 nanosec units */
+#define _W32_FT_OFFSET (116444736000000000ULL)
+
+int qemu_gettimeofday(qemu_timeval *tp)
+{
+  union {
+    unsigned long long ns100; /*time since 1 Jan 1601 in 100ns units */
+    FILETIME ft;
+  }  _now;
+
+  if(tp) {
+      GetSystemTimeAsFileTime (&_now.ft);
+      tp->tv_usec=(long)((_now.ns100 / 10ULL) % 1000000ULL );
+      tp->tv_sec= (long)((_now.ns100 - _W32_FT_OFFSET) / 10000000ULL);
+  }
+  /* Always return 0 as per Open Group Base Specifications Issue 6.
+     Do not set errno on error.  */
+  return 0;
 }

@@ -323,7 +323,7 @@ DriveInfo *drive_init(QemuOpts *opts, int default_to_scsi, int *fatal_error)
     on_write_error = BLOCK_ERR_STOP_ENOSPC;
     if ((buf = qemu_opt_get(opts, "werror")) != NULL) {
         if (type != IF_IDE && type != IF_SCSI && type != IF_VIRTIO && type != IF_NONE) {
-            fprintf(stderr, "werror is no supported by this format\n");
+            fprintf(stderr, "werror is not supported by this format\n");
             return NULL;
         }
 
@@ -335,8 +335,8 @@ DriveInfo *drive_init(QemuOpts *opts, int default_to_scsi, int *fatal_error)
 
     on_read_error = BLOCK_ERR_REPORT;
     if ((buf = qemu_opt_get(opts, "rerror")) != NULL) {
-        if (type != IF_IDE && type != IF_VIRTIO && type != IF_NONE) {
-            fprintf(stderr, "rerror is no supported by this format\n");
+        if (type != IF_IDE && type != IF_VIRTIO && type != IF_SCSI && type != IF_NONE) {
+            fprintf(stderr, "rerror is not supported by this format\n");
             return NULL;
         }
 

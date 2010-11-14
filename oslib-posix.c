@@ -29,9 +29,9 @@
 #include "config-host.h"
 #include "sysemu.h"
 #include "trace.h"
+#include "qemu_socket.h"
 
-#if !defined(_POSIX_C_SOURCE) || defined(__sun__)
-static void *oom_check(void *ptr)
+void *qemu_oom_check(void *ptr)
 {
     if (ptr == NULL) {
         fprintf(stderr, "Failed to allocate memory: %s\n", strerror(errno));
@@ -39,7 +39,6 @@ static void *oom_check(void *ptr)
     }
     return ptr;
 }
-#endif
 
 void *qemu_memalign(size_t alignment, size_t size)
 {
@@ -53,9 +52,9 @@ void *qemu_memalign(size_t alignment, size_t size)
         abort();
     }
 #elif defined(CONFIG_BSD)
-    ptr = oom_check(valloc(size));
+    ptr = qemu_oom_check(valloc(size));
 #else
-    ptr = oom_check(memalign(alignment, size));
+    ptr = qemu_oom_check(memalign(alignment, size));
 #endif
     trace_qemu_memalign(alignment, size, ptr);
     return ptr;
@@ -75,4 +74,40 @@ void qemu_vfree(void *ptr)
 {
     trace_qemu_vfree(ptr);
     free(ptr);
+}
+
+void socket_set_nonblock(int fd)
+{
+    int f;
+    f = fcntl(fd, F_GETFL);
+    fcntl(fd, F_SETFL, f | O_NONBLOCK);
+}
+
+void qemu_set_cloexec(int fd)
+{
+    int f;
+    f = fcntl(fd, F_GETFD);
+    fcntl(fd, F_SETFD, f | FD_CLOEXEC);
+}
+
+/*
+ * Creates a pipe with FD_CLOEXEC set on both file descriptors
+ */
+int qemu_pipe(int pipefd[2])
+{
+    int ret;
+
+#ifdef CONFIG_PIPE2
+    ret = pipe2(pipefd, O_CLOEXEC);
+    if (ret != -1 || errno != ENOSYS) {
+        return ret;
+    }
+#endif
+    ret = pipe(pipefd);
+    if (ret == 0) {
+        qemu_set_cloexec(pipefd[0]);
+        qemu_set_cloexec(pipefd[1]);
+    }
+
+    return ret;
 }

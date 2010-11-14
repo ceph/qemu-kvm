@@ -44,18 +44,6 @@
 extern int madvise(caddr_t, size_t, int);
 #endif
 
-#ifdef CONFIG_EVENTFD
-#include <sys/eventfd.h>
-#endif
-
-#ifdef _WIN32
-#include <windows.h>
-#elif defined(CONFIG_BSD)
-#include <stdlib.h>
-#else
-#include <malloc.h>
-#endif
-
 #include "qemu-common.h"
 #include "trace.h"
 #include "sysemu.h"
@@ -77,113 +65,6 @@ int qemu_madvise(void *addr, size_t len, int advice)
 #endif
 }
 
-int qemu_create_pidfile(const char *filename)
-{
-    char buffer[128];
-    int len;
-#ifndef _WIN32
-    int fd;
-
-    fd = qemu_open(filename, O_RDWR | O_CREAT, 0600);
-    if (fd == -1)
-        return -1;
-
-    if (lockf(fd, F_TLOCK, 0) == -1)
-        return -1;
-
-    len = snprintf(buffer, sizeof(buffer), "%ld\n", (long)getpid());
-    if (write(fd, buffer, len) != len)
-        return -1;
-#else
-    HANDLE file;
-    OVERLAPPED overlap;
-    BOOL ret;
-    memset(&overlap, 0, sizeof(overlap));
-
-    file = CreateFile(filename, GENERIC_WRITE, FILE_SHARE_READ, NULL,
-		      OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-
-    if (file == INVALID_HANDLE_VALUE)
-      return -1;
-
-    len = snprintf(buffer, sizeof(buffer), "%ld\n", (long)getpid());
-    ret = WriteFileEx(file, (LPCVOID)buffer, (DWORD)len,
-		      &overlap, NULL);
-    if (ret == 0)
-      return -1;
-#endif
-    return 0;
-}
-
-#ifdef _WIN32
-
-/* mingw32 needs ffs for compilations without optimization. */
-int ffs(int i)
-{
-    /* Use gcc's builtin ffs. */
-    return __builtin_ffs(i);
-}
-
-/* Offset between 1/1/1601 and 1/1/1970 in 100 nanosec units */
-#define _W32_FT_OFFSET (116444736000000000ULL)
-
-int qemu_gettimeofday(qemu_timeval *tp)
-{
-  union {
-    unsigned long long ns100; /*time since 1 Jan 1601 in 100ns units */
-    FILETIME ft;
-  }  _now;
-
-  if(tp)
-    {
-      GetSystemTimeAsFileTime (&_now.ft);
-      tp->tv_usec=(long)((_now.ns100 / 10ULL) % 1000000ULL );
-      tp->tv_sec= (long)((_now.ns100 - _W32_FT_OFFSET) / 10000000ULL);
-    }
-  /* Always return 0 as per Open Group Base Specifications Issue 6.
-     Do not set errno on error.  */
-  return 0;
-}
-#endif /* _WIN32 */
-
-
-#ifdef _WIN32
-void socket_set_nonblock(int fd)
-{
-    unsigned long opt = 1;
-    ioctlsocket(fd, FIONBIO, &opt);
-}
-
-int inet_aton(const char *cp, struct in_addr *ia)
-{
-    uint32_t addr = inet_addr(cp);
-    if (addr == 0xffffffff)
-	return 0;
-    ia->s_addr = addr;
-    return 1;
-}
-
-void qemu_set_cloexec(int fd)
-{
-}
-
-#else
-
-void socket_set_nonblock(int fd)
-{
-    int f;
-    f = fcntl(fd, F_GETFL);
-    fcntl(fd, F_SETFL, f | O_NONBLOCK);
-}
-
-void qemu_set_cloexec(int fd)
-{
-    int f;
-    f = fcntl(fd, F_GETFD);
-    fcntl(fd, F_SETFD, f | FD_CLOEXEC);
-}
-
-#endif
 
 /*
  * Opens a file with FD_CLOEXEC set
@@ -244,58 +125,6 @@ ssize_t qemu_write_full(int fd, const void *buf, size_t count)
 
     return total;
 }
-
-#ifndef _WIN32
-/*
- * Creates an eventfd that looks like a pipe and has EFD_CLOEXEC set.
- */
-int qemu_eventfd(int fds[2])
-{
-#ifdef CONFIG_EVENTFD
-    int ret;
-
-    ret = eventfd(0, 0);
-    if (ret >= 0) {
-        fds[0] = ret;
-        qemu_set_cloexec(ret);
-        if ((fds[1] = dup(ret)) == -1) {
-            close(ret);
-            return -1;
-        }
-        qemu_set_cloexec(fds[1]);
-        return 0;
-    }
-
-    if (errno != ENOSYS) {
-        return -1;
-    }
-#endif
-
-    return qemu_pipe(fds);
-}
-
-/*
- * Creates a pipe with FD_CLOEXEC set on both file descriptors
- */
-int qemu_pipe(int pipefd[2])
-{
-    int ret;
-
-#ifdef CONFIG_PIPE2
-    ret = pipe2(pipefd, O_CLOEXEC);
-    if (ret != -1 || errno != ENOSYS) {
-        return ret;
-    }
-#endif
-    ret = pipe(pipefd);
-    if (ret == 0) {
-        qemu_set_cloexec(pipefd[0]);
-        qemu_set_cloexec(pipefd[1]);
-    }
-
-    return ret;
-}
-#endif
 
 /*
  * Opens a socket with FD_CLOEXEC set

@@ -149,6 +149,7 @@ time_t mktimegm(struct tm *tm);
 int qemu_fls(int i);
 int qemu_fdatasync(int fd);
 int fcntl_setfl(int fd, int flag);
+ssize_t strtosz(const char *nptr, char **end);
 
 /* path.c */
 void init_paths(const char *prefix);
@@ -170,6 +171,12 @@ const char *path(const char *pathname);
 #define qemu_isascii(c)		isascii((unsigned char)(c))
 #define qemu_toascii(c)		toascii((unsigned char)(c))
 
+#ifdef _WIN32
+/* ffs() in oslib-win32.c for WIN32, strings.h for the rest of the world */
+int ffs(int i);
+#endif
+
+void *qemu_oom_check(void *ptr);
 void *qemu_malloc(size_t size);
 void *qemu_realloc(void *ptr, size_t size);
 void *qemu_mallocz(size_t size);
