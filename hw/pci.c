@@ -428,16 +428,18 @@ static void pci_set_default_subsystem_id(PCIDevice *pci_dev)
 }
 
 /*
- * Parse pci address in qemu command
- * Parse [[<domain>:]<bus>:]<slot>, return -1 on error
+ * Parse [[<domain>:]<bus>:]<slot>, return -1 on error if funcp == NULL
+ *       [[<domain>:]<bus>:]<slot>.<func>, return -1 on error
  */
-static int pci_parse_devaddr(const char *addr, int *domp, int *busp, unsigned *slotp)
+int pci_parse_devaddr(const char *addr, int *domp, int *busp,
+                      unsigned int *slotp, unsigned int *funcp)
 {
     const char *p;
     char *e;
     unsigned long val;
     unsigned long dom = 0, bus = 0;
-    unsigned slot = 0;
+    unsigned int slot = 0;
+    unsigned int func = 0;
 
     p = addr;
     val = strtoul(p, &e, 16);
@@ -459,10 +461,23 @@ static int pci_parse_devaddr(const char *addr, int *domp, int *busp, unsigned *s
 	}
     }
 
-    if (dom > 0xffff || bus > 0xff || val > 0x1f)
-	return -1;
-
     slot = val;
+
+    if (funcp != NULL) {
+        if (*e != '.')
+            return -1;
+
+        p = e + 1;
+        val = strtoul(p, &e, 16);
+        if (e == p)
+            return -1;
+
+        func = val;
+    }
+
+    /* if funcp == NULL func is 0 */
+    if (dom > 0xffff || bus > 0xff || slot > 0x1f || func > 7)
+	return -1;
 
     if (*e)
 	return -1;
@@ -474,6 +489,8 @@ static int pci_parse_devaddr(const char *addr, int *domp, int *busp, unsigned *s
     *domp = dom;
     *busp = bus;
     *slotp = slot;
+    if (funcp != NULL)
+        *funcp = func;
     return 0;
 }
 
@@ -561,7 +578,7 @@ int pci_read_devaddr(Monitor *mon, const char *addr, int *domp, int *busp,
     if (!strncmp(addr, "pci_addr=", 9)) {
         addr += 9;
     }
-    if (pci_parse_devaddr(addr, domp, busp, slotp)) {
+    if (pci_parse_devaddr(addr, domp, busp, slotp, NULL)) {
         monitor_printf(mon, "Invalid pci address\n");
         return -1;
     }
@@ -578,7 +595,7 @@ PCIBus *pci_get_bus_devfn(int *devfnp, const char *devaddr)
         return pci_find_bus(pci_find_root_bus(0), 0);
     }
 
-    if (pci_parse_devaddr(devaddr, &dom, &bus, &slot) < 0) {
+    if (pci_parse_devaddr(devaddr, &dom, &bus, &slot, NULL) < 0) {
         return NULL;
     }
 
@@ -1660,7 +1677,8 @@ static int pci_qdev_init(DeviceState *qdev, DeviceInfo *base)
         pci_dev->romfile = qemu_strdup(info->romfile);
     pci_add_option_rom(pci_dev);
 
-    if (qdev->hotplugged) {
+    if (bus->hotplug) {
+        /* lower layer must check qdev->hotplugged */
         rc = bus->hotplug(bus->hotplug_qdev, pci_dev, 1);
         if (rc != 0) {
             int r = pci_unregister_device(&pci_dev->qdev);
