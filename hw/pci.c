@@ -25,6 +25,8 @@
 #include "pci.h"
 #include "pci_bridge.h"
 #include "pci_internals.h"
+#include "msix.h"
+#include "msi.h"
 #include "monitor.h"
 #include "net.h"
 #include "sysemu.h"
@@ -141,9 +143,9 @@ static void pci_device_reset(PCIDevice *dev)
     dev->irq_state = 0;
     pci_update_irq_status(dev);
     /* Clear all writeable bits */
-    pci_set_word(dev->config + PCI_COMMAND,
-                 pci_get_word(dev->config + PCI_COMMAND) &
-                 ~pci_get_word(dev->wmask + PCI_COMMAND));
+    pci_word_test_and_clear_mask(dev->config + PCI_COMMAND,
+                                 pci_get_word(dev->wmask + PCI_COMMAND) |
+                                 pci_get_word(dev->w1cmask + PCI_COMMAND));
     dev->config[PCI_CACHE_LINE_SIZE] = 0x0;
     dev->config[PCI_INTERRUPT_LINE] = 0x0;
     for (r = 0; r < PCI_NUM_REGIONS; ++r) {
@@ -295,7 +297,8 @@ static int get_pci_config_device(QEMUFile *f, void *pv, size_t size)
 
     qemu_get_buffer(f, config, size);
     for (i = 0; i < size; ++i) {
-        if ((config[i] ^ s->config[i]) & s->cmask[i] & ~s->wmask[i]) {
+        if ((config[i] ^ s->config[i]) &
+            s->cmask[i] & ~s->wmask[i] & ~s->w1cmask[i]) {
             qemu_free(config);
             return -EINVAL;
         }
@@ -1174,6 +1177,23 @@ static void pci_set_irq(void *opaque, int irq_num, int level)
     pci_change_irq_level(pci_dev, irq_num, change);
 }
 
+bool pci_msi_enabled(PCIDevice *dev)
+{
+    return msix_enabled(dev) || msi_enabled(dev);
+}
+
+void pci_msi_notify(PCIDevice *dev, unsigned int vector)
+{
+    if (msix_enabled(dev)) {
+        msix_notify(dev, vector);
+    } else if (msi_enabled(dev)) {
+        msi_notify(dev, vector);
+    } else {
+        /* MSI/MSI-X must be enabled */
+        abort();
+    }
+}
+
 int pci_map_irq(PCIDevice *pci_dev, int pin)
 {
     return pci_dev->bus->map_irq(pci_dev, pin);
@@ -1921,6 +1941,7 @@ void pci_del_capability(PCIDevice *pdev, uint8_t cap_id, uint8_t size)
     pdev->config[prev] = pdev->config[offset + PCI_CAP_LIST_NEXT];
     /* Make capability writeable again */
     memset(pdev->wmask + offset, 0xff, size);
+    memset(pdev->w1cmask + offset, 0, size);
     /* Clear cmask as device-specific registers can't be checked */
     memset(pdev->cmask + offset, 0, size);
     memset(pdev->used + offset, 0, size);
