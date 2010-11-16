@@ -1438,6 +1438,17 @@ static const VMStateDescription vmstate_assigned_device = {
     .name = "pci-assign"
 };
 
+static void reset_assigned_device(DeviceState *dev)
+{
+    PCIDevice *d = DO_UPCAST(PCIDevice, qdev, dev);
+
+    /*
+     * When a 0 is written to the command register, the device is logically
+     * disconnected from the PCI bus. This avoids further DMA transfers.
+     */
+    assigned_dev_pci_write_config(d, PCI_COMMAND, 0, 2);
+}
+
 static int assigned_initfn(struct PCIDevice *pci_dev)
 {
     AssignedDevice *dev = DO_UPCAST(AssignedDevice, dev, pci_dev);
@@ -1555,6 +1566,7 @@ static PCIDeviceInfo assign_info = {
     .qdev.name    = "pci-assign",
     .qdev.desc    = "pass through host pci devices to the guest",
     .qdev.size    = sizeof(AssignedDevice),
+    .qdev.reset   = reset_assigned_device,
     .init         = assigned_initfn,
     .exit         = assigned_exitfn,
     .config_read  = assigned_dev_pci_read_config,
