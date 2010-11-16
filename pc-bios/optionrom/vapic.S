@@ -323,4 +323,8 @@ up_set_tpr_poll_irq:
 
 vapic:
 . = . + vapic_size
+
+.byte 0  # reserve space for signature
+.align 512, 0
+
 _end:
