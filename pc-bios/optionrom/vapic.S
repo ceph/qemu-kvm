@@ -4,6 +4,17 @@
 _start:
 	.short 0xaa55
 	.byte (_end - _start) / 512
+	# clear vapic area: firmware load using rep insb may cause
+	# stale tpr/isr/irr data to corrupt the vapic area.
+	push %es
+	push %cs
+	pop %es
+	xor %ax, %ax
+	mov $vapic_size/2, %cx
+	lea vapic, %di
+	cld
+	rep stosw
+	pop %es
 	mov $vapic_base, %ax
 	out %ax, $0x7e
 	lret
