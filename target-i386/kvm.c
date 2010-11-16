@@ -439,8 +439,20 @@ int kvm_arch_init_vcpu(CPUState *env)
     return kvm_vcpu_ioctl(env, KVM_SET_CPUID2, &cpuid_data);
 }
 
+static void kvm_clear_vapic(CPUState *env)
+{
+#ifdef KVM_SET_VAPIC_ADDR
+    struct kvm_vapic_addr va = {
+        .vapic_addr = 0,
+    };
+
+    kvm_vcpu_ioctl(env, KVM_SET_VAPIC_ADDR, &va);
+#endif
+}
+
 void kvm_arch_reset_vcpu(CPUState *env)
 {
+    kvm_clear_vapic(env);
     env->exception_injected = -1;
     env->interrupt_injected = -1;
     env->nmi_injected = 0;
