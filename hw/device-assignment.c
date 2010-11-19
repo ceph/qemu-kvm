@@ -1254,28 +1254,34 @@ static void assigned_dev_update_msix(PCIDevice *pci_dev, unsigned int ctrl_pos)
 static void assigned_device_pci_cap_write_config(PCIDevice *pci_dev, uint32_t address,
                                                  uint32_t val, int len)
 {
-    AssignedDevice *assigned_dev = container_of(pci_dev, AssignedDevice, dev);
+    uint8_t cap_id = pci_dev->config_map[address];
 
     pci_default_write_config(pci_dev, address, val, len);
+    switch (cap_id) {
 #ifdef KVM_CAP_IRQ_ROUTING
+    case PCI_CAP_ID_MSI:
 #ifdef KVM_CAP_DEVICE_MSI
-    if (assigned_dev->cap.available & ASSIGNED_DEVICE_CAP_MSI) {
-        int pos = pci_find_capability(pci_dev, PCI_CAP_ID_MSI);
-        if (ranges_overlap(address, len, pos + PCI_MSI_FLAGS, 1)) {
-            assigned_dev_update_msi(pci_dev, pos + PCI_MSI_FLAGS);
+        {
+            uint8_t cap = pci_find_capability(pci_dev, cap_id);
+            if (ranges_overlap(address - cap, len, PCI_MSI_FLAGS, 1)) {
+                assigned_dev_update_msi(pci_dev, cap + PCI_MSI_FLAGS);
+            }
         }
-    }
 #endif
+        break;
+
+    case PCI_CAP_ID_MSIX:
 #ifdef KVM_CAP_DEVICE_MSIX
-    if (assigned_dev->cap.available & ASSIGNED_DEVICE_CAP_MSIX) {
-        int pos = pci_find_capability(pci_dev, PCI_CAP_ID_MSIX);
-        if (ranges_overlap(address, len, pos + PCI_MSIX_FLAGS + 1, 1)) {
-            assigned_dev_update_msix(pci_dev, pos + PCI_MSIX_FLAGS);
-	}
+        {
+            uint8_t cap = pci_find_capability(pci_dev, cap_id);
+            if (ranges_overlap(address - cap, len, PCI_MSIX_FLAGS + 1, 1)) {
+                assigned_dev_update_msix(pci_dev, cap + PCI_MSIX_FLAGS);
+            }
+        }
+#endif
+        break;
+#endif
     }
-#endif
-#endif
-    return;
 }
 
 static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
