@@ -1292,8 +1292,6 @@ static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
                  pci_get_word(pci_dev->config + PCI_STATUS) &
                  ~PCI_STATUS_CAP_LIST);
 
-    pci_dev->cap.length = 0;
-
 #ifdef KVM_CAP_IRQ_ROUTING
 #ifdef KVM_CAP_DEVICE_MSI
     /* Expose MSI capability
@@ -1320,7 +1318,6 @@ static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
                      PCI_MSI_FLAGS_QSIZE | PCI_MSI_FLAGS_ENABLE);
         pci_set_long(pci_dev->wmask + vpos + PCI_MSI_ADDRESS_LO, 0xfffffffc);
         pci_set_long(pci_dev->wmask + vpos + PCI_MSI_DATA_32, 0xffff);
-        pci_dev->cap.length += PCI_CAPABILITY_CONFIG_MSI_LENGTH;
     }
 #endif
 #ifdef KVM_CAP_DEVICE_MSIX
@@ -1356,7 +1353,6 @@ static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
         bar_nr = msix_table_entry & PCI_MSIX_BIR;
         msix_table_entry &= ~PCI_MSIX_BIR;
         dev->msix_table_addr = pci_region[bar_nr].base_addr + msix_table_entry;
-        pci_dev->cap.length += PCI_CAPABILITY_CONFIG_MSIX_LENGTH;
     }
 #endif
 #endif

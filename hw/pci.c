@@ -1909,8 +1909,6 @@ int pci_add_capability(PCIDevice *pdev, uint8_t cap_id,
     memset(pdev->cmask + offset, 0xFF, size);
 
     pdev->config[PCI_STATUS] |= PCI_STATUS_CAP_LIST;
-    pdev->cap.supported = 1;
-    pdev->cap.start = pdev->cap.start ? MIN(pdev->cap.start, offset) : offset;
 
     return offset;
 }
@@ -1931,7 +1929,6 @@ void pci_del_capability(PCIDevice *pdev, uint8_t cap_id, uint8_t size)
 
     if (!pdev->config[PCI_CAPABILITY_LIST]) {
         pdev->config[PCI_STATUS] &= ~PCI_STATUS_CAP_LIST;
-        pdev->cap.start = pdev->cap.length = 0;
     }
 }
 

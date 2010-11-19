@@ -220,8 +220,6 @@ struct PCIDevice {
 
     /* Device capability configuration space */
     struct {
-        int supported;
-        unsigned int start, length;
         PCICapConfigReadFunc *config_read;
         PCICapConfigWriteFunc *config_write;
     } cap;
