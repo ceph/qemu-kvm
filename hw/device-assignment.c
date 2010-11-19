@@ -1292,7 +1292,12 @@ static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
     PCIRegion *pci_region = dev->real_device.regions;
     int next_cap_pt = 0;
 
+    pci_dev->cap.supported = 1;
+    pci_dev->cap.start = PCI_CAPABILITY_CONFIG_DEFAULT_START_ADDR;
     pci_dev->cap.length = 0;
+    pci_dev->config[PCI_STATUS] |= PCI_STATUS_CAP_LIST;
+    pci_dev->config[PCI_CAPABILITY_LIST] = pci_dev->cap.start;
+
 #ifdef KVM_CAP_IRQ_ROUTING
 #ifdef KVM_CAP_DEVICE_MSI
     /* Expose MSI capability
@@ -1488,9 +1493,10 @@ static int assigned_initfn(struct PCIDevice *pci_dev)
     dev->h_busnr = dev->host.bus;
     dev->h_devfn = PCI_DEVFN(dev->host.dev, dev->host.func);
 
-    if (pci_enable_capability_support(pci_dev, 0, NULL,
-                    assigned_device_pci_cap_write_config,
-                    assigned_device_pci_cap_init) < 0)
+    pci_register_capability_handlers(pci_dev, NULL,
+                                     assigned_device_pci_cap_write_config);
+
+    if (assigned_device_pci_cap_init(pci_dev) < 0)
         goto out;
 
     /* assign device to guest */

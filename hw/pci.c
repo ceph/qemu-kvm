@@ -770,6 +770,8 @@ static PCIDevice *do_pci_register_device(PCIDevice *pci_dev, PCIBus *bus,
         config_write = pci_default_write_config;
     pci_dev->config_read = config_read;
     pci_dev->config_write = config_write;
+    pci_dev->cap.config_read = pci_default_cap_read_config;
+    pci_dev->cap.config_write = pci_default_cap_write_config;
     bus->devices[devfn] = pci_dev;
     pci_dev->irq = qemu_allocate_irqs(pci_set_irq, pci_dev, PCI_NUM_PINS);
     pci_dev->version_id = 2; /* Current pci device vmstate version */
@@ -1754,35 +1756,21 @@ PCIDevice *pci_create_simple_multifunction(PCIBus *bus, int devfn,
     return dev;
 }
 
-int pci_enable_capability_support(PCIDevice *pci_dev,
-                                  uint32_t config_start,
-                                  PCICapConfigReadFunc *config_read,
-                                  PCICapConfigWriteFunc *config_write,
-                                  PCICapConfigInitFunc *config_init)
+void pci_register_capability_handlers(PCIDevice *pdev,
+                                      PCICapConfigReadFunc *config_read,
+                                      PCICapConfigWriteFunc *config_write)
 {
-    if (!pci_dev)
-        return -ENODEV;
+    if (config_read) {
+        pdev->cap.config_read = config_read;
+    } else {
+        pdev->cap.config_read = pci_default_cap_read_config;
+    }
 
-    pci_dev->config[0x06] |= 0x10; // status = capabilities
-
-    if (config_start == 0)
-	pci_dev->cap.start = PCI_CAPABILITY_CONFIG_DEFAULT_START_ADDR;
-    else if (config_start >= 0x40 && config_start < 0xff)
-        pci_dev->cap.start = config_start;
-    else
-        return -EINVAL;
-
-    if (config_read)
-        pci_dev->cap.config_read = config_read;
-    else
-        pci_dev->cap.config_read = pci_default_cap_read_config;
-    if (config_write)
-        pci_dev->cap.config_write = config_write;
-    else
-        pci_dev->cap.config_write = pci_default_cap_write_config;
-    pci_dev->cap.supported = 1;
-    pci_dev->config[PCI_CAPABILITY_LIST] = pci_dev->cap.start;
-    return config_init(pci_dev);
+    if (config_write) {
+        pdev->cap.config_write = config_write;
+    } else {
+        pdev->cap.config_write = pci_default_cap_write_config;
+    }
 }
 
 PCIDevice *pci_create(PCIBus *bus, int devfn, const char *name)
@@ -1920,12 +1908,16 @@ int pci_add_capability(PCIDevice *pdev, uint8_t cap_id,
     config[PCI_CAP_LIST_ID] = cap_id;
     config[PCI_CAP_LIST_NEXT] = pdev->config[PCI_CAPABILITY_LIST];
     pdev->config[PCI_CAPABILITY_LIST] = offset;
-    pdev->config[PCI_STATUS] |= PCI_STATUS_CAP_LIST;
     memset(pdev->used + offset, 0xFF, size);
     /* Make capability read-only by default */
     memset(pdev->wmask + offset, 0, size);
     /* Check capability by default */
     memset(pdev->cmask + offset, 0xFF, size);
+
+    pdev->config[PCI_STATUS] |= PCI_STATUS_CAP_LIST;
+    pdev->cap.supported = 1;
+    pdev->cap.start = pdev->cap.start ? MIN(pdev->cap.start, offset) : offset;
+
     return offset;
 }
 
@@ -1943,8 +1935,10 @@ void pci_del_capability(PCIDevice *pdev, uint8_t cap_id, uint8_t size)
     memset(pdev->cmask + offset, 0, size);
     memset(pdev->used + offset, 0, size);
 
-    if (!pdev->config[PCI_CAPABILITY_LIST])
+    if (!pdev->config[PCI_CAPABILITY_LIST]) {
         pdev->config[PCI_STATUS] &= ~PCI_STATUS_CAP_LIST;
+        pdev->cap.start = pdev->cap.length = 0;
+    }
 }
 
 /* Reserve space for capability at a known offset (to call after load). */
