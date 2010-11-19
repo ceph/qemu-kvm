@@ -85,11 +85,6 @@ typedef void PCIMapIORegionFunc(PCIDevice *pci_dev, int region_num,
                                 pcibus_t addr, pcibus_t size, int type);
 typedef int PCIUnregisterFunc(PCIDevice *pci_dev);
 
-typedef void PCICapConfigWriteFunc(PCIDevice *pci_dev,
-                                   uint32_t address, uint32_t val, int len);
-typedef uint32_t PCICapConfigReadFunc(PCIDevice *pci_dev,
-                                      uint32_t address, int len);
-
 typedef struct PCIIORegion {
     pcibus_t addr; /* current PCI mapping address. -1 means not mapped */
 #define PCI_BAR_UNMAPPED (~(pcibus_t)0)
@@ -217,12 +212,6 @@ struct PCIDevice {
     struct kvm_msix_message *msix_irq_entries;
 
     msix_mask_notifier_func msix_mask_notifier;
-
-    /* Device capability configuration space */
-    struct {
-        PCICapConfigReadFunc *config_read;
-        PCICapConfigWriteFunc *config_write;
-    } cap;
 };
 
 PCIDevice *pci_register_device(PCIBus *bus, const char *name,
@@ -236,10 +225,6 @@ void pci_register_bar(PCIDevice *pci_dev, int region_num,
 
 void pci_map_option_rom(PCIDevice *pdev, int region_num, pcibus_t addr,
                         pcibus_t size, int type);
-
-void pci_register_capability_handlers(PCIDevice *pci_dev,
-                                      PCICapConfigReadFunc *config_read,
-                                      PCICapConfigWriteFunc *config_write);
 
 int pci_map_irq(PCIDevice *pci_dev, int pin);
 
@@ -256,10 +241,6 @@ void pci_default_write_config(PCIDevice *d,
                               uint32_t address, uint32_t val, int len);
 void pci_device_save(PCIDevice *s, QEMUFile *f);
 int pci_device_load(PCIDevice *s, QEMUFile *f);
-uint32_t pci_default_cap_read_config(PCIDevice *pci_dev,
-                                     uint32_t address, int len);
-void pci_default_cap_write_config(PCIDevice *pci_dev,
-                                  uint32_t address, uint32_t val, int len);
 typedef void (*pci_set_irq_fn)(void *opaque, int irq_num, int level);
 typedef int (*pci_map_irq_fn)(PCIDevice *pci_dev, int irq_num);
 typedef int (*pci_hotplug_fn)(DeviceState *qdev, PCIDevice *pci_dev, int state);

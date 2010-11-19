@@ -63,6 +63,10 @@ static void assigned_dev_load_option_rom(AssignedDevice *dev);
 
 static void assigned_dev_unregister_msix_mmio(AssignedDevice *dev);
 
+static void assigned_device_pci_cap_write_config(PCIDevice *pci_dev,
+                                                 uint32_t address,
+                                                 uint32_t val, int len);
+
 static uint32_t assigned_dev_ioport_rw(AssignedDevRegion *dev_region,
                                        uint32_t addr, int len, uint32_t *val)
 {
@@ -406,14 +410,17 @@ static void assigned_dev_pci_write_config(PCIDevice *d, uint32_t address,
           ((d->devfn >> 3) & 0x1F), (d->devfn & 0x7),
           (uint16_t) address, val, len);
 
+    if (address > PCI_CONFIG_HEADER_SIZE && d->config_map[address]) {
+        return assigned_device_pci_cap_write_config(d, address, val, len);
+    }
+
     if (address == 0x4) {
         pci_default_write_config(d, address, val, len);
         /* Continue to program the card */
     }
 
     if ((address >= 0x10 && address <= 0x24) || address == 0x30 ||
-        address == 0x34 || address == 0x3c || address == 0x3d ||
-        (address > PCI_CONFIG_HEADER_SIZE && d->config_map[address])) {
+        address == 0x34 || address == 0x3c || address == 0x3d) {
         /* used for update-mappings (BAR emulation) */
         pci_default_write_config(d, address, val, len);
         return;
@@ -1249,7 +1256,7 @@ static void assigned_device_pci_cap_write_config(PCIDevice *pci_dev, uint32_t ad
 {
     AssignedDevice *assigned_dev = container_of(pci_dev, AssignedDevice, dev);
 
-    pci_default_cap_write_config(pci_dev, address, val, len);
+    pci_default_write_config(pci_dev, address, val, len);
 #ifdef KVM_CAP_IRQ_ROUTING
 #ifdef KVM_CAP_DEVICE_MSI
     if (assigned_dev->cap.available & ASSIGNED_DEVICE_CAP_MSI) {
@@ -1477,9 +1484,6 @@ static int assigned_initfn(struct PCIDevice *pci_dev)
     dev->h_segnr = dev->host.seg;
     dev->h_busnr = dev->host.bus;
     dev->h_devfn = PCI_DEVFN(dev->host.dev, dev->host.func);
-
-    pci_register_capability_handlers(pci_dev, NULL,
-                                     assigned_device_pci_cap_write_config);
 
     if (assigned_device_pci_cap_init(pci_dev) < 0)
         goto out;

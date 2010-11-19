@@ -772,8 +772,6 @@ static PCIDevice *do_pci_register_device(PCIDevice *pci_dev, PCIBus *bus,
         config_write = pci_default_write_config;
     pci_dev->config_read = config_read;
     pci_dev->config_write = config_write;
-    pci_dev->cap.config_read = pci_default_cap_read_config;
-    pci_dev->cap.config_write = pci_default_cap_write_config;
     bus->devices[devfn] = pci_dev;
     pci_dev->irq = qemu_allocate_irqs(pci_set_irq, pci_dev, PCI_NUM_PINS);
     pci_dev->version_id = 2; /* Current pci device vmstate version */
@@ -1070,56 +1068,20 @@ static void pci_update_irq_disabled(PCIDevice *d, int was_irq_disabled)
     }
 }
 
-static uint32_t pci_read_config(PCIDevice *d,
-                                uint32_t address, int len)
-{
-    uint32_t val = 0;
-
-    len = MIN(len, pci_config_size(d) - address);
-    memcpy(&val, d->config + address, len);
-    return le32_to_cpu(val);
-}
-
 uint32_t pci_default_read_config(PCIDevice *d,
                                  uint32_t address, int len)
 {
+    uint32_t val = 0;
     assert(len == 1 || len == 2 || len == 4);
-
-    if (address > PCI_CONFIG_HEADER_SIZE && d->config_map[address]) {
-        return d->cap.config_read(d, address, len);
-    }
-
-    return pci_read_config(d, address, len);
-}
-
-uint32_t pci_default_cap_read_config(PCIDevice *pci_dev,
-                                     uint32_t address, int len)
-{
-    return pci_read_config(pci_dev, address, len);
-}
-
-void pci_default_cap_write_config(PCIDevice *pci_dev,
-                                  uint32_t address, uint32_t val, int len)
-{
-    uint32_t config_size = pci_config_size(pci_dev);
-    int i;
-
-    for (i = 0; i < len && address + i < config_size; val >>= 8, ++i) {
-        uint8_t wmask = pci_dev->wmask[address + i];
-        pci_dev->config[address + i] =
-            (pci_dev->config[address + i] & ~wmask) | (val & wmask);
-    }
+    len = MIN(len, pci_config_size(d) - address);
+    memcpy(&val, d->config + address, len);
+    return le32_to_cpu(val);
 }
 
 void pci_default_write_config(PCIDevice *d, uint32_t addr, uint32_t val, int l)
 {
     int i, was_irq_disabled = pci_irq_disabled(d);
     uint32_t config_size = pci_config_size(d);
-
-    if (addr > PCI_CONFIG_HEADER_SIZE && d->config_map[addr]) {
-        d->cap.config_write(d, addr, val, l);
-        return;
-    }
 
     for (i = 0; i < l && addr + i < config_size; val >>= 8, ++i) {
         uint8_t wmask = d->wmask[addr + i];
@@ -1748,23 +1710,6 @@ PCIDevice *pci_create_simple_multifunction(PCIBus *bus, int devfn,
     PCIDevice *dev = pci_create_multifunction(bus, devfn, multifunction, name);
     qdev_init_nofail(&dev->qdev);
     return dev;
-}
-
-void pci_register_capability_handlers(PCIDevice *pdev,
-                                      PCICapConfigReadFunc *config_read,
-                                      PCICapConfigWriteFunc *config_write)
-{
-    if (config_read) {
-        pdev->cap.config_read = config_read;
-    } else {
-        pdev->cap.config_read = pci_default_cap_read_config;
-    }
-
-    if (config_write) {
-        pdev->cap.config_write = config_write;
-    } else {
-        pdev->cap.config_write = pci_default_cap_write_config;
-    }
 }
 
 PCIDevice *pci_create(PCIBus *bus, int devfn, const char *name)
