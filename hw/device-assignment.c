@@ -366,16 +366,6 @@ static uint8_t assigned_dev_pci_read_byte(PCIDevice *d, int pos)
     return (uint8_t)assigned_dev_pci_read(d, pos, 1);
 }
 
-static uint16_t assigned_dev_pci_read_word(PCIDevice *d, int pos)
-{
-    return (uint16_t)assigned_dev_pci_read(d, pos, 2);
-}
-
-static uint32_t assigned_dev_pci_read_long(PCIDevice *d, int pos)
-{
-    return assigned_dev_pci_read(d, pos, 4);
-}
-
 static uint8_t pci_find_cap_offset(PCIDevice *d, uint8_t cap)
 {
     int id;
@@ -1285,6 +1275,7 @@ static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
 {
     AssignedDevice *dev = container_of(pci_dev, AssignedDevice, dev);
     PCIRegion *pci_region = dev->real_device.regions;
+    int pos;
 
     /* Clear initial capabilities pointer and status copied from hw */
     pci_set_byte(pci_dev->config + PCI_CAPABILITY_LIST, 0);
@@ -1296,60 +1287,44 @@ static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
 #ifdef KVM_CAP_DEVICE_MSI
     /* Expose MSI capability
      * MSI capability is the 1st capability in capability config */
-    if (pci_find_cap_offset(pci_dev, PCI_CAP_ID_MSI)) {
-        int vpos, ppos;
-        uint16_t flags;
-
+    if ((pos = pci_find_cap_offset(pci_dev, PCI_CAP_ID_MSI))) {
         dev->cap.available |= ASSIGNED_DEVICE_CAP_MSI;
-        vpos = pci_add_capability(pci_dev, PCI_CAP_ID_MSI, 0,
-                                  PCI_CAPABILITY_CONFIG_MSI_LENGTH);
-
-        memset(pci_dev->config + vpos + PCI_CAP_FLAGS, 0,
-               PCI_CAPABILITY_CONFIG_MSI_LENGTH - PCI_CAP_FLAGS);
+        pci_add_capability(pci_dev, PCI_CAP_ID_MSI, pos,
+                           PCI_CAPABILITY_CONFIG_MSI_LENGTH);
 
         /* Only 32-bit/no-mask currently supported */
-        ppos = pci_find_cap_offset(pci_dev, PCI_CAP_ID_MSI);
-        flags = assigned_dev_pci_read_word(pci_dev, ppos + PCI_MSI_FLAGS);
-        flags &= PCI_MSI_FLAGS_QMASK;
-        pci_set_word(pci_dev->config + vpos + PCI_MSI_FLAGS, flags);
+        pci_set_word(pci_dev->config + pos + PCI_MSI_FLAGS,
+                     pci_get_word(pci_dev->config + pos + PCI_MSI_FLAGS) &
+                     PCI_MSI_FLAGS_QMASK);
+        pci_set_long(pci_dev->config + pos + PCI_MSI_ADDRESS_LO, 0);
+        pci_set_word(pci_dev->config + pos + PCI_MSI_DATA_32, 0);
 
         /* Set writable fields */
-        pci_set_word(pci_dev->wmask + vpos + PCI_MSI_FLAGS,
+        pci_set_word(pci_dev->wmask + pos + PCI_MSI_FLAGS,
                      PCI_MSI_FLAGS_QSIZE | PCI_MSI_FLAGS_ENABLE);
-        pci_set_long(pci_dev->wmask + vpos + PCI_MSI_ADDRESS_LO, 0xfffffffc);
-        pci_set_long(pci_dev->wmask + vpos + PCI_MSI_DATA_32, 0xffff);
+        pci_set_long(pci_dev->wmask + pos + PCI_MSI_ADDRESS_LO, 0xfffffffc);
+        pci_set_word(pci_dev->wmask + pos + PCI_MSI_DATA_32, 0xffff);
     }
 #endif
 #ifdef KVM_CAP_DEVICE_MSIX
     /* Expose MSI-X capability */
-    if (pci_find_cap_offset(pci_dev, PCI_CAP_ID_MSIX)) {
-        int vpos, ppos, entry_nr, bar_nr;
+    if ((pos = pci_find_cap_offset(pci_dev, PCI_CAP_ID_MSIX))) {
+        int bar_nr;
         uint32_t msix_table_entry;
 
         dev->cap.available |= ASSIGNED_DEVICE_CAP_MSIX;
-        vpos = pci_add_capability(pci_dev, PCI_CAP_ID_MSIX, 0,
+        pci_add_capability(pci_dev, PCI_CAP_ID_MSIX, pos,
                            PCI_CAPABILITY_CONFIG_MSIX_LENGTH);
 
-        memset(pci_dev->config + vpos + PCI_CAP_FLAGS, 0,
-               PCI_CAPABILITY_CONFIG_MSIX_LENGTH - PCI_CAP_FLAGS);
+        pci_set_word(pci_dev->config + pos + PCI_MSIX_FLAGS,
+                     pci_get_word(pci_dev->config + pos + PCI_MSIX_FLAGS) &
+                     PCI_MSIX_TABSIZE);
 
         /* Only enable and function mask bits are writable */
-        pci_set_word(pci_dev->wmask + vpos + PCI_MSIX_FLAGS,
+        pci_set_word(pci_dev->wmask + pos + PCI_MSIX_FLAGS,
                      PCI_MSIX_FLAGS_ENABLE | PCI_MSIX_FLAGS_MASKALL);
 
-        ppos = pci_find_cap_offset(pci_dev, PCI_CAP_ID_MSIX);
-
-        entry_nr = assigned_dev_pci_read_word(pci_dev, ppos + PCI_MSIX_FLAGS);
-        entry_nr &= PCI_MSIX_TABSIZE;
-        pci_set_word(pci_dev->config + vpos + PCI_MSIX_FLAGS, entry_nr);
-
-        msix_table_entry = assigned_dev_pci_read_long(pci_dev,
-                                                      ppos + PCI_MSIX_TABLE);
-        pci_set_long(pci_dev->config + vpos + PCI_MSIX_TABLE, msix_table_entry);
-
-        pci_set_long(pci_dev->config + vpos + PCI_MSIX_PBA,
-                     assigned_dev_pci_read_long(pci_dev, ppos + PCI_MSIX_PBA));
-
+        msix_table_entry = pci_get_long(pci_dev->config + pos + PCI_MSIX_TABLE);
         bar_nr = msix_table_entry & PCI_MSIX_BIR;
         msix_table_entry &= ~PCI_MSIX_BIR;
         dev->msix_table_addr = pci_region[bar_nr].base_addr + msix_table_entry;
