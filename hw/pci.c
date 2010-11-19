@@ -1088,16 +1088,6 @@ uint32_t pci_default_read_config(PCIDevice *d,
     return pci_read_config(d, address, len);
 }
 
-static void pci_write_config(PCIDevice *pci_dev,
-                             uint32_t address, uint32_t val, int len)
-{
-    int i;
-    for (i = 0; i < len; i++) {
-        pci_dev->config[address + i] = val & 0xff;
-        val >>= 8;
-    }
-}
-
 int pci_access_cap_config(PCIDevice *pci_dev, uint32_t address, int len)
 {
     if (pci_dev->cap.supported && address >= pci_dev->cap.start &&
@@ -1115,7 +1105,14 @@ uint32_t pci_default_cap_read_config(PCIDevice *pci_dev,
 void pci_default_cap_write_config(PCIDevice *pci_dev,
                                   uint32_t address, uint32_t val, int len)
 {
-    pci_write_config(pci_dev, address, val, len);
+    uint32_t config_size = pci_config_size(pci_dev);
+    int i;
+
+    for (i = 0; i < len && address + i < config_size; val >>= 8, ++i) {
+        uint8_t wmask = pci_dev->wmask[address + i];
+        pci_dev->config[address + i] =
+            (pci_dev->config[address + i] & ~wmask) | (val & wmask);
+    }
 }
 
 void pci_default_write_config(PCIDevice *d, uint32_t addr, uint32_t val, int l)
