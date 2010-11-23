@@ -359,36 +359,6 @@ int kvm_set_guest_debug(kvm_context_t, int vcpu, struct kvm_guest_debug *dbg);
 
 #if defined(__i386__) || defined(__x86_64__)
 /*!
- * \brief Setup a vcpu's cpuid instruction emulation
- *
- * Set up a table of cpuid function to cpuid outputs.\n
- *
- * \param kvm Pointer to the current kvm_context
- * \param vcpu Which virtual CPU should be initialized
- * \param nent number of entries to be installed
- * \param entries cpuid function entries table
- * \return 0 on success, or -errno on error
- */
-int kvm_setup_cpuid(kvm_context_t kvm, int vcpu, int nent,
-		    struct kvm_cpuid_entry *entries);
-
-/*!
- * \brief Setup a vcpu's cpuid instruction emulation
- *
- * Set up a table of cpuid function to cpuid outputs.
- * This call replaces the older kvm_setup_cpuid interface by adding a few
- * parameters to support cpuid functions that have sub-leaf values.
- *
- * \param kvm Pointer to the current kvm_context
- * \param vcpu Which virtual CPU should be initialized
- * \param nent number of entries to be installed
- * \param entries cpuid function entries table
- * \return 0 on success, or -errno on error
- */
-int kvm_setup_cpuid2(kvm_context_t kvm, int vcpu, int nent,
-		     struct kvm_cpuid_entry2 *entries);
-
-/*!
  * \brief Setting the number of shadow pages to be allocated to the vm
  *
  * \param kvm pointer to kvm_context

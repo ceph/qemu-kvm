@@ -418,37 +418,6 @@ static void kvm_set_cr8(CPUState *env, uint64_t cr8)
     env->kvm_run->cr8 = cr8;
 }
 
-int kvm_setup_cpuid(CPUState *env, int nent,
-                    struct kvm_cpuid_entry *entries)
-{
-    struct kvm_cpuid *cpuid;
-    int r;
-
-    cpuid = qemu_malloc(sizeof(*cpuid) + nent * sizeof(*entries));
-
-    cpuid->nent = nent;
-    memcpy(cpuid->entries, entries, nent * sizeof(*entries));
-    r = kvm_vcpu_ioctl(env, KVM_SET_CPUID, cpuid);
-
-    free(cpuid);
-    return r;
-}
-
-int kvm_setup_cpuid2(CPUState *env, int nent,
-                     struct kvm_cpuid_entry2 *entries)
-{
-    struct kvm_cpuid2 *cpuid;
-    int r;
-
-    cpuid = qemu_malloc(sizeof(*cpuid) + nent * sizeof(*entries));
-
-    cpuid->nent = nent;
-    memcpy(cpuid->entries, entries, nent * sizeof(*entries));
-    r = kvm_vcpu_ioctl(env, KVM_SET_CPUID2, cpuid);
-    free(cpuid);
-    return r;
-}
-
 int kvm_set_shadow_pages(kvm_context_t kvm, unsigned int nrshadow_pages)
 {
 #ifdef KVM_CAP_MMU_SHADOW_CACHE_CONTROL
