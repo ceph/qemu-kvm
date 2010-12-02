@@ -446,6 +446,8 @@ static int apic_find_dest(uint8_t dest)
         apic = local_apics[i];
 	if (apic && apic->id == dest)
             return i;
+        if (!apic)
+            break;
     }
 
     return -1;
@@ -481,6 +483,8 @@ static void apic_get_delivery_bitmask(uint32_t *deliver_bitmask,
                         set_bit(deliver_bitmask, i);
                     }
                 }
+            } else {
+                break;
             }
         }
     }
