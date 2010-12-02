@@ -55,6 +55,7 @@ struct pci_status {
 
 typedef struct PIIX4PMState {
     PCIDevice dev;
+    IORange ioport;
     uint16_t pmsts;
     uint16_t pmen;
     uint16_t pmcntrl;
@@ -132,10 +133,16 @@ static void pm_tmr_timer(void *opaque)
     pm_update_sci(s);
 }
 
-static void pm_ioport_writew(void *opaque, uint32_t addr, uint32_t val)
+static void pm_ioport_write(IORange *ioport, uint64_t addr, unsigned width,
+                            uint64_t val)
 {
-    PIIX4PMState *s = opaque;
-    addr &= 0x3f;
+    PIIX4PMState *s = container_of(ioport, PIIX4PMState, ioport);
+
+    if (width != 2) {
+        PIIX4_DPRINTF("PM write port=0x%04x width=%d val=0x%08x\n",
+                      (unsigned)addr, width, (unsigned)val);
+    }
+
     switch(addr) {
     case 0x00:
         {
@@ -188,12 +195,12 @@ static void pm_ioport_writew(void *opaque, uint32_t addr, uint32_t val)
     PIIX4_DPRINTF("PM writew port=0x%04x val=0x%04x\n", addr, val);
 }
 
-static uint32_t pm_ioport_readw(void *opaque, uint32_t addr)
+static void pm_ioport_read(IORange *ioport, uint64_t addr, unsigned width,
+                            uint64_t *data)
 {
-    PIIX4PMState *s = opaque;
+    PIIX4PMState *s = container_of(ioport, PIIX4PMState, ioport);
     uint32_t val;
 
-    addr &= 0x3f;
     switch(addr) {
     case 0x00:
         val = get_pmsts(s);
@@ -204,27 +211,6 @@ static uint32_t pm_ioport_readw(void *opaque, uint32_t addr)
     case 0x04:
         val = s->pmcntrl;
         break;
-    default:
-        val = 0;
-        break;
-    }
-    PIIX4_DPRINTF("PM readw port=0x%04x val=0x%04x\n", addr, val);
-    return val;
-}
-
-static void pm_ioport_writel(void *opaque, uint32_t addr, uint32_t val)
-{
-    //    PIIX4PMState *s = opaque;
-    PIIX4_DPRINTF("PM writel port=0x%04x val=0x%08x\n", addr & 0x3f, val);
-}
-
-static uint32_t pm_ioport_readl(void *opaque, uint32_t addr)
-{
-    PIIX4PMState *s = opaque;
-    uint32_t val;
-
-    addr &= 0x3f;
-    switch(addr) {
     case 0x08:
         val = get_pmtmr(s);
         break;
@@ -232,9 +218,14 @@ static uint32_t pm_ioport_readl(void *opaque, uint32_t addr)
         val = 0;
         break;
     }
-    PIIX4_DPRINTF("PM readl port=0x%04x val=0x%08x\n", addr, val);
-    return val;
+    PIIX4_DPRINTF("PM readw port=0x%04x val=0x%04x\n", addr, val);
+    *data = val;
 }
+
+static const IORangeOps pm_iorange_ops = {
+    .read = pm_ioport_read,
+    .write = pm_ioport_write,
+};
 
 static void apm_ctrl_changed(uint32_t val, void *arg)
 {
@@ -269,10 +260,8 @@ static void pm_io_space_update(PIIX4PMState *s)
 
         /* XXX: need to improve memory and ioport allocation */
         PIIX4_DPRINTF("PM: mapping to 0x%x\n", pm_io_base);
-        register_ioport_write(pm_io_base, 64, 2, pm_ioport_writew, s);
-        register_ioport_read(pm_io_base, 64, 2, pm_ioport_readw, s);
-        register_ioport_write(pm_io_base, 64, 4, pm_ioport_writel, s);
-        register_ioport_read(pm_io_base, 64, 4, pm_ioport_readl, s);
+        iorange_init(&s->ioport, &pm_iorange_ops, pm_io_base, 64);
+        ioport_register(&s->ioport);
     }
 }
 
@@ -607,7 +596,8 @@ static void pciej_write(void *opaque, uint32_t addr, uint32_t val)
 
 extern const char *global_cpu_model;
 
-static int piix4_device_hotplug(DeviceState *qdev, PCIDevice *dev, int state);
+static int piix4_device_hotplug(DeviceState *qdev, PCIDevice *dev,
+                                PCIHotplugState state);
 
 static void piix4_acpi_system_hot_add_init(PCIBus *bus, PIIX4PMState *s)
 {
@@ -682,18 +672,23 @@ static void disable_device(PIIX4PMState *s, int slot)
     s->pci0_status.down |= (1 << slot);
 }
 
-static int piix4_device_hotplug(DeviceState *qdev, PCIDevice *dev, int state)
+static int piix4_device_hotplug(DeviceState *qdev, PCIDevice *dev,
+				PCIHotplugState state)
 {
     int slot = PCI_SLOT(dev->devfn);
     PIIX4PMState *s = DO_UPCAST(PIIX4PMState, dev,
                                 DO_UPCAST(PCIDevice, qdev, qdev));
 
-    if (!dev->qdev.hotplugged)
+    /* Don't send event when device is enabled during qemu machine creation:
+     * it is present on boot, no hotplug event is necessary. We do send an
+     * event when the device is disabled later. */
+    if (state == PCI_COLDPLUG_ENABLED) {
         return 0;
+    }
 
     s->pci0_status.up = 0;
     s->pci0_status.down = 0;
-    if (state) {
+    if (state == PCI_HOTPLUG_ENABLED) {
         enable_device(s, slot);
     } else {
         disable_device(s, slot);
