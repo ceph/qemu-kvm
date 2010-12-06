@@ -410,7 +410,7 @@ static void assigned_dev_pci_write_config(PCIDevice *d, uint32_t address,
           ((d->devfn >> 3) & 0x1F), (d->devfn & 0x7),
           (uint16_t) address, val, len);
 
-    if (address > PCI_CONFIG_HEADER_SIZE && d->config_map[address]) {
+    if (address >= PCI_CONFIG_HEADER_SIZE && d->config_map[address]) {
         return assigned_device_pci_cap_write_config(d, address, val, len);
     }
 
@@ -456,7 +456,7 @@ static uint32_t assigned_dev_pci_read_config(PCIDevice *d, uint32_t address,
     if (address < 0x4 || (pci_dev->need_emulate_cmd && address == 0x4) ||
 	(address >= 0x10 && address <= 0x24) || address == 0x30 ||
         address == 0x34 || address == 0x3c || address == 0x3d ||
-        (address > PCI_CONFIG_HEADER_SIZE && d->config_map[address])) {
+        (address >= PCI_CONFIG_HEADER_SIZE && d->config_map[address])) {
         val = pci_default_read_config(d, address, len);
         DEBUG("(%x.%x): address=%04x val=0x%08x len=%d\n",
               (d->devfn >> 3) & 0x1F, (d->devfn & 0x7), address, val, len);
