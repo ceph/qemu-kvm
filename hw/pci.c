@@ -1845,6 +1845,20 @@ int pci_add_capability(PCIDevice *pdev, uint8_t cap_id,
         if (!offset) {
             return -ENOSPC;
         }
+    } else {
+        int i;
+
+        for (i = offset; i < offset + size; i++) {
+            if (pdev->config_map[i]) {
+                fprintf(stderr, "ERROR: %04x:%02x:%02x.%x "
+                        "Attempt to add PCI capability %x at offset "
+                        "%x overlaps existing capability %x at offset %x\n",
+                        pci_find_domain(pdev->bus), pci_bus_num(pdev->bus),
+                        PCI_SLOT(pdev->devfn), PCI_FUNC(pdev->devfn),
+                        cap_id, offset, pdev->config_map[i], i);
+                return -EFAULT;
+            }
+        }
     }
 
     config = pdev->config + offset;
