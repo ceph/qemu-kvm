@@ -67,6 +67,9 @@ static void assigned_device_pci_cap_write_config(PCIDevice *pci_dev,
                                                  uint32_t address,
                                                  uint32_t val, int len);
 
+static uint32_t assigned_device_pci_cap_read_config(PCIDevice *pci_dev,
+                                                    uint32_t address, int len);
+
 static uint32_t assigned_dev_ioport_rw(AssignedDevRegion *dev_region,
                                        uint32_t addr, int len, uint32_t *val)
 {
@@ -370,11 +373,32 @@ static uint8_t assigned_dev_pci_read_byte(PCIDevice *d, int pos)
     return (uint8_t)assigned_dev_pci_read(d, pos, 1);
 }
 
-static uint8_t pci_find_cap_offset(PCIDevice *d, uint8_t cap)
+static void assigned_dev_pci_write(PCIDevice *d, int pos, uint32_t val, int len)
+{
+    AssignedDevice *pci_dev = container_of(d, AssignedDevice, dev);
+    ssize_t ret;
+    int fd = pci_dev->real_device.config_fd;
+
+again:
+    ret = pwrite(fd, &val, len, pos);
+    if (ret != len) {
+	if ((ret < 0) && (errno == EINTR || errno == EAGAIN))
+	    goto again;
+
+	fprintf(stderr, "%s: pwrite failed, ret = %zd errno = %d\n",
+		__func__, ret, errno);
+
+	exit(1);
+    }
+
+    return;
+}
+
+static uint8_t pci_find_cap_offset(PCIDevice *d, uint8_t cap, uint8_t start)
 {
     int id;
     int max_cap = 48;
-    int pos = PCI_CAPABILITY_LIST;
+    int pos = start ? start : PCI_CAPABILITY_LIST;
     int status;
 
     status = assigned_dev_pci_read_byte(d, PCI_STATUS);
@@ -453,10 +477,16 @@ static uint32_t assigned_dev_pci_read_config(PCIDevice *d, uint32_t address,
     ssize_t ret;
     AssignedDevice *pci_dev = container_of(d, AssignedDevice, dev);
 
+    if (address >= PCI_CONFIG_HEADER_SIZE && d->config_map[address]) {
+        val = assigned_device_pci_cap_read_config(d, address, len);
+        DEBUG("(%x.%x): address=%04x val=0x%08x len=%d\n",
+              (d->devfn >> 3) & 0x1F, (d->devfn & 0x7), address, val, len);
+        return val;
+    }
+
     if (address < 0x4 || (pci_dev->need_emulate_cmd && address == 0x4) ||
 	(address >= 0x10 && address <= 0x24) || address == 0x30 ||
-        address == 0x34 || address == 0x3c || address == 0x3d ||
-        (address >= PCI_CONFIG_HEADER_SIZE && d->config_map[address])) {
+        address == 0x34 || address == 0x3c || address == 0x3d) {
         val = pci_default_read_config(d, address, len);
         DEBUG("(%x.%x): address=%04x val=0x%08x len=%d\n",
               (d->devfn >> 3) & 0x1F, (d->devfn & 0x7), address, val, len);
@@ -1251,7 +1281,70 @@ static void assigned_dev_update_msix(PCIDevice *pci_dev, unsigned int ctrl_pos)
 #endif
 #endif
 
-static void assigned_device_pci_cap_write_config(PCIDevice *pci_dev, uint32_t address,
+/* There can be multiple VNDR capabilities per device, we need to find the
+ * one that starts closet to the given address without going over. */
+static uint8_t find_vndr_start(PCIDevice *pci_dev, uint32_t address)
+{
+    uint8_t cap, pos;
+
+    for (cap = pos = 0;
+         (pos = pci_find_cap_offset(pci_dev, PCI_CAP_ID_VNDR, pos));
+         pos += PCI_CAP_LIST_NEXT) {
+        if (pos <= address) {
+            cap = MAX(pos, cap);
+        }
+    }
+    return cap;
+}
+
+/* Merge the bits set in mask from mval into val.  Both val and mval are
+ * at the same addr offset, pos is the starting offset of the mask. */
+static uint32_t merge_bits(uint32_t val, uint32_t mval, uint8_t addr,
+                           int len, uint8_t pos, uint32_t mask)
+{
+    if (!ranges_overlap(addr, len, pos, 4)) {
+        return val;
+    }
+
+    if (addr >= pos) {
+        mask >>= (addr - pos) * 8;
+    } else {
+        mask <<= (pos - addr) * 8;
+    }
+    mask &= 0xffffffffU >> (4 - len) * 8;
+
+    val &= ~mask;
+    val |= (mval & mask);
+
+    return val;
+}
+
+static uint32_t assigned_device_pci_cap_read_config(PCIDevice *pci_dev,
+                                                    uint32_t address, int len)
+{
+    uint8_t cap, cap_id = pci_dev->config_map[address];
+    uint32_t val;
+
+    switch (cap_id) {
+
+    case PCI_CAP_ID_VPD:
+        cap = pci_find_capability(pci_dev, cap_id);
+        val = assigned_dev_pci_read(pci_dev, address, len);
+        return merge_bits(val, pci_get_long(pci_dev->config + address),
+                          address, len, cap + PCI_CAP_LIST_NEXT, 0xff);
+
+    case PCI_CAP_ID_VNDR:
+        cap = find_vndr_start(pci_dev, address);
+        val = assigned_dev_pci_read(pci_dev, address, len);
+        return merge_bits(val, pci_get_long(pci_dev->config + address),
+                          address, len, cap + PCI_CAP_LIST_NEXT, 0xff);
+    }
+
+    return pci_default_read_config(pci_dev, address, len);
+}
+
+static void assigned_device_pci_cap_write_config(PCIDevice *pci_dev,
+                                                 uint32_t address,
                                                  uint32_t val, int len)
 {
     uint8_t cap_id = pci_dev->config_map[address];
@@ -1281,6 +1374,11 @@ static void assigned_device_pci_cap_write_config(PCIDevice *pci_dev, uint32_t ad
 #endif
         break;
 #endif
+
+    case PCI_CAP_ID_VPD:
+    case PCI_CAP_ID_VNDR:
+        assigned_dev_pci_write(pci_dev, address, val, len);
+        break;
     }
 }
 
@@ -1300,7 +1398,7 @@ static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
 #ifdef KVM_CAP_DEVICE_MSI
     /* Expose MSI capability
      * MSI capability is the 1st capability in capability config */
-    if ((pos = pci_find_cap_offset(pci_dev, PCI_CAP_ID_MSI))) {
+    if ((pos = pci_find_cap_offset(pci_dev, PCI_CAP_ID_MSI, 0))) {
         dev->cap.available |= ASSIGNED_DEVICE_CAP_MSI;
         /* Only 32-bit/no-mask currently supported */
         if ((ret = pci_add_capability(pci_dev, PCI_CAP_ID_MSI, pos, 10)) < 0) {
@@ -1322,7 +1420,7 @@ static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
 #endif
 #ifdef KVM_CAP_DEVICE_MSIX
     /* Expose MSI-X capability */
-    if ((pos = pci_find_cap_offset(pci_dev, PCI_CAP_ID_MSIX))) {
+    if ((pos = pci_find_cap_offset(pci_dev, PCI_CAP_ID_MSIX, 0))) {
         int bar_nr;
         uint32_t msix_table_entry;
 
@@ -1346,6 +1444,157 @@ static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
     }
 #endif
 #endif
+
+    /* Minimal PM support, nothing writable, device appears to NAK changes */
+    if ((pos = pci_find_cap_offset(pci_dev, PCI_CAP_ID_PM, 0))) {
+        uint16_t pmc;
+        if ((ret = pci_add_capability(pci_dev, PCI_CAP_ID_PM, pos,
+                                      PCI_PM_SIZEOF)) < 0) {
+            return ret;
+        }
+
+        pmc = pci_get_word(pci_dev->config + pos + PCI_CAP_FLAGS);
+        pmc &= (PCI_PM_CAP_VER_MASK | PCI_PM_CAP_DSI);
+        pci_set_word(pci_dev->config + pos + PCI_CAP_FLAGS, pmc);
+
+        /* assign_device will bring the device up to D0, so we don't need
+         * to worry about doing that ourselves here. */
+        pci_set_word(pci_dev->config + pos + PCI_PM_CTRL,
+                     PCI_PM_CTRL_NO_SOFT_RST);
+
+        pci_set_byte(pci_dev->config + pos + PCI_PM_PPB_EXTENSIONS, 0);
+        pci_set_byte(pci_dev->config + pos + PCI_PM_DATA_REGISTER, 0);
+    }
+
+    if ((pos = pci_find_cap_offset(pci_dev, PCI_CAP_ID_EXP, 0))) {
+        uint8_t version;
+        uint16_t type, devctl, lnkcap, lnksta;
+        uint32_t devcap;
+        int size = 0x3c; /* version 2 size */
+
+        version = pci_get_byte(pci_dev->config + pos + PCI_EXP_FLAGS);
+        version &= PCI_EXP_FLAGS_VERS;
+        if (version == 1) {
+            size = 0x14;
+        } else if (version > 2) {
+            fprintf(stderr, "Unsupported PCI express capability version %d\n",
+                    version);
+            return -EINVAL;
+        }
+
+        if ((ret = pci_add_capability(pci_dev, PCI_CAP_ID_EXP,
+                                      pos, size)) < 0) {
+            return ret;
+        }
+
+        type = pci_get_word(pci_dev->config + pos + PCI_EXP_FLAGS);
+        type = (type & PCI_EXP_FLAGS_TYPE) >> 8;
+        if (type != PCI_EXP_TYPE_ENDPOINT &&
+            type != PCI_EXP_TYPE_LEG_END && type != PCI_EXP_TYPE_RC_END) {
+            fprintf(stderr,
+                    "Device assignment only supports endpoint assignment, "
+                    "device type %d\n", type);
+            return -EINVAL;
+        }
+
+        /* capabilities, pass existing read-only copy
+         * PCI_EXP_FLAGS_IRQ: updated by hardware, should be direct read */
+
+        /* device capabilities: hide FLR */
+        devcap = pci_get_long(pci_dev->config + pos + PCI_EXP_DEVCAP);
+        devcap &= ~PCI_EXP_DEVCAP_FLR;
+        pci_set_long(pci_dev->config + pos + PCI_EXP_DEVCAP, devcap);
+
+        /* device control: clear all error reporting enable bits, leaving
+         *                 leaving only a few host values.  Note, these are
+         *                 all writable, but not passed to hw.
+         */
+        devctl = pci_get_word(pci_dev->config + pos + PCI_EXP_DEVCTL);
+        devctl = (devctl & (PCI_EXP_DEVCTL_READRQ | PCI_EXP_DEVCTL_PAYLOAD)) |
+                  PCI_EXP_DEVCTL_RELAX_EN | PCI_EXP_DEVCTL_NOSNOOP_EN;
+        pci_set_word(pci_dev->config + pos + PCI_EXP_DEVCTL, devctl);
+        devctl = PCI_EXP_DEVCTL_BCR_FLR | PCI_EXP_DEVCTL_AUX_PME;
+        pci_set_word(pci_dev->wmask + pos + PCI_EXP_DEVCTL, ~devctl);
+
+        /* Clear device status */
+        pci_set_word(pci_dev->config + pos + PCI_EXP_DEVSTA, 0);
+
+        /* Link capabilities, expose links and latencues, clear reporting */
+        lnkcap = pci_get_word(pci_dev->config + pos + PCI_EXP_LNKCAP);
+        lnkcap &= (PCI_EXP_LNKCAP_SLS | PCI_EXP_LNKCAP_MLW |
+                   PCI_EXP_LNKCAP_ASPMS | PCI_EXP_LNKCAP_L0SEL |
+                   PCI_EXP_LNKCAP_L1EL);
+        pci_set_word(pci_dev->config + pos + PCI_EXP_LNKCAP, lnkcap);
+        pci_set_word(pci_dev->wmask + pos + PCI_EXP_LNKCAP,
+                     PCI_EXP_LNKCTL_ASPMC | PCI_EXP_LNKCTL_RCB |
+                     PCI_EXP_LNKCTL_CCC | PCI_EXP_LNKCTL_ES |
+                     PCI_EXP_LNKCTL_CLKREQ_EN | PCI_EXP_LNKCTL_HAWD);
+
+        /* Link control, pass existing read-only copy.  Should be writable? */
+
+        /* Link status, only expose current speed and width */
+        lnksta = pci_get_word(pci_dev->config + pos + PCI_EXP_LNKSTA);
+        lnksta &= (PCI_EXP_LNKSTA_CLS | PCI_EXP_LNKSTA_NLW);
+        pci_set_word(pci_dev->config + pos + PCI_EXP_LNKSTA, lnksta);
+
+        if (version >= 2) {
+            /* Slot capabilities, control, status - not needed for endpoints */
+            pci_set_long(pci_dev->config + pos + PCI_EXP_SLTCAP, 0);
+            pci_set_word(pci_dev->config + pos + PCI_EXP_SLTCTL, 0);
+            pci_set_word(pci_dev->config + pos + PCI_EXP_SLTSTA, 0);
+
+            /* Root control, capabilities, status - not needed for endpoints */
+            pci_set_word(pci_dev->config + pos + PCI_EXP_RTCTL, 0);
+            pci_set_word(pci_dev->config + pos + PCI_EXP_RTCAP, 0);
+            pci_set_long(pci_dev->config + pos + PCI_EXP_RTSTA, 0);
+
+            /* Device capabilities/control 2, pass existing read-only copy */
+            /* Link control 2, pass existing read-only copy */
+        }
+    }
+
+    if ((pos = pci_find_cap_offset(pci_dev, PCI_CAP_ID_PCIX, 0))) {
+        uint16_t cmd;
+        uint32_t status;
+
+        /* Only expose the minimum, 8 byte capability */
+        if ((ret = pci_add_capability(pci_dev, PCI_CAP_ID_PCIX, pos, 8)) < 0) {
+            return ret;
+        }
+
+        /* Command register, clear upper bits, including extended modes */
+        cmd = pci_get_word(pci_dev->config + pos + PCI_X_CMD);
+        cmd &= (PCI_X_CMD_DPERR_E | PCI_X_CMD_ERO | PCI_X_CMD_MAX_READ |
+                PCI_X_CMD_MAX_SPLIT);
+        pci_set_word(pci_dev->config + pos + PCI_X_CMD, cmd);
+
+        /* Status register, update with emulated PCI bus location, clear
+         * error bits, leave the rest. */
+        status = pci_get_long(pci_dev->config + pos + PCI_X_STATUS);
+        status &= ~(PCI_X_STATUS_BUS | PCI_X_STATUS_DEVFN);
+        status |= (pci_bus_num(pci_dev->bus) << 8) | pci_dev->devfn;
+        status &= ~(PCI_X_STATUS_SPL_DISC | PCI_X_STATUS_UNX_SPL |
+                    PCI_X_STATUS_SPL_ERR);
+        pci_set_long(pci_dev->config + pos + PCI_X_STATUS, status);
+    }
+
+    if ((pos = pci_find_cap_offset(pci_dev, PCI_CAP_ID_VPD, 0))) {
+        /* Direct R/W passthrough */
+        if ((ret = pci_add_capability(pci_dev, PCI_CAP_ID_VPD, pos, 8)) < 0) {
+            return ret;
+        }
+    }
+
+    /* Devices can have multiple vendor capabilities, get them all */
+    for (pos = 0; (pos = pci_find_cap_offset(pci_dev, PCI_CAP_ID_VNDR, pos));
+        pos += PCI_CAP_LIST_NEXT) {
+        uint8_t len = pci_get_byte(pci_dev->config + pos + PCI_CAP_FLAGS);
+        /* Direct R/W passthrough */
+        if ((ret = pci_add_capability(pci_dev, PCI_CAP_ID_VNDR,
+                                      pos, len)) < 0) {
+            return ret;
+        }
+    }
 
     return 0;
 }
