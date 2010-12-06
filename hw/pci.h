@@ -122,11 +122,6 @@ enum {
     QEMU_PCI_CAP_MULTIFUNCTION = (1 << QEMU_PCI_CAP_MULTIFUNCTION_BITNR),
 };
 
-#define PCI_CAPABILITY_CONFIG_MAX_LENGTH 0x60
-#define PCI_CAPABILITY_CONFIG_DEFAULT_START_ADDR 0x40
-#define PCI_CAPABILITY_CONFIG_MSI_LENGTH 0x10
-#define PCI_CAPABILITY_CONFIG_MSIX_LENGTH 0x10
-
 typedef int (*msix_mask_notifier_func)(PCIDevice *, unsigned vector,
 				       int masked);
 

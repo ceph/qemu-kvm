@@ -1302,10 +1302,9 @@ static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
      * MSI capability is the 1st capability in capability config */
     if ((pos = pci_find_cap_offset(pci_dev, PCI_CAP_ID_MSI))) {
         dev->cap.available |= ASSIGNED_DEVICE_CAP_MSI;
-        pci_add_capability(pci_dev, PCI_CAP_ID_MSI, pos,
-                           PCI_CAPABILITY_CONFIG_MSI_LENGTH);
-
         /* Only 32-bit/no-mask currently supported */
+        pci_add_capability(pci_dev, PCI_CAP_ID_MSI, pos, 10);
+
         pci_set_word(pci_dev->config + pos + PCI_MSI_FLAGS,
                      pci_get_word(pci_dev->config + pos + PCI_MSI_FLAGS) &
                      PCI_MSI_FLAGS_QMASK);
@@ -1326,8 +1325,7 @@ static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
         uint32_t msix_table_entry;
 
         dev->cap.available |= ASSIGNED_DEVICE_CAP_MSIX;
-        pci_add_capability(pci_dev, PCI_CAP_ID_MSIX, pos,
-                           PCI_CAPABILITY_CONFIG_MSIX_LENGTH);
+        pci_add_capability(pci_dev, PCI_CAP_ID_MSIX, pos, 12);
 
         pci_set_word(pci_dev->config + pos + PCI_MSIX_FLAGS,
                      pci_get_word(pci_dev->config + pos + PCI_MSIX_FLAGS) &
