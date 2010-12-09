@@ -1460,7 +1460,7 @@ static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
         /* assign_device will bring the device up to D0, so we don't need
          * to worry about doing that ourselves here. */
         pci_set_word(pci_dev->config + pos + PCI_PM_CTRL,
-                     PCI_PM_CTRL_NO_SOFT_RST);
+                     PCI_PM_CTRL_NO_SOFT_RESET);
 
         pci_set_byte(pci_dev->config + pos + PCI_PM_PPB_EXTENSIONS, 0);
         pci_set_byte(pci_dev->config + pos + PCI_PM_DATA_REGISTER, 0);
