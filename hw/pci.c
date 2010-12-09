@@ -1856,7 +1856,7 @@ int pci_add_capability(PCIDevice *pdev, uint8_t cap_id,
                         pci_find_domain(pdev->bus), pci_bus_num(pdev->bus),
                         PCI_SLOT(pdev->devfn), PCI_FUNC(pdev->devfn),
                         cap_id, offset, pdev->config_map[i], i);
-                return -EFAULT;
+                return -EINVAL;
             }
         }
     }
