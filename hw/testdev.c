@@ -1,3 +1,4 @@
+#include <sys/mman.h>
 #include "hw.h"
 #include "qdev.h"
 #include "isa.h"
@@ -44,6 +45,16 @@ static void test_device_ioport_write(void *opaque, uint32_t addr, uint32_t data)
 static uint32_t test_device_ioport_read(void *opaque, uint32_t addr)
 {
     return test_device_ioport_data;
+}
+
+static void test_device_flush_page(void *opaque, uint32_t addr, uint32_t data)
+{
+    target_phys_addr_t len = 4096;
+    void *a = cpu_physical_memory_map(data & ~0xffful, &len, 0);
+
+    mprotect(a, 4096, PROT_NONE);
+    mprotect(a, 4096, PROT_READ|PROT_WRITE);
+    cpu_physical_memory_unmap(a, len, 0, 0);
 }
 
 static char *iomem_buf;
@@ -104,6 +115,7 @@ static int init_test_device(ISADevice *isa)
     register_ioport_write(0xe0, 1, 2, test_device_ioport_write, dev);
     register_ioport_read(0xe0, 1, 4, test_device_ioport_read, dev);
     register_ioport_write(0xe0, 1, 4, test_device_ioport_write, dev);
+    register_ioport_write(0xe4, 1, 4, test_device_flush_page, dev);
     register_ioport_write(0x2000, 24, 1, test_device_irq_line, NULL);
     iomem_buf = qemu_mallocz(0x10000);
     iomem = cpu_register_io_memory(test_iomem_read, test_iomem_write, NULL);
