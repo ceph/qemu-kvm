@@ -247,7 +247,7 @@ static void *boot_set_opaque;
 static NotifierList exit_notifiers =
     NOTIFIER_LIST_INITIALIZER(exit_notifiers);
 
-int kvm_allowed = 1;
+int kvm_allowed = -1;
 uint32_t xen_domid;
 enum xen_mode xen_mode = XEN_EMULATE;
 
@@ -2436,10 +2436,8 @@ int main(int argc, char **argv, char **envp)
             case QEMU_OPTION_smbios:
                 do_smbios_option(optarg);
                 break;
-#ifdef OBSOLETE_KVM_IMPL
             case QEMU_OPTION_enable_kvm:
                 kvm_allowed = 1;
-#endif
                 break;
 	    case QEMU_OPTION_no_kvm:
 		kvm_allowed = 0;
@@ -2789,19 +2787,17 @@ int main(int argc, char **argv, char **envp)
     if (kvm_allowed) {
         int ret = kvm_init(smp_cpus);
         if (ret < 0) {
-#if defined(OBSOLETE_KVM_IMPL) || defined(CONFIG_NO_CPU_EMULATION)
-            if (!kvm_available()) {
-                printf("KVM not supported for this target\n");
-            } else {
-                fprintf(stderr, "failed to initialize KVM: %s\n", strerror(-ret));
+            if (kvm_allowed > 0) {
+                if (!kvm_available()) {
+                    printf("KVM not supported for this target\n");
+                } else {
+                    fprintf(stderr, "failed to initialize KVM: %s\n", strerror(-ret));
+                }
+                exit(1);
             }
-            exit(1);
-#endif
-#ifdef CONFIG_KVM
             fprintf(stderr, "Could not initialize KVM, will disable KVM support\n");
-            kvm_allowed = 0;
-#endif
         }
+        kvm_allowed = ret >= 0;
     }
 
     if (qemu_init_main_loop()) {
