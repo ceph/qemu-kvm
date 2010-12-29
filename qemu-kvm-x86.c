@@ -564,20 +564,6 @@ static void kvm_arch_load_mpstate(CPUState *env)
 #endif
 }
 
-static void kvm_reset_mpstate(CPUState *env)
-{
-#ifdef KVM_CAP_MP_STATE
-    if (kvm_check_extension(kvm_state, KVM_CAP_MP_STATE)) {
-        if (kvm_irqchip_in_kernel()) {
-            env->mp_state = cpu_is_bsp(env) ? KVM_MP_STATE_RUNNABLE :
-                                              KVM_MP_STATE_UNINITIALIZED;
-        } else {
-            env->mp_state = KVM_MP_STATE_RUNNABLE;
-        }
-    }
-#endif
-}
-
 #define XSAVE_CWD_RIP     2
 #define XSAVE_CWD_RDP     4
 #define XSAVE_MXCSR       6
@@ -652,7 +638,6 @@ static int _kvm_arch_init_vcpu(CPUState *env)
 #ifdef KVM_EXIT_TPR_ACCESS
     kvm_enable_tpr_access_reporting(env);
 #endif
-    kvm_reset_mpstate(env);
     return 0;
 }
 
@@ -761,7 +746,6 @@ void kvm_arch_cpu_reset(CPUState *env)
 {
     kvm_reset_msrs(env);
     kvm_arch_reset_vcpu(env);
-    kvm_reset_mpstate(env);
 }
 
 #ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
