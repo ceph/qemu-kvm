@@ -1089,7 +1089,6 @@ static int kvm_get_msrs(CPUState *env)
     if (kvm_has_msr_hsave_pa(env))
         msrs[n++].index = MSR_VM_HSAVE_PA;
     msrs[n++].index = MSR_IA32_TSC;
-    msrs[n++].index = MSR_VM_HSAVE_PA;
 #ifdef TARGET_X86_64
     if (lm_capable_kernel) {
         msrs[n++].index = MSR_CSTAR;
