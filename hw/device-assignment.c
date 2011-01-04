@@ -1136,7 +1136,10 @@ static void assigned_dev_update_msi(PCIDevice *pci_dev, unsigned int ctrl_pos)
         if (kvm_assign_irq(kvm_context, &assigned_irq_data) < 0)
             perror("assigned_dev_enable_msi: assign irq");
 
+        assigned_dev->girq = -1;
         assigned_dev->irq_requested_type = assigned_irq_data.flags;
+    } else {
+        assign_irq(assigned_dev);
     }
 }
 #endif
@@ -1276,7 +1279,10 @@ static void assigned_dev_update_msix(PCIDevice *pci_dev, unsigned int ctrl_pos)
             perror("assigned_dev_enable_msix: assign irq");
             return;
         }
+        assigned_dev->girq = -1;
         assigned_dev->irq_requested_type = assigned_irq_data.flags;
+    } else {
+        assign_irq(assigned_dev);
     }
 }
 #endif
