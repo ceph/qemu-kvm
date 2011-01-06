@@ -495,7 +495,7 @@ EQMP
 
     {
         .name       = "migrate_set_speed",
-        .args_type  = "value:f",
+        .args_type  = "value:o",
         .params     = "value",
         .help       = "set maximum speed (in bytes) for migrations",
         .user_print = monitor_user_noop,
@@ -510,7 +510,7 @@ Set maximum speed for migrations.
 
 Arguments:
 
-- "value": maximum speed, in bytes per second (json-number)
+- "value": maximum speed, in bytes per second (json-int)
 
 Example:
 
