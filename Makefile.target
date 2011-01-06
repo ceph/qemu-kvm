@@ -228,6 +228,7 @@ obj-i386-y += device-hotplug.o pci-hotplug.o smbios.o wdt_ib700.o
 obj-i386-y += extboot.o
 obj-i386-y += debugcon.o multiboot.o
 obj-i386-y += pc_piix.o
+obj-i386-$(CONFIG_SPICE) += qxl.o qxl-logger.o qxl-render.o
 obj-i386-y += testdev.o
 obj-i386-y += acpi.o acpi_piix4.o
 

@@ -42,6 +42,7 @@
 #include "device-assignment.h"
 #include "kvm.h"
 #include "blockdev.h"
+#include "ui/qemu-spice.h"
 
 /* output Bochs bios info messages */
 //#define DEBUG_BIOS
@@ -1007,6 +1008,13 @@ void pc_vga_init(PCIBus *pci_bus)
             pci_vmsvga_init(pci_bus);
         else
             fprintf(stderr, "%s: vmware_vga: no PCI bus\n", __FUNCTION__);
+#ifdef CONFIG_SPICE
+    } else if (qxl_enabled) {
+        if (pci_bus)
+            pci_create_simple(pci_bus, -1, "qxl-vga");
+        else
+            fprintf(stderr, "%s: qxl: no PCI bus\n", __FUNCTION__);
+#endif
     } else if (std_vga_enabled) {
         if (pci_bus) {
             pci_vga_init(pci_bus);
