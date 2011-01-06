@@ -68,6 +68,24 @@ Eject a removable medium (use -f to force it).
 ETEXI
 
     {
+        .name       = "drive_del",
+        .args_type  = "id:s",
+        .params     = "device",
+        .help       = "remove host block device",
+        .user_print = monitor_user_noop,
+        .mhandler.cmd_new = do_drive_del,
+    },
+
+STEXI
+@item drive_del @var{device}
+@findex drive_del
+Remove host block device.  The result is that guest generated IO is no longer
+submitted against the host device underlying the disk.  Once a drive has
+been deleted, the QEMU Block layer returns -EIO which results in IO
+errors in the guest for applications that are reading/writing to the device.
+ETEXI
+
+    {
         .name       = "change",
         .args_type  = "device:B,target:F,arg:s?",
         .params     = "device filename [format]",
@@ -783,6 +801,25 @@ STEXI
 Set maximum tolerated downtime (in seconds) for migration.
 ETEXI
 
+    {
+        .name       = "snapshot_blkdev",
+        .args_type  = "device:s,snapshot_file:s?,format:s?",
+        .params     = "device [new-image-file] [format]",
+        .help       = "initiates a live snapshot\n\t\t\t"
+                      "of device. If a new image file is specified, the\n\t\t\t"
+                      "new image file will become the new root image.\n\t\t\t"
+                      "If format is specified, the snapshot file will\n\t\t\t"
+                      "be created in that format. Otherwise the\n\t\t\t"
+                      "snapshot will be internal! (currently unsupported)",
+        .mhandler.cmd_new = do_snapshot_blkdev,
+    },
+
+STEXI
+@item snapshot_blkdev
+@findex snapshot_blkdev
+Snapshot device, using snapshot file as target if provided
+ETEXI
+
 #if defined(TARGET_I386)
     {
         .name       = "drive_add",
@@ -1130,6 +1167,60 @@ Set CPU @var{cpu} online or offline.
 ETEXI
 
     {
+        .name       = "set_password",
+        .args_type  = "protocol:s,password:s,connected:s?",
+        .params     = "protocol password action-if-connected",
+        .help       = "set spice/vnc password",
+        .user_print = monitor_user_noop,
+        .mhandler.cmd_new = set_password,
+    },
+
+STEXI
+@item set_password [ vnc | spice ] password [ action-if-connected ]
+@findex set_password
+
+Change spice/vnc password.  Use zero to make the password stay valid
+forever.  @var{action-if-connected} specifies what should happen in
+case a connection is established: @var{fail} makes the password change
+fail.  @var{disconnect} changes the password and disconnects the
+client.  @var{keep} changes the password and keeps the connection up.
+@var{keep} is the default.
+ETEXI
+
+    {
+        .name       = "expire_password",
+        .args_type  = "protocol:s,time:s",
+        .params     = "protocol time",
+        .help       = "set spice/vnc password expire-time",
+        .user_print = monitor_user_noop,
+        .mhandler.cmd_new = expire_password,
+    },
+
+STEXI
+@item expire_password [ vnc | spice ] expire-time
+@findex expire_password
+
+Specify when a password for spice/vnc becomes
+invalid. @var{expire-time} accepts:
+
+@table @var
+@item now
+Invalidate password instantly.
+
+@item never
+Password stays valid forever.
+
+@item +nsec
+Password stays valid for @var{nsec} seconds starting now.
+
+@item nsec
+Password is invalidated at the given time.  @var{nsec} are the seconds
+passed since 1970, i.e. unix epoch.
+
+@end table
+ETEXI
+
+    {
         .name       = "info",
         .args_type  = "item:s?",
         .params     = "[subcommand]",
@@ -1166,7 +1257,7 @@ show i8259 (PIC) state
 @item info pci
 show emulated PCI device info
 @item info tlb
-show virtual to physical memory mappings (i386 only)
+show virtual to physical memory mappings (i386, SH4 and SPARC only)
 @item info mem
 show the active virtual memory mappings (i386 only)
 @item info jit

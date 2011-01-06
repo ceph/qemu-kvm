@@ -197,11 +197,11 @@ ifdef CONFIG_SOFTMMU
 obj-y = arch_init.o cpus.o monitor.o pci.o machine.o gdbstub.o vl.o balloon.o
 # virtio has to be here due to weird dependency between PCI and virtio-net.
 # need to fix this properly
-obj-y += virtio-blk.o virtio-balloon.o virtio-net.o virtio-serial-bus.o
+obj-$(CONFIG_VIRTIO) += virtio-blk.o virtio-balloon.o virtio-net.o virtio-serial-bus.o
 obj-$(CONFIG_VIRTIO_PCI) += virtio-pci.o
 obj-y += vhost_net.o
 obj-$(CONFIG_VHOST_NET) += vhost.o
-obj-$(CONFIG_VIRTFS) += virtio-9p.o
+obj-$(CONFIG_REALLY_VIRTFS) += virtio-9p.o
 obj-y += rwhandler.o
 obj-$(CONFIG_KVM) += kvm.o kvm-all.o
 obj-$(CONFIG_NO_KVM) += kvm-stub.o
@@ -216,13 +216,6 @@ QEMU_CFLAGS += $(VNC_PNG_CFLAGS)
 # xen backend driver support
 obj-$(CONFIG_XEN) += xen_machine_pv.o xen_domainbuild.o
 
-# USB layer
-obj-$(CONFIG_USB_OHCI) += usb-ohci.o
-
-# PCI network cards
-obj-y += rtl8139.o
-obj-y += e1000.o
-
 # Inter-VM PCI shared memory
 obj-$(CONFIG_KVM) += ivshmem.o
 
@@ -235,6 +228,7 @@ obj-i386-y += device-hotplug.o pci-hotplug.o smbios.o wdt_ib700.o
 obj-i386-y += extboot.o
 obj-i386-y += debugcon.o multiboot.o
 obj-i386-y += pc_piix.o
+obj-i386-$(CONFIG_SPICE) += qxl.o qxl-logger.o qxl-render.o
 obj-i386-y += testdev.o
 obj-i386-y += acpi.o acpi_piix4.o
 

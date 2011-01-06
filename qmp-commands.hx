@@ -495,7 +495,7 @@ EQMP
 
     {
         .name       = "migrate_set_speed",
-        .args_type  = "value:f",
+        .args_type  = "value:o",
         .params     = "value",
         .help       = "set maximum speed (in bytes) for migrations",
         .user_print = monitor_user_noop,
@@ -510,7 +510,7 @@ Set maximum speed for migrations.
 
 Arguments:
 
-- "value": maximum speed, in bytes per second (json-number)
+- "value": maximum speed, in bytes per second (json-int)
 
 Example:
 
@@ -738,6 +738,63 @@ Example:
 EQMP
 
     {
+        .name       = "set_password",
+        .args_type  = "protocol:s,password:s,connected:s?",
+        .params     = "protocol password action-if-connected",
+        .help       = "set spice/vnc password",
+        .user_print = monitor_user_noop,
+        .mhandler.cmd_new = set_password,
+    },
+
+SQMP
+set_password
+------------
+
+Set the password for vnc/spice protocols.
+
+Arguments:
+
+- "protocol": protocol name (json-string)
+- "password": password (json-string)
+- "connected": [ keep | disconnect | fail ] (josn-string, optional)
+
+Example:
+
+-> { "execute": "set_password", "arguments": { "protocol": "vnc",
+                                               "password": "secret" } }
+<- { "return": {} }
+
+EQMP
+
+    {
+        .name       = "expire_password",
+        .args_type  = "protocol:s,time:s",
+        .params     = "protocol time",
+        .help       = "set spice/vnc password expire-time",
+        .user_print = monitor_user_noop,
+        .mhandler.cmd_new = expire_password,
+    },
+
+SQMP
+expire_password
+---------------
+
+Set the password expire time for vnc/spice protocols.
+
+Arguments:
+
+- "protocol": protocol name (json-string)
+- "time": [ now | never | +secs | secs ] (json-string)
+
+Example:
+
+-> { "execute": "expire_password", "arguments": { "protocol": "vnc",
+                                                  "time": "+60" } }
+<- { "return": {} }
+
+EQMP
+
+    {
         .name       = "qmp_capabilities",
         .args_type  = "",
         .params     = "",
@@ -760,6 +817,51 @@ Example:
 <- { "return": {} }
 
 Note: This command must be issued before issuing any other command.
+
+EQMP
+
+    {
+        .name       = "human-monitor-command",
+        .args_type  = "command-line:s,cpu-index:i?",
+        .params     = "",
+        .help       = "",
+        .user_print = monitor_user_noop,
+        .mhandler.cmd_new = do_hmp_passthrough,
+    },
+
+SQMP
+human-monitor-command
+---------------------
+
+Execute a Human Monitor command.
+
+Arguments: 
+
+- command-line: the command name and its arguments, just like the
+                Human Monitor's shell (json-string)
+- cpu-index: select the CPU number to be used by commands which access CPU
+             data, like 'info registers'. The Monitor selects CPU 0 if this
+             argument is not provided (json-int, optional)
+
+Example:
+
+-> { "execute": "human-monitor-command", "arguments": { "command-line": "info kvm" } }
+<- { "return": "kvm support: enabled\r\n" }
+
+Notes:
+
+(1) The Human Monitor is NOT an stable interface, this means that command
+    names, arguments and responses can change or be removed at ANY time.
+    Applications that rely on long term stability guarantees should NOT
+    use this command
+
+(2) Limitations:
+
+    o This command is stateless, this means that commands that depend
+      on state information (such as getfd) might not work
+
+    o Commands that prompt the user for data (eg. 'cont' when the block
+      device is encrypted) don't currently work
 
 3. Query Commands
 =================
@@ -1387,6 +1489,76 @@ Example:
                "service":"50401",
                "family":"ipv4"
             }
+         ]
+      }
+   }
+
+EQMP
+
+SQMP
+query-spice
+-----------
+
+Show SPICE server information.
+
+Return a json-object with server information. Connected clients are returned
+as a json-array of json-objects.
+
+The main json-object contains the following:
+
+- "enabled": true or false (json-bool)
+- "host": server's IP address (json-string)
+- "port": server's port number (json-int, optional)
+- "tls-port": server's port number (json-int, optional)
+- "auth": authentication method (json-string)
+         - Possible values: "none", "spice"
+- "channels": a json-array of all active channels clients
+
+Channels are described by a json-object, each one contain the following:
+
+- "host": client's IP address (json-string)
+- "family": address family (json-string)
+         - Possible values: "ipv4", "ipv6", "unix", "unknown"
+- "port": client's port number (json-string)
+- "connection-id": spice connection id.  All channels with the same id
+                   belong to the same spice session (json-int)
+- "channel-type": channel type.  "1" is the main control channel, filter for
+                  this one if you want track spice sessions only (json-int)
+- "channel-id": channel id.  Usually "0", might be different needed when
+                multiple channels of the same type exist, such as multiple
+                display channels in a multihead setup (json-int)
+- "tls": whevener the channel is encrypted (json-bool)
+
+Example:
+
+-> { "execute": "query-spice" }
+<- {
+      "return": {
+         "enabled": true,
+         "auth": "spice",
+         "port": 5920,
+         "tls-port": 5921,
+         "host": "0.0.0.0",
+         "channels": [
+            {
+               "port": "54924",
+               "family": "ipv4",
+               "channel-type": 1,
+               "connection-id": 1804289383,
+               "host": "127.0.0.1",
+               "channel-id": 0,
+               "tls": true
+            },
+            {
+               "port": "36710",
+               "family": "ipv4",
+               "channel-type": 4,
+               "connection-id": 1804289383,
+               "host": "127.0.0.1",
+               "channel-id": 0,
+               "tls": false
+            },
+            [ ... more channels follow ... ]
          ]
       }
    }

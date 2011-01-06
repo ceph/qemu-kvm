@@ -676,43 +676,44 @@ static void cirrus_do_copy(CirrusVGAState *s, int dst, int src, int w, int h)
 {
     int sx, sy;
     int dx, dy;
-    int width, height;
     int depth;
     int notify = 0;
 
-    depth = s->vga.get_bpp(&s->vga) / 8;
-    s->vga.get_resolution(&s->vga, &width, &height);
+    /* make sure to only copy if it's a plain copy ROP */
+    if (*s->cirrus_rop == cirrus_bitblt_rop_fwd_src ||
+        *s->cirrus_rop == cirrus_bitblt_rop_bkwd_src) {
 
-    /* extra x, y */
-    sx = (src % ABS(s->cirrus_blt_srcpitch)) / depth;
-    sy = (src / ABS(s->cirrus_blt_srcpitch));
-    dx = (dst % ABS(s->cirrus_blt_dstpitch)) / depth;
-    dy = (dst / ABS(s->cirrus_blt_dstpitch));
+        int width, height;
 
-    /* normalize width */
-    w /= depth;
+        depth = s->vga.get_bpp(&s->vga) / 8;
+        s->vga.get_resolution(&s->vga, &width, &height);
 
-    /* if we're doing a backward copy, we have to adjust
-       our x/y to be the upper left corner (instead of the lower
-       right corner) */
-    if (s->cirrus_blt_dstpitch < 0) {
-	sx -= (s->cirrus_blt_width / depth) - 1;
-	dx -= (s->cirrus_blt_width / depth) - 1;
-	sy -= s->cirrus_blt_height - 1;
-	dy -= s->cirrus_blt_height - 1;
+        /* extra x, y */
+        sx = (src % ABS(s->cirrus_blt_srcpitch)) / depth;
+        sy = (src / ABS(s->cirrus_blt_srcpitch));
+        dx = (dst % ABS(s->cirrus_blt_dstpitch)) / depth;
+        dy = (dst / ABS(s->cirrus_blt_dstpitch));
+
+        /* normalize width */
+        w /= depth;
+
+        /* if we're doing a backward copy, we have to adjust
+           our x/y to be the upper left corner (instead of the lower
+           right corner) */
+        if (s->cirrus_blt_dstpitch < 0) {
+            sx -= (s->cirrus_blt_width / depth) - 1;
+            dx -= (s->cirrus_blt_width / depth) - 1;
+            sy -= s->cirrus_blt_height - 1;
+            dy -= s->cirrus_blt_height - 1;
+        }
+
+        /* are we in the visible portion of memory? */
+        if (sx >= 0 && sy >= 0 && dx >= 0 && dy >= 0 &&
+            (sx + w) <= width && (sy + h) <= height &&
+            (dx + w) <= width && (dy + h) <= height) {
+            notify = 1;
+        }
     }
-
-    /* are we in the visible portion of memory? */
-    if (sx >= 0 && sy >= 0 && dx >= 0 && dy >= 0 &&
-	(sx + w) <= width && (sy + h) <= height &&
-	(dx + w) <= width && (dy + h) <= height) {
-	notify = 1;
-    }
-
-    /* make to sure only copy if it's a plain copy ROP */
-    if (*s->cirrus_rop != cirrus_bitblt_rop_fwd_src &&
-	*s->cirrus_rop != cirrus_bitblt_rop_bkwd_src)
-	notify = 0;
 
     /* we have to flush all pending changes so that the copy
        is generated at the appropriate moment in time */
@@ -3088,23 +3089,27 @@ static void cirrus_init_common(CirrusVGAState * s, int device_id, int is_pci)
     register_ioport_read(0x3da, 1, 1, cirrus_vga_ioport_read, s);
 
     s->vga.vga_io_memory = cpu_register_io_memory(cirrus_vga_mem_read,
-                                                  cirrus_vga_mem_write, s);
+                                                  cirrus_vga_mem_write, s,
+                                                  DEVICE_NATIVE_ENDIAN);
     cpu_register_physical_memory(isa_mem_base + 0x000a0000, 0x20000,
                                  s->vga.vga_io_memory);
     qemu_register_coalesced_mmio(isa_mem_base + 0x000a0000, 0x20000);
 
     /* I/O handler for LFB */
     s->cirrus_linear_io_addr =
-        cpu_register_io_memory(cirrus_linear_read, cirrus_linear_write, s);
+        cpu_register_io_memory(cirrus_linear_read, cirrus_linear_write, s,
+                               DEVICE_NATIVE_ENDIAN);
 
     /* I/O handler for LFB */
     s->cirrus_linear_bitblt_io_addr =
         cpu_register_io_memory(cirrus_linear_bitblt_read,
-                               cirrus_linear_bitblt_write, s);
+                               cirrus_linear_bitblt_write, s,
+                               DEVICE_NATIVE_ENDIAN);
 
     /* I/O handler for memory-mapped I/O */
     s->cirrus_mmio_io_addr =
-        cpu_register_io_memory(cirrus_mmio_read, cirrus_mmio_write, s);
+        cpu_register_io_memory(cirrus_mmio_read, cirrus_mmio_write, s,
+                               DEVICE_NATIVE_ENDIAN);
 
     s->real_vram_size =
         (s->device_id == CIRRUS_ID_CLGD5446) ? 4096 * 1024 : 2048 * 1024;
@@ -3222,10 +3227,10 @@ static int pci_cirrus_vga_initfn(PCIDevice *dev)
      /* memory #0 LFB */
      /* memory #1 memory-mapped I/O */
      /* XXX: s->vga.vram_size must be a power of two */
-     pci_register_bar((PCIDevice *)d, 0, 0x2000000,
+     pci_register_bar(&d->dev, 0, 0x2000000,
                       PCI_BASE_ADDRESS_MEM_PREFETCH, cirrus_pci_lfb_map);
      if (device_id == CIRRUS_ID_CLGD5446) {
-         pci_register_bar((PCIDevice *)d, 1, CIRRUS_PNPMMIO_SIZE,
+         pci_register_bar(&d->dev, 1, CIRRUS_PNPMMIO_SIZE,
                           PCI_BASE_ADDRESS_SPACE_MEMORY, cirrus_pci_mmio_map);
      }
      return 0;

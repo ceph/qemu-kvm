@@ -42,6 +42,7 @@
 #include "device-assignment.h"
 #include "kvm.h"
 #include "blockdev.h"
+#include "ui/qemu-spice.h"
 
 /* output Bochs bios info messages */
 //#define DEBUG_BIOS
@@ -737,7 +738,8 @@ static void load_linux(void *fw_cfg,
     fw_cfg_add_i32(fw_cfg, FW_CFG_SETUP_SIZE, setup_size);
     fw_cfg_add_bytes(fw_cfg, FW_CFG_SETUP_DATA, setup, setup_size);
 
-    option_rom[nb_option_roms] = "linuxboot.bin";
+    option_rom[nb_option_roms].name = "linuxboot.bin";
+    option_rom[nb_option_roms].bootindex = 0;
     nb_option_roms++;
 }
 
@@ -941,7 +943,7 @@ void pc_memory_init(ram_addr_t ram_size,
         goto bios_error;
     }
     bios_offset = qemu_ram_alloc(NULL, "pc.bios", bios_size);
-    ret = rom_add_file_fixed(bios_name, (uint32_t)(-bios_size));
+    ret = rom_add_file_fixed(bios_name, (uint32_t)(-bios_size), -1);
     if (ret != 0) {
     bios_error:
         fprintf(stderr, "qemu: could not load PC BIOS '%s'\n", bios_name);
@@ -961,9 +963,13 @@ void pc_memory_init(ram_addr_t ram_size,
                                  (bios_offset + bios_size - isa_bios_size) | IO_MEM_ROM);
 
     if (extboot_drive) {
-        option_rom[nb_option_roms++] = qemu_strdup(EXTBOOT_FILENAME);
+        option_rom[nb_option_roms].name = qemu_strdup(EXTBOOT_FILENAME);
+        option_rom[nb_option_roms].bootindex = 0;
+        nb_option_roms++;
     }
-    option_rom[nb_option_roms++] = qemu_strdup(VAPIC_FILENAME);
+    option_rom[nb_option_roms].name = qemu_strdup(VAPIC_FILENAME);
+    option_rom[nb_option_roms].bootindex = -1;
+    nb_option_roms++;
 
     option_rom_offset = qemu_ram_alloc(NULL, "pc.rom", PC_ROM_SIZE);
     cpu_register_physical_memory(PC_ROM_MIN_VGA, PC_ROM_SIZE, option_rom_offset);
@@ -980,7 +986,7 @@ void pc_memory_init(ram_addr_t ram_size,
     }
 
     for (i = 0; i < nb_option_roms; i++) {
-        rom_add_option(option_rom[i]);
+        rom_add_option(option_rom[i].name, option_rom[i].bootindex);
     }
 }
 
@@ -1002,6 +1008,13 @@ void pc_vga_init(PCIBus *pci_bus)
             pci_vmsvga_init(pci_bus);
         else
             fprintf(stderr, "%s: vmware_vga: no PCI bus\n", __FUNCTION__);
+#ifdef CONFIG_SPICE
+    } else if (qxl_enabled) {
+        if (pci_bus)
+            pci_create_simple(pci_bus, -1, "qxl-vga");
+        else
+            fprintf(stderr, "%s: qxl: no PCI bus\n", __FUNCTION__);
+#endif
     } else if (std_vga_enabled) {
         if (pci_bus) {
             pci_vga_init(pci_bus);

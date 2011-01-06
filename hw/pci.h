@@ -64,6 +64,7 @@ struct kvm_irq_routing_entry;
 /* Intel (0x8086) */
 #define PCI_DEVICE_ID_INTEL_82551IT      0x1209
 #define PCI_DEVICE_ID_INTEL_82557        0x1229
+#define PCI_DEVICE_ID_INTEL_82801IR      0x2922
 
 /* Red Hat / Qumranet (for QEMU) -- see pci-ids.txt */
 #define PCI_VENDOR_ID_REDHAT_QUMRANET    0x1af4
@@ -120,6 +121,10 @@ enum {
     /* multifunction capable device */
 #define QEMU_PCI_CAP_MULTIFUNCTION_BITNR        3
     QEMU_PCI_CAP_MULTIFUNCTION = (1 << QEMU_PCI_CAP_MULTIFUNCTION_BITNR),
+
+    /* command register SERR bit enabled */
+#define QEMU_PCI_CAP_SERR_BITNR 4
+    QEMU_PCI_CAP_SERR = (1 << QEMU_PCI_CAP_SERR_BITNR),
 };
 
 typedef int (*msix_mask_notifier_func)(PCIDevice *, unsigned vector,
@@ -256,6 +261,7 @@ void pci_bus_hotplug(PCIBus *bus, pci_hotplug_fn hotplug, DeviceState *dev);
 PCIBus *pci_register_bus(DeviceState *parent, const char *name,
                          pci_set_irq_fn set_irq, pci_map_irq_fn map_irq,
                          void *irq_opaque, int devfn_min, int nirq);
+void pci_bus_reset(PCIBus *bus);
 
 void pci_bus_set_mem_base(PCIBus *bus, target_phys_addr_t base);
 
@@ -282,9 +288,6 @@ int pci_parse_host_devaddr(const char *addr, int *segp, int *busp,
 void do_pci_info_print(Monitor *mon, const QObject *data);
 void do_pci_info(Monitor *mon, QObject **ret_data);
 void pci_bridge_update_mappings(PCIBus *b);
-
-bool pci_msi_enabled(PCIDevice *dev);
-void pci_msi_notify(PCIDevice *dev, unsigned int vector);
 
 static inline void
 pci_set_byte(uint8_t *config, uint8_t val)

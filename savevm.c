@@ -611,7 +611,7 @@ int qemu_file_rate_limit(QEMUFile *f)
     return 0;
 }
 
-size_t qemu_file_get_rate_limit(QEMUFile *f)
+int64_t qemu_file_get_rate_limit(QEMUFile *f)
 {
     if (f->get_rate_limit)
         return f->get_rate_limit(f->opaque);
@@ -619,7 +619,7 @@ size_t qemu_file_get_rate_limit(QEMUFile *f)
     return 0;
 }
 
-size_t qemu_file_set_rate_limit(QEMUFile *f, size_t new_rate)
+int64_t qemu_file_set_rate_limit(QEMUFile *f, int64_t new_rate)
 {
     /* any failed or completed migration keeps its state to allow probing of
      * migration data, but has no associated file anymore */
@@ -1598,8 +1598,6 @@ static int qemu_savevm_state(Monitor *mon, QEMUFile *f)
     saved_vm_running = vm_running;
     vm_stop(0);
 
-    bdrv_flush_all();
-
     ret = qemu_savevm_state_begin(mon, f, 0, 0);
     if (ret < 0)
         goto out;
@@ -1908,8 +1906,6 @@ void do_savevm(Monitor *mon, const QDict *qdict)
         monitor_printf(mon, "No block device can accept snapshots\n");
         return;
     }
-    /* ??? Should this occur after vm_stop?  */
-    qemu_aio_flush();
 
     saved_vm_running = vm_running;
     vm_stop(0);

@@ -774,7 +774,7 @@ static uint32_t apic_mem_readl(void *opaque, target_phys_addr_t addr)
     return val;
 }
 
-static void apic_send_msi(target_phys_addr_t addr, uint32 data)
+static void apic_send_msi(target_phys_addr_t addr, uint32_t data)
 {
     uint8_t dest = (addr & MSI_ADDR_DEST_ID_MASK) >> MSI_ADDR_DEST_ID_SHIFT;
     uint8_t vector = (data & MSI_DATA_VECTOR_MASK) >> MSI_DATA_VECTOR_SHIFT;
@@ -1096,7 +1096,8 @@ static int apic_init1(SysBusDevice *dev)
         return -1;
     }
     apic_io_memory = cpu_register_io_memory(apic_mem_read,
-                                            apic_mem_write, NULL);
+                                            apic_mem_write, NULL,
+                                            DEVICE_NATIVE_ENDIAN);
     sysbus_init_mmio(dev, MSI_ADDR_SIZE, apic_io_memory);
 
     s->timer = qemu_new_timer(vm_clock, apic_timer, s);

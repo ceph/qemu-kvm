@@ -251,6 +251,8 @@ float32 float16_to_float32( bits16, flag STATUS_PARAM );
 /*----------------------------------------------------------------------------
 | Software IEC/IEEE single-precision conversion routines.
 *----------------------------------------------------------------------------*/
+int float32_to_int16_round_to_zero( float32 STATUS_PARAM );
+unsigned int float32_to_uint16_round_to_zero( float32 STATUS_PARAM );
 int float32_to_int32( float32 STATUS_PARAM );
 int float32_to_int32_round_to_zero( float32 STATUS_PARAM );
 unsigned int float32_to_uint32( float32 STATUS_PARAM );
@@ -285,8 +287,9 @@ int float32_le_quiet( float32, float32 STATUS_PARAM );
 int float32_lt_quiet( float32, float32 STATUS_PARAM );
 int float32_compare( float32, float32 STATUS_PARAM );
 int float32_compare_quiet( float32, float32 STATUS_PARAM );
-int float32_is_nan( float32 );
+int float32_is_quiet_nan( float32 );
 int float32_is_signaling_nan( float32 );
+float32 float32_maybe_silence_nan( float32 );
 float32 float32_scalbn( float32, int STATUS_PARAM );
 
 INLINE float32 float32_abs(float32 a)
@@ -314,6 +317,11 @@ INLINE int float32_is_zero(float32 a)
     return (float32_val(a) & 0x7fffffff) == 0;
 }
 
+INLINE int float32_is_any_nan(float32 a)
+{
+    return ((float32_val(a) & ~(1 << 31)) > 0x7f800000UL);
+}
+
 #define float32_zero make_float32(0)
 #define float32_one make_float32(0x3f800000)
 #define float32_ln2 make_float32(0x3f317218)
@@ -321,6 +329,8 @@ INLINE int float32_is_zero(float32 a)
 /*----------------------------------------------------------------------------
 | Software IEC/IEEE double-precision conversion routines.
 *----------------------------------------------------------------------------*/
+int float64_to_int16_round_to_zero( float64 STATUS_PARAM );
+unsigned int float64_to_uint16_round_to_zero( float64 STATUS_PARAM );
 int float64_to_int32( float64 STATUS_PARAM );
 int float64_to_int32_round_to_zero( float64 STATUS_PARAM );
 unsigned int float64_to_uint32( float64 STATUS_PARAM );
@@ -357,8 +367,9 @@ int float64_le_quiet( float64, float64 STATUS_PARAM );
 int float64_lt_quiet( float64, float64 STATUS_PARAM );
 int float64_compare( float64, float64 STATUS_PARAM );
 int float64_compare_quiet( float64, float64 STATUS_PARAM );
-int float64_is_nan( float64 a );
+int float64_is_quiet_nan( float64 a );
 int float64_is_signaling_nan( float64 );
+float64 float64_maybe_silence_nan( float64 );
 float64 float64_scalbn( float64, int STATUS_PARAM );
 
 INLINE float64 float64_abs(float64 a)
@@ -384,6 +395,11 @@ INLINE int float64_is_neg(float64 a)
 INLINE int float64_is_zero(float64 a)
 {
     return (float64_val(a) & 0x7fffffffffffffffLL) == 0;
+}
+
+INLINE int float64_is_any_nan(float64 a)
+{
+    return ((float64_val(a) & ~(1ULL << 63)) > 0x7ff0000000000000ULL);
 }
 
 #define float64_zero make_float64(0)
@@ -421,8 +437,9 @@ int floatx80_lt( floatx80, floatx80 STATUS_PARAM );
 int floatx80_eq_signaling( floatx80, floatx80 STATUS_PARAM );
 int floatx80_le_quiet( floatx80, floatx80 STATUS_PARAM );
 int floatx80_lt_quiet( floatx80, floatx80 STATUS_PARAM );
-int floatx80_is_nan( floatx80 );
+int floatx80_is_quiet_nan( floatx80 );
 int floatx80_is_signaling_nan( floatx80 );
+floatx80 floatx80_maybe_silence_nan( floatx80 );
 floatx80 floatx80_scalbn( floatx80, int STATUS_PARAM );
 
 INLINE floatx80 floatx80_abs(floatx80 a)
@@ -487,8 +504,9 @@ int float128_le_quiet( float128, float128 STATUS_PARAM );
 int float128_lt_quiet( float128, float128 STATUS_PARAM );
 int float128_compare( float128, float128 STATUS_PARAM );
 int float128_compare_quiet( float128, float128 STATUS_PARAM );
-int float128_is_nan( float128 );
+int float128_is_quiet_nan( float128 );
 int float128_is_signaling_nan( float128 );
+float128 float128_maybe_silence_nan( float128 );
 float128 float128_scalbn( float128, int STATUS_PARAM );
 
 INLINE float128 float128_abs(float128 a)

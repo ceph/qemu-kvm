@@ -34,6 +34,7 @@
 #include "net.h"
 #include "net/slirp.h"
 #include "qemu-char.h"
+#include "ui/qemu-spice.h"
 #include "sysemu.h"
 #include "monitor.h"
 #include "readline.h"
@@ -59,6 +60,7 @@
 #ifdef CONFIG_SIMPLE_TRACE
 #include "trace.h"
 #endif
+#include "ui/qemu-spice.h"
 #include "qemu-kvm.h"
 
 //#define DEBUG
@@ -352,10 +354,8 @@ static void monitor_json_emitter(Monitor *mon, const QObject *data)
 {
     QString *json;
 
-    if (mon->flags & MONITOR_USE_PRETTY)
-	json = qobject_to_json_pretty(data);
-    else
-	json = qobject_to_json(data);
+    json = mon->flags & MONITOR_USE_PRETTY ? qobject_to_json_pretty(data) :
+                                             qobject_to_json(data);
     assert(json != NULL);
 
     qstring_append_chr(json, '\n');
@@ -460,6 +460,15 @@ void monitor_protocol_event(MonitorEvent event, QObject *data)
         case QEVENT_WATCHDOG:
             event_name = "WATCHDOG";
             break;
+        case QEVENT_SPICE_CONNECTED:
+            event_name = "SPICE_CONNECTED";
+            break;
+        case QEVENT_SPICE_INITIALIZED:
+            event_name = "SPICE_INITIALIZED";
+            break;
+        case QEVENT_SPICE_DISCONNECTED:
+            event_name = "SPICE_DISCONNECTED";
+            break;
         default:
             abort();
             break;
@@ -490,6 +499,44 @@ static int do_qmp_capabilities(Monitor *mon, const QDict *params,
     }
 
     return 0;
+}
+
+static int mon_set_cpu(int cpu_index);
+static void handle_user_command(Monitor *mon, const char *cmdline);
+
+static int do_hmp_passthrough(Monitor *mon, const QDict *params,
+                              QObject **ret_data)
+{
+    int ret = 0;
+    Monitor *old_mon, hmp;
+    CharDriverState mchar;
+
+    memset(&hmp, 0, sizeof(hmp));
+    qemu_chr_init_mem(&mchar);
+    hmp.chr = &mchar;
+
+    old_mon = cur_mon;
+    cur_mon = &hmp;
+
+    if (qdict_haskey(params, "cpu-index")) {
+        ret = mon_set_cpu(qdict_get_int(params, "cpu-index"));
+        if (ret < 0) {
+            cur_mon = old_mon;
+            qerror_report(QERR_INVALID_PARAMETER_VALUE, "cpu-index", "a CPU number");
+            goto out;
+        }
+    }
+
+    handle_user_command(&hmp, qdict_get_str(params, "command-line"));
+    cur_mon = old_mon;
+
+    if (qemu_chr_mem_osize(hmp.chr) > 0) {
+        *ret_data = QOBJECT(qemu_chr_mem_to_qs(hmp.chr));
+    }
+
+out:
+    qemu_chr_close_mem(hmp.chr);
+    return ret;
 }
 
 static int compare_cmd(const char *name, const char *list)
@@ -1051,6 +1098,105 @@ static int do_change(Monitor *mon, const QDict *qdict, QObject **ret_data)
     }
 
     return ret;
+}
+
+static int set_password(Monitor *mon, const QDict *qdict, QObject **ret_data)
+{
+    const char *protocol  = qdict_get_str(qdict, "protocol");
+    const char *password  = qdict_get_str(qdict, "password");
+    const char *connected = qdict_get_try_str(qdict, "connected");
+    int disconnect_if_connected = 0;
+    int fail_if_connected = 0;
+    int rc;
+
+    if (connected) {
+        if (strcmp(connected, "fail") == 0) {
+            fail_if_connected = 1;
+        } else if (strcmp(connected, "disconnect") == 0) {
+            disconnect_if_connected = 1;
+        } else if (strcmp(connected, "keep") == 0) {
+            /* nothing */
+        } else {
+            qerror_report(QERR_INVALID_PARAMETER, "connected");
+            return -1;
+        }
+    }
+
+    if (strcmp(protocol, "spice") == 0) {
+        if (!using_spice) {
+            /* correct one? spice isn't a device ,,, */
+            qerror_report(QERR_DEVICE_NOT_ACTIVE, "spice");
+            return -1;
+        }
+        rc = qemu_spice_set_passwd(password, fail_if_connected,
+                                   disconnect_if_connected);
+        if (rc != 0) {
+            qerror_report(QERR_SET_PASSWD_FAILED);
+            return -1;
+        }
+        return 0;
+    }
+
+    if (strcmp(protocol, "vnc") == 0) {
+        if (fail_if_connected || disconnect_if_connected) {
+            /* vnc supports "connected=keep" only */
+            qerror_report(QERR_INVALID_PARAMETER, "connected");
+            return -1;
+        }
+        rc = vnc_display_password(NULL, password);
+        if (rc != 0) {
+            qerror_report(QERR_SET_PASSWD_FAILED);
+            return -1;
+        }
+        return 0;
+    }
+
+    qerror_report(QERR_INVALID_PARAMETER, "protocol");
+    return -1;
+}
+
+static int expire_password(Monitor *mon, const QDict *qdict, QObject **ret_data)
+{
+    const char *protocol  = qdict_get_str(qdict, "protocol");
+    const char *whenstr = qdict_get_str(qdict, "time");
+    time_t when;
+    int rc;
+
+    if (strcmp(whenstr, "now")) {
+        when = 0;
+    } else if (strcmp(whenstr, "never")) {
+        when = TIME_MAX;
+    } else if (whenstr[0] == '+') {
+        when = time(NULL) + strtoull(whenstr+1, NULL, 10);
+    } else {
+        when = strtoull(whenstr, NULL, 10);
+    }
+
+    if (strcmp(protocol, "spice") == 0) {
+        if (!using_spice) {
+            /* correct one? spice isn't a device ,,, */
+            qerror_report(QERR_DEVICE_NOT_ACTIVE, "spice");
+            return -1;
+        }
+        rc = qemu_spice_set_pw_expire(when);
+        if (rc != 0) {
+            qerror_report(QERR_SET_PASSWD_FAILED);
+            return -1;
+        }
+        return 0;
+    }
+
+    if (strcmp(protocol, "vnc") == 0) {
+        rc = vnc_display_pw_expire(NULL, when);
+        if (rc != 0) {
+            qerror_report(QERR_SET_PASSWD_FAILED);
+            return -1;
+        }
+        return 0;
+    }
+
+    qerror_report(QERR_INVALID_PARAMETER, "protocol");
+    return -1;
 }
 
 static int do_screen_dump(Monitor *mon, const QDict *qdict, QObject **ret_data)
@@ -1836,11 +1982,20 @@ static int do_system_powerdown(Monitor *mon, const QDict *qdict,
 }
 
 #if defined(TARGET_I386)
-static void print_pte(Monitor *mon, uint32_t addr, uint32_t pte, uint32_t mask)
+static void print_pte(Monitor *mon, target_phys_addr_t addr,
+                      target_phys_addr_t pte,
+                      target_phys_addr_t mask)
 {
-    monitor_printf(mon, "%08x: %08x %c%c%c%c%c%c%c%c\n",
+#ifdef TARGET_X86_64
+    if (addr & (1ULL << 47)) {
+        addr |= -1LL << 48;
+    }
+#endif
+    monitor_printf(mon, TARGET_FMT_plx ": " TARGET_FMT_plx
+                   " %c%c%c%c%c%c%c%c%c\n",
                    addr,
                    pte & mask,
+                   pte & PG_NX_MASK ? 'X' : '-',
                    pte & PG_GLOBAL_MASK ? 'G' : '-',
                    pte & PG_PSE_MASK ? 'P' : '-',
                    pte & PG_DIRTY_MASK ? 'D' : '-',
@@ -1851,25 +2006,19 @@ static void print_pte(Monitor *mon, uint32_t addr, uint32_t pte, uint32_t mask)
                    pte & PG_RW_MASK ? 'W' : '-');
 }
 
-static void tlb_info(Monitor *mon)
+static void tlb_info_32(Monitor *mon, CPUState *env)
 {
-    CPUState *env;
     int l1, l2;
     uint32_t pgd, pde, pte;
 
-    env = mon_get_cpu();
-
-    if (!(env->cr[0] & CR0_PG_MASK)) {
-        monitor_printf(mon, "PG disabled\n");
-        return;
-    }
     pgd = env->cr[3] & ~0xfff;
     for(l1 = 0; l1 < 1024; l1++) {
         cpu_physical_memory_read(pgd + l1 * 4, (uint8_t *)&pde, 4);
         pde = le32_to_cpu(pde);
         if (pde & PG_PRESENT_MASK) {
             if ((pde & PG_PSE_MASK) && (env->cr[4] & CR4_PSE_MASK)) {
-                print_pte(mon, (l1 << 22), pde, ~((1 << 20) - 1));
+                /* 4M pages */
+                print_pte(mon, (l1 << 22), pde, ~((1 << 21) - 1));
             } else {
                 for(l2 = 0; l2 < 1024; l2++) {
                     cpu_physical_memory_read((pde & ~0xfff) + l2 * 4,
@@ -1886,14 +2035,142 @@ static void tlb_info(Monitor *mon)
     }
 }
 
-static void mem_print(Monitor *mon, uint32_t *pstart, int *plast_prot,
-                      uint32_t end, int prot)
+static void tlb_info_pae32(Monitor *mon, CPUState *env)
+{
+    int l1, l2, l3;
+    uint64_t pdpe, pde, pte;
+    uint64_t pdp_addr, pd_addr, pt_addr;
+
+    pdp_addr = env->cr[3] & ~0x1f;
+    for (l1 = 0; l1 < 4; l1++) {
+        cpu_physical_memory_read(pdp_addr + l1 * 8, (uint8_t *)&pdpe, 8);
+        pdpe = le64_to_cpu(pdpe);
+        if (pdpe & PG_PRESENT_MASK) {
+            pd_addr = pdpe & 0x3fffffffff000ULL;
+            for (l2 = 0; l2 < 512; l2++) {
+                cpu_physical_memory_read(pd_addr + l2 * 8,
+                                         (uint8_t *)&pde, 8);
+                pde = le64_to_cpu(pde);
+                if (pde & PG_PRESENT_MASK) {
+                    if (pde & PG_PSE_MASK) {
+                        /* 2M pages with PAE, CR4.PSE is ignored */
+                        print_pte(mon, (l1 << 30 ) + (l2 << 21), pde,
+                                  ~((target_phys_addr_t)(1 << 20) - 1));
+                    } else {
+                        pt_addr = pde & 0x3fffffffff000ULL;
+                        for (l3 = 0; l3 < 512; l3++) {
+                            cpu_physical_memory_read(pt_addr + l3 * 8,
+                                                     (uint8_t *)&pte, 8);
+                            pte = le64_to_cpu(pte);
+                            if (pte & PG_PRESENT_MASK) {
+                                print_pte(mon, (l1 << 30 ) + (l2 << 21)
+                                          + (l3 << 12),
+                                          pte & ~PG_PSE_MASK,
+                                          ~(target_phys_addr_t)0xfff);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#ifdef TARGET_X86_64
+static void tlb_info_64(Monitor *mon, CPUState *env)
+{
+    uint64_t l1, l2, l3, l4;
+    uint64_t pml4e, pdpe, pde, pte;
+    uint64_t pml4_addr, pdp_addr, pd_addr, pt_addr;
+
+    pml4_addr = env->cr[3] & 0x3fffffffff000ULL;
+    for (l1 = 0; l1 < 512; l1++) {
+        cpu_physical_memory_read(pml4_addr + l1 * 8, (uint8_t *)&pml4e, 8);
+        pml4e = le64_to_cpu(pml4e);
+        if (pml4e & PG_PRESENT_MASK) {
+            pdp_addr = pml4e & 0x3fffffffff000ULL;
+            for (l2 = 0; l2 < 512; l2++) {
+                cpu_physical_memory_read(pdp_addr + l2 * 8, (uint8_t *)&pdpe,
+                                         8);
+                pdpe = le64_to_cpu(pdpe);
+                if (pdpe & PG_PRESENT_MASK) {
+                    if (pdpe & PG_PSE_MASK) {
+                        /* 1G pages, CR4.PSE is ignored */
+                        print_pte(mon, (l1 << 39) + (l2 << 30), pdpe,
+                                  0x3ffffc0000000ULL);
+                    } else {
+                        pd_addr = pdpe & 0x3fffffffff000ULL;
+                        for (l3 = 0; l3 < 512; l3++) {
+                            cpu_physical_memory_read(pd_addr + l3 * 8,
+                                                     (uint8_t *)&pde, 8);
+                            pde = le64_to_cpu(pde);
+                            if (pde & PG_PRESENT_MASK) {
+                                if (pde & PG_PSE_MASK) {
+                                    /* 2M pages, CR4.PSE is ignored */
+                                    print_pte(mon, (l1 << 39) + (l2 << 30) +
+                                              (l3 << 21), pde,
+                                              0x3ffffffe00000ULL);
+                                } else {
+                                    pt_addr = pde & 0x3fffffffff000ULL;
+                                    for (l4 = 0; l4 < 512; l4++) {
+                                        cpu_physical_memory_read(pt_addr
+                                                                 + l4 * 8,
+                                                                 (uint8_t *)&pte,
+                                                                 8);
+                                        pte = le64_to_cpu(pte);
+                                        if (pte & PG_PRESENT_MASK) {
+                                            print_pte(mon, (l1 << 39) +
+                                                      (l2 << 30) +
+                                                      (l3 << 21) + (l4 << 12),
+                                                      pte & ~PG_PSE_MASK,
+                                                      0x3fffffffff000ULL);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+#endif
+
+static void tlb_info(Monitor *mon)
+{
+    CPUState *env;
+
+    env = mon_get_cpu();
+
+    if (!(env->cr[0] & CR0_PG_MASK)) {
+        monitor_printf(mon, "PG disabled\n");
+        return;
+    }
+    if (env->cr[4] & CR4_PAE_MASK) {
+#ifdef TARGET_X86_64
+        if (env->hflags & HF_LMA_MASK) {
+            tlb_info_64(mon, env);
+        } else
+#endif
+        {
+            tlb_info_pae32(mon, env);
+        }
+    } else {
+        tlb_info_32(mon, env);
+    }
+}
+
+static void mem_print(Monitor *mon, target_phys_addr_t *pstart,
+                      int *plast_prot,
+                      target_phys_addr_t end, int prot)
 {
     int prot1;
     prot1 = *plast_prot;
     if (prot != prot1) {
         if (*pstart != -1) {
-            monitor_printf(mon, "%08x-%08x %08x %c%c%c\n",
+            monitor_printf(mon, TARGET_FMT_plx "-" TARGET_FMT_plx " "
+                           TARGET_FMT_plx " %c%c%c\n",
                            *pstart, end, end - *pstart,
                            prot1 & PG_USER_MASK ? 'u' : '-',
                            'r',
@@ -1907,18 +2184,12 @@ static void mem_print(Monitor *mon, uint32_t *pstart, int *plast_prot,
     }
 }
 
-static void mem_info(Monitor *mon)
+static void mem_info_32(Monitor *mon, CPUState *env)
 {
-    CPUState *env;
     int l1, l2, prot, last_prot;
-    uint32_t pgd, pde, pte, start, end;
+    uint32_t pgd, pde, pte;
+    target_phys_addr_t start, end;
 
-    env = mon_get_cpu();
-
-    if (!(env->cr[0] & CR0_PG_MASK)) {
-        monitor_printf(mon, "PG disabled\n");
-        return;
-    }
     pgd = env->cr[3] & ~0xfff;
     last_prot = 0;
     start = -1;
@@ -1950,6 +2221,162 @@ static void mem_info(Monitor *mon)
         }
     }
 }
+
+static void mem_info_pae32(Monitor *mon, CPUState *env)
+{
+    int l1, l2, l3, prot, last_prot;
+    uint64_t pdpe, pde, pte;
+    uint64_t pdp_addr, pd_addr, pt_addr;
+    target_phys_addr_t start, end;
+
+    pdp_addr = env->cr[3] & ~0x1f;
+    last_prot = 0;
+    start = -1;
+    for (l1 = 0; l1 < 4; l1++) {
+        cpu_physical_memory_read(pdp_addr + l1 * 8, (uint8_t *)&pdpe, 8);
+        pdpe = le64_to_cpu(pdpe);
+        end = l1 << 30;
+        if (pdpe & PG_PRESENT_MASK) {
+            pd_addr = pdpe & 0x3fffffffff000ULL;
+            for (l2 = 0; l2 < 512; l2++) {
+                cpu_physical_memory_read(pd_addr + l2 * 8,
+                                         (uint8_t *)&pde, 8);
+                pde = le64_to_cpu(pde);
+                end = (l1 << 30) + (l2 << 21);
+                if (pde & PG_PRESENT_MASK) {
+                    if (pde & PG_PSE_MASK) {
+                        prot = pde & (PG_USER_MASK | PG_RW_MASK |
+                                      PG_PRESENT_MASK);
+                        mem_print(mon, &start, &last_prot, end, prot);
+                    } else {
+                        pt_addr = pde & 0x3fffffffff000ULL;
+                        for (l3 = 0; l3 < 512; l3++) {
+                            cpu_physical_memory_read(pt_addr + l3 * 8,
+                                                     (uint8_t *)&pte, 8);
+                            pte = le64_to_cpu(pte);
+                            end = (l1 << 30) + (l2 << 21) + (l3 << 12);
+                            if (pte & PG_PRESENT_MASK) {
+                                prot = pte & (PG_USER_MASK | PG_RW_MASK |
+                                              PG_PRESENT_MASK);
+                            } else {
+                                prot = 0;
+                            }
+                            mem_print(mon, &start, &last_prot, end, prot);
+                        }
+                    }
+                } else {
+                    prot = 0;
+                    mem_print(mon, &start, &last_prot, end, prot);
+                }
+            }
+        } else {
+            prot = 0;
+            mem_print(mon, &start, &last_prot, end, prot);
+        }
+    }
+}
+
+
+#ifdef TARGET_X86_64
+static void mem_info_64(Monitor *mon, CPUState *env)
+{
+    int prot, last_prot;
+    uint64_t l1, l2, l3, l4;
+    uint64_t pml4e, pdpe, pde, pte;
+    uint64_t pml4_addr, pdp_addr, pd_addr, pt_addr, start, end;
+
+    pml4_addr = env->cr[3] & 0x3fffffffff000ULL;
+    last_prot = 0;
+    start = -1;
+    for (l1 = 0; l1 < 512; l1++) {
+        cpu_physical_memory_read(pml4_addr + l1 * 8, (uint8_t *)&pml4e, 8);
+        pml4e = le64_to_cpu(pml4e);
+        end = l1 << 39;
+        if (pml4e & PG_PRESENT_MASK) {
+            pdp_addr = pml4e & 0x3fffffffff000ULL;
+            for (l2 = 0; l2 < 512; l2++) {
+                cpu_physical_memory_read(pdp_addr + l2 * 8, (uint8_t *)&pdpe,
+                                         8);
+                pdpe = le64_to_cpu(pdpe);
+                end = (l1 << 39) + (l2 << 30);
+                if (pdpe & PG_PRESENT_MASK) {
+                    if (pdpe & PG_PSE_MASK) {
+                        prot = pde & (PG_USER_MASK | PG_RW_MASK |
+                                      PG_PRESENT_MASK);
+                        mem_print(mon, &start, &last_prot, end, prot);
+                    } else {
+                        pd_addr = pdpe & 0x3fffffffff000ULL;
+                        for (l3 = 0; l3 < 512; l3++) {
+                            cpu_physical_memory_read(pd_addr + l3 * 8,
+                                                     (uint8_t *)&pde, 8);
+                            pde = le64_to_cpu(pde);
+                            end = (l1 << 39) + (l2 << 30) + (l3 << 21);
+                            if (pde & PG_PRESENT_MASK) {
+                                if (pde & PG_PSE_MASK) {
+                                    prot = pde & (PG_USER_MASK | PG_RW_MASK |
+                                                  PG_PRESENT_MASK);
+                                    mem_print(mon, &start, &last_prot, end, prot);
+                                } else {
+                                    pt_addr = pde & 0x3fffffffff000ULL;
+                                    for (l4 = 0; l4 < 512; l4++) {
+                                        cpu_physical_memory_read(pt_addr
+                                                                 + l4 * 8,
+                                                                 (uint8_t *)&pte,
+                                                                 8);
+                                        pte = le64_to_cpu(pte);
+                                        end = (l1 << 39) + (l2 << 30) +
+                                            (l3 << 21) + (l4 << 12);
+                                        if (pte & PG_PRESENT_MASK) {
+                                            prot = pte & (PG_USER_MASK | PG_RW_MASK |
+                                                          PG_PRESENT_MASK);
+                                        } else {
+                                            prot = 0;
+                                        }
+                                        mem_print(mon, &start, &last_prot, end, prot);
+                                    }
+                                }
+                            } else {
+                                prot = 0;
+                                mem_print(mon, &start, &last_prot, end, prot);
+                            }
+                        }
+                    }
+                } else {
+                    prot = 0;
+                    mem_print(mon, &start, &last_prot, end, prot);
+                }
+            }
+        } else {
+            prot = 0;
+            mem_print(mon, &start, &last_prot, end, prot);
+        }
+    }
+}
+#endif
+
+static void mem_info(Monitor *mon)
+{
+    CPUState *env;
+
+    env = mon_get_cpu();
+
+    if (!(env->cr[0] & CR0_PG_MASK)) {
+        monitor_printf(mon, "PG disabled\n");
+        return;
+    }
+    if (env->cr[4] & CR4_PAE_MASK) {
+#ifdef TARGET_X86_64
+        if (env->hflags & HF_LMA_MASK) {
+            mem_info_64(mon, env);
+        } else
+#endif
+        {
+            mem_info_pae32(mon, env);
+        }
+    } else {
+        mem_info_32(mon, env);
+    }
+}
 #endif
 
 #if defined(TARGET_SH4)
@@ -1979,6 +2406,15 @@ static void tlb_info(Monitor *mon)
         print_tlb (mon, i, &env->utlb[i]);
 }
 
+#endif
+
+#if defined(TARGET_SPARC)
+static void tlb_info(Monitor *mon)
+{
+    CPUState *env1 = mon_get_cpu();
+
+    dump_mmu((FILE*)mon, (fprintf_function)monitor_printf, env1);
+}
 #endif
 
 static void do_info_kvm_print(Monitor *mon, const QObject *data)
@@ -2456,7 +2892,7 @@ static const mon_cmd_t info_cmds[] = {
         .user_print = do_pci_info_print,
         .mhandler.info_new = do_pci_info,
     },
-#if defined(TARGET_I386) || defined(TARGET_SH4)
+#if defined(TARGET_I386) || defined(TARGET_SH4) || defined(TARGET_SPARC)
     {
         .name       = "tlb",
         .args_type  = "",
@@ -2562,6 +2998,16 @@ static const mon_cmd_t info_cmds[] = {
         .user_print = do_info_vnc_print,
         .mhandler.info_new = do_info_vnc,
     },
+#if defined(CONFIG_SPICE)
+    {
+        .name       = "spice",
+        .args_type  = "",
+        .params     = "",
+        .help       = "show the spice server status",
+        .user_print = do_info_spice_print,
+        .mhandler.info_new = do_info_spice,
+    },
+#endif
     {
         .name       = "name",
         .args_type  = "",
@@ -2749,6 +3195,16 @@ static const mon_cmd_t qmp_query_cmds[] = {
         .user_print = do_info_vnc_print,
         .mhandler.info_new = do_info_vnc,
     },
+#if defined(CONFIG_SPICE)
+    {
+        .name       = "spice",
+        .args_type  = "",
+        .params     = "",
+        .help       = "show the spice server status",
+        .user_print = do_info_spice_print,
+        .mhandler.info_new = do_info_spice,
+    },
+#endif
     {
         .name       = "name",
         .args_type  = "",
@@ -3882,49 +4338,43 @@ void monitor_set_error(Monitor *mon, QError *qerror)
 
 static void handler_audit(Monitor *mon, const mon_cmd_t *cmd, int ret)
 {
-    if (monitor_ctrl_mode(mon)) {
-        if (ret && !monitor_has_error(mon)) {
-            /*
-             * If it returns failure, it must have passed on error.
-             *
-             * Action: Report an internal error to the client if in QMP.
-             */
-            qerror_report(QERR_UNDEFINED_ERROR);
-            MON_DEBUG("command '%s' returned failure but did not pass an error\n",
-                      cmd->name);
-        }
+    if (ret && !monitor_has_error(mon)) {
+        /*
+         * If it returns failure, it must have passed on error.
+         *
+         * Action: Report an internal error to the client if in QMP.
+         */
+        qerror_report(QERR_UNDEFINED_ERROR);
+        MON_DEBUG("command '%s' returned failure but did not pass an error\n",
+                  cmd->name);
+    }
 
 #ifdef CONFIG_DEBUG_MONITOR
-        if (!ret && monitor_has_error(mon)) {
-            /*
-             * If it returns success, it must not have passed an error.
-             *
-             * Action: Report the passed error to the client.
-             */
-            MON_DEBUG("command '%s' returned success but passed an error\n",
-                      cmd->name);
-        }
-
-        if (mon_print_count_get(mon) > 0 && strcmp(cmd->name, "info") != 0) {
-            /*
-             * Handlers should not call Monitor print functions.
-             *
-             * Action: Ignore them in QMP.
-             *
-             * (XXX: we don't check any 'info' or 'query' command here
-             * because the user print function _is_ called by do_info(), hence
-             * we will trigger this check. This problem will go away when we
-             * make 'query' commands real and kill do_info())
-             */
-            MON_DEBUG("command '%s' called print functions %d time(s)\n",
-                      cmd->name, mon_print_count_get(mon));
-        }
-#endif
-    } else {
-        assert(!monitor_has_error(mon));
-        QDECREF(mon->error);
-        mon->error = NULL;
+    if (!ret && monitor_has_error(mon)) {
+        /*
+         * If it returns success, it must not have passed an error.
+         *
+         * Action: Report the passed error to the client.
+         */
+        MON_DEBUG("command '%s' returned success but passed an error\n",
+                  cmd->name);
     }
+
+    if (mon_print_count_get(mon) > 0 && strcmp(cmd->name, "info") != 0) {
+        /*
+         * Handlers should not call Monitor print functions.
+         *
+         * Action: Ignore them in QMP.
+         *
+         * (XXX: we don't check any 'info' or 'query' command here
+         * because the user print function _is_ called by do_info(), hence
+         * we will trigger this check. This problem will go away when we
+         * make 'query' commands real and kill do_info())
+         */
+        MON_DEBUG("command '%s' called print functions %d time(s)\n",
+                  cmd->name, mon_print_count_get(mon));
+    }
+#endif
 }
 
 static void handle_user_command(Monitor *mon, const char *cmdline)
@@ -4455,10 +4905,8 @@ static void qmp_call_query_cmd(Monitor *mon, const mon_cmd_t *cmd)
         }
     } else {
         cmd->mhandler.info_new(mon, &ret_data);
-        if (ret_data) {
-            monitor_protocol_emitter(mon, ret_data);
-            qobject_decref(ret_data);
-        }
+        monitor_protocol_emitter(mon, ret_data);
+        qobject_decref(ret_data);
     }
 }
 

@@ -29,7 +29,6 @@
 #include "qemu-queue.h"
 
 #define BLOCK_FLAG_ENCRYPT	1
-#define BLOCK_FLAG_COMPRESS	2
 #define BLOCK_FLAG_COMPAT6	4
 
 #define BLOCK_OPT_SIZE          "size"
@@ -38,6 +37,7 @@
 #define BLOCK_OPT_BACKING_FILE  "backing_file"
 #define BLOCK_OPT_BACKING_FMT   "backing_fmt"
 #define BLOCK_OPT_CLUSTER_SIZE  "cluster_size"
+#define BLOCK_OPT_TABLE_SIZE    "table_size"
 #define BLOCK_OPT_PREALLOC      "preallocation"
 
 typedef struct AIOPool {
@@ -73,6 +73,8 @@ struct BlockDriver {
         BlockDriverCompletionFunc *cb, void *opaque);
     BlockDriverAIOCB *(*bdrv_aio_flush)(BlockDriverState *bs,
         BlockDriverCompletionFunc *cb, void *opaque);
+    int (*bdrv_discard)(BlockDriverState *bs, int64_t sector_num,
+                        int nb_sectors);
 
     int (*bdrv_aio_multiwrite)(BlockDriverState *bs, BlockRequest *reqs,
         int num_reqs);
@@ -227,6 +229,8 @@ typedef struct BlockConf {
     uint16_t logical_block_size;
     uint16_t min_io_size;
     uint32_t opt_io_size;
+    int32_t bootindex;
+    uint32_t discard_granularity;
 } BlockConf;
 
 static inline unsigned int get_physical_block_exp(BlockConf *conf)
@@ -249,6 +253,9 @@ static inline unsigned int get_physical_block_exp(BlockConf *conf)
     DEFINE_PROP_UINT16("physical_block_size", _state,                   \
                        _conf.physical_block_size, 512),                 \
     DEFINE_PROP_UINT16("min_io_size", _state, _conf.min_io_size, 0),  \
-    DEFINE_PROP_UINT32("opt_io_size", _state, _conf.opt_io_size, 0)
+    DEFINE_PROP_UINT32("opt_io_size", _state, _conf.opt_io_size, 0),    \
+    DEFINE_PROP_INT32("bootindex", _state, _conf.bootindex, -1),        \
+    DEFINE_PROP_UINT32("discard_granularity", _state, \
+                       _conf.discard_granularity, 0)
 
 #endif /* BLOCK_INT_H */

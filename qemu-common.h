@@ -50,6 +50,9 @@ typedef struct DeviceState DeviceState;
 #if !defined(ENOTSUP)
 #define ENOTSUP 4096
 #endif
+#ifndef TIME_MAX
+#define TIME_MAX LONG_MAX
+#endif
 
 #ifndef CONFIG_IOVEC
 #define CONFIG_IOVEC
@@ -149,7 +152,14 @@ time_t mktimegm(struct tm *tm);
 int qemu_fls(int i);
 int qemu_fdatasync(int fd);
 int fcntl_setfl(int fd, int flag);
+
+#define STRTOSZ_DEFSUFFIX_TB	'T'
+#define STRTOSZ_DEFSUFFIX_GB	'G'
+#define STRTOSZ_DEFSUFFIX_MB	'M'
+#define STRTOSZ_DEFSUFFIX_KB	'K'
+#define STRTOSZ_DEFSUFFIX_B	'B'
 ssize_t strtosz(const char *nptr, char **end);
+ssize_t strtosz_suffix(const char *nptr, char **end, const char default_suffix);
 
 /* path.c */
 void init_paths(const char *prefix);
@@ -240,6 +250,9 @@ typedef struct PCIBus PCIBus;
 typedef struct PCIDevice PCIDevice;
 typedef struct PCIExpressDevice PCIExpressDevice;
 typedef struct PCIBridge PCIBridge;
+typedef struct PCIEAERMsg PCIEAERMsg;
+typedef struct PCIEAERLog PCIEAERLog;
+typedef struct PCIEAERErr PCIEAERErr;
 typedef struct PCIEPort PCIEPort;
 typedef struct PCIESlot PCIESlot;
 typedef struct SerialState SerialState;
