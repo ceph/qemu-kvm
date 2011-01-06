@@ -235,6 +235,14 @@ static QEMUMachine pc_machine = {
     .desc = "Standard PC",
     .init = pc_init_pci,
     .max_cpus = 255,
+    .compat_props = (GlobalProperty[]) {
+        {
+            .driver   = "PCI",
+            .property = "command_serr_enable",
+            .value    = "off",
+        },
+        { /* end of list */ }
+    },
     .is_default = 1,
 };
 
@@ -283,6 +291,10 @@ static QEMUMachine pc_machine_v0_12 = {
             .driver   = "vmware-svga",
             .property = "rombar",
             .value    = stringify(0),
+        },{
+            .driver   = "PCI",
+            .property = "command_serr_enable",
+            .value    = "off",
         },
         { /* end of list */ }
     }
@@ -318,6 +330,10 @@ static QEMUMachine pc_machine_v0_11 = {
             .driver   = "PCI",
             .property = "rombar",
             .value    = stringify(0),
+        },{
+            .driver   = "PCI",
+            .property = "command_serr_enable",
+            .value    = "off",
         },
         { /* end of list */ }
     }
@@ -365,6 +381,10 @@ static QEMUMachine pc_machine_v0_10 = {
             .driver   = "PCI",
             .property = "rombar",
             .value    = stringify(0),
+        },{
+            .driver   = "PCI",
+            .property = "command_serr_enable",
+            .value    = "off",
         },
         { /* end of list */ }
     },
