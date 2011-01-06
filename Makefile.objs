@@ -190,6 +190,7 @@ hw-obj-$(CONFIG_PARALLEL) += parallel.o
 #hw-obj-$(CONFIG_PCSPK) += pcspk.o
 hw-obj-$(CONFIG_PCKBD) += pckbd.o
 hw-obj-$(CONFIG_USB_UHCI) += usb-uhci.o
+hw-obj-$(CONFIG_USB_OHCI) += usb-ohci.o
 hw-obj-$(CONFIG_FDC) += fdc.o
 # needs fixes for cpu hotplug, so moved to Makefile.target:
 # hw-obj-$(CONFIG_ACPI) += acpi.o acpi_piix4.o
@@ -227,6 +228,8 @@ hw-obj-$(CONFIG_NE2000_PCI) += ne2000.o
 hw-obj-$(CONFIG_EEPRO100_PCI) += eepro100.o
 hw-obj-$(CONFIG_PCNET_PCI) += pcnet-pci.o
 hw-obj-$(CONFIG_PCNET_COMMON) += pcnet.o
+hw-obj-$(CONFIG_E1000_PCI) += e1000.o
+hw-obj-$(CONFIG_RTL8139_PCI) += rtl8139.o
 
 hw-obj-$(CONFIG_SMC91C111) += smc91c111.o
 hw-obj-$(CONFIG_LAN9118) += lan9118.o
