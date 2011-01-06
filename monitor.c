@@ -61,7 +61,6 @@
 #include "trace.h"
 #endif
 #include "ui/qemu-spice.h"
-#include "qemu-kvm.h"
 
 //#define DEBUG
 //#define DEBUG_COMPLETION
