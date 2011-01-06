@@ -39,18 +39,19 @@ endif
 
 SUBDIR_MAKEFLAGS=$(if $(V),,--no-print-directory)
 SUBDIR_DEVICES_MAK=$(patsubst %, %/config-devices.mak, $(TARGET_DIRS))
+SUBDIR_DEVICES_MAK_DEP=$(patsubst %, %/config-devices.mak.d, $(TARGET_DIRS))
 
 config-all-devices.mak: $(SUBDIR_DEVICES_MAK)
 	$(call quiet-command,cat $(SUBDIR_DEVICES_MAK) | grep =y | sort -u > $@,"  GEN   $@")
 
+-include $(SUBDIR_DEVICES_MAK_DEP)
+
 %/config-devices.mak: default-configs/%.mak
-	$(call quiet-command,cat $< > $@.tmp, "  GEN   $@")
+	$(call quiet-command,$(SHELL) $(SRC_PATH)/make_device_config.sh $@ $<, "  GEN   $@")
 	@if test -f $@; then \
 	  if cmp -s $@.old $@; then \
-	    if ! cmp -s $@ $@.tmp; then \
-	      mv $@.tmp $@; \
-	      cp -p $@ $@.old; \
-	    fi; \
+	    mv $@.tmp $@; \
+	    cp -p $@ $@.old; \
 	  else \
 	    if test -f $@.old; then \
 	      echo "WARNING: $@ (user modified) out of date.";\
@@ -150,7 +151,7 @@ version-obj-$(CONFIG_WIN32) += version.o
 ######################################################################
 
 qemu-img.o: qemu-img-cmds.h
-qemu-img.o qemu-tool.o qemu-nbd.o qemu-io.o: $(GENERATED_HEADERS)
+qemu-img.o qemu-tool.o qemu-nbd.o qemu-io.o cmd.o: $(GENERATED_HEADERS)
 
 qemu-img$(EXESUF): qemu-img.o qemu-tool.o qemu-error.o $(oslib-obj-y) $(trace-obj-y) $(block-obj-y) $(qobject-obj-y) $(version-obj-y) qemu-timer-common.o
 
