@@ -87,12 +87,8 @@ static void bmdma_map(PCIDevice *pci_dev, int region_num,
         register_ioport_write(addr + 1, 3, 1, bmdma_writeb, bm);
         register_ioport_read(addr, 4, 1, bmdma_readb, bm);
 
-        register_ioport_write(addr + 4, 4, 1, bmdma_addr_writeb, bm);
-        register_ioport_read(addr + 4, 4, 1, bmdma_addr_readb, bm);
-        register_ioport_write(addr + 4, 4, 2, bmdma_addr_writew, bm);
-        register_ioport_read(addr + 4, 4, 2, bmdma_addr_readw, bm);
-        register_ioport_write(addr + 4, 4, 4, bmdma_addr_writel, bm);
-        register_ioport_read(addr + 4, 4, 4, bmdma_addr_readl, bm);
+        iorange_init(&bm->addr_ioport, &bmdma_addr_ioport_ops, addr + 4, 4);
+        ioport_register(&bm->addr_ioport);
         addr += 8;
     }
 }
@@ -153,7 +149,7 @@ static int vt82c686b_ide_initfn(PCIDevice *dev)
     pci_set_long(pci_conf + PCI_CAPABILITY_LIST, 0x000000c0);
 
     qemu_register_reset(via_reset, d);
-    pci_register_bar((PCIDevice *)d, 4, 0x10,
+    pci_register_bar(&d->dev, 4, 0x10,
                            PCI_BASE_ADDRESS_SPACE_IO, bmdma_map);
 
     vmstate_register(&dev->qdev, 0, &vmstate_ide_pci, d);

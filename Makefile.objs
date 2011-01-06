@@ -220,7 +220,7 @@ hw-obj-$(CONFIG_PIIX4) += piix4.o
 # PCI watchdog devices
 hw-obj-$(CONFIG_PCI) += wdt_i6300esb.o
 
-hw-obj-$(CONFIG_PCI) += pcie.o pcie_port.o
+hw-obj-$(CONFIG_PCI) += pcie.o pcie_aer.o pcie_port.o
 
 # PCI network cards
 hw-obj-$(CONFIG_NE2000_PCI) += ne2000.o

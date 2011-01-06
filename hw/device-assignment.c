@@ -251,7 +251,8 @@ static void assigned_dev_iomem_map_slow(PCIDevice *pci_dev, int region_num,
     int m;
 
     DEBUG("%s", "slow map\n");
-    m = cpu_register_io_memory(slow_bar_read, slow_bar_write, region);
+    m = cpu_register_io_memory(slow_bar_read, slow_bar_write, region,
+                               DEVICE_NATIVE_ENDIAN);
     cpu_register_physical_memory(e_phys, e_size, m);
 
     /* MSI-X MMIO page */
@@ -1669,7 +1670,8 @@ static int assigned_dev_register_msix_mmio(AssignedDevice *dev)
     }
     memset(dev->msix_table_page, 0, 0x1000);
     dev->mmio_index = cpu_register_io_memory(
-                        msix_mmio_read, msix_mmio_write, dev);
+                        msix_mmio_read, msix_mmio_write, dev,
+                        DEVICE_NATIVE_ENDIAN);
     return 0;
 }
 
