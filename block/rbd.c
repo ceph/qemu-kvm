@@ -985,6 +985,10 @@ static int rbd_snap_list(BlockDriverState *bs, QEMUSnapshotInfo **psn_tab)
         goto done_err;
     }
 
+    if (!snap_count) {
+        goto done;
+    }
+
     sn_tab = qemu_mallocz(snap_count * sizeof(QEMUSnapshotInfo));
     for (i = 0; i < snap_count; i++) {
         uint64_t id, image_size;
@@ -1011,6 +1015,7 @@ static int rbd_snap_list(BlockDriverState *bs, QEMUSnapshotInfo **psn_tab)
         sn_info->vm_clock_nsec = 0;
     }
     *psn_tab = sn_tab;
+done:
     qemu_free(outbuf);
     return snap_count;
 done_err:
