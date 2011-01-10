@@ -111,6 +111,7 @@ typedef struct AssignedDevice {
     int mmio_index;
     int need_emulate_cmd;
     char *configfd_name;
+    int32_t bootindex;
     QLIST_ENTRY(AssignedDevice) next;
 } AssignedDevice;
 
