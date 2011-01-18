@@ -475,6 +475,9 @@ static int virtio_pci_mask_notifier(PCIDevice *dev, unsigned vector,
     return 0;
 undo:
     while (--n >= 0) {
+        if (virtio_queue_vector(vdev, n) != vector) {
+            continue;
+        }
         virtio_pci_mask_vq(dev, vector, virtio_get_queue(vdev, n), !masked);
     }
     return r;
@@ -544,8 +547,17 @@ static int virtio_pci_set_guest_notifiers(void *opaque, bool assign)
 
 assign_error:
     /* We get here on assignment failure. Recover by undoing for VQs 0 .. n. */
+    if (assign) {
+        msix_unset_mask_notifier(&proxy->pci_dev);
+    }
+
     while (--n >= 0) {
         virtio_pci_set_guest_notifier(opaque, n, !assign);
+    }
+
+    if (!assign) {
+        msix_set_mask_notifier(&proxy->pci_dev,
+                               virtio_pci_mask_notifier);
     }
     return r;
 }
