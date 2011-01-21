@@ -74,19 +74,11 @@ interp_prefix="/usr/gnemul/qemu-%M"
 static="no"
 sparc_cpu=""
 cross_prefix=""
-cc="gcc"
 audio_drv_list=""
 audio_card_list="ac97 es1370 sb16 hda"
 audio_possible_cards="ac97 es1370 sb16 cs4231a adlib gus hda"
 block_drv_whitelist=""
 host_cc="gcc"
-ar="ar"
-make="make"
-install="install"
-objcopy="objcopy"
-ld="ld"
-strip="strip"
-windres="windres"
 helper_cflags=""
 libs_softmmu=""
 libs_tools=""
@@ -94,165 +86,7 @@ audio_pt_int=""
 audio_win_int=""
 cc_i386=i386-pc-linux-gnu-gcc
 
-# parse CC options first
-for opt do
-  optarg=`expr "x$opt" : 'x[^=]*=\(.*\)'`
-  case "$opt" in
-  --cross-prefix=*) cross_prefix="$optarg"
-  ;;
-  --cc=*) cc="$optarg"
-  ;;
-  --cpu=*) cpu="$optarg"
-  ;;
-  --extra-cflags=*) QEMU_CFLAGS="$optarg $QEMU_CFLAGS"
-  ;;
-  --extra-ldflags=*) LDFLAGS="$optarg $LDFLAGS"
-  ;;
-  --sparc_cpu=*)
-    sparc_cpu="$optarg"
-    case $sparc_cpu in
-    v7|v8|v8plus|v8plusa)
-      cpu="sparc"
-    ;;
-    v9)
-      cpu="sparc64"
-    ;;
-    *)
-      echo "undefined SPARC architecture. Exiting";
-      exit 1
-    ;;
-    esac
-  ;;
-  esac
-done
-# OS specific
-# Using uname is really, really broken.  Once we have the right set of checks
-# we can eliminate it's usage altogether
-
-cc="${cross_prefix}${cc}"
-ar="${cross_prefix}${ar}"
-objcopy="${cross_prefix}${objcopy}"
-ld="${cross_prefix}${ld}"
-strip="${cross_prefix}${strip}"
-windres="${cross_prefix}${windres}"
-
-# default flags for all hosts
-QEMU_CFLAGS="-fno-strict-aliasing $QEMU_CFLAGS"
-CFLAGS="-g $CFLAGS"
-QEMU_CFLAGS="-Wall -Wundef -Wendif-labels -Wwrite-strings -Wmissing-prototypes $QEMU_CFLAGS"
-QEMU_CFLAGS="-Wstrict-prototypes -Wredundant-decls $QEMU_CFLAGS"
-QEMU_CFLAGS="-D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE $QEMU_CFLAGS"
-QEMU_CFLAGS="-D_FORTIFY_SOURCE=2 $QEMU_CFLAGS"
-QEMU_CFLAGS="-I. -I\$(SRC_PATH) $QEMU_CFLAGS"
-LDFLAGS="-g $LDFLAGS"
-
-gcc_flags="-Wold-style-declaration -Wold-style-definition -Wtype-limits"
-gcc_flags="-Wformat-security -Wformat-y2k -Winit-self -Wignored-qualifiers $gcc_flags"
-gcc_flags="-Wmissing-include-dirs -Wempty-body -Wnested-externs $gcc_flags"
-gcc_flags="-fstack-protector-all $gcc_flags"
-cat > $TMPC << EOF
-int main(void) { return 0; }
-EOF
-for flag in $gcc_flags; do
-    if compile_prog "-Werror $QEMU_CFLAGS" "-Werror $flag" ; then
-	QEMU_CFLAGS="$QEMU_CFLAGS $flag"
-    fi
-done
-
-# check that the C compiler works.
-cat > $TMPC <<EOF
-int main(void) {}
-EOF
-
-if compile_object ; then
-  : C compiler works ok
-else
-    echo "ERROR: \"$cc\" either does not exist or does not work"
-    exit 1
-fi
-
-check_define() {
-cat > $TMPC <<EOF
-#if !defined($1)
-#error Not defined
-#endif
-int main(void) { return 0; }
-EOF
-  compile_object
-}
-
-if test ! -z "$cpu" ; then
-  # command line argument
-  :
-elif check_define __i386__ ; then
-  cpu="i386"
-elif check_define __x86_64__ ; then
-  cpu="x86_64"
-elif check_define __sparc__ ; then
-  # We can't check for 64 bit (when gcc is biarch) or V8PLUSA
-  # They must be specified using --sparc_cpu
-  if check_define __arch64__ ; then
-    cpu="sparc64"
-  else
-    cpu="sparc"
-  fi
-elif check_define _ARCH_PPC ; then
-  if check_define _ARCH_PPC64 ; then
-    cpu="ppc64"
-  else
-    cpu="ppc"
-  fi
-elif check_define __mips__ ; then
-  cpu="mips"
-elif check_define __ia64__ ; then
-  cpu="ia64"
-elif check_define __s390__ ; then
-  if check_define __s390x__ ; then
-    cpu="s390x"
-  else
-    cpu="s390"
-  fi
-else
-  cpu=`uname -m`
-fi
-
 target_list="x86_64-softmmu"
-case "$cpu" in
-  alpha|cris|ia64|m68k|microblaze|ppc|ppc64|sparc64)
-    cpu="$cpu"
-  ;;
-  i386|i486|i586|i686|i86pc|BePC)
-    cpu="i386"
-  ;;
-  x86_64|amd64)
-    cpu="x86_64"
-  ;;
-  armv*b)
-    cpu="armv4b"
-  ;;
-  armv*l)
-    cpu="armv4l"
-  ;;
-  parisc|parisc64)
-    cpu="hppa"
-  ;;
-  mips*)
-    cpu="mips"
-  ;;
-  s390)
-    cpu="s390"
-  ;;
-  s390x)
-    cpu="s390x"
-  ;;
-  sparc|sun4[cdmuv])
-    cpu="sparc"
-  ;;
-  *)
-    echo "Unsupported CPU = $cpu"
-    exit 1
-  ;;
-esac
 
 kvm_version() {
     local fname="$(dirname "$0")/KVM_VERSION"
@@ -336,7 +170,6 @@ kvm_cap_pit=""
 kvm_cap_device_assignment=""
 kerneldir=""
 aix="no"
-haiku="no"
 blobs="yes"
 pkgversion=" ($(kvm_version))"
 cpu_emulation="yes"
@@ -347,6 +180,165 @@ trace_backend="nop"
 trace_file="trace"
 spice=""
 rbd=""
+
+# parse CC options first
+for opt do
+  optarg=`expr "x$opt" : 'x[^=]*=\(.*\)'`
+  case "$opt" in
+  --cross-prefix=*) cross_prefix="$optarg"
+  ;;
+  --cc=*) CC="$optarg"
+  ;;
+  --cpu=*) cpu="$optarg"
+  ;;
+  --extra-cflags=*) QEMU_CFLAGS="$optarg $QEMU_CFLAGS"
+  ;;
+  --extra-ldflags=*) LDFLAGS="$optarg $LDFLAGS"
+  ;;
+  --sparc_cpu=*)
+    sparc_cpu="$optarg"
+    case $sparc_cpu in
+    v7|v8|v8plus|v8plusa)
+      cpu="sparc"
+    ;;
+    v9)
+      cpu="sparc64"
+    ;;
+    *)
+      echo "undefined SPARC architecture. Exiting";
+      exit 1
+    ;;
+    esac
+  ;;
+  esac
+done
+# OS specific
+# Using uname is really, really broken.  Once we have the right set of checks
+# we can eliminate it's usage altogether
+
+cc="${cross_prefix}${CC-gcc}"
+ar="${cross_prefix}${AR-ar}"
+objcopy="${cross_prefix}${OBJCOPY-objcopy}"
+ld="${cross_prefix}${LD-ld}"
+strip="${cross_prefix}${STRIP-strip}"
+windres="${cross_prefix}${WINDRES-windres}"
+
+# default flags for all hosts
+QEMU_CFLAGS="-fno-strict-aliasing $QEMU_CFLAGS"
+CFLAGS="-g $CFLAGS"
+QEMU_CFLAGS="-Wall -Wundef -Wendif-labels -Wwrite-strings -Wmissing-prototypes $QEMU_CFLAGS"
+QEMU_CFLAGS="-Wstrict-prototypes -Wredundant-decls $QEMU_CFLAGS"
+QEMU_CFLAGS="-D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE $QEMU_CFLAGS"
+QEMU_CFLAGS="-D_FORTIFY_SOURCE=2 $QEMU_CFLAGS"
+QEMU_CFLAGS="-I. -I\$(SRC_PATH) $QEMU_CFLAGS"
+LDFLAGS="-g $LDFLAGS"
+
+gcc_flags="-Wold-style-declaration -Wold-style-definition -Wtype-limits"
+gcc_flags="-Wformat-security -Wformat-y2k -Winit-self -Wignored-qualifiers $gcc_flags"
+gcc_flags="-Wmissing-include-dirs -Wempty-body -Wnested-externs $gcc_flags"
+gcc_flags="-fstack-protector-all $gcc_flags"
+cat > $TMPC << EOF
+int main(void) { return 0; }
+EOF
+for flag in $gcc_flags; do
+    if compile_prog "-Werror $QEMU_CFLAGS" "-Werror $flag" ; then
+	QEMU_CFLAGS="$QEMU_CFLAGS $flag"
+    fi
+done
+
+# check that the C compiler works.
+cat > $TMPC <<EOF
+int main(void) {}
+EOF
+
+if compile_object ; then
+  : C compiler works ok
+else
+    echo "ERROR: \"$cc\" either does not exist or does not work"
+    exit 1
+fi
+
+check_define() {
+cat > $TMPC <<EOF
+#if !defined($1)
+#error Not defined
+#endif
+int main(void) { return 0; }
+EOF
+  compile_object
+}
+
+if test ! -z "$cpu" ; then
+  # command line argument
+  :
+elif check_define __i386__ ; then
+  cpu="i386"
+elif check_define __x86_64__ ; then
+  cpu="x86_64"
+elif check_define __sparc__ ; then
+  # We can't check for 64 bit (when gcc is biarch) or V8PLUSA
+  # They must be specified using --sparc_cpu
+  if check_define __arch64__ ; then
+    cpu="sparc64"
+  else
+    cpu="sparc"
+  fi
+elif check_define _ARCH_PPC ; then
+  if check_define _ARCH_PPC64 ; then
+    cpu="ppc64"
+  else
+    cpu="ppc"
+  fi
+elif check_define __mips__ ; then
+  cpu="mips"
+elif check_define __ia64__ ; then
+  cpu="ia64"
+elif check_define __s390__ ; then
+  if check_define __s390x__ ; then
+    cpu="s390x"
+  else
+    cpu="s390"
+  fi
+else
+  cpu=`uname -m`
+fi
+
+case "$cpu" in
+  alpha|cris|ia64|m68k|microblaze|ppc|ppc64|sparc64)
+    cpu="$cpu"
+  ;;
+  i386|i486|i586|i686|i86pc|BePC)
+    cpu="i386"
+  ;;
+  x86_64|amd64)
+    cpu="x86_64"
+  ;;
+  armv*b)
+    cpu="armv4b"
+  ;;
+  armv*l)
+    cpu="armv4l"
+  ;;
+  parisc|parisc64)
+    cpu="hppa"
+  ;;
+  mips*)
+    cpu="mips"
+  ;;
+  s390)
+    cpu="s390"
+  ;;
+  s390x)
+    cpu="s390x"
+  ;;
+  sparc|sun4[cdmuv])
+    cpu="sparc"
+  ;;
+  *)
+    echo "Unsupported CPU = $cpu"
+    exit 1
+  ;;
+esac
 
 # OS specific
 if check_define __linux__ ; then
@@ -382,7 +374,7 @@ GNU/kFreeBSD)
 ;;
 FreeBSD)
   bsd="yes"
-  make="gmake"
+  make="${MAKE-gmake}"
   audio_drv_list="oss"
   audio_possible_drivers="oss sdl esd pa"
   # needed for kinfo_getvmmap(3) in libutil.h
@@ -390,20 +382,20 @@ FreeBSD)
 ;;
 DragonFly)
   bsd="yes"
-  make="gmake"
+  make="${MAKE-gmake}"
   audio_drv_list="oss"
   audio_possible_drivers="oss sdl esd pa"
 ;;
 NetBSD)
   bsd="yes"
-  make="gmake"
+  make="${MAKE-gmake}"
   audio_drv_list="oss"
   audio_possible_drivers="oss sdl esd"
   oss_lib="-lossaudio"
 ;;
 OpenBSD)
   bsd="yes"
-  make="gmake"
+  make="${MAKE-gmake}"
   audio_drv_list="oss"
   audio_possible_drivers="oss sdl esd"
   oss_lib="-lossaudio"
@@ -432,8 +424,8 @@ Darwin)
 ;;
 SunOS)
   solaris="yes"
-  make="gmake"
-  install="ginstall"
+  make="${MAKE-gmake}"
+  install="${INSTALL-ginstall}"
   ld="gld"
   needs_libsunmath="no"
   solarisrev=`uname -r | cut -f2 -d.`
@@ -472,7 +464,7 @@ SunOS)
 ;;
 AIX)
   aix="yes"
-  make="gmake"
+  make="${MAKE-gmake}"
 ;;
 Haiku)
   haiku="yes"
@@ -504,6 +496,9 @@ if [ "$bsd" = "yes" ] ; then
   fi
   bsd_user="yes"
 fi
+
+: ${make=${MAKE-make}}
+: ${install=${INSTALL-install}}
 
 if test "$mingw32" = "yes" ; then
   EXESUF=".exe"
@@ -2196,6 +2191,38 @@ if compile_prog "$ARCH_CFLAGS" "" ; then
   fallocate=yes
 fi
 
+# check for sync_file_range
+sync_file_range=no
+cat > $TMPC << EOF
+#include <fcntl.h>
+
+int main(void)
+{
+    sync_file_range(0, 0, 0, 0);
+    return 0;
+}
+EOF
+if compile_prog "$ARCH_CFLAGS" "" ; then
+  sync_file_range=yes
+fi
+
+# check for linux/fiemap.h and FS_IOC_FIEMAP
+fiemap=no
+cat > $TMPC << EOF
+#include <sys/ioctl.h>
+#include <linux/fs.h>
+#include <linux/fiemap.h>
+
+int main(void)
+{
+    ioctl(0, FS_IOC_FIEMAP, 0);
+    return 0;
+}
+EOF
+if compile_prog "$ARCH_CFLAGS" "" ; then
+  fiemap=yes
+fi
+
 # check for dup3
 dup3=no
 cat > $TMPC << EOF
@@ -2736,6 +2763,12 @@ if test "$eventfd" = "yes" ; then
 fi
 if test "$fallocate" = "yes" ; then
   echo "CONFIG_FALLOCATE=y" >> $config_host_mak
+fi
+if test "$sync_file_range" = "yes" ; then
+  echo "CONFIG_SYNC_FILE_RANGE=y" >> $config_host_mak
+fi
+if test "$fiemap" = "yes" ; then
+  echo "CONFIG_FIEMAP=y" >> $config_host_mak
 fi
 if test "$dup3" = "yes" ; then
   echo "CONFIG_DUP3=y" >> $config_host_mak

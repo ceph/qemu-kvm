@@ -180,7 +180,8 @@ enum {
     float_flag_divbyzero =  4,
     float_flag_overflow  =  8,
     float_flag_underflow = 16,
-    float_flag_inexact   = 32
+    float_flag_inexact   = 32,
+    float_flag_input_denormal = 64
 };
 
 typedef struct float_status {
@@ -190,7 +191,10 @@ typedef struct float_status {
 #ifdef FLOATX80
     signed char floatx80_rounding_precision;
 #endif
+    /* should denormalised results go to zero and set the inexact flag? */
     flag flush_to_zero;
+    /* should denormalised inputs go to zero and set the input_denormal flag? */
+    flag flush_inputs_to_zero;
     flag default_nan_mode;
 } float_status;
 
@@ -199,6 +203,10 @@ void set_float_exception_flags(int val STATUS_PARAM);
 INLINE void set_flush_to_zero(flag val STATUS_PARAM)
 {
     STATUS(flush_to_zero) = val;
+}
+INLINE void set_flush_inputs_to_zero(flag val STATUS_PARAM)
+{
+    STATUS(flush_inputs_to_zero) = val;
 }
 INLINE void set_default_nan_mode(flag val STATUS_PARAM)
 {
@@ -294,11 +302,17 @@ float32 float32_scalbn( float32, int STATUS_PARAM );
 
 INLINE float32 float32_abs(float32 a)
 {
+    /* Note that abs does *not* handle NaN specially, nor does
+     * it flush denormal inputs to zero.
+     */
     return make_float32(float32_val(a) & 0x7fffffff);
 }
 
 INLINE float32 float32_chs(float32 a)
 {
+    /* Note that chs does *not* handle NaN specially, nor does
+     * it flush denormal inputs to zero.
+     */
     return make_float32(float32_val(a) ^ 0x80000000);
 }
 
@@ -374,11 +388,17 @@ float64 float64_scalbn( float64, int STATUS_PARAM );
 
 INLINE float64 float64_abs(float64 a)
 {
+    /* Note that abs does *not* handle NaN specially, nor does
+     * it flush denormal inputs to zero.
+     */
     return make_float64(float64_val(a) & 0x7fffffffffffffffLL);
 }
 
 INLINE float64 float64_chs(float64 a)
 {
+    /* Note that chs does *not* handle NaN specially, nor does
+     * it flush denormal inputs to zero.
+     */
     return make_float64(float64_val(a) ^ 0x8000000000000000LL);
 }
 
@@ -469,6 +489,11 @@ INLINE int floatx80_is_zero(floatx80 a)
     return (a.high & 0x7fff) == 0 && a.low == 0;
 }
 
+INLINE int floatx80_is_any_nan(floatx80 a)
+{
+    return ((a.high & 0x7fff) == 0x7fff) && (a.low<<1);
+}
+
 #endif
 
 #ifdef FLOAT128
@@ -534,6 +559,12 @@ INLINE int float128_is_neg(float128 a)
 INLINE int float128_is_zero(float128 a)
 {
     return (a.high & 0x7fffffffffffffffLL) == 0 && a.low == 0;
+}
+
+INLINE int float128_is_any_nan(float128 a)
+{
+    return ((a.high >> 48) & 0x7fff) == 0x7fff &&
+        ((a.low != 0) || ((a.high & 0xffffffffffffLL) != 0));
 }
 
 #endif
