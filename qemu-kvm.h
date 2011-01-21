@@ -754,6 +754,7 @@ struct KVMState {
     int irqchip_in_kernel;
     int pit_in_kernel;
     int xsave, xcrs;
+    int many_ioeventfds;
 
     struct kvm_context kvm_context;
 };
