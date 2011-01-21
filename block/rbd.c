@@ -54,6 +54,18 @@ typedef struct RBDAIOCB {
     int cancelled;
 } RBDAIOCB;
 
+struct RADOSCB;
+
+enum {
+    RBD_OP_IO      = 1,
+    RBD_OP_NOTIFY  = 2,
+};
+
+typedef struct RADOSCBOP {
+    int type;
+    void *data;
+} RADOSCBOP;
+
 typedef struct RADOSCB {
     int rcbid;
     RBDAIOCB *acb;
@@ -62,6 +74,7 @@ typedef struct RADOSCB {
     int64_t segsize;
     char *buf;
     int ret;
+    RADOSCBOP cbop;
 } RADOSCB;
 
 #define RBD_FD_READ 0
@@ -76,13 +89,24 @@ typedef struct BDRVRBDState {
     uint64_t size;
     uint64_t objsize;
     int qemu_aio_count;
+    char *snap;
     int event_reader_pos;
-    RADOSCB *event_rcb;
+    RADOSCBOP *event_op;
+    uint64_t watch_handle;
 } BDRVRBDState;
+
+typedef struct RBDWatchInfo {
+    BDRVRBDState *rbd_state;
+    RADOSCBOP cbop;
+} RBDWatchInfo;
 
 typedef struct rbd_obj_header_ondisk RbdHeader1;
 
 static void rbd_aio_bh_cb(void *opaque);
+
+/* misc forward declarations */
+static int rbd_load_header(BDRVRBDState *s, RbdHeader1 **pheader, int watch);
+static int rbd_send_pipe(BDRVRBDState *s, RADOSCBOP *op);
 
 static int rbd_next_tok(char *dst, int dst_len,
                         char *src, char delim,
@@ -394,6 +418,31 @@ done:
 }
 
 /*
+ * This will run in the qemu context
+  */
+static void rbd_complete_notify(RBDWatchInfo *wi)
+{
+    int r;
+    BDRVRBDState *s = wi->rbd_state;
+
+    if ((r = rbd_load_header(s, NULL, 0)) < 0) {
+        error_report("error reading header from %s", s->name);
+    }
+}
+
+static void rbd_handle_event(RADOSCBOP *op)
+{
+    switch (op->type) {
+    case RBD_OP_IO:
+        rbd_complete_aio(op->data);
+        break;
+    case RBD_OP_NOTIFY:
+        rbd_complete_notify(op->data);
+        break;
+    }
+}
+
+/*
  * aio fd read handler. It runs in the qemu context and calls the
  * completion handling of completed rados aio operations.
  */
@@ -404,16 +453,16 @@ static void rbd_aio_event_reader(void *opaque)
     ssize_t ret;
 
     do {
-        char *p = (char *)&s->event_rcb;
+        char *p = (char *)&s->event_op;
 
         /* now read the rcb pointer that was sent from a non qemu thread */
         if ((ret = read(s->fds[RBD_FD_READ], p + s->event_reader_pos,
-                        sizeof(s->event_rcb) - s->event_reader_pos)) > 0) {
+                        sizeof(s->event_op) - s->event_reader_pos)) > 0) {
             if (ret > 0) {
                 s->event_reader_pos += ret;
-                if (s->event_reader_pos == sizeof(s->event_rcb)) {
+                if (s->event_reader_pos == sizeof(s->event_op)) {
                     s->event_reader_pos = 0;
-                    rbd_complete_aio(s->event_rcb);
+                    rbd_handle_event(s->event_op);
                     s->qemu_aio_count --;
                 }
             }
@@ -476,7 +525,91 @@ static int rbd_set_snapc(rados_pool_t pool, const char *snap, RbdHeader1 *header
 
 #define BUF_READ_START_LEN    4096
 
-static int rbd_read_header(BDRVRBDState *s, char **hbuf)
+#ifdef LIBRADOS_SUPPORTS_WATCH
+static void rbd_watch_cb(uint8_t opcode, uint64_t ver, void *arg)
+{
+    BDRVRBDState *s = (BDRVRBDState *)arg;
+    RBDWatchInfo *wi;
+    wi = (RBDWatchInfo *)qemu_malloc(sizeof(RBDWatchInfo));
+    wi->rbd_state = s;
+    wi->cbop.type = RBD_OP_NOTIFY;
+    wi->cbop.data = wi;
+    rbd_send_pipe(s, &wi->cbop);
+}
+
+static int rbd_watch(BDRVRBDState *s, const char *name)
+{
+    int r;
+    uint64_t ver;
+
+    ver = rados_get_last_version(s->header_pool);
+    r = rados_watch(s->header_pool, name, ver, &s->watch_handle,
+                    rbd_watch_cb, s);
+
+    return r;
+}
+
+static int rbd_notify(BDRVRBDState *s, const char *name)
+{
+    int r;
+    uint64_t ver;
+
+    ver = rados_get_last_version(s->header_pool);
+    r = rados_notify(s->header_pool, name, ver);
+
+    return r;
+}
+#else
+static int rbd_watch(BDRVRBDState *s, const char *name)
+{
+    return 0;
+}
+
+static int rbd_notify(BDRVRBDState *s, const char *name)
+{
+    return 0;
+}
+#endif
+
+/*
+ * a helper for rbd_read_header(), we want to read up to len-1, if we
+ * get len, it's too much, as we might be missing some more data
+ */
+static int rbd_read_and_watch(BDRVRBDState *s, const char *name,
+                              char *buf, int len, int watch)
+{
+    int r, read_len;
+
+    do {
+        r = rados_read(s->header_pool, name, 0, buf, len);
+        if (r < 0) {
+            goto failed;
+        }
+
+        read_len = r;
+
+        if (read_len >= len) {
+            goto failed;
+        }
+
+        if (!watch) {
+            break;
+        }
+
+        r = rbd_watch(s, name);
+        if (r < 0 && r != -ERANGE) {
+            error_report("rbd_watch failed");
+            goto failed;
+        }
+     } while (r == -ERANGE);
+
+    return read_len;
+failed:
+    return r;
+}
+
+
+static int rbd_read_header(BDRVRBDState *s, char **hbuf, int watch)
 {
     char *buf = NULL;
     char n[RBD_MAX_SEG_NAME_SIZE];
@@ -487,7 +620,7 @@ static int rbd_read_header(BDRVRBDState *s, char **hbuf)
 
     buf = qemu_malloc(len);
 
-    r = rados_read(s->header_pool, n, 0, buf, len);
+    r = rbd_read_and_watch(s, n, buf, len, watch);
     if (r < 0) {
         goto failed;
     }
@@ -499,12 +632,12 @@ static int rbd_read_header(BDRVRBDState *s, char **hbuf)
     qemu_free(buf);
     buf = qemu_malloc(len);
 
-    r = rados_stat(s->header_pool, n, &len, NULL);
+    r = rados_stat(s, n, &len, NULL);
     if (r < 0) {
         goto failed;
     }
 
-    r = rados_read(s->header_pool, n, 0, buf, len);
+    r = rbd_read_and_watch(s->header_pool, n, buf, len, watch);
     if (r < 0) {
         goto failed;
     }
@@ -518,14 +651,55 @@ failed:
     return r;
 }
 
+static int rbd_load_header(BDRVRBDState *s, RbdHeader1 **pheader, int watch)
+{
+    RbdHeader1 *header;
+    char *hbuf = NULL;
+    int r;
+
+    if ((r = rbd_read_header(s, &hbuf, watch)) < 0) {
+        error_report("error reading header from %s", s->name);
+        goto done;
+    }
+
+    if (memcmp(hbuf + 64, RBD_HEADER_SIGNATURE, 4)) {
+        error_report("Invalid header signature");
+        r = -EMEDIUMTYPE;
+        goto done;
+    }
+
+    if (memcmp(hbuf + 68, RBD_HEADER_VERSION, 8)) {
+        error_report("Unknown image version");
+        r = -EMEDIUMTYPE;
+        goto done;
+    }
+
+    header = (RbdHeader1 *)hbuf;
+    s->size = le64_to_cpu(header->image_size);
+    s->objsize = 1 << header->options.order;
+    memcpy(s->block_name, header->block_name, sizeof(header->block_name));
+
+    r = rbd_set_snapc(s->pool, s->snap, header);
+    if (r < 0) {
+        error_report("failed setting snap context: %s", strerror(-r));
+        goto done;
+    }
+
+    if (pheader)
+        *pheader = header;
+
+    return 0;
+done:
+    qemu_free(hbuf);
+    return r;
+}
+
 static int rbd_open(BlockDriverState *bs, const char *filename, int flags)
 {
     BDRVRBDState *s = bs->opaque;
-    RbdHeader1 *header;
+    RbdHeader1 *header = NULL;
     char pool[RBD_MAX_SEG_NAME_SIZE];
     char snap_buf[RBD_MAX_SEG_NAME_SIZE];
-    char *snap = NULL;
-    char *hbuf = NULL;
     int r;
 
     if (rbd_parsename(filename, pool, sizeof(pool),
@@ -533,8 +707,9 @@ static int rbd_open(BlockDriverState *bs, const char *filename, int flags)
                       s->name, sizeof(s->name)) < 0) {
         return -EINVAL;
     }
+    s->snap = NULL;
     if (snap_buf[0] != '\0') {
-        snap = snap_buf;
+        s->snap = qemu_strdup(snap_buf);
     }
 
     if ((r = rados_initialize(0, NULL)) < 0) {
@@ -554,35 +729,12 @@ static int rbd_open(BlockDriverState *bs, const char *filename, int flags)
         return r;
     }
 
-    if ((r = rbd_read_header(s, &hbuf)) < 0) {
+    if ((r = rbd_load_header(s, &header, 1)) < 0) {
         error_report("error reading header from %s", s->name);
         goto failed;
     }
 
-    if (memcmp(hbuf + 64, RBD_HEADER_SIGNATURE, 4)) {
-        error_report("Invalid header signature");
-        r = -EMEDIUMTYPE;
-        goto failed;
-    }
-
-    if (memcmp(hbuf + 68, RBD_HEADER_VERSION, 8)) {
-        error_report("Unknown image version");
-        r = -EMEDIUMTYPE;
-        goto failed;
-    }
-
-    header = (RbdHeader1 *) hbuf;
-    s->size = le64_to_cpu(header->image_size);
-    s->objsize = 1ULL << header->options.order;
-    memcpy(s->block_name, header->block_name, sizeof(header->block_name));
-
-    r = rbd_set_snapc(s->pool, snap, header);
-    if (r < 0) {
-        error_report("failed setting snap context: %s", strerror(-r));
-        goto failed;
-    }
-
-    bs->read_only = (snap != NULL);
+    bs->read_only = (s->snap != NULL);
 
     s->event_reader_pos = 0;
     r = qemu_pipe(s->fds);
@@ -595,13 +747,12 @@ static int rbd_open(BlockDriverState *bs, const char *filename, int flags)
     qemu_aio_set_fd_handler(s->fds[RBD_FD_READ], rbd_aio_event_reader, NULL,
         rbd_aio_flush_cb, NULL, s);
 
-    qemu_free(hbuf);
+    qemu_free(header);
 
     return 0;
 
 failed:
-    qemu_free(hbuf);
-
+    qemu_free(header);
     rados_close_pool(s->header_pool);
     rados_close_pool(s->pool);
     rados_deinitialize();
@@ -619,6 +770,7 @@ static void rbd_close(BlockDriverState *bs)
 
     rados_close_pool(s->header_pool);
     rados_close_pool(s->pool);
+    qemu_free(s->snap);
     rados_deinitialize();
 }
 
@@ -637,27 +789,16 @@ static AIOPool rbd_aio_pool = {
     .cancel = rbd_aio_cancel,
 };
 
-/*
- * This is the callback function for rados_aio_read and _write
- *
- * Note: this function is being called from a non qemu thread so
- * we need to be careful about what we do here. Generally we only
- * write to the block notification pipe, and do the rest of the
- * io completion handling from rbd_aio_event_reader() which
- * runs in a qemu context.
- */
-static void rbd_finish_aiocb(rados_completion_t c, RADOSCB *rcb)
+static int rbd_send_pipe(BDRVRBDState *s, RADOSCBOP *op)
 {
-    int ret;
-    rcb->ret = rados_aio_get_return_value(c);
-    rados_aio_release(c);
+    int ret = 0;
     while (1) {
         fd_set wfd;
-        int fd = rcb->s->fds[RBD_FD_WRITE];
+        int fd = s->fds[RBD_FD_WRITE];
 
-        /* send the rcb pointer to the qemu thread that is responsible
-           for the aio completion. Must do it in a qemu thread context */
-        ret = write(fd, (void *)&rcb, sizeof(rcb));
+        /* send the op pointer to the qemu thread that is responsible
+           for the aio/op completion. Must do it in a qemu thread context */
+        ret = write(fd, (void *)&op, sizeof(op));
         if (ret >= 0) {
             break;
         }
@@ -675,6 +816,26 @@ static void rbd_finish_aiocb(rados_completion_t c, RADOSCB *rcb)
         } while (ret < 0 && errno == EINTR);
     }
 
+    return ret;
+}
+
+/*
+ * This is the callback function for rados_aio_read and _write
+ *
+ * Note: this function is being called from a non qemu thread so
+ * we need to be careful about what we do here. Generally we only
+ * write to the block notification pipe, and do the rest of the
+ * io completion handling from rbd_aio_event_reader() which
+ * runs in a qemu context.
+ */
+static void rbd_finish_aiocb(rados_completion_t c, RADOSCB *rcb)
+{
+    int ret;
+    rcb->ret = rados_aio_get_return_value(c);
+    rados_aio_release(c);
+    rcb->cbop.type = RBD_OP_IO;
+    rcb->cbop.data = rcb;
+    ret = rbd_send_pipe(rcb->s, &rcb->cbop);
     if (ret < 0) {
         error_report("failed writing to acb->s->fds\n");
         qemu_free(rcb);
@@ -869,9 +1030,15 @@ static int rbd_snap_create(BlockDriverState *bs, QEMUSnapshotInfo *sn_info)
         return r;
     }
 
+    r = rbd_notify(s, n);
+    if (r < 0) {
+        error_report("failed notifying about new snapshot: %s", strerror(-r));
+        return r;
+    }
+
     sprintf(sn_info->id_str, "%s", sn_info->name);
 
-    r = rbd_read_header(s, &hbuf);
+    r = rbd_read_header(s, &hbuf, 0);
     if (r < 0) {
         error_report("failed reading header: %s", strerror(-r));
         return r;
@@ -947,7 +1114,7 @@ static int rbd_snap_list(BlockDriverState *bs, QEMUSnapshotInfo **psn_tab)
 
     /* read header to estimate how much space we need to read the snap
      * list */
-    if ((r = rbd_read_header(s, &hbuf)) < 0) {
+    if ((r = rbd_read_header(s, &hbuf, 0)) < 0) {
         goto done_err;
     }
     header = (RbdHeader1 *)hbuf;
