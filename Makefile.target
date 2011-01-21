@@ -1,6 +1,7 @@
 # -*- Mode: makefile -*-
 
 GENERATED_HEADERS = config-target.h
+CONFIG_NO_PCI = $(if $(subst n,,$(CONFIG_PCI)),n,y)
 CONFIG_NO_KVM = $(if $(subst n,,$(CONFIG_KVM)),n,y)
 
 include ../config-host.mak
@@ -53,7 +54,7 @@ TARGET_TYPE=system
 endif
 
 $(QEMU_PROG).stp:
-	$(call quiet-command,sh $(SRC_PATH)/tracetool \
+	$(call quiet-command,sh $(SRC_PATH)/scripts/tracetool \
 		--$(TRACE_BACKEND) \
 		--binary $(bindir)/$(QEMU_PROG) \
 		--target-arch $(TARGET_ARCH) \
@@ -197,6 +198,7 @@ ifdef CONFIG_SOFTMMU
 obj-y = arch_init.o cpus.o monitor.o pci.o machine.o gdbstub.o vl.o balloon.o
 # virtio has to be here due to weird dependency between PCI and virtio-net.
 # need to fix this properly
+obj-$(CONFIG_NO_PCI) += pci-stub.o
 obj-$(CONFIG_VIRTIO) += virtio-blk.o virtio-balloon.o virtio-net.o virtio-serial-bus.o
 obj-$(CONFIG_VIRTIO_PCI) += virtio-pci.o
 obj-y += vhost_net.o
@@ -373,14 +375,14 @@ $(QEMU_PROG): $(obj-y) $(obj-$(TARGET_BASE_ARCH)-y)
 	$(call LINK,$(obj-y) $(obj-$(TARGET_BASE_ARCH)-y))
 
 
-gdbstub-xml.c: $(TARGET_XML_FILES) $(SRC_PATH)/feature_to_c.sh
-	$(call quiet-command,rm -f $@ && $(SHELL) $(SRC_PATH)/feature_to_c.sh $@ $(TARGET_XML_FILES),"  GEN   $(TARGET_DIR)$@")
+gdbstub-xml.c: $(TARGET_XML_FILES) $(SRC_PATH)/scripts/feature_to_c.sh
+	$(call quiet-command,rm -f $@ && $(SHELL) $(SRC_PATH)/scripts/feature_to_c.sh $@ $(TARGET_XML_FILES),"  GEN   $(TARGET_DIR)$@")
 
 hmp-commands.h: $(SRC_PATH)/hmp-commands.hx
-	$(call quiet-command,sh $(SRC_PATH)/hxtool -h < $< > $@,"  GEN   $(TARGET_DIR)$@")
+	$(call quiet-command,sh $(SRC_PATH)/scripts/hxtool -h < $< > $@,"  GEN   $(TARGET_DIR)$@")
 
 qmp-commands.h: $(SRC_PATH)/qmp-commands.hx
-	$(call quiet-command,sh $(SRC_PATH)/hxtool -h < $< > $@,"  GEN   $(TARGET_DIR)$@")
+	$(call quiet-command,sh $(SRC_PATH)/scripts/hxtool -h < $< > $@,"  GEN   $(TARGET_DIR)$@")
 
 clean:
 	rm -f *.o *.a *~ $(PROGS) nwfpe/*.o fpu/*.o

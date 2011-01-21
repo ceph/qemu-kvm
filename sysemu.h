@@ -76,6 +76,7 @@ void qemu_announce_self(void);
 
 void main_loop_wait(int nonblocking);
 
+bool qemu_savevm_state_blocked(Monitor *mon);
 int qemu_savevm_state_begin(Monitor *mon, QEMUFile *f, int blk_enable,
                             int shared);
 int qemu_savevm_state_iterate(Monitor *mon, QEMUFile *f);
@@ -162,6 +163,11 @@ void qemu_system_cpu_hot_add(int cpu, int state);
 void pci_device_hot_add(Monitor *mon, const QDict *qdict);
 void drive_hot_add(Monitor *mon, const QDict *qdict);
 void do_pci_device_hot_remove(Monitor *mon, const QDict *qdict);
+
+/* pcie aer error injection */
+void pcie_aer_inject_error_print(Monitor *mon, const QObject *data);
+int do_pcie_aer_inejct_error(Monitor *mon,
+                             const QDict *qdict, QObject **ret_data);
 
 /* serial ports */
 

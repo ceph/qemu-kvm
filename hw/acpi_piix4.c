@@ -38,6 +38,7 @@
 #define PROC_BASE 0xaf00
 #define PCI_BASE 0xae00
 #define PCI_EJ_BASE 0xae08
+#define PCI_RMV_BASE 0xae0c
 
 #define PIIX4_CPU_HOTPLUG_STATUS 4
 #define PIIX4_PCI_HOTPLUG_STATUS 2
@@ -76,6 +77,7 @@ typedef struct PIIX4PMState {
     /* for pci hotplug */
     struct gpe_regs gpe;
     struct pci_status pci0_status;
+    uint32_t pci0_hotplug_enable;
 } PIIX4PMState;
 
 static void piix4_acpi_system_hot_add_init(PCIBus *bus, PIIX4PMState *s);
@@ -326,6 +328,25 @@ static const VMStateDescription vmstate_acpi = {
     }
 };
 
+static void piix4_update_hotplug(PIIX4PMState *s)
+{
+    PCIDevice *dev = &s->dev;
+    BusState *bus = qdev_get_parent_bus(&dev->qdev);
+    DeviceState *qdev, *next;
+
+    s->pci0_hotplug_enable = ~0;
+
+    QLIST_FOREACH_SAFE(qdev, &bus->children, sibling, next) {
+        PCIDeviceInfo *info = container_of(qdev->info, PCIDeviceInfo, qdev);
+        PCIDevice *pdev = DO_UPCAST(PCIDevice, qdev, qdev);
+        int slot = PCI_SLOT(pdev->devfn);
+
+        if (info->no_hotplug) {
+            s->pci0_hotplug_enable &= ~(1 << slot);
+        }
+    }
+}
+
 static void piix4_reset(void *opaque)
 {
     PIIX4PMState *s = opaque;
@@ -340,6 +361,7 @@ static void piix4_reset(void *opaque)
         /* Mark SMM as already inited (until KVM supports SMM). */
         pci_conf[0x5B] = 0x02;
     }
+    piix4_update_hotplug(s);
 }
 
 static void piix4_powerdown(void *opaque, int irq, int power_failing)
@@ -444,6 +466,8 @@ static PCIDeviceInfo piix4_pm_info = {
     .qdev.desc          = "PM",
     .qdev.size          = sizeof(PIIX4PMState),
     .qdev.vmsd          = &vmstate_acpi,
+    .qdev.no_user       = 1,
+    .no_hotplug         = 1,
     .init               = piix4_pm_initfn,
     .config_write       = pm_write_config,
     .qdev.props         = (Property[]) {
@@ -594,6 +618,18 @@ static void pciej_write(void *opaque, uint32_t addr, uint32_t val)
     PIIX4_DPRINTF("pciej write %x <== %d\n", addr, val);
 }
 
+static uint32_t pcirmv_read(void *opaque, uint32_t addr)
+{
+    PIIX4PMState *s = opaque;
+
+    return s->pci0_hotplug_enable;
+}
+
+static void pcirmv_write(void *opaque, uint32_t addr, uint32_t val)
+{
+    return;
+}
+
 extern const char *global_cpu_model;
 
 static int piix4_device_hotplug(DeviceState *qdev, PCIDevice *dev,
@@ -620,6 +656,9 @@ static void piix4_acpi_system_hot_add_init(PCIBus *bus, PIIX4PMState *s)
 
     register_ioport_write(PCI_EJ_BASE, 4, 4, pciej_write, bus);
     register_ioport_read(PCI_EJ_BASE, 4, 4,  pciej_read, bus);
+
+    register_ioport_write(PCI_RMV_BASE, 4, 4, pcirmv_write, s);
+    register_ioport_read(PCI_RMV_BASE, 4, 4,  pcirmv_read, s);
 
     pci_bus_hotplug(bus, piix4_device_hotplug, &s->dev.qdev);
 }
