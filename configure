@@ -32,6 +32,12 @@ compile_prog() {
   $cc $QEMU_CFLAGS $local_cflags -o $TMPE $TMPC $LDFLAGS $local_ldflags >> config.log 2>&1
 }
 
+# symbolically link $1 to $2.  Portable version of "ln -sf".
+symlink() {
+  rm -f $2
+  ln -s $1 $2
+}
+
 # check whether a command is available to this shell (may be either an
 # executable or a builtin)
 has() {
@@ -69,6 +75,7 @@ path_of() {
 }
 
 # default parameters
+source_path=`dirname "$0"`
 cpu=""
 interp_prefix="/usr/gnemul/qemu-%M"
 static="no"
@@ -189,6 +196,8 @@ for opt do
   ;;
   --cc=*) CC="$optarg"
   ;;
+  --source-path=*) source_path="$optarg"
+  ;;
   --cpu=*) cpu="$optarg"
   ;;
   --extra-cflags=*) QEMU_CFLAGS="$optarg $QEMU_CFLAGS"
@@ -223,6 +232,7 @@ ld="${cross_prefix}${LD-ld}"
 strip="${cross_prefix}${STRIP-strip}"
 windres="${cross_prefix}${WINDRES-windres}"
 pkg_config="${cross_prefix}${PKG_CONFIG-pkg-config}"
+sdl_config="${cross_prefix}${SDL_CONFIG-sdl-config}"
 
 # default flags for all hosts
 QEMU_CFLAGS="-fno-strict-aliasing $QEMU_CFLAGS"
@@ -233,6 +243,9 @@ QEMU_CFLAGS="-D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE $QEMU_CFLA
 QEMU_CFLAGS="-D_FORTIFY_SOURCE=2 $QEMU_CFLAGS"
 QEMU_INCLUDES="-I. -I\$(SRC_PATH)"
 LDFLAGS="-g $LDFLAGS"
+
+# make source path absolute
+source_path=`cd "$source_path"; pwd`
 
 check_define() {
 cat > $TMPC <<EOF
@@ -491,17 +504,6 @@ if test "$mingw32" = "yes" ; then
   confsuffix=""
 fi
 
-# find source path
-source_path=`dirname "$0"`
-source_path_used="no"
-workdir=`pwd`
-if [ -z "$source_path" ]; then
-    source_path=$workdir
-else
-    source_path=`cd "$source_path"; pwd`
-fi
-[ -f "$workdir/vl.c" ] || source_path_used="yes"
-
 werror=""
 
 for opt do
@@ -513,8 +515,7 @@ for opt do
   ;;
   --interp-prefix=*) interp_prefix="$optarg"
   ;;
-  --source-path=*) source_path="$optarg"
-  source_path_used="yes"
+  --source-path=*)
   ;;
   --cross-prefix=*)
   ;;
@@ -534,9 +535,9 @@ for opt do
   ;;
   --target-list=*) target_list="$optarg"
   ;;
-  --trace-backend=*) trace_backend="$optarg"
+  --enable-trace-backend=*) trace_backend="$optarg"
   ;;
-  --trace-file=*) trace_file="$optarg"
+  --with-trace-file=*) trace_file="$optarg"
   ;;
   --enable-gprof) gprof="yes"
   ;;
@@ -941,8 +942,8 @@ echo "  --enable-docs            enable documentation build"
 echo "  --disable-docs           disable documentation build"
 echo "  --disable-vhost-net      disable vhost-net acceleration support"
 echo "  --enable-vhost-net       enable vhost-net acceleration support"
-echo "  --trace-backend=B        Trace backend nop simple ust dtrace"
-echo "  --trace-file=NAME        Full PATH,NAME of file to store traces"
+echo "  --enable-trace-backend=B Trace backend nop simple ust dtrace"
+echo "  --with-trace-file=NAME   Full PATH,NAME of file to store traces"
 echo "                           Default:trace-<pid>"
 echo "  --disable-spice          disable spice"
 echo "  --enable-spice           enable spice"
@@ -1198,8 +1199,8 @@ fi
 # pkg-config probe
 
 if ! has $pkg_config; then
-  # likely not cross compiling, or hope for the best
-  pkg_config=pkg-config
+  echo warning: proceeding without "$pkg_config" >&2
+  pkg_config=/bin/false
 fi
 
 ##########################################
@@ -1218,27 +1219,26 @@ fi
 ##########################################
 # SDL probe
 
-# Look for sdl configuration program (pkg-config or sdl-config).
-# Prefer variant with cross prefix if cross compiling,
-# and favour pkg-config with sdl over sdl-config.
-if test -n "$cross_prefix" -a $pkg_config != pkg-config && \
-     $pkg_config sdl --modversion >/dev/null 2>&1; then
+# Look for sdl configuration program (pkg-config or sdl-config).  Try
+# sdl-config even without cross prefix, and favour pkg-config over sdl-config.
+if test "`basename $sdl_config`" != sdl-config && ! has ${sdl_config}; then
+  sdl_config=sdl-config
+fi
+
+if $pkg_config sdl --modversion >/dev/null 2>&1; then
   sdlconfig="$pkg_config sdl"
   _sdlversion=`$sdlconfig --modversion 2>/dev/null | sed 's/[^0-9]//g'`
-elif test -n "$cross_prefix" && has ${cross_prefix}sdl-config; then
-  sdlconfig="${cross_prefix}sdl-config"
-  _sdlversion=`$sdlconfig --version | sed 's/[^0-9]//g'`
-elif $pkg_config sdl --modversion >/dev/null 2>&1; then
-  sdlconfig="$pkg_config sdl"
-  _sdlversion=`$sdlconfig --modversion 2>/dev/null | sed 's/[^0-9]//g'`
-elif has sdl-config; then
-  sdlconfig='sdl-config'
+elif has ${sdl_config}; then
+  sdlconfig="$sdl_config"
   _sdlversion=`$sdlconfig --version | sed 's/[^0-9]//g'`
 else
   if test "$sdl" = "yes" ; then
     feature_not_found "sdl"
   fi
   sdl=no
+fi
+if test -n "$cross_prefix" && test "`basename $sdlconfig`" = sdl-config; then
+  echo warning: using "\"$sdlconfig\"" to detect cross-compiled sdl >&2
 fi
 
 sdl_too_old=no
@@ -2387,7 +2387,7 @@ fi
 ##########################################
 # check if trace backend exists
 
-sh "$source_path/tracetool" "--$trace_backend" --check-backend > /dev/null 2> /dev/null
+sh "$source_path/scripts/tracetool" "--$trace_backend" --check-backend > /dev/null 2> /dev/null
 if test "$?" -ne 0 ; then
   echo
   echo "Error: invalid trace backend"
@@ -2940,8 +2940,7 @@ fi
 
 for d in libdis libdis-user; do
     mkdir -p $d
-    rm -f $d/Makefile
-    ln -s $source_path/Makefile.dis $d/Makefile
+    symlink $source_path/Makefile.dis $d/Makefile
     echo > $d/config.mak
 done
 if test "$static" = "no" -a "$user_pie" = "yes" ; then
@@ -3005,12 +3004,7 @@ mkdir -p $target_dir/ide
 if test "$target" = "arm-linux-user" -o "$target" = "armeb-linux-user" -o "$target" = "arm-bsd-user" -o "$target" = "armeb-bsd-user" ; then
   mkdir -p $target_dir/nwfpe
 fi
-
-#
-# don't use ln -sf as not all "ln -sf" over write the file/link
-#
-rm -f $target_dir/Makefile
-ln -s $source_path/Makefile.target $target_dir/Makefile
+symlink $source_path/Makefile.target $target_dir/Makefile
 
 
 echo "# Automatically generated by configure - do not modify" > $config_target_mak
@@ -3205,11 +3199,11 @@ if test ! -z "$gdb_xml_files" ; then
 fi
 
 case "$target_arch2" in
-  alpha|arm|armeb|m68k|microblaze|mips|mipsel|mipsn32|mipsn32el|mips64|mips64el|ppc|ppc64|ppc64abi32|ppcemb|s390x|sparc|sparc64|sparc32plus)
-    echo "CONFIG_SOFTFLOAT=y" >> $config_target_mak
+  i386|x86_64)
+    echo "CONFIG_NOSOFTFLOAT=y" >> $config_target_mak
     ;;
   *)
-    echo "CONFIG_NOSOFTFLOAT=y" >> $config_target_mak
+    echo "CONFIG_SOFTFLOAT=y" >> $config_target_mak
     ;;
 esac
 
@@ -3372,28 +3366,21 @@ echo "QEMU_INCLUDES+=$includes" >> $config_target_mak
 
 done # for target in $targets
 
-# build tree in object directory if source path is different from current one
-if test "$source_path_used" = "yes" ; then
-    DIRS="tests tests/cris slirp audio block net pc-bios/optionrom"
-    DIRS="$DIRS roms/seabios roms/vgabios"
-    DIRS="$DIRS fsdev ui"
-    FILES="Makefile tests/Makefile"
-    FILES="$FILES tests/cris/Makefile tests/cris/.gdbinit"
-    FILES="$FILES tests/test-mmap.c"
-    FILES="$FILES pc-bios/optionrom/Makefile pc-bios/keymaps"
-    FILES="$FILES roms/seabios/Makefile roms/vgabios/Makefile"
-    for bios_file in $source_path/pc-bios/*.bin $source_path/pc-bios/*.dtb $source_path/pc-bios/openbios-*; do
-        FILES="$FILES pc-bios/`basename $bios_file`"
-    done
-    for dir in $DIRS ; do
-            mkdir -p $dir
-    done
-    # remove the link and recreate it, as not all "ln -sf" overwrite the link
-    for f in $FILES ; do
-        rm -f $f
-        ln -s $source_path/$f $f
-    done
-fi
+# build tree in object directory in case the source is not in the current directory
+DIRS="tests tests/cris slirp audio block net pc-bios/optionrom"
+DIRS="$DIRS roms/seabios roms/vgabios"
+DIRS="$DIRS fsdev ui"
+FILES="Makefile tests/Makefile"
+FILES="$FILES tests/cris/Makefile tests/cris/.gdbinit"
+FILES="$FILES pc-bios/optionrom/Makefile pc-bios/keymaps"
+FILES="$FILES roms/seabios/Makefile roms/vgabios/Makefile"
+for bios_file in $source_path/pc-bios/*.bin $source_path/pc-bios/*.dtb $source_path/pc-bios/openbios-*; do
+    FILES="$FILES pc-bios/`basename $bios_file`"
+done
+mkdir -p $DIRS
+for f in $FILES ; do
+    test -e $f || symlink $source_path/$f $f
+done
 
 # temporary config to build submodules
 for rom in seabios vgabios; do
@@ -3405,7 +3392,6 @@ for rom in seabios vgabios; do
     echo "CPP=${cross_prefix}cpp" >> $config_mak
     echo "OBJCOPY=objcopy" >> $config_mak
     echo "IASL=iasl" >> $config_mak
-    echo "HOST_CC=$host_cc" >> $config_mak
     echo "LD=$ld" >> $config_mak
 done
 
@@ -3413,15 +3399,13 @@ for hwlib in 32 64; do
   d=libhw$hwlib
   mkdir -p $d
   mkdir -p $d/ide
-  rm -f $d/Makefile
-  ln -s $source_path/Makefile.hw $d/Makefile
+  symlink $source_path/Makefile.hw $d/Makefile
   echo "QEMU_CFLAGS+=-DTARGET_PHYS_ADDR_BITS=$hwlib" > $d/config.mak
 done
 
 d=libuser
 mkdir -p $d
-rm -f $d/Makefile
-ln -s $source_path/Makefile.user $d/Makefile
+symlink $source_path/Makefile.user $d/Makefile
 if test "$static" = "no" -a "$user_pie" = "yes" ; then
   echo "QEMU_CFLAGS+=-fpie" > $d/config.mak
 fi

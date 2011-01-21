@@ -59,7 +59,12 @@ typedef struct DisasContext {
 #if !defined(CONFIG_USER_ONLY)
     int user;
 #endif
+    int vfp_enabled;
+    int vec_len;
+    int vec_stride;
 } DisasContext;
+
+static uint32_t gen_opc_condexec_bits[OPC_BUF_SIZE];
 
 #if defined(CONFIG_USER_ONLY)
 #define IS_USER(s) 1
@@ -2603,12 +2608,6 @@ static void gen_vfp_msr(TCGv tmp)
     dead_tmp(tmp);
 }
 
-static inline int
-vfp_enabled(CPUState * env)
-{
-    return ((env->vfp.xregs[ARM_VFP_FPEXC] & (1 << 30)) != 0);
-}
-
 static void gen_neon_dup_u8(TCGv var, int shift)
 {
     TCGv tmp = new_tmp();
@@ -2653,7 +2652,7 @@ static int disas_vfp_insn(CPUState * env, DisasContext *s, uint32_t insn)
     if (!arm_feature(env, ARM_FEATURE_VFP))
         return 1;
 
-    if (!vfp_enabled(env)) {
+    if (!s->vfp_enabled) {
         /* VFP disabled.  Only allow fmxr/fmrx to/from some control regs.  */
         if ((insn & 0x0fe00fff) != 0x0ee00a10)
             return 1;
@@ -2900,7 +2899,7 @@ static int disas_vfp_insn(CPUState * env, DisasContext *s, uint32_t insn)
                 rm = VFP_SREG_M(insn);
             }
 
-            veclen = env->vfp.vec_len;
+            veclen = s->vec_len;
             if (op == 15 && rn > 3)
                 veclen = 0;
 
@@ -2921,9 +2920,9 @@ static int disas_vfp_insn(CPUState * env, DisasContext *s, uint32_t insn)
                     veclen = 0;
                 } else {
                     if (dp)
-                        delta_d = (env->vfp.vec_stride >> 1) + 1;
+                        delta_d = (s->vec_stride >> 1) + 1;
                     else
-                        delta_d = env->vfp.vec_stride + 1;
+                        delta_d = s->vec_stride + 1;
 
                     if ((rm & bank_mask) == 0) {
                         /* mixed scalar/vector */
@@ -3488,6 +3487,14 @@ gen_set_condexec (DisasContext *s)
     }
 }
 
+static void gen_exception_insn(DisasContext *s, int offset, int excp)
+{
+    gen_set_condexec(s);
+    gen_set_pc_im(s->pc - offset);
+    gen_exception(excp);
+    s->is_jmp = DISAS_JUMP;
+}
+
 static void gen_nop_hint(DisasContext *s, int val)
 {
     switch (val) {
@@ -3804,7 +3811,7 @@ static int disas_neon_ls_insn(CPUState * env, DisasContext *s, uint32_t insn)
     TCGv tmp2;
     TCGv_i64 tmp64;
 
-    if (!vfp_enabled(env))
+    if (!s->vfp_enabled)
       return 1;
     VFP_DREG_D(rd, insn);
     rn = (insn >> 16) & 0xf;
@@ -4199,7 +4206,7 @@ static int disas_neon_data_insn(CPUState * env, DisasContext *s, uint32_t insn)
     TCGv tmp, tmp2, tmp3, tmp4, tmp5;
     TCGv_i64 tmp64;
 
-    if (!vfp_enabled(env))
+    if (!s->vfp_enabled)
       return 1;
     q = (insn & (1 << 6)) != 0;
     u = (insn >> 24) & 1;
@@ -5979,10 +5986,7 @@ static void gen_store_exclusive(DisasContext *s, int rd, int rt, int rt2,
     tcg_gen_mov_i32(cpu_exclusive_test, addr);
     tcg_gen_movi_i32(cpu_exclusive_info,
                      size | (rd << 4) | (rt << 8) | (rt2 << 12));
-    gen_set_condexec(s);
-    gen_set_pc_im(s->pc - 4);
-    gen_exception(EXCP_STREX);
-    s->is_jmp = DISAS_JUMP;
+    gen_exception_insn(s, 4, EXCP_STREX);
 }
 #else
 static void gen_store_exclusive(DisasContext *s, int rd, int rt, int rt2,
@@ -6122,14 +6126,10 @@ static void disas_arm_insn(CPUState * env, DisasContext *s)
                 goto illegal_op;
             ARCH(6);
             op1 = (insn & 0x1f);
-            if (op1 == (env->uncached_cpsr & CPSR_M)) {
-                addr = load_reg(s, 13);
-            } else {
-                addr = new_tmp();
-                tmp = tcg_const_i32(op1);
-                gen_helper_get_r13_banked(addr, cpu_env, tmp);
-                tcg_temp_free_i32(tmp);
-            }
+            addr = new_tmp();
+            tmp = tcg_const_i32(op1);
+            gen_helper_get_r13_banked(addr, cpu_env, tmp);
+            tcg_temp_free_i32(tmp);
             i = (insn >> 23) & 3;
             switch (i) {
             case 0: offset = -4; break; /* DA */
@@ -6156,14 +6156,10 @@ static void disas_arm_insn(CPUState * env, DisasContext *s)
                 }
                 if (offset)
                     tcg_gen_addi_i32(addr, addr, offset);
-                if (op1 == (env->uncached_cpsr & CPSR_M)) {
-                    store_reg(s, 13, addr);
-                } else {
-                    tmp = tcg_const_i32(op1);
-                    gen_helper_set_r13_banked(cpu_env, tmp, addr);
-                    tcg_temp_free_i32(tmp);
-                    dead_tmp(addr);
-                }
+                tmp = tcg_const_i32(op1);
+                gen_helper_set_r13_banked(cpu_env, tmp, addr);
+                tcg_temp_free_i32(tmp);
+                dead_tmp(addr);
             } else {
                 dead_tmp(addr);
             }
@@ -6387,10 +6383,7 @@ static void disas_arm_insn(CPUState * env, DisasContext *s)
                 goto illegal_op;
             }
             /* bkpt */
-            gen_set_condexec(s);
-            gen_set_pc_im(s->pc - 4);
-            gen_exception(EXCP_BKPT);
-            s->is_jmp = DISAS_JUMP;
+            gen_exception_insn(s, 4, EXCP_BKPT);
             break;
         case 0x8: /* signed multiply */
         case 0xa:
@@ -7289,10 +7282,7 @@ static void disas_arm_insn(CPUState * env, DisasContext *s)
             break;
         default:
         illegal_op:
-            gen_set_condexec(s);
-            gen_set_pc_im(s->pc - 4);
-            gen_exception(EXCP_UDEF);
-            s->is_jmp = DISAS_JUMP;
+            gen_exception_insn(s, 4, EXCP_UDEF);
             break;
         }
     }
@@ -7575,14 +7565,10 @@ static int disas_thumb2_insn(CPUState *env, DisasContext *s, uint16_t insn_hw1)
                 } else {
                     /* srs */
                     op = (insn & 0x1f);
-                    if (op == (env->uncached_cpsr & CPSR_M)) {
-                        addr = load_reg(s, 13);
-                    } else {
-                        addr = new_tmp();
-                        tmp = tcg_const_i32(op);
-                        gen_helper_get_r13_banked(addr, cpu_env, tmp);
-                        tcg_temp_free_i32(tmp);
-                    }
+                    addr = new_tmp();
+                    tmp = tcg_const_i32(op);
+                    gen_helper_get_r13_banked(addr, cpu_env, tmp);
+                    tcg_temp_free_i32(tmp);
                     if ((insn & (1 << 24)) == 0) {
                         tcg_gen_addi_i32(addr, addr, -8);
                     }
@@ -7598,13 +7584,9 @@ static int disas_thumb2_insn(CPUState *env, DisasContext *s, uint16_t insn_hw1)
                         } else {
                             tcg_gen_addi_i32(addr, addr, 4);
                         }
-                        if (op == (env->uncached_cpsr & CPSR_M)) {
-                            store_reg(s, 13, addr);
-                        } else {
-                            tmp = tcg_const_i32(op);
-                            gen_helper_set_r13_banked(cpu_env, tmp, addr);
-                            tcg_temp_free_i32(tmp);
-                        }
+                        tmp = tcg_const_i32(op);
+                        gen_helper_set_r13_banked(cpu_env, tmp, addr);
+                        tcg_temp_free_i32(tmp);
                     } else {
                         dead_tmp(addr);
                     }
@@ -8946,10 +8928,7 @@ static void disas_thumb_insn(CPUState *env, DisasContext *s)
             break;
 
         case 0xe: /* bkpt */
-            gen_set_condexec(s);
-            gen_set_pc_im(s->pc - 2);
-            gen_exception(EXCP_BKPT);
-            s->is_jmp = DISAS_JUMP;
+            gen_exception_insn(s, 2, EXCP_BKPT);
             break;
 
         case 0xa: /* rev */
@@ -9035,7 +9014,6 @@ static void disas_thumb_insn(CPUState *env, DisasContext *s)
 
         if (cond == 0xf) {
             /* swi */
-            gen_set_condexec(s);
             gen_set_pc_im(s->pc);
             s->is_jmp = DISAS_SWI;
             break;
@@ -9072,17 +9050,11 @@ static void disas_thumb_insn(CPUState *env, DisasContext *s)
     }
     return;
 undef32:
-    gen_set_condexec(s);
-    gen_set_pc_im(s->pc - 4);
-    gen_exception(EXCP_UDEF);
-    s->is_jmp = DISAS_JUMP;
+    gen_exception_insn(s, 4, EXCP_UDEF);
     return;
 illegal_op:
 undef:
-    gen_set_condexec(s);
-    gen_set_pc_im(s->pc - 2);
-    gen_exception(EXCP_UDEF);
-    s->is_jmp = DISAS_JUMP;
+    gen_exception_insn(s, 2, EXCP_UDEF);
 }
 
 /* generate intermediate code in gen_opc_buf and gen_opparam_buf for
@@ -9114,16 +9086,15 @@ static inline void gen_intermediate_code_internal(CPUState *env,
     dc->pc = pc_start;
     dc->singlestep_enabled = env->singlestep_enabled;
     dc->condjmp = 0;
-    dc->thumb = env->thumb;
-    dc->condexec_mask = (env->condexec_bits & 0xf) << 1;
-    dc->condexec_cond = env->condexec_bits >> 4;
+    dc->thumb = ARM_TBFLAG_THUMB(tb->flags);
+    dc->condexec_mask = (ARM_TBFLAG_CONDEXEC(tb->flags) & 0xf) << 1;
+    dc->condexec_cond = ARM_TBFLAG_CONDEXEC(tb->flags) >> 4;
 #if !defined(CONFIG_USER_ONLY)
-    if (IS_M(env)) {
-        dc->user = ((env->v7m.exception == 0) && (env->v7m.control & 1));
-    } else {
-        dc->user = (env->uncached_cpsr & 0x1f) == ARM_CPU_MODE_USR;
-    }
+    dc->user = (ARM_TBFLAG_PRIV(tb->flags) == 0);
 #endif
+    dc->vfp_enabled = ARM_TBFLAG_VFPEN(tb->flags);
+    dc->vec_len = ARM_TBFLAG_VECLEN(tb->flags);
+    dc->vec_stride = ARM_TBFLAG_VECSTRIDE(tb->flags);
     cpu_F0s = tcg_temp_new_i32();
     cpu_F1s = tcg_temp_new_i32();
     cpu_F0d = tcg_temp_new_i64();
@@ -9140,9 +9111,41 @@ static inline void gen_intermediate_code_internal(CPUState *env,
         max_insns = CF_COUNT_MASK;
 
     gen_icount_start();
+
+    /* A note on handling of the condexec (IT) bits:
+     *
+     * We want to avoid the overhead of having to write the updated condexec
+     * bits back to the CPUState for every instruction in an IT block. So:
+     * (1) if the condexec bits are not already zero then we write
+     * zero back into the CPUState now. This avoids complications trying
+     * to do it at the end of the block. (For example if we don't do this
+     * it's hard to identify whether we can safely skip writing condexec
+     * at the end of the TB, which we definitely want to do for the case
+     * where a TB doesn't do anything with the IT state at all.)
+     * (2) if we are going to leave the TB then we call gen_set_condexec()
+     * which will write the correct value into CPUState if zero is wrong.
+     * This is done both for leaving the TB at the end, and for leaving
+     * it because of an exception we know will happen, which is done in
+     * gen_exception_insn(). The latter is necessary because we need to
+     * leave the TB with the PC/IT state just prior to execution of the
+     * instruction which caused the exception.
+     * (3) if we leave the TB unexpectedly (eg a data abort on a load)
+     * then the CPUState will be wrong and we need to reset it.
+     * This is handled in the same way as restoration of the
+     * PC in these situations: we will be called again with search_pc=1
+     * and generate a mapping of the condexec bits for each PC in
+     * gen_opc_condexec_bits[]. gen_pc_load[] then uses this to restore
+     * the condexec bits.
+     *
+     * Note that there are no instructions which can read the condexec
+     * bits, and none which can write non-static values to them, so
+     * we don't need to care about whether CPUState is correct in the
+     * middle of a TB.
+     */
+
     /* Reset the conditional execution bits immediately. This avoids
        complications trying to do it at the end of the block.  */
-    if (env->condexec_bits)
+    if (dc->condexec_mask || dc->condexec_cond)
       {
         TCGv tmp = new_tmp();
         tcg_gen_movi_i32(tmp, 0);
@@ -9171,10 +9174,7 @@ static inline void gen_intermediate_code_internal(CPUState *env,
         if (unlikely(!QTAILQ_EMPTY(&env->breakpoints))) {
             QTAILQ_FOREACH(bp, &env->breakpoints, entry) {
                 if (bp->pc == dc->pc) {
-                    gen_set_condexec(dc);
-                    gen_set_pc_im(dc->pc);
-                    gen_exception(EXCP_DEBUG);
-                    dc->is_jmp = DISAS_JUMP;
+                    gen_exception_insn(dc, 0, EXCP_DEBUG);
                     /* Advance PC so that clearing the breakpoint will
                        invalidate this TB.  */
                     dc->pc += 2;
@@ -9191,6 +9191,7 @@ static inline void gen_intermediate_code_internal(CPUState *env,
                     gen_opc_instr_start[lj++] = 0;
             }
             gen_opc_pc[lj] = dc->pc;
+            gen_opc_condexec_bits[lj] = (dc->condexec_cond << 4) | (dc->condexec_mask >> 1);
             gen_opc_instr_start[lj] = 1;
             gen_opc_icount[lj] = num_insns;
         }
@@ -9198,7 +9199,11 @@ static inline void gen_intermediate_code_internal(CPUState *env,
         if (num_insns + 1 == max_insns && (tb->cflags & CF_LAST_IO))
             gen_io_start();
 
-        if (env->thumb) {
+        if (unlikely(qemu_loglevel_mask(CPU_LOG_TB_OP))) {
+            tcg_gen_debug_insn_start(dc->pc);
+        }
+
+        if (dc->thumb) {
             disas_thumb_insn(env, dc);
             if (dc->condexec_mask) {
                 dc->condexec_cond = (dc->condexec_cond & 0xe)
@@ -9312,7 +9317,7 @@ done_generating:
     if (qemu_loglevel_mask(CPU_LOG_TB_IN_ASM)) {
         qemu_log("----------------\n");
         qemu_log("IN: %s\n", lookup_symbol(pc_start));
-        log_target_disas(pc_start, dc->pc - pc_start, env->thumb);
+        log_target_disas(pc_start, dc->pc - pc_start, dc->thumb);
         qemu_log("\n");
     }
 #endif
@@ -9398,4 +9403,5 @@ void gen_pc_load(CPUState *env, TranslationBlock *tb,
                 unsigned long searched_pc, int pc_pos, void *puc)
 {
     env->regs[15] = gen_opc_pc[pc_pos];
+    env->condexec_bits = gen_opc_condexec_bits[pc_pos];
 }
