@@ -470,7 +470,6 @@ void kvm_arch_reset_vcpu(CPUState *env)
     env->interrupt_injected = -1;
     env->nmi_injected = 0;
     env->nmi_pending = 0;
-    /* Legal xcr0 for loading */
     env->xcr0 = 1;
     if (kvm_irqchip_in_kernel()) {
         env->mp_state = cpu_is_bsp(env) ? KVM_MP_STATE_RUNNABLE :
@@ -1791,8 +1790,6 @@ void kvm_arch_update_guest_debug(CPUState *env, struct kvm_guest_debug *dbg)
                 ((uint32_t)len_code[hw_breakpoint[n].len] << (18 + n*4));
         }
     }
-    /* Legal xcr0 for loading */
-    env->xcr0 = 1;
 }
 #endif /* KVM_CAP_SET_GUEST_DEBUG */
 
