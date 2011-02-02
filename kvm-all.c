@@ -65,9 +65,7 @@ struct KVMState
     int fd;
     int vmfd;
     int coalesced_mmio;
-#ifdef KVM_CAP_COALESCED_MMIO
     struct kvm_coalesced_mmio_ring *coalesced_mmio_ring;
-#endif
     int broken_set_mem_region;
     int migration_log;
     int vcpu_events;
@@ -83,6 +81,13 @@ struct KVMState
 };
 
 static KVMState *kvm_state;
+
+
+static const KVMCapabilityInfo kvm_required_capabilites[] = {
+    KVM_CAP_INFO(USER_MEMORY),
+    KVM_CAP_INFO(DESTROY_MEMORY_REGION_WORKS),
+    KVM_CAP_LAST_INFO
+};
 
 #endif
 
@@ -234,12 +239,10 @@ int kvm_init_vcpu(CPUState *env)
         goto err;
     }
 
-#ifdef KVM_CAP_COALESCED_MMIO
     if (s->coalesced_mmio && !s->coalesced_mmio_ring) {
         s->coalesced_mmio_ring =
             (void *)env->kvm_run + s->coalesced_mmio * PAGE_SIZE;
     }
-#endif
 
     ret = kvm_arch_init_vcpu(env);
     if (ret == 0) {
@@ -409,7 +412,6 @@ static int kvm_physical_sync_dirty_bitmap(target_phys_addr_t start_addr,
 int kvm_coalesce_mmio_region(target_phys_addr_t start, ram_addr_t size)
 {
     int ret = -ENOSYS;
-#ifdef KVM_CAP_COALESCED_MMIO
     KVMState *s = kvm_state;
 
     if (s->coalesced_mmio) {
@@ -420,7 +422,6 @@ int kvm_coalesce_mmio_region(target_phys_addr_t start, ram_addr_t size)
 
         ret = kvm_vm_ioctl(s, KVM_REGISTER_COALESCED_MMIO, &zone);
     }
-#endif
 
     return ret;
 }
@@ -428,7 +429,6 @@ int kvm_coalesce_mmio_region(target_phys_addr_t start, ram_addr_t size)
 int kvm_uncoalesce_mmio_region(target_phys_addr_t start, ram_addr_t size)
 {
     int ret = -ENOSYS;
-#ifdef KVM_CAP_COALESCED_MMIO
     KVMState *s = kvm_state;
 
     if (s->coalesced_mmio) {
@@ -439,7 +439,6 @@ int kvm_uncoalesce_mmio_region(target_phys_addr_t start, ram_addr_t size)
 
         ret = kvm_vm_ioctl(s, KVM_UNREGISTER_COALESCED_MMIO, &zone);
     }
-#endif
 
     return ret;
 }
@@ -488,6 +487,20 @@ static int kvm_check_many_ioeventfds(void)
     return 0;
 #endif
 }
+
+#ifdef OBSOLETE_KVM_IMPL
+static const KVMCapabilityInfo *
+kvm_check_extension_list(KVMState *s, const KVMCapabilityInfo *list)
+{
+    while (list->name) {
+        if (!kvm_check_extension(s, list->value)) {
+            return list;
+        }
+        list++;
+    }
+    return NULL;
+}
+#endif
 
 static void kvm_set_phys_mem(target_phys_addr_t start_addr, ram_addr_t size,
                              ram_addr_t phys_offset)
@@ -657,6 +670,7 @@ int kvm_init(void)
         "Please upgrade to at least kernel 2.6.29 or recent kvm-kmod\n"
         "(see http://sourceforge.net/projects/kvm).\n";
     KVMState *s;
+    const KVMCapabilityInfo *missing_cap;
     int ret;
     int i;
 
@@ -700,35 +714,19 @@ int kvm_init(void)
         goto err;
     }
 
-    /* initially, KVM allocated its own memory and we had to jump through
-     * hooks to make phys_ram_base point to this.  Modern versions of KVM
-     * just use a user allocated buffer so we can use regular pages
-     * unmodified.  Make sure we have a sufficiently modern version of KVM.
-     */
-    if (!kvm_check_extension(s, KVM_CAP_USER_MEMORY)) {
+    missing_cap = kvm_check_extension_list(s, kvm_required_capabilites);
+    if (!missing_cap) {
+        missing_cap =
+            kvm_check_extension_list(s, kvm_arch_required_capabilities);
+    }
+    if (missing_cap) {
         ret = -EINVAL;
-        fprintf(stderr, "kvm does not support KVM_CAP_USER_MEMORY\n%s",
-                upgrade_note);
+        fprintf(stderr, "kvm does not support %s\n%s",
+                missing_cap->name, upgrade_note);
         goto err;
     }
 
-    /* There was a nasty bug in < kvm-80 that prevents memory slots from being
-     * destroyed properly.  Since we rely on this capability, refuse to work
-     * with any kernel without this capability. */
-    if (!kvm_check_extension(s, KVM_CAP_DESTROY_MEMORY_REGION_WORKS)) {
-        ret = -EINVAL;
-
-        fprintf(stderr,
-                "KVM kernel module broken (DESTROY_MEMORY_REGION).\n%s",
-                upgrade_note);
-        goto err;
-    }
-
-    s->coalesced_mmio = 0;
-#ifdef KVM_CAP_COALESCED_MMIO
     s->coalesced_mmio = kvm_check_extension(s, KVM_CAP_COALESCED_MMIO);
-    s->coalesced_mmio_ring = NULL;
-#endif
 
     s->broken_set_mem_region = 1;
 #ifdef KVM_CAP_JOIN_MEMORY_REGIONS_WORKS
@@ -861,7 +859,6 @@ static int kvm_handle_internal_error(CPUState *env, struct kvm_run *run)
 
 void kvm_flush_coalesced_mmio_buffer(void)
 {
-#ifdef KVM_CAP_COALESCED_MMIO
     KVMState *s = kvm_state;
     if (s->coalesced_mmio_ring) {
         struct kvm_coalesced_mmio_ring *ring = s->coalesced_mmio_ring;
@@ -875,7 +872,6 @@ void kvm_flush_coalesced_mmio_buffer(void)
             ring->first = (ring->first + 1) % KVM_COALESCED_MMIO_MAX;
         }
     }
-#endif
 }
 
 #ifdef OBSOLETE_KVM_IMPL
@@ -1078,13 +1074,7 @@ int kvm_vcpu_ioctl(CPUState *env, int type, ...)
 
 int kvm_has_sync_mmu(void)
 {
-#ifdef KVM_CAP_SYNC_MMU
-    KVMState *s = kvm_state;
-
-    return kvm_check_extension(s, KVM_CAP_SYNC_MMU);
-#else
-    return 0;
-#endif
+    return kvm_check_extension(kvm_state, KVM_CAP_SYNC_MMU);
 }
 
 int kvm_has_vcpu_events(void)

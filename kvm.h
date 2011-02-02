@@ -36,6 +36,14 @@ extern int kvm_allowed;
 #ifdef OBSOLETE_KVM_IMPL
 struct kvm_run;
 
+typedef struct KVMCapabilityInfo {
+    const char *name;
+    int value;
+} KVMCapabilityInfo;
+
+#define KVM_CAP_INFO(CAP) { "KVM_CAP_" stringify(CAP), KVM_CAP_##CAP }
+#define KVM_CAP_LAST_INFO { NULL, 0 }
+
 /* external API */
 
 int kvm_init(void);
@@ -91,6 +99,10 @@ int kvm_vm_ioctl(KVMState *s, int type, ...);
 int kvm_vcpu_ioctl(CPUState *env, int type, ...);
 
 /* Arch specific hooks */
+
+#ifdef OBSOLETE_KVM_IMPL
+extern const KVMCapabilityInfo kvm_arch_required_capabilities[];
+#endif
 
 int kvm_arch_post_run(CPUState *env, struct kvm_run *run);
 
