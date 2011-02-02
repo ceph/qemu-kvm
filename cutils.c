@@ -296,10 +296,11 @@ int fcntl_setfl(int fd, int flag)
  * value must be terminated by whitespace, ',' or '\0'. Return -1 on
  * error.
  */
-ssize_t strtosz_suffix(const char *nptr, char **end, const char default_suffix)
+int64_t strtosz_suffix(const char *nptr, char **end, const char default_suffix)
 {
-    ssize_t retval = -1;
-    char *endptr, c, d;
+    int64_t retval = -1;
+    char *endptr;
+    unsigned char c, d;
     int mul_required = 0;
     double val, mul, integral, fraction;
 
@@ -308,8 +309,8 @@ ssize_t strtosz_suffix(const char *nptr, char **end, const char default_suffix)
     if (isnan(val) || endptr == nptr || errno != 0) {
         goto fail;
     }
-    integral = modf(val, &fraction);
-    if (integral != 0) {
+    fraction = modf(val, &integral);
+    if (fraction != 0) {
         mul_required = 1;
     }
     /*
@@ -319,7 +320,7 @@ ssize_t strtosz_suffix(const char *nptr, char **end, const char default_suffix)
      */
     c = *endptr;
     d = c;
-    if (isspace(c) || c == '\0' || c == ',') {
+    if (qemu_isspace(c) || c == '\0' || c == ',') {
         c = 0;
         if (default_suffix) {
             d = default_suffix;
@@ -327,32 +328,27 @@ ssize_t strtosz_suffix(const char *nptr, char **end, const char default_suffix)
             d = c;
         }
     }
-    switch (d) {
-    case 'B':
-    case 'b':
+    switch (qemu_toupper(d)) {
+    case STRTOSZ_DEFSUFFIX_B:
         mul = 1;
         if (mul_required) {
             goto fail;
         }
         break;
-    case 'K':
-    case 'k':
+    case STRTOSZ_DEFSUFFIX_KB:
         mul = 1 << 10;
         break;
     case 0:
         if (mul_required) {
             goto fail;
         }
-    case 'M':
-    case 'm':
+    case STRTOSZ_DEFSUFFIX_MB:
         mul = 1ULL << 20;
         break;
-    case 'G':
-    case 'g':
+    case STRTOSZ_DEFSUFFIX_GB:
         mul = 1ULL << 30;
         break;
-    case 'T':
-    case 't':
+    case STRTOSZ_DEFSUFFIX_TB:
         mul = 1ULL << 40;
         break;
     default:
@@ -366,11 +362,11 @@ ssize_t strtosz_suffix(const char *nptr, char **end, const char default_suffix)
      */
     if (c != 0) {
         endptr++;
-        if (!isspace(*endptr) && *endptr != ',' && *endptr != 0) {
+        if (!qemu_isspace(*endptr) && *endptr != ',' && *endptr != 0) {
             goto fail;
         }
     }
-    if ((val * mul >= ~(size_t)0) || val < 0) {
+    if ((val * mul >= INT64_MAX) || val < 0) {
         goto fail;
     }
     retval = val * mul;
@@ -383,7 +379,7 @@ fail:
     return retval;
 }
 
-ssize_t strtosz(const char *nptr, char **end)
+int64_t strtosz(const char *nptr, char **end)
 {
     return strtosz_suffix(nptr, end, STRTOSZ_DEFSUFFIX_MB);
 }

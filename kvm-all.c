@@ -457,10 +457,14 @@ int kvm_check_extension(KVMState *s, unsigned int extension)
 
 static int kvm_check_many_ioeventfds(void)
 {
-    /* Older kernels have a 6 device limit on the KVM io bus.  Find out so we
+    /* Userspace can use ioeventfd for io notification.  This requires a host
+     * that supports eventfd(2) and an I/O thread; since eventfd does not
+     * support SIGIO it cannot interrupt the vcpu.
+     *
+     * Older kernels have a 6 device limit on the KVM io bus.  Find out so we
      * can avoid creating too many ioeventfds.
      */
-#ifdef CONFIG_EVENTFD
+#if defined(CONFIG_EVENTFD) && defined(CONFIG_IOTHREAD)
     int ioeventfds[7];
     int i, ret = 0;
     for (i = 0; i < ARRAY_SIZE(ioeventfds); i++) {
@@ -939,6 +943,8 @@ int kvm_cpu_exec(CPUState *env)
         cpu_single_env = env;
         kvm_arch_post_run(env, run);
 
+        kvm_flush_coalesced_mmio_buffer();
+
         if (ret == -EINTR || ret == -EAGAIN) {
             cpu_exit(env);
             DPRINTF("io window exit\n");
@@ -950,8 +956,6 @@ int kvm_cpu_exec(CPUState *env)
             DPRINTF("kvm run failed %s\n", strerror(-ret));
             abort();
         }
-
-        kvm_flush_coalesced_mmio_buffer();
 
         ret = 0; /* exit loop */
         switch (run->exit_reason) {

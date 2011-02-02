@@ -53,6 +53,25 @@ Quit the emulator.
 ETEXI
 
     {
+        .name       = "block_resize",
+        .args_type  = "device:B,size:o",
+        .params     = "device size",
+        .help       = "resize a block image",
+        .user_print = monitor_user_noop,
+        .mhandler.cmd_new = do_block_resize,
+    },
+
+STEXI
+@item block_resize
+@findex block_resize
+Resize a block image while a guest is running.  Usually requires guest
+action to see the updated size.  Resize to a lower size is supported,
+but should be used with extreme caution.  Note that this command only
+resizes image files, it can not resize block devices like LVM volumes.
+ETEXI
+
+
+    {
         .name       = "eject",
         .args_type  = "force:-f,device:B",
         .params     = "[-f] device",
@@ -812,6 +831,23 @@ ETEXI
                       "be created in that format. Otherwise the\n\t\t\t"
                       "snapshot will be internal! (currently unsupported)",
         .mhandler.cmd_new = do_snapshot_blkdev,
+    },
+
+STEXI
+@item client_migrate_info @var{protocol} @var{hostname} @var{port} @var{tls-port} @var{cert-subject}
+@findex client_migrate_info
+Set the spice/vnc connection info for the migration target.  The spice/vnc
+server will ask the spice/vnc client to automatically reconnect using the
+new parameters (if specified) once the vm migration finished successfully.
+ETEXI
+
+    {
+        .name       = "client_migrate_info",
+        .args_type  = "protocol:s,hostname:s,port:i?,tls-port:i?,cert-subject:s?",
+        .params     = "protocol hostname port tls-port cert-subject",
+        .help       = "send migration info to spice/vnc client",
+        .user_print = monitor_user_noop,
+        .mhandler.cmd_new = client_migrate_info,
     },
 
 STEXI
