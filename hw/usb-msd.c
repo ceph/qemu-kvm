@@ -51,6 +51,7 @@ typedef struct {
     SCSIBus bus;
     BlockConf conf;
     SCSIDevice *scsi_dev;
+    uint32_t removable;
     int result;
     /* For async completion.  */
     USBPacket *packet;
@@ -515,7 +516,7 @@ static int usb_msd_initfn(USBDevice *dev)
 
     usb_desc_init(dev);
     scsi_bus_new(&s->bus, &s->dev.qdev, 0, 1, usb_msd_command_complete);
-    s->scsi_dev = scsi_bus_legacy_add_drive(&s->bus, bs, 0);
+    s->scsi_dev = scsi_bus_legacy_add_drive(&s->bus, bs, 0, !!s->removable);
     if (!s->scsi_dev) {
         return -1;
     }
@@ -531,6 +532,7 @@ static int usb_msd_initfn(USBDevice *dev)
         }
     }
 
+    add_boot_device_path(s->conf.bootindex, &dev->qdev, "/disk@0,0");
     return 0;
 }
 
@@ -541,7 +543,6 @@ static USBDevice *usb_msd_init(const char *filename)
     QemuOpts *opts;
     DriveInfo *dinfo;
     USBDevice *dev;
-    int fatal_error;
     const char *p1;
     char fmt[32];
 
@@ -571,7 +572,7 @@ static USBDevice *usb_msd_init(const char *filename)
     qemu_opt_set(opts, "if", "none");
 
     /* create host drive */
-    dinfo = drive_init(opts, 0, &fatal_error);
+    dinfo = drive_init(opts, 0);
     if (!dinfo) {
         qemu_opts_del(opts);
         return NULL;
@@ -595,6 +596,7 @@ static USBDevice *usb_msd_init(const char *filename)
 static struct USBDeviceInfo msd_info = {
     .product_desc   = "QEMU USB MSD",
     .qdev.name      = "usb-storage",
+    .qdev.fw_name      = "storage",
     .qdev.size      = sizeof(MSDState),
     .usb_desc       = &desc,
     .init           = usb_msd_initfn,
@@ -607,6 +609,7 @@ static struct USBDeviceInfo msd_info = {
     .usbdevice_init = usb_msd_init,
     .qdev.props     = (Property[]) {
         DEFINE_BLOCK_PROPERTIES(MSDState, conf),
+        DEFINE_PROP_BIT("removable", MSDState, removable, 0, false),
         DEFINE_PROP_END_OF_LIST(),
     },
 };
