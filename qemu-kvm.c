@@ -146,7 +146,7 @@ static inline void clear_gsi(kvm_context_t kvm, unsigned int gsi)
 
 static int kvm_create_context(void);
 
-int kvm_init(int smp_cpus)
+int kvm_init(void)
 {
     int fd;
     int r, gsi_count;

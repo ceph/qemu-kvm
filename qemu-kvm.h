@@ -623,7 +623,7 @@ struct kvm_pit_state {
  * \param opaque Not used
  * \return NULL on failure
  */
-int kvm_init(int smp_cpus);
+int kvm_init(void);
 
 int kvm_main_loop(void);
 int kvm_init_ap(void);
