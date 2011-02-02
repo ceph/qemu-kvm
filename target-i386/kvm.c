@@ -187,7 +187,7 @@ static int kvm_get_mce_cap_supported(KVMState *s, uint64_t *mce_cap,
 {
     int r;
 
-    r = kvm_ioctl(s, KVM_CHECK_EXTENSION, KVM_CAP_MCE);
+    r = kvm_check_extension(s, KVM_CAP_MCE);
     if (r > 0) {
         *max_banks = r;
         return kvm_ioctl(s, KVM_X86_GET_MCE_CAP_SUPPORTED, mce_cap);
@@ -264,11 +264,13 @@ static void kvm_do_inject_x86_mce(void *_data)
         }
     }
 }
+
+static void kvm_mce_broadcast_rest(CPUState *env);
 #endif
 
 void kvm_inject_x86_mce(CPUState *cenv, int bank, uint64_t status,
                         uint64_t mcg_status, uint64_t addr, uint64_t misc,
-                        int abort_on_error)
+                        int flag)
 {
 #ifdef KVM_CAP_MCE
     struct kvm_x86_mce mce = {
@@ -288,10 +290,15 @@ void kvm_inject_x86_mce(CPUState *cenv, int bank, uint64_t status,
         return;
     }
 
+    if (flag & MCE_BROADCAST) {
+        kvm_mce_broadcast_rest(cenv);
+    }
+
     on_vcpu(cenv, kvm_do_inject_x86_mce, &data);
 #else
-    if (abort_on_error)
+    if (flag & ABORT_ON_ERROR) {
         abort();
+    }
 #endif
 }
 
@@ -567,7 +574,7 @@ int kvm_arch_init(KVMState *s, int smp_cpus)
      * versions of KVM just assumed that it would be at the end of physical
      * memory but that doesn't work with more than 4GB of memory.  We simply
      * refuse to work with those older versions of KVM. */
-    ret = kvm_ioctl(s, KVM_CHECK_EXTENSION, KVM_CAP_SET_TSS_ADDR);
+    ret = kvm_check_extension(s, KVM_CAP_SET_TSS_ADDR);
     if (ret <= 0) {
         fprintf(stderr, "kvm does not support KVM_CAP_SET_TSS_ADDR\n");
         return ret;
@@ -1449,6 +1456,13 @@ int kvm_arch_get_registers(CPUState *env)
 
 int kvm_arch_pre_run(CPUState *env, struct kvm_run *run)
 {
+    /* Inject NMI */
+    if (env->interrupt_request & CPU_INTERRUPT_NMI) {
+        env->interrupt_request &= ~CPU_INTERRUPT_NMI;
+        DPRINTF("injected NMI\n");
+        kvm_vcpu_ioctl(env, KVM_NMI);
+    }
+
     /* Try to inject an interrupt if the guest can accept it */
     if (run->ready_for_interrupt_injection &&
         (env->interrupt_request & CPU_INTERRUPT_HARD) &&
@@ -1745,7 +1759,8 @@ static void kvm_mce_broadcast_rest(CPUState *env)
                 continue;
             }
             kvm_inject_x86_mce(cenv, 1, MCI_STATUS_VAL | MCI_STATUS_UC,
-                               MCG_STATUS_MCIP | MCG_STATUS_RIPV, 0, 0, 1);
+                               MCG_STATUS_MCIP | MCG_STATUS_RIPV, 0, 0,
+                               ABORT_ON_ERROR);
         }
     }
 }
@@ -1845,7 +1860,7 @@ int kvm_on_sigbus(int code, void *addr)
             | 0xc0;
         kvm_inject_x86_mce(first_cpu, 9, status,
                            MCG_STATUS_MCIP | MCG_STATUS_RIPV, paddr,
-                           (MCM_ADDR_PHYS << 6) | 0xc, 1);
+                           (MCM_ADDR_PHYS << 6) | 0xc, ABORT_ON_ERROR);
         kvm_mce_broadcast_rest(first_cpu);
     } else
 #endif
