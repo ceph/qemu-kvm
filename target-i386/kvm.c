@@ -219,7 +219,7 @@ static int kvm_get_msr(CPUState *env, struct kvm_msr_entry *msrs, int n)
 }
 
 /* FIXME: kill this and kvm_get_msr, use env->mcg_status instead */
-static int kvm_mce_in_exception(CPUState *env)
+static int kvm_mce_in_progress(CPUState *env)
 {
     struct kvm_msr_entry msr_mcg_status = {
         .index = MSR_MCG_STATUS,
@@ -228,7 +228,8 @@ static int kvm_mce_in_exception(CPUState *env)
 
     r = kvm_get_msr(env, &msr_mcg_status, 1);
     if (r == -1 || r == 0) {
-        return -1;
+        fprintf(stderr, "Failed to get MCE status\n");
+        return 0;
     }
     return !!(msr_mcg_status.data & MCG_STATUS_MCIP);
 }
@@ -248,10 +249,7 @@ static void kvm_do_inject_x86_mce(void *_data)
     /* If there is an MCE exception being processed, ignore this SRAO MCE */
     if ((data->env->mcg_cap & MCG_SER_P) &&
         !(data->mce->status & MCI_STATUS_AR)) {
-        r = kvm_mce_in_exception(data->env);
-        if (r == -1) {
-            fprintf(stderr, "Failed to get MCE status\n");
-        } else if (r) {
+        if (kvm_mce_in_progress(data->env)) {
             return;
         }
     }
@@ -263,6 +261,23 @@ static void kvm_do_inject_x86_mce(void *_data)
             abort();
         }
     }
+}
+
+static void kvm_inject_x86_mce_on(CPUState *env, struct kvm_x86_mce *mce,
+                                  int flag)
+{
+    struct kvm_x86_mce_data data = {
+        .env = env,
+        .mce = mce,
+        .abort_on_error = (flag & ABORT_ON_ERROR),
+    };
+
+    if (!env->mcg_cap) {
+        fprintf(stderr, "MCE support is not enabled!\n");
+        return;
+    }
+
+    on_vcpu(env, kvm_do_inject_x86_mce, &data);
 }
 
 static void kvm_mce_broadcast_rest(CPUState *env);
@@ -280,21 +295,12 @@ void kvm_inject_x86_mce(CPUState *cenv, int bank, uint64_t status,
         .addr = addr,
         .misc = misc,
     };
-    struct kvm_x86_mce_data data = {
-            .env = cenv,
-            .mce = &mce,
-    };
-
-    if (!cenv->mcg_cap) {
-        fprintf(stderr, "MCE support is not enabled!\n");
-        return;
-    }
 
     if (flag & MCE_BROADCAST) {
         kvm_mce_broadcast_rest(cenv);
     }
 
-    on_vcpu(cenv, kvm_do_inject_x86_mce, &data);
+    kvm_inject_x86_mce_on(cenv, &mce, flag);
 #else
     if (flag & ABORT_ON_ERROR) {
         abort();
@@ -1746,65 +1752,96 @@ static void hardware_memory_error(void)
 #ifdef KVM_CAP_MCE
 static void kvm_mce_broadcast_rest(CPUState *env)
 {
+    struct kvm_x86_mce mce = {
+        .bank = 1,
+        .status = MCI_STATUS_VAL | MCI_STATUS_UC,
+        .mcg_status = MCG_STATUS_MCIP | MCG_STATUS_RIPV,
+        .addr = 0,
+        .misc = 0,
+    };
     CPUState *cenv;
-    int family, model, cpuver = env->cpuid_version;
-
-    family = (cpuver >> 8) & 0xf;
-    model = ((cpuver >> 12) & 0xf0) + ((cpuver >> 4) & 0xf);
 
     /* Broadcast MCA signal for processor version 06H_EH and above */
-    if ((family == 6 && model >= 14) || family > 6) {
+    if (cpu_x86_support_mca_broadcast(env)) {
         for (cenv = first_cpu; cenv != NULL; cenv = cenv->next_cpu) {
             if (cenv == env) {
                 continue;
             }
-            kvm_inject_x86_mce(cenv, 1, MCI_STATUS_VAL | MCI_STATUS_UC,
-                               MCG_STATUS_MCIP | MCG_STATUS_RIPV, 0, 0,
-                               ABORT_ON_ERROR);
+            kvm_inject_x86_mce_on(cenv, &mce, ABORT_ON_ERROR);
         }
     }
 }
+
+static void kvm_mce_inj_srar_dataload(CPUState *env, target_phys_addr_t paddr)
+{
+    struct kvm_x86_mce mce = {
+        .bank = 9,
+        .status = MCI_STATUS_VAL | MCI_STATUS_UC | MCI_STATUS_EN
+                  | MCI_STATUS_MISCV | MCI_STATUS_ADDRV | MCI_STATUS_S
+                  | MCI_STATUS_AR | 0x134,
+        .mcg_status = MCG_STATUS_MCIP | MCG_STATUS_EIPV,
+        .addr = paddr,
+        .misc = (MCM_ADDR_PHYS << 6) | 0xc,
+    };
+    int r;
+
+    r = kvm_set_mce(env, &mce);
+    if (r < 0) {
+        fprintf(stderr, "kvm_set_mce: %s\n", strerror(errno));
+        abort();
+    }
+    kvm_mce_broadcast_rest(env);
+}
+
+static void kvm_mce_inj_srao_memscrub(CPUState *env, target_phys_addr_t paddr)
+{
+    struct kvm_x86_mce mce = {
+        .bank = 9,
+        .status = MCI_STATUS_VAL | MCI_STATUS_UC | MCI_STATUS_EN
+                  | MCI_STATUS_MISCV | MCI_STATUS_ADDRV | MCI_STATUS_S
+                  | 0xc0,
+        .mcg_status = MCG_STATUS_MCIP | MCG_STATUS_RIPV,
+        .addr = paddr,
+        .misc = (MCM_ADDR_PHYS << 6) | 0xc,
+    };
+    int r;
+
+    r = kvm_set_mce(env, &mce);
+    if (r < 0) {
+        fprintf(stderr, "kvm_set_mce: %s\n", strerror(errno));
+        abort();
+    }
+    kvm_mce_broadcast_rest(env);
+}
+
+static void kvm_mce_inj_srao_memscrub2(CPUState *env, target_phys_addr_t paddr)
+{
+    struct kvm_x86_mce mce = {
+        .bank = 9,
+        .status = MCI_STATUS_VAL | MCI_STATUS_UC | MCI_STATUS_EN
+                  | MCI_STATUS_MISCV | MCI_STATUS_ADDRV | MCI_STATUS_S
+                  | 0xc0,
+        .mcg_status = MCG_STATUS_MCIP | MCG_STATUS_RIPV,
+        .addr = paddr,
+        .misc = (MCM_ADDR_PHYS << 6) | 0xc,
+    };
+
+    kvm_inject_x86_mce_on(env, &mce, ABORT_ON_ERROR);
+    kvm_mce_broadcast_rest(env);
+}
+
 #endif
 
 int kvm_on_sigbus_vcpu(CPUState *env, int code, void *addr)
 {
 #if defined(KVM_CAP_MCE)
-    struct kvm_x86_mce mce = {
-            .bank = 9,
-    };
     void *vaddr;
     ram_addr_t ram_addr;
     target_phys_addr_t paddr;
-    int r;
 
     if ((env->mcg_cap & MCG_SER_P) && addr
         && (code == BUS_MCEERR_AR
             || code == BUS_MCEERR_AO)) {
-        if (code == BUS_MCEERR_AR) {
-            /* Fake an Intel architectural Data Load SRAR UCR */
-            mce.status = MCI_STATUS_VAL | MCI_STATUS_UC | MCI_STATUS_EN
-                | MCI_STATUS_MISCV | MCI_STATUS_ADDRV | MCI_STATUS_S
-                | MCI_STATUS_AR | 0x134;
-            mce.misc = (MCM_ADDR_PHYS << 6) | 0xc;
-            mce.mcg_status = MCG_STATUS_MCIP | MCG_STATUS_EIPV;
-        } else {
-            /*
-             * If there is an MCE excpetion being processed, ignore
-             * this SRAO MCE
-             */
-            r = kvm_mce_in_exception(env);
-            if (r == -1) {
-                fprintf(stderr, "Failed to get MCE status\n");
-            } else if (r) {
-                return 0;
-            }
-            /* Fake an Intel architectural Memory scrubbing UCR */
-            mce.status = MCI_STATUS_VAL | MCI_STATUS_UC | MCI_STATUS_EN
-                | MCI_STATUS_MISCV | MCI_STATUS_ADDRV | MCI_STATUS_S
-                | 0xc0;
-            mce.misc = (MCM_ADDR_PHYS << 6) | 0xc;
-            mce.mcg_status = MCG_STATUS_MCIP | MCG_STATUS_RIPV;
-        }
         vaddr = (void *)addr;
         if (qemu_ram_addr_from_host(vaddr, &ram_addr) ||
             !kvm_physical_memory_addr_from_ram(env->kvm_state, ram_addr, &paddr)) {
@@ -1817,13 +1854,20 @@ int kvm_on_sigbus_vcpu(CPUState *env, int code, void *addr)
                 hardware_memory_error();
             }
         }
-        mce.addr = paddr;
-        r = kvm_set_mce(env, &mce);
-        if (r < 0) {
-            fprintf(stderr, "kvm_set_mce: %s\n", strerror(errno));
-            abort();
+
+        if (code == BUS_MCEERR_AR) {
+            /* Fake an Intel architectural Data Load SRAR UCR */
+            kvm_mce_inj_srar_dataload(env, paddr);
+        } else {
+            /*
+             * If there is an MCE excpetion being processed, ignore
+             * this SRAO MCE
+             */
+            if (!kvm_mce_in_progress(env)) {
+                /* Fake an Intel architectural Memory scrubbing UCR */
+                kvm_mce_inj_srao_memscrub(env, paddr);
+            }
         }
-        kvm_mce_broadcast_rest(env);
     } else
 #endif
     {
@@ -1842,7 +1886,6 @@ int kvm_on_sigbus(int code, void *addr)
 {
 #if defined(KVM_CAP_MCE)
     if ((first_cpu->mcg_cap & MCG_SER_P) && addr && code == BUS_MCEERR_AO) {
-        uint64_t status;
         void *vaddr;
         ram_addr_t ram_addr;
         target_phys_addr_t paddr;
@@ -1855,13 +1898,7 @@ int kvm_on_sigbus(int code, void *addr)
                     "QEMU itself instead of guest system!: %p\n", addr);
             return 0;
         }
-        status = MCI_STATUS_VAL | MCI_STATUS_UC | MCI_STATUS_EN
-            | MCI_STATUS_MISCV | MCI_STATUS_ADDRV | MCI_STATUS_S
-            | 0xc0;
-        kvm_inject_x86_mce(first_cpu, 9, status,
-                           MCG_STATUS_MCIP | MCG_STATUS_RIPV, paddr,
-                           (MCM_ADDR_PHYS << 6) | 0xc, ABORT_ON_ERROR);
-        kvm_mce_broadcast_rest(first_cpu);
+        kvm_mce_inj_srao_memscrub2(first_cpu, paddr);
     } else
 #endif
     {
