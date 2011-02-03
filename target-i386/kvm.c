@@ -472,7 +472,6 @@ void kvm_arch_reset_vcpu(CPUState *env)
     }
 }
 
-#ifdef OBSOLETE_KVM_IMPL
 
 static int kvm_get_supported_msrs(KVMState *s)
 {
@@ -520,6 +519,8 @@ static int kvm_get_supported_msrs(KVMState *s)
 
     return ret;
 }
+
+#ifdef OBSOLETE_KVM_IMPL
 
 int kvm_arch_init(KVMState *s)
 {

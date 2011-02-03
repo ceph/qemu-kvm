@@ -509,6 +509,12 @@ int kvm_arch_qemu_create_context(void)
         kvm_set_shadow_pages(kvm_context, kvm_shadow_memory);
     }
 
+    /* initialize has_msr_star/has_msr_hsave_pa */
+    r = kvm_get_supported_msrs(kvm_state);
+    if (r < 0) {
+        return r;
+    }
+
     kvm_msr_list = kvm_get_msr_list();
     if (!kvm_msr_list) {
         return -1;
