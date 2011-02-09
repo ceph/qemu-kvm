@@ -1606,6 +1606,7 @@ int kvm_main_loop(void)
         }
     }
 
+    bdrv_close_all();
     pause_all_threads();
     pthread_mutex_unlock(&qemu_mutex);
 
