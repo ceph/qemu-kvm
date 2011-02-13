@@ -304,19 +304,25 @@ static int ioapic_post_load(void *opaque, int version_id)
 {
     IOAPICState *s = opaque;
 
+    if (version_id == 1) {
+        /* set sane value */
+        s->irr = 0;
+    }
+
     if (kvm_enabled() && kvm_irqchip_in_kernel()) {
         kvm_kernel_ioapic_load_from_user(s);
     }
+
     return 0;
 }
 
 static const VMStateDescription vmstate_ioapic = {
     .name = "ioapic",
     .version_id = 2,
+    .post_load = ioapic_post_load,
     .minimum_version_id = 1,
     .minimum_version_id_old = 1,
     .pre_load = ioapic_pre_load,
-    .post_load = ioapic_post_load,
     .pre_save = ioapic_pre_save,
     .fields      = (VMStateField []) {
         VMSTATE_UINT8(id, IOAPICState),
