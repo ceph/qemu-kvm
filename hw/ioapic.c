@@ -318,7 +318,7 @@ static int ioapic_post_load(void *opaque, int version_id)
 
 static const VMStateDescription vmstate_ioapic = {
     .name = "ioapic",
-    .version_id = 2,
+    .version_id = 3,
     .post_load = ioapic_post_load,
     .minimum_version_id = 1,
     .minimum_version_id_old = 1,
