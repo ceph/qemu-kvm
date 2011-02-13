@@ -198,6 +198,28 @@ NEON_VOP_ENV(qadd_u16, neon_u16, 2)
 #undef NEON_FN
 #undef NEON_USAT
 
+uint32_t HELPER(neon_qadd_u32)(CPUState *env, uint32_t a, uint32_t b)
+{
+    uint32_t res = a + b;
+    if (res < a) {
+        SET_QC();
+        res = ~0;
+    }
+    return res;
+}
+
+uint64_t HELPER(neon_qadd_u64)(CPUState *env, uint64_t src1, uint64_t src2)
+{
+    uint64_t res;
+
+    res = src1 + src2;
+    if (res < src1) {
+        SET_QC();
+        res = ~(uint64_t)0;
+    }
+    return res;
+}
+
 #define NEON_SSAT(dest, src1, src2, type) do { \
     int32_t tmp = (uint32_t)src1 + (uint32_t)src2; \
     if (tmp != (type)tmp) { \
@@ -218,6 +240,28 @@ NEON_VOP_ENV(qadd_s16, neon_s16, 2)
 #undef NEON_FN
 #undef NEON_SSAT
 
+uint32_t HELPER(neon_qadd_s32)(CPUState *env, uint32_t a, uint32_t b)
+{
+    uint32_t res = a + b;
+    if (((res ^ a) & SIGNBIT) && !((a ^ b) & SIGNBIT)) {
+        SET_QC();
+        res = ~(((int32_t)a >> 31) ^ SIGNBIT);
+    }
+    return res;
+}
+
+uint64_t HELPER(neon_qadd_s64)(CPUState *env, uint64_t src1, uint64_t src2)
+{
+    uint64_t res;
+
+    res = src1 + src2;
+    if (((res ^ src1) & SIGNBIT64) && !((src1 ^ src2) & SIGNBIT64)) {
+        SET_QC();
+        res = ((int64_t)src1 >> 63) ^ ~SIGNBIT64;
+    }
+    return res;
+}
+
 #define NEON_USAT(dest, src1, src2, type) do { \
     uint32_t tmp = (uint32_t)src1 - (uint32_t)src2; \
     if (tmp != (type)tmp) { \
@@ -233,6 +277,29 @@ NEON_VOP_ENV(qsub_u8, neon_u8, 4)
 NEON_VOP_ENV(qsub_u16, neon_u16, 2)
 #undef NEON_FN
 #undef NEON_USAT
+
+uint32_t HELPER(neon_qsub_u32)(CPUState *env, uint32_t a, uint32_t b)
+{
+    uint32_t res = a - b;
+    if (res > a) {
+        SET_QC();
+        res = 0;
+    }
+    return res;
+}
+
+uint64_t HELPER(neon_qsub_u64)(CPUState *env, uint64_t src1, uint64_t src2)
+{
+    uint64_t res;
+
+    if (src1 < src2) {
+        SET_QC();
+        res = 0;
+    } else {
+        res = src1 - src2;
+    }
+    return res;
+}
 
 #define NEON_SSAT(dest, src1, src2, type) do { \
     int32_t tmp = (uint32_t)src1 - (uint32_t)src2; \
@@ -253,6 +320,28 @@ NEON_VOP_ENV(qsub_s8, neon_s8, 4)
 NEON_VOP_ENV(qsub_s16, neon_s16, 2)
 #undef NEON_FN
 #undef NEON_SSAT
+
+uint32_t HELPER(neon_qsub_s32)(CPUState *env, uint32_t a, uint32_t b)
+{
+    uint32_t res = a - b;
+    if (((res ^ a) & SIGNBIT) && ((a ^ b) & SIGNBIT)) {
+        SET_QC();
+        res = ~(((int32_t)a >> 31) ^ SIGNBIT);
+    }
+    return res;
+}
+
+uint64_t HELPER(neon_qsub_s64)(CPUState *env, uint64_t src1, uint64_t src2)
+{
+    uint64_t res;
+
+    res = src1 - src2;
+    if (((res ^ src1) & SIGNBIT64) && ((src1 ^ src2) & SIGNBIT64)) {
+        SET_QC();
+        res = ((int64_t)src1 >> 63) ^ ~SIGNBIT64;
+    }
+    return res;
+}
 
 #define NEON_FN(dest, src1, src2) dest = (src1 + src2) >> 1
 NEON_VOP(hadd_s8, neon_s8, 4)
@@ -964,6 +1053,33 @@ uint32_t HELPER(neon_narrow_round_high_u16)(uint64_t x)
     return ((x >> 16) & 0xffff) | ((x >> 32) & 0xffff0000);
 }
 
+uint32_t HELPER(neon_unarrow_sat8)(CPUState *env, uint64_t x)
+{
+    uint16_t s;
+    uint8_t d;
+    uint32_t res = 0;
+#define SAT8(n) \
+    s = x >> n; \
+    if (s & 0x8000) { \
+        SET_QC(); \
+    } else { \
+        if (s > 0xff) { \
+            d = 0xff; \
+            SET_QC(); \
+        } else  { \
+            d = s; \
+        } \
+        res |= (uint32_t)d << (n / 2); \
+    }
+
+    SAT8(0);
+    SAT8(16);
+    SAT8(32);
+    SAT8(48);
+#undef SAT8
+    return res;
+}
+
 uint32_t HELPER(neon_narrow_sat_u8)(CPUState *env, uint64_t x)
 {
     uint16_t s;
@@ -1010,6 +1126,29 @@ uint32_t HELPER(neon_narrow_sat_s8)(CPUState *env, uint64_t x)
     return res;
 }
 
+uint32_t HELPER(neon_unarrow_sat16)(CPUState *env, uint64_t x)
+{
+    uint32_t high;
+    uint32_t low;
+    low = x;
+    if (low & 0x80000000) {
+        low = 0;
+        SET_QC();
+    } else if (low > 0xffff) {
+        low = 0xffff;
+        SET_QC();
+    }
+    high = x >> 32;
+    if (high & 0x80000000) {
+        high = 0;
+        SET_QC();
+    } else if (high > 0xffff) {
+        high = 0xffff;
+        SET_QC();
+    }
+    return low | (high << 16);
+}
+
 uint32_t HELPER(neon_narrow_sat_u16)(CPUState *env, uint64_t x)
 {
     uint32_t high;
@@ -1044,6 +1183,19 @@ uint32_t HELPER(neon_narrow_sat_s16)(CPUState *env, uint64_t x)
     return (uint16_t)low | (high << 16);
 }
 
+uint32_t HELPER(neon_unarrow_sat32)(CPUState *env, uint64_t x)
+{
+    if (x & 0x8000000000000000ull) {
+        SET_QC();
+        return 0;
+    }
+    if (x > 0xffffffffu) {
+        SET_QC();
+        return 0xffffffffu;
+    }
+    return x;
+}
+
 uint32_t HELPER(neon_narrow_sat_u32)(CPUState *env, uint64_t x)
 {
     if (x > 0xffffffffu) {
@@ -1057,7 +1209,7 @@ uint32_t HELPER(neon_narrow_sat_s32)(CPUState *env, uint64_t x)
 {
     if ((int64_t)x != (int32_t)x) {
         SET_QC();
-        return (x >> 63) ^ 0x7fffffff;
+        return ((int64_t)x >> 63) ^ 0x7fffffff;
     }
     return x;
 }
