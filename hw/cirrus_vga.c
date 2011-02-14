@@ -32,7 +32,6 @@
 #include "console.h"
 #include "vga_int.h"
 #include "kvm.h"
-#include "qemu-kvm.h"
 #include "loader.h"
 
 /*
@@ -2488,7 +2487,6 @@ static CPUWriteMemoryFunc * const cirrus_linear_bitblt_write[3] = {
 
 static void map_linear_vram(CirrusVGAState *s)
 {
-    vga_dirty_log_stop(&s->vga);
     if (!s->vga.map_addr && s->vga.lfb_addr && s->vga.lfb_end) {
         s->vga.map_addr = s->vga.lfb_addr;
         s->vga.map_end = s->vga.lfb_end;
@@ -2501,16 +2499,11 @@ static void map_linear_vram(CirrusVGAState *s)
 #ifndef TARGET_IA64
     s->vga.lfb_vram_mapped = 0;
 
-    cpu_register_physical_memory(isa_mem_base + 0xa0000, 0x8000,
-                                (s->vga.vram_offset + s->cirrus_bank_base[0]) | IO_MEM_UNASSIGNED);
-    cpu_register_physical_memory(isa_mem_base + 0xa8000, 0x8000,
-                                (s->vga.vram_offset + s->cirrus_bank_base[1]) | IO_MEM_UNASSIGNED);
     if (!(s->cirrus_srcptr != s->cirrus_srcptr_end)
         && !((s->vga.sr[0x07] & 0x01) == 0)
         && !((s->vga.gr[0x0B] & 0x14) == 0x14)
         && !(s->vga.gr[0x0B] & 0x02)) {
 
-        vga_dirty_log_stop(&s->vga);
         cpu_register_physical_memory(isa_mem_base + 0xa0000, 0x8000,
                                     (s->vga.vram_offset + s->cirrus_bank_base[0]) | IO_MEM_RAM);
         cpu_register_physical_memory(isa_mem_base + 0xa8000, 0x8000,
@@ -2529,7 +2522,6 @@ static void map_linear_vram(CirrusVGAState *s)
 
 static void unmap_linear_vram(CirrusVGAState *s)
 {
-    vga_dirty_log_stop(&s->vga);
     if (s->vga.map_addr && s->vga.lfb_addr && s->vga.lfb_end) {
         s->vga.map_addr = s->vga.map_end = 0;
          cpu_register_physical_memory(s->vga.lfb_addr, s->vga.vram_size,
@@ -2537,8 +2529,6 @@ static void unmap_linear_vram(CirrusVGAState *s)
     }
     cpu_register_physical_memory(isa_mem_base + 0xa0000, 0x20000,
                                  s->vga.vga_io_memory);
-
-    vga_dirty_log_start(&s->vga);
 }
 
 /* Compute the memory access functions */
@@ -3073,8 +3063,6 @@ static void cirrus_pci_lfb_map(PCIDevice *d, int region_num,
 {
     CirrusVGAState *s = &DO_UPCAST(PCICirrusVGAState, dev, d)->cirrus_vga;
 
-    vga_dirty_log_stop(&s->vga);
-
     /* XXX: add byte swapping apertures */
     cpu_register_physical_memory(addr, s->vga.vram_size,
 				 s->cirrus_linear_io_addr);
@@ -3106,14 +3094,10 @@ static void pci_cirrus_write_config(PCIDevice *d,
     PCICirrusVGAState *pvs = DO_UPCAST(PCICirrusVGAState, dev, d);
     CirrusVGAState *s = &pvs->cirrus_vga;
 
-    vga_dirty_log_stop(&s->vga);
-
     pci_default_write_config(d, address, val, len);
     if (s->vga.map_addr && d->io_regions[0].addr == PCI_BAR_UNMAPPED)
         s->vga.map_addr = 0;
     cirrus_update_memory_access(s);
-
-    vga_dirty_log_start(&s->vga);
 }
 
 static int pci_cirrus_vga_initfn(PCIDevice *dev)

@@ -65,11 +65,9 @@ static void pci_vga_write_config(PCIDevice *d,
     PCIVGAState *pvs = container_of(d, PCIVGAState, dev);
     VGACommonState *s = &pvs->vga;
 
-    vga_dirty_log_stop(s);
     pci_default_write_config(d, address, val, len);
     if (s->map_addr && pvs->dev.io_regions[0].addr == -1)
         s->map_addr = 0;
-    vga_dirty_log_start(s);
 }
 
 static int pci_vga_initfn(PCIDevice *dev)

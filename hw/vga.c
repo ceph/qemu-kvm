@@ -1258,8 +1258,6 @@ static void vga_draw_text(VGACommonState *s, int full_update)
     vga_draw_glyph8_func *vga_draw_glyph8;
     vga_draw_glyph9_func *vga_draw_glyph9;
 
-    vga_dirty_log_stop(s);
-
     /* compute font data address (in plane 2) */
     v = s->sr[3];
     offset = (((v >> 4) & 1) | ((v << 1) & 6)) * 8192 * 4 + 2;
@@ -1571,65 +1569,40 @@ static void vga_sync_dirty_bitmap(VGACommonState *s)
     }
 #endif
 
-    vga_dirty_log_start(s);
-}
-
-static int s1, s2, s3;
-
-static void mark_dirty(target_phys_addr_t start, target_phys_addr_t len)
-{
-    target_phys_addr_t end = start + len;
-
-    while (start < end) {
-        cpu_physical_memory_set_dirty(cpu_get_physical_page_desc(start));
-        start += TARGET_PAGE_SIZE;
-    }
 }
 
 void vga_dirty_log_start(VGACommonState *s)
 {
     if (kvm_enabled() && s->map_addr)
-        if (!s1) {
-            kvm_log_start(s->map_addr, s->map_end - s->map_addr);
-            mark_dirty(s->map_addr, s->map_end - s->map_addr);
-            s1 = 1;
-        }
+        kvm_log_start(s->map_addr, s->map_end - s->map_addr);
+
     if (kvm_enabled() && s->lfb_vram_mapped) {
-        if (!s2) {
-            kvm_log_start(isa_mem_base + 0xa0000, 0x8000);
-            kvm_log_start(isa_mem_base + 0xa8000, 0x8000);
-            mark_dirty(isa_mem_base + 0xa0000, 0x10000);
-        }
-        s2 = 1;
+        kvm_log_start(isa_mem_base + 0xa0000, 0x8000);
+        kvm_log_start(isa_mem_base + 0xa8000, 0x8000);
     }
 
 #ifdef CONFIG_BOCHS_VBE
     if (kvm_enabled() && s->vbe_mapped) {
-        if (!s3) {
-            kvm_log_start(VBE_DISPI_LFB_PHYSICAL_ADDRESS, s->vram_size);
-        }
-        s3 = 1;
+        kvm_log_start(VBE_DISPI_LFB_PHYSICAL_ADDRESS, s->vram_size);
     }
 #endif
 }
 
 void vga_dirty_log_stop(VGACommonState *s)
 {
-    if (kvm_enabled() && s->map_addr && s1)
+    if (kvm_enabled() && s->map_addr)
 	kvm_log_stop(s->map_addr, s->map_end - s->map_addr);
 
-    if (kvm_enabled() && s->lfb_vram_mapped && s1) {
+    if (kvm_enabled() && s->lfb_vram_mapped) {
 	kvm_log_stop(isa_mem_base + 0xa0000, 0x8000);
 	kvm_log_stop(isa_mem_base + 0xa8000, 0x8000);
     }
 
 #ifdef CONFIG_BOCHS_VBE
-    if (kvm_enabled() && s->vbe_mapped && s3) {
+    if (kvm_enabled() && s->vbe_mapped) {
 	kvm_log_stop(VBE_DISPI_LFB_PHYSICAL_ADDRESS, s->vram_size);
     }
 #endif
-
-    s1 = s2 = s3 = 0;
 }
 
 void vga_dirty_log_restart(VGACommonState *s)
@@ -1867,7 +1840,6 @@ static void vga_draw_blank(VGACommonState *s, int full_update)
         return;
     if (s->last_scr_width <= 0 || s->last_scr_height <= 0)
         return;
-    vga_dirty_log_stop(s);
 
     s->rgb_to_pixel =
         rgb_to_pixel_dup_table[get_depth_index(s->ds)];
