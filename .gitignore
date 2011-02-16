@@ -51,6 +51,8 @@ QMP/qmp-commands.txt
 *.vr
 *.d
 *.o
+*.swp
+*.orig
 .pc
 patches
 pc-bios/bios-pq/status
@@ -62,3 +64,4 @@ pc-bios/optionrom/extboot.bin
 pc-bios/optionrom/vapic.bin
 .stgit-*
 cscope.*
+tags

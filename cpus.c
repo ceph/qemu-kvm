@@ -314,6 +314,10 @@ void qemu_mutex_lock_iothread(void) {}
 void qemu_mutex_unlock_iothread(void) {}
 #endif
 
+void cpu_stop_current(void)
+{
+}
+
 void vm_stop(int reason)
 {
     do_vm_stop(reason);
@@ -483,6 +487,7 @@ static void qemu_wait_io_event_common(CPUState *env)
         qemu_cond_signal(&qemu_pause_cond);
     }
     flush_queued_work(env);
+    env->thread_kicked = false;
 }
 
 static void qemu_tcg_wait_io_event(void)
@@ -650,7 +655,10 @@ void qemu_cpu_kick(void *_env)
 {
     CPUState *env = _env;
     qemu_cond_broadcast(env->halt_cond);
-    qemu_thread_signal(env->thread, SIG_IPI);
+    if (!env->thread_kicked) {
+        qemu_thread_signal(env->thread, SIG_IPI);
+        env->thread_kicked = true;
+    }
 }
 
 int qemu_cpu_self(void *_env)
@@ -850,6 +858,14 @@ static void qemu_system_vmstop_request(int reason)
     qemu_notify_event();
 }
 
+void cpu_stop_current(void)
+{
+    if (cpu_single_env) {
+        cpu_single_env->stopped = 1;
+        cpu_exit(cpu_single_env);
+    }
+}
+
 void vm_stop(int reason)
 {
     QemuThread me;
@@ -861,10 +877,7 @@ void vm_stop(int reason)
          * FIXME: should not return to device code in case
          * vm_stop() has been requested.
          */
-        if (cpu_single_env) {
-            cpu_exit(cpu_single_env);
-            cpu_single_env->stop = 1;
-        }
+        cpu_stop_current();
         return;
     }
     do_vm_stop(reason);
