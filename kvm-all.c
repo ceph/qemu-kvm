@@ -793,8 +793,8 @@ err:
 }
 #endif
 
-static int kvm_handle_io(uint16_t port, void *data, int direction, int size,
-                         uint32_t count)
+static void kvm_handle_io(uint16_t port, void *data, int direction, int size,
+                          uint32_t count)
 {
     int i;
     uint8_t *ptr = data;
@@ -828,8 +828,6 @@ static int kvm_handle_io(uint16_t port, void *data, int direction, int size,
 
         ptr += size;
     }
-
-    return 1;
 }
 
 #ifdef KVM_CAP_INTERNAL_ERROR_DATA
@@ -965,11 +963,12 @@ int kvm_cpu_exec(CPUState *env)
         switch (run->exit_reason) {
         case KVM_EXIT_IO:
             DPRINTF("handle_io\n");
-            ret = kvm_handle_io(run->io.port,
-                                (uint8_t *)run + run->io.data_offset,
-                                run->io.direction,
-                                run->io.size,
-                                run->io.count);
+            kvm_handle_io(run->io.port,
+                          (uint8_t *)run + run->io.data_offset,
+                          run->io.direction,
+                          run->io.size,
+                          run->io.count);
+            ret = 1;
             break;
         case KVM_EXIT_MMIO:
             DPRINTF("handle_mmio\n");

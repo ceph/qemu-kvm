@@ -614,7 +614,7 @@ int kvm_run(CPUState *env)
             abort();
             break;
         case KVM_EXIT_IO:
-            r = kvm_handle_io(run->io.port,
+            kvm_handle_io(run->io.port,
                                 (uint8_t *)run + run->io.data_offset,
                                 run->io.direction,
                                 run->io.size,
