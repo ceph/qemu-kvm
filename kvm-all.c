@@ -80,7 +80,7 @@ struct KVMState
     int many_ioeventfds;
 };
 
-static KVMState *kvm_state;
+KVMState *kvm_state;
 
 
 static const KVMCapabilityInfo kvm_required_capabilites[] = {
