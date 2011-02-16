@@ -1233,7 +1233,7 @@ int kvm_cpu_exec(CPUState *env)
     r = kvm_run(env);
     if (r < 0) {
         printf("kvm_run returned %d\n", r);
-        vm_stop(0);
+        vm_stop(VMSTOP_PANIC);
     }
 
     return 0;
@@ -1590,7 +1590,7 @@ int kvm_main_loop(void)
         if (qemu_shutdown_requested()) {
             monitor_protocol_event(QEVENT_SHUTDOWN, NULL);
             if (qemu_no_shutdown()) {
-                vm_stop(0);
+                vm_stop(VMSTOP_SHUTDOWN);
             } else {
                 break;
             }
@@ -1601,7 +1601,7 @@ int kvm_main_loop(void)
             qemu_kvm_system_reset();
         } else if (kvm_debug_cpu_requested) {
             gdb_set_stop_cpu(kvm_debug_cpu_requested);
-            vm_stop(EXCP_DEBUG);
+            vm_stop(VMSTOP_DEBUG);
             kvm_debug_cpu_requested = NULL;
         }
     }
