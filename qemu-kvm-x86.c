@@ -658,12 +658,11 @@ int kvm_arch_halt(CPUState *env)
     return 1;
 }
 
-int kvm_arch_pre_run(CPUState *env, struct kvm_run *run)
+void kvm_arch_pre_run(CPUState *env, struct kvm_run *run)
 {
     if (!kvm_irqchip_in_kernel()) {
         kvm_set_cr8(env, cpu_get_apic_tpr(env->apic_state));
     }
-    return 0;
 }
 
 int kvm_arch_has_work(CPUState *env)

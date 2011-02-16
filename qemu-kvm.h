@@ -759,8 +759,6 @@ struct KVMState {
     struct kvm_context kvm_context;
 };
 
-extern struct KVMState *kvm_state;
-
 int kvm_tpr_enable_vapic(CPUState *env);
 
 unsigned long kvm_get_thread_id(void);
