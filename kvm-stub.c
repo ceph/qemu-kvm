@@ -147,6 +147,7 @@ int kvm_set_ioeventfd_mmio_long(int fd, uint32_t adr, uint32_t val, bool assign)
     return -ENOSYS;
 }
 
+<<<<<<< HEAD
 int kvm_has_gsi_routing(void)
 {
     return 0;
@@ -187,6 +188,12 @@ int kvm_set_irq(int irq, int level, int *status)
     assert(0);
     return -ENOSYS;
 }
+
+int kvm_on_sigbus_vcpu(CPUState *env, int code, void *addr)
+{
+    return 1;
+}
+
 int kvm_on_sigbus(int code, void *addr)
 {
     return 1;

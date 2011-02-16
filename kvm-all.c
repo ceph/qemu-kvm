@@ -227,6 +227,7 @@ int kvm_init_vcpu(CPUState *env)
 
     mmap_size = kvm_ioctl(s, KVM_GET_VCPU_MMAP_SIZE, 0);
     if (mmap_size < 0) {
+        ret = mmap_size;
         DPRINTF("KVM_GET_VCPU_MMAP_SIZE failed\n");
         goto err;
     }
@@ -1410,6 +1411,16 @@ int kvm_set_irqfd(int gsi, int fd, bool assigned)
     return 0;
 }
 #endif
+
+int kvm_on_sigbus_vcpu(CPUState *env, int code, void *addr)
+{
+    return kvm_arch_on_sigbus_vcpu(env, code, addr);
+}
+
+int kvm_on_sigbus(int code, void *addr)
+{
+    return kvm_arch_on_sigbus(code, addr);
+}
 
 #undef PAGE_SIZE
 #include "qemu-kvm.c"

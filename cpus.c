@@ -265,12 +265,18 @@ void qemu_main_loop_start(void)
 void qemu_init_vcpu(void *_env)
 {
     CPUState *env = _env;
+    int r;
 
     env->nr_cores = smp_cores;
     env->nr_threads = smp_threads;
-    if (kvm_enabled())
-        kvm_init_vcpu(env);
-    return;
+
+    if (kvm_enabled()) {
+        r = kvm_init_vcpu(env);
+        if (r < 0) {
+            fprintf(stderr, "kvm_init_vcpu failed: %s\n", strerror(-r));
+            exit(1);
+        }
+    }
 }
 
 int qemu_cpu_self(void *env)
@@ -307,6 +313,7 @@ void qemu_notify_event(void)
     if (next_cpu && env != next_cpu) {
         cpu_exit(next_cpu);
     }
+    exit_request = 1;
 }
 
 #if defined(OBSOLETE_KVM_IMPL) || !defined(CONFIG_KVM)
@@ -534,10 +541,9 @@ static void sigbus_reraise(void)
 static void sigbus_handler(int n, struct qemu_signalfd_siginfo *siginfo,
                            void *ctx)
 {
-#if defined(TARGET_I386)
-    if (kvm_on_sigbus(siginfo->ssi_code, (void *)(intptr_t)siginfo->ssi_addr))
-#endif
+    if (kvm_on_sigbus(siginfo->ssi_code, (void *)(intptr_t)siginfo->ssi_addr)) {
         sigbus_reraise();
+    }
 }
 
 static void qemu_kvm_eat_signal(CPUState *env, int timeout)
@@ -570,10 +576,9 @@ static void qemu_kvm_eat_signal(CPUState *env, int timeout)
 
         switch (r) {
         case SIGBUS:
-#ifdef TARGET_I386
-            if (kvm_on_sigbus_vcpu(env, siginfo.si_code, siginfo.si_addr))
-#endif
+            if (kvm_on_sigbus_vcpu(env, siginfo.si_code, siginfo.si_addr)) {
                 sigbus_reraise();
+            }
             break;
         default:
             break;
@@ -601,11 +606,16 @@ static int qemu_cpu_exec(CPUState *env);
 static void *kvm_cpu_thread_fn(void *arg)
 {
     CPUState *env = arg;
+    int r;
 
     qemu_mutex_lock(&qemu_global_mutex);
     qemu_thread_self(env->thread);
-    if (kvm_enabled())
-        kvm_init_vcpu(env);
+
+    r = kvm_init_vcpu(env);
+    if (r < 0) {
+        fprintf(stderr, "kvm_init_vcpu failed: %s\n", strerror(-r));
+        exit(1);
+    }
 
     kvm_init_ipi(env);
 
