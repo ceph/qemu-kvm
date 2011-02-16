@@ -107,11 +107,10 @@ int kvm_vcpu_ioctl(CPUState *env, int type, ...);
 extern const KVMCapabilityInfo kvm_arch_required_capabilities[];
 #endif
 
-int kvm_arch_post_run(CPUState *env, struct kvm_run *run);
+void kvm_arch_pre_run(CPUState *env, struct kvm_run *run);
+void kvm_arch_post_run(CPUState *env, struct kvm_run *run);
 
 int kvm_arch_handle_exit(CPUState *env, struct kvm_run *run);
-
-int kvm_arch_pre_run(CPUState *env, struct kvm_run *run);
 
 #ifdef OBSOLETE_KVM_IMPL
 int kvm_arch_process_irqchip_events(CPUState *env);
