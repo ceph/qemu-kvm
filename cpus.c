@@ -34,9 +34,6 @@
 
 #include "cpus.h"
 #include "compatfd.h"
-#ifdef CONFIG_LINUX
-#include <sys/prctl.h>
-#endif
 
 #ifdef SIGRTMIN
 #define SIG_IPI (SIGRTMIN+4)
@@ -44,9 +41,23 @@
 #define SIG_IPI SIGUSR1
 #endif
 
+#ifdef CONFIG_LINUX
+
+#include <sys/prctl.h>
+
 #ifndef PR_MCE_KILL
 #define PR_MCE_KILL 33
 #endif
+
+#ifndef PR_MCE_KILL_SET
+#define PR_MCE_KILL_SET 1
+#endif
+
+#ifndef PR_MCE_KILL_EARLY
+#define PR_MCE_KILL_EARLY 1
+#endif
+
+#endif /* CONFIG_LINUX */
 
 static CPUState *next_cpu;
 
@@ -157,6 +168,52 @@ static void cpu_debug_handler(CPUState *env)
     debug_requested = EXCP_DEBUG;
     vm_stop(EXCP_DEBUG);
 }
+
+#ifdef CONFIG_LINUX
+static void sigbus_reraise(void)
+{
+    sigset_t set;
+    struct sigaction action;
+
+    memset(&action, 0, sizeof(action));
+    action.sa_handler = SIG_DFL;
+    if (!sigaction(SIGBUS, &action, NULL)) {
+        raise(SIGBUS);
+        sigemptyset(&set);
+        sigaddset(&set, SIGBUS);
+        sigprocmask(SIG_UNBLOCK, &set, NULL);
+    }
+    perror("Failed to re-raise SIGBUS!\n");
+    abort();
+}
+
+static void sigbus_handler(int n, struct qemu_signalfd_siginfo *siginfo,
+                           void *ctx)
+{
+    if (kvm_on_sigbus(siginfo->ssi_code,
+                      (void *)(intptr_t)siginfo->ssi_addr)) {
+        sigbus_reraise();
+    }
+}
+
+static void qemu_init_sigbus(void)
+{
+    struct sigaction action;
+
+    memset(&action, 0, sizeof(action));
+    action.sa_flags = SA_SIGINFO;
+    action.sa_sigaction = (void (*)(int, siginfo_t*, void*))sigbus_handler;
+    sigaction(SIGBUS, &action, NULL);
+
+    prctl(PR_MCE_KILL, PR_MCE_KILL_SET, PR_MCE_KILL_EARLY, 0, 0);
+}
+
+#else /* !CONFIG_LINUX */
+
+static void qemu_init_sigbus(void)
+{
+}
+#endif /* !CONFIG_LINUX */
 
 #ifndef _WIN32
 static int io_thread_fd = -1;
@@ -300,13 +357,11 @@ static void qemu_kvm_eat_signals(CPUState *env)
         }
 
         switch (r) {
-#ifdef CONFIG_IOTHREAD
         case SIGBUS:
             if (kvm_on_sigbus_vcpu(env, siginfo.si_code, siginfo.si_addr)) {
                 sigbus_reraise();
             }
             break;
-#endif
         default:
             break;
         }
@@ -317,6 +372,12 @@ static void qemu_kvm_eat_signals(CPUState *env)
             exit(1);
         }
     } while (sigismember(&chkset, SIG_IPI) || sigismember(&chkset, SIGBUS));
+
+#ifndef CONFIG_IOTHREAD
+    if (sigismember(&chkset, SIGIO) || sigismember(&chkset, SIGALRM)) {
+        qemu_notify_event();
+    }
+#endif
 }
 
 #else /* _WIN32 */
@@ -366,11 +427,15 @@ static void qemu_kvm_init_cpu_signals(CPUState *env)
 
     sigemptyset(&set);
     sigaddset(&set, SIG_IPI);
+    sigaddset(&set, SIGIO);
+    sigaddset(&set, SIGALRM);
     pthread_sigmask(SIG_BLOCK, &set, NULL);
 
     pthread_sigmask(SIG_BLOCK, NULL, &set);
     sigdelset(&set, SIG_IPI);
     sigdelset(&set, SIGBUS);
+    sigdelset(&set, SIGIO);
+    sigdelset(&set, SIGALRM);
     r = kvm_set_signal_mask(env, &set);
     if (r) {
         fprintf(stderr, "kvm_set_signal_mask: %s\n", strerror(-r));
@@ -379,13 +444,33 @@ static void qemu_kvm_init_cpu_signals(CPUState *env)
 #endif
 }
 
+#ifndef _WIN32
+static sigset_t block_synchronous_signals(void)
+{
+    sigset_t set;
+
+    sigemptyset(&set);
+    sigaddset(&set, SIGBUS);
+    if (kvm_enabled()) {
+        /*
+         * We need to process timer signals synchronously to avoid a race
+         * between exit_request check and KVM vcpu entry.
+         */
+        sigaddset(&set, SIGIO);
+        sigaddset(&set, SIGALRM);
+    }
+
+    return set;
+}
+#endif
+
 int qemu_init_main_loop(void)
 {
 #ifndef _WIN32
     sigset_t blocked_signals;
     int ret;
 
-    sigemptyset(&blocked_signals);
+    blocked_signals = block_synchronous_signals();
 
     ret = qemu_signalfd_init(blocked_signals);
     if (ret) {
@@ -393,6 +478,8 @@ int qemu_init_main_loop(void)
     }
 #endif
     cpu_set_debug_excp_handler(cpu_debug_handler);
+
+    qemu_init_sigbus();
 
     return qemu_event_init();
 }
@@ -440,6 +527,17 @@ void pause_all_vcpus(void)
 void qemu_cpu_kick(void *env)
 {
     return;
+}
+
+void qemu_cpu_kick_self(void)
+{
+#ifndef _WIN32
+    assert(cpu_single_env);
+
+    raise(SIG_IPI);
+#else
+    abort();
+#endif
 }
 
 void qemu_notify_event(void)
@@ -532,13 +630,9 @@ static void qemu_tcg_init_cpu_signals(void)
     pthread_sigmask(SIG_UNBLOCK, &set, NULL);
 }
 
-static void sigbus_handler(int n, struct qemu_signalfd_siginfo *siginfo,
-                           void *ctx);
-
 static sigset_t block_io_signals(void)
 {
     sigset_t set;
-    struct sigaction action;
 
     /* SIGUSR2 used by posix-aio-compat.c */
     sigemptyset(&set);
@@ -552,12 +646,6 @@ static sigset_t block_io_signals(void)
     sigaddset(&set, SIGBUS);
     pthread_sigmask(SIG_BLOCK, &set, NULL);
 
-    memset(&action, 0, sizeof(action));
-    action.sa_flags = SA_SIGINFO;
-    action.sa_sigaction = (void (*)(int, siginfo_t*, void*))sigbus_handler;
-    sigaction(SIGBUS, &action, NULL);
-    prctl(PR_MCE_KILL, 1, 1, 0, 0);
-
     return set;
 }
 
@@ -567,6 +655,8 @@ int qemu_init_main_loop(void)
     sigset_t blocked_signals;
 
     cpu_set_debug_excp_handler(cpu_debug_handler);
+
+    qemu_init_sigbus();
 
     blocked_signals = block_io_signals();
 
@@ -675,31 +765,6 @@ static void qemu_tcg_wait_io_event(void)
     }
 }
 
-static void sigbus_reraise(void)
-{
-    sigset_t set;
-    struct sigaction action;
-
-    memset(&action, 0, sizeof(action));
-    action.sa_handler = SIG_DFL;
-    if (!sigaction(SIGBUS, &action, NULL)) {
-        raise(SIGBUS);
-        sigemptyset(&set);
-        sigaddset(&set, SIGBUS);
-        sigprocmask(SIG_UNBLOCK, &set, NULL);
-    }
-    perror("Failed to re-raise SIGBUS!\n");
-    abort();
-}
-
-static void sigbus_handler(int n, struct qemu_signalfd_siginfo *siginfo,
-                           void *ctx)
-{
-    if (kvm_on_sigbus(siginfo->ssi_code, (void *)(intptr_t)siginfo->ssi_addr)) {
-        sigbus_reraise();
-    }
-}
-
 static void qemu_kvm_wait_io_event(CPUState *env)
 {
     while (!cpu_has_work(env))
@@ -776,6 +841,16 @@ void qemu_cpu_kick(void *_env)
     if (!env->thread_kicked) {
         qemu_thread_signal(env->thread, SIG_IPI);
         env->thread_kicked = true;
+    }
+}
+
+void qemu_cpu_kick_self(void)
+{
+    assert(cpu_single_env);
+
+    if (!cpu_single_env->thread_kicked) {
+        qemu_thread_signal(cpu_single_env->thread, SIG_IPI);
+        cpu_single_env->thread_kicked = true;
     }
 }
 
