@@ -265,10 +265,11 @@ class TracepointProvider(object):
                 for name, number in values.iteritems():
                     extra.append(f + '(' + name + ')')
         fields += extra
+        self._setup(fields)
         self.select(fields)
     def fields(self):
         return self._fields
-    def select(self, _fields):
+    def _setup(self, _fields):
         self._fields = _fields
         cpure = r'cpu([0-9]+)'
         self.cpus = [int(re.match(cpure, x).group(1))
@@ -293,6 +294,13 @@ class TracepointProvider(object):
                                         tracepoint = tracepoint,
                                         filter = filter)
             self.group_leaders.append(group)
+    def select(self, fields):
+        for group in self.group_leaders:
+            for event in group.events:
+                if event.name in fields:
+                    event.enable()
+                else:
+                    event.disable()
     def read(self):
         from collections import defaultdict
         ret = defaultdict(int)
