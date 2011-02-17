@@ -311,20 +311,26 @@ class TracepointProvider(object):
 
 class Stats:
     def __init__(self, provider, fields = None):
+        self.provider = provider
+        self.fields_filter = fields
+        self._update()
+    def _update(self):
         def wanted(key):
             import re
-            if not fields:
+            if not self.fields_filter:
                 return True
-            return re.match(fields, key) != None
-        self.provider = provider
+            return re.match(self.fields_filter, key) is not None
         self.values = dict([(key, None)
                             for key in provider.fields()
                             if wanted(key)])
         self.provider.select(self.values.keys())
+    def set_fields_filter(self, fields_filter):
+        self.fields_filter = fields_filter
+        self._update()
     def get(self):
         new = self.provider.read()
         for key in self.provider.fields():
-            oldval = self.values[key]
+            oldval = self.values.get(key, (0, 0))
             newval = new[key]
             newdelta = None
             if oldval is not None:
@@ -346,6 +352,15 @@ number_width = 10
 def tui(screen, stats):
     curses.use_default_colors()
     curses.noecho()
+    drilldown = False
+    fields_filter = stats.fields_filter
+    def update_drilldown():
+        if not fields_filter:
+            if drilldown:
+                stats.set_fields_filter(None)
+            else:
+                stats.set_fields_filter(r'^[^\(]*$')
+    update_drilldown()
     def refresh(sleeptime):
         screen.erase()
         screen.addstr(0, 0, 'kvm statistics')
@@ -379,6 +394,9 @@ def tui(screen, stats):
         sleeptime = 3
         try:
             c = screen.getkey()
+            if c == 'x':
+                drilldown = not drilldown
+                update_drilldown()
             if c == 'q':
                 break
         except KeyboardInterrupt:
