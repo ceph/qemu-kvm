@@ -644,8 +644,7 @@ int kvm_run(CPUState *env)
             break;
 #endif
 	case KVM_EXIT_INTERNAL_ERROR:
-            kvm_handle_internal_error(env, run);
-            r = 1;
+            r = kvm_handle_internal_error(env, run);
 	    break;
         default:
             if (kvm_arch_run(env)) {
@@ -1233,6 +1232,7 @@ int kvm_cpu_exec(CPUState *env)
     r = kvm_run(env);
     if (r < 0) {
         printf("kvm_run returned %d\n", r);
+        kvm_show_regs(env);
         vm_stop(VMSTOP_PANIC);
     }
 
