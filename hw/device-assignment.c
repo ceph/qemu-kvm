@@ -246,7 +246,7 @@ static void assigned_dev_iomem_map_slow(PCIDevice *pci_dev, int region_num,
                                         pcibus_t e_phys, pcibus_t e_size,
                                         int type)
 {
-    AssignedDevice *r_dev = container_of(pci_dev, AssignedDevice, dev);
+    AssignedDevice *r_dev = DO_UPCAST(AssignedDevice, dev, pci_dev);
     AssignedDevRegion *region = &r_dev->v_addrs[region_num];
     PCIRegion *real_region = &r_dev->real_device.regions[region_num];
     int m;
@@ -270,7 +270,7 @@ static void assigned_dev_iomem_map_slow(PCIDevice *pci_dev, int region_num,
 static void assigned_dev_iomem_map(PCIDevice *pci_dev, int region_num,
                                    pcibus_t e_phys, pcibus_t e_size, int type)
 {
-    AssignedDevice *r_dev = container_of(pci_dev, AssignedDevice, dev);
+    AssignedDevice *r_dev = DO_UPCAST(AssignedDevice, dev, pci_dev);
     AssignedDevRegion *region = &r_dev->v_addrs[region_num];
     PCIRegion *real_region = &r_dev->real_device.regions[region_num];
     int ret = 0;
@@ -304,7 +304,7 @@ static void assigned_dev_iomem_map(PCIDevice *pci_dev, int region_num,
 static void assigned_dev_ioport_map(PCIDevice *pci_dev, int region_num,
                                     pcibus_t addr, pcibus_t size, int type)
 {
-    AssignedDevice *r_dev = container_of(pci_dev, AssignedDevice, dev);
+    AssignedDevice *r_dev = DO_UPCAST(AssignedDevice, dev, pci_dev);
     AssignedDevRegion *region = &r_dev->v_addrs[region_num];
     int first_map = (region->e_size == 0);
     CPUState *env;
@@ -350,7 +350,7 @@ static void assigned_dev_ioport_map(PCIDevice *pci_dev, int region_num,
 
 static uint32_t assigned_dev_pci_read(PCIDevice *d, int pos, int len)
 {
-    AssignedDevice *pci_dev = container_of(d, AssignedDevice, dev);
+    AssignedDevice *pci_dev = DO_UPCAST(AssignedDevice, dev, d);
     uint32_t val;
     ssize_t ret;
     int fd = pci_dev->real_device.config_fd;
@@ -377,7 +377,7 @@ static uint8_t assigned_dev_pci_read_byte(PCIDevice *d, int pos)
 
 static void assigned_dev_pci_write(PCIDevice *d, int pos, uint32_t val, int len)
 {
-    AssignedDevice *pci_dev = container_of(d, AssignedDevice, dev);
+    AssignedDevice *pci_dev = DO_UPCAST(AssignedDevice, dev, d);
     ssize_t ret;
     int fd = pci_dev->real_device.config_fd;
 
@@ -430,7 +430,7 @@ static void assigned_dev_pci_write_config(PCIDevice *d, uint32_t address,
 {
     int fd;
     ssize_t ret;
-    AssignedDevice *pci_dev = container_of(d, AssignedDevice, dev);
+    AssignedDevice *pci_dev = DO_UPCAST(AssignedDevice, dev, d);
 
     DEBUG("(%x.%x): address=%04x val=0x%08x len=%d\n",
           ((d->devfn >> 3) & 0x1F), (d->devfn & 0x7),
@@ -477,7 +477,7 @@ static uint32_t assigned_dev_pci_read_config(PCIDevice *d, uint32_t address,
     uint32_t val = 0;
     int fd;
     ssize_t ret;
-    AssignedDevice *pci_dev = container_of(d, AssignedDevice, dev);
+    AssignedDevice *pci_dev = DO_UPCAST(AssignedDevice, dev, d);
 
     if (address >= PCI_CONFIG_HEADER_SIZE && d->config_map[address]) {
         val = assigned_device_pci_cap_read_config(d, address, len);
@@ -1079,7 +1079,7 @@ void assigned_dev_update_irqs(void)
 static void assigned_dev_update_msi(PCIDevice *pci_dev, unsigned int ctrl_pos)
 {
     struct kvm_assigned_irq assigned_irq_data;
-    AssignedDevice *assigned_dev = container_of(pci_dev, AssignedDevice, dev);
+    AssignedDevice *assigned_dev = DO_UPCAST(AssignedDevice, dev, pci_dev);
     uint8_t ctrl_byte = pci_dev->config[ctrl_pos];
     int r;
 
@@ -1144,7 +1144,7 @@ static void assigned_dev_update_msi(PCIDevice *pci_dev, unsigned int ctrl_pos)
 #ifdef KVM_CAP_DEVICE_MSIX
 static int assigned_dev_update_msix_mmio(PCIDevice *pci_dev)
 {
-    AssignedDevice *adev = container_of(pci_dev, AssignedDevice, dev);
+    AssignedDevice *adev = DO_UPCAST(AssignedDevice, dev, pci_dev);
     uint16_t entries_nr = 0, entries_max_nr;
     int pos = 0, i, r = 0;
     uint32_t msg_addr, msg_upper_addr, msg_data, msg_ctrl;
@@ -1235,7 +1235,7 @@ static int assigned_dev_update_msix_mmio(PCIDevice *pci_dev)
 static void assigned_dev_update_msix(PCIDevice *pci_dev, unsigned int ctrl_pos)
 {
     struct kvm_assigned_irq assigned_irq_data;
-    AssignedDevice *assigned_dev = container_of(pci_dev, AssignedDevice, dev);
+    AssignedDevice *assigned_dev = DO_UPCAST(AssignedDevice, dev, pci_dev);
     uint16_t *ctrl_word = (uint16_t *)(pci_dev->config + ctrl_pos);
     int r;
 
@@ -1384,7 +1384,7 @@ static void assigned_device_pci_cap_write_config(PCIDevice *pci_dev,
 
 static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
 {
-    AssignedDevice *dev = container_of(pci_dev, AssignedDevice, dev);
+    AssignedDevice *dev = DO_UPCAST(AssignedDevice, dev, pci_dev);
     PCIRegion *pci_region = dev->real_device.regions;
     int ret, pos;
 
