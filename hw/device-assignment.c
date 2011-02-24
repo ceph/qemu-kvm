@@ -319,11 +319,6 @@ static void assigned_dev_ioport_map(PCIDevice *pci_dev, int region_num,
 	struct ioperm_data *data;
 
 	data = qemu_mallocz(sizeof(struct ioperm_data));
-	if (data == NULL) {
-	    fprintf(stderr, "%s: Out of memory\n", __func__);
-	    exit(1);
-	}
-
 	data->start_port = region->u.r_baseport;
 	data->num = region->r_size;
 	data->turn_on = 1;
