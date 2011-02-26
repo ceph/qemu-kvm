@@ -47,7 +47,7 @@
 #define IORESOURCE_MEM      0x00000200
 #define IORESOURCE_IRQ      0x00000400
 #define IORESOURCE_DMA      0x00000800
-#define IORESOURCE_PREFETCH 0x00001000  /* No side effects */
+#define IORESOURCE_PREFETCH 0x00002000  /* No side effects */
 
 /* #define DEVICE_ASSIGNMENT_DEBUG 1 */
 
