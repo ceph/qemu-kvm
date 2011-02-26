@@ -137,7 +137,6 @@ int kvm_set_ioeventfd_mmio_long(int fd, uint32_t adr, uint32_t val, bool assign)
     return -ENOSYS;
 }
 
-<<<<<<< HEAD
 int kvm_has_gsi_routing(void)
 {
     return 0;
