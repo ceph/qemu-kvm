@@ -306,9 +306,11 @@ fail:
     return err;
 }
 
+#ifdef OBSOLETE_KVM_IMPL
 static void dummy_signal(int sig)
 {
 }
+#endif
 
 /* If we have signalfd, we mask out the signals we want to handle and then
  * use signalfd to listen for them.  We rely on whatever the current signal
@@ -442,6 +444,7 @@ static void qemu_kvm_eat_signals(CPUState *env)
 #ifndef CONFIG_IOTHREAD
 static void qemu_kvm_init_cpu_signals(CPUState *env)
 {
+#if 0 /* Causes regressions: autotest WinXP.64 migrate.tcp */
 #ifndef _WIN32
     int r;
     sigset_t set;
@@ -467,6 +470,7 @@ static void qemu_kvm_init_cpu_signals(CPUState *env)
         fprintf(stderr, "kvm_set_signal_mask: %s\n", strerror(-r));
         exit(1);
     }
+#endif
 #endif
 }
 
