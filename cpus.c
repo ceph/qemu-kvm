@@ -860,25 +860,48 @@ static void *qemu_tcg_cpu_thread_fn(void *arg)
     return NULL;
 }
 
+static void qemu_cpu_kick_thread(CPUState *env)
+{
+#ifndef _WIN32
+    int err;
+
+    err = pthread_kill(env->thread->thread, SIG_IPI);
+    if (err) {
+        fprintf(stderr, "qemu:%s: %s", __func__, strerror(err));
+        exit(1);
+    }
+#else /* _WIN32 */
+    if (!qemu_cpu_is_self(env)) {
+        SuspendThread(env->thread->thread);
+        cpu_signal(0);
+        ResumeThread(env->thread->thread);
+    }
+#endif
+}
+
 void qemu_cpu_kick(void *_env)
 {
     CPUState *env = _env;
 
     qemu_cond_broadcast(env->halt_cond);
     if (!env->thread_kicked) {
-        qemu_thread_signal(env->thread, SIG_IPI);
+        qemu_cpu_kick_thread(env);
         env->thread_kicked = true;
     }
 }
 
 void qemu_cpu_kick_self(void)
 {
+#ifndef _WIN32
     assert(cpu_single_env);
 
     if (!cpu_single_env->thread_kicked) {
-        qemu_thread_signal(cpu_single_env->thread, SIG_IPI);
+        qemu_cpu_kick_thread(cpu_single_env);
         cpu_single_env->thread_kicked = true;
     }
+#else
+    abort();
+#endif
 }
 
 int qemu_cpu_is_self(void *_env)
@@ -895,7 +918,7 @@ void qemu_mutex_lock_iothread(void)
     } else {
         qemu_mutex_lock(&qemu_fair_mutex);
         if (qemu_mutex_trylock(&qemu_global_mutex)) {
-            qemu_thread_signal(tcg_cpu_thread, SIG_IPI);
+            qemu_cpu_kick_thread(first_cpu);
             qemu_mutex_lock(&qemu_global_mutex);
         }
         qemu_mutex_unlock(&qemu_fair_mutex);
