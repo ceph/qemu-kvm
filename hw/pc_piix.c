@@ -86,7 +86,6 @@ static void pc_init1(ram_addr_t ram_size,
     qemu_irq *smi_irq;
     IsaIrqState *isa_irq_state;
     DriveInfo *hd[MAX_IDE_BUS * MAX_IDE_DEVS];
-    FDCtrl *floppy_controller;
     BusState *idebus[MAX_IDE_BUS];
     ISADevice *rtc_state;
 
@@ -134,12 +133,12 @@ static void pc_init1(ram_addr_t ram_size,
     }
     isa_bus_irqs(isa_irq);
 
-    pc_register_ferr_irq(isa_reserve_irq(13));
+    pc_register_ferr_irq(isa_get_irq(13));
 
     pc_vga_init(pci_enabled? pci_bus: NULL);
 
     /* init basic PC hardware */
-    pc_basic_device_init(isa_irq, &floppy_controller, &rtc_state);
+    pc_basic_device_init(isa_irq, &rtc_state);
 
     for(i = 0; i < nb_nics; i++) {
         NICInfo *nd = &nd_table[i];
@@ -176,7 +175,7 @@ static void pc_init1(ram_addr_t ram_size,
     audio_init(isa_irq, pci_enabled ? pci_bus : NULL);
 
     pc_cmos_init(below_4g_mem_size, above_4g_mem_size, boot_device,
-                 idebus[0], idebus[1], floppy_controller, rtc_state);
+                 idebus[0], idebus[1], rtc_state);
 
     if (pci_enabled && usb_enabled) {
         usb_uhci_piix3_init(pci_bus, piix3_devfn + 2);
@@ -190,7 +189,7 @@ static void pc_init1(ram_addr_t ram_size,
         smi_irq = qemu_allocate_irqs(pc_acpi_smi_interrupt, first_cpu, 1);
         /* TODO: Populate SPD eeprom data.  */
         smbus = piix4_pm_init(pci_bus, piix3_devfn + 3, 0xb100,
-                              isa_reserve_irq(9), *cmos_s3, *smi_irq,
+                              isa_get_irq(9), *cmos_s3, *smi_irq,
                               kvm_enabled());
         for (i = 0; i < 8; i++) {
             DeviceState *eeprom;

@@ -225,7 +225,7 @@ obj-$(CONFIG_KVM) += ivshmem.o
 obj-i386-y += vga.o
 obj-i386-y += mc146818rtc.o i8259.o pc.o
 obj-i386-y += cirrus_vga.o apic.o ioapic.o piix_pci.o
-obj-i386-y += vmport.o applesmc.o
+obj-i386-y += vmport.o
 obj-i386-y += device-hotplug.o pci-hotplug.o smbios.o wdt_ib700.o
 obj-i386-y += extboot.o
 obj-i386-y += debugcon.o multiboot.o
@@ -270,6 +270,16 @@ obj-ppc-y += xilinx_intc.o
 obj-ppc-y += xilinx_timer.o
 obj-ppc-y += xilinx_uartlite.o
 obj-ppc-y += xilinx_ethlite.o
+
+# LM32 boards
+obj-lm32-y += lm32_boards.o
+
+# LM32 peripherals
+obj-lm32-y += lm32_pic.o
+obj-lm32-y += lm32_juart.o
+obj-lm32-y += lm32_timer.o
+obj-lm32-y += lm32_uart.o
+obj-lm32-y += lm32_sys.o
 
 obj-mips-y = mips_r4k.o mips_jazz.o mips_malta.o mips_mipssim.o
 obj-mips-y += pcspk.o i8254.o

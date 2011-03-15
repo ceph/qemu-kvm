@@ -140,7 +140,9 @@ void os_host_main_loop_wait(int *timeout)
         int err;
         WaitObjects *w = &wait_objects;
 
+        qemu_mutex_unlock_iothread();
         ret = WaitForMultipleObjects(w->num, w->events, FALSE, *timeout);
+        qemu_mutex_lock_iothread();
         if (WAIT_OBJECT_0 + 0 <= ret && ret <= WAIT_OBJECT_0 + w->num - 1) {
             if (w->func[ret - WAIT_OBJECT_0])
                 w->func[ret - WAIT_OBJECT_0](w->opaque[ret - WAIT_OBJECT_0]);
@@ -180,7 +182,7 @@ void os_setup_early_signal_handling(void)
     /* Note: cpu_interrupt() is currently not SMP safe, so we force
        QEMU to run on a single CPU */
     HANDLE h;
-    DWORD mask, smask;
+    DWORD_PTR mask, smask;
     int i;
 
     SetConsoleCtrlHandler(qemu_ctrl_handler, TRUE);

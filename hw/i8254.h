@@ -56,6 +56,9 @@ typedef struct PITChannelState {
 } PITChannelState;
 
 struct PITState {
+    ISADevice dev;
+    uint32_t irq;
+    uint32_t iobase;
     PITChannelState channels[3];
     uint32_t flags;
 };
@@ -64,6 +67,9 @@ void pit_save(QEMUFile *f, void *opaque);
 
 int pit_load(QEMUFile *f, void *opaque, int version_id);
 
-void pit_reset(void *opaque);
+typedef struct PITState PITState;
+
+/* i8254-kvm.c */
+void kvm_pit_init(PITState *pit);
 
 #endif

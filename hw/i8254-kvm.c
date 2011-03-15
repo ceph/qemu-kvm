@@ -30,8 +30,6 @@
 
 extern VMStateDescription vmstate_pit;
 
-static PITState pit_state;
-
 static void kvm_pit_pre_save(void *opaque)
 {
     PITState *s = (void *)opaque;
@@ -105,18 +103,13 @@ static void dummy_timer(void *opaque)
 {
 }
 
-PITState *kvm_pit_init(int base, qemu_irq irq)
+void kvm_pit_init(PITState *pit)
 {
-    PITState *pit = &pit_state;
     PITChannelState *s;
 
     s = &pit->channels[0];
     s->irq_timer = qemu_new_timer(vm_clock, dummy_timer, s);
     vmstate_pit.pre_save = kvm_pit_pre_save;
     vmstate_pit.post_load = kvm_pit_post_load;
-    vmstate_register(NULL, base, &vmstate_pit, pit);
-    qemu_register_reset(pit_reset, pit);
-    pit_reset(pit);
-
-    return pit;
+    return;
 }

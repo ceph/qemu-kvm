@@ -79,7 +79,7 @@ static void virtio_net_get_config(VirtIODevice *vdev, uint8_t *config)
     VirtIONet *n = to_virtio_net(vdev);
     struct virtio_net_config netcfg;
 
-    netcfg.status = lduw_p(&n->status);
+    stw_p(&netcfg.status, n->status);
     memcpy(netcfg.mac, n->mac, ETH_ALEN);
     memcpy(config, &netcfg, sizeof(netcfg));
 }
@@ -115,7 +115,8 @@ static void virtio_net_vhost_status(VirtIONet *n, uint8_t status)
     if (!tap_get_vhost_net(n->nic->nc.peer)) {
         return;
     }
-    if (!!n->vhost_started == virtio_net_started(n, status)) {
+    if (!!n->vhost_started == virtio_net_started(n, status) &&
+                              !n->nic->nc.peer->link_down) {
         return;
     }
     if (!n->vhost_started) {
@@ -678,7 +679,7 @@ static ssize_t virtio_net_receive(VLANClientState *nc, const uint8_t *buf, size_
     }
 
     if (mhdr) {
-        mhdr->num_buffers = lduw_p(&i);
+        stw_p(&mhdr->num_buffers, i);
     }
 
     virtqueue_flush(n->rx_vq, i);
