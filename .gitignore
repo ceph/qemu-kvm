@@ -65,3 +65,5 @@ pc-bios/optionrom/vapic.bin
 .stgit-*
 cscope.*
 tags
+TAGS
+*~
