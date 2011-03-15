@@ -39,7 +39,7 @@ typedef struct {
     uint8_t sample_buf[PCSPK_BUF_LEN];
     QEMUSoundCard card;
     SWVoiceOut *voice;
-    PITState *pit;
+    ISADevice *pit;
     unsigned int pit_count;
     unsigned int samples;
     unsigned int play_pos;
@@ -51,9 +51,10 @@ static const char *s_spk = "pcspk";
 static PCSpkState pcspk_state;
 
 #ifdef CONFIG_KVM_PIT
-static void kvm_get_pit_ch2(PITState *pit,
+static void kvm_get_pit_ch2(ISADevice *dev,
                             struct kvm_pit_state *inkernel_state)
 {
+    struct PITState *pit = DO_UPCAST(struct PITState, dev, dev);
     struct kvm_pit_state pit_state;
 
     if (kvm_enabled() && kvm_pit_in_kernel()) {
@@ -68,9 +69,11 @@ static void kvm_get_pit_ch2(PITState *pit,
     }
 }
 
-static void kvm_set_pit_ch2(PITState *pit,
+static void kvm_set_pit_ch2(ISADevice *dev,
                             struct kvm_pit_state *inkernel_state)
 {
+    struct PITState *pit = DO_UPCAST(struct PITState, dev, dev);
+
     if (kvm_enabled() && kvm_pit_in_kernel()) {
         inkernel_state->channels[2].mode = pit->channels[2].mode;
         inkernel_state->channels[2].count = pit->channels[2].count;
@@ -81,9 +84,9 @@ static void kvm_set_pit_ch2(PITState *pit,
     }
 }
 #else
-static inline void kvm_get_pit_ch2(PITState *pit,
+static inline void kvm_get_pit_ch2(struct PITState *pit,
                                    struct kvm_pit_state *inkernel_state) { }
-static inline void kvm_set_pit_ch2(PITState *pit,
+static inline void kvm_set_pit_ch2(struct PITState *pit,
                                    struct kvm_pit_state *inkernel_state) { }
 #endif
 
@@ -185,7 +188,7 @@ static void pcspk_ioport_write(void *opaque, uint32_t addr, uint32_t val)
     kvm_set_pit_ch2(s->pit, &inkernel_state);
 }
 
-void pcspk_init(PITState *pit)
+void pcspk_init(ISADevice *pit)
 {
     PCSpkState *s = &pcspk_state;
 
