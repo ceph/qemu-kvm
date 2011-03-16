@@ -84,9 +84,9 @@ static void kvm_set_pit_ch2(ISADevice *dev,
     }
 }
 #else
-static inline void kvm_get_pit_ch2(struct PITState *pit,
+static inline void kvm_get_pit_ch2(ISADevice *dev,
                                    struct kvm_pit_state *inkernel_state) { }
-static inline void kvm_set_pit_ch2(struct PITState *pit,
+static inline void kvm_set_pit_ch2(ISADevice *dev,
                                    struct kvm_pit_state *inkernel_state) { }
 #endif
 
