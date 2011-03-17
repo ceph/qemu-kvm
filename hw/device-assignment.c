@@ -1693,13 +1693,33 @@ static const VMStateDescription vmstate_assigned_device = {
 
 static void reset_assigned_device(DeviceState *dev)
 {
-    PCIDevice *d = DO_UPCAST(PCIDevice, qdev, dev);
+    PCIDevice *pci_dev = DO_UPCAST(PCIDevice, qdev, dev);
+    AssignedDevice *adev = DO_UPCAST(AssignedDevice, dev, pci_dev);
+    char reset_file[64];
+    const char reset[] = "1";
+    int fd, ret;
+
+    snprintf(reset_file, sizeof(reset_file),
+             "/sys/bus/pci/devices/%04x:%02x:%02x.%01x/reset",
+             adev->host.seg, adev->host.bus, adev->host.dev, adev->host.func);
+
+    /*
+     * Issue a device reset via pci-sysfs.  Note that we use write(2) here
+     * and ignore the return value because some kernels have a bug that
+     * returns 0 rather than bytes written on success, sending us into an
+     * infinite retry loop using other write mechanisms.
+     */
+    fd = open(reset_file, O_WRONLY);
+    if (fd != -1) {
+        ret = write(fd, reset, strlen(reset));
+        close(fd);
+    }
 
     /*
      * When a 0 is written to the command register, the device is logically
      * disconnected from the PCI bus. This avoids further DMA transfers.
      */
-    assigned_dev_pci_write_config(d, PCI_COMMAND, 0, 2);
+    assigned_dev_pci_write_config(pci_dev, PCI_COMMAND, 0, 2);
 }
 
 static int assigned_initfn(struct PCIDevice *pci_dev)
