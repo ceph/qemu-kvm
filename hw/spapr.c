@@ -27,6 +27,8 @@
 #include "sysemu.h"
 #include "hw.h"
 #include "elf.h"
+#include "net.h"
+#include "blockdev.h"
 
 #include "hw/boards.h"
 #include "hw/ppc.h"
@@ -34,6 +36,7 @@
 
 #include "hw/spapr.h"
 #include "hw/spapr_vio.h"
+#include "hw/xics.h"
 
 #include <libfdt.h>
 
@@ -41,10 +44,15 @@
 #define INITRD_LOAD_ADDR        0x02800000
 #define FDT_MAX_SIZE            0x10000
 #define RTAS_MAX_SIZE           0x10000
+#define FW_MAX_SIZE             0x400000
+#define FW_FILE_NAME            "slof.bin"
+
+#define MIN_RAM_SLOF		512UL
 
 #define TIMEBASE_FREQ           512000000ULL
 
 #define MAX_CPUS                32
+#define XICS_IRQS		1024
 
 sPAPREnvironment *spapr;
 
@@ -53,6 +61,7 @@ static void *spapr_create_fdt(int *fdt_size, ram_addr_t ramsize,
                               sPAPREnvironment *spapr,
                               target_phys_addr_t initrd_base,
                               target_phys_addr_t initrd_size,
+                              const char *boot_device,
                               const char *kernel_cmdline,
                               target_phys_addr_t rtas_addr,
                               target_phys_addr_t rtas_size,
@@ -63,7 +72,9 @@ static void *spapr_create_fdt(int *fdt_size, ram_addr_t ramsize,
     uint32_t start_prop = cpu_to_be32(initrd_base);
     uint32_t end_prop = cpu_to_be32(initrd_base + initrd_size);
     uint32_t pft_size_prop[] = {0, cpu_to_be32(hash_shift)};
-    char hypertas_prop[] = "hcall-pft\0hcall-term";
+    char hypertas_prop[] = "hcall-pft\0hcall-term\0hcall-dabr\0hcall-interrupt"
+        "\0hcall-tce\0hcall-vio\0hcall-splpar";
+    uint32_t interrupt_server_ranges_prop[] = {0, cpu_to_be32(smp_cpus)};
     int i;
     char *modelname;
     int ret;
@@ -99,6 +110,7 @@ static void *spapr_create_fdt(int *fdt_size, ram_addr_t ramsize,
                        &start_prop, sizeof(start_prop))));
     _FDT((fdt_property(fdt, "linux,initrd-end",
                        &end_prop, sizeof(end_prop))));
+    _FDT((fdt_property_string(fdt, "qemu,boot-device", boot_device)));
 
     _FDT((fdt_end_node(fdt)));
 
@@ -125,6 +137,7 @@ static void *spapr_create_fdt(int *fdt_size, ram_addr_t ramsize,
 
     for (i = 0; i < smp_cpus; i++) {
         CPUState *env = envs[i];
+        uint32_t gserver_prop[] = {cpu_to_be32(i), 0}; /* HACK! */
         char *nodename;
         uint32_t segs[] = {cpu_to_be32(28), cpu_to_be32(40),
                            0xffffffff, 0xffffffff};
@@ -155,6 +168,9 @@ static void *spapr_create_fdt(int *fdt_size, ram_addr_t ramsize,
                            pft_size_prop, sizeof(pft_size_prop))));
         _FDT((fdt_property_string(fdt, "status", "okay")));
         _FDT((fdt_property(fdt, "64-bit", NULL, 0)));
+        _FDT((fdt_property_cell(fdt, "ibm,ppc-interrupt-server#s", i)));
+        _FDT((fdt_property(fdt, "ibm,ppc-interrupt-gserver#s",
+                           gserver_prop, sizeof(gserver_prop))));
 
         if (envs[i]->mmu_model & POWERPC_MMU_1TSEG) {
             _FDT((fdt_property(fdt, "ibm,processor-segment-sizes",
@@ -176,6 +192,20 @@ static void *spapr_create_fdt(int *fdt_size, ram_addr_t ramsize,
 
     _FDT((fdt_end_node(fdt)));
 
+    /* interrupt controller */
+    _FDT((fdt_begin_node(fdt, "interrupt-controller@0")));
+
+    _FDT((fdt_property_string(fdt, "device_type",
+                              "PowerPC-External-Interrupt-Presentation")));
+    _FDT((fdt_property_string(fdt, "compatible", "IBM,ppc-xicp")));
+    _FDT((fdt_property_cell(fdt, "reg", 0)));
+    _FDT((fdt_property(fdt, "interrupt-controller", NULL, 0)));
+    _FDT((fdt_property(fdt, "ibm,interrupt-server-ranges",
+                       interrupt_server_ranges_prop,
+                       sizeof(interrupt_server_ranges_prop))));
+
+    _FDT((fdt_end_node(fdt)));
+
     /* vdevice */
     _FDT((fdt_begin_node(fdt, "vdevice")));
 
@@ -183,6 +213,8 @@ static void *spapr_create_fdt(int *fdt_size, ram_addr_t ramsize,
     _FDT((fdt_property_string(fdt, "compatible", "IBM,vdevice")));
     _FDT((fdt_property_cell(fdt, "#address-cells", 0x1)));
     _FDT((fdt_property_cell(fdt, "#size-cells", 0x0)));
+    _FDT((fdt_property_cell(fdt, "#interrupt-cells", 0x2)));
+    _FDT((fdt_property(fdt, "interrupt-controller", NULL, 0)));
 
     _FDT((fdt_end_node(fdt)));
 
@@ -235,10 +267,11 @@ static void ppc_spapr_init(ram_addr_t ram_size,
     ram_addr_t ram_offset;
     target_phys_addr_t fdt_addr, rtas_addr;
     uint32_t kernel_base, initrd_base;
-    long kernel_size, initrd_size, htab_size, rtas_size;
+    long kernel_size, initrd_size, htab_size, rtas_size, fw_size;
     long pteg_shift = 17;
     int fdt_size;
     char *filename;
+    int irq = 16;
 
     spapr = qemu_malloc(sizeof(*spapr));
     cpu_ppc_hypercall = emulate_spapr_hypercall;
@@ -296,12 +329,41 @@ static void ppc_spapr_init(ram_addr_t ram_size,
     }
     qemu_free(filename);
 
+    /* Set up Interrupt Controller */
+    spapr->icp = xics_system_init(smp_cpus, envs, XICS_IRQS);
+
+    /* Set up VIO bus */
     spapr->vio_bus = spapr_vio_bus_init();
 
-    for (i = 0; i < MAX_SERIAL_PORTS; i++) {
+    for (i = 0; i < MAX_SERIAL_PORTS; i++, irq++) {
         if (serial_hds[i]) {
-            spapr_vty_create(spapr->vio_bus, i, serial_hds[i]);
+            spapr_vty_create(spapr->vio_bus, i, serial_hds[i],
+                             xics_find_qirq(spapr->icp, irq), irq);
         }
+    }
+
+    for (i = 0; i < nb_nics; i++, irq++) {
+        NICInfo *nd = &nd_table[i];
+
+        if (!nd->model) {
+            nd->model = qemu_strdup("ibmveth");
+        }
+
+        if (strcmp(nd->model, "ibmveth") == 0) {
+            spapr_vlan_create(spapr->vio_bus, 0x1000 + i, nd,
+                              xics_find_qirq(spapr->icp, irq), irq);
+        } else {
+            fprintf(stderr, "pSeries (sPAPR) platform does not support "
+                    "NIC model '%s' (only ibmveth is supported)\n",
+                    nd->model);
+            exit(1);
+        }
+    }
+
+    for (i = 0; i <= drive_get_max_bus(IF_SCSI); i++) {
+        spapr_vscsi_create(spapr->vio_bus, 0x2000 + i,
+                           xics_find_qirq(spapr->icp, irq), irq);
+        irq++;
     }
 
     if (kernel_filename) {
@@ -336,13 +398,33 @@ static void ppc_spapr_init(ram_addr_t ram_size,
             initrd_size = 0;
         }
     } else {
-        fprintf(stderr, "pSeries machine needs -kernel for now");
-        exit(1);
+        if (ram_size < (MIN_RAM_SLOF << 20)) {
+            fprintf(stderr, "qemu: pSeries SLOF firmware requires >= "
+                    "%ldM guest RAM\n", MIN_RAM_SLOF);
+            exit(1);
+        }
+        filename = qemu_find_file(QEMU_FILE_TYPE_BIOS, "slof.bin");
+        fw_size = load_image_targphys(filename, 0, FW_MAX_SIZE);
+        if (fw_size < 0) {
+            hw_error("qemu: could not load LPAR rtas '%s'\n", filename);
+            exit(1);
+        }
+        qemu_free(filename);
+        kernel_base = 0x100;
+        initrd_base = 0;
+        initrd_size = 0;
+
+        /* SLOF will startup the secondary CPUs using RTAS,
+           rather than expecting a kexec() style entry */
+        for (i = 0; i < smp_cpus; i++) {
+            envs[i]->halted = 1;
+        }
     }
 
     /* Prepare the device tree */
     fdt = spapr_create_fdt(&fdt_size, ram_size, cpu_model, envs, spapr,
-                           initrd_base, initrd_size, kernel_cmdline,
+                           initrd_base, initrd_size,
+                           boot_device, kernel_cmdline,
                            rtas_addr, rtas_size, pteg_shift + 7);
     assert(fdt != NULL);
 
@@ -353,6 +435,7 @@ static void ppc_spapr_init(ram_addr_t ram_size,
     envs[0]->gpr[3] = fdt_addr;
     envs[0]->gpr[5] = 0;
     envs[0]->hreset_vector = kernel_base;
+    envs[0]->halted = 0;
 }
 
 static QEMUMachine spapr_machine = {
@@ -362,6 +445,7 @@ static QEMUMachine spapr_machine = {
     .max_cpus = MAX_CPUS,
     .no_vga = 1,
     .no_parallel = 1,
+    .use_scsi = 1,
 };
 
 static void spapr_machine_init(void)

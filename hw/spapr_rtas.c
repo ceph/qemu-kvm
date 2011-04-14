@@ -38,6 +38,133 @@
 #define TOKEN_BASE      0x2000
 #define TOKEN_MAX       0x100
 
+static void rtas_display_character(sPAPREnvironment *spapr,
+                                   uint32_t token, uint32_t nargs,
+                                   target_ulong args,
+                                   uint32_t nret, target_ulong rets)
+{
+    uint8_t c = rtas_ld(args, 0);
+    VIOsPAPRDevice *sdev = spapr_vio_find_by_reg(spapr->vio_bus, 0);
+
+    if (!sdev) {
+        rtas_st(rets, 0, -1);
+    } else {
+        vty_putchars(sdev, &c, sizeof(c));
+        rtas_st(rets, 0, 0);
+    }
+}
+
+static void rtas_get_time_of_day(sPAPREnvironment *spapr,
+                                 uint32_t token, uint32_t nargs,
+                                 target_ulong args,
+                                 uint32_t nret, target_ulong rets)
+{
+    struct tm tm;
+
+    if (nret != 8) {
+        rtas_st(rets, 0, -3);
+        return;
+    }
+
+    qemu_get_timedate(&tm, 0);
+
+    rtas_st(rets, 0, 0); /* Success */
+    rtas_st(rets, 1, tm.tm_year + 1900);
+    rtas_st(rets, 2, tm.tm_mon + 1);
+    rtas_st(rets, 3, tm.tm_mday);
+    rtas_st(rets, 4, tm.tm_hour);
+    rtas_st(rets, 5, tm.tm_min);
+    rtas_st(rets, 6, tm.tm_sec);
+    rtas_st(rets, 7, 0); /* we don't do nanoseconds */
+}
+
+static void rtas_power_off(sPAPREnvironment *spapr,
+                           uint32_t token, uint32_t nargs, target_ulong args,
+                           uint32_t nret, target_ulong rets)
+{
+    if (nargs != 2 || nret != 1) {
+        rtas_st(rets, 0, -3);
+        return;
+    }
+    qemu_system_shutdown_request();
+    rtas_st(rets, 0, 0);
+}
+
+static void rtas_query_cpu_stopped_state(sPAPREnvironment *spapr,
+                                         uint32_t token, uint32_t nargs,
+                                         target_ulong args,
+                                         uint32_t nret, target_ulong rets)
+{
+    target_ulong id;
+    CPUState *env;
+
+    if (nargs != 1 || nret != 2) {
+        rtas_st(rets, 0, -3);
+        return;
+    }
+
+    id = rtas_ld(args, 0);
+    for (env = first_cpu; env; env = env->next_cpu) {
+        if (env->cpu_index != id) {
+            continue;
+        }
+
+        if (env->halted) {
+            rtas_st(rets, 1, 0);
+        } else {
+            rtas_st(rets, 1, 2);
+        }
+
+        rtas_st(rets, 0, 0);
+        return;
+    }
+
+    /* Didn't find a matching cpu */
+    rtas_st(rets, 0, -3);
+}
+
+static void rtas_start_cpu(sPAPREnvironment *spapr,
+                           uint32_t token, uint32_t nargs,
+                           target_ulong args,
+                           uint32_t nret, target_ulong rets)
+{
+    target_ulong id, start, r3;
+    CPUState *env;
+
+    if (nargs != 3 || nret != 1) {
+        rtas_st(rets, 0, -3);
+        return;
+    }
+
+    id = rtas_ld(args, 0);
+    start = rtas_ld(args, 1);
+    r3 = rtas_ld(args, 2);
+
+    for (env = first_cpu; env; env = env->next_cpu) {
+        if (env->cpu_index != id) {
+            continue;
+        }
+
+        if (!env->halted) {
+            rtas_st(rets, 0, -1);
+            return;
+        }
+
+        env->msr = (1ULL << MSR_SF) | (1ULL << MSR_ME);
+        env->nip = start;
+        env->gpr[3] = r3;
+        env->halted = 0;
+
+        qemu_cpu_kick(env);
+
+        rtas_st(rets, 0, 0);
+        return;
+    }
+
+    /* Didn't find a matching cpu */
+    rtas_st(rets, 0, -3);
+}
+
 static struct rtas_call {
     const char *name;
     spapr_rtas_fn fn;
@@ -57,6 +184,15 @@ target_ulong spapr_rtas_call(sPAPREnvironment *spapr,
             call->fn(spapr, token, nargs, args, nret, rets);
             return H_SUCCESS;
         }
+    }
+
+    /* HACK: Some Linux early debug code uses RTAS display-character,
+     * but assumes the token value is 0xa (which it is on some real
+     * machines) without looking it up in the device tree.  This
+     * special case makes this work */
+    if (token == 0xa) {
+        rtas_display_character(spapr, 0xa, nargs, args, nret, rets);
+        return H_SUCCESS;
     }
 
     hcall_dprintf("Unknown RTAS token 0x%x\n", token);
@@ -129,3 +265,14 @@ int spapr_rtas_device_tree_setup(void *fdt, target_phys_addr_t rtas_addr,
     }
     return 0;
 }
+
+static void register_core_rtas(void)
+{
+    spapr_rtas_register("display-character", rtas_display_character);
+    spapr_rtas_register("get-time-of-day", rtas_get_time_of_day);
+    spapr_rtas_register("power-off", rtas_power_off);
+    spapr_rtas_register("query-cpu-stopped-state",
+                        rtas_query_cpu_stopped_state);
+    spapr_rtas_register("start-cpu", rtas_start_cpu);
+}
+device_init(register_core_rtas);
