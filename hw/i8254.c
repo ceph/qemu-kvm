@@ -557,6 +557,7 @@ static int pit_initfn(ISADevice *dev)
 #ifdef CONFIG_KVM_PIT
     }
 #endif
+    qdev_set_legacy_instance_id(&dev->qdev, pit->iobase, 2);
 
     return 0;
 }
