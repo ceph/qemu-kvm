@@ -687,6 +687,8 @@ typedef struct CPUX86State {
 
     uint64_t pat;
 
+    uint64_t mcg_status;
+
     /* exception/interrupt handling */
     int error_code;
     int exception_is_int;
@@ -741,7 +743,6 @@ typedef struct CPUX86State {
     struct DeviceState *apic_state;
 
     uint64_t mcg_cap;
-    uint64_t mcg_status;
     uint64_t mcg_ctl;
     uint64_t mce_banks[MCE_BANKS_DEF*4];
 
@@ -988,4 +989,12 @@ static inline void cpu_get_tb_cpu_state(CPUState *env, target_ulong *pc,
 
 void do_cpu_init(CPUState *env);
 void do_cpu_sipi(CPUState *env);
+
+#define MCE_INJECT_BROADCAST    1
+#define MCE_INJECT_UNCOND_AO    2
+
+void cpu_x86_inject_mce(Monitor *mon, CPUState *cenv, int bank,
+                        uint64_t status, uint64_t mcg_status, uint64_t addr,
+                        uint64_t misc, int flags);
+
 #endif /* CPU_I386_H */
