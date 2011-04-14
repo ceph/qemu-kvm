@@ -898,7 +898,7 @@ static void print_cpu_iter(QObject *obj, void *opaque)
     }
 
     monitor_printf(mon, " thread_id=%" PRId64 " ",
-					qdict_get_int(cpu, "thread_id"));
+                   qdict_get_int(cpu, "thread_id"));
 
     monitor_printf(mon, "\n");
 }

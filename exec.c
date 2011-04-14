@@ -647,10 +647,8 @@ void cpu_exec_init(CPUState *env)
     env->numa_node = 0;
     QTAILQ_INIT(&env->breakpoints);
     QTAILQ_INIT(&env->watchpoints);
-#ifdef __WIN32
-    env->thread_id = GetCurrentProcessId();
-#else
-    env->thread_id = getpid();
+#ifndef CONFIG_USER_ONLY
+    env->thread_id = qemu_get_thread_id();
 #endif
     *penv = env;
 #if defined(CONFIG_USER_ONLY)
