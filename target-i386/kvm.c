@@ -175,7 +175,42 @@ static int get_para_features(CPUState *env)
 }
 #endif /* CONFIG_KVM_PARA */
 
+typedef struct HWPoisonPage {
+    ram_addr_t ram_addr;
+    QLIST_ENTRY(HWPoisonPage) list;
+} HWPoisonPage;
+
+static QLIST_HEAD(, HWPoisonPage) hwpoison_page_list =
+    QLIST_HEAD_INITIALIZER(hwpoison_page_list);
+
+#ifdef OBSOLETE_KVM_IMPL
+static void kvm_unpoison_all(void *param)
+{
+    HWPoisonPage *page, *next_page;
+
+    QLIST_FOREACH_SAFE(page, &hwpoison_page_list, list, next_page) {
+        QLIST_REMOVE(page, list);
+        qemu_ram_remap(page->ram_addr, TARGET_PAGE_SIZE);
+        qemu_free(page);
+    }
+}
+#endif
+
 #ifdef KVM_CAP_MCE
+static void kvm_hwpoison_page_add(ram_addr_t ram_addr)
+{
+    HWPoisonPage *page;
+
+    QLIST_FOREACH(page, &hwpoison_page_list, list) {
+        if (page->ram_addr == ram_addr) {
+            return;
+        }
+    }
+    page = qemu_malloc(sizeof(HWPoisonPage));
+    page->ram_addr = ram_addr;
+    QLIST_INSERT_HEAD(&hwpoison_page_list, page, list);
+}
+
 static int kvm_get_mce_cap_supported(KVMState *s, uint64_t *mce_cap,
                                      int *max_banks)
 {
@@ -187,11 +222,6 @@ static int kvm_get_mce_cap_supported(KVMState *s, uint64_t *mce_cap,
         return kvm_ioctl(s, KVM_X86_GET_MCE_CAP_SUPPORTED, mce_cap);
     }
     return -ENOSYS;
-}
-
-static int kvm_setup_mce(CPUState *env, uint64_t *mcg_cap)
-{
-    return kvm_vcpu_ioctl(env, KVM_X86_SETUP_MCE, mcg_cap);
 }
 
 static void kvm_mce_inject(CPUState *env, target_phys_addr_t paddr, int code)
@@ -240,6 +270,7 @@ int kvm_arch_on_sigbus_vcpu(CPUState *env, int code, void *addr)
                 hardware_memory_error();
             }
         }
+        kvm_hwpoison_page_add(ram_addr);
         kvm_mce_inject(env, paddr, code);
     } else
 #endif /* KVM_CAP_MCE */
@@ -270,6 +301,7 @@ int kvm_arch_on_sigbus(int code, void *addr)
                     "QEMU itself instead of guest system!: %p\n", addr);
             return 0;
         }
+        kvm_hwpoison_page_add(ram_addr);
         kvm_mce_inject(first_cpu, paddr, code);
     } else
 #endif /* KVM_CAP_MCE */
@@ -452,20 +484,26 @@ int kvm_arch_init_vcpu(CPUState *env)
         && kvm_check_extension(env->kvm_state, KVM_CAP_MCE) > 0) {
         uint64_t mcg_cap;
         int banks;
+        int ret;
 
-        if (kvm_get_mce_cap_supported(env->kvm_state, &mcg_cap, &banks)) {
-            perror("kvm_get_mce_cap_supported FAILED");
-        } else {
-            if (banks > MCE_BANKS_DEF)
-                banks = MCE_BANKS_DEF;
-            mcg_cap &= MCE_CAP_DEF;
-            mcg_cap |= banks;
-            if (kvm_setup_mce(env, &mcg_cap)) {
-                perror("kvm_setup_mce FAILED");
-            } else {
-                env->mcg_cap = mcg_cap;
-            }
+        ret = kvm_get_mce_cap_supported(env->kvm_state, &mcg_cap, &banks);
+        if (ret < 0) {
+            fprintf(stderr, "kvm_get_mce_cap_supported: %s", strerror(-ret));
+            return ret;
         }
+
+        if (banks > MCE_BANKS_DEF) {
+            banks = MCE_BANKS_DEF;
+        }
+        mcg_cap &= MCE_CAP_DEF;
+        mcg_cap |= banks;
+        ret = kvm_vcpu_ioctl(env, KVM_X86_SETUP_MCE, &mcg_cap);
+        if (ret < 0) {
+            fprintf(stderr, "KVM_X86_SETUP_MCE: %s", strerror(-ret));
+            return ret;
+        }
+
+        env->mcg_cap = mcg_cap;
     }
 #endif
 
@@ -597,6 +635,7 @@ int kvm_arch_init(KVMState *s)
         fprintf(stderr, "e820_add_entry() table is full\n");
         return ret;
     }
+    qemu_register_reset(kvm_unpoison_all, NULL);
 
     return 0;
 }
