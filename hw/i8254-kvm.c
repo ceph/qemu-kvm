@@ -108,7 +108,7 @@ void kvm_pit_init(PITState *pit)
     PITChannelState *s;
 
     s = &pit->channels[0];
-    s->irq_timer = qemu_new_timer(vm_clock, dummy_timer, s);
+    s->irq_timer = qemu_new_timer_ns(vm_clock, dummy_timer, s);
     vmstate_pit.pre_save = kvm_pit_pre_save;
     vmstate_pit.post_load = kvm_pit_post_load;
     return;
