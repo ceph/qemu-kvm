@@ -647,10 +647,8 @@ void cpu_exec_init(CPUState *env)
     env->numa_node = 0;
     QTAILQ_INIT(&env->breakpoints);
     QTAILQ_INIT(&env->watchpoints);
-#ifdef __WIN32
-    env->thread_id = GetCurrentProcessId();
-#else
-    env->thread_id = getpid();
+#ifndef CONFIG_USER_ONLY
+    env->thread_id = qemu_get_thread_id();
 #endif
     *penv = env;
 #if defined(CONFIG_USER_ONLY)
@@ -2624,6 +2622,7 @@ void cpu_register_physical_memory_offset(target_phys_addr_t start_addr,
     ram_addr_t orig_size = size;
     subpage_t *subpage;
 
+    assert(size);
     cpu_notify_set_memory(start_addr, size, phys_offset);
 
     if (phys_offset == IO_MEM_UNASSIGNED) {
@@ -2632,7 +2631,9 @@ void cpu_register_physical_memory_offset(target_phys_addr_t start_addr,
     region_offset &= TARGET_PAGE_MASK;
     size = (size + TARGET_PAGE_SIZE - 1) & TARGET_PAGE_MASK;
     end_addr = start_addr + (target_phys_addr_t)size;
-    for(addr = start_addr; addr != end_addr; addr += TARGET_PAGE_SIZE) {
+
+    addr = start_addr;
+    do {
         p = phys_page_find(addr >> TARGET_PAGE_BITS);
         if (p && p->phys_offset != IO_MEM_UNASSIGNED) {
             ram_addr_t orig_memory = p->phys_offset;
@@ -2684,7 +2685,8 @@ void cpu_register_physical_memory_offset(target_phys_addr_t start_addr,
             }
         }
         region_offset += TARGET_PAGE_SIZE;
-    }
+        addr += TARGET_PAGE_SIZE;
+    } while (addr != end_addr);
 
     /* since each CPU stores ram addresses in its TLB cache, we must
        reset the modified entries */
@@ -2883,6 +2885,7 @@ ram_addr_t qemu_ram_alloc_from_ptr(DeviceState *dev, const char *name,
 
     if (host) {
         new_block->host = host;
+        new_block->flags |= RAM_PREALLOC_MASK;
     } else {
         if (mem_path) {
 #if defined (__linux__) && !defined(TARGET_S390X)
@@ -2949,7 +2952,9 @@ void qemu_ram_free(ram_addr_t addr)
     QLIST_FOREACH(block, &ram_list.blocks, next) {
         if (addr == block->offset) {
             QLIST_REMOVE(block, next);
-            if (mem_path) {
+            if (block->flags & RAM_PREALLOC_MASK) {
+                ;
+            } else if (mem_path) {
 #if defined (__linux__) && !defined(TARGET_S390X)
                 if (block->fd) {
                     munmap(block->host, block->length);
@@ -2957,6 +2962,8 @@ void qemu_ram_free(ram_addr_t addr)
                 } else {
                     qemu_vfree(block->host);
                 }
+#else
+                abort();
 #endif
             } else {
 #if defined(TARGET_S390X) && defined(CONFIG_KVM)
@@ -2971,6 +2978,66 @@ void qemu_ram_free(ram_addr_t addr)
     }
 
 }
+
+#ifndef _WIN32
+void qemu_ram_remap(ram_addr_t addr, ram_addr_t length)
+{
+    RAMBlock *block;
+    ram_addr_t offset;
+    int flags;
+    void *area, *vaddr;
+
+    QLIST_FOREACH(block, &ram_list.blocks, next) {
+        offset = addr - block->offset;
+        if (offset < block->length) {
+            vaddr = block->host + offset;
+            if (block->flags & RAM_PREALLOC_MASK) {
+                ;
+            } else {
+                flags = MAP_FIXED;
+                munmap(vaddr, length);
+                if (mem_path) {
+#if defined(__linux__) && !defined(TARGET_S390X)
+                    if (block->fd) {
+#ifdef MAP_POPULATE
+                        flags |= mem_prealloc ? MAP_POPULATE | MAP_SHARED :
+                            MAP_PRIVATE;
+#else
+                        flags |= MAP_PRIVATE;
+#endif
+                        area = mmap(vaddr, length, PROT_READ | PROT_WRITE,
+                                    flags, block->fd, offset);
+                    } else {
+                        flags |= MAP_PRIVATE | MAP_ANONYMOUS;
+                        area = mmap(vaddr, length, PROT_READ | PROT_WRITE,
+                                    flags, -1, 0);
+                    }
+#else
+                    abort();
+#endif
+                } else {
+#if defined(TARGET_S390X) && defined(CONFIG_KVM)
+                    flags |= MAP_SHARED | MAP_ANONYMOUS;
+                    area = mmap(vaddr, length, PROT_EXEC|PROT_READ|PROT_WRITE,
+                                flags, -1, 0);
+#else
+                    flags |= MAP_PRIVATE | MAP_ANONYMOUS;
+                    area = mmap(vaddr, length, PROT_READ | PROT_WRITE,
+                                flags, -1, 0);
+#endif
+                }
+                if (area != vaddr) {
+                    fprintf(stderr, "Could not remap addr: %lx@%lx\n",
+                            length, addr);
+                    exit(1);
+                }
+                qemu_madvise(vaddr, length, QEMU_MADV_MERGEABLE);
+            }
+            return;
+        }
+    }
+}
+#endif /* !_WIN32 */
 
 /* Return a host pointer to ram allocated with qemu_ram_alloc.
    With the exception of the softmmu code in this file, this should
@@ -3894,7 +3961,7 @@ void *cpu_physical_memory_map(target_phys_addr_t addr,
             bounce.addr = addr;
             bounce.len = l;
             if (!is_write) {
-                cpu_physical_memory_rw(addr, bounce.buffer, l, 0);
+                cpu_physical_memory_read(addr, bounce.buffer, l);
             }
             ptr = bounce.buffer;
         } else {
@@ -4219,7 +4286,7 @@ void stw_phys(target_phys_addr_t addr, uint32_t val)
 void stq_phys(target_phys_addr_t addr, uint64_t val)
 {
     val = tswap64(val);
-    cpu_physical_memory_write(addr, (const uint8_t *)&val, 8);
+    cpu_physical_memory_write(addr, &val, 8);
 }
 
 /* virtual memory access for debug (includes writing to ROM) */

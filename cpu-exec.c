@@ -200,6 +200,30 @@ static inline TranslationBlock *tb_find_fast(void)
     return tb;
 }
 
+static CPUDebugExcpHandler *debug_excp_handler;
+
+CPUDebugExcpHandler *cpu_set_debug_excp_handler(CPUDebugExcpHandler *handler)
+{
+    CPUDebugExcpHandler *old_handler = debug_excp_handler;
+
+    debug_excp_handler = handler;
+    return old_handler;
+}
+
+static void cpu_handle_debug_exception(CPUState *env)
+{
+    CPUWatchpoint *wp;
+
+    if (!env->watchpoint_hit) {
+        QTAILQ_FOREACH(wp, &env->watchpoints, entry) {
+            wp->flags &= ~BP_WATCHPOINT_HIT;
+        }
+    }
+    if (debug_excp_handler) {
+        debug_excp_handler(env);
+    }
+}
+
 /* main execution loop */
 
 volatile sig_atomic_t exit_request;
@@ -247,6 +271,7 @@ int cpu_exec(CPUState *env1)
     env->cc_x = (env->sr >> 4) & 1;
 #elif defined(TARGET_ALPHA)
 #elif defined(TARGET_ARM)
+#elif defined(TARGET_UNICORE32)
 #elif defined(TARGET_PPC)
 #elif defined(TARGET_LM32)
 #elif defined(TARGET_MICROBLAZE)
@@ -274,6 +299,9 @@ int cpu_exec(CPUState *env1)
                 if (env->exception_index >= EXCP_INTERRUPT) {
                     /* exit request from the cpu execution loop */
                     ret = env->exception_index;
+                    if (ret == EXCP_DEBUG) {
+                        cpu_handle_debug_exception(env);
+                    }
                     break;
                 } else {
 #if defined(CONFIG_USER_ONLY)
@@ -313,6 +341,8 @@ int cpu_exec(CPUState *env1)
                     do_interrupt(env);
 #elif defined(TARGET_ARM)
                     do_interrupt(env);
+#elif defined(TARGET_UNICORE32)
+                    do_interrupt(env);
 #elif defined(TARGET_SH4)
 		    do_interrupt(env);
 #elif defined(TARGET_ALPHA)
@@ -347,7 +377,7 @@ int cpu_exec(CPUState *env1)
                     }
 #if defined(TARGET_ARM) || defined(TARGET_SPARC) || defined(TARGET_MIPS) || \
     defined(TARGET_PPC) || defined(TARGET_ALPHA) || defined(TARGET_CRIS) || \
-    defined(TARGET_MICROBLAZE) || defined(TARGET_LM32)
+    defined(TARGET_MICROBLAZE) || defined(TARGET_LM32) || defined(TARGET_UNICORE32)
                     if (interrupt_request & CPU_INTERRUPT_HALT) {
                         env->interrupt_request &= ~CPU_INTERRUPT_HALT;
                         env->halted = 1;
@@ -491,6 +521,12 @@ int cpu_exec(CPUState *env1)
                         && ((IS_M(env) && env->regs[15] < 0xfffffff0)
                             || !(env->uncached_cpsr & CPSR_I))) {
                         env->exception_index = EXCP_IRQ;
+                        do_interrupt(env);
+                        next_tb = 0;
+                    }
+#elif defined(TARGET_UNICORE32)
+                    if (interrupt_request & CPU_INTERRUPT_HARD
+                        && !(env->uncached_asr & ASR_I)) {
                         do_interrupt(env);
                         next_tb = 0;
                     }
@@ -644,6 +680,7 @@ int cpu_exec(CPUState *env1)
     env->eflags = env->eflags | helper_cc_compute_all(CC_OP) | (DF & DF_MASK);
 #elif defined(TARGET_ARM)
     /* XXX: Save/restore host fpu exception state?.  */
+#elif defined(TARGET_UNICORE32)
 #elif defined(TARGET_SPARC)
 #elif defined(TARGET_PPC)
 #elif defined(TARGET_LM32)

@@ -176,22 +176,18 @@ static DisplaySurface* sdl_create_displaysurface(int width, int height)
 
     surface->width = width;
     surface->height = height;
-    
-    if (scaling_active) {
-        if (host_format.BytesPerPixel != 2 && host_format.BytesPerPixel != 4) {
-            surface->linesize = width * 4;
-            surface->pf = qemu_default_pixelformat(32);
-        } else {
-            surface->linesize = width * host_format.BytesPerPixel;
-            surface->pf = sdl_to_qemu_pixelformat(&host_format);
-        }
-#ifdef HOST_WORDS_BIGENDIAN
-        surface->flags = QEMU_ALLOCATED_FLAG | QEMU_BIG_ENDIAN_FLAG;
-#else
-        surface->flags = QEMU_ALLOCATED_FLAG;
-#endif
-        surface->data = (uint8_t*) qemu_mallocz(surface->linesize * surface->height);
 
+    if (scaling_active) {
+        int linesize;
+        PixelFormat pf;
+        if (host_format.BytesPerPixel != 2 && host_format.BytesPerPixel != 4) {
+            linesize = width * 4;
+            pf = qemu_default_pixelformat(32);
+        } else {
+            linesize = width * host_format.BytesPerPixel;
+            pf = sdl_to_qemu_pixelformat(&host_format);
+        }
+        qemu_alloc_display(surface, width, height, linesize, pf, 0);
         return surface;
     }
 
@@ -816,6 +812,7 @@ void sdl_display_init(DisplayState *ds, int full_screen, int no_frame)
     uint8_t data = 0;
     DisplayAllocator *da;
     const SDL_VideoInfo *vi;
+    char *filename;
 
 #if defined(__APPLE__)
     /* always use generic keymaps */
@@ -847,6 +844,18 @@ void sdl_display_init(DisplayState *ds, int full_screen, int no_frame)
     }
     vi = SDL_GetVideoInfo();
     host_format = *(vi->vfmt);
+
+    /* Load a 32x32x4 image. White pixels are transparent. */
+    filename = qemu_find_file(QEMU_FILE_TYPE_BIOS, "qemu-icon.bmp");
+    if (filename) {
+        SDL_Surface *image = SDL_LoadBMP(filename);
+        if (image) {
+            uint32_t colorkey = SDL_MapRGB(image->format, 255, 255, 255);
+            SDL_SetColorKey(image, SDL_SRCCOLORKEY, colorkey);
+            SDL_WM_SetIcon(image, NULL);
+        }
+        qemu_free(filename);
+    }
 
     dcl = qemu_mallocz(sizeof(DisplayChangeListener));
     dcl->dpy_update = sdl_update;

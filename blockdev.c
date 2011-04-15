@@ -516,7 +516,7 @@ DriveInfo *drive_init(QemuOpts *opts, int default_to_scsi)
     case IF_VIRTIO:
         /* add virtio block device */
         opts = qemu_opts_create(qemu_find_opts("device"), NULL, 0);
-        qemu_opt_set(opts, "driver", "virtio-blk-pci");
+        qemu_opt_set(opts, "driver", "virtio-blk");
         qemu_opt_set(opts, "drive", dinfo->id);
         if (devaddr)
             qemu_opt_set(opts, "addr", devaddr);
@@ -587,9 +587,10 @@ int do_snapshot_blkdev(Monitor *mon, const QDict *qdict, QObject **ret_data)
     const char *filename = qdict_get_try_str(qdict, "snapshot_file");
     const char *format = qdict_get_try_str(qdict, "format");
     BlockDriverState *bs;
-    BlockDriver *drv, *proto_drv;
+    BlockDriver *drv, *old_drv, *proto_drv;
     int ret = 0;
     int flags;
+    char old_filename[1024];
 
     if (!filename) {
         qerror_report(QERR_MISSING_PARAMETER, "snapshot_file");
@@ -603,6 +604,11 @@ int do_snapshot_blkdev(Monitor *mon, const QDict *qdict, QObject **ret_data)
         ret = -1;
         goto out;
     }
+
+    pstrcpy(old_filename, sizeof(old_filename), bs->filename);
+
+    old_drv = bs->drv;
+    flags = bs->open_flags;
 
     if (!format) {
         format = "qcow2";
@@ -623,7 +629,7 @@ int do_snapshot_blkdev(Monitor *mon, const QDict *qdict, QObject **ret_data)
     }
 
     ret = bdrv_img_create(filename, format, bs->filename,
-                          bs->drv->format_name, NULL, -1, bs->open_flags);
+                          bs->drv->format_name, NULL, -1, flags);
     if (ret) {
         goto out;
     }
@@ -631,15 +637,20 @@ int do_snapshot_blkdev(Monitor *mon, const QDict *qdict, QObject **ret_data)
     qemu_aio_flush();
     bdrv_flush(bs);
 
-    flags = bs->open_flags;
     bdrv_close(bs);
     ret = bdrv_open(bs, filename, flags, drv);
     /*
-     * If reopening the image file we just created fails, we really
-     * are in trouble :(
+     * If reopening the image file we just created fails, fall back
+     * and try to re-open the original image. If that fails too, we
+     * are in serious trouble.
      */
     if (ret != 0) {
-        abort();
+        ret = bdrv_open(bs, old_filename, flags, old_drv);
+        if (ret != 0) {
+            qerror_report(QERR_OPEN_FILE_FAILED, old_filename);
+        } else {
+            qerror_report(QERR_OPEN_FILE_FAILED, filename);
+        }
     }
 out:
     if (ret) {
@@ -739,8 +750,6 @@ int do_drive_del(Monitor *mon, const QDict *qdict, QObject **ret_data)
 {
     const char *id = qdict_get_str(qdict, "id");
     BlockDriverState *bs;
-    BlockDriverState **ptr;
-    Property *prop;
 
     bs = bdrv_find(id);
     if (!bs) {
@@ -757,23 +766,16 @@ int do_drive_del(Monitor *mon, const QDict *qdict, QObject **ret_data)
     bdrv_flush(bs);
     bdrv_close(bs);
 
-    /* clean up guest state from pointing to host resource by
-     * finding and removing DeviceState "drive" property */
+    /* if we have a device associated with this BlockDriverState (bs->peer)
+     * then we need to make the drive anonymous until the device
+     * can be removed.  If this is a drive with no device backing
+     * then we can just get rid of the block driver state right here.
+     */
     if (bs->peer) {
-        for (prop = bs->peer->info->props; prop && prop->name; prop++) {
-            if (prop->info->type == PROP_TYPE_DRIVE) {
-                ptr = qdev_get_prop_ptr(bs->peer, prop);
-                if (*ptr == bs) {
-                    bdrv_detach(bs, bs->peer);
-                    *ptr = NULL;
-                    break;
-                }
-            }
-        }
+        bdrv_make_anon(bs);
+    } else {
+        drive_uninit(drive_get_by_blockdev(bs));
     }
-
-    /* clean up host side */
-    drive_uninit(drive_get_by_blockdev(bs));
 
     return 0;
 }

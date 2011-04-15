@@ -127,6 +127,7 @@ kvm=""
 kvm_para=""
 nptl=""
 sdl=""
+vnc="yes"
 sparse="no"
 uuid=""
 vde=""
@@ -187,6 +188,9 @@ trace_backend="nop"
 trace_file="trace"
 spice=""
 rbd=""
+smartcard=""
+smartcard_nss=""
+opengl="no"
 
 # parse CC options first
 for opt do
@@ -293,7 +297,7 @@ else
 fi
 
 case "$cpu" in
-  alpha|cris|ia64|lm32|m68k|microblaze|ppc|ppc64|sparc64)
+  alpha|cris|ia64|lm32|m68k|microblaze|ppc|ppc64|sparc64|unicore32)
     cpu="$cpu"
   ;;
   i386|i486|i586|i686|i86pc|BePC)
@@ -511,6 +515,8 @@ for opt do
   case "$opt" in
   --help|-h) show_help=yes
   ;;
+  --version|-V) exec cat $source_path/VERSION
+  ;;
   --prefix=*) prefix="$optarg"
   ;;
   --interp-prefix=*) interp_prefix="$optarg"
@@ -558,6 +564,10 @@ for opt do
   --disable-sdl) sdl="no"
   ;;
   --enable-sdl) sdl="yes"
+  ;;
+  --disable-vnc) vnc="no"
+  ;;
+  --enable-vnc) vnc="yes"
   ;;
   --fmod-lib=*) fmod_lib="$optarg"
   ;;
@@ -743,11 +753,23 @@ for opt do
   ;;
   --enable-vhost-net) vhost_net="yes"
   ;;
+  --disable-opengl) opengl="no"
+  ;;
+  --enable-opengl) opengl="yes"
+  ;;
   --*dir)
   ;;
   --disable-rbd) rbd="no"
   ;;
   --enable-rbd) rbd="yes"
+  ;;
+  --disable-smartcard) smartcard="no"
+  ;;
+  --enable-smartcard) smartcard="yes"
+  ;;
+  --disable-smartcard-nss) smartcard_nss="no"
+  ;;
+  --enable-smartcard-nss) smartcard_nss="yes"
   ;;
   *) echo "ERROR: unknown option $opt"; show_help="yes"
   ;;
@@ -823,6 +845,9 @@ case "$cpu" in
     hppa*)
            host_guest_base="yes"
            ;;
+    unicore32*)
+           host_guest_base="yes"
+           ;;
 esac
 
 [ -z "$guest_base" ] && guest_base="$host_guest_base"
@@ -866,6 +891,8 @@ echo "  --disable-strip          disable stripping binaries"
 echo "  --disable-werror         disable compilation abort on warning"
 echo "  --disable-sdl            disable SDL"
 echo "  --enable-sdl             enable SDL"
+echo "  --disable-vnc            disable VNC"
+echo "  --enable-vnc             enable VNC"
 echo "  --enable-cocoa           enable COCOA (Mac OS X only)"
 echo "  --audio-drv-list=LIST    set audio drivers list:"
 echo "                           Available drivers: $audio_possible_drivers"
@@ -949,6 +976,10 @@ echo "                           Default:trace-<pid>"
 echo "  --disable-spice          disable spice"
 echo "  --enable-spice           enable spice"
 echo "  --enable-rbd             enable building the rados block device (rbd)"
+echo "  --disable-smartcard      disable smartcard support"
+echo "  --enable-smartcard       enable smartcard support"
+echo "  --disable-smartcard-nss  disable smartcard nss support"
+echo "  --enable-smartcard-nss   enable smartcard nss support"
 echo ""
 echo "NOTE: The object files are built at the place where configure is launched"
 exit 1
@@ -1056,6 +1087,7 @@ sh4eb-linux-user \
 sparc-linux-user \
 sparc64-linux-user \
 sparc32plus-linux-user \
+unicore32-linux-user \
 "
     fi
 # the following are Darwin specific
@@ -1241,7 +1273,7 @@ else
   fi
   sdl=no
 fi
-if test -n "$cross_prefix" && test "`basename $sdlconfig`" = sdl-config; then
+if test -n "$cross_prefix" && test "$(basename "$sdlconfig")" = sdl-config; then
   echo warning: using "\"$sdlconfig\"" to detect cross-compiled sdl >&2
 fi
 
@@ -1308,7 +1340,7 @@ fi
 
 ##########################################
 # VNC TLS detection
-if test "$vnc_tls" != "no" ; then
+if test "$vnc" = "yes" -a "$vnc_tls" != "no" ; then
   cat > $TMPC <<EOF
 #include <gnutls/gnutls.h>
 int main(void) { gnutls_session_t s; gnutls_init(&s, GNUTLS_SERVER); return 0; }
@@ -1328,7 +1360,7 @@ fi
 
 ##########################################
 # VNC SASL detection
-if test "$vnc_sasl" != "no" ; then
+if test "$vnc" = "yes" -a "$vnc_sasl" != "no" ; then
   cat > $TMPC <<EOF
 #include <sasl/sasl.h>
 #include <stdio.h>
@@ -1350,7 +1382,7 @@ fi
 
 ##########################################
 # VNC JPEG detection
-if test "$vnc_jpeg" != "no" ; then
+if test "$vnc" = "yes" -a "$vnc_jpeg" != "no" ; then
 cat > $TMPC <<EOF
 #include <stdio.h>
 #include <jpeglib.h>
@@ -1371,7 +1403,7 @@ fi
 
 ##########################################
 # VNC PNG detection
-if test "$vnc_png" != "no" ; then
+if test "$vnc" = "yes" -a "$vnc_png" != "no" ; then
 cat > $TMPC <<EOF
 //#include <stdio.h>
 #include <png.h>
@@ -1923,7 +1955,7 @@ if test "$rbd" != "no" ; then
 #include <rados/librados.h>
 int main(void) { rados_initialize(0, NULL); return 0; }
 EOF
-  rbd_libs="-lrados -lcrypto"
+  rbd_libs="-lrados"
   if compile_prog "" "$rbd_libs" ; then
     librados_too_old=no
     cat > $TMPC <<EOF
@@ -2041,6 +2073,27 @@ EOF
       feature_not_found "fdt"
     fi
     fdt=no
+  fi
+fi
+
+##########################################
+# opengl probe, used by milkymist-tmu2
+if test "$opengl" != "no" ; then
+  opengl_libs="-lGL"
+  cat > $TMPC << EOF
+#include <X11/Xlib.h>
+#include <GL/gl.h>
+#include <GL/glx.h>
+int main(void) { GL_VERSION; return 0; }
+EOF
+  if compile_prog "" "-lGL" ; then
+    opengl=yes
+       libs_softmmu="$opengl_libs $libs_softmmu"
+  else
+    if test "$opengl" = "yes" ; then
+      feature_not_found "opengl"
+    fi
+    opengl=no
   fi
 fi
 
@@ -2418,6 +2471,31 @@ EOF
   fi
 fi
 
+# check for libcacard for smartcard support
+if test "$smartcard" != "no" ; then
+    smartcard="yes"
+    smartcard_cflags=""
+    # TODO - what's the minimal nss version we support?
+    if test "$smartcard_nss" != "no"; then
+        if $pkg_config --atleast-version=3.12.8 nss >/dev/null 2>&1 ; then
+            smartcard_nss="yes"
+            smartcard_cflags="-I\$(SRC_PATH)/libcacard"
+            libcacard_libs=$($pkg_config --libs nss 2>/dev/null)
+            libcacard_cflags=$($pkg_config --cflags nss 2>/dev/null)
+            QEMU_CFLAGS="$QEMU_CFLAGS $smartcard_cflags $libcacard_cflags"
+            LIBS="$libcacard_libs $LIBS"
+        else
+            if test "$smartcard_nss" = "yes"; then
+                feature_not_found "nss"
+            fi
+            smartcard_nss="no"
+        fi
+    fi
+fi
+if test "$smartcard" = "no" ; then
+    smartcard_nss="no"
+fi
+
 ##########################################
 
 ##########################################
@@ -2575,7 +2653,9 @@ if test \( "$cpu" = "i386" -o "$cpu" = "x86_64" \) -a \
         "$softmmu" = yes ; then
   roms="optionrom"
 fi
-
+if test "$cpu" = "ppc64" ; then
+  roms="$roms spapr-rtas"
+fi
 
 echo "Install prefix    $prefix"
 echo "BIOS directory    `eval echo $datadir`"
@@ -2616,11 +2696,14 @@ echo "Audio drivers     $audio_drv_list"
 echo "Extra audio cards $audio_card_list"
 echo "Block whitelist   $block_drv_whitelist"
 echo "Mixer emulation   $mixemu"
-echo "VNC TLS support   $vnc_tls"
-echo "VNC SASL support  $vnc_sasl"
-echo "VNC JPEG support  $vnc_jpeg"
-echo "VNC PNG support   $vnc_png"
-echo "VNC thread        $vnc_thread"
+echo "VNC support       $vnc"
+if test "$vnc" = "yes" ; then
+    echo "VNC TLS support   $vnc_tls"
+    echo "VNC SASL support  $vnc_sasl"
+    echo "VNC JPEG support  $vnc_jpeg"
+    echo "VNC PNG support   $vnc_png"
+    echo "VNC thread        $vnc_thread"
+fi
 if test -n "$sparc_cpu"; then
     echo "Target Sparc Arch $sparc_cpu"
 fi
@@ -2654,6 +2737,8 @@ echo "Trace output file $trace_file-<pid>"
 echo "spice support     $spice"
 echo "rbd support       $rbd"
 echo "xfsctl support    $xfs"
+echo "nss used          $smartcard_nss"
+echo "OpenGL support    $opengl"
 
 if test $sdl_too_old = "yes"; then
 echo "-> Your SDL version is too old - please upgrade to have SDL support"
@@ -2677,7 +2762,7 @@ echo "docdir=$docdir" >> $config_host_mak
 echo "confdir=$confdir" >> $config_host_mak
 
 case "$cpu" in
-  i386|x86_64|alpha|cris|hppa|ia64|lm32|m68k|microblaze|mips|mips64|ppc|ppc64|s390|s390x|sparc|sparc64)
+  i386|x86_64|alpha|cris|hppa|ia64|lm32|m68k|microblaze|mips|mips64|ppc|ppc64|s390|s390x|sparc|sparc64|unicore32)
     ARCH=$cpu
   ;;
   armv4b|armv4l)
@@ -2773,6 +2858,9 @@ echo "CONFIG_BDRV_WHITELIST=$block_drv_whitelist" >> $config_host_mak
 if test "$mixemu" = "yes" ; then
   echo "CONFIG_MIXEMU=y" >> $config_host_mak
 fi
+if test "$vnc" = "yes" ; then
+  echo "CONFIG_VNC=y" >> $config_host_mak
+fi
 if test "$vnc_tls" = "yes" ; then
   echo "CONFIG_VNC_TLS=y" >> $config_host_mak
   echo "VNC_TLS_CFLAGS=$vnc_tls_cflags" >> $config_host_mak
@@ -2781,15 +2869,15 @@ if test "$vnc_sasl" = "yes" ; then
   echo "CONFIG_VNC_SASL=y" >> $config_host_mak
   echo "VNC_SASL_CFLAGS=$vnc_sasl_cflags" >> $config_host_mak
 fi
-if test "$vnc_jpeg" != "no" ; then
+if test "$vnc_jpeg" = "yes" ; then
   echo "CONFIG_VNC_JPEG=y" >> $config_host_mak
   echo "VNC_JPEG_CFLAGS=$vnc_jpeg_cflags" >> $config_host_mak
 fi
-if test "$vnc_png" != "no" ; then
+if test "$vnc_png" = "yes" ; then
   echo "CONFIG_VNC_PNG=y" >> $config_host_mak
   echo "VNC_PNG_CFLAGS=$vnc_png_cflags" >> $config_host_mak
 fi
-if test "$vnc_thread" != "no" ; then
+if test "$vnc_thread" = "yes" ; then
   echo "CONFIG_VNC_THREAD=y" >> $config_host_mak
 fi
 if test "$fnmatch" = "yes" ; then
@@ -2936,6 +3024,18 @@ fi
 
 if test "$spice" = "yes" ; then
   echo "CONFIG_SPICE=y" >> $config_host_mak
+fi
+
+if test "$smartcard" = "yes" ; then
+  echo "CONFIG_SMARTCARD=y" >> $config_host_mak
+fi
+
+if test "$smartcard_nss" = "yes" ; then
+  echo "CONFIG_SMARTCARD_NSS=y" >> $config_host_mak
+fi
+
+if test "$opengl" = "yes" ; then
+  echo "CONFIG_OPENGL=y" >> $config_host_mak
 fi
 
 # XXX: suppress that
@@ -3219,7 +3319,12 @@ case "$target_arch2" in
     target_phys_bits=64
   ;;
   s390x)
+    target_nptl="yes"
     target_phys_bits=64
+    target_long_alignment=8
+  ;;
+  unicore32)
+    target_phys_bits=32
   ;;
   *)
     echo "Unsupported target CPU"
@@ -3256,6 +3361,8 @@ case "$target_arch2" in
       \( "$target_arch2" = "$cpu" -o \
       \( "$target_arch2" = "ppcemb" -a "$cpu" = "ppc" \) -o \
       \( "$target_arch2" = "ppc64"  -a "$cpu" = "ppc" \) -o \
+      \( "$target_arch2" = "ppc"    -a "$cpu" = "ppc64" \) -o \
+      \( "$target_arch2" = "ppcemb" -a "$cpu" = "ppc64" \) -o \
       \( "$target_arch2" = "x86_64" -a "$cpu" = "i386"   \) -o \
       \( "$target_arch2" = "i386"   -a "$cpu" = "x86_64" \) \) ; then
       echo "CONFIG_KVM=y" >> $config_target_mak
@@ -3292,6 +3399,11 @@ if test "$target_linux_user" = "yes" ; then
 fi
 if test "$target_darwin_user" = "yes" ; then
   echo "CONFIG_DARWIN_USER=y" >> $config_target_mak
+fi
+if test "$smartcard_nss" = "yes" ; then
+  echo "subdir-$target: subdir-libcacard" >> $config_host_mak
+  echo "libcacard_libs=$libcacard_libs" >> $config_host_mak
+  echo "libcacard_cflags=$libcacard_cflags" >> $config_host_mak
 fi
 list=""
 if test ! -z "$gdb_xml_files" ; then
@@ -3417,6 +3529,9 @@ if test "$target_softmmu" = "yes" ; then
   arm)
     cflags="-DHAS_AUDIO $cflags"
   ;;
+  lm32)
+    cflags="-DHAS_AUDIO $cflags"
+  ;;
   i386|mips|ppc)
     cflags="-DHAS_AUDIO -DHAS_AUDIO_CHOICE $cflags"
   ;;
@@ -3505,6 +3620,13 @@ for hwlib in 32 64; do
   symlink $source_path/Makefile.hw $d/Makefile
   echo "QEMU_CFLAGS+=-DTARGET_PHYS_ADDR_BITS=$hwlib" > $d/config.mak
 done
+
+if [ "$source_path" != `pwd` ]; then
+    # out of tree build
+    mkdir -p libcacard
+    rm -f libcacard/Makefile
+    ln -s "$source_path/libcacard/Makefile" libcacard/Makefile
+fi
 
 d=libuser
 mkdir -p $d

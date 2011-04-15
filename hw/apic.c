@@ -650,7 +650,7 @@ static uint32_t apic_get_current_count(APICState *s)
 {
     int64_t d;
     uint32_t val;
-    d = (qemu_get_clock(vm_clock) - s->initial_count_load_time) >>
+    d = (qemu_get_clock_ns(vm_clock) - s->initial_count_load_time) >>
         s->count_shift;
     if (s->lvt[APIC_LVT_TIMER] & APIC_LVT_TIMER_PERIODIC) {
         /* periodic */
@@ -874,12 +874,12 @@ static void apic_mem_writel(void *opaque, target_phys_addr_t addr, uint32_t val)
             int n = index - 0x32;
             s->lvt[n] = val;
             if (n == APIC_LVT_TIMER)
-                apic_timer_update(s, qemu_get_clock(vm_clock));
+                apic_timer_update(s, qemu_get_clock_ns(vm_clock));
         }
         break;
     case 0x38:
         s->initial_count = val;
-        s->initial_count_load_time = qemu_get_clock(vm_clock);
+        s->initial_count_load_time = qemu_get_clock_ns(vm_clock);
         apic_timer_update(s, s->initial_count_load_time);
         break;
     case 0x39:
@@ -941,7 +941,7 @@ static void kvm_kernel_lapic_save_to_user(APICState *s)
     v = (s->divide_conf & 3) | ((s->divide_conf >> 1) & 4);
     s->count_shift = (v + 1) & 7;
 
-    s->initial_count_load_time = qemu_get_clock(vm_clock);
+    s->initial_count_load_time = qemu_get_clock_ns(vm_clock);
     apic_timer_update(s, s->initial_count_load_time);
 }
 
@@ -1121,7 +1121,7 @@ static int apic_init1(SysBusDevice *dev)
                                             DEVICE_NATIVE_ENDIAN);
     sysbus_init_mmio(dev, MSI_ADDR_SIZE, apic_io_memory);
 
-    s->timer = qemu_new_timer(vm_clock, apic_timer, s);
+    s->timer = qemu_new_timer_ns(vm_clock, apic_timer, s);
     s->idx = last_apic_idx++;
     local_apics[s->idx] = s;
     return 0;

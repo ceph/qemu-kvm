@@ -310,7 +310,7 @@ static int ioreq_runio_qemu_sync(struct ioreq *ioreq)
     off_t pos;
 
     if (ioreq->req.nr_segments && ioreq_map(ioreq) == -1)
-	goto err;
+	goto err_no_map;
     if (ioreq->presync)
 	bdrv_flush(blkdev->bs);
 
@@ -364,6 +364,9 @@ static int ioreq_runio_qemu_sync(struct ioreq *ioreq)
     return 0;
 
 err:
+    ioreq_unmap(ioreq);
+err_no_map:
+    ioreq_finish(ioreq);
     ioreq->status = BLKIF_RSP_ERROR;
     return -1;
 }
@@ -393,7 +396,7 @@ static int ioreq_runio_qemu_aio(struct ioreq *ioreq)
     struct XenBlkDev *blkdev = ioreq->blkdev;
 
     if (ioreq->req.nr_segments && ioreq_map(ioreq) == -1)
-	goto err;
+	goto err_no_map;
 
     ioreq->aio_inflight++;
     if (ioreq->presync)
@@ -408,9 +411,9 @@ static int ioreq_runio_qemu_aio(struct ioreq *ioreq)
 	break;
     case BLKIF_OP_WRITE:
     case BLKIF_OP_WRITE_BARRIER:
-        ioreq->aio_inflight++;
         if (!ioreq->req.nr_segments)
             break;
+        ioreq->aio_inflight++;
         bdrv_aio_writev(blkdev->bs, ioreq->start / BLOCK_SIZE,
                         &ioreq->v, ioreq->v.size / BLOCK_SIZE,
                         qemu_aio_complete, ioreq);
@@ -427,6 +430,9 @@ static int ioreq_runio_qemu_aio(struct ioreq *ioreq)
     return 0;
 
 err:
+    ioreq_unmap(ioreq);
+err_no_map:
+    ioreq_finish(ioreq);
     ioreq->status = BLKIF_RSP_ERROR;
     return -1;
 }

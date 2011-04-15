@@ -352,9 +352,9 @@ static CPUTimer* cpu_timer_create(const char* name, CPUState *env,
     timer->disabled_mask = disabled_mask;
 
     timer->disabled = 1;
-    timer->clock_offset = qemu_get_clock(vm_clock);
+    timer->clock_offset = qemu_get_clock_ns(vm_clock);
 
-    timer->qtimer = qemu_new_timer(vm_clock, cb, env);
+    timer->qtimer = qemu_new_timer_ns(vm_clock, cb, env);
 
     return timer;
 }
@@ -362,7 +362,7 @@ static CPUTimer* cpu_timer_create(const char* name, CPUState *env,
 static void cpu_timer_reset(CPUTimer *timer)
 {
     timer->disabled = 1;
-    timer->clock_offset = qemu_get_clock(vm_clock);
+    timer->clock_offset = qemu_get_clock_ns(vm_clock);
 
     qemu_del_timer(timer->qtimer);
 }
@@ -457,7 +457,7 @@ void cpu_tick_set_count(CPUTimer *timer, uint64_t count)
     uint64_t real_count = count & ~timer->disabled_mask;
     uint64_t disabled_bit = count & timer->disabled_mask;
 
-    int64_t vm_clock_offset = qemu_get_clock(vm_clock) -
+    int64_t vm_clock_offset = qemu_get_clock_ns(vm_clock) -
                     cpu_to_timer_ticks(real_count, timer->frequency);
 
     TIMER_DPRINTF("%s set_count count=0x%016lx (%s) p=%p\n",
@@ -471,7 +471,7 @@ void cpu_tick_set_count(CPUTimer *timer, uint64_t count)
 uint64_t cpu_tick_get_count(CPUTimer *timer)
 {
     uint64_t real_count = timer_to_cpu_ticks(
-                    qemu_get_clock(vm_clock) - timer->clock_offset,
+                    qemu_get_clock_ns(vm_clock) - timer->clock_offset,
                     timer->frequency);
 
     TIMER_DPRINTF("%s get_count count=0x%016lx (%s) p=%p\n",
@@ -486,7 +486,7 @@ uint64_t cpu_tick_get_count(CPUTimer *timer)
 
 void cpu_tick_set_limit(CPUTimer *timer, uint64_t limit)
 {
-    int64_t now = qemu_get_clock(vm_clock);
+    int64_t now = qemu_get_clock_ns(vm_clock);
 
     uint64_t real_limit = limit & ~timer->disabled_mask;
     timer->disabled = (limit & timer->disabled_mask) ? 1 : 0;
@@ -793,14 +793,7 @@ static void sun4uv_init(ram_addr_t RAM_size,
     for(i = 0; i < nb_nics; i++)
         pci_nic_init_nofail(&nd_table[i], "ne2k_pci", NULL);
 
-    if (drive_get_max_bus(IF_IDE) >= MAX_IDE_BUS) {
-        fprintf(stderr, "qemu: too many IDE bus\n");
-        exit(1);
-    }
-    for(i = 0; i < MAX_IDE_BUS * MAX_IDE_DEVS; i++) {
-        hd[i] = drive_get(IF_IDE, i / MAX_IDE_DEVS,
-                          i % MAX_IDE_DEVS);
-    }
+    ide_drive_get(hd, MAX_IDE_BUS);
 
     pci_cmd646_ide_init(pci_bus, hd, 1);
 

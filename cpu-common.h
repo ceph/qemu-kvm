@@ -51,6 +51,7 @@ ram_addr_t qemu_ram_alloc_from_ptr(DeviceState *dev, const char *name,
 ram_addr_t qemu_ram_alloc(DeviceState *dev, const char *name, ram_addr_t size);
 void qemu_ram_unmap(ram_addr_t addr);
 void qemu_ram_free(ram_addr_t addr);
+void qemu_ram_remap(ram_addr_t addr, ram_addr_t length);
 /* This should only be used for ram local to a device.  */
 void *qemu_get_ram_ptr(ram_addr_t addr);
 /* Same but slower, to use for migration, where the order of
@@ -68,14 +69,14 @@ void cpu_unregister_io_memory(int table_address);
 void cpu_physical_memory_rw(target_phys_addr_t addr, uint8_t *buf,
                             int len, int is_write);
 static inline void cpu_physical_memory_read(target_phys_addr_t addr,
-                                            uint8_t *buf, int len)
+                                            void *buf, int len)
 {
     cpu_physical_memory_rw(addr, buf, len, 0);
 }
 static inline void cpu_physical_memory_write(target_phys_addr_t addr,
-                                             const uint8_t *buf, int len)
+                                             const void *buf, int len)
 {
-    cpu_physical_memory_rw(addr, (uint8_t *)buf, len, 1);
+    cpu_physical_memory_rw(addr, (void *)buf, len, 1);
 }
 void *cpu_physical_memory_map(target_phys_addr_t addr,
                               target_phys_addr_t *plen,

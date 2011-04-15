@@ -89,7 +89,7 @@ int kvm_page_size;
 static int kvm_debug(CPUState *env,
                      struct kvm_debug_exit_arch *arch_info)
 {
-    int handle = kvm_arch_debug(arch_info);
+    int handle = kvm_handle_debug(arch_info);
 
     if (handle) {
         kvm_debug_cpu_requested = env;

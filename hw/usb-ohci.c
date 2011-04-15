@@ -427,7 +427,7 @@ static inline int get_dwords(OHCIState *ohci,
     addr += ohci->localmem_base;
 
     for (i = 0; i < num; i++, buf++, addr += sizeof(*buf)) {
-        cpu_physical_memory_rw(addr, (uint8_t *)buf, sizeof(*buf), 0);
+        cpu_physical_memory_read(addr, buf, sizeof(*buf));
         *buf = le32_to_cpu(*buf);
     }
 
@@ -444,7 +444,7 @@ static inline int put_dwords(OHCIState *ohci,
 
     for (i = 0; i < num; i++, buf++, addr += sizeof(*buf)) {
         uint32_t tmp = cpu_to_le32(*buf);
-        cpu_physical_memory_rw(addr, (uint8_t *)&tmp, sizeof(tmp), 1);
+        cpu_physical_memory_write(addr, &tmp, sizeof(tmp));
     }
 
     return 1;
@@ -459,7 +459,7 @@ static inline int get_words(OHCIState *ohci,
     addr += ohci->localmem_base;
 
     for (i = 0; i < num; i++, buf++, addr += sizeof(*buf)) {
-        cpu_physical_memory_rw(addr, (uint8_t *)buf, sizeof(*buf), 0);
+        cpu_physical_memory_read(addr, buf, sizeof(*buf));
         *buf = le16_to_cpu(*buf);
     }
 
@@ -476,7 +476,7 @@ static inline int put_words(OHCIState *ohci,
 
     for (i = 0; i < num; i++, buf++, addr += sizeof(*buf)) {
         uint16_t tmp = cpu_to_le16(*buf);
-        cpu_physical_memory_rw(addr, (uint8_t *)&tmp, sizeof(tmp), 1);
+        cpu_physical_memory_write(addr, &tmp, sizeof(tmp));
     }
 
     return 1;
@@ -504,8 +504,7 @@ static inline int ohci_read_iso_td(OHCIState *ohci,
 static inline int ohci_read_hcca(OHCIState *ohci,
                                  uint32_t addr, struct ohci_hcca *hcca)
 {
-    cpu_physical_memory_rw(addr + ohci->localmem_base,
-                           (uint8_t *)hcca, sizeof(*hcca), 0);
+    cpu_physical_memory_read(addr + ohci->localmem_base, hcca, sizeof(*hcca));
     return 1;
 }
 
@@ -531,8 +530,7 @@ static inline int ohci_put_iso_td(OHCIState *ohci,
 static inline int ohci_put_hcca(OHCIState *ohci,
                                 uint32_t addr, struct ohci_hcca *hcca)
 {
-    cpu_physical_memory_rw(addr + ohci->localmem_base,
-                           (uint8_t *)hcca, sizeof(*hcca), 1);
+    cpu_physical_memory_write(addr + ohci->localmem_base, hcca, sizeof(*hcca));
     return 1;
 }
 
@@ -1101,7 +1099,7 @@ static int ohci_service_ed_list(OHCIState *ohci, uint32_t head, int completion)
 /* Generate a SOF event, and set a timer for EOF */
 static void ohci_sof(OHCIState *ohci)
 {
-    ohci->sof_time = qemu_get_clock(vm_clock);
+    ohci->sof_time = qemu_get_clock_ns(vm_clock);
     qemu_mod_timer(ohci->eof_timer, ohci->sof_time + usb_frame_time);
     ohci_set_interrupt(ohci, OHCI_INTR_SF);
 }
@@ -1186,12 +1184,12 @@ static void ohci_frame_boundary(void *opaque)
  */
 static int ohci_bus_start(OHCIState *ohci)
 {
-    ohci->eof_timer = qemu_new_timer(vm_clock,
+    ohci->eof_timer = qemu_new_timer_ns(vm_clock,
                     ohci_frame_boundary,
                     ohci);
 
     if (ohci->eof_timer == NULL) {
-        fprintf(stderr, "usb-ohci: %s: qemu_new_timer failed\n", ohci->name);
+        fprintf(stderr, "usb-ohci: %s: qemu_new_timer_ns failed\n", ohci->name);
         /* TODO: Signal unrecoverable error */
         return 0;
     }
@@ -1311,7 +1309,7 @@ static uint32_t ohci_get_frame_remaining(OHCIState *ohci)
     /* Being in USB operational state guarnatees sof_time was
      * set already.
      */
-    tks = qemu_get_clock(vm_clock) - ohci->sof_time;
+    tks = qemu_get_clock_ns(vm_clock) - ohci->sof_time;
 
     /* avoid muldiv if possible */
     if (tks >= usb_frame_time)

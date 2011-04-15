@@ -105,7 +105,7 @@ static uint32_t speaker_ioport_read (void *opaque, uint32_t addr)
 {
 #if 0
     int out;
-    out = pit_get_out(pit, 2, qemu_get_clock(vm_clock));
+    out = pit_get_out(pit, 2, qemu_get_clock_ns(vm_clock));
     dummy_refresh_clock ^= 1;
     return (speaker_data_on << 1) | pit_get_gate(pit, 2) | (out << 5) |
         (dummy_refresh_clock << 4);
@@ -681,15 +681,7 @@ static void ppc_prep_init (ram_addr_t ram_size,
         }
     }
 
-    if (drive_get_max_bus(IF_IDE) >= MAX_IDE_BUS) {
-        fprintf(stderr, "qemu: too many IDE bus\n");
-        exit(1);
-    }
-
-    for(i = 0; i < MAX_IDE_BUS * MAX_IDE_DEVS; i++) {
-        hd[i] = drive_get(IF_IDE, i / MAX_IDE_DEVS, i % MAX_IDE_DEVS);
-    }
-
+    ide_drive_get(hd, MAX_IDE_BUS);
     for(i = 0; i < MAX_IDE_BUS; i++) {
         isa_ide_init(ide_iobase[i], ide_iobase2[i], ide_irq[i],
                      hd[2 * i],

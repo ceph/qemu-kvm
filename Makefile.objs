@@ -13,8 +13,8 @@ oslib-obj-$(CONFIG_POSIX) += oslib-posix.o
 #######################################################################
 # block-obj-y is code used by both qemu system emulation and qemu-img
 
-block-obj-y = cutils.o cache-utils.o qemu-malloc.o qemu-option.o module.o
-block-obj-y += nbd.o block.o aio.o aes.o qemu-config.o
+block-obj-y = cutils.o cache-utils.o qemu-malloc.o qemu-option.o module.o async.o
+block-obj-y += nbd.o block.o aio.o aes.o qemu-config.o qemu-progress.o qemu-sockets.o
 block-obj-$(CONFIG_POSIX) += posix-aio-compat.o
 block-obj-$(CONFIG_LINUX_AIO) += linux-aio.o
 block-obj-$(CONFIG_POSIX) += compatfd.o
@@ -64,7 +64,7 @@ common-obj-y = $(block-obj-y) blockdev.o
 common-obj-y += $(net-obj-y)
 common-obj-y += $(qobject-obj-y)
 common-obj-$(CONFIG_LINUX) += $(fsdev-obj-$(CONFIG_LINUX))
-common-obj-y += readline.o console.o cursor.o async.o qemu-error.o
+common-obj-y += readline.o console.o cursor.o qemu-error.o
 common-obj-y += $(oslib-obj-y)
 common-obj-$(CONFIG_WIN32) += os-win32.o
 common-obj-$(CONFIG_POSIX) += os-posix.o
@@ -95,11 +95,11 @@ common-obj-$(CONFIG_SSI_SD) += ssi-sd.o
 common-obj-$(CONFIG_SD) += sd.o
 common-obj-y += bt.o bt-host.o bt-vhci.o bt-l2cap.o bt-sdp.o bt-hci.o bt-hid.o usb-bt.o
 common-obj-y += bt-hci-csr.o
-common-obj-y += buffered_file.o migration.o migration-tcp.o qemu-sockets.o
+common-obj-y += buffered_file.o migration.o migration-tcp.o
 common-obj-y += qemu-char.o savevm.o #aio.o
 common-obj-y += msmouse.o ps2.o
 common-obj-y += qdev.o qdev-properties.o
-common-obj-y += block-migration.o
+common-obj-y += block-migration.o iohandler.o
 common-obj-y += pflib.o
 common-obj-y += bitmap.o bitops.o
 
@@ -128,19 +128,20 @@ common-obj-y += $(addprefix audio/, $(audio-obj-y))
 ui-obj-y += keymaps.o
 ui-obj-$(CONFIG_SDL) += sdl.o sdl_zoom.o x_keymap.o
 ui-obj-$(CONFIG_CURSES) += curses.o
-ui-obj-y += vnc.o d3des.o
-ui-obj-y += vnc-enc-zlib.o vnc-enc-hextile.o
-ui-obj-y += vnc-enc-tight.o vnc-palette.o
-ui-obj-y += vnc-enc-zrle.o
-ui-obj-$(CONFIG_VNC_TLS) += vnc-tls.o vnc-auth-vencrypt.o
-ui-obj-$(CONFIG_VNC_SASL) += vnc-auth-sasl.o
-ui-obj-$(CONFIG_COCOA) += cocoa.o
+vnc-obj-y += vnc.o d3des.o
+vnc-obj-y += vnc-enc-zlib.o vnc-enc-hextile.o
+vnc-obj-y += vnc-enc-tight.o vnc-palette.o
+vnc-obj-y += vnc-enc-zrle.o
+vnc-obj-$(CONFIG_VNC_TLS) += vnc-tls.o vnc-auth-vencrypt.o
+vnc-obj-$(CONFIG_VNC_SASL) += vnc-auth-sasl.o
+vnc-obj-$(CONFIG_COCOA) += cocoa.o
 ifdef CONFIG_VNC_THREAD
-ui-obj-y += vnc-jobs-async.o
+vnc-obj-y += vnc-jobs-async.o
 else
-ui-obj-y += vnc-jobs-sync.o
+vnc-obj-y += vnc-jobs-sync.o
 endif
 common-obj-y += $(addprefix ui/, $(ui-obj-y))
+common-obj-$(CONFIG_VNC) += $(addprefix ui/, $(vnc-obj-y))
 
 common-obj-y += iov.o acl.o
 common-obj-$(CONFIG_POSIX) += qemu-thread-posix.o #compatfd.o
@@ -202,6 +203,8 @@ hw-obj-$(CONFIG_APM) += pm_smbus.o apm.o
 hw-obj-$(CONFIG_DMA) += dma.o
 hw-obj-$(CONFIG_HPET) += hpet.o
 hw-obj-$(CONFIG_APPLESMC) += applesmc.o
+hw-obj-$(CONFIG_SMARTCARD) += usb-ccid.o ccid-card-passthru.o
+hw-obj-$(CONFIG_SMARTCARD_NSS) += ccid-card-emulated.o
 
 # PPC devices
 hw-obj-$(CONFIG_OPENPIC) += openpic.o
@@ -312,6 +315,38 @@ libdis-$(CONFIG_SPARC_DIS) += sparc-dis.o
 # trace
 
 ifeq ($(TRACE_BACKEND),dtrace)
+trace.h: trace.h-timestamp trace-dtrace.h
+else
+trace.h: trace.h-timestamp
+endif
+trace.h-timestamp: $(SRC_PATH)/trace-events config-host.mak
+	$(call quiet-command,sh $(SRC_PATH)/scripts/tracetool --$(TRACE_BACKEND) -h < $< > $@,"  GEN   trace.h")
+	@cmp -s $@ trace.h || cp $@ trace.h
+
+trace.c: trace.c-timestamp
+trace.c-timestamp: $(SRC_PATH)/trace-events config-host.mak
+	$(call quiet-command,sh $(SRC_PATH)/scripts/tracetool --$(TRACE_BACKEND) -c < $< > $@,"  GEN   trace.c")
+	@cmp -s $@ trace.c || cp $@ trace.c
+
+trace.o: trace.c $(GENERATED_HEADERS)
+
+trace-dtrace.h: trace-dtrace.dtrace
+	$(call quiet-command,dtrace -o $@ -h -s $<, "  GEN   trace-dtrace.h")
+
+# Normal practice is to name DTrace probe file with a '.d' extension
+# but that gets picked up by QEMU's Makefile as an external dependancy
+# rule file. So we use '.dtrace' instead
+trace-dtrace.dtrace: trace-dtrace.dtrace-timestamp
+trace-dtrace.dtrace-timestamp: $(SRC_PATH)/trace-events config-host.mak
+	$(call quiet-command,sh $(SRC_PATH)/scripts/tracetool --$(TRACE_BACKEND) -d < $< > $@,"  GEN   trace-dtrace.dtrace")
+	@cmp -s $@ trace-dtrace.dtrace || cp $@ trace-dtrace.dtrace
+
+trace-dtrace.o: trace-dtrace.dtrace $(GENERATED_HEADERS)
+	$(call quiet-command,dtrace -o $@ -G -s $<, "  GEN trace-dtrace.o")
+
+simpletrace.o: simpletrace.c $(GENERATED_HEADERS)
+
+ifeq ($(TRACE_BACKEND),dtrace)
 trace-obj-y = trace-dtrace.o
 else
 trace-obj-y = trace.o
@@ -320,6 +355,11 @@ trace-obj-y += simpletrace.o
 user-obj-y += qemu-timer-common.o
 endif
 endif
+
+######################################################################
+# smartcard
+
+libcacard-y = cac.o event.o vcard.o vreader.o vcard_emul_nss.o vcard_emul_type.o card_7816.o
 
 vl.o: QEMU_CFLAGS+=$(GPROF_CFLAGS)
 
