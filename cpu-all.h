@@ -138,11 +138,10 @@ typedef union {
     uint64_t ll;
 } CPU_DoubleU;
 
-#ifdef TARGET_SPARC
+#if defined(CONFIG_SOFTFLOAT)
 typedef union {
     float128 q;
-#if defined(HOST_WORDS_BIGENDIAN) \
-    || (defined(__arm__) && !defined(__VFP_FP__) && !defined(CONFIG_SOFTFLOAT))
+#if defined(HOST_WORDS_BIGENDIAN)
     struct {
         uint32_t upmost;
         uint32_t upper;

@@ -957,6 +957,7 @@ static PCIDeviceInfo virtio_info[] = {
         .qdev.reset = virtio_pci_reset,
     },{
         .qdev.name  = "virtio-net-pci",
+        .qdev.alias = "virtio-net",
         .qdev.size  = sizeof(VirtIOPCIProxy),
         .init       = virtio_net_init_pci,
         .exit       = virtio_net_exit_pci,
@@ -995,6 +996,7 @@ static PCIDeviceInfo virtio_info[] = {
         .qdev.reset = virtio_pci_reset,
     },{
         .qdev.name = "virtio-balloon-pci",
+        .qdev.alias = "virtio-balloon",
         .qdev.size = sizeof(VirtIOPCIProxy),
         .init      = virtio_balloon_init_pci,
         .exit      = virtio_exit_pci,
@@ -1006,6 +1008,7 @@ static PCIDeviceInfo virtio_info[] = {
     },{
 #ifdef CONFIG_VIRTFS
         .qdev.name = "virtio-9p-pci",
+        .qdev.alias = "virtio-9p",
         .qdev.size = sizeof(VirtIOPCIProxy),
         .init      = virtio_9p_init_pci,
         .qdev.props = (Property[]) {

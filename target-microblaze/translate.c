@@ -146,7 +146,7 @@ static void gen_goto_tb(DisasContext *dc, int n, target_ulong dest)
     if ((tb->pc & TARGET_PAGE_MASK) == (dest & TARGET_PAGE_MASK)) {
         tcg_gen_goto_tb(n);
         tcg_gen_movi_tl(cpu_SR[SR_PC], dest);
-        tcg_gen_exit_tb((long)tb + n);
+        tcg_gen_exit_tb((tcg_target_long)tb + n);
     } else {
         tcg_gen_movi_tl(cpu_SR[SR_PC], dest);
         tcg_gen_exit_tb(0);
@@ -923,7 +923,7 @@ static void dec_load(DisasContext *dc)
     /*
      * When doing reverse accesses we need to do two things.
      *
-     * 1. Reverse the address wrt endianess.
+     * 1. Reverse the address wrt endianness.
      * 2. Byteswap the data lanes on the way back into the CPU core.
      */
     if (rev && size != 4) {
