@@ -221,10 +221,9 @@ static int vmstate_acpi_post_load(void *opaque, int version_id)
  {                                                                   \
      .name       = (stringify(_field)),                              \
      .version_id = 0,                                                \
-     .num        = GPE_LEN,                                          \
      .info       = &vmstate_info_uint16,                             \
      .size       = sizeof(uint16_t),                                 \
-     .flags      = VMS_ARRAY | VMS_POINTER,                          \
+     .flags      = VMS_SINGLE | VMS_POINTER,                         \
      .offset     = vmstate_offset_pointer(_state, _field, uint8_t),  \
  }
 
