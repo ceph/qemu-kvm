@@ -183,6 +183,8 @@ int kvm_enable_vapic(CPUState *env, uint64_t vapic)
 
 #endif
 
+extern CPUState *kvm_debug_cpu_requested;
+
 int kvm_arch_run(CPUState *env)
 {
     int r = 0;
@@ -198,8 +200,18 @@ int kvm_arch_run(CPUState *env)
         r = kvm_handle_tpr_access(env);
         break;
 #endif
+#ifdef KVM_CAP_SET_GUEST_DEBUG
+    case KVM_EXIT_DEBUG:
+        DPRINTF("kvm_exit_debug\n");
+        r = kvm_handle_debug(&run->debug.arch);
+        if (r == EXCP_DEBUG) {
+            kvm_debug_cpu_requested = env;
+            env->stopped = 1;
+        }
+        break;
+#endif /* KVM_CAP_SET_GUEST_DEBUG */
     default:
-        r = 1;
+        r = -1;
         break;
     }
 

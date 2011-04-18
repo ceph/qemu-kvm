@@ -1768,7 +1768,7 @@ void kvm_arch_remove_all_hw_breakpoints(void)
 
 static CPUWatchpoint hw_watchpoint;
 
-int kvm_handle_debug(struct kvm_debug_exit_arch *arch_info)
+static int kvm_handle_debug(struct kvm_debug_exit_arch *arch_info)
 {
     int ret = 0;
     int n;

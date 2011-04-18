@@ -74,7 +74,7 @@ static int qemu_system_ready;
 pthread_t io_thread;
 static int io_thread_sigfd = -1;
 
-static CPUState *kvm_debug_cpu_requested;
+CPUState *kvm_debug_cpu_requested;
 
 #ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
 /* The list of ioperm_data */
@@ -85,20 +85,6 @@ static QLIST_HEAD(, ioperm_data) ioperm_head;
 
 int kvm_abi = EXPECTED_KVM_API_VERSION;
 int kvm_page_size;
-
-#ifdef KVM_CAP_SET_GUEST_DEBUG
-static int kvm_debug(CPUState *env,
-                     struct kvm_debug_exit_arch *arch_info)
-{
-    int handle = kvm_handle_debug(arch_info);
-
-    if (handle) {
-        kvm_debug_cpu_requested = env;
-        env->stopped = 1;
-    }
-    return handle;
-}
-#endif
 
 static int handle_unhandled(uint64_t reason)
 {
@@ -453,17 +439,6 @@ int kvm_set_irqchip(kvm_context_t kvm, struct kvm_irqchip *chip)
 
 #endif
 
-static int handle_debug(CPUState *env)
-{
-#ifdef KVM_CAP_SET_GUEST_DEBUG
-    struct kvm_run *run = env->kvm_run;
-
-    return kvm_debug(env, &run->debug.arch);
-#else
-    return 0;
-#endif
-}
-
 int kvm_get_regs(CPUState *env, struct kvm_regs *regs)
 {
     return kvm_vcpu_ioctl(env, KVM_GET_REGS, regs);
@@ -623,9 +598,6 @@ int kvm_run(CPUState *env)
                                 run->io.count);
             r = 0;
             break;
-        case KVM_EXIT_DEBUG:
-            r = handle_debug(env);
-            break;
         case KVM_EXIT_MMIO:
             r = handle_mmio(env);
             break;
@@ -649,10 +621,14 @@ int kvm_run(CPUState *env)
             r = kvm_handle_internal_error(env, run);
 	    break;
         default:
-            if (kvm_arch_run(env)) {
+            r = kvm_arch_run(env);
+            if (r < 0) {
                 fprintf(stderr, "unhandled vm exit: 0x%x\n", run->exit_reason);
                 kvm_show_regs(env);
                 abort();
+            }
+            if (r > 0) {
+                return r;
             }
             break;
         }

@@ -147,8 +147,6 @@ QTAILQ_HEAD(kvm_sw_breakpoint_head, kvm_sw_breakpoint);
 struct kvm_sw_breakpoint *kvm_find_sw_breakpoint(CPUState *env,
                                                  target_ulong pc);
 
-int kvm_handle_debug(struct kvm_debug_exit_arch *arch_info);
-
 int kvm_sw_breakpoints_active(CPUState *env);
 
 int kvm_arch_insert_sw_breakpoint(CPUState *current_env,
