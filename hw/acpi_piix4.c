@@ -235,7 +235,6 @@ static const VMStateDescription vmstate_gpe = {
     .fields      = (VMStateField []) {
         VMSTATE_GPE_ARRAY(sts, ACPIGPE),
         VMSTATE_GPE_ARRAY(en, ACPIGPE),
-        VMSTATE_UINT8_ARRAY(cpus_sts, struct gpe_regs, 32),
         VMSTATE_END_OF_LIST()
     }
 };

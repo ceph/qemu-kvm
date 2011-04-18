@@ -133,7 +133,6 @@ struct ACPIGPE {
 
     uint8_t *sts;
     uint8_t *en;
-    uint8_t *cpu_sts;
 };
 typedef struct ACPIGPE ACPIGPE;
 
