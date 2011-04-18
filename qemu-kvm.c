@@ -18,6 +18,7 @@
 #include "compatfd.h"
 #include "gdbstub.h"
 #include "monitor.h"
+#include "cpus.h"
 
 #include "qemu-kvm.h"
 #include "libkvm.h"
@@ -1396,6 +1397,7 @@ static void qemu_kvm_system_reset(void)
 {
     pause_all_threads();
 
+    cpu_synchronize_all_states();
     qemu_system_reset();
 
     resume_all_threads();
