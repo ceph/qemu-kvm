@@ -811,3 +811,30 @@ void kvm_arch_process_irqchip_events(CPUState *env)
         do_cpu_sipi(env);
     }
 }
+
+int kvm_arch_process_async_events(CPUState *env)
+{
+    if (env->interrupt_request & CPU_INTERRUPT_MCE) {
+        /* We must not raise CPU_INTERRUPT_MCE if it's not supported. */
+        assert(env->mcg_cap);
+
+        env->interrupt_request &= ~CPU_INTERRUPT_MCE;
+
+        kvm_cpu_synchronize_state(env);
+
+        if (env->exception_injected == EXCP08_DBLE) {
+            /* this means triple fault */
+            qemu_system_reset_request();
+            env->exit_request = 1;
+            return 0;
+        }
+        env->exception_injected = EXCP12_MCHK;
+        env->has_error_code = 0;
+
+        env->halted = 0;
+        if (kvm_irqchip_in_kernel() && env->mp_state == KVM_MP_STATE_HALTED) {
+            env->mp_state = KVM_MP_STATE_RUNNABLE;
+        }
+    }
+    return 0;
+}

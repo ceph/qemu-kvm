@@ -110,9 +110,7 @@ void kvm_arch_post_run(CPUState *env, struct kvm_run *run);
 
 int kvm_arch_handle_exit(CPUState *env, struct kvm_run *run);
 
-#ifdef OBSOLETE_KVM_IMPL
 int kvm_arch_process_async_events(CPUState *env);
-#endif
 
 int kvm_arch_get_registers(CPUState *env);
 
