@@ -242,31 +242,6 @@ static CPUReadMemoryFunc * const slow_bar_read[] = {
     &slow_bar_readl
 };
 
-static void assigned_dev_iomem_map_slow(PCIDevice *pci_dev, int region_num,
-                                        pcibus_t e_phys, pcibus_t e_size,
-                                        int type)
-{
-    AssignedDevice *r_dev = DO_UPCAST(AssignedDevice, dev, pci_dev);
-    AssignedDevRegion *region = &r_dev->v_addrs[region_num];
-    PCIRegion *real_region = &r_dev->real_device.regions[region_num];
-    int m;
-
-    DEBUG("%s", "slow map\n");
-    m = cpu_register_io_memory(slow_bar_read, slow_bar_write, region,
-                               DEVICE_NATIVE_ENDIAN);
-    cpu_register_physical_memory(e_phys, e_size, m);
-
-    /* MSI-X MMIO page */
-    if ((e_size > 0) &&
-        real_region->base_addr <= r_dev->msix_table_addr &&
-        real_region->base_addr + real_region->size >= r_dev->msix_table_addr) {
-        int offset = r_dev->msix_table_addr - real_region->base_addr;
-
-        cpu_register_physical_memory(e_phys + offset,
-                TARGET_PAGE_SIZE, r_dev->mmio_index);
-    }
-}
-
 static void assigned_dev_iomem_map(PCIDevice *pci_dev, int region_num,
                                    pcibus_t e_phys, pcibus_t e_size, int type)
 {
@@ -531,20 +506,9 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
 
         /* handle memory io regions */
         if (cur_region->type & IORESOURCE_MEM) {
-            int slow_map = 0;
             int t = cur_region->type & IORESOURCE_PREFETCH
                 ? PCI_BASE_ADDRESS_MEM_PREFETCH
                 : PCI_BASE_ADDRESS_SPACE_MEMORY;
-
-            if (cur_region->size & 0xFFF) {
-                fprintf(stderr, "PCI region %d at address 0x%llx "
-                        "has size 0x%x, which is not a multiple of 4K. "
-                        "You might experience some performance hit "
-                        "due to that.\n",
-                        i, (unsigned long long)cur_region->base_addr,
-                        cur_region->size);
-                slow_map = 1;
-            }
 
             /* map physical memory */
             pci_dev->v_addrs[i].e_physbase = cur_region->base_addr;
@@ -569,8 +533,18 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
             pci_dev->v_addrs[i].u.r_virtbase +=
                 (cur_region->base_addr & 0xFFF);
 
-
-            if (!slow_map) {
+            if (cur_region->size & 0xFFF) {
+                fprintf(stderr, "PCI region %d at address 0x%llx "
+                        "has size 0x%x, which is not a multiple of 4K. "
+                        "You might experience some performance hit "
+                        "due to that.\n",
+                        i, (unsigned long long)cur_region->base_addr,
+                        cur_region->size);
+                pci_dev->v_addrs[i].memory_index =
+                    cpu_register_io_memory(slow_bar_read, slow_bar_write,
+                                           &pci_dev->v_addrs[i],
+                                           DEVICE_NATIVE_ENDIAN);
+            } else {
                 void *virtbase = pci_dev->v_addrs[i].u.r_virtbase;
                 char name[32];
                 snprintf(name, sizeof(name), "%s.bar%d",
@@ -580,13 +554,10 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
                                                          &pci_dev->dev.qdev,
                                                          name, cur_region->size,
                                                          virtbase);
-            } else
-                pci_dev->v_addrs[i].memory_index = 0;
+            }
 
-            pci_register_bar((PCIDevice *) pci_dev, i,
-                             cur_region->size, t,
-                             slow_map ? assigned_dev_iomem_map_slow
-                                      : assigned_dev_iomem_map);
+            pci_register_bar((PCIDevice *) pci_dev, i, cur_region->size, t,
+                             assigned_dev_iomem_map);
             continue;
         } else {
             /* handle port io regions */
@@ -810,10 +781,14 @@ static void free_assigned_device(AssignedDevice *dev)
             }
         } else if (pci_region->type & IORESOURCE_MEM) {
             if (region->u.r_virtbase) {
-                if (region->memory_index) {
+                if (region->e_size > 0) {
                     cpu_register_physical_memory(region->e_physbase,
                                                  region->e_size,
                                                  IO_MEM_UNASSIGNED);
+                }
+                if (region->r_size & 0xFFF) {
+                    cpu_unregister_io_memory(region->memory_index);
+                } else {
                     qemu_ram_unmap(region->memory_index);
                 }
                 if (munmap(region->u.r_virtbase,
