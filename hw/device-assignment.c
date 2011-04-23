@@ -273,7 +273,6 @@ static void assigned_dev_iomem_map(PCIDevice *pci_dev, int region_num,
     AssignedDevice *r_dev = DO_UPCAST(AssignedDevice, dev, pci_dev);
     AssignedDevRegion *region = &r_dev->v_addrs[region_num];
     PCIRegion *real_region = &r_dev->real_device.regions[region_num];
-    int ret = 0;
 
     DEBUG("e_phys=%08" FMT_PCIBUS " r_virt=%p type=%d len=%08" FMT_PCIBUS " region_num=%d \n",
           e_phys, region->u.r_virtbase, type, e_size, region_num);
@@ -293,11 +292,6 @@ static void assigned_dev_iomem_map(PCIDevice *pci_dev, int region_num,
             cpu_register_physical_memory(e_phys + offset,
                     TARGET_PAGE_SIZE, r_dev->mmio_index);
         }
-    }
-
-    if (ret != 0) {
-	fprintf(stderr, "%s: Error: create new mapping failed\n", __func__);
-	exit(1);
     }
 }
 
