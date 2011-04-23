@@ -801,52 +801,50 @@ static void free_dev_irq_entries(AssignedDevice *dev)
 
 static void free_assigned_device(AssignedDevice *dev)
 {
-    if (dev) {
-        int i;
+    int i;
 
-        for (i = 0; i < dev->real_device.region_number; i++) {
-            PCIRegion *pci_region = &dev->real_device.regions[i];
-            AssignedDevRegion *region = &dev->v_addrs[i];
+    for (i = 0; i < dev->real_device.region_number; i++) {
+        PCIRegion *pci_region = &dev->real_device.regions[i];
+        AssignedDevRegion *region = &dev->v_addrs[i];
 
-            if (!pci_region->valid)
-                continue;
-
-            if (pci_region->type & IORESOURCE_IO) {
-                if (pci_region->resource_fd < 0) {
-                    kvm_remove_ioperm_data(region->u.r_baseport,
-                                           region->r_size);
+        if (!pci_region->valid) {
+            continue;
+        }
+        if (pci_region->type & IORESOURCE_IO) {
+            if (pci_region->resource_fd < 0) {
+                kvm_remove_ioperm_data(region->u.r_baseport, region->r_size);
+            }
+        } else if (pci_region->type & IORESOURCE_MEM) {
+            if (region->u.r_virtbase) {
+                if (region->memory_index) {
+                    cpu_register_physical_memory(region->e_physbase,
+                                                 region->e_size,
+                                                 IO_MEM_UNASSIGNED);
+                    qemu_ram_unmap(region->memory_index);
                 }
-            } else if (pci_region->type & IORESOURCE_MEM) {
-                if (region->u.r_virtbase) {
-                    if (region->memory_index) {
-                        cpu_register_physical_memory(region->e_physbase,
-                                                     region->e_size,
-                                                     IO_MEM_UNASSIGNED);
-                        qemu_ram_unmap(region->memory_index);
-                    }
-                    if (munmap(region->u.r_virtbase,
-                               (pci_region->size + 0xFFF) & 0xFFFFF000))
-                        fprintf(stderr,
-				"Failed to unmap assigned device region: %s\n",
-				strerror(errno));
+                if (munmap(region->u.r_virtbase,
+                           (pci_region->size + 0xFFF) & 0xFFFFF000)) {
+                    fprintf(stderr,
+                            "Failed to unmap assigned device region: %s\n",
+                            strerror(errno));
                 }
             }
-            if (pci_region->resource_fd >= 0) {
-                close(pci_region->resource_fd);
-            }
         }
-
-        if (dev->cap.available & ASSIGNED_DEVICE_CAP_MSIX)
-            assigned_dev_unregister_msix_mmio(dev);
-
-        if (dev->real_device.config_fd >= 0) {
-            close(dev->real_device.config_fd);
+        if (pci_region->resource_fd >= 0) {
+            close(pci_region->resource_fd);
         }
+    }
+
+    if (dev->cap.available & ASSIGNED_DEVICE_CAP_MSIX) {
+        assigned_dev_unregister_msix_mmio(dev);
+    }
+    if (dev->real_device.config_fd >= 0) {
+        close(dev->real_device.config_fd);
+    }
 
 #ifdef KVM_CAP_IRQ_ROUTING
-        free_dev_irq_entries(dev);
+    free_dev_irq_entries(dev);
 #endif
-    }
 }
 
 static uint32_t calc_assigned_dev_id(uint16_t seg, uint8_t bus, uint8_t devfn)
