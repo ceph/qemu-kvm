@@ -108,7 +108,7 @@ static void kvm_msix_update(PCIDevice *dev, int vector,
     }
 }
 
-static int kvm_msix_add(PCIDevice *dev, unsigned vector)
+static int kvm_msix_vector_add(PCIDevice *dev, unsigned vector)
 {
     KVMMsiMessage *kmm = dev->msix_irq_entries + vector;
     int r;
@@ -141,11 +141,8 @@ static int kvm_msix_add(PCIDevice *dev, unsigned vector)
     return 0;
 }
 
-static void kvm_msix_del(PCIDevice *dev, unsigned vector)
+static void kvm_msix_vector_del(PCIDevice *dev, unsigned vector)
 {
-    if (dev->msix_entry_used[vector]) {
-        return;
-    }
     kvm_msi_message_del(&dev->msix_irq_entries[vector]);
     kvm_commit_irq_routes();
 }
@@ -548,11 +545,9 @@ int msix_vector_use(PCIDevice *dev, unsigned vector)
     int ret;
     if (vector >= dev->msix_entries_nr)
         return -EINVAL;
-    if (dev->msix_entry_used[vector]) {
-        return 0;
-    }
-    if (kvm_enabled() && kvm_irqchip_in_kernel()) {
-        ret = kvm_msix_add(dev, vector);
+    if (kvm_enabled() && kvm_irqchip_in_kernel() &&
+        !dev->msix_entry_used[vector]) {
+        ret = kvm_msix_vector_add(dev, vector);
         if (ret) {
             return ret;
         }
@@ -571,7 +566,7 @@ void msix_vector_unuse(PCIDevice *dev, unsigned vector)
         return;
     }
     if (kvm_enabled() && kvm_irqchip_in_kernel()) {
-        kvm_msix_del(dev, vector);
+        kvm_msix_vector_del(dev, vector);
     }
     msix_clr_pending(dev, vector);
 }
