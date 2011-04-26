@@ -453,3 +453,16 @@ unsigned int msi_nr_vectors_allocated(const PCIDevice *dev)
     uint16_t flags = pci_get_word(dev->config + msi_flags_off(dev));
     return msi_nr_vectors(flags);
 }
+
+void msi_post_load(PCIDevice *dev)
+{
+    uint16_t flags = pci_get_word(dev->config + msi_flags_off(dev));
+
+    if (kvm_enabled() && dev->msi_irq_entries) {
+        kvm_msi_free(dev);
+
+        if (flags & PCI_MSI_FLAGS_ENABLE) {
+            kvm_msi_update(dev);
+        }
+    }
+}

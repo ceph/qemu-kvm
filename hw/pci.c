@@ -34,6 +34,7 @@
 #include "device-assignment.h"
 #include "qemu-objects.h"
 #include "range.h"
+#include "msi.h"
 
 //#define DEBUG_PCI
 #ifdef DEBUG_PCI
@@ -342,6 +343,7 @@ static int get_pci_config_device(QEMUFile *f, void *pv, size_t size)
     memcpy(s->config, config, size);
 
     pci_update_mappings(s);
+    msi_post_load(s);
 
     qemu_free(config);
     return 0;
