@@ -214,6 +214,13 @@ int kvm_set_irqfd(int gsi, int fd, bool assigned)
 
 int kvm_set_ioeventfd_pio_word(int fd, uint16_t adr, uint16_t val, bool assign);
 
+typedef struct KVMMsiMessage {
+    uint32_t gsi;
+    uint32_t addr_lo;
+    uint32_t addr_hi;
+    uint32_t data;
+} KVMMsiMessage;
+
 int kvm_has_gsi_routing(void);
 int kvm_get_irq_route_gsi(void);
 int kvm_add_msix(uint32_t gsi, uint32_t addr_lo,

@@ -51,7 +51,7 @@ int msix_supported;
 static void kvm_msix_free(PCIDevice *dev)
 {
     int vector, changed = 0;
-    struct kvm_msix_message *kmm;
+    KVMMsiMessage *kmm;
 
     for (vector = 0; vector < dev->msix_entries_nr; ++vector) {
         if (dev->msix_entry_used[vector]) {
@@ -66,7 +66,7 @@ static void kvm_msix_free(PCIDevice *dev)
 }
 
 static void kvm_msix_message_from_vector(PCIDevice *dev, unsigned vector,
-                                         struct kvm_msix_message *kmm)
+                                         KVMMsiMessage *kmm)
 {
     uint8_t *table_entry = dev->msix_table_page + vector * MSIX_ENTRY_SIZE;
 
@@ -78,7 +78,7 @@ static void kvm_msix_message_from_vector(PCIDevice *dev, unsigned vector,
 static void kvm_msix_update(PCIDevice *dev, int vector,
                             int was_masked, int is_masked)
 {
-    struct kvm_msix_message e = {}, *entry;
+    KVMMsiMessage e = {}, *entry;
     int mask_cleared = was_masked && !is_masked;
     /* It is only legal to change an entry when it is masked. Therefore, it is
      * enough to update the routing in kernel when mask is being cleared. */
@@ -114,7 +114,7 @@ static void kvm_msix_update(PCIDevice *dev, int vector,
 
 static int kvm_msix_add(PCIDevice *dev, unsigned vector)
 {
-    struct kvm_msix_message *kmm = dev->msix_irq_entries + vector;
+    KVMMsiMessage *kmm = dev->msix_irq_entries + vector;
     int r;
 
     if (!kvm_has_gsi_routing()) {
@@ -147,7 +147,7 @@ static int kvm_msix_add(PCIDevice *dev, unsigned vector)
 
 static void kvm_msix_del(PCIDevice *dev, unsigned vector)
 {
-    struct kvm_msix_message *kmm;
+    KVMMsiMessage *kmm;
 
     if (dev->msix_entry_used[vector]) {
         return;

@@ -5,6 +5,7 @@
 #include "qobject.h"
 
 #include "qdev.h"
+#include "kvm.h"
 
 /* PCI includes legacy ISA access.  */
 #include "isa.h"
@@ -129,13 +130,6 @@ enum {
 typedef int (*msix_mask_notifier_func)(PCIDevice *, unsigned vector,
 				       int masked);
 
-struct kvm_msix_message {
-    uint32_t gsi;
-    uint32_t addr_lo;
-    uint32_t addr_hi;
-    uint32_t data;
-};
-
 struct PCIDevice {
     DeviceState qdev;
     /* PCI config space */
@@ -208,7 +202,7 @@ struct PCIDevice {
      * on the rest of the region. */
     target_phys_addr_t msix_page_size;
 
-    struct kvm_msix_message *msix_irq_entries;
+    KVMMsiMessage *msix_irq_entries;
 
     msix_mask_notifier_func msix_mask_notifier;
 };
