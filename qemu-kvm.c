@@ -1011,10 +1011,22 @@ int kvm_msi_message_del(KVMMsiMessage *msg)
 int kvm_msi_message_update(KVMMsiMessage *old, KVMMsiMessage *new)
 {
     struct kvm_irq_routing_entry e1, e2;
+    int ret;
+
+    new->gsi = old->gsi;
+    if (memcmp(old, new, sizeof(KVMMsiMessage)) == 0) {
+        return 0;
+    }
 
     kvm_msi_routing_entry(&e1, old);
     kvm_msi_routing_entry(&e2, new);
-    return kvm_update_routing_entry(&e1, &e2);
+
+    ret = kvm_update_routing_entry(&e1, &e2);
+    if (ret < 0) {
+        return ret;
+    }
+
+    return 1;
 }
 
 

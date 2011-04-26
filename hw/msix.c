@@ -76,8 +76,10 @@ static void kvm_msix_message_from_vector(PCIDevice *dev, unsigned vector,
 static void kvm_msix_update(PCIDevice *dev, int vector,
                             int was_masked, int is_masked)
 {
-    KVMMsiMessage e = {}, *entry;
+    KVMMsiMessage new_entry, *entry;
     int mask_cleared = was_masked && !is_masked;
+    int r;
+
     /* It is only legal to change an entry when it is masked. Therefore, it is
      * enough to update the routing in kernel when mask is being cleared. */
     if (!mask_cleared) {
@@ -86,19 +88,17 @@ static void kvm_msix_update(PCIDevice *dev, int vector,
     if (!dev->msix_entry_used[vector]) {
         return;
     }
-    entry = dev->msix_irq_entries + vector;
-    e.gsi = entry->gsi;
-    kvm_msix_message_from_vector(dev, vector, &e);
-    if (memcmp(entry, &e, sizeof e) != 0) {
-        int r;
 
-        r = kvm_msi_message_update(entry, &e);
-        if (r) {
-            fprintf(stderr, "%s: kvm_update_msix failed: %s\n", __func__,
-		    strerror(-r));
-            exit(1);
-        }
-        *entry = e;
+    entry = dev->msix_irq_entries + vector;
+    kvm_msix_message_from_vector(dev, vector, &new_entry);
+    r = kvm_msi_message_update(entry, &new_entry);
+    if (r < 0) {
+        fprintf(stderr, "%s: kvm_update_msix failed: %s\n", __func__,
+                strerror(-r));
+        exit(1);
+    }
+    if (r > 0) {
+        *entry = new_entry;
         r = kvm_commit_irq_routes();
         if (r) {
             fprintf(stderr, "%s: kvm_commit_irq_routes failed: %s\n", __func__,
