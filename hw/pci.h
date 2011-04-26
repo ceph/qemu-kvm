@@ -195,6 +195,10 @@ struct PCIDevice {
     ram_addr_t rom_offset;
     uint32_t rom_bar;
 
+    /* MSI entries */
+    int msi_entries_nr;
+    struct KVMMsiMessage *msi_irq_entries;
+
     /* How much space does an MSIX table need. */
     /* The spec requires giving the table structure
      * a 4K aligned region all by itself. Align it to

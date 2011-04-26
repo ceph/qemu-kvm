@@ -20,6 +20,7 @@
 
 #include "msi.h"
 #include "range.h"
+#include "kvm.h"
 
 /* Eventually those constants should go to Linux pci_regs.h */
 #define PCI_MSI_PENDING_32      0x10
@@ -109,6 +110,92 @@ bool msi_enabled(const PCIDevice *dev)
          PCI_MSI_FLAGS_ENABLE);
 }
 
+static void kvm_msi_message_from_vector(PCIDevice *dev, unsigned vector,
+                                        KVMMsiMessage *kmm)
+{
+    uint16_t flags = pci_get_word(dev->config + msi_flags_off(dev));
+    bool msi64bit = flags & PCI_MSI_FLAGS_64BIT;
+    unsigned int nr_vectors = msi_nr_vectors(flags);
+
+    kmm->addr_lo = pci_get_long(dev->config + msi_address_lo_off(dev));
+    if (msi64bit) {
+        kmm->addr_hi = pci_get_long(dev->config + msi_address_hi_off(dev));
+    } else {
+        kmm->addr_hi = 0;
+    }
+
+    kmm->data = pci_get_word(dev->config + msi_data_off(dev, msi64bit));
+    if (nr_vectors > 1) {
+        kmm->data &= ~(nr_vectors - 1);
+        kmm->data |= vector;
+    }
+}
+
+static void kvm_msi_update(PCIDevice *dev)
+{
+    uint16_t flags = pci_get_word(dev->config + msi_flags_off(dev));
+    unsigned int nr_vectors = msi_nr_vectors(flags);
+    KVMMsiMessage new_entry, *entry;
+    bool changed = false;
+    unsigned int vector;
+    int r;
+
+    for (vector = 0; vector < 32; vector++) {
+        entry = dev->msi_irq_entries + vector;
+
+        if (vector >= nr_vectors) {
+            if (vector < dev->msi_entries_nr) {
+                kvm_msi_message_del(entry);
+                changed = true;
+            }
+        } else if (vector >= dev->msi_entries_nr) {
+            kvm_msi_message_from_vector(dev, vector, entry);
+            r = kvm_msi_message_add(entry);
+            if (r) {
+                fprintf(stderr, "%s: kvm_msi_add failed: %s\n", __func__,
+                        strerror(-r));
+                exit(1);
+            }
+            changed = true;
+        } else {
+            kvm_msi_message_from_vector(dev, vector, &new_entry);
+            r = kvm_msi_message_update(entry, &new_entry);
+            if (r < 0) {
+                fprintf(stderr, "%s: kvm_update_msi failed: %s\n",
+                        __func__, strerror(-r));
+                exit(1);
+            }
+            if (r > 0) {
+                *entry = new_entry;
+                changed = true;
+            }
+        }
+    }
+    dev->msi_entries_nr = nr_vectors;
+    if (changed) {
+        r = kvm_commit_irq_routes();
+        if (r) {
+            fprintf(stderr, "%s: kvm_commit_irq_routes failed: %s\n", __func__,
+                    strerror(-r));
+            exit(1);
+        }
+    }
+}
+
+/* KVM specific MSI helpers */
+static void kvm_msi_free(PCIDevice *dev)
+{
+    unsigned int vector;
+
+    for (vector = 0; vector < dev->msi_entries_nr; ++vector) {
+        kvm_msi_message_del(&dev->msi_irq_entries[vector]);
+    }
+    if (dev->msi_entries_nr > 0) {
+        kvm_commit_irq_routes();
+    }
+    dev->msi_entries_nr = 0;
+}
+
 int msi_init(struct PCIDevice *dev, uint8_t offset,
              unsigned int nr_vectors, bool msi64bit, bool msi_per_vector_mask)
 {
@@ -159,6 +246,12 @@ int msi_init(struct PCIDevice *dev, uint8_t offset,
         pci_set_long(dev->wmask + msi_mask_off(dev, msi64bit),
                      0xffffffff >> (PCI_MSI_VECTORS_MAX - nr_vectors));
     }
+
+    if (kvm_enabled() && kvm_irqchip_in_kernel()) {
+        dev->msi_irq_entries = qemu_malloc(nr_vectors *
+                                           sizeof(*dev->msix_irq_entries));
+    }
+
     return config_offset;
 }
 
@@ -166,6 +259,11 @@ void msi_uninit(struct PCIDevice *dev)
 {
     uint16_t flags = pci_get_word(dev->config + msi_flags_off(dev));
     uint8_t cap_size = msi_cap_sizeof(flags);
+
+    if (kvm_enabled() && kvm_irqchip_in_kernel()) {
+        kvm_msi_free(dev);
+        qemu_free(dev->msi_irq_entries);
+    }
     pci_del_capability(dev, PCI_CAP_ID_MSIX, cap_size);
     MSI_DEV_PRINTF(dev, "uninit\n");
 }
@@ -174,6 +272,10 @@ void msi_reset(PCIDevice *dev)
 {
     uint16_t flags;
     bool msi64bit;
+
+    if (kvm_enabled() && kvm_irqchip_in_kernel()) {
+        kvm_msi_free(dev);
+    }
 
     flags = pci_get_word(dev->config + msi_flags_off(dev));
     flags &= ~(PCI_MSI_FLAGS_QSIZE | PCI_MSI_FLAGS_ENABLE);
@@ -221,6 +323,11 @@ void msi_notify(PCIDevice *dev, unsigned int vector)
         pci_long_test_and_set_mask(
             dev->config + msi_pending_off(dev, msi64bit), 1U << vector);
         MSI_DEV_PRINTF(dev, "pending vector 0x%x\n", vector);
+        return;
+    }
+
+    if (kvm_enabled() && kvm_irqchip_in_kernel()) {
+        kvm_set_irq(dev->msi_irq_entries[vector].gsi, 1, NULL);
         return;
     }
 
@@ -310,6 +417,10 @@ void msi_write_config(PCIDevice *dev, uint32_t addr, uint32_t val, int len)
         flags &= ~PCI_MSI_FLAGS_QSIZE;
         flags |= log_max_vecs << (ffs(PCI_MSI_FLAGS_QSIZE) - 1);
         pci_set_word(dev->config + msi_flags_off(dev), flags);
+    }
+
+    if (kvm_enabled() && kvm_irqchip_in_kernel()) {
+        kvm_msi_update(dev);
     }
 
     if (!msi_per_vector_mask) {
