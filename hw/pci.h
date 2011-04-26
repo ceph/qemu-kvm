@@ -6,8 +6,6 @@
 
 #include "qdev.h"
 
-struct kvm_irq_routing_entry;
-
 /* PCI includes legacy ISA access.  */
 #include "isa.h"
 
