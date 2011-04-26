@@ -969,46 +969,40 @@ int kvm_get_irq_route_gsi(void)
     return -ENOSPC;
 }
 
-static void kvm_msix_routing_entry(struct kvm_irq_routing_entry *e,
-                                   uint32_t gsi, uint32_t addr_lo,
-                                   uint32_t addr_hi, uint32_t data)
+static void kvm_msi_routing_entry(struct kvm_irq_routing_entry *e,
+                                  KVMMsiMessage *msg)
 
 {
-    e->gsi = gsi;
+    e->gsi = msg->gsi;
     e->type = KVM_IRQ_ROUTING_MSI;
     e->flags = 0;
-    e->u.msi.address_lo = addr_lo;
-    e->u.msi.address_hi = addr_hi;
-    e->u.msi.data = data;
+    e->u.msi.address_lo = msg->addr_lo;
+    e->u.msi.address_hi = msg->addr_hi;
+    e->u.msi.data = msg->data;
 }
 
-int kvm_add_msix(uint32_t gsi, uint32_t addr_lo,
-                        uint32_t addr_hi, uint32_t data)
+int kvm_msi_message_add(KVMMsiMessage *msg)
 {
     struct kvm_irq_routing_entry e;
 
-    kvm_msix_routing_entry(&e, gsi, addr_lo, addr_hi, data);
+    kvm_msi_routing_entry(&e, msg);
     return kvm_add_routing_entry(&e);
 }
 
-int kvm_del_msix(uint32_t gsi, uint32_t addr_lo,
-                        uint32_t addr_hi, uint32_t data)
+int kvm_msi_message_del(KVMMsiMessage *msg)
 {
     struct kvm_irq_routing_entry e;
 
-    kvm_msix_routing_entry(&e, gsi, addr_lo, addr_hi, data);
+    kvm_msi_routing_entry(&e, msg);
     return kvm_del_routing_entry(&e);
 }
 
-int kvm_update_msix(uint32_t old_gsi, uint32_t old_addr_lo,
-                    uint32_t old_addr_hi, uint32_t old_data,
-                    uint32_t new_gsi, uint32_t new_addr_lo,
-                    uint32_t new_addr_hi, uint32_t new_data)
+int kvm_msi_message_update(KVMMsiMessage *old, KVMMsiMessage *new)
 {
     struct kvm_irq_routing_entry e1, e2;
 
-    kvm_msix_routing_entry(&e1, old_gsi, old_addr_lo, old_addr_hi, old_data);
-    kvm_msix_routing_entry(&e2, new_gsi, new_addr_lo, new_addr_hi, new_data);
+    kvm_msi_routing_entry(&e1, old);
+    kvm_msi_routing_entry(&e2, new);
     return kvm_update_routing_entry(&e1, &e2);
 }
 

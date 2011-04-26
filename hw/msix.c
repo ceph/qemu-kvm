@@ -51,12 +51,10 @@ int msix_supported;
 static void kvm_msix_free(PCIDevice *dev)
 {
     int vector, changed = 0;
-    KVMMsiMessage *kmm;
 
     for (vector = 0; vector < dev->msix_entries_nr; ++vector) {
         if (dev->msix_entry_used[vector]) {
-            kmm = &dev->msix_irq_entries[vector];
-            kvm_del_msix(kmm->gsi, kmm->addr_lo, kmm->addr_hi, kmm->data);
+            kvm_msi_message_del(&dev->msix_irq_entries[vector]);
             changed = 1;
         }
     }
@@ -94,9 +92,7 @@ static void kvm_msix_update(PCIDevice *dev, int vector,
     if (memcmp(entry, &e, sizeof e) != 0) {
         int r;
 
-        r = kvm_update_msix(entry->gsi, entry->addr_lo,
-                            entry->addr_hi, entry->data,
-                            e.gsi, e.addr_lo, e.addr_hi, e.data);
+        r = kvm_msi_message_update(entry, &e);
         if (r) {
             fprintf(stderr, "%s: kvm_update_msix failed: %s\n", __func__,
 		    strerror(-r));
@@ -131,7 +127,7 @@ static int kvm_msix_add(PCIDevice *dev, unsigned vector)
     }
     kmm->gsi = r;
     kvm_msix_message_from_vector(dev, vector, kmm);
-    r = kvm_add_msix(kmm->gsi, kmm->addr_lo, kmm->addr_hi, kmm->data);
+    r = kvm_msi_message_add(kmm);
     if (r < 0) {
         fprintf(stderr, "%s: kvm_add_msix failed: %s\n", __func__, strerror(-r));
         return r;
@@ -147,13 +143,10 @@ static int kvm_msix_add(PCIDevice *dev, unsigned vector)
 
 static void kvm_msix_del(PCIDevice *dev, unsigned vector)
 {
-    KVMMsiMessage *kmm;
-
     if (dev->msix_entry_used[vector]) {
         return;
     }
-    kmm = &dev->msix_irq_entries[vector];
-    kvm_del_msix(kmm->gsi, kmm->addr_lo, kmm->addr_hi, kmm->data);
+    kvm_msi_message_del(&dev->msix_irq_entries[vector]);
     kvm_commit_irq_routes();
 }
 

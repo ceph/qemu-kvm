@@ -223,14 +223,11 @@ typedef struct KVMMsiMessage {
 
 int kvm_has_gsi_routing(void);
 int kvm_get_irq_route_gsi(void);
-int kvm_add_msix(uint32_t gsi, uint32_t addr_lo,
-                 uint32_t addr_hi, uint32_t data);
-int kvm_del_msix(uint32_t gsi, uint32_t addr_lo,
-                 uint32_t addr_hi, uint32_t data);
-int kvm_update_msix(uint32_t old_gsi, uint32_t old_addr_lo,
-                    uint32_t old_addr_hi, uint32_t old_data,
-                    uint32_t new_gsi, uint32_t new_addr_lo,
-                    uint32_t new_addr_hi, uint32_t new_data);
+
+int kvm_msi_message_add(KVMMsiMessage *msg);
+int kvm_msi_message_del(KVMMsiMessage *msg);
+int kvm_msi_message_update(KVMMsiMessage *old, KVMMsiMessage *new);
+
 int kvm_commit_irq_routes(void);
 
 int kvm_irqchip_in_kernel(void);
