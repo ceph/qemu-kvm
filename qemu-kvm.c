@@ -984,6 +984,17 @@ static void kvm_msi_routing_entry(struct kvm_irq_routing_entry *e,
 int kvm_msi_message_add(KVMMsiMessage *msg)
 {
     struct kvm_irq_routing_entry e;
+    int ret;
+
+    if (!kvm_has_gsi_routing()) {
+        return -EOPNOTSUPP;
+    }
+
+    ret = kvm_get_irq_route_gsi();
+    if (ret < 0) {
+        return ret;
+    }
+    msg->gsi = ret;
 
     kvm_msi_routing_entry(&e, msg);
     return kvm_add_routing_entry(&e);
