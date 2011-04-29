@@ -71,6 +71,28 @@ static void assigned_device_pci_cap_write_config(PCIDevice *pci_dev,
 static uint32_t assigned_device_pci_cap_read_config(PCIDevice *pci_dev,
                                                     uint32_t address, int len);
 
+/* Merge the bits set in mask from mval into val.  Both val and mval are
+ * at the same addr offset, pos is the starting offset of the mask. */
+static uint32_t merge_bits(uint32_t val, uint32_t mval, uint8_t addr,
+                           int len, uint8_t pos, uint32_t mask)
+{
+    if (!ranges_overlap(addr, len, pos, 4)) {
+        return val;
+    }
+
+    if (addr >= pos) {
+        mask >>= (addr - pos) * 8;
+    } else {
+        mask <<= (pos - addr) * 8;
+    }
+    mask &= 0xffffffffU >> (4 - len) * 8;
+
+    val &= ~mask;
+    val |= (mval & mask);
+
+    return val;
+}
+
 static uint32_t assigned_dev_ioport_rw(AssignedDevRegion *dev_region,
                                        uint32_t addr, int len, uint32_t *val)
 {
@@ -1276,28 +1298,6 @@ static uint8_t find_vndr_start(PCIDevice *pci_dev, uint32_t address)
         }
     }
     return cap;
-}
-
-/* Merge the bits set in mask from mval into val.  Both val and mval are
- * at the same addr offset, pos is the starting offset of the mask. */
-static uint32_t merge_bits(uint32_t val, uint32_t mval, uint8_t addr,
-                           int len, uint8_t pos, uint32_t mask)
-{
-    if (!ranges_overlap(addr, len, pos, 4)) {
-        return val;
-    }
-
-    if (addr >= pos) {
-        mask >>= (addr - pos) * 8;
-    } else {
-        mask <<= (pos - addr) * 8;
-    }
-    mask &= 0xffffffffU >> (4 - len) * 8;
-
-    val &= ~mask;
-    val |= (mval & mask);
-
-    return val;
 }
 
 static uint32_t assigned_device_pci_cap_read_config(PCIDevice *pci_dev,
