@@ -622,6 +622,17 @@ static int compare_sectors(const uint8_t *buf1, const uint8_t *buf2, int n,
 }
 
 #define IO_BUF_SIZE (2 * 1024 * 1024)
+#define IO_WRITE_WINDOW_THRESHOLD (32 * 1024 * 1024)
+
+static int write_window = 0;
+
+static void img_write_cb(void *opaque, int ret)
+{
+    QEMUIOVector *qiov = (QEMUIOVector *)opaque;
+    write_window -=  qiov->iov->iov_len / 512;
+    qemu_iovec_destroy(qiov);    
+    qemu_free(qiov);
+}
 
 static int img_convert(int argc, char **argv)
 {
@@ -980,6 +991,9 @@ static int img_convert(int argc, char **argv)
                should add a specific call to have the info to go faster */
             buf1 = buf;
             while (n > 0) {
+                while (write_window > IO_WRITE_WINDOW_THRESHOLD / 512) {
+                    qemu_aio_wait();
+                }
                 /* If the output image is being created as a copy on write image,
                    copy all sectors even the ones containing only NUL bytes,
                    because they may differ from the sectors in the base image.
@@ -989,11 +1003,11 @@ static int img_convert(int argc, char **argv)
                    already there is garbage, not 0s. */
                 if (!has_zero_init || out_baseimg ||
                     is_allocated_sectors(buf1, n, &n1)) {
-                    ret = bdrv_write(out_bs, sector_num, buf1, n1);
-                    if (ret < 0) {
-                        error_report("error while writing");
-                        goto out;
-                    }
+                    QEMUIOVector *qiov = qemu_mallocz(sizeof(QEMUIOVector));
+		    qemu_iovec_init(qiov, 1);
+		    qemu_iovec_add(qiov, (void *)buf1, n1 * 512);
+                    bdrv_aio_writev(out_bs, sector_num, qiov, n1, img_write_cb, qiov);
+                    write_window += n1;
                 }
                 sector_num += n1;
                 n -= n1;
@@ -1001,11 +1015,15 @@ static int img_convert(int argc, char **argv)
             }
             qemu_progress_print(local_progress, 100);
         }
+        while (write_window > 0) {
+            qemu_aio_wait();
+        }
     }
 out:
     qemu_progress_end();
     free_option_parameters(create_options);
     free_option_parameters(param);
+    bdrv_flush(out_bs);
     qemu_free(buf);
     if (out_bs) {
         bdrv_delete(out_bs);
