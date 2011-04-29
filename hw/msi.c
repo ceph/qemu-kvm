@@ -134,13 +134,15 @@ static void kvm_msi_message_from_vector(PCIDevice *dev, unsigned vector,
 static void kvm_msi_update(PCIDevice *dev)
 {
     uint16_t flags = pci_get_word(dev->config + msi_flags_off(dev));
+    unsigned int max_vectors = 1 <<
+        ((flags & PCI_MSI_FLAGS_QMASK) >> (ffs(PCI_MSI_FLAGS_QMASK) - 1));
     unsigned int nr_vectors = msi_nr_vectors(flags);
     KVMMsiMessage new_entry, *entry;
     bool changed = false;
     unsigned int vector;
     int r;
 
-    for (vector = 0; vector < 32; vector++) {
+    for (vector = 0; vector < max_vectors; vector++) {
         entry = dev->msi_irq_entries + vector;
 
         if (vector >= nr_vectors) {
