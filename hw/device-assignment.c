@@ -482,14 +482,11 @@ static uint32_t assigned_dev_pci_read_config(PCIDevice *d, uint32_t address,
     /*
      * Catch access to
      *  - vendor & device ID
-     *  - command register (if emulation needed)
      *  - base address registers
      *  - ROM base address & capability pointer
      *  - interrupt line & pin
      */
     if (ranges_overlap(address, len, PCI_VENDOR_ID, 4) ||
-        (pci_dev->need_emulate_cmd &&
-         ranges_overlap(address, len, PCI_COMMAND, 2)) ||
         ranges_overlap(address, len, PCI_BASE_ADDRESS_0, 24) ||
         ranges_overlap(address, len, PCI_ROM_ADDRESS, 5) ||
         ranges_overlap(address, len, PCI_INTERRUPT_LINE, 2)) {
@@ -520,6 +517,11 @@ again:
 do_log:
     DEBUG("(%x.%x): address=%04x val=0x%08x len=%d\n",
           (d->devfn >> 3) & 0x1F, (d->devfn & 0x7), address, val, len);
+
+    if (pci_dev->need_emulate_cmd) {
+        val = merge_bits(val, pci_default_read_config(d, address, len),
+                         address, len, PCI_COMMAND, 0xffff);
+    }
 
     if (!pci_dev->cap.available) {
         /* kill the special capabilities */
