@@ -208,6 +208,10 @@ int msi_init(struct PCIDevice *dev, uint8_t offset,
                    " 64bit %d mask %d\n",
                    offset, nr_vectors, msi64bit, msi_per_vector_mask);
 
+    if (kvm_enabled() && kvm_irqchip_in_kernel() && !kvm_has_gsi_routing()) {
+        return -ENOTSUP;
+    }
+
     assert(!(nr_vectors & (nr_vectors - 1)));   /* power of 2 */
     assert(nr_vectors > 0);
     assert(nr_vectors <= PCI_MSI_VECTORS_MAX);

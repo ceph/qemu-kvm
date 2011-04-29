@@ -350,8 +350,10 @@ int msix_init(struct PCIDevice *dev, unsigned short nentries,
 {
     int ret;
     /* Nothing to do if MSI is not supported by interrupt controller */
-    if (!msix_supported)
+    if (!msix_supported ||
+        (kvm_enabled() && kvm_irqchip_in_kernel() && !kvm_has_gsi_routing())) {
         return -ENOTSUP;
+    }
 
     if (nentries > MSIX_MAX_ENTRIES)
         return -EINVAL;
