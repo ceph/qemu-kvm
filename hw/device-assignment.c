@@ -505,10 +505,6 @@ static uint32_t assigned_dev_pci_read_config(PCIDevice *d, uint32_t address,
         return val;
     }
 
-    /* vga specific, remove later */
-    if (address == 0xFC)
-        goto do_log;
-
     fd = pci_dev->real_device.config_fd;
 
 again:
@@ -523,7 +519,6 @@ again:
 	exit(1);
     }
 
-do_log:
     DEBUG("(%x.%x): address=%04x val=0x%08x len=%d\n",
           (d->devfn >> 3) & 0x1F, (d->devfn & 0x7), address, val, len);
 
