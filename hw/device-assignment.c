@@ -404,13 +404,20 @@ static void assigned_dev_pci_write_config(PCIDevice *d, uint32_t address,
         return assigned_device_pci_cap_write_config(d, address, val, len);
     }
 
-    if (address == 0x4) {
+    if (ranges_overlap(address, len, PCI_COMMAND, 2)) {
         pci_default_write_config(d, address, val, len);
         /* Continue to program the card */
     }
 
-    if ((address >= 0x10 && address <= 0x24) || address == 0x30 ||
-        address == 0x34 || address == 0x3c || address == 0x3d) {
+    /*
+     * Catch access to
+     *  - base address registers
+     *  - ROM base address & capability pointer
+     *  - interrupt line & pin
+     */
+    if (ranges_overlap(address, len, PCI_BASE_ADDRESS_0, 24) ||
+        ranges_overlap(address, len, PCI_ROM_ADDRESS, 5) ||
+        ranges_overlap(address, len, PCI_INTERRUPT_LINE, 2)) {
         /* used for update-mappings (BAR emulation) */
         pci_default_write_config(d, address, val, len);
         return;
@@ -450,9 +457,20 @@ static uint32_t assigned_dev_pci_read_config(PCIDevice *d, uint32_t address,
         return val;
     }
 
-    if (address < 0x4 || (pci_dev->need_emulate_cmd && address == 0x4) ||
-	(address >= 0x10 && address <= 0x24) || address == 0x30 ||
-        address == 0x34 || address == 0x3c || address == 0x3d) {
+    /*
+     * Catch access to
+     *  - vendor & device ID
+     *  - command register (if emulation needed)
+     *  - base address registers
+     *  - ROM base address & capability pointer
+     *  - interrupt line & pin
+     */
+    if (ranges_overlap(address, len, PCI_VENDOR_ID, 4) ||
+        (pci_dev->need_emulate_cmd &&
+         ranges_overlap(address, len, PCI_COMMAND, 2)) ||
+        ranges_overlap(address, len, PCI_BASE_ADDRESS_0, 24) ||
+        ranges_overlap(address, len, PCI_ROM_ADDRESS, 5) ||
+        ranges_overlap(address, len, PCI_INTERRUPT_LINE, 2)) {
         val = pci_default_read_config(d, address, len);
         DEBUG("(%x.%x): address=%04x val=0x%08x len=%d\n",
               (d->devfn >> 3) & 0x1F, (d->devfn & 0x7), address, val, len);
@@ -483,10 +501,11 @@ do_log:
 
     if (!pci_dev->cap.available) {
         /* kill the special capabilities */
-        if (address == 4 && len == 4)
-            val &= ~0x100000;
-        else if (address == 6)
-            val &= ~0x10;
+        if (address == PCI_COMMAND && len == 4) {
+            val &= ~(PCI_STATUS_CAP_LIST << 16);
+        } else if (address == PCI_STATUS) {
+            val &= ~PCI_STATUS_CAP_LIST;
+        }
     }
 
     return val;
