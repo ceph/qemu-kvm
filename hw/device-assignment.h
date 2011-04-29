@@ -109,7 +109,7 @@ typedef struct AssignedDevice {
     void *msix_table_page;
     target_phys_addr_t msix_table_addr;
     int mmio_index;
-    int need_emulate_cmd;
+    uint32_t emulate_cmd_mask;
     char *configfd_name;
     int32_t bootindex;
     QLIST_ENTRY(AssignedDevice) next;

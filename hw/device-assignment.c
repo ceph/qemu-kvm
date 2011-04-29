@@ -522,9 +522,9 @@ again:
     DEBUG("(%x.%x): address=%04x val=0x%08x len=%d\n",
           (d->devfn >> 3) & 0x1F, (d->devfn & 0x7), address, val, len);
 
-    if (pci_dev->need_emulate_cmd) {
+    if (pci_dev->emulate_cmd_mask) {
         val = merge_bits(val, pci_default_read_config(d, address, len),
-                         address, len, PCI_COMMAND, 0xffff);
+                         address, len, PCI_COMMAND, pci_dev->emulate_cmd_mask);
     }
 
     /*
@@ -796,10 +796,9 @@ again:
 
     /* dealing with virtual function device */
     snprintf(name, sizeof(name), "%sphysfn/", dir);
-    if (!stat(name, &statbuf))
-	    pci_dev->need_emulate_cmd = 1;
-    else
-	    pci_dev->need_emulate_cmd = 0;
+    if (!stat(name, &statbuf)) {
+        pci_dev->emulate_cmd_mask = 0xffff;
+    }
 
     dev->region_number = r;
     return 0;
