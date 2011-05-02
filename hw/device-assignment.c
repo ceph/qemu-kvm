@@ -438,11 +438,22 @@ static void assigned_dev_pci_write_config(PCIDevice *d, uint32_t address,
      *  - interrupt line & pin
      */
     if (ranges_overlap(address, len, PCI_BASE_ADDRESS_0, 24) ||
-        ranges_overlap(address, len, PCI_ROM_ADDRESS, 5) ||
-        ranges_overlap(address, len, PCI_INTERRUPT_LINE, 2)) {
-        /* used for update-mappings (BAR emulation) */
+        ranges_overlap(address, len, PCI_ROM_ADDRESS, 4)) {
         pci_default_write_config(d, address, val, len);
         return;
+    } else if (ranges_overlap(address, len, PCI_CAPABILITY_LIST, 1) ||
+               ranges_overlap(address, len, PCI_INTERRUPT_LINE, 2)) {
+        uint32_t real_val;
+
+        pci_default_write_config(d, address, val, len);
+
+        /* Ensure that writes to overlapping areas we don't virtualize still
+         * hit the device. */
+        real_val = assigned_dev_pci_read(d, address, len);
+        val = merge_bits(val, real_val, address, len,
+                         PCI_CAPABILITY_LIST, 0xff);
+        val = merge_bits(val, real_val, address, len,
+                         PCI_INTERRUPT_LINE, 0xffff);
     }
 
     DEBUG("NON BAR (%x.%x): address=%04x val=0x%08x len=%d\n",
@@ -467,7 +478,7 @@ again:
 static uint32_t assigned_dev_pci_read_config(PCIDevice *d, uint32_t address,
                                              int len)
 {
-    uint32_t val = 0;
+    uint32_t val = 0, virt_val;
     int fd;
     ssize_t ret;
     AssignedDevice *pci_dev = DO_UPCAST(AssignedDevice, dev, d);
@@ -483,13 +494,11 @@ static uint32_t assigned_dev_pci_read_config(PCIDevice *d, uint32_t address,
      * Catch access to
      *  - vendor & device ID
      *  - base address registers
-     *  - ROM base address & capability pointer
-     *  - interrupt line & pin
+     *  - ROM base address
      */
     if (ranges_overlap(address, len, PCI_VENDOR_ID, 4) ||
         ranges_overlap(address, len, PCI_BASE_ADDRESS_0, 24) ||
-        ranges_overlap(address, len, PCI_ROM_ADDRESS, 5) ||
-        ranges_overlap(address, len, PCI_INTERRUPT_LINE, 2)) {
+        ranges_overlap(address, len, PCI_ROM_ADDRESS, 4)) {
         val = pci_default_read_config(d, address, len);
         DEBUG("(%x.%x): address=%04x val=0x%08x len=%d\n",
               (d->devfn >> 3) & 0x1F, (d->devfn & 0x7), address, val, len);
@@ -522,6 +531,15 @@ do_log:
         val = merge_bits(val, pci_default_read_config(d, address, len),
                          address, len, PCI_COMMAND, 0xffff);
     }
+
+    /*
+     * Merge bits from virtualized
+     *  - capability pointer
+     *  - interrupt line & pin
+     */
+    virt_val = pci_default_read_config(d, address, len);
+    val = merge_bits(val, virt_val, address, len, PCI_CAPABILITY_LIST, 0xff);
+    val = merge_bits(val, virt_val, address, len, PCI_INTERRUPT_LINE, 0xffff);
 
     if (!pci_dev->cap.available) {
         /* kill the special capabilities */
