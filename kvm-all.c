@@ -681,6 +681,14 @@ void kvm_cpu_register_phys_memory_client(void)
 }
 
 #ifdef OBSOLETE_KVM_IMPL
+static void kvm_handle_interrupt(CPUState *env, int mask)
+{
+    env->interrupt_request |= mask;
+
+    if (!qemu_cpu_is_self(env)) {
+        qemu_cpu_kick(env);
+    }
+}
 
 int kvm_init(void)
 {
@@ -789,6 +797,8 @@ int kvm_init(void)
     cpu_register_phys_memory_client(&kvm_cpu_phys_memory_client);
 
     s->many_ioeventfds = kvm_check_many_ioeventfds();
+
+    cpu_interrupt_handler = kvm_handle_interrupt;
 
     return 0;
 

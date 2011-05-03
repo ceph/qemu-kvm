@@ -245,7 +245,7 @@ hw-obj-$(CONFIG_LAN9118) += lan9118.o
 hw-obj-$(CONFIG_NE2000_ISA) += ne2000-isa.o
 
 # IDE
-hw-obj-$(CONFIG_IDE_CORE) += ide/core.o
+hw-obj-$(CONFIG_IDE_CORE) += ide/core.o ide/atapi.o
 hw-obj-$(CONFIG_IDE_QDEV) += ide/qdev.o
 hw-obj-$(CONFIG_IDE_PCI) += ide/pci.o
 hw-obj-$(CONFIG_IDE_ISA) += ide/isa.o
@@ -288,9 +288,13 @@ sound-obj-$(CONFIG_HDA) += intel-hda.o hda-audio.o
 adlib.o fmopl.o: QEMU_CFLAGS += -DBUILD_Y8950=0
 hw-obj-$(CONFIG_SOUND) += $(sound-obj-y)
 
-hw-obj-$(CONFIG_REALLY_VIRTFS) += virtio-9p-debug.o
-hw-obj-$(CONFIG_VIRTFS) += virtio-9p-local.o virtio-9p-xattr.o
-hw-obj-$(CONFIG_VIRTFS) += virtio-9p-xattr-user.o virtio-9p-posix-acl.o
+9pfs-nested-$(CONFIG_REALLY_VIRTFS) = virtio-9p-debug.o
+9pfs-nested-$(CONFIG_VIRTFS) +=  virtio-9p-local.o virtio-9p-xattr.o
+9pfs-nested-$(CONFIG_VIRTFS) +=   virtio-9p-xattr-user.o virtio-9p-posix-acl.o
+
+hw-obj-$(CONFIG_VIRTFS) += $(addprefix 9pfs/, $(9pfs-nested-y))
+$(addprefix 9pfs/, $(9pfs-nested-y)): CFLAGS +=  -I$(SRC_PATH)/hw/
+
 
 ######################################################################
 # libdis
