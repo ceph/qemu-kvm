@@ -599,7 +599,7 @@ static int kvm_get_supported_msrs(KVMState *s)
             }
         }
 
-        free(kvm_msr_list);
+        qemu_free(kvm_msr_list);
     }
 
     return ret;
