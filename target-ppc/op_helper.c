@@ -3343,7 +3343,7 @@ HELPER_SPE_VECTOR_ARITH(fsmul);
 HELPER_SPE_VECTOR_ARITH(fsdiv);
 
 /* Single-precision floating-point comparisons */
-static inline uint32_t efststlt(uint32_t op1, uint32_t op2)
+static inline uint32_t efscmplt(uint32_t op1, uint32_t op2)
 {
     CPU_FloatU u1, u2;
     u1.l = op1;
@@ -3351,7 +3351,7 @@ static inline uint32_t efststlt(uint32_t op1, uint32_t op2)
     return float32_lt(u1.f, u2.f, &env->vec_status) ? 4 : 0;
 }
 
-static inline uint32_t efststgt(uint32_t op1, uint32_t op2)
+static inline uint32_t efscmpgt(uint32_t op1, uint32_t op2)
 {
     CPU_FloatU u1, u2;
     u1.l = op1;
@@ -3359,7 +3359,7 @@ static inline uint32_t efststgt(uint32_t op1, uint32_t op2)
     return float32_le(u1.f, u2.f, &env->vec_status) ? 0 : 4;
 }
 
-static inline uint32_t efststeq(uint32_t op1, uint32_t op2)
+static inline uint32_t efscmpeq(uint32_t op1, uint32_t op2)
 {
     CPU_FloatU u1, u2;
     u1.l = op1;
@@ -3367,22 +3367,22 @@ static inline uint32_t efststeq(uint32_t op1, uint32_t op2)
     return float32_eq(u1.f, u2.f, &env->vec_status) ? 4 : 0;
 }
 
-static inline uint32_t efscmplt(uint32_t op1, uint32_t op2)
+static inline uint32_t efststlt(uint32_t op1, uint32_t op2)
 {
-    /* XXX: TODO: test special values (NaN, infinites, ...) */
-    return efststlt(op1, op2);
+    /* XXX: TODO: ignore special values (NaN, infinites, ...) */
+    return efscmplt(op1, op2);
 }
 
-static inline uint32_t efscmpgt(uint32_t op1, uint32_t op2)
+static inline uint32_t efststgt(uint32_t op1, uint32_t op2)
 {
-    /* XXX: TODO: test special values (NaN, infinites, ...) */
-    return efststgt(op1, op2);
+    /* XXX: TODO: ignore special values (NaN, infinites, ...) */
+    return efscmpgt(op1, op2);
 }
 
-static inline uint32_t efscmpeq(uint32_t op1, uint32_t op2)
+static inline uint32_t efststeq(uint32_t op1, uint32_t op2)
 {
-    /* XXX: TODO: test special values (NaN, infinites, ...) */
-    return efststeq(op1, op2);
+    /* XXX: TODO: ignore special values (NaN, infinites, ...) */
+    return efscmpeq(op1, op2);
 }
 
 #define HELPER_SINGLE_SPE_CMP(name)                                           \
@@ -3678,7 +3678,7 @@ uint32_t helper_efdtsteq (uint64_t op1, uint64_t op2)
     CPU_DoubleU u1, u2;
     u1.ll = op1;
     u2.ll = op2;
-    return float64_eq(u1.d, u2.d, &env->vec_status) ? 4 : 0;
+    return float64_eq_quiet(u1.d, u2.d, &env->vec_status) ? 4 : 0;
 }
 
 uint32_t helper_efdcmplt (uint64_t op1, uint64_t op2)

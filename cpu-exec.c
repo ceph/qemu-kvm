@@ -353,6 +353,8 @@ int cpu_exec(CPUState *env1)
                     do_interrupt(0);
 #elif defined(TARGET_IA64)
 		    do_interrupt(env);
+#elif defined(TARGET_S390X)
+                    do_interrupt(env);
 #endif
                     env->exception_index = -1;
 #endif
@@ -565,6 +567,12 @@ int cpu_exec(CPUState *env1)
                            first signalled.  */
                         env->exception_index = env->pending_vector;
                         do_interrupt(1);
+                        next_tb = 0;
+                    }
+#elif defined(TARGET_S390X) && !defined(CONFIG_USER_ONLY)
+                    if ((interrupt_request & CPU_INTERRUPT_HARD) &&
+                        (env->psw.mask & PSW_MASK_EXT)) {
+                        do_interrupt(env);
                         next_tb = 0;
                     }
 #endif

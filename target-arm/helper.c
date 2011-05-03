@@ -5,7 +5,7 @@
 #include "cpu.h"
 #include "exec-all.h"
 #include "gdbstub.h"
-#include "helpers.h"
+#include "helper.h"
 #include "qemu-common.h"
 #include "host-utils.h"
 #if !defined(CONFIG_USER_ONLY)
@@ -1378,7 +1378,7 @@ void HELPER(set_cp15)(CPUState *env, uint32_t insn, uint32_t val)
             /* This may enable/disable the MMU, so do a TLB flush.  */
             tlb_flush(env, 1);
             break;
-        case 1: /* Auxiliary cotrol register.  */
+        case 1: /* Auxiliary control register.  */
             if (arm_feature(env, ARM_FEATURE_XSCALE)) {
                 env->cp15.c1_xscaleauxcr = val;
                 break;
