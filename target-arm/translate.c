@@ -30,9 +30,9 @@
 #include "tcg-op.h"
 #include "qemu-log.h"
 
-#include "helpers.h"
+#include "helper.h"
 #define GEN_HELPER 1
-#include "helpers.h"
+#include "helper.h"
 
 #define ENABLE_ARCH_4T    arm_feature(env, ARM_FEATURE_V4T)
 #define ENABLE_ARCH_5     arm_feature(env, ARM_FEATURE_V5)
@@ -129,7 +129,7 @@ void arm_translate_init(void)
 #endif
 
 #define GEN_HELPER 2
-#include "helpers.h"
+#include "helper.h"
 }
 
 static inline TCGv load_cpu_offset(int offset)
@@ -3830,6 +3830,21 @@ static int disas_neon_ls_insn(CPUState * env, DisasContext *s, uint32_t insn)
         size = (insn >> 6) & 3;
         if (op > 10)
             return 1;
+        /* Catch UNDEF cases for bad values of align field */
+        switch (op & 0xc) {
+        case 4:
+            if (((insn >> 5) & 1) == 1) {
+                return 1;
+            }
+            break;
+        case 8:
+            if (((insn >> 4) & 3) == 3) {
+                return 1;
+            }
+            break;
+        default:
+            break;
+        }
         nregs = neon_ls_element_type[op].nregs;
         interleave = neon_ls_element_type[op].interleave;
         spacing = neon_ls_element_type[op].spacing;
@@ -3975,6 +3990,7 @@ static int disas_neon_ls_insn(CPUState * env, DisasContext *s, uint32_t insn)
             stride = (1 << size) * nregs;
         } else {
             /* Single element.  */
+            int idx = (insn >> 4) & 0xf;
             pass = (insn >> 7) & 1;
             switch (size) {
             case 0:
@@ -3993,6 +4009,39 @@ static int disas_neon_ls_insn(CPUState * env, DisasContext *s, uint32_t insn)
                 abort();
             }
             nregs = ((insn >> 8) & 3) + 1;
+            /* Catch the UNDEF cases. This is unavoidably a bit messy. */
+            switch (nregs) {
+            case 1:
+                if (((idx & (1 << size)) != 0) ||
+                    (size == 2 && ((idx & 3) == 1 || (idx & 3) == 2))) {
+                    return 1;
+                }
+                break;
+            case 3:
+                if ((idx & 1) != 0) {
+                    return 1;
+                }
+                /* fall through */
+            case 2:
+                if (size == 2 && (idx & 2) != 0) {
+                    return 1;
+                }
+                break;
+            case 4:
+                if ((size == 2) && ((idx & 3) == 3)) {
+                    return 1;
+                }
+                break;
+            default:
+                abort();
+            }
+            if ((rd + stride * (nregs - 1)) > 31) {
+                /* Attempts to write off the end of the register file
+                 * are UNPREDICTABLE; we choose to UNDEF because otherwise
+                 * the neon_load_reg() would write off the end of the array.
+                 */
+                return 1;
+            }
             addr = tcg_temp_new_i32();
             load_reg_var(s, addr, rn);
             for (reg = 0; reg < nregs; reg++) {
@@ -7967,7 +8016,8 @@ static int disas_thumb2_insn(CPUState *env, DisasContext *s, uint16_t insn_hw1)
                     }
                 }
             } else {
-                int i;
+                int i, loaded_base = 0;
+                TCGv loaded_var;
                 /* Load/store multiple.  */
                 addr = load_reg(s, rn);
                 offset = 0;
@@ -7979,6 +8029,7 @@ static int disas_thumb2_insn(CPUState *env, DisasContext *s, uint16_t insn_hw1)
                     tcg_gen_addi_i32(addr, addr, -offset);
                 }
 
+                TCGV_UNUSED(loaded_var);
                 for (i = 0; i < 16; i++) {
                     if ((insn & (1 << i)) == 0)
                         continue;
@@ -7987,6 +8038,9 @@ static int disas_thumb2_insn(CPUState *env, DisasContext *s, uint16_t insn_hw1)
                         tmp = gen_ld32(addr, IS_USER(s));
                         if (i == 15) {
                             gen_bx(s, tmp);
+                        } else if (i == rn) {
+                            loaded_var = tmp;
+                            loaded_base = 1;
                         } else {
                             store_reg(s, i, tmp);
                         }
@@ -7996,6 +8050,9 @@ static int disas_thumb2_insn(CPUState *env, DisasContext *s, uint16_t insn_hw1)
                         gen_st32(tmp, addr, IS_USER(s));
                     }
                     tcg_gen_addi_i32(addr, addr, 4);
+                }
+                if (loaded_base) {
+                    store_reg(s, rn, loaded_var);
                 }
                 if (insn & (1 << 21)) {
                     /* Base register writeback.  */
@@ -9397,7 +9454,10 @@ static void disas_thumb_insn(CPUState *env, DisasContext *s)
         break;
 
     case 12:
+    {
         /* load/store multiple */
+        TCGv loaded_var;
+        TCGV_UNUSED(loaded_var);
         rn = (insn >> 8) & 0x7;
         addr = load_reg(s, rn);
         for (i = 0; i < 8; i++) {
@@ -9405,7 +9465,11 @@ static void disas_thumb_insn(CPUState *env, DisasContext *s)
                 if (insn & (1 << 11)) {
                     /* load */
                     tmp = gen_ld32(addr, IS_USER(s));
-                    store_reg(s, i, tmp);
+                    if (i == rn) {
+                        loaded_var = tmp;
+                    } else {
+                        store_reg(s, i, tmp);
+                    }
                 } else {
                     /* store */
                     tmp = load_reg(s, i);
@@ -9415,14 +9479,18 @@ static void disas_thumb_insn(CPUState *env, DisasContext *s)
                 tcg_gen_addi_i32(addr, addr, 4);
             }
         }
-        /* Base register writeback.  */
         if ((insn & (1 << rn)) == 0) {
+            /* base reg not in list: base register writeback */
             store_reg(s, rn, addr);
         } else {
+            /* base reg in list: if load, complete it now */
+            if (insn & (1 << 11)) {
+                store_reg(s, rn, loaded_var);
+            }
             tcg_temp_free_i32(addr);
         }
         break;
-
+    }
     case 13:
         /* conditional branch or swi */
         cond = (insn >> 8) & 0xf;
@@ -9551,8 +9619,8 @@ static inline void gen_intermediate_code_internal(CPUState *env,
      * This is handled in the same way as restoration of the
      * PC in these situations: we will be called again with search_pc=1
      * and generate a mapping of the condexec bits for each PC in
-     * gen_opc_condexec_bits[]. gen_pc_load[] then uses this to restore
-     * the condexec bits.
+     * gen_opc_condexec_bits[]. restore_state_to_opc() then uses
+     * this to restore the condexec bits.
      *
      * Note that there are no instructions which can read the condexec
      * bits, and none which can write non-static values to them, so
@@ -9817,8 +9885,7 @@ void cpu_dump_state(CPUState *env, FILE *f, fprintf_function cpu_fprintf,
 #endif
 }
 
-void gen_pc_load(CPUState *env, TranslationBlock *tb,
-                unsigned long searched_pc, int pc_pos, void *puc)
+void restore_state_to_opc(CPUState *env, TranslationBlock *tb, int pc_pos)
 {
     env->regs[15] = gen_opc_pc[pc_pos];
     env->condexec_bits = gen_opc_condexec_bits[pc_pos];

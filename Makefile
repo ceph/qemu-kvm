@@ -163,7 +163,10 @@ distclean: clean
 	rm -f config-host.mak config-host.h* config-host.ld $(DOCS) qemu-options.texi qemu-img-cmds.texi qemu-monitor.texi
 	rm -f config-all-devices.mak
 	rm -f roms/seabios/config.mak roms/vgabios/config.mak
-	rm -f qemu-doc.info qemu-doc.aux qemu-doc.cp qemu-doc.dvi qemu-doc.fn qemu-doc.info qemu-doc.ky qemu-doc.log qemu-doc.pdf qemu-doc.pg qemu-doc.toc qemu-doc.tp qemu-doc.vr
+	rm -f qemu-doc.info qemu-doc.aux qemu-doc.cp qemu-doc.cps qemu-doc.dvi
+	rm -f qemu-doc.fn qemu-doc.fns qemu-doc.info qemu-doc.ky qemu-doc.kys
+	rm -f qemu-doc.log qemu-doc.pdf qemu-doc.pg qemu-doc.toc qemu-doc.tp
+	rm -f qemu-doc.vr
 	rm -f qemu-tech.info qemu-tech.aux qemu-tech.cp qemu-tech.dvi qemu-tech.fn qemu-tech.info qemu-tech.ky qemu-tech.log qemu-tech.pdf qemu-tech.pg qemu-tech.toc qemu-tech.tp qemu-tech.vr
 	for d in $(TARGET_DIRS) $(QEMULIBS); do \
 	rm -rf $$d || exit 1 ; \
@@ -177,10 +180,8 @@ ifdef INSTALL_BLOBS
 BLOBS=bios.bin vgabios.bin vgabios-cirrus.bin \
 vgabios-stdvga.bin vgabios-vmware.bin vgabios-qxl.bin \
 ppc_rom.bin openbios-sparc32 openbios-sparc64 openbios-ppc \
-gpxe-eepro100-80861209.rom \
-pxe-e1000.bin \
-pxe-ne2k_pci.bin pxe-pcnet.bin \
-pxe-rtl8139.bin pxe-virtio.bin \
+pxe-e1000.rom pxe-eepro100.rom pxe-ne2k_pci.rom \
+pxe-pcnet.rom pxe-rtl8139.rom pxe-virtio.rom \
 bamboo.dtb petalogix-s3adsp1800.dtb petalogix-ml605.dtb \
 multiboot.bin linuxboot.bin \
 s390-zipl.rom \
@@ -333,10 +334,12 @@ tarbin:
 	$(datadir)/openbios-sparc32 \
 	$(datadir)/openbios-sparc64 \
 	$(datadir)/openbios-ppc \
-	$(datadir)/pxe-ne2k_pci.bin \
-	$(datadir)/pxe-rtl8139.bin \
-	$(datadir)/pxe-pcnet.bin \
-	$(datadir)/pxe-e1000.bin \
+	$(datadir)/pxe-e1000.rom \
+	$(datadir)/pxe-eepro100.rom \
+	$(datadir)/pxe-ne2k_pci.rom \
+	$(datadir)/pxe-pcnet.rom \
+	$(datadir)/pxe-rtl8139.rom \
+	$(datadir)/pxe-virtio.rom \
 	$(datadir)/extboot.bin \
 	$(docdir)/qemu-doc.html \
 	$(docdir)/qemu-tech.html \

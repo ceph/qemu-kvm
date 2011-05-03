@@ -681,6 +681,14 @@ void kvm_cpu_register_phys_memory_client(void)
 }
 
 #ifdef OBSOLETE_KVM_IMPL
+static void kvm_handle_interrupt(CPUState *env, int mask)
+{
+    env->interrupt_request |= mask;
+
+    if (!qemu_cpu_is_self(env)) {
+        qemu_cpu_kick(env);
+    }
+}
 
 int kvm_init(void)
 {
@@ -789,6 +797,8 @@ int kvm_init(void)
     cpu_register_phys_memory_client(&kvm_cpu_phys_memory_client);
 
     s->many_ioeventfds = kvm_check_many_ioeventfds();
+
+    cpu_interrupt_handler = kvm_handle_interrupt;
 
     return 0;
 
@@ -1206,7 +1216,7 @@ int kvm_insert_breakpoint(CPUState *current_env, target_ulong addr,
         bp->use_count = 1;
         err = kvm_arch_insert_sw_breakpoint(current_env, bp);
         if (err) {
-            free(bp);
+            qemu_free(bp);
             return err;
         }
 
@@ -1330,7 +1340,7 @@ int kvm_set_signal_mask(CPUState *env, const sigset_t *sigset)
     sigmask->len = 8;
     memcpy(sigmask->sigset, sigset, sizeof(*sigset));
     r = kvm_vcpu_ioctl(env, KVM_SET_SIGNAL_MASK, sigmask);
-    free(sigmask);
+    qemu_free(sigmask);
 
     return r;
 }
