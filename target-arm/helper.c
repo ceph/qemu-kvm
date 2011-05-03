@@ -214,6 +214,11 @@ static void cpu_reset_model_id(CPUARMState *env, uint32_t id)
         env->cp15.c0_cachetype = 0xd172172;
         env->cp15.c1_sys = 0x00000078;
         break;
+    case ARM_CPUID_SA1100:
+    case ARM_CPUID_SA1110:
+        set_feature(env, ARM_FEATURE_STRONGARM);
+        env->cp15.c1_sys = 0x00000070;
+        break;
     default:
         cpu_abort(env, "Bad CPU ID: %x\n", id);
         break;
@@ -378,6 +383,8 @@ static const struct arm_cpu_t arm_cpu_names[] = {
     { ARM_CPUID_CORTEXA9, "cortex-a9"},
     { ARM_CPUID_TI925T, "ti925t" },
     { ARM_CPUID_PXA250, "pxa250" },
+    { ARM_CPUID_SA1100,    "sa1100" },
+    { ARM_CPUID_SA1110,    "sa1110" },
     { ARM_CPUID_PXA255, "pxa255" },
     { ARM_CPUID_PXA260, "pxa260" },
     { ARM_CPUID_PXA261, "pxa261" },
@@ -1553,6 +1560,8 @@ void HELPER(set_cp15)(CPUState *env, uint32_t insn, uint32_t val)
     case 9:
         if (arm_feature(env, ARM_FEATURE_OMAPCP))
             break;
+        if (arm_feature(env, ARM_FEATURE_STRONGARM))
+            break; /* Ignore ReadBuffer access */
         switch (crm) {
         case 0: /* Cache lockdown.  */
 	    switch (op1) {
@@ -2542,6 +2551,7 @@ float64 VFP_HELPER(sito, d)(uint32_t x, CPUState *env)
 uint32_t VFP_HELPER(toui, s)(float32 x, CPUState *env)
 {
     if (float32_is_any_nan(x)) {
+        float_raise(float_flag_invalid, &env->vfp.fp_status);
         return 0;
     }
     return float32_to_uint32(x, &env->vfp.fp_status);
@@ -2550,6 +2560,7 @@ uint32_t VFP_HELPER(toui, s)(float32 x, CPUState *env)
 uint32_t VFP_HELPER(toui, d)(float64 x, CPUState *env)
 {
     if (float64_is_any_nan(x)) {
+        float_raise(float_flag_invalid, &env->vfp.fp_status);
         return 0;
     }
     return float64_to_uint32(x, &env->vfp.fp_status);
@@ -2558,6 +2569,7 @@ uint32_t VFP_HELPER(toui, d)(float64 x, CPUState *env)
 uint32_t VFP_HELPER(tosi, s)(float32 x, CPUState *env)
 {
     if (float32_is_any_nan(x)) {
+        float_raise(float_flag_invalid, &env->vfp.fp_status);
         return 0;
     }
     return float32_to_int32(x, &env->vfp.fp_status);
@@ -2566,6 +2578,7 @@ uint32_t VFP_HELPER(tosi, s)(float32 x, CPUState *env)
 uint32_t VFP_HELPER(tosi, d)(float64 x, CPUState *env)
 {
     if (float64_is_any_nan(x)) {
+        float_raise(float_flag_invalid, &env->vfp.fp_status);
         return 0;
     }
     return float64_to_int32(x, &env->vfp.fp_status);
@@ -2574,6 +2587,7 @@ uint32_t VFP_HELPER(tosi, d)(float64 x, CPUState *env)
 uint32_t VFP_HELPER(touiz, s)(float32 x, CPUState *env)
 {
     if (float32_is_any_nan(x)) {
+        float_raise(float_flag_invalid, &env->vfp.fp_status);
         return 0;
     }
     return float32_to_uint32_round_to_zero(x, &env->vfp.fp_status);
@@ -2582,6 +2596,7 @@ uint32_t VFP_HELPER(touiz, s)(float32 x, CPUState *env)
 uint32_t VFP_HELPER(touiz, d)(float64 x, CPUState *env)
 {
     if (float64_is_any_nan(x)) {
+        float_raise(float_flag_invalid, &env->vfp.fp_status);
         return 0;
     }
     return float64_to_uint32_round_to_zero(x, &env->vfp.fp_status);
@@ -2590,6 +2605,7 @@ uint32_t VFP_HELPER(touiz, d)(float64 x, CPUState *env)
 uint32_t VFP_HELPER(tosiz, s)(float32 x, CPUState *env)
 {
     if (float32_is_any_nan(x)) {
+        float_raise(float_flag_invalid, &env->vfp.fp_status);
         return 0;
     }
     return float32_to_int32_round_to_zero(x, &env->vfp.fp_status);
@@ -2598,6 +2614,7 @@ uint32_t VFP_HELPER(tosiz, s)(float32 x, CPUState *env)
 uint32_t VFP_HELPER(tosiz, d)(float64 x, CPUState *env)
 {
     if (float64_is_any_nan(x)) {
+        float_raise(float_flag_invalid, &env->vfp.fp_status);
         return 0;
     }
     return float64_to_int32_round_to_zero(x, &env->vfp.fp_status);
@@ -2636,6 +2653,7 @@ uint##fsz##_t VFP_HELPER(to##name, p)(float##fsz x, uint32_t shift, \
 { \
     float##fsz tmp; \
     if (float##fsz##_is_any_nan(x)) { \
+        float_raise(float_flag_invalid, &env->vfp.fp_status); \
         return 0; \
     } \
     tmp = float##fsz##_scalbn(x, shift, &env->vfp.fp_status); \
