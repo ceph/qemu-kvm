@@ -33,6 +33,10 @@
 #include <sys/eventfd.h>
 #endif
 
+#ifndef OBSOLETE_KVM_IMPL
+#define run_on_cpu on_vcpu
+#endif /* !OBSOLETE_KVM_IMPL */
+
 /* KVM uses PAGE_SIZE in it's definition of COALESCED_MMIO_MAX */
 #define PAGE_SIZE TARGET_PAGE_SIZE
 
@@ -896,8 +900,6 @@ void kvm_flush_coalesced_mmio_buffer(void)
     }
 }
 
-#ifdef OBSOLETE_KVM_IMPL
-
 static void do_kvm_cpu_synchronize_state(void *_env)
 {
     CPUState *env = _env;
@@ -926,6 +928,8 @@ void kvm_cpu_synchronize_post_init(CPUState *env)
     kvm_arch_put_registers(env, KVM_PUT_FULL_STATE);
     env->kvm_vcpu_dirty = 0;
 }
+
+#ifdef OBSOLETE_KVM_IMPL
 
 int kvm_cpu_exec(CPUState *env)
 {
@@ -1137,10 +1141,6 @@ void kvm_setup_guest_memory(void *start, size_t size)
 }
 
 #ifdef KVM_CAP_SET_GUEST_DEBUG
-#ifndef OBSOLETE_KVM_IMPL
-#define run_on_cpu on_vcpu
-#endif /* !OBSOLETE_KVM_IMPL */
-
 struct kvm_sw_breakpoint *kvm_find_sw_breakpoint(CPUState *env,
                                                  target_ulong pc)
 {

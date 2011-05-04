@@ -1097,35 +1097,6 @@ void on_vcpu(CPUState *env, void (*func)(void *data), void *data)
     }
 }
 
-static void do_kvm_cpu_synchronize_state(void *_env)
-{
-    CPUState *env = _env;
-
-    if (!env->kvm_vcpu_dirty) {
-        kvm_arch_get_registers(env);
-        env->kvm_vcpu_dirty = 1;
-    }
-}
-
-void kvm_cpu_synchronize_state(CPUState *env)
-{
-    if (!env->kvm_vcpu_dirty) {
-        on_vcpu(env, do_kvm_cpu_synchronize_state, env);
-    }
-}
-
-void kvm_cpu_synchronize_post_reset(CPUState *env)
-{
-    kvm_arch_put_registers(env, KVM_PUT_RESET_STATE);
-    env->kvm_vcpu_dirty = 0;
-}
-
-void kvm_cpu_synchronize_post_init(CPUState *env)
-{
-    kvm_arch_put_registers(env, KVM_PUT_FULL_STATE);
-    env->kvm_vcpu_dirty = 0;
-}
-
 static void inject_interrupt(void *data)
 {
     cpu_interrupt(current_env, (long) data);
