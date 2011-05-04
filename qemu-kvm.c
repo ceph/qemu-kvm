@@ -1382,7 +1382,7 @@ static int kvm_create_context(void)
         return -1;
     }
 
-    r = kvm_arch_create(kvm_context);
+    r = kvm_arch_init(kvm_state);
     if (r < 0) {
         kvm_finalize(kvm_state);
         return r;

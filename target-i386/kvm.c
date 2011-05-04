@@ -197,7 +197,6 @@ typedef struct HWPoisonPage {
 static QLIST_HEAD(, HWPoisonPage) hwpoison_page_list =
     QLIST_HEAD_INITIALIZER(hwpoison_page_list);
 
-#ifdef OBSOLETE_KVM_IMPL
 static void kvm_unpoison_all(void *param)
 {
     HWPoisonPage *page, *next_page;
@@ -208,7 +207,6 @@ static void kvm_unpoison_all(void *param)
         qemu_free(page);
     }
 }
-#endif
 
 #ifdef KVM_CAP_MCE
 static void kvm_hwpoison_page_add(ram_addr_t ram_addr)
@@ -603,7 +601,7 @@ static int kvm_get_supported_msrs(KVMState *s)
     return ret;
 }
 
-#ifdef OBSOLETE_KVM_IMPL
+static int kvm_create_pit(kvm_context_t kvm);
 
 int kvm_arch_init(KVMState *s)
 {
@@ -655,10 +653,25 @@ int kvm_arch_init(KVMState *s)
     }
     qemu_register_reset(kvm_unpoison_all, NULL);
 
+    ret = kvm_create_pit(&s->kvm_context);
+    if (ret < 0) {
+        return ret;
+    }
+
+    if (kvm_shadow_memory) {
+        ret = kvm_vm_ioctl(s, KVM_SET_NR_MMU_PAGES, kvm_shadow_memory);
+        if (ret < 0) {
+            return ret;
+        }
+    }
+
+    ret = kvm_set_boot_cpu_id(0);
+    if (ret < 0 && ret != -ENOSYS) {
+        return ret;
+    }
+
     return 0;
 }
-
-#endif
 
 static void set_v8086_seg(struct kvm_segment *lhs, const SegmentCache *rhs)
 {

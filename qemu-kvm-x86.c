@@ -23,83 +23,6 @@
 #include "kvm.h"
 #include "hw/apic.h"
 
-#define MSR_IA32_TSC            0x10
-
-extern unsigned int kvm_shadow_memory;
-
-static int kvm_set_tss_addr(kvm_context_t kvm, unsigned long addr)
-{
-    int r;
-
-    r = kvm_vm_ioctl(kvm_state, KVM_SET_TSS_ADDR, addr);
-    if (r < 0) {
-        fprintf(stderr, "kvm_set_tss_addr: %m\n");
-        return r;
-    }
-    return 0;
-}
-
-static int kvm_init_tss(kvm_context_t kvm)
-{
-    int r;
-
-    r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_SET_TSS_ADDR);
-    if (r > 0) {
-        /*
-         * this address is 3 pages before the bios, and the bios should present
-         * as unavaible memory
-         */
-        r = kvm_set_tss_addr(kvm, 0xfeffd000);
-        if (r < 0) {
-            fprintf(stderr, "kvm_init_tss: unable to set tss addr\n");
-            return r;
-        }
-    } else {
-        fprintf(stderr, "kvm does not support KVM_CAP_SET_TSS_ADDR\n");
-    }
-    return 0;
-}
-
-static int kvm_set_identity_map_addr(kvm_context_t kvm, uint64_t addr)
-{
-#ifdef KVM_CAP_SET_IDENTITY_MAP_ADDR
-    int r;
-
-    r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_SET_IDENTITY_MAP_ADDR);
-    if (r > 0) {
-        r = kvm_vm_ioctl(kvm_state, KVM_SET_IDENTITY_MAP_ADDR, &addr);
-        if (r == -1) {
-            fprintf(stderr, "kvm_set_identity_map_addr: %m\n");
-            return -errno;
-        }
-        return 0;
-    }
-#endif
-    return -ENOSYS;
-}
-
-static int kvm_init_identity_map_page(kvm_context_t kvm)
-{
-#ifdef KVM_CAP_SET_IDENTITY_MAP_ADDR
-    int r;
-
-    r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_SET_IDENTITY_MAP_ADDR);
-    if (r > 0) {
-        /*
-         * this address is 4 pages before the bios, and the bios should present
-         * as unavaible memory
-         */
-        r = kvm_set_identity_map_addr(kvm, 0xfeffc000);
-        if (r < 0) {
-            fprintf(stderr, "kvm_init_identity_map_page: "
-                    "unable to set identity mapping addr\n");
-            return r;
-        }
-    }
-#endif
-    return 0;
-}
-
 static int kvm_create_pit(kvm_context_t kvm)
 {
 #ifdef KVM_CAP_PIT
@@ -121,55 +44,6 @@ static int kvm_create_pit(kvm_context_t kvm)
         }
     }
 #endif
-    return 0;
-}
-
-int kvm_arch_create(kvm_context_t kvm)
-{
-    struct utsname utsname;
-    int r = 0;
-
-    r = kvm_init_tss(kvm);
-    if (r < 0) {
-        return r;
-    }
-
-    r = kvm_init_identity_map_page(kvm);
-    if (r < 0) {
-        return r;
-    }
-
-    /*
-     * Tell fw_cfg to notify the BIOS to reserve the range.
-     */
-    if (e820_add_entry(0xfeffc000, 0x4000, E820_RESERVED) < 0) {
-        perror("e820_add_entry() table is full");
-        exit(1);
-    }
-
-    r = kvm_create_pit(kvm);
-    if (r < 0) {
-        return r;
-    }
-
-    uname(&utsname);
-    lm_capable_kernel = strcmp(utsname.machine, "x86_64") == 0;
-
-    if (kvm_shadow_memory) {
-        kvm_set_shadow_pages(kvm_context, kvm_shadow_memory);
-    }
-
-    /* initialize has_msr_star/has_msr_hsave_pa */
-    r = kvm_get_supported_msrs(kvm_state);
-    if (r < 0) {
-        return r;
-    }
-
-    r = kvm_set_boot_cpu_id(0);
-    if (r < 0 && r != -ENOSYS) {
-        return r;
-    }
-
     return 0;
 }
 
@@ -317,25 +191,6 @@ int kvm_has_pit_state2(kvm_context_t kvm)
 static void kvm_set_cr8(CPUState *env, uint64_t cr8)
 {
     env->kvm_run->cr8 = cr8;
-}
-
-int kvm_set_shadow_pages(kvm_context_t kvm, unsigned int nrshadow_pages)
-{
-#ifdef KVM_CAP_MMU_SHADOW_CACHE_CONTROL
-    int r;
-
-    r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION,
-                  KVM_CAP_MMU_SHADOW_CACHE_CONTROL);
-    if (r > 0) {
-        r = kvm_vm_ioctl(kvm_state, KVM_SET_NR_MMU_PAGES, nrshadow_pages);
-        if (r < 0) {
-            fprintf(stderr, "kvm_set_shadow_pages: %m\n");
-            return r;
-        }
-        return 0;
-    }
-#endif
-    return -1;
 }
 
 #ifdef KVM_CAP_VAPIC

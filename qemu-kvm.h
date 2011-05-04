@@ -64,8 +64,6 @@ typedef struct kvm_context *kvm_context_t;
 
 #include "kvm.h"
 
-int kvm_arch_create(kvm_context_t kvm);
-
 int kvm_arch_run(CPUState *env);
 
 int handle_halt(CPUState *env);
@@ -124,16 +122,6 @@ int kvm_is_ready_for_interrupt_injection(CPUState *env);
  * \return 0 on success
  */
 int kvm_inject_irq(CPUState *env, unsigned irq);
-
-
-/*!
- * \brief Setting the number of shadow pages to be allocated to the vm
- *
- * \param kvm pointer to kvm_context
- * \param nrshadow_pages number of pages to be allocated
- */
-int kvm_set_shadow_pages(kvm_context_t kvm, unsigned int nrshadow_pages);
-
 #endif
 
 int kvm_set_irq_level(kvm_context_t kvm, int irq, int level, int *status);
@@ -449,6 +437,7 @@ extern int kvm_pit;
 extern int kvm_pit_reinject;
 extern int kvm_nested;
 extern kvm_context_t kvm_context;
+extern unsigned int kvm_shadow_memory;
 
 struct ioperm_data {
     unsigned long start_port;
