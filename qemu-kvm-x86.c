@@ -518,7 +518,7 @@ int kvm_arch_try_push_interrupts(void *opaque)
 }
 
 #ifdef KVM_CAP_USER_NMI
-void kvm_arch_push_nmi(void *opaque)
+void kvm_arch_push_nmi(void)
 {
     CPUState *env = cpu_single_env;
     int r;

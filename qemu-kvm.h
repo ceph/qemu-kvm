@@ -50,13 +50,8 @@
  */
 
 struct kvm_context {
-    void *opaque;
-    /// is dirty pages logging enabled for all regions or not
-    int dirty_pages_log_all;
     /// do not create in-kernel irqchip if set
     int no_irqchip_creation;
-    /// in-kernel irqchip status
-    int irqchip_in_kernel;
     /// ioctl to use to inject interrupts
     int irqchip_inject_ioctl;
     /// do not create in-kernel pit if set
@@ -500,7 +495,7 @@ int kvm_arch_qemu_create_context(void);
 int kvm_arch_has_work(CPUState *env);
 void kvm_arch_process_irqchip_events(CPUState *env);
 int kvm_arch_try_push_interrupts(void *opaque);
-void kvm_arch_push_nmi(void *opaque);
+void kvm_arch_push_nmi(void);
 int kvm_set_boot_cpu_id(uint32_t id);
 
 void kvm_tpr_access_report(CPUState *env, uint64_t rip, int is_write);

@@ -157,10 +157,6 @@ int kvm_init(void)
 
     kvm_state->fd = fd;
     kvm_state->vmfd = -1;
-    kvm_context->opaque = cpu_single_env;
-    kvm_context->dirty_pages_log_all = 0;
-    kvm_context->no_irqchip_creation = 0;
-    kvm_context->no_pit_creation = 0;
 
 #ifdef KVM_CAP_SET_GUEST_DEBUG
     QTAILQ_INIT(&kvm_state->kvm_sw_breakpoints);
@@ -263,7 +259,6 @@ void kvm_create_irqchip(kvm_context_t kvm)
 {
     int r;
 
-    kvm->irqchip_in_kernel = 0;
 #ifdef KVM_CAP_IRQCHIP
     if (!kvm->no_irqchip_creation) {
         r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_IRQCHIP);
@@ -278,13 +273,12 @@ void kvm_create_irqchip(kvm_context_t kvm)
                     kvm->irqchip_inject_ioctl = KVM_IRQ_LINE_STATUS;
                 }
 #endif
-                kvm->irqchip_in_kernel = 1;
+                kvm_state->irqchip_in_kernel = 1;
             } else
                 fprintf(stderr, "Create kernel PIC irqchip failed\n");
         }
     }
 #endif
-    kvm_state->irqchip_in_kernel = kvm->irqchip_in_kernel;
 }
 
 int kvm_create(kvm_context_t kvm, unsigned long phys_mem_bytes, void **vm_mem)
@@ -320,7 +314,7 @@ int kvm_set_irq_level(kvm_context_t kvm, int irq, int level, int *status)
     struct kvm_irq_level event;
     int r;
 
-    if (!kvm->irqchip_in_kernel) {
+    if (!kvm_state->irqchip_in_kernel) {
         return 0;
     }
     event.level = level;
@@ -346,7 +340,7 @@ int kvm_get_irqchip(kvm_context_t kvm, struct kvm_irqchip *chip)
 {
     int r;
 
-    if (!kvm->irqchip_in_kernel) {
+    if (!kvm_state->irqchip_in_kernel) {
         return 0;
     }
     r = kvm_vm_ioctl(kvm_state, KVM_GET_IRQCHIP, chip);
@@ -360,7 +354,7 @@ int kvm_set_irqchip(kvm_context_t kvm, struct kvm_irqchip *chip)
 {
     int r;
 
-    if (!kvm->irqchip_in_kernel) {
+    if (!kvm_state->irqchip_in_kernel) {
         return 0;
     }
     r = kvm_vm_ioctl(kvm_state, KVM_SET_IRQCHIP, chip);
@@ -404,7 +398,7 @@ int handle_shutdown(kvm_context_t kvm, CPUState *env)
 static inline void push_nmi(kvm_context_t kvm)
 {
 #ifdef KVM_CAP_USER_NMI
-    kvm_arch_push_nmi(kvm->opaque);
+    kvm_arch_push_nmi();
 #endif                          /* KVM_CAP_USER_NMI */
 }
 
@@ -442,7 +436,7 @@ int kvm_run(CPUState *env)
     }
     push_nmi(kvm);
 #if !defined(__s390__)
-    if (!kvm->irqchip_in_kernel) {
+    if (!kvm_state->irqchip_in_kernel) {
         run->request_interrupt_window = kvm_arch_try_push_interrupts(env);
     }
 #endif
