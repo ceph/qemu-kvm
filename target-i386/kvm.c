@@ -1280,7 +1280,6 @@ static int kvm_get_msrs(CPUState *env)
     return 0;
 }
 
-#ifdef OBSOLETE_KVM_IMPL
 static int kvm_put_mp_state(CPUState *env)
 {
     struct kvm_mp_state mp_state = { .mp_state = env->mp_state };
@@ -1303,7 +1302,6 @@ static int kvm_get_mp_state(CPUState *env)
     }
     return 0;
 }
-#endif
 
 static int kvm_put_vcpu_events(CPUState *env, int level)
 {

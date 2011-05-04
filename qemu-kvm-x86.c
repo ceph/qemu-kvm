@@ -546,42 +546,6 @@ int kvm_arch_qemu_create_context(void)
     return 0;
 }
 
-static void kvm_arch_save_mpstate(CPUState *env)
-{
-#ifdef KVM_CAP_MP_STATE
-    int r;
-    struct kvm_mp_state mp_state;
-
-    r = kvm_get_mpstate(env, &mp_state);
-    if (r < 0) {
-        env->mp_state = -1;
-    } else {
-        env->mp_state = mp_state.mp_state;
-        if (kvm_irqchip_in_kernel()) {
-            env->halted = (env->mp_state == KVM_MP_STATE_HALTED);
-        }
-    }
-#else
-    env->mp_state = -1;
-#endif
-}
-
-static void kvm_arch_load_mpstate(CPUState *env)
-{
-#ifdef KVM_CAP_MP_STATE
-    struct kvm_mp_state mp_state;
-
-    /*
-     * -1 indicates that the host did not support GET_MP_STATE ioctl,
-     *  so don't touch it.
-     */
-    if (env->mp_state != -1) {
-        mp_state.mp_state = env->mp_state;
-        kvm_set_mpstate(env, &mp_state);
-    }
-#endif
-}
-
 #define XSAVE_CWD_RIP     2
 #define XSAVE_CWD_RDP     4
 #define XSAVE_MXCSR       6
@@ -609,7 +573,7 @@ void kvm_arch_load_regs(CPUState *env, int level)
     }
 
     if (level >= KVM_PUT_RESET_STATE) {
-        kvm_arch_load_mpstate(env);
+        kvm_put_mp_state(env);
         kvm_load_lapic(env);
     }
     if (level == KVM_PUT_FULL_STATE) {
@@ -643,7 +607,7 @@ void kvm_arch_save_regs(CPUState *env)
         perror("kvm_get_msrs FAILED");
     }
 
-    kvm_arch_save_mpstate(env);
+    kvm_get_mp_state(env);
     kvm_save_lapic(env);
     kvm_get_vcpu_events(env);
     kvm_get_debugregs(env);
