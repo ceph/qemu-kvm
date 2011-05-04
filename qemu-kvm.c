@@ -199,16 +199,6 @@ static void kvm_finalize(KVMState *s)
     free(s);
 }
 
-void kvm_disable_irqchip_creation(kvm_context_t kvm)
-{
-    kvm->no_irqchip_creation = 1;
-}
-
-void kvm_disable_pit_creation(kvm_context_t kvm)
-{
-    kvm->no_pit_creation = 1;
-}
-
 static int kvm_set_boot_vcpu_id(kvm_context_t kvm, uint32_t id)
 {
 #ifdef KVM_CAP_SET_BOOT_CPU_ID
@@ -260,7 +250,7 @@ void kvm_create_irqchip(kvm_context_t kvm)
     int r;
 
 #ifdef KVM_CAP_IRQCHIP
-    if (!kvm->no_irqchip_creation) {
+    if (kvm_irqchip) {
         r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_IRQCHIP);
         if (r > 0) {            /* kernel irqchip supported */
             r = kvm_vm_ioctl(kvm_state, KVM_CREATE_IRQCHIP);
@@ -1437,12 +1427,8 @@ static int kvm_create_context(void)
 
     int r;
 
-    if (!kvm_irqchip) {
-        kvm_disable_irqchip_creation(kvm_context);
-    }
-    if (!kvm_pit) {
-        kvm_disable_pit_creation(kvm_context);
-    }
+    kvm_state->pit_in_kernel = kvm_pit;
+
     if (kvm_create(kvm_context, 0, NULL) < 0) {
         kvm_finalize(kvm_state);
         return -1;

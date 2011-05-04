@@ -50,12 +50,8 @@
  */
 
 struct kvm_context {
-    /// do not create in-kernel irqchip if set
-    int no_irqchip_creation;
     /// ioctl to use to inject interrupts
     int irqchip_inject_ioctl;
-    /// do not create in-kernel pit if set
-    int no_pit_creation;
 #ifdef KVM_CAP_IRQ_ROUTING
     struct kvm_irq_routing *irq_routes;
     int nr_allocated_irq_routes;
@@ -83,26 +79,6 @@ void post_kvm_run(kvm_context_t kvm, CPUState *env);
 int pre_kvm_run(kvm_context_t kvm, CPUState *env);
 int handle_io_window(kvm_context_t kvm);
 int try_push_interrupts(kvm_context_t kvm);
-
-/*!
- * \brief Disable the in-kernel IRQCHIP creation
- *
- * In-kernel irqchip is enabled by default. If userspace irqchip is to be used,
- * this should be called prior to kvm_create().
- *
- * \param kvm Pointer to the kvm_context
- */
-void kvm_disable_irqchip_creation(kvm_context_t kvm);
-
-/*!
- * \brief Disable the in-kernel PIT creation
- *
- * In-kernel pit is enabled by default. If userspace pit is to be used,
- * this should be called prior to kvm_create().
- *
- *  \param kvm Pointer to the kvm_context
- */
-void kvm_disable_pit_creation(kvm_context_t kvm);
 
 /*!
  * \brief Create new virtual machine
