@@ -200,8 +200,7 @@ int kvm_pit_in_kernel(void)
     return kvm_state->pit_in_kernel;
 }
 
-#ifdef OBSOLETE_KVM_IMPL
-int kvm_init_vcpu(CPUState *env)
+static int kvm_create_vcpu(CPUState *env)
 {
     KVMState *s = kvm_state;
     long mmap_size;
@@ -247,7 +246,6 @@ int kvm_init_vcpu(CPUState *env)
 err:
     return ret;
 }
-#endif
 
 /*
  * dirty pages logging control

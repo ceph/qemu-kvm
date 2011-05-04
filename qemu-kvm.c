@@ -224,55 +224,6 @@ void kvm_disable_pit_creation(kvm_context_t kvm)
     kvm->no_pit_creation = 1;
 }
 
-static void kvm_create_vcpu(CPUState *env, int id)
-{
-    long mmap_size;
-    int r;
-    KVMState *s = kvm_state;
-
-    r = kvm_vm_ioctl(kvm_state, KVM_CREATE_VCPU, id);
-    if (r < 0) {
-        fprintf(stderr, "kvm_create_vcpu: %m\n");
-        fprintf(stderr, "Failed to create vCPU. Check the -smp parameter.\n");
-        goto err;
-    }
-
-    env->kvm_fd = r;
-    env->kvm_state = kvm_state;
-    env->kvm_vcpu_dirty = 1;
-
-    mmap_size = kvm_ioctl(kvm_state, KVM_GET_VCPU_MMAP_SIZE, 0);
-    if (mmap_size < 0) {
-        fprintf(stderr, "get vcpu mmap size: %m\n");
-        goto err_fd;
-    }
-    env->kvm_run =
-        mmap(NULL, mmap_size, PROT_READ | PROT_WRITE, MAP_SHARED, env->kvm_fd,
-             0);
-    if (env->kvm_run == MAP_FAILED) {
-        fprintf(stderr, "mmap vcpu area: %m\n");
-        goto err_fd;
-    }
-
-#ifdef KVM_CAP_COALESCED_MMIO
-    if (s->coalesced_mmio && !s->coalesced_mmio_ring)
-        s->coalesced_mmio_ring = (void *) env->kvm_run +
-               s->coalesced_mmio * PAGE_SIZE;
-#endif
-
-    r = kvm_arch_init_vcpu(env);
-    if (r == 0) {
-        qemu_register_reset(kvm_reset_vcpu, env);
-    }
-
-    return;
-  err_fd:
-    close(env->kvm_fd);
-  err:
-    /* We're no good with semi-broken states. */
-    abort();
-}
-
 static int kvm_set_boot_vcpu_id(kvm_context_t kvm, uint32_t id)
 {
 #ifdef KVM_CAP_SET_BOOT_CPU_ID
@@ -1436,7 +1387,9 @@ static void *ap_main_loop(void *_env)
     pthread_mutex_lock(&qemu_mutex);
     cpu_single_env = env;
 
-    kvm_create_vcpu(env, env->cpu_index);
+    if (kvm_create_vcpu(env) < 0) {
+        abort();
+    }
     setup_kernel_sigmask(env);
 
     /* signal VCPU creation */
