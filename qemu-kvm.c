@@ -425,8 +425,7 @@ int kvm_run(CPUState *env)
         case KVM_EXIT_EXCEPTION:
             fprintf(stderr, "exception %d (%x)\n", run->ex.exception,
                     run->ex.error_code);
-            kvm_show_regs(env);
-            kvm_show_code(env);
+            cpu_dump_state(env, stderr, fprintf, CPU_DUMP_CODE);
             abort();
             break;
         case KVM_EXIT_IO:
@@ -463,7 +462,7 @@ int kvm_run(CPUState *env)
             r = kvm_arch_run(env);
             if (r < 0) {
                 fprintf(stderr, "unhandled vm exit: 0x%x\n", run->exit_reason);
-                kvm_show_regs(env);
+                cpu_dump_state(env, stderr, fprintf, CPU_DUMP_CODE);
                 abort();
             }
             if (r > 0) {
@@ -988,7 +987,7 @@ int kvm_cpu_exec(CPUState *env)
     r = kvm_run(env);
     if (r < 0) {
         printf("kvm_run returned %d\n", r);
-        kvm_show_regs(env);
+        cpu_dump_state(env, stderr, fprintf, CPU_DUMP_CODE);
         vm_stop(VMSTOP_PANIC);
     }
 

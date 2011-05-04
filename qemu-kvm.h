@@ -68,9 +68,6 @@ int kvm_arch_create(kvm_context_t kvm);
 
 int kvm_arch_run(CPUState *env);
 
-
-void kvm_show_code(CPUState *env);
-
 int handle_halt(CPUState *env);
 
 int handle_shutdown(kvm_context_t kvm, CPUState *env);
@@ -138,20 +135,6 @@ int kvm_inject_irq(CPUState *env, unsigned irq);
 int kvm_set_shadow_pages(kvm_context_t kvm, unsigned int nrshadow_pages);
 
 #endif
-
-/*!
- * \brief Dump VCPU registers
- *
- * This dumps some of the information that KVM has about a virtual CPU, namely:
- * - GP Registers
- *
- * A much more verbose version of this is available as kvm_dump_vcpu()
- *
- * \param kvm Pointer to the current kvm_context
- * \param vcpu Which virtual CPU should get dumped
- * \return 0 on success
- */
-void kvm_show_regs(CPUState *env);
 
 int kvm_set_irq_level(kvm_context_t kvm, int irq, int level, int *status);
 
