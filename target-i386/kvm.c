@@ -331,7 +331,6 @@ int kvm_arch_on_sigbus(int code, void *addr)
     return 0;
 }
 
-#ifdef OBSOLETE_KVM_IMPL
 static int kvm_inject_mce_oldstyle(CPUState *env)
 {
 #ifdef KVM_CAP_MCE
@@ -363,7 +362,6 @@ static int kvm_inject_mce_oldstyle(CPUState *env)
 #endif /* KVM_CAP_MCE */
     return 0;
 }
-#endif
 
 static void cpu_update_state(void *opaque, int running, int reason)
 {
@@ -1454,7 +1452,6 @@ static int kvm_get_debugregs(CPUState *env)
     return 0;
 }
 
-#ifdef OBSOLETE_KVM_IMPL
 int kvm_arch_put_registers(CPUState *env, int level)
 {
     int ret;
@@ -1491,6 +1488,8 @@ int kvm_arch_put_registers(CPUState *env, int level)
         if (ret < 0) {
             return ret;
         }
+
+        kvm_load_lapic(env);
     }
     ret = kvm_put_vcpu_events(env, level);
     if (ret < 0) {
@@ -1499,6 +1498,11 @@ int kvm_arch_put_registers(CPUState *env, int level)
     ret = kvm_put_debugregs(env);
     if (ret < 0) {
         return ret;
+    }
+    if (level == KVM_PUT_FULL_STATE) {
+        if (env->kvm_vcpu_update_vapic) {
+            kvm_tpr_enable_vapic(env);
+        }
     }
     /* must be last */
     ret = kvm_guest_debug_workarounds(env);
@@ -1538,6 +1542,7 @@ int kvm_arch_get_registers(CPUState *env)
     if (ret < 0) {
         return ret;
     }
+    kvm_save_lapic(env);
     ret = kvm_get_vcpu_events(env);
     if (ret < 0) {
         return ret;
@@ -1549,6 +1554,7 @@ int kvm_arch_get_registers(CPUState *env)
     return 0;
 }
 
+#ifdef OBSOLETE_KVM_IMPL
 void kvm_arch_pre_run(CPUState *env, struct kvm_run *run)
 {
     int ret;

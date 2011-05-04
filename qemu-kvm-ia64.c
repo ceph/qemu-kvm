@@ -16,12 +16,12 @@ int kvm_arch_qemu_create_context(void)
     return 0;
 }
 
-void kvm_arch_load_regs(CPUState *env, int level)
+void kvm_arch_put_registers(CPUState *env, int level)
 {
 }
 
 
-void kvm_arch_save_regs(CPUState *env)
+void kvm_arch_get_registers(CPUState *env)
 {
 }
 

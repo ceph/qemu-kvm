@@ -657,8 +657,6 @@ int kvm_qemu_destroy_memory_alias(uint64_t phys_start);
 
 int kvm_arch_qemu_create_context(void);
 
-void kvm_arch_save_regs(CPUState *env);
-void kvm_arch_load_regs(CPUState *env, int level);
 int kvm_arch_has_work(CPUState *env);
 void kvm_arch_process_irqchip_events(CPUState *env);
 int kvm_arch_try_push_interrupts(void *opaque);
