@@ -26,7 +26,6 @@
 
 #define MSR_IA32_TSC            0x10
 
-static struct kvm_msr_list *kvm_msr_list;
 extern unsigned int kvm_shadow_memory;
 
 int kvm_set_tss_addr(kvm_context_t kvm, unsigned long addr)
@@ -338,35 +337,6 @@ void kvm_show_code(CPUState *env)
     fprintf(stderr, "code:%s\n", code_str);
 }
 
-
-/*
- * Returns available msr list.  User must free.
- */
-static struct kvm_msr_list *kvm_get_msr_list(void)
-{
-    struct kvm_msr_list sizer, *msrs;
-    int r;
-
-    sizer.nmsrs = 0;
-    r = kvm_ioctl(kvm_state, KVM_GET_MSR_INDEX_LIST, &sizer);
-    if (r < 0 && r != -E2BIG) {
-        return NULL;
-    }
-    /* Old kernel modules had a bug and could write beyond the provided
-       memory. Allocate at least a safe amount of 1K. */
-    msrs = qemu_malloc(MAX(1024, sizeof(*msrs) +
-                           sizer.nmsrs * sizeof(*msrs->indices)));
-
-    msrs->nmsrs = sizer.nmsrs;
-    r = kvm_ioctl(kvm_state, KVM_GET_MSR_INDEX_LIST, msrs);
-    if (r < 0) {
-        free(msrs);
-        errno = r;
-        return NULL;
-    }
-    return msrs;
-}
-
 static void print_seg(FILE *file, const char *name, struct kvm_segment *seg)
 {
     fprintf(stderr,
@@ -494,11 +464,6 @@ int kvm_arch_qemu_create_context(void)
     r = kvm_get_supported_msrs(kvm_state);
     if (r < 0) {
         return r;
-    }
-
-    kvm_msr_list = kvm_get_msr_list();
-    if (!kvm_msr_list) {
-        return -1;
     }
 
     r = kvm_set_boot_cpu_id(0);
@@ -653,42 +618,8 @@ void kvm_arch_push_nmi(void *opaque)
 }
 #endif /* KVM_CAP_USER_NMI */
 
-static int kvm_reset_msrs(CPUState *env)
-{
-    struct {
-        struct kvm_msrs info;
-        struct kvm_msr_entry entries[100];
-    } msr_data;
-    int n;
-    struct kvm_msr_entry *msrs = msr_data.entries;
-    uint32_t index;
-    uint64_t data;
-
-    if (!kvm_msr_list) {
-        return -1;
-    }
-
-    for (n = 0; n < kvm_msr_list->nmsrs; n++) {
-        index = kvm_msr_list->indices[n];
-        switch (index) {
-        case MSR_PAT:
-            data = 0x0007040600070406ULL;
-            break;
-        default:
-            data = 0;
-        }
-        kvm_msr_entry_set(&msrs[n], kvm_msr_list->indices[n], data);
-    }
-
-    msr_data.info.nmsrs = n;
-
-    return kvm_vcpu_ioctl(env, KVM_SET_MSRS, &msr_data);
-}
-
-
 void kvm_arch_cpu_reset(CPUState *env)
 {
-    kvm_reset_msrs(env);
     kvm_arch_reset_vcpu(env);
 }
 
