@@ -1405,13 +1405,6 @@ static int kvm_create_context(void)
 
     kvm_create_irqchip(kvm_context);
 
-    if (kvm_pit && !kvm_pit_reinject) {
-        if (kvm_reinject_control(kvm_context, 0)) {
-            fprintf(stderr, "failure to disable in-kernel PIT reinjection\n");
-            return -1;
-        }
-    }
-
     /* There was a nasty bug in < kvm-80 that prevents memory slots from being
      * destroyed properly.  Since we rely on this capability, refuse to work
      * with any kernel without this capability. */

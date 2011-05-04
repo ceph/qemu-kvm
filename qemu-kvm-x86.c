@@ -111,6 +111,14 @@ static int kvm_create_pit(kvm_context_t kvm)
             fprintf(stderr, "Create kernel PIC irqchip failed\n");
             return r;
         }
+        if (!kvm_pit_reinject) {
+            r = kvm_reinject_control(kvm_context, 0);
+            if (r < 0) {
+                fprintf(stderr,
+                        "failure to disable in-kernel PIT reinjection\n");
+                return r;
+            }
+        }
     }
 #endif
     return 0;
