@@ -72,10 +72,6 @@ struct kvm_context {
 typedef struct kvm_context *kvm_context_t;
 
 #include "kvm.h"
-int kvm_alloc_kernel_memory(kvm_context_t kvm, unsigned long memory,
-                            void **vm_mem);
-int kvm_alloc_userspace_memory(kvm_context_t kvm, unsigned long memory,
-                               void **vm_mem);
 
 int kvm_arch_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
                     void **vm_mem);
@@ -92,10 +88,6 @@ void post_kvm_run(kvm_context_t kvm, CPUState *env);
 int pre_kvm_run(kvm_context_t kvm, CPUState *env);
 int handle_io_window(kvm_context_t kvm);
 int try_push_interrupts(kvm_context_t kvm);
-
-#if defined(__x86_64__) || defined(__i386__)
-struct kvm_x86_mce;
-#endif
 
 /*!
  * \brief Disable the in-kernel IRQCHIP creation
@@ -170,52 +162,6 @@ int kvm_run(CPUState *env);
  */
 int kvm_is_ready_for_interrupt_injection(CPUState *env);
 
-/*!
- * \brief Read VCPU registers
- *
- * This gets the GP registers from the VCPU and outputs them
- * into a kvm_regs structure
- *
- * \note This function returns a \b copy of the VCPUs registers.\n
- * If you wish to modify the VCPUs GP registers, you should call kvm_set_regs()
- *
- * \param kvm Pointer to the current kvm_context
- * \param vcpu Which virtual CPU should get dumped
- * \param regs Pointer to a kvm_regs which will be populated with the VCPUs
- * registers values
- * \return 0 on success
- */
-int kvm_get_regs(CPUState *env, struct kvm_regs *regs);
-
-/*!
- * \brief Write VCPU registers
- *
- * This sets the GP registers on the VCPU from a kvm_regs structure
- *
- * \note When this function returns, the regs pointer and the data it points to
- * can be discarded
- * \param kvm Pointer to the current kvm_context
- * \param vcpu Which virtual CPU should get dumped
- * \param regs Pointer to a kvm_regs which will be populated with the VCPUs
- * registers values
- * \return 0 on success
- */
-int kvm_set_regs(CPUState *env, struct kvm_regs *regs);
-
-#ifdef KVM_CAP_MP_STATE
-/*!
- *  * \brief Read VCPU MP state
- *
- */
-int kvm_get_mpstate(CPUState *env, struct kvm_mp_state *mp_state);
-
-/*!
- *  * \brief Write VCPU MP state
- *
- */
-int kvm_set_mpstate(CPUState *env, struct kvm_mp_state *mp_state);
-#endif
-
 #if defined(__i386__) || defined(__x86_64__)
 /*!
  * \brief Simulate an external vectored interrupt
@@ -238,14 +184,6 @@ int kvm_inject_irq(CPUState *env, unsigned irq);
  */
 int kvm_set_shadow_pages(kvm_context_t kvm, unsigned int nrshadow_pages);
 
-/*!
- * \brief Getting the number of shadow pages that are allocated to the vm
- *
- * \param kvm pointer to kvm_context
- * \param nrshadow_pages number of pages to be allocated
- */
-int kvm_get_shadow_pages(kvm_context_t kvm, unsigned int *nrshadow_pages);
-
 #endif
 
 /*!
@@ -262,61 +200,7 @@ int kvm_get_shadow_pages(kvm_context_t kvm, unsigned int *nrshadow_pages);
  */
 void kvm_show_regs(CPUState *env);
 
-
-void *kvm_create_phys_mem(kvm_context_t, unsigned long phys_start,
-                          unsigned long len, int log, int writable);
-void kvm_destroy_phys_mem(kvm_context_t, unsigned long phys_start,
-                          unsigned long len);
-
-int kvm_is_containing_region(kvm_context_t kvm, unsigned long phys_start,
-                             unsigned long size);
-int kvm_register_phys_mem(kvm_context_t kvm, unsigned long phys_start,
-                          void *userspace_addr, unsigned long len, int log);
-int kvm_get_dirty_pages_range(kvm_context_t kvm, unsigned long phys_addr,
-                              unsigned long end_addr, void *opaque,
-                              int (*cb)(unsigned long start,
-                                        unsigned long len, void *bitmap,
-                                        void *opaque));
-int kvm_register_coalesced_mmio(kvm_context_t kvm, uint64_t addr,
-                                uint32_t size);
-int kvm_unregister_coalesced_mmio(kvm_context_t kvm, uint64_t addr,
-                                  uint32_t size);
-
-/*!
- * \brief Get a bitmap of guest ram pages which are allocated to the guest.
- *
- * \param kvm Pointer to the current kvm_context
- * \param phys_addr Memory slot phys addr
- * \param bitmap Long aligned address of a big enough bitmap (one bit per page)
- */
-int kvm_get_mem_map(kvm_context_t kvm, unsigned long phys_addr, void *bitmap);
-int kvm_get_mem_map_range(kvm_context_t kvm, unsigned long phys_addr,
-                          unsigned long len, void *buf, void *opaque,
-                          int (*cb)(unsigned long start,
-                                    unsigned long len, void *bitmap,
-                                    void *opaque));
 int kvm_set_irq_level(kvm_context_t kvm, int irq, int level, int *status);
-
-int kvm_dirty_pages_log_enable_slot(kvm_context_t kvm, uint64_t phys_start,
-                                    uint64_t len);
-int kvm_dirty_pages_log_disable_slot(kvm_context_t kvm, uint64_t phys_start,
-                                     uint64_t len);
-/*!
- * \brief Enable dirty-pages-logging for all memory regions
- *
- * \param kvm Pointer to the current kvm_context
- */
-int kvm_dirty_pages_log_enable_all(kvm_context_t kvm);
-
-/*!
- * \brief Disable dirty-page-logging for some memory regions
- *
- * Disable dirty-pages-logging for those memory regions that were
- * created with dirty-page-logging disabled.
- *
- * \param kvm Pointer to the current kvm_context
- */
-int kvm_dirty_pages_log_reset(kvm_context_t kvm);
 
 #ifdef KVM_CAP_IRQCHIP
 /*!
@@ -570,20 +454,6 @@ int kvm_update_routing_entry(struct kvm_irq_routing_entry *entry,
                              struct kvm_irq_routing_entry *newentry);
 
 
-/*!
- * \brief Create a file descriptor for injecting interrupts
- *
- * Creates an eventfd based file-descriptor that maps to a specific GSI
- * in the guest.  eventfd compliant signaling (write() from userspace, or
- * eventfd_signal() from kernelspace) will cause the GSI to inject
- * itself into the guest at the next available window.
- *
- * \param kvm Pointer to the current kvm_context
- * \param gsi GSI to assign to this fd
- * \param flags reserved, must be zero
- */
-int kvm_irqfd(kvm_context_t kvm, int gsi, int flags);
-
 #ifdef KVM_CAP_DEVICE_MSIX
 int kvm_assign_set_msix_nr(kvm_context_t kvm,
                            struct kvm_assigned_msix_nr *msix_nr);
@@ -594,7 +464,6 @@ int kvm_assign_set_msix_entry(kvm_context_t kvm,
 #else                           /* !CONFIG_KVM */
 
 typedef struct kvm_context *kvm_context_t;
-typedef struct kvm_vcpu_context *kvm_vcpu_context_t;
 
 struct kvm_pit_state {
 };
@@ -616,33 +485,15 @@ int kvm_init(void);
 
 int kvm_main_loop(void);
 int kvm_init_ap(void);
-int kvm_vcpu_inited(CPUState *env);
 void kvm_save_lapic(CPUState *env);
 void kvm_load_lapic(CPUState *env);
 
 void kvm_hpet_enable_kpit(void);
 void kvm_hpet_disable_kpit(void);
 
-int kvm_physical_memory_set_dirty_tracking(int enable);
-
 void on_vcpu(CPUState *env, void (*func)(void *data), void *data);
-void qemu_kvm_call_with_env(void (*func)(void *), void *data, CPUState *env);
-void qemu_kvm_cpuid_on_env(CPUState *env);
 void kvm_inject_interrupt(CPUState *env, int mask);
-void kvm_update_after_sipi(CPUState *env);
 void kvm_update_interrupt_request(CPUState *env);
-#ifndef CONFIG_USER_ONLY
-void *kvm_cpu_create_phys_mem(target_phys_addr_t start_addr, unsigned long size,
-                              int log, int writable);
-
-void kvm_cpu_destroy_phys_mem(target_phys_addr_t start_addr,
-                              unsigned long size);
-void kvm_qemu_log_memory(target_phys_addr_t start, target_phys_addr_t size,
-                         int log);
-#endif
-int kvm_qemu_create_memory_alias(uint64_t phys_start, uint64_t len,
-                                 uint64_t target_phys);
-int kvm_qemu_destroy_memory_alias(uint64_t phys_start);
 
 int kvm_arch_qemu_create_context(void);
 
@@ -652,16 +503,9 @@ int kvm_arch_try_push_interrupts(void *opaque);
 void kvm_arch_push_nmi(void *opaque);
 int kvm_set_boot_cpu_id(uint32_t id);
 
-void qemu_kvm_aio_wait_start(void);
-void qemu_kvm_aio_wait(void);
-void qemu_kvm_aio_wait_end(void);
-
 void kvm_tpr_access_report(CPUState *env, uint64_t rip, int is_write);
 
 int kvm_arch_init_irq_routing(void);
-
-int kvm_mmio_read(void *opaque, uint64_t addr, uint8_t * data, int len);
-int kvm_mmio_write(void *opaque, uint64_t addr, uint8_t * data, int len);
 
 #ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
 struct ioperm_data;
@@ -671,9 +515,6 @@ void kvm_add_ioperm_data(struct ioperm_data *data);
 void kvm_remove_ioperm_data(unsigned long start_port, unsigned long num);
 void kvm_arch_do_ioperm(void *_data);
 #endif
-
-#define ALIGN(x, y)  (((x)+(y)-1) & ~((y)-1))
-#define BITMAP_SIZE(m) (ALIGN(((m)>>TARGET_PAGE_BITS), HOST_LONG_BITS) / 8)
 
 #ifdef CONFIG_KVM
 #include "qemu-queue.h"
@@ -691,7 +532,6 @@ struct ioperm_data {
     QLIST_ENTRY(ioperm_data) entries;
 };
 
-void qemu_kvm_cpu_stop(CPUState *env);
 int kvm_arch_halt(CPUState *env);
 int handle_tpr_access(void *opaque, CPUState *env, uint64_t rip,
                       int is_write);
@@ -706,7 +546,6 @@ int handle_tpr_access(void *opaque, CPUState *env, uint64_t rip,
 #ifdef TARGET_I386
 #define qemu_kvm_has_pit_state2() (0)
 #endif
-#define qemu_kvm_cpu_stop(env) do {} while(0)
 #endif
 
 #ifdef CONFIG_KVM

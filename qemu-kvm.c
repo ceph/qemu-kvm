@@ -31,9 +31,6 @@
 #include "compatfd.h"
 #include <sys/prctl.h>
 
-#define false 0
-#define true 1
-
 #ifndef PR_MCE_KILL
 #define PR_MCE_KILL 33
 #endif
@@ -70,9 +67,6 @@ __thread CPUState *current_env;
 static int qemu_system_ready;
 
 #define SIG_IPI (SIGRTMIN+4)
-
-pthread_t io_thread;
-static int io_thread_sigfd = -1;
 
 CPUState *kvm_debug_cpu_requested;
 
@@ -376,40 +370,6 @@ int kvm_set_irqchip(kvm_context_t kvm, struct kvm_irqchip *chip)
     return r;
 }
 
-#endif
-
-int kvm_get_regs(CPUState *env, struct kvm_regs *regs)
-{
-    return kvm_vcpu_ioctl(env, KVM_GET_REGS, regs);
-}
-
-int kvm_set_regs(CPUState *env, struct kvm_regs *regs)
-{
-    return kvm_vcpu_ioctl(env, KVM_SET_REGS, regs);
-}
-
-#ifdef KVM_CAP_MP_STATE
-int kvm_get_mpstate(CPUState *env, struct kvm_mp_state *mp_state)
-{
-    int r;
-
-    r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_MP_STATE);
-    if (r > 0) {
-        return kvm_vcpu_ioctl(env, KVM_GET_MP_STATE, mp_state);
-    }
-    return -ENOSYS;
-}
-
-int kvm_set_mpstate(CPUState *env, struct kvm_mp_state *mp_state)
-{
-    int r;
-
-    r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_MP_STATE);
-    if (r > 0) {
-        return kvm_vcpu_ioctl(env, KVM_SET_MP_STATE, mp_state);
-    }
-    return -ENOSYS;
-}
 #endif
 
 static int handle_mmio(CPUState *env)
@@ -979,51 +939,6 @@ int kvm_assign_set_msix_entry(kvm_context_t kvm,
 }
 #endif
 
-#if defined(KVM_CAP_IRQFD) && defined(CONFIG_EVENTFD)
-
-#include <sys/eventfd.h>
-
-static int _kvm_irqfd(kvm_context_t kvm, int fd, int gsi, int flags)
-{
-    struct kvm_irqfd data = {
-        .fd = fd,
-        .gsi = gsi,
-        .flags = flags,
-    };
-
-    return kvm_vm_ioctl(kvm_state, KVM_IRQFD, &data);
-}
-
-int kvm_irqfd(kvm_context_t kvm, int gsi, int flags)
-{
-    int r;
-    int fd;
-
-    if (!kvm_check_extension(kvm_state, KVM_CAP_IRQFD))
-        return -ENOENT;
-
-    fd = eventfd(0, 0);
-    if (fd < 0) {
-        return -errno;
-    }
-
-    r = _kvm_irqfd(kvm, fd, gsi, 0);
-    if (r < 0) {
-        close(fd);
-        return -errno;
-    }
-
-    return fd;
-}
-
-#else                           /* KVM_CAP_IRQFD */
-
-int kvm_irqfd(kvm_context_t kvm, int gsi, int flags)
-{
-    return -ENOSYS;
-}
-
-#endif                          /* KVM_CAP_IRQFD */
 unsigned long kvm_get_thread_id(void)
 {
     return syscall(SYS_gettid);
@@ -1383,11 +1298,6 @@ int kvm_init_vcpu(CPUState *env)
     return 0;
 }
 
-int kvm_vcpu_inited(CPUState *env)
-{
-    return env->created;
-}
-
 #ifdef TARGET_I386
 void kvm_hpet_disable_kpit(void)
 {
@@ -1465,7 +1375,6 @@ int kvm_main_loop(void)
     sigset_t mask;
     int sigfd;
 
-    io_thread = pthread_self();
     qemu_system_ready = 1;
 
     sigemptyset(&mask);
@@ -1487,7 +1396,6 @@ int kvm_main_loop(void)
 
     pthread_cond_broadcast(&qemu_system_cond);
 
-    io_thread_sigfd = sigfd;
     cpu_single_env = NULL;
 
     while (1) {

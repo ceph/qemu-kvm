@@ -418,21 +418,6 @@ int kvm_set_shadow_pages(kvm_context_t kvm, unsigned int nrshadow_pages)
     return -1;
 }
 
-int kvm_get_shadow_pages(kvm_context_t kvm, unsigned int *nrshadow_pages)
-{
-#ifdef KVM_CAP_MMU_SHADOW_CACHE_CONTROL
-    int r;
-
-    r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION,
-                  KVM_CAP_MMU_SHADOW_CACHE_CONTROL);
-    if (r > 0) {
-        *nrshadow_pages = kvm_vm_ioctl(kvm_state, KVM_GET_NR_MMU_PAGES);
-        return 0;
-    }
-#endif
-    return -1;
-}
-
 #ifdef KVM_CAP_VAPIC
 static int kvm_enable_tpr_access_reporting(CPUState *env)
 {
