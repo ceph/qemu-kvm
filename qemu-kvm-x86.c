@@ -116,9 +116,9 @@ static int kvm_create_pit(kvm_context_t kvm)
     return 0;
 }
 
-int kvm_arch_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
-                        void **vm_mem)
+int kvm_arch_create(kvm_context_t kvm)
 {
+    struct utsname utsname;
     int r = 0;
 
     r = kvm_init_tss(kvm);
@@ -146,6 +146,24 @@ int kvm_arch_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
 
     r = kvm_init_coalesced_mmio(kvm);
     if (r < 0) {
+        return r;
+    }
+
+    uname(&utsname);
+    lm_capable_kernel = strcmp(utsname.machine, "x86_64") == 0;
+
+    if (kvm_shadow_memory) {
+        kvm_set_shadow_pages(kvm_context, kvm_shadow_memory);
+    }
+
+    /* initialize has_msr_star/has_msr_hsave_pa */
+    r = kvm_get_supported_msrs(kvm_state);
+    if (r < 0) {
+        return r;
+    }
+
+    r = kvm_set_boot_cpu_id(0);
+    if (r < 0 && r != -ENOSYS) {
         return r;
     }
 
@@ -425,32 +443,6 @@ static int kvm_enable_tpr_access_reporting(CPUState *env)
     return kvm_vcpu_ioctl(env, KVM_TPR_ACCESS_REPORTING, &tac);
 }
 #endif
-
-int kvm_arch_qemu_create_context(void)
-{
-    int r;
-    struct utsname utsname;
-
-    uname(&utsname);
-    lm_capable_kernel = strcmp(utsname.machine, "x86_64") == 0;
-
-    if (kvm_shadow_memory) {
-        kvm_set_shadow_pages(kvm_context, kvm_shadow_memory);
-    }
-
-    /* initialize has_msr_star/has_msr_hsave_pa */
-    r = kvm_get_supported_msrs(kvm_state);
-    if (r < 0) {
-        return r;
-    }
-
-    r = kvm_set_boot_cpu_id(0);
-    if (r < 0 && r != -ENOSYS) {
-        return r;
-    }
-
-    return 0;
-}
 
 static int _kvm_arch_init_vcpu(CPUState *env)
 {

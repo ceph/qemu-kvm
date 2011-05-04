@@ -64,8 +64,7 @@ typedef struct kvm_context *kvm_context_t;
 
 #include "kvm.h"
 
-int kvm_arch_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
-                    void **vm_mem);
+int kvm_arch_create(kvm_context_t kvm);
 
 int kvm_arch_run(CPUState *env);
 
@@ -448,8 +447,6 @@ void kvm_hpet_disable_kpit(void);
 void on_vcpu(CPUState *env, void (*func)(void *data), void *data);
 void kvm_inject_interrupt(CPUState *env, int mask);
 void kvm_update_interrupt_request(CPUState *env);
-
-int kvm_arch_qemu_create_context(void);
 
 int kvm_arch_has_work(CPUState *env);
 void kvm_arch_process_irqchip_events(CPUState *env);

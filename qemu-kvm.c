@@ -1397,7 +1397,7 @@ static int kvm_create_context(void)
         return -1;
     }
 
-    r = kvm_arch_create(kvm_context, 0, NULL);
+    r = kvm_arch_create(kvm_context);
     if (r < 0) {
         kvm_finalize(kvm_state);
         return r;
@@ -1405,11 +1405,6 @@ static int kvm_create_context(void)
 
     kvm_create_irqchip(kvm_context);
 
-    r = kvm_arch_qemu_create_context();
-    if (r < 0) {
-        kvm_finalize(kvm_state);
-        return -1;
-    }
     if (kvm_pit && !kvm_pit_reinject) {
         if (kvm_reinject_control(kvm_context, 0)) {
             fprintf(stderr, "failure to disable in-kernel PIT reinjection\n");
