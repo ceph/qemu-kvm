@@ -22,7 +22,6 @@
 #include "qemu-thread.h"
 
 #include "qemu-kvm.h"
-#include "libkvm.h"
 
 #include <pthread.h>
 #include <sys/utsname.h>
@@ -83,9 +82,6 @@ static QLIST_HEAD(, ioperm_data) ioperm_head;
 #endif
 
 #define ALIGN(x, y) (((x)+(y)-1) & ~((y)-1))
-
-int kvm_abi = EXPECTED_KVM_API_VERSION;
-int kvm_page_size;
 
 static int handle_unhandled(uint64_t reason)
 {
@@ -162,8 +158,6 @@ int kvm_init(void)
         fprintf(stderr, "kvm userspace version too old\n");
         goto out_close;
     }
-    kvm_abi = r;
-    kvm_page_size = getpagesize();
     kvm_state = qemu_mallocz(sizeof(*kvm_state));
     kvm_context = &kvm_state->kvm_context;
 

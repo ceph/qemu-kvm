@@ -43,9 +43,6 @@
 #define MAX_VCPUS 16
 #endif
 
-/* kvm abi verison variable */
-extern int kvm_abi;
-
 /**
  * \brief The KVM context
  *
@@ -455,14 +452,6 @@ int kvm_get_pit2(kvm_context_t kvm, struct kvm_pit_state2 *ps2);
 
 int kvm_enable_vapic(CPUState *env, uint64_t vapic);
 
-#endif
-
-#if defined(__s390__)
-int kvm_s390_initial_reset(kvm_context_t kvm, int slot);
-int kvm_s390_interrupt(kvm_context_t kvm, int slot,
-                       struct kvm_s390_interrupt *kvmint);
-int kvm_s390_set_initial_psw(kvm_context_t kvm, int slot, psw_t psw);
-int kvm_s390_store_status(kvm_context_t kvm, int slot, unsigned long addr);
 #endif
 
 #ifdef KVM_CAP_DEVICE_ASSIGNMENT

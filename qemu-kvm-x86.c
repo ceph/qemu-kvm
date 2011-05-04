@@ -15,7 +15,6 @@
 #include <sys/io.h>
 
 #include "qemu-kvm.h"
-#include "libkvm.h"
 #include <pthread.h>
 #include <sys/utsname.h>
 #include <linux/kvm_para.h>
@@ -28,7 +27,7 @@
 
 extern unsigned int kvm_shadow_memory;
 
-int kvm_set_tss_addr(kvm_context_t kvm, unsigned long addr)
+static int kvm_set_tss_addr(kvm_context_t kvm, unsigned long addr)
 {
     int r;
 
