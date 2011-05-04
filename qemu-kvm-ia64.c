@@ -120,7 +120,7 @@ void kvm_arch_load_mpstate(CPUState *env)
 #endif
 }
 
-void kvm_arch_cpu_reset(CPUState *env)
+void kvm_arch_reset_vcpu(CPUState *env)
 {
     if (kvm_irqchip_in_kernel(kvm_context)) {
 #ifdef KVM_CAP_MP_STATE

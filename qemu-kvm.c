@@ -224,13 +224,6 @@ void kvm_disable_pit_creation(kvm_context_t kvm)
     kvm->no_pit_creation = 1;
 }
 
-static void kvm_reset_vcpu(void *opaque)
-{
-    CPUState *env = opaque;
-
-    kvm_arch_cpu_reset(env);
-}
-
 static void kvm_create_vcpu(CPUState *env, int id)
 {
     long mmap_size;

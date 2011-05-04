@@ -183,14 +183,12 @@ static int kvm_set_user_memory_region(KVMState *s, KVMSlot *slot)
     return kvm_vm_ioctl(s, KVM_SET_USER_MEMORY_REGION, &mem);
 }
 
-#ifdef OBSOLETE_KVM_IMPL
 static void kvm_reset_vcpu(void *opaque)
 {
     CPUState *env = opaque;
 
     kvm_arch_reset_vcpu(env);
 }
-#endif
 
 int kvm_irqchip_in_kernel(void)
 {

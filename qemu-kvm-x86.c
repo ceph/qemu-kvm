@@ -618,11 +618,6 @@ void kvm_arch_push_nmi(void *opaque)
 }
 #endif /* KVM_CAP_USER_NMI */
 
-void kvm_arch_cpu_reset(CPUState *env)
-{
-    kvm_arch_reset_vcpu(env);
-}
-
 #ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
 void kvm_arch_do_ioperm(void *_data)
 {
