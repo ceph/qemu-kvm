@@ -3382,6 +3382,7 @@ case "$target_arch2" in
       \( "$target_arch2" = "x86_64" -a "$cpu" = "i386"   \) -o \
       \( "$target_arch2" = "i386"   -a "$cpu" = "x86_64" \) \) ; then
       echo "CONFIG_KVM=y" >> $config_target_mak
+      echo "CONFIG_THREAD=y" >> $config_host_mak
       echo "KVM_CFLAGS=$kvm_cflags" >> $config_target_mak
       if test "$kvm_para" = "yes"; then
         echo "CONFIG_KVM_PARA=y" >> $config_target_mak

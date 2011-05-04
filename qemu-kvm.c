@@ -19,6 +19,7 @@
 #include "gdbstub.h"
 #include "monitor.h"
 #include "cpus.h"
+#include "qemu-thread.h"
 
 #include "qemu-kvm.h"
 #include "libkvm.h"
@@ -498,7 +499,7 @@ int kvm_run(CPUState *env)
     }
     if (env->exit_request) {
         env->exit_request = 0;
-        pthread_kill(env->kvm_cpu_state.thread, SIG_IPI);
+        pthread_kill(env->thread->thread, SIG_IPI);
     }
     r = ioctl(fd, KVM_RUN, 0);
 
@@ -1034,7 +1035,7 @@ unsigned long kvm_get_thread_id(void)
     return syscall(SYS_gettid);
 }
 
-static void qemu_cond_wait(pthread_cond_t *cond)
+static void kvm_cond_wait(pthread_cond_t *cond)
 {
     CPUState *env = cpu_single_env;
 
@@ -1090,9 +1091,9 @@ void on_vcpu(CPUState *env, void (*func)(void *data), void *data)
     wi.next = NULL;
     wi.done = false;
 
-    pthread_kill(env->kvm_cpu_state.thread, SIG_IPI);
+    pthread_kill(env->thread->thread, SIG_IPI);
     while (!wi.done) {
-        qemu_cond_wait(&qemu_work_cond);
+        kvm_cond_wait(&qemu_work_cond);
     }
 }
 
@@ -1153,8 +1154,8 @@ void kvm_update_interrupt_request(CPUState *env)
 
         if (signal) {
             env->kvm_cpu_state.signalled = 1;
-            if (env->kvm_cpu_state.thread) {
-                pthread_kill(env->kvm_cpu_state.thread, SIG_IPI);
+            if (env->thread) {
+                pthread_kill(env->thread->thread, SIG_IPI);
             }
         }
     }
@@ -1272,7 +1273,7 @@ static void pause_all_threads(void)
     while (penv) {
         if (penv != cpu_single_env) {
             penv->stop = 1;
-            pthread_kill(penv->kvm_cpu_state.thread, SIG_IPI);
+            pthread_kill(penv->thread->thread, SIG_IPI);
         } else {
             penv->stop = 0;
             penv->stopped = 1;
@@ -1282,7 +1283,7 @@ static void pause_all_threads(void)
     }
 
     while (!all_threads_paused()) {
-        qemu_cond_wait(&qemu_pause_cond);
+        kvm_cond_wait(&qemu_pause_cond);
     }
 }
 
@@ -1295,7 +1296,7 @@ static void resume_all_threads(void)
     while (penv) {
         penv->stop = 0;
         penv->stopped = 0;
-        pthread_kill(penv->kvm_cpu_state.thread, SIG_IPI);
+        pthread_kill(penv->thread->thread, SIG_IPI);
         penv = (CPUState *) penv->next_cpu;
     }
 }
@@ -1368,15 +1369,12 @@ static int kvm_main_loop_cpu(CPUState *env)
 static void *ap_main_loop(void *_env)
 {
     CPUState *env = _env;
-    sigset_t signals;
 #ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
     struct ioperm_data *data = NULL;
 #endif
 
     current_env = env;
     env->thread_id = kvm_get_thread_id();
-    sigfillset(&signals);
-    sigprocmask(SIG_BLOCK, &signals, NULL);
 
 #ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
     /* do ioperm for io ports of assigned devices */
@@ -1398,7 +1396,7 @@ static void *ap_main_loop(void *_env)
 
     /* and wait for machine initialization */
     while (!qemu_system_ready) {
-        qemu_cond_wait(&qemu_system_cond);
+        kvm_cond_wait(&qemu_system_cond);
     }
 
     /* re-initialize cpu_single_env after re-acquiring qemu_mutex */
@@ -1410,10 +1408,11 @@ static void *ap_main_loop(void *_env)
 
 int kvm_init_vcpu(CPUState *env)
 {
-    pthread_create(&env->kvm_cpu_state.thread, NULL, ap_main_loop, env);
+    env->thread = qemu_mallocz(sizeof(QemuThread));
+    qemu_thread_create(env->thread, ap_main_loop, env);
 
     while (env->created == 0) {
-        qemu_cond_wait(&qemu_vcpu_cond);
+        kvm_cond_wait(&qemu_vcpu_cond);
     }
 
     return 0;

@@ -486,7 +486,7 @@ void kvm_arch_load_regs(CPUState *env, int level)
 {
     int rc;
 
-    assert(kvm_cpu_is_stopped(env) || env->thread_id == kvm_get_thread_id());
+    assert(kvm_cpu_is_stopped(env) || qemu_cpu_is_self(env));
 
     kvm_getput_regs(env, 1);
 
@@ -521,7 +521,7 @@ void kvm_arch_save_regs(CPUState *env)
 {
     int rc;
 
-    assert(kvm_cpu_is_stopped(env) || env->thread_id == kvm_get_thread_id());
+    assert(kvm_cpu_is_stopped(env) || qemu_cpu_is_self(env));
 
     kvm_getput_regs(env, 0);
 
