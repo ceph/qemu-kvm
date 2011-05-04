@@ -478,37 +478,6 @@ static int kvm_enable_tpr_access_reporting(CPUState *env)
 }
 #endif
 
-#ifdef KVM_CAP_ADJUST_CLOCK
-static struct kvm_clock_data kvmclock_data;
-
-static void kvmclock_pre_save(void *opaque)
-{
-    struct kvm_clock_data *cl = opaque;
-
-    kvm_vm_ioctl(kvm_state, KVM_GET_CLOCK, cl);
-}
-
-static int kvmclock_post_load(void *opaque, int version_id)
-{
-    struct kvm_clock_data *cl = opaque;
-
-    return kvm_vm_ioctl(kvm_state, KVM_SET_CLOCK, cl);
-}
-
-static const VMStateDescription vmstate_kvmclock= {
-    .name = "kvmclock",
-    .version_id = 1,
-    .minimum_version_id = 1,
-    .minimum_version_id_old = 1,
-    .pre_save = kvmclock_pre_save,
-    .post_load = kvmclock_post_load,
-    .fields      = (VMStateField []) {
-        VMSTATE_U64(clock, struct kvm_clock_data),
-        VMSTATE_END_OF_LIST()
-    }
-};
-#endif
-
 int kvm_arch_qemu_create_context(void)
 {
     int r;
@@ -531,12 +500,6 @@ int kvm_arch_qemu_create_context(void)
     if (!kvm_msr_list) {
         return -1;
     }
-
-#ifdef KVM_CAP_ADJUST_CLOCK
-    if (kvm_check_extension(kvm_state, KVM_CAP_ADJUST_CLOCK)) {
-        vmstate_register(NULL, 0, &vmstate_kvmclock, &kvmclock_data);
-    }
-#endif
 
     r = kvm_set_boot_cpu_id(0);
     if (r < 0 && r != -ENOSYS) {

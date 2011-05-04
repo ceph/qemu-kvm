@@ -94,11 +94,9 @@ static void pc_init1(ram_addr_t ram_size,
 
     pc_cpus_init(cpu_model);
 
-#ifdef OBSOLETE_KVM_IMPL
     if (kvmclock_enabled) {
         kvmclock_create();
     }
-#endif
 
     /* allocate ram and load rom/bios */
     pc_memory_init(ram_size, kernel_filename, kernel_cmdline, initrd_filename,
