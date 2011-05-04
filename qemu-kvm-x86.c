@@ -152,11 +152,6 @@ int kvm_arch_create(kvm_context_t kvm)
         return r;
     }
 
-    r = kvm_init_coalesced_mmio(kvm);
-    if (r < 0) {
-        return r;
-    }
-
     uname(&utsname);
     lm_capable_kernel = strcmp(utsname.machine, "x86_64") == 0;
 

@@ -495,20 +495,6 @@ int kvm_inject_nmi(CPUState *env)
 #endif
 }
 
-int kvm_init_coalesced_mmio(kvm_context_t kvm)
-{
-    int r = 0;
-    kvm_state->coalesced_mmio = 0;
-#ifdef KVM_CAP_COALESCED_MMIO
-    r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_COALESCED_MMIO);
-    if (r > 0) {
-        kvm_state->coalesced_mmio = r;
-        return 0;
-    }
-#endif
-    return r;
-}
-
 #ifdef KVM_CAP_DEVICE_ASSIGNMENT
 int kvm_assign_pci_device(kvm_context_t kvm,
                           struct kvm_assigned_pci_dev *assigned_dev)
@@ -1418,6 +1404,12 @@ static int kvm_create_context(void)
     if (r < 0) {
         return r;
     }
+
+    kvm_state->coalesced_mmio = 0;
+#ifdef KVM_CAP_COALESCED_MMIO
+    kvm_state->coalesced_mmio =
+        kvm_check_extension(kvm_state, KVM_CAP_COALESCED_MMIO);
+#endif
 
     kvm_state->vcpu_events = 0;
 #ifdef KVM_CAP_VCPU_EVENTS
