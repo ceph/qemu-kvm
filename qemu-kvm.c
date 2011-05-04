@@ -127,7 +127,7 @@ static int kvm_create_context(void);
 int kvm_init(void)
 {
     int fd;
-    int r, gsi_count;
+    int r, gsi_count, i;
 
 
     fd = open("/dev/kvm", O_RDWR);
@@ -160,6 +160,21 @@ int kvm_init(void)
 
 #ifdef KVM_CAP_SET_GUEST_DEBUG
     QTAILQ_INIT(&kvm_state->kvm_sw_breakpoints);
+#endif
+
+    for (i = 0; i < ARRAY_SIZE(kvm_state->slots); i++) {
+        kvm_state->slots[i].slot = i;
+    }
+
+#ifdef KVM_CAP_USER_MEMORY
+    r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_USER_MEMORY);
+    if (r <= 0) {
+        fprintf(stderr,
+                "Hypervisor too old: KVM_CAP_USER_MEMORY extension not supported\n");
+        goto out_close;
+    }
+#else
+#error Hypervisor too old: KVM_CAP_USER_MEMORY extension not supported
 #endif
 
     gsi_count = kvm_get_gsi_count(kvm_context);
@@ -212,39 +227,6 @@ static int kvm_set_boot_vcpu_id(kvm_context_t kvm, uint32_t id)
 #endif
 }
 
-int kvm_create_vm(kvm_context_t kvm)
-{
-    int fd;
-#ifdef KVM_CAP_IRQ_ROUTING
-    kvm->irq_routes = qemu_mallocz(sizeof(*kvm->irq_routes));
-    kvm->nr_allocated_irq_routes = 0;
-#endif
-
-    fd = kvm_ioctl(kvm_state, KVM_CREATE_VM, 0);
-    if (fd < 0) {
-        fprintf(stderr, "kvm_create_vm: %m\n");
-        return -1;
-    }
-    kvm_state->vmfd = fd;
-    return 0;
-}
-
-static int kvm_create_default_phys_mem(kvm_context_t kvm,
-                                       unsigned long phys_mem_bytes,
-                                       void **vm_mem)
-{
-#ifdef KVM_CAP_USER_MEMORY
-    int r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_USER_MEMORY);
-    if (r > 0)
-        return 0;
-    fprintf(stderr,
-            "Hypervisor too old: KVM_CAP_USER_MEMORY extension not supported\n");
-#else
-#error Hypervisor too old: KVM_CAP_USER_MEMORY extension not supported
-#endif
-    return -1;
-}
-
 void kvm_create_irqchip(kvm_context_t kvm)
 {
     int r;
@@ -269,32 +251,6 @@ void kvm_create_irqchip(kvm_context_t kvm)
         }
     }
 #endif
-}
-
-int kvm_create(kvm_context_t kvm, unsigned long phys_mem_bytes, void **vm_mem)
-{
-    int r, i;
-
-    r = kvm_create_vm(kvm);
-    if (r < 0) {
-        return r;
-    }
-    r = kvm_arch_create(kvm, phys_mem_bytes, vm_mem);
-    if (r < 0) {
-        return r;
-    }
-    for (i = 0; i < ARRAY_SIZE(kvm_state->slots); i++) {
-        kvm_state->slots[i].slot = i;
-    }
-
-    r = kvm_create_default_phys_mem(kvm, phys_mem_bytes, vm_mem);
-    if (r < 0) {
-        return r;
-    }
-
-    kvm_create_irqchip(kvm);
-
-    return 0;
 }
 
 #ifdef KVM_CAP_IRQCHIP
@@ -1429,10 +1385,26 @@ static int kvm_create_context(void)
 
     kvm_state->pit_in_kernel = kvm_pit;
 
-    if (kvm_create(kvm_context, 0, NULL) < 0) {
+#ifdef KVM_CAP_IRQ_ROUTING
+    kvm_context->irq_routes = qemu_mallocz(sizeof(*kvm_context->irq_routes));
+    kvm_context->nr_allocated_irq_routes = 0;
+#endif
+
+    kvm_state->vmfd = kvm_ioctl(kvm_state, KVM_CREATE_VM, 0);
+    if (kvm_state->vmfd < 0) {
+        fprintf(stderr, "kvm_create_vm: %m\n");
         kvm_finalize(kvm_state);
         return -1;
     }
+
+    r = kvm_arch_create(kvm_context, 0, NULL);
+    if (r < 0) {
+        kvm_finalize(kvm_state);
+        return r;
+    }
+
+    kvm_create_irqchip(kvm_context);
+
     r = kvm_arch_qemu_create_context();
     if (r < 0) {
         kvm_finalize(kvm_state);

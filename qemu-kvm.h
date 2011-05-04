@@ -80,23 +80,6 @@ int pre_kvm_run(kvm_context_t kvm, CPUState *env);
 int handle_io_window(kvm_context_t kvm);
 int try_push_interrupts(kvm_context_t kvm);
 
-/*!
- * \brief Create new virtual machine
- *
- * This creates a new virtual machine, maps physical RAM to it, and creates a
- * virtual CPU for it.\n
- * \n
- * Memory gets mapped for addresses 0->0xA0000, 0xC0000->phys_mem_bytes
- *
- * \param kvm Pointer to the current kvm_context
- * \param phys_mem_bytes The amount of physical ram you want the VM to have
- * \param phys_mem This pointer will be set to point to the memory that
- * kvm_create allocates for physical RAM
- * \return 0 on success
- */
-int kvm_create(kvm_context_t kvm, unsigned long phys_mem_bytes,
-               void **phys_mem);
-int kvm_create_vm(kvm_context_t kvm);
 void kvm_create_irqchip(kvm_context_t kvm);
 
 /*!
