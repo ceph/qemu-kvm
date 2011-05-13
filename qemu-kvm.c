@@ -127,7 +127,7 @@ static int kvm_create_context(void);
 int kvm_init(void)
 {
     int fd;
-    int r, gsi_count, i;
+    int r, i;
 
 
     fd = open("/dev/kvm", O_RDWR);
@@ -177,21 +177,6 @@ int kvm_init(void)
 #error Hypervisor too old: KVM_CAP_USER_MEMORY extension not supported
 #endif
 
-    gsi_count = kvm_get_gsi_count(kvm_context);
-    if (gsi_count > 0) {
-        int gsi_bits, i;
-
-        /* Round up so we can search ints using ffs */
-        gsi_bits = ALIGN(gsi_count, 32);
-        kvm_context->used_gsi_bitmap = qemu_mallocz(gsi_bits / 8);
-        kvm_context->max_gsi = gsi_bits;
-
-        /* Mark any over-allocated bits as already in use */
-        for (i = gsi_count; i < gsi_bits; i++) {
-            set_gsi(kvm_context, i);
-        }
-    }
-
     cpu_register_phys_memory_client(&kvm_cpu_phys_memory_client);
 
     pthread_mutex_lock(&qemu_mutex);
@@ -227,30 +212,68 @@ static int kvm_set_boot_vcpu_id(kvm_context_t kvm, uint32_t id)
 #endif
 }
 
-void kvm_create_irqchip(kvm_context_t kvm)
+static int kvm_init_irq_routing(kvm_context_t kvm)
 {
-    int r;
+#ifdef KVM_CAP_IRQ_ROUTING
+    int r, gsi_count;
 
-#ifdef KVM_CAP_IRQCHIP
-    if (kvm_irqchip) {
-        r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_IRQCHIP);
-        if (r > 0) {            /* kernel irqchip supported */
-            r = kvm_vm_ioctl(kvm_state, KVM_CREATE_IRQCHIP);
-            if (r >= 0) {
-                kvm->irqchip_inject_ioctl = KVM_IRQ_LINE;
-#if defined(KVM_CAP_IRQ_INJECT_STATUS) && defined(KVM_IRQ_LINE_STATUS)
-                r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION,
-                              KVM_CAP_IRQ_INJECT_STATUS);
-                if (r > 0) {
-                    kvm->irqchip_inject_ioctl = KVM_IRQ_LINE_STATUS;
-                }
-#endif
-                kvm_state->irqchip_in_kernel = 1;
-            } else
-                fprintf(stderr, "Create kernel PIC irqchip failed\n");
+    gsi_count = kvm_get_gsi_count(kvm);
+    if (gsi_count > 0) {
+        int gsi_bits, i;
+
+        /* Round up so we can search ints using ffs */
+        gsi_bits = ALIGN(gsi_count, 32);
+        kvm->used_gsi_bitmap = qemu_mallocz(gsi_bits / 8);
+        kvm->max_gsi = gsi_bits;
+
+        /* Mark any over-allocated bits as already in use */
+        for (i = gsi_count; i < gsi_bits; i++) {
+            set_gsi(kvm, i);
         }
     }
+
+    kvm->irq_routes = qemu_mallocz(sizeof(*kvm_context->irq_routes));
+    kvm->nr_allocated_irq_routes = 0;
+
+    r = kvm_arch_init_irq_routing();
+    if (r < 0) {
+        return r;
+    }
 #endif
+
+    return 0;
+}
+
+int kvm_create_irqchip(kvm_context_t kvm)
+{
+#ifdef KVM_CAP_IRQCHIP
+    int r;
+
+    if (!kvm_irqchip || !kvm_check_extension(kvm_state, KVM_CAP_IRQCHIP)) {
+        return 0;
+    }
+
+    r = kvm_vm_ioctl(kvm_state, KVM_CREATE_IRQCHIP);
+    if (r < 0) {
+        fprintf(stderr, "Create kernel PIC irqchip failed\n");
+        return r;
+    }
+
+    kvm->irqchip_inject_ioctl = KVM_IRQ_LINE;
+#if defined(KVM_CAP_IRQ_INJECT_STATUS) && defined(KVM_IRQ_LINE_STATUS)
+    if (kvm_check_extension(kvm_state, KVM_CAP_IRQ_INJECT_STATUS)) {
+        kvm->irqchip_inject_ioctl = KVM_IRQ_LINE_STATUS;
+    }
+#endif
+    kvm_state->irqchip_in_kernel = 1;
+
+    r = kvm_init_irq_routing(kvm);
+    if (r < 0) {
+        return r;
+    }
+#endif
+
+    return 0;
 }
 
 #ifdef KVM_CAP_IRQCHIP
@@ -1348,8 +1371,6 @@ int kvm_arch_init_irq_routing(void)
 }
 #endif
 
-extern int no_hpet;
-
 static int kvm_create_context(void)
 {
     static const char upgrade_note[] =
@@ -1359,11 +1380,6 @@ static int kvm_create_context(void)
     int r;
 
     kvm_state->pit_in_kernel = kvm_pit;
-
-#ifdef KVM_CAP_IRQ_ROUTING
-    kvm_context->irq_routes = qemu_mallocz(sizeof(*kvm_context->irq_routes));
-    kvm_context->nr_allocated_irq_routes = 0;
-#endif
 
     kvm_state->vmfd = kvm_ioctl(kvm_state, KVM_CREATE_VM, 0);
     if (kvm_state->vmfd < 0) {
@@ -1378,8 +1394,6 @@ static int kvm_create_context(void)
         return r;
     }
 
-    kvm_create_irqchip(kvm_context);
-
     /* There was a nasty bug in < kvm-80 that prevents memory slots from being
      * destroyed properly.  Since we rely on this capability, refuse to work
      * with any kernel without this capability. */
@@ -1390,7 +1404,7 @@ static int kvm_create_context(void)
         return -EINVAL;
     }
 
-    r = kvm_arch_init_irq_routing();
+    r = kvm_create_irqchip(kvm_context);
     if (r < 0) {
         return r;
     }
@@ -1424,21 +1438,6 @@ static int kvm_create_context(void)
     kvm_state->many_ioeventfds = kvm_check_many_ioeventfds();
 
     kvm_init_ap();
-    if (kvm_irqchip) {
-        if (!qemu_kvm_has_gsi_routing()) {
-#ifdef TARGET_I386
-            /* if kernel can't do irq routing, interrupt source
-             * override 0->2 can not be set up as required by hpet,
-             * so disable hpet.
-             */
-            no_hpet = 1;
-        } else if (!qemu_kvm_has_pit_state2()) {
-            no_hpet = 1;
-        }
-#else
-        }
-#endif
-    }
 
     return 0;
 }

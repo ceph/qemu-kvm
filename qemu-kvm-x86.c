@@ -299,7 +299,7 @@ int kvm_arch_init_irq_routing(void)
 {
     int i, r;
 
-    if (kvm_irqchip && kvm_has_gsi_routing()) {
+    if (kvm_has_gsi_routing()) {
         kvm_clear_gsi_routes();
         for (i = 0; i < 8; ++i) {
             if (i == 2) {
@@ -327,7 +327,18 @@ int kvm_arch_init_irq_routing(void)
             }
         }
         kvm_commit_irq_routes();
+
+        if (!qemu_kvm_has_pit_state2()) {
+            no_hpet = 1;
+        }
+    } else {
+        /* If kernel can't do irq routing, interrupt source
+         * override 0->2 can not be set up as required by HPET.
+         * so we have to disable it.
+         */
+        no_hpet = 1;
     }
+
     return 0;
 }
 

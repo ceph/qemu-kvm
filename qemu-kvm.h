@@ -74,7 +74,7 @@ int pre_kvm_run(kvm_context_t kvm, CPUState *env);
 int handle_io_window(kvm_context_t kvm);
 int try_push_interrupts(kvm_context_t kvm);
 
-void kvm_create_irqchip(kvm_context_t kvm);
+int kvm_create_irqchip(kvm_context_t kvm);
 
 /*!
  * \brief Start the VCPU
@@ -449,13 +449,11 @@ int kvm_arch_halt(CPUState *env);
 int handle_tpr_access(void *opaque, CPUState *env, uint64_t rip,
                       int is_write);
 
-#define qemu_kvm_has_gsi_routing() kvm_has_gsi_routing()
 #ifdef TARGET_I386
 #define qemu_kvm_has_pit_state2() kvm_has_pit_state2(kvm_context)
 #endif
 #else
 #define kvm_nested 0
-#define qemu_kvm_has_gsi_routing() (0)
 #ifdef TARGET_I386
 #define qemu_kvm_has_pit_state2() (0)
 #endif
