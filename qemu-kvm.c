@@ -217,7 +217,7 @@ static int kvm_init_irq_routing(kvm_context_t kvm)
 #ifdef KVM_CAP_IRQ_ROUTING
     int r, gsi_count;
 
-    gsi_count = kvm_get_gsi_count(kvm);
+    gsi_count = kvm_check_extension(kvm_state, KVM_CAP_IRQ_ROUTING);
     if (gsi_count > 0) {
         int gsi_bits, i;
 
@@ -588,15 +588,6 @@ int kvm_has_gsi_routing(void)
     r = kvm_check_extension(kvm_state, KVM_CAP_IRQ_ROUTING);
 #endif
     return r;
-}
-
-int kvm_get_gsi_count(kvm_context_t kvm)
-{
-#ifdef KVM_CAP_IRQ_ROUTING
-    return kvm_check_extension(kvm_state, KVM_CAP_IRQ_ROUTING);
-#else
-    return -EINVAL;
-#endif
 }
 
 int kvm_clear_gsi_routes(void)

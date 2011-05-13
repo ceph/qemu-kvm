@@ -306,17 +306,6 @@ int kvm_deassign_pci_device(kvm_context_t kvm,
 #endif
 
 /*!
- * \brief Determines the number of gsis that can be routed
- *
- * Returns the number of distinct gsis that can be routed by kvm.  This is
- * also the number of distinct routes (if a gsi has two routes, than another
- * gsi cannot be used...)
- *
- * \param kvm Pointer to the current kvm_context
- */
-int kvm_get_gsi_count(kvm_context_t kvm);
-
-/*!
  * \brief Clears the temporary irq routing table
  *
  * Clears the temporary irq routing table.  Nothing is committed to the
