@@ -50,8 +50,6 @@
     do { } while (0)
 #endif
 
-#ifdef OBSOLETE_KVM_IMPL
-
 typedef struct KVMSlot
 {
     target_phys_addr_t start_addr;
@@ -83,10 +81,19 @@ struct KVMState
     int xsave, xcrs;
     int many_ioeventfds;
     int pit_state2;
+
+    int irqchip_inject_ioctl;
+#ifdef KVM_CAP_IRQ_ROUTING
+    struct kvm_irq_routing *irq_routes;
+    int nr_allocated_irq_routes;
+#endif
+    void *used_gsi_bitmap;
+    int max_gsi;
 };
 
 KVMState *kvm_state;
 
+#ifdef OBSOLETE_KVM_IMPL
 
 static const KVMCapabilityInfo kvm_required_capabilites[] = {
     KVM_CAP_INFO(USER_MEMORY),

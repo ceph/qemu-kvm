@@ -43,25 +43,6 @@
 #define MAX_VCPUS 16
 #endif
 
-/**
- * \brief The KVM context
- *
- * The verbose KVM context
- */
-
-struct kvm_context {
-    /// ioctl to use to inject interrupts
-    int irqchip_inject_ioctl;
-#ifdef KVM_CAP_IRQ_ROUTING
-    struct kvm_irq_routing *irq_routes;
-    int nr_allocated_irq_routes;
-#endif
-    void *used_gsi_bitmap;
-    int max_gsi;
-};
-
-typedef struct kvm_context *kvm_context_t;
-
 #include "kvm.h"
 
 int kvm_arch_run(CPUState *env);
@@ -397,47 +378,8 @@ int handle_tpr_access(void *opaque, CPUState *env, uint64_t rip,
 #define kvm_nested 0
 #endif
 
-#ifdef CONFIG_KVM
-
-typedef struct KVMSlot {
-    target_phys_addr_t start_addr;
-    ram_addr_t memory_size;
-    ram_addr_t phys_offset;
-    int slot;
-    int flags;
-} KVMSlot;
-
-typedef struct kvm_dirty_log KVMDirtyLog;
-
-struct KVMState {
-    KVMSlot slots[32];
-    int fd;
-    int vmfd;
-    int coalesced_mmio;
-#ifdef KVM_CAP_COALESCED_MMIO
-    struct kvm_coalesced_mmio_ring *coalesced_mmio_ring;
-#endif
-    int broken_set_mem_region;
-    int migration_log;
-    int vcpu_events;
-    int robust_singlestep;
-    int debugregs;
-#ifdef KVM_CAP_SET_GUEST_DEBUG
-    QTAILQ_HEAD(, kvm_sw_breakpoint) kvm_sw_breakpoints;
-#endif
-    int irqchip_in_kernel;
-    int pit_in_kernel;
-    int xsave, xcrs;
-    int many_ioeventfds;
-    int pit_state2;
-
-    struct kvm_context kvm_context;
-};
-
 int kvm_tpr_enable_vapic(CPUState *env);
 
 unsigned long kvm_get_thread_id(void);
-
-#endif
 
 #endif

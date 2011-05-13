@@ -53,9 +53,6 @@ int kvm_pit = 1;
 int kvm_pit_reinject = 1;
 int kvm_nested = 0;
 
-
-KVMState *kvm_state;
-
 pthread_mutex_t qemu_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t qemu_vcpu_cond = PTHREAD_COND_INITIALIZER;
 pthread_cond_t qemu_system_cond = PTHREAD_COND_INITIALIZER;
@@ -101,24 +98,26 @@ static int handle_failed_vmentry(uint64_t reason)
     return -EINVAL;
 }
 
-static inline void set_gsi(kvm_context_t kvm, unsigned int gsi)
+static inline void set_gsi(KVMState *s, unsigned int gsi)
 {
-    uint32_t *bitmap = kvm->used_gsi_bitmap;
+    uint32_t *bitmap = s->used_gsi_bitmap;
 
-    if (gsi < kvm->max_gsi)
+    if (gsi < s->max_gsi) {
         bitmap[gsi / 32] |= 1U << (gsi % 32);
-    else
+    } else {
         DPRINTF("Invalid GSI %u\n", gsi);
+    }
 }
 
-static inline void clear_gsi(kvm_context_t kvm, unsigned int gsi)
+static inline void clear_gsi(KVMState *s, unsigned int gsi)
 {
-    uint32_t *bitmap = kvm->used_gsi_bitmap;
+    uint32_t *bitmap = s->used_gsi_bitmap;
 
-    if (gsi < kvm->max_gsi)
+    if (gsi < s->max_gsi) {
         bitmap[gsi / 32] &= ~(1U << (gsi % 32));
-    else
+    } else {
         DPRINTF("Invalid GSI %u\n", gsi);
+    }
 }
 
 static int kvm_create_context(void);
@@ -200,7 +199,6 @@ static void kvm_finalize(KVMState *s)
 static int kvm_init_irq_routing(KVMState *s)
 {
 #ifdef KVM_CAP_IRQ_ROUTING
-    kvm_context_t kvm = &s->kvm_context;
     int r, gsi_count;
 
     gsi_count = kvm_check_extension(s, KVM_CAP_IRQ_ROUTING);
@@ -209,17 +207,17 @@ static int kvm_init_irq_routing(KVMState *s)
 
         /* Round up so we can search ints using ffs */
         gsi_bits = ALIGN(gsi_count, 32);
-        kvm->used_gsi_bitmap = qemu_mallocz(gsi_bits / 8);
-        kvm->max_gsi = gsi_bits;
+        s->used_gsi_bitmap = qemu_mallocz(gsi_bits / 8);
+        s->max_gsi = gsi_bits;
 
         /* Mark any over-allocated bits as already in use */
         for (i = gsi_count; i < gsi_bits; i++) {
-            set_gsi(kvm, i);
+            set_gsi(s, i);
         }
     }
 
-    kvm->irq_routes = qemu_mallocz(sizeof(*kvm->irq_routes));
-    kvm->nr_allocated_irq_routes = 0;
+    s->irq_routes = qemu_mallocz(sizeof(*s->irq_routes));
+    s->nr_allocated_irq_routes = 0;
 
     r = kvm_arch_init_irq_routing();
     if (r < 0) {
@@ -233,7 +231,6 @@ static int kvm_init_irq_routing(KVMState *s)
 int kvm_create_irqchip(KVMState *s)
 {
 #ifdef KVM_CAP_IRQCHIP
-    kvm_context_t kvm = &s->kvm_context;
     int r;
 
     if (!kvm_irqchip || !kvm_check_extension(s, KVM_CAP_IRQCHIP)) {
@@ -246,10 +243,10 @@ int kvm_create_irqchip(KVMState *s)
         return r;
     }
 
-    kvm->irqchip_inject_ioctl = KVM_IRQ_LINE;
+    s->irqchip_inject_ioctl = KVM_IRQ_LINE;
 #if defined(KVM_CAP_IRQ_INJECT_STATUS) && defined(KVM_IRQ_LINE_STATUS)
     if (kvm_check_extension(s, KVM_CAP_IRQ_INJECT_STATUS)) {
-        kvm->irqchip_inject_ioctl = KVM_IRQ_LINE_STATUS;
+        s->irqchip_inject_ioctl = KVM_IRQ_LINE_STATUS;
     }
 #endif
     s->irqchip_in_kernel = 1;
@@ -275,7 +272,7 @@ int kvm_set_irq(int irq, int level, int *status)
     }
     event.level = level;
     event.irq = irq;
-    r = kvm_vm_ioctl(kvm_state, kvm_state->kvm_context.irqchip_inject_ioctl,
+    r = kvm_vm_ioctl(kvm_state, kvm_state->irqchip_inject_ioctl,
                      &event);
     if (r < 0) {
         perror("kvm_set_irq");
@@ -283,9 +280,8 @@ int kvm_set_irq(int irq, int level, int *status)
 
     if (status) {
 #ifdef KVM_CAP_IRQ_INJECT_STATUS
-        *status =
-            (kvm_state->kvm_context.irqchip_inject_ioctl == KVM_IRQ_LINE) ?
-                1 : event.status;
+        *status = (kvm_state->irqchip_inject_ioctl == KVM_IRQ_LINE) ?
+            1 : event.status;
 #else
         *status = 1;
 #endif
@@ -339,7 +335,7 @@ static int handle_mmio(CPUState *env)
     return 0;
 }
 
-static int handle_shutdown(kvm_context_t kvm, CPUState *env)
+static int handle_shutdown(CPUState *env)
 {
     /* stop the current vcpu from going back to guest mode */
     env->stopped = 1;
@@ -348,21 +344,21 @@ static int handle_shutdown(kvm_context_t kvm, CPUState *env)
     return 1;
 }
 
-static inline void push_nmi(kvm_context_t kvm)
+static inline void push_nmi(void)
 {
 #ifdef KVM_CAP_USER_NMI
     kvm_arch_push_nmi();
 #endif                          /* KVM_CAP_USER_NMI */
 }
 
-static void post_kvm_run(kvm_context_t kvm, CPUState *env)
+static void post_kvm_run(CPUState *env)
 {
     pthread_mutex_lock(&qemu_mutex);
     kvm_arch_post_run(env, env->kvm_run);
     cpu_single_env = env;
 }
 
-static int pre_kvm_run(kvm_context_t kvm, CPUState *env)
+static int pre_kvm_run(CPUState *env)
 {
     kvm_arch_pre_run(env, env->kvm_run);
 
@@ -378,7 +374,6 @@ int kvm_is_ready_for_interrupt_injection(CPUState *env)
 static int kvm_run(CPUState *env)
 {
     int r;
-    kvm_context_t kvm = &env->kvm_state->kvm_context;
     struct kvm_run *run = env->kvm_run;
     int fd = env->kvm_fd;
 
@@ -387,14 +382,14 @@ static int kvm_run(CPUState *env)
         kvm_arch_put_registers(env, KVM_PUT_RUNTIME_STATE);
         env->kvm_vcpu_dirty = 0;
     }
-    push_nmi(kvm);
+    push_nmi();
 #if !defined(__s390__)
     if (!kvm_state->irqchip_in_kernel) {
         run->request_interrupt_window = kvm_arch_try_push_interrupts(env);
     }
 #endif
 
-    r = pre_kvm_run(kvm, env);
+    r = pre_kvm_run(env);
     if (r) {
         return r;
     }
@@ -406,12 +401,12 @@ static int kvm_run(CPUState *env)
 
     if (r == -1 && errno != EINTR && errno != EAGAIN) {
         r = -errno;
-        post_kvm_run(kvm, env);
+        post_kvm_run(env);
         fprintf(stderr, "kvm_run: %s\n", strerror(-r));
         return r;
     }
 
-    post_kvm_run(kvm, env);
+    post_kvm_run(env);
 
     kvm_flush_coalesced_mmio_buffer();
 
@@ -451,7 +446,7 @@ static int kvm_run(CPUState *env)
         case KVM_EXIT_IRQ_WINDOW_OPEN:
             break;
         case KVM_EXIT_SHUTDOWN:
-            r = handle_shutdown(kvm, env);
+            r = handle_shutdown(env);
             break;
 #if defined(__s390__)
         case KVM_EXIT_S390_SIEIC:
@@ -575,9 +570,7 @@ int kvm_has_gsi_routing(void)
 int kvm_clear_gsi_routes(void)
 {
 #ifdef KVM_CAP_IRQ_ROUTING
-    kvm_context_t kvm = &kvm_state->kvm_context;
-
-    kvm->irq_routes->nr = 0;
+    kvm_state->irq_routes->nr = 0;
     return 0;
 #else
     return -EINVAL;
@@ -587,34 +580,34 @@ int kvm_clear_gsi_routes(void)
 int kvm_add_routing_entry(struct kvm_irq_routing_entry *entry)
 {
 #ifdef KVM_CAP_IRQ_ROUTING
-    kvm_context_t kvm = &kvm_state->kvm_context;
+    KVMState *s = kvm_state;
     struct kvm_irq_routing *z;
     struct kvm_irq_routing_entry *new;
     int n, size;
 
-    if (kvm->irq_routes->nr == kvm->nr_allocated_irq_routes) {
-        n = kvm->nr_allocated_irq_routes * 2;
+    if (s->irq_routes->nr == s->nr_allocated_irq_routes) {
+        n = s->nr_allocated_irq_routes * 2;
         if (n < 64) {
             n = 64;
         }
         size = sizeof(struct kvm_irq_routing);
         size += n * sizeof(*new);
-        z = realloc(kvm->irq_routes, size);
+        z = realloc(s->irq_routes, size);
         if (!z) {
             return -ENOMEM;
         }
-        kvm->nr_allocated_irq_routes = n;
-        kvm->irq_routes = z;
+        s->nr_allocated_irq_routes = n;
+        s->irq_routes = z;
     }
-    n = kvm->irq_routes->nr++;
-    new = &kvm->irq_routes->entries[n];
+    n = s->irq_routes->nr++;
+    new = &s->irq_routes->entries[n];
     memset(new, 0, sizeof(*new));
     new->gsi = entry->gsi;
     new->type = entry->type;
     new->flags = entry->flags;
     new->u = entry->u;
 
-    set_gsi(kvm, entry->gsi);
+    set_gsi(s, entry->gsi);
 
     return 0;
 #else
@@ -641,21 +634,21 @@ int kvm_add_irq_route(int gsi, int irqchip, int pin)
 int kvm_del_routing_entry(struct kvm_irq_routing_entry *entry)
 {
 #ifdef KVM_CAP_IRQ_ROUTING
-    kvm_context_t kvm = &kvm_state->kvm_context;
+    KVMState *s = kvm_state;
     struct kvm_irq_routing_entry *e, *p;
     int i, gsi, found = 0;
 
     gsi = entry->gsi;
 
-    for (i = 0; i < kvm->irq_routes->nr; ++i) {
-        e = &kvm->irq_routes->entries[i];
+    for (i = 0; i < s->irq_routes->nr; ++i) {
+        e = &s->irq_routes->entries[i];
         if (e->type == entry->type && e->gsi == gsi) {
             switch (e->type) {
             case KVM_IRQ_ROUTING_IRQCHIP:{
                     if (e->u.irqchip.irqchip ==
                         entry->u.irqchip.irqchip
                         && e->u.irqchip.pin == entry->u.irqchip.pin) {
-                        p = &kvm->irq_routes->entries[--kvm->irq_routes->nr];
+                        p = &s->irq_routes->entries[--s->irq_routes->nr];
                         *e = *p;
                         found = 1;
                     }
@@ -667,7 +660,7 @@ int kvm_del_routing_entry(struct kvm_irq_routing_entry *entry)
                         && e->u.msi.address_hi ==
                         entry->u.msi.address_hi
                         && e->u.msi.data == entry->u.msi.data) {
-                        p = &kvm->irq_routes->entries[--kvm->irq_routes->nr];
+                        p = &s->irq_routes->entries[--s->irq_routes->nr];
                         *e = *p;
                         found = 1;
                     }
@@ -679,13 +672,13 @@ int kvm_del_routing_entry(struct kvm_irq_routing_entry *entry)
             if (found) {
                 /* If there are no other users of this GSI
                  * mark it available in the bitmap */
-                for (i = 0; i < kvm->irq_routes->nr; i++) {
-                    e = &kvm->irq_routes->entries[i];
+                for (i = 0; i < s->irq_routes->nr; i++) {
+                    e = &s->irq_routes->entries[i];
                     if (e->gsi == gsi)
                         break;
                 }
-                if (i == kvm->irq_routes->nr) {
-                    clear_gsi(kvm, gsi);
+                if (i == s->irq_routes->nr) {
+                    clear_gsi(s, gsi);
                 }
 
                 return 0;
@@ -702,7 +695,7 @@ int kvm_update_routing_entry(struct kvm_irq_routing_entry *entry,
                              struct kvm_irq_routing_entry *newentry)
 {
 #ifdef KVM_CAP_IRQ_ROUTING
-    kvm_context_t kvm = &kvm_state->kvm_context;
+    KVMState *s = kvm_state;
     struct kvm_irq_routing_entry *e;
     int i;
 
@@ -710,8 +703,8 @@ int kvm_update_routing_entry(struct kvm_irq_routing_entry *entry,
         return -EINVAL;
     }
 
-    for (i = 0; i < kvm->irq_routes->nr; ++i) {
-        e = &kvm->irq_routes->entries[i];
+    for (i = 0; i < s->irq_routes->nr; ++i) {
+        e = &s->irq_routes->entries[i];
         if (e->type != entry->type || e->gsi != entry->gsi) {
             continue;
         }
@@ -761,10 +754,10 @@ int kvm_del_irq_route(int gsi, int irqchip, int pin)
 int kvm_commit_irq_routes(void)
 {
 #ifdef KVM_CAP_IRQ_ROUTING
-    kvm_context_t kvm = &kvm_state->kvm_context;
+    KVMState *s = kvm_state;
 
-    kvm->irq_routes->flags = 0;
-    return kvm_vm_ioctl(kvm_state, KVM_SET_GSI_ROUTING, kvm->irq_routes);
+    s->irq_routes->flags = 0;
+    return kvm_vm_ioctl(s, KVM_SET_GSI_ROUTING, s->irq_routes);
 #else
     return -ENOSYS;
 #endif
@@ -772,12 +765,12 @@ int kvm_commit_irq_routes(void)
 
 int kvm_get_irq_route_gsi(void)
 {
-    kvm_context_t kvm = &kvm_state->kvm_context;
+    KVMState *s = kvm_state;
     int i, bit;
-    uint32_t *buf = kvm->used_gsi_bitmap;
+    uint32_t *buf = s->used_gsi_bitmap;
 
     /* Return the lowest unused GSI in the bitmap */
-    for (i = 0; i < kvm->max_gsi / 32; i++) {
+    for (i = 0; i < s->max_gsi / 32; i++) {
         bit = ffs(~buf[i]);
         if (!bit) {
             continue;
