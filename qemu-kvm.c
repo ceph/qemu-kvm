@@ -197,19 +197,6 @@ static void kvm_finalize(KVMState *s)
     free(s);
 }
 
-static int kvm_set_boot_vcpu_id(kvm_context_t kvm, uint32_t id)
-{
-#ifdef KVM_CAP_SET_BOOT_CPU_ID
-    int r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_SET_BOOT_CPU_ID);
-    if (r > 0) {
-        return kvm_vm_ioctl(kvm_state, KVM_SET_BOOT_CPU_ID, id);
-    }
-    return -ENOSYS;
-#else
-    return -ENOSYS;
-#endif
-}
-
 static int kvm_init_irq_routing(KVMState *s)
 {
 #ifdef KVM_CAP_IRQ_ROUTING
@@ -1497,8 +1484,14 @@ void kvm_ioperm(CPUState *env, void *data)
 
 #endif
 
-int kvm_set_boot_cpu_id(uint32_t id)
+int kvm_set_boot_cpu_id(KVMState *s, uint32_t id)
 {
-    return kvm_set_boot_vcpu_id(&kvm_state->kvm_context, id);
+#ifdef KVM_CAP_SET_BOOT_CPU_ID
+    int r = kvm_ioctl(s, KVM_CHECK_EXTENSION, KVM_CAP_SET_BOOT_CPU_ID);
+    if (r > 0) {
+        return kvm_vm_ioctl(s, KVM_SET_BOOT_CPU_ID, id);
+    }
+#endif
+    return -ENOSYS;
 }
 

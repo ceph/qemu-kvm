@@ -665,7 +665,7 @@ int kvm_arch_init(KVMState *s)
         }
     }
 
-    ret = kvm_set_boot_cpu_id(0);
+    ret = kvm_set_boot_cpu_id(s, 0);
     if (ret < 0 && ret != -ENOSYS) {
         return ret;
     }

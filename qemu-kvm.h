@@ -358,7 +358,7 @@ int kvm_arch_has_work(CPUState *env);
 void kvm_arch_process_irqchip_events(CPUState *env);
 int kvm_arch_try_push_interrupts(void *opaque);
 void kvm_arch_push_nmi(void);
-int kvm_set_boot_cpu_id(uint32_t id);
+int kvm_set_boot_cpu_id(KVMState *s, uint32_t id);
 
 void kvm_tpr_access_report(CPUState *env, uint64_t rip, int is_write);
 
