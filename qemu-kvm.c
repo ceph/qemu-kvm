@@ -120,82 +120,6 @@ static inline void clear_gsi(KVMState *s, unsigned int gsi)
     }
 }
 
-static int kvm_create_context(void);
-
-int kvm_init(void)
-{
-    int fd;
-    int r, i;
-
-
-    fd = open("/dev/kvm", O_RDWR);
-    if (fd == -1) {
-        perror("open /dev/kvm");
-        return -1;
-    }
-    r = ioctl(fd, KVM_GET_API_VERSION, 0);
-    if (r == -1) {
-        fprintf(stderr,
-                "kvm kernel version too old: "
-                "KVM_GET_API_VERSION ioctl not supported\n");
-        goto out_close;
-    }
-    if (r < EXPECTED_KVM_API_VERSION) {
-        fprintf(stderr, "kvm kernel version too old: "
-                "We expect API version %d or newer, but got "
-                "version %d\n", EXPECTED_KVM_API_VERSION, r);
-        goto out_close;
-    }
-    if (r > EXPECTED_KVM_API_VERSION) {
-        fprintf(stderr, "kvm userspace version too old\n");
-        goto out_close;
-    }
-    kvm_state = qemu_mallocz(sizeof(*kvm_state));
-
-    kvm_state->fd = fd;
-    kvm_state->vmfd = -1;
-
-#ifdef KVM_CAP_SET_GUEST_DEBUG
-    QTAILQ_INIT(&kvm_state->kvm_sw_breakpoints);
-#endif
-
-    for (i = 0; i < ARRAY_SIZE(kvm_state->slots); i++) {
-        kvm_state->slots[i].slot = i;
-    }
-
-#ifdef KVM_CAP_USER_MEMORY
-    r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_USER_MEMORY);
-    if (r <= 0) {
-        fprintf(stderr,
-                "Hypervisor too old: KVM_CAP_USER_MEMORY extension not supported\n");
-        goto out_close;
-    }
-#else
-#error Hypervisor too old: KVM_CAP_USER_MEMORY extension not supported
-#endif
-
-    cpu_register_phys_memory_client(&kvm_cpu_phys_memory_client);
-
-    pthread_mutex_lock(&qemu_mutex);
-    return kvm_create_context();
-
-  out_close:
-    close(fd);
-    return -1;
-}
-
-static void kvm_finalize(KVMState *s)
-{
-    /* FIXME
-       if (kvm->vcpu_fd[0] != -1)
-           close(kvm->vcpu_fd[0]);
-       if (kvm->vm_fd != -1)
-           close(kvm->vm_fd);
-     */
-    close(s->fd);
-    free(s);
-}
-
 static int kvm_init_irq_routing(KVMState *s)
 {
 #ifdef KVM_CAP_IRQ_ROUTING
@@ -1225,6 +1149,8 @@ int kvm_init_ap(void)
 {
     struct sigaction action;
 
+    pthread_mutex_lock(&qemu_mutex);
+
     qemu_add_vm_change_state_handler(kvm_vm_state_change_handler, NULL);
 
     signal(SIG_IPI, sig_ipi_handler);
@@ -1335,84 +1261,6 @@ int kvm_arch_init_irq_routing(void)
     return 0;
 }
 #endif
-
-static int kvm_create_context(void)
-{
-    static const char upgrade_note[] =
-    "Please upgrade to at least kernel 2.6.29 or recent kvm-kmod\n"
-    "(see http://sourceforge.net/projects/kvm).\n";
-
-    int r;
-
-    kvm_state->pit_in_kernel = kvm_pit;
-
-    kvm_state->vmfd = kvm_ioctl(kvm_state, KVM_CREATE_VM, 0);
-    if (kvm_state->vmfd < 0) {
-        fprintf(stderr, "kvm_create_vm: %m\n");
-        kvm_finalize(kvm_state);
-        return -1;
-    }
-
-    r = kvm_arch_init(kvm_state);
-    if (r < 0) {
-        kvm_finalize(kvm_state);
-        return r;
-    }
-
-    /* There was a nasty bug in < kvm-80 that prevents memory slots from being
-     * destroyed properly.  Since we rely on this capability, refuse to work
-     * with any kernel without this capability. */
-    if (!kvm_check_extension(kvm_state, KVM_CAP_DESTROY_MEMORY_REGION_WORKS)) {
-        fprintf(stderr,
-                "KVM kernel module broken (DESTROY_MEMORY_REGION).\n%s",
-                upgrade_note);
-        return -EINVAL;
-    }
-
-    r = kvm_create_irqchip(kvm_state);
-    if (r < 0) {
-        return r;
-    }
-
-    kvm_state->coalesced_mmio = 0;
-#ifdef KVM_CAP_COALESCED_MMIO
-    kvm_state->coalesced_mmio =
-        kvm_check_extension(kvm_state, KVM_CAP_COALESCED_MMIO);
-#endif
-
-    kvm_state->vcpu_events = 0;
-#ifdef KVM_CAP_VCPU_EVENTS
-    kvm_state->vcpu_events = kvm_check_extension(kvm_state, KVM_CAP_VCPU_EVENTS);
-#endif
-
-    kvm_state->debugregs = 0;
-#ifdef KVM_CAP_DEBUGREGS
-    kvm_state->debugregs = kvm_check_extension(kvm_state, KVM_CAP_DEBUGREGS);
-#endif
-
-    kvm_state->xsave = 0;
-#ifdef KVM_CAP_XSAVE
-    kvm_state->xsave = kvm_check_extension(kvm_state, KVM_CAP_XSAVE);
-#endif
-
-    kvm_state->xcrs = 0;
-#ifdef KVM_CAP_XCRS
-    kvm_state->xcrs = kvm_check_extension(kvm_state, KVM_CAP_XCRS);
-#endif
-
-    kvm_state->many_ioeventfds = kvm_check_many_ioeventfds();
-
-    kvm_state->pit_state2 = 0;
-#ifdef KVM_CAP_PIT_STATE2
-    kvm_state->pit_state2 = kvm_check_extension(kvm_state, KVM_CAP_PIT_STATE2);
-#endif
-
-    kvm_init_ap();
-
-    cpu_interrupt_handler = kvm_handle_interrupt;
-
-    return 0;
-}
 
 static void kvm_mutex_unlock(void)
 {

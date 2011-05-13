@@ -93,15 +93,11 @@ struct KVMState
 
 KVMState *kvm_state;
 
-#ifdef OBSOLETE_KVM_IMPL
-
 static const KVMCapabilityInfo kvm_required_capabilites[] = {
     KVM_CAP_INFO(USER_MEMORY),
     KVM_CAP_INFO(DESTROY_MEMORY_REGION_WORKS),
     KVM_CAP_LAST_INFO
 };
-
-#endif
 
 static KVMSlot *kvm_alloc_slot(KVMState *s)
 {
@@ -524,7 +520,6 @@ static int kvm_check_many_ioeventfds(void)
 #endif
 }
 
-#ifdef OBSOLETE_KVM_IMPL
 static const KVMCapabilityInfo *
 kvm_check_extension_list(KVMState *s, const KVMCapabilityInfo *list)
 {
@@ -536,7 +531,6 @@ kvm_check_extension_list(KVMState *s, const KVMCapabilityInfo *list)
     }
     return NULL;
 }
-#endif
 
 static void kvm_set_phys_mem(target_phys_addr_t start_addr, ram_addr_t size,
                              ram_addr_t phys_offset, bool log_dirty)
@@ -712,7 +706,6 @@ static void kvm_handle_interrupt(CPUState *env, int mask)
     kvm_update_interrupt_request(env);
 }
 
-#ifdef OBSOLETE_KVM_IMPL
 int kvm_init(void)
 {
     static const char upgrade_note[] =
@@ -816,6 +809,8 @@ int kvm_init(void)
     s->pit_state2 = kvm_check_extension(s, KVM_CAP_PIT_STATE2);
 #endif
 
+    s->pit_in_kernel = kvm_pit;
+
     ret = kvm_arch_init(s);
     if (ret < 0) {
         goto err;
@@ -825,6 +820,13 @@ int kvm_init(void)
     cpu_register_phys_memory_client(&kvm_cpu_phys_memory_client);
 
     s->many_ioeventfds = kvm_check_many_ioeventfds();
+
+    ret = kvm_create_irqchip(s);
+    if (ret < 0) {
+        return ret;
+    }
+
+    kvm_init_ap();
 
     cpu_interrupt_handler = kvm_handle_interrupt;
 
@@ -843,7 +845,6 @@ err:
 
     return ret;
 }
-#endif
 
 static void kvm_handle_io(uint16_t port, void *data, int direction, int size,
                           uint32_t count)

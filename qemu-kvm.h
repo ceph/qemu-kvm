@@ -311,19 +311,6 @@ struct kvm_pit_state {
 
 #endif                          /* !CONFIG_KVM */
 
-
-/*!
- * \brief Create new KVM context
- *
- * This creates a new kvm_context. A KVM context is a small area of data that
- * holds information about the KVM instance that gets created by this call.\n
- * This should always be your first call to KVM.
- *
- * \param opaque Not used
- * \return NULL on failure
- */
-int kvm_init(void);
-
 int kvm_main_loop(void);
 int kvm_init_ap(void);
 void kvm_save_lapic(CPUState *env);

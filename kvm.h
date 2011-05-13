@@ -30,7 +30,6 @@ extern int kvm_allowed;
 #define kvm_enabled() (0)
 #endif
 
-#ifdef OBSOLETE_KVM_IMPL
 struct kvm_run;
 
 typedef struct KVMCapabilityInfo {
@@ -44,7 +43,6 @@ typedef struct KVMCapabilityInfo {
 /* external API */
 
 int kvm_init(void);
-#endif /* OBSOLETE_KVM_IMPL */
 
 int kvm_has_sync_mmu(void);
 int kvm_has_vcpu_events(void);
@@ -99,9 +97,7 @@ int kvm_vcpu_ioctl(CPUState *env, int type, ...);
 
 /* Arch specific hooks */
 
-#ifdef OBSOLETE_KVM_IMPL
 extern const KVMCapabilityInfo kvm_arch_required_capabilities[];
-#endif
 
 void kvm_arch_pre_run(CPUState *env, struct kvm_run *run);
 void kvm_arch_post_run(CPUState *env, struct kvm_run *run);

@@ -53,14 +53,12 @@
 #define BUS_MCEERR_AO 5
 #endif
 
-#ifdef OBSOLETE_KVM_IMPL
 const KVMCapabilityInfo kvm_arch_required_capabilities[] = {
     KVM_CAP_INFO(SET_TSS_ADDR),
     KVM_CAP_INFO(EXT_CPUID),
     KVM_CAP_INFO(MP_STATE),
     KVM_CAP_LAST_INFO
 };
-#endif
 
 static bool has_msr_star;
 static bool has_msr_hsave_pa;

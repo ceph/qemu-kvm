@@ -28,7 +28,7 @@ static int kvm_create_pit(KVMState *s)
 #ifdef KVM_CAP_PIT
     int r;
 
-    if (kvm_pit_in_kernel()) {
+    if (kvm_pit) {
         r = kvm_vm_ioctl(s, KVM_CREATE_PIT);
         if (r < 0) {
             fprintf(stderr, "Create kernel PIC irqchip failed\n");
