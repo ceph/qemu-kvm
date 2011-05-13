@@ -22,7 +22,6 @@
 
 #include "hw.h"
 #include "pc.h"
-#include "sysemu.h"
 #include "apic.h"
 #include "ioapic.h"
 #include "qemu-timer.h"
@@ -146,7 +145,7 @@ static void ioapic_set_irq(void *opaque, int vector, int level)
      * the cleanest way of doing it but it should work. */
 
     DPRINTF("%s: %s vec %x\n", __func__, level ? "raise" : "lower", vector);
-    if (vector == 0 && irq0override) {
+    if (vector == 0) {
         vector = 2;
     }
     if (vector >= 0 && vector < IOAPIC_NUM_PINS) {
