@@ -220,6 +220,7 @@ typedef struct KVMMsiMessage {
 } KVMMsiMessage;
 
 int kvm_has_gsi_routing(void);
+int kvm_allows_irq0_override(void);
 int kvm_get_irq_route_gsi(void);
 
 int kvm_msi_message_add(KVMMsiMessage *msg);

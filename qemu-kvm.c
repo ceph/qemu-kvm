@@ -1426,7 +1426,6 @@ static int kvm_create_context(void)
     kvm_init_ap();
     if (kvm_irqchip) {
         if (!qemu_kvm_has_gsi_routing()) {
-            irq0override = 0;
 #ifdef TARGET_I386
             /* if kernel can't do irq routing, interrupt source
              * override 0->2 can not be set up as required by hpet,

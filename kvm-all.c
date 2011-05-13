@@ -1140,6 +1140,11 @@ int kvm_has_many_ioeventfds(void)
     return kvm_state->many_ioeventfds;
 }
 
+int kvm_allows_irq0_override(void)
+{
+    return !kvm_enabled() || !kvm_irqchip_in_kernel() || kvm_has_gsi_routing();
+}
+
 void kvm_setup_guest_memory(void *start, size_t size)
 {
     if (!kvm_has_sync_mmu()) {
