@@ -601,7 +601,7 @@ static int kvm_get_supported_msrs(KVMState *s)
     return ret;
 }
 
-static int kvm_create_pit(kvm_context_t kvm);
+static int kvm_create_pit(KVMState *s);
 
 int kvm_arch_init(KVMState *s)
 {
@@ -653,7 +653,7 @@ int kvm_arch_init(KVMState *s)
     }
     qemu_register_reset(kvm_unpoison_all, NULL);
 
-    ret = kvm_create_pit(&s->kvm_context);
+    ret = kvm_create_pit(s);
     if (ret < 0) {
         return ret;
     }

@@ -55,7 +55,6 @@ int kvm_nested = 0;
 
 
 KVMState *kvm_state;
-kvm_context_t kvm_context;
 
 pthread_mutex_t qemu_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t qemu_vcpu_cond = PTHREAD_COND_INITIALIZER;
@@ -153,7 +152,6 @@ int kvm_init(void)
         goto out_close;
     }
     kvm_state = qemu_mallocz(sizeof(*kvm_state));
-    kvm_context = &kvm_state->kvm_context;
 
     kvm_state->fd = fd;
     kvm_state->vmfd = -1;
@@ -212,12 +210,13 @@ static int kvm_set_boot_vcpu_id(kvm_context_t kvm, uint32_t id)
 #endif
 }
 
-static int kvm_init_irq_routing(kvm_context_t kvm)
+static int kvm_init_irq_routing(KVMState *s)
 {
 #ifdef KVM_CAP_IRQ_ROUTING
+    kvm_context_t kvm = &s->kvm_context;
     int r, gsi_count;
 
-    gsi_count = kvm_check_extension(kvm_state, KVM_CAP_IRQ_ROUTING);
+    gsi_count = kvm_check_extension(s, KVM_CAP_IRQ_ROUTING);
     if (gsi_count > 0) {
         int gsi_bits, i;
 
@@ -232,7 +231,7 @@ static int kvm_init_irq_routing(kvm_context_t kvm)
         }
     }
 
-    kvm->irq_routes = qemu_mallocz(sizeof(*kvm_context->irq_routes));
+    kvm->irq_routes = qemu_mallocz(sizeof(*kvm->irq_routes));
     kvm->nr_allocated_irq_routes = 0;
 
     r = kvm_arch_init_irq_routing();
@@ -244,16 +243,17 @@ static int kvm_init_irq_routing(kvm_context_t kvm)
     return 0;
 }
 
-int kvm_create_irqchip(kvm_context_t kvm)
+int kvm_create_irqchip(KVMState *s)
 {
 #ifdef KVM_CAP_IRQCHIP
+    kvm_context_t kvm = &s->kvm_context;
     int r;
 
-    if (!kvm_irqchip || !kvm_check_extension(kvm_state, KVM_CAP_IRQCHIP)) {
+    if (!kvm_irqchip || !kvm_check_extension(s, KVM_CAP_IRQCHIP)) {
         return 0;
     }
 
-    r = kvm_vm_ioctl(kvm_state, KVM_CREATE_IRQCHIP);
+    r = kvm_vm_ioctl(s, KVM_CREATE_IRQCHIP);
     if (r < 0) {
         fprintf(stderr, "Create kernel PIC irqchip failed\n");
         return r;
@@ -261,13 +261,13 @@ int kvm_create_irqchip(kvm_context_t kvm)
 
     kvm->irqchip_inject_ioctl = KVM_IRQ_LINE;
 #if defined(KVM_CAP_IRQ_INJECT_STATUS) && defined(KVM_IRQ_LINE_STATUS)
-    if (kvm_check_extension(kvm_state, KVM_CAP_IRQ_INJECT_STATUS)) {
+    if (kvm_check_extension(s, KVM_CAP_IRQ_INJECT_STATUS)) {
         kvm->irqchip_inject_ioctl = KVM_IRQ_LINE_STATUS;
     }
 #endif
-    kvm_state->irqchip_in_kernel = 1;
+    s->irqchip_in_kernel = 1;
 
-    r = kvm_init_irq_routing(kvm);
+    r = kvm_init_irq_routing(s);
     if (r < 0) {
         return r;
     }
@@ -307,28 +307,28 @@ int kvm_set_irq(int irq, int level, int *status)
     return 1;
 }
 
-int kvm_get_irqchip(kvm_context_t kvm, struct kvm_irqchip *chip)
+int kvm_get_irqchip(KVMState *s, struct kvm_irqchip *chip)
 {
     int r;
 
-    if (!kvm_state->irqchip_in_kernel) {
+    if (!s->irqchip_in_kernel) {
         return 0;
     }
-    r = kvm_vm_ioctl(kvm_state, KVM_GET_IRQCHIP, chip);
+    r = kvm_vm_ioctl(s, KVM_GET_IRQCHIP, chip);
     if (r < 0) {
         perror("kvm_get_irqchip\n");
     }
     return r;
 }
 
-int kvm_set_irqchip(kvm_context_t kvm, struct kvm_irqchip *chip)
+int kvm_set_irqchip(KVMState *s, struct kvm_irqchip *chip)
 {
     int r;
 
-    if (!kvm_state->irqchip_in_kernel) {
+    if (!s->irqchip_in_kernel) {
         return 0;
     }
-    r = kvm_vm_ioctl(kvm_state, KVM_SET_IRQCHIP, chip);
+    r = kvm_vm_ioctl(s, KVM_SET_IRQCHIP, chip);
     if (r < 0) {
         perror("kvm_set_irqchip\n");
     }
@@ -521,52 +521,52 @@ int kvm_inject_nmi(CPUState *env)
 }
 
 #ifdef KVM_CAP_DEVICE_ASSIGNMENT
-int kvm_assign_pci_device(kvm_context_t kvm,
+int kvm_assign_pci_device(KVMState *s,
                           struct kvm_assigned_pci_dev *assigned_dev)
 {
-    return kvm_vm_ioctl(kvm_state, KVM_ASSIGN_PCI_DEVICE, assigned_dev);
+    return kvm_vm_ioctl(s, KVM_ASSIGN_PCI_DEVICE, assigned_dev);
 }
 
-static int kvm_old_assign_irq(kvm_context_t kvm,
+static int kvm_old_assign_irq(KVMState *s,
                               struct kvm_assigned_irq *assigned_irq)
 {
-    return kvm_vm_ioctl(kvm_state, KVM_ASSIGN_IRQ, assigned_irq);
+    return kvm_vm_ioctl(s, KVM_ASSIGN_IRQ, assigned_irq);
 }
 
 #ifdef KVM_CAP_ASSIGN_DEV_IRQ
-int kvm_assign_irq(kvm_context_t kvm, struct kvm_assigned_irq *assigned_irq)
+int kvm_assign_irq(KVMState *s, struct kvm_assigned_irq *assigned_irq)
 {
     int ret;
 
-    ret = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_ASSIGN_DEV_IRQ);
+    ret = kvm_ioctl(s, KVM_CHECK_EXTENSION, KVM_CAP_ASSIGN_DEV_IRQ);
     if (ret > 0) {
-        return kvm_vm_ioctl(kvm_state, KVM_ASSIGN_DEV_IRQ, assigned_irq);
+        return kvm_vm_ioctl(s, KVM_ASSIGN_DEV_IRQ, assigned_irq);
     }
 
-    return kvm_old_assign_irq(kvm, assigned_irq);
+    return kvm_old_assign_irq(s, assigned_irq);
 }
 
-int kvm_deassign_irq(kvm_context_t kvm, struct kvm_assigned_irq *assigned_irq)
+int kvm_deassign_irq(KVMState *s, struct kvm_assigned_irq *assigned_irq)
 {
-    return kvm_vm_ioctl(kvm_state, KVM_DEASSIGN_DEV_IRQ, assigned_irq);
+    return kvm_vm_ioctl(s, KVM_DEASSIGN_DEV_IRQ, assigned_irq);
 }
 #else
-int kvm_assign_irq(kvm_context_t kvm, struct kvm_assigned_irq *assigned_irq)
+int kvm_assign_irq(KVMState *s, struct kvm_assigned_irq *assigned_irq)
 {
-    return kvm_old_assign_irq(kvm, assigned_irq);
+    return kvm_old_assign_irq(s, assigned_irq);
 }
 #endif
 #endif
 
 #ifdef KVM_CAP_DEVICE_DEASSIGNMENT
-int kvm_deassign_pci_device(kvm_context_t kvm,
+int kvm_deassign_pci_device(KVMState *s,
                             struct kvm_assigned_pci_dev *assigned_dev)
 {
-    return kvm_vm_ioctl(kvm_state, KVM_DEASSIGN_PCI_DEVICE, assigned_dev);
+    return kvm_vm_ioctl(s, KVM_DEASSIGN_PCI_DEVICE, assigned_dev);
 }
 #endif
 
-int kvm_reinject_control(kvm_context_t kvm, int pit_reinject)
+int kvm_reinject_control(KVMState *s, int pit_reinject)
 {
 #ifdef KVM_CAP_REINJECT_CONTROL
     int r;
@@ -574,9 +574,9 @@ int kvm_reinject_control(kvm_context_t kvm, int pit_reinject)
 
     control.pit_reinject = pit_reinject;
 
-    r = kvm_ioctl(kvm_state, KVM_CHECK_EXTENSION, KVM_CAP_REINJECT_CONTROL);
+    r = kvm_ioctl(s, KVM_CHECK_EXTENSION, KVM_CAP_REINJECT_CONTROL);
     if (r > 0) {
-        return kvm_vm_ioctl(kvm_state, KVM_REINJECT_CONTROL, &control);
+        return kvm_vm_ioctl(s, KVM_REINJECT_CONTROL, &control);
     }
 #endif
     return -ENOSYS;
@@ -595,7 +595,7 @@ int kvm_has_gsi_routing(void)
 int kvm_clear_gsi_routes(void)
 {
 #ifdef KVM_CAP_IRQ_ROUTING
-    kvm_context_t kvm = kvm_context;
+    kvm_context_t kvm = &kvm_state->kvm_context;
 
     kvm->irq_routes->nr = 0;
     return 0;
@@ -607,7 +607,7 @@ int kvm_clear_gsi_routes(void)
 int kvm_add_routing_entry(struct kvm_irq_routing_entry *entry)
 {
 #ifdef KVM_CAP_IRQ_ROUTING
-    kvm_context_t kvm = kvm_context;
+    kvm_context_t kvm = &kvm_state->kvm_context;
     struct kvm_irq_routing *z;
     struct kvm_irq_routing_entry *new;
     int n, size;
@@ -661,7 +661,7 @@ int kvm_add_irq_route(int gsi, int irqchip, int pin)
 int kvm_del_routing_entry(struct kvm_irq_routing_entry *entry)
 {
 #ifdef KVM_CAP_IRQ_ROUTING
-    kvm_context_t kvm = kvm_context;
+    kvm_context_t kvm = &kvm_state->kvm_context;
     struct kvm_irq_routing_entry *e, *p;
     int i, gsi, found = 0;
 
@@ -722,7 +722,7 @@ int kvm_update_routing_entry(struct kvm_irq_routing_entry *entry,
                              struct kvm_irq_routing_entry *newentry)
 {
 #ifdef KVM_CAP_IRQ_ROUTING
-    kvm_context_t kvm = kvm_context;
+    kvm_context_t kvm = &kvm_state->kvm_context;
     struct kvm_irq_routing_entry *e;
     int i;
 
@@ -781,7 +781,7 @@ int kvm_del_irq_route(int gsi, int irqchip, int pin)
 int kvm_commit_irq_routes(void)
 {
 #ifdef KVM_CAP_IRQ_ROUTING
-    kvm_context_t kvm = kvm_context;
+    kvm_context_t kvm = &kvm_state->kvm_context;
 
     kvm->irq_routes->flags = 0;
     return kvm_vm_ioctl(kvm_state, KVM_SET_GSI_ROUTING, kvm->irq_routes);
@@ -792,7 +792,7 @@ int kvm_commit_irq_routes(void)
 
 int kvm_get_irq_route_gsi(void)
 {
-    kvm_context_t kvm = kvm_context;
+    kvm_context_t kvm = &kvm_state->kvm_context;
     int i, bit;
     uint32_t *buf = kvm->used_gsi_bitmap;
 
@@ -867,16 +867,15 @@ int kvm_msi_message_update(KVMMsiMessage *old, KVMMsiMessage *new)
 
 
 #ifdef KVM_CAP_DEVICE_MSIX
-int kvm_assign_set_msix_nr(kvm_context_t kvm,
-                           struct kvm_assigned_msix_nr *msix_nr)
+int kvm_assign_set_msix_nr(KVMState *s, struct kvm_assigned_msix_nr *msix_nr)
 {
-    return kvm_vm_ioctl(kvm_state, KVM_ASSIGN_SET_MSIX_NR, msix_nr);
+    return kvm_vm_ioctl(s, KVM_ASSIGN_SET_MSIX_NR, msix_nr);
 }
 
-int kvm_assign_set_msix_entry(kvm_context_t kvm,
+int kvm_assign_set_msix_entry(KVMState *s,
                               struct kvm_assigned_msix_entry *entry)
 {
-    return kvm_vm_ioctl(kvm_state, KVM_ASSIGN_SET_MSIX_ENTRY, entry);
+    return kvm_vm_ioctl(s, KVM_ASSIGN_SET_MSIX_ENTRY, entry);
 }
 #endif
 
@@ -1234,18 +1233,18 @@ void kvm_hpet_disable_kpit(void)
 {
     struct kvm_pit_state2 ps2;
 
-    kvm_get_pit2(kvm_context, &ps2);
+    kvm_get_pit2(kvm_state, &ps2);
     ps2.flags |= KVM_PIT_FLAGS_HPET_LEGACY;
-    kvm_set_pit2(kvm_context, &ps2);
+    kvm_set_pit2(kvm_state, &ps2);
 }
 
 void kvm_hpet_enable_kpit(void)
 {
     struct kvm_pit_state2 ps2;
 
-    kvm_get_pit2(kvm_context, &ps2);
+    kvm_get_pit2(kvm_state, &ps2);
     ps2.flags &= ~KVM_PIT_FLAGS_HPET_LEGACY;
-    kvm_set_pit2(kvm_context, &ps2);
+    kvm_set_pit2(kvm_state, &ps2);
 }
 #endif
 
@@ -1397,7 +1396,7 @@ static int kvm_create_context(void)
         return -EINVAL;
     }
 
-    r = kvm_create_irqchip(kvm_context);
+    r = kvm_create_irqchip(kvm_state);
     if (r < 0) {
         return r;
     }
@@ -1500,6 +1499,6 @@ void kvm_ioperm(CPUState *env, void *data)
 
 int kvm_set_boot_cpu_id(uint32_t id)
 {
-    return kvm_set_boot_vcpu_id(kvm_context, id);
+    return kvm_set_boot_vcpu_id(&kvm_state->kvm_context, id);
 }
 

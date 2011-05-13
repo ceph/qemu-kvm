@@ -66,7 +66,7 @@ typedef struct kvm_context *kvm_context_t;
 
 int kvm_arch_run(CPUState *env);
 
-int kvm_create_irqchip(kvm_context_t kvm);
+int kvm_create_irqchip(KVMState *s);
 
 /*!
  * \brief Check if a vcpu is ready for interrupt injection
@@ -103,7 +103,7 @@ int kvm_inject_irq(CPUState *env, unsigned irq);
  * \param kvm Pointer to the current kvm_context
  * \param chip The irq chip device to be dumped
  */
-int kvm_get_irqchip(kvm_context_t kvm, struct kvm_irqchip *chip);
+int kvm_get_irqchip(KVMState *s, struct kvm_irqchip *chip);
 
 /*!
  * \brief Set in kernel IRQCHIP contents
@@ -115,7 +115,7 @@ int kvm_get_irqchip(kvm_context_t kvm, struct kvm_irqchip *chip);
  * \param kvm Pointer to the current kvm_context
  * \param chip THe irq chip device to be written
  */
-int kvm_set_irqchip(kvm_context_t kvm, struct kvm_irqchip *chip);
+int kvm_set_irqchip(KVMState *s, struct kvm_irqchip *chip);
 
 #if defined(__i386__) || defined(__x86_64__)
 /*!
@@ -166,7 +166,7 @@ int kvm_inject_nmi(CPUState *env);
  * \param kvm Pointer to the current kvm_context
  * \param s PIT state of the virtual domain
  */
-int kvm_get_pit(kvm_context_t kvm, struct kvm_pit_state *s);
+int kvm_get_pit(KVMState *s, struct kvm_pit_state *pit_state);
 
 /*!
  * \brief Set in kernel PIT of the virtual domain
@@ -177,9 +177,9 @@ int kvm_get_pit(kvm_context_t kvm, struct kvm_pit_state *s);
  * \param kvm Pointer to the current kvm_context
  * \param s PIT state of the virtual domain
  */
-int kvm_set_pit(kvm_context_t kvm, struct kvm_pit_state *s);
+int kvm_set_pit(KVMState *s, struct kvm_pit_state *pit_state);
 
-int kvm_reinject_control(kvm_context_t kvm, int pit_reinject);
+int kvm_reinject_control(KVMState *s, int pit_reinject);
 
 #ifdef KVM_CAP_PIT_STATE2
 /*!
@@ -190,7 +190,7 @@ int kvm_reinject_control(kvm_context_t kvm, int pit_reinject);
  * \param ps2 PIT state2 of the virtual domain
  * \return 0 on success
  */
-int kvm_set_pit2(kvm_context_t kvm, struct kvm_pit_state2 *ps2);
+int kvm_set_pit2(KVMState *s, struct kvm_pit_state2 *ps2);
 
 /*!
  * \brief Get in kernel PIT state2 of the virtual domain
@@ -200,7 +200,7 @@ int kvm_set_pit2(kvm_context_t kvm, struct kvm_pit_state2 *ps2);
  * \param ps2 PIT state2 of the virtual domain
  * \return 0 on success
  */
-int kvm_get_pit2(kvm_context_t kvm, struct kvm_pit_state2 *ps2);
+int kvm_get_pit2(KVMState *s, struct kvm_pit_state2 *ps2);
 
 #endif
 #endif
@@ -222,7 +222,7 @@ int kvm_enable_vapic(CPUState *env, uint64_t vapic);
  * \param kvm Pointer to the current kvm_context
  * \param assigned_dev Parameters, like bus, devfn number, etc
  */
-int kvm_assign_pci_device(kvm_context_t kvm,
+int kvm_assign_pci_device(KVMState *s,
                           struct kvm_assigned_pci_dev *assigned_dev);
 
 /*!
@@ -234,7 +234,7 @@ int kvm_assign_pci_device(kvm_context_t kvm,
  * \param kvm Pointer to the current kvm_context
  * \param assigned_irq Parameters, like dev id, host irq, guest irq, etc
  */
-int kvm_assign_irq(kvm_context_t kvm, struct kvm_assigned_irq *assigned_irq);
+int kvm_assign_irq(KVMState *s, struct kvm_assigned_irq *assigned_irq);
 
 #ifdef KVM_CAP_ASSIGN_DEV_IRQ
 /*!
@@ -246,7 +246,7 @@ int kvm_assign_irq(kvm_context_t kvm, struct kvm_assigned_irq *assigned_irq);
  * \param kvm Pointer to the current kvm_context
  * \param assigned_irq Parameters, like dev id, host irq, guest irq, etc
  */
-int kvm_deassign_irq(kvm_context_t kvm, struct kvm_assigned_irq *assigned_irq);
+int kvm_deassign_irq(KVMState *s, struct kvm_assigned_irq *assigned_irq);
 #endif
 #endif
 
@@ -260,7 +260,7 @@ int kvm_deassign_irq(kvm_context_t kvm, struct kvm_assigned_irq *assigned_irq);
  * \param kvm Pointer to the current kvm_context
  * \param assigned_dev Parameters, like bus, devfn number, etc
  */
-int kvm_deassign_pci_device(kvm_context_t kvm,
+int kvm_deassign_pci_device(KVMState *s,
                             struct kvm_assigned_pci_dev *assigned_dev);
 #endif
 
@@ -318,15 +318,12 @@ int kvm_update_routing_entry(struct kvm_irq_routing_entry *entry,
 
 
 #ifdef KVM_CAP_DEVICE_MSIX
-int kvm_assign_set_msix_nr(kvm_context_t kvm,
-                           struct kvm_assigned_msix_nr *msix_nr);
-int kvm_assign_set_msix_entry(kvm_context_t kvm,
+int kvm_assign_set_msix_nr(KVMState *s, struct kvm_assigned_msix_nr *msix_nr);
+int kvm_assign_set_msix_entry(KVMState *s,
                               struct kvm_assigned_msix_entry *entry);
 #endif
 
 #else                           /* !CONFIG_KVM */
-
-typedef struct kvm_context *kvm_context_t;
 
 struct kvm_pit_state {
 };
@@ -383,7 +380,6 @@ extern int kvm_irqchip;
 extern int kvm_pit;
 extern int kvm_pit_reinject;
 extern int kvm_nested;
-extern kvm_context_t kvm_context;
 extern unsigned int kvm_shadow_memory;
 
 struct ioperm_data {

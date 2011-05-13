@@ -23,19 +23,19 @@
 #include "kvm.h"
 #include "hw/apic.h"
 
-static int kvm_create_pit(kvm_context_t kvm)
+static int kvm_create_pit(KVMState *s)
 {
 #ifdef KVM_CAP_PIT
     int r;
 
     if (kvm_pit_in_kernel()) {
-        r = kvm_vm_ioctl(kvm_state, KVM_CREATE_PIT);
+        r = kvm_vm_ioctl(s, KVM_CREATE_PIT);
         if (r < 0) {
             fprintf(stderr, "Create kernel PIC irqchip failed\n");
             return r;
         }
         if (!kvm_pit_reinject) {
-            r = kvm_reinject_control(kvm_context, 0);
+            r = kvm_reinject_control(s, 0);
             if (r < 0) {
                 fprintf(stderr,
                         "failure to disable in-kernel PIT reinjection\n");
@@ -142,37 +142,37 @@ int kvm_set_lapic(CPUState *env, struct kvm_lapic_state *s)
 
 #ifdef KVM_CAP_PIT
 
-int kvm_get_pit(kvm_context_t kvm, struct kvm_pit_state *s)
+int kvm_get_pit(KVMState *s, struct kvm_pit_state *pit_state)
 {
     if (!kvm_pit_in_kernel()) {
         return 0;
     }
-    return kvm_vm_ioctl(kvm_state, KVM_GET_PIT, s);
+    return kvm_vm_ioctl(s, KVM_GET_PIT, pit_state);
 }
 
-int kvm_set_pit(kvm_context_t kvm, struct kvm_pit_state *s)
+int kvm_set_pit(KVMState *s, struct kvm_pit_state *pit_state)
 {
     if (!kvm_pit_in_kernel()) {
         return 0;
     }
-    return kvm_vm_ioctl(kvm_state, KVM_SET_PIT, s);
+    return kvm_vm_ioctl(s, KVM_SET_PIT, pit_state);
 }
 
 #ifdef KVM_CAP_PIT_STATE2
-int kvm_get_pit2(kvm_context_t kvm, struct kvm_pit_state2 *ps2)
+int kvm_get_pit2(KVMState *s, struct kvm_pit_state2 *ps2)
 {
     if (!kvm_pit_in_kernel()) {
         return 0;
     }
-    return kvm_vm_ioctl(kvm_state, KVM_GET_PIT2, ps2);
+    return kvm_vm_ioctl(s, KVM_GET_PIT2, ps2);
 }
 
-int kvm_set_pit2(kvm_context_t kvm, struct kvm_pit_state2 *ps2)
+int kvm_set_pit2(KVMState *s, struct kvm_pit_state2 *ps2)
 {
     if (!kvm_pit_in_kernel()) {
         return 0;
     }
-    return kvm_vm_ioctl(kvm_state, KVM_SET_PIT2, ps2);
+    return kvm_vm_ioctl(s, KVM_SET_PIT2, ps2);
 }
 
 #endif

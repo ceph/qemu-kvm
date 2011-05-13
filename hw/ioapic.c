@@ -278,7 +278,7 @@ static void kvm_kernel_ioapic_save_to_user(IOAPICState *s)
     int i;
 
     chip.chip_id = KVM_IRQCHIP_IOAPIC;
-    kvm_get_irqchip(kvm_context, &chip);
+    kvm_get_irqchip(kvm_state, &chip);
     kioapic = &chip.chip.ioapic;
 
     s->id = kioapic->id;
@@ -308,7 +308,7 @@ static void kvm_kernel_ioapic_load_from_user(IOAPICState *s)
         kioapic->redirtbl[i].bits = s->ioredtbl[i];
     }
 
-    kvm_set_irqchip(kvm_context, &chip);
+    kvm_set_irqchip(kvm_state, &chip);
 #endif
 }
 

@@ -590,7 +590,7 @@ static void kvm_kernel_pic_save_to_user(PicState *s)
     chip.chip_id = (&s->pics_state->pics[0] == s) ?
                    KVM_IRQCHIP_PIC_MASTER :
                    KVM_IRQCHIP_PIC_SLAVE;
-    kvm_get_irqchip(kvm_context, &chip);
+    kvm_get_irqchip(kvm_state, &chip);
     kpic = &chip.chip.pic;
 
     s->last_irr = kpic->last_irr;
@@ -640,7 +640,7 @@ static int kvm_kernel_pic_load_from_user(PicState *s)
     kpic->elcr = s->elcr;
     kpic->elcr_mask = s->elcr_mask;
 
-    kvm_set_irqchip(kvm_context, &chip);
+    kvm_set_irqchip(kvm_state, &chip);
 #endif
     return 0;
 }

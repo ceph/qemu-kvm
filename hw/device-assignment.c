@@ -967,7 +967,7 @@ static int assign_device(AssignedDevice *dev)
                 "requests!\n");
     }
 
-    r = kvm_assign_pci_device(kvm_context, &assigned_dev_data);
+    r = kvm_assign_pci_device(kvm_state, &assigned_dev_data);
     if (r < 0) {
         fprintf(stderr, "Failed to assign device \"%s\" : %s\n",
                 dev->dev.qdev.id, strerror(-r));
@@ -1010,7 +1010,7 @@ static int assign_irq(AssignedDevice *dev)
 #ifdef KVM_CAP_ASSIGN_DEV_IRQ
     if (dev->irq_requested_type) {
         assigned_irq_data.flags = dev->irq_requested_type;
-        r = kvm_deassign_irq(kvm_context, &assigned_irq_data);
+        r = kvm_deassign_irq(kvm_state, &assigned_irq_data);
         /* -ENXIO means no assigned irq */
         if (r && r != -ENXIO)
             perror("assign_irq: deassign");
@@ -1024,7 +1024,7 @@ static int assign_irq(AssignedDevice *dev)
         assigned_irq_data.flags |= KVM_DEV_IRQ_HOST_INTX;
 #endif
 
-    r = kvm_assign_irq(kvm_context, &assigned_irq_data);
+    r = kvm_assign_irq(kvm_state, &assigned_irq_data);
     if (r < 0) {
         fprintf(stderr, "Failed to assign irq for \"%s\": %s\n",
                 dev->dev.qdev.id, strerror(-r));
@@ -1048,7 +1048,7 @@ static void deassign_device(AssignedDevice *dev)
     assigned_dev_data.assigned_dev_id  =
 	calc_assigned_dev_id(dev->h_segnr, dev->h_busnr, dev->h_devfn);
 
-    r = kvm_deassign_pci_device(kvm_context, &assigned_dev_data);
+    r = kvm_deassign_pci_device(kvm_state, &assigned_dev_data);
     if (r < 0)
 	fprintf(stderr, "Failed to deassign device \"%s\" : %s\n",
                 dev->dev.qdev.id, strerror(-r));
@@ -1113,7 +1113,7 @@ static void assigned_dev_update_msi(PCIDevice *pci_dev, unsigned int ctrl_pos)
 
         assigned_irq_data.flags = assigned_dev->irq_requested_type;
         free_dev_irq_entries(assigned_dev);
-        r = kvm_deassign_irq(kvm_context, &assigned_irq_data);
+        r = kvm_deassign_irq(kvm_state, &assigned_irq_data);
         /* -ENXIO means no assigned irq */
         if (r && r != -ENXIO)
             perror("assigned_dev_update_msi: deassign irq");
@@ -1147,8 +1147,9 @@ static void assigned_dev_update_msi(PCIDevice *pci_dev, unsigned int ctrl_pos)
 
         assigned_irq_data.guest_irq = assigned_dev->entry->gsi;
 	assigned_irq_data.flags = KVM_DEV_IRQ_HOST_MSI | KVM_DEV_IRQ_GUEST_MSI;
-        if (kvm_assign_irq(kvm_context, &assigned_irq_data) < 0)
+        if (kvm_assign_irq(kvm_state, &assigned_irq_data) < 0) {
             perror("assigned_dev_enable_msi: assign irq");
+        }
 
         assigned_dev->girq = -1;
         assigned_dev->irq_requested_type = assigned_irq_data.flags;
@@ -1192,7 +1193,7 @@ static int assigned_dev_update_msix_mmio(PCIDevice *pci_dev)
     msix_nr.assigned_dev_id = calc_assigned_dev_id(adev->h_segnr, adev->h_busnr,
                                           (uint8_t)adev->h_devfn);
     msix_nr.entry_nr = entries_nr;
-    r = kvm_assign_set_msix_nr(kvm_context, &msix_nr);
+    r = kvm_assign_set_msix_nr(kvm_state, &msix_nr);
     if (r != 0) {
         fprintf(stderr, "fail to set MSI-X entry number for MSIX! %s\n",
 			strerror(-r));
@@ -1231,7 +1232,7 @@ static int assigned_dev_update_msix_mmio(PCIDevice *pci_dev)
 
         msix_entry.gsi = adev->entry[entries_nr].gsi;
         msix_entry.entry = i;
-        r = kvm_assign_set_msix_entry(kvm_context, &msix_entry);
+        r = kvm_assign_set_msix_entry(kvm_state, &msix_entry);
         if (r) {
             fprintf(stderr, "fail to set MSI-X entry! %s\n", strerror(-r));
             break;
@@ -1269,7 +1270,7 @@ static void assigned_dev_update_msix(PCIDevice *pci_dev, unsigned int ctrl_pos)
 
         assigned_irq_data.flags = assigned_dev->irq_requested_type;
         free_dev_irq_entries(assigned_dev);
-        r = kvm_deassign_irq(kvm_context, &assigned_irq_data);
+        r = kvm_deassign_irq(kvm_state, &assigned_irq_data);
         /* -ENXIO means no assigned irq */
         if (r && r != -ENXIO)
             perror("assigned_dev_update_msix: deassign irq");
@@ -1285,7 +1286,7 @@ static void assigned_dev_update_msix(PCIDevice *pci_dev, unsigned int ctrl_pos)
             perror("assigned_dev_update_msix_mmio");
             return;
         }
-        if (kvm_assign_irq(kvm_context, &assigned_irq_data) < 0) {
+        if (kvm_assign_irq(kvm_state, &assigned_irq_data) < 0) {
             perror("assigned_dev_enable_msix: assign irq");
             return;
         }

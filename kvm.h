@@ -17,9 +17,6 @@
 #include <errno.h>
 #include "config-host.h"
 #include "qemu-queue.h"
-#ifdef NEED_CPU_H
-#include "qemu-kvm.h"
-#endif
 
 #ifdef CONFIG_KVM
 #include <linux/kvm.h>
@@ -85,6 +82,7 @@ int kvm_pit_in_kernel(void);
 
 int kvm_on_sigbus_vcpu(CPUState *env, int code, void *addr);
 int kvm_on_sigbus(int code, void *addr);
+#endif /* NEED_CPU_H */
 
 /* internal API */
 
@@ -96,6 +94,7 @@ int kvm_ioctl(KVMState *s, int type, ...);
 
 int kvm_vm_ioctl(KVMState *s, int type, ...);
 
+#ifdef NEED_CPU_H
 int kvm_vcpu_ioctl(CPUState *env, int type, ...);
 
 /* Arch specific hooks */
@@ -233,5 +232,9 @@ int kvm_commit_irq_routes(void);
 int kvm_irqchip_in_kernel(void);
 
 int kvm_set_irq(int irq, int level, int *status);
+
+#ifdef NEED_CPU_H
+#include "qemu-kvm.h"
+#endif
 
 #endif

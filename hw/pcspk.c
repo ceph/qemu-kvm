@@ -58,7 +58,7 @@ static void kvm_get_pit_ch2(ISADevice *dev,
     struct kvm_pit_state pit_state;
 
     if (kvm_enabled() && kvm_pit_in_kernel()) {
-        kvm_get_pit(kvm_context, &pit_state);
+        kvm_get_pit(kvm_state, &pit_state);
         pit->channels[2].mode = pit_state.channels[2].mode;
         pit->channels[2].count = pit_state.channels[2].count;
         pit->channels[2].count_load_time = pit_state.channels[2].count_load_time;
@@ -80,7 +80,7 @@ static void kvm_set_pit_ch2(ISADevice *dev,
         inkernel_state->channels[2].count_load_time =
             pit->channels[2].count_load_time;
         inkernel_state->channels[2].gate = pit->channels[2].gate;
-        kvm_set_pit(kvm_context, inkernel_state);
+        kvm_set_pit(kvm_state, inkernel_state);
     }
 }
 #else
