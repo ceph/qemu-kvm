@@ -38,7 +38,7 @@ static void kvm_pit_pre_save(void *opaque)
     struct PITChannelState *sc;
     int i;
 
-    if(qemu_kvm_has_pit_state2()) {
+    if (kvm_has_pit_state2()) {
         kvm_get_pit2(kvm_context, &pit2);
         s->flags = pit2.flags;
     } else {
@@ -91,7 +91,7 @@ static int kvm_pit_post_load(void *opaque, int version_id)
 	c->count_load_time = sc->count_load_time;
     }
 
-    if(qemu_kvm_has_pit_state2()) {
+    if (kvm_has_pit_state2()) {
         kvm_set_pit2(kvm_context, &pit2);
     } else {
         kvm_set_pit(kvm_context, (struct kvm_pit_state *)&pit2);

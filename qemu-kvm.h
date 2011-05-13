@@ -185,14 +185,6 @@ int kvm_reinject_control(kvm_context_t kvm, int pit_reinject);
 
 #ifdef KVM_CAP_PIT_STATE2
 /*!
- * \brief Check for kvm support of kvm_pit_state2
- *
- * \param kvm Pointer to the current kvm_context
- * \return 0 on success
- */
-int kvm_has_pit_state2(kvm_context_t kvm);
-
-/*!
  * \brief Set in kernel PIT state2 of the virtual domain
  *
  *
@@ -407,14 +399,8 @@ int kvm_arch_halt(CPUState *env);
 int handle_tpr_access(void *opaque, CPUState *env, uint64_t rip,
                       int is_write);
 
-#ifdef TARGET_I386
-#define qemu_kvm_has_pit_state2() kvm_has_pit_state2(kvm_context)
-#endif
 #else
 #define kvm_nested 0
-#ifdef TARGET_I386
-#define qemu_kvm_has_pit_state2() (0)
-#endif
 #endif
 
 #ifdef CONFIG_KVM
@@ -449,6 +435,7 @@ struct KVMState {
     int pit_in_kernel;
     int xsave, xcrs;
     int many_ioeventfds;
+    int pit_state2;
 
     struct kvm_context kvm_context;
 };

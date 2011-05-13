@@ -497,7 +497,7 @@ void hpet_pit_disable(void)
     PITChannelState *s = &pit_state.channels[0];
 
     if (kvm_enabled() && kvm_pit_in_kernel()) {
-        if (qemu_kvm_has_pit_state2()) {
+        if (kvm_has_pit_state2()) {
             kvm_hpet_disable_kpit();
         } else {
              fprintf(stderr, "%s: kvm does not support pit_state2!\n", __FUNCTION__);
@@ -521,7 +521,7 @@ void hpet_pit_enable(void)
     PITChannelState *s = &pit->channels[0];
 
     if (kvm_enabled() && kvm_pit_in_kernel()) {
-        if (qemu_kvm_has_pit_state2()) {
+        if (kvm_has_pit_state2()) {
             kvm_hpet_enable_kpit();
         } else {
              fprintf(stderr, "%s: kvm does not support pit_state2!\n", __FUNCTION__);

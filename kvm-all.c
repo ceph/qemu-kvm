@@ -82,6 +82,7 @@ struct KVMState
     int pit_in_kernel;
     int xsave, xcrs;
     int many_ioeventfds;
+    int pit_state2;
 };
 
 KVMState *kvm_state;
@@ -802,6 +803,11 @@ int kvm_init(void)
     s->xcrs = kvm_check_extension(s, KVM_CAP_XCRS);
 #endif
 
+    s->pit_state2 = 0;
+#ifdef KVM_CAP_PIT_STATE2
+    s->pit_state2 = kvm_check_extension(s, KVM_CAP_PIT_STATE2);
+#endif
+
     ret = kvm_arch_init(s);
     if (ret < 0) {
         goto err;
@@ -1130,6 +1136,11 @@ int kvm_has_xsave(void)
 int kvm_has_xcrs(void)
 {
     return kvm_state->xcrs;
+}
+
+int kvm_has_pit_state2(void)
+{
+    return kvm_state->pit_state2;
 }
 
 int kvm_has_many_ioeventfds(void)

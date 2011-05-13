@@ -1428,6 +1428,11 @@ static int kvm_create_context(void)
 
     kvm_state->many_ioeventfds = kvm_check_many_ioeventfds();
 
+    kvm_state->pit_state2 = 0;
+#ifdef KVM_CAP_PIT_STATE2
+    kvm_state->pit_state2 = kvm_check_extension(kvm_state, KVM_CAP_PIT_STATE2);
+#endif
+
     kvm_init_ap();
 
     return 0;

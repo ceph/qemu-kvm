@@ -178,16 +178,6 @@ int kvm_set_pit2(kvm_context_t kvm, struct kvm_pit_state2 *ps2)
 #endif
 #endif
 
-int kvm_has_pit_state2(kvm_context_t kvm)
-{
-    int r = 0;
-
-#ifdef KVM_CAP_PIT_STATE2
-    r = kvm_check_extension(kvm_state, KVM_CAP_PIT_STATE2);
-#endif
-    return r;
-}
-
 static void kvm_set_cr8(CPUState *env, uint64_t cr8)
 {
     env->kvm_run->cr8 = cr8;
@@ -328,7 +318,7 @@ int kvm_arch_init_irq_routing(void)
         }
         kvm_commit_irq_routes();
 
-        if (!qemu_kvm_has_pit_state2()) {
+        if (!kvm_has_pit_state2()) {
             no_hpet = 1;
         }
     } else {
