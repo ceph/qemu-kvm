@@ -278,7 +278,7 @@ int kvm_create_irqchip(kvm_context_t kvm)
 
 #ifdef KVM_CAP_IRQCHIP
 
-int kvm_set_irq_level(kvm_context_t kvm, int irq, int level, int *status)
+int kvm_set_irq(int irq, int level, int *status)
 {
     struct kvm_irq_level event;
     int r;
@@ -288,15 +288,17 @@ int kvm_set_irq_level(kvm_context_t kvm, int irq, int level, int *status)
     }
     event.level = level;
     event.irq = irq;
-    r = kvm_vm_ioctl(kvm_state, kvm->irqchip_inject_ioctl, &event);
+    r = kvm_vm_ioctl(kvm_state, kvm_state->kvm_context.irqchip_inject_ioctl,
+                     &event);
     if (r < 0) {
-        perror("kvm_set_irq_level");
+        perror("kvm_set_irq");
     }
 
     if (status) {
 #ifdef KVM_CAP_IRQ_INJECT_STATUS
         *status =
-            (kvm->irqchip_inject_ioctl == KVM_IRQ_LINE) ? 1 : event.status;
+            (kvm_state->kvm_context.irqchip_inject_ioctl == KVM_IRQ_LINE) ?
+                1 : event.status;
 #else
         *status = 1;
 #endif
@@ -1437,15 +1439,6 @@ static int kvm_create_context(void)
 
     return 0;
 }
-
-#ifdef KVM_CAP_IRQCHIP
-
-int kvm_set_irq(int irq, int level, int *status)
-{
-    return kvm_set_irq_level(kvm_context, irq, level, status);
-}
-
-#endif
 
 static void kvm_mutex_unlock(void)
 {

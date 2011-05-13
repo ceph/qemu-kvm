@@ -93,8 +93,6 @@ int kvm_is_ready_for_interrupt_injection(CPUState *env);
 int kvm_inject_irq(CPUState *env, unsigned irq);
 #endif
 
-int kvm_set_irq_level(kvm_context_t kvm, int irq, int level, int *status);
-
 #ifdef KVM_CAP_IRQCHIP
 /*!
  * \brief Dump in kernel IRQCHIP contents
