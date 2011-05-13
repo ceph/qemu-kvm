@@ -317,9 +317,9 @@ int kvm_arch_init_irq_routing(void)
             }
         }
         for (i = 0; i < 24; ++i) {
-            if (i == 0 && irq0override) {
+            if (i == 0) {
                 r = kvm_add_irq_route(i, KVM_IRQCHIP_IOAPIC, 2);
-            } else if (i != 2 || !irq0override) {
+            } else if (i != 2) {
                 r = kvm_add_irq_route(i, KVM_IRQCHIP_IOAPIC, i);
             }
             if (r < 0) {
