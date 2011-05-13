@@ -407,7 +407,6 @@ void kvm_hpet_enable_kpit(void);
 void kvm_hpet_disable_kpit(void);
 
 void on_vcpu(CPUState *env, void (*func)(void *data), void *data);
-void kvm_inject_interrupt(CPUState *env, int mask);
 void kvm_update_interrupt_request(CPUState *env);
 
 int kvm_arch_has_work(CPUState *env);

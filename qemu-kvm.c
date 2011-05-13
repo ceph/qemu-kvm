@@ -931,16 +931,6 @@ void on_vcpu(CPUState *env, void (*func)(void *data), void *data)
     }
 }
 
-static void inject_interrupt(void *data)
-{
-    cpu_interrupt(current_env, (long) data);
-}
-
-void kvm_inject_interrupt(CPUState *env, int mask)
-{
-    on_vcpu(env, inject_interrupt, (void *) (long) mask);
-}
-
 void kvm_update_interrupt_request(CPUState *env)
 {
     int signal = 0;
