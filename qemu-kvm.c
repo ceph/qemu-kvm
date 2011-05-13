@@ -350,12 +350,12 @@ static int handle_mmio(CPUState *env)
     return 0;
 }
 
-int handle_io_window(kvm_context_t kvm)
+static int handle_io_window(kvm_context_t kvm)
 {
     return 1;
 }
 
-int handle_shutdown(kvm_context_t kvm, CPUState *env)
+static int handle_shutdown(kvm_context_t kvm, CPUState *env)
 {
     /* stop the current vcpu from going back to guest mode */
     env->stopped = 1;
@@ -371,14 +371,14 @@ static inline void push_nmi(kvm_context_t kvm)
 #endif                          /* KVM_CAP_USER_NMI */
 }
 
-void post_kvm_run(kvm_context_t kvm, CPUState *env)
+static void post_kvm_run(kvm_context_t kvm, CPUState *env)
 {
     pthread_mutex_lock(&qemu_mutex);
     kvm_arch_post_run(env, env->kvm_run);
     cpu_single_env = env;
 }
 
-int pre_kvm_run(kvm_context_t kvm, CPUState *env)
+static int pre_kvm_run(kvm_context_t kvm, CPUState *env)
 {
     kvm_arch_pre_run(env, env->kvm_run);
 
@@ -391,7 +391,7 @@ int kvm_is_ready_for_interrupt_injection(CPUState *env)
     return env->kvm_run->ready_for_interrupt_injection;
 }
 
-int kvm_run(CPUState *env)
+static int kvm_run(CPUState *env)
 {
     int r;
     kvm_context_t kvm = &env->kvm_state->kvm_context;
@@ -984,7 +984,7 @@ int kvm_cpu_exec(CPUState *env)
     return 0;
 }
 
-int kvm_cpu_is_stopped(CPUState *env)
+static int kvm_cpu_is_stopped(CPUState *env)
 {
     return !vm_running || env->stopped;
 }

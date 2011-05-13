@@ -66,38 +66,7 @@ typedef struct kvm_context *kvm_context_t;
 
 int kvm_arch_run(CPUState *env);
 
-int handle_halt(CPUState *env);
-
-int handle_shutdown(kvm_context_t kvm, CPUState *env);
-void post_kvm_run(kvm_context_t kvm, CPUState *env);
-int pre_kvm_run(kvm_context_t kvm, CPUState *env);
-int handle_io_window(kvm_context_t kvm);
-int try_push_interrupts(kvm_context_t kvm);
-
 int kvm_create_irqchip(kvm_context_t kvm);
-
-/*!
- * \brief Start the VCPU
- *
- * This starts the VCPU and virtualization is started.\n
- * \n
- * This function will not return until any of these conditions are met:
- * - An IO/MMIO handler does not return "0"
- * - An exception that neither the guest OS, nor KVM can handle occurs
- *
- * \note This function will call the callbacks registered in kvm_init()
- * to emulate those functions
- * \note If you at any point want to interrupt the VCPU, kvm_run() will
- * listen to the EINTR signal. This allows you to simulate external interrupts
- * and asyncronous IO.
- *
- * \param kvm Pointer to the current kvm_context
- * \param vcpu Which virtual CPU should be started
- * \return 0 on success, but you really shouldn't expect this function to
- * return except for when an error has occured, or when you have sent it
- * an EINTR signal.
- */
-int kvm_run(CPUState *env);
 
 /*!
  * \brief Check if a vcpu is ready for interrupt injection
@@ -487,7 +456,6 @@ struct KVMState {
 int kvm_tpr_enable_vapic(CPUState *env);
 
 unsigned long kvm_get_thread_id(void);
-int kvm_cpu_is_stopped(CPUState *env);
 
 #endif
 
