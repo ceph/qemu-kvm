@@ -192,7 +192,7 @@ int kvm_init(void)
         }
     }
 
-    kvm_cpu_register_phys_memory_client();
+    cpu_register_phys_memory_client(&kvm_cpu_phys_memory_client);
 
     pthread_mutex_lock(&qemu_mutex);
     return kvm_create_context();

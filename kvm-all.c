@@ -694,11 +694,6 @@ static CPUPhysMemoryClient kvm_cpu_phys_memory_client = {
     .log_stop = kvm_log_stop,
 };
 
-void kvm_cpu_register_phys_memory_client(void)
-{
-    cpu_register_phys_memory_client(&kvm_cpu_phys_memory_client);
-}
-
 #ifdef OBSOLETE_KVM_IMPL
 static void kvm_handle_interrupt(CPUState *env, int mask)
 {

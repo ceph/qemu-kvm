@@ -63,8 +63,6 @@ int kvm_init_vcpu(CPUState *env);
 int kvm_cpu_exec(CPUState *env);
 
 #if !defined(CONFIG_USER_ONLY)
-void kvm_cpu_register_phys_memory_client(void);
-
 void kvm_setup_guest_memory(void *start, size_t size);
 
 int kvm_coalesce_mmio_region(target_phys_addr_t start, ram_addr_t size);
