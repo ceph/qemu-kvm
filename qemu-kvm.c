@@ -339,11 +339,6 @@ static int handle_mmio(CPUState *env)
     return 0;
 }
 
-static int handle_io_window(kvm_context_t kvm)
-{
-    return 1;
-}
-
 static int handle_shutdown(kvm_context_t kvm, CPUState *env)
 {
     /* stop the current vcpu from going back to guest mode */
@@ -422,8 +417,7 @@ static int kvm_run(CPUState *env)
 
 #if !defined(__s390__)
     if (r == -1) {
-        r = handle_io_window(kvm);
-        goto more;
+        return 1;
     }
 #endif
     if (1) {
@@ -483,7 +477,6 @@ static int kvm_run(CPUState *env)
             break;
         }
     }
-more:
     if (!r) {
         goto again;
     }
