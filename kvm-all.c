@@ -702,7 +702,6 @@ static CPUPhysMemoryClient kvm_cpu_phys_memory_client = {
     .log_stop = kvm_log_stop,
 };
 
-#ifdef OBSOLETE_KVM_IMPL
 static void kvm_handle_interrupt(CPUState *env, int mask)
 {
     env->interrupt_request |= mask;
@@ -710,8 +709,10 @@ static void kvm_handle_interrupt(CPUState *env, int mask)
     if (!qemu_cpu_is_self(env)) {
         qemu_cpu_kick(env);
     }
+    kvm_update_interrupt_request(env);
 }
 
+#ifdef OBSOLETE_KVM_IMPL
 int kvm_init(void)
 {
     static const char upgrade_note[] =

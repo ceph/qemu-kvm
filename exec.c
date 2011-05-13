@@ -1649,8 +1649,6 @@ static void tcg_handle_interrupt(CPUState *env, int mask)
 
     old_mask = env->interrupt_request;
     env->interrupt_request |= mask;
-    if (kvm_enabled() && !kvm_irqchip_in_kernel())
-	kvm_update_interrupt_request(env);
 
     /*
      * If called from iothread context, wake the target cpu in

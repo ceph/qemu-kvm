@@ -1409,6 +1409,8 @@ static int kvm_create_context(void)
 
     kvm_init_ap();
 
+    cpu_interrupt_handler = kvm_handle_interrupt;
+
     return 0;
 }
 
