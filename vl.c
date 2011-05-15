@@ -261,7 +261,8 @@ static NotifierList exit_notifiers =
 static NotifierList machine_init_done_notifiers =
     NOTIFIER_LIST_INITIALIZER(machine_init_done_notifiers);
 
-int kvm_allowed = -1;
+static int tcg_allowed = 1;
+int kvm_allowed = 0;
 uint32_t xen_domid;
 enum xen_mode xen_mode = XEN_EMULATE;
 
@@ -1897,6 +1898,82 @@ static int debugcon_parse(const char *devname)
     return 0;
 }
 
+static int tcg_init(void)
+{
+    return 0;
+}
+
+static struct {
+    const char *opt_name;
+    const char *name;
+    int (*available)(void);
+    int (*init)(void);
+    int *allowed;
+} accel_list[] = {
+    { "tcg", "tcg", tcg_available, tcg_init, &tcg_allowed },
+    { "kvm", "KVM", kvm_available, kvm_init, &kvm_allowed },
+};
+
+static int configure_accelerator(void)
+{
+    const char *p = NULL;
+    char buf[10];
+    int i, ret;
+    bool accel_initalised = 0;
+    bool init_failed = 0;
+
+    QemuOptsList *list = qemu_find_opts("machine");
+    if (!QTAILQ_EMPTY(&list->head)) {
+        p = qemu_opt_get(QTAILQ_FIRST(&list->head), "accel");
+    }
+
+    if (p == NULL) {
+        /* Use the default "accelerator", kvm */
+        p = "kvm";
+    }
+
+    while (!accel_initalised && *p != '\0') {
+        if (*p == ':') {
+            p++;
+        }
+        p = get_opt_name(buf, sizeof (buf), p, ':');
+        for (i = 0; i < ARRAY_SIZE(accel_list); i++) {
+            if (strcmp(accel_list[i].opt_name, buf) == 0) {
+                ret = accel_list[i].init();
+                if (ret < 0) {
+                    init_failed = 1;
+                    if (!accel_list[i].available()) {
+                        printf("%s not supported for this target\n",
+                               accel_list[i].name);
+                    } else {
+                        fprintf(stderr, "failed to initialize %s: %s\n",
+                                accel_list[i].name,
+                                strerror(-ret));
+                    }
+                } else {
+                    accel_initalised = 1;
+                    *(accel_list[i].allowed) = 1;
+                }
+                break;
+            }
+        }
+        if (i == ARRAY_SIZE(accel_list)) {
+            fprintf(stderr, "\"%s\" accelerator does not exist.\n", buf);
+        }
+    }
+
+    if (!accel_initalised) {
+        fprintf(stderr, "No accelerator found!\n");
+        exit(1);
+    }
+
+    if (init_failed) {
+        fprintf(stderr, "Back to %s accelerator.\n", accel_list[i].name);
+    }
+
+    return !accel_initalised;
+}
+
 void qemu_add_exit_notifier(Notifier *notify)
 {
     notifier_list_add(&exit_notifiers, notify);
@@ -2597,15 +2674,24 @@ int main(int argc, char **argv, char **envp)
                 do_smbios_option(optarg);
                 break;
             case QEMU_OPTION_enable_kvm:
-                kvm_allowed = 1;
+                olist = qemu_find_opts("machine");
+                qemu_opts_reset(olist);
+                qemu_opts_parse(olist, "accel=kvm", 0);
+                break;
+            case QEMU_OPTION_machine:
+                olist = qemu_find_opts("machine");
+                qemu_opts_reset(olist);
+                opts = qemu_opts_parse(olist, optarg, 0);
+                if (!opts) {
+                    fprintf(stderr, "parse error: %s\n", optarg);
+                    exit(1);
+                }
                 break;
 	    case QEMU_OPTION_no_kvm:
-		kvm_allowed = 0;
-#ifdef CONFIG_NO_CPU_EMULATION
-                fprintf(stderr, "cpu emulation not configured\n");
-                exit(1);
-#endif
-		break;
+                olist = qemu_find_opts("machine");
+                qemu_opts_reset(olist);
+                qemu_opts_parse(olist, "accel=tcg", 0);
+                break;
 #ifdef CONFIG_KVM
 	    case QEMU_OPTION_no_kvm_irqchip: {
 		kvm_irqchip = 0;
@@ -2954,21 +3040,7 @@ int main(int argc, char **argv, char **envp)
         exit(1);
     }
 
-    if (kvm_allowed) {
-        int ret = kvm_init();
-        if (ret < 0) {
-            if (kvm_allowed > 0) {
-                if (!kvm_available()) {
-                    printf("KVM not supported for this target\n");
-                } else {
-                    fprintf(stderr, "failed to initialize KVM: %s\n", strerror(-ret));
-                }
-                exit(1);
-            }
-            fprintf(stderr, "Could not initialize KVM, will disable KVM support\n");
-        }
-        kvm_allowed = ret >= 0;
-    }
+    configure_accelerator();
 
     if (qemu_init_main_loop()) {
         fprintf(stderr, "qemu_init_main_loop failed\n");
