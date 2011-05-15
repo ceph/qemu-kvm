@@ -3026,7 +3026,6 @@ static void cirrus_init_common(CirrusVGAState * s, int device_id, int is_pci)
     s->vga.cursor_draw_line = cirrus_cursor_draw_line;
 
     qemu_register_reset(cirrus_reset, s);
-    cirrus_reset(s);
 }
 
 /***************************************

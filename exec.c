@@ -1729,11 +1729,12 @@ static QLIST_HEAD(memory_client_list, CPUPhysMemoryClient) memory_client_list
 
 static void cpu_notify_set_memory(target_phys_addr_t start_addr,
                                   ram_addr_t size,
-                                  ram_addr_t phys_offset)
+                                  ram_addr_t phys_offset,
+                                  bool log_dirty)
 {
     CPUPhysMemoryClient *client;
     QLIST_FOREACH(client, &memory_client_list, list) {
-        client->set_memory(client, start_addr, size, phys_offset);
+        client->set_memory(client, start_addr, size, phys_offset, log_dirty);
     }
 }
 
@@ -1773,7 +1774,7 @@ static void phys_page_for_each_1(CPUPhysMemoryClient *client,
         for (i = 0; i < L2_SIZE; ++i) {
             if (pd[i].phys_offset != IO_MEM_UNASSIGNED) {
                 client->set_memory(client, pd[i].region_offset,
-                                   TARGET_PAGE_SIZE, pd[i].phys_offset);
+                                   TARGET_PAGE_SIZE, pd[i].phys_offset, false);
             }
         }
     } else {
@@ -2618,10 +2619,11 @@ static subpage_t *subpage_init (target_phys_addr_t base, ram_addr_t *phys,
    start_addr and region_offset are rounded down to a page boundary
    before calculating this offset.  This should not be a problem unless
    the low bits of start_addr and region_offset differ.  */
-void cpu_register_physical_memory_offset(target_phys_addr_t start_addr,
+void cpu_register_physical_memory_log(target_phys_addr_t start_addr,
                                          ram_addr_t size,
                                          ram_addr_t phys_offset,
-                                         ram_addr_t region_offset)
+                                         ram_addr_t region_offset,
+                                         bool log_dirty)
 {
     target_phys_addr_t addr, end_addr;
     PhysPageDesc *p;
@@ -2630,7 +2632,7 @@ void cpu_register_physical_memory_offset(target_phys_addr_t start_addr,
     subpage_t *subpage;
 
     assert(size);
-    cpu_notify_set_memory(start_addr, size, phys_offset);
+    cpu_notify_set_memory(start_addr, size, phys_offset, log_dirty);
 
     if (phys_offset == IO_MEM_UNASSIGNED) {
         region_offset = start_addr;
