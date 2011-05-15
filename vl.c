@@ -263,6 +263,7 @@ static NotifierList machine_init_done_notifiers =
 
 static int tcg_allowed = 1;
 int kvm_allowed = 0;
+int xen_allowed = 0;
 uint32_t xen_domid;
 enum xen_mode xen_mode = XEN_EMULATE;
 
@@ -1911,6 +1912,7 @@ static struct {
     int *allowed;
 } accel_list[] = {
     { "tcg", "tcg", tcg_available, tcg_init, &tcg_allowed },
+    { "xen", "Xen", xen_available, xen_init, &xen_allowed },
     { "kvm", "KVM", kvm_available, kvm_init, &kvm_allowed },
 };
 
@@ -2968,6 +2970,28 @@ int main(int argc, char **argv, char **envp)
                 "supported by machine `%s' (%d)\n", smp_cpus,  machine->name,
                 machine->max_cpus);
         exit(1);
+    }
+
+    /*
+     * Get the default machine options from the machine if it is not already
+     * specified either by the configuration file or by the command line.
+     */
+    if (machine->default_machine_opts) {
+        QemuOptsList *list = qemu_find_opts("machine");
+        const char *p = NULL;
+
+        if (!QTAILQ_EMPTY(&list->head)) {
+            p = qemu_opt_get(QTAILQ_FIRST(&list->head), "accel");
+        }
+        if (p == NULL) {
+            opts = qemu_opts_parse(qemu_find_opts("machine"),
+                                   machine->default_machine_opts, 0);
+            if (!opts) {
+                fprintf(stderr, "parse error for machine %s: %s\n",
+                        machine->name, machine->default_machine_opts);
+                exit(1);
+            }
+        }
     }
 
     qemu_opts_foreach(qemu_find_opts("device"), default_driver_check, NULL, 0);
