@@ -367,10 +367,7 @@ int cpu_exec(CPUState *env1)
                 if (unlikely(interrupt_request)) {
                     if (unlikely(env->singlestep_enabled & SSTEP_NOIRQ)) {
                         /* Mask out external interrupts for this step. */
-                        interrupt_request &= ~(CPU_INTERRUPT_HARD |
-                                               CPU_INTERRUPT_FIQ |
-                                               CPU_INTERRUPT_SMI |
-                                               CPU_INTERRUPT_NMI);
+                        interrupt_request &= ~CPU_INTERRUPT_SSTEP_MASK;
                     }
                     if (interrupt_request & CPU_INTERRUPT_DEBUG) {
                         env->interrupt_request &= ~CPU_INTERRUPT_DEBUG;
@@ -499,9 +496,6 @@ int cpu_exec(CPUState *env1)
                                 next_tb = 0;
                             }
                         }
-		    } else if (interrupt_request & CPU_INTERRUPT_TIMER) {
-			//do_interrupt(0, 0, 0, 0, 0);
-			env->interrupt_request &= ~CPU_INTERRUPT_TIMER;
 		    }
 #elif defined(TARGET_ARM)
                     if (interrupt_request & CPU_INTERRUPT_FIQ
@@ -516,7 +510,7 @@ int cpu_exec(CPUState *env1)
                        jump normally, then does the exception return when the
                        CPU tries to execute code at the magic address.
                        This will cause the magic PC value to be pushed to
-                       the stack if an interrupt occured at the wrong time.
+                       the stack if an interrupt occurred at the wrong time.
                        We avoid this by disabling interrupts when
                        pc contains a magic address.  */
                     if (interrupt_request & CPU_INTERRUPT_HARD
@@ -576,7 +570,7 @@ int cpu_exec(CPUState *env1)
                         next_tb = 0;
                     }
 #endif
-                   /* Don't use the cached interupt_request value,
+                   /* Don't use the cached interrupt_request value,
                       do_interrupt may have updated the EXITTB flag. */
                     if (env->interrupt_request & CPU_INTERRUPT_EXITTB) {
                         env->interrupt_request &= ~CPU_INTERRUPT_EXITTB;

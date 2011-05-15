@@ -664,7 +664,8 @@ DEF("alt-grab", 0, QEMU_OPTION_alt_grab,
 STEXI
 @item -alt-grab
 @findex -alt-grab
-Use Ctrl-Alt-Shift to grab mouse (instead of Ctrl-Alt).
+Use Ctrl-Alt-Shift to grab mouse (instead of Ctrl-Alt). Note that this also
+affects the special keys (for fullscreen, monitor-mode switching, etc).
 ETEXI
 
 DEF("ctrl-grab", 0, QEMU_OPTION_ctrl_grab,
@@ -673,7 +674,8 @@ DEF("ctrl-grab", 0, QEMU_OPTION_ctrl_grab,
 STEXI
 @item -ctrl-grab
 @findex -ctrl-grab
-Use Right-Ctrl to grab mouse (instead of Ctrl-Alt).
+Use Right-Ctrl to grab mouse (instead of Ctrl-Alt). Note that this also
+affects the special keys (for fullscreen, monitor-mode switching, etc).
 ETEXI
 
 DEF("no-quit", 0, QEMU_OPTION_no_quit,
@@ -2030,6 +2032,16 @@ STEXI
 @findex -enable-kvm
 Enable KVM full virtualization support. This option is only available
 if KVM support is enabled when compiling.
+ETEXI
+
+DEF("machine", HAS_ARG, QEMU_OPTION_machine, \
+    "-machine accel=accel1[:accel2]    use an accelerator (kvm,xen,tcg), default is tcg\n", QEMU_ARCH_ALL)
+STEXI
+@item -machine accel=@var{accels}
+@findex -machine
+This is use to enable an accelerator, in kvm,xen,tcg.
+By default, it use only tcg. If there a more than one accelerator
+specified, the next one is used if the first don't work.
 ETEXI
 
 DEF("xen-domid", HAS_ARG, QEMU_OPTION_xen_domid,

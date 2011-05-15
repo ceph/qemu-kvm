@@ -93,6 +93,7 @@ typedef struct PCIIORegion {
     pcibus_t filtered_size;
     uint8_t type;
     PCIMapIORegionFunc *map_func;
+    ram_addr_t ram_addr;
 } PCIIORegion;
 
 #define PCI_ROM_SLOT 6
@@ -135,7 +136,7 @@ struct PCIDevice {
     /* PCI config space */
     uint8_t *config;
 
-    /* Used to enable config checks on load. Note that writeable bits are
+    /* Used to enable config checks on load. Note that writable bits are
      * never checked even if set in cmask. */
     uint8_t *cmask;
 
@@ -219,6 +220,8 @@ PCIDevice *pci_register_device(PCIBus *bus, const char *name,
 void pci_register_bar(PCIDevice *pci_dev, int region_num,
                             pcibus_t size, uint8_t type,
                             PCIMapIORegionFunc *map_func);
+void pci_register_bar_simple(PCIDevice *pci_dev, int region_num,
+                             pcibus_t size, uint8_t attr, ram_addr_t ram_addr);
 
 void pci_map_option_rom(PCIDevice *pdev, int region_num, pcibus_t addr,
                         pcibus_t size, int type);
@@ -254,6 +257,7 @@ void pci_bus_new_inplace(PCIBus *bus, DeviceState *parent,
 PCIBus *pci_bus_new(DeviceState *parent, const char *name, uint8_t devfn_min);
 void pci_bus_irqs(PCIBus *bus, pci_set_irq_fn set_irq, pci_map_irq_fn map_irq,
                   void *irq_opaque, int nirq);
+int pci_bus_get_irq_level(PCIBus *bus, int irq_num);
 void pci_bus_hotplug(PCIBus *bus, pci_hotplug_fn hotplug, DeviceState *dev);
 PCIBus *pci_register_bus(DeviceState *parent, const char *name,
                          pci_set_irq_fn set_irq, pci_map_irq_fn map_irq,
