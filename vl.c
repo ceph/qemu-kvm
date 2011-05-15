@@ -1172,6 +1172,16 @@ int qemu_no_shutdown(void)
     return r;
 }
 
+int qemu_shutdown_requested_get(void)
+{
+    return shutdown_requested;
+}
+
+int qemu_reset_requested_get(void)
+{
+    return reset_requested;
+}
+
 int qemu_shutdown_requested(void)
 {
     int r = shutdown_requested;
