@@ -590,6 +590,7 @@ void qemu_cpu_kick(void *env)
 {
 }
 
+#ifdef UNUSED_IMPL
 void qemu_cpu_kick_self(void)
 {
 #ifndef _WIN32
@@ -600,6 +601,7 @@ void qemu_cpu_kick_self(void)
     abort();
 #endif
 }
+#endif
 
 void qemu_notify_event(void)
 {
@@ -848,6 +850,7 @@ static void *qemu_tcg_cpu_thread_fn(void *arg)
     return NULL;
 }
 
+#endif
 static void qemu_cpu_kick_thread(CPUState *env)
 {
 #ifndef _WIN32
@@ -866,6 +869,7 @@ static void qemu_cpu_kick_thread(CPUState *env)
     }
 #endif
 }
+#ifdef CONFIG_IOTHREAD
 
 void qemu_cpu_kick(void *_env)
 {
@@ -878,6 +882,7 @@ void qemu_cpu_kick(void *_env)
     }
 }
 
+#endif
 void qemu_cpu_kick_self(void)
 {
 #ifndef _WIN32
@@ -891,6 +896,7 @@ void qemu_cpu_kick_self(void)
     abort();
 #endif
 }
+#ifdef CONFIG_IOTHREAD
 
 int qemu_cpu_is_self(void *_env)
 {
