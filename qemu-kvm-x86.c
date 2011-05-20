@@ -164,14 +164,18 @@ static int _kvm_arch_init_vcpu(CPUState *env)
 #ifdef KVM_EXIT_TPR_ACCESS
     kvm_enable_tpr_access_reporting(env);
 #endif
-    return 0;
+
+    return kvm_update_ioport_access(env);
 }
 
 #ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
-void kvm_arch_do_ioperm(void *_data)
+int kvm_arch_set_ioport_access(unsigned long start, unsigned long size,
+                               bool enable)
 {
-    struct ioperm_data *data = _data;
-    ioperm(data->start_port, data->num, data->turn_on);
+    if (ioperm(start, size, enable) < 0) {
+        return -errno;
+    }
+    return 0;
 }
 #endif
 

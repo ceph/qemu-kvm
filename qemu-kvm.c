@@ -66,11 +66,6 @@ static int qemu_system_ready;
 
 CPUState *kvm_debug_cpu_requested;
 
-#ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
-/* The list of ioperm_data */
-static QLIST_HEAD(, ioperm_data) ioperm_head;
-#endif
-
 #define ALIGN(x, y) (((x)+(y)-1) & ~((y)-1))
 
 static inline void set_gsi(KVMState *s, unsigned int gsi)
@@ -856,18 +851,9 @@ static int kvm_main_loop_cpu(CPUState *env)
 static void *ap_main_loop(void *_env)
 {
     CPUState *env = _env;
-#ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
-    struct ioperm_data *data = NULL;
-#endif
 
     current_env = env;
     env->thread_id = kvm_get_thread_id();
-
-#ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
-    /* do ioperm for io ports of assigned devices */
-    QLIST_FOREACH(data, &ioperm_head, entries)
-        on_vcpu(env, kvm_arch_do_ioperm, data);
-#endif
 
     pthread_mutex_lock(&qemu_mutex);
     cpu_single_env = env;
@@ -1069,36 +1055,95 @@ void qemu_mutex_lock_iothread(void)
 }
 
 #ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
-void kvm_add_ioperm_data(struct ioperm_data *data)
+typedef struct KVMIOPortRegion {
+    unsigned long start;
+    unsigned long size;
+    int status;
+    QLIST_ENTRY(KVMIOPortRegion) entry;
+} KVMIOPortRegion;
+
+static QLIST_HEAD(, KVMIOPortRegion) ioport_regions;
+
+static void do_set_ioport_access(void *data)
 {
-    QLIST_INSERT_HEAD(&ioperm_head, data, entries);
+    KVMIOPortRegion *region = data;
+    bool enable = region->status > 0;
+    int r;
+
+    r = kvm_arch_set_ioport_access(region->start, region->size, enable);
+    if (r < 0) {
+        region->status = r;
+    } else {
+        region->status = 1;
+    }
 }
 
-void kvm_remove_ioperm_data(unsigned long start_port, unsigned long num)
+int kvm_add_ioport_region(unsigned long start, unsigned long size)
 {
-    struct ioperm_data *data;
+    KVMIOPortRegion *region = qemu_mallocz(sizeof(KVMIOPortRegion));
+    CPUState *env;
+    int r = 0;
 
-    data = QLIST_FIRST(&ioperm_head);
-    while (data) {
-        struct ioperm_data *next = QLIST_NEXT(data, entries);
+    region->start = start;
+    region->size = size;
+    region->status = 1;
+    QLIST_INSERT_HEAD(&ioport_regions, region, entry);
 
-        if (data->start_port == start_port && data->num == num) {
-            QLIST_REMOVE(data, entries);
-            qemu_free(data);
+    if (qemu_system_ready) {
+        for (env = first_cpu; env != NULL; env = env->next_cpu) {
+            on_vcpu(env, do_set_ioport_access, region);
+            if (region->status < 0) {
+                r = region->status;
+                kvm_remove_ioport_region(start, size);
+                break;
+            }
         }
-
-        data = next;
     }
+    return r;
 }
 
-void kvm_ioperm(CPUState *env, void *data)
+int kvm_remove_ioport_region(unsigned long start, unsigned long size)
 {
-    if (kvm_enabled() && qemu_system_ready) {
-        on_vcpu(env, kvm_arch_do_ioperm, data);
-    }
-}
+    KVMIOPortRegion *region, *tmp;
+    CPUState *env;
+    int r = -ENOENT;
 
-#endif
+    QLIST_FOREACH_SAFE(region, &ioport_regions, entry, tmp) {
+        if (region->start == start && region->size == size) {
+            region->status = 0;
+        }
+        if (qemu_system_ready) {
+            for (env = first_cpu; env != NULL; env = env->next_cpu) {
+                on_vcpu(env, do_set_ioport_access, region);
+            }
+        }
+        QLIST_REMOVE(region, entry);
+        qemu_free(region);
+        r = 0;
+    }
+    return r;
+}
+#endif /* CONFIG_KVM_DEVICE_ASSIGNMENT */
+
+int kvm_update_ioport_access(CPUState *env)
+{
+#ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
+    KVMIOPortRegion *region;
+    int r;
+
+    assert(qemu_cpu_is_self(env));
+
+    QLIST_FOREACH(region, &ioport_regions, entry) {
+        bool enable = region->status > 0;
+
+        r = kvm_arch_set_ioport_access(region->start, region->size, enable);
+        if (r < 0) {
+            return r;
+        }
+    }
+#endif /* CONFIG_KVM_DEVICE_ASSIGNMENT */
+    return 0;
+}
 
 int kvm_set_boot_cpu_id(KVMState *s, uint32_t id)
 {

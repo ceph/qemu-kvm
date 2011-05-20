@@ -282,30 +282,19 @@ void kvm_tpr_access_report(CPUState *env, uint64_t rip, int is_write);
 
 int kvm_arch_init_irq_routing(void);
 
-#ifdef CONFIG_KVM_DEVICE_ASSIGNMENT
-struct ioperm_data;
+int kvm_add_ioport_region(unsigned long start, unsigned long size);
+int kvm_remove_ioport_region(unsigned long start, unsigned long size);
 
-void kvm_ioperm(CPUState *env, void *data);
-void kvm_add_ioperm_data(struct ioperm_data *data);
-void kvm_remove_ioperm_data(unsigned long start_port, unsigned long num);
-void kvm_arch_do_ioperm(void *_data);
-#endif
+int kvm_update_ioport_access(CPUState *env);
+int kvm_arch_set_ioport_access(unsigned long start, unsigned long size,
+                               bool enable);
 
 #ifdef CONFIG_KVM
-#include "qemu-queue.h"
-
 extern int kvm_irqchip;
 extern int kvm_pit;
 extern int kvm_pit_reinject;
 extern int kvm_nested;
 extern unsigned int kvm_shadow_memory;
-
-struct ioperm_data {
-    unsigned long start_port;
-    unsigned long num;
-    int turn_on;
-    QLIST_ENTRY(ioperm_data) entries;
-};
 
 int kvm_handle_tpr_access(CPUState *env);
 

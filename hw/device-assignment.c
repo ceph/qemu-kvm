@@ -298,7 +298,7 @@ static void assigned_dev_ioport_map(PCIDevice *pci_dev, int region_num,
     AssignedDevice *r_dev = DO_UPCAST(AssignedDevice, dev, pci_dev);
     AssignedDevRegion *region = &r_dev->v_addrs[region_num];
     int first_map = (region->e_size == 0);
-    CPUState *env;
+    int r;
 
     region->e_physbase = addr;
     region->e_size = size;
@@ -307,17 +307,11 @@ static void assigned_dev_ioport_map(PCIDevice *pci_dev, int region_num,
           addr, region->u.r_baseport, type, size, region_num);
 
     if (first_map && region->region->resource_fd < 0) {
-	struct ioperm_data *data;
-
-	data = qemu_mallocz(sizeof(struct ioperm_data));
-	data->start_port = region->u.r_baseport;
-	data->num = region->r_size;
-	data->turn_on = 1;
-
-	kvm_add_ioperm_data(data);
-
-	for (env = first_cpu; env; env = env->next_cpu)
-	    kvm_ioperm(env, data);
+        r = kvm_add_ioport_region(region->u.r_baseport, region->r_size);
+        if (r < 0) {
+            fprintf(stderr, "%s: failed to enable ioport access (%m)\n",
+                    __func__);
+        }
     }
 
     register_ioport_read(addr, size, 1, assigned_dev_ioport_readb,
@@ -832,7 +826,7 @@ static void free_assigned_device(AssignedDevice *dev)
         }
         if (pci_region->type & IORESOURCE_IO) {
             if (pci_region->resource_fd < 0) {
-                kvm_remove_ioperm_data(region->u.r_baseport, region->r_size);
+                kvm_remove_ioport_region(region->u.r_baseport, region->r_size);
             }
         } else if (pci_region->type & IORESOURCE_MEM) {
             if (region->u.r_virtbase) {
