@@ -73,31 +73,6 @@ static QLIST_HEAD(, ioperm_data) ioperm_head;
 
 #define ALIGN(x, y) (((x)+(y)-1) & ~((y)-1))
 
-static int handle_unhandled(uint64_t reason)
-{
-    fprintf(stderr, "kvm: unhandled exit %" PRIx64 "\n", reason);
-    return -EINVAL;
-}
-
-#define VMX_INVALID_GUEST_STATE 0x80000021
-
-static int handle_failed_vmentry(uint64_t reason)
-{
-    fprintf(stderr, "kvm: vm entry failed with error 0x%" PRIx64 "\n\n", reason);
-
-    /* Perhaps we will need to check if this machine is intel since exit reason 0x21
-       has a different interpretation on SVM */
-    if (reason == VMX_INVALID_GUEST_STATE) {
-        fprintf(stderr, "If you're runnning a guest on an Intel machine without\n");
-        fprintf(stderr, "unrestricted mode support, the failure can be most likely\n");
-        fprintf(stderr, "due to the guest entering an invalid state for Intel VT.\n");
-        fprintf(stderr, "For example, the guest maybe running in big real mode\n");
-        fprintf(stderr, "which is not supported on less recent Intel processors.\n\n");
-    }
-
-    return -EINVAL;
-}
-
 static inline void set_gsi(KVMState *s, unsigned int gsi)
 {
     uint32_t *bitmap = s->used_gsi_bitmap;
@@ -243,169 +218,6 @@ int kvm_set_irqchip(KVMState *s, struct kvm_irqchip *chip)
 }
 
 #endif
-
-static int handle_mmio(CPUState *env)
-{
-    unsigned long addr = env->kvm_run->mmio.phys_addr;
-    struct kvm_run *kvm_run = env->kvm_run;
-    void *data = kvm_run->mmio.data;
-
-    /* hack: Red Hat 7.1 generates these weird accesses. */
-    if ((addr > 0xa0000 - 4 && addr <= 0xa0000) && kvm_run->mmio.len == 3) {
-        return 0;
-    }
-
-    cpu_physical_memory_rw(addr, data, kvm_run->mmio.len, kvm_run->mmio.is_write);
-    return 0;
-}
-
-static int handle_shutdown(CPUState *env)
-{
-    /* stop the current vcpu from going back to guest mode */
-    env->stopped = 1;
-
-    qemu_system_reset_request();
-    return 1;
-}
-
-static inline void push_nmi(void)
-{
-#ifdef KVM_CAP_USER_NMI
-    kvm_arch_push_nmi();
-#endif                          /* KVM_CAP_USER_NMI */
-}
-
-static void post_kvm_run(CPUState *env)
-{
-    pthread_mutex_lock(&qemu_mutex);
-    cpu_single_env = env;
-
-    kvm_arch_post_run(env, env->kvm_run);
-}
-
-static void pre_kvm_run(CPUState *env)
-{
-    kvm_arch_pre_run(env, env->kvm_run);
-
-    if (env->exit_request) {
-        qemu_cpu_kick_self();
-    }
-
-    cpu_single_env = NULL;
-    pthread_mutex_unlock(&qemu_mutex);
-}
-
-int kvm_is_ready_for_interrupt_injection(CPUState *env)
-{
-    return env->kvm_run->ready_for_interrupt_injection;
-}
-
-static int kvm_run(CPUState *env)
-{
-    int r;
-    struct kvm_run *run = env->kvm_run;
-
-    cpu_single_env = env;
-
-  again:
-    if (env->kvm_vcpu_dirty) {
-        kvm_arch_put_registers(env, KVM_PUT_RUNTIME_STATE);
-        env->kvm_vcpu_dirty = 0;
-    }
-    push_nmi();
-    if (!kvm_state->irqchip_in_kernel) {
-        run->request_interrupt_window = kvm_arch_try_push_interrupts(env);
-    }
-
-    pre_kvm_run(env);
-
-    r = kvm_vcpu_ioctl(env, KVM_RUN, 0);
-
-    post_kvm_run(env);
-
-    kvm_flush_coalesced_mmio_buffer();
-
-    if (r == -EINTR || r == -EAGAIN) {
-        env->exit_request = 0;
-        return 1;
-    }
-    if (r < 0) {
-        fprintf(stderr, "kvm_run: %s\n", strerror(-r));
-        return r;
-    }
-
-    if (1) {
-        switch (run->exit_reason) {
-        case KVM_EXIT_UNKNOWN:
-            r = handle_unhandled(run->hw.hardware_exit_reason);
-            break;
-        case KVM_EXIT_FAIL_ENTRY:
-            r = handle_failed_vmentry(run->fail_entry.hardware_entry_failure_reason);
-            break;
-        case KVM_EXIT_EXCEPTION:
-            fprintf(stderr, "exception %d (%x)\n", run->ex.exception,
-                    run->ex.error_code);
-            cpu_dump_state(env, stderr, fprintf, CPU_DUMP_CODE);
-            abort();
-            break;
-        case KVM_EXIT_IO:
-            kvm_handle_io(run->io.port,
-                                (uint8_t *)run + run->io.data_offset,
-                                run->io.direction,
-                                run->io.size,
-                                run->io.count);
-            r = 0;
-            break;
-        case KVM_EXIT_MMIO:
-            r = handle_mmio(env);
-            break;
-        case KVM_EXIT_HLT:
-            r = kvm_arch_halt(env);
-            break;
-        case KVM_EXIT_IRQ_WINDOW_OPEN:
-            break;
-        case KVM_EXIT_SHUTDOWN:
-            r = handle_shutdown(env);
-            break;
-	case KVM_EXIT_INTERNAL_ERROR:
-            r = kvm_handle_internal_error(env, run);
-	    break;
-        default:
-            r = kvm_arch_run(env);
-            if (r < 0) {
-                fprintf(stderr, "unhandled vm exit: 0x%x\n", run->exit_reason);
-                cpu_dump_state(env, stderr, fprintf, CPU_DUMP_CODE);
-                abort();
-            }
-            if (r > 0) {
-                return r;
-            }
-            break;
-        }
-    }
-    if (!r) {
-        goto again;
-    }
-    env->exit_request = 0;
-    return r;
-}
-
-int kvm_inject_irq(CPUState *env, unsigned irq)
-{
-    struct kvm_interrupt intr;
-
-    intr.irq = irq;
-    return kvm_vcpu_ioctl(env, KVM_INTERRUPT, &intr);
-}
-
-int kvm_inject_nmi(CPUState *env)
-{
-#ifdef KVM_CAP_USER_NMI
-    return kvm_vcpu_ioctl(env, KVM_NMI);
-#else
-    return -ENOSYS;
-#endif
-}
 
 #ifdef KVM_CAP_DEVICE_ASSIGNMENT
 int kvm_assign_pci_device(KVMState *s,
@@ -856,20 +668,6 @@ void kvm_update_interrupt_request(CPUState *env)
     }
 }
 
-int kvm_cpu_exec(CPUState *env)
-{
-    int r;
-
-    r = kvm_run(env);
-    if (r < 0) {
-        printf("kvm_run returned %d\n", r);
-        cpu_dump_state(env, stderr, fprintf, CPU_DUMP_CODE);
-        vm_stop(VMSTOP_PANIC);
-    }
-
-    return 0;
-}
-
 static int kvm_cpu_is_stopped(CPUState *env)
 {
     return !vm_running || env->stopped;
@@ -1035,16 +833,21 @@ static void qemu_kvm_system_reset(void)
 static int kvm_main_loop_cpu(CPUState *env)
 {
     while (1) {
-        int run_cpu = !kvm_cpu_is_stopped(env);
-        if (run_cpu) {
-            run_cpu = !kvm_arch_process_async_events(env);
+        int timeout = 1000;
+        if (!kvm_cpu_is_stopped(env)) {
+            switch (kvm_cpu_exec(env)) {
+            case EXCP_HLT:
+                break;
+            case EXCP_DEBUG:
+                kvm_debug_cpu_requested = env;
+                env->stopped = 1;
+                break;
+            default:
+                timeout = 0;
+                break;
+            }
         }
-        if (run_cpu) {
-            kvm_cpu_exec(env);
-            kvm_main_loop_wait(env, 0);
-        } else {
-            kvm_main_loop_wait(env, 1000);
-        }
+        kvm_main_loop_wait(env, timeout);
     }
     pthread_mutex_unlock(&qemu_mutex);
     return 0;

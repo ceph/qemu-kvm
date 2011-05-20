@@ -958,8 +958,6 @@ void kvm_cpu_synchronize_post_init(CPUState *env)
     env->kvm_vcpu_dirty = 0;
 }
 
-#ifdef OBSOLETE_KVM_IMPL
-
 int kvm_cpu_exec(CPUState *env)
 {
     struct kvm_run *run = env->kvm_run;
@@ -1065,7 +1063,6 @@ int kvm_cpu_exec(CPUState *env)
     return ret;
 }
 
-#endif
 int kvm_ioctl(KVMState *s, int type, ...)
 {
     int ret;

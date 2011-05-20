@@ -1565,7 +1565,6 @@ int kvm_arch_get_registers(CPUState *env)
     return 0;
 }
 
-#ifdef OBSOLETE_KVM_IMPL
 void kvm_arch_pre_run(CPUState *env, struct kvm_run *run)
 {
     int ret;
@@ -1623,7 +1622,6 @@ void kvm_arch_pre_run(CPUState *env, struct kvm_run *run)
         run->cr8 = cpu_get_apic_tpr(env->apic_state);
     }
 }
-#endif
 
 void kvm_arch_post_run(CPUState *env, struct kvm_run *run)
 {

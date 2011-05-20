@@ -37,34 +37,7 @@
 
 #include "kvm.h"
 
-int kvm_arch_run(CPUState *env);
-
 int kvm_create_irqchip(KVMState *s);
-
-/*!
- * \brief Check if a vcpu is ready for interrupt injection
- *
- * This checks if vcpu interrupts are not masked by mov ss or sti.
- *
- * \param kvm Pointer to the current kvm_context
- * \param vcpu Which virtual CPU should get dumped
- * \return boolean indicating interrupt injection readiness
- */
-int kvm_is_ready_for_interrupt_injection(CPUState *env);
-
-#if defined(__i386__) || defined(__x86_64__)
-/*!
- * \brief Simulate an external vectored interrupt
- *
- * This allows you to simulate an external vectored interrupt.
- *
- * \param kvm Pointer to the current kvm_context
- * \param vcpu Which virtual CPU should get dumped
- * \param irq Vector number
- * \return 0 on success
- */
-int kvm_inject_irq(CPUState *env, unsigned irq);
-#endif
 
 #ifdef KVM_CAP_IRQCHIP
 /*!
@@ -114,17 +87,6 @@ int kvm_get_lapic(CPUState *env, struct kvm_lapic_state *s);
 int kvm_set_lapic(CPUState *env, struct kvm_lapic_state *s);
 
 #endif
-
-/*!
- * \brief Simulate an NMI
- *
- * This allows you to simulate a non-maskable interrupt.
- *
- * \param kvm Pointer to the current kvm_context
- * \param vcpu Which virtual CPU should get dumped
- * \return 0 on success
- */
-int kvm_inject_nmi(CPUState *env);
 
 #endif
 
@@ -314,8 +276,6 @@ void kvm_hpet_disable_kpit(void);
 void on_vcpu(CPUState *env, void (*func)(void *data), void *data);
 void kvm_update_interrupt_request(CPUState *env);
 
-int kvm_arch_try_push_interrupts(void *opaque);
-void kvm_arch_push_nmi(void);
 int kvm_set_boot_cpu_id(KVMState *s, uint32_t id);
 
 void kvm_tpr_access_report(CPUState *env, uint64_t rip, int is_write);
@@ -347,9 +307,7 @@ struct ioperm_data {
     QLIST_ENTRY(ioperm_data) entries;
 };
 
-int kvm_arch_halt(CPUState *env);
-int handle_tpr_access(void *opaque, CPUState *env, uint64_t rip,
-                      int is_write);
+int kvm_handle_tpr_access(CPUState *env);
 
 #else
 #define kvm_nested 0
