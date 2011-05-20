@@ -307,11 +307,9 @@ static int kvm_run(CPUState *env)
         env->kvm_vcpu_dirty = 0;
     }
     push_nmi();
-#if !defined(__s390__)
     if (!kvm_state->irqchip_in_kernel) {
         run->request_interrupt_window = kvm_arch_try_push_interrupts(env);
     }
-#endif
 
     r = pre_kvm_run(env);
     if (r) {
@@ -334,11 +332,9 @@ static int kvm_run(CPUState *env)
 
     kvm_flush_coalesced_mmio_buffer();
 
-#if !defined(__s390__)
     if (r == -1) {
         return 1;
     }
-#endif
     if (1) {
         switch (run->exit_reason) {
         case KVM_EXIT_UNKNOWN:
@@ -372,14 +368,6 @@ static int kvm_run(CPUState *env)
         case KVM_EXIT_SHUTDOWN:
             r = handle_shutdown(env);
             break;
-#if defined(__s390__)
-        case KVM_EXIT_S390_SIEIC:
-            r = kvm_s390_handle_intercept(kvm, env, run);
-            break;
-        case KVM_EXIT_S390_RESET:
-            r = kvm_s390_handle_reset(kvm, env, run);
-            break;
-#endif
 	case KVM_EXIT_INTERNAL_ERROR:
             r = kvm_handle_internal_error(env, run);
 	    break;
