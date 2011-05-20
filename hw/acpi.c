@@ -19,9 +19,6 @@
 #include "hw.h"
 #include "pc.h"
 #include "acpi.h"
-#include "kvm.h"
-#include "qemu-kvm.h"
-#include "string.h"
 
 struct acpi_table_header
 {

@@ -32,7 +32,6 @@
 #if !defined(TARGET_IA64)
 #include "tcg.h"
 #endif
-#include "qemu-kvm.h"
 
 #include "hw/hw.h"
 #include "hw/qdev.h"

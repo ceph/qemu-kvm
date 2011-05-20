@@ -20,7 +20,6 @@
 #include "balloon.h"
 #include "virtio-balloon.h"
 #include "kvm.h"
-#include "qemu-kvm.h"
 #include "qlist.h"
 #include "qint.h"
 #include "qstring.h"

@@ -32,7 +32,6 @@
 #include "monitor.h"
 #endif
 
-#include "qemu-kvm.h"
 #ifndef OBSOLETE_KVM_IMPL
 #define run_on_cpu on_vcpu
 #endif /* !OBSOLETE_KVM_IMPL */

@@ -23,7 +23,6 @@
 #include "device_tree.h"
 #include "loader.h"
 #include "elf.h"
-#include "qemu-kvm.h"
 
 #define BINARY_DEVICE_TREE_FILE "bamboo.dtb"
 

@@ -41,8 +41,6 @@
 #endif
 #endif
 
-#include "qemu-kvm.h"
-
 #if defined(__sparc__) && !defined(CONFIG_SOLARIS)
 // Work around ugly bugs in glibc that mangle global register contents
 #undef env
