@@ -158,7 +158,6 @@ typedef struct CPUWatchpoint {
 struct qemu_work_item;
 
 struct KVMCPUState {
-    int signalled;
     struct qemu_work_item *queued_work_first, *queued_work_last;
 };
 

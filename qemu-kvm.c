@@ -840,12 +840,12 @@ void kvm_update_interrupt_request(CPUState *env)
          * Testing for created here is really redundant
          */
         if (current_env && current_env->created &&
-            env != current_env && !env->kvm_cpu_state.signalled) {
+            env != current_env && !env->thread_kicked) {
             signal = 1;
         }
 
         if (signal) {
-            env->kvm_cpu_state.signalled = 1;
+            env->thread_kicked = true;
             if (env->thread) {
                 pthread_kill(env->thread->thread, SIG_IPI);
             }
@@ -941,7 +941,7 @@ static void kvm_main_loop_wait(CPUState *env, int timeout)
         pthread_cond_signal(&qemu_pause_cond);
     }
 
-    env->kvm_cpu_state.signalled = 0;
+    env->thread_kicked = false;
 }
 
 static int all_threads_paused(void)
