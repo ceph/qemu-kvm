@@ -28,7 +28,6 @@
 #include "helper_regs.h"
 #include "qemu-common.h"
 #include "kvm.h"
-#include "qemu-kvm.h"
 
 //#define DEBUG_MMU
 //#define DEBUG_BATS
