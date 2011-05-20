@@ -1636,7 +1636,6 @@ void kvm_arch_post_run(CPUState *env, struct kvm_run *run)
     cpu_set_apic_base(env->apic_state, run->apic_base);
 }
 
-#ifdef OBSOLETE_KVM_IMPL
 int kvm_arch_process_async_events(CPUState *env)
 {
     if (env->interrupt_request & CPU_INTERRUPT_MCE) {
@@ -1682,7 +1681,6 @@ int kvm_arch_process_async_events(CPUState *env)
 
     return env->halted;
 }
-#endif
 
 static int kvm_handle_halt(CPUState *env)
 {

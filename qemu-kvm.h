@@ -314,8 +314,6 @@ void kvm_hpet_disable_kpit(void);
 void on_vcpu(CPUState *env, void (*func)(void *data), void *data);
 void kvm_update_interrupt_request(CPUState *env);
 
-int kvm_arch_has_work(CPUState *env);
-void kvm_arch_process_irqchip_events(CPUState *env);
 int kvm_arch_try_push_interrupts(void *opaque);
 void kvm_arch_push_nmi(void);
 int kvm_set_boot_cpu_id(KVMState *s, uint32_t id);

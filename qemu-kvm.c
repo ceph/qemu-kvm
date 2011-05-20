@@ -1032,23 +1032,12 @@ static void qemu_kvm_system_reset(void)
     resume_all_threads();
 }
 
-static void process_irqchip_events(CPUState *env)
-{
-    kvm_arch_process_irqchip_events(env);
-    if (kvm_arch_has_work(env))
-        env->halted = 0;
-}
-
 static int kvm_main_loop_cpu(CPUState *env)
 {
     while (1) {
         int run_cpu = !kvm_cpu_is_stopped(env);
         if (run_cpu) {
-            kvm_arch_process_async_events(env);
-            if (!kvm_irqchip_in_kernel()) {
-                process_irqchip_events(env);
-                run_cpu = !env->halted;
-            }
+            run_cpu = !kvm_arch_process_async_events(env);
         }
         if (run_cpu) {
             kvm_cpu_exec(env);
