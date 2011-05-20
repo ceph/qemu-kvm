@@ -299,7 +299,6 @@ static int kvm_run(CPUState *env)
 {
     int r;
     struct kvm_run *run = env->kvm_run;
-    int fd = env->kvm_fd;
 
   again:
     if (env->kvm_vcpu_dirty) {
@@ -319,22 +318,20 @@ static int kvm_run(CPUState *env)
         env->exit_request = 0;
         pthread_kill(env->thread->thread, SIG_IPI);
     }
-    r = ioctl(fd, KVM_RUN, 0);
-
-    if (r == -1 && errno != EINTR && errno != EAGAIN) {
-        r = -errno;
-        post_kvm_run(env);
-        fprintf(stderr, "kvm_run: %s\n", strerror(-r));
-        return r;
-    }
+    r = kvm_vcpu_ioctl(env, KVM_RUN, 0);
 
     post_kvm_run(env);
 
     kvm_flush_coalesced_mmio_buffer();
 
-    if (r == -1) {
+    if (r == -EINTR || r == -EAGAIN) {
         return 1;
     }
+    if (r < 0) {
+        fprintf(stderr, "kvm_run: %s\n", strerror(-r));
+        return r;
+    }
+
     if (1) {
         switch (run->exit_reason) {
         case KVM_EXIT_UNKNOWN:
