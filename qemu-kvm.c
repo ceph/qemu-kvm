@@ -278,16 +278,21 @@ static inline void push_nmi(void)
 static void post_kvm_run(CPUState *env)
 {
     pthread_mutex_lock(&qemu_mutex);
-    kvm_arch_post_run(env, env->kvm_run);
     cpu_single_env = env;
+
+    kvm_arch_post_run(env, env->kvm_run);
 }
 
-static int pre_kvm_run(CPUState *env)
+static void pre_kvm_run(CPUState *env)
 {
     kvm_arch_pre_run(env, env->kvm_run);
 
+    if (env->exit_request) {
+        qemu_cpu_kick_self();
+    }
+
+    cpu_single_env = NULL;
     pthread_mutex_unlock(&qemu_mutex);
-    return 0;
 }
 
 int kvm_is_ready_for_interrupt_injection(CPUState *env)
@@ -300,6 +305,8 @@ static int kvm_run(CPUState *env)
     int r;
     struct kvm_run *run = env->kvm_run;
 
+    cpu_single_env = env;
+
   again:
     if (env->kvm_vcpu_dirty) {
         kvm_arch_put_registers(env, KVM_PUT_RUNTIME_STATE);
@@ -310,14 +317,8 @@ static int kvm_run(CPUState *env)
         run->request_interrupt_window = kvm_arch_try_push_interrupts(env);
     }
 
-    r = pre_kvm_run(env);
-    if (r) {
-        return r;
-    }
-    if (env->exit_request) {
-        env->exit_request = 0;
-        pthread_kill(env->thread->thread, SIG_IPI);
-    }
+    pre_kvm_run(env);
+
     r = kvm_vcpu_ioctl(env, KVM_RUN, 0);
 
     post_kvm_run(env);
@@ -325,6 +326,7 @@ static int kvm_run(CPUState *env)
     kvm_flush_coalesced_mmio_buffer();
 
     if (r == -EINTR || r == -EAGAIN) {
+        env->exit_request = 0;
         return 1;
     }
     if (r < 0) {
@@ -384,6 +386,7 @@ static int kvm_run(CPUState *env)
     if (!r) {
         goto again;
     }
+    env->exit_request = 0;
     return r;
 }
 
