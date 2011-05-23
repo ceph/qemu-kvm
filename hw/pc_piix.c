@@ -131,7 +131,11 @@ static void pc_init1(ram_addr_t ram_size,
     if (pci_enabled) {
         ioapic_init(isa_irq_state);
     }
-    isa_irq = qemu_allocate_irqs(isa_irq_handler, isa_irq_state, 24);
+    if (!(kvm_enabled() && kvm_irqchip_in_kernel())) {
+        isa_irq = qemu_allocate_irqs(isa_irq_handler, isa_irq_state, 24);
+    } else {
+        isa_irq = i8259;
+    }
 
     if (pci_enabled) {
         if (!xen_enabled()) {
