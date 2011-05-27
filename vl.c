@@ -1164,13 +1164,6 @@ static int powerdown_requested;
 static int debug_requested;
 static int vmstop_requested;
 
-int qemu_no_shutdown(void)
-{
-    int r = no_shutdown;
-    no_shutdown = 0;
-    return r;
-}
-
 int qemu_shutdown_requested_get(void)
 {
     return shutdown_requested;
@@ -1218,14 +1211,14 @@ int qemu_powerdown_requested(void)
     return r;
 }
 
-int qemu_debug_requested(void)
+static int qemu_debug_requested(void)
 {
     int r = debug_requested;
     debug_requested = 0;
     return r;
 }
 
-int qemu_vmstop_requested(void)
+static int qemu_vmstop_requested(void)
 {
     int r = vmstop_requested;
     vmstop_requested = 0;
@@ -1371,12 +1364,6 @@ static void main_loop(void)
     int64_t ti;
 #endif
     int r;
-
-    if (kvm_enabled()) {
-        kvm_main_loop();
-        cpu_disable_ticks();
-        return;
-    }
 
     qemu_main_loop_start();
 

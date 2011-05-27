@@ -546,11 +546,13 @@ int qemu_init_main_loop(void)
 
     return qemu_event_init();
 }
+#ifndef CONFIG_IOTHREAD
 
 void qemu_main_loop_start(void)
 {
 }
 
+#endif /* !CONFIG_IOTHREAD */
 void qemu_init_vcpu(void *_env)
 {
     CPUState *env = _env;
@@ -681,13 +683,13 @@ int qemu_init_main_loop(void)
 
     return 0;
 }
+#endif /* UNUSED_IOTHREAD_IMPL */
 
 void qemu_main_loop_start(void)
 {
     qemu_system_ready = 1;
     qemu_cond_broadcast(&qemu_system_cond);
 }
-#endif /* UNUSED_IOTHREAD_IMPL */
 
 void run_on_cpu(CPUState *env, void (*func)(void *data), void *data)
 {
@@ -1273,16 +1275,6 @@ static void setup_kernel_sigmask(CPUState *env)
     kvm_set_signal_mask(env, &set);
 }
 
-static void qemu_kvm_system_reset(void)
-{
-    pause_all_vcpus();
-
-    cpu_synchronize_all_states();
-    qemu_system_reset();
-
-    resume_all_vcpus();
-}
-
 static int kvm_main_loop_cpu(CPUState *env)
 {
     while (1) {
@@ -1365,42 +1357,6 @@ int kvm_init_ap(void)
 bool qemu_system_is_ready(void)
 {
     return qemu_system_ready;
-}
-
-int kvm_main_loop(void)
-{
-    int r;
-
-    qemu_system_ready = 1;
-    qemu_cond_broadcast(&qemu_system_cond);
-
-    while (1) {
-        main_loop_wait(0);
-        if (qemu_shutdown_requested()) {
-            monitor_protocol_event(QEVENT_SHUTDOWN, NULL);
-            if (qemu_no_shutdown()) {
-                vm_stop(VMSTOP_SHUTDOWN);
-            } else {
-                break;
-            }
-        } else if (qemu_powerdown_requested()) {
-            monitor_protocol_event(QEVENT_POWERDOWN, NULL);
-            qemu_irq_raise(qemu_system_powerdown);
-        } else if (qemu_reset_requested()) {
-            qemu_kvm_system_reset();
-        } else if (qemu_debug_requested()) {
-            vm_stop(VMSTOP_DEBUG);
-        }
-        if ((r = qemu_vmstop_requested())) {
-            vm_stop(r);
-        }
-    }
-
-    bdrv_close_all();
-    pause_all_vcpus();
-    qemu_mutex_unlock(&qemu_global_mutex);
-
-    return 0;
 }
 
 static void qemu_kvm_init_main_loop(void)

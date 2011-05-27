@@ -266,7 +266,6 @@ struct kvm_pit_state {
 #endif                          /* !CONFIG_KVM */
 
 int kvm_create_vcpu(CPUState *env);
-int kvm_main_loop(void);
 int kvm_init_ap(void);
 void kvm_save_lapic(CPUState *env);
 void kvm_load_lapic(CPUState *env);
