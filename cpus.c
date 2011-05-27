@@ -604,7 +604,6 @@ void qemu_cpu_kick_self(void)
 #endif
 }
 
-#endif /* !IOTHREAD */
 void qemu_notify_event(void)
 {
     CPUState *env = cpu_single_env;
@@ -618,7 +617,6 @@ void qemu_notify_event(void)
     }
     exit_request = 1;
 }
-#ifndef CONFIG_IOTHREAD
 
 void qemu_mutex_lock_iothread(void) {}
 void qemu_mutex_unlock_iothread(void) {}
@@ -1024,12 +1022,14 @@ void qemu_init_vcpu(void *_env)
         qemu_tcg_init_vcpu(env);
     }
 }
+#endif /* UNUSED_IOTHREAD_IMPL */
 
 void qemu_notify_event(void)
 {
     qemu_event_increment();
 }
 
+#ifdef UNUSED_IOTHREAD_IMPL
 void cpu_stop_current(void)
 {
     if (cpu_single_env) {
