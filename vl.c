@@ -1218,7 +1218,7 @@ int qemu_powerdown_requested(void)
     return r;
 }
 
-static int qemu_debug_requested(void)
+int qemu_debug_requested(void)
 {
     int r = debug_requested;
     debug_requested = 0;

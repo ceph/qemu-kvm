@@ -1193,8 +1193,6 @@ void list_cpus(FILE *f, fprintf_function cpu_fprintf, const char *optarg)
 
 #include <sys/syscall.h>
 
-static CPUState *kvm_debug_cpu_requested;
-
 unsigned long kvm_get_thread_id(void)
 {
     return syscall(SYS_gettid);
@@ -1294,8 +1292,7 @@ static int kvm_main_loop_cpu(CPUState *env)
             case EXCP_HLT:
                 break;
             case EXCP_DEBUG:
-                kvm_debug_cpu_requested = env;
-                env->stopped = 1;
+                cpu_handle_guest_debug(env);
                 break;
             default:
                 timeout = 0;
@@ -1391,10 +1388,8 @@ int kvm_main_loop(void)
             qemu_irq_raise(qemu_system_powerdown);
         } else if (qemu_reset_requested()) {
             qemu_kvm_system_reset();
-        } else if (kvm_debug_cpu_requested) {
-            gdb_set_stop_cpu(kvm_debug_cpu_requested);
+        } else if (qemu_debug_requested()) {
             vm_stop(VMSTOP_DEBUG);
-            kvm_debug_cpu_requested = NULL;
         }
         if ((r = qemu_vmstop_requested())) {
             vm_stop(r);

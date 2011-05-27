@@ -48,6 +48,7 @@ int qemu_reset_requested_get(void);
 int qemu_shutdown_requested(void);
 int qemu_reset_requested(void);
 int qemu_powerdown_requested(void);
+int qemu_debug_requested(void);
 int qemu_vmstop_requested(void);
 void qemu_system_killed(int signal, pid_t pid);
 void qemu_kill_report(void);
