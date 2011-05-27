@@ -529,7 +529,7 @@ static void qemu_tcg_init_cpu_signals(void)
 }
 #endif /* _WIN32 */
 
-#ifndef CONFIG_IOTHREAD
+/*#ifndef CONFIG_IOTHREAD*/
 int qemu_init_main_loop(void)
 {
     int ret;
@@ -567,6 +567,7 @@ void qemu_init_vcpu(void *_env)
         qemu_tcg_init_cpu_signals();
     }
 }
+#ifndef CONFIG_IOTHREAD
 
 int qemu_cpu_is_self(void *env)
 {
@@ -578,6 +579,7 @@ void run_on_cpu(CPUState *env, void (*func)(void *data), void *data)
     func(data);
 }
 
+#endif /* !IOTHREAD */
 void resume_all_vcpus(void)
 {
 }
@@ -589,8 +591,8 @@ void pause_all_vcpus(void)
 void qemu_cpu_kick(void *env)
 {
 }
+#ifndef CONFIG_IOTHREAD
 
-#ifdef UNUSED_IMPL
 void qemu_cpu_kick_self(void)
 {
 #ifndef _WIN32
@@ -601,8 +603,8 @@ void qemu_cpu_kick_self(void)
     abort();
 #endif
 }
-#endif
 
+#endif /* !IOTHREAD */
 void qemu_notify_event(void)
 {
     CPUState *env = cpu_single_env;
@@ -616,12 +618,12 @@ void qemu_notify_event(void)
     }
     exit_request = 1;
 }
+#ifndef CONFIG_IOTHREAD
 
-#if defined(OBSOLETE_KVM_IMPL) || !defined(CONFIG_KVM)
 void qemu_mutex_lock_iothread(void) {}
 void qemu_mutex_unlock_iothread(void) {}
-#endif
 
+#endif /* !IOTHREAD */
 void cpu_stop_current(void)
 {
 }
@@ -630,25 +632,31 @@ void vm_stop(int reason)
 {
     do_vm_stop(reason);
 }
+#ifndef CONFIG_IOTHREAD
 
 #else /* CONFIG_IOTHREAD */
 
 QemuMutex qemu_global_mutex;
+#ifdef UNUSED_IOTHREAD_IMPL
 static QemuMutex qemu_fair_mutex;
 
 static QemuThread io_thread;
 
 static QemuThread *tcg_cpu_thread;
 static QemuCond *tcg_halt_cond;
+#endif
 
 static int qemu_system_ready;
 /* cpu creation */
+#ifdef UNUSED_IOTHREAD_IMPL
 static QemuCond qemu_cpu_cond;
 /* system init */
 static QemuCond qemu_system_cond;
 static QemuCond qemu_pause_cond;
+#endif
 static QemuCond qemu_work_cond;
 
+#ifdef UNUSED_IOTHREAD_IMPL
 int qemu_init_main_loop(void)
 {
     int ret;
@@ -684,6 +692,7 @@ void qemu_main_loop_start(void)
     qemu_system_ready = 1;
     qemu_cond_broadcast(&qemu_system_cond);
 }
+#endif /* UNUSED_IOTHREAD_IMPL */
 
 void run_on_cpu(CPUState *env, void (*func)(void *data), void *data)
 {
@@ -714,6 +723,7 @@ void run_on_cpu(CPUState *env, void (*func)(void *data), void *data)
     }
 }
 
+#ifdef UNUSED_IOTHREAD_IMPL
 static void flush_queued_work(CPUState *env)
 {
     struct qemu_work_item *wi;
@@ -849,8 +859,8 @@ static void *qemu_tcg_cpu_thread_fn(void *arg)
 
     return NULL;
 }
+#endif /* UNUSED_IOTHREAD_IMPL */
 
-#endif
 static void qemu_cpu_kick_thread(CPUState *env)
 {
 #ifndef _WIN32
@@ -869,8 +879,8 @@ static void qemu_cpu_kick_thread(CPUState *env)
     }
 #endif
 }
-#ifdef CONFIG_IOTHREAD
 
+#ifdef UNUSED_IOTHREAD_IMPL
 void qemu_cpu_kick(void *_env)
 {
     CPUState *env = _env;
@@ -881,8 +891,8 @@ void qemu_cpu_kick(void *_env)
         env->thread_kicked = true;
     }
 }
+#endif /* UNUSED_IOTHREAD_IMPL */
 
-#endif
 void qemu_cpu_kick_self(void)
 {
 #ifndef _WIN32
@@ -896,7 +906,6 @@ void qemu_cpu_kick_self(void)
     abort();
 #endif
 }
-#ifdef CONFIG_IOTHREAD
 
 int qemu_cpu_is_self(void *_env)
 {
@@ -905,6 +914,7 @@ int qemu_cpu_is_self(void *_env)
     return qemu_thread_is_self(env->thread);
 }
 
+#ifdef UNUSED_IOTHREAD_IMPL
 void qemu_mutex_lock_iothread(void)
 {
     if (kvm_enabled()) {
@@ -1043,6 +1053,7 @@ void vm_stop(int reason)
     }
     do_vm_stop(reason);
 }
+#endif /* UNUSED_IOTHREAD_IMPL */
 
 #endif
 
@@ -1195,10 +1206,8 @@ pthread_mutex_t qemu_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t qemu_vcpu_cond = PTHREAD_COND_INITIALIZER;
 pthread_cond_t qemu_system_cond = PTHREAD_COND_INITIALIZER;
 pthread_cond_t qemu_pause_cond = PTHREAD_COND_INITIALIZER;
-pthread_cond_t qemu_work_cond = PTHREAD_COND_INITIALIZER;
+pthread_cond_t qemu_kvm_work_cond = PTHREAD_COND_INITIALIZER;
 __thread CPUState *current_env;
-
-static int qemu_system_ready;
 
 static CPUState *kvm_debug_cpu_requested;
 
@@ -1241,7 +1250,7 @@ void on_vcpu(CPUState *env, void (*func)(void *data), void *data)
 
     pthread_kill(env->thread->thread, SIG_IPI);
     while (!wi.done) {
-        kvm_cond_wait(&qemu_work_cond);
+        kvm_cond_wait(&qemu_kvm_work_cond);
     }
 }
 
@@ -1289,7 +1298,7 @@ static void flush_queued_work(CPUState *env)
         wi->done = true;
     }
     env->kvm_cpu_state.queued_work_last = NULL;
-    pthread_cond_broadcast(&qemu_work_cond);
+    pthread_cond_broadcast(&qemu_kvm_work_cond);
 }
 
 static void kvm_main_loop_wait(CPUState *env, int timeout)

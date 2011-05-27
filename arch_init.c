@@ -711,7 +711,8 @@ int audio_available(void)
 
 int tcg_available(void)
 {
-    return 1;
+    /* temporarily broken */
+    return 0;
 }
 
 int kvm_available(void)

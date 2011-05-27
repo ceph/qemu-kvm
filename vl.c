@@ -1910,7 +1910,8 @@ static int debugcon_parse(const char *devname)
 
 static int tcg_init(void)
 {
-    return 0;
+    fprintf(stderr, "Emulation temporarily broken\n");
+    return -1;
 }
 
 static struct {
@@ -2699,6 +2700,8 @@ int main(int argc, char **argv, char **envp)
                 }
                 break;
 	    case QEMU_OPTION_no_kvm:
+                fprintf(stderr, "Emulation temporarily broken\n");
+                exit(1);
                 olist = qemu_find_opts("machine");
                 qemu_opts_reset(olist);
                 qemu_opts_parse(olist, "accel=tcg", 0);
