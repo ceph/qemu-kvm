@@ -1179,3 +1179,428 @@ void list_cpus(FILE *f, fprintf_function cpu_fprintf, const char *optarg)
     cpu_list(f, cpu_fprintf); /* deprecated */
 #endif
 }
+
+
+
+/*
+ * qemu-kvm threading code, integration zone
+ */
+#ifdef CONFIG_KVM
+
+#include <sys/syscall.h>
+
+#include "qemu-thread.h"
+
+pthread_mutex_t qemu_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t qemu_vcpu_cond = PTHREAD_COND_INITIALIZER;
+pthread_cond_t qemu_system_cond = PTHREAD_COND_INITIALIZER;
+pthread_cond_t qemu_pause_cond = PTHREAD_COND_INITIALIZER;
+pthread_cond_t qemu_work_cond = PTHREAD_COND_INITIALIZER;
+__thread CPUState *current_env;
+
+static int qemu_system_ready;
+
+static CPUState *kvm_debug_cpu_requested;
+
+unsigned long kvm_get_thread_id(void)
+{
+    return syscall(SYS_gettid);
+}
+
+static void kvm_cond_wait(pthread_cond_t *cond)
+{
+    CPUState *env = cpu_single_env;
+
+    pthread_cond_wait(cond, &qemu_mutex);
+    cpu_single_env = env;
+}
+
+static void sig_ipi_handler(int n)
+{
+}
+
+void on_vcpu(CPUState *env, void (*func)(void *data), void *data)
+{
+    struct qemu_work_item wi;
+
+    if (env == current_env) {
+        func(data);
+        return;
+    }
+
+    wi.func = func;
+    wi.data = data;
+    if (!env->kvm_cpu_state.queued_work_first) {
+        env->kvm_cpu_state.queued_work_first = &wi;
+    } else {
+        env->kvm_cpu_state.queued_work_last->next = &wi;
+    }
+    env->kvm_cpu_state.queued_work_last = &wi;
+    wi.next = NULL;
+    wi.done = false;
+
+    pthread_kill(env->thread->thread, SIG_IPI);
+    while (!wi.done) {
+        kvm_cond_wait(&qemu_work_cond);
+    }
+}
+
+void kvm_update_interrupt_request(CPUState *env)
+{
+    int signal = 0;
+
+    if (env) {
+        if (!current_env || !current_env->created) {
+            signal = 1;
+        }
+        /*
+         * Testing for created here is really redundant
+         */
+        if (current_env && current_env->created &&
+            env != current_env && !env->thread_kicked) {
+            signal = 1;
+        }
+
+        if (signal) {
+            env->thread_kicked = true;
+            if (env->thread) {
+                pthread_kill(env->thread->thread, SIG_IPI);
+            }
+        }
+    }
+}
+
+static int kvm_cpu_is_stopped(CPUState *env)
+{
+    return !vm_running || env->stopped;
+}
+
+static void flush_queued_work(CPUState *env)
+{
+    struct qemu_work_item *wi;
+
+    if (!env->kvm_cpu_state.queued_work_first) {
+        return;
+    }
+
+    while ((wi = env->kvm_cpu_state.queued_work_first)) {
+        env->kvm_cpu_state.queued_work_first = wi->next;
+        wi->func(wi->data);
+        wi->done = true;
+    }
+    env->kvm_cpu_state.queued_work_last = NULL;
+    pthread_cond_broadcast(&qemu_work_cond);
+}
+
+static void kvm_main_loop_wait(CPUState *env, int timeout)
+{
+    struct timespec ts;
+    int r, e;
+    siginfo_t siginfo;
+    sigset_t waitset;
+    sigset_t chkset;
+
+    ts.tv_sec = timeout / 1000;
+    ts.tv_nsec = (timeout % 1000) * 1000000;
+    sigemptyset(&waitset);
+    sigaddset(&waitset, SIG_IPI);
+    sigaddset(&waitset, SIGBUS);
+
+    do {
+        pthread_mutex_unlock(&qemu_mutex);
+
+        r = sigtimedwait(&waitset, &siginfo, &ts);
+        e = errno;
+
+        pthread_mutex_lock(&qemu_mutex);
+
+        if (r == -1 && !(e == EAGAIN || e == EINTR)) {
+            printf("sigtimedwait: %s\n", strerror(e));
+            exit(1);
+        }
+
+        switch (r) {
+        case SIGBUS:
+            if (kvm_on_sigbus_vcpu(env, siginfo.si_code, siginfo.si_addr))
+                sigbus_reraise();
+            break;
+        default:
+            break;
+        }
+
+        r = sigpending(&chkset);
+        if (r == -1) {
+            printf("sigpending: %s\n", strerror(e));
+            exit(1);
+        }
+    } while (sigismember(&chkset, SIG_IPI) || sigismember(&chkset, SIGBUS));
+
+    cpu_single_env = env;
+    flush_queued_work(env);
+
+    if (env->stop) {
+        env->stop = 0;
+        env->stopped = 1;
+        pthread_cond_signal(&qemu_pause_cond);
+    }
+
+    env->thread_kicked = false;
+}
+
+static int all_threads_paused(void)
+{
+    CPUState *penv = first_cpu;
+
+    while (penv) {
+        if (penv->stop) {
+            return 0;
+        }
+        penv = (CPUState *) penv->next_cpu;
+    }
+
+    return 1;
+}
+
+static void pause_all_threads(void)
+{
+    CPUState *penv = first_cpu;
+
+    while (penv) {
+        if (penv != cpu_single_env) {
+            penv->stop = 1;
+            pthread_kill(penv->thread->thread, SIG_IPI);
+        } else {
+            penv->stop = 0;
+            penv->stopped = 1;
+            cpu_exit(penv);
+        }
+        penv = (CPUState *) penv->next_cpu;
+    }
+
+    while (!all_threads_paused()) {
+        kvm_cond_wait(&qemu_pause_cond);
+    }
+}
+
+static void resume_all_threads(void)
+{
+    CPUState *penv = first_cpu;
+
+    assert(!cpu_single_env);
+
+    while (penv) {
+        penv->stop = 0;
+        penv->stopped = 0;
+        pthread_kill(penv->thread->thread, SIG_IPI);
+        penv = (CPUState *) penv->next_cpu;
+    }
+}
+
+static void kvm_vm_state_change_handler(void *context, int running, int reason)
+{
+    if (running) {
+        resume_all_threads();
+    } else {
+        pause_all_threads();
+    }
+}
+
+static void setup_kernel_sigmask(CPUState *env)
+{
+    sigset_t set;
+
+    sigemptyset(&set);
+    sigaddset(&set, SIGUSR2);
+    sigaddset(&set, SIGIO);
+    sigaddset(&set, SIGALRM);
+    sigprocmask(SIG_BLOCK, &set, NULL);
+
+    sigprocmask(SIG_BLOCK, NULL, &set);
+    sigdelset(&set, SIG_IPI);
+    sigdelset(&set, SIGBUS);
+
+    kvm_set_signal_mask(env, &set);
+}
+
+static void qemu_kvm_system_reset(void)
+{
+    pause_all_threads();
+
+    cpu_synchronize_all_states();
+    qemu_system_reset();
+
+    resume_all_threads();
+}
+
+static int kvm_main_loop_cpu(CPUState *env)
+{
+    while (1) {
+        int timeout = 1000;
+        if (!kvm_cpu_is_stopped(env)) {
+            switch (kvm_cpu_exec(env)) {
+            case EXCP_HLT:
+                break;
+            case EXCP_DEBUG:
+                kvm_debug_cpu_requested = env;
+                env->stopped = 1;
+                break;
+            default:
+                timeout = 0;
+                break;
+            }
+        }
+        kvm_main_loop_wait(env, timeout);
+    }
+    pthread_mutex_unlock(&qemu_mutex);
+    return 0;
+}
+
+static void *ap_main_loop(void *_env)
+{
+    CPUState *env = _env;
+
+    current_env = env;
+    env->thread_id = kvm_get_thread_id();
+
+    pthread_mutex_lock(&qemu_mutex);
+    cpu_single_env = env;
+
+    if (kvm_create_vcpu(env) < 0) {
+        abort();
+    }
+    setup_kernel_sigmask(env);
+
+    /* signal VCPU creation */
+    current_env->created = 1;
+    pthread_cond_signal(&qemu_vcpu_cond);
+
+    /* and wait for machine initialization */
+    while (!qemu_system_ready) {
+        kvm_cond_wait(&qemu_system_cond);
+    }
+
+    /* re-initialize cpu_single_env after re-acquiring qemu_mutex */
+    cpu_single_env = env;
+
+    kvm_main_loop_cpu(env);
+    return NULL;
+}
+
+int kvm_init_vcpu(CPUState *env)
+{
+    env->thread = qemu_mallocz(sizeof(QemuThread));
+    qemu_thread_create(env->thread, ap_main_loop, env);
+
+    while (env->created == 0) {
+        kvm_cond_wait(&qemu_vcpu_cond);
+    }
+
+    return 0;
+}
+
+int kvm_init_ap(void)
+{
+    struct sigaction action;
+
+    pthread_mutex_lock(&qemu_mutex);
+
+    qemu_add_vm_change_state_handler(kvm_vm_state_change_handler, NULL);
+
+    signal(SIG_IPI, sig_ipi_handler);
+
+    memset(&action, 0, sizeof(action));
+    action.sa_flags = SA_SIGINFO;
+    action.sa_sigaction = (void (*)(int, siginfo_t*, void*))sigbus_handler;
+    sigaction(SIGBUS, &action, NULL);
+    prctl(PR_MCE_KILL, 1, 1, 0, 0);
+    return 0;
+}
+
+bool qemu_system_is_ready(void)
+{
+    return qemu_system_ready;
+}
+
+int kvm_main_loop(void)
+{
+    sigset_t mask;
+    int sigfd;
+
+    qemu_system_ready = 1;
+
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGIO);
+    sigaddset(&mask, SIGALRM);
+    sigaddset(&mask, SIGBUS);
+    sigprocmask(SIG_BLOCK, &mask, NULL);
+
+    sigfd = qemu_signalfd(&mask);
+    if (sigfd == -1) {
+        fprintf(stderr, "failed to create signalfd\n");
+        return -errno;
+    }
+
+    fcntl(sigfd, F_SETFL, O_NONBLOCK);
+
+    qemu_set_fd_handler2(sigfd, NULL, sigfd_handler, NULL,
+                         (void *)(unsigned long) sigfd);
+
+    pthread_cond_broadcast(&qemu_system_cond);
+
+    cpu_single_env = NULL;
+
+    while (1) {
+        main_loop_wait(0);
+        if (qemu_shutdown_requested()) {
+            monitor_protocol_event(QEVENT_SHUTDOWN, NULL);
+            if (qemu_no_shutdown()) {
+                vm_stop(VMSTOP_SHUTDOWN);
+            } else {
+                break;
+            }
+        } else if (qemu_powerdown_requested()) {
+            monitor_protocol_event(QEVENT_POWERDOWN, NULL);
+            qemu_irq_raise(qemu_system_powerdown);
+        } else if (qemu_reset_requested()) {
+            qemu_kvm_system_reset();
+        } else if (kvm_debug_cpu_requested) {
+            gdb_set_stop_cpu(kvm_debug_cpu_requested);
+            vm_stop(VMSTOP_DEBUG);
+            kvm_debug_cpu_requested = NULL;
+        }
+    }
+
+    bdrv_close_all();
+    pause_all_threads();
+    pthread_mutex_unlock(&qemu_mutex);
+
+    return 0;
+}
+
+static void kvm_mutex_unlock(void)
+{
+    assert(!cpu_single_env);
+    pthread_mutex_unlock(&qemu_mutex);
+}
+
+static void kvm_mutex_lock(void)
+{
+    pthread_mutex_lock(&qemu_mutex);
+    cpu_single_env = NULL;
+}
+
+void qemu_mutex_unlock_iothread(void)
+{
+    if (kvm_enabled()) {
+        kvm_mutex_unlock();
+    }
+}
+
+void qemu_mutex_lock_iothread(void)
+{
+    if (kvm_enabled()) {
+        kvm_mutex_lock();
+    }
+}
+
+#endif /* CONFIG_KVM */
