@@ -1212,11 +1212,6 @@ static void sig_ipi_handler(int n)
 {
 }
 
-static int kvm_cpu_is_stopped(CPUState *env)
-{
-    return !vm_running || env->stopped;
-}
-
 static void kvm_main_loop_wait(CPUState *env, int timeout)
 {
     struct timespec ts;
@@ -1361,7 +1356,7 @@ static int kvm_main_loop_cpu(CPUState *env)
 {
     while (1) {
         int timeout = 1000;
-        if (!kvm_cpu_is_stopped(env)) {
+        if (!cpu_is_stopped(env)) {
             switch (kvm_cpu_exec(env)) {
             case EXCP_HLT:
                 break;
