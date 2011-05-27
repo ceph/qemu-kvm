@@ -300,6 +300,4 @@ int kvm_handle_tpr_access(CPUState *env);
 
 int kvm_tpr_enable_vapic(CPUState *env);
 
-unsigned long kvm_get_thread_id(void);
-
 #endif

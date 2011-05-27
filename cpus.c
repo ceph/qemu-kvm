@@ -1187,13 +1187,6 @@ void list_cpus(FILE *f, fprintf_function cpu_fprintf, const char *optarg)
  */
 #ifdef CONFIG_KVM
 
-#include <sys/syscall.h>
-
-unsigned long kvm_get_thread_id(void)
-{
-    return syscall(SYS_gettid);
-}
-
 static void kvm_main_loop_wait(CPUState *env, int timeout)
 {
     struct timespec ts;
@@ -1291,7 +1284,7 @@ static void *ap_main_loop(void *_env)
 {
     CPUState *env = _env;
 
-    env->thread_id = kvm_get_thread_id();
+    env->thread_id = qemu_get_thread_id();
 
     env->halt_cond = qemu_mallocz(sizeof(QemuCond));
     qemu_cond_init(env->halt_cond);
