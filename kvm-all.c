@@ -703,7 +703,6 @@ static void kvm_handle_interrupt(CPUState *env, int mask)
     if (!qemu_cpu_is_self(env)) {
         qemu_cpu_kick(env);
     }
-    kvm_update_interrupt_request(env);
 }
 
 int kvm_init(void)

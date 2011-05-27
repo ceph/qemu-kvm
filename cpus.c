@@ -590,11 +590,11 @@ void resume_all_vcpus(void)
 void pause_all_vcpus(void)
 {
 }
+#ifndef CONFIG_IOTHREAD
 
 void qemu_cpu_kick(void *env)
 {
 }
-#ifndef CONFIG_IOTHREAD
 
 void qemu_cpu_kick_self(void)
 {
@@ -879,7 +879,6 @@ static void qemu_cpu_kick_thread(CPUState *env)
 #endif
 }
 
-#ifdef UNUSED_IOTHREAD_IMPL
 void qemu_cpu_kick(void *_env)
 {
     CPUState *env = _env;
@@ -890,7 +889,6 @@ void qemu_cpu_kick(void *_env)
         env->thread_kicked = true;
     }
 }
-#endif /* UNUSED_IOTHREAD_IMPL */
 
 void qemu_cpu_kick_self(void)
 {
@@ -1248,14 +1246,6 @@ void on_vcpu(CPUState *env, void (*func)(void *data), void *data)
     }
 }
 
-void kvm_update_interrupt_request(CPUState *env)
-{
-    if (!qemu_cpu_is_self(env) && !env->thread_kicked) {
-        env->thread_kicked = true;
-        pthread_kill(env->thread->thread, SIG_IPI);
-    }
-}
-
 static int kvm_cpu_is_stopped(CPUState *env)
 {
     return !vm_running || env->stopped;
@@ -1447,6 +1437,9 @@ static void *ap_main_loop(void *_env)
 
     current_env = env;
     env->thread_id = kvm_get_thread_id();
+
+    env->halt_cond = qemu_mallocz(sizeof(QemuCond));
+    qemu_cond_init(env->halt_cond);
 
     qemu_mutex_lock(&qemu_global_mutex);
 
