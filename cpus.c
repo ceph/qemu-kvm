@@ -529,9 +529,7 @@ static void qemu_tcg_init_cpu_signals(void)
 }
 #endif /* _WIN32 */
 
-/*#ifndef CONFIG_IOTHREAD*/
-static void qemu_kvm_init_main_loop(void);
-
+#ifndef CONFIG_IOTHREAD
 int qemu_init_main_loop(void)
 {
     int ret;
@@ -540,13 +538,11 @@ int qemu_init_main_loop(void)
     if (ret) {
         return ret;
     }
-    qemu_kvm_init_main_loop();
 
     qemu_init_sigbus();
 
     return qemu_event_init();
 }
-#ifndef CONFIG_IOTHREAD
 
 void qemu_main_loop_start(void)
 {
@@ -653,7 +649,6 @@ static QemuCond qemu_system_cond;
 static QemuCond qemu_pause_cond;
 static QemuCond qemu_work_cond;
 
-#ifdef UNUSED_IOTHREAD_IMPL
 int qemu_init_main_loop(void)
 {
     int ret;
@@ -683,7 +678,6 @@ int qemu_init_main_loop(void)
 
     return 0;
 }
-#endif /* UNUSED_IOTHREAD_IMPL */
 
 void qemu_main_loop_start(void)
 {
@@ -1200,10 +1194,6 @@ unsigned long kvm_get_thread_id(void)
     return syscall(SYS_gettid);
 }
 
-static void sig_ipi_handler(int n)
-{
-}
-
 static void kvm_main_loop_wait(CPUState *env, int timeout)
 {
     struct timespec ts;
@@ -1338,58 +1328,8 @@ int kvm_init_vcpu(CPUState *env)
     return 0;
 }
 
-int kvm_init_ap(void)
-{
-    struct sigaction action;
-
-    qemu_mutex_lock(&qemu_global_mutex);
-
-    signal(SIG_IPI, sig_ipi_handler);
-
-    memset(&action, 0, sizeof(action));
-    action.sa_flags = SA_SIGINFO;
-    action.sa_sigaction = (void (*)(int, siginfo_t*, void*))sigbus_handler;
-    sigaction(SIGBUS, &action, NULL);
-    prctl(PR_MCE_KILL, 1, 1, 0, 0);
-    return 0;
-}
-
 bool qemu_system_is_ready(void)
 {
     return qemu_system_ready;
 }
-
-static void qemu_kvm_init_main_loop(void)
-{
-    sigset_t mask;
-    int sigfd;
-
-    sigemptyset(&mask);
-    sigaddset(&mask, SIGIO);
-    sigaddset(&mask, SIGALRM);
-    sigaddset(&mask, SIGBUS);
-    sigprocmask(SIG_BLOCK, &mask, NULL);
-
-    sigfd = qemu_signalfd(&mask);
-    if (sigfd == -1) {
-        fprintf(stderr, "failed to create signalfd\n");
-        exit(1);
-    }
-
-    fcntl(sigfd, F_SETFL, O_NONBLOCK);
-
-    qemu_set_fd_handler2(sigfd, NULL, sigfd_handler, NULL,
-                         (void *)(unsigned long) sigfd);
-
-    qemu_cond_init(&qemu_cpu_cond);
-    qemu_cond_init(&qemu_system_cond);
-    qemu_cond_init(&qemu_pause_cond);
-    qemu_cond_init(&qemu_work_cond);
-    qemu_mutex_init(&qemu_fair_mutex);
-    qemu_mutex_init(&qemu_global_mutex);
-    qemu_mutex_lock(&qemu_global_mutex);
-
-    qemu_thread_get_self(&io_thread);
-}
-
 #endif /* CONFIG_KVM */
