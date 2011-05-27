@@ -1338,7 +1338,6 @@ static void kvm_main_loop_wait(CPUState *env, int timeout)
         }
     } while (sigismember(&chkset, SIG_IPI) || sigismember(&chkset, SIGBUS));
 
-    cpu_single_env = env;
     flush_queued_work(env);
 
     if (env->stop) {
@@ -1369,9 +1368,12 @@ static void pause_all_threads(void)
     CPUState *penv = first_cpu;
 
     while (penv) {
-        if (penv != cpu_single_env) {
+        if (!qemu_cpu_is_self(penv)) {
             penv->stop = 1;
-            pthread_kill(penv->thread->thread, SIG_IPI);
+            if (!penv->thread_kicked) {
+                pthread_kill(penv->thread->thread, SIG_IPI);
+                penv->thread_kicked = true;
+            }
         } else {
             penv->stop = 0;
             penv->stopped = 1;
@@ -1388,8 +1390,6 @@ static void pause_all_threads(void)
 static void resume_all_threads(void)
 {
     CPUState *penv = first_cpu;
-
-    assert(!cpu_single_env);
 
     while (penv) {
         penv->stop = 0;
@@ -1466,7 +1466,6 @@ static void *ap_main_loop(void *_env)
     env->thread_id = kvm_get_thread_id();
 
     qemu_mutex_lock(&qemu_global_mutex);
-    cpu_single_env = env;
 
     if (kvm_create_vcpu(env) < 0) {
         abort();
@@ -1481,9 +1480,6 @@ static void *ap_main_loop(void *_env)
     while (!qemu_system_ready) {
         kvm_cond_wait(&qemu_system_cond);
     }
-
-    /* re-initialize cpu_single_env after re-acquiring qemu_mutex */
-    cpu_single_env = env;
 
     kvm_main_loop_cpu(env);
     return NULL;
@@ -1550,8 +1546,6 @@ int kvm_main_loop(void)
 
     qemu_cond_broadcast(&qemu_system_cond);
 
-    cpu_single_env = NULL;
-
     while (1) {
         main_loop_wait(0);
         if (qemu_shutdown_requested()) {
@@ -1582,14 +1576,12 @@ int kvm_main_loop(void)
 
 static void kvm_mutex_unlock(void)
 {
-    assert(!cpu_single_env);
     qemu_mutex_unlock(&qemu_global_mutex);
 }
 
 static void kvm_mutex_lock(void)
 {
     qemu_mutex_lock(&qemu_global_mutex);
-    cpu_single_env = NULL;
 }
 
 void qemu_mutex_unlock_iothread(void)
