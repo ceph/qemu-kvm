@@ -767,7 +767,6 @@ static void qemu_tcg_wait_io_event(void)
     }
 }
 
-#ifdef UNUSED_IOTHREAD_IMPL
 static void qemu_kvm_wait_io_event(CPUState *env)
 {
     while (cpu_thread_is_idle(env)) {
@@ -777,9 +776,6 @@ static void qemu_kvm_wait_io_event(CPUState *env)
     qemu_kvm_eat_signals(env);
     qemu_wait_io_event_common(env);
 }
-#endif /* UNUSED_IOTHREAD_IMPL */
-
-static int kvm_main_loop_cpu(CPUState *env);
 
 static void *qemu_kvm_cpu_thread_fn(void *arg)
 {
@@ -807,7 +803,6 @@ static void *qemu_kvm_cpu_thread_fn(void *arg)
         qemu_cond_wait(&qemu_system_cond, &qemu_global_mutex);
     }
 
-#ifdef UNUSED_IOTHREAD_IMPL
     while (1) {
         if (cpu_can_run(env)) {
             r = kvm_cpu_exec(env);
@@ -817,8 +812,6 @@ static void *qemu_kvm_cpu_thread_fn(void *arg)
         }
         qemu_kvm_wait_io_event(env);
     }
-#endif /* UNUSED_IOTHREAD_IMPL */
-    kvm_main_loop_cpu(env);
 
     return NULL;
 }
@@ -1178,86 +1171,4 @@ void list_cpus(FILE *f, fprintf_function cpu_fprintf, const char *optarg)
 #elif defined(cpu_list)
     cpu_list(f, cpu_fprintf); /* deprecated */
 #endif
-}
-
-
-
-/*
- * qemu-kvm threading code, integration zone
- */
-
-static void kvm_main_loop_wait(CPUState *env, int timeout)
-{
-    struct timespec ts;
-    int r, e;
-    siginfo_t siginfo;
-    sigset_t waitset;
-    sigset_t chkset;
-
-    ts.tv_sec = timeout / 1000;
-    ts.tv_nsec = (timeout % 1000) * 1000000;
-    sigemptyset(&waitset);
-    sigaddset(&waitset, SIG_IPI);
-    sigaddset(&waitset, SIGBUS);
-
-    do {
-        qemu_mutex_unlock(&qemu_global_mutex);
-
-        r = sigtimedwait(&waitset, &siginfo, &ts);
-        e = errno;
-
-        qemu_mutex_lock(&qemu_global_mutex);
-
-        if (r == -1 && !(e == EAGAIN || e == EINTR)) {
-            printf("sigtimedwait: %s\n", strerror(e));
-            exit(1);
-        }
-
-        switch (r) {
-        case SIGBUS:
-            if (kvm_on_sigbus_vcpu(env, siginfo.si_code, siginfo.si_addr))
-                sigbus_reraise();
-            break;
-        default:
-            break;
-        }
-
-        r = sigpending(&chkset);
-        if (r == -1) {
-            printf("sigpending: %s\n", strerror(e));
-            exit(1);
-        }
-    } while (sigismember(&chkset, SIG_IPI) || sigismember(&chkset, SIGBUS));
-
-    flush_queued_work(env);
-
-    if (env->stop) {
-        env->stop = 0;
-        env->stopped = 1;
-        qemu_cond_signal(&qemu_pause_cond);
-    }
-
-    env->thread_kicked = false;
-}
-
-static int kvm_main_loop_cpu(CPUState *env)
-{
-    while (1) {
-        int timeout = 1000;
-        if (!cpu_is_stopped(env)) {
-            switch (kvm_cpu_exec(env)) {
-            case EXCP_HLT:
-                break;
-            case EXCP_DEBUG:
-                cpu_handle_guest_debug(env);
-                break;
-            default:
-                timeout = 0;
-                break;
-            }
-        }
-        kvm_main_loop_wait(env, timeout);
-    }
-    qemu_mutex_unlock(&qemu_global_mutex);
-    return 0;
 }
