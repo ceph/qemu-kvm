@@ -1225,7 +1225,7 @@ static int qemu_debug_requested(void)
     return r;
 }
 
-static int qemu_vmstop_requested(void)
+int qemu_vmstop_requested(void)
 {
     int r = vmstop_requested;
     vmstop_requested = 0;
@@ -1272,10 +1272,6 @@ void qemu_system_reset_request(void)
         shutdown_requested = 1;
     } else {
         reset_requested = 1;
-    }
-    if (cpu_single_env) {
-        cpu_single_env->stopped = 1;
-        cpu_exit(cpu_single_env);
     }
     cpu_stop_current();
     qemu_notify_event();

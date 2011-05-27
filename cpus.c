@@ -582,7 +582,6 @@ void run_on_cpu(CPUState *env, void (*func)(void *data), void *data)
     func(data);
 }
 
-#endif /* !IOTHREAD */
 void resume_all_vcpus(void)
 {
 }
@@ -590,7 +589,6 @@ void resume_all_vcpus(void)
 void pause_all_vcpus(void)
 {
 }
-#ifndef CONFIG_IOTHREAD
 
 void qemu_cpu_kick(void *env)
 {
@@ -624,7 +622,6 @@ void qemu_notify_event(void)
 void qemu_mutex_lock_iothread(void) {}
 void qemu_mutex_unlock_iothread(void) {}
 
-#endif /* !IOTHREAD */
 void cpu_stop_current(void)
 {
 }
@@ -633,16 +630,15 @@ void vm_stop(int reason)
 {
     do_vm_stop(reason);
 }
-#ifndef CONFIG_IOTHREAD
 
 #else /* CONFIG_IOTHREAD */
 
 QemuMutex qemu_global_mutex;
 static QemuMutex qemu_fair_mutex;
 
-#ifdef UNUSED_IOTHREAD_IMPL
 static QemuThread io_thread;
 
+#ifdef UNUSED_IOTHREAD_IMPL
 static QemuThread *tcg_cpu_thread;
 static QemuCond *tcg_halt_cond;
 #endif
@@ -930,7 +926,6 @@ void qemu_mutex_unlock_iothread(void)
     qemu_mutex_unlock(&qemu_global_mutex);
 }
 
-#ifdef UNUSED_IOTHREAD_IMPL
 static int all_vcpus_paused(void)
 {
     CPUState *penv = first_cpu;
@@ -977,6 +972,7 @@ void resume_all_vcpus(void)
     }
 }
 
+#ifdef UNUSED_IOTHREAD_IMPL
 static void qemu_tcg_init_vcpu(void *_env)
 {
     CPUState *env = _env;
@@ -1028,7 +1024,6 @@ void qemu_notify_event(void)
     qemu_event_increment();
 }
 
-#ifdef UNUSED_IOTHREAD_IMPL
 void cpu_stop_current(void)
 {
     if (cpu_single_env) {
@@ -1052,7 +1047,6 @@ void vm_stop(int reason)
     }
     do_vm_stop(reason);
 }
-#endif /* UNUSED_IOTHREAD_IMPL */
 
 #endif
 
@@ -1264,65 +1258,6 @@ static void kvm_main_loop_wait(CPUState *env, int timeout)
     env->thread_kicked = false;
 }
 
-static int all_threads_paused(void)
-{
-    CPUState *penv = first_cpu;
-
-    while (penv) {
-        if (penv->stop) {
-            return 0;
-        }
-        penv = (CPUState *) penv->next_cpu;
-    }
-
-    return 1;
-}
-
-static void pause_all_threads(void)
-{
-    CPUState *penv = first_cpu;
-
-    while (penv) {
-        if (!qemu_cpu_is_self(penv)) {
-            penv->stop = 1;
-            if (!penv->thread_kicked) {
-                pthread_kill(penv->thread->thread, SIG_IPI);
-                penv->thread_kicked = true;
-            }
-        } else {
-            penv->stop = 0;
-            penv->stopped = 1;
-            cpu_exit(penv);
-        }
-        penv = (CPUState *) penv->next_cpu;
-    }
-
-    while (!all_threads_paused()) {
-        qemu_cond_wait(&qemu_pause_cond, &qemu_global_mutex);
-    }
-}
-
-static void resume_all_threads(void)
-{
-    CPUState *penv = first_cpu;
-
-    while (penv) {
-        penv->stop = 0;
-        penv->stopped = 0;
-        pthread_kill(penv->thread->thread, SIG_IPI);
-        penv = (CPUState *) penv->next_cpu;
-    }
-}
-
-static void kvm_vm_state_change_handler(void *context, int running, int reason)
-{
-    if (running) {
-        resume_all_threads();
-    } else {
-        pause_all_threads();
-    }
-}
-
 static void setup_kernel_sigmask(CPUState *env)
 {
     sigset_t set;
@@ -1342,12 +1277,12 @@ static void setup_kernel_sigmask(CPUState *env)
 
 static void qemu_kvm_system_reset(void)
 {
-    pause_all_threads();
+    pause_all_vcpus();
 
     cpu_synchronize_all_states();
     qemu_system_reset();
 
-    resume_all_threads();
+    resume_all_vcpus();
 }
 
 static int kvm_main_loop_cpu(CPUState *env)
@@ -1420,8 +1355,6 @@ int kvm_init_ap(void)
 
     qemu_mutex_lock(&qemu_global_mutex);
 
-    qemu_add_vm_change_state_handler(kvm_vm_state_change_handler, NULL);
-
     signal(SIG_IPI, sig_ipi_handler);
 
     memset(&action, 0, sizeof(action));
@@ -1440,7 +1373,7 @@ bool qemu_system_is_ready(void)
 int kvm_main_loop(void)
 {
     sigset_t mask;
-    int sigfd;
+    int sigfd, r;
 
     qemu_system_ready = 1;
 
@@ -1482,10 +1415,13 @@ int kvm_main_loop(void)
             vm_stop(VMSTOP_DEBUG);
             kvm_debug_cpu_requested = NULL;
         }
+        if ((r = qemu_vmstop_requested())) {
+            vm_stop(r);
+        }
     }
 
     bdrv_close_all();
-    pause_all_threads();
+    pause_all_vcpus();
     qemu_mutex_unlock(&qemu_global_mutex);
 
     return 0;
@@ -1500,6 +1436,8 @@ static void qemu_kvm_init_main_loop(void)
     qemu_mutex_init(&qemu_fair_mutex);
     qemu_mutex_init(&qemu_global_mutex);
     qemu_mutex_lock(&qemu_global_mutex);
+
+    qemu_thread_get_self(&io_thread);
 }
 
 #endif /* CONFIG_KVM */
