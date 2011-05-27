@@ -1199,8 +1199,6 @@ void list_cpus(FILE *f, fprintf_function cpu_fprintf, const char *optarg)
 
 #include <sys/syscall.h>
 
-__thread CPUState *current_env;
-
 static CPUState *kvm_debug_cpu_requested;
 
 unsigned long kvm_get_thread_id(void)
@@ -1379,7 +1377,6 @@ static void *ap_main_loop(void *_env)
 {
     CPUState *env = _env;
 
-    current_env = env;
     env->thread_id = kvm_get_thread_id();
 
     env->halt_cond = qemu_mallocz(sizeof(QemuCond));
@@ -1393,7 +1390,7 @@ static void *ap_main_loop(void *_env)
     setup_kernel_sigmask(env);
 
     /* signal VCPU creation */
-    current_env->created = 1;
+    env->created = 1;
     qemu_cond_signal(&qemu_cpu_cond);
 
     /* and wait for machine initialization */
