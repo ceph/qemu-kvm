@@ -33,10 +33,6 @@
 #include <sys/eventfd.h>
 #endif
 
-#ifndef OBSOLETE_KVM_IMPL
-#define run_on_cpu on_vcpu
-#endif /* !OBSOLETE_KVM_IMPL */
-
 /* KVM uses PAGE_SIZE in it's definition of COALESCED_MMIO_MAX */
 #define PAGE_SIZE TARGET_PAGE_SIZE
 

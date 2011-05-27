@@ -722,7 +722,6 @@ void run_on_cpu(CPUState *env, void (*func)(void *data), void *data)
     }
 }
 
-#ifdef UNUSED_IOTHREAD_IMPL
 static void flush_queued_work(CPUState *env)
 {
     struct qemu_work_item *wi;
@@ -740,6 +739,7 @@ static void flush_queued_work(CPUState *env)
     qemu_cond_broadcast(&qemu_work_cond);
 }
 
+#ifdef UNUSED_IOTHREAD_IMPL
 static void qemu_wait_io_event_common(CPUState *env)
 {
     if (env->stop) {
@@ -1220,52 +1220,9 @@ static void sig_ipi_handler(int n)
 {
 }
 
-void on_vcpu(CPUState *env, void (*func)(void *data), void *data)
-{
-    struct qemu_work_item wi;
-
-    if (env == current_env) {
-        func(data);
-        return;
-    }
-
-    wi.func = func;
-    wi.data = data;
-    if (!env->kvm_cpu_state.queued_work_first) {
-        env->kvm_cpu_state.queued_work_first = &wi;
-    } else {
-        env->kvm_cpu_state.queued_work_last->next = &wi;
-    }
-    env->kvm_cpu_state.queued_work_last = &wi;
-    wi.next = NULL;
-    wi.done = false;
-
-    pthread_kill(env->thread->thread, SIG_IPI);
-    while (!wi.done) {
-        kvm_cond_wait(&qemu_work_cond);
-    }
-}
-
 static int kvm_cpu_is_stopped(CPUState *env)
 {
     return !vm_running || env->stopped;
-}
-
-static void flush_queued_work(CPUState *env)
-{
-    struct qemu_work_item *wi;
-
-    if (!env->kvm_cpu_state.queued_work_first) {
-        return;
-    }
-
-    while ((wi = env->kvm_cpu_state.queued_work_first)) {
-        env->kvm_cpu_state.queued_work_first = wi->next;
-        wi->func(wi->data);
-        wi->done = true;
-    }
-    env->kvm_cpu_state.queued_work_last = NULL;
-    qemu_cond_broadcast(&qemu_work_cond);
 }
 
 static void kvm_main_loop_wait(CPUState *env, int timeout)

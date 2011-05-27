@@ -32,10 +32,6 @@
 #include "monitor.h"
 #endif
 
-#ifndef OBSOLETE_KVM_IMPL
-#define run_on_cpu on_vcpu
-#endif /* !OBSOLETE_KVM_IMPL */
-
 //#define DEBUG_MMU
 
 /* NOTE: must be called outside the CPU execute loop */

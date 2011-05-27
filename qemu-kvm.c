@@ -602,7 +602,7 @@ int kvm_add_ioport_region(unsigned long start, unsigned long size)
 
     if (qemu_system_is_ready()) {
         for (env = first_cpu; env != NULL; env = env->next_cpu) {
-            on_vcpu(env, do_set_ioport_access, region);
+            run_on_cpu(env, do_set_ioport_access, region);
             if (region->status < 0) {
                 r = region->status;
                 kvm_remove_ioport_region(start, size);
@@ -625,7 +625,7 @@ int kvm_remove_ioport_region(unsigned long start, unsigned long size)
         }
         if (qemu_system_is_ready()) {
             for (env = first_cpu; env != NULL; env = env->next_cpu) {
-                on_vcpu(env, do_set_ioport_access, region);
+                run_on_cpu(env, do_set_ioport_access, region);
             }
         }
         QLIST_REMOVE(region, entry);
