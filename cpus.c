@@ -913,7 +913,6 @@ int qemu_cpu_is_self(void *_env)
     return qemu_thread_is_self(env->thread);
 }
 
-#ifdef UNUSED_IOTHREAD_IMPL
 void qemu_mutex_lock_iothread(void)
 {
     if (kvm_enabled()) {
@@ -933,6 +932,7 @@ void qemu_mutex_unlock_iothread(void)
     qemu_mutex_unlock(&qemu_global_mutex);
 }
 
+#ifdef UNUSED_IOTHREAD_IMPL
 static int all_vcpus_paused(void)
 {
     CPUState *penv = first_cpu;
@@ -1572,30 +1572,6 @@ int kvm_main_loop(void)
     qemu_mutex_unlock(&qemu_global_mutex);
 
     return 0;
-}
-
-static void kvm_mutex_unlock(void)
-{
-    qemu_mutex_unlock(&qemu_global_mutex);
-}
-
-static void kvm_mutex_lock(void)
-{
-    qemu_mutex_lock(&qemu_global_mutex);
-}
-
-void qemu_mutex_unlock_iothread(void)
-{
-    if (kvm_enabled()) {
-        kvm_mutex_unlock();
-    }
-}
-
-void qemu_mutex_lock_iothread(void)
-{
-    if (kvm_enabled()) {
-        kvm_mutex_lock();
-    }
 }
 
 static void qemu_kvm_init_main_loop(void)
