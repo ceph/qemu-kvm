@@ -204,7 +204,7 @@ int kvm_pit_in_kernel(void)
     return kvm_state->pit_in_kernel;
 }
 
-int kvm_create_vcpu(CPUState *env)
+int kvm_init_vcpu(CPUState *env)
 {
     KVMState *s = kvm_state;
     long mmap_size;
