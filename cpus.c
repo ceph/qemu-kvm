@@ -1208,14 +1208,6 @@ unsigned long kvm_get_thread_id(void)
     return syscall(SYS_gettid);
 }
 
-static void kvm_cond_wait(QemuCond *cond)
-{
-    CPUState *env = cpu_single_env;
-
-    qemu_cond_wait(cond, &qemu_global_mutex);
-    cpu_single_env = env;
-}
-
 static void sig_ipi_handler(int n)
 {
 }
@@ -1313,7 +1305,7 @@ static void pause_all_threads(void)
     }
 
     while (!all_threads_paused()) {
-        kvm_cond_wait(&qemu_pause_cond);
+        qemu_cond_wait(&qemu_pause_cond, &qemu_global_mutex);
     }
 }
 
@@ -1411,7 +1403,7 @@ static void *ap_main_loop(void *_env)
 
     /* and wait for machine initialization */
     while (!qemu_system_ready) {
-        kvm_cond_wait(&qemu_system_cond);
+        qemu_cond_wait(&qemu_system_cond, &qemu_global_mutex);
     }
 
     kvm_main_loop_cpu(env);
@@ -1424,7 +1416,7 @@ int kvm_init_vcpu(CPUState *env)
     qemu_thread_create(env->thread, ap_main_loop, env);
 
     while (env->created == 0) {
-        kvm_cond_wait(&qemu_cpu_cond);
+        qemu_cond_wait(&qemu_cpu_cond, &qemu_global_mutex);
     }
 
     return 0;
