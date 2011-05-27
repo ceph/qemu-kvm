@@ -1372,28 +1372,9 @@ bool qemu_system_is_ready(void)
 
 int kvm_main_loop(void)
 {
-    sigset_t mask;
-    int sigfd, r;
+    int r;
 
     qemu_system_ready = 1;
-
-    sigemptyset(&mask);
-    sigaddset(&mask, SIGIO);
-    sigaddset(&mask, SIGALRM);
-    sigaddset(&mask, SIGBUS);
-    sigprocmask(SIG_BLOCK, &mask, NULL);
-
-    sigfd = qemu_signalfd(&mask);
-    if (sigfd == -1) {
-        fprintf(stderr, "failed to create signalfd\n");
-        return -errno;
-    }
-
-    fcntl(sigfd, F_SETFL, O_NONBLOCK);
-
-    qemu_set_fd_handler2(sigfd, NULL, sigfd_handler, NULL,
-                         (void *)(unsigned long) sigfd);
-
     qemu_cond_broadcast(&qemu_system_cond);
 
     while (1) {
@@ -1429,6 +1410,26 @@ int kvm_main_loop(void)
 
 static void qemu_kvm_init_main_loop(void)
 {
+    sigset_t mask;
+    int sigfd;
+
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGIO);
+    sigaddset(&mask, SIGALRM);
+    sigaddset(&mask, SIGBUS);
+    sigprocmask(SIG_BLOCK, &mask, NULL);
+
+    sigfd = qemu_signalfd(&mask);
+    if (sigfd == -1) {
+        fprintf(stderr, "failed to create signalfd\n");
+        exit(1);
+    }
+
+    fcntl(sigfd, F_SETFL, O_NONBLOCK);
+
+    qemu_set_fd_handler2(sigfd, NULL, sigfd_handler, NULL,
+                         (void *)(unsigned long) sigfd);
+
     qemu_cond_init(&qemu_cpu_cond);
     qemu_cond_init(&qemu_system_cond);
     qemu_cond_init(&qemu_pause_cond);
