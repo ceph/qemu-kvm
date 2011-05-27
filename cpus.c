@@ -1250,26 +1250,9 @@ void on_vcpu(CPUState *env, void (*func)(void *data), void *data)
 
 void kvm_update_interrupt_request(CPUState *env)
 {
-    int signal = 0;
-
-    if (env) {
-        if (!current_env || !current_env->created) {
-            signal = 1;
-        }
-        /*
-         * Testing for created here is really redundant
-         */
-        if (current_env && current_env->created &&
-            env != current_env && !env->thread_kicked) {
-            signal = 1;
-        }
-
-        if (signal) {
-            env->thread_kicked = true;
-            if (env->thread) {
-                pthread_kill(env->thread->thread, SIG_IPI);
-            }
-        }
+    if (!qemu_cpu_is_self(env) && !env->thread_kicked) {
+        env->thread_kicked = true;
+        pthread_kill(env->thread->thread, SIG_IPI);
     }
 }
 
