@@ -1926,6 +1926,11 @@ int kvm_arch_handle_exit(CPUState *env, struct kvm_run *run)
         ret = kvm_handle_debug(&run->debug.arch);
         break;
 #endif /* KVM_CAP_SET_GUEST_DEBUG */
+#ifdef KVM_EXIT_TPR_ACCESS
+    case KVM_EXIT_TPR_ACCESS:
+        ret = kvm_handle_tpr_access(env);
+        break;
+#endif
     default:
         fprintf(stderr, "KVM: unknown exit reason %d\n", run->exit_reason);
         ret = -1;
