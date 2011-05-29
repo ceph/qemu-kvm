@@ -66,7 +66,7 @@ void isa_bus_irqs(qemu_irq *irqs)
  */
 qemu_irq isa_get_irq(int isairq)
 {
-    if (isairq < 0 || isairq > 15) {
+    if (isairq < 0 || isairq > 23) {
         hw_error("isa irq %d invalid", isairq);
     }
     return isabus->irqs[isairq];
