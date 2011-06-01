@@ -239,11 +239,6 @@ void qemu_iovec_to_buffer(QEMUIOVector *qiov, void *buf)
     }
 }
 
-/*
- * No dma flushing needed here, as the aio code will call dma_bdrv_cb()
- * on completion as well, which will result in a call to
- * dma_bdrv_unmap() which will do the flushing ....
- */
 void qemu_iovec_from_buffer(QEMUIOVector *qiov, const void *buf, size_t count)
 {
     const uint8_t *p = (const uint8_t *)buf;

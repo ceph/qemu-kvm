@@ -160,10 +160,6 @@ static BlockDriverAIOCB *dma_bdrv_io(
     dbs->is_write = is_write;
     dbs->bh = NULL;
     qemu_iovec_init(&dbs->iov, sg->nsg);
-    /*
-     * DMA flushing is handled in dma_bdrv_cb() calling dma_bdrv_unmap()
-     * so we don't need to do that here.
-     */
     dma_bdrv_cb(dbs, 0);
     if (!dbs->acb) {
         qemu_aio_release(dbs);

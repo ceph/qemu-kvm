@@ -40,7 +40,6 @@ void vm_stop(int reason);
 void qemu_system_reset_request(void);
 void qemu_system_shutdown_request(void);
 void qemu_system_powerdown_request(void);
-int qemu_no_shutdown(void);
 void qemu_system_debug_request(void);
 void qemu_system_vmstop_request(int reason);
 int qemu_shutdown_requested_get(void);

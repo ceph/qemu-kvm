@@ -107,8 +107,6 @@ tcg/tcg.o: cpu.h
 # cpu_signal_handler() in cpu-exec.c.
 signal.o: QEMU_CFLAGS += $(HELPER_CFLAGS)
 
-qemu-kvm-helper.o: QEMU_CFLAGS += $(HELPER_CFLAGS)
-
 #########################################################
 # Linux user emulator target
 
@@ -208,7 +206,6 @@ obj-$(CONFIG_REALLY_VIRTFS) += 9pfs/virtio-9p.o
 obj-y += rwhandler.o
 obj-$(CONFIG_KVM) += kvm.o kvm-all.o
 obj-$(CONFIG_NO_KVM) += kvm-stub.o
-
 LIBS+=-lz
 
 QEMU_CFLAGS += $(VNC_TLS_CFLAGS)

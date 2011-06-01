@@ -23,7 +23,6 @@
  */
 #include "hw.h"
 #include "pc.h"
-#include "apic.h"
 #include "isa.h"
 #include "monitor.h"
 #include "qemu-timer.h"
@@ -192,6 +191,7 @@ int64_t irq_time[16];
 static void i8259_set_irq(void *opaque, int irq, int level)
 {
     PicState2 *s = opaque;
+
 #if defined(DEBUG_PIC) || defined(DEBUG_IRQ_COUNT)
     if (level != irq_level[irq]) {
         DPRINTF("i8259_set_irq: irq=%d level=%d\n", irq, level);
@@ -220,11 +220,9 @@ static inline void pic_intack(PicState *s, int irq)
     } else {
         s->isr |= (1 << irq);
     }
-
     /* We don't clear a level sensitive interrupt here */
     if (!(s->elcr & (1 << irq)))
         s->irr &= ~(1 << irq);
-
 }
 
 extern int time_drift_fix;
@@ -236,7 +234,6 @@ int pic_read_irq(PicState2 *s)
 
     irq = pic_get_irq(&s->pics[0]);
     if (irq >= 0) {
-
         pic_intack(&s->pics[0], irq);
 #ifdef TARGET_I386
 	if (time_drift_fix && irq == 0) {

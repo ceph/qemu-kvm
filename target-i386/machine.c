@@ -487,7 +487,6 @@ static const VMStateDescription vmstate_cpu = {
         /* KVM pvclock msr */
         VMSTATE_UINT64_V(system_time_msr, CPUState, 11),
         VMSTATE_UINT64_V(wall_clock_msr, CPUState, 11),
-
         /* XSAVE related fields */
         VMSTATE_UINT64_V(xcr0, CPUState, 12),
         VMSTATE_UINT64_V(xstate_bv, CPUState, 12),

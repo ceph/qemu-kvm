@@ -551,7 +551,6 @@ void kvm_arch_reset_vcpu(CPUState *env)
     }
 }
 
-
 static int kvm_get_supported_msrs(KVMState *s)
 {
     static int kvm_supported_msrs;
@@ -981,6 +980,7 @@ static int kvm_put_msrs(CPUState *env, int level)
     return kvm_vcpu_ioctl(env, KVM_SET_MSRS, &msr_data);
 
 }
+
 
 static int kvm_get_fpu(CPUState *env)
 {
