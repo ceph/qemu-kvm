@@ -271,8 +271,6 @@ void kvm_load_lapic(CPUState *env);
 void kvm_hpet_enable_kpit(void);
 void kvm_hpet_disable_kpit(void);
 
-int kvm_set_boot_cpu_id(KVMState *s, uint32_t id);
-
 void kvm_tpr_access_report(CPUState *env, uint64_t rip, int is_write);
 
 int kvm_arch_init_irq_routing(void);
@@ -292,6 +290,8 @@ extern int kvm_nested;
 extern unsigned int kvm_shadow_memory;
 
 int kvm_handle_tpr_access(CPUState *env);
+
+int kvm_set_boot_cpu_id(KVMState *s, uint32_t id);
 
 #else
 #define kvm_nested 0
