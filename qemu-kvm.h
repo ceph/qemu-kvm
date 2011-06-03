@@ -291,8 +291,6 @@ extern unsigned int kvm_shadow_memory;
 
 int kvm_handle_tpr_access(CPUState *env);
 
-int kvm_set_boot_cpu_id(KVMState *s, uint32_t id);
-
 #else
 #define kvm_nested 0
 #endif

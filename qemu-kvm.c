@@ -655,14 +655,3 @@ int kvm_update_ioport_access(CPUState *env)
 #endif /* CONFIG_KVM_DEVICE_ASSIGNMENT */
     return 0;
 }
-
-int kvm_set_boot_cpu_id(KVMState *s, uint32_t id)
-{
-#ifdef KVM_CAP_SET_BOOT_CPU_ID
-    int r = kvm_ioctl(s, KVM_CHECK_EXTENSION, KVM_CAP_SET_BOOT_CPU_ID);
-    if (r > 0) {
-        return kvm_vm_ioctl(s, KVM_SET_BOOT_CPU_ID, id);
-    }
-#endif
-    return -ENOSYS;
-}
