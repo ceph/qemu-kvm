@@ -323,7 +323,9 @@ static void *aio_thread(void *unused)
 
         while (QTAILQ_EMPTY(&request_list) &&
                !(ret == ETIMEDOUT)) {
+            idle_threads++;
             ret = cond_timedwait(&cond, &lock, &ts);
+            idle_threads--;
         }
 
         if (QTAILQ_EMPTY(&request_list))
@@ -332,7 +334,6 @@ static void *aio_thread(void *unused)
         aiocb = QTAILQ_FIRST(&request_list);
         QTAILQ_REMOVE(&request_list, aiocb, node);
         aiocb->active = 1;
-        idle_threads--;
         mutex_unlock(&lock);
 
         switch (aiocb->aio_type & QEMU_AIO_TYPE_MASK) {
@@ -354,13 +355,11 @@ static void *aio_thread(void *unused)
 
         mutex_lock(&lock);
         aiocb->ret = ret;
-        idle_threads++;
         mutex_unlock(&lock);
 
         if (kill(pid, aiocb->ev_signo)) die("kill failed");
     }
 
-    idle_threads--;
     cur_threads--;
     mutex_unlock(&lock);
 
@@ -372,7 +371,6 @@ static void spawn_thread(void)
     sigset_t set, oldset;
 
     cur_threads++;
-    idle_threads++;
 
     /* block all signals */
     if (sigfillset(&set)) die("sigfillset");

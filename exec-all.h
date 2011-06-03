@@ -43,7 +43,11 @@ typedef ram_addr_t tb_page_addr_t;
 typedef struct TranslationBlock TranslationBlock;
 
 /* XXX: make safe guess about sizes */
+#if (HOST_LONG_BITS == 32) && (TARGET_LONG_BITS == 64)
+#define MAX_OP_PER_INSTR 128
+#else
 #define MAX_OP_PER_INSTR 96
+#endif
 
 #if HOST_LONG_BITS == 32
 #define MAX_OPC_PARAM_PER_ARG 2
@@ -95,7 +99,6 @@ void QEMU_NORETURN cpu_loop_exit(void);
 int page_unprotect(target_ulong address, unsigned long pc, void *puc);
 void tb_invalidate_phys_page_range(tb_page_addr_t start, tb_page_addr_t end,
                                    int is_cpu_write_access);
-void tb_invalidate_page_range(target_ulong start, target_ulong end);
 void tlb_flush_page(CPUState *env, target_ulong addr);
 void tlb_flush(CPUState *env, int flush_global);
 #if !defined(CONFIG_USER_ONLY)
