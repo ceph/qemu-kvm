@@ -41,7 +41,6 @@
 #include "qemu-timer.h"
 #if defined(CONFIG_USER_ONLY)
 #include <qemu.h>
-#include <signal.h>
 #if defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
 #include <sys/param.h>
 #if __FreeBSD_version >= 700104
@@ -2971,6 +2970,19 @@ void qemu_ram_unmap(ram_addr_t addr)
 ram_addr_t qemu_ram_alloc(DeviceState *dev, const char *name, ram_addr_t size)
 {
     return qemu_ram_alloc_from_ptr(dev, name, size, NULL);
+}
+
+void qemu_ram_free_from_ptr(ram_addr_t addr)
+{
+    RAMBlock *block;
+
+    QLIST_FOREACH(block, &ram_list.blocks, next) {
+        if (addr == block->offset) {
+            QLIST_REMOVE(block, next);
+            qemu_free(block);
+            return;
+        }
+    }
 }
 
 void qemu_ram_free(ram_addr_t addr)
