@@ -666,10 +666,6 @@ static int virtio_pci_set_guest_notifiers(void *opaque, bool assign)
 
 assign_error:
     /* We get here on assignment failure. Recover by undoing for VQs 0 .. n. */
-    if (assign) {
-        msix_unset_mask_notifier(&proxy->pci_dev);
-    }
-
     while (--n >= 0) {
         virtio_pci_set_guest_notifier(opaque, n, !assign);
     }
