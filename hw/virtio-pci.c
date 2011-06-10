@@ -549,7 +549,6 @@ static void virtio_pci_guest_notifier_read(void *opaque)
 static int virtio_pci_mask_vq(PCIDevice *dev, unsigned vector,
                               VirtQueue *vq, int masked)
 {
-#ifdef CONFIG_KVM
     EventNotifier *notifier = virtio_queue_get_guest_notifier(vq);
     int r = kvm_set_irqfd(dev->msix_irq_entries[vector].gsi,
                           event_notifier_get_fd(notifier),
@@ -565,9 +564,6 @@ static int virtio_pci_mask_vq(PCIDevice *dev, unsigned vector,
                             NULL, NULL, NULL);
     }
     return 0;
-#else
-    return -ENOSYS;
-#endif
 }
 
 static int virtio_pci_mask_notifier(PCIDevice *dev, unsigned vector,

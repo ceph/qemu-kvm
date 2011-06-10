@@ -1429,9 +1429,9 @@ int kvm_set_ioeventfd_pio_word(int fd, uint16_t addr, uint16_t val, bool assign)
 #endif
 }
 
-#if defined(KVM_IRQFD)
 int kvm_set_irqfd(int gsi, int fd, bool assigned)
 {
+#if defined(KVM_IRQFD)
     struct kvm_irqfd irqfd = {
         .fd = fd,
         .gsi = gsi,
@@ -1445,8 +1445,10 @@ int kvm_set_irqfd(int gsi, int fd, bool assigned)
     if (r < 0)
         return r;
     return 0;
-}
+#else
+    return -ENOSYS;
 #endif
+}
 
 int kvm_on_sigbus_vcpu(CPUState *env, int code, void *addr)
 {

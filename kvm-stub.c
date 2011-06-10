@@ -196,3 +196,8 @@ int kvm_on_sigbus(int code, void *addr)
 {
     return 1;
 }
+
+int kvm_set_irqfd(int gsi, int fd, bool assigned)
+{
+    return -ENOSYS;
+}
