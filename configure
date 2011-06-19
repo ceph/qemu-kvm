@@ -156,6 +156,7 @@ mandir="\${prefix}/share/man"
 datadir="\${prefix}/share/qemu"
 docdir="\${prefix}/share/doc/qemu"
 bindir="\${prefix}/bin"
+libdir="\${prefix}/lib"
 sysconfdir="\${prefix}/etc"
 confsuffix="/qemu"
 slirp="yes"
@@ -556,6 +557,8 @@ for opt do
   ;;
   --bindir=*) bindir="$optarg"
   ;;
+  --libdir=*) libdir="$optarg"
+  ;;
   --datadir=*) datadir="$optarg"
   ;;
   --docdir=*) docdir="$optarg"
@@ -861,6 +864,7 @@ if [ "$softmmu" = "yes" ] ; then
     default_target_list="\
 i386-softmmu \
 x86_64-softmmu \
+alpha-softmmu \
 arm-softmmu \
 cris-softmmu \
 lm32-softmmu \
@@ -1311,6 +1315,15 @@ if ! has $pkg_config; then
 fi
 
 ##########################################
+# libtool probe
+
+if ! has libtool; then
+    libtool=
+else
+    libtool=libtool
+fi
+
+##########################################
 # Sparse probe
 if test "$sparse" != "no" ; then
   if has cgcc; then
@@ -1744,7 +1757,7 @@ fi
 if test "$curl" != "no" ; then
   cat > $TMPC << EOF
 #include <curl/curl.h>
-int main(void) { return curl_easy_init(); }
+int main(void) { curl_easy_init(); curl_multi_setopt(0, 0, 0); return 0; }
 EOF
   curl_cflags=`$curlconfig --cflags 2>/dev/null`
   curl_libs=`$curlconfig --libs 2>/dev/null`
@@ -2582,7 +2595,13 @@ fi
 fdatasync=no
 cat > $TMPC << EOF
 #include <unistd.h>
-int main(void) { return fdatasync(0); }
+int main(void) {
+#if defined(_POSIX_SYNCHRONIZED_IO) && _POSIX_SYNCHRONIZED_IO > 0
+return fdatasync(0);
+#else
+#abort Not supported
+#endif
+}
 EOF
 if compile_prog "" "" ; then
     fdatasync=yes
@@ -2738,6 +2757,7 @@ fi
 echo "Install prefix    $prefix"
 echo "BIOS directory    `eval echo $datadir`"
 echo "binary directory  `eval echo $bindir`"
+echo "library directory `eval echo $libdir`"
 echo "config directory  `eval echo $sysconfdir`"
 if test "$mingw32" = "no" ; then
 echo "Manual directory  `eval echo $mandir`"
@@ -2833,6 +2853,7 @@ echo >> $config_host_mak
 echo all: >> $config_host_mak
 echo "prefix=$prefix" >> $config_host_mak
 echo "bindir=$bindir" >> $config_host_mak
+echo "libdir=$libdir" >> $config_host_mak
 echo "mandir=$mandir" >> $config_host_mak
 echo "datadir=$datadir" >> $config_host_mak
 echo "sysconfdir=$sysconfdir" >> $config_host_mak
@@ -3150,7 +3171,7 @@ if test "$trace_backend" = "simple"; then
 fi
 # Set the appropriate trace file.
 if test "$trace_backend" = "simple"; then
-  trace_file="\"$trace_file-%u\""
+  trace_file="\"$trace_file-\" FMT_pid"
 fi
 if test "$trace_backend" = "dtrace" -a "$trace_backend_stap" = "yes" ; then
   echo "CONFIG_SYSTEMTAP_TRACE=y" >> $config_host_mak
@@ -3171,6 +3192,7 @@ echo "AR=$ar" >> $config_host_mak
 echo "OBJCOPY=$objcopy" >> $config_host_mak
 echo "LD=$ld" >> $config_host_mak
 echo "WINDRES=$windres" >> $config_host_mak
+echo "LIBTOOL=$libtool" >> $config_host_mak
 echo "CFLAGS=$CFLAGS" >> $config_host_mak
 echo "QEMU_CFLAGS=$QEMU_CFLAGS" >> $config_host_mak
 echo "QEMU_INCLUDES=$QEMU_INCLUDES" >> $config_host_mak
@@ -3714,7 +3736,7 @@ if [ "$source_path" != `pwd` ]; then
     # out of tree build
     mkdir -p libcacard
     rm -f libcacard/Makefile
-    ln -s "$source_path/libcacard/Makefile" libcacard/Makefile
+    symlink "$source_path/libcacard/Makefile" libcacard/Makefile
 fi
 
 d=libuser

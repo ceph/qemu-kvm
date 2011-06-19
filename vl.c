@@ -928,9 +928,13 @@ static int usb_device_add(const char *devname)
         goto done;
 
     /* the other ones */
+#ifndef CONFIG_LINUX
+    /* only the linux version is qdev-ified, usb-bsd still needs this */
     if (strstart(devname, "host:", &p)) {
         dev = usb_host_device_open(p);
-    } else if (!strcmp(devname, "bt") || strstart(devname, "bt:", &p)) {
+    } else
+#endif
+    if (!strcmp(devname, "bt") || strstart(devname, "bt:", &p)) {
         dev = usb_bt_init(devname[2] ? hci_init(p) :
                         bt_new_hci(qemu_find_bt_vlan(0)));
     } else {
@@ -1196,7 +1200,7 @@ void qemu_kill_report(void)
              */
             fputc('\n', stderr);
         } else {
-            fprintf(stderr, " from pid %d\n", shutdown_pid);
+            fprintf(stderr, " from pid " FMT_pid "\n", shutdown_pid);
         }
         shutdown_signal = -1;
     }
@@ -2066,6 +2070,8 @@ int main(int argc, char **argv, char **envp)
 #endif
     int defconfig = 1;
     const char *trace_file = NULL;
+    const char *log_mask = NULL;
+    const char *log_file = NULL;
 
     atexit(qemu_run_exit_notifiers);
     error_set_progname(argv[0]);
@@ -2440,7 +2446,10 @@ int main(int argc, char **argv, char **envp)
                 break;
 #endif
             case QEMU_OPTION_d:
-                set_cpu_log(optarg);
+                log_mask = optarg;
+                break;
+            case QEMU_OPTION_D:
+                log_file = optarg;
                 break;
             case QEMU_OPTION_s:
                 gdbstub_dev = "tcp::" DEFAULT_GDBSTUB_PORT;
@@ -2940,6 +2949,18 @@ int main(int argc, char **argv, char **envp)
         }
     }
     loc_set_none();
+
+    /* Open the logfile at this point, if necessary. We can't open the logfile
+     * when encountering either of the logging options (-d or -D) because the
+     * other one may be encountered later on the command line, changing the
+     * location or level of logging.
+     */
+    if (log_mask) {
+        if (log_file) {
+            set_cpu_log_filename(log_file);
+        }
+        set_cpu_log(log_mask);
+    }
 
     if (!st_init(trace_file)) {
         fprintf(stderr, "warning: unable to initialize simple trace backend\n");

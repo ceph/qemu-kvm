@@ -1179,9 +1179,9 @@ Specify the guest-visible address of the host. Default is the 2nd IP in the
 guest network, i.e. x.x.x.2.
 
 @item restrict=y|yes|n|no
-If this options is enabled, the guest will be isolated, i.e. it will not be
+If this option is enabled, the guest will be isolated, i.e. it will not be
 able to contact the host and no guest IP packets will be routed over the host
-to the outside. This option does not affect explicitly set forwarding rule.
+to the outside. This option does not affect any explicitly set forwarding rules.
 
 @item hostname=@var{name}
 Specifies the client hostname reported by the builtin DHCP server.
@@ -2007,6 +2007,15 @@ STEXI
 @item -d
 @findex -d
 Output log in /tmp/qemu.log
+ETEXI
+
+DEF("D", HAS_ARG, QEMU_OPTION_D, \
+    "-D logfile      output log to logfile (instead of the default /tmp/qemu.log)\n",
+    QEMU_ARCH_ALL)
+STEXI
+@item -D
+@findex -D
+Output log in logfile instead of /tmp/qemu.log
 ETEXI
 
 DEF("hdachs", HAS_ARG, QEMU_OPTION_hdachs, \
