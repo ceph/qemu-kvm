@@ -75,9 +75,6 @@
                                          VIRTIO_PCI_CONFIG_MSI : \
                                          VIRTIO_PCI_CONFIG_NOMSI)
 
-/* Virtio ABI version, if we increment this, we break the guest driver. */
-#define VIRTIO_PCI_ABI_VERSION          0
-
 /* How many bits to shift physical queue address written to QUEUE_PFN.
  * 12 is historical, and due to x86 page size. */
 #define VIRTIO_PCI_QUEUE_ADDR_SHIFT    12
@@ -870,21 +867,6 @@ static int virtio_balloon_init_pci(PCIDevice *pci_dev)
     return 0;
 }
 
-#ifdef CONFIG_VIRTFS
-static int virtio_9p_init_pci(PCIDevice *pci_dev)
-{
-    VirtIOPCIProxy *proxy = DO_UPCAST(VirtIOPCIProxy, pci_dev, pci_dev);
-    VirtIODevice *vdev;
-
-    vdev = virtio_9p_init(&pci_dev->qdev, &proxy->fsconf);
-    vdev->nvectors = proxy->nvectors;
-    virtio_init_pci(proxy, vdev);
-    /* make the actual value visible */
-    proxy->nvectors = vdev->nvectors;
-    return 0;
-}
-#endif
-
 static PCIDeviceInfo virtio_info[] = {
     {
         .qdev.name = "virtio-blk-pci",
@@ -969,24 +951,6 @@ static PCIDeviceInfo virtio_info[] = {
         },
         .qdev.reset = virtio_pci_reset,
     },{
-#ifdef CONFIG_VIRTFS
-        .qdev.name = "virtio-9p-pci",
-        .qdev.alias = "virtio-9p",
-        .qdev.size = sizeof(VirtIOPCIProxy),
-        .init      = virtio_9p_init_pci,
-        .vendor_id = PCI_VENDOR_ID_REDHAT_QUMRANET,
-        .device_id = 0x1009,
-        .revision  = VIRTIO_PCI_ABI_VERSION,
-        .class_id  = 0x2,
-        .qdev.props = (Property[]) {
-            DEFINE_PROP_UINT32("vectors", VirtIOPCIProxy, nvectors, 2),
-            DEFINE_VIRTIO_COMMON_FEATURES(VirtIOPCIProxy, host_features),
-            DEFINE_PROP_STRING("mount_tag", VirtIOPCIProxy, fsconf.tag),
-            DEFINE_PROP_STRING("fsdev", VirtIOPCIProxy, fsconf.fsdev_id),
-            DEFINE_PROP_END_OF_LIST(),
-        },
-    }, {
-#endif
         /* end of list */
     }
 };
