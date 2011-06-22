@@ -22,7 +22,6 @@
 #if !defined(TARGET_IA64)
 #include "tcg.h"
 #endif
-#include "kvm.h"
 #include "qemu-barrier.h"
 
 #if defined(__sparc__) && !defined(CONFIG_SOLARIS)
