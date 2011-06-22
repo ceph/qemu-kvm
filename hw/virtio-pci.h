@@ -37,7 +37,5 @@ typedef struct {
     bool ioeventfd_started;
 } VirtIOPCIProxy;
 
-extern void virtio_init_pci(VirtIOPCIProxy *proxy, VirtIODevice *vdev,
-                            uint16_t vendor, uint16_t device,
-                            uint16_t class_code, uint8_t pif);
+extern void virtio_init_pci(VirtIOPCIProxy *proxy, VirtIODevice *vdev);
 #endif
