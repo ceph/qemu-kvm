@@ -77,6 +77,8 @@ static int pci_ich9_ahci_init(PCIDevice *dev)
     struct AHCIPCIState *d;
     d = DO_UPCAST(struct AHCIPCIState, card, dev);
 
+    ahci_init(&d->ahci, &dev->qdev, 6);
+
     pci_config_set_vendor_id(d->card.config, PCI_VENDOR_ID_INTEL);
     pci_config_set_device_id(d->card.config, PCI_DEVICE_ID_INTEL_82801IR);
 
@@ -94,8 +96,6 @@ static int pci_ich9_ahci_init(PCIDevice *dev)
     qemu_register_reset(ahci_reset, d);
 
     msi_init(dev, 0x50, 1, true, false);
-
-    ahci_init(&d->ahci, &dev->qdev, 6);
     d->ahci.irq = d->card.irq[0];
 
     /* XXX BAR size should be 1k, but that breaks, so bump it to 4k for now */
