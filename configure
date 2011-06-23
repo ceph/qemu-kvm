@@ -173,9 +173,9 @@ darwin_user="no"
 bsd_user="no"
 guest_base=""
 uname_release=""
-io_thread="no"
+io_thread="yes"
 mixemu="no"
-kvm_cap_pit=""
+kvm_cap_pit="yes"
 kvm_cap_device_assignment="yes"
 kerneldir=""
 aix="no"
@@ -3325,6 +3325,12 @@ case "$target_arch2" in
       fi
       if test $vhost_net = "yes" ; then
         echo "CONFIG_VHOST_NET=y" >> $config_target_mak
+      fi
+      if test $kvm_cap_pit = "yes" ; then
+        echo "CONFIG_KVM_PIT=y" >> $config_target_mak
+      fi
+      if test $kvm_cap_device_assignment = "yes" ; then
+        echo "CONFIG_KVM_DEVICE_ASSIGNMENT=y" >> $config_target_mak
       fi
     fi
 esac
