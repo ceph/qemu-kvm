@@ -2717,10 +2717,6 @@ int main(int argc, char **argv, char **envp)
                 kvm_pit_reinject = 0;
                 break;
             }
-	    case QEMU_OPTION_enable_nesting: {
-		kvm_nested = 1;
-		break;
-	    }
 #endif
             case QEMU_OPTION_usb:
                 usb_enabled = 1;

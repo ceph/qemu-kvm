@@ -259,19 +259,12 @@ int kvm_update_ioport_access(CPUState *env);
 int kvm_arch_set_ioport_access(unsigned long start, unsigned long size,
                                bool enable);
 
-#ifdef CONFIG_KVM
 extern int kvm_irqchip;
 extern int kvm_pit;
 extern int kvm_pit_reinject;
-extern int kvm_nested;
 extern unsigned int kvm_shadow_memory;
 
 int kvm_handle_tpr_access(CPUState *env);
-
-#else
-#define kvm_nested 0
-#endif
-
 int kvm_tpr_enable_vapic(CPUState *env);
 
 #endif
