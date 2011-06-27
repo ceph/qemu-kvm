@@ -487,6 +487,9 @@ static void pit_reset(DeviceState *dev)
         s->gate = (i != 2);
         pit_load_count(pit, 0, i);
     }
+    if (vmstate_pit.post_load) {
+        vmstate_pit.post_load(pit, 2);
+    }
 }
 
 #ifdef TARGET_I386
