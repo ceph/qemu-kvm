@@ -2982,19 +2982,6 @@ ram_addr_t qemu_ram_alloc_from_ptr(DeviceState *dev, const char *name,
     return new_block->offset;
 }
 
-void qemu_ram_unmap(ram_addr_t addr)
-{
-    RAMBlock *block;
-
-    QLIST_FOREACH(block, &ram_list.blocks, next) {
-        if (addr == block->offset) {
-            QLIST_REMOVE(block, next);
-            qemu_free(block);
-            return;
-        }
-    }
-}
-
 ram_addr_t qemu_ram_alloc(DeviceState *dev, const char *name, ram_addr_t size)
 {
     return qemu_ram_alloc_from_ptr(dev, name, size, NULL);

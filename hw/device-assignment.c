@@ -836,7 +836,7 @@ static void free_assigned_device(AssignedDevice *dev)
                 if (region->r_size & 0xFFF) {
                     cpu_unregister_io_memory(region->memory_index);
                 } else {
-                    qemu_ram_unmap(region->memory_index);
+                    qemu_ram_free_from_ptr(region->memory_index);
                 }
                 if (munmap(region->u.r_virtbase,
                            (pci_region->size + 0xFFF) & 0xFFFFF000)) {
