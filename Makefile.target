@@ -37,8 +37,6 @@ ifndef CONFIG_HAIKU
 LIBS+=-lm
 endif
 
-CFLAGS += $(KVM_CFLAGS)
-
 config-target.h: config-target.h-timestamp
 config-target.h-timestamp: config-target.mak
 
