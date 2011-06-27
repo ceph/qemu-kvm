@@ -25,7 +25,6 @@
 
 static int kvm_create_pit(KVMState *s)
 {
-#ifdef KVM_CAP_PIT
     int r;
 
     if (kvm_pit) {
@@ -43,11 +42,8 @@ static int kvm_create_pit(KVMState *s)
             }
         }
     }
-#endif
     return 0;
 }
-
-#ifdef KVM_EXIT_TPR_ACCESS
 
 int kvm_handle_tpr_access(CPUState *env)
 {
@@ -67,10 +63,6 @@ int kvm_enable_vapic(CPUState *env, uint64_t vapic)
 
     return kvm_vcpu_ioctl(env, KVM_SET_VAPIC_ADDR, &va);
 }
-
-#endif
-
-#ifdef KVM_CAP_IRQCHIP
 
 int kvm_get_lapic(CPUState *env, struct kvm_lapic_state *s)
 {
@@ -103,10 +95,6 @@ int kvm_set_lapic(CPUState *env, struct kvm_lapic_state *s)
     return r;
 }
 
-#endif
-
-#ifdef KVM_CAP_PIT
-
 int kvm_get_pit(KVMState *s, struct kvm_pit_state *pit_state)
 {
     if (!kvm_pit_in_kernel()) {
@@ -123,7 +111,6 @@ int kvm_set_pit(KVMState *s, struct kvm_pit_state *pit_state)
     return kvm_vm_ioctl(s, KVM_SET_PIT, pit_state);
 }
 
-#ifdef KVM_CAP_PIT_STATE2
 int kvm_get_pit2(KVMState *s, struct kvm_pit_state2 *ps2)
 {
     if (!kvm_pit_in_kernel()) {
@@ -140,10 +127,6 @@ int kvm_set_pit2(KVMState *s, struct kvm_pit_state2 *ps2)
     return kvm_vm_ioctl(s, KVM_SET_PIT2, ps2);
 }
 
-#endif
-#endif
-
-#ifdef KVM_CAP_VAPIC
 static int kvm_enable_tpr_access_reporting(CPUState *env)
 {
     int r;
@@ -155,15 +138,12 @@ static int kvm_enable_tpr_access_reporting(CPUState *env)
     }
     return kvm_vcpu_ioctl(env, KVM_TPR_ACCESS_REPORTING, &tac);
 }
-#endif
 
 static int _kvm_arch_init_vcpu(CPUState *env)
 {
     kvm_arch_reset_vcpu(env);
 
-#ifdef KVM_EXIT_TPR_ACCESS
     kvm_enable_tpr_access_reporting(env);
-#endif
 
     return kvm_update_ioport_access(env);
 }

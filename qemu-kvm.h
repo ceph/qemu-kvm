@@ -39,7 +39,6 @@
 
 int kvm_create_irqchip(KVMState *s);
 
-#ifdef KVM_CAP_IRQCHIP
 /*!
  * \brief Dump in kernel IRQCHIP contents
  *
@@ -86,13 +85,6 @@ int kvm_get_lapic(CPUState *env, struct kvm_lapic_state *s);
  */
 int kvm_set_lapic(CPUState *env, struct kvm_lapic_state *s);
 
-#endif
-
-#endif
-
-#ifdef KVM_CAP_PIT
-
-#if defined(__i386__) || defined(__x86_64__)
 /*!
  * \brief Get in kernel PIT of the virtual domain
  *
@@ -116,7 +108,6 @@ int kvm_set_pit(KVMState *s, struct kvm_pit_state *pit_state);
 
 int kvm_reinject_control(KVMState *s, int pit_reinject);
 
-#ifdef KVM_CAP_PIT_STATE2
 /*!
  * \brief Set in kernel PIT state2 of the virtual domain
  *
@@ -138,16 +129,9 @@ int kvm_set_pit2(KVMState *s, struct kvm_pit_state2 *ps2);
 int kvm_get_pit2(KVMState *s, struct kvm_pit_state2 *ps2);
 
 #endif
-#endif
-#endif
-
-#ifdef KVM_CAP_VAPIC
 
 int kvm_enable_vapic(CPUState *env, uint64_t vapic);
 
-#endif
-
-#ifdef KVM_CAP_DEVICE_ASSIGNMENT
 /*!
  * \brief Notifies host kernel about a PCI device to be assigned to a guest
  *
@@ -171,7 +155,6 @@ int kvm_assign_pci_device(KVMState *s,
  */
 int kvm_assign_irq(KVMState *s, struct kvm_assigned_irq *assigned_irq);
 
-#ifdef KVM_CAP_ASSIGN_DEV_IRQ
 /*!
  * \brief Deassign IRQ for an assigned device
  *
@@ -182,10 +165,7 @@ int kvm_assign_irq(KVMState *s, struct kvm_assigned_irq *assigned_irq);
  * \param assigned_irq Parameters, like dev id, host irq, guest irq, etc
  */
 int kvm_deassign_irq(KVMState *s, struct kvm_assigned_irq *assigned_irq);
-#endif
-#endif
 
-#ifdef KVM_CAP_DEVICE_DEASSIGNMENT
 /*!
  * \brief Notifies host kernel about a PCI device to be deassigned from a guest
  *
@@ -197,7 +177,6 @@ int kvm_deassign_irq(KVMState *s, struct kvm_assigned_irq *assigned_irq);
  */
 int kvm_deassign_pci_device(KVMState *s,
                             struct kvm_assigned_pci_dev *assigned_dev);
-#endif
 
 /*!
  * \brief Clears the temporary irq routing table
@@ -252,11 +231,9 @@ int kvm_update_routing_entry(struct kvm_irq_routing_entry *entry,
                              struct kvm_irq_routing_entry *newentry);
 
 
-#ifdef KVM_CAP_DEVICE_MSIX
 int kvm_assign_set_msix_nr(KVMState *s, struct kvm_assigned_msix_nr *msix_nr);
 int kvm_assign_set_msix_entry(KVMState *s,
                               struct kvm_assigned_msix_entry *entry);
-#endif
 
 #else                           /* !CONFIG_KVM */
 

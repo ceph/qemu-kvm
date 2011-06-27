@@ -800,7 +800,6 @@ again:
 
 static QLIST_HEAD(, AssignedDevice) devs = QLIST_HEAD_INITIALIZER(devs);
 
-#ifdef KVM_CAP_IRQ_ROUTING
 static void free_dev_irq_entries(AssignedDevice *dev)
 {
     int i;
@@ -811,7 +810,6 @@ static void free_dev_irq_entries(AssignedDevice *dev)
     dev->entry = NULL;
     dev->irq_entries_nr = 0;
 }
-#endif
 
 static void free_assigned_device(AssignedDevice *dev)
 {
@@ -860,9 +858,7 @@ static void free_assigned_device(AssignedDevice *dev)
         close(dev->real_device.config_fd);
     }
 
-#ifdef KVM_CAP_IRQ_ROUTING
     free_dev_irq_entries(dev);
-#endif
 }
 
 static uint32_t calc_assigned_dev_id(uint16_t seg, uint8_t bus, uint8_t devfn)
@@ -922,7 +918,6 @@ static int assign_device(AssignedDevice *dev)
     struct kvm_assigned_pci_dev assigned_dev_data;
     int r;
 
-#ifdef KVM_CAP_PCI_SEGMENT
     /* Only pass non-zero PCI segment to capable module */
     if (!kvm_check_extension(kvm_state, KVM_CAP_PCI_SEGMENT) &&
         dev->h_segnr) {
@@ -930,18 +925,14 @@ static int assign_device(AssignedDevice *dev)
                 "as this KVM module doesn't support it.\n");
         return -ENODEV;
     }
-#endif
 
     memset(&assigned_dev_data, 0, sizeof(assigned_dev_data));
     assigned_dev_data.assigned_dev_id  =
 	calc_assigned_dev_id(dev->h_segnr, dev->h_busnr, dev->h_devfn);
-#ifdef KVM_CAP_PCI_SEGMENT
     assigned_dev_data.segnr = dev->h_segnr;
-#endif
     assigned_dev_data.busnr = dev->h_busnr;
     assigned_dev_data.devfn = dev->h_devfn;
 
-#ifdef KVM_CAP_IOMMU
     /* We always enable the IOMMU unless disabled on the command line */
     if (dev->features & ASSIGNED_DEVICE_USE_IOMMU_MASK) {
         if (!kvm_check_extension(kvm_state, KVM_CAP_IOMMU)) {
@@ -951,9 +942,6 @@ static int assign_device(AssignedDevice *dev)
         }
         assigned_dev_data.flags |= KVM_DEV_ASSIGN_ENABLE_IOMMU;
     }
-#else
-    dev->features &= ~ASSIGNED_DEVICE_USE_IOMMU_MASK;
-#endif
     if (!(dev->features & ASSIGNED_DEVICE_USE_IOMMU_MASK)) {
         fprintf(stderr,
                 "WARNING: Assigning a device without IOMMU protection can "
@@ -1001,7 +989,6 @@ static int assign_irq(AssignedDevice *dev)
         calc_assigned_dev_id(dev->h_segnr, dev->h_busnr, dev->h_devfn);
     assigned_irq_data.guest_irq = irq;
     assigned_irq_data.host_irq = dev->real_device.irq;
-#ifdef KVM_CAP_ASSIGN_DEV_IRQ
     if (dev->irq_requested_type) {
         assigned_irq_data.flags = dev->irq_requested_type;
         r = kvm_deassign_irq(kvm_state, &assigned_irq_data);
@@ -1016,7 +1003,6 @@ static int assign_irq(AssignedDevice *dev)
         assigned_irq_data.flags |= KVM_DEV_IRQ_HOST_MSI;
     else
         assigned_irq_data.flags |= KVM_DEV_IRQ_HOST_INTX;
-#endif
 
     r = kvm_assign_irq(kvm_state, &assigned_irq_data);
     if (r < 0) {
@@ -1034,7 +1020,6 @@ static int assign_irq(AssignedDevice *dev)
 
 static void deassign_device(AssignedDevice *dev)
 {
-#ifdef KVM_CAP_DEVICE_DEASSIGNMENT
     struct kvm_assigned_pci_dev assigned_dev_data;
     int r;
 
@@ -1046,7 +1031,6 @@ static void deassign_device(AssignedDevice *dev)
     if (r < 0)
 	fprintf(stderr, "Failed to deassign device \"%s\" : %s\n",
                 dev->dev.qdev.id, strerror(-r));
-#endif
 }
 
 #if 0
@@ -1084,9 +1068,6 @@ void assigned_dev_update_irqs(void)
     }
 }
 
-#ifdef KVM_CAP_IRQ_ROUTING
-
-#ifdef KVM_CAP_DEVICE_MSI
 static void assigned_dev_update_msi(PCIDevice *pci_dev, unsigned int ctrl_pos)
 {
     struct kvm_assigned_irq assigned_irq_data;
@@ -1151,9 +1132,7 @@ static void assigned_dev_update_msi(PCIDevice *pci_dev, unsigned int ctrl_pos)
         assign_irq(assigned_dev);
     }
 }
-#endif
 
-#ifdef KVM_CAP_DEVICE_MSIX
 static int assigned_dev_update_msix_mmio(PCIDevice *pci_dev)
 {
     AssignedDevice *adev = DO_UPCAST(AssignedDevice, dev, pci_dev);
@@ -1290,8 +1269,6 @@ static void assigned_dev_update_msix(PCIDevice *pci_dev, unsigned int ctrl_pos)
         assign_irq(assigned_dev);
     }
 }
-#endif
-#endif
 
 /* There can be multiple VNDR capabilities per device, we need to find the
  * one that starts closet to the given address without going over. */
@@ -1338,32 +1315,23 @@ static void assigned_device_pci_cap_write_config(PCIDevice *pci_dev,
                                                  uint32_t val, int len)
 {
     uint8_t cap_id = pci_dev->config_map[address];
+    uint8_t cap;
 
     pci_default_write_config(pci_dev, address, val, len);
     switch (cap_id) {
-#ifdef KVM_CAP_IRQ_ROUTING
     case PCI_CAP_ID_MSI:
-#ifdef KVM_CAP_DEVICE_MSI
-        {
-            uint8_t cap = pci_find_capability(pci_dev, cap_id);
-            if (ranges_overlap(address - cap, len, PCI_MSI_FLAGS, 1)) {
-                assigned_dev_update_msi(pci_dev, cap + PCI_MSI_FLAGS);
-            }
+        cap = pci_find_capability(pci_dev, cap_id);
+        if (ranges_overlap(address - cap, len, PCI_MSI_FLAGS, 1)) {
+            assigned_dev_update_msi(pci_dev, cap + PCI_MSI_FLAGS);
         }
-#endif
         break;
 
     case PCI_CAP_ID_MSIX:
-#ifdef KVM_CAP_DEVICE_MSIX
-        {
-            uint8_t cap = pci_find_capability(pci_dev, cap_id);
-            if (ranges_overlap(address - cap, len, PCI_MSIX_FLAGS + 1, 1)) {
-                assigned_dev_update_msix(pci_dev, cap + PCI_MSIX_FLAGS);
-            }
+        cap = pci_find_capability(pci_dev, cap_id);
+        if (ranges_overlap(address - cap, len, PCI_MSIX_FLAGS + 1, 1)) {
+            assigned_dev_update_msix(pci_dev, cap + PCI_MSIX_FLAGS);
         }
-#endif
         break;
-#endif
 
     case PCI_CAP_ID_VPD:
     case PCI_CAP_ID_VNDR:
@@ -1384,8 +1352,6 @@ static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
                  pci_get_word(pci_dev->config + PCI_STATUS) &
                  ~PCI_STATUS_CAP_LIST);
 
-#ifdef KVM_CAP_IRQ_ROUTING
-#ifdef KVM_CAP_DEVICE_MSI
     /* Expose MSI capability
      * MSI capability is the 1st capability in capability config */
     if ((pos = pci_find_cap_offset(pci_dev, PCI_CAP_ID_MSI, 0))) {
@@ -1407,8 +1373,6 @@ static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
         pci_set_long(pci_dev->wmask + pos + PCI_MSI_ADDRESS_LO, 0xfffffffc);
         pci_set_word(pci_dev->wmask + pos + PCI_MSI_DATA_32, 0xffff);
     }
-#endif
-#ifdef KVM_CAP_DEVICE_MSIX
     /* Expose MSI-X capability */
     if ((pos = pci_find_cap_offset(pci_dev, PCI_CAP_ID_MSIX, 0))) {
         int bar_nr;
@@ -1432,8 +1396,6 @@ static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
         msix_table_entry &= ~PCI_MSIX_BIR;
         dev->msix_table_addr = pci_region[bar_nr].base_addr + msix_table_entry;
     }
-#endif
-#endif
 
     /* Minimal PM support, nothing writable, device appears to NAK changes */
     if ((pos = pci_find_cap_offset(pci_dev, PCI_CAP_ID_PM, 0))) {
