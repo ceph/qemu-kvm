@@ -278,6 +278,8 @@ int pic_read_irq(PicState2 *s)
     return intno;
 }
 
+static int kvm_kernel_pic_load_from_user(PicState *s);
+
 static void pic_reset(void *opaque)
 {
     PicState *s = opaque;
@@ -298,6 +300,10 @@ static void pic_reset(void *opaque)
     s->init4 = 0;
     s->single_mode = 0;
     /* Note: ELCR is not reset */
+
+    if (kvm_enabled() && kvm_irqchip_in_kernel()) {
+        kvm_kernel_pic_load_from_user(s);
+    }
 }
 
 static void pic_ioport_write(void *opaque, uint32_t addr, uint32_t val)
@@ -465,7 +471,6 @@ static uint32_t elcr_ioport_read(void *opaque, uint32_t addr1)
 }
 
 static void kvm_kernel_pic_save_to_user(PicState *s);
-static int kvm_kernel_pic_load_from_user(PicState *s);
 
 static void pic_pre_save(void *opaque)
 {
