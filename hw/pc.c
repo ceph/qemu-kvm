@@ -39,7 +39,6 @@
 #include "msix.h"
 #include "sysbus.h"
 #include "sysemu.h"
-#include "device-assignment.h"
 #include "kvm.h"
 #include "blockdev.h"
 #include "ui/qemu-spice.h"
