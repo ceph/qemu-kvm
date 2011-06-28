@@ -26,7 +26,6 @@
 
 #include "qemu-common.h"
 #include "cpu.h"
-#include "exec-all.h"
 #include "cache-utils.h"
 
 #if !defined(TARGET_IA64)
