@@ -307,7 +307,8 @@ static void assigned_dev_ioport_map(PCIDevice *pci_dev, int region_num,
           addr, region->u.r_baseport, type, size, region_num);
 
     if (first_map && region->region->resource_fd < 0) {
-        r = kvm_add_ioport_region(region->u.r_baseport, region->r_size);
+        r = kvm_add_ioport_region(region->u.r_baseport, region->r_size,
+                                  pci_dev->qdev.hotplugged);
         if (r < 0) {
             fprintf(stderr, "%s: failed to enable ioport access (%m)\n",
                     __func__);
@@ -824,7 +825,8 @@ static void free_assigned_device(AssignedDevice *dev)
         }
         if (pci_region->type & IORESOURCE_IO) {
             if (pci_region->resource_fd < 0) {
-                kvm_remove_ioport_region(region->u.r_baseport, region->r_size);
+                kvm_remove_ioport_region(region->u.r_baseport, region->r_size,
+                                         dev->dev.qdev.hotplugged);
             }
         } else if (pci_region->type & IORESOURCE_MEM) {
             if (region->u.r_virtbase) {

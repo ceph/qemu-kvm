@@ -589,7 +589,8 @@ static void do_set_ioport_access(void *data)
     }
 }
 
-int kvm_add_ioport_region(unsigned long start, unsigned long size)
+int kvm_add_ioport_region(unsigned long start, unsigned long size,
+                          bool is_hot_plug)
 {
     KVMIOPortRegion *region = qemu_mallocz(sizeof(KVMIOPortRegion));
     CPUState *env;
@@ -600,12 +601,12 @@ int kvm_add_ioport_region(unsigned long start, unsigned long size)
     region->status = 1;
     QLIST_INSERT_HEAD(&ioport_regions, region, entry);
 
-    if (qemu_system_is_ready()) {
+    if (is_hot_plug) {
         for (env = first_cpu; env != NULL; env = env->next_cpu) {
             run_on_cpu(env, do_set_ioport_access, region);
             if (region->status < 0) {
                 r = region->status;
-                kvm_remove_ioport_region(start, size);
+                kvm_remove_ioport_region(start, size, is_hot_plug);
                 break;
             }
         }
@@ -613,7 +614,8 @@ int kvm_add_ioport_region(unsigned long start, unsigned long size)
     return r;
 }
 
-int kvm_remove_ioport_region(unsigned long start, unsigned long size)
+int kvm_remove_ioport_region(unsigned long start, unsigned long size,
+                             bool is_hot_unplug)
 {
     KVMIOPortRegion *region, *tmp;
     CPUState *env;
@@ -623,7 +625,7 @@ int kvm_remove_ioport_region(unsigned long start, unsigned long size)
         if (region->start == start && region->size == size) {
             region->status = 0;
         }
-        if (qemu_system_is_ready()) {
+        if (is_hot_unplug) {
             for (env = first_cpu; env != NULL; env = env->next_cpu) {
                 run_on_cpu(env, do_set_ioport_access, region);
             }

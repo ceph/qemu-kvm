@@ -688,11 +688,6 @@ void qemu_main_loop_start(void)
     qemu_cond_broadcast(&qemu_system_cond);
 }
 
-bool qemu_system_is_ready(void)
-{
-    return qemu_system_ready;
-}
-
 void run_on_cpu(CPUState *env, void (*func)(void *data), void *data)
 {
     struct qemu_work_item wi;

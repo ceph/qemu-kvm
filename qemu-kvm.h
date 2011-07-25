@@ -252,8 +252,10 @@ void kvm_tpr_access_report(CPUState *env, uint64_t rip, int is_write);
 
 int kvm_arch_init_irq_routing(void);
 
-int kvm_add_ioport_region(unsigned long start, unsigned long size);
-int kvm_remove_ioport_region(unsigned long start, unsigned long size);
+int kvm_add_ioport_region(unsigned long start, unsigned long size,
+                          bool is_hot_plug);
+int kvm_remove_ioport_region(unsigned long start, unsigned long size,
+                             bool is_hot_unplug);
 
 int kvm_update_ioport_access(CPUState *env);
 int kvm_arch_set_ioport_access(unsigned long start, unsigned long size,
