@@ -1419,18 +1419,37 @@ static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
     }
 
     if ((pos = pci_find_cap_offset(pci_dev, PCI_CAP_ID_EXP, 0))) {
-        uint8_t version;
+        uint8_t version, size;
         uint16_t type, devctl, lnkcap, lnksta;
         uint32_t devcap;
-        int size = 0x3c; /* version 2 size */
 
         version = pci_get_byte(pci_dev->config + pos + PCI_EXP_FLAGS);
         version &= PCI_EXP_FLAGS_VERS;
         if (version == 1) {
             size = 0x14;
-        } else if (version > 2) {
-            fprintf(stderr, "Unsupported PCI express capability version %d\n",
-                    version);
+        } else if (version == 2) {
+            /*
+             * Check for non-std size, accept reduced size to 0x34,
+             * which is what bcm5761 implemented, violating the
+             * PCIe v3.0 spec that regs should exist and be read as 0,
+             * not optionally provided and shorten the struct size.
+             */
+            size = MIN(0x3c, PCI_CONFIG_SPACE_SIZE - pos);
+            if (size < 0x34) {
+                fprintf(stderr,
+                        "%s: Invalid size PCIe cap-id 0x%x \n",
+                        __func__, PCI_CAP_ID_EXP);
+                return -EINVAL;
+            } else if (size != 0x3c) {
+                fprintf(stderr,
+                        "WARNING, %s: PCIe cap-id 0x%x has "
+                        "non-standard size 0x%x; std size should be 0x3c \n",
+                         __func__, PCI_CAP_ID_EXP, size);
+            }
+        } else {
+            fprintf(stderr,
+                    "%s: Unsupported PCI express capability version %d\n",
+                    __func__, version);
             return -EINVAL;
         }
 
