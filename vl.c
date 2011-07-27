@@ -1401,7 +1401,6 @@ static void main_loop(void)
             monitor_protocol_event(QEVENT_SHUTDOWN, NULL);
             if (no_shutdown) {
                 vm_stop(VMSTOP_SHUTDOWN);
-                no_shutdown = 0;
             } else
                 break;
         }
@@ -2013,7 +2012,7 @@ void qemu_remove_exit_notifier(Notifier *notify)
 
 static void qemu_run_exit_notifiers(void)
 {
-    notifier_list_notify(&exit_notifiers);
+    notifier_list_notify(&exit_notifiers, NULL);
 }
 
 void qemu_add_machine_init_done_notifier(Notifier *notify)
@@ -2023,7 +2022,7 @@ void qemu_add_machine_init_done_notifier(Notifier *notify)
 
 static void qemu_run_machine_init_done_notifiers(void)
 {
-    notifier_list_notify(&machine_init_done_notifiers);
+    notifier_list_notify(&machine_init_done_notifiers, NULL);
 }
 
 static const QEMUOption *lookup_opt(int argc, char **argv,
@@ -3163,8 +3162,8 @@ int main(int argc, char **argv, char **envp)
     if (nb_numa_nodes > 0) {
         int i;
 
-        if (nb_numa_nodes > smp_cpus) {
-            nb_numa_nodes = smp_cpus;
+        if (nb_numa_nodes > MAX_NODES) {
+            nb_numa_nodes = MAX_NODES;
         }
 
         /* If no memory size if given for any node, assume the default case
