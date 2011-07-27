@@ -287,7 +287,8 @@ static inline int is_translating_asi(int asi)
      */
     switch (asi) {
     case 0x04 ... 0x11:
-    case 0x18 ... 0x19:
+    case 0x16 ... 0x19:
+    case 0x1E ... 0x1F:
     case 0x24 ... 0x2C:
     case 0x70 ... 0x73:
     case 0x78 ... 0x79:
@@ -525,6 +526,7 @@ typedef union {
     uint16_t w[4];
     int16_t sw[4];
     uint32_t l[2];
+    uint64_t ll;
     float64 d;
 } vis64;
 
@@ -789,32 +791,34 @@ VIS_HELPER(helper_fpadd, FADD)
 VIS_HELPER(helper_fpsub, FSUB)
 
 #define VIS_CMPHELPER(name, F)                                        \
-    void name##16(void)                                           \
+    uint64_t name##16(void)                                       \
     {                                                             \
         vis64 s, d;                                               \
                                                                   \
         s.d = DT0;                                                \
         d.d = DT1;                                                \
                                                                   \
-        d.VIS_W64(0) = F(d.VIS_W64(0), s.VIS_W64(0))? 1: 0;       \
-        d.VIS_W64(0) |= F(d.VIS_W64(1), s.VIS_W64(1))? 2: 0;      \
-        d.VIS_W64(0) |= F(d.VIS_W64(2), s.VIS_W64(2))? 4: 0;      \
-        d.VIS_W64(0) |= F(d.VIS_W64(3), s.VIS_W64(3))? 8: 0;      \
+        d.VIS_W64(0) = F(s.VIS_W64(0), d.VIS_W64(0)) ? 1 : 0;     \
+        d.VIS_W64(0) |= F(s.VIS_W64(1), d.VIS_W64(1)) ? 2 : 0;    \
+        d.VIS_W64(0) |= F(s.VIS_W64(2), d.VIS_W64(2)) ? 4 : 0;    \
+        d.VIS_W64(0) |= F(s.VIS_W64(3), d.VIS_W64(3)) ? 8 : 0;    \
+        d.VIS_W64(1) = d.VIS_W64(2) = d.VIS_W64(3) = 0;           \
                                                                   \
-        DT0 = d.d;                                                \
+        return d.ll;                                              \
     }                                                             \
                                                                   \
-    void name##32(void)                                           \
+    uint64_t name##32(void)                                       \
     {                                                             \
         vis64 s, d;                                               \
                                                                   \
         s.d = DT0;                                                \
         d.d = DT1;                                                \
                                                                   \
-        d.VIS_L64(0) = F(d.VIS_L64(0), s.VIS_L64(0))? 1: 0;       \
-        d.VIS_L64(0) |= F(d.VIS_L64(1), s.VIS_L64(1))? 2: 0;      \
+        d.VIS_L64(0) = F(s.VIS_L64(0), d.VIS_L64(0)) ? 1 : 0;     \
+        d.VIS_L64(0) |= F(s.VIS_L64(1), d.VIS_L64(1)) ? 2 : 0;    \
+        d.VIS_L64(1) = 0;                                         \
                                                                   \
-        DT0 = d.d;                                                \
+        return d.ll;                                              \
     }
 
 #define FCMPGT(a, b) ((a) > (b))
