@@ -1688,6 +1688,7 @@ static void reset_assigned_device(DeviceState *dev)
     fd = open(reset_file, O_WRONLY);
     if (fd != -1) {
         ret = write(fd, reset, strlen(reset));
+        (void)ret;
         close(fd);
     }
 
