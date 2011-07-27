@@ -1702,7 +1702,7 @@ static void reset_assigned_device(DeviceState *dev)
 static int assigned_initfn(struct PCIDevice *pci_dev)
 {
     AssignedDevice *dev = DO_UPCAST(AssignedDevice, dev, pci_dev);
-    uint8_t e_device, e_intx;
+    uint8_t e_intx;
     int r;
 
     if (!kvm_enabled()) {
@@ -1729,7 +1729,6 @@ static int assigned_initfn(struct PCIDevice *pci_dev)
         goto out;
 
     /* handle interrupt routing */
-    e_device = (dev->dev.devfn >> 3) & 0x1f;
     e_intx = dev->dev.config[0x3d] - 1;
     dev->intpin = e_intx;
     dev->run = 0;
