@@ -79,11 +79,14 @@ void *qemu_memalign(size_t alignment, size_t size)
 /* alloc shared memory pages */
 void *qemu_vmalloc(size_t size)
 {
+    void *ptr;
 #ifndef __ia64__
-    return qemu_memalign(getpagesize(), size);
+    ptr = qemu_memalign(getpagesize(), size);
 #else
-    return qemu_memalign(65536, size);
+    ptr = qemu_memalign(65536, size);
 #endif
+    trace_qemu_vmalloc(size, ptr);
+    return ptr;
 }
 
 void qemu_vfree(void *ptr)
