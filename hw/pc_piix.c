@@ -72,7 +72,8 @@ static void ioapic_init(IsaIrqState *isa_irq_state)
 }
 
 /* PC hardware initialisation */
-static void pc_init1(ram_addr_t ram_size,
+static void pc_init1(MemoryRegion *system_memory,
+                     ram_addr_t ram_size,
                      const char *boot_device,
                      const char *kernel_filename,
                      const char *kernel_cmdline,
@@ -95,9 +96,6 @@ static void pc_init1(ram_addr_t ram_size,
     DriveInfo *hd[MAX_IDE_BUS * MAX_IDE_DEVS];
     BusState *idebus[MAX_IDE_BUS];
     ISADevice *rtc_state;
-    MemoryRegion *system_memory;
-
-    system_memory = get_system_memory();
 
     global_cpu_model = cpu_model;
 
@@ -144,7 +142,8 @@ static void pc_init1(ram_addr_t ram_size,
     }
 
     if (pci_enabled) {
-        pci_bus = i440fx_init(&i440fx_state, &piix3_devfn, isa_irq, ram_size);
+        pci_bus = i440fx_init(&i440fx_state, &piix3_devfn, isa_irq,
+                              system_memory, ram_size);
     } else {
         pci_bus = NULL;
         i440fx_state = NULL;
@@ -228,7 +227,8 @@ static void pc_init_pci(ram_addr_t ram_size,
                         const char *initrd_filename,
                         const char *cpu_model)
 {
-    pc_init1(ram_size, boot_device,
+    pc_init1(get_system_memory(),
+             ram_size, boot_device,
              kernel_filename, kernel_cmdline,
              initrd_filename, cpu_model, 1, 1);
 }
@@ -240,7 +240,8 @@ static void pc_init_pci_no_kvmclock(ram_addr_t ram_size,
                                     const char *initrd_filename,
                                     const char *cpu_model)
 {
-    pc_init1(ram_size, boot_device,
+    pc_init1(get_system_memory(),
+             ram_size, boot_device,
              kernel_filename, kernel_cmdline,
              initrd_filename, cpu_model, 1, 0);
 }
@@ -254,7 +255,8 @@ static void pc_init_isa(ram_addr_t ram_size,
 {
     if (cpu_model == NULL)
         cpu_model = "486";
-    pc_init1(ram_size, boot_device,
+    pc_init1(get_system_memory(),
+             ram_size, boot_device,
              kernel_filename, kernel_cmdline,
              initrd_filename, cpu_model, 0, 1);
 }
