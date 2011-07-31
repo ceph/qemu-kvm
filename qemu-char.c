@@ -1782,7 +1782,7 @@ static int qemu_chr_open_win_pipe(QemuOpts *opts, CharDriverState **_chr)
     return 0;
 }
 
-static CharDriverState *qemu_chr_open_win_file(HANDLE fd_out)
+static int qemu_chr_open_win_file(HANDLE fd_out, CharDriverState **pchr)
 {
     CharDriverState *chr;
     WinCharState *s;
@@ -1793,10 +1793,11 @@ static CharDriverState *qemu_chr_open_win_file(HANDLE fd_out)
     chr->opaque = s;
     chr->chr_write = win_chr_write;
     qemu_chr_generic_open(chr);
-    return chr;
+    *pchr = chr;
+    return 0;
 }
 
-static int qemu_chr_open_win_con(QemuOpts *opts, CharDriverState **_chr)
+static int qemu_chr_open_win_con(QemuOpts *opts, CharDriverState **chr)
 {
     return qemu_chr_open_win_file(GetStdHandle(STD_OUTPUT_HANDLE), chr);
 }
@@ -1859,7 +1860,7 @@ static void udp_chr_read(void *opaque)
 
     if (s->max_size == 0)
         return;
-    s->bufcnt = recv(s->fd, (void *)s->buf, sizeof(s->buf), 0);
+    s->bufcnt = qemu_recv(s->fd, s->buf, sizeof(s->buf), 0);
     s->bufptr = s->bufcnt;
     if (s->bufcnt <= 0)
         return;
@@ -2077,7 +2078,7 @@ static ssize_t tcp_chr_recv(CharDriverState *chr, char *buf, size_t len)
 static ssize_t tcp_chr_recv(CharDriverState *chr, char *buf, size_t len)
 {
     TCPCharDriver *s = chr->opaque;
-    return recv(s->fd, buf, len, 0);
+    return qemu_recv(s->fd, buf, len, 0);
 }
 #endif
 

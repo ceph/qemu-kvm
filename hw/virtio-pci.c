@@ -864,8 +864,20 @@ static int virtio_balloon_init_pci(PCIDevice *pci_dev)
     VirtIODevice *vdev;
 
     vdev = virtio_balloon_init(&pci_dev->qdev);
+    if (!vdev) {
+        return -1;
+    }
     virtio_init_pci(proxy, vdev);
     return 0;
+}
+
+static int virtio_balloon_exit_pci(PCIDevice *pci_dev)
+{
+    VirtIOPCIProxy *proxy = DO_UPCAST(VirtIOPCIProxy, pci_dev, pci_dev);
+
+    virtio_pci_stop_ioeventfd(proxy);
+    virtio_balloon_exit(proxy->vdev);
+    return virtio_exit_pci(pci_dev);
 }
 
 static PCIDeviceInfo virtio_info[] = {
@@ -942,7 +954,7 @@ static PCIDeviceInfo virtio_info[] = {
         .qdev.alias = "virtio-balloon",
         .qdev.size = sizeof(VirtIOPCIProxy),
         .init      = virtio_balloon_init_pci,
-        .exit      = virtio_exit_pci,
+        .exit      = virtio_balloon_exit_pci,
         .vendor_id = PCI_VENDOR_ID_REDHAT_QUMRANET,
         .device_id = PCI_DEVICE_ID_VIRTIO_BALLOON,
         .revision  = VIRTIO_PCI_ABI_VERSION,
