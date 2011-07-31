@@ -74,7 +74,7 @@ all: $(PROGS) stap
 libobj-y = exec.o cpu-exec.o
 libobj-$(CONFIG_NO_CPU_EMULATION) += fake-exec.o
 libobj-$(CONFIG_CPU_EMULATION) += translate-all.o translate.o
-libobj-$(CONFIG_CPU_EMULATION) += tcg/tcg.o
+libobj-$(CONFIG_CPU_EMULATION) += tcg/tcg.o tcg/optimize.o
 libobj-y += fpu/softfloat.o
 libobj-y += op_helper.o helper.o
 ifeq ($(TARGET_BASE_ARCH), i386)
@@ -374,6 +374,7 @@ obj-arm-y += omap2.o omap_dss.o soc_dma.o omap_gptimer.o omap_synctimer.o \
 obj-arm-y += omap_sx1.o palm.o tsc210x.o
 obj-arm-y += nseries.o blizzard.o onenand.o vga.o cbus.o tusb6010.o usb-musb.o
 obj-arm-y += mst_fpga.o mainstone.o
+obj-arm-y += z2.o
 obj-arm-y += musicpal.o bitbang_i2c.o marvell_88w8618_audio.o
 obj-arm-y += framebuffer.o
 obj-arm-y += syborg.o syborg_fb.o syborg_interrupt.o syborg_keyboard.o
