@@ -5,6 +5,7 @@
 #include "qobject.h"
 
 #include "qdev.h"
+#include "memory.h"
 #include "kvm.h"
 
 /* PCI includes legacy ISA access.  */
@@ -94,6 +95,7 @@ typedef struct PCIIORegion {
     uint8_t type;
     PCIMapIORegionFunc *map_func;
     ram_addr_t ram_addr;
+    MemoryRegion *memory;
 } PCIIORegion;
 
 #define PCI_ROM_SLOT 6
@@ -222,6 +224,8 @@ void pci_register_bar(PCIDevice *pci_dev, int region_num,
                             PCIMapIORegionFunc *map_func);
 void pci_register_bar_simple(PCIDevice *pci_dev, int region_num,
                              pcibus_t size, uint8_t attr, ram_addr_t ram_addr);
+void pci_register_bar_region(PCIDevice *pci_dev, int region_num,
+                             uint8_t attr, MemoryRegion *memory);
 
 void pci_map_option_rom(PCIDevice *pdev, int region_num, pcibus_t addr,
                         pcibus_t size, int type);
@@ -253,15 +257,20 @@ typedef enum {
 typedef int (*pci_hotplug_fn)(DeviceState *qdev, PCIDevice *pci_dev,
                               PCIHotplugState state);
 void pci_bus_new_inplace(PCIBus *bus, DeviceState *parent,
-                         const char *name, uint8_t devfn_min);
-PCIBus *pci_bus_new(DeviceState *parent, const char *name, uint8_t devfn_min);
+                         const char *name,
+                         MemoryRegion *address_space,
+                         uint8_t devfn_min);
+PCIBus *pci_bus_new(DeviceState *parent, const char *name,
+                    MemoryRegion *address_space, uint8_t devfn_min);
 void pci_bus_irqs(PCIBus *bus, pci_set_irq_fn set_irq, pci_map_irq_fn map_irq,
                   void *irq_opaque, int nirq);
 int pci_bus_get_irq_level(PCIBus *bus, int irq_num);
 void pci_bus_hotplug(PCIBus *bus, pci_hotplug_fn hotplug, DeviceState *dev);
 PCIBus *pci_register_bus(DeviceState *parent, const char *name,
                          pci_set_irq_fn set_irq, pci_map_irq_fn map_irq,
-                         void *irq_opaque, uint8_t devfn_min, int nirq);
+                         void *irq_opaque,
+                         MemoryRegion *address_space,
+                         uint8_t devfn_min, int nirq);
 void pci_device_reset(PCIDevice *dev);
 void pci_bus_reset(PCIBus *bus);
 
