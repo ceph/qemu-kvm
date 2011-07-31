@@ -39,6 +39,8 @@
 #include "blockdev.h"
 #include "smbus.h"
 #include "xen.h"
+#include "memory.h"
+#include "exec-memory.h"
 #ifdef CONFIG_XEN
 #  include <xen/hvm/hvm_info_table.h>
 #endif
@@ -93,6 +95,9 @@ static void pc_init1(ram_addr_t ram_size,
     DriveInfo *hd[MAX_IDE_BUS * MAX_IDE_DEVS];
     BusState *idebus[MAX_IDE_BUS];
     ISADevice *rtc_state;
+    MemoryRegion *system_memory;
+
+    system_memory = get_system_memory();
 
     global_cpu_model = cpu_model;
 
@@ -112,7 +117,8 @@ static void pc_init1(ram_addr_t ram_size,
 
     /* allocate ram and load rom/bios */
     if (!xen_enabled()) {
-        pc_memory_init(kernel_filename, kernel_cmdline, initrd_filename,
+        pc_memory_init(system_memory,
+                       kernel_filename, kernel_cmdline, initrd_filename,
                        below_4g_mem_size, above_4g_mem_size);
     }
 

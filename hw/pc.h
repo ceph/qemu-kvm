@@ -2,10 +2,12 @@
 #define HW_PC_H
 
 #include "qemu-common.h"
+#include "memory.h"
 #include "ioport.h"
 #include "isa.h"
 #include "fdc.h"
 #include "net.h"
+#include "memory.h"
 
 /* PC-style peripherals (also used by other machines).  */
 
@@ -130,7 +132,8 @@ void pc_cmos_set_s3_resume(void *opaque, int irq, int level);
 void pc_acpi_smi_interrupt(void *opaque, int irq, int level);
 
 void pc_cpus_init(const char *cpu_model);
-void pc_memory_init(const char *kernel_filename,
+void pc_memory_init(MemoryRegion *system_memory,
+                    const char *kernel_filename,
                     const char *kernel_cmdline,
                     const char *initrd_filename,
                     ram_addr_t below_4g_mem_size,
