@@ -31,7 +31,6 @@
 int kvm_irqchip = 1;
 int kvm_pit = 1;
 int kvm_pit_reinject = 1;
-int kvm_nested = 0;
 
 #define ALIGN(x, y) (((x)+(y)-1) & ~((y)-1))
 
