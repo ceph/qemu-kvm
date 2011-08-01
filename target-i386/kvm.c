@@ -1451,9 +1451,7 @@ int kvm_arch_put_registers(CPUState *env, int level)
         return ret;
     }
     if (level == KVM_PUT_FULL_STATE) {
-        if (env->kvm_vcpu_update_vapic) {
-            kvm_tpr_enable_vapic(env);
-        }
+        kvm_tpr_enable_vapic(env);
     }
     /* must be last */
     ret = kvm_guest_debug_workarounds(env);

@@ -218,7 +218,7 @@ static int get_pcr_cpu(CPUState *env)
     return (int)b;
 }
 
-int kvm_tpr_enable_vapic(CPUState *env)
+static int tpr_enable_vapic(CPUState *env)
 {
     static uint8_t one = 1;
     int pcr_cpu = get_pcr_cpu(env);
@@ -228,9 +228,15 @@ int kvm_tpr_enable_vapic(CPUState *env)
 
     kvm_enable_vapic(env, vapic_phys + (pcr_cpu << 7));
     cpu_physical_memory_write_rom(vapic_phys + (pcr_cpu << 7) + 4, &one, 1);
-    env->kvm_vcpu_update_vapic = 0;
     bios_enabled = 1;
     return 1;
+}
+
+void kvm_tpr_enable_vapic(CPUState *env)
+{
+    if (!bios_enabled)
+        return;
+    tpr_enable_vapic(env);
 }
 
 static void patch_call(CPUState *env, uint64_t rip, uint32_t target)
@@ -293,7 +299,7 @@ void kvm_tpr_access_report(CPUState *env, uint64_t rip, int is_write)
 	return;
     if (!bios_is_mapped(env, rip))
 	return;
-    if (!kvm_tpr_enable_vapic(env))
+    if (!tpr_enable_vapic(env))
 	return;
     patch_instruction(env, rip);
 }
@@ -326,13 +332,6 @@ static int tpr_load(QEMUFile *f, void *s, int version_id)
     qemu_get_be32s(f, &vapic_phys);
     qemu_get_be32s(f, &vbios_desc_phys);
   
-    if (bios_enabled) {
-        CPUState *env = first_cpu->next_cpu;
-
-        for (env = first_cpu; env != NULL; env = env->next_cpu)
-            env->kvm_vcpu_update_vapic = 1;
-    }
-
     return 0;
 }
 
@@ -367,7 +366,7 @@ static void vtpr_ioport_write(void *opaque, uint32_t addr, uint32_t val)
 	}
     bios_enabled = 1;
     update_vbios_real_tpr();
-    kvm_tpr_enable_vapic(env);
+    tpr_enable_vapic(env);
 }
 
 static void kvm_tpr_opt_setup(void)

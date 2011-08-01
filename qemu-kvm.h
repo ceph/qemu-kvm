@@ -267,6 +267,6 @@ extern int kvm_pit_reinject;
 extern unsigned int kvm_shadow_memory;
 
 int kvm_handle_tpr_access(CPUState *env);
-int kvm_tpr_enable_vapic(CPUState *env);
+void kvm_tpr_enable_vapic(CPUState *env);
 
 #endif

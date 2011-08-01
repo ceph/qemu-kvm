@@ -759,8 +759,6 @@ typedef struct CPUX86State {
     uint16_t fptag_vmstate;
     uint16_t fpregs_format_vmstate;
 
-    int kvm_vcpu_update_vapic;
-
     uint64_t xstate_bv;
     XMMReg ymmh_regs[CPU_NB_REGS];
 
