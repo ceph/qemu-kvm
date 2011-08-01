@@ -30,7 +30,6 @@
 #include "sysbus.h"
 #include "range.h"
 #include "xen.h"
-#include "kvm.h"
 
 /*
  * I440FX chipset data sheet.
