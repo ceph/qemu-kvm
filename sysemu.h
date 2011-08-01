@@ -126,7 +126,6 @@ extern uint8_t *boot_splash_filedata;
 extern int boot_splash_filedata_size;
 extern uint8_t qemu_extra_params_fw[2];
 extern QEMUClock *rtc_clock;
-extern long hpagesize;
 
 #define MAX_NODES 64
 extern int nb_numa_nodes;
