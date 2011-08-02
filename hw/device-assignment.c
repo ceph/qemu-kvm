@@ -1356,7 +1356,8 @@ static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
 
     /* Expose MSI capability
      * MSI capability is the 1st capability in capability config */
-    if ((pos = pci_find_cap_offset(pci_dev, PCI_CAP_ID_MSI, 0))) {
+    pos = pci_find_cap_offset(pci_dev, PCI_CAP_ID_MSI, 0);
+    if (pos != 0 && kvm_check_extension(kvm_state, KVM_CAP_ASSIGN_DEV_IRQ)) {
         dev->cap.available |= ASSIGNED_DEVICE_CAP_MSI;
         /* Only 32-bit/no-mask currently supported */
         if ((ret = pci_add_capability(pci_dev, PCI_CAP_ID_MSI, pos, 10)) < 0) {
@@ -1376,7 +1377,8 @@ static int assigned_device_pci_cap_init(PCIDevice *pci_dev)
         pci_set_word(pci_dev->wmask + pos + PCI_MSI_DATA_32, 0xffff);
     }
     /* Expose MSI-X capability */
-    if ((pos = pci_find_cap_offset(pci_dev, PCI_CAP_ID_MSIX, 0))) {
+    pos = pci_find_cap_offset(pci_dev, PCI_CAP_ID_MSIX, 0);
+    if (pos != 0 && kvm_check_extension(kvm_state, KVM_CAP_DEVICE_MSIX)) {
         int bar_nr;
         uint32_t msix_table_entry;
 
