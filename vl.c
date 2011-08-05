@@ -1953,8 +1953,13 @@ static int configure_accelerator(void)
     }
 
     if (p == NULL) {
+#ifdef CONFIG_KVM
         /* Use the default "accelerator", kvm */
         p = "kvm";
+#else
+        /* Use the default "accelerator", tcg */
+        p = "tcg";
+#endif
     }
 
     while (!accel_initalised && *p != '\0') {
