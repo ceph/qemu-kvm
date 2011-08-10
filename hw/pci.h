@@ -94,7 +94,6 @@ typedef struct PCIIORegion {
     pcibus_t filtered_size;
     uint8_t type;
     PCIMapIORegionFunc *map_func;
-    ram_addr_t ram_addr;
     MemoryRegion *memory;
     MemoryRegion *address_space;
 } PCIIORegion;
@@ -196,7 +195,8 @@ struct PCIDevice {
 
     /* Location of option rom */
     char *romfile;
-    ram_addr_t rom_offset;
+    bool has_rom;
+    MemoryRegion rom;
     uint32_t rom_bar;
 
     /* MSI entries */
@@ -223,14 +223,9 @@ PCIDevice *pci_register_device(PCIBus *bus, const char *name,
 void pci_register_bar(PCIDevice *pci_dev, int region_num,
                             pcibus_t size, uint8_t type,
                             PCIMapIORegionFunc *map_func);
-void pci_register_bar_simple(PCIDevice *pci_dev, int region_num,
-                             pcibus_t size, uint8_t attr, ram_addr_t ram_addr);
 void pci_register_bar_region(PCIDevice *pci_dev, int region_num,
                              uint8_t attr, MemoryRegion *memory);
 pcibus_t pci_get_bar_addr(PCIDevice *pci_dev, int region_num);
-
-void pci_map_option_rom(PCIDevice *pdev, int region_num, pcibus_t addr,
-                        pcibus_t size, int type);
 
 int pci_map_irq(PCIDevice *pci_dev, int pin);
 

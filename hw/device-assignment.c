@@ -1886,8 +1886,8 @@ static void assigned_dev_load_option_rom(AssignedDevice *dev)
     fseek(fp, 0, SEEK_SET);
 
     snprintf(name, sizeof(name), "%s.rom", dev->dev.qdev.info->name);
-    dev->dev.rom_offset = qemu_ram_alloc(&dev->dev.qdev, name, st.st_size);
-    ptr = qemu_get_ram_ptr(dev->dev.rom_offset);
+    memory_region_init_ram(&dev->dev.rom, &dev->dev.qdev, name, st.st_size);
+    ptr = memory_region_get_ram_ptr(&dev->dev.rom);
     memset(ptr, 0xff, st.st_size);
 
     if (!fread(ptr, 1, st.st_size, fp)) {
@@ -1895,13 +1895,12 @@ static void assigned_dev_load_option_rom(AssignedDevice *dev)
                 "\tDevice option ROM contents are probably invalid "
                 "(check dmesg).\n\tSkip option ROM probe with rombar=0, "
                 "or load from file with romfile=\n", rom_file);
-        qemu_ram_free(dev->dev.rom_offset);
-        dev->dev.rom_offset = 0;
+        memory_region_destroy(&dev->dev.rom);
         goto close_rom;
     }
 
-    pci_register_bar(&dev->dev, PCI_ROM_SLOT,
-                     st.st_size, 0, pci_map_option_rom);
+    pci_register_bar_region(&dev->dev, PCI_ROM_SLOT, 0, &dev->dev.rom);
+    dev->dev.has_rom = true;
 close_rom:
     /* Write "0" to disable ROM */
     fseek(fp, 0, SEEK_SET);
