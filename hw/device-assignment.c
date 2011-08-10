@@ -604,8 +604,8 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
             }
 
             assigned_dev_iomem_setup(&pci_dev->dev, i, cur_region->size);
-            pci_register_bar_region((PCIDevice *) pci_dev, i, t,
-                                    &pci_dev->v_addrs[i].container);
+            pci_register_bar((PCIDevice *) pci_dev, i, t,
+                             &pci_dev->v_addrs[i].container);
             continue;
         } else {
             /* handle port io regions */
@@ -631,9 +631,9 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
             pci_dev->v_addrs[i].e_size = 0;
 
             assigned_dev_ioport_setup(&pci_dev->dev, i, cur_region->size);
-            pci_register_bar_region((PCIDevice *) pci_dev, i,
-                                    PCI_BASE_ADDRESS_SPACE_IO,
-                                    &pci_dev->v_addrs[i].container);
+            pci_register_bar((PCIDevice *) pci_dev, i,
+                             PCI_BASE_ADDRESS_SPACE_IO,
+                             &pci_dev->v_addrs[i].container);
         }
     }
 
@@ -1885,7 +1885,7 @@ static void assigned_dev_load_option_rom(AssignedDevice *dev)
         goto close_rom;
     }
 
-    pci_register_bar_region(&dev->dev, PCI_ROM_SLOT, 0, &dev->dev.rom);
+    pci_register_bar(&dev->dev, PCI_ROM_SLOT, 0, &dev->dev.rom);
     dev->dev.has_rom = true;
 close_rom:
     /* Write "0" to disable ROM */

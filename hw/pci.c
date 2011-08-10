@@ -966,12 +966,12 @@ static int pci_unregister_device(DeviceState *dev)
 }
 
 void pci_register_bar(PCIDevice *pci_dev, int region_num,
-                            pcibus_t size, uint8_t type,
-                            PCIMapIORegionFunc *map_func)
+                      uint8_t type, MemoryRegion *memory)
 {
     PCIIORegion *r;
     uint32_t addr;
     uint64_t wmask;
+    pcibus_t size = memory_region_size(memory);
 
     assert(region_num >= 0);
     assert(region_num < PCI_NUM_REGIONS);
@@ -986,7 +986,6 @@ void pci_register_bar(PCIDevice *pci_dev, int region_num,
     r->size = size;
     r->filtered_size = size;
     r->type = type;
-    r->map_func = map_func;
     r->memory = NULL;
 
     wmask = ~(size - 1);
@@ -1004,29 +1003,9 @@ void pci_register_bar(PCIDevice *pci_dev, int region_num,
         pci_set_long(pci_dev->wmask + addr, wmask & 0xffffffff);
         pci_set_long(pci_dev->cmask + addr, 0xffffffff);
     }
-}
-
-static void pci_simple_bar_mapfunc_region(PCIDevice *pci_dev, int region_num,
-                                          pcibus_t addr, pcibus_t size,
-                                          int type)
-{
-    PCIIORegion *r = &pci_dev->io_regions[region_num];
-
-    memory_region_add_subregion_overlap(r->address_space,
-                                        addr,
-                                        r->memory,
-                                        1);
-}
-
-void pci_register_bar_region(PCIDevice *pci_dev, int region_num,
-                             uint8_t attr, MemoryRegion *memory)
-{
-    pci_register_bar(pci_dev, region_num, memory_region_size(memory),
-                     attr,
-                     pci_simple_bar_mapfunc_region);
     pci_dev->io_regions[region_num].memory = memory;
     pci_dev->io_regions[region_num].address_space
-        = attr & PCI_BASE_ADDRESS_SPACE_IO
+        = type & PCI_BASE_ADDRESS_SPACE_IO
         ? pci_dev->bus->address_space_io
         : pci_dev->bus->address_space_mem;
 }
@@ -1194,10 +1173,16 @@ static void pci_update_mappings(PCIDevice *d)
              * addr & (size - 1) != 0.
              */
             if (r->type & PCI_BASE_ADDRESS_SPACE_IO) {
-                r->map_func(d, i, r->addr, r->filtered_size, r->type);
+                memory_region_add_subregion_overlap(r->address_space,
+                                                    r->addr,
+                                                    r->memory,
+                                                    1);
             } else {
-                r->map_func(d, i, pci_to_cpu_addr(d->bus, r->addr),
-                            r->filtered_size, r->type);
+                memory_region_add_subregion_overlap(r->address_space,
+                                                    pci_to_cpu_addr(d->bus,
+                                                                    r->addr),
+                                                    r->memory,
+                                                    1);
             }
         }
     }
@@ -2072,7 +2057,7 @@ static int pci_add_option_rom(PCIDevice *pdev, bool is_default_rom)
 
     qemu_put_ram_ptr(ptr);
 
-    pci_register_bar_region(pdev, PCI_ROM_SLOT, 0, &pdev->rom);
+    pci_register_bar(pdev, PCI_ROM_SLOT, 0, &pdev->rom);
 
     return 0;
 }

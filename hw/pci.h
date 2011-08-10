@@ -93,7 +93,6 @@ typedef struct PCIIORegion {
     pcibus_t size;
     pcibus_t filtered_size;
     uint8_t type;
-    PCIMapIORegionFunc *map_func;
     MemoryRegion *memory;
     MemoryRegion *address_space;
 } PCIIORegion;
@@ -221,10 +220,7 @@ PCIDevice *pci_register_device(PCIBus *bus, const char *name,
                                PCIConfigWriteFunc *config_write);
 
 void pci_register_bar(PCIDevice *pci_dev, int region_num,
-                            pcibus_t size, uint8_t type,
-                            PCIMapIORegionFunc *map_func);
-void pci_register_bar_region(PCIDevice *pci_dev, int region_num,
-                             uint8_t attr, MemoryRegion *memory);
+                      uint8_t attr, MemoryRegion *memory);
 pcibus_t pci_get_bar_addr(PCIDevice *pci_dev, int region_num);
 
 int pci_map_irq(PCIDevice *pci_dev, int pin);
