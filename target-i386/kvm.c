@@ -511,7 +511,6 @@ int kvm_arch_init_vcpu(CPUState *env)
     if (r)
 	    return r;
 
-#ifdef KVM_CAP_TSC_CONTROL
     r = kvm_check_extension(env->kvm_state, KVM_CAP_TSC_CONTROL);
     if (r && env->tsc_khz) {
         r = kvm_vcpu_ioctl(env, KVM_SET_TSC_KHZ, env->tsc_khz);
@@ -520,7 +519,6 @@ int kvm_arch_init_vcpu(CPUState *env)
             return r;
         }
     }
-#endif
 
     return 0;
 }
