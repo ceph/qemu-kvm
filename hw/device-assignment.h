@@ -62,8 +62,8 @@ typedef struct {
 } PCIDevRegions;
 
 typedef struct {
-    pcibus_t e_physbase;
-    ram_addr_t memory_index;
+    MemoryRegion container;
+    MemoryRegion real_iomem;
     union {
         void *r_virtbase;    /* mmapped access address for memory regions */
         uint32_t r_baseport; /* the base guest port for I/O regions */
@@ -108,7 +108,7 @@ typedef struct AssignedDevice {
     struct kvm_irq_routing_entry *entry;
     void *msix_table_page;
     target_phys_addr_t msix_table_addr;
-    int mmio_index;
+    MemoryRegion mmio;
     uint32_t emulate_cmd_mask;
     char *configfd_name;
     int32_t bootindex;
