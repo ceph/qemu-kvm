@@ -118,6 +118,7 @@ static int in_migration;
 RAMList ram_list = { .blocks = QLIST_HEAD_INITIALIZER(ram_list) };
 
 static MemoryRegion *system_memory;
+static MemoryRegion *system_io;
 
 #endif
 
@@ -534,7 +535,8 @@ static void code_gen_alloc(unsigned long tb_size)
         }
     }
 #elif defined(__FreeBSD__) || defined(__FreeBSD_kernel__) \
-    || defined(__DragonFly__) || defined(__OpenBSD__)
+    || defined(__DragonFly__) || defined(__OpenBSD__) \
+    || defined(__NetBSD__)
     {
         int flags;
         void *addr = NULL;
@@ -578,20 +580,29 @@ static void code_gen_alloc(unsigned long tb_size)
 /* Must be called before using the QEMU cpus. 'tb_size' is the size
    (in bytes) allocated to the translation buffer. Zero means default
    size. */
-void cpu_exec_init_all(unsigned long tb_size)
+void tcg_exec_init(unsigned long tb_size)
 {
     cpu_gen_init();
     code_gen_alloc(tb_size);
     code_gen_ptr = code_gen_buffer;
     page_init();
-#if !defined(CONFIG_USER_ONLY)
-    memory_map_init();
-    io_mem_init();
-#endif
 #if !defined(CONFIG_USER_ONLY) || !defined(CONFIG_USE_GUEST_BASE)
     /* There's no guest base to take into account, so go ahead and
        initialize the prologue now.  */
     tcg_prologue_init(&tcg_ctx);
+#endif
+}
+
+bool tcg_enabled(void)
+{
+    return code_gen_buffer != NULL;
+}
+
+void cpu_exec_init_all(void)
+{
+#if !defined(CONFIG_USER_ONLY)
+    memory_map_init();
+    io_mem_init();
 #endif
 }
 
@@ -3826,13 +3837,22 @@ static void io_mem_init(void)
 static void memory_map_init(void)
 {
     system_memory = qemu_malloc(sizeof(*system_memory));
-    memory_region_init(system_memory, "system", UINT64_MAX);
+    memory_region_init(system_memory, "system", INT64_MAX);
     set_system_memory_map(system_memory);
+
+    system_io = qemu_malloc(sizeof(*system_io));
+    memory_region_init(system_io, "io", 65536);
+    set_system_io_map(system_io);
 }
 
 MemoryRegion *get_system_memory(void)
 {
     return system_memory;
+}
+
+MemoryRegion *get_system_io(void)
+{
+    return system_io;
 }
 
 #endif /* !defined(CONFIG_USER_ONLY) */

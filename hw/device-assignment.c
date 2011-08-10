@@ -42,6 +42,8 @@
 #include <pci/header.h>
 #include "sysemu.h"
 
+#define MSIX_PAGE_SIZE 0x1000
+
 /* From linux/ioport.h */
 #define IORESOURCE_IO       0x00000100  /* Resource type */
 #define IORESOURCE_MEM      0x00000200
@@ -97,7 +99,7 @@ static uint32_t assigned_dev_ioport_rw(AssignedDevRegion *dev_region,
                                        uint32_t addr, int len, uint32_t *val)
 {
     uint32_t ret = 0;
-    uint32_t offset = addr - dev_region->e_physbase;
+    uint32_t offset = addr;
     int fd = dev_region->region->resource_fd;
 
     if (fd >= 0) {
@@ -252,33 +254,25 @@ static void slow_bar_writel(void *opaque, target_phys_addr_t addr, uint32_t val)
     *out = val;
 }
 
-static CPUWriteMemoryFunc * const slow_bar_write[] = {
-    &slow_bar_writeb,
-    &slow_bar_writew,
-    &slow_bar_writel
+static const MemoryRegionOps slow_bar_ops = {
+    .old_mmio = {
+        .read = { slow_bar_readb, slow_bar_readw, slow_bar_readl, },
+        .write = { slow_bar_writeb, slow_bar_writew, slow_bar_writel, },
+    },
+    .endianness = DEVICE_NATIVE_ENDIAN,
 };
 
-static CPUReadMemoryFunc * const slow_bar_read[] = {
-    &slow_bar_readb,
-    &slow_bar_readw,
-    &slow_bar_readl
-};
-
-static void assigned_dev_iomem_map(PCIDevice *pci_dev, int region_num,
-                                   pcibus_t e_phys, pcibus_t e_size, int type)
+static void assigned_dev_iomem_setup(PCIDevice *pci_dev, int region_num,
+                                     pcibus_t e_size)
 {
     AssignedDevice *r_dev = DO_UPCAST(AssignedDevice, dev, pci_dev);
     AssignedDevRegion *region = &r_dev->v_addrs[region_num];
     PCIRegion *real_region = &r_dev->real_device.regions[region_num];
 
-    DEBUG("e_phys=%08" FMT_PCIBUS " r_virt=%p type=%d len=%08" FMT_PCIBUS " region_num=%d \n",
-          e_phys, region->u.r_virtbase, type, e_size, region_num);
-
-    region->e_physbase = e_phys;
-    region->e_size = e_size;
-
     if (e_size > 0) {
-        cpu_register_physical_memory(e_phys, e_size, region->memory_index);
+        memory_region_init(&region->container, "assigned-dev-container",
+                           e_size);
+        memory_region_add_subregion(&region->container, 0, &region->real_iomem);
 
         /* deal with MSI-X MMIO page */
         if (real_region->base_addr <= r_dev->msix_table_addr &&
@@ -286,27 +280,39 @@ static void assigned_dev_iomem_map(PCIDevice *pci_dev, int region_num,
                 r_dev->msix_table_addr) {
             int offset = r_dev->msix_table_addr - real_region->base_addr;
 
-            cpu_register_physical_memory(e_phys + offset,
-                    TARGET_PAGE_SIZE, r_dev->mmio_index);
+            memory_region_add_subregion_overlap(&region->container,
+                                                offset,
+                                                &r_dev->mmio,
+                                                1);
         }
     }
 }
 
-static void assigned_dev_ioport_map(PCIDevice *pci_dev, int region_num,
-                                    pcibus_t addr, pcibus_t size, int type)
+static const MemoryRegionPortio assigned_dev_old_portio[] = {
+    { 0x10000, 1, .read = assigned_dev_ioport_readb, },
+    { 0x10000, 2, .read = assigned_dev_ioport_readw, },
+    { 0x10000, 4, .read = assigned_dev_ioport_readl, },
+    { 0x10000, 1, .write = assigned_dev_ioport_writeb, },
+    { 0x10000, 2, .write = assigned_dev_ioport_writew, },
+    { 0x10000, 4, .write = assigned_dev_ioport_writel, },
+    PORTIO_END_OF_LIST()
+};
+
+static const MemoryRegionOps assigned_dev_ioport_ops = {
+    .old_portio = assigned_dev_old_portio,
+    .endianness = DEVICE_NATIVE_ENDIAN,
+};
+
+static void assigned_dev_ioport_setup(PCIDevice *pci_dev, int region_num,
+                                      pcibus_t size)
 {
     AssignedDevice *r_dev = DO_UPCAST(AssignedDevice, dev, pci_dev);
     AssignedDevRegion *region = &r_dev->v_addrs[region_num];
-    int first_map = (region->e_size == 0);
     int r;
 
-    region->e_physbase = addr;
     region->e_size = size;
 
-    DEBUG("e_phys=0x%" FMT_PCIBUS " r_baseport=%x type=0x%x len=%" FMT_PCIBUS " region_num=%d \n",
-          addr, region->u.r_baseport, type, size, region_num);
-
-    if (first_map && region->region->resource_fd < 0) {
+    if (region->region->resource_fd < 0) {
         r = kvm_add_ioport_region(region->u.r_baseport, region->r_size,
                                   pci_dev->qdev.hotplugged);
         if (r < 0) {
@@ -314,19 +320,11 @@ static void assigned_dev_ioport_map(PCIDevice *pci_dev, int region_num,
                     __func__);
         }
     }
-
-    register_ioport_read(addr, size, 1, assigned_dev_ioport_readb,
-                         (r_dev->v_addrs + region_num));
-    register_ioport_read(addr, size, 2, assigned_dev_ioport_readw,
-                         (r_dev->v_addrs + region_num));
-    register_ioport_read(addr, size, 4, assigned_dev_ioport_readl,
-                         (r_dev->v_addrs + region_num));
-    register_ioport_write(addr, size, 1, assigned_dev_ioport_writeb,
-                          (r_dev->v_addrs + region_num));
-    register_ioport_write(addr, size, 2, assigned_dev_ioport_writew,
-                          (r_dev->v_addrs + region_num));
-    register_ioport_write(addr, size, 4, assigned_dev_ioport_writel,
-                          (r_dev->v_addrs + region_num));
+    memory_region_init(&region->container, "assigned-dev-container", size);
+    memory_region_init_io(&region->real_iomem, &assigned_dev_ioport_ops,
+                          r_dev->v_addrs + region_num,
+                          "assigned-dev-iomem", size);
+    memory_region_add_subregion(&region->container, 0, &region->real_iomem);
 }
 
 static uint32_t assigned_dev_pci_read(PCIDevice *d, int pos, int len)
@@ -562,7 +560,6 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
                 : PCI_BASE_ADDRESS_SPACE_MEMORY;
 
             /* map physical memory */
-            pci_dev->v_addrs[i].e_physbase = cur_region->base_addr;
             pci_dev->v_addrs[i].u.r_virtbase = mmap(NULL, cur_region->size,
                                                     PROT_WRITE | PROT_READ,
                                                     MAP_SHARED,
@@ -591,24 +588,24 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
                         "due to that.\n",
                         i, (unsigned long long)cur_region->base_addr,
                         cur_region->size);
-                pci_dev->v_addrs[i].memory_index =
-                    cpu_register_io_memory(slow_bar_read, slow_bar_write,
-                                           &pci_dev->v_addrs[i],
-                                           DEVICE_NATIVE_ENDIAN);
+                memory_region_init_io(&pci_dev->v_addrs[i].real_iomem,
+                                      &slow_bar_ops, &pci_dev->v_addrs[i],
+                                      "assigned-dev-slow-bar",
+                                      cur_region->size);
             } else {
                 void *virtbase = pci_dev->v_addrs[i].u.r_virtbase;
                 char name[32];
                 snprintf(name, sizeof(name), "%s.bar%d",
                          pci_dev->dev.qdev.info->name, i);
-                pci_dev->v_addrs[i].memory_index =
-                                            qemu_ram_alloc_from_ptr(
-                                                         &pci_dev->dev.qdev,
-                                                         name, cur_region->size,
-                                                         virtbase);
+                memory_region_init_ram_ptr(&pci_dev->v_addrs[i].real_iomem,
+                                           &pci_dev->dev.qdev,
+                                           name, cur_region->size,
+                                           virtbase);
             }
 
-            pci_register_bar((PCIDevice *) pci_dev, i, cur_region->size, t,
-                             assigned_dev_iomem_map);
+            assigned_dev_iomem_setup(&pci_dev->dev, i, cur_region->size);
+            pci_register_bar((PCIDevice *) pci_dev, i, t,
+                             &pci_dev->v_addrs[i].container);
             continue;
         } else {
             /* handle port io regions */
@@ -629,17 +626,14 @@ static int assigned_dev_register_regions(PCIRegion *io_regions,
                 pci_dev->v_addrs[i].region->resource_fd = -1;
             }
 
-            pci_dev->v_addrs[i].e_physbase = cur_region->base_addr;
             pci_dev->v_addrs[i].u.r_baseport = cur_region->base_addr;
             pci_dev->v_addrs[i].r_size = cur_region->size;
             pci_dev->v_addrs[i].e_size = 0;
 
+            assigned_dev_ioport_setup(&pci_dev->dev, i, cur_region->size);
             pci_register_bar((PCIDevice *) pci_dev, i,
-                             cur_region->size, PCI_BASE_ADDRESS_SPACE_IO,
-                             assigned_dev_ioport_map);
-
-            /* not relevant for port io */
-            pci_dev->v_addrs[i].memory_index = 0;
+                             PCI_BASE_ADDRESS_SPACE_IO,
+                             &pci_dev->v_addrs[i].container);
         }
     }
 
@@ -816,6 +810,9 @@ static void free_assigned_device(AssignedDevice *dev)
 {
     int i;
 
+    if (dev->cap.available & ASSIGNED_DEVICE_CAP_MSIX) {
+        assigned_dev_unregister_msix_mmio(dev);
+    }
     for (i = 0; i < dev->real_device.region_number; i++) {
         PCIRegion *pci_region = &dev->real_device.regions[i];
         AssignedDevRegion *region = &dev->v_addrs[i];
@@ -830,16 +827,10 @@ static void free_assigned_device(AssignedDevice *dev)
             }
         } else if (pci_region->type & IORESOURCE_MEM) {
             if (region->u.r_virtbase) {
-                if (region->e_size > 0) {
-                    cpu_register_physical_memory(region->e_physbase,
-                                                 region->e_size,
-                                                 IO_MEM_UNASSIGNED);
-                }
-                if (region->r_size & 0xFFF) {
-                    cpu_unregister_io_memory(region->memory_index);
-                } else {
-                    qemu_ram_free_from_ptr(region->memory_index);
-                }
+                memory_region_del_subregion(&region->container,
+                                            &region->real_iomem);
+                memory_region_destroy(&region->real_iomem);
+                memory_region_destroy(&region->container);
                 if (munmap(region->u.r_virtbase,
                            (pci_region->size + 0xFFF) & 0xFFFFF000)) {
                     fprintf(stderr,
@@ -853,9 +844,6 @@ static void free_assigned_device(AssignedDevice *dev)
         }
     }
 
-    if (dev->cap.available & ASSIGNED_DEVICE_CAP_MSIX) {
-        assigned_dev_unregister_msix_mmio(dev);
-    }
     if (dev->real_device.config_fd >= 0) {
         close(dev->real_device.config_fd);
     }
@@ -1624,12 +1612,12 @@ static void msix_mmio_writeb(void *opaque,
                      (val & 0xff) << (8*(addr & 3)));
 }
 
-static CPUWriteMemoryFunc *msix_mmio_write[] = {
-    msix_mmio_writeb,	msix_mmio_writew,	msix_mmio_writel
-};
-
-static CPUReadMemoryFunc *msix_mmio_read[] = {
-    msix_mmio_readb,	msix_mmio_readw,	msix_mmio_readl
+static const MemoryRegionOps msix_mmio_ops = {
+    .old_mmio = {
+        .read = { msix_mmio_readb, msix_mmio_readw, msix_mmio_readl, },
+        .write = { msix_mmio_writeb, msix_mmio_writew, msix_mmio_writel, },
+    },
+    .endianness = DEVICE_NATIVE_ENDIAN,
 };
 
 static int assigned_dev_register_msix_mmio(AssignedDevice *dev)
@@ -1643,9 +1631,8 @@ static int assigned_dev_register_msix_mmio(AssignedDevice *dev)
         return -EFAULT;
     }
     memset(dev->msix_table_page, 0, 0x1000);
-    dev->mmio_index = cpu_register_io_memory(
-                        msix_mmio_read, msix_mmio_write, dev,
-                        DEVICE_NATIVE_ENDIAN);
+    memory_region_init_io(&dev->mmio, &msix_mmio_ops, dev,
+                          "assigned-dev-msix", MSIX_PAGE_SIZE);
     return 0;
 }
 
@@ -1654,8 +1641,7 @@ static void assigned_dev_unregister_msix_mmio(AssignedDevice *dev)
     if (!dev->msix_table_page)
         return;
 
-    cpu_unregister_io_memory(dev->mmio_index);
-    dev->mmio_index = 0;
+    memory_region_destroy(&dev->mmio);
 
     if (munmap(dev->msix_table_page, 0x1000) == -1) {
         fprintf(stderr, "error unmapping msix_table_page! %s\n",
@@ -1886,8 +1872,8 @@ static void assigned_dev_load_option_rom(AssignedDevice *dev)
     fseek(fp, 0, SEEK_SET);
 
     snprintf(name, sizeof(name), "%s.rom", dev->dev.qdev.info->name);
-    dev->dev.rom_offset = qemu_ram_alloc(&dev->dev.qdev, name, st.st_size);
-    ptr = qemu_get_ram_ptr(dev->dev.rom_offset);
+    memory_region_init_ram(&dev->dev.rom, &dev->dev.qdev, name, st.st_size);
+    ptr = memory_region_get_ram_ptr(&dev->dev.rom);
     memset(ptr, 0xff, st.st_size);
 
     if (!fread(ptr, 1, st.st_size, fp)) {
@@ -1895,13 +1881,12 @@ static void assigned_dev_load_option_rom(AssignedDevice *dev)
                 "\tDevice option ROM contents are probably invalid "
                 "(check dmesg).\n\tSkip option ROM probe with rombar=0, "
                 "or load from file with romfile=\n", rom_file);
-        qemu_ram_free(dev->dev.rom_offset);
-        dev->dev.rom_offset = 0;
+        memory_region_destroy(&dev->dev.rom);
         goto close_rom;
     }
 
-    pci_register_bar(&dev->dev, PCI_ROM_SLOT,
-                     st.st_size, 0, pci_map_option_rom);
+    pci_register_bar(&dev->dev, PCI_ROM_SLOT, 0, &dev->dev.rom);
+    dev->dev.has_rom = true;
 close_rom:
     /* Write "0" to disable ROM */
     fseek(fp, 0, SEEK_SET);

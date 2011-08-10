@@ -743,6 +743,7 @@ typedef struct CPUX86State {
     uint32_t cpuid_kvm_features;
     uint32_t cpuid_svm_features;
     bool tsc_valid;
+    int tsc_khz;
     
     /* in order to simplify APIC support, we leave this pointer to the
        user */
@@ -889,7 +890,7 @@ void host_cpuid(uint32_t function, uint32_t count,
 
 /* helper.c */
 int cpu_x86_handle_mmu_fault(CPUX86State *env, target_ulong addr,
-                             int is_write, int mmu_idx, int is_softmmu);
+                             int is_write, int mmu_idx);
 #define cpu_handle_mmu_fault cpu_x86_handle_mmu_fault
 void cpu_x86_set_a20(CPUX86State *env, int a20_state);
 
