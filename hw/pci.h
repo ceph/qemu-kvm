@@ -226,6 +226,7 @@ void pci_register_bar_simple(PCIDevice *pci_dev, int region_num,
                              pcibus_t size, uint8_t attr, ram_addr_t ram_addr);
 void pci_register_bar_region(PCIDevice *pci_dev, int region_num,
                              uint8_t attr, MemoryRegion *memory);
+pcibus_t pci_get_bar_addr(PCIDevice *pci_dev, int region_num);
 
 void pci_map_option_rom(PCIDevice *pdev, int region_num, pcibus_t addr,
                         pcibus_t size, int type);

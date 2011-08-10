@@ -1036,6 +1036,11 @@ void pci_register_bar_region(PCIDevice *pci_dev, int region_num,
     pci_dev->io_regions[region_num].memory = memory;
 }
 
+pcibus_t pci_get_bar_addr(PCIDevice *pci_dev, int region_num)
+{
+    return pci_dev->io_regions[region_num].addr;
+}
+
 static void pci_bridge_filter(PCIDevice *d, pcibus_t *addr, pcibus_t *size,
                               uint8_t type)
 {
@@ -1229,8 +1234,7 @@ uint32_t pci_default_read_config(PCIDevice *d,
                                  uint32_t address, int len)
 {
     uint32_t val = 0;
-    assert(len == 1 || len == 2 || len == 4);
-    len = MIN(len, pci_config_size(d) - address);
+
     memcpy(&val, d->config + address, len);
     return le32_to_cpu(val);
 }
@@ -1238,9 +1242,8 @@ uint32_t pci_default_read_config(PCIDevice *d,
 void pci_default_write_config(PCIDevice *d, uint32_t addr, uint32_t val, int l)
 {
     int i, was_irq_disabled = pci_irq_disabled(d);
-    uint32_t config_size = pci_config_size(d);
 
-    for (i = 0; i < l && addr + i < config_size; val >>= 8, ++i) {
+    for (i = 0; i < l; val >>= 8, ++i) {
         uint8_t wmask = d->wmask[addr + i];
         uint8_t w1cmask = d->w1cmask[addr + i];
         assert(!(wmask & w1cmask));
