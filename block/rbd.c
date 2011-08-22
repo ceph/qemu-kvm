@@ -169,6 +169,38 @@ done:
     return ret;
 }
 
+static int qemu_rbd_parse_clientname(const char *conf, char *clientname,
+				      size_t maxlen)
+{
+    const char *p = conf;
+
+    while (*p) {
+	int len;
+	const char *end = strchr(p, ':');
+
+	if (end) {
+	    len = end - p;
+	} else {
+	    len = strlen(p);
+	}
+
+	if (strncmp(p, "id=", 3) == 0) {
+	    len -= 3;
+	    if (len >= maxlen) {
+		return -ERANGE;
+	    }
+	    strncpy(clientname, p + 3, len);
+	    clientname[len] = '\0';
+	    return 0;
+	}
+	if (end == NULL) {
+	    break;
+	}
+	p = end + 1;
+    }
+    return 0;
+}
+
 static int qemu_rbd_set_conf(rados_t cluster, const char *conf)
 {
     char *p, *buf;
@@ -198,17 +230,19 @@ static int qemu_rbd_set_conf(rados_t cluster, const char *conf)
             break;
         }
 
-        if (strcmp(name, "conf")) {
+        if (strcmp(name, "conf") == 0) {
+            ret = rados_conf_read_file(cluster, value);
+            if (ret < 0) {
+                error_report("error reading conf file %s", value);
+                break;
+            }
+	} else if (strcmp(name, "id") == 0) {
+	    /* ignore, this is parsed by qemu_rbd_parse_clientname() */
+	} else {
             ret = rados_conf_set(cluster, name, value);
             if (ret < 0) {
                 error_report("invalid conf option %s", name);
                 ret = -EINVAL;
-                break;
-            }
-        } else {
-            ret = rados_conf_read_file(cluster, value);
-            if (ret < 0) {
-                error_report("error reading conf file %s", value);
                 break;
             }
         }
@@ -227,6 +261,7 @@ static int qemu_rbd_create(const char *filename, QEMUOptionParameter *options)
     char name[RBD_MAX_IMAGE_NAME_SIZE];
     char snap_buf[RBD_MAX_SNAP_NAME_SIZE];
     char conf[RBD_MAX_CONF_SIZE];
+    char clientname[RBD_MAX_CONF_SIZE];
     rados_t cluster;
     rados_ioctx_t io_ctx;
     int ret;
@@ -259,7 +294,12 @@ static int qemu_rbd_create(const char *filename, QEMUOptionParameter *options)
         options++;
     }
 
-    if (rados_create(&cluster, NULL) < 0) {
+    ret = qemu_rbd_parse_clientname(conf, clientname, sizeof(clientname));
+    if (ret < 0) {
+	error_report("rbd client name is too long");
+	return ret;
+    }
+    if (rados_create(&cluster, clientname[0] ? clientname : NULL) < 0) {
         error_report("error initializing");
         return -EIO;
     }
@@ -385,6 +425,7 @@ static int qemu_rbd_open(BlockDriverState *bs, const char *filename, int flags)
     char pool[RBD_MAX_POOL_NAME_SIZE];
     char snap_buf[RBD_MAX_SNAP_NAME_SIZE];
     char conf[RBD_MAX_CONF_SIZE];
+    char clientname[RBD_MAX_CONF_SIZE];
     int r;
 
     if (qemu_rbd_parsename(filename, pool, sizeof(pool),
@@ -398,7 +439,12 @@ static int qemu_rbd_open(BlockDriverState *bs, const char *filename, int flags)
         s->snap = qemu_strdup(snap_buf);
     }
 
-    r = rados_create(&s->cluster, NULL);
+    r = qemu_rbd_parse_clientname(conf, clientname, sizeof(clientname));
+    if (r < 0) {
+	error_report("rbd client name is too long");
+	return r;
+    }
+    r = rados_create(&s->cluster, clientname[0] ? clientname : NULL);
     if (r < 0) {
         error_report("error initializing");
         return r;
